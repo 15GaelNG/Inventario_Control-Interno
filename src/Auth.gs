@@ -1,17 +1,3 @@
-/**
- * Auth.gs
- * Login propio (correo + contraseña) contra la hoja de usuarios.
- *
- * IMPORTANTE: por decisión explícita del usuario (2026-09-14), este módulo
- * está conectado al spreadsheet ORIGINAL de AppSheet (en vivo), no a una copia
- * propia. Esa hoja guarda la contraseña en texto plano en la columna
- * CONTRASEÑA — por eso aquí se compara texto plano en vez de hash+salt.
- * hashPassword_/crearHashParaUsuario se dejan por si en el futuro se vuelve
- * a un spreadsheet propio con el esquema hasheado (ver UsuariosService.gs).
- *
- * La sesión se guarda en CacheService con un token, y se manda al cliente en
- * cada llamada de google.script.run para validar rol/permisos.
- */
 
 const Auth = (function () {
   const COLUMNAS_USUARIOS = ['CORREO', 'CONTRASEÑA', 'ROL'];

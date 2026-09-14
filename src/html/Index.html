@@ -13,12 +13,29 @@
   <div id="app-shell" hidden>
     <div id="app">
       <nav id="sidebar">
-        <h1>Control Interno</h1>
-        <div class="nav-item" data-view="dashboard">🏠 Inicio</div>
-        <div class="nav-item" data-view="accesorios">🎒 Accesorios</div>
+        <div class="sidebar-header">
+          <h1 class="sidebar-title">Control Interno</h1>
+          <button type="button" class="sidebar-collapse-btn" id="sidebar-collapse-btn" title="Colapsar menú">⟨</button>
+        </div>
+
+        <div class="nav-item" data-view="dashboard">
+          <span class="nav-icon">🏠</span><span class="nav-label">Inicio</span>
+        </div>
+        <div class="nav-item" data-view="accesorios">
+          <span class="nav-icon">🎒</span><span class="nav-label">Accesorios</span>
+        </div>
+
         <div style="flex:1"></div>
-        <div style="padding:8px 12px; font-size:12px; color:var(--color-text-muted)" id="user-name"></div>
-        <button id="btn-logout" class="secondary">Cerrar sesión</button>
+
+        <div class="sidebar-theme-toggle">
+          <button type="button" class="theme-btn" data-tema="light" title="Modo claro">☀️</button>
+          <button type="button" class="theme-btn" data-tema="dark" title="Modo oscuro">🌙</button>
+        </div>
+
+        <div class="sidebar-user" id="user-name"></div>
+        <button id="btn-logout" class="secondary">
+          <span class="nav-icon">🚪</span><span class="nav-label">Cerrar sesión</span>
+        </button>
       </nav>
       <main id="main">
         <div id="view-container"></div>

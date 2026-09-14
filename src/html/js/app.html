@@ -7,6 +7,9 @@
    */
 
   // Tema (claro/oscuro) — se aplica antes de montar cualquier vista para evitar parpadeo.
+  // Los botones de tema viven en dos lugares (login y sidebar del app-shell), así que
+  // se identifican por clase (.theme-btn + data-tema), no por id, y se manejan con
+  // delegación de eventos para que funcionen sin importar cuándo se monten.
   (function initTema() {
     try {
       const guardado = localStorage.getItem('tema');
@@ -21,13 +24,30 @@
       document.documentElement.removeAttribute('data-theme');
     }
     try { localStorage.setItem('tema', tema); } catch (e) { /* no-op */ }
-    const btnClaro = document.getElementById('theme-light');
-    const btnOscuro = document.getElementById('theme-dark');
-    if (btnClaro && btnOscuro) {
-      btnClaro.classList.toggle('active', tema !== 'dark');
-      btnOscuro.classList.toggle('active', tema === 'dark');
-    }
+    document.querySelectorAll('.theme-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.tema === tema);
+    });
   }
+
+  // Sidebar colapsable — igual que el tema, se aplica antes de pintar para evitar parpadeo.
+  (function initColapsoSidebar() {
+    try {
+      if (localStorage.getItem('sidebarColapsado') === '1') {
+        document.getElementById('sidebar').classList.add('collapsed');
+      }
+    } catch (e) { /* no-op */ }
+  })();
+
+  document.addEventListener('click', (ev) => {
+    const btnTema = ev.target.closest('.theme-btn');
+    if (btnTema) { aplicarTema(btnTema.dataset.tema); return; }
+
+    if (ev.target.closest('#sidebar-collapse-btn')) {
+      const sidebar = document.getElementById('sidebar');
+      const colapsado = sidebar.classList.toggle('collapsed');
+      try { localStorage.setItem('sidebarColapsado', colapsado ? '1' : '0'); } catch (e) { /* no-op */ }
+    }
+  });
 
   const state = {
     token: sessionStorage.getItem('token') || null,
@@ -134,8 +154,6 @@
     montarVista('tpl-login', null, login);
 
     aplicarTema(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
-    document.getElementById('theme-light').addEventListener('click', () => aplicarTema('light'));
-    document.getElementById('theme-dark').addEventListener('click', () => aplicarTema('dark'));
 
     const inputPassword = document.getElementById('login-password');
     document.getElementById('toggle-password').addEventListener('click', (ev) => {
