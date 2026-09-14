@@ -90,8 +90,10 @@
     document.getElementById('theme-dark').addEventListener('click', () => aplicarTema('dark'));
 
     const inputPassword = document.getElementById('login-password');
-    document.getElementById('toggle-password').addEventListener('click', () => {
-      inputPassword.type = inputPassword.type === 'password' ? 'text' : 'password';
+    document.getElementById('toggle-password').addEventListener('click', (ev) => {
+      const seVaAMostrar = inputPassword.type === 'password';
+      inputPassword.type = seVaAMostrar ? 'text' : 'password';
+      ev.currentTarget.textContent = seVaAMostrar ? '🙈' : '🙉';
     });
 
     initGoogleQuickLogin();
