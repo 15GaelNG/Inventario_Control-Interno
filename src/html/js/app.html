@@ -375,8 +375,9 @@
 
   // ---------- Incidencias ----------
   async function initIncidencias() {
-    const tabla = document.getElementById('tabla-incidencias');
-    const cardCerrar = document.getElementById('card-cerrar');
+    const lista = document.getElementById('lista-incidencias');
+    const vacio = document.getElementById('incidencias-vacio');
+    const modal = document.getElementById('modal-cerrar');
 
     function formatearFecha(valor) {
       if (!valor) return '—';
@@ -384,28 +385,43 @@
       return isNaN(f) ? '—' : f.toLocaleDateString('es-MX');
     }
 
+    function abrirModalCierre(id, folio) {
+      document.getElementById('cerrar-id').value = id;
+      document.getElementById('cerrar-folio').textContent = 'Folio: ' + folio;
+      modal.hidden = false;
+    }
+    function cerrarModal() {
+      modal.hidden = true;
+      document.getElementById('form-cerrar-incidencia').reset();
+      document.getElementById('cerrar-error').hidden = true;
+    }
+
     async function cargar() {
       const incidencias = await callServer('apiListarIncidencias', state.token);
-      tabla.innerHTML = incidencias.map((inc) => `
-        <tr>
-          <td>${inc.FOLIO}</td>
-          <td>${inc.DEPARTAMENTO || ''}</td>
-          <td>${inc.INSPECCION_INGRESO || ''}</td>
-          <td>${formatearFecha(inc.FECHA_REGISTRO)}</td>
-          <td><span class="badge ${inc.ESTADO === 'CERRADA' ? 'ok' : 'low'}">${inc.ESTADO}</span></td>
-          <td>${inc.ESTADO === 'ABIERTA'
-            ? `<button type="button" class="secondary btn-cerrar-incidencia" data-id="${inc.ID}" data-folio="${inc.FOLIO}">Cerrar</button>`
-            : ''}</td>
-        </tr>
-      `).join('');
 
-      tabla.querySelectorAll('.btn-cerrar-incidencia').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          document.getElementById('cerrar-id').value = btn.dataset.id;
-          document.getElementById('cerrar-folio').textContent = btn.dataset.folio;
-          cardCerrar.hidden = false;
-          cardCerrar.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        });
+      document.getElementById('stat-total').textContent = incidencias.length;
+      document.getElementById('stat-abiertas').textContent = incidencias.filter((i) => i.ESTADO === 'ABIERTA').length;
+      document.getElementById('stat-cerradas').textContent = incidencias.filter((i) => i.ESTADO === 'CERRADA').length;
+
+      vacio.hidden = incidencias.length > 0;
+      lista.innerHTML = incidencias.map((inc) => {
+        const abierta = inc.ESTADO === 'ABIERTA';
+        return `
+          <div class="incidencia-item">
+            <div class="incidencia-icon">🚗</div>
+            <div class="incidencia-main">
+              <div class="incidencia-folio">${inc.FOLIO}${inc.DEPARTAMENTO ? ' · ' + inc.DEPARTAMENTO : ''}</div>
+              <div class="incidencia-meta">${inc.INSPECCION_INGRESO || 'Sin motivo registrado'}</div>
+            </div>
+            <div class="incidencia-fecha">${formatearFecha(inc.FECHA_REGISTRO)}</div>
+            <span class="badge-estado ${abierta ? 'abierta' : 'cerrada'}">${abierta ? '🔓 Abierta' : '✅ Cerrada'}</span>
+            ${abierta ? `<button type="button" class="secondary btn-cerrar-incidencia" data-id="${inc.ID}" data-folio="${inc.FOLIO}">Cerrar</button>` : ''}
+          </div>
+        `;
+      }).join('');
+
+      lista.querySelectorAll('.btn-cerrar-incidencia').forEach((btn) => {
+        btn.addEventListener('click', () => abrirModalCierre(btn.dataset.id, btn.dataset.folio));
       });
     }
 
@@ -431,10 +447,8 @@
       }
     });
 
-    document.getElementById('btn-cancelar-cierre').addEventListener('click', () => {
-      cardCerrar.hidden = true;
-      document.getElementById('form-cerrar-incidencia').reset();
-    });
+    document.getElementById('btn-cancelar-cierre').addEventListener('click', cerrarModal);
+    modal.addEventListener('click', (ev) => { if (ev.target === modal) cerrarModal(); });
 
     document.getElementById('form-cerrar-incidencia').addEventListener('submit', async (ev) => {
       ev.preventDefault();
@@ -446,8 +460,7 @@
           INSPECCION_SALIDA: document.getElementById('cerrar-salida').value.trim(),
           MECANICO: document.getElementById('cerrar-mecanico').value.trim(),
         });
-        cardCerrar.hidden = true;
-        ev.target.reset();
+        cerrarModal();
         await cargar();
       } catch (err) {
         errorBox.textContent = err.message;

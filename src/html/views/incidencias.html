@@ -1,9 +1,35 @@
 <template id="tpl-incidencias">
-  <h2>🔧 Incidencias — Bitácora de taller</h2>
+  <div class="page-header">
+    <div>
+      <h2>🔧 Incidencias</h2>
+      <p class="page-subtitle">Bitácora de taller — ingreso, trabajo realizado y salida del vehículo</p>
+    </div>
+  </div>
 
-  <div class="card" style="margin-bottom:16px">
-    <h3 style="margin-top:0">Registrar ingreso</h3>
-    <form id="form-incidencia" class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 12px;">
+  <div class="stat-row">
+    <div class="stat-tile">
+      <div class="stat-icon">📋</div>
+      <div><div class="stat-value" id="stat-total">0</div><div class="stat-label">Total</div></div>
+    </div>
+    <div class="stat-tile stat-tile-warn">
+      <div class="stat-icon">🔓</div>
+      <div><div class="stat-value" id="stat-abiertas">0</div><div class="stat-label">Abiertas</div></div>
+    </div>
+    <div class="stat-tile stat-tile-ok">
+      <div class="stat-icon">✅</div>
+      <div><div class="stat-value" id="stat-cerradas">0</div><div class="stat-label">Cerradas</div></div>
+    </div>
+  </div>
+
+  <div class="card form-card" style="margin-bottom:18px">
+    <div class="form-card-header">
+      <div class="form-card-icon">🚗</div>
+      <div>
+        <h3>Registrar ingreso</h3>
+        <p>Da de alta el vehículo que entra al taller</p>
+      </div>
+    </div>
+    <form id="form-incidencia" class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 14px;">
       <div class="field"><label>Folio del vehículo</label><input type="text" id="inc-folio" required placeholder="Ej. CTA0097" /></div>
       <div class="field"><label>Departamento</label><input type="text" id="inc-departamento" /></div>
       <div class="field"><label>Modelo</label><input type="text" id="inc-modelo" /></div>
@@ -14,39 +40,44 @@
         <label>Motivo de ingreso</label>
         <input type="text" id="inc-motivo" placeholder="Ej. Cambio de batería" />
       </div>
-      <div style="grid-column: 1 / -1;"><button type="submit">Registrar ingreso</button></div>
+      <div style="grid-column: 1 / -1;"><button type="submit">🚗 Registrar ingreso</button></div>
     </form>
     <div class="error-msg" id="inc-error" hidden></div>
   </div>
 
-  <div class="card" id="card-cerrar" hidden style="margin-bottom:16px">
-    <h3 style="margin-top:0">Cerrar incidencia — <span id="cerrar-folio"></span></h3>
-    <form id="form-cerrar-incidencia" class="grid" style="grid-template-columns: 1fr 1fr; gap: 0 12px;">
-      <input type="hidden" id="cerrar-id" />
-      <div class="field" style="grid-column: 1 / -1;">
-        <label>Trabajo realizado</label>
-        <input type="text" id="cerrar-trabajo" required placeholder="Ej. Cambio de batería" />
-      </div>
-      <div class="field" style="grid-column: 1 / -1;">
-        <label>Resultado de inspección de salida</label>
-        <input type="text" id="cerrar-salida" placeholder="Ej. Reemplazo realizado" />
-      </div>
-      <div class="field"><label>Mecánico</label><input type="text" id="cerrar-mecanico" /></div>
-      <div style="display:flex; gap:8px; align-items:flex-end; padding-bottom:12px;">
-        <button type="submit">Guardar y cerrar</button>
-        <button type="button" class="secondary" id="btn-cancelar-cierre">Cancelar</button>
-      </div>
-    </form>
-    <div class="error-msg" id="cerrar-error" hidden></div>
-  </div>
-
   <div class="card">
     <h3 style="margin-top:0">Historial</h3>
-    <table>
-      <thead>
-        <tr><th>Folio</th><th>Departamento</th><th>Motivo de ingreso</th><th>Fecha registro</th><th>Estado</th><th></th></tr>
-      </thead>
-      <tbody id="tabla-incidencias"></tbody>
-    </table>
+    <div id="lista-incidencias" class="incidencia-list"></div>
+    <p class="empty-state" id="incidencias-vacio" hidden>Todavía no hay incidencias registradas.</p>
+  </div>
+
+  <!-- Modal: cerrar incidencia -->
+  <div class="modal-backdrop" id="modal-cerrar" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h3 style="margin:0">Cerrar incidencia</h3>
+          <p class="modal-subtitle" id="cerrar-folio"></p>
+        </div>
+        <button type="button" class="modal-close" id="btn-cancelar-cierre">✕</button>
+      </div>
+      <form id="form-cerrar-incidencia">
+        <input type="hidden" id="cerrar-id" />
+        <div class="field">
+          <label>Trabajo realizado</label>
+          <input type="text" id="cerrar-trabajo" required placeholder="Ej. Cambio de batería" />
+        </div>
+        <div class="field">
+          <label>Resultado de inspección de salida</label>
+          <input type="text" id="cerrar-salida" placeholder="Ej. Reemplazo realizado" />
+        </div>
+        <div class="field">
+          <label>Mecánico</label>
+          <input type="text" id="cerrar-mecanico" placeholder="Nombre del mecánico" />
+        </div>
+        <div class="error-msg" id="cerrar-error" hidden></div>
+        <button type="submit" style="width:100%">✅ Guardar y cerrar</button>
+      </form>
+    </div>
   </div>
 </template>
