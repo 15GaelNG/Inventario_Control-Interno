@@ -27,17 +27,19 @@
 
         <div style="flex:1"></div>
 
-        <div class="sidebar-theme-toggle">
-          <button type="button" class="theme-btn" data-tema="light" title="Modo claro">☀️</button>
-          <button type="button" class="theme-btn" data-tema="dark" title="Modo oscuro">🌙</button>
-        </div>
-
         <div class="sidebar-user" id="user-name"></div>
         <button id="btn-logout" class="secondary">
           <span class="nav-icon">🚪</span><span class="nav-label">Cerrar sesión</span>
         </button>
       </nav>
       <main id="main">
+        <div class="topbar">
+          <div class="topbar-date" id="topbar-date"></div>
+          <div class="topbar-theme-toggle">
+            <button type="button" class="theme-btn" data-tema="light" title="Modo claro">☀️</button>
+            <button type="button" class="theme-btn" data-tema="dark" title="Modo oscuro">🌙</button>
+          </div>
+        </div>
         <div id="view-container"></div>
       </main>
     </div>
