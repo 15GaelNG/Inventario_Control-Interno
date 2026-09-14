@@ -90,10 +90,8 @@
     document.getElementById('theme-dark').addEventListener('click', () => aplicarTema('dark'));
 
     const inputPassword = document.getElementById('login-password');
-    document.getElementById('toggle-password').addEventListener('click', (ev) => {
-      const oculto = inputPassword.type === 'password';
-      inputPassword.type = oculto ? 'text' : 'password';
-      ev.currentTarget.textContent = oculto ? '🙈' : '👁️';
+    document.getElementById('toggle-password').addEventListener('click', () => {
+      inputPassword.type = inputPassword.type === 'password' ? 'text' : 'password';
     });
 
     document.getElementById('form-login').addEventListener('submit', async (ev) => {
