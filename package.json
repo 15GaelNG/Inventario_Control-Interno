@@ -1,0 +1,16 @@
+{
+  "name": "inventario-ciudadmaderas",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Sistema de Control Interno (vehículos, telefonía, accesorios, caja chica) — Google Apps Script",
+  "scripts": {
+    "login": "clasp login",
+    "push": "clasp push",
+    "watch": "clasp push --watch",
+    "open": "clasp open",
+    "deploy": "clasp deploy"
+  },
+  "devDependencies": {
+    "@google/clasp": "^3.0.0"
+  }
+}

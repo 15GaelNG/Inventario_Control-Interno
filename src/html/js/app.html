@@ -1,0 +1,140 @@
+<script>
+  /**
+   * app.js — estado global, router SPA (client-side) e inicialización de cada vista.
+   * Las vistas viven como <template> ya embebidas en el HTML (ver Index.html),
+   * se clonan a #view-container al navegar. Cero round-trips extra al servidor
+   * solo por cambiar de pantalla.
+   */
+
+  const state = {
+    token: sessionStorage.getItem('token') || null,
+    sesion: JSON.parse(sessionStorage.getItem('sesion') || 'null'),
+  };
+
+  function guardarSesion(resultadoLogin) {
+    state.token = resultadoLogin.token;
+    state.sesion = resultadoLogin;
+    sessionStorage.setItem('token', state.token);
+    sessionStorage.setItem('sesion', JSON.stringify(resultadoLogin));
+  }
+
+  function cerrarSesion() {
+    if (state.token) apiLogoutSafe();
+    state.token = null;
+    state.sesion = null;
+    sessionStorage.clear();
+    render();
+  }
+  async function apiLogoutSafe() {
+    try { await callServer('apiLogout', state.token); } catch (e) { /* no-op */ }
+  }
+
+  function render() {
+    document.getElementById('app-shell').hidden = !state.token;
+    document.getElementById('login-screen-container').hidden = !!state.token;
+
+    if (!state.token) {
+      initLogin();
+      return;
+    }
+    document.getElementById('user-name').textContent = state.sesion.nombre + ' · ' + state.sesion.rol;
+    navegarA('dashboard');
+  }
+
+  function montarVista(templateId, initFn, container) {
+    container = container || document.getElementById('view-container');
+    const tpl = document.getElementById(templateId);
+    container.innerHTML = '';
+    container.appendChild(tpl.content.cloneNode(true));
+    if (initFn) initFn();
+  }
+
+  function navegarA(vista) {
+    document.querySelectorAll('.nav-item').forEach((el) => {
+      el.classList.toggle('active', el.dataset.view === vista);
+    });
+    if (vista === 'dashboard') montarVista('tpl-dashboard', initDashboard);
+    if (vista === 'accesorios') montarVista('tpl-accesorios', initAccesorios);
+  }
+
+  // ---------- Login ----------
+  function initLogin() {
+    const login = document.getElementById('login-screen-container');
+    montarVista('tpl-login', null, login);
+    document.getElementById('form-login').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const correo = document.getElementById('login-correo').value.trim();
+      const password = document.getElementById('login-password').value;
+      const errorBox = document.getElementById('login-error');
+      errorBox.hidden = true;
+      try {
+        const resultado = await callServer('apiLogin', correo, password);
+        guardarSesion(resultado);
+        render();
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+      }
+    });
+  }
+
+  // ---------- Dashboard ----------
+  function initDashboard() {
+    document.querySelectorAll('.nav-module[data-view]').forEach((el) => {
+      el.addEventListener('click', () => navegarA(el.dataset.view));
+    });
+  }
+
+  // ---------- Accesorios ----------
+  async function initAccesorios() {
+    const selectArticulo = document.getElementById('mov-articulo');
+    const tabla = document.getElementById('tabla-articulos');
+
+    async function cargar() {
+      const articulos = await callServer('apiListarArticulosConStock', state.token);
+
+      selectArticulo.innerHTML = articulos
+        .map((a) => `<option value="${a.ID}">${a.NOMBRE}</option>`).join('');
+
+      tabla.innerHTML = articulos.map((a) => {
+        const bajo = Number(a.STOCK) <= Number(a.STOCK_MINIMO || 0);
+        return `<tr>
+          <td>${a.CATEGORIA || ''}</td>
+          <td>${a.NOMBRE || ''}</td>
+          <td>${a.MARCA || ''}</td>
+          <td><span class="badge ${bajo ? 'low' : 'ok'}">${a.STOCK}</span></td>
+        </tr>`;
+      }).join('');
+    }
+
+    document.getElementById('form-movimiento').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('mov-error');
+      errorBox.hidden = true;
+      try {
+        await callServer(
+          'apiRegistrarMovimiento',
+          state.token,
+          selectArticulo.value,
+          document.getElementById('mov-tipo').value,
+          Number(document.getElementById('mov-cantidad').value),
+          ''
+        );
+        document.getElementById('mov-cantidad').value = '';
+        await cargar();
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+      }
+    });
+
+    await cargar();
+  }
+
+  document.getElementById('btn-logout').addEventListener('click', cerrarSesion);
+  document.querySelectorAll('#sidebar .nav-item[data-view]').forEach((el) => {
+    el.addEventListener('click', () => navegarA(el.dataset.view));
+  });
+
+  render();
+</script>
