@@ -126,3 +126,22 @@ function configurarAmbienteInicial() {
   Logger.log(JSON.stringify(resumen, null, 2));
   return resumen;
 }
+
+/**
+ * Reapunta USUARIOS y ACCESORIOS al spreadsheet ORIGINAL de AppSheet (en vivo),
+ * en vez de a las copias creadas por configurarAmbienteInicial(). Decisión
+ * explícita del usuario (2026-09-14) — a partir de aquí, cualquier alta o
+ * movimiento registrado desde esta app escribe directo en ese archivo real.
+ *
+ * Ejecutar UNA vez desde el editor (dropdown de funciones > apuntarABdOriginal > Ejecutar).
+ */
+function apuntarABdOriginal() {
+  PropertiesService.getScriptProperties().setProperties({
+    SS_ID_USUARIOS: ORIGINAL_PRUEBAS_SPREADSHEET_ID,
+    SS_ID_ACCESORIOS: ORIGINAL_PRUEBAS_SPREADSHEET_ID,
+  });
+  const mensaje = 'Listo. USUARIOS y ACCESORIOS ahora apuntan al spreadsheet original de AppSheet: ' +
+    ORIGINAL_PRUEBAS_SPREADSHEET_ID;
+  Logger.log(mensaje);
+  return mensaje;
+}

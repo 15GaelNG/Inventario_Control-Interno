@@ -94,5 +94,24 @@ const SheetUtils = (function () {
     return true;
   }
 
-  return { getSheet, getAll, findById, insert, update, remove };
+  /**
+   * Encuentra, dentro de un spreadsheet, la hoja cuyo encabezado (fila 1)
+   * contiene TODAS las columnas dadas (por nombre exacto). Útil cuando no
+   * conocemos el nombre real de la pestaña (ej. spreadsheets ajenos, como el
+   * de AppSheet) pero sí sabemos qué columnas debe tener.
+   */
+  function getSheetByColumns(spreadsheetId, columnasRequeridas) {
+    const ss = SpreadsheetApp.openById(spreadsheetId);
+    const hoja = ss.getSheets().find((sheet) => {
+      if (sheet.getLastColumn() === 0) return false;
+      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
+      return columnasRequeridas.every((col) => headers.indexOf(col) !== -1);
+    });
+    if (!hoja) {
+      throw new Error('No se encontró ninguna hoja con las columnas: ' + columnasRequeridas.join(', '));
+    }
+    return hoja;
+  }
+
+  return { getSheet, getSheetByColumns, getAll, findById, insert, update, remove };
 })();
