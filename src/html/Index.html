@@ -14,8 +14,16 @@
     <div id="app">
       <nav id="sidebar">
         <div class="sidebar-header">
-          <h1 class="sidebar-title">Control Interno</h1>
+          <div class="sidebar-brand">
+            <img class="sidebar-brand-icon" src="data:image/png;base64,<?!= include('html/logoBase64') ?>" alt="Control Interno" />
+            <h1 class="sidebar-title">Control Interno</h1>
+          </div>
           <button type="button" class="sidebar-collapse-btn" id="sidebar-collapse-btn" title="Colapsar menú">⟨</button>
+        </div>
+
+        <div class="sidebar-cm-logo">
+          <img class="cm-logo-light" src="data:image/png;base64,<?!= include('html/cmLogoLightBase64') ?>" alt="Ciudad Maderas" />
+          <img class="cm-logo-dark" src="data:image/png;base64,<?!= include('html/cmLogoDarkBase64') ?>" alt="Ciudad Maderas" />
         </div>
 
         <div class="nav-item" data-view="dashboard">
