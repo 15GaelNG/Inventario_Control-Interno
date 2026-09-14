@@ -153,12 +153,100 @@
     if (initFn) initFn();
   }
 
-  function navegarA(vista) {
-    document.querySelectorAll('.nav-item').forEach((el) => {
+  function navegarA(vista, etiqueta) {
+    document.querySelectorAll('.nav-item, .nav-subitem').forEach((el) => {
       el.classList.toggle('active', el.dataset.view === vista);
     });
-    if (vista === 'dashboard') montarVista('tpl-dashboard', initDashboard);
-    if (vista === 'accesorios') montarVista('tpl-accesorios', initAccesorios);
+
+    if (vista === 'dashboard') { montarVista('tpl-dashboard', initDashboard); return; }
+    if (vista === 'accesorios') { montarVista('tpl-accesorios', initAccesorios); return; }
+
+    mostrarProximamente(etiqueta || vista);
+  }
+
+  /** Placeholder para módulos que ya están en el menú pero aún no se han construido */
+  function mostrarProximamente(nombreModulo) {
+    document.getElementById('view-container').innerHTML =
+      '<div class="card" style="max-width:420px; margin:60px auto; text-align:center;">' +
+      '<div style="font-size:32px; margin-bottom:10px;">🚧</div>' +
+      '<h2 style="margin-bottom:6px;">' + nombreModulo + '</h2>' +
+      '<p style="color:var(--color-text-muted); font-size:13px; margin:0;">' +
+      'Este módulo todavía no está construido — muy pronto.</p>' +
+      '</div>';
+  }
+
+  /**
+   * Estructura del sidebar por área. La mayoría de estos sub-módulos todavía
+   * no están construidos (ver mostrarProximamente); "accesorios" es el único
+   * que ya apunta a un módulo real y funcional.
+   */
+  const NAV_GRUPOS = [
+    {
+      id: 'servicios-vehiculares', icono: '🚗', etiqueta: 'Servicios Vehiculares',
+      items: [
+        { vista: 'incidencias', etiqueta: 'Incidencias' },
+        { vista: 'vehiculos', etiqueta: 'Vehículos' },
+        { vista: 'cambios-vehiculos', etiqueta: 'Cambios Vehículos' },
+        { vista: 'reasignaciones-vehiculares', etiqueta: 'Reasignaciones Vehiculares' },
+        { vista: 'verificaciones', etiqueta: 'Verificaciones' },
+        { vista: 'instalacion-sensores', etiqueta: 'Instalación de Sensores' },
+        { vista: 'servicios', etiqueta: 'Servicios' },
+        { vista: 'hologramas', etiqueta: 'Hologramas' },
+      ],
+    },
+    {
+      id: 'lineas', icono: '📱', etiqueta: 'Líneas',
+      items: [
+        { vista: 'reasignaciones-lineas', etiqueta: 'Control de Reasignaciones - Líneas' },
+        { vista: 'accesorios', etiqueta: 'Inventario de Accesorios' },
+        { vista: 'reactivacion-lineas', etiqueta: 'Reactivación de Líneas' },
+        { vista: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas' },
+        { vista: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas' },
+        { vista: 'bitacora-desechos', etiqueta: 'Bitácora de Desechos' },
+        { vista: 'lineas-post-venta', etiqueta: 'Líneas Post Venta' },
+      ],
+    },
+    {
+      id: 'arqueos', icono: '💰', etiqueta: 'Arqueos',
+      items: [
+        { vista: 'arqueos', etiqueta: 'Arqueos' },
+        { vista: 'caja-chica', etiqueta: 'Caja Chica' },
+      ],
+    },
+    {
+      id: 'uber', icono: '🚕', etiqueta: 'Uber',
+      items: [
+        { vista: 'uber', etiqueta: 'Uber' },
+        { vista: 'tickets', etiqueta: 'Tickets' },
+      ],
+    },
+  ];
+
+  function renderNavGrupos() {
+    const contenedor = document.getElementById('nav-groups');
+    contenedor.innerHTML = NAV_GRUPOS.map((grupo) => `
+      <div class="nav-group" id="nav-group-${grupo.id}">
+        <div class="nav-group-header" data-grupo="${grupo.id}">
+          <span class="nav-icon">${grupo.icono}</span>
+          <span class="nav-label">${grupo.etiqueta}</span>
+          <span class="nav-group-chevron">›</span>
+        </div>
+        <div class="nav-group-items">
+          ${grupo.items.map((item) => `
+            <div class="nav-subitem" data-view="${item.vista}" data-etiqueta="${item.etiqueta}">${item.etiqueta}</div>
+          `).join('')}
+        </div>
+      </div>
+    `).join('');
+
+    contenedor.querySelectorAll('.nav-group-header').forEach((header) => {
+      header.addEventListener('click', () => {
+        document.getElementById('nav-group-' + header.dataset.grupo).classList.toggle('expanded');
+      });
+    });
+    contenedor.querySelectorAll('.nav-subitem').forEach((el) => {
+      el.addEventListener('click', () => navegarA(el.dataset.view, el.dataset.etiqueta));
+    });
   }
 
   // ---------- Login ----------
@@ -289,5 +377,6 @@
     el.addEventListener('click', () => navegarA(el.dataset.view));
   });
 
+  renderNavGrupos();
   render();
 </script>
