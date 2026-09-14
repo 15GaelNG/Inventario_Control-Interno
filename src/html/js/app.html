@@ -64,6 +64,54 @@
     navegarA('dashboard');
   }
 
+  /**
+   * Pantalla de carga que se muestra justo después de un login exitoso
+   * (manual o con Google), antes de entrar al dashboard. Los 4 íconos de
+   * módulos se van "encendiendo" en secuencia con un mensaje temático, para
+   * darle personalidad a la espera en vez de un spinner genérico.
+   */
+  function mostrarPantallaCarga(callback) {
+    const container = document.getElementById('loading-screen-container');
+    montarVista('tpl-loading', null, container);
+
+    const pasos = [
+      { icono: 'loading-icon-0', mensaje: 'Sincronizando vehículos…' },
+      { icono: 'loading-icon-1', mensaje: 'Actualizando líneas telefónicas…' },
+      { icono: 'loading-icon-2', mensaje: 'Revisando accesorios…' },
+      { icono: 'loading-icon-3', mensaje: 'Cerrando caja chica del día…' },
+    ];
+    const duracionTotal = 1900;
+    const porPaso = duracionTotal / pasos.length;
+
+    const barra = document.getElementById('loading-bar-fill');
+    const mensaje = document.getElementById('loading-message');
+
+    requestAnimationFrame(() => {
+      barra.style.transitionDuration = duracionTotal + 'ms';
+      barra.style.width = '100%';
+    });
+
+    pasos.forEach((paso, i) => {
+      setTimeout(() => {
+        document.getElementById(paso.icono).classList.add('active');
+        mensaje.classList.add('fade');
+        setTimeout(() => {
+          mensaje.textContent = paso.mensaje;
+          mensaje.classList.remove('fade');
+        }, 150);
+      }, i * porPaso);
+    });
+
+    setTimeout(() => {
+      const pantalla = document.getElementById('loading-screen');
+      pantalla.classList.add('fade-out');
+      setTimeout(() => {
+        container.innerHTML = '';
+        callback();
+      }, 450);
+    }, duracionTotal + 250);
+  }
+
   function montarVista(templateId, initFn, container) {
     container = container || document.getElementById('view-container');
     const tpl = document.getElementById(templateId);
@@ -107,7 +155,7 @@
       try {
         const resultado = await callServer('apiLogin', correo, password);
         guardarSesion(resultado);
-        render();
+        mostrarPantallaCarga(() => render());
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.hidden = false;
@@ -141,7 +189,7 @@
         try {
           const resultado = await callServer('apiLoginConGoogle');
           guardarSesion(resultado);
-          render();
+          mostrarPantallaCarga(() => render());
         } catch (err) {
           errorBox.textContent = err.message;
           errorBox.hidden = false;

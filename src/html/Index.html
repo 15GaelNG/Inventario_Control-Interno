@@ -8,6 +8,7 @@
 <body>
 
   <div id="login-screen-container"></div>
+  <div id="loading-screen-container"></div>
 
   <div id="app-shell" hidden>
     <div id="app">
@@ -27,6 +28,7 @@
 
   <!-- Vistas embebidas como <template> (renderizadas server-side, sin round-trips extra) -->
   <?!= include('html/views/login'); ?>
+  <?!= include('html/views/loading'); ?>
   <?!= include('html/views/dashboard'); ?>
   <?!= include('html/views/accesorios'); ?>
 
