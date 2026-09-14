@@ -390,7 +390,11 @@
         return `<option value="${v.FOLIO}">${etiqueta}</option>`;
       }).join('');
     } catch (err) {
-      // Si falla la carga del catálogo, el folio se sigue pudiendo capturar a mano.
+      // Antes esto se ignoraba en silencio — ahora se ve para poder diagnosticar.
+      console.error('No se pudo cargar el catálogo de vehículos:', err);
+      const errorBox = document.getElementById('inc-error');
+      errorBox.textContent = 'No se pudo cargar el catálogo de vehículos para autocompletar: ' + err.message;
+      errorBox.hidden = false;
     }
 
     document.getElementById('inc-folio').addEventListener('input', (ev) => {
