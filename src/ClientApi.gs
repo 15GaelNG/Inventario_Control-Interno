@@ -34,3 +34,14 @@ function apiRegistrarMovimiento(token, idArticulo, tipo, cantidad, comentarios) 
 function apiHistorialMovimientos(token, idArticulo) {
   return AccesoriosService.historialMovimientos(token, idArticulo);
 }
+
+// --- Incidencias ---
+function apiListarIncidencias(token) {
+  return IncidenciasService.listar(token);
+}
+function apiCrearIncidencia(token, datos) {
+  return IncidenciasService.crear(token, datos);
+}
+function apiCerrarIncidencia(token, id, datos) {
+  return IncidenciasService.cerrar(token, id, datos);
+}

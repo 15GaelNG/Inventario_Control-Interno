@@ -180,8 +180,9 @@ function apuntarABdOriginal() {
   PropertiesService.getScriptProperties().setProperties({
     SS_ID_USUARIOS: ORIGINAL_PRUEBAS_SPREADSHEET_ID,
     SS_ID_ACCESORIOS: ORIGINAL_PRUEBAS_SPREADSHEET_ID,
+    SS_ID_VEHICULOS: ORIGINAL_PRUEBAS_SPREADSHEET_ID,
   });
-  const mensaje = 'Listo. USUARIOS y ACCESORIOS ahora apuntan al spreadsheet original de AppSheet: ' +
+  const mensaje = 'Listo. USUARIOS, ACCESORIOS y VEHICULOS ahora apuntan al spreadsheet original de AppSheet: ' +
     ORIGINAL_PRUEBAS_SPREADSHEET_ID;
   Logger.log(mensaje);
   return mensaje;

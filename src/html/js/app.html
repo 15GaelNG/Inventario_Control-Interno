@@ -160,6 +160,7 @@
 
     if (vista === 'dashboard') { montarVista('tpl-dashboard', initDashboard); return; }
     if (vista === 'accesorios') { montarVista('tpl-accesorios', initAccesorios); return; }
+    if (vista === 'incidencias') { montarVista('tpl-incidencias', initIncidencias); return; }
 
     mostrarProximamente(etiqueta || vista);
   }
@@ -362,6 +363,91 @@
           ''
         );
         document.getElementById('mov-cantidad').value = '';
+        await cargar();
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+      }
+    });
+
+    await cargar();
+  }
+
+  // ---------- Incidencias ----------
+  async function initIncidencias() {
+    const tabla = document.getElementById('tabla-incidencias');
+    const cardCerrar = document.getElementById('card-cerrar');
+
+    function formatearFecha(valor) {
+      if (!valor) return '—';
+      const f = new Date(valor);
+      return isNaN(f) ? '—' : f.toLocaleDateString('es-MX');
+    }
+
+    async function cargar() {
+      const incidencias = await callServer('apiListarIncidencias', state.token);
+      tabla.innerHTML = incidencias.map((inc) => `
+        <tr>
+          <td>${inc.FOLIO}</td>
+          <td>${inc.DEPARTAMENTO || ''}</td>
+          <td>${inc.INSPECCION_INGRESO || ''}</td>
+          <td>${formatearFecha(inc.FECHA_REGISTRO)}</td>
+          <td><span class="badge ${inc.ESTADO === 'CERRADA' ? 'ok' : 'low'}">${inc.ESTADO}</span></td>
+          <td>${inc.ESTADO === 'ABIERTA'
+            ? `<button type="button" class="secondary btn-cerrar-incidencia" data-id="${inc.ID}" data-folio="${inc.FOLIO}">Cerrar</button>`
+            : ''}</td>
+        </tr>
+      `).join('');
+
+      tabla.querySelectorAll('.btn-cerrar-incidencia').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          document.getElementById('cerrar-id').value = btn.dataset.id;
+          document.getElementById('cerrar-folio').textContent = btn.dataset.folio;
+          cardCerrar.hidden = false;
+          cardCerrar.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+      });
+    }
+
+    document.getElementById('form-incidencia').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('inc-error');
+      errorBox.hidden = true;
+      try {
+        await callServer('apiCrearIncidencia', state.token, {
+          FOLIO: document.getElementById('inc-folio').value.trim(),
+          DEPARTAMENTO: document.getElementById('inc-departamento').value.trim(),
+          MODELO: document.getElementById('inc-modelo').value.trim(),
+          ANIO: document.getElementById('inc-anio').value,
+          KILOMETRAJE: document.getElementById('inc-kilometraje').value,
+          TICKET: document.getElementById('inc-ticket').value.trim(),
+          INSPECCION_INGRESO: document.getElementById('inc-motivo').value.trim(),
+        });
+        ev.target.reset();
+        await cargar();
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+      }
+    });
+
+    document.getElementById('btn-cancelar-cierre').addEventListener('click', () => {
+      cardCerrar.hidden = true;
+      document.getElementById('form-cerrar-incidencia').reset();
+    });
+
+    document.getElementById('form-cerrar-incidencia').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('cerrar-error');
+      errorBox.hidden = true;
+      try {
+        await callServer('apiCerrarIncidencia', state.token, document.getElementById('cerrar-id').value, {
+          DESCRIPCION_TRABAJO: document.getElementById('cerrar-trabajo').value.trim(),
+          INSPECCION_SALIDA: document.getElementById('cerrar-salida').value.trim(),
+          MECANICO: document.getElementById('cerrar-mecanico').value.trim(),
+        });
+        cardCerrar.hidden = true;
+        ev.target.reset();
         await cargar();
       } catch (err) {
         errorBox.textContent = err.message;
