@@ -128,6 +128,47 @@ function configurarAmbienteInicial() {
 }
 
 /**
+ * Inspecciona (SOLO LECTURA) la hoja de Incidencias en el spreadsheet original
+ * de AppSheet: regresa su encabezado completo y hasta 3 filas de ejemplo.
+ * Se usa una sola vez, desde el editor, para entender la estructura real de
+ * ese módulo antes de construirlo — no modifica nada.
+ *
+ * Ejecutar desde el editor (dropdown de funciones > inspeccionarIncidencias > Ejecutar)
+ * y revisar el resultado en el panel de "Ejecuciones" / valor de retorno.
+ */
+function inspeccionarIncidencias() {
+  const ss = SpreadsheetApp.openById(ORIGINAL_PRUEBAS_SPREADSHEET_ID);
+  const hoja = ss.getSheets().find((sheet) => {
+    if (sheet.getLastColumn() === 0) return false;
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
+    return headers.indexOf('ID_INCIDENCIA') !== -1;
+  });
+
+  if (!hoja) {
+    const resultado = 'No se encontró ninguna hoja con la columna ID_INCIDENCIA.';
+    Logger.log(resultado);
+    return resultado;
+  }
+
+  const headers = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0];
+  const lastRow = hoja.getLastRow();
+  const filasEjemplo = lastRow > 1
+    ? hoja.getRange(2, 1, Math.min(3, lastRow - 1), hoja.getLastColumn()).getValues()
+    : [];
+
+  const resultado = {
+    nombreHoja: hoja.getName(),
+    totalColumnas: headers.length,
+    totalFilas: Math.max(0, lastRow - 1),
+    encabezados: headers,
+    filasEjemplo: filasEjemplo,
+  };
+
+  Logger.log(JSON.stringify(resultado, null, 2));
+  return resultado;
+}
+
+/**
  * Reapunta USUARIOS y ACCESORIOS al spreadsheet ORIGINAL de AppSheet (en vivo),
  * en vez de a las copias creadas por configurarAmbienteInicial(). Decisión
  * explícita del usuario (2026-09-14) — a partir de aquí, cualquier alta o
