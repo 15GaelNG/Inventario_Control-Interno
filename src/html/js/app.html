@@ -94,6 +94,8 @@
       inputPassword.type = inputPassword.type === 'password' ? 'text' : 'password';
     });
 
+    initGoogleQuickLogin();
+
     document.getElementById('form-login').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const correo = document.getElementById('login-correo').value.trim();
@@ -109,6 +111,43 @@
         errorBox.hidden = false;
       }
     });
+  }
+
+  /**
+   * Detecta la cuenta de Google con la que ya se accedió a la webapp (el
+   * acceso restringido a dominio obliga a iniciar sesión con Google antes de
+   * siquiera llegar aquí) y, si coincide con un usuario activo, muestra el
+   * botón de acceso directo "Continuar como [nombre]".
+   */
+  async function initGoogleQuickLogin() {
+    const chip = document.getElementById('google-account-chip');
+    const divisor = document.getElementById('login-or-divider');
+    try {
+      const identidad = await callServer('apiIdentidadGoogle');
+      if (!identidad || !identidad.coincide) return; // se queda solo el formulario manual
+
+      document.getElementById('google-account-avatar').textContent =
+        (identidad.nombre || identidad.correo).trim().charAt(0).toUpperCase();
+      document.getElementById('google-account-name').textContent = identidad.nombre || identidad.correo;
+      document.getElementById('google-account-email').textContent = identidad.correo;
+      chip.hidden = false;
+      divisor.hidden = false;
+
+      chip.addEventListener('click', async () => {
+        const errorBox = document.getElementById('login-error');
+        errorBox.hidden = true;
+        try {
+          const resultado = await callServer('apiLoginConGoogle');
+          guardarSesion(resultado);
+          render();
+        } catch (err) {
+          errorBox.textContent = err.message;
+          errorBox.hidden = false;
+        }
+      });
+    } catch (err) {
+      // Si falla la detección (poco común), simplemente se queda el formulario manual.
+    }
   }
 
   // ---------- Dashboard ----------

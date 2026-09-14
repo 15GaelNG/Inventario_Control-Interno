@@ -36,16 +36,15 @@ const Auth = (function () {
     return String(rolOriginal || '').toUpperCase() === 'ADMIN' ? Config.ROLES.ADMIN : Config.ROLES.OPERADOR;
   }
 
-  function login(correo, password) {
+  function buscarUsuarioPorCorreo_(correo) {
     const ssId = Config.SPREADSHEET_IDS.USUARIOS();
     const hoja = hojaUsuarios_();
-    const found = SheetUtils.getAll(ssId, hoja.getName())
+    return SheetUtils.getAll(ssId, hoja.getName())
       .find((u) => String(u.CORREO).toLowerCase().trim() === String(correo).toLowerCase().trim());
+  }
 
-    if (!found) throw new Error('Usuario o contraseña incorrectos');
-    if (String(found.ACTIVO).toUpperCase() !== 'TRUE') throw new Error('Usuario inactivo, contacta al administrador');
-    if (String(found['CONTRASEÑA']) !== String(password)) throw new Error('Usuario o contraseña incorrectos');
-
+  /** Crea el token de sesión a partir de una fila de usuario ya validada (login manual o con Google) */
+  function construirSesion_(found) {
     const token = Utilities.getUuid();
     const sesion = {
       correo: found.CORREO,
@@ -62,6 +61,42 @@ const Auth = (function () {
     );
 
     return Object.assign({ token: token }, sesion);
+  }
+
+  function login(correo, password) {
+    const found = buscarUsuarioPorCorreo_(correo);
+    if (!found) throw new Error('Usuario o contraseña incorrectos');
+    if (String(found.ACTIVO).toUpperCase() !== 'TRUE') throw new Error('Usuario inactivo, contacta al administrador');
+    if (String(found['CONTRASEÑA']) !== String(password)) throw new Error('Usuario o contraseña incorrectos');
+    return construirSesion_(found);
+  }
+
+  /**
+   * Identidad de Google detectada automáticamente (la webapp ya exige estar
+   * logueado con una cuenta @ciudadmaderas.com por el acceso restringido a
+   * dominio). Se usa para mostrar el botón "Continuar como [nombre]" sin
+   * pedir nada más — solo si ese correo existe y está activo en la hoja.
+   */
+  function identidadGoogle() {
+    const correoDetectado = Session.getActiveUser().getEmail();
+    if (!correoDetectado) return { coincide: false };
+
+    const found = buscarUsuarioPorCorreo_(correoDetectado);
+    if (!found || String(found.ACTIVO).toUpperCase() !== 'TRUE') {
+      return { coincide: false, correo: correoDetectado };
+    }
+    return { coincide: true, correo: correoDetectado, nombre: found.NOMBRE };
+  }
+
+  function loginConGoogle() {
+    const correoDetectado = Session.getActiveUser().getEmail();
+    if (!correoDetectado) throw new Error('No se pudo detectar tu cuenta de Google en esta sesión.');
+
+    const found = buscarUsuarioPorCorreo_(correoDetectado);
+    if (!found) throw new Error('Tu cuenta (' + correoDetectado + ') no está registrada en el sistema.');
+    if (String(found.ACTIVO).toUpperCase() !== 'TRUE') throw new Error('Usuario inactivo, contacta al administrador');
+
+    return construirSesion_(found);
   }
 
   function validarSesion(token) {
@@ -82,5 +117,5 @@ const Auth = (function () {
     CacheService.getScriptCache().remove('sesion_' + token);
   }
 
-  return { login, validarSesion, requiereRol, logout, crearHashParaUsuario };
+  return { login, identidadGoogle, loginConGoogle, validarSesion, requiereRol, logout, crearHashParaUsuario };
 })();

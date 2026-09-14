@@ -11,6 +11,12 @@
 function apiLogin(correo, password) {
   return Auth.login(correo, password);
 }
+function apiIdentidadGoogle() {
+  return Auth.identidadGoogle();
+}
+function apiLoginConGoogle() {
+  return Auth.loginConGoogle();
+}
 function apiLogout(token) {
   return Auth.logout(token);
 }
