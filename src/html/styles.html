@@ -19,6 +19,8 @@
     --color-border: #E7E7E7;
     --color-danger: #b3261e;
     --color-success: #1e7d4f;
+    --color-note-bg: var(--color-primary-soft);
+    --color-badge-bg: #ffffff; /* fijo: el logo (navy+dorado) siempre necesita fondo claro, en cualquier tema */
 
     --radius: 12px;
     --shadow: 0 1px 3px rgba(6,38,58,.08), 0 1px 2px rgba(6,38,58,.05);
@@ -26,18 +28,25 @@
   }
 
   :root[data-theme="dark"] {
-    --color-primary: #16507a;
-    --color-primary-hover: #1c6293;
+    --color-primary: #2f7bb0;
+    --color-primary-hover: #3f91cb;
     --color-primary-soft: #163041;
     --color-accent: #c4b280;
     --color-accent-hover: #d4c393;
     --color-accent-soft: #2a2718;
 
     --color-bg: #0b1a23;
-    --color-surface: #12232d;
+    --color-surface: #142732;
     --color-text: #edf1f3;
-    --color-text-muted: #94a6ae;
-    --color-border: #223842;
+    --color-text-muted: #9db0b8;
+    --color-border: #26404c;
+    --color-note-bg: #16344450;
+  }
+
+  /* Transición suave al cambiar de tema (no anima layout, solo color/fondo) */
+  body, .card, input, select, button, .login-form-card, .login-icon-badge,
+  .theme-toggle, .theme-toggle button, .login-security-note, #sidebar, .nav-item {
+    transition: background-color .35s ease, color .35s ease, border-color .35s ease, box-shadow .35s ease;
   }
 
   * { box-sizing: border-box; }
@@ -133,14 +142,31 @@
     flex: 1;
   }
 
-  .login-hero {
-    position: relative; overflow: hidden;
-    display: flex; flex-direction: column; justify-content: space-between;
-    padding: 48px 56px;
-    background-size: cover; background-position: center;
+  .login-hero { position: relative; overflow: hidden; }
+
+  .login-hero-bg {
+    position: absolute; inset: 0; background-size: cover; background-position: center;
+    transition: opacity .6s ease;
+  }
+  .login-hero-bg-light {
+    opacity: 1;
     background-image:
       linear-gradient(100deg, rgba(6,20,30,.88) 0%, rgba(6,20,30,.55) 45%, rgba(6,20,30,.25) 75%),
       url('data:image/jpeg;base64,<?!= include('html/loginBgBase64') ?>');
+  }
+  .login-hero-bg-dark {
+    opacity: 0;
+    background-image:
+      linear-gradient(100deg, rgba(3,10,16,.80) 0%, rgba(3,10,16,.50) 45%, rgba(3,10,16,.20) 75%),
+      url('data:image/jpeg;base64,<?!= include('html/loginBgDarkBase64') ?>');
+  }
+  :root[data-theme="dark"] .login-hero-bg-light { opacity: 0; }
+  :root[data-theme="dark"] .login-hero-bg-dark { opacity: 1; }
+
+  .login-hero-content {
+    position: relative; z-index: 1; height: 100%;
+    display: flex; flex-direction: column; justify-content: space-between;
+    padding: 48px 56px;
   }
 
   .login-brand { display: flex; align-items: center; gap: 12px; }
@@ -180,8 +206,9 @@
     border: 1px solid var(--color-border);
   }
   .login-icon-badge {
-    width: 72px; height: 72px; border-radius: 18px; background: var(--color-primary-soft);
+    width: 72px; height: 72px; border-radius: 18px; background: var(--color-badge-bg);
     display: flex; align-items: center; justify-content: center; margin: 0 auto 18px;
+    box-shadow: var(--shadow);
   }
   .login-icon-badge img { width: 42px; height: 42px; }
 
@@ -210,8 +237,9 @@
   }
 
   .login-security-note {
-    margin-top: 20px; background: var(--color-primary-soft); border-radius: 12px;
+    margin-top: 20px; background: var(--color-note-bg); border-radius: 12px;
     padding: 12px 14px; display: flex; gap: 10px; align-items: flex-start;
+    border: 1px solid var(--color-border);
   }
   .login-security-note .icon { font-size: 16px; line-height: 1.4; }
   .login-security-note strong { display: block; font-size: 12.5px; color: var(--color-text); }
@@ -223,7 +251,8 @@
 
   @media (max-width: 900px) {
     .login-grid { grid-template-columns: 1fr; }
-    .login-hero { padding: 32px 24px; min-height: 340px; }
+    .login-hero { min-height: 340px; }
+    .login-hero-content { padding: 32px 24px; }
     .login-hero-title { font-size: 24px; }
     .login-features { grid-template-columns: repeat(2, 1fr); }
   }
