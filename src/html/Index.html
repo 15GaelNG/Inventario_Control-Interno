@@ -21,10 +21,6 @@
           <button type="button" class="sidebar-collapse-btn" id="sidebar-collapse-btn" title="Colapsar menú">⟨</button>
         </div>
 
-        <div class="sidebar-cm-logo">
-          <img class="cm-logo-light" src="data:image/png;base64,<?!= include('html/cmLogoLightBase64') ?>" alt="Ciudad Maderas" />
-          <img class="cm-logo-dark" src="data:image/png;base64,<?!= include('html/cmLogoDarkBase64') ?>" alt="Ciudad Maderas" />
-        </div>
 
         <div class="nav-item" data-view="dashboard">
           <span class="nav-icon">🏠</span><span class="nav-label">Inicio</span>
@@ -41,7 +37,11 @@
       </nav>
       <main id="main">
         <div class="topbar">
-          <div class="topbar-date" id="topbar-date"></div>
+          <div class="topbar-left">
+            <img class="topbar-cm-logo cm-logo-light" src="data:image/png;base64,<?!= include('html/cmLogoLightBase64') ?>" alt="Ciudad Maderas" />
+            <img class="topbar-cm-logo cm-logo-dark" src="data:image/png;base64,<?!= include('html/cmLogoDarkBase64') ?>" alt="Ciudad Maderas" />
+            <div class="topbar-date" id="topbar-date"></div>
+          </div>
           <div class="topbar-theme-toggle">
             <button type="button" class="theme-btn" data-tema="light" title="Modo claro">☀️</button>
             <button type="button" class="theme-btn" data-tema="dark" title="Modo oscuro">🌙</button>
