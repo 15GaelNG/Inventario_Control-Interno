@@ -35,6 +35,11 @@ function apiHistorialMovimientos(token, idArticulo) {
   return AccesoriosService.historialMovimientos(token, idArticulo);
 }
 
+// --- Vehículos ---
+function apiListarVehiculosBasico(token) {
+  return VehiculosService.listarBasico(token);
+}
+
 // --- Incidencias ---
 function apiListarIncidencias(token) {
   return IncidenciasService.listar(token);

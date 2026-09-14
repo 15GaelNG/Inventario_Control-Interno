@@ -379,6 +379,36 @@
     const vacio = document.getElementById('incidencias-vacio');
     const modal = document.getElementById('modal-cerrar');
 
+    // Autollenado: el folio del vehículo trae Departamento/Modelo desde Vehículos
+    const vehiculosPorFolio = {};
+    try {
+      const vehiculos = await callServer('apiListarVehiculosBasico', state.token);
+      const datalist = document.getElementById('lista-folios-vehiculo');
+      datalist.innerHTML = vehiculos.map((v) => {
+        vehiculosPorFolio[v.FOLIO] = v;
+        const etiqueta = [v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ');
+        return `<option value="${v.FOLIO}">${etiqueta}</option>`;
+      }).join('');
+    } catch (err) {
+      // Si falla la carga del catálogo, el folio se sigue pudiendo capturar a mano.
+    }
+
+    document.getElementById('inc-folio').addEventListener('input', (ev) => {
+      const vehiculo = vehiculosPorFolio[ev.target.value];
+      const campoDepto = document.getElementById('inc-departamento');
+      const campoModelo = document.getElementById('inc-modelo');
+      if (vehiculo) {
+        campoDepto.value = vehiculo.DEPARTAMENTO;
+        campoModelo.value = [vehiculo.MARCA, vehiculo.LINEA_VEHICULO].filter(Boolean).join(' ');
+        document.getElementById('inc-anio').value = vehiculo.MODELO || '';
+        document.getElementById('tag-departamento').hidden = false;
+        document.getElementById('tag-modelo').hidden = false;
+      } else {
+        document.getElementById('tag-departamento').hidden = true;
+        document.getElementById('tag-modelo').hidden = true;
+      }
+    });
+
     function formatearFecha(valor) {
       if (!valor) return '—';
       const f = new Date(valor);

@@ -24,6 +24,26 @@ const VehiculosService = (function () {
     return SheetUtils.getAll(ssId(), SHEET_VEHICULOS);
   }
 
+  /**
+   * Catálogo ligero (FOLIO + datos clave) para autocompletar otros módulos
+   * que referencian un vehículo por folio (ej. Incidencias). Excluye
+   * vehículos dados de baja. MODELO en esta hoja es el año del vehículo,
+   * no el nombre del modelo (ese es LINEA VEHICULO).
+   */
+  function listarBasico(token) {
+    Auth.validarSesion(token);
+    return SheetUtils.getAll(ssId(), SHEET_VEHICULOS)
+      .filter((v) => v['FOLIO'] && String(v['ESTATUS'] || '').toUpperCase() !== 'BAJA VEHICULAR')
+      .map((v) => ({
+        FOLIO: v['FOLIO'],
+        DEPARTAMENTO: v['DEPARTAMENTO'] || '',
+        MARCA: v['MARCA'] || '',
+        LINEA_VEHICULO: v['LINEA VEHICULO'] || '',
+        MODELO: v['MODELO'] || '',
+      }))
+      .sort((a, b) => String(a.FOLIO).localeCompare(String(b.FOLIO)));
+  }
+
   function crear(token, vehiculo) {
     Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
     return SheetUtils.insert(ssId(), SHEET_VEHICULOS, vehiculo);
@@ -37,5 +57,5 @@ const VehiculosService = (function () {
   // TODO: reasignarResponsable, registrarVerificacion, registrarServicio,
   //       guardarInspeccion (usa PdfService.generarReporteDanios)
 
-  return { listar, crear, actualizar };
+  return { listar, listarBasico, crear, actualizar };
 })();
