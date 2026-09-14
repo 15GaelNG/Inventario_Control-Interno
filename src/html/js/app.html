@@ -6,6 +6,29 @@
    * solo por cambiar de pantalla.
    */
 
+  // Tema (claro/oscuro) — se aplica antes de montar cualquier vista para evitar parpadeo.
+  (function initTema() {
+    try {
+      const guardado = localStorage.getItem('tema');
+      if (guardado === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+    } catch (e) { /* localStorage puede fallar en vista previa/incógnito, se ignora */ }
+  })();
+
+  function aplicarTema(tema) {
+    if (tema === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+    try { localStorage.setItem('tema', tema); } catch (e) { /* no-op */ }
+    const btnClaro = document.getElementById('theme-light');
+    const btnOscuro = document.getElementById('theme-dark');
+    if (btnClaro && btnOscuro) {
+      btnClaro.classList.toggle('active', tema !== 'dark');
+      btnOscuro.classList.toggle('active', tema === 'dark');
+    }
+  }
+
   const state = {
     token: sessionStorage.getItem('token') || null,
     sesion: JSON.parse(sessionStorage.getItem('sesion') || 'null'),
@@ -61,6 +84,18 @@
   function initLogin() {
     const login = document.getElementById('login-screen-container');
     montarVista('tpl-login', null, login);
+
+    aplicarTema(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
+    document.getElementById('theme-light').addEventListener('click', () => aplicarTema('light'));
+    document.getElementById('theme-dark').addEventListener('click', () => aplicarTema('dark'));
+
+    const inputPassword = document.getElementById('login-password');
+    document.getElementById('toggle-password').addEventListener('click', (ev) => {
+      const oculto = inputPassword.type === 'password';
+      inputPassword.type = oculto ? 'text' : 'password';
+      ev.currentTarget.textContent = oculto ? '🙈' : '👁️';
+    });
+
     document.getElementById('form-login').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const correo = document.getElementById('login-correo').value.trim();
