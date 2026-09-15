@@ -53,6 +53,9 @@ function apiActualizarCampoVerificacion(token, id, campo, valor) {
 function apiEliminarVerificaciones(token, ids) {
   return VerificacionesService.eliminar(token, ids);
 }
+function apiPrevisualizarComprobanteVerificacion(token, ruta) {
+  return VerificacionesService.previsualizarComprobante(token, ruta);
+}
 function apiUrlComprobanteVerificacion(token, ruta) {
   return VerificacionesService.urlComprobante(token, ruta);
 }

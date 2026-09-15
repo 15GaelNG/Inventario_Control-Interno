@@ -1,0 +1,95 @@
+<style>
+  .confirmar-card { max-width: 460px; }
+  .confirmar-card h3 { margin: 0 0 6px; font-size: 16px; }
+  .confirmar-mensaje { margin: 0 0 12px; color: var(--color-text-muted); font-size: 13px; line-height: 1.45; }
+  .confirmar-detalle {
+    max-height: 180px; overflow-y: auto; margin: 0 0 12px; padding: 8px 10px 8px 26px;
+    background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 8px; font-size: 12.5px;
+  }
+  .confirmar-detalle li { padding: 2px 0; }
+  .confirmar-clave label { font-size: 12.5px; color: var(--color-text); }
+  .confirmar-acciones { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+  .confirmar-acciones button:disabled { opacity: .5; cursor: not-allowed; }
+</style>
+
+<script>
+  /**
+   * Confirmar — confirmación propia (reemplaza confirm()), con fricción según el riesgo:
+   *
+   *   const ok = await Confirmar.pedir({
+   *     titulo: '¿Eliminar 12 registros?',
+   *     mensaje: 'Esta acción no se puede deshacer.',
+   *     detalle: ['ST0443E · 15/09/2026', …],   // opcional: QUÉ se va a afectar
+   *     textoConfirmar: 'Eliminar',
+   *     peligro: true,                          // botón rojo
+   *     palabraClave: 'ELIMINAR',               // opcional: hay que escribirla para habilitar el botón
+   *   });
+   *
+   * Esc, clic fuera o "Cancelar" → false. El foco inicia en "Cancelar" (la opción segura).
+   */
+  const Confirmar = (function () {
+    const MAX_DETALLE = 50;
+
+    function esc(v) {
+      return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+      ));
+    }
+
+    function pedir(opciones) {
+      const o = Object.assign({ titulo: '¿Continuar?', mensaje: '', detalle: [], textoConfirmar: 'Confirmar', peligro: false }, opciones);
+      const extra = o.detalle.length - MAX_DETALLE;
+
+      return new Promise((resolve) => {
+        const fondo = document.createElement('div');
+        fondo.className = 'modal-backdrop';
+        fondo.innerHTML = `
+          <div class="modal-card confirmar-card" role="alertdialog" aria-modal="true" aria-labelledby="confirmar-titulo">
+            <h3 id="confirmar-titulo">${esc(o.titulo)}</h3>
+            ${o.mensaje ? `<p class="confirmar-mensaje">${esc(o.mensaje)}</p>` : ''}
+            ${o.detalle.length ? `<ul class="confirmar-detalle">${o.detalle.slice(0, MAX_DETALLE).map((d) => `<li>${esc(d)}</li>`).join('')}
+              ${extra > 0 ? `<li><em>…y ${extra} más</em></li>` : ''}</ul>` : ''}
+            ${o.palabraClave ? `<div class="field confirmar-clave">
+              <label for="confirmar-clave">Para confirmar, escribe <strong>${esc(o.palabraClave)}</strong></label>
+              <input type="text" id="confirmar-clave" autocomplete="off" />
+            </div>` : ''}
+            <div class="confirmar-acciones">
+              <button type="button" class="secondary" data-accion="cancelar">Cancelar</button>
+              <button type="button" class="${o.peligro ? 'danger' : ''}" data-accion="confirmar" ${o.palabraClave ? 'disabled' : ''}>${esc(o.textoConfirmar)}</button>
+            </div>
+          </div>`;
+        document.body.appendChild(fondo);
+
+        const botonOk = fondo.querySelector('[data-accion="confirmar"]');
+        const botonCancelar = fondo.querySelector('[data-accion="cancelar"]');
+        const inputClave = fondo.querySelector('#confirmar-clave');
+        const focoPrevio = document.activeElement;
+
+        const terminar = (resultado) => {
+          document.removeEventListener('keydown', alTecla, true);
+          fondo.remove();
+          if (focoPrevio && focoPrevio.focus) focoPrevio.focus();
+          resolve(resultado);
+        };
+        const alTecla = (ev) => {
+          if (ev.key === 'Escape') { ev.stopPropagation(); terminar(false); }
+          if (ev.key === 'Enter' && !botonOk.disabled && document.activeElement !== botonCancelar) { ev.preventDefault(); terminar(true); }
+        };
+
+        if (inputClave) {
+          inputClave.addEventListener('input', () => {
+            botonOk.disabled = inputClave.value.trim().toUpperCase() !== String(o.palabraClave).toUpperCase();
+          });
+        }
+        botonOk.addEventListener('click', () => terminar(true));
+        botonCancelar.addEventListener('click', () => terminar(false));
+        fondo.addEventListener('mousedown', (ev) => { if (ev.target === fondo) terminar(false); });
+        document.addEventListener('keydown', alTecla, true);
+
+        (inputClave || botonCancelar).focus();
+      });
+    }
+
+    return { pedir };
+  })();
+</script>

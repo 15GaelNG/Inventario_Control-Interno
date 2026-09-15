@@ -1,15 +1,34 @@
 <style>
   .dt { position: relative; }
-  .dt-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  .dt-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
   .dt-toolbar .dt-buscar { max-width: 260px; }
   .dt-toolbar button { padding: 8px 12px; font-size: 13px; white-space: nowrap; }
   .dt-toolbar .dt-espacio { flex: 1; }
   .dt-seleccion-info { font-size: 12.5px; color: var(--color-text-muted); }
-  .dt-mensaje { font-size: 12.5px; padding: 6px 10px; border-radius: 8px; }
-  .dt-mensaje.error { background: #fbeceb; color: var(--color-danger); }
-  .dt-mensaje.ok { background: #e5f6ec; color: var(--color-success); }
-
   .dt-ayuda { font-size: 12px; color: var(--color-text-muted); cursor: help; padding: 4px 6px; }
+
+  /* Filtros activos (chips) */
+  .dt-filtros-activos { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; font-size: 12px; }
+  .dt-filtros-activos .dt-filtros-titulo { color: var(--color-text-muted); }
+  .dt-chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 10px; border-radius: 999px;
+    background: var(--color-accent-soft); color: var(--color-text); border: 1px solid var(--color-accent);
+  }
+  .dt-chip button {
+    background: transparent; color: var(--color-text-muted); border: none; padding: 0 6px; font-size: 12px; line-height: 18px; border-radius: 999px;
+  }
+  .dt-chip button:hover { background: var(--color-surface); color: var(--color-danger); }
+  .dt-link { background: transparent; border: none; color: var(--color-primary); padding: 2px 4px; font-size: 12px; text-decoration: underline; }
+  :root[data-theme="dark"] .dt-link { color: var(--color-accent); }
+  .dt-link:hover { background: transparent; }
+
+  /* Aviso de selección (patrón Gmail) */
+  .dt-banner {
+    display: flex; gap: 6px; align-items: center; justify-content: center; flex-wrap: wrap;
+    padding: 7px 10px; margin-bottom: 8px; border-radius: 8px; font-size: 12.5px;
+    background: var(--color-primary-soft); color: var(--color-text);
+  }
+
   /* Ocupa el alto disponible de la ventana (se ajusta en JS según dónde quedó la tabla) */
   .dt-scroll { overflow: auto; max-height: 64vh; min-height: 240px; border: 1px solid var(--color-border); border-radius: 10px; }
   .dt table { font-size: 12.5px; }
@@ -33,13 +52,32 @@
   .dt tbody tr.dt-fila-seleccionada td { background: var(--color-primary-soft); }
   .dt .dt-col-check { width: 36px; text-align: center; padding: 0 8px; }
   .dt .dt-col-check input { width: auto; cursor: pointer; }
-  .dt td.dt-editable { cursor: text; }
-  .dt td.dt-editable:hover { box-shadow: inset 0 0 0 1px var(--color-accent); }
+  .dt .dt-col-ver { width: 34px; text-align: center; padding: 0 4px; }
+  .dt .dt-btn-ver {
+    background: transparent; border: none; padding: 3px 6px; border-radius: 6px; font-size: 13px; color: var(--color-text-muted);
+  }
+  .dt .dt-btn-ver:hover { background: var(--color-primary-soft); color: var(--color-text); }
+  .dt .dt-num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* Celda editable: lápiz visible al pasar el mouse */
+  .dt td.dt-editable { cursor: text; position: relative; }
+  .dt td.dt-editable:hover { box-shadow: inset 0 0 0 1px var(--color-accent); padding-right: 24px; }
+  .dt td.dt-editable:hover::after { content: '✏️'; position: absolute; right: 5px; top: 50%; transform: translateY(-50%); font-size: 11px; opacity: .8; }
   .dt td.dt-editando { padding: 2px 4px; overflow: visible; }
+  .dt td.dt-editando::after { content: none !important; }
   .dt td.dt-editando input, .dt td.dt-editando select { padding: 5px 8px; font-size: 12.5px; min-width: 130px; }
   .dt td.dt-guardando { opacity: .5; }
   .dt td.dt-error-celda { box-shadow: inset 0 0 0 2px var(--color-danger); }
-  .dt-vacio { text-align: center; color: var(--color-text-muted); padding: 28px 0 !important; }
+  .dt-vacio { text-align: center; color: var(--color-text-muted); padding: 28px 0 !important; white-space: normal !important; }
+  .dt-vacio.dt-error { color: var(--color-danger); }
+
+  /* Carga (skeleton) */
+  .dt-skel {
+    display: block; height: 10px; border-radius: 6px; width: 70%;
+    background: linear-gradient(90deg, var(--color-border) 25%, var(--color-bg) 50%, var(--color-border) 75%);
+    background-size: 200% 100%; animation: dt-brillo 1.2s ease-in-out infinite;
+  }
+  @keyframes dt-brillo { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
   .dt-pie { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-top: 10px; font-size: 12.5px; color: var(--color-text-muted); }
   .dt-paginacion { display: flex; gap: 6px; align-items: center; }
@@ -68,44 +106,80 @@
   .dt-lista-valores .dt-conteo { margin-left: auto; color: var(--color-text-muted); font-size: 11px; }
   .dt-columnas label { display: flex; align-items: center; gap: 8px; margin: 0; padding: 4px 2px; color: var(--color-text); font-weight: 400; cursor: pointer; }
   .dt-columnas input { width: auto; }
+
+  /* Panel lateral de detalle */
+  .dt-panel-fondo { position: fixed; inset: 0; z-index: 700; background: rgba(6,20,30,.35); }
+  .dt-panel {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 701; width: min(480px, 100vw);
+    background: var(--color-surface); box-shadow: var(--shadow-lg); display: flex; flex-direction: column;
+    animation: dt-panel-entrar .2s ease-out;
+  }
+  @keyframes dt-panel-entrar { from { transform: translateX(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .dt-panel-header {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+    padding: 16px 18px; border-bottom: 1px solid var(--color-border);
+  }
+  .dt-panel-header h3 { margin: 0; font-size: 16px; }
+  .dt-panel-header p { margin: 2px 0 0; font-size: 12px; color: var(--color-text-muted); }
+  .dt-panel-cuerpo { flex: 1; overflow-y: auto; padding: 8px 18px 18px; }
+  .dt-campo { display: grid; grid-template-columns: 40% 1fr; gap: 8px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--color-border); font-size: 13px; }
+  .dt-campo-titulo { color: var(--color-text-muted); font-size: 12px; font-weight: 500; }
+  .dt-campo-valor { display: flex; align-items: center; gap: 6px; min-width: 0; word-break: break-word; }
+  .dt-campo-valor .dt-campo-texto { flex: 1; }
+  .dt-campo-valor button { padding: 4px 8px; font-size: 12px; flex-shrink: 0; }
+  .dt-campo-valor input, .dt-campo-valor select { padding: 6px 8px; font-size: 13px; }
+  .dt-panel-extra:empty { display: none; }
+  .dt-panel-extra { margin-top: 14px; }
 </style>
 
 <script>
   /**
    * DataTable — tabla de datos reutilizable (estilo AppSheet), sin dependencias.
+   * Requiere los componentes Notificar y Confirmar (se incluyen antes en Index.html).
    *
    *   const tabla = DataTable.crear(elementoContenedor, {
    *     idCampo: 'ID',                         // clave única de cada fila
    *     columnas: [
    *       { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', editable: true },
-   *       { campo: 'KM', titulo: 'Kilometraje', tipo: 'numero', editable: true },
-   *       { campo: 'FECHA', titulo: 'Fecha', tipo: 'fecha', editable: true },   // valor ISO o Date
+   *       { campo: 'KM', titulo: 'Kilometraje', tipo: 'numero', editable: true },   // alineado a la derecha
+   *       { campo: 'FECHA', titulo: 'Fecha', tipo: 'fecha', editable: true },       // valor ISO o Date
    *       { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', editable: true,
    *         opciones: ['ACTIVO', 'BAJA'] },     // si se omite, usa los valores existentes
-   *       { campo: 'FOTO', titulo: 'Foto', tipo: 'texto', filtrable: false, ordenable: false,
+   *       { campo: 'FOTO', titulo: 'Foto', filtrable: false, ordenable: false,
    *         render: (valor, fila) => '<button …>' },  // HTML propio (el módulo escapa lo que use)
    *       { campo: 'DIAS', titulo: 'Días', tipo: 'numero',
    *         valor: (fila) => calcularDias(fila) },    // columna calculada
+   *       // Otras opciones por columna: visible:false, exportable:false, valorExportar:(fila)=>…,
+   *       //   enDetalle:false (no mostrar en el panel de detalle)
    *     ],
-   *     datos: [],
    *     tamanoPagina: 25,
    *     seleccionable: true,
    *     ordenInicial: { campo: 'FECHA', dir: 'desc' },
    *     textoVacio: 'Sin registros',
-   *     ayuda: 'Doble clic para editar…',       // tooltip "ⓘ Ayuda" en la barra (opcional)
-   *     // Botón verde "Exportar a Excel" (activo por defecto). Exporta columnas visibles + filtros
-   *     // + búsqueda + orden, todas las páginas. false lo oculta.
-   *     exportar: { nombreArchivo: 'Verificaciones' },
-   *     // Por columna: exportable: false la omite; valorExportar: (fila) => valor personalizado.
+   *     ayuda: 'Doble clic para editar…',       // tooltip "ⓘ Ayuda" (opcional)
+   *     exportar: { nombreArchivo: 'Verificaciones' },   // botón verde; false lo oculta
    *     alCambiarFiltros: (filtros) => {},      // opcional, p. ej. para marcar chips de KPI
-   *     // Guardar una celda. Lanza error para rechazar. Si regresa un objeto, reemplaza la fila.
+   *
+   *     // Cómo nombrar una fila en confirmaciones y en el panel (default: su id)
+   *     etiquetaFila: (fila) => fila.FOLIO + ' · ' + fila.PLACA,
+   *     // Panel lateral de detalle (botón 🔍 por fila). false lo desactiva.
+   *     detalle: {
+   *       titulo: (fila) => 'Verificación ' + fila.FOLIO,
+   *       contenidoExtra: (fila, contenedor) => {},   // p. ej. mostrar una imagen
+   *     },
+   *     // Eliminar pide escribir "ELIMINAR" a partir de esta cantidad de filas
+   *     umbralPalabraClave: 10,
+   *
+   *     // Guardar un campo (celda o panel). Lanza error para rechazar. Si regresa objeto, reemplaza la fila.
    *     alEditar: async (fila, campo, valorNuevo) => filaActualizada,
-   *     // Eliminar varias filas. Si se omite, no aparece el botón de eliminar.
+   *     // Eliminar varias filas. Si se omite, no aparece la opción.
    *     alEliminar: async (filas) => {},
    *   });
    *
-   *   tabla.setDatos(nuevosDatos);   // conserva filtros, orden, página y selección
-   *   tabla.getSeleccion();          // filas seleccionadas
+   *   tabla.setDatos(nuevosDatos);   // quita el estado de carga; conserva filtros, orden, página y selección
+   *   tabla.setCargando(true);       // filas grises mientras llega la información (estado inicial)
+   *   tabla.setError('mensaje');     // muestra el error dentro de la tabla
+   *   tabla.getSeleccion();
    *   tabla.setFiltro('ESTADO', { valores: ['Vencida'] });   // o { op: '>', v1: 30 }; null lo quita
    *   tabla.limpiarFiltros();
    *
@@ -128,6 +202,7 @@
       ],
     };
     const SIN_VALOR = ['vacio', 'no_vacio'];
+    const FILAS_SKELETON = 8;
 
     // ---------- utilidades ----------
     function esc(v) {
@@ -140,43 +215,59 @@
     /** Fecha → "yyyy-MM-dd" en hora local (para comparar por día) */
     function claveFecha(v) {
       if (vacio(v)) return '';
+      if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
       const f = v instanceof Date ? v : new Date(v);
       if (isNaN(f)) return '';
       return [f.getFullYear(), String(f.getMonth() + 1).padStart(2, '0'), String(f.getDate()).padStart(2, '0')].join('-');
+    }
+    /** "yyyy-MM-dd" → "dd/mm/aaaa" (siempre con ceros, igual que el Excel exportado y AppSheet) */
+    function fechaLegible(clave) {
+      if (!clave) return '';
+      const [y, m, d] = clave.split('-');
+      return `${d}/${m}/${y}`;
     }
     function aNumero(v) {
       if (vacio(v)) return null;
       const n = Number(String(v).replace(/[$,\s]/g, ''));
       return isNaN(n) ? null : n;
     }
+    function plural(n, singular, pluralTexto) { return n === 1 ? singular : (pluralTexto || singular + 's'); }
 
     function crear(contenedor, config) {
-      const cfg = Object.assign({ tamanoPagina: 25, seleccionable: true, textoVacio: 'Sin registros', exportar: true }, config);
+      const cfg = Object.assign({
+        tamanoPagina: 25, seleccionable: true, textoVacio: 'Sin registros', exportar: true,
+        detalle: {}, umbralPalabraClave: 10,
+      }, config);
       if (cfg.exportar === true) cfg.exportar = { nombreArchivo: 'Datos' };
       const columnas = cfg.columnas.map((c) => Object.assign(
-        { tipo: 'texto', editable: false, filtrable: true, ordenable: true, visible: true, exportable: true }, c
+        { tipo: 'texto', editable: false, filtrable: true, ordenable: true, visible: true, exportable: true, enDetalle: true }, c
       ));
       const idDe = (fila) => String(fila[cfg.idCampo]);
+      const etiquetaDe = (fila) => (cfg.etiquetaFila ? cfg.etiquetaFila(fila) : idDe(fila));
 
       const st = {
         datos: cfg.datos || [],
+        cargando: !cfg.datos,        // sin datos iniciales = todavía cargando
+        error: null,
         busqueda: '',
-        filtros: {},          // campo -> { op, v1, v2 } | { valores: [..] }
+        filtros: {},                 // campo -> { op, v1, v2 } | { valores: [..] }
         orden: cfg.ordenInicial ? Object.assign({}, cfg.ordenInicial) : null,
         pagina: 1,
         tamanoPagina: cfg.tamanoPagina,
         seleccion: new Set(),
         ocultas: new Set(columnas.filter((c) => !c.visible).map((c) => c.campo)),
-        editando: null,       // { id, campo }
+        editando: null,              // { id, campo } edición en celda
+        detalleId: null,             // fila abierta en el panel
       };
 
       const valorDe = (col, fila) => (col.valor ? col.valor(fila) : fila[col.campo]);
       const colPorCampo = (campo) => columnas.find((c) => c.campo === campo);
       const columnasVisibles = () => columnas.filter((c) => !st.ocultas.has(c.campo));
+      const puedeEditar = (col) => col.editable && !!cfg.alEditar;
 
       function textoVisible(col, fila) {
         const v = valorDe(col, fila);
-        if (col.tipo === 'fecha') { const k = claveFecha(v); return k ? new Date(k + 'T00:00:00').toLocaleDateString('es-MX') : ''; }
+        if (col.tipo === 'fecha') return fechaLegible(claveFecha(v));
         if (col.tipo === 'numero') { const n = aNumero(v); return n === null ? '' : n.toLocaleString('es-MX'); }
         return vacio(v) ? '' : String(v);
       }
@@ -185,24 +276,24 @@
       contenedor.innerHTML = `
         <div class="dt">
           <div class="dt-toolbar">
-            <input type="search" class="dt-buscar" placeholder="Buscar en la tabla…" />
-            <button type="button" class="secondary dt-btn-limpiar" hidden>✕ Limpiar filtros</button>
+            <input type="search" class="dt-buscar" placeholder="Buscar en la tabla…" aria-label="Buscar en la tabla" />
             <button type="button" class="secondary dt-btn-columnas">☰ Columnas</button>
             ${cfg.ayuda ? `<span class="dt-ayuda" title="${esc(cfg.ayuda)}">ⓘ Ayuda</span>` : ''}
-            <span class="dt-mensaje" hidden></span>
             <span class="dt-espacio"></span>
             <span class="dt-seleccion-info" hidden></span>
             <button type="button" class="danger dt-btn-eliminar" hidden>🗑️ Eliminar seleccionados</button>
             ${cfg.exportar ? '<button type="button" class="btn-excel dt-btn-excel" title="Descarga lo que ves: columnas visibles, filtros, búsqueda y orden (todas las páginas)">📥 Exportar a Excel</button>' : ''}
           </div>
+          <div class="dt-filtros-activos" hidden></div>
+          <div class="dt-banner" hidden></div>
           <div class="dt-scroll"><table><thead></thead><tbody></tbody></table></div>
           <div class="dt-pie">
-            <span class="dt-resumen"></span>
+            <span class="dt-resumen" aria-live="polite"></span>
             <div class="dt-paginacion">
-              <select class="dt-tamano">${[10, 25, 50, 100].map((n) => `<option value="${n}">${n} por página</option>`).join('')}</select>
-              <button type="button" class="secondary dt-prev">‹</button>
+              <select class="dt-tamano" aria-label="Registros por página">${[10, 25, 50, 100].map((n) => `<option value="${n}">${n} por página</option>`).join('')}</select>
+              <button type="button" class="secondary dt-prev" aria-label="Página anterior">‹</button>
               <span class="dt-pagina"></span>
-              <button type="button" class="secondary dt-next">›</button>
+              <button type="button" class="secondary dt-next" aria-label="Página siguiente">›</button>
             </div>
           </div>
         </div>`;
@@ -210,17 +301,14 @@
       const $ = (sel) => contenedor.querySelector(sel);
       const thead = $('thead');
       const tbody = $('tbody');
-      const mensaje = $('.dt-mensaje');
       $('.dt-tamano').value = String(st.tamanoPagina);
       let popover = null;
-      let timerMensaje = null;
+      let panel = null;
+      let ultimaFirmaFiltros = '{}';
+      let ultimaFirmaVista = '';
 
       function avisar(texto, tipo) {
-        clearTimeout(timerMensaje);
-        mensaje.textContent = texto;
-        mensaje.className = 'dt-mensaje ' + (tipo || 'ok');
-        mensaje.hidden = false;
-        timerMensaje = setTimeout(() => { mensaje.hidden = true; }, tipo === 'error' ? 7000 : 3000);
+        if (tipo === 'error') Notificar.error(texto); else Notificar.exito(texto);
       }
 
       // ---------- filtrar / ordenar ----------
@@ -300,66 +388,134 @@
         return filas;
       }
 
+      /** Texto legible de un filtro para el chip: "Días para vencer < 30" */
+      function describirFiltro(col, f) {
+        if (f.valores) {
+          if (!f.valores.length) return `${col.titulo}: (ninguno)`;
+          const nombres = f.valores.map((v) => (v === '' ? '(vacío)' : v));
+          return `${col.titulo}: ${nombres.length <= 3 ? nombres.join(', ') : nombres.length + ' valores'}`;
+        }
+        const ops = OPERADORES[col.tipo] || OPERADORES.texto;
+        const etiquetaOp = (ops.find(([k]) => k === f.op) || [, f.op])[1].replace(/\s*\(.*\)$/, '');
+        if (SIN_VALOR.includes(f.op)) return `${col.titulo} ${etiquetaOp.toLowerCase()}`;
+        const valor = (x) => (col.tipo === 'fecha' ? fechaLegible(x) : col.tipo === 'numero' ? x : `“${x}”`);
+        const simbolo = { '=': '=', '!=': '≠', '>': '>', '>=': '≥', '<': '<', '<=': '≤' }[f.op];
+        if (f.op === 'entre') return `${col.titulo} entre ${valor(f.v1)} y ${valor(f.v2)}`;
+        if (simbolo) return `${col.titulo} ${simbolo} ${valor(f.v1)}`;
+        return `${col.titulo} ${etiquetaOp.toLowerCase()} ${valor(f.v1)}`;
+      }
+
       // ---------- render ----------
       function render() {
         const visibles = columnasVisibles();
-        const filas = filasFiltradas();
+        const conDetalle = cfg.detalle !== false;
+        const nColumnas = visibles.length + (cfg.seleccionable ? 1 : 0) + (conDetalle ? 1 : 0);
+        const filas = st.cargando || st.error ? [] : filasFiltradas();
+
+        // Al cambiar filtros o búsqueda, soltar la selección de lo que ya no se ve
+        // (evita borrar registros que el usuario no tiene en pantalla)
+        const firmaVista = JSON.stringify([st.filtros, st.busqueda.trim()]);
+        if (firmaVista !== ultimaFirmaVista) {
+          ultimaFirmaVista = firmaVista;
+          const visiblesIds = new Set(filas.map(idDe));
+          st.seleccion.forEach((id) => { if (!visiblesIds.has(id)) st.seleccion.delete(id); });
+        }
+
         const totalPaginas = Math.max(1, Math.ceil(filas.length / st.tamanoPagina));
         st.pagina = Math.min(Math.max(1, st.pagina), totalPaginas);
         const inicio = (st.pagina - 1) * st.tamanoPagina;
         const pagina = filas.slice(inicio, inicio + st.tamanoPagina);
 
-        // Selección: quitar ids que ya no existen en los datos
         const existentes = new Set(st.datos.map(idDe));
         st.seleccion.forEach((id) => { if (!existentes.has(id)) st.seleccion.delete(id); });
-        const idsFiltrados = filas.map(idDe);
-        const seleccionadosFiltrados = idsFiltrados.filter((id) => st.seleccion.has(id)).length;
+        const idsPagina = pagina.map(idDe);
+        const selPagina = idsPagina.filter((id) => st.seleccion.has(id)).length;
 
+        // Encabezado
         thead.innerHTML = '<tr>' +
-          (cfg.seleccionable ? '<th class="dt-col-check"><input type="checkbox" class="dt-check-todos" title="Seleccionar todos los filtrados" /></th>' : '') +
+          (cfg.seleccionable ? '<th class="dt-col-check"><input type="checkbox" class="dt-check-pagina" title="Seleccionar esta página" aria-label="Seleccionar esta página" /></th>' : '') +
+          (conDetalle ? '<th class="dt-col-ver" aria-label="Detalle"></th>' : '') +
           visibles.map((col) => {
-            const orden = st.orden && st.orden.campo === col.campo ? (st.orden.dir === 'asc' ? '▲' : '▼') : '';
-            return `<th><div class="dt-th">
-              <span class="dt-th-titulo" data-campo="${esc(col.campo)}" title="${col.ordenable ? 'Ordenar' : ''}">${esc(col.titulo)}${orden ? `<span class="dt-orden">${orden}</span>` : ''}</span>
-              ${col.filtrable ? `<button type="button" class="dt-btn-filtro ${st.filtros[col.campo] ? 'activo' : ''}" data-campo="${esc(col.campo)}" title="Filtrar">▾</button>` : ''}
+            const orden = st.orden && st.orden.campo === col.campo ? st.orden.dir : null;
+            const ariaSort = orden === 'asc' ? 'ascending' : orden === 'desc' ? 'descending' : 'none';
+            return `<th aria-sort="${ariaSort}" class="${col.tipo === 'numero' ? 'dt-num' : ''}"><div class="dt-th">
+              <span class="dt-th-titulo" data-campo="${esc(col.campo)}" title="${col.ordenable ? 'Ordenar' : ''}">${esc(col.titulo)}${orden ? `<span class="dt-orden">${orden === 'asc' ? '▲' : '▼'}</span>` : ''}</span>
+              ${col.filtrable ? `<button type="button" class="dt-btn-filtro ${st.filtros[col.campo] ? 'activo' : ''}" data-campo="${esc(col.campo)}" title="Filtrar" aria-label="Filtrar ${esc(col.titulo)}">▾</button>` : ''}
             </div></th>`;
           }).join('') + '</tr>';
 
-        const checkTodos = thead.querySelector('.dt-check-todos');
-        if (checkTodos) {
-          checkTodos.checked = idsFiltrados.length > 0 && seleccionadosFiltrados === idsFiltrados.length;
-          checkTodos.indeterminate = seleccionadosFiltrados > 0 && seleccionadosFiltrados < idsFiltrados.length;
+        const checkPagina = thead.querySelector('.dt-check-pagina');
+        if (checkPagina) {
+          checkPagina.disabled = !idsPagina.length;
+          checkPagina.checked = idsPagina.length > 0 && selPagina === idsPagina.length;
+          checkPagina.indeterminate = selPagina > 0 && selPagina < idsPagina.length;
         }
 
-        if (!pagina.length) {
-          tbody.innerHTML = `<tr><td class="dt-vacio" colspan="${visibles.length + (cfg.seleccionable ? 1 : 0)}">${esc(st.datos.length ? 'Ningún registro coincide con los filtros' : cfg.textoVacio)}</td></tr>`;
+        // Cuerpo
+        if (st.cargando) {
+          tbody.innerHTML = Array.from({ length: FILAS_SKELETON }, () => '<tr>' +
+            Array.from({ length: nColumnas }, (_, i) => `<td><span class="dt-skel" style="width:${i < (cfg.seleccionable ? 1 : 0) + (conDetalle ? 1 : 0) ? 14 : 40 + ((i * 37) % 50)}px"></span></td>`).join('') +
+            '</tr>').join('');
+        } else if (st.error) {
+          tbody.innerHTML = `<tr><td class="dt-vacio dt-error" colspan="${nColumnas}">⚠️ ${esc(st.error)}</td></tr>`;
+        } else if (!pagina.length) {
+          tbody.innerHTML = `<tr><td class="dt-vacio" colspan="${nColumnas}">${esc(st.datos.length ? 'Ningún registro coincide con los filtros' : cfg.textoVacio)}</td></tr>`;
         } else {
           tbody.innerHTML = pagina.map((fila) => {
             const id = idDe(fila);
             const sel = st.seleccion.has(id);
             return `<tr data-id="${esc(id)}" class="${sel ? 'dt-fila-seleccionada' : ''}">` +
-              (cfg.seleccionable ? `<td class="dt-col-check"><input type="checkbox" class="dt-check" ${sel ? 'checked' : ''} /></td>` : '') +
+              (cfg.seleccionable ? `<td class="dt-col-check"><input type="checkbox" class="dt-check" ${sel ? 'checked' : ''} aria-label="Seleccionar ${esc(etiquetaDe(fila))}" /></td>` : '') +
+              (conDetalle ? `<td class="dt-col-ver"><button type="button" class="dt-btn-ver" title="Ver detalle" aria-label="Ver detalle de ${esc(etiquetaDe(fila))}">🔍</button></td>` : '') +
               visibles.map((col) => {
-                const editable = col.editable && cfg.alEditar;
+                const clases = [puedeEditar(col) ? 'dt-editable' : '', col.tipo === 'numero' ? 'dt-num' : ''].join(' ').trim();
                 const contenido = col.render ? col.render(valorDe(col, fila), fila) : esc(textoVisible(col, fila));
-                const titulo = col.render ? '' : ` title="${esc(textoVisible(col, fila))}"`;
-                return `<td data-campo="${esc(col.campo)}" class="${editable ? 'dt-editable' : ''}"${titulo}>${contenido}</td>`;
+                const titulo = col.render ? '' : ` title="${esc(textoVisible(col, fila))}${puedeEditar(col) ? ' — doble clic para editar' : ''}"`;
+                return `<td data-campo="${esc(col.campo)}" class="${clases}"${titulo}>${contenido}</td>`;
               }).join('') + '</tr>';
           }).join('');
         }
 
-        const hayFiltros = Object.keys(st.filtros).length > 0 || st.busqueda.trim() !== '';
-        $('.dt-btn-limpiar').hidden = !hayFiltros;
-        $('.dt-resumen').textContent = filas.length
-          ? `Mostrando ${inicio + 1}–${inicio + pagina.length} de ${filas.length}` + (filas.length !== st.datos.length ? ` (filtrados de ${st.datos.length})` : '')
-          : `0 de ${st.datos.length}`;
+        // Chips de filtros activos
+        const chips = Object.keys(st.filtros).map((campo) => {
+          const col = colPorCampo(campo);
+          return col ? `<span class="dt-chip">${esc(describirFiltro(col, st.filtros[campo]))}<button type="button" data-quitar-filtro="${esc(campo)}" aria-label="Quitar filtro">✕</button></span>` : '';
+        });
+        if (st.busqueda.trim()) {
+          chips.unshift(`<span class="dt-chip">Búsqueda: “${esc(st.busqueda.trim())}”<button type="button" data-quitar-busqueda aria-label="Quitar búsqueda">✕</button></span>`);
+        }
+        const zonaChips = $('.dt-filtros-activos');
+        zonaChips.hidden = chips.length === 0;
+        zonaChips.innerHTML = chips.length
+          ? `<span class="dt-filtros-titulo">Filtros:</span>${chips.join('')}<button type="button" class="dt-link" data-limpiar-todo>Limpiar todo</button>`
+          : '';
+
+        // Aviso de selección (patrón Gmail)
+        const selFiltradas = filas.filter((f) => st.seleccion.has(idDe(f))).length;
+        const banner = $('.dt-banner');
+        if (cfg.seleccionable && idsPagina.length && selPagina === idsPagina.length && filas.length > idsPagina.length) {
+          banner.hidden = false;
+          banner.innerHTML = selFiltradas === filas.length
+            ? `Los <strong>${filas.length}</strong> registros ${Object.keys(st.filtros).length || st.busqueda.trim() ? 'filtrados ' : ''}están seleccionados. <button type="button" class="dt-link" data-quitar-seleccion>Quitar selección</button>`
+            : `Seleccionaste los <strong>${idsPagina.length}</strong> registros de esta página. <button type="button" class="dt-link" data-seleccionar-todos>Seleccionar los ${filas.length} registros</button>`;
+        } else {
+          banner.hidden = true;
+          banner.innerHTML = '';
+        }
+
+        // Pie y botones
+        $('.dt-resumen').textContent = st.cargando ? 'Cargando…'
+          : filas.length
+            ? `Mostrando ${inicio + 1}–${inicio + pagina.length} de ${filas.length}` + (filas.length !== st.datos.length ? ` (filtrados de ${st.datos.length})` : '')
+            : `0 de ${st.datos.length}`;
         $('.dt-pagina').textContent = `${st.pagina} / ${totalPaginas}`;
         $('.dt-prev').disabled = st.pagina <= 1;
         $('.dt-next').disabled = st.pagina >= totalPaginas;
+        if (cfg.exportar) $('.dt-btn-excel').disabled = st.cargando || !!st.error;
 
         const nSel = st.seleccion.size;
         $('.dt-seleccion-info').hidden = nSel === 0;
-        $('.dt-seleccion-info').textContent = `${nSel} seleccionado${nSel === 1 ? '' : 's'}`;
+        $('.dt-seleccion-info').textContent = `${nSel} ${plural(nSel, 'seleccionado')}`;
         $('.dt-btn-eliminar').hidden = nSel === 0 || !cfg.alEliminar;
 
         ajustarAlto();
@@ -371,7 +527,6 @@
       }
 
       /** Alto del área con scroll = lo que queda de ventana debajo de la tabla (menos el pie) */
-      let ultimaFirmaFiltros = '{}';
       function ajustarAlto() {
         const scroll = $('.dt-scroll');
         if (!scroll || scroll.offsetParent === null) return;   // pestaña oculta: se ajusta al mostrarse
@@ -401,9 +556,10 @@
 
       function abrirFiltro(ancla, col) {
         const actual = st.filtros[col.campo] || {};
+        const esTexto = col.tipo === 'texto' || col.tipo === 'lista';
         const ordenHtml = col.ordenable ? `<div class="dt-pop-orden">
-            <button type="button" class="secondary" data-orden="asc">${col.tipo === 'texto' || col.tipo === 'lista' ? 'A → Z' : 'Menor → mayor'}</button>
-            <button type="button" class="secondary" data-orden="desc">${col.tipo === 'texto' || col.tipo === 'lista' ? 'Z → A' : 'Mayor → menor'}</button>
+            <button type="button" class="secondary" data-orden="asc">${esTexto ? 'A → Z' : col.tipo === 'fecha' ? 'Más antigua' : 'Menor → mayor'}</button>
+            <button type="button" class="secondary" data-orden="desc">${esTexto ? 'Z → A' : col.tipo === 'fecha' ? 'Más reciente' : 'Mayor → menor'}</button>
           </div>` : '';
         const acciones = `<div class="dt-pop-acciones">
             <button type="button" class="secondary" data-accion="quitar">Quitar filtro</button>
@@ -439,6 +595,7 @@
               st.pagina = 1; cerrarPopover(); render();
             });
             conectarComunes(pop, col);
+            pop.querySelector('.dt-pop-buscar').focus();
           });
           return;
         }
@@ -446,9 +603,9 @@
         const ops = OPERADORES[col.tipo] || OPERADORES.texto;
         const tipoInput = col.tipo === 'numero' ? 'number' : col.tipo === 'fecha' ? 'date' : 'text';
         abrirPopover(ancla, `<h4>${esc(col.titulo)}</h4>${ordenHtml}
-          <div class="dt-pop-fila"><select class="dt-pop-op">${ops.map(([k, t]) => `<option value="${k}" ${actual.op === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
-          <div class="dt-pop-fila"><input type="${tipoInput}" class="dt-pop-v1" step="any" placeholder="Valor" value="${esc(actual.v1 || '')}" /></div>
-          <div class="dt-pop-fila dt-pop-fila-v2"><input type="${tipoInput}" class="dt-pop-v2" step="any" placeholder="y…" value="${esc(actual.v2 || '')}" /></div>
+          <div class="dt-pop-fila"><select class="dt-pop-op" aria-label="Condición">${ops.map(([k, t]) => `<option value="${k}" ${actual.op === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+          <div class="dt-pop-fila"><input type="${tipoInput}" class="dt-pop-v1" step="any" placeholder="Valor" aria-label="Valor" value="${esc(actual.v1 || '')}" /></div>
+          <div class="dt-pop-fila dt-pop-fila-v2"><input type="${tipoInput}" class="dt-pop-v2" step="any" placeholder="y…" aria-label="Hasta" value="${esc(actual.v2 || '')}" /></div>
           ${acciones}`, (pop) => {
           const op = pop.querySelector('.dt-pop-op');
           const v1 = pop.querySelector('.dt-pop-v1');
@@ -459,11 +616,11 @@
           };
           op.addEventListener('change', sync);
           sync();
-          if (!v1.parentElement.hidden) v1.focus();
+          (v1.parentElement.hidden ? op : v1).focus();
 
           const aplicar = () => {
             const f = { op: op.value, v1: v1.value, v2: pop.querySelector('.dt-pop-v2').value };
-            if (!SIN_VALOR.includes(f.op) && f.v1 === '') { delete st.filtros[col.campo]; }
+            if (!SIN_VALOR.includes(f.op) && f.v1 === '') delete st.filtros[col.campo];
             else st.filtros[col.campo] = f;
             st.pagina = 1; cerrarPopover(); render();
           };
@@ -494,15 +651,8 @@
         });
       }
 
-      // ---------- edición en celda ----------
-      function iniciarEdicion(td) {
-        const tr = td.closest('tr');
-        const col = colPorCampo(td.dataset.campo);
-        const fila = st.datos.find((f) => idDe(f) === tr.dataset.id);
-        if (!col || !fila || !col.editable || !cfg.alEditar || st.editando) return;
-        cerrarPopover();
-
-        const valor = valorDe(col, fila);
+      // ---------- edición (compartida por celda y panel) ----------
+      function crearControl(col, valor) {
         let control;
         if (col.tipo === 'lista') {
           const opciones = col.opciones || Array.from(new Set(st.datos.map((f) => valorDe(col, f)).filter((v) => !vacio(v)).map(String))).sort();
@@ -512,9 +662,36 @@
           control = document.createElement('input');
           control.type = col.tipo === 'numero' ? 'number' : col.tipo === 'fecha' ? 'date' : 'text';
           if (col.tipo === 'numero') control.step = 'any';
-          control.value = col.tipo === 'fecha' ? claveFecha(valor) : (vacio(valor) ? '' : String(valor));
+          control.value = valorOriginal(col, valor);
         }
+        control.setAttribute('aria-label', col.titulo);
+        return control;
+      }
+      function valorOriginal(col, valor) {
+        return col.tipo === 'fecha' ? claveFecha(valor) : (vacio(valor) ? '' : String(valor));
+      }
 
+      /** Guarda vía alEditar y actualiza la fila. Regresa true si guardó, false si no había cambio. Lanza si falla. */
+      async function guardarCambio(fila, col, textoControl) {
+        if (textoControl === valorOriginal(col, valorDe(col, fila))) return false;
+        const nuevo = col.tipo === 'numero' ? aNumero(textoControl) : textoControl;
+        const resultado = await cfg.alEditar(fila, col.campo, nuevo);
+        if (resultado && typeof resultado === 'object') {
+          const i = st.datos.findIndex((f) => idDe(f) === idDe(fila));
+          if (i !== -1) st.datos[i] = resultado;
+        }
+        avisar(`${col.titulo}: cambio guardado`);
+        return true;
+      }
+
+      function iniciarEdicion(td) {
+        const tr = td.closest('tr');
+        const col = colPorCampo(td.dataset.campo);
+        const fila = st.datos.find((f) => idDe(f) === tr.dataset.id);
+        if (!col || !fila || !puedeEditar(col) || st.editando) return;
+        cerrarPopover();
+
+        const control = crearControl(col, valorDe(col, fila));
         st.editando = { id: idDe(fila), campo: col.campo };
         td.classList.add('dt-editando');
         td.classList.remove('dt-error-celda');
@@ -531,21 +708,13 @@
         const guardar = async () => {
           if (terminado) return;
           terminado = true;
-          const original = col.tipo === 'fecha' ? claveFecha(valor) : (vacio(valor) ? '' : String(valor));
-          if (control.value === original) { st.editando = null; render(); return; }
-
-          const nuevo = col.tipo === 'numero' ? aNumero(control.value) : control.value;
           td.classList.add('dt-guardando');
           control.disabled = true;
           try {
-            const resultado = await cfg.alEditar(fila, col.campo, nuevo);
-            if (resultado && typeof resultado === 'object') {
-              const i = st.datos.findIndex((f) => idDe(f) === idDe(fila));
-              if (i !== -1) st.datos[i] = resultado;
-            }
+            await guardarCambio(fila, col, control.value);
             st.editando = null;
             render();
-            avisar('Cambio guardado');
+            refrescarPanel();
           } catch (err) {
             st.editando = null;
             render();
@@ -557,21 +726,144 @@
 
         control.addEventListener('keydown', (ev) => {
           if (ev.key === 'Enter') { ev.preventDefault(); guardar(); }
-          if (ev.key === 'Escape') { ev.preventDefault(); cancelar(); }
+          if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); cancelar(); }
         });
         control.addEventListener('blur', guardar);
         if (control.tagName === 'SELECT') control.addEventListener('change', guardar);
       }
 
+      // ---------- panel lateral de detalle ----------
+      function cerrarPanel() {
+        if (!panel) return;
+        panel.fondo.remove();
+        panel.elemento.remove();
+        document.removeEventListener('keydown', panel.alTecla, true);
+        const foco = panel.focoPrevio;
+        panel = null;
+        st.detalleId = null;
+        if (foco && document.body.contains(foco)) foco.focus();
+      }
+
+      function abrirPanel(id) {
+        cerrarPopover();
+        const focoPrevio = document.activeElement;
+        if (panel) cerrarPanel();
+        st.detalleId = id;
+
+        const fondo = document.createElement('div');
+        fondo.className = 'dt-panel-fondo';
+        const elemento = document.createElement('aside');
+        elemento.className = 'dt-panel';
+        elemento.setAttribute('role', 'dialog');
+        elemento.setAttribute('aria-modal', 'true');
+        document.body.append(fondo, elemento);
+
+        const alTecla = (ev) => {
+          if (ev.key === 'Escape' && !elemento.querySelector('.dt-campo-valor input, .dt-campo-valor select')) {
+            ev.stopPropagation(); cerrarPanel();
+          }
+        };
+        document.addEventListener('keydown', alTecla, true);
+        fondo.addEventListener('click', cerrarPanel);
+        panel = { fondo, elemento, alTecla, focoPrevio };
+        pintarPanel();
+        const cerrar = elemento.querySelector('.dt-panel-cerrar');
+        if (cerrar) cerrar.focus();
+      }
+
+      function refrescarPanel() {
+        if (panel && !panel.elemento.querySelector('.dt-campo-valor input, .dt-campo-valor select')) pintarPanel();
+      }
+
+      function pintarPanel() {
+        if (!panel) return;
+        const fila = st.datos.find((f) => idDe(f) === st.detalleId);
+        if (!fila) { cerrarPanel(); return; }
+        const opciones = cfg.detalle || {};
+        const titulo = opciones.titulo ? opciones.titulo(fila) : etiquetaDe(fila);
+
+        panel.elemento.setAttribute('aria-label', titulo);
+        panel.elemento.innerHTML = `
+          <div class="dt-panel-header">
+            <div><h3>${esc(titulo)}</h3><p>Detalle del registro</p></div>
+            <button type="button" class="modal-close dt-panel-cerrar" aria-label="Cerrar">✕</button>
+          </div>
+          <div class="dt-panel-cuerpo">
+            ${columnas.filter((c) => c.enDetalle).map((col) => {
+              const valor = valorDe(col, fila);
+              const contenido = col.render ? col.render(valor, fila) : (esc(textoVisible(col, fila)) || '<span style="color:var(--color-text-muted)">—</span>');
+              return `<div class="dt-campo" data-campo="${esc(col.campo)}">
+                <div class="dt-campo-titulo">${esc(col.titulo)}</div>
+                <div class="dt-campo-valor"><span class="dt-campo-texto">${contenido}</span>
+                  ${puedeEditar(col) ? `<button type="button" class="secondary dt-btn-editar-campo" aria-label="Editar ${esc(col.titulo)}">✏️ Editar</button>` : ''}
+                </div>
+              </div>`;
+            }).join('')}
+            <div class="dt-panel-extra"></div>
+          </div>`;
+
+        panel.elemento.querySelector('.dt-panel-cerrar').addEventListener('click', cerrarPanel);
+        panel.elemento.querySelectorAll('.dt-btn-editar-campo').forEach((btn) => {
+          btn.addEventListener('click', () => editarEnPanel(fila, colPorCampo(btn.closest('.dt-campo').dataset.campo)));
+        });
+        if (opciones.contenidoExtra) opciones.contenidoExtra(fila, panel.elemento.querySelector('.dt-panel-extra'));
+      }
+
+      function editarEnPanel(fila, col) {
+        const zona = panel.elemento.querySelector(`.dt-campo[data-campo="${CSS.escape(col.campo)}"] .dt-campo-valor`);
+        const control = crearControl(col, valorDe(col, fila));
+        zona.innerHTML = '';
+        const guardarBtn = document.createElement('button');
+        guardarBtn.type = 'button'; guardarBtn.textContent = 'Guardar';
+        const cancelarBtn = document.createElement('button');
+        cancelarBtn.type = 'button'; cancelarBtn.className = 'secondary'; cancelarBtn.textContent = 'Cancelar';
+        zona.append(control, guardarBtn, cancelarBtn);
+        control.focus();
+
+        const guardar = async () => {
+          guardarBtn.disabled = cancelarBtn.disabled = control.disabled = true;
+          guardarBtn.textContent = 'Guardando…';
+          try {
+            await guardarCambio(fila, col, control.value);
+            render();
+            pintarPanel();
+          } catch (err) {
+            avisar('No se guardó: ' + err.message, 'error');
+            guardarBtn.disabled = cancelarBtn.disabled = control.disabled = false;
+            guardarBtn.textContent = 'Guardar';
+            control.focus();
+          }
+        };
+        guardarBtn.addEventListener('click', guardar);
+        cancelarBtn.addEventListener('click', pintarPanel);
+        control.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Enter') { ev.preventDefault(); guardar(); }
+          if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); pintarPanel(); }
+        });
+      }
+
       // ---------- eventos ----------
       $('.dt-buscar').addEventListener('input', (ev) => { st.busqueda = ev.target.value; st.pagina = 1; render(); });
-      $('.dt-btn-limpiar').addEventListener('click', () => {
-        st.filtros = {}; st.busqueda = ''; $('.dt-buscar').value = ''; st.pagina = 1; render();
-      });
       $('.dt-btn-columnas').addEventListener('click', (ev) => abrirColumnas(ev.currentTarget));
       $('.dt-tamano').addEventListener('change', (ev) => { st.tamanoPagina = Number(ev.target.value); st.pagina = 1; render(); });
       $('.dt-prev').addEventListener('click', () => { st.pagina--; render(); });
       $('.dt-next').addEventListener('click', () => { st.pagina++; render(); });
+
+      function limpiarTodo() {
+        st.filtros = {}; st.busqueda = ''; $('.dt-buscar').value = ''; st.pagina = 1; render();
+      }
+
+      $('.dt-filtros-activos').addEventListener('click', (ev) => {
+        const quitar = ev.target.closest('[data-quitar-filtro]');
+        if (quitar) { delete st.filtros[quitar.dataset.quitarFiltro]; st.pagina = 1; render(); return; }
+        if (ev.target.closest('[data-quitar-busqueda]')) { st.busqueda = ''; $('.dt-buscar').value = ''; st.pagina = 1; render(); return; }
+        if (ev.target.closest('[data-limpiar-todo]')) limpiarTodo();
+      });
+
+      $('.dt-banner').addEventListener('click', (ev) => {
+        if (ev.target.closest('[data-seleccionar-todos]')) { filasFiltradas().forEach((f) => st.seleccion.add(idDe(f))); render(); }
+        if (ev.target.closest('[data-quitar-seleccion]')) { st.seleccion.clear(); render(); }
+      });
 
       thead.addEventListener('click', (ev) => {
         const btnFiltro = ev.target.closest('.dt-btn-filtro');
@@ -586,15 +878,17 @@
           else if (st.orden.dir === 'asc') st.orden.dir = 'desc';
           else st.orden = null;
           render();
-          return;
         }
+      });
 
-        if (ev.target.classList.contains('dt-check-todos')) {
-          const ids = filasFiltradas().map(idDe);
-          if (ev.target.checked) ids.forEach((id) => st.seleccion.add(id));
-          else ids.forEach((id) => st.seleccion.delete(id));
-          render();
-        }
+      thead.addEventListener('change', (ev) => {
+        if (!ev.target.classList.contains('dt-check-pagina')) return;
+        // Solo la página visible; para todos, el aviso ofrece "Seleccionar los N registros"
+        const inicio = (st.pagina - 1) * st.tamanoPagina;
+        const ids = filasFiltradas().slice(inicio, inicio + st.tamanoPagina).map(idDe);
+        if (ev.target.checked) ids.forEach((id) => st.seleccion.add(id));
+        else ids.forEach((id) => st.seleccion.delete(id));
+        render();
       });
 
       tbody.addEventListener('change', (ev) => {
@@ -602,6 +896,11 @@
         const id = ev.target.closest('tr').dataset.id;
         if (ev.target.checked) st.seleccion.add(id); else st.seleccion.delete(id);
         render();
+      });
+
+      tbody.addEventListener('click', (ev) => {
+        const ver = ev.target.closest('.dt-btn-ver');
+        if (ver) abrirPanel(ver.closest('tr').dataset.id);
       });
 
       tbody.addEventListener('dblclick', (ev) => {
@@ -612,7 +911,18 @@
       $('.dt-btn-eliminar').addEventListener('click', async () => {
         const filas = st.datos.filter((f) => st.seleccion.has(idDe(f)));
         if (!filas.length) return;
-        if (!confirm(`¿Eliminar ${filas.length} registro${filas.length === 1 ? '' : 's'}? Esta acción no se puede deshacer.`)) return;
+        const n = filas.length;
+        // Fricción según el riesgo: 1 → simple; varios → lista de afectados; muchos → escribir ELIMINAR
+        const ok = await Confirmar.pedir({
+          titulo: n === 1 ? '¿Eliminar este registro?' : `¿Eliminar ${n} registros?`,
+          mensaje: 'Esta acción no se puede deshacer.' + (n > 1 ? ' Se eliminarán:' : ''),
+          detalle: filas.map(etiquetaDe),
+          textoConfirmar: n === 1 ? 'Eliminar' : `Eliminar ${n}`,
+          peligro: true,
+          palabraClave: n >= cfg.umbralPalabraClave ? 'ELIMINAR' : null,
+        });
+        if (!ok) return;
+
         const boton = $('.dt-btn-eliminar');
         boton.disabled = true;
         boton.textContent = 'Eliminando…';
@@ -621,8 +931,9 @@
           const ids = new Set(filas.map(idDe));
           st.datos = st.datos.filter((f) => !ids.has(idDe(f)));
           st.seleccion.clear();
+          if (panel && ids.has(st.detalleId)) cerrarPanel();
           render();
-          avisar(`${filas.length} registro${filas.length === 1 ? '' : 's'} eliminado${filas.length === 1 ? '' : 's'}`);
+          avisar(`${n} ${plural(n, 'registro')} ${plural(n, 'eliminado')}`);
         } catch (err) {
           avisar('No se eliminó: ' + err.message, 'error');
         } finally {
@@ -631,14 +942,6 @@
         }
       });
 
-      // Si el módulo se desmontó (navegación SPA) sin llamar destruir(), limpiar solos
-      const desmontado = () => {
-        if (document.body.contains(contenedor)) return false;
-        cerrarPopover();
-        document.removeEventListener('mousedown', alClicFuera);
-        document.removeEventListener('keydown', alTecla);
-        return true;
-      };
       if (cfg.exportar) {
         $('.dt-btn-excel').addEventListener('click', async () => {
           const boton = $('.dt-btn-excel');
@@ -654,7 +957,7 @@
               columnas: cols.map((c) => ({ titulo: c.titulo, tipo: c.tipo === 'lista' ? 'texto' : c.tipo })),
               filas: filas.map((fila) => cols.map((c) => (c.valorExportar ? c.valorExportar(fila) : valorDe(c, fila)))),
             });
-            avisar(`${filas.length} registro${filas.length === 1 ? '' : 's'} exportado${filas.length === 1 ? '' : 's'}`);
+            avisar(`${filas.length} ${plural(filas.length, 'registro')} ${plural(filas.length, 'exportado')}`);
           } catch (err) {
             avisar('No se pudo exportar: ' + err.message, 'error');
           } finally {
@@ -664,12 +967,25 @@
         });
       }
 
+      // Si el módulo se desmontó (navegación SPA) sin llamar destruir(), limpiar solos
+      const desmontado = () => {
+        if (document.body.contains(contenedor)) return false;
+        limpiarGlobales();
+        return true;
+      };
       const alClicFuera = (ev) => {
         if (desmontado()) return;
         if (popover && !popover.contains(ev.target) && !ev.target.closest('.dt-btn-filtro, .dt-btn-columnas')) cerrarPopover();
       };
       const alTecla = (ev) => { if (!desmontado() && ev.key === 'Escape') cerrarPopover(); };
-      const alRedimensionar = () => { if (document.body.contains(contenedor)) ajustarAlto(); else window.removeEventListener('resize', alRedimensionar); };
+      const alRedimensionar = () => { if (!desmontado()) ajustarAlto(); };
+      function limpiarGlobales() {
+        cerrarPopover();
+        cerrarPanel();
+        document.removeEventListener('mousedown', alClicFuera);
+        document.removeEventListener('keydown', alTecla);
+        window.removeEventListener('resize', alRedimensionar);
+      }
       document.addEventListener('mousedown', alClicFuera);
       document.addEventListener('keydown', alTecla);
       window.addEventListener('resize', alRedimensionar);
@@ -677,7 +993,14 @@
       render();
 
       return {
-        setDatos(datos) { st.datos = datos || []; if (!st.editando) render(); },
+        setDatos(datos) {
+          st.datos = datos || [];
+          st.cargando = false;
+          st.error = null;
+          if (!st.editando) { render(); refrescarPanel(); }
+        },
+        setCargando(valor) { st.cargando = !!valor; if (valor) st.error = null; render(); },
+        setError(mensaje) { st.error = mensaje || null; st.cargando = false; render(); },
         getDatos: () => st.datos.slice(),
         getSeleccion: () => st.datos.filter((f) => st.seleccion.has(idDe(f))),
         limpiarSeleccion() { st.seleccion.clear(); render(); },
@@ -685,18 +1008,11 @@
           if (filtro) st.filtros[campo] = filtro; else delete st.filtros[campo];
           st.pagina = 1; render();
         },
-        limpiarFiltros() {
-          st.filtros = {}; st.busqueda = ''; $('.dt-buscar').value = ''; st.pagina = 1; render();
-        },
+        limpiarFiltros: limpiarTodo,
+        abrirDetalle: abrirPanel,
         /** Llamar si la tabla estaba oculta (p. ej. en otra pestaña) y se acaba de mostrar */
         ajustarAlto,
-        destruir() {
-          cerrarPopover();
-          document.removeEventListener('mousedown', alClicFuera);
-          document.removeEventListener('keydown', alTecla);
-          window.removeEventListener('resize', alRedimensionar);
-          contenedor.innerHTML = '';
-        },
+        destruir() { limpiarGlobales(); contenedor.innerHTML = ''; },
       };
     }
 

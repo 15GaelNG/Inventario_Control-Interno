@@ -28,7 +28,6 @@
     <!-- Pestaña 1: tabla de registros -->
     <div class="card card-compacta" data-panel="registros">
       <div id="ver-tabla"></div>
-      <div class="error-msg" id="ver-tabla-error" hidden></div>
     </div>
 
     <!-- Pestaña 2: nuevo registro -->
@@ -56,8 +55,7 @@
         </div>
         <div style="grid-column: 1 / -1;"><button type="submit" id="ver-btn-guardar">💾 Registrar verificación</button></div>
       </form>
-      <div class="error-msg" id="ver-error" hidden></div>
-      <div class="dt-mensaje ok" id="ver-ok" hidden></div>
+      <div class="error-msg" id="ver-error" role="alert" hidden></div>
     </div>
 
     <!-- Pestaña 3: historial por tarjetas -->
@@ -67,7 +65,7 @@
         <input type="search" id="ver-buscar" placeholder="Buscar por folio o placa" style="max-width:260px;" />
       </div>
       <div id="ver-lista" class="incidencia-list" style="margin-top:12px"></div>
-      <p class="empty-state" id="ver-vacio" hidden>No hay verificaciones que coincidan.</p>
+      <p class="empty-state" id="ver-vacio">Cargando…</p>
     </div>
   </div>
 </template>

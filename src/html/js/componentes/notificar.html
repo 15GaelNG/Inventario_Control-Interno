@@ -1,0 +1,101 @@
+<style>
+  .toast-contenedor {
+    position: fixed; right: 20px; bottom: 20px; z-index: 900;
+    display: flex; flex-direction: column; gap: 8px; max-width: min(420px, calc(100vw - 40px));
+  }
+  .toast {
+    display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px;
+    background: var(--color-surface); color: var(--color-text);
+    border: 1px solid var(--color-border); border-left: 4px solid var(--color-primary);
+    border-radius: 10px; box-shadow: var(--shadow-lg); font-size: 13px;
+    animation: toast-entrar .18s ease-out;
+  }
+  .toast.saliendo { animation: toast-salir .18s ease-in forwards; }
+  .toast-exito { border-left-color: var(--color-success); }
+  .toast-error { border-left-color: var(--color-danger); }
+  .toast-icono { flex-shrink: 0; }
+  .toast-texto { flex: 1; line-height: 1.4; word-break: break-word; }
+  .toast button { padding: 2px 8px; font-size: 12px; }
+  .toast .toast-cerrar { background: transparent; color: var(--color-text-muted); border: none; }
+  @keyframes toast-entrar { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes toast-salir { to { opacity: 0; transform: translateY(8px); } }
+</style>
+
+<script>
+  /**
+   * Notificar — mensajes breves (toasts) abajo a la derecha. Reemplaza alert().
+   *
+   *   Notificar.exito('Verificación registrada');
+   *   Notificar.error('No se pudo guardar: ' + err.message);    // dura más y se puede cerrar
+   *   Notificar.info('Exportando…', { duracion: 2000 });
+   *   Notificar.exito('Registro archivado', { accion: { texto: 'Deshacer', alHacer: () => … } });
+   *
+   * Se anuncia a lectores de pantalla (aria-live).
+   */
+  const Notificar = (function () {
+    const ICONOS = { exito: '✅', error: '⚠️', info: 'ℹ️' };
+    const DURACION = { exito: 3500, info: 4000, error: 8000 };
+    let contenedor = null;
+
+    function obtenerContenedor() {
+      if (!contenedor || !document.body.contains(contenedor)) {
+        contenedor = document.createElement('div');
+        contenedor.className = 'toast-contenedor';
+        contenedor.setAttribute('role', 'status');
+        contenedor.setAttribute('aria-live', 'polite');
+        document.body.appendChild(contenedor);
+      }
+      return contenedor;
+    }
+
+    function mostrar(tipo, mensaje, opciones) {
+      opciones = opciones || {};
+      const toast = document.createElement('div');
+      toast.className = 'toast toast-' + tipo;
+
+      const icono = document.createElement('span');
+      icono.className = 'toast-icono';
+      icono.textContent = ICONOS[tipo];
+      const texto = document.createElement('span');
+      texto.className = 'toast-texto';
+      texto.textContent = mensaje;
+      toast.append(icono, texto);
+
+      let timer = null;
+      const cerrar = () => {
+        clearTimeout(timer);
+        toast.classList.add('saliendo');
+        setTimeout(() => toast.remove(), 180);
+      };
+
+      if (opciones.accion) {
+        const boton = document.createElement('button');
+        boton.type = 'button';
+        boton.className = 'secondary';
+        boton.textContent = opciones.accion.texto;
+        boton.addEventListener('click', () => { cerrar(); opciones.accion.alHacer(); });
+        toast.appendChild(boton);
+      }
+      const x = document.createElement('button');
+      x.type = 'button';
+      x.className = 'toast-cerrar';
+      x.setAttribute('aria-label', 'Cerrar');
+      x.textContent = '✕';
+      x.addEventListener('click', cerrar);
+      toast.appendChild(x);
+
+      obtenerContenedor().appendChild(toast);
+      timer = setTimeout(cerrar, opciones.duracion || DURACION[tipo]);
+      // Pausar mientras el mouse está encima, para alcanzar a leer
+      toast.addEventListener('mouseenter', () => clearTimeout(timer));
+      toast.addEventListener('mouseleave', () => { timer = setTimeout(cerrar, 2000); });
+      return { cerrar };
+    }
+
+    return {
+      exito: (mensaje, opciones) => mostrar('exito', mensaje, opciones),
+      error: (mensaje, opciones) => mostrar('error', mensaje, opciones),
+      info: (mensaje, opciones) => mostrar('info', mensaje, opciones),
+    };
+  })();
+</script>

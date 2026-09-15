@@ -34,14 +34,24 @@ const DriveUtils = (function () {
 
     const hora = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'HHmmss');
     const nombre = p.idFila + '.' + p.columna + '.' + hora + '.' + ext;
-    const archivo = DriveApp.getFolderById(p.carpetaId)
-      .createFile(Utilities.newBlob(bytes, p.archivo.mimeType, nombre));
+    let archivo;
+    try {
+      archivo = DriveApp.getFolderById(p.carpetaId)
+        .createFile(Utilities.newBlob(bytes, p.archivo.mimeType, nombre));
+    } catch (err) {
+      // "Acceso denegado: DriveApp" casi siempre = la cuenta puede VER la carpeta pero no EDITARLA
+      throw new Error(
+        'No se pudo guardar la imagen en Drive (' + err.message + '). ' +
+        'Verifica que tu cuenta (' + Session.getEffectiveUser().getEmail() + ') tenga permiso de ' +
+        'EDITOR en la carpeta ' + p.tabla + '_Images (ID ' + p.carpetaId + ').'
+      );
+    }
 
     return { ruta: p.tabla + '_Images/' + nombre, fileId: archivo.getId() };
   }
 
-  /** URL de Drive de un archivo a partir de su ruta AppSheet, buscando en orden en las carpetas dadas. */
-  function urlDeRuta(ruta, carpetasIds) {
+  /** Archivo de Drive a partir de su ruta AppSheet, buscando en orden en las carpetas dadas (o null). */
+  function archivoDeRuta(ruta, carpetasIds) {
     const nombre = String(ruta || '').split('/').pop();
     if (!nombre) return null;
 
@@ -52,14 +62,37 @@ const DriveUtils = (function () {
       } catch (e) {
         continue; // sin acceso a esa carpeta: probar la siguiente
       }
-      if (archivos.hasNext()) return archivos.next().getUrl();
+      if (archivos.hasNext()) return archivos.next();
     }
     return null;
+  }
+
+  function urlDeRuta(ruta, carpetasIds) {
+    const archivo = archivoDeRuta(ruta, carpetasIds);
+    return archivo ? archivo.getUrl() : null;
+  }
+
+  /**
+   * Imagen lista para <img src="data:…">: un link de Drive no se puede incrustar dentro
+   * de la web app, así que se manda el contenido. Imágenes grandes → solo la URL.
+   * @return {{url: string, mimeType: string, base64: string|null}|null}
+   */
+  function previsualizarRuta(ruta, carpetasIds) {
+    const MAX_PREVIEW = 4 * 1024 * 1024;
+    const archivo = archivoDeRuta(ruta, carpetasIds);
+    if (!archivo) return null;
+    const mimeType = archivo.getMimeType();
+    const esImagen = /^image\//.test(mimeType);
+    return {
+      url: archivo.getUrl(),
+      mimeType: mimeType,
+      base64: esImagen && archivo.getSize() <= MAX_PREVIEW ? Utilities.base64Encode(archivo.getBlob().getBytes()) : null,
+    };
   }
 
   function eliminar(fileId) {
     try { DriveApp.getFileById(fileId).setTrashed(true); } catch (e) { /* no-op */ }
   }
 
-  return { guardarImagenAppSheet, urlDeRuta, eliminar };
+  return { guardarImagenAppSheet, archivoDeRuta, urlDeRuta, previsualizarRuta, eliminar };
 })();

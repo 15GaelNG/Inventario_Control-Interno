@@ -656,7 +656,7 @@
       pestana.location.href = await callServer('apiUrlComprobanteVerificacion', state.token, ruta);
     } catch (err) {
       if (pestana) pestana.close();
-      alert(err.message);
+      Notificar.error(err.message);
     }
   }
 
@@ -716,6 +716,12 @@
       ayuda: 'Doble clic en Folio o en las fechas para editar (Enter guarda, Esc cancela). ▾ en cada columna para filtrar u ordenar.',
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
       exportar: { nombreArchivo: 'Verificaciones' },
+      etiquetaFila: (v) => [v.FOLIO, v.PLACA, v.FECHA_VERIFICACION ? 'verificó ' + formatearFecha(v.FECHA_VERIFICACION) : '']
+        .filter(Boolean).join(' · '),
+      detalle: {
+        titulo: (v) => 'Verificación ' + v.FOLIO,
+        contenidoExtra: (v, contenedor) => mostrarComprobanteEnPanel(v, contenedor),
+      },
       columnas: [
         { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', editable: true },
         { campo: 'PLACA', titulo: 'Placa', tipo: 'texto' },
@@ -726,7 +732,8 @@
         { campo: 'REGISTRADO_POR', titulo: 'Registrado por', tipo: 'lista' },
         { campo: 'FECHA_REGISTRO', titulo: 'Fecha registro', tipo: 'fecha' },
         {
-          campo: 'COMPROBANTE', titulo: 'Comprobante', filtrable: false, ordenable: false,
+          // En el panel de detalle se muestra la imagen completa (contenidoExtra), no el botón
+          campo: 'COMPROBANTE', titulo: 'Comprobante', filtrable: false, ordenable: false, enDetalle: false,
           render: (ruta) => (ruta
             ? `<button type="button" class="secondary btn-ver-comprobante" data-ruta="${escaparHtml(ruta)}" style="padding:4px 8px">🖼️ Ver</button>`
             : '—'),
@@ -755,12 +762,36 @@
       if (btn) abrirComprobanteVerificacion(btn.dataset.ruta);
     });
 
-    // ----- Pestaña 3: historial por tarjetas -----
     function formatearFecha(valor) {
       if (!valor) return '—';
       const f = new Date(valor);
       return isNaN(f) ? '—' : f.toLocaleDateString('es-MX');
     }
+
+    /** Panel de detalle: imagen del comprobante (llega en base64; un link de Drive no se puede incrustar) */
+    async function mostrarComprobanteEnPanel(v, contenedor) {
+      if (!v.COMPROBANTE) {
+        contenedor.innerHTML = '<p class="empty-state">Este registro no tiene comprobante.</p>';
+        return;
+      }
+      contenedor.innerHTML = '<div class="dt-campo-titulo" style="margin-bottom:8px">Comprobante</div>' +
+        '<span class="dt-skel" style="height:180px; width:100%; border-radius:10px"></span>';
+      try {
+        const vista = await callServer('apiPrevisualizarComprobanteVerificacion', state.token, v.COMPROBANTE);
+        if (!document.body.contains(contenedor)) return;   // el panel se cerró mientras cargaba
+        contenedor.innerHTML = '<div class="dt-campo-titulo" style="margin-bottom:8px">Comprobante</div>' +
+          (vista.base64
+            ? `<img src="data:${escaparHtml(vista.mimeType)};base64,${vista.base64}" alt="Comprobante de verificación del folio ${escaparHtml(v.FOLIO)}" style="width:100%; border-radius:10px; border:1px solid var(--color-border)" />`
+            : '<p class="page-subtitle">La imagen es muy grande para mostrarla aquí.</p>') +
+          `<p style="margin:8px 0 0"><a href="${escaparHtml(vista.url)}" target="_blank" rel="noopener">Abrir en Drive ↗</a></p>`;
+      } catch (err) {
+        if (document.body.contains(contenedor)) {
+          contenedor.innerHTML = `<p class="error-msg">⚠️ ${escaparHtml(err.message)}</p>`;
+        }
+      }
+    }
+
+    // ----- Pestaña 3: historial por tarjetas -----
 
     function pintarHistorial() {
       const lista = document.getElementById('ver-lista');
@@ -798,15 +829,15 @@
 
     // ----- Carga -----
     async function cargar() {
-      const errorBox = document.getElementById('ver-tabla-error');
       try {
         verificaciones = conDerivados((await callServer('apiListarVerificaciones', state.token)) || []);
-        errorBox.hidden = true;
       } catch (err) {
-        errorBox.textContent = 'No se pudieron cargar las verificaciones: ' + err.message;
-        errorBox.hidden = false;
+        tabla.setError('No se pudieron cargar las verificaciones: ' + err.message);
+        document.getElementById('ver-vacio').textContent = 'No se pudieron cargar las verificaciones.';
+        document.getElementById('ver-vacio').hidden = false;
         return;
       }
+      document.getElementById('ver-vacio').textContent = 'No hay verificaciones que coincidan.';
       tabla.setDatos(verificaciones);
       pintarStats();
       pintarHistorial();
@@ -839,7 +870,6 @@
 
     // ----- Pestaña 2: nuevo registro -----
     const errorBox = document.getElementById('ver-error');
-    const okBox = document.getElementById('ver-ok');
     const inputArchivo = document.getElementById('ver-comprobante');
     const preview = document.getElementById('ver-preview');
     document.getElementById('ver-fecha').value = hoyLocal();
@@ -871,7 +901,6 @@
     document.getElementById('form-verificacion').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       errorBox.hidden = true;
-      okBox.hidden = true;
       const boton = document.getElementById('ver-btn-guardar');
       const archivo = inputArchivo.files[0];
       try {
@@ -893,8 +922,7 @@
         ev.target.reset();
         preview.hidden = true;
         document.getElementById('ver-fecha').value = hoyLocal();
-        okBox.textContent = '✅ Verificación del folio ' + folio + ' registrada';
-        okBox.hidden = false;
+        Notificar.exito('Verificación del folio ' + folio + ' registrada');
         await cargar();
       } catch (err) {
         errorBox.textContent = err.message;

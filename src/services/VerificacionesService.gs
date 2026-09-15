@@ -178,5 +178,16 @@ const VerificacionesService = (function () {
     return url;
   }
 
-  return { listar, registrar, actualizarCampo, eliminar, urlComprobante };
+  /** Imagen del comprobante para el panel de detalle ({url, mimeType, base64|null}). */
+  function previsualizarComprobante(token, ruta) {
+    Auth.validarSesion(token);
+    const vista = DriveUtils.previsualizarRuta(ruta, [
+      Config.DRIVE_FOLDERS.VERIFICACIONES(),
+      Config.DRIVE_FOLDERS.VERIFICACIONES_LECTURA(),
+    ]);
+    if (!vista) throw new Error('No se encontró el archivo del comprobante en Drive');
+    return vista;
+  }
+
+  return { listar, registrar, actualizarCampo, eliminar, urlComprobante, previsualizarComprobante };
 })();
