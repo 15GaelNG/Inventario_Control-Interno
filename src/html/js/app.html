@@ -397,6 +397,15 @@
     fijarFechaRegistroHoy();
     document.getElementById('inc-fecha-inspeccion').value = hoyISO();
 
+    // Diagnóstico temporal: confirma qué hoja/spreadsheet está leyendo el
+    // servidor y cuántas filas ve, para depurar por qué no aparece el historial.
+    try {
+      const diag = await callServer('apiDiagnosticoIncidencias', state.token);
+      console.log('[Diagnóstico Incidencias]', diag);
+    } catch (err) {
+      console.error('[Diagnóstico Incidencias] error:', err);
+    }
+
     // Autollenado: el folio del vehículo trae Departamento/Modelo desde Vehículos
     const vehiculosPorFolio = {};
     try {
@@ -498,6 +507,9 @@
         return;
       }
       errorBox.hidden = true;
+      // google.script.run entrega null en vez de [] cuando el servidor regresa
+      // un arreglo vacío — normalizamos aquí para no tronar en .forEach/.map.
+      incidencias = incidencias || [];
 
       incidenciasPorId = {};
       incidencias.forEach((inc) => { incidenciasPorId[inc.ID] = inc; });

@@ -56,3 +56,6 @@ function apiActualizarIncidencia(token, id, datos) {
 function apiEliminarIncidencia(token, id) {
   return IncidenciasService.eliminar(token, id);
 }
+function apiDiagnosticoIncidencias(token) {
+  return IncidenciasService.diagnostico(token);
+}

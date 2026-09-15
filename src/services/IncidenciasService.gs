@@ -130,5 +130,17 @@ const IncidenciasService = (function () {
     return { ID: id };
   }
 
-  return { listar, crear, cerrar, actualizar, eliminar };
+  /** Diagnóstico de solo lectura: qué hoja/spreadsheet está usando realmente y cuántas filas ve. */
+  function diagnostico(token) {
+    Auth.validarSesion(token);
+    const hoja = hoja_();
+    return {
+      spreadsheetId: ssId(),
+      nombreHoja: hoja.getName(),
+      totalFilas: Math.max(0, hoja.getLastRow() - 1),
+      totalColumnas: hoja.getLastColumn(),
+    };
+  }
+
+  return { listar, crear, cerrar, actualizar, eliminar, diagnostico };
 })();
