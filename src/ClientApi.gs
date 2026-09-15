@@ -40,6 +40,44 @@ function apiListarVehiculosBasico(token) {
   return VehiculosService.listarBasico(token);
 }
 
+// --- Líneas (equipos y líneas telefónicas) ---
+function apiLineasPermisos(token) {
+  return TelefoniaService.permisos(token);
+}
+function apiLineasIndice(token) {
+  return TelefoniaService.indice(token);
+}
+function apiLineasEquipo(token, id) {
+  return TelefoniaService.equipo(token, id);
+}
+function apiLineasLinea(token, id) {
+  return TelefoniaService.linea(token, id);
+}
+function apiLineasEvidencias(token, id) {
+  return TelefoniaService.evidencias(token, id);
+}
+function apiLineasHistorial(token, id) {
+  return TelefoniaService.historial(token, id);
+}
+function apiLineasInspeccion(token, id) {
+  return TelefoniaService.inspeccion(token, id);
+}
+function apiLineasCatalogos(token) {
+  return TelefoniaService.catalogos(token);
+}
+function apiLineasAlertas(token) {
+  return TelefoniaService.alertas(token);
+}
+function apiLineasColaboradores(token) {
+  return TelefoniaService.colaboradores(token);
+}
+function apiLineasBitacora(token, tipo, opciones) {
+  return TelefoniaService.bitacora(token, tipo, opciones);
+}
+function apiLineasRecargarDatos(token) {
+  return TelefoniaService.recargarDatos(token);
+}
+
 // --- Incidencias ---
 function apiListarIncidencias(token) {
   return IncidenciasService.listar(token);

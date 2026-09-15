@@ -1,0 +1,823 @@
+<script>
+  /**
+   * lineas.js — vistas del módulo de Líneas (grupo "Líneas" del menú).
+   * Todo vive dentro del namespace `Lineas` para no chocar con el resto de app.js.
+   * Usa los globales del shell: callServer(), state.token y navegarA().
+   *
+   *   Lineas.initTelefonicas()     Líneas Telefónicas: inventario, ficha, inspecciones e historial
+   *   Lineas.initCambios()         Control de Cambios - Líneas (CAMBIOS LINEAS TELEFONICAS)
+   *   Lineas.initReasignaciones()  Control de Reasignaciones - Líneas (HISTORIAL_REASIGNACIONES)
+   *   Lineas.initDesechos()        Bitácora de Desechos (BITACORA DE DESECHO)
+   */
+  const Lineas = (function () {
+    'use strict';
+
+    // ---------------- Utilidades ----------------
+    const $ = (sel, raiz) => (raiz || document).querySelector(sel);
+    const esc = (v) => {
+      if (v === null || v === undefined || v === '') return '';
+      return String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    };
+    const vacio = '<span class="ln-tenue">—</span>';
+    const guion = (v) => (v === null || v === undefined || v === '' ? vacio : esc(v));
+    const fecha = (iso) => {
+      if (!iso) return null;
+      const d = new Date(iso);
+      return isNaN(d) ? null : d.toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: '2-digit' });
+    };
+    const fechaHora = (iso) => {
+      if (!iso) return '';
+      const d = new Date(iso);
+      return isNaN(d) ? '' : d.toLocaleString('es-MX', { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    };
+    const normal = (s) => String(s === null || s === undefined ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const porcentaje = (v) => {
+      if (v === null || v === undefined || v === '') return null;
+      const n = Number(v);
+      return Math.round(n > 1 ? n : n * 100) + '%';
+    };
+    const miles = (n) => Number(n || 0).toLocaleString('es-MX');
+    const enlaceDrive = (id, texto, esArchivo) => {
+      if (!id) return '';
+      const url = esArchivo ? 'https://drive.google.com/file/d/' + esc(id) + '/view' : 'https://drive.google.com/drive/folders/' + esc(id);
+      return '<a class="ln-enlace" target="_blank" rel="noopener" href="' + url + '">' + esc(texto) + ' ↗</a>';
+    };
+
+    function llamar(fn, ...args) {
+      return callServer(fn, state.token, ...args);
+    }
+
+    const COLOR_ESTATUS = {
+      'USO': 'verde', 'EN USO': 'verde', 'RENOVADA': 'verde',
+      'RESGUARDO': 'azul', 'EN ENVIO': 'azul', 'ESPERA DE RESPONSIVA': 'azul', 'ESPERA DE EQUIPO': 'azul',
+      'SUSPENDIDA': 'ambar', 'POSIBLE VENTA': 'ambar', 'VENTA': 'ambar', 'USO TEMPORAL': 'ambar', 'SIN LINEA': 'ambar', 'EN PROCESO DE CANCELACION': 'ambar',
+      'EXTRAVIADO': 'rojo', 'ROBO': 'rojo', 'ROBADO': 'rojo', 'CANCELADA': 'rojo', 'CANCELADO': 'rojo', 'DESECHO': 'rojo', 'DESECHADO': 'rojo', 'BLOQUEADO': 'rojo',
+    };
+    const chip = (estatus, clase) => {
+      if (!estatus) return vacio;
+      return '<span class="ln-chip ' + (clase || COLOR_ESTATUS[String(estatus).toUpperCase()] || '') + '">' + esc(estatus) + '</span>';
+    };
+    const TIPO_EQUIPO = { CELULAR: 'Celular', CELULAR_BASICO: 'Celular básico', MODEM: 'Módem', BANDA_ANCHA: 'Banda ancha', CAMARA: 'Cámara' };
+    const ORIGEN = {
+      DRIVE: '<span class="ln-chip">Solo Drive</span>',
+      SISTEMA: '<span class="ln-chip verde">Nuevo sistema</span>',
+      APPSHEET: '<span class="ln-chip azul">AppSheet</span>',
+    };
+
+    /** Descarga un CSV (UTF-8 con BOM para que Excel respete acentos). */
+    function exportarCsv(nombre, columnas, filas, titulos) {
+      const celda = (v) => {
+        if (v === null || v === undefined) return '';
+        const s = String(v);
+        return /[",\n;]/.test(s) || /^\d{11,}$/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+      };
+      const texto = '﻿' + [(titulos || columnas).map(celda).join(',')]
+        .concat(filas.map((r) => columnas.map((c) => celda(r[c])).join(','))).join('\n');
+      const url = URL.createObjectURL(new Blob([texto], { type: 'text/csv;charset=utf-8' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = nombre + ' ' + new Date().toISOString().slice(0, 10) + '.csv';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+    }
+
+    /** Aviso flotante (errores de cargas en segundo plano). */
+    function aviso(html, duracion) {
+      let caja = document.getElementById('ln-avisos');
+      if (!caja) {
+        caja = document.createElement('div');
+        caja.id = 'ln-avisos';
+        document.body.appendChild(caja);
+      }
+      const item = document.createElement('div');
+      item.className = 'ln-aviso';
+      item.innerHTML = '<div>' + html + '</div><button type="button" class="modal-close" aria-label="Cerrar">✕</button>';
+      item.querySelector('button').addEventListener('click', () => item.remove());
+      caja.appendChild(item);
+      if (duracion) setTimeout(() => item.remove(), duracion);
+    }
+    const mensajeError = (e) => esc(e && e.message ? e.message : e);
+
+    // ---------------- Estado del módulo ----------------
+    // Se conserva entre navegaciones: volver al inventario no vuelve a pedir el índice (5 min).
+    const POR_PAGINA = 50;
+    const VIGENCIA_INDICE_MS = 5 * 60 * 1000;
+    const memoria = {
+      indice: null,
+      cargadoEn: 0,
+      permisos: null,
+      modulo: 'equipos',
+      filtros: {
+        equipos: { q: '', tipo: '', estatus: '', depto: '', conLinea: '', pagina: 0 },
+        lineas: { q: '', compania: '', estatus: '', suelta: '', pagina: 0 },
+      },
+      abrirAlEntrar: null, // id de registro a abrir al entrar a Líneas Telefónicas (desde una bitácora)
+    };
+    let montaje = 0; // cambia en cada init: respuestas tardías de una vista anterior se ignoran
+
+    function filasComoObjetos(ix) {
+      return ix.filas.map((f) => {
+        const o = {};
+        ix.columnas.forEach((c, i) => { o[c] = f[i]; });
+        return o;
+      });
+    }
+
+    function cargarIndice(forzar) {
+      if (!forzar && memoria.indice && Date.now() - memoria.cargadoEn < VIGENCIA_INDICE_MS) return Promise.resolve(memoria.indice);
+      return llamar('apiLineasIndice').then((r) => {
+        const porNuco = (a, b) => {
+          const na = Number(a.nuco || a.nucoEquipo);
+          const nb = Number(b.nuco || b.nucoEquipo);
+          if (isNaN(na) && isNaN(nb)) return 0;
+          if (isNaN(na)) return 1;
+          if (isNaN(nb)) return -1;
+          return na - nb;
+        };
+        memoria.indice = {
+          columnas: { equipos: r.equipos.columnas, lineas: r.lineas.columnas },
+          equipos: filasComoObjetos(r.equipos).sort(porNuco),
+          lineas: filasComoObjetos(r.lineas).sort(porNuco),
+          generadoEn: r.equipos.generadoEn,
+        };
+        memoria.cargadoEn = Date.now();
+        return memoria.indice;
+      });
+    }
+
+    function cargarPermisos() {
+      if (memoria.permisos) return Promise.resolve(memoria.permisos);
+      return llamar('apiLineasPermisos').then((p) => (memoria.permisos = p));
+    }
+
+    function contarPor(filas, campo) {
+      const m = {};
+      filas.forEach((f) => { const k = f[campo] || ''; m[k] = (m[k] || 0) + 1; });
+      return m;
+    }
+    const unicos = (filas, campo) => Object.keys(contarPor(filas, campo)).filter(Boolean).sort();
+
+    // ======================================================================
+    // Líneas Telefónicas
+    // ======================================================================
+
+    const LISTADOS = {
+      equipos: {
+        nombreCsv: 'equipos telefonicos',
+        placeholder: 'Buscar por NUCO, IMEI, modelo, responsable o número…',
+        busqueda: ['nuco', 'imei', 'modelo', 'responsable', 'numero', 'departamento'],
+        detalle: 'equipo',
+        selects: [
+          { campo: 'tipo', todos: 'Todos los tipos', traducir: TIPO_EQUIPO, valores: (t) => unicos(t, 'tipo'), coincide: (r, v) => r.tipo === v },
+          { campo: 'estatus', todos: 'Todos los estatus', valores: (t) => unicos(t, 'estatus'), coincide: (r, v) => r.estatus === v },
+          { campo: 'depto', todos: 'Todos los departamentos', valores: (t) => unicos(t, 'departamento'), coincide: (r, v) => r.departamento === v },
+          { campo: 'conLinea', todos: 'Con y sin línea', traducir: { si: 'Con línea', no: 'Sin línea' }, valores: () => ['si', 'no'], coincide: (r, v) => (v === 'si' ? !!r.lineaId : !r.lineaId) },
+        ],
+        columnas: [
+          { titulo: 'NUCO', clase: 'ln-mono ln-fuerte', valor: (r) => guion(r.nuco) },
+          { titulo: 'Tipo', valor: (r) => esc(TIPO_EQUIPO[r.tipo] || r.tipo) },
+          { titulo: 'Modelo', valor: (r) => guion(r.modelo) },
+          { titulo: 'IMEI', clase: 'ln-mono ln-tenue', valor: (r) => guion(r.imei) },
+          { titulo: 'Estatus', valor: (r) => chip(r.estatus) },
+          { titulo: 'Línea', clase: 'ln-mono', valor: (r) => (r.numero ? esc(r.numero) : '<span class="ln-tenue">Sin línea</span>') },
+          { titulo: 'Responsable', valor: (r) => guion(r.responsable) },
+          { titulo: 'Departamento', clase: 'ln-tenue', valor: (r) => guion(r.departamento) },
+        ],
+      },
+      lineas: {
+        nombreCsv: 'lineas telefonicas',
+        placeholder: 'Buscar por número, SIM, NUCO o responsable…',
+        busqueda: ['numero', 'sim', 'nucoEquipo', 'responsable', 'departamento'],
+        detalle: 'linea',
+        selects: [
+          { campo: 'compania', todos: 'Todas las compañías', valores: (t) => unicos(t, 'compania'), coincide: (r, v) => r.compania === v },
+          { campo: 'estatus', todos: 'Todos los estatus', valores: (t) => unicos(t, 'estatus'), coincide: (r, v) => r.estatus === v },
+          { campo: 'suelta', todos: 'Con y sin equipo', traducir: { si: 'Solo sueltas', no: 'Solo en equipo' }, valores: () => ['si', 'no'], coincide: (r, v) => (v === 'si' ? r.suelta : !r.suelta) },
+        ],
+        columnas: [
+          { titulo: 'Número', clase: 'ln-mono ln-fuerte', valor: (r) => guion(r.numero) },
+          { titulo: 'Compañía', valor: (r) => guion(r.compania) },
+          { titulo: 'Estatus', valor: (r) => chip(r.estatus) },
+          { titulo: 'Equipo (NUCO)', clase: 'ln-mono', valor: (r) => (r.suelta ? chip('Suelta', 'ambar') + (r.nucoEquipo ? ' <span class="ln-tenue">' + esc(r.nucoEquipo) + '</span>' : '') : guion(r.nucoEquipo)) },
+          { titulo: 'SIM', clase: 'ln-mono ln-tenue', valor: (r) => guion(r.sim) },
+          { titulo: 'Responsable', valor: (r) => guion(r.responsable) },
+          { titulo: 'Departamento', clase: 'ln-tenue', valor: (r) => guion(r.departamento) },
+        ],
+      },
+    };
+
+    function initTelefonicas() {
+      const n = ++montaje;
+      const raiz = document.getElementById('ln-telefonicas');
+      const vigente = () => n === montaje && document.body.contains(raiz);
+      const pila = []; // navegación dentro del detalle: [{ tipo, id }]
+
+      // ---- Eventos ----
+      raiz.querySelectorAll('.ln-tab').forEach((tab) => {
+        tab.addEventListener('click', () => { memoria.modulo = tab.dataset.modulo; pintarListado(); });
+      });
+      $('#ln-anterior', raiz).addEventListener('click', () => { memoria.filtros[memoria.modulo].pagina--; pintarTabla(); });
+      $('#ln-siguiente', raiz).addEventListener('click', () => { memoria.filtros[memoria.modulo].pagina++; pintarTabla(); });
+      $('#ln-exportar', raiz).addEventListener('click', () => {
+        if (!memoria.indice) return;
+        exportarCsv(LISTADOS[memoria.modulo].nombreCsv, memoria.indice.columnas[memoria.modulo], filtradas());
+      });
+      $('#ln-recargar', raiz).addEventListener('click', (ev) => {
+        const b = ev.currentTarget;
+        b.disabled = true;
+        llamar('apiLineasRecargarDatos')
+          .then(() => cargarIndice(true))
+          .then(() => { if (vigente()) { pintarIndicadores(); pintarListado(); } })
+          .catch((e) => aviso('⚠️ ' + mensajeError(e), 12000))
+          .then(() => { b.disabled = false; });
+      });
+
+      // Clic en filas, enlaces internos y botones del detalle (delegación).
+      raiz.addEventListener('click', (ev) => {
+        const ir = ev.target.closest('[data-ln-ir]');
+        if (ir) {
+          ev.preventDefault();
+          abrir(ir.dataset.lnIr, ir.dataset.id);
+          return;
+        }
+        if (ev.target.closest('[data-ln-volver]')) { ev.preventDefault(); volver(); return; }
+        if (ev.target.closest('[data-ln-lista]')) { ev.preventDefault(); cerrarDetalle(); return; }
+        const filtro = ev.target.closest('[data-ln-filtro]');
+        if (filtro) {
+          const [modulo, campo, valor] = filtro.dataset.lnFiltro.split('|');
+          Object.assign(memoria.filtros[modulo], LISTADOS[modulo].selects.reduce((o, s) => { o[s.campo] = ''; return o; }, { q: '', pagina: 0 }));
+          if (campo) memoria.filtros[modulo][campo] = valor;
+          memoria.modulo = modulo;
+          cerrarDetalle();
+          pintarListado();
+          return;
+        }
+        if (ev.target.closest('#ln-tile-alertas')) abrirAlertas();
+      });
+      raiz.querySelectorAll('[data-cerrar-modal]').forEach((b) => b.addEventListener('click', () => { $('#ln-modal-alertas', raiz).hidden = true; }));
+      $('#ln-modal-alertas', raiz).addEventListener('click', (ev) => { if (ev.target.id === 'ln-modal-alertas') ev.target.hidden = true; });
+      $('#ln-alertas-ultimas', raiz).addEventListener('change', pintarAlertas);
+
+      // ---- Carga inicial ----
+      Promise.all([cargarPermisos(), cargarIndice()]).then(([permisos]) => {
+        if (!vigente()) return;
+        $('#ln-recargar', raiz).hidden = !permisos.esAdmin;
+        pintarIndicadores();
+        pintarListado();
+        cargarAlertasEnSegundoPlano();
+        if (memoria.abrirAlEntrar) {
+          const id = memoria.abrirAlEntrar;
+          memoria.abrirAlEntrar = null;
+          abrirRegistro(id);
+        }
+      }).catch((e) => {
+        if (!vigente()) return;
+        const box = $('#ln-error', raiz);
+        box.textContent = 'No se pudo cargar el inventario: ' + (e.message || e);
+        box.hidden = false;
+        $('#ln-tbody', raiz).innerHTML = '<tr><td class="empty-state">Sin datos</td></tr>';
+      });
+
+      // ---- Indicadores ----
+      let alertas = null;
+
+      function pintarIndicadores() {
+        const ix = memoria.indice;
+        const eq = ix.equipos;
+        const li = ix.lineas;
+        const tile = (icono, valor, etiqueta, filtro, clase, id) =>
+          '<div class="stat-tile ln-tile ' + (clase || '') + '"' + (id ? ' id="' + id + '"' : '') + (filtro ? ' data-ln-filtro="' + esc(filtro) + '"' : '') + ' role="button" tabindex="0">' +
+          '<div class="stat-icon">' + icono + '</div><div><div class="stat-value">' + valor + '</div><div class="stat-label">' + esc(etiqueta) + '</div></div></div>';
+        $('#ln-indicadores', raiz).innerHTML =
+          tile('📱', miles(eq.length), 'Equipos', 'equipos') +
+          tile('✅', miles(eq.filter((e) => e.estatus === 'USO').length), 'Equipos en uso', 'equipos|estatus|USO', 'stat-tile-ok') +
+          tile('🔌', miles(eq.filter((e) => !e.lineaId).length), 'Equipos sin línea', 'equipos|conLinea|no') +
+          tile('📶', miles(li.length), 'Líneas', 'lineas') +
+          tile('🧩', miles(li.filter((l) => l.suelta).length), 'Líneas sueltas', 'lineas|suelta|si') +
+          tile('⚠️', alertas ? miles(alertas.filas.filter((a) => a.ultima).length) : '…', 'Alertas de inspección', '', 'stat-tile-warn', 'ln-tile-alertas');
+        $('#ln-num-equipos', raiz).textContent = miles(eq.length);
+        $('#ln-num-lineas', raiz).textContent = miles(li.length);
+      }
+
+      function cargarAlertasEnSegundoPlano() {
+        llamar('apiLineasAlertas').then((r) => {
+          alertas = r;
+          if (!vigente()) return;
+          pintarIndicadores();
+          if (!$('#ln-modal-alertas', raiz).hidden) pintarAlertas();
+        }).catch(() => { /* el indicador se queda en "…"; el modal muestra el error al abrirlo */ });
+      }
+
+      function abrirAlertas() {
+        $('#ln-modal-alertas', raiz).hidden = false;
+        if (alertas) pintarAlertas();
+        else llamar('apiLineasAlertas').then((r) => { alertas = r; pintarAlertas(); })
+          .catch((e) => { $('#ln-alertas-lista', raiz).innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>'; });
+      }
+
+      function pintarAlertas() {
+        if (!alertas) return;
+        const soloUltimas = $('#ln-alertas-ultimas', raiz).checked;
+        const filas = alertas.filas.filter((a) => !soloUltimas || a.ultima);
+        $('#ln-alertas-lista', raiz).innerHTML = filas.length
+          ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Fecha</th><th>NUCO</th><th>Responsable</th><th>Calificación</th><th>Alertas</th></tr></thead><tbody>' +
+            filas.map((a) => '<tr class="ln-fila-clic" data-ln-ir="inspeccion" data-id="' + esc(a.id) + '">' +
+              '<td>' + guion(fecha(a.fecha)) + '</td><td class="ln-mono ln-fuerte">' + guion(a.nuco) + '</td>' +
+              '<td>' + guion(a.responsable) + '<div class="ln-tenue">' + esc(a.departamento || '') + '</div></td>' +
+              '<td>' + guion(porcentaje(a.calificacion)) + '</td>' +
+              '<td><ul class="ln-lista-alertas">' + a.alertas.map((t) => '<li>' + esc(t) + '</li>').join('') + '</ul></td></tr>').join('') +
+            '</tbody></table></div><p class="ln-tenue ln-pie">' + miles(filas.length) + ' inspección(es) · datos de ' + esc(fechaHora(alertas.generadoEn)) + '</p>'
+          : '<p class="empty-state">Sin alertas.</p>';
+      }
+
+      // ---- Listado ----
+      function filtradas() {
+        const cfg = LISTADOS[memoria.modulo];
+        const f = memoria.filtros[memoria.modulo];
+        const q = normal(f.q).trim();
+        return memoria.indice[memoria.modulo].filter((r) => {
+          for (let i = 0; i < cfg.selects.length; i++) {
+            const s = cfg.selects[i];
+            if (f[s.campo] && !s.coincide(r, f[s.campo])) return false;
+          }
+          return !q || cfg.busqueda.some((c) => normal(r[c]).indexOf(q) >= 0);
+        });
+      }
+
+      function pintarListado() {
+        if (!memoria.indice) return;
+        const cfg = LISTADOS[memoria.modulo];
+        const f = memoria.filtros[memoria.modulo];
+        const todas = memoria.indice[memoria.modulo];
+        raiz.querySelectorAll('.ln-tab').forEach((t) => t.classList.toggle('active', t.dataset.modulo === memoria.modulo));
+
+        const opciones = (s) => '<option value="">' + esc(s.todos) + '</option>' + s.valores(todas).map((v) =>
+          '<option value="' + esc(v) + '"' + (v === f[s.campo] ? ' selected' : '') + '>' + esc(s.traducir ? (s.traducir[v] || v) : v) + '</option>').join('');
+        $('#ln-filtros', raiz).innerHTML =
+          '<input type="search" id="ln-q" placeholder="' + esc(cfg.placeholder) + '" value="' + esc(f.q) + '" autocomplete="off" />' +
+          cfg.selects.map((s) => '<select data-campo="' + s.campo + '">' + opciones(s) + '</select>').join('');
+        $('#ln-thead', raiz).innerHTML = '<tr>' + cfg.columnas.map((c) => '<th>' + esc(c.titulo) + '</th>').join('') + '</tr>';
+
+        let temporizador = null;
+        $('#ln-q', raiz).addEventListener('input', (ev) => {
+          clearTimeout(temporizador);
+          temporizador = setTimeout(() => { f.q = ev.target.value; f.pagina = 0; pintarTabla(); }, 150);
+        });
+        raiz.querySelectorAll('#ln-filtros select').forEach((sel) => {
+          sel.addEventListener('change', () => { f[sel.dataset.campo] = sel.value; f.pagina = 0; pintarTabla(); });
+        });
+        pintarTabla();
+      }
+
+      function pintarTabla() {
+        const cfg = LISTADOS[memoria.modulo];
+        const f = memoria.filtros[memoria.modulo];
+        const lista = filtradas();
+        const total = memoria.indice[memoria.modulo].length;
+        const paginas = Math.max(1, Math.ceil(lista.length / POR_PAGINA));
+        if (f.pagina >= paginas) f.pagina = paginas - 1;
+        if (f.pagina < 0) f.pagina = 0;
+        const visibles = lista.slice(f.pagina * POR_PAGINA, (f.pagina + 1) * POR_PAGINA);
+        $('#ln-tbody', raiz).innerHTML = visibles.length
+          ? visibles.map((r) => '<tr class="ln-fila-clic" data-ln-ir="' + cfg.detalle + '" data-id="' + esc(r.id) + '">' +
+              cfg.columnas.map((c) => '<td class="' + (c.clase || '') + '">' + c.valor(r) + '</td>').join('') + '</tr>').join('')
+          : '<tr><td colspan="' + cfg.columnas.length + '" class="empty-state">Sin resultados</td></tr>';
+        $('#ln-conteo', raiz).textContent = miles(lista.length) + ' de ' + miles(total) + ' · datos de ' + fechaHora(memoria.indice.generadoEn);
+        $('#ln-pagina', raiz).textContent = 'Página ' + (f.pagina + 1) + ' de ' + paginas;
+        $('#ln-anterior', raiz).disabled = f.pagina === 0;
+        $('#ln-siguiente', raiz).disabled = f.pagina >= paginas - 1;
+      }
+
+      // ---- Detalle ----
+      function abrir(tipo, id, sinApilar) {
+        if (!sinApilar) pila.push({ tipo: tipo, id: id });
+        $('#ln-listado', raiz).hidden = true;
+        const detalle = $('#ln-detalle', raiz);
+        detalle.hidden = false;
+        detalle.innerHTML = migas() + '<div class="card ln-cargando"><span class="ln-spinner"></span> Cargando…</div>';
+        document.getElementById('view-container').scrollTop = 0;
+        window.scrollTo(0, 0);
+        const pintar = { equipo: pintarEquipo, linea: pintarLinea, inspeccion: pintarInspeccion }[tipo];
+        pintar(detalle, id).catch((e) => {
+          if (!vigente()) return;
+          detalle.innerHTML = migas() + '<div class="card"><p class="error-msg">No se pudo cargar: ' + mensajeError(e) + '</p></div>';
+        });
+      }
+
+      /** Abre un registro sabiendo solo su ID (equipo si existe como equipo; si no, línea). */
+      function abrirRegistro(id) {
+        const esEquipo = memoria.indice.equipos.some((e) => e.id === id);
+        abrir(esEquipo ? 'equipo' : 'linea', id);
+      }
+
+      function volver() {
+        pila.pop();
+        const anterior = pila[pila.length - 1];
+        if (anterior) abrir(anterior.tipo, anterior.id, true);
+        else cerrarDetalle();
+      }
+
+      function cerrarDetalle() {
+        pila.length = 0;
+        $('#ln-detalle', raiz).hidden = true;
+        $('#ln-detalle', raiz).innerHTML = '';
+        $('#ln-listado', raiz).hidden = false;
+      }
+
+      function migas() {
+        const etiquetas = { equipo: 'Equipo', linea: 'Línea', inspeccion: 'Inspección' };
+        return '<div class="ln-migas"><button type="button" class="secondary" data-ln-volver>‹ Volver</button>' +
+          '<span><a href="#" class="ln-enlace" data-ln-lista>Líneas Telefónicas</a>' +
+          pila.map((p) => ' › ' + esc(etiquetas[p.tipo])).join('') + '</span></div>';
+      }
+
+      function campos(pares) {
+        return '<dl class="ln-campos">' + pares.filter(Boolean).map((p) =>
+          '<dt>' + esc(p[0]) + '</dt><dd>' + (p[2] ? (p[1] || vacio) : guion(p[1])) + '</dd>').join('') + '</dl>';
+      }
+
+      function tarjeta(titulo, cuerpo, clase) {
+        return '<div class="card ln-card ' + (clase || '') + '"><h3>' + titulo + '</h3>' + cuerpo + '</div>';
+      }
+
+      function tarjetaResponsable(r, titulo) {
+        r = r || {};
+        const adicionales = (r.usuariosAdicionales || []).length
+          ? '<div class="ln-subtitulo">Usuarios adicionales</div>' + campos(r.usuariosAdicionales.map((u) => [u.rol, esc(u.nombre) + (u.puesto ? ' <span class="ln-tenue">· ' + esc(u.puesto) + '</span>' : ''), true]))
+          : '';
+        return tarjeta('👤 ' + esc(titulo || 'Responsable'), campos([
+          ['Nombre', (r.nombres && r.nombres.length > 1) ? r.nombres.map(esc).join('<br>') : esc(r.nombre || ''), true],
+          r.codigoResguardo ? ['Código de resguardo', r.codigoResguardo] : null,
+          ['No. empleado', r.noEmpleado],
+          ['Puesto', r.puesto],
+          ['Departamento', r.departamento],
+          ['Área', r.area],
+          ['Sede', r.sede],
+          ['Oficina / desarrollo', r.oficina],
+          ['Jefe directo', r.jefeDirecto],
+          ['Director', r.director],
+          ['Razón social', r.razonSocial],
+        ]) + adicionales);
+      }
+
+      function tarjetaRegistro(l) {
+        l = l || {};
+        return tarjeta('🗂️ Registro en la hoja', campos([
+          ['ID', l.id], ['Folio', l.folio], ['Tipo', l.tipo], ['Fila en hoja', l.fila],
+          ['Estatus general', chip(l.estatusGeneral), true], ['Fecha registro', fecha(l.fechaRegistro)], ['Última inspección', fecha(l.fechaInspeccion)],
+          ['Comentarios', l.comentarios],
+        ]));
+      }
+
+      function encabezado(icono, titulo, chips, botones) {
+        return '<div class="ln-detalle-header card">' +
+          '<div class="ln-detalle-icono">' + icono + '</div>' +
+          '<div class="ln-detalle-titulo"><h2>' + titulo + '</h2><div class="ln-chips">' + chips + '</div></div>' +
+          '<div class="ln-detalle-botones">' + (botones || '') + '</div></div>';
+      }
+
+      function pintarEquipo(detalle, id) {
+        return llamar('apiLineasEquipo', id).then((r) => {
+          if (!vigente()) return;
+          const e = r.equipo;
+          const l = r.linea;
+          const costo = l && l.costoPlan !== null && l.costoPlan !== undefined ? '$' + Number(l.costoPlan).toLocaleString('es-MX') : null;
+          detalle.innerHTML = migas() +
+            encabezado('📱', 'NUCO ' + esc(e.nuco || '—'),
+              chip(e.estatus) + chip(TIPO_EQUIPO[e.tipo] || e.tipo, 'neutro') + (l ? chip('Con línea', 'verde') : chip('Sin línea', 'ambar')),
+              e.carpetaDriveId ? enlaceDrive(e.carpetaDriveId, 'Carpeta en Drive') : '') +
+            (e._secretosVisibles ? '' : '<div class="ln-nota">🔒 Los PIN, patrones y contraseñas están ocultos para tu rol.</div>') +
+            '<div class="ln-grid-2">' +
+              tarjeta('📱 Equipo', campos([
+                ['Modelo', e.modelo], ['IMEI', e.imei], ['Accesorios', (e.accesorios || []).join(', ')],
+                ['Cuenta Google', e.cuentaGoogle], ['PIN equipo', e.pinEquipo], ['Patrón', e.patronRuta], ['Contraseña módem', e.contrasenaModem],
+                e.simResidual ? ['SIM residual', chip(e.simResidual, 'ambar'), true] : null,
+              ])) +
+              tarjeta('📶 Línea asignada', l ? campos([
+                ['Número', '<a href="#" class="ln-enlace ln-mono" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + esc(l.numero || '(sin número)') + '</a>', true],
+                ['Compañía', l.compania], ['Estatus', chip(l.estatus), true], ['SIM', l.sim], ['PIN WhatsApp', l.pinWhatsapp],
+                ['Costo plan', costo], ['Plan', [fecha(l.inicioPlan), fecha(l.finPlan)].filter(Boolean).join(' → ')],
+              ]) : '<p class="empty-state">Este equipo no tiene línea asignada.</p>') +
+              tarjetaResponsable(e.responsable) +
+              tarjetaRegistro(e.legado) +
+            '</div>' +
+            '<div id="ln-evidencias">' + tarjeta('📋 Inspecciones y responsivas', '<p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p>') + '</div>' +
+            '<div id="ln-historial">' + tarjeta('🕓 Historial', '<p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p>') + '</div>';
+          cargarEvidencias(id);
+          cargarHistorial(id);
+        });
+      }
+
+      function pintarLinea(detalle, id) {
+        return llamar('apiLineasLinea', id).then((r) => {
+          if (!vigente()) return;
+          const l = r.linea;
+          const e = r.equipo;
+          const costo = l.costoPlan !== null && l.costoPlan !== undefined ? '$' + Number(l.costoPlan).toLocaleString('es-MX') : null;
+          detalle.innerHTML = migas() +
+            encabezado('📶', esc(l.numero || 'Línea sin número'), chip(l.estatus) + (e ? chip('En NUCO ' + (e.nuco || '—'), 'neutro') : chip('Suelta', 'ambar'))) +
+            '<div class="ln-grid-2">' +
+              tarjeta('📶 Línea', campos([
+                ['Compañía', l.compania], ['SIM', l.sim], ['PIN WhatsApp', l.pinWhatsapp], ['Razón social', l.razonSocial],
+                ['Costo plan', costo], ['Inicio plan', fecha(l.inicioPlan)], ['Fin plan', fecha(l.finPlan)],
+                l.usoTemporal ? ['Uso temporal', 'Desde ' + esc(fecha(l.usoTemporal.desde) || '—') + ' · ' + esc(l.usoTemporal.correo || ''), true] : null,
+                !e && l.nucoLegado ? ['NUCO (anterior)', l.nucoLegado] : null,
+              ])) +
+              tarjeta('📱 Equipo', e ? campos([
+                ['NUCO', '<a href="#" class="ln-enlace ln-mono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + esc(e.nuco || '—') + '</a>', true],
+                ['Tipo', TIPO_EQUIPO[e.tipo] || e.tipo], ['Modelo', e.modelo], ['IMEI', e.imei], ['Estatus', chip(e.estatus), true],
+              ]) : '<p class="empty-state">Línea suelta: no está instalada en un equipo de la empresa.</p>') +
+              tarjetaResponsable(e ? e.responsable : l.responsable, e ? 'Responsable (del equipo)' : 'Responsable') +
+              tarjetaRegistro(l.legado) +
+            '</div>' +
+            (e ? '' : '<div id="ln-evidencias">' + tarjeta('📋 Inspecciones y responsivas', '<p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p>') + '</div>') +
+            '<div id="ln-historial">' + tarjeta('🕓 Historial', '<p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p>') + '</div>';
+          if (!e) cargarEvidencias(id);
+          cargarHistorial(id);
+        });
+      }
+
+      function cargarEvidencias(id) {
+        const pila0 = pila.length;
+        llamar('apiLineasEvidencias', id).then((ev) => {
+          const cont = $('#ln-evidencias', raiz);
+          if (!vigente() || !cont || pila.length !== pila0) return;
+          cont.innerHTML = tarjetaEvidencias(ev.inspecciones || [], ev.responsivas || []);
+        }).catch((e) => {
+          const cont = $('#ln-evidencias', raiz);
+          if (cont) cont.innerHTML = tarjeta('📋 Inspecciones y responsivas', '<p class="error-msg">' + mensajeError(e) + '</p>');
+        });
+      }
+
+      function tarjetaEvidencias(inspecciones, responsivas) {
+        const tablaInsp = inspecciones.length
+          ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Fecha</th><th>Origen</th><th>Calificación</th><th>Alertas</th><th>Fotos</th><th>Responsable</th><th>Inspector</th></tr></thead><tbody>' +
+            inspecciones.map((i) => '<tr class="ln-fila-clic" data-ln-ir="inspeccion" data-id="' + esc(i.id) + '"><td>' + guion(fecha(i.fecha)) + '</td><td>' + (ORIGEN[i.origen] || '') + '</td>' +
+              '<td>' + guion(porcentaje(i.calificacion)) + '</td><td>' + (i.alertas ? chip(String(i.alertas), 'rojo') : vacio) + '</td>' +
+              '<td>' + (i.fotos || '<span class="ln-tenue">0</span>') + '</td><td>' + guion(i.responsable) + '</td><td class="ln-tenue">' + guion(i.inspector) + '</td></tr>').join('') +
+            '</tbody></table></div>'
+          : '<p class="empty-state">Sin inspecciones registradas.</p>';
+        const tablaResp = responsivas.length
+          ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Fecha</th><th>Origen</th><th>Responsable</th><th>Documento</th><th>Carpeta</th></tr></thead><tbody>' +
+            responsivas.map((r) => '<tr><td>' + guion(fecha(r.fecha)) + '</td><td>' + (ORIGEN[r.origen] || '') + '</td><td>' + guion(r.responsable) + '</td>' +
+              '<td>' + (r.pdfId ? enlaceDrive(r.pdfId, 'PDF', true) : (r.pdfPendiente ? chip('PDF pendiente', 'ambar') : vacio)) + '</td>' +
+              '<td>' + (r.carpetaId ? enlaceDrive(r.carpetaId, 'Abrir') : vacio) + '</td></tr>').join('') +
+            '</tbody></table></div>'
+          : '<p class="empty-state">Sin responsivas registradas.</p>';
+        return tarjeta('📋 Inspecciones (' + inspecciones.length + ')', tablaInsp) + tarjeta('✍️ Responsivas (' + responsivas.length + ')', tablaResp);
+      }
+
+      // ---- Historial ----
+      const ETIQUETA_MOV = {
+        ASIGNAR_LINEA: 'Línea asignada', RETIRAR_LINEA: 'Línea retirada', CAMBIO_EQUIPO: 'Cambio de equipo',
+        REASIGNACION: 'Reasignación de responsable', CAMBIO_ESTATUS_EQUIPO: 'Cambio de estatus (equipo)',
+        CAMBIO_ESTATUS_LINEA: 'Cambio de estatus (línea)', DESECHO: 'Desecho', INSPECCION: 'Inspección', RESPONSIVA: 'Responsiva firmada',
+        EDICION: 'Edición de datos', ALTA: 'Alta de registro',
+      };
+
+      function describirMovimiento(m) {
+        const a = m.antes || {};
+        const d = m.despues || {};
+        const partes = [];
+        if (m.tipo === 'REASIGNACION') {
+          partes.push(esc((a.responsable && a.responsable.nombre) || '(sin responsable)') + ' → <b>' + esc((d.responsable && d.responsable.nombre) || '—') + '</b>');
+        } else if (m.tipo === 'ASIGNAR_LINEA' || m.tipo === 'RETIRAR_LINEA') {
+          partes.push('Línea <b>' + esc(m.numero || '') + '</b> ' + (m.tipo === 'ASIGNAR_LINEA' ? 'en' : 'fuera de') + ' NUCO <b>' + esc(m.nuco || '') + '</b>');
+        } else if (m.tipo === 'CAMBIO_EQUIPO') {
+          partes.push('Línea <b>' + esc(m.numero || '') + '</b>: NUCO ' + esc(m.nuco || '') + ' → <b>NUCO ' + esc(m.nucoDestino || '') + '</b>');
+        } else if (/^CAMBIO_ESTATUS/.test(m.tipo)) {
+          partes.push(esc(a.estatus || '—') + ' → <b>' + esc(d.estatus || '—') + '</b>');
+        } else if (m.tipo === 'INSPECCION') {
+          partes.push('<a href="#" class="ln-enlace" data-ln-ir="inspeccion" data-id="' + esc(m.inspeccionId) + '">Ver inspección</a>' +
+            (d.calificacion !== null && d.calificacion !== undefined ? ' · Calificación ' + Math.round(d.calificacion * 100) + '%' : '') +
+            (d.alertas ? ' · ' + chip(d.alertas + ' alerta(s)', 'rojo') : ''));
+        } else if (m.tipo === 'RESPONSIVA') {
+          partes.push('Responsable: <b>' + esc((d.responsable && d.responsable.nombre) || '—') + '</b>');
+        } else if (m.tipo === 'DESECHO') {
+          partes.push('Folio ' + esc(m.folio || '—') + (m.detalle && m.detalle.lugar ? ' · ' + esc(m.detalle.lugar) : ''));
+        }
+        if (m.motivo) partes.push('Motivo: ' + esc(m.motivo));
+        if (m.ticket) partes.push('Ticket: ' + esc(m.ticket));
+        if (m.cambios && m.cambios.length) {
+          partes.push('<details><summary class="ln-tenue">' + m.cambios.length + ' campo(s) modificados</summary><ul class="ln-tenue">' +
+            m.cambios.map((c) => '<li>' + esc(c.campo) + ': ' + esc(c.antes || '—') + ' → <b>' + esc(c.despues || '—') + '</b></li>').join('') + '</ul></details>');
+        }
+        return partes.join('<br>');
+      }
+
+      function cargarHistorial(id) {
+        const pila0 = pila.length;
+        llamar('apiLineasHistorial', id).then((h) => {
+          const cont = $('#ln-historial', raiz);
+          if (!vigente() || !cont || pila.length !== pila0) return;
+          const items = h.movimientos.map((m) => ({
+            fecha: m.fecha, titulo: ETIQUETA_MOV[m.tipo] || m.tipo, origen: m.origen, cuerpo: describirMovimiento(m),
+            usuario: m.usuario && (m.usuario.nombre || m.usuario.correo),
+          }));
+          (h.legado ? h.legado.eventos : []).forEach((e) => {
+            items.push({ fecha: e.fecha, titulo: 'Cambio: ' + (e.campo || ''), origen: 'BITACORA', cuerpo: esc(e.antes || '—') + ' → <b>' + esc(e.despues || '—') + '</b>', usuario: e.usuario });
+          });
+          items.sort((a, b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
+          const origen = { SISTEMA: chip('Nuevo sistema', 'verde'), LEGADO: chip('AppSheet', 'azul'), BITACORA: chip('Bitácora AppSheet', 'neutro') };
+          cont.innerHTML = tarjeta('🕓 Historial (' + items.length + ')', items.length
+            ? '<ol class="ln-timeline">' + items.slice(0, 150).map((it) =>
+                '<li><div class="ln-tl-cabecera"><b>' + esc(it.titulo) + '</b> ' + (origen[it.origen] || '') +
+                '<span class="ln-tenue ln-tl-fecha">' + esc(fechaHora(it.fecha)) + (it.usuario ? ' · ' + esc(it.usuario) : '') + '</span></div>' +
+                '<div class="ln-tl-cuerpo">' + it.cuerpo + '</div></li>').join('') + '</ol>' +
+              (items.length > 150 ? '<p class="ln-tenue ln-pie">Mostrando los 150 más recientes.</p>' : '')
+            : '<p class="empty-state">Sin movimientos registrados.</p>');
+        }).catch((e) => {
+          const cont = $('#ln-historial', raiz);
+          if (cont) cont.innerHTML = tarjeta('🕓 Historial', '<p class="error-msg">' + mensajeError(e) + '</p>');
+        });
+      }
+
+      // ---- Inspección ----
+      function pintarInspeccion(detalle, id) {
+        return llamar('apiLineasInspeccion', id).then((r) => {
+          if (!vigente()) return;
+          const i = r.inspeccion;
+          const e = r.equipo;
+          const s = i.snapshot || {};
+          const CLASE_VALOR = { SI: 'verde', BUENO: 'verde', INSTALADA: 'verde', REGULAR: 'ambar', NO: 'rojo', MALO: 'rojo', 'NO INSTALADA': 'neutro' };
+          const alertas = i.alertas || [];
+
+          const checklist = i.origen === 'DRIVE'
+            ? '<div class="ln-nota">Inspección histórica que solo existe en Drive: no tiene checklist capturado, solo sus archivos.</div>'
+            : '<div class="ln-grid-2">' + r.checklist.map((sec) => {
+                const puntos = sec.puntos.filter((p) => i.checklist && i.checklist[p.clave]);
+                if (!puntos.length) return '';
+                return tarjeta(esc(sec.seccion), campos(puntos.map((p) => {
+                  const v = i.checklist[p.clave];
+                  const alerta = alertas.filter((a) => a.clave === p.clave)[0];
+                  return [p.etiqueta, chip(v, CLASE_VALOR[v] || 'neutro') + (alerta ? ' ' + chip('antes ' + alerta.antes, 'rojo') : ''), true];
+                })));
+              }).join('') + '</div>';
+
+          const galeria = (lista, clase) => '<div class="ln-galeria">' + lista.map((f) =>
+            '<a class="ln-foto ' + (clase || '') + '" target="_blank" rel="noopener" href="' + esc(f.enlace) + '" title="' + esc(f.nombre) + '">' +
+            (f.miniatura ? '<img loading="lazy" referrerpolicy="no-referrer" src="' + esc(f.miniatura) + '" alt="' + esc(f.nombre) + '">' : '<span>' + (f.video ? '🎬' : '🖼️') + '</span>') +
+            '</a>').join('') + '</div>';
+
+          detalle.innerHTML = migas() +
+            encabezado('📋', 'Inspección ' + esc(fecha(i.fecha) || ''),
+              (ORIGEN[i.origen] || '') + (e ? chip('NUCO ' + (e.nuco || '—'), 'neutro') : '') +
+              (i.calificacion !== null && i.calificacion !== undefined ? chip('Calificación ' + porcentaje(i.calificacion), 'verde') : ''),
+              (e ? '<button type="button" class="secondary" data-ln-ir="equipo" data-id="' + esc(e._id) + '">Ver equipo</button>' : '') +
+              (i.drive ? enlaceDrive(i.drive.carpetaId, 'Carpeta en Drive') : '') +
+              (r.pdfs || []).map((p) => enlaceDrive(p.id, p.nombre || 'PDF', true)).join('')) +
+            (alertas.length ? '<div class="card ln-alerta-caja"><h3>⚠️ Alertas contra la inspección anterior</h3><ul>' +
+              alertas.map((a) => '<li><b>' + esc(a.etiqueta) + '</b>: antes <b>' + esc(a.antes) + '</b>, ahora <b>' + esc(a.despues) + '</b></li>').join('') + '</ul>' +
+              (i.inspeccionAnteriorId ? '<a href="#" class="ln-enlace" data-ln-ir="inspeccion" data-id="' + esc(i.inspeccionAnteriorId) + '">Ver inspección anterior</a>' : '') + '</div>' : '') +
+            '<div class="ln-grid-2">' +
+              (i.origen !== 'DRIVE' ? tarjeta('👤 Datos al momento de la inspección', campos([
+                ['Responsable', s.responsable], ['Departamento', s.departamento], ['Sede', s.sede], ['Puesto', s.puesto],
+                ['Número', s.numero], ['IMEI', s.imei], ['Modelo', s.modelo], ['Compañía', s.compania],
+                ['Inspector', i.inspector], ['Ticket', i.ticket], ['Observaciones', i.observaciones],
+              ])) : '') +
+              tarjeta('📁 Evidencias', campos([
+                ['Carpeta', i.drive ? esc(i.drive.ruta) : null, true],
+                ['Coincidencia', i.drive ? (i.drive.coincidenciaExacta ? 'Misma fecha' : 'Fecha ±1 día') : 'Sin carpeta en Drive'],
+                ['Fotos', String(r.fotos.length)],
+              ])) +
+            '</div>' +
+            checklist +
+            tarjeta('🖼️ Fotos (' + r.fotos.length + ')', r.fotos.length ? galeria(r.fotos) : '<p class="empty-state">Sin fotos en la carpeta de Drive.</p>') +
+            (r.firmas && r.firmas.length ? tarjeta('✍️ Firmas', galeria(r.firmas, 'ln-firma')) : '');
+        });
+      }
+    }
+
+    /** Desde una bitácora: abre el registro en Líneas Telefónicas. */
+    function irARegistro(id) {
+      memoria.abrirAlEntrar = id;
+      navegarA('lineas-telefonicas', 'Líneas Telefónicas');
+    }
+
+    // ======================================================================
+    // Bitácoras: Control de Cambios, Control de Reasignaciones, Bitácora de Desechos
+    // ======================================================================
+
+    const BITACORAS = {
+      CAMBIOS: {
+        titulo: '📝 Control de Cambios - Líneas', icono: '📝', csv: 'control de cambios lineas',
+        subtitulo: 'Bitácora de campos modificados en LINEAS TELEFONICAS (AppSheet y nuevo sistema)',
+        idRegistro: 'ID_LINEA',
+        columnas: [
+          ['FECHA ACTUALIZACION', 'Fecha'], ['NUCO', 'NUCO'], ['CAMPO', 'Campo'], ['ANTES', 'Antes'], ['DESPUES', 'Después'],
+          ['ACTUALIZADO POR', 'Actualizado por'], ['IMEI', 'IMEI'],
+        ],
+      },
+      REASIGNACIONES: {
+        titulo: '🔁 Control de Reasignaciones - Líneas', icono: '🔁', csv: 'control de reasignaciones lineas',
+        subtitulo: 'Cambios de responsable de equipos y líneas',
+        idRegistro: 'ID Linea',
+        columnas: [
+          ['Fecha de Reasignacion', 'Fecha'], ['NUCO', 'NUCO'],
+          ['Responsable Saliente', 'Responsable saliente'], ['Departamento Saliente', 'Depto. saliente'],
+          ['Responsable Entrante', 'Responsable entrante'], ['Departamento Entrante', 'Depto. entrante'],
+          ['QUIEN REGISTRO', 'Registró'],
+        ],
+      },
+      DESECHOS: {
+        titulo: '🗑️ Bitácora de Desechos', icono: '🗑️', csv: 'bitacora de desechos',
+        subtitulo: 'Equipos dados de baja definitiva (folio DR)',
+        idRegistro: 'ID_EQUIPO',
+        columnas: [
+          ['FOLIO DESECHO', 'Folio'], ['FECHA DE DESECHO', 'Fecha de desecho'], ['MOTIVO', 'Motivo'],
+          ['LUGAR DE DESECHO', 'Lugar'], ['ESTADO', 'Estado'], ['QUIEN REGISTRO', 'Registró'], ['FECHA DE REGISTRO', 'Registrado'],
+        ],
+      },
+    };
+
+    function initBitacora(tipo) {
+      const n = ++montaje;
+      const cfg = BITACORAS[tipo];
+      const raiz = document.getElementById('ln-bitacora');
+      const vigente = () => n === montaje && document.body.contains(raiz);
+      const consulta = { q: '', pagina: 0 };
+      let ultima = null;
+
+      $('#ln-bit-titulo', raiz).textContent = cfg.titulo;
+      $('#ln-bit-subtitulo', raiz).textContent = cfg.subtitulo;
+      $('#ln-bit-icono', raiz).textContent = cfg.icono;
+
+      const norm = (h) => String(h || '').toUpperCase().replace(/\s+/g, ' ').trim();
+      const buscarEncabezado = (encabezados, nombre) => encabezados.find((h) => norm(h) === norm(nombre));
+      const valorCelda = (h, v) => {
+        if (v === null || v === undefined || v === '') return vacio;
+        if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)) return esc(/FECHA/i.test(h) && !/REGISTRO/i.test(h) ? fechaHora(v) : fecha(v));
+        return esc(v);
+      };
+
+      function cargar() {
+        const tbody = $('#ln-bit-tbody', raiz);
+        tbody.innerHTML = '<tr><td class="empty-state"><span class="ln-spinner"></span> Cargando…</td></tr>';
+        $('#ln-bit-error', raiz).hidden = true;
+        ['#ln-bit-anterior', '#ln-bit-siguiente'].forEach((s) => { $(s, raiz).disabled = true; });
+        llamar('apiLineasBitacora', tipo, { q: consulta.q, pagina: consulta.pagina, porPagina: POR_PAGINA }).then((r) => {
+          if (!vigente()) return;
+          ultima = r;
+          const cols = cfg.columnas.map(([nombre, titulo]) => ({ h: buscarEncabezado(r.encabezados, nombre), titulo: titulo })).filter((c) => c.h);
+          const columnas = cols.length ? cols : r.encabezados.map((h) => ({ h: h, titulo: h }));
+          const hId = buscarEncabezado(r.encabezados, cfg.idRegistro);
+          ultima.columnas = columnas;
+
+          $('#ln-bit-thead', raiz).innerHTML = '<tr>' + columnas.map((c) => '<th>' + esc(c.titulo) + '</th>').join('') + (hId ? '<th></th>' : '') + '</tr>';
+          tbody.innerHTML = r.filas.length
+            ? r.filas.map((f) => '<tr>' + columnas.map((c) => '<td class="' + (/NUCO|IMEI|FOLIO/i.test(c.h) ? 'ln-mono' : '') + '">' + valorCelda(c.h, f[c.h]) + '</td>').join('') +
+                (hId ? '<td>' + (f[hId] ? '<button type="button" class="secondary ln-btn-chico" data-ln-registro="' + esc(f[hId]) + '">Ver</button>' : '') + '</td>' : '') + '</tr>').join('')
+            : '<tr><td colspan="' + (columnas.length + 1) + '" class="empty-state">Sin resultados</td></tr>';
+
+          if (!consulta.q) $('#ln-bit-total', raiz).textContent = miles(r.total);
+          $('#ln-bit-coinciden', raiz).textContent = consulta.q ? miles(r.total) : '—';
+          $('#ln-bit-conteo', raiz).textContent = consulta.q
+            ? miles(r.total) + ' coincidencia(s) con "' + consulta.q + '"'
+            : 'Del más reciente al más antiguo';
+          $('#ln-bit-pagina', raiz).textContent = 'Página ' + (r.pagina + 1) + ' de ' + miles(r.paginas);
+          $('#ln-bit-anterior', raiz).disabled = r.pagina === 0;
+          $('#ln-bit-siguiente', raiz).disabled = r.pagina >= r.paginas - 1;
+        }).catch((e) => {
+          if (!vigente()) return;
+          tbody.innerHTML = '<tr><td class="empty-state">Sin datos</td></tr>';
+          const box = $('#ln-bit-error', raiz);
+          box.textContent = 'No se pudo cargar la bitácora: ' + (e.message || e);
+          box.hidden = false;
+        });
+      }
+
+      $('#ln-bit-form', raiz).addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        consulta.q = $('#ln-bit-q', raiz).value.trim();
+        consulta.pagina = 0;
+        cargar();
+      });
+      $('#ln-bit-limpiar', raiz).addEventListener('click', () => {
+        $('#ln-bit-q', raiz).value = '';
+        consulta.q = '';
+        consulta.pagina = 0;
+        cargar();
+      });
+      $('#ln-bit-anterior', raiz).addEventListener('click', () => { consulta.pagina--; cargar(); });
+      $('#ln-bit-siguiente', raiz).addEventListener('click', () => { consulta.pagina++; cargar(); });
+      $('#ln-bit-exportar', raiz).addEventListener('click', () => {
+        if (!ultima || !ultima.filas.length) return;
+        exportarCsv(cfg.csv, ultima.encabezados, ultima.filas);
+      });
+      raiz.addEventListener('click', (ev) => {
+        const b = ev.target.closest('[data-ln-registro]');
+        if (b) irARegistro(b.dataset.lnRegistro);
+      });
+
+      cargar();
+    }
+
+    return {
+      initTelefonicas: initTelefonicas,
+      initCambios: () => initBitacora('CAMBIOS'),
+      initReasignaciones: () => initBitacora('REASIGNACIONES'),
+      initDesechos: () => initBitacora('DESECHOS'),
+    };
+  })();
+</script>

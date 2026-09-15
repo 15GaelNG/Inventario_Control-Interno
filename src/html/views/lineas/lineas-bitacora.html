@@ -1,0 +1,45 @@
+<template id="tpl-lineas-bitacora">
+  <div class="ln-modulo" id="ln-bitacora">
+    <div class="page-header">
+      <h2 id="ln-bit-titulo"></h2>
+      <p class="page-subtitle" id="ln-bit-subtitulo"></p>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-tile">
+        <div class="stat-icon" id="ln-bit-icono"></div>
+        <div><div class="stat-value" id="ln-bit-total">…</div><div class="stat-label">Registros en la hoja</div></div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-icon">🔎</div>
+        <div><div class="stat-value" id="ln-bit-coinciden">—</div><div class="stat-label">Coinciden con la búsqueda</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <form class="ln-filtros" id="ln-bit-form">
+        <input type="search" id="ln-bit-q" placeholder="Buscar en cualquier columna (NUCO, responsable, campo…)" autocomplete="off" />
+        <button type="submit">Buscar</button>
+        <button type="button" class="secondary" id="ln-bit-limpiar">Limpiar</button>
+        <button type="button" class="secondary" id="ln-bit-exportar">⬇ Exportar página</button>
+      </form>
+
+      <div class="ln-tabla-wrap">
+        <table class="ln-tabla">
+          <thead id="ln-bit-thead"></thead>
+          <tbody id="ln-bit-tbody"><tr><td class="empty-state">Cargando…</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="ln-paginacion">
+        <span class="ln-conteo" id="ln-bit-conteo"></span>
+        <div class="ln-paginas">
+          <button type="button" class="secondary" id="ln-bit-anterior">‹ Más recientes</button>
+          <span id="ln-bit-pagina"></span>
+          <button type="button" class="secondary" id="ln-bit-siguiente">Más antiguos ›</button>
+        </div>
+      </div>
+      <div class="error-msg" id="ln-bit-error" hidden></div>
+    </div>
+  </div>
+</template>

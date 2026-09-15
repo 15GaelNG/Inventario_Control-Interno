@@ -1,0 +1,70 @@
+<template id="tpl-lineas-telefonicas">
+  <div class="ln-modulo" id="ln-telefonicas">
+
+    <!-- Listado -->
+    <section id="ln-listado">
+      <div class="page-header ln-page-header">
+        <div>
+          <h2>📱 Líneas Telefónicas</h2>
+          <p class="page-subtitle">Inventario de equipos y líneas: responsables, estatus, inspecciones e historial</p>
+        </div>
+        <div class="ln-acciones-header">
+          <button type="button" class="secondary" id="ln-recargar" hidden title="Vaciar caché y volver a leer la hoja">↻ Recargar datos</button>
+        </div>
+      </div>
+
+      <div class="stat-row" id="ln-indicadores">
+        <div class="stat-tile ln-cargando-tile"><div class="stat-icon">⏳</div><div><div class="stat-value">…</div><div class="stat-label">Cargando</div></div></div>
+      </div>
+
+      <div class="card">
+        <div class="ln-toolbar">
+          <div class="ln-tabs" role="tablist">
+            <button type="button" class="ln-tab active" data-modulo="equipos" role="tab">📱 Equipos <span class="ln-tab-num" id="ln-num-equipos"></span></button>
+            <button type="button" class="ln-tab" data-modulo="lineas" role="tab">📶 Líneas <span class="ln-tab-num" id="ln-num-lineas"></span></button>
+          </div>
+          <button type="button" class="secondary" id="ln-exportar">⬇ Exportar CSV</button>
+        </div>
+
+        <div class="ln-filtros" id="ln-filtros"></div>
+
+        <div class="ln-tabla-wrap">
+          <table class="ln-tabla">
+            <thead id="ln-thead"></thead>
+            <tbody id="ln-tbody">
+              <tr><td class="empty-state">Cargando inventario…</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="ln-paginacion">
+          <span class="ln-conteo" id="ln-conteo"></span>
+          <div class="ln-paginas">
+            <button type="button" class="secondary" id="ln-anterior">‹ Anterior</button>
+            <span id="ln-pagina"></span>
+            <button type="button" class="secondary" id="ln-siguiente">Siguiente ›</button>
+          </div>
+        </div>
+        <div class="error-msg" id="ln-error" hidden></div>
+      </div>
+    </section>
+
+    <!-- Detalle de equipo / línea / inspección (se pinta desde lineas.html) -->
+    <section id="ln-detalle" hidden></section>
+
+    <!-- Alertas de inspección -->
+    <div class="modal-backdrop" id="ln-modal-alertas" hidden>
+      <div class="modal-card modal-card-wide">
+        <div class="modal-header">
+          <div>
+            <h3 style="margin:0">⚠️ Alertas de inspección</h3>
+            <p class="modal-subtitle">Puntos que empeoraron contra la inspección anterior del mismo equipo</p>
+          </div>
+          <button type="button" class="modal-close" data-cerrar-modal>✕</button>
+        </div>
+        <label class="ln-check"><input type="checkbox" id="ln-alertas-ultimas" checked> Solo la inspección más reciente de cada equipo</label>
+        <div class="modal-form-scroll" id="ln-alertas-lista"><p class="empty-state">Cargando…</p></div>
+      </div>
+    </div>
+  </div>
+</template>

@@ -1,41 +1,192 @@
 /**
  * TelefoniaService.gs
- * Módulo de líneas y equipos telefónicos: altas, reasignaciones, suspensiones,
- * bajas por desecho, e inspección de equipo (checklist de daños + firma).
- * Pendiente de finalizar esquema de columnas.
+ * Fachada del módulo de Líneas (equipos y líneas telefónicas) para ClientApi.gs.
+ * Valida la sesión y el rol en el servidor; la lógica vive en services/lineas/:
+ *   LineasDatos       acceso a la hoja (caché, búsquedas, escritura por lotes)
+ *   LineasUtil        normalización de valores del AppSheet
+ *   LineasChecklist   checklist de inspección de equipo
+ *   LineasRepo        traducción hoja ↔ modelo (equipo / línea / responsable) y bitácoras
  *
- * Hojas previstas en Config.SPREADSHEET_IDS.TELEFONIA():
- *   LINEAS_EQUIPOS   — catálogo de línea + equipo asignado
- *   REASIGNACIONES   — historial de cambio de responsable
- *   SUSPENSIONES     — bajas temporales / portabilidad
- *   BAJAS            — desecho definitivo, con evidencia
- *   INSPECCIONES     — checklist de daños del equipo (ver PdfService)
+ * Hoja: Config.SPREADSHEET_IDS.TELEFONIA() — misma estructura que el AppSheet.
  */
 
 const TelefoniaService = (function () {
-  const SHEET_LINEAS_EQUIPOS = 'LINEAS_EQUIPOS';
+  const CAMPOS_SECRETOS_EQUIPO = ['pinEquipo', 'patronRuta', 'contrasenaModem'];
+  const CAMPOS_SECRETOS_LINEA = ['pinWhatsapp'];
 
-  function ssId() {
-    return Config.SPREADSHEET_IDS.TELEFONIA();
+  function rolesOperan_() {
+    return [Config.ROLES.ADMIN, Config.ROLES.OPERADOR];
   }
 
-  function listar(token) {
+  /** PIN, patrones y contraseñas de equipos: solo ADMIN. */
+  function puedeVerSecretos_(sesion) {
+    return sesion.rol === Config.ROLES.ADMIN;
+  }
+
+  function ocultarSecretos_(doc, campos, sesion) {
+    if (!doc) return doc;
+    const puedeVer = puedeVerSecretos_(sesion);
+    campos.forEach((c) => {
+      if (c in doc) doc[c] = puedeVer ? doc[c] : (doc[c] ? '••••' : null);
+    });
+    doc._secretosVisibles = puedeVer;
+    return doc;
+  }
+
+  /** Permisos del usuario dentro del módulo (la interfaz decide qué botones mostrar). */
+  function permisos(token) {
+    const sesion = Auth.validarSesion(token);
+    return {
+      puedeOperar: rolesOperan_().indexOf(sesion.rol) >= 0,
+      puedeVerSecretos: puedeVerSecretos_(sesion),
+      esAdmin: sesion.rol === Config.ROLES.ADMIN,
+    };
+  }
+
+  /** Índices de equipos y líneas para los listados (caché 30 min). */
+  function indice(token) {
     Auth.validarSesion(token);
-    return SheetUtils.getAll(ssId(), SHEET_LINEAS_EQUIPOS);
+    const ix = LineasRepo.indice();
+    return { equipos: Object.assign({ generadoEn: ix.generadoEn }, ix.equipos), lineas: ix.lineas };
   }
 
-  function crear(token, registro) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
-    return SheetUtils.insert(ssId(), SHEET_LINEAS_EQUIPOS, registro);
+  function registro_(id) {
+    const f = LineasRepo.leerRegistroPorId(id);
+    return f ? LineasRepo.convertirRegistro(f, LineasUtil.carpetasNucos()) : null;
   }
 
-  function actualizar(token, id, cambios) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
-    return SheetUtils.update(ssId(), SHEET_LINEAS_EQUIPOS, id, cambios);
+  /** Ficha de un equipo con su línea (evidencias e historial se piden aparte, en paralelo). */
+  function equipo(token, id) {
+    const sesion = Auth.validarSesion(token);
+    const r = registro_(id);
+    if (!r || !r.equipo) throw new Error('No existe el equipo ' + id);
+    return LineasUtil.paraCliente({
+      equipo: ocultarSecretos_(r.equipo, CAMPOS_SECRETOS_EQUIPO, sesion),
+      linea: ocultarSecretos_(r.linea, CAMPOS_SECRETOS_LINEA, sesion),
+    });
   }
 
-  // TODO: reasignarResponsable, suspenderLinea, registrarBaja,
-  //       guardarInspeccion (usa PdfService.generarReporteDanios)
+  /** Ficha de una línea con su equipo. */
+  function linea(token, id) {
+    const sesion = Auth.validarSesion(token);
+    const r = registro_(id);
+    if (!r || !r.linea) throw new Error('No existe la línea ' + id);
+    return LineasUtil.paraCliente({
+      linea: ocultarSecretos_(r.linea, CAMPOS_SECRETOS_LINEA, sesion),
+      equipo: ocultarSecretos_(r.equipo, CAMPOS_SECRETOS_EQUIPO, sesion),
+    });
+  }
 
-  return { listar, crear, actualizar };
+  /** Resumen ligero de inspecciones/responsivas para tablas (sin checklist completo). */
+  function resumirEvidencias_(docs) {
+    return (docs || []).map((d) => {
+      const pdf = d.pdf && d.pdf.id ? d.pdf.id : (d.drive && d.drive.pdfs && d.drive.pdfs.length ? d.drive.pdfs[0].id : null);
+      return {
+        id: d._id, origen: d.origen, fecha: d.fecha, calificacion: d.calificacion === undefined ? null : d.calificacion,
+        alertas: (d.alertas || []).length, inspector: d.inspector || d.responsableCI || null,
+        pdfPendiente: d.origen === 'SISTEMA' && !pdf,
+        responsable: d.snapshot ? d.snapshot.responsable : (d.responsable ? d.responsable.nombre : null),
+        fotos: d.drive ? d.drive.fotos : 0, carpetaId: d.drive ? d.drive.carpetaId : null, pdfId: pdf,
+      };
+    }).sort((a, b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
+  }
+
+  /** Inspecciones y responsivas de un registro. */
+  function evidencias(token, id) {
+    Auth.validarSesion(token);
+    const ev = LineasRepo.evidenciasDeRegistro(id);
+    return LineasUtil.paraCliente({ inspecciones: resumirEvidencias_(ev.inspecciones), responsivas: resumirEvidencias_(ev.responsivas) });
+  }
+
+  /** Historial de un registro (bitácora, reasignaciones, desechos y operaciones del sistema). */
+  function historial(token, id) {
+    const sesion = Auth.validarSesion(token);
+    return LineasUtil.paraCliente(LineasRepo.historialDeRegistro(id, puedeVerSecretos_(sesion)));
+  }
+
+  /** Archivos de una carpeta de Drive (fotos/PDF) con miniaturas. */
+  function archivosCarpeta_(carpetaId, limite) {
+    const url = 'https://www.googleapis.com/drive/v3/files?' + [
+      'q=' + encodeURIComponent("'" + carpetaId + "' in parents and trashed = false"),
+      'pageSize=' + (limite || 200),
+      'orderBy=name',
+      'fields=' + encodeURIComponent('files(id,name,mimeType,thumbnailLink,webViewLink)'),
+      'supportsAllDrives=true', 'includeItemsFromAllDrives=true',
+    ].join('&');
+    const resp = UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
+    if (resp.getResponseCode() !== 200) return [];
+    return JSON.parse(resp.getContentText()).files || [];
+  }
+
+  /** Detalle de inspección con checklist, alertas y fotos de Drive. */
+  function inspeccion(token, id) {
+    const sesion = Auth.validarSesion(token);
+    const insp = LineasRepo.leerInspeccion(id);
+    if (!insp) throw new Error('No existe la inspección ' + id);
+    let eq = null;
+    if (insp.registroId) {
+      const f = LineasRepo.leerRegistroPorId(insp.registroId);
+      const r = f ? LineasRepo.convertirRegistro(f) : null;
+      if (r && r.equipo) eq = { _id: r.id, nuco: r.equipo.nuco, modelo: r.equipo.modelo, imei: r.equipo.imei, tipo: r.equipo.tipo };
+    }
+
+    const fotos = [];
+    const firmas = [];
+    if (insp.drive) {
+      const vistos = {};
+      [insp.drive.fotosCarpetaId, insp.drive.carpetaId].filter(Boolean).forEach((c) => {
+        archivosCarpeta_(c, 200).forEach((f) => {
+          if (vistos[f.id]) return;
+          vistos[f.id] = true;
+          if (!/^(image|video)\//.test(f.mimeType)) return;
+          const item = { id: f.id, nombre: f.name, miniatura: f.thumbnailLink || null, enlace: f.webViewLink, video: /^video\//.test(f.mimeType) };
+          if (/^(FIRMA|PATRON)/i.test(f.name)) firmas.push(item);
+          else fotos.push(item);
+        });
+      });
+    }
+    return LineasUtil.paraCliente({
+      inspeccion: insp,
+      equipo: eq,
+      checklist: LineasChecklist.secciones(),
+      fotos: fotos,
+      firmas: puedeVerSecretos_(sesion) ? firmas : [],
+      pdfs: insp.drive && insp.drive.pdfs ? insp.drive.pdfs : [],
+      puedeOperar: rolesOperan_().indexOf(sesion.rol) >= 0,
+    });
+  }
+
+  /** Catálogos para formularios (enums + LISTAS TELEFONOS + lugares de desecho). */
+  function catalogos(token) {
+    Auth.validarSesion(token);
+    return LineasRepo.catalogos();
+  }
+
+  /** Inspecciones con alertas contra la anterior (para seguimiento). */
+  function alertas(token) {
+    Auth.validarSesion(token);
+    return LineasRepo.alertasInspeccion();
+  }
+
+  /** Catálogo de colaboradores para autocompletar. */
+  function colaboradores(token) {
+    Auth.validarSesion(token);
+    return LineasRepo.indiceColaboradores();
+  }
+
+  /** Página de una bitácora de control: CAMBIOS | REASIGNACIONES | DESECHOS. */
+  function bitacora(token, tipo, opciones) {
+    const sesion = Auth.validarSesion(token);
+    const o = opciones || {};
+    return LineasUtil.paraCliente(LineasRepo.bitacora(tipo, o.q, o.pagina, o.porPagina, puedeVerSecretos_(sesion)));
+  }
+
+  /** Vacía las cachés del módulo (después de editar la hoja a mano). Solo ADMIN. */
+  function recargarDatos(token) {
+    Auth.requiereRol(token, [Config.ROLES.ADMIN]);
+    LineasRepo.borrarCaches();
+    return { ok: true };
+  }
+
+  return { permisos, indice, equipo, linea, evidencias, historial, inspeccion, catalogos, alertas, colaboradores, bitacora, recargarDatos };
 })();

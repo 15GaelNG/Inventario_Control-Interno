@@ -161,6 +161,10 @@
     if (vista === 'dashboard') { montarVista('tpl-dashboard', initDashboard); return; }
     if (vista === 'accesorios') { montarVista('tpl-accesorios', initAccesorios); return; }
     if (vista === 'incidencias') { montarVista('tpl-incidencias', initIncidencias); return; }
+    if (vista === 'lineas-telefonicas') { montarVista('tpl-lineas-telefonicas', Lineas.initTelefonicas); return; }
+    if (vista === 'cambios-lineas') { montarVista('tpl-lineas-bitacora', Lineas.initCambios); return; }
+    if (vista === 'reasignaciones-lineas') { montarVista('tpl-lineas-bitacora', Lineas.initReasignaciones); return; }
+    if (vista === 'bitacora-desechos') { montarVista('tpl-lineas-bitacora', Lineas.initDesechos); return; }
 
     mostrarProximamente(etiqueta || vista);
   }
