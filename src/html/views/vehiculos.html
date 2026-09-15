@@ -48,11 +48,16 @@
   </div>
 
   <div class="card">
-    <h3 style="margin-top:0">Catálogo</h3>
+    <div class="card-header-row">
+      <h3 style="margin:0">Catálogo</h3>
+      <select id="veh-filtro-clase" class="filtro-select">
+        <option value="">Todas las clases</option>
+      </select>
+    </div>
     <div class="table-scroll">
       <table>
         <thead>
-          <tr><th>Folio</th><th>Departamento</th><th>Marca / Línea</th><th>Año</th><th>Placa</th><th>Estatus</th><th></th></tr>
+          <tr><th>Folio</th><th>Departamento</th><th>Clase</th><th>Marca / Línea</th><th>Año</th><th>Placa</th><th>Estatus</th><th></th></tr>
         </thead>
         <tbody id="lista-vehiculos"></tbody>
       </table>

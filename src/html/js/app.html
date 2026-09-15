@@ -763,40 +763,45 @@
     const modalEditar = document.getElementById('modal-editar-vehiculo');
     const modalDetalle = document.getElementById('modal-detalle-vehiculo');
     let vehiculosPorId = {};
+    let todosLosVehiculos = [];
+    const filtroClase = document.getElementById('veh-filtro-clase');
 
     function badgeEstatus(estatus) {
       const esBaja = String(estatus || '').toUpperCase().includes('BAJA');
       return `<span class="badge-estado ${esBaja ? 'baja' : 'activo'}">${esBaja ? '🚫 De baja' : '✅ Activo'}</span>`;
     }
 
-    async function cargar() {
-      const errorBox = document.getElementById('veh-error');
-      let vehiculos;
-      try {
-        vehiculos = await callServer('apiListarVehiculosResumen', state.token);
-      } catch (err) {
-        console.error('No se pudo cargar el catálogo de vehículos:', err);
-        errorBox.textContent = 'No se pudo cargar el catálogo de vehículos: ' + err.message;
-        errorBox.hidden = false;
-        return;
-      }
-      errorBox.hidden = true;
-      vehiculos = vehiculos || [];
+    // Color determinístico por clase (misma clase = mismo color siempre),
+    // sin necesidad de saber de antemano qué clases existen en la hoja.
+    const PALETA_CLASES = ['tag-navy', 'tag-gold', 'tag-green', 'tag-brown', 'tag-slate'];
+    function colorClase(clase) {
+      if (!clase) return 'tag-slate';
+      let hash = 0;
+      for (let i = 0; i < clase.length; i++) hash = (hash * 31 + clase.charCodeAt(i)) >>> 0;
+      return PALETA_CLASES[hash % PALETA_CLASES.length];
+    }
+    function etiquetaClase(clase) {
+      return clase ? `<span class="tag ${colorClase(clase)}">${clase}</span>` : '—';
+    }
 
-      vehiculosPorId = {};
-      vehiculos.forEach((v) => { vehiculosPorId[v.ID_VEHICULO] = v; });
+    function poblarFiltroClases() {
+      const clases = Array.from(new Set(todosLosVehiculos.map((v) => v.CLASE).filter(Boolean))).sort();
+      const actual = filtroClase.value;
+      filtroClase.innerHTML = '<option value="">Todas las clases</option>' +
+        clases.map((c) => `<option value="${c}">${c}</option>`).join('');
+      if (clases.includes(actual)) filtroClase.value = actual;
+    }
 
-      document.getElementById('veh-stat-total').textContent = vehiculos.length;
-      document.getElementById('veh-stat-activos').textContent =
-        vehiculos.filter((v) => !String(v.ESTATUS || '').toUpperCase().includes('BAJA')).length;
-      document.getElementById('veh-stat-baja').textContent =
-        vehiculos.filter((v) => String(v.ESTATUS || '').toUpperCase().includes('BAJA')).length;
+    function renderTabla() {
+      const filtro = filtroClase.value;
+      const vehiculos = filtro ? todosLosVehiculos.filter((v) => v.CLASE === filtro) : todosLosVehiculos;
 
       vacio.hidden = vehiculos.length > 0;
       lista.innerHTML = vehiculos.map((v) => `
         <tr>
           <td class="tabla-clickable" data-id="${v.ID_VEHICULO}" title="Ver detalle completo">${v.FOLIO}</td>
           <td>${v.DEPARTAMENTO || '—'}</td>
+          <td>${etiquetaClase(v.CLASE)}</td>
           <td>${[v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ') || '—'}</td>
           <td>${v.MODELO || '—'}</td>
           <td>${v.PLACA || '—'}</td>
@@ -819,6 +824,35 @@
       lista.querySelectorAll('.btn-eliminar-vehiculo').forEach((btn) => {
         btn.addEventListener('click', () => eliminarVehiculo(btn.dataset.id, btn.dataset.folio));
       });
+    }
+    filtroClase.addEventListener('change', renderTabla);
+
+    async function cargar() {
+      const errorBox = document.getElementById('veh-error');
+      let vehiculos;
+      try {
+        vehiculos = await callServer('apiListarVehiculosResumen', state.token);
+      } catch (err) {
+        console.error('No se pudo cargar el catálogo de vehículos:', err);
+        errorBox.textContent = 'No se pudo cargar el catálogo de vehículos: ' + err.message;
+        errorBox.hidden = false;
+        return;
+      }
+      errorBox.hidden = true;
+      todosLosVehiculos = vehiculos || [];
+
+      vehiculosPorId = {};
+      todosLosVehiculos.forEach((v) => { vehiculosPorId[v.ID_VEHICULO] = v; });
+
+      // Los totales son del catálogo completo, sin importar el filtro de clase.
+      document.getElementById('veh-stat-total').textContent = todosLosVehiculos.length;
+      document.getElementById('veh-stat-activos').textContent =
+        todosLosVehiculos.filter((v) => !String(v.ESTATUS || '').toUpperCase().includes('BAJA')).length;
+      document.getElementById('veh-stat-baja').textContent =
+        todosLosVehiculos.filter((v) => String(v.ESTATUS || '').toUpperCase().includes('BAJA')).length;
+
+      poblarFiltroClases();
+      renderTabla();
     }
 
     async function abrirDetalleVehiculo(vResumen) {
