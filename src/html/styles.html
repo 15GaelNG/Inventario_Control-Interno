@@ -181,12 +181,7 @@
   /* Alto fijo (igual al tamaño "compacto" de CMTC-Dark) para que la topbar
      mida lo mismo sin importar el tema — CMTC-Light es más "cuadrado" que
      CMTC-Dark, así que a igual alto, el ancho varía (eso sí es aceptable). */
-  /* Un solo logo (el de texto blanco) para los dos temas — necesita un
-     fondo navy fijo detrás, si no, se pierde sobre el topbar claro. */
-  .topbar-cm-logo-chip {
-    background: var(--color-sidebar-bg); border-radius: 8px;
-    padding: 8px 14px; display: flex; align-items: center;
-  }
+  .topbar-cm-logo-chip { display: flex; align-items: center; }
   .topbar-cm-logo { height: 28px; width: auto; display: block; }
   .topbar-right { display: flex; flex-direction: row; align-items: center; gap: 14px; }
   .topbar-date {
