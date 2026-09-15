@@ -12,9 +12,9 @@
  *   SS_ID_ACCESORIOS
  *   SS_ID_CAJACHICA
  *   ENTORNO            ("DEV" | "PROD")
- *   DRIVE_FOLDER_ID_VERIFICACIONES          carpeta donde se GUARDAN los comprobantes
- *   DRIVE_FOLDER_ID_VERIFICACIONES_LECTURA  (opcional) carpeta extra donde se BUSCAN
- *                                           comprobantes existentes (en DEV: la de prod)
+ *   DRIVE_FOLDER_ID_VERIFICACIONES          carpeta VERIFICACIONES_Images donde se guardan y
+ *                                           buscan los comprobantes (DEV: la de pruebas)
+ *   DRIVE_FOLDER_ID_VERIFICACIONES_LECTURA  (opcional) carpeta extra donde también se BUSCAN
  */
 
 const Config = (function () {

@@ -228,8 +228,22 @@ function apuntarABdOriginal() {
 /** Proyecto de Apps Script compartido (el que recibe lo que está en master). */
 const SCRIPT_ID_COMPARTIDO = '1NbOczw_H8UJ7adxRP4h_jl9VlfyvxM3mANYsaz12U5uo8Gj0BmfIYN3k';
 
-/** Carpeta VERIFICACIONES_Images de PRODUCCIÓN (la que usa AppSheet). En DEV solo se lee. */
-const DRIVE_FOLDER_VERIFICACIONES_PROD = '1iGrxuqmUKKUV9UFIjEOSJ0TEibab3K7C';
+/**
+ * Carpeta de Drive de PRUEBAS: copia idéntica de la carpeta de la app de AppSheet
+ * (con sus *_Images). La usan los proyectos DEV. Producción NO se toca desde DEV.
+ */
+const DRIVE_FOLDER_PRUEBAS = '1FsC5mloJNhi_TR7pBX1KMEjUZfN_M9OM';
+
+/**
+ * Carpeta "<TABLA>_Images" a partir de la raíz de la app. Si la carpeta dada ya ES
+ * esa (mismo nombre), la usa directo; si no, busca la subcarpeta y la crea si falta.
+ */
+function carpetaImagenes_(carpetaId, nombre) {
+  const carpeta = DriveApp.getFolderById(carpetaId);
+  if (carpeta.getName().toUpperCase() === nombre.toUpperCase()) return carpeta;
+  const existentes = carpeta.getFoldersByName(nombre);
+  return existentes.hasNext() ? existentes.next() : carpeta.createFolder(nombre);
+}
 
 /**
  * Deja listas las Script Properties de un proyecto DEV personal (ver README y
@@ -250,15 +264,11 @@ function configurarEntornoDev() {
     SS_ID_USUARIOS: ORIGINAL_PRUEBAS_SPREADSHEET_ID,
     SS_ID_VEHICULOS: ORIGINAL_PRUEBAS_SPREADSHEET_ID,
     SS_ID_ACCESORIOS: ORIGINAL_PRUEBAS_SPREADSHEET_ID,
-    // Comprobantes existentes (rutas copiadas de producción) se buscan ahí, solo lectura.
-    DRIVE_FOLDER_ID_VERIFICACIONES_LECTURA: DRIVE_FOLDER_VERIFICACIONES_PROD,
+    // Comprobantes: se guardan y se leen en la carpeta de PRUEBAS, compartida por los 3 DEV.
+    DRIVE_FOLDER_ID_VERIFICACIONES: carpetaImagenes_(DRIVE_FOLDER_PRUEBAS, 'VERIFICACIONES_Images').getId(),
   });
-
-  // Los comprobantes NUEVOS de DEV van a una carpeta propia en tu Drive, nunca a la de producción.
-  if (!props.getProperty('DRIVE_FOLDER_ID_VERIFICACIONES')) {
-    const carpeta = DriveApp.createFolder('Inventario DEV - VERIFICACIONES_Images');
-    props.setProperty('DRIVE_FOLDER_ID_VERIFICACIONES', carpeta.getId());
-  }
+  // Versiones anteriores de esta función apuntaban la lectura a producción; ya no.
+  props.deleteProperty('DRIVE_FOLDER_ID_VERIFICACIONES_LECTURA');
 
   // Toca la BD de pruebas para que Google pida el permiso de Sheets desde ya
   // y falle aquí (con un mensaje claro) si tu cuenta no tiene acceso.
