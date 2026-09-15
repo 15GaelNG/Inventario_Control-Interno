@@ -93,6 +93,10 @@
    *     ordenInicial: { campo: 'FECHA', dir: 'desc' },
    *     textoVacio: 'Sin registros',
    *     ayuda: 'Doble clic para editar…',       // tooltip "ⓘ Ayuda" en la barra (opcional)
+   *     // Botón verde "Exportar a Excel" (activo por defecto). Exporta columnas visibles + filtros
+   *     // + búsqueda + orden, todas las páginas. false lo oculta.
+   *     exportar: { nombreArchivo: 'Verificaciones' },
+   *     // Por columna: exportable: false la omite; valorExportar: (fila) => valor personalizado.
    *     alCambiarFiltros: (filtros) => {},      // opcional, p. ej. para marcar chips de KPI
    *     // Guardar una celda. Lanza error para rechazar. Si regresa un objeto, reemplaza la fila.
    *     alEditar: async (fila, campo, valorNuevo) => filaActualizada,
@@ -147,9 +151,10 @@
     }
 
     function crear(contenedor, config) {
-      const cfg = Object.assign({ tamanoPagina: 25, seleccionable: true, textoVacio: 'Sin registros' }, config);
+      const cfg = Object.assign({ tamanoPagina: 25, seleccionable: true, textoVacio: 'Sin registros', exportar: true }, config);
+      if (cfg.exportar === true) cfg.exportar = { nombreArchivo: 'Datos' };
       const columnas = cfg.columnas.map((c) => Object.assign(
-        { tipo: 'texto', editable: false, filtrable: true, ordenable: true, visible: true }, c
+        { tipo: 'texto', editable: false, filtrable: true, ordenable: true, visible: true, exportable: true }, c
       ));
       const idDe = (fila) => String(fila[cfg.idCampo]);
 
@@ -188,6 +193,7 @@
             <span class="dt-espacio"></span>
             <span class="dt-seleccion-info" hidden></span>
             <button type="button" class="danger dt-btn-eliminar" hidden>🗑️ Eliminar seleccionados</button>
+            ${cfg.exportar ? '<button type="button" class="btn-excel dt-btn-excel" title="Descarga lo que ves: columnas visibles, filtros, búsqueda y orden (todas las páginas)">📥 Exportar a Excel</button>' : ''}
           </div>
           <div class="dt-scroll"><table><thead></thead><tbody></tbody></table></div>
           <div class="dt-pie">
@@ -633,6 +639,31 @@
         document.removeEventListener('keydown', alTecla);
         return true;
       };
+      if (cfg.exportar) {
+        $('.dt-btn-excel').addEventListener('click', async () => {
+          const boton = $('.dt-btn-excel');
+          const cols = columnasVisibles().filter((c) => c.exportable);
+          const filas = filasFiltradas();
+          if (!filas.length) { avisar('No hay registros para exportar con los filtros actuales', 'error'); return; }
+          boton.disabled = true;
+          boton.textContent = 'Exportando…';
+          try {
+            await ExportarExcel.descargar({
+              nombreArchivo: cfg.exportar.nombreArchivo,
+              nombreHoja: cfg.exportar.nombreHoja,
+              columnas: cols.map((c) => ({ titulo: c.titulo, tipo: c.tipo === 'lista' ? 'texto' : c.tipo })),
+              filas: filas.map((fila) => cols.map((c) => (c.valorExportar ? c.valorExportar(fila) : valorDe(c, fila)))),
+            });
+            avisar(`${filas.length} registro${filas.length === 1 ? '' : 's'} exportado${filas.length === 1 ? '' : 's'}`);
+          } catch (err) {
+            avisar('No se pudo exportar: ' + err.message, 'error');
+          } finally {
+            boton.disabled = false;
+            boton.textContent = '📥 Exportar a Excel';
+          }
+        });
+      }
+
       const alClicFuera = (ev) => {
         if (desmontado()) return;
         if (popover && !popover.contains(ev.target) && !ev.target.closest('.dt-btn-filtro, .dt-btn-columnas')) cerrarPopover();
