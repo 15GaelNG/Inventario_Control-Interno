@@ -224,3 +224,36 @@ function apuntarABdOriginal() {
   Logger.log(mensaje);
   return mensaje;
 }
+
+/** Proyecto de Apps Script compartido (el que recibe lo que está en master). */
+const SCRIPT_ID_COMPARTIDO = '1NbOczw_H8UJ7adxRP4h_jl9VlfyvxM3mANYsaz12U5uo8Gj0BmfIYN3k';
+
+/**
+ * Deja listas las Script Properties de un proyecto DEV personal (ver README y
+ * setup-dev.ps1): todo apunta a la BD de PRUEBAS, nunca a producción.
+ *
+ * Ejecutar UNA vez desde el editor de TU proyecto DEV
+ * (dropdown de funciones > configurarEntornoDev > Ejecutar).
+ * Se niega a correr en el proyecto compartido.
+ */
+function configurarEntornoDev() {
+  if (ScriptApp.getScriptId() === SCRIPT_ID_COMPARTIDO) {
+    throw new Error('Esta función es para proyectos DEV personales, no para el proyecto compartido.');
+  }
+
+  PropertiesService.getScriptProperties().setProperties({
+    ENTORNO: 'DEV',
+    SS_ID_USUARIOS: ORIGINAL_PRUEBAS_SPREADSHEET_ID,
+    SS_ID_VEHICULOS: ORIGINAL_PRUEBAS_SPREADSHEET_ID,
+    SS_ID_ACCESORIOS: ORIGINAL_PRUEBAS_SPREADSHEET_ID,
+  });
+
+  // Toca la BD de pruebas para que Google pida el permiso de Sheets desde ya
+  // y falle aquí (con un mensaje claro) si tu cuenta no tiene acceso.
+  const nombreBd = SpreadsheetApp.openById(ORIGINAL_PRUEBAS_SPREADSHEET_ID).getName();
+
+  const mensaje = 'Listo. Entorno DEV configurado contra la BD de pruebas "' + nombreBd + '". ' +
+    'Ahora abre Implementar > Probar implementaciones y usa la URL que termina en /dev.';
+  Logger.log(mensaje);
+  return mensaje;
+}
