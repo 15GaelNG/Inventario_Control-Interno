@@ -1,7 +1,7 @@
 <template id="tpl-lineas-bitacora">
   <div class="ln-modulo" id="ln-bitacora">
     <div class="page-header">
-      <h2 id="ln-bit-titulo"></h2>
+      <h2 class="ln-titulo"><span class="ln-titulo-icono" id="ln-bit-titulo-icono"></span> <span id="ln-bit-titulo"></span></h2>
       <p class="page-subtitle" id="ln-bit-subtitulo"></p>
     </div>
 
@@ -11,7 +11,7 @@
         <div><div class="stat-value" id="ln-bit-total">…</div><div class="stat-label">Registros en la hoja</div></div>
       </div>
       <div class="stat-tile">
-        <div class="stat-icon">🔎</div>
+        <div class="stat-icon" data-ln-icon="search"></div>
         <div><div class="stat-value" id="ln-bit-coinciden">—</div><div class="stat-label">Coinciden con la búsqueda</div></div>
       </div>
     </div>
@@ -19,9 +19,9 @@
     <div class="card">
       <form class="ln-filtros" id="ln-bit-form">
         <input type="search" id="ln-bit-q" placeholder="Buscar en cualquier columna (NUCO, responsable, campo…)" autocomplete="off" />
-        <button type="submit">Buscar</button>
-        <button type="button" class="secondary" id="ln-bit-limpiar">Limpiar</button>
-        <button type="button" class="secondary" id="ln-bit-exportar">⬇ Exportar página</button>
+        <button type="submit" class="ln-btn-icono"><span data-ln-icon="search"></span> Buscar</button>
+        <button type="button" class="secondary ln-btn-icono" id="ln-bit-limpiar"><span data-ln-icon="x"></span> Limpiar</button>
+        <button type="button" class="secondary ln-btn-icono" id="ln-bit-exportar"><span data-ln-icon="download"></span> Exportar página</button>
       </form>
 
       <div class="ln-tabla-wrap">
@@ -34,9 +34,9 @@
       <div class="ln-paginacion">
         <span class="ln-conteo" id="ln-bit-conteo"></span>
         <div class="ln-paginas">
-          <button type="button" class="secondary" id="ln-bit-anterior">‹ Más recientes</button>
+          <button type="button" class="secondary ln-btn-icono" id="ln-bit-anterior"><span data-ln-icon="chevron-left"></span> Más recientes</button>
           <span id="ln-bit-pagina"></span>
-          <button type="button" class="secondary" id="ln-bit-siguiente">Más antiguos ›</button>
+          <button type="button" class="secondary ln-btn-icono" id="ln-bit-siguiente">Más antiguos <span data-ln-icon="chevron-right"></span></button>
         </div>
       </div>
       <div class="error-msg" id="ln-bit-error" hidden></div>

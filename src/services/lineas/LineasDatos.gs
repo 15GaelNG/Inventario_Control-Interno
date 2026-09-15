@@ -32,7 +32,7 @@ const LineasDatos = (function () {
   };
 
   // Estado por ejecución (cada llamada de google.script.run empieza de cero).
-  const bd = { id: null, libro: null, tablas: {}, zona: null };
+  const bd = { id: null, libro: null, tablas: {}, zona: null, apiSheets: undefined };
   const desfasePorDia = {};
 
   function id() {
@@ -266,7 +266,55 @@ const LineasDatos = (function () {
       });
     }
 
-    // Muchas filas: una llamada a la API de Sheets por cada 500 rangos.
+    if (!apiSheetsDisponible_()) return leerFilasSinApi_(peticiones);
+    try {
+      return leerFilasConApi_(peticiones);
+    } catch (e) {
+      if (!marcarApiSinHabilitar_(e)) throw e;
+      return leerFilasSinApi_(peticiones);
+    }
+  }
+
+  /**
+   * Respaldo sin la API de Sheets: agrupa filas cercanas (hasta 20 de separación) y lee
+   * cada grupo como un bloque con SpreadsheetApp.
+   */
+  function leerFilasSinApi_(peticiones) {
+    return peticiones.map((p) => {
+      const t = tabla(p.tabla);
+      const porFila = {};
+      const ordenadas = p.filas.slice().sort((a, b) => a - b);
+      let i = 0;
+      while (i < ordenadas.length) {
+        let j = i;
+        while (j + 1 < ordenadas.length && ordenadas[j + 1] - ordenadas[j] <= 20) j++;
+        const desde = ordenadas[i];
+        const valores = t.hoja.getRange(desde, 1, ordenadas[j] - desde + 1, t.encabezados.length).getValues();
+        for (let k = i; k <= j; k++) porFila[ordenadas[k]] = valores[ordenadas[k] - desde];
+        i = j + 1;
+      }
+      return p.filas.map((n) => filaAObjeto_(t, porFila[n], n));
+    });
+  }
+
+  // ---------------- API de Sheets (opcional) ----------------
+  // Si la API no está habilitada en el proyecto de Google Cloud del script, se recuerda 1 h
+  // y se usa SpreadsheetApp (más lento con muchas filas, mismo resultado).
+
+  function apiSheetsDisponible_() {
+    if (bd.apiSheets === undefined) bd.apiSheets = CacheService.getScriptCache().get('ln_api_sheets_off') !== '1';
+    return bd.apiSheets;
+  }
+
+  function marcarApiSinHabilitar_(error) {
+    if (!/API de Sheets 403/.test(String(error && error.message)) || !/SERVICE_DISABLED|has not been used|is disabled/i.test(String(error.message))) return false;
+    bd.apiSheets = false;
+    CacheService.getScriptCache().put('ln_api_sheets_off', '1', 3600);
+    return true;
+  }
+
+  function leerFilasConApi_(peticiones) {
+    // Una llamada a la API de Sheets por cada 500 rangos.
     const rangos = [];
     peticiones.forEach((p, ip) => {
       const t = tabla(p.tabla);
@@ -376,9 +424,22 @@ const LineasDatos = (function () {
       else crudos.push({ range: rango, values: [[v === null || v === undefined ? '' : v]] });
     });
     if (!crudos.length && !fechas.length) return;
-    SpreadsheetApp.flush(); // que no queden escrituras de SpreadsheetApp pendientes antes de escribir por la API
-    if (crudos.length) sheetsApi('/values:batchUpdate', { valueInputOption: 'RAW', data: crudos });
-    if (fechas.length) sheetsApi('/values:batchUpdate', { valueInputOption: 'USER_ENTERED', data: fechas });
+    if (apiSheetsDisponible_()) {
+      try {
+        SpreadsheetApp.flush(); // que no queden escrituras de SpreadsheetApp pendientes antes de escribir por la API
+        if (crudos.length) sheetsApi('/values:batchUpdate', { valueInputOption: 'RAW', data: crudos });
+        if (fechas.length) sheetsApi('/values:batchUpdate', { valueInputOption: 'USER_ENTERED', data: fechas });
+        return;
+      } catch (e) {
+        // Solo se reintenta sin API si no se escribió nada (la API no está habilitada).
+        if (!marcarApiSinHabilitar_(e)) throw e;
+      }
+    }
+    // Respaldo sin API: celda por celda (textos de solo dígitos con apóstrofo para que sigan siendo texto).
+    Object.keys(cambios).forEach((c) => {
+      const i = colIndice(t, c);
+      if (i >= 0) t.hoja.getRange(fila, i + 1).setValue(valorCelda_(cambios[c], nombre));
+    });
   }
 
   /** Agrega filas al final. objetos = [{ 'COLUMNA': valor }]. Devuelve los números de fila. */

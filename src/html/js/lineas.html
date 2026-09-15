@@ -1,3 +1,4 @@
+<script src="https://cdn.jsdelivr.net/npm/lucide@1.46.0/dist/umd/lucide.min.js"></script>
 <script>
   /**
    * lineas.js — vistas del módulo de Líneas (grupo "Líneas" del menú).
@@ -30,17 +31,30 @@
       const d = new Date(iso);
       return isNaN(d) ? '' : d.toLocaleString('es-MX', { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
     };
-    const normal = (s) => String(s === null || s === undefined ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const normal = (s) => String(s === null || s === undefined ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
     const porcentaje = (v) => {
       if (v === null || v === undefined || v === '') return null;
       const n = Number(v);
       return Math.round(n > 1 ? n : n * 100) + '%';
     };
     const miles = (n) => Number(n || 0).toLocaleString('es-MX');
+    /** Ícono de Lucide (https://lucide.dev/icons) como SVG en línea: icono('smartphone'). */
+    const ATRIBUTOS_SVG = 'xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+    function icono(nombre, clase) {
+      const nombrePascal = String(nombre).replace(/(^|-)([a-z0-9])/g, (m, sep, c) => c.toUpperCase());
+      const nodos = window.lucide && window.lucide.icons && window.lucide.icons[nombrePascal];
+      if (!nodos) return '';
+      return '<svg ' + ATRIBUTOS_SVG + ' class="ln-icon ' + (clase || '') + '">' +
+        nodos.map((n) => '<' + n[0] + Object.keys(n[1]).map((k) => ' ' + k + '="' + n[1][k] + '"').join('') + '/>').join('') + '</svg>';
+    }
+    /** Rellena los <span data-ln-icon="nombre"> de las plantillas. */
+    function pintarIconos(raiz) {
+      raiz.querySelectorAll('[data-ln-icon]').forEach((el) => { el.innerHTML = icono(el.dataset.lnIcon); });
+    }
     const enlaceDrive = (id, texto, esArchivo) => {
       if (!id) return '';
       const url = esArchivo ? 'https://drive.google.com/file/d/' + esc(id) + '/view' : 'https://drive.google.com/drive/folders/' + esc(id);
-      return '<a class="ln-enlace" target="_blank" rel="noopener" href="' + url + '">' + esc(texto) + ' ↗</a>';
+      return '<a class="ln-enlace" target="_blank" rel="noopener" href="' + url + '">' + esc(texto) + ' ' + icono('external-link', 'ln-icon-sm') + '</a>';
     };
 
     function llamar(fn, ...args) {
@@ -71,7 +85,7 @@
         const s = String(v);
         return /[",\n;]/.test(s) || /^\d{11,}$/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
       };
-      const texto = '﻿' + [(titulos || columnas).map(celda).join(',')]
+      const texto = '\uFEFF' + [(titulos || columnas).map(celda).join(',')]
         .concat(filas.map((r) => columnas.map((c) => celda(r[c])).join(','))).join('\n');
       const url = URL.createObjectURL(new Blob([texto], { type: 'text/csv;charset=utf-8' }));
       const a = document.createElement('a');
@@ -92,7 +106,7 @@
       }
       const item = document.createElement('div');
       item.className = 'ln-aviso';
-      item.innerHTML = '<div>' + html + '</div><button type="button" class="modal-close" aria-label="Cerrar">✕</button>';
+      item.innerHTML = '<div>' + html + '</div><button type="button" class="modal-close" aria-label="Cerrar">' + icono('x') + '</button>';
       item.querySelector('button').addEventListener('click', () => item.remove());
       caja.appendChild(item);
       if (duracion) setTimeout(() => item.remove(), duracion);
@@ -212,6 +226,7 @@
       const raiz = document.getElementById('ln-telefonicas');
       const vigente = () => n === montaje && document.body.contains(raiz);
       const pila = []; // navegación dentro del detalle: [{ tipo, id }]
+      pintarIconos(raiz);
 
       // ---- Eventos ----
       raiz.querySelectorAll('.ln-tab').forEach((tab) => {
@@ -229,7 +244,7 @@
         llamar('apiLineasRecargarDatos')
           .then(() => cargarIndice(true))
           .then(() => { if (vigente()) { pintarIndicadores(); pintarListado(); } })
-          .catch((e) => aviso('⚠️ ' + mensajeError(e), 12000))
+          .catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 12000))
           .then(() => { b.disabled = false; });
       });
 
@@ -238,6 +253,7 @@
         const ir = ev.target.closest('[data-ln-ir]');
         if (ir) {
           ev.preventDefault();
+          $('#ln-modal-alertas', raiz).hidden = true;
           abrir(ir.dataset.lnIr, ir.dataset.id);
           return;
         }
@@ -255,8 +271,9 @@
         }
         if (ev.target.closest('#ln-tile-alertas')) abrirAlertas();
       });
-      raiz.querySelectorAll('[data-cerrar-modal]').forEach((b) => b.addEventListener('click', () => { $('#ln-modal-alertas', raiz).hidden = true; }));
-      $('#ln-modal-alertas', raiz).addEventListener('click', (ev) => { if (ev.target.id === 'ln-modal-alertas') ev.target.hidden = true; });
+      $('#ln-modal-alertas', raiz).addEventListener('click', (ev) => {
+        if (ev.target.id === 'ln-modal-alertas' || ev.target.closest('[data-cerrar-modal]')) $('#ln-modal-alertas', raiz).hidden = true;
+      });
       $('#ln-alertas-ultimas', raiz).addEventListener('change', pintarAlertas);
 
       // ---- Carga inicial ----
@@ -286,16 +303,16 @@
         const ix = memoria.indice;
         const eq = ix.equipos;
         const li = ix.lineas;
-        const tile = (icono, valor, etiqueta, filtro, clase, id) =>
+        const tile = (ico, valor, etiqueta, filtro, clase, id) =>
           '<div class="stat-tile ln-tile ' + (clase || '') + '"' + (id ? ' id="' + id + '"' : '') + (filtro ? ' data-ln-filtro="' + esc(filtro) + '"' : '') + ' role="button" tabindex="0">' +
-          '<div class="stat-icon">' + icono + '</div><div><div class="stat-value">' + valor + '</div><div class="stat-label">' + esc(etiqueta) + '</div></div></div>';
+          '<div class="stat-icon">' + icono(ico) + '</div><div><div class="stat-value">' + valor + '</div><div class="stat-label">' + esc(etiqueta) + '</div></div></div>';
         $('#ln-indicadores', raiz).innerHTML =
-          tile('📱', miles(eq.length), 'Equipos', 'equipos') +
-          tile('✅', miles(eq.filter((e) => e.estatus === 'USO').length), 'Equipos en uso', 'equipos|estatus|USO', 'stat-tile-ok') +
-          tile('🔌', miles(eq.filter((e) => !e.lineaId).length), 'Equipos sin línea', 'equipos|conLinea|no') +
-          tile('📶', miles(li.length), 'Líneas', 'lineas') +
-          tile('🧩', miles(li.filter((l) => l.suelta).length), 'Líneas sueltas', 'lineas|suelta|si') +
-          tile('⚠️', alertas ? miles(alertas.filas.filter((a) => a.ultima).length) : '…', 'Alertas de inspección', '', 'stat-tile-warn', 'ln-tile-alertas');
+          tile('smartphone', miles(eq.length), 'Equipos', 'equipos') +
+          tile('circle-check', miles(eq.filter((e) => e.estatus === 'USO').length), 'Equipos en uso', 'equipos|estatus|USO', 'stat-tile-ok') +
+          tile('unplug', miles(eq.filter((e) => !e.lineaId).length), 'Equipos sin línea', 'equipos|conLinea|no') +
+          tile('card-sim', miles(li.length), 'Líneas', 'lineas') +
+          tile('unlink', miles(li.filter((l) => l.suelta).length), 'Líneas sueltas', 'lineas|suelta|si') +
+          tile('triangle-alert', alertas ? miles(alertas.filas.filter((a) => a.ultima).length) : '…', 'Alertas de inspección', '', 'stat-tile-warn', 'ln-tile-alertas');
         $('#ln-num-equipos', raiz).textContent = miles(eq.length);
         $('#ln-num-lineas', raiz).textContent = miles(li.length);
       }
@@ -427,9 +444,9 @@
 
       function migas() {
         const etiquetas = { equipo: 'Equipo', linea: 'Línea', inspeccion: 'Inspección' };
-        return '<div class="ln-migas"><button type="button" class="secondary" data-ln-volver>‹ Volver</button>' +
+        return '<div class="ln-migas"><button type="button" class="secondary ln-btn-icono" data-ln-volver>' + icono('chevron-left') + ' Volver</button>' +
           '<span><a href="#" class="ln-enlace" data-ln-lista>Líneas Telefónicas</a>' +
-          pila.map((p) => ' › ' + esc(etiquetas[p.tipo])).join('') + '</span></div>';
+          pila.map((p) => ' ' + icono('chevron-right', 'ln-icon-sm') + ' ' + esc(etiquetas[p.tipo])).join('') + '</span></div>';
       }
 
       function campos(pares) {
@@ -446,7 +463,7 @@
         const adicionales = (r.usuariosAdicionales || []).length
           ? '<div class="ln-subtitulo">Usuarios adicionales</div>' + campos(r.usuariosAdicionales.map((u) => [u.rol, esc(u.nombre) + (u.puesto ? ' <span class="ln-tenue">· ' + esc(u.puesto) + '</span>' : ''), true]))
           : '';
-        return tarjeta('👤 ' + esc(titulo || 'Responsable'), campos([
+        return tarjeta(icono('user') + ' ' + esc(titulo || 'Responsable'), campos([
           ['Nombre', (r.nombres && r.nombres.length > 1) ? r.nombres.map(esc).join('<br>') : esc(r.nombre || ''), true],
           r.codigoResguardo ? ['Código de resguardo', r.codigoResguardo] : null,
           ['No. empleado', r.noEmpleado],
@@ -463,16 +480,16 @@
 
       function tarjetaRegistro(l) {
         l = l || {};
-        return tarjeta('🗂️ Registro en la hoja', campos([
+        return tarjeta(icono('file-spreadsheet') + ' Registro en la hoja', campos([
           ['ID', l.id], ['Folio', l.folio], ['Tipo', l.tipo], ['Fila en hoja', l.fila],
           ['Estatus general', chip(l.estatusGeneral), true], ['Fecha registro', fecha(l.fechaRegistro)], ['Última inspección', fecha(l.fechaInspeccion)],
           ['Comentarios', l.comentarios],
         ]));
       }
 
-      function encabezado(icono, titulo, chips, botones) {
+      function encabezado(ico, titulo, chips, botones) {
         return '<div class="ln-detalle-header card">' +
-          '<div class="ln-detalle-icono">' + icono + '</div>' +
+          '<div class="ln-detalle-icono">' + icono(ico) + '</div>' +
           '<div class="ln-detalle-titulo"><h2>' + titulo + '</h2><div class="ln-chips">' + chips + '</div></div>' +
           '<div class="ln-detalle-botones">' + (botones || '') + '</div></div>';
       }
@@ -484,17 +501,17 @@
           const l = r.linea;
           const costo = l && l.costoPlan !== null && l.costoPlan !== undefined ? '$' + Number(l.costoPlan).toLocaleString('es-MX') : null;
           detalle.innerHTML = migas() +
-            encabezado('📱', 'NUCO ' + esc(e.nuco || '—'),
+            encabezado('smartphone', 'NUCO ' + esc(e.nuco || '—'),
               chip(e.estatus) + chip(TIPO_EQUIPO[e.tipo] || e.tipo, 'neutro') + (l ? chip('Con línea', 'verde') : chip('Sin línea', 'ambar')),
               e.carpetaDriveId ? enlaceDrive(e.carpetaDriveId, 'Carpeta en Drive') : '') +
-            (e._secretosVisibles ? '' : '<div class="ln-nota">🔒 Los PIN, patrones y contraseñas están ocultos para tu rol.</div>') +
+            (e._secretosVisibles ? '' : '<div class="ln-nota">' + icono('lock') + ' Los PIN, patrones y contraseñas están ocultos para tu rol.</div>') +
             '<div class="ln-grid-2">' +
-              tarjeta('📱 Equipo', campos([
+              tarjeta(icono('smartphone') + ' Equipo', campos([
                 ['Modelo', e.modelo], ['IMEI', e.imei], ['Accesorios', (e.accesorios || []).join(', ')],
                 ['Cuenta Google', e.cuentaGoogle], ['PIN equipo', e.pinEquipo], ['Patrón', e.patronRuta], ['Contraseña módem', e.contrasenaModem],
                 e.simResidual ? ['SIM residual', chip(e.simResidual, 'ambar'), true] : null,
               ])) +
-              tarjeta('📶 Línea asignada', l ? campos([
+              tarjeta(icono('card-sim') + ' Línea asignada', l ? campos([
                 ['Número', '<a href="#" class="ln-enlace ln-mono" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + esc(l.numero || '(sin número)') + '</a>', true],
                 ['Compañía', l.compania], ['Estatus', chip(l.estatus), true], ['SIM', l.sim], ['PIN WhatsApp', l.pinWhatsapp],
                 ['Costo plan', costo], ['Plan', [fecha(l.inicioPlan), fecha(l.finPlan)].filter(Boolean).join(' → ')],
@@ -502,8 +519,8 @@
               tarjetaResponsable(e.responsable) +
               tarjetaRegistro(e.legado) +
             '</div>' +
-            '<div id="ln-evidencias">' + tarjeta('📋 Inspecciones y responsivas', '<p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p>') + '</div>' +
-            '<div id="ln-historial">' + tarjeta('🕓 Historial', '<p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p>') + '</div>';
+            '<div id="ln-evidencias">' + tarjeta(icono('clipboard-check') + ' Inspecciones y responsivas', '<p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p>') + '</div>' +
+            '<div id="ln-historial">' + tarjeta(icono('history') + ' Historial', '<p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p>') + '</div>';
           cargarEvidencias(id);
           cargarHistorial(id);
         });
@@ -516,23 +533,23 @@
           const e = r.equipo;
           const costo = l.costoPlan !== null && l.costoPlan !== undefined ? '$' + Number(l.costoPlan).toLocaleString('es-MX') : null;
           detalle.innerHTML = migas() +
-            encabezado('📶', esc(l.numero || 'Línea sin número'), chip(l.estatus) + (e ? chip('En NUCO ' + (e.nuco || '—'), 'neutro') : chip('Suelta', 'ambar'))) +
+            encabezado('card-sim', esc(l.numero || 'Línea sin número'), chip(l.estatus) + (e ? chip('En NUCO ' + (e.nuco || '—'), 'neutro') : chip('Suelta', 'ambar'))) +
             '<div class="ln-grid-2">' +
-              tarjeta('📶 Línea', campos([
+              tarjeta(icono('card-sim') + ' Línea', campos([
                 ['Compañía', l.compania], ['SIM', l.sim], ['PIN WhatsApp', l.pinWhatsapp], ['Razón social', l.razonSocial],
                 ['Costo plan', costo], ['Inicio plan', fecha(l.inicioPlan)], ['Fin plan', fecha(l.finPlan)],
                 l.usoTemporal ? ['Uso temporal', 'Desde ' + esc(fecha(l.usoTemporal.desde) || '—') + ' · ' + esc(l.usoTemporal.correo || ''), true] : null,
                 !e && l.nucoLegado ? ['NUCO (anterior)', l.nucoLegado] : null,
               ])) +
-              tarjeta('📱 Equipo', e ? campos([
+              tarjeta(icono('smartphone') + ' Equipo', e ? campos([
                 ['NUCO', '<a href="#" class="ln-enlace ln-mono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + esc(e.nuco || '—') + '</a>', true],
                 ['Tipo', TIPO_EQUIPO[e.tipo] || e.tipo], ['Modelo', e.modelo], ['IMEI', e.imei], ['Estatus', chip(e.estatus), true],
               ]) : '<p class="empty-state">Línea suelta: no está instalada en un equipo de la empresa.</p>') +
               tarjetaResponsable(e ? e.responsable : l.responsable, e ? 'Responsable (del equipo)' : 'Responsable') +
               tarjetaRegistro(l.legado) +
             '</div>' +
-            (e ? '' : '<div id="ln-evidencias">' + tarjeta('📋 Inspecciones y responsivas', '<p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p>') + '</div>') +
-            '<div id="ln-historial">' + tarjeta('🕓 Historial', '<p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p>') + '</div>';
+            (e ? '' : '<div id="ln-evidencias">' + tarjeta(icono('clipboard-check') + ' Inspecciones y responsivas', '<p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p>') + '</div>') +
+            '<div id="ln-historial">' + tarjeta(icono('history') + ' Historial', '<p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p>') + '</div>';
           if (!e) cargarEvidencias(id);
           cargarHistorial(id);
         });
@@ -546,7 +563,7 @@
           cont.innerHTML = tarjetaEvidencias(ev.inspecciones || [], ev.responsivas || []);
         }).catch((e) => {
           const cont = $('#ln-evidencias', raiz);
-          if (cont) cont.innerHTML = tarjeta('📋 Inspecciones y responsivas', '<p class="error-msg">' + mensajeError(e) + '</p>');
+          if (cont) cont.innerHTML = tarjeta(icono('clipboard-check') + ' Inspecciones y responsivas', '<p class="error-msg">' + mensajeError(e) + '</p>');
         });
       }
 
@@ -565,7 +582,7 @@
               '<td>' + (r.carpetaId ? enlaceDrive(r.carpetaId, 'Abrir') : vacio) + '</td></tr>').join('') +
             '</tbody></table></div>'
           : '<p class="empty-state">Sin responsivas registradas.</p>';
-        return tarjeta('📋 Inspecciones (' + inspecciones.length + ')', tablaInsp) + tarjeta('✍️ Responsivas (' + responsivas.length + ')', tablaResp);
+        return tarjeta(icono('clipboard-check') + ' Inspecciones (' + inspecciones.length + ')', tablaInsp) + tarjeta(icono('signature') + ' Responsivas (' + responsivas.length + ')', tablaResp);
       }
 
       // ---- Historial ----
@@ -620,7 +637,7 @@
           });
           items.sort((a, b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
           const origen = { SISTEMA: chip('Nuevo sistema', 'verde'), LEGADO: chip('AppSheet', 'azul'), BITACORA: chip('Bitácora AppSheet', 'neutro') };
-          cont.innerHTML = tarjeta('🕓 Historial (' + items.length + ')', items.length
+          cont.innerHTML = tarjeta(icono('history') + ' Historial (' + items.length + ')', items.length
             ? '<ol class="ln-timeline">' + items.slice(0, 150).map((it) =>
                 '<li><div class="ln-tl-cabecera"><b>' + esc(it.titulo) + '</b> ' + (origen[it.origen] || '') +
                 '<span class="ln-tenue ln-tl-fecha">' + esc(fechaHora(it.fecha)) + (it.usuario ? ' · ' + esc(it.usuario) : '') + '</span></div>' +
@@ -629,7 +646,7 @@
             : '<p class="empty-state">Sin movimientos registrados.</p>');
         }).catch((e) => {
           const cont = $('#ln-historial', raiz);
-          if (cont) cont.innerHTML = tarjeta('🕓 Historial', '<p class="error-msg">' + mensajeError(e) + '</p>');
+          if (cont) cont.innerHTML = tarjeta(icono('history') + ' Historial', '<p class="error-msg">' + mensajeError(e) + '</p>');
         });
       }
 
@@ -648,7 +665,7 @@
             : '<div class="ln-grid-2">' + r.checklist.map((sec) => {
                 const puntos = sec.puntos.filter((p) => i.checklist && i.checklist[p.clave]);
                 if (!puntos.length) return '';
-                return tarjeta(esc(sec.seccion), campos(puntos.map((p) => {
+                return tarjeta(icono('list-checks') + ' ' + esc(sec.seccion), campos(puntos.map((p) => {
                   const v = i.checklist[p.clave];
                   const alerta = alertas.filter((a) => a.clave === p.clave)[0];
                   return [p.etiqueta, chip(v, CLASE_VALOR[v] || 'neutro') + (alerta ? ' ' + chip('antes ' + alerta.antes, 'rojo') : ''), true];
@@ -657,34 +674,34 @@
 
           const galeria = (lista, clase) => '<div class="ln-galeria">' + lista.map((f) =>
             '<a class="ln-foto ' + (clase || '') + '" target="_blank" rel="noopener" href="' + esc(f.enlace) + '" title="' + esc(f.nombre) + '">' +
-            (f.miniatura ? '<img loading="lazy" referrerpolicy="no-referrer" src="' + esc(f.miniatura) + '" alt="' + esc(f.nombre) + '">' : '<span>' + (f.video ? '🎬' : '🖼️') + '</span>') +
+            (f.miniatura ? '<img loading="lazy" referrerpolicy="no-referrer" src="' + esc(f.miniatura) + '" alt="' + esc(f.nombre) + '">' : '<span>' + (f.video ? icono('video') : icono('image')) + '</span>') +
             '</a>').join('') + '</div>';
 
           detalle.innerHTML = migas() +
-            encabezado('📋', 'Inspección ' + esc(fecha(i.fecha) || ''),
+            encabezado('clipboard-check', 'Inspección ' + esc(fecha(i.fecha) || ''),
               (ORIGEN[i.origen] || '') + (e ? chip('NUCO ' + (e.nuco || '—'), 'neutro') : '') +
               (i.calificacion !== null && i.calificacion !== undefined ? chip('Calificación ' + porcentaje(i.calificacion), 'verde') : ''),
-              (e ? '<button type="button" class="secondary" data-ln-ir="equipo" data-id="' + esc(e._id) + '">Ver equipo</button>' : '') +
+              (e ? '<button type="button" class="secondary ln-btn-icono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' Ver equipo</button>' : '') +
               (i.drive ? enlaceDrive(i.drive.carpetaId, 'Carpeta en Drive') : '') +
               (r.pdfs || []).map((p) => enlaceDrive(p.id, p.nombre || 'PDF', true)).join('')) +
-            (alertas.length ? '<div class="card ln-alerta-caja"><h3>⚠️ Alertas contra la inspección anterior</h3><ul>' +
+            (alertas.length ? '<div class="card ln-alerta-caja"><h3>' + icono('triangle-alert', 'ln-alerta') + ' Alertas contra la inspección anterior</h3><ul>' +
               alertas.map((a) => '<li><b>' + esc(a.etiqueta) + '</b>: antes <b>' + esc(a.antes) + '</b>, ahora <b>' + esc(a.despues) + '</b></li>').join('') + '</ul>' +
               (i.inspeccionAnteriorId ? '<a href="#" class="ln-enlace" data-ln-ir="inspeccion" data-id="' + esc(i.inspeccionAnteriorId) + '">Ver inspección anterior</a>' : '') + '</div>' : '') +
             '<div class="ln-grid-2">' +
-              (i.origen !== 'DRIVE' ? tarjeta('👤 Datos al momento de la inspección', campos([
+              (i.origen !== 'DRIVE' ? tarjeta(icono('user') + ' Datos al momento de la inspección', campos([
                 ['Responsable', s.responsable], ['Departamento', s.departamento], ['Sede', s.sede], ['Puesto', s.puesto],
                 ['Número', s.numero], ['IMEI', s.imei], ['Modelo', s.modelo], ['Compañía', s.compania],
                 ['Inspector', i.inspector], ['Ticket', i.ticket], ['Observaciones', i.observaciones],
               ])) : '') +
-              tarjeta('📁 Evidencias', campos([
+              tarjeta(icono('folder-open') + ' Evidencias', campos([
                 ['Carpeta', i.drive ? esc(i.drive.ruta) : null, true],
                 ['Coincidencia', i.drive ? (i.drive.coincidenciaExacta ? 'Misma fecha' : 'Fecha ±1 día') : 'Sin carpeta en Drive'],
                 ['Fotos', String(r.fotos.length)],
               ])) +
             '</div>' +
             checklist +
-            tarjeta('🖼️ Fotos (' + r.fotos.length + ')', r.fotos.length ? galeria(r.fotos) : '<p class="empty-state">Sin fotos en la carpeta de Drive.</p>') +
-            (r.firmas && r.firmas.length ? tarjeta('✍️ Firmas', galeria(r.firmas, 'ln-firma')) : '');
+            tarjeta(icono('images') + ' Fotos (' + r.fotos.length + ')', r.fotos.length ? galeria(r.fotos) : '<p class="empty-state">Sin fotos en la carpeta de Drive.</p>') +
+            (r.firmas && r.firmas.length ? tarjeta(icono('signature') + ' Firmas', galeria(r.firmas, 'ln-firma')) : '');
         });
       }
     }
@@ -701,7 +718,7 @@
 
     const BITACORAS = {
       CAMBIOS: {
-        titulo: '📝 Control de Cambios - Líneas', icono: '📝', csv: 'control de cambios lineas',
+        titulo: 'Control de Cambios - Líneas', icono: 'file-pen-line', csv: 'control de cambios lineas',
         subtitulo: 'Bitácora de campos modificados en LINEAS TELEFONICAS (AppSheet y nuevo sistema)',
         idRegistro: 'ID_LINEA',
         columnas: [
@@ -710,7 +727,7 @@
         ],
       },
       REASIGNACIONES: {
-        titulo: '🔁 Control de Reasignaciones - Líneas', icono: '🔁', csv: 'control de reasignaciones lineas',
+        titulo: 'Control de Reasignaciones - Líneas', icono: 'repeat', csv: 'control de reasignaciones lineas',
         subtitulo: 'Cambios de responsable de equipos y líneas',
         idRegistro: 'ID Linea',
         columnas: [
@@ -721,7 +738,7 @@
         ],
       },
       DESECHOS: {
-        titulo: '🗑️ Bitácora de Desechos', icono: '🗑️', csv: 'bitacora de desechos',
+        titulo: 'Bitácora de Desechos', icono: 'trash-2', csv: 'bitacora de desechos',
         subtitulo: 'Equipos dados de baja definitiva (folio DR)',
         idRegistro: 'ID_EQUIPO',
         columnas: [
@@ -741,13 +758,18 @@
 
       $('#ln-bit-titulo', raiz).textContent = cfg.titulo;
       $('#ln-bit-subtitulo', raiz).textContent = cfg.subtitulo;
-      $('#ln-bit-icono', raiz).textContent = cfg.icono;
+      $('#ln-bit-icono', raiz).innerHTML = icono(cfg.icono);
+      $('#ln-bit-titulo-icono', raiz).innerHTML = icono(cfg.icono);
+      pintarIconos(raiz);
 
       const norm = (h) => String(h || '').toUpperCase().replace(/\s+/g, ' ').trim();
       const buscarEncabezado = (encabezados, nombre) => encabezados.find((h) => norm(h) === norm(nombre));
       const valorCelda = (h, v) => {
         if (v === null || v === undefined || v === '') return vacio;
-        if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)) return esc(/FECHA/i.test(h) && !/REGISTRO/i.test(h) ? fechaHora(v) : fecha(v));
+        if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)) {
+          const d = new Date(v);
+          return esc(d.getHours() || d.getMinutes() ? fechaHora(v) : fecha(v)); // sin hora capturada: solo la fecha
+        }
         return esc(v);
       };
 
@@ -767,7 +789,7 @@
           $('#ln-bit-thead', raiz).innerHTML = '<tr>' + columnas.map((c) => '<th>' + esc(c.titulo) + '</th>').join('') + (hId ? '<th></th>' : '') + '</tr>';
           tbody.innerHTML = r.filas.length
             ? r.filas.map((f) => '<tr>' + columnas.map((c) => '<td class="' + (/NUCO|IMEI|FOLIO/i.test(c.h) ? 'ln-mono' : '') + '">' + valorCelda(c.h, f[c.h]) + '</td>').join('') +
-                (hId ? '<td>' + (f[hId] ? '<button type="button" class="secondary ln-btn-chico" data-ln-registro="' + esc(f[hId]) + '">Ver</button>' : '') + '</td>' : '') + '</tr>').join('')
+                (hId ? '<td>' + (f[hId] ? '<button type="button" class="secondary ln-btn-chico ln-btn-icono" data-ln-registro="' + esc(f[hId]) + '">' + icono('eye') + ' Ver</button>' : '') + '</td>' : '') + '</tr>').join('')
             : '<tr><td colspan="' + (columnas.length + 1) + '" class="empty-state">Sin resultados</td></tr>';
 
           if (!consulta.q) $('#ln-bit-total', raiz).textContent = miles(r.total);

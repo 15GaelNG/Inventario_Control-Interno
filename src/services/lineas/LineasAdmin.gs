@@ -23,12 +23,20 @@ function configurarLineasDev() {
     LINEAS_DRIVE_CARPETA_RAIZ: LINEAS_DEV_CARPETA_RAIZ,
   });
 
-  // Toca la hoja y la API de Sheets para que Google pida los permisos desde ya.
+  // Toca la hoja para que Google pida los permisos desde ya.
   const nombre = SpreadsheetApp.openById(LINEAS_DEV_SPREADSHEET_ID).getName();
-  LineasDatos.sheetsApi('?fields=properties.title');
   LineasRepo.borrarCaches();
+  CacheService.getScriptCache().remove('ln_api_sheets_off');
 
-  const mensaje = 'Listo. Líneas apunta a "' + nombre + '" (' + LINEAS_DEV_SPREADSHEET_ID + ').';
+  // La API de Sheets es opcional (acelera lecturas/escrituras); sin ella se usa SpreadsheetApp.
+  let api = 'API de Sheets habilitada.';
+  try {
+    LineasDatos.sheetsApi('?fields=properties.title');
+  } catch (e) {
+    api = 'API de Sheets NO habilitada en el proyecto de Google Cloud (se usará SpreadsheetApp, más lento): ' + String(e.message).slice(0, 160);
+  }
+
+  const mensaje = 'Listo. Líneas apunta a "' + nombre + '" (' + LINEAS_DEV_SPREADSHEET_ID + '). ' + api;
   Logger.log(mensaje);
   return mensaje;
 }
