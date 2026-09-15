@@ -93,14 +93,18 @@
   .cm-logo-dark { display: none; }
   :root[data-theme="dark"] .cm-logo-light { display: none; }
   :root[data-theme="dark"] .cm-logo-dark { display: block; }
+  /* Ahora vive junto a "Cerrar sesión" (fila completa), no en el encabezado. */
   .sidebar-collapse-btn {
-    background: transparent; border: 1px solid var(--color-sidebar-border); color: var(--color-sidebar-text);
-    width: 26px; height: 26px; border-radius: 8px; padding: 0; font-size: 12px;
-    flex-shrink: 0; transition: transform .28s ease, background-color .35s ease;
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    background: transparent; border: none; color: var(--color-sidebar-text);
+    padding: 9px 13px; border-radius: var(--radius); font-size: 13px; font-weight: 500;
+    white-space: nowrap; overflow: hidden; transition: background-color .35s ease;
   }
   .sidebar-collapse-btn:hover { background: var(--color-sidebar-hover); }
+  .sidebar-collapse-btn .ico { transition: transform .28s ease; }
   #sidebar.collapsed .sidebar-header { justify-content: center; }
-  #sidebar.collapsed .sidebar-collapse-btn { transform: rotate(180deg); }
+  #sidebar.collapsed .sidebar-collapse-btn { justify-content: center; }
+  #sidebar.collapsed .sidebar-collapse-btn .ico { transform: rotate(180deg); }
 
   .nav-item {
     display: flex; align-items: center; gap: 10px;
