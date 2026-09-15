@@ -494,33 +494,67 @@
       if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(valor)) return formatearFecha(valor);
       return String(valor);
     }
+    function itemInfo(etiqueta, valor) {
+      return `
+        <div class="info-item">
+          <div class="info-label">${etiqueta}</div>
+          <div class="info-value">${formatearValorInfo(valor)}</div>
+        </div>
+      `;
+    }
+    function seccionInfo(titulo) {
+      return `<div class="info-section-title">${titulo}</div>`;
+    }
 
-    async function abrirModalVehiculo(folio) {
+    const ETIQUETAS_INCIDENCIA = {
+      FOLIO: 'Folio', DEPARTAMENTO: 'Departamento', MODELO: 'Modelo', ANIO: 'Año',
+      FECHA_REGISTRO: 'Fecha de registro', FECHA_INSPECCION: 'Fecha de inspección',
+      KILOMETRAJE: 'Kilometraje', TICKET: 'Ticket',
+      INSPECCION_INGRESO: 'Inspección de ingreso (motivo)',
+      DESCRIPCION_TRABAJO: 'Trabajo realizado', FECHA_TRABAJO: 'Fecha del trabajo realizado',
+      INSPECCION_SALIDA: 'Inspección de salida', MECANICO: 'Mecánico',
+      PERIODO_VERIFICACION: 'Periodo de verificación', SEGURO_AUTO: 'Seguro de auto',
+      ESTADO: 'Estado',
+    };
+
+    async function abrirModalVehiculo(folio, id) {
       document.getElementById('vehiculo-folio-label').textContent = 'Folio: ' + folio;
       const grid = document.getElementById('vehiculo-info-grid');
       const vacio = document.getElementById('vehiculo-info-vacio');
-      grid.innerHTML = '<p class="empty-state">Cargando…</p>';
       vacio.hidden = true;
+
+      // Sección "Incidencia": ya la tenemos en memoria, no hace falta pedirla.
+      const inc = incidenciasPorId[id];
+      let html = '';
+      if (inc) {
+        html += seccionInfo('📋 Incidencia');
+        html += Object.keys(ETIQUETAS_INCIDENCIA)
+          .filter((clave) => inc[clave] !== '' && inc[clave] !== null && inc[clave] !== undefined)
+          .map((clave) => itemInfo(ETIQUETAS_INCIDENCIA[clave], inc[clave]))
+          .join('');
+      }
+      html += seccionInfo('🚗 Vehículo');
+      html += '<p class="empty-state" id="vehiculo-info-cargando">Cargando…</p>';
+      grid.innerHTML = html;
       modalVehiculo.hidden = false;
+
       try {
         const vehiculo = await callServer('apiBuscarVehiculoPorFolio', state.token, folio);
+        const cargando = document.getElementById('vehiculo-info-cargando');
+        if (cargando) cargando.remove();
         if (!vehiculo) {
-          grid.innerHTML = '';
           vacio.hidden = false;
           return;
         }
-        grid.innerHTML = Object.keys(vehiculo)
+        grid.insertAdjacentHTML('beforeend', Object.keys(vehiculo)
           .filter((clave) => vehiculo[clave] !== '' && vehiculo[clave] !== null && vehiculo[clave] !== undefined)
-          .map((clave) => `
-            <div class="info-item">
-              <div class="info-label">${tituloDesdeClave(clave)}</div>
-              <div class="info-value">${formatearValorInfo(vehiculo[clave])}</div>
-            </div>
-          `).join('');
+          .map((clave) => itemInfo(tituloDesdeClave(clave), vehiculo[clave]))
+          .join(''));
       } catch (err) {
-        grid.innerHTML = '';
+        const cargando = document.getElementById('vehiculo-info-cargando');
+        if (cargando) cargando.remove();
         vacio.hidden = false;
-        document.getElementById('vehiculo-info-vacio').textContent = 'No se pudo cargar: ' + err.message;
+        document.getElementById('vehiculo-info-vacio').textContent = 'No se pudo cargar el vehículo: ' + err.message;
       }
     }
     function cerrarModalVehiculo() {
@@ -566,7 +600,7 @@
         return `
           <div class="incidencia-item">
             <div class="incidencia-icon">🚗</div>
-            <div class="incidencia-main incidencia-main-clickable" data-folio="${inc.FOLIO}" title="Ver información del vehículo">
+            <div class="incidencia-main incidencia-main-clickable" data-folio="${inc.FOLIO}" data-id="${inc.ID}" title="Ver detalle completo">
               <div class="incidencia-folio">${inc.FOLIO}${inc.DEPARTAMENTO ? ' · ' + inc.DEPARTAMENTO : ''}</div>
               <div class="incidencia-meta">${inc.INSPECCION_INGRESO || 'Sin motivo registrado'}</div>
             </div>
@@ -582,7 +616,7 @@
       }).join('');
 
       lista.querySelectorAll('.incidencia-main-clickable').forEach((el) => {
-        el.addEventListener('click', () => abrirModalVehiculo(el.dataset.folio));
+        el.addEventListener('click', () => abrirModalVehiculo(el.dataset.folio, el.dataset.id));
       });
       lista.querySelectorAll('.btn-cerrar-incidencia').forEach((btn) => {
         btn.addEventListener('click', () => abrirModalCierre(btn.dataset.id, btn.dataset.folio));
