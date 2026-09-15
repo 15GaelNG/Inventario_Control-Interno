@@ -431,6 +431,16 @@
       }
     });
 
+    // Mismo autollenado, pero para el folio dentro del modal de Editar.
+    document.getElementById('editar-folio').addEventListener('input', (ev) => {
+      const vehiculo = vehiculosPorFolio[ev.target.value];
+      if (vehiculo) {
+        document.getElementById('editar-departamento').value = vehiculo.DEPARTAMENTO;
+        document.getElementById('editar-modelo').value = [vehiculo.MARCA, vehiculo.LINEA_VEHICULO].filter(Boolean).join(' ');
+        document.getElementById('editar-anio').value = vehiculo.MODELO || '';
+      }
+    });
+
     function formatearFecha(valor) {
       if (!valor) return '—';
       const f = new Date(valor);
