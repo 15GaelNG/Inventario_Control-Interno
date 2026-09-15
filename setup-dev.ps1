@@ -72,7 +72,7 @@ if (-not (Get-Command fnm -ErrorAction SilentlyContinue)) {
   }
   $env:Path = "$fnmDir;$env:Path"
 }
-Ok ('fnm ' + (fnm --version))
+Ok (fnm --version)
 
 # Cargar fnm en ESTA sesión
 fnm env --shell powershell | Out-String | Invoke-Expression
