@@ -50,3 +50,9 @@ function apiCrearIncidencia(token, datos) {
 function apiCerrarIncidencia(token, id, datos) {
   return IncidenciasService.cerrar(token, id, datos);
 }
+function apiActualizarIncidencia(token, id, datos) {
+  return IncidenciasService.actualizar(token, id, datos);
+}
+function apiEliminarIncidencia(token, id) {
+  return IncidenciasService.eliminar(token, id);
+}

@@ -380,11 +380,18 @@
   function fijarFechaRegistroHoy() {
     document.getElementById('inc-fecha-registro').value = new Date().toLocaleDateString('es-MX');
   }
+  function fechaParaInput(valor) {
+    if (!valor) return '';
+    const f = new Date(valor);
+    return isNaN(f) ? '' : f.toISOString().slice(0, 10);
+  }
 
   async function initIncidencias() {
     const lista = document.getElementById('lista-incidencias');
     const vacio = document.getElementById('incidencias-vacio');
     const modal = document.getElementById('modal-cerrar');
+    const modalEditar = document.getElementById('modal-editar');
+    let incidenciasPorId = {};
 
     // Fecha de registro: siempre hoy, no editable (el servidor la fuerza igual).
     fijarFechaRegistroHoy();
@@ -442,8 +449,58 @@
       document.getElementById('cerrar-error').hidden = true;
     }
 
+    function abrirModalEditar(inc) {
+      if (!inc) return;
+      document.getElementById('editar-id').value = inc.ID;
+      document.getElementById('editar-folio-label').textContent = 'Folio: ' + inc.FOLIO;
+      document.getElementById('editar-folio').value = inc.FOLIO || '';
+      document.getElementById('editar-departamento').value = inc.DEPARTAMENTO || '';
+      document.getElementById('editar-modelo').value = inc.MODELO || '';
+      document.getElementById('editar-anio').value = inc.ANIO || '';
+      document.getElementById('editar-fecha-inspeccion').value = fechaParaInput(inc.FECHA_INSPECCION);
+      document.getElementById('editar-kilometraje').value = inc.KILOMETRAJE || '';
+      document.getElementById('editar-ticket').value = inc.TICKET || '';
+      document.getElementById('editar-periodo-verificacion').value = inc.PERIODO_VERIFICACION || '';
+      document.getElementById('editar-seguro-auto').value = inc.SEGURO_AUTO || '';
+      document.getElementById('editar-motivo').value = inc.INSPECCION_INGRESO || '';
+      document.getElementById('editar-trabajo').value = inc.DESCRIPCION_TRABAJO || '';
+      document.getElementById('editar-fecha-trabajo').value = fechaParaInput(inc.FECHA_TRABAJO);
+      document.getElementById('editar-mecanico').value = inc.MECANICO || '';
+      document.getElementById('editar-salida').value = inc.INSPECCION_SALIDA || '';
+      document.getElementById('editar-error').hidden = true;
+      modalEditar.hidden = false;
+    }
+    function cerrarModalEditar() {
+      modalEditar.hidden = true;
+      document.getElementById('form-editar-incidencia').reset();
+      document.getElementById('editar-error').hidden = true;
+    }
+
+    async function eliminarIncidencia(id, folio) {
+      if (!confirm('¿Eliminar la incidencia del folio ' + folio + '? Esta acción no se puede deshacer.')) return;
+      try {
+        await callServer('apiEliminarIncidencia', state.token, id);
+        await cargar();
+      } catch (err) {
+        alert('No se pudo eliminar: ' + err.message);
+      }
+    }
+
     async function cargar() {
-      const incidencias = await callServer('apiListarIncidencias', state.token);
+      const errorBox = document.getElementById('inc-error');
+      let incidencias;
+      try {
+        incidencias = await callServer('apiListarIncidencias', state.token);
+      } catch (err) {
+        console.error('No se pudo cargar el historial de incidencias:', err);
+        errorBox.textContent = 'No se pudo cargar el historial de incidencias: ' + err.message;
+        errorBox.hidden = false;
+        return;
+      }
+      errorBox.hidden = true;
+
+      incidenciasPorId = {};
+      incidencias.forEach((inc) => { incidenciasPorId[inc.ID] = inc; });
 
       document.getElementById('stat-total').textContent = incidencias.length;
       document.getElementById('stat-abiertas').textContent = incidencias.filter((i) => i.ESTADO === 'ABIERTA').length;
@@ -461,13 +518,23 @@
             </div>
             <div class="incidencia-fecha">${formatearFecha(inc.FECHA_REGISTRO)}</div>
             <span class="badge-estado ${abierta ? 'abierta' : 'cerrada'}">${abierta ? '🔓 Abierta' : '✅ Cerrada'}</span>
-            ${abierta ? `<button type="button" class="secondary btn-cerrar-incidencia" data-id="${inc.ID}" data-folio="${inc.FOLIO}">Cerrar</button>` : ''}
+            <div class="incidencia-actions">
+              ${abierta ? `<button type="button" class="secondary btn-cerrar-incidencia" data-id="${inc.ID}" data-folio="${inc.FOLIO}">Cerrar</button>` : ''}
+              <button type="button" class="secondary btn-editar-incidencia" data-id="${inc.ID}" title="Editar">✏️</button>
+              <button type="button" class="danger btn-eliminar-incidencia" data-id="${inc.ID}" data-folio="${inc.FOLIO}" title="Eliminar">🗑️</button>
+            </div>
           </div>
         `;
       }).join('');
 
       lista.querySelectorAll('.btn-cerrar-incidencia').forEach((btn) => {
         btn.addEventListener('click', () => abrirModalCierre(btn.dataset.id, btn.dataset.folio));
+      });
+      lista.querySelectorAll('.btn-editar-incidencia').forEach((btn) => {
+        btn.addEventListener('click', () => abrirModalEditar(incidenciasPorId[btn.dataset.id]));
+      });
+      lista.querySelectorAll('.btn-eliminar-incidencia').forEach((btn) => {
+        btn.addEventListener('click', () => eliminarIncidencia(btn.dataset.id, btn.dataset.folio));
       });
     }
 
@@ -513,6 +580,38 @@
           MECANICO: document.getElementById('cerrar-mecanico').value.trim(),
         });
         cerrarModal();
+        await cargar();
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+      }
+    });
+
+    document.getElementById('btn-cancelar-editar').addEventListener('click', cerrarModalEditar);
+    modalEditar.addEventListener('click', (ev) => { if (ev.target === modalEditar) cerrarModalEditar(); });
+
+    document.getElementById('form-editar-incidencia').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('editar-error');
+      errorBox.hidden = true;
+      try {
+        await callServer('apiActualizarIncidencia', state.token, document.getElementById('editar-id').value, {
+          FOLIO: document.getElementById('editar-folio').value.trim(),
+          DEPARTAMENTO: document.getElementById('editar-departamento').value.trim(),
+          MODELO: document.getElementById('editar-modelo').value.trim(),
+          ANIO: document.getElementById('editar-anio').value,
+          FECHA_INSPECCION: document.getElementById('editar-fecha-inspeccion').value,
+          KILOMETRAJE: document.getElementById('editar-kilometraje').value,
+          TICKET: document.getElementById('editar-ticket').value.trim(),
+          PERIODO_VERIFICACION: document.getElementById('editar-periodo-verificacion').value.trim(),
+          SEGURO_AUTO: document.getElementById('editar-seguro-auto').value.trim(),
+          INSPECCION_INGRESO: document.getElementById('editar-motivo').value.trim(),
+          DESCRIPCION_TRABAJO: document.getElementById('editar-trabajo').value.trim(),
+          FECHA_TRABAJO: document.getElementById('editar-fecha-trabajo').value,
+          MECANICO: document.getElementById('editar-mecanico').value.trim(),
+          INSPECCION_SALIDA: document.getElementById('editar-salida').value.trim(),
+        });
+        cerrarModalEditar();
         await cargar();
       } catch (err) {
         errorBox.textContent = err.message;

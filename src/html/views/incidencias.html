@@ -92,4 +92,38 @@
       </form>
     </div>
   </div>
+
+  <!-- Modal: editar incidencia (corrige cualquier campo) -->
+  <div class="modal-backdrop" id="modal-editar" hidden>
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <div>
+          <h3 style="margin:0">Editar incidencia</h3>
+          <p class="modal-subtitle" id="editar-folio-label"></p>
+        </div>
+        <button type="button" class="modal-close" id="btn-cancelar-editar">✕</button>
+      </div>
+      <form id="form-editar-incidencia">
+        <input type="hidden" id="editar-id" />
+        <div class="modal-form-scroll grid" style="grid-template-columns: repeat(2, 1fr); gap: 0 14px;">
+          <div class="field"><label>Folio del vehículo</label><input type="text" id="editar-folio" list="lista-folios-vehiculo" /></div>
+          <div class="field"><label>Departamento</label><input type="text" id="editar-departamento" /></div>
+          <div class="field"><label>Modelo</label><input type="text" id="editar-modelo" /></div>
+          <div class="field"><label>Año</label><input type="number" id="editar-anio" /></div>
+          <div class="field"><label>Fecha de inspección</label><input type="date" id="editar-fecha-inspeccion" /></div>
+          <div class="field"><label>Kilometraje</label><input type="number" id="editar-kilometraje" /></div>
+          <div class="field"><label>Ticket</label><input type="text" id="editar-ticket" /></div>
+          <div class="field"><label>Periodo de verificación</label><input type="text" id="editar-periodo-verificacion" /></div>
+          <div class="field"><label>Seguro de auto</label><input type="text" id="editar-seguro-auto" /></div>
+          <div class="field" style="grid-column: 1 / -1;"><label>Inspección de ingreso (motivo)</label><input type="text" id="editar-motivo" /></div>
+          <div class="field" style="grid-column: 1 / -1;"><label>Descripción de trabajo realizado</label><input type="text" id="editar-trabajo" /></div>
+          <div class="field"><label>Fecha del trabajo realizado</label><input type="date" id="editar-fecha-trabajo" /></div>
+          <div class="field"><label>Mecánico</label><input type="text" id="editar-mecanico" /></div>
+          <div class="field" style="grid-column: 1 / -1;"><label>Inspección de salida</label><input type="text" id="editar-salida" /></div>
+        </div>
+        <div class="error-msg" id="editar-error" hidden></div>
+        <button type="submit" style="width:100%; margin-top:10px">💾 Guardar cambios</button>
+      </form>
+    </div>
+  </div>
 </template>

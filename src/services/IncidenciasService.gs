@@ -95,5 +95,40 @@ const IncidenciasService = (function () {
     return { ID: id };
   }
 
-  return { listar, crear, cerrar };
+  /** Corrige cualquier campo de una incidencia existente (abierta o cerrada) */
+  function actualizar(token, id, datos) {
+    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    const cambios = {};
+    if (datos.FOLIO !== undefined) cambios['FOLIO'] = datos.FOLIO;
+    if (datos.DEPARTAMENTO !== undefined) cambios['DEPARTAMENTO'] = datos.DEPARTAMENTO;
+    if (datos.MODELO !== undefined) cambios['MODELO'] = datos.MODELO;
+    if (datos.ANIO !== undefined) cambios['AÑO'] = datos.ANIO;
+    if (datos.FECHA_INSPECCION !== undefined) {
+      cambios['FECHA INSPECCION'] = datos.FECHA_INSPECCION ? new Date(datos.FECHA_INSPECCION) : '';
+    }
+    if (datos.KILOMETRAJE !== undefined) cambios['KILOMETRAJE'] = datos.KILOMETRAJE;
+    if (datos.TICKET !== undefined) cambios['TICKET'] = datos.TICKET;
+    if (datos.PERIODO_VERIFICACION !== undefined) cambios['PERIODO VERIFICACION'] = datos.PERIODO_VERIFICACION;
+    if (datos.SEGURO_AUTO !== undefined) cambios['SEGURO AUTO'] = datos.SEGURO_AUTO;
+    if (datos.INSPECCION_INGRESO !== undefined) cambios['INSPECCION INGRESO'] = datos.INSPECCION_INGRESO;
+    if (datos.DESCRIPCION_TRABAJO !== undefined) cambios['DESCRIPCION TRABAJO REALIZADO'] = datos.DESCRIPCION_TRABAJO;
+    if (datos.FECHA_TRABAJO !== undefined) {
+      cambios['FECHA TRABAJO REALIZADO'] = datos.FECHA_TRABAJO ? new Date(datos.FECHA_TRABAJO) : '';
+    }
+    if (datos.INSPECCION_SALIDA !== undefined) cambios['INSPECCION SALIDA'] = datos.INSPECCION_SALIDA;
+    if (datos.MECANICO !== undefined) cambios['NOMBRE MECANICO'] = datos.MECANICO;
+
+    SheetUtils.update(ssId(), hoja_().getName(), id, cambios, 'ID_INCIDENCIA');
+    return { ID: id };
+  }
+
+  /** Elimina por completo una incidencia (borrado físico de la fila) — solo ADMIN */
+  function eliminar(token, id) {
+    Auth.requiereRol(token, [Config.ROLES.ADMIN]);
+    const ok = SheetUtils.remove(ssId(), hoja_().getName(), id, 'ID_INCIDENCIA');
+    if (!ok) throw new Error('No se encontró la incidencia con ID=' + id);
+    return { ID: id };
+  }
+
+  return { listar, crear, cerrar, actualizar, eliminar };
 })();
