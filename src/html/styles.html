@@ -320,6 +320,27 @@
     grid-column: 1 / -1; display: flex; align-items: center; gap: 10px;
     color: var(--color-text-muted); font-size: 13px; padding: 14px 4px;
   }
+
+  /* ===== Transición corta al cambiar de módulo en el sidebar ===== */
+  #view-container { position: relative; min-height: 240px; }
+  #view-container > * { animation: viewContentFadeIn .3s ease; }
+  @keyframes viewContentFadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .view-transition {
+    position: absolute; inset: 0; z-index: 50;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+    background: var(--color-bg); opacity: 0; transition: opacity .28s ease; pointer-events: none;
+    border-radius: var(--radius);
+  }
+  .view-transition.show { opacity: 1; }
+  .view-transition-icon { font-size: 38px; animation: viewIconPulse 1s ease-in-out infinite; }
+  .view-transition-text {
+    font-size: 12.5px; font-weight: 600; color: var(--color-text-muted);
+    text-transform: uppercase; letter-spacing: .3px;
+  }
+  @keyframes viewIconPulse {
+    0%, 100% { transform: scale(1); opacity: .8; }
+    50% { transform: scale(1.18); opacity: 1; }
+  }
   .modal-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px; }
   .modal-subtitle { margin: 2px 0 0; font-size: 12.5px; color: var(--color-text-muted); }
   .modal-close {

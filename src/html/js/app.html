@@ -153,16 +153,47 @@
     if (initFn) initFn();
   }
 
+  /** Ícono temático (vehículos/líneas/pagos/uber) según a qué área pertenece la vista. */
+  function iconoDeVista(vista) {
+    if (vista === 'dashboard') return '🏠';
+    const grupo = NAV_GRUPOS.find((g) => g.items.some((it) => it.vista === vista));
+    return grupo ? grupo.icono : '📄';
+  }
+
+  /**
+   * Transición corta y temática al cambiar de módulo — no acelera la carga
+   * real, solo evita que el cambio se sienta "trabado" o instantáneo/brusco.
+   * Mantiene la vista anterior visible detrás mientras aparece, monta la
+   * vista nueva a la mitad, y se desvanece revelándola.
+   */
+  function transicionVista(vista, etiqueta, montarVistaReal) {
+    const cont = document.getElementById('view-container');
+    const overlay = document.createElement('div');
+    overlay.className = 'view-transition';
+    overlay.innerHTML =
+      '<div class="view-transition-icon">' + iconoDeVista(vista) + '</div>' +
+      '<div class="view-transition-text">Cargando ' + (etiqueta || '') + '…</div>';
+    cont.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add('show'));
+
+    setTimeout(() => {
+      montarVistaReal();
+      overlay.classList.remove('show');
+      setTimeout(() => overlay.remove(), 300);
+    }, 380);
+  }
+
   function navegarA(vista, etiqueta) {
     document.querySelectorAll('.nav-item, .nav-subitem').forEach((el) => {
       el.classList.toggle('active', el.dataset.view === vista);
     });
 
-    if (vista === 'dashboard') { montarVista('tpl-dashboard', initDashboard); return; }
-    if (vista === 'accesorios') { montarVista('tpl-accesorios', initAccesorios); return; }
-    if (vista === 'incidencias') { montarVista('tpl-incidencias', initIncidencias); return; }
-
-    mostrarProximamente(etiqueta || vista);
+    transicionVista(vista, etiqueta, () => {
+      if (vista === 'dashboard') { montarVista('tpl-dashboard', initDashboard); return; }
+      if (vista === 'accesorios') { montarVista('tpl-accesorios', initAccesorios); return; }
+      if (vista === 'incidencias') { montarVista('tpl-incidencias', initIncidencias); return; }
+      mostrarProximamente(etiqueta || vista);
+    });
   }
 
   /** Placeholder para módulos que ya están en el menú pero aún no se han construido */
