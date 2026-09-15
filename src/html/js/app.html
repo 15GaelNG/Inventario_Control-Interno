@@ -167,7 +167,11 @@
    * vista nueva a la mitad, y se desvanece revelándola.
    */
   function transicionVista(vista, etiqueta, montarVistaReal) {
-    const cont = document.getElementById('view-container');
+    // Se cuelga de #main (no de #view-container) para cubrir TODO el módulo
+    // sin importar si la vista anterior estaba scrolleada — #view-container
+    // hace scroll interno, así que un overlay dentro de él se movía con el
+    // scroll y dejaba ver contenido viejo.
+    const cont = document.getElementById('main');
     const overlay = document.createElement('div');
     overlay.className = 'view-transition';
     overlay.innerHTML =
