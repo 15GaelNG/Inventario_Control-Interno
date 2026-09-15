@@ -177,7 +177,10 @@
     border-radius: 0; box-shadow: var(--shadow);
   }
   .topbar-left { display: flex; align-items: center; gap: 16px; }
-  .topbar-cm-logo { height: 52px; width: auto; }
+  /* Ancho fijo (no alto) — CMTC-Light y CMTC-Dark tienen proporciones muy
+     distintas entre sí; si se ajustaran por alto, uno se vería mucho más
+     ancho que el otro al cambiar de tema. */
+  .topbar-cm-logo { width: 160px; height: auto; }
   .topbar-right { display: flex; flex-direction: row; align-items: center; gap: 14px; }
   .topbar-date {
     font-size: 12.5px; font-weight: 500; color: var(--color-text-muted);
