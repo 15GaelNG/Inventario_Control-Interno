@@ -67,65 +67,80 @@ push al mismo proyecto, nos borraríamos los cambios unos a otros. Por eso:
 3. **Ramas cortas, merge seguido** (cada 1–2 días), no todo al final.
 4. Antes de empezar a trabajar: `git pull` en `master` y rebase/merge a tu rama.
 
+## Ramas
+
+Cada quien trabaja en **su rama personal** y abre Pull Request a `master`:
+
+| Persona | Rama |
+|---|---|
+| Ayrton | `ayrton` |
+| Jorge | `jorge` |
+| Emmanuel | `emmanuel` |
+
+Como nos dividimos por módulos casi no deberíamos chocar, pero **junta tu rama
+con master seguido** (cada 1–2 días) para no acumular diferencias.
+
 ## Setup (una sola vez por persona)
 
-1. **Clonar el repo e instalar clasp**
+Requisitos: **git** y una cuenta `@ciudadmaderas.com`. Node y clasp los instala
+el script (sin permisos de administrador).
+
+1. **Clonar el repo** (o, si ya lo tenías, `git checkout master` y `git pull`):
    ```
    git clone https://github.com/15GaelNG/Inventario_Control-Interno
    cd Inventario_Control-Interno
-   npm install
-   npx clasp login          # con tu cuenta @ciudadmaderas.com
    ```
 
-2. **Crear TU proyecto DEV** — en una carpeta temporal, para que clasp no
-   sobrescriba el `appsscript.json` del repo:
-   ```
-   mkdir ../clasp-dev-temp
-   cd ../clasp-dev-temp
-   npx clasp create-script --type standalone --title "Inventario DEV - TuNombre"
-   cat .clasp.json          # copia el "scriptId"
-   cd ../Inventario_Control-Interno
-   ```
+2. **Activar la Apps Script API** en tu cuenta (una vez):
+   https://script.google.com/home/usersettings
 
-3. **Apuntar tu `.clasp.json` a tu proyecto DEV**
+3. **Correr el script** con tu nombre de rama:
    ```
-   cp .clasp.json.example .clasp.json
+   powershell -ExecutionPolicy Bypass -File .\setup-dev.ps1 -Nombre jorge
    ```
-   Edita `.clasp.json` y pega tu `scriptId`.
+   Hace todo esto (y lo puedes volver a correr sin problema):
+   - instala **fnm + Node LTS** si faltan, y agrega fnm a tu `$PROFILE`
+   - `npm install` (clasp) y `clasp login` si no has iniciado sesión
+   - te cambia a tu rama y la pone al día con `master`
+   - crea **tu proyecto DEV** en Apps Script y escribe tu `.clasp.json`
+     (si tu `.clasp.json` viejo apuntaba al compartido, lo mueve a
+     `.clasp.compartido.json`)
+   - sube el código a tu DEV y abre el editor
 
-   > ⚠️ Si ya tenías el repo clonado de antes, tu `.clasp.json` todavía apunta
-   > al proyecto COMPARTIDO (`1NbOczw…`). Cámbialo **antes** de hacer push.
+4. **En el editor que se abrió** (una vez):
+   - Lista de funciones → `configurarEntornoDev` → **Ejecutar** → acepta permisos.
+     Deja las Script Properties apuntando a la BD de pruebas.
+   - **Implementar → Probar implementaciones** → copia la URL que termina en
+     `/dev`. Esa es tu app de pruebas: siempre corre el último código que
+     subiste.
 
-4. **Subir el código a tu DEV**
-   ```
-   npx clasp push --force
-   npx clasp open-script
-   ```
+<details>
+<summary>Setup manual (si el script falla)</summary>
 
-5. **Script Properties** (en tu proyecto DEV → ⚙️ Configuración del proyecto →
-   Propiedades del script):
+1. `npm install` y `npx clasp login`
+2. En una carpeta temporal (para no sobrescribir el `appsscript.json` del repo):
+   `npx clasp create-script --type standalone --title "Inventario DEV - TuNombre"`
+   y copia el `scriptId` de su `.clasp.json`.
+3. En el repo: copia `.clasp.json.example` a `.clasp.json` y pega tu `scriptId`.
+4. `npx clasp push --force`
+5. Script Properties de tu proyecto DEV: `ENTORNO=DEV`, y `SS_ID_USUARIOS`,
+   `SS_ID_VEHICULOS`, `SS_ID_ACCESORIOS` = `1fC77Uu1ePVUySNvhgWXMHqWpLhGhBMTZZMEblU2nUhI`
+   (o corre `configurarEntornoDev`).
 
-   | Propiedad | Valor |
-   |---|---|
-   | `ENTORNO` | `DEV` |
-   | `SS_ID_USUARIOS` | `1fC77Uu1ePVUySNvhgWXMHqWpLhGhBMTZZMEblU2nUhI` |
-   | `SS_ID_VEHICULOS` | `1fC77Uu1ePVUySNvhgWXMHqWpLhGhBMTZZMEblU2nUhI` |
-   | `SS_ID_ACCESORIOS` | `1fC77Uu1ePVUySNvhgWXMHqWpLhGhBMTZZMEblU2nUhI` |
-
-6. **URL de pruebas**: Implementar → Probar implementaciones → copia la URL que
-   termina en `/dev`. Siempre corre el último código que subiste, sin crear
-   versiones. La primera vez te pedirá autorizar permisos.
+</details>
 
 ## Día a día
 
 ```
-git checkout master && git pull
-git checkout -b modulo/verificaciones     # o tu rama existente
+git checkout jorge          # tu rama
+git pull
+git merge origin/master     # traer lo que ya se juntó en master
 # ... programar ...
-npm run push            # sube a TU DEV (o `npm run watch` para subir al guardar)
+npm run push                # sube a TU DEV (o `npm run watch` para subir al guardar)
 # ... probar en tu URL /dev ...
-git add -A && git commit -m "..."
-git push -u origin modulo/verificaciones  # y abrir Pull Request a master
+git add -A
+git commit -m "..."
+git push                    # y abrir Pull Request de tu rama a master
 ```
 
 ## Publicar al proyecto compartido
