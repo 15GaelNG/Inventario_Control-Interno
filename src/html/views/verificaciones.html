@@ -21,39 +21,59 @@
     </div>
   </div>
 
-  <div class="card form-card" style="margin-bottom:18px">
-    <div class="form-card-header">
-      <div class="form-card-icon">🚗</div>
-      <div>
-        <h3>Registrar verificación</h3>
-        <p>Folio, fechas y foto del comprobante</p>
-      </div>
+  <div id="ver-tabs">
+    <div class="tabs-lista">
+      <button type="button" class="tab-btn" data-tab="registros">📊 Registros</button>
+      <button type="button" class="tab-btn" data-tab="nuevo">➕ Nuevo registro</button>
+      <button type="button" class="tab-btn" data-tab="historial">🕒 Historial</button>
     </div>
-    <form id="form-verificacion" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 14px;">
-      <div class="field">
-        <label>Folio del vehículo</label>
-        <input type="text" id="ver-folio" list="ver-lista-folios" required placeholder="Escribe o elige el folio" autocomplete="off" />
-        <datalist id="ver-lista-folios"></datalist>
-      </div>
-      <div class="field"><label>Placa <span class="auto-tag">auto</span></label><input type="text" id="ver-placa" disabled /></div>
-      <div class="field"><label>Fecha de verificación</label><input type="date" id="ver-fecha" required /></div>
-      <div class="field"><label>Fecha de próxima verificación</label><input type="date" id="ver-fecha-proxima" required /></div>
-      <div class="field" style="grid-column: 1 / -1;">
-        <label>Comprobante (PNG o JPG, máx. 10 MB)</label>
-        <input type="file" id="ver-comprobante" accept="image/png,image/jpeg" required />
-        <img id="ver-preview" alt="Vista previa del comprobante" hidden style="margin-top:10px; max-height:180px; border-radius:8px;" />
-      </div>
-      <div style="grid-column: 1 / -1;"><button type="submit" id="ver-btn-guardar">💾 Registrar verificación</button></div>
-    </form>
-    <div class="error-msg" id="ver-error" hidden></div>
-  </div>
 
-  <div class="card">
-    <div style="display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap;">
-      <h3 style="margin:0">Historial</h3>
-      <input type="search" id="ver-buscar" placeholder="Buscar por folio o placa" style="max-width:260px;" />
+    <!-- Pestaña 1: tabla de registros -->
+    <div class="card" data-panel="registros">
+      <p class="page-subtitle" style="margin:0 0 12px">
+        Doble clic en una celda para editarla · ▾ en cada columna para filtrar u ordenar
+      </p>
+      <div id="ver-tabla"></div>
+      <div class="error-msg" id="ver-tabla-error" hidden></div>
     </div>
-    <div id="ver-lista" class="incidencia-list" style="margin-top:12px"></div>
-    <p class="empty-state" id="ver-vacio" hidden>No hay verificaciones que coincidan.</p>
+
+    <!-- Pestaña 2: nuevo registro -->
+    <div class="card form-card" data-panel="nuevo">
+      <div class="form-card-header">
+        <div class="form-card-icon">🚗</div>
+        <div>
+          <h3>Registrar verificación</h3>
+          <p>Folio, fechas y foto del comprobante</p>
+        </div>
+      </div>
+      <form id="form-verificacion" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 14px;">
+        <div class="field">
+          <label>Folio del vehículo</label>
+          <input type="text" id="ver-folio" list="ver-lista-folios" required placeholder="Escribe o elige el folio" autocomplete="off" />
+          <datalist id="ver-lista-folios"></datalist>
+        </div>
+        <div class="field"><label>Placa <span class="auto-tag">auto</span></label><input type="text" id="ver-placa" disabled /></div>
+        <div class="field"><label>Fecha de verificación</label><input type="date" id="ver-fecha" required /></div>
+        <div class="field"><label>Fecha de próxima verificación</label><input type="date" id="ver-fecha-proxima" required /></div>
+        <div class="field" style="grid-column: 1 / -1;">
+          <label>Comprobante (PNG o JPG, máx. 10 MB)</label>
+          <input type="file" id="ver-comprobante" accept="image/png,image/jpeg" required />
+          <img id="ver-preview" alt="Vista previa del comprobante" hidden style="margin-top:10px; max-height:180px; border-radius:8px;" />
+        </div>
+        <div style="grid-column: 1 / -1;"><button type="submit" id="ver-btn-guardar">💾 Registrar verificación</button></div>
+      </form>
+      <div class="error-msg" id="ver-error" hidden></div>
+      <div class="dt-mensaje ok" id="ver-ok" hidden></div>
+    </div>
+
+    <!-- Pestaña 3: historial por tarjetas -->
+    <div class="card" data-panel="historial">
+      <div style="display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap;">
+        <h3 style="margin:0">Historial</h3>
+        <input type="search" id="ver-buscar" placeholder="Buscar por folio o placa" style="max-width:260px;" />
+      </div>
+      <div id="ver-lista" class="incidencia-list" style="margin-top:12px"></div>
+      <p class="empty-state" id="ver-vacio" hidden>No hay verificaciones que coincidan.</p>
+    </div>
   </div>
 </template>

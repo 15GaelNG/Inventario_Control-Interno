@@ -643,36 +643,189 @@
     });
   }
 
+  /** Fecha local "yyyy-MM-dd" (hoyISO() usa UTC y después de las 6 pm en México da mañana) */
+  function hoyLocal() {
+    const f = new Date();
+    return [f.getFullYear(), String(f.getMonth() + 1).padStart(2, '0'), String(f.getDate()).padStart(2, '0')].join('-');
+  }
+
+  /** Abre un archivo de Drive a partir de su ruta AppSheet (la pestaña se abre antes para que no la bloqueen) */
+  async function abrirComprobanteVerificacion(ruta) {
+    const pestana = window.open('', '_blank');
+    try {
+      pestana.location.href = await callServer('apiUrlComprobanteVerificacion', state.token, ruta);
+    } catch (err) {
+      if (pestana) pestana.close();
+      alert(err.message);
+    }
+  }
+
   async function initVerificaciones() {
     const MAX_BYTES = 10 * 1024 * 1024;
     const DIA_MS = 24 * 60 * 60 * 1000;
-    const lista = document.getElementById('ver-lista');
-    const vacio = document.getElementById('ver-vacio');
-    const errorBox = document.getElementById('ver-error');
-    const inputArchivo = document.getElementById('ver-comprobante');
-    const preview = document.getElementById('ver-preview');
+    const esAdmin = state.sesion && state.sesion.rol === 'ADMIN';
     let verificaciones = [];
 
-    // Fecha local "yyyy-MM-dd" (hoyISO() usa UTC y después de las 6 pm en México da mañana)
-    function hoyLocal() {
-      const f = new Date();
-      return [f.getFullYear(), String(f.getMonth() + 1).padStart(2, '0'), String(f.getDate()).padStart(2, '0')].join('-');
+    // ----- Cálculos derivados (estado de vigencia por vehículo) -----
+    function diasParaVencer(fechaProximaISO) {
+      if (!fechaProximaISO) return null;
+      return Math.floor((new Date(fechaProximaISO) - new Date(hoyLocal() + 'T00:00:00')) / DIA_MS);
     }
 
+    /** Agrega ESTADO y DIAS_RESTANTES. Solo la verificación más reciente de cada folio cuenta como vigente. */
+    function conDerivados(filas) {
+      const ultimaPorFolio = {};
+      filas.forEach((v) => {
+        const actual = ultimaPorFolio[v.FOLIO];
+        if (!actual || (v.FECHA_VERIFICACION || '') > (actual.FECHA_VERIFICACION || '')) ultimaPorFolio[v.FOLIO] = v;
+      });
+      return filas.map((v) => {
+        const dias = diasParaVencer(v.FECHA_PROXIMA);
+        let estado = 'Reemplazada';
+        if (ultimaPorFolio[v.FOLIO] === v) {
+          estado = dias === null ? 'Sin fecha' : dias < 0 ? 'Vencida' : dias <= 30 ? 'Por vencer' : 'Vigente';
+        }
+        return Object.assign({}, v, { ESTADO: estado, DIAS_RESTANTES: dias });
+      });
+    }
+
+    const BADGE_ESTADO = {
+      'Vigente': ['cerrada', '✅ Vigente'],
+      'Por vencer': ['abierta', '⏳ Por vencer'],
+      'Vencida': ['abierta', '⚠️ Vencida'],
+    };
+    function badgeEstado(estado) {
+      const b = BADGE_ESTADO[estado];
+      return b ? `<span class="badge-estado ${b[0]}">${b[1]}</span>` : `<span style="color:var(--color-text-muted)">${escaparHtml(estado)}</span>`;
+    }
+
+    function pintarStats() {
+      document.getElementById('ver-stat-total').textContent = verificaciones.length;
+      document.getElementById('ver-stat-vencidas').textContent = verificaciones.filter((v) => v.ESTADO === 'Vencida').length;
+      document.getElementById('ver-stat-por-vencer').textContent = verificaciones.filter((v) => v.ESTADO === 'Por vencer').length;
+    }
+
+    // ----- Pestaña 1: tabla -----
+    const tabla = DataTable.crear(document.getElementById('ver-tabla'), {
+      idCampo: 'ID',
+      ordenInicial: { campo: 'FECHA_REGISTRO', dir: 'desc' },
+      textoVacio: 'Todavía no hay verificaciones registradas',
+      columnas: [
+        { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', editable: true },
+        { campo: 'PLACA', titulo: 'Placa', tipo: 'texto' },
+        { campo: 'FECHA_VERIFICACION', titulo: 'Fecha verificación', tipo: 'fecha', editable: true },
+        { campo: 'FECHA_PROXIMA', titulo: 'Próxima verificación', tipo: 'fecha', editable: true },
+        { campo: 'DIAS_RESTANTES', titulo: 'Días para vencer', tipo: 'numero' },
+        { campo: 'ESTADO', titulo: 'Estado', tipo: 'lista', render: (v) => badgeEstado(v) },
+        { campo: 'REGISTRADO_POR', titulo: 'Registrado por', tipo: 'lista' },
+        { campo: 'FECHA_REGISTRO', titulo: 'Fecha registro', tipo: 'fecha' },
+        {
+          campo: 'COMPROBANTE', titulo: 'Comprobante', filtrable: false, ordenable: false,
+          render: (ruta) => (ruta
+            ? `<button type="button" class="secondary btn-ver-comprobante" data-ruta="${escaparHtml(ruta)}" style="padding:4px 8px">🖼️ Ver</button>`
+            : '—'),
+        },
+      ],
+      alEditar: async (fila, campo, valor) => {
+        const actualizada = await callServer('apiActualizarCampoVerificacion', state.token, fila.ID, campo, valor);
+        // Recalcular estados de todos (cambiar una fecha o folio puede mover cuál es la "última")
+        verificaciones = conDerivados(verificaciones.map((v) => (v.ID === fila.ID ? actualizada : v)));
+        tabla.setDatos(verificaciones);
+        pintarStats();
+        pintarHistorial();
+      },
+      alEliminar: esAdmin ? async (filas) => {
+        await callServer('apiEliminarVerificaciones', state.token, filas.map((f) => f.ID));
+        const ids = new Set(filas.map((f) => f.ID));
+        verificaciones = conDerivados(verificaciones.filter((v) => !ids.has(v.ID)));
+        tabla.setDatos(verificaciones);
+        pintarStats();
+        pintarHistorial();
+      } : null,
+    });
+
+    document.getElementById('ver-tabla').addEventListener('click', (ev) => {
+      const btn = ev.target.closest('.btn-ver-comprobante');
+      if (btn) abrirComprobanteVerificacion(btn.dataset.ruta);
+    });
+
+    // ----- Pestaña 3: historial por tarjetas -----
+    function formatearFecha(valor) {
+      if (!valor) return '—';
+      const f = new Date(valor);
+      return isNaN(f) ? '—' : f.toLocaleDateString('es-MX');
+    }
+
+    function pintarHistorial() {
+      const lista = document.getElementById('ver-lista');
+      const texto = document.getElementById('ver-buscar').value.trim().toUpperCase();
+      const filtradas = verificaciones
+        .filter((v) => !texto || String(v.FOLIO).toUpperCase().includes(texto) || String(v.PLACA).toUpperCase().includes(texto))
+        .slice()
+        .sort((a, b) => (b.FECHA_REGISTRO || '').localeCompare(a.FECHA_REGISTRO || ''))
+        .slice(0, 100);
+
+      document.getElementById('ver-vacio').hidden = filtradas.length > 0;
+      lista.innerHTML = filtradas.map((v) => `
+        <div class="incidencia-item">
+          <div class="incidencia-icon">📋</div>
+          <div class="incidencia-main">
+            <div class="incidencia-folio">${escaparHtml(v.FOLIO)}${v.PLACA ? ' · ' + escaparHtml(v.PLACA) : ''}</div>
+            <div class="incidencia-meta">
+              Verificó: ${formatearFecha(v.FECHA_VERIFICACION)} · Próxima: ${formatearFecha(v.FECHA_PROXIMA)}
+              · Registró: ${escaparHtml(v.REGISTRADO_POR || '—')}
+            </div>
+          </div>
+          <div class="incidencia-fecha">${formatearFecha(v.FECHA_REGISTRO)}</div>
+          ${BADGE_ESTADO[v.ESTADO] ? badgeEstado(v.ESTADO) : ''}
+          <div class="incidencia-actions">
+            ${v.COMPROBANTE ? `<button type="button" class="secondary btn-ver-comprobante" data-ruta="${escaparHtml(v.COMPROBANTE)}" title="Ver comprobante">🖼️</button>` : ''}
+          </div>
+        </div>`).join('');
+    }
+
+    document.getElementById('ver-buscar').addEventListener('input', pintarHistorial);
+    document.getElementById('ver-lista').addEventListener('click', (ev) => {
+      const btn = ev.target.closest('.btn-ver-comprobante');
+      if (btn) abrirComprobanteVerificacion(btn.dataset.ruta);
+    });
+
+    // ----- Carga -----
+    async function cargar() {
+      const errorBox = document.getElementById('ver-tabla-error');
+      try {
+        verificaciones = conDerivados((await callServer('apiListarVerificaciones', state.token)) || []);
+        errorBox.hidden = true;
+      } catch (err) {
+        errorBox.textContent = 'No se pudieron cargar las verificaciones: ' + err.message;
+        errorBox.hidden = false;
+        return;
+      }
+      tabla.setDatos(verificaciones);
+      pintarStats();
+      pintarHistorial();
+    }
+
+    Tabs.iniciar(document.getElementById('ver-tabs'), { inicial: 'registros' });
+
+    // ----- Pestaña 2: nuevo registro -----
+    const errorBox = document.getElementById('ver-error');
+    const okBox = document.getElementById('ver-ok');
+    const inputArchivo = document.getElementById('ver-comprobante');
+    const preview = document.getElementById('ver-preview');
     document.getElementById('ver-fecha').value = hoyLocal();
 
     const vehiculosPorFolio = {};
-    try {
-      const vehiculos = (await callServer('apiListarVehiculosBasico', state.token)) || [];
-      document.getElementById('ver-lista-folios').innerHTML = vehiculos.map((v) => {
+    callServer('apiListarVehiculosBasico', state.token).then((vehiculos) => {
+      document.getElementById('ver-lista-folios').innerHTML = (vehiculos || []).map((v) => {
         vehiculosPorFolio[v.FOLIO] = v;
         const etiqueta = [v.PLACA, v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' · ');
         return `<option value="${escaparHtml(v.FOLIO)}">${escaparHtml(etiqueta)}</option>`;
       }).join('');
-    } catch (err) {
+    }).catch((err) => {
       errorBox.textContent = 'No se pudo cargar el catálogo de vehículos: ' + err.message;
       errorBox.hidden = false;
-    }
+    });
 
     document.getElementById('ver-folio').addEventListener('input', (ev) => {
       const vehiculo = vehiculosPorFolio[ev.target.value.trim()];
@@ -686,92 +839,10 @@
       preview.hidden = false;
     });
 
-    /** Estado de un vehículo según su verificación más reciente */
-    function estadoVigencia(fechaProximaISO) {
-      if (!fechaProximaISO) return null;
-      const dias = Math.floor((new Date(fechaProximaISO) - new Date(hoyLocal() + 'T00:00:00')) / DIA_MS);
-      if (dias < 0) return { clase: 'abierta', texto: '⚠️ Vencida' };
-      if (dias <= 30) return { clase: 'abierta', texto: '⏳ Vence en ' + dias + ' d' };
-      return { clase: 'cerrada', texto: '✅ Vigente' };
-    }
-
-    function formatearFecha(valor) {
-      if (!valor) return '—';
-      const f = new Date(valor);
-      return isNaN(f) ? '—' : f.toLocaleDateString('es-MX');
-    }
-
-    function pintar() {
-      // La verificación "vigente" de cada vehículo es la de fecha de verificación más reciente
-      const ultimaPorFolio = {};
-      verificaciones.forEach((v) => {
-        const actual = ultimaPorFolio[v.FOLIO];
-        if (!actual || (v.FECHA_VERIFICACION || '') > (actual.FECHA_VERIFICACION || '')) ultimaPorFolio[v.FOLIO] = v;
-      });
-      const ultimas = Object.values(ultimaPorFolio);
-      const estados = ultimas.map((v) => estadoVigencia(v.FECHA_PROXIMA)).filter(Boolean);
-      document.getElementById('ver-stat-total').textContent = verificaciones.length;
-      document.getElementById('ver-stat-vencidas').textContent = estados.filter((e) => e.texto.includes('Vencida')).length;
-      document.getElementById('ver-stat-por-vencer').textContent = estados.filter((e) => e.texto.includes('Vence en')).length;
-
-      const texto = document.getElementById('ver-buscar').value.trim().toUpperCase();
-      const filtradas = verificaciones
-        .filter((v) => !texto || String(v.FOLIO).toUpperCase().includes(texto) || String(v.PLACA).toUpperCase().includes(texto))
-        .slice(0, 100);
-
-      vacio.hidden = filtradas.length > 0;
-      lista.innerHTML = filtradas.map((v) => {
-        const esUltima = ultimaPorFolio[v.FOLIO] === v;
-        const estado = esUltima ? estadoVigencia(v.FECHA_PROXIMA) : null;
-        return `
-          <div class="incidencia-item">
-            <div class="incidencia-icon">📋</div>
-            <div class="incidencia-main">
-              <div class="incidencia-folio">${escaparHtml(v.FOLIO)}${v.PLACA ? ' · ' + escaparHtml(v.PLACA) : ''}</div>
-              <div class="incidencia-meta">
-                Verificó: ${formatearFecha(v.FECHA_VERIFICACION)} · Próxima: ${formatearFecha(v.FECHA_PROXIMA)}
-                · Registró: ${escaparHtml(v.REGISTRADO_POR || '—')}
-              </div>
-            </div>
-            <div class="incidencia-fecha">${formatearFecha(v.FECHA_REGISTRO)}</div>
-            ${estado ? `<span class="badge-estado ${estado.clase}">${estado.texto}</span>` : ''}
-            <div class="incidencia-actions">
-              ${v.COMPROBANTE ? `<button type="button" class="secondary btn-ver-comprobante" data-ruta="${escaparHtml(v.COMPROBANTE)}" title="Ver comprobante">🖼️</button>` : ''}
-            </div>
-          </div>
-        `;
-      }).join('');
-
-      lista.querySelectorAll('.btn-ver-comprobante').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-          // Abrir la pestaña ANTES de la llamada async para que el navegador no la bloquee
-          const pestana = window.open('', '_blank');
-          try {
-            pestana.location.href = await callServer('apiUrlComprobanteVerificacion', state.token, btn.dataset.ruta);
-          } catch (err) {
-            if (pestana) pestana.close();
-            alert(err.message);
-          }
-        });
-      });
-    }
-
-    async function cargar() {
-      try {
-        verificaciones = (await callServer('apiListarVerificaciones', state.token)) || [];
-      } catch (err) {
-        errorBox.textContent = 'No se pudo cargar el historial de verificaciones: ' + err.message;
-        errorBox.hidden = false;
-        return;
-      }
-      pintar();
-    }
-
-    document.getElementById('ver-buscar').addEventListener('input', pintar);
-
     document.getElementById('form-verificacion').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       errorBox.hidden = true;
+      okBox.hidden = true;
       const boton = document.getElementById('ver-btn-guardar');
       const archivo = inputArchivo.files[0];
       try {
@@ -780,8 +851,9 @@
         boton.disabled = true;
         boton.textContent = 'Guardando…';
 
+        const folio = document.getElementById('ver-folio').value.trim();
         await callServer('apiRegistrarVerificacion', state.token, {
-          FOLIO: document.getElementById('ver-folio').value.trim(),
+          FOLIO: folio,
           FECHA_VERIFICACION: document.getElementById('ver-fecha').value,
           FECHA_PROXIMA: document.getElementById('ver-fecha-proxima').value,
         }, {
@@ -792,6 +864,8 @@
         ev.target.reset();
         preview.hidden = true;
         document.getElementById('ver-fecha').value = hoyLocal();
+        okBox.textContent = '✅ Verificación del folio ' + folio + ' registrada';
+        okBox.hidden = false;
         await cargar();
       } catch (err) {
         errorBox.textContent = err.message;

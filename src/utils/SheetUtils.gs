@@ -95,6 +95,43 @@ const SheetUtils = (function () {
   }
 
   /**
+   * Elimina físicamente varias filas por ID en una sola pasada. Devuelve cuántas borró.
+   * Bloquea el script mientras borra: si alguien inserta/borra a la vez, los números
+   * de fila cambiarían entre la búsqueda y el borrado.
+   */
+  function removeMany(spreadsheetId, sheetName, ids, idColumn) {
+    idColumn = idColumn || 'ID';
+    const buscados = new Set((ids || []).map(String));
+    if (!buscados.size) return 0;
+
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try {
+      const sheet = getSheet(spreadsheetId, sheetName);
+      const idCol = getHeaders_(sheet).indexOf(idColumn);
+      if (idCol === -1) throw new Error('La hoja "' + sheetName + '" no tiene columna "' + idColumn + '"');
+      const lastRow = sheet.getLastRow();
+      if (lastRow < 2) return 0;
+
+      const filas = sheet.getRange(2, idCol + 1, lastRow - 1, 1).getValues()
+        .map((v, i) => (buscados.has(String(v[0])) ? i + 2 : null))
+        .filter(Boolean);
+
+      // De abajo hacia arriba, agrupando filas contiguas en un solo deleteRows
+      for (let i = filas.length - 1; i >= 0;) {
+        let inicio = filas[i];
+        let cantidad = 1;
+        while (i - cantidad >= 0 && filas[i - cantidad] === inicio - 1) { inicio--; cantidad++; }
+        sheet.deleteRows(inicio, cantidad);
+        i -= cantidad;
+      }
+      return filas.length;
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  /**
    * Encuentra, dentro de un spreadsheet, la hoja cuyo encabezado (fila 1)
    * contiene TODAS las columnas dadas (por nombre exacto). Útil cuando no
    * conocemos el nombre real de la pestaña (ej. spreadsheets ajenos, como el
@@ -138,5 +175,5 @@ const SheetUtils = (function () {
     return hoja;
   }
 
-  return { getSheet, getSheetByColumns, getAll, findById, insert, update, remove };
+  return { getSheet, getSheetByColumns, getAll, findById, insert, update, remove, removeMany };
 })();

@@ -47,6 +47,12 @@ function apiListarVerificaciones(token) {
 function apiRegistrarVerificacion(token, datos, archivo) {
   return VerificacionesService.registrar(token, datos, archivo);
 }
+function apiActualizarCampoVerificacion(token, id, campo, valor) {
+  return VerificacionesService.actualizarCampo(token, id, campo, valor);
+}
+function apiEliminarVerificaciones(token, ids) {
+  return VerificacionesService.eliminar(token, ids);
+}
 function apiUrlComprobanteVerificacion(token, ruta) {
   return VerificacionesService.urlComprobante(token, ruta);
 }

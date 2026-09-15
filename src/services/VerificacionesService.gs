@@ -120,6 +120,53 @@ const VerificacionesService = (function () {
     return { ID: id };
   }
 
+  /**
+   * Edición de UNA celda desde la tabla. Solo estos campos son editables; el resto
+   * (ID, placa, fecha de registro, registrado por, comprobante) no.
+   * @param {string} campo  FOLIO | FECHA_VERIFICACION | FECHA_PROXIMA
+   * @param {string} valor  folio, o fecha "yyyy-MM-dd"
+   * @return {Object} la fila actualizada (mismo formato que listar)
+   */
+  function actualizarCampo(token, id, campo, valor) {
+    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    const nombreHoja = hoja_().getName();
+    const actual = SheetUtils.findById(ssId(), nombreHoja, id, 'ID_VERIFICACION');
+    if (!actual) throw new Error('No se encontró la verificación ' + id);
+
+    const cambios = {};
+    if (campo === 'FOLIO') {
+      const folio = String(valor || '').trim();
+      if (!folio) throw new Error('El folio del vehículo es obligatorio');
+      const vehiculo = SheetUtils.findById(ssId(), 'VEHICULOS', folio, 'FOLIO');
+      if (!vehiculo) throw new Error('No existe un vehículo con folio ' + folio);
+      cambios['FOLIO VEHICULO'] = folio;
+      cambios['PLACA'] = vehiculo.data['PLACA'] || '';
+    } else if (campo === 'FECHA_VERIFICACION' || campo === 'FECHA_PROXIMA') {
+      const fecha = fechaDesdeInput_(valor, campo === 'FECHA_PROXIMA' ? 'fecha de próxima verificación' : 'fecha de verificación');
+      const columna = campo === 'FECHA_PROXIMA' ? 'FECHA PROXIMA VERIFICACION' : 'FECHA VERIFICACION';
+      const fila = desdeOriginal_(Object.assign({}, actual.data, { [columna]: fecha }));
+      if (fila.FECHA_VERIFICACION && fila.FECHA_PROXIMA && fila.FECHA_PROXIMA <= fila.FECHA_VERIFICACION) {
+        throw new Error('La próxima verificación debe ser posterior a la fecha de verificación');
+      }
+      cambios[columna] = fecha;
+    } else {
+      throw new Error('El campo "' + campo + '" no se puede editar');
+    }
+
+    return desdeOriginal_(SheetUtils.update(ssId(), nombreHoja, id, cambios, 'ID_VERIFICACION'));
+  }
+
+  /**
+   * Borra varias verificaciones — solo ADMIN. Los comprobantes NO se borran de Drive
+   * (quedan como respaldo; AppSheet tampoco los borra).
+   */
+  function eliminar(token, ids) {
+    Auth.requiereRol(token, [Config.ROLES.ADMIN]);
+    if (!Array.isArray(ids) || !ids.length) throw new Error('No se indicaron registros a eliminar');
+    const borradas = SheetUtils.removeMany(ssId(), hoja_().getName(), ids, 'ID_VERIFICACION');
+    return { eliminadas: borradas };
+  }
+
   /** URL de Drive del comprobante: busca en la carpeta de escritura y luego en la de lectura. */
   function urlComprobante(token, ruta) {
     Auth.validarSesion(token);
@@ -131,5 +178,5 @@ const VerificacionesService = (function () {
     return url;
   }
 
-  return { listar, registrar, urlComprobante };
+  return { listar, registrar, actualizarCampo, eliminar, urlComprobante };
 })();
