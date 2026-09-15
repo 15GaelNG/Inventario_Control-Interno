@@ -391,6 +391,7 @@
     const vacio = document.getElementById('incidencias-vacio');
     const modal = document.getElementById('modal-cerrar');
     const modalEditar = document.getElementById('modal-editar');
+    const modalVehiculo = document.getElementById('modal-vehiculo');
     let incidenciasPorId = {};
 
     // Fecha de registro: siempre hoy, no editable (el servidor la fuerza igual).
@@ -486,6 +487,46 @@
       document.getElementById('editar-error').hidden = true;
     }
 
+    function tituloDesdeClave(clave) {
+      return clave.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+    }
+    function formatearValorInfo(valor) {
+      if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(valor)) return formatearFecha(valor);
+      return String(valor);
+    }
+
+    async function abrirModalVehiculo(folio) {
+      document.getElementById('vehiculo-folio-label').textContent = 'Folio: ' + folio;
+      const grid = document.getElementById('vehiculo-info-grid');
+      const vacio = document.getElementById('vehiculo-info-vacio');
+      grid.innerHTML = '<p class="empty-state">Cargando…</p>';
+      vacio.hidden = true;
+      modalVehiculo.hidden = false;
+      try {
+        const vehiculo = await callServer('apiBuscarVehiculoPorFolio', state.token, folio);
+        if (!vehiculo) {
+          grid.innerHTML = '';
+          vacio.hidden = false;
+          return;
+        }
+        grid.innerHTML = Object.keys(vehiculo)
+          .filter((clave) => vehiculo[clave] !== '' && vehiculo[clave] !== null && vehiculo[clave] !== undefined)
+          .map((clave) => `
+            <div class="info-item">
+              <div class="info-label">${tituloDesdeClave(clave)}</div>
+              <div class="info-value">${formatearValorInfo(vehiculo[clave])}</div>
+            </div>
+          `).join('');
+      } catch (err) {
+        grid.innerHTML = '';
+        vacio.hidden = false;
+        document.getElementById('vehiculo-info-vacio').textContent = 'No se pudo cargar: ' + err.message;
+      }
+    }
+    function cerrarModalVehiculo() {
+      modalVehiculo.hidden = true;
+    }
+
     async function eliminarIncidencia(id, folio) {
       if (!confirm('¿Eliminar la incidencia del folio ' + folio + '? Esta acción no se puede deshacer.')) return;
       try {
@@ -525,7 +566,7 @@
         return `
           <div class="incidencia-item">
             <div class="incidencia-icon">🚗</div>
-            <div class="incidencia-main">
+            <div class="incidencia-main incidencia-main-clickable" data-folio="${inc.FOLIO}" title="Ver información del vehículo">
               <div class="incidencia-folio">${inc.FOLIO}${inc.DEPARTAMENTO ? ' · ' + inc.DEPARTAMENTO : ''}</div>
               <div class="incidencia-meta">${inc.INSPECCION_INGRESO || 'Sin motivo registrado'}</div>
             </div>
@@ -540,6 +581,9 @@
         `;
       }).join('');
 
+      lista.querySelectorAll('.incidencia-main-clickable').forEach((el) => {
+        el.addEventListener('click', () => abrirModalVehiculo(el.dataset.folio));
+      });
       lista.querySelectorAll('.btn-cerrar-incidencia').forEach((btn) => {
         btn.addEventListener('click', () => abrirModalCierre(btn.dataset.id, btn.dataset.folio));
       });
@@ -602,6 +646,9 @@
 
     document.getElementById('btn-cancelar-editar').addEventListener('click', cerrarModalEditar);
     modalEditar.addEventListener('click', (ev) => { if (ev.target === modalEditar) cerrarModalEditar(); });
+
+    document.getElementById('btn-cerrar-vehiculo').addEventListener('click', cerrarModalVehiculo);
+    modalVehiculo.addEventListener('click', (ev) => { if (ev.target === modalVehiculo) cerrarModalVehiculo(); });
 
     document.getElementById('form-editar-incidencia').addEventListener('submit', async (ev) => {
       ev.preventDefault();

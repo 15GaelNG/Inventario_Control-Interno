@@ -44,6 +44,24 @@ const VehiculosService = (function () {
       .sort((a, b) => String(a.FOLIO).localeCompare(String(b.FOLIO)));
   }
 
+  /** Regresa el registro completo de un vehículo (todas sus columnas) por FOLIO, o null. */
+  function buscarPorFolio(token, folio) {
+    Auth.validarSesion(token);
+    if (!folio) return null;
+    const vehiculo = SheetUtils.getAll(ssId(), SHEET_VEHICULOS)
+      .find((v) => String(v['FOLIO']) === String(folio));
+    if (!vehiculo) return null;
+
+    // Mismo motivo que en IncidenciasService: convertir fechas a texto antes
+    // de regresar un objeto — google.script.run puede fallar con Date crudo.
+    const limpio = {};
+    Object.keys(vehiculo).forEach((clave) => {
+      const valor = vehiculo[clave];
+      limpio[clave] = valor instanceof Date ? valor.toISOString() : valor;
+    });
+    return limpio;
+  }
+
   function crear(token, vehiculo) {
     Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
     return SheetUtils.insert(ssId(), SHEET_VEHICULOS, vehiculo);
@@ -57,5 +75,5 @@ const VehiculosService = (function () {
   // TODO: reasignarResponsable, registrarVerificacion, registrarServicio,
   //       guardarInspeccion (usa PdfService.generarReporteDanios)
 
-  return { listar, listarBasico, crear, actualizar };
+  return { listar, listarBasico, buscarPorFolio, crear, actualizar };
 })();

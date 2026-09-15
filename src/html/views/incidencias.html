@@ -126,4 +126,23 @@
       </form>
     </div>
   </div>
+
+  <!-- Modal: info completa del vehículo (al dar clic en una incidencia) -->
+  <div class="modal-backdrop" id="modal-vehiculo" hidden>
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <div>
+          <h3 style="margin:0">🚗 Información del vehículo</h3>
+          <p class="modal-subtitle" id="vehiculo-folio-label"></p>
+        </div>
+        <button type="button" class="modal-close" id="btn-cerrar-vehiculo">✕</button>
+      </div>
+      <div class="modal-form-scroll">
+        <div id="vehiculo-info-grid" class="info-grid"></div>
+        <p class="empty-state" id="vehiculo-info-vacio" hidden>
+          No se encontró este folio en el catálogo de Vehículos.
+        </p>
+      </div>
+    </div>
+  </div>
 </template>

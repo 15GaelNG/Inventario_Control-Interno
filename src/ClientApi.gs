@@ -39,6 +39,9 @@ function apiHistorialMovimientos(token, idArticulo) {
 function apiListarVehiculosBasico(token) {
   return VehiculosService.listarBasico(token);
 }
+function apiBuscarVehiculoPorFolio(token, folio) {
+  return VehiculosService.buscarPorFolio(token, folio);
+}
 
 // --- Incidencias ---
 function apiListarIncidencias(token) {
