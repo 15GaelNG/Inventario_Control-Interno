@@ -186,6 +186,8 @@
    *     alEditar: async (fila, campo, valorNuevo) => filaActualizada,
    *     // Eliminar varias filas. Si se omite, no aparece la opción.
    *     alEliminar: async (filas) => {},
+   *     // Si hay selección pero NO alEliminar (p. ej. por rol), texto que explica por qué
+   *     motivoSinEliminar: 'Solo administradores pueden eliminar',
    *   });
    *
    *   tabla.setDatos(nuevosDatos);   // quita el estado de carga; conserva filtros, orden, página y selección
@@ -537,7 +539,9 @@
 
         const nSel = st.seleccion.size;
         $('.dt-seleccion-info').hidden = nSel === 0;
-        $('.dt-seleccion-info').textContent = `${nSel} ${plural(nSel, 'seleccionado')}`;
+        // Sin permiso para eliminar: decir por qué en vez de esconder la acción sin explicación
+        $('.dt-seleccion-info').textContent = `${nSel} ${plural(nSel, 'seleccionado')}` +
+          (!cfg.alEliminar && cfg.motivoSinEliminar ? ` · ${cfg.motivoSinEliminar}` : '');
         $('.dt-btn-eliminar').hidden = nSel === 0 || !cfg.alEliminar;
 
         ajustarAlto();

@@ -663,7 +663,10 @@
   async function initVerificaciones() {
     const MAX_BYTES = 10 * 1024 * 1024;
     const DIA_MS = 24 * 60 * 60 * 1000;
-    const esAdmin = state.sesion && state.sesion.rol === 'ADMIN';
+    // Permisos por rol (el servidor los vuelve a validar; aquí solo se muestra lo que aplica)
+    const rol = state.sesion && state.sesion.rol;
+    const esAdmin = rol === 'ADMIN';
+    const puedeEditar = rol === 'ADMIN' || rol === 'OPERADOR';
     let verificaciones = [];
 
     // ----- Cálculos derivados (estado de vigencia por vehículo) -----
@@ -741,14 +744,16 @@
             : '—'),
         },
       ],
-      alEditar: async (fila, campo, valor) => {
+      // Casillas de selección solo si hay algo que hacer con ellas (hoy: eliminar)
+      seleccionable: esAdmin,
+      alEditar: puedeEditar ? async (fila, campo, valor) => {
         const actualizada = await callServer('apiActualizarCampoVerificacion', state.token, fila.ID, campo, valor);
         // Recalcular estados de todos (cambiar una fecha o folio puede mover cuál es la "última")
         verificaciones = conDerivados(verificaciones.map((v) => (v.ID === fila.ID ? actualizada : v)));
         tabla.setDatos(verificaciones);
         pintarStats();
         pintarHistorial();
-      },
+      } : null,
       alEliminar: esAdmin ? async (filas) => {
         await callServer('apiEliminarVerificaciones', state.token, filas.map((f) => f.ID));
         const ids = new Set(filas.map((f) => f.ID));
@@ -844,6 +849,10 @@
       pintarStats();
       pintarHistorial();
     }
+
+    // Solo lectura: sin pestaña de captura (se quita el botón; Tabs deja oculto su panel,
+    // y el servidor rechaza el registro de todos modos)
+    if (!puedeEditar) document.querySelector('#ver-tabs .tab-btn[data-tab="nuevo"]').remove();
 
     const tabs = Tabs.iniciar(document.getElementById('ver-tabs'), {
       inicial: 'registros',

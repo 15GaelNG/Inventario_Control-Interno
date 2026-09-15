@@ -17,9 +17,20 @@ const Auth = (function () {
     return { salt: salt, hash: hashPassword_(password, salt) };
   }
 
-  /** El spreadsheet original solo distingue ADMIN / USER; todo lo que no sea ADMIN opera como OPERADOR */
+  /**
+   * Roles reales de la hoja USUARIOS (AppSheet): ADMIN, SUPER, USER, VIEWER.
+   * Antes todo lo que no era ADMIN quedaba como OPERADOR, así que un VIEWER podía editar
+   * y un SUPER no podía eliminar. Un rol desconocido queda en LECTURA (mínimo privilegio).
+   */
   function mapearRol_(rolOriginal) {
-    return String(rolOriginal || '').toUpperCase() === 'ADMIN' ? Config.ROLES.ADMIN : Config.ROLES.OPERADOR;
+    // Dentro de la función (no al cargar el archivo): Config.gs podría cargarse después que Auth.gs
+    const roles = {
+      ADMIN: Config.ROLES.ADMIN,
+      SUPER: Config.ROLES.ADMIN,
+      USER: Config.ROLES.OPERADOR,
+      VIEWER: Config.ROLES.LECTURA,
+    };
+    return roles[String(rolOriginal || '').trim().toUpperCase()] || Config.ROLES.LECTURA;
   }
 
   function buscarUsuarioPorCorreo_(correo) {
