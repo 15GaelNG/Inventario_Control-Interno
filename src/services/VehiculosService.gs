@@ -44,20 +44,40 @@ const VehiculosService = (function () {
       .sort((a, b) => String(a.FOLIO).localeCompare(String(b.FOLIO)));
   }
 
-  /** Regresa el registro completo de un vehículo (todas sus columnas) por FOLIO, o null. */
+  /**
+   * Regresa el registro completo de un vehículo (todas sus columnas) por
+   * FOLIO, o null. Optimizado: en vez de leer las 648 filas x 41 columnas
+   * completas (SheetUtils.getAll) solo para buscar una, primero lee nada
+   * más la columna FOLIO para ubicar el renglón, y luego lee solo esa fila.
+   */
   function buscarPorFolio(token, folio) {
     Auth.validarSesion(token);
     if (!folio) return null;
-    const vehiculo = SheetUtils.getAll(ssId(), SHEET_VEHICULOS)
-      .find((v) => String(v['FOLIO']) === String(folio));
-    if (!vehiculo) return null;
 
-    // Mismo motivo que en IncidenciasService: convertir fechas a texto antes
-    // de regresar un objeto — google.script.run puede fallar con Date crudo.
+    const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return null;
+
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const folioCol = headers.indexOf('FOLIO');
+    if (folioCol === -1) return null;
+
+    const folios = sheet.getRange(2, folioCol + 1, lastRow - 1, 1).getValues();
+    let rowIndex = -1;
+    for (let i = 0; i < folios.length; i++) {
+      if (String(folios[i][0]) === String(folio)) {
+        rowIndex = i + 2;
+        break;
+      }
+    }
+    if (rowIndex === -1) return null;
+
+    const fila = sheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0];
     const limpio = {};
-    Object.keys(vehiculo).forEach((clave) => {
-      const valor = vehiculo[clave];
-      limpio[clave] = valor instanceof Date ? valor.toISOString() : valor;
+    headers.forEach((h, i) => {
+      const valor = fila[i];
+      // google.script.run puede fallar con Date crudo — se manda como texto ISO.
+      limpio[h] = valor instanceof Date ? valor.toISOString() : valor;
     });
     return limpio;
   }
