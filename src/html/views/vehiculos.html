@@ -49,7 +49,14 @@
 
   <div class="card">
     <h3 style="margin-top:0">Catálogo</h3>
-    <div id="lista-vehiculos" class="vehiculo-list"></div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Folio</th><th>Departamento</th><th>Marca / Línea</th><th>Año</th><th>Placa</th><th>Estatus</th><th></th></tr>
+        </thead>
+        <tbody id="lista-vehiculos"></tbody>
+      </table>
+    </div>
     <p class="empty-state" id="vehiculos-vacio" hidden>Todavía no hay vehículos registrados.</p>
   </div>
 

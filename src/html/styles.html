@@ -189,7 +189,13 @@
 
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--color-border); }
-  th { color: var(--color-text-muted); font-weight: 600; }
+  th { color: var(--color-text-muted); font-weight: 600; white-space: nowrap; }
+  tbody tr:hover { background: var(--color-bg); }
+  .table-scroll { overflow-x: auto; }
+  .tabla-clickable { cursor: pointer; font-weight: 700; }
+  .tabla-clickable:hover { color: var(--color-accent-hover); }
+  .tabla-actions { display: flex; gap: 6px; justify-content: flex-end; }
+  .tabla-actions button { padding: 6px 9px; font-size: 12px; white-space: nowrap; }
 
   input, select, button {
     font: inherit; padding: 9px 12px; border-radius: 8px;

@@ -55,7 +55,14 @@
 
   <div class="card">
     <h3 style="margin-top:0">Historial</h3>
-    <div id="lista-incidencias" class="incidencia-list"></div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Folio</th><th>Departamento</th><th>Motivo</th><th>Fecha</th><th>Estado</th><th></th></tr>
+        </thead>
+        <tbody id="lista-incidencias"></tbody>
+      </table>
+    </div>
     <p class="empty-state" id="incidencias-vacio" hidden>Todavía no hay incidencias registradas.</p>
   </div>
 

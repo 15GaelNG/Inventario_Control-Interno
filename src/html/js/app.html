@@ -638,24 +638,24 @@
       lista.innerHTML = incidencias.map((inc) => {
         const abierta = inc.ESTADO === 'ABIERTA';
         return `
-          <div class="incidencia-item">
-            <div class="incidencia-icon">🚗</div>
-            <div class="incidencia-main incidencia-main-clickable" data-folio="${inc.FOLIO}" data-id="${inc.ID}" title="Ver detalle completo">
-              <div class="incidencia-folio">${inc.FOLIO}${inc.DEPARTAMENTO ? ' · ' + inc.DEPARTAMENTO : ''}</div>
-              <div class="incidencia-meta">${inc.INSPECCION_INGRESO || 'Sin motivo registrado'}</div>
-            </div>
-            <div class="incidencia-fecha">${formatearFecha(inc.FECHA_REGISTRO)}</div>
-            <span class="badge-estado ${abierta ? 'abierta' : 'cerrada'}">${abierta ? '🔓 Abierta' : '✅ Cerrada'}</span>
-            <div class="incidencia-actions">
-              ${abierta ? `<button type="button" class="secondary btn-cerrar-incidencia" data-id="${inc.ID}" data-folio="${inc.FOLIO}">Cerrar</button>` : ''}
-              <button type="button" class="secondary btn-editar-incidencia" data-id="${inc.ID}" title="Editar">✏️</button>
-              <button type="button" class="danger btn-eliminar-incidencia" data-id="${inc.ID}" data-folio="${inc.FOLIO}" title="Eliminar">🗑️</button>
-            </div>
-          </div>
+          <tr>
+            <td class="tabla-clickable" data-folio="${inc.FOLIO}" data-id="${inc.ID}" title="Ver detalle completo">${inc.FOLIO}</td>
+            <td>${inc.DEPARTAMENTO || '—'}</td>
+            <td>${inc.INSPECCION_INGRESO || 'Sin motivo registrado'}</td>
+            <td>${formatearFecha(inc.FECHA_REGISTRO)}</td>
+            <td><span class="badge-estado ${abierta ? 'abierta' : 'cerrada'}">${abierta ? '🔓 Abierta' : '✅ Cerrada'}</span></td>
+            <td>
+              <div class="tabla-actions">
+                ${abierta ? `<button type="button" class="secondary btn-cerrar-incidencia" data-id="${inc.ID}" data-folio="${inc.FOLIO}">Cerrar</button>` : ''}
+                <button type="button" class="secondary btn-editar-incidencia" data-id="${inc.ID}" title="Editar">✏️</button>
+                <button type="button" class="danger btn-eliminar-incidencia" data-id="${inc.ID}" data-folio="${inc.FOLIO}" title="Eliminar">🗑️</button>
+              </div>
+            </td>
+          </tr>
         `;
       }).join('');
 
-      lista.querySelectorAll('.incidencia-main-clickable').forEach((el) => {
+      lista.querySelectorAll('.tabla-clickable').forEach((el) => {
         el.addEventListener('click', () => abrirModalVehiculo(el.dataset.folio, el.dataset.id));
       });
       lista.querySelectorAll('.btn-cerrar-incidencia').forEach((btn) => {
@@ -794,22 +794,23 @@
 
       vacio.hidden = vehiculos.length > 0;
       lista.innerHTML = vehiculos.map((v) => `
-        <div class="vehiculo-item">
-          <div class="vehiculo-icon">🚗</div>
-          <div class="vehiculo-main vehiculo-main-clickable" data-id="${v.ID_VEHICULO}" title="Ver detalle completo">
-            <div class="vehiculo-folio">${v.FOLIO}${v.DEPARTAMENTO ? ' · ' + v.DEPARTAMENTO : ''}</div>
-            <div class="vehiculo-meta">${[v.MARCA, v.LINEA_VEHICULO, v.MODELO].filter(Boolean).join(' ')}</div>
-          </div>
-          <div class="vehiculo-placa">${v.PLACA || '—'}</div>
-          ${badgeEstatus(v.ESTATUS)}
-          <div class="vehiculo-actions">
-            <button type="button" class="secondary btn-editar-vehiculo" data-id="${v.ID_VEHICULO}" title="Editar">✏️</button>
-            <button type="button" class="danger btn-eliminar-vehiculo" data-id="${v.ID_VEHICULO}" data-folio="${v.FOLIO}" title="Eliminar">🗑️</button>
-          </div>
-        </div>
+        <tr>
+          <td class="tabla-clickable" data-id="${v.ID_VEHICULO}" title="Ver detalle completo">${v.FOLIO}</td>
+          <td>${v.DEPARTAMENTO || '—'}</td>
+          <td>${[v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ') || '—'}</td>
+          <td>${v.MODELO || '—'}</td>
+          <td>${v.PLACA || '—'}</td>
+          <td>${badgeEstatus(v.ESTATUS)}</td>
+          <td>
+            <div class="tabla-actions">
+              <button type="button" class="secondary btn-editar-vehiculo" data-id="${v.ID_VEHICULO}" title="Editar">✏️</button>
+              <button type="button" class="danger btn-eliminar-vehiculo" data-id="${v.ID_VEHICULO}" data-folio="${v.FOLIO}" title="Eliminar">🗑️</button>
+            </div>
+          </td>
+        </tr>
       `).join('');
 
-      lista.querySelectorAll('.vehiculo-main-clickable').forEach((el) => {
+      lista.querySelectorAll('.tabla-clickable').forEach((el) => {
         el.addEventListener('click', () => abrirDetalleVehiculo(vehiculosPorId[el.dataset.id]));
       });
       lista.querySelectorAll('.btn-editar-vehiculo').forEach((btn) => {
