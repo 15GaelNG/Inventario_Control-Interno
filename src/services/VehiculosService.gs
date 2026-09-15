@@ -29,19 +29,44 @@ const VehiculosService = (function () {
    * que referencian un vehículo por folio (ej. Incidencias). Excluye
    * vehículos dados de baja. MODELO en esta hoja es el año del vehículo,
    * no el nombre del modelo (ese es LINEA VEHICULO).
+   *
+   * Optimizado: en vez de leer las 41 columnas completas (SheetUtils.getAll)
+   * solo para quedarse con 6, lee únicamente esas 6 columnas — de ~26,500
+   * celdas a ~3,900.
    */
   function listarBasico(token) {
     Auth.validarSesion(token);
-    return SheetUtils.getAll(ssId(), SHEET_VEHICULOS)
-      .filter((v) => v['FOLIO'] && String(v['ESTATUS'] || '').toUpperCase() !== 'BAJA VEHICULAR')
-      .map((v) => ({
-        FOLIO: v['FOLIO'],
-        DEPARTAMENTO: v['DEPARTAMENTO'] || '',
-        MARCA: v['MARCA'] || '',
-        LINEA_VEHICULO: v['LINEA VEHICULO'] || '',
-        MODELO: v['MODELO'] || '',
-      }))
-      .sort((a, b) => String(a.FOLIO).localeCompare(String(b.FOLIO)));
+    const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return [];
+
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const idx = (nombre) => headers.indexOf(nombre);
+    const leerColumna = (nombre) => {
+      const col = idx(nombre);
+      return col === -1 ? [] : sheet.getRange(2, col + 1, lastRow - 1, 1).getValues().map((f) => f[0]);
+    };
+
+    const folios = leerColumna('FOLIO');
+    const deptos = leerColumna('DEPARTAMENTO');
+    const marcas = leerColumna('MARCA');
+    const lineas = leerColumna('LINEA VEHICULO');
+    const modelos = leerColumna('MODELO');
+    const estatus = leerColumna('ESTATUS');
+
+    const resultado = [];
+    for (let i = 0; i < folios.length; i++) {
+      if (!folios[i]) continue;
+      if (String(estatus[i] || '').toUpperCase() === 'BAJA VEHICULAR') continue;
+      resultado.push({
+        FOLIO: folios[i],
+        DEPARTAMENTO: deptos[i] || '',
+        MARCA: marcas[i] || '',
+        LINEA_VEHICULO: lineas[i] || '',
+        MODELO: modelos[i] || '',
+      });
+    }
+    return resultado.sort((a, b) => String(a.FOLIO).localeCompare(String(b.FOLIO)));
   }
 
   /**

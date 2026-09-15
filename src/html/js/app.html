@@ -429,23 +429,28 @@
     fijarFechaRegistroHoy();
     document.getElementById('inc-fecha-inspeccion').value = hoyISO();
 
-    // Autollenado: el folio del vehículo trae Departamento/Modelo desde Vehículos
+    // Autollenado: el folio del vehículo trae Departamento/Modelo desde Vehículos.
+    // OJO: esto NO se espera aquí (sin await) para que salga en paralelo con la
+    // carga del historial (cargar(), al final de esta función) en vez de una
+    // petición tras otra — cada una puede tardar un rato y sumadas se sentía
+    // muy lento.
     const vehiculosPorFolio = {};
-    try {
-      const vehiculos = await callServer('apiListarVehiculosBasico', state.token);
-      const datalist = document.getElementById('lista-folios-vehiculo');
-      datalist.innerHTML = vehiculos.map((v) => {
-        vehiculosPorFolio[v.FOLIO] = v;
-        const etiqueta = [v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ');
-        return `<option value="${v.FOLIO}">${etiqueta}</option>`;
-      }).join('');
-    } catch (err) {
-      // Antes esto se ignoraba en silencio — ahora se ve para poder diagnosticar.
-      console.error('No se pudo cargar el catálogo de vehículos:', err);
-      const errorBox = document.getElementById('inc-error');
-      errorBox.textContent = 'No se pudo cargar el catálogo de vehículos para autocompletar: ' + err.message;
-      errorBox.hidden = false;
-    }
+    const promesaVehiculos = callServer('apiListarVehiculosBasico', state.token)
+      .then((vehiculos) => {
+        const datalist = document.getElementById('lista-folios-vehiculo');
+        datalist.innerHTML = vehiculos.map((v) => {
+          vehiculosPorFolio[v.FOLIO] = v;
+          const etiqueta = [v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ');
+          return `<option value="${v.FOLIO}">${etiqueta}</option>`;
+        }).join('');
+      })
+      .catch((err) => {
+        // Antes esto se ignoraba en silencio — ahora se ve para poder diagnosticar.
+        console.error('No se pudo cargar el catálogo de vehículos:', err);
+        const errorBox = document.getElementById('inc-error');
+        errorBox.textContent = 'No se pudo cargar el catálogo de vehículos para autocompletar: ' + err.message;
+        errorBox.hidden = false;
+      });
 
     document.getElementById('inc-folio').addEventListener('input', (ev) => {
       const vehiculo = vehiculosPorFolio[ev.target.value];
@@ -744,7 +749,7 @@
       }
     });
 
-    await cargar();
+    await Promise.all([promesaVehiculos, cargar()]);
   }
 
   document.getElementById('btn-logout').addEventListener('click', cerrarSesion);
