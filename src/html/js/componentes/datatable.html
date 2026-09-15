@@ -30,34 +30,64 @@
   }
 
   /* Ocupa el alto disponible de la ventana (se ajusta en JS según dónde quedó la tabla) */
-  .dt-scroll { overflow: auto; max-height: 64vh; min-height: 240px; border: 1px solid var(--color-border); border-radius: 10px; }
+  .dt-scroll { position: relative; overflow: auto; max-height: 64vh; min-height: 240px; border: 1px solid var(--color-border); border-radius: 10px; }
   .dt table { font-size: 12.5px; }
   .dt thead th {
-    position: sticky; top: 0; z-index: 2; background: var(--color-surface);
+    position: sticky; top: 0; z-index: 3; background: var(--color-surface);
     white-space: nowrap; user-select: none; padding: 0; border-bottom: 1px solid var(--color-border);
   }
-  .dt-th { display: flex; align-items: center; gap: 2px; padding: 8px 6px 8px 10px; }
+  .dt-th { position: relative; display: flex; align-items: center; gap: 2px; padding: 8px 12px 8px 10px; }
   .dt-th-titulo { flex: 1; cursor: pointer; overflow: hidden; text-overflow: ellipsis; }
   .dt-th-titulo:hover { color: var(--color-text); }
   .dt-orden { font-size: 10px; color: var(--color-accent); margin-left: 3px; }
+  .dt-orden sub { font-size: 9px; }
   .dt-btn-filtro {
     background: transparent; border: none; color: var(--color-text-muted); padding: 2px 6px;
     border-radius: 6px; font-size: 11px; line-height: 1;
   }
   .dt-btn-filtro:hover { background: var(--color-bg); color: var(--color-text); }
   .dt-btn-filtro.activo { background: var(--color-accent); color: #fff; }
+  .dt thead th[draggable="true"] { cursor: grab; }
+  .dt thead th.dt-arrastrando { opacity: .45; }
+  .dt thead th.dt-drop-antes { box-shadow: inset 3px 0 0 var(--color-accent); }
+  .dt thead th.dt-drop-despues { box-shadow: inset -3px 0 0 var(--color-accent); }
+
+  /* Ajuste de ancho: borde derecho del encabezado */
+  .dt-resize { position: absolute; top: 0; right: 0; bottom: 0; width: 7px; cursor: col-resize; z-index: 2; }
+  .dt-resize:hover, .dt-resize.activo { background: var(--color-accent); opacity: .6; }
+  body.dt-redimensionando, body.dt-redimensionando * { cursor: col-resize !important; user-select: none !important; }
 
   .dt tbody td { white-space: nowrap; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
   .dt tbody tr:hover td { background: var(--color-bg); }
   .dt tbody tr.dt-fila-seleccionada td { background: var(--color-primary-soft); }
-  .dt .dt-col-check { width: 36px; text-align: center; padding: 0 8px; }
+  .dt .dt-col-check { width: 36px; min-width: 36px; text-align: center; padding: 0 8px; }
   .dt .dt-col-check input { width: auto; cursor: pointer; }
-  .dt .dt-col-ver { width: 34px; text-align: center; padding: 0 4px; }
+  .dt .dt-col-ver { width: 34px; min-width: 34px; text-align: center; padding: 0 4px; }
   .dt .dt-btn-ver {
     background: transparent; border: none; padding: 3px 6px; border-radius: 6px; font-size: 13px; color: var(--color-text-muted);
   }
   .dt .dt-btn-ver:hover { background: var(--color-primary-soft); color: var(--color-text); }
   .dt .dt-num { text-align: right; font-variant-numeric: tabular-nums; }
+  .dt mark { background: #ffe58a; color: inherit; padding: 0 1px; border-radius: 2px; }
+  :root[data-theme="dark"] .dt mark { background: #7a6420; }
+
+  /* Columnas fijas a la izquierda (selección, detalle y las que el usuario fije) */
+  .dt .dt-fija { position: sticky; z-index: 1; }
+  .dt tbody td.dt-fija, .dt tfoot td.dt-fija { background: var(--color-surface); }
+  .dt thead th.dt-fija { z-index: 4; }
+  .dt .dt-fija-ultima { box-shadow: 3px 0 4px -2px rgba(6,38,58,.15); }
+
+  /* Densidad */
+  .dt.dt-densidad-compacta tbody td, .dt.dt-densidad-compacta tfoot td { padding-top: 3px; padding-bottom: 3px; }
+  .dt.dt-densidad-comoda tbody td, .dt.dt-densidad-comoda tfoot td { padding-top: 13px; padding-bottom: 13px; }
+
+  /* Fila de totales */
+  .dt tfoot td {
+    position: sticky; bottom: 0; z-index: 2; background: var(--color-surface); font-weight: 600;
+    border-top: 2px solid var(--color-border); border-bottom: none; white-space: nowrap;
+  }
+  .dt tfoot td.dt-fija { z-index: 3; }
+  .dt-agregado-etiqueta { font-weight: 400; color: var(--color-text-muted); font-size: 11px; margin-right: 4px; }
 
   /* Celda editable: botón ✏️ real (clic, Tab + Enter); visible al pasar el mouse o con foco,
      y siempre visible en pantallas táctiles */
@@ -81,21 +111,28 @@
   .dt-vacio { text-align: center; color: var(--color-text-muted); padding: 28px 0 !important; white-space: normal !important; }
   .dt-vacio.dt-error { color: var(--color-danger); }
 
-  /* Carga (skeleton) */
+  /* Carga: skeleton (sin datos) y barra superior (refrescando con datos a la vista) */
   .dt-skel {
     display: block; height: 10px; border-radius: 6px; width: 70%;
     background: linear-gradient(90deg, var(--color-border) 25%, var(--color-bg) 50%, var(--color-border) 75%);
     background-size: 200% 100%; animation: dt-brillo 1.2s ease-in-out infinite;
   }
   @keyframes dt-brillo { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+  .dt-barra-carga { position: sticky; top: 0; left: 0; height: 3px; z-index: 5; overflow: hidden; margin-bottom: -3px; }
+  .dt-barra-carga::before {
+    content: ''; position: absolute; top: 0; bottom: 0; width: 35%; background: var(--color-accent);
+    animation: dt-barra 1.1s ease-in-out infinite;
+  }
+  @keyframes dt-barra { from { left: -35%; } to { left: 100%; } }
 
   .dt-pie { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-top: 10px; font-size: 12.5px; color: var(--color-text-muted); }
   .dt-paginacion { display: flex; gap: 6px; align-items: center; }
   .dt-paginacion button { padding: 6px 10px; }
   .dt-paginacion select { width: auto; padding: 6px 8px; }
+  .dt-atajos { font-size: 11.5px; }
 
   .dt-popover {
-    position: fixed; z-index: 600; width: 270px; background: var(--color-surface);
+    position: fixed; z-index: 600; width: 280px; max-height: calc(100vh - 16px); overflow-y: auto; background: var(--color-surface);
     border: 1px solid var(--color-border); border-radius: 12px; box-shadow: var(--shadow-lg); padding: 12px;
     font-size: 12.5px;
   }
@@ -103,9 +140,13 @@
   .dt-popover .dt-pop-fila { display: flex; gap: 6px; margin-bottom: 8px; }
   .dt-popover input, .dt-popover select { padding: 7px 9px; font-size: 12.5px; }
   .dt-popover .dt-pop-acciones { display: flex; gap: 6px; justify-content: flex-end; margin-top: 10px; }
-  .dt-popover .dt-pop-acciones button, .dt-popover .dt-pop-orden button { padding: 6px 10px; font-size: 12px; }
+  .dt-popover .dt-pop-acciones button, .dt-popover .dt-pop-orden button, .dt-popover .dt-pop-col button { padding: 6px 10px; font-size: 12px; }
   .dt-popover .dt-pop-orden { display: flex; gap: 6px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--color-border); }
   .dt-popover .dt-pop-orden button { flex: 1; }
+  .dt-popover .dt-pop-col { display: flex; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--color-border); }
+  .dt-popover .dt-pop-col button { flex: 1; }
+  .dt-pop-presets { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+  .dt-pop-presets button { padding: 3px 8px; font-size: 11.5px; border-radius: 999px; }
   .dt-lista-valores { max-height: 200px; overflow-y: auto; border: 1px solid var(--color-border); border-radius: 8px; padding: 4px; }
   .dt-lista-valores label {
     display: flex; align-items: center; gap: 8px; margin: 0; padding: 4px 6px; border-radius: 6px;
@@ -114,8 +155,19 @@
   .dt-lista-valores label:hover { background: var(--color-bg); }
   .dt-lista-valores input { width: auto; }
   .dt-lista-valores .dt-conteo { margin-left: auto; color: var(--color-text-muted); font-size: 11px; }
-  .dt-columnas label { display: flex; align-items: center; gap: 8px; margin: 0; padding: 4px 2px; color: var(--color-text); font-weight: 400; cursor: pointer; }
-  .dt-columnas input { width: auto; }
+  .dt-lista-valores .dt-solo { visibility: hidden; background: transparent; border: none; color: var(--color-primary); padding: 0 4px; font-size: 11px; text-decoration: underline; }
+  .dt-lista-valores label:hover .dt-solo, .dt-lista-valores .dt-solo:focus-visible { visibility: visible; }
+
+  .dt-columnas { display: flex; flex-direction: column; gap: 2px; }
+  .dt-columna-item { display: flex; align-items: center; gap: 4px; padding: 2px; border-radius: 6px; }
+  .dt-columna-item:hover { background: var(--color-bg); }
+  .dt-columna-item label { flex: 1; display: flex; align-items: center; gap: 8px; margin: 0; color: var(--color-text); font-weight: 400; cursor: pointer; font-size: 12.5px; }
+  .dt-columna-item input { width: auto; }
+  .dt-columna-item button { background: transparent; border: none; color: var(--color-text-muted); padding: 2px 5px; font-size: 12px; border-radius: 6px; }
+  .dt-columna-item button:hover:not(:disabled) { background: var(--color-surface); color: var(--color-text); }
+  .dt-columna-item button:disabled { opacity: .3; cursor: default; }
+  .dt-columna-item button.activo { color: var(--color-accent); }
+  .dt-vista-opciones { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--color-border); display: flex; flex-direction: column; gap: 8px; }
 
   /* Panel lateral de detalle */
   .dt-panel-fondo { position: fixed; inset: 0; z-index: 700; background: rgba(6,20,30,.35); }
@@ -144,14 +196,15 @@
 
 <script>
   /**
-   * DataTable — tabla de datos reutilizable (estilo AppSheet), sin dependencias.
-   * Requiere los componentes Notificar y Confirmar (se incluyen antes en Index.html).
+   * DataTable — tabla de datos reutilizable (estilo AppSheet / AG Grid), sin dependencias.
+   * Requiere Notificar, Confirmar y ExportarExcel (se incluyen antes en Index.html).
    *
    *   const tabla = DataTable.crear(elementoContenedor, {
    *     idCampo: 'ID',                         // clave única de cada fila
+   *     idTabla: 'verificaciones',             // para recordar la vista de cada usuario (columnas, anchos, orden…)
    *     columnas: [
-   *       { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', editable: true },
-   *       { campo: 'KM', titulo: 'Kilometraje', tipo: 'numero', editable: true },   // alineado a la derecha
+   *       { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', editable: 'panel', fijada: true },
+   *       { campo: 'KM', titulo: 'Kilometraje', tipo: 'numero', editable: true, agregado: 'suma' },
    *       { campo: 'FECHA', titulo: 'Fecha', tipo: 'fecha', editable: true },       // valor ISO o Date
    *       { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', editable: true,
    *         opciones: ['ACTIVO', 'BAJA'] },     // si se omite, usa los valores existentes
@@ -159,49 +212,43 @@
    *         render: (valor, fila) => '<button …>' },  // HTML propio (el módulo escapa lo que use)
    *       { campo: 'DIAS', titulo: 'Días', tipo: 'numero',
    *         valor: (fila) => calcularDias(fila) },    // columna calculada
-   *       // editable: true    → se edita en la celda (✏️, doble clic o Tab+Enter) y en el panel
+   *       // editable: true    → se edita en la celda (✏️, doble clic, Tab+Enter o F2) y en el panel
    *       // editable: 'panel' → SOLO en el panel de detalle (cambios con consecuencias, p. ej. un folio)
-   *       // Otras opciones por columna: visible:false, exportable:false, valorExportar:(fila)=>…,
-   *       //   enDetalle:false (no mostrar en el panel de detalle)
+   *       // fijada: true      → fija a la izquierda por defecto (el usuario puede cambiarlo)
+   *       // ancho: 160        → ancho inicial en px (el usuario puede arrastrarlo)
+   *       // agregado: 'suma' | 'promedio' | 'min' | 'max' | 'conteo'  → fila de totales (sobre lo filtrado)
+   *       // Otras: visible:false, exportable:false, valorExportar:(fila)=>…, enDetalle:false
    *     ],
    *     tamanoPagina: 25,
+   *     densidad: 'normal',                    // 'compacta' | 'normal' | 'comoda'
    *     seleccionable: true,
-   *     ordenInicial: { campo: 'FECHA', dir: 'desc' },
+   *     ordenInicial: { campo: 'FECHA', dir: 'desc' },   // o un arreglo para orden múltiple
    *     textoVacio: 'Sin registros',
-   *     ayuda: 'Doble clic para editar…',       // tooltip "ⓘ Ayuda" (opcional)
+   *     ayuda: 'Texto de ayuda…',               // tooltip "ⓘ Ayuda" (opcional)
    *     exportar: { nombreArchivo: 'Verificaciones' },   // botón verde; false lo oculta
    *     alCambiarFiltros: (filtros) => {},      // opcional, p. ej. para marcar chips de KPI
-   *
-   *     // Cómo nombrar una fila en confirmaciones y en el panel (default: su id)
-   *     etiquetaFila: (fila) => fila.FOLIO + ' · ' + fila.PLACA,
-   *     // Panel lateral de detalle (botón 🔍 por fila). false lo desactiva.
-   *     detalle: {
-   *       titulo: (fila) => 'Verificación ' + fila.FOLIO,
-   *       contenidoExtra: (fila, contenedor) => {},   // p. ej. mostrar una imagen
-   *     },
-   *     // Eliminar pide escribir "ELIMINAR" a partir de esta cantidad de filas
-   *     umbralPalabraClave: 10,
-   *
-   *     // Guardar un campo (celda o panel). Lanza error para rechazar. Si regresa objeto, reemplaza la fila.
-   *     alEditar: async (fila, campo, valorNuevo) => filaActualizada,
-   *     // Eliminar varias filas. Si se omite, no aparece la opción.
-   *     alEliminar: async (filas) => {},
-   *     // Si hay selección pero NO alEliminar (p. ej. por rol), texto que explica por qué
+   *     etiquetaFila: (fila) => fila.FOLIO,     // cómo nombrar una fila en confirmaciones y avisos
+   *     detalle: { titulo: (fila) => '…', contenidoExtra: (fila, contenedor) => {} },   // false lo desactiva
+   *     umbralPalabraClave: 10,                 // eliminar pide escribir "ELIMINAR" desde N filas
+   *     alEditar: async (fila, campo, valorNuevo) => filaActualizada,   // lanza error para rechazar
+   *     alEliminar: async (filas) => {},        // si se omite, no aparece la opción
    *     motivoSinEliminar: 'Solo administradores pueden eliminar',
    *   });
    *
-   *   tabla.setDatos(nuevosDatos);   // quita el estado de carga; conserva filtros, orden, página y selección
-   *   tabla.setCargando(true);       // filas grises mientras llega la información (estado inicial)
-   *   tabla.setError('mensaje');     // muestra el error dentro de la tabla
-   *   tabla.getSeleccion();
-   *   tabla.setFiltro('ESTADO', { valores: ['Vencida'] });   // o { op: '>', v1: 30 }; null lo quita
-   *   tabla.limpiarFiltros();
+   *   tabla.setDatos(datos)      tabla.setCargando(true)    tabla.setError('msg')
+   *   tabla.getSeleccion()       tabla.limpiarSeleccion()   tabla.copiarSeleccion()
+   *   tabla.setFiltro(campo, { valores: [...] } | { op, v1, v2 } | null)   tabla.limpiarFiltros()
+   *   tabla.moverColumna(campo, antesDeCampo)   tabla.fijarColumna(campo, true)
+   *   tabla.setDensidad('compacta')   tabla.restablecerVista()   tabla.abrirDetalle(id)
+   *   tabla.ajustarAlto()        tabla.destruir()
+   *
+   * Atajos: Shift+clic en casillas = rango · Shift+clic en encabezado = orden múltiple ·
+   *   Ctrl+C = copiar seleccionados (pegar en Excel) · Ctrl+Z = deshacer última edición ·
+   *   Esc = cerrar menús / quitar selección · F2 = editar celda con foco.
    *
    * Valores de edición que recibe alEditar: texto → string, numero → Number|null,
    * fecha → "yyyy-MM-dd" (o "" si se borra), lista → string.
-   *
-   * Edición: guardar es explícito (✓ o Enter); salir de la celda o Esc CANCELA. Tras guardar,
-   * el aviso ofrece "Deshacer" (vuelve a llamar alEditar con el valor anterior).
+   * Guardar es explícito (✓ o Enter); salir de la celda o Esc CANCELA. Tras guardar hay "Deshacer".
    * En pantallas táctiles, tocar una fila abre el panel de detalle.
    */
   const DataTable = (function () {
@@ -221,6 +268,9 @@
     };
     const SIN_VALOR = ['vacio', 'no_vacio'];
     const FILAS_SKELETON = 8;
+    const ANCHO_MINIMO = 60;
+    const MAX_HISTORIAL = 20;
+    const ETIQUETA_AGREGADO = { suma: 'Σ', promedio: 'x̄', min: 'mín', max: 'máx', conteo: 'n' };
 
     // ---------- utilidades ----------
     function esc(v) {
@@ -230,14 +280,22 @@
     }
     function vacio(v) { return v === null || v === undefined || String(v).trim() === ''; }
 
+    /** Minúsculas y sin acentos, carácter por carácter (misma longitud, para poder resaltar) */
+    function normalizarCaracter(c) { return c.normalize('NFD').charAt(0).toLowerCase(); }
+    function normalizar(texto) { return Array.from(String(texto == null ? '' : texto)).map(normalizarCaracter).join(''); }
+
     /** Fecha → "yyyy-MM-dd" en hora local (para comparar por día) */
     function claveFecha(v) {
       if (vacio(v)) return '';
       if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
       const f = v instanceof Date ? v : new Date(v);
       if (isNaN(f)) return '';
+      return claveDeDate(f);
+    }
+    function claveDeDate(f) {
       return [f.getFullYear(), String(f.getMonth() + 1).padStart(2, '0'), String(f.getDate()).padStart(2, '0')].join('-');
     }
+    function sumarDias(dias) { const f = new Date(); f.setDate(f.getDate() + dias); return claveDeDate(f); }
     /** "yyyy-MM-dd" → "dd/mm/aaaa" (siempre con ceros, igual que el Excel exportado y AppSheet) */
     function fechaLegible(clave) {
       if (!clave) return '';
@@ -250,11 +308,14 @@
       return isNaN(n) ? null : n;
     }
     function plural(n, singular, pluralTexto) { return n === 1 ? singular : (pluralTexto || singular + 's'); }
+    function escribiendo(el) {
+      return !!(el && el.closest && el.closest('input:not([type="checkbox"]), textarea, select, [contenteditable="true"]'));
+    }
 
     function crear(contenedor, config) {
       const cfg = Object.assign({
         tamanoPagina: 25, seleccionable: true, textoVacio: 'Sin registros', exportar: true,
-        detalle: {}, umbralPalabraClave: 10,
+        detalle: {}, umbralPalabraClave: 10, densidad: 'normal',
       }, config);
       if (cfg.exportar === true) cfg.exportar = { nombreArchivo: 'Datos' };
       const columnas = cfg.columnas.map((c) => Object.assign(
@@ -262,28 +323,77 @@
       ));
       const idDe = (fila) => String(fila[cfg.idCampo]);
       const etiquetaDe = (fila) => (cfg.etiquetaFila ? cfg.etiquetaFila(fila) : idDe(fila));
+      const colPorCampo = (campo) => columnas.find((c) => c.campo === campo);
+      const aArreglo = (o) => (!o ? [] : Array.isArray(o) ? o.map((x) => Object.assign({}, x)) : [Object.assign({}, o)]);
+
+      /** Vista por defecto (lo que "Restablecer vista" recupera) */
+      const vistaDefault = () => ({
+        ocultas: columnas.filter((c) => !c.visible).map((c) => c.campo),
+        ordenColumnas: columnas.map((c) => c.campo),
+        anchos: Object.fromEntries(columnas.filter((c) => c.ancho).map((c) => [c.campo, c.ancho])),
+        fijadas: columnas.filter((c) => c.fijada).map((c) => c.campo),
+        orden: aArreglo(cfg.ordenInicial),
+        tamanoPagina: cfg.tamanoPagina,
+        densidad: cfg.densidad,
+      });
 
       const st = {
         datos: cfg.datos || [],
         cargando: !cfg.datos,        // sin datos iniciales = todavía cargando
+        refrescando: false,
         error: null,
         busqueda: '',
         filtros: {},                 // campo -> { op, v1, v2 } | { valores: [..] }
-        orden: cfg.ordenInicial ? Object.assign({}, cfg.ordenInicial) : null,
         pagina: 1,
-        tamanoPagina: cfg.tamanoPagina,
         seleccion: new Set(),
-        ocultas: new Set(columnas.filter((c) => !c.visible).map((c) => c.campo)),
-        editando: null,              // { id, campo } edición en celda
-        detalleId: null,             // fila abierta en el panel
+        ancla: null,                 // última casilla marcada (para Shift+clic)
+        editando: null,
+        detalleId: null,
+        historial: [],               // ediciones para Ctrl+Z
       };
+      aplicarVista(Object.assign(vistaDefault(), leerVistaGuardada()));
+
+      function aplicarVista(v) {
+        const existe = (campo) => !!colPorCampo(campo);
+        st.ocultas = new Set((v.ocultas || []).filter(existe));
+        // Columnas nuevas (agregadas después de guardar la vista) van al final
+        const orden = (v.ordenColumnas || []).filter(existe);
+        columnas.forEach((c) => { if (!orden.includes(c.campo)) orden.push(c.campo); });
+        st.ordenColumnas = orden;
+        st.anchos = Object.fromEntries(Object.entries(v.anchos || {}).filter(([k]) => existe(k)));
+        st.fijadas = new Set((v.fijadas || []).filter(existe));
+        st.orden = aArreglo(v.orden).filter((o) => existe(o.campo));
+        st.tamanoPagina = [10, 25, 50, 100].includes(Number(v.tamanoPagina)) ? Number(v.tamanoPagina) : 25;
+        st.densidad = ['compacta', 'normal', 'comoda'].includes(v.densidad) ? v.densidad : 'normal';
+      }
+
+      function claveVista() { return cfg.idTabla ? 'dt-vista:' + cfg.idTabla : null; }
+      function leerVistaGuardada() {
+        const clave = claveVista();
+        if (!clave) return {};
+        try { return JSON.parse(localStorage.getItem(clave) || '{}') || {}; } catch (e) { return {}; }
+      }
+      function guardarVista() {
+        const clave = claveVista();
+        if (!clave) return;
+        try {
+          localStorage.setItem(clave, JSON.stringify({
+            ocultas: Array.from(st.ocultas), ordenColumnas: st.ordenColumnas, anchos: st.anchos,
+            fijadas: Array.from(st.fijadas), orden: st.orden, tamanoPagina: st.tamanoPagina, densidad: st.densidad,
+          }));
+        } catch (e) { /* localStorage puede no estar disponible: la vista solo no se recuerda */ }
+      }
 
       const valorDe = (col, fila) => (col.valor ? col.valor(fila) : fila[col.campo]);
-      const colPorCampo = (campo) => columnas.find((c) => c.campo === campo);
-      const columnasVisibles = () => columnas.filter((c) => !st.ocultas.has(c.campo));
+      /** Visibles en el orden del usuario, con las fijadas primero */
+      const columnasVisibles = () => {
+        const ordenadas = st.ordenColumnas.map(colPorCampo).filter((c) => c && !st.ocultas.has(c.campo));
+        return ordenadas.filter((c) => st.fijadas.has(c.campo)).concat(ordenadas.filter((c) => !st.fijadas.has(c.campo)));
+      };
       const puedeEditarCelda = (col) => col.editable === true && !!cfg.alEditar;
       const puedeEditarPanel = (col) => !!col.editable && !!cfg.alEditar;
       const esTactil = () => window.matchMedia && window.matchMedia('(hover: none)').matches;
+      const conDetalle = () => cfg.detalle !== false;
 
       function textoVisible(col, fila) {
         const v = valorDe(col, fila);
@@ -292,40 +402,65 @@
         return vacio(v) ? '' : String(v);
       }
 
+      /** Texto escapado con las coincidencias de la búsqueda resaltadas (sin importar acentos) */
+      function resaltar(texto) {
+        const q = normalizar(st.busqueda.trim());
+        if (!q) return esc(texto);
+        const caracteres = Array.from(texto);
+        const base = caracteres.map(normalizarCaracter).join('');
+        let salida = '';
+        let desde = 0;
+        let i = base.indexOf(q);
+        if (i === -1) return esc(texto);
+        const largo = Array.from(q).length;
+        while (i !== -1) {
+          salida += esc(caracteres.slice(desde, i).join('')) + '<mark>' + esc(caracteres.slice(i, i + largo).join('')) + '</mark>';
+          desde = i + largo;
+          i = base.indexOf(q, desde);
+        }
+        return salida + esc(caracteres.slice(desde).join(''));
+      }
+
       // ---------- esqueleto ----------
       contenedor.innerHTML = `
         <div class="dt">
           <div class="dt-toolbar">
             <input type="search" class="dt-buscar" placeholder="Buscar en la tabla…" aria-label="Buscar en la tabla" />
-            <button type="button" class="secondary dt-btn-columnas">☰ Columnas</button>
+            <button type="button" class="secondary dt-btn-columnas" title="Columnas, orden, ancho y densidad">☰ Vista</button>
             ${cfg.ayuda ? `<span class="dt-ayuda" title="${esc(cfg.ayuda)}">ⓘ Ayuda</span>` : ''}
             <span class="dt-espacio"></span>
             <span class="dt-seleccion-info" hidden></span>
+            <button type="button" class="secondary dt-btn-copiar" hidden title="Copia los seleccionados para pegarlos en Excel (Ctrl+C)">📋 Copiar</button>
             <button type="button" class="danger dt-btn-eliminar" hidden>🗑️ Eliminar seleccionados</button>
             ${cfg.exportar ? '<button type="button" class="btn-excel dt-btn-excel" title="Descarga lo que ves: columnas visibles, filtros, búsqueda y orden (todas las páginas)">📥 Exportar a Excel</button>' : ''}
           </div>
           <div class="dt-filtros-activos" hidden></div>
           <div class="dt-banner" hidden></div>
-          <div class="dt-scroll"><table><thead></thead><tbody></tbody></table></div>
+          <div class="dt-scroll"><div class="dt-barra-carga" hidden></div><table><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
           <div class="dt-pie">
             <span class="dt-resumen" aria-live="polite"></span>
+            <span class="dt-atajos" title="Shift+clic en casillas: seleccionar rango · Shift+clic en encabezado: ordenar por varias columnas · Ctrl+C: copiar seleccionados · Ctrl+Z: deshacer edición · Arrastra encabezados para reordenar y sus bordes para cambiar el ancho">⌨️ Atajos</span>
             <div class="dt-paginacion">
               <select class="dt-tamano" aria-label="Registros por página">${[10, 25, 50, 100].map((n) => `<option value="${n}">${n} por página</option>`).join('')}</select>
+              <button type="button" class="secondary dt-primera" aria-label="Primera página" title="Primera página">«</button>
               <button type="button" class="secondary dt-prev" aria-label="Página anterior">‹</button>
               <span class="dt-pagina"></span>
               <button type="button" class="secondary dt-next" aria-label="Página siguiente">›</button>
+              <button type="button" class="secondary dt-ultima" aria-label="Última página" title="Última página">»</button>
             </div>
           </div>
         </div>`;
 
       const $ = (sel) => contenedor.querySelector(sel);
+      const raiz = $('.dt');
       const thead = $('thead');
       const tbody = $('tbody');
-      $('.dt-tamano').value = String(st.tamanoPagina);
+      const tfoot = $('tfoot');
       let popover = null;
       let panel = null;
       let ultimaFirmaFiltros = '{}';
       let ultimaFirmaVista = '';
+      let secuenciaHistorial = 0;
 
       function avisar(texto, tipo) {
         if (tipo === 'error') Notificar.error(texto); else Notificar.exito(texto);
@@ -363,8 +498,8 @@
           }
           return true;
         }
-        const t = String(vacio(v) ? '' : v).toLowerCase();
-        const q = String(f.v1 || '').toLowerCase();
+        const t = normalizar(vacio(v) ? '' : v);
+        const q = normalizar(f.v1 || '');
         switch (f.op) {
           case 'contiene': return t.includes(q);
           case 'no_contiene': return !t.includes(q);
@@ -375,35 +510,37 @@
         return true;
       }
 
+      function claveOrden(col, fila) {
+        const v = valorDe(col, fila);
+        if (col.tipo === 'numero') return aNumero(v);
+        if (col.tipo === 'fecha') return claveFecha(v) || null;
+        return vacio(v) ? null : normalizar(v);
+      }
+
       function filasFiltradas() {
-        const q = st.busqueda.trim().toLowerCase();
+        const q = normalizar(st.busqueda.trim());
         const visibles = columnasVisibles();
         let filas = st.datos.filter((fila) => {
           for (const campo in st.filtros) {
             const col = colPorCampo(campo);
             if (col && !cumpleFiltro(col, fila, st.filtros[campo])) return false;
           }
-          return !q || visibles.some((col) => textoVisible(col, fila).toLowerCase().includes(q));
+          return !q || visibles.some((col) => normalizar(textoVisible(col, fila)).includes(q));
         });
 
-        if (st.orden) {
-          const col = colPorCampo(st.orden.campo);
-          if (col) {
-            const signo = st.orden.dir === 'desc' ? -1 : 1;
-            const clave = (fila) => {
-              const v = valorDe(col, fila);
-              if (col.tipo === 'numero') return aNumero(v);
-              if (col.tipo === 'fecha') return claveFecha(v) || null;
-              return vacio(v) ? null : String(v).toLowerCase();
-            };
-            filas = filas.slice().sort((a, b) => {
-              const x = clave(a); const y = clave(b);
-              if (x === null && y === null) return 0;
+        const criterios = st.orden.map((o) => ({ col: colPorCampo(o.campo), signo: o.dir === 'desc' ? -1 : 1 })).filter((c) => c.col);
+        if (criterios.length) {
+          filas = filas.slice().sort((a, b) => {
+            for (const { col, signo } of criterios) {
+              const x = claveOrden(col, a); const y = claveOrden(col, b);
+              if (x === null && y === null) continue;
               if (x === null) return 1;          // vacíos siempre al final
               if (y === null) return -1;
-              return (x < y ? -1 : x > y ? 1 : 0) * signo;
-            });
-          }
+              if (x < y) return -1 * signo;
+              if (x > y) return 1 * signo;
+            }
+            return 0;
+          });
         }
         return filas;
       }
@@ -425,12 +562,30 @@
         return `${col.titulo} ${etiquetaOp.toLowerCase()} ${valor(f.v1)}`;
       }
 
+      function calcularAgregado(col, filas) {
+        if (col.agregado === 'conteo') return filas.filter((f) => !vacio(valorDe(col, f))).length.toLocaleString('es-MX');
+        const nums = filas.map((f) => aNumero(valorDe(col, f))).filter((n) => n !== null);
+        if (!nums.length) return '—';
+        let r;
+        if (col.agregado === 'suma') r = nums.reduce((a, b) => a + b, 0);
+        if (col.agregado === 'promedio') r = nums.reduce((a, b) => a + b, 0) / nums.length;
+        if (col.agregado === 'min') r = Math.min(...nums);
+        if (col.agregado === 'max') r = Math.max(...nums);
+        return r === undefined ? '' : r.toLocaleString('es-MX', { maximumFractionDigits: 2 });
+      }
+
       // ---------- render ----------
+      function estiloAncho(campo) {
+        const w = st.anchos[campo];
+        return w ? ` style="width:${w}px;min-width:${w}px;max-width:${w}px"` : '';
+      }
+
       function render() {
         const visibles = columnasVisibles();
-        const conDetalle = cfg.detalle !== false;
-        const nColumnas = visibles.length + (cfg.seleccionable ? 1 : 0) + (conDetalle ? 1 : 0);
+        const nFijasSistema = (cfg.seleccionable ? 1 : 0) + (conDetalle() ? 1 : 0);
+        const nColumnas = visibles.length + nFijasSistema;
         const filas = st.cargando || st.error ? [] : filasFiltradas();
+        raiz.className = 'dt dt-densidad-' + st.densidad;
 
         // Al cambiar filtros o búsqueda, soltar la selección de lo que ya no se ve
         // (evita borrar registros que el usuario no tiene en pantalla)
@@ -450,17 +605,21 @@
         st.seleccion.forEach((id) => { if (!existentes.has(id)) st.seleccion.delete(id); });
         const idsPagina = pagina.map(idDe);
         const selPagina = idsPagina.filter((id) => st.seleccion.has(id)).length;
+        const multiOrden = st.orden.length > 1;
 
         // Encabezado
         thead.innerHTML = '<tr>' +
-          (cfg.seleccionable ? '<th class="dt-col-check"><input type="checkbox" class="dt-check-pagina" title="Seleccionar esta página" aria-label="Seleccionar esta página" /></th>' : '') +
-          (conDetalle ? '<th class="dt-col-ver" aria-label="Detalle"></th>' : '') +
+          (cfg.seleccionable ? '<th class="dt-col-check dt-fija"><input type="checkbox" class="dt-check-pagina" title="Seleccionar esta página" aria-label="Seleccionar esta página" /></th>' : '') +
+          (conDetalle() ? '<th class="dt-col-ver dt-fija" aria-label="Detalle"></th>' : '') +
           visibles.map((col) => {
-            const orden = st.orden && st.orden.campo === col.campo ? st.orden.dir : null;
+            const idx = st.orden.findIndex((o) => o.campo === col.campo);
+            const orden = idx === -1 ? null : st.orden[idx].dir;
             const ariaSort = orden === 'asc' ? 'ascending' : orden === 'desc' ? 'descending' : 'none';
-            return `<th aria-sort="${ariaSort}" class="${col.tipo === 'numero' ? 'dt-num' : ''}"><div class="dt-th">
-              <span class="dt-th-titulo" data-campo="${esc(col.campo)}" title="${col.ordenable ? 'Ordenar' : ''}">${esc(col.titulo)}${orden ? `<span class="dt-orden">${orden === 'asc' ? '▲' : '▼'}</span>` : ''}</span>
-              ${col.filtrable ? `<button type="button" class="dt-btn-filtro ${st.filtros[col.campo] ? 'activo' : ''}" data-campo="${esc(col.campo)}" title="Filtrar" aria-label="Filtrar ${esc(col.titulo)}">▾</button>` : ''}
+            const clases = [col.tipo === 'numero' ? 'dt-num' : '', st.fijadas.has(col.campo) ? 'dt-fija' : ''].join(' ').trim();
+            return `<th aria-sort="${ariaSort}" class="${clases}" data-col="${esc(col.campo)}" draggable="true"${estiloAncho(col.campo)}><div class="dt-th">
+              <span class="dt-th-titulo" data-campo="${esc(col.campo)}" title="${col.ordenable ? 'Ordenar (Shift+clic: agregar orden)' : ''}">${st.fijadas.has(col.campo) ? '📌 ' : ''}${esc(col.titulo)}${orden ? `<span class="dt-orden">${orden === 'asc' ? '▲' : '▼'}${multiOrden ? `<sub>${idx + 1}</sub>` : ''}</span>` : ''}</span>
+              ${col.filtrable ? `<button type="button" class="dt-btn-filtro ${st.filtros[col.campo] ? 'activo' : ''}" data-campo="${esc(col.campo)}" title="Filtrar y opciones de columna" aria-label="Filtrar ${esc(col.titulo)}">▾</button>` : ''}
+              <span class="dt-resize" data-campo="${esc(col.campo)}" title="Arrastra para cambiar el ancho · doble clic para ajustar"></span>
             </div></th>`;
           }).join('') + '</tr>';
 
@@ -472,9 +631,10 @@
         }
 
         // Cuerpo
+        const qActiva = st.busqueda.trim() !== '';
         if (st.cargando) {
           tbody.innerHTML = Array.from({ length: FILAS_SKELETON }, () => '<tr>' +
-            Array.from({ length: nColumnas }, (_, i) => `<td><span class="dt-skel" style="width:${i < (cfg.seleccionable ? 1 : 0) + (conDetalle ? 1 : 0) ? 14 : 40 + ((i * 37) % 50)}px"></span></td>`).join('') +
+            Array.from({ length: nColumnas }, (_, i) => `<td><span class="dt-skel" style="width:${i < nFijasSistema ? 14 : 40 + ((i * 37) % 50)}px"></span></td>`).join('') +
             '</tr>').join('');
         } else if (st.error) {
           tbody.innerHTML = `<tr><td class="dt-vacio dt-error" colspan="${nColumnas}">⚠️ ${esc(st.error)}</td></tr>`;
@@ -485,27 +645,37 @@
             const id = idDe(fila);
             const sel = st.seleccion.has(id);
             return `<tr data-id="${esc(id)}" class="${sel ? 'dt-fila-seleccionada' : ''}">` +
-              (cfg.seleccionable ? `<td class="dt-col-check"><input type="checkbox" class="dt-check" ${sel ? 'checked' : ''} aria-label="Seleccionar ${esc(etiquetaDe(fila))}" /></td>` : '') +
-              (conDetalle ? `<td class="dt-col-ver"><button type="button" class="dt-btn-ver" title="Ver detalle" aria-label="Ver detalle de ${esc(etiquetaDe(fila))}">🔍</button></td>` : '') +
+              (cfg.seleccionable ? `<td class="dt-col-check dt-fija"><input type="checkbox" class="dt-check" ${sel ? 'checked' : ''} aria-label="Seleccionar ${esc(etiquetaDe(fila))}" /></td>` : '') +
+              (conDetalle() ? `<td class="dt-col-ver dt-fija"><button type="button" class="dt-btn-ver" title="Ver detalle" aria-label="Ver detalle de ${esc(etiquetaDe(fila))}">🔍</button></td>` : '') +
               visibles.map((col) => {
                 const editable = puedeEditarCelda(col);
-                const clases = [editable ? 'dt-editable' : '', col.tipo === 'numero' ? 'dt-num' : ''].join(' ').trim();
-                const contenido = col.render ? col.render(valorDe(col, fila), fila) : esc(textoVisible(col, fila));
-                const titulo = col.render ? '' : ` title="${esc(textoVisible(col, fila))}"`;
+                const clases = [editable ? 'dt-editable' : '', col.tipo === 'numero' ? 'dt-num' : '', st.fijadas.has(col.campo) ? 'dt-fija' : ''].join(' ').trim();
+                const texto = textoVisible(col, fila);
+                const contenido = col.render ? col.render(valorDe(col, fila), fila) : (qActiva ? resaltar(texto) : esc(texto));
+                const titulo = col.render ? '' : ` title="${esc(texto)}"`;
                 const lapiz = editable
                   ? `<button type="button" class="dt-btn-editar-celda" title="Editar ${esc(col.titulo)}" aria-label="Editar ${esc(col.titulo)} de ${esc(etiquetaDe(fila))}">✏️</button>`
                   : '';
-                return `<td data-campo="${esc(col.campo)}" class="${clases}"${titulo}>${contenido}${lapiz}</td>`;
+                return `<td data-campo="${esc(col.campo)}" class="${clases}"${titulo}${estiloAncho(col.campo)}>${contenido}${lapiz}</td>`;
               }).join('') + '</tr>';
           }).join('');
         }
+
+        // Fila de totales (sobre TODO lo filtrado, no solo la página)
+        const conAgregados = visibles.some((c) => c.agregado);
+        tfoot.innerHTML = conAgregados && !st.cargando && !st.error && filas.length
+          ? '<tr>' + (cfg.seleccionable ? '<td class="dt-col-check dt-fija"></td>' : '') + (conDetalle() ? '<td class="dt-col-ver dt-fija"></td>' : '') +
+            visibles.map((col) => `<td data-campo="${esc(col.campo)}" class="${[col.tipo === 'numero' ? 'dt-num' : '', st.fijadas.has(col.campo) ? 'dt-fija' : ''].join(' ').trim()}"${estiloAncho(col.campo)}>${col.agregado
+              ? `<span class="dt-agregado-etiqueta" title="${esc(col.agregado)} de ${filas.length} registros filtrados">${ETIQUETA_AGREGADO[col.agregado]}</span>${esc(calcularAgregado(col, filas))}`
+              : ''}</td>`).join('') + '</tr>'
+          : '';
 
         // Chips de filtros activos
         const chips = Object.keys(st.filtros).map((campo) => {
           const col = colPorCampo(campo);
           return col ? `<span class="dt-chip">${esc(describirFiltro(col, st.filtros[campo]))}<button type="button" data-quitar-filtro="${esc(campo)}" aria-label="Quitar filtro">✕</button></span>` : '';
         });
-        if (st.busqueda.trim()) {
+        if (qActiva) {
           chips.unshift(`<span class="dt-chip">Búsqueda: “${esc(st.busqueda.trim())}”<button type="button" data-quitar-busqueda aria-label="Quitar búsqueda">✕</button></span>`);
         }
         const zonaChips = $('.dt-filtros-activos');
@@ -520,7 +690,7 @@
         if (cfg.seleccionable && idsPagina.length && selPagina === idsPagina.length && filas.length > idsPagina.length) {
           banner.hidden = false;
           banner.innerHTML = selFiltradas === filas.length
-            ? `Los <strong>${filas.length}</strong> registros ${Object.keys(st.filtros).length || st.busqueda.trim() ? 'filtrados ' : ''}están seleccionados. <button type="button" class="dt-link" data-quitar-seleccion>Quitar selección</button>`
+            ? `Los <strong>${filas.length}</strong> registros ${Object.keys(st.filtros).length || qActiva ? 'filtrados ' : ''}están seleccionados. <button type="button" class="dt-link" data-quitar-seleccion>Quitar selección</button>`
             : `Seleccionaste los <strong>${idsPagina.length}</strong> registros de esta página. <button type="button" class="dt-link" data-seleccionar-todos>Seleccionar los ${filas.length} registros</button>`;
         } else {
           banner.hidden = true;
@@ -528,13 +698,15 @@
         }
 
         // Pie y botones
+        $('.dt-barra-carga').hidden = !st.refrescando;
         $('.dt-resumen').textContent = st.cargando ? 'Cargando…'
           : filas.length
             ? `Mostrando ${inicio + 1}–${inicio + pagina.length} de ${filas.length}` + (filas.length !== st.datos.length ? ` (filtrados de ${st.datos.length})` : '')
             : `0 de ${st.datos.length}`;
         $('.dt-pagina').textContent = `${st.pagina} / ${totalPaginas}`;
-        $('.dt-prev').disabled = st.pagina <= 1;
-        $('.dt-next').disabled = st.pagina >= totalPaginas;
+        $('.dt-tamano').value = String(st.tamanoPagina);
+        $('.dt-primera').disabled = $('.dt-prev').disabled = st.pagina <= 1;
+        $('.dt-ultima').disabled = $('.dt-next').disabled = st.pagina >= totalPaginas;
         if (cfg.exportar) $('.dt-btn-excel').disabled = st.cargando || !!st.error;
 
         const nSel = st.seleccion.size;
@@ -542,13 +714,38 @@
         // Sin permiso para eliminar: decir por qué en vez de esconder la acción sin explicación
         $('.dt-seleccion-info').textContent = `${nSel} ${plural(nSel, 'seleccionado')}` +
           (!cfg.alEliminar && cfg.motivoSinEliminar ? ` · ${cfg.motivoSinEliminar}` : '');
+        $('.dt-btn-copiar').hidden = nSel === 0;
         $('.dt-btn-eliminar').hidden = nSel === 0 || !cfg.alEliminar;
 
+        aplicarFijadas();
         ajustarAlto();
         const firmaFiltros = JSON.stringify(st.filtros);
         if (cfg.alCambiarFiltros && firmaFiltros !== ultimaFirmaFiltros) {
           ultimaFirmaFiltros = firmaFiltros;
           cfg.alCambiarFiltros(JSON.parse(firmaFiltros));
+        }
+      }
+
+      /** Posición "left" de las columnas fijas, según el ancho real de las anteriores */
+      function aplicarFijadas() {
+        const filaEncabezado = thead.rows[0];
+        if (!filaEncabezado) return;
+        const filasTabla = [filaEncabezado].concat(Array.from(tbody.rows), Array.from(tfoot.rows));
+        let izquierda = 0;
+        let ultima = -1;
+        for (let i = 0; i < filaEncabezado.cells.length; i++) {
+          const th = filaEncabezado.cells[i];
+          if (!th.classList.contains('dt-fija')) break;
+          filasTabla.forEach((tr) => {
+            const celda = tr.cells[i];
+            if (celda && celda.classList.contains('dt-fija')) { celda.style.left = izquierda + 'px'; celda.classList.remove('dt-fija-ultima'); }
+          });
+          izquierda += th.offsetWidth;
+          ultima = i;
+        }
+        // La sombra solo tiene sentido si el usuario fijó columnas de datos
+        if (ultima >= 0 && st.fijadas.size) {
+          filasTabla.forEach((tr) => { const c = tr.cells[ultima]; if (c && c.classList.contains('dt-fija')) c.classList.add('dt-fija-ultima'); });
         }
       }
 
@@ -559,6 +756,34 @@
         const pie = $('.dt-pie');
         const disponible = window.innerHeight - scroll.getBoundingClientRect().top - (pie ? pie.offsetHeight : 0) - 36;
         scroll.style.maxHeight = Math.max(240, disponible) + 'px';
+      }
+
+      // ---------- vista: columnas, anchos, orden, densidad ----------
+      function moverColumna(campo, antesDe) {
+        if (campo === antesDe || !colPorCampo(campo)) return;
+        const orden = st.ordenColumnas.filter((c) => c !== campo);
+        const destino = antesDe ? orden.indexOf(antesDe) : -1;
+        orden.splice(destino === -1 ? orden.length : destino, 0, campo);
+        st.ordenColumnas = orden;
+        guardarVista(); render();
+      }
+      function fijarColumna(campo, fijar) {
+        if (fijar) { st.fijadas.add(campo); st.ocultas.delete(campo); } else st.fijadas.delete(campo);
+        guardarVista(); render();
+      }
+      function ocultarColumna(campo) {
+        if (columnasVisibles().length <= 1) return;
+        st.ocultas.add(campo); st.fijadas.delete(campo);
+        guardarVista(); render();
+      }
+      function setDensidad(densidad) {
+        if (!['compacta', 'normal', 'comoda'].includes(densidad)) return;
+        st.densidad = densidad; guardarVista(); render();
+      }
+      function restablecerVista() {
+        aplicarVista(vistaDefault());
+        try { if (claveVista()) localStorage.removeItem(claveVista()); } catch (e) { /* no-op */ }
+        st.pagina = 1; render();
       }
 
       // ---------- popovers ----------
@@ -591,6 +816,10 @@
             <button type="button" class="secondary" data-accion="quitar">Quitar filtro</button>
             <button type="button" data-accion="aplicar">Aplicar</button>
           </div>`;
+        const opcionesColumna = `<div class="dt-pop-col">
+            <button type="button" class="secondary" data-accion="fijar">${st.fijadas.has(col.campo) ? '📌 Desfijar' : '📌 Fijar a la izquierda'}</button>
+            <button type="button" class="secondary" data-accion="ocultar" ${columnasVisibles().length <= 1 ? 'disabled' : ''}>🙈 Ocultar</button>
+          </div>`;
 
         if (col.tipo === 'lista') {
           const conteo = new Map();
@@ -604,16 +833,23 @@
             <div class="dt-pop-fila"><input type="search" class="dt-pop-buscar" placeholder="Buscar valor…" /></div>
             <div class="dt-pop-fila"><button type="button" class="secondary" data-accion="todos" style="flex:1">Todos</button><button type="button" class="secondary" data-accion="ninguno" style="flex:1">Ninguno</button></div>
             <div class="dt-lista-valores">${valores.map((v) => `
-              <label data-texto="${esc(v.toLowerCase())}"><input type="checkbox" value="${esc(v)}" ${marcados.has(v) ? 'checked' : ''} />
-                <span>${v === '' ? '<em>(vacío)</em>' : esc(v)}</span><span class="dt-conteo">${conteo.get(v)}</span></label>`).join('')}
-            </div>${acciones}`, (pop) => {
+              <label data-texto="${esc(normalizar(v))}"><input type="checkbox" value="${esc(v)}" ${marcados.has(v) ? 'checked' : ''} />
+                <span>${v === '' ? '<em>(vacío)</em>' : esc(v)}</span>
+                <button type="button" class="dt-solo" data-solo="${esc(v)}" title="Filtrar solo por este valor">solo</button>
+                <span class="dt-conteo">${conteo.get(v)}</span></label>`).join('')}
+            </div>${acciones}${opcionesColumna}`, (pop) => {
             const checks = () => Array.from(pop.querySelectorAll('.dt-lista-valores input'));
             pop.querySelector('.dt-pop-buscar').addEventListener('input', (ev) => {
-              const q = ev.target.value.toLowerCase();
+              const q = normalizar(ev.target.value);
               pop.querySelectorAll('.dt-lista-valores label').forEach((l) => { l.hidden = !l.dataset.texto.includes(q); });
             });
             pop.querySelector('[data-accion="todos"]').addEventListener('click', () => checks().forEach((c) => { if (!c.parentElement.hidden) c.checked = true; }));
             pop.querySelector('[data-accion="ninguno"]').addEventListener('click', () => checks().forEach((c) => { if (!c.parentElement.hidden) c.checked = false; }));
+            pop.querySelectorAll('[data-solo]').forEach((b) => b.addEventListener('click', (ev) => {
+              ev.preventDefault();   // no marcar la casilla del label
+              st.filtros[col.campo] = { valores: [b.dataset.solo] };
+              st.pagina = 1; cerrarPopover(); render();
+            }));
             pop.querySelector('[data-accion="aplicar"]').addEventListener('click', () => {
               const elegidos = checks().filter((c) => c.checked).map((c) => c.value);
               if (elegidos.length === valores.length) delete st.filtros[col.campo];
@@ -628,11 +864,19 @@
 
         const ops = OPERADORES[col.tipo] || OPERADORES.texto;
         const tipoInput = col.tipo === 'numero' ? 'number' : col.tipo === 'fecha' ? 'date' : 'text';
-        abrirPopover(ancla, `<h4>${esc(col.titulo)}</h4>${ordenHtml}
+        const presets = col.tipo === 'fecha' ? `<div class="dt-pop-presets">
+            <button type="button" class="secondary" data-preset="hoy">Hoy</button>
+            <button type="button" class="secondary" data-preset="ult7">Últimos 7 días</button>
+            <button type="button" class="secondary" data-preset="ult30">Últimos 30 días</button>
+            <button type="button" class="secondary" data-preset="mes">Este mes</button>
+            <button type="button" class="secondary" data-preset="prox30">Próximos 30 días</button>
+            <button type="button" class="secondary" data-preset="pasadas">Antes de hoy</button>
+          </div>` : '';
+        abrirPopover(ancla, `<h4>${esc(col.titulo)}</h4>${ordenHtml}${presets}
           <div class="dt-pop-fila"><select class="dt-pop-op" aria-label="Condición">${ops.map(([k, t]) => `<option value="${k}" ${actual.op === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
           <div class="dt-pop-fila"><input type="${tipoInput}" class="dt-pop-v1" step="any" placeholder="Valor" aria-label="Valor" value="${esc(actual.v1 || '')}" /></div>
           <div class="dt-pop-fila dt-pop-fila-v2"><input type="${tipoInput}" class="dt-pop-v2" step="any" placeholder="y…" aria-label="Hasta" value="${esc(actual.v2 || '')}" /></div>
-          ${acciones}`, (pop) => {
+          ${acciones}${opcionesColumna}`, (pop) => {
           const op = pop.querySelector('.dt-pop-op');
           const v1 = pop.querySelector('.dt-pop-v1');
           const filaV2 = pop.querySelector('.dt-pop-fila-v2');
@@ -652,6 +896,21 @@
           };
           pop.querySelector('[data-accion="aplicar"]').addEventListener('click', aplicar);
           pop.querySelectorAll('input').forEach((i) => i.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') aplicar(); }));
+
+          pop.querySelectorAll('[data-preset]').forEach((b) => b.addEventListener('click', () => {
+            const hoy = sumarDias(0);
+            const primeroDeMes = hoy.slice(0, 8) + '01';
+            const rangos = {
+              hoy: { op: 'igual', v1: hoy },
+              ult7: { op: 'entre', v1: sumarDias(-6), v2: hoy },
+              ult30: { op: 'entre', v1: sumarDias(-29), v2: hoy },
+              mes: { op: 'entre', v1: primeroDeMes, v2: hoy },
+              prox30: { op: 'entre', v1: hoy, v2: sumarDias(30) },
+              pasadas: { op: 'antes', v1: hoy },
+            };
+            st.filtros[col.campo] = rangos[b.dataset.preset];
+            st.pagina = 1; cerrarPopover(); render();
+          }));
           conectarComunes(pop, col);
         });
       }
@@ -661,20 +920,53 @@
           delete st.filtros[col.campo]; st.pagina = 1; cerrarPopover(); render();
         });
         pop.querySelectorAll('[data-orden]').forEach((b) => b.addEventListener('click', () => {
-          st.orden = { campo: col.campo, dir: b.dataset.orden }; cerrarPopover(); render();
+          st.orden = [{ campo: col.campo, dir: b.dataset.orden }]; guardarVista(); cerrarPopover(); render();
         }));
+        pop.querySelector('[data-accion="fijar"]').addEventListener('click', () => { cerrarPopover(); fijarColumna(col.campo, !st.fijadas.has(col.campo)); });
+        pop.querySelector('[data-accion="ocultar"]').addEventListener('click', () => { cerrarPopover(); ocultarColumna(col.campo); });
       }
 
-      function abrirColumnas(ancla) {
-        abrirPopover(ancla, `<h4>Columnas visibles</h4><div class="dt-columnas">${columnas.map((c) => `
-          <label><input type="checkbox" value="${esc(c.campo)}" ${st.ocultas.has(c.campo) ? '' : 'checked'} /> ${esc(c.titulo)}</label>`).join('')}</div>`, (pop) => {
-          pop.querySelectorAll('input').forEach((i) => i.addEventListener('change', () => {
+      function abrirVista(ancla) {
+        const pintar = (pop) => {
+          const orden = st.ordenColumnas.map(colPorCampo);
+          pop.innerHTML = `<h4>Columnas</h4><div class="dt-columnas">${orden.map((c, i) => `
+            <div class="dt-columna-item">
+              <label><input type="checkbox" value="${esc(c.campo)}" ${st.ocultas.has(c.campo) ? '' : 'checked'} /> ${esc(c.titulo)}</label>
+              <button type="button" data-fijar="${esc(c.campo)}" class="${st.fijadas.has(c.campo) ? 'activo' : ''}" title="${st.fijadas.has(c.campo) ? 'Desfijar' : 'Fijar a la izquierda'}" aria-label="Fijar ${esc(c.titulo)}">📌</button>
+              <button type="button" data-subir="${esc(c.campo)}" ${i === 0 ? 'disabled' : ''} title="Mover arriba" aria-label="Mover ${esc(c.titulo)} arriba">↑</button>
+              <button type="button" data-bajar="${esc(c.campo)}" ${i === orden.length - 1 ? 'disabled' : ''} title="Mover abajo" aria-label="Mover ${esc(c.titulo)} abajo">↓</button>
+            </div>`).join('')}</div>
+            <div class="dt-vista-opciones">
+              <label style="margin:0">Densidad
+                <select class="dt-densidad" style="margin-top:4px">
+                  <option value="compacta" ${st.densidad === 'compacta' ? 'selected' : ''}>Compacta</option>
+                  <option value="normal" ${st.densidad === 'normal' ? 'selected' : ''}>Normal</option>
+                  <option value="comoda" ${st.densidad === 'comoda' ? 'selected' : ''}>Cómoda</option>
+                </select>
+              </label>
+              <button type="button" class="secondary dt-restablecer">↺ Restablecer vista</button>
+              ${cfg.idTabla ? '<span class="page-subtitle" style="font-size:11px">Tu vista se guarda en este navegador.</span>' : ''}
+            </div>`;
+
+          pop.querySelectorAll('.dt-columnas input').forEach((i) => i.addEventListener('change', () => {
             if (i.checked) st.ocultas.delete(i.value);
-            else if (columnasVisibles().length > 1) st.ocultas.add(i.value);
+            else if (columnasVisibles().length > 1) { st.ocultas.add(i.value); st.fijadas.delete(i.value); }
             else i.checked = true; // siempre al menos una columna
-            render();
+            guardarVista(); render(); pintar(pop);
           }));
-        });
+          pop.querySelectorAll('[data-fijar]').forEach((b) => b.addEventListener('click', () => { fijarColumna(b.dataset.fijar, !st.fijadas.has(b.dataset.fijar)); pintar(pop); }));
+          pop.querySelectorAll('[data-subir]').forEach((b) => b.addEventListener('click', () => {
+            const i = st.ordenColumnas.indexOf(b.dataset.subir);
+            moverColumna(b.dataset.subir, st.ordenColumnas[i - 1]); pintar(pop);
+          }));
+          pop.querySelectorAll('[data-bajar]').forEach((b) => b.addEventListener('click', () => {
+            const i = st.ordenColumnas.indexOf(b.dataset.bajar);
+            moverColumna(b.dataset.bajar, st.ordenColumnas[i + 2] || null); pintar(pop);
+          }));
+          pop.querySelector('.dt-densidad').addEventListener('change', (ev) => setDensidad(ev.target.value));
+          pop.querySelector('.dt-restablecer').addEventListener('click', () => { restablecerVista(); pintar(pop); Notificar.info('Vista restablecida'); });
+        };
+        abrirPopover(ancla, '', pintar);
       }
 
       // ---------- edición (compartida por celda y panel) ----------
@@ -707,33 +999,36 @@
         }
       }
 
+      /** Revierte una edición del historial (desde "Deshacer" del aviso o con Ctrl+Z) */
+      async function deshacer(entrada) {
+        st.historial = st.historial.filter((e) => e !== entrada);
+        const actual = st.datos.find((f) => idDe(f) === entrada.id);
+        if (!actual) { Notificar.error('No se puede deshacer: el registro ya no existe'); return; }
+        try {
+          await aplicarCambio(actual, entrada.col, entrada.anterior);
+          render();
+          refrescarPanel();
+          Notificar.info(`Se restauró ${entrada.col.titulo} de ${etiquetaDe(actual)}`);
+        } catch (err) {
+          Notificar.error('No se pudo deshacer: ' + err.message);
+        }
+      }
+
       /**
        * Guarda un campo (celda o panel). Regresa true si guardó, false si no había cambio. Lanza si falla.
-       * El aviso de éxito ofrece "Deshacer": editar sí es reversible, conocemos el valor anterior.
+       * El aviso de éxito ofrece "Deshacer" y la edición queda en el historial para Ctrl+Z.
        */
       async function guardarCambio(fila, col, textoControl) {
         const anterior = valorOriginal(col, valorDe(col, fila));
         if (textoControl === anterior) return false;
         await aplicarCambio(fila, col, textoControl);
 
-        const id = idDe(fila);
+        const entrada = { seq: ++secuenciaHistorial, id: idDe(fila), col, anterior };
+        st.historial.push(entrada);
+        if (st.historial.length > MAX_HISTORIAL) st.historial.shift();
         Notificar.exito(`${col.titulo} de ${etiquetaDe(fila)} actualizado`, {
           duracion: 8000,
-          accion: {
-            texto: 'Deshacer',
-            alHacer: async () => {
-              const actual = st.datos.find((f) => idDe(f) === id);
-              if (!actual) { Notificar.error('No se puede deshacer: el registro ya no existe'); return; }
-              try {
-                await aplicarCambio(actual, col, anterior);
-                render();
-                refrescarPanel();
-                Notificar.info(`Se restauró ${col.titulo}`);
-              } catch (err) {
-                Notificar.error('No se pudo deshacer: ' + err.message);
-              }
-            },
-          },
+          accion: { texto: 'Deshacer', alHacer: () => deshacer(entrada) },
         });
         return true;
       }
@@ -809,6 +1104,40 @@
           if (ev.relatedTarget && editor.contains(ev.relatedTarget)) return;
           setTimeout(() => { if (!editor.contains(document.activeElement)) cancelar(false); }, 0);
         });
+      }
+
+      // ---------- copiar ----------
+      /** Seleccionados como texto separado por tabuladores (se pega en Excel en columnas) */
+      function textoSeleccion() {
+        const cols = columnasVisibles().filter((c) => c.exportable);
+        const filas = filasFiltradas().filter((f) => st.seleccion.has(idDe(f)));
+        const limpiar = (t) => String(t).replace(/[\t\r\n]+/g, ' ');
+        return [cols.map((c) => limpiar(c.titulo)).join('\t')]
+          .concat(filas.map((f) => cols.map((c) => limpiar(c.valorExportar ? c.valorExportar(f) : textoVisible(c, f))).join('\t')))
+          .join('\n');
+      }
+
+      async function copiarSeleccion() {
+        const n = st.seleccion.size;
+        if (!n) return '';
+        const texto = textoSeleccion();
+        let copiado = false;
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(texto); copiado = true; }
+        } catch (e) { /* el marco de Apps Script puede bloquear la API: usar el método clásico */ }
+        if (!copiado) {
+          const area = document.createElement('textarea');
+          area.value = texto;
+          area.setAttribute('readonly', '');
+          area.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+          document.body.appendChild(area);
+          area.select();
+          try { copiado = document.execCommand('copy'); } catch (e) { copiado = false; }
+          area.remove();
+        }
+        if (copiado) Notificar.exito(`${n} ${plural(n, 'registro')} ${plural(n, 'copiado')}: pégalos en Excel`);
+        else Notificar.error('El navegador no permitió copiar. Usa "Exportar a Excel".');
+        return texto;
       }
 
       // ---------- panel lateral de detalle ----------
@@ -923,10 +1252,13 @@
 
       // ---------- eventos ----------
       $('.dt-buscar').addEventListener('input', (ev) => { st.busqueda = ev.target.value; st.pagina = 1; render(); });
-      $('.dt-btn-columnas').addEventListener('click', (ev) => abrirColumnas(ev.currentTarget));
-      $('.dt-tamano').addEventListener('change', (ev) => { st.tamanoPagina = Number(ev.target.value); st.pagina = 1; render(); });
+      $('.dt-btn-columnas').addEventListener('click', (ev) => abrirVista(ev.currentTarget));
+      $('.dt-tamano').addEventListener('change', (ev) => { st.tamanoPagina = Number(ev.target.value); st.pagina = 1; guardarVista(); render(); });
+      $('.dt-primera').addEventListener('click', () => { st.pagina = 1; render(); });
       $('.dt-prev').addEventListener('click', () => { st.pagina--; render(); });
       $('.dt-next').addEventListener('click', () => { st.pagina++; render(); });
+      $('.dt-ultima').addEventListener('click', () => { st.pagina = Infinity; render(); });
+      $('.dt-btn-copiar').addEventListener('click', copiarSeleccion);
 
       function limpiarTodo() {
         st.filtros = {}; st.busqueda = ''; $('.dt-buscar').value = ''; st.pagina = 1; render();
@@ -941,7 +1273,7 @@
 
       $('.dt-banner').addEventListener('click', (ev) => {
         if (ev.target.closest('[data-seleccionar-todos]')) { filasFiltradas().forEach((f) => st.seleccion.add(idDe(f))); render(); }
-        if (ev.target.closest('[data-quitar-seleccion]')) { st.seleccion.clear(); render(); }
+        if (ev.target.closest('[data-quitar-seleccion]')) { st.seleccion.clear(); st.ancla = null; render(); }
       });
 
       thead.addEventListener('click', (ev) => {
@@ -952,10 +1284,19 @@
         if (titulo) {
           const col = colPorCampo(titulo.dataset.campo);
           if (!col || !col.ordenable) return;
-          // asc → desc → sin orden
-          if (!st.orden || st.orden.campo !== col.campo) st.orden = { campo: col.campo, dir: 'asc' };
-          else if (st.orden.dir === 'asc') st.orden.dir = 'desc';
-          else st.orden = null;
+          const i = st.orden.findIndex((o) => o.campo === col.campo);
+          if (ev.shiftKey) {
+            // Orden múltiple: agregar / invertir / quitar esta columna sin tocar las demás
+            if (i === -1) st.orden.push({ campo: col.campo, dir: 'asc' });
+            else if (st.orden[i].dir === 'asc') st.orden[i].dir = 'desc';
+            else st.orden.splice(i, 1);
+          } else {
+            // Clic normal: orden solo por esta columna, asc → desc → sin orden
+            if (i === -1 || st.orden.length > 1) st.orden = [{ campo: col.campo, dir: 'asc' }];
+            else if (st.orden[0].dir === 'asc') st.orden[0].dir = 'desc';
+            else st.orden = [];
+          }
+          guardarVista();
           render();
         }
       });
@@ -967,17 +1308,115 @@
         const ids = filasFiltradas().slice(inicio, inicio + st.tamanoPagina).map(idDe);
         if (ev.target.checked) ids.forEach((id) => st.seleccion.add(id));
         else ids.forEach((id) => st.seleccion.delete(id));
+        st.ancla = null;
         render();
       });
 
-      tbody.addEventListener('change', (ev) => {
-        if (!ev.target.classList.contains('dt-check')) return;
-        const id = ev.target.closest('tr').dataset.id;
-        if (ev.target.checked) st.seleccion.add(id); else st.seleccion.delete(id);
+      // --- Ajuste de ancho (arrastrar el borde del encabezado) ---
+      thead.addEventListener('mousedown', (ev) => {
+        const manija = ev.target.closest('.dt-resize');
+        if (!manija) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        const campo = manija.dataset.campo;
+        const th = manija.closest('th');
+        th.draggable = false;
+        const xInicial = ev.clientX;
+        const anchoInicial = th.getBoundingClientRect().width;
+        manija.classList.add('activo');
+        document.body.classList.add('dt-redimensionando');
+
+        const aplicar = (w) => {
+          contenedor.querySelectorAll(`[data-col="${CSS.escape(campo)}"], td[data-campo="${CSS.escape(campo)}"]`).forEach((c) => {
+            c.style.width = c.style.minWidth = c.style.maxWidth = w + 'px';
+          });
+        };
+        const mover = (e) => {
+          st.anchos[campo] = Math.max(ANCHO_MINIMO, Math.round(anchoInicial + e.clientX - xInicial));
+          aplicar(st.anchos[campo]);
+          aplicarFijadas();
+        };
+        const soltar = () => {
+          document.removeEventListener('mousemove', mover);
+          document.removeEventListener('mouseup', soltar);
+          document.body.classList.remove('dt-redimensionando');
+          guardarVista();
+          render();
+        };
+        document.addEventListener('mousemove', mover);
+        document.addEventListener('mouseup', soltar);
+      });
+      thead.addEventListener('dblclick', (ev) => {
+        const manija = ev.target.closest('.dt-resize');
+        if (!manija) return;
+        delete st.anchos[manija.dataset.campo];   // vuelve al ancho automático según el contenido
+        guardarVista();
         render();
+      });
+
+      // --- Reordenar columnas arrastrando el encabezado ---
+      let arrastrando = null;
+      const limpiarMarcas = () => thead.querySelectorAll('th').forEach((th) => th.classList.remove('dt-drop-antes', 'dt-drop-despues', 'dt-arrastrando'));
+      thead.addEventListener('dragstart', (ev) => {
+        const th = ev.target.closest && ev.target.closest('th[data-col]');
+        if (!th) return;
+        arrastrando = th.dataset.col;
+        th.classList.add('dt-arrastrando');
+        if (ev.dataTransfer) { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', arrastrando); }
+      });
+      thead.addEventListener('dragover', (ev) => {
+        const th = ev.target.closest && ev.target.closest('th[data-col]');
+        if (!arrastrando || !th || th.dataset.col === arrastrando) return;
+        ev.preventDefault();
+        const r = th.getBoundingClientRect();
+        const despues = ev.clientX > r.left + r.width / 2;
+        limpiarMarcas();
+        thead.querySelector(`th[data-col="${CSS.escape(arrastrando)}"]`)?.classList.add('dt-arrastrando');
+        th.classList.add(despues ? 'dt-drop-despues' : 'dt-drop-antes');
+      });
+      thead.addEventListener('drop', (ev) => {
+        const th = ev.target.closest && ev.target.closest('th[data-col]');
+        if (!arrastrando || !th) return;
+        ev.preventDefault();
+        const destino = th.dataset.col;
+        if (destino !== arrastrando) {
+          const despues = th.classList.contains('dt-drop-despues');
+          const orden = st.ordenColumnas.filter((c) => c !== arrastrando);
+          const siguiente = despues ? orden[orden.indexOf(destino) + 1] || null : destino;
+          moverColumna(arrastrando, siguiente);
+        }
+        arrastrando = null;
+        limpiarMarcas();
+      });
+      thead.addEventListener('dragend', () => { arrastrando = null; limpiarMarcas(); });
+
+      // --- Selección: clic y Shift+clic en rango ---
+      tbody.addEventListener('mousedown', (ev) => {
+        // Shift+clic no debe seleccionar texto de la página
+        if (ev.shiftKey && ev.target.classList.contains('dt-check')) ev.preventDefault();
       });
 
       tbody.addEventListener('click', (ev) => {
+        const check = ev.target.closest('.dt-check');
+        if (check) {
+          const id = check.closest('tr').dataset.id;
+          const marcar = check.checked;
+          if (ev.shiftKey && st.ancla && st.ancla !== id) {
+            const ids = filasFiltradas().map(idDe);
+            const a = ids.indexOf(st.ancla);
+            const b = ids.indexOf(id);
+            if (a !== -1 && b !== -1) {
+              ids.slice(Math.min(a, b), Math.max(a, b) + 1).forEach((x) => (marcar ? st.seleccion.add(x) : st.seleccion.delete(x)));
+            } else if (marcar) st.seleccion.add(id); else st.seleccion.delete(id);
+          } else if (marcar) st.seleccion.add(id); else st.seleccion.delete(id);
+          st.ancla = id;
+          render();
+          // Mantener el foco en la casilla para seguir con teclado (Espacio / Shift)
+          const nueva = tbody.querySelector(`tr[data-id="${CSS.escape(id)}"] .dt-check`);
+          if (nueva) nueva.focus();
+          return;
+        }
+
         const ver = ev.target.closest('.dt-btn-ver');
         if (ver) { abrirPanel(ver.closest('tr').dataset.id); return; }
 
@@ -985,7 +1424,7 @@
         if (lapiz) { iniciarEdicion(lapiz.closest('td')); return; }
 
         // En pantallas táctiles (sin doble clic ni hover), tocar la fila abre el detalle
-        if (esTactil() && cfg.detalle !== false && !st.editando) {
+        if (esTactil() && conDetalle() && !st.editando) {
           const tr = ev.target.closest('tr[data-id]');
           const interactivo = ev.target.closest('button, a, input, select, label, .dt-editor');
           if (tr && !interactivo) abrirPanel(tr.dataset.id);
@@ -1028,6 +1467,8 @@
           const ids = new Set(filas.map(idDe));
           st.datos = st.datos.filter((f) => !ids.has(idDe(f)));
           st.seleccion.clear();
+          st.ancla = null;
+          st.historial = st.historial.filter((e) => !ids.has(e.id));
           if (panel && ids.has(st.detalleId)) cerrarPanel();
           render();
           avisar(`${n} ${plural(n, 'registro')} ${plural(n, 'eliminado')}`);
@@ -1064,18 +1505,44 @@
         });
       }
 
-      // Si el módulo se desmontó (navegación SPA) sin llamar destruir(), limpiar solos
+      // ---------- atajos globales (solo si esta tabla está a la vista) ----------
       const desmontado = () => {
         if (document.body.contains(contenedor)) return false;
         limpiarGlobales();
         return true;
       };
+      // "A la vista" = conectada y sin un contenedor oculto (así esconde Tabs las pestañas).
+      // No se usa offsetParent: es null dentro de elementos position:fixed aunque se vea.
+      const visible = () => document.body.contains(contenedor) && !contenedor.closest('[hidden]');
       const alClicFuera = (ev) => {
         if (desmontado()) return;
         if (popover && !popover.contains(ev.target) && !ev.target.closest('.dt-btn-filtro, .dt-btn-columnas')) cerrarPopover();
       };
-      const alTecla = (ev) => { if (!desmontado() && ev.key === 'Escape') cerrarPopover(); };
-      const alRedimensionar = () => { if (!desmontado()) ajustarAlto(); };
+      const alTecla = (ev) => {
+        if (desmontado()) return;
+        if (ev.key === 'Escape') {
+          if (popover) { cerrarPopover(); return; }
+          // Quitar selección solo si el usuario está trabajando dentro de esta tabla
+          if (!panel && !st.editando && st.seleccion.size && contenedor.contains(document.activeElement)) {
+            st.seleccion.clear(); st.ancla = null; render();
+          }
+          return;
+        }
+        const ctrl = ev.ctrlKey || ev.metaKey;
+        if (!ctrl || panel || st.editando || escribiendo(ev.target) || document.querySelector('.confirmar-card')) return;
+        const tecla = ev.key.toLowerCase();
+
+        if (tecla === 'z' && !ev.shiftKey && st.historial.length && visible()) {
+          ev.preventDefault();
+          deshacer(st.historial[st.historial.length - 1]);
+        }
+        if (tecla === 'c' && st.seleccion.size && visible()) {
+          const hayTextoSeleccionado = window.getSelection && String(window.getSelection()).trim() !== '';
+          const enTabla = contenedor.contains(document.activeElement) || document.activeElement === document.body;
+          if (!hayTextoSeleccionado && enTabla) { ev.preventDefault(); copiarSeleccion(); }
+        }
+      };
+      const alRedimensionar = () => { if (!desmontado()) { ajustarAlto(); aplicarFijadas(); } };
       function limpiarGlobales() {
         cerrarPopover();
         cerrarPanel();
@@ -1093,22 +1560,37 @@
         setDatos(datos) {
           st.datos = datos || [];
           st.cargando = false;
+          st.refrescando = false;
           st.error = null;
           if (!st.editando) { render(); refrescarPanel(); }
         },
-        setCargando(valor) { st.cargando = !!valor; if (valor) st.error = null; render(); },
-        setError(mensaje) { st.error = mensaje || null; st.cargando = false; render(); },
+        /** Sin datos aún: filas grises. Con datos a la vista: barra de carga arriba, sin borrar lo que se ve. */
+        setCargando(valor) {
+          if (valor && st.datos.length) { st.refrescando = true; st.cargando = false; }
+          else { st.cargando = !!valor; st.refrescando = false; }
+          if (valor) st.error = null;
+          render();
+        },
+        setError(mensaje) { st.error = mensaje || null; st.cargando = false; st.refrescando = false; render(); },
         getDatos: () => st.datos.slice(),
         getSeleccion: () => st.datos.filter((f) => st.seleccion.has(idDe(f))),
-        limpiarSeleccion() { st.seleccion.clear(); render(); },
+        limpiarSeleccion() { st.seleccion.clear(); st.ancla = null; render(); },
+        copiarSeleccion,
+        textoSeleccion,
         setFiltro(campo, filtro) {
           if (filtro) st.filtros[campo] = filtro; else delete st.filtros[campo];
           st.pagina = 1; render();
         },
         limpiarFiltros: limpiarTodo,
+        moverColumna,
+        fijarColumna,
+        ocultarColumna,
+        setDensidad,
+        restablecerVista,
+        getVista: () => ({ ordenColumnas: st.ordenColumnas.slice(), fijadas: Array.from(st.fijadas), ocultas: Array.from(st.ocultas), anchos: Object.assign({}, st.anchos), orden: st.orden.map((o) => Object.assign({}, o)), densidad: st.densidad, tamanoPagina: st.tamanoPagina }),
         abrirDetalle: abrirPanel,
         /** Llamar si la tabla estaba oculta (p. ej. en otra pestaña) y se acaba de mostrar */
-        ajustarAlto,
+        ajustarAlto() { ajustarAlto(); aplicarFijadas(); },
         destruir() { limpiarGlobales(); contenedor.innerHTML = ''; },
       };
     }

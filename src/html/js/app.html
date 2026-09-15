@@ -714,10 +714,12 @@
     // ----- Pestaña 1: tabla -----
     const tabla = DataTable.crear(document.getElementById('ver-tabla'), {
       idCampo: 'ID',
+      idTabla: 'verificaciones',   // recuerda columnas, anchos, orden y densidad de cada usuario
       ordenInicial: { campo: 'FECHA_REGISTRO', dir: 'desc' },
       textoVacio: 'Todavía no hay verificaciones registradas',
-      ayuda: 'Fechas: pasa el mouse y usa ✏️ (o doble clic). ✓ o Enter guarda, ✕ o Esc cancela, y puedes deshacer. ' +
-        'El folio se cambia desde 🔍 Ver detalle. ▾ en cada columna para filtrar u ordenar.',
+      ayuda: 'Fechas: pasa el mouse y usa ✏️ (o doble clic). ✓ o Enter guarda, ✕ o Esc cancela; Ctrl+Z deshace. ' +
+        'El folio se cambia desde 🔍 Ver detalle. ▾ en cada columna: filtrar, ordenar, fijar u ocultar. ' +
+        'Shift+clic en casillas selecciona un rango.',
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
       exportar: { nombreArchivo: 'Verificaciones' },
       etiquetaFila: (v) => [v.FOLIO, v.PLACA, v.FECHA_VERIFICACION ? 'verificó ' + formatearFecha(v.FECHA_VERIFICACION) : '']
@@ -728,7 +730,7 @@
       },
       columnas: [
         // Cambiar el folio también cambia la placa: solo desde el panel de detalle, no en la celda
-        { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', editable: 'panel' },
+        { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', editable: 'panel', fijada: true },
         { campo: 'PLACA', titulo: 'Placa', tipo: 'texto' },
         { campo: 'FECHA_VERIFICACION', titulo: 'Fecha verificación', tipo: 'fecha', editable: true },
         { campo: 'FECHA_PROXIMA', titulo: 'Próxima verificación', tipo: 'fecha', editable: true },
@@ -836,6 +838,7 @@
 
     // ----- Carga -----
     async function cargar() {
+      tabla.setCargando(true);   // primera vez: filas grises; al refrescar: barra arriba sin borrar lo que se ve
       try {
         verificaciones = conDerivados((await callServer('apiListarVerificaciones', state.token)) || []);
       } catch (err) {
