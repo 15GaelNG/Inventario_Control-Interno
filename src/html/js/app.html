@@ -534,7 +534,7 @@
           .join('');
       }
       html += seccionInfo('🚗 Vehículo');
-      html += '<p class="empty-state" id="vehiculo-info-cargando">Cargando…</p>';
+      html += '<div class="loading-inline" id="vehiculo-info-cargando"><span class="spinner"></span> Buscando en el catálogo de vehículos…</div>';
       grid.innerHTML = html;
       modalVehiculo.hidden = false;
 
