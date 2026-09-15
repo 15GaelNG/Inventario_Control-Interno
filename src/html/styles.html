@@ -22,6 +22,13 @@
     --color-note-bg: var(--color-primary-soft);
     --color-badge-bg: #ffffff; /* fijo: el logo (navy+dorado) siempre necesita fondo claro, en cualquier tema */
 
+    /* Sidebar: fondo navy fijo de marca, NO cambia con el tema claro/oscuro. */
+    --color-sidebar-bg: #06263A;
+    --color-sidebar-text: #b7c8d2;
+    --color-sidebar-text-strong: #ffffff;
+    --color-sidebar-hover: rgba(255,255,255,.08);
+    --color-sidebar-border: rgba(255,255,255,.14);
+
     --radius: 12px;
     --shadow: 0 1px 3px rgba(6,38,58,.08), 0 1px 2px rgba(6,38,58,.05);
     --shadow-lg: 0 24px 48px -16px rgba(6,38,58,.35);
@@ -63,20 +70,23 @@
      hace scroll internamente (ver más abajo). */
   #app { display: flex; height: 100vh; overflow: hidden; }
 
-  /* Sidebar */
+  /* Sidebar — fondo navy fijo de marca (no cambia con el tema claro/oscuro) */
   #sidebar {
-    width: 220px; height: 100vh; background: var(--color-surface);
-    border-right: 1px solid var(--color-border);
-    padding: 16px 12px; display: flex; flex-direction: column; gap: 4px;
+    width: 250px; height: 100vh; background: var(--color-sidebar-bg);
+    border-right: 1px solid var(--color-sidebar-border);
+    padding: 18px 14px; display: flex; flex-direction: column; gap: 4px;
     flex-shrink: 0; overflow-y: auto; transition: width .28s ease;
   }
-  #sidebar.collapsed { width: 84px; }
+  #sidebar.collapsed { width: 92px; }
 
-  .sidebar-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-  .sidebar-brand { display: flex; align-items: center; gap: 8px; overflow: hidden; min-width: 0; }
-  .sidebar-brand-icon { width: 24px; height: 24px; flex-shrink: 0; }
+  .sidebar-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .sidebar-brand { display: flex; align-items: center; gap: 9px; overflow: hidden; min-width: 0; }
+  .sidebar-brand-icon {
+    width: 30px; height: 30px; flex-shrink: 0; border-radius: 8px;
+    background: var(--color-badge-bg); padding: 3px; object-fit: contain;
+  }
   .sidebar-title {
-    font-size: 15px; font-weight: 600; margin: 0; color: var(--color-primary);
+    font-size: 15.5px; font-weight: 600; margin: 0; color: var(--color-sidebar-text-strong);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
 
@@ -84,21 +94,21 @@
   :root[data-theme="dark"] .cm-logo-light { display: none; }
   :root[data-theme="dark"] .cm-logo-dark { display: block; }
   .sidebar-collapse-btn {
-    background: transparent; border: 1px solid var(--color-border); color: var(--color-text-muted);
+    background: transparent; border: 1px solid var(--color-sidebar-border); color: var(--color-sidebar-text);
     width: 26px; height: 26px; border-radius: 8px; padding: 0; font-size: 12px;
     flex-shrink: 0; transition: transform .28s ease, background-color .35s ease;
   }
-  .sidebar-collapse-btn:hover { background: var(--color-bg); }
+  .sidebar-collapse-btn:hover { background: var(--color-sidebar-hover); }
   #sidebar.collapsed .sidebar-header { justify-content: center; }
   #sidebar.collapsed .sidebar-collapse-btn { transform: rotate(180deg); }
 
   .nav-item {
     display: flex; align-items: center; gap: 10px;
-    padding: 10px 12px; border-radius: var(--radius); cursor: pointer;
-    color: var(--color-text-muted); font-weight: 500; white-space: nowrap; overflow: hidden;
+    padding: 11px 13px; border-radius: var(--radius); cursor: pointer;
+    color: var(--color-sidebar-text); font-weight: 500; white-space: nowrap; overflow: hidden;
   }
-  .nav-item:hover { background: var(--color-bg); }
-  .nav-item.active { background: var(--color-primary); color: #fff; }
+  .nav-item:hover { background: var(--color-sidebar-hover); }
+  .nav-item.active { background: var(--color-accent); color: var(--color-primary); }
   .nav-icon { flex-shrink: 0; width: 20px; text-align: center; }
   .nav-label { overflow: hidden; text-overflow: ellipsis; }
 
@@ -113,32 +123,32 @@
 
   .nav-group-header {
     display: flex; align-items: center; gap: 10px; cursor: pointer;
-    padding: 10px 12px; border-radius: var(--radius);
-    color: var(--color-text-muted); font-weight: 600; font-size: 12.5px;
+    padding: 11px 13px; border-radius: var(--radius);
+    color: var(--color-sidebar-text); font-weight: 600; font-size: 13px;
     white-space: nowrap; overflow: hidden;
   }
-  .nav-group-header:hover { background: var(--color-bg); }
+  .nav-group-header:hover { background: var(--color-sidebar-hover); }
   .nav-group-header .nav-icon { flex-shrink: 0; width: 20px; text-align: center; }
   .nav-group-header .nav-label { flex: 1; overflow: hidden; text-overflow: ellipsis; }
   .nav-group-chevron {
-    flex-shrink: 0; font-size: 10px; transition: transform .2s ease; color: var(--color-text-muted);
+    flex-shrink: 0; font-size: 10px; transition: transform .2s ease; color: var(--color-sidebar-text);
   }
   .nav-group.expanded .nav-group-chevron { transform: rotate(90deg); }
 
   .nav-group-items {
     max-height: 0; overflow: hidden; transition: max-height .25s ease;
     display: flex; flex-direction: column; gap: 1px;
-    padding-left: 14px; border-left: 2px solid var(--color-border); margin-left: 22px;
+    padding-left: 14px; border-left: 2px solid var(--color-sidebar-border); margin-left: 23px;
   }
   .nav-group.expanded .nav-group-items { max-height: 600px; }
 
   .nav-subitem {
-    padding: 8px 10px; border-radius: 8px; cursor: pointer;
-    color: var(--color-text-muted); font-size: 12.5px; font-weight: 500;
+    padding: 9px 11px; border-radius: 8px; cursor: pointer;
+    color: var(--color-sidebar-text); font-size: 13px; font-weight: 500;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .nav-subitem:hover { background: var(--color-bg); }
-  .nav-subitem.active { background: var(--color-primary); color: #fff; }
+  .nav-subitem:hover { background: var(--color-sidebar-hover); }
+  .nav-subitem.active { background: var(--color-accent); color: var(--color-primary); }
 
   /* En modo colapsado, los grupos se reducen a solo el ícono del encabezado */
   #sidebar.collapsed .nav-group-header .nav-label,
@@ -147,10 +157,14 @@
   #sidebar.collapsed .nav-group-items { display: none !important; }
 
   .sidebar-user {
-    padding: 8px 12px; font-size: 12px; color: var(--color-text-muted);
+    padding: 8px 13px; font-size: 12.5px; color: var(--color-sidebar-text);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   #btn-logout { display: flex; align-items: center; gap: 10px; }
+  #sidebar button.secondary {
+    color: var(--color-sidebar-text); border-color: var(--color-sidebar-border);
+  }
+  #sidebar button.secondary:hover { background: var(--color-sidebar-hover); }
 
   /* #main es columna: la topbar no encoge (queda fija), #view-container
      se lleva el espacio restante y hace scroll por su cuenta. */
