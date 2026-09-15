@@ -99,17 +99,42 @@ const SheetUtils = (function () {
    * contiene TODAS las columnas dadas (por nombre exacto). Útil cuando no
    * conocemos el nombre real de la pestaña (ej. spreadsheets ajenos, como el
    * de AppSheet) pero sí sabemos qué columnas debe tener.
+   *
+   * Cachea el nombre de hoja encontrado (CacheService, 6 horas) para no tener
+   * que escanear TODAS las pestañas del spreadsheet en cada llamada — en un
+   * archivo con ~50 pestañas eso se sentía notablemente lento.
+   *
+   * Si más de una pestaña comparte esas columnas (ej. una copia/respaldo),
+   * se usa la que tiene más filas de datos, asumiendo que la real es la que
+   * más se ha usado.
    */
   function getSheetByColumns(spreadsheetId, columnasRequeridas) {
+    const cache = CacheService.getScriptCache();
+    const cacheKey = 'hojaPorColumnas_' + spreadsheetId + '_' + columnasRequeridas.join('|');
     const ss = SpreadsheetApp.openById(spreadsheetId);
-    const hoja = ss.getSheets().find((sheet) => {
+
+    const nombreCacheado = cache.get(cacheKey);
+    if (nombreCacheado) {
+      const hoja = ss.getSheetByName(nombreCacheado);
+      if (hoja) return hoja;
+      // La hoja cacheada ya no existe (renombrada/eliminada) — se re-escanea abajo.
+    }
+
+    const candidatas = ss.getSheets().filter((sheet) => {
       if (sheet.getLastColumn() === 0) return false;
       const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
       return columnasRequeridas.every((col) => headers.indexOf(col) !== -1);
     });
-    if (!hoja) {
+
+    if (candidatas.length === 0) {
       throw new Error('No se encontró ninguna hoja con las columnas: ' + columnasRequeridas.join(', '));
     }
+
+    const hoja = candidatas.length === 1
+      ? candidatas[0]
+      : candidatas.sort((a, b) => b.getLastRow() - a.getLastRow())[0];
+
+    cache.put(cacheKey, hoja.getName(), 21600); // 6 horas
     return hoja;
   }
 
