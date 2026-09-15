@@ -6,6 +6,13 @@
    * solo por cambiar de pantalla.
    */
 
+  // Íconos (Lucide): dibuja cualquier <i data-lucide="..."> que haya en el DOM.
+  // Hay que llamarla cada vez que se inyecta HTML nuevo con íconos (innerHTML no
+  // los "activa" solo) — por eso aparece después de casi cada render dinámico.
+  function refreshIcons() {
+    if (window.lucide) lucide.createIcons();
+  }
+
   // Tema (claro/oscuro) — se aplica antes de montar cualquier vista para evitar parpadeo.
   // Los botones de tema viven en dos lugares (login y sidebar del app-shell), así que
   // se identifican por clase (.theme-btn + data-tema), no por id, y se manejan con
@@ -150,14 +157,15 @@
     const tpl = document.getElementById(templateId);
     container.innerHTML = '';
     container.appendChild(tpl.content.cloneNode(true));
+    refreshIcons();
     if (initFn) initFn();
   }
 
-  /** Ícono temático (vehículos/líneas/pagos/uber) según a qué área pertenece la vista. */
+  /** Ícono (nombre de Lucide) temático según a qué área pertenece la vista. */
   function iconoDeVista(vista) {
-    if (vista === 'dashboard') return '🏠';
+    if (vista === 'dashboard') return 'home';
     const grupo = NAV_GRUPOS.find((g) => g.items.some((it) => it.vista === vista));
-    return grupo ? grupo.icono : '📄';
+    return grupo ? grupo.icono : 'file-text';
   }
 
   /**
@@ -175,9 +183,10 @@
     const overlay = document.createElement('div');
     overlay.className = 'view-transition';
     overlay.innerHTML =
-      '<div class="view-transition-icon">' + iconoDeVista(vista) + '</div>' +
+      '<div class="view-transition-icon"><i data-lucide="' + iconoDeVista(vista) + '" class="ico"></i></div>' +
       '<div class="view-transition-text">Cargando ' + (etiqueta || '') + '…</div>';
     cont.appendChild(overlay);
+    refreshIcons();
     requestAnimationFrame(() => overlay.classList.add('show'));
 
     setTimeout(() => {
@@ -205,11 +214,12 @@
   function mostrarProximamente(nombreModulo) {
     document.getElementById('view-container').innerHTML =
       '<div class="card" style="max-width:420px; margin:60px auto; text-align:center;">' +
-      '<div style="font-size:32px; margin-bottom:10px;">🚧</div>' +
+      '<div style="font-size:32px; margin-bottom:10px;"><i data-lucide="construction" class="ico"></i></div>' +
       '<h2 style="margin-bottom:6px;">' + nombreModulo + '</h2>' +
       '<p style="color:var(--color-text-muted); font-size:13px; margin:0;">' +
       'Este módulo todavía no está construido — muy pronto.</p>' +
       '</div>';
+    refreshIcons();
   }
 
   /**
@@ -219,7 +229,7 @@
    */
   const NAV_GRUPOS = [
     {
-      id: 'servicios-vehiculares', icono: '🚗', etiqueta: 'Servicios Vehiculares',
+      id: 'servicios-vehiculares', icono: 'car', etiqueta: 'Servicios Vehiculares',
       items: [
         { vista: 'incidencias', etiqueta: 'Incidencias' },
         { vista: 'vehiculos', etiqueta: 'Vehículos' },
@@ -232,7 +242,7 @@
       ],
     },
     {
-      id: 'lineas', icono: '📱', etiqueta: 'Líneas',
+      id: 'lineas', icono: 'smartphone', etiqueta: 'Líneas',
       items: [
         { vista: 'reasignaciones-lineas', etiqueta: 'Control de Reasignaciones - Líneas' },
         { vista: 'accesorios', etiqueta: 'Inventario de Accesorios' },
@@ -244,14 +254,14 @@
       ],
     },
     {
-      id: 'arqueos', icono: '💰', etiqueta: 'Arqueos',
+      id: 'arqueos', icono: 'wallet', etiqueta: 'Arqueos',
       items: [
         { vista: 'arqueos', etiqueta: 'Arqueos' },
         { vista: 'caja-chica', etiqueta: 'Caja Chica' },
       ],
     },
     {
-      id: 'uber', icono: '🚕', etiqueta: 'Uber',
+      id: 'uber', icono: 'car-taxi-front', etiqueta: 'Uber',
       items: [
         { vista: 'uber', etiqueta: 'Uber' },
         { vista: 'tickets', etiqueta: 'Tickets' },
@@ -264,9 +274,9 @@
     contenedor.innerHTML = NAV_GRUPOS.map((grupo) => `
       <div class="nav-group" id="nav-group-${grupo.id}">
         <div class="nav-group-header" data-grupo="${grupo.id}">
-          <span class="nav-icon">${grupo.icono}</span>
+          <span class="nav-icon"><i data-lucide="${grupo.icono}" class="ico"></i></span>
           <span class="nav-label">${grupo.etiqueta}</span>
-          <span class="nav-group-chevron">›</span>
+          <span class="nav-group-chevron"><i data-lucide="chevron-right" class="ico"></i></span>
         </div>
         <div class="nav-group-items">
           ${grupo.items.map((item) => `
@@ -284,6 +294,7 @@
     contenedor.querySelectorAll('.nav-subitem').forEach((el) => {
       el.addEventListener('click', () => navegarA(el.dataset.view, el.dataset.etiqueta));
     });
+    refreshIcons();
   }
 
   // ---------- Login ----------
@@ -297,7 +308,8 @@
     document.getElementById('toggle-password').addEventListener('click', (ev) => {
       const seVaAMostrar = inputPassword.type === 'password';
       inputPassword.type = seVaAMostrar ? 'text' : 'password';
-      ev.currentTarget.textContent = seVaAMostrar ? '🙈' : '🙉';
+      ev.currentTarget.innerHTML = `<i data-lucide="${seVaAMostrar ? 'eye' : 'eye-off'}" class="ico"></i>`;
+      refreshIcons();
     });
 
     initGoogleQuickLogin();
@@ -442,8 +454,8 @@
       </div>
     `;
   }
-  function seccionInfo(titulo) {
-    return `<div class="info-section-title">${titulo}</div>`;
+  function seccionInfo(icono, titulo) {
+    return `<div class="info-section-title"><i data-lucide="${icono}" class="ico"></i> ${titulo}</div>`;
   }
 
   async function initIncidencias() {
@@ -567,16 +579,17 @@
       const inc = incidenciasPorId[id];
       let html = '';
       if (inc) {
-        html += seccionInfo('📋 Incidencia');
+        html += seccionInfo('clipboard-list', 'Incidencia');
         html += Object.keys(ETIQUETAS_INCIDENCIA)
           .filter((clave) => inc[clave] !== '' && inc[clave] !== null && inc[clave] !== undefined)
           .map((clave) => itemInfo(ETIQUETAS_INCIDENCIA[clave], inc[clave]))
           .join('');
       }
-      html += seccionInfo('🚗 Vehículo');
+      html += seccionInfo('car', 'Vehículo');
       html += '<div class="loading-inline" id="vehiculo-info-cargando"><span class="spinner"></span> Buscando en el catálogo de vehículos…</div>';
       grid.innerHTML = html;
       modalVehiculo.hidden = false;
+      refreshIcons();
 
       try {
         const vehiculo = await callServer('apiBuscarVehiculoPorFolio', state.token, folio);
@@ -643,12 +656,12 @@
             <td>${inc.DEPARTAMENTO || '—'}</td>
             <td>${inc.INSPECCION_INGRESO || 'Sin motivo registrado'}</td>
             <td>${formatearFecha(inc.FECHA_REGISTRO)}</td>
-            <td><span class="badge-estado ${abierta ? 'abierta' : 'cerrada'}">${abierta ? '🔓 Abierta' : '✅ Cerrada'}</span></td>
+            <td><span class="badge-estado ${abierta ? 'abierta' : 'cerrada'}"><i data-lucide="${abierta ? 'lock-open' : 'circle-check'}" class="ico"></i> ${abierta ? 'Abierta' : 'Cerrada'}</span></td>
             <td>
               <div class="tabla-actions">
                 ${abierta ? `<button type="button" class="secondary btn-cerrar-incidencia" data-id="${inc.ID}" data-folio="${inc.FOLIO}">Cerrar</button>` : ''}
-                <button type="button" class="secondary btn-editar-incidencia" data-id="${inc.ID}" title="Editar">✏️</button>
-                <button type="button" class="danger btn-eliminar-incidencia" data-id="${inc.ID}" data-folio="${inc.FOLIO}" title="Eliminar">🗑️</button>
+                <button type="button" class="secondary btn-editar-incidencia" data-id="${inc.ID}" title="Editar"><i data-lucide="pencil" class="ico"></i></button>
+                <button type="button" class="danger btn-eliminar-incidencia" data-id="${inc.ID}" data-folio="${inc.FOLIO}" title="Eliminar"><i data-lucide="trash-2" class="ico"></i></button>
               </div>
             </td>
           </tr>
@@ -667,6 +680,7 @@
       lista.querySelectorAll('.btn-eliminar-incidencia').forEach((btn) => {
         btn.addEventListener('click', () => eliminarIncidencia(btn.dataset.id, btn.dataset.folio));
       });
+      refreshIcons();
     }
 
     document.getElementById('form-incidencia').addEventListener('submit', async (ev) => {
@@ -768,7 +782,7 @@
 
     function badgeEstatus(estatus) {
       const esBaja = String(estatus || '').toUpperCase().includes('BAJA');
-      return `<span class="badge-estado ${esBaja ? 'baja' : 'activo'}">${esBaja ? '🚫 De baja' : '✅ Activo'}</span>`;
+      return `<span class="badge-estado ${esBaja ? 'baja' : 'activo'}"><i data-lucide="${esBaja ? 'ban' : 'circle-check'}" class="ico"></i> ${esBaja ? 'De baja' : 'Activo'}</span>`;
     }
 
     // Color determinístico por clase (misma clase = mismo color siempre),
@@ -808,8 +822,8 @@
           <td>${badgeEstatus(v.ESTATUS)}</td>
           <td>
             <div class="tabla-actions">
-              <button type="button" class="secondary btn-editar-vehiculo" data-id="${v.ID_VEHICULO}" title="Editar">✏️</button>
-              <button type="button" class="danger btn-eliminar-vehiculo" data-id="${v.ID_VEHICULO}" data-folio="${v.FOLIO}" title="Eliminar">🗑️</button>
+              <button type="button" class="secondary btn-editar-vehiculo" data-id="${v.ID_VEHICULO}" title="Editar"><i data-lucide="pencil" class="ico"></i></button>
+              <button type="button" class="danger btn-eliminar-vehiculo" data-id="${v.ID_VEHICULO}" data-folio="${v.FOLIO}" title="Eliminar"><i data-lucide="trash-2" class="ico"></i></button>
             </div>
           </td>
         </tr>
@@ -824,6 +838,7 @@
       lista.querySelectorAll('.btn-eliminar-vehiculo').forEach((btn) => {
         btn.addEventListener('click', () => eliminarVehiculo(btn.dataset.id, btn.dataset.folio));
       });
+      refreshIcons();
     }
     filtroClase.addEventListener('change', renderTabla);
 
