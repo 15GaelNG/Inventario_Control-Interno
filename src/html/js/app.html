@@ -196,6 +196,7 @@
       if (vista === 'dashboard') { montarVista('tpl-dashboard', initDashboard); return; }
       if (vista === 'accesorios') { montarVista('tpl-accesorios', initAccesorios); return; }
       if (vista === 'incidencias') { montarVista('tpl-incidencias', initIncidencias); return; }
+      if (vista === 'vehiculos') { montarVista('tpl-vehiculos', initVehiculos); return; }
       mostrarProximamente(etiqueta || vista);
     });
   }
@@ -420,6 +421,30 @@
     const f = new Date(valor);
     return isNaN(f) ? '' : f.toISOString().slice(0, 10);
   }
+  function formatearFecha(valor) {
+    if (!valor) return '—';
+    const f = new Date(valor);
+    return isNaN(f) ? '—' : f.toLocaleDateString('es-MX');
+  }
+  // Helpers compartidos para las tarjetas de "detalle completo" (Incidencias y Vehículos).
+  function tituloDesdeClave(clave) {
+    return clave.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+  }
+  function formatearValorInfo(valor) {
+    if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(valor)) return formatearFecha(valor);
+    return String(valor);
+  }
+  function itemInfo(etiqueta, valor) {
+    return `
+      <div class="info-item">
+        <div class="info-label">${etiqueta}</div>
+        <div class="info-value">${formatearValorInfo(valor)}</div>
+      </div>
+    `;
+  }
+  function seccionInfo(titulo) {
+    return `<div class="info-section-title">${titulo}</div>`;
+  }
 
   async function initIncidencias() {
     const lista = document.getElementById('lista-incidencias');
@@ -482,12 +507,6 @@
       }
     });
 
-    function formatearFecha(valor) {
-      if (!valor) return '—';
-      const f = new Date(valor);
-      return isNaN(f) ? '—' : f.toLocaleDateString('es-MX');
-    }
-
     function abrirModalCierre(id, folio) {
       document.getElementById('cerrar-id').value = id;
       document.getElementById('cerrar-folio').textContent = 'Folio: ' + folio;
@@ -525,25 +544,6 @@
       modalEditar.hidden = true;
       document.getElementById('form-editar-incidencia').reset();
       document.getElementById('editar-error').hidden = true;
-    }
-
-    function tituloDesdeClave(clave) {
-      return clave.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
-    }
-    function formatearValorInfo(valor) {
-      if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(valor)) return formatearFecha(valor);
-      return String(valor);
-    }
-    function itemInfo(etiqueta, valor) {
-      return `
-        <div class="info-item">
-          <div class="info-label">${etiqueta}</div>
-          <div class="info-value">${formatearValorInfo(valor)}</div>
-        </div>
-      `;
-    }
-    function seccionInfo(titulo) {
-      return `<div class="info-section-title">${titulo}</div>`;
     }
 
     const ETIQUETAS_INCIDENCIA = {
@@ -754,6 +754,187 @@
     });
 
     await Promise.all([promesaVehiculos, cargar()]);
+  }
+
+  // ---------- Vehículos ----------
+  async function initVehiculos() {
+    const lista = document.getElementById('lista-vehiculos');
+    const vacio = document.getElementById('vehiculos-vacio');
+    const modalEditar = document.getElementById('modal-editar-vehiculo');
+    const modalDetalle = document.getElementById('modal-detalle-vehiculo');
+    let vehiculosPorId = {};
+
+    function badgeEstatus(estatus) {
+      const esBaja = String(estatus || '').toUpperCase().includes('BAJA');
+      return `<span class="badge-estado ${esBaja ? 'baja' : 'activo'}">${esBaja ? '🚫 De baja' : '✅ Activo'}</span>`;
+    }
+
+    async function cargar() {
+      const errorBox = document.getElementById('veh-error');
+      let vehiculos;
+      try {
+        vehiculos = await callServer('apiListarVehiculosResumen', state.token);
+      } catch (err) {
+        console.error('No se pudo cargar el catálogo de vehículos:', err);
+        errorBox.textContent = 'No se pudo cargar el catálogo de vehículos: ' + err.message;
+        errorBox.hidden = false;
+        return;
+      }
+      errorBox.hidden = true;
+      vehiculos = vehiculos || [];
+
+      vehiculosPorId = {};
+      vehiculos.forEach((v) => { vehiculosPorId[v.ID_VEHICULO] = v; });
+
+      document.getElementById('veh-stat-total').textContent = vehiculos.length;
+      document.getElementById('veh-stat-activos').textContent =
+        vehiculos.filter((v) => !String(v.ESTATUS || '').toUpperCase().includes('BAJA')).length;
+      document.getElementById('veh-stat-baja').textContent =
+        vehiculos.filter((v) => String(v.ESTATUS || '').toUpperCase().includes('BAJA')).length;
+
+      vacio.hidden = vehiculos.length > 0;
+      lista.innerHTML = vehiculos.map((v) => `
+        <div class="vehiculo-item">
+          <div class="vehiculo-icon">🚗</div>
+          <div class="vehiculo-main vehiculo-main-clickable" data-id="${v.ID_VEHICULO}" title="Ver detalle completo">
+            <div class="vehiculo-folio">${v.FOLIO}${v.DEPARTAMENTO ? ' · ' + v.DEPARTAMENTO : ''}</div>
+            <div class="vehiculo-meta">${[v.MARCA, v.LINEA_VEHICULO, v.MODELO].filter(Boolean).join(' ')}</div>
+          </div>
+          <div class="vehiculo-placa">${v.PLACA || '—'}</div>
+          ${badgeEstatus(v.ESTATUS)}
+          <div class="vehiculo-actions">
+            <button type="button" class="secondary btn-editar-vehiculo" data-id="${v.ID_VEHICULO}" title="Editar">✏️</button>
+            <button type="button" class="danger btn-eliminar-vehiculo" data-id="${v.ID_VEHICULO}" data-folio="${v.FOLIO}" title="Eliminar">🗑️</button>
+          </div>
+        </div>
+      `).join('');
+
+      lista.querySelectorAll('.vehiculo-main-clickable').forEach((el) => {
+        el.addEventListener('click', () => abrirDetalleVehiculo(vehiculosPorId[el.dataset.id]));
+      });
+      lista.querySelectorAll('.btn-editar-vehiculo').forEach((btn) => {
+        btn.addEventListener('click', () => abrirEditarVehiculo(vehiculosPorId[btn.dataset.id]));
+      });
+      lista.querySelectorAll('.btn-eliminar-vehiculo').forEach((btn) => {
+        btn.addEventListener('click', () => eliminarVehiculo(btn.dataset.id, btn.dataset.folio));
+      });
+    }
+
+    async function abrirDetalleVehiculo(vResumen) {
+      if (!vResumen) return;
+      document.getElementById('detalle-vehiculo-folio-label').textContent = 'Folio: ' + vResumen.FOLIO;
+      const grid = document.getElementById('detalle-vehiculo-grid');
+      grid.innerHTML = '<div class="loading-inline"><span class="spinner"></span> Cargando…</div>';
+      modalDetalle.hidden = false;
+      try {
+        const completo = await callServer('apiBuscarVehiculoPorFolio', state.token, vResumen.FOLIO);
+        if (!completo) {
+          grid.innerHTML = '<p class="empty-state">No se encontró el registro completo.</p>';
+          return;
+        }
+        grid.innerHTML = Object.keys(completo)
+          .filter((k) => completo[k] !== '' && completo[k] !== null && completo[k] !== undefined)
+          .map((k) => itemInfo(tituloDesdeClave(k), completo[k]))
+          .join('');
+      } catch (err) {
+        grid.innerHTML = '<p class="error-msg">No se pudo cargar: ' + err.message + '</p>';
+      }
+    }
+    document.getElementById('btn-cerrar-detalle-vehiculo').addEventListener('click', () => { modalDetalle.hidden = true; });
+    modalDetalle.addEventListener('click', (ev) => { if (ev.target === modalDetalle) modalDetalle.hidden = true; });
+
+    function abrirEditarVehiculo(v) {
+      if (!v) return;
+      document.getElementById('editar-vehiculo-id').value = v.ID_VEHICULO;
+      document.getElementById('editar-vehiculo-folio-label').textContent = 'Folio: ' + v.FOLIO;
+      document.getElementById('editar-vehiculo-folio').value = v.FOLIO || '';
+      document.getElementById('editar-vehiculo-departamento').value = v.DEPARTAMENTO || '';
+      document.getElementById('editar-vehiculo-no-economico').value = v.NO_ECONOMICO || '';
+      document.getElementById('editar-vehiculo-marca').value = v.MARCA || '';
+      document.getElementById('editar-vehiculo-clase').value = v.CLASE || '';
+      document.getElementById('editar-vehiculo-linea').value = v.LINEA_VEHICULO || '';
+      document.getElementById('editar-vehiculo-anio').value = v.MODELO || '';
+      document.getElementById('editar-vehiculo-color').value = v.COLOR || '';
+      document.getElementById('editar-vehiculo-placa').value = v.PLACA || '';
+      document.getElementById('editar-vehiculo-sede').value = v.SEDE || '';
+      document.getElementById('editar-vehiculo-ubicacion').value = v.UBICACION || '';
+      document.getElementById('editar-vehiculo-estatus').value = v.ESTATUS || '';
+      document.getElementById('editar-vehiculo-error').hidden = true;
+      modalEditar.hidden = false;
+    }
+    function cerrarEditarVehiculo() {
+      modalEditar.hidden = true;
+      document.getElementById('form-editar-vehiculo').reset();
+      document.getElementById('editar-vehiculo-error').hidden = true;
+    }
+    document.getElementById('btn-cancelar-editar-vehiculo').addEventListener('click', cerrarEditarVehiculo);
+    modalEditar.addEventListener('click', (ev) => { if (ev.target === modalEditar) cerrarEditarVehiculo(); });
+
+    document.getElementById('form-editar-vehiculo').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('editar-vehiculo-error');
+      errorBox.hidden = true;
+      try {
+        await callServer('apiActualizarVehiculo', state.token, document.getElementById('editar-vehiculo-id').value, {
+          FOLIO: document.getElementById('editar-vehiculo-folio').value.trim(),
+          DEPARTAMENTO: document.getElementById('editar-vehiculo-departamento').value.trim(),
+          'NO ECONOMICO': document.getElementById('editar-vehiculo-no-economico').value.trim(),
+          MARCA: document.getElementById('editar-vehiculo-marca').value.trim(),
+          CLASE: document.getElementById('editar-vehiculo-clase').value.trim(),
+          'LINEA VEHICULO': document.getElementById('editar-vehiculo-linea').value.trim(),
+          MODELO: document.getElementById('editar-vehiculo-anio').value,
+          COLOR: document.getElementById('editar-vehiculo-color').value.trim(),
+          PLACA: document.getElementById('editar-vehiculo-placa').value.trim(),
+          SEDE: document.getElementById('editar-vehiculo-sede').value.trim(),
+          UBICACION: document.getElementById('editar-vehiculo-ubicacion').value.trim(),
+          ESTATUS: document.getElementById('editar-vehiculo-estatus').value.trim(),
+        });
+        cerrarEditarVehiculo();
+        await cargar();
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+      }
+    });
+
+    async function eliminarVehiculo(id, folio) {
+      if (!confirm('¿Eliminar el vehículo con folio ' + folio + '? Esta acción no se puede deshacer.')) return;
+      try {
+        await callServer('apiEliminarVehiculo', state.token, id);
+        await cargar();
+      } catch (err) {
+        alert('No se pudo eliminar: ' + err.message);
+      }
+    }
+
+    document.getElementById('form-vehiculo').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('veh-error');
+      errorBox.hidden = true;
+      try {
+        await callServer('apiCrearVehiculo', state.token, {
+          FOLIO: document.getElementById('veh-folio').value.trim(),
+          DEPARTAMENTO: document.getElementById('veh-departamento').value.trim(),
+          'NO ECONOMICO': document.getElementById('veh-no-economico').value.trim(),
+          MARCA: document.getElementById('veh-marca').value.trim(),
+          CLASE: document.getElementById('veh-clase').value.trim(),
+          'LINEA VEHICULO': document.getElementById('veh-linea').value.trim(),
+          MODELO: document.getElementById('veh-anio').value,
+          COLOR: document.getElementById('veh-color').value.trim(),
+          PLACA: document.getElementById('veh-placa').value.trim(),
+          SEDE: document.getElementById('veh-sede').value.trim(),
+          UBICACION: document.getElementById('veh-ubicacion').value.trim(),
+          ESTATUS: document.getElementById('veh-estatus').value.trim(),
+        });
+        ev.target.reset();
+        await cargar();
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+      }
+    });
+
+    await cargar();
   }
 
   document.getElementById('btn-logout').addEventListener('click', cerrarSesion);

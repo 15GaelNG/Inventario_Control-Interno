@@ -1,0 +1,103 @@
+<template id="tpl-vehiculos">
+  <div class="page-header">
+    <div>
+      <h2>🚗 Vehículos</h2>
+      <p class="page-subtitle">Catálogo de unidades — alta, edición y baja</p>
+    </div>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat-tile">
+      <div class="stat-icon">🚗</div>
+      <div><div class="stat-value" id="veh-stat-total">0</div><div class="stat-label">Total</div></div>
+    </div>
+    <div class="stat-tile stat-tile-ok">
+      <div class="stat-icon">✅</div>
+      <div><div class="stat-value" id="veh-stat-activos">0</div><div class="stat-label">Activos</div></div>
+    </div>
+    <div class="stat-tile stat-tile-warn">
+      <div class="stat-icon">🚫</div>
+      <div><div class="stat-value" id="veh-stat-baja">0</div><div class="stat-label">De baja</div></div>
+    </div>
+  </div>
+
+  <div class="card form-card" style="margin-bottom:18px">
+    <div class="form-card-header">
+      <div class="form-card-icon">🚗</div>
+      <div>
+        <h3>Registrar vehículo</h3>
+        <p>Da de alta una nueva unidad en el catálogo</p>
+      </div>
+    </div>
+    <form id="form-vehiculo" class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 14px;">
+      <div class="field"><label>Folio</label><input type="text" id="veh-folio" required placeholder="Ej. AUT0100" /></div>
+      <div class="field"><label>Departamento</label><input type="text" id="veh-departamento" /></div>
+      <div class="field"><label>No. económico</label><input type="text" id="veh-no-economico" /></div>
+      <div class="field"><label>Marca</label><input type="text" id="veh-marca" /></div>
+      <div class="field"><label>Clase</label><input type="text" id="veh-clase" placeholder="Ej. Motocicleta, Utilitario" /></div>
+      <div class="field"><label>Línea / modelo</label><input type="text" id="veh-linea" placeholder="Ej. CGL125 TOOL" /></div>
+      <div class="field"><label>Año</label><input type="number" id="veh-anio" /></div>
+      <div class="field"><label>Color</label><input type="text" id="veh-color" /></div>
+      <div class="field"><label>Placa</label><input type="text" id="veh-placa" /></div>
+      <div class="field"><label>Sede</label><input type="text" id="veh-sede" /></div>
+      <div class="field"><label>Ubicación</label><input type="text" id="veh-ubicacion" /></div>
+      <div class="field"><label>Estatus</label><input type="text" id="veh-estatus" placeholder="Ej. Activo" /></div>
+      <div style="grid-column: 1 / -1;"><button type="submit">🚗 Registrar vehículo</button></div>
+    </form>
+    <div class="error-msg" id="veh-error" hidden></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">Catálogo</h3>
+    <div id="lista-vehiculos" class="vehiculo-list"></div>
+    <p class="empty-state" id="vehiculos-vacio" hidden>Todavía no hay vehículos registrados.</p>
+  </div>
+
+  <!-- Modal: editar vehículo -->
+  <div class="modal-backdrop" id="modal-editar-vehiculo" hidden>
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <div>
+          <h3 style="margin:0">Editar vehículo</h3>
+          <p class="modal-subtitle" id="editar-vehiculo-folio-label"></p>
+        </div>
+        <button type="button" class="modal-close" id="btn-cancelar-editar-vehiculo">✕</button>
+      </div>
+      <form id="form-editar-vehiculo">
+        <input type="hidden" id="editar-vehiculo-id" />
+        <div class="modal-form-scroll grid" style="grid-template-columns: repeat(2, 1fr); gap: 0 14px;">
+          <div class="field"><label>Folio</label><input type="text" id="editar-vehiculo-folio" /></div>
+          <div class="field"><label>Departamento</label><input type="text" id="editar-vehiculo-departamento" /></div>
+          <div class="field"><label>No. económico</label><input type="text" id="editar-vehiculo-no-economico" /></div>
+          <div class="field"><label>Marca</label><input type="text" id="editar-vehiculo-marca" /></div>
+          <div class="field"><label>Clase</label><input type="text" id="editar-vehiculo-clase" /></div>
+          <div class="field"><label>Línea / modelo</label><input type="text" id="editar-vehiculo-linea" /></div>
+          <div class="field"><label>Año</label><input type="number" id="editar-vehiculo-anio" /></div>
+          <div class="field"><label>Color</label><input type="text" id="editar-vehiculo-color" /></div>
+          <div class="field"><label>Placa</label><input type="text" id="editar-vehiculo-placa" /></div>
+          <div class="field"><label>Sede</label><input type="text" id="editar-vehiculo-sede" /></div>
+          <div class="field"><label>Ubicación</label><input type="text" id="editar-vehiculo-ubicacion" /></div>
+          <div class="field"><label>Estatus</label><input type="text" id="editar-vehiculo-estatus" /></div>
+        </div>
+        <div class="error-msg" id="editar-vehiculo-error" hidden></div>
+        <button type="submit" style="width:100%; margin-top:10px">💾 Guardar cambios</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: detalle completo, solo lectura (las 41 columnas de la hoja) -->
+  <div class="modal-backdrop" id="modal-detalle-vehiculo" hidden>
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <div>
+          <h3 style="margin:0">Detalle completo</h3>
+          <p class="modal-subtitle" id="detalle-vehiculo-folio-label"></p>
+        </div>
+        <button type="button" class="modal-close" id="btn-cerrar-detalle-vehiculo">✕</button>
+      </div>
+      <div class="modal-form-scroll">
+        <div id="detalle-vehiculo-grid" class="info-grid"></div>
+      </div>
+    </div>
+  </div>
+</template>

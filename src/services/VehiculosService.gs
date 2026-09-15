@@ -14,14 +14,29 @@
 
 const VehiculosService = (function () {
   const SHEET_VEHICULOS = 'VEHICULOS';
+  // La columna ID real de esta hoja es ID_VEHICULO, no "ID" (a diferencia de
+  // las hojas nuevas) — hay que pasarla explícitamente a SheetUtils.update/remove.
+  const ID_COLUMN = 'ID_VEHICULO';
 
   function ssId() {
     return Config.SPREADSHEET_IDS.VEHICULOS();
   }
 
+  function limpiarValor_(valor) {
+    // google.script.run puede fallar (entrega null) con arreglos de objetos
+    // que traen Date crudo — se manda todo como texto ISO.
+    return valor instanceof Date ? valor.toISOString() : valor;
+  }
+
+  /** Catálogo completo, todas las columnas. Pesado (648 filas x 41 columnas) —
+   * usar listarResumen() para listas/tarjetas y buscarPorFolio() para detalle. */
   function listar(token) {
     Auth.validarSesion(token);
-    return SheetUtils.getAll(ssId(), SHEET_VEHICULOS);
+    return SheetUtils.getAll(ssId(), SHEET_VEHICULOS).map((row) => {
+      const limpio = {};
+      Object.keys(row).forEach((k) => { limpio[k] = limpiarValor_(row[k]); });
+      return limpio;
+    });
   }
 
   /**
@@ -69,6 +84,56 @@ const VehiculosService = (function () {
     return resultado.sort((a, b) => String(a.FOLIO).localeCompare(String(b.FOLIO)));
   }
 
+  const COLUMNAS_RESUMEN = [
+    'ID_VEHICULO', 'FOLIO', 'DEPARTAMENTO', 'NO ECONOMICO', 'MARCA', 'CLASE',
+    'LINEA VEHICULO', 'MODELO', 'COLOR', 'PLACA', 'SEDE', 'ESTATUS',
+  ];
+
+  /** Lee solo las columnas dadas (no toda la hoja) — {filas, datos: {columna: [valores]}} */
+  function leerColumnas_(sheet, columnas) {
+    const lastRow = sheet.getLastRow();
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const datos = {};
+    columnas.forEach((nombre) => {
+      const col = headers.indexOf(nombre);
+      datos[nombre] = (col === -1 || lastRow < 2)
+        ? []
+        : sheet.getRange(2, col + 1, lastRow - 1, 1).getValues().map((f) => f[0]);
+    });
+    return { filas: Math.max(0, lastRow - 1), datos: datos };
+  }
+
+  /**
+   * Catálogo ligero para la lista/tarjetas del módulo (solo las columnas que
+   * se muestran, no las 41) — incluye vehículos de baja (a diferencia de
+   * listarBasico, que es para autocompletar y los excluye).
+   */
+  function listarResumen(token) {
+    Auth.validarSesion(token);
+    const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
+    const { filas, datos } = leerColumnas_(sheet, COLUMNAS_RESUMEN);
+
+    const resultado = [];
+    for (let i = 0; i < filas; i++) {
+      if (!datos['FOLIO'][i]) continue;
+      resultado.push({
+        ID_VEHICULO: datos['ID_VEHICULO'][i],
+        FOLIO: datos['FOLIO'][i],
+        DEPARTAMENTO: datos['DEPARTAMENTO'][i] || '',
+        NO_ECONOMICO: datos['NO ECONOMICO'][i] || '',
+        MARCA: datos['MARCA'][i] || '',
+        CLASE: datos['CLASE'][i] || '',
+        LINEA_VEHICULO: datos['LINEA VEHICULO'][i] || '',
+        MODELO: datos['MODELO'][i] || '',
+        COLOR: datos['COLOR'][i] || '',
+        PLACA: datos['PLACA'][i] || '',
+        SEDE: datos['SEDE'][i] || '',
+        ESTATUS: datos['ESTATUS'][i] || '',
+      });
+    }
+    return resultado.sort((a, b) => String(a.FOLIO).localeCompare(String(b.FOLIO)));
+  }
+
   /**
    * Regresa el registro completo de un vehículo (todas sus columnas) por
    * FOLIO, o null. Optimizado: en vez de leer las 648 filas x 41 columnas
@@ -107,18 +172,35 @@ const VehiculosService = (function () {
     return limpio;
   }
 
-  function crear(token, vehiculo) {
+  /** Da de alta un vehículo. La columna ID_VEHICULO no la trae SheetUtils.insert
+   * sola (solo autogenera si la columna se llama literalmente "ID") — se genera aquí. */
+  function crear(token, datos) {
     Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
-    return SheetUtils.insert(ssId(), SHEET_VEHICULOS, vehiculo);
+    if (!datos.FOLIO) throw new Error('El folio es obligatorio');
+    const fila = Object.assign({}, datos);
+    fila[ID_COLUMN] = Utilities.getUuid().slice(0, 8);
+    SheetUtils.insert(ssId(), SHEET_VEHICULOS, fila);
+    return { ID: fila[ID_COLUMN] };
   }
 
   function actualizar(token, id, cambios) {
     Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
-    return SheetUtils.update(ssId(), SHEET_VEHICULOS, id, cambios);
+    SheetUtils.update(ssId(), SHEET_VEHICULOS, id, cambios, ID_COLUMN);
+    return { ID: id };
+  }
+
+  /** Elimina por completo un vehículo (borrado físico) — solo ADMIN.
+   * OJO: el negocio normalmente "da de baja" (ESTATUS = BAJA VEHICULAR) en
+   * vez de borrar — esto es un borrado real, para altas hechas por error. */
+  function eliminar(token, id) {
+    Auth.requiereRol(token, [Config.ROLES.ADMIN]);
+    const ok = SheetUtils.remove(ssId(), SHEET_VEHICULOS, id, ID_COLUMN);
+    if (!ok) throw new Error('No se encontró el vehículo con ID=' + id);
+    return { ID: id };
   }
 
   // TODO: reasignarResponsable, registrarVerificacion, registrarServicio,
   //       guardarInspeccion (usa PdfService.generarReporteDanios)
 
-  return { listar, listarBasico, buscarPorFolio, crear, actualizar };
+  return { listar, listarBasico, listarResumen, buscarPorFolio, crear, actualizar, eliminar };
 })();
