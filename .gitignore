@@ -1,4 +1,8 @@
 node_modules/
 .clasprc.json
+# Cada desarrollador apunta a SU proyecto DEV de Apps Script (ver README)
+.clasp.json
+.clasp.*.json
+!.clasp.json.example
 *.log
 .DS_Store
