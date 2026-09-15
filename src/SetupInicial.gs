@@ -228,6 +228,9 @@ function apuntarABdOriginal() {
 /** Proyecto de Apps Script compartido (el que recibe lo que está en master). */
 const SCRIPT_ID_COMPARTIDO = '1NbOczw_H8UJ7adxRP4h_jl9VlfyvxM3mANYsaz12U5uo8Gj0BmfIYN3k';
 
+/** Carpeta VERIFICACIONES_Images de PRODUCCIÓN (la que usa AppSheet). En DEV solo se lee. */
+const DRIVE_FOLDER_VERIFICACIONES_PROD = '1iGrxuqmUKKUV9UFIjEOSJ0TEibab3K7C';
+
 /**
  * Deja listas las Script Properties de un proyecto DEV personal (ver README y
  * setup-dev.ps1): todo apunta a la BD de PRUEBAS, nunca a producción.
@@ -241,12 +244,21 @@ function configurarEntornoDev() {
     throw new Error('Esta función es para proyectos DEV personales, no para el proyecto compartido.');
   }
 
-  PropertiesService.getScriptProperties().setProperties({
+  const props = PropertiesService.getScriptProperties();
+  props.setProperties({
     ENTORNO: 'DEV',
     SS_ID_USUARIOS: ORIGINAL_PRUEBAS_SPREADSHEET_ID,
     SS_ID_VEHICULOS: ORIGINAL_PRUEBAS_SPREADSHEET_ID,
     SS_ID_ACCESORIOS: ORIGINAL_PRUEBAS_SPREADSHEET_ID,
+    // Comprobantes existentes (rutas copiadas de producción) se buscan ahí, solo lectura.
+    DRIVE_FOLDER_ID_VERIFICACIONES_LECTURA: DRIVE_FOLDER_VERIFICACIONES_PROD,
   });
+
+  // Los comprobantes NUEVOS de DEV van a una carpeta propia en tu Drive, nunca a la de producción.
+  if (!props.getProperty('DRIVE_FOLDER_ID_VERIFICACIONES')) {
+    const carpeta = DriveApp.createFolder('Inventario DEV - VERIFICACIONES_Images');
+    props.setProperty('DRIVE_FOLDER_ID_VERIFICACIONES', carpeta.getId());
+  }
 
   // Toca la BD de pruebas para que Google pida el permiso de Sheets desde ya
   // y falle aquí (con un mensaje claro) si tu cuenta no tiene acceso.

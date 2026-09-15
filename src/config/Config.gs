@@ -12,6 +12,9 @@
  *   SS_ID_ACCESORIOS
  *   SS_ID_CAJACHICA
  *   ENTORNO            ("DEV" | "PROD")
+ *   DRIVE_FOLDER_ID_VERIFICACIONES          carpeta donde se GUARDAN los comprobantes
+ *   DRIVE_FOLDER_ID_VERIFICACIONES_LECTURA  (opcional) carpeta extra donde se BUSCAN
+ *                                           comprobantes existentes (en DEV: la de prod)
  */
 
 const Config = (function () {
@@ -37,6 +40,11 @@ const Config = (function () {
       TELEFONIA: () => required('SS_ID_TELEFONIA'),
       ACCESORIOS: () => required('SS_ID_ACCESORIOS'),
       CAJACHICA: () => required('SS_ID_CAJACHICA'),
+    },
+
+    DRIVE_FOLDERS: {
+      VERIFICACIONES: () => required('DRIVE_FOLDER_ID_VERIFICACIONES'),
+      VERIFICACIONES_LECTURA: () => props.getProperty('DRIVE_FOLDER_ID_VERIFICACIONES_LECTURA') || '',
     },
 
     SESION_DURACION_HORAS: 8,

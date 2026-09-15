@@ -40,6 +40,7 @@ const VehiculosService = (function () {
         MARCA: v['MARCA'] || '',
         LINEA_VEHICULO: v['LINEA VEHICULO'] || '',
         MODELO: v['MODELO'] || '',
+        PLACA: v['PLACA'] || '',
       }))
       .sort((a, b) => String(a.FOLIO).localeCompare(String(b.FOLIO)));
   }

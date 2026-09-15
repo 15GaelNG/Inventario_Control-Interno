@@ -40,6 +40,17 @@ function apiListarVehiculosBasico(token) {
   return VehiculosService.listarBasico(token);
 }
 
+// --- Verificaciones ---
+function apiListarVerificaciones(token) {
+  return VerificacionesService.listar(token);
+}
+function apiRegistrarVerificacion(token, datos, archivo) {
+  return VerificacionesService.registrar(token, datos, archivo);
+}
+function apiUrlComprobanteVerificacion(token, ruta) {
+  return VerificacionesService.urlComprobante(token, ruta);
+}
+
 // --- Incidencias ---
 function apiListarIncidencias(token) {
   return IncidenciasService.listar(token);
