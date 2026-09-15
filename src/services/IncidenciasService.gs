@@ -68,11 +68,15 @@ const IncidenciasService = (function () {
       'DEPARTAMENTO': datos.DEPARTAMENTO || '',
       'MODELO': datos.MODELO || '',
       'AÑO': datos.ANIO || '',
+      // Fecha de registro: siempre "hoy", ignora cualquier valor del cliente.
       'FECHA REGISTRO': ahora,
-      'FECHA INSPECCION': ahora,
+      // Fecha de inspección: editable, no necesariamente igual a la de registro.
+      'FECHA INSPECCION': datos.FECHA_INSPECCION ? new Date(datos.FECHA_INSPECCION) : ahora,
       'KILOMETRAJE': datos.KILOMETRAJE || '',
       'TICKET': datos.TICKET || '',
       'INSPECCION INGRESO': datos.INSPECCION_INGRESO || '',
+      'PERIODO VERIFICACION': datos.PERIODO_VERIFICACION || '',
+      'SEGURO AUTO': datos.SEGURO_AUTO || '',
     });
     return { ID: id };
   }
@@ -84,7 +88,7 @@ const IncidenciasService = (function () {
 
     SheetUtils.update(ssId(), hoja_().getName(), id, {
       'DESCRIPCION TRABAJO REALIZADO': datos.DESCRIPCION_TRABAJO,
-      'FECHA TRABAJO REALIZADO': new Date(),
+      'FECHA TRABAJO REALIZADO': datos.FECHA_TRABAJO ? new Date(datos.FECHA_TRABAJO) : new Date(),
       'INSPECCION SALIDA': datos.INSPECCION_SALIDA || '',
       'NOMBRE MECANICO': datos.MECANICO || '',
     }, 'ID_INCIDENCIA');

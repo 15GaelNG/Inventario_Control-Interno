@@ -38,10 +38,14 @@
       <div class="field"><label>Departamento <span class="auto-tag" id="tag-departamento" hidden>auto</span></label><input type="text" id="inc-departamento" /></div>
       <div class="field"><label>Modelo <span class="auto-tag" id="tag-modelo" hidden>auto</span></label><input type="text" id="inc-modelo" /></div>
       <div class="field"><label>Año</label><input type="number" id="inc-anio" /></div>
+      <div class="field"><label>Fecha de registro</label><input type="text" id="inc-fecha-registro" disabled /></div>
+      <div class="field"><label>Fecha de inspección</label><input type="date" id="inc-fecha-inspeccion" /></div>
       <div class="field"><label>Kilometraje</label><input type="number" id="inc-kilometraje" /></div>
       <div class="field"><label>Ticket</label><input type="text" id="inc-ticket" /></div>
+      <div class="field"><label>Periodo de verificación</label><input type="text" id="inc-periodo-verificacion" placeholder="Ej. 2do semestre 2026" /></div>
+      <div class="field"><label>Seguro de auto</label><input type="text" id="inc-seguro-auto" placeholder="Ej. Póliza vigente" /></div>
       <div class="field" style="grid-column: 1 / -1;">
-        <label>Motivo de ingreso</label>
+        <label>Inspección de ingreso (motivo)</label>
         <input type="text" id="inc-motivo" placeholder="Ej. Cambio de batería" />
       </div>
       <div style="grid-column: 1 / -1;"><button type="submit">🚗 Registrar ingreso</button></div>
@@ -70,6 +74,10 @@
         <div class="field">
           <label>Trabajo realizado</label>
           <input type="text" id="cerrar-trabajo" required placeholder="Ej. Cambio de batería" />
+        </div>
+        <div class="field">
+          <label>Fecha del trabajo realizado</label>
+          <input type="date" id="cerrar-fecha-trabajo" />
         </div>
         <div class="field">
           <label>Resultado de inspección de salida</label>

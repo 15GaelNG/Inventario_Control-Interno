@@ -374,10 +374,21 @@
   }
 
   // ---------- Incidencias ----------
+  function hoyISO() {
+    return new Date().toISOString().slice(0, 10);
+  }
+  function fijarFechaRegistroHoy() {
+    document.getElementById('inc-fecha-registro').value = new Date().toLocaleDateString('es-MX');
+  }
+
   async function initIncidencias() {
     const lista = document.getElementById('lista-incidencias');
     const vacio = document.getElementById('incidencias-vacio');
     const modal = document.getElementById('modal-cerrar');
+
+    // Fecha de registro: siempre hoy, no editable (el servidor la fuerza igual).
+    fijarFechaRegistroHoy();
+    document.getElementById('inc-fecha-inspeccion').value = hoyISO();
 
     // Autollenado: el folio del vehículo trae Departamento/Modelo desde Vehículos
     const vehiculosPorFolio = {};
@@ -422,6 +433,7 @@
     function abrirModalCierre(id, folio) {
       document.getElementById('cerrar-id').value = id;
       document.getElementById('cerrar-folio').textContent = 'Folio: ' + folio;
+      document.getElementById('cerrar-fecha-trabajo').value = hoyISO();
       modal.hidden = false;
     }
     function cerrarModal() {
@@ -469,11 +481,16 @@
           DEPARTAMENTO: document.getElementById('inc-departamento').value.trim(),
           MODELO: document.getElementById('inc-modelo').value.trim(),
           ANIO: document.getElementById('inc-anio').value,
+          FECHA_INSPECCION: document.getElementById('inc-fecha-inspeccion').value,
           KILOMETRAJE: document.getElementById('inc-kilometraje').value,
           TICKET: document.getElementById('inc-ticket').value.trim(),
+          PERIODO_VERIFICACION: document.getElementById('inc-periodo-verificacion').value.trim(),
+          SEGURO_AUTO: document.getElementById('inc-seguro-auto').value.trim(),
           INSPECCION_INGRESO: document.getElementById('inc-motivo').value.trim(),
         });
         ev.target.reset();
+        fijarFechaRegistroHoy();
+        document.getElementById('inc-fecha-inspeccion').value = hoyISO();
         await cargar();
       } catch (err) {
         errorBox.textContent = err.message;
@@ -491,6 +508,7 @@
       try {
         await callServer('apiCerrarIncidencia', state.token, document.getElementById('cerrar-id').value, {
           DESCRIPCION_TRABAJO: document.getElementById('cerrar-trabajo').value.trim(),
+          FECHA_TRABAJO: document.getElementById('cerrar-fecha-trabajo').value,
           INSPECCION_SALIDA: document.getElementById('cerrar-salida').value.trim(),
           MECANICO: document.getElementById('cerrar-mecanico').value.trim(),
         });
