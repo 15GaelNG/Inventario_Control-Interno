@@ -226,6 +226,32 @@
   .page-header h2 { margin: 0 0 4px; }
   .page-subtitle { margin: 0; color: var(--color-text-muted); font-size: 13px; }
 
+  /* Encabezado compacto: título a la izquierda, KPIs como chips a la derecha (reutilizable) */
+  .page-header-compacto {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px 16px;
+    flex-wrap: wrap; margin-bottom: 12px;
+  }
+  .page-header-compacto h2 { margin: 0; font-size: 20px; }
+  .page-header-compacto .page-subtitle { font-size: 12px; }
+  .kpi-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .kpi-chip {
+    display: inline-flex; align-items: baseline; gap: 6px;
+    padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 500;
+    background: var(--color-surface); color: var(--color-text-muted);
+    border: 1px solid var(--color-border); box-shadow: var(--shadow);
+  }
+  .kpi-chip strong { font-size: 15px; font-weight: 700; color: var(--color-text); }
+  button.kpi-chip { cursor: pointer; }
+  button.kpi-chip:hover { background: var(--color-bg); border-color: var(--color-accent); }
+  .kpi-chip.activo { border-color: var(--color-accent); box-shadow: 0 0 0 2px rgba(180,161,105,.35); }
+  .kpi-chip.kpi-warn strong { color: #b26a00; }
+  .kpi-chip.kpi-danger strong { color: var(--color-danger); }
+  :root[data-theme="dark"] .kpi-chip.kpi-warn strong { color: #f0b54a; }
+  :root[data-theme="dark"] .kpi-chip.kpi-danger strong { color: #ff8a80; }
+
+  /* Tarjeta con menos relleno para contenido denso (tablas en pestañas) */
+  .card.card-compacta { padding: 12px 14px; }
+
   .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 20px; }
   .stat-tile {
     display: flex; align-items: center; gap: 12px;

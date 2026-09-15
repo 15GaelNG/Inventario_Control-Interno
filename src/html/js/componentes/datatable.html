@@ -9,7 +9,9 @@
   .dt-mensaje.error { background: #fbeceb; color: var(--color-danger); }
   .dt-mensaje.ok { background: #e5f6ec; color: var(--color-success); }
 
-  .dt-scroll { overflow: auto; max-height: 64vh; border: 1px solid var(--color-border); border-radius: 10px; }
+  .dt-ayuda { font-size: 12px; color: var(--color-text-muted); cursor: help; padding: 4px 6px; }
+  /* Ocupa el alto disponible de la ventana (se ajusta en JS según dónde quedó la tabla) */
+  .dt-scroll { overflow: auto; max-height: 64vh; min-height: 240px; border: 1px solid var(--color-border); border-radius: 10px; }
   .dt table { font-size: 12.5px; }
   .dt thead th {
     position: sticky; top: 0; z-index: 2; background: var(--color-surface);
@@ -90,6 +92,8 @@
    *     seleccionable: true,
    *     ordenInicial: { campo: 'FECHA', dir: 'desc' },
    *     textoVacio: 'Sin registros',
+   *     ayuda: 'Doble clic para editar…',       // tooltip "ⓘ Ayuda" en la barra (opcional)
+   *     alCambiarFiltros: (filtros) => {},      // opcional, p. ej. para marcar chips de KPI
    *     // Guardar una celda. Lanza error para rechazar. Si regresa un objeto, reemplaza la fila.
    *     alEditar: async (fila, campo, valorNuevo) => filaActualizada,
    *     // Eliminar varias filas. Si se omite, no aparece el botón de eliminar.
@@ -98,6 +102,8 @@
    *
    *   tabla.setDatos(nuevosDatos);   // conserva filtros, orden, página y selección
    *   tabla.getSeleccion();          // filas seleccionadas
+   *   tabla.setFiltro('ESTADO', { valores: ['Vencida'] });   // o { op: '>', v1: 30 }; null lo quita
+   *   tabla.limpiarFiltros();
    *
    * Valores de edición que recibe alEditar: texto → string, numero → Number|null,
    * fecha → "yyyy-MM-dd" (o "" si se borra), lista → string.
@@ -177,6 +183,7 @@
             <input type="search" class="dt-buscar" placeholder="Buscar en la tabla…" />
             <button type="button" class="secondary dt-btn-limpiar" hidden>✕ Limpiar filtros</button>
             <button type="button" class="secondary dt-btn-columnas">☰ Columnas</button>
+            ${cfg.ayuda ? `<span class="dt-ayuda" title="${esc(cfg.ayuda)}">ⓘ Ayuda</span>` : ''}
             <span class="dt-mensaje" hidden></span>
             <span class="dt-espacio"></span>
             <span class="dt-seleccion-info" hidden></span>
@@ -348,6 +355,23 @@
         $('.dt-seleccion-info').hidden = nSel === 0;
         $('.dt-seleccion-info').textContent = `${nSel} seleccionado${nSel === 1 ? '' : 's'}`;
         $('.dt-btn-eliminar').hidden = nSel === 0 || !cfg.alEliminar;
+
+        ajustarAlto();
+        const firmaFiltros = JSON.stringify(st.filtros);
+        if (cfg.alCambiarFiltros && firmaFiltros !== ultimaFirmaFiltros) {
+          ultimaFirmaFiltros = firmaFiltros;
+          cfg.alCambiarFiltros(JSON.parse(firmaFiltros));
+        }
+      }
+
+      /** Alto del área con scroll = lo que queda de ventana debajo de la tabla (menos el pie) */
+      let ultimaFirmaFiltros = '{}';
+      function ajustarAlto() {
+        const scroll = $('.dt-scroll');
+        if (!scroll || scroll.offsetParent === null) return;   // pestaña oculta: se ajusta al mostrarse
+        const pie = $('.dt-pie');
+        const disponible = window.innerHeight - scroll.getBoundingClientRect().top - (pie ? pie.offsetHeight : 0) - 36;
+        scroll.style.maxHeight = Math.max(240, disponible) + 'px';
       }
 
       // ---------- popovers ----------
@@ -614,8 +638,10 @@
         if (popover && !popover.contains(ev.target) && !ev.target.closest('.dt-btn-filtro, .dt-btn-columnas')) cerrarPopover();
       };
       const alTecla = (ev) => { if (!desmontado() && ev.key === 'Escape') cerrarPopover(); };
+      const alRedimensionar = () => { if (document.body.contains(contenedor)) ajustarAlto(); else window.removeEventListener('resize', alRedimensionar); };
       document.addEventListener('mousedown', alClicFuera);
       document.addEventListener('keydown', alTecla);
+      window.addEventListener('resize', alRedimensionar);
 
       render();
 
@@ -624,10 +650,20 @@
         getDatos: () => st.datos.slice(),
         getSeleccion: () => st.datos.filter((f) => st.seleccion.has(idDe(f))),
         limpiarSeleccion() { st.seleccion.clear(); render(); },
+        setFiltro(campo, filtro) {
+          if (filtro) st.filtros[campo] = filtro; else delete st.filtros[campo];
+          st.pagina = 1; render();
+        },
+        limpiarFiltros() {
+          st.filtros = {}; st.busqueda = ''; $('.dt-buscar').value = ''; st.pagina = 1; render();
+        },
+        /** Llamar si la tabla estaba oculta (p. ej. en otra pestaña) y se acaba de mostrar */
+        ajustarAlto,
         destruir() {
           cerrarPopover();
           document.removeEventListener('mousedown', alClicFuera);
           document.removeEventListener('keydown', alTecla);
+          window.removeEventListener('resize', alRedimensionar);
           contenedor.innerHTML = '';
         },
       };

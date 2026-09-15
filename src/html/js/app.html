@@ -705,11 +705,16 @@
       document.getElementById('ver-stat-por-vencer').textContent = verificaciones.filter((v) => v.ESTADO === 'Por vencer').length;
     }
 
+    /** Chip de KPI → valor de la columna ESTADO que filtra */
+    const KPI_ESTADO = { 'ver-kpi-por-vencer': 'Por vencer', 'ver-kpi-vencidas': 'Vencida' };
+
     // ----- Pestaña 1: tabla -----
     const tabla = DataTable.crear(document.getElementById('ver-tabla'), {
       idCampo: 'ID',
       ordenInicial: { campo: 'FECHA_REGISTRO', dir: 'desc' },
       textoVacio: 'Todavía no hay verificaciones registradas',
+      ayuda: 'Doble clic en Folio o en las fechas para editar (Enter guarda, Esc cancela). ▾ en cada columna para filtrar u ordenar.',
+      alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
       columnas: [
         { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', editable: true },
         { campo: 'PLACA', titulo: 'Placa', tipo: 'texto' },
@@ -806,7 +811,30 @@
       pintarHistorial();
     }
 
-    Tabs.iniciar(document.getElementById('ver-tabs'), { inicial: 'registros' });
+    const tabs = Tabs.iniciar(document.getElementById('ver-tabs'), {
+      inicial: 'registros',
+      alCambiar: (nombre) => { if (nombre === 'registros') requestAnimationFrame(tabla.ajustarAlto); },
+    });
+
+    // ----- KPIs: clic = filtrar la tabla por estado -----
+    function marcarKpiActivo(filtros) {
+      const valores = filtros.ESTADO && filtros.ESTADO.valores;
+      const soloUno = valores && valores.length === 1 ? valores[0] : null;
+      Object.keys(KPI_ESTADO).forEach((id) => {
+        document.getElementById(id).classList.toggle('activo', KPI_ESTADO[id] === soloUno);
+      });
+    }
+    Object.keys(KPI_ESTADO).forEach((id) => {
+      document.getElementById(id).addEventListener('click', (ev) => {
+        const yaActivo = ev.currentTarget.classList.contains('activo');
+        tabs.mostrar('registros');
+        tabla.setFiltro('ESTADO', yaActivo ? null : { valores: [KPI_ESTADO[id]] });
+      });
+    });
+    document.getElementById('ver-kpi-total').addEventListener('click', () => {
+      tabs.mostrar('registros');
+      tabla.limpiarFiltros();
+    });
 
     // ----- Pestaña 2: nuevo registro -----
     const errorBox = document.getElementById('ver-error');

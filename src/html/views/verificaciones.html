@@ -1,23 +1,20 @@
 <template id="tpl-verificaciones">
-  <div class="page-header">
+  <div class="page-header-compacto">
     <div>
       <h2>📋 Verificaciones</h2>
       <p class="page-subtitle">Verificación vehicular — comprobante y fecha de la próxima</p>
     </div>
-  </div>
-
-  <div class="stat-row">
-    <div class="stat-tile">
-      <div class="stat-icon">📋</div>
-      <div><div class="stat-value" id="ver-stat-total">0</div><div class="stat-label">Registros</div></div>
-    </div>
-    <div class="stat-tile stat-tile-warn">
-      <div class="stat-icon">⏳</div>
-      <div><div class="stat-value" id="ver-stat-por-vencer">0</div><div class="stat-label">Vehículos por vencer (30 días)</div></div>
-    </div>
-    <div class="stat-tile">
-      <div class="stat-icon">⚠️</div>
-      <div><div class="stat-value" id="ver-stat-vencidas">0</div><div class="stat-label">Vehículos vencidos</div></div>
+    <!-- KPIs: clic = filtrar la tabla -->
+    <div class="kpi-chips">
+      <button type="button" class="kpi-chip" id="ver-kpi-total" title="Ver todos los registros">
+        <strong id="ver-stat-total">0</strong> registros
+      </button>
+      <button type="button" class="kpi-chip kpi-warn" id="ver-kpi-por-vencer" title="Filtrar: vehículos que vencen en 30 días o menos">
+        ⏳ <strong id="ver-stat-por-vencer">0</strong> por vencer
+      </button>
+      <button type="button" class="kpi-chip kpi-danger" id="ver-kpi-vencidas" title="Filtrar: vehículos con verificación vencida">
+        ⚠️ <strong id="ver-stat-vencidas">0</strong> vencidos
+      </button>
     </div>
   </div>
 
@@ -29,10 +26,7 @@
     </div>
 
     <!-- Pestaña 1: tabla de registros -->
-    <div class="card" data-panel="registros">
-      <p class="page-subtitle" style="margin:0 0 12px">
-        Doble clic en una celda para editarla · ▾ en cada columna para filtrar u ordenar
-      </p>
+    <div class="card card-compacta" data-panel="registros">
       <div id="ver-tabla"></div>
       <div class="error-msg" id="ver-tabla-error" hidden></div>
     </div>
@@ -67,7 +61,7 @@
     </div>
 
     <!-- Pestaña 3: historial por tarjetas -->
-    <div class="card" data-panel="historial">
+    <div class="card card-compacta" data-panel="historial">
       <div style="display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap;">
         <h3 style="margin:0">Historial</h3>
         <input type="search" id="ver-buscar" placeholder="Buscar por folio o placa" style="max-width:260px;" />
