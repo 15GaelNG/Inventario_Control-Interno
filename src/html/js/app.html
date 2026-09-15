@@ -713,7 +713,8 @@
       idCampo: 'ID',
       ordenInicial: { campo: 'FECHA_REGISTRO', dir: 'desc' },
       textoVacio: 'Todavía no hay verificaciones registradas',
-      ayuda: 'Doble clic en Folio o en las fechas para editar (Enter guarda, Esc cancela). ▾ en cada columna para filtrar u ordenar.',
+      ayuda: 'Fechas: pasa el mouse y usa ✏️ (o doble clic). ✓ o Enter guarda, ✕ o Esc cancela, y puedes deshacer. ' +
+        'El folio se cambia desde 🔍 Ver detalle. ▾ en cada columna para filtrar u ordenar.',
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
       exportar: { nombreArchivo: 'Verificaciones' },
       etiquetaFila: (v) => [v.FOLIO, v.PLACA, v.FECHA_VERIFICACION ? 'verificó ' + formatearFecha(v.FECHA_VERIFICACION) : '']
@@ -723,7 +724,8 @@
         contenidoExtra: (v, contenedor) => mostrarComprobanteEnPanel(v, contenedor),
       },
       columnas: [
-        { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', editable: true },
+        // Cambiar el folio también cambia la placa: solo desde el panel de detalle, no en la celda
+        { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', editable: 'panel' },
         { campo: 'PLACA', titulo: 'Placa', tipo: 'texto' },
         { campo: 'FECHA_VERIFICACION', titulo: 'Fecha verificación', tipo: 'fecha', editable: true },
         { campo: 'FECHA_PROXIMA', titulo: 'Próxima verificación', tipo: 'fecha', editable: true },

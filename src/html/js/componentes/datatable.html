@@ -59,13 +59,23 @@
   .dt .dt-btn-ver:hover { background: var(--color-primary-soft); color: var(--color-text); }
   .dt .dt-num { text-align: right; font-variant-numeric: tabular-nums; }
 
-  /* Celda editable: lápiz visible al pasar el mouse */
-  .dt td.dt-editable { cursor: text; position: relative; }
-  .dt td.dt-editable:hover { box-shadow: inset 0 0 0 1px var(--color-accent); padding-right: 24px; }
-  .dt td.dt-editable:hover::after { content: '✏️'; position: absolute; right: 5px; top: 50%; transform: translateY(-50%); font-size: 11px; opacity: .8; }
-  .dt td.dt-editando { padding: 2px 4px; overflow: visible; }
-  .dt td.dt-editando::after { content: none !important; }
-  .dt td.dt-editando input, .dt td.dt-editando select { padding: 5px 8px; font-size: 12.5px; min-width: 130px; }
+  /* Celda editable: botón ✏️ real (clic, Tab + Enter); visible al pasar el mouse o con foco,
+     y siempre visible en pantallas táctiles */
+  .dt td.dt-editable { position: relative; padding-right: 30px; }
+  .dt td.dt-editable:hover { box-shadow: inset 0 0 0 1px var(--color-accent); }
+  .dt .dt-btn-editar-celda {
+    position: absolute; right: 3px; top: 50%; transform: translateY(-50%);
+    background: transparent; border: none; padding: 2px 5px; border-radius: 6px; font-size: 11px; line-height: 1;
+    opacity: 0;
+  }
+  .dt td.dt-editable:hover .dt-btn-editar-celda, .dt .dt-btn-editar-celda:focus-visible { opacity: 1; }
+  .dt .dt-btn-editar-celda:hover, .dt .dt-btn-editar-celda:focus-visible { background: var(--color-accent-soft); }
+  @media (hover: none) { .dt .dt-btn-editar-celda { opacity: .7; } }
+
+  .dt td.dt-editando { padding: 2px 4px; overflow: visible; box-shadow: inset 0 0 0 2px var(--color-accent); }
+  .dt-editor { display: flex; align-items: center; gap: 4px; }
+  .dt-editor input, .dt-editor select { padding: 5px 8px; font-size: 12.5px; min-width: 130px; }
+  .dt-editor button { padding: 4px 8px; font-size: 12px; line-height: 1.2; flex-shrink: 0; }
   .dt td.dt-guardando { opacity: .5; }
   .dt td.dt-error-celda { box-shadow: inset 0 0 0 2px var(--color-danger); }
   .dt-vacio { text-align: center; color: var(--color-text-muted); padding: 28px 0 !important; white-space: normal !important; }
@@ -149,6 +159,8 @@
    *         render: (valor, fila) => '<button …>' },  // HTML propio (el módulo escapa lo que use)
    *       { campo: 'DIAS', titulo: 'Días', tipo: 'numero',
    *         valor: (fila) => calcularDias(fila) },    // columna calculada
+   *       // editable: true    → se edita en la celda (✏️, doble clic o Tab+Enter) y en el panel
+   *       // editable: 'panel' → SOLO en el panel de detalle (cambios con consecuencias, p. ej. un folio)
    *       // Otras opciones por columna: visible:false, exportable:false, valorExportar:(fila)=>…,
    *       //   enDetalle:false (no mostrar en el panel de detalle)
    *     ],
@@ -185,6 +197,10 @@
    *
    * Valores de edición que recibe alEditar: texto → string, numero → Number|null,
    * fecha → "yyyy-MM-dd" (o "" si se borra), lista → string.
+   *
+   * Edición: guardar es explícito (✓ o Enter); salir de la celda o Esc CANCELA. Tras guardar,
+   * el aviso ofrece "Deshacer" (vuelve a llamar alEditar con el valor anterior).
+   * En pantallas táctiles, tocar una fila abre el panel de detalle.
    */
   const DataTable = (function () {
     const OPERADORES = {
@@ -263,7 +279,9 @@
       const valorDe = (col, fila) => (col.valor ? col.valor(fila) : fila[col.campo]);
       const colPorCampo = (campo) => columnas.find((c) => c.campo === campo);
       const columnasVisibles = () => columnas.filter((c) => !st.ocultas.has(c.campo));
-      const puedeEditar = (col) => col.editable && !!cfg.alEditar;
+      const puedeEditarCelda = (col) => col.editable === true && !!cfg.alEditar;
+      const puedeEditarPanel = (col) => !!col.editable && !!cfg.alEditar;
+      const esTactil = () => window.matchMedia && window.matchMedia('(hover: none)').matches;
 
       function textoVisible(col, fila) {
         const v = valorDe(col, fila);
@@ -468,10 +486,14 @@
               (cfg.seleccionable ? `<td class="dt-col-check"><input type="checkbox" class="dt-check" ${sel ? 'checked' : ''} aria-label="Seleccionar ${esc(etiquetaDe(fila))}" /></td>` : '') +
               (conDetalle ? `<td class="dt-col-ver"><button type="button" class="dt-btn-ver" title="Ver detalle" aria-label="Ver detalle de ${esc(etiquetaDe(fila))}">🔍</button></td>` : '') +
               visibles.map((col) => {
-                const clases = [puedeEditar(col) ? 'dt-editable' : '', col.tipo === 'numero' ? 'dt-num' : ''].join(' ').trim();
+                const editable = puedeEditarCelda(col);
+                const clases = [editable ? 'dt-editable' : '', col.tipo === 'numero' ? 'dt-num' : ''].join(' ').trim();
                 const contenido = col.render ? col.render(valorDe(col, fila), fila) : esc(textoVisible(col, fila));
-                const titulo = col.render ? '' : ` title="${esc(textoVisible(col, fila))}${puedeEditar(col) ? ' — doble clic para editar' : ''}"`;
-                return `<td data-campo="${esc(col.campo)}" class="${clases}"${titulo}>${contenido}</td>`;
+                const titulo = col.render ? '' : ` title="${esc(textoVisible(col, fila))}"`;
+                const lapiz = editable
+                  ? `<button type="button" class="dt-btn-editar-celda" title="Editar ${esc(col.titulo)}" aria-label="Editar ${esc(col.titulo)} de ${esc(etiquetaDe(fila))}">✏️</button>`
+                  : '';
+                return `<td data-campo="${esc(col.campo)}" class="${clases}"${titulo}>${contenido}${lapiz}</td>`;
               }).join('') + '</tr>';
           }).join('');
         }
@@ -671,54 +693,102 @@
         return col.tipo === 'fecha' ? claveFecha(valor) : (vacio(valor) ? '' : String(valor));
       }
 
-      /** Guarda vía alEditar y actualiza la fila. Regresa true si guardó, false si no había cambio. Lanza si falla. */
-      async function guardarCambio(fila, col, textoControl) {
-        if (textoControl === valorOriginal(col, valorDe(col, fila))) return false;
+      /** Llama alEditar y actualiza la fila en memoria. Lanza si el servidor rechaza. */
+      async function aplicarCambio(fila, col, textoControl) {
         const nuevo = col.tipo === 'numero' ? aNumero(textoControl) : textoControl;
         const resultado = await cfg.alEditar(fila, col.campo, nuevo);
         if (resultado && typeof resultado === 'object') {
           const i = st.datos.findIndex((f) => idDe(f) === idDe(fila));
           if (i !== -1) st.datos[i] = resultado;
         }
-        avisar(`${col.titulo}: cambio guardado`);
+      }
+
+      /**
+       * Guarda un campo (celda o panel). Regresa true si guardó, false si no había cambio. Lanza si falla.
+       * El aviso de éxito ofrece "Deshacer": editar sí es reversible, conocemos el valor anterior.
+       */
+      async function guardarCambio(fila, col, textoControl) {
+        const anterior = valorOriginal(col, valorDe(col, fila));
+        if (textoControl === anterior) return false;
+        await aplicarCambio(fila, col, textoControl);
+
+        const id = idDe(fila);
+        Notificar.exito(`${col.titulo} de ${etiquetaDe(fila)} actualizado`, {
+          duracion: 8000,
+          accion: {
+            texto: 'Deshacer',
+            alHacer: async () => {
+              const actual = st.datos.find((f) => idDe(f) === id);
+              if (!actual) { Notificar.error('No se puede deshacer: el registro ya no existe'); return; }
+              try {
+                await aplicarCambio(actual, col, anterior);
+                render();
+                refrescarPanel();
+                Notificar.info(`Se restauró ${col.titulo}`);
+              } catch (err) {
+                Notificar.error('No se pudo deshacer: ' + err.message);
+              }
+            },
+          },
+        });
         return true;
+      }
+
+      /** Devuelve el foco al ✏️ de una celda (usuarios de teclado no pierden su lugar) */
+      function enfocarLapiz(id, campo) {
+        const btn = tbody.querySelector(`tr[data-id="${CSS.escape(id)}"] td[data-campo="${CSS.escape(campo)}"] .dt-btn-editar-celda`);
+        if (btn) { btn.style.opacity = '1'; btn.focus(); btn.addEventListener('blur', () => { btn.style.opacity = ''; }, { once: true }); }
       }
 
       function iniciarEdicion(td) {
         const tr = td.closest('tr');
         const col = colPorCampo(td.dataset.campo);
         const fila = st.datos.find((f) => idDe(f) === tr.dataset.id);
-        if (!col || !fila || !puedeEditar(col) || st.editando) return;
+        if (!col || !fila || !puedeEditarCelda(col) || st.editando) return;
         cerrarPopover();
 
+        const id = idDe(fila);
         const control = crearControl(col, valorDe(col, fila));
-        st.editando = { id: idDe(fila), campo: col.campo };
+        const editor = document.createElement('div');
+        editor.className = 'dt-editor';
+        const btnOk = document.createElement('button');
+        btnOk.type = 'button'; btnOk.textContent = '✓'; btnOk.title = 'Guardar (Enter)';
+        btnOk.setAttribute('aria-label', 'Guardar');
+        const btnCancelar = document.createElement('button');
+        btnCancelar.type = 'button'; btnCancelar.className = 'secondary'; btnCancelar.textContent = '✕';
+        btnCancelar.title = 'Cancelar (Esc)'; btnCancelar.setAttribute('aria-label', 'Cancelar');
+        editor.append(control, btnOk, btnCancelar);
+
+        st.editando = { id, campo: col.campo };
         td.classList.add('dt-editando');
         td.classList.remove('dt-error-celda');
+        td.removeAttribute('title');
         td.innerHTML = '';
-        td.appendChild(control);
+        td.appendChild(editor);
         control.focus();
         if (control.select && control.type === 'text') control.select();
 
         let terminado = false;
-        const cancelar = () => {
+        const cancelar = (devolverFoco) => {
           if (terminado) return;
           terminado = true; st.editando = null; render();
+          if (devolverFoco) enfocarLapiz(id, col.campo);
         };
         const guardar = async () => {
           if (terminado) return;
           terminado = true;
           td.classList.add('dt-guardando');
-          control.disabled = true;
+          control.disabled = btnOk.disabled = btnCancelar.disabled = true;
           try {
             await guardarCambio(fila, col, control.value);
             st.editando = null;
             render();
             refrescarPanel();
+            enfocarLapiz(id, col.campo);
           } catch (err) {
             st.editando = null;
             render();
-            const celda = tbody.querySelector(`tr[data-id="${CSS.escape(idDe(fila))}"] td[data-campo="${CSS.escape(col.campo)}"]`);
+            const celda = tbody.querySelector(`tr[data-id="${CSS.escape(id)}"] td[data-campo="${CSS.escape(col.campo)}"]`);
             if (celda) { celda.classList.add('dt-error-celda'); celda.title = err.message; }
             avisar('No se guardó: ' + err.message, 'error');
           }
@@ -726,10 +796,15 @@
 
         control.addEventListener('keydown', (ev) => {
           if (ev.key === 'Enter') { ev.preventDefault(); guardar(); }
-          if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); cancelar(); }
+          if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); cancelar(true); }
         });
-        control.addEventListener('blur', guardar);
-        if (control.tagName === 'SELECT') control.addEventListener('change', guardar);
+        btnOk.addEventListener('click', guardar);
+        btnCancelar.addEventListener('click', () => cancelar(true));
+        // Salir de la celda sin confirmar CANCELA (un clic accidental no cambia datos)
+        editor.addEventListener('focusout', (ev) => {
+          if (ev.relatedTarget && editor.contains(ev.relatedTarget)) return;
+          setTimeout(() => { if (!editor.contains(document.activeElement)) cancelar(false); }, 0);
+        });
       }
 
       // ---------- panel lateral de detalle ----------
@@ -795,7 +870,7 @@
               return `<div class="dt-campo" data-campo="${esc(col.campo)}">
                 <div class="dt-campo-titulo">${esc(col.titulo)}</div>
                 <div class="dt-campo-valor"><span class="dt-campo-texto">${contenido}</span>
-                  ${puedeEditar(col) ? `<button type="button" class="secondary dt-btn-editar-campo" aria-label="Editar ${esc(col.titulo)}">✏️ Editar</button>` : ''}
+                  ${puedeEditarPanel(col) ? `<button type="button" class="secondary dt-btn-editar-campo" aria-label="Editar ${esc(col.titulo)}">✏️ Editar</button>` : ''}
                 </div>
               </div>`;
             }).join('')}
@@ -900,12 +975,30 @@
 
       tbody.addEventListener('click', (ev) => {
         const ver = ev.target.closest('.dt-btn-ver');
-        if (ver) abrirPanel(ver.closest('tr').dataset.id);
+        if (ver) { abrirPanel(ver.closest('tr').dataset.id); return; }
+
+        const lapiz = ev.target.closest('.dt-btn-editar-celda');
+        if (lapiz) { iniciarEdicion(lapiz.closest('td')); return; }
+
+        // En pantallas táctiles (sin doble clic ni hover), tocar la fila abre el detalle
+        if (esTactil() && cfg.detalle !== false && !st.editando) {
+          const tr = ev.target.closest('tr[data-id]');
+          const interactivo = ev.target.closest('button, a, input, select, label, .dt-editor');
+          if (tr && !interactivo) abrirPanel(tr.dataset.id);
+        }
       });
 
+      // F2 sobre una celda editable (con foco en su ✏️) abre la edición, como en Excel
+      tbody.addEventListener('keydown', (ev) => {
+        if (ev.key !== 'F2') return;
+        const td = ev.target.closest('td.dt-editable');
+        if (td && !td.classList.contains('dt-editando')) { ev.preventDefault(); iniciarEdicion(td); }
+      });
+
+      // Atajo para quien ya lo conoce (como en Excel); la forma visible es el ✏️
       tbody.addEventListener('dblclick', (ev) => {
         const td = ev.target.closest('td.dt-editable');
-        if (td) iniciarEdicion(td);
+        if (td && !td.classList.contains('dt-editando')) iniciarEdicion(td);
       });
 
       $('.dt-btn-eliminar').addEventListener('click', async () => {
