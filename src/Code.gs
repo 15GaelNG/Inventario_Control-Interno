@@ -11,9 +11,8 @@ function doGet(e) {
 /**
  * Helper estándar para incluir parciales HTML (styles.html, views/*.html, js/*.html).
  * Usa createTemplateFromFile (no createHtmlOutputFromFile) para que los parciales
- * incluidos puedan a su vez usar sus propios scriptlets <?!= ... ?> (ej. el logo
- * en base64 dentro de views/login.html) — si no, quedarían como texto literal
- * sin evaluar.
+ * incluidos puedan a su vez usar sus propios scriptlets <?!= ... ?> — si no,
+ * quedarían como texto literal sin evaluar.
  */
 function include(filename) {
   return HtmlService.createTemplateFromFile(filename).evaluate().getContent();
