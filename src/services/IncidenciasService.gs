@@ -25,6 +25,17 @@ const IncidenciasService = (function () {
     return SheetUtils.getSheetByColumns(ssId(), COLUMNAS);
   }
 
+  /**
+   * google.script.run puede fallar (entregando null al cliente en vez del
+   * arreglo real) cuando un ARREGLO de objetos trae valores Date crudos —
+   * por eso aquí siempre se convierten a texto ISO antes de regresar.
+   */
+  function fechaISO_(valor) {
+    if (!valor) return '';
+    const f = valor instanceof Date ? valor : new Date(valor);
+    return isNaN(f.getTime()) ? '' : f.toISOString();
+  }
+
   function desdeOriginal_(row) {
     const trabajoHecho = !!(row['DESCRIPCION TRABAJO REALIZADO'] || row['INSPECCION SALIDA']);
     return {
@@ -33,13 +44,13 @@ const IncidenciasService = (function () {
       DEPARTAMENTO: row['DEPARTAMENTO'] || '',
       MODELO: row['MODELO'] || '',
       ANIO: row['AÑO'] || '',
-      FECHA_REGISTRO: row['FECHA REGISTRO'] || '',
-      FECHA_INSPECCION: row['FECHA INSPECCION'] || '',
+      FECHA_REGISTRO: fechaISO_(row['FECHA REGISTRO']),
+      FECHA_INSPECCION: fechaISO_(row['FECHA INSPECCION']),
       KILOMETRAJE: row['KILOMETRAJE'] || '',
       TICKET: row['TICKET'] || '',
       INSPECCION_INGRESO: row['INSPECCION INGRESO'] || '',
       DESCRIPCION_TRABAJO: row['DESCRIPCION TRABAJO REALIZADO'] || '',
-      FECHA_TRABAJO: row['FECHA TRABAJO REALIZADO'] || '',
+      FECHA_TRABAJO: fechaISO_(row['FECHA TRABAJO REALIZADO']),
       INSPECCION_SALIDA: row['INSPECCION SALIDA'] || '',
       MECANICO: row['NOMBRE MECANICO'] || '',
       PERIODO_VERIFICACION: row['PERIODO VERIFICACION'] || '',
@@ -130,16 +141,28 @@ const IncidenciasService = (function () {
     return { ID: id };
   }
 
-  /** Diagnóstico de solo lectura: qué hoja/spreadsheet está usando realmente y cuántas filas ve. */
+  /**
+   * Diagnóstico de solo lectura. Envuelto en try/catch total y con todo
+   * convertido a tipos primitivos/strings antes de regresar — así no hay
+   * duda de si algo se pierde por una serialización rara de google.script.run.
+   */
   function diagnostico(token) {
-    Auth.validarSesion(token);
-    const hoja = hoja_();
-    return {
-      spreadsheetId: ssId(),
-      nombreHoja: hoja.getName(),
-      totalFilas: Math.max(0, hoja.getLastRow() - 1),
-      totalColumnas: hoja.getLastColumn(),
-    };
+    try {
+      Auth.validarSesion(token);
+      const hoja = hoja_();
+      const crudos = SheetUtils.getAll(ssId(), hoja.getName());
+      return {
+        ok: true,
+        spreadsheetId: String(ssId()),
+        nombreHoja: String(hoja.getName()),
+        totalFilas: Number(Math.max(0, hoja.getLastRow() - 1)),
+        totalColumnas: Number(hoja.getLastColumn()),
+        getAllLength: Number(crudos.length),
+        primeraFilaCrudaJSON: crudos[0] ? JSON.stringify(crudos[0]) : '(sin filas)',
+      };
+    } catch (err) {
+      return { ok: false, errorGeneral: String((err && err.stack) || err) };
+    }
   }
 
   return { listar, crear, cerrar, actualizar, eliminar, diagnostico };
