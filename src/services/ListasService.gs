@@ -47,5 +47,10 @@ const ListasService = (function () {
     return listarColumna_('OFICINA / DESARROLLO');
   }
 
-  return { listarDepartamentos, listarRazonesSociales, listarSedes, listarOficinasDesarrollo };
+  function listarMarcas(token) {
+    Auth.validarSesion(token);
+    return listarColumna_('MARCA');
+  }
+
+  return { listarDepartamentos, listarRazonesSociales, listarSedes, listarOficinasDesarrollo, listarMarcas };
 })();

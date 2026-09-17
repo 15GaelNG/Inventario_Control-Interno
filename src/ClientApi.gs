@@ -111,6 +111,9 @@ function apiListarSedes(token) {
 function apiListarOficinasDesarrollo(token) {
   return ListasService.listarOficinasDesarrollo(token);
 }
+function apiListarMarcas(token) {
+  return ListasService.listarMarcas(token);
+}
 
 // --- Incidencias ---
 function apiListarIncidencias(token) {
