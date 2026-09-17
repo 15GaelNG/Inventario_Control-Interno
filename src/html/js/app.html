@@ -717,7 +717,10 @@
         'Octubre - Noviembre (Terminación 1 y 2)', 'Noviembre - Diciembre (Terminación 9 y 0)',
       ],
     },
-    { grupo: 'Documentación y seguro', clave: 'SEGURO (SI / NO)', etiqueta: 'Seguro (Sí/No)', tipo: 'text' },
+    {
+      grupo: 'Documentación y seguro', clave: 'SEGURO (SI / NO)', etiqueta: 'Seguro', tipo: 'select',
+      opciones: ['VIGENTE', 'VENCIDO', 'NO APLICA'],
+    },
     { grupo: 'Documentación y seguro', clave: 'FECHA VENCIMIENTO SEGURO', etiqueta: 'Fecha de vencimiento del seguro', tipo: 'date' },
     { grupo: 'Documentación y seguro', clave: 'POLIZA SEGURO', etiqueta: 'Póliza de seguro', tipo: 'file' },
     { grupo: 'Documentación y seguro', clave: 'TENENCIA (SI / NO)', etiqueta: 'Tenencia (Sí/No)', tipo: 'text' },
