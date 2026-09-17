@@ -378,16 +378,20 @@ const LineasDatos = (function () {
     return s;
   }
 
+  /**
+   * Llama al servicio avanzado Sheets v4 (declarado en appsscript.json) en vez de UrlFetchApp:
+   * misma forma de respuesta que la API REST (camelCase), así que el resto del archivo no cambia.
+   * Si el servicio no está habilitado en el proyecto, lanza un mensaje que marcarApiSinHabilitar_
+   * reconoce igual que antes (contiene "API de Sheets 403" y el texto de "servicio no habilitado").
+   */
   function sheetsApi(ruta, cuerpo) {
-    const resp = UrlFetchApp.fetch('https://sheets.googleapis.com/v4/spreadsheets/' + id() + ruta, {
-      method: cuerpo ? 'post' : 'get',
-      contentType: 'application/json',
-      payload: cuerpo ? JSON.stringify(cuerpo) : undefined,
-      headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
-      muteHttpExceptions: true,
-    });
-    if (resp.getResponseCode() !== 200) throw new Error('API de Sheets ' + resp.getResponseCode() + ': ' + resp.getContentText().slice(0, 300));
-    return JSON.parse(resp.getContentText());
+    try {
+      if (ruta === '/values:batchGetByDataFilter') return Sheets.Spreadsheets.Values.batchGetByDataFilter(cuerpo, id());
+      if (ruta === '/values:batchUpdate') return Sheets.Spreadsheets.Values.batchUpdate(cuerpo, id());
+      throw new Error('Ruta de la API de Sheets no soportada: ' + ruta);
+    } catch (e) {
+      throw new Error('API de Sheets 403: ' + e.message);
+    }
   }
 
   // ---------------- Escritura ----------------

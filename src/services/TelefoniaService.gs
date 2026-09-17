@@ -188,5 +188,59 @@ const TelefoniaService = (function () {
     return { ok: true };
   }
 
-  return { permisos, indice, equipo, linea, evidencias, historial, inspeccion, catalogos, alertas, colaboradores, bitacora, recargarDatos };
+  // ---------------- Captura: inspección y responsiva nuevas ----------------
+
+  function usuarioOperacion_(sesion) {
+    return { correo: sesion.correo, nombre: sesion.nombre || sesion.correo };
+  }
+
+  /** Datos precargados para el formulario de una inspección nueva. */
+  function contextoInspeccion(token, ref) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    return LineasUtil.paraCliente(LineasCaptura.contextoInspeccion(ref, usuarioOperacion_(sesion)));
+  }
+
+  /** Datos precargados para el formulario de una responsiva nueva. */
+  function contextoResponsiva(token, ref) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    return LineasUtil.paraCliente(LineasCaptura.contextoResponsiva(ref, usuarioOperacion_(sesion)));
+  }
+
+  /** Crea la carpeta de evidencia en Drive (NUCOS) para una inspección o responsiva nueva. */
+  function prepararEvidencia(token, tipo, ref) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    if (tipo !== 'INSPECCION' && tipo !== 'RESPONSIVA') throw new Error('Tipo de evidencia inválido.');
+    const obj = LineasCaptura.objetivo(ref);
+    const nuco = obj.reg.nuco || ('LINEA ' + (obj.linea && obj.linea.numero || ''));
+    return LineasUtil.paraCliente(LineasEvidencias.prepararCarpetaEvidencia(tipo, nuco, new Date(), sesion.correo));
+  }
+
+  /** Sube una foto o firma (base64) a una carpeta de evidencia ya preparada. */
+  function subirArchivo(token, carpetaId, nombre, mime, base64) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    return LineasUtil.paraCliente(LineasEvidencias.subirArchivo(sesion.correo, carpetaId, nombre, mime, base64));
+  }
+
+  /** Guarda una inspección nueva (checklist, snapshot, alertas y bitácora). El PDF se pide aparte. */
+  function guardarInspeccion(token, datos) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    return LineasUtil.paraCliente(LineasCaptura.guardarInspeccion(datos, usuarioOperacion_(sesion)));
+  }
+
+  /** Guarda una responsiva nueva. El PDF se pide aparte. */
+  function guardarResponsiva(token, datos) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    return LineasUtil.paraCliente(LineasCaptura.guardarResponsiva(datos, usuarioOperacion_(sesion)));
+  }
+
+  /** Genera (o regenera) el PDF de una inspección/responsiva capturada en el sistema. */
+  function generarPdf(token, tipo, id, forzar) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    return LineasUtil.paraCliente(LineasCaptura.generarPdf(tipo, id, !!forzar, usuarioOperacion_(sesion)));
+  }
+
+  return {
+    permisos, indice, equipo, linea, evidencias, historial, inspeccion, catalogos, alertas, colaboradores, bitacora, recargarDatos,
+    contextoInspeccion, contextoResponsiva, prepararEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf,
+  };
 })();

@@ -77,6 +77,27 @@ function apiLineasBitacora(token, tipo, opciones) {
 function apiLineasRecargarDatos(token) {
   return TelefoniaService.recargarDatos(token);
 }
+function apiLineasContextoInspeccion(token, ref) {
+  return TelefoniaService.contextoInspeccion(token, ref);
+}
+function apiLineasContextoResponsiva(token, ref) {
+  return TelefoniaService.contextoResponsiva(token, ref);
+}
+function apiLineasPrepararEvidencia(token, tipo, ref) {
+  return TelefoniaService.prepararEvidencia(token, tipo, ref);
+}
+function apiLineasSubirArchivo(token, carpetaId, nombre, mime, base64) {
+  return TelefoniaService.subirArchivo(token, carpetaId, nombre, mime, base64);
+}
+function apiLineasGuardarInspeccion(token, datos) {
+  return TelefoniaService.guardarInspeccion(token, datos);
+}
+function apiLineasGuardarResponsiva(token, datos) {
+  return TelefoniaService.guardarResponsiva(token, datos);
+}
+function apiLineasGenerarPdf(token, tipo, id, forzar) {
+  return TelefoniaService.generarPdf(token, tipo, id, forzar);
+}
 
 // --- Incidencias ---
 function apiListarIncidencias(token) {

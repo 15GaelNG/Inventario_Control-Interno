@@ -174,4 +174,33 @@
     .ln-grid-2 { grid-template-columns: 1fr; }
     .ln-filtros, form.ln-filtros { grid-template-columns: 1fr; }
   }
+
+  /* Captura de inspección / responsiva */
+  .ln-checklist-seccion { margin-bottom: 16px; }
+  .ln-checklist-punto { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--color-border); }
+  .ln-checklist-punto:last-child { border-bottom: none; }
+  .ln-checklist-etiqueta { font-size: 13px; }
+  .ln-pastillas { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+  .ln-pastilla {
+    padding: 5px 11px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    background: var(--ln-neutro-bg); color: var(--ln-neutro-tx); border: 1px solid transparent; cursor: pointer;
+  }
+  .ln-pastilla.activa { background: var(--color-primary); color: #fff; }
+  .ln-pastilla.activa.ln-pastilla-mal { background: var(--ln-rojo-tx); color: #fff; }
+  .ln-pastilla.activa.ln-pastilla-media { background: var(--ln-ambar-tx); color: #fff; }
+
+  .ln-firma-caja { border: 1px dashed var(--color-border); border-radius: 10px; padding: 10px; background: #fff; }
+  .ln-firma-caja canvas { width: 100%; height: 140px; display: block; touch-action: none; cursor: crosshair; }
+  .ln-firma-acciones { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+  .ln-firma-acciones .ln-firma-vacia { font-size: 11.5px; color: var(--color-text-muted); }
+
+  .ln-fotos-lista { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .ln-foto-chip {
+    display: inline-flex; align-items: center; gap: 6px; background: var(--ln-verde-bg); color: var(--ln-verde-tx);
+    border-radius: 999px; padding: 5px 8px 5px 10px; font-size: 12px; font-weight: 500; max-width: 220px;
+  }
+  .ln-foto-chip span.ln-foto-nombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ln-foto-chip button { background: none; border: none; color: inherit; cursor: pointer; display: inline-flex; padding: 2px; }
+  .ln-foto-chip.ln-foto-subiendo { background: var(--ln-neutro-bg); color: var(--ln-neutro-tx); }
+  .ln-captura-acciones { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--color-border); }
 </style>

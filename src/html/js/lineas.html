@@ -96,6 +96,31 @@
       setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
     }
 
+    /** Redimensiona una imagen en el navegador antes de subirla (máx. `maxDim` px, JPEG calidad .82). */
+    function redimensionarImagen(archivo, maxDim) {
+      return new Promise((resolve, reject) => {
+        const lector = new FileReader();
+        lector.onerror = () => reject(new Error('No se pudo leer el archivo.'));
+        lector.onload = () => {
+          const img = new Image();
+          img.onerror = () => reject(new Error('Archivo de imagen inválido.'));
+          img.onload = () => {
+            let w = img.width, h = img.height;
+            if (w > maxDim || h > maxDim) {
+              const factor = maxDim / Math.max(w, h);
+              w = Math.round(w * factor); h = Math.round(h * factor);
+            }
+            const lienzo = document.createElement('canvas');
+            lienzo.width = w; lienzo.height = h;
+            lienzo.getContext('2d').drawImage(img, 0, 0, w, h);
+            resolve({ mime: 'image/jpeg', base64: lienzo.toDataURL('image/jpeg', 0.82).split(',')[1] });
+          };
+          img.src = lector.result;
+        };
+        lector.readAsDataURL(archivo);
+      });
+    }
+
     /** Aviso flotante (errores de cargas en segundo plano). */
     function aviso(html, duracion) {
       let caja = document.getElementById('ln-avisos');
@@ -226,6 +251,7 @@
       const raiz = document.getElementById('ln-telefonicas');
       const vigente = () => n === montaje && document.body.contains(raiz);
       const pila = []; // navegación dentro del detalle: [{ tipo, id }]
+      let captura = null; // sesión de captura de inspección/responsiva en curso (null si el modal está cerrado)
       pintarIconos(raiz);
 
       // ---- Eventos ----
@@ -270,11 +296,38 @@
           return;
         }
         if (ev.target.closest('#ln-tile-alertas')) abrirAlertas();
+        const btnCaptura = ev.target.closest('[data-ln-captura]');
+        if (btnCaptura) {
+          ev.preventDefault();
+          const ref = btnCaptura.dataset.equipoId ? { equipoId: btnCaptura.dataset.equipoId } : { lineaId: btnCaptura.dataset.lineaId };
+          abrirCaptura(btnCaptura.dataset.lnCaptura, ref);
+          return;
+        }
+        const pastilla = ev.target.closest('.ln-pastilla');
+        if (pastilla) {
+          pastilla.parentElement.querySelectorAll('.ln-pastilla').forEach((b) => b.classList.remove('activa'));
+          pastilla.classList.add('activa');
+          return;
+        }
+        const limpiarFirma = ev.target.closest('[data-limpiar-firma]');
+        if (limpiarFirma) {
+          if (captura && captura.firmas[limpiarFirma.dataset.limpiarFirma]) captura.firmas[limpiarFirma.dataset.limpiarFirma].limpiar();
+          return;
+        }
+        const quitarFoto = ev.target.closest('[data-quitar-foto]');
+        if (quitarFoto) {
+          if (captura) captura.fotos = captura.fotos.filter((f) => f.id !== quitarFoto.dataset.quitarFoto);
+          quitarFoto.closest('.ln-foto-chip').remove();
+          return;
+        }
       });
       $('#ln-modal-alertas', raiz).addEventListener('click', (ev) => {
         if (ev.target.id === 'ln-modal-alertas' || ev.target.closest('[data-cerrar-modal]')) $('#ln-modal-alertas', raiz).hidden = true;
       });
       $('#ln-alertas-ultimas', raiz).addEventListener('change', pintarAlertas);
+      $('#ln-modal-captura', raiz).addEventListener('click', (ev) => {
+        if (ev.target.id === 'ln-modal-captura' || ev.target.closest('[data-cerrar-modal]')) cerrarCaptura();
+      });
 
       // ---- Carga inicial ----
       Promise.all([cargarPermisos(), cargarIndice()]).then(([permisos]) => {
@@ -500,10 +553,13 @@
           const e = r.equipo;
           const l = r.linea;
           const costo = l && l.costoPlan !== null && l.costoPlan !== undefined ? '$' + Number(l.costoPlan).toLocaleString('es-MX') : null;
+          const puedeOperar = memoria.permisos && memoria.permisos.puedeOperar;
           detalle.innerHTML = migas() +
             encabezado('smartphone', 'NUCO ' + esc(e.nuco || '—'),
               chip(e.estatus) + chip(TIPO_EQUIPO[e.tipo] || e.tipo, 'neutro') + (l ? chip('Con línea', 'verde') : chip('Sin línea', 'ambar')),
-              e.carpetaDriveId ? enlaceDrive(e.carpetaDriveId, 'Carpeta en Drive') : '') +
+              (puedeOperar ? '<button type="button" class="secondary ln-btn-icono" data-ln-captura="INSPECCION" data-equipo-id="' + esc(id) + '">' + icono('clipboard-check') + ' Nueva inspección</button>' +
+                '<button type="button" class="secondary ln-btn-icono" data-ln-captura="RESPONSIVA" data-equipo-id="' + esc(id) + '">' + icono('signature') + ' Nueva responsiva</button>' : '') +
+              (e.carpetaDriveId ? enlaceDrive(e.carpetaDriveId, 'Carpeta en Drive') : '')) +
             (e._secretosVisibles ? '' : '<div class="ln-nota">' + icono('lock') + ' Los PIN, patrones y contraseñas están ocultos para tu rol.</div>') +
             '<div class="ln-grid-2">' +
               tarjeta(icono('smartphone') + ' Equipo', campos([
@@ -532,8 +588,11 @@
           const l = r.linea;
           const e = r.equipo;
           const costo = l.costoPlan !== null && l.costoPlan !== undefined ? '$' + Number(l.costoPlan).toLocaleString('es-MX') : null;
+          const puedeOperarLinea = !e && memoria.permisos && memoria.permisos.puedeOperar;
           detalle.innerHTML = migas() +
-            encabezado('card-sim', esc(l.numero || 'Línea sin número'), chip(l.estatus) + (e ? chip('En NUCO ' + (e.nuco || '—'), 'neutro') : chip('Suelta', 'ambar'))) +
+            encabezado('card-sim', esc(l.numero || 'Línea sin número'), chip(l.estatus) + (e ? chip('En NUCO ' + (e.nuco || '—'), 'neutro') : chip('Suelta', 'ambar')),
+              puedeOperarLinea ? '<button type="button" class="secondary ln-btn-icono" data-ln-captura="INSPECCION" data-linea-id="' + esc(id) + '">' + icono('clipboard-check') + ' Nueva inspección</button>' +
+                '<button type="button" class="secondary ln-btn-icono" data-ln-captura="RESPONSIVA" data-linea-id="' + esc(id) + '">' + icono('signature') + ' Nueva responsiva</button>' : '') +
             '<div class="ln-grid-2">' +
               tarjeta(icono('card-sim') + ' Línea', campos([
                 ['Compañía', l.compania], ['SIM', l.sim], ['PIN WhatsApp', l.pinWhatsapp], ['Razón social', l.razonSocial],
@@ -583,6 +642,287 @@
             '</tbody></table></div>'
           : '<p class="empty-state">Sin responsivas registradas.</p>';
         return tarjeta(icono('clipboard-check') + ' Inspecciones (' + inspecciones.length + ')', tablaInsp) + tarjeta(icono('signature') + ' Responsivas (' + responsivas.length + ')', tablaResp);
+      }
+
+      // ---- Captura: inspección y responsiva nuevas ----
+
+      function cerrarCaptura() {
+        $('#ln-modal-captura', raiz).hidden = true;
+        $('#ln-captura-cuerpo', raiz).innerHTML = '';
+        captura = null;
+      }
+
+      function opcionesEstatus(lista, actual) {
+        return (lista || []).map((v) => '<option value="' + esc(v) + '"' + (v === actual ? ' selected' : '') + '>' + esc(v) + '</option>').join('');
+      }
+
+      function grupoEscala(escala, valorPrevio) {
+        const opciones = { SI_NO: ['SI', 'NO', 'N/A'], CALIDAD: ['BUENO', 'REGULAR', 'MALO'], APP: ['INSTALADA', 'NO INSTALADA'] }[escala] || [];
+        const claseMala = { NO: 'ln-pastilla-mal', MALO: 'ln-pastilla-mal', REGULAR: 'ln-pastilla-media' };
+        return '<div class="ln-pastillas">' + opciones.map((v) =>
+          '<button type="button" class="ln-pastilla' + (v === valorPrevio ? ' activa' : '') + (claseMala[v] ? ' ' + claseMala[v] : '') + '" data-valor="' + esc(v) + '">' + esc(v) + '</button>').join('') + '</div>';
+      }
+
+      function leerChecklistFormulario() {
+        const checklist = {};
+        raiz.querySelectorAll('#ln-captura-cuerpo .ln-checklist-punto').forEach((fila) => {
+          const activa = fila.querySelector('.ln-pastilla.activa');
+          if (activa) checklist[fila.dataset.clave] = activa.dataset.valor;
+        });
+        return checklist;
+      }
+
+      function activarFirma(id) {
+        const canvas = document.getElementById(id);
+        if (!canvas) return null;
+        const ctx2d = canvas.getContext('2d');
+        const rect = canvas.getBoundingClientRect();
+        const escala = window.devicePixelRatio || 1;
+        canvas.width = Math.max(1, rect.width) * escala;
+        canvas.height = Math.max(1, rect.height) * escala;
+        ctx2d.scale(escala, escala);
+        ctx2d.lineWidth = 2.2; ctx2d.lineCap = 'round'; ctx2d.lineJoin = 'round'; ctx2d.strokeStyle = '#111';
+        const estado = { vacia: true, dibujando: false };
+        const posicion = (ev) => {
+          const r = canvas.getBoundingClientRect();
+          return { x: ev.clientX - r.left, y: ev.clientY - r.top };
+        };
+        const empezar = (ev) => { ev.preventDefault(); estado.dibujando = true; estado.vacia = false; const p = posicion(ev); ctx2d.beginPath(); ctx2d.moveTo(p.x, p.y); };
+        const mover = (ev) => { if (!estado.dibujando) return; ev.preventDefault(); const p = posicion(ev); ctx2d.lineTo(p.x, p.y); ctx2d.stroke(); };
+        const terminar = () => { estado.dibujando = false; };
+        canvas.addEventListener('pointerdown', empezar);
+        canvas.addEventListener('pointermove', mover);
+        canvas.addEventListener('pointerup', terminar);
+        canvas.addEventListener('pointerleave', terminar);
+        return {
+          estaVacia: () => estado.vacia,
+          limpiar: () => { ctx2d.clearRect(0, 0, canvas.width, canvas.height); estado.vacia = true; },
+          base64: () => canvas.toDataURL('image/png').split(',')[1],
+        };
+      }
+
+      function subirImagenCaptura(archivo, listaId, carpetaId, onSubido) {
+        const lista = document.getElementById(listaId);
+        if (!lista) return;
+        const chip = document.createElement('span');
+        chip.className = 'ln-foto-chip ln-foto-subiendo';
+        chip.innerHTML = icono('loader-circle', 'ln-icon-sm') + '<span class="ln-foto-nombre">' + esc(archivo.name) + '</span>';
+        lista.appendChild(chip);
+        redimensionarImagen(archivo, 1600)
+          .then((img) => llamar('apiLineasSubirArchivo', carpetaId, archivo.name, img.mime, img.base64))
+          .then((subido) => {
+            chip.className = 'ln-foto-chip';
+            chip.innerHTML = icono('check', 'ln-icon-sm') + '<span class="ln-foto-nombre">' + esc(subido.nombre) + '</span>' +
+              '<button type="button" data-quitar-foto="' + esc(subido.id) + '">' + icono('x', 'ln-icon-sm') + '</button>';
+            onSubido(subido);
+          }).catch((e) => {
+            chip.className = 'ln-foto-chip';
+            chip.style.background = 'var(--ln-rojo-bg)'; chip.style.color = 'var(--ln-rojo-tx)';
+            chip.innerHTML = icono('triangle-alert', 'ln-icon-sm') + '<span class="ln-foto-nombre">' + esc(mensajeError(e)) + '</span>';
+            onSubido(null);
+          });
+      }
+
+      function manejarSubidaArchivo(inputId, listaId, obtenerCarpetaId, multiple, onSubido) {
+        const input = document.getElementById(inputId);
+        if (!input) return;
+        input.addEventListener('change', () => {
+          const archivos = Array.from(input.files || []);
+          input.value = '';
+          if (!multiple) document.getElementById(listaId).innerHTML = '';
+          archivos.slice(0, multiple ? archivos.length : 1).forEach((archivo) => subirImagenCaptura(archivo, listaId, obtenerCarpetaId(), onSubido));
+        });
+      }
+
+      function refrescarDespuesDeCaptura(idAbierto, tipo, nuevoId) {
+        cargarIndice(true);
+        if (vigente() && pila.length && pila[pila.length - 1].id === idAbierto) {
+          cargarEvidencias(idAbierto);
+          cargarHistorial(idAbierto);
+        }
+        llamar('apiLineasGenerarPdf', tipo, nuevoId, false).then(() => {
+          aviso(icono('circle-check', 'ln-icon-sm') + ' PDF generado.', 4000);
+          if (vigente() && pila.length && pila[pila.length - 1].id === idAbierto) cargarEvidencias(idAbierto);
+        }).catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' No se pudo generar el PDF: ' + mensajeError(e), 10000));
+      }
+
+      // -- Inspección --
+
+      function formularioInspeccion(ctx) {
+        const secciones = ctx.secciones.map((s) => tarjeta(icono('list-checks') + ' ' + esc(s.seccion), '<div class="ln-checklist-seccion">' +
+          s.puntos.map((p) => '<div class="ln-checklist-punto" data-clave="' + esc(p.clave) + '">' +
+            '<span class="ln-checklist-etiqueta">' + esc(p.etiqueta) + '</span>' +
+            grupoEscala(p.escala, ctx.anterior && ctx.anterior.checklist ? ctx.anterior.checklist[p.clave] : null) + '</div>').join('') +
+          '</div>')).join('');
+        return tarjetaResponsable(ctx.responsable, 'Responsable') +
+          (ctx.anterior ? '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' Se precargó cada punto con el resultado de la inspección anterior (' + esc(fecha(ctx.anterior.fecha) || '') + '); revisa y corrige lo que cambió.</div>' : '') +
+          '<div class="grid" style="grid-template-columns: repeat(3, 1fr)">' +
+            '<div class="field"><label>Color del equipo</label><input type="text" id="cap-color" autocomplete="off" /></div>' +
+            '<div class="field"><label>Ticket (opcional)</label><input type="text" id="cap-ticket" autocomplete="off" /></div>' +
+            '<div class="field"><label>Otra app (opcional)</label><input type="text" id="cap-otra-app" autocomplete="off" /></div>' +
+          '</div>' +
+          (ctx.equipo ? '<div class="grid" style="grid-template-columns: repeat(2, 1fr)">' +
+            '<div class="field"><label>Cambiar estatus del equipo (opcional)</label><select id="cap-estatus"><option value="">Sin cambio</option>' + opcionesEstatus(ctx.catalogos.estatusEquipo, '') + '</select></div>' +
+            '</div><label class="ln-check"><input type="checkbox" id="cap-actualizar-accesorios" checked> Actualizar accesorios del equipo (cubo, cable, funda, mica) según el checklist</label>' : '') +
+          secciones +
+          '<div class="field"><label>Observaciones</label><textarea id="cap-observaciones" rows="2"></textarea></div>' +
+          tarjeta(icono('images') + ' Fotos', '<input type="file" id="cap-fotos" accept="image/*" capture="environment" multiple />' +
+            '<div class="ln-fotos-lista" id="cap-fotos-lista"></div>') +
+          '<div class="ln-grid-2">' +
+            tarjeta(icono('signature') + ' Firma del inspector (obligatoria)', '<div class="ln-firma-caja"><canvas id="cap-firma-inspector"></canvas>' +
+              '<div class="ln-firma-acciones"><span class="ln-firma-vacia">Dibuja con el dedo o el mouse</span><button type="button" class="secondary ln-btn-chico" data-limpiar-firma="inspector">Limpiar</button></div></div>') +
+            tarjeta(icono('signature') + ' Firma del responsable (opcional)', '<div class="ln-firma-caja"><canvas id="cap-firma-responsable"></canvas>' +
+              '<div class="ln-firma-acciones"><span class="ln-firma-vacia">Dibuja con el dedo o el mouse</span><button type="button" class="secondary ln-btn-chico" data-limpiar-firma="responsable">Limpiar</button></div></div>') +
+          '</div>' +
+          '<div class="error-msg" id="cap-error" hidden></div>' +
+          '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
+            '<button type="button" class="primary" id="cap-guardar">Guardar inspección</button></div>';
+      }
+
+      function iniciarFormularioInspeccion() {
+        captura.firmas.inspector = activarFirma('cap-firma-inspector');
+        captura.firmas.responsable = activarFirma('cap-firma-responsable');
+        manejarSubidaArchivo('cap-fotos', 'cap-fotos-lista', () => captura.fotosCarpetaId, true, (s) => { if (s) captura.fotos.push(s); });
+        $('#cap-guardar', raiz).addEventListener('click', guardarInspeccionDesdeFormulario);
+      }
+
+      function guardarInspeccionDesdeFormulario() {
+        const boton = $('#cap-guardar', raiz);
+        const errorBox = $('#cap-error', raiz);
+        errorBox.hidden = true;
+        const firmaInspector = captura.firmas.inspector;
+        const firmaResponsable = captura.firmas.responsable;
+        if (!firmaInspector || firmaInspector.estaVacia()) { errorBox.textContent = 'La firma del inspector es obligatoria.'; errorBox.hidden = false; return; }
+        const checklist = leerChecklistFormulario();
+        const idAbierto = captura.idObjetivo;
+        const refCaptura = captura.ref;
+        const carpetaId = captura.carpetaId;
+        const fotosCarpetaId = captura.fotosCarpetaId;
+        const ruta = captura.ruta;
+        const fotos = captura.fotos;
+        const anteriorId = captura.contexto && captura.contexto.anterior ? captura.contexto.anterior.id : null;
+
+        boton.disabled = true;
+        Promise.all([
+          llamar('apiLineasSubirArchivo', carpetaId, 'FIRMA INSPECTOR.png', 'image/png', firmaInspector.base64()),
+          firmaResponsable && !firmaResponsable.estaVacia() ? llamar('apiLineasSubirArchivo', carpetaId, 'FIRMA RESPONSABLE.png', 'image/png', firmaResponsable.base64()) : Promise.resolve(null),
+        ]).then(([fInspector, fResponsable]) => llamar('apiLineasGuardarInspeccion', Object.assign({}, refCaptura, {
+          carpetaId: carpetaId, fotosCarpetaId: fotosCarpetaId, ruta: ruta, checklist: checklist,
+          color: $('#cap-color', raiz).value, ticket: $('#cap-ticket', raiz).value, otraApp: $('#cap-otra-app', raiz).value,
+          observaciones: $('#cap-observaciones', raiz).value,
+          estatusEquipo: $('#cap-estatus', raiz) ? $('#cap-estatus', raiz).value : '',
+          actualizarAccesorios: $('#cap-actualizar-accesorios', raiz) ? $('#cap-actualizar-accesorios', raiz).checked : false,
+          fotos: fotos, firmaInspectorId: fInspector.id, firmaResponsableId: fResponsable ? fResponsable.id : null, anteriorId: anteriorId,
+        }))).then((r) => {
+          cerrarCaptura();
+          aviso(icono('circle-check', 'ln-icon-sm') + ' Inspección guardada' + (r.alertas && r.alertas.length ? ' — ' + r.alertas.length + ' alerta(s) contra la anterior' : '') + '. Generando el PDF…', 6000);
+          refrescarDespuesDeCaptura(idAbierto, 'INSPECCION', r.id);
+        }).catch((e) => {
+          errorBox.textContent = mensajeError(e);
+          errorBox.hidden = false;
+          boton.disabled = false;
+        });
+      }
+
+      // -- Responsiva --
+
+      function formularioResponsiva(ctx) {
+        return tarjetaResponsable(ctx.responsable, 'Responsable') +
+          '<div class="grid" style="grid-template-columns: repeat(2, 1fr)">' +
+            '<div class="field"><label>Identificación (INE, pasaporte…)</label><input type="text" id="cap-identificacion" autocomplete="off" required /></div>' +
+            '<div class="field"><label>Tipo de contraseña</label><input type="text" id="cap-tipo-contrasena" placeholder="PIN, PATRON, CONTRASEÑA…" autocomplete="off" /></div>' +
+            (ctx.equipo ? '<div class="field"><label>Color del equipo</label><input type="text" id="cap-color" autocomplete="off" /></div>' : '') +
+            (ctx.equipo ? '<div class="field"><label>Cambiar estatus del equipo (opcional)</label><select id="cap-estatus"><option value="">Sin cambio</option>' + opcionesEstatus(ctx.catalogos.estatusEquipo, '') + '</select></div>' : '') +
+          '</div>' +
+          '<div class="field"><label>Foto del patrón (solo si el tipo de contraseña es PATRON)</label><input type="file" id="cap-patron" accept="image/*" />' +
+            '<div class="ln-fotos-lista" id="cap-patron-lista"></div></div>' +
+          '<div class="field"><label>Observaciones</label><textarea id="cap-observaciones" rows="2"></textarea></div>' +
+          '<div class="ln-grid-2">' +
+            tarjeta(icono('signature') + ' Firma del responsable (obligatoria)', '<div class="ln-firma-caja"><canvas id="cap-firma-responsable"></canvas>' +
+              '<div class="ln-firma-acciones"><span class="ln-firma-vacia">Dibuja con el dedo o el mouse</span><button type="button" class="secondary ln-btn-chico" data-limpiar-firma="responsable">Limpiar</button></div></div>') +
+            tarjeta(icono('signature') + ' Firma de Control Interno' + (ctx.nombreCI ? ' — ' + esc(ctx.nombreCI) : '') + ' (obligatoria)', '<div class="ln-firma-caja"><canvas id="cap-firma-ci"></canvas>' +
+              '<div class="ln-firma-acciones"><span class="ln-firma-vacia">Dibuja con el dedo o el mouse</span><button type="button" class="secondary ln-btn-chico" data-limpiar-firma="ci">Limpiar</button></div></div>') +
+          '</div>' +
+          '<div class="error-msg" id="cap-error" hidden></div>' +
+          '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
+            '<button type="button" class="primary" id="cap-guardar">Guardar responsiva</button></div>';
+      }
+
+      function iniciarFormularioResponsiva() {
+        captura.firmas.responsable = activarFirma('cap-firma-responsable');
+        captura.firmas.ci = activarFirma('cap-firma-ci');
+        manejarSubidaArchivo('cap-patron', 'cap-patron-lista', () => captura.carpetaId, false, (s) => { captura.patronId = s ? s.id : null; });
+        $('#cap-guardar', raiz).addEventListener('click', guardarResponsivaDesdeFormulario);
+      }
+
+      function guardarResponsivaDesdeFormulario() {
+        const boton = $('#cap-guardar', raiz);
+        const errorBox = $('#cap-error', raiz);
+        errorBox.hidden = true;
+        const identificacion = $('#cap-identificacion', raiz).value.trim();
+        const firmaResponsable = captura.firmas.responsable;
+        const firmaCi = captura.firmas.ci;
+        if (!identificacion) { errorBox.textContent = 'La identificación es obligatoria.'; errorBox.hidden = false; return; }
+        if (!firmaResponsable || firmaResponsable.estaVacia() || !firmaCi || firmaCi.estaVacia()) {
+          errorBox.textContent = 'Se requieren la firma del responsable y la de Control Interno.'; errorBox.hidden = false; return;
+        }
+        const idAbierto = captura.idObjetivo;
+        const refCaptura = captura.ref;
+        const carpetaId = captura.carpetaId;
+        const patronId = captura.patronId || null;
+
+        boton.disabled = true;
+        Promise.all([
+          llamar('apiLineasSubirArchivo', carpetaId, 'FIRMA RESPONSABLE.png', 'image/png', firmaResponsable.base64()),
+          llamar('apiLineasSubirArchivo', carpetaId, 'FIRMA CI.png', 'image/png', firmaCi.base64()),
+        ]).then(([fResponsable, fCi]) => llamar('apiLineasGuardarResponsiva', Object.assign({}, refCaptura, {
+          carpetaId: carpetaId, identificacion: identificacion, tipoContrasena: $('#cap-tipo-contrasena', raiz).value,
+          color: $('#cap-color', raiz) ? $('#cap-color', raiz).value : '', observaciones: $('#cap-observaciones', raiz).value,
+          estatusEquipo: $('#cap-estatus', raiz) ? $('#cap-estatus', raiz).value : '',
+          firmaResponsableId: fResponsable.id, firmaCiId: fCi.id, patronId: patronId,
+        }))).then((r) => {
+          cerrarCaptura();
+          aviso(icono('circle-check', 'ln-icon-sm') + ' Responsiva guardada. Generando el PDF…', 6000);
+          refrescarDespuesDeCaptura(idAbierto, 'RESPONSIVA', r.id);
+        }).catch((e) => {
+          errorBox.textContent = mensajeError(e);
+          errorBox.hidden = false;
+          boton.disabled = false;
+        });
+      }
+
+      // -- Abrir el modal --
+
+      function abrirCaptura(tipo, ref) {
+        $('#ln-modal-alertas', raiz).hidden = true;
+        $('#ln-modal-captura', raiz).hidden = false;
+        $('#ln-captura-titulo', raiz).textContent = tipo === 'INSPECCION' ? 'Nueva inspección' : 'Nueva responsiva';
+        $('#ln-captura-subtitulo', raiz).textContent = 'Preparando la carpeta de evidencia…';
+        $('#ln-captura-cuerpo', raiz).innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando…</p>';
+        captura = { tipo: tipo, ref: ref, idObjetivo: ref.equipoId || ref.lineaId, fotos: [], patronId: null, firmas: {} };
+
+        const pedirContexto = tipo === 'INSPECCION' ? llamar('apiLineasContextoInspeccion', ref) : llamar('apiLineasContextoResponsiva', ref);
+        Promise.all([pedirContexto, llamar('apiLineasPrepararEvidencia', tipo, ref), llamar('apiLineasCatalogos')]).then(([ctx, carpeta, catalogos]) => {
+          if (!captura) return; // el modal se cerró mientras cargaba
+          ctx.catalogos = catalogos;
+          captura.contexto = ctx;
+          captura.carpetaId = carpeta.carpetaId;
+          captura.fotosCarpetaId = carpeta.fotosCarpetaId || carpeta.carpetaId;
+          captura.ruta = carpeta.ruta;
+          $('#ln-captura-subtitulo', raiz).textContent = carpeta.ruta;
+          if (tipo === 'INSPECCION') {
+            $('#ln-captura-cuerpo', raiz).innerHTML = formularioInspeccion(ctx);
+            pintarIconos($('#ln-captura-cuerpo', raiz));
+            iniciarFormularioInspeccion();
+          } else {
+            $('#ln-captura-cuerpo', raiz).innerHTML = formularioResponsiva(ctx);
+            pintarIconos($('#ln-captura-cuerpo', raiz));
+            iniciarFormularioResponsiva();
+          }
+        }).catch((e) => {
+          if (!captura) return;
+          $('#ln-captura-cuerpo', raiz).innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>';
+        });
       }
 
       // ---- Historial ----
