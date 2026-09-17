@@ -102,6 +102,15 @@ function apiListarDepartamentos(token) {
 function apiListarSolicitantesTickets(token) {
   return TicketsService.listarSolicitantes(token);
 }
+function apiListarRazonesSociales(token) {
+  return ListasService.listarRazonesSociales(token);
+}
+function apiListarSedes(token) {
+  return ListasService.listarSedes(token);
+}
+function apiListarOficinasDesarrollo(token) {
+  return ListasService.listarOficinasDesarrollo(token);
+}
 
 // --- Incidencias ---
 function apiListarIncidencias(token) {

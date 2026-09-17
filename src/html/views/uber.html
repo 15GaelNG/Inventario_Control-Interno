@@ -31,15 +31,15 @@
     </div>
     <form id="form-uber" class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 14px;">
       <div class="field"><label>Nombre completo</label><input type="text" id="uber-nombre-completo" required /></div>
-      <div class="field"><label>Razón social</label><input type="text" id="uber-razon-social" /></div>
+      <div class="field"><label>Razón social</label><select id="uber-razon-social"><option value="">Selecciona…</option></select></div>
       <div class="field"><label>Estatus</label><input type="text" id="uber-estaus-usuario" placeholder="Ej. Activo" /></div>
       <div class="field"><label>Rol</label><input type="text" id="uber-rol" placeholder="Ej. Empleado, Beneficiario" /></div>
       <div class="field"><label>Fecha de alta</label><input type="date" id="uber-fecha-de-alta" /></div>
       <div class="field"><label>Correo electrónico</label><input type="email" id="uber-correo-electronico" /></div>
       <div class="field"><label>Teléfono</label><input type="text" id="uber-numero-telefono" /></div>
-      <div class="field"><label>Sede</label><input type="text" id="uber-sede" /></div>
-      <div class="field"><label>Oficina / Desarrollo</label><input type="text" id="uber-oficina-desarrollo" /></div>
-      <div class="field"><label>Departamento</label><input type="text" id="uber-departamento" /></div>
+      <div class="field"><label>Sede</label><select id="uber-sede"><option value="">Selecciona…</option></select></div>
+      <div class="field"><label>Oficina / Desarrollo</label><select id="uber-oficina-desarrollo"><option value="">Selecciona…</option></select></div>
+      <div class="field"><label>Departamento</label><select id="uber-departamento"><option value="">Selecciona…</option></select></div>
       <div class="field"><label>Puesto</label><input type="text" id="uber-puesto" /></div>
       <div class="field"><label>Días autorizados</label><input type="text" id="uber-dias-autorizados" placeholder="Ej. Lunes a viernes" /></div>
       <div class="field"><label>Horario autorizado</label><input type="text" id="uber-horario-autorizado" placeholder="Ej. 07:00 - 19:00" /></div>
@@ -80,15 +80,15 @@
         <input type="hidden" id="editar-uber-id" />
         <div class="modal-form-scroll grid" style="grid-template-columns: repeat(2, 1fr); gap: 0 14px;">
           <div class="field"><label>Nombre completo</label><input type="text" id="editar-uber-nombre-completo" required /></div>
-          <div class="field"><label>Razón social</label><input type="text" id="editar-uber-razon-social" /></div>
+          <div class="field"><label>Razón social</label><select id="editar-uber-razon-social"><option value="">Selecciona…</option></select></div>
           <div class="field"><label>Estatus</label><input type="text" id="editar-uber-estaus-usuario" /></div>
           <div class="field"><label>Rol</label><input type="text" id="editar-uber-rol" /></div>
           <div class="field"><label>Fecha de alta</label><input type="date" id="editar-uber-fecha-de-alta" /></div>
           <div class="field"><label>Correo electrónico</label><input type="email" id="editar-uber-correo-electronico" /></div>
           <div class="field"><label>Teléfono</label><input type="text" id="editar-uber-numero-telefono" /></div>
-          <div class="field"><label>Sede</label><input type="text" id="editar-uber-sede" /></div>
-          <div class="field"><label>Oficina / Desarrollo</label><input type="text" id="editar-uber-oficina-desarrollo" /></div>
-          <div class="field"><label>Departamento</label><input type="text" id="editar-uber-departamento" /></div>
+          <div class="field"><label>Sede</label><select id="editar-uber-sede"><option value="">Selecciona…</option></select></div>
+          <div class="field"><label>Oficina / Desarrollo</label><select id="editar-uber-oficina-desarrollo"><option value="">Selecciona…</option></select></div>
+          <div class="field"><label>Departamento</label><select id="editar-uber-departamento"><option value="">Selecciona…</option></select></div>
           <div class="field"><label>Puesto</label><input type="text" id="editar-uber-puesto" /></div>
           <div class="field"><label>Días autorizados</label><input type="text" id="editar-uber-dias-autorizados" /></div>
           <div class="field"><label>Horario autorizado</label><input type="text" id="editar-uber-horario-autorizado" /></div>

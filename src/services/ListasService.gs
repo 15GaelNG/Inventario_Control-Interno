@@ -29,5 +29,20 @@ const ListasService = (function () {
     return listarColumna_('DEPARTAMENTO');
   }
 
-  return { listarDepartamentos };
+  function listarRazonesSociales(token) {
+    Auth.validarSesion(token);
+    return listarColumna_('RAZON SOCIAL');
+  }
+
+  function listarSedes(token) {
+    Auth.validarSesion(token);
+    return listarColumna_('SEDE');
+  }
+
+  function listarOficinasDesarrollo(token) {
+    Auth.validarSesion(token);
+    return listarColumna_('OFICINA/DESARROLLO');
+  }
+
+  return { listarDepartamentos, listarRazonesSociales, listarSedes, listarOficinasDesarrollo };
 })();

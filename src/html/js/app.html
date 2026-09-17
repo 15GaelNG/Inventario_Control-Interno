@@ -1149,6 +1149,29 @@
       return `<span class="badge-estado ${esBaja ? 'baja' : 'activo'}"><i data-lucide="${esBaja ? 'ban' : 'circle-check'}" class="ico"></i> ${esBaja ? 'De baja' : 'Activo'}</span>`;
     }
 
+    // Razón social / Sede / Oficina-Desarrollo / Departamento: catálogos
+    // reales (hoja "LISTAS VEHICULOS"), mismas opciones en Registrar y Editar.
+    function llenarSelect(id, valores) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.innerHTML = '<option value="">Selecciona…</option>' +
+        (valores || []).map((v) => `<option value="${v}">${v}</option>`).join('');
+    }
+    try {
+      const [razones, sedes, oficinas, deptos] = await Promise.all([
+        callServer('apiListarRazonesSociales', state.token),
+        callServer('apiListarSedes', state.token),
+        callServer('apiListarOficinasDesarrollo', state.token),
+        callServer('apiListarDepartamentos', state.token),
+      ]);
+      ['uber-razon-social', 'editar-uber-razon-social'].forEach((id) => llenarSelect(id, razones));
+      ['uber-sede', 'editar-uber-sede'].forEach((id) => llenarSelect(id, sedes));
+      ['uber-oficina-desarrollo', 'editar-uber-oficina-desarrollo'].forEach((id) => llenarSelect(id, oficinas));
+      ['uber-departamento', 'editar-uber-departamento'].forEach((id) => llenarSelect(id, deptos));
+    } catch (err) {
+      console.error('No se pudieron cargar los catálogos de Razón social/Sede/Oficina/Departamento:', err);
+    }
+
     // SOLICITUD es archivo — se maneja aparte (subirArchivoUber), no aquí:
     // subir un archivo es asíncrono, no se puede leer de golpe como el resto.
     const CAMPOS_UBER = [
