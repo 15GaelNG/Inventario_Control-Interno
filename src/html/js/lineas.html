@@ -1,4 +1,3 @@
-<script src="https://cdn.jsdelivr.net/npm/lucide@1.46.0/dist/umd/lucide.min.js"></script>
 <script>
   /**
    * lineas.js — vistas del módulo de Líneas (grupo "Líneas" del menú).
@@ -44,8 +43,11 @@
       const nombrePascal = String(nombre).replace(/(^|-)([a-z0-9])/g, (m, sep, c) => c.toUpperCase());
       const nodos = window.lucide && window.lucide.icons && window.lucide.icons[nombrePascal];
       if (!nodos) return '';
-      return '<svg ' + ATRIBUTOS_SVG + ' class="ln-icon ' + (clase || '') + '">' +
-        nodos.map((n) => '<' + n[0] + Object.keys(n[1]).map((k) => ' ' + k + '="' + n[1][k] + '"').join('') + '/>').join('') + '</svg>';
+      const svg = window.lucide.createElement(nodos);
+      svg.setAttribute('class', 'ln-icon ' + (clase || ''));
+      svg.setAttribute('aria-hidden', 'true');
+      svg.setAttribute('focusable', 'false');
+      return svg.outerHTML;
     }
     /** Rellena los <span data-ln-icon="nombre"> de las plantillas. */
     function pintarIconos(raiz) {

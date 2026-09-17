@@ -1,29 +1,29 @@
 <template id="tpl-incidencias">
   <div class="page-header">
     <div>
-      <h2>🔧 Incidencias</h2>
+      <h2><i data-lucide="wrench" class="ico"></i> Incidencias</h2>
       <p class="page-subtitle">Bitácora de taller — ingreso, trabajo realizado y salida del vehículo</p>
     </div>
   </div>
 
   <div class="stat-row">
     <div class="stat-tile">
-      <div class="stat-icon">📋</div>
+      <div class="stat-icon"><i data-lucide="clipboard-list" class="ico"></i></div>
       <div><div class="stat-value" id="stat-total">0</div><div class="stat-label">Total</div></div>
     </div>
     <div class="stat-tile stat-tile-warn">
-      <div class="stat-icon">🔓</div>
+      <div class="stat-icon"><i data-lucide="lock-open" class="ico"></i></div>
       <div><div class="stat-value" id="stat-abiertas">0</div><div class="stat-label">Abiertas</div></div>
     </div>
     <div class="stat-tile stat-tile-ok">
-      <div class="stat-icon">✅</div>
+      <div class="stat-icon"><i data-lucide="circle-check" class="ico"></i></div>
       <div><div class="stat-value" id="stat-cerradas">0</div><div class="stat-label">Cerradas</div></div>
     </div>
   </div>
 
   <div class="card form-card" style="margin-bottom:18px">
     <div class="form-card-header">
-      <div class="form-card-icon">🚗</div>
+      <div class="form-card-icon"><i data-lucide="car" class="ico"></i></div>
       <div>
         <h3>Registrar ingreso</h3>
         <p>Da de alta el vehículo que entra al taller</p>
@@ -48,7 +48,7 @@
         <label>Inspección de ingreso (motivo)</label>
         <input type="text" id="inc-motivo" placeholder="Ej. Cambio de batería" />
       </div>
-      <div style="grid-column: 1 / -1;"><button type="submit">🚗 Registrar ingreso</button></div>
+      <div style="grid-column: 1 / -1;"><button type="submit"><i data-lucide="car" class="ico"></i> Registrar ingreso</button></div>
     </form>
     <div class="error-msg" id="inc-error" hidden></div>
   </div>
@@ -67,7 +67,7 @@
           <h3 style="margin:0">Cerrar incidencia</h3>
           <p class="modal-subtitle" id="cerrar-folio"></p>
         </div>
-        <button type="button" class="modal-close" id="btn-cancelar-cierre">✕</button>
+        <button type="button" class="modal-close" id="btn-cancelar-cierre"><i data-lucide="x" class="ico"></i></button>
       </div>
       <form id="form-cerrar-incidencia">
         <input type="hidden" id="cerrar-id" />
@@ -88,7 +88,7 @@
           <input type="text" id="cerrar-mecanico" placeholder="Nombre del mecánico" />
         </div>
         <div class="error-msg" id="cerrar-error" hidden></div>
-        <button type="submit" style="width:100%">✅ Guardar y cerrar</button>
+        <button type="submit" style="width:100%"><i data-lucide="circle-check" class="ico"></i> Guardar y cerrar</button>
       </form>
     </div>
   </div>
@@ -101,7 +101,7 @@
           <h3 style="margin:0">Editar incidencia</h3>
           <p class="modal-subtitle" id="editar-folio-label"></p>
         </div>
-        <button type="button" class="modal-close" id="btn-cancelar-editar">✕</button>
+        <button type="button" class="modal-close" id="btn-cancelar-editar"><i data-lucide="x" class="ico"></i></button>
       </div>
       <form id="form-editar-incidencia">
         <input type="hidden" id="editar-id" />
@@ -122,7 +122,7 @@
           <div class="field" style="grid-column: 1 / -1;"><label>Inspección de salida</label><input type="text" id="editar-salida" /></div>
         </div>
         <div class="error-msg" id="editar-error" hidden></div>
-        <button type="submit" style="width:100%; margin-top:10px">💾 Guardar cambios</button>
+        <button type="submit" style="width:100%; margin-top:10px"><i data-lucide="save" class="ico"></i> Guardar cambios</button>
       </form>
     </div>
   </div>
