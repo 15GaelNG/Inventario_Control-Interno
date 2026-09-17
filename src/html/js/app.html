@@ -1371,6 +1371,7 @@
     const lista = document.getElementById('lista-uber');
     const vacio = document.getElementById('uber-vacio');
     const modalEditar = document.getElementById('modal-editar-uber');
+    const modalDetalle = document.getElementById('modal-detalle-uber');
     let usuariosPorId = {};
     let todosLosUsuarios = [];
 
@@ -1477,7 +1478,7 @@
         vacio.hidden = total > 0;
         lista.innerHTML = usuarios.map((u) => `
           <tr>
-            <td class="tabla-clickable" data-id="${u.ID}" title="Editar / ver detalle">${u.NOMBRE_COMPLETO || '—'}</td>
+            <td class="tabla-clickable" data-id="${u.ID}" title="Ver detalle completo">${u.NOMBRE_COMPLETO || '—'}</td>
             <td>${u.RAZON_SOCIAL || '—'}</td>
             <td>${etiquetaRol(u.ROL)}</td>
             <td>${u.DEPARTAMENTO || '—'}</td>
@@ -1485,6 +1486,7 @@
             <td>${badgeEstatusUber(u.ESTATUS)}</td>
             <td>
               <div class="tabla-actions">
+                <button type="button" class="secondary btn-editar-uber" data-id="${u.ID}" title="Editar"><i data-lucide="pencil" class="ico"></i></button>
                 <button type="button" class="danger btn-eliminar-uber" data-id="${u.ID}" data-nombre="${u.NOMBRE_COMPLETO}" title="Eliminar"><i data-lucide="trash-2" class="ico"></i></button>
               </div>
             </td>
@@ -1492,7 +1494,10 @@
         `).join('');
 
         lista.querySelectorAll('.tabla-clickable').forEach((el) => {
-          el.addEventListener('click', () => abrirEditarUber(el.dataset.id));
+          el.addEventListener('click', () => abrirDetalleUber(el.dataset.id));
+        });
+        lista.querySelectorAll('.btn-editar-uber').forEach((btn) => {
+          btn.addEventListener('click', () => abrirEditarUber(btn.dataset.id));
         });
         lista.querySelectorAll('.btn-eliminar-uber').forEach((btn) => {
           btn.addEventListener('click', () => eliminarUber(btn.dataset.id, btn.dataset.nombre));
@@ -1529,6 +1534,30 @@
 
       motorTablaUber.setDatos(todosLosUsuarios);
     }
+
+    async function abrirDetalleUber(id) {
+      const resumen = usuariosPorId[id];
+      if (!resumen) return;
+      document.getElementById('detalle-uber-nombre-label').textContent = resumen.NOMBRE_COMPLETO || '';
+      const grid = document.getElementById('detalle-uber-grid');
+      grid.innerHTML = '<div class="loading-inline"><span class="spinner"></span> Cargando…</div>';
+      modalDetalle.hidden = false;
+      try {
+        const completo = await callServer('apiBuscarUberPorId', state.token, id);
+        if (!completo) {
+          grid.innerHTML = '<p class="empty-state">No se encontró el registro completo.</p>';
+          return;
+        }
+        grid.innerHTML = Object.keys(completo)
+          .filter((k) => completo[k] !== '' && completo[k] !== null && completo[k] !== undefined)
+          .map((k) => itemInfo(tituloDesdeClave(k), completo[k]))
+          .join('');
+      } catch (err) {
+        grid.innerHTML = '<p class="error-msg">No se pudo cargar: ' + err.message + '</p>';
+      }
+    }
+    document.getElementById('btn-cerrar-detalle-uber').addEventListener('click', () => { modalDetalle.hidden = true; });
+    modalDetalle.addEventListener('click', (ev) => { if (ev.target === modalDetalle) modalDetalle.hidden = true; });
 
     async function abrirEditarUber(id) {
       const resumen = usuariosPorId[id];
@@ -1619,6 +1648,7 @@
     const lista = document.getElementById('lista-tickets');
     const vacio = document.getElementById('tickets-vacio');
     const modalEditar = document.getElementById('modal-editar-ticket');
+    const modalDetalle = document.getElementById('modal-detalle-ticket');
     let ticketsPorId = {};
     let todosLosTickets = [];
 
@@ -1682,7 +1712,7 @@
         vacio.hidden = total > 0;
         lista.innerHTML = tickets.map((t) => `
           <tr>
-            <td class="tabla-clickable" data-id="${t.ID}" title="Editar / ver detalle">${t.TICKET || '—'}</td>
+            <td class="tabla-clickable" data-id="${t.ID}" title="Ver detalle completo">${t.TICKET || '—'}</td>
             <td>${formatearFecha(t.FECHA)}</td>
             <td>${t.DEPARTAMENTO || '—'}</td>
             <td>${t.SOLICITANTE || '—'}</td>
@@ -1690,6 +1720,7 @@
             <td>${t.QUIEN_ATENDIO || '—'}</td>
             <td>
               <div class="tabla-actions">
+                <button type="button" class="secondary btn-editar-ticket" data-id="${t.ID}" title="Editar"><i data-lucide="pencil" class="ico"></i></button>
                 <button type="button" class="danger btn-eliminar-ticket" data-id="${t.ID}" data-ticket="${t.TICKET}" title="Eliminar"><i data-lucide="trash-2" class="ico"></i></button>
               </div>
             </td>
@@ -1697,7 +1728,10 @@
         `).join('');
 
         lista.querySelectorAll('.tabla-clickable').forEach((el) => {
-          el.addEventListener('click', () => abrirEditarTicket(el.dataset.id));
+          el.addEventListener('click', () => abrirDetalleTicket(el.dataset.id));
+        });
+        lista.querySelectorAll('.btn-editar-ticket').forEach((btn) => {
+          btn.addEventListener('click', () => abrirEditarTicket(btn.dataset.id));
         });
         lista.querySelectorAll('.btn-eliminar-ticket').forEach((btn) => {
           btn.addEventListener('click', () => eliminarTicket(btn.dataset.id, btn.dataset.ticket));
@@ -1727,6 +1761,30 @@
 
       motorTablaTickets.setDatos(todosLosTickets);
     }
+
+    async function abrirDetalleTicket(id) {
+      const resumen = ticketsPorId[id];
+      if (!resumen) return;
+      document.getElementById('detalle-ticket-label').textContent = 'Ticket: ' + (resumen.TICKET || id);
+      const grid = document.getElementById('detalle-ticket-grid');
+      grid.innerHTML = '<div class="loading-inline"><span class="spinner"></span> Cargando…</div>';
+      modalDetalle.hidden = false;
+      try {
+        const completo = await callServer('apiBuscarTicketPorId', state.token, id);
+        if (!completo) {
+          grid.innerHTML = '<p class="empty-state">No se encontró el registro completo.</p>';
+          return;
+        }
+        grid.innerHTML = Object.keys(completo)
+          .filter((k) => completo[k] !== '' && completo[k] !== null && completo[k] !== undefined)
+          .map((k) => itemInfo(tituloDesdeClave(k), completo[k]))
+          .join('');
+      } catch (err) {
+        grid.innerHTML = '<p class="error-msg">No se pudo cargar: ' + err.message + '</p>';
+      }
+    }
+    document.getElementById('btn-cerrar-detalle-ticket').addEventListener('click', () => { modalDetalle.hidden = true; });
+    modalDetalle.addEventListener('click', (ev) => { if (ev.target === modalDetalle) modalDetalle.hidden = true; });
 
     async function abrirEditarTicket(id) {
       const resumen = ticketsPorId[id];

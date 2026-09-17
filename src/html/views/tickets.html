@@ -84,7 +84,23 @@
     <div class="tabla-pie" id="tickets-pie"></div>
   </div>
 
-  <!-- Modal: editar (también sirve para ver el detalle completo) -->
+  <!-- Modal: detalle completo, solo lectura -->
+  <div class="modal-backdrop" id="modal-detalle-ticket" hidden>
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <div>
+          <h3 style="margin:0">Detalle completo</h3>
+          <p class="modal-subtitle" id="detalle-ticket-label"></p>
+        </div>
+        <button type="button" class="modal-close" id="btn-cerrar-detalle-ticket"><i data-lucide="x" class="ico"></i></button>
+      </div>
+      <div class="modal-form-scroll">
+        <div id="detalle-ticket-grid" class="info-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: editar ticket -->
   <div class="modal-backdrop" id="modal-editar-ticket" hidden>
     <div class="modal-card">
       <div class="modal-header">

@@ -88,7 +88,23 @@
     <div class="tabla-pie" id="uber-pie"></div>
   </div>
 
-  <!-- Modal: editar (también sirve para ver el detalle completo) -->
+  <!-- Modal: detalle completo, solo lectura -->
+  <div class="modal-backdrop" id="modal-detalle-uber" hidden>
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <div>
+          <h3 style="margin:0">Detalle completo</h3>
+          <p class="modal-subtitle" id="detalle-uber-nombre-label"></p>
+        </div>
+        <button type="button" class="modal-close" id="btn-cerrar-detalle-uber"><i data-lucide="x" class="ico"></i></button>
+      </div>
+      <div class="modal-form-scroll">
+        <div id="detalle-uber-grid" class="info-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: editar usuario -->
   <div class="modal-backdrop" id="modal-editar-uber" hidden>
     <div class="modal-card modal-card-wide">
       <div class="modal-header">
