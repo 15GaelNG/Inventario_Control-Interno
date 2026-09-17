@@ -646,7 +646,32 @@
     return {
       setDatos(datos) { datosOriginales = datos || []; renderTodo(); },
       refrescar: renderTodo,
+      // Filtrado + ordenado actual, SIN recortar por página — para exportar
+      // exactamente lo que el usuario está viendo (con sus filtros aplicados).
+      obtenerFiltrados: datosFiltrados,
     };
+  }
+
+  /** Descarga un arreglo de objetos como .csv (Excel lo abre nativo, con
+   *  acentos/ñ correctos gracias al BOM). `columnas` = [{clave, etiqueta}],
+   *  igual que las que ya usa crearTablaInteractiva. */
+  function exportarCSV(nombreArchivo, columnas, filas) {
+    const escapar = (valor) => {
+      const texto = String(valor == null ? '' : valor);
+      return /[",\n]/.test(texto) ? '"' + texto.replace(/"/g, '""') + '"' : texto;
+    };
+    const encabezado = columnas.map((c) => escapar(c.etiqueta)).join(',');
+    const cuerpo = (filas || []).map((fila) => columnas.map((c) => escapar(fila[c.clave])).join(',')).join('\r\n');
+    const contenido = '﻿' + encabezado + '\r\n' + cuerpo;
+    const blob = new Blob([contenido], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const enlace = document.createElement('a');
+    enlace.href = url;
+    enlace.download = nombreArchivo;
+    document.body.appendChild(enlace);
+    enlace.click();
+    enlace.remove();
+    URL.revokeObjectURL(url);
   }
   // Helpers compartidos para las tarjetas de "detalle completo" (Incidencias y Vehículos).
   function tituloDesdeClave(clave) {
@@ -1271,18 +1296,19 @@
       return clase ? `<span class="tag ${colorClase(clase)}">${clase}</span>` : '—';
     }
 
+    const columnasVehiculos = [
+      { clave: 'FOLIO', etiqueta: 'Folio' },
+      { clave: 'DEPARTAMENTO', etiqueta: 'Departamento' },
+      { clave: 'CLASE', etiqueta: 'Clase' },
+      { clave: 'MARCA', etiqueta: 'Marca' },
+      { clave: 'LINEA_VEHICULO', etiqueta: 'Línea' },
+      { clave: 'MODELO', etiqueta: 'Año' },
+      { clave: 'PLACA', etiqueta: 'Placa' },
+      { clave: 'ESTATUS', etiqueta: 'Estatus' },
+    ];
     const motorTablaVehiculos = crearTablaInteractiva({
       thead: document.getElementById('veh-thead'),
-      columnas: [
-        { clave: 'FOLIO', etiqueta: 'Folio' },
-        { clave: 'DEPARTAMENTO', etiqueta: 'Departamento' },
-        { clave: 'CLASE', etiqueta: 'Clase' },
-        { clave: 'MARCA', etiqueta: 'Marca' },
-        { clave: 'LINEA_VEHICULO', etiqueta: 'Línea' },
-        { clave: 'MODELO', etiqueta: 'Año' },
-        { clave: 'PLACA', etiqueta: 'Placa' },
-        { clave: 'ESTATUS', etiqueta: 'Estatus' },
-      ],
+      columnas: columnasVehiculos,
       buscadorGlobal: document.getElementById('veh-buscar-global'),
       piePaginacion: document.getElementById('veh-pie'),
       onRenderPagina: (vehiculos, total) => {
@@ -1450,6 +1476,13 @@
         btn.disabled = false;
         btn.innerHTML = textoOriginal;
       }
+    });
+
+    document.getElementById('btn-exportar-excel-vehiculos').addEventListener('click', () => {
+      exportarCSV('vehiculos.csv', columnasVehiculos, motorTablaVehiculos.obtenerFiltrados());
+    });
+    document.getElementById('btn-ver-reporte-vehiculos').addEventListener('click', () => {
+      window.open('https://datastudio.google.com/u/0/reporting/40272bf8-ecac-4d37-8cca-01f4c4c32841/page/1jHvF', '_blank', 'noopener');
     });
 
     await cargar();
