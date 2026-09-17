@@ -27,7 +27,25 @@
       <div class="field"><label>Fecha</label><input type="date" id="ticket-fecha" /></div>
       <div class="field"><label>Departamento</label><input type="text" id="ticket-departamento" /></div>
       <div class="field"><label>Solicitante</label><input type="text" id="ticket-solicitante" /></div>
-      <div class="field"><label>Tipo de atención</label><input type="text" id="ticket-tipo-atencion" required placeholder="Ej. Alta de usuario Uber" /></div>
+      <div class="field">
+        <label>Tipo de atención</label>
+        <select id="ticket-tipo-atencion" required>
+          <option value="">Selecciona…</option>
+          <option value="ALTA DE HOLOGRAMA EOX">ALTA DE HOLOGRAMA EOX</option>
+          <option value="INCREMENTO DE COMBUSTIBLE EOX INDETERMINADO">INCREMENTO DE COMBUSTIBLE EOX INDETERMINADO</option>
+          <option value="INCREMENTO DE COMBUSTIBLE EOX PERMANENTE">INCREMENTO DE COMBUSTIBLE EOX PERMANENTE</option>
+          <option value="INCREMENTO DE COMBUSTIBLE EOX TEMPORAL">INCREMENTO DE COMBUSTIBLE EOX TEMPORAL</option>
+          <option value="INFORMACION GENERAL - EOX">INFORMACION GENERAL - EOX</option>
+          <option value="NIP EOX">NIP EOX</option>
+          <option value="REEMBOLSO DE COMBUSTIBLE EOX">REEMBOLSO DE COMBUSTIBLE EOX</option>
+          <option value="REEMPLAZO DE HOLOGRAMA EOX">REEMPLAZO DE HOLOGRAMA EOX</option>
+          <option value="REPORTE DE CONSUMO DE COMBUSTIBLE EOX">REPORTE DE CONSUMO DE COMBUSTIBLE EOX</option>
+          <option value="ALTA DE USUARIO UBER">ALTA DE USUARIO UBER</option>
+          <option value="BAJA DE USUARIO UBER">BAJA DE USUARIO UBER</option>
+          <option value="ACTUALIZACION DE INFORMACION UBER">ACTUALIZACION DE INFORMACION UBER</option>
+          <option value="CONSULTA DE INFORMACION UBER">CONSULTA DE INFORMACION UBER</option>
+        </select>
+      </div>
       <div class="field"><label>Placa</label><input type="text" id="ticket-placa" /></div>
       <div class="field">
         <label>Quién atendió</label>
@@ -74,7 +92,25 @@
         <div class="field"><label>Fecha</label><input type="date" id="editar-ticket-fecha" /></div>
         <div class="field"><label>Departamento</label><input type="text" id="editar-ticket-departamento" /></div>
         <div class="field"><label>Solicitante</label><input type="text" id="editar-ticket-solicitante" /></div>
-        <div class="field"><label>Tipo de atención</label><input type="text" id="editar-ticket-tipo-atencion" required /></div>
+        <div class="field">
+          <label>Tipo de atención</label>
+          <select id="editar-ticket-tipo-atencion" required>
+            <option value="">Selecciona…</option>
+            <option value="ALTA DE HOLOGRAMA EOX">ALTA DE HOLOGRAMA EOX</option>
+            <option value="INCREMENTO DE COMBUSTIBLE EOX INDETERMINADO">INCREMENTO DE COMBUSTIBLE EOX INDETERMINADO</option>
+            <option value="INCREMENTO DE COMBUSTIBLE EOX PERMANENTE">INCREMENTO DE COMBUSTIBLE EOX PERMANENTE</option>
+            <option value="INCREMENTO DE COMBUSTIBLE EOX TEMPORAL">INCREMENTO DE COMBUSTIBLE EOX TEMPORAL</option>
+            <option value="INFORMACION GENERAL - EOX">INFORMACION GENERAL - EOX</option>
+            <option value="NIP EOX">NIP EOX</option>
+            <option value="REEMBOLSO DE COMBUSTIBLE EOX">REEMBOLSO DE COMBUSTIBLE EOX</option>
+            <option value="REEMPLAZO DE HOLOGRAMA EOX">REEMPLAZO DE HOLOGRAMA EOX</option>
+            <option value="REPORTE DE CONSUMO DE COMBUSTIBLE EOX">REPORTE DE CONSUMO DE COMBUSTIBLE EOX</option>
+            <option value="ALTA DE USUARIO UBER">ALTA DE USUARIO UBER</option>
+            <option value="BAJA DE USUARIO UBER">BAJA DE USUARIO UBER</option>
+            <option value="ACTUALIZACION DE INFORMACION UBER">ACTUALIZACION DE INFORMACION UBER</option>
+            <option value="CONSULTA DE INFORMACION UBER">CONSULTA DE INFORMACION UBER</option>
+          </select>
+        </div>
         <div class="field"><label>Placa</label><input type="text" id="editar-ticket-placa" /></div>
         <div class="field">
           <label>Quién atendió</label>
