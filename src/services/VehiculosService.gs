@@ -202,5 +202,33 @@ const VehiculosService = (function () {
   // TODO: reasignarResponsable, registrarVerificacion, registrarServicio,
   //       guardarInspeccion (usa PdfService.generarReporteDanios)
 
-  return { listar, listarBasico, listarResumen, buscarPorFolio, crear, actualizar, eliminar };
+  // Carpeta de Drive donde se guardan los archivos adjuntos (responsiva,
+  // documento de baja, archivo de tenencia). No se cambia la seguridad del
+  // archivo — hereda los permisos que ya tenga esa carpeta compartida.
+  const CARPETA_ADJUNTOS_ID = '1gmu5Gs6thEwOv7tcwe0KWQaWTRhFr4-l';
+  const TAMANO_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+
+  /**
+   * Sube un archivo (PDF/imagen) codificado en base64 a la carpeta de Drive
+   * de adjuntos y regresa su URL — el cliente guarda esa URL en la columna
+   * correspondiente (RESPONSIVA / DOCUMENTO BAJA / ARCHIVO TENENCIA) al
+   * llamar crear()/actualizar(), igual que cualquier otro campo de texto.
+   */
+  function subirArchivo(token, nombreArchivo, mimeType, base64Data) {
+    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    if (!base64Data) throw new Error('No se recibió ningún archivo.');
+
+    const bytes = Utilities.base64Decode(base64Data);
+    if (bytes.length > TAMANO_MAX_BYTES) {
+      throw new Error('El archivo pesa más de 10 MB — súbelo más ligero.');
+    }
+
+    const blob = Utilities.newBlob(bytes, mimeType || 'application/octet-stream', nombreArchivo || 'archivo');
+    const carpeta = DriveApp.getFolderById(CARPETA_ADJUNTOS_ID);
+    const archivo = carpeta.createFile(blob);
+
+    return { url: archivo.getUrl(), id: archivo.getId(), nombre: nombreArchivo };
+  }
+
+  return { listar, listarBasico, listarResumen, buscarPorFolio, crear, actualizar, eliminar, subirArchivo };
 })();

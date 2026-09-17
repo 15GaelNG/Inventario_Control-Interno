@@ -31,7 +31,7 @@
     </div>
     <form id="form-vehiculo">
       <div id="campos-form-vehiculo" class="modal-form-scroll grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 14px;"></div>
-      <div style="margin-top:10px"><button type="submit"><i data-lucide="car" class="ico"></i> Registrar vehículo</button></div>
+      <div style="margin-top:10px"><button type="submit" id="btn-guardar-vehiculo"><i data-lucide="car" class="ico"></i> Registrar vehículo</button></div>
     </form>
     <div class="error-msg" id="veh-error" hidden></div>
   </div>
@@ -68,7 +68,7 @@
         <input type="hidden" id="editar-vehiculo-id" />
         <div id="campos-form-editar-vehiculo" class="modal-form-scroll grid" style="grid-template-columns: repeat(2, 1fr); gap: 0 14px;"></div>
         <div class="error-msg" id="editar-vehiculo-error" hidden></div>
-        <button type="submit" style="width:100%; margin-top:10px"><i data-lucide="save" class="ico"></i> Guardar cambios</button>
+        <button type="submit" id="btn-guardar-editar-vehiculo" style="width:100%; margin-top:10px"><i data-lucide="save" class="ico"></i> Guardar cambios</button>
       </form>
     </div>
   </div>

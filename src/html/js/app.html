@@ -444,6 +444,9 @@
   }
   function formatearValorInfo(valor) {
     if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(valor)) return formatearFecha(valor);
+    if (typeof valor === 'string' && /^https?:\/\//.test(valor)) {
+      return `<a href="${valor}" target="_blank" rel="noopener">📎 Ver archivo</a>`;
+    }
     return String(valor);
   }
   function itemInfo(etiqueta, valor) {
@@ -485,15 +488,15 @@
     { grupo: 'Vehículo', clave: 'CAPACIDAD COMBUSTIBLE (LTS)', etiqueta: 'Capacidad de combustible (L)', tipo: 'number' },
     { grupo: 'Vehículo', clave: 'ESTATUS', etiqueta: 'Estatus', tipo: 'text' },
 
-    { grupo: 'Documentación y seguro', clave: 'RESPONSIVA', etiqueta: 'Responsiva', tipo: 'text' },
-    { grupo: 'Documentación y seguro', clave: 'DOCUMENTO BAJA', etiqueta: 'Documento de baja', tipo: 'text' },
+    { grupo: 'Documentación y seguro', clave: 'RESPONSIVA', etiqueta: 'Responsiva', tipo: 'file' },
+    { grupo: 'Documentación y seguro', clave: 'DOCUMENTO BAJA', etiqueta: 'Documento de baja', tipo: 'file' },
     { grupo: 'Documentación y seguro', clave: 'VERIFICACION (SI / NO)', etiqueta: 'Verificación (Sí/No)', tipo: 'text' },
     { grupo: 'Documentación y seguro', clave: 'PEDIDO DE VERIFICACIÓN', etiqueta: 'Pedido de verificación', tipo: 'text' },
     { grupo: 'Documentación y seguro', clave: 'SEGURO (SI / NO)', etiqueta: 'Seguro (Sí/No)', tipo: 'text' },
     { grupo: 'Documentación y seguro', clave: 'FECHA VENCIMIENTO SEGURO', etiqueta: 'Fecha de vencimiento del seguro', tipo: 'date' },
     { grupo: 'Documentación y seguro', clave: 'POLIZA SEGURO', etiqueta: 'Póliza de seguro', tipo: 'text' },
     { grupo: 'Documentación y seguro', clave: 'TENENCIA (SI / NO)', etiqueta: 'Tenencia (Sí/No)', tipo: 'text' },
-    { grupo: 'Documentación y seguro', clave: 'ARCHIVO TENENCIA', etiqueta: 'Archivo de tenencia', tipo: 'text' },
+    { grupo: 'Documentación y seguro', clave: 'ARCHIVO TENENCIA', etiqueta: 'Archivo de tenencia', tipo: 'file' },
     { grupo: 'Documentación y seguro', clave: 'ADJUNTAR FACTURA', etiqueta: 'Factura', tipo: 'text' },
 
     { grupo: 'Accesorios y sensor', clave: 'ACCESORIOS', etiqueta: 'Accesorios', tipo: 'text' },
@@ -530,30 +533,82 @@
       const campos = porGrupo[grupo].map((campo) => {
         const id = prefijo + '-' + slugCampo(campo.clave);
         const req = campo.requerido ? ' required' : '';
+        if (campo.tipo === 'file') {
+          return `<div class="field">
+            <label>${campo.etiqueta}</label>
+            <input type="file" id="${id}" accept=".pdf,.png,.jpg,.jpeg" />
+            <div class="file-actual" id="${id}-actual"></div>
+          </div>`;
+        }
         return `<div class="field"><label>${campo.etiqueta}</label><input type="${campo.tipo}" id="${id}"${req} /></div>`;
       }).join('');
       return `<div class="info-section-title">${grupo}</div>${campos}`;
     }).join('');
   }
 
-  /** Lee los valores actuales del formulario, devuelve un objeto {columna real: valor}. */
+  /** Lee los valores actuales del formulario, devuelve un objeto {columna real: valor}.
+   * Los campos "file" NO se leen aquí — se manejan aparte (subirArchivosVehiculo),
+   * porque subir un archivo es asíncrono y no se puede leer de golpe como el resto. */
   function recolectarDatosVehiculo(prefijo) {
     const datos = {};
     CAMPOS_VEHICULO.forEach((campo) => {
+      if (campo.tipo === 'file') return;
       const el = document.getElementById(prefijo + '-' + slugCampo(campo.clave));
       if (el) datos[campo.clave] = el.value.trim();
     });
     return datos;
   }
 
-  /** Llena el formulario con un objeto {columna real: valor} (ej. de buscarPorFolio). */
+  /** Llena el formulario con un objeto {columna real: valor} (ej. de buscarPorFolio).
+   * Para "file" no se puede rellenar el <input> (los navegadores no lo permiten por
+   * seguridad) — en vez de eso, muestra un link al archivo ya subido, si existe. */
   function poblarFormularioVehiculo(prefijo, datos) {
     CAMPOS_VEHICULO.forEach((campo) => {
-      const el = document.getElementById(prefijo + '-' + slugCampo(campo.clave));
-      if (!el) return;
+      const id = prefijo + '-' + slugCampo(campo.clave);
       const valor = (datos && datos[campo.clave]) || '';
+      if (campo.tipo === 'file') {
+        const info = document.getElementById(id + '-actual');
+        if (info) {
+          info.innerHTML = valor
+            ? `<a href="${valor}" target="_blank" rel="noopener">📎 Ver archivo actual</a>`
+            : '<span class="empty-state" style="margin:0">Sin archivo</span>';
+        }
+        return;
+      }
+      const el = document.getElementById(id);
+      if (!el) return;
       el.value = campo.tipo === 'date' ? fechaParaInput(valor) : valor;
     });
+  }
+
+  /** Convierte un File del navegador a base64 puro (sin el prefijo data:...;base64,). */
+  function leerArchivoBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+      reader.onerror = () => reject(new Error('No se pudo leer el archivo ' + file.name));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /**
+   * Sube (si el usuario eligió) los archivos de los campos tipo "file" del
+   * formulario y regresa {columna real: url}. Los campos sin archivo nuevo
+   * seleccionado simplemente no aparecen en el resultado — así crear()/
+   * actualizar() no les tocan el valor que ya tenían.
+   */
+  async function subirArchivosVehiculo(prefijo) {
+    const resultado = {};
+    const camposArchivo = CAMPOS_VEHICULO.filter((c) => c.tipo === 'file');
+    for (const campo of camposArchivo) {
+      const input = document.getElementById(prefijo + '-' + slugCampo(campo.clave));
+      const file = input && input.files && input.files[0];
+      if (!file) continue;
+      const base64 = await leerArchivoBase64(file);
+      const subido = await callServer('apiSubirArchivoVehiculo', state.token, file.name, file.type, base64);
+      resultado[campo.clave] = subido.url;
+    }
+    return resultado;
   }
 
   async function initIncidencias() {
@@ -1025,14 +1080,22 @@
       ev.preventDefault();
       const errorBox = document.getElementById('editar-vehiculo-error');
       errorBox.hidden = true;
+      const btn = document.getElementById('btn-guardar-editar-vehiculo');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Subiendo archivos y guardando…';
       try {
-        await callServer('apiActualizarVehiculo', state.token, document.getElementById('editar-vehiculo-id').value,
-          recolectarDatosVehiculo('editar-vehiculo'));
+        const archivos = await subirArchivosVehiculo('editar-vehiculo');
+        const datos = Object.assign(recolectarDatosVehiculo('editar-vehiculo'), archivos);
+        await callServer('apiActualizarVehiculo', state.token, document.getElementById('editar-vehiculo-id').value, datos);
         cerrarEditarVehiculo();
         await cargar();
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.hidden = false;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
       }
     });
 
@@ -1050,13 +1113,22 @@
       ev.preventDefault();
       const errorBox = document.getElementById('veh-error');
       errorBox.hidden = true;
+      const btn = document.getElementById('btn-guardar-vehiculo');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Subiendo archivos y guardando…';
       try {
-        await callServer('apiCrearVehiculo', state.token, recolectarDatosVehiculo('veh'));
+        const archivos = await subirArchivosVehiculo('veh');
+        const datos = Object.assign(recolectarDatosVehiculo('veh'), archivos);
+        await callServer('apiCrearVehiculo', state.token, datos);
         ev.target.reset();
         await cargar();
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.hidden = false;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
       }
     });
 

@@ -54,6 +54,9 @@ function apiActualizarVehiculo(token, id, cambios) {
 function apiEliminarVehiculo(token, id) {
   return VehiculosService.eliminar(token, id);
 }
+function apiSubirArchivoVehiculo(token, nombreArchivo, mimeType, base64Data) {
+  return VehiculosService.subirArchivo(token, nombreArchivo, mimeType, base64Data);
+}
 
 // --- Incidencias ---
 function apiListarIncidencias(token) {
