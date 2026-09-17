@@ -74,7 +74,15 @@
   </div>
 
   <div class="card">
-    <h3 style="margin-top:0">Catálogo</h3>
+    <div class="card-header-row">
+      <h3 style="margin:0">Catálogo</h3>
+      <select id="uber-filtro-estatus" class="filtro-select">
+        <option value="">Todos los estatus</option>
+        <option value="ACTIVO">Activo</option>
+        <option value="PENDIENTE">Pendiente</option>
+        <option value="BAJA">Baja</option>
+      </select>
+    </div>
     <div class="table-scroll">
       <table>
         <thead>

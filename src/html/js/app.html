@@ -779,28 +779,12 @@
       }
     }
 
-    async function cargar() {
-      const errorBox = document.getElementById('inc-error');
-      let incidencias;
-      try {
-        incidencias = await callServer('apiListarIncidencias', state.token);
-      } catch (err) {
-        console.error('No se pudo cargar el historial de incidencias:', err);
-        errorBox.textContent = 'No se pudo cargar el historial de incidencias: ' + err.message;
-        errorBox.hidden = false;
-        return;
-      }
-      errorBox.hidden = true;
-      // google.script.run entrega null en vez de [] cuando el servidor regresa
-      // un arreglo vacío — normalizamos aquí para no tronar en .forEach/.map.
-      incidencias = incidencias || [];
+    let todasLasIncidencias = [];
+    const filtroEstado = document.getElementById('inc-filtro-estado');
 
-      incidenciasPorId = {};
-      incidencias.forEach((inc) => { incidenciasPorId[inc.ID] = inc; });
-
-      document.getElementById('stat-total').textContent = incidencias.length;
-      document.getElementById('stat-abiertas').textContent = incidencias.filter((i) => i.ESTADO === 'ABIERTA').length;
-      document.getElementById('stat-cerradas').textContent = incidencias.filter((i) => i.ESTADO === 'CERRADA').length;
+    function renderTabla() {
+      const filtro = filtroEstado.value;
+      const incidencias = filtro ? todasLasIncidencias.filter((i) => i.ESTADO === filtro) : todasLasIncidencias;
 
       vacio.hidden = incidencias.length > 0;
       lista.innerHTML = incidencias.map((inc) => {
@@ -836,6 +820,34 @@
         btn.addEventListener('click', () => eliminarIncidencia(btn.dataset.id, btn.dataset.folio));
       });
       refreshIcons();
+    }
+    filtroEstado.addEventListener('change', renderTabla);
+
+    async function cargar() {
+      const errorBox = document.getElementById('inc-error');
+      let incidencias;
+      try {
+        incidencias = await callServer('apiListarIncidencias', state.token);
+      } catch (err) {
+        console.error('No se pudo cargar el historial de incidencias:', err);
+        errorBox.textContent = 'No se pudo cargar el historial de incidencias: ' + err.message;
+        errorBox.hidden = false;
+        return;
+      }
+      errorBox.hidden = true;
+      // google.script.run entrega null en vez de [] cuando el servidor regresa
+      // un arreglo vacío — normalizamos aquí para no tronar en .forEach/.map.
+      todasLasIncidencias = incidencias || [];
+
+      incidenciasPorId = {};
+      todasLasIncidencias.forEach((inc) => { incidenciasPorId[inc.ID] = inc; });
+
+      // Los totales son del historial completo, sin importar el filtro.
+      document.getElementById('stat-total').textContent = todasLasIncidencias.length;
+      document.getElementById('stat-abiertas').textContent = todasLasIncidencias.filter((i) => i.ESTADO === 'ABIERTA').length;
+      document.getElementById('stat-cerradas').textContent = todasLasIncidencias.filter((i) => i.ESTADO === 'CERRADA').length;
+
+      renderTabla();
     }
 
     document.getElementById('form-incidencia').addEventListener('submit', async (ev) => {
@@ -1143,6 +1155,8 @@
     const vacio = document.getElementById('uber-vacio');
     const modalEditar = document.getElementById('modal-editar-uber');
     let usuariosPorId = {};
+    let todosLosUsuarios = [];
+    const filtroEstatusUber = document.getElementById('uber-filtro-estatus');
 
     function badgeEstatusUber(estatus) {
       const valor = String(estatus || '').toUpperCase();
@@ -1236,18 +1250,29 @@
         return;
       }
       errorBox.hidden = true;
-      usuarios = usuarios || [];
+      todosLosUsuarios = usuarios || [];
 
       usuariosPorId = {};
-      usuarios.forEach((u) => { usuariosPorId[u.ID] = u; });
+      todosLosUsuarios.forEach((u) => { usuariosPorId[u.ID] = u; });
 
-      document.getElementById('uber-stat-total').textContent = usuarios.length;
+      // Los totales son del catálogo completo, sin importar el filtro.
+      document.getElementById('uber-stat-total').textContent = todosLosUsuarios.length;
       document.getElementById('uber-stat-activos').textContent =
-        usuarios.filter((u) => String(u.ESTATUS || '').toUpperCase().includes('ACTIVO')).length;
+        todosLosUsuarios.filter((u) => String(u.ESTATUS || '').toUpperCase().includes('ACTIVO')).length;
       document.getElementById('uber-stat-pendientes').textContent =
-        usuarios.filter((u) => String(u.ESTATUS || '').toUpperCase().includes('PENDIENTE')).length;
+        todosLosUsuarios.filter((u) => String(u.ESTATUS || '').toUpperCase().includes('PENDIENTE')).length;
       document.getElementById('uber-stat-baja').textContent =
-        usuarios.filter((u) => String(u.ESTATUS || '').toUpperCase().includes('BAJA')).length;
+        todosLosUsuarios.filter((u) => String(u.ESTATUS || '').toUpperCase().includes('BAJA')).length;
+
+      renderTabla();
+    }
+    filtroEstatusUber.addEventListener('change', renderTabla);
+
+    function renderTabla() {
+      const filtro = filtroEstatusUber.value;
+      const usuarios = filtro
+        ? todosLosUsuarios.filter((u) => String(u.ESTATUS || '').toUpperCase() === filtro)
+        : todosLosUsuarios;
 
       vacio.hidden = usuarios.length > 0;
       lista.innerHTML = usuarios.map((u) => `
@@ -1364,6 +1389,8 @@
     const vacio = document.getElementById('tickets-vacio');
     const modalEditar = document.getElementById('modal-editar-ticket');
     let ticketsPorId = {};
+    let todosLosTickets = [];
+    const filtroTipoAtencion = document.getElementById('tickets-filtro-tipo');
 
     document.getElementById('ticket-fecha-registro').value = new Date().toLocaleDateString('es-MX');
     document.getElementById('ticket-fecha').value = hoyISO();
@@ -1409,24 +1436,17 @@
       });
     }
 
-    async function cargar() {
-      const errorBox = document.getElementById('ticket-error');
-      let tickets;
-      try {
-        tickets = await callServer('apiListarTicketsResumen', state.token);
-      } catch (err) {
-        console.error('No se pudo cargar el historial de tickets:', err);
-        errorBox.textContent = 'No se pudo cargar el historial: ' + err.message;
-        errorBox.hidden = false;
-        return;
-      }
-      errorBox.hidden = true;
-      tickets = tickets || [];
+    function poblarFiltroTipos() {
+      const tipos = Array.from(new Set(todosLosTickets.map((t) => t.TIPO_ATENCION).filter(Boolean))).sort();
+      const actual = filtroTipoAtencion.value;
+      filtroTipoAtencion.innerHTML = '<option value="">Todos los tipos</option>' +
+        tipos.map((t) => `<option value="${t}">${t}</option>`).join('');
+      if (tipos.includes(actual)) filtroTipoAtencion.value = actual;
+    }
 
-      ticketsPorId = {};
-      tickets.forEach((t) => { ticketsPorId[t.ID] = t; });
-
-      document.getElementById('tickets-stat-total').textContent = tickets.length;
+    function renderTabla() {
+      const filtro = filtroTipoAtencion.value;
+      const tickets = filtro ? todosLosTickets.filter((t) => t.TIPO_ATENCION === filtro) : todosLosTickets;
 
       vacio.hidden = tickets.length > 0;
       lista.innerHTML = tickets.map((t) => `
@@ -1452,6 +1472,30 @@
         btn.addEventListener('click', () => eliminarTicket(btn.dataset.id, btn.dataset.ticket));
       });
       refreshIcons();
+    }
+    filtroTipoAtencion.addEventListener('change', renderTabla);
+
+    async function cargar() {
+      const errorBox = document.getElementById('ticket-error');
+      let tickets;
+      try {
+        tickets = await callServer('apiListarTicketsResumen', state.token);
+      } catch (err) {
+        console.error('No se pudo cargar el historial de tickets:', err);
+        errorBox.textContent = 'No se pudo cargar el historial: ' + err.message;
+        errorBox.hidden = false;
+        return;
+      }
+      errorBox.hidden = true;
+      todosLosTickets = tickets || [];
+
+      ticketsPorId = {};
+      todosLosTickets.forEach((t) => { ticketsPorId[t.ID] = t; });
+
+      document.getElementById('tickets-stat-total').textContent = todosLosTickets.length;
+
+      poblarFiltroTipos();
+      renderTabla();
     }
 
     async function abrirEditarTicket(id) {

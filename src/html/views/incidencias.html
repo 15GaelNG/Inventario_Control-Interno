@@ -54,7 +54,14 @@
   </div>
 
   <div class="card">
-    <h3 style="margin-top:0">Historial</h3>
+    <div class="card-header-row">
+      <h3 style="margin:0">Historial</h3>
+      <select id="inc-filtro-estado" class="filtro-select">
+        <option value="">Todos los estados</option>
+        <option value="ABIERTA">Abierta</option>
+        <option value="CERRADA">Cerrada</option>
+      </select>
+    </div>
     <div class="table-scroll">
       <table>
         <thead>
