@@ -1,6 +1,7 @@
 # Líneas — plan de mudanza del prototipo
 
-Rama: `emmanuel` · Responsable: Emmanuel · Estado: **propuesta** (2026-09-15)
+Rama: `emmanuel` · Responsable: Emmanuel · Estado: **en curso** — fases 1 y 2 hechas
+(avance, infraestructura y pendientes: [lineas-estado.md](lineas-estado.md))
 
 El módulo de Líneas ya existe como prototipo funcional en un proyecto aparte
 ("CI Control Activos"): lee y escribe la misma estructura de hojas del
@@ -32,7 +33,7 @@ no al revés.
 | Bitácora de Desechos | Tabla de `BITACORA DE DESECHO` (folio DR) | Prototipo (desechar) + vista nueva |
 | Reactivación de Líneas | Trámites `REACTIVACION DE LINEAS` (y solicitudes) | Pendiente en el prototipo |
 | Líneas Post Venta | Por definir | Por definir |
-| Inventario de Accesorios | Ya construido (`AccesoriosService`) | Por confirmar dueño |
+| Inventario de Accesorios | Ya construido (`AccesoriosService`) | No se toca (queda con quien lo hizo) |
 
 Alertas de inspección: indicador dentro de "Líneas Telefónicas".
 
@@ -44,11 +45,11 @@ líneas puntuales para reducir conflictos al juntar en `master`.
 ```
 src/services/lineas/
   LineasDatos.gs        acceso a Sheets con caché, TextFinder, escritura por lotes, zona horaria
+  LineasUtil.gs         normalización de valores del AppSheet y carpetas de evidencias
+  LineasChecklist.gs    checklist de inspección, calificación y alertas
   LineasRepo.gs         traducción hoja AppSheet ↔ objetos (equipos, líneas, bitácora, evidencias)
-  LineasOperaciones.gs  operaciones con candado + bitácora igual que los bots del AppSheet
-  LineasCaptura.gs      inspección y responsiva (fotos, firma)
-  LineasPdf.gs          plantillas Google Docs con sintaxis <<…>> del AppSheet
-  LineasAdmin.gs        tareas de mantenimiento (índices, sincronizar evidencias, reporte de calidad)
+  LineasAdmin.gs        configuración del entorno DEV y vaciado de cachés
+  (fases 3-4) LineasOperaciones.gs, LineasCaptura.gs, LineasPdf.gs
 src/services/TelefoniaService.gs   fachada pública del módulo (reemplaza el stub)
 src/html/views/lineas/*.html       una plantilla por vista del menú
 src/html/js/lineas.html            init de cada vista + formularios
@@ -61,10 +62,9 @@ Toques a archivos compartidos (avisar al equipo en el PR):
 - `html/Index.html`: `include` de las vistas, JS y estilos del módulo.
 - `html/js/app.html`: una línea por vista en `navegarA` (Jorge también modifica
   `navegarA` en su rama → conflicto esperado y sencillo de resolver).
-- `SetupInicial.gs` → `configurarEntornoDev`: agregar `SS_ID_TELEFONIA` y carpetas de Líneas.
-- `appsscript.json`: el prototipo usa `script.external_request` (API REST de
-  Sheets para leer/escribir por lotes). Agregar un scope pide re-autorizar a
-  todos → decidir con el equipo o reemplazar por `SpreadsheetApp`.
+- `appsscript.json`: scope `script.external_request` + servicio avanzado Sheets v4
+  (pide re-autorizar cada proyecto DEV; sin la API, Líneas usa `SpreadsheetApp`).
+  Las Script Properties de Líneas las deja `configurarLineasDev()`, no se toca `SetupInicial.gs`.
 - Pestañas `APP_MOVIMIENTOS` y `APP_EVIDENCIAS` en la BD: se agregan a la hoja
   que use Líneas (no tocan las pestañas del AppSheet).
 
@@ -79,7 +79,7 @@ Toques a archivos compartidos (avisar al equipo en el PR):
 
 ## 5. Preguntas abiertas
 
-- ¿La BD de pruebas del equipo (`1fC77…`) tiene todas las pestañas de telefonía y es una copia **no conectada** a un AppSheet en uso? El prototipo trabaja sobre su propia copia (`1_47fd5…`) con carpetas de evidencias de prueba.
 - ¿Qué es "Líneas Post Venta" en el AppSheet?
-- ¿"Inventario de Accesorios" queda con quien lo construyó o pasa a Líneas?
-- ¿Se acepta el scope `script.external_request` en el manifiesto compartido?
+- ~~¿Se acepta el scope `script.external_request`?~~ Sí; además se agregó el servicio avanzado Sheets v4 (2026-09-17).
+- ~~¿Accesorios pasa a Líneas?~~ No: el repo ya tiene ese módulo y el prototipo no lo cubría.
+- ~~¿Qué hoja usa Líneas en DEV?~~ La copia del prototipo `1_47fd5…`.
