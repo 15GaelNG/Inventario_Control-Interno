@@ -1062,15 +1062,16 @@
 
     let todasLasIncidencias = [];
 
+    const columnasIncidencias = [
+      { clave: 'FOLIO', etiqueta: 'Folio' },
+      { clave: 'DEPARTAMENTO', etiqueta: 'Departamento' },
+      { clave: 'INSPECCION_INGRESO', etiqueta: 'Motivo' },
+      { clave: 'FECHA_REGISTRO', etiqueta: 'Fecha' },
+      { clave: 'ESTADO', etiqueta: 'Estado' },
+    ];
     const motorTablaIncidencias = crearTablaInteractiva({
       thead: document.getElementById('inc-thead'),
-      columnas: [
-        { clave: 'FOLIO', etiqueta: 'Folio' },
-        { clave: 'DEPARTAMENTO', etiqueta: 'Departamento' },
-        { clave: 'INSPECCION_INGRESO', etiqueta: 'Motivo' },
-        { clave: 'FECHA_REGISTRO', etiqueta: 'Fecha' },
-        { clave: 'ESTADO', etiqueta: 'Estado' },
-      ],
+      columnas: columnasIncidencias,
       buscadorGlobal: document.getElementById('inc-buscar-global'),
       piePaginacion: document.getElementById('inc-pie'),
       onRenderPagina: (incidencias, total) => {
@@ -1220,6 +1221,10 @@
         errorBox.textContent = err.message;
         errorBox.hidden = false;
       }
+    });
+
+    document.getElementById('btn-exportar-excel-incidencias').addEventListener('click', () => {
+      exportarCSV('incidencias.csv', columnasIncidencias, motorTablaIncidencias.obtenerFiltrados());
     });
 
     await Promise.all([promesaVehiculos, cargar()]);
@@ -1584,16 +1589,17 @@
       return { SOLICITUD: subido.url };
     }
 
+    const columnasUber = [
+      { clave: 'NOMBRE_COMPLETO', etiqueta: 'Nombre' },
+      { clave: 'RAZON_SOCIAL', etiqueta: 'Razón social' },
+      { clave: 'ROL', etiqueta: 'Rol' },
+      { clave: 'DEPARTAMENTO', etiqueta: 'Departamento' },
+      { clave: 'PUESTO', etiqueta: 'Puesto' },
+      { clave: 'ESTATUS', etiqueta: 'Estatus' },
+    ];
     const motorTablaUber = crearTablaInteractiva({
       thead: document.getElementById('uber-thead'),
-      columnas: [
-        { clave: 'NOMBRE_COMPLETO', etiqueta: 'Nombre' },
-        { clave: 'RAZON_SOCIAL', etiqueta: 'Razón social' },
-        { clave: 'ROL', etiqueta: 'Rol' },
-        { clave: 'DEPARTAMENTO', etiqueta: 'Departamento' },
-        { clave: 'PUESTO', etiqueta: 'Puesto' },
-        { clave: 'ESTATUS', etiqueta: 'Estatus' },
-      ],
+      columnas: columnasUber,
       buscadorGlobal: document.getElementById('uber-buscar-global'),
       piePaginacion: document.getElementById('uber-pie'),
       onRenderPagina: (usuarios, total) => {
@@ -1762,6 +1768,10 @@
       }
     });
 
+    document.getElementById('btn-exportar-excel-uber').addEventListener('click', () => {
+      exportarCSV('uber.csv', columnasUber, motorTablaUber.obtenerFiltrados());
+    });
+
     await cargar();
   }
 
@@ -1818,16 +1828,17 @@
       });
     }
 
+    const columnasTickets = [
+      { clave: 'TICKET', etiqueta: 'Ticket' },
+      { clave: 'FECHA', etiqueta: 'Fecha' },
+      { clave: 'DEPARTAMENTO', etiqueta: 'Departamento' },
+      { clave: 'SOLICITANTE', etiqueta: 'Solicitante' },
+      { clave: 'TIPO_ATENCION', etiqueta: 'Tipo de atención' },
+      { clave: 'QUIEN_ATENDIO', etiqueta: 'Atendió' },
+    ];
     const motorTablaTickets = crearTablaInteractiva({
       thead: document.getElementById('tickets-thead'),
-      columnas: [
-        { clave: 'TICKET', etiqueta: 'Ticket' },
-        { clave: 'FECHA', etiqueta: 'Fecha' },
-        { clave: 'DEPARTAMENTO', etiqueta: 'Departamento' },
-        { clave: 'SOLICITANTE', etiqueta: 'Solicitante' },
-        { clave: 'TIPO_ATENCION', etiqueta: 'Tipo de atención' },
-        { clave: 'QUIEN_ATENDIO', etiqueta: 'Atendió' },
-      ],
+      columnas: columnasTickets,
       buscadorGlobal: document.getElementById('tickets-buscar-global'),
       piePaginacion: document.getElementById('tickets-pie'),
       onRenderPagina: (tickets, total) => {
@@ -1970,6 +1981,10 @@
         errorBox.textContent = err.message;
         errorBox.hidden = false;
       }
+    });
+
+    document.getElementById('btn-exportar-excel-tickets').addEventListener('click', () => {
+      exportarCSV('tickets.csv', columnasTickets, motorTablaTickets.obtenerFiltrados());
     });
 
     await cargar();
