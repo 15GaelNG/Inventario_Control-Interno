@@ -458,6 +458,104 @@
     return `<div class="info-section-title"><i data-lucide="${icono}" class="ico"></i> ${titulo}</div>`;
   }
 
+  /**
+   * Las 40 columnas reales de la hoja VEHICULOS (todo menos ID_VEHICULO),
+   * agrupadas para que los formularios de Registrar/Editar no sean una
+   * lista plana interminable. "clave" es el nombre EXACTO de columna en la
+   * hoja — se usa tal cual como llave al mandar los datos al servidor
+   * (VehiculosService.crear/actualizar ya esperan las claves reales).
+   */
+  const CAMPOS_VEHICULO = [
+    { grupo: 'Identificación', clave: 'FOLIO', etiqueta: 'Folio', tipo: 'text', requerido: true },
+    { grupo: 'Identificación', clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'text' },
+    { grupo: 'Identificación', clave: 'NO ECONOMICO', etiqueta: 'No. económico', tipo: 'text' },
+    { grupo: 'Identificación', clave: 'RESPONSABLE VEHICULO', etiqueta: 'Responsable del vehículo', tipo: 'text' },
+    { grupo: 'Identificación', clave: 'NO EMPLEADO', etiqueta: 'No. de empleado', tipo: 'text' },
+    { grupo: 'Identificación', clave: 'SERIE VEHICULO', etiqueta: 'Serie del vehículo', tipo: 'text' },
+    { grupo: 'Identificación', clave: 'NUCCO', etiqueta: 'Nucco', tipo: 'text' },
+
+    { grupo: 'Vehículo', clave: 'MARCA', etiqueta: 'Marca', tipo: 'text' },
+    { grupo: 'Vehículo', clave: 'CLASE', etiqueta: 'Clase', tipo: 'text' },
+    { grupo: 'Vehículo', clave: 'LINEA VEHICULO', etiqueta: 'Línea / modelo', tipo: 'text' },
+    { grupo: 'Vehículo', clave: 'MODELO', etiqueta: 'Año', tipo: 'number' },
+    { grupo: 'Vehículo', clave: 'COLOR', etiqueta: 'Color', tipo: 'text' },
+    { grupo: 'Vehículo', clave: 'PLACA', etiqueta: 'Placa', tipo: 'text' },
+    { grupo: 'Vehículo', clave: 'TIPO MAQUINARIA', etiqueta: 'Tipo de maquinaria', tipo: 'text' },
+    { grupo: 'Vehículo', clave: 'TIPO DE COMBUSTIBLE', etiqueta: 'Tipo de combustible', tipo: 'text' },
+    { grupo: 'Vehículo', clave: 'CAPACIDAD COMBUSTIBLE (LTS)', etiqueta: 'Capacidad de combustible (L)', tipo: 'number' },
+    { grupo: 'Vehículo', clave: 'ESTATUS', etiqueta: 'Estatus', tipo: 'text' },
+
+    { grupo: 'Documentación y seguro', clave: 'RESPONSIVA', etiqueta: 'Responsiva', tipo: 'text' },
+    { grupo: 'Documentación y seguro', clave: 'DOCUMENTO BAJA', etiqueta: 'Documento de baja', tipo: 'text' },
+    { grupo: 'Documentación y seguro', clave: 'VERIFICACION (SI / NO)', etiqueta: 'Verificación (Sí/No)', tipo: 'text' },
+    { grupo: 'Documentación y seguro', clave: 'PEDIDO DE VERIFICACIÓN', etiqueta: 'Pedido de verificación', tipo: 'text' },
+    { grupo: 'Documentación y seguro', clave: 'SEGURO (SI / NO)', etiqueta: 'Seguro (Sí/No)', tipo: 'text' },
+    { grupo: 'Documentación y seguro', clave: 'FECHA VENCIMIENTO SEGURO', etiqueta: 'Fecha de vencimiento del seguro', tipo: 'date' },
+    { grupo: 'Documentación y seguro', clave: 'POLIZA SEGURO', etiqueta: 'Póliza de seguro', tipo: 'text' },
+    { grupo: 'Documentación y seguro', clave: 'TENENCIA (SI / NO)', etiqueta: 'Tenencia (Sí/No)', tipo: 'text' },
+    { grupo: 'Documentación y seguro', clave: 'ARCHIVO TENENCIA', etiqueta: 'Archivo de tenencia', tipo: 'text' },
+    { grupo: 'Documentación y seguro', clave: 'ADJUNTAR FACTURA', etiqueta: 'Factura', tipo: 'text' },
+
+    { grupo: 'Accesorios y sensor', clave: 'ACCESORIOS', etiqueta: 'Accesorios', tipo: 'text' },
+    { grupo: 'Accesorios y sensor', clave: 'ADITAMENTOS', etiqueta: 'Aditamentos', tipo: 'text' },
+    { grupo: 'Accesorios y sensor', clave: 'SENSOR', etiqueta: 'Sensor', tipo: 'text' },
+    { grupo: 'Accesorios y sensor', clave: 'SERIE SENSOR', etiqueta: 'Serie del sensor', tipo: 'text' },
+    { grupo: 'Accesorios y sensor', clave: 'ACTIVADOR', etiqueta: 'Activador', tipo: 'text' },
+    { grupo: 'Accesorios y sensor', clave: '$ Costo del Sensor', etiqueta: 'Costo del sensor', tipo: 'number' },
+    { grupo: 'Accesorios y sensor', clave: 'LLAVE DUPLICADA', etiqueta: 'Llave duplicada', tipo: 'text' },
+
+    { grupo: 'Ubicación y registro', clave: 'SEDE', etiqueta: 'Sede', tipo: 'text' },
+    { grupo: 'Ubicación y registro', clave: 'UBICACION', etiqueta: 'Ubicación', tipo: 'text' },
+    { grupo: 'Ubicación y registro', clave: 'RAZON SOCIAL', etiqueta: 'Razón social', tipo: 'text' },
+    { grupo: 'Ubicación y registro', clave: 'FECHA COMPRA', etiqueta: 'Fecha de compra', tipo: 'date' },
+    { grupo: 'Ubicación y registro', clave: 'FECHA REGISTRO SISTEMA CI', etiqueta: 'Fecha de registro en el sistema', tipo: 'date' },
+    { grupo: 'Ubicación y registro', clave: 'RESPONSABLE CI', etiqueta: 'Responsable (Control Interno)', tipo: 'text' },
+  ];
+
+  function slugCampo(clave) {
+    return clave.toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  }
+
+  /** Genera los <div class="field"> agrupados por sección para un formulario de vehículo. */
+  function renderCamposVehiculo(prefijo) {
+    const grupos = [];
+    const porGrupo = {};
+    CAMPOS_VEHICULO.forEach((campo) => {
+      if (!porGrupo[campo.grupo]) { porGrupo[campo.grupo] = []; grupos.push(campo.grupo); }
+      porGrupo[campo.grupo].push(campo);
+    });
+    return grupos.map((grupo) => {
+      const campos = porGrupo[grupo].map((campo) => {
+        const id = prefijo + '-' + slugCampo(campo.clave);
+        const req = campo.requerido ? ' required' : '';
+        return `<div class="field"><label>${campo.etiqueta}</label><input type="${campo.tipo}" id="${id}"${req} /></div>`;
+      }).join('');
+      return `<div class="info-section-title">${grupo}</div>${campos}`;
+    }).join('');
+  }
+
+  /** Lee los valores actuales del formulario, devuelve un objeto {columna real: valor}. */
+  function recolectarDatosVehiculo(prefijo) {
+    const datos = {};
+    CAMPOS_VEHICULO.forEach((campo) => {
+      const el = document.getElementById(prefijo + '-' + slugCampo(campo.clave));
+      if (el) datos[campo.clave] = el.value.trim();
+    });
+    return datos;
+  }
+
+  /** Llena el formulario con un objeto {columna real: valor} (ej. de buscarPorFolio). */
+  function poblarFormularioVehiculo(prefijo, datos) {
+    CAMPOS_VEHICULO.forEach((campo) => {
+      const el = document.getElementById(prefijo + '-' + slugCampo(campo.clave));
+      if (!el) return;
+      const valor = (datos && datos[campo.clave]) || '';
+      el.value = campo.tipo === 'date' ? fechaParaInput(valor) : valor;
+    });
+  }
+
   async function initIncidencias() {
     const lista = document.getElementById('lista-incidencias');
     const vacio = document.getElementById('incidencias-vacio');
@@ -780,6 +878,9 @@
     let todosLosVehiculos = [];
     const filtroClase = document.getElementById('veh-filtro-clase');
 
+    document.getElementById('campos-form-vehiculo').innerHTML = renderCamposVehiculo('veh');
+    document.getElementById('campos-form-editar-vehiculo').innerHTML = renderCamposVehiculo('editar-vehiculo');
+
     function badgeEstatus(estatus) {
       const esBaja = String(estatus || '').toUpperCase().includes('BAJA');
       return `<span class="badge-estado ${esBaja ? 'baja' : 'activo'}"><i data-lucide="${esBaja ? 'ban' : 'circle-check'}" class="ico"></i> ${esBaja ? 'De baja' : 'Activo'}</span>`;
@@ -893,24 +994,24 @@
     document.getElementById('btn-cerrar-detalle-vehiculo').addEventListener('click', () => { modalDetalle.hidden = true; });
     modalDetalle.addEventListener('click', (ev) => { if (ev.target === modalDetalle) modalDetalle.hidden = true; });
 
-    function abrirEditarVehiculo(v) {
-      if (!v) return;
-      document.getElementById('editar-vehiculo-id').value = v.ID_VEHICULO;
-      document.getElementById('editar-vehiculo-folio-label').textContent = 'Folio: ' + v.FOLIO;
-      document.getElementById('editar-vehiculo-folio').value = v.FOLIO || '';
-      document.getElementById('editar-vehiculo-departamento').value = v.DEPARTAMENTO || '';
-      document.getElementById('editar-vehiculo-no-economico').value = v.NO_ECONOMICO || '';
-      document.getElementById('editar-vehiculo-marca').value = v.MARCA || '';
-      document.getElementById('editar-vehiculo-clase').value = v.CLASE || '';
-      document.getElementById('editar-vehiculo-linea').value = v.LINEA_VEHICULO || '';
-      document.getElementById('editar-vehiculo-anio').value = v.MODELO || '';
-      document.getElementById('editar-vehiculo-color').value = v.COLOR || '';
-      document.getElementById('editar-vehiculo-placa').value = v.PLACA || '';
-      document.getElementById('editar-vehiculo-sede').value = v.SEDE || '';
-      document.getElementById('editar-vehiculo-ubicacion').value = v.UBICACION || '';
-      document.getElementById('editar-vehiculo-estatus').value = v.ESTATUS || '';
+    async function abrirEditarVehiculo(vResumen) {
+      if (!vResumen) return;
+      document.getElementById('editar-vehiculo-id').value = vResumen.ID_VEHICULO;
+      document.getElementById('editar-vehiculo-folio-label').textContent = 'Folio: ' + vResumen.FOLIO;
       document.getElementById('editar-vehiculo-error').hidden = true;
+      // El resumen (tabla) solo trae 12 columnas — para editar TODO se necesita
+      // el registro completo, se pide igual que en "Detalle completo".
+      poblarFormularioVehiculo('editar-vehiculo', vResumen);
       modalEditar.hidden = false;
+      try {
+        const completo = await callServer('apiBuscarVehiculoPorFolio', state.token, vResumen.FOLIO);
+        if (completo) poblarFormularioVehiculo('editar-vehiculo', completo);
+      } catch (err) {
+        console.error('No se pudo cargar el registro completo para editar:', err);
+        const errorBox = document.getElementById('editar-vehiculo-error');
+        errorBox.textContent = 'No se pudieron cargar todos los campos: ' + err.message;
+        errorBox.hidden = false;
+      }
     }
     function cerrarEditarVehiculo() {
       modalEditar.hidden = true;
@@ -925,20 +1026,8 @@
       const errorBox = document.getElementById('editar-vehiculo-error');
       errorBox.hidden = true;
       try {
-        await callServer('apiActualizarVehiculo', state.token, document.getElementById('editar-vehiculo-id').value, {
-          FOLIO: document.getElementById('editar-vehiculo-folio').value.trim(),
-          DEPARTAMENTO: document.getElementById('editar-vehiculo-departamento').value.trim(),
-          'NO ECONOMICO': document.getElementById('editar-vehiculo-no-economico').value.trim(),
-          MARCA: document.getElementById('editar-vehiculo-marca').value.trim(),
-          CLASE: document.getElementById('editar-vehiculo-clase').value.trim(),
-          'LINEA VEHICULO': document.getElementById('editar-vehiculo-linea').value.trim(),
-          MODELO: document.getElementById('editar-vehiculo-anio').value,
-          COLOR: document.getElementById('editar-vehiculo-color').value.trim(),
-          PLACA: document.getElementById('editar-vehiculo-placa').value.trim(),
-          SEDE: document.getElementById('editar-vehiculo-sede').value.trim(),
-          UBICACION: document.getElementById('editar-vehiculo-ubicacion').value.trim(),
-          ESTATUS: document.getElementById('editar-vehiculo-estatus').value.trim(),
-        });
+        await callServer('apiActualizarVehiculo', state.token, document.getElementById('editar-vehiculo-id').value,
+          recolectarDatosVehiculo('editar-vehiculo'));
         cerrarEditarVehiculo();
         await cargar();
       } catch (err) {
@@ -962,20 +1051,7 @@
       const errorBox = document.getElementById('veh-error');
       errorBox.hidden = true;
       try {
-        await callServer('apiCrearVehiculo', state.token, {
-          FOLIO: document.getElementById('veh-folio').value.trim(),
-          DEPARTAMENTO: document.getElementById('veh-departamento').value.trim(),
-          'NO ECONOMICO': document.getElementById('veh-no-economico').value.trim(),
-          MARCA: document.getElementById('veh-marca').value.trim(),
-          CLASE: document.getElementById('veh-clase').value.trim(),
-          'LINEA VEHICULO': document.getElementById('veh-linea').value.trim(),
-          MODELO: document.getElementById('veh-anio').value,
-          COLOR: document.getElementById('veh-color').value.trim(),
-          PLACA: document.getElementById('veh-placa').value.trim(),
-          SEDE: document.getElementById('veh-sede').value.trim(),
-          UBICACION: document.getElementById('veh-ubicacion').value.trim(),
-          ESTATUS: document.getElementById('veh-estatus').value.trim(),
-        });
+        await callServer('apiCrearVehiculo', state.token, recolectarDatosVehiculo('veh'));
         ev.target.reset();
         await cargar();
       } catch (err) {
