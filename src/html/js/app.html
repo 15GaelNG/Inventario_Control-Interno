@@ -886,7 +886,10 @@
       opciones: ['VIGENTE', 'CERRADA', 'EN PROCESO DE CIERRE'],
       bloqueadoAlCrear: true, valorPorDefecto: 'VIGENTE',
     },
-    { grupo: 'Identificación', clave: 'EMPRESA ORIGEN', etiqueta: 'Empresa origen', tipo: 'text' },
+    {
+      grupo: 'Identificación', clave: 'EMPRESA ORIGEN', etiqueta: 'Empresa origen', tipo: 'select',
+      opciones: ['CIB', 'FRO', 'IID', 'IPQ', 'GPH AC', 'GPH SC', 'MULTI', 'PHC', 'PRE', 'VME'],
+    },
     { grupo: 'Identificación', clave: 'RESPONSABLE DE CAJA CHICA', etiqueta: 'Responsable', tipo: 'text' },
     { grupo: 'Identificación', clave: 'PUESTO DE RESPONSABLE', etiqueta: 'Puesto del responsable', tipo: 'text' },
 
@@ -940,7 +943,7 @@
         }
         if (campo.tipo === 'select') {
           const opciones = (campo.opciones || []).map((o) => `<option value="${o}">${o}</option>`).join('');
-          return `<div class="field"><label>${campo.etiqueta}</label><select id="${id}">${opciones}</select></div>`;
+          return `<div class="field"><label>${campo.etiqueta}</label><select id="${id}"><option value="">Selecciona…</option>${opciones}</select></div>`;
         }
         return `<div class="field"><label>${campo.etiqueta}</label><input type="${campo.tipo}" id="${id}"${disabled}${placeholder} /></div>`;
       }).join('');
