@@ -206,6 +206,14 @@ const VehiculosService = (function () {
     return prefijo + String(maximo + 1).padStart(4, '0');
   }
 
+  /** Solo para mostrarlo en el formulario de Registrar mientras se llena (el
+   * campo Folio es de solo lectura) — NO reserva el folio, es una vista previa;
+   * el que de verdad queda asignado se recalcula bajo candado dentro de crear(). */
+  function previsualizarFolio(token, clase) {
+    Auth.validarSesion(token);
+    return generarFolio_(clase);
+  }
+
   /** Da de alta un vehículo. El FOLIO no lo manda el cliente — se calcula aquí
    * a partir de la Clase (ver generarFolio_) — y la columna ID_VEHICULO no la
    * trae SheetUtils.insert sola (solo autogenera si la columna se llama
@@ -275,5 +283,5 @@ const VehiculosService = (function () {
     return { url: archivo.getUrl(), id: archivo.getId(), nombre: nombreArchivo };
   }
 
-  return { listar, listarBasico, listarResumen, buscarPorFolio, crear, actualizar, eliminar, subirArchivo };
+  return { listar, listarBasico, listarResumen, buscarPorFolio, previsualizarFolio, crear, actualizar, eliminar, subirArchivo };
 })();

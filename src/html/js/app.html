@@ -691,7 +691,6 @@
       grupo: 'Vehículo', clave: 'PLACA', etiqueta: 'Placa', tipo: 'select',
       opciones: ['SIN PLACA', 'BAJA DE PLACA'],
     },
-    { grupo: 'Vehículo', clave: 'TIPO MAQUINARIA', etiqueta: 'Tipo de maquinaria', tipo: 'text' },
     {
       grupo: 'Vehículo', clave: 'TIPO DE COMBUSTIBLE', etiqueta: 'Tipo de combustible', tipo: 'select',
       opciones: ['GASOLINA', 'ELECTRICO', 'DIESEL', 'HIBRIDO', 'N/A', 'NUCO SIN INFORMACION', 'NO UTILIZA'],
@@ -707,7 +706,6 @@
       soloLectura: true, placeholder: 'Se genera solo, según la Clase',
     },
     { grupo: 'Identificación', clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select' },
-    { grupo: 'Identificación', clave: 'NO ECONOMICO', etiqueta: 'No. económico', tipo: 'text' },
     { grupo: 'Identificación', clave: 'RESPONSABLE VEHICULO', etiqueta: 'Responsable del vehículo', tipo: 'text' },
     { grupo: 'Identificación', clave: 'NO EMPLEADO', etiqueta: 'No. de empleado', tipo: 'text' },
     { grupo: 'Identificación', clave: 'SERIE VEHICULO', etiqueta: 'Serie del vehículo', tipo: 'text' },
@@ -1239,6 +1237,21 @@
     } catch (err) {
       console.error('No se pudieron cargar los catálogos de Marca/Departamento/Sede/Razón social/Ubicación:', err);
     }
+
+    // Folio: se ve en su campo (deshabilitado, no se puede escribir) desde que
+    // se elige la Clase en Registrar — es solo vista previa, el que de verdad
+    // queda asignado se recalcula al guardar (por si alguien más registró un
+    // vehículo de esa misma Clase mientras tanto).
+    const campoFolioVeh = document.getElementById('veh-folio');
+    document.getElementById('veh-clase').addEventListener('change', async (ev) => {
+      const clase = ev.target.value;
+      if (!clase) { campoFolioVeh.value = ''; return; }
+      try {
+        campoFolioVeh.value = await callServer('apiPrevisualizarFolioVehiculo', state.token, clase);
+      } catch (err) {
+        console.error('No se pudo previsualizar el folio:', err);
+      }
+    });
 
     function badgeEstatus(estatus) {
       const esBaja = String(estatus || '').toUpperCase().includes('BAJA');

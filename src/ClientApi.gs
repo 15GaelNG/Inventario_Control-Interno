@@ -45,6 +45,9 @@ function apiBuscarVehiculoPorFolio(token, folio) {
 function apiListarVehiculosResumen(token) {
   return VehiculosService.listarResumen(token);
 }
+function apiPrevisualizarFolioVehiculo(token, clase) {
+  return VehiculosService.previsualizarFolio(token, clase);
+}
 function apiCrearVehiculo(token, datos) {
   return VehiculosService.crear(token, datos);
 }
