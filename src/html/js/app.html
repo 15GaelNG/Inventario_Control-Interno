@@ -440,6 +440,21 @@
     const f = new Date(valor);
     return isNaN(f) ? '—' : f.toLocaleDateString('es-MX');
   }
+  /** Refresca un <select> de filtro con los valores distintos presentes en
+   *  los datos cargados (catálogos abiertos, ej. Departamento o Clase).
+   *  Conserva la selección actual si sigue existiendo entre las opciones. */
+  function poblarFiltroDinamico(select, valores, placeholderTexto) {
+    const opciones = Array.from(new Set((valores || []).filter(Boolean))).sort((a, b) => String(a).localeCompare(String(b)));
+    const actual = select.value;
+    select.innerHTML = `<option value="">${placeholderTexto}</option>` +
+      opciones.map((v) => `<option value="${v}">${v}</option>`).join('');
+    if (opciones.includes(actual)) select.value = actual;
+  }
+  /** true si el texto de búsqueda (ya en minúsculas) aparece en alguno de los campos dados. */
+  function coincideBusqueda(texto, campos) {
+    if (!texto) return true;
+    return campos.some((c) => String(c || '').toLowerCase().includes(texto));
+  }
   // Helpers compartidos para las tarjetas de "detalle completo" (Incidencias y Vehículos).
   function tituloDesdeClave(clave) {
     return clave.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
@@ -781,10 +796,22 @@
 
     let todasLasIncidencias = [];
     const filtroEstado = document.getElementById('inc-filtro-estado');
+    const filtroDepartamento = document.getElementById('inc-filtro-departamento');
+    const filtroBuscarInc = document.getElementById('inc-filtro-buscar');
+
+    function poblarFiltroDepartamentos() {
+      poblarFiltroDinamico(filtroDepartamento, todasLasIncidencias.map((i) => i.DEPARTAMENTO), 'Todos los departamentos');
+    }
 
     function renderTabla() {
-      const filtro = filtroEstado.value;
-      const incidencias = filtro ? todasLasIncidencias.filter((i) => i.ESTADO === filtro) : todasLasIncidencias;
+      const estado = filtroEstado.value;
+      const depto = filtroDepartamento.value;
+      const busqueda = filtroBuscarInc.value.trim().toLowerCase();
+      const incidencias = todasLasIncidencias.filter((i) => {
+        if (estado && i.ESTADO !== estado) return false;
+        if (depto && i.DEPARTAMENTO !== depto) return false;
+        return coincideBusqueda(busqueda, [i.FOLIO, i.DEPARTAMENTO, i.INSPECCION_INGRESO]);
+      });
 
       vacio.hidden = incidencias.length > 0;
       lista.innerHTML = incidencias.map((inc) => {
@@ -822,6 +849,8 @@
       refreshIcons();
     }
     filtroEstado.addEventListener('change', renderTabla);
+    filtroDepartamento.addEventListener('change', renderTabla);
+    filtroBuscarInc.addEventListener('input', renderTabla);
 
     async function cargar() {
       const errorBox = document.getElementById('inc-error');
@@ -847,6 +876,7 @@
       document.getElementById('stat-abiertas').textContent = todasLasIncidencias.filter((i) => i.ESTADO === 'ABIERTA').length;
       document.getElementById('stat-cerradas').textContent = todasLasIncidencias.filter((i) => i.ESTADO === 'CERRADA').length;
 
+      poblarFiltroDepartamentos();
       renderTabla();
     }
 
@@ -946,6 +976,8 @@
     let vehiculosPorId = {};
     let todosLosVehiculos = [];
     const filtroClase = document.getElementById('veh-filtro-clase');
+    const filtroEstatusVeh = document.getElementById('veh-filtro-estatus');
+    const filtroBuscarVeh = document.getElementById('veh-filtro-buscar');
 
     document.getElementById('campos-form-vehiculo').innerHTML = renderCamposVehiculo('veh');
     document.getElementById('campos-form-editar-vehiculo').innerHTML = renderCamposVehiculo('editar-vehiculo');
@@ -969,16 +1001,22 @@
     }
 
     function poblarFiltroClases() {
-      const clases = Array.from(new Set(todosLosVehiculos.map((v) => v.CLASE).filter(Boolean))).sort();
-      const actual = filtroClase.value;
-      filtroClase.innerHTML = '<option value="">Todas las clases</option>' +
-        clases.map((c) => `<option value="${c}">${c}</option>`).join('');
-      if (clases.includes(actual)) filtroClase.value = actual;
+      poblarFiltroDinamico(filtroClase, todosLosVehiculos.map((v) => v.CLASE), 'Todas las clases');
     }
 
     function renderTabla() {
-      const filtro = filtroClase.value;
-      const vehiculos = filtro ? todosLosVehiculos.filter((v) => v.CLASE === filtro) : todosLosVehiculos;
+      const clase = filtroClase.value;
+      const estatus = filtroEstatusVeh.value;
+      const busqueda = filtroBuscarVeh.value.trim().toLowerCase();
+      const vehiculos = todosLosVehiculos.filter((v) => {
+        if (clase && v.CLASE !== clase) return false;
+        if (estatus) {
+          const deBaja = String(v.ESTATUS || '').toUpperCase().includes('BAJA');
+          if (estatus === 'BAJA' && !deBaja) return false;
+          if (estatus === 'ACTIVO' && deBaja) return false;
+        }
+        return coincideBusqueda(busqueda, [v.FOLIO, v.MARCA, v.LINEA_VEHICULO, v.PLACA]);
+      });
 
       vacio.hidden = vehiculos.length > 0;
       lista.innerHTML = vehiculos.map((v) => `
@@ -1011,6 +1049,8 @@
       refreshIcons();
     }
     filtroClase.addEventListener('change', renderTabla);
+    filtroEstatusVeh.addEventListener('change', renderTabla);
+    filtroBuscarVeh.addEventListener('input', renderTabla);
 
     async function cargar() {
       const errorBox = document.getElementById('veh-error');
@@ -1157,6 +1197,8 @@
     let usuariosPorId = {};
     let todosLosUsuarios = [];
     const filtroEstatusUber = document.getElementById('uber-filtro-estatus');
+    const filtroRolUber = document.getElementById('uber-filtro-rol');
+    const filtroBuscarUber = document.getElementById('uber-filtro-buscar');
 
     // FECHA DE ALTA no se edita: siempre es el día en que se da de alta.
     document.getElementById('uber-fecha-de-alta').value = new Date().toLocaleDateString('es-MX');
@@ -1274,12 +1316,18 @@
       renderTabla();
     }
     filtroEstatusUber.addEventListener('change', renderTabla);
+    filtroRolUber.addEventListener('change', renderTabla);
+    filtroBuscarUber.addEventListener('input', renderTabla);
 
     function renderTabla() {
-      const filtro = filtroEstatusUber.value;
-      const usuarios = filtro
-        ? todosLosUsuarios.filter((u) => String(u.ESTATUS || '').toUpperCase() === filtro)
-        : todosLosUsuarios;
+      const estatus = filtroEstatusUber.value;
+      const rol = filtroRolUber.value;
+      const busqueda = filtroBuscarUber.value.trim().toLowerCase();
+      const usuarios = todosLosUsuarios.filter((u) => {
+        if (estatus && String(u.ESTATUS || '').toUpperCase() !== estatus) return false;
+        if (rol && String(u.ROL || '').toUpperCase() !== rol) return false;
+        return coincideBusqueda(busqueda, [u.NOMBRE_COMPLETO, u.DEPARTAMENTO, u.PUESTO]);
+      });
 
       vacio.hidden = usuarios.length > 0;
       lista.innerHTML = usuarios.map((u) => `
@@ -1399,6 +1447,8 @@
     let ticketsPorId = {};
     let todosLosTickets = [];
     const filtroTipoAtencion = document.getElementById('tickets-filtro-tipo');
+    const filtroAtendio = document.getElementById('tickets-filtro-atendio');
+    const filtroBuscarTickets = document.getElementById('tickets-filtro-buscar');
 
     document.getElementById('ticket-fecha-registro').value = new Date().toLocaleDateString('es-MX');
     document.getElementById('ticket-fecha').value = hoyISO();
@@ -1445,16 +1495,18 @@
     }
 
     function poblarFiltroTipos() {
-      const tipos = Array.from(new Set(todosLosTickets.map((t) => t.TIPO_ATENCION).filter(Boolean))).sort();
-      const actual = filtroTipoAtencion.value;
-      filtroTipoAtencion.innerHTML = '<option value="">Todos los tipos</option>' +
-        tipos.map((t) => `<option value="${t}">${t}</option>`).join('');
-      if (tipos.includes(actual)) filtroTipoAtencion.value = actual;
+      poblarFiltroDinamico(filtroTipoAtencion, todosLosTickets.map((t) => t.TIPO_ATENCION), 'Todos los tipos');
     }
 
     function renderTabla() {
-      const filtro = filtroTipoAtencion.value;
-      const tickets = filtro ? todosLosTickets.filter((t) => t.TIPO_ATENCION === filtro) : todosLosTickets;
+      const tipo = filtroTipoAtencion.value;
+      const atendio = filtroAtendio.value;
+      const busqueda = filtroBuscarTickets.value.trim().toLowerCase();
+      const tickets = todosLosTickets.filter((t) => {
+        if (tipo && t.TIPO_ATENCION !== tipo) return false;
+        if (atendio && t.QUIEN_ATENDIO !== atendio) return false;
+        return coincideBusqueda(busqueda, [t.TICKET, t.DEPARTAMENTO, t.SOLICITANTE]);
+      });
 
       vacio.hidden = tickets.length > 0;
       lista.innerHTML = tickets.map((t) => `
@@ -1482,6 +1534,8 @@
       refreshIcons();
     }
     filtroTipoAtencion.addEventListener('change', renderTabla);
+    filtroAtendio.addEventListener('change', renderTabla);
+    filtroBuscarTickets.addEventListener('input', renderTabla);
 
     async function cargar() {
       const errorBox = document.getElementById('ticket-error');

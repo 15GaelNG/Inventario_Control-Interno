@@ -56,11 +56,17 @@
   <div class="card">
     <div class="card-header-row">
       <h3 style="margin:0">Historial</h3>
-      <select id="inc-filtro-estado" class="filtro-select">
-        <option value="">Todos los estados</option>
-        <option value="ABIERTA">Abierta</option>
-        <option value="CERRADA">Cerrada</option>
-      </select>
+      <div class="filtros-group">
+        <input type="search" id="inc-filtro-buscar" class="filtro-input" placeholder="Buscar folio, depto o motivo…" />
+        <select id="inc-filtro-departamento" class="filtro-select">
+          <option value="">Todos los departamentos</option>
+        </select>
+        <select id="inc-filtro-estado" class="filtro-select">
+          <option value="">Todos los estados</option>
+          <option value="ABIERTA">Abierta</option>
+          <option value="CERRADA">Cerrada</option>
+        </select>
+      </div>
     </div>
     <div class="table-scroll">
       <table>

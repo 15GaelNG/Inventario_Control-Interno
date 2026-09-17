@@ -76,12 +76,21 @@
   <div class="card">
     <div class="card-header-row">
       <h3 style="margin:0">Catálogo</h3>
-      <select id="uber-filtro-estatus" class="filtro-select">
-        <option value="">Todos los estatus</option>
-        <option value="ACTIVO">Activo</option>
-        <option value="PENDIENTE">Pendiente</option>
-        <option value="BAJA">Baja</option>
-      </select>
+      <div class="filtros-group">
+        <input type="search" id="uber-filtro-buscar" class="filtro-input" placeholder="Buscar nombre, depto o puesto…" />
+        <select id="uber-filtro-rol" class="filtro-select">
+          <option value="">Todos los roles</option>
+          <option value="ADMINISTRADOR">Administrador</option>
+          <option value="BENEFICIARIO">Beneficiario</option>
+          <option value="EMPLEADO">Empleado</option>
+        </select>
+        <select id="uber-filtro-estatus" class="filtro-select">
+          <option value="">Todos los estatus</option>
+          <option value="ACTIVO">Activo</option>
+          <option value="PENDIENTE">Pendiente</option>
+          <option value="BAJA">Baja</option>
+        </select>
+      </div>
     </div>
     <div class="table-scroll">
       <table>

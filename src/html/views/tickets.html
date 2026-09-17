@@ -72,9 +72,19 @@
   <div class="card">
     <div class="card-header-row">
       <h3 style="margin:0">Historial</h3>
-      <select id="tickets-filtro-tipo" class="filtro-select">
-        <option value="">Todos los tipos</option>
-      </select>
+      <div class="filtros-group">
+        <input type="search" id="tickets-filtro-buscar" class="filtro-input" placeholder="Buscar ticket, depto o solicitante…" />
+        <select id="tickets-filtro-atendio" class="filtro-select">
+          <option value="">Todos (atendió)</option>
+          <option value="ABIGAIL LEDESMA CORONA">Abigail Ledesma Corona</option>
+          <option value="DAVID MOISES MALDONADO HERNANDEZ">David Moises Maldonado Hernández</option>
+          <option value="GIOVANNI JAVIER ORDUÑA DE LA PEÑA">Giovanni Javier Orduña de la Peña</option>
+          <option value="JORGE LUIS AVECILLA RIVERA">Jorge Luis Avecilla Rivera</option>
+        </select>
+        <select id="tickets-filtro-tipo" class="filtro-select">
+          <option value="">Todos los tipos</option>
+        </select>
+      </div>
     </div>
     <div class="table-scroll">
       <table>

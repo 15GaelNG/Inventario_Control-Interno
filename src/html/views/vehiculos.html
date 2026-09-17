@@ -39,9 +39,17 @@
   <div class="card">
     <div class="card-header-row">
       <h3 style="margin:0">Catálogo</h3>
-      <select id="veh-filtro-clase" class="filtro-select">
-        <option value="">Todas las clases</option>
-      </select>
+      <div class="filtros-group">
+        <input type="search" id="veh-filtro-buscar" class="filtro-input" placeholder="Buscar folio, marca o placa…" />
+        <select id="veh-filtro-clase" class="filtro-select">
+          <option value="">Todas las clases</option>
+        </select>
+        <select id="veh-filtro-estatus" class="filtro-select">
+          <option value="">Todos los estatus</option>
+          <option value="ACTIVO">Activos</option>
+          <option value="BAJA">De baja</option>
+        </select>
+      </div>
     </div>
     <div class="table-scroll">
       <table>
