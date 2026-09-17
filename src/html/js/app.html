@@ -707,7 +707,16 @@
       grupo: 'Documentación y seguro', clave: 'VERIFICACION (SI / NO)', etiqueta: 'Verificación', tipo: 'select',
       opciones: ['VERIFICADO', 'VENCIDO', 'NO APLICA'],
     },
-    { grupo: 'Documentación y seguro', clave: 'PEDIDO DE VERIFICACIÓN', etiqueta: 'Pedido de verificación', tipo: 'text' },
+    {
+      grupo: 'Documentación y seguro', clave: 'PEDIDO DE VERIFICACIÓN', etiqueta: 'Periodo de verificación', tipo: 'select',
+      opciones: [
+        'Enero - Febrero (Terminación 5 y 6)', 'Febrero - Marzo (Terminación 7 y 8)',
+        'Marzo - Abril (Terminación 3 y 4)', 'Abril - Mayo (Terminación 1 y 2)',
+        'Mayo - Junio (Terminación 9 y 0)', 'Julio - Agosto (Terminación 5 y 6)',
+        'Agosto - Septiembre (Terminación 7 y 8)', 'Septiembre - Octubre (Terminación 3 y 4)',
+        'Octubre - Noviembre (Terminación 1 y 2)', 'Noviembre - Diciembre (Terminación 9 y 0)',
+      ],
+    },
     { grupo: 'Documentación y seguro', clave: 'SEGURO (SI / NO)', etiqueta: 'Seguro (Sí/No)', tipo: 'text' },
     { grupo: 'Documentación y seguro', clave: 'FECHA VENCIMIENTO SEGURO', etiqueta: 'Fecha de vencimiento del seguro', tipo: 'date' },
     { grupo: 'Documentación y seguro', clave: 'POLIZA SEGURO', etiqueta: 'Póliza de seguro', tipo: 'file' },
