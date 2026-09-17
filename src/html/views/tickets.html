@@ -29,7 +29,16 @@
       <div class="field"><label>Solicitante</label><input type="text" id="ticket-solicitante" /></div>
       <div class="field"><label>Tipo de atención</label><input type="text" id="ticket-tipo-atencion" required placeholder="Ej. Alta de usuario Uber" /></div>
       <div class="field"><label>Placa</label><input type="text" id="ticket-placa" /></div>
-      <div class="field"><label>Quién atendió</label><input type="text" id="ticket-quien-atendio" /></div>
+      <div class="field">
+        <label>Quién atendió</label>
+        <select id="ticket-quien-atendio">
+          <option value="">Selecciona…</option>
+          <option value="DAVID MOISES MALDONADO HERNANDEZ">David Moisés Maldonado Hernández</option>
+          <option value="GIOVANNI JAVIER ORDUÑA DE LA PEÑA">Giovanni Javier Orduña de la Peña</option>
+          <option value="ABIGAIL LEDESMA CORONA">Abigail Ledesma Corona</option>
+          <option value="JORGE LUIS AVECILLA RIVERA">Jorge Luis Avecilla Rivera</option>
+        </select>
+      </div>
       <div class="field" style="grid-column: 1 / -1;"><label>Comentario</label><input type="text" id="ticket-comentario" /></div>
       <div style="grid-column: 1 / -1;"><button type="submit" id="btn-guardar-ticket"><i data-lucide="ticket" class="ico"></i> Registrar ticket</button></div>
     </form>
@@ -67,7 +76,16 @@
         <div class="field"><label>Solicitante</label><input type="text" id="editar-ticket-solicitante" /></div>
         <div class="field"><label>Tipo de atención</label><input type="text" id="editar-ticket-tipo-atencion" required /></div>
         <div class="field"><label>Placa</label><input type="text" id="editar-ticket-placa" /></div>
-        <div class="field"><label>Quién atendió</label><input type="text" id="editar-ticket-quien-atendio" /></div>
+        <div class="field">
+          <label>Quién atendió</label>
+          <select id="editar-ticket-quien-atendio">
+            <option value="">Selecciona…</option>
+            <option value="DAVID MOISES MALDONADO HERNANDEZ">David Moisés Maldonado Hernández</option>
+            <option value="GIOVANNI JAVIER ORDUÑA DE LA PEÑA">Giovanni Javier Orduña de la Peña</option>
+            <option value="ABIGAIL LEDESMA CORONA">Abigail Ledesma Corona</option>
+            <option value="JORGE LUIS AVECILLA RIVERA">Jorge Luis Avecilla Rivera</option>
+          </select>
+        </div>
         <div class="field"><label>Comentario</label><input type="text" id="editar-ticket-comentario" /></div>
         <div class="error-msg" id="editar-ticket-error" hidden></div>
         <button type="submit" id="btn-guardar-editar-ticket" style="width:100%"><i data-lucide="save" class="ico"></i> Guardar cambios</button>
