@@ -278,7 +278,8 @@ const LineasCaptura = (function () {
       LineasDatos.conCandado(() => ligarPdf_(LineasRepo.TAB.INSP, 'FORMATO INSPECCIONES LINEAS', id, obj.reg.id, 'FORMATO INSPECCION', pdf));
       return pdf;
     } catch (e) {
-      return { error: e.message };
+      console.error('generarPdfInspeccion_ (' + id + '): ' + e.message);
+      throw new Error('No se pudo generar el PDF de la inspección: ' + e.message);
     }
   }
 
@@ -329,7 +330,8 @@ const LineasCaptura = (function () {
       });
       return pdf;
     } catch (e) {
-      return { error: e.message };
+      console.error('generarPdfResponsiva_ (' + id + '): ' + e.message);
+      throw new Error('No se pudo generar el PDF de la responsiva: ' + e.message);
     }
   }
 
