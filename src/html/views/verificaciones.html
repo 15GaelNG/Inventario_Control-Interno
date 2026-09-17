@@ -1,7 +1,7 @@
 <template id="tpl-verificaciones">
   <div class="page-header-compacto">
     <div>
-      <h2>📋 Verificaciones</h2>
+      <h2><i data-lucide="clipboard-check" class="ico"></i> Verificaciones</h2>
       <p class="page-subtitle">Verificación vehicular — comprobante y fecha de la próxima</p>
     </div>
     <!-- KPIs: clic = filtrar la tabla -->
@@ -10,19 +10,19 @@
         <strong id="ver-stat-total">0</strong> registros
       </button>
       <button type="button" class="kpi-chip kpi-warn" id="ver-kpi-por-vencer" title="Filtrar: vehículos que vencen en 30 días o menos">
-        ⏳ <strong id="ver-stat-por-vencer">0</strong> por vencer
+        <i data-lucide="hourglass" class="ico"></i> <strong id="ver-stat-por-vencer">0</strong> por vencer
       </button>
       <button type="button" class="kpi-chip kpi-danger" id="ver-kpi-vencidas" title="Filtrar: vehículos con verificación vencida">
-        ⚠️ <strong id="ver-stat-vencidas">0</strong> vencidos
+        <i data-lucide="triangle-alert" class="ico"></i> <strong id="ver-stat-vencidas">0</strong> vencidos
       </button>
     </div>
   </div>
 
   <div id="ver-tabs">
     <div class="tabs-lista">
-      <button type="button" class="tab-btn" data-tab="registros">📊 Registros</button>
-      <button type="button" class="tab-btn" data-tab="nuevo">➕ Nuevo registro</button>
-      <button type="button" class="tab-btn" data-tab="historial">🕒 Historial</button>
+      <button type="button" class="tab-btn" data-tab="registros"><i data-lucide="table" class="ico"></i> Registros</button>
+      <button type="button" class="tab-btn" data-tab="nuevo"><i data-lucide="plus" class="ico"></i> Nuevo registro</button>
+      <button type="button" class="tab-btn" data-tab="historial"><i data-lucide="history" class="ico"></i> Historial</button>
     </div>
 
     <!-- Pestaña 1: tabla de registros -->
@@ -33,7 +33,7 @@
     <!-- Pestaña 2: nuevo registro -->
     <div class="card form-card" data-panel="nuevo">
       <div class="form-card-header">
-        <div class="form-card-icon">🚗</div>
+        <div class="form-card-icon"><i data-lucide="car" class="ico"></i></div>
         <div>
           <h3>Registrar verificación</h3>
           <p>Folio, fechas y foto del comprobante</p>

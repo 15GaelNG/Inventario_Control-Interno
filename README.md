@@ -27,6 +27,32 @@ src/
     ├── styles.html           CSS
     ├── views/                una vista (template) por módulo
     └── js/                   api.js (wrapper de google.script.run) + app.js (router SPA)
+        └── componentes/       piezas reutilizables (ver abajo)
+tests/                         pruebas de los componentes (npm test)
+```
+
+### Componentes reutilizables (`src/html/js/componentes/`)
+
+| Componente | Para qué |
+|---|---|
+| `datatable` | Tabla completa: búsqueda, filtros, orden, selección, edición, panel de detalle, acciones por fila, exportar. Instrucciones y ejemplos al inicio del archivo. |
+| `iconos` | `Iconos.svg('editar')` o cualquier nombre de [lucide.dev](https://lucide.dev/icons). Para cambiar un ícono en toda la app, edita su renglón en `ICONOS`. |
+| `notificar` | Avisos abajo a la derecha (`Notificar.exito/error/info`), en vez de `alert()`. |
+| `confirmar` | Confirmaciones propias (`await Confirmar.pedir({...})`), en vez de `confirm()`. |
+| `tabs` | Pestañas dentro de una vista. |
+| `exportar-excel` | Descarga un `.xlsx` real. |
+
+Para extender la tabla sin tocar su código: `accionesFila`, `accionesSeleccion` y
+`DataTable.registrarTipo(...)` (tipos de columna nuevos, p. ej. moneda).
+
+### Datos copiados entre hojas
+
+Si tu módulo guarda datos que pertenecen a otra hoja (p. ej. la PLACA de `VEHICULOS`),
+sigue las reglas de [`docs/relaciones.md`](docs/relaciones.md) y anótalo en su inventario.
+
+**Antes de subir un cambio a un componente**, corre las pruebas (tardan segundos):
+```
+npm test
 ```
 
 Cada módulo (Vehículos, Telefonía, Accesorios, Caja Chica) vive en su **propio

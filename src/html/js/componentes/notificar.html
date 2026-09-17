@@ -13,7 +13,9 @@
   .toast.saliendo { animation: toast-salir .18s ease-in forwards; }
   .toast-exito { border-left-color: var(--color-success); }
   .toast-error { border-left-color: var(--color-danger); }
-  .toast-icono { flex-shrink: 0; }
+  .toast-icono { flex-shrink: 0; font-size: 16px; line-height: 1; color: var(--color-primary); }
+  .toast-exito .toast-icono { color: var(--color-success); }
+  .toast-error .toast-icono { color: var(--color-danger); }
   .toast-texto { flex: 1; line-height: 1.4; word-break: break-word; }
   .toast button { padding: 2px 8px; font-size: 12px; }
   .toast .toast-cerrar { background: transparent; color: var(--color-text-muted); border: none; }
@@ -33,7 +35,7 @@
    * Se anuncia a lectores de pantalla (aria-live).
    */
   const Notificar = (function () {
-    const ICONOS = { exito: '✅', error: '⚠️', info: 'ℹ️' };
+    const ICONOS = { exito: 'exito', error: 'alerta', info: 'info' };   // nombres de Iconos
     const DURACION = { exito: 3500, info: 4000, error: 8000 };
     let contenedor = null;
 
@@ -55,7 +57,7 @@
 
       const icono = document.createElement('span');
       icono.className = 'toast-icono';
-      icono.textContent = ICONOS[tipo];
+      icono.innerHTML = Iconos.svg(ICONOS[tipo]);
       const texto = document.createElement('span');
       texto.className = 'toast-texto';
       texto.textContent = mensaje;
@@ -80,7 +82,7 @@
       x.type = 'button';
       x.className = 'toast-cerrar';
       x.setAttribute('aria-label', 'Cerrar');
-      x.textContent = '✕';
+      x.innerHTML = Iconos.svg('cerrar');
       x.addEventListener('click', cerrar);
       toast.appendChild(x);
 

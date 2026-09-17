@@ -1054,14 +1054,17 @@
       });
     }
 
+    // estado → [clase del badge, ícono]. Iconos.svg (y no data-lucide) porque la tabla se redibuja sola
     const BADGE_ESTADO = {
-      'Vigente': ['cerrada', '✅ Vigente'],
-      'Por vencer': ['abierta', '⏳ Por vencer'],
-      'Vencida': ['abierta', '⚠️ Vencida'],
+      'Vigente': ['cerrada', 'circle-check'],
+      'Por vencer': ['abierta', 'hourglass'],
+      'Vencida': ['abierta', 'triangle-alert'],
     };
     function badgeEstado(estado) {
       const b = BADGE_ESTADO[estado];
-      return b ? `<span class="badge-estado ${b[0]}">${b[1]}</span>` : `<span style="color:var(--color-text-muted)">${escaparHtml(estado)}</span>`;
+      return b
+        ? `<span class="badge-estado ${b[0]}">${Iconos.svg(b[1])} ${escaparHtml(estado)}</span>`
+        : `<span style="color:var(--color-text-muted)">${escaparHtml(estado)}</span>`;
     }
 
     function pintarStats() {
@@ -1079,9 +1082,9 @@
       idTabla: 'verificaciones',   // recuerda columnas, anchos, orden y densidad de cada usuario
       ordenInicial: { campo: 'FECHA_REGISTRO', dir: 'desc' },
       textoVacio: 'Todavía no hay verificaciones registradas',
-      ayuda: 'Fechas: pasa el mouse y usa ✏️ (o doble clic). ✓ o Enter guarda, ✕ o Esc cancela; Ctrl+Z deshace. ' +
-        'El folio se cambia desde 🔍 Ver detalle. ▾ en cada columna: filtrar, ordenar, fijar u ocultar. ' +
-        'Shift+clic en casillas selecciona un rango.',
+      ayuda: 'Fechas: pasa el mouse y usa el lápiz (o doble clic). Enter guarda, Esc cancela; Ctrl+Z deshace. ' +
+        'El folio se cambia desde "Ver detalle" (el ojo en Acciones). La flecha de cada columna: filtrar, ordenar, fijar u ocultar. ' +
+        'Para eliminar: el bote de basura de la fila, o marca varias casillas. Shift+clic en casillas selecciona un rango.',
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
       exportar: { nombreArchivo: 'Verificaciones' },
       etiquetaFila: (v) => [v.FOLIO, v.PLACA, v.FECHA_VERIFICACION ? 'verificó ' + formatearFecha(v.FECHA_VERIFICACION) : '']
@@ -1104,12 +1107,12 @@
           // En el panel de detalle se muestra la imagen completa (contenidoExtra), no el botón
           campo: 'COMPROBANTE', titulo: 'Comprobante', filtrable: false, ordenable: false, enDetalle: false,
           render: (ruta) => (ruta
-            ? `<button type="button" class="secondary btn-ver-comprobante" data-ruta="${escaparHtml(ruta)}" style="padding:4px 8px">🖼️ Ver</button>`
+            ? `<button type="button" class="secondary btn-ver-comprobante" data-ruta="${escaparHtml(ruta)}" style="padding:4px 8px; display:inline-flex; align-items:center; gap:5px">${Iconos.svg('imagen')} Ver</button>`
             : '—'),
         },
       ],
-      // Casillas de selección solo si hay algo que hacer con ellas (hoy: eliminar)
-      seleccionable: esAdmin,
+      // Casillas para todos: copiar sirve a cualquiera; sin permiso, la barra explica por qué no hay "Eliminar"
+      seleccionable: true,
       alEditar: puedeEditar ? async (fila, campo, valor) => {
         const actualizada = await callServer('apiActualizarCampoVerificacion', state.token, fila.ID, campo, valor);
         // Recalcular estados de todos (cambiar una fecha o folio puede mover cuál es la "última")
@@ -1126,6 +1129,7 @@
         pintarStats();
         pintarHistorial();
       } : null,
+      motivoSinEliminar: `Eliminar es solo para administradores (tu rol: ${rol || 'sin rol'})`,
     });
 
     document.getElementById('ver-tabla').addEventListener('click', (ev) => {
@@ -1157,7 +1161,7 @@
           `<p style="margin:8px 0 0"><a href="${escaparHtml(vista.url)}" target="_blank" rel="noopener">Abrir en Drive ↗</a></p>`;
       } catch (err) {
         if (document.body.contains(contenedor)) {
-          contenedor.innerHTML = `<p class="error-msg">⚠️ ${escaparHtml(err.message)}</p>`;
+          contenedor.innerHTML = `<p class="error-msg">${Iconos.svg('alerta')} ${escaparHtml(err.message)}</p>`;
         }
       }
     }
@@ -1176,7 +1180,7 @@
       document.getElementById('ver-vacio').hidden = filtradas.length > 0;
       lista.innerHTML = filtradas.map((v) => `
         <div class="incidencia-item">
-          <div class="incidencia-icon">📋</div>
+          <div class="incidencia-icon">${Iconos.svg('clipboard-check')}</div>
           <div class="incidencia-main">
             <div class="incidencia-folio">${escaparHtml(v.FOLIO)}${v.PLACA ? ' · ' + escaparHtml(v.PLACA) : ''}</div>
             <div class="incidencia-meta">
@@ -1187,7 +1191,7 @@
           <div class="incidencia-fecha">${formatearFecha(v.FECHA_REGISTRO)}</div>
           ${BADGE_ESTADO[v.ESTADO] ? badgeEstado(v.ESTADO) : ''}
           <div class="incidencia-actions">
-            ${v.COMPROBANTE ? `<button type="button" class="secondary btn-ver-comprobante" data-ruta="${escaparHtml(v.COMPROBANTE)}" title="Ver comprobante">🖼️</button>` : ''}
+            ${v.COMPROBANTE ? `<button type="button" class="secondary btn-ver-comprobante" data-ruta="${escaparHtml(v.COMPROBANTE)}" title="Ver comprobante" aria-label="Ver comprobante">${Iconos.svg('imagen')}</button>` : ''}
           </div>
         </div>`).join('');
     }
