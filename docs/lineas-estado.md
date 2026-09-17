@@ -1,6 +1,6 @@
 # Líneas — estado del módulo
 
-Rama `emmanuel` · Última actualización: 2026-09-17
+Rama `emmanuel` · Última actualización: 2026-09-17 (tarde)
 
 Documento de continuidad del módulo **Líneas** (equipos y líneas telefónicas).
 El plan de la mudanza está en [lineas-plan.md](lineas-plan.md); aquí se registra
@@ -37,10 +37,25 @@ Script Properties que usa Líneas (las deja `configurarLineasDev()`):
 
 **API de Sheets:** el proyecto DEV ya tiene agregado el servicio avanzado
 **Google Sheets API v4** (Editor → Servicios → +), declarado en `src/appsscript.json`.
-Con eso las lecturas y escrituras por lotes van por la API (más rápido). Si un
-proyecto no la tiene habilitada, `LineasDatos` lo detecta (error 403 con
-`SERVICE_DISABLED`), lo recuerda 1 hora en caché y usa `SpreadsheetApp`: mismo
-resultado, más lento con muchas filas. Es decir, la app funciona con o sin API.
+Desde el 2026-09-17 `LineasDatos.sheetsApi()` llama directo al servicio avanzado
+(`Sheets.Spreadsheets.Values.batchGetByDataFilter/batchUpdate`) en vez de
+`UrlFetchApp` + `ScriptApp.getOAuthToken()`; la respuesta tiene la misma forma
+que la API REST, así que el resto del archivo no cambió. Si un proyecto no
+tiene el servicio habilitado, `LineasDatos` lo detecta igual que antes (el
+mensaje de error contiene "has not been used"/"disabled"), lo recuerda 1 hora
+en caché y usa `SpreadsheetApp`: mismo resultado, más lento con muchas filas.
+Es decir, la app funciona con o sin el servicio avanzado.
+
+**Rol ADMIN (para ver PIN/patrón/contraseñas):** el rol se lee de la columna
+`ROL` en la hoja `USUARIOS` (BD de pruebas del equipo, Script Property
+`SS_ID_USUARIOS`; ver `Auth.mapearRol_` en `src/Auth.gs` — no es un archivo de
+Líneas, no se toca). Para ver los campos secretos en tu ficha de equipo: en esa
+hoja, en tu fila, pon `ADMIN` en `ROL`, guarda y vuelve a iniciar sesión en `/dev`
+(el rol queda fijo en el token de sesión 8 h). Ojo: capturar una inspección o
+responsiva **no** requiere ser ADMIN — el rol OPERADOR ya puede operar
+(`rolesOperan_`); ADMIN solo cambia qué se **muestra** en la ficha, porque el
+PDF de la inspección/responsiva sí lleva el PIN/patrón sin importar el rol
+(igual que en el AppSheet: es el documento físico que se firma).
 
 ## 3. Archivos del módulo
 
@@ -53,6 +68,12 @@ src/services/lineas/
   LineasRepo.gs       traducción fila ↔ equipo/línea/responsable, bitácora igual que los bots del
                       AppSheet, evidencias, historial, bitácoras, catálogos, alertas, colaboradores
   LineasAdmin.gs      configurarLineasDev() y recargarDatosLineas() (se corren desde el editor)
+  LineasEvidencias.gs carpetas de evidencia en Drive (misma estructura NUCOS), subir archivo,
+                      validar que un archivo pertenezca a la carpeta de la evidencia
+  LineasPdf.gs        motor de plantillas Google Docs del AppSheet (<<COLUMNA>>, <<If:>>…<<EndIf>>,
+                      IDs de las plantillas INSPECCION_CELULAR / RESPONSIVA_CELULAR)
+  LineasCaptura.gs    contexto + guardar inspección/responsiva nueva (checklist, snapshot, alertas,
+                      bitácora, APP_EVIDENCIAS) y generar el PDF después de guardar
 src/services/TelefoniaService.gs   fachada: valida sesión y rol, arma lo que consume la interfaz
 src/html/views/lineas/             plantillas: lineas-telefonicas, lineas-bitacora
 src/html/js/lineas.html            namespace `Lineas` (carga lucide@1.46.0 + helper icono())
@@ -84,7 +105,34 @@ npm run push                     # sube a TU proyecto DEV
 - `configurarLineasDev()` se corre una vez por proyecto DEV; `recargarDatosLineas()`
   vacía las cachés si editas la hoja a mano.
 
-## 5. Qué está hecho (probado en `/dev` el 2026-09-15)
+## 5. Captura de inspección y responsiva (nuevo, 2026-09-17 — sin probar en `/dev` todavía)
+
+Botones **Nueva inspección** / **Nueva responsiva** en la ficha del equipo (o de
+una línea suelta), visibles solo si `puedeOperar` (ADMIN u OPERADOR):
+
+1. Al abrir el modal se piden en paralelo el contexto (equipo/línea, responsable,
+   checklist aplicable según el tipo, resultado de la inspección anterior) y se
+   crea ya la carpeta de evidencia en Drive (misma estructura que producción:
+   `<NUCO>/INSPECCIONES/<AÑO>/<CUATRIMESTRE>/<MES>/INSP DD MM/FOTOS` o
+   `<NUCO>/CARTA RESPONSIVA/<AÑO>/RESP DD MM`).
+2. Checklist por secciones con pastillas (SI/NO/N-A, BUENO/REGULAR/MALO,
+   INSTALADA/NO INSTALADA), precargado con el valor de la inspección anterior si
+   existe. Fotos con `<input type=file capture>` (se redimensionan a 1600 px /
+   JPEG .82 en el navegador antes de subirse). Firma en un `<canvas>` (sin
+   librería, con Pointer Events).
+3. Al guardar: sube las firmas, llama `apiLineasGuardarInspeccion` /
+   `apiLineasGuardarResponsiva` (fila nueva + bitácora + `APP_EVIDENCIAS`, bajo
+   candado, igual que el prototipo) y **después** pide `apiLineasGenerarPdf` en
+   segundo plano (para no bloquear ~30-40 s por el PDF) con las plantillas del
+   AppSheet (Google Docs, IDs en `LineasPdf.PLANTILLAS`; la plantilla original
+   nunca se toca, se copia y se manda a la papelera la copia temporal).
+
+**Pendiente de probar en el navegador de verdad** (el integrado no maneja bien
+`<input type=file>`/cámara ni canvases con Pointer Events): abrir un equipo sin
+línea o con línea, capturar una inspección completa y una responsiva, confirmar
+que el PDF se genera y que el enlace aparece en la tarjeta de evidencias.
+
+## 6. Qué está hecho (probado en `/dev` el 2026-09-15)
 
 **Líneas Telefónicas**
 
@@ -112,7 +160,7 @@ npm run push                     # sube a TU proyecto DEV
 - Fechas en hora de México aunque la hoja esté en otra zona horaria.
 - SIM, IMEI y teléfonos se conservan como texto (no se convierten en número).
 
-## 6. Pendientes
+## 7. Pendientes
 
 **Fase 3 — operaciones (lo siguiente)**
 Asignar y retirar línea, cambio de equipo, reasignar responsable, cambiar estatus,
@@ -122,15 +170,15 @@ bitácora que dejaban los bots del AppSheet (`CAMBIOS LINEAS TELEFONICAS`,
 El código del prototipo ya existe (`Operaciones.js`) y falta portarlo a `LineasRepo` / `TelefoniaService`.
 
 **Fase 4 — captura**
-Inspección y responsiva: fotos y firma desde el celular, carpetas en NUCOS y PDF con las
-plantillas del AppSheet (`PlantillasDoc.js` del prototipo), generado en segundo plano.
+Backend y formulario ya están (ver sección 5); falta probarlo en un navegador de
+verdad (fotos/cámara y firma) y, si algo no coincide con las plantillas reales
+del AppSheet, ajustar `LineasPdf`/`LineasCaptura`.
 
 **Fase 5 — lo que falta del prototipo**
 Trámites (Reactivación / Solicitudes), Líneas Post Venta (falta definir qué es),
 accesorios del equipo, evidencia y autorización del desecho, usuarios adicionales.
 
 **Mejoras técnicas**
-- Usar el servicio avanzado `Sheets` en vez de llamar a la API por URL (ya está declarado).
 - Revisar si conviene compartir la capa de datos con el resto del equipo (hoy `SheetUtils`
   lee la pestaña completa en cada llamada).
 
