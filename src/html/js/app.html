@@ -208,6 +208,7 @@
       if (vista === 'vehiculos') { montarVista('tpl-vehiculos', initVehiculos); return; }
       if (vista === 'uber') { montarVista('tpl-uber', initUber); return; }
       if (vista === 'tickets') { montarVista('tpl-tickets', initTickets); return; }
+      if (vista === 'caja-chica') { montarVista('tpl-cajachica', initCajaChica); return; }
       mostrarProximamente(etiqueta || vista);
     });
   }
@@ -860,6 +861,91 @@
       }
       const el = document.getElementById(id);
       if (!el) return;
+      el.value = campo.tipo === 'date' ? fechaParaInput(valor) : valor;
+    });
+  }
+
+  /**
+   * Las 27 columnas editables de la hoja de Cajas Chicas (todo menos ID CCH,
+   * que se genera solo, y CALIFICACION PROMEDIO, que es un promedio calculado
+   * a partir de los Arqueos — módulo que todavía no existe). Mismo patrón
+   * data-driven que CAMPOS_VEHICULO: una sola definición para Registrar y
+   * Editar, agrupada por secciones. Todos los campos "no catalogados" quedan
+   * como texto libre por ahora — se van convirtiendo a lista desplegable
+   * conforme se confirmen los valores reales, igual que se hizo con Vehículos.
+   */
+  const CAMPOS_CAJACHICA = [
+    { grupo: 'Identificación', clave: 'ID CCH', etiqueta: 'ID CCH', tipo: 'text', soloLectura: true, placeholder: 'Se genera solo' },
+    { grupo: 'Identificación', clave: 'ESTATUS', etiqueta: 'Estatus', tipo: 'text' },
+    { grupo: 'Identificación', clave: 'EMPRESA ORIGEN', etiqueta: 'Empresa origen', tipo: 'text' },
+    { grupo: 'Identificación', clave: 'RESPONSABLE DE CAJA CHICA', etiqueta: 'Responsable', tipo: 'text' },
+    { grupo: 'Identificación', clave: 'PUESTO DE RESPONSABLE', etiqueta: 'Puesto del responsable', tipo: 'text' },
+
+    { grupo: 'Jefe y captura', clave: 'JEFE INMEDIATO DEL REPSONSABLE', etiqueta: 'Jefe inmediato del responsable', tipo: 'text' },
+    { grupo: 'Jefe y captura', clave: 'ADMINISTRADA POR', etiqueta: 'Administrada por', tipo: 'text' },
+    { grupo: 'Jefe y captura', clave: 'CAPTURISTA DE CAJA CHICA', etiqueta: 'Capturista', tipo: 'text' },
+    { grupo: 'Jefe y captura', clave: 'PUESTO DE CAPTURISTA', etiqueta: 'Puesto del capturista', tipo: 'text' },
+
+    { grupo: 'Ubicación', clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'text' },
+    { grupo: 'Ubicación', clave: 'OFICINA', etiqueta: 'Oficina', tipo: 'text' },
+    { grupo: 'Ubicación', clave: 'SEDE', etiqueta: 'Sede', tipo: 'text' },
+
+    { grupo: 'Fechas y configuración', clave: 'FECHA DE APERTURA', etiqueta: 'Fecha de apertura', tipo: 'date' },
+    { grupo: 'Fechas y configuración', clave: 'FECHA DE CIERRE', etiqueta: 'Fecha de cierre', tipo: 'date' },
+    { grupo: 'Fechas y configuración', clave: 'FECHA DE RESPONSIVA CI', etiqueta: 'Fecha de responsiva CI', tipo: 'date' },
+    { grupo: 'Fechas y configuración', clave: 'TIPO DE AUTORIZACIÓN', etiqueta: 'Tipo de autorización', tipo: 'text' },
+    { grupo: 'Fechas y configuración', clave: 'MONTO ACTUAL', etiqueta: 'Monto actual', tipo: 'number' },
+    { grupo: 'Fechas y configuración', clave: 'METODO DE REEMBOLSO', etiqueta: 'Método de reembolso', tipo: 'text' },
+
+    { grupo: 'Contacto', clave: 'CORREO ELECTRONICO DE RESPONSABLE', etiqueta: 'Correo del responsable', tipo: 'email' },
+    { grupo: 'Contacto', clave: 'CORREO ELECTRONICO CAPTURISTA', etiqueta: 'Correo del capturista', tipo: 'email' },
+    { grupo: 'Contacto', clave: 'TELEFONO DE RESPONSABLE', etiqueta: 'Teléfono del responsable', tipo: 'text' },
+    { grupo: 'Contacto', clave: 'TELEFONO DE CAPTURISTA', etiqueta: 'Teléfono del capturista', tipo: 'text' },
+
+    { grupo: 'Identificación oficial', clave: 'TIPO IDENTIFICACION RESPONSABLE', etiqueta: 'Tipo de identificación (responsable)', tipo: 'text' },
+    { grupo: 'Identificación oficial', clave: 'VIGENCIA IDENTIFICACION OFICIAL RESPONSABLE', etiqueta: 'Vigencia de identificación (responsable)', tipo: 'text' },
+    { grupo: 'Identificación oficial', clave: 'TIPO IDENTIFICACION JEFE DIRECTO', etiqueta: 'Tipo de identificación (jefe directo)', tipo: 'text' },
+    { grupo: 'Identificación oficial', clave: 'VIGENCIA IDENTIFICACION OFICIAL JEFE DIRECTO', etiqueta: 'Vigencia de identificación (jefe directo)', tipo: 'text' },
+
+    { grupo: 'Notas', clave: 'OBSERVACIONES', etiqueta: 'Observaciones', tipo: 'text' },
+  ];
+
+  /** Genera los <div class="field"> agrupados por sección para un formulario de caja chica. */
+  function renderCamposCajaChica(prefijo) {
+    const grupos = [];
+    const porGrupo = {};
+    CAMPOS_CAJACHICA.forEach((campo) => {
+      if (!porGrupo[campo.grupo]) { porGrupo[campo.grupo] = []; grupos.push(campo.grupo); }
+      porGrupo[campo.grupo].push(campo);
+    });
+    return grupos.map((grupo) => {
+      const campos = porGrupo[grupo].map((campo) => {
+        const id = prefijo + '-' + slugCampo(campo.clave);
+        const disabled = campo.soloLectura ? ' disabled' : '';
+        const placeholder = campo.placeholder ? ` placeholder="${campo.placeholder}"` : '';
+        return `<div class="field"><label>${campo.etiqueta}</label><input type="${campo.tipo}" id="${id}"${disabled}${placeholder} /></div>`;
+      }).join('');
+      return `<div class="info-section-title">${grupo}</div>${campos}`;
+    }).join('');
+  }
+
+  /** Lee los valores actuales del formulario, devuelve un objeto {columna real: valor}. */
+  function recolectarDatosCajaChica(prefijo) {
+    const datos = {};
+    CAMPOS_CAJACHICA.forEach((campo) => {
+      if (campo.soloLectura) return;
+      const el = document.getElementById(prefijo + '-' + slugCampo(campo.clave));
+      if (el) datos[campo.clave] = el.value.trim();
+    });
+    return datos;
+  }
+
+  /** Llena el formulario con un objeto {columna real: valor} (ej. de buscarPorId). */
+  function poblarFormularioCajaChica(prefijo, datos) {
+    CAMPOS_CAJACHICA.forEach((campo) => {
+      const el = document.getElementById(prefijo + '-' + slugCampo(campo.clave));
+      if (!el) return;
+      const valor = (datos && datos[campo.clave]) || '';
       el.value = campo.tipo === 'date' ? fechaParaInput(valor) : valor;
     });
   }
@@ -1985,6 +2071,206 @@
 
     document.getElementById('btn-exportar-excel-tickets').addEventListener('click', () => {
       exportarCSV('tickets.csv', columnasTickets, motorTablaTickets.obtenerFiltrados());
+    });
+
+    await cargar();
+  }
+
+  // ---------- Caja Chica ----------
+  async function initCajaChica() {
+    const lista = document.getElementById('lista-cajaschicas');
+    const vacio = document.getElementById('cajaschicas-vacio');
+    const modalEditar = document.getElementById('modal-editar-cajachica');
+    const modalDetalle = document.getElementById('modal-detalle-cajachica');
+    let cajasPorId = {};
+    let todasLasCajas = [];
+
+    document.getElementById('campos-form-cajachica').innerHTML = renderCamposCajaChica('cch');
+    document.getElementById('campos-form-editar-cajachica').innerHTML = renderCamposCajaChica('editar-cajachica');
+
+    function badgeEstatusCaja(estatus) {
+      const vigente = String(estatus || '').toUpperCase() === 'VIGENTE';
+      return `<span class="badge-estado ${vigente ? 'activo' : 'baja'}"><i data-lucide="${vigente ? 'circle-check' : 'ban'}" class="ico"></i> ${estatus || '—'}</span>`;
+    }
+
+    const columnasCajasChicas = [
+      { clave: 'ID_CCH', etiqueta: 'ID CCH' },
+      { clave: 'ESTATUS', etiqueta: 'Estatus' },
+      { clave: 'RESPONSABLE', etiqueta: 'Responsable' },
+      { clave: 'DEPARTAMENTO', etiqueta: 'Departamento' },
+      { clave: 'OFICINA', etiqueta: 'Oficina' },
+      { clave: 'SEDE', etiqueta: 'Sede' },
+      { clave: 'MONTO_ACTUAL', etiqueta: 'Monto actual' },
+    ];
+    const motorTablaCajasChicas = crearTablaInteractiva({
+      thead: document.getElementById('cch-thead'),
+      columnas: columnasCajasChicas,
+      buscadorGlobal: document.getElementById('cch-buscar-global'),
+      piePaginacion: document.getElementById('cch-pie'),
+      onRenderPagina: (cajas, total) => {
+        vacio.hidden = total > 0;
+        lista.innerHTML = cajas.map((c) => `
+          <tr>
+            <td class="tabla-clickable" data-id="${c.ID_CCH}" title="Ver detalle completo">${c.ID_CCH}</td>
+            <td>${badgeEstatusCaja(c.ESTATUS)}</td>
+            <td>${c.RESPONSABLE || '—'}</td>
+            <td>${c.DEPARTAMENTO || '—'}</td>
+            <td>${c.OFICINA || '—'}</td>
+            <td>${c.SEDE || '—'}</td>
+            <td>${c.MONTO_ACTUAL || '—'}</td>
+            <td>
+              <div class="tabla-actions">
+                <button type="button" class="secondary btn-editar-cajachica" data-id="${c.ID_CCH}" title="Editar"><i data-lucide="pencil" class="ico"></i></button>
+                <button type="button" class="danger btn-eliminar-cajachica" data-id="${c.ID_CCH}" data-responsable="${c.RESPONSABLE}" title="Eliminar"><i data-lucide="trash-2" class="ico"></i></button>
+              </div>
+            </td>
+          </tr>
+        `).join('');
+
+        lista.querySelectorAll('.tabla-clickable').forEach((el) => {
+          el.addEventListener('click', () => abrirDetalleCajaChica(el.dataset.id));
+        });
+        lista.querySelectorAll('.btn-editar-cajachica').forEach((btn) => {
+          btn.addEventListener('click', () => abrirEditarCajaChica(btn.dataset.id));
+        });
+        lista.querySelectorAll('.btn-eliminar-cajachica').forEach((btn) => {
+          btn.addEventListener('click', () => eliminarCajaChica(btn.dataset.id, btn.dataset.responsable));
+        });
+        refreshIcons();
+      },
+    });
+
+    async function cargar() {
+      const errorBox = document.getElementById('cch-error');
+      let cajas;
+      try {
+        cajas = await callServer('apiListarCajasChicasResumen', state.token);
+      } catch (err) {
+        console.error('No se pudo cargar el catálogo de cajas chicas:', err);
+        errorBox.textContent = 'No se pudo cargar el catálogo: ' + err.message;
+        errorBox.hidden = false;
+        return;
+      }
+      errorBox.hidden = true;
+      todasLasCajas = cajas || [];
+
+      cajasPorId = {};
+      todasLasCajas.forEach((c) => { cajasPorId[c.ID_CCH] = c; });
+
+      document.getElementById('cch-stat-total').textContent = todasLasCajas.length;
+      document.getElementById('cch-stat-vigentes').textContent =
+        todasLasCajas.filter((c) => String(c.ESTATUS || '').toUpperCase() === 'VIGENTE').length;
+      document.getElementById('cch-stat-cerradas').textContent =
+        todasLasCajas.filter((c) => String(c.ESTATUS || '').toUpperCase() === 'CERRADA').length;
+
+      motorTablaCajasChicas.setDatos(todasLasCajas);
+    }
+
+    async function abrirDetalleCajaChica(id) {
+      const resumen = cajasPorId[id];
+      if (!resumen) return;
+      document.getElementById('detalle-cajachica-label').textContent = 'ID CCH: ' + id;
+      const grid = document.getElementById('detalle-cajachica-grid');
+      grid.innerHTML = '<div class="loading-inline"><span class="spinner"></span> Cargando…</div>';
+      modalDetalle.hidden = false;
+      try {
+        const completo = await callServer('apiBuscarCajaChicaPorId', state.token, id);
+        if (!completo) {
+          grid.innerHTML = '<p class="empty-state">No se encontró el registro completo.</p>';
+          return;
+        }
+        grid.innerHTML = Object.keys(completo)
+          .filter((k) => completo[k] !== '' && completo[k] !== null && completo[k] !== undefined)
+          .map((k) => itemInfo(tituloDesdeClave(k), completo[k]))
+          .join('');
+      } catch (err) {
+        grid.innerHTML = '<p class="error-msg">No se pudo cargar: ' + err.message + '</p>';
+      }
+    }
+    document.getElementById('btn-cerrar-detalle-cajachica').addEventListener('click', () => { modalDetalle.hidden = true; });
+    modalDetalle.addEventListener('click', (ev) => { if (ev.target === modalDetalle) modalDetalle.hidden = true; });
+
+    async function abrirEditarCajaChica(id) {
+      const resumen = cajasPorId[id];
+      if (!resumen) return;
+      document.getElementById('editar-cajachica-id').value = id;
+      document.getElementById('editar-cajachica-label').textContent = 'ID CCH: ' + id;
+      document.getElementById('editar-cajachica-error').hidden = true;
+      modalEditar.hidden = false;
+      try {
+        const completo = await callServer('apiBuscarCajaChicaPorId', state.token, id);
+        if (completo) poblarFormularioCajaChica('editar-cajachica', completo);
+      } catch (err) {
+        const errorBox = document.getElementById('editar-cajachica-error');
+        errorBox.textContent = 'No se pudo cargar el registro: ' + err.message;
+        errorBox.hidden = false;
+      }
+    }
+    function cerrarEditarCajaChica() {
+      modalEditar.hidden = true;
+      document.getElementById('form-editar-cajachica').reset();
+      document.getElementById('editar-cajachica-error').hidden = true;
+    }
+    document.getElementById('btn-cancelar-editar-cajachica').addEventListener('click', cerrarEditarCajaChica);
+    modalEditar.addEventListener('click', (ev) => { if (ev.target === modalEditar) cerrarEditarCajaChica(); });
+
+    document.getElementById('form-editar-cajachica').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('editar-cajachica-error');
+      errorBox.hidden = true;
+      const btn = document.getElementById('btn-guardar-editar-cajachica');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
+      try {
+        const datos = recolectarDatosCajaChica('editar-cajachica');
+        await callServer('apiActualizarCajaChica', state.token, document.getElementById('editar-cajachica-id').value, datos);
+        cerrarEditarCajaChica();
+        await cargar();
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+      }
+    });
+
+    async function eliminarCajaChica(id, responsable) {
+      const etiqueta = responsable ? ('de ' + responsable) : ('ID CCH ' + id);
+      if (!confirm('¿Eliminar la caja chica ' + etiqueta + '? Esta acción no se puede deshacer.')) return;
+      try {
+        await callServer('apiEliminarCajaChica', state.token, id);
+        await cargar();
+      } catch (err) {
+        alert('No se pudo eliminar: ' + err.message);
+      }
+    }
+
+    document.getElementById('form-cajachica').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('cch-error');
+      errorBox.hidden = true;
+      const btn = document.getElementById('btn-guardar-cajachica');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
+      try {
+        const datos = recolectarDatosCajaChica('cch');
+        await callServer('apiCrearCajaChica', state.token, datos);
+        ev.target.reset();
+        await cargar();
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+      }
+    });
+
+    document.getElementById('btn-exportar-excel-cajachica').addEventListener('click', () => {
+      exportarCSV('cajas_chicas.csv', columnasCajasChicas, motorTablaCajasChicas.obtenerFiltrados());
     });
 
     await cargar();

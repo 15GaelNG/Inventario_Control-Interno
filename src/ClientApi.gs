@@ -98,6 +98,23 @@ function apiEliminarTicket(token, id) {
   return TicketsService.eliminar(token, id);
 }
 
+// --- Cajas Chicas ---
+function apiListarCajasChicasResumen(token) {
+  return CajasChicasService.listarResumen(token);
+}
+function apiBuscarCajaChicaPorId(token, id) {
+  return CajasChicasService.buscarPorId(token, id);
+}
+function apiCrearCajaChica(token, datos) {
+  return CajasChicasService.crear(token, datos);
+}
+function apiActualizarCajaChica(token, id, cambios) {
+  return CajasChicasService.actualizar(token, id, cambios);
+}
+function apiEliminarCajaChica(token, id) {
+  return CajasChicasService.eliminar(token, id);
+}
+
 // --- Listas de referencia ---
 function apiListarDepartamentos(token) {
   return ListasService.listarDepartamentos(token);
