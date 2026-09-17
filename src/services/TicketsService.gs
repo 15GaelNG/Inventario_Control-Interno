@@ -91,5 +91,22 @@ const TicketsService = (function () {
     return { ID: id };
   }
 
-  return { listarResumen, buscarPorId, crear, actualizar, eliminar };
+  /**
+   * Valores sugeridos para SOLICITANTE — equivalente a la fórmula que ya
+   * tenían en AppSheet: UNIQUE(SORT(TICKETS[SOLICITANTE])). Son sugerencias
+   * (datalist), no una lista cerrada — se puede escribir un nombre nuevo.
+   */
+  function listarSolicitantes(token) {
+    Auth.validarSesion(token);
+    const sheet = hoja_();
+    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, ['SOLICITANTE']);
+    const valores = new Set();
+    for (let i = 0; i < filas; i++) {
+      const v = datos['SOLICITANTE'][i];
+      if (v) valores.add(String(v).trim());
+    }
+    return Array.from(valores).sort((a, b) => a.localeCompare(b));
+  }
+
+  return { listarResumen, buscarPorId, crear, actualizar, eliminar, listarSolicitantes };
 })();

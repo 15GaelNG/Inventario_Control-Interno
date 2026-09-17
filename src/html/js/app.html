@@ -1343,6 +1343,16 @@
       console.error('No se pudo cargar la lista de departamentos:', err);
     }
 
+    // Solicitante: sugerencias (no lista cerrada) = UNIQUE(SORT(TICKETS[SOLICITANTE]))
+    // de AppSheet — se puede seguir escribiendo un nombre nuevo que no esté aquí.
+    try {
+      const solicitantes = await callServer('apiListarSolicitantesTickets', state.token);
+      document.getElementById('lista-solicitantes').innerHTML =
+        (solicitantes || []).map((s) => `<option value="${s}"></option>`).join('');
+    } catch (err) {
+      console.error('No se pudo cargar la lista de solicitantes:', err);
+    }
+
     const CAMPOS_TICKET = ['TICKET', 'FECHA', 'DEPARTAMENTO', 'SOLICITANTE', 'TIPO ATENCION', 'PLACA', 'QUIEN ATENDIO', 'COMENTARIO'];
     function idTicket(prefijo, clave) { return prefijo + '-' + slugCampo(clave); }
     function recolectarTicket(prefijo) {

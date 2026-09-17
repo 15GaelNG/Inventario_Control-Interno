@@ -99,6 +99,9 @@ function apiEliminarTicket(token, id) {
 function apiListarDepartamentos(token) {
   return ListasService.listarDepartamentos(token);
 }
+function apiListarSolicitantesTickets(token) {
+  return TicketsService.listarSolicitantes(token);
+}
 
 // --- Incidencias ---
 function apiListarIncidencias(token) {

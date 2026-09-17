@@ -29,7 +29,10 @@
         <label>Departamento</label>
         <select id="ticket-departamento"><option value="">Selecciona…</option></select>
       </div>
-      <div class="field"><label>Solicitante</label><input type="text" id="ticket-solicitante" /></div>
+      <div class="field">
+        <label>Solicitante</label>
+        <input type="text" id="ticket-solicitante" list="lista-solicitantes" autocomplete="off" placeholder="Escribe o elige un nombre" />
+      </div>
       <div class="field">
         <label>Tipo de atención</label>
         <select id="ticket-tipo-atencion" required>
@@ -97,7 +100,10 @@
           <label>Departamento</label>
           <select id="editar-ticket-departamento"><option value="">Selecciona…</option></select>
         </div>
-        <div class="field"><label>Solicitante</label><input type="text" id="editar-ticket-solicitante" /></div>
+        <div class="field">
+          <label>Solicitante</label>
+          <input type="text" id="editar-ticket-solicitante" list="lista-solicitantes" autocomplete="off" />
+        </div>
         <div class="field">
           <label>Tipo de atención</label>
           <select id="editar-ticket-tipo-atencion" required>
@@ -134,4 +140,7 @@
       </form>
     </div>
   </div>
+
+  <!-- Compartido entre Registrar y Editar -->
+  <datalist id="lista-solicitantes"></datalist>
 </template>
