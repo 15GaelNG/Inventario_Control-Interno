@@ -1158,6 +1158,9 @@
     let todosLosUsuarios = [];
     const filtroEstatusUber = document.getElementById('uber-filtro-estatus');
 
+    // FECHA DE ALTA no se edita: siempre es el día en que se da de alta.
+    document.getElementById('uber-fecha-de-alta').value = new Date().toLocaleDateString('es-MX');
+
     function badgeEstatusUber(estatus) {
       const valor = String(estatus || '').toUpperCase();
       if (valor.includes('BAJA')) {
@@ -1200,8 +1203,10 @@
 
     // SOLICITUD es archivo — se maneja aparte (subirArchivoUber), no aquí:
     // subir un archivo es asíncrono, no se puede leer de golpe como el resto.
+    // FECHA DE ALTA tampoco entra aquí: no se edita, la fija el servidor solo
+    // al crear (siempre "hoy") — se muestra como texto deshabilitado.
     const CAMPOS_UBER = [
-      'RAZON SOCIAL', 'NOMBRE COMPLETO', 'ESTAUS USUARIO', 'ROL', 'FECHA DE ALTA',
+      'RAZON SOCIAL', 'NOMBRE COMPLETO', 'ESTAUS USUARIO', 'ROL',
       'CORREO ELECTRONICO', 'NUMERO TELEFONO', 'SEDE', 'OFICINA/DESARROLLO',
       'DEPARTAMENTO', 'PUESTO', 'DIAS AUTORIZADOS', 'HORARIO AUTORIZADO',
     ];
@@ -1228,6 +1233,8 @@
           ? `<a href="${valor}" target="_blank" rel="noopener">📎 Ver archivo actual</a>`
           : '<span class="empty-state" style="margin:0">Sin archivo</span>';
       }
+      const campoFechaAlta = document.getElementById(idUber(prefijo, 'FECHA DE ALTA'));
+      if (campoFechaAlta) campoFechaAlta.value = formatearFecha(datos && datos['FECHA DE ALTA']);
     }
     async function subirArchivoUber(prefijo) {
       const input = document.getElementById(idUber(prefijo, 'SOLICITUD'));
@@ -1370,6 +1377,7 @@
         const datos = Object.assign(recolectarUber('uber'), archivo);
         await callServer('apiCrearUber', state.token, datos);
         ev.target.reset();
+        document.getElementById('uber-fecha-de-alta').value = new Date().toLocaleDateString('es-MX');
         await cargar();
       } catch (err) {
         errorBox.textContent = err.message;

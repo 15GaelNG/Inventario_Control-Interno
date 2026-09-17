@@ -63,18 +63,22 @@ const UberService = (function () {
     return limpio;
   }
 
+  /** Da de alta a un usuario. FECHA DE ALTA siempre es "hoy" (no la manda el cliente). */
   function crear(token, datos) {
     Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
     if (!datos['NOMBRE COMPLETO']) throw new Error('El nombre completo es obligatorio');
     const fila = Object.assign({}, datos);
     fila[ID_COLUMN] = Utilities.getUuid().slice(0, 8);
+    fila['FECHA DE ALTA'] = new Date();
     SheetUtils.insert(ssId(), hoja_().getName(), fila);
     return { ID: fila[ID_COLUMN] };
   }
 
   function actualizar(token, id, cambios) {
     Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
-    SheetUtils.update(ssId(), hoja_().getName(), id, cambios, ID_COLUMN);
+    const datos = Object.assign({}, cambios);
+    delete datos['FECHA DE ALTA']; // no se edita, se fija solo al crear
+    SheetUtils.update(ssId(), hoja_().getName(), id, datos, ID_COLUMN);
     return { ID: id };
   }
 
