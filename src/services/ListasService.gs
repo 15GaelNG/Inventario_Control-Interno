@@ -41,7 +41,10 @@ const ListasService = (function () {
 
   function listarOficinasDesarrollo(token) {
     Auth.validarSesion(token);
-    return listarColumna_('OFICINA/DESARROLLO');
+    // Ojo: en "LISTAS VEHICULOS" la columna lleva espacios alrededor de la
+    // diagonal ("OFICINA / DESARROLLO"), a diferencia de la hoja de Uber
+    // ("OFICINA/DESARROLLO", sin espacios) — son nombres reales distintos.
+    return listarColumna_('OFICINA / DESARROLLO');
   }
 
   return { listarDepartamentos, listarRazonesSociales, listarSedes, listarOficinasDesarrollo };
