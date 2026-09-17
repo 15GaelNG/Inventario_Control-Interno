@@ -1,0 +1,23 @@
+<template id="tpl-lineas-detalles">
+  <div class="ln-modulo" id="ln-detalles-lineas">
+    <div class="page-header ln-page-header">
+      <div>
+        <h2 class="ln-titulo"><span class="ln-titulo-icono" data-ln-icon="search"></span> Detalles Líneas Telefónicas</h2>
+        <p class="page-subtitle">Búsqueda rápida: escribe un NUCO, número, IMEI, SIM o responsable para ir directo a la ficha</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <input type="search" id="lnd-q" placeholder="Buscar por NUCO, número, IMEI, SIM o responsable…" autocomplete="off" autofocus />
+      <div class="ln-tabla-wrap" style="margin-top:14px">
+        <table class="ln-tabla">
+          <thead id="lnd-thead"></thead>
+          <tbody id="lnd-tbody">
+            <tr><td class="empty-state">Escribe para buscar…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="error-msg" id="lnd-error" hidden></div>
+    </div>
+  </div>
+</template>

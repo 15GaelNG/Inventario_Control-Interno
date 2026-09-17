@@ -1,0 +1,22 @@
+<template id="tpl-lineas-gestion-activos">
+  <div class="ln-modulo" id="ln-gestion-activos">
+    <div class="page-header ln-page-header">
+      <div>
+        <h2 class="ln-titulo"><span class="ln-titulo-icono" data-ln-icon="user-search"></span> Gestión de Activos</h2>
+        <p class="page-subtitle">Busca a un colaborador y revisa lo que tiene asignado en cada módulo</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <input type="search" id="lnga-q" placeholder="Buscar colaborador por nombre o número de empleado…" autocomplete="off" autofocus />
+      <div class="ln-tabla-wrap" id="lnga-sugerencias-wrap" style="margin-top:10px" hidden>
+        <table class="ln-tabla">
+          <thead><tr><th>Nombre</th><th>Puesto</th><th>Departamento</th><th>Sede</th></tr></thead>
+          <tbody id="lnga-sugerencias"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="lnga-resultado"></div>
+  </div>
+</template>

@@ -1053,6 +1053,151 @@
     }
 
     // ======================================================================
+    // Detalles Líneas Telefónicas: buscador rápido que salta a la ficha
+    // ======================================================================
+
+    function initDetalles() {
+      const n = ++montaje;
+      const raiz = document.getElementById('ln-detalles-lineas');
+      const vigente = () => n === montaje && document.body.contains(raiz);
+      pintarIconos(raiz);
+
+      $('#lnd-thead', raiz).innerHTML = '<tr><th>NUCO / Número</th><th>Tipo</th><th>Modelo / Compañía</th><th>IMEI / SIM</th><th>Estatus</th><th>Responsable</th><th>Departamento</th></tr>';
+
+      function fila(tipo, r) {
+        return '<tr class="ln-fila-clic" data-ir="' + esc(r.id) + '">' +
+          '<td class="ln-mono ln-fuerte">' + guion(tipo === 'equipo' ? r.nuco : r.numero) + '</td>' +
+          '<td>' + (tipo === 'equipo' ? 'Equipo' : 'Línea') + '</td>' +
+          '<td>' + guion(tipo === 'equipo' ? TIPO_EQUIPO[r.tipo] || r.tipo : r.compania) + '</td>' +
+          '<td class="ln-mono ln-tenue">' + guion(tipo === 'equipo' ? r.imei : r.sim) + '</td>' +
+          '<td>' + chip(r.estatus) + '</td>' +
+          '<td>' + guion(r.responsable) + '</td>' +
+          '<td class="ln-tenue">' + guion(r.departamento) + '</td></tr>';
+      }
+
+      function buscar(indice, q) {
+        const texto = normal(q).trim();
+        if (!texto) return [];
+        const eq = indice.equipos.filter((r) => ['nuco', 'imei', 'modelo', 'responsable', 'numero', 'departamento'].some((c) => normal(r[c]).indexOf(texto) >= 0));
+        const li = indice.lineas.filter((r) => r.suelta && ['numero', 'sim', 'responsable', 'departamento'].some((c) => normal(r[c]).indexOf(texto) >= 0));
+        return eq.slice(0, 30).map((r) => fila('equipo', r)).concat(li.slice(0, 30).map((r) => fila('linea', r)));
+      }
+
+      function pintar(q) {
+        if (!vigente() || !memoria.indice) return;
+        const filas = buscar(memoria.indice, q);
+        $('#lnd-tbody', raiz).innerHTML = !q.trim()
+          ? '<tr><td class="empty-state" colspan="7">Escribe para buscar…</td></tr>'
+          : (filas.length ? filas.join('') : '<tr><td class="empty-state" colspan="7">Sin resultados</td></tr>');
+      }
+
+      let temporizador = null;
+      $('#lnd-q', raiz).addEventListener('input', (ev) => {
+        clearTimeout(temporizador);
+        temporizador = setTimeout(() => pintar(ev.target.value), 150);
+      });
+      raiz.addEventListener('click', (ev) => {
+        const f = ev.target.closest('[data-ir]');
+        if (f) irARegistro(f.dataset.ir);
+      });
+
+      Promise.all([cargarPermisos(), cargarIndice()]).then(() => { if (vigente()) pintar($('#lnd-q', raiz).value); })
+        .catch((e) => {
+          if (!vigente()) return;
+          $('#lnd-error', raiz).textContent = 'No se pudo cargar el índice: ' + mensajeError(e);
+          $('#lnd-error', raiz).hidden = false;
+        });
+    }
+
+    // ======================================================================
+    // Gestión de Activos: busca un colaborador y muestra sus líneas/equipos
+    // (vehículos, hologramas, Uber y cajas chicas se integran con los demás módulos)
+    // ======================================================================
+
+    function initGestionActivos() {
+      const n = ++montaje;
+      const raiz = document.getElementById('ln-gestion-activos');
+      const vigente = () => n === montaje && document.body.contains(raiz);
+      pintarIconos(raiz);
+
+      let colaboradores = null;
+      let temporizador = null;
+
+      function filasPorResponsable(indice, nombre) {
+        const texto = normal(nombre);
+        return {
+          equipos: indice.equipos.filter((r) => normal(r.responsable) === texto),
+          lineas: indice.lineas.filter((r) => r.suelta && normal(r.responsable) === texto),
+        };
+      }
+
+      function tarjetaLineas(nombre, datos) {
+        const filaEq = (r) => '<tr class="ln-fila-clic" data-ir="' + esc(r.id) + '"><td class="ln-mono ln-fuerte">' + guion(r.nuco) + '</td><td>' +
+          esc(TIPO_EQUIPO[r.tipo] || r.tipo || '') + '</td><td>' + guion(r.modelo) + '</td><td>' + chip(r.estatus) + '</td><td class="ln-mono">' +
+          (r.numero ? esc(r.numero) : '<span class="ln-tenue">Sin línea</span>') + '</td></tr>';
+        const filaLi = (r) => '<tr class="ln-fila-clic" data-ir="' + esc(r.id) + '"><td class="ln-mono ln-fuerte">' + guion(r.numero) +
+          '</td><td>Línea suelta</td><td>' + guion(r.compania) + '</td><td>' + chip(r.estatus) + '</td><td>—</td></tr>';
+        const filas = datos.equipos.map(filaEq).concat(datos.lineas.map(filaLi));
+        return '<div class="card ln-card"><h3>' + icono('smartphone') + ' Líneas y equipos (' + filas.length + ')</h3>' +
+          (filas.length
+            ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>NUCO / Número</th><th>Tipo</th><th>Modelo / Compañía</th><th>Estatus</th><th>Línea</th></tr></thead><tbody>' + filas.join('') + '</tbody></table></div>'
+            : '<p class="empty-state">Sin líneas ni equipos asignados a ' + esc(nombre) + '.</p>') + '</div>';
+      }
+
+      function tarjetaPendiente(titulo, ico) {
+        return '<div class="card ln-card"><h3>' + icono(ico) + ' ' + esc(titulo) + '</h3>' +
+          '<p class="ln-tenue">Pendiente: se integra cuando se junten los módulos del equipo (no es de Líneas).</p></div>';
+      }
+
+      function mostrarColaborador(c) {
+        cargarIndice().then((indice) => {
+          if (!vigente()) return;
+          const datos = filasPorResponsable(indice, c.nombre);
+          $('#lnga-resultado', raiz).innerHTML =
+            '<div class="ln-detalle-header card"><div class="ln-detalle-icono">' + icono('user') + '</div>' +
+            '<div class="ln-detalle-titulo"><h2>' + esc(c.nombre) + '</h2><div class="ln-chips">' +
+              (c.puesto ? chip(c.puesto, 'neutro') : '') + (c.departamento ? chip(c.departamento, 'azul') : '') + (c.estatus ? chip(c.estatus) : '') +
+            '</div></div></div>' +
+            tarjetaLineas(c.nombre, datos) +
+            '<div class="ln-grid-2">' + tarjetaPendiente('Vehículos', 'car') + tarjetaPendiente('Hologramas / combustible', 'fuel') + '</div>' +
+            '<div class="ln-grid-2">' + tarjetaPendiente('Uber', 'car-front') + tarjetaPendiente('Cajas chicas', 'wallet') + '</div>';
+        });
+      }
+
+      function pintarSugerencias(q) {
+        const wrap = $('#lnga-sugerencias-wrap', raiz);
+        const cuerpo = $('#lnga-sugerencias', raiz);
+        const texto = normal(q).trim();
+        if (!texto || !colaboradores) { wrap.hidden = true; cuerpo.innerHTML = ''; return; }
+        const filas = colaboradores.filter((c) => normal(c.nombre).indexOf(texto) >= 0 || normal(c.noEmpleado).indexOf(texto) >= 0).slice(0, 20);
+        wrap.hidden = !filas.length;
+        cuerpo.innerHTML = filas.map((c) => '<tr class="ln-fila-clic" data-colaborador="' + esc(c.nombre) + '"><td>' + guion(c.nombre) + '</td><td>' +
+          guion(c.puesto) + '</td><td>' + guion(c.departamento) + '</td><td>' + guion(c.sede) + '</td></tr>').join('');
+      }
+
+      $('#lnga-q', raiz).addEventListener('input', (ev) => {
+        clearTimeout(temporizador);
+        const q = ev.target.value;
+        temporizador = setTimeout(() => pintarSugerencias(q), 150);
+      });
+      raiz.addEventListener('click', (ev) => {
+        const sug = ev.target.closest('[data-colaborador]');
+        if (sug) {
+          const c = (colaboradores || []).filter((x) => x.nombre === sug.dataset.colaborador)[0];
+          if (c) { $('#lnga-q', raiz).value = c.nombre; $('#lnga-sugerencias-wrap', raiz).hidden = true; mostrarColaborador(c); }
+          return;
+        }
+        const f = ev.target.closest('[data-ir]');
+        if (f) irARegistro(f.dataset.ir);
+      });
+
+      llamar('apiLineasColaboradores').then((r) => {
+        colaboradores = filasComoObjetos(r);
+      }).catch(() => { colaboradores = []; });
+      cargarIndice();
+    }
+
+    // ======================================================================
     // Bitácoras: Control de Cambios, Control de Reasignaciones, Bitácora de Desechos
     // ======================================================================
 
@@ -1177,6 +1322,8 @@
 
     return {
       initTelefonicas: initTelefonicas,
+      initDetalles: initDetalles,
+      initGestionActivos: initGestionActivos,
       initCambios: () => initBitacora('CAMBIOS'),
       initReasignaciones: () => initBitacora('REASIGNACIONES'),
       initDesechos: () => initBitacora('DESECHOS'),

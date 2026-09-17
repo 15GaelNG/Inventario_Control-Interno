@@ -162,6 +162,8 @@
     if (vista === 'accesorios') { montarVista('tpl-accesorios', initAccesorios); return; }
     if (vista === 'incidencias') { montarVista('tpl-incidencias', initIncidencias); return; }
     if (vista === 'lineas-telefonicas') { montarVista('tpl-lineas-telefonicas', Lineas.initTelefonicas); return; }
+    if (vista === 'detalles-lineas-telefonicas') { montarVista('tpl-lineas-detalles', Lineas.initDetalles); return; }
+    if (vista === 'gestion-activos') { montarVista('tpl-lineas-gestion-activos', Lineas.initGestionActivos); return; }
     if (vista === 'cambios-lineas') { montarVista('tpl-lineas-bitacora', Lineas.initCambios); return; }
     if (vista === 'reasignaciones-lineas') { montarVista('tpl-lineas-bitacora', Lineas.initReasignaciones); return; }
     if (vista === 'bitacora-desechos') { montarVista('tpl-lineas-bitacora', Lineas.initDesechos); return; }
@@ -202,13 +204,16 @@
     {
       id: 'lineas', icono: '📱', etiqueta: 'Líneas',
       items: [
-        { vista: 'reasignaciones-lineas', etiqueta: 'Control de Reasignaciones - Líneas' },
+        { vista: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas' },
+        { vista: 'gestion-activos', etiqueta: 'Gestión de Activos' },
+        { vista: 'detalles-lineas-telefonicas', etiqueta: 'Detalles Líneas Telefónicas' },
         { vista: 'accesorios', etiqueta: 'Inventario de Accesorios' },
         { vista: 'reactivacion-lineas', etiqueta: 'Reactivación de Líneas' },
-        { vista: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas' },
+        { vista: 'reasignaciones-lineas', etiqueta: 'Control de Reasignaciones - Líneas' },
+        { vista: 'solicitud-lineas', etiqueta: 'Solicitud de Líneas' },
+        { vista: 'lineas-post-venta', etiqueta: 'Líneas Post Venta' },
         { vista: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas' },
         { vista: 'bitacora-desechos', etiqueta: 'Bitácora de Desechos' },
-        { vista: 'lineas-post-venta', etiqueta: 'Líneas Post Venta' },
       ],
     },
     {
