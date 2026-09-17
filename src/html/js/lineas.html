@@ -1198,6 +1198,138 @@
     }
 
     // ======================================================================
+    // Inventario de Accesorios (Líneas) — ACCESORIOS CELULARES / MOVIMIENTOS_ACCESORIOS
+    // en la copia de pruebas de Líneas; no toca el módulo de accesorios del equipo.
+    // ======================================================================
+
+    function initAccesoriosLineas() {
+      const n = ++montaje;
+      const raiz = document.getElementById('ln-accesorios');
+      const vigente = () => n === montaje && document.body.contains(raiz);
+      pintarIconos(raiz);
+
+      let indiceAcc = null;
+      let seleccionado = null;
+      let filtroQ = '';
+      let temporizador = null;
+
+      function tarjeta(titulo, cuerpo) {
+        return '<div class="card ln-card"><h3>' + titulo + '</h3>' + cuerpo + '</div>';
+      }
+
+      function pintarIndicadores() {
+        if (!indiceAcc) return;
+        const alertas = indiceAcc.filas.filter((a) => a.reabasto).length;
+        $('#lac-indicadores', raiz).innerHTML =
+          '<div class="stat-tile"><div class="stat-icon">' + icono('package') + '</div><div><div class="stat-value">' + miles(indiceAcc.filas.length) + '</div><div class="stat-label">Artículos</div></div></div>' +
+          '<div class="stat-tile stat-tile-warn"><div class="stat-icon">' + icono('triangle-alert') + '</div><div><div class="stat-value">' + miles(alertas) + '</div><div class="stat-label">Con stock bajo (≤ ' + indiceAcc.umbralReabasto + ')</div></div></div>';
+      }
+
+      function filtradas() {
+        const texto = normal(filtroQ).trim();
+        if (!texto) return indiceAcc.filas;
+        return indiceAcc.filas.filter((a) => ['nombre', 'categoria', 'marca'].some((c) => normal(a[c]).indexOf(texto) >= 0));
+      }
+
+      function pintarTabla() {
+        if (!indiceAcc) return;
+        const filas = filtradas();
+        $('#lac-tbody', raiz).innerHTML = filas.length ? filas.map((a) =>
+          '<tr class="ln-fila-clic" data-articulo="' + esc(a.id) + '"><td class="ln-fuerte">' + guion(a.nombre) + '</td><td>' + guion(a.categoria) +
+          '</td><td class="ln-tenue">' + guion(a.marca) + '</td><td>' + (a.reabasto ? chip(String(a.stock), 'rojo') : esc(String(a.stock))) + '</td>' +
+          '<td><button type="button" class="secondary ln-btn-chico" data-entrada="' + esc(a.id) + '">+ Entrada</button> ' +
+          '<button type="button" class="secondary ln-btn-chico" data-salida="' + esc(a.id) + '">− Salida</button></td></tr>').join('')
+          : '<tr><td colspan="5" class="empty-state">Sin artículos</td></tr>';
+      }
+
+      function cargar() {
+        llamar('apiLineasAccesoriosIndice').then((r) => {
+          if (!vigente()) return;
+          indiceAcc = r;
+          pintarIndicadores();
+          pintarTabla();
+        }).catch((e) => {
+          if (!vigente()) return;
+          $('#lac-error', raiz).textContent = 'No se pudo cargar el inventario: ' + mensajeError(e);
+          $('#lac-error', raiz).hidden = false;
+        });
+      }
+
+      function abrirDetalle(id) {
+        const a = (indiceAcc.filas || []).filter((x) => x.id === id)[0];
+        if (!a) return;
+        const cont = $('#lac-detalle', raiz);
+        cont.hidden = false;
+        cont.innerHTML = tarjeta(icono('history') + ' Movimientos de ' + esc(a.nombre), '<p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p>');
+        llamar('apiLineasAccesoriosMovimientos', id).then((movs) => {
+          if (!vigente()) return;
+          cont.innerHTML = tarjeta(icono('history') + ' Movimientos de ' + esc(a.nombre) + ' (' + movs.length + ')', movs.length
+            ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Fecha</th><th>Tipo</th><th>Cantidad</th><th>Usuario</th><th>Comentarios</th></tr></thead><tbody>' +
+              movs.map((m) => '<tr><td>' + guion(fechaHora(m.fecha)) + '</td><td>' + chip(m.tipo, m.tipo === 'ENTRADA' ? 'verde' : 'ambar') + '</td><td>' +
+                esc(String(m.cantidad)) + '</td><td>' + guion(m.usuario) + '</td><td>' + guion(m.comentarios) + '</td></tr>').join('') + '</tbody></table></div>'
+            : '<p class="empty-state">Sin movimientos.</p>');
+        }).catch((e) => { if (vigente()) cont.innerHTML = tarjeta(icono('history') + ' Movimientos', '<p class="error-msg">' + mensajeError(e) + '</p>'); });
+      }
+
+      function abrirModalNuevo() {
+        $('#lac-nombre', raiz).value = ''; $('#lac-categoria', raiz).value = ''; $('#lac-marca', raiz).value = '';
+        $('#lac-nuevo-error', raiz).hidden = true;
+        $('#lac-modal-nuevo', raiz).hidden = false;
+      }
+      function cerrarModalNuevo() { $('#lac-modal-nuevo', raiz).hidden = true; }
+
+      function abrirModalMovimiento(id, tipo) {
+        seleccionado = { id: id, tipo: tipo };
+        const a = (indiceAcc.filas || []).filter((x) => x.id === id)[0];
+        $('#lac-mov-titulo', raiz).textContent = (tipo === 'ENTRADA' ? 'Entrada de ' : 'Salida de ') + (a ? a.nombre : '');
+        $('#lac-cantidad', raiz).value = '';
+        $('#lac-comentarios', raiz).value = '';
+        $('#lac-mov-error', raiz).hidden = true;
+        $('#lac-modal-mov', raiz).hidden = false;
+      }
+      function cerrarModalMov() { $('#lac-modal-mov', raiz).hidden = true; seleccionado = null; }
+
+      $('#lac-nuevo', raiz).addEventListener('click', abrirModalNuevo);
+      raiz.querySelectorAll('[data-cerrar-modal-nuevo]').forEach((b) => b.addEventListener('click', cerrarModalNuevo));
+      raiz.querySelectorAll('[data-cerrar-modal-mov]').forEach((b) => b.addEventListener('click', cerrarModalMov));
+      $('#lac-modal-nuevo', raiz).addEventListener('click', (ev) => { if (ev.target.id === 'lac-modal-nuevo') cerrarModalNuevo(); });
+      $('#lac-modal-mov', raiz).addEventListener('click', (ev) => { if (ev.target.id === 'lac-modal-mov') cerrarModalMov(); });
+
+      $('#lac-guardar-nuevo', raiz).addEventListener('click', () => {
+        const nombre = $('#lac-nombre', raiz).value.trim();
+        if (!nombre) { $('#lac-nuevo-error', raiz).textContent = 'El nombre es obligatorio.'; $('#lac-nuevo-error', raiz).hidden = false; return; }
+        llamar('apiLineasAccesoriosAgregarArticulo', { nombre: nombre, categoria: $('#lac-categoria', raiz).value, marca: $('#lac-marca', raiz).value })
+          .then(() => { cerrarModalNuevo(); cargar(); })
+          .catch((e) => { $('#lac-nuevo-error', raiz).textContent = mensajeError(e); $('#lac-nuevo-error', raiz).hidden = false; });
+      });
+
+      $('#lac-guardar-mov', raiz).addEventListener('click', () => {
+        if (!seleccionado) return;
+        const cantidad = Number($('#lac-cantidad', raiz).value);
+        if (!cantidad || cantidad <= 0) { $('#lac-mov-error', raiz).textContent = 'Captura una cantidad válida.'; $('#lac-mov-error', raiz).hidden = false; return; }
+        llamar('apiLineasAccesoriosRegistrarMovimiento', { accesorioId: seleccionado.id, tipo: seleccionado.tipo, cantidad: cantidad, comentarios: $('#lac-comentarios', raiz).value })
+          .then(() => { cerrarModalMov(); cargar(); })
+          .catch((e) => { $('#lac-mov-error', raiz).textContent = mensajeError(e); $('#lac-mov-error', raiz).hidden = false; });
+      });
+
+      $('#lac-q', raiz).addEventListener('input', (ev) => {
+        clearTimeout(temporizador);
+        temporizador = setTimeout(() => { filtroQ = ev.target.value; pintarTabla(); }, 150);
+      });
+
+      raiz.addEventListener('click', (ev) => {
+        const entrada = ev.target.closest('[data-entrada]');
+        if (entrada) { abrirModalMovimiento(entrada.dataset.entrada, 'ENTRADA'); return; }
+        const salida = ev.target.closest('[data-salida]');
+        if (salida) { abrirModalMovimiento(salida.dataset.salida, 'SALIDA'); return; }
+        const fila = ev.target.closest('[data-articulo]');
+        if (fila) abrirDetalle(fila.dataset.articulo);
+      });
+
+      cargar();
+    }
+
+    // ======================================================================
     // Bitácoras: Control de Cambios, Control de Reasignaciones, Bitácora de Desechos
     // ======================================================================
 
@@ -1324,6 +1456,7 @@
       initTelefonicas: initTelefonicas,
       initDetalles: initDetalles,
       initGestionActivos: initGestionActivos,
+      initAccesoriosLineas: initAccesoriosLineas,
       initCambios: () => initBitacora('CAMBIOS'),
       initReasignaciones: () => initBitacora('REASIGNACIONES'),
       initDesechos: () => initBitacora('DESECHOS'),

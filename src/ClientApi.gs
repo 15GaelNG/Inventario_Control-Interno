@@ -98,6 +98,18 @@ function apiLineasGuardarResponsiva(token, datos) {
 function apiLineasGenerarPdf(token, tipo, id, forzar) {
   return TelefoniaService.generarPdf(token, tipo, id, forzar);
 }
+function apiLineasAccesoriosIndice(token) {
+  return LineasAccesorios.indice(token);
+}
+function apiLineasAccesoriosMovimientos(token, id) {
+  return LineasAccesorios.movimientosDeArticulo(token, id);
+}
+function apiLineasAccesoriosAgregarArticulo(token, datos) {
+  return LineasAccesorios.agregarArticulo(token, datos);
+}
+function apiLineasAccesoriosRegistrarMovimiento(token, datos) {
+  return LineasAccesorios.registrarMovimiento(token, datos);
+}
 
 // --- Incidencias ---
 function apiListarIncidencias(token) {

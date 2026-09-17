@@ -1,0 +1,65 @@
+<template id="tpl-lineas-accesorios">
+  <div class="ln-modulo" id="ln-accesorios">
+    <div class="page-header ln-page-header">
+      <div>
+        <h2 class="ln-titulo"><span class="ln-titulo-icono" data-ln-icon="package"></span> Inventario de Accesorios (Líneas)</h2>
+        <p class="page-subtitle">Fundas, micas, cargadores… sobre la copia de pruebas de Líneas — separado del módulo "Inventario de Accesorios" del equipo</p>
+      </div>
+      <div class="ln-acciones-header">
+        <button type="button" class="primary ln-btn-icono" id="lac-nuevo"><span data-ln-icon="plus"></span> Nuevo artículo</button>
+      </div>
+    </div>
+
+    <div class="stat-row" id="lac-indicadores">
+      <div class="stat-tile"><div class="stat-icon" data-ln-icon="loader-circle"></div><div><div class="stat-value">…</div><div class="stat-label">Cargando</div></div></div>
+    </div>
+
+    <div class="card">
+      <input type="search" id="lac-q" placeholder="Buscar por nombre, categoría o marca…" autocomplete="off" />
+      <div class="ln-tabla-wrap" style="margin-top:14px">
+        <table class="ln-tabla">
+          <thead><tr><th>Artículo</th><th>Categoría</th><th>Marca / modelo</th><th>Stock</th><th></th></tr></thead>
+          <tbody id="lac-tbody"><tr><td class="empty-state">Cargando…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="error-msg" id="lac-error" hidden></div>
+    </div>
+
+    <section id="lac-detalle" hidden></section>
+
+    <div class="modal-backdrop" id="lac-modal-nuevo" hidden>
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 class="ln-titulo" style="margin:0">Nuevo artículo</h3>
+          <button type="button" class="modal-close" data-cerrar-modal-nuevo aria-label="Cerrar"><span data-ln-icon="x"></span></button>
+        </div>
+        <div class="field"><label>Nombre del artículo</label><input type="text" id="lac-nombre" autocomplete="off" /></div>
+        <div class="grid" style="grid-template-columns:1fr 1fr">
+          <div class="field"><label>Categoría</label><input type="text" id="lac-categoria" autocomplete="off" /></div>
+          <div class="field"><label>Marca / modelo</label><input type="text" id="lac-marca" autocomplete="off" /></div>
+        </div>
+        <div class="error-msg" id="lac-nuevo-error" hidden></div>
+        <div class="ln-captura-acciones">
+          <button type="button" class="secondary" data-cerrar-modal-nuevo>Cancelar</button>
+          <button type="button" class="primary" id="lac-guardar-nuevo">Guardar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-backdrop" id="lac-modal-mov" hidden>
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 class="ln-titulo" style="margin:0" id="lac-mov-titulo">Movimiento</h3>
+          <button type="button" class="modal-close" data-cerrar-modal-mov aria-label="Cerrar"><span data-ln-icon="x"></span></button>
+        </div>
+        <div class="field"><label>Cantidad</label><input type="number" id="lac-cantidad" min="1" /></div>
+        <div class="field"><label>Comentarios (opcional)</label><input type="text" id="lac-comentarios" autocomplete="off" /></div>
+        <div class="error-msg" id="lac-mov-error" hidden></div>
+        <div class="ln-captura-acciones">
+          <button type="button" class="secondary" data-cerrar-modal-mov>Cancelar</button>
+          <button type="button" class="primary" id="lac-guardar-mov">Registrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
