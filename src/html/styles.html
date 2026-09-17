@@ -353,9 +353,45 @@
     display: flex; align-items: center; justify-content: space-between;
     flex-wrap: wrap; gap: 10px; margin-bottom: 12px;
   }
-  .filtros-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .filtro-select { width: auto; min-width: 160px; font-size: 12.5px; padding: 7px 10px; }
-  .filtro-input { width: auto; min-width: 170px; font-size: 12.5px; padding: 7px 10px; }
+  /* ========== Tabla interactiva: buscador global + encabezado con
+     orden/filtro por columna + paginación ========== */
+  .tabla-buscar-global { width: auto; min-width: 220px; font-size: 12.5px; padding: 7px 10px; }
+
+  th.th-interactivo { padding: 0; }
+  .th-interactivo-label {
+    display: flex; align-items: center; gap: 4px; cursor: pointer; user-select: none;
+    padding: 8px 10px;
+  }
+  .th-interactivo-label .ico { width: .8em; height: .8em; opacity: .5; flex-shrink: 0; }
+  th.th-interactivo.activo { color: var(--color-primary); }
+  th.th-interactivo.activo .ico { opacity: 1; }
+
+  .th-popover {
+    position: absolute; z-index: 600; width: 220px;
+    background: var(--color-surface); border: 1px solid var(--color-border);
+    border-radius: var(--radius); box-shadow: var(--shadow-lg);
+    padding: 12px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .th-popover-titulo { font-weight: 700; font-size: 12.5px; }
+  .th-popover-orden { display: flex; gap: 8px; }
+  .th-popover-orden button { flex: 1; padding: 7px 0; font-size: 12px; }
+  .th-popover-orden button.activo { background: var(--color-primary-soft); color: var(--color-primary); border-color: transparent; }
+  .th-popover select, .th-popover input[type="text"] { font-size: 12.5px; padding: 7px 9px; }
+  .th-popover-acciones { display: flex; gap: 8px; }
+  .th-popover-acciones button { flex: 1; padding: 7px 0; font-size: 12px; white-space: nowrap; }
+
+  .tabla-pie {
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+    gap: 10px; margin-top: 14px; font-size: 12.5px; color: var(--color-text-muted);
+  }
+  .tabla-pie-paginas { display: flex; align-items: center; gap: 8px; }
+  .tabla-pie-paginas select { width: auto; font-size: 12.5px; padding: 6px 8px; }
+  .tabla-pie-paginas button {
+    background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-border);
+    padding: 6px 9px;
+  }
+  .tabla-pie-paginas button:disabled { opacity: .35; cursor: not-allowed; }
+  .tabla-pie-paginas button:not(:disabled):hover { background: var(--color-bg); }
 
   .tag {
     display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px;

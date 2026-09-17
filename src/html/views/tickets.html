@@ -72,29 +72,16 @@
   <div class="card">
     <div class="card-header-row">
       <h3 style="margin:0">Historial</h3>
-      <div class="filtros-group">
-        <input type="search" id="tickets-filtro-buscar" class="filtro-input" placeholder="Buscar ticket, depto o solicitante…" />
-        <select id="tickets-filtro-atendio" class="filtro-select">
-          <option value="">Todos (atendió)</option>
-          <option value="ABIGAIL LEDESMA CORONA">Abigail Ledesma Corona</option>
-          <option value="DAVID MOISES MALDONADO HERNANDEZ">David Moises Maldonado Hernández</option>
-          <option value="GIOVANNI JAVIER ORDUÑA DE LA PEÑA">Giovanni Javier Orduña de la Peña</option>
-          <option value="JORGE LUIS AVECILLA RIVERA">Jorge Luis Avecilla Rivera</option>
-        </select>
-        <select id="tickets-filtro-tipo" class="filtro-select">
-          <option value="">Todos los tipos</option>
-        </select>
-      </div>
+      <input type="search" id="tickets-buscar-global" class="tabla-buscar-global" placeholder="Buscar en la tabla…" />
     </div>
     <div class="table-scroll">
       <table>
-        <thead>
-          <tr><th>Ticket</th><th>Fecha</th><th>Departamento</th><th>Solicitante</th><th>Tipo de atención</th><th>Atendió</th><th></th></tr>
-        </thead>
+        <thead id="tickets-thead"></thead>
         <tbody id="lista-tickets"></tbody>
       </table>
     </div>
     <p class="empty-state" id="tickets-vacio" hidden>Todavía no hay tickets registrados.</p>
+    <div class="tabla-pie" id="tickets-pie"></div>
   </div>
 
   <!-- Modal: editar (también sirve para ver el detalle completo) -->
