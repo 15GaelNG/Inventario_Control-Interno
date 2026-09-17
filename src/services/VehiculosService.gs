@@ -172,20 +172,65 @@ const VehiculosService = (function () {
     return limpio;
   }
 
-  /** Da de alta un vehículo. La columna ID_VEHICULO no la trae SheetUtils.insert
-   * sola (solo autogenera si la columna se llama literalmente "ID") — se genera aquí. */
+  // Prefijo de folio según Clase — folio = PREFIJO + consecutivo de 4 dígitos,
+  // el siguiente disponible para ESE prefijo (no se reutilizan aunque se
+  // borre a la mitad un vehículo). Clases sin prefijo propio (CUATRIMOTO,
+  // NUCO SIN INFORMACION, MOTOCARRO, etc.) caen en el prefijo genérico "FOL".
+  const PREFIJOS_CLASE = {
+    AUTOMOVIL: 'AUT',
+    CAMION: 'CON',
+    CAMIONETA: 'CTA',
+    MOTOCICLETA: 'MOT',
+    REMOLQUE: 'REM',
+    'MAQUINARIA MENOR': 'MAQ',
+  };
+  const PREFIJO_POR_DEFECTO = 'FOL';
+
+  /** Calcula el siguiente folio disponible para el prefijo de una Clase dada. */
+  function generarFolio_(clase) {
+    const prefijo = PREFIJOS_CLASE[String(clase || '').toUpperCase().trim()] || PREFIJO_POR_DEFECTO;
+    const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
+    const lastRow = sheet.getLastRow();
+    let maximo = 0;
+    if (lastRow >= 2) {
+      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      const col = headers.indexOf('FOLIO');
+      if (col !== -1) {
+        const patron = new RegExp('^' + prefijo + '(\\d+)$', 'i');
+        sheet.getRange(2, col + 1, lastRow - 1, 1).getValues().forEach((fila) => {
+          const match = patron.exec(String(fila[0] || '').trim());
+          if (match) maximo = Math.max(maximo, parseInt(match[1], 10));
+        });
+      }
+    }
+    return prefijo + String(maximo + 1).padStart(4, '0');
+  }
+
+  /** Da de alta un vehículo. El FOLIO no lo manda el cliente — se calcula aquí
+   * a partir de la Clase (ver generarFolio_) — y la columna ID_VEHICULO no la
+   * trae SheetUtils.insert sola (solo autogenera si la columna se llama
+   * literalmente "ID") — se genera aquí también.
+   * Con LockService: dos altas al mismo tiempo no deben terminar con el mismo folio. */
   function crear(token, datos) {
     Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
-    if (!datos.FOLIO) throw new Error('El folio es obligatorio');
-    const fila = Object.assign({}, datos);
-    fila[ID_COLUMN] = Utilities.getUuid().slice(0, 8);
-    SheetUtils.insert(ssId(), SHEET_VEHICULOS, fila);
-    return { ID: fila[ID_COLUMN] };
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+      const fila = Object.assign({}, datos);
+      fila.FOLIO = generarFolio_(datos.CLASE);
+      fila[ID_COLUMN] = Utilities.getUuid().slice(0, 8);
+      SheetUtils.insert(ssId(), SHEET_VEHICULOS, fila);
+      return { ID: fila[ID_COLUMN], FOLIO: fila.FOLIO };
+    } finally {
+      lock.releaseLock();
+    }
   }
 
   function actualizar(token, id, cambios) {
     Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
-    SheetUtils.update(ssId(), SHEET_VEHICULOS, id, cambios, ID_COLUMN);
+    const datos = Object.assign({}, cambios);
+    delete datos.FOLIO; // no se edita, se fija solo al crear
+    SheetUtils.update(ssId(), SHEET_VEHICULOS, id, datos, ID_COLUMN);
     return { ID: id };
   }
 

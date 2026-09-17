@@ -702,7 +702,10 @@
       opciones: ['BAJA VEHICULAR', 'PRESTAMO', 'UTILITARIO', 'NO UTILITARIO', 'NUCO SIN INFORMACION', 'FUERA DE SERVICIO'],
     },
 
-    { grupo: 'Identificación', clave: 'FOLIO', etiqueta: 'Folio', tipo: 'text', requerido: true },
+    {
+      grupo: 'Identificación', clave: 'FOLIO', etiqueta: 'Folio', tipo: 'text',
+      soloLectura: true, placeholder: 'Se genera solo, según la Clase',
+    },
     { grupo: 'Identificación', clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select' },
     { grupo: 'Identificación', clave: 'NO ECONOMICO', etiqueta: 'No. económico', tipo: 'text' },
     { grupo: 'Identificación', clave: 'RESPONSABLE VEHICULO', etiqueta: 'Responsable del vehículo', tipo: 'text' },
@@ -793,7 +796,11 @@
           const opciones = (campo.opciones || []).map((o) => `<option value="${o}">${o}</option>`).join('');
           return `<div class="field"><label>${campo.etiqueta}</label><select id="${id}"${req}><option value="">Selecciona…</option>${opciones}</select></div>`;
         }
-        return `<div class="field"><label>${campo.etiqueta}</label><input type="${campo.tipo}" id="${id}"${req} /></div>`;
+        // soloLectura: el servidor decide el valor (ej. Folio, autogenerado
+        // a partir de la Clase) — el campo se muestra pero no se puede editar.
+        const disabled = campo.soloLectura ? ' disabled' : '';
+        const placeholder = campo.placeholder ? ` placeholder="${campo.placeholder}"` : '';
+        return `<div class="field"><label>${campo.etiqueta}</label><input type="${campo.tipo}" id="${id}"${req}${disabled}${placeholder} /></div>`;
       }).join('');
       return `<div class="info-section-title">${grupo}</div>${campos}`;
     }).join('');
@@ -805,7 +812,7 @@
   function recolectarDatosVehiculo(prefijo) {
     const datos = {};
     CAMPOS_VEHICULO.forEach((campo) => {
-      if (campo.tipo === 'file') return;
+      if (campo.tipo === 'file' || campo.soloLectura) return;
       const el = document.getElementById(prefijo + '-' + slugCampo(campo.clave));
       if (el) datos[campo.clave] = el.value.trim();
     });
