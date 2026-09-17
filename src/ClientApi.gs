@@ -39,6 +39,21 @@ function apiHistorialMovimientos(token, idArticulo) {
 function apiListarVehiculosBasico(token) {
   return VehiculosService.listarBasico(token);
 }
+function apiBuscarVehiculoPorFolio(token, folio) {
+  return VehiculosService.buscarPorFolio(token, folio);
+}
+function apiListarVehiculosResumen(token) {
+  return VehiculosService.listarResumen(token);
+}
+function apiCrearVehiculo(token, datos) {
+  return VehiculosService.crear(token, datos);
+}
+function apiActualizarVehiculo(token, id, cambios) {
+  return VehiculosService.actualizar(token, id, cambios);
+}
+function apiEliminarVehiculo(token, id) {
+  return VehiculosService.eliminar(token, id);
+}
 
 // --- Verificaciones ---
 function apiListarVerificaciones(token) {

@@ -6,6 +6,13 @@
    * solo por cambiar de pantalla.
    */
 
+  // Íconos (Lucide): dibuja cualquier <i data-lucide="..."> que haya en el DOM.
+  // Hay que llamarla cada vez que se inyecta HTML nuevo con íconos (innerHTML no
+  // los "activa" solo) — por eso aparece después de casi cada render dinámico.
+  function refreshIcons() {
+    if (window.lucide) lucide.createIcons();
+  }
+
   // Tema (claro/oscuro) — se aplica antes de montar cualquier vista para evitar parpadeo.
   // Los botones de tema viven en dos lugares (login y sidebar del app-shell), así que
   // se identifican por clase (.theme-btn + data-tema), no por id, y se manejan con
@@ -150,7 +157,43 @@
     const tpl = document.getElementById(templateId);
     container.innerHTML = '';
     container.appendChild(tpl.content.cloneNode(true));
+    refreshIcons();
     if (initFn) initFn();
+  }
+
+  /** Ícono (nombre de Lucide) temático según a qué área pertenece la vista. */
+  function iconoDeVista(vista) {
+    if (vista === 'dashboard') return 'home';
+    const grupo = NAV_GRUPOS.find((g) => g.items.some((it) => it.vista === vista));
+    return grupo ? grupo.icono : 'file-text';
+  }
+
+  /**
+   * Transición corta y temática al cambiar de módulo — no acelera la carga
+   * real, solo evita que el cambio se sienta "trabado" o instantáneo/brusco.
+   * Mantiene la vista anterior visible detrás mientras aparece, monta la
+   * vista nueva a la mitad, y se desvanece revelándola.
+   */
+  function transicionVista(vista, etiqueta, montarVistaReal) {
+    // Se cuelga de #main (no de #view-container) para cubrir TODO el módulo
+    // sin importar si la vista anterior estaba scrolleada — #view-container
+    // hace scroll interno, así que un overlay dentro de él se movía con el
+    // scroll y dejaba ver contenido viejo.
+    const cont = document.getElementById('main');
+    const overlay = document.createElement('div');
+    overlay.className = 'view-transition';
+    overlay.innerHTML =
+      '<div class="view-transition-icon"><i data-lucide="' + iconoDeVista(vista) + '" class="ico"></i></div>' +
+      '<div class="view-transition-text">Cargando ' + (etiqueta || '') + '…</div>';
+    cont.appendChild(overlay);
+    refreshIcons();
+    requestAnimationFrame(() => overlay.classList.add('show'));
+
+    setTimeout(() => {
+      montarVistaReal();
+      overlay.classList.remove('show');
+      setTimeout(() => overlay.remove(), 300);
+    }, 2500);
   }
 
   function navegarA(vista, etiqueta) {
@@ -158,23 +201,26 @@
       el.classList.toggle('active', el.dataset.view === vista);
     });
 
-    if (vista === 'dashboard') { montarVista('tpl-dashboard', initDashboard); return; }
-    if (vista === 'accesorios') { montarVista('tpl-accesorios', initAccesorios); return; }
-    if (vista === 'incidencias') { montarVista('tpl-incidencias', initIncidencias); return; }
-    if (vista === 'verificaciones') { montarVista('tpl-verificaciones', initVerificaciones); return; }
-
-    mostrarProximamente(etiqueta || vista);
+    transicionVista(vista, etiqueta, () => {
+      if (vista === 'dashboard') { montarVista('tpl-dashboard', initDashboard); return; }
+      if (vista === 'accesorios') { montarVista('tpl-accesorios', initAccesorios); return; }
+      if (vista === 'incidencias') { montarVista('tpl-incidencias', initIncidencias); return; }
+      if (vista === 'verificaciones') { montarVista('tpl-verificaciones', initVerificaciones); return; }
+      if (vista === 'vehiculos') { montarVista('tpl-vehiculos', initVehiculos); return; }
+      mostrarProximamente(etiqueta || vista);
+    });
   }
 
   /** Placeholder para módulos que ya están en el menú pero aún no se han construido */
   function mostrarProximamente(nombreModulo) {
     document.getElementById('view-container').innerHTML =
       '<div class="card" style="max-width:420px; margin:60px auto; text-align:center;">' +
-      '<div style="font-size:32px; margin-bottom:10px;">🚧</div>' +
+      '<div style="font-size:32px; margin-bottom:10px;"><i data-lucide="construction" class="ico"></i></div>' +
       '<h2 style="margin-bottom:6px;">' + nombreModulo + '</h2>' +
       '<p style="color:var(--color-text-muted); font-size:13px; margin:0;">' +
       'Este módulo todavía no está construido — muy pronto.</p>' +
       '</div>';
+    refreshIcons();
   }
 
   /**
@@ -184,7 +230,7 @@
    */
   const NAV_GRUPOS = [
     {
-      id: 'servicios-vehiculares', icono: '🚗', etiqueta: 'Servicios Vehiculares',
+      id: 'servicios-vehiculares', icono: 'car', etiqueta: 'Servicios Vehiculares',
       items: [
         { vista: 'incidencias', etiqueta: 'Incidencias' },
         { vista: 'vehiculos', etiqueta: 'Vehículos' },
@@ -197,7 +243,7 @@
       ],
     },
     {
-      id: 'lineas', icono: '📱', etiqueta: 'Líneas',
+      id: 'lineas', icono: 'smartphone', etiqueta: 'Líneas',
       items: [
         { vista: 'reasignaciones-lineas', etiqueta: 'Control de Reasignaciones - Líneas' },
         { vista: 'accesorios', etiqueta: 'Inventario de Accesorios' },
@@ -209,14 +255,14 @@
       ],
     },
     {
-      id: 'arqueos', icono: '💰', etiqueta: 'Arqueos',
+      id: 'arqueos', icono: 'wallet', etiqueta: 'Arqueos',
       items: [
         { vista: 'arqueos', etiqueta: 'Arqueos' },
         { vista: 'caja-chica', etiqueta: 'Caja Chica' },
       ],
     },
     {
-      id: 'uber', icono: '🚕', etiqueta: 'Uber',
+      id: 'uber', icono: 'car-taxi-front', etiqueta: 'Uber',
       items: [
         { vista: 'uber', etiqueta: 'Uber' },
         { vista: 'tickets', etiqueta: 'Tickets' },
@@ -229,9 +275,9 @@
     contenedor.innerHTML = NAV_GRUPOS.map((grupo) => `
       <div class="nav-group" id="nav-group-${grupo.id}">
         <div class="nav-group-header" data-grupo="${grupo.id}">
-          <span class="nav-icon">${grupo.icono}</span>
+          <span class="nav-icon"><i data-lucide="${grupo.icono}" class="ico"></i></span>
           <span class="nav-label">${grupo.etiqueta}</span>
-          <span class="nav-group-chevron">›</span>
+          <span class="nav-group-chevron"><i data-lucide="chevron-right" class="ico"></i></span>
         </div>
         <div class="nav-group-items">
           ${grupo.items.map((item) => `
@@ -249,6 +295,7 @@
     contenedor.querySelectorAll('.nav-subitem').forEach((el) => {
       el.addEventListener('click', () => navegarA(el.dataset.view, el.dataset.etiqueta));
     });
+    refreshIcons();
   }
 
   // ---------- Login ----------
@@ -262,7 +309,8 @@
     document.getElementById('toggle-password').addEventListener('click', (ev) => {
       const seVaAMostrar = inputPassword.type === 'password';
       inputPassword.type = seVaAMostrar ? 'text' : 'password';
-      ev.currentTarget.textContent = seVaAMostrar ? '🙈' : '🙉';
+      ev.currentTarget.innerHTML = `<i data-lucide="${seVaAMostrar ? 'eye' : 'eye-off'}" class="ico"></i>`;
+      refreshIcons();
     });
 
     initGoogleQuickLogin();
@@ -386,35 +434,65 @@
     const f = new Date(valor);
     return isNaN(f) ? '' : f.toISOString().slice(0, 10);
   }
+  function formatearFecha(valor) {
+    if (!valor) return '—';
+    const f = new Date(valor);
+    return isNaN(f) ? '—' : f.toLocaleDateString('es-MX');
+  }
+  // Helpers compartidos para las tarjetas de "detalle completo" (Incidencias y Vehículos).
+  function tituloDesdeClave(clave) {
+    return clave.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+  }
+  function formatearValorInfo(valor) {
+    if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(valor)) return formatearFecha(valor);
+    return String(valor);
+  }
+  function itemInfo(etiqueta, valor) {
+    return `
+      <div class="info-item">
+        <div class="info-label">${etiqueta}</div>
+        <div class="info-value">${formatearValorInfo(valor)}</div>
+      </div>
+    `;
+  }
+  function seccionInfo(icono, titulo) {
+    return `<div class="info-section-title"><i data-lucide="${icono}" class="ico"></i> ${titulo}</div>`;
+  }
 
   async function initIncidencias() {
     const lista = document.getElementById('lista-incidencias');
     const vacio = document.getElementById('incidencias-vacio');
     const modal = document.getElementById('modal-cerrar');
     const modalEditar = document.getElementById('modal-editar');
+    const modalVehiculo = document.getElementById('modal-vehiculo');
     let incidenciasPorId = {};
 
     // Fecha de registro: siempre hoy, no editable (el servidor la fuerza igual).
     fijarFechaRegistroHoy();
     document.getElementById('inc-fecha-inspeccion').value = hoyISO();
 
-    // Autollenado: el folio del vehículo trae Departamento/Modelo desde Vehículos
+    // Autollenado: el folio del vehículo trae Departamento/Modelo desde Vehículos.
+    // OJO: esto NO se espera aquí (sin await) para que salga en paralelo con la
+    // carga del historial (cargar(), al final de esta función) en vez de una
+    // petición tras otra — cada una puede tardar un rato y sumadas se sentía
+    // muy lento.
     const vehiculosPorFolio = {};
-    try {
-      const vehiculos = await callServer('apiListarVehiculosBasico', state.token);
-      const datalist = document.getElementById('lista-folios-vehiculo');
-      datalist.innerHTML = vehiculos.map((v) => {
-        vehiculosPorFolio[v.FOLIO] = v;
-        const etiqueta = [v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ');
-        return `<option value="${v.FOLIO}">${etiqueta}</option>`;
-      }).join('');
-    } catch (err) {
-      // Antes esto se ignoraba en silencio — ahora se ve para poder diagnosticar.
-      console.error('No se pudo cargar el catálogo de vehículos:', err);
-      const errorBox = document.getElementById('inc-error');
-      errorBox.textContent = 'No se pudo cargar el catálogo de vehículos para autocompletar: ' + err.message;
-      errorBox.hidden = false;
-    }
+    const promesaVehiculos = callServer('apiListarVehiculosBasico', state.token)
+      .then((vehiculos) => {
+        const datalist = document.getElementById('lista-folios-vehiculo');
+        datalist.innerHTML = vehiculos.map((v) => {
+          vehiculosPorFolio[v.FOLIO] = v;
+          const etiqueta = [v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ');
+          return `<option value="${v.FOLIO}">${etiqueta}</option>`;
+        }).join('');
+      })
+      .catch((err) => {
+        // Antes esto se ignoraba en silencio — ahora se ve para poder diagnosticar.
+        console.error('No se pudo cargar el catálogo de vehículos:', err);
+        const errorBox = document.getElementById('inc-error');
+        errorBox.textContent = 'No se pudo cargar el catálogo de vehículos para autocompletar: ' + err.message;
+        errorBox.hidden = false;
+      });
 
     document.getElementById('inc-folio').addEventListener('input', (ev) => {
       const vehiculo = vehiculosPorFolio[ev.target.value];
@@ -432,11 +510,15 @@
       }
     });
 
-    function formatearFecha(valor) {
-      if (!valor) return '—';
-      const f = new Date(valor);
-      return isNaN(f) ? '—' : f.toLocaleDateString('es-MX');
-    }
+    // Mismo autollenado, pero para el folio dentro del modal de Editar.
+    document.getElementById('editar-folio').addEventListener('input', (ev) => {
+      const vehiculo = vehiculosPorFolio[ev.target.value];
+      if (vehiculo) {
+        document.getElementById('editar-departamento').value = vehiculo.DEPARTAMENTO;
+        document.getElementById('editar-modelo').value = [vehiculo.MARCA, vehiculo.LINEA_VEHICULO].filter(Boolean).join(' ');
+        document.getElementById('editar-anio').value = vehiculo.MODELO || '';
+      }
+    });
 
     function abrirModalCierre(id, folio) {
       document.getElementById('cerrar-id').value = id;
@@ -477,6 +559,62 @@
       document.getElementById('editar-error').hidden = true;
     }
 
+    const ETIQUETAS_INCIDENCIA = {
+      FOLIO: 'Folio', DEPARTAMENTO: 'Departamento', MODELO: 'Modelo', ANIO: 'Año',
+      FECHA_REGISTRO: 'Fecha de registro', FECHA_INSPECCION: 'Fecha de inspección',
+      KILOMETRAJE: 'Kilometraje', TICKET: 'Ticket',
+      INSPECCION_INGRESO: 'Inspección de ingreso (motivo)',
+      DESCRIPCION_TRABAJO: 'Trabajo realizado', FECHA_TRABAJO: 'Fecha del trabajo realizado',
+      INSPECCION_SALIDA: 'Inspección de salida', MECANICO: 'Mecánico',
+      PERIODO_VERIFICACION: 'Periodo de verificación', SEGURO_AUTO: 'Seguro de auto',
+      ESTADO: 'Estado',
+    };
+
+    async function abrirModalVehiculo(folio, id) {
+      document.getElementById('vehiculo-folio-label').textContent = 'Folio: ' + folio;
+      const grid = document.getElementById('vehiculo-info-grid');
+      const vacio = document.getElementById('vehiculo-info-vacio');
+      vacio.hidden = true;
+
+      // Sección "Incidencia": ya la tenemos en memoria, no hace falta pedirla.
+      const inc = incidenciasPorId[id];
+      let html = '';
+      if (inc) {
+        html += seccionInfo('clipboard-list', 'Incidencia');
+        html += Object.keys(ETIQUETAS_INCIDENCIA)
+          .filter((clave) => inc[clave] !== '' && inc[clave] !== null && inc[clave] !== undefined)
+          .map((clave) => itemInfo(ETIQUETAS_INCIDENCIA[clave], inc[clave]))
+          .join('');
+      }
+      html += seccionInfo('car', 'Vehículo');
+      html += '<div class="loading-inline" id="vehiculo-info-cargando"><span class="spinner"></span> Buscando en el catálogo de vehículos…</div>';
+      grid.innerHTML = html;
+      modalVehiculo.hidden = false;
+      refreshIcons();
+
+      try {
+        const vehiculo = await callServer('apiBuscarVehiculoPorFolio', state.token, folio);
+        const cargando = document.getElementById('vehiculo-info-cargando');
+        if (cargando) cargando.remove();
+        if (!vehiculo) {
+          vacio.hidden = false;
+          return;
+        }
+        grid.insertAdjacentHTML('beforeend', Object.keys(vehiculo)
+          .filter((clave) => vehiculo[clave] !== '' && vehiculo[clave] !== null && vehiculo[clave] !== undefined)
+          .map((clave) => itemInfo(tituloDesdeClave(clave), vehiculo[clave]))
+          .join(''));
+      } catch (err) {
+        const cargando = document.getElementById('vehiculo-info-cargando');
+        if (cargando) cargando.remove();
+        vacio.hidden = false;
+        document.getElementById('vehiculo-info-vacio').textContent = 'No se pudo cargar el vehículo: ' + err.message;
+      }
+    }
+    function cerrarModalVehiculo() {
+      modalVehiculo.hidden = true;
+    }
+
     async function eliminarIncidencia(id, folio) {
       if (!confirm('¿Eliminar la incidencia del folio ' + folio + '? Esta acción no se puede deshacer.')) return;
       try {
@@ -514,23 +652,26 @@
       lista.innerHTML = incidencias.map((inc) => {
         const abierta = inc.ESTADO === 'ABIERTA';
         return `
-          <div class="incidencia-item">
-            <div class="incidencia-icon">🚗</div>
-            <div class="incidencia-main">
-              <div class="incidencia-folio">${inc.FOLIO}${inc.DEPARTAMENTO ? ' · ' + inc.DEPARTAMENTO : ''}</div>
-              <div class="incidencia-meta">${inc.INSPECCION_INGRESO || 'Sin motivo registrado'}</div>
-            </div>
-            <div class="incidencia-fecha">${formatearFecha(inc.FECHA_REGISTRO)}</div>
-            <span class="badge-estado ${abierta ? 'abierta' : 'cerrada'}">${abierta ? '🔓 Abierta' : '✅ Cerrada'}</span>
-            <div class="incidencia-actions">
-              ${abierta ? `<button type="button" class="secondary btn-cerrar-incidencia" data-id="${inc.ID}" data-folio="${inc.FOLIO}">Cerrar</button>` : ''}
-              <button type="button" class="secondary btn-editar-incidencia" data-id="${inc.ID}" title="Editar">✏️</button>
-              <button type="button" class="danger btn-eliminar-incidencia" data-id="${inc.ID}" data-folio="${inc.FOLIO}" title="Eliminar">🗑️</button>
-            </div>
-          </div>
+          <tr>
+            <td class="tabla-clickable" data-folio="${inc.FOLIO}" data-id="${inc.ID}" title="Ver detalle completo">${inc.FOLIO}</td>
+            <td>${inc.DEPARTAMENTO || '—'}</td>
+            <td>${inc.INSPECCION_INGRESO || 'Sin motivo registrado'}</td>
+            <td>${formatearFecha(inc.FECHA_REGISTRO)}</td>
+            <td><span class="badge-estado ${abierta ? 'abierta' : 'cerrada'}"><i data-lucide="${abierta ? 'lock-open' : 'circle-check'}" class="ico"></i> ${abierta ? 'Abierta' : 'Cerrada'}</span></td>
+            <td>
+              <div class="tabla-actions">
+                ${abierta ? `<button type="button" class="secondary btn-cerrar-incidencia" data-id="${inc.ID}" data-folio="${inc.FOLIO}">Cerrar</button>` : ''}
+                <button type="button" class="secondary btn-editar-incidencia" data-id="${inc.ID}" title="Editar"><i data-lucide="pencil" class="ico"></i></button>
+                <button type="button" class="danger btn-eliminar-incidencia" data-id="${inc.ID}" data-folio="${inc.FOLIO}" title="Eliminar"><i data-lucide="trash-2" class="ico"></i></button>
+              </div>
+            </td>
+          </tr>
         `;
       }).join('');
 
+      lista.querySelectorAll('.tabla-clickable').forEach((el) => {
+        el.addEventListener('click', () => abrirModalVehiculo(el.dataset.folio, el.dataset.id));
+      });
       lista.querySelectorAll('.btn-cerrar-incidencia').forEach((btn) => {
         btn.addEventListener('click', () => abrirModalCierre(btn.dataset.id, btn.dataset.folio));
       });
@@ -540,6 +681,7 @@
       lista.querySelectorAll('.btn-eliminar-incidencia').forEach((btn) => {
         btn.addEventListener('click', () => eliminarIncidencia(btn.dataset.id, btn.dataset.folio));
       });
+      refreshIcons();
     }
 
     document.getElementById('form-incidencia').addEventListener('submit', async (ev) => {
@@ -594,6 +736,9 @@
     document.getElementById('btn-cancelar-editar').addEventListener('click', cerrarModalEditar);
     modalEditar.addEventListener('click', (ev) => { if (ev.target === modalEditar) cerrarModalEditar(); });
 
+    document.getElementById('btn-cerrar-vehiculo').addEventListener('click', cerrarModalVehiculo);
+    modalVehiculo.addEventListener('click', (ev) => { if (ev.target === modalVehiculo) cerrarModalVehiculo(); });
+
     document.getElementById('form-editar-incidencia').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const errorBox = document.getElementById('editar-error');
@@ -616,6 +761,223 @@
           INSPECCION_SALIDA: document.getElementById('editar-salida').value.trim(),
         });
         cerrarModalEditar();
+        await cargar();
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+      }
+    });
+
+    await Promise.all([promesaVehiculos, cargar()]);
+  }
+
+  // ---------- Vehículos ----------
+  async function initVehiculos() {
+    const lista = document.getElementById('lista-vehiculos');
+    const vacio = document.getElementById('vehiculos-vacio');
+    const modalEditar = document.getElementById('modal-editar-vehiculo');
+    const modalDetalle = document.getElementById('modal-detalle-vehiculo');
+    let vehiculosPorId = {};
+    let todosLosVehiculos = [];
+    const filtroClase = document.getElementById('veh-filtro-clase');
+
+    function badgeEstatus(estatus) {
+      const esBaja = String(estatus || '').toUpperCase().includes('BAJA');
+      return `<span class="badge-estado ${esBaja ? 'baja' : 'activo'}"><i data-lucide="${esBaja ? 'ban' : 'circle-check'}" class="ico"></i> ${esBaja ? 'De baja' : 'Activo'}</span>`;
+    }
+
+    // Color determinístico por clase (misma clase = mismo color siempre),
+    // sin necesidad de saber de antemano qué clases existen en la hoja.
+    const PALETA_CLASES = ['tag-navy', 'tag-gold', 'tag-green', 'tag-brown', 'tag-slate'];
+    function colorClase(clase) {
+      if (!clase) return 'tag-slate';
+      let hash = 0;
+      for (let i = 0; i < clase.length; i++) hash = (hash * 31 + clase.charCodeAt(i)) >>> 0;
+      return PALETA_CLASES[hash % PALETA_CLASES.length];
+    }
+    function etiquetaClase(clase) {
+      return clase ? `<span class="tag ${colorClase(clase)}">${clase}</span>` : '—';
+    }
+
+    function poblarFiltroClases() {
+      const clases = Array.from(new Set(todosLosVehiculos.map((v) => v.CLASE).filter(Boolean))).sort();
+      const actual = filtroClase.value;
+      filtroClase.innerHTML = '<option value="">Todas las clases</option>' +
+        clases.map((c) => `<option value="${c}">${c}</option>`).join('');
+      if (clases.includes(actual)) filtroClase.value = actual;
+    }
+
+    function renderTabla() {
+      const filtro = filtroClase.value;
+      const vehiculos = filtro ? todosLosVehiculos.filter((v) => v.CLASE === filtro) : todosLosVehiculos;
+
+      vacio.hidden = vehiculos.length > 0;
+      lista.innerHTML = vehiculos.map((v) => `
+        <tr>
+          <td class="tabla-clickable" data-id="${v.ID_VEHICULO}" title="Ver detalle completo">${v.FOLIO}</td>
+          <td>${v.DEPARTAMENTO || '—'}</td>
+          <td>${etiquetaClase(v.CLASE)}</td>
+          <td>${[v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ') || '—'}</td>
+          <td>${v.MODELO || '—'}</td>
+          <td>${v.PLACA || '—'}</td>
+          <td>${badgeEstatus(v.ESTATUS)}</td>
+          <td>
+            <div class="tabla-actions">
+              <button type="button" class="secondary btn-editar-vehiculo" data-id="${v.ID_VEHICULO}" title="Editar"><i data-lucide="pencil" class="ico"></i></button>
+              <button type="button" class="danger btn-eliminar-vehiculo" data-id="${v.ID_VEHICULO}" data-folio="${v.FOLIO}" title="Eliminar"><i data-lucide="trash-2" class="ico"></i></button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+
+      lista.querySelectorAll('.tabla-clickable').forEach((el) => {
+        el.addEventListener('click', () => abrirDetalleVehiculo(vehiculosPorId[el.dataset.id]));
+      });
+      lista.querySelectorAll('.btn-editar-vehiculo').forEach((btn) => {
+        btn.addEventListener('click', () => abrirEditarVehiculo(vehiculosPorId[btn.dataset.id]));
+      });
+      lista.querySelectorAll('.btn-eliminar-vehiculo').forEach((btn) => {
+        btn.addEventListener('click', () => eliminarVehiculo(btn.dataset.id, btn.dataset.folio));
+      });
+      refreshIcons();
+    }
+    filtroClase.addEventListener('change', renderTabla);
+
+    async function cargar() {
+      const errorBox = document.getElementById('veh-error');
+      let vehiculos;
+      try {
+        vehiculos = await callServer('apiListarVehiculosResumen', state.token);
+      } catch (err) {
+        console.error('No se pudo cargar el catálogo de vehículos:', err);
+        errorBox.textContent = 'No se pudo cargar el catálogo de vehículos: ' + err.message;
+        errorBox.hidden = false;
+        return;
+      }
+      errorBox.hidden = true;
+      todosLosVehiculos = vehiculos || [];
+
+      vehiculosPorId = {};
+      todosLosVehiculos.forEach((v) => { vehiculosPorId[v.ID_VEHICULO] = v; });
+
+      // Los totales son del catálogo completo, sin importar el filtro de clase.
+      document.getElementById('veh-stat-total').textContent = todosLosVehiculos.length;
+      document.getElementById('veh-stat-activos').textContent =
+        todosLosVehiculos.filter((v) => !String(v.ESTATUS || '').toUpperCase().includes('BAJA')).length;
+      document.getElementById('veh-stat-baja').textContent =
+        todosLosVehiculos.filter((v) => String(v.ESTATUS || '').toUpperCase().includes('BAJA')).length;
+
+      poblarFiltroClases();
+      renderTabla();
+    }
+
+    async function abrirDetalleVehiculo(vResumen) {
+      if (!vResumen) return;
+      document.getElementById('detalle-vehiculo-folio-label').textContent = 'Folio: ' + vResumen.FOLIO;
+      const grid = document.getElementById('detalle-vehiculo-grid');
+      grid.innerHTML = '<div class="loading-inline"><span class="spinner"></span> Cargando…</div>';
+      modalDetalle.hidden = false;
+      try {
+        const completo = await callServer('apiBuscarVehiculoPorFolio', state.token, vResumen.FOLIO);
+        if (!completo) {
+          grid.innerHTML = '<p class="empty-state">No se encontró el registro completo.</p>';
+          return;
+        }
+        grid.innerHTML = Object.keys(completo)
+          .filter((k) => completo[k] !== '' && completo[k] !== null && completo[k] !== undefined)
+          .map((k) => itemInfo(tituloDesdeClave(k), completo[k]))
+          .join('');
+      } catch (err) {
+        grid.innerHTML = '<p class="error-msg">No se pudo cargar: ' + err.message + '</p>';
+      }
+    }
+    document.getElementById('btn-cerrar-detalle-vehiculo').addEventListener('click', () => { modalDetalle.hidden = true; });
+    modalDetalle.addEventListener('click', (ev) => { if (ev.target === modalDetalle) modalDetalle.hidden = true; });
+
+    function abrirEditarVehiculo(v) {
+      if (!v) return;
+      document.getElementById('editar-vehiculo-id').value = v.ID_VEHICULO;
+      document.getElementById('editar-vehiculo-folio-label').textContent = 'Folio: ' + v.FOLIO;
+      document.getElementById('editar-vehiculo-folio').value = v.FOLIO || '';
+      document.getElementById('editar-vehiculo-departamento').value = v.DEPARTAMENTO || '';
+      document.getElementById('editar-vehiculo-no-economico').value = v.NO_ECONOMICO || '';
+      document.getElementById('editar-vehiculo-marca').value = v.MARCA || '';
+      document.getElementById('editar-vehiculo-clase').value = v.CLASE || '';
+      document.getElementById('editar-vehiculo-linea').value = v.LINEA_VEHICULO || '';
+      document.getElementById('editar-vehiculo-anio').value = v.MODELO || '';
+      document.getElementById('editar-vehiculo-color').value = v.COLOR || '';
+      document.getElementById('editar-vehiculo-placa').value = v.PLACA || '';
+      document.getElementById('editar-vehiculo-sede').value = v.SEDE || '';
+      document.getElementById('editar-vehiculo-ubicacion').value = v.UBICACION || '';
+      document.getElementById('editar-vehiculo-estatus').value = v.ESTATUS || '';
+      document.getElementById('editar-vehiculo-error').hidden = true;
+      modalEditar.hidden = false;
+    }
+    function cerrarEditarVehiculo() {
+      modalEditar.hidden = true;
+      document.getElementById('form-editar-vehiculo').reset();
+      document.getElementById('editar-vehiculo-error').hidden = true;
+    }
+    document.getElementById('btn-cancelar-editar-vehiculo').addEventListener('click', cerrarEditarVehiculo);
+    modalEditar.addEventListener('click', (ev) => { if (ev.target === modalEditar) cerrarEditarVehiculo(); });
+
+    document.getElementById('form-editar-vehiculo').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('editar-vehiculo-error');
+      errorBox.hidden = true;
+      try {
+        await callServer('apiActualizarVehiculo', state.token, document.getElementById('editar-vehiculo-id').value, {
+          FOLIO: document.getElementById('editar-vehiculo-folio').value.trim(),
+          DEPARTAMENTO: document.getElementById('editar-vehiculo-departamento').value.trim(),
+          'NO ECONOMICO': document.getElementById('editar-vehiculo-no-economico').value.trim(),
+          MARCA: document.getElementById('editar-vehiculo-marca').value.trim(),
+          CLASE: document.getElementById('editar-vehiculo-clase').value.trim(),
+          'LINEA VEHICULO': document.getElementById('editar-vehiculo-linea').value.trim(),
+          MODELO: document.getElementById('editar-vehiculo-anio').value,
+          COLOR: document.getElementById('editar-vehiculo-color').value.trim(),
+          PLACA: document.getElementById('editar-vehiculo-placa').value.trim(),
+          SEDE: document.getElementById('editar-vehiculo-sede').value.trim(),
+          UBICACION: document.getElementById('editar-vehiculo-ubicacion').value.trim(),
+          ESTATUS: document.getElementById('editar-vehiculo-estatus').value.trim(),
+        });
+        cerrarEditarVehiculo();
+        await cargar();
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+      }
+    });
+
+    async function eliminarVehiculo(id, folio) {
+      if (!confirm('¿Eliminar el vehículo con folio ' + folio + '? Esta acción no se puede deshacer.')) return;
+      try {
+        await callServer('apiEliminarVehiculo', state.token, id);
+        await cargar();
+      } catch (err) {
+        alert('No se pudo eliminar: ' + err.message);
+      }
+    }
+
+    document.getElementById('form-vehiculo').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('veh-error');
+      errorBox.hidden = true;
+      try {
+        await callServer('apiCrearVehiculo', state.token, {
+          FOLIO: document.getElementById('veh-folio').value.trim(),
+          DEPARTAMENTO: document.getElementById('veh-departamento').value.trim(),
+          'NO ECONOMICO': document.getElementById('veh-no-economico').value.trim(),
+          MARCA: document.getElementById('veh-marca').value.trim(),
+          CLASE: document.getElementById('veh-clase').value.trim(),
+          'LINEA VEHICULO': document.getElementById('veh-linea').value.trim(),
+          MODELO: document.getElementById('veh-anio').value,
+          COLOR: document.getElementById('veh-color').value.trim(),
+          PLACA: document.getElementById('veh-placa').value.trim(),
+          SEDE: document.getElementById('veh-sede').value.trim(),
+          UBICACION: document.getElementById('veh-ubicacion').value.trim(),
+          ESTATUS: document.getElementById('veh-estatus').value.trim(),
+        });
+        ev.target.reset();
         await cargar();
       } catch (err) {
         errorBox.textContent = err.message;
