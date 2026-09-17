@@ -692,7 +692,10 @@
       opciones: ['SIN PLACA', 'BAJA DE PLACA'],
     },
     { grupo: 'Vehículo', clave: 'TIPO MAQUINARIA', etiqueta: 'Tipo de maquinaria', tipo: 'text' },
-    { grupo: 'Vehículo', clave: 'TIPO DE COMBUSTIBLE', etiqueta: 'Tipo de combustible', tipo: 'text' },
+    {
+      grupo: 'Vehículo', clave: 'TIPO DE COMBUSTIBLE', etiqueta: 'Tipo de combustible', tipo: 'select',
+      opciones: ['GASOLINA', 'ELECTRICO', 'DIESEL', 'HIBRIDO', 'N/A', 'NUCO SIN INFORMACION', 'NO UTILIZA'],
+    },
     { grupo: 'Vehículo', clave: 'CAPACIDAD COMBUSTIBLE (LTS)', etiqueta: 'Capacidad de combustible (L)', tipo: 'number' },
     {
       grupo: 'Vehículo', clave: 'ESTATUS', etiqueta: 'Estatus', tipo: 'select',
