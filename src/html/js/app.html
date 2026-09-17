@@ -754,7 +754,7 @@
     },
 
     { grupo: 'Ubicación y registro', clave: 'SEDE', etiqueta: 'Sede', tipo: 'select' },
-    { grupo: 'Ubicación y registro', clave: 'UBICACION', etiqueta: 'Ubicación', tipo: 'text' },
+    { grupo: 'Ubicación y registro', clave: 'UBICACION', etiqueta: 'Ubicación', tipo: 'select' },
     { grupo: 'Ubicación y registro', clave: 'RAZON SOCIAL', etiqueta: 'Razón social', tipo: 'select' },
     { grupo: 'Ubicación y registro', clave: 'FECHA COMPRA', etiqueta: 'Fecha de compra', tipo: 'date' },
     { grupo: 'Ubicación y registro', clave: 'FECHA REGISTRO SISTEMA CI', etiqueta: 'Fecha de registro en el sistema', tipo: 'date' },
@@ -1207,8 +1207,9 @@
     document.getElementById('campos-form-vehiculo').innerHTML = renderCamposVehiculo('veh');
     document.getElementById('campos-form-editar-vehiculo').innerHTML = renderCamposVehiculo('editar-vehiculo');
 
-    // Marca / Departamento / Sede / Razón social: catálogos reales (hoja
-    // "LISTAS VEHICULOS"), mismas opciones en Registrar y Editar.
+    // Marca / Departamento / Sede / Razón social / Ubicación: catálogos
+    // reales (hoja "LISTAS VEHICULOS"), mismas opciones en Registrar y Editar.
+    // Ubicación reutiliza la misma columna OFICINA / DESARROLLO que ya usa Uber.
     function llenarSelect(id, valores) {
       const el = document.getElementById(id);
       if (!el) return;
@@ -1216,18 +1217,20 @@
         (valores || []).map((v) => `<option value="${v}">${v}</option>`).join('');
     }
     try {
-      const [marcas, departamentos, sedes, razones] = await Promise.all([
+      const [marcas, departamentos, sedes, razones, ubicaciones] = await Promise.all([
         callServer('apiListarMarcas', state.token),
         callServer('apiListarDepartamentos', state.token),
         callServer('apiListarSedes', state.token),
         callServer('apiListarRazonesSociales', state.token),
+        callServer('apiListarOficinasDesarrollo', state.token),
       ]);
       ['veh-marca', 'editar-vehiculo-marca'].forEach((id) => llenarSelect(id, marcas));
       ['veh-departamento', 'editar-vehiculo-departamento'].forEach((id) => llenarSelect(id, departamentos));
       ['veh-sede', 'editar-vehiculo-sede'].forEach((id) => llenarSelect(id, sedes));
       ['veh-razon-social', 'editar-vehiculo-razon-social'].forEach((id) => llenarSelect(id, razones));
+      ['veh-ubicacion', 'editar-vehiculo-ubicacion'].forEach((id) => llenarSelect(id, ubicaciones));
     } catch (err) {
-      console.error('No se pudieron cargar los catálogos de Marca/Departamento/Sede/Razón social:', err);
+      console.error('No se pudieron cargar los catálogos de Marca/Departamento/Sede/Razón social/Ubicación:', err);
     }
 
     function badgeEstatus(estatus) {
