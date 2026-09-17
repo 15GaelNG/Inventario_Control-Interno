@@ -85,5 +85,28 @@ const UberService = (function () {
     return { ID: id };
   }
 
-  return { listarResumen, buscarPorId, crear, actualizar, eliminar };
+  // Carpeta de Drive para el archivo de "Solicitud" (distinta a la de
+  // Vehículos). No se cambia la seguridad del archivo — hereda los permisos
+  // que ya tenga esa carpeta compartida.
+  const CARPETA_SOLICITUDES_ID = '1lNo-vHXVT8R2ZMgj2FK2awfIcW17JdY8';
+  const TAMANO_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+
+  /** Sube un archivo (PDF/imagen) en base64 a la carpeta de solicitudes y regresa su URL. */
+  function subirArchivo(token, nombreArchivo, mimeType, base64Data) {
+    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    if (!base64Data) throw new Error('No se recibió ningún archivo.');
+
+    const bytes = Utilities.base64Decode(base64Data);
+    if (bytes.length > TAMANO_MAX_BYTES) {
+      throw new Error('El archivo pesa más de 10 MB — súbelo más ligero.');
+    }
+
+    const blob = Utilities.newBlob(bytes, mimeType || 'application/octet-stream', nombreArchivo || 'archivo');
+    const carpeta = DriveApp.getFolderById(CARPETA_SOLICITUDES_ID);
+    const archivo = carpeta.createFile(blob);
+
+    return { url: archivo.getUrl(), id: archivo.getId(), nombre: nombreArchivo };
+  }
+
+  return { listarResumen, buscarPorId, crear, actualizar, eliminar, subirArchivo };
 })();

@@ -1149,10 +1149,12 @@
       return `<span class="badge-estado ${esBaja ? 'baja' : 'activo'}"><i data-lucide="${esBaja ? 'ban' : 'circle-check'}" class="ico"></i> ${esBaja ? 'De baja' : 'Activo'}</span>`;
     }
 
+    // SOLICITUD es archivo — se maneja aparte (subirArchivoUber), no aquí:
+    // subir un archivo es asíncrono, no se puede leer de golpe como el resto.
     const CAMPOS_UBER = [
       'RAZON SOCIAL', 'NOMBRE COMPLETO', 'ESTAUS USUARIO', 'ROL', 'FECHA DE ALTA',
       'CORREO ELECTRONICO', 'NUMERO TELEFONO', 'SEDE', 'OFICINA/DESARROLLO',
-      'DEPARTAMENTO', 'PUESTO', 'DIAS AUTORIZADOS', 'HORARIO AUTORIZADO', 'SOLICITUD',
+      'DEPARTAMENTO', 'PUESTO', 'DIAS AUTORIZADOS', 'HORARIO AUTORIZADO',
     ];
     function idUber(prefijo, clave) { return prefijo + '-' + slugCampo(clave); }
     function recolectarUber(prefijo) {
@@ -1170,6 +1172,21 @@
         const valor = (datos && datos[clave]) || '';
         el.value = el.type === 'date' ? fechaParaInput(valor) : valor;
       });
+      const info = document.getElementById(idUber(prefijo, 'SOLICITUD') + '-actual');
+      if (info) {
+        const valor = (datos && datos['SOLICITUD']) || '';
+        info.innerHTML = valor
+          ? `<a href="${valor}" target="_blank" rel="noopener">📎 Ver archivo actual</a>`
+          : '<span class="empty-state" style="margin:0">Sin archivo</span>';
+      }
+    }
+    async function subirArchivoUber(prefijo) {
+      const input = document.getElementById(idUber(prefijo, 'SOLICITUD'));
+      const file = input && input.files && input.files[0];
+      if (!file) return {};
+      const base64 = await leerArchivoBase64(file);
+      const subido = await callServer('apiSubirArchivoUber', state.token, file.name, file.type, base64);
+      return { SOLICITUD: subido.url };
     }
 
     async function cargar() {
@@ -1252,8 +1269,11 @@
       const btn = document.getElementById('btn-guardar-editar-uber');
       const textoOriginal = btn.innerHTML;
       btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
       try {
-        await callServer('apiActualizarUber', state.token, document.getElementById('editar-uber-id').value, recolectarUber('editar-uber'));
+        const archivo = await subirArchivoUber('editar-uber');
+        const datos = Object.assign(recolectarUber('editar-uber'), archivo);
+        await callServer('apiActualizarUber', state.token, document.getElementById('editar-uber-id').value, datos);
         cerrarEditarUber();
         await cargar();
       } catch (err) {
@@ -1282,8 +1302,11 @@
       const btn = document.getElementById('btn-guardar-uber');
       const textoOriginal = btn.innerHTML;
       btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
       try {
-        await callServer('apiCrearUber', state.token, recolectarUber('uber'));
+        const archivo = await subirArchivoUber('uber');
+        const datos = Object.assign(recolectarUber('uber'), archivo);
+        await callServer('apiCrearUber', state.token, datos);
         ev.target.reset();
         await cargar();
       } catch (err) {

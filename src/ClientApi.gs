@@ -74,6 +74,9 @@ function apiActualizarUber(token, id, cambios) {
 function apiEliminarUber(token, id) {
   return UberService.eliminar(token, id);
 }
+function apiSubirArchivoUber(token, nombreArchivo, mimeType, base64Data) {
+  return UberService.subirArchivo(token, nombreArchivo, mimeType, base64Data);
+}
 
 // --- Tickets ---
 function apiListarTicketsResumen(token) {

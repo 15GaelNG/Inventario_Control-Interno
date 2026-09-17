@@ -43,7 +43,11 @@
       <div class="field"><label>Puesto</label><input type="text" id="uber-puesto" /></div>
       <div class="field"><label>Días autorizados</label><input type="text" id="uber-dias-autorizados" placeholder="Ej. Lunes a viernes" /></div>
       <div class="field"><label>Horario autorizado</label><input type="text" id="uber-horario-autorizado" placeholder="Ej. 07:00 - 19:00" /></div>
-      <div class="field"><label>Solicitud</label><input type="text" id="uber-solicitud" placeholder="Link o referencia de la solicitud" /></div>
+      <div class="field">
+        <label>Solicitud</label>
+        <input type="file" id="uber-solicitud" accept=".pdf,.png,.jpg,.jpeg" />
+        <div class="file-actual" id="uber-solicitud-actual"></div>
+      </div>
       <div style="grid-column: 1 / -1;"><button type="submit" id="btn-guardar-uber"><i data-lucide="car-taxi-front" class="ico"></i> Registrar usuario</button></div>
     </form>
     <div class="error-msg" id="uber-error" hidden></div>
@@ -88,7 +92,11 @@
           <div class="field"><label>Puesto</label><input type="text" id="editar-uber-puesto" /></div>
           <div class="field"><label>Días autorizados</label><input type="text" id="editar-uber-dias-autorizados" /></div>
           <div class="field"><label>Horario autorizado</label><input type="text" id="editar-uber-horario-autorizado" /></div>
-          <div class="field"><label>Solicitud</label><input type="text" id="editar-uber-solicitud" /></div>
+          <div class="field">
+            <label>Solicitud</label>
+            <input type="file" id="editar-uber-solicitud" accept=".pdf,.png,.jpg,.jpeg" />
+            <div class="file-actual" id="editar-uber-solicitud-actual"></div>
+          </div>
         </div>
         <div class="error-msg" id="editar-uber-error" hidden></div>
         <button type="submit" id="btn-guardar-editar-uber" style="width:100%; margin-top:10px"><i data-lucide="save" class="ico"></i> Guardar cambios</button>
