@@ -101,9 +101,17 @@ const CajasChicasService = (function () {
     return String(maximo + 1);
   }
 
-  /** Da de alta una caja chica. El ID CCH no lo manda el cliente — se calcula
+  /**
+   * Da de alta una caja chica. El ID CCH no lo manda el cliente — se calcula
    * aquí bajo candado (LockService), para que dos altas al mismo tiempo no
-   * terminen con el mismo ID. */
+   * terminen con el mismo ID.
+   *
+   * ESTATUS también se fuerza a "VIGENTE" aquí, igual que en AppSheet: su
+   * "Valid If" original era
+   *   IF(IN([ID CCH], CAJAS CHICAS[ID CCH]), LIST("VIGENTE","CERRADA","EN PROCESO DE CIERRE"), LIST("VIGENTE"))
+   * — solo "VIGENTE" es válido mientras el ID CCH todavía no existe en la
+   * tabla (o sea, al crear); las otras 2 opciones solo aplican al editar.
+   */
   function crear(token, datos) {
     Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
     const lock = LockService.getScriptLock();
@@ -112,6 +120,7 @@ const CajasChicasService = (function () {
       const sheet = hoja_();
       const fila = Object.assign({}, datos);
       fila[ID_COLUMN] = generarIdCch_(sheet);
+      fila['ESTATUS'] = 'VIGENTE';
       SheetUtils.insert(ssId(), sheet.getName(), fila);
       return { ID: fila[ID_COLUMN] };
     } finally {

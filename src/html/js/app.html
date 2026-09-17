@@ -876,7 +876,16 @@
    */
   const CAMPOS_CAJACHICA = [
     { grupo: 'Identificación', clave: 'ID CCH', etiqueta: 'ID CCH', tipo: 'text', soloLectura: true, placeholder: 'Se genera solo' },
-    { grupo: 'Identificación', clave: 'ESTATUS', etiqueta: 'Estatus', tipo: 'text' },
+    {
+      // En AppSheet, el "Valid If" de este campo era:
+      //   IF(IN([ID CCH], CAJAS CHICAS[ID CCH]), LIST("VIGENTE","CERRADA","EN PROCESO DE CIERRE"), LIST("VIGENTE"))
+      // Es decir: al crear (el ID CCH todavía no existe en la tabla) solo se
+      // permite "VIGENTE"; al editar (el ID CCH ya existe) se puede cambiar
+      // entre las 3. bloqueadoAlCrear + valorPorDefecto replican justo eso.
+      grupo: 'Identificación', clave: 'ESTATUS', etiqueta: 'Estatus', tipo: 'select',
+      opciones: ['VIGENTE', 'CERRADA', 'EN PROCESO DE CIERRE'],
+      bloqueadoAlCrear: true, valorPorDefecto: 'VIGENTE',
+    },
     { grupo: 'Identificación', clave: 'EMPRESA ORIGEN', etiqueta: 'Empresa origen', tipo: 'text' },
     { grupo: 'Identificación', clave: 'RESPONSABLE DE CAJA CHICA', etiqueta: 'Responsable', tipo: 'text' },
     { grupo: 'Identificación', clave: 'PUESTO DE RESPONSABLE', etiqueta: 'Puesto del responsable', tipo: 'text' },
@@ -911,7 +920,7 @@
   ];
 
   /** Genera los <div class="field"> agrupados por sección para un formulario de caja chica. */
-  function renderCamposCajaChica(prefijo) {
+  function renderCamposCajaChica(prefijo, esEdicion) {
     const grupos = [];
     const porGrupo = {};
     CAMPOS_CAJACHICA.forEach((campo) => {
@@ -923,6 +932,16 @@
         const id = prefijo + '-' + slugCampo(campo.clave);
         const disabled = campo.soloLectura ? ' disabled' : '';
         const placeholder = campo.placeholder ? ` placeholder="${campo.placeholder}"` : '';
+        // Campos "bloqueados al crear" (ej. Estatus: solo VIGENTE al dar de
+        // alta, editable a sus 3 opciones después) — en Registrar se ven
+        // fijos y deshabilitados; en Editar sí son un select normal.
+        if (campo.tipo === 'select' && campo.bloqueadoAlCrear && !esEdicion) {
+          return `<div class="field"><label>${campo.etiqueta}</label><input type="text" id="${id}" value="${campo.valorPorDefecto}" disabled /></div>`;
+        }
+        if (campo.tipo === 'select') {
+          const opciones = (campo.opciones || []).map((o) => `<option value="${o}">${o}</option>`).join('');
+          return `<div class="field"><label>${campo.etiqueta}</label><select id="${id}">${opciones}</select></div>`;
+        }
         return `<div class="field"><label>${campo.etiqueta}</label><input type="${campo.tipo}" id="${id}"${disabled}${placeholder} /></div>`;
       }).join('');
       return `<div class="info-section-title">${grupo}</div>${campos}`;
@@ -2085,12 +2104,18 @@
     let cajasPorId = {};
     let todasLasCajas = [];
 
-    document.getElementById('campos-form-cajachica').innerHTML = renderCamposCajaChica('cch');
-    document.getElementById('campos-form-editar-cajachica').innerHTML = renderCamposCajaChica('editar-cajachica');
+    document.getElementById('campos-form-cajachica').innerHTML = renderCamposCajaChica('cch', false);
+    document.getElementById('campos-form-editar-cajachica').innerHTML = renderCamposCajaChica('editar-cajachica', true);
 
     function badgeEstatusCaja(estatus) {
-      const vigente = String(estatus || '').toUpperCase() === 'VIGENTE';
-      return `<span class="badge-estado ${vigente ? 'activo' : 'baja'}"><i data-lucide="${vigente ? 'circle-check' : 'ban'}" class="ico"></i> ${estatus || '—'}</span>`;
+      const valor = String(estatus || '').toUpperCase();
+      if (valor === 'CERRADA') {
+        return '<span class="badge-estado baja"><i data-lucide="ban" class="ico"></i> Cerrada</span>';
+      }
+      if (valor === 'EN PROCESO DE CIERRE') {
+        return '<span class="badge-estado pendiente"><i data-lucide="clock" class="ico"></i> En proceso de cierre</span>';
+      }
+      return '<span class="badge-estado activo"><i data-lucide="circle-check" class="ico"></i> Vigente</span>';
     }
 
     const columnasCajasChicas = [
@@ -2160,6 +2185,8 @@
       document.getElementById('cch-stat-total').textContent = todasLasCajas.length;
       document.getElementById('cch-stat-vigentes').textContent =
         todasLasCajas.filter((c) => String(c.ESTATUS || '').toUpperCase() === 'VIGENTE').length;
+      document.getElementById('cch-stat-proceso-cierre').textContent =
+        todasLasCajas.filter((c) => String(c.ESTATUS || '').toUpperCase() === 'EN PROCESO DE CIERRE').length;
       document.getElementById('cch-stat-cerradas').textContent =
         todasLasCajas.filter((c) => String(c.ESTATUS || '').toUpperCase() === 'CERRADA').length;
 
