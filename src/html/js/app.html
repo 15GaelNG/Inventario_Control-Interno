@@ -680,7 +680,10 @@
    */
   const CAMPOS_VEHICULO = [
     { grupo: 'Vehículo', clave: 'MARCA', etiqueta: 'Marca', tipo: 'select' },
-    { grupo: 'Vehículo', clave: 'CLASE', etiqueta: 'Clase', tipo: 'text' },
+    {
+      grupo: 'Vehículo', clave: 'CLASE', etiqueta: 'Clase', tipo: 'select',
+      opciones: ['AUTOMOVIL', 'CAMION', 'CAMIONETA', 'MOTOCICLETA', 'REMOLQUE', 'MAQUINARIA MENOR', 'CUATRIMOTO', 'NUCO SIN INFORMACION', 'MOTOCARRO'],
+    },
     { grupo: 'Vehículo', clave: 'LINEA VEHICULO', etiqueta: 'Línea / modelo', tipo: 'text' },
     { grupo: 'Vehículo', clave: 'MODELO', etiqueta: 'Año', tipo: 'number' },
     { grupo: 'Vehículo', clave: 'COLOR', etiqueta: 'Color', tipo: 'text' },
@@ -751,7 +754,11 @@
           </div>`;
         }
         if (campo.tipo === 'select') {
-          return `<div class="field"><label>${campo.etiqueta}</label><select id="${id}"${req}><option value="">Selecciona…</option></select></div>`;
+          // Con "opciones" definidas de antemano (lista fija, ej. Clase) se pintan
+          // aquí mismo; sin ellas (catálogos reales, ej. Marca) quedan vacías y
+          // las llena initVehiculos() por JS al cargar.
+          const opciones = (campo.opciones || []).map((o) => `<option value="${o}">${o}</option>`).join('');
+          return `<div class="field"><label>${campo.etiqueta}</label><select id="${id}"${req}><option value="">Selecciona…</option>${opciones}</select></div>`;
         }
         return `<div class="field"><label>${campo.etiqueta}</label><input type="${campo.tipo}" id="${id}"${req} /></div>`;
       }).join('');
