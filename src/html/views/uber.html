@@ -16,6 +16,10 @@
       <div><div class="stat-value" id="uber-stat-activos">0</div><div class="stat-label">Activos</div></div>
     </div>
     <div class="stat-tile stat-tile-warn">
+      <div class="stat-icon"><i data-lucide="clock" class="ico"></i></div>
+      <div><div class="stat-value" id="uber-stat-pendientes">0</div><div class="stat-label">Pendientes</div></div>
+    </div>
+    <div class="stat-tile stat-tile-warn">
       <div class="stat-icon"><i data-lucide="ban" class="ico"></i></div>
       <div><div class="stat-value" id="uber-stat-baja">0</div><div class="stat-label">De baja</div></div>
     </div>
@@ -32,8 +36,24 @@
     <form id="form-uber" class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 14px;">
       <div class="field"><label>Nombre completo</label><input type="text" id="uber-nombre-completo" required /></div>
       <div class="field"><label>Razón social</label><select id="uber-razon-social"><option value="">Selecciona…</option></select></div>
-      <div class="field"><label>Estatus</label><input type="text" id="uber-estaus-usuario" placeholder="Ej. Activo" /></div>
-      <div class="field"><label>Rol</label><input type="text" id="uber-rol" placeholder="Ej. Empleado, Beneficiario" /></div>
+      <div class="field">
+        <label>Estatus</label>
+        <select id="uber-estaus-usuario">
+          <option value="">Selecciona…</option>
+          <option value="ACTIVO">ACTIVO</option>
+          <option value="BAJA">BAJA</option>
+          <option value="PENDIENTE">PENDIENTE</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Rol</label>
+        <select id="uber-rol">
+          <option value="">Selecciona…</option>
+          <option value="ADMINISTRADOR">ADMINISTRADOR</option>
+          <option value="BENEFICIARIO">BENEFICIARIO</option>
+          <option value="EMPLEADO">EMPLEADO</option>
+        </select>
+      </div>
       <div class="field"><label>Fecha de alta</label><input type="date" id="uber-fecha-de-alta" /></div>
       <div class="field"><label>Correo electrónico</label><input type="email" id="uber-correo-electronico" /></div>
       <div class="field"><label>Teléfono</label><input type="text" id="uber-numero-telefono" /></div>
@@ -81,8 +101,24 @@
         <div class="modal-form-scroll grid" style="grid-template-columns: repeat(2, 1fr); gap: 0 14px;">
           <div class="field"><label>Nombre completo</label><input type="text" id="editar-uber-nombre-completo" required /></div>
           <div class="field"><label>Razón social</label><select id="editar-uber-razon-social"><option value="">Selecciona…</option></select></div>
-          <div class="field"><label>Estatus</label><input type="text" id="editar-uber-estaus-usuario" /></div>
-          <div class="field"><label>Rol</label><input type="text" id="editar-uber-rol" /></div>
+          <div class="field">
+            <label>Estatus</label>
+            <select id="editar-uber-estaus-usuario">
+              <option value="">Selecciona…</option>
+              <option value="ACTIVO">ACTIVO</option>
+              <option value="BAJA">BAJA</option>
+              <option value="PENDIENTE">PENDIENTE</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Rol</label>
+            <select id="editar-uber-rol">
+              <option value="">Selecciona…</option>
+              <option value="ADMINISTRADOR">ADMINISTRADOR</option>
+              <option value="BENEFICIARIO">BENEFICIARIO</option>
+              <option value="EMPLEADO">EMPLEADO</option>
+            </select>
+          </div>
           <div class="field"><label>Fecha de alta</label><input type="date" id="editar-uber-fecha-de-alta" /></div>
           <div class="field"><label>Correo electrónico</label><input type="email" id="editar-uber-correo-electronico" /></div>
           <div class="field"><label>Teléfono</label><input type="text" id="editar-uber-numero-telefono" /></div>

@@ -1145,8 +1145,20 @@
     let usuariosPorId = {};
 
     function badgeEstatusUber(estatus) {
-      const esBaja = String(estatus || '').toUpperCase().includes('BAJA');
-      return `<span class="badge-estado ${esBaja ? 'baja' : 'activo'}"><i data-lucide="${esBaja ? 'ban' : 'circle-check'}" class="ico"></i> ${esBaja ? 'De baja' : 'Activo'}</span>`;
+      const valor = String(estatus || '').toUpperCase();
+      if (valor.includes('BAJA')) {
+        return '<span class="badge-estado baja"><i data-lucide="ban" class="ico"></i> Baja</span>';
+      }
+      if (valor.includes('PENDIENTE')) {
+        return '<span class="badge-estado pendiente"><i data-lucide="clock" class="ico"></i> Pendiente</span>';
+      }
+      return '<span class="badge-estado activo"><i data-lucide="circle-check" class="ico"></i> Activo</span>';
+    }
+
+    function etiquetaRol(rol) {
+      const mapa = { ADMINISTRADOR: 'tag-navy', BENEFICIARIO: 'tag-gold', EMPLEADO: 'tag-green' };
+      const clase = mapa[String(rol || '').toUpperCase()] || 'tag-slate';
+      return rol ? `<span class="tag ${clase}">${rol}</span>` : '—';
     }
 
     // Razón social / Sede / Oficina-Desarrollo / Departamento: catálogos
@@ -1231,7 +1243,9 @@
 
       document.getElementById('uber-stat-total').textContent = usuarios.length;
       document.getElementById('uber-stat-activos').textContent =
-        usuarios.filter((u) => !String(u.ESTATUS || '').toUpperCase().includes('BAJA')).length;
+        usuarios.filter((u) => String(u.ESTATUS || '').toUpperCase().includes('ACTIVO')).length;
+      document.getElementById('uber-stat-pendientes').textContent =
+        usuarios.filter((u) => String(u.ESTATUS || '').toUpperCase().includes('PENDIENTE')).length;
       document.getElementById('uber-stat-baja').textContent =
         usuarios.filter((u) => String(u.ESTATUS || '').toUpperCase().includes('BAJA')).length;
 
@@ -1240,7 +1254,7 @@
         <tr>
           <td class="tabla-clickable" data-id="${u.ID}" title="Editar / ver detalle">${u.NOMBRE_COMPLETO || '—'}</td>
           <td>${u.RAZON_SOCIAL || '—'}</td>
-          <td>${u.ROL || '—'}</td>
+          <td>${etiquetaRol(u.ROL)}</td>
           <td>${u.DEPARTAMENTO || '—'}</td>
           <td>${u.PUESTO || '—'}</td>
           <td>${badgeEstatusUber(u.ESTATUS)}</td>
