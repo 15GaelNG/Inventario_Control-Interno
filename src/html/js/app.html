@@ -206,6 +206,8 @@
       if (vista === 'accesorios') { montarVista('tpl-accesorios', initAccesorios); return; }
       if (vista === 'incidencias') { montarVista('tpl-incidencias', initIncidencias); return; }
       if (vista === 'vehiculos') { montarVista('tpl-vehiculos', initVehiculos); return; }
+      if (vista === 'uber') { montarVista('tpl-uber', initUber); return; }
+      if (vista === 'tickets') { montarVista('tpl-tickets', initTickets); return; }
       mostrarProximamente(etiqueta || vista);
     });
   }
@@ -1129,6 +1131,308 @@
       } finally {
         btn.disabled = false;
         btn.innerHTML = textoOriginal;
+      }
+    });
+
+    await cargar();
+  }
+
+  // ---------- Uber (usuarios autorizados) ----------
+  async function initUber() {
+    const lista = document.getElementById('lista-uber');
+    const vacio = document.getElementById('uber-vacio');
+    const modalEditar = document.getElementById('modal-editar-uber');
+    let usuariosPorId = {};
+
+    function badgeEstatusUber(estatus) {
+      const esBaja = String(estatus || '').toUpperCase().includes('BAJA');
+      return `<span class="badge-estado ${esBaja ? 'baja' : 'activo'}"><i data-lucide="${esBaja ? 'ban' : 'circle-check'}" class="ico"></i> ${esBaja ? 'De baja' : 'Activo'}</span>`;
+    }
+
+    const CAMPOS_UBER = [
+      'RAZON SOCIAL', 'NOMBRE COMPLETO', 'ESTAUS USUARIO', 'ROL', 'FECHA DE ALTA',
+      'CORREO ELECTRONICO', 'NUMERO TELEFONO', 'SEDE', 'OFICINA/DESARROLLO',
+      'DEPARTAMENTO', 'PUESTO', 'DIAS AUTORIZADOS', 'HORARIO AUTORIZADO', 'SOLICITUD',
+    ];
+    function idUber(prefijo, clave) { return prefijo + '-' + slugCampo(clave); }
+    function recolectarUber(prefijo) {
+      const datos = {};
+      CAMPOS_UBER.forEach((clave) => {
+        const el = document.getElementById(idUber(prefijo, clave));
+        if (el) datos[clave] = el.value.trim();
+      });
+      return datos;
+    }
+    function poblarUber(prefijo, datos) {
+      CAMPOS_UBER.forEach((clave) => {
+        const el = document.getElementById(idUber(prefijo, clave));
+        if (!el) return;
+        const valor = (datos && datos[clave]) || '';
+        el.value = el.type === 'date' ? fechaParaInput(valor) : valor;
+      });
+    }
+
+    async function cargar() {
+      const errorBox = document.getElementById('uber-error');
+      let usuarios;
+      try {
+        usuarios = await callServer('apiListarUberResumen', state.token);
+      } catch (err) {
+        console.error('No se pudo cargar el catálogo de Uber:', err);
+        errorBox.textContent = 'No se pudo cargar el catálogo: ' + err.message;
+        errorBox.hidden = false;
+        return;
+      }
+      errorBox.hidden = true;
+      usuarios = usuarios || [];
+
+      usuariosPorId = {};
+      usuarios.forEach((u) => { usuariosPorId[u.ID] = u; });
+
+      document.getElementById('uber-stat-total').textContent = usuarios.length;
+      document.getElementById('uber-stat-activos').textContent =
+        usuarios.filter((u) => !String(u.ESTATUS || '').toUpperCase().includes('BAJA')).length;
+      document.getElementById('uber-stat-baja').textContent =
+        usuarios.filter((u) => String(u.ESTATUS || '').toUpperCase().includes('BAJA')).length;
+
+      vacio.hidden = usuarios.length > 0;
+      lista.innerHTML = usuarios.map((u) => `
+        <tr>
+          <td class="tabla-clickable" data-id="${u.ID}" title="Editar / ver detalle">${u.NOMBRE_COMPLETO || '—'}</td>
+          <td>${u.RAZON_SOCIAL || '—'}</td>
+          <td>${u.ROL || '—'}</td>
+          <td>${u.DEPARTAMENTO || '—'}</td>
+          <td>${u.PUESTO || '—'}</td>
+          <td>${badgeEstatusUber(u.ESTATUS)}</td>
+          <td>
+            <div class="tabla-actions">
+              <button type="button" class="danger btn-eliminar-uber" data-id="${u.ID}" data-nombre="${u.NOMBRE_COMPLETO}" title="Eliminar"><i data-lucide="trash-2" class="ico"></i></button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+
+      lista.querySelectorAll('.tabla-clickable').forEach((el) => {
+        el.addEventListener('click', () => abrirEditarUber(el.dataset.id));
+      });
+      lista.querySelectorAll('.btn-eliminar-uber').forEach((btn) => {
+        btn.addEventListener('click', () => eliminarUber(btn.dataset.id, btn.dataset.nombre));
+      });
+      refreshIcons();
+    }
+
+    async function abrirEditarUber(id) {
+      const resumen = usuariosPorId[id];
+      if (!resumen) return;
+      document.getElementById('editar-uber-id').value = id;
+      document.getElementById('editar-uber-nombre-label').textContent = resumen.NOMBRE_COMPLETO || '';
+      document.getElementById('editar-uber-error').hidden = true;
+      modalEditar.hidden = false;
+      try {
+        const completo = await callServer('apiBuscarUberPorId', state.token, id);
+        if (completo) poblarUber('editar-uber', completo);
+      } catch (err) {
+        const errorBox = document.getElementById('editar-uber-error');
+        errorBox.textContent = 'No se pudo cargar el registro: ' + err.message;
+        errorBox.hidden = false;
+      }
+    }
+    function cerrarEditarUber() {
+      modalEditar.hidden = true;
+      document.getElementById('form-editar-uber').reset();
+      document.getElementById('editar-uber-error').hidden = true;
+    }
+    document.getElementById('btn-cancelar-editar-uber').addEventListener('click', cerrarEditarUber);
+    modalEditar.addEventListener('click', (ev) => { if (ev.target === modalEditar) cerrarEditarUber(); });
+
+    document.getElementById('form-editar-uber').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('editar-uber-error');
+      errorBox.hidden = true;
+      const btn = document.getElementById('btn-guardar-editar-uber');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      try {
+        await callServer('apiActualizarUber', state.token, document.getElementById('editar-uber-id').value, recolectarUber('editar-uber'));
+        cerrarEditarUber();
+        await cargar();
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+      }
+    });
+
+    async function eliminarUber(id, nombre) {
+      if (!confirm('¿Eliminar a ' + nombre + ' del catálogo de Uber? Esta acción no se puede deshacer.')) return;
+      try {
+        await callServer('apiEliminarUber', state.token, id);
+        await cargar();
+      } catch (err) {
+        alert('No se pudo eliminar: ' + err.message);
+      }
+    }
+
+    document.getElementById('form-uber').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('uber-error');
+      errorBox.hidden = true;
+      const btn = document.getElementById('btn-guardar-uber');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      try {
+        await callServer('apiCrearUber', state.token, recolectarUber('uber'));
+        ev.target.reset();
+        await cargar();
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+      }
+    });
+
+    await cargar();
+  }
+
+  // ---------- Tickets (bitácora general de atención) ----------
+  async function initTickets() {
+    const lista = document.getElementById('lista-tickets');
+    const vacio = document.getElementById('tickets-vacio');
+    const modalEditar = document.getElementById('modal-editar-ticket');
+    let ticketsPorId = {};
+
+    document.getElementById('ticket-fecha-registro').value = new Date().toLocaleDateString('es-MX');
+    document.getElementById('ticket-fecha').value = hoyISO();
+
+    const CAMPOS_TICKET = ['TICKET', 'FECHA', 'DEPARTAMENTO', 'SOLICITANTE', 'TIPO ATENCION', 'PLACA', 'QUIEN ATENDIO', 'COMENTARIO'];
+    function idTicket(prefijo, clave) { return prefijo + '-' + slugCampo(clave); }
+    function recolectarTicket(prefijo) {
+      const datos = {};
+      CAMPOS_TICKET.forEach((clave) => {
+        const el = document.getElementById(idTicket(prefijo, clave));
+        if (el) datos[clave] = el.value.trim();
+      });
+      return datos;
+    }
+    function poblarTicket(prefijo, datos) {
+      CAMPOS_TICKET.forEach((clave) => {
+        const el = document.getElementById(idTicket(prefijo, clave));
+        if (!el) return;
+        const valor = (datos && datos[clave]) || '';
+        el.value = el.type === 'date' ? fechaParaInput(valor) : valor;
+      });
+    }
+
+    async function cargar() {
+      const errorBox = document.getElementById('ticket-error');
+      let tickets;
+      try {
+        tickets = await callServer('apiListarTicketsResumen', state.token);
+      } catch (err) {
+        console.error('No se pudo cargar el historial de tickets:', err);
+        errorBox.textContent = 'No se pudo cargar el historial: ' + err.message;
+        errorBox.hidden = false;
+        return;
+      }
+      errorBox.hidden = true;
+      tickets = tickets || [];
+
+      ticketsPorId = {};
+      tickets.forEach((t) => { ticketsPorId[t.ID] = t; });
+
+      document.getElementById('tickets-stat-total').textContent = tickets.length;
+
+      vacio.hidden = tickets.length > 0;
+      lista.innerHTML = tickets.map((t) => `
+        <tr>
+          <td class="tabla-clickable" data-id="${t.ID}" title="Editar / ver detalle">${t.TICKET || '—'}</td>
+          <td>${formatearFecha(t.FECHA)}</td>
+          <td>${t.DEPARTAMENTO || '—'}</td>
+          <td>${t.SOLICITANTE || '—'}</td>
+          <td>${t.TIPO_ATENCION || '—'}</td>
+          <td>${t.QUIEN_ATENDIO || '—'}</td>
+          <td>
+            <div class="tabla-actions">
+              <button type="button" class="danger btn-eliminar-ticket" data-id="${t.ID}" data-ticket="${t.TICKET}" title="Eliminar"><i data-lucide="trash-2" class="ico"></i></button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+
+      lista.querySelectorAll('.tabla-clickable').forEach((el) => {
+        el.addEventListener('click', () => abrirEditarTicket(el.dataset.id));
+      });
+      lista.querySelectorAll('.btn-eliminar-ticket').forEach((btn) => {
+        btn.addEventListener('click', () => eliminarTicket(btn.dataset.id, btn.dataset.ticket));
+      });
+      refreshIcons();
+    }
+
+    async function abrirEditarTicket(id) {
+      const resumen = ticketsPorId[id];
+      if (!resumen) return;
+      document.getElementById('editar-ticket-id').value = id;
+      document.getElementById('editar-ticket-label').textContent = 'Ticket: ' + (resumen.TICKET || id);
+      document.getElementById('editar-ticket-error').hidden = true;
+      modalEditar.hidden = false;
+      try {
+        const completo = await callServer('apiBuscarTicketPorId', state.token, id);
+        if (completo) poblarTicket('editar-ticket', completo);
+      } catch (err) {
+        const errorBox = document.getElementById('editar-ticket-error');
+        errorBox.textContent = 'No se pudo cargar el registro: ' + err.message;
+        errorBox.hidden = false;
+      }
+    }
+    function cerrarEditarTicket() {
+      modalEditar.hidden = true;
+      document.getElementById('form-editar-ticket').reset();
+      document.getElementById('editar-ticket-error').hidden = true;
+    }
+    document.getElementById('btn-cancelar-editar-ticket').addEventListener('click', cerrarEditarTicket);
+    modalEditar.addEventListener('click', (ev) => { if (ev.target === modalEditar) cerrarEditarTicket(); });
+
+    document.getElementById('form-editar-ticket').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('editar-ticket-error');
+      errorBox.hidden = true;
+      try {
+        await callServer('apiActualizarTicket', state.token, document.getElementById('editar-ticket-id').value, recolectarTicket('editar-ticket'));
+        cerrarEditarTicket();
+        await cargar();
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+      }
+    });
+
+    async function eliminarTicket(id, ticket) {
+      if (!confirm('¿Eliminar el ticket ' + ticket + '? Esta acción no se puede deshacer.')) return;
+      try {
+        await callServer('apiEliminarTicket', state.token, id);
+        await cargar();
+      } catch (err) {
+        alert('No se pudo eliminar: ' + err.message);
+      }
+    }
+
+    document.getElementById('form-ticket').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('ticket-error');
+      errorBox.hidden = true;
+      try {
+        await callServer('apiCrearTicket', state.token, recolectarTicket('ticket'));
+        ev.target.reset();
+        document.getElementById('ticket-fecha-registro').value = new Date().toLocaleDateString('es-MX');
+        document.getElementById('ticket-fecha').value = hoyISO();
+        await cargar();
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
       }
     });
 

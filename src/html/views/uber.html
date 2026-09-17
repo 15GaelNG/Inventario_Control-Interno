@@ -1,0 +1,98 @@
+<template id="tpl-uber">
+  <div class="page-header">
+    <div>
+      <h2><i data-lucide="car-taxi-front" class="ico"></i> Uber</h2>
+      <p class="page-subtitle">Usuarios autorizados para viáticos por Uber</p>
+    </div>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat-tile">
+      <div class="stat-icon"><i data-lucide="users" class="ico"></i></div>
+      <div><div class="stat-value" id="uber-stat-total">0</div><div class="stat-label">Total</div></div>
+    </div>
+    <div class="stat-tile stat-tile-ok">
+      <div class="stat-icon"><i data-lucide="circle-check" class="ico"></i></div>
+      <div><div class="stat-value" id="uber-stat-activos">0</div><div class="stat-label">Activos</div></div>
+    </div>
+    <div class="stat-tile stat-tile-warn">
+      <div class="stat-icon"><i data-lucide="ban" class="ico"></i></div>
+      <div><div class="stat-value" id="uber-stat-baja">0</div><div class="stat-label">De baja</div></div>
+    </div>
+  </div>
+
+  <div class="card form-card" style="margin-bottom:18px">
+    <div class="form-card-header">
+      <div class="form-card-icon"><i data-lucide="car-taxi-front" class="ico"></i></div>
+      <div>
+        <h3>Registrar usuario</h3>
+        <p>Da de alta a alguien autorizado para usar Uber</p>
+      </div>
+    </div>
+    <form id="form-uber" class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 14px;">
+      <div class="field"><label>Nombre completo</label><input type="text" id="uber-nombre-completo" required /></div>
+      <div class="field"><label>Razón social</label><input type="text" id="uber-razon-social" /></div>
+      <div class="field"><label>Estatus</label><input type="text" id="uber-estaus-usuario" placeholder="Ej. Activo" /></div>
+      <div class="field"><label>Rol</label><input type="text" id="uber-rol" placeholder="Ej. Empleado, Beneficiario" /></div>
+      <div class="field"><label>Fecha de alta</label><input type="date" id="uber-fecha-de-alta" /></div>
+      <div class="field"><label>Correo electrónico</label><input type="email" id="uber-correo-electronico" /></div>
+      <div class="field"><label>Teléfono</label><input type="text" id="uber-numero-telefono" /></div>
+      <div class="field"><label>Sede</label><input type="text" id="uber-sede" /></div>
+      <div class="field"><label>Oficina / Desarrollo</label><input type="text" id="uber-oficina-desarrollo" /></div>
+      <div class="field"><label>Departamento</label><input type="text" id="uber-departamento" /></div>
+      <div class="field"><label>Puesto</label><input type="text" id="uber-puesto" /></div>
+      <div class="field"><label>Días autorizados</label><input type="text" id="uber-dias-autorizados" placeholder="Ej. Lunes a viernes" /></div>
+      <div class="field"><label>Horario autorizado</label><input type="text" id="uber-horario-autorizado" placeholder="Ej. 07:00 - 19:00" /></div>
+      <div class="field"><label>Solicitud</label><input type="text" id="uber-solicitud" placeholder="Link o referencia de la solicitud" /></div>
+      <div style="grid-column: 1 / -1;"><button type="submit" id="btn-guardar-uber"><i data-lucide="car-taxi-front" class="ico"></i> Registrar usuario</button></div>
+    </form>
+    <div class="error-msg" id="uber-error" hidden></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">Catálogo</h3>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Nombre</th><th>Razón social</th><th>Rol</th><th>Departamento</th><th>Puesto</th><th>Estatus</th><th></th></tr>
+        </thead>
+        <tbody id="lista-uber"></tbody>
+      </table>
+    </div>
+    <p class="empty-state" id="uber-vacio" hidden>Todavía no hay usuarios registrados.</p>
+  </div>
+
+  <!-- Modal: editar (también sirve para ver el detalle completo) -->
+  <div class="modal-backdrop" id="modal-editar-uber" hidden>
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <div>
+          <h3 style="margin:0">Editar usuario</h3>
+          <p class="modal-subtitle" id="editar-uber-nombre-label"></p>
+        </div>
+        <button type="button" class="modal-close" id="btn-cancelar-editar-uber"><i data-lucide="x" class="ico"></i></button>
+      </div>
+      <form id="form-editar-uber">
+        <input type="hidden" id="editar-uber-id" />
+        <div class="modal-form-scroll grid" style="grid-template-columns: repeat(2, 1fr); gap: 0 14px;">
+          <div class="field"><label>Nombre completo</label><input type="text" id="editar-uber-nombre-completo" required /></div>
+          <div class="field"><label>Razón social</label><input type="text" id="editar-uber-razon-social" /></div>
+          <div class="field"><label>Estatus</label><input type="text" id="editar-uber-estaus-usuario" /></div>
+          <div class="field"><label>Rol</label><input type="text" id="editar-uber-rol" /></div>
+          <div class="field"><label>Fecha de alta</label><input type="date" id="editar-uber-fecha-de-alta" /></div>
+          <div class="field"><label>Correo electrónico</label><input type="email" id="editar-uber-correo-electronico" /></div>
+          <div class="field"><label>Teléfono</label><input type="text" id="editar-uber-numero-telefono" /></div>
+          <div class="field"><label>Sede</label><input type="text" id="editar-uber-sede" /></div>
+          <div class="field"><label>Oficina / Desarrollo</label><input type="text" id="editar-uber-oficina-desarrollo" /></div>
+          <div class="field"><label>Departamento</label><input type="text" id="editar-uber-departamento" /></div>
+          <div class="field"><label>Puesto</label><input type="text" id="editar-uber-puesto" /></div>
+          <div class="field"><label>Días autorizados</label><input type="text" id="editar-uber-dias-autorizados" /></div>
+          <div class="field"><label>Horario autorizado</label><input type="text" id="editar-uber-horario-autorizado" /></div>
+          <div class="field"><label>Solicitud</label><input type="text" id="editar-uber-solicitud" /></div>
+        </div>
+        <div class="error-msg" id="editar-uber-error" hidden></div>
+        <button type="submit" id="btn-guardar-editar-uber" style="width:100%; margin-top:10px"><i data-lucide="save" class="ico"></i> Guardar cambios</button>
+      </form>
+    </div>
+  </div>
+</template>

@@ -58,6 +58,40 @@ function apiSubirArchivoVehiculo(token, nombreArchivo, mimeType, base64Data) {
   return VehiculosService.subirArchivo(token, nombreArchivo, mimeType, base64Data);
 }
 
+// --- Uber ---
+function apiListarUberResumen(token) {
+  return UberService.listarResumen(token);
+}
+function apiBuscarUberPorId(token, id) {
+  return UberService.buscarPorId(token, id);
+}
+function apiCrearUber(token, datos) {
+  return UberService.crear(token, datos);
+}
+function apiActualizarUber(token, id, cambios) {
+  return UberService.actualizar(token, id, cambios);
+}
+function apiEliminarUber(token, id) {
+  return UberService.eliminar(token, id);
+}
+
+// --- Tickets ---
+function apiListarTicketsResumen(token) {
+  return TicketsService.listarResumen(token);
+}
+function apiBuscarTicketPorId(token, id) {
+  return TicketsService.buscarPorId(token, id);
+}
+function apiCrearTicket(token, datos) {
+  return TicketsService.crear(token, datos);
+}
+function apiActualizarTicket(token, id, cambios) {
+  return TicketsService.actualizar(token, id, cambios);
+}
+function apiEliminarTicket(token, id) {
+  return TicketsService.eliminar(token, id);
+}
+
 // --- Incidencias ---
 function apiListarIncidencias(token) {
   return IncidenciasService.listar(token);
