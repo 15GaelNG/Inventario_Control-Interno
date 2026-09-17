@@ -694,7 +694,10 @@
     { grupo: 'Vehículo', clave: 'TIPO MAQUINARIA', etiqueta: 'Tipo de maquinaria', tipo: 'text' },
     { grupo: 'Vehículo', clave: 'TIPO DE COMBUSTIBLE', etiqueta: 'Tipo de combustible', tipo: 'text' },
     { grupo: 'Vehículo', clave: 'CAPACIDAD COMBUSTIBLE (LTS)', etiqueta: 'Capacidad de combustible (L)', tipo: 'number' },
-    { grupo: 'Vehículo', clave: 'ESTATUS', etiqueta: 'Estatus', tipo: 'text' },
+    {
+      grupo: 'Vehículo', clave: 'ESTATUS', etiqueta: 'Estatus', tipo: 'select',
+      opciones: ['BAJA VEHICULAR', 'PRESTAMO', 'UTILITARIO', 'NO UTILITARIO', 'NUCO SIN INFORMACION', 'FUERA DE SERVICIO'],
+    },
 
     { grupo: 'Identificación', clave: 'FOLIO', etiqueta: 'Folio', tipo: 'text', requerido: true },
     { grupo: 'Identificación', clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select' },
