@@ -57,6 +57,15 @@ responsiva **no** requiere ser ADMIN — el rol OPERADOR ya puede operar
 PDF de la inspección/responsiva sí lleva el PIN/patrón sin importar el rol
 (igual que en el AppSheet: es el documento físico que se firma).
 
+**⚠️ Pendiente de corregir a mano (2026-09-17):** al intentar cambiar el ROL
+por automatización de navegador, un clic falló y escribió "G57" en la celda
+A18 (columna CORREO) de la pestaña `USUARIOS` de la BD de pruebas del equipo
+(`1fC77Uu1ePVUySNvhgWXMHqWpLhGhBMTZZMEblU2nUhI`) — debería decir
+`especialista.ci@ciudadmaderas.com` (fila de GIOVANNI JAVIER ORDUÑA DE LA
+PEÑA). Hay que corregirlo a mano en la hoja. El ROL de la fila 57
+(`auxiliar7datos.ci@ciudadmaderas.com`, el usuario) sí se cambió a `ADMIN`
+antes de ese error — conviene confirmarlo al abrir la hoja.
+
 ## 3. Archivos del módulo
 
 ```
@@ -74,17 +83,30 @@ src/services/lineas/
                       IDs de las plantillas INSPECCION_CELULAR / RESPONSIVA_CELULAR)
   LineasCaptura.gs    contexto + guardar inspección/responsiva nueva (checklist, snapshot, alertas,
                       bitácora, APP_EVIDENCIAS) y generar el PDF después de guardar
+  LineasAccesorios.gs inventario de accesorios de celular (ACCESORIOS CELULARES /
+                      MOVIMIENTOS_ACCESORIOS de la misma copia de pruebas): stock calculado,
+                      alerta de reabasto, alta de artículo, entrada/salida bajo candado.
+                      Módulo aparte de AccesoriosService.gs (el del equipo, conectado a producción).
 src/services/TelefoniaService.gs   fachada: valida sesión y rol, arma lo que consume la interfaz
-src/html/views/lineas/             plantillas: lineas-telefonicas, lineas-bitacora
+src/html/views/lineas/             plantillas: lineas-telefonicas, lineas-bitacora, lineas-detalles
+                                    (buscador rápido), lineas-gestion-activos (busca colaborador →
+                                    sus líneas/equipos), lineas-accesorios
 src/html/js/lineas.html            namespace `Lineas` (carga lucide@1.46.0 + helper icono())
 src/html/lineas-estilos.html       estilos .ln-*
 ```
+
+Menú (`NAV_GRUPOS` en `html/js/app.html`) reordenado 2026-09-17: Líneas Telefónicas,
+Gestión de Activos, Detalles Líneas Telefónicas, Inventario de Accesorios (el del equipo),
+Reactivación, Reasignaciones, Solicitud, **Líneas Post Venta**, Cambios, Bitácora de
+Desechos, y al final "Inventario de Accesorios (Líneas)" (temporal, ver arriba). El
+usuario dijo que reacomoda el resto de las posiciones él mismo.
 
 Enganches en archivos compartidos (mínimos, para reducir conflictos al unir):
 
 - `ClientApi.gs`: bloque `// --- Líneas ---` con las funciones `apiLineas*`.
 - `html/Index.html`: `include` de estilos, plantillas y JS del módulo.
-- `html/js/app.html`: 4 líneas en `navegarA` (Jorge también edita esa función → conflicto esperado).
+- `html/js/app.html`: `NAV_GRUPOS` (grupo "Líneas") y líneas en `navegarA` (Jorge también
+  edita esa función → conflicto esperado).
 - `appsscript.json`: scope `script.external_request` + servicio avanzado Sheets v4.
 
 ## 4. Cómo trabajar
