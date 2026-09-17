@@ -894,29 +894,44 @@
     { grupo: 'Identificación', clave: 'PUESTO DE RESPONSABLE', etiqueta: 'Puesto del responsable', tipo: 'text' },
 
     { grupo: 'Jefe y captura', clave: 'JEFE INMEDIATO DEL REPSONSABLE', etiqueta: 'Jefe inmediato del responsable', tipo: 'text' },
-    { grupo: 'Jefe y captura', clave: 'ADMINISTRADA POR', etiqueta: 'Administrada por', tipo: 'text' },
+    {
+      grupo: 'Jefe y captura', clave: 'ADMINISTRADA POR', etiqueta: 'Administrada por', tipo: 'select',
+      opciones: ['RESPONSABLE', 'CAPTURISTA'],
+    },
     { grupo: 'Jefe y captura', clave: 'CAPTURISTA DE CAJA CHICA', etiqueta: 'Capturista', tipo: 'text' },
     { grupo: 'Jefe y captura', clave: 'PUESTO DE CAPTURISTA', etiqueta: 'Puesto del capturista', tipo: 'text' },
 
-    { grupo: 'Ubicación', clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'text' },
-    { grupo: 'Ubicación', clave: 'OFICINA', etiqueta: 'Oficina', tipo: 'text' },
-    { grupo: 'Ubicación', clave: 'SEDE', etiqueta: 'Sede', tipo: 'text' },
+    { grupo: 'Ubicación', clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select' },
+    { grupo: 'Ubicación', clave: 'OFICINA', etiqueta: 'Oficina', tipo: 'select' },
+    { grupo: 'Ubicación', clave: 'SEDE', etiqueta: 'Sede', tipo: 'select' },
 
     { grupo: 'Fechas y configuración', clave: 'FECHA DE APERTURA', etiqueta: 'Fecha de apertura', tipo: 'date' },
     { grupo: 'Fechas y configuración', clave: 'FECHA DE CIERRE', etiqueta: 'Fecha de cierre', tipo: 'date' },
     { grupo: 'Fechas y configuración', clave: 'FECHA DE RESPONSIVA CI', etiqueta: 'Fecha de responsiva CI', tipo: 'date' },
-    { grupo: 'Fechas y configuración', clave: 'TIPO DE AUTORIZACIÓN', etiqueta: 'Tipo de autorización', tipo: 'text' },
+    {
+      grupo: 'Fechas y configuración', clave: 'TIPO DE AUTORIZACIÓN', etiqueta: 'Tipo de autorización', tipo: 'select',
+      opciones: ['FISICA', 'CORREO'],
+    },
     { grupo: 'Fechas y configuración', clave: 'MONTO ACTUAL', etiqueta: 'Monto actual', tipo: 'number' },
-    { grupo: 'Fechas y configuración', clave: 'METODO DE REEMBOLSO', etiqueta: 'Método de reembolso', tipo: 'text' },
+    {
+      grupo: 'Fechas y configuración', clave: 'METODO DE REEMBOLSO', etiqueta: 'Método de reembolso', tipo: 'select',
+      opciones: ['ECHQ', 'TEA', 'EFEC', 'NA', 'EFEC NA'],
+    },
 
     { grupo: 'Contacto', clave: 'CORREO ELECTRONICO DE RESPONSABLE', etiqueta: 'Correo del responsable', tipo: 'email' },
     { grupo: 'Contacto', clave: 'CORREO ELECTRONICO CAPTURISTA', etiqueta: 'Correo del capturista', tipo: 'email' },
     { grupo: 'Contacto', clave: 'TELEFONO DE RESPONSABLE', etiqueta: 'Teléfono del responsable', tipo: 'text' },
     { grupo: 'Contacto', clave: 'TELEFONO DE CAPTURISTA', etiqueta: 'Teléfono del capturista', tipo: 'text' },
 
-    { grupo: 'Identificación oficial', clave: 'TIPO IDENTIFICACION RESPONSABLE', etiqueta: 'Tipo de identificación (responsable)', tipo: 'text' },
+    {
+      grupo: 'Identificación oficial', clave: 'TIPO IDENTIFICACION RESPONSABLE', etiqueta: 'Tipo de identificación (responsable)', tipo: 'select',
+      opciones: ['INE', 'PASAPORTE'],
+    },
     { grupo: 'Identificación oficial', clave: 'VIGENCIA IDENTIFICACION OFICIAL RESPONSABLE', etiqueta: 'Vigencia de identificación (responsable)', tipo: 'text' },
-    { grupo: 'Identificación oficial', clave: 'TIPO IDENTIFICACION JEFE DIRECTO', etiqueta: 'Tipo de identificación (jefe directo)', tipo: 'text' },
+    {
+      grupo: 'Identificación oficial', clave: 'TIPO IDENTIFICACION JEFE DIRECTO', etiqueta: 'Tipo de identificación (jefe directo)', tipo: 'select',
+      opciones: ['INE', 'PASAPORTE'],
+    },
     { grupo: 'Identificación oficial', clave: 'VIGENCIA IDENTIFICACION OFICIAL JEFE DIRECTO', etiqueta: 'Vigencia de identificación (jefe directo)', tipo: 'text' },
 
     { grupo: 'Notas', clave: 'OBSERVACIONES', etiqueta: 'Observaciones', tipo: 'text' },
@@ -2109,6 +2124,28 @@
 
     document.getElementById('campos-form-cajachica').innerHTML = renderCamposCajaChica('cch', false);
     document.getElementById('campos-form-editar-cajachica').innerHTML = renderCamposCajaChica('editar-cajachica', true);
+
+    // Departamento / Sede / Oficina: catálogos reales de la hoja
+    // "DEPARTAMENTOS" (distinta de "LISTAS VEHICULOS" — es la que usan
+    // Vehículos/Uber/Tickets), mismas opciones en Registrar y Editar.
+    function llenarSelect(id, valores) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.innerHTML = '<option value="">Selecciona…</option>' +
+        (valores || []).map((v) => `<option value="${v}">${v}</option>`).join('');
+    }
+    try {
+      const [departamentos, sedes, oficinas] = await Promise.all([
+        callServer('apiListarDepartamentosCCH', state.token),
+        callServer('apiListarSedesCCH', state.token),
+        callServer('apiListarOficinasCCH', state.token),
+      ]);
+      ['cch-departamento', 'editar-cajachica-departamento'].forEach((id) => llenarSelect(id, departamentos));
+      ['cch-sede', 'editar-cajachica-sede'].forEach((id) => llenarSelect(id, sedes));
+      ['cch-oficina', 'editar-cajachica-oficina'].forEach((id) => llenarSelect(id, oficinas));
+    } catch (err) {
+      console.error('No se pudieron cargar los catálogos de Departamento/Sede/Oficina:', err);
+    }
 
     function badgeEstatusCaja(estatus) {
       const valor = String(estatus || '').toUpperCase();

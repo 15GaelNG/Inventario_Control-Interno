@@ -134,6 +134,15 @@ function apiListarOficinasDesarrollo(token) {
 function apiListarMarcas(token) {
   return ListasService.listarMarcas(token);
 }
+function apiListarDepartamentosCCH(token) {
+  return ListasService.listarDepartamentosCCH(token);
+}
+function apiListarSedesCCH(token) {
+  return ListasService.listarSedesCCH(token);
+}
+function apiListarOficinasCCH(token) {
+  return ListasService.listarOficinasCCH(token);
+}
 
 // --- Incidencias ---
 function apiListarIncidencias(token) {
