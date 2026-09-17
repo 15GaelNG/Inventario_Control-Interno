@@ -1331,6 +1331,18 @@
     document.getElementById('ticket-fecha-registro').value = new Date().toLocaleDateString('es-MX');
     document.getElementById('ticket-fecha').value = hoyISO();
 
+    // Departamentos: catálogo real (hoja "LISTAS VEHICULOS", columna
+    // DEPARTAMENTO), no una lista fija a mano — mismas opciones en los dos formularios.
+    try {
+      const departamentos = await callServer('apiListarDepartamentos', state.token);
+      const opciones = '<option value="">Selecciona…</option>' +
+        (departamentos || []).map((d) => `<option value="${d}">${d}</option>`).join('');
+      document.getElementById('ticket-departamento').innerHTML = opciones;
+      document.getElementById('editar-ticket-departamento').innerHTML = opciones;
+    } catch (err) {
+      console.error('No se pudo cargar la lista de departamentos:', err);
+    }
+
     const CAMPOS_TICKET = ['TICKET', 'FECHA', 'DEPARTAMENTO', 'SOLICITANTE', 'TIPO ATENCION', 'PLACA', 'QUIEN ATENDIO', 'COMENTARIO'];
     function idTicket(prefijo, clave) { return prefijo + '-' + slugCampo(clave); }
     function recolectarTicket(prefijo) {

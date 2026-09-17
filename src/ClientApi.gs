@@ -95,6 +95,11 @@ function apiEliminarTicket(token, id) {
   return TicketsService.eliminar(token, id);
 }
 
+// --- Listas de referencia ---
+function apiListarDepartamentos(token) {
+  return ListasService.listarDepartamentos(token);
+}
+
 // --- Incidencias ---
 function apiListarIncidencias(token) {
   return IncidenciasService.listar(token);

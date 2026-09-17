@@ -25,7 +25,10 @@
       <div class="field"><label>Ticket</label><input type="text" id="ticket-ticket" placeholder="Ej. 4021" /></div>
       <div class="field"><label>Fecha de registro</label><input type="text" id="ticket-fecha-registro" disabled /></div>
       <div class="field"><label>Fecha</label><input type="date" id="ticket-fecha" /></div>
-      <div class="field"><label>Departamento</label><input type="text" id="ticket-departamento" /></div>
+      <div class="field">
+        <label>Departamento</label>
+        <select id="ticket-departamento"><option value="">Selecciona…</option></select>
+      </div>
       <div class="field"><label>Solicitante</label><input type="text" id="ticket-solicitante" /></div>
       <div class="field">
         <label>Tipo de atención</label>
@@ -90,7 +93,10 @@
         <input type="hidden" id="editar-ticket-id" />
         <div class="field"><label>Ticket</label><input type="text" id="editar-ticket-ticket" /></div>
         <div class="field"><label>Fecha</label><input type="date" id="editar-ticket-fecha" /></div>
-        <div class="field"><label>Departamento</label><input type="text" id="editar-ticket-departamento" /></div>
+        <div class="field">
+          <label>Departamento</label>
+          <select id="editar-ticket-departamento"><option value="">Selecciona…</option></select>
+        </div>
         <div class="field"><label>Solicitante</label><input type="text" id="editar-ticket-solicitante" /></div>
         <div class="field">
           <label>Tipo de atención</label>
