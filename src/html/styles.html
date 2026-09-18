@@ -72,7 +72,7 @@
 
   /* Sidebar — fondo navy fijo de marca (no cambia con el tema claro/oscuro) */
   #sidebar {
-    width: 250px; height: 100vh; background: var(--color-sidebar-bg);
+    width: 310px; height: 100vh; background: var(--color-sidebar-bg);
     border-right: 1px solid var(--color-sidebar-border);
     padding: 18px 14px; display: flex; flex-direction: column; gap: 4px;
     flex-shrink: 0; overflow-y: auto; transition: width .28s ease;
@@ -143,13 +143,13 @@
     display: flex; flex-direction: column; gap: 1px;
     padding-left: 14px; border-left: 2px solid var(--color-sidebar-border); margin-left: 23px;
   }
-  .nav-group.expanded .nav-group-items { max-height: 600px; }
+  .nav-group.expanded .nav-group-items { max-height: 820px; }
 
   .nav-subitem {
     padding: 9px 11px; border-radius: 8px; cursor: pointer;
     color: var(--color-sidebar-text); font-size: 13px; font-weight: 500;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    width: 100%; border: 0; background: transparent; text-align: left; font-family: inherit;
+    white-space: normal; overflow: visible; line-height: 1.3;
+    width: 100%; border: 0; background: transparent; text-align: left; justify-content: flex-start; font-family: inherit;
   }
   .nav-subitem:hover { background: var(--color-sidebar-hover); }
   .nav-subitem.active { background: var(--color-accent); color: var(--color-primary); }

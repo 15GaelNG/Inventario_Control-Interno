@@ -79,6 +79,12 @@
 
   .ln-filtros { display: grid; grid-template-columns: minmax(220px, 2fr) repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
   form.ln-filtros { grid-template-columns: minmax(220px, 1fr) auto auto auto; }
+  form.ln-op-filtros { grid-template-columns: minmax(240px, 2fr) minmax(190px, 1fr) auto auto auto; }
+  .ln-op-tabla { min-width: 1200px; }
+  .ln-booleano { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; }
+  .ln-booleano .ln-icon { width: 14px; height: 14px; }
+  .ln-booleano.ln-si { color: var(--ln-verde-tx); }
+  .ln-booleano.ln-no { color: var(--ln-rojo-tx); }
   .ln-check { display: flex; align-items: center; gap: 8px; font-size: 12.5px; margin-bottom: 12px; cursor: pointer; }
   .ln-check input { width: auto; }
 

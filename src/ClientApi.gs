@@ -74,6 +74,9 @@ function apiLineasColaboradores(token) {
 function apiLineasBitacora(token, tipo, opciones) {
   return TelefoniaService.bitacora(token, tipo, opciones);
 }
+function apiLineasVistaOperativa(token, tipo, opciones) {
+  return TelefoniaService.vistaOperativa(token, tipo, opciones);
+}
 function apiLineasRecargarDatos(token) {
   return TelefoniaService.recargarDatos(token);
 }

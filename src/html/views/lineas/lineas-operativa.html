@@ -1,0 +1,42 @@
+<template id="tpl-lineas-operativa">
+  <section id="ln-operativa" class="ln-modulo">
+    <div class="page-header ln-page-header">
+      <div class="ln-titulo">
+        <span id="ln-op-titulo-icono" class="ln-titulo-icono"></span>
+        <div>
+          <h2 id="ln-op-titulo">Módulo de líneas</h2>
+          <p id="ln-op-subtitulo" class="page-subtitle"></p>
+        </div>
+      </div>
+      <div class="kpi-chips">
+        <span class="kpi-chip">Total <strong id="ln-op-total">—</strong></span>
+        <span class="kpi-chip">Resultados <strong id="ln-op-resultados">—</strong></span>
+      </div>
+    </div>
+
+    <div id="ln-op-error" class="error-msg" hidden></div>
+    <div class="card ln-card">
+      <form id="ln-op-form" class="ln-filtros ln-op-filtros">
+        <input id="ln-op-q" type="search" placeholder="Buscar en todos los campos…" autocomplete="off" />
+        <select id="ln-op-grupo" aria-label="Filtrar"></select>
+        <button type="submit" class="ln-btn-icono"><span data-ln-icon="search"></span> Buscar</button>
+        <button id="ln-op-limpiar" type="button" class="secondary ln-btn-icono"><span data-ln-icon="x"></span> Limpiar</button>
+        <button id="ln-op-exportar" type="button" class="secondary ln-btn-icono"><span data-ln-icon="download"></span> Exportar página</button>
+      </form>
+      <div class="ln-tabla-wrap">
+        <table class="ln-tabla ln-op-tabla">
+          <thead id="ln-op-thead"></thead>
+          <tbody id="ln-op-tbody"><tr><td class="empty-state"><span class="ln-spinner"></span> Cargando…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="ln-paginacion">
+        <span id="ln-op-conteo" class="ln-conteo"></span>
+        <div class="ln-paginas">
+          <button id="ln-op-anterior" type="button" class="secondary ln-btn-chico">Anterior</button>
+          <span id="ln-op-pagina">Página 1</span>
+          <button id="ln-op-siguiente" type="button" class="secondary ln-btn-chico">Siguiente</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</template>

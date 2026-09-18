@@ -238,6 +238,9 @@
       if (vista === 'detalles-lineas-telefonicas') { montarVista('tpl-lineas-detalles', Lineas.initDetalles); return; }
       if (vista === 'gestion-activos') { montarVista('tpl-lineas-gestion-activos', Lineas.initGestionActivos); return; }
       if (vista === 'accesorios-lineas') { montarVista('tpl-lineas-accesorios', Lineas.initAccesoriosLineas); return; }
+      if (vista === 'reactivacion-lineas') { montarVista('tpl-lineas-operativa', Lineas.initReactivacion); return; }
+      if (vista === 'solicitud-lineas') { montarVista('tpl-lineas-operativa', Lineas.initSolicitud); return; }
+      if (vista === 'lineas-post-venta') { montarVista('tpl-lineas-operativa', Lineas.initPostVenta); return; }
       if (vista === 'cambios-lineas') { montarVista('tpl-lineas-bitacora', Lineas.initCambios); return; }
       if (vista === 'reasignaciones-lineas') { montarVista('tpl-lineas-bitacora', Lineas.initReasignaciones); return; }
       if (vista === 'bitacora-desechos') { montarVista('tpl-lineas-bitacora', Lineas.initDesechos); return; }
@@ -282,10 +285,13 @@
         { vista: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas' },
         { vista: 'gestion-activos', etiqueta: 'Gestión de Activos' },
         { vista: 'detalles-lineas-telefonicas', etiqueta: 'Detalles Líneas Telefónicas' },
-        { vista: 'reasignaciones-lineas', etiqueta: 'Control de Reasignaciones - Líneas' },
-        { vista: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas' },
-        { vista: 'bitacora-desechos', etiqueta: 'Bitácora de Desechos' },
         { vista: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios' },
+        { vista: 'reactivacion-lineas', etiqueta: 'Reactivación de Líneas' },
+        { vista: 'reasignaciones-lineas', etiqueta: 'Control de Reasignaciones - Líneas' },
+        { vista: 'solicitud-lineas', etiqueta: 'Solicitud de Líneas' },
+        { vista: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas' },
+        { vista: 'lineas-post-venta', etiqueta: 'Líneas Post Venta' },
+        { vista: 'bitacora-desechos', etiqueta: 'Bitácora de Desechos' },
       ],
     },
     {

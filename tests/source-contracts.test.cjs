@@ -46,13 +46,23 @@ test('el login acepta hash y conserva compatibilidad con la hoja histórica', ()
   assert.match(auth, /hashPassword_\(String\(password\)/);
 });
 
-test('Telefonía solo muestra rutas implementadas y un inventario de accesorios', () => {
+test('Telefonía muestra los diez módulos implementados en el orden solicitado', () => {
   const app = read('src/html/js/app.html');
   const lineas = app.slice(app.indexOf("id: 'lineas'"), app.indexOf("id: 'arqueos'"));
-  assert.doesNotMatch(lineas, /reactivacion-lineas|solicitud-lineas|lineas-post-venta/);
   assert.equal((lineas.match(/Inventario de Accesorios/g) || []).length, 1);
-  ['lineas-telefonicas', 'gestion-activos', 'detalles-lineas-telefonicas', 'reasignaciones-lineas', 'cambios-lineas', 'bitacora-desechos', 'accesorios-lineas']
+  const orden = ['lineas-telefonicas', 'gestion-activos', 'detalles-lineas-telefonicas', 'accesorios-lineas', 'reactivacion-lineas',
+    'reasignaciones-lineas', 'solicitud-lineas', 'cambios-lineas', 'lineas-post-venta', 'bitacora-desechos'];
+  assert.deepEqual([...lineas.matchAll(/vista: '([^']+)'/g)].map((m) => m[1]), orden);
+  orden
     .forEach((route) => assert.match(app, new RegExp(`vista === '${route}'`), `falta montar ${route}`));
+});
+
+test('las vistas operativas usan la misma base de AppSheet', () => {
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  assert.match(repo, /REACTIVACION: 'REACTIVACION DE LINEAS'/);
+  assert.match(repo, /SOLICITUD: 'SOLICITUD DE LINEAS'/);
+  assert.match(repo, /departamento: 'POST VENTA'/);
+  assert.match(read('src/ClientApi.gs'), /apiLineasVistaOperativa/);
 });
 
 test('las capturas canceladas tienen un flujo completo de limpieza', () => {
@@ -74,6 +84,8 @@ test('el shell tiene navegación móvil y controles semánticos', () => {
   assert.match(index, /id="mobile-menu-btn"/);
   assert.match(index, /id="sidebar-backdrop"/);
   assert.match(styles, /#sidebar\.mobile-open/);
+  assert.match(styles, /width: 310px/);
+  assert.match(styles, /\.nav-subitem \{[\s\S]*?white-space: normal;[\s\S]*?text-align: left; justify-content: flex-start;/);
   assert.match(app, /<button type="button" class="nav-group-header"/);
   assert.match(app, /<button type="button" class="nav-subitem"/);
 });

@@ -20,6 +20,8 @@ const LineasRepo = (function () {
     RESP: 'RESPONSIVAS LINEAS',
     COLAB: 'COLABORADORES',
     LISTAS: 'LISTAS TELEFONOS',
+    REACTIVACION: 'REACTIVACION DE LINEAS',
+    SOLICITUD: 'SOLICITUD DE LINEAS',
     // Pestañas propias del nuevo sistema (AppSheet las ignora).
     APP_MOV: 'APP_MOVIMIENTOS',
     APP_EVID: 'APP_EVIDENCIAS',
@@ -623,6 +625,91 @@ const LineasRepo = (function () {
     return { encabezados: encabezados, filas: salida, total: total, pagina: pagina, paginas: Math.max(1, Math.ceil(total / porPagina)) };
   }
 
+  // ---------------- Vistas operativas heredadas de AppSheet ----------------
+
+  const VISTAS_OPERATIVAS = {
+    REACTIVACION: {
+      tabla: TAB.REACTIVACION, grupo: 'ESTATUS',
+      encabezados: ['FOLIO', 'LINEA SUSPENDIDA', 'COMPAÑIA', 'SIM', 'CORREO / TICKET', 'FECHA DE SUSPENSION',
+        'ESTATUS', 'ESTADO DEL EQUIPO', 'IMEI', 'RETRO DE SOLICITUD', 'FECHA DE REACTIVACION', 'NUEVO NUMERO',
+        'FECHA DE REGISTRO', 'QUIEN REGISTRO', 'COMENTARIOS'],
+    },
+    SOLICITUD: {
+      tabla: TAB.SOLICITUD, grupo: 'ESTATUS',
+      encabezados: ['FOLIO', 'FECHA DE SOLICITUD', 'TIPO DE PLAN', 'TICKET', 'NÚMERO DE EMPLEADO DEL SOLICITANTE',
+        'NOMBRE COMPLETO DEL SOLICITANTE', 'PUESTO DEL SOLICITANTE', 'DEPARTAMENTO DEL SOLICITANTE', 'SEDE',
+        'DEPARTAMENTO', 'TIPO', 'PUESTO', 'COLABORADOR', 'SOLICITANTE', 'FECHA DE ENTREGA', 'ASIGNACION',
+        'REASIGNACION', 'COMPAÑIA', 'EQUIPO', 'NUMERO ANTERIOR', 'NUMERO ACTUAL', 'IMEI', 'SIM', 'ESTATUS',
+        'FECHA DE REGISTRO', 'QUIEN REGISTRO', 'COMENTARIOS'],
+    },
+    POST_VENTA: {
+      tabla: TAB.LINEAS, grupo: 'TIPO', departamento: 'POST VENTA',
+      encabezados: ['NUMERO TELEFONO', 'FOLIO', 'NUCO', 'TIPO', 'RESPONSABLE', 'EQUIPO', 'IMEI', 'NUMERO SIM',
+        'ACCESORIOS', 'SEDE', 'OFICINA / DESARROLLO', 'DEPARTAMENTO', 'AREA', 'RAZON SOCIAL', 'PIN WHATSAPP',
+        'PIN EQUIPO', 'CUENTA GOOGLE', 'COMPAÑIA', 'COSTO PLAN', 'FECHA REGISTRO', 'INICIO PLAN', 'FIN PLAN',
+        'ESTATUS LINEA', 'ESTATUS EQUIPO'],
+    },
+  };
+
+  /**
+   * Página buscable de Reactivación, Solicitud o Líneas Post Venta. Las dos
+   * primeras leen sus tablas del AppSheet; Post Venta es la misma selección
+   * de LINEAS TELEFONICAS cuyo departamento es POST VENTA.
+   */
+  function vistaOperativa(tipo, opciones, puedeVerSecretos) {
+    const cfg = VISTAS_OPERATIVAS[String(tipo || '').toUpperCase()];
+    if (!cfg) throw new Error('Vista operativa desconocida: ' + tipo);
+    if (!LineasDatos.existeTabla(cfg.tabla)) throw new Error('No existe la pestaña "' + cfg.tabla + '" en la base de telefonía.');
+
+    const o = opciones || {};
+    const pagina = Math.max(0, Number(o.pagina) || 0);
+    const porPagina = Math.min(200, Math.max(10, Number(o.porPagina) || 50));
+    const q = String(o.q || '').trim().toUpperCase();
+    const grupo = String(o.grupo || '').trim().toUpperCase();
+    const tabla = LineasDatos.tabla(cfg.tabla);
+    const encabezados = cfg.encabezados.map((h) => {
+      const objetivo = LineasDatos.normCol(h);
+      return tabla.encabezados.find((real) => LineasDatos.normCol(real) === objetivo);
+    }).filter(Boolean);
+
+    let filas;
+    if (cfg.departamento) {
+      const numeros = LineasDatos.buscarFilas(cfg.tabla, 'DEPARTAMENTO', cfg.departamento, false);
+      filas = LineasDatos.leerFilas([{ tabla: cfg.tabla, filas: numeros }])[0]
+        .filter((f) => /^EQUIPO(?: \+ SIM(?: BASICO)?)?$/.test(String(col(f, 'TIPO') || '').trim().toUpperCase()));
+    } else {
+      filas = LineasDatos.leerTabla(cfg.tabla);
+    }
+
+    const grupos = {};
+    filas.forEach((f) => {
+      const valor = String(col(f, cfg.grupo) || 'SIN ESTATUS').trim().toUpperCase();
+      grupos[valor] = (grupos[valor] || 0) + 1;
+    });
+    const totalSinFiltro = filas.length;
+    filas = filas.filter((f) => {
+      if (grupo && String(col(f, cfg.grupo) || 'SIN ESTATUS').trim().toUpperCase() !== grupo) return false;
+      if (!q) return true;
+      return encabezados.some((h) => String(f[h] === null || f[h] === undefined ? '' : f[h]).toUpperCase().indexOf(q) >= 0);
+    });
+
+    const total = filas.length;
+    const desde = pagina * porPagina;
+    const salida = filas.slice(desde, desde + porPagina).map((f) => {
+      const fila = { _fila: f._fila };
+      encabezados.forEach((h) => {
+        const secreto = /^(PIN WHATSAPP|PIN EQUIPO|CONTRASEÑA MODEM)$/i.test(h);
+        fila[h] = secreto && !puedeVerSecretos && f[h] ? '••••' : f[h];
+      });
+      return fila;
+    });
+    return {
+      encabezados: encabezados, filas: salida, total: total, totalSinFiltro: totalSinFiltro,
+      pagina: pagina, paginas: Math.max(1, Math.ceil(total / porPagina)), campoGrupo: cfg.grupo,
+      grupos: Object.keys(grupos).sort().map((nombre) => ({ nombre: nombre, total: grupos[nombre] })),
+    };
+  }
+
   // ---------------- Catálogos, alertas y colaboradores ----------------
 
   /** Catálogos para formularios: enums del AppSheet + valores de LISTAS TELEFONOS y BITACORA DE DESECHO. */
@@ -712,7 +799,7 @@ const LineasRepo = (function () {
     indice, refrescarIndice, leerRegistroPorId, leerRegistroObligatorio,
     guardarCambiosRegistro, agregarRegistro, registrarMovimiento, asegurarPestanaApp,
     evidenciaDesdeFila, inspeccionDesdeFila, inspeccionDesdeEvidencia, responsivaDesdeFila,
-    evidenciasDeRegistro, leerInspeccion, historialDeRegistro, bitacora,
+    evidenciasDeRegistro, leerInspeccion, historialDeRegistro, bitacora, vistaOperativa,
     catalogos, alertasInspeccion, indiceColaboradores, borrarCaches,
   };
 })();

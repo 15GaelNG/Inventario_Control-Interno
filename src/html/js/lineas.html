@@ -1353,6 +1353,110 @@
     }
 
     // ======================================================================
+    // Reactivación, Solicitud y Líneas Post Venta
+    // ======================================================================
+
+    const OPERATIVAS = {
+      REACTIVACION: {
+        titulo: 'Reactivación de Líneas', icono: 'refresh-cw', csv: 'reactivacion de lineas',
+        subtitulo: 'Seguimiento de líneas suspendidas, canceladas y reactivadas', filtro: 'Todos los estatus',
+      },
+      SOLICITUD: {
+        titulo: 'Solicitud de Líneas', icono: 'clipboard-list', csv: 'solicitud de lineas',
+        subtitulo: 'Solicitudes de asignación y reasignación de líneas telefónicas', filtro: 'Todos los estatus',
+      },
+      POST_VENTA: {
+        titulo: 'Líneas Post Venta', icono: 'headset', csv: 'lineas post venta',
+        subtitulo: 'Equipos y líneas asignados al departamento de Post Venta', filtro: 'Todos los tipos',
+      },
+    };
+
+    function initOperativa(tipo) {
+      const n = ++montaje;
+      const cfg = OPERATIVAS[tipo];
+      const raiz = document.getElementById('ln-operativa');
+      const vigente = () => n === montaje && document.body.contains(raiz);
+      const consulta = { q: '', grupo: '', pagina: 0 };
+      let ultima = null;
+
+      $('#ln-op-titulo', raiz).textContent = cfg.titulo;
+      $('#ln-op-subtitulo', raiz).textContent = cfg.subtitulo;
+      $('#ln-op-titulo-icono', raiz).innerHTML = icono(cfg.icono);
+      pintarIconos(raiz);
+
+      function valor(v) {
+        if (v === null || v === undefined || v === '') return vacio;
+        if (v === true || String(v).toUpperCase() === 'TRUE') return '<span class="ln-booleano ln-si" title="Sí">' + icono('check') + '<span>Sí</span></span>';
+        if (v === false || String(v).toUpperCase() === 'FALSE') return '<span class="ln-booleano ln-no" title="No">' + icono('x') + '<span>No</span></span>';
+        if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)) {
+          const d = new Date(v);
+          return esc(d.getHours() || d.getMinutes() || d.getSeconds() ? fechaHora(v) : fecha(v));
+        }
+        return esc(v);
+      }
+
+      function cargar() {
+        const tbody = $('#ln-op-tbody', raiz);
+        tbody.innerHTML = '<tr><td class="empty-state"><span class="ln-spinner"></span> Cargando…</td></tr>';
+        $('#ln-op-error', raiz).hidden = true;
+        $('#ln-op-anterior', raiz).disabled = true;
+        $('#ln-op-siguiente', raiz).disabled = true;
+        llamar('apiLineasVistaOperativa', tipo, {
+          q: consulta.q, grupo: consulta.grupo, pagina: consulta.pagina, porPagina: POR_PAGINA,
+        }).then((r) => {
+          if (!vigente()) return;
+          ultima = r;
+          $('#ln-op-thead', raiz).innerHTML = '<tr>' + r.encabezados.map((h) => '<th>' + esc(h) + '</th>').join('') + '</tr>';
+          tbody.innerHTML = r.filas.length
+            ? r.filas.map((f) => '<tr>' + r.encabezados.map((h) => '<td class="' + (/FOLIO|NUCO|IMEI|SIM|NUMERO|L[IÍ]NEA/i.test(h) ? 'ln-mono' : '') + '">' + valor(f[h]) + '</td>').join('') + '</tr>').join('')
+            : '<tr><td colspan="' + Math.max(1, r.encabezados.length) + '" class="empty-state">Sin resultados</td></tr>';
+
+          const selector = $('#ln-op-grupo', raiz);
+          selector.innerHTML = '<option value="">' + esc(cfg.filtro) + '</option>' + r.grupos.map((g) =>
+            '<option value="' + esc(g.nombre) + '"' + (g.nombre === consulta.grupo ? ' selected' : '') + '>' + esc(g.nombre) + ' (' + miles(g.total) + ')</option>').join('');
+          $('#ln-op-total', raiz).textContent = miles(r.totalSinFiltro);
+          $('#ln-op-resultados', raiz).textContent = miles(r.total);
+          $('#ln-op-conteo', raiz).textContent = r.total ? miles(r.total) + ' registro(s)' : 'Sin registros';
+          $('#ln-op-pagina', raiz).textContent = 'Página ' + (r.pagina + 1) + ' de ' + miles(r.paginas);
+          $('#ln-op-anterior', raiz).disabled = r.pagina === 0;
+          $('#ln-op-siguiente', raiz).disabled = r.pagina >= r.paginas - 1;
+        }).catch((e) => {
+          if (!vigente()) return;
+          tbody.innerHTML = '<tr><td class="empty-state">No se pudieron cargar los datos</td></tr>';
+          const box = $('#ln-op-error', raiz);
+          box.textContent = 'No se pudo cargar ' + cfg.titulo + ': ' + mensajeError(e);
+          box.hidden = false;
+        });
+      }
+
+      $('#ln-op-form', raiz).addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        consulta.q = $('#ln-op-q', raiz).value.trim();
+        consulta.grupo = $('#ln-op-grupo', raiz).value;
+        consulta.pagina = 0;
+        cargar();
+      });
+      $('#ln-op-grupo', raiz).addEventListener('change', (ev) => {
+        consulta.grupo = ev.target.value;
+        consulta.pagina = 0;
+        cargar();
+      });
+      $('#ln-op-limpiar', raiz).addEventListener('click', () => {
+        $('#ln-op-q', raiz).value = '';
+        consulta.q = '';
+        consulta.grupo = '';
+        consulta.pagina = 0;
+        cargar();
+      });
+      $('#ln-op-anterior', raiz).addEventListener('click', () => { consulta.pagina--; cargar(); });
+      $('#ln-op-siguiente', raiz).addEventListener('click', () => { consulta.pagina++; cargar(); });
+      $('#ln-op-exportar', raiz).addEventListener('click', () => {
+        if (ultima && ultima.filas.length) exportarCsv(cfg.csv, ultima.encabezados, ultima.filas);
+      });
+      cargar();
+    }
+
+    // ======================================================================
     // Bitácoras: Control de Cambios, Control de Reasignaciones, Bitácora de Desechos
     // ======================================================================
 
@@ -1480,6 +1584,9 @@
       initDetalles: initDetalles,
       initGestionActivos: initGestionActivos,
       initAccesoriosLineas: initAccesoriosLineas,
+      initReactivacion: () => initOperativa('REACTIVACION'),
+      initSolicitud: () => initOperativa('SOLICITUD'),
+      initPostVenta: () => initOperativa('POST_VENTA'),
       initCambios: () => initBitacora('CAMBIOS'),
       initReasignaciones: () => initBitacora('REASIGNACIONES'),
       initDesechos: () => initBitacora('DESECHOS'),
