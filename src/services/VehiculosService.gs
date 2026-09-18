@@ -49,36 +49,23 @@ const VehiculosService = (function () {
    * solo para quedarse con 6, lee únicamente esas 6 columnas — de ~26,500
    * celdas a ~3,900.
    */
+  const COLUMNAS_BASICO = ['FOLIO', 'DEPARTAMENTO', 'MARCA', 'LINEA VEHICULO', 'MODELO', 'ESTATUS'];
+
   function listarBasico(token) {
     Auth.validarSesion(token);
     const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
-    const lastRow = sheet.getLastRow();
-    if (lastRow < 2) return [];
-
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    const idx = (nombre) => headers.indexOf(nombre);
-    const leerColumna = (nombre) => {
-      const col = idx(nombre);
-      return col === -1 ? [] : sheet.getRange(2, col + 1, lastRow - 1, 1).getValues().map((f) => f[0]);
-    };
-
-    const folios = leerColumna('FOLIO');
-    const deptos = leerColumna('DEPARTAMENTO');
-    const marcas = leerColumna('MARCA');
-    const lineas = leerColumna('LINEA VEHICULO');
-    const modelos = leerColumna('MODELO');
-    const estatus = leerColumna('ESTATUS');
+    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_BASICO);
 
     const resultado = [];
-    for (let i = 0; i < folios.length; i++) {
-      if (!folios[i]) continue;
-      if (String(estatus[i] || '').toUpperCase() === 'BAJA VEHICULAR') continue;
+    for (let i = 0; i < filas; i++) {
+      if (!datos['FOLIO'][i]) continue;
+      if (String(datos['ESTATUS'][i] || '').toUpperCase() === 'BAJA VEHICULAR') continue;
       resultado.push({
-        FOLIO: folios[i],
-        DEPARTAMENTO: deptos[i] || '',
-        MARCA: marcas[i] || '',
-        LINEA_VEHICULO: lineas[i] || '',
-        MODELO: modelos[i] || '',
+        FOLIO: datos['FOLIO'][i],
+        DEPARTAMENTO: datos['DEPARTAMENTO'][i] || '',
+        MARCA: datos['MARCA'][i] || '',
+        LINEA_VEHICULO: datos['LINEA VEHICULO'][i] || '',
+        MODELO: datos['MODELO'][i] || '',
       });
     }
     return resultado.sort((a, b) => String(a.FOLIO).localeCompare(String(b.FOLIO)));
@@ -89,20 +76,6 @@ const VehiculosService = (function () {
     'LINEA VEHICULO', 'MODELO', 'COLOR', 'PLACA', 'SEDE', 'ESTATUS',
   ];
 
-  /** Lee solo las columnas dadas (no toda la hoja) — {filas, datos: {columna: [valores]}} */
-  function leerColumnas_(sheet, columnas) {
-    const lastRow = sheet.getLastRow();
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    const datos = {};
-    columnas.forEach((nombre) => {
-      const col = headers.indexOf(nombre);
-      datos[nombre] = (col === -1 || lastRow < 2)
-        ? []
-        : sheet.getRange(2, col + 1, lastRow - 1, 1).getValues().map((f) => f[0]);
-    });
-    return { filas: Math.max(0, lastRow - 1), datos: datos };
-  }
-
   /**
    * Catálogo ligero para la lista/tarjetas del módulo (solo las columnas que
    * se muestran, no las 41) — incluye vehículos de baja (a diferencia de
@@ -111,7 +84,7 @@ const VehiculosService = (function () {
   function listarResumen(token) {
     Auth.validarSesion(token);
     const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
-    const { filas, datos } = leerColumnas_(sheet, COLUMNAS_RESUMEN);
+    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
 
     const resultado = [];
     for (let i = 0; i < filas; i++) {

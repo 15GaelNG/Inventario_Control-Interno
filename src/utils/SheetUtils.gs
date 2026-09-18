@@ -154,21 +154,32 @@ const SheetUtils = (function () {
   }
 
   /**
-   * Lee solo las columnas dadas de una hoja ya resuelta (no toda la hoja) —
-   * regresa {filas, datos: {columna: [valores]}}. Útil para listas/tarjetas
+   * Lee columnas específicas de una hoja ya resuelta — regresa
+   * {filas, datos: {columna: [valores]}}. Pensada para listas/tarjetas
    * donde no se necesitan las decenas de columnas completas de la hoja.
+   *
+   * Hace UNA sola lectura (sheet.getRange(...).getValues() de todo el
+   * ancho) y de ahí saca nada más las columnas pedidas — antes hacía una
+   * llamada a getRange/getValues POR CADA columna (8-12 llamadas típico
+   * en los módulos con más columnas), y en Apps Script el costo real está
+   * en el NÚMERO de llamadas a la hoja, no tanto en cuántas celdas de más
+   * se traigan — leer todo el ancho de un jalón es notablemente más rápido
+   * que leerlo columna por columna, aunque parezca "menos preciso".
    */
   function leerColumnasDeHoja(sheet, columnas) {
     const lastRow = sheet.getLastRow();
     const headers = getHeaders_(sheet);
     const datos = {};
+    if (lastRow < 2) {
+      columnas.forEach((nombre) => { datos[nombre] = []; });
+      return { filas: 0, datos: datos };
+    }
+    const todasLasFilas = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
     columnas.forEach((nombre) => {
       const col = headers.indexOf(nombre);
-      datos[nombre] = (col === -1 || lastRow < 2)
-        ? []
-        : sheet.getRange(2, col + 1, lastRow - 1, 1).getValues().map((f) => f[0]);
+      datos[nombre] = col === -1 ? [] : todasLasFilas.map((fila) => fila[col]);
     });
-    return { filas: Math.max(0, lastRow - 1), datos: datos };
+    return { filas: lastRow - 1, datos: datos };
   }
 
   return { getSheet, getSheetByColumns, getAll, findById, insert, update, remove, leerColumnasDeHoja };
