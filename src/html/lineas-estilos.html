@@ -85,6 +85,10 @@
   .ln-booleano .ln-icon { width: 14px; height: 14px; }
   .ln-booleano.ln-si { color: var(--ln-verde-tx); }
   .ln-booleano.ln-no { color: var(--ln-rojo-tx); }
+  .ln-op-campos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; }
+  .ln-op-campo-ancho { grid-column: 1 / -1; }
+  .ln-op-check { min-height: 40px; display: flex; align-items: center; gap: 8px; text-transform: none; font-size: 13px; }
+  .ln-op-check input { width: auto; }
   .ln-check { display: flex; align-items: center; gap: 8px; font-size: 12.5px; margin-bottom: 12px; cursor: pointer; }
   .ln-check input { width: auto; }
 
@@ -186,6 +190,7 @@
     .ln-acciones-header, .ln-acciones-header button { width: 100%; }
     .ln-captura-acciones { position: sticky; bottom: 0; background: var(--color-surface); padding-top: 10px; }
     .ln-firma-caja canvas { min-height: 180px; }
+    .ln-op-campos { grid-template-columns: 1fr; }
   }
 
   @media (max-width: 520px) {

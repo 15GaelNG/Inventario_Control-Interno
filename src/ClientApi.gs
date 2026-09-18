@@ -77,6 +77,9 @@ function apiLineasBitacora(token, tipo, opciones) {
 function apiLineasVistaOperativa(token, tipo, opciones) {
   return TelefoniaService.vistaOperativa(token, tipo, opciones);
 }
+function apiLineasCrearVistaOperativa(token, tipo, datos) {
+  return TelefoniaService.crearVistaOperativa(token, tipo, datos);
+}
 function apiLineasRecargarDatos(token) {
   return TelefoniaService.recargarDatos(token);
 }

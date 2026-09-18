@@ -651,6 +651,15 @@ const LineasRepo = (function () {
     },
   };
 
+  const CAMPOS_ALTA_OPERATIVA = {
+    REACTIVACION: ['LINEA SUSPENDIDA', 'COMPAÑIA', 'SIM', 'CORREO / TICKET', 'FECHA DE SUSPENSION', 'ESTATUS',
+      'ESTADO DEL EQUIPO', 'IMEI', 'RETRO DE SOLICITUD', 'FECHA DE REACTIVACION', 'NUEVO NUMERO', 'COMENTARIOS'],
+    SOLICITUD: ['FECHA DE SOLICITUD', 'TIPO DE PLAN', 'TICKET', 'NÚMERO DE EMPLEADO DEL SOLICITANTE',
+      'NOMBRE COMPLETO DEL SOLICITANTE', 'PUESTO DEL SOLICITANTE', 'DEPARTAMENTO DEL SOLICITANTE', 'SEDE',
+      'DEPARTAMENTO', 'TIPO', 'PUESTO', 'COLABORADOR', 'SOLICITANTE', 'FECHA DE ENTREGA', 'ASIGNACION',
+      'REASIGNACION', 'COMPAÑIA', 'EQUIPO', 'NUMERO ANTERIOR', 'NUMERO ACTUAL', 'IMEI', 'SIM', 'ESTATUS', 'COMENTARIOS'],
+  };
+
   /**
    * Página buscable de Reactivación, Solicitud o Líneas Post Venta. Las dos
    * primeras leen sus tablas del AppSheet; Post Venta es la misma selección
@@ -708,6 +717,35 @@ const LineasRepo = (function () {
       pagina: pagina, paginas: Math.max(1, Math.ceil(total / porPagina)), campoGrupo: cfg.grupo,
       grupos: Object.keys(grupos).sort().map((nombre) => ({ nombre: nombre, total: grupos[nombre] })),
     };
+  }
+
+  /** Agrega un registro conservando las columnas y folios de las tablas del AppSheet. */
+  function crearVistaOperativa(tipo, datos, usuario) {
+    const clave = String(tipo || '').toUpperCase();
+    const cfg = VISTAS_OPERATIVAS[clave];
+    const permitidos = CAMPOS_ALTA_OPERATIVA[clave];
+    if (!cfg || !permitidos) throw new Error('Este módulo no admite altas.');
+    datos = datos || {};
+    const requeridos = clave === 'REACTIVACION' ? ['LINEA SUSPENDIDA', 'ESTATUS'] : ['FECHA DE SOLICITUD', 'TIPO DE PLAN'];
+    requeridos.forEach((campo) => {
+      if (datos[campo] === null || datos[campo] === undefined || String(datos[campo]).trim() === '') {
+        throw new Error('El campo "' + campo + '" es obligatorio.');
+      }
+    });
+
+    return LineasDatos.conCandado(() => {
+      const existentes = LineasDatos.leerTabla(cfg.tabla);
+      const folio = existentes.reduce((max, f) => Math.max(max, Number(col(f, 'FOLIO')) || 0), 0) + 1;
+      const fila = { FOLIO: folio, 'FECHA DE REGISTRO': new Date(), 'QUIEN REGISTRO': usuario.nombre || usuario.correo };
+      permitidos.forEach((campo) => {
+        if (!(campo in datos)) return;
+        let valor = datos[campo];
+        if (/^FECHA /.test(campo) && valor) valor = new Date(valor + (String(valor).length === 10 ? 'T12:00:00' : ''));
+        fila[campo] = valor;
+      });
+      const numeroFila = LineasDatos.agregarFilas(cfg.tabla, [fila])[0];
+      return { ok: true, folio: folio, fila: numeroFila };
+    });
   }
 
   // ---------------- Catálogos, alertas y colaboradores ----------------
@@ -799,7 +837,7 @@ const LineasRepo = (function () {
     indice, refrescarIndice, leerRegistroPorId, leerRegistroObligatorio,
     guardarCambiosRegistro, agregarRegistro, registrarMovimiento, asegurarPestanaApp,
     evidenciaDesdeFila, inspeccionDesdeFila, inspeccionDesdeEvidencia, responsivaDesdeFila,
-    evidenciasDeRegistro, leerInspeccion, historialDeRegistro, bitacora, vistaOperativa,
+    evidenciasDeRegistro, leerInspeccion, historialDeRegistro, bitacora, vistaOperativa, crearVistaOperativa,
     catalogos, alertasInspeccion, indiceColaboradores, borrarCaches,
   };
 })();

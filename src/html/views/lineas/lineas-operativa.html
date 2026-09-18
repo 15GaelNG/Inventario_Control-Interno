@@ -9,6 +9,7 @@
         </div>
       </div>
       <div class="kpi-chips">
+        <button id="ln-op-nuevo" type="button" class="kpi-chip ln-btn-icono" hidden><span data-ln-icon="plus"></span> Nuevo registro</button>
         <span class="kpi-chip">Total <strong id="ln-op-total">—</strong></span>
         <span class="kpi-chip">Resultados <strong id="ln-op-resultados">—</strong></span>
       </div>
@@ -39,4 +40,21 @@
       </div>
     </div>
   </section>
+
+  <div id="ln-op-modal" class="modal-backdrop" hidden>
+    <div class="modal-card modal-card-wide" role="dialog" aria-modal="true" aria-labelledby="ln-op-modal-titulo">
+      <div class="modal-header">
+        <h3 id="ln-op-modal-titulo">Nuevo registro</h3>
+        <button id="ln-op-cerrar" type="button" class="modal-close secondary" aria-label="Cerrar"><span data-ln-icon="x"></span></button>
+      </div>
+      <form id="ln-op-alta-form">
+        <div id="ln-op-campos" class="ln-op-campos modal-form-scroll"></div>
+        <div id="ln-op-alta-error" class="error-msg" hidden></div>
+        <div class="ln-captura-acciones">
+          <button id="ln-op-cancelar" type="button" class="secondary">Cancelar</button>
+          <button id="ln-op-guardar" type="submit" class="ln-btn-icono"><span data-ln-icon="save"></span> Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </template>

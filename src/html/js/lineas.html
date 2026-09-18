@@ -1360,10 +1360,28 @@
       REACTIVACION: {
         titulo: 'Reactivación de Líneas', icono: 'refresh-cw', csv: 'reactivacion de lineas',
         subtitulo: 'Seguimiento de líneas suspendidas, canceladas y reactivadas', filtro: 'Todos los estatus',
+        campos: [
+          ['LINEA SUSPENDIDA', 'Línea suspendida', 'tel', true], ['COMPAÑIA', 'Compañía', 'select', false, ['TELCEL', 'TELCEL GPH', 'TELCEL FRO', 'AT&T', 'BAIT']],
+          ['SIM', 'SIM', 'text'], ['CORREO / TICKET', 'Correo / ticket', 'text'], ['FECHA DE SUSPENSION', 'Fecha de suspensión', 'date'],
+          ['ESTATUS', 'Estatus', 'select', true, ['ACTUALIZACIÓN DE LINEA TELEFONICA', 'CANCELADA', 'DISPONIBLE', 'EN USO', 'PROCESO DE CANCELACION']],
+          ['ESTADO DEL EQUIPO', 'Estado del equipo', 'text'], ['IMEI', 'IMEI', 'text'], ['RETRO DE SOLICITUD', 'Retro de solicitud', 'text'],
+          ['FECHA DE REACTIVACION', 'Fecha de reactivación', 'date'], ['NUEVO NUMERO', 'Nuevo número', 'tel'], ['COMENTARIOS', 'Comentarios', 'textarea'],
+        ],
       },
       SOLICITUD: {
         titulo: 'Solicitud de Líneas', icono: 'clipboard-list', csv: 'solicitud de lineas',
         subtitulo: 'Solicitudes de asignación y reasignación de líneas telefónicas', filtro: 'Todos los estatus',
+        campos: [
+          ['FECHA DE SOLICITUD', 'Fecha de solicitud', 'date', true], ['TIPO DE PLAN', 'Tipo de plan', 'text', true], ['TICKET', 'Ticket', 'text'],
+          ['NÚMERO DE EMPLEADO DEL SOLICITANTE', 'Número de empleado del solicitante', 'text'],
+          ['NOMBRE COMPLETO DEL SOLICITANTE', 'Nombre completo del solicitante', 'text'], ['PUESTO DEL SOLICITANTE', 'Puesto del solicitante', 'text'],
+          ['DEPARTAMENTO DEL SOLICITANTE', 'Departamento del solicitante', 'text'], ['SEDE', 'Sede', 'text'], ['DEPARTAMENTO', 'Departamento', 'text'],
+          ['TIPO', 'Tipo', 'text'], ['PUESTO', 'Puesto', 'text'], ['COLABORADOR', 'Colaborador', 'text'], ['SOLICITANTE', 'Solicitante', 'text'],
+          ['FECHA DE ENTREGA', 'Fecha de entrega', 'date'], ['ASIGNACION', 'Asignación', 'checkbox'], ['REASIGNACION', 'Reasignación', 'checkbox'],
+          ['COMPAÑIA', 'Compañía', 'select', false, ['TELCEL', 'TELCEL GPH', 'TELCEL FRO', 'AT&T', 'BAIT']], ['EQUIPO', 'Equipo', 'text'],
+          ['NUMERO ANTERIOR', 'Número anterior', 'tel'], ['NUMERO ACTUAL', 'Número actual', 'tel'], ['IMEI', 'IMEI', 'text'], ['SIM', 'SIM', 'text'],
+          ['ESTATUS', 'Estatus', 'select', false, ['FINALIZADO', 'TRAMITE CANCELADO']], ['COMENTARIOS', 'Comentarios', 'textarea'],
+        ],
       },
       POST_VENTA: {
         titulo: 'Líneas Post Venta', icono: 'headset', csv: 'lineas post venta',
@@ -1378,11 +1396,47 @@
       const vigente = () => n === montaje && document.body.contains(raiz);
       const consulta = { q: '', grupo: '', pagina: 0 };
       let ultima = null;
+      const modal = $('#ln-op-modal');
 
       $('#ln-op-titulo', raiz).textContent = cfg.titulo;
       $('#ln-op-subtitulo', raiz).textContent = cfg.subtitulo;
       $('#ln-op-titulo-icono', raiz).innerHTML = icono(cfg.icono);
       pintarIconos(raiz);
+
+      function cerrarAlta() {
+        modal.hidden = true;
+        $('#ln-op-alta-error').hidden = true;
+      }
+
+      function abrirAlta() {
+        const hoy = new Date();
+        const fechaHoy = hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0') + '-' + String(hoy.getDate()).padStart(2, '0');
+        $('#ln-op-modal-titulo').textContent = 'Nuevo registro · ' + cfg.titulo;
+        $('#ln-op-campos').innerHTML = cfg.campos.map(([nombre, etiqueta, tipoCampo, requerido, opciones]) => {
+          const req = requerido ? ' required' : '';
+          const valorInicial = tipoCampo === 'date' && /FECHA DE (SOLICITUD|ENTREGA)/.test(nombre) ? fechaHoy : '';
+          let control;
+          if (tipoCampo === 'select') {
+            control = '<select name="' + esc(nombre) + '"' + req + '><option value="">Selecciona…</option>' +
+              opciones.map((o) => '<option value="' + esc(o) + '">' + esc(o) + '</option>').join('') + '</select>';
+          } else if (tipoCampo === 'textarea') {
+            control = '<textarea name="' + esc(nombre) + '" rows="3"' + req + '></textarea>';
+          } else if (tipoCampo === 'checkbox') {
+            control = '<label class="ln-op-check"><input name="' + esc(nombre) + '" type="checkbox"> <span data-ln-icon="check"></span> Sí</label>';
+          } else {
+            control = '<input name="' + esc(nombre) + '" type="' + tipoCampo + '" value="' + valorInicial + '"' + req + '>';
+          }
+          return '<div class="field' + (tipoCampo === 'textarea' ? ' ln-op-campo-ancho' : '') + '"><label>' + esc(etiqueta) + (requerido ? ' *' : '') + '</label>' + control + '</div>';
+        }).join('');
+        $('#ln-op-alta-form').reset();
+        $('#ln-op-campos').querySelectorAll('input[type="date"]').forEach((el) => {
+          if (/FECHA DE (SOLICITUD|ENTREGA)/.test(el.name)) el.value = fechaHoy;
+        });
+        modal.hidden = false;
+        pintarIconos(modal);
+        const primero = modal.querySelector('input:not([type="checkbox"]), select, textarea');
+        if (primero) primero.focus();
+      }
 
       function valor(v) {
         if (v === null || v === undefined || v === '') return vacio;
@@ -1453,6 +1507,35 @@
       $('#ln-op-exportar', raiz).addEventListener('click', () => {
         if (ultima && ultima.filas.length) exportarCsv(cfg.csv, ultima.encabezados, ultima.filas);
       });
+      $('#ln-op-nuevo', raiz).addEventListener('click', abrirAlta);
+      $('#ln-op-cerrar').addEventListener('click', cerrarAlta);
+      $('#ln-op-cancelar').addEventListener('click', cerrarAlta);
+      modal.addEventListener('click', (ev) => { if (ev.target === modal) cerrarAlta(); });
+      $('#ln-op-alta-form').addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        const datos = {};
+        cfg.campos.forEach(([nombre, , tipoCampo]) => {
+          const control = ev.currentTarget.elements.namedItem(nombre);
+          datos[nombre] = tipoCampo === 'checkbox' ? control.checked : control.value.trim();
+        });
+        const guardar = $('#ln-op-guardar');
+        guardar.disabled = true;
+        $('#ln-op-alta-error').hidden = true;
+        llamar('apiLineasCrearVistaOperativa', tipo, datos).then((r) => {
+          if (!vigente()) return;
+          cerrarAlta();
+          consulta.pagina = 0;
+          aviso('Registro ' + r.folio + ' guardado correctamente.', 'exito');
+          cargar();
+        }).catch((e) => {
+          const box = $('#ln-op-alta-error');
+          box.textContent = mensajeError(e);
+          box.hidden = false;
+        }).finally(() => { guardar.disabled = false; });
+      });
+      if (cfg.campos) {
+        cargarPermisos().then((p) => { if (vigente()) $('#ln-op-nuevo', raiz).hidden = !p.puedeOperar; });
+      }
       cargar();
     }
 

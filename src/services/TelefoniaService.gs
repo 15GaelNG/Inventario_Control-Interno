@@ -187,6 +187,11 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente(LineasRepo.vistaOperativa(tipo, opciones || {}, puedeVerSecretos_(sesion)));
   }
 
+  function crearVistaOperativa(token, tipo, datos) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    return LineasRepo.crearVistaOperativa(tipo, datos || {}, usuarioOperacion_(sesion));
+  }
+
   /** Vacía las cachés del módulo (después de editar la hoja a mano). Solo ADMIN. */
   function recargarDatos(token) {
     Auth.requiereRol(token, [Config.ROLES.ADMIN]);
@@ -252,7 +257,7 @@ const TelefoniaService = (function () {
   }
 
   return {
-    permisos, indice, equipo, linea, evidencias, historial, inspeccion, catalogos, alertas, colaboradores, bitacora, vistaOperativa, recargarDatos,
+    permisos, indice, equipo, linea, evidencias, historial, inspeccion, catalogos, alertas, colaboradores, bitacora, vistaOperativa, crearVistaOperativa, recargarDatos,
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf,
   };
 })();

@@ -63,6 +63,8 @@ test('las vistas operativas usan la misma base de AppSheet', () => {
   assert.match(repo, /SOLICITUD: 'SOLICITUD DE LINEAS'/);
   assert.match(repo, /departamento: 'POST VENTA'/);
   assert.match(read('src/ClientApi.gs'), /apiLineasVistaOperativa/);
+  assert.match(read('src/ClientApi.gs'), /apiLineasCrearVistaOperativa/);
+  assert.match(repo, /crearVistaOperativa/);
 });
 
 test('las capturas canceladas tienen un flujo completo de limpieza', () => {
