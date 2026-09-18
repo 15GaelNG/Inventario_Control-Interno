@@ -971,10 +971,10 @@
         return {
           puntos: () => estado.puntos.slice(),
           valor: () => estado.puntos.join('-'),
-          base64: () => {
+          base64: (fondoPdf) => {
             if (!estado.puntos.length) return null;
             const c = document.createElement('canvas'); c.width = 300; c.height = 300;
-            const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, 300, 300); x.strokeStyle = '#0b5d7a'; x.lineWidth = 8; x.lineCap = 'round';
+            const x = c.getContext('2d'); x.fillStyle = fondoPdf || '#ffffff'; x.fillRect(0, 0, 300, 300); x.strokeStyle = '#0b5d7a'; x.lineWidth = 8; x.lineCap = 'round';
             x.beginPath(); estado.puntos.forEach((n, i) => { const p = posiciones[n - 1]; if (!i) x.moveTo(p[0], p[1]); else x.lineTo(p[0], p[1]); }); x.stroke();
             estado.puntos.forEach((n) => { const p = posiciones[n - 1]; x.beginPath(); x.fillStyle = '#0b5d7a'; x.arc(p[0], p[1], 13, 0, Math.PI * 2); x.fill(); });
             return c.toDataURL('image/png').split(',')[1];
@@ -1094,13 +1094,12 @@
         const secciones = ctx.secciones.map((s) => '<div class="ln-checklist-tarjeta"><h4>' + icono('list-checks') + ' ' + esc(s.seccion) + '</h4><div class="ln-checklist-seccion">' +
           s.puntos.map((p) => '<div class="ln-checklist-punto" data-clave="' + esc(p.clave) + '">' +
             '<span class="ln-checklist-etiqueta">' + esc(p.etiqueta) + '</span>' +
-            grupoEscala(p.escala, ctx.anterior && ctx.anterior.checklist ? ctx.anterior.checklist[p.clave] : null) + '</div>').join('') +
+            grupoEscala(p.escala, null) + '</div>').join('') +
           (normal(s.seccion).indexOf('app') === 0 || normal(s.seccion).indexOf('aplicacion') >= 0 ? '<div class="field ln-otra-app"><label for="cap-otra-app">Otra aplicación (opcional)</label><input type="text" id="cap-otra-app" placeholder="Nombre de otra aplicación revisada" autocomplete="off" /></div>' : '') + '</div></div>').join('');
         const datos = tarjetaResponsable(ctx.responsable, 'Responsable del activo') +
           (ctx.equipo ? '<div class="ln-captura-datos-grid"><div class="ln-captura-dato"><span><small>Color del equipo</small><b>' + esc(ctx.equipo.color || '—') + '</b></span></div>' +
             '<div class="ln-captura-dato"><span><small>Estatus actual del equipo</small><b>' + esc(ctx.equipo.estatus || '—') + '</b></span></div></div>' : '') +
-          '<div class="field ln-campo-separado"><label for="cap-ticket">Ticket <span class="ln-tenue">(opcional)</span></label><input type="text" id="cap-ticket" autocomplete="off" /></div>' +
-          (ctx.equipo ? '<label class="ln-check"><input type="checkbox" id="cap-actualizar-accesorios" checked> Sincronizar cubo, cable, funda y mica con las respuestas del checklist</label>' : '');
+          '<div class="field ln-campo-separado"><label for="cap-ticket">Ticket <span class="ln-tenue">(opcional)</span></label><input type="text" id="cap-ticket" autocomplete="off" /></div>';
         const seguridad = ctx.equipo ? '<div class="ln-editor-grid"><div class="field"><label for="cap-insp-tipo-contrasena">Seguridad del equipo</label><select id="cap-insp-tipo-contrasena"><option value="">Sin registrar</option><option value="PIN">PIN</option><option value="PATRON">Patrón</option><option value="CONTRASEÑA">Contraseña</option></select></div>' +
           '<div class="field" id="cap-insp-pin-campo" hidden><label for="cap-insp-pin">PIN o contraseña</label><input type="text" id="cap-insp-pin" autocomplete="new-password" /></div></div>' +
           '<div class="ln-nota" id="cap-insp-patron-ayuda" hidden>' + icono('info', 'ln-icon-sm') + ' Traza el patrón que debe quedar en la inspección.</div>' + htmlPatron('cap-insp-patron', true) :
@@ -1119,7 +1118,7 @@
           seccionCaptura(2, 'list-checks', 'Revisión del activo', 'Marca el estado actual de cada componente y servicio.',
             '<div class="ln-checklist-avance" id="cap-checklist-avance"><div class="ln-checklist-avance-cabecera"><b>Avance del checklist</b><span id="cap-checklist-conteo"></span></div>' +
             '<div class="ln-checklist-avance-barra"><span id="cap-checklist-barra"></span></div></div>' +
-            (ctx.anterior ? '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' Se precargaron las respuestas de la inspección anterior del ' + esc(fecha(ctx.anterior.fecha) || '') + '. Revisa cada punto antes de guardar.</div>' : '') + secciones) +
+            secciones) +
           seccionCaptura(3, 'shield-check', 'Seguridad del equipo', 'Registra el PIN, contraseña o patrón solicitado en el proceso de inspección.', seguridad) +
           seccionCaptura(4, 'camera', 'Evidencia y observaciones', 'Documenta los hallazgos que deben acompañar al archivo.', evidencia) +
           seccionCaptura(5, 'signature', 'Firmas de validación', 'Control Interno debe firmar para poder generar el documento.', firmas) +
@@ -1174,7 +1173,7 @@
         const fotos = captura.fotos;
         if (raiz.querySelector('.ln-foto-subiendo')) { mostrarErrorCaptura('Espera a que terminen de subir las imágenes.', '#cap-fotos-lista'); return; }
         captura.pdfFirmas = { inspector: firmaInspector.base64('#ddebf7'), responsable: firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ddebf7') : null,
-          patron: tipoSeguridad === 'PATRON' ? captura.controlPatron.base64() : null };
+          patron: tipoSeguridad === 'PATRON' ? captura.controlPatron.base64('#ddebf7') : null };
         estadoGuardado('Guardando inspección');
         llamar('apiLineasGuardarInspeccion', Object.assign({}, refCaptura, {
           carpetaId: carpetaId, fotosCarpetaId: fotosCarpetaId, ruta: ruta, checklist: checklist,
@@ -1182,7 +1181,6 @@
           observaciones: $('#cap-observaciones', raiz).value,
           tipoContrasena: tipoSeguridad, pinEquipo: pinEquipo, patron: tipoSeguridad === 'PATRON' ? captura.controlPatron.valor() : '', patronBase64: captura.pdfFirmas.patron,
           estatusEquipo: ctxEstatusActual_(),
-          actualizarAccesorios: $('#cap-actualizar-accesorios', raiz) ? $('#cap-actualizar-accesorios', raiz).checked : false,
           fotos: fotos, firmaInspectorBase64: captura.pdfFirmas.inspector, firmaResponsableBase64: captura.pdfFirmas.responsable,
         })).then((r) => {
           refrescarDespuesDeCaptura(idAbierto, 'INSPECCION', r.id);
@@ -1250,7 +1248,7 @@
         const idAbierto = captura.idObjetivo;
         const refCaptura = captura.ref;
         const carpetaId = captura.carpetaId;
-        captura.pdfFirmas = { responsable: firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ffffff') : null, ci: firmaCi.base64('#ffffff'), patron: captura.controlPatron.base64() };
+        captura.pdfFirmas = { responsable: firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ffffff') : null, ci: firmaCi.base64('#ffffff'), patron: captura.controlPatron.base64('#ffffff') };
         estadoGuardado('Guardando responsiva');
         llamar('apiLineasGuardarResponsiva', Object.assign({}, refCaptura, {
           carpetaId: carpetaId, identificacion: identificacion, tipoContrasena: $('#cap-tipo-contrasena', raiz).value,

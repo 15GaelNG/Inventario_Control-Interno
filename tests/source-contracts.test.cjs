@@ -144,6 +144,23 @@ test('el patrón conserva su proporción y cabe completo en las plantillas PDF',
   assert.match(pdf, /setAlignment\(DocumentApp\.HorizontalAlignment\.CENTER\)/);
 });
 
+test('cada inspección inicia limpia y no modifica accesorios desde el checklist', () => {
+  const cliente = read('src/html/js/lineas.html');
+  const captura = read('src/services/lineas/LineasCaptura.gs');
+  assert.match(cliente, /grupoEscala\(p\.escala, null\)/);
+  assert.doesNotMatch(cliente, /cap-actualizar-accesorios/);
+  assert.doesNotMatch(cliente, /ctx\.anterior/);
+  assert.doesNotMatch(captura, /actualizarAccesorios/);
+  assert.doesNotMatch(captura, /inspeccionesPrevias_/);
+});
+
+test('el patrón usa fondo azul en inspección y blanco en responsiva solo al exportar', () => {
+  const cliente = read('src/html/js/lineas.html');
+  assert.match(cliente, /controlPatron\.base64\('#ddebf7'\)/);
+  assert.match(cliente, /controlPatron\.base64\('#ffffff'\)/);
+  assert.match(cliente, /x\.fillStyle = fondoPdf \|\| '#ffffff'/);
+});
+
 test('los movimientos rechazan artículos inexistentes', () => {
   const accesorios = read('src/services/lineas/LineasAccesorios.gs');
   assert.match(accesorios, /if \(!actual\) throw new Error\('El artículo seleccionado ya no existe/);

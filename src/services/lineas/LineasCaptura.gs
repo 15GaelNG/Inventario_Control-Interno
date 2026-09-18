@@ -3,7 +3,7 @@
  * Captura de INSPECCIONES y RESPONSIVAS nuevas de equipo/línea (portado del prototipo).
  *
  * Flujo desde la interfaz:
- *   1. contextoInspeccion / contextoResponsiva   → datos precargados (equipo/línea, responsable, checklist)
+ *   1. contextoInspeccion / contextoResponsiva   → datos del equipo/línea y responsable
  *   2. LineasEvidencias.prepararCarpetaEvidencia → crea la carpeta en NUCOS (misma estructura que producción)
  *   3. LineasEvidencias.subirArchivo (por cada foto) → archivo dentro de esa carpeta
  *      Las firmas viajan en memoria únicamente para insertarlas en el PDF; no se persisten en Drive.
@@ -53,12 +53,6 @@ const LineasCaptura = (function () {
     return (obj.equipo ? obj.equipo.responsable : obj.linea && obj.linea.responsable) || {};
   }
 
-  function inspeccionesPrevias_(registroId) {
-    return LineasRepo.evidenciasDeRegistro(registroId).inspecciones
-      .filter((i) => i.checklist && Object.keys(i.checklist).length)
-      .sort((a, b) => (b.fecha || 0) - (a.fecha || 0));
-  }
-
   function resumenEquipo_(e) {
     return e ? { nuco: e.nuco || null, estatus: e.estatus || null, lineaId: e.lineaId || null, responsable: e.responsable ? e.responsable.nombre || null : null } : null;
   }
@@ -81,12 +75,10 @@ const LineasCaptura = (function () {
 
   function contextoInspeccion(ref, usuario) {
     const obj = objetivoCaptura_(ref);
-    const anterior = inspeccionesPrevias_(obj.reg.id)[0] || null;
     return {
       equipo: obj.equipo, linea: obj.linea, responsable: responsableObjetivo_(obj),
       secciones: LineasChecklist.puntosAplicables(obj.equipo ? obj.equipo.tipo : null, !!obj.linea),
       escalas: LineasChecklist.ESCALAS,
-      anterior: anterior ? { id: anterior._id, fecha: anterior.fecha, checklist: anterior.checklist, calificacion: anterior.calificacion } : null,
       inspector: usuario.nombre,
     };
   }
@@ -165,17 +157,8 @@ const LineasCaptura = (function () {
       LineasChecklist.puntos().forEach((p) => { if (checklist[p.clave]) fila[p.columna] = checklist[p.clave]; });
       LineasDatos.agregarFilas(LineasRepo.TAB.INSP, [fila]);
 
-      // 2) Registro: fecha de inspección, accesorios y estatus.
+      // 2) Registro: fecha de inspección y estatus.
       const cambios = { 'FECHA INSPECCION': ahora };
-      if (obj.equipo && datos.actualizarAccesorios) {
-        const acc = {};
-        (obj.equipo.accesorios || []).forEach((a) => { acc[a] = true; });
-        [['cubo', 'CUBO'], ['cable', 'CABLE'], ['funda', 'FUNDA'], ['mica', 'MICA']].forEach((par) => {
-          if (checklist[par[0]] === 'SI') acc[par[1]] = true;
-          if (checklist[par[0]] === 'NO') delete acc[par[1]];
-        });
-        cambios['ACCESORIOS'] = Object.keys(acc).join(', ');
-      }
       if (obj.equipo && LineasUtil.txt(datos.estatusEquipo)) cambios['ESTATUS EQUIPO'] = String(datos.estatusEquipo);
       const g = LineasRepo.guardarCambiosRegistro(obj.fila, cambios, usuario, ahora);
 
