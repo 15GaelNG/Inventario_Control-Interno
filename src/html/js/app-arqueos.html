@@ -545,15 +545,18 @@
       const textoOriginal = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner"></span> Subiendo archivos y guardando…';
+      toastCargando('Guardando cambios…');
       try {
         const archivos = await subirArchivosArqueo('editar-arqueo');
         const datos = Object.assign(recolectarDatosArqueo('editar-arqueo'), archivos);
         await callServer('apiActualizarArqueo', state.token, document.getElementById('editar-arqueo-id').value, datos);
         cerrarEditarArqueo();
         await cargar();
+        toastExito('Actualizado exitosamente');
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.hidden = false;
+        toastError('No se pudo actualizar: ' + err.message);
       } finally {
         btn.disabled = false;
         btn.innerHTML = textoOriginal;
@@ -562,11 +565,13 @@
 
     async function eliminarArqueo(id) {
       if (!confirm('¿Eliminar el arqueo ' + id + '? Esta acción no se puede deshacer.')) return;
+      toastCargando('Eliminando…');
       try {
         await callServer('apiEliminarArqueo', state.token, id);
         await cargar();
+        toastExito('Eliminado exitosamente');
       } catch (err) {
-        alert('No se pudo eliminar: ' + err.message);
+        toastError('No se pudo eliminar: ' + err.message);
       }
     }
 
@@ -583,6 +588,7 @@
       const textoOriginal = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner"></span> Subiendo archivos y guardando…';
+      toastCargando('Registrando…');
       try {
         const archivos = await subirArchivosArqueo('arq');
         const datos = Object.assign(recolectarDatosArqueo('arq'), archivos);
@@ -597,9 +603,11 @@
         });
         recalcularTotalesArqueo('arq', auditItems);
         await cargar();
+        toastExito('Registrado exitosamente');
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.hidden = false;
+        toastError('No se pudo registrar: ' + err.message);
       } finally {
         btn.disabled = false;
         btn.innerHTML = textoOriginal;

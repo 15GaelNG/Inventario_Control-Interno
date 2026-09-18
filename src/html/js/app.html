@@ -13,6 +13,42 @@
     if (window.lucide) lucide.createIcons();
   }
 
+  /**
+   * Notificación flotante de cargando/éxito/error — para Registrar/Editar/
+   * Eliminar en todos los módulos. Un solo slot (el siguiente toast
+   * reemplaza al anterior, no se apilan). toastCargando() se usa al
+   * empezar la operación; toastExito()/toastError() cierran ese mismo
+   * toast con el resultado — no hace falta llamar a toastCargando() de
+   * nuevo, solo pasar el mensaje final.
+   */
+  let toastActual = null;
+  let toastTimeoutId = null;
+  function toastCargando(mensaje) {
+    const contenedor = document.getElementById('toast-container');
+    if (toastTimeoutId) { clearTimeout(toastTimeoutId); toastTimeoutId = null; }
+    contenedor.innerHTML = '';
+    const el = document.createElement('div');
+    el.className = 'toast toast-cargando';
+    el.innerHTML = `<span class="toast-icon"><span class="spinner"></span></span><span class="toast-mensaje">${mensaje}</span>`;
+    contenedor.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('show'));
+    toastActual = el;
+  }
+  function toastExito(mensaje) {
+    if (!toastActual) toastCargando('');
+    toastActual.className = 'toast toast-exito show';
+    toastActual.innerHTML = `<span class="toast-icon"><i data-lucide="circle-check" class="ico"></i></span><span class="toast-mensaje">${mensaje}</span>`;
+    refreshIcons();
+    toastTimeoutId = setTimeout(() => { if (toastActual) toastActual.classList.remove('show'); }, 2800);
+  }
+  function toastError(mensaje) {
+    if (!toastActual) toastCargando('');
+    toastActual.className = 'toast toast-error show';
+    toastActual.innerHTML = `<span class="toast-icon"><i data-lucide="x" class="ico"></i></span><span class="toast-mensaje">${mensaje}</span>`;
+    refreshIcons();
+    toastTimeoutId = setTimeout(() => { if (toastActual) toastActual.classList.remove('show'); }, 4500);
+  }
+
   // Tema (claro/oscuro) — se aplica antes de montar cualquier vista para evitar parpadeo.
   // Los botones de tema viven en dos lugares (login y sidebar del app-shell), así que
   // se identifican por clase (.theme-btn + data-tema), no por id, y se manejan con
@@ -441,6 +477,7 @@
       ev.preventDefault();
       const errorBox = document.getElementById('mov-error');
       errorBox.hidden = true;
+      toastCargando('Registrando movimiento…');
       try {
         await callServer(
           'apiRegistrarMovimiento',
@@ -452,9 +489,11 @@
         );
         document.getElementById('mov-cantidad').value = '';
         await cargar();
+        toastExito('Registrado exitosamente');
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.hidden = false;
+        toastError('No se pudo registrar: ' + err.message);
       }
     });
 
@@ -1219,11 +1258,13 @@
 
     async function eliminarIncidencia(id, folio) {
       if (!confirm('¿Eliminar la incidencia del folio ' + folio + '? Esta acción no se puede deshacer.')) return;
+      toastCargando('Eliminando…');
       try {
         await callServer('apiEliminarIncidencia', state.token, id);
         await cargar();
+        toastExito('Eliminado exitosamente');
       } catch (err) {
-        alert('No se pudo eliminar: ' + err.message);
+        toastError('No se pudo eliminar: ' + err.message);
       }
     }
 
@@ -1310,6 +1351,7 @@
       ev.preventDefault();
       const errorBox = document.getElementById('inc-error');
       errorBox.hidden = true;
+      toastCargando('Registrando…');
       try {
         await callServer('apiCrearIncidencia', state.token, {
           FOLIO: document.getElementById('inc-folio').value.trim(),
@@ -1327,9 +1369,11 @@
         fijarFechaRegistroHoy();
         document.getElementById('inc-fecha-inspeccion').value = hoyISO();
         await cargar();
+        toastExito('Registrado exitosamente');
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.hidden = false;
+        toastError('No se pudo registrar: ' + err.message);
       }
     });
 
@@ -1340,6 +1384,7 @@
       ev.preventDefault();
       const errorBox = document.getElementById('cerrar-error');
       errorBox.hidden = true;
+      toastCargando('Guardando cambios…');
       try {
         await callServer('apiCerrarIncidencia', state.token, document.getElementById('cerrar-id').value, {
           DESCRIPCION_TRABAJO: document.getElementById('cerrar-trabajo').value.trim(),
@@ -1349,9 +1394,11 @@
         });
         cerrarModal();
         await cargar();
+        toastExito('Actualizado exitosamente');
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.hidden = false;
+        toastError('No se pudo actualizar: ' + err.message);
       }
     });
 
@@ -1365,6 +1412,7 @@
       ev.preventDefault();
       const errorBox = document.getElementById('editar-error');
       errorBox.hidden = true;
+      toastCargando('Guardando cambios…');
       try {
         await callServer('apiActualizarIncidencia', state.token, document.getElementById('editar-id').value, {
           FOLIO: document.getElementById('editar-folio').value.trim(),
@@ -1384,9 +1432,11 @@
         });
         cerrarModalEditar();
         await cargar();
+        toastExito('Actualizado exitosamente');
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.hidden = false;
+        toastError('No se pudo actualizar: ' + err.message);
       }
     });
 
@@ -1608,15 +1658,18 @@
       const textoOriginal = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner"></span> Subiendo archivos y guardando…';
+      toastCargando('Guardando cambios…');
       try {
         const archivos = await subirArchivosVehiculo('editar-vehiculo');
         const datos = Object.assign(recolectarDatosVehiculo('editar-vehiculo'), archivos);
         await callServer('apiActualizarVehiculo', state.token, document.getElementById('editar-vehiculo-id').value, datos);
         cerrarEditarVehiculo();
         await cargar();
+        toastExito('Actualizado exitosamente');
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.hidden = false;
+        toastError('No se pudo actualizar: ' + err.message);
       } finally {
         btn.disabled = false;
         btn.innerHTML = textoOriginal;
@@ -1625,11 +1678,13 @@
 
     async function eliminarVehiculo(id, folio) {
       if (!confirm('¿Eliminar el vehículo con folio ' + folio + '? Esta acción no se puede deshacer.')) return;
+      toastCargando('Eliminando…');
       try {
         await callServer('apiEliminarVehiculo', state.token, id);
         await cargar();
+        toastExito('Eliminado exitosamente');
       } catch (err) {
-        alert('No se pudo eliminar: ' + err.message);
+        toastError('No se pudo eliminar: ' + err.message);
       }
     }
 
@@ -1641,15 +1696,18 @@
       const textoOriginal = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner"></span> Subiendo archivos y guardando…';
+      toastCargando('Registrando…');
       try {
         const archivos = await subirArchivosVehiculo('veh');
         const datos = Object.assign(recolectarDatosVehiculo('veh'), archivos);
         await callServer('apiCrearVehiculo', state.token, datos);
         ev.target.reset();
         await cargar();
+        toastExito('Registrado exitosamente');
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.hidden = false;
+        toastError('No se pudo registrar: ' + err.message);
       } finally {
         btn.disabled = false;
         btn.innerHTML = textoOriginal;
@@ -1897,15 +1955,18 @@
       const textoOriginal = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner"></span> Guardando…';
+      toastCargando('Guardando cambios…');
       try {
         const archivo = await subirArchivoUber('editar-uber');
         const datos = Object.assign(recolectarUber('editar-uber'), archivo);
         await callServer('apiActualizarUber', state.token, document.getElementById('editar-uber-id').value, datos);
         cerrarEditarUber();
         await cargar();
+        toastExito('Actualizado exitosamente');
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.hidden = false;
+        toastError('No se pudo actualizar: ' + err.message);
       } finally {
         btn.disabled = false;
         btn.innerHTML = textoOriginal;
@@ -1914,11 +1975,13 @@
 
     async function eliminarUber(id, nombre) {
       if (!confirm('¿Eliminar a ' + nombre + ' del catálogo de Uber? Esta acción no se puede deshacer.')) return;
+      toastCargando('Eliminando…');
       try {
         await callServer('apiEliminarUber', state.token, id);
         await cargar();
+        toastExito('Eliminado exitosamente');
       } catch (err) {
-        alert('No se pudo eliminar: ' + err.message);
+        toastError('No se pudo eliminar: ' + err.message);
       }
     }
 
@@ -1930,6 +1993,7 @@
       const textoOriginal = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner"></span> Guardando…';
+      toastCargando('Registrando…');
       try {
         const archivo = await subirArchivoUber('uber');
         const datos = Object.assign(recolectarUber('uber'), archivo);
@@ -1937,9 +2001,11 @@
         ev.target.reset();
         document.getElementById('uber-fecha-de-alta').value = new Date().toLocaleDateString('es-MX');
         await cargar();
+        toastExito('Registrado exitosamente');
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.hidden = false;
+        toastError('No se pudo registrar: ' + err.message);
       } finally {
         btn.disabled = false;
         btn.innerHTML = textoOriginal;
@@ -2124,23 +2190,28 @@
       ev.preventDefault();
       const errorBox = document.getElementById('editar-ticket-error');
       errorBox.hidden = true;
+      toastCargando('Guardando cambios…');
       try {
         await callServer('apiActualizarTicket', state.token, document.getElementById('editar-ticket-id').value, recolectarTicket('editar-ticket'));
         cerrarEditarTicket();
         await cargar();
+        toastExito('Actualizado exitosamente');
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.hidden = false;
+        toastError('No se pudo actualizar: ' + err.message);
       }
     });
 
     async function eliminarTicket(id, ticket) {
       if (!confirm('¿Eliminar el ticket ' + ticket + '? Esta acción no se puede deshacer.')) return;
+      toastCargando('Eliminando…');
       try {
         await callServer('apiEliminarTicket', state.token, id);
         await cargar();
+        toastExito('Eliminado exitosamente');
       } catch (err) {
-        alert('No se pudo eliminar: ' + err.message);
+        toastError('No se pudo eliminar: ' + err.message);
       }
     }
 
@@ -2148,15 +2219,18 @@
       ev.preventDefault();
       const errorBox = document.getElementById('ticket-error');
       errorBox.hidden = true;
+      toastCargando('Registrando…');
       try {
         await callServer('apiCrearTicket', state.token, recolectarTicket('ticket'));
         ev.target.reset();
         document.getElementById('ticket-fecha-registro').value = new Date().toLocaleDateString('es-MX');
         document.getElementById('ticket-fecha').value = hoyISO();
         await cargar();
+        toastExito('Registrado exitosamente');
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.hidden = false;
+        toastError('No se pudo registrar: ' + err.message);
       }
     });
 
@@ -2346,14 +2420,17 @@
       const textoOriginal = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner"></span> Guardando…';
+      toastCargando('Guardando cambios…');
       try {
         const datos = recolectarDatosCajaChica('editar-cajachica');
         await callServer('apiActualizarCajaChica', state.token, document.getElementById('editar-cajachica-id').value, datos);
         cerrarEditarCajaChica();
         await cargar();
+        toastExito('Actualizado exitosamente');
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.hidden = false;
+        toastError('No se pudo actualizar: ' + err.message);
       } finally {
         btn.disabled = false;
         btn.innerHTML = textoOriginal;
@@ -2363,11 +2440,13 @@
     async function eliminarCajaChica(id, responsable) {
       const etiqueta = responsable ? ('de ' + responsable) : ('ID CCH ' + id);
       if (!confirm('¿Eliminar la caja chica ' + etiqueta + '? Esta acción no se puede deshacer.')) return;
+      toastCargando('Eliminando…');
       try {
         await callServer('apiEliminarCajaChica', state.token, id);
         await cargar();
+        toastExito('Eliminado exitosamente');
       } catch (err) {
-        alert('No se pudo eliminar: ' + err.message);
+        toastError('No se pudo eliminar: ' + err.message);
       }
     }
 
@@ -2379,14 +2458,17 @@
       const textoOriginal = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner"></span> Guardando…';
+      toastCargando('Registrando…');
       try {
         const datos = recolectarDatosCajaChica('cch');
         await callServer('apiCrearCajaChica', state.token, datos);
         ev.target.reset();
         await cargar();
+        toastExito('Registrado exitosamente');
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.hidden = false;
+        toastError('No se pudo registrar: ' + err.message);
       } finally {
         btn.disabled = false;
         btn.innerHTML = textoOriginal;
@@ -2564,11 +2646,13 @@
 
     async function eliminarCambioMonto(id) {
       if (!confirm('¿Eliminar este cambio de monto? Esto NO revierte el monto actual de la caja chica — solo borra el registro del historial. Esta acción no se puede deshacer.')) return;
+      toastCargando('Eliminando…');
       try {
         await callServer('apiEliminarCambioMontoCCH', state.token, id);
         await cargar();
+        toastExito('Eliminado exitosamente');
       } catch (err) {
-        alert('No se pudo eliminar: ' + err.message);
+        toastError('No se pudo eliminar: ' + err.message);
       }
     }
 
@@ -2580,6 +2664,7 @@
       const textoOriginal = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner"></span> Guardando…';
+      toastCargando('Registrando…');
       try {
         await callServer('apiCrearCambioMontoCCH', state.token, {
           'ID CCH': selectCaja.value,
@@ -2595,9 +2680,11 @@
         selectCaja.innerHTML = '<option value="">Selecciona…</option>' +
           (cajas || []).map((c) => `<option value="${c.ID_CCH}">${c.ID_CCH} — ${c.RESPONSABLE || 'Sin responsable'}</option>`).join('');
         await cargar();
+        toastExito('Registrado exitosamente');
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.hidden = false;
+        toastError('No se pudo registrar: ' + err.message);
       } finally {
         btn.disabled = false;
         btn.innerHTML = textoOriginal;
