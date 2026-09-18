@@ -281,7 +281,7 @@
     const contenedor = document.getElementById('nav-groups');
     contenedor.innerHTML = NAV_GRUPOS.map((grupo) => `
       <div class="nav-group" id="nav-group-${grupo.id}">
-        <div class="nav-group-header">
+        <div class="nav-group-header" data-tooltip="${grupo.etiqueta}">
           <span class="nav-icon"><i data-lucide="${grupo.icono}" class="ico"></i></span>
           <span class="nav-label">${grupo.etiqueta}</span>
           <span class="nav-group-chevron"><i data-lucide="chevron-right" class="ico"></i></span>
