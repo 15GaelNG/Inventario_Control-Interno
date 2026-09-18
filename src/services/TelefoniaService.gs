@@ -221,6 +221,12 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente(LineasEvidencias.subirArchivo(sesion.correo, carpetaId, nombre, mime, base64));
   }
 
+  /** Descarta una carpeta creada para una captura que el usuario canceló. */
+  function cancelarEvidencia(token, carpetaId, fotosCarpetaId) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    return LineasEvidencias.cancelarCarpetaEvidencia(sesion.correo, carpetaId, fotosCarpetaId);
+  }
+
   /** Guarda una inspección nueva (checklist, snapshot, alertas y bitácora). El PDF se pide aparte. */
   function guardarInspeccion(token, datos) {
     const sesion = Auth.requiereRol(token, rolesOperan_());
@@ -241,6 +247,6 @@ const TelefoniaService = (function () {
 
   return {
     permisos, indice, equipo, linea, evidencias, historial, inspeccion, catalogos, alertas, colaboradores, bitacora, recargarDatos,
-    contextoInspeccion, contextoResponsiva, prepararEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf,
+    contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf,
   };
 })();

@@ -3,7 +3,7 @@
 <head>
   <base target="_top">
   <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/logo.png">
-  <script src="https://unpkg.com/lucide@0.462.0/dist/umd/lucide.min.js"></script>
+  <script src="https://unpkg.com/lucide@0.513.0/dist/umd/lucide.min.js"></script>
   <?!= include('html/styles'); ?>
   <?!= include('html/lineas-estilos'); ?>
 </head>
@@ -14,7 +14,7 @@
 
   <div id="app-shell" hidden>
     <div id="app">
-      <nav id="sidebar">
+      <nav id="sidebar" aria-label="Navegación principal">
         <div class="sidebar-header">
           <div class="sidebar-brand">
             <img class="sidebar-brand-icon" src="https://raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/logo.png" alt="Control Interno" />
@@ -23,9 +23,9 @@
         </div>
 
 
-        <div class="nav-item" data-view="dashboard">
+        <button type="button" class="nav-item" data-view="dashboard">
           <span class="nav-icon"><i data-lucide="home" class="ico"></i></span><span class="nav-label">Inicio</span>
-        </div>
+        </button>
 
         <div class="nav-groups" id="nav-groups"></div>
 
@@ -39,9 +39,11 @@
           <span class="nav-icon"><i data-lucide="log-out" class="ico"></i></span><span class="nav-label">Cerrar sesión</span>
         </button>
       </nav>
+      <button type="button" id="sidebar-backdrop" aria-label="Cerrar menú" tabindex="-1"></button>
       <main id="main">
         <div class="topbar">
           <div class="topbar-left">
+            <button type="button" id="mobile-menu-btn" aria-label="Abrir menú" aria-controls="sidebar" aria-expanded="false"><i data-lucide="menu" class="ico"></i></button>
             <img class="topbar-cm-logo cm-logo-light" src="https://raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/CMTC-Light.png" alt="Ciudad Maderas" />
             <img class="topbar-cm-logo cm-logo-dark" src="https://raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/CMTC-Dark.png" alt="Ciudad Maderas" />
           </div>

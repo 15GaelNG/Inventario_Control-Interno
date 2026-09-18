@@ -97,9 +97,10 @@ const LineasAccesorios = (function () {
     if (!datos.accesorioId) throw new Error('Selecciona un artículo.');
 
     return LineasDatos.conCandado(() => {
+      const actual = indiceSinCache_().filas.filter((a) => a.id === datos.accesorioId)[0];
+      if (!actual) throw new Error('El artículo seleccionado ya no existe. Recarga el inventario.');
       if (tipo === 'SALIDA') {
-        const actual = indiceSinCache_().filas.filter((a) => a.id === datos.accesorioId)[0];
-        if (actual && cantidad > actual.stock) throw new Error('No hay suficiente stock (' + actual.stock + ' disponible).');
+        if (cantidad > actual.stock) throw new Error('No hay suficiente stock (' + actual.stock + ' disponible).');
       }
       const id = LineasDatos.nuevoIdCorto();
       LineasDatos.agregarFilas(TAB_MOV, [{

@@ -78,6 +78,17 @@ const LineasEvidencias = (function () {
     return { id: archivo.getId(), nombre: archivo.getName() };
   }
 
+  /** Envía a la papelera una carpeta de borrador que el mismo usuario acaba de preparar. */
+  function cancelarCarpetaEvidencia(correo, carpetaId, fotosCarpetaId) {
+    const cache = CacheService.getScriptCache();
+    const clave = 'ln_subida_' + correo + '_' + carpetaId;
+    if (!carpetaId || !cache.get(clave)) return { ok: false };
+    DriveApp.getFolderById(carpetaId).setTrashed(true);
+    cache.remove(clave);
+    if (fotosCarpetaId) cache.remove('ln_subida_' + correo + '_' + fotosCarpetaId);
+    return { ok: true };
+  }
+
   /** Blob de un archivo de Drive (para insertar firmas en el PDF). null si no existe o no hay id. */
   function blobDeArchivo(id) {
     if (!id) return null;
@@ -94,5 +105,5 @@ const LineasEvidencias = (function () {
     });
   }
 
-  return { prepararCarpetaEvidencia, subirArchivo, blobDeArchivo, validarArchivosEnCarpeta };
+  return { prepararCarpetaEvidencia, cancelarCarpetaEvidencia, subirArchivo, blobDeArchivo, validarArchivosEnCarpeta };
 })();

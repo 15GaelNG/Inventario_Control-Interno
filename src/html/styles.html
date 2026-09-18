@@ -107,6 +107,7 @@
     display: flex; align-items: center; gap: 10px;
     padding: 11px 13px; border-radius: var(--radius); cursor: pointer;
     color: var(--color-sidebar-text); font-weight: 500; white-space: nowrap; overflow: hidden;
+    width: 100%; border: 0; background: transparent; text-align: left; font: inherit;
   }
   .nav-item:hover { background: var(--color-sidebar-hover); }
   .nav-item.active { background: var(--color-accent); color: var(--color-primary); }
@@ -127,6 +128,7 @@
     padding: 11px 13px; border-radius: var(--radius);
     color: var(--color-sidebar-text); font-weight: 600; font-size: 13px;
     white-space: nowrap; overflow: hidden;
+    width: 100%; border: 0; background: transparent; text-align: left; font-family: inherit;
   }
   .nav-group-header:hover { background: var(--color-sidebar-hover); }
   .nav-group-header .nav-icon { flex-shrink: 0; width: 20px; text-align: center; }
@@ -147,6 +149,7 @@
     padding: 9px 11px; border-radius: 8px; cursor: pointer;
     color: var(--color-sidebar-text); font-size: 13px; font-weight: 500;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    width: 100%; border: 0; background: transparent; text-align: left; font-family: inherit;
   }
   .nav-subitem:hover { background: var(--color-sidebar-hover); }
   .nav-subitem.active { background: var(--color-accent); color: var(--color-primary); }
@@ -178,6 +181,12 @@
     border-radius: 0; box-shadow: var(--shadow);
   }
   .topbar-left { display: flex; align-items: center; gap: 16px; }
+  #mobile-menu-btn {
+    display: none; align-items: center; justify-content: center; width: 38px; height: 38px;
+    padding: 0; border: 1px solid var(--color-border); border-radius: 10px;
+    color: var(--color-text); background: var(--color-bg);
+  }
+  #sidebar-backdrop { display: none; }
   /* Alto fijo (igual al tamaño "compacto" de CMTC-Dark) para que la topbar
      mida lo mismo sin importar el tema — CMTC-Light es más "cuadrado" que
      CMTC-Dark, así que a igual alto, el ancho varía (eso sí es aceptable). */
@@ -440,6 +449,11 @@
     position: relative; min-height: 240px;
     flex: 1; overflow-y: auto; padding: 0 32px 24px;
   }
+
+  .nav-item:focus-visible, .nav-group-header:focus-visible, .nav-subitem:focus-visible,
+  #mobile-menu-btn:focus-visible {
+    outline: 2px solid var(--color-accent); outline-offset: 2px;
+  }
   #view-container > * { animation: viewContentFadeIn .3s ease; }
   @keyframes viewContentFadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
   .view-transition {
@@ -636,6 +650,26 @@
   }
 
   @media (max-width: 900px) {
+    #sidebar, #sidebar.collapsed {
+      position: fixed; inset: 0 auto 0 0; z-index: 1001; width: min(82vw, 300px);
+      transform: translateX(-105%); transition: transform .24s ease; box-shadow: var(--shadow-lg);
+    }
+    #sidebar.mobile-open, #sidebar.collapsed.mobile-open { transform: translateX(0); }
+    #sidebar.collapsed .sidebar-title, #sidebar.collapsed .nav-label, #sidebar.collapsed .sidebar-user { display: block; }
+    #sidebar.collapsed .nav-item, #sidebar.collapsed .nav-group-header, #sidebar.collapsed #btn-logout { justify-content: flex-start; }
+    #sidebar.collapsed .nav-group-header .nav-label, #sidebar.collapsed .nav-group-chevron { display: block; }
+    #sidebar.collapsed .nav-group-items { display: flex !important; }
+    #sidebar-collapse-btn { display: none; }
+    #sidebar-backdrop {
+      position: fixed; inset: 0; z-index: 1000; width: 100%; height: 100%; margin: 0; padding: 0;
+      border: 0; border-radius: 0; background: rgba(2, 18, 28, .56); opacity: 0; pointer-events: none;
+      display: block; transition: opacity .2s ease;
+    }
+    body.sidebar-mobile-open #sidebar-backdrop { opacity: 1; pointer-events: auto; }
+    #mobile-menu-btn { display: inline-flex; flex-shrink: 0; }
+    .topbar { padding: 10px 16px; margin-bottom: 14px; }
+    #view-container { padding: 0 16px 20px; }
+    .topbar-cm-logo { max-width: min(46vw, 220px); height: 32px; object-fit: contain; object-position: left center; }
     .login-grid { grid-template-columns: 1fr; }
     .login-hero { min-height: 340px; }
     .login-hero-content { padding: 32px 24px; }
@@ -643,6 +677,10 @@
     .login-features { grid-template-columns: repeat(2, 1fr); }
   }
   @media (max-width: 420px) {
+    .topbar-date { display: none; }
+    .topbar-right { gap: 8px; }
+    .stat-row { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .stat-tile { min-width: 0; padding: 12px; }
     .login-form-card { padding: 28px 20px; }
   }
 

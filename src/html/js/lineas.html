@@ -255,6 +255,7 @@
       const pila = []; // navegación dentro del detalle: [{ tipo, id }]
       let captura = null; // sesión de captura de inspección/responsiva en curso (null si el modal está cerrado)
       pintarIconos(raiz);
+      document.addEventListener('app:before-navigate', () => { if (vigente() && captura) cerrarCaptura(); }, { once: true });
 
       // ---- Eventos ----
       raiz.querySelectorAll('.ln-tab').forEach((tab) => {
@@ -323,6 +324,14 @@
           return;
         }
       });
+      raiz.addEventListener('keydown', (ev) => {
+        if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches('[role="button"][tabindex="0"]')) {
+          ev.preventDefault();
+          ev.target.click();
+        }
+        if (ev.key === 'Escape' && !$('#ln-modal-captura', raiz).hidden) cerrarCaptura();
+        else if (ev.key === 'Escape' && !$('#ln-modal-alertas', raiz).hidden) $('#ln-modal-alertas', raiz).hidden = true;
+      });
       $('#ln-modal-alertas', raiz).addEventListener('click', (ev) => {
         if (ev.target.id === 'ln-modal-alertas' || ev.target.closest('[data-cerrar-modal]')) $('#ln-modal-alertas', raiz).hidden = true;
       });
@@ -378,7 +387,11 @@
           if (!vigente()) return;
           pintarIndicadores();
           if (!$('#ln-modal-alertas', raiz).hidden) pintarAlertas();
-        }).catch(() => { /* el indicador se queda en "…"; el modal muestra el error al abrirlo */ });
+        }).catch((e) => {
+          if (!vigente()) return;
+          $('#ln-tile-alertas .stat-value', raiz).textContent = '—';
+          aviso(icono('triangle-alert', 'ln-alerta') + ' No se pudieron cargar las alertas: ' + mensajeError(e), 9000);
+        });
       }
 
       function abrirAlertas() {
@@ -648,10 +661,15 @@
 
       // ---- Captura: inspección y responsiva nuevas ----
 
-      function cerrarCaptura() {
+      function cerrarCaptura(guardada) {
+        const borrador = captura;
         $('#ln-modal-captura', raiz).hidden = true;
         $('#ln-captura-cuerpo', raiz).innerHTML = '';
         captura = null;
+        if (!guardada && borrador && borrador.carpetaId) {
+          llamar('apiLineasCancelarEvidencia', borrador.carpetaId, borrador.fotosCarpetaId)
+            .catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' No se pudo limpiar la carpeta cancelada: ' + mensajeError(e), 9000));
+        }
       }
 
       function opcionesEstatus(lista, actual) {
@@ -816,7 +834,7 @@
           actualizarAccesorios: $('#cap-actualizar-accesorios', raiz) ? $('#cap-actualizar-accesorios', raiz).checked : false,
           fotos: fotos, firmaInspectorId: fInspector.id, firmaResponsableId: fResponsable ? fResponsable.id : null, anteriorId: anteriorId,
         }))).then((r) => {
-          cerrarCaptura();
+          cerrarCaptura(true);
           aviso(icono('circle-check', 'ln-icon-sm') + ' Inspección guardada' + (r.alertas && r.alertas.length ? ' — ' + r.alertas.length + ' alerta(s) contra la anterior' : '') + '. Generando el PDF…', 6000);
           refrescarDespuesDeCaptura(idAbierto, 'INSPECCION', r.id);
         }).catch((e) => {
@@ -883,7 +901,7 @@
           estatusEquipo: $('#cap-estatus', raiz) ? $('#cap-estatus', raiz).value : '',
           firmaResponsableId: fResponsable.id, firmaCiId: fCi.id, patronId: patronId,
         }))).then((r) => {
-          cerrarCaptura();
+          cerrarCaptura(true);
           aviso(icono('circle-check', 'ln-icon-sm') + ' Responsiva guardada. Generando el PDF…', 6000);
           refrescarDespuesDeCaptura(idAbierto, 'RESPONSIVA', r.id);
         }).catch((e) => {
@@ -905,7 +923,10 @@
 
         const pedirContexto = tipo === 'INSPECCION' ? llamar('apiLineasContextoInspeccion', ref) : llamar('apiLineasContextoResponsiva', ref);
         Promise.all([pedirContexto, llamar('apiLineasPrepararEvidencia', tipo, ref), llamar('apiLineasCatalogos')]).then(([ctx, carpeta, catalogos]) => {
-          if (!captura) return; // el modal se cerró mientras cargaba
+          if (!captura) {
+            llamar('apiLineasCancelarEvidencia', carpeta.carpetaId, carpeta.fotosCarpetaId).catch(() => {});
+            return;
+          }
           ctx.catalogos = catalogos;
           captura.contexto = ctx;
           captura.carpetaId = carpeta.carpetaId;

@@ -173,6 +173,24 @@
   @media (max-width: 900px) {
     .ln-grid-2 { grid-template-columns: 1fr; }
     .ln-filtros, form.ln-filtros { grid-template-columns: 1fr; }
+    .ln-modulo .grid[style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
+    .ln-page-header, .ln-toolbar { align-items: stretch; }
+    .ln-tabs { width: 100%; overflow-x: auto; }
+    .ln-tab { flex: 1; min-width: max-content; }
+    .ln-acciones-header, .ln-acciones-header button { width: 100%; }
+    .ln-captura-acciones { position: sticky; bottom: 0; background: var(--color-surface); padding-top: 10px; }
+    .ln-firma-caja canvas { min-height: 180px; }
+  }
+
+  @media (max-width: 520px) {
+    .modal-backdrop { padding: 0; align-items: stretch; }
+    .modal-card, .modal-card-wide {
+      width: 100%; max-width: none; min-height: 100%; max-height: 100vh;
+      border-radius: 0; padding: 16px;
+    }
+    .modal-form-scroll { max-height: calc(100vh - 140px); }
+    .ln-captura-acciones { display: grid; grid-template-columns: 1fr; }
+    #ln-avisos { left: 12px; right: 12px; bottom: 12px; max-width: none; }
   }
 
   /* Captura de inspección / responsiva */

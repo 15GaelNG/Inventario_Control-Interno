@@ -86,6 +86,9 @@ function apiLineasContextoResponsiva(token, ref) {
 function apiLineasPrepararEvidencia(token, tipo, ref) {
   return TelefoniaService.prepararEvidencia(token, tipo, ref);
 }
+function apiLineasCancelarEvidencia(token, carpetaId, fotosCarpetaId) {
+  return TelefoniaService.cancelarEvidencia(token, carpetaId, fotosCarpetaId);
+}
 function apiLineasSubirArchivo(token, carpetaId, nombre, mime, base64) {
   return TelefoniaService.subirArchivo(token, carpetaId, nombre, mime, base64);
 }

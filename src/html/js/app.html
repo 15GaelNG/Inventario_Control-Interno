@@ -58,6 +58,22 @@
     } catch (e) { /* no-op */ }
   })();
 
+  function cerrarMenuMovil() {
+    const sidebar = document.getElementById('sidebar');
+    const boton = document.getElementById('mobile-menu-btn');
+    sidebar.classList.remove('mobile-open');
+    document.body.classList.remove('sidebar-mobile-open');
+    if (boton) boton.setAttribute('aria-expanded', 'false');
+  }
+
+  function alternarMenuMovil() {
+    const sidebar = document.getElementById('sidebar');
+    const boton = document.getElementById('mobile-menu-btn');
+    const abierto = sidebar.classList.toggle('mobile-open');
+    document.body.classList.toggle('sidebar-mobile-open', abierto);
+    if (boton) boton.setAttribute('aria-expanded', String(abierto));
+  }
+
   document.addEventListener('click', (ev) => {
     const btnTema = ev.target.closest('.theme-btn');
     if (btnTema) { aplicarTema(btnTema.dataset.tema); return; }
@@ -66,7 +82,15 @@
       const sidebar = document.getElementById('sidebar');
       const colapsado = sidebar.classList.toggle('collapsed');
       try { localStorage.setItem('sidebarColapsado', colapsado ? '1' : '0'); } catch (e) { /* no-op */ }
+      return;
     }
+
+    if (ev.target.closest('#mobile-menu-btn')) { alternarMenuMovil(); return; }
+    if (ev.target.closest('#sidebar-backdrop')) { cerrarMenuMovil(); return; }
+  });
+
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') cerrarMenuMovil();
   });
 
   const state = {
@@ -196,10 +220,12 @@
         overlay.classList.remove('show');
         setTimeout(() => overlay.remove(), 300);
       }
-    }, 2500);
+    }, 220);
   }
 
   function navegarA(vista, etiqueta) {
+    document.dispatchEvent(new CustomEvent('app:before-navigate'));
+    cerrarMenuMovil();
     document.querySelectorAll('.nav-item, .nav-subitem').forEach((el) => {
       el.classList.toggle('active', el.dataset.view === vista);
     });
@@ -256,15 +282,10 @@
         { vista: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas' },
         { vista: 'gestion-activos', etiqueta: 'Gestión de Activos' },
         { vista: 'detalles-lineas-telefonicas', etiqueta: 'Detalles Líneas Telefónicas' },
-        { vista: 'accesorios', etiqueta: 'Inventario de Accesorios' },
-        { vista: 'reactivacion-lineas', etiqueta: 'Reactivación de Líneas' },
         { vista: 'reasignaciones-lineas', etiqueta: 'Control de Reasignaciones - Líneas' },
-        { vista: 'solicitud-lineas', etiqueta: 'Solicitud de Líneas' },
-        { vista: 'lineas-post-venta', etiqueta: 'Líneas Post Venta' },
         { vista: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas' },
         { vista: 'bitacora-desechos', etiqueta: 'Bitácora de Desechos' },
-        // Temporal: mientras se decide con el equipo si se queda este o el "accesorios" de arriba.
-        { vista: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios (Líneas)' },
+        { vista: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios' },
       ],
     },
     {
@@ -287,14 +308,14 @@
     const contenedor = document.getElementById('nav-groups');
     contenedor.innerHTML = NAV_GRUPOS.map((grupo) => `
       <div class="nav-group" id="nav-group-${grupo.id}">
-        <div class="nav-group-header" data-grupo="${grupo.id}">
+        <button type="button" class="nav-group-header" data-grupo="${grupo.id}" aria-expanded="false" aria-controls="nav-items-${grupo.id}">
           <span class="nav-icon"><i data-lucide="${grupo.icono}" class="ico"></i></span>
           <span class="nav-label">${grupo.etiqueta}</span>
           <span class="nav-group-chevron"><i data-lucide="chevron-right" class="ico"></i></span>
-        </div>
-        <div class="nav-group-items">
+        </button>
+        <div class="nav-group-items" id="nav-items-${grupo.id}">
           ${grupo.items.map((item) => `
-            <div class="nav-subitem" data-view="${item.vista}" data-etiqueta="${item.etiqueta}">${item.etiqueta}</div>
+            <button type="button" class="nav-subitem" data-view="${item.vista}" data-etiqueta="${item.etiqueta}">${item.etiqueta}</button>
           `).join('')}
         </div>
       </div>
@@ -302,7 +323,8 @@
 
     contenedor.querySelectorAll('.nav-group-header').forEach((header) => {
       header.addEventListener('click', () => {
-        document.getElementById('nav-group-' + header.dataset.grupo).classList.toggle('expanded');
+        const expandido = document.getElementById('nav-group-' + header.dataset.grupo).classList.toggle('expanded');
+        header.setAttribute('aria-expanded', String(expandido));
       });
     });
     contenedor.querySelectorAll('.nav-subitem').forEach((el) => {
