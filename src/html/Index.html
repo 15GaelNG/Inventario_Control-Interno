@@ -30,12 +30,8 @@
 
         <div style="flex:1"></div>
 
-        <div class="sidebar-user" id="user-name"></div>
         <button type="button" class="sidebar-collapse-btn" id="sidebar-collapse-btn" title="Colapsar menú">
           <i data-lucide="chevron-left" class="ico"></i><span class="nav-label">Colapsar menú</span>
-        </button>
-        <button id="btn-logout" class="secondary">
-          <span class="nav-icon"><i data-lucide="log-out" class="ico"></i></span><span class="nav-label">Cerrar sesión</span>
         </button>
       </nav>
       <main id="main">
@@ -50,6 +46,12 @@
               <button type="button" class="theme-btn" data-tema="dark" title="Modo oscuro"><i data-lucide="moon" class="ico"></i></button>
             </div>
             <div class="topbar-date" id="topbar-date"></div>
+            <div class="topbar-user-menu">
+              <div class="topbar-user" id="user-name"></div>
+              <button type="button" id="btn-logout" class="topbar-logout-btn" title="Cerrar sesión">
+                <i data-lucide="log-out" class="ico"></i>
+              </button>
+            </div>
           </div>
         </div>
         <div id="view-container"></div>
