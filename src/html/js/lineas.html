@@ -347,6 +347,7 @@
         if (pastilla) {
           pastilla.parentElement.querySelectorAll('.ln-pastilla').forEach((b) => b.classList.remove('activa'));
           pastilla.classList.add('activa');
+          actualizarProgresoChecklist();
           return;
         }
         const limpiarFirma = ev.target.closest('[data-limpiar-firma]');
@@ -676,6 +677,32 @@
           '<button type="button" class="ln-pastilla' + (v === valorPrevio ? ' activa' : '') + (claseMala[v] ? ' ' + claseMala[v] : '') + '" data-valor="' + esc(v) + '">' + esc(v) + '</button>').join('') + '</div>';
       }
 
+      function introduccionCaptura(ctx, tipo) {
+        const equipo = ctx.equipo || {};
+        const linea = ctx.linea || {};
+        const responsable = ctx.responsable || {};
+        const valor = (v) => esc(v === null || v === undefined || v === '' ? '—' : String(v));
+        const activo = equipo.nuco
+          ? 'NUCO ' + valor(equipo.nuco) + (equipo.modelo ? ' · ' + valor(equipo.modelo) : '')
+          : 'Línea ' + valor(linea.numero);
+        const pasos = tipo === 'INSPECCION'
+          ? [['Datos', 'Información general'], ['Checklist', 'Revisión del activo'], ['Evidencia', 'Fotos y notas'], ['Firmas', 'Validación y PDF']]
+          : [['Datos', 'Responsable'], ['Seguridad', 'Equipo y acceso'], ['Evidencia', 'Notas y patrón'], ['Firmas', 'Validación y PDF']];
+        return '<div class="ln-captura-guia">' + pasos.map((p, i) =>
+          '<div class="ln-captura-paso"><span class="ln-captura-paso-num">' + (i + 1) + '</span><span><b>' + p[0] + '</b>' + p[1] + '</span></div>').join('') +
+          '</div><div class="ln-captura-resumen">' +
+            '<div class="ln-captura-dato">' + icono(equipo.nuco ? 'smartphone' : 'card-sim') + '<span><small>Activo seleccionado</small><b>' + activo + '</b></span></div>' +
+            '<div class="ln-captura-dato">' + icono('phone') + '<span><small>Número telefónico</small><b>' + valor(linea.numero) + '</b></span></div>' +
+            '<div class="ln-captura-dato">' + icono('user-round') + '<span><small>Responsable</small><b>' + valor(responsable.nombre) + '</b></span></div>' +
+          '</div>';
+      }
+
+      function seccionCaptura(numero, ico, titulo, ayuda, contenido) {
+        return '<section class="ln-form-seccion"><div class="ln-form-seccion-cabecera"><span class="ln-form-seccion-num">' + numero + '</span><div>' +
+          '<h3>' + icono(ico) + ' ' + esc(titulo) + '</h3><p>' + esc(ayuda) + '</p></div></div>' +
+          '<div class="ln-form-seccion-contenido">' + contenido + '</div></section>';
+      }
+
       function leerChecklistFormulario() {
         const checklist = {};
         raiz.querySelectorAll('#ln-captura-cuerpo .ln-checklist-punto').forEach((fila) => {
@@ -683,6 +710,17 @@
           if (activa) checklist[fila.dataset.clave] = activa.dataset.valor;
         });
         return checklist;
+      }
+
+      function actualizarProgresoChecklist(incompleto) {
+        const progreso = $('#cap-checklist-avance', raiz);
+        if (!progreso) return;
+        const filas = Array.from(raiz.querySelectorAll('#ln-captura-cuerpo .ln-checklist-punto'));
+        const contestadas = filas.filter((fila) => fila.querySelector('.ln-pastilla.activa')).length;
+        const total = filas.length;
+        $('#cap-checklist-conteo', raiz).textContent = contestadas + ' de ' + total + ' puntos revisados';
+        $('#cap-checklist-barra', raiz).style.width = (total ? Math.round(contestadas / total * 100) : 0) + '%';
+        progreso.classList.toggle('incompleto', !!incompleto && contestadas < total);
       }
 
       function activarFirma(id) {
@@ -762,34 +800,38 @@
       // -- Inspección --
 
       function formularioInspeccion(ctx) {
-        const secciones = ctx.secciones.map((s) => tarjeta(icono('list-checks') + ' ' + esc(s.seccion), '<div class="ln-checklist-seccion">' +
+        const secciones = ctx.secciones.map((s) => '<div class="ln-checklist-tarjeta"><h4>' + icono('list-checks') + ' ' + esc(s.seccion) + '</h4><div class="ln-checklist-seccion">' +
           s.puntos.map((p) => '<div class="ln-checklist-punto" data-clave="' + esc(p.clave) + '">' +
             '<span class="ln-checklist-etiqueta">' + esc(p.etiqueta) + '</span>' +
             grupoEscala(p.escala, ctx.anterior && ctx.anterior.checklist ? ctx.anterior.checklist[p.clave] : null) + '</div>').join('') +
-          '</div>')).join('');
-        return tarjetaResponsable(ctx.responsable, 'Responsable') +
-          (ctx.anterior ? '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' Se precargó cada punto con el resultado de la inspección anterior (' + esc(fecha(ctx.anterior.fecha) || '') + '); revisa y corrige lo que cambió.</div>' : '') +
+          '</div></div>').join('');
+        const datos = tarjetaResponsable(ctx.responsable, 'Responsable del activo') +
           '<div class="grid" style="grid-template-columns: repeat(3, 1fr)">' +
-            '<div class="field"><label>Color del equipo</label><input type="text" id="cap-color" autocomplete="off" /></div>' +
-            '<div class="field"><label>Ticket (opcional)</label><input type="text" id="cap-ticket" autocomplete="off" /></div>' +
-            '<div class="field"><label>Otra app (opcional)</label><input type="text" id="cap-otra-app" autocomplete="off" /></div>' +
-          '</div>' +
-          (ctx.equipo ? '<div class="grid" style="grid-template-columns: repeat(2, 1fr)">' +
-            '<div class="field"><label>Cambiar estatus del equipo (opcional)</label><select id="cap-estatus"><option value="">Sin cambio</option>' + opcionesEstatus(ctx.catalogos.estatusEquipo, '') + '</select></div>' +
-            '</div><label class="ln-check"><input type="checkbox" id="cap-actualizar-accesorios" checked> Actualizar accesorios del equipo (cubo, cable, funda, mica) según el checklist</label>' : '') +
-          secciones +
-          '<div class="field"><label>Observaciones</label><textarea id="cap-observaciones" rows="2"></textarea></div>' +
-          tarjeta(icono('images') + ' Fotos', '<input type="file" id="cap-fotos" accept="image/*" capture="environment" multiple />' +
-            '<div class="ln-fotos-lista" id="cap-fotos-lista"></div>') +
-          '<div class="ln-grid-2">' +
-            tarjeta(icono('signature') + ' Firma del inspector (obligatoria)', '<div class="ln-firma-caja"><canvas id="cap-firma-inspector"></canvas>' +
+          '<div class="field"><label>Color del equipo</label><input type="text" id="cap-color" autocomplete="off" /></div>' +
+          '<div class="field"><label>Ticket <span class="ln-tenue">(opcional)</span></label><input type="text" id="cap-ticket" autocomplete="off" /></div>' +
+          '<div class="field"><label>Otra aplicación <span class="ln-tenue">(opcional)</span></label><input type="text" id="cap-otra-app" autocomplete="off" /></div></div>' +
+          (ctx.equipo ? '<div class="grid" style="grid-template-columns: repeat(2, 1fr)"><div class="field"><label>Estatus del equipo</label><select id="cap-estatus"><option value="">Conservar estatus actual</option>' + opcionesEstatus(ctx.catalogos.estatusEquipo, '') + '</select></div></div>' +
+          '<label class="ln-check"><input type="checkbox" id="cap-actualizar-accesorios" checked> Sincronizar cubo, cable, funda y mica con las respuestas del checklist</label>' : '');
+        const evidencia = '<div class="field"><label>Observaciones de la inspección</label><textarea id="cap-observaciones" rows="3" placeholder="Agrega hallazgos, daños o información útil para el seguimiento"></textarea></div>' +
+          '<label class="ln-upload">' + icono('images') + '<span><b>Agregar fotografías</b><small>Puedes seleccionar varias imágenes; se guardarán en la carpeta de evidencia.</small></span>' +
+          '<input type="file" id="cap-fotos" accept="image/*" capture="environment" multiple /></label><div class="ln-fotos-lista" id="cap-fotos-lista"></div>';
+        const firmas = '<div class="ln-grid-2">' +
+          tarjeta(icono('signature') + ' Firma del inspector · obligatoria', '<div class="ln-firma-caja"><canvas id="cap-firma-inspector"></canvas>' +
               '<div class="ln-firma-acciones"><span class="ln-firma-vacia">Dibuja con el dedo o el mouse</span><button type="button" class="secondary ln-btn-chico" data-limpiar-firma="inspector">Limpiar</button></div></div>') +
-            tarjeta(icono('signature') + ' Firma del responsable (opcional)', '<div class="ln-firma-caja"><canvas id="cap-firma-responsable"></canvas>' +
+          tarjeta(icono('signature') + ' Firma del responsable · opcional', '<div class="ln-firma-caja"><canvas id="cap-firma-responsable"></canvas>' +
               '<div class="ln-firma-acciones"><span class="ln-firma-vacia">Dibuja con el dedo o el mouse</span><button type="button" class="secondary ln-btn-chico" data-limpiar-firma="responsable">Limpiar</button></div></div>') +
-          '</div>' +
+          '</div>';
+        return introduccionCaptura(ctx, 'INSPECCION') +
+          seccionCaptura(1, 'clipboard-list', 'Datos de la inspección', 'Confirma el responsable y completa los datos generales.', datos) +
+          seccionCaptura(2, 'list-checks', 'Revisión del activo', 'Marca el estado actual de cada componente y servicio.',
+            '<div class="ln-checklist-avance" id="cap-checklist-avance"><div class="ln-checklist-avance-cabecera"><b>Avance del checklist</b><span id="cap-checklist-conteo"></span></div>' +
+            '<div class="ln-checklist-avance-barra"><span id="cap-checklist-barra"></span></div></div>' +
+            (ctx.anterior ? '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' Se precargaron las respuestas de la inspección anterior del ' + esc(fecha(ctx.anterior.fecha) || '') + '. Revisa cada punto antes de guardar.</div>' : '') + secciones) +
+          seccionCaptura(3, 'camera', 'Evidencia y observaciones', 'Documenta los hallazgos que deben acompañar al archivo.', evidencia) +
+          seccionCaptura(4, 'signature', 'Firmas de validación', 'El inspector debe firmar para poder generar el documento.', firmas) +
           '<div class="error-msg" id="cap-error" hidden></div>' +
           '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
-            '<button type="button" class="primary" id="cap-guardar">Guardar inspección</button></div>';
+            '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + ' Guardar y generar PDF</button></div>';
       }
 
       function iniciarFormularioInspeccion() {
@@ -797,6 +839,7 @@
         captura.firmas.responsable = activarFirma('cap-firma-responsable');
         manejarSubidaArchivo('cap-fotos', 'cap-fotos-lista', () => captura.fotosCarpetaId, true, (s) => { if (s) captura.fotos.push(s); });
         $('#cap-guardar', raiz).addEventListener('click', guardarInspeccionDesdeFormulario);
+        actualizarProgresoChecklist();
       }
 
       function guardarInspeccionDesdeFormulario() {
@@ -807,6 +850,14 @@
         const firmaResponsable = captura.firmas.responsable;
         if (!firmaInspector || firmaInspector.estaVacia()) { errorBox.textContent = 'La firma del inspector es obligatoria.'; errorBox.hidden = false; return; }
         const checklist = leerChecklistFormulario();
+        const totalPuntos = raiz.querySelectorAll('#ln-captura-cuerpo .ln-checklist-punto').length;
+        if (Object.keys(checklist).length < totalPuntos) {
+          errorBox.textContent = 'Completa todos los puntos del checklist antes de generar el documento.';
+          errorBox.hidden = false;
+          actualizarProgresoChecklist(true);
+          $('#cap-checklist-avance', raiz).scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
         const idAbierto = captura.idObjetivo;
         const refCaptura = captura.ref;
         const carpetaId = captura.carpetaId;
@@ -838,31 +889,43 @@
       // -- Responsiva --
 
       function formularioResponsiva(ctx) {
-        return tarjetaResponsable(ctx.responsable, 'Responsable') +
-          '<div class="grid" style="grid-template-columns: repeat(2, 1fr)">' +
-            '<div class="field"><label>Identificación (INE, pasaporte…)</label><input type="text" id="cap-identificacion" autocomplete="off" required /></div>' +
-            '<div class="field"><label>Tipo de contraseña</label><input type="text" id="cap-tipo-contrasena" placeholder="PIN, PATRON, CONTRASEÑA…" autocomplete="off" /></div>' +
-            (ctx.equipo ? '<div class="field"><label>Color del equipo</label><input type="text" id="cap-color" autocomplete="off" /></div>' : '') +
-            (ctx.equipo ? '<div class="field"><label>Cambiar estatus del equipo (opcional)</label><select id="cap-estatus"><option value="">Sin cambio</option>' + opcionesEstatus(ctx.catalogos.estatusEquipo, '') + '</select></div>' : '') +
-          '</div>' +
-          '<div class="field"><label>Foto del patrón (solo si el tipo de contraseña es PATRON)</label><input type="file" id="cap-patron" accept="image/*" />' +
-            '<div class="ln-fotos-lista" id="cap-patron-lista"></div></div>' +
-          '<div class="field"><label>Observaciones</label><textarea id="cap-observaciones" rows="2"></textarea></div>' +
-          '<div class="ln-grid-2">' +
-            tarjeta(icono('signature') + ' Firma del responsable (obligatoria)', '<div class="ln-firma-caja"><canvas id="cap-firma-responsable"></canvas>' +
+        const datos = tarjetaResponsable(ctx.responsable, 'Responsable que recibe el activo') +
+          '<div class="grid" style="grid-template-columns: repeat(2, 1fr)"><div class="field"><label>Identificación presentada *</label><input type="text" id="cap-identificacion" placeholder="INE, pasaporte u otra identificación" autocomplete="off" required /></div>' +
+          (ctx.equipo ? '<div class="field"><label>Color del equipo</label><input type="text" id="cap-color" autocomplete="off" /></div>' : '') + '</div>';
+        const seguridad = '<div class="grid" style="grid-template-columns: repeat(2, 1fr)"><div class="field"><label>Tipo de contraseña</label><input type="text" id="cap-tipo-contrasena" placeholder="PIN, PATRÓN, CONTRASEÑA…" autocomplete="off" /></div>' +
+          (ctx.equipo ? '<div class="field"><label>Estatus del equipo</label><select id="cap-estatus"><option value="">Conservar estatus actual</option>' + opcionesEstatus(ctx.catalogos.estatusEquipo, '') + '</select></div>' : '') + '</div>';
+        const evidencia = '<div class="ln-nota" id="cap-patron-no-aplica">' + icono('info', 'ln-icon-sm') + ' La carga del patrón se habilitará si seleccionas PATRÓN como tipo de contraseña.</div>' +
+          '<div id="cap-patron-bloque" hidden><label class="ln-upload">' + icono('scan-line') + '<span><b>Adjuntar fotografía del patrón</b><small>La imagen se resguarda dentro de la carpeta de evidencia.</small></span>' +
+          '<input type="file" id="cap-patron" accept="image/*" /></label><div class="ln-fotos-lista" id="cap-patron-lista"></div></div>' +
+          '<div class="field" style="margin-top:14px"><label>Observaciones</label><textarea id="cap-observaciones" rows="3" placeholder="Condiciones de entrega, acuerdos o comentarios adicionales"></textarea></div>';
+        const firmas = '<div class="ln-grid-2">' +
+          tarjeta(icono('signature') + ' Firma del responsable · obligatoria', '<div class="ln-firma-caja"><canvas id="cap-firma-responsable"></canvas>' +
               '<div class="ln-firma-acciones"><span class="ln-firma-vacia">Dibuja con el dedo o el mouse</span><button type="button" class="secondary ln-btn-chico" data-limpiar-firma="responsable">Limpiar</button></div></div>') +
-            tarjeta(icono('signature') + ' Firma de Control Interno' + (ctx.nombreCI ? ' — ' + esc(ctx.nombreCI) : '') + ' (obligatoria)', '<div class="ln-firma-caja"><canvas id="cap-firma-ci"></canvas>' +
+          tarjeta(icono('badge-check') + ' Control Interno' + (ctx.nombreCI ? ' · ' + esc(ctx.nombreCI) : ''), '<div class="ln-firma-caja"><canvas id="cap-firma-ci"></canvas>' +
               '<div class="ln-firma-acciones"><span class="ln-firma-vacia">Dibuja con el dedo o el mouse</span><button type="button" class="secondary ln-btn-chico" data-limpiar-firma="ci">Limpiar</button></div></div>') +
-          '</div>' +
+          '</div>';
+        return introduccionCaptura(ctx, 'RESPONSIVA') +
+          seccionCaptura(1, 'user-check', 'Datos del responsable', 'Verifica a quién se entrega el activo y registra su identificación.', datos) +
+          seccionCaptura(2, 'shield-check', 'Equipo y seguridad', 'Registra la modalidad de acceso y cualquier cambio de estatus.', seguridad) +
+          seccionCaptura(3, 'paperclip', 'Evidencia y observaciones', 'Adjunta el patrón cuando aplique y deja constancia de la entrega.', evidencia) +
+          seccionCaptura(4, 'signature', 'Firmas de conformidad', 'Ambas firmas son obligatorias para emitir la responsiva.', firmas) +
           '<div class="error-msg" id="cap-error" hidden></div>' +
           '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
-            '<button type="button" class="primary" id="cap-guardar">Guardar responsiva</button></div>';
+            '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + ' Guardar y generar PDF</button></div>';
       }
 
       function iniciarFormularioResponsiva() {
         captura.firmas.responsable = activarFirma('cap-firma-responsable');
         captura.firmas.ci = activarFirma('cap-firma-ci');
         manejarSubidaArchivo('cap-patron', 'cap-patron-lista', () => captura.carpetaId, false, (s) => { captura.patronId = s ? s.id : null; });
+        const tipoContrasena = $('#cap-tipo-contrasena', raiz);
+        const alternarPatron = () => {
+          const usaPatron = normal(tipoContrasena.value).indexOf('patron') >= 0;
+          $('#cap-patron-bloque', raiz).hidden = !usaPatron;
+          $('#cap-patron-no-aplica', raiz).hidden = usaPatron;
+        };
+        tipoContrasena.addEventListener('input', alternarPatron);
+        alternarPatron();
         $('#cap-guardar', raiz).addEventListener('click', guardarResponsivaDesdeFormulario);
       }
 
@@ -906,8 +969,10 @@
 
       function abrirCaptura(tipo, ref) {
         $('#ln-modal-captura', raiz).hidden = false;
+        $('#ln-captura-icono', raiz).innerHTML = icono(tipo === 'INSPECCION' ? 'clipboard-check' : 'signature');
+        $('#ln-captura-tipo', raiz).textContent = tipo === 'INSPECCION' ? 'Inspección de telefonía' : 'Responsiva de entrega';
         $('#ln-captura-titulo', raiz).textContent = tipo === 'INSPECCION' ? 'Nueva inspección' : 'Nueva responsiva';
-        $('#ln-captura-subtitulo', raiz).textContent = 'Preparando la carpeta de evidencia…';
+        $('#ln-captura-subtitulo', raiz).textContent = 'Preparando datos y carpeta de evidencia…';
         $('#ln-captura-cuerpo', raiz).innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando…</p>';
         captura = { tipo: tipo, ref: ref, idObjetivo: ref.equipoId || ref.lineaId, fotos: [], patronId: null, firmas: {} };
 
@@ -922,7 +987,9 @@
           captura.carpetaId = carpeta.carpetaId;
           captura.fotosCarpetaId = carpeta.fotosCarpetaId || carpeta.carpetaId;
           captura.ruta = carpeta.ruta;
-          $('#ln-captura-subtitulo', raiz).textContent = carpeta.ruta;
+          $('#ln-captura-subtitulo', raiz).textContent = tipo === 'INSPECCION'
+            ? 'Revisa el estado del activo, agrega evidencia y valida con firma.'
+            : 'Confirma la entrega, registra la evidencia y recaba ambas firmas.';
           if (tipo === 'INSPECCION') {
             $('#ln-captura-cuerpo', raiz).innerHTML = formularioInspeccion(ctx);
             pintarIconos($('#ln-captura-cuerpo', raiz));

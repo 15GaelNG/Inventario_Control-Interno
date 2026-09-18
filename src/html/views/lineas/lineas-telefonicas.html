@@ -54,11 +54,15 @@
 
     <!-- Captura de inspección / responsiva nueva -->
     <div class="modal-backdrop" id="ln-modal-captura" hidden>
-      <div class="modal-card modal-card-wide">
-        <div class="modal-header">
-          <div>
-            <h3 class="ln-titulo" style="margin:0" id="ln-captura-titulo"></h3>
+      <div class="modal-card modal-card-wide ln-captura-modal">
+        <div class="modal-header ln-captura-cabecera">
+          <div class="ln-captura-cabecera-principal">
+            <span class="ln-captura-icono" id="ln-captura-icono"><span data-ln-icon="file-text"></span></span>
+            <div>
+            <span class="ln-captura-tipo" id="ln-captura-tipo">Documento</span>
+            <h3 class="ln-titulo" style="margin:3px 0 0" id="ln-captura-titulo"></h3>
             <p class="modal-subtitle" id="ln-captura-subtitulo"></p>
+            </div>
           </div>
           <button type="button" class="modal-close" data-cerrar-modal aria-label="Cerrar"><span data-ln-icon="x"></span></button>
         </div>
