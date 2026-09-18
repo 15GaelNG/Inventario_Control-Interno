@@ -1023,8 +1023,8 @@
     { grupo: 'Ubicación', clave: 'SEDE', etiqueta: 'Sede', tipo: 'select' },
 
     { grupo: 'Fechas y configuración', clave: 'FECHA DE APERTURA', etiqueta: 'Fecha de apertura', tipo: 'date' },
-    { grupo: 'Fechas y configuración', clave: 'FECHA DE CIERRE', etiqueta: 'Fecha de cierre', tipo: 'date' },
-    { grupo: 'Fechas y configuración', clave: 'FECHA DE RESPONSIVA CI', etiqueta: 'Fecha de responsiva CI', tipo: 'date' },
+    { grupo: 'Fechas y configuración', clave: 'FECHA DE CIERRE', etiqueta: 'Fecha de cierre', tipo: 'date', soloEdicion: true },
+    { grupo: 'Fechas y configuración', clave: 'FECHA DE RESPONSIVA CI', etiqueta: 'Fecha de autorización por DG', tipo: 'date' },
     {
       grupo: 'Fechas y configuración', clave: 'TIPO DE AUTORIZACIÓN', etiqueta: 'Tipo de autorización', tipo: 'select',
       opciones: ['FISICA', 'CORREO'],
@@ -1044,12 +1044,12 @@
       grupo: 'Identificación oficial', clave: 'TIPO IDENTIFICACION RESPONSABLE', etiqueta: 'Tipo de identificación (responsable)', tipo: 'select',
       opciones: ['INE', 'PASAPORTE'],
     },
-    { grupo: 'Identificación oficial', clave: 'VIGENCIA IDENTIFICACION OFICIAL RESPONSABLE', etiqueta: 'Vigencia de identificación (responsable)', tipo: 'text' },
+    { grupo: 'Identificación oficial', clave: 'VIGENCIA IDENTIFICACION OFICIAL RESPONSABLE', etiqueta: 'Vigencia de identificación (responsable)', tipo: 'date' },
     {
       grupo: 'Identificación oficial', clave: 'TIPO IDENTIFICACION JEFE DIRECTO', etiqueta: 'Tipo de identificación (jefe directo)', tipo: 'select',
       opciones: ['INE', 'PASAPORTE'],
     },
-    { grupo: 'Identificación oficial', clave: 'VIGENCIA IDENTIFICACION OFICIAL JEFE DIRECTO', etiqueta: 'Vigencia de identificación (jefe directo)', tipo: 'text' },
+    { grupo: 'Identificación oficial', clave: 'VIGENCIA IDENTIFICACION OFICIAL JEFE DIRECTO', etiqueta: 'Vigencia de identificación (jefe directo)', tipo: 'date' },
 
     { grupo: 'Notas', clave: 'OBSERVACIONES', etiqueta: 'Observaciones', tipo: 'text' },
   ];
@@ -1059,6 +1059,9 @@
     const grupos = [];
     const porGrupo = {};
     CAMPOS_CAJACHICA.forEach((campo) => {
+      // soloEdicion: campos que no aplican al dar de alta (ej. Fecha de
+      // cierre — no tiene sentido cerrarla antes de que exista).
+      if (campo.soloEdicion && !esEdicion) return;
       if (!porGrupo[campo.grupo]) { porGrupo[campo.grupo] = []; grupos.push(campo.grupo); }
       porGrupo[campo.grupo].push(campo);
     });
