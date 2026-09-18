@@ -297,8 +297,18 @@ const LineasPdf = (function () {
             const parrafo = m.elemento.getParent();
             const img = parrafo.insertInlineImage(parrafo.getChildIndex(m.elemento) + 1, blob);
             const ancho = img.getWidth(), alto = img.getHeight();
-            const max = 160;
-            if (ancho > max) { img.setWidth(max); img.setHeight(Math.round(alto * max / ancho)); }
+            if (/^(PATRON|CONTRASEÑA)$/.test(nombreImagen)) {
+              // Las plantillas colocan el patrón en una celda baja. Limitar también
+              // la altura evita que Google Docs recorte las filas inferior y superior.
+              const maxAncho = 56, maxAlto = 56;
+              const escala = Math.min(1, maxAncho / ancho, maxAlto / alto);
+              img.setWidth(Math.max(1, Math.round(ancho * escala)));
+              img.setHeight(Math.max(1, Math.round(alto * escala)));
+              parrafo.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+            } else {
+              const max = 160;
+              if (ancho > max) { img.setWidth(max); img.setHeight(Math.round(alto * max / ancho)); }
+            }
           } catch (e) {
             avisos.push('No se pudo insertar la imagen ' + nombreImagen + ': ' + e.message);
           }

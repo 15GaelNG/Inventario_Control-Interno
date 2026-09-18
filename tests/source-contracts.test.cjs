@@ -137,6 +137,13 @@ test('edición e inspección comparten patrón, navegación y fondos de firma de
   assert.match(captura, /'PATRON': firmasBase64 \? blobBase64_\(firmasBase64\.patron/);
 });
 
+test('el patrón conserva su proporción y cabe completo en las plantillas PDF', () => {
+  const pdf = read('src/services/lineas/LineasPdf.gs');
+  assert.match(pdf, /\^\(PATRON\|CONTRASEÑA\)\$/);
+  assert.match(pdf, /Math\.min\(1, maxAncho \/ ancho, maxAlto \/ alto\)/);
+  assert.match(pdf, /setAlignment\(DocumentApp\.HorizontalAlignment\.CENTER\)/);
+});
+
 test('los movimientos rechazan artículos inexistentes', () => {
   const accesorios = read('src/services/lineas/LineasAccesorios.gs');
   assert.match(accesorios, /if \(!actual\) throw new Error\('El artículo seleccionado ya no existe/);
