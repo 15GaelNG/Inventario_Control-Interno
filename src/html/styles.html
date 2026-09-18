@@ -118,37 +118,63 @@
   #sidebar.collapsed .nav-label { display: none; }
   #sidebar.collapsed .nav-item { justify-content: center; }
 
-  /* Grupos de navegación (acordeón por área) */
-  .nav-groups { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; overflow-y: auto; }
+  /* Grupos de navegación (acordeón por área) — con la temática navy+dorado
+     de la marca: cada grupo trae su ícono en una placa que se enciende en
+     dorado cuando está abierto, la línea que conecta con sus subitems
+     también es dorada (degradada), y los subitems se deslizan un poco al
+     pasar el mouse en vez de solo cambiar de color. */
+  .nav-groups { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; overflow-y: auto; }
 
   .nav-group-header {
     display: flex; align-items: center; gap: 10px; cursor: pointer;
-    padding: 11px 13px; border-radius: var(--radius);
+    padding: 8px 10px; border-radius: var(--radius);
     color: var(--color-sidebar-text); font-weight: 600; font-size: 13px;
     white-space: nowrap; overflow: hidden;
+    transition: background-color .2s ease, color .2s ease;
   }
   .nav-group-header:hover { background: var(--color-sidebar-hover); }
-  .nav-group-header .nav-icon { flex-shrink: 0; width: 20px; text-align: center; }
+  .nav-group.expanded .nav-group-header {
+    background: rgba(180,161,105,.14); color: var(--color-sidebar-text-strong);
+  }
+  .nav-group-header .nav-icon {
+    flex-shrink: 0; width: 30px; height: 30px; border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,.07); color: var(--color-sidebar-text);
+    transition: background-color .25s ease, color .25s ease;
+  }
+  .nav-group-header .nav-icon .ico { width: 15px; height: 15px; }
+  .nav-group.expanded .nav-group-header .nav-icon {
+    background: var(--color-accent); color: var(--color-primary);
+  }
   .nav-group-header .nav-label { flex: 1; overflow: hidden; text-overflow: ellipsis; }
   .nav-group-chevron {
-    flex-shrink: 0; font-size: 10px; transition: transform .2s ease; color: var(--color-sidebar-text);
+    flex-shrink: 0; color: var(--color-sidebar-text); opacity: .55;
+    transition: transform .25s ease, color .2s ease, opacity .2s ease;
   }
-  .nav-group.expanded .nav-group-chevron { transform: rotate(90deg); }
+  .nav-group-chevron .ico { width: 15px; height: 15px; }
+  .nav-group.expanded .nav-group-chevron { transform: rotate(90deg); color: var(--color-accent); opacity: 1; }
 
   .nav-group-items {
-    max-height: 0; overflow: hidden; transition: max-height .25s ease;
+    max-height: 0; overflow: hidden; opacity: 0; position: relative;
+    transition: max-height .3s ease, opacity .25s ease;
     display: flex; flex-direction: column; gap: 1px;
-    padding-left: 14px; border-left: 2px solid var(--color-sidebar-border); margin-left: 23px;
+    padding-left: 16px; margin-left: 24px;
   }
-  .nav-group.expanded .nav-group-items { max-height: 600px; }
+  .nav-group-items::before {
+    content: ''; position: absolute; left: 0; top: 2px; bottom: 2px; width: 2px;
+    background: linear-gradient(to bottom, var(--color-accent), rgba(255,255,255,.08));
+    border-radius: 2px; opacity: .6;
+  }
+  .nav-group.expanded .nav-group-items { max-height: 600px; opacity: 1; }
 
   .nav-subitem {
-    padding: 9px 11px; border-radius: 8px; cursor: pointer;
-    color: var(--color-sidebar-text); font-size: 13px; font-weight: 500;
+    padding: 8px 12px; border-radius: 8px; cursor: pointer;
+    color: var(--color-sidebar-text); font-size: 12.5px; font-weight: 500;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    transition: background-color .18s ease, color .18s ease, transform .18s ease;
   }
-  .nav-subitem:hover { background: var(--color-sidebar-hover); }
-  .nav-subitem.active { background: var(--color-accent); color: var(--color-primary); }
+  .nav-subitem:hover { background: var(--color-sidebar-hover); color: var(--color-sidebar-text-strong); transform: translateX(3px); }
+  .nav-subitem.active { background: var(--color-accent); color: var(--color-primary); font-weight: 700; }
 
   /* En modo colapsado, los grupos se reducen a solo el ícono del encabezado */
   #sidebar.collapsed .nav-group-header .nav-label,
