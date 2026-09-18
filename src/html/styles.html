@@ -79,6 +79,19 @@
   }
   #sidebar.collapsed { width: 92px; }
 
+  /* Barra de scroll del sidebar (y de sus grupos) — delgada, dorada y sin
+     las flechitas feas de la barra por default del navegador/Windows. */
+  #sidebar, .nav-groups { scrollbar-width: thin; scrollbar-color: rgba(180,161,105,.5) transparent; }
+  #sidebar::-webkit-scrollbar, .nav-groups::-webkit-scrollbar { width: 6px; }
+  #sidebar::-webkit-scrollbar-track, .nav-groups::-webkit-scrollbar-track { background: transparent; }
+  #sidebar::-webkit-scrollbar-thumb, .nav-groups::-webkit-scrollbar-thumb {
+    background: rgba(180,161,105,.45); border-radius: 999px;
+  }
+  #sidebar::-webkit-scrollbar-thumb:hover, .nav-groups::-webkit-scrollbar-thumb:hover {
+    background: rgba(180,161,105,.75);
+  }
+  #sidebar::-webkit-scrollbar-button, .nav-groups::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+
   .sidebar-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
   .sidebar-brand { display: flex; align-items: center; gap: 9px; overflow: hidden; min-width: 0; }
   .sidebar-brand-icon {
