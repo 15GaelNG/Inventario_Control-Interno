@@ -7,9 +7,24 @@
  */
 
 const SheetUtils = (function () {
+  // SpreadsheetApp.openById() es de las llamadas más caras de Apps Script —
+  // dentro de UNA sola ejecución es común que varios Services toquen el
+  // mismo spreadsheet (ej. ArqueosService.crear() llama a hoja_() propia Y a
+  // CajasChicasService.buscarPorId()/actualizar(), cada uno con su propio
+  // getSheet/getSheetByColumns) — sin este cache cada una reabre el archivo
+  // por su cuenta. El cache vive mientras dure la ejecución (no entre
+  // llamadas de google.script.run distintas — para eso ya está el cache de
+  // CacheService en getSheetByColumns).
+  const _ssCache = {};
+  function abrirSpreadsheet_(spreadsheetId) {
+    if (!_ssCache[spreadsheetId]) {
+      _ssCache[spreadsheetId] = SpreadsheetApp.openById(spreadsheetId);
+    }
+    return _ssCache[spreadsheetId];
+  }
 
   function getSheet(spreadsheetId, sheetName) {
-    const ss = SpreadsheetApp.openById(spreadsheetId);
+    const ss = abrirSpreadsheet_(spreadsheetId);
     const sheet = ss.getSheetByName(sheetName);
     if (!sheet) {
       throw new Error('No existe la hoja "' + sheetName + '" en el spreadsheet ' + spreadsheetId);
@@ -111,7 +126,7 @@ const SheetUtils = (function () {
   function getSheetByColumns(spreadsheetId, columnasRequeridas) {
     const cache = CacheService.getScriptCache();
     const cacheKey = 'hojaPorColumnas_' + spreadsheetId + '_' + columnasRequeridas.join('|');
-    const ss = SpreadsheetApp.openById(spreadsheetId);
+    const ss = abrirSpreadsheet_(spreadsheetId);
 
     const nombreCacheado = cache.get(cacheKey);
     if (nombreCacheado) {

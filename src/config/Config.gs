@@ -16,9 +16,16 @@
 
 const Config = (function () {
   const props = PropertiesService.getScriptProperties();
+  // ssId() se llama en CADA función de CADA Service (a veces varias veces
+  // por ejecución) — cachear las propiedades ya leídas evita ir a Properties
+  // Service una y otra vez por el mismo valor dentro de una sola ejecución.
+  const _propsCache = {};
 
   function required(key) {
-    const value = props.getProperty(key);
+    if (!(key in _propsCache)) {
+      _propsCache[key] = props.getProperty(key);
+    }
+    const value = _propsCache[key];
     if (!value) {
       throw new Error(
         'Falta configurar "' + key + '" en Script Properties ' +
