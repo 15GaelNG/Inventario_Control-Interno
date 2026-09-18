@@ -443,6 +443,13 @@
     const f = new Date(valor);
     return isNaN(f) ? '—' : f.toLocaleDateString('es-MX');
   }
+  /** Formatea un monto como pesos mexicanos ($1,234.56) — solo para mostrar
+   * en tablas/detalle; los campos de captura siguen siendo number normal. */
+  function formatearMoneda(valor) {
+    if (valor === '' || valor === null || valor === undefined) return '—';
+    const n = Number(valor);
+    return isNaN(n) ? '—' : n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
+  }
 
   // ============================================================
   // Motor genérico de "tabla interactiva": buscador global, orden
@@ -2184,7 +2191,7 @@
             <td>${c.DEPARTAMENTO || '—'}</td>
             <td>${c.OFICINA || '—'}</td>
             <td>${c.SEDE || '—'}</td>
-            <td>${c.MONTO_ACTUAL || '—'}</td>
+            <td>${formatearMoneda(c.MONTO_ACTUAL)}</td>
             <td>
               <div class="tabla-actions">
                 <button type="button" class="secondary btn-editar-cajachica" data-id="${c.ID_CCH}" title="Editar"><i data-lucide="pencil" class="ico"></i></button>
@@ -2250,7 +2257,7 @@
         }
         grid.innerHTML = Object.keys(completo)
           .filter((k) => completo[k] !== '' && completo[k] !== null && completo[k] !== undefined)
-          .map((k) => itemInfo(tituloDesdeClave(k), completo[k]))
+          .map((k) => itemInfo(tituloDesdeClave(k), k === 'MONTO ACTUAL' ? formatearMoneda(completo[k]) : completo[k]))
           .join('');
       } catch (err) {
         grid.innerHTML = '<p class="error-msg">No se pudo cargar: ' + err.message + '</p>';
@@ -2373,7 +2380,7 @@
     selectCaja.addEventListener('change', () => {
       const caja = cajasPorId[selectCaja.value];
       if (caja) {
-        campoAnterior.value = caja.MONTO_ACTUAL || 0;
+        campoAnterior.value = formatearMoneda(caja.MONTO_ACTUAL || 0);
         tagAnterior.hidden = false;
       } else {
         campoAnterior.value = '';
@@ -2392,6 +2399,7 @@
 
     const columnasCambiosMonto = [
       { clave: 'ID_CCH', etiqueta: 'ID CCH' },
+      { clave: 'RESPONSABLE', etiqueta: 'Responsable' },
       { clave: 'TIPO', etiqueta: 'Tipo' },
       { clave: 'CANTIDAD', etiqueta: 'Cantidad' },
       { clave: 'CANTIDAD_ANTERIOR', etiqueta: 'Cantidad anterior' },
@@ -2409,11 +2417,11 @@
         lista.innerHTML = cambios.map((c) => `
           <tr>
             <td class="tabla-clickable" data-id="${c.ID}" title="Ver detalle completo">${c.ID_CCH}</td>
-            <td>${nombreResponsable(c.ID_CCH)}</td>
+            <td>${c.RESPONSABLE || '—'}</td>
             <td>${etiquetaTipo(c.TIPO)}</td>
-            <td>${c.CANTIDAD || '—'}</td>
-            <td>${c.CANTIDAD_ANTERIOR || '—'}</td>
-            <td>${c.CANTIDAD_ACTUALIZADA || '—'}</td>
+            <td>${formatearMoneda(c.CANTIDAD)}</td>
+            <td>${formatearMoneda(c.CANTIDAD_ANTERIOR)}</td>
+            <td>${formatearMoneda(c.CANTIDAD_ACTUALIZADA)}</td>
             <td>${formatearFecha(c.FECHA)}</td>
             <td>${c.QUIEN_REALIZO || '—'}</td>
             <td>
@@ -2446,7 +2454,11 @@
         return;
       }
       errorBox.hidden = true;
-      todosLosCambios = cambios || [];
+      // RESPONSABLE no viene del servidor (el historial solo guarda ID CCH) —
+      // se agrega aquí como un dato real más del objeto, para que la tabla
+      // (encabezado, filtro, orden, búsqueda y exportar) lo trate igual que
+      // cualquier otra columna, en vez de solo "pintarlo" en la celda.
+      todosLosCambios = (cambios || []).map((c) => Object.assign({}, c, { RESPONSABLE: nombreResponsable(c.ID_CCH) }));
 
       cambiosPorId = {};
       todosLosCambios.forEach((c) => { cambiosPorId[c.ID] = c; });
@@ -2470,10 +2482,14 @@
       if (!cambio) return;
       document.getElementById('detalle-cambio-monto-label').textContent = 'ID CCH: ' + cambio.ID_CCH;
       const grid = document.getElementById('detalle-cambio-monto-grid');
+      const CAMPOS_MONEDA = ['CANTIDAD', 'CANTIDAD_ANTERIOR', 'CANTIDAD_ACTUALIZADA'];
       grid.innerHTML = itemInfo('Responsable', nombreResponsable(cambio.ID_CCH)) +
         Object.keys(ETIQUETAS_CAMBIO_MONTO)
           .filter((clave) => cambio[clave] !== '' && cambio[clave] !== null && cambio[clave] !== undefined)
-          .map((clave) => itemInfo(ETIQUETAS_CAMBIO_MONTO[clave], cambio[clave]))
+          .map((clave) => itemInfo(
+            ETIQUETAS_CAMBIO_MONTO[clave],
+            CAMPOS_MONEDA.includes(clave) ? formatearMoneda(cambio[clave]) : cambio[clave]
+          ))
           .join('');
       modalDetalle.hidden = false;
     }
