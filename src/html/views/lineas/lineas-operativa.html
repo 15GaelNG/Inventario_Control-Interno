@@ -9,7 +9,7 @@
         </div>
       </div>
       <div class="kpi-chips">
-        <button id="ln-op-nuevo" type="button" class="kpi-chip ln-btn-icono" hidden><span data-ln-icon="plus"></span> Nuevo registro</button>
+        <button id="ln-op-nuevo" type="button" class="primary ln-btn-icono" hidden><span data-ln-icon="plus"></span> Nuevo registro</button>
         <span class="kpi-chip">Total <strong id="ln-op-total">—</strong></span>
         <span class="kpi-chip">Resultados <strong id="ln-op-resultados">—</strong></span>
       </div>
@@ -18,12 +18,13 @@
     <div id="ln-op-error" class="error-msg" hidden></div>
     <div class="card ln-card">
       <form id="ln-op-form" class="ln-filtros ln-op-filtros">
-        <input id="ln-op-q" type="search" placeholder="Buscar en todos los campos…" autocomplete="off" />
+        <input aria-label="Buscar en todos los campos…" id="ln-op-q" type="search" placeholder="Buscar en todos los campos…" autocomplete="off" />
         <select id="ln-op-grupo" aria-label="Filtrar"></select>
         <button type="submit" class="ln-btn-icono"><span data-ln-icon="search"></span> Buscar</button>
         <button id="ln-op-limpiar" type="button" class="secondary ln-btn-icono"><span data-ln-icon="x"></span> Limpiar</button>
         <button id="ln-op-exportar" type="button" class="secondary ln-btn-icono"><span data-ln-icon="download"></span> Exportar página</button>
       </form>
+      <p class="ln-tabla-ayuda">Consulta el resumen o abre una ficha para ver todos sus datos. La exportación incluye todos los campos de la página.</p>
       <div class="ln-tabla-wrap">
         <table class="ln-tabla ln-op-tabla">
           <thead id="ln-op-thead"></thead>
@@ -48,6 +49,7 @@
         <button id="ln-op-cerrar" type="button" class="modal-close secondary" aria-label="Cerrar"><span data-ln-icon="x"></span></button>
       </div>
       <form id="ln-op-alta-form">
+        <p class="ln-tabla-ayuda">Completa los datos del registro. Los campos con * son obligatorios.</p>
         <div id="ln-op-campos" class="ln-op-campos modal-form-scroll"></div>
         <div id="ln-op-alta-error" class="error-msg" hidden></div>
         <div class="ln-captura-acciones">

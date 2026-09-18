@@ -59,6 +59,21 @@
       return '<a class="ln-enlace ln-accion-enlace" target="_blank" rel="noopener" href="' + url + '">' + icono(esArchivo ? 'file-text' : 'folder-open') + ' ' + esc(texto) + ' ' + icono('external-link', 'ln-icon-sm') + '</a>';
     };
 
+    /** Ficha de consulta: conserva todos los campos sin obligar a recorrer una tabla ancha. */
+    function mostrarFicha(raiz, titulo, pares) {
+      const foco = document.activeElement;
+      const dialogo = document.createElement('dialog');
+      dialogo.className = 'ln-consulta-dialog';
+      dialogo.setAttribute('aria-label', titulo);
+      dialogo.innerHTML = '<div class="modal-header"><h3>' + icono('file-text') + ' ' + esc(titulo) + '</h3><button type="button" class="secondary" data-cerrar-ficha aria-label="Cerrar ficha">' + icono('x') + ' Cerrar</button></div>' +
+        '<div class="ln-consulta-contenido"><dl class="ln-ficha-campos">' + pares.map(([etiqueta, valor]) =>
+          '<div' + (/COMENTARIO|OBSERVACION|OBSERVACIÓN/i.test(etiqueta) ? ' class="ln-notas-ancho"' : '') + '><dt>' + esc(etiqueta) + '</dt><dd>' + valor + '</dd></div>').join('') + '</dl></div>';
+      raiz.appendChild(dialogo);
+      dialogo.querySelector('[data-cerrar-ficha]').addEventListener('click', () => dialogo.close());
+      dialogo.addEventListener('close', () => { dialogo.remove(); if (foco && foco.isConnected) foco.focus(); });
+      dialogo.showModal();
+    }
+
     function llamar(fn, ...args) {
       return callServer(fn, state.token, ...args);
     }
@@ -318,6 +333,12 @@
 
       // Clic en filas, enlaces internos y botones del detalle (delegación).
       raiz.addEventListener('click', (ev) => {
+        const seccion = ev.target.closest('[data-ln-seccion]');
+        if (seccion) {
+          const destino = document.getElementById(seccion.dataset.lnSeccion);
+          if (destino) { destino.scrollIntoView({ behavior: 'smooth', block: 'start' }); destino.focus({ preventScroll: true }); }
+          return;
+        }
         const pdfPendiente = ev.target.closest('[data-ln-pdf]');
         if (pdfPendiente) {
           ev.preventDefault();
@@ -439,14 +460,22 @@
         const cfg = LISTADOS[memoria.modulo];
         const f = memoria.filtros[memoria.modulo];
         const todas = memoria.indice[memoria.modulo];
-        raiz.querySelectorAll('.ln-tab').forEach((t) => t.classList.toggle('active', t.dataset.modulo === memoria.modulo));
+        raiz.querySelectorAll('.ln-tab').forEach((t) => {
+          const activa = t.dataset.modulo === memoria.modulo;
+          t.classList.toggle('active', activa);
+          t.setAttribute('aria-selected', String(activa));
+        });
 
         const opciones = (s) => '<option value="">' + esc(s.todos) + '</option>' + s.valores(todas).map((v) =>
           '<option value="' + esc(v) + '"' + (v === f[s.campo] ? ' selected' : '') + '>' + esc(s.traducir ? (s.traducir[v] || v) : v) + '</option>').join('');
         $('#ln-filtros', raiz).innerHTML =
           '<input type="search" id="ln-q" placeholder="' + esc(cfg.placeholder) + '" value="' + esc(f.q) + '" autocomplete="off" />' +
-          cfg.selects.map((s) => '<select data-campo="' + s.campo + '">' + opciones(s) + '</select>').join('');
-        $('#ln-thead', raiz).innerHTML = '<tr>' + cfg.columnas.map((c) => '<th>' + esc(c.titulo) + '</th>').join('') + '</tr>';
+          cfg.selects.map((s) => '<select aria-label="' + esc(s.todos) + '" data-campo="' + s.campo + '">' + opciones(s) + '</select>').join('') +
+          '<button type="button" class="secondary ln-btn-icono" id="ln-limpiar-filtros">' + icono('filter-x') + ' Limpiar filtros</button>';
+        $('#ln-limpiar-filtros', raiz).addEventListener('click', () => {
+          f.q = ''; f.pagina = 0; cfg.selects.forEach((campo) => { f[campo.campo] = ''; }); pintarListado();
+        });
+        $('#ln-thead', raiz).innerHTML = '<tr>' + cfg.columnas.map((c) => '<th>' + esc(c.titulo) + '</th>').join('') + '<th>Acciones</th></tr>';
 
         let temporizador = null;
         $('#ln-q', raiz).addEventListener('input', (ev) => {
@@ -470,8 +499,8 @@
         const visibles = lista.slice(f.pagina * POR_PAGINA, (f.pagina + 1) * POR_PAGINA);
         $('#ln-tbody', raiz).innerHTML = visibles.length
           ? visibles.map((r) => '<tr class="ln-fila-clic" data-ln-ir="' + cfg.detalle + '" data-id="' + esc(r.id) + '">' +
-              cfg.columnas.map((c) => '<td class="' + (c.clase || '') + '">' + c.valor(r) + '</td>').join('') + '</tr>').join('')
-          : '<tr><td colspan="' + cfg.columnas.length + '" class="empty-state">Sin resultados</td></tr>';
+              cfg.columnas.map((c) => '<td class="' + (c.clase || '') + '">' + c.valor(r) + '</td>').join('') + '<td><button type="button" class="secondary ln-btn-icono" data-ln-ir="' + cfg.detalle + '" data-id="' + esc(r.id) + '">' + icono('eye') + ' Ver ficha</button></td></tr>').join('')
+          : '<tr><td colspan="' + (cfg.columnas.length + 1) + '" class="empty-state">Sin resultados</td></tr>';
         $('#ln-conteo', raiz).textContent = miles(lista.length) + ' de ' + miles(total) + ' · datos de ' + fechaHora(memoria.indice.generadoEn);
         $('#ln-pagina', raiz).textContent = 'Página ' + (f.pagina + 1) + ' de ' + paginas;
         $('#ln-anterior', raiz).disabled = f.pagina === 0;
@@ -480,7 +509,11 @@
 
       // ---- Detalle ----
       function abrir(tipo, id, sinApilar) {
-        if (!sinApilar) pila.push({ tipo: tipo, id: id });
+        if (!sinApilar) {
+          const existente = pila.findIndex((p) => p.tipo === tipo && p.id === id);
+          if (existente >= 0) pila.splice(existente + 1);
+          else pila.push({ tipo: tipo, id: id });
+        }
         $('#ln-listado', raiz).hidden = true;
         const detalle = $('#ln-detalle', raiz);
         detalle.hidden = false;
@@ -489,7 +522,7 @@
         window.scrollTo(0, 0);
         const pintar = { equipo: pintarEquipo, linea: pintarLinea, inspeccion: pintarInspeccion }[tipo];
         pintar(detalle, id).catch((e) => {
-          if (!vigente()) return;
+          if (!vigente() || !pila.length || pila[pila.length - 1].tipo !== tipo || pila[pila.length - 1].id !== id) return;
           detalle.innerHTML = migas() + '<div class="card"><p class="error-msg">No se pudo cargar: ' + mensajeError(e) + '</p></div>';
         });
       }
@@ -568,7 +601,7 @@
 
       function pintarEquipo(detalle, id) {
         return llamar('apiLineasEquipo', id).then((r) => {
-          if (!vigente()) return;
+          if (!vigente() || !pila.length || pila[pila.length - 1].tipo !== 'equipo' || pila[pila.length - 1].id !== id) return;
           const e = r.equipo;
           const l = r.linea;
           const costo = l && l.costoPlan !== null && l.costoPlan !== undefined ? '$' + Number(l.costoPlan).toLocaleString('es-MX') : null;
@@ -603,7 +636,7 @@
 
       function pintarLinea(detalle, id) {
         return llamar('apiLineasLinea', id).then((r) => {
-          if (!vigente()) return;
+          if (!vigente() || !pila.length || pila[pila.length - 1].tipo !== 'linea' || pila[pila.length - 1].id !== id) return;
           const l = r.linea;
           const e = r.equipo;
           const costo = l.costoPlan !== null && l.costoPlan !== undefined ? '$' + Number(l.costoPlan).toLocaleString('es-MX') : null;
@@ -652,10 +685,10 @@
 
       function tarjetaEvidencias(inspecciones, responsivas) {
         const tablaInsp = inspecciones.length
-          ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Fecha</th><th>Origen</th><th>Calificación</th><th>Fotos</th><th>Responsable</th><th>Inspector</th><th>Documento</th></tr></thead><tbody>' +
+          ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Fecha</th><th>Origen</th><th>Calificación</th><th>Fotos</th><th>Responsable</th><th>Inspector</th><th>Consulta</th><th>Documento</th></tr></thead><tbody>' +
             inspecciones.map((i) => '<tr class="ln-fila-clic" data-ln-ir="inspeccion" data-id="' + esc(i.id) + '"><td>' + guion(fecha(i.fecha)) + '</td><td>' + (ORIGEN[i.origen] || '') + '</td>' +
               '<td>' + guion(porcentaje(i.calificacion)) + '</td><td>' + (i.fotos || '<span class="ln-tenue">0</span>') + '</td>' +
-              '<td>' + guion(i.responsable) + '</td><td class="ln-tenue">' + guion(i.inspector) + '</td><td>' + accionPdf(i, 'INSPECCION') + '</td></tr>').join('') +
+              '<td>' + guion(i.responsable) + '</td><td class="ln-tenue">' + guion(i.inspector) + '</td><td><button type="button" class="secondary ln-btn-icono" data-ln-ir="inspeccion" data-id="' + esc(i.id) + '">' + icono('eye') + ' Ver inspección</button></td><td>' + accionPdf(i, 'INSPECCION') + '</td></tr>').join('') +
             '</tbody></table></div>'
           : '<p class="empty-state">Sin inspecciones registradas.</p>';
         const tablaResp = responsivas.length
@@ -872,13 +905,12 @@
             grupoEscala(p.escala, ctx.anterior && ctx.anterior.checklist ? ctx.anterior.checklist[p.clave] : null) + '</div>').join('') +
           '</div></div>').join('');
         const datos = tarjetaResponsable(ctx.responsable, 'Responsable del activo') +
-          '<div class="grid" style="grid-template-columns: repeat(3, 1fr)">' +
+          '<div class="grid" style="grid-template-columns: repeat(2, 1fr)">' +
           '<div class="field"><label>Color del equipo</label><input type="text" id="cap-color" autocomplete="off" /></div>' +
-          '<div class="field"><label>Ticket <span class="ln-tenue">(opcional)</span></label><input type="text" id="cap-ticket" autocomplete="off" /></div>' +
-          '<div class="field"><label>Otra aplicación <span class="ln-tenue">(opcional)</span></label><input type="text" id="cap-otra-app" autocomplete="off" /></div></div>' +
+          '<div class="field"><label for="cap-ticket">Ticket <span class="ln-tenue">(opcional)</span></label><input type="text" id="cap-ticket" autocomplete="off" /></div></div>' +
           (ctx.equipo ? '<div class="grid" style="grid-template-columns: repeat(2, 1fr)"><div class="field"><label>Estatus del equipo</label><select id="cap-estatus"><option value="">Conservar estatus actual</option>' + opcionesEstatus(ctx.catalogos.estatusEquipo, '') + '</select></div></div>' +
           '<label class="ln-check"><input type="checkbox" id="cap-actualizar-accesorios" checked> Sincronizar cubo, cable, funda y mica con las respuestas del checklist</label>' : '');
-        const evidencia = '<div class="field"><label>Observaciones de la inspección</label><textarea id="cap-observaciones" rows="3" placeholder="Agrega hallazgos, daños o información útil para el seguimiento"></textarea></div>' +
+        const evidencia = '<div class="field"><label for="cap-observaciones">Observaciones de la inspección (opcional)</label><textarea id="cap-observaciones" rows="6" placeholder="Agrega hallazgos, daños o información útil para el seguimiento"></textarea></div>' +
           '<label class="ln-upload">' + icono('images') + '<span><b>Agregar fotografías</b><small>Puedes seleccionar varias imágenes; se guardarán en la carpeta de evidencia.</small></span>' +
           '<input type="file" id="cap-fotos" accept="image/*" capture="environment" multiple /></label><div class="ln-fotos-lista" id="cap-fotos-lista"></div>';
         const firmas = '<div class="ln-grid-2">' +
@@ -937,7 +969,7 @@
           firmaResponsable && !firmaResponsable.estaVacia() ? llamar('apiLineasSubirArchivo', carpetaId, 'FIRMA RESPONSABLE.png', 'image/png', firmaResponsable.base64()) : Promise.resolve(null),
         ]).then(([fInspector, fResponsable]) => { estadoGuardado('Guardando inspección'); return llamar('apiLineasGuardarInspeccion', Object.assign({}, refCaptura, {
           carpetaId: carpetaId, fotosCarpetaId: fotosCarpetaId, ruta: ruta, checklist: checklist,
-          color: $('#cap-color', raiz).value, ticket: $('#cap-ticket', raiz).value, otraApp: $('#cap-otra-app', raiz).value,
+          color: $('#cap-color', raiz).value, ticket: $('#cap-ticket', raiz).value,
           observaciones: $('#cap-observaciones', raiz).value,
           estatusEquipo: $('#cap-estatus', raiz) ? $('#cap-estatus', raiz).value : '',
           actualizarAccesorios: $('#cap-actualizar-accesorios', raiz) ? $('#cap-actualizar-accesorios', raiz).checked : false,
@@ -962,7 +994,7 @@
         const evidencia = '<div class="ln-nota" id="cap-patron-no-aplica">' + icono('info', 'ln-icon-sm') + ' La carga del patrón se habilitará si seleccionas PATRÓN como tipo de contraseña.</div>' +
           '<div id="cap-patron-bloque" hidden><label class="ln-upload">' + icono('scan-line') + '<span><b>Adjuntar fotografía del patrón</b><small>La imagen se resguarda dentro de la carpeta de evidencia.</small></span>' +
           '<input type="file" id="cap-patron" accept="image/*" /></label><div class="ln-fotos-lista" id="cap-patron-lista"></div></div>' +
-          '<div class="field" style="margin-top:14px"><label>Observaciones</label><textarea id="cap-observaciones" rows="3" placeholder="Condiciones de entrega, acuerdos o comentarios adicionales"></textarea></div>';
+          '<div class="field" style="margin-top:14px"><label for="cap-observaciones">Observaciones de la entrega (opcional)</label><textarea id="cap-observaciones" rows="6" placeholder="Condiciones de entrega, acuerdos o comentarios adicionales"></textarea></div>';
         const firmas = '<div class="ln-grid-2">' +
           tarjeta(icono('signature') + ' Firma del responsable · obligatoria', '<div class="ln-firma-caja"><canvas id="cap-firma-responsable"></canvas>' +
               '<div class="ln-firma-acciones"><span class="ln-firma-vacia">Dibuja con el dedo o el mouse</span><button type="button" class="secondary ln-btn-chico" data-limpiar-firma="responsable">Limpiar</button></div></div>') +
@@ -1136,14 +1168,16 @@
       // ---- Inspección ----
       function pintarInspeccion(detalle, id) {
         return llamar('apiLineasInspeccion', id).then((r) => {
-          if (!vigente()) return;
+          if (!vigente() || !pila.length || pila[pila.length - 1].tipo !== 'inspeccion' || pila[pila.length - 1].id !== id) return;
           const i = r.inspeccion;
           const e = r.equipo;
           const s = i.snapshot || {};
+          const fotos = r.fotos || [];
+          const firmas = r.firmas || [];
           const CLASE_VALOR = { SI: 'verde', BUENO: 'verde', INSTALADA: 'verde', REGULAR: 'ambar', NO: 'rojo', MALO: 'rojo', 'NO INSTALADA': 'neutro' };
           const checklist = i.origen === 'DRIVE'
-            ? '<div class="ln-nota">Inspección histórica que solo existe en Drive: no tiene checklist capturado, solo sus archivos.</div>'
-            : '<div class="ln-grid-2">' + r.checklist.map((sec) => {
+            ? '<div class="ln-nota">Esta inspección se conserva en Drive. Consulta sus archivos; no hay respuestas de checklist registradas en el sistema.</div>'
+            : '<div class="ln-grid-2">' + (r.checklist || []).map((sec) => {
                 const puntos = sec.puntos.filter((p) => i.checklist && i.checklist[p.clave]);
                 if (!puntos.length) return '';
                 return tarjeta(icono('list-checks') + ' ' + esc(sec.seccion), campos(puntos.map((p) => {
@@ -1151,36 +1185,40 @@
                   return [p.etiqueta, chip(v, CLASE_VALOR[v] || 'neutro'), true];
                 })));
               }).join('') + '</div>';
-
-          const galeria = (lista, clase) => '<div class="ln-galeria">' + lista.map((f) =>
-            '<a class="ln-foto ' + (clase || '') + '" target="_blank" rel="noopener" href="' + esc(f.enlace) + '" title="' + esc(f.nombre) + '">' +
-            (f.miniatura ? '<img loading="lazy" referrerpolicy="no-referrer" src="' + esc(f.miniatura) + '" alt="' + esc(f.nombre) + '">' : '<span>' + (f.video ? icono('video') : icono('image')) + '</span>') +
-            '</a>').join('') + '</div>';
-
+          const galeria = (lista, firma) => '<div class="ln-galeria">' + lista.map((f) =>
+            '<a class="ln-evidencia" target="_blank" rel="noopener" href="' + esc(f.enlace) + '">' +
+            '<span class="ln-foto' + (firma ? ' ln-firma' : '') + '">' +
+            (f.miniatura ? '<img loading="lazy" referrerpolicy="no-referrer" src="' + esc(f.miniatura) + '" alt="' + esc(f.nombre) + '">' : icono(f.video ? 'video' : 'image')) +
+            '</span><span class="ln-evidencia-nombre">' + esc(f.nombre || 'Evidencia') + '<small>' + icono('external-link') + ' Abrir en Drive</small></span></a>').join('') + '</div>';
+          const seccion = (num, ico, titulo, ayuda, contenido) => '<section class="ln-seccion-consulta" id="ln-consulta-' + num + '" tabindex="-1">' + seccionCaptura(num, ico, titulo, ayuda, contenido) + '</section>';
+          const resumen = (ico, etiqueta, valor) => '<div class="ln-captura-dato">' + icono(ico) + '<span><small>' + esc(etiqueta) + '</small><b>' + guion(valor) + '</b></span></div>';
           detalle.innerHTML = migas() +
             encabezado('clipboard-check', 'Inspección ' + esc(fecha(i.fecha) || ''),
-              (ORIGEN[i.origen] || '') + (e ? chip('NUCO ' + (e.nuco || '—'), 'neutro') : '') +
-              (i.calificacion !== null && i.calificacion !== undefined ? chip('Calificación ' + porcentaje(i.calificacion), 'verde') : ''),
+              (ORIGEN[i.origen] || '') + (e ? chip('NUCO ' + (e.nuco || '—'), 'neutro') : ''),
               (e ? '<button type="button" class="secondary ln-btn-icono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' Ver equipo</button>' : '') +
               (i.drive ? enlaceDrive(i.drive.carpetaId, 'Carpeta en Drive') : '') +
-              (r.pdfs || []).map((p) => enlaceDrive(p.id, p.nombre || 'PDF', true)).join('')) +
-            '<div class="ln-grid-2">' +
-              (i.origen !== 'DRIVE' ? tarjeta(icono('user') + ' Datos al momento de la inspección', campos([
-                ['Responsable', s.responsable], ['Departamento', s.departamento], ['Sede', s.sede], ['Puesto', s.puesto],
-                ['Número', s.numero], ['IMEI', s.imei], ['Modelo', s.modelo], ['Compañía', s.compania],
-                ['Inspector', i.inspector], ['Ticket', i.ticket], ['Observaciones', i.observaciones],
-              ])) : '') +
-              tarjeta(icono('folder-open') + ' Evidencias', campos([
-                ['Carpeta', i.drive ? esc(i.drive.ruta) : null, true],
-                ['Coincidencia', i.drive ? (i.drive.coincidenciaExacta ? 'Misma fecha' : 'Fecha ±1 día') : 'Sin carpeta en Drive'],
-                ['Fotos', String(r.fotos.length)],
-              ])) +
-            '</div>' +
-            checklist +
-            tarjeta(icono('images') + ' Fotos (' + r.fotos.length + ')', r.fotos.length ? galeria(r.fotos) : '<p class="empty-state">Sin fotos en la carpeta de Drive.</p>') +
-            (r.firmas && r.firmas.length ? tarjeta(icono('signature') + ' Firmas', galeria(r.firmas, 'ln-firma')) : '');
+              (r.pdfs || []).map((p, indice) => enlaceDrive(p.id, 'Abrir PDF' + (r.pdfs.length > 1 ? ' ' + (indice + 1) : ''), true)).join('')) +
+            '<div class="ln-captura-resumen">' + resumen('user', 'Inspector', i.inspector) + resumen('clipboard-check', 'Calificación', porcentaje(i.calificacion)) + resumen('images', 'Evidencia fotográfica', fotos.length + ' archivo(s)') + '</div>' +
+            '<nav class="ln-secciones-nav" aria-label="Secciones de la inspección">' +
+              ['Datos', 'Checklist', 'Fotos y observaciones', 'Firmas'].map((t, n) => '<button type="button" class="secondary" data-ln-seccion="ln-consulta-' + (n + 1) + '">' + (n + 1) + '. ' + t + '</button>').join('') + '</nav>' +
+            seccion(1, 'user', 'Datos de la inspección', 'Información registrada al realizar la revisión.',
+              i.origen !== 'DRIVE' ? '<div class="ln-grid-2">' +
+                tarjeta(icono('user') + ' Responsable', campos([['Nombre', s.responsable], ['Departamento', s.departamento], ['Sede', s.sede], ['Puesto', s.puesto]])) +
+                tarjeta(icono('smartphone') + ' Activo revisado', campos([['Número', s.numero], ['IMEI', s.imei], ['Modelo', s.modelo], ['Compañía', s.compania], ['Ticket', i.ticket]])) + '</div>'
+                : '<p class="ln-tenue">Los datos de esta inspección histórica se encuentran en el documento PDF.</p>') +
+            seccion(2, 'list-checks', 'Revisión del activo', 'Respuestas y estado de cada componente al momento de la inspección.', checklist) +
+            seccion(3, 'camera', 'Evidencia y observaciones', 'Abre cualquier archivo para consultar la imagen completa en Drive.',
+              '<h4>Observaciones</h4><p class="ln-lectura-notas">' + esc(i.observaciones || 'Sin observaciones registradas.') + '</p>' +
+              '<h4>Fotografías (' + fotos.length + ')</h4>' + (fotos.length ? galeria(fotos) : '<p class="empty-state">No se adjuntaron fotografías a esta inspección.</p>') +
+              (i.drive ? '<details class="ln-pie"><summary>Ubicación de los archivos</summary><p>' + esc(i.drive.ruta || '') + '</p></details>' : '')) +
+            seccion(4, 'signature', 'Firmas de validación', 'Firmas disponibles en la carpeta de esta inspección.',
+              firmas.length ? galeria(firmas, true) : '<p class="empty-state">No hay imágenes de firmas disponibles en esta carpeta. Consulta el PDF para revisar el documento.</p>');
+          detalle.querySelectorAll('.ln-evidencia img').forEach((img) => img.addEventListener('error', () => {
+            img.parentElement.innerHTML = icono('image-off') + '<span>Vista previa no disponible</span>';
+          }, { once: true }));
         });
       }
+
     }
 
     /** Desde una bitácora: abre el registro en Líneas Telefónicas. */
@@ -1212,14 +1250,14 @@
         const identidad = esEquipo ? r.imei : r.sim;
         return '<button type="button" class="card ln-cuadro ln-cuadro-activo" data-ir="' + esc(r.id) + '" aria-label="Abrir ' + esc(titulo) + '">' +
           '<div class="ln-cuadro-superior"><span class="ln-cuadro-folio ln-mono">' + esc(titulo) + '</span>' +
-          '<span class="ln-cuadro-tipo">' + icono(esEquipo ? 'smartphone' : 'sim-card') + ' ' + (esEquipo ? 'Equipo' : 'Línea') + '</span></div>' +
+          '<span class="ln-cuadro-tipo">' + icono(esEquipo ? 'smartphone' : 'card-sim') + ' ' + (esEquipo ? 'Equipo' : 'Línea') + '</span></div>' +
           '<div class="ln-cuadro-depto">' + guion(r.departamento) + '</div>' +
           '<div class="ln-cuadro-principal">' + guion(principal) + '</div>' +
           '<div class="ln-cuadro-secundario">' + guion(subtitulo) + '</div>' +
           '<div class="ln-cuadro-pie"><span>' + icono('user') + ' ' + guion(r.responsable) + '</span>' +
           '<span class="ln-mono">' + icono(esEquipo ? 'scan-line' : 'credit-card') + ' ' + guion(identidad) + '</span></div>' +
           '<div class="ln-cuadro-pie"><span>' + chip(r.estatus) + '</span>' +
-          (esEquipo && r.compania ? '<span>' + esc(r.compania) + '</span>' : '') + '</div></button>';
+          '<span>Ver ficha ' + icono('chevron-right') + '</span></div></button>';
       }
 
       function aplicarFiltros() {
@@ -1300,10 +1338,10 @@
       }
 
       function tarjetaLineas(nombre, datos) {
-        const filaEq = (r) => '<tr class="ln-fila-clic" data-ir="' + esc(r.id) + '"><td class="ln-mono ln-fuerte">' + guion(r.nuco) + '</td><td>' +
+        const filaEq = (r) => '<tr class="ln-fila-clic" data-ir="' + esc(r.id) + '"><td><button type="button" class="secondary ln-btn-icono" data-ir="' + esc(r.id) + '">' + icono('smartphone') + ' NUCO ' + guion(r.nuco) + ' ' + icono('chevron-right') + '</button></td><td>' +
           esc(TIPO_EQUIPO[r.tipo] || r.tipo || '') + '</td><td>' + guion(r.modelo) + '</td><td>' + chip(r.estatus) + '</td><td class="ln-mono">' +
           (r.numero ? esc(r.numero) : '<span class="ln-tenue">Sin línea</span>') + '</td></tr>';
-        const filaLi = (r) => '<tr class="ln-fila-clic" data-ir="' + esc(r.id) + '"><td class="ln-mono ln-fuerte">' + guion(r.numero) +
+        const filaLi = (r) => '<tr class="ln-fila-clic" data-ir="' + esc(r.id) + '"><td><button type="button" class="secondary ln-btn-icono" data-ir="' + esc(r.id) + '">' + icono('phone') + ' ' + guion(r.numero) + ' ' + icono('chevron-right') + '</button>' +
           '</td><td>Línea suelta</td><td>' + guion(r.compania) + '</td><td>' + chip(r.estatus) + '</td><td>—</td></tr>';
         const filas = datos.equipos.map(filaEq).concat(datos.lineas.map(filaLi));
         return '<div class="card ln-card"><h3>' + icono('smartphone') + ' Líneas y equipos (' + filas.length + ')</h3>' +
@@ -1314,7 +1352,7 @@
 
       function tarjetaPendiente(titulo, ico) {
         return '<div class="card ln-card"><h3>' + icono(ico) + ' ' + esc(titulo) + '</h3>' +
-          '<p class="ln-tenue">Pendiente: se integra cuando se junten los módulos del equipo (no es de Líneas).</p></div>';
+          '<p class="ln-tenue">Esta información aún no está disponible en esta vista.</p></div>';
       }
 
       function mostrarColaborador(c, tarjeta) {
@@ -1332,7 +1370,7 @@
             '<div class="ln-grid-2">' + tarjetaPendiente('Vehículos', 'car') + tarjetaPendiente('Hologramas / combustible', 'fuel') + '</div>' +
             '<div class="ln-grid-2">' + tarjetaPendiente('Uber', 'car-front') + tarjetaPendiente('Cajas chicas', 'wallet') + '</div>';
           $('#lnga-resultado', raiz).scrollIntoView({ behavior: 'smooth', block: 'start' });
-        });
+        }).catch((e) => { if (vigente()) $('#lnga-resultado', raiz).innerHTML = '<p class="error-msg">No se pudieron consultar las asignaciones: ' + mensajeError(e) + '</p>'; });
       }
 
       function tarjetaColaborador(c) {
@@ -1345,7 +1383,7 @@
           '<div class="ln-cuadro-pie"><span>' + icono('map-pin') + ' ' + guion(c.sede) + '</span><span>' + icono('building-2') + ' ' + guion(c.oficina) + '</span></div>' +
           '<div class="ln-cuadro-pie"><span>' + icono('briefcase-business') + ' ' + chip(c.estatus || 'Sin estatus', String(c.estatus).toUpperCase() === 'ACTIVO' ? 'verde' : 'neutro') + '</span>' +
           '<span class="ln-activos-estado ' + (conActivos ? 'si' : 'no') + '">' + icono(conActivos ? 'package-check' : 'package-x') + ' ' +
-          (conActivos ? miles(c.totalActivos) + ' activo(s)' : 'Sin activos') + '</span></div></button>';
+          (conActivos ? miles(c.totalActivos) + ' activo(s)' : 'Sin activos') + '</span></div><div class="ln-cuadro-pie"><span>Consultar asignaciones ' + icono('chevron-right') + '</span></div></button>';
       }
 
       function pintarCuadros() {
@@ -1416,6 +1454,8 @@
 
       let indiceAcc = null;
       let seleccionado = null;
+      let guardandoAccesorio = false;
+      let movimientoActual = 0;
       let filtroQ = '';
       let temporizador = null;
 
@@ -1443,7 +1483,7 @@
         $('#lac-tbody', raiz).innerHTML = filas.length ? filas.map((a) =>
           '<tr class="ln-fila-clic" data-articulo="' + esc(a.id) + '"><td class="ln-fuerte">' + guion(a.nombre) + '</td><td>' + guion(a.categoria) +
           '</td><td class="ln-tenue">' + guion(a.marca) + '</td><td class="lac-stock-celda"><span class="lac-stock' + (a.reabasto ? ' bajo' : '') + '">' + esc(String(a.stock)) + '</span></td>' +
-          '<td><button type="button" class="secondary ln-btn-chico" data-entrada="' + esc(a.id) + '">+ Entrada</button> ' +
+          '<td><button type="button" class="secondary ln-btn-icono" data-articulo="' + esc(a.id) + '">' + icono('history') + ' Movimientos</button> <button type="button" class="secondary ln-btn-chico" data-entrada="' + esc(a.id) + '">+ Entrada</button> ' +
           '<button type="button" class="secondary ln-btn-chico" data-salida="' + esc(a.id) + '">− Salida</button></td></tr>').join('')
           : '<tr><td colspan="5" class="empty-state">Sin artículos</td></tr>';
       }
@@ -1462,19 +1502,21 @@
       }
 
       function abrirDetalle(id) {
+        const turno = ++movimientoActual;
         const a = (indiceAcc.filas || []).filter((x) => x.id === id)[0];
         if (!a) return;
         const cont = $('#lac-detalle', raiz);
         cont.hidden = false;
+        cont.scrollIntoView({ behavior: 'smooth', block: 'start' });
         cont.innerHTML = tarjeta(icono('history') + ' Movimientos de ' + esc(a.nombre), '<p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p>');
         llamar('apiLineasAccesoriosMovimientos', id).then((movs) => {
-          if (!vigente()) return;
+          if (!vigente() || turno !== movimientoActual) return;
           cont.innerHTML = tarjeta(icono('history') + ' Movimientos de ' + esc(a.nombre) + ' (' + movs.length + ')', movs.length
             ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Fecha</th><th>Tipo</th><th>Cantidad</th><th>Usuario</th><th>Comentarios</th></tr></thead><tbody>' +
               movs.map((m) => '<tr><td>' + guion(fechaHora(m.fecha)) + '</td><td>' + chip(m.tipo, m.tipo === 'ENTRADA' ? 'verde' : 'ambar') + '</td><td>' +
                 esc(String(m.cantidad)) + '</td><td>' + guion(m.usuario) + '</td><td>' + guion(m.comentarios) + '</td></tr>').join('') + '</tbody></table></div>'
             : '<p class="empty-state">Sin movimientos.</p>');
-        }).catch((e) => { if (vigente()) cont.innerHTML = tarjeta(icono('history') + ' Movimientos', '<p class="error-msg">' + mensajeError(e) + '</p>'); });
+        }).catch((e) => { if (vigente() && turno === movimientoActual) cont.innerHTML = tarjeta(icono('history') + ' Movimientos', '<p class="error-msg">' + mensajeError(e) + '</p>'); });
       }
 
       function abrirModalNuevo() {
@@ -1482,7 +1524,7 @@
         $('#lac-nuevo-error', raiz).hidden = true;
         $('#lac-modal-nuevo', raiz).hidden = false;
       }
-      function cerrarModalNuevo() { $('#lac-modal-nuevo', raiz).hidden = true; }
+      function cerrarModalNuevo() { if (!guardandoAccesorio) $('#lac-modal-nuevo', raiz).hidden = true; }
 
       function abrirModalMovimiento(id, tipo) {
         seleccionado = { id: id, tipo: tipo };
@@ -1493,7 +1535,16 @@
         $('#lac-mov-error', raiz).hidden = true;
         $('#lac-modal-mov', raiz).hidden = false;
       }
-      function cerrarModalMov() { $('#lac-modal-mov', raiz).hidden = true; seleccionado = null; }
+      function cerrarModalMov() { if (guardandoAccesorio) return; $('#lac-modal-mov', raiz).hidden = true; seleccionado = null; }
+
+      function estadoAccesorio(modalId, ocupado) {
+        guardandoAccesorio = ocupado;
+        const modal = $(modalId, raiz);
+        modal.querySelectorAll('button, input, textarea').forEach((el) => { el.disabled = ocupado; });
+        const boton = modal.querySelector('.primary');
+        if (ocupado) { boton.dataset.texto = boton.innerHTML; boton.innerHTML = '<span class="ln-spinner"></span> Guardando…'; }
+        else boton.innerHTML = boton.dataset.texto;
+      }
 
       $('#lac-nuevo', raiz).addEventListener('click', abrirModalNuevo);
       raiz.querySelectorAll('[data-cerrar-modal-nuevo]').forEach((b) => b.addEventListener('click', cerrarModalNuevo));
@@ -1502,20 +1553,25 @@
       $('#lac-modal-mov', raiz).addEventListener('click', (ev) => { if (ev.target.id === 'lac-modal-mov') cerrarModalMov(); });
 
       $('#lac-guardar-nuevo', raiz).addEventListener('click', () => {
+        if (guardandoAccesorio) return;
         const nombre = $('#lac-nombre', raiz).value.trim();
         if (!nombre) { $('#lac-nuevo-error', raiz).textContent = 'El nombre es obligatorio.'; $('#lac-nuevo-error', raiz).hidden = false; return; }
+        estadoAccesorio('#lac-modal-nuevo', true);
         llamar('apiLineasAccesoriosAgregarArticulo', { nombre: nombre, categoria: $('#lac-categoria', raiz).value, marca: $('#lac-marca', raiz).value })
-          .then(() => { cerrarModalNuevo(); cargar(true); })
-          .catch((e) => { $('#lac-nuevo-error', raiz).textContent = mensajeError(e); $('#lac-nuevo-error', raiz).hidden = false; });
+          .then(() => { guardandoAccesorio = false; cerrarModalNuevo(); aviso('Artículo guardado correctamente.', 6000); cargar(true); })
+          .catch((e) => { $('#lac-nuevo-error', raiz).textContent = mensajeError(e); $('#lac-nuevo-error', raiz).hidden = false; })
+          .finally(() => estadoAccesorio('#lac-modal-nuevo', false));
       });
 
       $('#lac-guardar-mov', raiz).addEventListener('click', () => {
-        if (!seleccionado) return;
+        if (!seleccionado || guardandoAccesorio) return;
         const cantidad = Number($('#lac-cantidad', raiz).value);
-        if (!cantidad || cantidad <= 0) { $('#lac-mov-error', raiz).textContent = 'Captura una cantidad válida.'; $('#lac-mov-error', raiz).hidden = false; return; }
+        if (!Number.isInteger(cantidad) || cantidad <= 0) { $('#lac-mov-error', raiz).textContent = 'Captura una cantidad entera mayor que cero.'; $('#lac-mov-error', raiz).hidden = false; return; }
+        estadoAccesorio('#lac-modal-mov', true);
         llamar('apiLineasAccesoriosRegistrarMovimiento', { accesorioId: seleccionado.id, tipo: seleccionado.tipo, cantidad: cantidad, comentarios: $('#lac-comentarios', raiz).value })
-          .then(() => { cerrarModalMov(); cargar(true); })
-          .catch((e) => { $('#lac-mov-error', raiz).textContent = mensajeError(e); $('#lac-mov-error', raiz).hidden = false; });
+          .then(() => { guardandoAccesorio = false; cerrarModalMov(); aviso('Movimiento registrado correctamente.', 6000); cargar(true); })
+          .catch((e) => { $('#lac-mov-error', raiz).textContent = mensajeError(e); $('#lac-mov-error', raiz).hidden = false; })
+          .finally(() => estadoAccesorio('#lac-modal-mov', false));
       });
 
       $('#lac-q', raiz).addEventListener('input', (ev) => {
@@ -1541,6 +1597,7 @@
 
     const OPERATIVAS = {
       REACTIVACION: {
+        resumen: ['FOLIO', 'LINEA SUSPENDIDA', 'COMPAÑIA', 'ESTATUS', 'FECHA DE REACTIVACION'],
         titulo: 'Reactivación de Líneas', icono: 'refresh-cw', csv: 'reactivacion de lineas',
         subtitulo: 'Seguimiento de líneas suspendidas, canceladas y reactivadas', filtro: 'Todos los estatus',
         campos: [
@@ -1552,6 +1609,7 @@
         ],
       },
       SOLICITUD: {
+        resumen: ['FOLIO', 'FECHA DE SOLICITUD', 'NOMBRE COMPLETO DEL SOLICITANTE', 'TIPO DE PLAN', 'ESTATUS'],
         titulo: 'Solicitud de Líneas', icono: 'clipboard-list', csv: 'solicitud de lineas',
         subtitulo: 'Solicitudes de asignación y reasignación de líneas telefónicas', filtro: 'Todos los estatus',
         campos: [
@@ -1567,6 +1625,7 @@
         ],
       },
       POST_VENTA: {
+        resumen: ['NUCO', 'NUMERO TELEFONO', 'RESPONSABLE', 'EQUIPO', 'ESTATUS LINEA'],
         titulo: 'Líneas Post Venta', icono: 'headset', csv: 'lineas post venta',
         subtitulo: 'Equipos y líneas asignados al departamento de Post Venta', filtro: 'Todos los tipos',
       },
@@ -1579,6 +1638,8 @@
       const vigente = () => n === montaje && document.body.contains(raiz);
       const consulta = { q: '', grupo: '', pagina: 0 };
       let ultima = null;
+      let solicitud = 0;
+      let guardando = false;
       const modal = $('#ln-op-modal');
 
       $('#ln-op-titulo', raiz).textContent = cfg.titulo;
@@ -1587,6 +1648,7 @@
       pintarIconos(raiz);
 
       function cerrarAlta() {
+        if (guardando) return;
         modal.hidden = true;
         $('#ln-op-alta-error').hidden = true;
       }
@@ -1595,7 +1657,8 @@
         const hoy = new Date();
         const fechaHoy = hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0') + '-' + String(hoy.getDate()).padStart(2, '0');
         $('#ln-op-modal-titulo').textContent = 'Nuevo registro · ' + cfg.titulo;
-        $('#ln-op-campos').innerHTML = cfg.campos.map(([nombre, etiqueta, tipoCampo, requerido, opciones]) => {
+        $('#ln-op-campos').innerHTML = cfg.campos.map(([nombre, etiqueta, tipoCampo, requerido, opciones], indice) => {
+          const idCampo = 'ln-op-campo-' + indice;
           const req = requerido ? ' required' : '';
           const valorInicial = tipoCampo === 'date' && /FECHA DE (SOLICITUD|ENTREGA)/.test(nombre) ? fechaHoy : '';
           let control;
@@ -1609,7 +1672,8 @@
           } else {
             control = '<input name="' + esc(nombre) + '" type="' + tipoCampo + '" value="' + valorInicial + '"' + req + '>';
           }
-          return '<div class="field' + (tipoCampo === 'textarea' ? ' ln-op-campo-ancho' : '') + '"><label>' + esc(etiqueta) + (requerido ? ' *' : '') + '</label>' + control + '</div>';
+          control = control.replace(/<(input|select|textarea) /, '<$1 id="' + idCampo + '" ');
+          return '<div class="field' + (tipoCampo === 'textarea' ? ' ln-op-campo-ancho' : '') + '"><label for="' + idCampo + '">' + esc(etiqueta) + (requerido ? ' *' : '') + '</label>' + control + '</div>';
         }).join('');
         $('#ln-op-alta-form').reset();
         $('#ln-op-campos').querySelectorAll('input[type="date"]').forEach((el) => {
@@ -1633,7 +1697,10 @@
       }
 
       function cargar() {
+        const turno = ++solicitud;
         const tbody = $('#ln-op-tbody', raiz);
+        $('#ln-op-exportar', raiz).disabled = true;
+        ultima = null;
         tbody.innerHTML = '<tr><td class="empty-state"><span class="ln-spinner"></span> Cargando…</td></tr>';
         $('#ln-op-error', raiz).hidden = true;
         $('#ln-op-anterior', raiz).disabled = true;
@@ -1641,12 +1708,15 @@
         llamar('apiLineasVistaOperativa', tipo, {
           q: consulta.q, grupo: consulta.grupo, pagina: consulta.pagina, porPagina: POR_PAGINA,
         }).then((r) => {
-          if (!vigente()) return;
+          if (!vigente() || turno !== solicitud) return;
           ultima = r;
-          $('#ln-op-thead', raiz).innerHTML = '<tr>' + r.encabezados.map((h) => '<th>' + esc(h) + '</th>').join('') + '</tr>';
+          const columnas = cfg.resumen.filter((h) => r.encabezados.includes(h));
+          if (!columnas.length) columnas.push(...r.encabezados.slice(0, 5));
+          $('#ln-op-exportar', raiz).disabled = !r.filas.length;
+          $('#ln-op-thead', raiz).innerHTML = '<tr><th>Consulta</th>' + columnas.map((h) => '<th>' + esc(h) + '</th>').join('') + '</tr>';
           tbody.innerHTML = r.filas.length
-            ? r.filas.map((f) => '<tr>' + r.encabezados.map((h) => '<td class="' + (/FOLIO|NUCO|IMEI|SIM|NUMERO|L[IÍ]NEA/i.test(h) ? 'ln-mono' : '') + '">' + valor(f[h]) + '</td>').join('') + '</tr>').join('')
-            : '<tr><td colspan="' + Math.max(1, r.encabezados.length) + '" class="empty-state">Sin resultados</td></tr>';
+            ? r.filas.map((f, indice) => '<tr><td><button type="button" class="secondary ln-btn-icono" data-ln-ficha="' + indice + '">' + icono('eye') + ' Ver ficha</button></td>' + columnas.map((h) => '<td class="' + (/FOLIO|NUCO|IMEI|SIM|NUMERO|L[IÍ]NEA/i.test(h) ? 'ln-mono' : '') + '">' + valor(f[h]) + '</td>').join('') + '</tr>').join('')
+            : '<tr><td colspan="' + (columnas.length + 1) + '" class="empty-state">Sin resultados</td></tr>';
 
           const selector = $('#ln-op-grupo', raiz);
           selector.innerHTML = '<option value="">' + esc(cfg.filtro) + '</option>' + r.grupos.map((g) =>
@@ -1658,7 +1728,7 @@
           $('#ln-op-anterior', raiz).disabled = r.pagina === 0;
           $('#ln-op-siguiente', raiz).disabled = r.pagina >= r.paginas - 1;
         }).catch((e) => {
-          if (!vigente()) return;
+          if (!vigente() || turno !== solicitud) return;
           tbody.innerHTML = '<tr><td class="empty-state">No se pudieron cargar los datos</td></tr>';
           const box = $('#ln-op-error', raiz);
           box.textContent = 'No se pudo cargar ' + cfg.titulo + ': ' + mensajeError(e);
@@ -1690,31 +1760,46 @@
       $('#ln-op-exportar', raiz).addEventListener('click', () => {
         if (ultima && ultima.filas.length) exportarCsv(cfg.csv, ultima.encabezados, ultima.filas);
       });
+      raiz.addEventListener('click', (ev) => {
+        const boton = ev.target.closest('[data-ln-ficha]');
+        if (!boton || !ultima) return;
+        const fila = ultima.filas[Number(boton.dataset.lnFicha)];
+        if (fila) mostrarFicha(raiz, cfg.titulo + (fila.FOLIO ? ' · ' + fila.FOLIO : ''), ultima.encabezados.map((h) => [h, valor(fila[h])]));
+      });
       $('#ln-op-nuevo', raiz).addEventListener('click', abrirAlta);
       $('#ln-op-cerrar').addEventListener('click', cerrarAlta);
       $('#ln-op-cancelar').addEventListener('click', cerrarAlta);
       modal.addEventListener('click', (ev) => { if (ev.target === modal) cerrarAlta(); });
       $('#ln-op-alta-form').addEventListener('submit', (ev) => {
         ev.preventDefault();
+        if (guardando) return;
         const datos = {};
         cfg.campos.forEach(([nombre, , tipoCampo]) => {
           const control = ev.currentTarget.elements.namedItem(nombre);
           datos[nombre] = tipoCampo === 'checkbox' ? control.checked : control.value.trim();
         });
         const guardar = $('#ln-op-guardar');
-        guardar.disabled = true;
+        guardando = true;
+        const textoGuardar = guardar.innerHTML;
+        guardar.innerHTML = '<span class="ln-spinner"></span> Guardando…';
+        modal.querySelectorAll('button, input, select, textarea').forEach((el) => { el.disabled = true; });
         $('#ln-op-alta-error').hidden = true;
         llamar('apiLineasCrearVistaOperativa', tipo, datos).then((r) => {
           if (!vigente()) return;
+          guardando = false;
           cerrarAlta();
           consulta.pagina = 0;
-          aviso('Registro ' + r.folio + ' guardado correctamente.', 'exito');
+          aviso(icono('circle-check') + ' Registro ' + esc(r.folio) + ' guardado correctamente.', 6000);
           cargar();
         }).catch((e) => {
           const box = $('#ln-op-alta-error');
           box.textContent = mensajeError(e);
           box.hidden = false;
-        }).finally(() => { guardar.disabled = false; });
+        }).finally(() => {
+          guardando = false;
+          guardar.innerHTML = textoGuardar;
+          modal.querySelectorAll('button, input, select, textarea').forEach((el) => { el.disabled = false; });
+        });
       });
       if (cfg.campos) {
         cargarPermisos().then((p) => { if (vigente()) $('#ln-op-nuevo', raiz).hidden = !p.puedeOperar; });
@@ -1765,6 +1850,7 @@
       const vigente = () => n === montaje && document.body.contains(raiz);
       const consulta = { q: '', pagina: 0 };
       let ultima = null;
+      let solicitud = 0;
 
       $('#ln-bit-titulo', raiz).textContent = cfg.titulo;
       $('#ln-bit-subtitulo', raiz).textContent = cfg.subtitulo;
@@ -1784,23 +1870,27 @@
       };
 
       function cargar() {
+        const turno = ++solicitud;
         const tbody = $('#ln-bit-tbody', raiz);
+        ultima = null;
+        $('#ln-bit-exportar', raiz).disabled = true;
         tbody.innerHTML = '<tr><td class="empty-state"><span class="ln-spinner"></span> Cargando…</td></tr>';
         $('#ln-bit-error', raiz).hidden = true;
         ['#ln-bit-anterior', '#ln-bit-siguiente'].forEach((s) => { $(s, raiz).disabled = true; });
         llamar('apiLineasBitacora', tipo, { q: consulta.q, pagina: consulta.pagina, porPagina: POR_PAGINA }).then((r) => {
-          if (!vigente()) return;
+          if (!vigente() || turno !== solicitud) return;
           ultima = r;
+          $('#ln-bit-exportar', raiz).disabled = !r.filas.length;
           const cols = cfg.columnas.map(([nombre, titulo]) => ({ h: buscarEncabezado(r.encabezados, nombre), titulo: titulo })).filter((c) => c.h);
           const columnas = cols.length ? cols : r.encabezados.map((h) => ({ h: h, titulo: h }));
           const hId = buscarEncabezado(r.encabezados, cfg.idRegistro);
           ultima.columnas = columnas;
 
-          $('#ln-bit-thead', raiz).innerHTML = '<tr>' + columnas.map((c) => '<th>' + esc(c.titulo) + '</th>').join('') + (hId ? '<th></th>' : '') + '</tr>';
+          $('#ln-bit-thead', raiz).innerHTML = '<tr><th>Consulta</th>' + columnas.map((c) => '<th>' + esc(c.titulo) + '</th>').join('') + (hId ? '<th></th>' : '') + '</tr>';
           tbody.innerHTML = r.filas.length
-            ? r.filas.map((f) => '<tr>' + columnas.map((c) => '<td class="' + (/NUCO|IMEI|FOLIO/i.test(c.h) ? 'ln-mono' : '') + '">' + valorCelda(c.h, f[c.h]) + '</td>').join('') +
-                (hId ? '<td>' + (f[hId] ? '<button type="button" class="secondary ln-btn-chico ln-btn-icono" data-ln-registro="' + esc(f[hId]) + '">' + icono('eye') + ' Ver</button>' : '') + '</td>' : '') + '</tr>').join('')
-            : '<tr><td colspan="' + (columnas.length + 1) + '" class="empty-state">Sin resultados</td></tr>';
+            ? r.filas.map((f, indice) => '<tr><td><button type="button" class="secondary ln-btn-icono" data-bit-ficha="' + indice + '">' + icono('eye') + ' Ver detalle</button></td>' + columnas.map((c) => '<td class="' + (/NUCO|IMEI|FOLIO/i.test(c.h) ? 'ln-mono' : '') + '">' + valorCelda(c.h, f[c.h]) + '</td>').join('') +
+                (hId ? '<td>' + (f[hId] ? '<button type="button" class="secondary ln-btn-chico ln-btn-icono" data-ln-registro="' + esc(f[hId]) + '">' + icono('smartphone') + ' Ver activo</button>' : '') + '</td>' : '') + '</tr>').join('')
+            : '<tr><td colspan="' + (columnas.length + 1 + (hId ? 1 : 0)) + '" class="empty-state">Sin resultados</td></tr>';
 
           if (!consulta.q) $('#ln-bit-total', raiz).textContent = miles(r.total);
           $('#ln-bit-coinciden', raiz).textContent = consulta.q ? miles(r.total) : '—';
@@ -1811,7 +1901,7 @@
           $('#ln-bit-anterior', raiz).disabled = r.pagina === 0;
           $('#ln-bit-siguiente', raiz).disabled = r.pagina >= r.paginas - 1;
         }).catch((e) => {
-          if (!vigente()) return;
+          if (!vigente() || turno !== solicitud) return;
           tbody.innerHTML = '<tr><td class="empty-state">Sin datos</td></tr>';
           const box = $('#ln-bit-error', raiz);
           box.textContent = 'No se pudo cargar la bitácora: ' + (e.message || e);
@@ -1838,6 +1928,12 @@
         exportarCsv(cfg.csv, ultima.encabezados, ultima.filas);
       });
       raiz.addEventListener('click', (ev) => {
+        const ficha = ev.target.closest('[data-bit-ficha]');
+        if (ficha && ultima) {
+          const fila = ultima.filas[Number(ficha.dataset.bitFicha)];
+          if (fila) mostrarFicha(raiz, cfg.titulo, ultima.encabezados.map((h) => [h, valorCelda(h, fila[h])]));
+          return;
+        }
         const b = ev.target.closest('[data-ln-registro]');
         if (b) irARegistro(b.dataset.lnRegistro);
       });

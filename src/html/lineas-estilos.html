@@ -378,4 +378,63 @@
   .ln-pdf-estado [aria-current] { font-weight: 700; color: var(--color-accent-hover); }
   .ln-pdf-acciones { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
   #ln-modal-captura[aria-busy="true"] canvas { pointer-events: none; opacity: .6; }
+  /* Lenguaje común para consulta, captura y módulos de seguimiento. */
+  .ln-modulo textarea, #ln-op-modal textarea {
+    display: block; width: 100%; min-height: 160px; box-sizing: border-box; resize: vertical;
+    font: inherit; line-height: 1.6; padding: 14px 16px; border-radius: 10px;
+    border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text);
+  }
+  .ln-modulo textarea:focus, #ln-op-modal textarea:focus {
+    outline: none; border-color: var(--color-accent); box-shadow: 0 0 0 3px rgba(180,161,105,.25);
+  }
+  .ln-modulo textarea:disabled { background: var(--color-bg); opacity: .7; }
+  .ln-modulo .secondary, #ln-op-modal .secondary { background: var(--color-surface); min-height: 38px; }
+  .ln-modulo button:disabled, #ln-op-modal button:disabled { opacity: .55; cursor: wait; }
+  .ln-modulo .ln-paginas button:disabled { cursor: default; }
+  .ln-modulo .ln-tabla td { vertical-align: middle; line-height: 1.5; }
+  .ln-modulo .ln-tabla th { padding-top: 13px; padding-bottom: 13px; }
+  .ln-detalle-header { background: linear-gradient(135deg, var(--color-surface), var(--color-bg)); border-radius: 15px; padding: 22px; }
+  .ln-detalle-titulo h2 { line-height: 1.4; }
+  .ln-migas { flex-wrap: wrap; }
+  .ln-chip { white-space: normal; }
+  .ln-campos { row-gap: 12px; line-height: 1.5; }
+  .ln-campos dd { white-space: pre-wrap; }
+  .ln-captura-dato b { white-space: normal; overflow-wrap: anywhere; }
+  .ln-lectura-notas { white-space: pre-wrap; line-height: 1.7; margin: 0; padding: 16px; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 10px; }
+  .ln-secciones-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; }
+  .ln-secciones-nav button { font-size: 12px; }
+  .ln-seccion-consulta { scroll-margin-top: 20px; }
+  .ln-galeria { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
+  .ln-evidencia { color: var(--color-text); text-decoration: none; border: 1px solid var(--color-border); border-radius: 12px; overflow: hidden; background: var(--color-surface); }
+  .ln-evidencia:hover { border-color: var(--color-accent); box-shadow: var(--shadow); }
+  .ln-evidencia:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 3px; }
+  .ln-evidencia .ln-foto { aspect-ratio: 4 / 3; border: 0; border-radius: 0; }
+  .ln-evidencia .ln-foto img { object-fit: contain; }
+  .ln-evidencia-nombre { display: block; padding: 11px 12px; font-size: 12px; overflow-wrap: anywhere; }
+  .ln-evidencia-nombre small { display: block; color: var(--color-text-muted); margin-top: 5px; }
+  .ln-tabla-ayuda { color: var(--color-text-muted); font-size: 12px; margin: 0 0 12px; }
+  .ln-op-tabla { min-width: 800px; }
+  .ln-consulta-dialog { width: min(880px, calc(100vw - 32px)); max-height: 88vh; box-sizing: border-box; padding: 0; border: 1px solid var(--color-border); border-radius: 16px; background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-lg); }
+  .ln-consulta-dialog::backdrop { background: rgba(6,38,58,.5); }
+  .ln-consulta-dialog .modal-header { padding: 20px 24px; margin: 0; border-bottom: 1px solid var(--color-border); }
+  .ln-consulta-contenido { padding: 24px; }
+  .ln-ficha-campos { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; margin: 0; }
+  .ln-ficha-campos dt { font-size: 12px; color: var(--color-text-muted); margin-bottom: 6px; }
+  .ln-ficha-campos dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
+  .ln-ficha-campos > div { border-bottom: 1px solid var(--color-border); padding-bottom: 14px; }
+  .ln-ficha-campos .ln-notas-ancho { grid-column: 1 / -1; }
+  .ln-modulo .modal-card:not(.ln-captura-modal) .ln-captura-acciones, #ln-op-modal .ln-captura-acciones { position: static; margin: 18px 0 0; padding: 16px 0 0; }
+  #ln-op-modal .modal-card { max-width: 960px; }
+  .ln-modulo .ln-upload:focus-within { outline: 3px solid var(--color-accent); outline-offset: 3px; }
+  @media (max-width: 760px) {
+    .ln-detalle-header { padding: 16px; }
+    .ln-detalle-botones { width: 100%; }
+    .ln-detalle-botones > * { flex: 1 1 auto; }
+    .ln-campos { grid-template-columns: minmax(90px, 36%) 1fr; }
+    .ln-ficha-campos { grid-template-columns: 1fr; }
+    .ln-consulta-contenido { padding: 16px; }
+    .ln-form-seccion { padding: 14px; }
+    .ln-galeria { grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); }
+    .ln-checklist-punto { align-items: flex-start; flex-direction: column; gap: 8px; padding: 12px 0; }
+  }
 </style>

@@ -1,6 +1,6 @@
 # Líneas — estado del módulo
 
-Rama `emmanuel` · Última actualización: 2026-09-17 (tarde)
+Rama `emmanuel` · Última actualización: 2026-09-18
 
 Documento de continuidad del módulo **Líneas** (equipos y líneas telefónicas).
 El plan de la mudanza está en [lineas-plan.md](lineas-plan.md); aquí se registra
@@ -209,3 +209,18 @@ accesorios del equipo, evidencia y autorización del desecho, usuarios adicional
   que autorizar de nuevo su DEV.
 - Conflicto esperado en `navegarA` con la rama de Jorge.
 - Las pestañas `APP_MOVIMIENTOS` y `APP_EVIDENCIAS` se crean solas en la hoja que use Líneas.
+
+
+## Revisión de experiencia de uso · 2026-09-18
+
+- Inspección: se retiró el campo «Otra aplicación» de la captura; el backend conserva compatibilidad con los registros históricos.
+- Observaciones de inspección, responsiva y formularios de seguimiento: ancho completo, alto mínimo de 160 px, tipografía y foco consistentes. Comentarios de movimientos de accesorios ahora admiten varias líneas.
+- Consulta de inspección: mismas cuatro secciones que la captura, accesos directos por sección, observaciones independientes, fotografías más grandes con nombre, acceso a Drive y estado alternativo si no carga la miniatura.
+- Inventario y evidencias: botones explícitos para abrir fichas/inspecciones; limpiar filtros; pestaña activa identificada para lectores de pantalla. La navegación evita repetir el mismo equipo/inspección en la ruta.
+- Reactivación, Solicitudes y Post Venta: tabla de resumen y ficha modal con todos los campos disponibles. Exportación mantiene todas las columnas.
+- Reasignaciones, Cambios y Desechos: ficha de consulta completa, además del acceso al activo cuando existe.
+- Accesorios: acceso visible a movimientos, guardado con estado ocupado, protección contra doble clic y validación de cantidades enteras positivas.
+- Solicitudes y Reactivación: campos etiquetados, formulario más amplio, estado de guardado y confirmación visible. Búsquedas y navegación descartan respuestas antiguas; exportación deshabilitada mientras se carga.
+- Roles y módulos de otros equipos permanecen fuera del alcance de esta revisión.
+
+Validación: ejecutar npm test; recorrer los diez módulos en /dev; abrir una ficha operativa y una de bitácora; consultar una inspección histórica con fotos y otra del sistema; revisar observaciones sin guardar documentos de prueba. No se generan firmas ni movimientos ficticios para estas comprobaciones.

@@ -15,10 +15,10 @@
     </div>
 
     <div class="card">
-      <input type="search" id="lac-q" placeholder="Buscar por nombre, categoría o marca…" autocomplete="off" />
+      <input aria-label="Buscar por nombre, categoría o marca…" type="search" id="lac-q" placeholder="Buscar por nombre, categoría o marca…" autocomplete="off" />
       <div class="ln-tabla-wrap" style="margin-top:14px">
         <table class="ln-tabla">
-          <thead><tr><th>Artículo</th><th>Categoría</th><th>Marca / modelo</th><th>Stock</th><th></th></tr></thead>
+          <thead><tr><th>Artículo</th><th>Categoría</th><th>Marca / modelo</th><th class="lac-stock-celda">Stock</th><th>Acciones</th></tr></thead>
           <tbody id="lac-tbody"><tr><td class="empty-state">Cargando…</td></tr></tbody>
         </table>
       </div>
@@ -28,15 +28,15 @@
     <section id="lac-detalle" hidden></section>
 
     <div class="modal-backdrop" id="lac-modal-nuevo" hidden>
-      <div class="modal-card">
+      <div class="modal-card" role="dialog" aria-modal="true" aria-label="Nuevo artículo">
         <div class="modal-header">
           <h3 class="ln-titulo" style="margin:0">Nuevo artículo</h3>
           <button type="button" class="modal-close" data-cerrar-modal-nuevo aria-label="Cerrar"><span data-ln-icon="x"></span></button>
         </div>
-        <div class="field"><label>Nombre del artículo</label><input type="text" id="lac-nombre" autocomplete="off" /></div>
+        <div class="field"><label for="lac-nombre">Nombre del artículo</label><input type="text" id="lac-nombre" autocomplete="off" /></div>
         <div class="grid" style="grid-template-columns:1fr 1fr">
-          <div class="field"><label>Categoría</label><input type="text" id="lac-categoria" autocomplete="off" /></div>
-          <div class="field"><label>Marca / modelo</label><input type="text" id="lac-marca" autocomplete="off" /></div>
+          <div class="field"><label for="lac-categoria">Categoría</label><input type="text" id="lac-categoria" autocomplete="off" /></div>
+          <div class="field"><label for="lac-marca">Marca / modelo</label><input type="text" id="lac-marca" autocomplete="off" /></div>
         </div>
         <div class="error-msg" id="lac-nuevo-error" hidden></div>
         <div class="ln-captura-acciones">
@@ -47,13 +47,13 @@
     </div>
 
     <div class="modal-backdrop" id="lac-modal-mov" hidden>
-      <div class="modal-card">
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="lac-mov-titulo">
         <div class="modal-header">
           <h3 class="ln-titulo" style="margin:0" id="lac-mov-titulo">Movimiento</h3>
           <button type="button" class="modal-close" data-cerrar-modal-mov aria-label="Cerrar"><span data-ln-icon="x"></span></button>
         </div>
-        <div class="field"><label>Cantidad</label><input type="number" id="lac-cantidad" min="1" /></div>
-        <div class="field"><label>Comentarios (opcional)</label><input type="text" id="lac-comentarios" autocomplete="off" /></div>
+        <div class="field"><label for="lac-cantidad">Cantidad</label><input type="number" id="lac-cantidad" min="1" /></div>
+        <div class="field"><label for="lac-comentarios">Comentarios (opcional)</label><textarea id="lac-comentarios" rows="5" placeholder="Motivo del movimiento o información para el seguimiento"></textarea></div>
         <div class="error-msg" id="lac-mov-error" hidden></div>
         <div class="ln-captura-acciones">
           <button type="button" class="secondary" data-cerrar-modal-mov>Cancelar</button>
