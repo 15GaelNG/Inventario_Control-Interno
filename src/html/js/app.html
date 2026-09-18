@@ -1094,6 +1094,28 @@
     return datos;
   }
 
+  /**
+   * "Administrada por": si es CAPTURISTA se liberan (habilitan) sus 4 campos
+   * de captura (Capturista, Puesto, Correo, Teléfono); si es RESPONSABLE
+   * quedan bloqueados — así funcionaba el formulario original de AppSheet.
+   * limpiarSiBloqueado=true además vacía esos campos al bloquearlos: se usa
+   * al cambiar el select a mano (ya no aplica un capturista que se quitó),
+   * pero NO al abrir Editar (ahí solo se refleja el estado guardado, sin
+   * borrar datos existentes con solo abrir el modal).
+   */
+  const CAMPOS_CAPTURISTA = ['CAPTURISTA DE CAJA CHICA', 'PUESTO DE CAPTURISTA', 'CORREO ELECTRONICO CAPTURISTA', 'TELEFONO DE CAPTURISTA'];
+  function actualizarBloqueoCapturista(prefijo, limpiarSiBloqueado) {
+    const select = document.getElementById(prefijo + '-administrada-por');
+    if (!select) return;
+    const liberar = select.value === 'CAPTURISTA';
+    CAMPOS_CAPTURISTA.forEach((clave) => {
+      const el = document.getElementById(prefijo + '-' + slugCampo(clave));
+      if (!el) return;
+      el.disabled = !liberar;
+      if (!liberar && limpiarSiBloqueado) el.value = '';
+    });
+  }
+
   /** Llena el formulario con un objeto {columna real: valor} (ej. de buscarPorId). */
   function poblarFormularioCajaChica(prefijo, datos) {
     CAMPOS_CAJACHICA.forEach((campo) => {
@@ -1101,6 +1123,10 @@
       if (!el) return;
       const valor = (datos && datos[campo.clave]) || '';
       el.value = campo.tipo === 'date' ? fechaParaInput(valor) : valor;
+      // ADMINISTRADA POR va antes que los 4 campos de capturista en
+      // CAMPOS_CAJACHICA, así que para cuando este forEach llegue a esos
+      // campos el bloqueo/desbloqueo ya refleja el valor recién cargado.
+      if (campo.clave === 'ADMINISTRADA POR') actualizarBloqueoCapturista(prefijo, false);
     });
   }
 
@@ -2321,6 +2347,16 @@
 
     document.getElementById('campos-form-cajachica').innerHTML = renderCamposCajaChica('cch', false);
     document.getElementById('campos-form-editar-cajachica').innerHTML = renderCamposCajaChica('editar-cajachica', true);
+
+    // Administrada por → Capturista/Puesto/Correo/Teléfono del capturista:
+    // estado inicial (recién armado el formulario, "Administrada por" vacío
+    // → bloqueados) y wiring del cambio manual del select.
+    ['cch', 'editar-cajachica'].forEach((prefijo) => {
+      actualizarBloqueoCapturista(prefijo, false);
+      document.getElementById(prefijo + '-administrada-por').addEventListener('change', () => {
+        actualizarBloqueoCapturista(prefijo, true);
+      });
+    });
 
     // Departamento / Sede / Oficina: catálogos reales de la hoja
     // "DEPARTAMENTOS" (distinta de "LISTAS VEHICULOS" — es la que usan
