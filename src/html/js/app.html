@@ -926,13 +926,15 @@
     return datos;
   }
 
-  // Ubicación NO es un catálogo plano: depende de la Sede elegida (en
-  // AppSheet, Valid If = SELECT(LISTAS VEHICULOS[SEDE 2], [SEDE]=[_THISROW].[SEDE])).
-  // mapaUbicacionesPorSede llega una sola vez desde el servidor como
-  // {SEDE: [ubicaciones]} (cargarCatalogosVehiculo, dentro de initVehiculos,
-  // la llena) y se filtra aquí en el cliente. A nivel de módulo (no dentro
-  // de initVehiculos) porque poblarFormularioVehiculo también la necesita
-  // y se define antes de que initVehiculos exista.
+  // Sede + Ubicación son un par dependiente: Sede se llena desde la
+  // columna "SEDE 2" de "LISTAS VEHICULOS" y Ubicación desde "OFICINA /
+  // DESARROLLO 2" de la MISMA fila (ej. Sede "AGUASCALIENTES" → Ubicación
+  // CDMAGS / AGS COWORKING / AGUASCALIENTES; Sede "CANCUN" → CMCROO /
+  // PLAZA AMERICAS). mapaUbicacionesPorSede llega una sola vez desde el
+  // servidor como {SEDE 2: [ubicaciones]} (cargarCatalogosVehiculo, dentro
+  // de initVehiculos, la llena) y se filtra aquí en el cliente. A nivel de
+  // módulo (no dentro de initVehiculos) porque poblarFormularioVehiculo
+  // también la necesita y se define antes de que initVehiculos exista.
   let mapaUbicacionesPorSede = {};
   function llenarUbicacionesSegunSede(prefijo) {
     const sedeEl = document.getElementById(prefijo + '-sede');
@@ -1509,7 +1511,7 @@
         const [marcas, departamentos, sedes, razones, mapaUbicaciones] = await Promise.all([
           callServer('apiListarMarcas', state.token),
           callServer('apiListarDepartamentos', state.token),
-          callServer('apiListarSedes', state.token),
+          callServer('apiListarSedesVehiculo', state.token),
           callServer('apiListarRazonesSociales', state.token),
           callServer('apiListarUbicacionesPorSede', state.token),
         ]);

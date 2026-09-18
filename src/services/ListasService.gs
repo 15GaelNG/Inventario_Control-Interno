@@ -58,23 +58,32 @@ const ListasService = (function () {
   }
 
   /**
-   * Ubicación (Vehículos) NO es un catálogo plano — depende de la Sede
-   * elegida. En AppSheet el Valid If de "UBICACION" era:
-   *   SELECT(LISTAS VEHICULOS[SEDE 2], [SEDE]=[_THISROW].[SEDE])
-   * Es decir, cada fila de "LISTAS VEHICULOS" trae una Sede y, en la
-   * columna "SEDE 2", la ubicación específica de esa sede (ej. Sede
-   * "AGUASCALIENTES" trae filas con SEDE 2 = "CDMAGS", "AGS COWORKING",
-   * "AGUASCALIENTES"). Se manda el mapa {SEDE: [ubicaciones]} completo de
-   * una sola vez — así el cliente filtra localmente al cambiar la Sede en
-   * el formulario, en vez de pedir un endpoint nuevo por cada cambio.
+   * Sede + Ubicación (Vehículos) son un par dependiente, NO dos catálogos
+   * planos sueltos — se sacan de un segundo par de columnas de "LISTAS
+   * VEHICULOS" ("SEDE 2" / "OFICINA / DESARROLLO 2") pensado justo para
+   * esto: cada fila trae una Sede en "SEDE 2" y, en la misma fila, su
+   * ubicación específica en "OFICINA / DESARROLLO 2" (ej. Sede
+   * "AGUASCALIENTES" trae filas con OFICINA / DESARROLLO 2 = "CDMAGS",
+   * "AGS COWORKING", "AGUASCALIENTES"; Sede "CANCUN" trae "CMCROO",
+   * "PLAZA AMERICAS"). El campo "Sede" del formulario también se llena
+   * desde "SEDE 2" (no de la columna "SEDE" a secas, que es una lista
+   * distinta) para que sus valores calcen exacto con las llaves de este
+   * mapa. Se manda el mapa {SEDE 2: [ubicaciones]} completo de una sola
+   * vez — así el cliente filtra localmente al cambiar la Sede, en vez de
+   * pedir un endpoint nuevo por cada cambio.
    */
+  function listarSedesVehiculo(token) {
+    Auth.validarSesion(token);
+    return listarColumna_('SEDE 2');
+  }
+
   function mapaUbicacionesPorSede_() {
     const sheet = SheetUtils.getSheet(ssId(), SHEET_LISTAS);
-    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, ['SEDE', 'SEDE 2']);
+    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, ['SEDE 2', 'OFICINA / DESARROLLO 2']);
     const mapa = {};
     for (let i = 0; i < filas; i++) {
-      const sede = String(datos.SEDE[i] || '').trim();
-      const ubicacion = String(datos['SEDE 2'][i] || '').trim();
+      const sede = String(datos['SEDE 2'][i] || '').trim();
+      const ubicacion = String(datos['OFICINA / DESARROLLO 2'][i] || '').trim();
       if (!sede || !ubicacion) continue;
       if (!mapa[sede]) mapa[sede] = new Set();
       mapa[sede].add(ubicacion);
@@ -114,7 +123,7 @@ const ListasService = (function () {
 
   return {
     listarDepartamentos, listarRazonesSociales, listarSedes, listarOficinasDesarrollo, listarMarcas,
-    listarUbicacionesPorSede,
+    listarSedesVehiculo, listarUbicacionesPorSede,
     listarDepartamentosCCH, listarSedesCCH, listarOficinasCCH,
   };
 })();
