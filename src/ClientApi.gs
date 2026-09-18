@@ -126,33 +126,6 @@ function apiEliminarCambioMontoCCH(token, id) {
   return CambiosMontoCCHService.eliminar(token, id);
 }
 
-// --- Arqueos ---
-function apiListarAuditItems(token) {
-  Auth.validarSesion(token);
-  return ArqueosService.AUDIT_ITEMS;
-}
-function apiListarArqueosResumen(token) {
-  return ArqueosService.listarResumen(token);
-}
-function apiBuscarArqueoPorId(token, id) {
-  return ArqueosService.buscarPorId(token, id);
-}
-function apiPrevisualizarIdArqueo(token, idCch) {
-  return ArqueosService.previsualizarIdArqueo(token, idCch);
-}
-function apiCrearArqueo(token, datos) {
-  return ArqueosService.crear(token, datos);
-}
-function apiActualizarArqueo(token, id, cambios) {
-  return ArqueosService.actualizar(token, id, cambios);
-}
-function apiEliminarArqueo(token, id) {
-  return ArqueosService.eliminar(token, id);
-}
-function apiSubirArchivoArqueo(token, nombreArchivo, mimeType, base64Data) {
-  return ArqueosService.subirArchivo(token, nombreArchivo, mimeType, base64Data);
-}
-
 // --- Listas de referencia ---
 function apiListarDepartamentos(token) {
   return ListasService.listarDepartamentos(token);
