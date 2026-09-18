@@ -101,8 +101,14 @@ function apiLineasGuardarInspeccion(token, datos) {
 function apiLineasGuardarResponsiva(token, datos) {
   return TelefoniaService.guardarResponsiva(token, datos);
 }
-function apiLineasGenerarPdf(token, tipo, id, forzar) {
-  return TelefoniaService.generarPdf(token, tipo, id, forzar);
+function apiLineasGenerarPdf(token, tipo, id, forzar, firmas) {
+  return TelefoniaService.generarPdf(token, tipo, id, forzar, firmas);
+}
+function apiLineasCrearRegistro(token, datos) {
+  return TelefoniaService.crearRegistro(token, datos);
+}
+function apiLineasEditarRegistro(token, id, datos) {
+  return TelefoniaService.editarRegistro(token, id, datos);
 }
 function apiLineasAccesoriosIndice(token) {
   return LineasAccesorios.indice(token);

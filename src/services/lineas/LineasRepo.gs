@@ -67,7 +67,7 @@ const LineasRepo = (function () {
   /** Campos que registraba el bot "CAMBIOS TELEFONIA" del AppSheet. */
   const CAMPOS_BITACORA = ['RESPONSABLE', 'RESPONSIVA', 'ESTATUS LINEA', 'OFICINA / DESARROLLO', 'ESTATUS EQUIPO', 'CUENTA GOOGLE', 'AREA',
     'COMENTARIOS', 'PIN EQUIPO', 'PIN WHATSAPP', 'NUMERO SIM', 'DEPARTAMENTO', 'ACCESORIOS', 'NUMERO TELEFONO', 'SEDE', 'COSTO PLAN', 'TIPO',
-    'INICIO PLAN', 'EQUIPO', 'FIN PLAN', 'RAZON SOCIAL', 'COMPAÑIA', 'NUCO'];
+    'INICIO PLAN', 'EQUIPO', 'FIN PLAN', 'RAZON SOCIAL', 'COMPAÑIA', 'NUCO', 'IMEI', 'COLOR', 'PATRON', 'CONTRASEÑA MODEM'];
 
   const COLS_INDICE_EQUIPOS = ['id', 'nuco', 'tipo', 'modelo', 'imei', 'estatus', 'responsable', 'departamento', 'sede', 'lineaId', 'numero', 'compania', 'estatusLinea'];
   const COLS_INDICE_LINEAS = ['id', 'numero', 'sim', 'compania', 'estatus', 'equipoId', 'nucoEquipo', 'responsable', 'departamento', 'suelta'];
@@ -139,6 +139,7 @@ const LineasRepo = (function () {
       simResidual: tipo === 'EQUIPO' ? sim : null,
       accesorios: (txt(col(f, 'ACCESORIOS')) || '').split(',').map((s) => s.trim()).filter(Boolean),
       pinEquipo: texto('PIN EQUIPO'), patronRuta: texto('PATRON'), cuentaGoogle: texto('CUENTA GOOGLE'), contrasenaModem: texto('CONTRASEÑA MODEM'),
+      color: texto('COLOR'),
       estatus: txt(col(f, 'ESTATUS EQUIPO')), lineaId: tieneLinea ? id : null, responsable: datosResponsable,
       carpetaDriveId: nuco && carpetas ? (carpetas[nuco] || null) : null, legado: legado,
       actualizadoEn: legado.fechaRegistro,

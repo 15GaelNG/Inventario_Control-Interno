@@ -5,7 +5,8 @@
  * Flujo desde la interfaz:
  *   1. contextoInspeccion / contextoResponsiva   → datos precargados (equipo/línea, responsable, checklist)
  *   2. LineasEvidencias.prepararCarpetaEvidencia → crea la carpeta en NUCOS (misma estructura que producción)
- *   3. LineasEvidencias.subirArchivo (por cada foto/firma) → archivo dentro de esa carpeta
+ *   3. LineasEvidencias.subirArchivo (por cada foto) → archivo dentro de esa carpeta
+ *      Las firmas viajan en memoria únicamente para insertarlas en el PDF; no se persisten en Drive.
  *   4. guardarInspeccion / guardarResponsiva     → fila nueva en INSPECCIONES LINEAS / RESPONSIVAS LINEAS
  *      (mismas columnas que el AppSheet) + actualización del registro + bitácora + APP_EVIDENCIAS
  *   5. generarPdf (después de guardar, para no bloquear la respuesta ~30-40 s con el PDF)
@@ -20,6 +21,21 @@ const LineasCaptura = (function () {
   function idDeUrlDrive_(url) {
     const m = /\/d\/([\w-]{20,})/.exec(String(url || ''));
     return m ? m[1] : null;
+  }
+
+  function blobBase64_(base64, nombre) {
+    return base64 ? Utilities.newBlob(Utilities.base64Decode(String(base64)), 'image/png', nombre || 'firma.png') : null;
+  }
+
+  function firmasCache_(tipo, id, nuevas) {
+    const clave = 'firmas_' + tipo + '_' + id;
+    const serializadas = nuevas ? JSON.stringify(nuevas) : null;
+    if (serializadas) {
+      try { CacheService.getScriptCache().put(clave, serializadas, 21600); } catch (e) { console.warn('No se pudieron conservar temporalmente las firmas: ' + e.message); }
+    }
+    const raw = serializadas || CacheService.getScriptCache().get(clave);
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch (e) { return null; }
   }
 
   /** Registro objetivo a partir de { equipoId } o { lineaId } (línea suelta). */
@@ -85,9 +101,9 @@ const LineasCaptura = (function () {
   function guardarInspeccion(datos, usuario) {
     const ref = { equipoId: datos.equipoId || null, lineaId: datos.equipoId ? null : datos.lineaId };
     if (!datos.carpetaId) throw new Error('Falta la carpeta de evidencia.');
-    if (!datos.firmaInspectorId) throw new Error('La firma del inspector es obligatoria.');
+    if (!datos.firmaInspectorBase64) throw new Error('La firma del inspector es obligatoria.');
     LineasEvidencias.validarArchivosEnCarpeta(
-      [datos.firmaInspectorId, datos.firmaResponsableId].concat((datos.fotos || []).map((f) => f.id)),
+      (datos.fotos || []).map((f) => f.id),
       [datos.carpetaId, datos.fotosCarpetaId].filter(Boolean)
     );
 
@@ -116,7 +132,7 @@ const LineasCaptura = (function () {
         correo: obj.equipo ? obj.equipo.cuentaGoogle || null : null,
         numero: obj.linea ? obj.linea.numero || null : null, imei: obj.equipo ? obj.equipo.imei || null : null,
         sim: obj.linea ? obj.linea.sim || null : null, modelo: obj.equipo ? obj.equipo.modelo || null : null,
-        color: LineasUtil.txt(datos.color), compania: obj.linea ? obj.linea.compania || null : null,
+        color: obj.equipo ? obj.equipo.color || null : null, compania: obj.linea ? obj.linea.compania || null : null,
         plan: obj.linea && obj.linea.costoPlan !== undefined ? obj.linea.costoPlan : null, razonSocial: r.razonSocial || null,
       };
       const actual = { checklist: checklist, calificacion: LineasChecklist.calificacion(checklist, secciones), snapshot: snapshot };
@@ -124,7 +140,7 @@ const LineasCaptura = (function () {
       const inspeccion = {
         nuco: obj.reg.nuco, fecha: ahora, tipoRegistro: obj.reg.tipo, snapshot: snapshot, checklist: checklist,
         otraApp: LineasUtil.txt(datos.otraApp), calificacion: actual.calificacion, observaciones: LineasUtil.txt(datos.observaciones), ticket: LineasUtil.txt(datos.ticket),
-        inspector: usuario.nombre, firmas: { responsableId: datos.firmaResponsableId || null, inspectorId: datos.firmaInspectorId },
+        inspector: usuario.nombre, firmas: {},
         drive: { carpetaId: datos.carpetaId },
       };
 
@@ -137,7 +153,7 @@ const LineasCaptura = (function () {
         'COMPAÑIA': snapshot.compania, 'PLAN': snapshot.plan, 'RAZON SOCIAL': snapshot.razonSocial,
         'OTRA': inspeccion.otraApp, 'CALIFICACION': actual.calificacion, 'OBSERVACIONES': inspeccion.observaciones, 'TICKET': inspeccion.ticket,
         'NOMBRE INSPECTOR': usuario.nombre, 'FECHA DE REGISTRO': ahora,
-        'FIRMA RESPONSABLE': urlArchivo_(datos.firmaResponsableId), 'FIRMA INSPECTOR': urlArchivo_(datos.firmaInspectorId),
+        'FIRMA RESPONSABLE': '', 'FIRMA INSPECTOR': '',
       };
       LineasChecklist.puntos().forEach((p) => { if (checklist[p.clave]) fila[p.columna] = checklist[p.clave]; });
       LineasDatos.agregarFilas(LineasRepo.TAB.INSP, [fila]);
@@ -174,6 +190,7 @@ const LineasCaptura = (function () {
     });
 
     // El PDF se genera después (generarPdf), para que guardar no tarde ~30-40 s.
+    firmasCache_('INSPECCION', id, { inspector: datos.firmaInspectorBase64, responsable: datos.firmaResponsableBase64 || null });
     const filas = LineasRepo.refrescarIndice([res.obj.reg.id]);
     return { id: id, calificacion: res.inspeccion.calificacion, pdfPendiente: true, filas: filas };
   }
@@ -184,9 +201,9 @@ const LineasCaptura = (function () {
     const ref = { equipoId: datos.equipoId || null, lineaId: datos.equipoId ? null : datos.lineaId };
     if (!datos.carpetaId) throw new Error('Falta la carpeta de evidencia.');
     if (!LineasUtil.txt(datos.identificacion)) throw new Error('La identificación es obligatoria.');
-    if (!datos.firmaResponsableId || !datos.firmaCiId) throw new Error('Se requieren la firma del responsable y la de Control Interno.');
+    if (!datos.firmaCiBase64) throw new Error('La firma de Control Interno es obligatoria.');
     LineasEvidencias.validarArchivosEnCarpeta(
-      [datos.firmaResponsableId, datos.firmaCiId, datos.patronId].concat((datos.archivos || []).map((a) => a.id)),
+      (datos.archivos || []).map((a) => a.id),
       [datos.carpetaId]
     );
 
@@ -205,11 +222,11 @@ const LineasCaptura = (function () {
           oficina: r.oficina || null, director: r.director || null, razonSocial: r.razonSocial || (obj.linea && obj.linea.razonSocial) || null,
           correo: obj.equipo ? obj.equipo.cuentaGoogle || null : null,
         },
-        equipo: obj.equipo ? { modelo: obj.equipo.modelo || null, imei: obj.equipo.imei || null, color: LineasUtil.txt(datos.color), accesorios: (obj.equipo.accesorios || []).join(', ') } : null,
+        equipo: obj.equipo ? { modelo: obj.equipo.modelo || null, imei: obj.equipo.imei || null, color: obj.equipo.color || null, accesorios: (obj.equipo.accesorios || []).join(', ') } : null,
         linea: obj.linea ? { numero: obj.linea.numero || null, sim: obj.linea.sim || null, compania: obj.linea.compania || null } : null,
         tipoContrasena: LineasUtil.txt(datos.tipoContrasena), observaciones: LineasUtil.txt(datos.observaciones) ? String(datos.observaciones).toUpperCase() : null,
         responsableCI: usuario.nombre,
-        firmas: { responsableId: datos.firmaResponsableId, ciId: datos.firmaCiId, patronId: datos.patronId || null },
+        firmas: {}, patron: LineasUtil.txt(datos.patron),
         drive: { carpetaId: datos.carpetaId },
       };
 
@@ -224,8 +241,8 @@ const LineasCaptura = (function () {
         'COLOR': responsiva.equipo ? responsiva.equipo.color : '', 'ACCESORIOS': responsiva.equipo ? responsiva.equipo.accesorios : '',
         'PIN WHATSAPP': obj.linea ? obj.linea.pinWhatsapp : '', 'TIPO CONTRASEÑA': responsiva.tipoContrasena,
         'PIN EQUIPO': responsiva.tipoContrasena === 'PATRON' ? '' : (obj.equipo ? obj.equipo.pinEquipo : ''),
-        'CONTRASEÑA': urlArchivo_(datos.patronId), 'OBSERVACIONES': responsiva.observaciones,
-        'FIRMA RESPONSABLE': urlArchivo_(datos.firmaResponsableId), 'NOMBRE CI': usuario.nombre, 'FIRMA CI': urlArchivo_(datos.firmaCiId),
+        'CONTRASEÑA': responsiva.patron || '', 'OBSERVACIONES': responsiva.observaciones,
+        'FIRMA RESPONSABLE': '', 'NOMBRE CI': usuario.nombre, 'FIRMA CI': '',
         'DIA': Number(Utilities.formatDate(ahora, 'America/Mexico_City', 'd')), 'MES': mes, 'AÑO': Number(Utilities.formatDate(ahora, 'America/Mexico_City', 'yyyy')),
       }]);
 
@@ -246,13 +263,14 @@ const LineasCaptura = (function () {
       return { responsiva: responsiva, obj: obj };
     });
 
+    firmasCache_('RESPONSIVA', id, { responsable: datos.firmaResponsableBase64 || null, ci: datos.firmaCiBase64, patron: datos.patronBase64 || null });
     const filas = LineasRepo.refrescarIndice([res.obj.reg.id]);
     return { id: id, pdfPendiente: true, filas: filas };
   }
 
   // ---------------- PDF (generado después de guardar) ----------------
 
-  function generarPdfInspeccion_(id, insp, obj) {
+  function generarPdfInspeccion_(id, insp, obj, firmasBase64) {
     try {
       const registro = {
         'ID': id, 'NUCO': insp.nuco, 'TIPO': insp.tipoRegistro, 'FECHA DE REGISTRO': insp.fecha,
@@ -268,8 +286,8 @@ const LineasCaptura = (function () {
       const carpeta = DriveApp.getFolderById(insp.drive.carpetaId);
       const nombre = 'INSP ' + (insp.nuco || 'SIN NUCO') + ' ' + Utilities.formatDate(insp.fecha, 'America/Mexico_City', 'dd MM') + '.pdf';
       const pdf = LineasPdf.generarPdfDesdePlantilla(LineasPdf.PLANTILLAS.INSPECCION_CELULAR, registro, {
-        'FIRMA RESPONSABLE': LineasEvidencias.blobDeArchivo(insp.firmas.responsableId),
-        'FIRMA INSPECTOR': LineasEvidencias.blobDeArchivo(insp.firmas.inspectorId),
+        'FIRMA RESPONSABLE': firmasBase64 ? blobBase64_(firmasBase64.responsable, 'firma-responsable.png') : LineasEvidencias.blobDeArchivo(insp.firmas.responsableId),
+        'FIRMA INSPECTOR': firmasBase64 ? blobBase64_(firmasBase64.inspector, 'firma-inspector.png') : LineasEvidencias.blobDeArchivo(insp.firmas.inspectorId),
         'PATRON': null,
       }, carpeta, nombre);
       LineasDatos.conCandado(() => ligarPdf_(LineasRepo.TAB.INSP, 'FORMATO INSPECCIONES LINEAS', id, obj.reg.id, 'FORMATO INSPECCION', pdf));
@@ -295,7 +313,7 @@ const LineasCaptura = (function () {
     }
   }
 
-  function generarPdfResponsiva_(id, resp, obj, usuario) {
+  function generarPdfResponsiva_(id, resp, obj, usuario, firmasBase64) {
     try {
       const f = resp.fecha;
       const mes = MESES[Number(Utilities.formatDate(f, 'America/Mexico_City', 'M')) - 1];
@@ -315,9 +333,9 @@ const LineasCaptura = (function () {
       const carpeta = DriveApp.getFolderById(resp.drive.carpetaId);
       const nombre = 'RESP ' + (resp.nuco || 'SIN NUCO') + ' ' + Utilities.formatDate(f, 'America/Mexico_City', 'dd MM') + '.pdf';
       const pdf = LineasPdf.generarPdfDesdePlantilla(LineasPdf.PLANTILLAS.RESPONSIVA_CELULAR, registro, {
-        'FIRMA RESPONSABLE': LineasEvidencias.blobDeArchivo(resp.firmas.responsableId),
-        'FIRMA CI': LineasEvidencias.blobDeArchivo(resp.firmas.ciId),
-        'CONTRASEÑA': LineasEvidencias.blobDeArchivo(resp.firmas.patronId),
+        'FIRMA RESPONSABLE': firmasBase64 ? blobBase64_(firmasBase64.responsable, 'firma-responsable.png') : LineasEvidencias.blobDeArchivo(resp.firmas.responsableId),
+        'FIRMA CI': firmasBase64 ? blobBase64_(firmasBase64.ci, 'firma-ci.png') : LineasEvidencias.blobDeArchivo(resp.firmas.ciId),
+        'CONTRASEÑA': firmasBase64 ? blobBase64_(firmasBase64.patron, 'patron.png') : LineasEvidencias.blobDeArchivo(resp.firmas.patronId),
       }, carpeta, nombre);
       LineasDatos.conCandado(() => {
         ligarPdf_(LineasRepo.TAB.RESP, 'FORMATO RESPONSIVA', id, null, null, pdf);
@@ -333,7 +351,7 @@ const LineasCaptura = (function () {
   }
 
   /** Genera (o regenera con forzar=true) el PDF de una inspección o responsiva capturada en el sistema. */
-  function generarPdf(tipo, id, forzar, usuario) {
+  function generarPdf(tipo, id, forzar, usuario, firmasNuevas) {
     if (tipo === 'INSPECCION') {
       const insp = LineasRepo.leerInspeccion(id);
       if (!insp || insp.origen !== 'SISTEMA') throw new Error('Solo se generan PDF de inspecciones capturadas en el sistema.');
@@ -342,7 +360,9 @@ const LineasCaptura = (function () {
       const reg = LineasRepo.convertirRegistro(f);
       insp.firmas = { responsableId: idDeUrlDrive_(insp.firmas.responsableRuta), inspectorId: idDeUrlDrive_(insp.firmas.inspectorRuta) };
       if (insp.calificacion > 1) insp.calificacion = insp.calificacion / 100;
-      return generarPdfInspeccion_(id, insp, { fila: f, reg: reg, equipo: reg.equipo, linea: reg.linea });
+      const firmas = firmasCache_('INSPECCION', id, firmasNuevas);
+      if (!firmas && !insp.firmas.inspectorId) throw new Error('La firma temporal ya no está disponible. Genera una inspección nueva.');
+      return generarPdfInspeccion_(id, insp, { fila: f, reg: reg, equipo: reg.equipo, linea: reg.linea }, firmas);
     }
     if (tipo === 'RESPONSIVA') {
       const filas = LineasDatos.buscarFilas(LineasRepo.TAB.RESP, 'ID', id);
@@ -368,7 +388,9 @@ const LineasCaptura = (function () {
         drive: { carpetaId: ev.carpetaId },
       };
       const obj = { reg: { id: LineasUtil.txt(LineasUtil.col(f, 'ID LINEA')) }, linea: { pinWhatsapp: texto('PIN WHATSAPP') }, equipo: { pinEquipo: texto('PIN EQUIPO') } };
-      return generarPdfResponsiva_(id, resp, obj, usuario);
+      const firmas = firmasCache_('RESPONSIVA', id, firmasNuevas);
+      if (!firmas && !resp.firmas.ciId) throw new Error('La firma temporal ya no está disponible. Genera una responsiva nueva.');
+      return generarPdfResponsiva_(id, resp, obj, usuario, firmas);
     }
     throw new Error('Tipo de PDF inválido.');
   }

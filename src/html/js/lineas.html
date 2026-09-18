@@ -330,6 +330,7 @@
           .catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 12000))
           .then(() => { b.disabled = false; });
       });
+      $('#ln-nuevo-registro', raiz).addEventListener('click', () => abrirEditor(null));
 
       // Clic en filas, enlaces internos y botones del detalle (delegación).
       raiz.addEventListener('click', (ev) => {
@@ -374,6 +375,8 @@
           abrirCaptura(btnCaptura.dataset.lnCaptura, ref);
           return;
         }
+        const btnEditar = ev.target.closest('[data-ln-editar]');
+        if (btnEditar) { ev.preventDefault(); abrirEditor(btnEditar.dataset.lnEditar); return; }
         const pastilla = ev.target.closest('.ln-pastilla');
         if (pastilla) {
           pastilla.parentElement.querySelectorAll('.ln-pastilla').forEach((b) => b.classList.remove('activa'));
@@ -512,7 +515,7 @@
         if (!sinApilar) {
           const existente = pila.findIndex((p) => p.tipo === tipo && p.id === id);
           if (existente >= 0) pila.splice(existente + 1);
-          else pila.push({ tipo: tipo, id: id });
+          else pila.push({ tipo: tipo, id: id, etiqueta: tipo === 'inspeccion' ? 'Inspección' : null });
         }
         $('#ln-listado', raiz).hidden = true;
         const detalle = $('#ln-detalle', raiz);
@@ -551,7 +554,7 @@
         const etiquetas = { equipo: 'Equipo', linea: 'Línea', inspeccion: 'Inspección' };
         return '<div class="ln-migas"><button type="button" class="secondary ln-btn-icono" data-ln-volver>' + icono('chevron-left') + ' Volver</button>' +
           '<span><a href="#" class="ln-enlace" data-ln-lista>Líneas Telefónicas</a>' +
-          pila.map((p) => ' ' + icono('chevron-right', 'ln-icon-sm') + ' ' + esc(etiquetas[p.tipo])).join('') + '</span></div>';
+          pila.map((p) => ' ' + icono('chevron-right', 'ln-icon-sm') + ' ' + esc(p.etiqueta || etiquetas[p.tipo])).join('') + '</span></div>';
       }
 
       function campos(pares) {
@@ -606,17 +609,22 @@
           const l = r.linea;
           const costo = l && l.costoPlan !== null && l.costoPlan !== undefined ? '$' + Number(l.costoPlan).toLocaleString('es-MX') : null;
           const puedeOperar = memoria.permisos && memoria.permisos.puedeOperar;
+          pila[pila.length - 1].etiqueta = 'NUCO ' + (e.nuco || '—');
           detalle.innerHTML = migas() +
             encabezado('smartphone', 'NUCO ' + esc(e.nuco || '—'),
               chip(e.estatus) + chip(TIPO_EQUIPO[e.tipo] || e.tipo, 'neutro') + (l ? chip('Con línea', 'verde') : chip('Sin línea', 'ambar')),
-              (puedeOperar ? '<button type="button" class="secondary ln-btn-icono" data-ln-captura="INSPECCION" data-equipo-id="' + esc(id) + '">' + icono('clipboard-check') + ' Nueva inspección</button>' +
+              (puedeOperar ? '<button type="button" class="secondary ln-btn-icono" data-ln-editar="' + esc(id) + '">' + icono('pencil') + ' Editar información</button>' +
+                '<button type="button" class="secondary ln-btn-icono" data-ln-captura="INSPECCION" data-equipo-id="' + esc(id) + '">' + icono('clipboard-check') + ' Nueva inspección</button>' +
                 '<button type="button" class="secondary ln-btn-icono" data-ln-captura="RESPONSIVA" data-equipo-id="' + esc(id) + '">' + icono('signature') + ' Nueva responsiva</button>' : '') +
               (e.carpetaDriveId ? enlaceDrive(e.carpetaDriveId, 'Carpeta en Drive') : '')) +
             (e._secretosVisibles ? '' : '<div class="ln-nota">' + icono('lock') + ' Los PIN, patrones y contraseñas están ocultos para tu rol.</div>') +
             '<div class="ln-grid-2">' +
               tarjeta(icono('smartphone') + ' Equipo', campos([
-                ['Modelo', e.modelo], ['IMEI', e.imei], ['Accesorios', (e.accesorios || []).join(', ')],
-                ['Cuenta Google', e.cuentaGoogle], ['PIN equipo', e.pinEquipo], ['Patrón', e.patronRuta], ['Contraseña módem', e.contrasenaModem],
+                ['Modelo', e.modelo], ['IMEI', e.imei], ['Color', e.color], ['Accesorios', (e.accesorios || []).join(', ')],
+                e.tipo !== 'MODEM' && e.tipo !== 'BANDA_ANCHA' && e.tipo !== 'CAMARA' ? ['Cuenta Google', e.cuentaGoogle] : null,
+                e.tipo === 'CELULAR' || e.tipo === 'CELULAR_BASICO' ? ['PIN equipo', e.pinEquipo] : null,
+                e.tipo === 'CELULAR' || e.tipo === 'CELULAR_BASICO' ? ['Patrón', e.patronRuta] : null,
+                e.tipo === 'MODEM' || e.tipo === 'BANDA_ANCHA' ? ['Contraseña módem', e.contrasenaModem] : null,
                 e.simResidual ? ['SIM residual', chip(e.simResidual, 'ambar'), true] : null,
               ])) +
               tarjeta(icono('card-sim') + ' Línea asignada', l ? campos([
@@ -641,9 +649,11 @@
           const e = r.equipo;
           const costo = l.costoPlan !== null && l.costoPlan !== undefined ? '$' + Number(l.costoPlan).toLocaleString('es-MX') : null;
           const puedeOperarLinea = !e && memoria.permisos && memoria.permisos.puedeOperar;
+          pila[pila.length - 1].etiqueta = e ? 'NUCO ' + (e.nuco || '—') : 'Línea ' + (l.numero || '—');
           detalle.innerHTML = migas() +
             encabezado('card-sim', esc(l.numero || 'Línea sin número'), chip(l.estatus) + (e ? chip('En NUCO ' + (e.nuco || '—'), 'neutro') : chip('Suelta', 'ambar')),
-              puedeOperarLinea ? '<button type="button" class="secondary ln-btn-icono" data-ln-captura="INSPECCION" data-linea-id="' + esc(id) + '">' + icono('clipboard-check') + ' Nueva inspección</button>' +
+              puedeOperarLinea ? '<button type="button" class="secondary ln-btn-icono" data-ln-editar="' + esc(id) + '">' + icono('pencil') + ' Editar información</button>' +
+                '<button type="button" class="secondary ln-btn-icono" data-ln-captura="INSPECCION" data-linea-id="' + esc(id) + '">' + icono('clipboard-check') + ' Nueva inspección</button>' +
                 '<button type="button" class="secondary ln-btn-icono" data-ln-captura="RESPONSIVA" data-linea-id="' + esc(id) + '">' + icono('signature') + ' Nueva responsiva</button>' : '') +
             '<div class="ln-grid-2">' +
               tarjeta(icono('card-sim') + ' Línea', campos([
@@ -699,6 +709,107 @@
             '</tbody></table></div>'
           : '<p class="empty-state">Sin responsivas registradas.</p>';
         return tarjeta(icono('clipboard-check') + ' Inspecciones (' + inspecciones.length + ')', tablaInsp) + tarjeta(icono('signature') + ' Responsivas (' + responsivas.length + ')', tablaResp);
+      }
+
+      // ---- Alta y edición directa del inventario ----
+      function campoEditor(id, etiqueta, valor, tipo, opciones, grupo) {
+        const attrs = ' id="reg-' + id + '" data-campo="' + esc(id) + '"' + (grupo ? ' data-grupo="' + grupo + '"' : '');
+        if (tipo === 'select') return '<div class="field"' + (grupo ? ' data-reg-grupo="' + grupo + '"' : '') + '><label>' + esc(etiqueta) + '</label><select' + attrs + '>' +
+          (opciones || []).map((v) => '<option value="' + esc(v) + '"' + (String(v) === String(valor || '') ? ' selected' : '') + '>' + esc(v || 'Selecciona…') + '</option>').join('') + '</select></div>';
+        return '<div class="field"' + (grupo ? ' data-reg-grupo="' + grupo + '"' : '') + '><label>' + esc(etiqueta) + '</label><input' + attrs + ' type="' + (tipo || 'text') + '" value="' + esc(valor || '') + '" autocomplete="off" /></div>';
+      }
+
+      function datosEditor(r) {
+        const e = r && r.equipo || {};
+        const l = r && r.linea || {};
+        const leg = e.legado || l.legado || {};
+        const resp = e.responsable || l.responsable || {};
+        return {
+          'TIPO': leg.tipo || '', 'NUCO': e.nuco || l.nucoLegado || '', 'EQUIPO': e.modelo || '', 'IMEI': e.imei || '', 'COLOR': e.color || '',
+          'ACCESORIOS': (e.accesorios || []).join(', '), 'ESTATUS EQUIPO': e.estatus || '', 'CUENTA GOOGLE': e.cuentaGoogle || '', 'PIN EQUIPO': e.pinEquipo || '',
+          'PATRON': e.patronRuta || '', 'CONTRASEÑA MODEM': e.contrasenaModem || '', 'NUMERO TELEFONO': l.numero || '', 'NUMERO SIM': l.sim || '',
+          'COMPAÑIA': l.compania || '', 'COSTO PLAN': l.costoPlan === null || l.costoPlan === undefined ? '' : l.costoPlan,
+          'INICIO PLAN': fechaInput(l.inicioPlan), 'FIN PLAN': fechaInput(l.finPlan), 'ESTATUS LINEA': l.estatus || '', 'PIN WHATSAPP': l.pinWhatsapp || '',
+          'NO EMPLEADO': resp.noEmpleado || '', 'RESPONSABLE': resp.nombre || '', 'PUESTO': resp.puesto || '', 'SEDE': resp.sede || '',
+          'OFICINA / DESARROLLO': resp.oficina || '', 'DEPARTAMENTO': resp.departamento || '', 'AREA': resp.area || '', 'JEFE DIRECTO': resp.jefeDirecto || '',
+          'DIRECTOR': resp.director || '', 'RAZON SOCIAL': resp.razonSocial || '', 'COMENTARIOS': leg.comentarios || '',
+        };
+      }
+
+      function fechaInput(v) {
+        if (!v) return '';
+        const d = new Date(v);
+        return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+      }
+
+      function formularioEditor(datos, catalogos, editando) {
+        const f = (id, et, tipo, opciones, grupo) => campoEditor(id, et, datos[id], tipo, opciones, grupo);
+        const puedeVerSecretos = memoria.permisos && memoria.permisos.puedeVerSecretos;
+        const secretosEquipo = puedeVerSecretos
+          ? f('PIN EQUIPO', 'PIN del equipo', null, null, 'celular') + f('PATRON', 'Patrón (ej. 1-2-5-8)', null, null, 'celular') +
+            f('CONTRASEÑA MODEM', 'Contraseña del módem', null, null, 'modem')
+          : '';
+        const secretosLinea = puedeVerSecretos ? f('PIN WHATSAPP', 'PIN WhatsApp', null, null, 'linea') : '';
+        return '<div class="ln-nota">' + icono('history') + ' Cada cambio se registrará automáticamente en el historial del activo.</div>' +
+          seccionCaptura(1, 'layout-list', 'Tipo e identificación', 'Define qué clase de activo se registrará.', '<div class="ln-editor-grid">' +
+            f('TIPO', 'Tipo *', 'select', [''].concat(catalogos.tipos || [])) + f('NUCO', 'NUCO *') + '</div>') +
+          seccionCaptura(2, 'smartphone', 'Datos del equipo', 'Solo se guardan para tipos que incluyen equipo.', '<div class="ln-editor-grid">' +
+            f('EQUIPO', 'Modelo *', null, null, 'equipo') + f('IMEI', 'IMEI', null, null, 'equipo') + f('COLOR', 'Color', null, null, 'equipo') +
+            f('ACCESORIOS', 'Accesorios (separados por coma)', null, null, 'equipo') + f('ESTATUS EQUIPO', 'Estatus del equipo', 'select', [''].concat(catalogos.estatusEquipo || []), 'equipo') +
+            f('CUENTA GOOGLE', 'Cuenta Google', null, null, 'celular') + secretosEquipo + '</div>') +
+          seccionCaptura(3, 'card-sim', 'Datos de la línea', 'Solo se guardan para tipos que incluyen SIM o línea.', '<div class="ln-editor-grid">' +
+            f('NUMERO TELEFONO', 'Número telefónico', null, null, 'linea') + f('NUMERO SIM', 'Número SIM', null, null, 'linea') +
+            f('COMPAÑIA', 'Compañía', 'select', [''].concat(catalogos.companias || []), 'linea') + f('COSTO PLAN', 'Costo del plan', 'number', null, 'linea') +
+            f('INICIO PLAN', 'Inicio del plan', 'date', null, 'linea') + f('FIN PLAN', 'Fin del plan', 'date', null, 'linea') +
+            f('ESTATUS LINEA', 'Estatus de la línea', 'select', [''].concat(catalogos.estatusLinea || []), 'linea') + secretosLinea + '</div>') +
+          seccionCaptura(4, 'user-round', 'Responsable y ubicación', 'Información operativa del activo.', '<div class="ln-editor-grid">' +
+            f('NO EMPLEADO', 'No. empleado') + f('RESPONSABLE', 'Responsable') + f('PUESTO', 'Puesto') + f('SEDE', 'Sede') + f('OFICINA / DESARROLLO', 'Oficina / desarrollo') +
+            f('DEPARTAMENTO', 'Departamento') + f('AREA', 'Área') + f('JEFE DIRECTO', 'Jefe directo') + f('DIRECTOR', 'Director') + f('RAZON SOCIAL', 'Razón social') + '</div>' +
+            '<div class="field"><label>Comentarios</label><textarea id="reg-COMENTARIOS" data-campo="COMENTARIOS" rows="4">' + esc(datos.COMENTARIOS || '') + '</textarea></div>') +
+          '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div><div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
+          '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('save') + ' ' + (editando ? 'Guardar cambios' : 'Crear registro') + '</button></div>';
+      }
+
+      function actualizarCamposEditor() {
+        const tipo = ($('#reg-TIPO', raiz) || {}).value || '';
+        const equipo = /^(EQUIPO|MODEM|BANDA ANCHA|CAMARA)/.test(tipo);
+        const linea = ['EQUIPO + SIM', 'EQUIPO + SIM BASICO', 'LINEA', 'LINEA BASICA', 'MODEM', 'BANDA ANCHA', 'CAMARA'].indexOf(tipo) >= 0;
+        raiz.querySelectorAll('[data-reg-grupo="equipo"]').forEach((n) => { n.hidden = !equipo; });
+        raiz.querySelectorAll('[data-reg-grupo="linea"]').forEach((n) => { n.hidden = !linea; });
+        raiz.querySelectorAll('[data-reg-grupo="celular"]').forEach((n) => { n.hidden = !/^EQUIPO/.test(tipo); });
+        raiz.querySelectorAll('[data-reg-grupo="modem"]').forEach((n) => { n.hidden = ['MODEM', 'BANDA ANCHA'].indexOf(tipo) < 0; });
+      }
+
+      function abrirEditor(id) {
+        $('#ln-modal-captura', raiz).hidden = false;
+        $('#ln-captura-icono', raiz).innerHTML = icono(id ? 'pencil' : 'plus');
+        $('#ln-captura-tipo', raiz).textContent = 'Inventario de telefonía';
+        $('#ln-captura-titulo', raiz).textContent = id ? 'Editar información' : 'Agregar nuevo NUCO';
+        $('#ln-captura-subtitulo', raiz).textContent = 'Cargando campos y catálogos…';
+        $('#ln-captura-cuerpo', raiz).innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando…</p>';
+        captura = { tipo: 'REGISTRO', idObjetivo: id, firmas: {} };
+        const detalleReq = id ? (memoria.indice.equipos.some((e) => e.id === id) ? llamar('apiLineasEquipo', id) : llamar('apiLineasLinea', id)) : Promise.resolve(null);
+        Promise.all([detalleReq, llamar('apiLineasCatalogos')]).then(([detalleReg, catalogos]) => {
+          if (!captura || captura.tipo !== 'REGISTRO') return;
+          const datos = datosEditor(detalleReg);
+          $('#ln-captura-subtitulo', raiz).textContent = id ? 'Actualiza los datos necesarios; el historial conservará antes y después.' : 'Completa los datos del nuevo equipo o línea.';
+          $('#ln-captura-cuerpo', raiz).innerHTML = formularioEditor(datos, catalogos, !!id);
+          pintarIconos($('#ln-captura-cuerpo', raiz));
+          $('#reg-TIPO', raiz).addEventListener('change', actualizarCamposEditor);
+          actualizarCamposEditor();
+          $('#cap-guardar', raiz).addEventListener('click', () => {
+            const valores = {};
+            raiz.querySelectorAll('#ln-captura-cuerpo [data-campo]').forEach((el) => { valores[el.dataset.campo] = el.value; });
+            const errorBox = $('#cap-error', raiz); errorBox.hidden = true;
+            estadoGuardado(id ? 'Guardando cambios' : 'Creando registro');
+            const promesa = id ? llamar('apiLineasEditarRegistro', id, valores) : llamar('apiLineasCrearRegistro', valores);
+            promesa.then((r) => cargarIndice(true).then(() => {
+              cerrarCaptura(true);
+              aviso(icono('circle-check') + ' ' + (id ? 'Información actualizada.' : 'Registro creado.'), 6000);
+              if (id) abrirRegistro(id); else abrirRegistro(r.id);
+            })).catch((e) => { mostrarErrorCaptura(mensajeError(e)); restaurarGuardado(); });
+          });
+        }).catch((e) => { $('#ln-captura-cuerpo', raiz).innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>'; });
       }
 
       // ---- Captura: inspección y responsiva nuevas ----
@@ -772,7 +883,7 @@
         progreso.classList.toggle('incompleto', !!incompleto && contestadas < total);
       }
 
-      function activarFirma(id) {
+      function activarFirma(id, fondo) {
         const canvas = document.getElementById(id);
         if (!canvas) return null;
         const ctx2d = canvas.getContext('2d');
@@ -781,6 +892,8 @@
         canvas.width = Math.max(1, rect.width) * escala;
         canvas.height = Math.max(1, rect.height) * escala;
         ctx2d.scale(escala, escala);
+        const rellenar = () => { ctx2d.save(); ctx2d.fillStyle = fondo || '#ffffff'; ctx2d.fillRect(0, 0, rect.width, rect.height); ctx2d.restore(); };
+        rellenar();
         ctx2d.lineWidth = 2.2; ctx2d.lineCap = 'round'; ctx2d.lineJoin = 'round'; ctx2d.strokeStyle = '#111';
         const estado = { vacia: true, dibujando: false };
         const posicion = (ev) => {
@@ -796,7 +909,7 @@
         canvas.addEventListener('pointerleave', terminar);
         return {
           estaVacia: () => estado.vacia,
-          limpiar: () => { ctx2d.clearRect(0, 0, canvas.width, canvas.height); estado.vacia = true; },
+          limpiar: () => { ctx2d.clearRect(0, 0, rect.width, rect.height); rellenar(); estado.vacia = true; },
           base64: () => canvas.toDataURL('image/png').split(',')[1],
         };
       }
@@ -854,6 +967,17 @@
         $('#ln-captura-subtitulo', raiz).textContent = 'No se completó el guardado. Revisa el mensaje y vuelve a intentar.';
       }
 
+      function mostrarErrorCaptura(mensaje, destino) {
+        const errorBox = $('#cap-error', raiz);
+        if (!errorBox) return;
+        errorBox.textContent = mensaje;
+        errorBox.hidden = false;
+        const objetivo = destino ? $(destino, raiz) : errorBox;
+        (objetivo || errorBox).scrollIntoView({ behavior: 'smooth', block: 'center' });
+        errorBox.setAttribute('tabindex', '-1');
+        errorBox.focus({ preventScroll: true });
+      }
+
       function refrescarDespuesDeCaptura(idAbierto, tipo, nuevoId) {
         const sesionCaptura = captura;
         sesionCaptura.guardada = true;
@@ -866,11 +990,11 @@
           modal.querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = true; });
           $('#ln-captura-subtitulo', raiz).textContent = 'Registro guardado. Preparando el documento PDF.';
           cuerpo.innerHTML = '<div class="ln-pdf-estado" role="status"><span class="ln-spinner"></span><h3>Generando tu PDF</h3>' +
-            '<p>Las firmas y los datos ya están guardados. Estamos completando la plantilla y creando el archivo en Drive.</p>' +
+            '<p>Los datos ya están guardados. Las firmas permanecen temporalmente en esta sesión mientras se completa la plantilla y se crea el PDF.</p>' +
             '<ol><li>Firmas cargadas</li><li>Registro guardado</li><li aria-current="step">Generación del PDF en curso</li></ol>' +
             '<p class="ln-tenue">Este paso puede tardar unos segundos. El enlace aparecerá aquí al terminar.</p></div>';
           cuerpo.scrollTop = 0;
-          return llamar('apiLineasGenerarPdf', tipo, nuevoId, false).then((pdf) => {
+          return llamar('apiLineasGenerarPdf', tipo, nuevoId, false, sesionCaptura.pdfFirmas || null).then((pdf) => {
             if (!vigente() || captura !== sesionCaptura) return;
             $('#ln-captura-subtitulo', raiz).textContent = 'Documento listo para consultar o descargar.';
             cuerpo.innerHTML = '<div class="ln-pdf-estado" role="status">' + icono('circle-check') + '<h3>Tu PDF está listo</h3><p>' + esc(pdf.nombre || 'Documento generado') + '</p>' +
@@ -882,7 +1006,7 @@
             if (!vigente() || captura !== sesionCaptura) return;
             $('#ln-captura-subtitulo', raiz).textContent = 'Registro guardado; PDF pendiente.';
             cuerpo.innerHTML = '<div class="ln-pdf-estado" role="alert">' + icono('file-warning') + '<h3>No se pudo completar el PDF</h3><p>' + mensajeError(e) + '</p>' +
-              '<p>Tus datos y firmas están guardados. Puedes reintentar el PDF sin volver a llenar el formulario.</p>' +
+            '<p>Tus datos están guardados y las firmas permanecen en esta sesión para reintentar sin volver a llenar el formulario.</p>' +
               '<button type="button" class="primary ln-btn-icono" id="cap-reintentar-pdf">' + icono('refresh-cw') + ' Reintentar PDF</button></div>';
             $('#cap-reintentar-pdf', raiz).addEventListener('click', generar);
             cargarEvidencias(idAbierto);
@@ -903,12 +1027,12 @@
           s.puntos.map((p) => '<div class="ln-checklist-punto" data-clave="' + esc(p.clave) + '">' +
             '<span class="ln-checklist-etiqueta">' + esc(p.etiqueta) + '</span>' +
             grupoEscala(p.escala, ctx.anterior && ctx.anterior.checklist ? ctx.anterior.checklist[p.clave] : null) + '</div>').join('') +
-          '</div></div>').join('');
+          (normal(s.seccion).indexOf('app') === 0 || normal(s.seccion).indexOf('aplicacion') >= 0 ? '<div class="field ln-otra-app"><label for="cap-otra-app">Otra aplicación (opcional)</label><input type="text" id="cap-otra-app" placeholder="Nombre de otra aplicación revisada" autocomplete="off" /></div>' : '') + '</div></div>').join('');
         const datos = tarjetaResponsable(ctx.responsable, 'Responsable del activo') +
           '<div class="grid" style="grid-template-columns: repeat(2, 1fr)">' +
-          '<div class="field"><label>Color del equipo</label><input type="text" id="cap-color" autocomplete="off" /></div>' +
+          (ctx.equipo ? '<div class="ln-captura-dato"><span><small>Color del equipo</small><b>' + esc(ctx.equipo.color || '—') + '</b></span></div>' : '') +
           '<div class="field"><label for="cap-ticket">Ticket <span class="ln-tenue">(opcional)</span></label><input type="text" id="cap-ticket" autocomplete="off" /></div></div>' +
-          (ctx.equipo ? '<div class="grid" style="grid-template-columns: repeat(2, 1fr)"><div class="field"><label>Estatus del equipo</label><select id="cap-estatus"><option value="">Conservar estatus actual</option>' + opcionesEstatus(ctx.catalogos.estatusEquipo, '') + '</select></div></div>' +
+          (ctx.equipo ? '<div class="grid" style="grid-template-columns: repeat(2, 1fr)"><div class="ln-captura-dato"><span><small>Estatus actual del equipo</small><b>' + esc(ctx.equipo.estatus || '—') + '</b></span></div></div>' +
           '<label class="ln-check"><input type="checkbox" id="cap-actualizar-accesorios" checked> Sincronizar cubo, cable, funda y mica con las respuestas del checklist</label>' : '');
         const evidencia = '<div class="field"><label for="cap-observaciones">Observaciones de la inspección (opcional)</label><textarea id="cap-observaciones" rows="6" placeholder="Agrega hallazgos, daños o información útil para el seguimiento"></textarea></div>' +
           '<label class="ln-upload">' + icono('images') + '<span><b>Agregar fotografías</b><small>Puedes seleccionar varias imágenes; se guardarán en la carpeta de evidencia.</small></span>' +
@@ -933,8 +1057,8 @@
       }
 
       function iniciarFormularioInspeccion() {
-        captura.firmas.inspector = activarFirma('cap-firma-inspector');
-        captura.firmas.responsable = activarFirma('cap-firma-responsable');
+        captura.firmas.inspector = activarFirma('cap-firma-inspector', '#ddebf7');
+        captura.firmas.responsable = activarFirma('cap-firma-responsable', '#ddebf7');
         manejarSubidaArchivo('cap-fotos', 'cap-fotos-lista', () => captura.fotosCarpetaId, true, (s) => { if (s) captura.fotos.push(s); });
         $('#cap-guardar', raiz).addEventListener('click', guardarInspeccionDesdeFormulario);
         actualizarProgresoChecklist();
@@ -946,12 +1070,11 @@
         errorBox.hidden = true;
         const firmaInspector = captura.firmas.inspector;
         const firmaResponsable = captura.firmas.responsable;
-        if (!firmaInspector || firmaInspector.estaVacia()) { errorBox.textContent = 'La firma del inspector es obligatoria.'; errorBox.hidden = false; return; }
+        if (!firmaInspector || firmaInspector.estaVacia()) { mostrarErrorCaptura('La firma del inspector o Control Interno es obligatoria.', '#cap-firma-inspector'); return; }
         const checklist = leerChecklistFormulario();
         const totalPuntos = raiz.querySelectorAll('#ln-captura-cuerpo .ln-checklist-punto').length;
         if (Object.keys(checklist).length < totalPuntos) {
-          errorBox.textContent = 'Completa todos los puntos del checklist antes de generar el documento.';
-          errorBox.hidden = false;
+          mostrarErrorCaptura('Completa todos los puntos del checklist antes de generar el documento.', '#cap-checklist-avance');
           actualizarProgresoChecklist(true);
           $('#cap-checklist-avance', raiz).scrollIntoView({ behavior: 'smooth', block: 'center' });
           return;
@@ -962,25 +1085,26 @@
         const fotosCarpetaId = captura.fotosCarpetaId;
         const ruta = captura.ruta;
         const fotos = captura.fotos;
-        if (raiz.querySelector('.ln-foto-subiendo')) { errorBox.textContent = 'Espera a que terminen de subir las imágenes.'; errorBox.hidden = false; return; }
-        estadoGuardado('Subiendo firmas');
-        Promise.all([
-          llamar('apiLineasSubirArchivo', carpetaId, 'FIRMA INSPECTOR.png', 'image/png', firmaInspector.base64()),
-          firmaResponsable && !firmaResponsable.estaVacia() ? llamar('apiLineasSubirArchivo', carpetaId, 'FIRMA RESPONSABLE.png', 'image/png', firmaResponsable.base64()) : Promise.resolve(null),
-        ]).then(([fInspector, fResponsable]) => { estadoGuardado('Guardando inspección'); return llamar('apiLineasGuardarInspeccion', Object.assign({}, refCaptura, {
+        if (raiz.querySelector('.ln-foto-subiendo')) { mostrarErrorCaptura('Espera a que terminen de subir las imágenes.', '#cap-fotos-lista'); return; }
+        captura.pdfFirmas = { inspector: firmaInspector.base64(), responsable: firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64() : null };
+        estadoGuardado('Guardando inspección');
+        llamar('apiLineasGuardarInspeccion', Object.assign({}, refCaptura, {
           carpetaId: carpetaId, fotosCarpetaId: fotosCarpetaId, ruta: ruta, checklist: checklist,
-          color: $('#cap-color', raiz).value, ticket: $('#cap-ticket', raiz).value,
+          otraApp: $('#cap-otra-app', raiz) ? $('#cap-otra-app', raiz).value : '', ticket: $('#cap-ticket', raiz).value,
           observaciones: $('#cap-observaciones', raiz).value,
-          estatusEquipo: $('#cap-estatus', raiz) ? $('#cap-estatus', raiz).value : '',
+          estatusEquipo: ctxEstatusActual_(),
           actualizarAccesorios: $('#cap-actualizar-accesorios', raiz) ? $('#cap-actualizar-accesorios', raiz).checked : false,
-          fotos: fotos, firmaInspectorId: fInspector.id, firmaResponsableId: fResponsable ? fResponsable.id : null,
-        })); }).then((r) => {
+          fotos: fotos, firmaInspectorBase64: captura.pdfFirmas.inspector, firmaResponsableBase64: captura.pdfFirmas.responsable,
+        })).then((r) => {
           refrescarDespuesDeCaptura(idAbierto, 'INSPECCION', r.id);
         }).catch((e) => {
-          errorBox.textContent = mensajeError(e);
-          errorBox.hidden = false;
+          mostrarErrorCaptura(mensajeError(e));
           restaurarGuardado();
         });
+      }
+
+      function ctxEstatusActual_() {
+        return captura && captura.contexto && captura.contexto.equipo ? (captura.contexto.equipo.estatus || '') : '';
       }
 
       // -- Responsiva --
@@ -988,33 +1112,34 @@
       function formularioResponsiva(ctx) {
         const datos = tarjetaResponsable(ctx.responsable, 'Responsable que recibe el activo') +
           '<div class="grid" style="grid-template-columns: repeat(2, 1fr)"><div class="field"><label>Identificación presentada *</label><input type="text" id="cap-identificacion" placeholder="INE, pasaporte u otra identificación" autocomplete="off" required /></div>' +
-          (ctx.equipo ? '<div class="field"><label>Color del equipo</label><input type="text" id="cap-color" autocomplete="off" /></div>' : '') + '</div>';
-        const seguridad = '<div class="grid" style="grid-template-columns: repeat(2, 1fr)"><div class="field"><label>Tipo de contraseña</label><input type="text" id="cap-tipo-contrasena" placeholder="PIN, PATRÓN, CONTRASEÑA…" autocomplete="off" /></div>' +
-          (ctx.equipo ? '<div class="field"><label>Estatus del equipo</label><select id="cap-estatus"><option value="">Conservar estatus actual</option>' + opcionesEstatus(ctx.catalogos.estatusEquipo, '') + '</select></div>' : '') + '</div>';
-        const evidencia = '<div class="ln-nota" id="cap-patron-no-aplica">' + icono('info', 'ln-icon-sm') + ' La carga del patrón se habilitará si seleccionas PATRÓN como tipo de contraseña.</div>' +
-          '<div id="cap-patron-bloque" hidden><label class="ln-upload">' + icono('scan-line') + '<span><b>Adjuntar fotografía del patrón</b><small>La imagen se resguarda dentro de la carpeta de evidencia.</small></span>' +
-          '<input type="file" id="cap-patron" accept="image/*" /></label><div class="ln-fotos-lista" id="cap-patron-lista"></div></div>' +
+          (ctx.equipo ? '<div class="ln-captura-dato"><span><small>Color del equipo</small><b>' + esc(ctx.equipo.color || '—') + '</b></span></div>' : '') + '</div>';
+        const seguridad = '<div class="grid" style="grid-template-columns: repeat(2, 1fr)"><div class="field"><label>Tipo de contraseña</label><select id="cap-tipo-contrasena"><option value="">Sin contraseña</option><option value="PIN">PIN</option><option value="PATRON">Patrón</option><option value="CONTRASEÑA">Contraseña</option></select></div>' +
+          (ctx.equipo ? '<div class="ln-captura-dato"><span><small>Estatus actual del equipo</small><b>' + esc(ctx.equipo.estatus || '—') + '</b></span></div>' : '') + '</div>';
+        const evidencia = '<div class="ln-nota" id="cap-patron-no-aplica">' + icono('info', 'ln-icon-sm') + ' Selecciona Patrón para habilitar el trazado de 9 puntos.</div>' +
+          '<div id="cap-patron-bloque" hidden><div class="ln-patron"><svg id="cap-patron-lineas" viewBox="0 0 300 300" aria-hidden="true"></svg>' +
+          Array.from({ length: 9 }, (_, i) => '<button type="button" class="ln-patron-punto" data-punto="' + (i + 1) + '" aria-label="Punto ' + (i + 1) + '"></button>').join('') +
+          '</div><div class="ln-patron-acciones"><span id="cap-patron-texto">Sin patrón trazado</span><button type="button" class="secondary ln-btn-chico" id="cap-patron-limpiar">Limpiar patrón</button></div></div>' +
           '<div class="field" style="margin-top:14px"><label for="cap-observaciones">Observaciones de la entrega (opcional)</label><textarea id="cap-observaciones" rows="6" placeholder="Condiciones de entrega, acuerdos o comentarios adicionales"></textarea></div>';
         const firmas = '<div class="ln-grid-2">' +
-          tarjeta(icono('signature') + ' Firma del responsable · obligatoria', '<div class="ln-firma-caja"><canvas id="cap-firma-responsable"></canvas>' +
+          tarjeta(icono('signature') + ' Firma del responsable · opcional', '<div class="ln-firma-caja"><canvas id="cap-firma-responsable"></canvas>' +
               '<div class="ln-firma-acciones"><span class="ln-firma-vacia">Dibuja con el dedo o el mouse</span><button type="button" class="secondary ln-btn-chico" data-limpiar-firma="responsable">Limpiar</button></div></div>') +
-          tarjeta(icono('badge-check') + ' Control Interno' + (ctx.nombreCI ? ' · ' + esc(ctx.nombreCI) : ''), '<div class="ln-firma-caja"><canvas id="cap-firma-ci"></canvas>' +
+          tarjeta(icono('badge-check') + ' Control Interno · obligatoria' + (ctx.nombreCI ? ' · ' + esc(ctx.nombreCI) : ''), '<div class="ln-firma-caja"><canvas id="cap-firma-ci"></canvas>' +
               '<div class="ln-firma-acciones"><span class="ln-firma-vacia">Dibuja con el dedo o el mouse</span><button type="button" class="secondary ln-btn-chico" data-limpiar-firma="ci">Limpiar</button></div></div>') +
           '</div>';
         return introduccionCaptura(ctx, 'RESPONSIVA') +
           seccionCaptura(1, 'user-check', 'Datos del responsable', 'Verifica a quién se entrega el activo y registra su identificación.', datos) +
           seccionCaptura(2, 'shield-check', 'Equipo y seguridad', 'Registra la modalidad de acceso y cualquier cambio de estatus.', seguridad) +
           seccionCaptura(3, 'paperclip', 'Evidencia y observaciones', 'Adjunta el patrón cuando aplique y deja constancia de la entrega.', evidencia) +
-          seccionCaptura(4, 'signature', 'Firmas de conformidad', 'Ambas firmas son obligatorias para emitir la responsiva.', firmas) +
+          seccionCaptura(4, 'signature', 'Firmas de conformidad', 'La firma de Control Interno es obligatoria; la del responsable es opcional.', firmas) +
           '<div class="error-msg" id="cap-error" hidden></div>' +
           '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
             '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + ' Guardar y generar PDF</button></div>';
       }
 
       function iniciarFormularioResponsiva() {
-        captura.firmas.responsable = activarFirma('cap-firma-responsable');
-        captura.firmas.ci = activarFirma('cap-firma-ci');
-        manejarSubidaArchivo('cap-patron', 'cap-patron-lista', () => captura.carpetaId, false, (s) => { captura.patronId = s ? s.id : null; });
+        captura.firmas.responsable = activarFirma('cap-firma-responsable', '#ffffff');
+        captura.firmas.ci = activarFirma('cap-firma-ci', '#ffffff');
+        captura.patron = [];
         const tipoContrasena = $('#cap-tipo-contrasena', raiz);
         const alternarPatron = () => {
           const usaPatron = normal(tipoContrasena.value).indexOf('patron') >= 0;
@@ -1022,8 +1147,31 @@
           $('#cap-patron-no-aplica', raiz).hidden = usaPatron;
         };
         tipoContrasena.addEventListener('input', alternarPatron);
+        raiz.querySelectorAll('.ln-patron-punto').forEach((p) => p.addEventListener('click', () => {
+          const n = Number(p.dataset.punto);
+          if (captura.patron.indexOf(n) < 0) captura.patron.push(n);
+          pintarPatron();
+        }));
+        $('#cap-patron-limpiar', raiz).addEventListener('click', () => { captura.patron = []; pintarPatron(); });
         alternarPatron();
         $('#cap-guardar', raiz).addEventListener('click', guardarResponsivaDesdeFormulario);
+      }
+
+      function pintarPatron() {
+        const posiciones = [[50,50],[150,50],[250,50],[50,150],[150,150],[250,150],[50,250],[150,250],[250,250]];
+        raiz.querySelectorAll('.ln-patron-punto').forEach((p) => p.classList.toggle('activa', captura.patron.indexOf(Number(p.dataset.punto)) >= 0));
+        $('#cap-patron-lineas', raiz).innerHTML = captura.patron.length > 1 ? '<polyline points="' + captura.patron.map((n) => posiciones[n - 1].join(',')).join(' ') + '" />' : '';
+        $('#cap-patron-texto', raiz).textContent = captura.patron.length ? 'Patrón: ' + captura.patron.join(' → ') : 'Sin patrón trazado';
+      }
+
+      function patronBase64() {
+        if (!captura.patron || !captura.patron.length) return null;
+        const posiciones = [[50,50],[150,50],[250,50],[50,150],[150,150],[250,150],[50,250],[150,250],[250,250]];
+        const c = document.createElement('canvas'); c.width = 300; c.height = 300;
+        const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, 300, 300); x.strokeStyle = '#0b5d7a'; x.lineWidth = 8; x.lineCap = 'round';
+        x.beginPath(); captura.patron.forEach((n, i) => { const p = posiciones[n - 1]; if (!i) x.moveTo(p[0], p[1]); else x.lineTo(p[0], p[1]); }); x.stroke();
+        captura.patron.forEach((n) => { const p = posiciones[n - 1]; x.beginPath(); x.fillStyle = '#0b5d7a'; x.arc(p[0], p[1], 13, 0, Math.PI * 2); x.fill(); });
+        return c.toDataURL('image/png').split(',')[1];
       }
 
       function guardarResponsivaDesdeFormulario() {
@@ -1033,30 +1181,22 @@
         const identificacion = $('#cap-identificacion', raiz).value.trim();
         const firmaResponsable = captura.firmas.responsable;
         const firmaCi = captura.firmas.ci;
-        if (!identificacion) { errorBox.textContent = 'La identificación es obligatoria.'; errorBox.hidden = false; return; }
-        if (!firmaResponsable || firmaResponsable.estaVacia() || !firmaCi || firmaCi.estaVacia()) {
-          errorBox.textContent = 'Se requieren la firma del responsable y la de Control Interno.'; errorBox.hidden = false; return;
-        }
+        if (!identificacion) { mostrarErrorCaptura('La identificación es obligatoria.', '#cap-identificacion'); return; }
+        if (!firmaCi || firmaCi.estaVacia()) { mostrarErrorCaptura('La firma de Control Interno es obligatoria.', '#cap-firma-ci'); return; }
+        if ($('#cap-tipo-contrasena', raiz).value === 'PATRON' && (!captura.patron || captura.patron.length < 2)) { mostrarErrorCaptura('Traza al menos dos puntos para registrar el patrón.', '#cap-patron-bloque'); return; }
         const idAbierto = captura.idObjetivo;
         const refCaptura = captura.ref;
         const carpetaId = captura.carpetaId;
-        const patronId = captura.patronId || null;
-
-        if (raiz.querySelector('.ln-foto-subiendo')) { errorBox.textContent = 'Espera a que terminen de subir las imágenes.'; errorBox.hidden = false; return; }
-        estadoGuardado('Subiendo firmas');
-        Promise.all([
-          llamar('apiLineasSubirArchivo', carpetaId, 'FIRMA RESPONSABLE.png', 'image/png', firmaResponsable.base64()),
-          llamar('apiLineasSubirArchivo', carpetaId, 'FIRMA CI.png', 'image/png', firmaCi.base64()),
-        ]).then(([fResponsable, fCi]) => { estadoGuardado('Guardando responsiva'); return llamar('apiLineasGuardarResponsiva', Object.assign({}, refCaptura, {
+        captura.pdfFirmas = { responsable: firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64() : null, ci: firmaCi.base64(), patron: patronBase64() };
+        estadoGuardado('Guardando responsiva');
+        llamar('apiLineasGuardarResponsiva', Object.assign({}, refCaptura, {
           carpetaId: carpetaId, identificacion: identificacion, tipoContrasena: $('#cap-tipo-contrasena', raiz).value,
-          color: $('#cap-color', raiz) ? $('#cap-color', raiz).value : '', observaciones: $('#cap-observaciones', raiz).value,
-          estatusEquipo: $('#cap-estatus', raiz) ? $('#cap-estatus', raiz).value : '',
-          firmaResponsableId: fResponsable.id, firmaCiId: fCi.id, patronId: patronId,
-        })); }).then((r) => {
+          observaciones: $('#cap-observaciones', raiz).value, estatusEquipo: ctxEstatusActual_(), patron: (captura.patron || []).join('-'),
+          firmaResponsableBase64: captura.pdfFirmas.responsable, firmaCiBase64: captura.pdfFirmas.ci, patronBase64: captura.pdfFirmas.patron,
+        })).then((r) => {
           refrescarDespuesDeCaptura(idAbierto, 'RESPONSIVA', r.id);
         }).catch((e) => {
-          errorBox.textContent = mensajeError(e);
-          errorBox.hidden = false;
+          mostrarErrorCaptura(mensajeError(e));
           restaurarGuardado();
         });
       }
@@ -1085,7 +1225,7 @@
           captura.ruta = carpeta.ruta;
           $('#ln-captura-subtitulo', raiz).textContent = tipo === 'INSPECCION'
             ? 'Revisa el estado del activo, agrega evidencia y valida con firma.'
-            : 'Confirma la entrega, registra la evidencia y recaba ambas firmas.';
+            : 'Confirma la entrega, registra la evidencia y recaba la validación de Control Interno.';
           if (tipo === 'INSPECCION') {
             $('#ln-captura-cuerpo', raiz).innerHTML = formularioInspeccion(ctx);
             pintarIconos($('#ln-captura-cuerpo', raiz));

@@ -88,6 +88,41 @@ test('las capturas canceladas tienen un flujo completo de limpieza', () => {
   assert.match(read('src/html/js/lineas.html'), /apiLineasCancelarEvidencia/);
 });
 
+test('Telefonía permite alta y edición directa con bitácora y color persistente', () => {
+  const api = read('src/ClientApi.gs');
+  const service = read('src/services/TelefoniaService.gs');
+  const registros = read('src/services/lineas/LineasRegistros.gs');
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  assert.match(api, /apiLineasCrearRegistro/);
+  assert.match(api, /apiLineasEditarRegistro/);
+  assert.match(service, /LineasRegistros\.crear/);
+  assert.match(registros, /registrarMovimiento\('ALTA'/);
+  assert.match(registros, /registrarMovimiento\('EDICION'/);
+  assert.match(registros, /asegurarPestana\(LineasRepo\.TAB\.LINEAS, \['COLOR'\]\)/);
+  assert.match(repo, /color: texto\('COLOR'\)/);
+});
+
+test('las firmas nuevas no se almacenan como archivos de Drive', () => {
+  const captura = read('src/services/lineas/LineasCaptura.gs');
+  const cliente = read('src/html/js/lineas.html');
+  assert.match(captura, /firmaInspectorBase64/);
+  assert.match(captura, /firmaCiBase64/);
+  assert.match(captura, /'FIRMA RESPONSABLE': '', 'FIRMA INSPECTOR': ''/);
+  assert.match(captura, /'FIRMA RESPONSABLE': '', 'NOMBRE CI': usuario\.nombre, 'FIRMA CI': ''/);
+  assert.doesNotMatch(cliente, /'FIRMA INSPECTOR\.png'/);
+  assert.doesNotMatch(cliente, /'FIRMA CI\.png'/);
+});
+
+test('los formularios muestran el estado y color actuales y trazan patrón de nueve puntos', () => {
+  const cliente = read('src/html/js/lineas.html');
+  assert.doesNotMatch(cliente, /Conservar estatus actual/);
+  assert.match(cliente, /Estatus actual del equipo/);
+  assert.match(cliente, /ctx\.equipo\.color/);
+  assert.match(cliente, /Array\.from\(\{ length: 9 \}/);
+  assert.match(cliente, /Otra aplicación \(opcional\)/);
+  assert.match(cliente, /responsable es opcional/i);
+});
+
 test('los movimientos rechazan artículos inexistentes', () => {
   const accesorios = read('src/services/lineas/LineasAccesorios.gs');
   assert.match(accesorios, /if \(!actual\) throw new Error\('El artículo seleccionado ya no existe/);

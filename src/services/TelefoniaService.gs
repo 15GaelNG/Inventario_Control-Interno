@@ -186,6 +186,16 @@ const TelefoniaService = (function () {
     return LineasRepo.crearVistaOperativa(tipo, datos || {}, usuarioOperacion_(sesion));
   }
 
+  function crearRegistro(token, datos) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    return LineasUtil.paraCliente(LineasRegistros.crear(datos || {}, usuarioOperacion_(sesion)));
+  }
+
+  function editarRegistro(token, id, datos) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    return LineasUtil.paraCliente(LineasRegistros.editar(id, datos || {}, usuarioOperacion_(sesion)));
+  }
+
   /** Vacía las cachés del módulo (después de editar la hoja a mano). Solo ADMIN. */
   function recargarDatos(token) {
     Auth.requiereRol(token, [Config.ROLES.ADMIN]);
@@ -220,7 +230,7 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente(LineasEvidencias.prepararCarpetaEvidencia(tipo, nuco, new Date(), sesion.correo));
   }
 
-  /** Sube una foto o firma (base64) a una carpeta de evidencia ya preparada. */
+  /** Sube una foto o evidencia (base64) a una carpeta ya preparada. Las firmas no se persisten en Drive. */
   function subirArchivo(token, carpetaId, nombre, mime, base64) {
     const sesion = Auth.requiereRol(token, rolesOperan_());
     return LineasUtil.paraCliente(LineasEvidencias.subirArchivo(sesion.correo, carpetaId, nombre, mime, base64));
@@ -245,13 +255,13 @@ const TelefoniaService = (function () {
   }
 
   /** Genera (o regenera) el PDF de una inspección/responsiva capturada en el sistema. */
-  function generarPdf(token, tipo, id, forzar) {
+  function generarPdf(token, tipo, id, forzar, firmas) {
     const sesion = Auth.requiereRol(token, rolesOperan_());
-    return LineasUtil.paraCliente(LineasCaptura.generarPdf(tipo, id, !!forzar, usuarioOperacion_(sesion)));
+    return LineasUtil.paraCliente(LineasCaptura.generarPdf(tipo, id, !!forzar, usuarioOperacion_(sesion), firmas || null));
   }
 
   return {
     permisos, indice, equipo, linea, evidencias, historial, inspeccion, catalogos, colaboradores, bitacora, vistaOperativa, crearVistaOperativa, recargarDatos,
-    contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf,
+    contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf, crearRegistro, editarRegistro,
   };
 })();
