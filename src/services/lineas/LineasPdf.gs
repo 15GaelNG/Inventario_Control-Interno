@@ -209,11 +209,22 @@ const LineasPdf = (function () {
 
   function buscarTodas_(seccion, patron) {
     const encontradas = [];
-    let r = seccion.findText(patron);
-    while (r) {
-      encontradas.push({ elemento: r.getElement().asText(), inicio: r.getStartOffset(), fin: r.getEndOffsetInclusive() });
-      r = seccion.findText(patron, r);
-    }
+    // Una lectura por bloque de texto; evita buscar de nuevo en todo el documento por cada etiqueta.
+    const recorrer = (elemento) => {
+      if (elemento.getType() === DocumentApp.ElementType.TEXT) {
+        const texto = elemento.asText();
+        const contenido = texto.getText();
+        const expresion = new RegExp(patron, 'g');
+        let m;
+        while ((m = expresion.exec(contenido)) !== null) {
+          encontradas.push({ elemento: texto, inicio: m.index, fin: m.index + m[0].length - 1, etiqueta: m[0] });
+        }
+      } else if (elemento.getNumChildren) {
+        const total = elemento.getNumChildren();
+        for (let i = 0; i < total; i++) recorrer(elemento.getChild(i));
+      }
+    };
+    recorrer(seccion);
     return encontradas;
   }
 
@@ -274,7 +285,7 @@ const LineasPdf = (function () {
     const coincidencias = buscarTodas_(seccion, '<<[^<>]*>>');
     for (let i = coincidencias.length - 1; i >= 0; i--) {
       const m = coincidencias[i];
-      const etiqueta = m.elemento.getText().slice(m.inicio, m.fin + 1);
+      const etiqueta = m.etiqueta;
       const interior = etiqueta.slice(2, -2).trim();
       const nombreImagen = interior.replace(/^\[|\]$/g, '').toUpperCase();
       if (/^(End|Start:)/i.test(interior)) { m.elemento.deleteText(m.inicio, m.fin); continue; }

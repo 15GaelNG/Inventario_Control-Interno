@@ -360,4 +360,22 @@
     .ln-captura-cabecera { padding: 16px; }
     .ln-captura-acciones { margin: 18px -16px -16px; padding: 12px 16px; bottom: -16px; }
   }
+  /* Acciones reconocibles y estados del documento. */
+  .ln-accion-enlace {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    padding: 8px 12px; border: 1px solid var(--color-border); border-radius: 9px;
+    background: var(--color-primary-soft); color: var(--color-text); font-size: 12px;
+    line-height: 1.4; text-decoration: none; min-height: 36px; box-sizing: border-box;
+  }
+  .ln-accion-enlace:hover { border-color: var(--color-accent); background: var(--color-accent-soft); text-decoration: none; }
+  .ln-accion-enlace:focus-visible, .ln-modulo button:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 3px; }
+  .ln-detalle-botones .secondary, .ln-detalle-botones .ln-accion-enlace { min-height: 38px; font-weight: 600; }
+  .ln-pdf-estado { max-width: 650px; margin: 30px auto; padding: 26px; text-align: center; }
+  .ln-pdf-estado > .ln-icon, .ln-pdf-estado > .ln-spinner { width: 42px; height: 42px; margin-bottom: 18px; color: var(--color-accent-hover); }
+  .ln-pdf-estado h3 { font-size: 23px; }
+  .ln-pdf-estado p { font-size: 14px; line-height: 1.7; }
+  .ln-pdf-estado ol { text-align: left; margin: 22px auto; max-width: 330px; line-height: 2.2; }
+  .ln-pdf-estado [aria-current] { font-weight: 700; color: var(--color-accent-hover); }
+  .ln-pdf-acciones { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+  #ln-modal-captura[aria-busy="true"] canvas { pointer-events: none; opacity: .6; }
 </style>

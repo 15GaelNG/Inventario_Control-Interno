@@ -56,7 +56,7 @@
     const enlaceDrive = (id, texto, esArchivo) => {
       if (!id) return '';
       const url = esArchivo ? 'https://drive.google.com/file/d/' + esc(id) + '/view' : 'https://drive.google.com/drive/folders/' + esc(id);
-      return '<a class="ln-enlace" target="_blank" rel="noopener" href="' + url + '">' + esc(texto) + ' ' + icono('external-link', 'ln-icon-sm') + '</a>';
+      return '<a class="ln-enlace ln-accion-enlace" target="_blank" rel="noopener" href="' + url + '">' + icono(esArchivo ? 'file-text' : 'folder-open') + ' ' + esc(texto) + ' ' + icono('external-link', 'ln-icon-sm') + '</a>';
     };
 
     function llamar(fn, ...args) {
@@ -318,6 +318,16 @@
 
       // Clic en filas, enlaces internos y botones del detalle (delegación).
       raiz.addEventListener('click', (ev) => {
+        const pdfPendiente = ev.target.closest('[data-ln-pdf]');
+        if (pdfPendiente) {
+          ev.preventDefault();
+          captura = { guardada: true, firmas: {}, carpetaId: pdfPendiente.dataset.carpeta };
+          $('#ln-modal-captura', raiz).hidden = false;
+          $('#ln-captura-titulo', raiz).textContent = 'Generar PDF pendiente';
+          refrescarDespuesDeCaptura(pila[pila.length - 1].id, pdfPendiente.dataset.lnPdf, pdfPendiente.dataset.id);
+          return;
+        }
+        if (ev.target.closest('a[target="_blank"]')) return;
         const ir = ev.target.closest('[data-ln-ir]');
         if (ir) {
           ev.preventDefault();
@@ -577,7 +587,7 @@
                 e.simResidual ? ['SIM residual', chip(e.simResidual, 'ambar'), true] : null,
               ])) +
               tarjeta(icono('card-sim') + ' Línea asignada', l ? campos([
-                ['Número', '<a href="#" class="ln-enlace ln-mono" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + esc(l.numero || '(sin número)') + '</a>', true],
+                ['Número', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + icono('phone') + ' ' + esc(l.numero || '(sin número)') + ' ' + icono('chevron-right') + '</a>', true],
                 ['Compañía', l.compania], ['Estatus', chip(l.estatus), true], ['SIM', l.sim], ['PIN WhatsApp', l.pinWhatsapp],
                 ['Costo plan', costo], ['Plan', [fecha(l.inicioPlan), fecha(l.finPlan)].filter(Boolean).join(' → ')],
               ]) : '<p class="empty-state">Este equipo no tiene línea asignada.</p>') +
@@ -610,7 +620,7 @@
                 !e && l.nucoLegado ? ['NUCO (anterior)', l.nucoLegado] : null,
               ])) +
               tarjeta(icono('smartphone') + ' Equipo', e ? campos([
-                ['NUCO', '<a href="#" class="ln-enlace ln-mono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + esc(e.nuco || '—') + '</a>', true],
+                ['NUCO', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' ' + esc(e.nuco || '—') + ' ' + icono('chevron-right') + '</a>', true],
                 ['Tipo', TIPO_EQUIPO[e.tipo] || e.tipo], ['Modelo', e.modelo], ['IMEI', e.imei], ['Estatus', chip(e.estatus), true],
               ]) : '<p class="empty-state">Línea suelta: no está instalada en un equipo de la empresa.</p>') +
               tarjetaResponsable(e ? e.responsable : l.responsable, e ? 'Responsable (del equipo)' : 'Responsable') +
@@ -635,18 +645,23 @@
         });
       }
 
+      function accionPdf(d, tipo) {
+        if (d.pdfId) return enlaceDrive(d.pdfId, 'Abrir PDF', true);
+        return d.pdfPendiente ? '<button type="button" class="secondary ln-btn-icono" data-ln-pdf="' + tipo + '" data-id="' + esc(d.id) + '" data-carpeta="' + esc(d.carpetaId || '') + '">' + icono('file-text') + ' Generar PDF</button>' : vacio;
+      }
+
       function tarjetaEvidencias(inspecciones, responsivas) {
         const tablaInsp = inspecciones.length
-          ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Fecha</th><th>Origen</th><th>Calificación</th><th>Fotos</th><th>Responsable</th><th>Inspector</th></tr></thead><tbody>' +
+          ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Fecha</th><th>Origen</th><th>Calificación</th><th>Fotos</th><th>Responsable</th><th>Inspector</th><th>Documento</th></tr></thead><tbody>' +
             inspecciones.map((i) => '<tr class="ln-fila-clic" data-ln-ir="inspeccion" data-id="' + esc(i.id) + '"><td>' + guion(fecha(i.fecha)) + '</td><td>' + (ORIGEN[i.origen] || '') + '</td>' +
               '<td>' + guion(porcentaje(i.calificacion)) + '</td><td>' + (i.fotos || '<span class="ln-tenue">0</span>') + '</td>' +
-              '<td>' + guion(i.responsable) + '</td><td class="ln-tenue">' + guion(i.inspector) + '</td></tr>').join('') +
+              '<td>' + guion(i.responsable) + '</td><td class="ln-tenue">' + guion(i.inspector) + '</td><td>' + accionPdf(i, 'INSPECCION') + '</td></tr>').join('') +
             '</tbody></table></div>'
           : '<p class="empty-state">Sin inspecciones registradas.</p>';
         const tablaResp = responsivas.length
           ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Fecha</th><th>Origen</th><th>Responsable</th><th>Documento</th><th>Carpeta</th></tr></thead><tbody>' +
             responsivas.map((r) => '<tr><td>' + guion(fecha(r.fecha)) + '</td><td>' + (ORIGEN[r.origen] || '') + '</td><td>' + guion(r.responsable) + '</td>' +
-              '<td>' + (r.pdfId ? enlaceDrive(r.pdfId, 'PDF', true) : (r.pdfPendiente ? chip('PDF pendiente', 'ambar') : vacio)) + '</td>' +
+              '<td>' + accionPdf(r, 'RESPONSIVA') + '</td>' +
               '<td>' + (r.carpetaId ? enlaceDrive(r.carpetaId, 'Abrir') : vacio) + '</td></tr>').join('') +
             '</tbody></table></div>'
           : '<p class="empty-state">Sin responsivas registradas.</p>';
@@ -656,11 +671,12 @@
       // ---- Captura: inspección y responsiva nuevas ----
 
       function cerrarCaptura(guardada) {
+        if (captura && captura.guardando && !guardada) return;
         const borrador = captura;
         $('#ln-modal-captura', raiz).hidden = true;
         $('#ln-captura-cuerpo', raiz).innerHTML = '';
         captura = null;
-        if (!guardada && borrador && borrador.carpetaId) {
+        if (!guardada && borrador && !borrador.guardada && borrador.carpetaId) {
           llamar('apiLineasCancelarEvidencia', borrador.carpetaId, borrador.fotosCarpetaId)
             .catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' No se pudo limpiar la carpeta cancelada: ' + mensajeError(e), 9000));
         }
@@ -718,7 +734,7 @@
         const filas = Array.from(raiz.querySelectorAll('#ln-captura-cuerpo .ln-checklist-punto'));
         const contestadas = filas.filter((fila) => fila.querySelector('.ln-pastilla.activa')).length;
         const total = filas.length;
-        $('#cap-checklist-conteo', raiz).textContent = contestadas + ' de ' + total + ' puntos revisados';
+        $('#cap-checklist-conteo', raiz).textContent = contestadas + ' de ' + total + ' puntos con respuesta';
         $('#cap-checklist-barra', raiz).style.width = (total ? Math.round(contestadas / total * 100) : 0) + '%';
         progreso.classList.toggle('incompleto', !!incompleto && contestadas < total);
       }
@@ -785,16 +801,66 @@
         });
       }
 
+      function estadoGuardado(texto) {
+        if (!captura) return;
+        captura.guardando = true;
+        const modal = $('#ln-modal-captura', raiz);
+        modal.querySelectorAll('button, input, select, textarea').forEach((el) => { el.disabled = true; });
+        $('#cap-guardar', raiz).innerHTML = '<span class="ln-spinner"></span> ' + esc(texto);
+        $('#ln-captura-subtitulo', raiz).textContent = texto + '. Mantén esta ventana abierta.';
+        modal.setAttribute('aria-busy', 'true');
+      }
+
+      function restaurarGuardado() {
+        if (!captura) return;
+        captura.guardando = false;
+        const modal = $('#ln-modal-captura', raiz);
+        modal.removeAttribute('aria-busy');
+        modal.querySelectorAll('button, input, select, textarea').forEach((el) => { el.disabled = false; });
+        $('#cap-guardar', raiz).innerHTML = icono('circle-check') + ' Guardar y generar PDF';
+        $('#ln-captura-subtitulo', raiz).textContent = 'No se completó el guardado. Revisa el mensaje y vuelve a intentar.';
+      }
+
       function refrescarDespuesDeCaptura(idAbierto, tipo, nuevoId) {
-        cargarIndice(true);
-        if (vigente() && pila.length && pila[pila.length - 1].id === idAbierto) {
-          cargarEvidencias(idAbierto);
-          cargarHistorial(idAbierto);
-        }
-        llamar('apiLineasGenerarPdf', tipo, nuevoId, false).then(() => {
-          aviso(icono('circle-check', 'ln-icon-sm') + ' PDF generado.', 4000);
-          if (vigente() && pila.length && pila[pila.length - 1].id === idAbierto) cargarEvidencias(idAbierto);
-        }).catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' No se pudo generar el PDF: ' + mensajeError(e), 10000));
+        const sesionCaptura = captura;
+        sesionCaptura.guardada = true;
+        memoria.cargadoEn = 0;
+        const modal = $('#ln-modal-captura', raiz);
+        const cuerpo = $('#ln-captura-cuerpo', raiz);
+        const generar = () => {
+          sesionCaptura.guardando = true;
+          modal.setAttribute('aria-busy', 'true');
+          modal.querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = true; });
+          $('#ln-captura-subtitulo', raiz).textContent = 'Registro guardado. Preparando el documento PDF.';
+          cuerpo.innerHTML = '<div class="ln-pdf-estado" role="status"><span class="ln-spinner"></span><h3>Generando tu PDF</h3>' +
+            '<p>Las firmas y los datos ya están guardados. Estamos completando la plantilla y creando el archivo en Drive.</p>' +
+            '<ol><li>Firmas cargadas</li><li>Registro guardado</li><li aria-current="step">Generación del PDF en curso</li></ol>' +
+            '<p class="ln-tenue">Este paso puede tardar unos segundos. El enlace aparecerá aquí al terminar.</p></div>';
+          cuerpo.scrollTop = 0;
+          return llamar('apiLineasGenerarPdf', tipo, nuevoId, false).then((pdf) => {
+            if (!vigente() || captura !== sesionCaptura) return;
+            $('#ln-captura-subtitulo', raiz).textContent = 'Documento listo para consultar o descargar.';
+            cuerpo.innerHTML = '<div class="ln-pdf-estado" role="status">' + icono('circle-check') + '<h3>Tu PDF está listo</h3><p>' + esc(pdf.nombre || 'Documento generado') + '</p>' +
+              '<div class="ln-pdf-acciones">' + enlaceDrive(pdf.id, 'Abrir PDF', true) + enlaceDrive(sesionCaptura.carpetaId, 'Carpeta en Drive') +
+              '<button type="button" class="secondary" data-cerrar-modal>Volver al equipo</button></div></div>';
+            cargarEvidencias(idAbierto);
+            cargarHistorial(idAbierto);
+          }).catch((e) => {
+            if (!vigente() || captura !== sesionCaptura) return;
+            $('#ln-captura-subtitulo', raiz).textContent = 'Registro guardado; PDF pendiente.';
+            cuerpo.innerHTML = '<div class="ln-pdf-estado" role="alert">' + icono('file-warning') + '<h3>No se pudo completar el PDF</h3><p>' + mensajeError(e) + '</p>' +
+              '<p>Tus datos y firmas están guardados. Puedes reintentar el PDF sin volver a llenar el formulario.</p>' +
+              '<button type="button" class="primary ln-btn-icono" id="cap-reintentar-pdf">' + icono('refresh-cw') + ' Reintentar PDF</button></div>';
+            $('#cap-reintentar-pdf', raiz).addEventListener('click', generar);
+            cargarEvidencias(idAbierto);
+            cargarHistorial(idAbierto);
+          }).finally(() => {
+            sesionCaptura.guardando = false;
+            modal.removeAttribute('aria-busy');
+            modal.querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = false; });
+          });
+        };
+        generar();
       }
 
       // -- Inspección --
@@ -864,25 +930,24 @@
         const fotosCarpetaId = captura.fotosCarpetaId;
         const ruta = captura.ruta;
         const fotos = captura.fotos;
-        boton.disabled = true;
+        if (raiz.querySelector('.ln-foto-subiendo')) { errorBox.textContent = 'Espera a que terminen de subir las imágenes.'; errorBox.hidden = false; return; }
+        estadoGuardado('Subiendo firmas');
         Promise.all([
           llamar('apiLineasSubirArchivo', carpetaId, 'FIRMA INSPECTOR.png', 'image/png', firmaInspector.base64()),
           firmaResponsable && !firmaResponsable.estaVacia() ? llamar('apiLineasSubirArchivo', carpetaId, 'FIRMA RESPONSABLE.png', 'image/png', firmaResponsable.base64()) : Promise.resolve(null),
-        ]).then(([fInspector, fResponsable]) => llamar('apiLineasGuardarInspeccion', Object.assign({}, refCaptura, {
+        ]).then(([fInspector, fResponsable]) => { estadoGuardado('Guardando inspección'); return llamar('apiLineasGuardarInspeccion', Object.assign({}, refCaptura, {
           carpetaId: carpetaId, fotosCarpetaId: fotosCarpetaId, ruta: ruta, checklist: checklist,
           color: $('#cap-color', raiz).value, ticket: $('#cap-ticket', raiz).value, otraApp: $('#cap-otra-app', raiz).value,
           observaciones: $('#cap-observaciones', raiz).value,
           estatusEquipo: $('#cap-estatus', raiz) ? $('#cap-estatus', raiz).value : '',
           actualizarAccesorios: $('#cap-actualizar-accesorios', raiz) ? $('#cap-actualizar-accesorios', raiz).checked : false,
           fotos: fotos, firmaInspectorId: fInspector.id, firmaResponsableId: fResponsable ? fResponsable.id : null,
-        }))).then((r) => {
-          cerrarCaptura(true);
-          aviso(icono('circle-check', 'ln-icon-sm') + ' Inspección guardada. Generando el PDF…', 6000);
+        })); }).then((r) => {
           refrescarDespuesDeCaptura(idAbierto, 'INSPECCION', r.id);
         }).catch((e) => {
           errorBox.textContent = mensajeError(e);
           errorBox.hidden = false;
-          boton.disabled = false;
+          restaurarGuardado();
         });
       }
 
@@ -945,23 +1010,22 @@
         const carpetaId = captura.carpetaId;
         const patronId = captura.patronId || null;
 
-        boton.disabled = true;
+        if (raiz.querySelector('.ln-foto-subiendo')) { errorBox.textContent = 'Espera a que terminen de subir las imágenes.'; errorBox.hidden = false; return; }
+        estadoGuardado('Subiendo firmas');
         Promise.all([
           llamar('apiLineasSubirArchivo', carpetaId, 'FIRMA RESPONSABLE.png', 'image/png', firmaResponsable.base64()),
           llamar('apiLineasSubirArchivo', carpetaId, 'FIRMA CI.png', 'image/png', firmaCi.base64()),
-        ]).then(([fResponsable, fCi]) => llamar('apiLineasGuardarResponsiva', Object.assign({}, refCaptura, {
+        ]).then(([fResponsable, fCi]) => { estadoGuardado('Guardando responsiva'); return llamar('apiLineasGuardarResponsiva', Object.assign({}, refCaptura, {
           carpetaId: carpetaId, identificacion: identificacion, tipoContrasena: $('#cap-tipo-contrasena', raiz).value,
           color: $('#cap-color', raiz) ? $('#cap-color', raiz).value : '', observaciones: $('#cap-observaciones', raiz).value,
           estatusEquipo: $('#cap-estatus', raiz) ? $('#cap-estatus', raiz).value : '',
           firmaResponsableId: fResponsable.id, firmaCiId: fCi.id, patronId: patronId,
-        }))).then((r) => {
-          cerrarCaptura(true);
-          aviso(icono('circle-check', 'ln-icon-sm') + ' Responsiva guardada. Generando el PDF…', 6000);
+        })); }).then((r) => {
           refrescarDespuesDeCaptura(idAbierto, 'RESPONSIVA', r.id);
         }).catch((e) => {
           errorBox.textContent = mensajeError(e);
           errorBox.hidden = false;
-          boton.disabled = false;
+          restaurarGuardado();
         });
       }
 
