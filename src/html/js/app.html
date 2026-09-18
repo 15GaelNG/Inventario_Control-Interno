@@ -275,14 +275,15 @@
     },
   ];
 
+  // Los grupos ya no son acordeón (se abren/cierran) — se quedan siempre
+  // abiertos, el encabezado es nomás la etiqueta de la sección.
   function renderNavGrupos() {
     const contenedor = document.getElementById('nav-groups');
     contenedor.innerHTML = NAV_GRUPOS.map((grupo) => `
       <div class="nav-group" id="nav-group-${grupo.id}">
-        <div class="nav-group-header" data-grupo="${grupo.id}">
+        <div class="nav-group-header">
           <span class="nav-icon"><i data-lucide="${grupo.icono}" class="ico"></i></span>
           <span class="nav-label">${grupo.etiqueta}</span>
-          <span class="nav-group-chevron"><i data-lucide="chevron-right" class="ico"></i></span>
         </div>
         <div class="nav-group-items">
           ${grupo.items.map((item) => `
@@ -292,11 +293,6 @@
       </div>
     `).join('');
 
-    contenedor.querySelectorAll('.nav-group-header').forEach((header) => {
-      header.addEventListener('click', () => {
-        document.getElementById('nav-group-' + header.dataset.grupo).classList.toggle('expanded');
-      });
-    });
     contenedor.querySelectorAll('.nav-subitem').forEach((el) => {
       el.addEventListener('click', () => navegarA(el.dataset.view, el.dataset.etiqueta));
     });
