@@ -115,6 +115,17 @@ function apiEliminarCajaChica(token, id) {
   return CajasChicasService.eliminar(token, id);
 }
 
+// --- Historial de cambios de monto (Caja Chica) ---
+function apiListarCambiosMontoCCH(token) {
+  return CambiosMontoCCHService.listarResumen(token);
+}
+function apiCrearCambioMontoCCH(token, datos) {
+  return CambiosMontoCCHService.crear(token, datos);
+}
+function apiEliminarCambioMontoCCH(token, id) {
+  return CambiosMontoCCHService.eliminar(token, id);
+}
+
 // --- Listas de referencia ---
 function apiListarDepartamentos(token) {
   return ListasService.listarDepartamentos(token);

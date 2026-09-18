@@ -209,6 +209,7 @@
       if (vista === 'uber') { montarVista('tpl-uber', initUber); return; }
       if (vista === 'tickets') { montarVista('tpl-tickets', initTickets); return; }
       if (vista === 'caja-chica') { montarVista('tpl-cajachica', initCajaChica); return; }
+      if (vista === 'cambios-monto-cch') { montarVista('tpl-cambios-monto-cch', initCambiosMontoCCH); return; }
       mostrarProximamente(etiqueta || vista);
     });
   }
@@ -261,6 +262,7 @@
       items: [
         { vista: 'arqueos', etiqueta: 'Arqueos' },
         { vista: 'caja-chica', etiqueta: 'Caja Chica' },
+        { vista: 'cambios-monto-cch', etiqueta: 'Cambios de Monto' },
       ],
     },
     {
@@ -2338,6 +2340,190 @@
 
     document.getElementById('btn-exportar-excel-cajachica').addEventListener('click', () => {
       exportarCSV('cajas_chicas.csv', columnasCajasChicas, motorTablaCajasChicas.obtenerFiltrados());
+    });
+
+    await cargar();
+  }
+
+  // ---------- Cambios de Monto (Caja Chica) ----------
+  async function initCambiosMontoCCH() {
+    const lista = document.getElementById('lista-cambios-monto');
+    const vacio = document.getElementById('cambios-monto-vacio');
+    const modalDetalle = document.getElementById('modal-detalle-cambio-monto');
+    let cambiosPorId = {};
+    let cajasPorId = {};
+    let todosLosCambios = [];
+
+    const selectCaja = document.getElementById('cm-id-cch');
+    const campoAnterior = document.getElementById('cm-cantidad-anterior');
+    const tagAnterior = document.getElementById('cm-tag-anterior');
+
+    try {
+      const cajas = await callServer('apiListarCajasChicasResumen', state.token);
+      (cajas || []).forEach((c) => { cajasPorId[c.ID_CCH] = c; });
+      selectCaja.innerHTML = '<option value="">Selecciona…</option>' +
+        (cajas || []).map((c) => `<option value="${c.ID_CCH}">${c.ID_CCH} — ${c.RESPONSABLE || 'Sin responsable'}</option>`).join('');
+    } catch (err) {
+      console.error('No se pudo cargar el catálogo de cajas chicas:', err);
+      const errorBox = document.getElementById('cm-error');
+      errorBox.textContent = 'No se pudo cargar el catálogo de cajas chicas: ' + err.message;
+      errorBox.hidden = false;
+    }
+
+    selectCaja.addEventListener('change', () => {
+      const caja = cajasPorId[selectCaja.value];
+      if (caja) {
+        campoAnterior.value = caja.MONTO_ACTUAL || 0;
+        tagAnterior.hidden = false;
+      } else {
+        campoAnterior.value = '';
+        tagAnterior.hidden = true;
+      }
+    });
+
+    function etiquetaTipo(tipo) {
+      const esIncremento = String(tipo || '').toUpperCase() === 'INCREMENTO';
+      return `<span class="tag ${esIncremento ? 'tag-green' : 'tag-gold'}">${tipo || '—'}</span>`;
+    }
+    function nombreResponsable(idCch) {
+      const caja = cajasPorId[idCch];
+      return caja ? (caja.RESPONSABLE || '—') : '—';
+    }
+
+    const columnasCambiosMonto = [
+      { clave: 'ID_CCH', etiqueta: 'ID CCH' },
+      { clave: 'TIPO', etiqueta: 'Tipo' },
+      { clave: 'CANTIDAD', etiqueta: 'Cantidad' },
+      { clave: 'CANTIDAD_ANTERIOR', etiqueta: 'Cantidad anterior' },
+      { clave: 'CANTIDAD_ACTUALIZADA', etiqueta: 'Cantidad actualizada' },
+      { clave: 'FECHA', etiqueta: 'Fecha' },
+      { clave: 'QUIEN_REALIZO', etiqueta: 'Quién realizó' },
+    ];
+    const motorTablaCambiosMonto = crearTablaInteractiva({
+      thead: document.getElementById('cm-thead'),
+      columnas: columnasCambiosMonto,
+      buscadorGlobal: document.getElementById('cm-buscar-global'),
+      piePaginacion: document.getElementById('cm-pie'),
+      onRenderPagina: (cambios, total) => {
+        vacio.hidden = total > 0;
+        lista.innerHTML = cambios.map((c) => `
+          <tr>
+            <td class="tabla-clickable" data-id="${c.ID}" title="Ver detalle completo">${c.ID_CCH}</td>
+            <td>${nombreResponsable(c.ID_CCH)}</td>
+            <td>${etiquetaTipo(c.TIPO)}</td>
+            <td>${c.CANTIDAD || '—'}</td>
+            <td>${c.CANTIDAD_ANTERIOR || '—'}</td>
+            <td>${c.CANTIDAD_ACTUALIZADA || '—'}</td>
+            <td>${formatearFecha(c.FECHA)}</td>
+            <td>${c.QUIEN_REALIZO || '—'}</td>
+            <td>
+              <div class="tabla-actions">
+                <button type="button" class="danger btn-eliminar-cambio-monto" data-id="${c.ID}" title="Eliminar"><i data-lucide="trash-2" class="ico"></i></button>
+              </div>
+            </td>
+          </tr>
+        `).join('');
+
+        lista.querySelectorAll('.tabla-clickable').forEach((el) => {
+          el.addEventListener('click', () => abrirDetalleCambioMonto(el.dataset.id));
+        });
+        lista.querySelectorAll('.btn-eliminar-cambio-monto').forEach((btn) => {
+          btn.addEventListener('click', () => eliminarCambioMonto(btn.dataset.id));
+        });
+        refreshIcons();
+      },
+    });
+
+    async function cargar() {
+      const errorBox = document.getElementById('cm-error');
+      let cambios;
+      try {
+        cambios = await callServer('apiListarCambiosMontoCCH', state.token);
+      } catch (err) {
+        console.error('No se pudo cargar el historial de cambios de monto:', err);
+        errorBox.textContent = 'No se pudo cargar el historial: ' + err.message;
+        errorBox.hidden = false;
+        return;
+      }
+      errorBox.hidden = true;
+      todosLosCambios = cambios || [];
+
+      cambiosPorId = {};
+      todosLosCambios.forEach((c) => { cambiosPorId[c.ID] = c; });
+
+      document.getElementById('cmcch-stat-total').textContent = todosLosCambios.length;
+      document.getElementById('cmcch-stat-incrementos').textContent =
+        todosLosCambios.filter((c) => String(c.TIPO || '').toUpperCase() === 'INCREMENTO').length;
+      document.getElementById('cmcch-stat-reducciones').textContent =
+        todosLosCambios.filter((c) => String(c.TIPO || '').toUpperCase() === 'REDUCCION').length;
+
+      motorTablaCambiosMonto.setDatos(todosLosCambios);
+    }
+
+    const ETIQUETAS_CAMBIO_MONTO = {
+      ID_CCH: 'ID CCH', TIPO: 'Tipo', CANTIDAD: 'Cantidad',
+      CANTIDAD_ANTERIOR: 'Cantidad anterior', CANTIDAD_ACTUALIZADA: 'Cantidad actualizada',
+      FECHA: 'Fecha', QUIEN_REALIZO: 'Quién realizó',
+    };
+    function abrirDetalleCambioMonto(id) {
+      const cambio = cambiosPorId[id];
+      if (!cambio) return;
+      document.getElementById('detalle-cambio-monto-label').textContent = 'ID CCH: ' + cambio.ID_CCH;
+      const grid = document.getElementById('detalle-cambio-monto-grid');
+      grid.innerHTML = itemInfo('Responsable', nombreResponsable(cambio.ID_CCH)) +
+        Object.keys(ETIQUETAS_CAMBIO_MONTO)
+          .filter((clave) => cambio[clave] !== '' && cambio[clave] !== null && cambio[clave] !== undefined)
+          .map((clave) => itemInfo(ETIQUETAS_CAMBIO_MONTO[clave], cambio[clave]))
+          .join('');
+      modalDetalle.hidden = false;
+    }
+    document.getElementById('btn-cerrar-detalle-cambio-monto').addEventListener('click', () => { modalDetalle.hidden = true; });
+    modalDetalle.addEventListener('click', (ev) => { if (ev.target === modalDetalle) modalDetalle.hidden = true; });
+
+    async function eliminarCambioMonto(id) {
+      if (!confirm('¿Eliminar este cambio de monto? Esto NO revierte el monto actual de la caja chica — solo borra el registro del historial. Esta acción no se puede deshacer.')) return;
+      try {
+        await callServer('apiEliminarCambioMontoCCH', state.token, id);
+        await cargar();
+      } catch (err) {
+        alert('No se pudo eliminar: ' + err.message);
+      }
+    }
+
+    document.getElementById('form-cambio-monto').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('cm-error');
+      errorBox.hidden = true;
+      const btn = document.getElementById('btn-guardar-cambio-monto');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
+      try {
+        await callServer('apiCrearCambioMontoCCH', state.token, {
+          'ID CCH': selectCaja.value,
+          'CANTIDAD ACTUALIZADA': document.getElementById('cm-cantidad-actualizada').value,
+        });
+        ev.target.reset();
+        tagAnterior.hidden = true;
+        // Refresca también el catálogo de cajas chicas en memoria: el monto
+        // actual de la que se acaba de cambiar ya no es el mismo.
+        const cajas = await callServer('apiListarCajasChicasResumen', state.token);
+        cajasPorId = {};
+        (cajas || []).forEach((c) => { cajasPorId[c.ID_CCH] = c; });
+        selectCaja.innerHTML = '<option value="">Selecciona…</option>' +
+          (cajas || []).map((c) => `<option value="${c.ID_CCH}">${c.ID_CCH} — ${c.RESPONSABLE || 'Sin responsable'}</option>`).join('');
+        await cargar();
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+      }
+    });
+
+    document.getElementById('btn-exportar-excel-cambios-monto').addEventListener('click', () => {
+      exportarCSV('cambios_monto_caja_chica.csv', columnasCambiosMonto, motorTablaCambiosMonto.obtenerFiltrados());
     });
 
     await cargar();

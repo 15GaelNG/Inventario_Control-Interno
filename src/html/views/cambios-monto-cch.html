@@ -1,0 +1,83 @@
+<template id="tpl-cambios-monto-cch">
+  <div class="page-header">
+    <div>
+      <h2><i data-lucide="wallet" class="ico"></i> Cambios de Monto</h2>
+      <p class="page-subtitle">Historial de incrementos y reducciones al monto asignado de cada caja chica</p>
+    </div>
+    <div class="page-header-actions">
+      <button type="button" class="secondary" id="btn-exportar-excel-cambios-monto"><i data-lucide="file-spreadsheet" class="ico"></i> Exportar a Excel</button>
+    </div>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat-tile">
+      <div class="stat-icon"><i data-lucide="wallet" class="ico"></i></div>
+      <div><div class="stat-value" id="cmcch-stat-total">0</div><div class="stat-label">Total</div></div>
+    </div>
+    <div class="stat-tile stat-tile-ok">
+      <div class="stat-icon"><i data-lucide="circle-check" class="ico"></i></div>
+      <div><div class="stat-value" id="cmcch-stat-incrementos">0</div><div class="stat-label">Incrementos</div></div>
+    </div>
+    <div class="stat-tile stat-tile-warn">
+      <div class="stat-icon"><i data-lucide="ban" class="ico"></i></div>
+      <div><div class="stat-value" id="cmcch-stat-reducciones">0</div><div class="stat-label">Reducciones</div></div>
+    </div>
+  </div>
+
+  <div class="card form-card" style="margin-bottom:18px">
+    <div class="form-card-header">
+      <div class="form-card-icon"><i data-lucide="wallet" class="ico"></i></div>
+      <div>
+        <h3>Registrar cambio de monto</h3>
+        <p>Sube o baja el monto asignado a una caja chica</p>
+      </div>
+    </div>
+    <form id="form-cambio-monto" class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 14px;">
+      <div class="field">
+        <label>Caja chica</label>
+        <select id="cm-id-cch"><option value="">Selecciona…</option></select>
+      </div>
+      <div class="field">
+        <label>Cantidad anterior <span class="auto-tag" id="cm-tag-anterior" hidden>auto</span></label>
+        <input type="text" id="cm-cantidad-anterior" disabled placeholder="Elige una caja chica" />
+      </div>
+      <div class="field">
+        <label>Cantidad actualizada</label>
+        <input type="number" id="cm-cantidad-actualizada" required />
+      </div>
+      <div style="grid-column: 1 / -1;"><button type="submit" id="btn-guardar-cambio-monto"><i data-lucide="wallet" class="ico"></i> Registrar cambio</button></div>
+    </form>
+    <div class="error-msg" id="cm-error" hidden></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header-row">
+      <h3 style="margin:0">Historial</h3>
+      <input type="search" id="cm-buscar-global" class="tabla-buscar-global" placeholder="Buscar en la tabla…" />
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead id="cm-thead"></thead>
+        <tbody id="lista-cambios-monto"></tbody>
+      </table>
+    </div>
+    <p class="empty-state" id="cambios-monto-vacio" hidden>Todavía no hay cambios de monto registrados.</p>
+    <div class="tabla-pie" id="cm-pie"></div>
+  </div>
+
+  <!-- Modal: detalle completo, solo lectura -->
+  <div class="modal-backdrop" id="modal-detalle-cambio-monto" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h3 style="margin:0">Detalle completo</h3>
+          <p class="modal-subtitle" id="detalle-cambio-monto-label"></p>
+        </div>
+        <button type="button" class="modal-close" id="btn-cerrar-detalle-cambio-monto"><i data-lucide="x" class="ico"></i></button>
+      </div>
+      <div class="modal-form-scroll">
+        <div id="detalle-cambio-monto-grid" class="info-grid"></div>
+      </div>
+    </div>
+  </div>
+</template>
