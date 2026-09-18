@@ -284,6 +284,7 @@
         <div class="nav-group-header">
           <span class="nav-icon"><i data-lucide="${grupo.icono}" class="ico"></i></span>
           <span class="nav-label">${grupo.etiqueta}</span>
+          <span class="nav-group-chevron"><i data-lucide="chevron-right" class="ico"></i></span>
         </div>
         <div class="nav-group-items">
           ${grupo.items.map((item) => `
@@ -293,6 +294,21 @@
       </div>
     `).join('');
 
+    contenedor.querySelectorAll('.nav-group-header').forEach((header) => {
+      header.addEventListener('click', () => {
+        const grupoEl = header.closest('.nav-group');
+        const sidebar = document.getElementById('sidebar');
+        if (sidebar.classList.contains('collapsed')) {
+          // Con el sidebar colapsado, picarle a un grupo lo expande de una
+          // vez Y abre ese submenú en específico (no solo un toggle normal).
+          sidebar.classList.remove('collapsed');
+          try { localStorage.setItem('sidebarColapsado', '0'); } catch (e) { /* no-op */ }
+          grupoEl.classList.add('expanded');
+        } else {
+          grupoEl.classList.toggle('expanded');
+        }
+      });
+    });
     contenedor.querySelectorAll('.nav-subitem').forEach((el) => {
       el.addEventListener('click', () => navegarA(el.dataset.view, el.dataset.etiqueta));
     });
