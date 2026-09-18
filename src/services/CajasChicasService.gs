@@ -45,11 +45,14 @@ const CajasChicasService = (function () {
   }
 
   const COLUMNAS_RESUMEN = [
-    'ID CCH', 'ESTATUS', 'RESPONSABLE DE CAJA CHICA', 'DEPARTAMENTO', 'OFICINA',
-    'SEDE', 'MONTO ACTUAL', 'METODO DE REEMBOLSO',
+    'ID CCH', 'ESTATUS', 'RESPONSABLE DE CAJA CHICA', 'PUESTO DE RESPONSABLE', 'DEPARTAMENTO',
+    'OFICINA', 'SEDE', 'EMPRESA ORIGEN', 'MONTO ACTUAL', 'METODO DE REEMBOLSO',
   ];
 
-  /** Catálogo ligero para la tabla (8 columnas, no las 28 completas). */
+  /** Catálogo ligero para la tabla (10 columnas, no las 28 completas) — también
+   * lo usa Arqueos para el autollenado al elegir una Caja Chica, así que
+   * incluye PUESTO y EMPRESA ORIGEN aunque la tabla de Cajas Chicas no los
+   * muestre, para no tener que pedir el registro completo aparte. */
   function listarResumen(token) {
     Auth.validarSesion(token);
     const sheet = hoja_();
@@ -62,9 +65,11 @@ const CajasChicasService = (function () {
         ID_CCH: datos['ID CCH'][i],
         ESTATUS: datos['ESTATUS'][i] || '',
         RESPONSABLE: datos['RESPONSABLE DE CAJA CHICA'][i] || '',
+        PUESTO: datos['PUESTO DE RESPONSABLE'][i] || '',
         DEPARTAMENTO: datos['DEPARTAMENTO'][i] || '',
         OFICINA: datos['OFICINA'][i] || '',
         SEDE: datos['SEDE'][i] || '',
+        EMPRESA_ORIGEN: datos['EMPRESA ORIGEN'][i] || '',
         MONTO_ACTUAL: datos['MONTO ACTUAL'][i] || '',
         METODO_REEMBOLSO: datos['METODO DE REEMBOLSO'][i] || '',
       });
