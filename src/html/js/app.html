@@ -69,6 +69,28 @@
     }
   });
 
+  // Tooltip del sidebar colapsado (ver .sidebar-tooltip en styles.html —
+  // vive en <body>, no dentro de #sidebar, para no toparse con su
+  // overflow-x:hidden). Delegado en document: los grupos se regeneran con
+  // innerHTML, así que no sirve engancharlo elemento por elemento.
+  const tooltipSidebar = document.createElement('div');
+  tooltipSidebar.className = 'sidebar-tooltip';
+  document.body.appendChild(tooltipSidebar);
+
+  document.addEventListener('mouseover', (ev) => {
+    const el = ev.target.closest('[data-tooltip]');
+    const sidebar = document.getElementById('sidebar');
+    if (!el || !sidebar.contains(el) || !sidebar.classList.contains('collapsed')) return;
+    const rect = el.getBoundingClientRect();
+    tooltipSidebar.textContent = el.dataset.tooltip;
+    tooltipSidebar.style.top = (rect.top + rect.height / 2) + 'px';
+    tooltipSidebar.style.left = (rect.right + 12) + 'px';
+    tooltipSidebar.classList.add('show');
+  });
+  document.addEventListener('mouseout', (ev) => {
+    if (ev.target.closest('[data-tooltip]')) tooltipSidebar.classList.remove('show');
+  });
+
   const state = {
     token: sessionStorage.getItem('token') || null,
     sesion: JSON.parse(sessionStorage.getItem('sesion') || 'null'),
