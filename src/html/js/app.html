@@ -144,7 +144,7 @@
       { icono: 'loading-icon-2', mensaje: 'Revisando accesorios…' },
       { icono: 'loading-icon-3', mensaje: 'Cerrando caja chica del día…' },
     ];
-    const duracionTotal = 1900;
+    const duracionTotal = 750;
     const porPaso = duracionTotal / pasos.length;
 
     const barra = document.getElementById('loading-bar-fill');
@@ -162,7 +162,7 @@
         setTimeout(() => {
           mensaje.textContent = paso.mensaje;
           mensaje.classList.remove('fade');
-        }, 150);
+        }, 70);
       }, i * porPaso);
     });
 
@@ -172,8 +172,8 @@
       setTimeout(() => {
         container.innerHTML = '';
         callback();
-      }, 450);
-    }, duracionTotal + 250);
+      }, 180);
+    }, duracionTotal + 80);
   }
 
   function montarVista(templateId, initFn, container) {
@@ -218,9 +218,9 @@
         montarVistaReal();
       } finally {
         overlay.classList.remove('show');
-        setTimeout(() => overlay.remove(), 300);
+        setTimeout(() => overlay.remove(), 160);
       }
-    }, 220);
+    }, 60);
   }
 
   function navegarA(vista, etiqueta) {
@@ -415,6 +415,9 @@
     document.querySelectorAll('.nav-module[data-view]').forEach((el) => {
       el.addEventListener('click', () => navegarA(el.dataset.view));
     });
+    const prepararTelefonia = () => { if (typeof Lineas !== 'undefined' && Lineas.precargar) Lineas.precargar(); };
+    if (window.requestIdleCallback) requestIdleCallback(prepararTelefonia, { timeout: 2500 });
+    else setTimeout(prepararTelefonia, 900);
   }
 
   // ---------- Accesorios ----------

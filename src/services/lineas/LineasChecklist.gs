@@ -139,30 +139,5 @@ const LineasChecklist = (function () {
     return total ? Math.round(suma / total * 1000) / 1000 : null;
   }
 
-  /** Alertas contra la inspección anterior: puntos que empeoraron, calificación −10 % o cambio de IMEI. */
-  function alertas(anterior, actual, secs) {
-    const lista = [];
-    if (!anterior) return lista;
-    secs.forEach((s) => {
-      s.puntos.forEach((p) => {
-        const orden = ESCALAS[p.escala].orden;
-        if (!orden) return;
-        const a = orden[(anterior.checklist || {})[p.clave]];
-        const d = orden[actual.checklist[p.clave]];
-        if (a && d && d < a) lista.push({ tipo: 'EMPEORO', clave: p.clave, etiqueta: p.etiqueta, antes: anterior.checklist[p.clave], despues: actual.checklist[p.clave] });
-      });
-    });
-    if (anterior.calificacion !== null && anterior.calificacion !== undefined && actual.calificacion !== null) {
-      const ca = anterior.calificacion > 1 ? anterior.calificacion / 100 : anterior.calificacion;
-      if (ca - actual.calificacion >= 0.1) {
-        lista.push({ tipo: 'CALIFICACION_BAJO', etiqueta: 'Calificación', antes: Math.round(ca * 100) + '%', despues: Math.round(actual.calificacion * 100) + '%' });
-      }
-    }
-    const imeiAntes = anterior.snapshot && anterior.snapshot.imei;
-    const imeiAhora = actual.snapshot && actual.snapshot.imei;
-    if (imeiAntes && imeiAhora && imeiAntes !== imeiAhora) lista.push({ tipo: 'CAMBIO_IMEI', etiqueta: 'IMEI', antes: imeiAntes, despues: imeiAhora });
-    return lista;
-  }
-
-  return { ESCALAS, puntos, secciones, puntosAplicables, calificacion, alertas };
+  return { ESCALAS, puntos, secciones, puntosAplicables, calificacion };
 })();

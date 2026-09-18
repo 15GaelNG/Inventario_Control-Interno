@@ -52,21 +52,6 @@
     <!-- Detalle de equipo / línea / inspección (se pinta desde lineas.html) -->
     <section id="ln-detalle" hidden></section>
 
-    <!-- Alertas de inspección -->
-    <div class="modal-backdrop" id="ln-modal-alertas" hidden>
-      <div class="modal-card modal-card-wide">
-        <div class="modal-header">
-          <div>
-            <h3 class="ln-titulo" style="margin:0"><span class="ln-titulo-icono ln-alerta" data-ln-icon="triangle-alert"></span> Alertas de inspección</h3>
-            <p class="modal-subtitle">Puntos que empeoraron contra la inspección anterior del mismo equipo</p>
-          </div>
-          <button type="button" class="modal-close" data-cerrar-modal aria-label="Cerrar"><span data-ln-icon="x"></span></button>
-        </div>
-        <label class="ln-check"><input type="checkbox" id="ln-alertas-ultimas" checked> Solo la inspección más reciente de cada equipo</label>
-        <div class="modal-form-scroll" id="ln-alertas-lista"><p class="empty-state">Cargando…</p></div>
-      </div>
-    </div>
-
     <!-- Captura de inspección / responsiva nueva -->
     <div class="modal-backdrop" id="ln-modal-captura" hidden>
       <div class="modal-card modal-card-wide">

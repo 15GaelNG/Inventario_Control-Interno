@@ -176,9 +176,13 @@
     background: var(--color-note-bg); border: 1px solid var(--color-border); border-radius: 10px;
     padding: 10px 14px; font-size: 12.5px; margin-bottom: 14px;
   }
-  .ln-alerta-caja { border-color: var(--ln-rojo-tx); margin-bottom: 14px; }
-  .ln-alerta-caja ul { margin: 0 0 8px; padding-left: 18px; font-size: 13px; }
-  .ln-lista-alertas { margin: 0; padding-left: 16px; font-size: 12px; }
+  .lac-stock-celda { text-align: right; }
+  .lac-stock {
+    display: inline-flex; align-items: center; justify-content: flex-end;
+    min-width: 3.5ch; padding: 3px 8px; border-radius: 999px;
+    font-variant-numeric: tabular-nums; font-weight: 600;
+  }
+  .lac-stock.bajo { background: var(--ln-rojo-bg); color: var(--ln-rojo-tx); }
 
   .ln-cargando { display: flex; align-items: center; gap: 10px; color: var(--color-text-muted); }
   .ln-spinner {

@@ -376,8 +376,7 @@ const LineasRepo = (function () {
       id: txt(f['ID']), tipo: txt(f['TIPO']), origen: txt(f['ORIGEN']), idRegistro: txt(f['ID_REGISTRO']), idLinea: txt(f['ID_LINEA']),
       nuco: txt(f['NUCO']), fecha: fecha(f['FECHA']) || (txt(f['FECHA']) ? new Date(f['FECHA']) : null),
       carpetaId: txt(f['CARPETA_ID']), ruta: txt(f['RUTA']), fotosCarpetaId: txt(f['FOTOS_CARPETA_ID']), fotos: Number(f['FOTOS']) || 0,
-      pdfs: json('PDFS_JSON', []), coincidenciaExacta: String(f['COINCIDENCIA_EXACTA']).toUpperCase() !== 'FALSE',
-      alertas: json('ALERTAS_JSON', null), idAnterior: txt(f['ID_ANTERIOR']), _fila: f._fila,
+      pdfs: json('PDFS_JSON', []), coincidenciaExacta: String(f['COINCIDENCIA_EXACTA']).toUpperCase() !== 'FALSE', _fila: f._fila,
     };
   }
 
@@ -407,7 +406,7 @@ const LineasRepo = (function () {
       observaciones: txt(col(f, 'OBSERVACIONES')), ticket: ticket === null ? null : String(ticket), inspector: txt(col(f, 'NOMBRE INSPECTOR')),
       firmas: { responsableRuta: txt(col(f, 'FIRMA RESPONSABLE')), inspectorRuta: txt(col(f, 'FIRMA INSPECTOR')) },
       pdfRuta: txt(col(f, 'FORMATO INSPECCIONES LINEAS')),
-      drive: driveDeEvidencia_(ev), alertas: ev && ev.alertas ? ev.alertas : [], inspeccionAnteriorId: ev ? ev.idAnterior : null,
+      drive: driveDeEvidencia_(ev),
       pdf: ev && ev.pdfs && ev.pdfs.length ? { id: ev.pdfs[0].id, nombre: ev.pdfs[0].nombre } : null,
     };
   }
@@ -416,7 +415,7 @@ const LineasRepo = (function () {
   function inspeccionDesdeEvidencia(ev) {
     return {
       _id: 'drive_' + ev.carpetaId, origen: 'DRIVE', registroId: ev.idLinea, nuco: ev.nuco, fecha: ev.fecha,
-      checklist: {}, alertas: [], calificacion: null, drive: driveDeEvidencia_(ev),
+      checklist: {}, calificacion: null, drive: driveDeEvidencia_(ev),
     };
   }
 
@@ -462,26 +461,7 @@ const LineasRepo = (function () {
       if (e.tipo === 'INSPECCION') inspecciones.push(inspeccionDesdeEvidencia(e));
       else responsivas.push({ _id: 'drive_' + e.carpetaId, origen: 'DRIVE', nuco: e.nuco, fecha: e.fecha, drive: driveDeEvidencia_(e) });
     });
-    completarAlertas_(inspecciones);
     return { inspecciones: inspecciones, responsivas: responsivas };
-  }
-
-  /** Alertas contra la inspección anterior para las del AppSheet (las del sistema ya las traen guardadas). */
-  function completarAlertas_(inspecciones) {
-    const secs = LineasChecklist.secciones();
-    const conChecklist = inspecciones.filter((i) => i.fecha && Object.keys(i.checklist || {}).length)
-      .sort((a, b) => a.fecha - b.fecha);
-    for (let k = 1; k < conChecklist.length; k++) {
-      const actual = conChecklist[k];
-      if (actual.origen === 'SISTEMA' && actual.alertas && actual.alertas.length) continue;
-      const anterior = conChecklist[k - 1];
-      actual.alertas = LineasChecklist.alertas(anterior, {
-        checklist: actual.checklist,
-        calificacion: actual.calificacion > 1 ? actual.calificacion / 100 : actual.calificacion,
-        snapshot: actual.snapshot,
-      }, secs);
-      actual.inspeccionAnteriorId = actual.inspeccionAnteriorId || anterior._id;
-    }
   }
 
   /** Inspección por id: fila de INSPECCIONES LINEAS, o "drive_<carpetaId>" si solo existe en Drive. */
@@ -496,16 +476,7 @@ const LineasRepo = (function () {
     const f = LineasDatos.leerFilas([{ tabla: TAB.INSP, filas: filas.slice(0, 1) }])[0][0];
     const filasEv = LineasDatos.existeTabla(TAB.APP_EVID) ? LineasDatos.buscarFilas(TAB.APP_EVID, 'ID_REGISTRO', id) : [];
     const ev = filasEv.length ? evidenciaDesdeFila(LineasDatos.leerFilas([{ tabla: TAB.APP_EVID, filas: filasEv.slice(0, 1) }])[0][0]) : null;
-    const insp = inspeccionDesdeFila(f, ev);
-    if (insp.origen !== 'SISTEMA' && insp.registroId) {
-      // Alertas contra la inspección anterior del mismo registro.
-      const misma = evidenciasDeRegistro(insp.registroId).inspecciones.filter((x) => x._id === id)[0];
-      if (misma) {
-        insp.alertas = misma.alertas || [];
-        insp.inspeccionAnteriorId = misma.inspeccionAnteriorId || null;
-      }
-    }
-    return insp;
+    return inspeccionDesdeFila(f, ev);
   }
 
   /** Historial: bitácora de cambios, reasignaciones, desechos y movimientos del nuevo sistema. */
@@ -748,7 +719,7 @@ const LineasRepo = (function () {
     });
   }
 
-  // ---------------- Catálogos, alertas y colaboradores ----------------
+  // ---------------- Catálogos y colaboradores ----------------
 
   /** Catálogos para formularios: enums del AppSheet + valores de LISTAS TELEFONOS y BITACORA DE DESECHO. */
   function catalogos() {
@@ -772,46 +743,6 @@ const LineasRepo = (function () {
     return c;
   }
 
-  /**
-   * Inspecciones con alertas contra la inspección anterior del mismo registro (todas las del AppSheet
-   * y del sistema). `ultima` indica si es la inspección más reciente de ese registro. Caché 30 min.
-   */
-  function alertasInspeccion() {
-    const enCache = LineasDatos.cacheLeer('alertas_inspeccion');
-    if (enCache) return enCache;
-    const evPorRegistro = {};
-    if (LineasDatos.existeTabla(TAB.APP_EVID)) {
-      LineasDatos.leerTabla(TAB.APP_EVID).forEach((f) => {
-        if (String(f['ORIGEN']).toUpperCase() === 'SISTEMA' && f['TIPO'] === 'INSPECCION') evPorRegistro[txt(f['ID_REGISTRO'])] = evidenciaDesdeFila(f);
-      });
-    }
-    const porRegistro = {};
-    LineasDatos.leerTabla(TAB.INSP).forEach((f) => {
-      const insp = inspeccionDesdeFila(f, evPorRegistro[txt(f['ID'])]);
-      if (!insp._id || !insp.registroId) return;
-      (porRegistro[insp.registroId] = porRegistro[insp.registroId] || []).push(insp);
-    });
-    const lista = [];
-    Object.keys(porRegistro).forEach((reg) => {
-      const inspecciones = porRegistro[reg];
-      completarAlertas_(inspecciones);
-      const conFecha = inspecciones.filter((i) => i.fecha).sort((a, b) => b.fecha - a.fecha);
-      inspecciones.forEach((i) => {
-        if (!i.alertas || !i.alertas.length) return;
-        lista.push({
-          id: i._id, registroId: reg, nuco: i.nuco, fecha: i.fecha, origen: i.origen, calificacion: i.calificacion,
-          responsable: i.snapshot ? i.snapshot.responsable : null, departamento: i.snapshot ? i.snapshot.departamento : null,
-          alertas: i.alertas.map((a) => a.etiqueta + ': ' + a.antes + ' → ' + a.despues),
-          ultima: !!(conFecha[0] && conFecha[0]._id === i._id),
-        });
-      });
-    });
-    lista.sort((a, b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
-    const res = LineasUtil.paraCliente({ filas: lista, generadoEn: new Date() });
-    LineasDatos.cacheGuardar('alertas_inspeccion', res, 1800);
-    return res;
-  }
-
   function indiceColaboradores() {
     const enCache = LineasDatos.cacheLeer('indice_colaboradores');
     if (enCache) return enCache;
@@ -825,9 +756,9 @@ const LineasRepo = (function () {
     return ix;
   }
 
-  /** Vacía las cachés del módulo (índices, catálogos, alertas, carpetas). */
+  /** Vacía las cachés del módulo (índices, catálogos y carpetas). */
   function borrarCaches() {
-    ['indice_telefonia', 'indice_colaboradores', 'carpetas_nucos', 'catalogos_telefonia', 'alertas_inspeccion'].forEach(LineasDatos.cacheBorrar);
+    ['indice_telefonia', 'indice_colaboradores', 'carpetas_nucos', 'catalogos_telefonia'].forEach(LineasDatos.cacheBorrar);
   }
 
   return {
@@ -838,6 +769,6 @@ const LineasRepo = (function () {
     guardarCambiosRegistro, agregarRegistro, registrarMovimiento, asegurarPestanaApp,
     evidenciaDesdeFila, inspeccionDesdeFila, inspeccionDesdeEvidencia, responsivaDesdeFila,
     evidenciasDeRegistro, leerInspeccion, historialDeRegistro, bitacora, vistaOperativa, crearVistaOperativa,
-    catalogos, alertasInspeccion, indiceColaboradores, borrarCaches,
+    catalogos, indiceColaboradores, borrarCaches,
   };
 })();

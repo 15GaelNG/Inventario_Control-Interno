@@ -41,7 +41,7 @@ function configurarLineasDev() {
   return mensaje;
 }
 
-/** Vacía las cachés de Líneas (índices, catálogos, alertas). */
+/** Vacía las cachés de Líneas (índices, catálogos y carpetas). */
 function recargarDatosLineas() {
   LineasRepo.borrarCaches();
   Logger.log('Cachés de Líneas vaciadas.');

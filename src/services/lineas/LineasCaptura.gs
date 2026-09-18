@@ -120,14 +120,12 @@ const LineasCaptura = (function () {
         plan: obj.linea && obj.linea.costoPlan !== undefined ? obj.linea.costoPlan : null, razonSocial: r.razonSocial || null,
       };
       const actual = { checklist: checklist, calificacion: LineasChecklist.calificacion(checklist, secciones), snapshot: snapshot };
-      const anterior = datos.anteriorId ? inspeccionesPrevias_(obj.reg.id).filter((i) => i._id === datos.anteriorId)[0] || null : null;
-      const alertas = LineasChecklist.alertas(anterior ? { checklist: anterior.checklist, calificacion: anterior.calificacion, snapshot: anterior.snapshot } : null, actual, secciones);
 
       const inspeccion = {
         nuco: obj.reg.nuco, fecha: ahora, tipoRegistro: obj.reg.tipo, snapshot: snapshot, checklist: checklist,
         otraApp: LineasUtil.txt(datos.otraApp), calificacion: actual.calificacion, observaciones: LineasUtil.txt(datos.observaciones), ticket: LineasUtil.txt(datos.ticket),
         inspector: usuario.nombre, firmas: { responsableId: datos.firmaResponsableId || null, inspectorId: datos.firmaInspectorId },
-        alertas: alertas, drive: { carpetaId: datos.carpetaId },
+        drive: { carpetaId: datos.carpetaId },
       };
 
       // 1) Fila en INSPECCIONES LINEAS con las columnas del AppSheet.
@@ -158,27 +156,26 @@ const LineasCaptura = (function () {
       if (obj.equipo && LineasUtil.txt(datos.estatusEquipo)) cambios['ESTATUS EQUIPO'] = String(datos.estatusEquipo);
       const g = LineasRepo.guardarCambiosRegistro(obj.fila, cambios, usuario, ahora);
 
-      // 3) Evidencia (carpeta, fotos y alertas) y movimiento.
+      // 3) Evidencia (carpeta y fotos) y movimiento.
       LineasRepo.asegurarPestanaApp(LineasRepo.TAB.APP_EVID);
       LineasDatos.agregarFilas(LineasRepo.TAB.APP_EVID, [{
         'ID': LineasDatos.nuevoIdCorto(), 'TIPO': 'INSPECCION', 'ORIGEN': 'SISTEMA', 'ID_REGISTRO': id, 'ID_LINEA': obj.reg.id, 'NUCO': obj.reg.nuco || '',
         'FECHA': ahora, 'CARPETA_ID': datos.carpetaId, 'RUTA': datos.ruta || '', 'FOTOS_CARPETA_ID': datos.fotosCarpetaId || '',
         'FOTOS': String((datos.fotos || []).length), 'PDFS_JSON': '[]', 'COINCIDENCIA_EXACTA': 'TRUE',
-        'ALERTAS_JSON': JSON.stringify(alertas), 'ID_ANTERIOR': anterior ? anterior._id : '', 'ACTUALIZADO_EN': ahora,
+        'ALERTAS_JSON': '[]', 'ID_ANTERIOR': '', 'ACTUALIZADO_EN': ahora,
       }]);
       LineasRepo.registrarMovimiento('INSPECCION', { motivo: 'Inspección registrada', ticket: datos.ticket }, usuario, ahora, {
         refs: [obj.reg.id], nuco: obj.reg.nuco, numero: snapshot.numero,
         antes: { estado: obj.equipo ? resumenEquipo_(obj.equipo) : resumenLinea_(obj.linea) },
-        despues: { calificacion: actual.calificacion, alertas: alertas.length, estatus: obj.equipo ? (cambios['ESTATUS EQUIPO'] || obj.equipo.estatus) : null },
+        despues: { calificacion: actual.calificacion, estatus: obj.equipo ? (cambios['ESTATUS EQUIPO'] || obj.equipo.estatus) : null },
         detalle: Object.assign(detalleCambios_([g]), { inspeccionId: id }),
       });
       return { inspeccion: inspeccion, obj: obj };
     });
 
     // El PDF se genera después (generarPdf), para que guardar no tarde ~30-40 s.
-    LineasDatos.cacheBorrar('alertas_inspeccion');
     const filas = LineasRepo.refrescarIndice([res.obj.reg.id]);
-    return { id: id, alertas: res.inspeccion.alertas, calificacion: res.inspeccion.calificacion, pdfPendiente: true, filas: filas };
+    return { id: id, calificacion: res.inspeccion.calificacion, pdfPendiente: true, filas: filas };
   }
 
   // ---------------- Responsiva ----------------

@@ -83,7 +83,7 @@ const TelefoniaService = (function () {
       const pdf = d.pdf && d.pdf.id ? d.pdf.id : (d.drive && d.drive.pdfs && d.drive.pdfs.length ? d.drive.pdfs[0].id : null);
       return {
         id: d._id, origen: d.origen, fecha: d.fecha, calificacion: d.calificacion === undefined ? null : d.calificacion,
-        alertas: (d.alertas || []).length, inspector: d.inspector || d.responsableCI || null,
+        inspector: d.inspector || d.responsableCI || null,
         pdfPendiente: d.origen === 'SISTEMA' && !pdf,
         responsable: d.snapshot ? d.snapshot.responsable : (d.responsable ? d.responsable.nombre : null),
         fotos: d.drive ? d.drive.fotos : 0, carpetaId: d.drive ? d.drive.carpetaId : null, pdfId: pdf,
@@ -118,7 +118,7 @@ const TelefoniaService = (function () {
     return JSON.parse(resp.getContentText()).files || [];
   }
 
-  /** Detalle de inspección con checklist, alertas y fotos de Drive. */
+  /** Detalle de inspección con checklist y fotos de Drive. */
   function inspeccion(token, id) {
     const sesion = Auth.validarSesion(token);
     const insp = LineasRepo.leerInspeccion(id);
@@ -160,12 +160,6 @@ const TelefoniaService = (function () {
   function catalogos(token) {
     Auth.validarSesion(token);
     return LineasRepo.catalogos();
-  }
-
-  /** Inspecciones con alertas contra la anterior (para seguimiento). */
-  function alertas(token) {
-    Auth.validarSesion(token);
-    return LineasRepo.alertasInspeccion();
   }
 
   /** Catálogo de colaboradores para autocompletar. */
@@ -238,7 +232,7 @@ const TelefoniaService = (function () {
     return LineasEvidencias.cancelarCarpetaEvidencia(sesion.correo, carpetaId, fotosCarpetaId);
   }
 
-  /** Guarda una inspección nueva (checklist, snapshot, alertas y bitácora). El PDF se pide aparte. */
+  /** Guarda una inspección nueva (checklist, snapshot y bitácora). El PDF se pide aparte. */
   function guardarInspeccion(token, datos) {
     const sesion = Auth.requiereRol(token, rolesOperan_());
     return LineasUtil.paraCliente(LineasCaptura.guardarInspeccion(datos, usuarioOperacion_(sesion)));
@@ -257,7 +251,7 @@ const TelefoniaService = (function () {
   }
 
   return {
-    permisos, indice, equipo, linea, evidencias, historial, inspeccion, catalogos, alertas, colaboradores, bitacora, vistaOperativa, crearVistaOperativa, recargarDatos,
+    permisos, indice, equipo, linea, evidencias, historial, inspeccion, catalogos, colaboradores, bitacora, vistaOperativa, crearVistaOperativa, recargarDatos,
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf,
   };
 })();

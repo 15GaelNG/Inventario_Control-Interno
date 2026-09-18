@@ -65,9 +65,6 @@ function apiLineasInspeccion(token, id) {
 function apiLineasCatalogos(token) {
   return TelefoniaService.catalogos(token);
 }
-function apiLineasAlertas(token) {
-  return TelefoniaService.alertas(token);
-}
 function apiLineasColaboradores(token) {
   return TelefoniaService.colaboradores(token);
 }

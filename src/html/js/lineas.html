@@ -141,13 +141,21 @@
     const mensajeError = (e) => esc(e && e.message ? e.message : e);
 
     // ---------------- Estado del módulo ----------------
-    // Se conserva entre navegaciones: volver al inventario no vuelve a pedir el índice (5 min).
+    // Se conserva entre navegaciones para evitar volver a pedir los mismos catálogos.
     const POR_PAGINA = 50;
-    const VIGENCIA_INDICE_MS = 5 * 60 * 1000;
+    const VIGENCIA_INDICE_MS = 15 * 60 * 1000;
+    const VIGENCIA_CATALOGO_MS = 15 * 60 * 1000;
     const memoria = {
       indice: null,
       cargadoEn: 0,
+      indicePendiente: null,
       permisos: null,
+      colaboradores: null,
+      colaboradoresCargadosEn: 0,
+      colaboradoresPendientes: null,
+      accesorios: null,
+      accesoriosCargadosEn: 0,
+      accesoriosPendientes: null,
       modulo: 'equipos',
       filtros: {
         equipos: { q: '', tipo: '', estatus: '', depto: '', conLinea: '', pagina: 0 },
@@ -167,7 +175,8 @@
 
     function cargarIndice(forzar) {
       if (!forzar && memoria.indice && Date.now() - memoria.cargadoEn < VIGENCIA_INDICE_MS) return Promise.resolve(memoria.indice);
-      return llamar('apiLineasIndice').then((r) => {
+      if (!forzar && memoria.indicePendiente) return memoria.indicePendiente;
+      memoria.indicePendiente = llamar('apiLineasIndice').then((r) => {
         const porNuco = (a, b) => {
           const na = Number(a.nuco || a.nucoEquipo);
           const nb = Number(b.nuco || b.nucoEquipo);
@@ -185,11 +194,41 @@
         memoria.cargadoEn = Date.now();
         return memoria.indice;
       });
+      memoria.indicePendiente.then(() => { memoria.indicePendiente = null; }, () => { memoria.indicePendiente = null; });
+      return memoria.indicePendiente;
     }
 
     function cargarPermisos() {
       if (memoria.permisos) return Promise.resolve(memoria.permisos);
       return llamar('apiLineasPermisos').then((p) => (memoria.permisos = p));
+    }
+
+    function cargarColaboradores(forzar) {
+      if (!forzar && memoria.colaboradores && Date.now() - memoria.colaboradoresCargadosEn < VIGENCIA_CATALOGO_MS) return Promise.resolve(memoria.colaboradores);
+      if (!forzar && memoria.colaboradoresPendientes) return memoria.colaboradoresPendientes;
+      memoria.colaboradoresPendientes = llamar('apiLineasColaboradores').then((r) => {
+        memoria.colaboradores = r;
+        memoria.colaboradoresCargadosEn = Date.now();
+        return r;
+      });
+      memoria.colaboradoresPendientes.then(() => { memoria.colaboradoresPendientes = null; }, () => { memoria.colaboradoresPendientes = null; });
+      return memoria.colaboradoresPendientes;
+    }
+
+    function cargarAccesorios(forzar) {
+      if (!forzar && memoria.accesorios && Date.now() - memoria.accesoriosCargadosEn < VIGENCIA_CATALOGO_MS) return Promise.resolve(memoria.accesorios);
+      if (!forzar && memoria.accesoriosPendientes) return memoria.accesoriosPendientes;
+      memoria.accesoriosPendientes = llamar('apiLineasAccesoriosIndice').then((r) => {
+        memoria.accesorios = r;
+        memoria.accesoriosCargadosEn = Date.now();
+        return r;
+      });
+      memoria.accesoriosPendientes.then(() => { memoria.accesoriosPendientes = null; }, () => { memoria.accesoriosPendientes = null; });
+      return memoria.accesoriosPendientes;
+    }
+
+    function precargar() {
+      Promise.all([cargarPermisos(), cargarIndice()]).catch(() => {});
     }
 
     function contarPor(filas, campo) {
@@ -282,7 +321,6 @@
         const ir = ev.target.closest('[data-ln-ir]');
         if (ir) {
           ev.preventDefault();
-          $('#ln-modal-alertas', raiz).hidden = true;
           abrir(ir.dataset.lnIr, ir.dataset.id);
           return;
         }
@@ -298,7 +336,6 @@
           pintarListado();
           return;
         }
-        if (ev.target.closest('#ln-tile-alertas')) abrirAlertas();
         const btnCaptura = ev.target.closest('[data-ln-captura]');
         if (btnCaptura) {
           ev.preventDefault();
@@ -330,12 +367,7 @@
           ev.target.click();
         }
         if (ev.key === 'Escape' && !$('#ln-modal-captura', raiz).hidden) cerrarCaptura();
-        else if (ev.key === 'Escape' && !$('#ln-modal-alertas', raiz).hidden) $('#ln-modal-alertas', raiz).hidden = true;
       });
-      $('#ln-modal-alertas', raiz).addEventListener('click', (ev) => {
-        if (ev.target.id === 'ln-modal-alertas' || ev.target.closest('[data-cerrar-modal]')) $('#ln-modal-alertas', raiz).hidden = true;
-      });
-      $('#ln-alertas-ultimas', raiz).addEventListener('change', pintarAlertas);
       $('#ln-modal-captura', raiz).addEventListener('click', (ev) => {
         if (ev.target.id === 'ln-modal-captura' || ev.target.closest('[data-cerrar-modal]')) cerrarCaptura();
       });
@@ -346,7 +378,6 @@
         $('#ln-recargar', raiz).hidden = !permisos.esAdmin;
         pintarIndicadores();
         pintarListado();
-        cargarAlertasEnSegundoPlano();
         if (memoria.abrirAlEntrar) {
           const id = memoria.abrirAlEntrar;
           memoria.abrirAlEntrar = null;
@@ -361,8 +392,6 @@
       });
 
       // ---- Indicadores ----
-      let alertas = null;
-
       function pintarIndicadores() {
         const ix = memoria.indice;
         const eq = ix.equipos;
@@ -375,45 +404,9 @@
           tile('circle-check', miles(eq.filter((e) => e.estatus === 'USO').length), 'Equipos en uso', 'equipos|estatus|USO', 'stat-tile-ok') +
           tile('unplug', miles(eq.filter((e) => !e.lineaId).length), 'Equipos sin línea', 'equipos|conLinea|no') +
           tile('card-sim', miles(li.length), 'Líneas', 'lineas') +
-          tile('unlink', miles(li.filter((l) => l.suelta).length), 'Líneas sueltas', 'lineas|suelta|si') +
-          tile('triangle-alert', alertas ? miles(alertas.filas.filter((a) => a.ultima).length) : '…', 'Alertas de inspección', '', 'stat-tile-warn', 'ln-tile-alertas');
+          tile('unlink', miles(li.filter((l) => l.suelta).length), 'Líneas sueltas', 'lineas|suelta|si');
         $('#ln-num-equipos', raiz).textContent = miles(eq.length);
         $('#ln-num-lineas', raiz).textContent = miles(li.length);
-      }
-
-      function cargarAlertasEnSegundoPlano() {
-        llamar('apiLineasAlertas').then((r) => {
-          alertas = r;
-          if (!vigente()) return;
-          pintarIndicadores();
-          if (!$('#ln-modal-alertas', raiz).hidden) pintarAlertas();
-        }).catch((e) => {
-          if (!vigente()) return;
-          $('#ln-tile-alertas .stat-value', raiz).textContent = '—';
-          aviso(icono('triangle-alert', 'ln-alerta') + ' No se pudieron cargar las alertas: ' + mensajeError(e), 9000);
-        });
-      }
-
-      function abrirAlertas() {
-        $('#ln-modal-alertas', raiz).hidden = false;
-        if (alertas) pintarAlertas();
-        else llamar('apiLineasAlertas').then((r) => { alertas = r; pintarAlertas(); })
-          .catch((e) => { $('#ln-alertas-lista', raiz).innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>'; });
-      }
-
-      function pintarAlertas() {
-        if (!alertas) return;
-        const soloUltimas = $('#ln-alertas-ultimas', raiz).checked;
-        const filas = alertas.filas.filter((a) => !soloUltimas || a.ultima);
-        $('#ln-alertas-lista', raiz).innerHTML = filas.length
-          ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Fecha</th><th>NUCO</th><th>Responsable</th><th>Calificación</th><th>Alertas</th></tr></thead><tbody>' +
-            filas.map((a) => '<tr class="ln-fila-clic" data-ln-ir="inspeccion" data-id="' + esc(a.id) + '">' +
-              '<td>' + guion(fecha(a.fecha)) + '</td><td class="ln-mono ln-fuerte">' + guion(a.nuco) + '</td>' +
-              '<td>' + guion(a.responsable) + '<div class="ln-tenue">' + esc(a.departamento || '') + '</div></td>' +
-              '<td>' + guion(porcentaje(a.calificacion)) + '</td>' +
-              '<td><ul class="ln-lista-alertas">' + a.alertas.map((t) => '<li>' + esc(t) + '</li>').join('') + '</ul></td></tr>').join('') +
-            '</tbody></table></div><p class="ln-tenue ln-pie">' + miles(filas.length) + ' inspección(es) · datos de ' + esc(fechaHora(alertas.generadoEn)) + '</p>'
-          : '<p class="empty-state">Sin alertas.</p>';
       }
 
       // ---- Listado ----
@@ -643,10 +636,10 @@
 
       function tarjetaEvidencias(inspecciones, responsivas) {
         const tablaInsp = inspecciones.length
-          ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Fecha</th><th>Origen</th><th>Calificación</th><th>Alertas</th><th>Fotos</th><th>Responsable</th><th>Inspector</th></tr></thead><tbody>' +
+          ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Fecha</th><th>Origen</th><th>Calificación</th><th>Fotos</th><th>Responsable</th><th>Inspector</th></tr></thead><tbody>' +
             inspecciones.map((i) => '<tr class="ln-fila-clic" data-ln-ir="inspeccion" data-id="' + esc(i.id) + '"><td>' + guion(fecha(i.fecha)) + '</td><td>' + (ORIGEN[i.origen] || '') + '</td>' +
-              '<td>' + guion(porcentaje(i.calificacion)) + '</td><td>' + (i.alertas ? chip(String(i.alertas), 'rojo') : vacio) + '</td>' +
-              '<td>' + (i.fotos || '<span class="ln-tenue">0</span>') + '</td><td>' + guion(i.responsable) + '</td><td class="ln-tenue">' + guion(i.inspector) + '</td></tr>').join('') +
+              '<td>' + guion(porcentaje(i.calificacion)) + '</td><td>' + (i.fotos || '<span class="ln-tenue">0</span>') + '</td>' +
+              '<td>' + guion(i.responsable) + '</td><td class="ln-tenue">' + guion(i.inspector) + '</td></tr>').join('') +
             '</tbody></table></div>'
           : '<p class="empty-state">Sin inspecciones registradas.</p>';
         const tablaResp = responsivas.length
@@ -820,8 +813,6 @@
         const fotosCarpetaId = captura.fotosCarpetaId;
         const ruta = captura.ruta;
         const fotos = captura.fotos;
-        const anteriorId = captura.contexto && captura.contexto.anterior ? captura.contexto.anterior.id : null;
-
         boton.disabled = true;
         Promise.all([
           llamar('apiLineasSubirArchivo', carpetaId, 'FIRMA INSPECTOR.png', 'image/png', firmaInspector.base64()),
@@ -832,10 +823,10 @@
           observaciones: $('#cap-observaciones', raiz).value,
           estatusEquipo: $('#cap-estatus', raiz) ? $('#cap-estatus', raiz).value : '',
           actualizarAccesorios: $('#cap-actualizar-accesorios', raiz) ? $('#cap-actualizar-accesorios', raiz).checked : false,
-          fotos: fotos, firmaInspectorId: fInspector.id, firmaResponsableId: fResponsable ? fResponsable.id : null, anteriorId: anteriorId,
+          fotos: fotos, firmaInspectorId: fInspector.id, firmaResponsableId: fResponsable ? fResponsable.id : null,
         }))).then((r) => {
           cerrarCaptura(true);
-          aviso(icono('circle-check', 'ln-icon-sm') + ' Inspección guardada' + (r.alertas && r.alertas.length ? ' — ' + r.alertas.length + ' alerta(s) contra la anterior' : '') + '. Generando el PDF…', 6000);
+          aviso(icono('circle-check', 'ln-icon-sm') + ' Inspección guardada. Generando el PDF…', 6000);
           refrescarDespuesDeCaptura(idAbierto, 'INSPECCION', r.id);
         }).catch((e) => {
           errorBox.textContent = mensajeError(e);
@@ -914,7 +905,6 @@
       // -- Abrir el modal --
 
       function abrirCaptura(tipo, ref) {
-        $('#ln-modal-alertas', raiz).hidden = true;
         $('#ln-modal-captura', raiz).hidden = false;
         $('#ln-captura-titulo', raiz).textContent = tipo === 'INSPECCION' ? 'Nueva inspección' : 'Nueva responsiva';
         $('#ln-captura-subtitulo', raiz).textContent = 'Preparando la carpeta de evidencia…';
@@ -970,8 +960,7 @@
           partes.push(esc(a.estatus || '—') + ' → <b>' + esc(d.estatus || '—') + '</b>');
         } else if (m.tipo === 'INSPECCION') {
           partes.push('<a href="#" class="ln-enlace" data-ln-ir="inspeccion" data-id="' + esc(m.inspeccionId) + '">Ver inspección</a>' +
-            (d.calificacion !== null && d.calificacion !== undefined ? ' · Calificación ' + Math.round(d.calificacion * 100) + '%' : '') +
-            (d.alertas ? ' · ' + chip(d.alertas + ' alerta(s)', 'rojo') : ''));
+            (d.calificacion !== null && d.calificacion !== undefined ? ' · Calificación ' + Math.round(d.calificacion * 100) + '%' : ''));
         } else if (m.tipo === 'RESPONSIVA') {
           partes.push('Responsable: <b>' + esc((d.responsable && d.responsable.nombre) || '—') + '</b>');
         } else if (m.tipo === 'DESECHO') {
@@ -1021,8 +1010,6 @@
           const e = r.equipo;
           const s = i.snapshot || {};
           const CLASE_VALOR = { SI: 'verde', BUENO: 'verde', INSTALADA: 'verde', REGULAR: 'ambar', NO: 'rojo', MALO: 'rojo', 'NO INSTALADA': 'neutro' };
-          const alertas = i.alertas || [];
-
           const checklist = i.origen === 'DRIVE'
             ? '<div class="ln-nota">Inspección histórica que solo existe en Drive: no tiene checklist capturado, solo sus archivos.</div>'
             : '<div class="ln-grid-2">' + r.checklist.map((sec) => {
@@ -1030,8 +1017,7 @@
                 if (!puntos.length) return '';
                 return tarjeta(icono('list-checks') + ' ' + esc(sec.seccion), campos(puntos.map((p) => {
                   const v = i.checklist[p.clave];
-                  const alerta = alertas.filter((a) => a.clave === p.clave)[0];
-                  return [p.etiqueta, chip(v, CLASE_VALOR[v] || 'neutro') + (alerta ? ' ' + chip('antes ' + alerta.antes, 'rojo') : ''), true];
+                  return [p.etiqueta, chip(v, CLASE_VALOR[v] || 'neutro'), true];
                 })));
               }).join('') + '</div>';
 
@@ -1047,9 +1033,6 @@
               (e ? '<button type="button" class="secondary ln-btn-icono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' Ver equipo</button>' : '') +
               (i.drive ? enlaceDrive(i.drive.carpetaId, 'Carpeta en Drive') : '') +
               (r.pdfs || []).map((p) => enlaceDrive(p.id, p.nombre || 'PDF', true)).join('')) +
-            (alertas.length ? '<div class="card ln-alerta-caja"><h3>' + icono('triangle-alert', 'ln-alerta') + ' Alertas contra la inspección anterior</h3><ul>' +
-              alertas.map((a) => '<li><b>' + esc(a.etiqueta) + '</b>: antes <b>' + esc(a.antes) + '</b>, ahora <b>' + esc(a.despues) + '</b></li>').join('') + '</ul>' +
-              (i.inspeccionAnteriorId ? '<a href="#" class="ln-enlace" data-ln-ir="inspeccion" data-id="' + esc(i.inspeccionAnteriorId) + '">Ver inspección anterior</a>' : '') + '</div>' : '') +
             '<div class="ln-grid-2">' +
               (i.origen !== 'DRIVE' ? tarjeta(icono('user') + ' Datos al momento de la inspección', campos([
                 ['Responsable', s.responsable], ['Departamento', s.departamento], ['Sede', s.sede], ['Puesto', s.puesto],
@@ -1272,7 +1255,7 @@
         if (f) irARegistro(f.dataset.ir);
       });
 
-      Promise.all([llamar('apiLineasColaboradores'), cargarIndice()]).then(([r, indice]) => {
+      Promise.all([cargarColaboradores(), cargarIndice()]).then(([r, indice]) => {
         if (!vigente()) return;
         const conteo = {};
         indice.equipos.forEach((a) => { const k = normal(a.responsable); if (k) conteo[k] = (conteo[k] || 0) + 1; });
@@ -1311,10 +1294,10 @@
 
       function pintarIndicadores() {
         if (!indiceAcc) return;
-        const alertas = indiceAcc.filas.filter((a) => a.reabasto).length;
+        const stockBajo = indiceAcc.filas.filter((a) => a.reabasto).length;
         $('#lac-indicadores', raiz).innerHTML =
           '<div class="stat-tile"><div class="stat-icon">' + icono('package') + '</div><div><div class="stat-value">' + miles(indiceAcc.filas.length) + '</div><div class="stat-label">Artículos</div></div></div>' +
-          '<div class="stat-tile stat-tile-warn"><div class="stat-icon">' + icono('triangle-alert') + '</div><div><div class="stat-value">' + miles(alertas) + '</div><div class="stat-label">Con stock bajo (≤ ' + indiceAcc.umbralReabasto + ')</div></div></div>';
+          '<div class="stat-tile stat-tile-warn"><div class="stat-icon">' + icono('triangle-alert') + '</div><div><div class="stat-value">' + miles(stockBajo) + '</div><div class="stat-label">Con stock bajo (≤ ' + indiceAcc.umbralReabasto + ')</div></div></div>';
       }
 
       function filtradas() {
@@ -1328,14 +1311,14 @@
         const filas = filtradas();
         $('#lac-tbody', raiz).innerHTML = filas.length ? filas.map((a) =>
           '<tr class="ln-fila-clic" data-articulo="' + esc(a.id) + '"><td class="ln-fuerte">' + guion(a.nombre) + '</td><td>' + guion(a.categoria) +
-          '</td><td class="ln-tenue">' + guion(a.marca) + '</td><td>' + (a.reabasto ? chip(String(a.stock), 'rojo') : esc(String(a.stock))) + '</td>' +
+          '</td><td class="ln-tenue">' + guion(a.marca) + '</td><td class="lac-stock-celda"><span class="lac-stock' + (a.reabasto ? ' bajo' : '') + '">' + esc(String(a.stock)) + '</span></td>' +
           '<td><button type="button" class="secondary ln-btn-chico" data-entrada="' + esc(a.id) + '">+ Entrada</button> ' +
           '<button type="button" class="secondary ln-btn-chico" data-salida="' + esc(a.id) + '">− Salida</button></td></tr>').join('')
           : '<tr><td colspan="5" class="empty-state">Sin artículos</td></tr>';
       }
 
-      function cargar() {
-        llamar('apiLineasAccesoriosIndice').then((r) => {
+      function cargar(forzar) {
+        cargarAccesorios(!!forzar).then((r) => {
           if (!vigente()) return;
           indiceAcc = r;
           pintarIndicadores();
@@ -1391,7 +1374,7 @@
         const nombre = $('#lac-nombre', raiz).value.trim();
         if (!nombre) { $('#lac-nuevo-error', raiz).textContent = 'El nombre es obligatorio.'; $('#lac-nuevo-error', raiz).hidden = false; return; }
         llamar('apiLineasAccesoriosAgregarArticulo', { nombre: nombre, categoria: $('#lac-categoria', raiz).value, marca: $('#lac-marca', raiz).value })
-          .then(() => { cerrarModalNuevo(); cargar(); })
+          .then(() => { cerrarModalNuevo(); cargar(true); })
           .catch((e) => { $('#lac-nuevo-error', raiz).textContent = mensajeError(e); $('#lac-nuevo-error', raiz).hidden = false; });
       });
 
@@ -1400,7 +1383,7 @@
         const cantidad = Number($('#lac-cantidad', raiz).value);
         if (!cantidad || cantidad <= 0) { $('#lac-mov-error', raiz).textContent = 'Captura una cantidad válida.'; $('#lac-mov-error', raiz).hidden = false; return; }
         llamar('apiLineasAccesoriosRegistrarMovimiento', { accesorioId: seleccionado.id, tipo: seleccionado.tipo, cantidad: cantidad, comentarios: $('#lac-comentarios', raiz).value })
-          .then(() => { cerrarModalMov(); cargar(); })
+          .then(() => { cerrarModalMov(); cargar(true); })
           .catch((e) => { $('#lac-mov-error', raiz).textContent = mensajeError(e); $('#lac-mov-error', raiz).hidden = false; });
       });
 
@@ -1742,6 +1725,7 @@
       initCambios: () => initBitacora('CAMBIOS'),
       initReasignaciones: () => initBitacora('REASIGNACIONES'),
       initDesechos: () => initBitacora('DESECHOS'),
+      precargar: precargar,
     };
   })();
 </script>
