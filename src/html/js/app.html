@@ -824,7 +824,7 @@
     },
 
     { grupo: 'Documentación y seguro', clave: 'RESPONSIVA', etiqueta: 'Responsiva', tipo: 'file' },
-    { grupo: 'Documentación y seguro', clave: 'DOCUMENTO BAJA', etiqueta: 'Documento de baja', tipo: 'file' },
+    { grupo: 'Documentación y seguro', clave: 'DOCUMENTO BAJA', etiqueta: 'Documento de baja', tipo: 'file', soloEdicion: true },
     {
       grupo: 'Documentación y seguro', clave: 'VERIFICACION (SI / NO)', etiqueta: 'Verificación', tipo: 'select',
       opciones: ['VERIFICADO', 'VENCIDO', 'NO APLICA'],
@@ -883,11 +883,14 @@
       .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   }
 
-  /** Genera los <div class="field"> agrupados por sección para un formulario de vehículo. */
-  function renderCamposVehiculo(prefijo) {
+  /** Genera los <div class="field"> agrupados por sección para un formulario de vehículo.
+   * esEdicion=true en Editar habilita los campos marcados "soloEdicion" (ej.
+   * Documento de baja: no tiene sentido pedirlo al DAR DE ALTA un vehículo). */
+  function renderCamposVehiculo(prefijo, esEdicion) {
     const grupos = [];
     const porGrupo = {};
     CAMPOS_VEHICULO.forEach((campo) => {
+      if (campo.soloEdicion && !esEdicion) return;
       if (!porGrupo[campo.grupo]) { porGrupo[campo.grupo] = []; grupos.push(campo.grupo); }
       porGrupo[campo.grupo].push(campo);
     });
@@ -1488,7 +1491,7 @@
     let todosLosVehiculos = [];
 
     document.getElementById('campos-form-vehiculo').innerHTML = renderCamposVehiculo('veh');
-    document.getElementById('campos-form-editar-vehiculo').innerHTML = renderCamposVehiculo('editar-vehiculo');
+    document.getElementById('campos-form-editar-vehiculo').innerHTML = renderCamposVehiculo('editar-vehiculo', true);
 
     // Fecha de registro en el sistema: siempre "hoy", no se edita (el
     // servidor fija el valor real al crear, esto es solo para que se vea
