@@ -72,6 +72,8 @@
   const state = {
     token: sessionStorage.getItem('token') || null,
     sesion: JSON.parse(sessionStorage.getItem('sesion') || 'null'),
+    permisos: {},   // se leen del servidor en cada carga (ver render)
+    grupos: [],
   };
 
   function guardarSesion(resultadoLogin) {
@@ -88,6 +90,16 @@
     sessionStorage.clear();
     render();
   }
+  // Sesión caducada en el servidor → de vuelta al login, una sola vez aunque fallen varias llamadas
+  window.addEventListener('sesion-expirada', () => {
+    if (!state.token) return;
+    state.token = null;
+    state.sesion = null;
+    sessionStorage.clear();
+    Notificar.error('Tu sesión expiró. Vuelve a iniciar sesión.');
+    render();
+  });
+
   async function apiLogoutSafe() {
     try { await callServer('apiLogout', state.token); } catch (e) { /* no-op */ }
   }
@@ -100,9 +112,26 @@
       initLogin();
       return;
     }
-    document.getElementById('user-name').textContent = state.sesion.nombre + ' · ' + state.sesion.rol;
-    navegarA('dashboard');
+    document.getElementById('user-name').textContent = state.sesion.nombre;
+    // El menú se arma con lo que el servidor dice que esta persona puede ver.
+    // Se lee en cada carga (no se guarda en la sesión) para que un cambio de permisos
+    // aplique al recargar, sin tener que cerrar sesión.
+    callServer('apiMisPermisos', state.token).then((info) => {
+      state.permisos = (info && info.permisos) || {};
+      state.grupos = (info && info.grupos) || [];
+      renderNavGrupos(state.grupos);
+      navegarA('dashboard');
+    }).catch((err) => {
+      if (!state.token) return;   // sesión expirada: ya se regresó al login
+      Notificar.error('No se pudieron leer tus permisos: ' + err.message);
+      renderNavGrupos([], err.message);
+      navegarA('dashboard');
+    });
   }
+
+  /** ¿Qué puede hacer esta persona en un módulo? 'LECTURA' | 'EDICION' | undefined */
+  const permisoDe = (modulo) => (state.permisos || {})[modulo];
+  const puedeEditarModulo = (modulo) => permisoDe(modulo) === 'EDICION';
 
   /**
    * Pantalla de carga que se muestra justo después de un login exitoso
@@ -164,7 +193,7 @@
   /** Ícono (nombre de Lucide) temático según a qué área pertenece la vista. */
   function iconoDeVista(vista) {
     if (vista === 'dashboard') return 'home';
-    const grupo = NAV_GRUPOS.find((g) => g.items.some((it) => it.vista === vista));
+    const grupo = (state.grupos || []).find((g) => g.modulos.some((m) => m.id === vista));
     return grupo ? grupo.icono : 'file-text';
   }
 
@@ -189,14 +218,23 @@
     refreshIcons();
     requestAnimationFrame(() => overlay.classList.add('show'));
 
+    // La vista se monta YA, detrás del velo, para que sus datos empiecen a pedirse de
+    // inmediato. Antes se esperaban 2.5 s fijos antes de montar: ese tiempo se sumaba
+    // entero a la carga real de cada módulo. El velo solo dura lo justo para que el
+    // cambio no se sienta brusco.
+    requestAnimationFrame(() => requestAnimationFrame(montarVistaReal));
     setTimeout(() => {
-      montarVistaReal();
       overlay.classList.remove('show');
       setTimeout(() => overlay.remove(), 300);
-    }, 2500);
+    }, 450);
   }
 
   function navegarA(vista, etiqueta) {
+    // Sin permiso no se entra (el servidor igual lo rechaza; esto solo evita la pantalla en blanco)
+    if (vista !== 'dashboard' && !permisoDe(vista)) {
+      Notificar.error('No tienes acceso a ' + (etiqueta || vista) + '. Pídeselo a quien administra los permisos.');
+      return;
+    }
     document.querySelectorAll('.nav-item, .nav-subitem').forEach((el) => {
       el.classList.toggle('active', el.dataset.view === vista);
     });
@@ -207,6 +245,10 @@
       if (vista === 'incidencias') { montarVista('tpl-incidencias', initIncidencias); return; }
       if (vista === 'verificaciones') { montarVista('tpl-verificaciones', initVerificaciones); return; }
       if (vista === 'vehiculos') { montarVista('tpl-vehiculos', initVehiculos); return; }
+      // Módulos en su propio archivo (html/js/modulos/…), incluidos después de app.js
+      if (vista === 'instalacion-sensores') { montarVista('tpl-sensores', initSensores); return; }
+      if (vista === 'hologramas') { montarVista('tpl-hologramas', initHologramas); return; }
+      if (vista === 'inspeccion-vehicular') { montarVista('tpl-inspecciones', initInspecciones); return; }
       mostrarProximamente(etiqueta || vista);
     });
   }
@@ -238,7 +280,6 @@
         { vista: 'reasignaciones-vehiculares', etiqueta: 'Reasignaciones Vehiculares' },
         { vista: 'verificaciones', etiqueta: 'Verificaciones' },
         { vista: 'instalacion-sensores', etiqueta: 'Instalación de Sensores' },
-        { vista: 'servicios', etiqueta: 'Servicios' },
         { vista: 'hologramas', etiqueta: 'Hologramas' },
       ],
     },
@@ -270,9 +311,25 @@
     },
   ];
 
-  function renderNavGrupos() {
+  /**
+   * Pinta el menú con los grupos que manda el servidor (ya filtrados por permisos).
+   * Un módulo al que no se tiene acceso simplemente no existe para esa persona.
+   */
+  function renderNavGrupos(grupos, error) {
     const contenedor = document.getElementById('nav-groups');
-    contenedor.innerHTML = NAV_GRUPOS.map((grupo) => `
+    if (!grupos || !grupos.length) {
+      // Un error NO es "no tienes módulos": decirlo así mandaba a revisar permisos que estaban bien
+      const p = document.createElement('p');
+      p.className = 'page-subtitle';
+      p.style.padding = '10px 13px';
+      p.textContent = error
+        ? 'No se pudo cargar el menú: ' + error + ' Recarga la página.'
+        : 'Todavía no tienes módulos asignados.';
+      contenedor.innerHTML = '';
+      contenedor.appendChild(p);
+      return;
+    }
+    contenedor.innerHTML = grupos.map((grupo) => `
       <div class="nav-group" id="nav-group-${grupo.id}">
         <div class="nav-group-header" data-grupo="${grupo.id}">
           <span class="nav-icon"><i data-lucide="${grupo.icono}" class="ico"></i></span>
@@ -280,8 +337,8 @@
           <span class="nav-group-chevron"><i data-lucide="chevron-right" class="ico"></i></span>
         </div>
         <div class="nav-group-items">
-          ${grupo.items.map((item) => `
-            <div class="nav-subitem" data-view="${item.vista}" data-etiqueta="${item.etiqueta}">${item.etiqueta}</div>
+          ${grupo.modulos.map((item) => `
+            <div class="nav-subitem" data-view="${item.id}" data-etiqueta="${item.etiqueta}">${item.etiqueta}</div>
           `).join('')}
         </div>
       </div>
@@ -1023,12 +1080,10 @@
   }
 
   async function initVerificaciones() {
-    const MAX_BYTES = 10 * 1024 * 1024;
     const DIA_MS = 24 * 60 * 60 * 1000;
-    // Permisos por rol (el servidor los vuelve a validar; aquí solo se muestra lo que aplica)
-    const rol = state.sesion && state.sesion.rol;
-    const esAdmin = rol === 'ADMIN';
-    const puedeEditar = rol === 'ADMIN' || rol === 'OPERADOR';
+    // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
+    // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
+    const puedeEditar = puedeEditarModulo('verificaciones');
     let verificaciones = [];
 
     // ----- Cálculos derivados (estado de vigencia por vehículo) -----
@@ -1121,7 +1176,7 @@
         pintarStats();
         pintarHistorial();
       } : null,
-      alEliminar: esAdmin ? async (filas) => {
+      alEliminar: puedeEditar ? async (filas) => {
         await callServer('apiEliminarVerificaciones', state.token, filas.map((f) => f.ID));
         const ids = new Set(filas.map((f) => f.ID));
         verificaciones = conDerivados(verificaciones.filter((v) => !ids.has(v.ID)));
@@ -1129,7 +1184,7 @@
         pintarStats();
         pintarHistorial();
       } : null,
-      motivoSinEliminar: `Eliminar es solo para administradores (tu rol: ${rol || 'sin rol'})`,
+      motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
 
     document.getElementById('ver-tabla').addEventListener('click', (ev) => {
@@ -1249,69 +1304,67 @@
     });
 
     // ----- Pestaña 2: nuevo registro -----
-    const errorBox = document.getElementById('ver-error');
-    const inputArchivo = document.getElementById('ver-comprobante');
-    const preview = document.getElementById('ver-preview');
-    document.getElementById('ver-fecha').value = hoyLocal();
-
-    const vehiculosPorFolio = {};
-    callServer('apiListarVehiculosBasico', state.token).then((vehiculos) => {
-      document.getElementById('ver-lista-folios').innerHTML = (vehiculos || []).map((v) => {
-        vehiculosPorFolio[v.FOLIO] = v;
-        const etiqueta = [v.PLACA, v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' · ');
-        return `<option value="${escaparHtml(v.FOLIO)}">${escaparHtml(etiqueta)}</option>`;
-      }).join('');
-    }).catch((err) => {
-      errorBox.textContent = 'No se pudo cargar el catálogo de vehículos: ' + err.message;
-      errorBox.hidden = false;
-    });
-
-    document.getElementById('ver-folio').addEventListener('input', (ev) => {
-      const vehiculo = vehiculosPorFolio[ev.target.value.trim()];
-      document.getElementById('ver-placa').value = vehiculo ? vehiculo.PLACA : '';
-    });
-
-    inputArchivo.addEventListener('change', () => {
-      const archivo = inputArchivo.files[0];
-      if (!archivo) { preview.hidden = true; return; }
-      preview.src = URL.createObjectURL(archivo);
-      preview.hidden = false;
-    });
-
-    document.getElementById('form-verificacion').addEventListener('submit', async (ev) => {
-      ev.preventDefault();
-      errorBox.hidden = true;
-      const boton = document.getElementById('ver-btn-guardar');
-      const archivo = inputArchivo.files[0];
-      try {
-        if (!archivo) throw new Error('Adjunta el comprobante de verificación');
-        if (archivo.size > MAX_BYTES) throw new Error('La imagen pesa más de 10 MB');
-        boton.disabled = true;
-        boton.textContent = 'Guardando…';
-
-        const folio = document.getElementById('ver-folio').value.trim();
-        await callServer('apiRegistrarVerificacion', state.token, {
-          FOLIO: folio,
-          FECHA_VERIFICACION: document.getElementById('ver-fecha').value,
-          FECHA_PROXIMA: document.getElementById('ver-fecha-proxima').value,
-        }, {
-          base64: await leerArchivoBase64(archivo),
-          mimeType: archivo.type,
-        });
-
-        ev.target.reset();
-        preview.hidden = true;
-        document.getElementById('ver-fecha').value = hoyLocal();
-        Notificar.exito('Verificación del folio ' + folio + ' registrada');
-        await cargar();
-      } catch (err) {
-        errorBox.textContent = err.message;
-        errorBox.hidden = false;
-      } finally {
-        boton.disabled = false;
-        boton.textContent = '💾 Registrar verificación';
-      }
-    });
+    // Sin pasos: son cuatro campos, partirlos serían clics de más. La ficha del vehículo
+    // va en el panel derecho (antes era un campo gris deshabilitado con la placa).
+    if (puedeEditar) {
+      Formulario.crear(document.getElementById('ver-form'), {
+        ancho: 'medio',
+        columnas: 2,
+        panel: true,
+        buscar: {
+          campo: 'FOLIO',
+          etiqueta: 'Folio del vehículo',
+          ayuda: 'Al escribirlo se muestran los datos de la unidad para confirmar',
+          opciones: async () => ((await callServer('apiListarVehiculosBasico', state.token)) || []).map((v) => ({
+            valor: v.FOLIO,
+            etiqueta: [v.PLACA, v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' · '),
+          })),
+          cargar: (folio) => callServer('apiBuscarVehiculoPorFolio', state.token, folio),
+          ficha: (v) => ({
+            titulo: v['PLACA'] || 'Sin placa',
+            subtitulo: [v['MARCA'], v['LINEA VEHICULO'], v['MODELO']].filter(Boolean).join(' · '),
+            avisos: String(v['ESTATUS'] || '').toUpperCase().indexOf('BAJA') !== -1
+              ? [{ tipo: 'alerta', texto: 'El vehículo está dado de baja (' + v['ESTATUS'] + ')' }]
+              : [],
+            datos: [
+              ['Departamento', v['DEPARTAMENTO']],
+              ['Sede', v['SEDE']],
+              ['Responsable', v['RESPONSABLE VEHICULO']],
+              ['Serie', v['SERIE VEHICULO']],
+              ['Estatus', v['ESTATUS']],
+              ['Verificación', v['VERIFICACION (SI / NO)']],
+            ],
+            pie: 'Datos del catálogo de Vehículos, solo para confirmar la unidad',
+          }),
+        },
+        campos: [
+          { id: 'FECHA_VERIFICACION', etiqueta: 'Fecha de verificación', tipo: 'fecha', requerido: true,
+            valor: hoyLocal(), seccion: 'Verificación' },
+          { id: 'FECHA_PROXIMA', etiqueta: 'Próxima verificación', tipo: 'fecha', requerido: true,
+            ayuda: 'Debe ser posterior a la fecha de verificación' },
+          { id: 'COMPROBANTE', etiqueta: 'Comprobante', tipo: 'archivo', acepta: 'image/png,image/jpeg',
+            maxMB: 10, requerido: true, vistaPrevia: true, ayuda: 'Foto o captura del comprobante (PNG o JPG)' },
+        ],
+        // Se revisa aquí para no esperar hasta el servidor (que también lo valida)
+        alValidar: (valores) => (valores.FECHA_PROXIMA && valores.FECHA_VERIFICACION
+          && valores.FECHA_PROXIMA <= valores.FECHA_VERIFICACION
+          ? { FECHA_PROXIMA: 'Debe ser posterior a la fecha de verificación' }
+          : null),
+        textoGuardar: 'Registrar verificación',
+        iconoGuardar: 'save',
+        alGuardar: async (valores, archivos) => {
+          await callServer('apiRegistrarVerificacion', state.token, valores, {
+            base64: await leerArchivoBase64(archivos.COMPROBANTE),
+            mimeType: archivos.COMPROBANTE.type,
+          });
+        },
+        textoExito: (valores) => 'Verificación del folio ' + valores.FOLIO + ' registrada',
+        alGuardado: async () => {
+          tabs.mostrar('registros');
+          await cargar();
+        },
+      });
+    }
 
     await cargar();
   }
@@ -1321,6 +1374,5 @@
     el.addEventListener('click', () => navegarA(el.dataset.view));
   });
 
-  renderNavGrupos();
-  render();
+  render();   // el menú se pinta dentro, cuando llegan los permisos
 </script>

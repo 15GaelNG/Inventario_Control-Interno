@@ -1,0 +1,49 @@
+<template id="tpl-sensores">
+  <div class="page-header-compacto">
+    <div>
+      <h2><i data-lucide="satellite-dish" class="ico"></i> Instalación de sensores</h2>
+      <p class="page-subtitle">Sensores GPS por unidad — responsiva, rendimiento y estado en vivo</p>
+    </div>
+    <!-- KPIs: clic = filtrar la tabla -->
+    <div class="kpi-chips">
+      <button type="button" class="kpi-chip" id="sen-kpi-total" title="Ver todas las instalaciones">
+        <strong id="sen-stat-total">0</strong> instalaciones
+      </button>
+      <button type="button" class="kpi-chip" id="sen-kpi-activos" title="Filtrar: sensores activos">
+        <i data-lucide="circle-check" class="ico"></i> <strong id="sen-stat-activos">0</strong> activos
+      </button>
+      <button type="button" class="kpi-chip kpi-warn" id="sen-kpi-baja" title="Filtrar: sensores dados de baja">
+        <i data-lucide="ban" class="ico"></i> <strong id="sen-stat-baja">0</strong> de baja
+      </button>
+      <button type="button" class="kpi-chip" id="sen-kpi-viajando" title="Filtrar: unidades que van circulando ahora" hidden>
+        <i data-lucide="navigation" class="ico"></i> <strong id="sen-stat-viajando">0</strong> viajando
+      </button>
+    </div>
+  </div>
+
+  <div id="sen-tabs">
+    <div class="tabs-lista">
+      <button type="button" class="tab-btn" data-tab="registros"><i data-lucide="table" class="ico"></i> Instalaciones</button>
+      <button type="button" class="tab-btn" data-tab="nuevo"><i data-lucide="plus" class="ico"></i> Nueva instalación</button>
+    </div>
+
+    <!-- Pestaña 1: tabla -->
+    <div class="card card-compacta" data-panel="registros">
+      <div id="sen-tabla"></div>
+    </div>
+
+    <!-- Pestaña 2: alta -->
+    <div class="card form-card" data-panel="nuevo">
+      <div class="form-card-header">
+        <div class="form-card-icon"><i data-lucide="satellite-dish" class="ico"></i></div>
+        <div>
+          <h3>Registrar instalación</h3>
+          <p>Escribe el folio: los datos del vehículo se llenan solos</p>
+        </div>
+      </div>
+
+      <!-- El formulario lo arma el componente Formulario (ver js/modulos/sensores) -->
+      <div id="sen-form"></div>
+    </div>
+  </div>
+</template>

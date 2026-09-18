@@ -6,3 +6,6 @@ node_modules/
 !.clasp.json.example
 *.log
 .DS_Store
+
+# Formatos y PDFs reales de consulta (traen datos de personas): nunca al repo
+basura/

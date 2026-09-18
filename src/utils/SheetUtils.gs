@@ -27,8 +27,20 @@ const SheetUtils = (function () {
     return obj;
   }
 
+  /**
+   * Objeto → fila, en el orden de los encabezados. La búsqueda es tolerante a espacios
+   * y acentos: con la comparación exacta, un encabezado con un espacio de más hacía que
+   * ese dato NO se escribiera, sin error ni aviso.
+   */
   function objectToRow_(headers, obj) {
-    return headers.map((h) => (obj[h] !== undefined ? obj[h] : ''));
+    const datos = obj || {};
+    const porNombre = {};
+    Object.keys(datos).forEach((clave) => { porNombre[normalizarEncabezado_(clave)] = datos[clave]; });
+    return headers.map((h) => {
+      if (datos[h] !== undefined) return datos[h];
+      const valor = porNombre[normalizarEncabezado_(h)];
+      return valor === undefined ? '' : valor;
+    });
   }
 
   /** Devuelve todas las filas como array de objetos {columna: valor} */
@@ -145,6 +157,77 @@ const SheetUtils = (function () {
    * se usa la que tiene más filas de datos, asumiendo que la real es la que
    * más se ha usado.
    */
+  /**
+   * Encabezado listo para comparar: sin acentos, sin espacios de más y en mayúsculas.
+   * En las hojas reales sobran espacios al final ("TIPO ") y hay acentos inconsistentes;
+   * comparar en crudo hacía que una columna existente se diera por ausente.
+   */
+  function normalizarEncabezado_(texto) {
+    return String(texto == null ? '' : texto)
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toUpperCase();
+  }
+
+  /**
+   * Posición de cada columna pedida dentro de los encabezados (-1 si no está).
+   * Usar SIEMPRE esto en vez de headers.indexOf(nombre): con la comparación exacta, un
+   * espacio de más en la hoja devuelve la columna vacía y nadie se entera.
+   * @return {Object} { 'NOMBRE PEDIDO': índice }
+   */
+  function indiceDeColumnas(encabezados, nombres) {
+    const normalizados = (encabezados || []).map(normalizarEncabezado_);
+    const mapa = {};
+    (nombres || []).forEach((nombre) => {
+      mapa[nombre] = normalizados.indexOf(normalizarEncabezado_(nombre));
+    });
+    return mapa;
+  }
+
+  /**
+   * Lee solo las columnas pedidas, en el MENOR número de llamadas posible.
+   *
+   * Cada getValues() es un viaje a Sheets, y es lo que más cuesta (bastante más que traer
+   * unas celdas de más). Leer 23 columnas una por una eran 23 viajes; aquí se agrupan las
+   * que están juntas en la hoja y los huecos cortos se leen de paso: las 23 de
+   * INSPECCION VEHICULAR (1–19, 173–178, 195) quedan en 3 lecturas.
+   *
+   * @param {Sheet} hoja
+   * @param {string[]} columnas nombres de encabezado (tolerante a espacios y acentos)
+   * @return {{filas: number, datos: Object}} datos = { 'COLUMNA': [valores] }; [] si no existe
+   */
+  function leerColumnas(hoja, columnas) {
+    const HUECO_MAXIMO = 8;   // leer hasta 8 columnas de sobra sale más barato que otro viaje
+    const ultimaFila = hoja.getLastRow();
+    const filas = Math.max(0, ultimaFila - 1);
+    const datos = {};
+    columnas.forEach((nombre) => { datos[nombre] = []; });
+    if (!filas) return { filas: 0, datos: datos };
+
+    const indices = indiceDeColumnas(getHeaders_(hoja), columnas);
+    const posiciones = columnas.map((c) => indices[c]).filter((i) => i !== -1)
+      .sort((a, b) => a - b)
+      .filter((i, k, arr) => k === 0 || arr[k - 1] !== i);
+
+    // Bloques contiguos [desde, hasta] (índices base 0)
+    const bloques = [];
+    posiciones.forEach((i) => {
+      const ultimo = bloques[bloques.length - 1];
+      if (ultimo && i - ultimo[1] - 1 <= HUECO_MAXIMO) ultimo[1] = i;
+      else bloques.push([i, i]);
+    });
+
+    bloques.forEach(([desde, hasta]) => {
+      const valores = hoja.getRange(2, desde + 1, filas, hasta - desde + 1).getValues();
+      columnas.forEach((nombre) => {
+        const i = indices[nombre];
+        if (i >= desde && i <= hasta) datos[nombre] = valores.map((f) => f[i - desde]);
+      });
+    });
+    return { filas: filas, datos: datos };
+  }
+
   function getSheetByColumns(spreadsheetId, columnasRequeridas) {
     const cache = CacheService.getScriptCache();
     const cacheKey = 'hojaPorColumnas_' + spreadsheetId + '_' + columnasRequeridas.join('|');
@@ -157,14 +240,27 @@ const SheetUtils = (function () {
       // La hoja cacheada ya no existe (renombrada/eliminada) — se re-escanea abajo.
     }
 
+    const faltantesPorHoja = {};
     const candidatas = ss.getSheets().filter((sheet) => {
       if (sheet.getLastColumn() === 0) return false;
-      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
-      return columnasRequeridas.every((col) => headers.indexOf(col) !== -1);
+      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      const indices = indiceDeColumnas(headers, columnasRequeridas);
+      const faltantes = columnasRequeridas.filter((col) => indices[col] === -1);
+      if (faltantes.length && faltantes.length < columnasRequeridas.length) {
+        faltantesPorHoja[sheet.getName()] = faltantes;   // se parece, pero le falta algo
+      }
+      return faltantes.length === 0;
     });
 
     if (candidatas.length === 0) {
-      throw new Error('No se encontró ninguna hoja con las columnas: ' + columnasRequeridas.join(', '));
+      // Decir DÓNDE se buscó y qué se encontró: si no, el error obliga a adivinar
+      const parecidas = Object.keys(faltantesPorHoja)
+        .map((nombre) => '"' + nombre + '" (le faltan: ' + faltantesPorHoja[nombre].join(', ') + ')');
+      throw new Error(
+        'No se encontró ninguna hoja con las columnas: ' + columnasRequeridas.join(', ') +
+        '. Se buscó en "' + ss.getName() + '" (' + ss.getSheets().length + ' hojas)' +
+        (parecidas.length ? '. Hojas parecidas: ' + parecidas.join(' · ') : '') + '.'
+      );
     }
 
     const hoja = candidatas.length === 1
@@ -175,5 +271,8 @@ const SheetUtils = (function () {
     return hoja;
   }
 
-  return { getSheet, getSheetByColumns, getAll, findById, insert, update, remove, removeMany };
+  return {
+    getSheet, getSheetByColumns, getAll, leerColumnas, findById, insert, update, remove, removeMany,
+    indiceDeColumnas, normalizarEncabezado_, objectToRow_,
+  };
 })();

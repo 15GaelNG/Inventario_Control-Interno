@@ -51,7 +51,7 @@
   }
 
   /* Transición suave al cambiar de tema (no anima layout, solo color/fondo) */
-  body, .card, input, select, button, .login-form-card, .login-icon-badge,
+  body, .card, input, select, textarea, button, .login-form-card, .login-icon-badge,
   .theme-toggle, .theme-toggle button, .login-security-note, #sidebar, .nav-item {
     transition: background-color .35s ease, color .35s ease, border-color .35s ease, box-shadow .35s ease;
   }
@@ -221,18 +221,21 @@
   .tabla-actions { display: flex; gap: 6px; justify-content: flex-end; }
   .tabla-actions button { padding: 6px 9px; font-size: 12px; white-space: nowrap; }
 
-  input, select, button {
+  input, select, textarea, button {
     font: inherit; padding: 9px 12px; border-radius: 8px;
     border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text);
   }
-  input, select { width: 100%; }
-  input:focus, select:focus {
+  input, select, textarea { width: 100%; }
+  /* Sin esto el navegador le pone su propio estilo al textarea y desentona con los demás campos */
+  textarea { resize: vertical; min-height: 76px; line-height: 1.5; }
+  input:focus, select:focus, textarea:focus {
     outline: none; border-color: var(--color-accent);
     box-shadow: 0 0 0 3px rgba(180,161,105,.25);
   }
-  input:disabled {
+  input:disabled, select:disabled, textarea:disabled {
     background: var(--color-bg); color: var(--color-text-muted); cursor: not-allowed;
   }
+  input::placeholder, textarea::placeholder { color: var(--color-text-muted); opacity: .75; }
   label { display: block; font-size: 12px; color: var(--color-text-muted); margin-bottom: 6px; font-weight: 500; }
   .auto-tag {
     display: inline-block; margin-left: 4px; padding: 1px 6px; border-radius: 999px;
@@ -240,6 +243,16 @@
     text-transform: uppercase; letter-spacing: .3px;
   }
   .field { margin-bottom: 14px; }
+  /* Obligatorio = un "*" junto a la etiqueta; opcional = nada (escribir "OPCIONAL" ocupa
+     mucho espacio y repite lo mismo en media pantalla). Sale solo del atributo required
+     del campo, así que basta marcarlo en el HTML: no hay que tocar la etiqueta. */
+  /* .icon-label = login: ahí TODO es obligatorio, marcarlo no aporta nada */
+  .field:has(> input:required, > select:required, > textarea:required) > label:not(.icon-label)::after,
+  label.requerido::after {
+    content: "*"; margin-left: 3px; color: var(--color-danger); font-weight: 700;
+  }
+  .form-nota-obligatorios { font-size: 11.5px; color: var(--color-text-muted); margin: 0 0 10px; }
+  .form-nota-obligatorios::before { content: "*"; color: var(--color-danger); font-weight: 700; margin-right: 3px; }
 
   button {
     background: var(--color-primary); color: #fff; border: none;
@@ -265,6 +278,68 @@
   .badge.low { background: #F3ECD6; color: var(--color-danger); }
 
   [hidden] { display: none !important; }
+
+  /* ===== Checklist de inspección: una pieza por renglón, sus opciones en columnas ===== */
+  /* Se imita el formato de papel a propósito: el inspector ya lo conoce de memoria */
+  .chk-seccion { border: 1px solid var(--color-border); border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
+  .chk-seccion-titulo {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 9px 12px; background: var(--color-bg); border-bottom: 1px solid var(--color-border);
+  }
+  .chk-seccion-titulo h4 { margin: 0; font-size: 13.5px; }
+  .chk-peso { font-size: 11.5px; color: var(--color-text-muted); }
+  .chk-avance { margin-left: auto; font-size: 11.5px; color: var(--color-text-muted); }
+  .chk-avance.completa { color: var(--color-success); font-weight: 600; }
+  .chk-tabla { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .chk-tabla th {
+    font-size: 11px; font-weight: 600; color: var(--color-text-muted); text-transform: uppercase;
+    letter-spacing: .3px; padding: 6px 4px; text-align: center; white-space: nowrap;
+  }
+  .chk-tabla th:first-child { text-align: left; padding-left: 12px; }
+  .chk-tabla td { padding: 5px 4px; border-top: 1px solid var(--color-border); text-align: center; }
+  .chk-tabla td:first-child { text-align: left; padding-left: 12px; }
+  .chk-tabla tr:hover td { background: var(--color-bg); }
+  .chk-tabla tr.sin-responder td:first-child { color: var(--color-text-muted); }
+  .chk-tabla input[type="radio"] { width: auto; margin: 0; cursor: pointer; }
+  /* La opción mala se resalta para que salte a la vista al revisar */
+  .chk-tabla td.chk-malo:has(input:checked) { background: #F3ECD6; }
+  :root[data-theme="dark"] .chk-tabla td.chk-malo:has(input:checked) { background: rgba(255,138,128,.18); }
+  .chk-opcion { display: block; margin: 0; cursor: pointer; padding: 3px; }
+  .chk-todo-bien { padding: 4px 10px; font-size: 11.5px; }
+  .chk-resumen {
+    position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 10px 14px; margin-top: 10px; border-radius: 10px;
+    background: var(--color-surface); border: 1px solid var(--color-border); box-shadow: var(--shadow);
+  }
+  .chk-resumen strong { font-size: 18px; }
+
+  /* Captura por pasos: puntaje en vivo y avance por sección en el panel lateral.
+     Son dos recuadros: el del vehículo mide lo que su contenido y el del puntaje
+     crece para llenar el resto del alto (el panel se estira junto al formulario). */
+  .form-panel:has(.ins-panel-avance:not([hidden])) .ins-ficha-vehiculo { flex: 0 0 auto; }
+  .ins-puntaje { font-size: 30px; font-weight: 700; line-height: 1.1; color: var(--color-text); }
+  .ins-puntaje-sub { font-size: 12px; color: var(--color-text-muted); margin-top: 2px; }
+  .ins-avance-lista { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+  .ins-avance-lista button {
+    width: 100%; display: flex; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px;
+    background: transparent; border: none; color: var(--color-text); font-size: 12.5px; font-weight: 500; text-align: left;
+  }
+  .ins-avance-lista button:hover { background: var(--color-bg); }
+  .ins-avance-lista button span:last-child { color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+  .ins-avance-lista button.completa span:last-child { color: var(--color-success); font-weight: 600; }
+  /* Apilado (pantalla chica) el panel queda arriba: la lista de secciones solo estorbaría */
+  @media (max-width: 1000px) { .ins-avance-lista { display: none; } }
+  .ins-revision-saltos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .ins-revision-saltos button { padding: 4px 10px; font-size: 12px; }
+  .ins-revision-titulo { margin: 18px 0 8px; font-size: 13.5px; }
+  .ins-revision-problemas { list-style: none; margin: 0; padding: 0; border: 1px solid var(--color-border); border-radius: 10px; }
+  .ins-revision-problemas li {
+    display: flex; align-items: center; gap: 10px; padding: 7px 12px; font-size: 13px;
+    border-top: 1px solid var(--color-border);
+  }
+  .ins-revision-problemas li:first-child { border-top: none; }
+  .ins-revision-problemas li > span:first-child { flex: 1; }
+  .ins-revision-seccion { font-size: 11.5px; color: var(--color-text-muted); }
 
   /* ========== Encabezado de página + stat tiles ========== */
   .page-header { margin-bottom: 18px; }

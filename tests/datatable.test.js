@@ -385,7 +385,30 @@ const cambiar = (el, checked) => { el.checked = checked; el.dispatchEvent(new wi
   ok(error && error.message.includes('no-existe'), 'heredar de un tipo inexistente avisa con un error claro');
   t5.destruir();
 
-  console.log('22. Íconos');
+  console.log('22. Una columna editable Y fijada se queda fija (choque de estilos)');
+  // .dt td.dt-editable pone position:relative para el lápiz y .dt .dt-fija pone sticky.
+  // Si gana relative, la columna deja de fijarse y al hacer scroll horizontal se encima
+  // sobre las de la izquierda (pasaba con SERIE SENSOR en Sensores).
+  const estilos = fs.readFileSync(path.join(SRC, 'datatable.html'), 'utf8');
+  const css = estilos.slice(estilos.indexOf('<style>') + 7, estilos.indexOf('</style>'));
+  const hojaEstilos = doc.createElement('style');
+  hojaEstilos.textContent = css;
+  doc.head.appendChild(hojaEstilos);
+  const celdaCon = (clases) => {
+    const caja = doc.createElement('div');
+    caja.className = 'dt';
+    caja.innerHTML = `<table><tbody><tr><td class="${clases}">x</td></tr></tbody></table>`;
+    doc.body.appendChild(caja);
+    const td = caja.querySelector('td');
+    const posicion = window.getComputedStyle(td).position;
+    caja.remove();
+    return posicion;
+  };
+  ok(celdaCon('dt-editable') === 'relative', 'celda editable sola: relative (ancla del botón ✏️)');
+  ok(celdaCon('dt-fija') === 'sticky', 'celda fijada sola: sticky');
+  ok(celdaCon('dt-editable dt-fija') === 'sticky', 'editable + fijada: sticky (si no, se encima al hacer scroll)');
+
+  console.log('23. Íconos');
   ok(window.Iconos.svg('editar') !== '' && window.Iconos.svg('no-existe-este-icono') === '', 'Iconos.svg da algo para los conocidos y nada para los desconocidos');
   if (process.env.LUCIDE) {
     ok(window.Iconos.svg('editar').startsWith('<svg') && window.Iconos.svg('car').startsWith('<svg'), 'con Lucide cargado: SVG real (nombre propio o de lucide.dev)');

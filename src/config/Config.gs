@@ -15,6 +15,14 @@
  *   DRIVE_FOLDER_ID_VERIFICACIONES          carpeta VERIFICACIONES_Images donde se guardan y
  *                                           buscan los comprobantes (DEV: la de pruebas)
  *   DRIVE_FOLDER_ID_VERIFICACIONES_LECTURA  (opcional) carpeta extra donde también se BUSCAN
+ *   DRIVE_FOLDER_ID_SENSORES                carpeta "INSTALACION DE SENSORES_Files_" (responsivas PDF)
+ *   DRIVE_FOLDER_ID_HOLOGRAMAS_ARCHIVOS     carpeta "HOLOGRAMAS_Files_" (solicitudes en PDF)
+ *   DRIVE_FOLDER_ID_HOLOGRAMAS_IMAGENES     carpeta "HOLOGRAMAS_Images" (solicitudes en foto)
+ *   DRIVE_FOLDER_ID_REPORTES                carpeta donde caen los formatos ya llenados en PDF
+ *                                           (la misma que usa AppSheet, no una nueva)
+ *
+ * Geotab (opcional; sin esto la app funciona igual, solo sin telemetría — ver GeotabService.gs):
+ *   GEOTAB_USUARIO, GEOTAB_PASSWORD, GEOTAB_BASE_DATOS, GEOTAB_SERVIDOR
  */
 
 const Config = (function () {
@@ -45,6 +53,14 @@ const Config = (function () {
     DRIVE_FOLDERS: {
       VERIFICACIONES: () => required('DRIVE_FOLDER_ID_VERIFICACIONES'),
       VERIFICACIONES_LECTURA: () => props.getProperty('DRIVE_FOLDER_ID_VERIFICACIONES_LECTURA') || '',
+      // Carpeta raíz de la app: las rutas largas de AppSheet ("CARPETA/SUBCARPETA/archivo")
+      // se resuelven a partir de aquí (ver DriveUtils.archivoDeRutaProfunda)
+      RAIZ: () => required('DRIVE_FOLDER_ID_RAIZ'),
+      SENSORES: () => required('DRIVE_FOLDER_ID_SENSORES'),
+      HOLOGRAMAS_ARCHIVOS: () => required('DRIVE_FOLDER_ID_HOLOGRAMAS_ARCHIVOS'),
+      HOLOGRAMAS_IMAGENES: () => required('DRIVE_FOLDER_ID_HOLOGRAMAS_IMAGENES'),
+      REPORTES: () => required('DRIVE_FOLDER_ID_REPORTES'),
+      INSPECCIONES_IMAGENES: () => required('DRIVE_FOLDER_ID_INSPECCIONES_IMAGENES'),
     },
 
     SESION_DURACION_HORAS: 8,

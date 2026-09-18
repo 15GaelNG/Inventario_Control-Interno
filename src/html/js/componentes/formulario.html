@@ -1,0 +1,932 @@
+<style>
+  /* ============ Formulario ============ */
+  /* Rejilla: los campos van en una o dos columnas, pero cada renglón es un grupo de
+     campos RELACIONADOS (fecha + estatus, por ejemplo). Poner campos sin relación uno
+     al lado del otro corta el avance vertical y se llenan peor (NN/g); agrupar los
+     cortos y relacionados es la excepción aceptada. */
+  /* `columnas` no fija el número: fija el ANCHO MÍNIMO de un campo (720px entre el número
+     de columnas que pidió el módulo). Con eso, en una pantalla ancha la rejilla acomoda
+     más columnas sola en vez de estirar los campos —un campo de fecha de 600px se ve mal—
+     y en una angosta baja a una sola columna. */
+  .form-campos {
+    display: grid;
+    --form-min: calc(720px / var(--form-columnas, 2));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--form-min)), 1fr));
+    gap: 0 18px;
+  }
+  /* El formulario ocupa el ancho de la tarjeta: como el ancho de CADA campo lo fija
+     --form-min, estirarlo agrega columnas, no campos larguísimos. El tope alto solo evita
+     que en un monitor ultra ancho la vista quede imposible de recorrer con la mirada. */
+  .form-uno { max-width: 560px; }          /* captura de pocos campos: una columna angosta */
+  .form-uno .form-campos { --form-columnas: 1; }
+  .form-medio { max-width: 1700px; }
+  .form-ancho { max-width: none; }
+  .form-uno .field, .form-medio .field, .form-ancho .field { margin-bottom: 16px; }
+  .form-campos label { display: block; margin-bottom: 4px; }
+  .form-completo { grid-column: 1 / -1; }
+  @media (max-width: 620px) { .form-campos { --form-columnas: 1; } }
+
+  /* Dos paneles: captura a la izquierda, contexto a la derecha.
+     Estirar los campos a todo lo ancho se lee peor; el espacio sobrante se aprovecha
+     mejor con la información que el usuario necesita TENER A LA VISTA mientras captura
+     (la ficha de la unidad y lo que ya lleva capturado). El panel es un extra: por
+     debajo de 1000px se va arriba del formulario y todo queda en una columna. */
+  /* El panel crece un poco en pantallas grandes, pero nunca se lleva el protagonismo.
+     align-items: stretch hace que la columna del panel mida lo mismo que la de captura,
+     y la ficha crece para llenarla: una tarjeta chaparra junto a un formulario alto se ve
+     desbalanceada. El contenido se queda arriba y el pie se pega abajo. */
+  .form-doble { display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 22%, 400px); gap: 0 28px; align-items: stretch; }
+  .form-panel { display: flex; flex-direction: column; }
+  .form-panel .form-ficha { display: flex; flex-direction: column; flex: 1 1 auto; }
+  .form-panel .form-ficha-datos { align-content: start; }
+  .form-ficha-pie {
+    margin-top: auto; padding-top: 12px; border-top: 1px dashed var(--color-border);
+    font-size: 11.5px; color: var(--color-text-muted);
+  }
+  .form-panel-titulo {
+    font-size: 11.5px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase;
+    color: var(--color-text-muted); margin: 0 0 8px;
+  }
+  .form-panel .form-ficha { margin-bottom: 14px; }
+  /* En 320px de ancho, dos columnas de datos aprietan: en el panel va uno por renglón */
+  .form-panel .form-ficha-datos { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 9px 14px; }
+  .form-panel-seccion { margin-bottom: 14px; }
+  .form-panel-vacio { font-size: 12.5px; color: var(--color-text-muted); }
+  .form-resumen-panel { display: grid; gap: 8px; }
+  @media (max-width: 1000px) {
+    .form-doble { grid-template-columns: 1fr; }
+    .form-panel { order: -1; margin-bottom: 8px; }
+    .form-panel .form-ficha { flex: 0 0 auto; }   /* apilado no hay alto que llenar */
+  }
+
+  /* Secciones: un título chico agrupa los campos que van juntos */
+  .form-seccion {
+    grid-column: 1 / -1; margin: 6px 0 10px; padding-top: 12px;
+    border-top: 1px solid var(--color-border);
+    font-size: 12px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+  .form-campos > .form-seccion:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+
+  /* La ayuda va DEBAJO del campo y se queda a la vista mientras se escribe
+     (un placeholder desaparece justo cuando hace falta). */
+  .form-ayuda { display: block; margin-top: 4px; font-size: 11.5px; color: var(--color-text-muted); }
+  .form-error-campo { display: block; margin-top: 4px; font-size: 12px; color: var(--color-danger); font-weight: 500; }
+  .form-campo-error input, .form-campo-error select, .form-campo-error textarea { border-color: var(--color-danger); }
+
+  /* Ficha: lo que el sistema ya sabe, para confirmar de un vistazo (no son campos:
+     campos deshabilitados no los leen los lectores de pantalla — Carbon Design System). */
+  .form-ficha {
+    border: 1px solid var(--color-border); border-radius: 10px; padding: 12px 14px;
+    background: var(--color-bg); margin: 0 0 16px;
+  }
+  .form-ficha-titulo { font-size: 15px; font-weight: 700; color: var(--color-text); }
+  .form-ficha-subtitulo { font-size: 12.5px; color: var(--color-text-muted); margin-top: 2px; }
+  .form-ficha-datos {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px 14px; margin-top: 12px;
+  }
+  .form-ficha-dato .form-ficha-etiqueta { font-size: 11px; color: var(--color-text-muted); font-weight: 500; }
+  .form-ficha-dato .form-ficha-valor { font-size: 13px; color: var(--color-text); word-break: break-word; }
+  .form-ficha-extra { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--color-border); }
+  .form-ficha-mas {
+    background: transparent; border: none; color: var(--color-primary); padding: 8px 0 0;
+    font-size: 12px; text-decoration: underline;
+  }
+  :root[data-theme="dark"] .form-ficha-mas { color: var(--color-accent); }
+  .form-ficha-mas:hover { background: transparent; }
+  .form-aviso {
+    display: flex; align-items: flex-start; gap: 7px; margin-top: 10px; padding: 8px 10px;
+    border-radius: 8px; font-size: 12.5px; background: var(--color-primary-soft); color: var(--color-text);
+  }
+  .form-aviso.form-aviso-alerta { background: #F3ECD6; color: var(--color-danger); }
+  :root[data-theme="dark"] .form-aviso.form-aviso-alerta { background: rgba(255,138,128,.15); color: #ff8a80; }
+
+  /* ---- Por pasos ---- */
+  .form-pasos { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0 0 18px; padding: 0; }
+  .form-paso-chip {
+    display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 999px;
+    background: transparent; border: 1px solid var(--color-border); color: var(--color-text-muted);
+    font-size: 12.5px; font-weight: 600;
+  }
+  .form-paso-chip:disabled { cursor: default; opacity: 1; }
+  .form-paso-chip .form-paso-num {
+    display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px;
+    border-radius: 50%; background: var(--color-border); color: var(--color-text); font-size: 11px;
+  }
+  .form-paso-chip.completado { border-color: var(--color-success); color: var(--color-success); }
+  .form-paso-chip.completado .form-paso-num { background: var(--color-success); color: #fff; }
+  .form-paso-chip.activo { border-color: var(--color-accent); background: var(--color-primary-soft); color: var(--color-text); }
+  .form-paso-chip.activo .form-paso-num { background: var(--color-accent); color: #fff; }
+  .form-paso-titulo { margin: 0 0 2px; font-size: 15px; }
+  .form-paso-desc { margin: 0 0 14px; font-size: 12.5px; color: var(--color-text-muted); }
+  .form-acciones-pasos { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .form-acciones-pasos .form-cuenta { margin-left: auto; font-size: 12px; color: var(--color-text-muted); }
+
+  /* Resumen final antes de guardar */
+  .form-resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px 18px; }
+  .form-resumen-dato .form-resumen-etiqueta { font-size: 11px; color: var(--color-text-muted); font-weight: 500; }
+  .form-resumen-dato .form-resumen-valor { font-size: 13.5px; color: var(--color-text); word-break: break-word; }
+  .form-resumen-vacio { color: var(--color-text-muted); }
+
+  /* ---- Campo de opciones (radio): una pregunta que decide el resto del formulario ---- */
+  .form-opciones { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+  .form-opcion {
+    display: flex; align-items: flex-start; gap: 9px; margin: 0; padding: 11px 13px; cursor: pointer;
+    border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface);
+    color: var(--color-text); font-weight: 400;
+  }
+  .form-opcion:hover { border-color: var(--color-accent); }
+  .form-opcion input { width: auto; margin-top: 2px; flex-shrink: 0; }
+  .form-opcion:has(input:checked) { border-color: var(--color-accent); background: var(--color-primary-soft); }
+  .form-opcion strong { display: block; font-size: 13.5px; }
+  .form-opcion small { display: block; margin-top: 2px; font-size: 11.5px; color: var(--color-text-muted); }
+
+  .form-archivo-info { margin-top: 6px; font-size: 12px; color: var(--color-text-muted); }
+  .form-archivo-preview { margin-top: 8px; max-height: 180px; border-radius: 8px; border: 1px solid var(--color-border); }
+  .form-acciones { margin-top: 4px; }
+  .form-acciones button { display: inline-flex; align-items: center; gap: 7px; }
+  .form-nota { font-size: 11.5px; color: var(--color-text-muted); margin: 0 0 14px; }
+  .form-nota::before { content: "*"; color: var(--color-danger); font-weight: 700; margin-right: 3px; }
+</style>
+
+<script>
+  /**
+   * Formulario — captura de un registro, con las prácticas de usabilidad ya integradas.
+   * Requiere Iconos y Notificar.
+   *
+   * Por qué existe: cada módulo repetía lo mismo (una columna, marcar obligatorios, ayuda
+   * debajo, validar, botón ocupado, errores). Aquí se declara QUÉ se pide y el componente
+   * resuelve CÓMO se ve y se valida, igual que DataTable con las tablas.
+   *
+   * ─── USO ──────────────────────────────────────────────────────────────────────────
+   *   const form = Formulario.crear(contenedor, {
+   *     buscar: {                                  // opcional: campo llave que trae una ficha
+   *       campo: 'FOLIO', etiqueta: 'Folio del vehículo',
+   *       ayuda: 'Escribe o elige el folio',
+   *       opciones: async () => [{ valor: 'AUT0100', etiqueta: 'ABC-123 · NISSAN' }],
+   *       requerido: false,                                   // búsqueda opcional (ver abajo)
+   *       cargar: async (folio) => datosDelVehiculo,          // null = no encontrado
+   *       alNoEncontrar: (texto, form) => {},                 // solo si requerido: false
+   *       ficha: (datos) => ({
+   *         titulo: datos.PLACA, subtitulo: 'NISSAN NP300 2020',
+   *         avisos: [{ tipo: 'alerta', texto: 'Ya tiene un sensor activo' }],
+   *         datos: [['Marca', 'NISSAN'], ['Año', 2020]],      // siempre visibles
+   *         extra: [['Color', 'BLANCO']],                     // tras "Ver todos los datos"
+   *         pie: 'Datos del catálogo de Vehículos',           // nota al pie de la ficha
+   *       }),
+   *       alCargar: (datos, form) => form.setOpciones('COMBUSTIBLE', datos.combustibles),
+   *     },
+   *     campos: [
+   *       { id: 'SERIE', etiqueta: 'Serie del sensor', requerido: true, ayuda: '…', mayusculas: true,
+   *         seccion: 'Datos del sensor' },              // inicia un grupo con este título
+   *       { id: 'COMBUSTIBLE', etiqueta: 'Combustible', tipo: 'lista', opciones: [], requerido: true },
+   *       { id: 'FECHA', etiqueta: 'Fecha', tipo: 'fecha', requerido: true, valor: '2026-09-17' },
+   *       { id: 'ESTATUS', etiqueta: 'Estatus', tipo: 'lista', opciones: ['ACTIVO'] },
+   *       { id: 'KM', etiqueta: 'Kilometraje', tipo: 'numero', min: 0, paso: 0.01 },
+   *       { id: 'PDF', etiqueta: 'Responsiva', tipo: 'archivo', acepta: 'application/pdf', maxMB: 10,
+   *         requerido: true, ancho: 'completo' },       // ocupa el renglón entero
+   *       { id: 'NOTAS', etiqueta: 'Comentarios', tipo: 'parrafo' },
+   *     ],
+   *     ancho: 'medio',                         // 'uno' (una columna) | 'medio' (default) | 'ancho'
+   *     columnas: 2,                            // campos por renglón (1 a 3); en móvil siempre 1
+   *     pasos: [                                // opcional: formulario por pasos (ver abajo)
+   *       { titulo: 'Vehículo', descripcion: 'Elige la unidad', campos: ['FOLIO'] },
+   *       { titulo: 'Equipo', campos: ['SERIE', 'COMBUSTIBLE', 'PDF'] },
+   *     ],
+   *     resumen: true,                          // agrega un último paso "Revisar y guardar"
+   *     panel: true,                            // panel de contexto a la derecha (ver abajo)
+   *     panelExtra: (valores, ficha) => '<p>…</p>',   // HTML propio al final del panel
+   *     textoGuardar: 'Registrar instalación',  iconoGuardar: 'save',
+   *     alCambiar: (campo, valores, form) => {},   // al cambiar cualquier campo (p. ej. para
+   *                                                // bloquear o liberar otros)
+   *     alValidar: (valores) => ({ SERIE: 'Ya existe' }),   // validación extra del módulo
+   *     alGuardar: async (valores, archivos) => { … },      // lanza Error para mostrarlo
+   *     alGuardado: (valores) => { … },                     // después de guardar bien
+   *     textoExito: (valores) => 'Instalación registrada',
+   *   });
+   *
+   * Tipos de campo: 'texto' (por defecto) · 'numero' · 'fecha' · 'lista' · 'archivo' ·
+   *                 'parrafo' · 'opciones' (botones de radio, para preguntas que deciden el resto)
+   * Opciones comunes: requerido · ayuda · valor · opciones · seccion · ancho ('completo')
+   *                   mayusculas · min · max · paso · acepta · maxMB · vistaPrevia (imágenes)
+   *                   visibleSi: (valores) => bool   ← el campo aparece solo si se cumple
+   * (archivo, parrafo y opciones ocupan el renglón completo por default)
+   *
+   * ─── FORMULARIOS QUE CAMBIAN SEGÚN LA RESPUESTA ───────────────────────────────────
+   *   Una pregunta al inicio puede decidir qué se pide después. Los campos y los pasos
+   *   aceptan `visibleSi`, y lo que está oculto no se valida ni se envía:
+   *
+   *     campos: [
+   *       { id: 'TIPO', tipo: 'opciones', etiqueta: '¿Qué unidad es?', requerido: true,
+   *         opciones: [{ valor: 'FLOTA', etiqueta: 'De la flota', descripcion: 'Está en el catálogo' },
+   *                    { valor: 'PERSONAL', etiqueta: 'Personal', descripcion: 'De un empleado' }] },
+   *       { id: 'PLACA', etiqueta: 'Placa', requerido: true, visibleSi: (v) => v.TIPO === 'PERSONAL' },
+   *     ],
+   *     pasos: [{ titulo: 'Unidad', campos: ['TIPO'] },
+   *             { titulo: 'Datos', campos: ['PLACA'], visibleSi: (v) => v.TIPO === 'PERSONAL' }],
+   *
+   * Métodos: getValores() · getArchivos() · setValor(id, v) · setOpciones(id, [..]) ·
+   *          setSoloLectura(id, si, motivo) · setError(id, msg) · limpiar() · enfocar() ·
+   *          elemento(id) · irAPaso(i)
+   *
+   * ─── ¿POR PASOS O TODO DE UNA VEZ? ────────────────────────────────────────────────
+   *   Todo de una vez (default): hasta ~10 campos. Se ve completo y se llena de corrido.
+   *   Por pasos: formularios largos o con etapas claras (primero elegir la unidad, luego
+   *   capturar). Avanza por partes, valida cada paso antes de seguir y muestra en qué va;
+   *   con `resumen: true` termina con una revisión de todo lo capturado antes de guardar.
+   *   No conviene partir en pasos un formulario corto: son clics de más para lo mismo.
+   *
+   * ─── PANEL DE CONTEXTO (`panel: true`) ────────────────────────────────────────────
+   *   En pantallas anchas sobra espacio a la derecha. Estirar los campos se lee peor,
+   *   así que ese espacio se usa para lo que conviene tener A LA VISTA mientras se
+   *   captura: la ficha de lo que se eligió y lo que ya se lleva capturado (útil sobre
+   *   todo por pasos, donde lo de los pasos anteriores ya no se ve). Por debajo de
+   *   1000px el panel se va arriba del formulario y todo queda en una columna.
+   *
+   * Lo que resuelve solo:
+   * - Una sola columna (`pareja: true` junta dos campos cortos relacionados).
+   * - Obligatorios con "*" (del atributo required, ver styles.html) y nota al inicio.
+   * - Ayuda debajo del campo, nunca como placeholder.
+   * - Valida al SALIR del campo (no mientras se escribe) y otra vez al guardar; el error
+   *   aparece junto al campo y el foco se va al primero que falló.
+   * - Botón ocupado mientras guarda; no hay botón de limpiar (borrar por accidente es peor).
+   */
+  const Formulario = (function () {
+    const TIPOS_INPUT = { texto: 'text', numero: 'number', fecha: 'date' };
+
+    function esc(v) {
+      return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+      ));
+    }
+    const vacio = (v) => v === null || v === undefined || String(v).trim() === '';
+    /** Lleva el campo a la vista (no todos los entornos traen scrollIntoView) */
+    const irA = (el) => { if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); };
+    const ic = (nombre) => (typeof Iconos !== 'undefined' ? Iconos.svg(nombre) : '');
+
+    function crear(contenedor, cfg) {
+      const campos = (cfg.campos || []).map((c) => Object.assign({ tipo: 'texto' }, c));
+      const porId = {};
+      campos.forEach((c) => { porId[c.id] = c; });
+      const archivos = {};
+      let datosFicha = null;
+
+      // ---------- pintado ----------
+      function htmlCampo(campo) {
+        const id = 'f-' + campo.id;
+        const req = campo.requerido ? ' required' : '';
+        const ayuda = campo.ayuda ? `<span class="form-ayuda" id="${id}-ayuda">${esc(campo.ayuda)}</span>` : '';
+        const descrito = campo.ayuda ? ` aria-describedby="${id}-ayuda"` : '';
+        let control;
+
+        if (campo.tipo === 'opciones') {
+          const items = (campo.opciones || []).map((o) => (typeof o === 'object' ? o : { valor: o, etiqueta: o }));
+          control = `<div class="form-opciones" role="radiogroup" aria-labelledby="${id}-etiqueta"${descrito}>
+            ${items.map((o, i) => `<label class="form-opcion">
+              <input type="radio" name="${id}" id="${i === 0 ? id : id + '-' + i}" value="${esc(o.valor)}"
+                ${String(campo.valor) === String(o.valor) ? 'checked' : ''} />
+              <span><strong>${esc(o.etiqueta)}</strong>${o.descripcion ? `<small>${esc(o.descripcion)}</small>` : ''}</span>
+            </label>`).join('')}
+          </div>`;
+        } else if (campo.tipo === 'lista') {
+          control = `<select id="${id}"${req}${descrito}>${opcionesHtml(campo.opciones || [], campo.valor)}</select>`;
+        } else if (campo.tipo === 'archivo') {
+          control = `<input type="file" id="${id}"${req}${descrito} accept="${esc(campo.acepta || '')}" />` +
+            `<div class="form-archivo-info" id="${id}-info" hidden></div>` +
+            (campo.vistaPrevia ? `<img class="form-archivo-preview" id="${id}-preview" alt="Vista previa" hidden />` : '');
+        } else if (campo.tipo === 'parrafo') {
+          control = `<textarea id="${id}" rows="3"${req}${descrito}></textarea>`;
+        } else {
+          const extra = [
+            campo.min !== undefined ? ` min="${esc(campo.min)}"` : '',
+            campo.max !== undefined ? ` max="${esc(campo.max)}"` : '',
+            campo.paso ? ` step="${esc(campo.paso)}"` : (campo.tipo === 'numero' ? ' step="any"' : ''),
+            campo.mayusculas ? ' style="text-transform:uppercase"' : '',
+            campo.lista ? ` list="${esc(campo.lista)}"` : '',
+            ' autocomplete="off"',
+          ].join('');
+          control = `<input type="${TIPOS_INPUT[campo.tipo] || 'text'}" id="${id}"${req}${descrito}${extra} />`;
+        }
+
+        // Archivos, párrafos y opciones necesitan todo el renglón; el resto cabe en una columna
+        const completo = campo.ancho === 'completo' || ['archivo', 'parrafo', 'opciones'].indexOf(campo.tipo) !== -1;
+        return `<div class="field ${completo ? 'form-completo' : ''}" data-campo="${esc(campo.id)}">
+          <label ${campo.tipo === 'opciones' ? `id="${id}-etiqueta"` : `for="${id}"`}>${esc(campo.etiqueta)}</label>
+          ${control}${ayuda}
+          <span class="form-error-campo" hidden></span>
+        </div>`;
+      }
+
+      function opcionesHtml(opciones, seleccionado) {
+        const items = (opciones || []).map((o) => (typeof o === 'object' ? o : { valor: o, etiqueta: o }));
+        const vacia = items.length && items.some((o) => String(o.valor) === String(seleccionado || '')) ? '' : '<option value=""></option>';
+        return vacia + items.map((o) =>
+          `<option value="${esc(o.valor)}"${String(o.valor) === String(seleccionado || '') ? ' selected' : ''}>${esc(o.etiqueta)}</option>`
+        ).join('');
+      }
+
+      /** Los campos van en la rejilla; `seccion` abre un grupo con su título */
+      function htmlCampos(lista) {
+        return (lista || campos).map((campo) =>
+          (campo.seccion ? `<div class="form-seccion">${esc(campo.seccion)}</div>` : '') + htmlCampo(campo)
+        ).join('');
+      }
+
+      const buscar = cfg.buscar;
+      // 'uno' fuerza una columna; 'medio' (default) y 'ancho' aprovechan el espacio horizontal
+      const anchoForm = ['uno', 'medio', 'ancho'].indexOf(cfg.ancho) === -1 ? 'medio' : cfg.ancho;
+      const columnas = Math.min(3, Math.max(1, Number(cfg.columnas) || 2));
+      const textoGuardar = cfg.textoGuardar || 'Guardar';
+
+      /** Pasos declarados; los campos que no se mencionen caen en el último */
+      function armarPasos() {
+        if (!cfg.pasos || !cfg.pasos.length) return null;
+        const mencionados = {};
+        const pasos = cfg.pasos.map((p) => {
+          const ids = (p.campos || []).filter((id) => porId[id] || (buscar && id === buscar.campo));
+          ids.forEach((id) => { mencionados[id] = true; });
+          return { titulo: p.titulo, descripcion: p.descripcion, campos: ids, visibleSi: p.visibleSi };
+        });
+        campos.forEach((c) => { if (!mencionados[c.id]) pasos[pasos.length - 1].campos.push(c.id); });
+        if (buscar && !mencionados[buscar.campo]) pasos[0].campos.unshift(buscar.campo);
+        if (cfg.resumen) pasos.push({ titulo: 'Revisar', descripcion: 'Confirma antes de guardar', campos: [], resumen: true });
+        return pasos;
+      }
+      const pasos = armarPasos();
+
+      // Con panel lateral, la ficha se va a la derecha y se queda a la vista mientras se captura
+      const conPanel = !!cfg.panel;
+      const htmlFicha = '<div class="form-ficha" hidden></div>';
+      const htmlBuscar = buscar ? `<div class="field" data-campo="${esc(buscar.campo)}" style="max-width:360px">
+          <label for="f-${esc(buscar.campo)}">${esc(buscar.etiqueta)}</label>
+          <input type="text" id="f-${esc(buscar.campo)}" ${buscar.requerido === false ? '' : 'required'} autocomplete="off"
+            ${buscar.ayuda ? `aria-describedby="f-${esc(buscar.campo)}-ayuda"` : ''} />
+          ${buscar.ayuda ? `<span class="form-ayuda" id="f-${esc(buscar.campo)}-ayuda">${esc(buscar.ayuda)}</span>` : ''}
+          <span class="form-error-campo" hidden></span>
+        </div>
+        ${conPanel ? '' : htmlFicha}` : '';
+
+      /** Un bloque por paso (solo se ve el actual) o todo junto si no hay pasos */
+      function htmlCuerpo() {
+        if (!pasos) return htmlBuscar + `<div class="form-campos">${htmlCampos()}</div>`;
+        return pasos.map((paso, i) => {
+          const conBuscar = buscar && paso.campos.indexOf(buscar.campo) !== -1;
+          const suyos = paso.campos.filter((id) => porId[id]).map((id) => porId[id]);
+          return `<section class="form-paso" data-paso="${i}" ${i === 0 ? '' : 'hidden'}>
+            <h3 class="form-paso-titulo">${esc(paso.titulo || 'Paso ' + (i + 1))}</h3>
+            ${paso.descripcion ? `<p class="form-paso-desc">${esc(paso.descripcion)}</p>` : ''}
+            ${conBuscar ? htmlBuscar : ''}
+            ${paso.resumen ? '<div class="form-resumen"></div>' : `<div class="form-campos">${htmlCampos(suyos)}</div>`}
+          </section>`;
+        }).join('');
+      }
+
+      const htmlAcciones = pasos
+        ? `<div class="form-acciones form-acciones-pasos">
+            <button type="button" class="secondary form-atras" hidden>${ic('anterior')} Atrás</button>
+            <button type="button" class="form-siguiente">Siguiente ${ic('siguiente')}</button>
+            <button type="submit" hidden>${ic(cfg.iconoGuardar || 'guardar')} ${esc(textoGuardar)}</button>
+            <span class="form-cuenta"></span>
+          </div>`
+        : `<div class="form-acciones">
+            <button type="submit">${ic(cfg.iconoGuardar || 'guardar')} ${esc(textoGuardar)}</button>
+          </div>`;
+
+      // En el panel la ficha se muestra completa: hay espacio de sobra y así no hay que
+      // desplegar nada. La lista de "lo capturado" es opcional (panel.capturado): repite
+      // lo que el usuario acaba de escribir y a la vista suele estorbar más que ayudar.
+      const conCapturado = !!(cfg.panel && cfg.panel.capturado);
+      const htmlPanel = conPanel ? `<aside class="form-panel">
+          ${buscar ? htmlFicha : ''}
+          ${conCapturado ? `<div class="form-panel-seccion form-panel-capturado" hidden>
+            <p class="form-panel-titulo">${esc((cfg.panel && cfg.panel.titulo) || 'Lo que llevas capturado')}</p>
+            <div class="form-resumen-panel"></div>
+          </div>` : ''}
+          <div class="form-panel-extra"></div>
+        </aside>` : '';
+
+      const htmlPrincipal = `
+        ${pasos ? `<ol class="form-pasos">${pasos.map((p, i) =>
+          `<li><button type="button" class="form-paso-chip" data-ir="${i}" ${i === 0 ? 'disabled' : ''}>
+            <span class="form-paso-num">${i + 1}</span>${esc(p.titulo || 'Paso ' + (i + 1))}</button></li>`).join('')}</ol>` : ''}
+        ${campos.some((c) => c.requerido) || (buscar && buscar.requerido !== false) ? '<p class="form-nota">Campos obligatorios</p>' : ''}
+        ${htmlCuerpo()}
+        ${htmlAcciones}
+        <div class="error-msg" role="alert" hidden></div>`;
+
+      contenedor.innerHTML = `
+        <form class="form-${anchoForm} ${conPanel ? 'form-doble' : ''}" novalidate style="--form-columnas:${columnas}">
+          ${conPanel ? `<div class="form-principal">${htmlPrincipal}</div>${htmlPanel}` : htmlPrincipal}
+        </form>`;
+
+      const $ = (sel) => contenedor.querySelector(sel);
+      const formulario = $('form');
+      const errorGeneral = $('.error-msg');
+      const botonGuardar = formulario.querySelector('button[type="submit"]');
+      const elemento = (id) => contenedor.querySelector('#f-' + CSS.escape(id));
+      const campoDe = (id) => contenedor.querySelector(`[data-campo="${CSS.escape(id)}"]`);
+
+      // ---------- valores ----------
+      /** Valor crudo de un campo (los de opciones viven en varios radios) */
+      function valorCrudo(campo) {
+        if (campo.tipo === 'opciones') {
+          const marcado = contenedor.querySelector(`input[name="f-${CSS.escape(campo.id)}"]:checked`);
+          return marcado ? marcado.value : '';
+        }
+        const el = elemento(campo.id);
+        return el ? el.value : '';
+      }
+
+      function getValores() {
+        const valores = {};
+        if (buscar) valores[buscar.campo] = visible(buscar) ? elemento(buscar.campo).value.trim() : '';
+        campos.forEach((c) => {
+          if (c.tipo === 'archivo') return;
+          // Lo oculto no se envía: si la respuesta cambió, esos datos ya no aplican
+          if (!visible(c)) { valores[c.id] = ''; return; }
+          let v = valorCrudo(c);
+          if (c.tipo !== 'fecha') v = String(v).trim();
+          if (c.mayusculas) v = v.toUpperCase();
+          valores[c.id] = v;
+        });
+        return valores;
+      }
+
+      function setValor(id, valor) {
+        const campo = porId[id];
+        if (campo && campo.tipo === 'opciones') {
+          contenedor.querySelectorAll(`input[name="f-${CSS.escape(id)}"]`).forEach((r) => { r.checked = r.value === String(valor); });
+          actualizarVisibilidad();
+          return;
+        }
+        const el = elemento(id);
+        if (el) el.value = valor == null ? '' : valor;
+      }
+
+      function setOpciones(id, opciones, seleccionado) {
+        const el = elemento(id);
+        if (el && el.tagName === 'SELECT') el.innerHTML = opcionesHtml(opciones, seleccionado);
+      }
+
+      /**
+       * Campo que se muestra pero no se edita (p. ej. lo que manda otro módulo).
+       * Se usa readonly y no disabled: los lectores de pantalla SÍ leen los readonly,
+       * y su valor se sigue enviando al guardar (Carbon Design System).
+       */
+      function setSoloLectura(id, si, motivo) {
+        const el = elemento(id);
+        if (!el) return;
+        if (el.tagName === 'SELECT') el.disabled = !!si;   // select no tiene readonly
+        else el.readOnly = !!si;
+        el.setAttribute('aria-readonly', si ? 'true' : 'false');
+        const caja = campoDe(id);
+        const ayuda = caja && caja.querySelector('.form-ayuda');
+        if (ayuda && motivo) {
+          if (si && ayuda.dataset.original === undefined) ayuda.dataset.original = ayuda.textContent;
+          ayuda.textContent = si ? motivo : (ayuda.dataset.original || '');
+        }
+      }
+
+      // ---------- errores ----------
+      function setError(id, mensaje) {
+        const caja = campoDe(id);
+        if (!caja) return;
+        const span = caja.querySelector('.form-error-campo');
+        caja.classList.toggle('form-campo-error', !!mensaje);
+        span.hidden = !mensaje;
+        span.textContent = mensaje || '';
+      }
+      const limpiarErrores = () => {
+        [].concat(buscar ? [buscar.campo] : [], campos.map((c) => c.id)).forEach((id) => setError(id, null));
+        errorGeneral.hidden = true;
+      };
+
+      /** Reglas del propio campo (las del módulo van en alValidar) */
+      function validarCampo(campo) {
+        const el = elemento(campo.id);
+        if (!el || !visible(campo)) return null;   // lo que no se ve no se pide
+        if (campo.tipo === 'opciones') {
+          return campo.requerido && vacio(valorCrudo(campo)) ? 'Elige una opción' : null;
+        }
+        if (campo.tipo === 'archivo') {
+          const archivo = el.files && el.files[0];
+          if (campo.requerido && !archivo) return 'Adjunta ' + campo.etiqueta.toLowerCase();
+          if (!archivo) return null;
+          if (campo.acepta && campo.acepta.split(',').map((t) => t.trim()).indexOf(archivo.type) === -1) {
+            return 'El archivo debe ser ' + campo.acepta.split('/').pop().toUpperCase();
+          }
+          if (campo.maxMB && archivo.size > campo.maxMB * 1024 * 1024) return 'El archivo pesa más de ' + campo.maxMB + ' MB';
+          return null;
+        }
+        const valor = String(el.value).trim();
+        if (campo.requerido && vacio(valor)) return 'Este dato es obligatorio';
+        if (campo.tipo === 'numero' && !vacio(valor)) {
+          const n = Number(valor);
+          if (isNaN(n)) return 'Escribe un número';
+          if (campo.min !== undefined && n < campo.min) return 'Debe ser ' + campo.min + ' o más';
+          if (campo.max !== undefined && n > campo.max) return 'Debe ser ' + campo.max + ' o menos';
+        }
+        return null;
+      }
+
+      /**
+       * ¿Este campo (o paso, o la búsqueda) aplica con lo respondido hasta ahora?
+       * Se lee sin pasar por getValores para no entrar en un ciclo: getValores lo usa.
+       */
+      function visible(elemento_) {
+        if (!elemento_ || !elemento_.visibleSi) return true;
+        const crudos = {};
+        campos.forEach((c) => { crudos[c.id] = c.tipo === 'archivo' ? (archivos[c.id] ? archivos[c.id].name : '') : valorCrudo(c); });
+        if (buscar) crudos[buscar.campo] = (elemento(buscar.campo) || {}).value || '';
+        return !!elemento_.visibleSi(crudos);
+      }
+
+      /** Muestra u oculta lo que dependa de una respuesta; también recalcula los pasos */
+      function actualizarVisibilidad() {
+        campos.forEach((c) => {
+          const caja = campoDe(c.id);
+          if (!caja) return;
+          const seVe = visible(c);
+          if (caja.hidden === !seVe) return;
+          caja.hidden = !seVe;
+          if (!seVe) setError(c.id, null);
+        });
+        if (buscar) {
+          const caja = campoDe(buscar.campo);
+          const seVe = visible(buscar);
+          if (caja) caja.hidden = !seVe;
+          const ficha = contenedor.querySelector('.form-ficha');
+          if (ficha && !seVe) ficha.hidden = true;
+        }
+        if (!pasos) return;
+        // Si la respuesta cambió y el paso donde está parado ya no aplica, hay que moverlo
+        if (!visible(pasos[pasoActual])) mostrarPaso(pasoActual);
+        else actualizarPasos();
+      }
+
+      /** El campo de búsqueda: obligatorio y confirmado, salvo que se haya declarado opcional */
+      function validarBuscar() {
+        if (!buscar || buscar.requerido === false || !visible(buscar)) return null;
+        const valor = elemento(buscar.campo).value.trim();
+        if (vacio(valor)) return 'Este dato es obligatorio';
+        return datosFicha ? null : 'Todavía no se confirma este dato';
+      }
+
+      /** @return {string|null} id del primer campo con error */
+      function validarTodo() {
+        let primero = null;
+        if (buscar) {
+          const mensaje = validarBuscar();
+          setError(buscar.campo, mensaje);
+          if (mensaje && !primero) primero = buscar.campo;
+        }
+        campos.forEach((c) => {
+          const mensaje = validarCampo(c);
+          setError(c.id, mensaje);
+          if (mensaje && !primero) primero = c.id;
+        });
+        const extra = cfg.alValidar ? cfg.alValidar(getValores()) || {} : {};
+        Object.keys(extra).forEach((id) => {
+          setError(id, extra[id]);
+          if (extra[id] && !primero) primero = id;
+        });
+        return primero;
+      }
+
+      // Validar al SALIR del campo, no mientras se escribe
+      campos.forEach((campo) => {
+        const el = elemento(campo.id);
+        if (!el) return;
+        // blur cubre lo que se escribe; change cubre lo que se elige (fecha, lista, archivo),
+        // que en el navegador no dispara blur hasta salir del campo
+        const revisar = () => {
+          setError(campo.id, validarCampo(campo));
+          actualizarVisibilidad();
+          actualizarPanel();
+          if (cfg.alCambiar) cfg.alCambiar(campo.id, getValores(), api);
+        };
+        el.addEventListener('blur', revisar);
+        el.addEventListener('change', revisar);
+        // Los radios viven en varios elementos: se escuchan todos
+        if (campo.tipo === 'opciones') {
+          contenedor.querySelectorAll(`input[name="f-${CSS.escape(campo.id)}"]`)
+            .forEach((r) => r.addEventListener('change', revisar));
+        }
+        // Al corregir, el error se quita de inmediato (no esperar a salir otra vez)
+        el.addEventListener('input', () => { if (campoDe(campo.id).classList.contains('form-campo-error')) setError(campo.id, null); });
+
+        if (campo.tipo === 'archivo') {
+          el.addEventListener('change', () => {
+            const archivo = el.files && el.files[0];
+            archivos[campo.id] = archivo || null;
+            const info = contenedor.querySelector('#f-' + CSS.escape(campo.id) + '-info');
+            info.hidden = !archivo;
+            if (archivo) info.textContent = archivo.name + ' · ' + Math.round(archivo.size / 1024) + ' KB';
+            const preview = contenedor.querySelector('#f-' + CSS.escape(campo.id) + '-preview');
+            if (preview) {
+              preview.hidden = !archivo;
+              if (archivo) preview.src = URL.createObjectURL(archivo);
+            }
+          });
+        }
+      });
+
+      // ---------- ficha ----------
+      function pintarFicha(datos) {
+        const caja = $('.form-ficha');
+        if (!caja) return;
+        datosFicha = datos;
+        if (!datos) { caja.hidden = true; caja.innerHTML = ''; return; }
+
+        const f = buscar.ficha ? buscar.ficha(datos) : {};
+        // En el panel no hay competencia por el espacio: se muestra todo de una vez
+        const extra = conPanel ? [] : (f.extra || []);
+        const visibles = conPanel ? (f.datos || []).concat(f.extra || []) : (f.datos || []);
+        const dato = ([etiqueta, valor]) => `<div class="form-ficha-dato">
+          <div class="form-ficha-etiqueta">${esc(etiqueta)}</div>
+          <div class="form-ficha-valor">${vacio(valor) ? '—' : esc(valor)}</div></div>`;
+        const avisos = (f.avisos || []).map((a) =>
+          `<div class="form-aviso ${a.tipo === 'alerta' ? 'form-aviso-alerta' : ''}">${ic(a.tipo === 'alerta' ? 'alerta' : 'info')}<span>${esc(a.texto)}</span></div>`).join('');
+
+        caja.innerHTML = `
+          <div class="form-ficha-titulo">${esc(f.titulo || '')}</div>
+          ${f.subtitulo ? `<div class="form-ficha-subtitulo">${esc(f.subtitulo)}</div>` : ''}
+          ${avisos}
+          <div class="form-ficha-datos">${visibles.map(dato).join('')}</div>
+          ${f.pie ? `<p class="form-ficha-pie">${esc(f.pie)}</p>` : ''}
+          ${extra.length ? `
+            <button type="button" class="form-ficha-mas">Ver todos los datos</button>
+            <div class="form-ficha-extra" hidden><div class="form-ficha-datos" style="margin-top:0">${extra.map(dato).join('')}</div></div>` : ''}`;
+        caja.hidden = false;
+
+        const mas = caja.querySelector('.form-ficha-mas');
+        if (mas) {
+          mas.addEventListener('click', () => {
+            const extra = caja.querySelector('.form-ficha-extra');
+            extra.hidden = !extra.hidden;
+            mas.textContent = extra.hidden ? 'Ver todos los datos' : 'Ocultar datos';
+          });
+        }
+      }
+
+      if (buscar) {
+        const campoBuscar = elemento(buscar.campo);
+        let pedido = '';
+        let espera = null;
+
+        const consultar = async () => {
+          const valor = campoBuscar.value.trim();
+          pedido = valor;
+          if (!valor) { pintarFicha(null); setError(buscar.campo, null); actualizarPanel(); return; }
+          try {
+            const datos = await buscar.cargar(valor);
+            if (pedido !== valor) return;          // el usuario siguió escribiendo
+            if (!datos) {
+              pintarFicha(null);
+              // Si la búsqueda es opcional, no encontrar NO es un error: se captura a mano
+              if (buscar.requerido === false) {
+                setError(buscar.campo, null);
+                if (buscar.alNoEncontrar) buscar.alNoEncontrar(valor, api);
+              } else {
+                setError(buscar.campo, 'No se encontró');
+              }
+              return;
+            }
+            setError(buscar.campo, null);
+            pintarFicha(datos);
+            if (buscar.alCargar) buscar.alCargar(datos, api);
+            actualizarPanel();
+          } catch (err) {
+            if (pedido !== valor) return;
+            pintarFicha(null);
+            setError(buscar.campo, err.message);
+          }
+        };
+
+        campoBuscar.addEventListener('input', () => {
+          clearTimeout(espera);
+          espera = setTimeout(consultar, 350);     // no consultar en cada tecla
+        });
+        campoBuscar.addEventListener('blur', () => { clearTimeout(espera); consultar(); });
+
+        // Lista propia (no <datalist>: se ve distinto en cada navegador y no se puede estilizar)
+        if (buscar.opciones) {
+          const cbx = Combobox.crear(campoBuscar, { opciones: [], alElegir: () => consultar() });
+          Promise.resolve(buscar.opciones()).then((items) => cbx.setOpciones(items || [])).catch((err) => {
+            errorGeneral.textContent = err.message;
+            errorGeneral.hidden = false;
+          });
+        }
+      }
+
+      // ---------- pasos ----------
+      let pasoActual = 0;
+      const vistos = { 0: true };
+
+      /** Valida solo los campos de un paso; regresa el id del primero con error */
+      function validarPaso(i) {
+        const paso = pasos[i];
+        let primero = null;
+        if (buscar && paso.campos.indexOf(buscar.campo) !== -1) {
+          const mensaje = validarBuscar();
+          setError(buscar.campo, mensaje);
+          if (mensaje) primero = buscar.campo;
+        }
+        paso.campos.filter((id) => porId[id]).forEach((id) => {
+          const mensaje = validarCampo(porId[id]);
+          setError(id, mensaje);
+          if (mensaje && !primero) primero = id;
+        });
+        return primero;
+      }
+
+      /** Lo capturado hasta ahora, como lista de "etiqueta: valor" */
+      function filasResumen() {
+        const valores = getValores();
+        const filas = [];
+        if (buscar) filas.push([buscar.etiqueta, valores[buscar.campo]]);
+        campos.forEach((c) => {
+          const valor = c.tipo === 'archivo'
+            ? (archivos[c.id] ? archivos[c.id].name : '')
+            : (c.tipo === 'fecha' && valores[c.id]
+              ? valores[c.id].split('-').reverse().join('/')
+              : valores[c.id]);
+          filas.push([c.etiqueta, valor]);
+        });
+        return filas;
+      }
+
+      const htmlResumen = (filas) => filas.map(([etiqueta, valor]) => `<div class="form-resumen-dato">
+        <div class="form-resumen-etiqueta">${esc(etiqueta)}</div>
+        <div class="form-resumen-valor ${vacio(valor) ? 'form-resumen-vacio' : ''}">${vacio(valor) ? 'Sin capturar' : esc(valor)}</div>
+      </div>`).join('');
+
+      /** Paso de revisión: todo, incluso lo que quedó vacío */
+      function pintarResumen() {
+        const caja = contenedor.querySelector('.form-resumen');
+        if (caja) caja.innerHTML = htmlResumen(filasResumen());
+      }
+
+      /** Panel lateral: solo lo que ya se llenó, para no llenar de "Sin capturar" */
+      function actualizarPanel() {
+        const seccion = contenedor.querySelector('.form-panel-capturado');
+        if (!seccion) return;
+        const llenas = filasResumen().filter(([, valor]) => !vacio(valor));
+        seccion.hidden = !llenas.length;
+        seccion.querySelector('.form-resumen-panel').innerHTML = htmlResumen(llenas);
+        if (cfg.panelExtra) contenedor.querySelector('.form-panel-extra').innerHTML = cfg.panelExtra(getValores(), datosFicha) || '';
+      }
+
+      /** Índices de los pasos que aplican con lo respondido (los demás se saltan) */
+      const indicesVisibles = () => pasos.map((p, i) => i).filter((i) => visible(pasos[i]));
+      const siguienteVisible = (i) => indicesVisibles().find((x) => x > i);
+      const anteriorVisible = (i) => indicesVisibles().filter((x) => x < i).pop();
+      const esUltimoVisible = (i) => siguienteVisible(i) === undefined;
+
+      /** Redibuja el indicador y los botones según los pasos que apliquen ahora */
+      function actualizarPasos() {
+        const visibles = indicesVisibles();
+        const posicion = visibles.indexOf(pasoActual) + 1;
+        contenedor.querySelectorAll('.form-paso-chip').forEach((chip) => {
+          const idx = Number(chip.dataset.ir);
+          const aplica = visibles.indexOf(idx) !== -1;
+          chip.closest('li').hidden = !aplica;
+          chip.classList.toggle('activo', idx === pasoActual);
+          chip.classList.toggle('completado', aplica && visibles.indexOf(idx) < posicion - 1);
+          chip.disabled = !vistos[idx] && idx > pasoActual;     // solo se salta a lo ya visitado
+          const numero = chip.querySelector('.form-paso-num');
+          if (numero) numero.textContent = visibles.indexOf(idx) + 1;
+        });
+        contenedor.querySelector('.form-atras').hidden = anteriorVisible(pasoActual) === undefined;
+        contenedor.querySelector('.form-siguiente').hidden = esUltimoVisible(pasoActual);
+        formulario.querySelector('button[type="submit"]').hidden = !esUltimoVisible(pasoActual);
+        contenedor.querySelector('.form-cuenta').textContent = `Paso ${posicion} de ${visibles.length}`;
+      }
+
+      function mostrarPaso(i) {
+        // Si el paso dejó de aplicar (cambió una respuesta), se pasa al siguiente que sí
+        if (!visible(pasos[i])) {
+          const destino = siguienteVisible(i) !== undefined ? siguienteVisible(i) : anteriorVisible(i);
+          if (destino === undefined) return;
+          i = destino;
+        }
+        pasoActual = i;
+        vistos[i] = true;
+        contenedor.querySelectorAll('.form-paso').forEach((s) => { s.hidden = Number(s.dataset.paso) !== i; });
+        actualizarPasos();
+        if (pasos[i].resumen) pintarResumen();
+        actualizarPanel();
+        const primerCampo = contenedor.querySelector(
+          `.form-paso[data-paso="${i}"] .field:not([hidden]) input, .form-paso[data-paso="${i}"] .field:not([hidden]) select, .form-paso[data-paso="${i}"] .field:not([hidden]) textarea`
+        );
+        if (primerCampo) primerCampo.focus();
+        irA(formulario);
+      }
+
+      function avanzar() {
+        const error = validarPaso(pasoActual);
+        if (error) {
+          const el = elemento(error);
+          if (el) { el.focus(); irA(el); }
+          return;
+        }
+        const destino = siguienteVisible(pasoActual);
+        if (destino !== undefined) mostrarPaso(destino);
+      }
+
+      if (pasos) {
+        contenedor.querySelector('.form-siguiente').addEventListener('click', avanzar);
+        contenedor.querySelector('.form-atras').addEventListener('click', () => {
+          const destino = anteriorVisible(pasoActual);
+          if (destino !== undefined) mostrarPaso(destino);
+        });
+        contenedor.querySelectorAll('.form-paso-chip').forEach((chip) => chip.addEventListener('click', () => {
+          const destino = Number(chip.dataset.ir);
+          if (destino <= pasoActual) mostrarPaso(destino);      // regresar siempre se puede
+          else if (!validarPaso(pasoActual)) mostrarPaso(destino);
+        }));
+        // Enter avanza de paso en vez de guardar a medias
+        formulario.addEventListener('keydown', (ev) => {
+          if (ev.key !== 'Enter' || ev.target.tagName === 'TEXTAREA' || esUltimoVisible(pasoActual)) return;
+          ev.preventDefault();
+          avanzar();
+        });
+        mostrarPaso(0);
+      }
+
+      // Estado inicial de lo que depende de una respuesta (todavía sin responder)
+      actualizarVisibilidad();
+
+      // ---------- guardar ----------
+      formulario.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        errorGeneral.hidden = true;
+        const primerError = validarTodo();
+        if (primerError) {
+          // Con pasos, el error puede estar en otro paso: hay que llevar al usuario ahí
+          if (pasos) {
+            const destino = pasos.findIndex((p) => p.campos.indexOf(primerError) !== -1);
+            if (destino !== -1 && destino !== pasoActual) mostrarPaso(destino);
+          }
+          const el = elemento(primerError);
+          if (el) { el.focus(); irA(el); }
+          return;
+        }
+
+        const valores = getValores();
+        const htmlBoton = botonGuardar.innerHTML;
+        botonGuardar.disabled = true;
+        botonGuardar.textContent = 'Guardando…';
+        try {
+          await cfg.alGuardar(valores, Object.assign({}, archivos));
+          limpiar();
+          Notificar.exito(cfg.textoExito ? cfg.textoExito(valores) : 'Registro guardado');
+          if (cfg.alGuardado) cfg.alGuardado(valores);
+        } catch (err) {
+          errorGeneral.textContent = err.message;
+          errorGeneral.hidden = false;
+          irA(errorGeneral);
+        } finally {
+          botonGuardar.disabled = false;
+          botonGuardar.innerHTML = htmlBoton;
+        }
+      });
+
+      function limpiar() {
+        formulario.reset();
+        Object.keys(archivos).forEach((k) => { delete archivos[k]; });
+        contenedor.querySelectorAll('.form-archivo-info, .form-archivo-preview').forEach((el) => { el.hidden = true; });
+        pintarFicha(null);
+        limpiarErrores();
+        campos.forEach((c) => { if (c.valor !== undefined) setValor(c.id, c.valor); });
+        if (pasos) {
+          Object.keys(vistos).forEach((k) => { if (k !== '0') delete vistos[k]; });
+          mostrarPaso(0);
+        }
+        actualizarPanel();
+      }
+
+      // Valores iniciales declarados en los campos
+      campos.forEach((c) => { if (c.valor !== undefined && c.tipo !== 'lista') setValor(c.id, c.valor); });
+
+      const api = {
+        getValores,
+        getArchivos: () => Object.assign({}, archivos),
+        getDatosFicha: () => datosFicha,
+        setValor,
+        setOpciones,
+        setSoloLectura,
+        setError,
+        limpiar,
+        enfocar: () => { const el = elemento(buscar ? buscar.campo : campos[0].id); if (el) el.focus(); },
+        elemento,
+        irAPaso: (i) => { if (pasos && pasos[i]) mostrarPaso(i); },
+        pasoActual: () => pasoActual,
+      };
+      return api;
+    }
+
+    return { crear };
+  })();
+</script>

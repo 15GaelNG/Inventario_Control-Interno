@@ -67,7 +67,7 @@ const VerificacionesService = (function () {
   }
 
   function listar(token) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'verificaciones');
     return SheetUtils.getAll(ssId(), hoja_().getName())
       .filter((r) => r['ID_VERIFICACION'])
       .map(desdeOriginal_)
@@ -79,7 +79,7 @@ const VerificacionesService = (function () {
    * @param {{base64: string, mimeType: string}} archivo  comprobante
    */
   function registrar(token, datos, archivo) {
-    const sesion = Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    const sesion = Permisos.puedeEditar(token, 'verificaciones');
 
     const folio = String(datos.FOLIO || '').trim();
     if (!folio) throw new Error('El folio del vehículo es obligatorio');
@@ -128,7 +128,7 @@ const VerificacionesService = (function () {
    * @return {Object} la fila actualizada (mismo formato que listar)
    */
   function actualizarCampo(token, id, campo, valor) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    Permisos.puedeEditar(token, 'verificaciones');
     const nombreHoja = hoja_().getName();
     const actual = SheetUtils.findById(ssId(), nombreHoja, id, 'ID_VERIFICACION');
     if (!actual) throw new Error('No se encontró la verificación ' + id);
@@ -161,7 +161,7 @@ const VerificacionesService = (function () {
    * (quedan como respaldo; AppSheet tampoco los borra).
    */
   function eliminar(token, ids) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN]);
+    Permisos.puedeEditar(token, 'verificaciones');
     if (!Array.isArray(ids) || !ids.length) throw new Error('No se indicaron registros a eliminar');
     const borradas = SheetUtils.removeMany(ssId(), hoja_().getName(), ids, 'ID_VERIFICACION');
     return { eliminadas: borradas };
@@ -169,7 +169,7 @@ const VerificacionesService = (function () {
 
   /** URL de Drive del comprobante: busca en la carpeta de escritura y luego en la de lectura. */
   function urlComprobante(token, ruta) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'verificaciones');
     const url = DriveUtils.urlDeRuta(ruta, [
       Config.DRIVE_FOLDERS.VERIFICACIONES(),
       Config.DRIVE_FOLDERS.VERIFICACIONES_LECTURA(),
@@ -180,7 +180,7 @@ const VerificacionesService = (function () {
 
   /** Imagen del comprobante para el panel de detalle ({url, mimeType, base64|null}). */
   function previsualizarComprobante(token, ruta) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'verificaciones');
     const vista = DriveUtils.previsualizarRuta(ruta, [
       Config.DRIVE_FOLDERS.VERIFICACIONES(),
       Config.DRIVE_FOLDERS.VERIFICACIONES_LECTURA(),

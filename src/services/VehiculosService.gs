@@ -1,6 +1,6 @@
 /**
  * VehiculosService.gs
- * Módulo de vehículos: alta, reasignación, verificaciones, servicios e inspección
+ * Módulo de vehículos: alta, reasignación, verificaciones e inspección
  * con checklist de daños (diagrama + firma). Pendiente de finalizar esquema de columnas
  * (ver mapeo de tablas originales del AppSheet en /docs/mapeo-modulos.md).
  *
@@ -8,7 +8,7 @@
  *   VEHICULOS          — catálogo de unidades
  *   REASIGNACIONES     — historial de cambio de responsable
  *   VERIFICACIONES     — verificación vehicular periódica
- *   SERVICIOS          — mantenimiento (aceite, llantas, etc.)
+ *   (SERVICIOS existe en la hoja, pero el módulo se descartó — 2026-09-17)
  *   INSPECCIONES       — checklist de daños + referencia a imagen anotada (ver PdfService)
  */
 
@@ -31,7 +31,7 @@ const VehiculosService = (function () {
   /** Catálogo completo, todas las columnas. Pesado (648 filas x 41 columnas) —
    * usar listarResumen() para listas/tarjetas y buscarPorFolio() para detalle. */
   function listar(token) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'vehiculos');
     return SheetUtils.getAll(ssId(), SHEET_VEHICULOS).map((row) => {
       const limpio = {};
       Object.keys(row).forEach((k) => { limpio[k] = limpiarValor_(row[k]); });
@@ -50,37 +50,23 @@ const VehiculosService = (function () {
    * celdas a ~3,900.
    */
   function listarBasico(token) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'vehiculos');
     const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
-    const lastRow = sheet.getLastRow();
-    if (lastRow < 2) return [];
-
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    const idx = (nombre) => headers.indexOf(nombre);
-    const leerColumna = (nombre) => {
-      const col = idx(nombre);
-      return col === -1 ? [] : sheet.getRange(2, col + 1, lastRow - 1, 1).getValues().map((f) => f[0]);
-    };
-
-    const folios = leerColumna('FOLIO');
-    const deptos = leerColumna('DEPARTAMENTO');
-    const marcas = leerColumna('MARCA');
-    const lineas = leerColumna('LINEA VEHICULO');
-    const modelos = leerColumna('MODELO');
-    const placas = leerColumna('PLACA');
-    const estatus = leerColumna('ESTATUS');
+    const { filas, datos } = leerColumnas_(sheet,
+      ['FOLIO', 'DEPARTAMENTO', 'MARCA', 'LINEA VEHICULO', 'MODELO', 'PLACA', 'ESTATUS']);
 
     const resultado = [];
-    for (let i = 0; i < folios.length; i++) {
-      if (!folios[i]) continue;
-      if (String(estatus[i] || '').toUpperCase() === 'BAJA VEHICULAR') continue;
+    for (let i = 0; i < filas; i++) {
+      const folio = datos['FOLIO'][i];
+      if (!folio) continue;
+      if (String(datos['ESTATUS'][i] || '').toUpperCase() === 'BAJA VEHICULAR') continue;
       resultado.push({
-        FOLIO: folios[i],
-        DEPARTAMENTO: deptos[i] || '',
-        MARCA: marcas[i] || '',
-        LINEA_VEHICULO: lineas[i] || '',
-        MODELO: modelos[i] || '',
-        PLACA: placas[i] || '',
+        FOLIO: folio,
+        DEPARTAMENTO: datos['DEPARTAMENTO'][i] || '',
+        MARCA: datos['MARCA'][i] || '',
+        LINEA_VEHICULO: datos['LINEA VEHICULO'][i] || '',
+        MODELO: datos['MODELO'][i] || '',
+        PLACA: datos['PLACA'][i] || '',
       });
     }
     return resultado.sort((a, b) => String(a.FOLIO).localeCompare(String(b.FOLIO)));
@@ -93,16 +79,7 @@ const VehiculosService = (function () {
 
   /** Lee solo las columnas dadas (no toda la hoja) — {filas, datos: {columna: [valores]}} */
   function leerColumnas_(sheet, columnas) {
-    const lastRow = sheet.getLastRow();
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    const datos = {};
-    columnas.forEach((nombre) => {
-      const col = headers.indexOf(nombre);
-      datos[nombre] = (col === -1 || lastRow < 2)
-        ? []
-        : sheet.getRange(2, col + 1, lastRow - 1, 1).getValues().map((f) => f[0]);
-    });
-    return { filas: Math.max(0, lastRow - 1), datos: datos };
+    return SheetUtils.leerColumnas(sheet, columnas);
   }
 
   /**
@@ -111,7 +88,7 @@ const VehiculosService = (function () {
    * listarBasico, que es para autocompletar y los excluye).
    */
   function listarResumen(token) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'vehiculos');
     const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
     const { filas, datos } = leerColumnas_(sheet, COLUMNAS_RESUMEN);
 
@@ -143,7 +120,7 @@ const VehiculosService = (function () {
    * más la columna FOLIO para ubicar el renglón, y luego lee solo esa fila.
    */
   function buscarPorFolio(token, folio) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'vehiculos');
     if (!folio) return null;
 
     const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
@@ -177,7 +154,7 @@ const VehiculosService = (function () {
   /** Da de alta un vehículo. La columna ID_VEHICULO no la trae SheetUtils.insert
    * sola (solo autogenera si la columna se llama literalmente "ID") — se genera aquí. */
   function crear(token, datos) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    Permisos.puedeEditar(token, 'vehiculos');
     if (!datos.FOLIO) throw new Error('El folio es obligatorio');
     const fila = Object.assign({}, datos);
     fila[ID_COLUMN] = Utilities.getUuid().slice(0, 8);
@@ -186,7 +163,7 @@ const VehiculosService = (function () {
   }
 
   function actualizar(token, id, cambios) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    Permisos.puedeEditar(token, 'vehiculos');
     SheetUtils.update(ssId(), SHEET_VEHICULOS, id, cambios, ID_COLUMN);
     return { ID: id };
   }
@@ -195,7 +172,7 @@ const VehiculosService = (function () {
    * OJO: el negocio normalmente "da de baja" (ESTATUS = BAJA VEHICULAR) en
    * vez de borrar — esto es un borrado real, para altas hechas por error. */
   function eliminar(token, id) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN]);
+    Permisos.puedeEditar(token, 'vehiculos');
     const ok = SheetUtils.remove(ssId(), SHEET_VEHICULOS, id, ID_COLUMN);
     if (!ok) throw new Error('No se encontró el vehículo con ID=' + id);
     return { ID: id };

@@ -168,7 +168,26 @@ por todo el código:
 |---|---|---|---|---|---|
 | `VERIFICACIONES` | `FOLIO VEHICULO` | `PLACA` | `VEHICULOS` | `VerificacionesService`: al registrar y al cambiar el folio (copia en 2 lugares) | Unificar en `datosDeVehiculo_` (regla 1) |
 | `INCIDENCIAS` | `FOLIO` | `DEPARTAMENTO`, `MODELO` | `VEHICULOS` | **Los manda el formulario** (autocompletado en el navegador) y son editables | Copiarlos en el servidor; quitar edición (regla 2) |
-| `INSTALACION DE SENSORES` | `FOLIO` | Serie, placa, marca, clase, línea, modelo, razón social, departamento, sede, responsable (coinciden con `VEHICULOS`) | `VEHICULOS` | Módulo aún no construido en Apps Script | Confirmar nombres exactos de columnas y cuáles se capturan ahí (tipo de combustible, color, rendimiento, consumo en ralentí) |
+| `INSTALACION DE SENSORES` | `FOLIO` | 13 columnas: `SERIE VEHICULO`, `PLACA`, `MARCA`, `CLASE`, `LINEA VEHICULO`, `MODELO`, `COLOR`, `CAPACIDAD DE COMBUSTIBLE`, `RAZON SOCIAL`, `DEPARTAMENTO`, `SEDE`, `OFICINA / DESARROLLO` (← `UBICACION`), `RESPONSABLE` (← `RESPONSABLE VEHICULO`) | `VEHICULOS` | `SensoresService.datosDeVehiculo_` (función temporal, regla 1); no son editables en el módulo | Reemplazar por `Relaciones.datosParaNuevo` |
+
+> **`INSTALACION DE SENSORES` — lo que NO es copia:** `TIPO DE COMBUSTIBLE` es propio
+> (en `VEHICULOS` es el tipo: GASOLINA/DIESEL; aquí el producto: MAGNA/PREMIUM/DIESEL —
+> verificado contra producción, sin una sola contradicción). `SERIE SENSOR`, `FECHA INSTALACION`,
+> `ESTATUS SENSOR`, `RESPONSIVA SENSOR`, `RENDIMIENTO (KM/L)`, `CONSUMO RALENTI (L/HR)` y
+> `COMENTARIOS` se capturan (los dos numéricos también se pueden calcular con Geotab).
+>
+> **Pendiente:** `SERIE SENSOR` también está en `VEHICULOS` (207/207) y ahí la escribe un bot de
+> AppSheet al instalar. El módulo todavía **no** la escribe de vuelta; falta revisar ese bot.
+
+| `HOLOGRAMAS` | `SERIE VEHICULO` | `PLACA`, `MARCA`, `LINEA VEHICULO`, `MODELO`, `RESPONSABLE` (← `RESPONSABLE VEHICULO`), `DEPARTAMENTO`, `CAPACIDAD DEL TANQUE` (← `CAPACIDAD COMBUSTIBLE (LTS)`) | `VEHICULOS` | `HologramasService`: se leen del catálogo al listar (el catálogo manda) y `sincronizar()` los escribe en la hoja | Reemplazar por `Relaciones.propagar` + `revisar` |
+
+> **`HOLOGRAMAS` es el caso que más se parece a lo que hará `Relaciones.revisar`:** al listar se
+> compara contra `VEHICULOS`, se muestran los datos del catálogo y se marca la fila como
+> "Desactualizado"; el usuario corrige con un botón y eso escribe la hoja (para que AppSheet
+> también lo vea). Dos particularidades: **111 de 255 hologramas no tienen vehículo en el
+> catálogo** (son vehículos personales) y ahí los datos sí se capturan en la hoja; y
+> `TIPO COMBUSTIBLE` (producto de la tarjeta) y `RAZON SOCIAL` (empresa del contrato) **no son
+> copias** aunque se llamen igual que columnas de `VEHICULOS`.
 
 **Problema conocido mientras no exista `Relaciones`:** editar PLACA (u otra columna copiada)
 desde Vehículos **no** actualiza las copias. Afecta solo a la base de pruebas mientras se

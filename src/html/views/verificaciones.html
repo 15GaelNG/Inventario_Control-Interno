@@ -39,23 +39,8 @@
           <p>Folio, fechas y foto del comprobante</p>
         </div>
       </div>
-      <form id="form-verificacion" class="grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 14px;">
-        <div class="field">
-          <label>Folio del vehículo</label>
-          <input type="text" id="ver-folio" list="ver-lista-folios" required placeholder="Escribe o elige el folio" autocomplete="off" />
-          <datalist id="ver-lista-folios"></datalist>
-        </div>
-        <div class="field"><label>Placa <span class="auto-tag">auto</span></label><input type="text" id="ver-placa" disabled /></div>
-        <div class="field"><label>Fecha de verificación</label><input type="date" id="ver-fecha" required /></div>
-        <div class="field"><label>Fecha de próxima verificación</label><input type="date" id="ver-fecha-proxima" required /></div>
-        <div class="field" style="grid-column: 1 / -1;">
-          <label>Comprobante (PNG o JPG, máx. 10 MB)</label>
-          <input type="file" id="ver-comprobante" accept="image/png,image/jpeg" required />
-          <img id="ver-preview" alt="Vista previa del comprobante" hidden style="margin-top:10px; max-height:180px; border-radius:8px;" />
-        </div>
-        <div style="grid-column: 1 / -1;"><button type="submit" id="ver-btn-guardar">💾 Registrar verificación</button></div>
-      </form>
-      <div class="error-msg" id="ver-error" role="alert" hidden></div>
+      <!-- El formulario lo arma el componente Formulario (ver initVerificaciones en app.js) -->
+      <div id="ver-form"></div>
     </div>
 
     <!-- Pestaña 3: historial por tarjetas -->

@@ -1,0 +1,50 @@
+<template id="tpl-hologramas">
+  <div class="page-header-compacto">
+    <div>
+      <h2><i data-lucide="fuel" class="ico"></i> Hologramas</h2>
+      <p class="page-subtitle">Tarjetas de combustible por unidad — autorización, calcomanía y solicitud</p>
+    </div>
+    <!-- KPIs: clic = filtrar la tabla -->
+    <div class="kpi-chips">
+      <button type="button" class="kpi-chip" id="hol-kpi-total" title="Ver todos los hologramas">
+        <strong id="hol-stat-total">0</strong> hologramas
+      </button>
+      <button type="button" class="kpi-chip" id="hol-kpi-habilitados" title="Filtrar: habilitados para cargar">
+        <i data-lucide="circle-check" class="ico"></i> <strong id="hol-stat-habilitados">0</strong> habilitados
+      </button>
+      <button type="button" class="kpi-chip kpi-warn" id="hol-kpi-deshabilitados" title="Filtrar: deshabilitados">
+        <i data-lucide="ban" class="ico"></i> <strong id="hol-stat-deshabilitados">0</strong> deshabilitados
+      </button>
+      <button type="button" class="kpi-chip" id="hol-kpi-personales" title="Filtrar: vehículos personales (no son de la flota)">
+        <i data-lucide="user" class="ico"></i> <strong id="hol-stat-personales">0</strong> personales
+      </button>
+      <button type="button" class="kpi-chip kpi-danger" id="hol-kpi-viejos" title="Filtrar: difieren del catálogo de Vehículos" hidden>
+        <i data-lucide="triangle-alert" class="ico"></i> <strong id="hol-stat-viejos">0</strong> desactualizados
+      </button>
+    </div>
+  </div>
+
+  <div id="hol-tabs">
+    <div class="tabs-lista">
+      <button type="button" class="tab-btn" data-tab="registros"><i data-lucide="table" class="ico"></i> Hologramas</button>
+      <button type="button" class="tab-btn" data-tab="nuevo"><i data-lucide="plus" class="ico"></i> Nuevo holograma</button>
+    </div>
+
+    <!-- Pestaña 1: tabla -->
+    <div class="card card-compacta" data-panel="registros">
+      <div id="hol-tabla"></div>
+    </div>
+
+    <!-- Pestaña 2: alta -->
+    <div class="card form-card" data-panel="nuevo">
+      <div class="form-card-header">
+        <div class="form-card-icon"><i data-lucide="fuel" class="ico"></i></div>
+        <div>
+          <h3>Registrar holograma</h3>
+          <p>Si la unidad está en el catálogo, sus datos se llenan con el folio; si es un vehículo personal, se capturan a mano</p>
+        </div>
+      </div>
+      <div id="hol-form"></div>
+    </div>
+  </div>
+</template>

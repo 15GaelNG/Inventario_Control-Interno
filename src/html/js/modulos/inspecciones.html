@@ -1,0 +1,862 @@
+<script>
+  /**
+   * inspecciones.js — Inspección vehicular: consulta y captura por pasos.
+   *
+   * Se ven, filtran y exportan las inspecciones, se abre su formato en PDF y se captura
+   * una nueva (Unidad → Exterior → Neumáticos → Interior → Mecánica → Cierre → Revisar).
+   * Los diagramas de daños y las firmas llegan en la fase 3.
+   *
+   * Lo propio de este módulo:
+   * - El puntaje se muestra como semáforo: es el dato que se mira primero.
+   * - El panel de detalle carga la inspección completa (195 columnas) solo al abrirla,
+   *   y ahí resalta las piezas que salieron MALO o REGULAR, que es lo accionable.
+   */
+
+  /** Color del puntaje: lo que decide si hay que hacer algo con esa unidad */
+  function colorPuntaje(valor) {
+    if (valor === '' || valor === null || valor === undefined) return '';
+    return valor >= 90 ? 'cerrada' : valor >= 80 ? 'activo' : 'abierta';
+  }
+
+  async function abrirFormatoInspeccion(ruta) {
+    const pestana = window.open('', '_blank');   // se abre antes para que no la bloqueen
+    try {
+      pestana.location.href = await callServer('apiUrlFormatoInspeccion', state.token, ruta);
+    } catch (err) {
+      if (pestana) pestana.close();
+      Notificar.error(err.message);
+    }
+  }
+
+  async function initInspecciones() {
+    const DIA_MS = 24 * 60 * 60 * 1000;
+    const PUNTAJE_BAJO = 80;
+    // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
+    const puedeEditar = puedeEditarModulo('inspeccion-vehicular');
+    let inspecciones = [];
+
+    function badgePuntaje(valor) {
+      if (valor === '' || valor === null || valor === undefined) {
+        return '<span style="color:var(--color-text-muted)">—</span>';
+      }
+      const icono = valor >= 90 ? 'circle-check' : valor >= 80 ? 'hourglass' : 'triangle-alert';
+      return `<span class="badge-estado ${colorPuntaje(valor)}">${Iconos.svg(icono)} ${valor}%</span>`;
+    }
+
+    // ----- Tabla -----
+    const tabla = DataTable.crear(document.getElementById('ins-tabla'), {
+      idCampo: 'ID',
+      idTabla: 'inspecciones',
+      ordenInicial: { campo: 'FECHA', dir: 'desc' },
+      textoVacio: 'Todavía no hay inspecciones registradas',
+      ayuda: 'Cada renglón es una inspección hecha a una unidad. El puntaje resume el estado: ' +
+        'verde arriba de 90%, ámbar entre 80 y 90, rojo abajo de 80. Abre el detalle (el ojo) ' +
+        'para ver las piezas que salieron mal, los diagramas de daños y las firmas. ' +
+        'El botón de PDF abre el formato tal como se firmó.',
+      exportar: { nombreArchivo: 'Inspecciones vehiculares' },
+      alCambiarFiltros: (filtros) => { marcarKpiActivo(filtros); },
+      etiquetaFila: (i) => [i.FOLIO, i.PLACAS, formatearFecha(i.FECHA)].filter(Boolean).join(' · '),
+      detalle: {
+        titulo: (i) => 'Inspección ' + (i.FOLIO || '') + ' · ' + formatearFecha(i.FECHA),
+        contenidoExtra: (i, contenedor) => pintarDetalle(i, contenedor),
+      },
+      columnas: [
+        { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', fijada: true },
+        { campo: 'FECHA', titulo: 'Fecha', tipo: 'fecha' },
+        { campo: 'TIPO', titulo: 'Tipo de unidad', tipo: 'lista' },
+        { campo: 'PLACAS', titulo: 'Placas', tipo: 'texto' },
+        { campo: 'PUNTAJE', titulo: 'Puntaje', tipo: 'numero', agregado: 'promedio',
+          render: (v) => badgePuntaje(v) },
+        { campo: 'RESPONSABLE', titulo: 'Responsable', tipo: 'texto' },
+        { campo: 'CONDUCTOR', titulo: 'Conductor', tipo: 'texto' },
+        { campo: 'DEPARTAMENTO', titulo: 'Departamento', tipo: 'lista' },
+        { campo: 'SEDE', titulo: 'Sede', tipo: 'lista' },
+        { campo: 'INSPECTOR', titulo: 'Inspector', tipo: 'lista' },
+        { campo: 'VEHICULO', titulo: 'Vehículo', tipo: 'lista' },
+        { campo: 'MODELO', titulo: 'Año', tipo: 'texto', visible: false },
+        { campo: 'SERIE', titulo: 'Serie', tipo: 'texto', visible: false },
+        { campo: 'AREA', titulo: 'Área', tipo: 'lista', visible: false },
+        { campo: 'OFICINA', titulo: 'Oficina / desarrollo', tipo: 'lista', visible: false },
+        { campo: 'JEFE_DIRECTO', titulo: 'Jefe directo', tipo: 'texto', visible: false },
+        { campo: 'HOLOGRAMA', titulo: 'Holograma', tipo: 'texto', visible: false },
+        { campo: 'COMBUSTIBLE', titulo: 'Combustible', tipo: 'lista', visible: false },
+        { campo: 'VOLTAJE', titulo: 'Voltaje', tipo: 'numero', visible: false },
+        { campo: 'ULTIMO_SERVICIO', titulo: 'Último servicio', tipo: 'fecha', visible: false },
+        { campo: 'OBSERVACIONES', titulo: 'Observaciones', tipo: 'texto', visible: false },
+        {
+          campo: 'PDF', titulo: 'Formato', filtrable: false, ordenable: false, enDetalle: false,
+          render: (ruta) => (ruta
+            ? `<button type="button" class="secondary btn-ver-formato" data-ruta="${escaparHtml(ruta)}" style="padding:4px 8px; display:inline-flex; align-items:center; gap:5px">${Iconos.svg('documento')} PDF</button>`
+            : '—'),
+        },
+      ],
+      accionesFila: [{
+        icono: 'documento', titulo: 'Abrir el formato en PDF',
+        visible: (i) => !!i.PDF,
+        alHacer: (i) => abrirFormatoInspeccion(i.PDF),
+      }],
+      seleccionable: true,
+      // Una inspección es un acta firmada: no se corrige, se levanta otra
+      motivoSinEliminar: 'Una inspección firmada no se edita: si algo cambió, levanta una nueva',
+    });
+
+    document.getElementById('ins-tabla').addEventListener('click', (ev) => {
+      const btn = ev.target.closest('.btn-ver-formato');
+      if (btn) abrirFormatoInspeccion(btn.dataset.ruta);
+    });
+
+    // ----- Panel de detalle: la inspección completa se pide solo al abrirla -----
+    async function pintarDetalle(inspeccion, contenedor) {
+      contenedor.innerHTML = '<span class="dt-skel" style="height:120px; width:100%; border-radius:10px"></span>';
+      let d;
+      try {
+        d = await callServer('apiDetalleInspeccion', state.token, inspeccion.ID);
+      } catch (err) {
+        contenedor.innerHTML = `<p class="error-msg">${Iconos.svg('alerta')} ${escaparHtml(err.message)}</p>`;
+        return;
+      }
+      if (!document.body.contains(contenedor)) return;   // el panel se cerró mientras cargaba
+
+      const seccion = (titulo, cuerpo) => (cuerpo
+        ? `<div class="dt-campo-titulo" style="margin:14px 0 6px">${titulo}</div>${cuerpo}` : '');
+      const lista = (items) => (items.length
+        ? '<ul style="margin:0; padding-left:18px; line-height:1.7">' +
+          items.map((t) => `<li>${t}</li>`).join('') + '</ul>' : '');
+
+      const problemas = d.conProblema.map((c) => {
+        const malo = /^MALO$/i.test(c.estado);
+        return `<span style="color:${malo ? 'var(--color-danger)' : 'inherit'}">` +
+          `${escaparHtml(c.pieza)} — <strong>${escaparHtml(c.estado)}</strong></span>`;
+      });
+
+      contenedor.innerHTML =
+        seccion('Resultado', `<p style="margin:0">${badgePuntaje(d.PUNTAJE)} · ${d.piezasRevisadas} piezas revisadas` +
+          (d.conProblema.length ? ` · <strong>${d.conProblema.length}</strong> con problema` : ' · sin problemas') + '</p>') +
+        seccion(`Piezas con problema (${d.conProblema.length})`, lista(problemas)) +
+        seccion('Llantas (mm)', lista(d.llantas.map((l) =>
+          `${escaparHtml(l.etiqueta)}: <strong>${escaparHtml(l.valor)}</strong>`))) +
+        seccion('Puntaje por sección', lista(d.puntuaciones.map((p) =>
+          `${escaparHtml(p.etiqueta)}: ${p.valor === '' ? '—' : p.valor + '%'}`))) +
+        seccion('Diagramas y firmas',
+          `<div id="ins-imagenes" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px">` +
+          d.imagenes.map((img) =>
+            `<button type="button" class="secondary btn-ver-imagen" data-ruta="${escaparHtml(img.valor)}"
+              style="display:flex; flex-direction:column; gap:4px; padding:8px; height:auto">
+              ${Iconos.svg('imagen')} <span style="font-size:11.5px">${escaparHtml(img.etiqueta)}</span>
+            </button>`).join('') + '</div>') +
+        (d.OBSERVACIONES ? seccion('Observaciones', `<p style="margin:0">${escaparHtml(d.OBSERVACIONES)}</p>`) : '');
+
+      contenedor.querySelectorAll('.btn-ver-imagen').forEach((btn) => {
+        btn.addEventListener('click', () => mostrarImagen(btn, btn.dataset.ruta));
+      });
+    }
+
+    /** Muestra la imagen debajo del botón (un link de Drive no se puede incrustar) */
+    async function mostrarImagen(boton, ruta) {
+      const caja = boton.parentElement.parentElement;
+      let vista = caja.querySelector('#ins-vista-imagen');
+      if (!vista) {
+        vista = document.createElement('div');
+        vista.id = 'ins-vista-imagen';
+        vista.style.marginTop = '10px';
+        caja.appendChild(vista);
+      }
+      vista.innerHTML = '<span class="dt-skel" style="height:160px; width:100%; border-radius:10px"></span>';
+      try {
+        const imagen = await callServer('apiPrevisualizarImagenInspeccion', state.token, ruta);
+        vista.innerHTML = (imagen.base64
+          ? `<img src="data:${escaparHtml(imagen.mimeType)};base64,${imagen.base64}" alt="Diagrama de la inspección"
+              style="width:100%; border-radius:10px; border:1px solid var(--color-border)" />`
+          : '<p class="page-subtitle">La imagen es muy grande para mostrarla aquí.</p>') +
+          `<p style="margin:8px 0 0"><a href="${escaparHtml(imagen.url)}" target="_blank" rel="noopener">Abrir en Drive ↗</a></p>`;
+      } catch (err) {
+        vista.innerHTML = `<p class="error-msg">${Iconos.svg('alerta')} ${escaparHtml(err.message)}</p>`;
+      }
+    }
+
+    // ----- KPIs -----
+    function pintarStats() {
+      const hace30 = Date.now() - 30 * DIA_MS;
+      const conPuntaje = inspecciones.filter((i) => i.PUNTAJE !== '');
+      const promedio = conPuntaje.length
+        ? Math.round(conPuntaje.reduce((s, i) => s + i.PUNTAJE, 0) / conPuntaje.length * 10) / 10
+        : null;
+
+      document.getElementById('ins-stat-total').textContent = inspecciones.length;
+      document.getElementById('ins-stat-mes').textContent =
+        inspecciones.filter((i) => i.FECHA && new Date(i.FECHA).getTime() >= hace30).length;
+      document.getElementById('ins-stat-bajas').textContent =
+        conPuntaje.filter((i) => i.PUNTAJE < PUNTAJE_BAJO).length;
+      document.getElementById('ins-stat-promedio').textContent = promedio === null ? '—' : promedio + '%';
+    }
+
+    function marcarKpiActivo(filtros) {
+      const f = filtros.PUNTAJE;
+      document.getElementById('ins-kpi-bajas').classList.toggle(
+        'activo', !!(f && f.op === '<' && String(f.v1) === String(PUNTAJE_BAJO))
+      );
+      const fecha = filtros.FECHA;
+      document.getElementById('ins-kpi-mes').classList.toggle('activo', !!(fecha && fecha.op === 'despues'));
+    }
+
+    document.getElementById('ins-kpi-bajas').addEventListener('click', (ev) => {
+      const yaActivo = ev.currentTarget.classList.contains('activo');
+      tabla.setFiltro('PUNTAJE', yaActivo ? null : { op: '<', v1: String(PUNTAJE_BAJO) });
+    });
+    document.getElementById('ins-kpi-mes').addEventListener('click', (ev) => {
+      const yaActivo = ev.currentTarget.classList.contains('activo');
+      const desde = new Date(Date.now() - 30 * DIA_MS);
+      const iso = [desde.getFullYear(), String(desde.getMonth() + 1).padStart(2, '0'),
+        String(desde.getDate()).padStart(2, '0')].join('-');
+      tabla.setFiltro('FECHA', yaActivo ? null : { op: 'despues', v1: iso });
+    });
+    document.getElementById('ins-kpi-total').addEventListener('click', () => tabla.limpiarFiltros());
+
+    // ----- Carga -----
+    // Al volver al módulo se pinta al instante lo de la visita anterior y se refresca
+    // detrás (la tabla muestra la barra de "actualizando" en vez del esqueleto).
+    async function cargar() {
+      const previas = inspeccionesPrevias && inspeccionesPrevias.token === state.token
+        ? inspeccionesPrevias.datos : null;
+      if (previas) {
+        inspecciones = previas;
+        tabla.setDatos(previas);
+        pintarStats();
+      }
+      tabla.setCargando(true);
+      try {
+        inspecciones = (await callServer('apiListarInspecciones', state.token)) || [];
+      } catch (err) {
+        if (previas) {
+          tabla.setCargando(false);
+          Notificar.error('No se pudieron actualizar las inspecciones: ' + err.message);
+        } else {
+          tabla.setError('No se pudieron cargar las inspecciones: ' + err.message);
+        }
+        return;
+      }
+      inspeccionesPrevias = { token: state.token, datos: inspecciones };
+      tabla.setDatos(inspecciones);
+      pintarStats();
+    }
+
+    // La captura (y sus catálogos) se prepara hasta que hace falta: al abrir la pestaña,
+    // o en cuanto termina de cargar la tabla. Así no compite con la lista por el servidor.
+    let captura = null;
+    const prepararSiFalta = () => {
+      if (puedeEditar && !captura) captura = prepararCaptura(tabs, cargar);
+    };
+
+    const tabs = Tabs.iniciar(document.getElementById('ins-tabs'), {
+      inicial: 'registros',
+      alCambiar: (nombre) => {
+        if (nombre === 'registros') requestAnimationFrame(tabla.ajustarAlto);
+        if (nombre === 'nueva') prepararSiFalta();
+      },
+    });
+
+    if (!puedeEditar) {
+      document.querySelector('#ins-tabs .tab-btn[data-tab="nueva"]').remove();
+    }
+
+    await cargar();
+    prepararSiFalta();
+  }
+
+  /** Lo último que se cargó, para pintar al instante al volver al módulo */
+  let inspeccionesPrevias = null;
+
+  /**
+   * Cómo se reparten las secciones del formato en pasos: en el orden en que el inspector
+   * le da la vuelta a la unidad (por fuera, llantas, por dentro, motor). Se agrupan por el
+   * título de la sección, que es el mismo en los 18 formatos; si algún formato trae una
+   * sección que no encaje, cae en "Otras revisiones" en vez de perderse.
+   */
+  const PASOS_CHECKLIST = [
+    { titulo: 'Exterior', descripcion: 'Papeles de la unidad y lo que se ve por fuera',
+      coincide: /documenta|cristal|latoner|pintura|cerradura/i },
+    { titulo: 'Neumáticos', descripcion: 'Estado de cada llanta y su profundidad en milímetros',
+      coincide: /neum|llanta/i, llantas: true },
+    { titulo: 'Interior', descripcion: 'Cabina, inventario y limpieza',
+      coincide: /interior|inventario|limpieza/i },
+    { titulo: 'Mecánica', descripcion: 'Motor, niveles y batería',
+      coincide: /mec[aá]nic|nivel|bater/i, voltaje: true },
+  ];
+
+  /** Puntos de una respuesta; null = no cuenta (sin responder o N/A). Misma regla que el servidor. */
+  function puntoDeRespuesta(campo, valor) {
+    if (!valor) return null;
+    const ops = campo.opciones.map((o) => o.toUpperCase());
+    // En las secciones de defectos (SI/NO) lo bueno es NO tenerlos
+    if (ops.indexOf('SI') !== -1 && ops.indexOf('NO') !== -1) {
+      return valor === 'NO' ? 1 : (valor === 'SI' ? 0 : null);
+    }
+    const tabla = { BUENO: 1, REGULAR: 0.5, MALO: 0, PRESENTA: 1, 'NO PRESENTA': 0 };
+    const punto = tabla[valor.toUpperCase()];
+    return punto === undefined ? null : punto;
+  }
+
+  /** La respuesta "buena" de una pieza: la que vale 1 punto (en defectos es NO, no la primera) */
+  const opcionBuena = (campo) => campo.opciones.find((o) => puntoDeRespuesta(campo, o) === 1) || campo.opciones[0];
+
+  /**
+   * Captura de una inspección, por pasos. El checklist no está escrito en ningún lado del
+   * código: se pide al servidor según el tipo de unidad, y este lo saca de la plantilla.
+   *
+   * Usa el mismo sistema visual de pasos que Formulario (chips, Atrás/Siguiente, panel
+   * lateral), pero con su propio control: los pasos dependen del tipo de unidad y el
+   * checklist es una cuadrícula de opciones, que no es un campo de Formulario.
+   *
+   * Las piezas sin responder NO bloquean el avance (así lo permitía AppSheet y no cuentan
+   * para el puntaje); el paso de revisión dice cuáles faltan y deja saltar a ellas.
+   */
+  function prepararCaptura(tabs, recargar) {
+    const contenedor = document.getElementById('ins-form');
+    let estructura = null;      // secciones, llantas y diagramas del tipo elegido
+    let vehiculo = null;
+    let pasos = [];
+    let pasoActual = 0;
+    let vistos = {};
+
+    contenedor.innerHTML = `
+      <form class="form-medio form-doble" novalidate>
+        <div class="form-principal">
+          <ol class="form-pasos" id="ins-pasos"></ol>
+          <section class="form-paso" data-paso="0">
+            <h3 class="form-paso-titulo" tabindex="-1">Unidad</h3>
+            <p class="form-paso-desc">Qué vehículo se revisa y con qué formato</p>
+            <p class="form-nota">Campos obligatorios</p>
+            <div class="form-campos" style="--form-columnas:2">
+              <div class="field" data-campo="FOLIO">
+                <label for="ins-folio">Folio del vehículo</label>
+                <input type="text" id="ins-folio" required autocomplete="off" />
+                <span class="form-ayuda">Al elegirlo se traen sus datos y se sugiere el tipo de unidad</span>
+                <span class="form-error-campo" hidden></span>
+              </div>
+              <div class="field" data-campo="TIPO">
+                <label for="ins-tipo">Tipo de unidad</label>
+                <select id="ins-tipo" required><option value="">Cargando tipos…</option></select>
+                <span class="form-ayuda">Decide qué piezas se revisan y con qué formato se imprime</span>
+                <span class="form-error-campo" hidden></span>
+              </div>
+            </div>
+            <div id="ins-cargando-checklist"></div>
+          </section>
+          <div id="ins-pasos-checklist"></div>
+          <div class="form-acciones form-acciones-pasos chk-resumen">
+            <button type="button" class="secondary" id="ins-atras" hidden>${Iconos.svg('anterior')} Atrás</button>
+            <button type="button" id="ins-siguiente">Siguiente ${Iconos.svg('siguiente')}</button>
+            <button type="button" id="ins-guardar" hidden>${Iconos.svg('guardar')} Guardar inspección</button>
+            <span class="form-cuenta" id="ins-cuenta"></span>
+          </div>
+          <div class="error-msg" id="ins-error" role="alert" hidden></div>
+        </div>
+        <aside class="form-panel">
+          <div class="form-ficha ins-ficha-vehiculo" id="ins-ficha">
+            <p class="form-panel-vacio">Elige el vehículo para ver sus datos</p>
+          </div>
+          <div class="form-ficha ins-panel-avance" id="ins-panel-avance" hidden>
+            <p class="form-panel-titulo">Puntaje</p>
+            <div class="ins-puntaje" id="ins-puntaje">—</div>
+            <div class="ins-puntaje-sub" id="ins-avance"></div>
+            <ul class="ins-avance-lista" id="ins-avance-lista"></ul>
+          </div>
+        </aside>
+      </form>`;
+
+    const $ = (sel) => contenedor.querySelector(sel);
+    const campoFolio = $('#ins-folio');
+    const campoTipo = $('#ins-tipo');
+    const cajaPasos = $('#ins-pasos-checklist');
+    $('form').addEventListener('submit', (ev) => ev.preventDefault());
+
+    const error = (campo, mensaje) => {
+      const caja = contenedor.querySelector(`[data-campo="${campo}"]`);
+      if (!caja) return;
+      caja.classList.toggle('form-campo-error', !!mensaje);
+      const span = caja.querySelector('.form-error-campo');
+      span.hidden = !mensaje;
+      span.textContent = mensaje || '';
+    };
+    const errorGeneral = (mensaje) => {
+      const caja = $('#ins-error');
+      caja.hidden = !mensaje;
+      caja.textContent = mensaje || '';
+    };
+
+    // ----- catálogos -----
+    const catalogos = Promise.all([
+      callServer('apiListarVehiculosBasico', state.token).then((vehiculos) => {
+        Combobox.crear(campoFolio, {
+          opciones: (vehiculos || []).map((v) => ({
+            valor: v.FOLIO,
+            etiqueta: [v.PLACA, v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' · '),
+          })),
+          alElegir: () => buscarVehiculo(),
+        });
+      }).catch((err) => Notificar.error('No se pudo cargar el catálogo de vehículos: ' + err.message)),
+
+      callServer('apiTiposInspeccion', state.token).then((tipos) => {
+        campoTipo.innerHTML = '<option value=""></option>' + (tipos || [])
+          .map((t) => `<option value="${escaparHtml(t.tipo)}" ${t.listo ? '' : 'disabled'}>` +
+            `${escaparHtml(t.tipo)}${t.listo ? '' : ' (sin formato)'}</option>`).join('');
+      }).catch((err) => Notificar.error('No se pudieron cargar los tipos: ' + err.message)),
+    ]);
+
+    // ----- vehículo -----
+    function pintarFicha() {
+      const ficha = $('#ins-ficha');
+      if (!vehiculo) {
+        ficha.innerHTML = '<p class="form-panel-vacio">Elige el vehículo para ver sus datos</p>';
+        return;
+      }
+      const v = vehiculo;
+      ficha.innerHTML =
+        `<div class="form-ficha-titulo">${escaparHtml(v['PLACA'] || 'Sin placa')}</div>` +
+        `<div class="form-ficha-subtitulo">${escaparHtml([v['MARCA'], v['LINEA VEHICULO'], v['MODELO']].filter(Boolean).join(' · '))}</div>` +
+        '<div class="form-ficha-datos">' +
+        [['Folio', v['FOLIO']], ['Responsable', v['RESPONSABLE VEHICULO']], ['Departamento', v['DEPARTAMENTO']],
+          ['Sede', v['SEDE']], ['Serie', v['SERIE VEHICULO']], ['Estatus', v['ESTATUS']]]
+          .map(([e, valor]) => `<div class="form-ficha-dato"><div class="form-ficha-etiqueta">${e}</div>` +
+            `<div class="form-ficha-valor">${escaparHtml(valor || '—')}</div></div>`).join('') +
+        '</div>';
+    }
+
+    let pedido = '';
+    let buscando = null;   // la búsqueda en curso, para que "Siguiente" la espere
+    function buscarVehiculo() {
+      const folio = campoFolio.value.trim();
+      if (folio === pedido && (vehiculo || buscando)) return buscando || Promise.resolve();
+      pedido = folio;
+      if (!folio) { vehiculo = null; pintarFicha(); return Promise.resolve(); }
+      buscando = (async () => {
+        try {
+          const v = await callServer('apiBuscarVehiculoPorFolio', state.token, folio);
+          if (pedido !== folio) return;
+          vehiculo = v || null;
+          pintarFicha();
+          error('FOLIO', v ? null : 'No se encontró ese folio');
+          if (!v) return;
+          // La línea del vehículo suele coincidir con el tipo de formato: se sugiere
+          await catalogos;
+          const sugerido = Array.from(campoTipo.options)
+            .find((o) => o.value && !o.disabled && o.value.toUpperCase() === String(v['LINEA VEHICULO'] || '').toUpperCase());
+          if (sugerido && !campoTipo.value) { campoTipo.value = sugerido.value; cargarChecklist(); }
+        } catch (err) {
+          if (pedido === folio) error('FOLIO', err.message);
+        } finally {
+          buscando = null;
+        }
+      })();
+      return buscando;
+    }
+    campoFolio.addEventListener('blur', buscarVehiculo);
+
+    // Cambiar el tipo cambia el checklist entero: si ya había respuestas, se pregunta
+    let tipoAnterior = '';
+    campoTipo.addEventListener('change', async () => {
+      if (tipoAnterior && Object.keys(respuestas()).length) {
+        const ok = await Confirmar.pedir({
+          titulo: 'Cambiar el tipo de unidad',
+          mensaje: 'El checklist es otro y se perderán las respuestas que llevas. ¿Cambiar de todos modos?',
+          textoConfirmar: 'Cambiar',
+        });
+        if (!ok) { campoTipo.value = tipoAnterior; return; }
+      }
+      cargarChecklist();
+    });
+
+    // ----- checklist -----
+    let cargandoChecklist = null;
+    function cargarChecklist() {
+      const tipo = campoTipo.value;
+      tipoAnterior = tipo;
+      const aviso = $('#ins-cargando-checklist');
+      estructura = null;
+      armarPasos();
+      if (!tipo) { aviso.innerHTML = ''; return Promise.resolve(); }
+      error('TIPO', null);
+      aviso.innerHTML = `<p class="form-ayuda" style="margin-top:6px">Preparando el checklist de ${escaparHtml(tipo)}…</p>`;
+      cargandoChecklist = (async () => {
+        try {
+          const recibida = await callServer('apiEstructuraInspeccion', state.token, tipo);
+          if (campoTipo.value !== tipo) return;   // cambiaron el tipo mientras llegaba
+          estructura = recibida;
+          aviso.innerHTML = `<p class="form-ayuda" style="margin-top:6px">${estructura.piezas} piezas en ` +
+            `${estructura.secciones.length} secciones</p>`;
+          armarPasos();
+        } catch (err) {
+          if (campoTipo.value === tipo) error('TIPO', err.message);
+          aviso.innerHTML = '';
+        } finally {
+          cargandoChecklist = null;
+        }
+      })();
+      return cargandoChecklist;
+    }
+
+    /** Pasos según el tipo elegido: Unidad → grupos del checklist → Cierre → Revisar */
+    function armarPasos() {
+      pasos = [{ id: 'unidad', titulo: 'Unidad' }];
+      vistos = { 0: true };
+      pasoActual = 0;
+      cajaPasos.innerHTML = '';
+      if (estructura) {
+        const grupos = PASOS_CHECKLIST.map((g) => Object.assign({}, g, { secciones: [] }));
+        const otras = { titulo: 'Otras revisiones', descripcion: 'Secciones propias de este formato', secciones: [] };
+        estructura.secciones.forEach((s, i) => {
+          (grupos.find((g) => g.coincide.test(s.titulo)) || otras).secciones.push(i);
+        });
+        grupos.concat(otras)
+          .filter((g) => g.secciones.length || (g.llantas && estructura.llantas.length))
+          .forEach((g) => pasos.push(Object.assign({ id: 'checklist' }, g)));
+        pasos.push({ id: 'cierre', titulo: 'Cierre', descripcion: 'Quién maneja la unidad y lo que haya que anotar' });
+        pasos.push({ id: 'revisar', titulo: 'Revisar y guardar', descripcion: 'Confirma el puntaje y lo que salió mal antes de guardar' });
+
+        cajaPasos.innerHTML = pasos.slice(1).map((p, k) => `
+          <section class="form-paso" data-paso="${k + 1}" hidden>
+            <h3 class="form-paso-titulo" tabindex="-1">${escaparHtml(p.titulo)}</h3>
+            <p class="form-paso-desc">${escaparHtml(p.descripcion || '')}</p>
+            ${htmlDePaso(p)}
+          </section>`).join('');
+        conectarChecklist();
+      }
+      $('#ins-panel-avance').hidden = !estructura;
+      mostrarPaso(0);
+      actualizarAvance();
+    }
+
+    function htmlSeccion(i) {
+      const s = estructura.secciones[i];
+      return `
+        <div class="chk-seccion" data-seccion="${i}">
+          <div class="chk-seccion-titulo">
+            <h4>${escaparHtml(s.titulo)}</h4>
+            <span class="chk-peso">vale ${s.peso}%</span>
+            <button type="button" class="secondary chk-todo-bien" data-todo="${i}">
+              ${Iconos.svg('guardar')} ${puntoDeRespuesta(s.campos[0], 'SI') === 0 ? 'Sin defectos' : 'Todo ' + escaparHtml(opcionBuena(s.campos[0]).toLowerCase())}
+            </button>
+            <span class="chk-avance">0 de ${s.campos.length}</span>
+          </div>
+          <table class="chk-tabla">
+            <thead><tr><th>Pieza</th>${s.campos[0].opciones.map((o) => `<th>${escaparHtml(o)}</th>`).join('')}</tr></thead>
+            <tbody>${s.campos.map((c) => `
+              <tr class="sin-responder" data-pieza="${escaparHtml(c.campo)}">
+                <td>${escaparHtml(c.campo)}</td>
+                ${c.opciones.map((o) => `<td class="${/^(MALO|SI|NO PRESENTA)$/i.test(o) ? 'chk-malo' : ''}">
+                  <label class="chk-opcion" title="${escaparHtml(c.campo)}: ${escaparHtml(o)}">
+                    <input type="radio" name="chk-${escaparHtml(c.campo)}" value="${escaparHtml(o)}" />
+                  </label></td>`).join('')}
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    }
+
+    function htmlDePaso(p) {
+      if (p.id === 'checklist') {
+        const llantas = p.llantas && estructura.llantas.length ? `
+          <div class="chk-seccion">
+            <div class="chk-seccion-titulo"><h4>Profundidad de las llantas</h4><span class="chk-peso">en mm</span></div>
+            <div class="form-campos" style="--form-columnas:2; padding:12px">
+              ${estructura.llantas.map((l) => `
+                <div class="field">
+                  <label for="ins-${escaparHtml(l.campo)}">${escaparHtml(l.etiqueta)}</label>
+                  <input type="number" id="ins-${escaparHtml(l.campo)}" data-llanta="${escaparHtml(l.campo)}"
+                    step="0.1" min="0" max="30" inputmode="decimal" />
+                </div>`).join('')}
+            </div>
+          </div>` : '';
+        const voltaje = p.voltaje ? `
+          <div class="form-campos" style="--form-columnas:2">
+            <div class="field"><label for="ins-voltaje">Voltaje de la batería</label>
+              <input type="number" id="ins-voltaje" step="0.01" min="0" max="20" inputmode="decimal" />
+              <span class="form-ayuda">Medido con el multímetro, en volts</span></div>
+          </div>` : '';
+        return p.secciones.map(htmlSeccion).join('') + llantas + voltaje;
+      }
+      if (p.id === 'cierre') {
+        return `
+          <div class="form-campos" style="--form-columnas:2">
+            <div class="field"><label for="ins-conductor">Conductor</label><input type="text" id="ins-conductor" /></div>
+            <div class="field"><label for="ins-jefe">Jefe directo</label><input type="text" id="ins-jefe" /></div>
+            <div class="field"><label for="ins-holograma">Holograma</label><input type="text" id="ins-holograma" /></div>
+            <div class="field"><label for="ins-servicio">Fecha del último servicio</label>
+              <input type="date" id="ins-servicio" /></div>
+            ${PASOS_CHECKLIST.some((g) => g.voltaje && pasos.some((x) => x.titulo === g.titulo)) ? '' : `
+            <div class="field"><label for="ins-voltaje">Voltaje de la batería</label>
+              <input type="number" id="ins-voltaje" step="0.01" min="0" max="20" inputmode="decimal" /></div>`}
+            <div class="field form-completo"><label for="ins-observaciones">Observaciones</label>
+              <textarea id="ins-observaciones" rows="3"></textarea></div>
+          </div>`;
+      }
+      return '<div id="ins-revision"></div>';   // se llena al llegar al paso
+    }
+
+    function conectarChecklist() {
+      cajaPasos.querySelectorAll('[data-todo]').forEach((btn) => btn.addEventListener('click', () => {
+        const s = estructura.secciones[Number(btn.dataset.todo)];
+        s.campos.forEach((c) => {
+          const bueno = opcionBuena(c);
+          const radio = cajaPasos.querySelector(`input[name="chk-${CSS.escape(c.campo)}"][value="${CSS.escape(bueno)}"]`);
+          if (radio) radio.checked = true;
+        });
+        actualizarAvance();
+      }));
+      cajaPasos.addEventListener('change', (ev) => { if (ev.target.type === 'radio') actualizarAvance(); });
+      refreshIcons();
+    }
+
+    /** Respuestas capturadas hasta ahora */
+    function respuestas() {
+      const salida = {};
+      (estructura ? estructura.secciones : []).forEach((s) => s.campos.forEach((c) => {
+        const marcado = cajaPasos.querySelector(`input[name="chk-${CSS.escape(c.campo)}"]:checked`);
+        if (marcado) salida[c.campo] = marcado.value;
+      }));
+      return salida;
+    }
+
+    /** Puntaje y avance, con la misma regla del servidor (ahí se vuelve a calcular) */
+    function calcular() {
+      const dadas = respuestas();
+      let total = 0;
+      let respondidas = 0;
+      const porSeccion = estructura.secciones.map((s) => {
+        let puntos = 0;
+        let evaluadas = 0;
+        let contestadas = 0;
+        const problemas = [];
+        s.campos.forEach((c) => {
+          const valor = dadas[c.campo];
+          if (valor) contestadas++;
+          const punto = puntoDeRespuesta(c, valor);
+          if (punto === null) return;
+          puntos += punto;
+          evaluadas++;
+          if (punto < 1) problemas.push({ pieza: c.campo, valor: valor });
+        });
+        const aporte = evaluadas ? (s.peso / 100) * (puntos / evaluadas) : 0;
+        total += aporte;
+        respondidas += contestadas;
+        return { contestadas, total: s.campos.length, aporte: aporte * 100, problemas };
+      });
+      return { dadas, respondidas, porSeccion, puntaje: Math.round(total * 10000) / 100 };
+    }
+
+    const pasoDeSeccion = (i) => pasos.findIndex((p) => p.secciones && p.secciones.indexOf(i) !== -1);
+
+    function actualizarAvance() {
+      if (!estructura) { actualizarPasos(); return; }
+      const r = calcular();
+      r.porSeccion.forEach((s, i) => {
+        const avance = cajaPasos.querySelector(`[data-seccion="${i}"] .chk-avance`);
+        if (!avance) return;
+        avance.textContent = `${s.contestadas} de ${s.total}`;
+        avance.classList.toggle('completa', s.contestadas === s.total);
+      });
+      cajaPasos.querySelectorAll('.chk-tabla tr[data-pieza]').forEach((tr) => {
+        tr.classList.toggle('sin-responder', !tr.querySelector('input:checked'));
+      });
+      $('#ins-puntaje').textContent = r.puntaje + '%';
+      $('#ins-avance').textContent = `${r.respondidas} de ${estructura.piezas} piezas respondidas`;
+      // Avance por sección en el panel: cada una lleva a su paso
+      $('#ins-avance-lista').innerHTML = estructura.secciones.map((s, i) => {
+        const a = r.porSeccion[i];
+        return `<li><button type="button" data-ir-seccion="${i}" class="${a.contestadas === a.total ? 'completa' : ''}">
+          <span>${escaparHtml(s.titulo)}</span><span>${a.contestadas}/${a.total}</span></button></li>`;
+      }).join('');
+      $('#ins-avance-lista').querySelectorAll('[data-ir-seccion]').forEach((b) => b.addEventListener('click', () =>
+        irASeccion(Number(b.dataset.irSeccion))));
+      actualizarPasos(r);
+    }
+
+    function irASeccion(i) {
+      const paso = pasoDeSeccion(i);
+      if (paso === -1) return;
+      vistos[paso] = true;
+      mostrarPaso(paso);
+      const caja = cajaPasos.querySelector(`[data-seccion="${i}"]`);
+      if (caja && caja.scrollIntoView) caja.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+
+    // ----- pasos -----
+    /** ¿El paso ya está completo? (para pintar su chip en verde) */
+    function completo(i, r) {
+      const p = pasos[i];
+      if (!vistos[i] || i === pasoActual) return false;
+      if (p.id === 'unidad') return !!(vehiculo && estructura);
+      if (p.id === 'checklist') {
+        return !!r && p.secciones.every((s) => r.porSeccion[s].contestadas === r.porSeccion[s].total);
+      }
+      return p.id === 'cierre';
+    }
+
+    function actualizarPasos(r) {
+      if (estructura && !r) r = calcular();
+      const lista = $('#ins-pasos');
+      // Solo se muestran los chips cuando ya hay checklist: un solo chip "Unidad" no dice nada
+      lista.hidden = pasos.length < 2;
+      lista.innerHTML = pasos.map((p, i) => `
+        <li><button type="button" class="form-paso-chip ${i === pasoActual ? 'activo' : ''} ${completo(i, r) ? 'completado' : ''}"
+          data-ir="${i}" ${!vistos[i] || i === pasoActual ? 'disabled' : ''}>
+          <span class="form-paso-num">${completo(i, r) ? Iconos.svg('guardar') : i + 1}</span>${escaparHtml(p.titulo)}</button></li>`).join('');
+      lista.querySelectorAll('[data-ir]').forEach((b) => b.addEventListener('click', () => mostrarPaso(Number(b.dataset.ir))));
+
+      const ultimo = pasoActual === pasos.length - 1 && pasos.length > 1;
+      $('#ins-atras').hidden = pasoActual === 0;
+      $('#ins-siguiente').hidden = ultimo;
+      $('#ins-guardar').hidden = !ultimo;
+      $('#ins-cuenta').textContent = pasos.length > 1
+        ? `Paso ${pasoActual + 1} de ${pasos.length}` + (r ? ` · puntaje ${r.puntaje}%` : '')
+        : '';
+    }
+
+    function mostrarPaso(i) {
+      pasoActual = i;
+      vistos[i] = true;
+      contenedor.querySelectorAll('.form-paso').forEach((s) => { s.hidden = Number(s.dataset.paso) !== i; });
+      if (pasos[i] && pasos[i].id === 'revisar') pintarRevision();
+      errorGeneral(null);
+      actualizarPasos();
+      const titulo = contenedor.querySelector(`.form-paso[data-paso="${i}"] .form-paso-titulo`);
+      if (titulo && i > 0) {
+        titulo.focus({ preventScroll: true });
+        if (contenedor.scrollIntoView) contenedor.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      }
+    }
+
+    /** Paso 1: sin vehículo y tipo (y su checklist) no hay nada que capturar */
+    async function validarUnidad() {
+      if (buscando) await buscando;
+      const folio = campoFolio.value.trim();
+      if (!folio) { error('FOLIO', 'Elige un vehículo'); campoFolio.focus(); return false; }
+      if (!vehiculo) {
+        await buscarVehiculo();
+        if (!vehiculo) { campoFolio.focus(); return false; }
+      }
+      if (!campoTipo.value) { error('TIPO', 'Elige el tipo de unidad'); campoTipo.focus(); return false; }
+      if (cargandoChecklist) await cargandoChecklist;
+      return !!estructura;
+    }
+
+    $('#ins-siguiente').addEventListener('click', async () => {
+      if (pasoActual === 0) {
+        const boton = $('#ins-siguiente');
+        boton.disabled = true;
+        const ok = await validarUnidad().finally(() => { boton.disabled = false; });
+        if (!ok) return;
+      }
+      if (pasoActual < pasos.length - 1) mostrarPaso(pasoActual + 1);
+    });
+    $('#ins-atras').addEventListener('click', () => { if (pasoActual > 0) mostrarPaso(pasoActual - 1); });
+
+    /** Revisión: el puntaje, lo que salió mal (lo accionable) y lo que falta por responder */
+    function pintarRevision() {
+      const caja = $('#ins-revision');
+      if (!caja || !estructura) return;
+      const r = calcular();
+      const faltantes = estructura.secciones
+        .map((s, i) => ({ s, i, a: r.porSeccion[i] }))
+        .filter((x) => x.a.contestadas < x.a.total);
+      const problemas = [];
+      r.porSeccion.forEach((a, i) => a.problemas.forEach((p) => problemas.push(Object.assign({ seccion: i }, p))));
+
+      caja.innerHTML = `
+        <div class="form-resumen" style="margin-bottom:16px">
+          <div class="form-resumen-dato"><div class="form-resumen-etiqueta">Vehículo</div>
+            <div class="form-resumen-valor">${escaparHtml([campoFolio.value, vehiculo && vehiculo['PLACA']].filter(Boolean).join(' · '))}</div></div>
+          <div class="form-resumen-dato"><div class="form-resumen-etiqueta">Tipo de unidad</div>
+            <div class="form-resumen-valor">${escaparHtml(campoTipo.value)}</div></div>
+          <div class="form-resumen-dato"><div class="form-resumen-etiqueta">Puntaje</div>
+            <div class="form-resumen-valor"><strong>${r.puntaje}%</strong></div></div>
+          <div class="form-resumen-dato"><div class="form-resumen-etiqueta">Piezas respondidas</div>
+            <div class="form-resumen-valor">${r.respondidas} de ${estructura.piezas}</div></div>
+        </div>
+        ${faltantes.length ? `
+          <div class="form-aviso form-aviso-alerta">${Iconos.svg('alerta')}
+            <div>Faltan ${estructura.piezas - r.respondidas} piezas por responder. No cuentan para el puntaje.
+              <div class="ins-revision-saltos">${faltantes.map((x) =>
+                `<button type="button" class="secondary" data-ir-seccion="${x.i}">${escaparHtml(x.s.titulo)} · faltan ${x.a.total - x.a.contestadas}</button>`).join('')}</div>
+            </div>
+          </div>` : ''}
+        <h4 class="ins-revision-titulo">Lo que salió mal (${problemas.length})</h4>
+        ${problemas.length ? `<ul class="ins-revision-problemas">${problemas.map((p) =>
+          `<li><span>${escaparHtml(p.pieza)}</span><span class="ins-revision-seccion">${escaparHtml(estructura.secciones[p.seccion].titulo)}</span>` +
+          `<span class="badge-estado abierta">${escaparHtml(p.valor)}</span></li>`).join('')}</ul>`
+          : '<p class="form-panel-vacio">Nada: todo lo revisado salió bien.</p>'}`;
+      caja.querySelectorAll('[data-ir-seccion]').forEach((b) => b.addEventListener('click', () =>
+        irASeccion(Number(b.dataset.irSeccion))));
+      refreshIcons();
+    }
+
+    // ----- guardar -----
+    const valorDe = (id) => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+
+    $('#ins-guardar').addEventListener('click', async () => {
+      const boton = $('#ins-guardar');
+      errorGeneral(null);
+      if (!(await validarUnidad())) { mostrarPaso(0); return; }
+      const r = calcular();
+      if (!Object.keys(r.dadas).length) { errorGeneral('Responde al menos una pieza del checklist'); return; }
+      const faltan = estructura.piezas - r.respondidas;
+      if (faltan > 0) {
+        const ok = await Confirmar.pedir({
+          titulo: `Faltan ${faltan} piezas por responder`,
+          mensaje: 'Las piezas sin responder no cuentan para el puntaje. ¿Guardar así?',
+          textoConfirmar: 'Guardar de todos modos',
+        });
+        if (!ok) return;
+      }
+
+      const llantas = {};
+      cajaPasos.querySelectorAll('[data-llanta]').forEach((el) => {
+        if (el.value !== '') llantas[el.dataset.llanta] = Number(el.value);
+      });
+
+      const htmlBoton = boton.innerHTML;
+      boton.disabled = true;
+      boton.textContent = 'Guardando…';
+      try {
+        const res = await callServer('apiRegistrarInspeccion', state.token, {
+          FOLIO: campoFolio.value.trim(),
+          TIPO: campoTipo.value,
+          checklist: r.dadas,
+          llantas: llantas,
+          CONDUCTOR: valorDe('ins-conductor'),
+          JEFE_DIRECTO: valorDe('ins-jefe'),
+          HOLOGRAMA: valorDe('ins-holograma'),
+          VOLTAJE: valorDe('ins-voltaje'),
+          ULTIMO_SERVICIO: valorDe('ins-servicio'),
+          OBSERVACIONES: valorDe('ins-observaciones'),
+        }, {});
+
+        if (res.aviso) Notificar.error(res.aviso);
+        else Notificar.exito(`Inspección guardada · puntaje ${res.puntaje}%`, {
+          duracion: 9000,
+          accion: res.pdf ? { texto: 'Ver PDF', alHacer: () => window.open(res.pdf, '_blank') } : null,
+        });
+        // Se deja listo para la siguiente unidad
+        campoFolio.value = '';
+        campoTipo.value = '';
+        tipoAnterior = '';
+        pedido = '';
+        vehiculo = null;
+        estructura = null;
+        $('#ins-cargando-checklist').innerHTML = '';
+        pintarFicha();
+        armarPasos();
+        tabs.mostrar('registros');
+        await recargar();
+      } catch (err) {
+        errorGeneral(err.message);
+      } finally {
+        boton.disabled = false;
+        boton.innerHTML = htmlBoton;
+      }
+    });
+
+    armarPasos();
+    return { catalogos };
+  }
+</script>

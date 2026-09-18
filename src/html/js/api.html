@@ -7,7 +7,15 @@
     return new Promise((resolve, reject) => {
       google.script.run
         .withSuccessHandler(resolve)
-        .withFailureHandler((err) => reject(new Error(err.message || String(err))))
+        .withFailureHandler((err) => {
+          const error = new Error(err.message || String(err));
+          // El token vive en sessionStorage pero la sesión del servidor caduca (8 h): sin
+          // esto la app se queda "adentro" con todo fallando y el menú vacío.
+          if (/sesi[oó]n expirada/i.test(error.message)) {
+            window.dispatchEvent(new CustomEvent('sesion-expirada'));
+          }
+          reject(error);
+        })
         [fnName](...args);
     });
   }

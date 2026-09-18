@@ -60,7 +60,7 @@ const IncidenciasService = (function () {
   }
 
   function listar(token) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'incidencias');
     return SheetUtils.getAll(ssId(), hoja_().getName())
       .map(desdeOriginal_)
       .sort((a, b) => new Date(b.FECHA_REGISTRO) - new Date(a.FECHA_REGISTRO));
@@ -68,7 +68,7 @@ const IncidenciasService = (function () {
 
   /** Abre una nueva incidencia (ingreso del vehículo al taller) */
   function crear(token, datos) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    Permisos.puedeEditar(token, 'incidencias');
     if (!datos.FOLIO) throw new Error('El folio del vehículo es obligatorio');
 
     const id = Utilities.getUuid().slice(0, 8);
@@ -94,7 +94,7 @@ const IncidenciasService = (function () {
 
   /** Cierra una incidencia abierta (trabajo realizado + inspección de salida) */
   function cerrar(token, id, datos) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    Permisos.puedeEditar(token, 'incidencias');
     if (!datos.DESCRIPCION_TRABAJO) throw new Error('Describe el trabajo realizado');
 
     SheetUtils.update(ssId(), hoja_().getName(), id, {
@@ -108,7 +108,7 @@ const IncidenciasService = (function () {
 
   /** Corrige cualquier campo de una incidencia existente (abierta o cerrada) */
   function actualizar(token, id, datos) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    Permisos.puedeEditar(token, 'incidencias');
     const cambios = {};
     if (datos.FOLIO !== undefined) cambios['FOLIO'] = datos.FOLIO;
     if (datos.DEPARTAMENTO !== undefined) cambios['DEPARTAMENTO'] = datos.DEPARTAMENTO;
@@ -135,7 +135,7 @@ const IncidenciasService = (function () {
 
   /** Elimina por completo una incidencia (borrado físico de la fila) — solo ADMIN */
   function eliminar(token, id) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN]);
+    Permisos.puedeEditar(token, 'incidencias');
     const ok = SheetUtils.remove(ssId(), hoja_().getName(), id, 'ID_INCIDENCIA');
     if (!ok) throw new Error('No se encontró la incidencia con ID=' + id);
     return { ID: id };
@@ -148,7 +148,7 @@ const IncidenciasService = (function () {
    */
   function diagnostico(token) {
     try {
-      Auth.validarSesion(token);
+      Permisos.puedeLeer(token, 'incidencias');
       const hoja = hoja_();
       const crudos = SheetUtils.getAll(ssId(), hoja.getName());
       return {

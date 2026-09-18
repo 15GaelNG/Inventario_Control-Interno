@@ -13,7 +13,8 @@ cada módulo del nuevo sistema. Solo se documentan nombres de columnas
 |---|---|---|
 | Usuarios | Tabla de login (CORREO, ROL, ACTIVO, DPTOS PERMITIDOS...) | ✅ Definido en `UsuariosService.gs` / `Auth.gs` |
 | Accesorios | Catálogo de accesorios + movimientos entrada/salida | ✅ Definido en `AccesoriosService.gs` (referencia de patrón) |
-| Vehículos | Alta de vehículo, reasignaciones, verificaciones, servicios, sensores GPS, hologramas EOX | ⏳ Pendiente — service creado como stub |
+| Vehículos | Alta de vehículo, reasignaciones, verificaciones, sensores GPS, hologramas EOX | ⏳ Pendiente — service creado como stub |
+| ~~Servicios~~ (mantenimiento) | Hoja `SERVICIOS` del AppSheet | ❌ Descartado (2026-09-17): no se va a migrar |
 | Inspección vehicular | Checklist ~150 campos por pieza + diagrama frontal/trasera/izq/der + firma | ⏳ Pendiente — usa `PdfService.generarReporteDanios('VEHICULO', ...)` |
 | Telefonía | Líneas + equipos, reasignaciones, suspensiones, portabilidad, bajas | ⏳ Pendiente — service creado como stub |
 | Inspección de equipo telefónico | Checklist de daños del celular + firma | ⏳ Pendiente — usa `PdfService.generarReporteDanios('CELULAR', ...)` |

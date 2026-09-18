@@ -9,7 +9,7 @@
     "watch": "clasp push --watch",
     "open": "clasp open",
     "deploy": "clasp deploy",
-    "test": "node tests/datatable.test.js"
+    "test": "node tests/datatable.test.js && node tests/inspecciones-captura.test.js && node tests/formulario.test.js && node tests/permisos.test.js && node tests/plantilla.test.js && node tests/inspecciones.test.js && node tests/pdf.test.js && node tests/sheetutils.test.js && node tests/geotab.test.js"
   },
   "devDependencies": {
     "@google/clasp": "^3.0.0",
