@@ -48,6 +48,9 @@ function apiListarVehiculosResumen(token) {
 function apiPrevisualizarFolioVehiculo(token, clase) {
   return VehiculosService.previsualizarFolio(token, clase);
 }
+function apiPrevisualizarNuccoVehiculo(token) {
+  return VehiculosService.previsualizarNucco(token);
+}
 function apiCrearVehiculo(token, datos) {
   return VehiculosService.crear(token, datos);
 }

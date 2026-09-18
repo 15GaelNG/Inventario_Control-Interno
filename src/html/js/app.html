@@ -793,7 +793,7 @@
       grupo: 'Vehículo', clave: 'CLASE', etiqueta: 'Clase', tipo: 'select',
       opciones: ['AUTOMOVIL', 'CAMION', 'CAMIONETA', 'MOTOCICLETA', 'REMOLQUE', 'MAQUINARIA MENOR', 'CUATRIMOTO', 'NUCO SIN INFORMACION', 'MOTOCARRO'],
     },
-    { grupo: 'Vehículo', clave: 'LINEA VEHICULO', etiqueta: 'Línea / modelo', tipo: 'text' },
+    { grupo: 'Vehículo', clave: 'LINEA VEHICULO', etiqueta: 'Línea', tipo: 'text' },
     { grupo: 'Vehículo', clave: 'MODELO', etiqueta: 'Año', tipo: 'number' },
     { grupo: 'Vehículo', clave: 'COLOR', etiqueta: 'Color', tipo: 'text' },
     {
@@ -818,7 +818,10 @@
     { grupo: 'Identificación', clave: 'RESPONSABLE VEHICULO', etiqueta: 'Responsable del vehículo', tipo: 'text' },
     { grupo: 'Identificación', clave: 'NO EMPLEADO', etiqueta: 'No. de empleado', tipo: 'text' },
     { grupo: 'Identificación', clave: 'SERIE VEHICULO', etiqueta: 'Serie del vehículo', tipo: 'text' },
-    { grupo: 'Identificación', clave: 'NUCCO', etiqueta: 'Nucco', tipo: 'text' },
+    {
+      grupo: 'Identificación', clave: 'NUCCO', etiqueta: 'Nucco', tipo: 'text',
+      soloLectura: true, placeholder: 'Se genera solo (consecutivo)',
+    },
 
     { grupo: 'Documentación y seguro', clave: 'RESPONSIVA', etiqueta: 'Responsiva', tipo: 'file' },
     { grupo: 'Documentación y seguro', clave: 'DOCUMENTO BAJA', etiqueta: 'Documento de baja', tipo: 'file' },
@@ -867,7 +870,10 @@
     { grupo: 'Ubicación y registro', clave: 'UBICACION', etiqueta: 'Ubicación', tipo: 'select' },
     { grupo: 'Ubicación y registro', clave: 'RAZON SOCIAL', etiqueta: 'Razón social', tipo: 'select' },
     { grupo: 'Ubicación y registro', clave: 'FECHA COMPRA', etiqueta: 'Fecha de compra', tipo: 'date' },
-    { grupo: 'Ubicación y registro', clave: 'FECHA REGISTRO SISTEMA CI', etiqueta: 'Fecha de registro en el sistema', tipo: 'date' },
+    {
+      grupo: 'Ubicación y registro', clave: 'FECHA REGISTRO SISTEMA CI', etiqueta: 'Fecha de registro en el sistema', tipo: 'date',
+      soloLectura: true, placeholder: 'Se pone sola, la fecha de hoy',
+    },
     { grupo: 'Ubicación y registro', clave: 'RESPONSABLE CI', etiqueta: 'Responsable (Control Interno)', tipo: 'text' },
   ];
 
@@ -1484,6 +1490,13 @@
     document.getElementById('campos-form-vehiculo').innerHTML = renderCamposVehiculo('veh');
     document.getElementById('campos-form-editar-vehiculo').innerHTML = renderCamposVehiculo('editar-vehiculo');
 
+    // Fecha de registro en el sistema: siempre "hoy", no se edita (el
+    // servidor fija el valor real al crear, esto es solo para que se vea
+    // algo ahí — igual que FECHA DE REGISTRO en Tickets). Solo en
+    // Registrar: en Editar la pisa poblarFormularioVehiculo con la fecha
+    // real ya guardada.
+    document.getElementById('veh-fecha-registro-sistema-ci').value = hoyISO();
+
     // Marca / Departamento / Sede / Razón social: catálogos planos (hoja
     // "LISTAS VEHICULOS"), mismas opciones en Registrar y Editar.
     function llenarSelect(id, valores) {
@@ -1544,6 +1557,18 @@
         console.error('No se pudo previsualizar el folio:', err);
       }
     });
+
+    // NUCCO: consecutivo simple, no depende de ningún otro campo — se
+    // previsualiza una sola vez al entrar a Registrar (igual que el Folio,
+    // NO reserva nada: el valor real se recalcula al guardar).
+    async function previsualizarNuccoVeh() {
+      try {
+        document.getElementById('veh-nucco').value = await callServer('apiPrevisualizarNuccoVehiculo', state.token);
+      } catch (err) {
+        console.error('No se pudo previsualizar el NUCCO:', err);
+      }
+    }
+    previsualizarNuccoVeh();
 
     function badgeEstatus(estatus) {
       const esBaja = String(estatus || '').toUpperCase().includes('BAJA');
@@ -1741,6 +1766,8 @@
         const datos = Object.assign(recolectarDatosVehiculo('veh'), archivos);
         await callServer('apiCrearVehiculo', state.token, datos);
         ev.target.reset();
+        document.getElementById('veh-fecha-registro-sistema-ci').value = hoyISO();
+        previsualizarNuccoVeh();
         await cargar();
         toastExito('Registrado exitosamente');
       } catch (err) {

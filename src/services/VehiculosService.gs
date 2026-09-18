@@ -187,11 +187,44 @@ const VehiculosService = (function () {
     return generarFolio_(clase);
   }
 
+  /** NUCCO: consecutivo simple (no depende de la Clase, a diferencia del
+   * Folio) — el siguiente número disponible es el máximo NUCCO numérico ya
+   * usado + 1, con ceros a la izquierda a 5 dígitos (00001, 00002…). Valores
+   * viejos que no sean puramente numéricos se ignoran al calcular el máximo. */
+  function generarNucco_() {
+    const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
+    const lastRow = sheet.getLastRow();
+    let maximo = 0;
+    if (lastRow >= 2) {
+      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      const col = headers.indexOf('NUCCO');
+      if (col !== -1) {
+        sheet.getRange(2, col + 1, lastRow - 1, 1).getValues().forEach((fila) => {
+          const texto = String(fila[0] || '').trim();
+          if (/^\d+$/.test(texto)) maximo = Math.max(maximo, parseInt(texto, 10));
+        });
+      }
+    }
+    return String(maximo + 1).padStart(5, '0');
+  }
+
+  /** Vista previa de NUCCO para el formulario de Registrar (mismo criterio que
+   * previsualizarFolio: no reserva nada, el valor real se recalcula bajo
+   * candado dentro de crear()). No depende de ningún otro campo del formulario,
+   * así que se pide una sola vez al abrir el módulo. */
+  function previsualizarNucco(token) {
+    Auth.validarSesion(token);
+    return generarNucco_();
+  }
+
   /** Da de alta un vehículo. El FOLIO no lo manda el cliente — se calcula aquí
    * a partir de la Clase (ver generarFolio_) — y la columna ID_VEHICULO no la
    * trae SheetUtils.insert sola (solo autogenera si la columna se llama
-   * literalmente "ID") — se genera aquí también.
-   * Con LockService: dos altas al mismo tiempo no deben terminar con el mismo folio. */
+   * literalmente "ID") — se genera aquí también. FECHA REGISTRO SISTEMA CI
+   * siempre es "hoy" (no la manda el cliente, mismo patrón que FECHA DE
+   * REGISTRO en Tickets). NUCCO también se calcula aquí (ver generarNucco_).
+   * Con LockService: dos altas al mismo tiempo no deben terminar con el mismo
+   * folio NI el mismo NUCCO. */
   function crear(token, datos) {
     Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
     const lock = LockService.getScriptLock();
@@ -199,7 +232,9 @@ const VehiculosService = (function () {
     try {
       const fila = Object.assign({}, datos);
       fila.FOLIO = generarFolio_(datos.CLASE);
+      fila.NUCCO = generarNucco_();
       fila[ID_COLUMN] = Utilities.getUuid().slice(0, 8);
+      fila['FECHA REGISTRO SISTEMA CI'] = new Date();
       SheetUtils.insert(ssId(), SHEET_VEHICULOS, fila);
       return { ID: fila[ID_COLUMN], FOLIO: fila.FOLIO };
     } finally {
@@ -211,6 +246,8 @@ const VehiculosService = (function () {
     Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
     const datos = Object.assign({}, cambios);
     delete datos.FOLIO; // no se edita, se fija solo al crear
+    delete datos.NUCCO; // ídem
+    delete datos['FECHA REGISTRO SISTEMA CI']; // ídem
     SheetUtils.update(ssId(), SHEET_VEHICULOS, id, datos, ID_COLUMN);
     return { ID: id };
   }
@@ -256,5 +293,5 @@ const VehiculosService = (function () {
     return { url: archivo.getUrl(), id: archivo.getId(), nombre: nombreArchivo };
   }
 
-  return { listar, listarBasico, listarResumen, buscarPorFolio, previsualizarFolio, crear, actualizar, eliminar, subirArchivo };
+  return { listar, listarBasico, listarResumen, buscarPorFolio, previsualizarFolio, previsualizarNucco, crear, actualizar, eliminar, subirArchivo };
 })();
