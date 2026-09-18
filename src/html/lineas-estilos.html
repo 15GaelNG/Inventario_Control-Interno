@@ -151,6 +151,7 @@
   .ln-migas { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; font-size: 12.5px; color: var(--color-text-muted); }
   .ln-migas > span { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
   .ln-migas button { padding: 6px 12px; }
+  .ln-migas .ln-miga-enlace { padding: 0; min-height: auto; border: 0; background: none; color: var(--color-primary); font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
   .ln-detalle-header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
   .ln-detalle-icono {
     width: 48px; height: 48px; border-radius: 14px; background: var(--color-primary-soft);
@@ -271,7 +272,7 @@
   }
   .ln-captura-modal .modal-form-scroll { max-height: min(76vh, 780px); padding: 22px 24px 26px; margin: 0; }
   .ln-captura-guia {
-    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 18px;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-bottom: 18px;
     padding: 8px; border-radius: 14px; background: var(--color-bg); border: 1px solid var(--color-border);
   }
   .ln-captura-paso { display: flex; align-items: center; gap: 9px; padding: 9px 11px; border-radius: 10px; font-size: 12px; color: var(--color-text-muted); }
@@ -289,6 +290,9 @@
   .ln-captura-dato span { display: block; min-width: 0; }
   .ln-captura-dato small { display: block; color: var(--color-text-muted); font-size: 10.5px; margin-bottom: 2px; }
   .ln-captura-dato b { display: block; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ln-captura-datos-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; gap: 12px; margin: 14px 0; }
+  .ln-captura-datos-grid .ln-captura-dato { min-height: 66px; box-sizing: border-box; }
+  .ln-campo-separado { margin-top: 14px; }
   .ln-form-seccion {
     border: 1px solid var(--color-border); border-radius: 15px; background: var(--color-surface);
     padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow);
@@ -339,6 +343,8 @@
   .ln-firma-acciones .ln-firma-vacia { font-size: 11.5px; color: var(--color-text-muted); }
   .ln-editor-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
   .ln-editor-grid .field[hidden] { display: none; }
+  .ln-seguridad-editor { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--color-border); }
+  .ln-seguridad-editor[hidden] { display: none; }
   .ln-error-fijo { position: sticky; bottom: 62px; z-index: 6; margin: 14px 0; box-shadow: var(--shadow-lg); }
   .ln-otra-app { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--color-border); }
   .ln-patron { position: relative; width: 300px; height: 300px; max-width: 100%; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); place-items: center; }

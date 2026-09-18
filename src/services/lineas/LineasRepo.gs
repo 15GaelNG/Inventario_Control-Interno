@@ -404,6 +404,8 @@ const LineasRepo = (function () {
         compania: txt(col(f, 'COMPAÑIA')), plan: txt(col(f, 'PLAN')), razonSocial: txt(col(f, 'RAZON SOCIAL')),
       },
       checklist: checklist, otraApp: txt(col(f, 'OTRA')), calificacion: LineasUtil.numero(col(f, 'CALIFICACION')),
+      tipoContrasena: txt(col(f, 'PIN EQUIPO')) === 'PATRON' ? 'PATRON' : (txt(col(f, 'PIN EQUIPO')) ? 'PIN' : null),
+      pinEquipo: txt(col(f, 'PIN EQUIPO')), patronRuta: txt(col(f, 'PATRON')),
       observaciones: txt(col(f, 'OBSERVACIONES')), ticket: ticket === null ? null : String(ticket), inspector: txt(col(f, 'NOMBRE INSPECTOR')),
       firmas: { responsableRuta: txt(col(f, 'FIRMA RESPONSABLE')), inspectorRuta: txt(col(f, 'FIRMA INSPECTOR')) },
       pdfRuta: txt(col(f, 'FORMATO INSPECCIONES LINEAS')),

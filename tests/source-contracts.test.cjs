@@ -123,6 +123,20 @@ test('los formularios muestran el estado y color actuales y trazan patrón de nu
   assert.match(cliente, /responsable es opcional/i);
 });
 
+test('edición e inspección comparten patrón, navegación y fondos de firma del PDF', () => {
+  const cliente = read('src/html/js/lineas.html');
+  const captura = read('src/services/lineas/LineasCaptura.gs');
+  assert.match(cliente, /function activarPatron\(prefijo, inicial\)/);
+  assert.match(cliente, /htmlPatron\('reg-patron'/);
+  assert.match(cliente, /htmlPatron\('cap-insp-patron'/);
+  assert.match(cliente, /data-ln-miga=/);
+  assert.match(cliente, /Control Interno'.*ctx\.inspector.*' · obligatoria'/s);
+  assert.match(cliente, /Control Interno'.*ctx\.nombreCI.*' · obligatoria'/s);
+  assert.match(cliente, /firmaInspector\.base64\('#ddebf7'\)/);
+  assert.match(cliente, /firmaCi\.base64\('#ffffff'\)/);
+  assert.match(captura, /'PATRON': firmasBase64 \? blobBase64_\(firmasBase64\.patron/);
+});
+
 test('los movimientos rechazan artículos inexistentes', () => {
   const accesorios = read('src/services/lineas/LineasAccesorios.gs');
   assert.match(accesorios, /if \(!actual\) throw new Error\('El artículo seleccionado ya no existe/);
