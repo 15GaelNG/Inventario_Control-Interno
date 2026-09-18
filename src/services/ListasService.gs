@@ -57,6 +57,40 @@ const ListasService = (function () {
     return listarColumna_('OFICINA / DESARROLLO');
   }
 
+  /**
+   * Ubicación (Vehículos) NO es un catálogo plano — depende de la Sede
+   * elegida. En AppSheet el Valid If de "UBICACION" era:
+   *   SELECT(LISTAS VEHICULOS[SEDE 2], [SEDE]=[_THISROW].[SEDE])
+   * Es decir, cada fila de "LISTAS VEHICULOS" trae una Sede y, en la
+   * columna "SEDE 2", la ubicación específica de esa sede (ej. Sede
+   * "AGUASCALIENTES" trae filas con SEDE 2 = "CDMAGS", "AGS COWORKING",
+   * "AGUASCALIENTES"). Se manda el mapa {SEDE: [ubicaciones]} completo de
+   * una sola vez — así el cliente filtra localmente al cambiar la Sede en
+   * el formulario, en vez de pedir un endpoint nuevo por cada cambio.
+   */
+  function mapaUbicacionesPorSede_() {
+    const sheet = SheetUtils.getSheet(ssId(), SHEET_LISTAS);
+    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, ['SEDE', 'SEDE 2']);
+    const mapa = {};
+    for (let i = 0; i < filas; i++) {
+      const sede = String(datos.SEDE[i] || '').trim();
+      const ubicacion = String(datos['SEDE 2'][i] || '').trim();
+      if (!sede || !ubicacion) continue;
+      if (!mapa[sede]) mapa[sede] = new Set();
+      mapa[sede].add(ubicacion);
+    }
+    const resultado = {};
+    Object.keys(mapa).forEach((sede) => {
+      resultado[sede] = Array.from(mapa[sede]).sort((a, b) => a.localeCompare(b));
+    });
+    return resultado;
+  }
+
+  function listarUbicacionesPorSede(token) {
+    Auth.validarSesion(token);
+    return mapaUbicacionesPorSede_();
+  }
+
   function listarMarcas(token) {
     Auth.validarSesion(token);
     return listarColumna_('MARCA');
@@ -80,6 +114,7 @@ const ListasService = (function () {
 
   return {
     listarDepartamentos, listarRazonesSociales, listarSedes, listarOficinasDesarrollo, listarMarcas,
+    listarUbicacionesPorSede,
     listarDepartamentosCCH, listarSedesCCH, listarOficinasCCH,
   };
 })();

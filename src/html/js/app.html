@@ -926,6 +926,23 @@
     return datos;
   }
 
+  // Ubicación NO es un catálogo plano: depende de la Sede elegida (en
+  // AppSheet, Valid If = SELECT(LISTAS VEHICULOS[SEDE 2], [SEDE]=[_THISROW].[SEDE])).
+  // mapaUbicacionesPorSede llega una sola vez desde el servidor como
+  // {SEDE: [ubicaciones]} (cargarCatalogosVehiculo, dentro de initVehiculos,
+  // la llena) y se filtra aquí en el cliente. A nivel de módulo (no dentro
+  // de initVehiculos) porque poblarFormularioVehiculo también la necesita
+  // y se define antes de que initVehiculos exista.
+  let mapaUbicacionesPorSede = {};
+  function llenarUbicacionesSegunSede(prefijo) {
+    const sedeEl = document.getElementById(prefijo + '-sede');
+    const ubicacionEl = document.getElementById(prefijo + '-ubicacion');
+    if (!sedeEl || !ubicacionEl) return;
+    const opciones = mapaUbicacionesPorSede[sedeEl.value] || [];
+    ubicacionEl.innerHTML = '<option value="">Selecciona…</option>' +
+      opciones.map((v) => `<option value="${v}">${v}</option>`).join('');
+  }
+
   /** Llena el formulario con un objeto {columna real: valor} (ej. de buscarPorFolio).
    * Para "file" no se puede rellenar el <input> (los navegadores no lo permiten por
    * seguridad) — en vez de eso, muestra un link al archivo ya subido, si existe. */
@@ -944,6 +961,12 @@
       }
       const el = document.getElementById(id);
       if (!el) return;
+      // Ubicación depende de la Sede — SEDE va antes que UBICACION en
+      // CAMPOS_VEHICULO, así que para cuando llegamos aquí el <select> de
+      // Sede ya quedó con su valor puesto; hay que repoblar las opciones
+      // de Ubicación para ESA sede antes de poder ponerle el valor guardado
+      // (si no, el <option> todavía no existe y el navegador lo deja en blanco).
+      if (campo.clave === 'UBICACION') llenarUbicacionesSegunSede(prefijo);
       el.value = campo.tipo === 'date' ? fechaParaInput(valor) : valor;
     });
   }
@@ -1459,33 +1482,47 @@
     document.getElementById('campos-form-vehiculo').innerHTML = renderCamposVehiculo('veh');
     document.getElementById('campos-form-editar-vehiculo').innerHTML = renderCamposVehiculo('editar-vehiculo');
 
-    // Marca / Departamento / Sede / Razón social / Ubicación: catálogos
-    // reales (hoja "LISTAS VEHICULOS"), mismas opciones en Registrar y Editar.
-    // Ubicación reutiliza la misma columna OFICINA / DESARROLLO que ya usa Uber.
+    // Marca / Departamento / Sede / Razón social: catálogos planos (hoja
+    // "LISTAS VEHICULOS"), mismas opciones en Registrar y Editar.
     function llenarSelect(id, valores) {
       const el = document.getElementById(id);
       if (!el) return;
       el.innerHTML = '<option value="">Selecciona…</option>' +
         (valores || []).map((v) => `<option value="${v}">${v}</option>`).join('');
     }
+
+    // El filtrado de Ubicación según Sede (mapaUbicacionesPorSede,
+    // llenarUbicacionesSegunSede) vive a nivel de módulo, junto a
+    // poblarFormularioVehiculo — ver comentario ahí.
+    ['veh-sede', 'editar-vehiculo-sede'].forEach((id) => {
+      document.getElementById(id).addEventListener('change', () => {
+        llenarUbicacionesSegunSede(id.replace('-sede', ''));
+      });
+    });
+
     // En su propia función (en vez de un await suelto aquí) para poder
     // correrla EN PARALELO con cargar() más abajo — antes se esperaba a que
     // terminaran los 5 catálogos antes de ni siquiera empezar a pedir la
     // lista de vehículos, cuando ninguno depende del otro.
     async function cargarCatalogosVehiculo() {
       try {
-        const [marcas, departamentos, sedes, razones, ubicaciones] = await Promise.all([
+        const [marcas, departamentos, sedes, razones, mapaUbicaciones] = await Promise.all([
           callServer('apiListarMarcas', state.token),
           callServer('apiListarDepartamentos', state.token),
           callServer('apiListarSedes', state.token),
           callServer('apiListarRazonesSociales', state.token),
-          callServer('apiListarOficinasDesarrollo', state.token),
+          callServer('apiListarUbicacionesPorSede', state.token),
         ]);
         ['veh-marca', 'editar-vehiculo-marca'].forEach((id) => llenarSelect(id, marcas));
         ['veh-departamento', 'editar-vehiculo-departamento'].forEach((id) => llenarSelect(id, departamentos));
         ['veh-sede', 'editar-vehiculo-sede'].forEach((id) => llenarSelect(id, sedes));
         ['veh-razon-social', 'editar-vehiculo-razon-social'].forEach((id) => llenarSelect(id, razones));
-        ['veh-ubicacion', 'editar-vehiculo-ubicacion'].forEach((id) => llenarSelect(id, ubicaciones));
+        mapaUbicacionesPorSede = mapaUbicaciones || {};
+        // Al cargar los catálogos ya puede haber una Sede elegida (ej. al
+        // reabrir Editar antes de que termine esta llamada) — refresca la
+        // Ubicación por si acaso.
+        llenarUbicacionesSegunSede('veh');
+        llenarUbicacionesSegunSede('editar-vehiculo');
       } catch (err) {
         console.error('No se pudieron cargar los catálogos de Marca/Departamento/Sede/Razón social/Ubicación:', err);
       }

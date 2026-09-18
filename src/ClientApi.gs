@@ -169,6 +169,9 @@ function apiListarSedes(token) {
 function apiListarOficinasDesarrollo(token) {
   return ListasService.listarOficinasDesarrollo(token);
 }
+function apiListarUbicacionesPorSede(token) {
+  return ListasService.listarUbicacionesPorSede(token);
+}
 function apiListarMarcas(token) {
   return ListasService.listarMarcas(token);
 }
