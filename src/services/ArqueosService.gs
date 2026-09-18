@@ -1,0 +1,432 @@
+/**
+ * ArqueosService.gs
+ * Bitácora de auditorías/conteo de efectivo hechas a una Caja Chica —
+ * referencia su ID CCH. Vive en el mismo spreadsheet original de AppSheet
+ * que el resto de los módulos — la pestaña real se ubica por firma de
+ * columnas, no por nombre fijo.
+ *
+ * Columnas reales (79) — la lista completa vive en CAMPOS_ARQUEO del
+ * cliente (src/html/js/app.html); aquí solo se listan las que este archivo
+ * toca directamente. Varias columnas son "campo formulado" en AppSheet
+ * (autollenado/calculado) — el cliente NUNCA las manda con un valor real:
+ * este servicio las recalcula siempre, de la misma forma que ya se hace con
+ * el Folio de Vehículos y el Estatus/estatus-al-crear de Caja Chica:
+ *
+ *   - ID ARQUEO: se genera solo — "{año}_{ID CCH}_{consecutivo 3 dígitos}",
+ *     el siguiente disponible para ESE ID CCH en el año actual.
+ *   - RESPONSABLE, PUESTO, AREA / DEPARTAMENTO, RAZON SOCIAL, METODO
+ *     REEMBOLSO, MONTO CAJA: se copian de la Caja Chica (RESPONSABLE DE
+ *     CAJA CHICA, PUESTO DE RESPONSABLE, DEPARTAMENTO, EMPRESA ORIGEN,
+ *     METODO DE REEMBOLSO, MONTO ACTUAL) al crear, y no se vuelven a tocar
+ *     al editar (el arqueo queda "fotografiado" con los datos de ese
+ *     momento).
+ *   - QUIEN REGISTRO: nombre de la sesión que crea el arqueo.
+ *   - FECHA DEL ULTIMO ARQUEO / FECHA INICIO / FECHA FIN: "ahora" al crear;
+ *     no se tocan al editar.
+ *   - CANTIDAD M / TOTAL M / CANTIDAD B / TOTAL B / TOTAL EFECTIVO / TOTAL
+ *     GENERAL / DIFERENCIA / CALIFICACION_AUDITORIA_FINAL: se recalculan
+ *     siempre a partir de las columnas manuales (denominaciones, totales de
+ *     gasto, los 17 reactivos de auditoría), tanto al crear como al editar
+ *     — ver calcularCampos_.
+ */
+
+const ArqueosService = (function () {
+  const COLUMNAS_FIRMA = ['ID ARQUEO', 'TIPO DE ARQUEO', 'CALIFICACION_AUDITORIA_FINAL', 'FORMATO ARQUEO'];
+  const ID_COLUMN = 'ID ARQUEO';
+
+  function ssId() {
+    return Config.SPREADSHEET_IDS.VEHICULOS();
+  }
+
+  function hoja_() {
+    return SheetUtils.getSheetByColumns(ssId(), COLUMNAS_FIRMA);
+  }
+
+  function fechaISO_(valor) {
+    if (!valor) return '';
+    const f = valor instanceof Date ? valor : new Date(valor);
+    return isNaN(f.getTime()) ? '' : f.toISOString();
+  }
+
+  function num_(valor) {
+    const n = Number(valor);
+    return isNaN(n) ? 0 : n;
+  }
+
+  /**
+   * Los 17 reactivos de auditoría — texto exacto de cada opción (tal como
+   * queda guardado en la celda) + los puntos que de verdad le da la
+   * fórmula SWITCH original de AppSheet. OJO: en AUDIT_16 y AUDIT_17 el
+   * texto de una opción dice un % pero el SWITCH le da otro puntaje
+   * distinto (confirmado con el usuario que es a propósito, no error de
+   * captura) — se respeta el puntaje del SWITCH, no el que dice el texto.
+   */
+  const AUDIT_ITEMS = [
+    {
+      clave: 'AUDIT_01_Facturas_Pendientes', etiqueta: 'Facturas pendientes',
+      opciones: [
+        { texto: 'a) Semana actual - 100%', puntos: 100 },
+        { texto: 'b) 1 a 3 Facturas anteriores - 75%', puntos: 75 },
+        { texto: 'c) 4 a 6 Facturas anteriores - 50%', puntos: 50 },
+        { texto: 'd) 7 o más Facturas anteriores - 0%', puntos: 0 },
+      ],
+    },
+    {
+      clave: 'AUDIT_02_Folios_Rechazados', etiqueta: 'Folios rechazados',
+      opciones: [
+        { texto: 'a) 0 folios rechazados - 100%', puntos: 100 },
+        { texto: 'b) Incidencia justificada - 75%', puntos: 75 },
+        { texto: 'c) 1 a 4 Folios - 50%', puntos: 50 },
+        { texto: 'd) 5 o más Folios - 0%', puntos: 0 },
+      ],
+    },
+    {
+      clave: 'AUDIT_03_Folios_No_Reembolsados', etiqueta: 'Folios no reembolsados',
+      opciones: [
+        { texto: 'a) 0 folios no reembolsados - 100%', puntos: 100 },
+        { texto: 'b) 1 a 3 Folios - 75%', puntos: 75 },
+        { texto: 'c) 4 a 6 Folios - 50%', puntos: 50 },
+        { texto: 'd) 7 o más Folios - 0%', puntos: 0 },
+      ],
+    },
+    {
+      clave: 'AUDIT_04_Folios_Errores_Captura', etiqueta: 'Folios con errores de captura',
+      opciones: [
+        { texto: 'a) 0 Folios sin errores - 100%', puntos: 100 },
+        { texto: 'b) 1 a 3 Folios - 75%', puntos: 75 },
+        { texto: 'c) 4 a 6 Folios - 50%', puntos: 50 },
+        { texto: 'd) 7 o más Folios - 0%', puntos: 0 },
+      ],
+    },
+    {
+      clave: 'AUDIT_05_Gastos_No_Capturados', etiqueta: 'Gastos no capturados',
+      opciones: [
+        { texto: 'a) 0 Gastos - 100%', puntos: 100 },
+        { texto: 'b) 1 a 3 Gastos - 75%', puntos: 75 },
+        { texto: 'c) 4 a 6 Gastos - 50%', puntos: 50 },
+        { texto: 'd) 7 o más Gastos - 0%', puntos: 0 },
+      ],
+    },
+    {
+      clave: 'AUDIT_06_Seguimiento_No_Facturados', etiqueta: 'Seguimiento a no facturados',
+      opciones: [
+        { texto: 'a) 0 Tickets - 100%', puntos: 100 },
+        { texto: 'b) 1 a 2 Tickets - 75%', puntos: 75 },
+        { texto: 'c) 3 a 5 Tickets - 50%', puntos: 50 },
+        { texto: 'd) 6 o más Tickets - 0%', puntos: 0 },
+      ],
+    },
+    {
+      clave: 'AUDIT_07_Vales_Rosas', etiqueta: 'Vales rosas',
+      opciones: [
+        { texto: 'a) 0 Vales - 100%', puntos: 100 },
+        { texto: 'b) 1 a 2 Vales - 75%', puntos: 75 },
+        { texto: 'c) 3 a 5 Vales - 50%', puntos: 50 },
+        { texto: 'd) 6 Vales o más - 0%', puntos: 0 },
+      ],
+    },
+    {
+      clave: 'AUDIT_08_Comprobante_Transferencia', etiqueta: 'Comprobante de transferencia',
+      opciones: [
+        { texto: 'a) 0 Transferencias - 100%', puntos: 100 },
+        { texto: 'b) 1 a 2 Transferencias - 75%', puntos: 75 },
+        { texto: 'c) 3 a 5 Transferencias - 50%', puntos: 50 },
+        { texto: 'd) 6 o más Transferencias - 0%', puntos: 0 },
+      ],
+    },
+    {
+      clave: 'AUDIT_09_Transferencias_No_Enviadas', etiqueta: 'Transferencias no enviadas',
+      opciones: [
+        { texto: 'a) 0 Transferencias - 100%', puntos: 100 },
+        { texto: 'b) 1 a 3 Transferencias - 75%', puntos: 75 },
+        { texto: 'c) 4 a 6 Transferencias - 50%', puntos: 50 },
+        { texto: 'd) 7 o más Transferencias - 0%', puntos: 0 },
+      ],
+    },
+    {
+      clave: 'AUDIT_10_Gastos_No_Deducibles', etiqueta: 'Gastos no deducibles',
+      opciones: [
+        { texto: 'a) 0 Folios - 100%', puntos: 100 },
+        { texto: 'b) 1 a 3 Folios - 75%', puntos: 75 },
+        { texto: 'c) 4 a 6 Folios - 50%', puntos: 50 },
+        { texto: 'd) 7 o más Folios - 0%', puntos: 0 },
+      ],
+    },
+    {
+      clave: 'AUDIT_11_Sobrante_Dinero', etiqueta: 'Sobrante de dinero',
+      opciones: [
+        { texto: 'a) $20 o menos - 100%', puntos: 100 },
+        { texto: 'b) $21 a $200 - 75%', puntos: 75 },
+        { texto: 'c) $201 a $300 - 50%', puntos: 50 },
+        { texto: 'd) $301 o más - 0%', puntos: 0 },
+      ],
+    },
+    {
+      clave: 'AUDIT_12_Faltante_Dinero_1', etiqueta: 'Faltante de dinero',
+      opciones: [
+        { texto: 'a) $1 o menos - 100%', puntos: 100 },
+        { texto: 'b) $2 a $100 - 75%', puntos: 75 },
+        { texto: 'c) $101 a $500 - 50%', puntos: 50 },
+        { texto: 'd) $501 o más - 0%', puntos: 0 },
+      ],
+    },
+    {
+      clave: 'AUDIT_13_Prestamo_Dinero', etiqueta: 'Préstamo de dinero',
+      opciones: [
+        { texto: 'a) No - 100%', puntos: 100 },
+        { texto: 'b) Sí - 0%', puntos: 0 },
+      ],
+    },
+    {
+      clave: 'AUDIT_14_Cuenta_Para_CCH', etiqueta: 'Cuenta exclusiva para CCH',
+      opciones: [
+        { texto: 'a) Sí - 100%', puntos: 100 },
+        { texto: 'b) No - 0%', puntos: 0 },
+        { texto: 'c) No aplica', puntos: 100 },
+      ],
+    },
+    {
+      clave: 'AUDIT_15_Cambio_Titular', etiqueta: 'Cambio de titular',
+      opciones: [
+        { texto: 'a) No - 100%', puntos: 100 },
+        { texto: 'b) Sí - 0%', puntos: 0 },
+      ],
+    },
+    {
+      clave: 'AUDIT_16_Gastos_No_Permitioos', etiqueta: 'Gastos no permitidos',
+      opciones: [
+        { texto: 'a) Sí cuenta con autorización - 100%', puntos: 100 },
+        { texto: 'b) No cuenta con autorización - 0%', puntos: 50 }, // sí, 50 — confirmado con el usuario
+        { texto: 'c) No aplica', puntos: 100 },
+      ],
+    },
+    {
+      clave: 'AUDIT_17_Incidencias_contempladas', etiqueta: 'Incidencias contempladas',
+      opciones: [
+        { texto: 'a) Sin incidencias adicionales - 100%', puntos: 100 },
+        { texto: 'b) Con incidencias adicionales - 0%', puntos: 75 }, // sí, 75 — confirmado con el usuario
+      ],
+    },
+  ];
+
+  /** Calcula todos los totales/calificación a partir de los campos manuales
+   * de `datos` (denominaciones, totales de gasto, reactivos de auditoría)
+   * + el MONTO CAJA ya fijado del arqueo. Se usa igual en crear() y en
+   * actualizar() — nunca se confía en un total que mande el cliente. */
+  function calcularCampos_(datos, montoCaja) {
+    const calc = {};
+
+    // OJO: CANTIDAD M / CANTIDAD B no tienen fórmula confirmada (el usuario
+    // no la dio y en los datos reales siempre quedaron vacías) — no se
+    // tocan aquí, se dejan tal cual las mande el cliente (o vacías).
+    const monedas = { 'M 0,50': 0.5, 'M 1,00': 1, 'M 2,00': 2, 'M 5,00': 5, 'M 10,00': 10, 'M 20,00': 20 };
+    let totalM = 0;
+    Object.keys(monedas).forEach((clave) => { totalM += num_(datos[clave]) * monedas[clave]; });
+    calc['TOTAL M'] = totalM;
+
+    const billetes = { 'B 20,00': 20, 'B 50,00': 50, 'B 100,00': 100, 'B 200,00': 200, 'B 500,00': 500, 'B 1000,00': 1000 };
+    let totalB = 0;
+    Object.keys(billetes).forEach((clave) => { totalB += num_(datos[clave]) * billetes[clave]; });
+    calc['TOTAL B'] = totalB;
+
+    calc['TOTAL EFECTIVO'] = totalM + totalB;
+
+    const disponible = num_(datos['DISPONIBLE CUENTA BANCARIA']);
+    const totalCheques = num_(datos['TOTAL CHEQUES']);
+    const CAMPOS_GASTO = [
+      'TOTAL CAJA CHICA CON FACTURAS / XML',
+      'TOTAL CAJA CHICA GASTOS NO DEDUCIBLES',
+      'TOTAL VIATICOS CON FACTURAS / XML',
+      'TOTAL VIATICOS NO DEDUCIBLES',
+      'TOTAL CAJA CHICA CON FACTURAS (PENDIENTES)',
+      'TOTAL VIATICOS CON FACTURAS (PENDIENTES)',
+      'TOTAL CAJA CHICA NO DEDUCIBLES (PENDIENTES)',
+      'TOTAL VIATICOS NO DEDUCIBLES (PENDIENTES)',
+    ];
+    const sumaGastos = CAMPOS_GASTO.reduce((acc, clave) => acc + num_(datos[clave]), 0);
+    const otros = num_(datos['OTROS']);
+
+    calc['TOTAL GENERAL'] = calc['TOTAL EFECTIVO'] + disponible + totalCheques + sumaGastos + otros;
+    calc['DIFERENCIA'] = calc['TOTAL GENERAL'] - num_(montoCaja);
+
+    // Calificación final = promedio de los 17 reactivos, guardada ya
+    // multiplicada por 100 (ej. 97.06, no 0.9706) — así lo pidió el usuario.
+    let sumaAudit = 0;
+    AUDIT_ITEMS.forEach((item) => {
+      const seleccion = datos[item.clave];
+      const opcion = item.opciones.find((o) => o.texto === seleccion);
+      sumaAudit += opcion ? opcion.puntos : 0;
+    });
+    calc['CALIFICACION_AUDITORIA_FINAL'] = Math.round((sumaAudit / 17) * 100) / 100;
+
+    return calc;
+  }
+
+  /** Siguiente ID ARQUEO disponible para un ID CCH en el año actual:
+   * "{año}_{ID CCH}_{consecutivo 3 dígitos}". */
+  function generarIdArqueo_(sheet, idCch) {
+    const anio = new Date().getFullYear();
+    const lastRow = sheet.getLastRow();
+    let maximo = 0;
+    if (lastRow >= 2) {
+      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      const col = headers.indexOf(ID_COLUMN);
+      if (col !== -1) {
+        const patron = new RegExp('^' + anio + '_' + idCch + '_(\\d+)$');
+        sheet.getRange(2, col + 1, lastRow - 1, 1).getValues().forEach((fila) => {
+          const match = patron.exec(String(fila[0] || '').trim());
+          if (match) maximo = Math.max(maximo, parseInt(match[1], 10));
+        });
+      }
+    }
+    return anio + '_' + idCch + '_' + String(maximo + 1).padStart(3, '0');
+  }
+
+  /** Solo para mostrarlo en el formulario de Registrar mientras se llena —
+   * NO reserva el ID, es una vista previa (igual que el Folio de Vehículos). */
+  function previsualizarIdArqueo(token, idCch) {
+    Auth.validarSesion(token);
+    if (!idCch) return '';
+    return generarIdArqueo_(hoja_(), idCch);
+  }
+
+  const COLUMNAS_RESUMEN = [
+    'ID ARQUEO', 'ID CCH', 'RESPONSABLE', 'TIPO DE ARQUEO', 'FECHA INICIO',
+    'TOTAL GENERAL', 'DIFERENCIA', 'CALIFICACION_AUDITORIA_FINAL', 'ESTADO PDF',
+  ];
+
+  /** Catálogo ligero para la tabla (9 columnas, no las 79 completas). */
+  function listarResumen(token) {
+    Auth.validarSesion(token);
+    const sheet = hoja_();
+    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
+
+    const resultado = [];
+    for (let i = 0; i < filas; i++) {
+      if (!datos['ID ARQUEO'][i]) continue;
+      resultado.push({
+        ID: datos['ID ARQUEO'][i],
+        ID_CCH: datos['ID CCH'][i] || '',
+        RESPONSABLE: datos['RESPONSABLE'][i] || '',
+        TIPO_ARQUEO: datos['TIPO DE ARQUEO'][i] || '',
+        FECHA_INICIO: fechaISO_(datos['FECHA INICIO'][i]),
+        TOTAL_GENERAL: datos['TOTAL GENERAL'][i] || '',
+        DIFERENCIA: datos['DIFERENCIA'][i] || '',
+        CALIFICACION: datos['CALIFICACION_AUDITORIA_FINAL'][i] || '',
+        ESTADO_PDF: datos['ESTADO PDF'][i] || '',
+      });
+    }
+    return resultado.sort((a, b) => new Date(b.FECHA_INICIO) - new Date(a.FECHA_INICIO));
+  }
+
+  /** Registro completo por ID ARQUEO (para el modal de detalle/editar). */
+  function buscarPorId(token, id) {
+    Auth.validarSesion(token);
+    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, ID_COLUMN);
+    if (!encontrado) return null;
+    const limpio = {};
+    Object.keys(encontrado.data).forEach((k) => {
+      const v = encontrado.data[k];
+      limpio[k] = v instanceof Date ? v.toISOString() : v;
+    });
+    return limpio;
+  }
+
+  /** Da de alta un arqueo. Ver el bloque de comentarios de arriba del
+   * archivo: ID ARQUEO, los datos de la Caja Chica, Quién registró, las 3
+   * fechas y todos los totales/calificación se calculan aquí — no se
+   * confía en lo que mande el cliente para ninguno de esos. */
+  function crear(token, datos) {
+    const sesion = Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    const idCch = datos['ID CCH'];
+    if (!idCch) throw new Error('Selecciona la caja chica.');
+
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+      const caja = CajasChicasService.buscarPorId(token, idCch);
+      if (!caja) throw new Error('No se encontró la caja chica con ID CCH=' + idCch);
+
+      const sheet = hoja_();
+      const fila = Object.assign({}, datos);
+      fila['ID CCH'] = idCch;
+      fila['ID ARQUEO'] = generarIdArqueo_(sheet, idCch);
+
+      fila['RESPONSABLE'] = caja['RESPONSABLE DE CAJA CHICA'] || '';
+      fila['PUESTO'] = caja['PUESTO DE RESPONSABLE'] || '';
+      fila['AREA / DEPARTAMENTO'] = caja['DEPARTAMENTO'] || '';
+      fila['RAZON SOCIAL'] = caja['EMPRESA ORIGEN'] || '';
+      fila['METODO REEMBOLSO'] = caja['METODO DE REEMBOLSO'] || '';
+      fila['MONTO CAJA'] = caja['MONTO ACTUAL'] || 0;
+
+      fila['QUIEN REGISTRO'] = sesion.nombre;
+      const ahora = new Date();
+      fila['FECHA DEL ULTIMO ARQUEO'] = ahora;
+      fila['FECHA INICIO'] = ahora;
+      fila['FECHA FIN'] = ahora;
+
+      Object.assign(fila, calcularCampos_(datos, fila['MONTO CAJA']));
+
+      SheetUtils.insert(ssId(), sheet.getName(), fila);
+      return { ID: fila['ID ARQUEO'] };
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  /** Actualiza un arqueo. Igual que en crear(): los campos "formulados" no
+   * se dejan editar (se descartan de `cambios` si vinieran) y los totales/
+   * calificación se recalculan siempre, combinando lo ya guardado con lo
+   * nuevo. */
+  function actualizar(token, id, cambios) {
+    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    const registro = SheetUtils.findById(ssId(), hoja_().getName(), id, ID_COLUMN);
+    if (!registro) throw new Error('No se encontró el arqueo con ID ARQUEO=' + id);
+
+    const datos = Object.assign({}, cambios);
+    [
+      'ID CCH', 'ID ARQUEO', 'RESPONSABLE', 'PUESTO', 'AREA / DEPARTAMENTO', 'RAZON SOCIAL',
+      'METODO REEMBOLSO', 'MONTO CAJA', 'QUIEN REGISTRO',
+      'FECHA DEL ULTIMO ARQUEO', 'FECHA INICIO', 'FECHA FIN',
+    ].forEach((campo) => { delete datos[campo]; });
+
+    const combinado = Object.assign({}, registro.data, datos);
+    Object.assign(datos, calcularCampos_(combinado, registro.data['MONTO CAJA']));
+
+    SheetUtils.update(ssId(), hoja_().getName(), id, datos, ID_COLUMN);
+    return { ID: id };
+  }
+
+  function eliminar(token, id) {
+    Auth.requiereRol(token, [Config.ROLES.ADMIN]);
+    const ok = SheetUtils.remove(ssId(), hoja_().getName(), id, ID_COLUMN);
+    if (!ok) throw new Error('No se encontró el arqueo con ID ARQUEO=' + id);
+    return { ID: id };
+  }
+
+  // Carpeta de Drive donde se guardan los archivos de Arqueos (firmas,
+  // evidencias, formato arqueo) — una sola carpeta para los 6 campos.
+  const CARPETA_ARCHIVOS_ID = '1UMHf-zKY6sRz-0Zkt_CxnNCPdrJMHF5o';
+  const TAMANO_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+
+  function subirArchivo(token, nombreArchivo, mimeType, base64Data) {
+    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    if (!base64Data) throw new Error('No se recibió ningún archivo.');
+
+    const bytes = Utilities.base64Decode(base64Data);
+    if (bytes.length > TAMANO_MAX_BYTES) {
+      throw new Error('El archivo pesa más de 10 MB — súbelo más ligero.');
+    }
+
+    const blob = Utilities.newBlob(bytes, mimeType || 'application/octet-stream', nombreArchivo || 'archivo');
+    const carpeta = DriveApp.getFolderById(CARPETA_ARCHIVOS_ID);
+    const archivo = carpeta.createFile(blob);
+
+    return { url: archivo.getUrl(), id: archivo.getId(), nombre: nombreArchivo };
+  }
+
+  return {
+    AUDIT_ITEMS, listarResumen, buscarPorId, previsualizarIdArqueo,
+    crear, actualizar, eliminar, subirArchivo,
+  };
+})();

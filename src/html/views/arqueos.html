@@ -1,0 +1,111 @@
+<template id="tpl-arqueos">
+  <div class="page-header">
+    <div>
+      <h2><i data-lucide="wallet" class="ico"></i> Arqueos</h2>
+      <p class="page-subtitle">Auditorías y conteo de efectivo de cada caja chica</p>
+    </div>
+    <div class="page-header-actions">
+      <button type="button" class="secondary" id="btn-exportar-excel-arqueos"><i data-lucide="file-spreadsheet" class="ico"></i> Exportar a Excel</button>
+    </div>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat-tile">
+      <div class="stat-icon"><i data-lucide="wallet" class="ico"></i></div>
+      <div><div class="stat-value" id="arq-stat-total">0</div><div class="stat-label">Total</div></div>
+    </div>
+    <div class="stat-tile stat-tile-ok">
+      <div class="stat-icon"><i data-lucide="circle-check" class="ico"></i></div>
+      <div><div class="stat-value" id="arq-stat-calificacion">0%</div><div class="stat-label">Calificación promedio</div></div>
+    </div>
+    <div class="stat-tile stat-tile-warn">
+      <div class="stat-icon"><i data-lucide="ban" class="ico"></i></div>
+      <div><div class="stat-value" id="arq-stat-diferencias">0</div><div class="stat-label">Con diferencia</div></div>
+    </div>
+  </div>
+
+  <div class="card form-card" style="margin-bottom:18px">
+    <div class="form-card-header">
+      <div class="form-card-icon"><i data-lucide="wallet" class="ico"></i></div>
+      <div>
+        <h3>Registrar arqueo</h3>
+        <p>Auditoría y conteo de efectivo de una caja chica</p>
+      </div>
+    </div>
+    <form id="form-arqueo">
+      <div class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 14px; margin-bottom: 4px;">
+        <div class="field">
+          <label>Caja chica</label>
+          <select id="arq-id-cch"><option value="">Selecciona…</option></select>
+        </div>
+        <div class="field">
+          <label>ID Arqueo</label>
+          <input type="text" id="arq-id-arqueo" disabled placeholder="Elige una caja chica" />
+        </div>
+      </div>
+      <div id="campos-form-arqueo" class="modal-form-scroll grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 14px;"></div>
+      <div style="margin-top:14px;"><button type="submit" id="btn-guardar-arqueo"><i data-lucide="wallet" class="ico"></i> Registrar arqueo</button></div>
+    </form>
+    <div class="error-msg" id="arq-error" hidden></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header-row">
+      <h3 style="margin:0">Historial</h3>
+      <input type="search" id="arq-buscar-global" class="tabla-buscar-global" placeholder="Buscar en la tabla…" />
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead id="arq-thead"></thead>
+        <tbody id="lista-arqueos"></tbody>
+      </table>
+    </div>
+    <p class="empty-state" id="arqueos-vacio" hidden>Todavía no hay arqueos registrados.</p>
+    <div class="tabla-pie" id="arq-pie"></div>
+  </div>
+
+  <!-- Modal: detalle completo, solo lectura -->
+  <div class="modal-backdrop" id="modal-detalle-arqueo" hidden>
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <div>
+          <h3 style="margin:0">Detalle completo</h3>
+          <p class="modal-subtitle" id="detalle-arqueo-label"></p>
+        </div>
+        <button type="button" class="modal-close" id="btn-cerrar-detalle-arqueo"><i data-lucide="x" class="ico"></i></button>
+      </div>
+      <div class="modal-form-scroll">
+        <div id="detalle-arqueo-grid" class="info-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: editar arqueo -->
+  <div class="modal-backdrop" id="modal-editar-arqueo" hidden>
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <div>
+          <h3 style="margin:0">Editar arqueo</h3>
+          <p class="modal-subtitle" id="editar-arqueo-label"></p>
+        </div>
+        <button type="button" class="modal-close" id="btn-cancelar-editar-arqueo"><i data-lucide="x" class="ico"></i></button>
+      </div>
+      <form id="form-editar-arqueo">
+        <input type="hidden" id="editar-arqueo-id" />
+        <div class="grid" style="grid-template-columns: repeat(2, 1fr); gap: 0 14px; margin-bottom: 4px;">
+          <div class="field">
+            <label>Caja chica</label>
+            <input type="text" id="editar-arqueo-id-cch" disabled />
+          </div>
+          <div class="field">
+            <label>ID Arqueo</label>
+            <input type="text" id="editar-arqueo-id-arqueo" disabled />
+          </div>
+        </div>
+        <div id="campos-form-editar-arqueo" class="modal-form-scroll grid" style="grid-template-columns: repeat(2, 1fr); gap: 0 14px;"></div>
+        <div class="error-msg" id="editar-arqueo-error" hidden></div>
+        <button type="submit" id="btn-guardar-editar-arqueo" style="width:100%; margin-top:10px"><i data-lucide="save" class="ico"></i> Guardar cambios</button>
+      </form>
+    </div>
+  </div>
+</template>
