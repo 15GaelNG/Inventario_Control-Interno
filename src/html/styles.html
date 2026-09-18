@@ -72,10 +72,10 @@
 
   /* Sidebar — fondo navy fijo de marca (no cambia con el tema claro/oscuro) */
   #sidebar {
-    width: 250px; height: 100vh; background: var(--color-sidebar-bg);
+    width: 280px; height: 100vh; background: var(--color-sidebar-bg);
     border-right: 1px solid var(--color-sidebar-border);
     padding: 18px 14px; display: flex; flex-direction: column; gap: 4px;
-    flex-shrink: 0; overflow-y: auto; transition: width .28s ease;
+    flex-shrink: 0; overflow-y: auto; overflow-x: hidden; transition: width .28s ease;
   }
   #sidebar.collapsed { width: 92px; }
 
@@ -137,7 +137,7 @@
      placa dorada fija; la línea que conecta con los subitems es un
      degradado dorado, y los subitems se deslizan un poco + brillan al
      pasar el mouse (siguen siendo los que se pueden clickear). */
-  .nav-groups { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; overflow-y: auto; }
+  .nav-groups { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; overflow-y: auto; overflow-x: hidden; }
 
   .nav-group-header {
     display: flex; align-items: center; gap: 10px;
