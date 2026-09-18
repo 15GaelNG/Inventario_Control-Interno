@@ -89,6 +89,46 @@
   .ln-op-campo-ancho { grid-column: 1 / -1; }
   .ln-op-check { min-height: 40px; display: flex; align-items: center; gap: 8px; text-transform: none; font-size: 13px; }
   .ln-op-check input { width: auto; }
+
+  /* Cuadrículas tipo AppSheet para Gestión de Activos y Detalles */
+  .ln-cuadros-kpis { margin: -4px 0 14px; }
+  .ln-cuadros-toolbar { margin-bottom: 14px; padding-bottom: 12px; }
+  .ln-cuadros-filtros { grid-template-columns: minmax(280px, 2fr) minmax(210px, 1fr) auto; margin-bottom: 8px; }
+  .ln-cuadros-grid {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px;
+    align-items: stretch;
+  }
+  button.ln-cuadro {
+    width: 100%; min-height: 210px; padding: 16px; background: var(--color-surface); color: var(--color-text);
+    border: 1px solid var(--color-border); border-radius: 12px; box-shadow: var(--shadow);
+    display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 7px;
+    text-align: left; font-family: inherit; font-weight: inherit; overflow: hidden;
+    transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+  }
+  button.ln-cuadro:hover { background: var(--color-surface); border-color: var(--color-accent); box-shadow: var(--shadow-lg); transform: translateY(-1px); }
+  button.ln-cuadro:focus-visible, button.ln-cuadro.seleccionado { outline: 0; border-color: var(--color-accent); box-shadow: 0 0 0 3px rgba(180,161,105,.28); }
+  .ln-cuadro-superior { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; min-width: 0; }
+  .ln-cuadro-folio, .ln-cuadro-departamento { font-size: 13px; font-weight: 700; color: var(--color-text); overflow-wrap: anywhere; }
+  .ln-cuadro-tipo, .ln-cuadro-area { color: var(--color-text-muted); font-size: 11px; display: inline-flex; align-items: center; gap: 4px; text-align: right; }
+  .ln-cuadro-depto { color: var(--color-text-muted); font-size: 11.5px; min-height: 17px; text-transform: uppercase; }
+  .ln-cuadro-principal { margin-top: 12px; color: var(--color-primary); font-size: 19px; font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; }
+  .ln-cuadro-secundario { color: var(--color-text-muted); font-size: 12px; line-height: 1.35; min-height: 32px; }
+  .ln-cuadro-pie {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap;
+    color: var(--color-text-muted); font-size: 11.5px; line-height: 1.35; margin-top: auto;
+  }
+  .ln-cuadro-pie + .ln-cuadro-pie { margin-top: 2px; padding-top: 8px; border-top: 1px solid var(--color-border); }
+  .ln-cuadro-pie > span { display: inline-flex; align-items: center; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+  .ln-cuadro-pie .ln-icon, .ln-cuadro-tipo .ln-icon { width: 13px; height: 13px; }
+  .ln-cuadro-colaborador.con-activos .ln-cuadro-principal { color: var(--ln-verde-tx); }
+  .ln-cuadro-colaborador.sin-activos .ln-cuadro-principal { color: var(--ln-rojo-tx); }
+  .ln-activos-estado { font-weight: 600; }
+  .ln-activos-estado.si { color: var(--ln-verde-tx); }
+  .ln-activos-estado.no { color: var(--ln-rojo-tx); }
+  .ln-cuadros-mas { display: flex; justify-content: center; margin: 16px 0; }
+  .ln-cuadros-mas button { min-width: 180px; }
+  .ln-cuadro-cargando, .ln-cuadro-vacio { grid-column: 1 / -1; min-height: 120px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .ln-cuadro-detalle { scroll-margin-top: 16px; }
   .ln-check { display: flex; align-items: center; gap: 8px; font-size: 12.5px; margin-bottom: 12px; cursor: pointer; }
   .ln-check input { width: auto; }
 
@@ -191,6 +231,8 @@
     .ln-captura-acciones { position: sticky; bottom: 0; background: var(--color-surface); padding-top: 10px; }
     .ln-firma-caja canvas { min-height: 180px; }
     .ln-op-campos { grid-template-columns: 1fr; }
+    .ln-cuadros-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .ln-cuadros-filtros { grid-template-columns: 1fr; }
   }
 
   @media (max-width: 520px) {
@@ -202,6 +244,8 @@
     .modal-form-scroll { max-height: calc(100vh - 140px); }
     .ln-captura-acciones { display: grid; grid-template-columns: 1fr; }
     #ln-avisos { left: 12px; right: 12px; bottom: 12px; max-width: none; }
+    .ln-cuadros-grid { grid-template-columns: 1fr; }
+    button.ln-cuadro { min-height: 190px; }
   }
 
   /* Captura de inspección / responsiva */

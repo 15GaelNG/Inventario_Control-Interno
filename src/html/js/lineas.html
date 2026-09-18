@@ -1083,48 +1083,76 @@
       const n = ++montaje;
       const raiz = document.getElementById('ln-detalles-lineas');
       const vigente = () => n === montaje && document.body.contains(raiz);
+      const paso = 48;
+      let registros = [];
+      let filtrados = [];
+      let visibles = paso;
+      let temporizador = null;
       pintarIconos(raiz);
 
-      $('#lnd-thead', raiz).innerHTML = '<tr><th>NUCO / Número</th><th>Tipo</th><th>Modelo / Compañía</th><th>IMEI / SIM</th><th>Estatus</th><th>Responsable</th><th>Departamento</th></tr>';
-
-      function fila(tipo, r) {
-        return '<tr class="ln-fila-clic" data-ir="' + esc(r.id) + '">' +
-          '<td class="ln-mono ln-fuerte">' + guion(tipo === 'equipo' ? r.nuco : r.numero) + '</td>' +
-          '<td>' + (tipo === 'equipo' ? 'Equipo' : 'Línea') + '</td>' +
-          '<td>' + guion(tipo === 'equipo' ? TIPO_EQUIPO[r.tipo] || r.tipo : r.compania) + '</td>' +
-          '<td class="ln-mono ln-tenue">' + guion(tipo === 'equipo' ? r.imei : r.sim) + '</td>' +
-          '<td>' + chip(r.estatus) + '</td>' +
-          '<td>' + guion(r.responsable) + '</td>' +
-          '<td class="ln-tenue">' + guion(r.departamento) + '</td></tr>';
+      function tarjetaDetalle(r) {
+        const esEquipo = r.clase === 'EQUIPO';
+        const titulo = esEquipo ? (r.nuco || 'Sin NUCO') : (r.numero || 'Sin número');
+        const principal = esEquipo ? (r.numero || r.modelo || 'Sin línea asociada') : (r.responsable || 'Línea sin responsable');
+        const subtitulo = esEquipo ? (r.modelo || TIPO_EQUIPO[r.tipo] || r.tipo || 'Equipo') : (r.compania || 'Línea telefónica');
+        const identidad = esEquipo ? r.imei : r.sim;
+        return '<button type="button" class="card ln-cuadro ln-cuadro-activo" data-ir="' + esc(r.id) + '" aria-label="Abrir ' + esc(titulo) + '">' +
+          '<div class="ln-cuadro-superior"><span class="ln-cuadro-folio ln-mono">' + esc(titulo) + '</span>' +
+          '<span class="ln-cuadro-tipo">' + icono(esEquipo ? 'smartphone' : 'sim-card') + ' ' + (esEquipo ? 'Equipo' : 'Línea') + '</span></div>' +
+          '<div class="ln-cuadro-depto">' + guion(r.departamento) + '</div>' +
+          '<div class="ln-cuadro-principal">' + guion(principal) + '</div>' +
+          '<div class="ln-cuadro-secundario">' + guion(subtitulo) + '</div>' +
+          '<div class="ln-cuadro-pie"><span>' + icono('user') + ' ' + guion(r.responsable) + '</span>' +
+          '<span class="ln-mono">' + icono(esEquipo ? 'scan-line' : 'credit-card') + ' ' + guion(identidad) + '</span></div>' +
+          '<div class="ln-cuadro-pie"><span>' + chip(r.estatus) + '</span>' +
+          (esEquipo && r.compania ? '<span>' + esc(r.compania) + '</span>' : '') + '</div></button>';
       }
 
-      function buscar(indice, q) {
-        const texto = normal(q).trim();
-        if (!texto) return [];
-        const eq = indice.equipos.filter((r) => ['nuco', 'imei', 'modelo', 'responsable', 'numero', 'departamento'].some((c) => normal(r[c]).indexOf(texto) >= 0));
-        const li = indice.lineas.filter((r) => r.suelta && ['numero', 'sim', 'responsable', 'departamento'].some((c) => normal(r[c]).indexOf(texto) >= 0));
-        return eq.slice(0, 30).map((r) => fila('equipo', r)).concat(li.slice(0, 30).map((r) => fila('linea', r)));
+      function aplicarFiltros() {
+        const texto = normal($('#lnd-q', raiz).value).trim();
+        const tipo = $('#lnd-tipo', raiz).value;
+        filtrados = registros.filter((r) => {
+          if (tipo !== 'TODOS' && r.clase !== tipo) return false;
+          return !texto || ['nuco', 'numero', 'imei', 'sim', 'modelo', 'compania', 'responsable', 'departamento', 'estatus']
+            .some((c) => normal(r[c]).indexOf(texto) >= 0);
+        });
+        visibles = paso;
+        pintar();
       }
 
-      function pintar(q) {
-        if (!vigente() || !memoria.indice) return;
-        const filas = buscar(memoria.indice, q);
-        $('#lnd-tbody', raiz).innerHTML = !q.trim()
-          ? '<tr><td class="empty-state" colspan="7">Escribe para buscar…</td></tr>'
-          : (filas.length ? filas.join('') : '<tr><td class="empty-state" colspan="7">Sin resultados</td></tr>');
+      function pintar() {
+        const grid = $('#lnd-grid', raiz);
+        grid.innerHTML = filtrados.length
+          ? filtrados.slice(0, visibles).map(tarjetaDetalle).join('')
+          : '<div class="card empty-state ln-cuadro-vacio">No hay líneas o equipos que coincidan con los filtros.</div>';
+        $('#lnd-total', raiz).textContent = miles(registros.length);
+        $('#lnd-filtrados', raiz).textContent = miles(filtrados.length);
+        $('#lnd-conteo', raiz).textContent = 'Mostrando ' + miles(Math.min(visibles, filtrados.length)) + ' de ' + miles(filtrados.length);
+        $('#lnd-mas', raiz).hidden = visibles >= filtrados.length;
       }
 
-      let temporizador = null;
       $('#lnd-q', raiz).addEventListener('input', (ev) => {
         clearTimeout(temporizador);
-        temporizador = setTimeout(() => pintar(ev.target.value), 150);
+        temporizador = setTimeout(aplicarFiltros, 150);
+      });
+      $('#lnd-tipo', raiz).addEventListener('change', aplicarFiltros);
+      $('#lnd-mas', raiz).addEventListener('click', () => { visibles += paso; pintar(); });
+      $('#lnd-exportar', raiz).addEventListener('click', () => {
+        const columnas = ['clase', 'nuco', 'numero', 'modelo', 'imei', 'sim', 'compania', 'estatus', 'responsable', 'departamento'];
+        exportarCsv('detalles lineas telefonicas', columnas, filtrados,
+          ['Tipo', 'NUCO', 'Número', 'Modelo', 'IMEI', 'SIM', 'Compañía', 'Estatus', 'Responsable', 'Departamento']);
       });
       raiz.addEventListener('click', (ev) => {
         const f = ev.target.closest('[data-ir]');
         if (f) irARegistro(f.dataset.ir);
       });
 
-      Promise.all([cargarPermisos(), cargarIndice()]).then(() => { if (vigente()) pintar($('#lnd-q', raiz).value); })
+      Promise.all([cargarPermisos(), cargarIndice()]).then(([, indice]) => {
+        if (!vigente()) return;
+        registros = indice.equipos.map((r) => Object.assign({ clase: 'EQUIPO' }, r))
+          .concat(indice.lineas.filter((r) => r.suelta).map((r) => Object.assign({ clase: 'LINEA' }, r)));
+        aplicarFiltros();
+      })
         .catch((e) => {
           if (!vigente()) return;
           $('#lnd-error', raiz).textContent = 'No se pudo cargar el índice: ' + mensajeError(e);
@@ -1141,9 +1169,12 @@
       const n = ++montaje;
       const raiz = document.getElementById('ln-gestion-activos');
       const vigente = () => n === montaje && document.body.contains(raiz);
+      const paso = 48;
       pintarIconos(raiz);
 
-      let colaboradores = null;
+      let colaboradores = [];
+      let filtrados = [];
+      let visibles = paso;
       let temporizador = null;
 
       function filasPorResponsable(indice, nombre) {
@@ -1172,52 +1203,90 @@
           '<p class="ln-tenue">Pendiente: se integra cuando se junten los módulos del equipo (no es de Líneas).</p></div>';
       }
 
-      function mostrarColaborador(c) {
+      function mostrarColaborador(c, tarjeta) {
         cargarIndice().then((indice) => {
           if (!vigente()) return;
           const datos = filasPorResponsable(indice, c.nombre);
+          raiz.querySelectorAll('.ln-cuadro-colaborador.seleccionado').forEach((el) => el.classList.remove('seleccionado'));
+          if (tarjeta) tarjeta.classList.add('seleccionado');
           $('#lnga-resultado', raiz).innerHTML =
             '<div class="ln-detalle-header card"><div class="ln-detalle-icono">' + icono('user') + '</div>' +
             '<div class="ln-detalle-titulo"><h2>' + esc(c.nombre) + '</h2><div class="ln-chips">' +
               (c.puesto ? chip(c.puesto, 'neutro') : '') + (c.departamento ? chip(c.departamento, 'azul') : '') + (c.estatus ? chip(c.estatus) : '') +
-            '</div></div></div>' +
+            '</div><p class="ln-pie ln-tenue">' + [c.noEmpleado ? 'Empleado ' + esc(c.noEmpleado) : '', c.sede, c.oficina].filter(Boolean).join(' · ') + '</p></div></div>' +
             tarjetaLineas(c.nombre, datos) +
             '<div class="ln-grid-2">' + tarjetaPendiente('Vehículos', 'car') + tarjetaPendiente('Hologramas / combustible', 'fuel') + '</div>' +
             '<div class="ln-grid-2">' + tarjetaPendiente('Uber', 'car-front') + tarjetaPendiente('Cajas chicas', 'wallet') + '</div>';
+          $('#lnga-resultado', raiz).scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
       }
 
-      function pintarSugerencias(q) {
-        const wrap = $('#lnga-sugerencias-wrap', raiz);
-        const cuerpo = $('#lnga-sugerencias', raiz);
-        const texto = normal(q).trim();
-        if (!texto || !colaboradores) { wrap.hidden = true; cuerpo.innerHTML = ''; return; }
-        const filas = colaboradores.filter((c) => normal(c.nombre).indexOf(texto) >= 0 || normal(c.noEmpleado).indexOf(texto) >= 0).slice(0, 20);
-        wrap.hidden = !filas.length;
-        cuerpo.innerHTML = filas.map((c) => '<tr class="ln-fila-clic" data-colaborador="' + esc(c.nombre) + '"><td>' + guion(c.nombre) + '</td><td>' +
-          guion(c.puesto) + '</td><td>' + guion(c.departamento) + '</td><td>' + guion(c.sede) + '</td></tr>').join('');
+      function tarjetaColaborador(c) {
+        const conActivos = c.totalActivos > 0;
+        return '<button type="button" class="card ln-cuadro ln-cuadro-colaborador ' + (conActivos ? 'con-activos' : 'sin-activos') + '" data-colaborador-i="' + c._i + '">' +
+          '<div class="ln-cuadro-superior"><span class="ln-cuadro-departamento">' + guion(c.departamento) + '</span>' +
+          '<span class="ln-cuadro-area">' + guion(c.area) + '</span></div>' +
+          '<div class="ln-cuadro-principal">' + guion(c.nombre) + '</div>' +
+          '<div class="ln-cuadro-secundario">' + guion(c.puesto) + '</div>' +
+          '<div class="ln-cuadro-pie"><span>' + icono('map-pin') + ' ' + guion(c.sede) + '</span><span>' + icono('building-2') + ' ' + guion(c.oficina) + '</span></div>' +
+          '<div class="ln-cuadro-pie"><span>' + icono('briefcase-business') + ' ' + chip(c.estatus || 'Sin estatus', String(c.estatus).toUpperCase() === 'ACTIVO' ? 'verde' : 'neutro') + '</span>' +
+          '<span class="ln-activos-estado ' + (conActivos ? 'si' : 'no') + '">' + icono(conActivos ? 'package-check' : 'package-x') + ' ' +
+          (conActivos ? miles(c.totalActivos) + ' activo(s)' : 'Sin activos') + '</span></div></button>';
+      }
+
+      function pintarCuadros() {
+        $('#lnga-grid', raiz).innerHTML = filtrados.length
+          ? filtrados.slice(0, visibles).map(tarjetaColaborador).join('')
+          : '<div class="card empty-state ln-cuadro-vacio">No hay colaboradores que coincidan con los filtros.</div>';
+        $('#lnga-conteo', raiz).textContent = 'Mostrando ' + miles(Math.min(visibles, filtrados.length)) + ' de ' + miles(filtrados.length);
+        $('#lnga-mas', raiz).hidden = visibles >= filtrados.length;
+      }
+
+      function aplicarFiltros() {
+        const texto = normal($('#lnga-q', raiz).value).trim();
+        const activos = $('#lnga-filtro-activos', raiz).value;
+        filtrados = colaboradores.filter((c) => {
+          if (activos === 'CON' && !c.totalActivos) return false;
+          if (activos === 'SIN' && c.totalActivos) return false;
+          return !texto || ['nombre', 'noEmpleado', 'puesto', 'departamento', 'area', 'sede', 'oficina']
+            .some((campo) => normal(c[campo]).indexOf(texto) >= 0);
+        });
+        visibles = paso;
+        pintarCuadros();
       }
 
       $('#lnga-q', raiz).addEventListener('input', (ev) => {
         clearTimeout(temporizador);
-        const q = ev.target.value;
-        temporizador = setTimeout(() => pintarSugerencias(q), 150);
+        temporizador = setTimeout(aplicarFiltros, 150);
       });
+      $('#lnga-filtro-activos', raiz).addEventListener('change', aplicarFiltros);
+      $('#lnga-mas', raiz).addEventListener('click', () => { visibles += paso; pintarCuadros(); });
       raiz.addEventListener('click', (ev) => {
-        const sug = ev.target.closest('[data-colaborador]');
+        const sug = ev.target.closest('[data-colaborador-i]');
         if (sug) {
-          const c = (colaboradores || []).filter((x) => x.nombre === sug.dataset.colaborador)[0];
-          if (c) { $('#lnga-q', raiz).value = c.nombre; $('#lnga-sugerencias-wrap', raiz).hidden = true; mostrarColaborador(c); }
+          const c = colaboradores[Number(sug.dataset.colaboradorI)];
+          if (c) mostrarColaborador(c, sug);
           return;
         }
         const f = ev.target.closest('[data-ir]');
         if (f) irARegistro(f.dataset.ir);
       });
 
-      llamar('apiLineasColaboradores').then((r) => {
-        colaboradores = filasComoObjetos(r);
-      }).catch(() => { colaboradores = []; });
-      cargarIndice();
+      Promise.all([llamar('apiLineasColaboradores'), cargarIndice()]).then(([r, indice]) => {
+        if (!vigente()) return;
+        const conteo = {};
+        indice.equipos.forEach((a) => { const k = normal(a.responsable); if (k) conteo[k] = (conteo[k] || 0) + 1; });
+        indice.lineas.filter((a) => a.suelta).forEach((a) => { const k = normal(a.responsable); if (k) conteo[k] = (conteo[k] || 0) + 1; });
+        colaboradores = filasComoObjetos(r).map((c, i) => Object.assign(c, { _i: i, totalActivos: conteo[normal(c.nombre)] || 0 }));
+        $('#lnga-total', raiz).textContent = miles(colaboradores.length);
+        $('#lnga-con-activos', raiz).textContent = miles(colaboradores.filter((c) => c.totalActivos).length);
+        aplicarFiltros();
+      }).catch((e) => {
+        if (!vigente()) return;
+        $('#lnga-grid', raiz).innerHTML = '';
+        $('#lnga-error', raiz).textContent = 'No se pudieron cargar los colaboradores: ' + mensajeError(e);
+        $('#lnga-error', raiz).hidden = false;
+      });
     }
 
     // ======================================================================

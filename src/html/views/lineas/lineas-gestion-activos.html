@@ -7,16 +7,28 @@
       </div>
     </div>
 
-    <div class="card">
-      <input type="search" id="lnga-q" placeholder="Buscar colaborador por nombre o número de empleado…" autocomplete="off" autofocus />
-      <div class="ln-tabla-wrap" id="lnga-sugerencias-wrap" style="margin-top:10px" hidden>
-        <table class="ln-tabla">
-          <thead><tr><th>Nombre</th><th>Puesto</th><th>Departamento</th><th>Sede</th></tr></thead>
-          <tbody id="lnga-sugerencias"></tbody>
-        </table>
-      </div>
+    <div class="kpi-chips ln-cuadros-kpis">
+      <span class="kpi-chip">Colaboradores <strong id="lnga-total">—</strong></span>
+      <span class="kpi-chip">Con activos <strong id="lnga-con-activos">—</strong></span>
     </div>
 
-    <div id="lnga-resultado"></div>
+    <div class="card ln-cuadros-toolbar">
+      <div class="ln-filtros ln-cuadros-filtros">
+        <input type="search" id="lnga-q" placeholder="Buscar por nombre, empleado, puesto, área o sede…" autocomplete="off" autofocus />
+        <select id="lnga-filtro-activos" aria-label="Filtrar por activos">
+          <option value="TODOS">Todos los colaboradores</option>
+          <option value="CON">Con activos asociados</option>
+          <option value="SIN">Sin activos asociados</option>
+        </select>
+      </div>
+      <p id="lnga-conteo" class="ln-conteo"></p>
+    </div>
+
+    <div id="lnga-error" class="error-msg" hidden></div>
+    <div id="lnga-grid" class="ln-cuadros-grid" aria-live="polite">
+      <div class="card ln-cuadro-cargando"><span class="ln-spinner"></span> Cargando colaboradores…</div>
+    </div>
+    <div class="ln-cuadros-mas"><button id="lnga-mas" type="button" class="secondary" hidden>Mostrar más</button></div>
+    <div id="lnga-resultado" class="ln-cuadro-detalle"></div>
   </div>
 </template>

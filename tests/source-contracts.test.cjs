@@ -67,6 +67,20 @@ test('las vistas operativas usan la misma base de AppSheet', () => {
   assert.match(repo, /crearVistaOperativa/);
 });
 
+test('Gestión de Activos y Detalles usan cuadrículas de tarjetas con filtros', () => {
+  const lineas = read('src/html/js/lineas.html');
+  const gestion = read('src/html/views/lineas/lineas-gestion-activos.html');
+  const detalles = read('src/html/views/lineas/lineas-detalles.html');
+  const estilos = read('src/html/lineas-estilos.html');
+  assert.match(gestion, /id="lnga-grid" class="ln-cuadros-grid"/);
+  assert.match(gestion, /id="lnga-filtro-activos"/);
+  assert.match(detalles, /id="lnd-grid" class="ln-cuadros-grid"/);
+  assert.match(detalles, /id="lnd-tipo"/);
+  assert.match(lineas, /function tarjetaColaborador/);
+  assert.match(lineas, /function tarjetaDetalle/);
+  assert.match(estilos, /grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+});
+
 test('las capturas canceladas tienen un flujo completo de limpieza', () => {
   assert.match(read('src/ClientApi.gs'), /apiLineasCancelarEvidencia/);
   assert.match(read('src/services/TelefoniaService.gs'), /cancelarEvidencia/);

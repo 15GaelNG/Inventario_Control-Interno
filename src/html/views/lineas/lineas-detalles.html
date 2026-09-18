@@ -7,17 +7,27 @@
       </div>
     </div>
 
-    <div class="card">
-      <input type="search" id="lnd-q" placeholder="Buscar por NUCO, número, IMEI, SIM o responsable…" autocomplete="off" autofocus />
-      <div class="ln-tabla-wrap" style="margin-top:14px">
-        <table class="ln-tabla">
-          <thead id="lnd-thead"></thead>
-          <tbody id="lnd-tbody">
-            <tr><td class="empty-state">Escribe para buscar…</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="error-msg" id="lnd-error" hidden></div>
+    <div class="kpi-chips ln-cuadros-kpis">
+      <span class="kpi-chip">Registros <strong id="lnd-total">—</strong></span>
+      <span class="kpi-chip">Mostrados <strong id="lnd-filtrados">—</strong></span>
     </div>
+
+    <div class="card ln-cuadros-toolbar">
+      <div class="ln-filtros ln-cuadros-filtros">
+        <input type="search" id="lnd-q" placeholder="Buscar por NUCO, número, IMEI, SIM, modelo o responsable…" autocomplete="off" autofocus />
+        <select id="lnd-tipo" aria-label="Filtrar por tipo de activo">
+          <option value="TODOS">Todos los registros</option>
+          <option value="EQUIPO">Equipos</option>
+          <option value="LINEA">Líneas sin equipo</option>
+        </select>
+        <button id="lnd-exportar" type="button" class="secondary ln-btn-icono"><span data-ln-icon="download"></span> Exportar vista</button>
+      </div>
+      <p id="lnd-conteo" class="ln-conteo"></p>
+    </div>
+    <div class="error-msg" id="lnd-error" hidden></div>
+    <div id="lnd-grid" class="ln-cuadros-grid" aria-live="polite">
+      <div class="card ln-cuadro-cargando"><span class="ln-spinner"></span> Cargando líneas y equipos…</div>
+    </div>
+    <div class="ln-cuadros-mas"><button id="lnd-mas" type="button" class="secondary" hidden>Mostrar más</button></div>
   </div>
 </template>
