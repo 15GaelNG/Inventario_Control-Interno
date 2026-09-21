@@ -838,6 +838,9 @@
     document.getElementById('btn-exportar-excel-arqueos').addEventListener('click', () => {
       exportarCSV('arqueos.csv', columnasArqueos, motorTablaArqueos.obtenerFiltrados());
     });
+    document.getElementById('btn-calendario-arqueos').addEventListener('click', () => {
+      window.open('https://script.google.com/a/macros/ciudadmaderas.com/s/AKfycbwAgUrG2tEiZSxMtNO7hvXlyjfurJnuXIVXUDwyJF99Eci6UbvRtJqmpoCfXGGCdWad1A/exec', '_blank', 'noopener');
+    });
 
     await cargar();
   }
