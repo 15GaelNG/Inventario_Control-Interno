@@ -63,6 +63,9 @@ function apiEliminarVehiculo(token, id) {
 function apiSubirArchivoVehiculo(token, nombreArchivo, mimeType, base64Data) {
   return VehiculosService.subirArchivo(token, nombreArchivo, mimeType, base64Data);
 }
+function apiListarCambiosVehiculos(token) {
+  return CambiosVehiculosService.listarResumen(token);
+}
 
 // --- Uber ---
 function apiListarUberResumen(token) {

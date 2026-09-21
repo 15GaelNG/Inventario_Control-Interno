@@ -1,0 +1,41 @@
+<template id="tpl-cambios-vehiculos">
+  <div class="page-header">
+    <div>
+      <h2><i data-lucide="history" class="ico"></i> Cambios Vehículos</h2>
+      <p class="page-subtitle">Bitácora automática: qué campo cambió, de qué valor a cuál, quién y cuándo — se llena sola al editar un vehículo</p>
+    </div>
+    <div class="page-header-actions">
+      <button type="button" class="secondary" id="btn-exportar-excel-cambios-vehiculos"><i data-lucide="file-spreadsheet" class="ico"></i> Exportar a Excel</button>
+    </div>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat-tile">
+      <div class="stat-icon"><i data-lucide="history" class="ico"></i></div>
+      <div><div class="stat-value" id="cv-stat-total">0</div><div class="stat-label">Total de cambios</div></div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-icon"><i data-lucide="car" class="ico"></i></div>
+      <div><div class="stat-value" id="cv-stat-vehiculos">0</div><div class="stat-label">Vehículos con cambios</div></div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-icon"><i data-lucide="clock" class="ico"></i></div>
+      <div><div class="stat-value" id="cv-stat-hoy">0</div><div class="stat-label">Hoy</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header-row">
+      <h3 style="margin:0">Historial</h3>
+      <input type="search" id="cv-buscar-global" class="tabla-buscar-global" placeholder="Buscar en la tabla…" />
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead id="cv-thead"></thead>
+        <tbody id="lista-cambios-vehiculos"></tbody>
+      </table>
+    </div>
+    <p class="empty-state" id="cambios-vehiculos-vacio" hidden>Todavía no hay cambios registrados.</p>
+    <div class="tabla-pie" id="cv-pie"></div>
+  </div>
+</template>

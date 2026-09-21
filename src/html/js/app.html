@@ -289,6 +289,7 @@
       if (vista === 'accesorios') { montarVista('tpl-accesorios', initAccesorios); return; }
       if (vista === 'incidencias') { montarVista('tpl-incidencias', initIncidencias); return; }
       if (vista === 'vehiculos') { montarVista('tpl-vehiculos', initVehiculos); return; }
+      if (vista === 'cambios-vehiculos') { montarVista('tpl-cambios-vehiculos', initCambiosVehiculos); return; }
       if (vista === 'uber') { montarVista('tpl-uber', initUber); return; }
       if (vista === 'tickets') { montarVista('tpl-tickets', initTickets); return; }
       if (vista === 'caja-chica') { montarVista('tpl-cajachica', initCajaChica); return; }
@@ -2832,6 +2833,68 @@
 
     document.getElementById('btn-exportar-excel-cambios-monto').addEventListener('click', () => {
       exportarCSV('cambios_monto_caja_chica.csv', columnasCambiosMonto, motorTablaCambiosMonto.obtenerFiltrados());
+    });
+
+    await cargar();
+  }
+
+  // ---------- Cambios Vehículos (bitácora automática, solo lectura) ----------
+  async function initCambiosVehiculos() {
+    const lista = document.getElementById('lista-cambios-vehiculos');
+    const vacio = document.getElementById('cambios-vehiculos-vacio');
+    let todosLosCambios = [];
+
+    const columnasCambiosVehiculos = [
+      { clave: 'FOLIO', etiqueta: 'Folio' },
+      { clave: 'CAMPO', etiqueta: 'Campo' },
+      { clave: 'ANTES', etiqueta: 'Antes' },
+      { clave: 'DESPUES', etiqueta: 'Después' },
+      { clave: 'ACTUALIZADO_POR', etiqueta: 'Actualizado por' },
+      { clave: 'FECHA', etiqueta: 'Fecha' },
+    ];
+    const motorTablaCambiosVehiculos = crearTablaInteractiva({
+      thead: document.getElementById('cv-thead'),
+      columnas: columnasCambiosVehiculos,
+      conAcciones: false, // bitácora de solo lectura, sin botones de editar/eliminar
+      buscadorGlobal: document.getElementById('cv-buscar-global'),
+      piePaginacion: document.getElementById('cv-pie'),
+      onRenderPagina: (cambios, total) => {
+        vacio.hidden = total > 0;
+        lista.innerHTML = cambios.map((c) => `
+          <tr>
+            <td>${c.FOLIO || '—'}</td>
+            <td>${c.CAMPO || '—'}</td>
+            <td>${c.ANTES || '<span class="empty-state" style="padding:0">(vacío)</span>'}</td>
+            <td>${c.DESPUES || '<span class="empty-state" style="padding:0">(vacío)</span>'}</td>
+            <td>${c.ACTUALIZADO_POR || '—'}</td>
+            <td>${formatearFecha(c.FECHA)}</td>
+          </tr>
+        `).join('');
+      },
+    });
+
+    async function cargar() {
+      try {
+        todosLosCambios = await callServer('apiListarCambiosVehiculos', state.token) || [];
+      } catch (err) {
+        console.error('No se pudo cargar el historial de Cambios Vehículos:', err);
+        vacio.textContent = 'No se pudo cargar el historial: ' + err.message;
+        vacio.hidden = false;
+        return;
+      }
+
+      document.getElementById('cv-stat-total').textContent = todosLosCambios.length;
+      document.getElementById('cv-stat-vehiculos').textContent =
+        new Set(todosLosCambios.map((c) => c.FOLIO).filter(Boolean)).size;
+      const hoyStr = hoyISO();
+      document.getElementById('cv-stat-hoy').textContent =
+        todosLosCambios.filter((c) => c.FECHA && c.FECHA.slice(0, 10) === hoyStr).length;
+
+      motorTablaCambiosVehiculos.setDatos(todosLosCambios);
+    }
+
+    document.getElementById('btn-exportar-excel-cambios-vehiculos').addEventListener('click', () => {
+      exportarCSV('cambios_vehiculos.csv', columnasCambiosVehiculos, motorTablaCambiosVehiculos.obtenerFiltrados());
     });
 
     await cargar();

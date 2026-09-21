@@ -6,6 +6,9 @@
  *
  * Hojas previstas en Config.SPREADSHEET_IDS.VEHICULOS():
  *   VEHICULOS          — catálogo de unidades
+ *   CAMBIOS VEHICULOS  — bitácora automática de ediciones (ver
+ *                         CambiosVehiculosService, se llena sola desde
+ *                         actualizar(), nadie la captura a mano)
  *   REASIGNACIONES     — historial de cambio de responsable
  *   VERIFICACIONES     — verificación vehicular periódica
  *   SERVICIOS          — mantenimiento (aceite, llantas, etc.)
@@ -242,13 +245,23 @@ const VehiculosService = (function () {
     }
   }
 
+  /** Edita un vehículo. Además de guardar, compara contra el registro que
+   * había antes y manda la diferencia campo por campo a la bitácora de
+   * Cambios Vehículos (ver CambiosVehiculosService) — así queda quién
+   * cambió qué y cuándo, sin que nadie tenga que anotarlo a mano. */
   function actualizar(token, id, cambios) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    const sesion = Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
     const datos = Object.assign({}, cambios);
     delete datos.FOLIO; // no se edita, se fija solo al crear
     delete datos.NUCCO; // ídem
     delete datos['FECHA REGISTRO SISTEMA CI']; // ídem
+
+    const encontrado = SheetUtils.findById(ssId(), SHEET_VEHICULOS, id, ID_COLUMN);
     SheetUtils.update(ssId(), SHEET_VEHICULOS, id, datos, ID_COLUMN);
+
+    if (encontrado) {
+      CambiosVehiculosService.registrarCambios(encontrado.data.FOLIO, encontrado.data, datos, sesion.nombre);
+    }
     return { ID: id };
   }
 
