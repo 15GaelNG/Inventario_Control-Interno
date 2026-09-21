@@ -195,6 +195,20 @@
       }
       const el = document.getElementById(id);
       if (!el) return;
+      // Un <select> (ej. los 17 reactivos de auditoría, o campos con
+      // opciones que hayan cambiado de texto) NO puede mostrar un valor
+      // que no esté entre sus <option> — lo deja en blanco en silencio. Y
+      // como Guardar manda TODO el formulario (no solo lo que se tocó), ese
+      // blanco se guardaba encima del valor real, borrándolo. Si el valor
+      // guardado ya no calza con ninguna opción actual, se agrega una
+      // opción extra para ESE valor, así se ve y se conserva tal cual si
+      // nadie lo cambia a mano.
+      if (el.tagName === 'SELECT' && valor !== '' && !Array.from(el.options).some((o) => o.value === valor)) {
+        const opcionExtra = document.createElement('option');
+        opcionExtra.value = valor;
+        opcionExtra.textContent = valor + ' (guardado, ya no está en la lista)';
+        el.appendChild(opcionExtra);
+      }
       if (CAMPOS_MONEDA_ARQUEO.includes(campo.clave)) {
         el.value = formatearMoneda(valor || 0);
         el.dataset.valor = valor || 0; // valor crudo, lo usa recalcularTotalesArqueo (Monto caja)
