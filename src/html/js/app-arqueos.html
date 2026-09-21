@@ -121,10 +121,21 @@
     { grupo: 'Firmas y evidencia', clave: 'CUENTA CON FIRMA RESPONSABLE', etiqueta: 'Cuenta con firma del responsable', tipo: 'select', opciones: ['SI', 'NO'] },
     { grupo: 'Firmas y evidencia', clave: 'CUENTA CON FIRMA ESPECIALISTA', etiqueta: 'Cuenta con firma del especialista', tipo: 'select', opciones: ['SI', 'NO'] },
     { grupo: 'Firmas y evidencia', clave: 'CUENTA CON FIRMA ASISTENTE', etiqueta: 'Cuenta con firma del asistente', tipo: 'select', opciones: ['SI', 'NO'] },
-    { grupo: 'Firmas y evidencia', clave: 'FIRMA RESPONSABLE', etiqueta: 'Firma del responsable', tipo: 'file' },
-    { grupo: 'Firmas y evidencia', clave: 'FIRMA ESPECIALISTA', etiqueta: 'Firma del especialista', tipo: 'file' },
+    // tipo "firma": recuadro para firmar con mouse/dedo (no subir archivo) —
+    // solo se abre si la "Cuenta con firma de..." correspondiente es SI.
+    {
+      grupo: 'Firmas y evidencia', clave: 'FIRMA RESPONSABLE', etiqueta: 'Firma del responsable', tipo: 'firma',
+      mostrarSiCampo: 'CUENTA CON FIRMA RESPONSABLE', mostrarSiValor: 'SI',
+    },
+    {
+      grupo: 'Firmas y evidencia', clave: 'FIRMA ESPECIALISTA', etiqueta: 'Firma del especialista', tipo: 'firma',
+      mostrarSiCampo: 'CUENTA CON FIRMA ESPECIALISTA', mostrarSiValor: 'SI',
+    },
     { grupo: 'Firmas y evidencia', clave: 'NOMBRE ASISTENTE', etiqueta: 'Nombre del asistente', tipo: 'text' },
-    { grupo: 'Firmas y evidencia', clave: 'FIRMA ASISTENTE', etiqueta: 'Firma del asistente', tipo: 'file' },
+    {
+      grupo: 'Firmas y evidencia', clave: 'FIRMA ASISTENTE', etiqueta: 'Firma del asistente', tipo: 'firma',
+      mostrarSiCampo: 'CUENTA CON FIRMA ASISTENTE', mostrarSiValor: 'SI',
+    },
     { grupo: 'Firmas y evidencia', clave: 'FIRMA EXTERNA', etiqueta: 'Firma externa', tipo: 'file' },
     { grupo: 'Firmas y evidencia', clave: 'EVIDENCIAS', etiqueta: 'Evidencias', tipo: 'file' },
     // El PDF ya no se sube a mano: se genera solo al Registrar/Editar (ver
@@ -155,6 +166,19 @@
             <div class="file-actual" id="${id}-actual"></div>
           </div>`;
         }
+        if (campo.tipo === 'firma') {
+          // Recuadro para firmar con mouse/dedo (crearFirmaPad la conecta) —
+          // en vez de subir un archivo. data-tiene-trazo indica si ya se
+          // dibujó algo (lo lee subirFirmasArqueo al guardar).
+          return `<div class="field"${mostrarSi}>
+            <label>${campo.etiqueta}</label>
+            <div class="firma-pad-wrap">
+              <canvas id="${id}" class="firma-pad" width="500" height="170" data-tiene-trazo="0"></canvas>
+              <button type="button" class="secondary firma-pad-limpiar" data-target="${id}"><i data-lucide="eraser" class="ico"></i> Limpiar firma</button>
+            </div>
+            <div class="file-actual" id="${id}-actual"></div>
+          </div>`;
+        }
         if (campo.tipo === 'select') {
           const opciones = (campo.opciones || []).map((o) => `<option value="${o}">${o}</option>`).join('');
           return `<div class="field"${mostrarSi}><label>${campo.etiqueta}</label><select id="${id}"><option value="">Selecciona…</option>${opciones}</select></div>`;
@@ -170,11 +194,11 @@
     }).join('');
   }
 
-  /** Lee los campos de captura manual (deja fuera soloLectura y file — esos se manejan aparte). */
+  /** Lee los campos de captura manual (deja fuera soloLectura, file y firma — esos se manejan aparte). */
   function recolectarDatosArqueo(prefijo) {
     const datos = {};
     CAMPOS_ARQUEO.forEach((campo) => {
-      if (campo.tipo === 'file' || campo.soloLectura) return;
+      if (campo.tipo === 'file' || campo.tipo === 'firma' || campo.soloLectura) return;
       const el = document.getElementById(prefijo + '-' + slugCampo(campo.clave));
       if (el) datos[campo.clave] = el.value.trim();
     });
@@ -216,6 +240,20 @@
             ? `<a href="${valor}" target="_blank" rel="noopener">📎 Ver archivo actual</a>`
             : '<span class="empty-state" style="margin:0">Sin archivo</span>';
         }
+        return;
+      }
+      if (campo.tipo === 'firma') {
+        // La firma ya guardada se ve como imagen (es una firma, no un PDF
+        // cualquiera) — y el recuadro para volver a firmar arranca limpio,
+        // no con el trazo de la sesión anterior de este mismo navegador.
+        const info = document.getElementById(id + '-actual');
+        if (info) {
+          info.innerHTML = valor
+            ? `<img src="${valor}" alt="Firma guardada" style="max-width:220px;border:1px solid var(--color-border);border-radius:8px;background:#fff" />`
+            : '<span class="empty-state" style="margin:0">Sin firma</span>';
+        }
+        const canvas = document.getElementById(id);
+        if (canvas) limpiarFirmaPad(canvas);
         return;
       }
       const el = document.getElementById(id);
@@ -270,6 +308,81 @@
       if (!file) continue;
       const base64 = await leerArchivoBase64(file);
       const subido = await callServer('apiSubirArchivoArqueo', state.token, file.name, file.type, base64);
+      resultado[campo.clave] = subido.url;
+    }
+    return resultado;
+  }
+
+  /**
+   * Recuadro para firmar con mouse/dedo (canvas), en vez de subir un
+   * archivo. Conecta los eventos de dibujo — funciona igual con mouse
+   * (mousedown/move/up) y con touch (touchstart/move/end, con
+   * preventDefault para que el navegador no haga scroll mientras se firma).
+   * canvas.dataset.tieneTrazo indica si ya se dibujó algo (lo usa
+   * subirFirmasArqueo al guardar, para no mandar un canvas vacío).
+   */
+  function crearFirmaPad(canvas) {
+    const ctx = canvas.getContext('2d');
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#1a1a2e';
+    let dibujando = false;
+    let ultimoPunto = null;
+
+    function posicion(ev) {
+      const rect = canvas.getBoundingClientRect();
+      const punto = ev.touches && ev.touches[0] ? ev.touches[0] : ev;
+      return {
+        x: (punto.clientX - rect.left) * (canvas.width / rect.width),
+        y: (punto.clientY - rect.top) * (canvas.height / rect.height),
+      };
+    }
+    function iniciar(ev) {
+      ev.preventDefault();
+      dibujando = true;
+      ultimoPunto = posicion(ev);
+    }
+    function mover(ev) {
+      if (!dibujando) return;
+      ev.preventDefault();
+      const punto = posicion(ev);
+      ctx.beginPath();
+      ctx.moveTo(ultimoPunto.x, ultimoPunto.y);
+      ctx.lineTo(punto.x, punto.y);
+      ctx.stroke();
+      ultimoPunto = punto;
+      canvas.dataset.tieneTrazo = '1';
+    }
+    function terminar() { dibujando = false; ultimoPunto = null; }
+
+    canvas.addEventListener('mousedown', iniciar);
+    canvas.addEventListener('mousemove', mover);
+    canvas.addEventListener('mouseup', terminar);
+    canvas.addEventListener('mouseleave', terminar);
+    canvas.addEventListener('touchstart', iniciar, { passive: false });
+    canvas.addEventListener('touchmove', mover, { passive: false });
+    canvas.addEventListener('touchend', terminar);
+  }
+
+  /** Borra el dibujo del recuadro de firma y lo deja como recién abierto. */
+  function limpiarFirmaPad(canvas) {
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    canvas.dataset.tieneTrazo = '0';
+  }
+
+  /** Sube (si el usuario firmó) las firmas dibujadas y regresa {columna real: url}
+   * — mismo patrón que subirArchivosArqueo, pero exportando el canvas a PNG en
+   * vez de leer un <input type="file">. Sin trazo nuevo, no se manda nada
+   * (así crear()/actualizar() no le tocan la firma que ya tenía guardada). */
+  async function subirFirmasArqueo(prefijo) {
+    const resultado = {};
+    const camposFirma = CAMPOS_ARQUEO.filter((c) => c.tipo === 'firma');
+    for (const campo of camposFirma) {
+      const canvas = document.getElementById(prefijo + '-' + slugCampo(campo.clave));
+      if (!canvas || canvas.dataset.tieneTrazo !== '1') continue;
+      const base64 = canvas.toDataURL('image/png').split(',')[1];
+      const subido = await callServer('apiSubirArchivoArqueo', state.token, 'firma.png', 'image/png', base64);
       resultado[campo.clave] = subido.url;
     }
     return resultado;
@@ -340,6 +453,16 @@
 
     document.getElementById('campos-form-arqueo').innerHTML = renderCamposArqueo('arq');
     document.getElementById('campos-form-editar-arqueo').innerHTML = renderCamposArqueo('editar-arqueo');
+
+    // Recuadros de firma: conecta el dibujo en cada canvas y el botón
+    // "Limpiar firma" de cada uno.
+    document.querySelectorAll('.firma-pad').forEach((canvas) => crearFirmaPad(canvas));
+    document.querySelectorAll('.firma-pad-limpiar').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const canvas = document.getElementById(btn.dataset.target);
+        if (canvas) limpiarFirmaPad(canvas);
+      });
+    });
 
     // Quién registró / fechas: solo vista previa (el servidor las vuelve a
     // fijar siempre) — se ven ya llenas desde que se abre el formulario.
@@ -641,7 +764,8 @@
       toastCargando('Guardando cambios…');
       try {
         const archivos = await subirArchivosArqueo('editar-arqueo');
-        const datos = Object.assign(recolectarDatosArqueo('editar-arqueo'), archivos);
+        const firmas = await subirFirmasArqueo('editar-arqueo');
+        const datos = Object.assign(recolectarDatosArqueo('editar-arqueo'), archivos, firmas);
         await callServer('apiActualizarArqueo', state.token, document.getElementById('editar-arqueo-id').value, datos);
         cerrarEditarArqueo();
         await cargar();
@@ -684,10 +808,12 @@
       toastCargando('Registrando…');
       try {
         const archivos = await subirArchivosArqueo('arq');
-        const datos = Object.assign(recolectarDatosArqueo('arq'), archivos);
+        const firmas = await subirFirmasArqueo('arq');
+        const datos = Object.assign(recolectarDatosArqueo('arq'), archivos, firmas);
         datos['ID CCH'] = selectCajaArqueo.value;
         await callServer('apiCrearArqueo', state.token, datos);
         ev.target.reset();
+        document.querySelectorAll('#campos-form-arqueo .firma-pad').forEach((canvas) => limpiarFirmaPad(canvas));
         campoIdArqueoPreview.value = '';
         document.getElementById(idArq('arq', 'QUIEN REGISTRO')).value = (state.sesion && state.sesion.nombre) || '';
         ['FECHA DEL ULTIMO ARQUEO', 'FECHA INICIO', 'FECHA FIN'].forEach((clave) => {

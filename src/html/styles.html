@@ -495,6 +495,15 @@
   .file-actual { margin-top: 4px; font-size: 12px; }
   .file-actual a { color: var(--color-accent-hover); }
 
+  /* Recuadro para firmar con mouse/dedo (Arqueos) */
+  .firma-pad-wrap { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+  .firma-pad {
+    width: 100%; max-width: 500px; aspect-ratio: 500 / 170; height: auto;
+    background: #fff; border: 1px dashed var(--color-border); border-radius: var(--radius);
+    cursor: crosshair; touch-action: none; /* evita que el navegador haga scroll al firmar en pantalla táctil */
+  }
+  .firma-pad-limpiar { padding: 6px 10px; font-size: 12px; }
+
   /* ========== Modal ========== */
   .modal-backdrop {
     position: fixed; inset: 0; background: rgba(6,20,30,.5); backdrop-filter: blur(2px);
