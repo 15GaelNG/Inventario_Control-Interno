@@ -7,7 +7,17 @@
     return new Promise((resolve, reject) => {
       google.script.run
         .withSuccessHandler(resolve)
-        .withFailureHandler((err) => reject(new Error(err.message || String(err))))
+        .withFailureHandler((err) => {
+          const mensaje = err.message || String(err);
+          // Sesión expirada (Auth.validarSesion, server-side): sin importar
+          // desde qué pantalla/módulo venga la llamada, se maneja aquí una
+          // sola vez — regresa al login con un aviso, en vez de dejar cada
+          // pantalla a medias cargar (selects vacíos, etc.) sin explicación.
+          if (/sesi[oó]n expirada/i.test(mensaje) && typeof manejarSesionExpirada === 'function') {
+            manejarSesionExpirada();
+          }
+          reject(new Error(mensaje));
+        })
         [fnName](...args);
     });
   }

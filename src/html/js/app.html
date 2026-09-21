@@ -137,6 +137,7 @@
     state.sesion = resultadoLogin;
     sessionStorage.setItem('token', state.token);
     sessionStorage.setItem('sesion', JSON.stringify(resultadoLogin));
+    sesionExpiradaManejada = false; // por si la siguiente sesión también llega a expirar
   }
 
   function cerrarSesion() {
@@ -148,6 +149,30 @@
   }
   async function apiLogoutSafe() {
     try { await callServer('apiLogout', state.token); } catch (e) { /* no-op */ }
+  }
+
+  /**
+   * Cualquier llamada al servidor (desde cualquier pantalla/módulo) que
+   * truene con "Sesión expirada" llega aquí, vía callServer (api.html).
+   * Antes cada módulo lo manejaba (o no) por su cuenta — se veía como
+   * catálogos/selects vacíos sin explicación (ej. Arqueos). Ahora: se
+   * regresa al login de una vez, con un aviso claro ahí mismo.
+   * sesionExpiradaManejada evita procesarlo varias veces si revientan
+   * varias llamadas en paralelo (ej. un Promise.all) por la misma causa.
+   */
+  let sesionExpiradaManejada = false;
+  function manejarSesionExpirada() {
+    if (sesionExpiradaManejada || !state.token) return;
+    sesionExpiradaManejada = true;
+    state.token = null;
+    state.sesion = null;
+    sessionStorage.clear();
+    render();
+    const errorBox = document.getElementById('login-error');
+    if (errorBox) {
+      errorBox.textContent = 'Tu sesión expiró — vuelve a iniciar sesión.';
+      errorBox.hidden = false;
+    }
   }
 
   function render() {
