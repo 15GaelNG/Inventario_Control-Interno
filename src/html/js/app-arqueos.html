@@ -127,8 +127,10 @@
     { grupo: 'Firmas y evidencia', clave: 'FIRMA ASISTENTE', etiqueta: 'Firma del asistente', tipo: 'file' },
     { grupo: 'Firmas y evidencia', clave: 'FIRMA EXTERNA', etiqueta: 'Firma externa', tipo: 'file' },
     { grupo: 'Firmas y evidencia', clave: 'EVIDENCIAS', etiqueta: 'Evidencias', tipo: 'file' },
-    { grupo: 'Firmas y evidencia', clave: 'ESTADO PDF', etiqueta: 'Estado del PDF', tipo: 'text' },
-    { grupo: 'Firmas y evidencia', clave: 'FORMATO ARQUEO', etiqueta: 'Formato de arqueo (PDF)', tipo: 'file' },
+    // El PDF ya no se sube a mano: se genera solo al Registrar/Editar (ver
+    // ArqueosService.generarPdfArqueo_) a partir de la plantilla F-CI03-009.
+    { grupo: 'Firmas y evidencia', clave: 'ESTADO PDF', etiqueta: 'Estado del PDF', tipo: 'text', soloLectura: true, placeholder: 'Se genera solo al guardar' },
+    { grupo: 'Firmas y evidencia', clave: 'FORMATO ARQUEO', etiqueta: 'Formato de arqueo (PDF)', tipo: 'file', soloLectura: true },
   ];
 
   /** Genera los <div class="field"> agrupados por sección para un formulario de arqueo. */
@@ -144,9 +146,12 @@
         const id = prefijo + '-' + slugCampo(campo.clave);
         const mostrarSi = campo.mostrarSiCampo ? ` data-mostrar-si-campo="${campo.mostrarSiCampo}" data-mostrar-si-valor="${campo.mostrarSiValor}"` : '';
         if (campo.tipo === 'file') {
+          // soloLectura (ej. Formato de arqueo): ya no se sube a mano, se
+          // genera solo — no tiene caso pintar el <input type="file">.
+          const inputArchivo = campo.soloLectura ? '' : `<input type="file" id="${id}" accept=".pdf,.png,.jpg,.jpeg" />`;
           return `<div class="field"${mostrarSi}>
             <label>${campo.etiqueta}</label>
-            <input type="file" id="${id}" accept=".pdf,.png,.jpg,.jpeg" />
+            ${inputArchivo}
             <div class="file-actual" id="${id}-actual"></div>
           </div>`;
         }
@@ -433,6 +438,7 @@
             <td>${a.ESTADO_PDF || '—'}</td>
             <td>
               <div class="tabla-actions">
+                ${a.FORMATO_ARQUEO ? `<a class="secondary" href="${a.FORMATO_ARQUEO}" target="_blank" rel="noopener" title="Ver PDF"><i data-lucide="file-text" class="ico"></i></a>` : ''}
                 <button type="button" class="secondary btn-editar-arqueo" data-id="${a.ID}" title="Editar"><i data-lucide="pencil" class="ico"></i></button>
                 <button type="button" class="danger btn-eliminar-arqueo" data-id="${a.ID}" title="Eliminar"><i data-lucide="trash-2" class="ico"></i></button>
               </div>

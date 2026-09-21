@@ -294,6 +294,15 @@
   .tabla-clickable:hover { color: var(--color-accent-hover); }
   .tabla-actions { display: flex; gap: 6px; justify-content: flex-end; }
   .tabla-actions button { padding: 6px 9px; font-size: 12px; white-space: nowrap; }
+  /* Botones de acción que en realidad son links (ej. "Ver PDF" en Arqueos)
+     — mismo look que button.secondary, sin duplicar toda la regla. */
+  .tabla-actions a.secondary {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 6px 9px; font-size: 12px; white-space: nowrap; border-radius: 8px;
+    background: transparent; color: var(--color-primary); border: 1px solid var(--color-border);
+    text-decoration: none; cursor: pointer;
+  }
+  .tabla-actions a.secondary:hover { background: var(--color-bg); }
 
   input, select, button {
     font: inherit; padding: 9px 12px; border-radius: 8px;

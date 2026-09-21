@@ -27,7 +27,12 @@
  *     GENERAL / DIFERENCIA / CALIFICACION_AUDITORIA_FINAL: se recalculan
  *     siempre a partir de las columnas manuales (denominaciones, totales de
  *     gasto, los 17 reactivos de auditoría), tanto al crear como al editar
- *     — ver calcularCampos_.
+ *     — ver calcularCampos_. CANTIDAD M/B = suma de las CANTIDADES de cada
+ *     denominación (no su valor) — la plantilla del PDF (F-CI03-009) fue la
+ *     que confirmó la fórmula, antes no se tenía clara.
+ *   - FORMATO ARQUEO / ESTADO PDF: el PDF se genera solo al crear y al
+ *     editar (ver generarPdfArqueo_/actualizarPdfArqueo_), a partir de la
+ *     plantilla de Google Docs F-CI03-009 — ya no se sube a mano.
  */
 
 const ArqueosService = (function () {
@@ -216,17 +221,28 @@ const ArqueosService = (function () {
   function calcularCampos_(datos, montoCaja) {
     const calc = {};
 
-    // OJO: CANTIDAD M / CANTIDAD B no tienen fórmula confirmada (el usuario
-    // no la dio y en los datos reales siempre quedaron vacías) — no se
-    // tocan aquí, se dejan tal cual las mande el cliente (o vacías).
+    // CANTIDAD M/B = suma de las CANTIDADES tecleadas de cada denominación
+    // (no su valor en pesos) — confirmado con la plantilla del PDF F-CI03-009.
     const monedas = { 'M 0,50': 0.5, 'M 1,00': 1, 'M 2,00': 2, 'M 5,00': 5, 'M 10,00': 10, 'M 20,00': 20 };
     let totalM = 0;
-    Object.keys(monedas).forEach((clave) => { totalM += num_(datos[clave]) * monedas[clave]; });
+    let cantidadM = 0;
+    Object.keys(monedas).forEach((clave) => {
+      const cantidad = num_(datos[clave]);
+      cantidadM += cantidad;
+      totalM += cantidad * monedas[clave];
+    });
+    calc['CANTIDAD M'] = cantidadM;
     calc['TOTAL M'] = totalM;
 
     const billetes = { 'B 20,00': 20, 'B 50,00': 50, 'B 100,00': 100, 'B 200,00': 200, 'B 500,00': 500, 'B 1000,00': 1000 };
     let totalB = 0;
-    Object.keys(billetes).forEach((clave) => { totalB += num_(datos[clave]) * billetes[clave]; });
+    let cantidadB = 0;
+    Object.keys(billetes).forEach((clave) => {
+      const cantidad = num_(datos[clave]);
+      cantidadB += cantidad;
+      totalB += cantidad * billetes[clave];
+    });
+    calc['CANTIDAD B'] = cantidadB;
     calc['TOTAL B'] = totalB;
 
     calc['TOTAL EFECTIVO'] = totalM + totalB;
@@ -292,7 +308,7 @@ const ArqueosService = (function () {
 
   const COLUMNAS_RESUMEN = [
     'ID ARQUEO', 'ID CCH', 'RESPONSABLE', 'TIPO DE ARQUEO', 'FECHA INICIO',
-    'TOTAL GENERAL', 'DIFERENCIA', 'CALIFICACION_AUDITORIA_FINAL', 'ESTADO PDF',
+    'TOTAL GENERAL', 'DIFERENCIA', 'CALIFICACION_AUDITORIA_FINAL', 'ESTADO PDF', 'FORMATO ARQUEO',
   ];
 
   /** Catálogo ligero para la tabla (9 columnas, no las 79 completas). */
@@ -314,6 +330,7 @@ const ArqueosService = (function () {
         DIFERENCIA: datos['DIFERENCIA'][i] || '',
         CALIFICACION: datos['CALIFICACION_AUDITORIA_FINAL'][i] || '',
         ESTADO_PDF: datos['ESTADO PDF'][i] || '',
+        FORMATO_ARQUEO: datos['FORMATO ARQUEO'][i] || '',
       });
     }
     return resultado.sort((a, b) => new Date(b.FECHA_INICIO) - new Date(a.FECHA_INICIO));
@@ -341,6 +358,7 @@ const ArqueosService = (function () {
     const idCch = datos['ID CCH'];
     if (!idCch) throw new Error('Selecciona la caja chica.');
 
+    let filaParaPdf;
     const lock = LockService.getScriptLock();
     lock.waitLock(30000);
     try {
@@ -368,10 +386,15 @@ const ArqueosService = (function () {
       Object.assign(fila, calcularCampos_(datos, fila['MONTO CAJA']));
 
       SheetUtils.insert(ssId(), sheet.getName(), fila);
-      return { ID: fila['ID ARQUEO'] };
+      filaParaPdf = fila;
     } finally {
       lock.releaseLock();
     }
+    // El PDF se genera FUERA del candado (tarda unos segundos — copiar la
+    // plantilla, llenarla, exportar) para no alargarle la espera a otra
+    // alta de arqueo que esté esperando el mismo candado.
+    actualizarPdfArqueo_(filaParaPdf);
+    return { ID: filaParaPdf['ID ARQUEO'] };
   }
 
   /** Actualiza un arqueo. Igual que en crear(): los campos "formulados" no
@@ -388,12 +411,17 @@ const ArqueosService = (function () {
       'ID CCH', 'ID ARQUEO', 'RESPONSABLE', 'PUESTO', 'AREA / DEPARTAMENTO', 'RAZON SOCIAL',
       'METODO REEMBOLSO', 'MONTO CAJA', 'QUIEN REGISTRO',
       'FECHA DEL ULTIMO ARQUEO', 'FECHA INICIO', 'FECHA FIN',
+      'FORMATO ARQUEO', 'ESTADO PDF', // se recalculan/regeneran aquí abajo, no los manda el cliente
     ].forEach((campo) => { delete datos[campo]; });
 
     const combinado = Object.assign({}, registro.data, datos);
     Object.assign(datos, calcularCampos_(combinado, registro.data['MONTO CAJA']));
 
     SheetUtils.update(ssId(), hoja_().getName(), id, datos, ID_COLUMN);
+
+    // Fila final (para el PDF) = lo que ya estaba + los cambios de esta
+    // edición, con los totales recién recalculados encima.
+    actualizarPdfArqueo_(Object.assign({}, combinado, datos));
     return { ID: id };
   }
 
@@ -423,6 +451,165 @@ const ArqueosService = (function () {
     const archivo = carpeta.createFile(blob);
 
     return { url: archivo.getUrl(), id: archivo.getId(), nombre: nombreArchivo };
+  }
+
+  // ---------- Generación automática del PDF (plantilla F-CI03-009) ----------
+  // Plantilla de Google Docs compartida por el usuario — mismo patrón que
+  // PdfService.gs (copiar plantilla, reemplazar marcadores, exportar a PDF,
+  // borrar la copia), pero esta plantilla usa marcadores "<<[CAMPO]>>" (no
+  // "{{CAMPO}}") porque así viene ya armada — no hay necesidad de tocarla.
+  const PLANTILLA_ARQUEO_DOC_ID = '1ZIhyDvbG5WENKL73lyGPZWDehAPXRf9yu3-en5vhX-w';
+
+  function escaparRegex_(texto) {
+    return String(texto).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  /** Reemplaza TODAS las ocurrencias del marcador literal `<<[texto]>>` (o
+   * la variante que sea) por `valor`, en cualquier parte del body (incluye
+   * texto dentro de tablas). */
+  function reemplazarMarcador_(body, marcadorLiteral, valor) {
+    body.replaceText(escaparRegex_(marcadorLiteral), (valor === undefined || valor === null) ? '' : String(valor));
+  }
+
+  /** Saca el fileId de Drive de una URL como las que regresa subirArchivo()
+   * (".../file/d/{id}/view..." o "...?id={id}..."). */
+  function extraerIdDrive_(url) {
+    if (!url) return null;
+    const m = String(url).match(/\/d\/([a-zA-Z0-9_-]+)/) || String(url).match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    return m ? m[1] : null;
+  }
+
+  /** Busca el marcador de una firma y, si hay archivo, inserta la imagen ahí
+   * mismo (mismo patrón que {{DIAGRAMA}} en PdfService.gs); si no hay
+   * archivo o no es una imagen, solo borra el texto del marcador. Achica la
+   * imagen si viene más ancha de 150pt, para que no se salga de la celda. */
+  function insertarFirma_(body, marcadorLiteral, urlArchivo) {
+    const encontrado = body.findText(escaparRegex_(marcadorLiteral));
+    if (!encontrado) return;
+    const parrafo = encontrado.getElement().getParent().asParagraph();
+    parrafo.clear();
+    const fileId = extraerIdDrive_(urlArchivo);
+    if (!fileId) return;
+    try {
+      const blob = DriveApp.getFileById(fileId).getBlob();
+      if (String(blob.getContentType() || '').indexOf('image/') !== 0) return;
+      const imagen = parrafo.appendInlineImage(blob);
+      const ANCHO_MAX = 150;
+      if (imagen.getWidth() > ANCHO_MAX) {
+        const proporcion = ANCHO_MAX / imagen.getWidth();
+        imagen.setHeight(Math.round(imagen.getHeight() * proporcion));
+        imagen.setWidth(ANCHO_MAX);
+      }
+    } catch (err) {
+      // No se pudo leer/insertar la imagen (archivo borrado, sin permiso,
+      // etc.) — se deja el marcador vacío, no se rompe todo el PDF por esto.
+    }
+  }
+
+  /**
+   * Genera el PDF del arqueo a partir de la plantilla F-CI03-009 y `fila`
+   * (el registro YA completo: datos capturados + los calculados por
+   * calcularCampos_ + lo copiado de la Caja Chica). Regresa la URL del PDF.
+   */
+  function generarPdfArqueo_(fila) {
+    const copia = DriveApp.getFileById(PLANTILLA_ARQUEO_DOC_ID).makeCopy(
+      'Arqueo_' + (fila['ID ARQUEO'] || Utilities.getUuid()),
+      DriveApp.getFolderById(CARPETA_ARCHIVOS_ID)
+    );
+    const doc = DocumentApp.openById(copia.getId());
+    const body = doc.getBody();
+
+    const moneda = (v) => num_(v).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
+    const numero = (v) => num_(v).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const texto = (v) => (v === undefined || v === null) ? '' : String(v);
+
+    // Campos de texto plano.
+    ['ID ARQUEO', 'ID CCH', 'RESPONSABLE', 'PUESTO', 'AREA / DEPARTAMENTO', 'RAZON SOCIAL',
+      'METODO REEMBOLSO', 'QUIEN REGISTRO', 'NOMBRE ASISTENTE',
+    ].forEach((clave) => reemplazarMarcador_(body, '<<[' + clave + ']>>', texto(fila[clave])));
+
+    // Montos: en la plantilla estos marcadores NO tienen un "$" literal
+    // antes (a diferencia de la tabla de denominaciones, ver abajo).
+    ['MONTO CAJA', 'DIFERENCIA', 'TOTAL EFECTIVO', 'DISPONIBLE CUENTA BANCARIA', 'TOTAL CHEQUES',
+      'TOTAL CAJA CHICA CON FACTURAS / XML', 'TOTAL CAJA CHICA GASTOS NO DEDUCIBLES',
+      'TOTAL VIATICOS CON FACTURAS / XML', 'TOTAL VIATICOS NO DEDUCIBLES',
+      'TOTAL CAJA CHICA CON FACTURAS (PENDIENTES)', 'TOTAL VIATICOS CON FACTURAS (PENDIENTES)',
+      'TOTAL CAJA CHICA NO DEDUCIBLES (PENDIENTES)', 'TOTAL VIATICOS NO DEDUCIBLES (PENDIENTES)',
+      'OTROS', 'TOTAL GENERAL', 'TOTAL M', 'TOTAL B',
+    ].forEach((clave) => reemplazarMarcador_(body, '<<[' + clave + ']>>', moneda(fila[clave])));
+
+    // Cantidades (piezas, no dinero — CANTIDAD M/B y cada denominación).
+    ['CANTIDAD M', 'CANTIDAD B', 'M 0,50', 'M 1,00', 'M 2,00', 'M 5,00', 'M 10,00', 'M 20,00',
+      'B 20,00', 'B 50,00', 'B 100,00', 'B 200,00', 'B 500,00', 'B 1000,00',
+    ].forEach((clave) => reemplazarMarcador_(body, '<<[' + clave + ']>>', texto(num_(fila[clave]))));
+
+    // Subtotal por denominación (columna "Total" de las tablas de Monedas/
+    // Billetes) — ahí sí lleva un "$" literal antes en la plantilla, así
+    // que aquí solo va el número. El marcador de $1000 dice "* 10000" en la
+    // plantilla (typo de origen) — se busca ese texto EXACTO, pero el
+    // valor que se calcula es el correcto (cantidad × 1000).
+    const VALOR_MONEDA = { 'M 0,50': 0.5, 'M 1,00': 1, 'M 2,00': 2, 'M 5,00': 5, 'M 10,00': 10, 'M 20,00': 20 };
+    Object.keys(VALOR_MONEDA).forEach((clave) => {
+      const cantidad = num_(fila[clave]);
+      reemplazarMarcador_(body, '<<[' + clave + '] * ' + VALOR_MONEDA[clave] + '>>', numero(cantidad * VALOR_MONEDA[clave]));
+    });
+    const VALOR_BILLETE = { 'B 20,00': 20, 'B 50,00': 50, 'B 100,00': 100, 'B 200,00': 200, 'B 500,00': 500 };
+    Object.keys(VALOR_BILLETE).forEach((clave) => {
+      const cantidad = num_(fila[clave]);
+      reemplazarMarcador_(body, '<<[' + clave + '] * ' + VALOR_BILLETE[clave] + '>>', numero(cantidad * VALOR_BILLETE[clave]));
+    });
+    reemplazarMarcador_(body, '<<[B 1000,00] * 10000>>', numero(num_(fila['B 1000,00']) * 1000));
+
+    // Textos en mayúsculas.
+    reemplazarMarcador_(body, '<<UPPER([OBSERVACIONES FINALES])>>', texto(fila['OBSERVACIONES FINALES']).toUpperCase());
+    reemplazarMarcador_(body, '<<UPPER([DESCRIPCION CUENTA BANCARIA])>>', texto(fila['DESCRIPCION CUENTA BANCARIA']).toUpperCase());
+    reemplazarMarcador_(body, '<<UPPER([Nombre_Fintech])>>', texto(fila['Nombre_Fintech']).toUpperCase());
+
+    // Calificación (con "%") y fecha de inicio (dd/mm/aaaa).
+    reemplazarMarcador_(body, '<<[CALIFICACION_AUDITORIA_FINAL]>>', texto(fila['CALIFICACION_AUDITORIA_FINAL']) + '%');
+    const fechaInicio = fila['FECHA INICIO']
+      ? Utilities.formatDate(new Date(fila['FECHA INICIO']), 'America/Mexico_City', 'dd/MM/yyyy')
+      : '';
+    reemplazarMarcador_(body, '<<[FECHA INICIO]>>', fechaInicio);
+
+    // Los 17 reactivos de auditoría — texto exacto de la opción elegida.
+    AUDIT_ITEMS.forEach((item) => {
+      reemplazarMarcador_(body, '<<[' + item.clave + ']>>', texto(fila[item.clave]));
+    });
+
+    // Firmas — se insertan como imagen, no como texto.
+    insertarFirma_(body, '<<[FIRMA RESPONSABLE]>>', fila['FIRMA RESPONSABLE']);
+    insertarFirma_(body, '<<[FIRMA ESPECIALISTA]>>', fila['FIRMA ESPECIALISTA']);
+    insertarFirma_(body, '<<[FIRMA ASISTENTE]>>', fila['FIRMA ASISTENTE']);
+
+    doc.saveAndClose();
+
+    const pdfBlob = DriveApp.getFileById(copia.getId()).getAs('application/pdf');
+    const pdfFile = DriveApp.getFolderById(CARPETA_ARCHIVOS_ID).createFile(pdfBlob).setName(copia.getName() + '.pdf');
+    DriveApp.getFileById(copia.getId()).setTrashed(true); // ya no se necesita el Doc, solo el PDF
+
+    return pdfFile.getUrl();
+  }
+
+  /** Genera el PDF y guarda su URL (+ "Generado") en la fila; si algo falla,
+   * deja el motivo en ESTADO PDF en vez de tronar toda la alta/edición —
+   * el arqueo ya se guardó bien, perder el PDF no debería perder los datos. */
+  function actualizarPdfArqueo_(fila) {
+    const idArqueo = fila['ID ARQUEO'];
+    try {
+      const url = generarPdfArqueo_(fila);
+      SheetUtils.update(ssId(), hoja_().getName(), idArqueo, {
+        'FORMATO ARQUEO': url, 'ESTADO PDF': 'Generado',
+      }, ID_COLUMN);
+    } catch (err) {
+      try {
+        SheetUtils.update(ssId(), hoja_().getName(), idArqueo, {
+          'ESTADO PDF': 'Error al generar: ' + err.message,
+        }, ID_COLUMN);
+      } catch (err2) {
+        // Si ni esto se pudo guardar, ya no hay más que hacer aquí.
+      }
+    }
   }
 
   return {
