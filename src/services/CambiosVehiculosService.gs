@@ -79,9 +79,13 @@ const CambiosVehiculosService = (function () {
 
     const resultado = [];
     for (let i = 0; i < filas; i++) {
-      if (!datos.ID_CAMBIO[i]) continue;
+      // OJO: los renglones viejos (de antes de este módulo) nunca tuvieron
+      // ID_CAMBIO asignado — solo se genera para los nuevos de aquí en
+      // adelante. FOLIO sí debería estar siempre lleno, es el indicador
+      // confiable de que el renglón es real.
+      if (!datos.FOLIO[i]) continue;
       resultado.push({
-        ID: datos.ID_CAMBIO[i],
+        ID: datos.ID_CAMBIO[i] || '',
         FOLIO: datos.FOLIO[i] || '',
         CAMPO: datos.CAMPO[i] || '',
         ANTES: datos.ANTES[i] || '',
