@@ -170,7 +170,9 @@
           // Recuadro para firmar con mouse/dedo (crearFirmaPad la conecta) —
           // en vez de subir un archivo. data-tiene-trazo indica si ya se
           // dibujó algo (lo lee subirFirmasArqueo al guardar).
-          return `<div class="field"${mostrarSi}>
+          // grid-column: 1 / -1 — ocupa todo el ancho de la fila (si no,
+          // queda apachurrado dentro de una sola columna del grid de 2/3).
+          return `<div class="field" style="grid-column: 1 / -1;"${mostrarSi}>
             <label>${campo.etiqueta}</label>
             <div class="firma-pad-wrap">
               <canvas id="${id}" class="firma-pad" width="500" height="170" data-tiene-trazo="0"></canvas>
