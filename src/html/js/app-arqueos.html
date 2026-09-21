@@ -546,6 +546,18 @@
       document.getElementById('editar-arqueo-id-arqueo').value = id;
       document.getElementById('editar-arqueo-error').hidden = true;
       modalEditar.hidden = false;
+
+      // EL BUG REAL de "se borran campos al editar": el modal se abre y
+      // Guardar queda disponible de inmediato, pero el formulario TODAVÍA
+      // tiene los valores en blanco de cuando se armó (renderCamposArqueo,
+      // al iniciar el módulo) — el registro completo llega después, por
+      // este await. Si alguien le da Guardar antes de que termine de
+      // cargar, se manda el formulario en blanco y se sobreescribe TODO el
+      // registro. Se bloquea Guardar hasta que sí termine de poblarse.
+      const btnGuardar = document.getElementById('btn-guardar-editar-arqueo');
+      const textoOriginalBtn = btnGuardar.innerHTML;
+      btnGuardar.disabled = true;
+      btnGuardar.innerHTML = '<span class="spinner"></span> Cargando datos…';
       try {
         const completo = await callServer('apiBuscarArqueoPorId', state.token, id);
         if (completo) {
@@ -554,11 +566,20 @@
             completo['ID CCH'] + (caja ? ' — ' + caja.RESPONSABLE : '');
           poblarFormularioArqueo('editar-arqueo', completo);
           recalcularTotalesArqueo('editar-arqueo', auditItems);
+          btnGuardar.disabled = false;
+          btnGuardar.innerHTML = textoOriginalBtn;
+        } else {
+          const errorBox = document.getElementById('editar-arqueo-error');
+          errorBox.textContent = 'No se encontró el registro completo — cierra esta ventana e inténtalo de nuevo.';
+          errorBox.hidden = false;
+          // Guardar se queda bloqueado a propósito: sin el registro
+          // completo, guardar ahorita borraría todo lo demás.
         }
       } catch (err) {
         const errorBox = document.getElementById('editar-arqueo-error');
-        errorBox.textContent = 'No se pudo cargar el registro: ' + err.message;
+        errorBox.textContent = 'No se pudo cargar el registro: ' + err.message + ' — cierra esta ventana e inténtalo de nuevo.';
         errorBox.hidden = false;
+        // Ídem: Guardar se queda bloqueado, no se reactiva en este caso.
       }
     }
     function cerrarEditarArqueo() {
