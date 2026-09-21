@@ -916,7 +916,10 @@
         // a partir de la Clase) — el campo se muestra pero no se puede editar.
         const disabled = campo.soloLectura ? ' disabled' : '';
         const placeholder = campo.placeholder ? ` placeholder="${campo.placeholder}"` : '';
-        return `<div class="field"><label>${campo.etiqueta}</label><input type="${campo.tipo}" id="${id}"${req}${disabled}${placeholder} /></div>`;
+        // step="any": sin esto, type="number" solo acepta enteros por
+        // default (step="1" implícito) — los montos necesitan decimales.
+        const step = campo.tipo === 'number' ? ' step="any"' : '';
+        return `<div class="field"><label>${campo.etiqueta}</label><input type="${campo.tipo}" id="${id}"${step}${req}${disabled}${placeholder} /></div>`;
       }).join('');
       return `<div class="info-section-title">${grupo}</div>${campos}`;
     }).join('');
@@ -1070,6 +1073,9 @@
         const id = prefijo + '-' + slugCampo(campo.clave);
         const disabled = campo.soloLectura ? ' disabled' : '';
         const placeholder = campo.placeholder ? ` placeholder="${campo.placeholder}"` : '';
+        // step="any": sin esto, type="number" solo acepta enteros por
+        // default (step="1" implícito) — los montos necesitan decimales.
+        const step = campo.tipo === 'number' ? ' step="any"' : '';
         // Campos "bloqueados al crear" (ej. Estatus: solo VIGENTE al dar de
         // alta, editable a sus 3 opciones después) — en Registrar se ven
         // fijos y deshabilitados; en Editar sí son un select normal.
@@ -1080,7 +1086,7 @@
           const opciones = (campo.opciones || []).map((o) => `<option value="${o}">${o}</option>`).join('');
           return `<div class="field"><label>${campo.etiqueta}</label><select id="${id}"><option value="">Selecciona…</option>${opciones}</select></div>`;
         }
-        return `<div class="field"><label>${campo.etiqueta}</label><input type="${campo.tipo}" id="${id}"${disabled}${placeholder} /></div>`;
+        return `<div class="field"><label>${campo.etiqueta}</label><input type="${campo.tipo}" id="${id}"${step}${disabled}${placeholder} /></div>`;
       }).join('');
       return `<div class="info-section-title">${grupo}</div>${campos}`;
     }).join('');

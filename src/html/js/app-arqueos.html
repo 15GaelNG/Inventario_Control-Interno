@@ -161,7 +161,10 @@
         }
         const disabled = campo.soloLectura ? ' disabled' : '';
         const placeholder = campo.placeholder ? ` placeholder="${campo.placeholder}"` : '';
-        return `<div class="field"${mostrarSi}><label>${campo.etiqueta}</label><input type="${campo.tipo}" id="${id}"${disabled}${placeholder} /></div>`;
+        // step="any": sin esto, type="number" solo acepta enteros por
+        // default (step="1" implícito) — los montos necesitan decimales.
+        const step = campo.tipo === 'number' ? ' step="any"' : '';
+        return `<div class="field"${mostrarSi}><label>${campo.etiqueta}</label><input type="${campo.tipo}" id="${id}"${step}${disabled}${placeholder} /></div>`;
       }).join('');
       return `<div class="info-section-title">${grupo}</div>${campos}`;
     }).join('');
