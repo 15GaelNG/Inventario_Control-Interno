@@ -181,6 +181,28 @@
     return datos;
   }
 
+  /**
+   * "¿Se realiza auditoría?": si es SI se habilitan los 17 reactivos +
+   * Observaciones finales; si es NO (o está vacío) quedan bloqueados —
+   * mismo patrón que Administrada por/Capturista en Caja Chica.
+   * CALIFICACION_AUDITORIA_FINAL se excluye porque siempre es soloLectura
+   * (la calcula el servidor), no aplica bloquearla/desbloquearla aparte.
+   */
+  const CAMPOS_AUDITORIA_DEPENDIENTES = CAMPOS_ARQUEO
+    .filter((c) => c.grupo === 'Auditoría' && c.clave !== 'REALIZAR_AUDITORIA' && !c.soloLectura)
+    .map((c) => c.clave);
+  function actualizarBloqueoAuditoria(prefijo, limpiarSiBloqueado) {
+    const select = document.getElementById(prefijo + '-' + slugCampo('REALIZAR_AUDITORIA'));
+    if (!select) return;
+    const liberar = select.value === 'SI';
+    CAMPOS_AUDITORIA_DEPENDIENTES.forEach((clave) => {
+      const el = document.getElementById(prefijo + '-' + slugCampo(clave));
+      if (!el) return;
+      el.disabled = !liberar;
+      if (!liberar && limpiarSiBloqueado) el.value = '';
+    });
+  }
+
   /** Llena el formulario con un objeto {columna real: valor} (ej. de buscarPorId). */
   const CAMPOS_MONEDA_ARQUEO = ['MONTO CAJA', 'TOTAL M', 'TOTAL B', 'TOTAL EFECTIVO', 'SUBTOTAL TOTALES DE GASTO', 'TOTAL GENERAL', 'DIFERENCIA'];
   function poblarFormularioArqueo(prefijo, datos) {
@@ -220,6 +242,10 @@
       } else {
         el.value = valor;
       }
+      // REALIZAR_AUDITORIA va antes que los 17 reactivos en CAMPOS_ARQUEO,
+      // así que para cuando el forEach llegue a ellos el bloqueo/desbloqueo
+      // ya refleja el valor recién cargado.
+      if (campo.clave === 'REALIZAR_AUDITORIA') actualizarBloqueoAuditoria(prefijo, false);
     });
     actualizarVisibilidadCondicionalArqueo(prefijo);
   }
@@ -382,6 +408,17 @@
     wireRecalculoArqueo('editar-arqueo');
     wireVisibilidadCondicionalArqueo('arq');
     wireVisibilidadCondicionalArqueo('editar-arqueo');
+
+    // ¿Se realiza auditoría? → los 17 reactivos + Observaciones finales:
+    // estado inicial (recién armado el formulario, vacío → bloqueados) y
+    // wiring del cambio manual del select.
+    ['arq', 'editar-arqueo'].forEach((prefijo) => {
+      actualizarBloqueoAuditoria(prefijo, false);
+      document.getElementById(idArq(prefijo, 'REALIZAR_AUDITORIA')).addEventListener('change', () => {
+        actualizarBloqueoAuditoria(prefijo, true);
+        recalcularTotalesArqueo(prefijo, auditItems); // refleja de una vez la calificación en 0% si se acaba de bloquear
+      });
+    });
 
     // Elegir la caja chica autollena Responsable/Puesto/Área/Razón social/
     // Método de reembolso/Monto caja (soloLectura) y previsualiza el ID
