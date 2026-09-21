@@ -22,7 +22,10 @@
    * aquí es solo vista previa para el usuario.
    */
   const CAMPOS_ARQUEO = [
-    { grupo: 'Identificación', clave: 'TIPO DE ARQUEO', etiqueta: 'Tipo de arqueo', tipo: 'text' },
+    {
+      grupo: 'Identificación', clave: 'TIPO DE ARQUEO', etiqueta: 'Tipo de arqueo', tipo: 'select',
+      opciones: ['TIPO A', 'TIPO B', 'TIPO C'],
+    },
     { grupo: 'Identificación', clave: 'RESPONSABLE', etiqueta: 'Responsable', tipo: 'text', soloLectura: true, placeholder: 'Elige la caja chica' },
     { grupo: 'Identificación', clave: 'PUESTO', etiqueta: 'Puesto', tipo: 'text', soloLectura: true, placeholder: 'Elige la caja chica' },
     { grupo: 'Identificación', clave: 'AREA / DEPARTAMENTO', etiqueta: 'Área / Departamento', tipo: 'text', soloLectura: true, placeholder: 'Elige la caja chica' },
@@ -84,6 +87,11 @@
     { grupo: 'Totales de gasto', clave: 'TOTAL CAJA CHICA NO DEDUCIBLES (PENDIENTES)', etiqueta: 'Caja chica no deducibles (pendientes)', tipo: 'number' },
     { grupo: 'Totales de gasto', clave: 'TOTAL VIATICOS NO DEDUCIBLES (PENDIENTES)', etiqueta: 'Viáticos no deducibles (pendientes)', tipo: 'number' },
     { grupo: 'Totales de gasto', clave: 'OTROS', etiqueta: 'Otros', tipo: 'number' },
+    // Subtotal de solo los campos de este grupo (los 8 "TOTAL ..." + Otros),
+    // ANTES del Total general (que además suma Efectivo/Disponible/Cheques).
+    // No es una columna real de la hoja — es puro cálculo en vivo del
+    // cliente, como TOTAL M/TOTAL B, para que se vea antes del total final.
+    { grupo: 'Totales de gasto', clave: 'SUBTOTAL TOTALES DE GASTO', etiqueta: 'Total de gastos', tipo: 'text', soloLectura: true, placeholder: '$0.00' },
     { grupo: 'Totales de gasto', clave: 'TOTAL GENERAL', etiqueta: 'Total general', tipo: 'text', soloLectura: true, placeholder: '$0.00' },
     { grupo: 'Totales de gasto', clave: 'DIFERENCIA', etiqueta: 'Diferencia', tipo: 'text', soloLectura: true, placeholder: '$0.00' },
 
@@ -166,7 +174,7 @@
   }
 
   /** Llena el formulario con un objeto {columna real: valor} (ej. de buscarPorId). */
-  const CAMPOS_MONEDA_ARQUEO = ['MONTO CAJA', 'TOTAL M', 'TOTAL B', 'TOTAL EFECTIVO', 'TOTAL GENERAL', 'DIFERENCIA'];
+  const CAMPOS_MONEDA_ARQUEO = ['MONTO CAJA', 'TOTAL M', 'TOTAL B', 'TOTAL EFECTIVO', 'SUBTOTAL TOTALES DE GASTO', 'TOTAL GENERAL', 'DIFERENCIA'];
   function poblarFormularioArqueo(prefijo, datos) {
     CAMPOS_ARQUEO.forEach((campo) => {
       const id = prefijo + '-' + slugCampo(campo.clave);
@@ -241,7 +249,10 @@
       'TOTAL CAJA CHICA CON FACTURAS (PENDIENTES)', 'TOTAL VIATICOS CON FACTURAS (PENDIENTES)',
       'TOTAL CAJA CHICA NO DEDUCIBLES (PENDIENTES)', 'TOTAL VIATICOS NO DEDUCIBLES (PENDIENTES)',
     ].reduce((acc, clave) => acc + val(clave), 0);
-    const totalGeneral = totalEfectivo + val('DISPONIBLE CUENTA BANCARIA') + val('TOTAL CHEQUES') + sumaGastos + val('OTROS');
+    // Subtotal de TODO el grupo "Totales de gasto" (los 8 de arriba + Otros),
+    // antes de sumarle Efectivo/Disponible/Cheques para el Total general.
+    const subtotalGastos = sumaGastos + val('OTROS');
+    const totalGeneral = totalEfectivo + val('DISPONIBLE CUENTA BANCARIA') + val('TOTAL CHEQUES') + subtotalGastos;
 
     const montoCajaEl = document.getElementById(prefijo + '-' + slugCampo('MONTO CAJA'));
     const montoCaja = montoCajaEl ? Number(montoCajaEl.dataset.valor) || 0 : 0;
@@ -250,6 +261,7 @@
     document.getElementById(prefijo + '-' + slugCampo('TOTAL M')).value = formatearMoneda(totalM);
     document.getElementById(prefijo + '-' + slugCampo('TOTAL B')).value = formatearMoneda(totalB);
     document.getElementById(prefijo + '-' + slugCampo('TOTAL EFECTIVO')).value = formatearMoneda(totalEfectivo);
+    document.getElementById(prefijo + '-' + slugCampo('SUBTOTAL TOTALES DE GASTO')).value = formatearMoneda(subtotalGastos);
     document.getElementById(prefijo + '-' + slugCampo('TOTAL GENERAL')).value = formatearMoneda(totalGeneral);
     document.getElementById(prefijo + '-' + slugCampo('DIFERENCIA')).value = formatearMoneda(diferencia);
 
