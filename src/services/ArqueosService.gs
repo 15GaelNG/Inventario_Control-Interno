@@ -545,20 +545,32 @@ const ArqueosService = (function () {
 
     // Subtotal por denominación (columna "Total" de las tablas de Monedas/
     // Billetes) — ahí sí lleva un "$" literal antes en la plantilla, así
-    // que aquí solo va el número. El marcador de $1000 dice "* 10000" en la
-    // plantilla (typo de origen) — se busca ese texto EXACTO, pero el
+    // que aquí solo va el número. IMPORTANTE: el texto del marcador tiene
+    // que calzar carácter por carácter con la plantilla (ej. "0.50", no
+    // "0.5" — si se arma el marcador concatenando el número de JS en vez de
+    // copiar el texto tal cual, "0.5" !== "0.50" y no encuentra nada que
+    // reemplazar). Por eso van escritos literales, uno por uno, en vez de
+    // armarlos con un objeto {clave: valor}. El de $1000 dice "* 10000" en
+    // la plantilla (typo de origen) — se busca ese texto EXACTO, pero el
     // valor que se calcula es el correcto (cantidad × 1000).
-    const VALOR_MONEDA = { 'M 0,50': 0.5, 'M 1,00': 1, 'M 2,00': 2, 'M 5,00': 5, 'M 10,00': 10, 'M 20,00': 20 };
-    Object.keys(VALOR_MONEDA).forEach((clave) => {
-      const cantidad = num_(fila[clave]);
-      reemplazarMarcador_(body, '<<[' + clave + '] * ' + VALOR_MONEDA[clave] + '>>', numero(cantidad * VALOR_MONEDA[clave]));
+    const SUBTOTALES_DENOMINACION = [
+      { marcador: '<<[M 0,50] * 0.50>>', clave: 'M 0,50', valor: 0.5 },
+      { marcador: '<<[M 1,00] * 1>>', clave: 'M 1,00', valor: 1 },
+      { marcador: '<<[M 2,00] * 2>>', clave: 'M 2,00', valor: 2 },
+      { marcador: '<<[M 5,00] * 5>>', clave: 'M 5,00', valor: 5 },
+      { marcador: '<<[M 10,00] * 10>>', clave: 'M 10,00', valor: 10 },
+      { marcador: '<<[M 20,00] * 20>>', clave: 'M 20,00', valor: 20 },
+      { marcador: '<<[B 20,00] * 20>>', clave: 'B 20,00', valor: 20 },
+      { marcador: '<<[B 50,00] * 50>>', clave: 'B 50,00', valor: 50 },
+      { marcador: '<<[B 100,00] * 100>>', clave: 'B 100,00', valor: 100 },
+      { marcador: '<<[B 200,00] * 200>>', clave: 'B 200,00', valor: 200 },
+      { marcador: '<<[B 500,00] * 500>>', clave: 'B 500,00', valor: 500 },
+      { marcador: '<<[B 1000,00] * 10000>>', clave: 'B 1000,00', valor: 1000 }, // typo de la plantilla, ver comentario arriba
+    ];
+    SUBTOTALES_DENOMINACION.forEach((item) => {
+      const cantidad = num_(fila[item.clave]);
+      reemplazarMarcador_(body, item.marcador, numero(cantidad * item.valor));
     });
-    const VALOR_BILLETE = { 'B 20,00': 20, 'B 50,00': 50, 'B 100,00': 100, 'B 200,00': 200, 'B 500,00': 500 };
-    Object.keys(VALOR_BILLETE).forEach((clave) => {
-      const cantidad = num_(fila[clave]);
-      reemplazarMarcador_(body, '<<[' + clave + '] * ' + VALOR_BILLETE[clave] + '>>', numero(cantidad * VALOR_BILLETE[clave]));
-    });
-    reemplazarMarcador_(body, '<<[B 1000,00] * 10000>>', numero(num_(fila['B 1000,00']) * 1000));
 
     // Textos en mayúsculas.
     reemplazarMarcador_(body, '<<UPPER([OBSERVACIONES FINALES])>>', texto(fila['OBSERVACIONES FINALES']).toUpperCase());
