@@ -2455,6 +2455,31 @@
     el.addEventListener('click', () => navegarA(el.dataset.view));
   });
 
+  /**
+   * Mayúsculas automáticas en todos los campos de texto de los formularios
+   * (Registrar/Editar/modales, de cualquier módulo) — a excepción de
+   * números y fechas, que no tienen letras que convertir. Un solo listener
+   * delegado en #view-container (los formularios/modales de cada vista
+   * viven adentro, aunque montarVista los reemplace en cada navegación) —
+   * no hay que tocarle nada a cada campo/módulo uno por uno. Se excluyen
+   * a propósito los cuadros de búsqueda/filtro (buscador global de cada
+   * tabla y el del popover de filtro por columna): son para BUSCAR, no
+   * datos que se vayan a guardar, y ya comparan sin importar mayúsculas.
+   */
+  document.getElementById('view-container').addEventListener('input', (ev) => {
+    const el = ev.target;
+    const esTexto = el.tagName === 'TEXTAREA' ||
+      (el.tagName === 'INPUT' && ['text', 'email', 'tel', 'url'].includes(el.type));
+    if (!esTexto) return;
+    if (el.classList.contains('tabla-buscar-global') || el.classList.contains('th-popover-valor')) return;
+    const inicio = el.selectionStart;
+    const fin = el.selectionEnd;
+    el.value = el.value.toUpperCase();
+    // toUpperCase() no mueve el cursor solo — sin esto, cada letra que se
+    // escribe salta al final del campo en vez de seguir donde se iba escribiendo.
+    if (inicio !== null && el.setSelectionRange) el.setSelectionRange(inicio, fin);
+  });
+
   renderNavGrupos();
   render();
 </script>
