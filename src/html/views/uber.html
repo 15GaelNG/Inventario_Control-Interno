@@ -28,67 +28,76 @@
     </div>
   </div>
 
-  <div class="card form-card" style="margin-bottom:18px">
-    <div class="form-card-header">
-      <div class="form-card-icon"><i data-lucide="car-taxi-front" class="ico"></i></div>
-      <div>
-        <h3>Registrar usuario</h3>
-        <p>Da de alta a alguien autorizado para usar Uber</p>
-      </div>
-    </div>
-    <form id="form-uber" class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 14px;">
-      <div class="field"><label>Nombre completo</label><input type="text" id="uber-nombre-completo" required /></div>
-      <div class="field"><label>Razón social</label><select id="uber-razon-social"><option value="">Selecciona…</option></select></div>
-      <div class="field">
-        <label>Estatus</label>
-        <select id="uber-estaus-usuario">
-          <option value="">Selecciona…</option>
-          <option value="ACTIVO">ACTIVO</option>
-          <option value="BAJA">BAJA</option>
-          <option value="PENDIENTE">PENDIENTE</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Rol</label>
-        <select id="uber-rol">
-          <option value="">Selecciona…</option>
-          <option value="ADMINISTRADOR">ADMINISTRADOR</option>
-          <option value="BENEFICIARIO">BENEFICIARIO</option>
-          <option value="EMPLEADO">EMPLEADO</option>
-        </select>
-      </div>
-      <div class="field"><label>Fecha de alta</label><input type="text" id="uber-fecha-de-alta" disabled /></div>
-      <div class="field"><label>Correo electrónico</label><input type="email" id="uber-correo-electronico" /></div>
-      <div class="field"><label>Teléfono</label><input type="text" id="uber-numero-telefono" /></div>
-      <div class="field"><label>Sede</label><select id="uber-sede"><option value="">Selecciona…</option></select></div>
-      <div class="field"><label>Oficina / Desarrollo</label><select id="uber-oficina-desarrollo"><option value="">Selecciona…</option></select></div>
-      <div class="field"><label>Departamento</label><select id="uber-departamento"><option value="">Selecciona…</option></select></div>
-      <div class="field"><label>Puesto</label><input type="text" id="uber-puesto" /></div>
-      <div class="field"><label>Días autorizados</label><input type="text" id="uber-dias-autorizados" placeholder="Ej. Lunes a viernes" /></div>
-      <div class="field"><label>Horario autorizado</label><input type="text" id="uber-horario-autorizado" placeholder="Ej. 07:00 - 19:00" /></div>
-      <div class="field">
-        <label>Solicitud</label>
-        <input type="file" id="uber-solicitud" accept=".pdf,.png,.jpg,.jpeg" />
-        <div class="file-actual" id="uber-solicitud-actual"></div>
-      </div>
-      <div style="grid-column: 1 / -1;"><button type="submit" id="btn-guardar-uber"><i data-lucide="car-taxi-front" class="ico"></i> Registrar usuario</button></div>
-    </form>
-    <div class="error-msg" id="uber-error" hidden></div>
+  <div class="tabs-simple" id="uber-tabs">
+    <button type="button" class="tab-btn active" data-tab="lista"><i data-lucide="list" class="ico"></i> Catálogo</button>
+    <button type="button" class="tab-btn" data-tab="registrar"><i data-lucide="plus" class="ico"></i> Registrar</button>
   </div>
 
-  <div class="card">
-    <div class="card-header-row">
-      <h3 style="margin:0">Catálogo</h3>
-      <input type="search" id="uber-buscar-global" class="tabla-buscar-global" placeholder="Buscar en la tabla…" />
+  <div class="tab-panel" data-tab-panel="registrar" hidden>
+    <div class="card form-card" style="margin-bottom:18px">
+      <div class="form-card-header">
+        <div class="form-card-icon"><i data-lucide="car-taxi-front" class="ico"></i></div>
+        <div>
+          <h3>Registrar usuario</h3>
+          <p>Da de alta a alguien autorizado para usar Uber</p>
+        </div>
+      </div>
+      <form id="form-uber" class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 14px;">
+        <div class="field"><label>Nombre completo</label><input type="text" id="uber-nombre-completo" required /></div>
+        <div class="field"><label>Razón social</label><select id="uber-razon-social"><option value="">Selecciona…</option></select></div>
+        <div class="field">
+          <label>Estatus</label>
+          <select id="uber-estaus-usuario">
+            <option value="">Selecciona…</option>
+            <option value="ACTIVO">ACTIVO</option>
+            <option value="BAJA">BAJA</option>
+            <option value="PENDIENTE">PENDIENTE</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Rol</label>
+          <select id="uber-rol">
+            <option value="">Selecciona…</option>
+            <option value="ADMINISTRADOR">ADMINISTRADOR</option>
+            <option value="BENEFICIARIO">BENEFICIARIO</option>
+            <option value="EMPLEADO">EMPLEADO</option>
+          </select>
+        </div>
+        <div class="field"><label>Fecha de alta</label><input type="text" id="uber-fecha-de-alta" disabled /></div>
+        <div class="field"><label>Correo electrónico</label><input type="email" id="uber-correo-electronico" /></div>
+        <div class="field"><label>Teléfono</label><input type="text" id="uber-numero-telefono" /></div>
+        <div class="field"><label>Sede</label><select id="uber-sede"><option value="">Selecciona…</option></select></div>
+        <div class="field"><label>Oficina / Desarrollo</label><select id="uber-oficina-desarrollo"><option value="">Selecciona…</option></select></div>
+        <div class="field"><label>Departamento</label><select id="uber-departamento"><option value="">Selecciona…</option></select></div>
+        <div class="field"><label>Puesto</label><input type="text" id="uber-puesto" /></div>
+        <div class="field"><label>Días autorizados</label><input type="text" id="uber-dias-autorizados" placeholder="Ej. Lunes a viernes" /></div>
+        <div class="field"><label>Horario autorizado</label><input type="text" id="uber-horario-autorizado" placeholder="Ej. 07:00 - 19:00" /></div>
+        <div class="field">
+          <label>Solicitud</label>
+          <input type="file" id="uber-solicitud" accept=".pdf,.png,.jpg,.jpeg" />
+          <div class="file-actual" id="uber-solicitud-actual"></div>
+        </div>
+        <div style="grid-column: 1 / -1;"><button type="submit" id="btn-guardar-uber"><i data-lucide="car-taxi-front" class="ico"></i> Registrar usuario</button></div>
+      </form>
+      <div class="error-msg" id="uber-error" hidden></div>
     </div>
-    <div class="table-scroll">
-      <table>
-        <thead id="uber-thead"></thead>
-        <tbody id="lista-uber"></tbody>
-      </table>
+  </div>
+
+  <div class="tab-panel" data-tab-panel="lista">
+    <div class="card">
+      <div class="card-header-row">
+        <h3 style="margin:0">Catálogo</h3>
+        <input type="search" id="uber-buscar-global" class="tabla-buscar-global" placeholder="Buscar en la tabla…" />
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead id="uber-thead"></thead>
+          <tbody id="lista-uber"></tbody>
+        </table>
+      </div>
+      <p class="empty-state" id="uber-vacio" hidden>Todavía no hay usuarios registrados.</p>
+      <div class="tabla-pie" id="uber-pie"></div>
     </div>
-    <p class="empty-state" id="uber-vacio" hidden>Todavía no hay usuarios registrados.</p>
-    <div class="tabla-pie" id="uber-pie"></div>
   </div>
 
   <!-- Modal: detalle completo, solo lectura -->

@@ -25,44 +25,53 @@
     </div>
   </div>
 
-  <div class="card form-card" style="margin-bottom:18px">
-    <div class="form-card-header">
-      <div class="form-card-icon"><i data-lucide="wallet" class="ico"></i></div>
-      <div>
-        <h3>Registrar arqueo</h3>
-        <p>Auditoría y conteo de efectivo de una caja chica</p>
-      </div>
-    </div>
-    <form id="form-arqueo">
-      <div class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 14px; margin-bottom: 4px;">
-        <div class="field">
-          <label>Caja chica</label>
-          <select id="arq-id-cch"><option value="">Selecciona…</option></select>
-        </div>
-        <div class="field">
-          <label>ID Arqueo</label>
-          <input type="text" id="arq-id-arqueo" disabled placeholder="Elige una caja chica" />
-        </div>
-      </div>
-      <div id="campos-form-arqueo" class="modal-form-scroll grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 14px;"></div>
-      <div style="margin-top:14px;"><button type="submit" id="btn-guardar-arqueo"><i data-lucide="wallet" class="ico"></i> Registrar arqueo</button></div>
-    </form>
-    <div class="error-msg" id="arq-error" hidden></div>
+  <div class="tabs-simple" id="arq-tabs">
+    <button type="button" class="tab-btn active" data-tab="lista"><i data-lucide="list" class="ico"></i> Historial</button>
+    <button type="button" class="tab-btn" data-tab="registrar"><i data-lucide="plus" class="ico"></i> Registrar</button>
   </div>
 
-  <div class="card">
-    <div class="card-header-row">
-      <h3 style="margin:0">Historial</h3>
-      <input type="search" id="arq-buscar-global" class="tabla-buscar-global" placeholder="Buscar en la tabla…" />
+  <div class="tab-panel" data-tab-panel="registrar" hidden>
+    <div class="card form-card" style="margin-bottom:18px">
+      <div class="form-card-header">
+        <div class="form-card-icon"><i data-lucide="wallet" class="ico"></i></div>
+        <div>
+          <h3>Registrar arqueo</h3>
+          <p>Auditoría y conteo de efectivo de una caja chica</p>
+        </div>
+      </div>
+      <form id="form-arqueo">
+        <div class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 14px; margin-bottom: 4px;">
+          <div class="field">
+            <label>Caja chica</label>
+            <select id="arq-id-cch"><option value="">Selecciona…</option></select>
+          </div>
+          <div class="field">
+            <label>ID Arqueo</label>
+            <input type="text" id="arq-id-arqueo" disabled placeholder="Elige una caja chica" />
+          </div>
+        </div>
+        <div id="campos-form-arqueo" class="modal-form-scroll grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 14px;"></div>
+        <div style="margin-top:14px;"><button type="submit" id="btn-guardar-arqueo"><i data-lucide="wallet" class="ico"></i> Registrar arqueo</button></div>
+      </form>
+      <div class="error-msg" id="arq-error" hidden></div>
     </div>
-    <div class="table-scroll">
-      <table>
-        <thead id="arq-thead"></thead>
-        <tbody id="lista-arqueos"></tbody>
-      </table>
+  </div>
+
+  <div class="tab-panel" data-tab-panel="lista">
+    <div class="card">
+      <div class="card-header-row">
+        <h3 style="margin:0">Historial</h3>
+        <input type="search" id="arq-buscar-global" class="tabla-buscar-global" placeholder="Buscar en la tabla…" />
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead id="arq-thead"></thead>
+          <tbody id="lista-arqueos"></tbody>
+        </table>
+      </div>
+      <p class="empty-state" id="arqueos-vacio" hidden>Todavía no hay arqueos registrados.</p>
+      <div class="tabla-pie" id="arq-pie"></div>
     </div>
-    <p class="empty-state" id="arqueos-vacio" hidden>Todavía no hay arqueos registrados.</p>
-    <div class="tabla-pie" id="arq-pie"></div>
   </div>
 
   <!-- Modal: detalle completo, solo lectura -->

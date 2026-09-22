@@ -28,34 +28,43 @@
     </div>
   </div>
 
-  <div class="card form-card" style="margin-bottom:18px">
-    <div class="form-card-header">
-      <div class="form-card-icon"><i data-lucide="wallet" class="ico"></i></div>
-      <div>
-        <h3>Registrar caja chica</h3>
-        <p>Da de alta una nueva caja chica</p>
-      </div>
-    </div>
-    <form id="form-cajachica">
-      <div id="campos-form-cajachica" class="modal-form-scroll grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 14px;"></div>
-      <div style="margin-top:14px;"><button type="submit" id="btn-guardar-cajachica"><i data-lucide="wallet" class="ico"></i> Registrar caja chica</button></div>
-    </form>
-    <div class="error-msg" id="cch-error" hidden></div>
+  <div class="tabs-simple" id="cch-tabs">
+    <button type="button" class="tab-btn active" data-tab="lista"><i data-lucide="list" class="ico"></i> Catálogo</button>
+    <button type="button" class="tab-btn" data-tab="registrar"><i data-lucide="plus" class="ico"></i> Registrar</button>
   </div>
 
-  <div class="card">
-    <div class="card-header-row">
-      <h3 style="margin:0">Catálogo</h3>
-      <input type="search" id="cch-buscar-global" class="tabla-buscar-global" placeholder="Buscar en la tabla…" />
+  <div class="tab-panel" data-tab-panel="registrar" hidden>
+    <div class="card form-card" style="margin-bottom:18px">
+      <div class="form-card-header">
+        <div class="form-card-icon"><i data-lucide="wallet" class="ico"></i></div>
+        <div>
+          <h3>Registrar caja chica</h3>
+          <p>Da de alta una nueva caja chica</p>
+        </div>
+      </div>
+      <form id="form-cajachica">
+        <div id="campos-form-cajachica" class="modal-form-scroll grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 14px;"></div>
+        <div style="margin-top:14px;"><button type="submit" id="btn-guardar-cajachica"><i data-lucide="wallet" class="ico"></i> Registrar caja chica</button></div>
+      </form>
+      <div class="error-msg" id="cch-error" hidden></div>
     </div>
-    <div class="table-scroll">
-      <table>
-        <thead id="cch-thead"></thead>
-        <tbody id="lista-cajaschicas"></tbody>
-      </table>
+  </div>
+
+  <div class="tab-panel" data-tab-panel="lista">
+    <div class="card">
+      <div class="card-header-row">
+        <h3 style="margin:0">Catálogo</h3>
+        <input type="search" id="cch-buscar-global" class="tabla-buscar-global" placeholder="Buscar en la tabla…" />
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead id="cch-thead"></thead>
+          <tbody id="lista-cajaschicas"></tbody>
+        </table>
+      </div>
+      <p class="empty-state" id="cajaschicas-vacio" hidden>Todavía no hay cajas chicas registradas.</p>
+      <div class="tabla-pie" id="cch-pie"></div>
     </div>
-    <p class="empty-state" id="cajaschicas-vacio" hidden>Todavía no hay cajas chicas registradas.</p>
-    <div class="tabla-pie" id="cch-pie"></div>
   </div>
 
   <!-- Modal: detalle completo, solo lectura -->

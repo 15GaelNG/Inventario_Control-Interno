@@ -14,6 +14,25 @@
   }
 
   /**
+   * Barra de pestañas simple (ej. "Catálogo" / "Registrar" arriba de cada
+   * módulo) — conecta los <button class="tab-btn" data-tab="clave"> con sus
+   * <div class="tab-panel" data-tab-panel="clave"> dentro de `contenedor`.
+   * Un panel visible a la vez. Se llama una vez por módulo, después de
+   * pintar su HTML (montarVista ya lo hace fresco cada vez que se navega).
+   */
+  function wireTabsSimple(contenedor) {
+    const botones = contenedor.querySelectorAll('.tab-btn');
+    botones.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        botones.forEach((b) => b.classList.toggle('active', b === btn));
+        contenedor.querySelectorAll('.tab-panel').forEach((panel) => {
+          panel.hidden = panel.dataset.tabPanel !== btn.dataset.tab;
+        });
+      });
+    });
+  }
+
+  /**
    * Notificación flotante de cargando/éxito/error — para Registrar/Editar/
    * Eliminar en todos los módulos. Un solo slot (el siguiente toast
    * reemplaza al anterior, no se apilan). toastCargando() se usa al
@@ -479,6 +498,7 @@
 
   // ---------- Accesorios ----------
   async function initAccesorios() {
+    wireTabsSimple(document.getElementById('view-container'));
     const selectArticulo = document.getElementById('mov-articulo');
     const tabla = document.getElementById('tabla-articulos');
 
@@ -1207,6 +1227,7 @@
   }
 
   async function initIncidencias() {
+    wireTabsSimple(document.getElementById('view-container'));
     const lista = document.getElementById('lista-incidencias');
     const vacio = document.getElementById('incidencias-vacio');
     const modal = document.getElementById('modal-cerrar');
@@ -1555,6 +1576,7 @@
 
   // ---------- Vehículos ----------
   async function initVehiculos() {
+    wireTabsSimple(document.getElementById('view-container'));
     const lista = document.getElementById('lista-vehiculos');
     const vacio = document.getElementById('vehiculos-vacio');
     const modalEditar = document.getElementById('modal-editar-vehiculo');
@@ -1869,6 +1891,7 @@
 
   // ---------- Uber (usuarios autorizados) ----------
   async function initUber() {
+    wireTabsSimple(document.getElementById('view-container'));
     const lista = document.getElementById('lista-uber');
     const vacio = document.getElementById('uber-vacio');
     const modalEditar = document.getElementById('modal-editar-uber');
@@ -2162,6 +2185,7 @@
 
   // ---------- Tickets (bitácora general de atención) ----------
   async function initTickets() {
+    wireTabsSimple(document.getElementById('view-container'));
     const lista = document.getElementById('lista-tickets');
     const vacio = document.getElementById('tickets-vacio');
     const modalEditar = document.getElementById('modal-editar-ticket');
@@ -2384,6 +2408,7 @@
 
   // ---------- Caja Chica ----------
   async function initCajaChica() {
+    wireTabsSimple(document.getElementById('view-container'));
     const lista = document.getElementById('lista-cajaschicas');
     const vacio = document.getElementById('cajaschicas-vacio');
     const modalEditar = document.getElementById('modal-editar-cajachica');
@@ -2635,6 +2660,7 @@
 
   // ---------- Cambios de Monto (Caja Chica) ----------
   async function initCambiosMontoCCH() {
+    wireTabsSimple(document.getElementById('view-container'));
     const lista = document.getElementById('lista-cambios-monto');
     const vacio = document.getElementById('cambios-monto-vacio');
     const modalDetalle = document.getElementById('modal-detalle-cambio-monto');
