@@ -313,13 +313,25 @@
   .tabla-actions button { padding: 6px 9px; font-size: 12px; white-space: nowrap; }
   /* Botones de acción que en realidad son links (ej. "Ver PDF" en Arqueos)
      — mismo look que button.secondary, sin duplicar toda la regla. */
-  .tabla-actions a.secondary {
+  .tabla-actions a.secondary, .tabla-actions a.externo {
     display: inline-flex; align-items: center; justify-content: center;
     padding: 6px 9px; font-size: 12px; white-space: nowrap; border-radius: 8px;
-    background: transparent; color: var(--color-primary); border: 1px solid var(--color-border);
     text-decoration: none; cursor: pointer;
   }
+  .tabla-actions a.secondary {
+    background: transparent; color: var(--color-primary); border: 1px solid var(--color-border);
+  }
   .tabla-actions a.secondary:hover { background: var(--color-bg); }
+
+  /* Botones "azules" (PDF y links que sacan de la app, ej. Calendario, Ver
+     reporte, Ver PDF) — fondo azul fijo + texto/ícono blancos (el ícono
+     hereda el color vía currentColor), para que resalten y no se pierdan
+     entre los botones grises normales. Color fijo (no ligado al tema claro/
+     oscuro) a propósito: es una señal de "esto te saca del sistema". */
+  button.externo, a.externo {
+    background: #1a73e8; color: #fff; border: 1px solid #1a73e8;
+  }
+  button.externo:hover, a.externo:hover { background: #1558b0; border-color: #1558b0; }
 
   input, select, button {
     font: inherit; padding: 9px 12px; border-radius: 8px;

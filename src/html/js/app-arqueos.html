@@ -625,7 +625,7 @@
             <td>${a.ESTADO_PDF || '—'}</td>
             <td>
               <div class="tabla-actions">
-                ${a.FORMATO_ARQUEO ? `<a class="secondary" href="${a.FORMATO_ARQUEO}" target="_blank" rel="noopener" title="Ver PDF"><i data-lucide="file-text" class="ico"></i></a>` : ''}
+                ${a.FORMATO_ARQUEO ? `<a class="externo" href="${a.FORMATO_ARQUEO}" target="_blank" rel="noopener" title="Ver PDF"><i data-lucide="file-text" class="ico"></i></a>` : ''}
                 <button type="button" class="secondary btn-editar-arqueo" data-id="${a.ID}" title="Editar"><i data-lucide="pencil" class="ico"></i></button>
                 <button type="button" class="danger btn-eliminar-arqueo" data-id="${a.ID}" title="Eliminar"><i data-lucide="trash-2" class="ico"></i></button>
               </div>
