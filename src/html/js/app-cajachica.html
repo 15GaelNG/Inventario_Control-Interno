@@ -1,0 +1,714 @@
+<script>
+  /**
+   * app-cajachica.js — Caja Chica, Cambios de Monto y Cambios Vehículos, en
+   * su propio archivo/<script> por el mismo motivo que Arqueos
+   * (app-arqueos.html): un solo <script> de app.html creciendo sin límite
+   * llegó otra vez cerca del tamaño que ya rompió la carga de TODA la app
+   * una vez (ver comentario en app-arqueos.html) — se parte aquí para
+   * quedar con margen de nuevo. Comparte el mismo scope global del
+   * navegador que app.html (state, callServer, crearTablaInteractiva,
+   * formatearMoneda, toastCargando, slugCampo, fechaParaInput, hoyISO,
+   * etc.) — mismo patrón ya usado por Arqueos.
+   */
+
+  /**
+   * Las 27 columnas editables de la hoja de Cajas Chicas (todo menos ID CCH,
+   * que se genera solo, y CALIFICACION PROMEDIO, que es un promedio calculado
+   * a partir de los Arqueos — módulo que todavía no existe). Mismo patrón
+   * data-driven que CAMPOS_VEHICULO: una sola definición para Registrar y
+   * Editar, agrupada por secciones. Todos los campos "no catalogados" quedan
+   * como texto libre por ahora — se van convirtiendo a lista desplegable
+   * conforme se confirmen los valores reales, igual que se hizo con Vehículos.
+   */
+  const CAMPOS_CAJACHICA = [
+    { grupo: 'Identificación', clave: 'ID CCH', etiqueta: 'ID CCH', tipo: 'text', soloLectura: true, placeholder: 'Se genera solo' },
+    {
+      // En AppSheet, el "Valid If" de este campo era:
+      //   IF(IN([ID CCH], CAJAS CHICAS[ID CCH]), LIST("VIGENTE","CERRADA","EN PROCESO DE CIERRE"), LIST("VIGENTE"))
+      // Es decir: al crear (el ID CCH todavía no existe en la tabla) solo se
+      // permite "VIGENTE"; al editar (el ID CCH ya existe) se puede cambiar
+      // entre las 3. bloqueadoAlCrear + valorPorDefecto replican justo eso.
+      grupo: 'Identificación', clave: 'ESTATUS', etiqueta: 'Estatus', tipo: 'select',
+      opciones: ['VIGENTE', 'CERRADA', 'EN PROCESO DE CIERRE'],
+      bloqueadoAlCrear: true, valorPorDefecto: 'VIGENTE',
+    },
+    {
+      grupo: 'Identificación', clave: 'EMPRESA ORIGEN', etiqueta: 'Empresa origen', tipo: 'select',
+      opciones: ['CIB', 'FRO', 'IID', 'IPQ', 'GPH AC', 'GPH SC', 'MULTI', 'PHC', 'PRE', 'VME'],
+    },
+    { grupo: 'Identificación', clave: 'RESPONSABLE DE CAJA CHICA', etiqueta: 'Responsable', tipo: 'text' },
+    { grupo: 'Identificación', clave: 'PUESTO DE RESPONSABLE', etiqueta: 'Puesto del responsable', tipo: 'text' },
+
+    { grupo: 'Jefe y captura', clave: 'JEFE INMEDIATO DEL REPSONSABLE', etiqueta: 'Jefe inmediato del responsable', tipo: 'text' },
+    {
+      grupo: 'Jefe y captura', clave: 'ADMINISTRADA POR', etiqueta: 'Administrada por', tipo: 'select',
+      opciones: ['RESPONSABLE', 'CAPTURISTA'],
+    },
+    { grupo: 'Jefe y captura', clave: 'CAPTURISTA DE CAJA CHICA', etiqueta: 'Capturista', tipo: 'text' },
+    { grupo: 'Jefe y captura', clave: 'PUESTO DE CAPTURISTA', etiqueta: 'Puesto del capturista', tipo: 'text' },
+
+    { grupo: 'Ubicación', clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select', catalogo: true },
+    { grupo: 'Ubicación', clave: 'OFICINA', etiqueta: 'Oficina', tipo: 'select', catalogo: true },
+    { grupo: 'Ubicación', clave: 'SEDE', etiqueta: 'Sede', tipo: 'select', catalogo: true },
+
+    { grupo: 'Fechas y configuración', clave: 'FECHA DE APERTURA', etiqueta: 'Fecha de apertura', tipo: 'date' },
+    { grupo: 'Fechas y configuración', clave: 'FECHA DE CIERRE', etiqueta: 'Fecha de cierre', tipo: 'date', soloEdicion: true },
+    { grupo: 'Fechas y configuración', clave: 'FECHA DE RESPONSIVA CI', etiqueta: 'Fecha de autorización por DG', tipo: 'date' },
+    {
+      grupo: 'Fechas y configuración', clave: 'TIPO DE AUTORIZACIÓN', etiqueta: 'Tipo de autorización', tipo: 'select',
+      opciones: ['FISICA', 'CORREO'],
+    },
+    { grupo: 'Fechas y configuración', clave: 'MONTO ACTUAL', etiqueta: 'Monto actual', tipo: 'number', moneda: true },
+    {
+      grupo: 'Fechas y configuración', clave: 'METODO DE REEMBOLSO', etiqueta: 'Método de reembolso', tipo: 'select',
+      opciones: ['ECHQ', 'TEA', 'EFEC', 'NA', 'EFEC NA'],
+    },
+
+    { grupo: 'Contacto', clave: 'CORREO ELECTRONICO DE RESPONSABLE', etiqueta: 'Correo del responsable', tipo: 'email' },
+    { grupo: 'Contacto', clave: 'CORREO ELECTRONICO CAPTURISTA', etiqueta: 'Correo del capturista', tipo: 'email' },
+    { grupo: 'Contacto', clave: 'TELEFONO DE RESPONSABLE', etiqueta: 'Teléfono del responsable', tipo: 'text' },
+    { grupo: 'Contacto', clave: 'TELEFONO DE CAPTURISTA', etiqueta: 'Teléfono del capturista', tipo: 'text' },
+
+    {
+      grupo: 'Identificación oficial', clave: 'TIPO IDENTIFICACION RESPONSABLE', etiqueta: 'Tipo de identificación (responsable)', tipo: 'select',
+      opciones: ['INE', 'PASAPORTE'],
+    },
+    { grupo: 'Identificación oficial', clave: 'VIGENCIA IDENTIFICACION OFICIAL RESPONSABLE', etiqueta: 'Vigencia de identificación (responsable)', tipo: 'date' },
+    {
+      grupo: 'Identificación oficial', clave: 'TIPO IDENTIFICACION JEFE DIRECTO', etiqueta: 'Tipo de identificación (jefe directo)', tipo: 'select',
+      opciones: ['INE', 'PASAPORTE'],
+    },
+    { grupo: 'Identificación oficial', clave: 'VIGENCIA IDENTIFICACION OFICIAL JEFE DIRECTO', etiqueta: 'Vigencia de identificación (jefe directo)', tipo: 'date' },
+
+    { grupo: 'Notas', clave: 'OBSERVACIONES', etiqueta: 'Observaciones', tipo: 'text' },
+  ];
+
+  /** Genera los <div class="field"> agrupados por sección para un formulario de caja chica. */
+  function renderCamposCajaChica(prefijo, esEdicion) {
+    const grupos = [];
+    const porGrupo = {};
+    CAMPOS_CAJACHICA.forEach((campo) => {
+      // soloEdicion: campos que no aplican al dar de alta (ej. Fecha de
+      // cierre — no tiene sentido cerrarla antes de que exista).
+      if (campo.soloEdicion && !esEdicion) return;
+      if (!porGrupo[campo.grupo]) { porGrupo[campo.grupo] = []; grupos.push(campo.grupo); }
+      porGrupo[campo.grupo].push(campo);
+    });
+    return grupos.map((grupo) => {
+      const campos = porGrupo[grupo].map((campo) => {
+        const id = prefijo + '-' + slugCampo(campo.clave);
+        const disabled = campo.soloLectura ? ' disabled' : '';
+        const placeholder = campo.placeholder ? ` placeholder="${campo.placeholder}"` : '';
+        // step="any": sin esto, type="number" solo acepta enteros por
+        // default (step="1" implícito) — los montos necesitan decimales.
+        const step = campo.tipo === 'number' ? ' step="any"' : '';
+        // Campos "bloqueados al crear" (ej. Estatus: solo VIGENTE al dar de
+        // alta, editable a sus 3 opciones después) — en Registrar se ven
+        // fijos y deshabilitados; en Editar sí son un select normal.
+        if (campo.tipo === 'select' && campo.bloqueadoAlCrear && !esEdicion) {
+          return `<div class="field"><label>${campo.etiqueta}</label><input type="text" id="${id}" value="${campo.valorPorDefecto}" disabled /></div>`;
+        }
+        if (campo.tipo === 'select' && campo.catalogo) {
+          // catalogo: true — caja de texto con sugerencias (datalist), se
+          // puede escribir una opción nueva que todavía no esté ahí.
+          return `<div class="field"><label>${campo.etiqueta}</label><input type="text" id="${id}" list="${id}-lista" autocomplete="off" placeholder="Escribe o elige…" /><datalist id="${id}-lista"></datalist></div>`;
+        }
+        if (campo.tipo === 'select') {
+          const opciones = (campo.opciones || []).map((o) => `<option value="${o}">${o}</option>`).join('');
+          return `<div class="field"><label>${campo.etiqueta}</label><select id="${id}"><option value="">Selecciona…</option>${opciones}</select></div>`;
+        }
+        const input = `<input type="${campo.tipo}" id="${id}"${step}${disabled}${placeholder} />`;
+        // moneda: solo un "$" fijo a la izquierda, puro visual.
+        if (campo.moneda) {
+          return `<div class="field"><label>${campo.etiqueta}</label><div class="input-moneda-wrap">${input}</div></div>`;
+        }
+        return `<div class="field"><label>${campo.etiqueta}</label>${input}</div>`;
+      }).join('');
+      return `<div class="info-section-title">${grupo}</div>${campos}`;
+    }).join('');
+  }
+
+  /** Lee los valores actuales del formulario, devuelve un objeto {columna real: valor}. */
+  function recolectarDatosCajaChica(prefijo) {
+    const datos = {};
+    CAMPOS_CAJACHICA.forEach((campo) => {
+      if (campo.soloLectura) return;
+      const el = document.getElementById(prefijo + '-' + slugCampo(campo.clave));
+      if (el) datos[campo.clave] = el.value.trim();
+    });
+    return datos;
+  }
+
+  /**
+   * "Administrada por": si es CAPTURISTA se liberan (habilitan) sus 4 campos
+   * de captura (Capturista, Puesto, Correo, Teléfono); si es RESPONSABLE
+   * quedan bloqueados — así funcionaba el formulario original de AppSheet.
+   * limpiarSiBloqueado=true además vacía esos campos al bloquearlos: se usa
+   * al cambiar el select a mano (ya no aplica un capturista que se quitó),
+   * pero NO al abrir Editar (ahí solo se refleja el estado guardado, sin
+   * borrar datos existentes con solo abrir el modal).
+   */
+  const CAMPOS_CAPTURISTA = ['CAPTURISTA DE CAJA CHICA', 'PUESTO DE CAPTURISTA', 'CORREO ELECTRONICO CAPTURISTA', 'TELEFONO DE CAPTURISTA'];
+  function actualizarBloqueoCapturista(prefijo, limpiarSiBloqueado) {
+    const select = document.getElementById(prefijo + '-administrada-por');
+    if (!select) return;
+    const liberar = select.value === 'CAPTURISTA';
+    CAMPOS_CAPTURISTA.forEach((clave) => {
+      const el = document.getElementById(prefijo + '-' + slugCampo(clave));
+      if (!el) return;
+      el.disabled = !liberar;
+      if (!liberar && limpiarSiBloqueado) el.value = '';
+    });
+  }
+
+  /** Llena el formulario con un objeto {columna real: valor} (ej. de buscarPorId). */
+  function poblarFormularioCajaChica(prefijo, datos) {
+    CAMPOS_CAJACHICA.forEach((campo) => {
+      const el = document.getElementById(prefijo + '-' + slugCampo(campo.clave));
+      if (!el) return;
+      const valor = (datos && datos[campo.clave]) || '';
+      el.value = campo.tipo === 'date' ? fechaParaInput(valor) : valor;
+      // ADMINISTRADA POR va antes que los 4 campos de capturista en
+      // CAMPOS_CAJACHICA, así que para cuando este forEach llegue a esos
+      // campos el bloqueo/desbloqueo ya refleja el valor recién cargado.
+      if (campo.clave === 'ADMINISTRADA POR') actualizarBloqueoCapturista(prefijo, false);
+    });
+  }
+
+  // ---------- Caja Chica ----------
+  async function initCajaChica() {
+    wireTabsSimple(document.getElementById('view-container'));
+    const lista = document.getElementById('lista-cajaschicas');
+    const vacio = document.getElementById('cajaschicas-vacio');
+    const modalEditar = document.getElementById('modal-editar-cajachica');
+    const modalDetalle = document.getElementById('modal-detalle-cajachica');
+    let cajasPorId = {};
+    let todasLasCajas = [];
+
+    document.getElementById('campos-form-cajachica').innerHTML = renderCamposCajaChica('cch', false);
+    document.getElementById('campos-form-editar-cajachica').innerHTML = renderCamposCajaChica('editar-cajachica', true);
+
+    // Administrada por → Capturista/Puesto/Correo/Teléfono del capturista:
+    // estado inicial (recién armado el formulario, "Administrada por" vacío
+    // → bloqueados) y wiring del cambio manual del select.
+    ['cch', 'editar-cajachica'].forEach((prefijo) => {
+      actualizarBloqueoCapturista(prefijo, false);
+      document.getElementById(prefijo + '-administrada-por').addEventListener('change', () => {
+        actualizarBloqueoCapturista(prefijo, true);
+      });
+    });
+
+    // Departamento / Sede / Oficina: catálogos reales de la hoja
+    // "DEPARTAMENTOS" (distinta de "LISTAS VEHICULOS" — es la que usan
+    // Vehículos/Uber/Tickets), mismas opciones en Registrar y Editar. Son
+    // <input list="..."> — se puede escribir una opción nueva.
+    function llenarSelect(id, valores) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (el.tagName === 'INPUT') {
+        const datalist = document.getElementById(el.getAttribute('list'));
+        if (datalist) datalist.innerHTML = (valores || []).map((v) => `<option value="${v}"></option>`).join('');
+        return;
+      }
+      el.innerHTML = '<option value="">Selecciona…</option>' +
+        (valores || []).map((v) => `<option value="${v}">${v}</option>`).join('');
+    }
+    // En su propia función para correr en paralelo con cargar() más abajo.
+    async function cargarCatalogosCajaChica() {
+      try {
+        const [departamentos, sedes, oficinas] = await Promise.all([
+          callServer('apiListarDepartamentosCCH', state.token),
+          callServer('apiListarSedesCCH', state.token),
+          callServer('apiListarOficinasCCH', state.token),
+        ]);
+        ['cch-departamento', 'editar-cajachica-departamento'].forEach((id) => llenarSelect(id, departamentos));
+        ['cch-sede', 'editar-cajachica-sede'].forEach((id) => llenarSelect(id, sedes));
+        ['cch-oficina', 'editar-cajachica-oficina'].forEach((id) => llenarSelect(id, oficinas));
+      } catch (err) {
+        console.error('No se pudieron cargar los catálogos de Departamento/Sede/Oficina:', err);
+      }
+    }
+
+    function badgeEstatusCaja(estatus) {
+      const valor = String(estatus || '').toUpperCase();
+      if (valor === 'CERRADA') {
+        return '<span class="badge-estado baja"><i data-lucide="ban" class="ico"></i> Cerrada</span>';
+      }
+      if (valor === 'EN PROCESO DE CIERRE') {
+        return '<span class="badge-estado pendiente"><i data-lucide="clock" class="ico"></i> En proceso de cierre</span>';
+      }
+      return '<span class="badge-estado activo"><i data-lucide="circle-check" class="ico"></i> Vigente</span>';
+    }
+
+    const columnasCajasChicas = [
+      { clave: 'ID_CCH', etiqueta: 'ID CCH' },
+      { clave: 'ESTATUS', etiqueta: 'Estatus' },
+      { clave: 'RESPONSABLE', etiqueta: 'Responsable' },
+      { clave: 'DEPARTAMENTO', etiqueta: 'Departamento' },
+      { clave: 'OFICINA', etiqueta: 'Oficina' },
+      { clave: 'SEDE', etiqueta: 'Sede' },
+      { clave: 'MONTO_ACTUAL', etiqueta: 'Monto actual' },
+    ];
+    const motorTablaCajasChicas = crearTablaInteractiva({
+      thead: document.getElementById('cch-thead'),
+      columnas: columnasCajasChicas,
+      buscadorGlobal: document.getElementById('cch-buscar-global'),
+      piePaginacion: document.getElementById('cch-pie'),
+      onRenderPagina: (cajas, total) => {
+        vacio.hidden = total > 0;
+        lista.innerHTML = cajas.map((c) => `
+          <tr>
+            <td class="tabla-clickable" data-id="${c.ID_CCH}" title="Ver detalle completo">${c.ID_CCH}</td>
+            <td>${badgeEstatusCaja(c.ESTATUS)}</td>
+            <td>${c.RESPONSABLE || '—'}</td>
+            <td>${c.DEPARTAMENTO || '—'}</td>
+            <td>${c.OFICINA || '—'}</td>
+            <td>${c.SEDE || '—'}</td>
+            <td>${formatearMoneda(c.MONTO_ACTUAL)}</td>
+            <td>
+              <div class="tabla-actions">
+                <button type="button" class="secondary btn-editar-cajachica" data-id="${c.ID_CCH}" title="Editar"><i data-lucide="pencil" class="ico"></i></button>
+                <button type="button" class="danger btn-eliminar-cajachica" data-id="${c.ID_CCH}" data-responsable="${c.RESPONSABLE}" title="Eliminar"><i data-lucide="trash-2" class="ico"></i></button>
+              </div>
+            </td>
+          </tr>
+        `).join('');
+
+        lista.querySelectorAll('.tabla-clickable').forEach((el) => {
+          el.addEventListener('click', () => abrirDetalleCajaChica(el.dataset.id));
+        });
+        lista.querySelectorAll('.btn-editar-cajachica').forEach((btn) => {
+          btn.addEventListener('click', () => abrirEditarCajaChica(btn.dataset.id));
+        });
+        lista.querySelectorAll('.btn-eliminar-cajachica').forEach((btn) => {
+          btn.addEventListener('click', () => eliminarCajaChica(btn.dataset.id, btn.dataset.responsable));
+        });
+        refreshIcons();
+      },
+    });
+
+    async function cargar() {
+      const errorBox = document.getElementById('cch-error');
+      let cajas;
+      try {
+        cajas = await callServer('apiListarCajasChicasResumen', state.token);
+      } catch (err) {
+        console.error('No se pudo cargar el catálogo de cajas chicas:', err);
+        errorBox.textContent = 'No se pudo cargar el catálogo: ' + err.message;
+        errorBox.hidden = false;
+        return;
+      }
+      errorBox.hidden = true;
+      todasLasCajas = cajas || [];
+
+      cajasPorId = {};
+      todasLasCajas.forEach((c) => { cajasPorId[c.ID_CCH] = c; });
+
+      document.getElementById('cch-stat-total').textContent = todasLasCajas.length;
+      document.getElementById('cch-stat-vigentes').textContent =
+        todasLasCajas.filter((c) => String(c.ESTATUS || '').toUpperCase() === 'VIGENTE').length;
+      document.getElementById('cch-stat-proceso-cierre').textContent =
+        todasLasCajas.filter((c) => String(c.ESTATUS || '').toUpperCase() === 'EN PROCESO DE CIERRE').length;
+      document.getElementById('cch-stat-cerradas').textContent =
+        todasLasCajas.filter((c) => String(c.ESTATUS || '').toUpperCase() === 'CERRADA').length;
+
+      motorTablaCajasChicas.setDatos(todasLasCajas);
+    }
+
+    async function abrirDetalleCajaChica(id) {
+      const resumen = cajasPorId[id];
+      if (!resumen) return;
+      document.getElementById('detalle-cajachica-label').textContent = 'ID CCH: ' + id;
+      const grid = document.getElementById('detalle-cajachica-grid');
+      grid.innerHTML = '<div class="loading-inline"><span class="spinner"></span> Cargando…</div>';
+      modalDetalle.hidden = false;
+      try {
+        const completo = await callServer('apiBuscarCajaChicaPorId', state.token, id);
+        if (!completo) {
+          grid.innerHTML = '<p class="empty-state">No se encontró el registro completo.</p>';
+          return;
+        }
+        grid.innerHTML = Object.keys(completo)
+          .filter((k) => completo[k] !== '' && completo[k] !== null && completo[k] !== undefined)
+          .map((k) => itemInfo(tituloDesdeClave(k), k === 'MONTO ACTUAL' ? formatearMoneda(completo[k]) : completo[k]))
+          .join('');
+      } catch (err) {
+        grid.innerHTML = '<p class="error-msg">No se pudo cargar: ' + err.message + '</p>';
+      }
+    }
+    document.getElementById('btn-cerrar-detalle-cajachica').addEventListener('click', () => { modalDetalle.hidden = true; });
+    modalDetalle.addEventListener('click', (ev) => { if (ev.target === modalDetalle) modalDetalle.hidden = true; });
+
+    async function abrirEditarCajaChica(id) {
+      const resumen = cajasPorId[id];
+      if (!resumen) return;
+      document.getElementById('editar-cajachica-id').value = id;
+      document.getElementById('editar-cajachica-label').textContent = 'ID CCH: ' + id;
+      document.getElementById('editar-cajachica-error').hidden = true;
+      modalEditar.hidden = false;
+      try {
+        const completo = await callServer('apiBuscarCajaChicaPorId', state.token, id);
+        if (completo) poblarFormularioCajaChica('editar-cajachica', completo);
+      } catch (err) {
+        const errorBox = document.getElementById('editar-cajachica-error');
+        errorBox.textContent = 'No se pudo cargar el registro: ' + err.message;
+        errorBox.hidden = false;
+      }
+    }
+    function cerrarEditarCajaChica() {
+      modalEditar.hidden = true;
+      document.getElementById('form-editar-cajachica').reset();
+      document.getElementById('editar-cajachica-error').hidden = true;
+    }
+    document.getElementById('btn-cancelar-editar-cajachica').addEventListener('click', cerrarEditarCajaChica);
+    modalEditar.addEventListener('click', (ev) => { if (ev.target === modalEditar) cerrarEditarCajaChica(); });
+
+    document.getElementById('form-editar-cajachica').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('editar-cajachica-error');
+      errorBox.hidden = true;
+      const btn = document.getElementById('btn-guardar-editar-cajachica');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
+      toastCargando('Guardando cambios…');
+      try {
+        const datos = recolectarDatosCajaChica('editar-cajachica');
+        await callServer('apiActualizarCajaChica', state.token, document.getElementById('editar-cajachica-id').value, datos);
+        cerrarEditarCajaChica();
+        await cargar();
+        toastExito('Actualizado exitosamente');
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+        toastError('No se pudo actualizar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+      }
+    });
+
+    async function eliminarCajaChica(id, responsable) {
+      const etiqueta = responsable ? ('de ' + responsable) : ('ID CCH ' + id);
+      if (!confirm('¿Eliminar la caja chica ' + etiqueta + '? Esta acción no se puede deshacer.')) return;
+      toastCargando('Eliminando…');
+      try {
+        await callServer('apiEliminarCajaChica', state.token, id);
+        await cargar();
+        toastExito('Eliminado exitosamente');
+      } catch (err) {
+        toastError('No se pudo eliminar: ' + err.message);
+      }
+    }
+
+    document.getElementById('form-cajachica').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('cch-error');
+      errorBox.hidden = true;
+      const btn = document.getElementById('btn-guardar-cajachica');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
+      toastCargando('Registrando…');
+      try {
+        const datos = recolectarDatosCajaChica('cch');
+        await callServer('apiCrearCajaChica', state.token, datos);
+        ev.target.reset();
+        await cargar();
+        toastExito('Registrado exitosamente');
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+        toastError('No se pudo registrar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+      }
+    });
+
+    document.getElementById('btn-exportar-excel-cajachica').addEventListener('click', () => {
+      exportarCSV('cajas_chicas.csv', columnasCajasChicas, motorTablaCajasChicas.obtenerFiltrados());
+    });
+
+    await Promise.all([cargarCatalogosCajaChica(), cargar()]);
+  }
+
+  // ---------- Cambios de Monto (Caja Chica) ----------
+  async function initCambiosMontoCCH() {
+    wireTabsSimple(document.getElementById('view-container'));
+    const lista = document.getElementById('lista-cambios-monto');
+    const vacio = document.getElementById('cambios-monto-vacio');
+    const modalDetalle = document.getElementById('modal-detalle-cambio-monto');
+    let cambiosPorId = {};
+    let cajasPorId = {};
+    let todosLosCambios = [];
+
+    const selectCaja = document.getElementById('cm-id-cch');
+    const campoAnterior = document.getElementById('cm-cantidad-anterior');
+    const tagAnterior = document.getElementById('cm-tag-anterior');
+
+    // cargar() necesita cajasPorId ya lleno (para poner Responsable en cada
+    // renglón), así que no se puede simplemente "correr en paralelo y ya" —
+    // pero SÍ se puede pedir el catálogo y el historial al mismo tiempo, y
+    // solo esperar a que ambos terminen antes de armar la tabla. Memoizada
+    // en una promesa: la primera vez de verdad pide el catálogo; llamadas
+    // posteriores a cargar() (tras crear/eliminar) reusan el mismo resultado
+    // ya resuelto, sin volver a pedirlo ni resetear el <select>.
+    let promesaCatalogoCajas = null;
+    function cargarCatalogoCajas() {
+      if (promesaCatalogoCajas) return promesaCatalogoCajas;
+      promesaCatalogoCajas = (async () => {
+        try {
+          const cajas = await callServer('apiListarCajasChicasResumen', state.token);
+          (cajas || []).forEach((c) => { cajasPorId[c.ID_CCH] = c; });
+          selectCaja.innerHTML = '<option value="">Selecciona…</option>' +
+            (cajas || []).map((c) => `<option value="${c.ID_CCH}">${c.ID_CCH} — ${c.RESPONSABLE || 'Sin responsable'}</option>`).join('');
+        } catch (err) {
+          console.error('No se pudo cargar el catálogo de cajas chicas:', err);
+          const errorBox = document.getElementById('cm-error');
+          errorBox.textContent = 'No se pudo cargar el catálogo de cajas chicas: ' + err.message;
+          errorBox.hidden = false;
+        }
+      })();
+      return promesaCatalogoCajas;
+    }
+    cargarCatalogoCajas(); // arranca de una vez, sin esperar aquí — cargar() la espera abajo
+
+    selectCaja.addEventListener('change', () => {
+      const caja = cajasPorId[selectCaja.value];
+      if (caja) {
+        campoAnterior.value = formatearMoneda(caja.MONTO_ACTUAL || 0);
+        tagAnterior.hidden = false;
+      } else {
+        campoAnterior.value = '';
+        tagAnterior.hidden = true;
+      }
+    });
+
+    function etiquetaTipo(tipo) {
+      const esIncremento = String(tipo || '').toUpperCase() === 'INCREMENTO';
+      return `<span class="tag ${esIncremento ? 'tag-green' : 'tag-gold'}">${tipo || '—'}</span>`;
+    }
+    function nombreResponsable(idCch) {
+      const caja = cajasPorId[idCch];
+      return caja ? (caja.RESPONSABLE || '—') : '—';
+    }
+
+    const columnasCambiosMonto = [
+      { clave: 'ID_CCH', etiqueta: 'ID CCH' },
+      { clave: 'RESPONSABLE', etiqueta: 'Responsable' },
+      { clave: 'TIPO', etiqueta: 'Tipo' },
+      { clave: 'CANTIDAD', etiqueta: 'Cantidad' },
+      { clave: 'CANTIDAD_ANTERIOR', etiqueta: 'Cantidad anterior' },
+      { clave: 'CANTIDAD_ACTUALIZADA', etiqueta: 'Cantidad actualizada' },
+      { clave: 'FECHA', etiqueta: 'Fecha' },
+      { clave: 'QUIEN_REALIZO', etiqueta: 'Quién realizó' },
+    ];
+    const motorTablaCambiosMonto = crearTablaInteractiva({
+      thead: document.getElementById('cm-thead'),
+      columnas: columnasCambiosMonto,
+      buscadorGlobal: document.getElementById('cm-buscar-global'),
+      piePaginacion: document.getElementById('cm-pie'),
+      onRenderPagina: (cambios, total) => {
+        vacio.hidden = total > 0;
+        lista.innerHTML = cambios.map((c) => `
+          <tr>
+            <td class="tabla-clickable" data-id="${c.ID}" title="Ver detalle completo">${c.ID_CCH}</td>
+            <td>${c.RESPONSABLE || '—'}</td>
+            <td>${etiquetaTipo(c.TIPO)}</td>
+            <td>${formatearMoneda(c.CANTIDAD)}</td>
+            <td>${formatearMoneda(c.CANTIDAD_ANTERIOR)}</td>
+            <td>${formatearMoneda(c.CANTIDAD_ACTUALIZADA)}</td>
+            <td>${formatearFecha(c.FECHA)}</td>
+            <td>${c.QUIEN_REALIZO || '—'}</td>
+            <td>
+              <div class="tabla-actions">
+                <button type="button" class="danger btn-eliminar-cambio-monto" data-id="${c.ID}" title="Eliminar"><i data-lucide="trash-2" class="ico"></i></button>
+              </div>
+            </td>
+          </tr>
+        `).join('');
+
+        lista.querySelectorAll('.tabla-clickable').forEach((el) => {
+          el.addEventListener('click', () => abrirDetalleCambioMonto(el.dataset.id));
+        });
+        lista.querySelectorAll('.btn-eliminar-cambio-monto').forEach((btn) => {
+          btn.addEventListener('click', () => eliminarCambioMonto(btn.dataset.id));
+        });
+        refreshIcons();
+      },
+    });
+
+    async function cargar() {
+      const errorBox = document.getElementById('cm-error');
+      let cambios;
+      try {
+        [, cambios] = await Promise.all([
+          cargarCatalogoCajas(),
+          callServer('apiListarCambiosMontoCCH', state.token),
+        ]);
+      } catch (err) {
+        console.error('No se pudo cargar el historial de cambios de monto:', err);
+        errorBox.textContent = 'No se pudo cargar el historial: ' + err.message;
+        errorBox.hidden = false;
+        return;
+      }
+      errorBox.hidden = true;
+      // RESPONSABLE no viene del servidor (el historial solo guarda ID CCH) —
+      // se agrega aquí como un dato real más del objeto, para que la tabla
+      // (encabezado, filtro, orden, búsqueda y exportar) lo trate igual que
+      // cualquier otra columna, en vez de solo "pintarlo" en la celda.
+      todosLosCambios = (cambios || []).map((c) => Object.assign({}, c, { RESPONSABLE: nombreResponsable(c.ID_CCH) }));
+
+      cambiosPorId = {};
+      todosLosCambios.forEach((c) => { cambiosPorId[c.ID] = c; });
+
+      document.getElementById('cmcch-stat-total').textContent = todosLosCambios.length;
+      document.getElementById('cmcch-stat-incrementos').textContent =
+        todosLosCambios.filter((c) => String(c.TIPO || '').toUpperCase() === 'INCREMENTO').length;
+      document.getElementById('cmcch-stat-reducciones').textContent =
+        todosLosCambios.filter((c) => String(c.TIPO || '').toUpperCase() === 'REDUCCION').length;
+
+      motorTablaCambiosMonto.setDatos(todosLosCambios);
+    }
+
+    const ETIQUETAS_CAMBIO_MONTO = {
+      ID_CCH: 'ID CCH', TIPO: 'Tipo', CANTIDAD: 'Cantidad',
+      CANTIDAD_ANTERIOR: 'Cantidad anterior', CANTIDAD_ACTUALIZADA: 'Cantidad actualizada',
+      FECHA: 'Fecha', QUIEN_REALIZO: 'Quién realizó',
+    };
+    function abrirDetalleCambioMonto(id) {
+      const cambio = cambiosPorId[id];
+      if (!cambio) return;
+      document.getElementById('detalle-cambio-monto-label').textContent = 'ID CCH: ' + cambio.ID_CCH;
+      const grid = document.getElementById('detalle-cambio-monto-grid');
+      const CAMPOS_MONEDA = ['CANTIDAD', 'CANTIDAD_ANTERIOR', 'CANTIDAD_ACTUALIZADA'];
+      grid.innerHTML = itemInfo('Responsable', nombreResponsable(cambio.ID_CCH)) +
+        Object.keys(ETIQUETAS_CAMBIO_MONTO)
+          .filter((clave) => cambio[clave] !== '' && cambio[clave] !== null && cambio[clave] !== undefined)
+          .map((clave) => itemInfo(
+            ETIQUETAS_CAMBIO_MONTO[clave],
+            CAMPOS_MONEDA.includes(clave) ? formatearMoneda(cambio[clave]) : cambio[clave]
+          ))
+          .join('');
+      modalDetalle.hidden = false;
+    }
+    document.getElementById('btn-cerrar-detalle-cambio-monto').addEventListener('click', () => { modalDetalle.hidden = true; });
+    modalDetalle.addEventListener('click', (ev) => { if (ev.target === modalDetalle) modalDetalle.hidden = true; });
+
+    async function eliminarCambioMonto(id) {
+      if (!confirm('¿Eliminar este cambio de monto? Esto NO revierte el monto actual de la caja chica — solo borra el registro del historial. Esta acción no se puede deshacer.')) return;
+      toastCargando('Eliminando…');
+      try {
+        await callServer('apiEliminarCambioMontoCCH', state.token, id);
+        await cargar();
+        toastExito('Eliminado exitosamente');
+      } catch (err) {
+        toastError('No se pudo eliminar: ' + err.message);
+      }
+    }
+
+    document.getElementById('form-cambio-monto').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('cm-error');
+      errorBox.hidden = true;
+      const btn = document.getElementById('btn-guardar-cambio-monto');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
+      toastCargando('Registrando…');
+      try {
+        await callServer('apiCrearCambioMontoCCH', state.token, {
+          'ID CCH': selectCaja.value,
+          'CANTIDAD ACTUALIZADA': document.getElementById('cm-cantidad-actualizada').value,
+        });
+        ev.target.reset();
+        tagAnterior.hidden = true;
+        // Refresca también el catálogo de cajas chicas en memoria: el monto
+        // actual de la que se acaba de cambiar ya no es el mismo.
+        const cajas = await callServer('apiListarCajasChicasResumen', state.token);
+        cajasPorId = {};
+        (cajas || []).forEach((c) => { cajasPorId[c.ID_CCH] = c; });
+        selectCaja.innerHTML = '<option value="">Selecciona…</option>' +
+          (cajas || []).map((c) => `<option value="${c.ID_CCH}">${c.ID_CCH} — ${c.RESPONSABLE || 'Sin responsable'}</option>`).join('');
+        await cargar();
+        toastExito('Registrado exitosamente');
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+        toastError('No se pudo registrar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+      }
+    });
+
+    document.getElementById('btn-exportar-excel-cambios-monto').addEventListener('click', () => {
+      exportarCSV('cambios_monto_caja_chica.csv', columnasCambiosMonto, motorTablaCambiosMonto.obtenerFiltrados());
+    });
+
+    await cargar();
+  }
+
+  // ---------- Cambios Vehículos (bitácora automática, solo lectura) ----------
+  async function initCambiosVehiculos() {
+    const lista = document.getElementById('lista-cambios-vehiculos');
+    const vacio = document.getElementById('cambios-vehiculos-vacio');
+    let todosLosCambios = [];
+
+    const columnasCambiosVehiculos = [
+      { clave: 'FOLIO', etiqueta: 'Folio' },
+      { clave: 'CAMPO', etiqueta: 'Campo' },
+      { clave: 'ANTES', etiqueta: 'Antes' },
+      { clave: 'DESPUES', etiqueta: 'Después' },
+      { clave: 'ACTUALIZADO_POR', etiqueta: 'Actualizado por' },
+      { clave: 'FECHA', etiqueta: 'Fecha' },
+    ];
+    const motorTablaCambiosVehiculos = crearTablaInteractiva({
+      thead: document.getElementById('cv-thead'),
+      columnas: columnasCambiosVehiculos,
+      conAcciones: false, // bitácora de solo lectura, sin botones de editar/eliminar
+      buscadorGlobal: document.getElementById('cv-buscar-global'),
+      piePaginacion: document.getElementById('cv-pie'),
+      onRenderPagina: (cambios, total) => {
+        vacio.hidden = total > 0;
+        lista.innerHTML = cambios.map((c) => `
+          <tr>
+            <td>${c.FOLIO || '—'}</td>
+            <td>${c.CAMPO || '—'}</td>
+            <td>${c.ANTES || '<span class="empty-state" style="padding:0">(vacío)</span>'}</td>
+            <td>${c.DESPUES || '<span class="empty-state" style="padding:0">(vacío)</span>'}</td>
+            <td>${c.ACTUALIZADO_POR || '—'}</td>
+            <td>${formatearFecha(c.FECHA)}</td>
+          </tr>
+        `).join('');
+      },
+    });
+
+    async function cargar() {
+      try {
+        todosLosCambios = await callServer('apiListarCambiosVehiculos', state.token) || [];
+      } catch (err) {
+        console.error('No se pudo cargar el historial de Cambios Vehículos:', err);
+        vacio.textContent = 'No se pudo cargar el historial: ' + err.message;
+        vacio.hidden = false;
+        return;
+      }
+
+      document.getElementById('cv-stat-total').textContent = todosLosCambios.length;
+      document.getElementById('cv-stat-vehiculos').textContent =
+        new Set(todosLosCambios.map((c) => c.FOLIO).filter(Boolean)).size;
+      const hoyStr = hoyISO();
+      document.getElementById('cv-stat-hoy').textContent =
+        todosLosCambios.filter((c) => c.FECHA && c.FECHA.slice(0, 10) === hoyStr).length;
+
+      motorTablaCambiosVehiculos.setDatos(todosLosCambios);
+    }
+
+    document.getElementById('btn-exportar-excel-cambios-vehiculos').addEventListener('click', () => {
+      exportarCSV('cambios_vehiculos.csv', columnasCambiosVehiculos, motorTablaCambiosVehiculos.obtenerFiltrados());
+    });
+
+    await cargar();
+  }
+</script>
