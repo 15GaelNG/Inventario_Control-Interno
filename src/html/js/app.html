@@ -391,41 +391,41 @@
     {
       id: 'servicios-vehiculares', icono: 'car', etiqueta: 'Control Vehicular',
       items: [
-        { vista: 'incidencias', etiqueta: 'Incidencias' },
-        { vista: 'vehiculos', etiqueta: 'Vehículos' },
-        { vista: 'cambios-vehiculos', etiqueta: 'Cambios Vehículos' },
-        { vista: 'reasignaciones-vehiculares', etiqueta: 'Reasignaciones Vehiculares' },
-        { vista: 'verificaciones', etiqueta: 'Verificaciones' },
-        { vista: 'instalacion-sensores', etiqueta: 'Instalación de Sensores' },
-        { vista: 'servicios', etiqueta: 'Servicios' },
-        { vista: 'hologramas', etiqueta: 'Hologramas' },
+        { vista: 'incidencias', etiqueta: 'Incidencias', icono: 'wrench' },
+        { vista: 'vehiculos', etiqueta: 'Vehículos', icono: 'car' },
+        { vista: 'cambios-vehiculos', etiqueta: 'Cambios Vehículos', icono: 'history' },
+        { vista: 'reasignaciones-vehiculares', etiqueta: 'Reasignaciones Vehiculares', icono: 'arrow-left-right' },
+        { vista: 'verificaciones', etiqueta: 'Verificaciones', icono: 'badge-check' },
+        { vista: 'instalacion-sensores', etiqueta: 'Instalación de Sensores', icono: 'radio' },
+        { vista: 'servicios', etiqueta: 'Servicios', icono: 'clipboard-check' },
+        { vista: 'hologramas', etiqueta: 'Hologramas', icono: 'sparkles' },
       ],
     },
     {
       id: 'lineas', icono: 'smartphone', etiqueta: 'Líneas',
       items: [
-        { vista: 'reasignaciones-lineas', etiqueta: 'Control de Reasignaciones - Líneas' },
-        { vista: 'accesorios', etiqueta: 'Inventario de Accesorios' },
-        { vista: 'reactivacion-lineas', etiqueta: 'Reactivación de Líneas' },
-        { vista: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas' },
-        { vista: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas' },
-        { vista: 'bitacora-desechos', etiqueta: 'Bitácora de Desechos' },
-        { vista: 'lineas-post-venta', etiqueta: 'Líneas Post Venta' },
+        { vista: 'reasignaciones-lineas', etiqueta: 'Control de Reasignaciones - Líneas', icono: 'arrow-left-right' },
+        { vista: 'accesorios', etiqueta: 'Inventario de Accesorios', icono: 'backpack' },
+        { vista: 'reactivacion-lineas', etiqueta: 'Reactivación de Líneas', icono: 'refresh-cw' },
+        { vista: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas', icono: 'phone' },
+        { vista: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas', icono: 'repeat' },
+        { vista: 'bitacora-desechos', etiqueta: 'Bitácora de Desechos', icono: 'trash-2' },
+        { vista: 'lineas-post-venta', etiqueta: 'Líneas Post Venta', icono: 'headphones' },
       ],
     },
     {
       id: 'arqueos', icono: 'wallet', etiqueta: 'Arqueos',
       items: [
-        { vista: 'arqueos', etiqueta: 'Arqueos' },
-        { vista: 'caja-chica', etiqueta: 'Caja Chica' },
-        { vista: 'cambios-monto-cch', etiqueta: 'Cambios de Monto' },
+        { vista: 'arqueos', etiqueta: 'Arqueos', icono: 'wallet' },
+        { vista: 'caja-chica', etiqueta: 'Caja Chica', icono: 'piggy-bank' },
+        { vista: 'cambios-monto-cch', etiqueta: 'Cambios de Monto', icono: 'repeat' },
       ],
     },
     {
       id: 'uber', icono: 'car-taxi-front', etiqueta: 'Uber',
       items: [
-        { vista: 'uber', etiqueta: 'Uber' },
-        { vista: 'tickets', etiqueta: 'Tickets' },
+        { vista: 'uber', etiqueta: 'Uber', icono: 'car-taxi-front' },
+        { vista: 'tickets', etiqueta: 'Tickets', icono: 'ticket' },
       ],
     },
   ];
@@ -443,7 +443,10 @@
         </div>
         <div class="nav-group-items">
           ${grupo.items.map((item) => `
-            <div class="nav-subitem" data-view="${item.vista}" data-etiqueta="${item.etiqueta}">${item.etiqueta}</div>
+            <div class="nav-subitem" data-view="${item.vista}" data-etiqueta="${item.etiqueta}">
+              <span class="nav-subitem-icon"><i data-lucide="${item.icono}" class="ico"></i></span>
+              <span class="nav-subitem-label">${item.etiqueta}</span>
+            </div>
           `).join('')}
         </div>
       </div>

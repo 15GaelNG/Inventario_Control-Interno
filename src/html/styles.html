@@ -206,11 +206,14 @@
   .nav-group.expanded .nav-group-items { max-height: 600px; opacity: 1; }
 
   .nav-subitem {
+    display: flex; align-items: center; gap: 8px;
     padding: 8px 12px; border-radius: 8px; cursor: pointer;
     color: var(--color-sidebar-text); font-size: 12.5px; font-weight: 500;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     transition: background-color .18s ease, color .18s ease, transform .18s ease;
   }
+  .nav-subitem-icon { flex-shrink: 0; width: 15px; display: flex; align-items: center; justify-content: center; opacity: .85; }
+  .nav-subitem-icon .ico { width: 13px; height: 13px; }
+  .nav-subitem-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .nav-subitem:hover {
     background: rgba(255,255,255,.13); color: var(--color-sidebar-text-strong);
     transform: translateX(3px);
