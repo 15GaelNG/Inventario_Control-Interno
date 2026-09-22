@@ -10,10 +10,12 @@ function doGet(e) {
 
 /**
  * Helper estándar para incluir parciales HTML (styles.html, views/*.html, js/*.html).
- * Usa createTemplateFromFile (no createHtmlOutputFromFile) para que los parciales
- * incluidos puedan a su vez usar sus propios scriptlets <?!= ... ?> — si no,
- * quedarían como texto literal sin evaluar.
+ *
+ * Usa createHtmlOutputFromFile (NO createTemplateFromFile().evaluate()) a
+ * propósito: ninguno de estos parciales usa scriptlets <?!= ?> propios
+ * (solo Index.html los usa, para llamar a include() — ver Router.gs), así
+ * que no hace falta evaluarlos como template.
  */
 function include(filename) {
-  return HtmlService.createTemplateFromFile(filename).evaluate().getContent();
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }

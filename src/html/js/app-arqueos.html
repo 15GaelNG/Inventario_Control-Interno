@@ -847,7 +847,8 @@
       exportarCSV('arqueos.csv', columnasArqueos, motorTablaArqueos.obtenerFiltrados());
     });
     document.getElementById('btn-calendario-arqueos').addEventListener('click', () => {
-      window.open('https://script.google.com/a/macros/ciudadmaderas.com/s/AKfycbwAgUrG2tEiZSxMtNO7hvXlyjfurJnuXIVXUDwyJF99Eci6UbvRtJqmpoCfXGGCdWad1A/exec', '_blank', 'noopener');
+      // "\/\/" (no "//") — ver comentario en app.html, botón de reporte de Vehículos.
+      window.open('https:\/\/script.google.com/a/macros/ciudadmaderas.com/s/AKfycbwAgUrG2tEiZSxMtNO7hvXlyjfurJnuXIVXUDwyJF99Eci6UbvRtJqmpoCfXGGCdWad1A/exec', '_blank', 'noopener');
     });
 
     await cargar();

@@ -1741,7 +1741,11 @@
       exportarCSV('vehiculos.csv', columnasVehiculos, motorTablaVehiculos.obtenerFiltrados());
     });
     document.getElementById('btn-ver-reporte-vehiculos').addEventListener('click', () => {
-      window.open('https://datastudio.google.com/u/0/reporting/40272bf8-ecac-4d37-8cca-01f4c4c32841/page/1jHvF', '_blank', 'noopener');
+      // "\/\/" (no "//"): Apps Script le borra a los .html todo lo que
+      // encuentre después de "//" pensando que es un comentario — incluso
+      // dentro de un string — y eso rompía justo esta línea. "\/" en un
+      // string de JS es simplemente "/", así que el resultado es idéntico.
+      window.open('https:\/\/datastudio.google.com/u/0/reporting/40272bf8-ecac-4d37-8cca-01f4c4c32841/page/1jHvF', '_blank', 'noopener');
     });
 
     // En paralelo, no uno tras otro — los catálogos no dependen de la lista
