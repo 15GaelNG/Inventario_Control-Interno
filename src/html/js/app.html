@@ -843,7 +843,12 @@
     { grupo: 'Vehículo', clave: 'MODELO', etiqueta: 'Año', tipo: 'number' },
     { grupo: 'Vehículo', clave: 'COLOR', etiqueta: 'Color', tipo: 'text' },
     {
-      grupo: 'Vehículo', clave: 'PLACA', etiqueta: 'Placa', tipo: 'select',
+      // catalogo: true — antes era un <select> cerrado a solo estas 2
+      // opciones, así que no había forma de capturar una placa real (y
+      // cualquier vehículo con placa real que se editara aquí la perdía,
+      // quedaba forzado a una de las 2). Ahora es texto libre con estas 2
+      // como sugerencias — se puede escribir la placa real o elegir una.
+      grupo: 'Vehículo', clave: 'PLACA', etiqueta: 'Placa', tipo: 'select', catalogo: true,
       opciones: ['SIN PLACA', 'BAJA DE PLACA'],
     },
     {
@@ -958,7 +963,11 @@
           // que todavía no esté en el catálogo. llenarSelect() (por JS, al
           // cargar) detecta que es un <input> y llena el <datalist> en vez
           // de las <option> de un <select>.
-          return `<div class="field"><label>${campo.etiqueta}</label><input type="text" id="${id}" list="${id}-lista" autocomplete="off"${req} placeholder="Escribe o elige…" /><datalist id="${id}-lista"></datalist></div>`;
+          // Campos con "opciones" fijas (ej. Placa: "SIN PLACA"/"BAJA DE
+          // PLACA") no dependen de un catálogo del servidor — se precargan
+          // aquí mismo, directo en el HTML.
+          const sugerencias = (campo.opciones || []).map((o) => `<option value="${o}"></option>`).join('');
+          return `<div class="field"><label>${campo.etiqueta}</label><input type="text" id="${id}" list="${id}-lista" autocomplete="off"${req} placeholder="Escribe o elige…" /><datalist id="${id}-lista">${sugerencias}</datalist></div>`;
         }
         if (campo.tipo === 'select') {
           // Con "opciones" definidas de antemano (lista fija, ej. Clase) se
