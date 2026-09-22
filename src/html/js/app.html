@@ -655,6 +655,21 @@
       }
     }
 
+    // Si la columna tiene pocos valores distintos en los datos actuales (ej.
+    // Estado, Estatus, Rol — no Departamento/Nombre, que tienen decenas o
+    // cientos), el filtro se pinta como checklist de esos valores reales en
+    // vez del cuadro de texto genérico — no hay que escribir ni acertarle a
+    // como está capturado. filtro.tipo === 'lista'. Con más valores que esto
+    // sigue siendo el filtro de texto (contiene/igual/etc.), como antes.
+    const UMBRAL_FILTRO_LISTA = 15;
+
+    function coincideFiltro(valorCelda, filtro) {
+      if (filtro.tipo === 'lista') {
+        return filtro.valores.includes(String(valorCelda == null ? '' : valorCelda));
+      }
+      return coincideOperador(valorCelda, filtro.operador, filtro.valor);
+    }
+
     function datosFiltrados() {
       let r = datosOriginales;
       const global = (buscadorGlobal && buscadorGlobal.value.trim().toLowerCase()) || '';
@@ -664,7 +679,7 @@
       Object.keys(filtros).forEach((clave) => {
         const f = filtros[clave];
         if (!f) return;
-        r = r.filter((fila) => coincideOperador(fila[clave], f.operador, f.valor));
+        r = r.filter((fila) => coincideFiltro(fila[clave], f));
       });
       if (orden) {
         const dir = orden.dir === 'desc' ? -1 : 1;
@@ -684,19 +699,61 @@
       const rect = boton.getBoundingClientRect();
       const pop = document.createElement('div');
       pop.className = 'th-popover';
-      const actual = filtros[columna.clave] || { operador: 'contiene', valor: '' };
+      const actual = filtros[columna.clave];
       const ordenAsc = !!(orden && orden.clave === columna.clave && orden.dir === 'asc');
       const ordenDesc = !!(orden && orden.clave === columna.clave && orden.dir === 'desc');
-      pop.innerHTML = `
-        <div class="th-popover-titulo">${columna.etiqueta}</div>
+
+      // Valores realmente presentes en los datos actuales para esta
+      // columna — si son pocos, el filtro se pinta como checklist en vez
+      // de texto libre (ver UMBRAL_FILTRO_LISTA arriba).
+      const valoresPresentes = new Set();
+      datosOriginales.forEach((fila) => {
+        const v = fila[columna.clave];
+        if (v !== '' && v !== null && v !== undefined) valoresPresentes.add(String(v));
+      });
+      const listaValores = [...valoresPresentes].sort((a, b) => a.localeCompare(b, 'es', { numeric: true, sensitivity: 'base' }));
+      const esLista = listaValores.length > 0 && listaValores.length <= UMBRAL_FILTRO_LISTA;
+
+      const ordenHtml = `
         <div class="th-popover-orden">
           <button type="button" class="secondary ${ordenAsc ? 'activo' : ''}" data-dir="asc">A → Z</button>
           <button type="button" class="secondary ${ordenDesc ? 'activo' : ''}" data-dir="desc">Z → A</button>
         </div>
-        <select class="th-popover-operador">
-          ${OPERADORES_FILTRO_TABLA.map((o) => `<option value="${o.valor}" ${o.valor === actual.operador ? 'selected' : ''}>${o.texto}</option>`).join('')}
-        </select>
-        <input type="text" class="th-popover-valor" placeholder="Valor" value="${String(actual.valor || '').replace(/"/g, '&quot;')}" />
+      `;
+
+      let cuerpoHtml;
+      if (esLista) {
+        // Sin filtro activo (o filtro de otro tipo, ej. cambiaron de dirty
+        // los datos): todo marcado = "no estoy filtrando nada todavía".
+        const seleccionados = actual && actual.tipo === 'lista' ? new Set(actual.valores) : null;
+        cuerpoHtml = `
+          <div class="th-popover-lista-acciones">
+            <button type="button" class="th-popover-marcar-todos">Marcar todos</button>
+            <button type="button" class="th-popover-marcar-ninguno">Ninguno</button>
+          </div>
+          <div class="th-popover-lista">
+            ${listaValores.map((v) => `
+              <label class="th-popover-opcion">
+                <input type="checkbox" value="${v.replace(/"/g, '&quot;')}" ${!seleccionados || seleccionados.has(v) ? 'checked' : ''} />
+                <span>${v}</span>
+              </label>
+            `).join('')}
+          </div>
+        `;
+      } else {
+        const valorActual = (actual && actual.tipo !== 'lista') ? actual : { operador: 'contiene', valor: '' };
+        cuerpoHtml = `
+          <select class="th-popover-operador">
+            ${OPERADORES_FILTRO_TABLA.map((o) => `<option value="${o.valor}" ${o.valor === valorActual.operador ? 'selected' : ''}>${o.texto}</option>`).join('')}
+          </select>
+          <input type="text" class="th-popover-valor" placeholder="Valor" value="${String(valorActual.valor || '').replace(/"/g, '&quot;')}" />
+        `;
+      }
+
+      pop.innerHTML = `
+        <div class="th-popover-titulo">${columna.etiqueta}</div>
+        ${ordenHtml}
+        ${cuerpoHtml}
         <div class="th-popover-acciones">
           <button type="button" class="secondary th-popover-quitar">Quitar filtro</button>
           <button type="button" class="th-popover-aplicar">Aplicar</button>
@@ -707,15 +764,6 @@
       pop.style.left = Math.max(8, Math.min(rect.left + window.scrollX, window.innerWidth - ancho - 8)) + 'px';
       pop.style.top = (rect.bottom + window.scrollY + 6) + 'px';
 
-      const valorInput = pop.querySelector('.th-popover-valor');
-      const operadorSelect = pop.querySelector('.th-popover-operador');
-      function actualizarValorVisible() {
-        valorInput.hidden = ['vacio', 'no-vacio'].includes(operadorSelect.value);
-      }
-      actualizarValorVisible();
-      operadorSelect.addEventListener('change', actualizarValorVisible);
-      if (!valorInput.hidden) valorInput.focus();
-
       pop.querySelectorAll('.th-popover-orden button').forEach((btn) => {
         btn.addEventListener('click', () => {
           orden = { clave: columna.clave, dir: btn.dataset.dir };
@@ -724,15 +772,45 @@
           renderTodo();
         });
       });
-      pop.querySelector('.th-popover-aplicar').addEventListener('click', () => {
-        const operador = operadorSelect.value;
-        const valor = valorInput.value.trim();
-        if (['vacio', 'no-vacio'].includes(operador) || valor) filtros[columna.clave] = { operador, valor };
-        else delete filtros[columna.clave];
-        pagina = 1;
-        cerrarPopover();
-        renderTodo();
-      });
+
+      if (esLista) {
+        pop.querySelector('.th-popover-marcar-todos').addEventListener('click', () => {
+          pop.querySelectorAll('.th-popover-lista input').forEach((el) => { el.checked = true; });
+        });
+        pop.querySelector('.th-popover-marcar-ninguno').addEventListener('click', () => {
+          pop.querySelectorAll('.th-popover-lista input').forEach((el) => { el.checked = false; });
+        });
+        pop.querySelector('.th-popover-aplicar').addEventListener('click', () => {
+          const marcados = [...pop.querySelectorAll('.th-popover-lista input:checked')].map((el) => el.value);
+          // Nada marcado (no tendría match nunca) o todo marcado (equivale
+          // a "sin filtro") — en ambos casos mejor quitar el filtro.
+          if (marcados.length === 0 || marcados.length === listaValores.length) delete filtros[columna.clave];
+          else filtros[columna.clave] = { tipo: 'lista', valores: marcados };
+          pagina = 1;
+          cerrarPopover();
+          renderTodo();
+        });
+      } else {
+        const valorInput = pop.querySelector('.th-popover-valor');
+        const operadorSelect = pop.querySelector('.th-popover-operador');
+        function actualizarValorVisible() {
+          valorInput.hidden = ['vacio', 'no-vacio'].includes(operadorSelect.value);
+        }
+        actualizarValorVisible();
+        operadorSelect.addEventListener('change', actualizarValorVisible);
+        if (!valorInput.hidden) valorInput.focus();
+
+        pop.querySelector('.th-popover-aplicar').addEventListener('click', () => {
+          const operador = operadorSelect.value;
+          const valor = valorInput.value.trim();
+          if (['vacio', 'no-vacio'].includes(operador) || valor) filtros[columna.clave] = { tipo: 'texto', operador, valor };
+          else delete filtros[columna.clave];
+          pagina = 1;
+          cerrarPopover();
+          renderTodo();
+        });
+      }
+
       pop.querySelector('.th-popover-quitar').addEventListener('click', () => {
         delete filtros[columna.clave];
         pagina = 1;

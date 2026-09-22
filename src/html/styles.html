@@ -502,6 +502,26 @@
   .th-popover-acciones { display: flex; gap: 8px; }
   .th-popover-acciones button { flex: 1; padding: 7px 0; font-size: 12px; white-space: nowrap; }
 
+  /* Filtro de checklist (columnas con pocos valores distintos, ej. Estado,
+     Estatus, Rol) — lista de los valores reales presentes en los datos,
+     en vez del cuadro de texto genérico. */
+  .th-popover-lista-acciones { display: flex; gap: 10px; }
+  .th-popover-lista-acciones button {
+    background: none; border: none; padding: 0; color: var(--color-primary);
+    font-size: 11.5px; font-weight: 600; cursor: pointer; text-decoration: underline;
+  }
+  .th-popover-lista {
+    display: flex; flex-direction: column; gap: 2px;
+    max-height: 190px; overflow-y: auto;
+  }
+  .th-popover-opcion {
+    display: flex; align-items: center; gap: 8px; font-size: 12.5px;
+    padding: 4px 2px; border-radius: 6px; cursor: pointer;
+  }
+  .th-popover-opcion:hover { background: var(--color-bg); }
+  .th-popover-opcion input { width: auto; padding: 0; flex-shrink: 0; }
+  .th-popover-opcion span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
   .tabla-pie {
     display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
     gap: 10px; margin-top: 14px; font-size: 12.5px; color: var(--color-text-muted);
