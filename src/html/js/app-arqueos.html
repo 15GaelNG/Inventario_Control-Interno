@@ -644,6 +644,13 @@
       },
     });
 
+    // Solo Total/Con diferencia son "categorías" clickeables — Calificación
+    // promedio es un promedio, no algo que se pueda filtrar como categoría.
+    const tilesKpiArqueos = ['arq-stat-total', 'arq-stat-diferencias']
+      .map((id) => document.getElementById(id).closest('.stat-tile'));
+    wireKpiFiltro(tilesKpiArqueos[0], motorTablaArqueos, 'DIFERENCIA', null, tilesKpiArqueos);
+    wireKpiFiltro(tilesKpiArqueos[1], motorTablaArqueos, 'DIFERENCIA', (v) => (Number(v) || 0) !== 0, tilesKpiArqueos);
+
     async function cargar() {
       const errorBox = document.getElementById('arq-error');
       let arqueos;

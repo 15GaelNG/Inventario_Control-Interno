@@ -20,6 +20,27 @@
    * Un panel visible a la vez. Se llama una vez por módulo, después de
    * pintar su HTML (montarVista ya lo hace fresco cada vez que se navega).
    */
+  /**
+   * Convierte un stat-tile (KPI, ej. "Activos" en Vehículos) en un filtro
+   * de la tabla con un solo clic: aplica `prueba` (la MISMA función que ya
+   * se usa para contar ese KPI, así nunca se desincroniza el número del
+   * filtro) sobre la columna `clave` del motor de tabla. `prueba: null`
+   * es para el tile de "Total" — solo quita el filtro (ver todo). Los
+   * demás tiles del mismo grupo (`gruposTiles`) pierden el resaltado
+   * "activo" al elegir uno nuevo — como un selector de opciones, no un
+   * toggle independiente por tile.
+   */
+  function wireKpiFiltro(tile, motorTabla, clave, prueba, grupoTiles) {
+    if (!tile) return;
+    tile.classList.add('stat-tile-clickable');
+    tile.addEventListener('click', () => {
+      (grupoTiles || []).forEach((t) => t && t.classList.remove('stat-tile-activo'));
+      tile.classList.add('stat-tile-activo');
+      if (prueba) motorTabla.aplicarFiltro(clave, { tipo: 'personalizado', prueba });
+      else motorTabla.quitarFiltro(clave);
+    });
+  }
+
   function wireTabsSimple(contenedor) {
     const botones = contenedor.querySelectorAll('.tab-btn');
     botones.forEach((btn) => {
@@ -667,6 +688,12 @@
       if (filtro.tipo === 'lista') {
         return filtro.valores.includes(String(valorCelda == null ? '' : valorCelda));
       }
+      // 'personalizado': para los KPI clickeables (ver aplicarFiltro más
+      // abajo) — misma función que ya se usa para contar ese KPI, en vez de
+      // tener que traducirla a una lista de valores exactos.
+      if (filtro.tipo === 'personalizado') {
+        return filtro.prueba(valorCelda);
+      }
       return coincideOperador(valorCelda, filtro.operador, filtro.valor);
     }
 
@@ -888,6 +915,18 @@
       // Filtrado + ordenado actual, SIN recortar por página — para exportar
       // exactamente lo que el usuario está viendo (con sus filtros aplicados).
       obtenerFiltrados: datosFiltrados,
+      // Para que los KPI (stat-tiles) de cada módulo funcionen como filtro
+      // de la tabla con solo darles clic — ver wireKpiFiltro más abajo.
+      aplicarFiltro(clave, filtro) {
+        filtros[clave] = filtro;
+        pagina = 1;
+        renderTodo();
+      },
+      quitarFiltro(clave) {
+        delete filtros[clave];
+        pagina = 1;
+        renderTodo();
+      },
     };
   }
 
@@ -1413,6 +1452,12 @@
       },
     });
 
+    const tilesKpiIncidencias = ['stat-total', 'stat-abiertas', 'stat-cerradas']
+      .map((id) => document.getElementById(id).closest('.stat-tile'));
+    wireKpiFiltro(tilesKpiIncidencias[0], motorTablaIncidencias, 'ESTADO', null, tilesKpiIncidencias);
+    wireKpiFiltro(tilesKpiIncidencias[1], motorTablaIncidencias, 'ESTADO', (v) => v === 'ABIERTA', tilesKpiIncidencias);
+    wireKpiFiltro(tilesKpiIncidencias[2], motorTablaIncidencias, 'ESTADO', (v) => v === 'CERRADA', tilesKpiIncidencias);
+
     async function cargar() {
       const errorBox = document.getElementById('inc-error');
       let incidencias;
@@ -1707,6 +1752,12 @@
         refreshIcons();
       },
     });
+
+    const tilesKpiVehiculos = ['veh-stat-total', 'veh-stat-activos', 'veh-stat-baja']
+      .map((id) => document.getElementById(id).closest('.stat-tile'));
+    wireKpiFiltro(tilesKpiVehiculos[0], motorTablaVehiculos, 'ESTATUS', null, tilesKpiVehiculos);
+    wireKpiFiltro(tilesKpiVehiculos[1], motorTablaVehiculos, 'ESTATUS', (v) => !String(v || '').toUpperCase().includes('BAJA'), tilesKpiVehiculos);
+    wireKpiFiltro(tilesKpiVehiculos[2], motorTablaVehiculos, 'ESTATUS', (v) => String(v || '').toUpperCase().includes('BAJA'), tilesKpiVehiculos);
 
     async function cargar() {
       const errorBox = document.getElementById('veh-error');
@@ -2015,6 +2066,15 @@
         refreshIcons();
       },
     });
+
+    // KPI clickeables: filtran la tabla con la misma prueba que ya se usa
+    // para contarlos (ver cargar() más abajo).
+    const tilesKpiUber = ['uber-stat-total', 'uber-stat-activos', 'uber-stat-pendientes', 'uber-stat-baja']
+      .map((id) => document.getElementById(id).closest('.stat-tile'));
+    wireKpiFiltro(tilesKpiUber[0], motorTablaUber, 'ESTATUS', null, tilesKpiUber);
+    wireKpiFiltro(tilesKpiUber[1], motorTablaUber, 'ESTATUS', (v) => String(v || '').toUpperCase().includes('ACTIVO'), tilesKpiUber);
+    wireKpiFiltro(tilesKpiUber[2], motorTablaUber, 'ESTATUS', (v) => String(v || '').toUpperCase().includes('PENDIENTE'), tilesKpiUber);
+    wireKpiFiltro(tilesKpiUber[3], motorTablaUber, 'ESTATUS', (v) => String(v || '').toUpperCase().includes('BAJA'), tilesKpiUber);
 
     async function cargar() {
       const errorBox = document.getElementById('uber-error');

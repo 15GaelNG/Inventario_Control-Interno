@@ -285,6 +285,13 @@
       },
     });
 
+    const tilesKpiCajaChica = ['cch-stat-total', 'cch-stat-vigentes', 'cch-stat-proceso-cierre', 'cch-stat-cerradas']
+      .map((id) => document.getElementById(id).closest('.stat-tile'));
+    wireKpiFiltro(tilesKpiCajaChica[0], motorTablaCajasChicas, 'ESTATUS', null, tilesKpiCajaChica);
+    wireKpiFiltro(tilesKpiCajaChica[1], motorTablaCajasChicas, 'ESTATUS', (v) => String(v || '').toUpperCase() === 'VIGENTE', tilesKpiCajaChica);
+    wireKpiFiltro(tilesKpiCajaChica[2], motorTablaCajasChicas, 'ESTATUS', (v) => String(v || '').toUpperCase() === 'EN PROCESO DE CIERRE', tilesKpiCajaChica);
+    wireKpiFiltro(tilesKpiCajaChica[3], motorTablaCajasChicas, 'ESTATUS', (v) => String(v || '').toUpperCase() === 'CERRADA', tilesKpiCajaChica);
+
     async function cargar() {
       const errorBox = document.getElementById('cch-error');
       let cajas;
@@ -539,6 +546,12 @@
       },
     });
 
+    const tilesKpiCambiosMonto = ['cmcch-stat-total', 'cmcch-stat-incrementos', 'cmcch-stat-reducciones']
+      .map((id) => document.getElementById(id).closest('.stat-tile'));
+    wireKpiFiltro(tilesKpiCambiosMonto[0], motorTablaCambiosMonto, 'TIPO', null, tilesKpiCambiosMonto);
+    wireKpiFiltro(tilesKpiCambiosMonto[1], motorTablaCambiosMonto, 'TIPO', (v) => String(v || '').toUpperCase() === 'INCREMENTO', tilesKpiCambiosMonto);
+    wireKpiFiltro(tilesKpiCambiosMonto[2], motorTablaCambiosMonto, 'TIPO', (v) => String(v || '').toUpperCase() === 'REDUCCION', tilesKpiCambiosMonto);
+
     async function cargar() {
       const errorBox = document.getElementById('cm-error');
       let cambios;
@@ -684,6 +697,13 @@
         `).join('');
       },
     });
+
+    // Solo Total/Hoy son "categorías" clickeables — Vehículos con cambios
+    // es un conteo de folios distintos, no algo filtrable como categoría.
+    const tilesKpiCambiosVehiculos = ['cv-stat-total', 'cv-stat-hoy']
+      .map((id) => document.getElementById(id).closest('.stat-tile'));
+    wireKpiFiltro(tilesKpiCambiosVehiculos[0], motorTablaCambiosVehiculos, 'FECHA', null, tilesKpiCambiosVehiculos);
+    wireKpiFiltro(tilesKpiCambiosVehiculos[1], motorTablaCambiosVehiculos, 'FECHA', (v) => v && v.slice(0, 10) === hoyISO(), tilesKpiCambiosVehiculos);
 
     async function cargar() {
       try {
