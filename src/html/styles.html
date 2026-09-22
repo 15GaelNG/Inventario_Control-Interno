@@ -307,8 +307,9 @@
   th { color: var(--color-text-muted); font-weight: 600; white-space: nowrap; }
   tbody tr:hover { background: var(--color-bg); }
   .table-scroll { overflow-x: auto; }
-  .tabla-clickable { cursor: pointer; font-weight: 700; }
-  .tabla-clickable:hover { color: var(--color-accent-hover); }
+  .tabla-clickable { font-weight: 700; }
+  .fila-clickable { cursor: pointer; }
+  .fila-clickable:hover .tabla-clickable { color: var(--color-accent-hover); }
   .tabla-actions { display: flex; gap: 6px; justify-content: flex-end; }
   .tabla-actions button { padding: 6px 9px; font-size: 12px; white-space: nowrap; }
   /* Botones de acción que en realidad son links (ej. "Ver PDF" en Arqueos)

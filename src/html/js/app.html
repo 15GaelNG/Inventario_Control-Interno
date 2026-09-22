@@ -33,6 +33,37 @@
   }
 
   /**
+   * Hace clickeable la fila COMPLETA de una tabla (antes solo la primera
+   * celda, la que trae la clase "tabla-clickable", abría el detalle). Cada
+   * <tr> debe traer adentro una celda <td class="tabla-clickable" data-...>
+   * (la sigue marcando visualmente y trae los data-* con el id/folio/etc.) —
+   * este helper solo agrega el click a toda la fila, delegando en un solo
+   * listener por tabla en vez de uno por fila. Los clics dentro de
+   * .tabla-actions (o cualquier <a>/<button>, ej. editar/eliminar/ver
+   * documento) NO abren el detalle — se ignoran para que esos botones
+   * sigan funcionando normal.
+   *
+   * Se llama de nuevo en cada render (cada vez que se filtra/ordena/cambia
+   * de página) porque las filas son nuevas, pero el <tbody> en sí es el
+   * mismo elemento durante toda la vida del módulo — el listener delegado
+   * solo se engancha la PRIMERA vez (dataset.filasClickablesWired) para no
+   * ir acumulando uno nuevo por cada render.
+   */
+  function wireFilasClickables(tbody, callback) {
+    tbody.querySelectorAll('.tabla-clickable').forEach((celda) => {
+      celda.closest('tr').classList.add('fila-clickable');
+    });
+    if (tbody.dataset.filasClickablesWired) return;
+    tbody.dataset.filasClickablesWired = '1';
+    tbody.addEventListener('click', (ev) => {
+      if (ev.target.closest('a, button')) return;
+      const fila = ev.target.closest('tr');
+      const celda = fila && fila.querySelector('.tabla-clickable');
+      if (celda) callback(celda.dataset, celda);
+    });
+  }
+
+  /**
    * Notificación flotante de cargando/éxito/error — para Registrar/Editar/
    * Eliminar en todos los módulos. Un solo slot (el siguiente toast
    * reemplaza al anterior, no se apilan). toastCargando() se usa al
@@ -1290,9 +1321,7 @@
           `;
         }).join('');
 
-        lista.querySelectorAll('.tabla-clickable').forEach((el) => {
-          el.addEventListener('click', () => abrirModalVehiculo(el.dataset.folio, el.dataset.id));
-        });
+        wireFilasClickables(lista, (ds) => abrirModalVehiculo(ds.folio, ds.id));
         lista.querySelectorAll('.btn-cerrar-incidencia').forEach((btn) => {
           btn.addEventListener('click', () => abrirModalCierre(btn.dataset.id, btn.dataset.folio));
         });
@@ -1590,9 +1619,7 @@
           </tr>
         `).join('');
 
-        lista.querySelectorAll('.tabla-clickable').forEach((el) => {
-          el.addEventListener('click', () => abrirDetalleVehiculo(vehiculosPorId[el.dataset.id]));
-        });
+        wireFilasClickables(lista, (ds) => abrirDetalleVehiculo(vehiculosPorId[ds.id]));
         lista.querySelectorAll('.btn-editar-vehiculo').forEach((btn) => {
           btn.addEventListener('click', () => abrirEditarVehiculo(vehiculosPorId[btn.dataset.id]));
         });
@@ -1900,9 +1927,7 @@
           </tr>
         `).join('');
 
-        lista.querySelectorAll('.tabla-clickable').forEach((el) => {
-          el.addEventListener('click', () => abrirDetalleUber(el.dataset.id));
-        });
+        wireFilasClickables(lista, (ds) => abrirDetalleUber(ds.id));
         lista.querySelectorAll('.btn-editar-uber').forEach((btn) => {
           btn.addEventListener('click', () => abrirEditarUber(btn.dataset.id));
         });
@@ -2148,9 +2173,7 @@
           </tr>
         `).join('');
 
-        lista.querySelectorAll('.tabla-clickable').forEach((el) => {
-          el.addEventListener('click', () => abrirDetalleTicket(el.dataset.id));
-        });
+        wireFilasClickables(lista, (ds) => abrirDetalleTicket(ds.id));
         lista.querySelectorAll('.btn-editar-ticket').forEach((btn) => {
           btn.addEventListener('click', () => abrirEditarTicket(btn.dataset.id));
         });

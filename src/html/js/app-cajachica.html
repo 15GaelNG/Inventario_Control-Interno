@@ -274,9 +274,7 @@
           </tr>
         `).join('');
 
-        lista.querySelectorAll('.tabla-clickable').forEach((el) => {
-          el.addEventListener('click', () => abrirDetalleCajaChica(el.dataset.id));
-        });
+        wireFilasClickables(lista, (ds) => abrirDetalleCajaChica(ds.id));
         lista.querySelectorAll('.btn-editar-cajachica').forEach((btn) => {
           btn.addEventListener('click', () => abrirEditarCajaChica(btn.dataset.id));
         });
@@ -533,9 +531,7 @@
           </tr>
         `).join('');
 
-        lista.querySelectorAll('.tabla-clickable').forEach((el) => {
-          el.addEventListener('click', () => abrirDetalleCambioMonto(el.dataset.id));
-        });
+        wireFilasClickables(lista, (ds) => abrirDetalleCambioMonto(ds.id));
         lista.querySelectorAll('.btn-eliminar-cambio-monto').forEach((btn) => {
           btn.addEventListener('click', () => eliminarCambioMonto(btn.dataset.id));
         });

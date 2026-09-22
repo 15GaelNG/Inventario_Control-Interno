@@ -633,9 +633,7 @@
           </tr>
         `).join('');
 
-        lista.querySelectorAll('.tabla-clickable').forEach((el) => {
-          el.addEventListener('click', () => abrirDetalleArqueo(el.dataset.id));
-        });
+        wireFilasClickables(lista, (ds) => abrirDetalleArqueo(ds.id));
         lista.querySelectorAll('.btn-editar-arqueo').forEach((btn) => {
           btn.addEventListener('click', () => abrirEditarArqueo(btn.dataset.id));
         });
