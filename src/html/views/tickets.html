@@ -36,7 +36,8 @@
         <div class="field"><label>Fecha</label><input type="date" id="ticket-fecha" /></div>
         <div class="field">
           <label>Departamento</label>
-          <select id="ticket-departamento"><option value="">Selecciona…</option></select>
+          <input type="text" id="ticket-departamento" list="ticket-departamento-lista" autocomplete="off" placeholder="Escribe o elige…" />
+          <datalist id="ticket-departamento-lista"></datalist>
         </div>
         <div class="field">
           <label>Solicitante</label>
@@ -128,7 +129,8 @@
         <div class="field"><label>Fecha</label><input type="date" id="editar-ticket-fecha" /></div>
         <div class="field">
           <label>Departamento</label>
-          <select id="editar-ticket-departamento"><option value="">Selecciona…</option></select>
+          <input type="text" id="editar-ticket-departamento" list="editar-ticket-departamento-lista" autocomplete="off" placeholder="Escribe o elige…" />
+          <datalist id="editar-ticket-departamento-lista"></datalist>
         </div>
         <div class="field">
           <label>Solicitante</label>

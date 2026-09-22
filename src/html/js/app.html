@@ -834,7 +834,7 @@
    * (VehiculosService.crear/actualizar ya esperan las claves reales).
    */
   const CAMPOS_VEHICULO = [
-    { grupo: 'Vehículo', clave: 'MARCA', etiqueta: 'Marca', tipo: 'select' },
+    { grupo: 'Vehículo', clave: 'MARCA', etiqueta: 'Marca', tipo: 'select', catalogo: true },
     {
       grupo: 'Vehículo', clave: 'CLASE', etiqueta: 'Clase', tipo: 'select',
       opciones: ['AUTOMOVIL', 'CAMION', 'CAMIONETA', 'MOTOCICLETA', 'REMOLQUE', 'MAQUINARIA MENOR', 'CUATRIMOTO', 'NUCO SIN INFORMACION', 'MOTOCARRO'],
@@ -860,7 +860,7 @@
       grupo: 'Identificación', clave: 'FOLIO', etiqueta: 'Folio', tipo: 'text',
       soloLectura: true, placeholder: 'Se genera solo, según la Clase',
     },
-    { grupo: 'Identificación', clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select' },
+    { grupo: 'Identificación', clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select', catalogo: true },
     { grupo: 'Identificación', clave: 'RESPONSABLE VEHICULO', etiqueta: 'Responsable del vehículo', tipo: 'text' },
     { grupo: 'Identificación', clave: 'NO EMPLEADO', etiqueta: 'No. de empleado', tipo: 'text' },
     { grupo: 'Identificación', clave: 'SERIE VEHICULO', etiqueta: 'Serie del vehículo', tipo: 'text' },
@@ -912,9 +912,9 @@
       opciones: ['SI', 'NO'],
     },
 
-    { grupo: 'Ubicación y registro', clave: 'SEDE', etiqueta: 'Sede', tipo: 'select' },
-    { grupo: 'Ubicación y registro', clave: 'UBICACION', etiqueta: 'Ubicación', tipo: 'select' },
-    { grupo: 'Ubicación y registro', clave: 'RAZON SOCIAL', etiqueta: 'Razón social', tipo: 'select' },
+    { grupo: 'Ubicación y registro', clave: 'SEDE', etiqueta: 'Sede', tipo: 'select', catalogo: true },
+    { grupo: 'Ubicación y registro', clave: 'UBICACION', etiqueta: 'Ubicación', tipo: 'select', catalogo: true },
+    { grupo: 'Ubicación y registro', clave: 'RAZON SOCIAL', etiqueta: 'Razón social', tipo: 'select', catalogo: true },
     { grupo: 'Ubicación y registro', clave: 'FECHA COMPRA', etiqueta: 'Fecha de compra', tipo: 'date' },
     {
       grupo: 'Ubicación y registro', clave: 'FECHA REGISTRO SISTEMA CI', etiqueta: 'Fecha de registro en el sistema', tipo: 'date',
@@ -951,10 +951,18 @@
             <div class="file-actual" id="${id}-actual"></div>
           </div>`;
         }
+        if (campo.tipo === 'select' && campo.catalogo) {
+          // catalogo: true (ej. Marca, Departamento, Sede, Razón social) —
+          // caja de texto con sugerencias (datalist) en vez de lista
+          // cerrada: se puede elegir una ya existente O escribir una nueva
+          // que todavía no esté en el catálogo. llenarSelect() (por JS, al
+          // cargar) detecta que es un <input> y llena el <datalist> en vez
+          // de las <option> de un <select>.
+          return `<div class="field"><label>${campo.etiqueta}</label><input type="text" id="${id}" list="${id}-lista" autocomplete="off"${req} placeholder="Escribe o elige…" /><datalist id="${id}-lista"></datalist></div>`;
+        }
         if (campo.tipo === 'select') {
-          // Con "opciones" definidas de antemano (lista fija, ej. Clase) se pintan
-          // aquí mismo; sin ellas (catálogos reales, ej. Marca) quedan vacías y
-          // las llena initVehiculos() por JS al cargar.
+          // Con "opciones" definidas de antemano (lista fija, ej. Clase) se
+          // pintan aquí mismo — son opciones cerradas a propósito.
           const opciones = (campo.opciones || []).map((o) => `<option value="${o}">${o}</option>`).join('');
           return `<div class="field"><label>${campo.etiqueta}</label><select id="${id}"${req}><option value="">Selecciona…</option>${opciones}</select></div>`;
         }
@@ -1002,11 +1010,10 @@
   let mapaUbicacionesPorSede = {};
   function llenarUbicacionesSegunSede(prefijo) {
     const sedeEl = document.getElementById(prefijo + '-sede');
-    const ubicacionEl = document.getElementById(prefijo + '-ubicacion');
-    if (!sedeEl || !ubicacionEl) return;
+    const ubicacionDatalist = document.getElementById(prefijo + '-ubicacion-lista');
+    if (!sedeEl || !ubicacionDatalist) return;
     const opciones = mapaUbicacionesPorSede[sedeEl.value] || [];
-    ubicacionEl.innerHTML = '<option value="">Selecciona…</option>' +
-      opciones.map((v) => `<option value="${v}">${v}</option>`).join('');
+    ubicacionDatalist.innerHTML = opciones.map((v) => `<option value="${v}"></option>`).join('');
   }
 
   /** Llena el formulario con un objeto {columna real: valor} (ej. de buscarPorFolio).
@@ -1028,10 +1035,12 @@
       const el = document.getElementById(id);
       if (!el) return;
       // Ubicación depende de la Sede — SEDE va antes que UBICACION en
-      // CAMPOS_VEHICULO, así que para cuando llegamos aquí el <select> de
-      // Sede ya quedó con su valor puesto; hay que repoblar las opciones
-      // de Ubicación para ESA sede antes de poder ponerle el valor guardado
-      // (si no, el <option> todavía no existe y el navegador lo deja en blanco).
+      // CAMPOS_VEHICULO, así que para cuando llegamos aquí el campo de Sede
+      // ya quedó con su valor puesto; hay que repoblar las sugerencias de
+      // Ubicación para ESA sede (aunque, al ser <input>, poner el valor
+      // guardado directo abajo también funcionaría sin esto — es solo para
+      // que las sugerencias del datalist ya vengan correctas desde que se
+      // abre el formulario).
       if (campo.clave === 'UBICACION') llenarUbicacionesSegunSede(prefijo);
       el.value = campo.tipo === 'date' ? fechaParaInput(valor) : valor;
     });
@@ -1073,9 +1082,9 @@
     { grupo: 'Jefe y captura', clave: 'CAPTURISTA DE CAJA CHICA', etiqueta: 'Capturista', tipo: 'text' },
     { grupo: 'Jefe y captura', clave: 'PUESTO DE CAPTURISTA', etiqueta: 'Puesto del capturista', tipo: 'text' },
 
-    { grupo: 'Ubicación', clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select' },
-    { grupo: 'Ubicación', clave: 'OFICINA', etiqueta: 'Oficina', tipo: 'select' },
-    { grupo: 'Ubicación', clave: 'SEDE', etiqueta: 'Sede', tipo: 'select' },
+    { grupo: 'Ubicación', clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select', catalogo: true },
+    { grupo: 'Ubicación', clave: 'OFICINA', etiqueta: 'Oficina', tipo: 'select', catalogo: true },
+    { grupo: 'Ubicación', clave: 'SEDE', etiqueta: 'Sede', tipo: 'select', catalogo: true },
 
     { grupo: 'Fechas y configuración', clave: 'FECHA DE APERTURA', etiqueta: 'Fecha de apertura', tipo: 'date' },
     { grupo: 'Fechas y configuración', clave: 'FECHA DE CIERRE', etiqueta: 'Fecha de cierre', tipo: 'date', soloEdicion: true },
@@ -1133,6 +1142,11 @@
         // fijos y deshabilitados; en Editar sí son un select normal.
         if (campo.tipo === 'select' && campo.bloqueadoAlCrear && !esEdicion) {
           return `<div class="field"><label>${campo.etiqueta}</label><input type="text" id="${id}" value="${campo.valorPorDefecto}" disabled /></div>`;
+        }
+        if (campo.tipo === 'select' && campo.catalogo) {
+          // catalogo: true — caja de texto con sugerencias (datalist), se
+          // puede escribir una opción nueva que todavía no esté ahí.
+          return `<div class="field"><label>${campo.etiqueta}</label><input type="text" id="${id}" list="${id}-lista" autocomplete="off" placeholder="Escribe o elige…" /><datalist id="${id}-lista"></datalist></div>`;
         }
         if (campo.tipo === 'select') {
           const opciones = (campo.opciones || []).map((o) => `<option value="${o}">${o}</option>`).join('');
@@ -1595,10 +1609,17 @@
     document.getElementById('veh-fecha-registro-sistema-ci').value = hoyISO();
 
     // Marca / Departamento / Sede / Razón social: catálogos planos (hoja
-    // "LISTAS VEHICULOS"), mismas opciones en Registrar y Editar.
+    // "LISTAS VEHICULOS"), mismas opciones en Registrar y Editar. Estos ya
+    // son <input list="..."> (campo.catalogo: true) — se puede escribir una
+    // opción nueva que todavía no esté en la lista.
     function llenarSelect(id, valores) {
       const el = document.getElementById(id);
       if (!el) return;
+      if (el.tagName === 'INPUT') {
+        const datalist = document.getElementById(el.getAttribute('list'));
+        if (datalist) datalist.innerHTML = (valores || []).map((v) => `<option value="${v}"></option>`).join('');
+        return;
+      }
       el.innerHTML = '<option value="">Selecciona…</option>' +
         (valores || []).map((v) => `<option value="${v}">${v}</option>`).join('');
     }
@@ -1607,7 +1628,10 @@
     // llenarUbicacionesSegunSede) vive a nivel de módulo, junto a
     // poblarFormularioVehiculo — ver comentario ahí.
     ['veh-sede', 'editar-vehiculo-sede'].forEach((id) => {
-      document.getElementById(id).addEventListener('change', () => {
+      // 'input' (no solo 'change'): Sede ahora es un <input list="..."> —
+      // 'input' dispara al escribir Y al elegir una sugerencia del
+      // datalist, así Ubicación se actualiza al momento en ambos casos.
+      document.getElementById(id).addEventListener('input', () => {
         llenarUbicacionesSegunSede(id.replace('-sede', ''));
       });
     });
@@ -1920,10 +1944,16 @@
     }
 
     // Razón social / Sede / Oficina-Desarrollo / Departamento: catálogos
-    // reales (hoja "LISTAS VEHICULOS"), mismas opciones en Registrar y Editar.
+    // reales (hoja "LISTAS VEHICULOS"), mismas opciones en Registrar y
+    // Editar. Son <input list="..."> — se puede escribir una opción nueva.
     function llenarSelect(id, valores) {
       const el = document.getElementById(id);
       if (!el) return;
+      if (el.tagName === 'INPUT') {
+        const datalist = document.getElementById(el.getAttribute('list'));
+        if (datalist) datalist.innerHTML = (valores || []).map((v) => `<option value="${v}"></option>`).join('');
+        return;
+      }
       el.innerHTML = '<option value="">Selecciona…</option>' +
         (valores || []).map((v) => `<option value="${v}">${v}</option>`).join('');
     }
@@ -2206,10 +2236,11 @@
           callServer('apiListarDepartamentos', state.token),
           callServer('apiListarSolicitantesTickets', state.token),
         ]);
-        const opciones = '<option value="">Selecciona…</option>' +
-          (departamentos || []).map((d) => `<option value="${d}">${d}</option>`).join('');
-        document.getElementById('ticket-departamento').innerHTML = opciones;
-        document.getElementById('editar-ticket-departamento').innerHTML = opciones;
+        // Departamento ahora es <input list="..."> igual que Solicitante
+        // (se puede escribir uno nuevo que todavía no esté en la lista).
+        const opcionesDepto = (departamentos || []).map((d) => `<option value="${d}"></option>`).join('');
+        document.getElementById('ticket-departamento-lista').innerHTML = opcionesDepto;
+        document.getElementById('editar-ticket-departamento-lista').innerHTML = opcionesDepto;
         document.getElementById('lista-solicitantes').innerHTML =
           (solicitantes || []).map((s) => `<option value="${s}"></option>`).join('');
       } catch (err) {
@@ -2431,10 +2462,16 @@
 
     // Departamento / Sede / Oficina: catálogos reales de la hoja
     // "DEPARTAMENTOS" (distinta de "LISTAS VEHICULOS" — es la que usan
-    // Vehículos/Uber/Tickets), mismas opciones en Registrar y Editar.
+    // Vehículos/Uber/Tickets), mismas opciones en Registrar y Editar. Son
+    // <input list="..."> — se puede escribir una opción nueva.
     function llenarSelect(id, valores) {
       const el = document.getElementById(id);
       if (!el) return;
+      if (el.tagName === 'INPUT') {
+        const datalist = document.getElementById(el.getAttribute('list'));
+        if (datalist) datalist.innerHTML = (valores || []).map((v) => `<option value="${v}"></option>`).join('');
+        return;
+      }
       el.innerHTML = '<option value="">Selecciona…</option>' +
         (valores || []).map((v) => `<option value="${v}">${v}</option>`).join('');
     }
