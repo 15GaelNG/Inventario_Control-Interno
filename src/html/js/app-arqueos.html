@@ -47,7 +47,7 @@
       grupo: 'Cuenta bancaria', clave: 'Nombre_Fintech', etiqueta: 'Nombre de la fintech', tipo: 'text',
       mostrarSiCampo: 'DESCRIPCION CUENTA BANCARIA', mostrarSiValor: 'FINTECH (OTROS)',
     },
-    { grupo: 'Cuenta bancaria', clave: 'DISPONIBLE CUENTA BANCARIA', etiqueta: 'Disponible en cuenta', tipo: 'number' },
+    { grupo: 'Cuenta bancaria', clave: 'DISPONIBLE CUENTA BANCARIA', etiqueta: 'Disponible en cuenta', tipo: 'number', moneda: true },
 
     { grupo: 'Fechas y método', clave: 'FECHA DEL ULTIMO ARQUEO', etiqueta: 'Fecha del último arqueo', tipo: 'text', soloLectura: true, placeholder: 'Se fija solo, hoy' },
     { grupo: 'Fechas y método', clave: 'FECHA INICIO', etiqueta: 'Fecha inicio', tipo: 'text', soloLectura: true, placeholder: 'Se fija solo, hoy' },
@@ -76,17 +76,17 @@
     { grupo: 'Cheques', clave: '¿CHEQUE?', etiqueta: '¿Hay cheque?', tipo: 'select', opciones: ['SI', 'NO'] },
     // Solo se muestra si ¿CHEQUE? = SI.
     { grupo: 'Cheques', clave: 'NO CHEQUE', etiqueta: 'No. de cheque', tipo: 'text', mostrarSiCampo: '¿CHEQUE?', mostrarSiValor: 'SI' },
-    { grupo: 'Cheques', clave: 'TOTAL CHEQUES', etiqueta: 'Total en cheques', tipo: 'number' },
+    { grupo: 'Cheques', clave: 'TOTAL CHEQUES', etiqueta: 'Total en cheques', tipo: 'number', moneda: true },
 
-    { grupo: 'Totales de gasto', clave: 'TOTAL CAJA CHICA CON FACTURAS / XML', etiqueta: 'Caja chica con facturas/XML', tipo: 'number' },
-    { grupo: 'Totales de gasto', clave: 'TOTAL CAJA CHICA GASTOS NO DEDUCIBLES', etiqueta: 'Caja chica no deducibles', tipo: 'number' },
-    { grupo: 'Totales de gasto', clave: 'TOTAL VIATICOS CON FACTURAS / XML', etiqueta: 'Viáticos con facturas/XML', tipo: 'number' },
-    { grupo: 'Totales de gasto', clave: 'TOTAL VIATICOS NO DEDUCIBLES', etiqueta: 'Viáticos no deducibles', tipo: 'number' },
-    { grupo: 'Totales de gasto', clave: 'TOTAL CAJA CHICA CON FACTURAS (PENDIENTES)', etiqueta: 'Caja chica con facturas (pendientes)', tipo: 'number' },
-    { grupo: 'Totales de gasto', clave: 'TOTAL VIATICOS CON FACTURAS (PENDIENTES)', etiqueta: 'Viáticos con facturas (pendientes)', tipo: 'number' },
-    { grupo: 'Totales de gasto', clave: 'TOTAL CAJA CHICA NO DEDUCIBLES (PENDIENTES)', etiqueta: 'Caja chica no deducibles (pendientes)', tipo: 'number' },
-    { grupo: 'Totales de gasto', clave: 'TOTAL VIATICOS NO DEDUCIBLES (PENDIENTES)', etiqueta: 'Viáticos no deducibles (pendientes)', tipo: 'number' },
-    { grupo: 'Totales de gasto', clave: 'OTROS', etiqueta: 'Otros', tipo: 'number' },
+    { grupo: 'Totales de gasto', clave: 'TOTAL CAJA CHICA CON FACTURAS / XML', etiqueta: 'Caja chica con facturas/XML', tipo: 'number', moneda: true },
+    { grupo: 'Totales de gasto', clave: 'TOTAL CAJA CHICA GASTOS NO DEDUCIBLES', etiqueta: 'Caja chica no deducibles', tipo: 'number', moneda: true },
+    { grupo: 'Totales de gasto', clave: 'TOTAL VIATICOS CON FACTURAS / XML', etiqueta: 'Viáticos con facturas/XML', tipo: 'number', moneda: true },
+    { grupo: 'Totales de gasto', clave: 'TOTAL VIATICOS NO DEDUCIBLES', etiqueta: 'Viáticos no deducibles', tipo: 'number', moneda: true },
+    { grupo: 'Totales de gasto', clave: 'TOTAL CAJA CHICA CON FACTURAS (PENDIENTES)', etiqueta: 'Caja chica con facturas (pendientes)', tipo: 'number', moneda: true },
+    { grupo: 'Totales de gasto', clave: 'TOTAL VIATICOS CON FACTURAS (PENDIENTES)', etiqueta: 'Viáticos con facturas (pendientes)', tipo: 'number', moneda: true },
+    { grupo: 'Totales de gasto', clave: 'TOTAL CAJA CHICA NO DEDUCIBLES (PENDIENTES)', etiqueta: 'Caja chica no deducibles (pendientes)', tipo: 'number', moneda: true },
+    { grupo: 'Totales de gasto', clave: 'TOTAL VIATICOS NO DEDUCIBLES (PENDIENTES)', etiqueta: 'Viáticos no deducibles (pendientes)', tipo: 'number', moneda: true },
+    { grupo: 'Totales de gasto', clave: 'OTROS', etiqueta: 'Otros', tipo: 'number', moneda: true },
     // Subtotal de solo los campos de este grupo (los 8 "TOTAL ..." + Otros),
     // ANTES del Total general (que además suma Efectivo/Disponible/Cheques).
     // No es una columna real de la hoja — es puro cálculo en vivo del
@@ -190,7 +190,14 @@
         // step="any": sin esto, type="number" solo acepta enteros por
         // default (step="1" implícito) — los montos necesitan decimales.
         const step = campo.tipo === 'number' ? ' step="any"' : '';
-        return `<div class="field"${mostrarSi}><label>${campo.etiqueta}</label><input type="${campo.tipo}" id="${id}"${step}${disabled}${placeholder} /></div>`;
+        const input = `<input type="${campo.tipo}" id="${id}"${step}${disabled}${placeholder} />`;
+        // moneda: solo un "$" fijo a la izquierda, puro visual — los
+        // soloLectura (Total M, Total general, etc.) NO llevan esto, su
+        // propio valor ya sale formateado como "$1,234.56".
+        if (campo.moneda) {
+          return `<div class="field"${mostrarSi}><label>${campo.etiqueta}</label><div class="input-moneda-wrap">${input}</div></div>`;
+        }
+        return `<div class="field"${mostrarSi}><label>${campo.etiqueta}</label>${input}</div>`;
       }).join('');
       return `<div class="info-section-title">${grupo}</div>${campos}`;
     }).join('');

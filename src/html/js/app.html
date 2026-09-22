@@ -886,7 +886,7 @@
     },
     { grupo: 'Accesorios y sensor', clave: 'SERIE SENSOR', etiqueta: 'Serie del sensor', tipo: 'text' },
     { grupo: 'Accesorios y sensor', clave: 'ACTIVADOR', etiqueta: 'Activador', tipo: 'text' },
-    { grupo: 'Accesorios y sensor', clave: '$ Costo del Sensor', etiqueta: 'Costo del sensor', tipo: 'number' },
+    { grupo: 'Accesorios y sensor', clave: '$ Costo del Sensor', etiqueta: 'Costo del sensor', tipo: 'number', moneda: true },
     {
       grupo: 'Accesorios y sensor', clave: 'LLAVE DUPLICADA', etiqueta: 'Llave duplicada', tipo: 'select',
       opciones: ['SI', 'NO'],
@@ -945,7 +945,13 @@
         // step="any": sin esto, type="number" solo acepta enteros por
         // default (step="1" implícito) — los montos necesitan decimales.
         const step = campo.tipo === 'number' ? ' step="any"' : '';
-        return `<div class="field"><label>${campo.etiqueta}</label><input type="${campo.tipo}" id="${id}"${step}${req}${disabled}${placeholder} /></div>`;
+        const input = `<input type="${campo.tipo}" id="${id}"${step}${req}${disabled}${placeholder} />`;
+        // moneda: solo un "$" fijo a la izquierda, puro visual — el input
+        // sigue siendo un número normal por dentro.
+        if (campo.moneda) {
+          return `<div class="field"><label>${campo.etiqueta}</label><div class="input-moneda-wrap">${input}</div></div>`;
+        }
+        return `<div class="field"><label>${campo.etiqueta}</label>${input}</div>`;
       }).join('');
       return `<div class="info-section-title">${grupo}</div>${campos}`;
     }).join('');
@@ -1058,7 +1064,7 @@
       grupo: 'Fechas y configuración', clave: 'TIPO DE AUTORIZACIÓN', etiqueta: 'Tipo de autorización', tipo: 'select',
       opciones: ['FISICA', 'CORREO'],
     },
-    { grupo: 'Fechas y configuración', clave: 'MONTO ACTUAL', etiqueta: 'Monto actual', tipo: 'number' },
+    { grupo: 'Fechas y configuración', clave: 'MONTO ACTUAL', etiqueta: 'Monto actual', tipo: 'number', moneda: true },
     {
       grupo: 'Fechas y configuración', clave: 'METODO DE REEMBOLSO', etiqueta: 'Método de reembolso', tipo: 'select',
       opciones: ['ECHQ', 'TEA', 'EFEC', 'NA', 'EFEC NA'],
@@ -1112,7 +1118,12 @@
           const opciones = (campo.opciones || []).map((o) => `<option value="${o}">${o}</option>`).join('');
           return `<div class="field"><label>${campo.etiqueta}</label><select id="${id}"><option value="">Selecciona…</option>${opciones}</select></div>`;
         }
-        return `<div class="field"><label>${campo.etiqueta}</label><input type="${campo.tipo}" id="${id}"${step}${disabled}${placeholder} /></div>`;
+        const input = `<input type="${campo.tipo}" id="${id}"${step}${disabled}${placeholder} />`;
+        // moneda: solo un "$" fijo a la izquierda, puro visual.
+        if (campo.moneda) {
+          return `<div class="field"><label>${campo.etiqueta}</label><div class="input-moneda-wrap">${input}</div></div>`;
+        }
+        return `<div class="field"><label>${campo.etiqueta}</label>${input}</div>`;
       }).join('');
       return `<div class="info-section-title">${grupo}</div>${campos}`;
     }).join('');
@@ -1742,7 +1753,7 @@
         }
         grid.innerHTML = Object.keys(completo)
           .filter((k) => completo[k] !== '' && completo[k] !== null && completo[k] !== undefined)
-          .map((k) => itemInfo(tituloDesdeClave(k), completo[k]))
+          .map((k) => itemInfo(tituloDesdeClave(k), k === '$ Costo del Sensor' ? formatearMoneda(completo[k]) : completo[k]))
           .join('');
       } catch (err) {
         grid.innerHTML = '<p class="error-msg">No se pudo cargar: ' + err.message + '</p>';

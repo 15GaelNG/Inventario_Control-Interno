@@ -495,6 +495,15 @@
   .file-actual { margin-top: 4px; font-size: 12px; }
   .file-actual a { color: var(--color-accent-hover); }
 
+  /* Campos de captura en pesos (montos): "$" fijo a la izquierda del input,
+     nada más visual — el valor sigue siendo un número normal por dentro. */
+  .input-moneda-wrap { position: relative; }
+  .input-moneda-wrap input { padding-left: 26px; }
+  .input-moneda-wrap::before {
+    content: '$'; position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    color: var(--color-text-muted); font-weight: 700; font-size: 13px; pointer-events: none;
+  }
+
   /* Recuadro para firmar con mouse/dedo (Arqueos) */
   .firma-pad-wrap { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
   .firma-pad {
