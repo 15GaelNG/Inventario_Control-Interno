@@ -11,6 +11,12 @@
  */
 
 const CambiosVehiculosService = (function () {
+  // El nombre real de la pestaña ya está confirmado ("CAMBIOS VEHICULOS")
+  // — se busca directo por nombre (SheetUtils.getSheet), no por columnas
+  // como en Arqueos/Caja Chica. Evita cualquier riesgo de que la búsqueda
+  // por columnas encuentre una pestaña equivocada (ej. una copia/respaldo
+  // con las mismas 8 columnas) y la deje cacheada 6 horas.
+  const NOMBRE_HOJA = 'CAMBIOS VEHICULOS';
   const COLUMNAS_FIRMA = ['ID_CAMBIO', 'FOLIO', 'TABLA', 'CAMPO', 'ANTES', 'DESPUES', 'ACTUALIZADO POR', 'FECHA ACTUALIZACION'];
 
   function ssId() {
@@ -18,7 +24,7 @@ const CambiosVehiculosService = (function () {
   }
 
   function hoja_() {
-    return SheetUtils.getSheetByColumns(ssId(), COLUMNAS_FIRMA);
+    return SheetUtils.getSheet(ssId(), NOMBRE_HOJA);
   }
 
   function fechaISO_(valor) {
@@ -71,15 +77,25 @@ const CambiosVehiculosService = (function () {
     }
   }
 
-  /** Historial completo, solo lectura — más reciente primero. */
+  // Con miles de filas viejas (esta hoja ya trae 9,000+ del sistema
+  // anterior), regresarlas TODAS y luego ordenarlas con .sort() hacía que
+  // la respuesta se perdiera en el camino (confirmado con pruebas: 1 solo
+  // renglón sí llega bien, la lista completa no). Recorrer la hoja de
+  // ABAJO hacia ARRIBA evita el sort por completo — como cada renglón se
+  // agrega al final (tanto lo viejo como lo que escribe registrarCambios),
+  // ya vienen en orden cronológico por posición — y de una vez limita
+  // cuántos manda, para no repetir el mismo problema de tamaño.
+  const MAXIMO_CAMBIOS = 500;
+
+  /** Historial — los MAXIMO_CAMBIOS más recientes, solo lectura. */
   function listarResumen(token) {
     Auth.validarSesion(token);
     const sheet = hoja_();
     const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_FIRMA);
 
     const resultado = [];
-    for (let i = 0; i < filas; i++) {
-      // OJO: los renglones viejos (de antes de este módulo) nunca tuvieron
+    for (let i = filas - 1; i >= 0 && resultado.length < MAXIMO_CAMBIOS; i--) {
+      // Los renglones viejos (de antes de este módulo) nunca tuvieron
       // ID_CAMBIO asignado — solo se genera para los nuevos de aquí en
       // adelante. FOLIO sí debería estar siempre lleno, es el indicador
       // confiable de que el renglón es real.
@@ -94,7 +110,7 @@ const CambiosVehiculosService = (function () {
         FECHA: fechaISO_(datos['FECHA ACTUALIZACION'][i]),
       });
     }
-    return resultado.sort((a, b) => new Date(b.FECHA) - new Date(a.FECHA));
+    return resultado;
   }
 
   return { registrarCambios, listarResumen };
