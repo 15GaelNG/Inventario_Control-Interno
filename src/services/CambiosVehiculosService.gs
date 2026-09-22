@@ -113,5 +113,38 @@ const CambiosVehiculosService = (function () {
     return resultado;
   }
 
-  return { registrarCambios, listarResumen };
+  /**
+   * Historial de cambios de UN vehículo (para enlazarlo desde el detalle
+   * de Vehículos) — recorre la hoja de abajo hacia arriba, igual que
+   * listarResumen (mismo motivo: evitar el bug de .sort() con 9,000+
+   * filas), pero filtrando por FOLIO en vez de limitarse a los últimos
+   * MAXIMO_CAMBIOS globales — un vehículo puntual no debería acumular
+   * tantos cambios como para necesitar ese límite, pero se deja uno
+   * generoso (200) por seguridad.
+   */
+  const MAXIMO_CAMBIOS_POR_VEHICULO = 200;
+
+  function listarPorFolio(token, folio) {
+    Auth.validarSesion(token);
+    if (!folio) return [];
+    const sheet = hoja_();
+    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_FIRMA);
+
+    const resultado = [];
+    for (let i = filas - 1; i >= 0 && resultado.length < MAXIMO_CAMBIOS_POR_VEHICULO; i--) {
+      if (String(datos.FOLIO[i] || '') !== String(folio)) continue;
+      resultado.push({
+        ID: datos.ID_CAMBIO[i] || '',
+        FOLIO: datos.FOLIO[i] || '',
+        CAMPO: datos.CAMPO[i] || '',
+        ANTES: datos.ANTES[i] || '',
+        DESPUES: datos.DESPUES[i] || '',
+        ACTUALIZADO_POR: datos['ACTUALIZADO POR'][i] || '',
+        FECHA: fechaISO_(datos['FECHA ACTUALIZACION'][i]),
+      });
+    }
+    return resultado;
+  }
+
+  return { registrarCambios, listarResumen, listarPorFolio };
 })();

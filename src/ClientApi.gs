@@ -66,6 +66,12 @@ function apiSubirArchivoVehiculo(token, nombreArchivo, mimeType, base64Data) {
 function apiListarCambiosVehiculos(token) {
   return CambiosVehiculosService.listarResumen(token);
 }
+function apiListarCambiosVehiculosPorFolio(token, folio) {
+  return CambiosVehiculosService.listarPorFolio(token, folio);
+}
+function apiListarReasignacionesVehicularesPorFolio(token, folio) {
+  return ReasignacionesVehicularesService.listarPorFolio(token, folio);
+}
 
 // --- Uber ---
 function apiListarUberResumen(token) {

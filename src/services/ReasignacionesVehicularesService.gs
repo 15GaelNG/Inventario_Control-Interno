@@ -132,5 +132,37 @@ const ReasignacionesVehicularesService = (function () {
     return { ID: id };
   }
 
-  return { listarResumen, crear, eliminar };
+  /** Historial de reasignaciones de UN vehículo (para enlazarlo desde el
+   * detalle de Vehículos) — mismo criterio que
+   * CambiosVehiculosService.listarPorFolio: recorre de abajo hacia arriba
+   * y filtra por folio, en vez de traer todo el historial completo. */
+  function listarPorFolio(token, folio) {
+    Auth.validarSesion(token);
+    if (!folio) return [];
+    const sheet = hoja_();
+    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
+
+    const resultado = [];
+    for (let i = filas - 1; i >= 0; i--) {
+      if (!datos[ID_COLUMN][i]) continue;
+      if (String(datos['Folio Vehiculo'][i] || '') !== String(folio)) continue;
+      resultado.push({
+        ID: datos[ID_COLUMN][i],
+        FOLIO_VEHICULO: datos['Folio Vehiculo'][i] || '',
+        FECHA: fechaISO_(datos['Fecha de Reasignacion'][i]),
+        VIN: datos['VIN'][i] || '',
+        NUCO: datos['NUCO'][i] || '',
+        NO_EMPLEADO_SALIENTE: datos['No Empleado Saliente'][i] || '',
+        RESPONSABLE_SALIENTE: datos['Responsable Saliente'][i] || '',
+        DEPARTAMENTO_SALIENTE: datos['Departamento Saliente'][i] || '',
+        NO_EMPLEADO_ENTRANTE: datos['No Empleado Entrante'][i] || '',
+        RESPONSABLE_ENTRANTE: datos['Responsable Entrante'][i] || '',
+        DEPARTAMENTO_ENTRANTE: datos['Departamento Entrante'][i] || '',
+        QUIEN_REGISTRO: datos['QUIEN REGISTRO'][i] || '',
+      });
+    }
+    return resultado;
+  }
+
+  return { listarResumen, crear, eliminar, listarPorFolio };
 })();

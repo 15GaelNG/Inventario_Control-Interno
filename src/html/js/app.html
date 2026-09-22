@@ -1796,10 +1796,25 @@
       if (!vResumen) return;
       document.getElementById('detalle-vehiculo-folio-label').textContent = 'Folio: ' + vResumen.FOLIO;
       const grid = document.getElementById('detalle-vehiculo-grid');
+      const cuerpoCambios = document.getElementById('detalle-vehiculo-cambios');
+      const vacioCambios = document.getElementById('detalle-vehiculo-cambios-vacio');
+      const cuerpoReasignaciones = document.getElementById('detalle-vehiculo-reasignaciones');
+      const vacioReasignaciones = document.getElementById('detalle-vehiculo-reasignaciones-vacio');
       grid.innerHTML = '<div class="loading-inline"><span class="spinner"></span> Cargando…</div>';
+      cuerpoCambios.innerHTML = '';
+      cuerpoReasignaciones.innerHTML = '';
+      vacioCambios.hidden = true;
+      vacioReasignaciones.hidden = true;
       modalDetalle.hidden = false;
       try {
-        const completo = await callServer('apiBuscarVehiculoPorFolio', state.token, vResumen.FOLIO);
+        // Las 3 en paralelo — el detalle completo del vehículo y sus dos
+        // historiales enlazados (Cambios Vehículos y Reasignaciones
+        // Vehiculares), ambos filtrados por este mismo Folio en el servidor.
+        const [completo, cambios, reasignaciones] = await Promise.all([
+          callServer('apiBuscarVehiculoPorFolio', state.token, vResumen.FOLIO),
+          callServer('apiListarCambiosVehiculosPorFolio', state.token, vResumen.FOLIO),
+          callServer('apiListarReasignacionesVehicularesPorFolio', state.token, vResumen.FOLIO),
+        ]);
         if (!completo) {
           grid.innerHTML = '<p class="empty-state">No se encontró el registro completo.</p>';
           return;
@@ -1808,6 +1823,28 @@
           .filter((k) => completo[k] !== '' && completo[k] !== null && completo[k] !== undefined)
           .map((k) => itemInfo(tituloDesdeClave(k), k === '$ Costo del Sensor' ? formatearMoneda(completo[k]) : completo[k]))
           .join('');
+
+        vacioCambios.hidden = (cambios || []).length > 0;
+        cuerpoCambios.innerHTML = (cambios || []).map((c) => `
+          <tr>
+            <td>${c.CAMPO || '—'}</td>
+            <td>${c.ANTES || '<span class="empty-state" style="padding:0">(vacío)</span>'}</td>
+            <td>${c.DESPUES || '<span class="empty-state" style="padding:0">(vacío)</span>'}</td>
+            <td>${c.ACTUALIZADO_POR || '—'}</td>
+            <td>${formatearFecha(c.FECHA)}</td>
+          </tr>
+        `).join('');
+
+        vacioReasignaciones.hidden = (reasignaciones || []).length > 0;
+        cuerpoReasignaciones.innerHTML = (reasignaciones || []).map((r) => `
+          <tr>
+            <td>${formatearFecha(r.FECHA)}</td>
+            <td>${r.RESPONSABLE_SALIENTE || '—'}</td>
+            <td>${r.RESPONSABLE_ENTRANTE || '—'}</td>
+            <td>${r.DEPARTAMENTO_ENTRANTE || '—'}</td>
+            <td>${r.QUIEN_REGISTRO || '—'}</td>
+          </tr>
+        `).join('');
       } catch (err) {
         grid.innerHTML = '<p class="error-msg">No se pudo cargar: ' + err.message + '</p>';
       }
