@@ -75,7 +75,7 @@ const VehiculosService = (function () {
   }
 
   const COLUMNAS_RESUMEN = [
-    'ID_VEHICULO', 'FOLIO', 'DEPARTAMENTO', 'NO ECONOMICO', 'MARCA', 'CLASE',
+    'ID_VEHICULO', 'FOLIO', 'NUCCO', 'DEPARTAMENTO', 'NO ECONOMICO', 'MARCA', 'CLASE',
     'LINEA VEHICULO', 'MODELO', 'COLOR', 'PLACA', 'SEDE', 'ESTATUS',
   ];
 
@@ -95,6 +95,7 @@ const VehiculosService = (function () {
       resultado.push({
         ID_VEHICULO: datos['ID_VEHICULO'][i],
         FOLIO: datos['FOLIO'][i],
+        NUCCO: datos['NUCCO'][i] || '',
         DEPARTAMENTO: datos['DEPARTAMENTO'][i] || '',
         NO_ECONOMICO: datos['NO ECONOMICO'][i] || '',
         MARCA: datos['MARCA'][i] || '',

@@ -1708,6 +1708,7 @@
 
     const columnasVehiculos = [
       { clave: 'FOLIO', etiqueta: 'Folio' },
+      { clave: 'NUCCO', etiqueta: 'Nucco' },
       { clave: 'DEPARTAMENTO', etiqueta: 'Departamento' },
       { clave: 'CLASE', etiqueta: 'Clase' },
       { clave: 'MARCA', etiqueta: 'Marca' },
@@ -1726,6 +1727,7 @@
         lista.innerHTML = vehiculos.map((v) => `
           <tr>
             <td class="tabla-clickable" data-id="${v.ID_VEHICULO}" title="Ver detalle completo">${v.FOLIO}</td>
+            <td>${v.NUCCO || '—'}</td>
             <td>${v.DEPARTAMENTO || '—'}</td>
             <td>${etiquetaClase(v.CLASE)}</td>
             <td>${v.MARCA || '—'}</td>
