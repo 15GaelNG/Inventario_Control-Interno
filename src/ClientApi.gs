@@ -132,6 +132,17 @@ function apiEliminarCambioMontoCCH(token, id) {
   return CambiosMontoCCHService.eliminar(token, id);
 }
 
+// --- Reasignaciones Vehiculares ---
+function apiListarReasignacionesVehiculares(token) {
+  return ReasignacionesVehicularesService.listarResumen(token);
+}
+function apiCrearReasignacionVehicular(token, datos) {
+  return ReasignacionesVehicularesService.crear(token, datos);
+}
+function apiEliminarReasignacionVehicular(token, id) {
+  return ReasignacionesVehicularesService.eliminar(token, id);
+}
+
 // --- Arqueos ---
 function apiListarAuditItems(token) {
   Auth.validarSesion(token);

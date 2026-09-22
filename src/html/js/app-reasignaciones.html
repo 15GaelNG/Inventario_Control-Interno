@@ -1,0 +1,204 @@
+<script>
+  /**
+   * app-reasignaciones.js — Reasignaciones Vehiculares, en su propio
+   * archivo/<script> por el mismo motivo que Arqueos/Caja Chica (ver
+   * comentario en app-arqueos.html): mantener cada <script> con margen
+   * frente al límite de tamaño de Apps Script. Comparte el mismo scope
+   * global del navegador que app.html (state, callServer,
+   * crearTablaInteractiva, wireTabsSimple, wireFilasClickables,
+   * wireKpiFiltro, formatearFecha, toastCargando, hoyISO, itemInfo,
+   * tituloDesdeClave, exportarCSV, etc.).
+   */
+
+  // ---------- Reasignaciones Vehiculares ----------
+  async function initReasignacionesVehiculares() {
+    wireTabsSimple(document.getElementById('view-container'));
+    const lista = document.getElementById('lista-reasignaciones-vehiculares');
+    const vacio = document.getElementById('reasignaciones-vehiculares-vacio');
+    const modalDetalle = document.getElementById('modal-detalle-reasignacion-vehicular');
+    let reasignacionesPorId = {};
+    let vehiculosPorFolio = {};
+    let todasLasReasignaciones = [];
+
+    document.getElementById('rv-fecha').value = hoyISO();
+
+    // Catálogo de vehículos (para el datalist de Folio y para autollenar VIN
+    // + responsable/departamento salientes sin ida y vuelta al servidor).
+    callServer('apiListarVehiculosBasico', state.token).then((vehiculos) => {
+      (vehiculos || []).forEach((v) => { vehiculosPorFolio[v.FOLIO] = v; });
+      document.getElementById('rv-folio-lista').innerHTML =
+        (vehiculos || []).map((v) => `<option value="${v.FOLIO}"></option>`).join('');
+    }).catch((err) => {
+      console.error('No se pudo cargar el catálogo de vehículos:', err);
+      const errorBox = document.getElementById('rv-error');
+      errorBox.textContent = 'No se pudo cargar el catálogo de vehículos: ' + err.message;
+      errorBox.hidden = false;
+    });
+
+    // Departamento (catálogo real, mismo que usan Vehículos/Uber/Tickets).
+    callServer('apiListarDepartamentos', state.token).then((departamentos) => {
+      document.getElementById('rv-departamento-entrante-lista').innerHTML =
+        (departamentos || []).map((d) => `<option value="${d}"></option>`).join('');
+    }).catch((err) => {
+      console.error('No se pudo cargar el catálogo de departamentos:', err);
+    });
+
+    document.getElementById('rv-folio').addEventListener('input', (ev) => {
+      const vehiculo = vehiculosPorFolio[ev.target.value];
+      document.getElementById('rv-vin').value = vehiculo ? vehiculo.VIN : '';
+      document.getElementById('rv-no-empleado-saliente').value = vehiculo ? vehiculo.NO_EMPLEADO : '';
+      document.getElementById('rv-responsable-saliente').value = vehiculo ? vehiculo.RESPONSABLE_VEHICULO : '';
+      document.getElementById('rv-departamento-saliente').value = vehiculo ? vehiculo.DEPARTAMENTO : '';
+    });
+
+    const columnasReasignaciones = [
+      { clave: 'FOLIO_VEHICULO', etiqueta: 'Folio' },
+      { clave: 'FECHA', etiqueta: 'Fecha' },
+      { clave: 'RESPONSABLE_SALIENTE', etiqueta: 'Responsable saliente' },
+      { clave: 'DEPARTAMENTO_SALIENTE', etiqueta: 'Departamento saliente' },
+      { clave: 'RESPONSABLE_ENTRANTE', etiqueta: 'Responsable entrante' },
+      { clave: 'DEPARTAMENTO_ENTRANTE', etiqueta: 'Departamento entrante' },
+      { clave: 'QUIEN_REGISTRO', etiqueta: 'Quién registró' },
+    ];
+    const motorTablaReasignaciones = crearTablaInteractiva({
+      thead: document.getElementById('rv-thead'),
+      columnas: columnasReasignaciones,
+      buscadorGlobal: document.getElementById('rv-buscar-global'),
+      piePaginacion: document.getElementById('rv-pie'),
+      onRenderPagina: (reasignaciones, total) => {
+        vacio.hidden = total > 0;
+        lista.innerHTML = reasignaciones.map((r) => `
+          <tr>
+            <td class="tabla-clickable" data-id="${r.ID}" title="Ver detalle completo">${r.FOLIO_VEHICULO || '—'}</td>
+            <td>${formatearFecha(r.FECHA)}</td>
+            <td>${r.RESPONSABLE_SALIENTE || '—'}</td>
+            <td>${r.DEPARTAMENTO_SALIENTE || '—'}</td>
+            <td>${r.RESPONSABLE_ENTRANTE || '—'}</td>
+            <td>${r.DEPARTAMENTO_ENTRANTE || '—'}</td>
+            <td>${r.QUIEN_REGISTRO || '—'}</td>
+            <td>
+              <div class="tabla-actions">
+                <button type="button" class="danger btn-eliminar-reasignacion-vehicular" data-id="${r.ID}" title="Eliminar"><i data-lucide="trash-2" class="ico"></i></button>
+              </div>
+            </td>
+          </tr>
+        `).join('');
+
+        wireFilasClickables(lista, (ds) => abrirDetalleReasignacionVehicular(ds.id));
+        lista.querySelectorAll('.btn-eliminar-reasignacion-vehicular').forEach((btn) => {
+          btn.addEventListener('click', () => eliminarReasignacionVehicular(btn.dataset.id));
+        });
+        refreshIcons();
+      },
+    });
+
+    // KPI clickeables: Total limpia el filtro, Hoy filtra por la fecha de hoy.
+    const tilesKpiReasignaciones = ['rv-stat-total', 'rv-stat-hoy'].map((id) => document.getElementById(id).closest('.stat-tile'));
+    wireKpiFiltro(tilesKpiReasignaciones[0], motorTablaReasignaciones, 'FECHA', null, tilesKpiReasignaciones);
+    wireKpiFiltro(tilesKpiReasignaciones[1], motorTablaReasignaciones, 'FECHA', (v) => v && v.slice(0, 10) === hoyISO(), tilesKpiReasignaciones);
+
+    async function cargar() {
+      const errorBox = document.getElementById('rv-error');
+      let reasignaciones;
+      try {
+        reasignaciones = await callServer('apiListarReasignacionesVehiculares', state.token);
+      } catch (err) {
+        console.error('No se pudo cargar el historial de reasignaciones:', err);
+        errorBox.textContent = 'No se pudo cargar el historial: ' + err.message;
+        errorBox.hidden = false;
+        return;
+      }
+      errorBox.hidden = true;
+      todasLasReasignaciones = reasignaciones || [];
+
+      reasignacionesPorId = {};
+      todasLasReasignaciones.forEach((r) => { reasignacionesPorId[r.ID] = r; });
+
+      document.getElementById('rv-stat-total').textContent = todasLasReasignaciones.length;
+      const hoyStr = hoyISO();
+      document.getElementById('rv-stat-hoy').textContent =
+        todasLasReasignaciones.filter((r) => r.FECHA && r.FECHA.slice(0, 10) === hoyStr).length;
+
+      motorTablaReasignaciones.setDatos(todasLasReasignaciones);
+    }
+
+    const ETIQUETAS_REASIGNACION = {
+      FOLIO_VEHICULO: 'Folio', FECHA: 'Fecha', VIN: 'VIN', NUCO: 'Nuco',
+      NO_EMPLEADO_SALIENTE: 'No. de empleado saliente', RESPONSABLE_SALIENTE: 'Responsable saliente', DEPARTAMENTO_SALIENTE: 'Departamento saliente',
+      NO_EMPLEADO_ENTRANTE: 'No. de empleado entrante', RESPONSABLE_ENTRANTE: 'Responsable entrante', DEPARTAMENTO_ENTRANTE: 'Departamento entrante',
+      QUIEN_REGISTRO: 'Quién registró',
+    };
+    function abrirDetalleReasignacionVehicular(id) {
+      const r = reasignacionesPorId[id];
+      if (!r) return;
+      document.getElementById('detalle-reasignacion-vehicular-label').textContent = 'Folio: ' + r.FOLIO_VEHICULO;
+      document.getElementById('detalle-reasignacion-vehicular-grid').innerHTML = Object.keys(ETIQUETAS_REASIGNACION)
+        .filter((clave) => r[clave] !== '' && r[clave] !== null && r[clave] !== undefined)
+        .map((clave) => itemInfo(ETIQUETAS_REASIGNACION[clave], clave === 'FECHA' ? formatearFecha(r[clave]) : r[clave]))
+        .join('');
+      modalDetalle.hidden = false;
+    }
+    document.getElementById('btn-cerrar-detalle-reasignacion-vehicular').addEventListener('click', () => { modalDetalle.hidden = true; });
+    modalDetalle.addEventListener('click', (ev) => { if (ev.target === modalDetalle) modalDetalle.hidden = true; });
+
+    async function eliminarReasignacionVehicular(id) {
+      if (!confirm('¿Eliminar este registro de reasignación? Esto NO revierte el responsable actual del vehículo — solo borra el registro del historial. Esta acción no se puede deshacer.')) return;
+      toastCargando('Eliminando…');
+      try {
+        await callServer('apiEliminarReasignacionVehicular', state.token, id);
+        await cargar();
+        toastExito('Eliminado exitosamente');
+      } catch (err) {
+        toastError('No se pudo eliminar: ' + err.message);
+      }
+    }
+
+    document.getElementById('form-reasignacion-vehicular').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('rv-error');
+      errorBox.hidden = true;
+      const btn = document.getElementById('btn-guardar-reasignacion-vehicular');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
+      toastCargando('Registrando…');
+      try {
+        await callServer('apiCrearReasignacionVehicular', state.token, {
+          'Folio Vehiculo': document.getElementById('rv-folio').value.trim(),
+          'Fecha de Reasignacion': document.getElementById('rv-fecha').value,
+          'No Empleado Entrante': document.getElementById('rv-no-empleado-entrante').value.trim(),
+          'Responsable Entrante': document.getElementById('rv-responsable-entrante').value.trim(),
+          'Departamento Entrante': document.getElementById('rv-departamento-entrante').value.trim(),
+        });
+        ev.target.reset();
+        document.getElementById('rv-fecha').value = hoyISO();
+        document.getElementById('rv-vin').value = '';
+        document.getElementById('rv-no-empleado-saliente').value = '';
+        document.getElementById('rv-responsable-saliente').value = '';
+        document.getElementById('rv-departamento-saliente').value = '';
+        // El vehículo reasignado ya trae otro responsable — refresca el
+        // catálogo en memoria para que una segunda reasignación seguida no
+        // muestre datos salientes obsoletos.
+        callServer('apiListarVehiculosBasico', state.token).then((vehiculos) => {
+          vehiculosPorFolio = {};
+          (vehiculos || []).forEach((v) => { vehiculosPorFolio[v.FOLIO] = v; });
+        }).catch(() => {});
+        await cargar();
+        toastExito('Registrado exitosamente');
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+        toastError('No se pudo registrar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+      }
+    });
+
+    document.getElementById('btn-exportar-excel-reasignaciones-vehiculares').addEventListener('click', () => {
+      exportarCSV('reasignaciones_vehiculares.csv', columnasReasignaciones, motorTablaReasignaciones.obtenerFiltrados());
+    });
+
+    await cargar();
+  }
+</script>

@@ -44,15 +44,18 @@ const VehiculosService = (function () {
 
   /**
    * Catálogo ligero (FOLIO + datos clave) para autocompletar otros módulos
-   * que referencian un vehículo por folio (ej. Incidencias). Excluye
-   * vehículos dados de baja. MODELO en esta hoja es el año del vehículo,
-   * no el nombre del modelo (ese es LINEA VEHICULO).
+   * que referencian un vehículo por folio (ej. Incidencias, Reasignaciones
+   * Vehiculares). Excluye vehículos dados de baja. MODELO en esta hoja es
+   * el año del vehículo, no el nombre del modelo (ese es LINEA VEHICULO).
    *
    * Optimizado: en vez de leer las 41 columnas completas (SheetUtils.getAll)
-   * solo para quedarse con 6, lee únicamente esas 6 columnas — de ~26,500
-   * celdas a ~3,900.
+   * solo para quedarse con unas cuantas, lee únicamente esas columnas — de
+   * ~26,500 celdas a ~5,800.
    */
-  const COLUMNAS_BASICO = ['FOLIO', 'DEPARTAMENTO', 'MARCA', 'LINEA VEHICULO', 'MODELO', 'ESTATUS'];
+  const COLUMNAS_BASICO = [
+    'FOLIO', 'DEPARTAMENTO', 'MARCA', 'LINEA VEHICULO', 'MODELO', 'ESTATUS',
+    'RESPONSABLE VEHICULO', 'NO EMPLEADO', 'SERIE VEHICULO', 'NUCCO',
+  ];
 
   function listarBasico(token) {
     Auth.validarSesion(token);
@@ -69,6 +72,10 @@ const VehiculosService = (function () {
         MARCA: datos['MARCA'][i] || '',
         LINEA_VEHICULO: datos['LINEA VEHICULO'][i] || '',
         MODELO: datos['MODELO'][i] || '',
+        RESPONSABLE_VEHICULO: datos['RESPONSABLE VEHICULO'][i] || '',
+        NO_EMPLEADO: datos['NO EMPLEADO'][i] || '',
+        VIN: datos['SERIE VEHICULO'][i] || '',
+        NUCO: datos['NUCCO'][i] || '',
       });
     }
     return resultado.sort((a, b) => String(a.FOLIO).localeCompare(String(b.FOLIO)));
