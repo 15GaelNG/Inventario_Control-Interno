@@ -271,3 +271,53 @@ function probarGeotab() {
   Logger.log(mensaje);
   return mensaje;
 }
+
+/**
+ * Muestra lo que hay en la hoja PERFILES (perfil → módulo: permiso), agrupado por
+ * perfil, y avisa cuáles de los 4 módulos nuevos (verificaciones, instalacion-sensores,
+ * hologramas, inspeccion-vehicular) NO tiene ningún perfil configurado todavía.
+ * Correr desde el editor: seleccionar "verPerfiles" arriba y "Ejecutar"; el resultado
+ * sale en Ver > Registros (Ctrl+Enter). Solo lee PERFIL/MODULO/PERMISO — nunca toca
+ * correos ni contraseñas de USUARIOS. No cambia nada.
+ */
+function verPerfiles() {
+  const MODULOS_NUEVOS = ['verificaciones', 'instalacion-sensores', 'hologramas', 'inspeccion-vehicular'];
+  const ssId = Config.SPREADSHEET_IDS.USUARIOS();
+
+  let filas;
+  try {
+    filas = SheetUtils.getAll(ssId, 'PERFILES');
+  } catch (e) {
+    const msg = 'No existe la hoja "PERFILES" en ese spreadsheet — el sistema está usando el ROL ' +
+      'viejo para todos los módulos (ADMIN/SUPER editan todo, USER edita, VIEWER solo lee).';
+    Logger.log(msg);
+    return msg;
+  }
+
+  const porPerfil = {};
+  const modulosVistos = new Set();
+  filas.forEach((f) => {
+    const perfil = String(f['PERFIL'] || '').trim();
+    const modulo = String(f['MODULO'] || '').trim();
+    const permiso = String(f['PERMISO'] || '').trim();
+    if (!perfil || !modulo || !permiso) return;
+    if (!porPerfil[perfil]) porPerfil[perfil] = [];
+    porPerfil[perfil].push(modulo + ': ' + permiso);
+    modulosVistos.add(Modulos.resolver(modulo) || modulo.toLowerCase());
+  });
+
+  const lineas = ['Hoja PERFILES — ' + filas.length + ' fila(s):'];
+  Object.keys(porPerfil).forEach((perfil) => {
+    lineas.push('  · ' + perfil + '  →  ' + porPerfil[perfil].join(', '));
+  });
+
+  const faltantes = MODULOS_NUEVOS.filter((m) => !modulosVistos.has(m));
+  lineas.push('');
+  lineas.push(faltantes.length
+    ? 'Módulos NUEVOS sin ningún perfil configurado (usan el ROL viejo mientras tanto): ' + faltantes.join(', ')
+    : 'Los 4 módulos nuevos ya tienen al menos un perfil configurado.');
+
+  const mensaje = lineas.join('\n');
+  Logger.log(mensaje);
+  return mensaje;
+}
