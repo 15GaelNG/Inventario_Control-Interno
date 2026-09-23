@@ -735,24 +735,18 @@
 
   .login-hero { position: relative; overflow: hidden; }
 
+  /* El fondo del login ya no es una sola imagen fija — es un slideshow
+     entre varias fotos de marca (cada una con su propia variante clara/
+     oscura), armado en JS (ver initLoginHeroSlideshow en app.html): dos
+     capas apiladas que se van turnando la clase "login-hero-bg-visible"
+     para un fundido cruzado. El degradado y la URL de cada capa los pone
+     el JS directo en background-image (cambia según tema + slide actual),
+     aquí solo queda la transición de opacidad. */
   .login-hero-bg {
     position: absolute; inset: 0; background-size: cover; background-position: center;
-    transition: opacity .6s ease;
+    opacity: 0; transition: opacity 1.2s ease;
   }
-  .login-hero-bg-light {
-    opacity: 1;
-    background-image:
-      linear-gradient(100deg, rgba(6,20,30,.88) 0%, rgba(6,20,30,.55) 45%, rgba(6,20,30,.25) 75%),
-      url('https://raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/login-bg.jpg');
-  }
-  .login-hero-bg-dark {
-    opacity: 0;
-    background-image:
-      linear-gradient(100deg, rgba(3,10,16,.80) 0%, rgba(3,10,16,.50) 45%, rgba(3,10,16,.20) 75%),
-      url('https://raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/login-bg-dark.jpg');
-  }
-  :root[data-theme="dark"] .login-hero-bg-light { opacity: 0; }
-  :root[data-theme="dark"] .login-hero-bg-dark { opacity: 1; }
+  .login-hero-bg-visible { opacity: 1; }
 
   .login-hero-content {
     position: relative; z-index: 1; height: 100%;

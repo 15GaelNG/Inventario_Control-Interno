@@ -141,6 +141,81 @@
     document.querySelectorAll('.theme-btn').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.tema === tema);
     });
+    // Si el slideshow del fondo del login está activo, refresca las
+    // imágenes ya pintadas a la variante del tema nuevo — si no, se
+    // quedarían con la del tema anterior hasta el siguiente cambio de slide.
+    if (typeof actualizarHeroLoginTema === 'function') actualizarHeroLoginTema();
+  }
+
+  /**
+   * Slideshow del fondo del login: varias fotos de marca (no una sola fija)
+   * — cada una con su propia variante clara/oscura (ver IMAGENES_HERO_LOGIN)
+   * — se van turnando cada 7s con un fundido cruzado entre dos capas
+   * apiladas (#login-hero-bg-a / #login-hero-bg-b). Cuando le toca a una
+   * capa aparecer, la OTRA ya viene precargada con la imagen que sigue
+   * después de esa, para que no se note un salto al cargar justo cuando le
+   * toca mostrarse. Si cambia el tema mientras el login está abierto,
+   * aplicarTema() llama a actualizarHeroLoginTema (definida aquí abajo)
+   * para no esperar hasta el siguiente cambio de slide.
+   */
+  const IMAGENES_HERO_LOGIN = [
+    { light: 'login-bg.jpg', dark: 'login-bg-dark.jpg' },
+    { light: 'EntradaCM-Light.jpg', dark: 'EntradaCM-Dark.png' },
+    { light: 'FamilyClub-Light.jpg', dark: 'FamilyClub-Dark.png' },
+    { light: 'Terrrenos-Light.jpg', dark: 'Terrrenos-Dark.png' },
+  ];
+  // "\/\/" (no "//") — Apps Script le borra a los .html todo lo que
+  // encuentre después de "//" pensando que es un comentario, incluso
+  // dentro de un string (ver CLAUDE.md). "\/" en un string de JS es
+  // idéntico a "/", así que el resultado es la misma URL de siempre.
+  const BASE_ASSETS = 'https:\/\/raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/';
+  const GRADIENTE_HERO_LIGHT = 'linear-gradient(100deg, rgba(6,20,30,.88) 0%, rgba(6,20,30,.55) 45%, rgba(6,20,30,.25) 75%)';
+  const GRADIENTE_HERO_DARK = 'linear-gradient(100deg, rgba(3,10,16,.80) 0%, rgba(3,10,16,.50) 45%, rgba(3,10,16,.20) 75%)';
+
+  let intervaloHeroLogin = null;
+  let actualizarHeroLoginTema = null;
+
+  function initLoginHeroSlideshow() {
+    // Por si initLogin() se vuelve a llamar en la misma carga de página
+    // (ej. sesión expirada, regresa al login) — sin esto quedarían varios
+    // intervalos corriendo a la vez.
+    if (intervaloHeroLogin) { clearInterval(intervaloHeroLogin); intervaloHeroLogin = null; }
+
+    const capaA = document.getElementById('login-hero-bg-a');
+    const capaB = document.getElementById('login-hero-bg-b');
+    if (!capaA || !capaB) return;
+
+    let indice = 0;
+    let visible = capaA;
+    let oculta = capaB;
+
+    function urlPara(i) {
+      const set = IMAGENES_HERO_LOGIN[i];
+      const esOscuro = document.documentElement.getAttribute('data-theme') === 'dark';
+      const gradiente = esOscuro ? GRADIENTE_HERO_DARK : GRADIENTE_HERO_LIGHT;
+      const archivo = esOscuro ? set.dark : set.light;
+      return gradiente + ', url("' + BASE_ASSETS + archivo + '")';
+    }
+
+    visible.style.backgroundImage = urlPara(indice);
+    visible.classList.add('login-hero-bg-visible');
+    oculta.style.backgroundImage = urlPara((indice + 1) % IMAGENES_HERO_LOGIN.length);
+
+    intervaloHeroLogin = setInterval(() => {
+      indice = (indice + 1) % IMAGENES_HERO_LOGIN.length;
+      oculta.classList.add('login-hero-bg-visible');
+      visible.classList.remove('login-hero-bg-visible');
+      const anteriorVisible = visible;
+      visible = oculta;
+      oculta = anteriorVisible;
+      // Precarga la que sigue en la capa que acaba de quedar oculta.
+      oculta.style.backgroundImage = urlPara((indice + 1) % IMAGENES_HERO_LOGIN.length);
+    }, 7000);
+
+    actualizarHeroLoginTema = () => {
+      visible.style.backgroundImage = urlPara(indice);
+      oculta.style.backgroundImage = urlPara((indice + 1) % IMAGENES_HERO_LOGIN.length);
+    };
   }
 
   // Fecha de hoy en la barra superior, formato "Martes 10 de agosto del 2026".
@@ -273,6 +348,10 @@
     // debajo un instante, justo antes de pasar al sistema. Ocultarlo desde
     // aquí (apenas arranca la animación, no hasta que termina) lo evita.
     document.getElementById('login-screen-container').hidden = true;
+    // El login ya no se va a volver a ver — apaga el slideshow de su fondo
+    // en vez de dejarlo corriendo de fondo apuntando a elementos ocultos.
+    if (intervaloHeroLogin) { clearInterval(intervaloHeroLogin); intervaloHeroLogin = null; }
+    actualizarHeroLoginTema = null;
 
     const container = document.getElementById('loading-screen-container');
     montarVista('tpl-loading', null, container);
@@ -489,6 +568,7 @@
     montarVista('tpl-login', null, login);
 
     aplicarTema(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
+    initLoginHeroSlideshow();
 
     const inputPassword = document.getElementById('login-password');
     document.getElementById('toggle-password').addEventListener('click', (ev) => {
