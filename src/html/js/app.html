@@ -185,6 +185,18 @@
     const capaB = document.getElementById('login-hero-bg-b');
     if (!capaA || !capaB) return;
 
+    // Precarga TODAS las variantes (claro + oscuro de las 4 fotos) desde
+    // que arranca, no solo "la siguiente" justo antes de que le toque —
+    // algunas de estas imágenes pesan varios MB (los PNG de tema oscuro),
+    // y con precarga de una en una a veces no alcanzaban a bajar a tiempo:
+    // se veían aparecer de golpe/tarde en vez de fundirse parejo como las
+    // demás. Así, para cuando le toca a cada una, el navegador ya la tiene
+    // en caché — un simple new Image() con su src basta para que el
+    // navegador la baje y la cachee, no hace falta esperar el onload aquí.
+    IMAGENES_HERO_LOGIN.forEach((set) => {
+      [set.light, set.dark].forEach((archivo) => { new Image().src = BASE_ASSETS + archivo; });
+    });
+
     let indice = 0;
     let visible = capaA;
     let oculta = capaB;
