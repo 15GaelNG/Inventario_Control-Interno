@@ -1,0 +1,56 @@
+<template id="tpl-verificaciones">
+  <div class="page-header-compacto">
+    <div>
+      <h2><i data-lucide="clipboard-check" class="ico"></i> Verificaciones</h2>
+      <p class="page-subtitle">Verificación vehicular — comprobante y fecha de la próxima</p>
+    </div>
+    <!-- KPIs: clic = filtrar la tabla -->
+    <div class="kpi-chips">
+      <button type="button" class="kpi-chip" id="ver-kpi-total" title="Ver todos los registros">
+        <strong id="ver-stat-total">0</strong> registros
+      </button>
+      <button type="button" class="kpi-chip kpi-warn" id="ver-kpi-por-vencer" title="Filtrar: vehículos que vencen en 30 días o menos">
+        <i data-lucide="hourglass" class="ico"></i> <strong id="ver-stat-por-vencer">0</strong> por vencer
+      </button>
+      <button type="button" class="kpi-chip kpi-danger" id="ver-kpi-vencidas" title="Filtrar: vehículos con verificación vencida">
+        <i data-lucide="triangle-alert" class="ico"></i> <strong id="ver-stat-vencidas">0</strong> vencidos
+      </button>
+    </div>
+  </div>
+
+  <div id="ver-tabs">
+    <div class="tabs-lista">
+      <button type="button" class="tab-btn" data-tab="registros"><i data-lucide="table" class="ico"></i> Verificaciones</button>
+      <button type="button" class="tab-btn" data-tab="nuevo"><i data-lucide="plus" class="ico"></i> Nueva verificación</button>
+      <button type="button" class="tab-btn" data-tab="historial"><i data-lucide="history" class="ico"></i> Historial</button>
+    </div>
+
+    <!-- Pestaña 1: tabla de registros -->
+    <div class="card card-compacta" data-panel="registros">
+      <div id="ver-tabla"></div>
+    </div>
+
+    <!-- Pestaña 2: nuevo registro -->
+    <div class="card form-card" data-panel="nuevo">
+      <div class="form-card-header">
+        <div class="form-card-icon"><i data-lucide="car" class="ico"></i></div>
+        <div>
+          <h3>Registrar verificación</h3>
+          <p>Folio, fechas y foto del comprobante</p>
+        </div>
+      </div>
+      <!-- El formulario lo arma el componente Formulario (ver initVerificaciones en app.js) -->
+      <div id="ver-form"></div>
+    </div>
+
+    <!-- Pestaña 3: historial por tarjetas -->
+    <div class="card card-compacta" data-panel="historial">
+      <div style="display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap;">
+        <h3 style="margin:0">Historial</h3>
+        <input type="search" id="ver-buscar" placeholder="Buscar por folio o placa" style="max-width:260px;" />
+      </div>
+      <div id="ver-lista" class="incidencia-list" style="margin-top:12px"></div>
+      <p class="empty-state" id="ver-vacio">Cargando…</p>
+    </div>
+  </div>
+</template>

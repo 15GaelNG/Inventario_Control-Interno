@@ -325,7 +325,30 @@
   const state = {
     token: sessionStorage.getItem('token') || null,
     sesion: JSON.parse(sessionStorage.getItem('sesion') || 'null'),
+    // Permisos por módulo (rama `ayrton`: PermisosService/Modulos.gs), se leen del
+    // servidor en cada carga (ver render). Aditivo: el menú lateral (NAV_GRUPOS,
+    // renderNavGrupos) sigue siendo estático y siempre visible como hasta ahora —
+    // esto solo alimenta a los módulos nuevos que si consultan permiso fino
+    // (Verificaciones/Sensores/Hologramas/Inspección Vehicular).
+    permisos: {},
   };
+
+  /** ¿Qué puede hacer esta persona en un módulo? 'LECTURA' | 'EDICION' | undefined */
+  const permisoDe = (modulo) => (state.permisos || {})[modulo];
+  const puedeEditarModulo = (modulo) => permisoDe(modulo) === 'EDICION';
+
+  /** Escapa HTML al insertar texto dinámico con innerHTML (evita XSS con datos de hojas) */
+  function escaparHtml(valor) {
+    return String(valor == null ? '' : valor).replace(/[&<>"']/g, (c) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+  }
+
+  /** Fecha de hoy en horario LOCAL como "YYYY-MM-DD" (a diferencia de hoyISO(), que usa UTC) */
+  function hoyLocal() {
+    const f = new Date();
+    return [f.getFullYear(), String(f.getMonth() + 1).padStart(2, '0'), String(f.getDate()).padStart(2, '0')].join('-');
+  }
 
   function guardarSesion(resultadoLogin) {
     state.token = resultadoLogin.token;
@@ -379,6 +402,13 @@
       return;
     }
     document.getElementById('user-name').textContent = state.sesion.nombre + ' · ' + state.sesion.rol;
+    // Aditivo (rama `ayrton`): permisos finos por módulo para Verificaciones/Sensores/
+    // Hologramas/Inspección Vehicular. No bloquea la navegación ni afecta el menú
+    // (NAV_GRUPOS sigue siempre visible) — si falla, esos módulos simplemente quedan
+    // en modo solo-lectura (puedeEditarModulo devuelve false con permisos vacíos).
+    callServer('apiMisPermisos', state.token).then((info) => {
+      state.permisos = (info && info.permisos) || {};
+    }).catch(() => { /* no-op: ver comentario arriba */ });
     navegarA('dashboard');
   }
 
@@ -504,6 +534,10 @@
       if (vista === 'caja-chica') { montarVista('tpl-cajachica', initCajaChica); return; }
       if (vista === 'cambios-monto-cch') { montarVista('tpl-cambios-monto-cch', initCambiosMontoCCH); return; }
       if (vista === 'arqueos') { montarVista('tpl-arqueos', initArqueos); return; }
+      if (vista === 'verificaciones') { montarVista('tpl-verificaciones', initVerificaciones); return; }
+      if (vista === 'instalacion-sensores') { montarVista('tpl-sensores', initSensores); return; }
+      if (vista === 'hologramas') { montarVista('tpl-hologramas', initHologramas); return; }
+      if (vista === 'inspeccion-vehicular') { montarVista('tpl-inspecciones', initInspecciones); return; }
       mostrarProximamente(etiqueta || vista);
     });
   }
@@ -534,6 +568,7 @@
         { vista: 'cambios-vehiculos', etiqueta: 'Cambios Vehículos', icono: 'history' },
         { vista: 'reasignaciones-vehiculares', etiqueta: 'Reasignaciones Vehiculares', icono: 'arrow-left-right' },
         { vista: 'verificaciones', etiqueta: 'Verificaciones', icono: 'badge-check' },
+        { vista: 'inspeccion-vehicular', etiqueta: 'Inspección Vehicular', icono: 'clipboard-list' },
         { vista: 'instalacion-sensores', etiqueta: 'Instalación de Sensores', icono: 'radio' },
         { vista: 'servicios', etiqueta: 'Servicios', icono: 'clipboard-check' },
         { vista: 'hologramas', etiqueta: 'Hologramas', icono: 'sparkles' },

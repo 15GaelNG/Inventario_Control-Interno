@@ -1,0 +1,429 @@
+<script>
+  /**
+   * sensores.js — Instalación de sensores GPS.
+   *
+   * Vive en su propio archivo (no en app.js) para que cada quien trabaje su módulo
+   * sin chocar en el mismo archivo. Usa las ayudas globales de app.js
+   * (state, callServer, escaparHtml, formatearFecha, hoyLocal, leerArchivoBase64).
+   *
+   * Lo propio de este módulo:
+   * - Los datos del vehículo se copian del folio y NO se editan aquí (docs/relaciones.md).
+   * - Columna "En vivo" con datos de Geotab (si está configurado): se refresca sola cada
+   *   minuto mientras la pantalla esté abierta.
+   * - Botón de actividad: viajes, combustible y ralentí de los últimos 30 días, solo para
+   *   consultar. El rendimiento (km/L) y el ralentí (L/h) de la hoja se capturan a mano.
+   */
+
+  const SENSORES_ESTADO_VIVO = {
+    Viajando: ['abierta', 'navigation'],
+    Detenido: ['cerrada', 'circle-pause'],
+    'Sin señal': ['baja', 'wifi-off'],
+    'Sin equipo': ['baja', 'circle-help'],
+  };
+
+  /** SERIE SENSOR tal como se compara contra Geotab (sin espacios, en mayúsculas) */
+  function serieNormalizada(serie) {
+    return String(serie == null ? '' : serie).toUpperCase().replace(/\s+/g, '');
+  }
+
+  async function abrirResponsivaSensor(ruta) {
+    const pestana = window.open('', '_blank');   // se abre antes para que el navegador no la bloquee
+    try {
+      pestana.location.href = await callServer('apiUrlResponsivaSensor', state.token, ruta);
+    } catch (err) {
+      if (pestana) pestana.close();
+      Notificar.error(err.message);
+    }
+  }
+
+  async function initSensores() {
+    const DIAS_ACTIVIDAD = 30;
+    // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
+    const puedeEditar = puedeEditarModulo('instalacion-sensores');
+
+    let sensores = [];
+    let vivo = { disponible: false, estados: {} };
+    let temporizador = null;
+
+    // ----- Estado en vivo (Geotab) -----
+    function estadoDe(sensor) {
+      if (!vivo.disponible || !sensor.SERIE_SENSOR) return '';
+      const info = vivo.estados[serieNormalizada(sensor.SERIE_SENSOR)];
+      if (!info) return 'Sin equipo';
+      if (!info.comunicando) return 'Sin señal';
+      return info.enMovimiento ? 'Viajando' : 'Detenido';
+    }
+    const infoVivoDe = (sensor) => (vivo.estados || {})[serieNormalizada(sensor.SERIE_SENSOR)] || null;
+
+    function conEstadoEnVivo(lista) {
+      return lista.map((s) => Object.assign({}, s, { EN_VIVO: estadoDe(s) }));
+    }
+
+    function badgeEnVivo(valor, sensor) {
+      if (!valor) return '<span style="color:var(--color-text-muted)">—</span>';
+      const [clase, icono] = SENSORES_ESTADO_VIVO[valor] || ['', 'circle-help'];
+      const info = infoVivoDe(sensor);
+      const velocidad = valor === 'Viajando' && info && info.velocidad ? ' ' + info.velocidad + ' km/h' : '';
+      return `<span class="badge-estado ${clase}">${Iconos.svg(icono)} ${escaparHtml(valor)}${velocidad}</span>`;
+    }
+
+    // ----- Tabla -----
+    const tabla = DataTable.crear(document.getElementById('sen-tabla'), {
+      idCampo: 'ID',
+      idTabla: 'sensores',
+      ordenInicial: { campo: 'FECHA_INSTALACION', dir: 'desc' },
+      textoVacio: 'Todavía no hay instalaciones registradas',
+      ayuda: 'Los datos del vehículo (placa, marca, serie…) se copian del folio y no se editan aquí: ' +
+        'se corrigen en el módulo de Vehículos. "En vivo" viene de Geotab y se actualiza cada minuto. ' +
+        'El botón de actividad en cada fila muestra viajes, combustible y ralentí de los últimos 30 días ' +
+        '(solo consulta). El rendimiento y el consumo en ralentí de la tabla se capturan a mano.',
+      exportar: { nombreArchivo: 'Instalacion de sensores' },
+      alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
+      etiquetaFila: (s) => [s.FOLIO, s.SERIE_SENSOR, s.PLACA].filter(Boolean).join(' · '),
+      detalle: {
+        titulo: (s) => 'Sensor ' + (s.SERIE_SENSOR || '') + ' · ' + (s.FOLIO || ''),
+        contenidoExtra: (s, contenedor) => pintarExtraDetalle(s, contenedor),
+      },
+      columnas: [
+        // Cambiar el folio vuelve a copiar TODOS los datos del vehículo: solo desde el panel
+        { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', editable: 'panel', fijada: true },
+        { campo: 'SERIE_SENSOR', titulo: 'Serie sensor', tipo: 'texto', editable: true },
+        { campo: 'EN_VIVO', titulo: 'En vivo', tipo: 'lista', enDetalle: false, exportable: true,
+          render: (valor, fila) => badgeEnVivo(valor, fila) },
+        { campo: 'PLACA', titulo: 'Placa', tipo: 'texto' },
+        { campo: 'MARCA', titulo: 'Marca', tipo: 'lista' },
+        { campo: 'LINEA', titulo: 'Línea', tipo: 'lista' },
+        { campo: 'MODELO', titulo: 'Año', tipo: 'texto' },
+        { campo: 'CLASE', titulo: 'Clase', tipo: 'lista' },
+        { campo: 'COMBUSTIBLE', titulo: 'Combustible', tipo: 'lista', editable: true },
+        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', editable: true, opciones: ['ACTIVO', 'BAJA'] },
+        { campo: 'FECHA_INSTALACION', titulo: 'Instalación', tipo: 'fecha', editable: true },
+        { campo: 'RENDIMIENTO', titulo: 'Rendimiento (km/L)', tipo: 'numero', editable: true },
+        { campo: 'RALENTI', titulo: 'Ralentí (L/h)', tipo: 'numero', editable: true },
+        { campo: 'DEPARTAMENTO', titulo: 'Departamento', tipo: 'lista' },
+        { campo: 'SEDE', titulo: 'Sede', tipo: 'lista' },
+        { campo: 'RESPONSABLE', titulo: 'Responsable', tipo: 'texto' },
+        { campo: 'OFICINA', titulo: 'Oficina / desarrollo', tipo: 'lista', visible: false },
+        { campo: 'RAZON_SOCIAL', titulo: 'Razón social', tipo: 'lista', visible: false },
+        { campo: 'SERIE_VEHICULO', titulo: 'Serie vehículo', tipo: 'texto', visible: false },
+        { campo: 'CAPACIDAD', titulo: 'Capacidad (L)', tipo: 'numero', visible: false },
+        { campo: 'COLOR', titulo: 'Color', tipo: 'lista', visible: false },
+        { campo: 'COMENTARIOS', titulo: 'Comentarios', tipo: 'texto', editable: true, visible: false },
+        { campo: 'FECHA_REGISTRO', titulo: 'Registro', tipo: 'fecha', visible: false },
+        {
+          campo: 'RESPONSIVA', titulo: 'Responsiva', filtrable: false, ordenable: false, enDetalle: false,
+          render: (ruta) => (ruta
+            ? `<button type="button" class="secondary btn-ver-responsiva" data-ruta="${escaparHtml(ruta)}" style="padding:4px 8px; display:inline-flex; align-items:center; gap:5px" title="Abrir la responsiva en PDF">${Iconos.svg('documento')} Ver</button>`
+            : '—'),
+        },
+      ],
+      accionesFila: [
+        {
+          icono: 'map-pin', titulo: 'Ver en el mapa',
+          visible: (s) => !!(infoVivoDe(s) && infoVivoDe(s).lat),
+          alHacer: (s) => {
+            const info = infoVivoDe(s);
+            window.open('https://www.google.com/maps?q=' + info.lat + ',' + info.lon, '_blank');
+          },
+        },
+        {
+          icono: 'activity', titulo: 'Actividad de los últimos 30 días (Geotab)',
+          visible: (s) => vivo.disponible && !!s.SERIE_SENSOR,
+          alHacer: (s) => verActividad(s),
+        },
+      ],
+      seleccionable: true,
+      alEditar: puedeEditar ? async (fila, campo, valor) => {
+        const actualizada = await callServer('apiActualizarCampoSensor', state.token, fila.ID, campo, valor);
+        sensores = sensores.map((s) => (s.ID === fila.ID ? actualizada : s));
+        refrescarTabla();
+        pintarStats();
+      } : null,
+      alEliminar: puedeEditar ? async (filas) => {
+        await callServer('apiEliminarSensores', state.token, filas.map((f) => f.ID));
+        const ids = new Set(filas.map((f) => f.ID));
+        sensores = sensores.filter((s) => !ids.has(s.ID));
+        refrescarTabla();
+        pintarStats();
+      } : null,
+      motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
+    });
+
+    const refrescarTabla = () => tabla.setDatos(conEstadoEnVivo(sensores));
+
+    document.getElementById('sen-tabla').addEventListener('click', (ev) => {
+      const btn = ev.target.closest('.btn-ver-responsiva');
+      if (btn) abrirResponsivaSensor(btn.dataset.ruta);
+    });
+
+    // ----- Panel de detalle: responsiva + estado en vivo -----
+    function pintarExtraDetalle(sensor, contenedor) {
+      const info = infoVivoDe(sensor);
+      const partes = [];
+      if (sensor.RESPONSIVA) {
+        partes.push(
+          `<button type="button" class="secondary btn-ver-responsiva" data-ruta="${escaparHtml(sensor.RESPONSIVA)}">
+            ${Iconos.svg('documento')} Ver responsiva (PDF)</button>`
+        );
+      }
+      if (vivo.disponible && info) {
+        const cuando = info.ultimaComunicacion ? new Date(info.ultimaComunicacion).toLocaleString('es-MX') : '—';
+        partes.push(`
+          <div class="dt-campo-titulo" style="margin:14px 0 6px">Estado en vivo (Geotab)</div>
+          <div>${badgeEnVivo(estadoDe(sensor), sensor)}</div>
+          <p class="page-subtitle" style="margin:6px 0 0">Última comunicación: ${escaparHtml(cuando)}</p>
+          ${info.lat ? `<p style="margin:6px 0 0"><a href="https://www.google.com/maps?q=${info.lat},${info.lon}" target="_blank" rel="noopener">Ver en el mapa ↗</a></p>` : ''}`);
+      }
+      if (vivo.disponible && sensor.SERIE_SENSOR) {
+        partes.push(
+          `<div id="sen-actividad" style="margin-top:14px"><button type="button" class="secondary" id="sen-btn-actividad">
+            ${Iconos.svg('activity')} Ver actividad de los últimos ${DIAS_ACTIVIDAD} días</button></div>`
+        );
+      }
+      contenedor.innerHTML = partes.join('');
+
+      const btn = contenedor.querySelector('#sen-btn-actividad');
+      if (btn) {
+        btn.addEventListener('click', async () => {
+          const caja = contenedor.querySelector('#sen-actividad');
+          caja.innerHTML = '<span class="dt-skel" style="height:60px; width:100%; border-radius:8px"></span>';
+          try {
+            const r = await callServer('apiResumenGeotabSensor', state.token, sensor.ID, DIAS_ACTIVIDAD);
+            caja.innerHTML =
+              `<div class="dt-campo-titulo" style="margin-bottom:6px">Actividad · últimos ${r.dias} días (Geotab)</div>` +
+              '<ul style="margin:0; padding-left:18px; line-height:1.7">' +
+              lineasActividad(r).map((l) => `<li>${escaparHtml(l)}</li>`).join('') + '</ul>';
+          } catch (err) {
+            caja.innerHTML = `<p class="error-msg">${Iconos.svg('alerta')} ${escaparHtml(err.message)}</p>`;
+          }
+        });
+      }
+    }
+
+    // ----- Actividad en Geotab (solo consulta: no cambia nada de la hoja) -----
+    const horasLegibles = (horas) => {
+      const h = Math.floor(horas);
+      const min = Math.round((horas - h) * 60);
+      return h ? `${h} h ${min} min` : `${min} min`;
+    };
+
+    function lineasActividad(r) {
+      return [
+        `Viajes: ${r.viajes}`,
+        `Combustible: ${r.litros} L` + (r.viajes ? ` (reportado en ${r.viajesConCombustible} de ${r.viajes} viajes)` : ''),
+        `Tiempo en ralentí: ${horasLegibles(r.horasRalenti)}`,
+        `Kilómetros recorridos: ${r.km} km · manejando ${horasLegibles(r.horasConduccion)}`,
+      ];
+    }
+
+    async function verActividad(sensor) {
+      const aviso = Notificar.info(`Consultando Geotab (últimos ${DIAS_ACTIVIDAD} días)…`, { duracion: 60000 });
+      let r;
+      try {
+        r = await callServer('apiResumenGeotabSensor', state.token, sensor.ID, DIAS_ACTIVIDAD);
+      } catch (err) {
+        aviso.cerrar();
+        Notificar.error('No se pudo consultar Geotab: ' + err.message);
+        return;
+      }
+      aviso.cerrar();
+      await Confirmar.pedir({
+        titulo: `Actividad de ${r.equipo}`,
+        mensaje: `Últimos ${r.dias} días, según Geotab:`,
+        detalle: lineasActividad(r),
+        textoConfirmar: 'Cerrar',
+      });
+    }
+
+    // ----- KPIs -----
+    function pintarStats() {
+      const activos = sensores.filter((s) => String(s.ESTATUS).toUpperCase() === 'ACTIVO').length;
+      document.getElementById('sen-stat-total').textContent = sensores.length;
+      document.getElementById('sen-stat-activos').textContent = activos;
+      document.getElementById('sen-stat-baja').textContent = sensores.length - activos;
+
+      const chipViajando = document.getElementById('sen-kpi-viajando');
+      chipViajando.hidden = !vivo.disponible;
+      if (vivo.disponible) {
+        document.getElementById('sen-stat-viajando').textContent =
+          sensores.filter((s) => estadoDe(s) === 'Viajando').length;
+      }
+    }
+
+    const KPI_FILTRO = {
+      'sen-kpi-activos': { campo: 'ESTATUS', valor: 'ACTIVO' },
+      'sen-kpi-baja': { campo: 'ESTATUS', valor: 'BAJA' },
+      'sen-kpi-viajando': { campo: 'EN_VIVO', valor: 'Viajando' },
+    };
+
+    function marcarKpiActivo(filtros) {
+      Object.keys(KPI_FILTRO).forEach((id) => {
+        const f = KPI_FILTRO[id];
+        const valores = filtros[f.campo] && filtros[f.campo].valores;
+        const activo = !!(valores && valores.length === 1 && valores[0] === f.valor);
+        document.getElementById(id).classList.toggle('activo', activo);
+      });
+    }
+
+    const tabs = Tabs.iniciar(document.getElementById('sen-tabs'), {
+      inicial: 'registros',
+      alCambiar: (nombre) => { if (nombre === 'registros') requestAnimationFrame(tabla.ajustarAlto); },
+    });
+
+    Object.keys(KPI_FILTRO).forEach((id) => {
+      document.getElementById(id).addEventListener('click', (ev) => {
+        const f = KPI_FILTRO[id];
+        const yaActivo = ev.currentTarget.classList.contains('activo');
+        tabs.mostrar('registros');
+        tabla.setFiltro(f.campo, yaActivo ? null : { valores: [f.valor] });
+      });
+    });
+    document.getElementById('sen-kpi-total').addEventListener('click', () => {
+      tabs.mostrar('registros');
+      tabla.limpiarFiltros();
+    });
+
+    // ----- Carga -----
+    async function cargar() {
+      tabla.setCargando(true);
+      try {
+        sensores = (await callServer('apiListarSensores', state.token)) || [];
+      } catch (err) {
+        tabla.setError('No se pudieron cargar las instalaciones: ' + err.message);
+        return;
+      }
+      refrescarTabla();
+      pintarStats();
+    }
+
+    /** Estado en vivo: la tabla ya se ve aunque Geotab tarde o no esté configurado */
+    async function cargarEstadoEnVivo() {
+      try {
+        vivo = (await callServer('apiEstadoEnVivoSensores', state.token)) || { disponible: false, estados: {} };
+      } catch (err) {
+        vivo = { disponible: false, estados: {}, motivo: err.message };
+      }
+      if (!document.body.contains(document.getElementById('sen-tabla'))) return;   // se salieron de la pantalla
+      refrescarTabla();
+      pintarStats();
+    }
+
+    /** Se refresca solo cada minuto; se detiene al salir de la pantalla */
+    function programarRefresco() {
+      clearInterval(temporizador);
+      temporizador = setInterval(() => {
+        if (!document.body.contains(document.getElementById('sen-tabla'))) {
+          clearInterval(temporizador);
+          return;
+        }
+        cargarEstadoEnVivo();
+      }, 60000);
+    }
+
+    // ----- Alta -----
+    if (!puedeEditar) {
+      document.querySelector('#sen-tabs .tab-btn[data-tab="nuevo"]').remove();
+    } else {
+      prepararFormulario();
+    }
+
+    /** Todo el formulario lo arma el componente: aquí solo se declara QUÉ se pide. */
+    function prepararFormulario() {
+      Formulario.crear(document.getElementById('sen-form'), {
+        buscar: {
+          campo: 'FOLIO',
+          etiqueta: 'Folio del vehículo',
+          ayuda: 'Al escribirlo se muestran los datos de la unidad para confirmar',
+          opciones: async () => ((await callServer('apiListarVehiculosBasico', state.token)) || []).map((v) => ({
+            valor: v.FOLIO,
+            etiqueta: [v.PLACA, v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' · '),
+          })),
+          cargar: (folio) => callServer('apiDatosVehiculoParaSensor', state.token, folio),
+          ficha: (d) => {
+            const c = d.copiados;
+            const avisos = [];
+            if (d.sensoresActivos.length) {
+              avisos.push({ tipo: 'alerta', texto: 'Esta unidad ya tiene un sensor activo: ' + d.sensoresActivos.join(', ') });
+            }
+            if (String(d.estatusVehiculo).toUpperCase().indexOf('BAJA') !== -1) {
+              avisos.push({ tipo: 'alerta', texto: 'El vehículo está dado de baja (' + d.estatusVehiculo + ')' });
+            }
+            return {
+              titulo: c['PLACA'] || 'Sin placa',
+              subtitulo: [c['MARCA'], c['LINEA VEHICULO'], c['MODELO']].filter(Boolean).join(' · '),
+              avisos: avisos,
+              datos: [
+                ['Departamento', c['DEPARTAMENTO']],
+                ['Sede', c['SEDE']],
+                ['Responsable', c['RESPONSABLE']],
+                ['Serie del vehículo', c['SERIE VEHICULO']],
+                ['Capacidad', c['CAPACIDAD DE COMBUSTIBLE'] ? c['CAPACIDAD DE COMBUSTIBLE'] + ' L' : ''],
+                ['Estatus del vehículo', d.estatusVehiculo],
+              ],
+              extra: [
+                ['Clase', c['CLASE']],
+                ['Color', c['COLOR']],
+                ['Razón social', c['RAZON SOCIAL']],
+                ['Oficina / desarrollo', c['OFICINA / DESARROLLO']],
+                ['Combustible del vehículo', d.tipoCombustibleVehiculo],
+              ],
+              pie: 'Estos datos se copian del catálogo de Vehículos al guardar la instalación',
+            };
+          },
+          // El vehículo decide qué productos de combustible aplican y sugiere la serie
+          alCargar: (d, form) => {
+            form.setOpciones('COMBUSTIBLE', d.combustibles, d.combustibles.length === 1 ? d.combustibles[0] : '');
+            if (!form.getValores().SERIE_SENSOR && d.serieSensorSugerida) form.setValor('SERIE_SENSOR', d.serieSensorSugerida);
+          },
+        },
+        // Por pasos: primero se elige la unidad y se confirma, luego se captura.
+        // El panel de la derecha deja a la vista la unidad y lo que ya se capturó.
+        ancho: 'medio',
+        columnas: 2,
+        panel: true,   // solo la ficha del vehículo: repetir lo capturado estorba más que ayuda
+        pasos: [
+          { titulo: 'Vehículo', descripcion: 'Busca la unidad y confirma que sea la correcta', campos: ['FOLIO'] },
+          { titulo: 'Instalación', descripcion: 'Datos del equipo y la responsiva firmada',
+            campos: ['SERIE_SENSOR', 'COMBUSTIBLE', 'FECHA_INSTALACION', 'ESTATUS', 'RESPONSIVA'] },
+          { titulo: 'Consumo', descripcion: 'Opcional: se puede llenar después',
+            campos: ['RENDIMIENTO', 'RALENTI', 'COMENTARIOS'] },
+        ],
+        resumen: true,
+        campos: [
+          { id: 'SERIE_SENSOR', etiqueta: 'Serie del sensor', requerido: true, mayusculas: true,
+            ayuda: 'La que trae la etiqueta del equipo, ej. G9HT5CEWRJV7', seccion: 'Equipo instalado' },
+          { id: 'COMBUSTIBLE', etiqueta: 'Combustible que carga', tipo: 'lista', requerido: true,
+            ayuda: 'Solo los que aplican al vehículo' },
+          { id: 'FECHA_INSTALACION', etiqueta: 'Fecha de instalación', tipo: 'fecha', requerido: true,
+            valor: hoyLocal(), seccion: 'Instalación' },
+          { id: 'ESTATUS', etiqueta: 'Estatus del sensor', tipo: 'lista', opciones: ['ACTIVO', 'BAJA'], valor: 'ACTIVO' },
+          { id: 'RESPONSIVA', etiqueta: 'Responsiva del sensor', tipo: 'archivo', acepta: 'application/pdf',
+            maxMB: 10, requerido: true, ayuda: 'PDF firmado, máximo 10 MB' },
+          { id: 'RENDIMIENTO', etiqueta: 'Rendimiento (km/L)', tipo: 'numero', min: 0, paso: 0.01,
+            ayuda: 'Se puede llenar después', seccion: 'Consumo declarado' },
+          { id: 'RALENTI', etiqueta: 'Consumo en ralentí (L/h)', tipo: 'numero', min: 0, paso: 0.01,
+            ayuda: 'Se puede llenar después' },
+          { id: 'COMENTARIOS', etiqueta: 'Comentarios', tipo: 'parrafo',
+            ayuda: 'Ej. se reubicó el equipo del tablero' },
+        ],
+        textoGuardar: 'Registrar instalación',
+        iconoGuardar: 'save',
+        alGuardar: async (valores, archivos) => {
+          await callServer('apiRegistrarSensor', state.token, valores, {
+            base64: await leerArchivoBase64(archivos.RESPONSIVA),
+            mimeType: archivos.RESPONSIVA.type,
+          });
+        },
+        textoExito: (valores) => 'Instalación registrada en el folio ' + valores.FOLIO,
+        alGuardado: async () => {
+          tabs.mostrar('registros');
+          await cargar();
+        },
+      });
+    }
+
+    await cargar();
+    cargarEstadoEnVivo();     // sin await: la tabla no espera a Geotab
+    programarRefresco();
+  }
+</script>

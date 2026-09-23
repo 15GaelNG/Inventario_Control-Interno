@@ -1,0 +1,45 @@
+<template id="tpl-inspecciones">
+  <div class="page-header-compacto">
+    <div>
+      <h2><i data-lucide="clipboard-list" class="ico"></i> Inspección vehicular</h2>
+      <p class="page-subtitle">Checklist de estado por unidad — puntaje, diagramas de daños y formato firmado</p>
+    </div>
+    <!-- KPIs: clic = filtrar la tabla -->
+    <div class="kpi-chips">
+      <button type="button" class="kpi-chip" id="ins-kpi-total" title="Ver todas las inspecciones">
+        <strong id="ins-stat-total">0</strong> inspecciones
+      </button>
+      <button type="button" class="kpi-chip" id="ins-kpi-mes" title="Filtrar: inspecciones de los últimos 30 días">
+        <i data-lucide="calendar-clock" class="ico"></i> <strong id="ins-stat-mes">0</strong> este mes
+      </button>
+      <button type="button" class="kpi-chip kpi-warn" id="ins-kpi-bajas" title="Filtrar: puntaje menor a 80%">
+        <i data-lucide="triangle-alert" class="ico"></i> <strong id="ins-stat-bajas">0</strong> con puntaje bajo
+      </button>
+      <button type="button" class="kpi-chip" id="ins-kpi-promedio" title="Promedio de puntaje de lo que se ve en la tabla" disabled>
+        <i data-lucide="gauge" class="ico"></i> <strong id="ins-stat-promedio">—</strong> promedio
+      </button>
+    </div>
+  </div>
+
+  <div id="ins-tabs">
+    <div class="tabs-lista">
+      <button type="button" class="tab-btn" data-tab="registros"><i data-lucide="table" class="ico"></i> Inspecciones</button>
+      <button type="button" class="tab-btn" data-tab="nueva"><i data-lucide="plus" class="ico"></i> Nueva inspección</button>
+    </div>
+
+    <div class="card card-compacta" data-panel="registros">
+      <div id="ins-tabla"></div>
+    </div>
+
+    <div class="card form-card" data-panel="nueva">
+      <div class="form-card-header">
+        <div class="form-card-icon"><i data-lucide="clipboard-list" class="ico"></i></div>
+        <div>
+          <h3>Registrar inspección</h3>
+          <p>Escribe el folio y elige el tipo de unidad: el checklist se arma según su formato</p>
+        </div>
+      </div>
+      <div id="ins-form"></div>
+    </div>
+  </div>
+</template>
