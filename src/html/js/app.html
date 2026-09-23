@@ -1826,25 +1826,42 @@
 
         vacioCambios.hidden = (cambios || []).length > 0;
         cuerpoCambios.innerHTML = (cambios || []).map((c) => `
-          <tr>
-            <td>${c.CAMPO || '—'}</td>
-            <td>${c.ANTES || '<span class="empty-state" style="padding:0">(vacío)</span>'}</td>
-            <td>${c.DESPUES || '<span class="empty-state" style="padding:0">(vacío)</span>'}</td>
-            <td>${c.ACTUALIZADO_POR || '—'}</td>
-            <td>${formatearFecha(c.FECHA)}</td>
-          </tr>
+          <div class="historial-item">
+            <div class="historial-icon"><i data-lucide="pencil" class="ico"></i></div>
+            <div class="historial-main">
+              <div class="historial-campo">${c.CAMPO || '—'}</div>
+              <div class="historial-valores">
+                <span class="chip-valor chip-antes">${c.ANTES || '(vacío)'}</span>
+                <i data-lucide="arrow-right" class="ico historial-flecha"></i>
+                <span class="chip-valor chip-despues">${c.DESPUES || '(vacío)'}</span>
+              </div>
+            </div>
+            <div class="historial-meta">
+              <div>${c.ACTUALIZADO_POR || '—'}</div>
+              <div>${formatearFecha(c.FECHA)}</div>
+            </div>
+          </div>
         `).join('');
 
         vacioReasignaciones.hidden = (reasignaciones || []).length > 0;
         cuerpoReasignaciones.innerHTML = (reasignaciones || []).map((r) => `
-          <tr>
-            <td>${formatearFecha(r.FECHA)}</td>
-            <td>${r.RESPONSABLE_SALIENTE || '—'}</td>
-            <td>${r.RESPONSABLE_ENTRANTE || '—'}</td>
-            <td>${r.DEPARTAMENTO_ENTRANTE || '—'}</td>
-            <td>${r.QUIEN_REGISTRO || '—'}</td>
-          </tr>
+          <div class="historial-item">
+            <div class="historial-icon historial-icon-accent"><i data-lucide="arrow-left-right" class="ico"></i></div>
+            <div class="historial-main">
+              <div class="historial-valores">
+                <span class="chip-valor chip-antes">${r.RESPONSABLE_SALIENTE || '—'}</span>
+                <i data-lucide="arrow-right" class="ico historial-flecha"></i>
+                <span class="chip-valor chip-despues">${r.RESPONSABLE_ENTRANTE || '—'}</span>
+              </div>
+              <div class="historial-departamento">${r.DEPARTAMENTO_ENTRANTE || '—'}</div>
+            </div>
+            <div class="historial-meta">
+              <div>${r.QUIEN_REGISTRO || '—'}</div>
+              <div>${formatearFecha(r.FECHA)}</div>
+            </div>
+          </div>
         `).join('');
+        refreshIcons();
       } catch (err) {
         grid.innerHTML = '<p class="error-msg">No se pudo cargar: ' + err.message + '</p>';
       }
