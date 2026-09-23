@@ -515,6 +515,7 @@
    * botón de acceso directo "Continuar como [nombre]".
    */
   async function initGoogleQuickLogin() {
+    const detectando = document.getElementById('google-account-detectando');
     const chip = document.getElementById('google-account-chip');
     const divisor = document.getElementById('login-or-divider');
     try {
@@ -542,6 +543,8 @@
       });
     } catch (err) {
       // Si falla la detección (poco común), simplemente se queda el formulario manual.
+    } finally {
+      detectando.hidden = true;
     }
   }
 

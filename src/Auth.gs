@@ -1,9 +1,17 @@
 
 const Auth = (function () {
-  const COLUMNAS_USUARIOS = ['CORREO', 'CONTRASEÑA', 'ROL'];
+  // Nombre real de la pestaña ya confirmado ("USUARIOS") — se busca directo
+  // por nombre, no por firma de columnas (SheetUtils.getSheetByColumns).
+  // Esto SÍ importa para la velocidad: ese spreadsheet tiene ~50 pestañas
+  // (es el mismo compartido de AppSheet), y buscar por columnas implica
+  // abrir y leer los encabezados de CADA UNA hasta encontrar la que
+  // coincide — lento la primera vez que se pide en el día (después queda
+  // 6h en caché, pero la detección automática de Google al abrir el login
+  // es justo la más sensible a esa primera vez lenta).
+  const NOMBRE_HOJA_USUARIOS = 'USUARIOS';
 
   function hojaUsuarios_() {
-    return SheetUtils.getSheetByColumns(Config.SPREADSHEET_IDS.USUARIOS(), COLUMNAS_USUARIOS);
+    return SheetUtils.getSheet(Config.SPREADSHEET_IDS.USUARIOS(), NOMBRE_HOJA_USUARIOS);
   }
 
   function hashPassword_(password, salt) {
