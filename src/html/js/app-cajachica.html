@@ -217,9 +217,9 @@
     async function cargarCatalogosCajaChica() {
       try {
         const [departamentos, sedes, oficinas] = await Promise.all([
-          callServer('apiListarDepartamentosCCH', state.token),
-          callServer('apiListarSedesCCH', state.token),
-          callServer('apiListarOficinasCCH', state.token),
+          callServerCacheado('apiListarDepartamentosCCH', state.token),
+          callServerCacheado('apiListarSedesCCH', state.token),
+          callServerCacheado('apiListarOficinasCCH', state.token),
         ]);
         ['cch-departamento', 'editar-cajachica-departamento'].forEach((id) => llenarSelect(id, departamentos));
         ['cch-sede', 'editar-cajachica-sede'].forEach((id) => llenarSelect(id, sedes));

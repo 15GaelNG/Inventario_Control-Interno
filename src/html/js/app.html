@@ -1644,11 +1644,11 @@
     async function cargarCatalogosVehiculo() {
       try {
         const [marcas, departamentos, sedes, razones, mapaUbicaciones] = await Promise.all([
-          callServer('apiListarMarcas', state.token),
-          callServer('apiListarDepartamentos', state.token),
-          callServer('apiListarSedesVehiculo', state.token),
-          callServer('apiListarRazonesSociales', state.token),
-          callServer('apiListarUbicacionesPorSede', state.token),
+          callServerCacheado('apiListarMarcas', state.token),
+          callServerCacheado('apiListarDepartamentos', state.token),
+          callServerCacheado('apiListarSedesVehiculo', state.token),
+          callServerCacheado('apiListarRazonesSociales', state.token),
+          callServerCacheado('apiListarUbicacionesPorSede', state.token),
         ]);
         ['veh-marca', 'editar-vehiculo-marca'].forEach((id) => llenarSelect(id, marcas));
         ['veh-departamento', 'editar-vehiculo-departamento'].forEach((id) => llenarSelect(id, departamentos));
@@ -2026,10 +2026,10 @@
     async function cargarCatalogosUber() {
       try {
         const [razones, sedes, oficinas, deptos] = await Promise.all([
-          callServer('apiListarRazonesSociales', state.token),
-          callServer('apiListarSedes', state.token),
-          callServer('apiListarOficinasDesarrollo', state.token),
-          callServer('apiListarDepartamentos', state.token),
+          callServerCacheado('apiListarRazonesSociales', state.token),
+          callServerCacheado('apiListarSedes', state.token),
+          callServerCacheado('apiListarOficinasDesarrollo', state.token),
+          callServerCacheado('apiListarDepartamentos', state.token),
         ]);
         ['uber-razon-social', 'editar-uber-razon-social'].forEach((id) => llenarSelect(id, razones));
         ['uber-sede', 'editar-uber-sede'].forEach((id) => llenarSelect(id, sedes));
@@ -2305,7 +2305,7 @@
     async function cargarCatalogosTickets() {
       try {
         const [departamentos, solicitantes] = await Promise.all([
-          callServer('apiListarDepartamentos', state.token),
+          callServerCacheado('apiListarDepartamentos', state.token),
           callServer('apiListarSolicitantesTickets', state.token),
         ]);
         // Departamento ahora es <input list="..."> igual que Solicitante

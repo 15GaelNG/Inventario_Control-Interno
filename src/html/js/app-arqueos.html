@@ -485,7 +485,7 @@
     try {
       const [cajas, items] = await Promise.all([
         callServer('apiListarCajasChicasResumen', state.token),
-        callServer('apiListarAuditItems', state.token),
+        callServerCacheado('apiListarAuditItems', state.token),
       ]);
       auditItems = items || [];
       (cajas || []).forEach((c) => { cajasPorId[c.ID_CCH] = c; });

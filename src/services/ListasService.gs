@@ -18,16 +18,39 @@ const ListasService = (function () {
     return Config.SPREADSHEET_IDS.VEHICULOS();
   }
 
+  // Estos catálogos casi no cambian (los mantiene un admin de vez en
+  // cuando), pero se piden MUCHO — cada vez que cualquier usuario abre
+  // Vehículos/Uber/Tickets/Caja Chica. CacheService.getScriptCache() es
+  // compartido entre TODOS los usuarios del script (no por sesión), así
+  // que la primera persona que abra un módulo en el día "calienta" la
+  // caché para todos los demás durante 30 min — de ~150-3600 celdas leídas
+  // de la hoja a una lectura de caché casi instantánea. Solo guarda texto,
+  // por eso JSON.stringify/parse; si el valor no cabe (>100KB, no debería
+  // pasar con estos catálogos) simplemente no se cachea, sin tronar.
+  const TTL_CATALOGOS_SEGUNDOS = 1800;
+  function obtenerCacheado_(clave, calcular) {
+    const cache = CacheService.getScriptCache();
+    const cacheado = cache.get(clave);
+    if (cacheado) {
+      try { return JSON.parse(cacheado); } catch (e) { /* caché corrupta — se recalcula abajo */ }
+    }
+    const valor = calcular();
+    try { cache.put(clave, JSON.stringify(valor), TTL_CATALOGOS_SEGUNDOS); } catch (e) { /* no cupo — no pasa nada */ }
+    return valor;
+  }
+
   /** Valores únicos, no vacíos y ordenados de una columna de cualquier hoja de catálogo. */
   function listarColumnaDeHoja_(nombreHoja, nombreColumna) {
-    const sheet = SheetUtils.getSheet(ssId(), nombreHoja);
-    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, [nombreColumna]);
-    const valores = new Set();
-    for (let i = 0; i < filas; i++) {
-      const v = datos[nombreColumna][i];
-      if (v) valores.add(String(v).trim());
-    }
-    return Array.from(valores).sort((a, b) => a.localeCompare(b));
+    return obtenerCacheado_('lista_' + nombreHoja + '_' + nombreColumna, () => {
+      const sheet = SheetUtils.getSheet(ssId(), nombreHoja);
+      const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, [nombreColumna]);
+      const valores = new Set();
+      for (let i = 0; i < filas; i++) {
+        const v = datos[nombreColumna][i];
+        if (v) valores.add(String(v).trim());
+      }
+      return Array.from(valores).sort((a, b) => a.localeCompare(b));
+    });
   }
 
   function listarColumna_(nombreColumna) {
@@ -78,21 +101,23 @@ const ListasService = (function () {
   }
 
   function mapaUbicacionesPorSede_() {
-    const sheet = SheetUtils.getSheet(ssId(), SHEET_LISTAS);
-    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, ['SEDE 2', 'OFICINA / DESARROLLO 2']);
-    const mapa = {};
-    for (let i = 0; i < filas; i++) {
-      const sede = String(datos['SEDE 2'][i] || '').trim();
-      const ubicacion = String(datos['OFICINA / DESARROLLO 2'][i] || '').trim();
-      if (!sede || !ubicacion) continue;
-      if (!mapa[sede]) mapa[sede] = new Set();
-      mapa[sede].add(ubicacion);
-    }
-    const resultado = {};
-    Object.keys(mapa).forEach((sede) => {
-      resultado[sede] = Array.from(mapa[sede]).sort((a, b) => a.localeCompare(b));
+    return obtenerCacheado_('mapa_ubicaciones_sede', () => {
+      const sheet = SheetUtils.getSheet(ssId(), SHEET_LISTAS);
+      const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, ['SEDE 2', 'OFICINA / DESARROLLO 2']);
+      const mapa = {};
+      for (let i = 0; i < filas; i++) {
+        const sede = String(datos['SEDE 2'][i] || '').trim();
+        const ubicacion = String(datos['OFICINA / DESARROLLO 2'][i] || '').trim();
+        if (!sede || !ubicacion) continue;
+        if (!mapa[sede]) mapa[sede] = new Set();
+        mapa[sede].add(ubicacion);
+      }
+      const resultado = {};
+      Object.keys(mapa).forEach((sede) => {
+        resultado[sede] = Array.from(mapa[sede]).sort((a, b) => a.localeCompare(b));
+      });
+      return resultado;
     });
-    return resultado;
   }
 
   function listarUbicacionesPorSede(token) {

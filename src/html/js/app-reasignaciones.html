@@ -36,7 +36,7 @@
     });
 
     // Departamento (catálogo real, mismo que usan Vehículos/Uber/Tickets).
-    callServer('apiListarDepartamentos', state.token).then((departamentos) => {
+    callServerCacheado('apiListarDepartamentos', state.token).then((departamentos) => {
       document.getElementById('rv-departamento-entrante-lista').innerHTML =
         (departamentos || []).map((d) => `<option value="${d}"></option>`).join('');
     }).catch((err) => {
