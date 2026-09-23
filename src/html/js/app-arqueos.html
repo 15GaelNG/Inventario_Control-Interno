@@ -450,10 +450,10 @@
   // ---------- Arqueos ----------
   async function initArqueos() {
     wireTabsSimple(document.getElementById('view-container'));
-    const lista = document.getElementById('lista-arqueos');
-    const vacio = document.getElementById('arqueos-vacio');
+    // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
+    const puedeEditar = puedeEditarModulo('arqueos');
+    if (!puedeEditar) document.querySelector('#arq-tabs .tab-btn[data-tab="registrar"]').remove();
     const modalEditar = document.getElementById('modal-editar-arqueo');
-    const modalDetalle = document.getElementById('modal-detalle-arqueo');
     let arqueosPorId = {};
     let cajasPorId = {};
     let todosLosArqueos = [];
@@ -594,76 +594,97 @@
       return `<span class="badge-estado ${n > 0 ? 'pendiente' : 'baja'}"><i data-lucide="${n > 0 ? 'clock' : 'ban'}" class="ico"></i> ${formatearMoneda(n)}</span>`;
     }
 
-    const columnasArqueos = [
-      { clave: 'ID', etiqueta: 'ID Arqueo' },
-      { clave: 'ID_CCH', etiqueta: 'ID CCH' },
-      { clave: 'RESPONSABLE', etiqueta: 'Responsable' },
-      { clave: 'TIPO_ARQUEO', etiqueta: 'Tipo' },
-      { clave: 'FECHA_INICIO', etiqueta: 'Fecha' },
-      { clave: 'TOTAL_GENERAL', etiqueta: 'Total general' },
-      { clave: 'DIFERENCIA', etiqueta: 'Diferencia' },
-      { clave: 'CALIFICACION', etiqueta: 'Calificación' },
-      { clave: 'ESTADO_PDF', etiqueta: 'Estado PDF' },
+    // Campos con valor en pesos, para mostrarlos bien en el detalle completo.
+    const CAMPOS_MONEDA_DETALLE_ARQUEO = [
+      'MONTO CAJA', 'TOTAL M', 'TOTAL B', 'TOTAL EFECTIVO', 'DISPONIBLE CUENTA BANCARIA', 'TOTAL CHEQUES',
+      'TOTAL CAJA CHICA CON FACTURAS / XML', 'TOTAL CAJA CHICA GASTOS NO DEDUCIBLES',
+      'TOTAL VIATICOS CON FACTURAS / XML', 'TOTAL VIATICOS NO DEDUCIBLES',
+      'TOTAL CAJA CHICA CON FACTURAS (PENDIENTES)', 'TOTAL VIATICOS CON FACTURAS (PENDIENTES)',
+      'TOTAL CAJA CHICA NO DEDUCIBLES (PENDIENTES)', 'TOTAL VIATICOS NO DEDUCIBLES (PENDIENTES)',
+      'OTROS', 'TOTAL GENERAL', 'DIFERENCIA',
     ];
-    const motorTablaArqueos = crearTablaInteractiva({
-      thead: document.getElementById('arq-thead'),
-      columnas: columnasArqueos,
-      buscadorGlobal: document.getElementById('arq-buscar-global'),
-      piePaginacion: document.getElementById('arq-pie'),
-      onRenderPagina: (arqueos, total) => {
-        vacio.hidden = total > 0;
-        lista.innerHTML = arqueos.map((a) => `
-          <tr>
-            <td class="tabla-clickable" data-id="${a.ID}" title="Ver detalle completo">${a.ID}</td>
-            <td>${a.ID_CCH || '—'}</td>
-            <td>${a.RESPONSABLE || '—'}</td>
-            <td>${a.TIPO_ARQUEO || '—'}</td>
-            <td>${formatearFecha(a.FECHA_INICIO)}</td>
-            <td>${formatearMoneda(a.TOTAL_GENERAL)}</td>
-            <td>${badgeDiferencia(a.DIFERENCIA)}</td>
-            <td>${a.CALIFICACION === '' ? '—' : a.CALIFICACION + '%'}</td>
-            <td>${a.ESTADO_PDF || '—'}</td>
-            <td>
-              <div class="tabla-actions">
-                ${a.FORMATO_ARQUEO ? `<a class="externo" href="${a.FORMATO_ARQUEO}" target="_blank" rel="noopener" title="Ver PDF"><i data-lucide="file-text" class="ico"></i></a>` : ''}
-                <button type="button" class="secondary btn-editar-arqueo" data-id="${a.ID}" title="Editar"><i data-lucide="pencil" class="ico"></i></button>
-                <button type="button" class="danger btn-eliminar-arqueo" data-id="${a.ID}" title="Eliminar"><i data-lucide="trash-2" class="ico"></i></button>
-              </div>
-            </td>
-          </tr>
-        `).join('');
+    /** Panel de detalle: el registro completo (79 columnas, no las 9 del
+     *  resumen) — las columnas de la tabla van con enDetalle:false para no
+     *  repetir esos mismos campos arriba. Mismo patrón que Vehículos. */
+    async function mostrarDetalleArqueoEnPanel(resumen, contenedor) {
+      contenedor.innerHTML = '<div class="loading-inline"><span class="spinner"></span> Cargando…</div>';
+      try {
+        const completo = await callServer('apiBuscarArqueoPorId', state.token, resumen.ID);
+        if (!completo) {
+          contenedor.innerHTML = '<p class="empty-state">No se encontró el registro completo.</p>';
+          return;
+        }
+        contenedor.innerHTML = Object.keys(completo)
+          .filter((k) => completo[k] !== '' && completo[k] !== null && completo[k] !== undefined)
+          .map((k) => {
+            let valor = completo[k];
+            if (CAMPOS_MONEDA_DETALLE_ARQUEO.includes(k)) valor = formatearMoneda(valor);
+            else if (k === 'CALIFICACION_AUDITORIA_FINAL') valor = valor + '%';
+            return itemInfo(tituloDesdeClave(k), valor);
+          })
+          .join('');
+      } catch (err) {
+        contenedor.innerHTML = '<p class="error-msg">No se pudo cargar: ' + escaparHtml(err.message) + '</p>';
+      }
+    }
 
-        wireFilasClickables(lista, (ds) => abrirDetalleArqueo(ds.id));
-        lista.querySelectorAll('.btn-editar-arqueo').forEach((btn) => {
-          btn.addEventListener('click', () => abrirEditarArqueo(btn.dataset.id));
-        });
-        lista.querySelectorAll('.btn-eliminar-arqueo').forEach((btn) => {
-          btn.addEventListener('click', () => eliminarArqueo(btn.dataset.id));
-        });
-        refreshIcons();
+    const tabla = DataTable.crear(document.getElementById('arq-tabla'), {
+      idCampo: 'ID',
+      idTabla: 'arqueos',
+      ordenInicial: { campo: 'FECHA_INICIO', dir: 'desc' },
+      textoVacio: 'Todavía no hay arqueos registrados',
+      exportar: { nombreArchivo: 'Arqueos' },
+      etiquetaFila: (a) => a.ID,
+      alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
+      detalle: {
+        titulo: (a) => 'ID Arqueo: ' + (a.ID || ''),
+        contenidoExtra: (a, contenedor) => mostrarDetalleArqueoEnPanel(a, contenedor),
       },
+      columnas: [
+        { campo: 'ID', titulo: 'ID Arqueo', tipo: 'texto', fijada: true, enDetalle: false },
+        { campo: 'ID_CCH', titulo: 'ID CCH', tipo: 'texto', enDetalle: false },
+        { campo: 'RESPONSABLE', titulo: 'Responsable', tipo: 'texto', enDetalle: false },
+        { campo: 'TIPO_ARQUEO', titulo: 'Tipo', tipo: 'lista', enDetalle: false },
+        { campo: 'FECHA_INICIO', titulo: 'Fecha', tipo: 'fecha', enDetalle: false },
+        { campo: 'TOTAL_GENERAL', titulo: 'Total general', tipo: 'numero', render: (v) => escaparHtml(formatearMoneda(v)), enDetalle: false },
+        { campo: 'DIFERENCIA', titulo: 'Diferencia', tipo: 'numero', render: (v) => badgeDiferencia(v), enDetalle: false },
+        { campo: 'CALIFICACION', titulo: 'Calificación', tipo: 'numero', render: (v) => (v === '' ? '—' : escaparHtml(v + '%')), enDetalle: false },
+        { campo: 'ESTADO_PDF', titulo: 'Estado PDF', tipo: 'lista', enDetalle: false },
+      ],
+      accionesFila: [].concat(
+        [{ icono: 'documento', titulo: 'Ver PDF', visible: (a) => !!a.FORMATO_ARQUEO, alHacer: (a) => window.open(a.FORMATO_ARQUEO, '_blank', 'noopener') }],
+        puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (a) => abrirEditarArqueo(a.ID) }] : []
+      ),
+      alEliminar: puedeEditar ? async (filas) => {
+        await Promise.all(filas.map((f) => callServer('apiEliminarArqueo', state.token, f.ID)));
+      } : null,
+      motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
 
     // Solo Total/Con diferencia son "categorías" clickeables — Calificación
     // promedio es un promedio, no algo que se pueda filtrar como categoría.
-    const tilesKpiArqueos = ['arq-stat-total', 'arq-stat-diferencias']
-      .map((id) => document.getElementById(id).closest('.stat-tile'));
-    wireKpiFiltro(tilesKpiArqueos[0], motorTablaArqueos, 'DIFERENCIA', null, tilesKpiArqueos);
-    wireKpiFiltro(tilesKpiArqueos[1], motorTablaArqueos, 'DIFERENCIA', (v) => (Number(v) || 0) !== 0, tilesKpiArqueos);
+    const tileTotalArq = document.getElementById('arq-stat-total').closest('.stat-tile');
+    const tileDiferenciasArq = document.getElementById('arq-stat-diferencias').closest('.stat-tile');
+    [tileTotalArq, tileDiferenciasArq].forEach((t) => t.classList.add('stat-tile-clickable'));
+    tileTotalArq.addEventListener('click', () => tabla.setFiltro('DIFERENCIA', null));
+    tileDiferenciasArq.addEventListener('click', () => {
+      const yaActivo = tileDiferenciasArq.classList.contains('stat-tile-activo');
+      tabla.setFiltro('DIFERENCIA', yaActivo ? null : { op: '!=', v1: 0 });
+    });
+    function marcarKpiActivo(filtros) {
+      const f = filtros.DIFERENCIA;
+      tileTotalArq.classList.toggle('stat-tile-activo', !f);
+      tileDiferenciasArq.classList.toggle('stat-tile-activo', !!(f && f.op === '!=' && f.v1 === 0));
+    }
 
     async function cargar() {
-      const errorBox = document.getElementById('arq-error');
-      let arqueos;
+      tabla.setCargando(true);
       try {
-        arqueos = await callServer('apiListarArqueosResumen', state.token);
+        todosLosArqueos = (await callServer('apiListarArqueosResumen', state.token)) || [];
       } catch (err) {
-        console.error('No se pudo cargar el historial de arqueos:', err);
-        errorBox.textContent = 'No se pudo cargar el historial: ' + err.message;
-        errorBox.hidden = false;
+        tabla.setError('No se pudo cargar el historial: ' + err.message);
         return;
       }
-      errorBox.hidden = true;
-      todosLosArqueos = arqueos || [];
 
       arqueosPorId = {};
       todosLosArqueos.forEach((a) => { arqueosPorId[a.ID] = a; });
@@ -675,46 +696,8 @@
       document.getElementById('arq-stat-diferencias').textContent =
         todosLosArqueos.filter((a) => (Number(a.DIFERENCIA) || 0) !== 0).length;
 
-      motorTablaArqueos.setDatos(todosLosArqueos);
+      tabla.setDatos(todosLosArqueos);
     }
-
-    // Campos con valor en pesos, para mostrarlos bien en el detalle completo.
-    const CAMPOS_MONEDA_DETALLE_ARQUEO = [
-      'MONTO CAJA', 'TOTAL M', 'TOTAL B', 'TOTAL EFECTIVO', 'DISPONIBLE CUENTA BANCARIA', 'TOTAL CHEQUES',
-      'TOTAL CAJA CHICA CON FACTURAS / XML', 'TOTAL CAJA CHICA GASTOS NO DEDUCIBLES',
-      'TOTAL VIATICOS CON FACTURAS / XML', 'TOTAL VIATICOS NO DEDUCIBLES',
-      'TOTAL CAJA CHICA CON FACTURAS (PENDIENTES)', 'TOTAL VIATICOS CON FACTURAS (PENDIENTES)',
-      'TOTAL CAJA CHICA NO DEDUCIBLES (PENDIENTES)', 'TOTAL VIATICOS NO DEDUCIBLES (PENDIENTES)',
-      'OTROS', 'TOTAL GENERAL', 'DIFERENCIA',
-    ];
-    async function abrirDetalleArqueo(id) {
-      const resumen = arqueosPorId[id];
-      if (!resumen) return;
-      document.getElementById('detalle-arqueo-label').textContent = 'ID Arqueo: ' + id;
-      const grid = document.getElementById('detalle-arqueo-grid');
-      grid.innerHTML = '<div class="loading-inline"><span class="spinner"></span> Cargando…</div>';
-      modalDetalle.hidden = false;
-      try {
-        const completo = await callServer('apiBuscarArqueoPorId', state.token, id);
-        if (!completo) {
-          grid.innerHTML = '<p class="empty-state">No se encontró el registro completo.</p>';
-          return;
-        }
-        grid.innerHTML = Object.keys(completo)
-          .filter((k) => completo[k] !== '' && completo[k] !== null && completo[k] !== undefined)
-          .map((k) => {
-            let valor = completo[k];
-            if (CAMPOS_MONEDA_DETALLE_ARQUEO.includes(k)) valor = formatearMoneda(valor);
-            else if (k === 'CALIFICACION_AUDITORIA_FINAL') valor = valor + '%';
-            return itemInfo(tituloDesdeClave(k), valor);
-          })
-          .join('');
-      } catch (err) {
-        grid.innerHTML = '<p class="error-msg">No se pudo cargar: ' + err.message + '</p>';
-      }
-    }
-    document.getElementById('btn-cerrar-detalle-arqueo').addEventListener('click', () => { modalDetalle.hidden = true; });
-    modalDetalle.addEventListener('click', (ev) => { if (ev.target === modalDetalle) modalDetalle.hidden = true; });
 
     async function abrirEditarArqueo(id) {
       const resumen = arqueosPorId[id];
@@ -795,18 +778,6 @@
       }
     });
 
-    async function eliminarArqueo(id) {
-      if (!confirm('¿Eliminar el arqueo ' + id + '? Esta acción no se puede deshacer.')) return;
-      toastCargando('Eliminando…');
-      try {
-        await callServer('apiEliminarArqueo', state.token, id);
-        await cargar();
-        toastExito('Eliminado exitosamente');
-      } catch (err) {
-        toastError('No se pudo eliminar: ' + err.message);
-      }
-    }
-
     document.getElementById('form-arqueo').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const errorBox = document.getElementById('arq-error');
@@ -848,9 +819,6 @@
       }
     });
 
-    document.getElementById('btn-exportar-excel-arqueos').addEventListener('click', () => {
-      exportarCSV('arqueos.csv', columnasArqueos, motorTablaArqueos.obtenerFiltrados());
-    });
     document.getElementById('btn-calendario-arqueos').addEventListener('click', () => {
       // "\/\/" (no "//") — ver comentario en app.html, botón de reporte de Vehículos.
       window.open('https:\/\/script.google.com/a/macros/ciudadmaderas.com/s/AKfycbwAgUrG2tEiZSxMtNO7hvXlyjfurJnuXIVXUDwyJF99Eci6UbvRtJqmpoCfXGGCdWad1A/exec', '_blank', 'noopener');

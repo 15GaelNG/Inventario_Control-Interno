@@ -4,9 +4,6 @@
       <h2><i data-lucide="ticket" class="ico"></i> Tickets</h2>
       <p class="page-subtitle">Bitácora general de atención — Uber, tarjeta EOX, hologramas, etc.</p>
     </div>
-    <div class="page-header-actions">
-      <button type="button" class="externo" id="btn-exportar-excel-tickets"><i data-lucide="file-spreadsheet" class="ico"></i> Exportar a Excel</button>
-    </div>
   </div>
 
   <div class="stat-row">
@@ -81,37 +78,13 @@
   </div>
 
   <div class="tab-panel" data-tab-panel="lista">
-    <div class="card">
-      <div class="card-header-row">
-        <h3 style="margin:0">Historial</h3>
-        <input type="search" id="tickets-buscar-global" class="tabla-buscar-global" placeholder="Buscar en la tabla…" />
-      </div>
-      <div class="table-scroll">
-        <table>
-          <thead id="tickets-thead"></thead>
-          <tbody id="lista-tickets"></tbody>
-        </table>
-      </div>
-      <p class="empty-state" id="tickets-vacio" hidden>Todavía no hay tickets registrados.</p>
-      <div class="tabla-pie" id="tickets-pie"></div>
+    <div class="card card-compacta">
+      <div id="tickets-tabla"></div>
     </div>
   </div>
 
-  <!-- Modal: detalle completo, solo lectura -->
-  <div class="modal-backdrop" id="modal-detalle-ticket" hidden>
-    <div class="modal-card modal-card-wide">
-      <div class="modal-header">
-        <div>
-          <h3 style="margin:0">Detalle completo</h3>
-          <p class="modal-subtitle" id="detalle-ticket-label"></p>
-        </div>
-        <button type="button" class="modal-close" id="btn-cerrar-detalle-ticket"><i data-lucide="x" class="ico"></i></button>
-      </div>
-      <div class="modal-form-scroll">
-        <div id="detalle-ticket-grid" class="info-grid"></div>
-      </div>
-    </div>
-  </div>
+  <!-- Compartido con Registrar -->
+  <datalist id="lista-solicitantes"></datalist>
 
   <!-- Modal: editar ticket -->
   <div class="modal-backdrop" id="modal-editar-ticket" hidden>
@@ -172,7 +145,4 @@
       </form>
     </div>
   </div>
-
-  <!-- Compartido entre Registrar y Editar -->
-  <datalist id="lista-solicitantes"></datalist>
 </template>

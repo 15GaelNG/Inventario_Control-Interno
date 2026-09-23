@@ -34,7 +34,7 @@ const VehiculosService = (function () {
   /** Catálogo completo, todas las columnas. Pesado (648 filas x 41 columnas) —
    * usar listarResumen() para listas/tarjetas y buscarPorFolio() para detalle. */
   function listar(token) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'vehiculos');
     return SheetUtils.getAll(ssId(), SHEET_VEHICULOS).map((row) => {
       const limpio = {};
       Object.keys(row).forEach((k) => { limpio[k] = limpiarValor_(row[k]); });
@@ -58,7 +58,7 @@ const VehiculosService = (function () {
   ];
 
   function listarBasico(token) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'vehiculos');
     const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
     const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_BASICO);
 
@@ -92,7 +92,7 @@ const VehiculosService = (function () {
    * listarBasico, que es para autocompletar y los excluye).
    */
   function listarResumen(token) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'vehiculos');
     const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
     const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
 
@@ -125,7 +125,7 @@ const VehiculosService = (function () {
    * más la columna FOLIO para ubicar el renglón, y luego lee solo esa fila.
    */
   function buscarPorFolio(token, folio) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'vehiculos');
     if (!folio) return null;
 
     const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
@@ -194,7 +194,7 @@ const VehiculosService = (function () {
    * campo Folio es de solo lectura) — NO reserva el folio, es una vista previa;
    * el que de verdad queda asignado se recalcula bajo candado dentro de crear(). */
   function previsualizarFolio(token, clase) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'vehiculos');
     return generarFolio_(clase);
   }
 
@@ -224,7 +224,7 @@ const VehiculosService = (function () {
    * candado dentro de crear()). No depende de ningún otro campo del formulario,
    * así que se pide una sola vez al abrir el módulo. */
   function previsualizarNucco(token) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'vehiculos');
     return generarNucco_();
   }
 
@@ -237,7 +237,7 @@ const VehiculosService = (function () {
    * Con LockService: dos altas al mismo tiempo no deben terminar con el mismo
    * folio NI el mismo NUCCO. */
   function crear(token, datos) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    Permisos.puedeEditar(token, 'vehiculos');
     const lock = LockService.getScriptLock();
     lock.waitLock(30000);
     try {
@@ -258,7 +258,7 @@ const VehiculosService = (function () {
    * Cambios Vehículos (ver CambiosVehiculosService) — así queda quién
    * cambió qué y cuándo, sin que nadie tenga que anotarlo a mano. */
   function actualizar(token, id, cambios) {
-    const sesion = Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    const sesion = Permisos.puedeEditar(token, 'vehiculos');
     const datos = Object.assign({}, cambios);
     delete datos.FOLIO; // no se edita, se fija solo al crear
     delete datos.NUCCO; // ídem
@@ -277,7 +277,7 @@ const VehiculosService = (function () {
    * OJO: el negocio normalmente "da de baja" (ESTATUS = BAJA VEHICULAR) en
    * vez de borrar — esto es un borrado real, para altas hechas por error. */
   function eliminar(token, id) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN]);
+    Permisos.puedeEditar(token, 'vehiculos');
     const ok = SheetUtils.remove(ssId(), SHEET_VEHICULOS, id, ID_COLUMN);
     if (!ok) throw new Error('No se encontró el vehículo con ID=' + id);
     return { ID: id };
@@ -299,7 +299,7 @@ const VehiculosService = (function () {
    * llamar crear()/actualizar(), igual que cualquier otro campo de texto.
    */
   function subirArchivo(token, nombreArchivo, mimeType, base64Data) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    Permisos.puedeEditar(token, 'vehiculos');
     if (!base64Data) throw new Error('No se recibió ningún archivo.');
 
     const bytes = Utilities.base64Decode(base64Data);

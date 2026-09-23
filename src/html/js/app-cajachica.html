@@ -178,11 +178,10 @@
   // ---------- Caja Chica ----------
   async function initCajaChica() {
     wireTabsSimple(document.getElementById('view-container'));
-    const lista = document.getElementById('lista-cajaschicas');
-    const vacio = document.getElementById('cajaschicas-vacio');
+    // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
+    const puedeEditar = puedeEditarModulo('caja-chica');
+    if (!puedeEditar) document.querySelector('#cch-tabs .tab-btn[data-tab="registrar"]').remove();
     const modalEditar = document.getElementById('modal-editar-cajachica');
-    const modalDetalle = document.getElementById('modal-detalle-cajachica');
-    let cajasPorId = {};
     let todasLasCajas = [];
 
     document.getElementById('campos-form-cajachica').innerHTML = renderCamposCajaChica('cch', false);
@@ -240,74 +239,82 @@
       return '<span class="badge-estado activo"><i data-lucide="circle-check" class="ico"></i> Vigente</span>';
     }
 
-    const columnasCajasChicas = [
-      { clave: 'ID_CCH', etiqueta: 'ID CCH' },
-      { clave: 'ESTATUS', etiqueta: 'Estatus' },
-      { clave: 'RESPONSABLE', etiqueta: 'Responsable' },
-      { clave: 'DEPARTAMENTO', etiqueta: 'Departamento' },
-      { clave: 'OFICINA', etiqueta: 'Oficina' },
-      { clave: 'SEDE', etiqueta: 'Sede' },
-      { clave: 'MONTO_ACTUAL', etiqueta: 'Monto actual' },
-    ];
-    const motorTablaCajasChicas = crearTablaInteractiva({
-      thead: document.getElementById('cch-thead'),
-      columnas: columnasCajasChicas,
-      buscadorGlobal: document.getElementById('cch-buscar-global'),
-      piePaginacion: document.getElementById('cch-pie'),
-      onRenderPagina: (cajas, total) => {
-        vacio.hidden = total > 0;
-        lista.innerHTML = cajas.map((c) => `
-          <tr>
-            <td class="tabla-clickable" data-id="${c.ID_CCH}" title="Ver detalle completo">${c.ID_CCH}</td>
-            <td>${badgeEstatusCaja(c.ESTATUS)}</td>
-            <td>${c.RESPONSABLE || '—'}</td>
-            <td>${c.DEPARTAMENTO || '—'}</td>
-            <td>${c.OFICINA || '—'}</td>
-            <td>${c.SEDE || '—'}</td>
-            <td>${formatearMoneda(c.MONTO_ACTUAL)}</td>
-            <td>
-              <div class="tabla-actions">
-                <button type="button" class="secondary btn-editar-cajachica" data-id="${c.ID_CCH}" title="Editar"><i data-lucide="pencil" class="ico"></i></button>
-                <button type="button" class="danger btn-eliminar-cajachica" data-id="${c.ID_CCH}" data-responsable="${c.RESPONSABLE}" title="Eliminar"><i data-lucide="trash-2" class="ico"></i></button>
-              </div>
-            </td>
-          </tr>
-        `).join('');
-
-        wireFilasClickables(lista, (ds) => abrirDetalleCajaChica(ds.id));
-        lista.querySelectorAll('.btn-editar-cajachica').forEach((btn) => {
-          btn.addEventListener('click', () => abrirEditarCajaChica(btn.dataset.id));
-        });
-        lista.querySelectorAll('.btn-eliminar-cajachica').forEach((btn) => {
-          btn.addEventListener('click', () => eliminarCajaChica(btn.dataset.id, btn.dataset.responsable));
-        });
-        refreshIcons();
-      },
+    const tabla = DataTable.crear(document.getElementById('cch-tabla'), {
+      idCampo: 'ID CCH',
+      idTabla: 'cajas-chicas',
+      textoVacio: 'Todavía no hay cajas chicas registradas',
+      exportar: { nombreArchivo: 'Cajas Chicas' },
+      etiquetaFila: (c) => c.RESPONSABLE || ('ID CCH ' + c['ID CCH']),
+      detalle: { titulo: (c) => 'ID CCH: ' + c['ID CCH'] },
+      alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
+      columnas: [
+        { campo: 'ID CCH', titulo: 'ID CCH', tipo: 'texto', fijada: true },
+        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', render: (v) => badgeEstatusCaja(v) },
+        { campo: 'RESPONSABLE DE CAJA CHICA', titulo: 'Responsable', tipo: 'texto' },
+        { campo: 'DEPARTAMENTO', titulo: 'Departamento', tipo: 'lista' },
+        { campo: 'OFICINA', titulo: 'Oficina', tipo: 'lista' },
+        { campo: 'SEDE', titulo: 'Sede', tipo: 'lista' },
+        { campo: 'MONTO ACTUAL', titulo: 'Monto actual', tipo: 'numero', render: (v) => escaparHtml(formatearMoneda(v)) },
+        { campo: 'EMPRESA ORIGEN', titulo: 'Empresa origen', tipo: 'lista', visible: false },
+        { campo: 'PUESTO DE RESPONSABLE', titulo: 'Puesto del responsable', tipo: 'texto', visible: false },
+        { campo: 'JEFE INMEDIATO DEL REPSONSABLE', titulo: 'Jefe inmediato del responsable', tipo: 'texto', visible: false },
+        { campo: 'ADMINISTRADA POR', titulo: 'Administrada por', tipo: 'lista', visible: false },
+        { campo: 'CAPTURISTA DE CAJA CHICA', titulo: 'Capturista', tipo: 'texto', visible: false },
+        { campo: 'PUESTO DE CAPTURISTA', titulo: 'Puesto del capturista', tipo: 'texto', visible: false },
+        { campo: 'FECHA DE APERTURA', titulo: 'Fecha de apertura', tipo: 'fecha', visible: false },
+        { campo: 'FECHA DE CIERRE', titulo: 'Fecha de cierre', tipo: 'fecha', visible: false },
+        { campo: 'FECHA DE RESPONSIVA CI', titulo: 'Fecha de autorización por DG', tipo: 'fecha', visible: false },
+        { campo: 'TIPO DE AUTORIZACIÓN', titulo: 'Tipo de autorización', tipo: 'lista', visible: false },
+        { campo: 'METODO DE REEMBOLSO', titulo: 'Método de reembolso', tipo: 'lista', visible: false },
+        { campo: 'CORREO ELECTRONICO DE RESPONSABLE', titulo: 'Correo del responsable', tipo: 'texto', visible: false },
+        { campo: 'CORREO ELECTRONICO CAPTURISTA', titulo: 'Correo del capturista', tipo: 'texto', visible: false },
+        { campo: 'TELEFONO DE RESPONSABLE', titulo: 'Teléfono del responsable', tipo: 'texto', visible: false },
+        { campo: 'TELEFONO DE CAPTURISTA', titulo: 'Teléfono del capturista', tipo: 'texto', visible: false },
+        { campo: 'TIPO IDENTIFICACION RESPONSABLE', titulo: 'Tipo de identificación (responsable)', tipo: 'lista', visible: false },
+        { campo: 'VIGENCIA IDENTIFICACION OFICIAL RESPONSABLE', titulo: 'Vigencia de identificación (responsable)', tipo: 'fecha', visible: false },
+        { campo: 'TIPO IDENTIFICACION JEFE DIRECTO', titulo: 'Tipo de identificación (jefe directo)', tipo: 'lista', visible: false },
+        { campo: 'VIGENCIA IDENTIFICACION OFICIAL JEFE DIRECTO', titulo: 'Vigencia de identificación (jefe directo)', tipo: 'fecha', visible: false },
+        { campo: 'OBSERVACIONES', titulo: 'Observaciones', tipo: 'texto', visible: false },
+      ],
+      accionesFila: puedeEditar ? [{
+        icono: 'pencil', titulo: 'Editar', alHacer: (c) => abrirEditarCajaChica(c),
+      }] : [],
+      alEliminar: puedeEditar ? async (filas) => {
+        await Promise.all(filas.map((f) => callServer('apiEliminarCajaChica', state.token, f['ID CCH'])));
+      } : null,
+      motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
 
-    const tilesKpiCajaChica = ['cch-stat-total', 'cch-stat-vigentes', 'cch-stat-proceso-cierre', 'cch-stat-cerradas']
-      .map((id) => document.getElementById(id).closest('.stat-tile'));
-    wireKpiFiltro(tilesKpiCajaChica[0], motorTablaCajasChicas, 'ESTATUS', null, tilesKpiCajaChica);
-    wireKpiFiltro(tilesKpiCajaChica[1], motorTablaCajasChicas, 'ESTATUS', (v) => String(v || '').toUpperCase() === 'VIGENTE', tilesKpiCajaChica);
-    wireKpiFiltro(tilesKpiCajaChica[2], motorTablaCajasChicas, 'ESTATUS', (v) => String(v || '').toUpperCase() === 'EN PROCESO DE CIERRE', tilesKpiCajaChica);
-    wireKpiFiltro(tilesKpiCajaChica[3], motorTablaCajasChicas, 'ESTATUS', (v) => String(v || '').toUpperCase() === 'CERRADA', tilesKpiCajaChica);
+    const KPI_FILTRO_CCH = { 'cch-stat-vigentes': 'VIGENTE', 'cch-stat-proceso-cierre': 'EN PROCESO DE CIERRE', 'cch-stat-cerradas': 'CERRADA' };
+    const tileTotalCch = document.getElementById('cch-stat-total').closest('.stat-tile');
+    tileTotalCch.classList.add('stat-tile-clickable');
+    tileTotalCch.addEventListener('click', () => tabla.setFiltro('ESTATUS', null));
+    Object.keys(KPI_FILTRO_CCH).forEach((id) => {
+      const tile = document.getElementById(id).closest('.stat-tile');
+      tile.classList.add('stat-tile-clickable');
+      tile.addEventListener('click', () => {
+        const yaActivo = tile.classList.contains('stat-tile-activo');
+        tabla.setFiltro('ESTATUS', yaActivo ? null : { valores: [KPI_FILTRO_CCH[id]] });
+      });
+    });
+    function marcarKpiActivo(filtros) {
+      const valores = filtros.ESTATUS && filtros.ESTATUS.valores;
+      tileTotalCch.classList.toggle('stat-tile-activo', !valores);
+      Object.keys(KPI_FILTRO_CCH).forEach((id) => {
+        document.getElementById(id).closest('.stat-tile').classList.toggle(
+          'stat-tile-activo', !!(valores && valores.length === 1 && valores[0] === KPI_FILTRO_CCH[id])
+        );
+      });
+    }
 
     async function cargar() {
-      const errorBox = document.getElementById('cch-error');
-      let cajas;
+      tabla.setCargando(true);
       try {
-        cajas = await callServer('apiListarCajasChicasResumen', state.token);
+        todasLasCajas = (await callServer('apiListarCajasChicasResumen', state.token)) || [];
       } catch (err) {
-        console.error('No se pudo cargar el catálogo de cajas chicas:', err);
-        errorBox.textContent = 'No se pudo cargar el catálogo: ' + err.message;
-        errorBox.hidden = false;
+        tabla.setError('No se pudo cargar el catálogo: ' + err.message);
         return;
       }
-      errorBox.hidden = true;
-      todasLasCajas = cajas || [];
-
-      cajasPorId = {};
-      todasLasCajas.forEach((c) => { cajasPorId[c.ID_CCH] = c; });
 
       document.getElementById('cch-stat-total').textContent = todasLasCajas.length;
       document.getElementById('cch-stat-vigentes').textContent =
@@ -317,36 +324,12 @@
       document.getElementById('cch-stat-cerradas').textContent =
         todasLasCajas.filter((c) => String(c.ESTATUS || '').toUpperCase() === 'CERRADA').length;
 
-      motorTablaCajasChicas.setDatos(todasLasCajas);
+      tabla.setDatos(todasLasCajas);
     }
 
-    async function abrirDetalleCajaChica(id) {
-      const resumen = cajasPorId[id];
+    async function abrirEditarCajaChica(resumen) {
       if (!resumen) return;
-      document.getElementById('detalle-cajachica-label').textContent = 'ID CCH: ' + id;
-      const grid = document.getElementById('detalle-cajachica-grid');
-      grid.innerHTML = '<div class="loading-inline"><span class="spinner"></span> Cargando…</div>';
-      modalDetalle.hidden = false;
-      try {
-        const completo = await callServer('apiBuscarCajaChicaPorId', state.token, id);
-        if (!completo) {
-          grid.innerHTML = '<p class="empty-state">No se encontró el registro completo.</p>';
-          return;
-        }
-        grid.innerHTML = Object.keys(completo)
-          .filter((k) => completo[k] !== '' && completo[k] !== null && completo[k] !== undefined)
-          .map((k) => itemInfo(tituloDesdeClave(k), k === 'MONTO ACTUAL' ? formatearMoneda(completo[k]) : completo[k]))
-          .join('');
-      } catch (err) {
-        grid.innerHTML = '<p class="error-msg">No se pudo cargar: ' + err.message + '</p>';
-      }
-    }
-    document.getElementById('btn-cerrar-detalle-cajachica').addEventListener('click', () => { modalDetalle.hidden = true; });
-    modalDetalle.addEventListener('click', (ev) => { if (ev.target === modalDetalle) modalDetalle.hidden = true; });
-
-    async function abrirEditarCajaChica(id) {
-      const resumen = cajasPorId[id];
-      if (!resumen) return;
+      const id = resumen['ID CCH'];
       document.getElementById('editar-cajachica-id').value = id;
       document.getElementById('editar-cajachica-label').textContent = 'ID CCH: ' + id;
       document.getElementById('editar-cajachica-error').hidden = true;
@@ -393,19 +376,6 @@
       }
     });
 
-    async function eliminarCajaChica(id, responsable) {
-      const etiqueta = responsable ? ('de ' + responsable) : ('ID CCH ' + id);
-      if (!confirm('¿Eliminar la caja chica ' + etiqueta + '? Esta acción no se puede deshacer.')) return;
-      toastCargando('Eliminando…');
-      try {
-        await callServer('apiEliminarCajaChica', state.token, id);
-        await cargar();
-        toastExito('Eliminado exitosamente');
-      } catch (err) {
-        toastError('No se pudo eliminar: ' + err.message);
-      }
-    }
-
     document.getElementById('form-cajachica').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const errorBox = document.getElementById('cch-error');
@@ -431,9 +401,6 @@
       }
     });
 
-    document.getElementById('btn-exportar-excel-cajachica').addEventListener('click', () => {
-      exportarCSV('cajas_chicas.csv', columnasCajasChicas, motorTablaCajasChicas.obtenerFiltrados());
-    });
     document.getElementById('btn-calendario-cajachica').addEventListener('click', () => {
       // "\/\/" (no "//") — ver comentario en app.html, botón de reporte de Vehículos.
       window.open('https:\/\/script.google.com/a/macros/ciudadmaderas.com/s/AKfycbwAgUrG2tEiZSxMtNO7hvXlyjfurJnuXIVXUDwyJF99Eci6UbvRtJqmpoCfXGGCdWad1A/exec', '_blank', 'noopener');
@@ -445,10 +412,9 @@
   // ---------- Cambios de Monto (Caja Chica) ----------
   async function initCambiosMontoCCH() {
     wireTabsSimple(document.getElementById('view-container'));
-    const lista = document.getElementById('lista-cambios-monto');
-    const vacio = document.getElementById('cambios-monto-vacio');
-    const modalDetalle = document.getElementById('modal-detalle-cambio-monto');
-    let cambiosPorId = {};
+    // Mismo módulo de permisos que Caja Chica (no tiene id propio en Modulos.gs)
+    const puedeEditar = puedeEditarModulo('caja-chica');
+    if (!puedeEditar) document.querySelector('#cm-tabs .tab-btn[data-tab="registrar"]').remove();
     let cajasPorId = {};
     let todosLosCambios = [];
 
@@ -503,57 +469,54 @@
       return caja ? (caja.RESPONSABLE || '—') : '—';
     }
 
-    const columnasCambiosMonto = [
-      { clave: 'ID_CCH', etiqueta: 'ID CCH' },
-      { clave: 'RESPONSABLE', etiqueta: 'Responsable' },
-      { clave: 'TIPO', etiqueta: 'Tipo' },
-      { clave: 'CANTIDAD', etiqueta: 'Cantidad' },
-      { clave: 'CANTIDAD_ANTERIOR', etiqueta: 'Cantidad anterior' },
-      { clave: 'CANTIDAD_ACTUALIZADA', etiqueta: 'Cantidad actualizada' },
-      { clave: 'FECHA', etiqueta: 'Fecha' },
-      { clave: 'QUIEN_REALIZO', etiqueta: 'Quién realizó' },
-    ];
-    const motorTablaCambiosMonto = crearTablaInteractiva({
-      thead: document.getElementById('cm-thead'),
-      columnas: columnasCambiosMonto,
-      buscadorGlobal: document.getElementById('cm-buscar-global'),
-      piePaginacion: document.getElementById('cm-pie'),
-      onRenderPagina: (cambios, total) => {
-        vacio.hidden = total > 0;
-        lista.innerHTML = cambios.map((c) => `
-          <tr>
-            <td class="tabla-clickable" data-id="${c.ID}" title="Ver detalle completo">${c.ID_CCH}</td>
-            <td>${c.RESPONSABLE || '—'}</td>
-            <td>${etiquetaTipo(c.TIPO)}</td>
-            <td>${formatearMoneda(c.CANTIDAD)}</td>
-            <td>${formatearMoneda(c.CANTIDAD_ANTERIOR)}</td>
-            <td>${formatearMoneda(c.CANTIDAD_ACTUALIZADA)}</td>
-            <td>${formatearFecha(c.FECHA)}</td>
-            <td>${c.QUIEN_REALIZO || '—'}</td>
-            <td>
-              <div class="tabla-actions">
-                <button type="button" class="danger btn-eliminar-cambio-monto" data-id="${c.ID}" title="Eliminar"><i data-lucide="trash-2" class="ico"></i></button>
-              </div>
-            </td>
-          </tr>
-        `).join('');
-
-        wireFilasClickables(lista, (ds) => abrirDetalleCambioMonto(ds.id));
-        lista.querySelectorAll('.btn-eliminar-cambio-monto').forEach((btn) => {
-          btn.addEventListener('click', () => eliminarCambioMonto(btn.dataset.id));
-        });
-        refreshIcons();
-      },
+    const tabla = DataTable.crear(document.getElementById('cm-tabla'), {
+      idCampo: 'ID',
+      idTabla: 'cambios-monto-cch',
+      ordenInicial: { campo: 'FECHA', dir: 'desc' },
+      textoVacio: 'Todavía no hay cambios de monto registrados',
+      exportar: { nombreArchivo: 'Cambios de Monto' },
+      etiquetaFila: (c) => c.RESPONSABLE || c.ID_CCH,
+      alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
+      columnas: [
+        { campo: 'ID_CCH', titulo: 'ID CCH', tipo: 'texto', fijada: true },
+        { campo: 'RESPONSABLE', titulo: 'Responsable', tipo: 'texto' },
+        { campo: 'TIPO', titulo: 'Tipo', tipo: 'lista', render: (v) => etiquetaTipo(v) },
+        { campo: 'CANTIDAD', titulo: 'Cantidad', tipo: 'numero', render: (v) => escaparHtml(formatearMoneda(v)) },
+        { campo: 'CANTIDAD_ANTERIOR', titulo: 'Cantidad anterior', tipo: 'numero', render: (v) => escaparHtml(formatearMoneda(v)) },
+        { campo: 'CANTIDAD_ACTUALIZADA', titulo: 'Cantidad actualizada', tipo: 'numero', render: (v) => escaparHtml(formatearMoneda(v)) },
+        { campo: 'FECHA', titulo: 'Fecha', tipo: 'fecha' },
+        { campo: 'QUIEN_REALIZO', titulo: 'Quién realizó', tipo: 'texto' },
+      ],
+      alEliminar: puedeEditar ? async (filas) => {
+        await Promise.all(filas.map((f) => callServer('apiEliminarCambioMontoCCH', state.token, f.ID)));
+      } : null,
+      motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
 
-    const tilesKpiCambiosMonto = ['cmcch-stat-total', 'cmcch-stat-incrementos', 'cmcch-stat-reducciones']
-      .map((id) => document.getElementById(id).closest('.stat-tile'));
-    wireKpiFiltro(tilesKpiCambiosMonto[0], motorTablaCambiosMonto, 'TIPO', null, tilesKpiCambiosMonto);
-    wireKpiFiltro(tilesKpiCambiosMonto[1], motorTablaCambiosMonto, 'TIPO', (v) => String(v || '').toUpperCase() === 'INCREMENTO', tilesKpiCambiosMonto);
-    wireKpiFiltro(tilesKpiCambiosMonto[2], motorTablaCambiosMonto, 'TIPO', (v) => String(v || '').toUpperCase() === 'REDUCCION', tilesKpiCambiosMonto);
+    const KPI_FILTRO_CM = { 'cmcch-stat-incrementos': 'INCREMENTO', 'cmcch-stat-reducciones': 'REDUCCION' };
+    const tileTotalCm = document.getElementById('cmcch-stat-total').closest('.stat-tile');
+    tileTotalCm.classList.add('stat-tile-clickable');
+    tileTotalCm.addEventListener('click', () => tabla.setFiltro('TIPO', null));
+    Object.keys(KPI_FILTRO_CM).forEach((id) => {
+      const tile = document.getElementById(id).closest('.stat-tile');
+      tile.classList.add('stat-tile-clickable');
+      tile.addEventListener('click', () => {
+        const yaActivo = tile.classList.contains('stat-tile-activo');
+        tabla.setFiltro('TIPO', yaActivo ? null : { valores: [KPI_FILTRO_CM[id]] });
+      });
+    });
+    function marcarKpiActivo(filtros) {
+      const valores = filtros.TIPO && filtros.TIPO.valores;
+      tileTotalCm.classList.toggle('stat-tile-activo', !valores);
+      Object.keys(KPI_FILTRO_CM).forEach((id) => {
+        document.getElementById(id).closest('.stat-tile').classList.toggle(
+          'stat-tile-activo', !!(valores && valores.length === 1 && valores[0] === KPI_FILTRO_CM[id])
+        );
+      });
+    }
 
     async function cargar() {
-      const errorBox = document.getElementById('cm-error');
+      tabla.setCargando(true);
       let cambios;
       try {
         [, cambios] = await Promise.all([
@@ -561,20 +524,14 @@
           callServer('apiListarCambiosMontoCCH', state.token),
         ]);
       } catch (err) {
-        console.error('No se pudo cargar el historial de cambios de monto:', err);
-        errorBox.textContent = 'No se pudo cargar el historial: ' + err.message;
-        errorBox.hidden = false;
+        tabla.setError('No se pudo cargar el historial: ' + err.message);
         return;
       }
-      errorBox.hidden = true;
       // RESPONSABLE no viene del servidor (el historial solo guarda ID CCH) —
       // se agrega aquí como un dato real más del objeto, para que la tabla
       // (encabezado, filtro, orden, búsqueda y exportar) lo trate igual que
       // cualquier otra columna, en vez de solo "pintarlo" en la celda.
       todosLosCambios = (cambios || []).map((c) => Object.assign({}, c, { RESPONSABLE: nombreResponsable(c.ID_CCH) }));
-
-      cambiosPorId = {};
-      todosLosCambios.forEach((c) => { cambiosPorId[c.ID] = c; });
 
       document.getElementById('cmcch-stat-total').textContent = todosLosCambios.length;
       document.getElementById('cmcch-stat-incrementos').textContent =
@@ -582,43 +539,7 @@
       document.getElementById('cmcch-stat-reducciones').textContent =
         todosLosCambios.filter((c) => String(c.TIPO || '').toUpperCase() === 'REDUCCION').length;
 
-      motorTablaCambiosMonto.setDatos(todosLosCambios);
-    }
-
-    const ETIQUETAS_CAMBIO_MONTO = {
-      ID_CCH: 'ID CCH', TIPO: 'Tipo', CANTIDAD: 'Cantidad',
-      CANTIDAD_ANTERIOR: 'Cantidad anterior', CANTIDAD_ACTUALIZADA: 'Cantidad actualizada',
-      FECHA: 'Fecha', QUIEN_REALIZO: 'Quién realizó',
-    };
-    function abrirDetalleCambioMonto(id) {
-      const cambio = cambiosPorId[id];
-      if (!cambio) return;
-      document.getElementById('detalle-cambio-monto-label').textContent = 'ID CCH: ' + cambio.ID_CCH;
-      const grid = document.getElementById('detalle-cambio-monto-grid');
-      const CAMPOS_MONEDA = ['CANTIDAD', 'CANTIDAD_ANTERIOR', 'CANTIDAD_ACTUALIZADA'];
-      grid.innerHTML = itemInfo('Responsable', nombreResponsable(cambio.ID_CCH)) +
-        Object.keys(ETIQUETAS_CAMBIO_MONTO)
-          .filter((clave) => cambio[clave] !== '' && cambio[clave] !== null && cambio[clave] !== undefined)
-          .map((clave) => itemInfo(
-            ETIQUETAS_CAMBIO_MONTO[clave],
-            CAMPOS_MONEDA.includes(clave) ? formatearMoneda(cambio[clave]) : cambio[clave]
-          ))
-          .join('');
-      modalDetalle.hidden = false;
-    }
-    document.getElementById('btn-cerrar-detalle-cambio-monto').addEventListener('click', () => { modalDetalle.hidden = true; });
-    modalDetalle.addEventListener('click', (ev) => { if (ev.target === modalDetalle) modalDetalle.hidden = true; });
-
-    async function eliminarCambioMonto(id) {
-      if (!confirm('¿Eliminar este cambio de monto? Esto NO revierte el monto actual de la caja chica — solo borra el registro del historial. Esta acción no se puede deshacer.')) return;
-      toastCargando('Eliminando…');
-      try {
-        await callServer('apiEliminarCambioMontoCCH', state.token, id);
-        await cargar();
-        toastExito('Eliminado exitosamente');
-      } catch (err) {
-        toastError('No se pudo eliminar: ' + err.message);
-      }
+      tabla.setDatos(todosLosCambios);
     }
 
     document.getElementById('form-cambio-monto').addEventListener('submit', async (ev) => {
@@ -656,64 +577,63 @@
       }
     });
 
-    document.getElementById('btn-exportar-excel-cambios-monto').addEventListener('click', () => {
-      exportarCSV('cambios_monto_caja_chica.csv', columnasCambiosMonto, motorTablaCambiosMonto.obtenerFiltrados());
-    });
-
     await cargar();
   }
 
   // ---------- Cambios Vehículos (bitácora automática, solo lectura) ----------
   async function initCambiosVehiculos() {
-    const lista = document.getElementById('lista-cambios-vehiculos');
-    const vacio = document.getElementById('cambios-vehiculos-vacio');
     let todosLosCambios = [];
 
-    const columnasCambiosVehiculos = [
-      { clave: 'FOLIO', etiqueta: 'Folio' },
-      { clave: 'CAMPO', etiqueta: 'Campo' },
-      { clave: 'ANTES', etiqueta: 'Antes' },
-      { clave: 'DESPUES', etiqueta: 'Después' },
-      { clave: 'ACTUALIZADO_POR', etiqueta: 'Actualizado por' },
-      { clave: 'FECHA', etiqueta: 'Fecha' },
-    ];
-    const motorTablaCambiosVehiculos = crearTablaInteractiva({
-      thead: document.getElementById('cv-thead'),
-      columnas: columnasCambiosVehiculos,
-      conAcciones: false, // bitácora de solo lectura, sin botones de editar/eliminar
-      buscadorGlobal: document.getElementById('cv-buscar-global'),
-      piePaginacion: document.getElementById('cv-pie'),
-      onRenderPagina: (cambios, total) => {
-        vacio.hidden = total > 0;
-        lista.innerHTML = cambios.map((c) => `
-          <tr>
-            <td>${c.FOLIO || '—'}</td>
-            <td>${c.CAMPO || '—'}</td>
-            <td>${c.ANTES || '<span class="empty-state" style="padding:0">(vacío)</span>'}</td>
-            <td>${c.DESPUES || '<span class="empty-state" style="padding:0">(vacío)</span>'}</td>
-            <td>${c.ACTUALIZADO_POR || '—'}</td>
-            <td>${formatearFecha(c.FECHA)}</td>
-          </tr>
-        `).join('');
-      },
+    const tabla = DataTable.crear(document.getElementById('cv-tabla'), {
+      idCampo: 'ID',
+      idTabla: 'cambios-vehiculos',
+      ordenInicial: { campo: 'FECHA', dir: 'desc' },
+      textoVacio: 'Todavía no hay cambios registrados',
+      exportar: { nombreArchivo: 'Cambios Vehículos' },
+      etiquetaFila: (c) => [c.FOLIO, c.CAMPO].filter(Boolean).join(' · '),
+      detalle: false, // bitácora de solo lectura, sin panel de detalle ni edición
+      alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
+      columnas: [
+        { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', fijada: true },
+        { campo: 'CAMPO', titulo: 'Campo', tipo: 'texto' },
+        { campo: 'ANTES', titulo: 'Antes', tipo: 'texto',
+          render: (v) => (v ? escaparHtml(v) : '<span class="empty-state" style="padding:0">(vacío)</span>') },
+        { campo: 'DESPUES', titulo: 'Después', tipo: 'texto',
+          render: (v) => (v ? escaparHtml(v) : '<span class="empty-state" style="padding:0">(vacío)</span>') },
+        { campo: 'ACTUALIZADO_POR', titulo: 'Actualizado por', tipo: 'texto' },
+        { campo: 'FECHA', titulo: 'Fecha', tipo: 'fecha' },
+      ],
     });
 
     // Solo Total/Hoy son "categorías" clickeables — Vehículos con cambios
     // es un conteo de folios distintos, no algo filtrable como categoría.
-    const tilesKpiCambiosVehiculos = ['cv-stat-total', 'cv-stat-hoy']
-      .map((id) => document.getElementById(id).closest('.stat-tile'));
-    wireKpiFiltro(tilesKpiCambiosVehiculos[0], motorTablaCambiosVehiculos, 'FECHA', null, tilesKpiCambiosVehiculos);
-    wireKpiFiltro(tilesKpiCambiosVehiculos[1], motorTablaCambiosVehiculos, 'FECHA', (v) => v && v.slice(0, 10) === hoyISO(), tilesKpiCambiosVehiculos);
+    const tileTotal = document.getElementById('cv-stat-total').closest('.stat-tile');
+    const tileHoy = document.getElementById('cv-stat-hoy').closest('.stat-tile');
+    [tileTotal, tileHoy].forEach((t) => t.classList.add('stat-tile-clickable'));
+    tileTotal.addEventListener('click', () => tabla.setFiltro('FECHA', null));
+    tileHoy.addEventListener('click', () => {
+      const yaActivo = tileHoy.classList.contains('stat-tile-activo');
+      tabla.setFiltro('FECHA', yaActivo ? null : { op: 'igual', v1: hoyISO() });
+    });
+    function marcarKpiActivo(filtros) {
+      const f = filtros.FECHA;
+      tileHoy.classList.toggle('stat-tile-activo', !!(f && f.op === 'igual' && f.v1 === hoyISO()));
+      tileTotal.classList.toggle('stat-tile-activo', !f);
+    }
 
     async function cargar() {
+      tabla.setCargando(true);
+      let crudos;
       try {
-        todosLosCambios = await callServer('apiListarCambiosVehiculos', state.token) || [];
+        crudos = await callServer('apiListarCambiosVehiculos', state.token) || [];
       } catch (err) {
-        console.error('No se pudo cargar el historial de Cambios Vehículos:', err);
-        vacio.textContent = 'No se pudo cargar el historial: ' + err.message;
-        vacio.hidden = false;
+        tabla.setError('No se pudo cargar el historial: ' + err.message);
         return;
       }
+      // Los renglones de antes de este módulo nunca tuvieron ID_CAMBIO asignado
+      // (ver CambiosVehiculosService.gs) — sin un ID único DataTable no puede
+      // llevar el rastro de cada fila, así que se completa uno aquí.
+      todosLosCambios = crudos.map((c, i) => Object.assign({}, c, { ID: c.ID || ('sin-id-' + i) }));
 
       document.getElementById('cv-stat-total').textContent = todosLosCambios.length;
       document.getElementById('cv-stat-vehiculos').textContent =
@@ -722,12 +642,8 @@
       document.getElementById('cv-stat-hoy').textContent =
         todosLosCambios.filter((c) => c.FECHA && c.FECHA.slice(0, 10) === hoyStr).length;
 
-      motorTablaCambiosVehiculos.setDatos(todosLosCambios);
+      tabla.setDatos(todosLosCambios);
     }
-
-    document.getElementById('btn-exportar-excel-cambios-vehiculos').addEventListener('click', () => {
-      exportarCSV('cambios_vehiculos.csv', columnasCambiosVehiculos, motorTablaCambiosVehiculos.obtenerFiltrados());
-    });
 
     await cargar();
   }

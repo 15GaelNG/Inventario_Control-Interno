@@ -151,7 +151,7 @@ function apiEliminarReasignacionVehicular(token, id) {
 
 // --- Arqueos ---
 function apiListarAuditItems(token) {
-  Auth.validarSesion(token);
+  Permisos.puedeLeer(token, 'arqueos');
   return ArqueosService.AUDIT_ITEMS;
 }
 function apiListarArqueosResumen(token) {

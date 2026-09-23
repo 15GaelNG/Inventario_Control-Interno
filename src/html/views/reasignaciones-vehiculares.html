@@ -4,9 +4,6 @@
       <h2><i data-lucide="arrow-left-right" class="ico"></i> Reasignaciones Vehiculares</h2>
       <p class="page-subtitle">Historial de cambio de responsable de cada vehículo</p>
     </div>
-    <div class="page-header-actions">
-      <button type="button" class="externo" id="btn-exportar-excel-reasignaciones-vehiculares"><i data-lucide="file-spreadsheet" class="ico"></i> Exportar a Excel</button>
-    </div>
   </div>
 
   <div class="stat-row">
@@ -64,35 +61,8 @@
   </div>
 
   <div class="tab-panel" data-tab-panel="lista">
-    <div class="card">
-      <div class="card-header-row">
-        <h3 style="margin:0">Historial</h3>
-        <input type="search" id="rv-buscar-global" class="tabla-buscar-global" placeholder="Buscar en la tabla…" />
-      </div>
-      <div class="table-scroll">
-        <table>
-          <thead id="rv-thead"></thead>
-          <tbody id="lista-reasignaciones-vehiculares"></tbody>
-        </table>
-      </div>
-      <p class="empty-state" id="reasignaciones-vehiculares-vacio" hidden>Todavía no hay reasignaciones registradas.</p>
-      <div class="tabla-pie" id="rv-pie"></div>
-    </div>
-  </div>
-
-  <!-- Modal: detalle completo, solo lectura -->
-  <div class="modal-backdrop" id="modal-detalle-reasignacion-vehicular" hidden>
-    <div class="modal-card">
-      <div class="modal-header">
-        <div>
-          <h3 style="margin:0">Detalle completo</h3>
-          <p class="modal-subtitle" id="detalle-reasignacion-vehicular-label"></p>
-        </div>
-        <button type="button" class="modal-close" id="btn-cerrar-detalle-reasignacion-vehicular"><i data-lucide="x" class="ico"></i></button>
-      </div>
-      <div class="modal-form-scroll">
-        <div id="detalle-reasignacion-vehicular-grid" class="info-grid"></div>
-      </div>
+    <div class="card card-compacta">
+      <div id="rv-tabla"></div>
     </div>
   </div>
 </template>

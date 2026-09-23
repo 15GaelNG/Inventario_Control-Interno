@@ -4,9 +4,6 @@
       <h2><i data-lucide="wrench" class="ico"></i> Incidencias</h2>
       <p class="page-subtitle">Bitácora de taller — ingreso, trabajo realizado y salida del vehículo</p>
     </div>
-    <div class="page-header-actions">
-      <button type="button" class="externo" id="btn-exportar-excel-incidencias"><i data-lucide="file-spreadsheet" class="ico"></i> Exportar a Excel</button>
-    </div>
   </div>
 
   <div class="stat-row">
@@ -64,19 +61,8 @@
   </div>
 
   <div class="tab-panel" data-tab-panel="lista">
-    <div class="card">
-      <div class="card-header-row">
-        <h3 style="margin:0">Historial</h3>
-        <input type="search" id="inc-buscar-global" class="tabla-buscar-global" placeholder="Buscar en la tabla…" />
-      </div>
-      <div class="table-scroll">
-        <table>
-          <thead id="inc-thead"></thead>
-          <tbody id="lista-incidencias"></tbody>
-        </table>
-      </div>
-      <p class="empty-state" id="incidencias-vacio" hidden>Todavía no hay incidencias registradas.</p>
-      <div class="tabla-pie" id="inc-pie"></div>
+    <div class="card card-compacta">
+      <div id="inc-tabla"></div>
     </div>
   </div>
 
@@ -145,25 +131,6 @@
         <div class="error-msg" id="editar-error" hidden></div>
         <button type="submit" style="width:100%; margin-top:10px"><i data-lucide="save" class="ico"></i> Guardar cambios</button>
       </form>
-    </div>
-  </div>
-
-  <!-- Modal: info completa del vehículo (al dar clic en una incidencia) -->
-  <div class="modal-backdrop" id="modal-vehiculo" hidden>
-    <div class="modal-card modal-card-wide">
-      <div class="modal-header">
-        <div>
-          <h3 style="margin:0">Detalle completo</h3>
-          <p class="modal-subtitle" id="vehiculo-folio-label"></p>
-        </div>
-        <button type="button" class="modal-close" id="btn-cerrar-vehiculo"><i data-lucide="x" class="ico"></i></button>
-      </div>
-      <div class="modal-form-scroll">
-        <div id="vehiculo-info-grid" class="info-grid"></div>
-        <p class="empty-state" id="vehiculo-info-vacio" hidden>
-          No se encontró este folio en el catálogo de Vehículos.
-        </p>
-      </div>
     </div>
   </div>
 </template>

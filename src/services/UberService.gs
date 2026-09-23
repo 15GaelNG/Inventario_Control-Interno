@@ -32,33 +32,35 @@ const UberService = (function () {
     return valor instanceof Date ? valor.toISOString() : valor;
   }
 
-  const COLUMNAS_RESUMEN = ['ID', 'RAZON SOCIAL', 'NOMBRE COMPLETO', 'ESTAUS USUARIO', 'ROL', 'DEPARTAMENTO', 'PUESTO'];
+  // Las 15 columnas reales completas (antes solo se traían 7 para la tabla y
+  // el detalle pedía las otras 8 aparte con buscarPorId) — el catálogo de Uber
+  // no es tan grande como el de Vehículos, así que traerlas todas de una vez
+  // evita ese segundo viaje solo para pintar el panel de detalle.
+  const COLUMNAS_RESUMEN = [
+    'ID', 'RAZON SOCIAL', 'NOMBRE COMPLETO', 'ESTAUS USUARIO', 'ROL', 'FECHA DE ALTA',
+    'CORREO ELECTRONICO', 'NUMERO TELEFONO', 'SEDE', 'OFICINA/DESARROLLO', 'DEPARTAMENTO',
+    'PUESTO', 'SOLICITUD', 'DIAS AUTORIZADOS', 'HORARIO AUTORIZADO',
+  ];
 
-  /** Catálogo ligero para la tabla (7 columnas, no las 15 completas). */
+  /** Catálogo con las 15 columnas reales (nombres tal cual la hoja). */
   function listarResumen(token) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'uber');
     const sheet = hoja_();
     const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
 
     const resultado = [];
     for (let i = 0; i < filas; i++) {
       if (!datos['ID'][i]) continue;
-      resultado.push({
-        ID: datos['ID'][i],
-        RAZON_SOCIAL: datos['RAZON SOCIAL'][i] || '',
-        NOMBRE_COMPLETO: datos['NOMBRE COMPLETO'][i] || '',
-        ESTATUS: datos['ESTAUS USUARIO'][i] || '',
-        ROL: datos['ROL'][i] || '',
-        DEPARTAMENTO: datos['DEPARTAMENTO'][i] || '',
-        PUESTO: datos['PUESTO'][i] || '',
-      });
+      const fila = { NOMBRE_COMPLETO: datos['NOMBRE COMPLETO'][i] || '', RAZON_SOCIAL: datos['RAZON SOCIAL'][i] || '', ESTATUS: datos['ESTAUS USUARIO'][i] || '' };
+      COLUMNAS_RESUMEN.forEach((clave) => { fila[clave] = limpiarValor_(datos[clave][i]); });
+      resultado.push(fila);
     }
     return resultado.sort((a, b) => String(a.NOMBRE_COMPLETO).localeCompare(String(b.NOMBRE_COMPLETO)));
   }
 
   /** Registro completo por ID (para el modal de detalle/editar). */
   function buscarPorId(token, id) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'uber');
     const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, ID_COLUMN);
     if (!encontrado) return null;
     const limpio = {};
@@ -68,7 +70,7 @@ const UberService = (function () {
 
   /** Da de alta a un usuario. FECHA DE ALTA siempre es "hoy" (no la manda el cliente). */
   function crear(token, datos) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    Permisos.puedeEditar(token, 'uber');
     if (!datos['NOMBRE COMPLETO']) throw new Error('El nombre completo es obligatorio');
     const fila = Object.assign({}, datos);
     fila[ID_COLUMN] = Utilities.getUuid().slice(0, 8);
@@ -78,7 +80,7 @@ const UberService = (function () {
   }
 
   function actualizar(token, id, cambios) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    Permisos.puedeEditar(token, 'uber');
     const datos = Object.assign({}, cambios);
     delete datos['FECHA DE ALTA']; // no se edita, se fija solo al crear
     SheetUtils.update(ssId(), hoja_().getName(), id, datos, ID_COLUMN);
@@ -86,7 +88,7 @@ const UberService = (function () {
   }
 
   function eliminar(token, id) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN]);
+    Permisos.puedeEditar(token, 'uber');
     const ok = SheetUtils.remove(ssId(), hoja_().getName(), id, ID_COLUMN);
     if (!ok) throw new Error('No se encontró el usuario con ID=' + id);
     return { ID: id };
@@ -100,7 +102,7 @@ const UberService = (function () {
 
   /** Sube un archivo (PDF/imagen) en base64 a la carpeta de solicitudes y regresa su URL. */
   function subirArchivo(token, nombreArchivo, mimeType, base64Data) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    Permisos.puedeEditar(token, 'uber');
     if (!base64Data) throw new Error('No se recibió ningún archivo.');
 
     const bytes = Utilities.base64Decode(base64Data);

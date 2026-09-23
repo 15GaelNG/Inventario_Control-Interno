@@ -5,7 +5,6 @@
       <p class="page-subtitle">Catálogo de unidades — alta, edición y baja</p>
     </div>
     <div class="page-header-actions">
-      <button type="button" class="externo" id="btn-exportar-excel-vehiculos"><i data-lucide="file-spreadsheet" class="ico"></i> Exportar a Excel</button>
       <button type="button" class="externo" id="btn-ver-reporte-vehiculos"><i data-lucide="bar-chart-3" class="ico"></i> Ver reporte</button>
     </div>
   </div>
@@ -48,19 +47,8 @@
   </div>
 
   <div class="tab-panel" data-tab-panel="lista">
-    <div class="card">
-      <div class="card-header-row">
-        <h3 style="margin:0">Catálogo</h3>
-        <input type="search" id="veh-buscar-global" class="tabla-buscar-global" placeholder="Buscar en la tabla…" />
-      </div>
-      <div class="table-scroll">
-        <table>
-          <thead id="veh-thead"></thead>
-          <tbody id="lista-vehiculos"></tbody>
-        </table>
-      </div>
-      <p class="empty-state" id="vehiculos-vacio" hidden>Todavía no hay vehículos registrados.</p>
-      <div class="tabla-pie" id="veh-pie"></div>
+    <div class="card card-compacta">
+      <div id="veh-tabla"></div>
     </div>
   </div>
 
@@ -83,27 +71,4 @@
     </div>
   </div>
 
-  <!-- Modal: detalle completo, solo lectura (las 41 columnas de la hoja) -->
-  <div class="modal-backdrop" id="modal-detalle-vehiculo" hidden>
-    <div class="modal-card modal-card-wide">
-      <div class="modal-header">
-        <div>
-          <h3 style="margin:0">Detalle completo</h3>
-          <p class="modal-subtitle" id="detalle-vehiculo-folio-label"></p>
-        </div>
-        <button type="button" class="modal-close" id="btn-cerrar-detalle-vehiculo"><i data-lucide="x" class="ico"></i></button>
-      </div>
-      <div class="modal-form-scroll">
-        <div id="detalle-vehiculo-grid" class="info-grid"></div>
-
-        <div class="info-section-title"><i data-lucide="history" class="ico"></i> Historial de cambios</div>
-        <div class="historial-timeline" id="detalle-vehiculo-cambios"></div>
-        <p class="empty-state" id="detalle-vehiculo-cambios-vacio" hidden>Sin cambios registrados para este vehículo.</p>
-
-        <div class="info-section-title"><i data-lucide="arrow-left-right" class="ico"></i> Historial de reasignaciones</div>
-        <div class="historial-timeline" id="detalle-vehiculo-reasignaciones"></div>
-        <p class="empty-state" id="detalle-vehiculo-reasignaciones-vacio" hidden>Sin reasignaciones registradas para este vehículo.</p>
-      </div>
-    </div>
-  </div>
 </template>

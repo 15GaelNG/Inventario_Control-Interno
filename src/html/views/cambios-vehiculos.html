@@ -4,9 +4,6 @@
       <h2><i data-lucide="history" class="ico"></i> Cambios Vehículos</h2>
       <p class="page-subtitle">Bitácora automática: qué campo cambió, de qué valor a cuál, quién y cuándo — se llena sola al editar un vehículo (los 500 más recientes)</p>
     </div>
-    <div class="page-header-actions">
-      <button type="button" class="externo" id="btn-exportar-excel-cambios-vehiculos"><i data-lucide="file-spreadsheet" class="ico"></i> Exportar a Excel</button>
-    </div>
   </div>
 
   <div class="stat-row">
@@ -24,18 +21,7 @@
     </div>
   </div>
 
-  <div class="card">
-    <div class="card-header-row">
-      <h3 style="margin:0">Historial</h3>
-      <input type="search" id="cv-buscar-global" class="tabla-buscar-global" placeholder="Buscar en la tabla…" />
-    </div>
-    <div class="table-scroll">
-      <table>
-        <thead id="cv-thead"></thead>
-        <tbody id="lista-cambios-vehiculos"></tbody>
-      </table>
-    </div>
-    <p class="empty-state" id="cambios-vehiculos-vacio" hidden>Todavía no hay cambios registrados.</p>
-    <div class="tabla-pie" id="cv-pie"></div>
+  <div class="card card-compacta">
+    <div id="cv-tabla"></div>
   </div>
 </template>

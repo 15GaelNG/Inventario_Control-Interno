@@ -306,7 +306,7 @@ const ArqueosService = (function () {
   /** Solo para mostrarlo en el formulario de Registrar mientras se llena —
    * NO reserva el ID, es una vista previa (igual que el Folio de Vehículos). */
   function previsualizarIdArqueo(token, idCch) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'arqueos');
     if (!idCch) return '';
     return generarIdArqueo_(hoja_(), idCch);
   }
@@ -318,7 +318,7 @@ const ArqueosService = (function () {
 
   /** Catálogo ligero para la tabla (9 columnas, no las 79 completas). */
   function listarResumen(token) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'arqueos');
     const sheet = hoja_();
     const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
 
@@ -343,7 +343,7 @@ const ArqueosService = (function () {
 
   /** Registro completo por ID ARQUEO (para el modal de detalle/editar). */
   function buscarPorId(token, id) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'arqueos');
     const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, ID_COLUMN);
     if (!encontrado) return null;
     const limpio = {};
@@ -359,7 +359,7 @@ const ArqueosService = (function () {
    * fechas y todos los totales/calificación se calculan aquí — no se
    * confía en lo que mande el cliente para ninguno de esos. */
   function crear(token, datos) {
-    const sesion = Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    const sesion = Permisos.puedeEditar(token, 'arqueos');
     const idCch = datos['ID CCH'];
     if (!idCch) throw new Error('Selecciona la caja chica.');
 
@@ -407,7 +407,7 @@ const ArqueosService = (function () {
    * calificación se recalculan siempre, combinando lo ya guardado con lo
    * nuevo. */
   function actualizar(token, id, cambios) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    Permisos.puedeEditar(token, 'arqueos');
     const registro = SheetUtils.findById(ssId(), hoja_().getName(), id, ID_COLUMN);
     if (!registro) throw new Error('No se encontró el arqueo con ID ARQUEO=' + id);
 
@@ -431,7 +431,7 @@ const ArqueosService = (function () {
   }
 
   function eliminar(token, id) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN]);
+    Permisos.puedeEditar(token, 'arqueos');
     const ok = SheetUtils.remove(ssId(), hoja_().getName(), id, ID_COLUMN);
     if (!ok) throw new Error('No se encontró el arqueo con ID ARQUEO=' + id);
     return { ID: id };
@@ -443,7 +443,7 @@ const ArqueosService = (function () {
   const TAMANO_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
   function subirArchivo(token, nombreArchivo, mimeType, base64Data) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    Permisos.puedeEditar(token, 'arqueos');
     if (!base64Data) throw new Error('No se recibió ningún archivo.');
 
     const bytes = Utilities.base64Decode(base64Data);

@@ -57,7 +57,7 @@ const ReasignacionesVehicularesService = (function () {
 
   /** Historial completo (ya son solo 12 columnas, no hace falta un "resumen" más ligero). */
   function listarResumen(token) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'reasignaciones-vehiculares');
     const sheet = hoja_();
     const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
 
@@ -87,7 +87,7 @@ const ReasignacionesVehicularesService = (function () {
    * actualiza el responsable/departamento ACTUAL de ese vehículo.
    */
   function crear(token, datos) {
-    const sesion = Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    const sesion = Permisos.puedeEditar(token, 'reasignaciones-vehiculares');
     const folio = datos['Folio Vehiculo'];
     if (!folio) throw new Error('Selecciona el vehículo (Folio).');
     const responsableEntrante = String(datos['Responsable Entrante'] || '').trim();
@@ -128,7 +128,7 @@ const ReasignacionesVehicularesService = (function () {
   }
 
   function eliminar(token, id) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN]);
+    Permisos.puedeEditar(token, 'reasignaciones-vehiculares');
     const ok = SheetUtils.remove(ssId(), hoja_().getName(), id, ID_COLUMN);
     if (!ok) throw new Error('No se encontró el registro con ID=' + id);
     return { ID: id };
@@ -139,7 +139,7 @@ const ReasignacionesVehicularesService = (function () {
    * CambiosVehiculosService.listarPorFolio: recorre de abajo hacia arriba
    * y filtra por folio, en vez de traer todo el historial completo. */
   function listarPorFolio(token, folio) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'reasignaciones-vehiculares');
     if (!folio) return [];
     const sheet = hoja_();
     const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);

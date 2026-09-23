@@ -46,42 +46,50 @@ const CajasChicasService = (function () {
     return valor instanceof Date ? valor.toISOString() : valor;
   }
 
+  // Las 27 columnas capturables completas (todo menos CALIFICACION PROMEDIO,
+  // que es un promedio calculado a partir de Arqueos) — antes solo se traían
+  // 10 para la tabla y el detalle/editar pedía las demás aparte con
+  // buscarPorId; el catálogo de Cajas Chicas no es tan grande como el de
+  // Vehículos, así que traerlas todas de una vez evita ese segundo viaje
+  // para pintar el panel de detalle. Se mantienen además los alias en
+  // MAYUSCULAS_CON_GUION (ID_CCH, RESPONSABLE, MONTO_ACTUAL...) porque
+  // Arqueos y Cambios de Monto ya los usan para su selector de Caja Chica.
   const COLUMNAS_RESUMEN = [
-    'ID CCH', 'ESTATUS', 'RESPONSABLE DE CAJA CHICA', 'PUESTO DE RESPONSABLE', 'DEPARTAMENTO',
-    'OFICINA', 'SEDE', 'EMPRESA ORIGEN', 'MONTO ACTUAL', 'METODO DE REEMBOLSO',
+    'ID CCH', 'ESTATUS', 'EMPRESA ORIGEN', 'RESPONSABLE DE CAJA CHICA', 'PUESTO DE RESPONSABLE',
+    'JEFE INMEDIATO DEL REPSONSABLE', 'ADMINISTRADA POR', 'CAPTURISTA DE CAJA CHICA', 'PUESTO DE CAPTURISTA',
+    'DEPARTAMENTO', 'OFICINA', 'SEDE', 'FECHA DE APERTURA', 'FECHA DE CIERRE', 'FECHA DE RESPONSIVA CI',
+    'TIPO DE AUTORIZACIÓN', 'MONTO ACTUAL', 'METODO DE REEMBOLSO', 'CORREO ELECTRONICO DE RESPONSABLE',
+    'CORREO ELECTRONICO CAPTURISTA', 'TELEFONO DE RESPONSABLE', 'TELEFONO DE CAPTURISTA',
+    'TIPO IDENTIFICACION RESPONSABLE', 'VIGENCIA IDENTIFICACION OFICIAL RESPONSABLE',
+    'TIPO IDENTIFICACION JEFE DIRECTO', 'VIGENCIA IDENTIFICACION OFICIAL JEFE DIRECTO', 'OBSERVACIONES',
   ];
 
-  /** Catálogo ligero para la tabla (10 columnas, no las 28 completas) — también
-   * lo usa Arqueos para el autollenado al elegir una Caja Chica, así que
-   * incluye PUESTO y EMPRESA ORIGEN aunque la tabla de Cajas Chicas no los
-   * muestre, para no tener que pedir el registro completo aparte. */
+  /** Catálogo con las 27 columnas capturables (nombres tal cual la hoja, + alias). */
   function listarResumen(token) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'caja-chica');
     const sheet = hoja_();
     const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
 
     const resultado = [];
     for (let i = 0; i < filas; i++) {
       if (!datos['ID CCH'][i]) continue;
-      resultado.push({
+      const fila = {
         ID_CCH: datos['ID CCH'][i],
-        ESTATUS: datos['ESTATUS'][i] || '',
         RESPONSABLE: datos['RESPONSABLE DE CAJA CHICA'][i] || '',
         PUESTO: datos['PUESTO DE RESPONSABLE'][i] || '',
-        DEPARTAMENTO: datos['DEPARTAMENTO'][i] || '',
-        OFICINA: datos['OFICINA'][i] || '',
-        SEDE: datos['SEDE'][i] || '',
         EMPRESA_ORIGEN: datos['EMPRESA ORIGEN'][i] || '',
         MONTO_ACTUAL: datos['MONTO ACTUAL'][i] || '',
         METODO_REEMBOLSO: datos['METODO DE REEMBOLSO'][i] || '',
-      });
+      };
+      COLUMNAS_RESUMEN.forEach((clave) => { fila[clave] = limpiarValor_(datos[clave][i]) || ''; });
+      resultado.push(fila);
     }
     return resultado.sort((a, b) => Number(a.ID_CCH) - Number(b.ID_CCH));
   }
 
   /** Registro completo por ID CCH (para el modal de detalle/editar). */
   function buscarPorId(token, id) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'caja-chica');
     const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, ID_COLUMN);
     if (!encontrado) return null;
     const limpio = {};
@@ -120,7 +128,7 @@ const CajasChicasService = (function () {
    * tabla (o sea, al crear); las otras 2 opciones solo aplican al editar.
    */
   function crear(token, datos) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    Permisos.puedeEditar(token, 'caja-chica');
     const lock = LockService.getScriptLock();
     lock.waitLock(30000);
     try {
@@ -136,7 +144,7 @@ const CajasChicasService = (function () {
   }
 
   function actualizar(token, id, cambios) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    Permisos.puedeEditar(token, 'caja-chica');
     const datos = Object.assign({}, cambios);
     delete datos[ID_COLUMN]; // no se edita, se fija solo al crear
     SheetUtils.update(ssId(), hoja_().getName(), id, datos, ID_COLUMN);
@@ -144,7 +152,7 @@ const CajasChicasService = (function () {
   }
 
   function eliminar(token, id) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN]);
+    Permisos.puedeEditar(token, 'caja-chica');
     const ok = SheetUtils.remove(ssId(), hoja_().getName(), id, ID_COLUMN);
     if (!ok) throw new Error('No se encontró la caja chica con ID CCH=' + id);
     return { ID: id };

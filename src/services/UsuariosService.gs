@@ -17,14 +17,14 @@ const UsuariosService = (function () {
   }
 
   function listar(token) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN]);
+    Permisos.puedeEditar(token, 'usuarios');
     // Nunca regresar SALT/PASSWORD_HASH al cliente
     return SheetUtils.getAll(ssId(), SHEET_USUARIOS)
       .map(({ SALT, PASSWORD_HASH, ...resto }) => resto);
   }
 
   function crear(token, datos, passwordInicial) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN]);
+    Permisos.puedeEditar(token, 'usuarios');
     const credenciales = Auth.crearHashParaUsuario(passwordInicial);
     return SheetUtils.insert(ssId(), SHEET_USUARIOS, Object.assign({}, datos, {
       SALT: credenciales.salt,
@@ -34,7 +34,7 @@ const UsuariosService = (function () {
   }
 
   function resetearPassword(token, id, nuevoPassword) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN]);
+    Permisos.puedeEditar(token, 'usuarios');
     const credenciales = Auth.crearHashParaUsuario(nuevoPassword);
     return SheetUtils.update(ssId(), SHEET_USUARIOS, id, {
       SALT: credenciales.salt,
@@ -43,7 +43,7 @@ const UsuariosService = (function () {
   }
 
   function cambiarEstatus(token, id, activo) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN]);
+    Permisos.puedeEditar(token, 'usuarios');
     return SheetUtils.update(ssId(), SHEET_USUARIOS, id, { ACTIVO: activo });
   }
 

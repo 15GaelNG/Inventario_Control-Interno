@@ -1447,12 +1447,11 @@
 
   async function initIncidencias() {
     wireTabsSimple(document.getElementById('view-container'));
-    const lista = document.getElementById('lista-incidencias');
-    const vacio = document.getElementById('incidencias-vacio');
+    // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
+    const puedeEditar = puedeEditarModulo('incidencias');
+    if (!puedeEditar) document.querySelector('#inc-tabs .tab-btn[data-tab="registrar"]').remove();
     const modal = document.getElementById('modal-cerrar');
     const modalEditar = document.getElementById('modal-editar');
-    const modalVehiculo = document.getElementById('modal-vehiculo');
-    let incidenciasPorId = {};
 
     // Fecha de registro: siempre hoy, no editable (el servidor la fuerza igual).
     fijarFechaRegistroHoy();
@@ -1497,16 +1496,6 @@
       }
     });
 
-    // Mismo autollenado, pero para el folio dentro del modal de Editar.
-    document.getElementById('editar-folio').addEventListener('input', (ev) => {
-      const vehiculo = vehiculosPorFolio[ev.target.value];
-      if (vehiculo) {
-        document.getElementById('editar-departamento').value = vehiculo.DEPARTAMENTO;
-        document.getElementById('editar-modelo').value = [vehiculo.MARCA, vehiculo.LINEA_VEHICULO].filter(Boolean).join(' ');
-        document.getElementById('editar-anio').value = vehiculo.MODELO || '';
-      }
-    });
-
     function abrirModalCierre(id, folio) {
       document.getElementById('cerrar-id').value = id;
       document.getElementById('cerrar-folio').textContent = 'Folio: ' + folio;
@@ -1519,6 +1508,18 @@
       document.getElementById('cerrar-error').hidden = true;
     }
 
+    // Mismo autollenado, pero para el folio dentro del modal de Editar.
+    document.getElementById('editar-folio').addEventListener('input', (ev) => {
+      const vehiculo = vehiculosPorFolio[ev.target.value];
+      if (vehiculo) {
+        document.getElementById('editar-departamento').value = vehiculo.DEPARTAMENTO;
+        document.getElementById('editar-modelo').value = [vehiculo.MARCA, vehiculo.LINEA_VEHICULO].filter(Boolean).join(' ');
+        document.getElementById('editar-anio').value = vehiculo.MODELO || '';
+      }
+    });
+
+    /** Abre el modal general de edición con lo que ya trae la fila (el resumen
+     *  ya incluye todos los campos, no hace falta pedir el registro completo). */
     function abrirModalEditar(inc) {
       if (!inc) return;
       document.getElementById('editar-id').value = inc.ID;
@@ -1545,156 +1546,149 @@
       document.getElementById('form-editar-incidencia').reset();
       document.getElementById('editar-error').hidden = true;
     }
+    document.getElementById('btn-cancelar-editar').addEventListener('click', cerrarModalEditar);
+    modalEditar.addEventListener('click', (ev) => { if (ev.target === modalEditar) cerrarModalEditar(); });
 
-    const ETIQUETAS_INCIDENCIA = {
-      FOLIO: 'Folio', DEPARTAMENTO: 'Departamento', MODELO: 'Modelo', ANIO: 'Año',
-      FECHA_REGISTRO: 'Fecha de registro', FECHA_INSPECCION: 'Fecha de inspección',
-      KILOMETRAJE: 'Kilometraje', TICKET: 'Ticket',
-      INSPECCION_INGRESO: 'Inspección de ingreso (motivo)',
-      DESCRIPCION_TRABAJO: 'Trabajo realizado', FECHA_TRABAJO: 'Fecha del trabajo realizado',
-      INSPECCION_SALIDA: 'Inspección de salida', MECANICO: 'Mecánico',
-      PERIODO_VERIFICACION: 'Periodo de verificación', SEGURO_AUTO: 'Seguro de auto',
-      ESTADO: 'Estado',
-    };
-
-    async function abrirModalVehiculo(folio, id) {
-      document.getElementById('vehiculo-folio-label').textContent = 'Folio: ' + folio;
-      const grid = document.getElementById('vehiculo-info-grid');
-      const vacio = document.getElementById('vehiculo-info-vacio');
-      vacio.hidden = true;
-
-      // Sección "Incidencia": ya la tenemos en memoria, no hace falta pedirla.
-      const inc = incidenciasPorId[id];
-      let html = '';
-      if (inc) {
-        html += seccionInfo('clipboard-list', 'Incidencia');
-        html += Object.keys(ETIQUETAS_INCIDENCIA)
-          .filter((clave) => inc[clave] !== '' && inc[clave] !== null && inc[clave] !== undefined)
-          .map((clave) => itemInfo(ETIQUETAS_INCIDENCIA[clave], inc[clave]))
-          .join('');
-      }
-      html += seccionInfo('car', 'Vehículo');
-      html += '<div class="loading-inline" id="vehiculo-info-cargando"><span class="spinner"></span> Buscando en el catálogo de vehículos…</div>';
-      grid.innerHTML = html;
-      modalVehiculo.hidden = false;
-      refreshIcons();
-
+    document.getElementById('form-editar-incidencia').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('editar-error');
+      errorBox.hidden = true;
+      toastCargando('Guardando cambios…');
       try {
-        const vehiculo = await callServer('apiBuscarVehiculoPorFolio', state.token, folio);
-        const cargando = document.getElementById('vehiculo-info-cargando');
-        if (cargando) cargando.remove();
+        await callServer('apiActualizarIncidencia', state.token, document.getElementById('editar-id').value, {
+          FOLIO: document.getElementById('editar-folio').value.trim(),
+          DEPARTAMENTO: document.getElementById('editar-departamento').value.trim(),
+          MODELO: document.getElementById('editar-modelo').value.trim(),
+          ANIO: document.getElementById('editar-anio').value,
+          FECHA_INSPECCION: document.getElementById('editar-fecha-inspeccion').value,
+          KILOMETRAJE: document.getElementById('editar-kilometraje').value,
+          TICKET: document.getElementById('editar-ticket').value.trim(),
+          PERIODO_VERIFICACION: document.getElementById('editar-periodo-verificacion').value.trim(),
+          SEGURO_AUTO: document.getElementById('editar-seguro-auto').value.trim(),
+          INSPECCION_INGRESO: document.getElementById('editar-motivo').value.trim(),
+          DESCRIPCION_TRABAJO: document.getElementById('editar-trabajo').value.trim(),
+          FECHA_TRABAJO: document.getElementById('editar-fecha-trabajo').value,
+          MECANICO: document.getElementById('editar-mecanico').value.trim(),
+          INSPECCION_SALIDA: document.getElementById('editar-salida').value.trim(),
+        });
+        cerrarModalEditar();
+        await cargar();
+        toastExito('Actualizado exitosamente');
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+        toastError('No se pudo actualizar: ' + err.message);
+      }
+    });
+
+    /** Sección "Vehículo" dentro del panel de detalle nativo de DataTable — los
+     *  datos de la incidencia ya los pinta el panel solo (vienen de `columnas`);
+     *  esto solo agrega, abajo, lo que trae el catálogo de Vehículos. */
+    async function mostrarVehiculoEnPanel(inc, contenedor) {
+      const titulo = '<div class="dt-campo-titulo" style="margin:14px 0 6px">Vehículo</div>';
+      contenedor.innerHTML = titulo + '<div class="loading-inline"><span class="spinner"></span> Buscando en el catálogo de vehículos…</div>';
+      try {
+        const vehiculo = await callServer('apiBuscarVehiculoPorFolio', state.token, inc.FOLIO);
         if (!vehiculo) {
-          vacio.hidden = false;
+          contenedor.innerHTML = titulo + '<p class="empty-state">No se encontró este folio en el catálogo de Vehículos.</p>';
           return;
         }
-        grid.insertAdjacentHTML('beforeend', Object.keys(vehiculo)
+        contenedor.innerHTML = titulo + Object.keys(vehiculo)
           .filter((clave) => vehiculo[clave] !== '' && vehiculo[clave] !== null && vehiculo[clave] !== undefined)
           .map((clave) => itemInfo(tituloDesdeClave(clave), vehiculo[clave]))
-          .join(''));
+          .join('');
       } catch (err) {
-        const cargando = document.getElementById('vehiculo-info-cargando');
-        if (cargando) cargando.remove();
-        vacio.hidden = false;
-        document.getElementById('vehiculo-info-vacio').textContent = 'No se pudo cargar el vehículo: ' + err.message;
+        contenedor.innerHTML = titulo + '<p class="error-msg">No se pudo cargar el vehículo: ' + escaparHtml(err.message) + '</p>';
       }
-    }
-    function cerrarModalVehiculo() {
-      modalVehiculo.hidden = true;
     }
 
-    async function eliminarIncidencia(id, folio) {
-      if (!confirm('¿Eliminar la incidencia del folio ' + folio + '? Esta acción no se puede deshacer.')) return;
-      toastCargando('Eliminando…');
-      try {
-        await callServer('apiEliminarIncidencia', state.token, id);
-        await cargar();
-        toastExito('Eliminado exitosamente');
-      } catch (err) {
-        toastError('No se pudo eliminar: ' + err.message);
-      }
+    function badgeEstadoIncidencia(estado) {
+      const abierta = estado === 'ABIERTA';
+      return `<span class="badge-estado ${abierta ? 'abierta' : 'cerrada'}"><i data-lucide="${abierta ? 'lock-open' : 'circle-check'}" class="ico"></i> ${abierta ? 'Abierta' : 'Cerrada'}</span>`;
     }
 
     let todasLasIncidencias = [];
 
-    const columnasIncidencias = [
-      { clave: 'FOLIO', etiqueta: 'Folio' },
-      { clave: 'DEPARTAMENTO', etiqueta: 'Departamento' },
-      { clave: 'INSPECCION_INGRESO', etiqueta: 'Motivo' },
-      { clave: 'FECHA_REGISTRO', etiqueta: 'Fecha' },
-      { clave: 'ESTADO', etiqueta: 'Estado' },
-    ];
-    const motorTablaIncidencias = crearTablaInteractiva({
-      thead: document.getElementById('inc-thead'),
-      columnas: columnasIncidencias,
-      buscadorGlobal: document.getElementById('inc-buscar-global'),
-      piePaginacion: document.getElementById('inc-pie'),
-      onRenderPagina: (incidencias, total) => {
-        vacio.hidden = total > 0;
-        lista.innerHTML = incidencias.map((inc) => {
-          const abierta = inc.ESTADO === 'ABIERTA';
-          return `
-            <tr>
-              <td class="tabla-clickable" data-folio="${inc.FOLIO}" data-id="${inc.ID}" title="Ver detalle completo">${inc.FOLIO}</td>
-              <td>${inc.DEPARTAMENTO || '—'}</td>
-              <td>${inc.INSPECCION_INGRESO || 'Sin motivo registrado'}</td>
-              <td>${formatearFecha(inc.FECHA_REGISTRO)}</td>
-              <td><span class="badge-estado ${abierta ? 'abierta' : 'cerrada'}"><i data-lucide="${abierta ? 'lock-open' : 'circle-check'}" class="ico"></i> ${abierta ? 'Abierta' : 'Cerrada'}</span></td>
-              <td>
-                <div class="tabla-actions">
-                  ${abierta ? `<button type="button" class="secondary btn-cerrar-incidencia" data-id="${inc.ID}" data-folio="${inc.FOLIO}">Cerrar</button>` : ''}
-                  <button type="button" class="secondary btn-editar-incidencia" data-id="${inc.ID}" title="Editar"><i data-lucide="pencil" class="ico"></i></button>
-                  <button type="button" class="danger btn-eliminar-incidencia" data-id="${inc.ID}" data-folio="${inc.FOLIO}" title="Eliminar"><i data-lucide="trash-2" class="ico"></i></button>
-                </div>
-              </td>
-            </tr>
-          `;
-        }).join('');
-
-        wireFilasClickables(lista, (ds) => abrirModalVehiculo(ds.folio, ds.id));
-        lista.querySelectorAll('.btn-cerrar-incidencia').forEach((btn) => {
-          btn.addEventListener('click', () => abrirModalCierre(btn.dataset.id, btn.dataset.folio));
-        });
-        lista.querySelectorAll('.btn-editar-incidencia').forEach((btn) => {
-          btn.addEventListener('click', () => abrirModalEditar(incidenciasPorId[btn.dataset.id]));
-        });
-        lista.querySelectorAll('.btn-eliminar-incidencia').forEach((btn) => {
-          btn.addEventListener('click', () => eliminarIncidencia(btn.dataset.id, btn.dataset.folio));
-        });
-        refreshIcons();
+    const tabla = DataTable.crear(document.getElementById('inc-tabla'), {
+      idCampo: 'ID',
+      idTabla: 'incidencias',
+      ordenInicial: { campo: 'FECHA_REGISTRO', dir: 'desc' },
+      textoVacio: 'Todavía no hay incidencias registradas',
+      exportar: { nombreArchivo: 'Incidencias' },
+      etiquetaFila: (inc) => inc.FOLIO,
+      alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
+      detalle: {
+        titulo: (inc) => 'Folio: ' + (inc.FOLIO || ''),
+        contenidoExtra: (inc, contenedor) => mostrarVehiculoEnPanel(inc, contenedor),
       },
+      columnas: [
+        { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', fijada: true },
+        { campo: 'DEPARTAMENTO', titulo: 'Departamento', tipo: 'lista' },
+        { campo: 'INSPECCION_INGRESO', titulo: 'Motivo', tipo: 'texto' },
+        { campo: 'FECHA_REGISTRO', titulo: 'Fecha', tipo: 'fecha' },
+        { campo: 'ESTADO', titulo: 'Estado', tipo: 'lista', render: (v) => badgeEstadoIncidencia(v) },
+        { campo: 'MODELO', titulo: 'Modelo', tipo: 'texto', visible: false },
+        { campo: 'ANIO', titulo: 'Año', tipo: 'numero', visible: false },
+        { campo: 'FECHA_INSPECCION', titulo: 'Fecha de inspección', tipo: 'fecha', visible: false },
+        { campo: 'KILOMETRAJE', titulo: 'Kilometraje', tipo: 'numero', visible: false },
+        { campo: 'TICKET', titulo: 'Ticket', tipo: 'texto', visible: false },
+        { campo: 'PERIODO_VERIFICACION', titulo: 'Periodo de verificación', tipo: 'texto', visible: false },
+        { campo: 'SEGURO_AUTO', titulo: 'Seguro de auto', tipo: 'texto', visible: false },
+        { campo: 'DESCRIPCION_TRABAJO', titulo: 'Trabajo realizado', tipo: 'texto', visible: false },
+        { campo: 'FECHA_TRABAJO', titulo: 'Fecha del trabajo realizado', tipo: 'fecha', visible: false },
+        { campo: 'INSPECCION_SALIDA', titulo: 'Inspección de salida', tipo: 'texto', visible: false },
+        { campo: 'MECANICO', titulo: 'Mecánico', tipo: 'texto', visible: false },
+      ],
+      accionesFila: puedeEditar ? [
+        {
+          icono: 'lock-open', titulo: 'Cerrar incidencia',
+          visible: (inc) => inc.ESTADO === 'ABIERTA',
+          alHacer: (inc) => abrirModalCierre(inc.ID, inc.FOLIO),
+        },
+        { icono: 'pencil', titulo: 'Editar', alHacer: (inc) => abrirModalEditar(inc) },
+      ] : [],
+      seleccionable: true,
+      alEliminar: puedeEditar ? async (filas) => {
+        await Promise.all(filas.map((f) => callServer('apiEliminarIncidencia', state.token, f.ID)));
+      } : null,
+      motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
 
-    const tilesKpiIncidencias = ['stat-total', 'stat-abiertas', 'stat-cerradas']
-      .map((id) => document.getElementById(id).closest('.stat-tile'));
-    wireKpiFiltro(tilesKpiIncidencias[0], motorTablaIncidencias, 'ESTADO', null, tilesKpiIncidencias);
-    wireKpiFiltro(tilesKpiIncidencias[1], motorTablaIncidencias, 'ESTADO', (v) => v === 'ABIERTA', tilesKpiIncidencias);
-    wireKpiFiltro(tilesKpiIncidencias[2], motorTablaIncidencias, 'ESTADO', (v) => v === 'CERRADA', tilesKpiIncidencias);
+    const tilesKpiIncidencias = { 'stat-total': null, 'stat-abiertas': 'ABIERTA', 'stat-cerradas': 'CERRADA' };
+    Object.keys(tilesKpiIncidencias).forEach((id) => {
+      const tile = document.getElementById(id).closest('.stat-tile');
+      tile.classList.add('stat-tile-clickable');
+      tile.addEventListener('click', () => {
+        const valor = tilesKpiIncidencias[id];
+        tabla.setFiltro('ESTADO', valor ? { valores: [valor] } : null);
+      });
+    });
+    function marcarKpiActivo(filtros) {
+      const valores = filtros.ESTADO && filtros.ESTADO.valores;
+      Object.keys(tilesKpiIncidencias).forEach((id) => {
+        const valor = tilesKpiIncidencias[id];
+        const activo = valor ? !!(valores && valores.length === 1 && valores[0] === valor) : !valores;
+        document.getElementById(id).closest('.stat-tile').classList.toggle('stat-tile-activo', activo);
+      });
+    }
 
     async function cargar() {
-      const errorBox = document.getElementById('inc-error');
-      let incidencias;
+      tabla.setCargando(true);
       try {
-        incidencias = await callServer('apiListarIncidencias', state.token);
+        // google.script.run entrega null en vez de [] cuando el servidor regresa
+        // un arreglo vacío — normalizamos aquí para no tronar en .forEach/.map.
+        todasLasIncidencias = (await callServer('apiListarIncidencias', state.token)) || [];
       } catch (err) {
-        console.error('No se pudo cargar el historial de incidencias:', err);
-        errorBox.textContent = 'No se pudo cargar el historial de incidencias: ' + err.message;
-        errorBox.hidden = false;
+        tabla.setError('No se pudo cargar el historial de incidencias: ' + err.message);
         return;
       }
-      errorBox.hidden = true;
-      // google.script.run entrega null en vez de [] cuando el servidor regresa
-      // un arreglo vacío — normalizamos aquí para no tronar en .forEach/.map.
-      todasLasIncidencias = incidencias || [];
-
-      incidenciasPorId = {};
-      todasLasIncidencias.forEach((inc) => { incidenciasPorId[inc.ID] = inc; });
 
       // Los totales son del historial completo, sin importar el filtro.
       document.getElementById('stat-total').textContent = todasLasIncidencias.length;
       document.getElementById('stat-abiertas').textContent = todasLasIncidencias.filter((i) => i.ESTADO === 'ABIERTA').length;
       document.getElementById('stat-cerradas').textContent = todasLasIncidencias.filter((i) => i.ESTADO === 'CERRADA').length;
 
-      motorTablaIncidencias.setDatos(todasLasIncidencias);
+      tabla.setDatos(todasLasIncidencias);
     }
 
     document.getElementById('form-incidencia').addEventListener('submit', async (ev) => {
@@ -1752,58 +1746,16 @@
       }
     });
 
-    document.getElementById('btn-cancelar-editar').addEventListener('click', cerrarModalEditar);
-    modalEditar.addEventListener('click', (ev) => { if (ev.target === modalEditar) cerrarModalEditar(); });
-
-    document.getElementById('btn-cerrar-vehiculo').addEventListener('click', cerrarModalVehiculo);
-    modalVehiculo.addEventListener('click', (ev) => { if (ev.target === modalVehiculo) cerrarModalVehiculo(); });
-
-    document.getElementById('form-editar-incidencia').addEventListener('submit', async (ev) => {
-      ev.preventDefault();
-      const errorBox = document.getElementById('editar-error');
-      errorBox.hidden = true;
-      toastCargando('Guardando cambios…');
-      try {
-        await callServer('apiActualizarIncidencia', state.token, document.getElementById('editar-id').value, {
-          FOLIO: document.getElementById('editar-folio').value.trim(),
-          DEPARTAMENTO: document.getElementById('editar-departamento').value.trim(),
-          MODELO: document.getElementById('editar-modelo').value.trim(),
-          ANIO: document.getElementById('editar-anio').value,
-          FECHA_INSPECCION: document.getElementById('editar-fecha-inspeccion').value,
-          KILOMETRAJE: document.getElementById('editar-kilometraje').value,
-          TICKET: document.getElementById('editar-ticket').value.trim(),
-          PERIODO_VERIFICACION: document.getElementById('editar-periodo-verificacion').value.trim(),
-          SEGURO_AUTO: document.getElementById('editar-seguro-auto').value.trim(),
-          INSPECCION_INGRESO: document.getElementById('editar-motivo').value.trim(),
-          DESCRIPCION_TRABAJO: document.getElementById('editar-trabajo').value.trim(),
-          FECHA_TRABAJO: document.getElementById('editar-fecha-trabajo').value,
-          MECANICO: document.getElementById('editar-mecanico').value.trim(),
-          INSPECCION_SALIDA: document.getElementById('editar-salida').value.trim(),
-        });
-        cerrarModalEditar();
-        await cargar();
-        toastExito('Actualizado exitosamente');
-      } catch (err) {
-        errorBox.textContent = err.message;
-        errorBox.hidden = false;
-        toastError('No se pudo actualizar: ' + err.message);
-      }
-    });
-
-    document.getElementById('btn-exportar-excel-incidencias').addEventListener('click', () => {
-      exportarCSV('incidencias.csv', columnasIncidencias, motorTablaIncidencias.obtenerFiltrados());
-    });
-
     await Promise.all([promesaVehiculos, cargar()]);
   }
 
   // ---------- Vehículos ----------
   async function initVehiculos() {
     wireTabsSimple(document.getElementById('view-container'));
-    const lista = document.getElementById('lista-vehiculos');
-    const vacio = document.getElementById('vehiculos-vacio');
+    // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
+    const puedeEditar = puedeEditarModulo('vehiculos');
+    if (!puedeEditar) document.querySelector('#veh-tabs .tab-btn[data-tab="registrar"]').remove();
     const modalEditar = document.getElementById('modal-editar-vehiculo');
-    const modalDetalle = document.getElementById('modal-detalle-vehiculo');
     let vehiculosPorId = {};
     let todosLosVehiculos = [];
 
@@ -1918,164 +1870,152 @@
       return clase ? `<span class="tag ${colorClase(clase)}">${clase}</span>` : '—';
     }
 
-    const columnasVehiculos = [
-      { clave: 'FOLIO', etiqueta: 'Folio' },
-      { clave: 'NUCCO', etiqueta: 'Nucco' },
-      { clave: 'DEPARTAMENTO', etiqueta: 'Departamento' },
-      { clave: 'CLASE', etiqueta: 'Clase' },
-      { clave: 'MARCA', etiqueta: 'Marca' },
-      { clave: 'LINEA_VEHICULO', etiqueta: 'Línea' },
-      { clave: 'MODELO', etiqueta: 'Año' },
-      { clave: 'PLACA', etiqueta: 'Placa' },
-      { clave: 'ESTATUS', etiqueta: 'Estatus' },
-    ];
-    const motorTablaVehiculos = crearTablaInteractiva({
-      thead: document.getElementById('veh-thead'),
-      columnas: columnasVehiculos,
-      buscadorGlobal: document.getElementById('veh-buscar-global'),
-      piePaginacion: document.getElementById('veh-pie'),
-      onRenderPagina: (vehiculos, total) => {
-        vacio.hidden = total > 0;
-        lista.innerHTML = vehiculos.map((v) => `
-          <tr>
-            <td class="tabla-clickable" data-id="${v.ID_VEHICULO}" title="Ver detalle completo">${v.FOLIO}</td>
-            <td>${v.NUCCO || '—'}</td>
-            <td>${v.DEPARTAMENTO || '—'}</td>
-            <td>${etiquetaClase(v.CLASE)}</td>
-            <td>${v.MARCA || '—'}</td>
-            <td>${v.LINEA_VEHICULO || '—'}</td>
-            <td>${v.MODELO || '—'}</td>
-            <td>${v.PLACA || '—'}</td>
-            <td>${badgeEstatus(v.ESTATUS)}</td>
-            <td>
-              <div class="tabla-actions">
-                <button type="button" class="secondary btn-editar-vehiculo" data-id="${v.ID_VEHICULO}" title="Editar"><i data-lucide="pencil" class="ico"></i></button>
-                <button type="button" class="danger btn-eliminar-vehiculo" data-id="${v.ID_VEHICULO}" data-folio="${v.FOLIO}" title="Eliminar"><i data-lucide="trash-2" class="ico"></i></button>
-              </div>
-            </td>
-          </tr>
-        `).join('');
-
-        wireFilasClickables(lista, (ds) => abrirDetalleVehiculo(vehiculosPorId[ds.id]));
-        lista.querySelectorAll('.btn-editar-vehiculo').forEach((btn) => {
-          btn.addEventListener('click', () => abrirEditarVehiculo(vehiculosPorId[btn.dataset.id]));
-        });
-        lista.querySelectorAll('.btn-eliminar-vehiculo').forEach((btn) => {
-          btn.addEventListener('click', () => eliminarVehiculo(btn.dataset.id, btn.dataset.folio));
-        });
-        refreshIcons();
-      },
-    });
-
-    const tilesKpiVehiculos = ['veh-stat-total', 'veh-stat-activos', 'veh-stat-baja']
-      .map((id) => document.getElementById(id).closest('.stat-tile'));
-    wireKpiFiltro(tilesKpiVehiculos[0], motorTablaVehiculos, 'ESTATUS', null, tilesKpiVehiculos);
-    wireKpiFiltro(tilesKpiVehiculos[1], motorTablaVehiculos, 'ESTATUS', (v) => !String(v || '').toUpperCase().includes('BAJA'), tilesKpiVehiculos);
-    wireKpiFiltro(tilesKpiVehiculos[2], motorTablaVehiculos, 'ESTATUS', (v) => String(v || '').toUpperCase().includes('BAJA'), tilesKpiVehiculos);
-
-    async function cargar() {
-      const errorBox = document.getElementById('veh-error');
-      let vehiculos;
+    /** Panel de detalle: el registro completo (41 columnas, no las 13 del
+     *  resumen) + los dos historiales enlazados — todo lo que antes traía
+     *  el modal de "Detalle completo". Las columnas de la tabla se marcan
+     *  enDetalle:false para no repetir esos mismos 13 campos arriba. */
+    async function mostrarDetalleVehiculoEnPanel(vResumen, contenedor) {
+      contenedor.innerHTML = '<div class="loading-inline"><span class="spinner"></span> Cargando…</div>';
       try {
-        vehiculos = await callServer('apiListarVehiculosResumen', state.token);
-      } catch (err) {
-        console.error('No se pudo cargar el catálogo de vehículos:', err);
-        errorBox.textContent = 'No se pudo cargar el catálogo de vehículos: ' + err.message;
-        errorBox.hidden = false;
-        return;
-      }
-      errorBox.hidden = true;
-      todosLosVehiculos = vehiculos || [];
-
-      vehiculosPorId = {};
-      todosLosVehiculos.forEach((v) => { vehiculosPorId[v.ID_VEHICULO] = v; });
-
-      // Los totales son del catálogo completo, sin importar el filtro de clase.
-      document.getElementById('veh-stat-total').textContent = todosLosVehiculos.length;
-      document.getElementById('veh-stat-activos').textContent =
-        todosLosVehiculos.filter((v) => !String(v.ESTATUS || '').toUpperCase().includes('BAJA')).length;
-      document.getElementById('veh-stat-baja').textContent =
-        todosLosVehiculos.filter((v) => String(v.ESTATUS || '').toUpperCase().includes('BAJA')).length;
-
-      motorTablaVehiculos.setDatos(todosLosVehiculos);
-    }
-
-    async function abrirDetalleVehiculo(vResumen) {
-      if (!vResumen) return;
-      document.getElementById('detalle-vehiculo-folio-label').textContent = 'Folio: ' + vResumen.FOLIO;
-      const grid = document.getElementById('detalle-vehiculo-grid');
-      const cuerpoCambios = document.getElementById('detalle-vehiculo-cambios');
-      const vacioCambios = document.getElementById('detalle-vehiculo-cambios-vacio');
-      const cuerpoReasignaciones = document.getElementById('detalle-vehiculo-reasignaciones');
-      const vacioReasignaciones = document.getElementById('detalle-vehiculo-reasignaciones-vacio');
-      grid.innerHTML = '<div class="loading-inline"><span class="spinner"></span> Cargando…</div>';
-      cuerpoCambios.innerHTML = '';
-      cuerpoReasignaciones.innerHTML = '';
-      vacioCambios.hidden = true;
-      vacioReasignaciones.hidden = true;
-      modalDetalle.hidden = false;
-      try {
-        // Las 3 en paralelo — el detalle completo del vehículo y sus dos
-        // historiales enlazados (Cambios Vehículos y Reasignaciones
-        // Vehiculares), ambos filtrados por este mismo Folio en el servidor.
         const [completo, cambios, reasignaciones] = await Promise.all([
           callServer('apiBuscarVehiculoPorFolio', state.token, vResumen.FOLIO),
           callServer('apiListarCambiosVehiculosPorFolio', state.token, vResumen.FOLIO),
           callServer('apiListarReasignacionesVehicularesPorFolio', state.token, vResumen.FOLIO),
         ]);
         if (!completo) {
-          grid.innerHTML = '<p class="empty-state">No se encontró el registro completo.</p>';
+          contenedor.innerHTML = '<p class="empty-state">No se encontró el registro completo.</p>';
           return;
         }
-        grid.innerHTML = Object.keys(completo)
+        let html = Object.keys(completo)
           .filter((k) => completo[k] !== '' && completo[k] !== null && completo[k] !== undefined)
           .map((k) => itemInfo(tituloDesdeClave(k), k === '$ Costo del Sensor' ? formatearMoneda(completo[k]) : completo[k]))
           .join('');
 
-        vacioCambios.hidden = (cambios || []).length > 0;
-        cuerpoCambios.innerHTML = (cambios || []).map((c) => `
-          <div class="historial-item">
-            <div class="historial-icon"><i data-lucide="pencil" class="ico"></i></div>
-            <div class="historial-main">
-              <div class="historial-campo">${c.CAMPO || '—'}</div>
-              <div class="historial-valores">
-                <span class="chip-valor chip-antes">${c.ANTES || '(vacío)'}</span>
-                <i data-lucide="arrow-right" class="ico historial-flecha"></i>
-                <span class="chip-valor chip-despues">${c.DESPUES || '(vacío)'}</span>
+        html += '<div class="info-section-title" style="margin-top:14px"><i data-lucide="history" class="ico"></i> Historial de cambios</div>';
+        html += (cambios || []).length ? '<div class="historial-timeline">' + cambios.map((c) => `
+            <div class="historial-item">
+              <div class="historial-icon"><i data-lucide="pencil" class="ico"></i></div>
+              <div class="historial-main">
+                <div class="historial-campo">${c.CAMPO || '—'}</div>
+                <div class="historial-valores">
+                  <span class="chip-valor chip-antes">${c.ANTES || '(vacío)'}</span>
+                  <i data-lucide="arrow-right" class="ico historial-flecha"></i>
+                  <span class="chip-valor chip-despues">${c.DESPUES || '(vacío)'}</span>
+                </div>
+              </div>
+              <div class="historial-meta">
+                <div>${c.ACTUALIZADO_POR || '—'}</div>
+                <div>${formatearFecha(c.FECHA)}</div>
               </div>
             </div>
-            <div class="historial-meta">
-              <div>${c.ACTUALIZADO_POR || '—'}</div>
-              <div>${formatearFecha(c.FECHA)}</div>
-            </div>
-          </div>
-        `).join('');
+          `).join('') + '</div>' : '<p class="empty-state">Sin cambios registrados para este vehículo.</p>';
 
-        vacioReasignaciones.hidden = (reasignaciones || []).length > 0;
-        cuerpoReasignaciones.innerHTML = (reasignaciones || []).map((r) => `
-          <div class="historial-item">
-            <div class="historial-icon historial-icon-accent"><i data-lucide="arrow-left-right" class="ico"></i></div>
-            <div class="historial-main">
-              <div class="historial-valores">
-                <span class="chip-valor chip-antes">${r.RESPONSABLE_SALIENTE || '—'}</span>
-                <i data-lucide="arrow-right" class="ico historial-flecha"></i>
-                <span class="chip-valor chip-despues">${r.RESPONSABLE_ENTRANTE || '—'}</span>
+        html += '<div class="info-section-title" style="margin-top:14px"><i data-lucide="arrow-left-right" class="ico"></i> Historial de reasignaciones</div>';
+        html += (reasignaciones || []).length ? '<div class="historial-timeline">' + reasignaciones.map((r) => `
+            <div class="historial-item">
+              <div class="historial-icon historial-icon-accent"><i data-lucide="arrow-left-right" class="ico"></i></div>
+              <div class="historial-main">
+                <div class="historial-valores">
+                  <span class="chip-valor chip-antes">${r.RESPONSABLE_SALIENTE || '—'}</span>
+                  <i data-lucide="arrow-right" class="ico historial-flecha"></i>
+                  <span class="chip-valor chip-despues">${r.RESPONSABLE_ENTRANTE || '—'}</span>
+                </div>
+                <div class="historial-departamento">${r.DEPARTAMENTO_ENTRANTE || '—'}</div>
               </div>
-              <div class="historial-departamento">${r.DEPARTAMENTO_ENTRANTE || '—'}</div>
+              <div class="historial-meta">
+                <div>${r.QUIEN_REGISTRO || '—'}</div>
+                <div>${formatearFecha(r.FECHA)}</div>
+              </div>
             </div>
-            <div class="historial-meta">
-              <div>${r.QUIEN_REGISTRO || '—'}</div>
-              <div>${formatearFecha(r.FECHA)}</div>
-            </div>
-          </div>
-        `).join('');
+          `).join('') + '</div>' : '<p class="empty-state">Sin reasignaciones registradas para este vehículo.</p>';
+
+        contenedor.innerHTML = html;
         refreshIcons();
       } catch (err) {
-        grid.innerHTML = '<p class="error-msg">No se pudo cargar: ' + err.message + '</p>';
+        contenedor.innerHTML = '<p class="error-msg">No se pudo cargar: ' + escaparHtml(err.message) + '</p>';
       }
     }
-    document.getElementById('btn-cerrar-detalle-vehiculo').addEventListener('click', () => { modalDetalle.hidden = true; });
-    modalDetalle.addEventListener('click', (ev) => { if (ev.target === modalDetalle) modalDetalle.hidden = true; });
+
+    const tabla = DataTable.crear(document.getElementById('veh-tabla'), {
+      idCampo: 'ID_VEHICULO',
+      idTabla: 'vehiculos',
+      textoVacio: 'Todavía no hay vehículos registrados',
+      exportar: { nombreArchivo: 'Vehículos' },
+      etiquetaFila: (v) => v.FOLIO,
+      alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
+      detalle: {
+        titulo: (v) => 'Folio: ' + (v.FOLIO || ''),
+        contenidoExtra: (v, contenedor) => mostrarDetalleVehiculoEnPanel(v, contenedor),
+      },
+      columnas: [
+        { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', fijada: true, enDetalle: false },
+        { campo: 'NUCCO', titulo: 'Nucco', tipo: 'texto', enDetalle: false },
+        { campo: 'DEPARTAMENTO', titulo: 'Departamento', tipo: 'lista', enDetalle: false },
+        { campo: 'CLASE', titulo: 'Clase', tipo: 'lista', render: (v) => etiquetaClase(v), enDetalle: false },
+        { campo: 'MARCA', titulo: 'Marca', tipo: 'lista', enDetalle: false },
+        { campo: 'LINEA_VEHICULO', titulo: 'Línea', tipo: 'lista', enDetalle: false },
+        { campo: 'MODELO', titulo: 'Año', tipo: 'texto', enDetalle: false },
+        { campo: 'PLACA', titulo: 'Placa', tipo: 'texto', enDetalle: false },
+        // 'texto' (no 'lista'): ESTATUS trae varias razones de baja distintas
+        // ("BAJA VEHICULAR", etc.) — contiene/no contiene "BAJA" cubre todas
+        // sin tener que enumerarlas, igual que hacía el filtro de KPI de antes.
+        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'texto', render: (v) => badgeEstatus(v), enDetalle: false },
+        { campo: 'NO_ECONOMICO', titulo: 'No. económico', tipo: 'texto', visible: false, enDetalle: false },
+        { campo: 'COLOR', titulo: 'Color', tipo: 'lista', visible: false, enDetalle: false },
+        { campo: 'SEDE', titulo: 'Sede', tipo: 'lista', visible: false, enDetalle: false },
+      ],
+      accionesFila: puedeEditar ? [{
+        icono: 'pencil', titulo: 'Editar', alHacer: (v) => abrirEditarVehiculo(v),
+      }] : [],
+      alEliminar: puedeEditar ? async (filas) => {
+        await Promise.all(filas.map((f) => callServer('apiEliminarVehiculo', state.token, f.ID_VEHICULO)));
+      } : null,
+      motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
+    });
+
+    const KPI_FILTRO_VEHICULOS = { 'veh-stat-activos': 'no_contiene', 'veh-stat-baja': 'contiene' };
+    const tileTotalVeh = document.getElementById('veh-stat-total').closest('.stat-tile');
+    tileTotalVeh.classList.add('stat-tile-clickable');
+    tileTotalVeh.addEventListener('click', () => tabla.setFiltro('ESTATUS', null));
+    Object.keys(KPI_FILTRO_VEHICULOS).forEach((id) => {
+      const tile = document.getElementById(id).closest('.stat-tile');
+      tile.classList.add('stat-tile-clickable');
+      tile.addEventListener('click', () => {
+        const yaActivo = tile.classList.contains('stat-tile-activo');
+        tabla.setFiltro('ESTATUS', yaActivo ? null : { op: KPI_FILTRO_VEHICULOS[id], v1: 'BAJA' });
+      });
+    });
+    function marcarKpiActivo(filtros) {
+      const f = filtros.ESTATUS;
+      tileTotalVeh.classList.toggle('stat-tile-activo', !f);
+      Object.keys(KPI_FILTRO_VEHICULOS).forEach((id) => {
+        document.getElementById(id).closest('.stat-tile').classList.toggle(
+          'stat-tile-activo', !!(f && f.op === KPI_FILTRO_VEHICULOS[id] && f.v1 === 'BAJA')
+        );
+      });
+    }
+
+    async function cargar() {
+      tabla.setCargando(true);
+      try {
+        todosLosVehiculos = (await callServer('apiListarVehiculosResumen', state.token)) || [];
+      } catch (err) {
+        tabla.setError('No se pudo cargar el catálogo de vehículos: ' + err.message);
+        return;
+      }
+
+      vehiculosPorId = {};
+      todosLosVehiculos.forEach((v) => { vehiculosPorId[v.ID_VEHICULO] = v; });
+
+      // Los totales son del catálogo completo, sin importar el filtro.
+      document.getElementById('veh-stat-total').textContent = todosLosVehiculos.length;
+      document.getElementById('veh-stat-activos').textContent =
+        todosLosVehiculos.filter((v) => !String(v.ESTATUS || '').toUpperCase().includes('BAJA')).length;
+      document.getElementById('veh-stat-baja').textContent =
+        todosLosVehiculos.filter((v) => String(v.ESTATUS || '').toUpperCase().includes('BAJA')).length;
+
+      tabla.setDatos(todosLosVehiculos);
+    }
 
     async function abrirEditarVehiculo(vResumen) {
       if (!vResumen) return;
@@ -2130,18 +2070,6 @@
       }
     });
 
-    async function eliminarVehiculo(id, folio) {
-      if (!confirm('¿Eliminar el vehículo con folio ' + folio + '? Esta acción no se puede deshacer.')) return;
-      toastCargando('Eliminando…');
-      try {
-        await callServer('apiEliminarVehiculo', state.token, id);
-        await cargar();
-        toastExito('Eliminado exitosamente');
-      } catch (err) {
-        toastError('No se pudo eliminar: ' + err.message);
-      }
-    }
-
     document.getElementById('form-vehiculo').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const errorBox = document.getElementById('veh-error');
@@ -2170,9 +2098,6 @@
       }
     });
 
-    document.getElementById('btn-exportar-excel-vehiculos').addEventListener('click', () => {
-      exportarCSV('vehiculos.csv', columnasVehiculos, motorTablaVehiculos.obtenerFiltrados());
-    });
     document.getElementById('btn-ver-reporte-vehiculos').addEventListener('click', () => {
       // "\/\/" (no "//"): Apps Script le borra a los .html todo lo que
       // encuentre después de "//" pensando que es un comentario — incluso
@@ -2189,10 +2114,10 @@
   // ---------- Uber (usuarios autorizados) ----------
   async function initUber() {
     wireTabsSimple(document.getElementById('view-container'));
-    const lista = document.getElementById('lista-uber');
-    const vacio = document.getElementById('uber-vacio');
+    // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
+    const puedeEditar = puedeEditarModulo('uber');
+    if (!puedeEditar) document.querySelector('#uber-tabs .tab-btn[data-tab="registrar"]').remove();
     const modalEditar = document.getElementById('modal-editar-uber');
-    const modalDetalle = document.getElementById('modal-detalle-uber');
     let usuariosPorId = {};
     let todosLosUsuarios = [];
 
@@ -2292,71 +2217,76 @@
       return { SOLICITUD: subido.url };
     }
 
-    const columnasUber = [
-      { clave: 'NOMBRE_COMPLETO', etiqueta: 'Nombre' },
-      { clave: 'RAZON_SOCIAL', etiqueta: 'Razón social' },
-      { clave: 'ROL', etiqueta: 'Rol' },
-      { clave: 'DEPARTAMENTO', etiqueta: 'Departamento' },
-      { clave: 'PUESTO', etiqueta: 'Puesto' },
-      { clave: 'ESTATUS', etiqueta: 'Estatus' },
-    ];
-    const motorTablaUber = crearTablaInteractiva({
-      thead: document.getElementById('uber-thead'),
-      columnas: columnasUber,
-      buscadorGlobal: document.getElementById('uber-buscar-global'),
-      piePaginacion: document.getElementById('uber-pie'),
-      onRenderPagina: (usuarios, total) => {
-        vacio.hidden = total > 0;
-        lista.innerHTML = usuarios.map((u) => `
-          <tr>
-            <td class="tabla-clickable" data-id="${u.ID}" title="Ver detalle completo">${u.NOMBRE_COMPLETO || '—'}</td>
-            <td>${u.RAZON_SOCIAL || '—'}</td>
-            <td>${etiquetaRol(u.ROL)}</td>
-            <td>${u.DEPARTAMENTO || '—'}</td>
-            <td>${u.PUESTO || '—'}</td>
-            <td>${badgeEstatusUber(u.ESTATUS)}</td>
-            <td>
-              <div class="tabla-actions">
-                <button type="button" class="secondary btn-editar-uber" data-id="${u.ID}" title="Editar"><i data-lucide="pencil" class="ico"></i></button>
-                <button type="button" class="danger btn-eliminar-uber" data-id="${u.ID}" data-nombre="${u.NOMBRE_COMPLETO}" title="Eliminar"><i data-lucide="trash-2" class="ico"></i></button>
-              </div>
-            </td>
-          </tr>
-        `).join('');
-
-        wireFilasClickables(lista, (ds) => abrirDetalleUber(ds.id));
-        lista.querySelectorAll('.btn-editar-uber').forEach((btn) => {
-          btn.addEventListener('click', () => abrirEditarUber(btn.dataset.id));
-        });
-        lista.querySelectorAll('.btn-eliminar-uber').forEach((btn) => {
-          btn.addEventListener('click', () => eliminarUber(btn.dataset.id, btn.dataset.nombre));
-        });
-        refreshIcons();
-      },
+    const tabla = DataTable.crear(document.getElementById('uber-tabla'), {
+      idCampo: 'ID',
+      idTabla: 'uber',
+      textoVacio: 'Todavía no hay usuarios registrados',
+      exportar: { nombreArchivo: 'Uber' },
+      etiquetaFila: (u) => u.NOMBRE_COMPLETO,
+      alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
+      detalle: { titulo: (u) => u.NOMBRE_COMPLETO || '' },
+      columnas: [
+        { campo: 'NOMBRE_COMPLETO', titulo: 'Nombre', tipo: 'texto', fijada: true },
+        { campo: 'RAZON_SOCIAL', titulo: 'Razón social', tipo: 'lista' },
+        { campo: 'ROL', titulo: 'Rol', tipo: 'lista', render: (v) => etiquetaRol(v) },
+        { campo: 'DEPARTAMENTO', titulo: 'Departamento', tipo: 'lista' },
+        { campo: 'PUESTO', titulo: 'Puesto', tipo: 'texto' },
+        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', render: (v) => badgeEstatusUber(v) },
+        { campo: 'CORREO ELECTRONICO', titulo: 'Correo electrónico', tipo: 'texto', visible: false },
+        { campo: 'NUMERO TELEFONO', titulo: 'Teléfono', tipo: 'texto', visible: false },
+        { campo: 'SEDE', titulo: 'Sede', tipo: 'lista', visible: false },
+        { campo: 'OFICINA/DESARROLLO', titulo: 'Oficina / Desarrollo', tipo: 'lista', visible: false },
+        { campo: 'DIAS AUTORIZADOS', titulo: 'Días autorizados', tipo: 'texto', visible: false },
+        { campo: 'HORARIO AUTORIZADO', titulo: 'Horario autorizado', tipo: 'texto', visible: false },
+        { campo: 'FECHA DE ALTA', titulo: 'Fecha de alta', tipo: 'fecha', visible: false },
+        {
+          campo: 'SOLICITUD', titulo: 'Solicitud', filtrable: false, ordenable: false,
+          render: (ruta) => (ruta ? `<a href="${escaparHtml(ruta)}" target="_blank" rel="noopener">📎 Ver archivo</a>` : '—'),
+        },
+      ],
+      accionesFila: puedeEditar ? [{
+        icono: 'pencil', titulo: 'Editar', alHacer: (u) => abrirEditarUber(u.ID),
+      }] : [],
+      alEliminar: puedeEditar ? async (filas) => {
+        await Promise.all(filas.map((f) => callServer('apiEliminarUber', state.token, f.ID)));
+      } : null,
+      motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
 
-    // KPI clickeables: filtran la tabla con la misma prueba que ya se usa
-    // para contarlos (ver cargar() más abajo).
-    const tilesKpiUber = ['uber-stat-total', 'uber-stat-activos', 'uber-stat-pendientes', 'uber-stat-baja']
-      .map((id) => document.getElementById(id).closest('.stat-tile'));
-    wireKpiFiltro(tilesKpiUber[0], motorTablaUber, 'ESTATUS', null, tilesKpiUber);
-    wireKpiFiltro(tilesKpiUber[1], motorTablaUber, 'ESTATUS', (v) => String(v || '').toUpperCase().includes('ACTIVO'), tilesKpiUber);
-    wireKpiFiltro(tilesKpiUber[2], motorTablaUber, 'ESTATUS', (v) => String(v || '').toUpperCase().includes('PENDIENTE'), tilesKpiUber);
-    wireKpiFiltro(tilesKpiUber[3], motorTablaUber, 'ESTATUS', (v) => String(v || '').toUpperCase().includes('BAJA'), tilesKpiUber);
+    // KPI clickeables: los valores de ESTATUS son exactos (ACTIVO/PENDIENTE/BAJA,
+    // las mismas 3 opciones del <select> de Registrar), así que un filtro de
+    // lista exacta basta — no hace falta la prueba "contains" que traía la
+    // versión anterior por si acaso.
+    const KPI_FILTRO_UBER = { 'uber-stat-activos': 'ACTIVO', 'uber-stat-pendientes': 'PENDIENTE', 'uber-stat-baja': 'BAJA' };
+    const tileTotalUber = document.getElementById('uber-stat-total').closest('.stat-tile');
+    tileTotalUber.classList.add('stat-tile-clickable');
+    tileTotalUber.addEventListener('click', () => tabla.setFiltro('ESTATUS', null));
+    Object.keys(KPI_FILTRO_UBER).forEach((id) => {
+      const tile = document.getElementById(id).closest('.stat-tile');
+      tile.classList.add('stat-tile-clickable');
+      tile.addEventListener('click', () => {
+        const yaActivo = tile.classList.contains('stat-tile-activo');
+        tabla.setFiltro('ESTATUS', yaActivo ? null : { valores: [KPI_FILTRO_UBER[id]] });
+      });
+    });
+    function marcarKpiActivo(filtros) {
+      const valores = filtros.ESTATUS && filtros.ESTATUS.valores;
+      tileTotalUber.classList.toggle('stat-tile-activo', !valores);
+      Object.keys(KPI_FILTRO_UBER).forEach((id) => {
+        document.getElementById(id).closest('.stat-tile').classList.toggle(
+          'stat-tile-activo', !!(valores && valores.length === 1 && valores[0] === KPI_FILTRO_UBER[id])
+        );
+      });
+    }
 
     async function cargar() {
-      const errorBox = document.getElementById('uber-error');
-      let usuarios;
+      tabla.setCargando(true);
       try {
-        usuarios = await callServer('apiListarUberResumen', state.token);
+        todosLosUsuarios = (await callServer('apiListarUberResumen', state.token)) || [];
       } catch (err) {
-        console.error('No se pudo cargar el catálogo de Uber:', err);
-        errorBox.textContent = 'No se pudo cargar el catálogo: ' + err.message;
-        errorBox.hidden = false;
+        tabla.setError('No se pudo cargar el catálogo: ' + err.message);
         return;
       }
-      errorBox.hidden = true;
-      todosLosUsuarios = usuarios || [];
 
       usuariosPorId = {};
       todosLosUsuarios.forEach((u) => { usuariosPorId[u.ID] = u; });
@@ -2370,32 +2300,8 @@
       document.getElementById('uber-stat-baja').textContent =
         todosLosUsuarios.filter((u) => String(u.ESTATUS || '').toUpperCase().includes('BAJA')).length;
 
-      motorTablaUber.setDatos(todosLosUsuarios);
+      tabla.setDatos(todosLosUsuarios);
     }
-
-    async function abrirDetalleUber(id) {
-      const resumen = usuariosPorId[id];
-      if (!resumen) return;
-      document.getElementById('detalle-uber-nombre-label').textContent = resumen.NOMBRE_COMPLETO || '';
-      const grid = document.getElementById('detalle-uber-grid');
-      grid.innerHTML = '<div class="loading-inline"><span class="spinner"></span> Cargando…</div>';
-      modalDetalle.hidden = false;
-      try {
-        const completo = await callServer('apiBuscarUberPorId', state.token, id);
-        if (!completo) {
-          grid.innerHTML = '<p class="empty-state">No se encontró el registro completo.</p>';
-          return;
-        }
-        grid.innerHTML = Object.keys(completo)
-          .filter((k) => completo[k] !== '' && completo[k] !== null && completo[k] !== undefined)
-          .map((k) => itemInfo(tituloDesdeClave(k), completo[k]))
-          .join('');
-      } catch (err) {
-        grid.innerHTML = '<p class="error-msg">No se pudo cargar: ' + err.message + '</p>';
-      }
-    }
-    document.getElementById('btn-cerrar-detalle-uber').addEventListener('click', () => { modalDetalle.hidden = true; });
-    modalDetalle.addEventListener('click', (ev) => { if (ev.target === modalDetalle) modalDetalle.hidden = true; });
 
     async function abrirEditarUber(id) {
       const resumen = usuariosPorId[id];
@@ -2447,18 +2353,6 @@
       }
     });
 
-    async function eliminarUber(id, nombre) {
-      if (!confirm('¿Eliminar a ' + nombre + ' del catálogo de Uber? Esta acción no se puede deshacer.')) return;
-      toastCargando('Eliminando…');
-      try {
-        await callServer('apiEliminarUber', state.token, id);
-        await cargar();
-        toastExito('Eliminado exitosamente');
-      } catch (err) {
-        toastError('No se pudo eliminar: ' + err.message);
-      }
-    }
-
     document.getElementById('form-uber').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const errorBox = document.getElementById('uber-error');
@@ -2486,21 +2380,16 @@
       }
     });
 
-    document.getElementById('btn-exportar-excel-uber').addEventListener('click', () => {
-      exportarCSV('uber.csv', columnasUber, motorTablaUber.obtenerFiltrados());
-    });
-
     await Promise.all([cargarCatalogosUber(), cargar()]);
   }
 
   // ---------- Tickets (bitácora general de atención) ----------
   async function initTickets() {
     wireTabsSimple(document.getElementById('view-container'));
-    const lista = document.getElementById('lista-tickets');
-    const vacio = document.getElementById('tickets-vacio');
+    // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
+    const puedeEditar = puedeEditarModulo('tickets');
+    if (!puedeEditar) document.querySelector('#tickets-tabs .tab-btn[data-tab="registrar"]').remove();
     const modalEditar = document.getElementById('modal-editar-ticket');
-    const modalDetalle = document.getElementById('modal-detalle-ticket');
-    let ticketsPorId = {};
     let todosLosTickets = [];
 
     document.getElementById('ticket-fecha-registro').value = new Date().toLocaleDateString('es-MX');
@@ -2547,110 +2436,42 @@
       });
     }
 
-    const columnasTickets = [
-      { clave: 'TICKET', etiqueta: 'Ticket' },
-      { clave: 'FECHA', etiqueta: 'Fecha' },
-      { clave: 'DEPARTAMENTO', etiqueta: 'Departamento' },
-      { clave: 'SOLICITANTE', etiqueta: 'Solicitante' },
-      { clave: 'TIPO_ATENCION', etiqueta: 'Tipo de atención' },
-      { clave: 'QUIEN_ATENDIO', etiqueta: 'Atendió' },
-    ];
-    const motorTablaTickets = crearTablaInteractiva({
-      thead: document.getElementById('tickets-thead'),
-      columnas: columnasTickets,
-      buscadorGlobal: document.getElementById('tickets-buscar-global'),
-      piePaginacion: document.getElementById('tickets-pie'),
-      onRenderPagina: (tickets, total) => {
-        vacio.hidden = total > 0;
-        lista.innerHTML = tickets.map((t) => `
-          <tr>
-            <td class="tabla-clickable" data-id="${t.ID}" title="Ver detalle completo">${t.TICKET || '—'}</td>
-            <td>${formatearFecha(t.FECHA)}</td>
-            <td>${t.DEPARTAMENTO || '—'}</td>
-            <td>${t.SOLICITANTE || '—'}</td>
-            <td>${t.TIPO_ATENCION || '—'}</td>
-            <td>${t.QUIEN_ATENDIO || '—'}</td>
-            <td>
-              <div class="tabla-actions">
-                <button type="button" class="secondary btn-editar-ticket" data-id="${t.ID}" title="Editar"><i data-lucide="pencil" class="ico"></i></button>
-                <button type="button" class="danger btn-eliminar-ticket" data-id="${t.ID}" data-ticket="${t.TICKET}" title="Eliminar"><i data-lucide="trash-2" class="ico"></i></button>
-              </div>
-            </td>
-          </tr>
-        `).join('');
-
-        wireFilasClickables(lista, (ds) => abrirDetalleTicket(ds.id));
-        lista.querySelectorAll('.btn-editar-ticket').forEach((btn) => {
-          btn.addEventListener('click', () => abrirEditarTicket(btn.dataset.id));
-        });
-        lista.querySelectorAll('.btn-eliminar-ticket').forEach((btn) => {
-          btn.addEventListener('click', () => eliminarTicket(btn.dataset.id, btn.dataset.ticket));
-        });
-        refreshIcons();
-      },
+    const tabla = DataTable.crear(document.getElementById('tickets-tabla'), {
+      idCampo: 'ID',
+      idTabla: 'tickets',
+      ordenInicial: { campo: 'FECHA', dir: 'desc' },
+      textoVacio: 'Todavía no hay tickets registrados',
+      exportar: { nombreArchivo: 'Tickets' },
+      etiquetaFila: (t) => t['TICKET'],
+      detalle: { titulo: (t) => 'Ticket: ' + (t['TICKET'] || '') },
+      columnas: [
+        { campo: 'TICKET', titulo: 'Ticket', tipo: 'texto', fijada: true },
+        { campo: 'FECHA', titulo: 'Fecha', tipo: 'fecha' },
+        { campo: 'DEPARTAMENTO', titulo: 'Departamento', tipo: 'lista' },
+        { campo: 'SOLICITANTE', titulo: 'Solicitante', tipo: 'lista' },
+        { campo: 'TIPO ATENCION', titulo: 'Tipo de atención', tipo: 'lista' },
+        { campo: 'QUIEN ATENDIO', titulo: 'Atendió', tipo: 'lista' },
+        { campo: 'PLACA', titulo: 'Placa', tipo: 'texto', visible: false },
+        { campo: 'COMENTARIO', titulo: 'Comentario', tipo: 'texto', visible: false },
+        { campo: 'FECHA DE REGISTRO', titulo: 'Fecha de registro', tipo: 'fecha', visible: false },
+      ],
+      accionesFila: puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (t) => abrirEditarTicket(t) }] : [],
+      seleccionable: true,
+      alEliminar: puedeEditar ? async (filas) => {
+        await Promise.all(filas.map((f) => callServer('apiEliminarTicket', state.token, f.ID)));
+      } : null,
+      motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
 
-    async function cargar() {
-      const errorBox = document.getElementById('ticket-error');
-      let tickets;
-      try {
-        tickets = await callServer('apiListarTicketsResumen', state.token);
-      } catch (err) {
-        console.error('No se pudo cargar el historial de tickets:', err);
-        errorBox.textContent = 'No se pudo cargar el historial: ' + err.message;
-        errorBox.hidden = false;
-        return;
-      }
-      errorBox.hidden = true;
-      todosLosTickets = tickets || [];
-
-      ticketsPorId = {};
-      todosLosTickets.forEach((t) => { ticketsPorId[t.ID] = t; });
-
-      document.getElementById('tickets-stat-total').textContent = todosLosTickets.length;
-
-      motorTablaTickets.setDatos(todosLosTickets);
-    }
-
-    async function abrirDetalleTicket(id) {
-      const resumen = ticketsPorId[id];
-      if (!resumen) return;
-      document.getElementById('detalle-ticket-label').textContent = 'Ticket: ' + (resumen.TICKET || id);
-      const grid = document.getElementById('detalle-ticket-grid');
-      grid.innerHTML = '<div class="loading-inline"><span class="spinner"></span> Cargando…</div>';
-      modalDetalle.hidden = false;
-      try {
-        const completo = await callServer('apiBuscarTicketPorId', state.token, id);
-        if (!completo) {
-          grid.innerHTML = '<p class="empty-state">No se encontró el registro completo.</p>';
-          return;
-        }
-        grid.innerHTML = Object.keys(completo)
-          .filter((k) => completo[k] !== '' && completo[k] !== null && completo[k] !== undefined)
-          .map((k) => itemInfo(tituloDesdeClave(k), completo[k]))
-          .join('');
-      } catch (err) {
-        grid.innerHTML = '<p class="error-msg">No se pudo cargar: ' + err.message + '</p>';
-      }
-    }
-    document.getElementById('btn-cerrar-detalle-ticket').addEventListener('click', () => { modalDetalle.hidden = true; });
-    modalDetalle.addEventListener('click', (ev) => { if (ev.target === modalDetalle) modalDetalle.hidden = true; });
-
-    async function abrirEditarTicket(id) {
-      const resumen = ticketsPorId[id];
-      if (!resumen) return;
-      document.getElementById('editar-ticket-id').value = id;
-      document.getElementById('editar-ticket-label').textContent = 'Ticket: ' + (resumen.TICKET || id);
+    /** El resumen ya trae las 10 columnas completas — no hace falta pedir el
+     *  registro completo aparte para poblar el modal de edición. */
+    function abrirEditarTicket(t) {
+      if (!t) return;
+      document.getElementById('editar-ticket-id').value = t.ID;
+      document.getElementById('editar-ticket-label').textContent = 'Ticket: ' + (t['TICKET'] || t.ID);
       document.getElementById('editar-ticket-error').hidden = true;
+      poblarTicket('editar-ticket', t);
       modalEditar.hidden = false;
-      try {
-        const completo = await callServer('apiBuscarTicketPorId', state.token, id);
-        if (completo) poblarTicket('editar-ticket', completo);
-      } catch (err) {
-        const errorBox = document.getElementById('editar-ticket-error');
-        errorBox.textContent = 'No se pudo cargar el registro: ' + err.message;
-        errorBox.hidden = false;
-      }
     }
     function cerrarEditarTicket() {
       modalEditar.hidden = true;
@@ -2677,16 +2498,16 @@
       }
     });
 
-    async function eliminarTicket(id, ticket) {
-      if (!confirm('¿Eliminar el ticket ' + ticket + '? Esta acción no se puede deshacer.')) return;
-      toastCargando('Eliminando…');
+    async function cargar() {
+      tabla.setCargando(true);
       try {
-        await callServer('apiEliminarTicket', state.token, id);
-        await cargar();
-        toastExito('Eliminado exitosamente');
+        todosLosTickets = (await callServer('apiListarTicketsResumen', state.token)) || [];
       } catch (err) {
-        toastError('No se pudo eliminar: ' + err.message);
+        tabla.setError('No se pudo cargar el historial: ' + err.message);
+        return;
       }
+      document.getElementById('tickets-stat-total').textContent = todosLosTickets.length;
+      tabla.setDatos(todosLosTickets);
     }
 
     document.getElementById('form-ticket').addEventListener('submit', async (ev) => {
@@ -2706,10 +2527,6 @@
         errorBox.hidden = false;
         toastError('No se pudo registrar: ' + err.message);
       }
-    });
-
-    document.getElementById('btn-exportar-excel-tickets').addEventListener('click', () => {
-      exportarCSV('tickets.csv', columnasTickets, motorTablaTickets.obtenerFiltrados());
     });
 
     await Promise.all([cargarCatalogosTickets(), cargar()]);

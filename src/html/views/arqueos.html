@@ -6,7 +6,6 @@
     </div>
     <div class="page-header-actions">
       <button type="button" class="externo" id="btn-calendario-arqueos" title="Cronograma de arqueos"><i data-lucide="calendar" class="ico"></i> Cronograma</button>
-      <button type="button" class="externo" id="btn-exportar-excel-arqueos"><i data-lucide="file-spreadsheet" class="ico"></i> Exportar a Excel</button>
     </div>
   </div>
 
@@ -58,35 +57,8 @@
   </div>
 
   <div class="tab-panel" data-tab-panel="lista">
-    <div class="card">
-      <div class="card-header-row">
-        <h3 style="margin:0">Historial</h3>
-        <input type="search" id="arq-buscar-global" class="tabla-buscar-global" placeholder="Buscar en la tabla…" />
-      </div>
-      <div class="table-scroll">
-        <table>
-          <thead id="arq-thead"></thead>
-          <tbody id="lista-arqueos"></tbody>
-        </table>
-      </div>
-      <p class="empty-state" id="arqueos-vacio" hidden>Todavía no hay arqueos registrados.</p>
-      <div class="tabla-pie" id="arq-pie"></div>
-    </div>
-  </div>
-
-  <!-- Modal: detalle completo, solo lectura -->
-  <div class="modal-backdrop" id="modal-detalle-arqueo" hidden>
-    <div class="modal-card modal-card-wide">
-      <div class="modal-header">
-        <div>
-          <h3 style="margin:0">Detalle completo</h3>
-          <p class="modal-subtitle" id="detalle-arqueo-label"></p>
-        </div>
-        <button type="button" class="modal-close" id="btn-cerrar-detalle-arqueo"><i data-lucide="x" class="ico"></i></button>
-      </div>
-      <div class="modal-form-scroll">
-        <div id="detalle-arqueo-grid" class="info-grid"></div>
-      </div>
+    <div class="card card-compacta">
+      <div id="arq-tabla"></div>
     </div>
   </div>
 

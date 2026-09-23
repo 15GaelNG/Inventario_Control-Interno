@@ -54,7 +54,7 @@ const CambiosMontoCCHService = (function () {
 
   /** Historial completo (ya son solo 8 columnas, no hace falta un "resumen" más ligero). */
   function listarResumen(token) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'caja-chica');
     const sheet = hoja_();
     const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
 
@@ -80,7 +80,7 @@ const CambiosMontoCCHService = (function () {
    * operación, actualiza su MONTO ACTUAL.
    */
   function crear(token, datos) {
-    const sesion = Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    const sesion = Permisos.puedeEditar(token, 'caja-chica');
     const idCch = datos['ID CCH'];
     if (!idCch) throw new Error('Selecciona la caja chica.');
     const nueva = Number(datos['CANTIDAD ACTUALIZADA']);
@@ -116,7 +116,7 @@ const CambiosMontoCCHService = (function () {
   }
 
   function eliminar(token, id) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN]);
+    Permisos.puedeEditar(token, 'caja-chica');
     const ok = SheetUtils.remove(ssId(), hoja_().getName(), id, ID_COLUMN);
     if (!ok) throw new Error('No se encontró el registro con ID=' + id);
     return { ID: id };

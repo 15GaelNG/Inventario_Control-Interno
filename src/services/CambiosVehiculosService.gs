@@ -89,7 +89,7 @@ const CambiosVehiculosService = (function () {
 
   /** Historial — los MAXIMO_CAMBIOS más recientes, solo lectura. */
   function listarResumen(token) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'cambios-vehiculos');
     const sheet = hoja_();
     const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_FIRMA);
 
@@ -125,7 +125,7 @@ const CambiosVehiculosService = (function () {
   const MAXIMO_CAMBIOS_POR_VEHICULO = 200;
 
   function listarPorFolio(token, folio) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'cambios-vehiculos');
     if (!folio) return [];
     const sheet = hoja_();
     const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_FIRMA);
