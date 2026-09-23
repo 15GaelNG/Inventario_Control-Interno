@@ -257,3 +257,17 @@ function configurarEntornoDev() {
   Logger.log(mensaje);
   return mensaje;
 }
+
+/**
+ * Prueba la conexión a Geotab sin pasar por la app (útil al configurar las Script
+ * Properties GEOTAB_USUARIO/PASSWORD/BASE_DATOS/SERVIDOR): seleccionar
+ * "probarGeotab" en el dropdown de funciones de arriba y presionar "Ejecutar".
+ * El resultado sale en Ver > Registros (o Ctrl+Enter). Es de solo lectura, no
+ * cambia nada — se puede correr las veces que haga falta.
+ */
+function probarGeotab() {
+  const info = Geotab.probar();
+  const mensaje = 'Geotab responde: ' + info.equipos + ' equipos en ' + info.servidor + '.';
+  Logger.log(mensaje);
+  return mensaje;
+}
