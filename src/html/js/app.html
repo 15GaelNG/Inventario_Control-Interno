@@ -58,7 +58,22 @@
     } catch (e) { /* no-op */ }
   })();
 
+  // Celular: el menú es un cajón (ver styles.html, "el menú lateral se vuelve un cajón")
+  function abrirMenu(abrir) {
+    document.body.classList.toggle('menu-abierto', abrir);
+    const boton = document.getElementById('topbar-menu-btn');
+    if (boton) boton.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+  }
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && document.body.classList.contains('menu-abierto')) abrirMenu(false);
+  });
+
   document.addEventListener('click', (ev) => {
+    if (ev.target.closest('#topbar-menu-btn')) { abrirMenu(!document.body.classList.contains('menu-abierto')); return; }
+    if (ev.target.closest('#sidebar-velo')) { abrirMenu(false); return; }
+    // Al elegir un módulo el cajón se cierra solo (abrir un grupo no: se está eligiendo)
+    if (ev.target.closest('#sidebar .nav-subitem, #sidebar .nav-item[data-view]')) abrirMenu(false);
+
     const btnTema = ev.target.closest('.theme-btn');
     if (btnTema) { aplicarTema(btnTema.dataset.tema); return; }
 
@@ -491,10 +506,11 @@
     const f = new Date(valor);
     return isNaN(f) ? '' : f.toISOString().slice(0, 10);
   }
+  /** "17/09/2026": igual que las fechas de las tablas (toLocaleDateString daba "17/9/2026") */
   function formatearFecha(valor) {
     if (!valor) return '—';
     const f = new Date(valor);
-    return isNaN(f) ? '—' : f.toLocaleDateString('es-MX');
+    return isNaN(f) ? '—' : f.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
   }
   // Helpers compartidos para las tarjetas de "detalle completo" (Incidencias y Vehículos).
   function tituloDesdeClave(clave) {
@@ -1191,12 +1207,6 @@
       const btn = ev.target.closest('.btn-ver-comprobante');
       if (btn) abrirComprobanteVerificacion(btn.dataset.ruta);
     });
-
-    function formatearFecha(valor) {
-      if (!valor) return '—';
-      const f = new Date(valor);
-      return isNaN(f) ? '—' : f.toLocaleDateString('es-MX');
-    }
 
     /** Panel de detalle: imagen del comprobante (llega en base64; un link de Drive no se puede incrustar) */
     async function mostrarComprobanteEnPanel(v, contenedor) {

@@ -241,6 +241,14 @@ const DRIVE_FOLDER_PRUEBAS = '1FsC5mloJNhi_TR7pBX1KMEjUZfN_M9OM';
 const DRIVE_FOLDER_FORMATOS_PRUEBAS = '1WLrBWn3kP2va_B-rZxAf4jMVTNRBDLmV';
 
 /**
+ * Carpeta MODELOS INSPECCION de PRODUCCIÓN (la real: en la raíz de prod,
+ * 1WPFFd4imLiui6zIpAa3OL62ZEu_a5BJn, aparece como acceso directo a esta). Única excepción a
+ * "producción no se toca desde DEV": de aquí se LEEN los dibujos en blanco, que en la copia
+ * de pruebas están incompletos. Nada se escribe aquí (ver Config.DRIVE_FOLDERS.MODELOS).
+ */
+const DRIVE_FOLDER_MODELOS_PRODUCCION = '1ddRghL8izS63UYWDHn9w_YFHPuRC8bTm';
+
+/**
  * Carpeta de archivos de AppSheet ("<TABLA>_Images" o "<TABLA>_Files_") a partir de la
  * raíz de la app. Si la carpeta dada ya ES esa (mismo nombre), la usa directo; si no,
  * busca la subcarpeta y la crea si falta.
@@ -283,6 +291,10 @@ function configurarEntornoDev() {
     DRIVE_FOLDER_ID_REPORTES: DRIVE_FOLDER_FORMATOS_PRUEBAS,
     // Diagramas marcados y firmas de las inspecciones
     DRIVE_FOLDER_ID_INSPECCIONES_IMAGENES: carpetaImagenes_(DRIVE_FOLDER_PRUEBAS, 'INSPECCION VEHICULAR_Images').getId(),
+    // Dibujos en blanco de MODELOS INSPECCION: SOLO LECTURA desde producción, porque la
+    // copia de pruebas no los tiene todos (faltan IZQUIERDA y DERECHA de los 18 tipos).
+    // Son dibujos de referencia, no registros: leerlos de prod no mezcla datos de prueba.
+    DRIVE_FOLDER_ID_MODELOS: DRIVE_FOLDER_MODELOS_PRODUCCION,
   });
   // Versiones anteriores de esta función apuntaban la lectura a producción; ya no.
   props.deleteProperty('DRIVE_FOLDER_ID_VERIFICACIONES_LECTURA');

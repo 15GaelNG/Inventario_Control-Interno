@@ -56,6 +56,11 @@ const Config = (function () {
       // Carpeta raíz de la app: las rutas largas de AppSheet ("CARPETA/SUBCARPETA/archivo")
       // se resuelven a partir de aquí (ver DriveUtils.archivoDeRutaProfunda)
       RAIZ: () => required('DRIVE_FOLDER_ID_RAIZ'),
+      // De dónde se LEEN los dibujos en blanco de MODELOS INSPECCION (nunca se escribe ahí).
+      // Puede ser la raíz de la app o la carpeta MODELOS INSPECCION misma: si la ruta empieza
+      // con el nombre de la carpeta, ese tramo se salta. En DEV apunta a la de producción,
+      // porque la copia de pruebas no tiene todos los dibujos. Sin la propiedad, se usa RAIZ.
+      MODELOS: () => props.getProperty('DRIVE_FOLDER_ID_MODELOS') || required('DRIVE_FOLDER_ID_RAIZ'),
       SENSORES: () => required('DRIVE_FOLDER_ID_SENSORES'),
       HOLOGRAMAS_ARCHIVOS: () => required('DRIVE_FOLDER_ID_HOLOGRAMAS_ARCHIVOS'),
       HOLOGRAMAS_IMAGENES: () => required('DRIVE_FOLDER_ID_HOLOGRAMAS_IMAGENES'),

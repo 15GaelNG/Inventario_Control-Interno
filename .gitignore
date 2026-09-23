@@ -9,3 +9,12 @@ node_modules/
 
 # Formatos y PDFs reales de consulta (traen datos de personas): nunca al repo
 basura/
+
+# Capturas y página armada de la vista previa local (se regeneran con npm run captura)
+tools/vista-previa/salida/
+
+# Capturas de pantalla y PDFs que dejamos sueltos en la raíz para revisar algo
+# (los PDFs traen nombres y placas reales). Las imágenes del sistema viven en assets/.
+/*.png
+/*.jpg
+/*.pdf

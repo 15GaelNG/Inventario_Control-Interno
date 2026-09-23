@@ -38,9 +38,14 @@
           <span class="nav-icon"><i data-lucide="log-out" class="ico"></i></span><span class="nav-label">Cerrar sesión</span>
         </button>
       </nav>
+      <!-- En celular el menú es un cajón: este velo oscurece el contenido y lo cierra al tocarlo -->
+      <div class="sidebar-velo" id="sidebar-velo"></div>
       <main id="main">
         <div class="topbar">
           <div class="topbar-left">
+            <button type="button" class="topbar-menu-btn" id="topbar-menu-btn" aria-label="Abrir el menú" aria-controls="sidebar" aria-expanded="false">
+              <i data-lucide="menu" class="ico"></i>
+            </button>
             <img class="topbar-cm-logo cm-logo-light" src="https://raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/CMTC-Light.png" alt="Ciudad Maderas" />
             <img class="topbar-cm-logo cm-logo-dark" src="https://raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/CMTC-Dark.png" alt="Ciudad Maderas" />
           </div>
@@ -78,6 +83,8 @@
   <?!= include('html/js/componentes/datatable'); ?>
   <?!= include('html/js/componentes/combobox'); ?>
   <?!= include('html/js/componentes/formulario'); ?>
+  <?!= include('html/js/componentes/lienzo'); ?>
+  <?!= include('html/js/componentes/firma'); ?>
   <?!= include('html/js/app'); ?>
   <!-- Módulos: un archivo por módulo, después de app.js (usan sus ayudas globales) -->
   <?!= include('html/js/modulos/sensores'); ?>

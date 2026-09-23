@@ -219,6 +219,16 @@
   .dt-campo-valor { display: flex; align-items: center; gap: 6px; min-width: 0; word-break: break-word; }
   .dt-campo-valor .dt-campo-texto { flex: 1; }
   .dt-campo-valor button { padding: 4px 8px; font-size: 12px; flex-shrink: 0; }
+  /* "Editar" discreto: con ocho campos editables eran ocho botones con borde compitiendo
+     con el dato; se nota al pasar el mouse por el renglón */
+  .dt-campo-valor .dt-btn-editar-campo { background: transparent; border-color: transparent; color: var(--color-text-muted); box-shadow: none; }
+  .dt-campo:hover .dt-btn-editar-campo, .dt-btn-editar-campo:focus-visible { border-color: var(--color-border); color: var(--color-text); }
+  /* Los campos sin dato (y que no se pueden llenar aquí) van juntos y plegados: son ruido
+     cuando se abre el detalle para ver lo importante */
+  .dt-campos-vacios { margin-top: 10px; font-size: 12.5px; color: var(--color-text-muted); }
+  .dt-campos-vacios summary { cursor: pointer; padding: 6px 0; font-weight: 500; }
+  .dt-campos-vacios summary:hover { color: var(--color-text); }
+  .dt-panel-extra.dt-extra-primero { margin: 6px 0 14px; padding-bottom: 14px; border-bottom: 1px solid var(--color-border); }
   .dt-campo-valor input, .dt-campo-valor select { padding: 6px 8px; font-size: 13px; }
   .dt-panel-extra:empty { display: none; }
   .dt-panel-extra { margin-top: 14px; }
@@ -250,7 +260,8 @@
    *     motivoSinEliminar: 'Solo administradores pueden eliminar',
    *     accionesFila: [ … ],                    // botones extra por fila (ver EXTENDER)
    *     accionesSeleccion: [ … ],               // botones extra con registros seleccionados
-   *     detalle: { titulo: (fila) => '…', contenidoExtra: (fila, contenedor) => {} },   // false lo desactiva
+   *     detalle: { titulo: (fila) => '…', contenidoExtra: (fila, contenedor) => {},   // false lo desactiva
+   *               extraPrimero: true },   // lo del módulo arriba de los campos (cuando es lo que se viene a ver)
    *     etiquetaFila: (fila) => fila.FOLIO,     // cómo nombrar una fila en confirmaciones y avisos
    *     tamanoPagina: 25,  densidad: 'normal',  ordenInicial: { campo: 'FECHA', dir: 'desc' },
    *     textoVacio: 'Sin registros',  ayuda: 'Texto de ayuda…',
@@ -1561,6 +1572,12 @@
         const opciones = cfg.detalle || {};
         const titulo = opciones.titulo ? opciones.titulo(fila) : etiquetaDe(fila);
 
+        // Vacío y no editable → al grupo plegado; lo editable se queda a la vista aunque esté
+        // vacío, porque justo para llenarlo se abre el detalle
+        const vacio = (col) => { const v = valorDe(col, fila); return v === '' || v === null || v === undefined; };
+        const enDetalle = columnas.filter((c) => c.enDetalle);
+        const sinDato = enDetalle.filter((c) => vacio(c) && !puedeEditarPanel(c));
+        const conDato = enDetalle.filter((c) => sinDato.indexOf(c) === -1);
         panel.elemento.setAttribute('aria-label', titulo);
         panel.elemento.innerHTML = `
           <div class="dt-panel-header">
@@ -1568,8 +1585,11 @@
             ${botonIcono('modal-close dt-panel-cerrar', 'cerrar', 'Cerrar')}
           </div>
           <div class="dt-panel-cuerpo">
-            ${columnas.filter((c) => c.enDetalle).map((col) => htmlCampoDetalle(col, fila)).join('')}
-            <div class="dt-panel-extra"></div>
+            ${opciones.extraPrimero ? '<div class="dt-panel-extra dt-extra-primero"></div>' : ''}
+            ${conDato.map((col) => htmlCampoDetalle(col, fila)).join('')}
+            ${sinDato.length ? `<details class="dt-campos-vacios"><summary>${sinDato.length} ${sinDato.length === 1 ? 'campo' : 'campos'} sin dato</summary>
+              ${sinDato.map((col) => htmlCampoDetalle(col, fila)).join('')}</details>` : ''}
+            ${opciones.extraPrimero ? '' : '<div class="dt-panel-extra"></div>'}
           </div>
           <div class="dt-panel-pie">${cfg.alEliminar ? `<button type="button" class="danger dt-btn-eliminar-detalle">${ic('eliminar')} Eliminar registro</button>` : ''}</div>`;
 

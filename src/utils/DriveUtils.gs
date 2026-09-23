@@ -139,13 +139,38 @@ const DriveUtils = (function () {
     if (partes[0].toUpperCase() === carpeta.getName().toUpperCase()) inicio = 1;
 
     for (let i = inicio; i < partes.length - 1; i++) {
-      const subcarpetas = carpeta.getFoldersByName(partes[i]);
-      if (!subcarpetas.hasNext()) return null;
-      carpeta = subcarpetas.next();
+      carpeta = subcarpetaOAcceso_(carpeta, partes[i]);
+      if (!carpeta) return null;
     }
 
     const archivos = carpeta.getFilesByName(partes[partes.length - 1]);
-    return archivos.hasNext() ? archivos.next() : null;
+    return archivos.hasNext() ? sinAcceso_(archivos.next()) : null;
+  }
+
+  /**
+   * Accesos directos: en la raíz de producción "MODELOS INSPECCION" es un ACCESO DIRECTO a
+   * la carpeta real, no una carpeta. Para Drive un acceso directo es un archivo, así que
+   * getFoldersByName no lo ve y la ruta no se encontraba. Se sigue hasta su destino.
+   */
+  const ACCESO_DIRECTO = 'application/vnd.google-apps.shortcut';
+  const CARPETA = 'application/vnd.google-apps.folder';
+
+  function subcarpetaOAcceso_(carpeta, nombre) {
+    const reales = carpeta.getFoldersByName(nombre);
+    if (reales.hasNext()) return reales.next();
+    const accesos = carpeta.getFilesByName(nombre);
+    while (accesos.hasNext()) {
+      const acceso = accesos.next();
+      if (acceso.getMimeType() !== ACCESO_DIRECTO || acceso.getTargetMimeType() !== CARPETA) continue;
+      try { return DriveApp.getFolderById(acceso.getTargetId()); } catch (e) { /* sin permiso al destino */ }
+    }
+    return null;
+  }
+
+  /** Si el archivo es un acceso directo, el archivo al que apunta (null si no se puede abrir) */
+  function sinAcceso_(archivo) {
+    if (archivo.getMimeType() !== ACCESO_DIRECTO) return archivo;
+    try { return DriveApp.getFileById(archivo.getTargetId()); } catch (e) { return null; }
   }
 
   function urlDeRutaProfunda(ruta, raizId) {

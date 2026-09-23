@@ -3,8 +3,9 @@
    * inspecciones.js — Inspección vehicular: consulta y captura por pasos.
    *
    * Se ven, filtran y exportan las inspecciones, se abre su formato en PDF y se captura
-   * una nueva (Unidad → Exterior → Neumáticos → Interior → Mecánica → Cierre → Revisar).
-   * Los diagramas de daños y las firmas llegan en la fase 3.
+   * una nueva (Unidad → Exterior → Neumáticos → Interior → Mecánica → Daños → Cierre →
+   * Revisar y firmar). Los daños se marcan sobre el diagrama del tipo (Lienzo) y las firmas
+   * usan el motor de la responsiva de sensores (Firma).
    *
    * Lo propio de este módulo:
    * - El puntaje se muestra como semáforo: es el dato que se mira primero.
@@ -59,6 +60,7 @@
       detalle: {
         titulo: (i) => 'Inspección ' + (i.FOLIO || '') + ' · ' + formatearFecha(i.FECHA),
         contenidoExtra: (i, contenedor) => pintarDetalle(i, contenedor),
+        extraPrimero: true,   // el resultado, lo que salió mal y las firmas: a lo que se viene
       },
       columnas: [
         { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', fijada: true },
@@ -86,15 +88,10 @@
         {
           campo: 'PDF', titulo: 'Formato', filtrable: false, ordenable: false, enDetalle: false,
           render: (ruta) => (ruta
-            ? `<button type="button" class="secondary btn-ver-formato" data-ruta="${escaparHtml(ruta)}" style="padding:4px 8px; display:inline-flex; align-items:center; gap:5px">${Iconos.svg('documento')} PDF</button>`
+            ? `<button type="button" class="secondary btn-ver-formato" data-ruta="${escaparHtml(ruta)}" style="padding:4px 8px; display:inline-flex; align-items:center; gap:5px" title="Abrir el formato en PDF">${Iconos.svg('documento')} Ver</button>`
             : '—'),
         },
       ],
-      accionesFila: [{
-        icono: 'documento', titulo: 'Abrir el formato en PDF',
-        visible: (i) => !!i.PDF,
-        alHacer: (i) => abrirFormatoInspeccion(i.PDF),
-      }],
       seleccionable: true,
       // Una inspección es un acta firmada: no se corrige, se levanta otra
       motivoSinEliminar: 'Una inspección firmada no se edita: si algo cambió, levanta una nueva',
@@ -267,6 +264,23 @@
   let inspeccionesPrevias = null;
 
   /**
+   * Diagramas en blanco ya descargados (ruta → promesa de dataURL, o null si no está en
+   * Drive). Son los mismos para todas las unidades de un tipo: se piden una sola vez.
+   */
+  const diagramasEnBlanco = new Map();
+  function diagramaEnBlanco(ruta) {
+    if (!diagramasEnBlanco.has(ruta)) {
+      diagramasEnBlanco.set(ruta, callServer('apiPrevisualizarImagenInspeccion', state.token, ruta)
+        .then((img) => (img && img.base64 ? 'data:' + img.mimeType + ';base64,' + img.base64 : null))
+        .catch(() => { diagramasEnBlanco.delete(ruta); return null; }));   // se reintenta la próxima vez
+    }
+    return diagramasEnBlanco.get(ruta);
+  }
+
+  /** Alto máximo de un diagrama en pantalla: una moto de frente a todo lo ancho mediría 700 px */
+  const ALTO_DIAGRAMA = 340;
+
+  /**
    * Cómo se reparten las secciones del formato en pasos: en el orden en que el inspector
    * le da la vuelta a la unidad (por fuera, llantas, por dentro, motor). Se agrupan por el
    * título de la sección, que es el mismo en los 18 formatos; si algún formato trae una
@@ -281,6 +295,15 @@
       coincide: /interior|inventario|limpieza/i },
     { titulo: 'Mecánica', descripcion: 'Motor, niveles y batería',
       coincide: /mec[aá]nic|nivel|bater/i, voltaje: true },
+  ];
+
+  /** Después del checklist; el título y la descripción se ven en el formulario */
+  const PASOS_FINALES = [
+    { id: 'danos', titulo: 'Daños',
+      descripcion: 'Marca con el dedo o el mouse dónde está cada golpe o rayón. Si no hay daños, sigue sin marcar nada.' },
+    { id: 'cierre', titulo: 'Cierre', descripcion: 'Quién maneja la unidad y lo que haya que anotar' },
+    { id: 'revisar', titulo: 'Revisar y firmar', chip: 'Firmar',
+      descripcion: 'Confirma el puntaje y lo que salió mal; al final firman el responsable y el inspector' },
   ];
 
   /** Puntos de una respuesta; null = no cuenta (sin responder o N/A). Misma regla que el servidor. */
@@ -317,15 +340,17 @@
     let pasos = [];
     let pasoActual = 0;
     let vistos = {};
+    let lienzos = {};    // 'INS FRONTAL' → Lienzo con las marcas de daños
+    let firmas = {};     // 'FIRMA INSPECTOR' → Firma
 
     contenedor.innerHTML = `
       <form class="form-medio form-doble" novalidate>
         <div class="form-principal">
           <ol class="form-pasos" id="ins-pasos"></ol>
+          <p class="form-nota">Campos obligatorios</p>
           <section class="form-paso" data-paso="0">
-            <h3 class="form-paso-titulo" tabindex="-1">Unidad</h3>
-            <p class="form-paso-desc">Qué vehículo se revisa y con qué formato</p>
-            <p class="form-nota">Campos obligatorios</p>
+            <h3 class="form-paso-titulo" tabindex="-1">Vehículo</h3>
+            <p class="form-paso-desc">Qué unidad se revisa y con qué formato</p>
             <div class="form-campos" style="--form-columnas:2">
               <div class="field" data-campo="FOLIO">
                 <label for="ins-folio">Folio del vehículo</label>
@@ -343,7 +368,7 @@
             <div id="ins-cargando-checklist"></div>
           </section>
           <div id="ins-pasos-checklist"></div>
-          <div class="form-acciones form-acciones-pasos chk-resumen">
+          <div class="form-acciones form-acciones-pasos">
             <button type="button" class="secondary" id="ins-atras" hidden>${Iconos.svg('anterior')} Atrás</button>
             <button type="button" id="ins-siguiente">Siguiente ${Iconos.svg('siguiente')}</button>
             <button type="button" id="ins-guardar" hidden>${Iconos.svg('guardar')} Guardar inspección</button>
@@ -419,7 +444,8 @@
           ['Sede', v['SEDE']], ['Serie', v['SERIE VEHICULO']], ['Estatus', v['ESTATUS']]]
           .map(([e, valor]) => `<div class="form-ficha-dato"><div class="form-ficha-etiqueta">${e}</div>` +
             `<div class="form-ficha-valor">${escaparHtml(valor || '—')}</div></div>`).join('') +
-        '</div>';
+        '</div>' +
+        '<p class="form-ficha-pie">Datos del catálogo de Vehículos, solo para confirmar la unidad</p>';
     }
 
     let pedido = '';
@@ -497,11 +523,20 @@
 
     /** Pasos según el tipo elegido: Unidad → grupos del checklist → Cierre → Revisar */
     function armarPasos() {
-      pasos = [{ id: 'unidad', titulo: 'Unidad' }];
+      pasos = [{ id: 'unidad', titulo: 'Vehículo' }];
       vistos = { 0: true };
       pasoActual = 0;
+      Object.keys(firmas).forEach((k) => firmas[k].destruir());
+      Object.keys(lienzos).forEach((k) => lienzos[k].destruir());
+      lienzos = {};
+      firmas = {};
       cajaPasos.innerHTML = '';
-      if (estructura) {
+      if (!estructura) {
+        // El plan se ve desde el inicio: los grupos son los mismos en todos los formatos.
+        // Antes solo aparecía "Unidad" hasta que llegaba el checklist del tipo, y parecía
+        // que el formulario era de un solo paso.
+        PASOS_CHECKLIST.concat(PASOS_FINALES).forEach((p) => pasos.push({ id: 'pendiente', titulo: p.titulo, chip: p.chip }));
+      } else {
         const grupos = PASOS_CHECKLIST.map((g) => Object.assign({}, g, { secciones: [] }));
         const otras = { titulo: 'Otras revisiones', descripcion: 'Secciones propias de este formato', secciones: [] };
         estructura.secciones.forEach((s, i) => {
@@ -510,8 +545,9 @@
         grupos.concat(otras)
           .filter((g) => g.secciones.length || (g.llantas && estructura.llantas.length))
           .forEach((g) => pasos.push(Object.assign({ id: 'checklist' }, g)));
-        pasos.push({ id: 'cierre', titulo: 'Cierre', descripcion: 'Quién maneja la unidad y lo que haya que anotar' });
-        pasos.push({ id: 'revisar', titulo: 'Revisar y guardar', descripcion: 'Confirma el puntaje y lo que salió mal antes de guardar' });
+        PASOS_FINALES
+          .filter((p) => p.id !== 'danos' || estructura.diagramas.length)
+          .forEach((p) => pasos.push(Object.assign({}, p)));
 
         cajaPasos.innerHTML = pasos.slice(1).map((p, k) => `
           <section class="form-paso" data-paso="${k + 1}" hidden>
@@ -520,6 +556,8 @@
             ${htmlDePaso(p)}
           </section>`).join('');
         conectarChecklist();
+        prepararDiagramas();
+        prepararFirmas();
       }
       $('#ins-panel-avance').hidden = !estructura;
       mostrarPaso(0);
@@ -590,8 +628,83 @@
               <textarea id="ins-observaciones" rows="3"></textarea></div>
           </div>`;
       }
-      return '<div id="ins-revision"></div>';   // se llena al llegar al paso
+      if (p.id === 'danos') {
+        return `<div class="ins-diagramas">${estructura.diagramas.map((d) => `
+          <div class="ins-diagrama" data-diagrama="${escaparHtml(d.campo)}">
+            <div class="ins-diagrama-cabeza">
+              <h4>${escaparHtml(d.etiqueta)}</h4>
+              <span class="lienzo-herramientas">
+                <button type="button" class="secondary" data-deshacer disabled>${Iconos.svg('restablecer')} Deshacer</button>
+                <button type="button" class="secondary" data-borrar disabled>${Iconos.svg('cancelar')} Borrar</button>
+              </span>
+            </div>
+            <div class="ins-diagrama-lienzo"><span class="dt-skel" style="height:220px; width:100%; border-radius:10px"></span></div>
+          </div>`).join('')}</div>`;
+      }
+      // Revisión (se llena al llegar al paso) y, debajo, las firmas: se firma viendo el
+      // puntaje, que es lo que dice el formato ("firmo en conformidad con la calificación")
+      return `<div id="ins-revision"></div>
+        <h4 class="ins-revision-titulo">Firmas</h4>
+        <div class="ins-firmas">
+          <div class="ins-firma">
+            <label>Firma del responsable</label>
+            <div data-firma="FIRMA RESPONSABLE"></div>
+          </div>
+          <div class="ins-firma">
+            <label class="requerido">Firma del inspector</label>
+            <div data-firma="FIRMA INSPECTOR"></div>
+          </div>
+        </div>`;
     }
+
+    /** Un lienzo por diagrama, con el dibujo en blanco del tipo de fondo. Se piden en cuanto
+        llega el checklist: para cuando el inspector llega a este paso, ya están. */
+    function prepararDiagramas() {
+      const deEstaEstructura = estructura;
+      estructura.diagramas.forEach((d) => {
+        const caja = cajaPasos.querySelector(`[data-diagrama="${CSS.escape(d.campo)}"]`);
+        if (!caja) return;
+        diagramaEnBlanco(d.ruta).then((fondo) => {
+          if (estructura !== deEstaEstructura) return;   // cambiaron de tipo mientras llegaba
+          const destino = caja.querySelector('.ins-diagrama-lienzo');
+          if (!fondo) {
+            destino.innerHTML = `<p class="form-aviso">${Iconos.svg('alerta')} No está el dibujo en Drive ` +
+              `(${escaparHtml(d.ruta)}): esta vista se guardará sin él.</p>`;
+            refreshIcons();
+            return;
+          }
+          const botones = caja.querySelectorAll('[data-deshacer], [data-borrar]');
+          const lienzo = Lienzo.crear(destino, {
+            fondo: fondo,
+            color: '#1f6fd1',        // el azul con el que se marcaban en AppSheet
+            grosor: 3,
+            altoMaximo: ALTO_DIAGRAMA,
+            guia: 'Toca o dibuja sobre el daño',
+            alCambiar: (vacio) => {
+              botones.forEach((b) => { b.disabled = vacio; });
+              actualizarPasos();
+            },
+          });
+          lienzos[d.campo] = lienzo;
+          caja.querySelector('[data-deshacer]').addEventListener('click', () => lienzo.deshacer());
+          caja.querySelector('[data-borrar]').addEventListener('click', () => lienzo.limpiar());
+        });
+      });
+    }
+
+    function prepararFirmas() {
+      cajaPasos.querySelectorAll('[data-firma]').forEach((el) => {
+        firmas[el.dataset.firma] = Firma.crear(el, {
+          marca: 'Firma aquí con el dedo o el mouse',
+          nombre: el.dataset.firma === 'FIRMA INSPECTOR'
+            ? ((state.sesion && state.sesion.nombre) || '')
+            : ((vehiculo && vehiculo['RESPONSABLE VEHICULO']) || ''),
+          alCambiar: () => errorGeneral(null),
+        });
+      });
+    }
+
+    const marcados = () => Object.keys(lienzos).filter((campo) => !lienzos[campo].vacio());
 
     function conectarChecklist() {
       cajaPasos.querySelectorAll('[data-todo]').forEach((btn) => btn.addEventListener('click', () => {
@@ -689,7 +802,7 @@
       if (p.id === 'checklist') {
         return !!r && p.secciones.every((s) => r.porSeccion[s].contestadas === r.porSeccion[s].total);
       }
-      return p.id === 'cierre';
+      return p.id === 'cierre' || p.id === 'danos';
     }
 
     function actualizarPasos(r) {
@@ -700,7 +813,7 @@
       lista.innerHTML = pasos.map((p, i) => `
         <li><button type="button" class="form-paso-chip ${i === pasoActual ? 'activo' : ''} ${completo(i, r) ? 'completado' : ''}"
           data-ir="${i}" ${!vistos[i] || i === pasoActual ? 'disabled' : ''}>
-          <span class="form-paso-num">${completo(i, r) ? Iconos.svg('guardar') : i + 1}</span>${escaparHtml(p.titulo)}</button></li>`).join('');
+          <span class="form-paso-num">${completo(i, r) ? Iconos.svg('guardar') : i + 1}</span>${escaparHtml(p.chip || p.titulo)}</button></li>`).join('');
       lista.querySelectorAll('[data-ir]').forEach((b) => b.addEventListener('click', () => mostrarPaso(Number(b.dataset.ir))));
 
       const ultimo = pasoActual === pasos.length - 1 && pasos.length > 1;
@@ -708,7 +821,7 @@
       $('#ins-siguiente').hidden = ultimo;
       $('#ins-guardar').hidden = !ultimo;
       $('#ins-cuenta').textContent = pasos.length > 1
-        ? `Paso ${pasoActual + 1} de ${pasos.length}` + (r ? ` · puntaje ${r.puntaje}%` : '')
+        ? `Paso ${pasoActual + 1} de ${pasos.length}`
         : '';
     }
 
@@ -716,7 +829,14 @@
       pasoActual = i;
       vistos[i] = true;
       contenedor.querySelectorAll('.form-paso').forEach((s) => { s.hidden = Number(s.dataset.paso) !== i; });
+      // La nota de obligatorios, solo en los pasos que los tienen (igual que Formulario)
+      $('.form-nota').hidden = !contenedor.querySelector(`.form-paso[data-paso="${i}"] :is(input, select, textarea):required, .form-paso[data-paso="${i}"] label.requerido`);
       if (pasos[i] && pasos[i].id === 'revisar') pintarRevision();
+      // Un canvas oculto mide 0: se dimensiona al quedar a la vista
+      requestAnimationFrame(() => {
+        Object.keys(lienzos).forEach((k) => lienzos[k].ajustar());
+        Object.keys(firmas).forEach((k) => firmas[k].ajustar());
+      });
       errorGeneral(null);
       actualizarPasos();
       const titulo = contenedor.querySelector(`.form-paso[data-paso="${i}"] .form-paso-titulo`);
@@ -756,6 +876,8 @@
       const caja = $('#ins-revision');
       if (!caja || !estructura) return;
       const r = calcular();
+      if (firmas['FIRMA RESPONSABLE']) firmas['FIRMA RESPONSABLE'].setNombre((vehiculo && vehiculo['RESPONSABLE VEHICULO']) || '');
+      if (firmas['FIRMA INSPECTOR']) firmas['FIRMA INSPECTOR'].setNombre((state.sesion && state.sesion.nombre) || '');
       const faltantes = estructura.secciones
         .map((s, i) => ({ s, i, a: r.porSeccion[i] }))
         .filter((x) => x.a.contestadas < x.a.total);
@@ -772,6 +894,10 @@
             <div class="form-resumen-valor"><strong>${r.puntaje}%</strong></div></div>
           <div class="form-resumen-dato"><div class="form-resumen-etiqueta">Piezas respondidas</div>
             <div class="form-resumen-valor">${r.respondidas} de ${estructura.piezas}</div></div>
+          ${estructura.diagramas.length ? `<div class="form-resumen-dato"><div class="form-resumen-etiqueta">Daños marcados</div>
+            <div class="form-resumen-valor">${marcados().length
+              ? escaparHtml(estructura.diagramas.filter((d) => marcados().indexOf(d.campo) !== -1).map((d) => d.etiqueta).join(', '))
+              : 'Ninguno'}</div></div>` : ''}
         </div>
         ${faltantes.length ? `
           <div class="form-aviso form-aviso-alerta">${Iconos.svg('alerta')}
@@ -809,6 +935,28 @@
         if (!ok) return;
       }
 
+      // Firmas: la del inspector es obligatoria (es quien captura); la del responsable
+      // puede faltar (a veces se firma en ausencia), pero se pregunta
+      const irAFirmas = () => {
+        const revisar = pasos.findIndex((p) => p.id === 'revisar');
+        if (pasoActual !== revisar) mostrarPaso(revisar);
+        const el = $('.ins-firmas');
+        if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      };
+      if (!firmas['FIRMA INSPECTOR'] || firmas['FIRMA INSPECTOR'].vacia()) {
+        irAFirmas();
+        errorGeneral('Falta la firma del inspector');
+        return;
+      }
+      if (firmas['FIRMA RESPONSABLE'] && firmas['FIRMA RESPONSABLE'].vacia()) {
+        const ok = await Confirmar.pedir({
+          titulo: 'Falta la firma del responsable',
+          mensaje: 'Si se firma en ausencia, anótalo en las observaciones. ¿Guardar sin su firma?',
+          textoConfirmar: 'Guardar sin su firma',
+        });
+        if (!ok) { irAFirmas(); return; }
+      }
+
       const llantas = {};
       cajaPasos.querySelectorAll('[data-llanta]').forEach((el) => {
         if (el.value !== '') llantas[el.dataset.llanta] = Number(el.value);
@@ -818,6 +966,15 @@
       boton.disabled = true;
       boton.textContent = 'Guardando…';
       try {
+        // Solo se mandan los diagramas marcados: de los demás el servidor guarda el dibujo
+        // en blanco del tipo (como AppSheet), sin subir una copia idéntica cada vez
+        const imagenes = {};
+        for (const campo of marcados()) imagenes[campo] = await lienzos[campo].exportar();
+        Object.keys(firmas).forEach((campo) => {
+          const firma = firmas[campo].exportar();
+          if (firma) imagenes[campo] = firma;
+        });
+
         const res = await callServer('apiRegistrarInspeccion', state.token, {
           FOLIO: campoFolio.value.trim(),
           TIPO: campoTipo.value,
@@ -829,13 +986,14 @@
           VOLTAJE: valorDe('ins-voltaje'),
           ULTIMO_SERVICIO: valorDe('ins-servicio'),
           OBSERVACIONES: valorDe('ins-observaciones'),
-        }, {});
+        }, imagenes);
 
         if (res.aviso) Notificar.error(res.aviso);
         else Notificar.exito(`Inspección guardada · puntaje ${res.puntaje}%`, {
           duracion: 9000,
           accion: res.pdf ? { texto: 'Ver PDF', alHacer: () => window.open(res.pdf, '_blank') } : null,
         });
+        if (res.advertencia) Notificar.info(res.advertencia, { duracion: 12000 });
         // Se deja listo para la siguiente unidad
         campoFolio.value = '';
         campoTipo.value = '';

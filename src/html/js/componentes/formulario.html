@@ -57,6 +57,14 @@
     .form-doble { grid-template-columns: 1fr; }
     .form-panel { order: -1; margin-bottom: 8px; }
     .form-panel .form-ficha { flex: 0 0 auto; }   /* apilado no hay alto que llenar */
+    /* Apilado, la ficha va ARRIBA del formulario: con todos sus datos eran 800 px de scroll
+       antes del primer campo. Basta la placa y el modelo para reconocer la unidad; los
+       avisos (sensor activo, unidad de baja) sí se quedan, que son lo importante. */
+    .form-panel .form-ficha-datos, .form-panel .form-ficha-pie, .form-panel .form-ficha-extra,
+    .form-panel .form-ficha-mas, .form-panel .form-panel-vacio { display: none; }
+    .form-panel .form-ficha { padding: 10px 14px; margin-bottom: 8px; }
+    /* Una ficha vacía ("elige el vehículo…") no aporta nada arriba del formulario */
+    .form-panel .form-ficha:has(> .form-panel-vacio:only-child) { display: none; }
   }
 
   /* Secciones: un título chico agrupa los campos que van juntos */
@@ -103,9 +111,10 @@
   :root[data-theme="dark"] .form-aviso.form-aviso-alerta { background: rgba(255,138,128,.15); color: #ff8a80; }
 
   /* ---- Por pasos ---- */
-  .form-pasos { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0 0 18px; padding: 0; }
+  .form-pasos { display: flex; flex-wrap: wrap; gap: 4px; list-style: none; margin: 0 0 18px; padding: 0; }
   .form-paso-chip {
-    display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 999px;
+    /* Menos relleno del lado del número: así caben 8 pasos en un renglón (inspección) */
+    display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px 6px 6px; border-radius: 999px;
     background: transparent; border: 1px solid var(--color-border); color: var(--color-text-muted);
     font-size: 12.5px; font-weight: 600;
   }
@@ -118,7 +127,19 @@
   .form-paso-chip.completado .form-paso-num { background: var(--color-success); color: #fff; }
   .form-paso-chip.activo { border-color: var(--color-accent); background: var(--color-primary-soft); color: var(--color-text); }
   .form-paso-chip.activo .form-paso-num { background: var(--color-accent); color: #fff; }
+  /* Celular: los pasos que no son el actual muestran solo su número (o la palomita), así
+     caben en un renglón; con 8 pasos con nombre eran 4 renglones antes del primer campo.
+     El nombre sigue ahí (font-size 0), así que un lector de pantalla lo lee igual. */
+  @media (max-width: 600px) {
+    .form-pasos { flex-wrap: nowrap; }
+    .form-paso-chip:not(.activo) { font-size: 0; gap: 0; padding: 4px; }
+    .form-paso-chip .form-paso-num { font-size: 11px; flex-shrink: 0; }
+    .form-paso-chip.activo { white-space: nowrap; }
+  }
   .form-paso-titulo { margin: 0 0 2px; font-size: 15px; }
+  /* El foco se pone ahí al cambiar de paso (para lectores de pantalla), no por teclado:
+     el contorno negro solo estorba */
+  .form-paso-titulo:focus { outline: none; }
   .form-paso-desc { margin: 0 0 14px; font-size: 12.5px; color: var(--color-text-muted); }
   .form-acciones-pasos { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
   .form-acciones-pasos .form-cuenta { margin-left: auto; font-size: 12px; color: var(--color-text-muted); }
@@ -131,13 +152,15 @@
 
   /* ---- Campo de opciones (radio): una pregunta que decide el resto del formulario ---- */
   .form-opciones { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
-  .form-opcion {
+  /* Con .form-opciones al frente: la regla general ".field label { display: block }" le ganaba
+     y el círculo quedaba en su propio renglón, arriba del título */
+  .form-opciones .form-opcion {
     display: flex; align-items: flex-start; gap: 9px; margin: 0; padding: 11px 13px; cursor: pointer;
     border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface);
     color: var(--color-text); font-weight: 400;
   }
   .form-opcion:hover { border-color: var(--color-accent); }
-  .form-opcion input { width: auto; margin-top: 2px; flex-shrink: 0; }
+  .form-opciones .form-opcion input { width: 18px; height: 18px; margin: 1px 0 0; flex-shrink: 0; accent-color: var(--color-primary); }
   .form-opcion:has(input:checked) { border-color: var(--color-accent); background: var(--color-primary-soft); }
   .form-opcion strong { display: block; font-size: 13.5px; }
   .form-opcion small { display: block; margin-top: 2px; font-size: 11.5px; color: var(--color-text-muted); }
@@ -814,6 +837,12 @@
         pasoActual = i;
         vistos[i] = true;
         contenedor.querySelectorAll('.form-paso').forEach((s) => { s.hidden = Number(s.dataset.paso) !== i; });
+        // "* Campos obligatorios" solo donde hay alguno: en "Revisar" o en un paso de puros
+        // opcionales la nota no explica nada
+        const nota = contenedor.querySelector('.form-nota');
+        if (nota) {
+          nota.hidden = !contenedor.querySelector(`.form-paso[data-paso="${i}"] :is(input, select, textarea):required`);
+        }
         actualizarPasos();
         if (pasos[i].resumen) pintarResumen();
         actualizarPanel();

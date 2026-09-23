@@ -113,7 +113,7 @@
         {
           campo: 'RESPONSIVA', titulo: 'Responsiva', filtrable: false, ordenable: false, enDetalle: false,
           render: (ruta) => (ruta
-            ? `<button type="button" class="secondary btn-ver-responsiva" data-ruta="${escaparHtml(ruta)}" style="padding:4px 8px; display:inline-flex; align-items:center; gap:5px">${Iconos.svg('documento')} PDF</button>`
+            ? `<button type="button" class="secondary btn-ver-responsiva" data-ruta="${escaparHtml(ruta)}" style="padding:4px 8px; display:inline-flex; align-items:center; gap:5px" title="Abrir la responsiva en PDF">${Iconos.svg('documento')} Ver</button>`
             : '—'),
         },
       ],

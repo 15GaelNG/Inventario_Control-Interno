@@ -97,5 +97,47 @@ ok(r.datos['B'][0] === 2, 'tolerante a espacios en el encabezado');
 ok(Array.isArray(r.datos['NO EXISTE']) && r.datos['NO EXISTE'].length === 0, 'una columna que no existe queda como lista vacía');
 ok(SheetUtils.leerColumnas(hojaFalsa(['A'], []), ['A']).filas === 0, 'hoja sin datos: cero filas, sin leer nada');
 
+console.log('8. Encabezados con espacios de más al buscar, actualizar y leer (caso real: "ID INSPECCION ")');
+// Hoja falsa en memoria que sí se puede escribir
+const libro = {};
+contexto.SpreadsheetApp.openById = () => ({ getSheetByName: (n) => libro[n] || null });
+contexto.LockService.getScriptLock = () => ({ waitLock: () => {}, releaseLock: () => {} });
+const hojaEditable = (valores) => ({
+  valores,
+  getLastRow: () => valores.length,
+  getLastColumn: () => valores[0].length,
+  getRange: (r, c, nr, nc) => ({
+    getValues: () => valores.slice(r - 1, r - 1 + nr).map((f) => f.slice(c - 1, c - 1 + nc)),
+    setValues: (nuevos) => nuevos.forEach((f, i) => f.forEach((v, j) => { valores[r - 1 + i][c - 1 + j] = v; })),
+  }),
+  deleteRow: (n) => valores.splice(n - 1, 1),
+  deleteRows: (n, cuantas) => valores.splice(n - 1, cuantas),
+});
+libro['INSPECCION VEHICULAR'] = hojaEditable([
+  ['ID INSPECCION ', 'FOLIO', ' PLACAS', 'FORMATO INSPECCION VEHICULAR'],
+  ['2026_25_290', 'AUT0024', 'XYZ-1', ''],
+  ['2026_25_291', 'AUT0025', 'ABC-2', ''],
+]);
+const encontrada = SheetUtils.findById('x', 'INSPECCION VEHICULAR', '2026_25_291', 'ID INSPECCION');
+ok(encontrada && encontrada.rowIndex === 3, 'encuentra la fila aunque el encabezado del ID traiga un espacio al final');
+ok(encontrada && encontrada.data['ID INSPECCION'] === '2026_25_291' && encontrada.data['PLACAS'] === 'ABC-2',
+  'las claves de la fila vienen sin los espacios sobrantes');
+
+SheetUtils.update('x', 'INSPECCION VEHICULAR', '2026_25_291', { 'FORMATO INSPECCION VEHICULAR': 'X/INSPECCION.pdf' }, 'ID INSPECCION');
+const escrita = libro['INSPECCION VEHICULAR'].valores[2];
+ok(escrita[3] === 'X/INSPECCION.pdf', 'update escribe el cambio');
+ok(escrita[0] === '2026_25_291' && escrita[1] === 'AUT0025' && escrita[2] === 'ABC-2', 'y conserva lo demás de la fila');
+SheetUtils.update('x', 'INSPECCION VEHICULAR', '2026_25_291', { PLACAS: 'NUEVA-9' }, 'ID INSPECCION');
+ok(libro['INSPECCION VEHICULAR'].valores[2][2] === 'NUEVA-9',
+  'cambiar una columna con espacio en el encabezado NO se pierde (antes ganaba el valor viejo)');
+
+const todas = SheetUtils.getAll('x', 'INSPECCION VEHICULAR');
+ok(todas.length === 2 && todas[1]['ID INSPECCION'] === '2026_25_291', 'getAll también entrega claves limpias');
+ok(SheetUtils.removeMany('x', 'INSPECCION VEHICULAR', ['2026_25_290'], 'ID INSPECCION') === 1 &&
+  libro['INSPECCION VEHICULAR'].valores.length === 2, 'removeMany encuentra el ID con espacio y borra');
+let mensaje = '';
+try { SheetUtils.findById('x', 'INSPECCION VEHICULAR', '1', 'NO EXISTE'); } catch (e) { mensaje = e.message; }
+ok(/no tiene columna "NO EXISTE"/.test(mensaje), 'una columna de ID que de verdad no existe sigue dando error claro');
+
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
 process.exit(fallas ? 1 : 0);

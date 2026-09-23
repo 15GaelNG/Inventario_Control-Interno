@@ -128,7 +128,7 @@ const VehiculosService = (function () {
     if (lastRow < 2) return null;
 
     const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    const folioCol = headers.indexOf('FOLIO');
+    const folioCol = SheetUtils.indiceDeColumnas(headers, ['FOLIO'])['FOLIO'];
     if (folioCol === -1) return null;
 
     const folios = sheet.getRange(2, folioCol + 1, lastRow - 1, 1).getValues();
@@ -146,7 +146,8 @@ const VehiculosService = (function () {
     headers.forEach((h, i) => {
       const valor = fila[i];
       // google.script.run puede fallar con Date crudo — se manda como texto ISO.
-      limpio[h] = valor instanceof Date ? valor.toISOString() : valor;
+      // Clave sin espacios sobrantes (igual que SheetUtils.getAll): "PLACA " → 'PLACA'
+      limpio[String(h).replace(/\s+/g, ' ').trim()] = valor instanceof Date ? valor.toISOString() : valor;
     });
     return limpio;
   }

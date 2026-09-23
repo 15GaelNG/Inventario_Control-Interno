@@ -247,7 +247,9 @@
      mucho espacio y repite lo mismo en media pantalla). Sale solo del atributo required
      del campo, así que basta marcarlo en el HTML: no hay que tocar la etiqueta. */
   /* .icon-label = login: ahí TODO es obligatorio, marcarlo no aporta nada */
-  .field:has(> input:required, > select:required, > textarea:required) > label:not(.icon-label)::after,
+  /* El buscador (Combobox) envuelve su input en .cbx: sin esa regla el folio, que siempre es
+     obligatorio, era el único campo sin su "*" */
+  .field:has(> input:required, > select:required, > textarea:required, > .cbx > input:required) > label:not(.icon-label)::after,
   label.requerido::after {
     content: "*"; margin-left: 3px; color: var(--color-danger); font-weight: 700;
   }
@@ -296,15 +298,20 @@
     letter-spacing: .3px; padding: 6px 4px; text-align: center; white-space: nowrap;
   }
   .chk-tabla th:first-child { text-align: left; padding-left: 12px; }
-  .chk-tabla td { padding: 5px 4px; border-top: 1px solid var(--color-border); text-align: center; }
+  .chk-tabla td { padding: 0 2px; border-top: 1px solid var(--color-border); text-align: center; }
+  .chk-tabla td:first-child { padding-top: 6px; padding-bottom: 6px; }
   .chk-tabla td:first-child { text-align: left; padding-left: 12px; }
   .chk-tabla tr:hover td { background: var(--color-bg); }
   .chk-tabla tr.sin-responder td:first-child { color: var(--color-text-muted); }
-  .chk-tabla input[type="radio"] { width: auto; margin: 0; cursor: pointer; }
+  .chk-tabla input[type="radio"] { width: 18px; height: 18px; margin: 0; cursor: pointer; accent-color: var(--color-primary); }
+  :root[data-theme="dark"] .chk-tabla input[type="radio"] { accent-color: var(--color-accent); }
   /* La opción mala se resalta para que salte a la vista al revisar */
   .chk-tabla td.chk-malo:has(input:checked) { background: #F3ECD6; }
   :root[data-theme="dark"] .chk-tabla td.chk-malo:has(input:checked) { background: rgba(255,138,128,.18); }
-  .chk-opcion { display: block; margin: 0; cursor: pointer; padding: 3px; }
+  /* Toda la celda responde al toque, no solo el círculo: en celular, con el dedo, un
+     círculo de 16 px entre columnas de 40 px hacía fácil marcar la de al lado */
+  .chk-opcion { display: flex; align-items: center; justify-content: center; min-height: 40px; margin: 0; cursor: pointer; }
+  .chk-tabla td:has(.chk-opcion):hover { background: var(--color-primary-soft); }
   .chk-todo-bien { padding: 4px 10px; font-size: 11.5px; }
   .chk-resumen {
     position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
@@ -328,7 +335,13 @@
   .ins-avance-lista button span:last-child { color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
   .ins-avance-lista button.completa span:last-child { color: var(--color-success); font-weight: 600; }
   /* Apilado (pantalla chica) el panel queda arriba: la lista de secciones solo estorbaría */
-  @media (max-width: 1000px) { .ins-avance-lista { display: none; } }
+  /* Apilado (pantalla chica) el panel queda arriba: el puntaje en un renglón, sin la lista */
+  @media (max-width: 1000px) {
+    .ins-avance-lista { display: none; }
+    .form-panel .form-ficha.ins-panel-avance { display: flex; flex-direction: row; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 10px 14px; }
+    .form-panel .ins-panel-avance .form-panel-titulo { margin: 0; }
+    .form-panel .ins-panel-avance .ins-puntaje { font-size: 20px; }
+  }
   .ins-revision-saltos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .ins-revision-saltos button { padding: 4px 10px; font-size: 12px; }
   .ins-revision-titulo { margin: 18px 0 8px; font-size: 13.5px; }
@@ -340,6 +353,15 @@
   .ins-revision-problemas li:first-child { border-top: none; }
   .ins-revision-problemas li > span:first-child { flex: 1; }
   .ins-revision-seccion { font-size: 11.5px; color: var(--color-text-muted); }
+
+  /* Daños: un diagrama por vista, en cuadrícula (dos por renglón en pantalla ancha) */
+  .ins-diagramas { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px; }
+  .ins-diagrama-cabeza { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+  .ins-diagrama-cabeza h4 { margin: 0; font-size: 13.5px; }
+  /* Firmas: lado a lado; en celular una debajo de otra */
+  .ins-firmas { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 18px; }
+  .ins-firma > label { display: block; font-weight: 600; font-size: 13px; margin-bottom: 6px; }
+
 
   /* ========== Encabezado de página + stat tiles ========== */
   .page-header { margin-bottom: 18px; }
@@ -516,6 +538,41 @@
     flex: 1; overflow-y: auto; padding: 0 32px 24px;
   }
   #view-container > * { animation: viewContentFadeIn .3s ease; }
+
+  /* ========== Celular: el menú lateral se vuelve un cajón ========== */
+  /* En 390 px de ancho un menú fijo de 250 px dejaba 140 px para trabajar. Abajo de 860 px
+     se esconde y se abre con ☰; se cierra al elegir un módulo, al tocar fuera o con Esc. */
+  .topbar-menu-btn, .sidebar-velo { display: none; }
+  @media (max-width: 860px) {
+    .topbar-menu-btn {
+      display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+      width: 38px; height: 38px; padding: 0; border-radius: 10px;
+      background: transparent; border: 1px solid var(--color-border); color: var(--color-text);
+    }
+    #sidebar {
+      position: fixed; z-index: 1000; top: 0; left: 0; bottom: 0; width: 280px; height: auto;
+      transform: translateX(-100%); transition: transform .25s ease; box-shadow: var(--shadow-lg);
+    }
+    body.menu-abierto #sidebar { transform: none; }
+    .sidebar-velo {
+      display: block; position: fixed; inset: 0; z-index: 999; background: rgba(4, 23, 34, .5);
+      opacity: 0; pointer-events: none; transition: opacity .25s ease;
+    }
+    body.menu-abierto .sidebar-velo { opacity: 1; pointer-events: auto; }
+    /* "Colapsar" es cosa de escritorio: en el cajón siempre se ve completo */
+    .sidebar-collapse-btn { display: none; }
+    #sidebar.collapsed { width: 280px; }
+    #sidebar.collapsed .sidebar-title, #sidebar.collapsed .sidebar-user { display: block; }
+    #sidebar.collapsed .nav-label, #sidebar.collapsed .nav-group-chevron { display: inline; }
+    #sidebar.collapsed .nav-item, #sidebar.collapsed .nav-group-header, #sidebar.collapsed #btn-logout { justify-content: flex-start; }
+    #sidebar.collapsed .nav-group-items { display: flex !important; }
+
+    .topbar { padding: 8px 14px; margin-bottom: 12px; }
+    .topbar-left { gap: 10px; }
+    .topbar-cm-logo { height: 28px; }
+    .topbar-date { display: none; }
+    #view-container { padding: 0 14px 20px; }
+  }
   @keyframes viewContentFadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
   .view-transition {
     position: absolute; inset: 0; z-index: 50;

@@ -17,7 +17,9 @@
  * - `FORMATO INSPECCION VEHICULAR` guarda la RUTA del PDF dentro de la carpeta de
  *   formatos, con subcarpeta por tipo: "INSPECCIONES VEHICULARES/INSPECCIONES L200/….pdf".
  *
- * Este servicio, por ahora, solo LEE: la captura llega en el siguiente paso.
+ * Imágenes: los diagramas marcados y las firmas llegan del cliente como PNG y se guardan
+ * con la ruta de AppSheet (INSPECCION VEHICULAR_Images/<id>.<COLUMNA>.<hora>.png). Un
+ * diagrama sin marcar guarda la ruta del dibujo en blanco del tipo, como hacía AppSheet.
  */
 
 const InspeccionesService = (function () {
@@ -212,14 +214,22 @@ const InspeccionesService = (function () {
   }
 
   /**
+   * Carpeta desde la que se resuelve una ruta de imagen. Los dibujos en blanco del tipo
+   * ("MODELOS INSPECCION/L200/…") se leen de DRIVE_FOLDERS.MODELOS; lo demás (diagramas
+   * marcados, firmas) de la raíz, que es donde se escribe.
+   */
+  const raizDe_ = (ruta) => (/^MODELOS INSPECCION\//i.test(limpiar_(ruta))
+    ? Config.DRIVE_FOLDERS.MODELOS()
+    : Config.DRIVE_FOLDERS.RAIZ());
+
+  /**
    * Imagen (diagrama o firma) para verla dentro del panel de detalle. Los diagramas
    * pueden venir de dos lados: marcados por el usuario ("INSPECCION VEHICULAR_Images/…")
-   * o el dibujo en blanco del tipo ("MODELOS INSPECCION/L200/…"). Las dos rutas cuelgan
-   * de la raíz, así que se resuelven igual.
+   * o el dibujo en blanco del tipo ("MODELOS INSPECCION/L200/…").
    */
   function previsualizarImagen(token, ruta) {
     Permisos.puedeLeer(token, MODULO);
-    const vista = DriveUtils.previsualizarRutaProfunda(ruta, Config.DRIVE_FOLDERS.RAIZ());
+    const vista = DriveUtils.previsualizarRutaProfunda(ruta, raizDe_(ruta));
     if (!vista) throw new Error('No se encontró la imagen en Drive: ' + ruta);
     return vista;
   }
@@ -264,6 +274,17 @@ const InspeccionesService = (function () {
     'PLACAS': 'PLACA',
     'TIPO COMBUSTIBLE': 'TIPO DE COMBUSTIBLE',
   };
+
+  /** Caja de las firmas en el PDF: la misma de los formatos de AppSheet (150 × 60 pt) */
+  const FIRMA_PDF = { ancho: 150, alto: 60 };
+
+  /**
+   * El PDF sale como lo imprimía AppSheet, que es el que todos conocen: en Arial y con sus
+   * márgenes (medidos sobre un formato suyo: 20 pt a los lados, 27 arriba). Las plantillas
+   * están en Century Gothic a 0.2"; exportadas así, las etiquetas largas se parten y una
+   * sección se corta al pie de la primera hoja. Solo se ajusta la copia, no la plantilla.
+   */
+  const FORMATO_PDF = { fuente: 'Arial', margenes: { arriba: 27, abajo: 27, izquierda: 20, derecha: 20 } };
 
   /** Lo que captura el inspector además del checklist */
   const CAPTURADOS = {
@@ -313,6 +334,10 @@ const InspeccionesService = (function () {
     Object.keys(CAPTURADOS).forEach((campo) => {
       if (p[campo] !== undefined) fila[CAPTURADOS[campo]] = p[campo];
     });
+    // El <input type="date"> manda "2026-09-14": como texto no se ordena ni se filtra como
+    // fecha, y las demás filas tienen fecha real. Se guarda como Date.
+    const servicio = /^(\d{4})-(\d{2})-(\d{2})$/.exec(limpiar_(p.ULTIMO_SERVICIO));
+    if (servicio) fila['FECHA ULTIMO SERVICIO'] = new Date(+servicio[1], +servicio[2] - 1, +servicio[3]);
     if (!limpiar_(fila['NOMBRE INSPECTOR'])) fila['NOMBRE INSPECTOR'] = sesion.nombre;
 
     // Solo las piezas que ese tipo de unidad pide: si el cliente manda de más, se ignoran
@@ -331,6 +356,7 @@ const InspeccionesService = (function () {
     // ---- imágenes (diagramas y firmas) ----
     const subidas = [];
     const paraPdf = {};
+    const sinDibujo = [];   // diagramas en blanco que no están en Drive
     try {
       COLUMNAS_IMAGEN.forEach(([columna]) => {
         const imagen = (imagenes || {})[columna];
@@ -346,15 +372,16 @@ const InspeccionesService = (function () {
           });
           subidas.push(guardada.fileId);
           fila[columna] = guardada.ruta;
-          paraPdf[columna] = imagen;
+          paraPdf[columna] = /^FIRMA /.test(columna) ? Object.assign({}, imagen, FIRMA_PDF) : imagen;
           return;
         }
         // Sin marcar: se guarda el diagrama en blanco del tipo, igual que hacía AppSheet
         const diagrama = estructura.diagramas.find((d) => d.campo === columna);
         if (diagrama) {
           fila[columna] = diagrama.ruta;
-          const archivo = DriveUtils.archivoDeRutaProfunda(diagrama.ruta, Config.DRIVE_FOLDERS.RAIZ());
+          const archivo = DriveUtils.archivoDeRutaProfunda(diagrama.ruta, raizDe_(diagrama.ruta));
           if (archivo) paraPdf[columna] = { blob: archivo.getBlob() };
+          else sinDibujo.push(diagrama.etiqueta + ' (' + diagrama.ruta + ')');
         }
       });
 
@@ -369,8 +396,14 @@ const InspeccionesService = (function () {
     try {
       pdf = PdfService.generar({
         plantillaId: estructura.plantillaId,
-        datos: fila,
+        // Una imagen que no llegó deja su marcador vacío: si no, el PDF imprimiría la ruta
+        // del archivo ("MODELOS INSPECCION/HONDA 150XR/IZQUIERDA.png") en lugar del dibujo
+        datos: Object.assign({}, fila, COLUMNAS_IMAGEN.reduce((vacias, [columna]) => {
+          if (!paraPdf[columna]) vacias[columna] = '';
+          return vacias;
+        }, {})),
         imagenes: paraPdf,
+        formato: FORMATO_PDF,
         carpetaId: Config.DRIVE_FOLDERS.REPORTES(),
         subcarpeta: estructura.carpeta,
         nombre: PdfService.nombreArchivo([
@@ -391,7 +424,13 @@ const InspeccionesService = (function () {
       };
     }
 
-    return { ID: id, puntaje: puntaje.final, pdf: pdf.url, sinResolver: pdf.sinResolver };
+    return {
+      ID: id, puntaje: puntaje.final, pdf: pdf.url, sinResolver: pdf.sinResolver,
+      advertencia: sinDibujo.length
+        ? 'El PDF salió sin estos dibujos porque no están en Drive: ' + sinDibujo.join(', ') +
+          '. Súbelos a esa ruta para que aparezcan en las siguientes inspecciones.'
+        : '',
+    };
   }
 
   // ---------- puntaje ----------

@@ -21,10 +21,26 @@ const SheetUtils = (function () {
     return sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   }
 
+  /**
+   * Fila → objeto. Las claves van SIN los espacios sobrantes del encabezado ("ID INSPECCION "
+   * en la hoja → 'ID INSPECCION'): así el código lee row['ID INSPECCION'] como está escrito.
+   * Con la clave cruda, además, update() mezclaba 'ID INSPECCION ' (lo viejo) con
+   * 'ID INSPECCION' (lo nuevo) y escribía lo viejo: el cambio se perdía sin aviso.
+   * Los acentos y mayúsculas se respetan (la clave sigue siendo el nombre de la columna).
+   */
+  const claveDeEncabezado_ = (h) => String(h == null ? '' : h).replace(/\s+/g, ' ').trim();
+
   function rowToObject_(headers, row) {
     const obj = {};
-    headers.forEach((h, i) => { obj[h] = row[i]; });
+    headers.forEach((h, i) => { obj[claveDeEncabezado_(h)] = row[i]; });
     return obj;
+  }
+
+  /** Posición de la columna de ID, tolerante a espacios y acentos; truena claro si no está */
+  function columnaId_(headers, idColumn, sheetName) {
+    const idCol = indiceDeColumnas(headers, [idColumn])[idColumn];
+    if (idCol === -1) throw new Error('La hoja "' + sheetName + '" no tiene columna "' + idColumn + '"');
+    return idCol;
   }
 
   /**
@@ -58,8 +74,7 @@ const SheetUtils = (function () {
     idColumn = idColumn || 'ID';
     const sheet = getSheet(spreadsheetId, sheetName);
     const headers = getHeaders_(sheet);
-    const idCol = headers.indexOf(idColumn);
-    if (idCol === -1) throw new Error('La hoja "' + sheetName + '" no tiene columna "' + idColumn + '"');
+    const idCol = columnaId_(headers, idColumn, sheetName);
 
     const lastRow = sheet.getLastRow();
     if (lastRow < 2) return null;
@@ -77,7 +92,7 @@ const SheetUtils = (function () {
   function insert(spreadsheetId, sheetName, obj) {
     const sheet = getSheet(spreadsheetId, sheetName);
     const headers = getHeaders_(sheet);
-    if (headers.indexOf('ID') !== -1 && !obj.ID) {
+    if (indiceDeColumnas(headers, ['ID'])['ID'] !== -1 && !obj.ID) {
       obj.ID = Utilities.getUuid().slice(0, 8);
     }
     const row = objectToRow_(headers, obj);
@@ -120,8 +135,7 @@ const SheetUtils = (function () {
     lock.waitLock(20000);
     try {
       const sheet = getSheet(spreadsheetId, sheetName);
-      const idCol = getHeaders_(sheet).indexOf(idColumn);
-      if (idCol === -1) throw new Error('La hoja "' + sheetName + '" no tiene columna "' + idColumn + '"');
+      const idCol = columnaId_(getHeaders_(sheet), idColumn, sheetName);
       const lastRow = sheet.getLastRow();
       if (lastRow < 2) return 0;
 
