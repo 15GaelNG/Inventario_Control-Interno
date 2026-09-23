@@ -172,34 +172,40 @@
   const GRADIENTE_HERO_LIGHT = 'linear-gradient(100deg, rgba(6,20,30,.88) 0%, rgba(6,20,30,.55) 45%, rgba(6,20,30,.25) 75%)';
   const GRADIENTE_HERO_DARK = 'linear-gradient(100deg, rgba(3,10,16,.80) 0%, rgba(3,10,16,.50) 45%, rgba(3,10,16,.20) 75%)';
 
-  let intervaloHeroLogin = null;
+  let detenerHeroLogin = null;
   let actualizarHeroLoginTema = null;
+
+  // Cache de precarga por URL — así, si una imagen ya se pidió antes (ej.
+  // al regresar al login, o al volver a tocarle su turno en otra vuelta
+  // del ciclo), no se vuelve a descargar de cero.
+  const cachePrecargaHero = {};
+  function precargarImagen_(url) {
+    if (!cachePrecargaHero[url]) {
+      cachePrecargaHero[url] = new Promise((resolve) => {
+        const img = new Image();
+        img.onload = resolve;
+        img.onerror = resolve; // si falla, igual se resuelve — no se traba el slideshow por una imagen caída
+        img.src = url;
+      });
+    }
+    return cachePrecargaHero[url];
+  }
 
   function initLoginHeroSlideshow() {
     // Por si initLogin() se vuelve a llamar en la misma carga de página
     // (ej. sesión expirada, regresa al login) — sin esto quedarían varios
-    // intervalos corriendo a la vez.
-    if (intervaloHeroLogin) { clearInterval(intervaloHeroLogin); intervaloHeroLogin = null; }
+    // ciclos corriendo a la vez.
+    if (detenerHeroLogin) { detenerHeroLogin(); detenerHeroLogin = null; }
 
     const capaA = document.getElementById('login-hero-bg-a');
     const capaB = document.getElementById('login-hero-bg-b');
     if (!capaA || !capaB) return;
 
-    // Precarga TODAS las variantes (claro + oscuro de las 4 fotos) desde
-    // que arranca, no solo "la siguiente" justo antes de que le toque —
-    // algunas de estas imágenes pesan varios MB (los PNG de tema oscuro),
-    // y con precarga de una en una a veces no alcanzaban a bajar a tiempo:
-    // se veían aparecer de golpe/tarde en vez de fundirse parejo como las
-    // demás. Así, para cuando le toca a cada una, el navegador ya la tiene
-    // en caché — un simple new Image() con su src basta para que el
-    // navegador la baje y la cachee, no hace falta esperar el onload aquí.
-    IMAGENES_HERO_LOGIN.forEach((set) => {
-      [set.light, set.dark].forEach((archivo) => { new Image().src = BASE_ASSETS + archivo; });
-    });
-
     let indice = 0;
     let visible = capaA;
     let oculta = capaB;
+    let detenido = false;
+    let idEspera = null;
 
     function urlPara(i) {
       const set = IMAGENES_HERO_LOGIN[i];
@@ -209,24 +215,55 @@
       return gradiente + ', url("' + BASE_ASSETS + archivo + '")';
     }
 
-    visible.style.backgroundImage = urlPara(indice);
-    visible.classList.add('login-hero-bg-visible');
-    oculta.style.backgroundImage = urlPara((indice + 1) % IMAGENES_HERO_LOGIN.length);
+    const DURACION_VISIBLE_MS = 7000;
 
-    intervaloHeroLogin = setInterval(() => {
-      indice = (indice + 1) % IMAGENES_HERO_LOGIN.length;
+    /**
+     * Antes este slideshow avanzaba en un reloj fijo (setInterval) sin
+     * importar si la imagen que seguía ya había terminado de bajar —
+     * algunas de estas fotos pesan varios MB (los PNG de tema oscuro), así
+     * que a veces le tocaba su turno a una que apenas iba a la mitad de la
+     * descarga: se veía aparecer de golpe/tarde, y por lo mismo la de
+     * antes se sentía "durar menos" de lo que debía. Ahora cada vuelta:
+     *   1. Lanza la precarga de la SIGUIENTE imagen de una vez (para que
+     *      tenga toda la ventana de "duración visible" para bajar).
+     *   2. Espera esa duración.
+     *   3. Si la imagen YA está lista, hace el fundido al toque (caso
+     *      normal). Si no, ESPERA a que sí esté lista antes de fundir —
+     *      la imagen actual se queda un poco más en vez de cambiar a una
+     *      a medio cargar.
+     */
+    async function ciclo() {
+      const siguiente = (indice + 1) % IMAGENES_HERO_LOGIN.length;
+      const listaSiguiente = precargarImagen_(urlPara(siguiente));
+
+      await new Promise((resolve) => { idEspera = setTimeout(resolve, DURACION_VISIBLE_MS); });
+      if (detenido) return;
+
+      await listaSiguiente;
+      if (detenido) return;
+
+      indice = siguiente;
+      oculta.style.backgroundImage = urlPara(indice);
       oculta.classList.add('login-hero-bg-visible');
       visible.classList.remove('login-hero-bg-visible');
       const anteriorVisible = visible;
       visible = oculta;
       oculta = anteriorVisible;
-      // Precarga la que sigue en la capa que acaba de quedar oculta.
-      oculta.style.backgroundImage = urlPara((indice + 1) % IMAGENES_HERO_LOGIN.length);
-    }, 7000);
+
+      ciclo();
+    }
+
+    visible.style.backgroundImage = urlPara(indice);
+    visible.classList.add('login-hero-bg-visible');
+    ciclo();
 
     actualizarHeroLoginTema = () => {
       visible.style.backgroundImage = urlPara(indice);
-      oculta.style.backgroundImage = urlPara((indice + 1) % IMAGENES_HERO_LOGIN.length);
+    };
+
+    detenerHeroLogin = () => {
+      detenido = true;
+      if (idEspera) clearTimeout(idEspera);
     };
   }
 
@@ -362,7 +399,7 @@
     document.getElementById('login-screen-container').hidden = true;
     // El login ya no se va a volver a ver — apaga el slideshow de su fondo
     // en vez de dejarlo corriendo de fondo apuntando a elementos ocultos.
-    if (intervaloHeroLogin) { clearInterval(intervaloHeroLogin); intervaloHeroLogin = null; }
+    if (detenerHeroLogin) { detenerHeroLogin(); detenerHeroLogin = null; }
     actualizarHeroLoginTema = null;
 
     const container = document.getElementById('loading-screen-container');
