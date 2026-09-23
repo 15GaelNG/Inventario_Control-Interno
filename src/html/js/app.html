@@ -497,13 +497,35 @@
       const password = document.getElementById('login-password').value;
       const errorBox = document.getElementById('login-error');
       errorBox.hidden = true;
+      const btn = document.getElementById('btn-login');
+      // Sin esto: el primer clic sí manda la petición, pero como
+      // google.script.run tarda (sobre todo el primero de la sesión) el
+      // botón se ve exactamente igual que antes de darle clic — parece
+      // "congelado" y es fácil volver a darle, lo que manda una SEGUNDA
+      // petición en paralelo; cuando ambas responden, la pantalla de carga
+      // (mostrarPantallaCarga) se dispara dos veces seguidas y se ve como
+      // que la animación "brinca"/se repite. Deshabilitar los dos botones
+      // de inicio de sesión (no solo este) evita ambos casos: doble clic en
+      // el mismo, y clic en el OTRO método mientras este ya está en curso.
+      if (btn.disabled) return;
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Ingresando…';
+      const chip = document.getElementById('google-account-chip');
+      if (chip) chip.disabled = true;
       try {
         const resultado = await callServer('apiLogin', correo, password);
         guardarSesion(resultado);
         mostrarPantallaCarga(() => render());
+        // A propósito NO se reactivan los botones en éxito: ya se está
+        // navegando a la pantalla de carga, no debería poder volver a
+        // usarse este formulario.
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.hidden = false;
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+        if (chip) chip.disabled = false;
       }
     });
   }
@@ -530,15 +552,25 @@
       divisor.hidden = false;
 
       chip.addEventListener('click', async () => {
+        if (chip.disabled) return; // mismo motivo que en btn-login — evita doble petición por clics repetidos
         const errorBox = document.getElementById('login-error');
         errorBox.hidden = true;
+        const contenidoOriginal = chip.innerHTML;
+        chip.disabled = true;
+        chip.innerHTML = '<span class="spinner"></span>';
+        const btnLogin = document.getElementById('btn-login');
+        if (btnLogin) btnLogin.disabled = true;
         try {
           const resultado = await callServer('apiLoginConGoogle');
           guardarSesion(resultado);
           mostrarPantallaCarga(() => render());
+          // Tampoco se reactiva en éxito — ver comentario en form-login.
         } catch (err) {
           errorBox.textContent = err.message;
           errorBox.hidden = false;
+          chip.disabled = false;
+          chip.innerHTML = contenidoOriginal;
+          if (btnLogin) btnLogin.disabled = false;
         }
       });
     } catch (err) {
