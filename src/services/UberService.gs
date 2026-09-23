@@ -14,7 +14,10 @@
  */
 
 const UberService = (function () {
-  const COLUMNAS_FIRMA = ['RAZON SOCIAL', 'NOMBRE COMPLETO', 'ESTAUS USUARIO', 'DIAS AUTORIZADOS'];
+  // Nombre real ya confirmado ("UBER" — ojo, no confundir con la pestaña
+  // "UBER JUANITO", que es otra cosa con otras columnas) — directo por
+  // nombre, no por firma de columnas (ver mismo comentario en ArqueosService).
+  const NOMBRE_HOJA = 'UBER';
   const ID_COLUMN = 'ID';
 
   function ssId() {
@@ -22,7 +25,7 @@ const UberService = (function () {
   }
 
   function hoja_() {
-    return SheetUtils.getSheetByColumns(ssId(), COLUMNAS_FIRMA);
+    return SheetUtils.getSheet(ssId(), NOMBRE_HOJA);
   }
 
   function limpiarValor_(valor) {

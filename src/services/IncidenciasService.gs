@@ -15,14 +15,16 @@
  */
 
 const IncidenciasService = (function () {
-  const COLUMNAS = ['ID_INCIDENCIA', 'FOLIO', 'DEPARTAMENTO'];
+  // Nombre real ya confirmado ("INCIDENCIAS") — directo por nombre, no por
+  // firma de columnas (ver mismo comentario en ArqueosService).
+  const NOMBRE_HOJA = 'INCIDENCIAS';
 
   function ssId() {
     return Config.SPREADSHEET_IDS.VEHICULOS();
   }
 
   function hoja_() {
-    return SheetUtils.getSheetByColumns(ssId(), COLUMNAS);
+    return SheetUtils.getSheet(ssId(), NOMBRE_HOJA);
   }
 
   /**

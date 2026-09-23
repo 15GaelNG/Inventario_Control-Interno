@@ -27,7 +27,9 @@
  */
 
 const CajasChicasService = (function () {
-  const COLUMNAS_FIRMA = ['ID CCH', 'RESPONSABLE DE CAJA CHICA', 'CAPTURISTA DE CAJA CHICA', 'MONTO ACTUAL'];
+  // Nombre real ya confirmado ("CAJAS CHICAS") — directo por nombre, no
+  // por firma de columnas (ver mismo comentario en ArqueosService).
+  const NOMBRE_HOJA = 'CAJAS CHICAS';
   const ID_COLUMN = 'ID CCH';
 
   function ssId() {
@@ -35,7 +37,7 @@ const CajasChicasService = (function () {
   }
 
   function hoja_() {
-    return SheetUtils.getSheetByColumns(ssId(), COLUMNAS_FIRMA);
+    return SheetUtils.getSheet(ssId(), NOMBRE_HOJA);
   }
 
   function limpiarValor_(valor) {

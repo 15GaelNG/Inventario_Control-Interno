@@ -28,7 +28,10 @@
  */
 
 const CambiosMontoCCHService = (function () {
-  const COLUMNAS_FIRMA = ['ID CCH', 'CANTIDAD ANTERIOR', 'CANTIDAD ACTUALIZADA', 'QUIEN REALIZO'];
+  // Nombre real ya confirmado ("INCREMENTOS", a pesar del nombre del
+  // módulo/Service) — directo por nombre, no por firma de columnas (ver
+  // mismo comentario en ArqueosService).
+  const NOMBRE_HOJA = 'INCREMENTOS';
   const ID_COLUMN = 'ID';
 
   function ssId() {
@@ -36,7 +39,7 @@ const CambiosMontoCCHService = (function () {
   }
 
   function hoja_() {
-    return SheetUtils.getSheetByColumns(ssId(), COLUMNAS_FIRMA);
+    return SheetUtils.getSheet(ssId(), NOMBRE_HOJA);
   }
 
   function fechaISO_(valor) {

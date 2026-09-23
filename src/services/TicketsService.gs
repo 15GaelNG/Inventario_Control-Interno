@@ -9,7 +9,10 @@
  */
 
 const TicketsService = (function () {
-  const COLUMNAS_FIRMA = ['TICKET', 'QUIEN ATENDIO', 'TIPO ATENCION', 'SOLICITANTE'];
+  // Nombre real ya confirmado ("TICKETS" — ojo, no confundir con la
+  // pestaña de respaldo "TICKETS 24/04/25") — directo por nombre, no por
+  // firma de columnas (ver mismo comentario en ArqueosService).
+  const NOMBRE_HOJA = 'TICKETS';
   const ID_COLUMN = 'ID';
 
   function ssId() {
@@ -17,7 +20,7 @@ const TicketsService = (function () {
   }
 
   function hoja_() {
-    return SheetUtils.getSheetByColumns(ssId(), COLUMNAS_FIRMA);
+    return SheetUtils.getSheet(ssId(), NOMBRE_HOJA);
   }
 
   function fechaISO_(valor) {

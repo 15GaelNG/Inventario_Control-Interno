@@ -30,7 +30,9 @@
  */
 
 const ReasignacionesVehicularesService = (function () {
-  const COLUMNAS_FIRMA = ['Folio Vehiculo', 'VIN', 'No Empleado Saliente', 'Responsable Saliente'];
+  // Nombre real ya confirmado ("REASIGNACIONES_VEHICULOS") — directo por
+  // nombre, no por firma de columnas (ver mismo comentario en ArqueosService).
+  const NOMBRE_HOJA = 'REASIGNACIONES_VEHICULOS';
   const ID_COLUMN = 'ID Reasignacion Vehicular';
 
   function ssId() {
@@ -38,7 +40,7 @@ const ReasignacionesVehicularesService = (function () {
   }
 
   function hoja_() {
-    return SheetUtils.getSheetByColumns(ssId(), COLUMNAS_FIRMA);
+    return SheetUtils.getSheet(ssId(), NOMBRE_HOJA);
   }
 
   function fechaISO_(valor) {

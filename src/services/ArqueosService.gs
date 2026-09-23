@@ -36,7 +36,12 @@
  */
 
 const ArqueosService = (function () {
-  const COLUMNAS_FIRMA = ['ID ARQUEO', 'TIPO DE ARQUEO', 'CALIFICACION_AUDITORIA_FINAL', 'FORMATO ARQUEO'];
+  // Nombre real de la pestaña ya confirmado ("ARQUEOS") — se busca directo
+  // por nombre, no por firma de columnas (SheetUtils.getSheetByColumns).
+  // Con la caché fría (6h), buscar por columnas implica escanear las ~50
+  // pestañas del spreadsheet una por una — se notaba, sobre todo siendo
+  // Arqueos uno de los módulos con más tráfico.
+  const NOMBRE_HOJA = 'ARQUEOS';
   const ID_COLUMN = 'ID ARQUEO';
 
   function ssId() {
@@ -44,7 +49,7 @@ const ArqueosService = (function () {
   }
 
   function hoja_() {
-    return SheetUtils.getSheetByColumns(ssId(), COLUMNAS_FIRMA);
+    return SheetUtils.getSheet(ssId(), NOMBRE_HOJA);
   }
 
   function fechaISO_(valor) {
