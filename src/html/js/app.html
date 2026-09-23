@@ -265,6 +265,15 @@
    * darle personalidad a la espera en vez de un spinner genérico.
    */
   function mostrarPantallaCarga(callback) {
+    // El login (#login-screen-container) se quedaba visible DEBAJO de la
+    // pantalla de carga durante toda la animación — no se ocultaba hasta el
+    // callback final (render()). No se notaba mientras la pantalla de carga
+    // estaba a opacidad completa, pero en su fade-out final (ver abajo) sí
+    // se iba transparentando y dejaba ver el formulario de login por
+    // debajo un instante, justo antes de pasar al sistema. Ocultarlo desde
+    // aquí (apenas arranca la animación, no hasta que termina) lo evita.
+    document.getElementById('login-screen-container').hidden = true;
+
     const container = document.getElementById('loading-screen-container');
     montarVista('tpl-loading', null, container);
 
