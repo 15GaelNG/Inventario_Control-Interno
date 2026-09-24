@@ -81,7 +81,7 @@ Primeras mejoras que AppSheet no permitía:
   Las tarjetas muestran exactamente lo que filtra la tabla (búsqueda, filtros de columna, orden y KPIs): se
   agregó `getFiltradas()` al DataTable (solo lectura) y un `MutationObserver` repinta las tarjetas cuando la
   tabla se repinta.
-- **Detalles para copiar.** La ficha de equipo y de línea muestra el texto de la columna virtual
+- **Detalles.** La ficha de equipo y de línea muestra el texto de la columna virtual
   `DETALLES LINEAS TELEFONICAS` del AppSheet, en su orden (NUCO, Motivo de resguardo, Ticket / Asunto, Código de
   resguardo = RESPONSABLE, IMEI, SIM, Número, Modelo, Compañía, Razón Social, Estatus de adendum = FIN PLAN,
   Estatus actual de la línea), con botón *Copiar detalles*. Motivo, ticket y estatus actual (que AppSheet dejaba
@@ -101,6 +101,28 @@ Primeras mejoras que AppSheet no permitía:
   editar, *Ver PDF*, *Ver carpeta en Drive*, *Limpiar firma*. Medidas únicas (las de la barra del DataTable) y
   colores del sistema: acciones en azul de marca, `.secondary` para cancelar/volver, `a.externo` para Drive/PDF,
   verde para Excel (sección "Botones" de `lineas-estilos.html`).
+
+Segunda ronda (commit `0932115`):
+
+- **Listas desplegables** en todo campo que en AppSheet era texto libre y tiene valores conocidos
+  (`listaAbierta` con el Combobox: se elige o se escribe uno nuevo). Propiedades nuevas de los elementos:
+  `sugerencias` (`PERSONAS`, `NO_EMPLEADO`, `PUESTOS`, `DEPARTAMENTOS` salen de COLABORADORES y `NUMEROS`,
+  `IMEIS`, `SIMS` del índice; las completa `opcionesSugeridas` en el navegador para no inflar cada formulario) y
+  `autollenar` (`{ COLUMNA: 'noEmpleado' | 'nombre' | 'puesto' | 'departamento' }`: al elegir una persona se
+  copian sus datos a campos editables del mismo formulario). Los demás valores salen de `LineasRepo.catalogos()`
+  (`catalogos_telefonia_v3`: colores, puestos, jefes, directores, otras apps, identificaciones y motivos de desecho,
+  además de los catálogos del AppSheet). TIPO de la inspección y DIA/MES/AÑO de la responsiva son listas cerradas.
+  Accesorios: Nombre y Marca con lista; no se permite un artículo repetido (cliente y servidor).
+- **Formato del AppSheet completo** (`REGLAS_FORMATO`): se agregaron las flechas de Control de Reasignaciones
+  (Responsable Entrante verde con `chevrons-up`, Saliente rojo con `chevrons-down`) y de Control de Cambios (ANTES
+  `circle-chevron-down`, DESPUES `circle-chevron-up`); estilos corregidos (RETRO DE SOLICITUD y SOLICITUD en
+  cursiva, TIPO en negrita y cursiva, categorías de accesorios en negrita y cursiva). `fondo: true` = la regla trae
+  Highlight color. ESTATUS TEMPORAL (USO TEMPORAL ≥ 13 días) sale como aviso rojo en la ficha. Íconos del menú
+  iguales a los del AppSheet y acción "Ver línea"/"Ver activo" (View Ref) con `circle-chevron-right`.
+- **KPIs en todos los módulos** con línea de color a la izquierda (`.ln-modulo .stat-tile::before`): Gestión de
+  Activos (colaboradores, con/sin activos, asignados), Accesorios (+ sin stock), Control de Cambios (+ estatus y
+  responsable), Reasignaciones (+ activos y responsables distintos), Desechos (+ año en curso y lugar más frecuente).
+- La tarjeta de la ficha se llama **Detalles** y ya no lleva texto de ayuda.
 
 ## 1. Contexto
 
