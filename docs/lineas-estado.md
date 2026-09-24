@@ -1,10 +1,55 @@
 # Líneas — estado del módulo
 
-Rama `emmanuel` · Última actualización: 2026-09-18
+Rama `emmanuel` · Última actualización: 2026-09-24
 
 Documento de continuidad del módulo **Líneas** (equipos y líneas telefónicas).
 El plan de la mudanza está en [lineas-plan.md](lineas-plan.md); aquí se registra
 qué está hecho, cómo probarlo y qué sigue.
+
+## 0. Diseño de la rama `jorge` (2026-09-24, commit `d2b316c`)
+
+La estructura del sistema se **copió** de `origin/jorge` (sin merge, para que al
+unir no se borre nada de nadie) y **sin sus módulos**:
+
+- Copiado tal cual: `styles.html`, `api.html`, `html/js/componentes/*` (DataTable,
+  Notificar, Confirmar, Tabs, Combobox, Formulario, Firma, Lienzo, ExportarExcel,
+  Iconos), `views/login|loading`, `Code.gs`, `Router.gs`, `config/Config.gs`,
+  `config/Modulos.gs`, `PermisosService.gs`, `UsuariosService.gs`,
+  `utils/SheetUtils.gs`, `assets/`, `CLAUDE.md`.
+- Adaptado: `app.html` (sin `initIncidencias/Vehiculos/Uber/Tickets/Accesorios` ni
+  campos de vehículos; `NAV_GRUPOS` y `navegarA` solo con Líneas), `Index.html`
+  (solo vistas de Líneas; `lineas.html` se carga después de la librería de
+  componentes), `dashboard.html` (tarjetas de Líneas), `Modulos.gs` (grupo Líneas
+  con los 10 ids reales), `Auth.gs` (el de jorge + la verificación con hash que ya
+  tenía esta rama). Lucide queda en 0.513.0 porque Líneas usa `card-sim`.
+- Los archivos viejos de los compañeros que ya existían en esta rama
+  (`AccesoriosService`, `IncidenciasService`, `VehiculosService`, vistas
+  `accesorios`/`incidencias`) no se tocaron ni se incluyen en `Index.html`.
+- `app.html` de jorge pone mayúsculas automáticas en todos los campos de texto;
+  los campos que se guardan tal cual llevan `data-respetar-texto` (línea mínima
+  agregada en `app.html`).
+- **Regla de Apps Script** (ver `CLAUDE.md`): los `.html` se sirven con
+  `createHtmlOutputFromFile` y todo lo que va después de `//` se corta, aunque esté
+  en un string. Las URL dentro de JS van como `'https:\/\/…'`. Hay una prueba que
+  lo revisa.
+
+Líneas con el lenguaje visual de jorge: `page-header` + `stat-tile` clicables
+(filtran la tabla, otro clic quita el filtro) + `DataTable` en Líneas Telefónicas
+(pestañas Equipos/Líneas; ojo o doble clic abre la ficha), Inventario de
+Accesorios (panel con movimientos; flechas para entrada/salida), Reactivación,
+Solicitud, Post Venta (panel con todos los campos) y las tres bitácoras. Las
+tablas llegan completas como texto JSON (`apiLineasBitacoraTabla`,
+`apiLineasVistaOperativaTabla`, hasta 5000 filas); Control de Cambios carga los
+5000 más recientes y ofrece “Buscar en todo el historial”. Gestión de Activos y
+Detalles conservan sus tarjetas tipo AppSheet. Los avisos usan `Notificar`.
+Helpers en `lineas.html`: `tablaLineas`, `columnasDeHoja`, `tilesKpi`.
+
+De paso se corrigieron encabezados que no coincidían con la hoja (se perdían en
+consulta y en altas): `LINIEA SUSPENDIDA` (así se llama en la hoja) y
+`NO EMPLEADO / NOMBRE / PUESTO / DEPARTAMENTO SOLICITANTE`.
+
+Al unir con master: tomar el `app.html`/`Index.html`/`Modulos.gs` de master y
+volver a aplicar los bloques marcados “Líneas (rama emmanuel)”.
 
 ## 1. Contexto
 
