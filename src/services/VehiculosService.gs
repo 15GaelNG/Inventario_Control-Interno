@@ -256,7 +256,9 @@ const VehiculosService = (function () {
   /** Edita un vehículo. Además de guardar, compara contra el registro que
    * había antes y manda la diferencia campo por campo a la bitácora de
    * Cambios Vehículos (ver CambiosVehiculosService) — así queda quién
-   * cambió qué y cuándo, sin que nadie tenga que anotarlo a mano. */
+   * cambió qué y cuándo, sin que nadie tenga que anotarlo a mano. También
+   * propaga los campos copiados (placa, marca, línea…) a Instalación de
+   * Sensores, Verificaciones y Hologramas (ver Relaciones.gs / docs/relaciones.md). */
   function actualizar(token, id, cambios) {
     const sesion = Permisos.puedeEditar(token, 'vehiculos');
     const datos = Object.assign({}, cambios);
@@ -265,10 +267,17 @@ const VehiculosService = (function () {
     delete datos['FECHA REGISTRO SISTEMA CI']; // ídem
 
     const encontrado = SheetUtils.findById(ssId(), SHEET_VEHICULOS, id, ID_COLUMN);
-    SheetUtils.update(ssId(), SHEET_VEHICULOS, id, datos, ID_COLUMN);
+    const actualizado = SheetUtils.update(ssId(), SHEET_VEHICULOS, id, datos, ID_COLUMN);
 
     if (encontrado) {
       CambiosVehiculosService.registrarCambios(encontrado.data.FOLIO, encontrado.data, datos, sesion.nombre);
+    }
+    // El vehículo YA se guardó bien en este punto — si propagar falla, no se revierte
+    // nada: solo se avisa en los logs y revisar() lo corrige en la corrida nocturna.
+    try {
+      Relaciones.propagar('VEHICULOS', actualizado, datos);
+    } catch (err) {
+      console.error('Relaciones.propagar falló para el vehículo ' + id + ': ' + err.message);
     }
     return { ID: id };
   }

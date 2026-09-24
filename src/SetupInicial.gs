@@ -321,3 +321,51 @@ function verPerfiles() {
   Logger.log(mensaje);
   return mensaje;
 }
+
+/**
+ * Corre Relaciones.revisar() en modo SOLO REPORTE (corregir: false) — compara lo que
+ * copiaron Instalación de Sensores, Verificaciones y Hologramas contra el catálogo
+ * de Vehículos y dice cuántas diferencias hay, sin tocar ni una celda. Úsalo antes
+ * de decidir si vale la pena activar la corrección automática (ver Relaciones.gs).
+ *
+ * Correr desde el editor: seleccionar "revisarRelacionesSoloReporte" arriba y
+ * "Ejecutar"; el resultado sale en Ver > Registros (Ctrl+Enter) y además queda
+ * escrito en la hoja LOG_RELACIONES del spreadsheet de Vehículos (se crea sola la
+ * primera vez). No cambia nada — se puede correr las veces que haga falta.
+ */
+function revisarRelacionesSoloReporte() {
+  const resultado = Relaciones.revisar({ corregir: false });
+  const lineas = ['Relaciones.revisar({corregir: false}) —', ''];
+  Object.keys(resultado).forEach((hoja) => {
+    const r = resultado[hoja];
+    lineas.push(
+      '  · ' + hoja + ': ' + r.revisadas + ' filas revisadas, ' + r.diferencias + ' diferencia(s), ' +
+      r.huerfanos + ' huérfana(s)' +
+      (r.clavesDuplicadasOmitidas ? ', ' + r.clavesDuplicadasOmitidas + ' con clave duplicada en el origen (no se revisaron)' : '')
+    );
+  });
+  lineas.push('', 'Detalle de cada diferencia: hoja LOG_RELACIONES, en el mismo spreadsheet de Vehículos.');
+  const mensaje = lineas.join('\n');
+  Logger.log(mensaje);
+  return mensaje;
+}
+
+/**
+ * Igual que revisarRelacionesSoloReporte(), pero además CORRIGE las diferencias que
+ * encuentre (sobrescribe la copia con el valor de Vehículos). Correrla una vez ya
+ * revisado el log de la corrida en modo reporte — después de esto, se puede dejar
+ * en un activador de tiempo nocturno (Activadores > Agregar activador, con esta
+ * función, ~2 a.m.) como red de seguridad para cambios que Relaciones.propagar()
+ * nunca vio (edición directa en el Excel, o desde AppSheet).
+ */
+function revisarRelacionesYCorregir() {
+  const resultado = Relaciones.revisar({ corregir: true });
+  const lineas = ['Relaciones.revisar({corregir: true}) —', ''];
+  Object.keys(resultado).forEach((hoja) => {
+    const r = resultado[hoja];
+    lineas.push('  · ' + hoja + ': ' + r.revisadas + ' filas revisadas, ' + r.diferencias + ' corregida(s), ' + r.huerfanos + ' huérfana(s)');
+  });
+  const mensaje = lineas.join('\n');
+  Logger.log(mensaje);
+  return mensaje;
+}
