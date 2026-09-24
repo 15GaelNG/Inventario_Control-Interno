@@ -627,7 +627,7 @@ const LineasRepo = (function () {
     },
     POST_VENTA: {
       tabla: TAB.LINEAS, grupo: 'TIPO', departamento: 'POST VENTA',
-      encabezados: ['NUMERO TELEFONO', 'FOLIO', 'NUCO', 'TIPO', 'RESPONSABLE', 'EQUIPO', 'IMEI', 'NUMERO SIM',
+      encabezados: ['NUMERO TELEFONO', 'RESPONSIVA', 'FOLIO', 'NUCO', 'TIPO', 'RESPONSABLE', 'EQUIPO', 'IMEI', 'NUMERO SIM',
         'ACCESORIOS', 'SEDE', 'OFICINA / DESARROLLO', 'DEPARTAMENTO', 'AREA', 'RAZON SOCIAL', 'PIN WHATSAPP',
         'PIN EQUIPO', 'CUENTA GOOGLE', 'COMPAÑIA', 'COSTO PLAN', 'FECHA REGISTRO', 'INICIO PLAN', 'FIN PLAN',
         'ESTATUS LINEA', 'ESTATUS EQUIPO'],
@@ -659,8 +659,8 @@ const LineasRepo = (function () {
     let filas;
     if (cfg.departamento) {
       const numeros = LineasDatos.buscarFilas(cfg.tabla, 'DEPARTAMENTO', cfg.departamento, false);
-      filas = LineasDatos.leerFilas([{ tabla: cfg.tabla, filas: numeros }])[0]
-        .filter((f) => /^EQUIPO(?: \+ SIM(?: BASICO)?)?$/.test(String(col(f, 'TIPO') || '').trim().toUpperCase()));
+      // Slice LINEAS POST VENTA del AppSheet: solo [DEPARTAMENTO]="POST VENTA" (cualquier TIPO)
+      filas = LineasDatos.leerFilas([{ tabla: cfg.tabla, filas: numeros }])[0];
     } else {
       filas = LineasDatos.leerTabla(cfg.tabla);
     }

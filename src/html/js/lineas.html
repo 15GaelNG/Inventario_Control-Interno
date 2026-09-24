@@ -2097,8 +2097,8 @@
       function crearTablaAcc() {
         tabla = tablaLineas($('#lac-tabla', raiz), {
           idCampo: 'id',
-          idTabla: 'lineas-accesorios',
-          ordenInicial: { campo: 'nombre', dir: 'asc' },
+          idTabla: 'lineas-accesorios-v2',
+          ordenInicial: { campo: 'categoria', dir: 'asc' },
           textoVacio: 'Sin artículos',
           exportar: { nombreArchivo: 'Inventario de accesorios' },
           etiquetaFila: (a) => a.nombre,
@@ -2110,16 +2110,18 @@
             { icono: 'arrow-up-from-line', titulo: 'Registrar salida', alHacer: (a) => abrirModalMovimiento(a.id, 'SALIDA') },
           ],
           columnas: [
-            { campo: 'nombre', titulo: 'Nombre del Articulo', tipo: 'texto', fijada: true },
+            // Orden de la vista INVENTARIO DE ACCESORIOS del AppSheet (agrupada por Categoria)
+            { campo: 'reabasto', titulo: 'Aviso Reabastecimiento', tipo: 'lista', valor: (a) => (a.reabasto ? 'Sí' : 'No'),
+              render: (v) => (v === 'Sí' ? '<span class="ln-regla" style="color:#d62020;font-weight:700">' + ico('triangle-alert') + ' REABASTECER PRODUCTO</span>' : '') },
+
             { campo: 'categoria', titulo: 'Categoria', tipo: 'lista', render: (v) => formatoAppSheet('ACCESORIOS', 'Categoria', v) || esc(v) },
+            { campo: 'nombre', titulo: 'Nombre del Articulo', tipo: 'texto', fijada: false },
             { campo: 'marca', titulo: 'Marca', tipo: 'texto' },
             { campo: 'stock', titulo: 'Stock', tipo: 'numero', agregado: 'suma',
               // Reglas ALERTA BAJO STOCK (rojo sobre amarillo, ícono) y Stock disponible (#2f7d23), solo para las 3 categorías
               render: (v, a) => (a.reabasto
                 ? '<span class="ln-regla ln-regla-chip" style="color:#d62020;background:#fff3b0;border:1px solid #e6c700;font-weight:700">' + ico('rotate-cw') + ' ' + esc(String(v)) + '</span>'
                 : (['Cargadores', 'Micas', 'Fundas'].indexOf(a.categoria) >= 0 ? '<span class="ln-regla" style="color:#2f7d23;font-weight:700">' + esc(String(v)) + '</span>' : esc(String(v)))) },
-            { campo: 'reabasto', titulo: 'Aviso Reabastecimiento', tipo: 'lista', valor: (a) => (a.reabasto ? 'Sí' : 'No'),
-              render: (v) => (v === 'Sí' ? '<span class="ln-regla" style="color:#d62020;font-weight:700">' + ico('triangle-alert') + ' REABASTECER PRODUCTO</span>' : '') },
           ],
         });
       }
@@ -2205,7 +2207,10 @@
 
     const OPERATIVAS = {
       REACTIVACION: {
-        resumen: ['FOLIO', 'LINIEA SUSPENDIDA', 'COMPAÑIA', 'ESTATUS', 'FECHA DE REACTIVACION'],
+        // Vista REACTIVACION DE LINEAS del AppSheet: todas estas columnas, agrupada por ESTATUS
+        resumen: ['FOLIO', 'LINIEA SUSPENDIDA', 'COMPAÑIA', 'SIM', 'CORREO / TICKET', 'FECHA DE SUSPENSION', 'ESTATUS', 'ESTADO DEL EQUIPO', 'IMEI',
+          'RETRO DE SOLICITUD', 'FECHA DE REACTIVACION', 'NUEVO NUMERO', 'FECHA DE REGISTRO', 'QUIEN REGISTRO', 'COMENTARIOS'],
+        agrupar: 'ESTATUS',
         titulo: 'Reactivación de Líneas', icono: 'refresh-cw', csv: 'reactivacion de lineas',
         subtitulo: 'Seguimiento de líneas suspendidas, canceladas y reactivadas', filtro: 'Todos los estatus',
         altas: true,
@@ -2213,7 +2218,10 @@
         nombres: { 'LINIEA SUSPENDIDA': 'LINEA SUSPENDIDA' },
       },
       SOLICITUD: {
-        resumen: ['FOLIO', 'FECHA DE SOLICITUD', 'NOMBRE SOLICITANTE', 'TIPO DE PLAN', 'ESTATUS'],
+        // Vista SOLICITUD DE LINEAS del AppSheet: todas las columnas en el orden de la tabla
+        resumen: ['FOLIO', 'FECHA DE SOLICITUD', 'TIPO DE PLAN', 'TICKET', 'NO EMPLEADO SOLICITANTE', 'NOMBRE SOLICITANTE', 'PUESTO SOLICITANTE',
+          'DEPARTAMENTO SOLICITANTE', 'SEDE', 'DEPARTAMENTO', 'TIPO', 'PUESTO', 'COLABORADOR', 'SOLICITANTE', 'FECHA DE ENTREGA', 'ASIGNACION',
+          'REASIGNACION', 'COMPAÑIA', 'EQUIPO', 'NUMERO ANTERIOR', 'NUMERO ACTUAL', 'IMEI', 'SIM', 'ESTATUS', 'FECHA DE REGISTRO', 'QUIEN REGISTRO', 'COMENTARIOS'],
         titulo: 'Solicitud de Líneas', icono: 'clipboard-list', csv: 'solicitud de lineas',
         subtitulo: 'Solicitudes de asignación y reasignación de líneas telefónicas', filtro: 'Todos los estatus',
         altas: true,
@@ -2221,9 +2229,13 @@
         nombres: { 'NO EMPLEADO SOLICITANTE': 'NÚMERO DE EMPLEADO DEL SOLICITANTE', 'NOMBRE SOLICITANTE': 'NOMBRE COMPLETO DEL SOLICITANTE', 'PUESTO SOLICITANTE': 'PUESTO DEL SOLICITANTE', 'DEPARTAMENTO SOLICITANTE': 'DEPARTAMENTO DEL SOLICITANTE' },
       },
       POST_VENTA: {
-        resumen: ['NUCO', 'NUMERO TELEFONO', 'RESPONSABLE', 'EQUIPO', 'ESTATUS LINEA'],
+        // Vista LINEAS POST VENTA del AppSheet (slice DEPARTAMENTO = POST VENTA), agrupada por TIPO
+        resumen: ['NUMERO TELEFONO', 'RESPONSIVA', 'FOLIO', 'NUCO', 'TIPO', 'RESPONSABLE', 'EQUIPO', 'IMEI', 'NUMERO SIM', 'ACCESORIOS', 'SEDE',
+          'OFICINA / DESARROLLO', 'DEPARTAMENTO', 'AREA', 'RAZON SOCIAL', 'PIN WHATSAPP', 'PIN EQUIPO', 'CUENTA GOOGLE', 'COMPAÑIA', 'COSTO PLAN',
+          'FECHA REGISTRO', 'INICIO PLAN', 'FIN PLAN', 'ESTATUS LINEA', 'ESTATUS EQUIPO'],
+        agrupar: 'TIPO',
         titulo: 'Líneas Post Venta', icono: 'headset', csv: 'lineas post venta',
-        subtitulo: 'Equipos y líneas asignados al departamento de Post Venta', filtro: 'Todos los tipos',
+        subtitulo: 'Registros de LINEAS TELEFONICAS con departamento POST VENTA', filtro: 'Todos los tipos',
       },
     };
 
@@ -2290,9 +2302,11 @@
             const campoFolio = r.encabezados.find((h) => /^FOLIO$/i.test(h)) || r.encabezados.find((h) => /NUCO|NUMERO/i.test(h));
             tabla = tablaLineas($('#ln-op-tabla', raiz), {
               idCampo: '_fila',
-              idTabla: 'lineas-' + tipo.toLowerCase(),
+              idTabla: 'lineas-' + tipo.toLowerCase() + '-v2',
               columnas: columnas,
-              ordenInicial: campoFolio && /FOLIO/i.test(campoFolio) ? { campo: campoFolio, dir: 'desc' } : undefined,
+              // AppSheet agrupa por ESTATUS / TIPO: se ordena por esa columna (DataTable no agrupa)
+              ordenInicial: cfg.agrupar && columnas.some((c) => c.campo === cfg.agrupar) ? { campo: cfg.agrupar, dir: 'asc' }
+                : (campoFolio && /FOLIO/i.test(campoFolio) ? { campo: campoFolio, dir: 'desc' } : undefined),
               textoVacio: 'Sin registros',
               exportar: { nombreArchivo: cfg.titulo },
               etiquetaFila: (f) => (campoFolio && f[campoFolio] ? String(f[campoFolio]) : 'Registro'),
@@ -2385,31 +2399,35 @@
       CAMBIOS: {
         titulo: 'Control de Cambios - Líneas', icono: 'file-pen-line', csv: 'control de cambios lineas',
         subtitulo: 'Bitácora de campos modificados en LINEAS TELEFONICAS (AppSheet y nuevo sistema)',
-        idRegistro: 'ID_LINEA',
+        idRegistro: 'ID_LINEA', fecha: 'FECHA ACTUALIZACION',
+        // Vista CONTROL DE CAMBIOS - LINEAS del AppSheet
         columnas: [
-          ['FECHA ACTUALIZACION', 'Fecha'], ['NUCO', 'NUCO'], ['CAMPO', 'Campo'], ['ANTES', 'Antes'], ['DESPUES', 'Después'],
-          ['ACTUALIZADO POR', 'Actualizado por'], ['IMEI', 'IMEI'],
+          ['NUCO', 'NUCO'], ['IMEI', 'IMEI'], ['CAMPO', 'Campo'], ['ANTES', 'Antes'], ['DESPUES', 'Después'],
+          ['ACTUALIZADO POR', 'Actualizado por'], ['FECHA ACTUALIZACION', 'Fecha actualización'],
         ],
       },
       REASIGNACIONES: {
         titulo: 'Control de Reasignaciones - Líneas', icono: 'repeat', csv: 'control de reasignaciones lineas',
         subtitulo: 'Cambios de responsable de equipos y líneas',
-        idRegistro: 'ID Linea',
+        idRegistro: 'ID Linea', fecha: 'Fecha de Reasignacion',
+        // Vista CONTROL DE REASIGNACIONES - LINEAS del AppSheet: todas las columnas en el orden de la tabla
         columnas: [
-          ['Fecha de Reasignacion', 'Fecha'], ['NUCO', 'NUCO'],
-          ['Responsable Saliente', 'Responsable saliente'], ['Departamento Saliente', 'Depto. saliente'],
-          ['Responsable Entrante', 'Responsable entrante'], ['Departamento Entrante', 'Depto. entrante'],
-          ['QUIEN REGISTRO', 'Registró'],
+          ['Fecha de Reasignacion', 'Fecha de reasignación'], ['NUCO', 'NUCO'], ['No Empleado Saliente', 'No. empleado saliente'],
+          ['Responsable Saliente', 'Responsable saliente'], ['Departamento Saliente', 'Departamento saliente'],
+          ['No Empleado Entrante', 'No. empleado entrante'], ['Responsable Entrante', 'Responsable entrante'],
+          ['Departamento Entrante', 'Departamento entrante'], ['QUIEN REGISTRO', 'Registró'],
         ],
       },
       DESECHOS: {
         titulo: 'Bitácora de Desechos', icono: 'trash-2', csv: 'bitacora de desechos',
         alta: 'DESECHO',
         subtitulo: 'Equipos dados de baja definitiva (folio DR)',
-        idRegistro: 'ID_EQUIPO',
+        idRegistro: 'ID_EQUIPO', fecha: 'FECHA DE DESECHO',
+        // Vista BITACORA DE DESECHOS del AppSheet (ID_EQUIPO se muestra con su etiqueta: el IMEI)
         columnas: [
-          ['FOLIO DESECHO', 'Folio'], ['FECHA DE DESECHO', 'Fecha de desecho'], ['MOTIVO', 'Motivo'],
-          ['LUGAR DE DESECHO', 'Lugar'], ['ESTADO', 'Estado'], ['QUIEN REGISTRO', 'Registró'], ['FECHA DE REGISTRO', 'Registrado'],
+          ['FOLIO DESECHO', 'Folio desecho'], ['IMEI', 'IMEI equipo'], ['FOLIO EQUIPO', 'Folio equipo'], ['EQUIPO', 'Equipo'],
+          ['LUGAR DE DESECHO', 'Lugar de desecho'], ['EVIDENCIA', 'Evidencia'], ['AUTORIZACION', 'Autorización'], ['ESTADO', 'Estado'],
+          ['MOTIVO', 'Motivo'], ['FECHA DE DESECHO', 'Fecha de desecho'], ['FECHA DE REGISTRO', 'Fecha de registro'], ['QUIEN REGISTRO', 'Registró'],
         ],
       },
     };
@@ -2438,11 +2456,11 @@
         cfg.columnas.forEach(([nombre, titulo]) => { titulos[norm(nombre)] = titulo; });
         const columnas = columnasDeHoja(r.encabezados, r.filas, cfg.columnas.map((c) => c[0]), titulos, tipo);
         const hId = buscarEncabezado(r.encabezados, cfg.idRegistro);
-        const hFecha = buscarEncabezado(r.encabezados, cfg.columnas[0][0]);
+        const hFecha = buscarEncabezado(r.encabezados, cfg.fecha || cfg.columnas[0][0]);
         const hFolio = buscarEncabezado(r.encabezados, 'NUCO') || buscarEncabezado(r.encabezados, 'FOLIO DESECHO');
         tabla = tablaLineas($('#ln-bit-tabla', raiz), {
           idCampo: '_fila',
-          idTabla: 'lineas-bitacora-' + tipo.toLowerCase(),
+          idTabla: 'lineas-bitacora-' + tipo.toLowerCase() + '-v2',
           columnas: columnas,
           ordenInicial: hFecha ? { campo: hFecha, dir: 'desc' } : undefined,
           textoVacio: 'Sin registros',
