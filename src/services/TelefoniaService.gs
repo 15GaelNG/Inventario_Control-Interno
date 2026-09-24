@@ -63,6 +63,7 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente({
       equipo: ocultarSecretos_(r.equipo, CAMPOS_SECRETOS_EQUIPO, sesion),
       linea: ocultarSecretos_(r.linea, CAMPOS_SECRETOS_LINEA, sesion),
+      detalles: r.detalles,
     });
   }
 
@@ -74,6 +75,7 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente({
       linea: ocultarSecretos_(r.linea, CAMPOS_SECRETOS_LINEA, sesion),
       equipo: ocultarSecretos_(r.equipo, CAMPOS_SECRETOS_EQUIPO, sesion),
+      detalles: r.detalles,
     });
   }
 

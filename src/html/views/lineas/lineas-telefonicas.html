@@ -10,7 +10,7 @@
         </div>
         <div class="page-header-actions">
           <button type="button" class="secondary" id="ln-recargar" hidden title="Vaciar caché y volver a leer la hoja"><i data-lucide="refresh-cw" class="ico"></i> Recargar datos</button>
-          <button type="button" id="ln-nuevo-registro"><i data-lucide="plus" class="ico"></i> Agregar NUCO</button>
+          <button type="button" id="ln-nuevo-registro"><i data-lucide="plus" class="ico"></i> Registrar NUCO</button>
         </div>
       </div>
 
@@ -18,16 +18,23 @@
         <div class="stat-tile"><div class="stat-icon"><i data-lucide="loader-circle" class="ico"></i></div><div><div class="stat-value">…</div><div class="stat-label">Cargando</div></div></div>
       </div>
 
-      <div class="tabs-simple" id="ln-tabs">
-        <button type="button" class="tab-btn active" data-tab="equipos"><i data-lucide="smartphone" class="ico"></i> Equipos <span class="ln-tab-num" id="ln-num-equipos"></span></button>
-        <button type="button" class="tab-btn" data-tab="lineas"><i data-lucide="card-sim" class="ico"></i> Líneas <span class="ln-tab-num" id="ln-num-lineas"></span></button>
+      <div class="ln-tabs-fila">
+        <div class="tabs-simple" id="ln-tabs">
+          <button type="button" class="tab-btn active" data-tab="equipos"><i data-lucide="smartphone" class="ico"></i> Equipos <span class="ln-tab-num" id="ln-num-equipos"></span></button>
+          <button type="button" class="tab-btn" data-tab="lineas"><i data-lucide="card-sim" class="ico"></i> Líneas <span class="ln-tab-num" id="ln-num-lineas"></span></button>
+        </div>
+        <!-- Antes "Detalles Líneas Telefónicas" era otro módulo con la misma información en tarjetas -->
+        <div class="ln-segmentado" id="ln-modo-vista" role="group" aria-label="Forma de ver el inventario">
+          <button type="button" class="secondary activo" data-modo="tabla" aria-pressed="true"><i data-lucide="table" class="ico"></i> Tabla</button>
+          <button type="button" class="secondary" data-modo="tarjetas" aria-pressed="false"><i data-lucide="layout-grid" class="ico"></i> Tarjetas</button>
+        </div>
       </div>
 
       <div class="tab-panel" data-tab-panel="equipos">
-        <div class="card card-compacta"><div id="ln-tabla-equipos"></div></div>
+        <div class="card card-compacta"><div id="ln-tabla-equipos"></div><div class="ln-tarjetas" id="ln-tarjetas-equipos" hidden></div></div>
       </div>
       <div class="tab-panel" data-tab-panel="lineas" hidden>
-        <div class="card card-compacta"><div id="ln-tabla-lineas"></div></div>
+        <div class="card card-compacta"><div id="ln-tabla-lineas"></div><div class="ln-tarjetas" id="ln-tarjetas-lineas" hidden></div></div>
       </div>
       <p class="ln-conteo" id="ln-conteo"></p>
     </section>

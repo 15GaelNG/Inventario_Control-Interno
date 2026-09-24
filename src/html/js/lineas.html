@@ -4,7 +4,8 @@
    * Todo vive dentro del namespace `Lineas` para no chocar con el resto de app.js.
    * Usa los globales del shell: callServer(), state.token y navegarA().
    *
-   *   Lineas.initTelefonicas()     Líneas Telefónicas: inventario, ficha, inspecciones e historial
+   *   Lineas.initTelefonicas()     Líneas Telefónicas: inventario (tabla o tarjetas), ficha, inspecciones e historial
+   *   Lineas.initGestionActivos()  Gestión de Activos: activos por colaborador (acceso propio en el menú)
    *   Lineas.initCambios()         Control de Cambios - Líneas (CAMBIOS LINEAS TELEFONICAS)
    *   Lineas.initReasignaciones()  Control de Reasignaciones - Líneas (HISTORIAL_REASIGNACIONES)
    *   Lineas.initDesechos()        Bitácora de Desechos (BITACORA DE DESECHO)
@@ -55,7 +56,7 @@
     const enlaceDrive = (id, texto, esArchivo) => {
       if (!id) return '';
       const url = esArchivo ? 'https:\/\/drive.google.com/file/d/' + esc(id) + '/view' : 'https:\/\/drive.google.com/drive/folders/' + esc(id);
-      return '<a class="ln-enlace ln-accion-enlace" target="_blank" rel="noopener" href="' + url + '">' + icono(esArchivo ? 'file-text' : 'folder-open') + ' ' + esc(texto) + ' ' + icono('external-link', 'ln-icon-sm') + '</a>';
+      return '<a class="externo ln-boton" target="_blank" rel="noopener" href="' + url + '">' + icono(esArchivo ? 'file-text' : 'folder-open') + ' ' + esc(texto) + ' ' + icono('external-link', 'ln-icon-sm') + '</a>';
     };
 
     function llamar(fn, ...args) {
@@ -78,24 +79,6 @@
       SISTEMA: '<span class="ln-chip verde">Nuevo sistema</span>',
       APPSHEET: '<span class="ln-chip azul">AppSheet</span>',
     };
-
-    /** Descarga un CSV (UTF-8 con BOM para que Excel respete acentos). */
-    function exportarCsv(nombre, columnas, filas, titulos) {
-      const celda = (v) => {
-        if (v === null || v === undefined) return '';
-        const s = String(v);
-        return /[",\n;]/.test(s) || /^\d{11,}$/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-      };
-      const texto = '\uFEFF' + [(titulos || columnas).map(celda).join(',')]
-        .concat(filas.map((r) => columnas.map((c) => celda(r[c])).join(','))).join('\n');
-      const url = URL.createObjectURL(new Blob([texto], { type: 'text/csv;charset=utf-8' }));
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = nombre + ' ' + new Date().toISOString().slice(0, 10) + '.csv';
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
-    }
 
     // ---------------- Tablas y KPIs con los componentes del sistema (rama jorge) ----------------
     /** Ícono con la clase .ico del sistema, para HTML que se repinta (tablas, KPIs, títulos). */
@@ -410,7 +393,7 @@
         control = (nota ? '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' ' + esc(nota) + '</div>' : '') + htmlPatron(id + '-patron', false);
       } else if (e.control === 'firma') {
         control = '<div class="ln-firma-caja"><canvas id="' + id + '-firma"></canvas><div class="ln-firma-acciones"><span class="ln-firma-vacia">Dibuja con el dedo o el mouse</span>' +
-          '<button type="button" class="secondary ln-btn-chico" data-limpiar-firma="' + esc(e.columna) + '">Limpiar</button></div></div>';
+          '<button type="button" class="secondary ln-btn-chico" data-limpiar-firma="' + esc(e.columna) + '">Limpiar firma</button></div></div>';
       } else if (e.control === 'calculado') {
         control = '<div class="ln-af-calculado' + (e.formula ? '' : ' ln-af-calculado-texto') + '" id="' + id + '"' + (e.formula ? ' data-formula="' + esc(e.formula) + '"' : '') + '>' + (valor ? esc(valor) : '—') + '</div>';
       } else {
@@ -582,16 +565,17 @@
     /**
      * Modal de alta con el formulario del AppSheet (apiLineasFormularioOperativa / apiLineasCrearVistaOperativa).
      * Lo usa la Bitácora de Desechos; soporta referencias, listas abiertas, fechas y archivos.
+     * `titulo` es el del botón que lo abre (p. ej. "Registrar desecho").
      */
     function abrirAltaAppSheet(tipo, titulo, alGuardar) {
       const fondo = document.createElement('div');
       fondo.className = 'modal-backdrop';
       fondo.innerHTML = '<div class="modal-card modal-card-wide" role="dialog" aria-modal="true" style="max-width:960px">' +
-        '<div class="modal-header"><div><h3 style="margin:0">Nuevo registro · ' + esc(titulo) + '</h3><p class="modal-subtitle">Mismo formulario que en AppSheet. Los campos con * son obligatorios.</p></div>' +
+        '<div class="modal-header"><div><h3 style="margin:0">' + esc(titulo) + '</h3><p class="modal-subtitle">Mismo formulario que en AppSheet. Los campos con * son obligatorios.</p></div>' +
         '<button type="button" class="modal-close" data-cerrar aria-label="Cerrar">' + ico('x') + '</button></div>' +
         '<div class="ln-alta-cuerpo modal-form-scroll"><p class="empty-state"><span class="ln-spinner"></span> Cargando formulario…</p></div>' +
         '<div class="error-msg" data-error hidden></div>' +
-        '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar>Cancelar</button><button type="button" data-guardar>' + ico('save') + ' Guardar</button></div></div>';
+        '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar>Cancelar</button><button type="button" data-guardar>' + ico('save') + ' Registrar</button></div></div>';
       document.getElementById('view-container').appendChild(fondo);
       const cuerpo = fondo.querySelector('.ln-alta-cuerpo');
       const errorBox = fondo.querySelector('[data-error]');
@@ -695,6 +679,25 @@
     }
     const mensajeError = (e) => esc(e && e.message ? e.message : e);
 
+    /** Copia texto al portapapeles; dentro del iframe de Apps Script cae a execCommand si la API no está permitida. */
+    function copiarTexto(texto) {
+      const conArea = () => {
+        const area = document.createElement('textarea');
+        area.value = texto;
+        area.setAttribute('readonly', '');
+        area.style.position = 'fixed';
+        area.style.opacity = '0';
+        document.body.appendChild(area);
+        area.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        area.remove();
+        return ok;
+      };
+      if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(texto).then(() => true, conArea);
+      return Promise.resolve(conArea());
+    }
+
     // ---------------- Estado del módulo ----------------
     // Se conserva entre navegaciones para evitar volver a pedir los mismos catálogos.
     const POR_PAGINA = 50;
@@ -712,6 +715,7 @@
       accesoriosCargadosEn: 0,
       accesoriosPendientes: null,
       modulo: 'equipos',
+      modoVista: null, // 'tabla' | 'tarjetas' (se recuerda en el navegador)
       abrirAlEntrar: null, // id de registro a abrir al entrar a Líneas Telefónicas (desde una bitácora)
     };
     let montaje = 0; // cambia en cada init: respuestas tardías de una vista anterior se ignoran
@@ -841,6 +845,10 @@
       // ---- Eventos ----
       const tablas = {};
       const filtrosActuales = { equipos: {}, lineas: {} };
+      const PASO_TARJETAS = 48; // vista de tarjetas: cuántas se agregan con "Mostrar más"
+      const tarjetasVisibles = { equipos: PASO_TARJETAS, lineas: PASO_TARJETAS };
+      let detallesFicha = null; // datos de "Detalles para copiar" de la ficha abierta
+      let tablaHistorial = null; // DataTable del historial de la ficha abierta
       let marcarKpi = null;
       raiz.querySelectorAll('#ln-tabs .tab-btn').forEach((tab) => {
         tab.addEventListener('click', () => mostrarModulo(tab.dataset.tab));
@@ -855,6 +863,11 @@
           .then(() => { b.disabled = false; });
       });
       $('#ln-nuevo-registro', raiz).addEventListener('click', () => abrirEditor(null));
+      raiz.querySelectorAll('#ln-modo-vista [data-modo]').forEach((b) => b.addEventListener('click', () => {
+        memoria.modoVista = b.dataset.modo;
+        try { localStorage.setItem('lineas.modoVista', memoria.modoVista); } catch (e) { /* solo no se recuerda */ }
+        aplicarModoVista();
+      }));
 
       // Clic en filas, enlaces internos y botones del detalle (delegación).
       raiz.addEventListener('click', (ev) => {
@@ -880,6 +893,10 @@
           abrir(ir.dataset.lnIr, ir.dataset.id);
           return;
         }
+        const mas = ev.target.closest('[data-ln-mas-tarjetas]');
+        if (mas) { tarjetasVisibles[mas.dataset.lnMasTarjetas] += PASO_TARJETAS; pintarTarjetas(mas.dataset.lnMasTarjetas); return; }
+        const copiar = ev.target.closest('[data-ln-copiar-detalles]');
+        if (copiar) { copiarDetalles(copiar); return; }
         if (ev.target.closest('[data-ln-volver]')) { ev.preventDefault(); volver(); return; }
         if (ev.target.closest('[data-ln-lista]')) { ev.preventDefault(); cerrarDetalle(); return; }
         const miga = ev.target.closest('[data-ln-miga]');
@@ -918,6 +935,7 @@
           return;
         }
       });
+      raiz.addEventListener('input', (ev) => { if (ev.target.closest('[data-ln-copiar]')) pintarTextoDetalles(); });
       raiz.addEventListener('keydown', (ev) => {
         if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches('[role="button"][tabindex="0"]')) {
           ev.preventDefault();
@@ -930,8 +948,12 @@
       });
 
       // ---- Carga inicial ----
+      if (!memoria.modoVista) {
+        try { memoria.modoVista = localStorage.getItem('lineas.modoVista') === 'tarjetas' ? 'tarjetas' : 'tabla'; } catch (e) { memoria.modoVista = 'tabla'; }
+      }
       mostrarModulo(memoria.modulo, true);
       crearTabla(memoria.modulo).setCargando(true);
+      aplicarModoVista();
       Promise.all([cargarPermisos(), cargarIndice()]).then(([permisos]) => {
         if (!vigente()) return;
         $('#ln-recargar', raiz).hidden = !permisos.esAdmin;
@@ -1011,8 +1033,64 @@
           const tr = ev.target.closest('tbody tr[data-id]');
           if (tr && !ev.target.closest('button, input, a')) abrir(cfg.detalle, tr.dataset.id);
         });
+        // La tabla se repinta con cada filtro, búsqueda, orden o KPI: las tarjetas la siguen
+        let repintePendiente = false;
+        new MutationObserver(() => {
+          if (memoria.modoVista !== 'tarjetas' || repintePendiente) return;
+          repintePendiente = true;
+          requestAnimationFrame(() => { repintePendiente = false; tarjetasVisibles[modulo] = PASO_TARJETAS; pintarTarjetas(modulo); });
+        }).observe(contenedor.querySelector('tbody'), { childList: true });
         if (memoria.indice) tablas[modulo].setDatos(memoria.indice[modulo]);
         return tablas[modulo];
+      }
+
+      // ---- Vista de tarjetas (antes el módulo "Detalles Líneas Telefónicas") ----
+      // Muestra lo mismo que la tabla: la búsqueda, los filtros de columna, el orden y los KPIs de arriba.
+
+      function tarjetaInventario(modulo, r) {
+        const tipo = formatoAppSheet('LINEAS', 'TIPO', r.tipoHoja) || guion(r.tipoHoja);
+        const pie = (izq, der) => '<div class="ln-cuadro-pie"><span>' + izq + '</span><span>' + der + '</span></div>';
+        if (modulo === 'equipos') {
+          return '<button type="button" class="card ln-cuadro ln-cuadro-activo" data-ln-ir="equipo" data-id="' + esc(r.id) + '" aria-label="Abrir NUCO ' + esc(r.nuco || '') + '">' +
+            '<div class="ln-cuadro-superior"><span class="ln-cuadro-folio ln-mono">NUCO ' + guion(r.nuco) + '</span><span class="ln-cuadro-tipo">' + tipo + '</span></div>' +
+            '<div class="ln-cuadro-depto">' + guion(r.departamento) + '</div>' +
+            '<div class="ln-cuadro-principal">' + guion(r.responsable) + '</div>' +
+            '<div class="ln-cuadro-secundario">' + guion(r.modelo) + '</div>' +
+            pie(icono('phone') + ' <span class="ln-mono">' + (r.numero ? esc(r.numero) : 'Sin línea') + '</span>', icono('scan-line') + ' <span class="ln-mono">' + guion(r.imei) + '</span>') +
+            pie(chip(r.estatus), 'Ver ficha ' + icono('chevron-right')) + '</button>';
+        }
+        return '<button type="button" class="card ln-cuadro ln-cuadro-activo" data-ln-ir="linea" data-id="' + esc(r.id) + '" aria-label="Abrir línea ' + esc(r.numero || '') + '">' +
+          '<div class="ln-cuadro-superior"><span class="ln-cuadro-folio ln-mono">' + guion(r.numero) + '</span><span class="ln-cuadro-tipo">' + tipo + '</span></div>' +
+          '<div class="ln-cuadro-depto">' + guion(r.departamento) + '</div>' +
+          '<div class="ln-cuadro-principal">' + guion(r.responsable) + '</div>' +
+          '<div class="ln-cuadro-secundario">' + guion(r.compania) + '</div>' +
+          pie(icono('card-sim') + ' <span class="ln-mono">' + guion(r.sim) + '</span>', r.suelta ? chip('Suelta', 'ambar') : icono('smartphone') + ' NUCO ' + guion(r.nucoEquipo)) +
+          pie(chip(r.estatus), 'Ver ficha ' + icono('chevron-right')) + '</button>';
+      }
+
+      function pintarTarjetas(modulo) {
+        const cont = $('#ln-tarjetas-' + modulo, raiz);
+        if (!cont || memoria.modoVista !== 'tarjetas' || !tablas[modulo]) return;
+        const filas = tablas[modulo].getFiltradas();
+        const visibles = Math.min(tarjetasVisibles[modulo], filas.length);
+        cont.innerHTML = (filas.length
+          ? '<div class="ln-cuadros-grid">' + filas.slice(0, visibles).map((r) => tarjetaInventario(modulo, r)).join('') + '</div>'
+          : '<p class="empty-state">' + (memoria.indice ? 'No hay registros que coincidan con la búsqueda o los filtros.' : '<span class="ln-spinner"></span> Cargando…') + '</p>') +
+          '<div class="ln-cuadros-mas"><span class="ln-tenue">Mostrando ' + miles(visibles) + ' de ' + miles(filas.length) + '</span>' +
+          (visibles < filas.length ? '<button type="button" class="secondary" data-ln-mas-tarjetas="' + modulo + '">Mostrar más</button>' : '') + '</div>';
+      }
+
+      function aplicarModoVista() {
+        const tarjetas = memoria.modoVista === 'tarjetas';
+        $('#ln-listado', raiz).classList.toggle('ln-modo-tarjetas', tarjetas);
+        raiz.querySelectorAll('#ln-modo-vista [data-modo]').forEach((b) => {
+          const activo = b.dataset.modo === memoria.modoVista;
+          b.classList.toggle('activo', activo);
+          b.setAttribute('aria-pressed', String(activo));
+        });
+        ['equipos', 'lineas'].forEach((m) => { $('#ln-tarjetas-' + m, raiz).hidden = !tarjetas; });
+        if (tarjetas) { tarjetasVisibles[memoria.modulo] = PASO_TARJETAS; pintarTarjetas(memoria.modulo); }
+        else if (tablas[memoria.modulo]) tablas[memoria.modulo].ajustarAlto();
       }
 
       function mostrarModulo(modulo, sinTabla) {
@@ -1021,6 +1099,7 @@
         raiz.querySelectorAll('#ln-listado .tab-panel').forEach((p) => { p.hidden = p.dataset.tabPanel !== modulo; });
         if (sinTabla) return;
         crearTabla(modulo).ajustarAlto();
+        if (memoria.modoVista === 'tarjetas') pintarTarjetas(modulo);
         if (marcarKpi) marcarKpi();
       }
 
@@ -1039,6 +1118,7 @@
           else pila.push({ tipo: tipo, id: id, etiqueta: tipo === 'inspeccion' ? 'Inspección' : null });
         }
         $('#ln-listado', raiz).hidden = true;
+        soltarHistorial();
         const detalle = $('#ln-detalle', raiz);
         detalle.hidden = false;
         detalle.innerHTML = migas() + '<div class="card ln-cargando"><span class="ln-spinner"></span> Cargando…</div>';
@@ -1065,6 +1145,7 @@
       }
 
       function cerrarDetalle() {
+        soltarHistorial();
         pila.length = 0;
         $('#ln-detalle', raiz).hidden = true;
         $('#ln-detalle', raiz).innerHTML = '';
@@ -1138,11 +1219,10 @@
           detalle.innerHTML = migas() +
             encabezado('smartphone', 'NUCO ' + esc(e.nuco || '—'),
               chip(e.estatus) + chip(TIPO_EQUIPO[e.tipo] || e.tipo, 'neutro') + (l ? chip('Con línea', 'verde') : chip('Sin línea', 'ambar')),
-              (puedeOperar ? '<button type="button" class="secondary ln-btn-icono" data-ln-editar="' + esc(id) + '">' + icono('pencil') + ' Editar información</button>' +
-                '<button type="button" class="secondary ln-btn-icono" data-ln-captura="INSPECCION" data-equipo-id="' + esc(id) + '">' + icono('clipboard-check') + ' Nueva inspección</button>' +
-                '<button type="button" class="secondary ln-btn-icono" data-ln-captura="RESPONSIVA" data-equipo-id="' + esc(id) + '">' + icono('signature') + ' Nueva responsiva</button>' : '') +
-              (e.carpetaDriveId ? enlaceDrive(e.carpetaDriveId, 'Carpeta en Drive') : '')) +
+              (puedeOperar ? botonesFicha('data-equipo-id', id) : '') +
+              (e.carpetaDriveId ? enlaceDrive(e.carpetaDriveId, 'Ver carpeta en Drive') : '')) +
             (e._secretosVisibles ? '' : '<div class="ln-nota">' + icono('lock') + ' Los PIN, patrones y contraseñas están ocultos para tu rol.</div>') +
+            tarjetaDetallesCopiar(r.detalles) +
             '<div class="ln-grid-2">' +
               tarjeta(icono('smartphone') + ' Equipo', campos([
                 ['Modelo', e.modelo], ['IMEI', e.imei], ['Color', e.color], ['Accesorios', (e.accesorios || []).join(', ')],
@@ -1163,7 +1243,7 @@
             '<div id="ln-evidencias">' + tarjeta(icono('clipboard-check') + ' Inspecciones y responsivas', '<p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p>') + '</div>' +
             '<div id="ln-historial">' + tarjeta(icono('history') + ' Historial', '<p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p>') + '</div>';
           cargarEvidencias(id);
-          cargarHistorial(id);
+          cargarHistorial(id, 'NUCO ' + (e.nuco || id));
         });
       }
 
@@ -1177,9 +1257,8 @@
           pila[pila.length - 1].etiqueta = e ? 'NUCO ' + (e.nuco || '—') : 'Línea ' + (l.numero || '—');
           detalle.innerHTML = migas() +
             encabezado('card-sim', esc(l.numero || 'Línea sin número'), chip(l.estatus) + (e ? chip('En NUCO ' + (e.nuco || '—'), 'neutro') : chip('Suelta', 'ambar')),
-              puedeOperarLinea ? '<button type="button" class="secondary ln-btn-icono" data-ln-editar="' + esc(id) + '">' + icono('pencil') + ' Editar información</button>' +
-                '<button type="button" class="secondary ln-btn-icono" data-ln-captura="INSPECCION" data-linea-id="' + esc(id) + '">' + icono('clipboard-check') + ' Nueva inspección</button>' +
-                '<button type="button" class="secondary ln-btn-icono" data-ln-captura="RESPONSIVA" data-linea-id="' + esc(id) + '">' + icono('signature') + ' Nueva responsiva</button>' : '') +
+              puedeOperarLinea ? botonesFicha('data-linea-id', id) : (e ? '<button type="button" class="ln-btn-icono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' Ver equipo</button>' : '')) +
+            tarjetaDetallesCopiar(r.detalles) +
             '<div class="ln-grid-2">' +
               tarjeta(icono('card-sim') + ' Línea', campos([
                 ['Compañía', l.compania], ['SIM', l.sim], ['PIN WhatsApp', l.pinWhatsapp], ['Razón social', l.razonSocial],
@@ -1197,7 +1276,64 @@
             (e ? '' : '<div id="ln-evidencias">' + tarjeta(icono('clipboard-check') + ' Inspecciones y responsivas', '<p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p>') + '</div>') +
             '<div id="ln-historial">' + tarjeta(icono('history') + ' Historial', '<p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p>') + '</div>';
           if (!e) cargarEvidencias(id);
-          cargarHistorial(id);
+          cargarHistorial(id, e ? 'NUCO ' + (e.nuco || id) : 'Linea ' + (l.numero || id));
+        });
+      }
+
+      /** Acciones de la ficha: botones principales (con color) para que se reconozcan como botones. */
+      function botonesFicha(atributoRef, id) {
+        return '<button type="button" class="ln-btn-icono" data-ln-editar="' + esc(id) + '">' + icono('pencil') + ' Editar información</button>' +
+          '<button type="button" class="ln-btn-icono" data-ln-captura="INSPECCION" ' + atributoRef + '="' + esc(id) + '">' + icono('clipboard-check') + ' Nueva inspección</button>' +
+          '<button type="button" class="ln-btn-icono" data-ln-captura="RESPONSIVA" ' + atributoRef + '="' + esc(id) + '">' + icono('signature') + ' Nueva responsiva</button>';
+      }
+
+      // ---- Detalles para copiar: la columna DETALLES LINEAS TELEFONICAS del AppSheet ----
+      // Mismo texto y orden que copiaban del módulo "Detalles Líneas Telefónicas". AppSheet deja en blanco
+      // motivo, ticket y estatus actual para llenarlos al pegar; aquí se escriben antes de copiar (no se guardan)
+      // y el estatus actual se propone con ESTATUS LINEA.
+      function textoDetalles() {
+        const d = detallesFicha || {};
+        const caja = $('[data-ln-copiar]', raiz);
+        const escrito = (campo) => (caja ? caja.querySelector('[data-ln-copiar-campo="' + campo + '"]').value.trim() : '');
+        const valor = (v) => (v === null || v === undefined ? '' : (esFechaIso(v) ? fechaTabla(v) : String(v)));
+        return 'NUCO ' + valor(d.nuco) + '\n-------------------------------------------------------\n' +
+          'Motivo de resguardo: ' + escrito('motivo') + '\n' +
+          'Ticket / Asunto: ' + escrito('ticket') + '\n' +
+          'Código de resguardo: ' + valor(d.responsable) + '\n' +
+          'IMEI: ' + valor(d.imei) + '\n' +
+          'SIM: ' + valor(d.sim) + '\n' +
+          'Número: ' + valor(d.numero) + '\n' +
+          'Modelo: ' + valor(d.modelo) + '\n' +
+          'Compañía: ' + valor(d.compania) + '\n' +
+          'Razón Social: ' + valor(d.razonSocial) + '\n' +
+          'Estatus de adendum: ' + valor(d.finPlan) + '\n' +
+          'Estatus actual de la línea: ' + escrito('estatus');
+      }
+      function pintarTextoDetalles() {
+        const pre = $('[data-ln-copiar-texto]', raiz);
+        if (pre) pre.textContent = textoDetalles();
+      }
+      function tarjetaDetallesCopiar(d) {
+        detallesFicha = d || null;
+        if (!d) return '';
+        const campo = (clave, etiqueta, valor) => '<div class="field"><label for="ln-copiar-' + clave + '">' + esc(etiqueta) + '</label>' +
+          '<input type="text" id="ln-copiar-' + clave + '" data-ln-copiar-campo="' + clave + '" value="' + esc(valor || '') + '" autocomplete="off"></div>';
+        setTimeout(pintarTextoDetalles, 0);
+        return '<div class="card ln-card ln-copiar" data-ln-copiar data-respetar-texto>' +
+          '<div class="ln-copiar-cabecera"><h3>' + icono('clipboard-list') + ' Detalles para copiar</h3>' +
+          '<button type="button" class="ln-btn-icono" data-ln-copiar-detalles>' + icono('copy') + ' Copiar detalles</button></div>' +
+          '<p class="ln-tenue ln-copiar-ayuda">El mismo texto que “Detalles Líneas Telefónicas” en AppSheet. Motivo, ticket y estatus actual se escriben aquí antes de copiar; no se guardan en la hoja.</p>' +
+          '<div class="ln-copiar-cuerpo"><div class="ln-copiar-campos">' +
+            campo('motivo', 'Motivo de resguardo', '') + campo('ticket', 'Ticket / Asunto', '') + campo('estatus', 'Estatus actual de la línea', d.estatusLinea) +
+          '</div><pre class="ln-copiar-texto" data-ln-copiar-texto aria-label="Texto que se copiará"></pre></div></div>';
+      }
+      function copiarDetalles(boton) {
+        copiarTexto(textoDetalles()).then((ok) => {
+          if (!ok) { aviso(icono('triangle-alert', 'ln-alerta') + ' El navegador no permitió copiar. Selecciona el texto y cópialo con Ctrl+C.', 8000); return; }
+          aviso('Detalles copiados: pégalos en el ticket o correo.', 4000);
+          const original = boton.innerHTML;
+          boton.innerHTML = icono('check') + ' Copiado';
+          setTimeout(() => { if (document.body.contains(boton)) boton.innerHTML = original; }, 1800);
         });
       }
 
@@ -1214,8 +1350,8 @@
       }
 
       function accionPdf(d, tipo) {
-        if (d.pdfId) return enlaceDrive(d.pdfId, 'Abrir PDF', true);
-        return d.pdfPendiente ? '<button type="button" class="secondary ln-btn-icono" data-ln-pdf="' + tipo + '" data-id="' + esc(d.id) + '" data-carpeta="' + esc(d.carpetaId || '') + '">' + icono('file-text') + ' Generar PDF</button>' : vacio;
+        if (d.pdfId) return enlaceDrive(d.pdfId, 'Ver PDF', true);
+        return d.pdfPendiente ? '<button type="button" class="ln-btn-icono" data-ln-pdf="' + tipo + '" data-id="' + esc(d.id) + '" data-carpeta="' + esc(d.carpetaId || '') + '">' + icono('file-text') + ' Generar PDF</button>' : vacio;
       }
 
       function tarjetaEvidencias(inspecciones, responsivas) {
@@ -1223,14 +1359,14 @@
           ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Fecha</th><th>Origen</th><th>Calificación</th><th>Fotos</th><th>Responsable</th><th>Inspector</th><th>Consulta</th><th>Documento</th></tr></thead><tbody>' +
             inspecciones.map((i) => '<tr class="ln-fila-clic" data-ln-ir="inspeccion" data-id="' + esc(i.id) + '"><td>' + guion(fecha(i.fecha)) + '</td><td>' + (ORIGEN[i.origen] || '') + '</td>' +
               '<td>' + guion(porcentaje(i.calificacion)) + '</td><td>' + (i.fotos || '<span class="ln-tenue">0</span>') + '</td>' +
-              '<td>' + guion(i.responsable) + '</td><td class="ln-tenue">' + guion(i.inspector) + '</td><td><button type="button" class="secondary ln-btn-icono" data-ln-ir="inspeccion" data-id="' + esc(i.id) + '">' + icono('eye') + ' Ver inspección</button></td><td>' + accionPdf(i, 'INSPECCION') + '</td></tr>').join('') +
+              '<td>' + guion(i.responsable) + '</td><td class="ln-tenue">' + guion(i.inspector) + '</td><td><button type="button" class="ln-btn-icono" data-ln-ir="inspeccion" data-id="' + esc(i.id) + '">' + icono('eye') + ' Ver inspección</button></td><td>' + accionPdf(i, 'INSPECCION') + '</td></tr>').join('') +
             '</tbody></table></div>'
           : '<p class="empty-state">Sin inspecciones registradas.</p>';
         const tablaResp = responsivas.length
           ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Fecha</th><th>Origen</th><th>Responsable</th><th>Documento</th><th>Carpeta</th></tr></thead><tbody>' +
             responsivas.map((r) => '<tr><td>' + guion(fecha(r.fecha)) + '</td><td>' + (ORIGEN[r.origen] || '') + '</td><td>' + guion(r.responsable) + '</td>' +
               '<td>' + accionPdf(r, 'RESPONSIVA') + '</td>' +
-              '<td>' + (r.carpetaId ? enlaceDrive(r.carpetaId, 'Abrir') : vacio) + '</td></tr>').join('') +
+              '<td>' + (r.carpetaId ? enlaceDrive(r.carpetaId, 'Ver carpeta') : vacio) + '</td></tr>').join('') +
             '</tbody></table></div>'
           : '<p class="empty-state">Sin responsivas registradas.</p>';
         return tarjeta(icono('clipboard-check') + ' Inspecciones (' + inspecciones.length + ')', tablaInsp) + tarjeta(icono('signature') + ' Responsivas (' + responsivas.length + ')', tablaResp);
@@ -1241,7 +1377,7 @@
         $('#ln-modal-captura', raiz).hidden = false;
         $('#ln-captura-icono', raiz).innerHTML = icono(id ? 'pencil' : 'plus');
         $('#ln-captura-tipo', raiz).textContent = 'LINEAS TELEFONICAS';
-        $('#ln-captura-titulo', raiz).textContent = id ? 'Editar información' : 'Agregar nuevo NUCO';
+        $('#ln-captura-titulo', raiz).textContent = id ? 'Editar información' : 'Registrar NUCO';
         $('#ln-captura-subtitulo', raiz).textContent = 'Cargando formulario…';
         $('#ln-captura-cuerpo', raiz).innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando…</p>';
         captura = { tipo: 'REGISTRO', idObjetivo: id, firmas: {} };
@@ -1256,7 +1392,7 @@
           cuerpo.innerHTML = '<div class="ln-nota">' + icono('history') + ' Los campos se habilitan según el TIPO, igual que en AppSheet.</div>' +
             htmlFormularioAppSheet(elementos) +
             '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div><div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
-            '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + ' Guardar</button></div>';
+            '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + (id ? ' Guardar cambios' : ' Registrar') + '</button></div>';
           pintarIconos(cuerpo);
           activarCombosEn(cuerpo, elementos);
           const patron = elementos.filter((e) => e.control === 'patron')[0];
@@ -1561,7 +1697,7 @@
             if (!vigente() || captura !== sesionCaptura) return;
             $('#ln-captura-subtitulo', raiz).textContent = 'Documento listo para consultar o descargar.';
             cuerpo.innerHTML = '<div class="ln-pdf-estado" role="status">' + icono('circle-check') + '<h3>Tu PDF está listo</h3><p>' + esc(pdf.nombre || 'Documento generado') + '</p>' +
-              '<div class="ln-pdf-acciones">' + enlaceDrive(pdf.id, 'Abrir PDF', true) + enlaceDrive(sesionCaptura.carpetaId, 'Carpeta en Drive') +
+              '<div class="ln-pdf-acciones">' + enlaceDrive(pdf.id, 'Ver PDF', true) + enlaceDrive(sesionCaptura.carpetaId, 'Ver carpeta en Drive') +
               '<button type="button" class="secondary" data-cerrar-modal>Volver al equipo</button></div></div>';
             cargarEvidencias(idAbierto);
             cargarHistorial(idAbierto);
@@ -1706,68 +1842,80 @@
         });
       }
 
-      // ---- Historial ----
-      const ETIQUETA_MOV = {
-        ASIGNAR_LINEA: 'Línea asignada', RETIRAR_LINEA: 'Línea retirada', CAMBIO_EQUIPO: 'Cambio de equipo',
-        REASIGNACION: 'Reasignación de responsable', CAMBIO_ESTATUS_EQUIPO: 'Cambio de estatus (equipo)',
-        CAMBIO_ESTATUS_LINEA: 'Cambio de estatus (línea)', DESECHO: 'Desecho', INSPECCION: 'Inspección', RESPONSIVA: 'Responsiva firmada',
-        EDICION: 'Edición de datos', ALTA: 'Alta de registro',
+      // ---- Historial: todos los movimientos del registro, filtrables y exportables a Excel ----
+      const ICONO_MOVIMIENTO = {
+        'Alta de registro': 'circle-plus', 'Reasignación': 'arrow-left-right', 'Cambio de estatus': 'toggle-right',
+        'Cambio de línea': 'card-sim', 'Cambio de plan': 'receipt-text', 'Cambio de equipo': 'smartphone',
+        'Cambio de área o ubicación': 'map-pin', 'Cambio de accesos': 'key-round', 'Otros cambios': 'file-pen-line',
+        'Inspección': 'clipboard-check', 'Responsiva': 'signature', 'Reactivación': 'refresh-cw', 'Desecho': 'trash-2',
       };
+      const COLOR_ORIGEN = { 'Nuevo sistema': 'verde', AppSheet: 'azul', Drive: 'neutro' };
 
-      function describirMovimiento(m) {
-        const a = m.antes || {};
-        const d = m.despues || {};
-        const partes = [];
-        if (m.tipo === 'REASIGNACION') {
-          partes.push(esc((a.responsable && a.responsable.nombre) || '(sin responsable)') + ' → <b>' + esc((d.responsable && d.responsable.nombre) || '—') + '</b>');
-        } else if (m.tipo === 'ASIGNAR_LINEA' || m.tipo === 'RETIRAR_LINEA') {
-          partes.push('Línea <b>' + esc(m.numero || '') + '</b> ' + (m.tipo === 'ASIGNAR_LINEA' ? 'en' : 'fuera de') + ' NUCO <b>' + esc(m.nuco || '') + '</b>');
-        } else if (m.tipo === 'CAMBIO_EQUIPO') {
-          partes.push('Línea <b>' + esc(m.numero || '') + '</b>: NUCO ' + esc(m.nuco || '') + ' → <b>NUCO ' + esc(m.nucoDestino || '') + '</b>');
-        } else if (/^CAMBIO_ESTATUS/.test(m.tipo)) {
-          partes.push(esc(a.estatus || '—') + ' → <b>' + esc(d.estatus || '—') + '</b>');
-        } else if (m.tipo === 'INSPECCION') {
-          partes.push('<a href="#" class="ln-enlace" data-ln-ir="inspeccion" data-id="' + esc(m.inspeccionId) + '">Ver inspección</a>' +
-            (d.calificacion !== null && d.calificacion !== undefined ? ' · Calificación ' + Math.round(d.calificacion * 100) + '%' : ''));
-        } else if (m.tipo === 'RESPONSIVA') {
-          partes.push('Responsable: <b>' + esc((d.responsable && d.responsable.nombre) || '—') + '</b>');
-        } else if (m.tipo === 'DESECHO') {
-          partes.push('Folio ' + esc(m.folio || '—') + (m.detalle && m.detalle.lugar ? ' · ' + esc(m.detalle.lugar) : ''));
-        }
-        if (m.motivo) partes.push('Motivo: ' + esc(m.motivo));
-        if (m.ticket) partes.push('Ticket: ' + esc(m.ticket));
-        if (m.cambios && m.cambios.length) {
-          partes.push('<details><summary class="ln-tenue">' + m.cambios.length + ' campo(s) modificados</summary><ul class="ln-tenue">' +
-            m.cambios.map((c) => '<li>' + esc(c.campo) + ': ' + esc(c.antes || '—') + ' → <b>' + esc(c.despues || '—') + '</b></li>').join('') + '</ul></details>');
-        }
-        return partes.join('<br>');
+      /** La DataTable del historial escucha eventos del documento: se destruye al salir de la ficha. */
+      function soltarHistorial() {
+        if (tablaHistorial) tablaHistorial.destruir();
+        tablaHistorial = null;
       }
 
-      function cargarHistorial(id) {
+      function cargarHistorial(id, nombre) {
         const pila0 = pila.length;
         llamar('apiLineasHistorial', id).then((h) => {
           const cont = $('#ln-historial', raiz);
           if (!vigente() || !cont || pila.length !== pila0) return;
-          const items = h.movimientos.map((m) => ({
-            fecha: m.fecha, titulo: ETIQUETA_MOV[m.tipo] || m.tipo, origen: m.origen, cuerpo: describirMovimiento(m),
-            usuario: m.usuario && (m.usuario.nombre || m.usuario.correo),
-          }));
-          (h.legado ? h.legado.eventos : []).forEach((e) => {
-            items.push({ fecha: e.fecha, titulo: 'Cambio: ' + (e.campo || ''), origen: 'BITACORA', cuerpo: esc(e.antes || '—') + ' → <b>' + esc(e.despues || '—') + '</b>', usuario: e.usuario });
-          });
-          items.sort((a, b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
-          const origen = { SISTEMA: chip('Nuevo sistema', 'verde'), LEGADO: chip('AppSheet', 'azul'), BITACORA: chip('Bitácora AppSheet', 'neutro') };
-          cont.innerHTML = tarjeta(icono('history') + ' Historial (' + items.length + ')', items.length
-            ? '<ol class="ln-timeline">' + items.slice(0, 150).map((it) =>
-                '<li><div class="ln-tl-cabecera"><b>' + esc(it.titulo) + '</b> ' + (origen[it.origen] || '') +
-                '<span class="ln-tenue ln-tl-fecha">' + esc(fechaHora(it.fecha)) + (it.usuario ? ' · ' + esc(it.usuario) : '') + '</span></div>' +
-                '<div class="ln-tl-cuerpo">' + it.cuerpo + '</div></li>').join('') + '</ol>' +
-              (items.length > 150 ? '<p class="ln-tenue ln-pie">Mostrando los 150 más recientes.</p>' : '')
-            : '<p class="empty-state">Sin movimientos registrados.</p>');
+          pintarHistorial(cont, h.eventos || [], nombre);
         }).catch((e) => {
           const cont = $('#ln-historial', raiz);
           if (cont) cont.innerHTML = tarjeta(icono('history') + ' Historial', '<p class="error-msg">' + mensajeError(e) + '</p>');
         });
+      }
+
+      function pintarHistorial(cont, eventos, nombre) {
+        const conteo = contarPor(eventos, 'movimiento');
+        const movimientos = Object.keys(conteo).sort((a, b) => conteo[b] - conteo[a] || a.localeCompare(b));
+        cont.innerHTML = '<div class="card ln-card ln-historial">' +
+          '<div class="ln-historial-cabecera"><h3>' + icono('history') + ' Historial (' + miles(eventos.length) + ')</h3>' +
+          (eventos.length ? '<label class="ln-historial-filtro"><span>Movimiento</span><select id="ln-historial-mov">' +
+            '<option value="">Todos los movimientos (' + miles(eventos.length) + ')</option>' +
+            movimientos.map((m) => '<option value="' + esc(m) + '">' + esc(m) + ' (' + miles(conteo[m]) + ')</option>').join('') +
+            '</select></label>' : '') + '</div>' +
+          (eventos.length ? '<div id="ln-historial-tabla"></div>' : '<p class="empty-state">Sin movimientos registrados.</p>') + '</div>';
+        if (!eventos.length) return;
+        const select = $('#ln-historial-mov', cont);
+        soltarHistorial();
+        const tabla = tablaHistorial = tablaLineas($('#ln-historial-tabla', cont), {
+          idCampo: 'id',
+          idTabla: 'lineas-historial-v2',
+          tamanoPagina: 25,
+          seleccionable: false,
+          ordenInicial: { campo: 'fecha', dir: 'desc' },
+          textoVacio: 'Sin movimientos con esos filtros',
+          exportar: { nombreArchivo: 'Historial ' + nombre, nombreHoja: 'Historial' },
+          etiquetaFila: (m) => m.movimiento + ' · ' + fechaTabla(m.fecha),
+          detalle: { titulo: (m) => m.movimiento + (m.campo ? ' · ' + m.campo : '') },
+          accionesFila: [
+            { icono: 'clipboard-check', titulo: 'Ver inspección', visible: (m) => m.refTipo === 'inspeccion' && !!m.refId, alHacer: (m) => abrir('inspeccion', m.refId) },
+            { icono: 'file-text', titulo: 'Ver PDF', visible: (m) => !!m.pdfId, alHacer: (m) => window.open('https:\/\/drive.google.com/file/d/' + encodeURIComponent(m.pdfId) + '/view', '_blank', 'noopener') },
+          ],
+          ayuda: 'Todos los movimientos del registro: reasignaciones, cambios de cada campo, inspecciones, responsivas, reactivaciones y desechos, ' +
+            'del AppSheet y del sistema nuevo. "Movimiento" filtra por tipo; la flecha de cada columna filtra por campo, usuario, origen o rango de fechas. ' +
+            '"Exportar a Excel" descarga lo filtrado.',
+          alCambiarFiltros: (f) => {
+            const valores = f && f.movimiento && f.movimiento.valores;
+            select.value = valores && valores.length === 1 ? valores[0] : '';
+          },
+          columnas: [
+            { campo: 'fecha', titulo: 'Fecha', tipo: 'lnFechaHora', fijada: true, ancho: 140 },
+            { campo: 'movimiento', titulo: 'Movimiento', tipo: 'lista', ancho: 220, render: (v) => '<span class="ln-movimiento">' + ico(ICONO_MOVIMIENTO[v] || 'dot') + ' ' + esc(v) + '</span>' },
+            { campo: 'campo', titulo: 'Campo', tipo: 'lista', ancho: 170 },
+            { campo: 'antes', titulo: 'Antes', tipo: 'texto', ancho: 200, render: (v) => formatoAppSheet('CAMBIOS', 'ANTES', v) || vacio },
+            { campo: 'despues', titulo: 'Después', tipo: 'texto', ancho: 200, render: (v) => formatoAppSheet('CAMBIOS', 'DESPUES', v) || vacio },
+            { campo: 'detalle', titulo: 'Detalle', tipo: 'texto', ancho: 260 },
+            { campo: 'usuario', titulo: 'Usuario', tipo: 'lista', ancho: 190 },
+            { campo: 'origen', titulo: 'Origen', tipo: 'lista', ancho: 130, render: (v) => chip(v, COLOR_ORIGEN[v] || 'neutro') },
+          ],
+        });
+        tabla.setDatos(eventos);
+        select.addEventListener('change', () => tabla.setFiltro('movimiento', select.value ? { valores: [select.value] } : null));
       }
 
       // ---- Inspección ----
@@ -1800,9 +1948,9 @@
           detalle.innerHTML = migas() +
             encabezado('clipboard-check', 'Inspección ' + esc(fecha(i.fecha) || ''),
               (ORIGEN[i.origen] || '') + (e ? chip('NUCO ' + (e.nuco || '—'), 'neutro') : ''),
-              (e ? '<button type="button" class="secondary ln-btn-icono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' Ver equipo</button>' : '') +
-              (i.drive ? enlaceDrive(i.drive.carpetaId, 'Carpeta en Drive') : '') +
-              (r.pdfs || []).map((p, indice) => enlaceDrive(p.id, 'Abrir PDF' + (r.pdfs.length > 1 ? ' ' + (indice + 1) : ''), true)).join('')) +
+              (e ? '<button type="button" class="ln-btn-icono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' Ver equipo</button>' : '') +
+              (i.drive ? enlaceDrive(i.drive.carpetaId, 'Ver carpeta en Drive') : '') +
+              (r.pdfs || []).map((p, indice) => enlaceDrive(p.id, 'Ver PDF' + (r.pdfs.length > 1 ? ' ' + (indice + 1) : ''), true)).join('')) +
             '<div class="ln-captura-resumen">' + resumen('user', 'Inspector', i.inspector) + resumen('clipboard-check', 'Calificación', porcentaje(i.calificacion)) + resumen('images', 'Evidencia fotográfica', fotos.length + ' archivo(s)') + '</div>' +
             '<nav class="ln-secciones-nav" aria-label="Secciones de la inspección">' +
               ['Datos', 'Checklist', 'Fotos y observaciones', 'Firmas'].map((t, n) => '<button type="button" class="secondary" data-ln-seccion="ln-consulta-' + (n + 1) + '">' + (n + 1) + '. ' + t + '</button>').join('') + '</nav>' +
@@ -1833,91 +1981,6 @@
     }
 
     // ======================================================================
-    // Detalles Líneas Telefónicas: buscador rápido que salta a la ficha
-    // ======================================================================
-
-    function initDetalles() {
-      const n = ++montaje;
-      const raiz = document.getElementById('ln-detalles-lineas');
-      const vigente = () => n === montaje && document.body.contains(raiz);
-      const paso = 48;
-      let registros = [];
-      let filtrados = [];
-      let visibles = paso;
-      let temporizador = null;
-      pintarIconos(raiz);
-
-      function tarjetaDetalle(r) {
-        const esEquipo = r.clase === 'EQUIPO';
-        const titulo = esEquipo ? (r.nuco || 'Sin NUCO') : (r.numero || 'Sin número');
-        const principal = esEquipo ? (r.numero || r.modelo || 'Sin línea asociada') : (r.responsable || 'Línea sin responsable');
-        const subtitulo = esEquipo ? (r.modelo || TIPO_EQUIPO[r.tipo] || r.tipo || 'Equipo') : (r.compania || 'Línea telefónica');
-        const identidad = esEquipo ? r.imei : r.sim;
-        return '<button type="button" class="card ln-cuadro ln-cuadro-activo" data-ir="' + esc(r.id) + '" aria-label="Abrir ' + esc(titulo) + '">' +
-          '<div class="ln-cuadro-superior"><span class="ln-cuadro-folio ln-mono">' + esc(titulo) + '</span>' +
-          '<span class="ln-cuadro-tipo">' + icono(esEquipo ? 'smartphone' : 'card-sim') + ' ' + (esEquipo ? 'Equipo' : 'Línea') + '</span></div>' +
-          '<div class="ln-cuadro-depto">' + guion(r.departamento) + '</div>' +
-          '<div class="ln-cuadro-principal">' + guion(principal) + '</div>' +
-          '<div class="ln-cuadro-secundario">' + guion(subtitulo) + '</div>' +
-          '<div class="ln-cuadro-pie"><span>' + icono('user') + ' ' + guion(r.responsable) + '</span>' +
-          '<span class="ln-mono">' + icono(esEquipo ? 'scan-line' : 'credit-card') + ' ' + guion(identidad) + '</span></div>' +
-          '<div class="ln-cuadro-pie"><span>' + chip(r.estatus) + '</span>' +
-          '<span>Ver ficha ' + icono('chevron-right') + '</span></div></button>';
-      }
-
-      function aplicarFiltros() {
-        const texto = normal($('#lnd-q', raiz).value).trim();
-        const tipo = $('#lnd-tipo', raiz).value;
-        filtrados = registros.filter((r) => {
-          if (tipo !== 'TODOS' && r.clase !== tipo) return false;
-          return !texto || ['nuco', 'numero', 'imei', 'sim', 'modelo', 'compania', 'responsable', 'departamento', 'estatus']
-            .some((c) => normal(r[c]).indexOf(texto) >= 0);
-        });
-        visibles = paso;
-        pintar();
-      }
-
-      function pintar() {
-        const grid = $('#lnd-grid', raiz);
-        grid.innerHTML = filtrados.length
-          ? filtrados.slice(0, visibles).map(tarjetaDetalle).join('')
-          : '<div class="card empty-state ln-cuadro-vacio">No hay líneas o equipos que coincidan con los filtros.</div>';
-        $('#lnd-total', raiz).textContent = miles(registros.length);
-        $('#lnd-filtrados', raiz).textContent = miles(filtrados.length);
-        $('#lnd-conteo', raiz).textContent = 'Mostrando ' + miles(Math.min(visibles, filtrados.length)) + ' de ' + miles(filtrados.length);
-        $('#lnd-mas', raiz).hidden = visibles >= filtrados.length;
-      }
-
-      $('#lnd-q', raiz).addEventListener('input', (ev) => {
-        clearTimeout(temporizador);
-        temporizador = setTimeout(aplicarFiltros, 150);
-      });
-      $('#lnd-tipo', raiz).addEventListener('change', aplicarFiltros);
-      $('#lnd-mas', raiz).addEventListener('click', () => { visibles += paso; pintar(); });
-      $('#lnd-exportar', raiz).addEventListener('click', () => {
-        const columnas = ['clase', 'nuco', 'numero', 'modelo', 'imei', 'sim', 'compania', 'estatus', 'responsable', 'departamento'];
-        exportarCsv('detalles lineas telefonicas', columnas, filtrados,
-          ['Tipo', 'NUCO', 'Número', 'Modelo', 'IMEI', 'SIM', 'Compañía', 'Estatus', 'Responsable', 'Departamento']);
-      });
-      raiz.addEventListener('click', (ev) => {
-        const f = ev.target.closest('[data-ir]');
-        if (f) irARegistro(f.dataset.ir);
-      });
-
-      Promise.all([cargarPermisos(), cargarIndice()]).then(([, indice]) => {
-        if (!vigente()) return;
-        registros = indice.equipos.map((r) => Object.assign({ clase: 'EQUIPO' }, r))
-          .concat(indice.lineas.filter((r) => r.suelta).map((r) => Object.assign({ clase: 'LINEA' }, r)));
-        aplicarFiltros();
-      })
-        .catch((e) => {
-          if (!vigente()) return;
-          $('#lnd-error', raiz).textContent = 'No se pudo cargar el índice: ' + mensajeError(e);
-          $('#lnd-error', raiz).hidden = false;
-        });
-    }
-
-    // ======================================================================
     // Gestión de Activos: busca un colaborador y muestra sus líneas/equipos
     // (vehículos, hologramas, Uber y cajas chicas se integran con los demás módulos)
     // ======================================================================
@@ -1943,10 +2006,10 @@
       }
 
       function tarjetaLineas(nombre, datos) {
-        const filaEq = (r) => '<tr class="ln-fila-clic" data-ir="' + esc(r.id) + '"><td><button type="button" class="secondary ln-btn-icono" data-ir="' + esc(r.id) + '">' + icono('smartphone') + ' NUCO ' + guion(r.nuco) + ' ' + icono('chevron-right') + '</button></td><td>' +
+        const filaEq = (r) => '<tr class="ln-fila-clic" data-ir="' + esc(r.id) + '"><td><button type="button" class="ln-btn-icono" data-ir="' + esc(r.id) + '">' + icono('smartphone') + ' NUCO ' + guion(r.nuco) + ' ' + icono('chevron-right') + '</button></td><td>' +
           esc(TIPO_EQUIPO[r.tipo] || r.tipo || '') + '</td><td>' + guion(r.modelo) + '</td><td>' + chip(r.estatus) + '</td><td class="ln-mono">' +
           (r.numero ? esc(r.numero) : '<span class="ln-tenue">Sin línea</span>') + '</td></tr>';
-        const filaLi = (r) => '<tr class="ln-fila-clic" data-ir="' + esc(r.id) + '"><td><button type="button" class="secondary ln-btn-icono" data-ir="' + esc(r.id) + '">' + icono('phone') + ' ' + guion(r.numero) + ' ' + icono('chevron-right') + '</button>' +
+        const filaLi = (r) => '<tr class="ln-fila-clic" data-ir="' + esc(r.id) + '"><td><button type="button" class="ln-btn-icono" data-ir="' + esc(r.id) + '">' + icono('phone') + ' ' + guion(r.numero) + ' ' + icono('chevron-right') + '</button>' +
           '</td><td>Línea suelta</td><td>' + guion(r.compania) + '</td><td>' + chip(r.estatus) + '</td><td>—</td></tr>';
         const filas = datos.equipos.map(filaEq).concat(datos.lineas.map(filaLi));
         return '<div class="card ln-card"><h3>' + icono('smartphone') + ' Líneas y equipos (' + filas.length + ')</h3>' +
@@ -2202,7 +2265,7 @@
     }
 
     // ======================================================================
-    // Reactivación, Solicitud y Líneas Post Venta
+    // Reactivación y Solicitud de Líneas
     // ======================================================================
 
     const OPERATIVAS = {
@@ -2211,7 +2274,7 @@
         resumen: ['FOLIO', 'LINIEA SUSPENDIDA', 'COMPAÑIA', 'SIM', 'CORREO / TICKET', 'FECHA DE SUSPENSION', 'ESTATUS', 'ESTADO DEL EQUIPO', 'IMEI',
           'RETRO DE SOLICITUD', 'FECHA DE REACTIVACION', 'NUEVO NUMERO', 'FECHA DE REGISTRO', 'QUIEN REGISTRO', 'COMENTARIOS'],
         agrupar: 'ESTATUS',
-        titulo: 'Reactivación de Líneas', icono: 'refresh-cw', csv: 'reactivacion de lineas',
+        titulo: 'Reactivación de Líneas', icono: 'refresh-cw', textoAlta: 'Registrar reactivación',
         subtitulo: 'Seguimiento de líneas suspendidas, canceladas y reactivadas', filtro: 'Todos los estatus',
         altas: true,
         // Display name de las columnas en el AppSheet
@@ -2222,20 +2285,11 @@
         resumen: ['FOLIO', 'FECHA DE SOLICITUD', 'TIPO DE PLAN', 'TICKET', 'NO EMPLEADO SOLICITANTE', 'NOMBRE SOLICITANTE', 'PUESTO SOLICITANTE',
           'DEPARTAMENTO SOLICITANTE', 'SEDE', 'DEPARTAMENTO', 'TIPO', 'PUESTO', 'COLABORADOR', 'SOLICITANTE', 'FECHA DE ENTREGA', 'ASIGNACION',
           'REASIGNACION', 'COMPAÑIA', 'EQUIPO', 'NUMERO ANTERIOR', 'NUMERO ACTUAL', 'IMEI', 'SIM', 'ESTATUS', 'FECHA DE REGISTRO', 'QUIEN REGISTRO', 'COMENTARIOS'],
-        titulo: 'Solicitud de Líneas', icono: 'clipboard-list', csv: 'solicitud de lineas',
+        titulo: 'Solicitud de Líneas', icono: 'clipboard-list', textoAlta: 'Registrar solicitud',
         subtitulo: 'Solicitudes de asignación y reasignación de líneas telefónicas', filtro: 'Todos los estatus',
         altas: true,
         // Display name de las columnas en el AppSheet
         nombres: { 'NO EMPLEADO SOLICITANTE': 'NÚMERO DE EMPLEADO DEL SOLICITANTE', 'NOMBRE SOLICITANTE': 'NOMBRE COMPLETO DEL SOLICITANTE', 'PUESTO SOLICITANTE': 'PUESTO DEL SOLICITANTE', 'DEPARTAMENTO SOLICITANTE': 'DEPARTAMENTO DEL SOLICITANTE' },
-      },
-      POST_VENTA: {
-        // Vista LINEAS POST VENTA del AppSheet (slice DEPARTAMENTO = POST VENTA), agrupada por TIPO
-        resumen: ['NUMERO TELEFONO', 'RESPONSIVA', 'FOLIO', 'NUCO', 'TIPO', 'RESPONSABLE', 'EQUIPO', 'IMEI', 'NUMERO SIM', 'ACCESORIOS', 'SEDE',
-          'OFICINA / DESARROLLO', 'DEPARTAMENTO', 'AREA', 'RAZON SOCIAL', 'PIN WHATSAPP', 'PIN EQUIPO', 'CUENTA GOOGLE', 'COMPAÑIA', 'COSTO PLAN',
-          'FECHA REGISTRO', 'INICIO PLAN', 'FIN PLAN', 'ESTATUS LINEA', 'ESTATUS EQUIPO'],
-        agrupar: 'TIPO',
-        titulo: 'Líneas Post Venta', icono: 'headset', csv: 'lineas post venta',
-        subtitulo: 'Registros de LINEAS TELEFONICAS con departamento POST VENTA', filtro: 'Todos los tipos',
       },
     };
 
@@ -2254,6 +2308,7 @@
       $('#ln-op-titulo', raiz).textContent = cfg.titulo;
       $('#ln-op-subtitulo', raiz).textContent = cfg.subtitulo;
       $('#ln-op-titulo-icono', raiz).innerHTML = ico(cfg.icono);
+      $('#ln-op-nuevo', raiz).innerHTML = ico('plus') + ' ' + esc(cfg.textoAlta);
       pintarIconos(raiz);
       refreshIcons();
 
@@ -2266,7 +2321,7 @@
       let elementosAlta = [];
       function abrirAlta() {
         const cuerpo = $('#ln-op-campos');
-        $('#ln-op-modal-titulo').textContent = 'Nuevo registro · ' + cfg.titulo;
+        $('#ln-op-modal-titulo').textContent = cfg.textoAlta;
         $('#ln-op-alta-error').hidden = true;
         cuerpo.innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando formulario…</p>';
         modal.hidden = false;
@@ -2292,7 +2347,7 @@
             // Títulos: las etiquetas del formulario de alta y, si no hay, el encabezado en formato de oración
             const titulos = { FOLIO: 'Folio', 'FECHA DE REGISTRO': 'Fecha de registro', 'QUIEN REGISTRO': 'Registró' };
             Object.keys(cfg.nombres || {}).forEach((nombre) => { titulos[normEncabezado(nombre)] = tituloLegible(cfg.nombres[nombre]); });
-            const columnas = columnasDeHoja(r.encabezados, r.filas, cfg.resumen, titulos, tipo === 'POST_VENTA' ? 'LINEAS' : tipo);
+            const columnas = columnasDeHoja(r.encabezados, r.filas, cfg.resumen, titulos, tipo);
             // El servidor agrupa en mayúsculas y sin espacios de más: la columna filtra con el mismo valor
             const colGrupo = columnas.find((c) => c.campo === campoGrupo);
             if (colGrupo) {
@@ -2397,7 +2452,7 @@
 
     const BITACORAS = {
       CAMBIOS: {
-        titulo: 'Control de Cambios - Líneas', icono: 'file-pen-line', csv: 'control de cambios lineas',
+        titulo: 'Control de Cambios - Líneas', icono: 'file-pen-line',
         subtitulo: 'Bitácora de campos modificados en LINEAS TELEFONICAS (AppSheet y nuevo sistema)',
         idRegistro: 'ID_LINEA', fecha: 'FECHA ACTUALIZACION',
         // Vista CONTROL DE CAMBIOS - LINEAS del AppSheet
@@ -2407,7 +2462,7 @@
         ],
       },
       REASIGNACIONES: {
-        titulo: 'Control de Reasignaciones - Líneas', icono: 'repeat', csv: 'control de reasignaciones lineas',
+        titulo: 'Control de Reasignaciones - Líneas', icono: 'repeat',
         subtitulo: 'Cambios de responsable de equipos y líneas',
         idRegistro: 'ID Linea', fecha: 'Fecha de Reasignacion',
         // Vista CONTROL DE REASIGNACIONES - LINEAS del AppSheet: todas las columnas en el orden de la tabla
@@ -2419,8 +2474,8 @@
         ],
       },
       DESECHOS: {
-        titulo: 'Bitácora de Desechos', icono: 'trash-2', csv: 'bitacora de desechos',
-        alta: 'DESECHO',
+        titulo: 'Bitácora de Desechos', icono: 'trash-2',
+        alta: 'DESECHO', textoAlta: 'Registrar desecho',
         subtitulo: 'Equipos dados de baja definitiva (folio DR)',
         idRegistro: 'ID_EQUIPO', fecha: 'FECHA DE DESECHO',
         // Vista BITACORA DE DESECHOS del AppSheet (ID_EQUIPO se muestra con su etiqueta: el IMEI)
@@ -2511,7 +2566,8 @@
 
       if (cfg.alta) {
         cargarPermisos().then((p) => { if (vigente()) $('#ln-bit-nuevo', raiz).hidden = !p.puedeOperar; });
-        $('#ln-bit-nuevo', raiz).addEventListener('click', () => abrirAltaAppSheet(cfg.alta, cfg.titulo, () => { if (vigente()) cargar(); }));
+        $('#ln-bit-nuevo', raiz).innerHTML = ico('plus') + ' ' + esc(cfg.textoAlta);
+        $('#ln-bit-nuevo', raiz).addEventListener('click', () => abrirAltaAppSheet(cfg.alta, cfg.textoAlta, () => { if (vigente()) cargar(); }));
       }
 
       $('#ln-bit-form', raiz).addEventListener('submit', (ev) => {
@@ -2530,12 +2586,10 @@
 
     return {
       initTelefonicas: initTelefonicas,
-      initDetalles: initDetalles,
       initGestionActivos: initGestionActivos,
       initAccesoriosLineas: initAccesoriosLineas,
       initReactivacion: () => initOperativa('REACTIVACION'),
       initSolicitud: () => initOperativa('SOLICITUD'),
-      initPostVenta: () => initOperativa('POST_VENTA'),
       initCambios: () => initBitacora('CAMBIOS'),
       initReasignaciones: () => initBitacora('REASIGNACIONES'),
       initDesechos: () => initBitacora('DESECHOS'),

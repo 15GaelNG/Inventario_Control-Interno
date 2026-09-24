@@ -46,39 +46,120 @@ test('el login acepta hash y conserva compatibilidad con la hoja histórica', ()
   assert.match(auth, /hashPassword_\(String\(password\)/);
 });
 
-test('Telefonía muestra los diez módulos implementados en el orden solicitado', () => {
+test('Telefonía muestra sus módulos en orden y Gestión de Activos queda fuera del grupo', () => {
   const app = read('src/html/js/app.html');
-  const lineas = app.slice(app.indexOf("id: 'lineas'"), app.indexOf('\n  ];', app.indexOf("id: 'lineas'")));
+  const lineas = app.slice(app.indexOf("id: 'lineas'"), app.indexOf("id: 'gestion-activos'"));
   assert.equal((lineas.match(/Inventario de Accesorios/g) || []).length, 1);
-  const orden = ['lineas-telefonicas', 'gestion-activos', 'detalles-lineas-telefonicas', 'accesorios-lineas', 'reactivacion-lineas',
-    'reasignaciones-lineas', 'solicitud-lineas', 'cambios-lineas', 'lineas-post-venta', 'bitacora-desechos'];
+  const orden = ['lineas-telefonicas', 'accesorios-lineas', 'reactivacion-lineas', 'reasignaciones-lineas', 'solicitud-lineas',
+    'cambios-lineas', 'bitacora-desechos'];
   assert.deepEqual([...lineas.matchAll(/vista: '([^']+)'/g)].map((m) => m[1]), orden);
-  orden
+  // Acceso directo debajo del desplegable de Líneas
+  assert.match(app, /\{ id: 'gestion-activos', vista: 'gestion-activos', icono: 'briefcase', etiqueta: 'Gestión de Activos' \}/);
+  assert.match(app, /grupo\.vista \? `/);
+  orden.concat('gestion-activos')
     .forEach((route) => assert.match(app, new RegExp(`vista === '${route}'`), `falta montar ${route}`));
+  // Retirados: Post Venta (ya no existe) y Detalles (ahora es la vista de tarjetas de Líneas Telefónicas)
+  ['lineas-post-venta', 'detalles-lineas-telefonicas'].forEach((retirado) => {
+    assert.doesNotMatch(app, new RegExp(retirado));
+    assert.doesNotMatch(read('src/config/Modulos.gs'), new RegExp(`id: '${retirado}'`));
+  });
+  assert.ok(!fs.existsSync(path.join(root, 'src/html/views/lineas/lineas-detalles.html')));
+  assert.doesNotMatch(read('src/html/Index.html'), /lineas-detalles/);
 });
 
-test('las vistas operativas usan la misma base de AppSheet', () => {
+test('las vistas operativas usan la misma base de AppSheet (sin Post Venta)', () => {
   const repo = read('src/services/lineas/LineasRepo.gs');
   assert.match(repo, /REACTIVACION: 'REACTIVACION DE LINEAS'/);
   assert.match(repo, /SOLICITUD: 'SOLICITUD DE LINEAS'/);
-  assert.match(repo, /departamento: 'POST VENTA'/);
+  assert.doesNotMatch(repo, /POST_VENTA|POST VENTA/);
+  assert.doesNotMatch(read('src/html/js/lineas.html'), /POST_VENTA|initPostVenta/);
   assert.match(read('src/ClientApi.gs'), /apiLineasVistaOperativa/);
   assert.match(read('src/ClientApi.gs'), /apiLineasCrearVistaOperativa/);
   assert.match(read('src/services/lineas/LineasOperativas.gs'), /function crear\(tipo, datos, usuario\)/);
 });
 
-test('Gestión de Activos y Detalles usan cuadrículas de tarjetas con filtros', () => {
+test('Líneas Telefónicas ofrece la vista de tarjetas con los mismos filtros de la tabla', () => {
   const lineas = read('src/html/js/lineas.html');
+  const vista = read('src/html/views/lineas/lineas-telefonicas.html');
+  const tabla = read('src/html/js/componentes/datatable.html');
+  assert.match(vista, /id="ln-modo-vista"/);
+  assert.match(vista, /data-modo="tabla"/);
+  assert.match(vista, /data-modo="tarjetas"/);
+  assert.match(vista, /id="ln-tarjetas-equipos"/);
+  assert.match(vista, /id="ln-tarjetas-lineas"/);
+  assert.match(tabla, /getFiltradas: \(\) =>/);
+  assert.match(lineas, /tablas\[modulo\]\.getFiltradas\(\)/);
+  assert.match(lineas, /new MutationObserver/);
+  assert.match(lineas, /localStorage\.setItem\('lineas\.modoVista'/);
+  // Con "Tarjetas" recordado la carga inicial ya usa estas constantes: deben declararse antes (zona muerta de const)
+  const inicio = lineas.indexOf('// ---- Carga inicial ----');
+  ['const PASO_TARJETAS', 'const tarjetasVisibles', 'let detallesFicha', 'let tablaHistorial'].forEach((decl) => {
+    assert.ok(lineas.indexOf(decl) > 0 && lineas.indexOf(decl) < inicio, decl + ' debe declararse antes de la carga inicial');
+  });
   const gestion = read('src/html/views/lineas/lineas-gestion-activos.html');
-  const detalles = read('src/html/views/lineas/lineas-detalles.html');
-  const estilos = read('src/html/lineas-estilos.html');
   assert.match(gestion, /id="lnga-grid" class="ln-cuadros-grid"/);
-  assert.match(gestion, /id="lnga-filtro-activos"/);
-  assert.match(detalles, /id="lnd-grid" class="ln-cuadros-grid"/);
-  assert.match(detalles, /id="lnd-tipo"/);
   assert.match(lineas, /function tarjetaColaborador/);
-  assert.match(lineas, /function tarjetaDetalle/);
-  assert.match(estilos, /grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+});
+
+test('la ficha trae los Detalles para copiar en el orden de DETALLES LINEAS TELEFONICAS', () => {
+  const lineas = read('src/html/js/lineas.html');
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  const servicio = read('src/services/TelefoniaService.gs');
+  assert.equal((servicio.match(/detalles: r\.detalles/g) || []).length, 2);
+  assert.match(repo, /return \{ id: id, tipo: tipo, nuco: nuco, equipo: equipo, linea: linea, detalles: detalles \};/);
+  const cuerpo = lineas.slice(lineas.indexOf('function textoDetalles()'), lineas.indexOf('function pintarTextoDetalles()'));
+  const etiquetas = [...cuerpo.matchAll(/'(?:\\n)?([A-ZÁÉÍÓÚa-záéíóúñ /]+): '/g)].map((m) => m[1]);
+  assert.deepEqual(etiquetas, ['Motivo de resguardo', 'Ticket / Asunto', 'Código de resguardo', 'IMEI', 'SIM', 'Número', 'Modelo',
+    'Compañía', 'Razón Social', 'Estatus de adendum', 'Estatus actual de la línea']);
+  assert.match(cuerpo, /'NUCO ' \+ valor\(d\.nuco\) \+ '\\n-{55}\\n'/);
+  assert.match(lineas, /data-ln-copiar-detalles/);
+  assert.match(lineas, /function copiarTexto\(texto\)/);
+  // Mismo mapeo que la fórmula del AppSheet: Código de resguardo = [RESPONSABLE], Estatus de adendum = [FIN PLAN]
+  assert.match(repo, /responsable: crudo\('RESPONSABLE'\)/);
+  assert.match(repo, /finPlan: crudo\('FIN PLAN'\)/);
+});
+
+test('el historial es una lista filtrable por movimiento y exportable a Excel', () => {
+  const lineas = read('src/html/js/lineas.html');
+  const src = read('src/services/lineas/LineasRepo.gs');
+  const Repo = new Function('LineasUtil', 'LineasDatos', 'Utilities', src + '\nreturn LineasRepo;')({}, {}, {});
+  const casos = {
+    RESPONSABLE: 'Reasignación', 'SEGUNDO RESPONSABLE': 'Reasignación', 'ESTATUS LINEA': 'Cambio de estatus', 'ESTATUS EQUIPO': 'Cambio de estatus',
+    'NUMERO TELEFONO': 'Cambio de línea', 'COMPAÑIA': 'Cambio de línea', 'FIN PLAN': 'Cambio de plan', 'COSTO PLAN': 'Cambio de plan',
+    EQUIPO: 'Cambio de equipo', IMEI: 'Cambio de equipo', 'OFICINA / DESARROLLO': 'Cambio de área o ubicación', AREA: 'Cambio de área o ubicación',
+    'PIN WHATSAPP': 'Cambio de accesos', 'CUENTA GOOGLE': 'Cambio de accesos', 'CONTRASEÑA MODEM': 'Cambio de accesos', COMENTARIOS: 'Otros cambios',
+  };
+  Object.keys(casos).forEach((campo) => assert.equal(Repo.movimientoDeCampo(campo), casos[campo], campo));
+  // Fuentes del historial: bitácora, reasignaciones, desechos, reactivaciones, inspecciones, responsivas y el sistema nuevo
+  const cuerpo = src.slice(src.indexOf('function historialDeRegistro'), src.indexOf('// ---------------- Bitácoras'));
+  ['TAB.CAMBIOS', 'TAB.REASIG', 'TAB.DESECHO', 'TAB.APP_MOV', 'TAB.REACTIVACION', 'evidenciasDeRegistro(id)'].forEach((fuente) => assert.ok(cuerpo.includes(fuente), fuente));
+  assert.match(cuerpo, /return \{ eventos: eventos, total: eventos\.length \};/);
+  // La edición marca su reasignación para no duplicarla
+  assert.match(read('src/services/lineas/LineasRegistros.gs'), /idsReasignacion: guardado\.idReasignacion \? \[guardado\.idReasignacion\] : \[\]/);
+  // Cliente: DataTable con selector de movimiento y Excel
+  assert.match(lineas, /id="ln-historial-mov"/);
+  assert.match(lineas, /tabla\.setFiltro\('movimiento', select\.value \? \{ valores: \[select\.value\] \} : null\)/);
+  assert.match(lineas, /exportar: \{ nombreArchivo: 'Historial ' \+ nombre, nombreHoja: 'Historial' \}/);
+  assert.match(lineas, /tablaHistorial\.destruir\(\)/);
+});
+
+test('no se descargan CSV y los botones usan los mismos nombres y medidas', () => {
+  const archivos = filesBelow(path.join(root, 'src/html')).filter((f) => /lineas|views[\\/]lineas/.test(f));
+  const todo = archivos.map((f) => fs.readFileSync(f, 'utf8')).join('\n');
+  assert.doesNotMatch(todo, /text\/csv|\.csv'|exportarCsv/);
+  assert.doesNotMatch(todo, /Exportar vista|Descargar|Bajar Excel|Agregar NUCO|Nuevo registro ·|Nuevo artículo|'Abrir PDF'|'Carpeta en Drive'/);
+  const lineas = read('src/html/js/lineas.html');
+  assert.match(lineas, /textoAlta: 'Registrar reactivación'/);
+  assert.match(lineas, /textoAlta: 'Registrar solicitud'/);
+  assert.match(lineas, /textoAlta: 'Registrar desecho'/);
+  assert.match(lineas, /\(id \? ' Guardar cambios' : ' Registrar'\)/);
+  // Acciones de la ficha con color (botón principal, sin .secondary)
+  const botones = lineas.slice(lineas.indexOf('function botonesFicha'), lineas.indexOf('// ---- Detalles para copiar'));
+  assert.doesNotMatch(botones, /secondary/);
+  assert.match(lineas, /'<a class="externo ln-boton"/);
+  const estilos = read('src/html/lineas-estilos.html');
+  assert.match(estilos, /Botones: mismo tamaño y mismos colores en todo Líneas/);
+  assert.doesNotMatch(estilos, /\.ln-detalle-botones button \{ padding/);
 });
 
 test('las capturas canceladas tienen un flujo completo de limpieza', () => {

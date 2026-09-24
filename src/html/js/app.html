@@ -505,7 +505,7 @@
   /** Ícono (nombre de Lucide) temático según a qué área pertenece la vista. */
   function iconoDeVista(vista) {
     if (vista === 'dashboard') return 'home';
-    const grupo = NAV_GRUPOS.find((g) => g.items.some((it) => it.vista === vista));
+    const grupo = NAV_GRUPOS.find((g) => g.vista === vista || (g.items || []).some((it) => it.vista === vista));
     return grupo ? grupo.icono : 'file-text';
   }
 
@@ -547,13 +547,11 @@
       // --- Líneas (rama emmanuel): el módulo vive en html/js/lineas.html (namespace Lineas) ---
       if (vista === 'lineas-telefonicas') { montarVista('tpl-lineas-telefonicas', Lineas.initTelefonicas); return; }
       if (vista === 'gestion-activos') { montarVista('tpl-lineas-gestion-activos', Lineas.initGestionActivos); return; }
-      if (vista === 'detalles-lineas-telefonicas') { montarVista('tpl-lineas-detalles', Lineas.initDetalles); return; }
       if (vista === 'accesorios-lineas') { montarVista('tpl-lineas-accesorios', Lineas.initAccesoriosLineas); return; }
       if (vista === 'reactivacion-lineas') { montarVista('tpl-lineas-operativa', Lineas.initReactivacion); return; }
       if (vista === 'reasignaciones-lineas') { montarVista('tpl-lineas-bitacora', Lineas.initReasignaciones); return; }
       if (vista === 'solicitud-lineas') { montarVista('tpl-lineas-operativa', Lineas.initSolicitud); return; }
       if (vista === 'cambios-lineas') { montarVista('tpl-lineas-bitacora', Lineas.initCambios); return; }
-      if (vista === 'lineas-post-venta') { montarVista('tpl-lineas-operativa', Lineas.initPostVenta); return; }
       if (vista === 'bitacora-desechos') { montarVista('tpl-lineas-bitacora', Lineas.initDesechos); return; }
       mostrarProximamente(etiqueta || vista);
     });
@@ -574,31 +572,34 @@
   /**
    * Estructura del sidebar por área. En la rama emmanuel solo va el grupo de
    * Líneas (los demás grupos viven en las ramas de sus responsables y se juntan
-   * al unir en master).
+   * al unir en master). Una entrada con `vista` y sin `items` es un acceso
+   * directo suelto (sin desplegable), como Gestión de Activos.
    */
   const NAV_GRUPOS = [
     {
       id: 'lineas', icono: 'smartphone', etiqueta: 'Líneas',
       items: [
         { vista: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas', icono: 'phone' },
-        { vista: 'gestion-activos', etiqueta: 'Gestión de Activos', icono: 'briefcase' },
-        { vista: 'detalles-lineas-telefonicas', etiqueta: 'Detalles Líneas Telefónicas', icono: 'file-search' },
         { vista: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios', icono: 'backpack' },
         { vista: 'reactivacion-lineas', etiqueta: 'Reactivación de Líneas', icono: 'refresh-cw' },
         { vista: 'reasignaciones-lineas', etiqueta: 'Control de Reasignaciones - Líneas', icono: 'arrow-left-right' },
         { vista: 'solicitud-lineas', etiqueta: 'Solicitud de Líneas', icono: 'file-plus' },
         { vista: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas', icono: 'repeat' },
-        { vista: 'lineas-post-venta', etiqueta: 'Líneas Post Venta', icono: 'headphones' },
         { vista: 'bitacora-desechos', etiqueta: 'Bitácora de Desechos', icono: 'trash-2' },
       ],
     },
+    // Activos por colaborador de todas las áreas (líneas hoy; vehículos, Uber y cajas al unir en master)
+    { id: 'gestion-activos', vista: 'gestion-activos', icono: 'briefcase', etiqueta: 'Gestión de Activos' },
   ];
 
   // Los grupos ya no son acordeón (se abren/cierran) — se quedan siempre
   // abiertos, el encabezado es nomás la etiqueta de la sección.
   function renderNavGrupos() {
     const contenedor = document.getElementById('nav-groups');
-    contenedor.innerHTML = NAV_GRUPOS.map((grupo) => `
+    contenedor.innerHTML = NAV_GRUPOS.map((grupo) => (grupo.vista ? `
+      <div class="nav-item" data-view="${grupo.vista}" data-etiqueta="${grupo.etiqueta}" data-tooltip="${grupo.etiqueta}">
+        <span class="nav-icon"><i data-lucide="${grupo.icono}" class="ico"></i></span><span class="nav-label">${grupo.etiqueta}</span>
+      </div>` : `
       <div class="nav-group" id="nav-group-${grupo.id}">
         <div class="nav-group-header" data-tooltip="${grupo.etiqueta}">
           <span class="nav-icon"><i data-lucide="${grupo.icono}" class="ico"></i></span>
@@ -614,7 +615,7 @@
           `).join('')}
         </div>
       </div>
-    `).join('');
+    `)).join('');
 
     contenedor.querySelectorAll('.nav-group-header').forEach((header) => {
       header.addEventListener('click', () => {
@@ -631,7 +632,7 @@
         }
       });
     });
-    contenedor.querySelectorAll('.nav-subitem').forEach((el) => {
+    contenedor.querySelectorAll('.nav-subitem, .nav-item[data-view]').forEach((el) => {
       el.addEventListener('click', () => navegarA(el.dataset.view, el.dataset.etiqueta));
     });
     refreshIcons();

@@ -362,7 +362,7 @@ const LineasRegistros = (function () {
       const guardado = LineasRepo.guardarCambiosRegistro(fila, cambios, usuario, new Date());
       LineasRepo.registrarMovimiento('EDICION', { motivo: 'Edición del registro' }, usuario, new Date(), {
         refs: [id], nuco: valores.NUCO, numero: valores['NUMERO TELEFONO'], antes: antes, despues: cambios,
-        detalle: { idsCambios: guardado.idsCambios, cambios: guardado.campos },
+        detalle: { idsCambios: guardado.idsCambios, idsReasignacion: guardado.idReasignacion ? [guardado.idReasignacion] : [], cambios: guardado.campos },
       });
       return guardado;
     });

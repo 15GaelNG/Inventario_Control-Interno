@@ -279,6 +279,7 @@
    *
    * Métodos:
    *   setDatos(datos) · setCargando(true) · setError('msg') · getDatos() · getSeleccion()
+   *   getFiltradas()  → filas con filtros, búsqueda y orden aplicados (todas las páginas)
    *   limpiarSeleccion() · copiarSeleccion() · textoSeleccion()
    *   setFiltro(campo, { valores: [...] } | { op, v1, v2 } | null) · limpiarFiltros()
    *   moverColumna(campo, antesDeCampo) · fijarColumna(campo, true) · ocultarColumna(campo)
@@ -1889,6 +1890,7 @@
         },
         setError(mensaje) { st.error = mensaje || null; st.cargando = false; st.refrescando = false; render(); },
         getDatos: () => st.datos.slice(),
+        getFiltradas: () => (st.cargando || st.error ? [] : filasFiltradas()),
         getSeleccion: () => st.datos.filter((f) => st.seleccion.has(idDe(f))),
         limpiarSeleccion,
         copiarSeleccion,

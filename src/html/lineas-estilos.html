@@ -101,7 +101,7 @@
   .ln-activos-estado { font-weight: 600; }
   .ln-activos-estado.si { color: var(--ln-verde-tx); }
   .ln-activos-estado.no { color: var(--ln-rojo-tx); }
-  .ln-cuadros-mas { display: flex; justify-content: center; margin: 16px 0; }
+  .ln-cuadros-mas { display: flex; justify-content: center; align-items: center; gap: 14px; flex-wrap: wrap; margin: 16px 0; font-size: 12.5px; }
   .ln-cuadros-mas button { min-width: 180px; }
   .ln-cuadro-cargando, .ln-cuadro-vacio { grid-column: 1 / -1; min-height: 120px; display: flex; align-items: center; justify-content: center; gap: 8px; }
   .ln-cuadro-detalle { scroll-margin-top: 16px; }
@@ -116,14 +116,12 @@
   .ln-tabla tbody tr:last-child td { border-bottom: none; }
   .ln-fila-clic { cursor: pointer; }
   .ln-fila-clic:hover td { background: var(--color-bg); }
-  .ln-btn-chico { padding: 5px 10px; font-size: 12px; }
 
   .ln-conteo { font-size: 12px; color: var(--color-text-muted); }
 
   /* Detalle */
   .ln-migas { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; font-size: 12.5px; color: var(--color-text-muted); }
   .ln-migas > span { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-  .ln-migas button { padding: 6px 12px; }
   .ln-migas .ln-miga-enlace { padding: 0; min-height: auto; border: 0; background: none; color: var(--color-primary); font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
   .ln-detalle-header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
   .ln-detalle-icono {
@@ -135,7 +133,6 @@
   .ln-detalle-titulo { flex: 1; min-width: 200px; }
   .ln-detalle-titulo h2 { margin: 0 0 6px; font-size: 20px; }
   .ln-detalle-botones { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-  .ln-detalle-botones button { padding: 7px 12px; }
 
   .ln-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }
   .ln-card { margin-bottom: 14px; }
@@ -354,7 +351,6 @@
   }
   .ln-accion-enlace:hover { border-color: var(--color-accent); background: var(--color-accent-soft); text-decoration: none; }
   .ln-accion-enlace:focus-visible, .ln-modulo button:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 3px; }
-  .ln-detalle-botones .secondary, .ln-detalle-botones .ln-accion-enlace { min-height: 38px; font-weight: 600; }
   .ln-pdf-estado { max-width: 650px; margin: 30px auto; padding: 26px; text-align: center; }
   .ln-pdf-estado > .ln-icon, .ln-pdf-estado > .ln-spinner { width: 42px; height: 42px; margin-bottom: 18px; color: var(--color-accent-hover); }
   .ln-pdf-estado h3 { font-size: 23px; }
@@ -373,7 +369,7 @@
     outline: none; border-color: var(--color-accent); box-shadow: 0 0 0 3px rgba(180,161,105,.25);
   }
   .ln-modulo textarea:disabled { background: var(--color-bg); opacity: .7; }
-  .ln-modulo .secondary, #ln-op-modal .secondary { background: var(--color-surface); min-height: 38px; }
+  .ln-modulo .secondary, #ln-op-modal .secondary { background: var(--color-surface); }
   .ln-modulo button:disabled, #ln-op-modal button:disabled { opacity: .55; cursor: wait; }
   .ln-modulo .ln-tabla td { vertical-align: middle; line-height: 1.5; }
   .ln-modulo .ln-tabla th { padding-top: 13px; padding-bottom: 13px; }
@@ -386,7 +382,6 @@
   .ln-captura-dato b { white-space: normal; overflow-wrap: anywhere; }
   .ln-lectura-notas { white-space: pre-wrap; line-height: 1.7; margin: 0; padding: 16px; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 10px; }
   .ln-secciones-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; }
-  .ln-secciones-nav button { font-size: 12px; }
   .ln-seccion-consulta { scroll-margin-top: 20px; }
   .ln-galeria { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
   .ln-evidencia { color: var(--color-text); text-decoration: none; border: 1px solid var(--color-border); border-radius: 12px; overflow: hidden; background: var(--color-surface); }
@@ -424,7 +419,6 @@
   .ln-historial-completo[hidden] { display: none; }
   .ln-historial-texto { flex: 1 1 260px; color: var(--color-text); }
   .ln-historial-completo input { max-width: 340px; flex: 1 1 220px; }
-  .ln-historial-completo button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; font-size: 13px; }
   .lac-stock { min-width: 34px; }
 
   /* ---- Formularios del AppSheet (inspección / responsiva): títulos de página y campos en rejilla ---- */
@@ -456,4 +450,60 @@
   .ln-regla-chip { padding: 2px 8px; border-radius: 999px; font-size: 11.5px; }
   @media (max-width: 900px) { .ln-af-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (max-width: 560px) { .ln-af-grid { grid-template-columns: 1fr; } }
+  /* ---- Botones: mismo tamaño y mismos colores en todo Líneas ----
+     Las medidas son las de la barra del DataTable (8px 12px, 13px), para que todo mida igual.
+       button (sin clase)   azul de marca: acciones (Registrar, Guardar cambios, Editar, Nueva inspección, Copiar…)
+       .secondary           contorno: Cancelar, Volver, Mostrar más, filtros y selectores
+       .externo / a.externo azul de marca con ícono de salida: abre Drive o un PDF (convención del sistema)
+       .btn-excel           verde: Exportar a Excel (lo pone el DataTable)
+     Dentro de tablas (.ln-tabla) los botones son compactos, pero con los mismos colores. */
+  .ln-modulo .page-header-actions button, .ln-detalle-botones > button, .ln-migas > button, .ln-captura-acciones button,
+  .ln-pdf-acciones > button, .ln-cuadros-mas button, .ln-copiar-cabecera button, .ln-segmentado button,
+  .ln-historial-completo button, .ln-secciones-nav button, .ln-modulo .modal-card .modal-acciones button, a.ln-boton {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    min-height: 36px; padding: 8px 12px; font-size: 13px; font-weight: 600; line-height: 1.2; border-radius: 8px; white-space: nowrap;
+  }
+  a.ln-boton { text-decoration: none; box-sizing: border-box; cursor: pointer; }
+  a.ln-boton:hover { text-decoration: none; }
+  a.ln-boton .ln-icon, .ln-detalle-botones > button .ln-icon { width: 15px; height: 15px; }
+  .ln-tabla button, .ln-tabla a.ln-boton, .ln-btn-chico {
+    display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 5px 10px; font-size: 12px; font-weight: 600; border-radius: 8px; white-space: nowrap;
+  }
+  a.ln-boton.externo, a.ln-boton.externo:hover { color: #fff; }
+
+  /* Selector Tabla / Tarjetas de Líneas Telefónicas */
+  .ln-tabs-fila { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .ln-tabs-fila .tabs-simple { flex: 1 1 auto; }
+  .ln-segmentado { display: inline-flex; margin-bottom: 8px; }
+  .ln-segmentado button { border-radius: 0; }
+  .ln-segmentado button:first-child { border-radius: 8px 0 0 8px; }
+  .ln-segmentado button:last-child { border-radius: 0 8px 8px 0; margin-left: -1px; }
+  .ln-modulo .ln-segmentado button.activo { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+  .ln-modo-tarjetas .dt-scroll, .ln-modo-tarjetas .dt-pie, .ln-modo-tarjetas .dt-btn-columnas { display: none; }
+  .ln-tarjetas { padding-top: 6px; }
+  .ln-tarjetas[hidden] { display: none; }
+  .ln-cuadro-tipo .ln-regla { font-size: 11px; }
+
+  /* Detalles para copiar (DETALLES LINEAS TELEFONICAS del AppSheet) */
+  .ln-copiar-cabecera { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .ln-copiar-cabecera h3 { margin: 0; }
+  .ln-copiar-ayuda { font-size: 12px; margin: 6px 0 12px; }
+  .ln-copiar-cuerpo { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(0, 1.4fr); gap: 16px; align-items: start; }
+  .ln-copiar-campos .field:last-child { margin-bottom: 0; }
+  .ln-copiar-texto {
+    margin: 0; padding: 14px 16px; border-radius: 10px; border: 1px solid var(--color-border); background: var(--color-bg);
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12.5px; line-height: 1.65;
+    white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; color: var(--color-text);
+  }
+  @media (max-width: 760px) { .ln-copiar-cuerpo { grid-template-columns: 1fr; } }
+
+  /* Historial filtrable */
+  .ln-historial-cabecera { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .ln-historial-cabecera h3 { margin: 0; }
+  .ln-historial-filtro { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 12.5px; font-weight: 600; color: var(--color-text-muted); }
+  .ln-historial-filtro select { width: auto; min-width: 240px; max-width: 100%; }
+  .ln-movimiento { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; white-space: nowrap; }
+  .ln-movimiento .ico { color: var(--color-accent-hover); }
+  /* El DataTable calcula su alto con lo que queda de ventana; en la ficha el historial está abajo y quedaría chico */
+  .ln-historial .dt-scroll { max-height: min(70vh, 640px) !important; }
 </style>

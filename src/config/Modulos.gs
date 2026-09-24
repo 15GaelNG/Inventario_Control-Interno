@@ -27,18 +27,23 @@ const Modulos = (function () {
     },
     {
       id: 'lineas', etiqueta: 'Líneas', icono: 'smartphone',
-      // Rama emmanuel: los diez módulos de Telefonía (ver html/js/lineas.html)
+      // Rama emmanuel: los módulos de Telefonía (ver html/js/lineas.html). "Detalles Líneas
+      // Telefónicas" quedó como la vista de tarjetas de Líneas Telefónicas y Post Venta se retiró.
       modulos: [
         { id: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas', listo: true },
-        { id: 'gestion-activos', etiqueta: 'Gestión de Activos', listo: true },
-        { id: 'detalles-lineas-telefonicas', etiqueta: 'Detalles Líneas Telefónicas', listo: true },
         { id: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios (Líneas)', listo: true },
         { id: 'reactivacion-lineas', etiqueta: 'Reactivación de Líneas', listo: true },
         { id: 'reasignaciones-lineas', etiqueta: 'Control de Reasignaciones - Líneas', listo: true },
         { id: 'solicitud-lineas', etiqueta: 'Solicitud de Líneas', listo: true },
         { id: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas', listo: true },
-        { id: 'lineas-post-venta', etiqueta: 'Líneas Post Venta', listo: true },
         { id: 'bitacora-desechos', etiqueta: 'Bitácora de Desechos', listo: true },
+      ],
+    },
+    {
+      // Activos por colaborador de todas las áreas (fuera del grupo Líneas)
+      id: 'gestion-activos', etiqueta: 'Gestión de Activos', icono: 'briefcase',
+      modulos: [
+        { id: 'gestion-activos', etiqueta: 'Gestión de Activos', listo: true },
       ],
     },
     {
