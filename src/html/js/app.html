@@ -41,6 +41,26 @@
     });
   }
 
+  /**
+   * Guarda varios cambios de un tirón para los módulos (Verificaciones,
+   * Sensores, Hologramas) cuyo servidor solo expone "actualizar UN campo"
+   * (apiActualizarCampoX(token, id, campo, valor)), no un actualizar()
+   * general — para que su ventana de "Editar" pueda mandar todo el
+   * formulario de golpe, se llama una vez por cada campo que de verdad
+   * cambió. SIEMPRE una tras otra (nunca Promise.all): cada llamada relee
+   * y regraba la fila COMPLETA, así que dos a la vez sobre la misma fila
+   * podrían pisarse (la segunda escribiría encima con datos de antes de
+   * que la primera terminara). Regresa el registro tal como lo dejó la
+   * ÚLTIMA llamada (ya con todos los cambios aplicados).
+   */
+  async function guardarCambiosCampoPorCampo(id, cambios, funcionApi) {
+    let actualizado = null;
+    for (const campo of Object.keys(cambios)) {
+      actualizado = await funcionApi(id, campo, cambios[campo]);
+    }
+    return actualizado;
+  }
+
   function wireTabsSimple(contenedor) {
     const botones = contenedor.querySelectorAll('.tab-btn');
     botones.forEach((btn) => {

@@ -40,6 +40,7 @@
     const DIAS_ACTIVIDAD = 30;
     // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
     const puedeEditar = puedeEditarModulo('instalacion-sensores');
+    const modalEditar = document.getElementById('modal-editar-sensor');
 
     let sensores = [];
     let vivo = { disponible: false, estados: {} };
@@ -85,9 +86,8 @@
         contenidoExtra: (s, contenedor) => pintarExtraDetalle(s, contenedor),
       },
       columnas: [
-        // Cambiar el folio vuelve a copiar TODOS los datos del vehículo: solo desde el panel
-        { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', editable: 'panel', fijada: true },
-        { campo: 'SERIE_SENSOR', titulo: 'Serie sensor', tipo: 'texto', editable: true },
+        { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', fijada: true },
+        { campo: 'SERIE_SENSOR', titulo: 'Serie sensor', tipo: 'texto' },
         { campo: 'EN_VIVO', titulo: 'En vivo', tipo: 'lista', enDetalle: false, exportable: true,
           render: (valor, fila) => badgeEnVivo(valor, fila) },
         { campo: 'PLACA', titulo: 'Placa', tipo: 'texto' },
@@ -95,11 +95,11 @@
         { campo: 'LINEA', titulo: 'Línea', tipo: 'lista' },
         { campo: 'MODELO', titulo: 'Año', tipo: 'texto' },
         { campo: 'CLASE', titulo: 'Clase', tipo: 'lista' },
-        { campo: 'COMBUSTIBLE', titulo: 'Combustible', tipo: 'lista', editable: true },
-        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', editable: true, opciones: ['ACTIVO', 'BAJA'] },
-        { campo: 'FECHA_INSTALACION', titulo: 'Instalación', tipo: 'fecha', editable: true },
-        { campo: 'RENDIMIENTO', titulo: 'Rendimiento (km/L)', tipo: 'numero', editable: true },
-        { campo: 'RALENTI', titulo: 'Ralentí (L/h)', tipo: 'numero', editable: true },
+        { campo: 'COMBUSTIBLE', titulo: 'Combustible', tipo: 'lista' },
+        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista' },
+        { campo: 'FECHA_INSTALACION', titulo: 'Instalación', tipo: 'fecha' },
+        { campo: 'RENDIMIENTO', titulo: 'Rendimiento (km/L)', tipo: 'numero' },
+        { campo: 'RALENTI', titulo: 'Ralentí (L/h)', tipo: 'numero' },
         { campo: 'DEPARTAMENTO', titulo: 'Departamento', tipo: 'lista' },
         { campo: 'SEDE', titulo: 'Sede', tipo: 'lista' },
         { campo: 'RESPONSABLE', titulo: 'Responsable', tipo: 'texto' },
@@ -108,7 +108,7 @@
         { campo: 'SERIE_VEHICULO', titulo: 'Serie vehículo', tipo: 'texto', visible: false },
         { campo: 'CAPACIDAD', titulo: 'Capacidad (L)', tipo: 'numero', visible: false },
         { campo: 'COLOR', titulo: 'Color', tipo: 'lista', visible: false },
-        { campo: 'COMENTARIOS', titulo: 'Comentarios', tipo: 'texto', editable: true, visible: false },
+        { campo: 'COMENTARIOS', titulo: 'Comentarios', tipo: 'texto', visible: false },
         { campo: 'FECHA_REGISTRO', titulo: 'Registro', tipo: 'fecha', visible: false },
         {
           campo: 'RESPONSIVA', titulo: 'Responsiva', filtrable: false, ordenable: false, enDetalle: false,
@@ -117,28 +117,25 @@
             : '—'),
         },
       ],
-      accionesFila: [
-        {
-          icono: 'map-pin', titulo: 'Ver en el mapa',
-          visible: (s) => !!(infoVivoDe(s) && infoVivoDe(s).lat),
-          alHacer: (s) => {
-            const info = infoVivoDe(s);
-            window.open('https://www.google.com/maps?q=' + info.lat + ',' + info.lon, '_blank');
+      accionesFila: [].concat(
+        [
+          {
+            icono: 'map-pin', titulo: 'Ver en el mapa',
+            visible: (s) => !!(infoVivoDe(s) && infoVivoDe(s).lat),
+            alHacer: (s) => {
+              const info = infoVivoDe(s);
+              window.open('https://www.google.com/maps?q=' + info.lat + ',' + info.lon, '_blank');
+            },
           },
-        },
-        {
-          icono: 'activity', titulo: 'Actividad de los últimos 30 días (Geotab)',
-          visible: (s) => vivo.disponible && !!s.SERIE_SENSOR,
-          alHacer: (s) => verActividad(s),
-        },
-      ],
+          {
+            icono: 'activity', titulo: 'Actividad de los últimos 30 días (Geotab)',
+            visible: (s) => vivo.disponible && !!s.SERIE_SENSOR,
+            alHacer: (s) => verActividad(s),
+          },
+        ],
+        puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (s) => abrirEditarSensor(s) }] : []
+      ),
       seleccionable: true,
-      alEditar: puedeEditar ? async (fila, campo, valor) => {
-        const actualizada = await callServer('apiActualizarCampoSensor', state.token, fila.ID, campo, valor);
-        sensores = sensores.map((s) => (s.ID === fila.ID ? actualizada : s));
-        refrescarTabla();
-        pintarStats();
-      } : null,
       alEliminar: puedeEditar ? async (filas) => {
         await callServer('apiEliminarSensores', state.token, filas.map((f) => f.ID));
         const ids = new Set(filas.map((f) => f.ID));
@@ -199,6 +196,71 @@
         });
       }
     }
+
+    /** Ventana de edición general (los campos capturables de golpe, en vez de celda por celda). */
+    function abrirEditarSensor(s) {
+      document.getElementById('editar-sensor-id').value = s.ID;
+      document.getElementById('editar-sensor-label').textContent = [s.FOLIO, s.SERIE_SENSOR].filter(Boolean).join(' · ');
+      document.getElementById('editar-sensor-folio').value = s.FOLIO || '';
+      document.getElementById('editar-sensor-serie').value = s.SERIE_SENSOR || '';
+      document.getElementById('editar-sensor-combustible').value = s.COMBUSTIBLE || '';
+      document.getElementById('editar-sensor-estatus').value = s.ESTATUS || 'ACTIVO';
+      document.getElementById('editar-sensor-fecha-instalacion').value = fechaParaInput(s.FECHA_INSTALACION);
+      document.getElementById('editar-sensor-rendimiento').value = s.RENDIMIENTO || '';
+      document.getElementById('editar-sensor-ralenti').value = s.RALENTI || '';
+      document.getElementById('editar-sensor-comentarios').value = s.COMENTARIOS || '';
+      document.getElementById('editar-sensor-error').hidden = true;
+      modalEditar.hidden = false;
+    }
+    function cerrarEditarSensor() {
+      modalEditar.hidden = true;
+      document.getElementById('form-editar-sensor').reset();
+      document.getElementById('editar-sensor-error').hidden = true;
+    }
+    document.getElementById('btn-cancelar-editar-sensor').addEventListener('click', cerrarEditarSensor);
+    modalEditar.addEventListener('click', (ev) => { if (ev.target === modalEditar) cerrarEditarSensor(); });
+
+    document.getElementById('form-editar-sensor').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('editar-sensor-error');
+      errorBox.hidden = true;
+      const id = document.getElementById('editar-sensor-id').value;
+      const original = sensores.find((s) => s.ID === id) || {};
+      const nuevo = {
+        FOLIO: document.getElementById('editar-sensor-folio').value.trim(),
+        SERIE_SENSOR: document.getElementById('editar-sensor-serie').value.trim(),
+        COMBUSTIBLE: document.getElementById('editar-sensor-combustible').value.trim(),
+        ESTATUS: document.getElementById('editar-sensor-estatus').value,
+        FECHA_INSTALACION: document.getElementById('editar-sensor-fecha-instalacion').value,
+        RENDIMIENTO: document.getElementById('editar-sensor-rendimiento').value,
+        RALENTI: document.getElementById('editar-sensor-ralenti').value,
+        COMENTARIOS: document.getElementById('editar-sensor-comentarios').value.trim(),
+      };
+      const cambios = {};
+      Object.keys(nuevo).forEach((campo) => {
+        const antes = campo === 'FECHA_INSTALACION' ? fechaParaInput(original[campo]) : String(original[campo] || '');
+        if (String(nuevo[campo]) !== antes) cambios[campo] = nuevo[campo];
+      });
+      if (!Object.keys(cambios).length) { cerrarEditarSensor(); return; }
+
+      const btn = ev.target.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      try {
+        const actualizada = await guardarCambiosCampoPorCampo(id, cambios,
+          (id, campo, valor) => callServer('apiActualizarCampoSensor', state.token, id, campo, valor));
+        sensores = sensores.map((s) => (s.ID === id ? actualizada : s));
+        refrescarTabla();
+        pintarStats();
+        cerrarEditarSensor();
+        Notificar.exito('Actualizado exitosamente');
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+        Notificar.error('No se pudo actualizar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+      }
+    });
 
     // ----- Actividad en Geotab (solo consulta: no cambia nada de la hoja) -----
     const horasLegibles = (horas) => {

@@ -53,4 +53,25 @@
       <p class="empty-state" id="ver-vacio">Cargando…</p>
     </div>
   </div>
+
+  <!-- Modal: editar verificación (folio, fecha de verificación, próxima verificación) -->
+  <div class="modal-backdrop" id="modal-editar-verificacion" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h3 style="margin:0">Editar verificación</h3>
+          <p class="modal-subtitle" id="editar-verificacion-label"></p>
+        </div>
+        <button type="button" class="modal-close" id="btn-cancelar-editar-verificacion"><i data-lucide="x" class="ico"></i></button>
+      </div>
+      <form id="form-editar-verificacion">
+        <input type="hidden" id="editar-verificacion-id" />
+        <div class="field"><label>Folio del vehículo</label><input type="text" id="editar-verificacion-folio" /></div>
+        <div class="field"><label>Fecha de verificación</label><input type="date" id="editar-verificacion-fecha-verificacion" /></div>
+        <div class="field"><label>Próxima verificación</label><input type="date" id="editar-verificacion-fecha-proxima" /></div>
+        <div class="error-msg" id="editar-verificacion-error" hidden></div>
+        <button type="submit" style="width:100%; margin-top:10px"><i data-lucide="save" class="ico"></i> Guardar cambios</button>
+      </form>
+    </div>
+  </div>
 </template>

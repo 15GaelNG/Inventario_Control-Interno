@@ -46,4 +46,36 @@
       <div id="sen-form"></div>
     </div>
   </div>
+
+  <!-- Modal: editar instalación -->
+  <div class="modal-backdrop" id="modal-editar-sensor" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h3 style="margin:0">Editar instalación</h3>
+          <p class="modal-subtitle" id="editar-sensor-label"></p>
+        </div>
+        <button type="button" class="modal-close" id="btn-cancelar-editar-sensor"><i data-lucide="x" class="ico"></i></button>
+      </div>
+      <form id="form-editar-sensor">
+        <input type="hidden" id="editar-sensor-id" />
+        <div class="field"><label>Folio del vehículo</label><input type="text" id="editar-sensor-folio" /><span class="form-ayuda">Cambiarlo vuelve a copiar los datos del vehículo</span></div>
+        <div class="field"><label>Serie del sensor</label><input type="text" id="editar-sensor-serie" /></div>
+        <div class="field"><label>Combustible</label><input type="text" id="editar-sensor-combustible" /></div>
+        <div class="field">
+          <label>Estatus</label>
+          <select id="editar-sensor-estatus">
+            <option value="ACTIVO">ACTIVO</option>
+            <option value="BAJA">BAJA</option>
+          </select>
+        </div>
+        <div class="field"><label>Fecha de instalación</label><input type="date" id="editar-sensor-fecha-instalacion" /></div>
+        <div class="field"><label>Rendimiento (km/L)</label><input type="number" step="any" id="editar-sensor-rendimiento" /></div>
+        <div class="field"><label>Ralentí (L/h)</label><input type="number" step="any" id="editar-sensor-ralenti" /></div>
+        <div class="field"><label>Comentarios</label><input type="text" id="editar-sensor-comentarios" /></div>
+        <div class="error-msg" id="editar-sensor-error" hidden></div>
+        <button type="submit" style="width:100%; margin-top:10px"><i data-lucide="save" class="ico"></i> Guardar cambios</button>
+      </form>
+    </div>
+  </div>
 </template>

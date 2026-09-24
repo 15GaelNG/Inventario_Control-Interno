@@ -24,6 +24,7 @@
     const DIA_MS = 24 * 60 * 60 * 1000;
     // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
     const puedeEditar = puedeEditarModulo('verificaciones');
+    const modalEditar = document.getElementById('modal-editar-verificacion');
     let verificaciones = [];
 
     // ----- Cálculos derivados (estado de vigencia por vehículo) -----
@@ -89,11 +90,10 @@
         contenidoExtra: (v, contenedor) => mostrarComprobanteEnPanel(v, contenedor),
       },
       columnas: [
-        // Cambiar el folio también cambia la placa: solo desde el panel de detalle, no en la celda
-        { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', editable: 'panel', fijada: true },
+        { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', fijada: true },
         { campo: 'PLACA', titulo: 'Placa', tipo: 'texto' },
-        { campo: 'FECHA_VERIFICACION', titulo: 'Fecha verificación', tipo: 'fecha', editable: true },
-        { campo: 'FECHA_PROXIMA', titulo: 'Próxima verificación', tipo: 'fecha', editable: true },
+        { campo: 'FECHA_VERIFICACION', titulo: 'Fecha verificación', tipo: 'fecha' },
+        { campo: 'FECHA_PROXIMA', titulo: 'Próxima verificación', tipo: 'fecha' },
         { campo: 'DIAS_RESTANTES', titulo: 'Días para vencer', tipo: 'numero' },
         { campo: 'ESTADO', titulo: 'Estado', tipo: 'lista', render: (v) => badgeEstado(v) },
         { campo: 'REGISTRADO_POR', titulo: 'Registrado por', tipo: 'lista' },
@@ -106,16 +106,9 @@
             : '—'),
         },
       ],
+      accionesFila: puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (v) => abrirEditarVerificacion(v) }] : [],
       // Casillas para todos: copiar sirve a cualquiera; sin permiso, la barra explica por qué no hay "Eliminar"
       seleccionable: true,
-      alEditar: puedeEditar ? async (fila, campo, valor) => {
-        const actualizada = await callServer('apiActualizarCampoVerificacion', state.token, fila.ID, campo, valor);
-        // Recalcular estados de todos (cambiar una fecha o folio puede mover cuál es la "última")
-        verificaciones = conDerivados(verificaciones.map((v) => (v.ID === fila.ID ? actualizada : v)));
-        tabla.setDatos(verificaciones);
-        pintarStats();
-        pintarHistorial();
-      } : null,
       alEliminar: puedeEditar ? async (filas) => {
         await callServer('apiEliminarVerificaciones', state.token, filas.map((f) => f.ID));
         const ids = new Set(filas.map((f) => f.ID));
@@ -154,6 +147,61 @@
         }
       }
     }
+
+    /** Ventana de edición general (los 3 campos de golpe, en vez de celda por celda). */
+    function abrirEditarVerificacion(v) {
+      document.getElementById('editar-verificacion-id').value = v.ID;
+      document.getElementById('editar-verificacion-label').textContent = 'Folio: ' + (v.FOLIO || '');
+      document.getElementById('editar-verificacion-folio').value = v.FOLIO || '';
+      document.getElementById('editar-verificacion-fecha-verificacion').value = fechaParaInput(v.FECHA_VERIFICACION);
+      document.getElementById('editar-verificacion-fecha-proxima').value = fechaParaInput(v.FECHA_PROXIMA);
+      document.getElementById('editar-verificacion-error').hidden = true;
+      modalEditar.hidden = false;
+    }
+    function cerrarEditarVerificacion() {
+      modalEditar.hidden = true;
+      document.getElementById('form-editar-verificacion').reset();
+      document.getElementById('editar-verificacion-error').hidden = true;
+    }
+    document.getElementById('btn-cancelar-editar-verificacion').addEventListener('click', cerrarEditarVerificacion);
+    modalEditar.addEventListener('click', (ev) => { if (ev.target === modalEditar) cerrarEditarVerificacion(); });
+
+    document.getElementById('form-editar-verificacion').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('editar-verificacion-error');
+      errorBox.hidden = true;
+      const id = document.getElementById('editar-verificacion-id').value;
+      const original = verificaciones.find((v) => v.ID === id) || {};
+      const nuevo = {
+        FOLIO: document.getElementById('editar-verificacion-folio').value.trim(),
+        FECHA_VERIFICACION: document.getElementById('editar-verificacion-fecha-verificacion').value,
+        FECHA_PROXIMA: document.getElementById('editar-verificacion-fecha-proxima').value,
+      };
+      const cambios = {};
+      if (nuevo.FOLIO !== (original.FOLIO || '')) cambios.FOLIO = nuevo.FOLIO;
+      if (nuevo.FECHA_VERIFICACION !== fechaParaInput(original.FECHA_VERIFICACION)) cambios.FECHA_VERIFICACION = nuevo.FECHA_VERIFICACION;
+      if (nuevo.FECHA_PROXIMA !== fechaParaInput(original.FECHA_PROXIMA)) cambios.FECHA_PROXIMA = nuevo.FECHA_PROXIMA;
+      if (!Object.keys(cambios).length) { cerrarEditarVerificacion(); return; }
+
+      const btn = ev.target.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      try {
+        const actualizada = await guardarCambiosCampoPorCampo(id, cambios,
+          (id, campo, valor) => callServer('apiActualizarCampoVerificacion', state.token, id, campo, valor));
+        verificaciones = conDerivados(verificaciones.map((v) => (v.ID === id ? actualizada : v)));
+        tabla.setDatos(verificaciones);
+        pintarStats();
+        pintarHistorial();
+        cerrarEditarVerificacion();
+        Notificar.exito('Actualizado exitosamente');
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+        Notificar.error('No se pudo actualizar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+      }
+    });
 
     // ----- Pestaña 3: historial por tarjetas -----
 
