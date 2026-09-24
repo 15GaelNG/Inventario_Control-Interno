@@ -28,7 +28,7 @@ const LineasOperativas = (function () {
       return {
         id: id,
         etiqueta: (t('IMEI') || 'SIN IMEI') + ' · ' + (t('NUMERO TELEFONO') || '—') + (t('NUCO') ? ' · NUCO ' + t('NUCO') : ''),
-        datos: { 'NUMERO TELEFONO': t('NUMERO TELEFONO'), 'NUMERO SIM': t('NUMERO SIM') },
+        datos: { 'NUMERO TELEFONO': t('NUMERO TELEFONO'), 'NUMERO SIM': t('NUMERO SIM'), 'FOLIO': t('FOLIO'), 'EQUIPO': t('EQUIPO'), 'NUCO': t('NUCO') },
       };
     }).filter(Boolean);
   }
@@ -84,7 +84,22 @@ const LineasOperativas = (function () {
     ],
   };
 
-  const TABLAS = { REACTIVACION: () => LineasRepo.TAB.REACTIVACION, SOLICITUD: () => LineasRepo.TAB.SOLICITUD };
+  // BITACORA DE DESECHO_Form (ColumnOrder del AppSheet); EVIDENCIA y AUTORIZACION son archivos obligatorios
+  FORMULARIOS.DESECHO = (usuario, catalogos, conOpciones) => [
+    campo_('ID_EQUIPO', 'IMEI EQUIPO', 'referencia', Object.assign({ opciones: conOpciones ? opcionesLineas_() : [] }, req)),
+    campo_('FOLIO EQUIPO', 'FOLIO EQUIPO', 'texto', { soloLectura: true, deriva: { de: 'ID_EQUIPO', dato: 'FOLIO' } }),
+    campo_('EQUIPO', 'EQUIPO', 'texto', { soloLectura: true, deriva: { de: 'ID_EQUIPO', dato: 'EQUIPO' } }),
+    campo_('LUGAR DE DESECHO', 'LUGAR DE DESECHO', 'listaAbierta', Object.assign({ opciones: catalogos.lugaresDesecho || [] }, req)),
+    campo_('EVIDENCIA', 'EVIDENCIA', 'archivo', req),
+    campo_('AUTORIZACION', 'AUTORIZACION', 'archivo', req),
+    campo_('ESTADO', 'ESTADO', 'listaAbierta', Object.assign({ opciones: catalogos.estadosDesecho || [] }, req)),
+    campo_('MOTIVO', 'MOTIVO', 'texto', req),
+    campo_('FECHA DE DESECHO', 'FECHA DE DESECHO', 'fecha', req),
+    campo_('FECHA DE REGISTRO', 'FECHA DE REGISTRO', 'calculado', { valor: Utilities.formatDate(new Date(), ZONA, 'dd/MM/yyyy'), soloLectura: true }),
+    campo_('QUIEN REGISTRO', 'QUIEN REGISTRO', 'texto', { valor: usuario.nombre || '', soloLectura: true }),
+  ];
+
+  const TABLAS = { REACTIVACION: () => LineasRepo.TAB.REACTIVACION, SOLICITUD: () => LineasRepo.TAB.SOLICITUD, DESECHO: () => LineasRepo.TAB.DESECHO };
 
   function formulario(tipo, usuario) {
     const clave = String(tipo || '').toUpperCase();
@@ -97,7 +112,7 @@ const LineasOperativas = (function () {
     const valores = {};
     const errores = [];
     elementos.forEach((e) => {
-      if (e.soloLectura) return;
+      if (e.soloLectura || e.control === 'archivo') return;
       let v = enviados && enviados[e.columna] !== undefined && enviados[e.columna] !== null ? String(enviados[e.columna]).trim() : '';
       if (e.requerido === 'SIEMPRE' && v === '') { errores.push(e.etiqueta + ' es obligatorio'); return; }
       if (v === '') { valores[e.columna] = ''; return; }
@@ -117,11 +132,15 @@ const LineasOperativas = (function () {
   }
 
   /** Agrega el registro con el folio del AppSheet. */
-  function crear(tipo, enviados, usuario) {
+  function crear(tipo, datos, usuario) {
     const clave = String(tipo || '').toUpperCase();
     if (!FORMULARIOS[clave]) throw new Error('Este módulo no admite altas.');
+    const enviados = (datos && datos.valores) || datos || {};
+    const archivos = (datos && datos.archivos) || {};
     const elementos = FORMULARIOS[clave](usuario, LineasRepo.catalogos(), false);
-    const r = validar_(elementos, enviados || {});
+    const r = validar_(elementos, enviados);
+    elementos.filter((e) => e.control === 'archivo' && e.requerido === 'SIEMPRE' && !(archivos[e.columna] && archivos[e.columna].base64))
+      .forEach((e) => r.errores.push(e.etiqueta + ' es obligatorio'));
     if (r.errores.length) throw new Error(r.errores.join(' · '));
     const valores = r.valores;
     const tabla = TABLAS[clave]();
@@ -131,7 +150,24 @@ const LineasOperativas = (function () {
       const fila = Object.assign({}, valores, {
         'ID': LineasDatos.nuevoIdCorto(), 'FECHA DE REGISTRO': ahora, 'QUIEN REGISTRO': usuario.nombre || usuario.correo,
       });
-      if (clave === 'REACTIVACION') {
+      if (clave === 'DESECHO') {
+        // ID_EQUIPO es Ref a LINEAS TELEFONICAS; FOLIO EQUIPO / EQUIPO / IMEI = [ID_EQUIPO].[...]
+        const filas = LineasDatos.buscarFilas(LineasRepo.TAB.LINEAS, 'ID', valores['ID_EQUIPO']);
+        if (!filas.length) throw new Error('IMEI EQUIPO: selecciona un equipo de la lista.');
+        const equipo = LineasDatos.leerFilas([{ tabla: LineasRepo.TAB.LINEAS, filas: filas.slice(0, 1) }])[0][0];
+        delete fila['ID'];
+        fila['ID_DESECHO'] = LineasDatos.nuevoIdCorto();
+        fila['FOLIO EQUIPO'] = LineasUtil.col(equipo, 'FOLIO');
+        fila['EQUIPO'] = LineasUtil.col(equipo, 'EQUIPO');
+        fila['IMEI'] = LineasUtil.col(equipo, 'IMEI');
+        // FECHA DE REGISTRO = TODAY()
+        fila['FECHA DE REGISTRO'] = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+        const nuco = LineasUtil.col(equipo, 'NUCO');
+        ['EVIDENCIA', 'AUTORIZACION'].forEach((c) => {
+          const a = archivos[c];
+          fila[c] = LineasEvidencias.guardarArchivoDeRegistro(nuco, 'DESECHO', c + ' ' + (a.nombre || ''), a.mime, a.base64);
+        });
+      } else if (clave === 'REACTIVACION') {
         // IMEI es Ref a LINEAS TELEFONICAS: guarda el ID; LINEA SUSPENDIDA y SIM = [IMEI].[...]
         const filas = LineasDatos.buscarFilas(LineasRepo.TAB.LINEAS, 'ID', valores['IMEI']);
         if (!filas.length) throw new Error('IMEI: selecciona una línea de la lista.');
@@ -146,6 +182,12 @@ const LineasOperativas = (function () {
         fila['FOLIO'] = LineasDatos.ultimaFila(tabla); // la nueva fila es ultimaFila + 1 → folio = ultimaFila
       }
       const numeroFila = LineasDatos.agregarFilas(tabla, [fila])[0];
+      if (clave === 'DESECHO') {
+        // Bot FOLIO DESECHO: "DR" & RIGHT("0000" & ([_ROWNUMBER] - 1), 4)
+        fila['FOLIO DESECHO'] = 'DR' + ('0000' + (numeroFila - 1)).slice(-4);
+        LineasDatos.actualizarFila(tabla, numeroFila, { 'FOLIO DESECHO': fila['FOLIO DESECHO'] });
+        return { ok: true, folio: fila['FOLIO DESECHO'], fila: numeroFila };
+      }
       if (clave === 'SOLICITUD' && numeroFila - 1 !== fila['FOLIO']) {
         LineasDatos.actualizarFila(tabla, numeroFila, { 'FOLIO': numeroFila - 1 });
         fila['FOLIO'] = numeroFila - 1;

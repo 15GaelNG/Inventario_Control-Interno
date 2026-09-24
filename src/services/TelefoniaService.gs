@@ -192,6 +192,12 @@ const TelefoniaService = (function () {
     return LineasOperativas.crear(tipo, datos || {}, usuarioOperacion_(sesion));
   }
 
+  /** Formulario de alta (id vacío) o edición de LINEAS TELEFONICAS, como el del AppSheet. */
+  function formularioRegistro(token, id) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    return LineasUtil.paraCliente(LineasRegistros.formulario(id || null, usuarioOperacion_(sesion), puedeVerSecretos_(sesion)));
+  }
+
   function crearRegistro(token, datos) {
     const sesion = Auth.requiereRol(token, rolesOperan_());
     return LineasUtil.paraCliente(LineasRegistros.crear(datos || {}, usuarioOperacion_(sesion)));
@@ -199,7 +205,7 @@ const TelefoniaService = (function () {
 
   function editarRegistro(token, id, datos) {
     const sesion = Auth.requiereRol(token, rolesOperan_());
-    return LineasUtil.paraCliente(LineasRegistros.editar(id, datos || {}, usuarioOperacion_(sesion)));
+    return LineasUtil.paraCliente(LineasRegistros.editar(id, datos || {}, usuarioOperacion_(sesion), puedeVerSecretos_(sesion)));
   }
 
   /** Vacía las cachés del módulo (después de editar la hoja a mano). Solo ADMIN. */
@@ -267,7 +273,7 @@ const TelefoniaService = (function () {
   }
 
   return {
-    permisos, indice, equipo, linea, evidencias, historial, inspeccion, catalogos, colaboradores, bitacora, vistaOperativa, formularioOperativa, crearVistaOperativa, recargarDatos,
+    permisos, indice, equipo, linea, evidencias, historial, inspeccion, catalogos, colaboradores, bitacora, vistaOperativa, formularioOperativa, crearVistaOperativa, formularioRegistro, recargarDatos,
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf, crearRegistro, editarRegistro,
   };
 })();

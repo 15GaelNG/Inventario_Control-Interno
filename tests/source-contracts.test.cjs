@@ -64,7 +64,7 @@ test('las vistas operativas usan la misma base de AppSheet', () => {
   assert.match(repo, /departamento: 'POST VENTA'/);
   assert.match(read('src/ClientApi.gs'), /apiLineasVistaOperativa/);
   assert.match(read('src/ClientApi.gs'), /apiLineasCrearVistaOperativa/);
-  assert.match(read('src/services/lineas/LineasOperativas.gs'), /function crear\(tipo, enviados, usuario\)/);
+  assert.match(read('src/services/lineas/LineasOperativas.gs'), /function crear\(tipo, datos, usuario\)/);
 });
 
 test('Gestión de Activos y Detalles usan cuadrículas de tarjetas con filtros', () => {
@@ -88,18 +88,36 @@ test('las capturas canceladas tienen un flujo completo de limpieza', () => {
   assert.match(read('src/html/js/lineas.html'), /apiLineasCancelarEvidencia/);
 });
 
-test('Telefonía permite alta y edición directa con bitácora y color persistente', () => {
+test('el alta y edición de LINEAS TELEFONICAS sigue LINEAS TELEFONICAS_Form del AppSheet', () => {
   const api = read('src/ClientApi.gs');
-  const service = read('src/services/TelefoniaService.gs');
-  const registros = read('src/services/lineas/LineasRegistros.gs');
-  const repo = read('src/services/lineas/LineasRepo.gs');
+  const reg = read('src/services/lineas/LineasRegistros.gs');
+  assert.match(api, /apiLineasFormularioRegistro/);
   assert.match(api, /apiLineasCrearRegistro/);
   assert.match(api, /apiLineasEditarRegistro/);
-  assert.match(service, /LineasRegistros\.crear/);
-  assert.match(registros, /registrarMovimiento\('ALTA'/);
-  assert.match(registros, /registrarMovimiento\('EDICION'/);
-  assert.match(registros, /asegurarPestana\(LineasRepo\.TAB\.LINEAS, \['COLOR'\]\)/);
-  assert.match(repo, /color: texto\('COLOR'\)/);
+  assert.match(reg, /asegurarPestana\(LineasRepo\.TAB\.LINEAS, \['COLOR'\]\)/);
+  const cuerpo = reg.slice(reg.indexOf('function elementos_'), reg.indexOf('DATOS DEL SISTEMA NUEVO'));
+  const directos = [...cuerpo.matchAll(/campo_\('([^']+)'|lista\('([^']+)'/g)].map((m) => m[1] || m[2]);
+  const orden = ['FOLIO', 'TIPO', 'NUMERO TELEFONO', 'NUCO', 'EQUIPO', 'NO EMPLEADO', 'ESTATUS GENERAL', 'RESPONSABLE', 'PUESTO',
+    'RESPONSABLE USA EL EQUIPO', 'NOMBRE QUIEN USA', 'PUESTO QUIEN USA', 'IMEI', 'NUMERO SIM', 'ACCESORIOS', 'SEDE', 'OFICINA / DESARROLLO',
+    'DEPARTAMENTO', 'AREA', 'JEFE DIRECTO', 'DIRECTOR', 'RAZON SOCIAL', 'PIN WHATSAPP', 'PIN EQUIPO', 'CUENTA GOOGLE', 'COMPAÑIA',
+    'COSTO PLAN', 'FECHA REGISTRO', 'INICIO PLAN', 'FIN PLAN', 'ESTATUS LINEA', 'ESTATUS EQUIPO', 'RESPONSIVA', 'FECHA INSPECCION',
+    'FORMATO INSPECCION', 'COMENTARIOS'];
+  assert.deepEqual(directos.filter((c) => !/ $/.test(c)), orden);
+  assert.match(reg, /responsableExtra\('QUINTO', 'CUARTO RESPONSABLE', 'QUINTO RESPONSABLE'\)/);
+  assert.match(reg, /PIN_EQ: 'INGRESE UN VALOR VALIDO, Y NO MAYOR A 6 CARACTERES'/);
+  assert.match(reg, /mostrar: \{ nuevo: true \}, requerido: \{ nuevo: true \}/);
+  // Simulación: un alta de EQUIPO toma los valores iniciales "NO APLICA" y valida mayúsculas
+  const Reg = new Function('LineasRepo', 'CacheService', 'Utilities', 'SpreadsheetApp', 'Config',
+    reg + '; return LineasRegistros;')(
+    { CATALOGO: { tipos: ['EQUIPO', 'LINEA'], estatusLinea: ['USO'], estatusEquipo: ['USO'] } },
+    { getScriptCache: () => ({ get: () => '', put: () => {} }) },
+    { formatDate: () => '2026-09-24' }, {}, {});
+  const ctx = { nuevo: true, nucoRepetido: () => false, telefonoRepetido: () => false };
+  const els = Reg._elementos({}, {}, { correo: 'x@y.z' }, ctx);
+  const r = Reg._resolver(els, {}, { TIPO: 'EQUIPO', NUCO: '12', RESPONSABLE: 'juan', 'INICIO PLAN': '2026-09-01', 'FIN PLAN': '2027-09-01' }, ctx);
+  assert.equal(r.valores['NUMERO TELEFONO'], 'NO APLICA');
+  assert.equal(r.valores['NUMERO SIM'], 'NO APLICA');
+  assert.ok(r.errores.some((e) => /RESPONSABLE: ESCRIBIR EN MAYUSCULAS/.test(e)));
 });
 
 test('las firmas nuevas no se almacenan como archivos de Drive', () => {
@@ -233,7 +251,7 @@ test('las altas de Reactivación y Solicitud usan columnas, opciones y folios de
   assert.deepEqual(columnas('REACTIVACION: (usuario', 'SOLICITUD: (usuario'), ['FOLIO', 'LINIEA SUSPENDIDA', 'COMPAÑIA', 'SIM', 'CORREO / TICKET',
     'FECHA DE SUSPENSION', 'ESTATUS', 'ESTADO DEL EQUIPO', 'IMEI', 'RETRO DE SOLICITUD', 'FECHA DE REACTIVACION', 'NUEVO NUMERO', 'FECHA DE REGISTRO',
     'QUIEN REGISTRO', 'COMENTARIOS']);
-  assert.deepEqual(columnas('SOLICITUD: (usuario', 'const TABLAS'), ['FOLIO', 'FECHA DE SOLICITUD', 'TIPO DE PLAN', 'TICKET', 'NO EMPLEADO SOLICITANTE',
+  assert.deepEqual(columnas('SOLICITUD: (usuario', '// BITACORA DE DESECHO_Form'), ['FOLIO', 'FECHA DE SOLICITUD', 'TIPO DE PLAN', 'TICKET', 'NO EMPLEADO SOLICITANTE',
     'NOMBRE SOLICITANTE', 'PUESTO SOLICITANTE', 'DEPARTAMENTO SOLICITANTE', 'SEDE', 'DEPARTAMENTO', 'TIPO', 'PUESTO', 'COLABORADOR', 'SOLICITANTE',
     'FECHA DE ENTREGA', 'ASIGNACION', 'REASIGNACION', 'COMPAÑIA', 'EQUIPO', 'NUMERO ANTERIOR', 'NUMERO ACTUAL', 'IMEI', 'SIM', 'ESTATUS', 'COMENTARIOS',
     'FECHA DE REGISTRO', 'QUIEN REGISTRO']);
@@ -241,6 +259,9 @@ test('las altas de Reactivación y Solicitud usan columnas, opciones y folios de
   assert.match(op, /fila\['REASIGNACION'\] = !valores\['ASIGNACION'\]/);
   assert.match(op, /MAX\(REACTIVACION DE LINEAS\[FOLIO\]\) \+ 1/);
   assert.doesNotMatch(read('src/services/lineas/LineasRepo.gs'), /'LINEA SUSPENDIDA'|NOMBRE COMPLETO DEL SOLICITANTE/);
+  assert.deepEqual(columnas('FORMULARIOS.DESECHO', 'const TABLAS'), ['ID_EQUIPO', 'FOLIO EQUIPO', 'EQUIPO', 'LUGAR DE DESECHO', 'EVIDENCIA',
+    'AUTORIZACION', 'ESTADO', 'MOTIVO', 'FECHA DE DESECHO', 'FECHA DE REGISTRO', 'QUIEN REGISTRO']);
+  assert.match(op, /'DR' \+ \('0000' \+ \(numeroFila - 1\)\)\.slice\(-4\)/);
 });
 
 test('la bitácora automática registra exactamente los 23 campos del bot CAMBIOS TELEFONIA', () => {

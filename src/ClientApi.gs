@@ -115,6 +115,9 @@ function apiLineasGuardarResponsiva(token, datos) {
 function apiLineasGenerarPdf(token, tipo, id, forzar, firmas) {
   return TelefoniaService.generarPdf(token, tipo, id, forzar, firmas);
 }
+function apiLineasFormularioRegistro(token, id) {
+  return TelefoniaService.formularioRegistro(token, id);
+}
 function apiLineasCrearRegistro(token, datos) {
   return TelefoniaService.crearRegistro(token, datos);
 }

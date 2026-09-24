@@ -69,8 +69,8 @@ const LineasRepo = (function () {
     'AREA', 'RAZON SOCIAL', 'PIN WHATSAPP', 'PIN EQUIPO', 'CUENTA GOOGLE', 'INICIO PLAN', 'FIN PLAN', 'ESTATUS LINEA', 'ESTATUS EQUIPO',
     'RESPONSIVA', 'TIPO', 'COMPAÑIA', 'COSTO PLAN', 'NUCO', 'COMENTARIOS'];
 
-  const COLS_INDICE_EQUIPOS = ['id', 'nuco', 'tipo', 'modelo', 'imei', 'estatus', 'responsable', 'departamento', 'sede', 'lineaId', 'numero', 'compania', 'estatusLinea'];
-  const COLS_INDICE_LINEAS = ['id', 'numero', 'sim', 'compania', 'estatus', 'equipoId', 'nucoEquipo', 'responsable', 'departamento', 'suelta'];
+  const COLS_INDICE_EQUIPOS = ['id', 'nuco', 'tipo', 'modelo', 'imei', 'estatus', 'responsable', 'departamento', 'sede', 'lineaId', 'numero', 'compania', 'estatusLinea', 'tipoHoja'];
+  const COLS_INDICE_LINEAS = ['id', 'numero', 'sim', 'compania', 'estatus', 'equipoId', 'nucoEquipo', 'responsable', 'departamento', 'suelta', 'tipoHoja'];
   const SEG_CACHE_INDICE = 30 * 60;
 
   // Atajos (se resuelven al llamar, no al cargar el archivo).
@@ -198,19 +198,21 @@ const LineasRepo = (function () {
     const r = equipo.responsable || {};
     return [equipo._id, equipo.nuco || null, equipo.tipo || null, equipo.modelo || null, equipo.imei || null, equipo.estatus || null,
       r.nombre || null, r.departamento || null, r.sede || null,
-      equipo.lineaId || null, linea ? linea.numero || null : null, linea ? linea.compania || null : null, linea ? linea.estatus || null : null];
+      equipo.lineaId || null, linea ? linea.numero || null : null, linea ? linea.compania || null : null, linea ? linea.estatus || null : null,
+      (equipo.legado || {}).tipo || null]; // tipoHoja: TIPO tal cual en la hoja (reglas de formato del AppSheet)
   }
 
   function filaIndiceLinea_(linea, equipo) {
     const r = (equipo ? equipo.responsable : linea.responsable) || {};
     return [linea._id, linea.numero || null, linea.sim || null, linea.compania || null, linea.estatus || null, linea.equipoId || null,
-      equipo ? equipo.nuco || null : linea.nucoLegado || null, r.nombre || null, r.departamento || null, !linea.equipoId];
+      equipo ? equipo.nuco || null : linea.nucoLegado || null, r.nombre || null, r.departamento || null, !linea.equipoId,
+      ((equipo || linea).legado || {}).tipo || null];
   }
 
   /** Índices de equipos y líneas (1 lectura de la pestaña; caché 30 min). */
   function indice(forzar) {
     if (!forzar) {
-      const enCache = LineasDatos.cacheLeer('indice_telefonia');
+      const enCache = LineasDatos.cacheLeer('indice_telefonia_v2');
       if (enCache) return enCache;
     }
     const equipos = [];
@@ -226,7 +228,7 @@ const LineasRepo = (function () {
       lineas: { columnas: COLS_INDICE_LINEAS, filas: lineas },
       generadoEn: new Date(),
     });
-    LineasDatos.cacheGuardar('indice_telefonia', ix, SEG_CACHE_INDICE);
+    LineasDatos.cacheGuardar('indice_telefonia_v2', ix, SEG_CACHE_INDICE);
     return ix;
   }
 
@@ -237,7 +239,7 @@ const LineasRepo = (function () {
    */
   function refrescarIndice(ids) {
     const cambios = { equipos: [], lineas: [], quitar: { equipos: [], lineas: [] } };
-    const ix = LineasDatos.cacheLeer('indice_telefonia');
+    const ix = LineasDatos.cacheLeer('indice_telefonia_v2');
     (ids || []).filter(Boolean).forEach((id) => {
       const f = leerRegistroPorId(id);
       const r = f ? convertirRegistro(f) : null;
@@ -260,7 +262,7 @@ const LineasRepo = (function () {
         cambios.quitar.lineas.push(id);
       }
     });
-    if (ix) LineasDatos.cacheGuardar('indice_telefonia', ix, SEG_CACHE_INDICE);
+    if (ix) LineasDatos.cacheGuardar('indice_telefonia_v2', ix, SEG_CACHE_INDICE);
     return cambios;
   }
 
@@ -741,7 +743,7 @@ const LineasRepo = (function () {
 
   /** Vacía las cachés del módulo (índices, catálogos y carpetas). */
   function borrarCaches() {
-    ['indice_telefonia', 'indice_colaboradores', 'carpetas_nucos', 'catalogos_telefonia_v2'].forEach(LineasDatos.cacheBorrar);
+    ['indice_telefonia_v2', 'indice_colaboradores', 'carpetas_nucos', 'catalogos_telefonia_v2'].forEach(LineasDatos.cacheBorrar);
   }
 
   return {

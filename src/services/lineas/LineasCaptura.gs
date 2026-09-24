@@ -132,7 +132,9 @@ const LineasCaptura = (function () {
     ['DOCUMENTACIÓN / ACCESORIOS', 'SISTEMA', 'CONECTIVIDAD', 'ESTADO FÍSICO GENERAL', 'DESEMPEÑO'].forEach(agregarSeccion);
     elementos.push(
       titulo_('BLOQUEO Y CONTRASEÑAS'),
-      campo_('CONTRASEÑA MODEM', 'CONTRASEÑA MODEM', 'texto', { valor: '', mostrar: 'MODEM', literal: true, secreto: true }),
+      // Mejora sobre el AppSheet: se precarga la de la línea (en AppSheet no tiene valor inicial y el bot,
+      // al copiarla, borraba la contraseña guardada si el campo se dejaba vacío)
+      campo_('CONTRASEÑA MODEM', 'CONTRASEÑA MODEM', 'texto', { valor: v('CONTRASEÑA MODEM'), mostrar: 'MODEM', literal: true, secreto: true }),
       campo_('PIN WHATSAPP', 'PIN WHATSAPP', 'texto', { valor: v('PIN WHATSAPP'), mostrar: 'VOZ', literal: true, secreto: true }),
       campo_('PIN EQUIPO', 'PIN EQUIPO', 'texto', { valor: v('PIN EQUIPO'), mostrar: 'EQUIPOS', literal: true, secreto: true }),
       campo_('PATRON', 'PATRON', 'patron', { valor: v('PATRON'), mostrar: 'EQUIPOS', secreto: true })

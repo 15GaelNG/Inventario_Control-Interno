@@ -445,6 +445,15 @@
   .ln-af-extra { background: var(--color-bg); }
   .ln-af-calculado-texto { font-size: 13px; font-weight: 500; color: var(--color-text-muted); }
   #ln-op-campos.ln-op-campos { display: block; }
+  .ln-af-bloqueado input, .ln-af-bloqueado select { background: var(--color-bg); color: var(--color-text-muted); }
+  .ln-af-bloqueado .ln-pastilla { opacity: .5; }
+  .ln-af-archivo { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+  .ln-af-archivo input[type="file"] { font-size: 12px; }
+  .ln-multi .ln-pastillas { flex-wrap: wrap; }
+  /* Reglas de formato del AppSheet */
+  .ln-regla { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; line-height: 1.3; }
+  .ln-regla .ico { width: 1em; height: 1em; }
+  .ln-regla-chip { padding: 2px 8px; border-radius: 999px; font-size: 11.5px; }
   @media (max-width: 900px) { .ln-af-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (max-width: 560px) { .ln-af-grid { grid-template-columns: 1fr; } }
 </style>

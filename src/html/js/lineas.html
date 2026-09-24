@@ -114,6 +114,76 @@
     const esBooleano = (v) => v === true || v === false || /^(TRUE|FALSE)$/i.test(String(v));
     const booleano = (v) => (v === '' || v === null || v === undefined ? '' : (v === true || String(v).toUpperCase() === 'TRUE' ? 'Sí' : 'No'));
 
+    // ---------------- Reglas de formato del AppSheet (Format Rules de Telefonía) ----------------
+    // Color, tamaño, negritas/cursiva e ícono de cada regla (Logica/docs/06_reglas_formato_configuracion.md).
+    // Los colores con nombre del AppSheet se traducen a un tono legible sobre fondo claro u oscuro;
+    // los íconos Font Awesome se sustituyen por su equivalente de Lucide.
+    const COLOR_APPSHEET = {
+      green: '#1e8a3a', orange: '#e67e00', yellow: '#b59a00', red: '#d62020', pink: '#d4508a',
+      themeMainColor: 'var(--color-primary)', minorText: 'var(--color-text-muted)',
+    };
+    const colorAppSheet = (c) => COLOR_APPSHEET[c] || COLOR_APPSHEET[String(c).toLowerCase()] || c;
+    const REGLAS_FORMATO = {
+      REACTIVACION: {
+        'ESTATUS': {
+          'EN USO': { color: 'green', tam: 1.1, bold: true, italic: true },
+          'DISPONIBLE': { color: '#006400', tam: 1.1, bold: true, italic: true },
+          'EN PROCESO DE ASIGNACION': { color: 'themeMainColor', tam: 1.1, bold: true, italic: true },
+          'CANCELADA': { color: 'red', bold: true },
+          'PROCESO DE CANCELACION': { color: 'orange', bold: true },
+          'ACTUALIZACIÓN DE LINEA TELEFONICA': { color: '#305496', bold: true },
+        },
+        'RETRO DE SOLICITUD': {
+          'SUSPENSION DE LINEA': { color: 'orange', tam: 0.9, bold: true },
+          'ACTIVACION DE LINEA': { color: 'yellow', tam: 0.9, bold: true },
+          'CAMBIO DE NUMERO': { color: 'themeMainColor', tam: 0.9, bold: true },
+          'TRAMITE CONCLUIDO': { color: 'green', tam: 0.9, bold: true },
+          'PENDIENTE DE ENTREGA': { color: 'red', tam: 0.9, bold: true },
+          'CANCELACION': { color: '#8B0000', bold: true },
+        },
+      },
+      SOLICITUD: {
+        'ESTATUS': {
+          'PROCESO DE ADQUISICION': { color: 'themeMainColor', tam: 0.9, bold: true },
+          'FINALIZADO': { color: 'green', tam: 0.9, bold: true },
+          'TRAMITE CANCELADO': { color: 'orange', tam: 0.9, bold: true },
+        },
+      },
+      LINEAS: {
+        'TIPO': {
+          'MODEM': { color: 'themeMainColor', icono: 'hard-drive', bold: true },
+          'LINEA': { color: 'yellow', icono: 'card-sim', bold: true },
+          'EQUIPO + SIM': { color: 'green', icono: 'smartphone', bold: true },
+          'BANDA ANCHA': { color: 'pink', icono: 'radio-tower', bold: true },
+          'EQUIPO': { color: 'minorText', icono: 'smartphone', bold: true },
+          'EQUIPO + SIM BASICO': { color: '#54AE98', icono: 'card-sim', bold: true },
+          'CAMARA': { color: '#004734', icono: 'camera', bold: true },
+          'LINEA BASICA': { color: '#B3A184', icono: 'card-sim', bold: true },
+        },
+      },
+      CAMBIOS: {
+        'ANTES': { '*': { color: '#b78360' } },
+        'DESPUES': { '*': { color: 'themeMainColor' } },
+      },
+      ACCESORIOS: {
+        'Categoria': { 'Cargadores': { color: '#006699' }, 'Fundas': { color: 'pink' }, 'Micas': { color: '#998459' } },
+      },
+    };
+
+    /** HTML con la regla de formato del AppSheet para ese valor (o null si no hay regla). */
+    function estiloAppSheet(regla, texto, conFondo) {
+      const c = colorAppSheet(regla.color);
+      const estilo = 'color:' + c + ';' + (regla.tam ? 'font-size:' + regla.tam + 'em;' : '') + (regla.bold ? 'font-weight:700;' : '') + (regla.italic ? 'font-style:italic;' : '') +
+        (conFondo ? 'background:color-mix(in srgb, ' + c + ' 12%, transparent);border:1px solid color-mix(in srgb, ' + c + ' 45%, transparent);' : '');
+      return '<span class="ln-regla' + (conFondo ? ' ln-regla-chip' : '') + '" style="' + estilo + '">' + (regla.icono ? ico(regla.icono) + ' ' : '') + esc(texto) + '</span>';
+    }
+    function formatoAppSheet(modulo, columna, valor) {
+      const porColumna = (REGLAS_FORMATO[modulo] || {})[columna];
+      if (!porColumna || valor === null || valor === undefined || valor === '') return null;
+      const regla = porColumna[String(valor).trim().toUpperCase()] || porColumna[String(valor).trim()] || porColumna['*'];
+      return regla ? estiloAppSheet(regla, String(valor), !porColumna['*']) : null;
+    }
+
     let tiposTablaListos = false;
     /** DataTable con los valores por omisión del módulo (el tipo lnFechaHora ordena por fecha y hora). */
     function tablaLineas(contenedor, config) {
@@ -145,7 +215,7 @@
       return t.length <= 5 && !/\s/.test(t) ? t : t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
     };
 
-    function columnasDeHoja(encabezados, filas, visibles, titulos) {
+    function columnasDeHoja(encabezados, filas, visibles, titulos, modulo) {
       const orden = (visibles || []).map(normEncabezado);
       const norm = normEncabezado;
       const muestra = filas.slice(0, 300);
@@ -164,6 +234,8 @@
         else if (valores.length && valores.every(esBooleano)) { col.tipo = 'lista'; col.valor = (f) => booleano(f[h]); }
         else if (/ESTATUS|ESTADO|COMPA[ÑN]IA|^TIPO|SEDE|DEPARTAMENTO|MOTIVO|LUGAR|CAMPO$/.test(norm(h))) col.tipo = 'lista';
         if (/ESTATUS|ESTADO/.test(norm(h))) col.render = (v) => chip(v);
+        const reglasCol = modulo && (REGLAS_FORMATO[modulo] || {})[h];
+        if (reglasCol) col.render = (v) => formatoAppSheet(modulo, h, v) || (/ESTATUS|ESTADO/.test(norm(h)) ? chip(v) : esc(v));
         if (i === 0 && col.visible) col.fijada = true;
         return col;
       });
@@ -255,7 +327,25 @@
       MODEM: (t) => t.indexOf('MODEM') >= 0 || t.indexOf('BANDA ANCHA') >= 0,
       MODEM_Y_BANDA: (t) => t.indexOf('MODEM') >= 0 && t.indexOf('BANDA ANCHA') >= 0,
     };
-    const cumpleCondicion = (codigo, tipo) => !!CONDICIONES_APPSHEET[codigo] && CONDICIONES_APPSHEET[codigo](String(tipo || '').trim().toUpperCase());
+    /**
+     * Show_If / Required_If / Editable_If. `cond` es un código sobre [TIPO] (CONDICIONES_APPSHEET) o un
+     * objeto como los de LineasRegistros.gs: { tipoLleno } { tipoEn } { tipoNoEn } { campo, igual } { nuevo } { y }.
+     */
+    function cumpleCondicion(cond, tipo, valores, ctx) {
+      if (typeof cond === 'string' && cond.charAt(0) === '{') { try { cond = JSON.parse(cond); } catch (e) { return true; } }
+      if (cond === undefined || cond === null || cond === '' || cond === 'SIEMPRE') return true;
+      if (cond === 'NUNCA') return false;
+      const t = String((valores && valores.TIPO !== undefined ? valores.TIPO : tipo) || '').trim().toUpperCase();
+      if (typeof cond === 'string') return !!CONDICIONES_APPSHEET[cond] && CONDICIONES_APPSHEET[cond](t);
+      if (cond.y) return cond.y.every((c) => cumpleCondicion(c, tipo, valores, ctx));
+      if (cond.tipoLleno) return !!t;
+      if (cond.tipoEn) return cond.tipoEn.indexOf(t) >= 0;
+      if (cond.tipoNoEn) return cond.tipoNoEn.indexOf(t) < 0;
+      if (cond.nuevo) return !!(ctx && ctx.nuevo);
+      if (cond.campo) return String((valores || {})[cond.campo] || '').trim().toUpperCase() === String(cond.igual).toUpperCase();
+      return true;
+    }
+    const condAtributo = (c) => esc(typeof c === 'object' && c !== null ? JSON.stringify(c) : (c || 'SIEMPRE'));
 
     // CALIFICACION: misma AppFormula del AppSheet (ver LineasChecklist.calificacion)
     const CALIFICACION_SI = ['IDENTIFICACION', 'CUBO', 'CABLE', 'FUNDA', 'MICA', 'PANTALLA', 'BOTONES VOLUMEN', 'BOTON ENCENDIDO',
@@ -291,6 +381,17 @@
       } else if (e.control === 'listaAbierta') {
         // Enum con AllowOtherValues del AppSheet: sugerencias en su orden y cualquier otro valor
         control = '<input type="text"' + attrs + ' data-lista-abierta="1" value="' + esc(valor) + '" autocomplete="off" />';
+      } else if (e.control === 'numero') {
+        control = '<input type="text" inputmode="decimal"' + attrs + ' value="' + esc(valor) + '" autocomplete="off" />';
+      } else if (e.control === 'multi') {
+        // EnumList del AppSheet: varias opciones; se guarda "A , B"
+        const elegidas = valor.split(',').map((x) => x.trim().toUpperCase()).filter(Boolean);
+        control = '<div class="ln-multi" data-columna="' + esc(e.columna) + '"><div class="ln-pastillas">' + (e.opciones || []).map((o) =>
+          '<button type="button" class="ln-pastilla ln-pastilla-multi' + (elegidas.indexOf(String(o).toUpperCase()) >= 0 ? ' activa' : '') + '" data-valor="' + esc(o) + '">' + esc(o) + '</button>').join('') + '</div></div>';
+      } else if (e.control === 'archivo') {
+        const enlace = /^https?:/.test(valor) ? '<a class="ln-enlace" target="_blank" rel="noopener" href="' + esc(valor) + '">' + icono('file-text') + ' Ver archivo actual</a>'
+          : (valor ? '<span class="ln-tenue">' + esc(valor) + '</span>' : '<span class="ln-tenue">Sin archivo</span>');
+        control = '<div class="ln-af-archivo">' + enlace + '<input type="file" id="' + id + '" data-archivo="' + esc(e.columna) + '" accept="application/pdf,image/*" /></div>';
       } else if (e.control === 'fecha') {
         control = '<input type="date"' + attrs + ' value="' + esc(valor) + '" />';
       } else if (e.control === 'siNo') {
@@ -316,7 +417,7 @@
         control = '<input type="text"' + attrs + ' value="' + esc(valor) + '" autocomplete="off"' + (e.valorOculto ? ' placeholder="•••• (se conserva el valor registrado)"' : '') + ' />';
       }
       const ancho = ['escala', 'area', 'patron', 'firma'].indexOf(e.control) >= 0 ? ' ln-af-ancho' : '';
-      return '<div class="field ln-af-campo' + ancho + (e.soloLectura ? ' ln-af-lectura' : '') + '" data-af-columna="' + esc(e.columna) + '" data-mostrar="' + esc(e.mostrar) + '" data-requerido="' + esc(e.requerido) + '">' +
+      return '<div class="field ln-af-campo' + ancho + (e.soloLectura ? ' ln-af-lectura' : '') + '" data-af-columna="' + esc(e.columna) + '" data-mostrar="' + condAtributo(e.mostrar) + '" data-requerido="' + condAtributo(e.requerido) + '" data-editable="' + condAtributo(e.editable) + '">' +
         '<label for="' + id + '">' + esc(e.etiqueta) + '<span class="ln-af-req"' + (e.requerido === 'SIEMPRE' ? '' : ' hidden') + '> *</span></label>' + control + '</div>';
     }
 
@@ -354,6 +455,9 @@
         const activa = fila.querySelector('.ln-pastilla.activa');
         valores[fila.dataset.columna] = activa ? activa.dataset.valor : '';
       });
+      cuerpo.querySelectorAll('.ln-multi[data-columna]').forEach((fila) => {
+        valores[fila.dataset.columna] = Array.from(fila.querySelectorAll('.ln-pastilla.activa')).map((b) => b.dataset.valor).join(' , ');
+      });
       return valores;
     }
 
@@ -387,18 +491,155 @@
     }
 
     /** Obligatorios vacíos y valores fuera de lista (mismas reglas que valida el servidor). */
-    function erroresFormularioEn(cuerpo, elementos, tipo) {
+    const VALIDA_CLIENTE = {
+      MAYUS: { f: (v) => v === v.toUpperCase() && !/[ÁÉÍÓÚ]/.test(v), msg: 'ESCRIBIR EN MAYUSCULAS Y SIN ACENTOS' },
+      NUCO: { f: (v) => /^\d+$/.test(v), msg: 'ESTE CAMPO DEBE SER NUMEROS Y NO SE DEBE REPETIR' },
+      TELEFONO: { f: (v, t) => (t === 'EQUIPO' ? v === 'NO APLICA' : v !== 'NO APLICA'), msg: 'ESTE VALOR DEBE SER UNICO' },
+      EQUIPO: { f: (v, t) => (t === 'LINEA' ? v === 'NO APLICA' : v !== 'NO APLICA'), msg: 'DEBE ESCRIBIR EN MAYUSCULAS SIN ACENTOS Y EL NOMBRE DEBE ESTAR EN LA LISTA AUTORIZADA' },
+      PIN_WA: { f: (v, t) => (['BANDA ANCHA', 'MODEM'].indexOf(t) >= 0 ? v === 'NO APLICA' : v !== 'NO APLICA' && v.length <= 13), msg: 'INGRESE UN VALOR VALIDO, Y NO MAYOR A 13 CARACTERES' },
+      PIN_EQ: { f: (v, t) => (['BANDA ANCHA', 'LINEA', 'MODEM'].indexOf(t) >= 0 ? v === 'NO APLICA' : v !== 'NO APLICA' && v.length <= 6), msg: 'INGRESE UN VALOR VALIDO, Y NO MAYOR A 6 CARACTERES' },
+      CUENTA: { f: (v, t) => (['BANDA ANCHA', 'LINEA', 'MODEM'].indexOf(t) >= 0 ? v === 'NO APLICA' : v !== 'NO APLICA'), msg: 'INGRESE UN VALOR VALIDO' },
+      COMENTARIOS: { f: (v) => v.length > 3, msg: 'ESCRIBE MÁS DE 3 CARACTERES' },
+    };
+
+    /** Obligatorios vacíos y Valid_If (mismas reglas que valida el servidor, salvo unicidad). */
+    function erroresFormularioEn(cuerpo, elementos, tipo, ctx) {
       const valores = leerFormularioEn(cuerpo, elementos);
+      const t = String(valores.TIPO !== undefined ? valores.TIPO : (tipo || '')).trim().toUpperCase();
       const errores = [];
       (elementos || []).forEach((e) => {
-        if (e.tipo !== 'campo' || e.soloLectura || e.control === 'calculado' || e.control === 'firma' || e.control === 'patron' || e.valorOculto) return;
-        if (!cumpleCondicion(e.mostrar, tipo)) return;
+        if (e.tipo !== 'campo' || e.soloLectura || e.control === 'calculado' || e.control === 'firma' || e.control === 'patron' || e.control === 'archivo' || e.valorOculto) return;
+        if (!cumpleCondicion(e.mostrar, t, valores, ctx)) return;
         const v = valores[e.columna] || '';
-        if (!v) { if (cumpleCondicion(e.requerido, tipo)) errores.push({ e: e, msg: e.etiqueta + ' es obligatorio' }); return; }
-        if (e.control === 'lista' && (e.opciones || []).map((o) => String(o).toUpperCase()).indexOf(v.toUpperCase()) < 0) errores.push({ e: e, msg: e.etiqueta + ': ' + (e.mensaje || 'VALOR NO ENCONTRADO EN LA LISTA') });
+        if (!v) { if (cumpleCondicion(e.requerido, t, valores, ctx)) errores.push({ e: e, msg: e.etiqueta + ' es obligatorio' }); return; }
+        if (e.control === 'lista' && (e.opciones || []).map((o) => String(o).toUpperCase()).indexOf(v.toUpperCase()) < 0) { errores.push({ e: e, msg: e.etiqueta + ': ' + (e.mensaje || 'VALOR NO ENCONTRADO EN LA LISTA') }); return; }
         if (e.control === 'referencia' && v.charAt(0) === '¿') errores.push({ e: e, msg: e.etiqueta + ': elige un valor de la lista' });
+        const regla = e.valida && VALIDA_CLIENTE[e.valida];
+        if (regla && !regla.f(v, t)) errores.push({ e: e, msg: e.etiqueta + ': ' + regla.msg });
       });
       return errores;
+    }
+
+    /** FOLIO y ESTATUS GENERAL (AppFormula de LINEAS TELEFONICAS) para mostrarlos en vivo. */
+    function formulaRegistro(nombre, v, id) {
+      const tipo = String(v.TIPO || '').toUpperCase();
+      if (nombre === 'FOLIO') {
+        const prefijo = { 'EQUIPO + SIM': 'EQS', 'LINEA': 'LIN', 'MODEM': 'MOD', 'CAMARA': 'CAM', 'BANDA ANCHA': 'BAN', 'EQUIPO': 'EQP' }[tipo] || '';
+        return prefijo + ('0000' + (v.NUCO || '')).slice(-4);
+      }
+      if (nombre === 'ESTATUS_GENERAL') {
+        if (/^DG/i.test(id || '')) return 'PERSONAL DG';
+        if (tipo === 'EQUIPO') return { 'ESPERA DE RESPONSIVA': 'USO', 'EN ENVIO': 'USO', 'VENTA': 'RESGUARDO', 'DESECHADO': 'DESECHO' }[v['ESTATUS EQUIPO']] || v['ESTATUS EQUIPO'] || '';
+        if (['EQUIPO + SIM', 'LINEA', 'MODEM', 'BANDA ANCHA'].indexOf(tipo) >= 0) return { 'ESPERA DE RESPONSIVA': 'USO', 'SIN LINEA': 'CANCELADA', 'EN PROCESO DE CANCELACION': 'CANCELADA' }[v['ESTATUS LINEA']] || v['ESTATUS LINEA'] || '';
+        return '';
+      }
+      return '';
+    }
+
+    /**
+     * Show_If, Required_If, Editable_If y Reset_If en vivo (formulario de LINEAS TELEFONICAS).
+     * `tipoAnterior` sirve para los Reset_If que solo aplican cuando cambia TIPO.
+     */
+    function aplicarReglasEn(cuerpo, elementos, ctx) {
+      let valores = leerFormularioEn(cuerpo, elementos);
+      const t = String(valores.TIPO || '').toUpperCase();
+      const tipoCambio = ctx.nuevo || t !== String(ctx.tipoInicial || '').toUpperCase();
+      (elementos || []).forEach((e) => {
+        if (e.tipo !== 'campo' || !e.reset) return;
+        if (!cumpleCondicion(e.reset.cuando, t, valores, ctx) || (e.reset.soloCambioTipo && !tipoCambio)) return;
+        const el = cuerpo.querySelector('input[data-columna="' + CSS.escape(e.columna) + '"]');
+        if (el) el.value = e.reset.copiar ? (valores[e.reset.copiar] || '') : e.reset.valor;
+      });
+      valores = leerFormularioEn(cuerpo, elementos);
+      cuerpo.querySelectorAll('.ln-af-campo').forEach((campo) => {
+        const visible = cumpleCondicion(campo.dataset.mostrar, t, valores, ctx);
+        campo.hidden = !visible;
+        campo.querySelector('.ln-af-req').hidden = !(visible && cumpleCondicion(campo.dataset.requerido, t, valores, ctx));
+        const editable = cumpleCondicion(campo.dataset.editable, t, valores, ctx);
+        campo.classList.toggle('ln-af-bloqueado', !editable);
+        campo.querySelectorAll('input:not([readonly]), select, textarea, .ln-pastilla, input[type="file"]').forEach((el) => { el.disabled = !editable; });
+      });
+      cuerpo.querySelectorAll('.ln-af-seccion').forEach((sec) => { sec.hidden = !sec.querySelector('.ln-af-campo:not([hidden])'); });
+      cuerpo.querySelectorAll('[data-formula]').forEach((el) => {
+        if (el.dataset.formula === 'NO_ASIGNACION') return;
+        el.textContent = formulaRegistro(el.dataset.formula, valores, ctx.id) || '—';
+      });
+    }
+
+    /** Archivos elegidos en columnas File → { COLUMNA: { nombre, mime, base64 } }. */
+    function leerArchivosEn(cuerpo) {
+      const lectores = Array.from(cuerpo.querySelectorAll('input[type="file"][data-archivo]')).filter((i) => i.files && i.files[0]).map((input) => new Promise((resolve, reject) => {
+        const f = input.files[0];
+        if (f.size > 15 * 1024 * 1024) { reject(new Error(input.dataset.archivo + ': el archivo supera 15 MB.')); return; }
+        const r = new FileReader();
+        r.onload = () => resolve([input.dataset.archivo, { nombre: f.name, mime: f.type || 'application/pdf', base64: String(r.result).split(',')[1] }]);
+        r.onerror = () => reject(new Error('No se pudo leer ' + f.name));
+        r.readAsDataURL(f);
+      }));
+      return Promise.all(lectores).then((pares) => pares.reduce((o, [k, v]) => { o[k] = v; return o; }, {}));
+    }
+
+    /**
+     * Modal de alta con el formulario del AppSheet (apiLineasFormularioOperativa / apiLineasCrearVistaOperativa).
+     * Lo usa la Bitácora de Desechos; soporta referencias, listas abiertas, fechas y archivos.
+     */
+    function abrirAltaAppSheet(tipo, titulo, alGuardar) {
+      const fondo = document.createElement('div');
+      fondo.className = 'modal-backdrop';
+      fondo.innerHTML = '<div class="modal-card modal-card-wide" role="dialog" aria-modal="true" style="max-width:960px">' +
+        '<div class="modal-header"><div><h3 style="margin:0">Nuevo registro · ' + esc(titulo) + '</h3><p class="modal-subtitle">Mismo formulario que en AppSheet. Los campos con * son obligatorios.</p></div>' +
+        '<button type="button" class="modal-close" data-cerrar aria-label="Cerrar">' + ico('x') + '</button></div>' +
+        '<div class="ln-alta-cuerpo modal-form-scroll"><p class="empty-state"><span class="ln-spinner"></span> Cargando formulario…</p></div>' +
+        '<div class="error-msg" data-error hidden></div>' +
+        '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar>Cancelar</button><button type="button" data-guardar>' + ico('save') + ' Guardar</button></div></div>';
+      document.getElementById('view-container').appendChild(fondo);
+      const cuerpo = fondo.querySelector('.ln-alta-cuerpo');
+      const errorBox = fondo.querySelector('[data-error]');
+      let elementos = [];
+      let guardando = false;
+      const cerrar = () => { if (!guardando) fondo.remove(); };
+      fondo.addEventListener('click', (ev) => {
+        if (ev.target === fondo || ev.target.closest('[data-cerrar]')) { cerrar(); return; }
+        const pastilla = ev.target.closest('.ln-pastilla');
+        if (pastilla) {
+          pastilla.parentElement.querySelectorAll('.ln-pastilla').forEach((b) => b.classList.remove('activa'));
+          pastilla.classList.add('activa');
+          actualizarDerivadosEn(cuerpo, elementos);
+        }
+      });
+      cuerpo.addEventListener('input', () => actualizarDerivadosEn(cuerpo, elementos));
+      cuerpo.addEventListener('change', () => actualizarDerivadosEn(cuerpo, elementos));
+      callServer('apiLineasFormularioOperativa', state.token, tipo).then((els) => {
+        elementos = els;
+        cuerpo.innerHTML = htmlFormularioAppSheet(elementos);
+        activarCombosEn(cuerpo, elementos);
+        actualizarDerivadosEn(cuerpo, elementos);
+      }).catch((e) => { cuerpo.innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>'; });
+      fondo.querySelector('[data-guardar]').addEventListener('click', (ev) => {
+        if (guardando) return;
+        errorBox.hidden = true;
+        const errores = erroresFormularioEn(cuerpo, elementos, '');
+        elementos.filter((e) => e.control === 'archivo' && e.requerido === 'SIEMPRE').forEach((e) => {
+          const input = cuerpo.querySelector('input[type="file"][data-archivo="' + CSS.escape(e.columna) + '"]');
+          if (!input || !input.files || !input.files[0]) errores.push({ e: e, msg: e.etiqueta + ' es obligatorio' });
+        });
+        if (errores.length) { errorBox.textContent = errores.map((x) => x.msg).slice(0, 6).join(' · '); errorBox.hidden = false; return; }
+        const boton = ev.currentTarget;
+        const texto = boton.innerHTML;
+        guardando = true;
+        boton.innerHTML = '<span class="ln-spinner"></span> Guardando…';
+        fondo.querySelectorAll('button, input, select, textarea').forEach((el) => { el.disabled = true; });
+        leerArchivosEn(cuerpo)
+          .then((archivos) => callServer('apiLineasCrearVistaOperativa', state.token, tipo, { valores: leerFormularioEn(cuerpo, elementos), archivos: archivos }))
+          .then((r) => { guardando = false; fondo.remove(); aviso(ico('circle-check') + ' Registro ' + esc(r.folio) + ' guardado correctamente.', 6000); if (alGuardar) alGuardar(r); })
+          .catch((e) => {
+            guardando = false;
+            boton.innerHTML = texto;
+            fondo.querySelectorAll('button, input, select, textarea').forEach((el) => { el.disabled = false; });
+            errorBox.textContent = mensajeError(e);
+            errorBox.hidden = false;
+          });
+      });
     }
 
     /** Redimensiona una imagen en el navegador antes de subirla (máx. `maxDim` px, JPEG calidad .82). */
@@ -559,7 +800,7 @@
         etiqueta: (r) => 'NUCO ' + (r.nuco || '—') + (r.modelo ? ' · ' + r.modelo : ''),
         columnas: [
           { campo: 'nuco', titulo: 'NUCO', tipo: 'texto', fijada: true, render: (v) => '<span class="ln-mono ln-fuerte">' + guion(v) + '</span>' },
-          { campo: 'tipo', titulo: 'Tipo', tipo: 'lista', valor: (r) => TIPO_EQUIPO[r.tipo] || r.tipo || '' },
+          { campo: 'tipoHoja', titulo: 'Tipo', tipo: 'lista', render: (v) => formatoAppSheet('LINEAS', 'TIPO', v) || guion(v) },
           { campo: 'modelo', titulo: 'Modelo', tipo: 'texto' },
           { campo: 'imei', titulo: 'IMEI', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
           { campo: 'estatus', titulo: 'Estatus', tipo: 'lista', render: (v) => chip(v) },
@@ -576,6 +817,7 @@
         etiqueta: (r) => 'Línea ' + (r.numero || '—'),
         columnas: [
           { campo: 'numero', titulo: 'Número', tipo: 'texto', fijada: true, render: (v) => '<span class="ln-mono ln-fuerte">' + guion(v) + '</span>' },
+          { campo: 'tipoHoja', titulo: 'Tipo', tipo: 'lista', render: (v) => formatoAppSheet('LINEAS', 'TIPO', v) || guion(v) },
           { campo: 'compania', titulo: 'Compañía', tipo: 'lista' },
           { campo: 'estatus', titulo: 'Estatus', tipo: 'lista', render: (v) => chip(v) },
           { campo: 'suelta', titulo: 'Suelta', tipo: 'lista', valor: (r) => (r.suelta ? 'Sí' : 'No'), render: (v) => (v === 'Sí' ? chip('Suelta', 'ambar') : '<span class="ln-tenue">En equipo</span>') },
@@ -995,125 +1237,65 @@
       }
 
       // ---- Alta y edición directa del inventario ----
-      function campoEditor(id, etiqueta, valor, tipo, opciones, grupo) {
-        // Correos, PIN y contraseñas se guardan tal cual (sin las mayúsculas automáticas del sistema)
-        const literal = /^(CUENTA GOOGLE|CONTRASEÑA MODEM|PIN WHATSAPP|PIN EQUIPO)$/.test(id) ? ' data-respetar-texto' : '';
-        const attrs = ' id="reg-' + id + '" data-campo="' + esc(id) + '"' + (grupo ? ' data-grupo="' + grupo + '"' : '') + literal;
-        if (tipo === 'select') return '<div class="field"' + (grupo ? ' data-reg-grupo="' + grupo + '"' : '') + '><label>' + esc(etiqueta) + '</label><select' + attrs + '>' +
-          (opciones || []).map((v) => '<option value="' + esc(v) + '"' + (String(v) === String(valor || '') ? ' selected' : '') + '>' + esc(v || 'Selecciona…') + '</option>').join('') + '</select></div>';
-        return '<div class="field"' + (grupo ? ' data-reg-grupo="' + grupo + '"' : '') + '><label>' + esc(etiqueta) + '</label><input' + attrs + ' type="' + (tipo || 'text') + '" value="' + esc(valor || '') + '" autocomplete="off" /></div>';
-      }
-
-      function datosEditor(r) {
-        const e = r && r.equipo || {};
-        const l = r && r.linea || {};
-        const leg = e.legado || l.legado || {};
-        const resp = e.responsable || l.responsable || {};
-        return {
-          'TIPO': leg.tipo || '', 'NUCO': e.nuco || l.nucoLegado || '', 'EQUIPO': e.modelo || '', 'IMEI': e.imei || '', 'COLOR': e.color || '',
-          'ACCESORIOS': (e.accesorios || []).join(', '), 'ESTATUS EQUIPO': e.estatus || '', 'CUENTA GOOGLE': e.cuentaGoogle || '', 'PIN EQUIPO': e.pinEquipo || '',
-          'PATRON': e.patronRuta || '', 'CONTRASEÑA MODEM': e.contrasenaModem || '', 'NUMERO TELEFONO': l.numero || '', 'NUMERO SIM': l.sim || '',
-          'COMPAÑIA': l.compania || '', 'COSTO PLAN': l.costoPlan === null || l.costoPlan === undefined ? '' : l.costoPlan,
-          'INICIO PLAN': fechaInput(l.inicioPlan), 'FIN PLAN': fechaInput(l.finPlan), 'ESTATUS LINEA': l.estatus || '', 'PIN WHATSAPP': l.pinWhatsapp || '',
-          'NO EMPLEADO': resp.noEmpleado || '', 'RESPONSABLE': resp.nombre || '', 'PUESTO': resp.puesto || '', 'SEDE': resp.sede || '',
-          'OFICINA / DESARROLLO': resp.oficina || '', 'DEPARTAMENTO': resp.departamento || '', 'AREA': resp.area || '', 'JEFE DIRECTO': resp.jefeDirecto || '',
-          'DIRECTOR': resp.director || '', 'RAZON SOCIAL': resp.razonSocial || '', 'COMENTARIOS': leg.comentarios || '',
-        };
-      }
-
-      function fechaInput(v) {
-        if (!v) return '';
-        const d = new Date(v);
-        return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
-      }
-
-      function formularioEditor(datos, catalogos, editando) {
-        const f = (id, et, tipo, opciones, grupo) => campoEditor(id, et, datos[id], tipo, opciones, grupo);
-        const puedeVerSecretos = memoria.permisos && memoria.permisos.puedeVerSecretos;
-        const seguridadEquipo = '<div class="ln-seguridad-editor" data-reg-grupo="celular"><div class="ln-editor-grid">' +
-          '<div class="field"><label for="reg-tipo-seguridad">Seguridad del equipo</label><select id="reg-tipo-seguridad">' +
-            (editando ? '<option value="CONSERVAR">Conservar configuración actual</option>' : '') +
-            '<option value="SIN">Sin PIN o patrón</option><option value="PIN">PIN</option><option value="PATRON">Patrón</option><option value="CONTRASEÑA">Contraseña</option></select></div>' +
-          '<div class="field" id="reg-seguridad-valor-campo" hidden><label for="reg-seguridad-valor">PIN o contraseña</label><input type="text" id="reg-seguridad-valor" data-respetar-texto autocomplete="new-password" /></div></div>' +
-          '<div class="ln-nota" id="reg-patron-ayuda" hidden>' + icono('info', 'ln-icon-sm') + ' Selecciona los puntos en el orden del patrón.</div>' + htmlPatron('reg-patron', true) + '</div>';
-        const secretosEquipo = puedeVerSecretos ? f('CONTRASEÑA MODEM', 'Contraseña del módem', null, null, 'modem') : '';
-        const secretosLinea = puedeVerSecretos ? f('PIN WHATSAPP', 'PIN WhatsApp', null, null, 'linea') : '';
-        return '<div class="ln-nota">' + icono('history') + ' Cada cambio se registrará automáticamente en el historial del activo.</div>' +
-          seccionCaptura(1, 'layout-list', 'Tipo e identificación', 'Define qué clase de activo se registrará.', '<div class="ln-editor-grid">' +
-            f('TIPO', 'Tipo *', 'select', [''].concat(catalogos.tipos || [])) + f('NUCO', 'NUCO *') + '</div>') +
-          seccionCaptura(2, 'smartphone', 'Datos del equipo', 'Solo se guardan para tipos que incluyen equipo.', '<div class="ln-editor-grid">' +
-            f('EQUIPO', 'Modelo *', null, null, 'equipo') + f('IMEI', 'IMEI', null, null, 'equipo') + f('COLOR', 'Color', null, null, 'equipo') +
-            f('ACCESORIOS', 'Accesorios (separados por coma)', null, null, 'equipo') + f('ESTATUS EQUIPO', 'Estatus del equipo', 'select', [''].concat(catalogos.estatusEquipo || []), 'equipo') +
-            f('CUENTA GOOGLE', 'Cuenta Google', null, null, 'celular') + secretosEquipo + '</div>' + seguridadEquipo) +
-          seccionCaptura(3, 'card-sim', 'Datos de la línea', 'Solo se guardan para tipos que incluyen SIM o línea.', '<div class="ln-editor-grid">' +
-            f('NUMERO TELEFONO', 'Número telefónico', null, null, 'linea') + f('NUMERO SIM', 'Número SIM', null, null, 'linea') +
-            f('COMPAÑIA', 'Compañía', 'select', [''].concat(catalogos.companias || []), 'linea') + f('COSTO PLAN', 'Costo del plan', 'number', null, 'linea') +
-            f('INICIO PLAN', 'Inicio del plan', 'date', null, 'linea') + f('FIN PLAN', 'Fin del plan', 'date', null, 'linea') +
-            f('ESTATUS LINEA', 'Estatus de la línea', 'select', [''].concat(catalogos.estatusLinea || []), 'linea') + secretosLinea + '</div>') +
-          seccionCaptura(4, 'user-round', 'Responsable y ubicación', 'Información operativa del activo.', '<div class="ln-editor-grid">' +
-            f('NO EMPLEADO', 'No. empleado') + f('RESPONSABLE', 'Responsable') + f('PUESTO', 'Puesto') + f('SEDE', 'Sede') + f('OFICINA / DESARROLLO', 'Oficina / desarrollo') +
-            f('DEPARTAMENTO', 'Departamento') + f('AREA', 'Área') + f('JEFE DIRECTO', 'Jefe directo') + f('DIRECTOR', 'Director') + f('RAZON SOCIAL', 'Razón social') + '</div>' +
-            '<div class="field"><label>Comentarios</label><textarea id="reg-COMENTARIOS" data-campo="COMENTARIOS" rows="4">' + esc(datos.COMENTARIOS || '') + '</textarea></div>') +
-          '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div><div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
-          '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('save') + ' ' + (editando ? 'Guardar cambios' : 'Crear registro') + '</button></div>';
-      }
-
-      function actualizarCamposEditor() {
-        const tipo = ($('#reg-TIPO', raiz) || {}).value || '';
-        const equipo = /^(EQUIPO|MODEM|BANDA ANCHA|CAMARA)/.test(tipo);
-        const linea = ['EQUIPO + SIM', 'EQUIPO + SIM BASICO', 'LINEA', 'LINEA BASICA', 'MODEM', 'BANDA ANCHA', 'CAMARA'].indexOf(tipo) >= 0;
-        raiz.querySelectorAll('[data-reg-grupo="equipo"]').forEach((n) => { n.hidden = !equipo; });
-        raiz.querySelectorAll('[data-reg-grupo="linea"]').forEach((n) => { n.hidden = !linea; });
-        raiz.querySelectorAll('[data-reg-grupo="celular"]').forEach((n) => { n.hidden = !/^EQUIPO/.test(tipo); });
-        raiz.querySelectorAll('[data-reg-grupo="modem"]').forEach((n) => { n.hidden = ['MODEM', 'BANDA ANCHA'].indexOf(tipo) < 0; });
-      }
-
-      function actualizarSeguridadEditor() {
-        const selector = $('#reg-tipo-seguridad', raiz); if (!selector) return;
-        const modo = selector.value;
-        $('#reg-seguridad-valor-campo', raiz).hidden = modo !== 'PIN' && modo !== 'CONTRASEÑA';
-        $('#reg-patron-bloque', raiz).hidden = modo !== 'PATRON';
-        $('#reg-patron-ayuda', raiz).hidden = modo !== 'PATRON';
-      }
-
       function abrirEditor(id) {
         $('#ln-modal-captura', raiz).hidden = false;
         $('#ln-captura-icono', raiz).innerHTML = icono(id ? 'pencil' : 'plus');
-        $('#ln-captura-tipo', raiz).textContent = 'Inventario de telefonía';
+        $('#ln-captura-tipo', raiz).textContent = 'LINEAS TELEFONICAS';
         $('#ln-captura-titulo', raiz).textContent = id ? 'Editar información' : 'Agregar nuevo NUCO';
-        $('#ln-captura-subtitulo', raiz).textContent = 'Cargando campos y catálogos…';
+        $('#ln-captura-subtitulo', raiz).textContent = 'Cargando formulario…';
         $('#ln-captura-cuerpo', raiz).innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando…</p>';
         captura = { tipo: 'REGISTRO', idObjetivo: id, firmas: {} };
-        const detalleReq = id ? (memoria.indice.equipos.some((e) => e.id === id) ? llamar('apiLineasEquipo', id) : llamar('apiLineasLinea', id)) : Promise.resolve(null);
-        Promise.all([detalleReq, llamar('apiLineasCatalogos')]).then(([detalleReg, catalogos]) => {
+        llamar('apiLineasFormularioRegistro', id || '').then((form) => {
           if (!captura || captura.tipo !== 'REGISTRO') return;
-          const datos = datosEditor(detalleReg);
-          $('#ln-captura-subtitulo', raiz).textContent = id ? 'Actualiza los datos necesarios; el historial conservará antes y después.' : 'Completa los datos del nuevo equipo o línea.';
-          $('#ln-captura-cuerpo', raiz).innerHTML = formularioEditor(datos, catalogos, !!id);
-          pintarIconos($('#ln-captura-cuerpo', raiz));
-          $('#reg-TIPO', raiz).addEventListener('change', actualizarCamposEditor);
-          captura.controlPatron = activarPatron('reg-patron');
-          $('#reg-tipo-seguridad', raiz).addEventListener('change', actualizarSeguridadEditor);
-          actualizarCamposEditor();
-          actualizarSeguridadEditor();
+          const cuerpo = $('#ln-captura-cuerpo', raiz);
+          const elementos = form.elementos;
+          const tipoInicial = (elementos.filter((e) => e.columna === 'TIPO')[0] || {}).valor || '';
+          const ctx = { nuevo: form.nuevo, id: id, tipoInicial: tipoInicial };
+          captura.contexto = { formulario: elementos };
+          $('#ln-captura-subtitulo', raiz).textContent = id ? 'Mismo formulario que en AppSheet. Cada cambio queda en la bitácora.' : 'Mismo formulario que en AppSheet. Elige primero el TIPO.';
+          cuerpo.innerHTML = '<div class="ln-nota">' + icono('history') + ' Los campos se habilitan según el TIPO, igual que en AppSheet.</div>' +
+            htmlFormularioAppSheet(elementos) +
+            '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div><div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
+            '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + ' Guardar</button></div>';
+          pintarIconos(cuerpo);
+          activarCombosEn(cuerpo, elementos);
+          const patron = elementos.filter((e) => e.control === 'patron')[0];
+          if (patron) {
+            captura.patronInicial = esPuntosPatron(patron.valor) ? patron.valor : null;
+            captura.controlPatron = activarPatron('af-' + patron.columna.replace(/[^A-Za-z0-9]+/g, '-') + '-patron', captura.patronInicial ? captura.patronInicial.split('-') : []);
+          }
+          const aplicar = () => aplicarReglasEn(cuerpo, elementos, ctx);
+          cuerpo.addEventListener('input', aplicar);
+          cuerpo.addEventListener('change', aplicar);
+          cuerpo.addEventListener('click', (ev) => {
+            const multi = ev.target.closest('.ln-pastilla-multi');
+            if (multi) { ev.stopPropagation(); multi.classList.toggle('activa'); aplicar(); return; }
+            if (ev.target.closest('.ln-pastilla')) setTimeout(aplicar, 0);
+          }, true);
+          aplicar();
           $('#cap-guardar', raiz).addEventListener('click', () => {
-            const valores = {};
-            raiz.querySelectorAll('#ln-captura-cuerpo [data-campo]').forEach((el) => { valores[el.dataset.campo] = el.value; });
-            const errorBox = $('#cap-error', raiz); errorBox.hidden = true;
-            const modoSeguridad = $('#reg-tipo-seguridad', raiz).value;
-            if (modoSeguridad === 'PATRON' && captura.controlPatron.puntos().length < 2) { mostrarErrorCaptura('Traza al menos dos puntos para guardar el patrón.', '#reg-patron-bloque'); return; }
-            if ((modoSeguridad === 'PIN' || modoSeguridad === 'CONTRASEÑA') && !$('#reg-seguridad-valor', raiz).value.trim()) { mostrarErrorCaptura('Captura el PIN o la contraseña del equipo.', '#reg-seguridad-valor'); return; }
-            if (modoSeguridad !== 'CONSERVAR') {
-              valores['PIN EQUIPO'] = modoSeguridad === 'PATRON' ? 'PATRON' : (modoSeguridad === 'SIN' ? '' : $('#reg-seguridad-valor', raiz).value.trim());
-              valores.PATRON = modoSeguridad === 'PATRON' ? captura.controlPatron.valor() : '';
+            $('#cap-error', raiz).hidden = true;
+            const errores = erroresFormularioEn(cuerpo, elementos, '', ctx);
+            if (errores.length) {
+              const col = errores[0].e.columna;
+              const campo = cuerpo.querySelector('[data-af-columna="' + CSS.escape(col) + '"] input, [data-af-columna="' + CSS.escape(col) + '"] select, [data-af-columna="' + CSS.escape(col) + '"] .ln-pastilla');
+              mostrarErrorCaptura(errores.map((x) => x.msg).slice(0, 6).join(' · '), campo && campo.id ? '#' + campo.id : null);
+              return;
             }
-            estadoGuardado(id ? 'Guardando cambios' : 'Creando registro');
-            const promesa = id ? llamar('apiLineasEditarRegistro', id, valores) : llamar('apiLineasCrearRegistro', valores);
-            promesa.then((r) => cargarIndice(true).then(() => {
-              cerrarCaptura(true);
-              aviso(icono('circle-check') + ' ' + (id ? 'Información actualizada.' : 'Registro creado.'), 6000);
-              if (id) abrirRegistro(id); else abrirRegistro(r.id);
-            })).catch((e) => { mostrarErrorCaptura(mensajeError(e)); restaurarGuardado(); });
+            const valores = leerFormularioEn(cuerpo, elementos);
+            if (patron) {
+              const p = patronParaGuardar();
+              if (p === undefined) delete valores[patron.columna]; else valores[patron.columna] = p;
+            }
+            leerArchivosEn(cuerpo).then((archivos) => {
+              estadoGuardado(id ? 'Guardando cambios' : 'Creando registro');
+              const datos = { valores: valores, archivos: archivos };
+              return (id ? llamar('apiLineasEditarRegistro', id, datos) : llamar('apiLineasCrearRegistro', datos)).then((r) => cargarIndice(true).then(() => {
+                cerrarCaptura(true);
+                aviso(icono('circle-check') + ' ' + (id ? 'Información actualizada.' : 'Registro creado.'), 6000);
+                abrirRegistro(id || r.id);
+              }));
+            }).catch((e) => { mostrarErrorCaptura(mensajeError(e)); restaurarGuardado(); });
           });
         }).catch((e) => { $('#ln-captura-cuerpo', raiz).innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>'; });
       }
@@ -1929,12 +2111,15 @@
           ],
           columnas: [
             { campo: 'nombre', titulo: 'Nombre del Articulo', tipo: 'texto', fijada: true },
-            { campo: 'categoria', titulo: 'Categoria', tipo: 'lista' },
+            { campo: 'categoria', titulo: 'Categoria', tipo: 'lista', render: (v) => formatoAppSheet('ACCESORIOS', 'Categoria', v) || esc(v) },
             { campo: 'marca', titulo: 'Marca', tipo: 'texto' },
             { campo: 'stock', titulo: 'Stock', tipo: 'numero', agregado: 'suma',
-              render: (v, a) => '<span class="lac-stock' + (a.reabasto ? ' bajo' : '') + '">' + esc(String(v)) + '</span>' },
+              // Reglas ALERTA BAJO STOCK (rojo sobre amarillo, ícono) y Stock disponible (#2f7d23), solo para las 3 categorías
+              render: (v, a) => (a.reabasto
+                ? '<span class="ln-regla ln-regla-chip" style="color:#d62020;background:#fff3b0;border:1px solid #e6c700;font-weight:700">' + ico('rotate-cw') + ' ' + esc(String(v)) + '</span>'
+                : (['Cargadores', 'Micas', 'Fundas'].indexOf(a.categoria) >= 0 ? '<span class="ln-regla" style="color:#2f7d23;font-weight:700">' + esc(String(v)) + '</span>' : esc(String(v)))) },
             { campo: 'reabasto', titulo: 'Aviso Reabastecimiento', tipo: 'lista', valor: (a) => (a.reabasto ? 'Sí' : 'No'),
-              render: (v) => (v === 'Sí' ? chip('REABASTECER PRODUCTO', 'rojo') : '') },
+              render: (v) => (v === 'Sí' ? '<span class="ln-regla" style="color:#d62020;font-weight:700">' + ico('triangle-alert') + ' REABASTECER PRODUCTO</span>' : '') },
           ],
         });
       }
@@ -2095,7 +2280,7 @@
             // Títulos: las etiquetas del formulario de alta y, si no hay, el encabezado en formato de oración
             const titulos = { FOLIO: 'Folio', 'FECHA DE REGISTRO': 'Fecha de registro', 'QUIEN REGISTRO': 'Registró' };
             Object.keys(cfg.nombres || {}).forEach((nombre) => { titulos[normEncabezado(nombre)] = tituloLegible(cfg.nombres[nombre]); });
-            const columnas = columnasDeHoja(r.encabezados, r.filas, cfg.resumen, titulos);
+            const columnas = columnasDeHoja(r.encabezados, r.filas, cfg.resumen, titulos, tipo === 'POST_VENTA' ? 'LINEAS' : tipo);
             // El servidor agrupa en mayúsculas y sin espacios de más: la columna filtra con el mismo valor
             const colGrupo = columnas.find((c) => c.campo === campoGrupo);
             if (colGrupo) {
@@ -2219,6 +2404,7 @@
       },
       DESECHOS: {
         titulo: 'Bitácora de Desechos', icono: 'trash-2', csv: 'bitacora de desechos',
+        alta: 'DESECHO',
         subtitulo: 'Equipos dados de baja definitiva (folio DR)',
         idRegistro: 'ID_EQUIPO',
         columnas: [
@@ -2250,7 +2436,7 @@
       function crearTabla(r) {
         const titulos = {};
         cfg.columnas.forEach(([nombre, titulo]) => { titulos[norm(nombre)] = titulo; });
-        const columnas = columnasDeHoja(r.encabezados, r.filas, cfg.columnas.map((c) => c[0]), titulos);
+        const columnas = columnasDeHoja(r.encabezados, r.filas, cfg.columnas.map((c) => c[0]), titulos, tipo);
         const hId = buscarEncabezado(r.encabezados, cfg.idRegistro);
         const hFecha = buscarEncabezado(r.encabezados, cfg.columnas[0][0]);
         const hFolio = buscarEncabezado(r.encabezados, 'NUCO') || buscarEncabezado(r.encabezados, 'FOLIO DESECHO');
@@ -2303,6 +2489,11 @@
           if (!tabla) tabla = tablaLineas($('#ln-bit-tabla', raiz), { idCampo: '_fila', columnas: [{ campo: '_fila', titulo: 'Fila' }], detalle: false, exportar: false });
           tabla.setError('No se pudo cargar la bitácora: ' + mensajeError(e));
         });
+      }
+
+      if (cfg.alta) {
+        cargarPermisos().then((p) => { if (vigente()) $('#ln-bit-nuevo', raiz).hidden = !p.puedeOperar; });
+        $('#ln-bit-nuevo', raiz).addEventListener('click', () => abrirAltaAppSheet(cfg.alta, cfg.titulo, () => { if (vigente()) cargar(); }));
       }
 
       $('#ln-bit-form', raiz).addEventListener('submit', (ev) => {

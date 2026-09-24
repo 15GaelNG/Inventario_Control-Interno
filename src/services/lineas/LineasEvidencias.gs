@@ -89,6 +89,19 @@ const LineasEvidencias = (function () {
     return { ok: true };
   }
 
+  /**
+   * Archivo de una columna File de LINEAS TELEFONICAS (RESPONSIVA, FORMATO INSPECCION) capturado desde el
+   * formulario del registro: se guarda en <NUCO>/<subcarpeta> y regresa el enlace que queda en la hoja.
+   */
+  function guardarArchivoDeRegistro(nuco, subcarpeta, nombre, mime, base64) {
+    if (!/^(image\/(jpeg|png|webp|heic|heif)|application\/pdf)$/.test(mime)) throw new Error('Tipo de archivo no permitido: ' + mime);
+    const bytes = Utilities.base64Decode(base64);
+    if (bytes.length > 15 * 1024 * 1024) throw new Error('El archivo supera 15 MB.');
+    const carpeta = subcarpeta_(carpetaNuco_(nuco), subcarpeta);
+    const archivo = carpeta.createFile(Utilities.newBlob(bytes, mime, String(nombre || 'archivo').replace(/[\/]/g, '_')));
+    return 'https://drive.google.com/file/d/' + archivo.getId() + '/view';
+  }
+
   /** Blob de un archivo de Drive (para insertar firmas en el PDF). null si no existe o no hay id. */
   function blobDeArchivo(id) {
     if (!id) return null;
@@ -105,5 +118,5 @@ const LineasEvidencias = (function () {
     });
   }
 
-  return { prepararCarpetaEvidencia, cancelarCarpetaEvidencia, subirArchivo, blobDeArchivo, validarArchivosEnCarpeta };
+  return { prepararCarpetaEvidencia, cancelarCarpetaEvidencia, subirArchivo, guardarArchivoDeRegistro, blobDeArchivo, validarArchivosEnCarpeta };
 })();
