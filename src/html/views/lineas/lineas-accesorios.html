@@ -21,15 +21,14 @@
         <div class="modal-header">
           <div>
             <h3 style="margin:0" id="lac-nuevo-titulo">Nuevo artículo</h3>
-            <p class="modal-subtitle">Se agrega al catálogo con stock en cero</p>
+            <p class="modal-subtitle">El stock se calcula con las entradas y salidas</p>
           </div>
           <button type="button" class="modal-close" data-cerrar-modal-nuevo aria-label="Cerrar"><i data-lucide="x" class="ico"></i></button>
         </div>
-        <div class="field"><label for="lac-nombre">Nombre del artículo</label><input type="text" id="lac-nombre" autocomplete="off" /></div>
-        <div class="grid" style="grid-template-columns:1fr 1fr">
-          <div class="field"><label for="lac-categoria">Categoría</label><input type="text" id="lac-categoria" autocomplete="off" /></div>
-          <div class="field"><label for="lac-marca">Marca / modelo</label><input type="text" id="lac-marca" autocomplete="off" /></div>
-        </div>
+        <!-- Orden de ACCESORIOS CELULARES_Form: Categoria, Nombre del Articulo, Marca -->
+        <div class="field"><label for="lac-categoria">Categoria *</label><select id="lac-categoria"><option value="">Selecciona…</option><option>Micas</option><option>Fundas</option><option>Cargadores</option></select></div>
+        <div class="field"><label for="lac-nombre">Nombre del Articulo *</label><input type="text" id="lac-nombre" autocomplete="off" /></div>
+        <div class="field"><label for="lac-marca">Marca</label><input type="text" id="lac-marca" autocomplete="off" /></div>
         <div class="error-msg" id="lac-nuevo-error" hidden></div>
         <div class="ln-captura-acciones">
           <button type="button" class="secondary" data-cerrar-modal-nuevo>Cancelar</button>

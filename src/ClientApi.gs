@@ -82,6 +82,9 @@ function apiLineasBitacoraTabla(token, tipo, opciones) {
 function apiLineasVistaOperativaTabla(token, tipo, opciones) {
   return JSON.stringify(TelefoniaService.vistaOperativa(token, tipo, Object.assign({}, opciones, { pagina: 0, porPagina: 5000 })));
 }
+function apiLineasFormularioOperativa(token, tipo) {
+  return TelefoniaService.formularioOperativa(token, tipo);
+}
 function apiLineasCrearVistaOperativa(token, tipo, datos) {
   return TelefoniaService.crearVistaOperativa(token, tipo, datos);
 }

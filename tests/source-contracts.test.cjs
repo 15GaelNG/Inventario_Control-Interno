@@ -64,7 +64,7 @@ test('las vistas operativas usan la misma base de AppSheet', () => {
   assert.match(repo, /departamento: 'POST VENTA'/);
   assert.match(read('src/ClientApi.gs'), /apiLineasVistaOperativa/);
   assert.match(read('src/ClientApi.gs'), /apiLineasCrearVistaOperativa/);
-  assert.match(repo, /crearVistaOperativa/);
+  assert.match(read('src/services/lineas/LineasOperativas.gs'), /function crear\(tipo, enviados, usuario\)/);
 });
 
 test('Gestión de Activos y Detalles usan cuadrículas de tarjetas con filtros', () => {
@@ -227,17 +227,26 @@ test('las tablas de Líneas usan el DataTable del sistema con KPIs que filtran',
   }
 });
 
-test('Reactivación usa el encabezado real de la hoja (LINIEA SUSPENDIDA)', () => {
-  const repo = read('src/services/lineas/LineasRepo.gs');
-  assert.match(repo, /REACTIVACION: \['LINIEA SUSPENDIDA'/);
-  assert.match(repo, /\['LINIEA SUSPENDIDA', 'ESTATUS'\]/);
-  assert.doesNotMatch(repo + read('src/html/js/lineas.html'), /'LINEA SUSPENDIDA'/);
+test('las altas de Reactivación y Solicitud usan columnas, opciones y folios del AppSheet', () => {
+  const op = read('src/services/lineas/LineasOperativas.gs');
+  const columnas = (desde, hasta) => [...op.slice(op.indexOf(desde), op.indexOf(hasta)).matchAll(/campo_\('([^']+)'/g)].map((m) => m[1]);
+  assert.deepEqual(columnas('REACTIVACION: (usuario', 'SOLICITUD: (usuario'), ['FOLIO', 'LINIEA SUSPENDIDA', 'COMPAÑIA', 'SIM', 'CORREO / TICKET',
+    'FECHA DE SUSPENSION', 'ESTATUS', 'ESTADO DEL EQUIPO', 'IMEI', 'RETRO DE SOLICITUD', 'FECHA DE REACTIVACION', 'NUEVO NUMERO', 'FECHA DE REGISTRO',
+    'QUIEN REGISTRO', 'COMENTARIOS']);
+  assert.deepEqual(columnas('SOLICITUD: (usuario', 'const TABLAS'), ['FOLIO', 'FECHA DE SOLICITUD', 'TIPO DE PLAN', 'TICKET', 'NO EMPLEADO SOLICITANTE',
+    'NOMBRE SOLICITANTE', 'PUESTO SOLICITANTE', 'DEPARTAMENTO SOLICITANTE', 'SEDE', 'DEPARTAMENTO', 'TIPO', 'PUESTO', 'COLABORADOR', 'SOLICITANTE',
+    'FECHA DE ENTREGA', 'ASIGNACION', 'REASIGNACION', 'COMPAÑIA', 'EQUIPO', 'NUMERO ANTERIOR', 'NUMERO ACTUAL', 'IMEI', 'SIM', 'ESTATUS', 'COMENTARIOS',
+    'FECHA DE REGISTRO', 'QUIEN REGISTRO']);
+  assert.match(op, /opciones: \['EN USO', 'DISPONIBLE', 'EN PROCESO DE ASIGNACION', 'PROCESO DE CANCELACION', 'CANCELADA', 'ACTUALIZACIÓN DE LINEA TELEFONICA'\]/);
+  assert.match(op, /fila\['REASIGNACION'\] = !valores\['ASIGNACION'\]/);
+  assert.match(op, /MAX\(REACTIVACION DE LINEAS\[FOLIO\]\) \+ 1/);
+  assert.doesNotMatch(read('src/services/lineas/LineasRepo.gs'), /'LINEA SUSPENDIDA'|NOMBRE COMPLETO DEL SOLICITANTE/);
 });
 
-test('Solicitud usa los encabezados reales de la hoja (no los nombres que muestra AppSheet)', () => {
-  const codigo = read('src/services/lineas/LineasRepo.gs') + read('src/html/js/lineas.html');
-  for (const real of ['NO EMPLEADO SOLICITANTE', 'NOMBRE SOLICITANTE', 'PUESTO SOLICITANTE', 'DEPARTAMENTO SOLICITANTE']) {
-    assert.match(codigo, new RegExp(`'${real}'`));
-  }
-  assert.doesNotMatch(codigo, /DEL SOLICITANTE'/);
+test('la bitácora automática registra exactamente los 23 campos del bot CAMBIOS TELEFONIA', () => {
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  const lista = /const CAMPOS_BITACORA = \[([\s\S]*?)\];/.exec(repo)[1];
+  const campos = [...lista.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  assert.equal(campos.length, 23);
+  for (const fuera of ['IMEI', 'COLOR', 'PATRON', 'CONTRASEÑA MODEM']) assert.ok(!campos.includes(fuera), fuera);
 });

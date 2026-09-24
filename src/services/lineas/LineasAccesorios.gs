@@ -14,9 +14,11 @@
 const LineasAccesorios = (function () {
   const TAB_ART = 'ACCESORIOS CELULARES';
   const TAB_MOV = 'MOVIMIENTOS_ACCESORIOS';
-  const CLAVE_CACHE = 'accesorios_indice';
-  // No hay un valor documentado del AppSheet original para "stock bajo"; ajustable.
-  const UMBRAL_REABASTO = 5;
+  const CLAVE_CACHE = 'accesorios_indice_v2';
+  // Columna virtual "Aviso Reabastecimiento" del AppSheet: umbral por categoría
+  const UMBRAL_REABASTO = { Cargadores: 10, Micas: 182, Fundas: 182 };
+  // Enum Categoria del AppSheet (Dropdown, sin otros valores), en su orden
+  const CATEGORIAS = ['Micas', 'Fundas', 'Cargadores'];
 
   function rolesOperan_() {
     return [Config.ROLES.ADMIN, Config.ROLES.OPERADOR];
@@ -44,15 +46,19 @@ const LineasAccesorios = (function () {
     const articulos = LineasDatos.leerTabla(TAB_ART).map(articuloDesdeFila_).filter((a) => a.id);
     const movimientos = LineasDatos.leerTabla(TAB_MOV).map(movimientoDesdeFila_).filter((m) => m.id);
     const stock = {};
+    // Stock = SUM(Cantidad de "Entrada") − SUM(Cantidad de "Salida"); otros tipos no cuentan
     movimientos.forEach((m) => {
-      const signo = m.tipo === 'SALIDA' ? -1 : 1;
+      const signo = m.tipo === 'ENTRADA' ? 1 : (m.tipo === 'SALIDA' ? -1 : 0);
       stock[m.accesorioId] = (stock[m.accesorioId] || 0) + signo * m.cantidad;
     });
-    const filas = articulos.map((a) => Object.assign({}, a, {
-      stock: stock[a.id] || 0,
-      reabasto: (stock[a.id] || 0) <= UMBRAL_REABASTO,
-    }));
-    return { filas: filas, umbralReabasto: UMBRAL_REABASTO, generadoEn: new Date() };
+    const filas = articulos.map((a) => {
+      const umbral = UMBRAL_REABASTO[a.categoria];
+      return Object.assign({}, a, {
+        stock: stock[a.id] || 0,
+        reabasto: umbral !== undefined && (stock[a.id] || 0) <= umbral,
+      });
+    });
+    return { filas: filas, umbralReabasto: UMBRAL_REABASTO, categorias: CATEGORIAS, generadoEn: new Date() };
   }
 
   /** Catálogo con stock calculado (entradas − salidas) y alerta de reabasto. Caché 15 min. */
@@ -77,10 +83,11 @@ const LineasAccesorios = (function () {
   /** Alta de un artículo nuevo en el catálogo. */
   function agregarArticulo(token, datos) {
     Auth.requiereRol(token, rolesOperan_());
-    if (!LineasUtil.txt(datos.nombre)) throw new Error('El nombre del artículo es obligatorio.');
+    if (CATEGORIAS.indexOf(String(datos.categoria || '')) < 0) throw new Error('Categoria es obligatorio (Micas, Fundas o Cargadores).');
+    if (!LineasUtil.txt(datos.nombre)) throw new Error('Nombre del Articulo es obligatorio.');
     const id = LineasDatos.nuevoIdCorto();
     LineasDatos.agregarFilas(TAB_ART, [{
-      'ID_Accesorio': id, 'Categoria': LineasUtil.txt(datos.categoria) || '',
+      'ID_Accesorio': id, 'Categoria': String(datos.categoria),
       'Nombre del Articulo': String(datos.nombre).trim(), 'Marca': LineasUtil.txt(datos.marca) || '',
     }]);
     LineasDatos.cacheBorrar(CLAVE_CACHE);

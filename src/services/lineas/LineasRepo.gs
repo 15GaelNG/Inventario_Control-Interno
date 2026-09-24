@@ -64,10 +64,10 @@ const LineasRepo = (function () {
     noEmpleado: 'NO EMPLEADO', nombre: 'RESPONSABLE', puesto: 'PUESTO', departamento: 'DEPARTAMENTO', area: 'AREA',
     sede: 'SEDE', oficina: 'OFICINA / DESARROLLO', jefeDirecto: 'JEFE DIRECTO', director: 'DIRECTOR', razonSocial: 'RAZON SOCIAL',
   };
-  /** Campos que registraba el bot "CAMBIOS TELEFONIA" del AppSheet. */
-  const CAMPOS_BITACORA = ['RESPONSABLE', 'RESPONSIVA', 'ESTATUS LINEA', 'OFICINA / DESARROLLO', 'ESTATUS EQUIPO', 'CUENTA GOOGLE', 'AREA',
-    'COMENTARIOS', 'PIN EQUIPO', 'PIN WHATSAPP', 'NUMERO SIM', 'DEPARTAMENTO', 'ACCESORIOS', 'NUMERO TELEFONO', 'SEDE', 'COSTO PLAN', 'TIPO',
-    'INICIO PLAN', 'EQUIPO', 'FIN PLAN', 'RAZON SOCIAL', 'COMPAÑIA', 'NUCO', 'IMEI', 'COLOR', 'PATRON', 'CONTRASEÑA MODEM'];
+  /** Los 23 campos que registra el bot "CAMBIOS TELEFONIA" del AppSheet (una fila por campo que cambia). */
+  const CAMPOS_BITACORA = ['NUMERO TELEFONO', 'RESPONSABLE', 'EQUIPO', 'NUMERO SIM', 'ACCESORIOS', 'SEDE', 'OFICINA / DESARROLLO', 'DEPARTAMENTO',
+    'AREA', 'RAZON SOCIAL', 'PIN WHATSAPP', 'PIN EQUIPO', 'CUENTA GOOGLE', 'INICIO PLAN', 'FIN PLAN', 'ESTATUS LINEA', 'ESTATUS EQUIPO',
+    'RESPONSIVA', 'TIPO', 'COMPAÑIA', 'COSTO PLAN', 'NUCO', 'COMENTARIOS'];
 
   const COLS_INDICE_EQUIPOS = ['id', 'nuco', 'tipo', 'modelo', 'imei', 'estatus', 'responsable', 'departamento', 'sede', 'lineaId', 'numero', 'compania', 'estatusLinea'];
   const COLS_INDICE_LINEAS = ['id', 'numero', 'sim', 'compania', 'estatus', 'equipoId', 'nucoEquipo', 'responsable', 'departamento', 'suelta'];
@@ -318,7 +318,8 @@ const LineasRepo = (function () {
     LineasDatos.actualizarFila(TAB.LINEAS, f._fila, escribir);
 
     const bitacora = efectivos.filter((e) => CAMPOS_BITACORA.indexOf(LineasDatos.normCol(e.campo)) >= 0).map((e) => ({
-      'ID_CAMBIO': LineasDatos.nuevoIdCorto(), 'ID_LINEA': f['ID'], 'NUCO': col(f, 'NUCO'), 'IMEI': col(f, 'IMEI'), 'TABLA': TAB.LINEAS,
+      // NUCO e IMEI ya actualizados, como [NUCO] / [IMEI] en las acciones del bot
+      'ID_CAMBIO': LineasDatos.nuevoIdCorto(), 'ID_LINEA': f['ID'], 'NUCO': col(nuevo, 'NUCO'), 'IMEI': col(nuevo, 'IMEI'), 'TABLA': TAB.LINEAS,
       'CAMPO': e.campo, 'ANTES': textoBitacora_(e.antes), 'DESPUES': textoBitacora_(e.despues),
       'ACTUALIZADO POR': usuario.nombre, 'FECHA ACTUALIZACION': ahora,
     }));
@@ -631,14 +632,6 @@ const LineasRepo = (function () {
     },
   };
 
-  const CAMPOS_ALTA_OPERATIVA = {
-    REACTIVACION: ['LINIEA SUSPENDIDA', 'COMPAÑIA', 'SIM', 'CORREO / TICKET', 'FECHA DE SUSPENSION', 'ESTATUS',
-      'ESTADO DEL EQUIPO', 'IMEI', 'RETRO DE SOLICITUD', 'FECHA DE REACTIVACION', 'NUEVO NUMERO', 'COMENTARIOS'],
-    SOLICITUD: ['FECHA DE SOLICITUD', 'TIPO DE PLAN', 'TICKET', 'NO EMPLEADO SOLICITANTE',
-      'NOMBRE SOLICITANTE', 'PUESTO SOLICITANTE', 'DEPARTAMENTO SOLICITANTE', 'SEDE',
-      'DEPARTAMENTO', 'TIPO', 'PUESTO', 'COLABORADOR', 'SOLICITANTE', 'FECHA DE ENTREGA', 'ASIGNACION',
-      'REASIGNACION', 'COMPAÑIA', 'EQUIPO', 'NUMERO ANTERIOR', 'NUMERO ACTUAL', 'IMEI', 'SIM', 'ESTATUS', 'COMENTARIOS'],
-  };
 
   /**
    * Página buscable de Reactivación, Solicitud o Líneas Post Venta. Las dos
@@ -682,6 +675,11 @@ const LineasRepo = (function () {
       return encabezados.some((h) => String(f[h] === null || f[h] === undefined ? '' : f[h]).toUpperCase().indexOf(q) >= 0);
     });
 
+    if (String(tipo).toUpperCase() === 'REACTIVACION') {
+      const imeiPorId = {};
+      LineasDatos.leerTabla(TAB.LINEAS).forEach((l) => { imeiPorId[String(l['ID'])] = col(l, 'IMEI'); });
+      filas = filas.map((f) => (f['IMEI'] && imeiPorId[String(f['IMEI'])] !== undefined ? Object.assign({}, f, { 'IMEI': imeiPorId[String(f['IMEI'])] }) : f));
+    }
     const total = filas.length;
     const desde = pagina * porPagina;
     const salida = filas.slice(desde, desde + porPagina).map((f) => {
@@ -697,35 +695,6 @@ const LineasRepo = (function () {
       pagina: pagina, paginas: Math.max(1, Math.ceil(total / porPagina)), campoGrupo: cfg.grupo,
       grupos: Object.keys(grupos).sort().map((nombre) => ({ nombre: nombre, total: grupos[nombre] })),
     };
-  }
-
-  /** Agrega un registro conservando las columnas y folios de las tablas del AppSheet. */
-  function crearVistaOperativa(tipo, datos, usuario) {
-    const clave = String(tipo || '').toUpperCase();
-    const cfg = VISTAS_OPERATIVAS[clave];
-    const permitidos = CAMPOS_ALTA_OPERATIVA[clave];
-    if (!cfg || !permitidos) throw new Error('Este módulo no admite altas.');
-    datos = datos || {};
-    const requeridos = clave === 'REACTIVACION' ? ['LINIEA SUSPENDIDA', 'ESTATUS'] : ['FECHA DE SOLICITUD', 'TIPO DE PLAN'];
-    requeridos.forEach((campo) => {
-      if (datos[campo] === null || datos[campo] === undefined || String(datos[campo]).trim() === '') {
-        throw new Error('El campo "' + campo + '" es obligatorio.');
-      }
-    });
-
-    return LineasDatos.conCandado(() => {
-      const existentes = LineasDatos.leerTabla(cfg.tabla);
-      const folio = existentes.reduce((max, f) => Math.max(max, Number(col(f, 'FOLIO')) || 0), 0) + 1;
-      const fila = { FOLIO: folio, 'FECHA DE REGISTRO': new Date(), 'QUIEN REGISTRO': usuario.nombre || usuario.correo };
-      permitidos.forEach((campo) => {
-        if (!(campo in datos)) return;
-        let valor = datos[campo];
-        if (/^FECHA /.test(campo) && valor) valor = new Date(valor + (String(valor).length === 10 ? 'T12:00:00' : ''));
-        fila[campo] = valor;
-      });
-      const numeroFila = LineasDatos.agregarFilas(cfg.tabla, [fila])[0];
-      return { ok: true, folio: folio, fila: numeroFila };
-    });
   }
 
   // ---------------- Catálogos y colaboradores ----------------
@@ -782,7 +751,7 @@ const LineasRepo = (function () {
     indice, refrescarIndice, leerRegistroPorId, leerRegistroObligatorio,
     guardarCambiosRegistro, agregarRegistro, registrarMovimiento, asegurarPestanaApp,
     evidenciaDesdeFila, inspeccionDesdeFila, inspeccionDesdeEvidencia, responsivaDesdeFila,
-    evidenciasDeRegistro, leerInspeccion, historialDeRegistro, bitacora, vistaOperativa, crearVistaOperativa,
+    evidenciasDeRegistro, leerInspeccion, historialDeRegistro, bitacora, vistaOperativa,
     catalogos, indiceColaboradores, borrarCaches,
   };
 })();

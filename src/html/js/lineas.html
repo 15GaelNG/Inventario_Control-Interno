@@ -224,6 +224,183 @@
       }).length;
     }
 
+    // ---------------- Formularios con la definición del AppSheet ----------------
+    // El servidor manda los elementos en el orden del formulario del AppSheet (titulo | campo con
+    // control, opciones, valor inicial y códigos de Show_If / Required_If); aquí se dibujan y se
+    // leen. Se usan en inspecciones, responsivas y altas de Reactivación y Solicitud.
+    function grupoEscala(opciones, valorPrevio) {
+      const claseMala = { NO: 'ln-pastilla-mal', MALO: 'ln-pastilla-mal', REGULAR: 'ln-pastilla-media' };
+      return '<div class="ln-pastillas">' + opciones.map((v) =>
+        '<button type="button" class="ln-pastilla' + (v === valorPrevio ? ' activa' : '') + (claseMala[v] ? ' ' + claseMala[v] : '') + '" data-valor="' + esc(v) + '">' + esc(v) + '</button>').join('') + '</div>';
+    }
+
+    function htmlPatron(prefijo, oculto) {
+      return '<div id="' + prefijo + '-bloque"' + (oculto ? ' hidden' : '') + '><div class="ln-patron" id="' + prefijo + '-lienzo"><svg id="' + prefijo + '-lineas" viewBox="0 0 300 300" aria-hidden="true"></svg>' +
+        Array.from({ length: 9 }, (_, i) => '<button type="button" class="ln-patron-punto" data-punto="' + (i + 1) + '" aria-label="Punto ' + (i + 1) + '"></button>').join('') +
+        '</div><div class="ln-patron-acciones"><span id="' + prefijo + '-texto">Sin patrón trazado</span><button type="button" class="secondary ln-btn-chico" id="' + prefijo + '-limpiar">Limpiar patrón</button></div></div>';
+    }
+
+    // ---- Formularios del AppSheet (INSPECCIONES LINEAS_Form / RESPONSIVAS LINEAS_Form) ----
+    // El servidor manda los elementos en el orden del AppSheet; aquí se dibujan y se aplican
+    // los Show_If / Required_If sobre [TIPO] con los mismos códigos (LineasChecklist.CONDICIONES).
+    const CONDICIONES_APPSHEET = {
+      SIEMPRE: () => true,
+      NUNCA: () => false,
+      NO_LINEA: (t) => t !== 'LINEA',
+      NO_EQUIPO: (t) => t !== 'EQUIPO',
+      EQUIPOS: (t) => t === 'EQUIPO + SIM' || t === 'EQUIPO',
+      VOZ: (t) => t === 'EQUIPO + SIM' || t === 'LINEA',
+      BATERIA: (t) => ['EQUIPO + SIM', 'EQUIPO', 'BANDA ANCHA'].indexOf(t) >= 0,
+      EQUIPOS_Y_MODEMS: (t) => ['EQUIPO + SIM', 'EQUIPO', 'MODEM', 'BANDA ANCHA'].indexOf(t) >= 0,
+      MODEM: (t) => t.indexOf('MODEM') >= 0 || t.indexOf('BANDA ANCHA') >= 0,
+      MODEM_Y_BANDA: (t) => t.indexOf('MODEM') >= 0 && t.indexOf('BANDA ANCHA') >= 0,
+    };
+    const cumpleCondicion = (codigo, tipo) => !!CONDICIONES_APPSHEET[codigo] && CONDICIONES_APPSHEET[codigo](String(tipo || '').trim().toUpperCase());
+
+    // CALIFICACION: misma AppFormula del AppSheet (ver LineasChecklist.calificacion)
+    const CALIFICACION_SI = ['IDENTIFICACION', 'CUBO', 'CABLE', 'FUNDA', 'MICA', 'PANTALLA', 'BOTONES VOLUMEN', 'BOTON ENCENDIDO',
+      'CUERPO EQUIPO', 'CAMARA', 'PUERTO CARGA', 'ALTAVOZ', 'BOCINAS', 'MICROFONO', 'LINEA DE VOZ'];
+    const CALIFICACION_DESEMPENO = { 'DURACION BATERIA': 1, 'TEMPERATURA': 1, 'DESEMPEÑO': 1 };
+    function calificacionAppSheet(valores) {
+      let suma = 0;
+      let contestados = 0;
+      CALIFICACION_SI.forEach((c) => { if (valores[c] === 'SI') { suma++; contestados++; } else if (valores[c] === 'NO') contestados++; });
+      Object.keys(CALIFICACION_DESEMPENO).forEach((c) => {
+        const n = { BUENO: 1, REGULAR: 0.5, MALO: 0 }[valores[c]];
+        if (n !== undefined) { suma += n; contestados++; }
+      });
+      return suma / Math.max(1, contestados);
+    }
+
+    const esPuntosPatron = (v) => /^[1-9](-[1-9])*$/.test(String(v || ''));
+
+    function htmlElementoFormulario(e) {
+      if (e.tipo === 'titulo') return '<h4 class="ln-af-titulo">' + (e.icono ? icono(e.icono) + ' ' : '') + esc(e.texto) + '</h4>';
+      const id = 'af-' + e.columna.replace(/[^A-Za-z0-9]+/g, '-');
+      const attrs = ' id="' + id + '" data-columna="' + esc(e.columna) + '"' + (e.deriva ? ' data-deriva-de="' + esc(e.deriva.de) + '" data-deriva-dato="' + esc(e.deriva.dato) + '"' : '') + (e.literal || e.secreto ? ' data-respetar-texto' : '') + (e.soloLectura ? ' readonly tabindex="-1"' : '');
+      const valor = e.valor === null || e.valor === undefined ? '' : String(e.valor);
+      let control;
+      if (e.control === 'escala') {
+        control = '<div class="ln-checklist-punto" data-columna="' + esc(e.columna) + '">' + grupoEscala(e.opciones || [], valor || null) + '</div>';
+      } else if (e.control === 'lista') {
+        const opciones = (e.opciones || []).slice();
+        const fuera = valor && opciones.map((o) => String(o).toUpperCase()).indexOf(valor.toUpperCase()) < 0;
+        control = '<select' + attrs + '><option value="">Selecciona…</option>' +
+          (fuera ? '<option value="' + esc(valor) + '" selected>' + esc(valor) + ' (no está en la lista)</option>' : '') +
+          opciones.map((o) => '<option value="' + esc(o) + '"' + (String(o).toUpperCase() === valor.toUpperCase() ? ' selected' : '') + '>' + esc(o) + '</option>').join('') + '</select>';
+      } else if (e.control === 'listaAbierta') {
+        // Enum con AllowOtherValues del AppSheet: sugerencias en su orden y cualquier otro valor
+        control = '<input type="text"' + attrs + ' data-lista-abierta="1" value="' + esc(valor) + '" autocomplete="off" />';
+      } else if (e.control === 'fecha') {
+        control = '<input type="date"' + attrs + ' value="' + esc(valor) + '" />';
+      } else if (e.control === 'siNo') {
+        control = '<div class="ln-checklist-punto" data-columna="' + esc(e.columna) + '" data-si-no="1"><div class="ln-pastillas">' +
+          [['TRUE', 'Sí'], ['FALSE', 'No']].map(([v, t]) => '<button type="button" class="ln-pastilla' + (valor.toUpperCase() === v ? ' activa' : '') + (v === 'FALSE' ? ' ln-pastilla-mal' : '') + '" data-valor="' + v + '">' + t + '</button>').join('') + '</div></div>';
+      } else if (e.control === 'referencia') {
+        // Ref del AppSheet: se elige por etiqueta y se guarda el ID de la fila
+        control = '<input type="text"' + attrs + ' data-referencia="1" autocomplete="off" placeholder="Escribe para buscar…" />';
+      } else if (e.control === 'area') {
+        control = '<textarea' + attrs + ' rows="4">' + esc(valor) + '</textarea>';
+      } else if (e.control === 'fechaHora') {
+        control = '<input type="datetime-local"' + attrs + ' value="' + esc(valor) + '" />';
+      } else if (e.control === 'patron') {
+        const nota = e.valorOculto ? 'Registrado (solo administradores lo ven). Si no trazas uno nuevo, se conserva.'
+          : (valor && !esPuntosPatron(valor) ? 'Hay un patrón capturado en AppSheet (imagen). Si no trazas uno nuevo, se conserva.' : '');
+        control = (nota ? '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' ' + esc(nota) + '</div>' : '') + htmlPatron(id + '-patron', false);
+      } else if (e.control === 'firma') {
+        control = '<div class="ln-firma-caja"><canvas id="' + id + '-firma"></canvas><div class="ln-firma-acciones"><span class="ln-firma-vacia">Dibuja con el dedo o el mouse</span>' +
+          '<button type="button" class="secondary ln-btn-chico" data-limpiar-firma="' + esc(e.columna) + '">Limpiar</button></div></div>';
+      } else if (e.control === 'calculado') {
+        control = '<div class="ln-af-calculado' + (e.formula ? '' : ' ln-af-calculado-texto') + '" id="' + id + '"' + (e.formula ? ' data-formula="' + esc(e.formula) + '"' : '') + '>' + (valor ? esc(valor) : '—') + '</div>';
+      } else {
+        control = '<input type="text"' + attrs + ' value="' + esc(valor) + '" autocomplete="off"' + (e.valorOculto ? ' placeholder="•••• (se conserva el valor registrado)"' : '') + ' />';
+      }
+      const ancho = ['escala', 'area', 'patron', 'firma'].indexOf(e.control) >= 0 ? ' ln-af-ancho' : '';
+      return '<div class="field ln-af-campo' + ancho + (e.soloLectura ? ' ln-af-lectura' : '') + '" data-af-columna="' + esc(e.columna) + '" data-mostrar="' + esc(e.mostrar) + '" data-requerido="' + esc(e.requerido) + '">' +
+        '<label for="' + id + '">' + esc(e.etiqueta) + '<span class="ln-af-req"' + (e.requerido === 'SIEMPRE' ? '' : ' hidden') + '> *</span></label>' + control + '</div>';
+    }
+
+    /** Dibuja el formulario agrupando cada título del AppSheet con sus campos. */
+    function htmlFormularioAppSheet(elementos) {
+      let html = '';
+      let abierto = false;
+      elementos.forEach((e) => {
+        if (e.tipo === 'titulo') {
+          if (abierto) html += '</div></section>';
+          html += '<section class="ln-af-seccion">' + htmlElementoFormulario(e) + '<div class="ln-af-grid">';
+          abierto = true;
+          return;
+        }
+        if (!abierto) { html += '<section class="ln-af-seccion"><div class="ln-af-grid">'; abierto = true; }
+        html += htmlElementoFormulario(e);
+      });
+      return html + (abierto ? '</div></section>' : '');
+    }
+
+    /** Valores por columna del AppSheet dentro de `cuerpo` (las referencias se traducen a ID). */
+    function leerFormularioEn(cuerpo, elementos) {
+      const valores = {};
+      cuerpo.querySelectorAll('input[data-columna], select[data-columna], textarea[data-columna]').forEach((el) => {
+        if (el.readOnly) return;
+        let v = el.value.trim();
+        if (el.dataset.referencia) {
+          const def = (elementos || []).filter((e) => e.columna === el.dataset.columna)[0];
+          const op = def && (def.opciones || []).filter((o) => o.etiqueta === v)[0];
+          v = op ? op.id : (v ? '¿' + v : '');
+        }
+        valores[el.dataset.columna] = v;
+      });
+      cuerpo.querySelectorAll('.ln-checklist-punto[data-columna]').forEach((fila) => {
+        const activa = fila.querySelector('.ln-pastilla.activa');
+        valores[fila.dataset.columna] = activa ? activa.dataset.valor : '';
+      });
+      return valores;
+    }
+
+    /** Listas abiertas (Enum con AllowOtherValues) y referencias con el Combobox de la librería del sistema. */
+    function activarCombosEn(cuerpo, elementos) {
+      if (typeof Combobox === 'undefined') return;
+      (elementos || []).forEach((e) => {
+        if (e.tipo !== 'campo' || (e.control !== 'listaAbierta' && e.control !== 'referencia')) return;
+        const input = cuerpo.querySelector('[data-columna="' + CSS.escape(e.columna) + '"]');
+        if (!input) return;
+        Combobox.crear(input, {
+          opciones: e.control === 'referencia' ? (e.opciones || []).map((o) => ({ valor: o.etiqueta, etiqueta: '' })) : (e.opciones || []),
+          maximo: 50,
+          alElegir: () => input.dispatchEvent(new Event('change', { bubbles: true })),
+        });
+      });
+    }
+
+    /** Campos derivados de una referencia (p. ej. LINEA SUSPENDIDA = [IMEI].[NUMERO TELEFONO]) y fórmulas. */
+    function actualizarDerivadosEn(cuerpo, elementos) {
+      const valores = leerFormularioEn(cuerpo, elementos);
+      cuerpo.querySelectorAll('[data-deriva-de]').forEach((el) => {
+        const def = (elementos || []).filter((e) => e.columna === el.dataset.derivaDe)[0];
+        const op = def && (def.opciones || []).filter((o) => o.id === valores[el.dataset.derivaDe])[0];
+        el.value = op ? (op.datos[el.dataset.derivaDato] || '') : '';
+      });
+      cuerpo.querySelectorAll('[data-formula="NO_ASIGNACION"]').forEach((el) => {
+        const a = valores['ASIGNACION'];
+        el.textContent = a === 'TRUE' ? 'No' : (a === 'FALSE' ? 'Sí' : '—');
+      });
+    }
+
+    /** Obligatorios vacíos y valores fuera de lista (mismas reglas que valida el servidor). */
+    function erroresFormularioEn(cuerpo, elementos, tipo) {
+      const valores = leerFormularioEn(cuerpo, elementos);
+      const errores = [];
+      (elementos || []).forEach((e) => {
+        if (e.tipo !== 'campo' || e.soloLectura || e.control === 'calculado' || e.control === 'firma' || e.control === 'patron' || e.valorOculto) return;
+        if (!cumpleCondicion(e.mostrar, tipo)) return;
+        const v = valores[e.columna] || '';
+        if (!v) { if (cumpleCondicion(e.requerido, tipo)) errores.push({ e: e, msg: e.etiqueta + ' es obligatorio' }); return; }
+        if (e.control === 'lista' && (e.opciones || []).map((o) => String(o).toUpperCase()).indexOf(v.toUpperCase()) < 0) errores.push({ e: e, msg: e.etiqueta + ': ' + (e.mensaje || 'VALOR NO ENCONTRADO EN LA LISTA') });
+        if (e.control === 'referencia' && v.charAt(0) === '¿') errores.push({ e: e, msg: e.etiqueta + ': elige un valor de la lista' });
+      });
+      return errores;
+    }
+
     /** Redimensiona una imagen en el navegador antes de subirla (máx. `maxDim` px, JPEG calidad .82). */
     function redimensionarImagen(archivo, maxDim) {
       return new Promise((resolve, reject) => {
@@ -955,116 +1132,15 @@
         }
       }
 
-      function grupoEscala(opciones, valorPrevio) {
-        const claseMala = { NO: 'ln-pastilla-mal', MALO: 'ln-pastilla-mal', REGULAR: 'ln-pastilla-media' };
-        return '<div class="ln-pastillas">' + opciones.map((v) =>
-          '<button type="button" class="ln-pastilla' + (v === valorPrevio ? ' activa' : '') + (claseMala[v] ? ' ' + claseMala[v] : '') + '" data-valor="' + esc(v) + '">' + esc(v) + '</button>').join('') + '</div>';
-      }
-
       function seccionCaptura(numero, ico, titulo, ayuda, contenido) {
         return '<section class="ln-form-seccion"><div class="ln-form-seccion-cabecera"><span class="ln-form-seccion-num">' + numero + '</span><div>' +
           '<h3>' + icono(ico) + ' ' + esc(titulo) + '</h3><p>' + esc(ayuda) + '</p></div></div>' +
           '<div class="ln-form-seccion-contenido">' + contenido + '</div></section>';
       }
 
-      // ---- Formularios del AppSheet (INSPECCIONES LINEAS_Form / RESPONSIVAS LINEAS_Form) ----
-      // El servidor manda los elementos en el orden del AppSheet; aquí se dibujan y se aplican
-      // los Show_If / Required_If sobre [TIPO] con los mismos códigos (LineasChecklist.CONDICIONES).
-      const CONDICIONES_APPSHEET = {
-        SIEMPRE: () => true,
-        NUNCA: () => false,
-        NO_LINEA: (t) => t !== 'LINEA',
-        NO_EQUIPO: (t) => t !== 'EQUIPO',
-        EQUIPOS: (t) => t === 'EQUIPO + SIM' || t === 'EQUIPO',
-        VOZ: (t) => t === 'EQUIPO + SIM' || t === 'LINEA',
-        BATERIA: (t) => ['EQUIPO + SIM', 'EQUIPO', 'BANDA ANCHA'].indexOf(t) >= 0,
-        EQUIPOS_Y_MODEMS: (t) => ['EQUIPO + SIM', 'EQUIPO', 'MODEM', 'BANDA ANCHA'].indexOf(t) >= 0,
-        MODEM: (t) => t.indexOf('MODEM') >= 0 || t.indexOf('BANDA ANCHA') >= 0,
-        MODEM_Y_BANDA: (t) => t.indexOf('MODEM') >= 0 && t.indexOf('BANDA ANCHA') >= 0,
-      };
-      const cumpleCondicion = (codigo, tipo) => !!CONDICIONES_APPSHEET[codigo] && CONDICIONES_APPSHEET[codigo](String(tipo || '').trim().toUpperCase());
-
-      // CALIFICACION: misma AppFormula del AppSheet (ver LineasChecklist.calificacion)
-      const CALIFICACION_SI = ['IDENTIFICACION', 'CUBO', 'CABLE', 'FUNDA', 'MICA', 'PANTALLA', 'BOTONES VOLUMEN', 'BOTON ENCENDIDO',
-        'CUERPO EQUIPO', 'CAMARA', 'PUERTO CARGA', 'ALTAVOZ', 'BOCINAS', 'MICROFONO', 'LINEA DE VOZ'];
-      const CALIFICACION_DESEMPENO = { 'DURACION BATERIA': 1, 'TEMPERATURA': 1, 'DESEMPEÑO': 1 };
-      function calificacionAppSheet(valores) {
-        let suma = 0;
-        let contestados = 0;
-        CALIFICACION_SI.forEach((c) => { if (valores[c] === 'SI') { suma++; contestados++; } else if (valores[c] === 'NO') contestados++; });
-        Object.keys(CALIFICACION_DESEMPENO).forEach((c) => {
-          const n = { BUENO: 1, REGULAR: 0.5, MALO: 0 }[valores[c]];
-          if (n !== undefined) { suma += n; contestados++; }
-        });
-        return suma / Math.max(1, contestados);
-      }
-
-      const esPuntosPatron = (v) => /^[1-9](-[1-9])*$/.test(String(v || ''));
-
-      function htmlElementoFormulario(e) {
-        if (e.tipo === 'titulo') return '<h4 class="ln-af-titulo">' + (e.icono ? icono(e.icono) + ' ' : '') + esc(e.texto) + '</h4>';
-        const id = 'af-' + e.columna.replace(/[^A-Za-z0-9]+/g, '-');
-        const attrs = ' id="' + id + '" data-columna="' + esc(e.columna) + '"' + (e.literal || e.secreto ? ' data-respetar-texto' : '') + (e.soloLectura ? ' readonly tabindex="-1"' : '');
-        const valor = e.valor === null || e.valor === undefined ? '' : String(e.valor);
-        let control;
-        if (e.control === 'escala') {
-          control = '<div class="ln-checklist-punto" data-columna="' + esc(e.columna) + '">' + grupoEscala(e.opciones || [], valor || null) + '</div>';
-        } else if (e.control === 'lista') {
-          const opciones = (e.opciones || []).slice();
-          const fuera = valor && opciones.map((o) => String(o).toUpperCase()).indexOf(valor.toUpperCase()) < 0;
-          control = '<select' + attrs + '><option value="">Selecciona…</option>' +
-            (fuera ? '<option value="' + esc(valor) + '" selected>' + esc(valor) + ' (no está en la lista)</option>' : '') +
-            opciones.map((o) => '<option value="' + esc(o) + '"' + (String(o).toUpperCase() === valor.toUpperCase() ? ' selected' : '') + '>' + esc(o) + '</option>').join('') + '</select>';
-        } else if (e.control === 'area') {
-          control = '<textarea' + attrs + ' rows="4">' + esc(valor) + '</textarea>';
-        } else if (e.control === 'fechaHora') {
-          control = '<input type="datetime-local"' + attrs + ' value="' + esc(valor) + '" />';
-        } else if (e.control === 'patron') {
-          const nota = e.valorOculto ? 'Registrado (solo administradores lo ven). Si no trazas uno nuevo, se conserva.'
-            : (valor && !esPuntosPatron(valor) ? 'Hay un patrón capturado en AppSheet (imagen). Si no trazas uno nuevo, se conserva.' : '');
-          control = (nota ? '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' ' + esc(nota) + '</div>' : '') + htmlPatron(id + '-patron', false);
-        } else if (e.control === 'firma') {
-          control = '<div class="ln-firma-caja"><canvas id="' + id + '-firma"></canvas><div class="ln-firma-acciones"><span class="ln-firma-vacia">Dibuja con el dedo o el mouse</span>' +
-            '<button type="button" class="secondary ln-btn-chico" data-limpiar-firma="' + esc(e.columna) + '">Limpiar</button></div></div>';
-        } else if (e.control === 'calculado') {
-          control = '<div class="ln-af-calculado" id="' + id + '">—</div>';
-        } else {
-          control = '<input type="text"' + attrs + ' value="' + esc(valor) + '" autocomplete="off"' + (e.valorOculto ? ' placeholder="•••• (se conserva el valor registrado)"' : '') + ' />';
-        }
-        const ancho = ['escala', 'area', 'patron', 'firma'].indexOf(e.control) >= 0 ? ' ln-af-ancho' : '';
-        return '<div class="field ln-af-campo' + ancho + (e.soloLectura ? ' ln-af-lectura' : '') + '" data-af-columna="' + esc(e.columna) + '" data-mostrar="' + esc(e.mostrar) + '" data-requerido="' + esc(e.requerido) + '">' +
-          '<label for="' + id + '">' + esc(e.etiqueta) + '<span class="ln-af-req" hidden> *</span></label>' + control + '</div>';
-      }
-
-      /** Dibuja el formulario agrupando cada título del AppSheet con sus campos. */
-      function htmlFormularioAppSheet(elementos) {
-        let html = '';
-        let abierto = false;
-        elementos.forEach((e) => {
-          if (e.tipo === 'titulo') {
-            if (abierto) html += '</div></section>';
-            html += '<section class="ln-af-seccion">' + htmlElementoFormulario(e) + '<div class="ln-af-grid">';
-            abierto = true;
-            return;
-          }
-          if (!abierto) { html += '<section class="ln-af-seccion"><div class="ln-af-grid">'; abierto = true; }
-          html += htmlElementoFormulario(e);
-        });
-        return html + (abierto ? '</div></section>' : '');
-      }
-
       /** Valores actuales del formulario, por columna del AppSheet. */
       function leerFormularioAppSheet() {
-        const valores = {};
-        const cuerpo = $('#ln-captura-cuerpo', raiz);
-        cuerpo.querySelectorAll('input[data-columna], select[data-columna], textarea[data-columna]').forEach((el) => {
-          if (!el.readOnly) valores[el.dataset.columna] = el.value.trim();
-        });
-        cuerpo.querySelectorAll('.ln-checklist-punto[data-columna]').forEach((fila) => {
-          const activa = fila.querySelector('.ln-pastilla.activa');
-          valores[fila.dataset.columna] = activa ? activa.dataset.valor : '';
-        });
-        return valores;
+        return leerFormularioEn($('#ln-captura-cuerpo', raiz), captura && captura.contexto ? captura.contexto.formulario : []);
       }
 
       function tipoFormulario() {
@@ -1188,12 +1264,6 @@
             return salida.toDataURL('image/png').split(',')[1];
           },
         };
-      }
-
-      function htmlPatron(prefijo, oculto) {
-        return '<div id="' + prefijo + '-bloque"' + (oculto ? ' hidden' : '') + '><div class="ln-patron" id="' + prefijo + '-lienzo"><svg id="' + prefijo + '-lineas" viewBox="0 0 300 300" aria-hidden="true"></svg>' +
-          Array.from({ length: 9 }, (_, i) => '<button type="button" class="ln-patron-punto" data-punto="' + (i + 1) + '" aria-label="Punto ' + (i + 1) + '"></button>').join('') +
-          '</div><div class="ln-patron-acciones"><span id="' + prefijo + '-texto">Sin patrón trazado</span><button type="button" class="secondary ln-btn-chico" id="' + prefijo + '-limpiar">Limpiar patrón</button></div></div>';
       }
 
       function activarPatron(prefijo, inicial) {
@@ -1819,7 +1889,8 @@
         const filas = indiceAcc.filas;
         marcarKpi = tilesKpi($('#lac-indicadores', raiz), [
           { icono: 'package', valor: miles(filas.length), etiqueta: 'Artículos' },
-          { icono: 'triangle-alert', valor: miles(filas.filter((a) => a.reabasto).length), etiqueta: 'Con stock bajo (≤ ' + indiceAcc.umbralReabasto + ')',
+          { icono: 'triangle-alert', valor: miles(filas.filter((a) => a.reabasto).length), etiqueta: 'Por reabastecer',
+            titulo: 'Aviso del AppSheet: Cargadores ≤ 10, Micas ≤ 182, Fundas ≤ 182',
             clase: 'stat-tile-warn', filtros: { reabasto: { valores: ['Sí'] } } },
           { icono: 'circle-check', valor: miles(filas.reduce((t, a) => t + (Number(a.stock) || 0), 0)), etiqueta: 'Piezas en stock', clase: 'stat-tile-ok', filtros: false },
         ], () => tabla);
@@ -1857,13 +1928,13 @@
             { icono: 'arrow-up-from-line', titulo: 'Registrar salida', alHacer: (a) => abrirModalMovimiento(a.id, 'SALIDA') },
           ],
           columnas: [
-            { campo: 'nombre', titulo: 'Artículo', tipo: 'texto', fijada: true },
-            { campo: 'categoria', titulo: 'Categoría', tipo: 'lista' },
-            { campo: 'marca', titulo: 'Marca / modelo', tipo: 'texto' },
+            { campo: 'nombre', titulo: 'Nombre del Articulo', tipo: 'texto', fijada: true },
+            { campo: 'categoria', titulo: 'Categoria', tipo: 'lista' },
+            { campo: 'marca', titulo: 'Marca', tipo: 'texto' },
             { campo: 'stock', titulo: 'Stock', tipo: 'numero', agregado: 'suma',
               render: (v, a) => '<span class="lac-stock' + (a.reabasto ? ' bajo' : '') + '">' + esc(String(v)) + '</span>' },
-            { campo: 'reabasto', titulo: 'Stock bajo', tipo: 'lista', valor: (a) => (a.reabasto ? 'Sí' : 'No'),
-              render: (v) => (v === 'Sí' ? chip('Reabastecer', 'rojo') : '<span class="ln-tenue">No</span>') },
+            { campo: 'reabasto', titulo: 'Aviso Reabastecimiento', tipo: 'lista', valor: (a) => (a.reabasto ? 'Sí' : 'No'),
+              render: (v) => (v === 'Sí' ? chip('REABASTECER PRODUCTO', 'rojo') : '') },
           ],
         });
       }
@@ -1919,7 +1990,9 @@
       $('#lac-guardar-nuevo', raiz).addEventListener('click', () => {
         if (guardandoAccesorio) return;
         const nombre = $('#lac-nombre', raiz).value.trim();
-        if (!nombre) { $('#lac-nuevo-error', raiz).textContent = 'El nombre es obligatorio.'; $('#lac-nuevo-error', raiz).hidden = false; return; }
+        const categoria = $('#lac-categoria', raiz).value;
+        const faltan = [!categoria && 'Categoria', !nombre && 'Nombre del Articulo'].filter(Boolean);
+        if (faltan.length) { $('#lac-nuevo-error', raiz).textContent = faltan.join(', ') + (faltan.length > 1 ? ' son obligatorios.' : ' es obligatorio.'); $('#lac-nuevo-error', raiz).hidden = false; return; }
         estadoAccesorio('#lac-modal-nuevo', true);
         llamar('apiLineasAccesoriosAgregarArticulo', { nombre: nombre, categoria: $('#lac-categoria', raiz).value, marca: $('#lac-marca', raiz).value })
           .then(() => { guardandoAccesorio = false; cerrarModalNuevo(); aviso('Artículo guardado correctamente.', 6000); cargar(true); })
@@ -1950,29 +2023,17 @@
         resumen: ['FOLIO', 'LINIEA SUSPENDIDA', 'COMPAÑIA', 'ESTATUS', 'FECHA DE REACTIVACION'],
         titulo: 'Reactivación de Líneas', icono: 'refresh-cw', csv: 'reactivacion de lineas',
         subtitulo: 'Seguimiento de líneas suspendidas, canceladas y reactivadas', filtro: 'Todos los estatus',
-        campos: [
-          ['LINIEA SUSPENDIDA', 'Línea suspendida', 'tel', true], ['COMPAÑIA', 'Compañía', 'select', false, ['TELCEL', 'TELCEL GPH', 'TELCEL FRO', 'AT&T', 'BAIT']],
-          ['SIM', 'SIM', 'text'], ['CORREO / TICKET', 'Correo / ticket', 'text'], ['FECHA DE SUSPENSION', 'Fecha de suspensión', 'date'],
-          ['ESTATUS', 'Estatus', 'select', true, ['ACTUALIZACIÓN DE LINEA TELEFONICA', 'CANCELADA', 'DISPONIBLE', 'EN USO', 'PROCESO DE CANCELACION']],
-          ['ESTADO DEL EQUIPO', 'Estado del equipo', 'text'], ['IMEI', 'IMEI', 'text'], ['RETRO DE SOLICITUD', 'Retro de solicitud', 'text'],
-          ['FECHA DE REACTIVACION', 'Fecha de reactivación', 'date'], ['NUEVO NUMERO', 'Nuevo número', 'tel'], ['COMENTARIOS', 'Comentarios', 'textarea'],
-        ],
+        altas: true,
+        // Display name de las columnas en el AppSheet
+        nombres: { 'LINIEA SUSPENDIDA': 'LINEA SUSPENDIDA' },
       },
       SOLICITUD: {
         resumen: ['FOLIO', 'FECHA DE SOLICITUD', 'NOMBRE SOLICITANTE', 'TIPO DE PLAN', 'ESTATUS'],
         titulo: 'Solicitud de Líneas', icono: 'clipboard-list', csv: 'solicitud de lineas',
         subtitulo: 'Solicitudes de asignación y reasignación de líneas telefónicas', filtro: 'Todos los estatus',
-        campos: [
-          ['FECHA DE SOLICITUD', 'Fecha de solicitud', 'date', true], ['TIPO DE PLAN', 'Tipo de plan', 'text', true], ['TICKET', 'Ticket', 'text'],
-          ['NO EMPLEADO SOLICITANTE', 'Número de empleado del solicitante', 'text'],
-          ['NOMBRE SOLICITANTE', 'Nombre completo del solicitante', 'text'], ['PUESTO SOLICITANTE', 'Puesto del solicitante', 'text'],
-          ['DEPARTAMENTO SOLICITANTE', 'Departamento del solicitante', 'text'], ['SEDE', 'Sede', 'text'], ['DEPARTAMENTO', 'Departamento', 'text'],
-          ['TIPO', 'Tipo', 'text'], ['PUESTO', 'Puesto', 'text'], ['COLABORADOR', 'Colaborador', 'text'], ['SOLICITANTE', 'Solicitante', 'text'],
-          ['FECHA DE ENTREGA', 'Fecha de entrega', 'date'], ['ASIGNACION', 'Asignación', 'checkbox'], ['REASIGNACION', 'Reasignación', 'checkbox'],
-          ['COMPAÑIA', 'Compañía', 'select', false, ['TELCEL', 'TELCEL GPH', 'TELCEL FRO', 'AT&T', 'BAIT']], ['EQUIPO', 'Equipo', 'text'],
-          ['NUMERO ANTERIOR', 'Número anterior', 'tel'], ['NUMERO ACTUAL', 'Número actual', 'tel'], ['IMEI', 'IMEI', 'text'], ['SIM', 'SIM', 'text'],
-          ['ESTATUS', 'Estatus', 'select', false, ['FINALIZADO', 'TRAMITE CANCELADO']], ['COMENTARIOS', 'Comentarios', 'textarea'],
-        ],
+        altas: true,
+        // Display name de las columnas en el AppSheet
+        nombres: { 'NO EMPLEADO SOLICITANTE': 'NÚMERO DE EMPLEADO DEL SOLICITANTE', 'NOMBRE SOLICITANTE': 'NOMBRE COMPLETO DEL SOLICITANTE', 'PUESTO SOLICITANTE': 'PUESTO DEL SOLICITANTE', 'DEPARTAMENTO SOLICITANTE': 'DEPARTAMENTO DEL SOLICITANTE' },
       },
       POST_VENTA: {
         resumen: ['NUCO', 'NUMERO TELEFONO', 'RESPONSABLE', 'EQUIPO', 'ESTATUS LINEA'],
@@ -2005,36 +2066,22 @@
         $('#ln-op-alta-error').hidden = true;
       }
 
+      let elementosAlta = [];
       function abrirAlta() {
-        const hoy = new Date();
-        const fechaHoy = hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0') + '-' + String(hoy.getDate()).padStart(2, '0');
+        const cuerpo = $('#ln-op-campos');
         $('#ln-op-modal-titulo').textContent = 'Nuevo registro · ' + cfg.titulo;
-        $('#ln-op-campos').innerHTML = cfg.campos.map(([nombre, etiqueta, tipoCampo, requerido, opciones], indice) => {
-          const idCampo = 'ln-op-campo-' + indice;
-          const req = requerido ? ' required' : '';
-          const valorInicial = tipoCampo === 'date' && /FECHA DE (SOLICITUD|ENTREGA)/.test(nombre) ? fechaHoy : '';
-          let control;
-          if (tipoCampo === 'select') {
-            control = '<select name="' + esc(nombre) + '"' + req + '><option value="">Selecciona…</option>' +
-              opciones.map((o) => '<option value="' + esc(o) + '">' + esc(o) + '</option>').join('') + '</select>';
-          } else if (tipoCampo === 'textarea') {
-            control = '<textarea name="' + esc(nombre) + '" rows="3"' + req + '></textarea>';
-          } else if (tipoCampo === 'checkbox') {
-            control = '<label class="ln-op-check"><input name="' + esc(nombre) + '" type="checkbox"> <span data-ln-icon="check"></span> Sí</label>';
-          } else {
-            control = '<input name="' + esc(nombre) + '" type="' + tipoCampo + '" value="' + valorInicial + '"' + req + '>';
-          }
-          control = control.replace(/<(input|select|textarea) /, '<$1 id="' + idCampo + '" ');
-          return '<div class="field' + (tipoCampo === 'textarea' ? ' ln-op-campo-ancho' : '') + '"><label for="' + idCampo + '">' + esc(etiqueta) + (requerido ? ' *' : '') + '</label>' + control + '</div>';
-        }).join('');
-        $('#ln-op-alta-form').reset();
-        $('#ln-op-campos').querySelectorAll('input[type="date"]').forEach((el) => {
-          if (/FECHA DE (SOLICITUD|ENTREGA)/.test(el.name)) el.value = fechaHoy;
-        });
+        $('#ln-op-alta-error').hidden = true;
+        cuerpo.innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando formulario…</p>';
         modal.hidden = false;
-        pintarIconos(modal);
-        const primero = modal.querySelector('input:not([type="checkbox"]), select, textarea');
-        if (primero) primero.focus();
+        llamar('apiLineasFormularioOperativa', tipo).then((elementos) => {
+          if (!vigente() || modal.hidden) return;
+          elementosAlta = elementos;
+          cuerpo.innerHTML = htmlFormularioAppSheet(elementos);
+          activarCombosEn(cuerpo, elementosAlta);
+          actualizarDerivadosEn(cuerpo, elementosAlta);
+          const primero = cuerpo.querySelector('input:not([readonly]), select, textarea');
+          if (primero) primero.focus();
+        }).catch((e) => { cuerpo.innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>'; });
       }
 
       function cargar() {
@@ -2047,7 +2094,7 @@
           if (!tabla) {
             // Títulos: las etiquetas del formulario de alta y, si no hay, el encabezado en formato de oración
             const titulos = { FOLIO: 'Folio', 'FECHA DE REGISTRO': 'Fecha de registro', 'QUIEN REGISTRO': 'Registró' };
-            (cfg.campos || []).forEach(([nombre, etiqueta]) => { titulos[normEncabezado(nombre)] = etiqueta; });
+            Object.keys(cfg.nombres || {}).forEach((nombre) => { titulos[normEncabezado(nombre)] = tituloLegible(cfg.nombres[nombre]); });
             const columnas = columnasDeHoja(r.encabezados, r.filas, cfg.resumen, titulos);
             // El servidor agrupa en mayúsculas y sin espacios de más: la columna filtra con el mismo valor
             const colGrupo = columnas.find((c) => c.campo === campoGrupo);
@@ -2092,15 +2139,31 @@
       $('#ln-op-nuevo', raiz).addEventListener('click', abrirAlta);
       $('#ln-op-cerrar').addEventListener('click', cerrarAlta);
       $('#ln-op-cancelar').addEventListener('click', cerrarAlta);
-      modal.addEventListener('click', (ev) => { if (ev.target === modal) cerrarAlta(); });
+      modal.addEventListener('click', (ev) => {
+        if (ev.target === modal) { cerrarAlta(); return; }
+        const pastilla = ev.target.closest('.ln-pastilla');
+        if (pastilla) {
+          pastilla.parentElement.querySelectorAll('.ln-pastilla').forEach((b) => b.classList.remove('activa'));
+          pastilla.classList.add('activa');
+          actualizarDerivadosEn($('#ln-op-campos'), elementosAlta);
+        }
+      });
+      $('#ln-op-campos').addEventListener('input', () => actualizarDerivadosEn($('#ln-op-campos'), elementosAlta));
+      $('#ln-op-campos').addEventListener('change', () => actualizarDerivadosEn($('#ln-op-campos'), elementosAlta));
       $('#ln-op-alta-form').addEventListener('submit', (ev) => {
         ev.preventDefault();
         if (guardando) return;
-        const datos = {};
-        cfg.campos.forEach(([nombre, , tipoCampo]) => {
-          const control = ev.currentTarget.elements.namedItem(nombre);
-          datos[nombre] = tipoCampo === 'checkbox' ? control.checked : control.value.trim();
-        });
+        const cuerpo = $('#ln-op-campos');
+        const errores = erroresFormularioEn(cuerpo, elementosAlta, '');
+        if (errores.length) {
+          const box = $('#ln-op-alta-error');
+          box.textContent = errores.map((x) => x.msg).slice(0, 6).join(' · ');
+          box.hidden = false;
+          const campo = cuerpo.querySelector('[data-af-columna="' + CSS.escape(errores[0].e.columna) + '"] input, [data-af-columna="' + CSS.escape(errores[0].e.columna) + '"] select, [data-af-columna="' + CSS.escape(errores[0].e.columna) + '"] .ln-pastilla');
+          if (campo) { campo.scrollIntoView({ behavior: 'smooth', block: 'center' }); if (campo.focus) campo.focus(); }
+          return;
+        }
+        const datos = leerFormularioEn(cuerpo, elementosAlta);
         const guardar = $('#ln-op-guardar');
         guardando = true;
         const textoGuardar = guardar.innerHTML;
@@ -2123,7 +2186,7 @@
           modal.querySelectorAll('button, input, select, textarea').forEach((el) => { el.disabled = false; });
         });
       });
-      if (cfg.campos) {
+      if (cfg.altas) {
         cargarPermisos().then((p) => { if (vigente()) $('#ln-op-nuevo', raiz).hidden = !p.puedeOperar; });
       }
       cargar();

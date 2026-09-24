@@ -181,9 +181,15 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente(LineasRepo.vistaOperativa(tipo, opciones || {}, puedeVerSecretos_(sesion)));
   }
 
+  /** Formulario de alta de Reactivación / Solicitud tal como el del AppSheet. */
+  function formularioOperativa(token, tipo) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    return LineasUtil.paraCliente(LineasOperativas.formulario(tipo, usuarioOperacion_(sesion)));
+  }
+
   function crearVistaOperativa(token, tipo, datos) {
     const sesion = Auth.requiereRol(token, rolesOperan_());
-    return LineasRepo.crearVistaOperativa(tipo, datos || {}, usuarioOperacion_(sesion));
+    return LineasOperativas.crear(tipo, datos || {}, usuarioOperacion_(sesion));
   }
 
   function crearRegistro(token, datos) {
@@ -261,7 +267,7 @@ const TelefoniaService = (function () {
   }
 
   return {
-    permisos, indice, equipo, linea, evidencias, historial, inspeccion, catalogos, colaboradores, bitacora, vistaOperativa, crearVistaOperativa, recargarDatos,
+    permisos, indice, equipo, linea, evidencias, historial, inspeccion, catalogos, colaboradores, bitacora, vistaOperativa, formularioOperativa, crearVistaOperativa, recargarDatos,
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf, crearRegistro, editarRegistro,
   };
 })();
