@@ -51,6 +51,24 @@ consulta y en altas): `LINIEA SUSPENDIDA` (así se llama en la hoja) y
 Al unir con master: tomar el `app.html`/`Index.html`/`Modulos.gs` de master y
 volver a aplicar los bloques marcados “Líneas (rama emmanuel)”.
 
+## 0b. Lógica igual al AppSheet (2026-09-24, commits `421f98d` → `94f5e93`)
+
+Telefonía replica la definición del AppSheet v1.001924 (auditoría completa en la carpeta de documentación:
+`migracion/AUDITORIA_APPSHEET_TELEFONIA.md`): orden de formularios, display names, listas y su orden,
+Show_If / Required_If / Editable_If / Reset_If / Valid_If con sus mensajes, valores iniciales, folios y bots
+(ACTUALIZAR DESDE INSPECCION, CAMBIOS TELEFONIA de 23 campos, MAYUSCULAS, FOLIO DESECHO), reglas de formato y
+columnas/orden de las vistas de tabla.
+
+**Cómo están hechos los formularios.** El servidor arma cada formulario como una lista de elementos en el orden
+del AppSheet (`LineasCaptura` para inspección/responsiva, `LineasRegistros` para LINEAS TELEFONICAS,
+`LineasOperativas` para Reactivación/Solicitud/Desecho). Cada campo trae `control`, `opciones`, `valor` inicial y
+condiciones (`'SIEMPRE'`, códigos sobre TIPO o `{ tipoEn }`, `{ campo, igual }`, `{ nuevo }`, `{ y: [...] }`).
+`lineas.html` los dibuja (`htmlFormularioAppSheet`), aplica las reglas en vivo y valida; el servidor vuelve a
+aplicar Editable/Reset/Valid_If al guardar. Para portar otra tabla del AppSheet basta con escribir su lista.
+
+Mejoras sobre AppSheet ya decididas: CONTRASEÑA MODEM se precarga en la inspección; se conservan fotos, patrón
+de 9 puntos, COLOR persistente y la carpeta NUCOS para PDFs.
+
 ## 1. Contexto
 
 El módulo viene de un prototipo propio ("CI Control Activos") que ya funcionaba
