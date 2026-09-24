@@ -1,0 +1,118 @@
+<style>
+  button.btn-excel { background: var(--color-success); color: #fff; border: none; }
+  button.btn-excel:hover { background: #17663f; }
+  button.btn-excel:disabled { opacity: .7; cursor: wait; }
+</style>
+
+<script>
+  /**
+   * ExportarExcel — genera y descarga un .xlsx real (fechas como fecha, números como número).
+   * Usa SheetJS, que se descarga la PRIMERA vez que alguien exporta (no pesa al abrir la app).
+   *
+   *   await ExportarExcel.descargar({
+   *     nombreArchivo: 'Verificaciones',        // se le agrega fecha y hora + .xlsx
+   *     nombreHoja: 'Verificaciones',           // opcional
+   *     columnas: [
+   *       { titulo: 'Folio', tipo: 'texto' },
+   *       { titulo: 'Kilometraje', tipo: 'numero' },
+   *       { titulo: 'Fecha', tipo: 'fecha' },   // Date, ISO o "yyyy-MM-dd" → celda de fecha dd/mm/yyyy
+   *     ],
+   *     filas: [ ['ST0443E', 12000, '2026-09-15'], … ],
+   *   });
+   *
+   * El DataTable ya lo usa con su botón "Exportar a Excel"; esto es para exportar desde otro lado.
+   */
+  const ExportarExcel = (function () {
+    // "\/\/" (no "//") — Apps Script bug, ver CLAUDE.md
+    const URL_LIBRERIA = 'https:\/\/cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    let cargando = null;
+
+    function cargarLibreria() {
+      if (window.XLSX) return Promise.resolve(window.XLSX);
+      if (!cargando) {
+        cargando = new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = URL_LIBRERIA;
+          script.onload = () => resolve(window.XLSX);
+          script.onerror = () => {
+            cargando = null;
+            reject(new Error('No se pudo cargar el generador de Excel. Revisa tu conexión e intenta de nuevo.'));
+          };
+          document.head.appendChild(script);
+        });
+      }
+      return cargando;
+    }
+
+    /** Número de serie de Excel para un día (sin hora ni zona horaria, para que no se corra de día) */
+    function serialExcel(valor) {
+      if (valor === null || valor === undefined || valor === '') return null;
+      let y, m, d;
+      const iso = typeof valor === 'string' && valor.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (iso) {
+        [y, m, d] = [+iso[1], +iso[2], +iso[3]];
+      } else {
+        const f = valor instanceof Date ? valor : new Date(valor);
+        if (isNaN(f)) return null;
+        [y, m, d] = [f.getFullYear(), f.getMonth() + 1, f.getDate()];   // día local, igual que en pantalla
+      }
+      return (Date.UTC(y, m - 1, d) - Date.UTC(1899, 11, 30)) / 86400000;
+    }
+
+    function aNumero(valor) {
+      if (valor === null || valor === undefined || String(valor).trim() === '') return null;
+      const n = Number(String(valor).replace(/[$,\s]/g, ''));
+      return isNaN(n) ? null : n;
+    }
+
+    function marcaDeTiempo() {
+      const f = new Date();
+      const p = (n) => String(n).padStart(2, '0');
+      return `${f.getFullYear()}-${p(f.getMonth() + 1)}-${p(f.getDate())}_${p(f.getHours())}${p(f.getMinutes())}`;
+    }
+
+    async function descargar(opciones) {
+      const XLSX = await cargarLibreria();
+      const columnas = opciones.columnas;
+
+      const cuerpo = opciones.filas.map((fila) => fila.map((valor, i) => {
+        const tipo = columnas[i].tipo;
+        if (tipo === 'numero') return aNumero(valor);
+        if (tipo === 'fecha') return serialExcel(valor);
+        return valor === null || valor === undefined ? '' : String(valor);
+      }));
+
+      const hoja = XLSX.utils.aoa_to_sheet([columnas.map((c) => c.titulo)].concat(cuerpo));
+
+      // Formato de fecha en las columnas de fecha
+      columnas.forEach((col, c) => {
+        if (col.tipo !== 'fecha') return;
+        for (let r = 1; r <= cuerpo.length; r++) {
+          const celda = hoja[XLSX.utils.encode_cell({ r, c })];
+          if (celda && celda.t === 'n') celda.z = 'dd/mm/yyyy';
+        }
+      });
+
+      // Ancho de columna aproximado al contenido y autofiltro en el encabezado
+      hoja['!cols'] = columnas.map((col, c) => {
+        const largo = Math.max(String(col.titulo).length, ...cuerpo.slice(0, 500).map((f) => (
+          col.tipo === 'fecha' ? 10 : String(f[c] === null ? '' : f[c]).length
+        )));
+        return { wch: Math.min(50, Math.max(8, largo + 2)) };
+      });
+      if (cuerpo.length) {
+        hoja['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: cuerpo.length, c: columnas.length - 1 } }) };
+      }
+
+      const libro = XLSX.utils.book_new();
+      // Nombre de hoja: máx. 31 caracteres y sin : \ / ? * [ ]
+      const nombreHoja = String(opciones.nombreHoja || opciones.nombreArchivo || 'Datos').replace(/[:\\/?*\[\]]/g, ' ').slice(0, 31);
+      XLSX.utils.book_append_sheet(libro, hoja, nombreHoja);
+
+      const nombreArchivo = String(opciones.nombreArchivo || 'Datos').replace(/[\\/:*?"<>|]/g, ' ').trim();
+      XLSX.writeFile(libro, `${nombreArchivo}_${marcaDeTiempo()}.xlsx`, { compression: true });
+    }
+
+    return { descargar };
+  })();
+</script>

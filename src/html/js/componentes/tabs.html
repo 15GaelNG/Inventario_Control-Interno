@@ -1,0 +1,55 @@
+<style>
+  .tabs-lista {
+    display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .tabs-lista .tab-btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: transparent; color: var(--color-text-muted); border: none; border-radius: 10px 10px 0 0;
+    padding: 8px 14px; font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tabs-lista .tab-btn:hover { background: var(--color-bg); color: var(--color-text); }
+  .tabs-lista .tab-btn.activa { color: var(--color-primary); border-bottom-color: var(--color-accent); }
+  :root[data-theme="dark"] .tabs-lista .tab-btn.activa { color: var(--color-text); }
+</style>
+
+<script>
+  /**
+   * Tabs — pestañas genéricas.
+   *
+   * Marcado:
+   *   <div class="tabs-lista">
+   *     <button type="button" class="tab-btn" data-tab="registros">Registros</button>
+   *     <button type="button" class="tab-btn" data-tab="nuevo">Nuevo</button>
+   *   </div>
+   *   <div data-panel="registros">…</div>
+   *   <div data-panel="nuevo">…</div>
+   *
+   * Uso:
+   *   const tabs = Tabs.iniciar(contenedor, { inicial: 'registros', alCambiar: (nombre) => {} });
+   *   tabs.mostrar('nuevo');
+   */
+  const Tabs = (function () {
+    function iniciar(contenedor, opciones) {
+      opciones = opciones || {};
+      const botones = Array.from(contenedor.querySelectorAll('.tab-btn[data-tab]'));
+      const paneles = Array.from(contenedor.querySelectorAll('[data-panel]'));
+      let actual = null;
+
+      function mostrar(nombre) {
+        if (nombre === actual) return;
+        actual = nombre;
+        botones.forEach((b) => b.classList.toggle('activa', b.dataset.tab === nombre));
+        paneles.forEach((p) => { p.hidden = p.dataset.panel !== nombre; });
+        if (opciones.alCambiar) opciones.alCambiar(nombre);
+      }
+
+      botones.forEach((b) => b.addEventListener('click', () => mostrar(b.dataset.tab)));
+      mostrar(opciones.inicial || (botones[0] && botones[0].dataset.tab));
+
+      return { mostrar, actual: () => actual };
+    }
+
+    return { iniciar };
+  })();
+</script>

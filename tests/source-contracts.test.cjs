@@ -48,7 +48,7 @@ test('el login acepta hash y conserva compatibilidad con la hoja histórica', ()
 
 test('Telefonía muestra los diez módulos implementados en el orden solicitado', () => {
   const app = read('src/html/js/app.html');
-  const lineas = app.slice(app.indexOf("id: 'lineas'"), app.indexOf("id: 'arqueos'"));
+  const lineas = app.slice(app.indexOf("id: 'lineas'"), app.indexOf('\n  ];', app.indexOf("id: 'lineas'")));
   assert.equal((lineas.match(/Inventario de Accesorios/g) || []).length, 1);
   const orden = ['lineas-telefonicas', 'gestion-activos', 'detalles-lineas-telefonicas', 'accesorios-lineas', 'reactivacion-lineas',
     'reasignaciones-lineas', 'solicitud-lineas', 'cambios-lineas', 'lineas-post-venta', 'bitacora-desechos'];
@@ -166,15 +166,63 @@ test('los movimientos rechazan artículos inexistentes', () => {
   assert.match(accesorios, /if \(!actual\) throw new Error\('El artículo seleccionado ya no existe/);
 });
 
-test('el shell tiene navegación móvil y controles semánticos', () => {
+test('el shell es el de la rama jorge con solo el grupo de Líneas', () => {
   const index = read('src/html/Index.html');
-  const styles = read('src/html/styles.html');
   const app = read('src/html/js/app.html');
-  assert.match(index, /id="mobile-menu-btn"/);
-  assert.match(index, /id="sidebar-backdrop"/);
-  assert.match(styles, /#sidebar\.mobile-open/);
-  assert.match(styles, /width: 310px/);
-  assert.match(styles, /\.nav-subitem \{[\s\S]*?white-space: normal;[\s\S]*?text-align: left; justify-content: flex-start;/);
-  assert.match(app, /<button type="button" class="nav-group-header"/);
-  assert.match(app, /<button type="button" class="nav-subitem"/);
+  assert.match(index, /include\('html\/js\/componentes\/datatable'\)/);
+  assert.ok(index.indexOf("include('html/js/componentes/datatable')") < index.indexOf("include('html/js/lineas')"),
+    'lineas.html debe cargarse después de la librería de componentes');
+  const grupos = /const NAV_GRUPOS = \[([\s\S]*?)\n  \];/.exec(app)[1];
+  assert.deepEqual([...grupos.matchAll(/^      id: '([^']+)'/gm)].map((m) => m[1]), ['lineas']);
+  for (const ajeno of ['initVehiculos', 'initIncidencias', 'initUber', 'initTickets', 'initAccesorios(']) {
+    assert.ok(!app.includes(ajeno), 'app.html no debe traer el módulo ' + ajeno);
+  }
+});
+
+test('el JS de los .html no tiene "//" dentro de strings (Apps Script lo corta como comentario)', () => {
+  const html = filesBelow(path.join(root, 'src')).filter((file) => file.endsWith('.html'));
+  const hallazgos = [];
+  html.forEach((file) => {
+    const source = fs.readFileSync(file, 'utf8');
+    for (const match of source.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)) {
+      match[1].split('\n').forEach((linea) => {
+        const t = linea.trim();
+        if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) return;
+        if (/['"`][^'"`]*:\/\//.test(linea)) hallazgos.push(path.relative(root, file) + ': ' + t.slice(0, 90));
+      });
+    }
+  });
+  assert.deepEqual(hallazgos, []);
+});
+
+test('las tablas de Líneas usan el DataTable del sistema con KPIs que filtran', () => {
+  const cliente = read('src/html/js/lineas.html');
+  const api = read('src/ClientApi.gs');
+  assert.match(cliente, /DataTable\.crear\(contenedor/);
+  assert.equal((cliente.match(/tablaLineas\(\$\('#(ln-tabla-' \+ modulo|lac-tabla|ln-op-tabla|ln-bit-tabla)'?/g) || []).length >= 4, true);
+  assert.doesNotMatch(cliente, /class="ln-tabla"><thead id=/);
+  assert.match(cliente, /function tilesKpi\(/);
+  assert.match(api, /function apiLineasBitacoraTabla[\s\S]*?JSON\.stringify/);
+  assert.match(api, /function apiLineasVistaOperativaTabla[\s\S]*?JSON\.stringify/);
+  assert.match(read('src/services/lineas/LineasRepo.gs'), /const MAX_FILAS_TABLA = 5000;/);
+  for (const vista of ['lineas-telefonicas', 'lineas-bitacora', 'lineas-operativa', 'lineas-accesorios']) {
+    const html = read(`src/html/views/lineas/${vista}.html`);
+    assert.match(html, /class="page-header"/, vista);
+    assert.match(html, /class="stat-row"/, vista);
+  }
+});
+
+test('Reactivación usa el encabezado real de la hoja (LINIEA SUSPENDIDA)', () => {
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  assert.match(repo, /REACTIVACION: \['LINIEA SUSPENDIDA'/);
+  assert.match(repo, /\['LINIEA SUSPENDIDA', 'ESTATUS'\]/);
+  assert.doesNotMatch(repo + read('src/html/js/lineas.html'), /'LINEA SUSPENDIDA'/);
+});
+
+test('Solicitud usa los encabezados reales de la hoja (no los nombres que muestra AppSheet)', () => {
+  const codigo = read('src/services/lineas/LineasRepo.gs') + read('src/html/js/lineas.html');
+  for (const real of ['NO EMPLEADO SOLICITANTE', 'NOMBRE SOLICITANTE', 'PUESTO SOLICITANTE', 'DEPARTAMENTO SOLICITANTE']) {
+    assert.match(codigo, new RegExp(`'${real}'`));
+  }
+  assert.doesNotMatch(codigo, /DEL SOLICITANTE'/);
 });

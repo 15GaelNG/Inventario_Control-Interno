@@ -37,8 +37,7 @@
       return Math.round(n > 1 ? n : n * 100) + '%';
     };
     const miles = (n) => Number(n || 0).toLocaleString('es-MX');
-    /** Ícono de Lucide (https://lucide.dev/icons) como SVG en línea: icono('smartphone'). */
-    const ATRIBUTOS_SVG = 'xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+    /** Ícono de Lucide (lucide.dev/icons) como SVG en línea: icono('smartphone'). */
     function icono(nombre, clase) {
       const nombrePascal = String(nombre).replace(/(^|-)([a-z0-9])/g, (m, sep, c) => c.toUpperCase());
       const nodos = window.lucide && window.lucide.icons && window.lucide.icons[nombrePascal];
@@ -55,24 +54,9 @@
     }
     const enlaceDrive = (id, texto, esArchivo) => {
       if (!id) return '';
-      const url = esArchivo ? 'https://drive.google.com/file/d/' + esc(id) + '/view' : 'https://drive.google.com/drive/folders/' + esc(id);
+      const url = esArchivo ? 'https:\/\/drive.google.com/file/d/' + esc(id) + '/view' : 'https:\/\/drive.google.com/drive/folders/' + esc(id);
       return '<a class="ln-enlace ln-accion-enlace" target="_blank" rel="noopener" href="' + url + '">' + icono(esArchivo ? 'file-text' : 'folder-open') + ' ' + esc(texto) + ' ' + icono('external-link', 'ln-icon-sm') + '</a>';
     };
-
-    /** Ficha de consulta: conserva todos los campos sin obligar a recorrer una tabla ancha. */
-    function mostrarFicha(raiz, titulo, pares) {
-      const foco = document.activeElement;
-      const dialogo = document.createElement('dialog');
-      dialogo.className = 'ln-consulta-dialog';
-      dialogo.setAttribute('aria-label', titulo);
-      dialogo.innerHTML = '<div class="modal-header"><h3>' + icono('file-text') + ' ' + esc(titulo) + '</h3><button type="button" class="secondary" data-cerrar-ficha aria-label="Cerrar ficha">' + icono('x') + ' Cerrar</button></div>' +
-        '<div class="ln-consulta-contenido"><dl class="ln-ficha-campos">' + pares.map(([etiqueta, valor]) =>
-          '<div' + (/COMENTARIO|OBSERVACION|OBSERVACIÓN/i.test(etiqueta) ? ' class="ln-notas-ancho"' : '') + '><dt>' + esc(etiqueta) + '</dt><dd>' + valor + '</dd></div>').join('') + '</dl></div>';
-      raiz.appendChild(dialogo);
-      dialogo.querySelector('[data-cerrar-ficha]').addEventListener('click', () => dialogo.close());
-      dialogo.addEventListener('close', () => { dialogo.remove(); if (foco && foco.isConnected) foco.focus(); });
-      dialogo.showModal();
-    }
 
     function llamar(fn, ...args) {
       return callServer(fn, state.token, ...args);
@@ -113,6 +97,133 @@
       setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
     }
 
+    // ---------------- Tablas y KPIs con los componentes del sistema (rama jorge) ----------------
+    /** Ícono con la clase .ico del sistema, para HTML que se repinta (tablas, KPIs, títulos). */
+    const ico = (nombre) => (typeof Iconos !== 'undefined' ? Iconos.svg(nombre) : icono(nombre));
+
+    /** Fecha como la muestra DataTable (dd/mm/aaaa) y con hora solo si la trae. */
+    function fechaTabla(v) {
+      if (v === null || v === undefined || v === '') return '';
+      const d = v instanceof Date ? v : new Date(v);
+      if (isNaN(d)) return String(v);
+      const dos = (x) => String(x).padStart(2, '0');
+      const dia = dos(d.getDate()) + '/' + dos(d.getMonth() + 1) + '/' + d.getFullYear();
+      return d.getHours() || d.getMinutes() ? dia + ' ' + dos(d.getHours()) + ':' + dos(d.getMinutes()) : dia;
+    }
+    const esFechaIso = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v);
+    const esBooleano = (v) => v === true || v === false || /^(TRUE|FALSE)$/i.test(String(v));
+    const booleano = (v) => (v === '' || v === null || v === undefined ? '' : (v === true || String(v).toUpperCase() === 'TRUE' ? 'Sí' : 'No'));
+
+    let tiposTablaListos = false;
+    /** DataTable con los valores por omisión del módulo (el tipo lnFechaHora ordena por fecha y hora). */
+    function tablaLineas(contenedor, config) {
+      if (!tiposTablaListos) {
+        tiposTablaListos = true;
+        DataTable.registrarTipo('lnFechaHora', {
+          hereda: 'fecha',
+          formatear: fechaTabla,
+          claveOrden: (v) => {
+            const d = v instanceof Date ? v : new Date(v);
+            return v === '' || v === null || v === undefined || isNaN(d) ? null : d.getTime();
+          },
+        });
+      }
+      return DataTable.crear(contenedor, Object.assign({ tamanoPagina: 50, seleccionable: true }, config));
+    }
+
+    /**
+     * Columnas de DataTable a partir de los encabezados de una hoja del AppSheet: las de `visibles`
+     * se muestran en ese orden y las demás quedan ocultas (se activan desde "Columnas" y salen en
+     * el panel de detalle y en el Excel). Detecta fechas y casillas por su contenido.
+     */
+    /** Encabezado comparable: mayúsculas, sin acentos y con un solo espacio. */
+    const normEncabezado = (h) => String(h || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+
+    /** "FECHA DE REGISTRO" → "Fecha de registro"; siglas cortas (NUCO, IMEI, SIM) se quedan igual. */
+    const tituloLegible = (h) => {
+      const t = String(h || '').trim();
+      return t.length <= 5 && !/\s/.test(t) ? t : t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+    };
+
+    function columnasDeHoja(encabezados, filas, visibles, titulos) {
+      const orden = (visibles || []).map(normEncabezado);
+      const norm = normEncabezado;
+      const muestra = filas.slice(0, 300);
+      const ordenados = encabezados.slice().sort((a, b) => {
+        const ia = orden.indexOf(norm(a));
+        const ib = orden.indexOf(norm(b));
+        return (ia < 0 ? 1e6 : ia) - (ib < 0 ? 1e6 : ib);
+      });
+      return ordenados.map((h, i) => {
+        const valores = muestra.map((f) => f[h]).filter((v) => v !== '' && v !== null && v !== undefined);
+        const col = { campo: h, titulo: (titulos && titulos[norm(h)]) || tituloLegible(h), tipo: 'texto', visible: orden.indexOf(norm(h)) >= 0 };
+        // Fecha si todo es fecha, o si el encabezado lo dice y casi todo lo es (AppSheet mezcla "N/A" y texto)
+        const fechas = valores.filter(esFechaIso).length;
+        if (valores.length && (fechas === valores.length || (/FECHA/.test(norm(h)) && fechas >= valores.length * 0.8))) col.tipo = 'lnFechaHora';
+        else if (/^FOLIO$/.test(norm(h)) && valores.length && valores.every((v) => /^\d+$/.test(String(v).trim()))) col.tipo = 'numero';
+        else if (valores.length && valores.every(esBooleano)) { col.tipo = 'lista'; col.valor = (f) => booleano(f[h]); }
+        else if (/ESTATUS|ESTADO|COMPA[ÑN]IA|^TIPO|SEDE|DEPARTAMENTO|MOTIVO|LUGAR|CAMPO$/.test(norm(h))) col.tipo = 'lista';
+        if (/ESTATUS|ESTADO/.test(norm(h))) col.render = (v) => chip(v);
+        if (i === 0 && col.visible) col.fijada = true;
+        return col;
+      });
+    }
+
+    /**
+     * KPIs (stat-tile de la rama jorge) que filtran la tabla con un clic, como en Vehículos o Uber.
+     * defs: [{ icono, etiqueta, valor, clase, titulo, filtros }]. `filtros: { campo: filtro }` usa el
+     * formato de DataTable.setFiltro; sin `filtros` el tile es "Total" (quita los de los KPIs);
+     * `filtros: false` lo deja solo informativo. Otro clic sobre el activo quita su filtro.
+     * Regresa marcar(filtros) para llamarlo desde `alCambiarFiltros`.
+     */
+    function tilesKpi(contenedor, defs, obtenerTabla) {
+      const campos = defs.reduce((lista, d) => lista.concat(Object.keys(d.filtros || {})), [])
+        .filter((c, i, lista) => lista.indexOf(c) === i);
+      contenedor.innerHTML = defs.map((d, i) => {
+        const clic = d.filtros !== false;
+        return '<div class="stat-tile ' + (d.clase || '') + (clic ? ' stat-tile-clickable' : '') + '" data-kpi="' + i + '"' +
+          (clic ? ' role="button" tabindex="0"' : '') + (d.titulo ? ' title="' + esc(d.titulo) + '"' : '') + '>' +
+          '<div class="stat-icon">' + ico(d.icono) + '</div><div><div class="stat-value">' + esc(d.valor) + '</div>' +
+          '<div class="stat-label">' + esc(d.etiqueta) + '</div></div></div>';
+      }).join('');
+      const tiles = Array.from(contenedor.querySelectorAll('[data-kpi]'));
+      const igual = (a, b) => JSON.stringify(a || null) === JSON.stringify(b || null);
+      const activo = (d, filtros) => d.filtros !== false && campos.every((c) => igual(filtros[c], (d.filtros || {})[c]));
+      function marcar(filtros) {
+        tiles.forEach((t) => t.classList.toggle('stat-tile-activo', activo(defs[Number(t.dataset.kpi)], filtros || {})));
+      }
+      function clic(t) {
+        const d = defs[Number(t.dataset.kpi)];
+        if (d.filtros === false) return;
+        const tabla = obtenerTabla();
+        if (!tabla) return;
+        const quitar = !!d.filtros && t.classList.contains('stat-tile-activo');
+        campos.forEach((c) => tabla.setFiltro(c, quitar ? null : ((d.filtros || {})[c] || null)));
+      }
+      tiles.forEach((t) => {
+        t.addEventListener('click', () => clic(t));
+        t.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); clic(t); } });
+      });
+      return marcar;
+    }
+
+    /** Días atrás como "yyyy-mm-dd" local (formato de los filtros de fecha de DataTable). */
+    function diaClave(diasAtras) {
+      const f = new Date();
+      f.setDate(f.getDate() - (diasAtras || 0));
+      return [f.getFullYear(), String(f.getMonth() + 1).padStart(2, '0'), String(f.getDate()).padStart(2, '0')].join('-');
+    }
+    function contarDesde(filas, campo, diasAtras) {
+      const desde = diaClave(diasAtras);
+      return filas.filter((f) => {
+        if (!f[campo]) return false;
+        const d = new Date(f[campo]);
+        if (isNaN(d)) return false;
+        const clave = [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');
+        return clave >= desde;
+      }).length;
+    }
+
     /** Redimensiona una imagen en el navegador antes de subirla (máx. `maxDim` px, JPEG calidad .82). */
     function redimensionarImagen(archivo, maxDim) {
       return new Promise((resolve, reject) => {
@@ -138,8 +249,19 @@
       });
     }
 
-    /** Aviso flotante (errores de cargas en segundo plano). */
+    /**
+     * Aviso flotante. Usa Notificar (toasts del sistema); el HTML se reduce a texto y los
+     * que traen el ícono de alerta salen como error. Sin Notificar, cae al aviso propio.
+     */
     function aviso(html, duracion) {
+      if (typeof Notificar !== 'undefined') {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        const texto = tmp.textContent.trim();
+        if (/ln-alerta/.test(html)) Notificar.error(texto, duracion ? { duracion: duracion } : undefined);
+        else Notificar.exito(texto, duracion ? { duracion: duracion } : undefined);
+        return;
+      }
       let caja = document.getElementById('ln-avisos');
       if (!caja) {
         caja = document.createElement('div');
@@ -172,10 +294,6 @@
       accesoriosCargadosEn: 0,
       accesoriosPendientes: null,
       modulo: 'equipos',
-      filtros: {
-        equipos: { q: '', tipo: '', estatus: '', depto: '', conLinea: '', pagina: 0 },
-        lineas: { q: '', compania: '', estatus: '', suelta: '', pagina: 0 },
-      },
       abrirAlEntrar: null, // id de registro a abrir al entrar a Líneas Telefónicas (desde una bitácora)
     };
     let montaje = 0; // cambia en cada init: respuestas tardías de una vista anterior se ignoran
@@ -257,47 +375,37 @@
     // Líneas Telefónicas
     // ======================================================================
 
-    const LISTADOS = {
+    /** Columnas del inventario (DataTable). Las ocultas se activan desde "Columnas". */
+    const TABLAS_INVENTARIO = {
       equipos: {
-        nombreCsv: 'equipos telefonicos',
-        placeholder: 'Buscar por NUCO, IMEI, modelo, responsable o número…',
-        busqueda: ['nuco', 'imei', 'modelo', 'responsable', 'numero', 'departamento'],
-        detalle: 'equipo',
-        selects: [
-          { campo: 'tipo', todos: 'Todos los tipos', traducir: TIPO_EQUIPO, valores: (t) => unicos(t, 'tipo'), coincide: (r, v) => r.tipo === v },
-          { campo: 'estatus', todos: 'Todos los estatus', valores: (t) => unicos(t, 'estatus'), coincide: (r, v) => r.estatus === v },
-          { campo: 'depto', todos: 'Todos los departamentos', valores: (t) => unicos(t, 'departamento'), coincide: (r, v) => r.departamento === v },
-          { campo: 'conLinea', todos: 'Con y sin línea', traducir: { si: 'Con línea', no: 'Sin línea' }, valores: () => ['si', 'no'], coincide: (r, v) => (v === 'si' ? !!r.lineaId : !r.lineaId) },
-        ],
+        detalle: 'equipo', nombreArchivo: 'Equipos telefonicos', textoVacio: 'Sin equipos',
+        etiqueta: (r) => 'NUCO ' + (r.nuco || '—') + (r.modelo ? ' · ' + r.modelo : ''),
         columnas: [
-          { titulo: 'NUCO', clase: 'ln-mono ln-fuerte', valor: (r) => guion(r.nuco) },
-          { titulo: 'Tipo', valor: (r) => esc(TIPO_EQUIPO[r.tipo] || r.tipo) },
-          { titulo: 'Modelo', valor: (r) => guion(r.modelo) },
-          { titulo: 'IMEI', clase: 'ln-mono ln-tenue', valor: (r) => guion(r.imei) },
-          { titulo: 'Estatus', valor: (r) => chip(r.estatus) },
-          { titulo: 'Línea', clase: 'ln-mono', valor: (r) => (r.numero ? esc(r.numero) : '<span class="ln-tenue">Sin línea</span>') },
-          { titulo: 'Responsable', valor: (r) => guion(r.responsable) },
-          { titulo: 'Departamento', clase: 'ln-tenue', valor: (r) => guion(r.departamento) },
+          { campo: 'nuco', titulo: 'NUCO', tipo: 'texto', fijada: true, render: (v) => '<span class="ln-mono ln-fuerte">' + guion(v) + '</span>' },
+          { campo: 'tipo', titulo: 'Tipo', tipo: 'lista', valor: (r) => TIPO_EQUIPO[r.tipo] || r.tipo || '' },
+          { campo: 'modelo', titulo: 'Modelo', tipo: 'texto' },
+          { campo: 'imei', titulo: 'IMEI', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
+          { campo: 'estatus', titulo: 'Estatus', tipo: 'lista', render: (v) => chip(v) },
+          { campo: 'numero', titulo: 'Línea', tipo: 'texto', render: (v) => (v ? '<span class="ln-mono">' + esc(v) + '</span>' : '<span class="ln-tenue">Sin línea</span>') },
+          { campo: 'compania', titulo: 'Compañía', tipo: 'lista', visible: false },
+          { campo: 'estatusLinea', titulo: 'Estatus de la línea', tipo: 'lista', visible: false, render: (v) => chip(v) },
+          { campo: 'responsable', titulo: 'Responsable', tipo: 'texto' },
+          { campo: 'departamento', titulo: 'Departamento', tipo: 'lista' },
+          { campo: 'sede', titulo: 'Sede', tipo: 'lista', visible: false },
         ],
       },
       lineas: {
-        nombreCsv: 'lineas telefonicas',
-        placeholder: 'Buscar por número, SIM, NUCO o responsable…',
-        busqueda: ['numero', 'sim', 'nucoEquipo', 'responsable', 'departamento'],
-        detalle: 'linea',
-        selects: [
-          { campo: 'compania', todos: 'Todas las compañías', valores: (t) => unicos(t, 'compania'), coincide: (r, v) => r.compania === v },
-          { campo: 'estatus', todos: 'Todos los estatus', valores: (t) => unicos(t, 'estatus'), coincide: (r, v) => r.estatus === v },
-          { campo: 'suelta', todos: 'Con y sin equipo', traducir: { si: 'Solo sueltas', no: 'Solo en equipo' }, valores: () => ['si', 'no'], coincide: (r, v) => (v === 'si' ? r.suelta : !r.suelta) },
-        ],
+        detalle: 'linea', nombreArchivo: 'Lineas telefonicas', textoVacio: 'Sin líneas',
+        etiqueta: (r) => 'Línea ' + (r.numero || '—'),
         columnas: [
-          { titulo: 'Número', clase: 'ln-mono ln-fuerte', valor: (r) => guion(r.numero) },
-          { titulo: 'Compañía', valor: (r) => guion(r.compania) },
-          { titulo: 'Estatus', valor: (r) => chip(r.estatus) },
-          { titulo: 'Equipo (NUCO)', clase: 'ln-mono', valor: (r) => (r.suelta ? chip('Suelta', 'ambar') + (r.nucoEquipo ? ' <span class="ln-tenue">' + esc(r.nucoEquipo) + '</span>' : '') : guion(r.nucoEquipo)) },
-          { titulo: 'SIM', clase: 'ln-mono ln-tenue', valor: (r) => guion(r.sim) },
-          { titulo: 'Responsable', valor: (r) => guion(r.responsable) },
-          { titulo: 'Departamento', clase: 'ln-tenue', valor: (r) => guion(r.departamento) },
+          { campo: 'numero', titulo: 'Número', tipo: 'texto', fijada: true, render: (v) => '<span class="ln-mono ln-fuerte">' + guion(v) + '</span>' },
+          { campo: 'compania', titulo: 'Compañía', tipo: 'lista' },
+          { campo: 'estatus', titulo: 'Estatus', tipo: 'lista', render: (v) => chip(v) },
+          { campo: 'suelta', titulo: 'Suelta', tipo: 'lista', valor: (r) => (r.suelta ? 'Sí' : 'No'), render: (v) => (v === 'Sí' ? chip('Suelta', 'ambar') : '<span class="ln-tenue">En equipo</span>') },
+          { campo: 'nucoEquipo', titulo: 'Equipo (NUCO)', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
+          { campo: 'sim', titulo: 'SIM', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
+          { campo: 'responsable', titulo: 'Responsable', tipo: 'texto' },
+          { campo: 'departamento', titulo: 'Departamento', tipo: 'lista' },
         ],
       },
     };
@@ -312,14 +420,11 @@
       document.addEventListener('app:before-navigate', () => { if (vigente() && captura) cerrarCaptura(); }, { once: true });
 
       // ---- Eventos ----
-      raiz.querySelectorAll('.ln-tab').forEach((tab) => {
-        tab.addEventListener('click', () => { memoria.modulo = tab.dataset.modulo; pintarListado(); });
-      });
-      $('#ln-anterior', raiz).addEventListener('click', () => { memoria.filtros[memoria.modulo].pagina--; pintarTabla(); });
-      $('#ln-siguiente', raiz).addEventListener('click', () => { memoria.filtros[memoria.modulo].pagina++; pintarTabla(); });
-      $('#ln-exportar', raiz).addEventListener('click', () => {
-        if (!memoria.indice) return;
-        exportarCsv(LISTADOS[memoria.modulo].nombreCsv, memoria.indice.columnas[memoria.modulo], filtradas());
+      const tablas = {};
+      const filtrosActuales = { equipos: {}, lineas: {} };
+      let marcarKpi = null;
+      raiz.querySelectorAll('#ln-tabs .tab-btn').forEach((tab) => {
+        tab.addEventListener('click', () => mostrarModulo(tab.dataset.tab));
       });
       $('#ln-recargar', raiz).addEventListener('click', (ev) => {
         const b = ev.currentTarget;
@@ -366,16 +471,6 @@
           if (destino) { pila.splice(indice + 1); abrir(destino.tipo, destino.id, true); }
           return;
         }
-        const filtro = ev.target.closest('[data-ln-filtro]');
-        if (filtro) {
-          const [modulo, campo, valor] = filtro.dataset.lnFiltro.split('|');
-          Object.assign(memoria.filtros[modulo], LISTADOS[modulo].selects.reduce((o, s) => { o[s.campo] = ''; return o; }, { q: '', pagina: 0 }));
-          if (campo) memoria.filtros[modulo][campo] = valor;
-          memoria.modulo = modulo;
-          cerrarDetalle();
-          pintarListado();
-          return;
-        }
         const btnCaptura = ev.target.closest('[data-ln-captura]');
         if (btnCaptura) {
           ev.preventDefault();
@@ -416,6 +511,8 @@
       });
 
       // ---- Carga inicial ----
+      mostrarModulo(memoria.modulo, true);
+      crearTabla(memoria.modulo).setCargando(true);
       Promise.all([cargarPermisos(), cargarIndice()]).then(([permisos]) => {
         if (!vigente()) return;
         $('#ln-recargar', raiz).hidden = !permisos.esAdmin;
@@ -428,94 +525,91 @@
         }
       }).catch((e) => {
         if (!vigente()) return;
-        const box = $('#ln-error', raiz);
-        box.textContent = 'No se pudo cargar el inventario: ' + (e.message || e);
-        box.hidden = false;
-        $('#ln-tbody', raiz).innerHTML = '<tr><td class="empty-state">Sin datos</td></tr>';
+        crearTabla(memoria.modulo).setError('No se pudo cargar el inventario: ' + (e.message || e));
       });
 
-      // ---- Indicadores ----
+      // ---- Indicadores (clic = filtrar, como en los módulos de la rama jorge) ----
       function pintarIndicadores() {
         const ix = memoria.indice;
         const eq = ix.equipos;
         const li = ix.lineas;
-        const tile = (ico, valor, etiqueta, filtro, clase, id) =>
-          '<div class="stat-tile ln-tile ' + (clase || '') + '"' + (id ? ' id="' + id + '"' : '') + (filtro ? ' data-ln-filtro="' + esc(filtro) + '"' : '') + ' role="button" tabindex="0">' +
-          '<div class="stat-icon">' + icono(ico) + '</div><div><div class="stat-value">' + valor + '</div><div class="stat-label">' + esc(etiqueta) + '</div></div></div>';
-        $('#ln-indicadores', raiz).innerHTML =
-          tile('smartphone', miles(eq.length), 'Equipos', 'equipos') +
-          tile('circle-check', miles(eq.filter((e) => e.estatus === 'USO').length), 'Equipos en uso', 'equipos|estatus|USO', 'stat-tile-ok') +
-          tile('unplug', miles(eq.filter((e) => !e.lineaId).length), 'Equipos sin línea', 'equipos|conLinea|no') +
-          tile('card-sim', miles(li.length), 'Líneas', 'lineas') +
-          tile('unlink', miles(li.filter((l) => l.suelta).length), 'Líneas sueltas', 'lineas|suelta|si');
+        const defs = [
+          { icono: 'smartphone', valor: miles(eq.length), etiqueta: 'Equipos', modulo: 'equipos', filtros: {} },
+          { icono: 'circle-check', valor: miles(eq.filter((e) => e.estatus === 'USO').length), etiqueta: 'Equipos en uso', clase: 'stat-tile-ok', modulo: 'equipos', filtros: { estatus: { valores: ['USO'] } } },
+          { icono: 'unplug', valor: miles(eq.filter((e) => !e.lineaId).length), etiqueta: 'Equipos sin línea', modulo: 'equipos', filtros: { numero: { op: 'vacio' } } },
+          { icono: 'card-sim', valor: miles(li.length), etiqueta: 'Líneas', modulo: 'lineas', filtros: {} },
+          { icono: 'unlink', valor: miles(li.filter((l) => l.suelta).length), etiqueta: 'Líneas sueltas', clase: 'stat-tile-warn', modulo: 'lineas', filtros: { suelta: { valores: ['Sí'] } } },
+        ];
+        const cont = $('#ln-indicadores', raiz);
+        cont.innerHTML = defs.map((d, i) => '<div class="stat-tile stat-tile-clickable ' + (d.clase || '') + '" data-kpi="' + i + '" role="button" tabindex="0">' +
+          '<div class="stat-icon">' + ico(d.icono) + '</div><div><div class="stat-value">' + d.valor + '</div><div class="stat-label">' + esc(d.etiqueta) + '</div></div></div>').join('');
+        const campos = { equipos: ['estatus', 'numero'], lineas: ['suelta'] };
+        const igual = (x, y) => JSON.stringify(x || null) === JSON.stringify(y || null);
+        marcarKpi = () => {
+          cont.querySelectorAll('[data-kpi]').forEach((t) => {
+            const d = defs[Number(t.dataset.kpi)];
+            const f = filtrosActuales[d.modulo] || {};
+            t.classList.toggle('stat-tile-activo', memoria.modulo === d.modulo && campos[d.modulo].every((c) => igual(f[c], d.filtros[c])));
+          });
+        };
+        const clic = (t) => {
+          const d = defs[Number(t.dataset.kpi)];
+          const quitar = t.classList.contains('stat-tile-activo') && Object.keys(d.filtros).length > 0;
+          mostrarModulo(d.modulo);
+          const tabla = crearTabla(d.modulo);
+          campos[d.modulo].forEach((c) => tabla.setFiltro(c, quitar ? null : (d.filtros[c] || null)));
+          marcarKpi();
+        };
+        cont.querySelectorAll('[data-kpi]').forEach((t) => {
+          t.addEventListener('click', () => clic(t));
+          t.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); clic(t); } });
+        });
+        marcarKpi();
         $('#ln-num-equipos', raiz).textContent = miles(eq.length);
         $('#ln-num-lineas', raiz).textContent = miles(li.length);
       }
 
-      // ---- Listado ----
-      function filtradas() {
-        const cfg = LISTADOS[memoria.modulo];
-        const f = memoria.filtros[memoria.modulo];
-        const q = normal(f.q).trim();
-        return memoria.indice[memoria.modulo].filter((r) => {
-          for (let i = 0; i < cfg.selects.length; i++) {
-            const s = cfg.selects[i];
-            if (f[s.campo] && !s.coincide(r, f[s.campo])) return false;
-          }
-          return !q || cfg.busqueda.some((c) => normal(r[c]).indexOf(q) >= 0);
+      // ---- Listado: una DataTable por pestaña (se crea al mostrarla) ----
+      function crearTabla(modulo) {
+        if (tablas[modulo]) return tablas[modulo];
+        const cfg = TABLAS_INVENTARIO[modulo];
+        const contenedor = $('#ln-tabla-' + modulo, raiz);
+        tablas[modulo] = tablaLineas(contenedor, {
+          idCampo: 'id',
+          idTabla: 'lineas-' + modulo,
+          columnas: cfg.columnas,
+          textoVacio: cfg.textoVacio,
+          exportar: { nombreArchivo: cfg.nombreArchivo },
+          etiquetaFila: cfg.etiqueta,
+          detalle: false, // la ficha completa (responsable, evidencias, historial) es su propia pantalla
+          accionesFila: [{ icono: 'eye', titulo: 'Ver ficha', alHacer: (r) => abrir(cfg.detalle, r.id) }],
+          ayuda: 'Doble clic en una fila (o el ojo en Acciones) abre su ficha. La flecha de cada columna filtra, ordena, fija u oculta; ' +
+            '"Columnas" agrega compañía, sede y otros datos. Los indicadores de arriba filtran con un clic.',
+          alCambiarFiltros: (filtros) => { filtrosActuales[modulo] = filtros || {}; if (marcarKpi) marcarKpi(); },
         });
+        // Doble clic en la fila = abrir la ficha (DataTable no trae clic de fila propio)
+        contenedor.addEventListener('dblclick', (ev) => {
+          const tr = ev.target.closest('tbody tr[data-id]');
+          if (tr && !ev.target.closest('button, input, a')) abrir(cfg.detalle, tr.dataset.id);
+        });
+        if (memoria.indice) tablas[modulo].setDatos(memoria.indice[modulo]);
+        return tablas[modulo];
+      }
+
+      function mostrarModulo(modulo, sinTabla) {
+        memoria.modulo = modulo;
+        raiz.querySelectorAll('#ln-tabs .tab-btn').forEach((t) => t.classList.toggle('active', t.dataset.tab === modulo));
+        raiz.querySelectorAll('#ln-listado .tab-panel').forEach((p) => { p.hidden = p.dataset.tabPanel !== modulo; });
+        if (sinTabla) return;
+        crearTabla(modulo).ajustarAlto();
+        if (marcarKpi) marcarKpi();
       }
 
       function pintarListado() {
         if (!memoria.indice) return;
-        const cfg = LISTADOS[memoria.modulo];
-        const f = memoria.filtros[memoria.modulo];
-        const todas = memoria.indice[memoria.modulo];
-        raiz.querySelectorAll('.ln-tab').forEach((t) => {
-          const activa = t.dataset.modulo === memoria.modulo;
-          t.classList.toggle('active', activa);
-          t.setAttribute('aria-selected', String(activa));
-        });
-
-        const opciones = (s) => '<option value="">' + esc(s.todos) + '</option>' + s.valores(todas).map((v) =>
-          '<option value="' + esc(v) + '"' + (v === f[s.campo] ? ' selected' : '') + '>' + esc(s.traducir ? (s.traducir[v] || v) : v) + '</option>').join('');
-        $('#ln-filtros', raiz).innerHTML =
-          '<input type="search" id="ln-q" placeholder="' + esc(cfg.placeholder) + '" value="' + esc(f.q) + '" autocomplete="off" />' +
-          cfg.selects.map((s) => '<select aria-label="' + esc(s.todos) + '" data-campo="' + s.campo + '">' + opciones(s) + '</select>').join('') +
-          '<button type="button" class="secondary ln-btn-icono" id="ln-limpiar-filtros">' + icono('filter-x') + ' Limpiar filtros</button>';
-        $('#ln-limpiar-filtros', raiz).addEventListener('click', () => {
-          f.q = ''; f.pagina = 0; cfg.selects.forEach((campo) => { f[campo.campo] = ''; }); pintarListado();
-        });
-        $('#ln-thead', raiz).innerHTML = '<tr>' + cfg.columnas.map((c) => '<th>' + esc(c.titulo) + '</th>').join('') + '<th>Acciones</th></tr>';
-
-        let temporizador = null;
-        $('#ln-q', raiz).addEventListener('input', (ev) => {
-          clearTimeout(temporizador);
-          temporizador = setTimeout(() => { f.q = ev.target.value; f.pagina = 0; pintarTabla(); }, 150);
-        });
-        raiz.querySelectorAll('#ln-filtros select').forEach((sel) => {
-          sel.addEventListener('change', () => { f[sel.dataset.campo] = sel.value; f.pagina = 0; pintarTabla(); });
-        });
-        pintarTabla();
-      }
-
-      function pintarTabla() {
-        const cfg = LISTADOS[memoria.modulo];
-        const f = memoria.filtros[memoria.modulo];
-        const lista = filtradas();
-        const total = memoria.indice[memoria.modulo].length;
-        const paginas = Math.max(1, Math.ceil(lista.length / POR_PAGINA));
-        if (f.pagina >= paginas) f.pagina = paginas - 1;
-        if (f.pagina < 0) f.pagina = 0;
-        const visibles = lista.slice(f.pagina * POR_PAGINA, (f.pagina + 1) * POR_PAGINA);
-        $('#ln-tbody', raiz).innerHTML = visibles.length
-          ? visibles.map((r) => '<tr class="ln-fila-clic" data-ln-ir="' + cfg.detalle + '" data-id="' + esc(r.id) + '">' +
-              cfg.columnas.map((c) => '<td class="' + (c.clase || '') + '">' + c.valor(r) + '</td>').join('') + '<td><button type="button" class="secondary ln-btn-icono" data-ln-ir="' + cfg.detalle + '" data-id="' + esc(r.id) + '">' + icono('eye') + ' Ver ficha</button></td></tr>').join('')
-          : '<tr><td colspan="' + (cfg.columnas.length + 1) + '" class="empty-state">Sin resultados</td></tr>';
-        $('#ln-conteo', raiz).textContent = miles(lista.length) + ' de ' + miles(total) + ' · datos de ' + fechaHora(memoria.indice.generadoEn);
-        $('#ln-pagina', raiz).textContent = 'Página ' + (f.pagina + 1) + ' de ' + paginas;
-        $('#ln-anterior', raiz).disabled = f.pagina === 0;
-        $('#ln-siguiente', raiz).disabled = f.pagina >= paginas - 1;
+        Object.keys(tablas).forEach((m) => tablas[m].setDatos(memoria.indice[m]));
+        mostrarModulo(memoria.modulo);
+        $('#ln-conteo', raiz).textContent = 'Datos de la hoja al ' + fechaHora(memoria.indice.generadoEn) + '.';
       }
 
       // ---- Detalle ----
@@ -556,6 +650,8 @@
         $('#ln-detalle', raiz).hidden = true;
         $('#ln-detalle', raiz).innerHTML = '';
         $('#ln-listado', raiz).hidden = false;
+        // Refleja altas y ediciones hechas desde la ficha (el índice ya se recargó al guardar)
+        if (memoria.indice) { pintarIndicadores(); pintarListado(); }
       }
 
       function migas() {
@@ -723,7 +819,9 @@
 
       // ---- Alta y edición directa del inventario ----
       function campoEditor(id, etiqueta, valor, tipo, opciones, grupo) {
-        const attrs = ' id="reg-' + id + '" data-campo="' + esc(id) + '"' + (grupo ? ' data-grupo="' + grupo + '"' : '');
+        // Correos, PIN y contraseñas se guardan tal cual (sin las mayúsculas automáticas del sistema)
+        const literal = /^(CUENTA GOOGLE|CONTRASEÑA MODEM|PIN WHATSAPP|PIN EQUIPO)$/.test(id) ? ' data-respetar-texto' : '';
+        const attrs = ' id="reg-' + id + '" data-campo="' + esc(id) + '"' + (grupo ? ' data-grupo="' + grupo + '"' : '') + literal;
         if (tipo === 'select') return '<div class="field"' + (grupo ? ' data-reg-grupo="' + grupo + '"' : '') + '><label>' + esc(etiqueta) + '</label><select' + attrs + '>' +
           (opciones || []).map((v) => '<option value="' + esc(v) + '"' + (String(v) === String(valor || '') ? ' selected' : '') + '>' + esc(v || 'Selecciona…') + '</option>').join('') + '</select></div>';
         return '<div class="field"' + (grupo ? ' data-reg-grupo="' + grupo + '"' : '') + '><label>' + esc(etiqueta) + '</label><input' + attrs + ' type="' + (tipo || 'text') + '" value="' + esc(valor || '') + '" autocomplete="off" /></div>';
@@ -759,7 +857,7 @@
           '<div class="field"><label for="reg-tipo-seguridad">Seguridad del equipo</label><select id="reg-tipo-seguridad">' +
             (editando ? '<option value="CONSERVAR">Conservar configuración actual</option>' : '') +
             '<option value="SIN">Sin PIN o patrón</option><option value="PIN">PIN</option><option value="PATRON">Patrón</option><option value="CONTRASEÑA">Contraseña</option></select></div>' +
-          '<div class="field" id="reg-seguridad-valor-campo" hidden><label for="reg-seguridad-valor">PIN o contraseña</label><input type="text" id="reg-seguridad-valor" autocomplete="new-password" /></div></div>' +
+          '<div class="field" id="reg-seguridad-valor-campo" hidden><label for="reg-seguridad-valor">PIN o contraseña</label><input type="text" id="reg-seguridad-valor" data-respetar-texto autocomplete="new-password" /></div></div>' +
           '<div class="ln-nota" id="reg-patron-ayuda" hidden>' + icono('info', 'ln-icon-sm') + ' Selecciona los puntos en el orden del patrón.</div>' + htmlPatron('reg-patron', true) + '</div>';
         const secretosEquipo = puedeVerSecretos ? f('CONTRASEÑA MODEM', 'Contraseña del módem', null, null, 'modem') : '';
         const secretosLinea = puedeVerSecretos ? f('PIN WHATSAPP', 'PIN WhatsApp', null, null, 'linea') : '';
@@ -1101,7 +1199,7 @@
             '<div class="ln-captura-dato"><span><small>Estatus actual del equipo</small><b>' + esc(ctx.equipo.estatus || '—') + '</b></span></div></div>' : '') +
           '<div class="field ln-campo-separado"><label for="cap-ticket">Ticket <span class="ln-tenue">(opcional)</span></label><input type="text" id="cap-ticket" autocomplete="off" /></div>';
         const seguridad = ctx.equipo ? '<div class="ln-editor-grid"><div class="field"><label for="cap-insp-tipo-contrasena">Seguridad del equipo</label><select id="cap-insp-tipo-contrasena"><option value="">Sin registrar</option><option value="PIN">PIN</option><option value="PATRON">Patrón</option><option value="CONTRASEÑA">Contraseña</option></select></div>' +
-          '<div class="field" id="cap-insp-pin-campo" hidden><label for="cap-insp-pin">PIN o contraseña</label><input type="text" id="cap-insp-pin" autocomplete="new-password" /></div></div>' +
+          '<div class="field" id="cap-insp-pin-campo" hidden><label for="cap-insp-pin">PIN o contraseña</label><input type="text" id="cap-insp-pin" data-respetar-texto autocomplete="new-password" /></div></div>' +
           '<div class="ln-nota" id="cap-insp-patron-ayuda" hidden>' + icono('info', 'ln-icon-sm') + ' Traza el patrón que debe quedar en la inspección.</div>' + htmlPatron('cap-insp-patron', true) :
           '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' Esta inspección corresponde a una línea sin equipo; no aplica seguridad del dispositivo.</div>';
         const evidencia = '<div class="field"><label for="cap-observaciones">Observaciones de la inspección (opcional)</label><textarea id="cap-observaciones" rows="6" placeholder="Agrega hallazgos, daños o información útil para el seguimiento"></textarea></div>' +
@@ -1657,67 +1755,77 @@
       let seleccionado = null;
       let guardandoAccesorio = false;
       let movimientoActual = 0;
-      let filtroQ = '';
-      let temporizador = null;
 
-      function tarjeta(titulo, cuerpo) {
-        return '<div class="card ln-card"><h3>' + titulo + '</h3>' + cuerpo + '</div>';
-      }
+      let tabla = null;
+      let filtrosAcc = {};
+      let marcarKpi = null;
 
       function pintarIndicadores() {
         if (!indiceAcc) return;
-        const stockBajo = indiceAcc.filas.filter((a) => a.reabasto).length;
-        $('#lac-indicadores', raiz).innerHTML =
-          '<div class="stat-tile"><div class="stat-icon">' + icono('package') + '</div><div><div class="stat-value">' + miles(indiceAcc.filas.length) + '</div><div class="stat-label">Artículos</div></div></div>' +
-          '<div class="stat-tile stat-tile-warn"><div class="stat-icon">' + icono('triangle-alert') + '</div><div><div class="stat-value">' + miles(stockBajo) + '</div><div class="stat-label">Con stock bajo (≤ ' + indiceAcc.umbralReabasto + ')</div></div></div>';
+        const filas = indiceAcc.filas;
+        marcarKpi = tilesKpi($('#lac-indicadores', raiz), [
+          { icono: 'package', valor: miles(filas.length), etiqueta: 'Artículos' },
+          { icono: 'triangle-alert', valor: miles(filas.filter((a) => a.reabasto).length), etiqueta: 'Con stock bajo (≤ ' + indiceAcc.umbralReabasto + ')',
+            clase: 'stat-tile-warn', filtros: { reabasto: { valores: ['Sí'] } } },
+          { icono: 'circle-check', valor: miles(filas.reduce((t, a) => t + (Number(a.stock) || 0), 0)), etiqueta: 'Piezas en stock', clase: 'stat-tile-ok', filtros: false },
+        ], () => tabla);
+        marcarKpi(filtrosAcc);
       }
 
-      function filtradas() {
-        const texto = normal(filtroQ).trim();
-        if (!texto) return indiceAcc.filas;
-        return indiceAcc.filas.filter((a) => ['nombre', 'categoria', 'marca'].some((c) => normal(a[c]).indexOf(texto) >= 0));
+      /** Panel de detalle de DataTable: movimientos del artículo, del más reciente al más antiguo. */
+      function movimientosEnPanel(a, cont) {
+        const turno = ++movimientoActual;
+        cont.innerHTML = '<div class="dt-campo-titulo" style="margin-bottom:8px">Movimientos</div><p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p>';
+        llamar('apiLineasAccesoriosMovimientos', a.id).then((movs) => {
+          if (!vigente() || turno !== movimientoActual || !document.body.contains(cont)) return;
+          cont.innerHTML = '<div class="dt-campo-titulo" style="margin-bottom:8px">Movimientos (' + movs.length + ')</div>' + (movs.length
+            ? '<div class="historial-timeline">' + movs.map((m) => '<div class="historial-item"><div class="historial-icon' + (m.tipo === 'ENTRADA' ? '' : ' historial-icon-accent') + '">' +
+                ico(m.tipo === 'ENTRADA' ? 'arrow-down-to-line' : 'arrow-up-from-line') + '</div><div style="flex:1; min-width:0">' +
+                '<div><strong>' + (m.tipo === 'ENTRADA' ? 'Entrada' : 'Salida') + ' de ' + esc(String(m.cantidad)) + '</strong> <span class="ln-tenue">· ' + esc(fechaTabla(m.fecha)) + '</span></div>' +
+                '<div class="ln-tenue">' + guion(m.usuario) + (m.comentarios ? ' — ' + esc(m.comentarios) : '') + '</div></div></div>').join('') + '</div>'
+            : '<p class="empty-state">Sin movimientos.</p>');
+        }).catch((e) => { if (vigente() && turno === movimientoActual) cont.innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>'; });
       }
 
-      function pintarTabla() {
-        if (!indiceAcc) return;
-        const filas = filtradas();
-        $('#lac-tbody', raiz).innerHTML = filas.length ? filas.map((a) =>
-          '<tr class="ln-fila-clic" data-articulo="' + esc(a.id) + '"><td class="ln-fuerte">' + guion(a.nombre) + '</td><td>' + guion(a.categoria) +
-          '</td><td class="ln-tenue">' + guion(a.marca) + '</td><td class="lac-stock-celda"><span class="lac-stock' + (a.reabasto ? ' bajo' : '') + '">' + esc(String(a.stock)) + '</span></td>' +
-          '<td><button type="button" class="secondary ln-btn-icono" data-articulo="' + esc(a.id) + '">' + icono('history') + ' Movimientos</button> <button type="button" class="secondary ln-btn-chico" data-entrada="' + esc(a.id) + '">+ Entrada</button> ' +
-          '<button type="button" class="secondary ln-btn-chico" data-salida="' + esc(a.id) + '">− Salida</button></td></tr>').join('')
-          : '<tr><td colspan="5" class="empty-state">Sin artículos</td></tr>';
+      function crearTablaAcc() {
+        tabla = tablaLineas($('#lac-tabla', raiz), {
+          idCampo: 'id',
+          idTabla: 'lineas-accesorios',
+          ordenInicial: { campo: 'nombre', dir: 'asc' },
+          textoVacio: 'Sin artículos',
+          exportar: { nombreArchivo: 'Inventario de accesorios' },
+          etiquetaFila: (a) => a.nombre,
+          detalle: { titulo: (a) => a.nombre, contenidoExtra: movimientosEnPanel },
+          ayuda: 'El ojo en Acciones muestra el artículo y sus movimientos. Las flechas registran entradas y salidas.',
+          alCambiarFiltros: (f) => { filtrosAcc = f || {}; if (marcarKpi) marcarKpi(filtrosAcc); },
+          accionesFila: [
+            { icono: 'arrow-down-to-line', titulo: 'Registrar entrada', alHacer: (a) => abrirModalMovimiento(a.id, 'ENTRADA') },
+            { icono: 'arrow-up-from-line', titulo: 'Registrar salida', alHacer: (a) => abrirModalMovimiento(a.id, 'SALIDA') },
+          ],
+          columnas: [
+            { campo: 'nombre', titulo: 'Artículo', tipo: 'texto', fijada: true },
+            { campo: 'categoria', titulo: 'Categoría', tipo: 'lista' },
+            { campo: 'marca', titulo: 'Marca / modelo', tipo: 'texto' },
+            { campo: 'stock', titulo: 'Stock', tipo: 'numero', agregado: 'suma',
+              render: (v, a) => '<span class="lac-stock' + (a.reabasto ? ' bajo' : '') + '">' + esc(String(v)) + '</span>' },
+            { campo: 'reabasto', titulo: 'Stock bajo', tipo: 'lista', valor: (a) => (a.reabasto ? 'Sí' : 'No'),
+              render: (v) => (v === 'Sí' ? chip('Reabastecer', 'rojo') : '<span class="ln-tenue">No</span>') },
+          ],
+        });
       }
 
       function cargar(forzar) {
+        if (!tabla) crearTablaAcc();
+        tabla.setCargando(true);
         cargarAccesorios(!!forzar).then((r) => {
           if (!vigente()) return;
           indiceAcc = r;
           pintarIndicadores();
-          pintarTabla();
+          tabla.setDatos(r.filas);
         }).catch((e) => {
           if (!vigente()) return;
-          $('#lac-error', raiz).textContent = 'No se pudo cargar el inventario: ' + mensajeError(e);
-          $('#lac-error', raiz).hidden = false;
+          tabla.setError('No se pudo cargar el inventario: ' + mensajeError(e));
         });
-      }
-
-      function abrirDetalle(id) {
-        const turno = ++movimientoActual;
-        const a = (indiceAcc.filas || []).filter((x) => x.id === id)[0];
-        if (!a) return;
-        const cont = $('#lac-detalle', raiz);
-        cont.hidden = false;
-        cont.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        cont.innerHTML = tarjeta(icono('history') + ' Movimientos de ' + esc(a.nombre), '<p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p>');
-        llamar('apiLineasAccesoriosMovimientos', id).then((movs) => {
-          if (!vigente() || turno !== movimientoActual) return;
-          cont.innerHTML = tarjeta(icono('history') + ' Movimientos de ' + esc(a.nombre) + ' (' + movs.length + ')', movs.length
-            ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Fecha</th><th>Tipo</th><th>Cantidad</th><th>Usuario</th><th>Comentarios</th></tr></thead><tbody>' +
-              movs.map((m) => '<tr><td>' + guion(fechaHora(m.fecha)) + '</td><td>' + chip(m.tipo, m.tipo === 'ENTRADA' ? 'verde' : 'ambar') + '</td><td>' +
-                esc(String(m.cantidad)) + '</td><td>' + guion(m.usuario) + '</td><td>' + guion(m.comentarios) + '</td></tr>').join('') + '</tbody></table></div>'
-            : '<p class="empty-state">Sin movimientos.</p>');
-        }).catch((e) => { if (vigente() && turno === movimientoActual) cont.innerHTML = tarjeta(icono('history') + ' Movimientos', '<p class="error-msg">' + mensajeError(e) + '</p>'); });
       }
 
       function abrirModalNuevo() {
@@ -1730,7 +1838,8 @@
       function abrirModalMovimiento(id, tipo) {
         seleccionado = { id: id, tipo: tipo };
         const a = (indiceAcc.filas || []).filter((x) => x.id === id)[0];
-        $('#lac-mov-titulo', raiz).textContent = (tipo === 'ENTRADA' ? 'Entrada de ' : 'Salida de ') + (a ? a.nombre : '');
+        $('#lac-mov-titulo', raiz).textContent = (tipo === 'ENTRADA' ? 'Registrar entrada' : 'Registrar salida');
+        $('#lac-mov-subtitulo', raiz).textContent = (a ? a.nombre + ' · stock actual ' + a.stock : '');
         $('#lac-cantidad', raiz).value = '';
         $('#lac-comentarios', raiz).value = '';
         $('#lac-mov-error', raiz).hidden = true;
@@ -1775,20 +1884,6 @@
           .finally(() => estadoAccesorio('#lac-modal-mov', false));
       });
 
-      $('#lac-q', raiz).addEventListener('input', (ev) => {
-        clearTimeout(temporizador);
-        temporizador = setTimeout(() => { filtroQ = ev.target.value; pintarTabla(); }, 150);
-      });
-
-      raiz.addEventListener('click', (ev) => {
-        const entrada = ev.target.closest('[data-entrada]');
-        if (entrada) { abrirModalMovimiento(entrada.dataset.entrada, 'ENTRADA'); return; }
-        const salida = ev.target.closest('[data-salida]');
-        if (salida) { abrirModalMovimiento(salida.dataset.salida, 'SALIDA'); return; }
-        const fila = ev.target.closest('[data-articulo]');
-        if (fila) abrirDetalle(fila.dataset.articulo);
-      });
-
       cargar();
     }
 
@@ -1798,11 +1893,11 @@
 
     const OPERATIVAS = {
       REACTIVACION: {
-        resumen: ['FOLIO', 'LINEA SUSPENDIDA', 'COMPAÑIA', 'ESTATUS', 'FECHA DE REACTIVACION'],
+        resumen: ['FOLIO', 'LINIEA SUSPENDIDA', 'COMPAÑIA', 'ESTATUS', 'FECHA DE REACTIVACION'],
         titulo: 'Reactivación de Líneas', icono: 'refresh-cw', csv: 'reactivacion de lineas',
         subtitulo: 'Seguimiento de líneas suspendidas, canceladas y reactivadas', filtro: 'Todos los estatus',
         campos: [
-          ['LINEA SUSPENDIDA', 'Línea suspendida', 'tel', true], ['COMPAÑIA', 'Compañía', 'select', false, ['TELCEL', 'TELCEL GPH', 'TELCEL FRO', 'AT&T', 'BAIT']],
+          ['LINIEA SUSPENDIDA', 'Línea suspendida', 'tel', true], ['COMPAÑIA', 'Compañía', 'select', false, ['TELCEL', 'TELCEL GPH', 'TELCEL FRO', 'AT&T', 'BAIT']],
           ['SIM', 'SIM', 'text'], ['CORREO / TICKET', 'Correo / ticket', 'text'], ['FECHA DE SUSPENSION', 'Fecha de suspensión', 'date'],
           ['ESTATUS', 'Estatus', 'select', true, ['ACTUALIZACIÓN DE LINEA TELEFONICA', 'CANCELADA', 'DISPONIBLE', 'EN USO', 'PROCESO DE CANCELACION']],
           ['ESTADO DEL EQUIPO', 'Estado del equipo', 'text'], ['IMEI', 'IMEI', 'text'], ['RETRO DE SOLICITUD', 'Retro de solicitud', 'text'],
@@ -1810,14 +1905,14 @@
         ],
       },
       SOLICITUD: {
-        resumen: ['FOLIO', 'FECHA DE SOLICITUD', 'NOMBRE COMPLETO DEL SOLICITANTE', 'TIPO DE PLAN', 'ESTATUS'],
+        resumen: ['FOLIO', 'FECHA DE SOLICITUD', 'NOMBRE SOLICITANTE', 'TIPO DE PLAN', 'ESTATUS'],
         titulo: 'Solicitud de Líneas', icono: 'clipboard-list', csv: 'solicitud de lineas',
         subtitulo: 'Solicitudes de asignación y reasignación de líneas telefónicas', filtro: 'Todos los estatus',
         campos: [
           ['FECHA DE SOLICITUD', 'Fecha de solicitud', 'date', true], ['TIPO DE PLAN', 'Tipo de plan', 'text', true], ['TICKET', 'Ticket', 'text'],
-          ['NÚMERO DE EMPLEADO DEL SOLICITANTE', 'Número de empleado del solicitante', 'text'],
-          ['NOMBRE COMPLETO DEL SOLICITANTE', 'Nombre completo del solicitante', 'text'], ['PUESTO DEL SOLICITANTE', 'Puesto del solicitante', 'text'],
-          ['DEPARTAMENTO DEL SOLICITANTE', 'Departamento del solicitante', 'text'], ['SEDE', 'Sede', 'text'], ['DEPARTAMENTO', 'Departamento', 'text'],
+          ['NO EMPLEADO SOLICITANTE', 'Número de empleado del solicitante', 'text'],
+          ['NOMBRE SOLICITANTE', 'Nombre completo del solicitante', 'text'], ['PUESTO SOLICITANTE', 'Puesto del solicitante', 'text'],
+          ['DEPARTAMENTO SOLICITANTE', 'Departamento del solicitante', 'text'], ['SEDE', 'Sede', 'text'], ['DEPARTAMENTO', 'Departamento', 'text'],
           ['TIPO', 'Tipo', 'text'], ['PUESTO', 'Puesto', 'text'], ['COLABORADOR', 'Colaborador', 'text'], ['SOLICITANTE', 'Solicitante', 'text'],
           ['FECHA DE ENTREGA', 'Fecha de entrega', 'date'], ['ASIGNACION', 'Asignación', 'checkbox'], ['REASIGNACION', 'Reasignación', 'checkbox'],
           ['COMPAÑIA', 'Compañía', 'select', false, ['TELCEL', 'TELCEL GPH', 'TELCEL FRO', 'AT&T', 'BAIT']], ['EQUIPO', 'Equipo', 'text'],
@@ -1837,16 +1932,18 @@
       const cfg = OPERATIVAS[tipo];
       const raiz = document.getElementById('ln-operativa');
       const vigente = () => n === montaje && document.body.contains(raiz);
-      const consulta = { q: '', grupo: '', pagina: 0 };
-      let ultima = null;
+      let tabla = null;
+      let filtrosOp = {};
+      let marcarKpi = null;
       let solicitud = 0;
       let guardando = false;
       const modal = $('#ln-op-modal');
 
       $('#ln-op-titulo', raiz).textContent = cfg.titulo;
       $('#ln-op-subtitulo', raiz).textContent = cfg.subtitulo;
-      $('#ln-op-titulo-icono', raiz).innerHTML = icono(cfg.icono);
+      $('#ln-op-titulo-icono', raiz).innerHTML = ico(cfg.icono);
       pintarIconos(raiz);
+      refreshIcons();
 
       function cerrarAlta() {
         if (guardando) return;
@@ -1886,87 +1983,58 @@
         if (primero) primero.focus();
       }
 
-      function valor(v) {
-        if (v === null || v === undefined || v === '') return vacio;
-        if (v === true || String(v).toUpperCase() === 'TRUE') return '<span class="ln-booleano ln-si" title="Sí">' + icono('check') + '<span>Sí</span></span>';
-        if (v === false || String(v).toUpperCase() === 'FALSE') return '<span class="ln-booleano ln-no" title="No">' + icono('x') + '<span>No</span></span>';
-        if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)) {
-          const d = new Date(v);
-          return esc(d.getHours() || d.getMinutes() || d.getSeconds() ? fechaHora(v) : fecha(v));
-        }
-        return esc(v);
-      }
-
       function cargar() {
         const turno = ++solicitud;
-        const tbody = $('#ln-op-tbody', raiz);
-        $('#ln-op-exportar', raiz).disabled = true;
-        ultima = null;
-        tbody.innerHTML = '<tr><td class="empty-state"><span class="ln-spinner"></span> Cargando…</td></tr>';
-        $('#ln-op-error', raiz).hidden = true;
-        $('#ln-op-anterior', raiz).disabled = true;
-        $('#ln-op-siguiente', raiz).disabled = true;
-        llamar('apiLineasVistaOperativa', tipo, {
-          q: consulta.q, grupo: consulta.grupo, pagina: consulta.pagina, porPagina: POR_PAGINA,
-        }).then((r) => {
+        if (tabla) tabla.setCargando(true);
+        llamar('apiLineasVistaOperativaTabla', tipo, {}).then((texto) => {
           if (!vigente() || turno !== solicitud) return;
-          ultima = r;
-          const columnas = cfg.resumen.filter((h) => r.encabezados.includes(h));
-          if (!columnas.length) columnas.push(...r.encabezados.slice(0, 5));
-          $('#ln-op-exportar', raiz).disabled = !r.filas.length;
-          $('#ln-op-thead', raiz).innerHTML = '<tr><th>Consulta</th>' + columnas.map((h) => '<th>' + esc(h) + '</th>').join('') + '</tr>';
-          tbody.innerHTML = r.filas.length
-            ? r.filas.map((f, indice) => '<tr><td><button type="button" class="secondary ln-btn-icono" data-ln-ficha="' + indice + '">' + icono('eye') + ' Ver ficha</button></td>' + columnas.map((h) => '<td class="' + (/FOLIO|NUCO|IMEI|SIM|NUMERO|L[IÍ]NEA/i.test(h) ? 'ln-mono' : '') + '">' + valor(f[h]) + '</td>').join('') + '</tr>').join('')
-            : '<tr><td colspan="' + (columnas.length + 1) + '" class="empty-state">Sin resultados</td></tr>';
-
-          const selector = $('#ln-op-grupo', raiz);
-          selector.innerHTML = '<option value="">' + esc(cfg.filtro) + '</option>' + r.grupos.map((g) =>
-            '<option value="' + esc(g.nombre) + '"' + (g.nombre === consulta.grupo ? ' selected' : '') + '>' + esc(g.nombre) + ' (' + miles(g.total) + ')</option>').join('');
-          $('#ln-op-total', raiz).textContent = miles(r.totalSinFiltro);
-          $('#ln-op-resultados', raiz).textContent = miles(r.total);
-          $('#ln-op-conteo', raiz).textContent = r.total ? miles(r.total) + ' registro(s)' : 'Sin registros';
-          $('#ln-op-pagina', raiz).textContent = 'Página ' + (r.pagina + 1) + ' de ' + miles(r.paginas);
-          $('#ln-op-anterior', raiz).disabled = r.pagina === 0;
-          $('#ln-op-siguiente', raiz).disabled = r.pagina >= r.paginas - 1;
+          const r = JSON.parse(texto);
+          const campoGrupo = r.campoGrupo;
+          if (!tabla) {
+            // Títulos: las etiquetas del formulario de alta y, si no hay, el encabezado en formato de oración
+            const titulos = { FOLIO: 'Folio', 'FECHA DE REGISTRO': 'Fecha de registro', 'QUIEN REGISTRO': 'Registró' };
+            (cfg.campos || []).forEach(([nombre, etiqueta]) => { titulos[normEncabezado(nombre)] = etiqueta; });
+            const columnas = columnasDeHoja(r.encabezados, r.filas, cfg.resumen, titulos);
+            // El servidor agrupa en mayúsculas y sin espacios de más: la columna filtra con el mismo valor
+            const colGrupo = columnas.find((c) => c.campo === campoGrupo);
+            if (colGrupo) {
+              colGrupo.tipo = 'lista';
+              colGrupo.valor = (f) => String(f[campoGrupo] === null || f[campoGrupo] === undefined ? '' : f[campoGrupo]).trim().toUpperCase();
+            }
+            const campoFolio = r.encabezados.find((h) => /^FOLIO$/i.test(h)) || r.encabezados.find((h) => /NUCO|NUMERO/i.test(h));
+            tabla = tablaLineas($('#ln-op-tabla', raiz), {
+              idCampo: '_fila',
+              idTabla: 'lineas-' + tipo.toLowerCase(),
+              columnas: columnas,
+              ordenInicial: campoFolio && /FOLIO/i.test(campoFolio) ? { campo: campoFolio, dir: 'desc' } : undefined,
+              textoVacio: 'Sin registros',
+              exportar: { nombreArchivo: cfg.titulo },
+              etiquetaFila: (f) => (campoFolio && f[campoFolio] ? String(f[campoFolio]) : 'Registro'),
+              detalle: { titulo: (f) => cfg.titulo + (campoFolio && f[campoFolio] ? ' · ' + f[campoFolio] : '') },
+              ayuda: 'El ojo en Acciones muestra todos los campos del registro. "Columnas" agrega los que no se ven; la flecha de cada columna filtra y ordena.',
+              alCambiarFiltros: (f) => { filtrosOp = f || {}; if (marcarKpi) marcarKpi(filtrosOp); },
+            });
+          }
+          // KPIs: total y los estatus (o tipos) más frecuentes; clic = filtrar
+          const grupos = r.grupos.slice().sort((a, b) => b.total - a.total).slice(0, 4);
+          marcarKpi = tilesKpi($('#ln-op-kpis', raiz), [{ icono: cfg.icono, valor: miles(r.totalSinFiltro), etiqueta: 'Registros' }]
+            .concat(grupos.map((g) => ({
+              icono: /CANCEL|TRAMITE CANCELADO/.test(g.nombre) ? 'circle-x' : /FINALIZADO|EN USO|DISPONIBLE/.test(g.nombre) ? 'circle-check' : 'tag',
+              clase: /CANCEL/.test(g.nombre) ? 'stat-tile-warn' : /FINALIZADO|EN USO|DISPONIBLE/.test(g.nombre) ? 'stat-tile-ok' : '',
+              valor: miles(g.total), etiqueta: g.nombre === 'SIN ESTATUS' ? 'Sin estatus' : g.nombre,
+              filtros: campoGrupo ? { [campoGrupo]: { valores: [g.nombre === 'SIN ESTATUS' ? '' : g.nombre] } } : false,
+            }))), () => tabla);
+          marcarKpi(filtrosOp);
+          tabla.setDatos(r.filas);
         }).catch((e) => {
           if (!vigente() || turno !== solicitud) return;
-          tbody.innerHTML = '<tr><td class="empty-state">No se pudieron cargar los datos</td></tr>';
-          const box = $('#ln-op-error', raiz);
-          box.textContent = 'No se pudo cargar ' + cfg.titulo + ': ' + mensajeError(e);
-          box.hidden = false;
+          if (!tabla) {
+            tabla = tablaLineas($('#ln-op-tabla', raiz), { idCampo: '_fila', columnas: [{ campo: '_fila', titulo: 'Fila' }], detalle: false, exportar: false });
+          }
+          tabla.setError('No se pudo cargar ' + cfg.titulo + ': ' + mensajeError(e));
         });
       }
 
-      $('#ln-op-form', raiz).addEventListener('submit', (ev) => {
-        ev.preventDefault();
-        consulta.q = $('#ln-op-q', raiz).value.trim();
-        consulta.grupo = $('#ln-op-grupo', raiz).value;
-        consulta.pagina = 0;
-        cargar();
-      });
-      $('#ln-op-grupo', raiz).addEventListener('change', (ev) => {
-        consulta.grupo = ev.target.value;
-        consulta.pagina = 0;
-        cargar();
-      });
-      $('#ln-op-limpiar', raiz).addEventListener('click', () => {
-        $('#ln-op-q', raiz).value = '';
-        consulta.q = '';
-        consulta.grupo = '';
-        consulta.pagina = 0;
-        cargar();
-      });
-      $('#ln-op-anterior', raiz).addEventListener('click', () => { consulta.pagina--; cargar(); });
-      $('#ln-op-siguiente', raiz).addEventListener('click', () => { consulta.pagina++; cargar(); });
-      $('#ln-op-exportar', raiz).addEventListener('click', () => {
-        if (ultima && ultima.filas.length) exportarCsv(cfg.csv, ultima.encabezados, ultima.filas);
-      });
-      raiz.addEventListener('click', (ev) => {
-        const boton = ev.target.closest('[data-ln-ficha]');
-        if (!boton || !ultima) return;
-        const fila = ultima.filas[Number(boton.dataset.lnFicha)];
-        if (fila) mostrarFicha(raiz, cfg.titulo + (fila.FOLIO ? ' · ' + fila.FOLIO : ''), ultima.encabezados.map((h) => [h, valor(fila[h])]));
-      });
       $('#ln-op-nuevo', raiz).addEventListener('click', abrirAlta);
       $('#ln-op-cerrar').addEventListener('click', cerrarAlta);
       $('#ln-op-cancelar').addEventListener('click', cerrarAlta);
@@ -1989,7 +2057,6 @@
           if (!vigente()) return;
           guardando = false;
           cerrarAlta();
-          consulta.pagina = 0;
           aviso(icono('circle-check') + ' Registro ' + esc(r.folio) + ' guardado correctamente.', 6000);
           cargar();
         }).catch((e) => {
@@ -2049,94 +2116,87 @@
       const cfg = BITACORAS[tipo];
       const raiz = document.getElementById('ln-bitacora');
       const vigente = () => n === montaje && document.body.contains(raiz);
-      const consulta = { q: '', pagina: 0 };
-      let ultima = null;
       let solicitud = 0;
+      let tabla = null;
+      let filtrosBit = {};
+      let marcarKpi = null;
+      let busqueda = '';
 
       $('#ln-bit-titulo', raiz).textContent = cfg.titulo;
       $('#ln-bit-subtitulo', raiz).textContent = cfg.subtitulo;
-      $('#ln-bit-icono', raiz).innerHTML = icono(cfg.icono);
-      $('#ln-bit-titulo-icono', raiz).innerHTML = icono(cfg.icono);
-      pintarIconos(raiz);
+      $('#ln-bit-titulo-icono', raiz).innerHTML = ico(cfg.icono);
+      refreshIcons();
 
-      const norm = (h) => String(h || '').toUpperCase().replace(/\s+/g, ' ').trim();
+      const norm = normEncabezado;
       const buscarEncabezado = (encabezados, nombre) => encabezados.find((h) => norm(h) === norm(nombre));
-      const valorCelda = (h, v) => {
-        if (v === null || v === undefined || v === '') return vacio;
-        if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)) {
-          const d = new Date(v);
-          return esc(d.getHours() || d.getMinutes() ? fechaHora(v) : fecha(v)); // sin hora capturada: solo la fecha
+
+      function crearTabla(r) {
+        const titulos = {};
+        cfg.columnas.forEach(([nombre, titulo]) => { titulos[norm(nombre)] = titulo; });
+        const columnas = columnasDeHoja(r.encabezados, r.filas, cfg.columnas.map((c) => c[0]), titulos);
+        const hId = buscarEncabezado(r.encabezados, cfg.idRegistro);
+        const hFecha = buscarEncabezado(r.encabezados, cfg.columnas[0][0]);
+        const hFolio = buscarEncabezado(r.encabezados, 'NUCO') || buscarEncabezado(r.encabezados, 'FOLIO DESECHO');
+        tabla = tablaLineas($('#ln-bit-tabla', raiz), {
+          idCampo: '_fila',
+          idTabla: 'lineas-bitacora-' + tipo.toLowerCase(),
+          columnas: columnas,
+          ordenInicial: hFecha ? { campo: hFecha, dir: 'desc' } : undefined,
+          textoVacio: 'Sin registros',
+          exportar: { nombreArchivo: cfg.titulo },
+          etiquetaFila: (f) => [hFolio && f[hFolio], hFecha && fechaTabla(f[hFecha])].filter(Boolean).join(' · ') || 'Registro',
+          detalle: { titulo: (f) => cfg.titulo + (hFolio && f[hFolio] ? ' · ' + f[hFolio] : '') },
+          accionesFila: hId ? [{ icono: 'smartphone', titulo: 'Ver activo', visible: (f) => !!f[hId], alHacer: (f) => irARegistro(f[hId]) }] : [],
+          ayuda: 'Bitácora de solo lectura. El ojo abre todos los campos del registro y el celular abre la ficha del activo.',
+          alCambiarFiltros: (f) => { filtrosBit = f || {}; if (marcarKpi) marcarKpi(filtrosBit); },
+        });
+        tabla.hFecha = hFecha;
+      }
+
+      function pintarKpis(r) {
+        const hFecha = tabla && tabla.hFecha;
+        const defs = [{ icono: cfg.icono, valor: miles(r.total), etiqueta: busqueda ? 'Coinciden con "' + busqueda + '"' : 'Registros en la hoja' }];
+        if (r.filas.length < r.total) defs.push({ icono: 'layers', valor: miles(r.filas.length), etiqueta: 'Cargados (los más recientes)', filtros: false });
+        if (hFecha) {
+          defs.push({ icono: 'calendar-days', valor: miles(contarDesde(r.filas, hFecha, 29)), etiqueta: 'Últimos 30 días', filtros: { [hFecha]: { op: 'entre', v1: diaClave(29), v2: diaClave(0) } } });
+          defs.push({ icono: 'clock', valor: miles(contarDesde(r.filas, hFecha, 0)), etiqueta: 'Hoy', clase: 'stat-tile-ok', filtros: { [hFecha]: { op: 'igual', v1: diaClave(0) } } });
         }
-        return esc(v);
-      };
+        marcarKpi = tilesKpi($('#ln-bit-kpis', raiz), defs, () => tabla);
+        marcarKpi(filtrosBit);
+      }
 
       function cargar() {
         const turno = ++solicitud;
-        const tbody = $('#ln-bit-tbody', raiz);
-        ultima = null;
-        $('#ln-bit-exportar', raiz).disabled = true;
-        tbody.innerHTML = '<tr><td class="empty-state"><span class="ln-spinner"></span> Cargando…</td></tr>';
-        $('#ln-bit-error', raiz).hidden = true;
-        ['#ln-bit-anterior', '#ln-bit-siguiente'].forEach((s) => { $(s, raiz).disabled = true; });
-        llamar('apiLineasBitacora', tipo, { q: consulta.q, pagina: consulta.pagina, porPagina: POR_PAGINA }).then((r) => {
+        if (tabla) tabla.setCargando(true);
+        llamar('apiLineasBitacoraTabla', tipo, { q: busqueda }).then((texto) => {
           if (!vigente() || turno !== solicitud) return;
-          ultima = r;
-          $('#ln-bit-exportar', raiz).disabled = !r.filas.length;
-          const cols = cfg.columnas.map(([nombre, titulo]) => ({ h: buscarEncabezado(r.encabezados, nombre), titulo: titulo })).filter((c) => c.h);
-          const columnas = cols.length ? cols : r.encabezados.map((h) => ({ h: h, titulo: h }));
-          const hId = buscarEncabezado(r.encabezados, cfg.idRegistro);
-          ultima.columnas = columnas;
-
-          $('#ln-bit-thead', raiz).innerHTML = '<tr><th>Consulta</th>' + columnas.map((c) => '<th>' + esc(c.titulo) + '</th>').join('') + (hId ? '<th></th>' : '') + '</tr>';
-          tbody.innerHTML = r.filas.length
-            ? r.filas.map((f, indice) => '<tr><td><button type="button" class="secondary ln-btn-icono" data-bit-ficha="' + indice + '">' + icono('eye') + ' Ver detalle</button></td>' + columnas.map((c) => '<td class="' + (/NUCO|IMEI|FOLIO/i.test(c.h) ? 'ln-mono' : '') + '">' + valorCelda(c.h, f[c.h]) + '</td>').join('') +
-                (hId ? '<td>' + (f[hId] ? '<button type="button" class="secondary ln-btn-chico ln-btn-icono" data-ln-registro="' + esc(f[hId]) + '">' + icono('smartphone') + ' Ver activo</button>' : '') + '</td>' : '') + '</tr>').join('')
-            : '<tr><td colspan="' + (columnas.length + 1 + (hId ? 1 : 0)) + '" class="empty-state">Sin resultados</td></tr>';
-
-          if (!consulta.q) $('#ln-bit-total', raiz).textContent = miles(r.total);
-          $('#ln-bit-coinciden', raiz).textContent = consulta.q ? miles(r.total) : '—';
-          $('#ln-bit-conteo', raiz).textContent = consulta.q
-            ? miles(r.total) + ' coincidencia(s) con "' + consulta.q + '"'
-            : 'Del más reciente al más antiguo';
-          $('#ln-bit-pagina', raiz).textContent = 'Página ' + (r.pagina + 1) + ' de ' + miles(r.paginas);
-          $('#ln-bit-anterior', raiz).disabled = r.pagina === 0;
-          $('#ln-bit-siguiente', raiz).disabled = r.pagina >= r.paginas - 1;
+          const r = JSON.parse(texto);
+          if (!tabla) crearTabla(r);
+          pintarKpis(r);
+          tabla.setDatos(r.filas);
+          // Si la hoja tiene más filas de las que se cargan, se ofrece buscar en todo el historial
+          const form = $('#ln-bit-form', raiz);
+          form.hidden = !busqueda && r.filas.length >= r.total;
+          $('#ln-bit-limpiar', raiz).hidden = !busqueda;
+          $('#ln-bit-aviso', raiz).textContent = busqueda
+            ? miles(r.total) + ' coincidencia(s) en todo el historial' + (r.filas.length < r.total ? ' (se muestran las ' + miles(r.filas.length) + ' más recientes)' : '') + '.'
+            : 'Se muestran los ' + miles(r.filas.length) + ' registros más recientes de ' + miles(r.total) + '.';
         }).catch((e) => {
           if (!vigente() || turno !== solicitud) return;
-          tbody.innerHTML = '<tr><td class="empty-state">Sin datos</td></tr>';
-          const box = $('#ln-bit-error', raiz);
-          box.textContent = 'No se pudo cargar la bitácora: ' + (e.message || e);
-          box.hidden = false;
+          if (!tabla) tabla = tablaLineas($('#ln-bit-tabla', raiz), { idCampo: '_fila', columnas: [{ campo: '_fila', titulo: 'Fila' }], detalle: false, exportar: false });
+          tabla.setError('No se pudo cargar la bitácora: ' + mensajeError(e));
         });
       }
 
       $('#ln-bit-form', raiz).addEventListener('submit', (ev) => {
         ev.preventDefault();
-        consulta.q = $('#ln-bit-q', raiz).value.trim();
-        consulta.pagina = 0;
+        busqueda = $('#ln-bit-q', raiz).value.trim();
         cargar();
       });
       $('#ln-bit-limpiar', raiz).addEventListener('click', () => {
         $('#ln-bit-q', raiz).value = '';
-        consulta.q = '';
-        consulta.pagina = 0;
+        busqueda = '';
         cargar();
-      });
-      $('#ln-bit-anterior', raiz).addEventListener('click', () => { consulta.pagina--; cargar(); });
-      $('#ln-bit-siguiente', raiz).addEventListener('click', () => { consulta.pagina++; cargar(); });
-      $('#ln-bit-exportar', raiz).addEventListener('click', () => {
-        if (!ultima || !ultima.filas.length) return;
-        exportarCsv(cfg.csv, ultima.encabezados, ultima.filas);
-      });
-      raiz.addEventListener('click', (ev) => {
-        const ficha = ev.target.closest('[data-bit-ficha]');
-        if (ficha && ultima) {
-          const fila = ultima.filas[Number(ficha.dataset.bitFicha)];
-          if (fila) mostrarFicha(raiz, cfg.titulo, ultima.encabezados.map((h) => [h, valorCelda(h, fila[h])]));
-          return;
-        }
-        const b = ev.target.closest('[data-ln-registro]');
-        if (b) irARegistro(b.dataset.lnRegistro);
       });
 
       cargar();

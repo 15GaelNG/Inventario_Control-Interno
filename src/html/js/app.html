@@ -13,6 +13,133 @@
     if (window.lucide) lucide.createIcons();
   }
 
+  /**
+   * Barra de pestañas simple (ej. "Catálogo" / "Registrar" arriba de cada
+   * módulo) — conecta los <button class="tab-btn" data-tab="clave"> con sus
+   * <div class="tab-panel" data-tab-panel="clave"> dentro de `contenedor`.
+   * Un panel visible a la vez. Se llama una vez por módulo, después de
+   * pintar su HTML (montarVista ya lo hace fresco cada vez que se navega).
+   */
+  /**
+   * Convierte un stat-tile (KPI, ej. "Activos" en Vehículos) en un filtro
+   * de la tabla con un solo clic: aplica `prueba` (la MISMA función que ya
+   * se usa para contar ese KPI, así nunca se desincroniza el número del
+   * filtro) sobre la columna `clave` del motor de tabla. `prueba: null`
+   * es para el tile de "Total" — solo quita el filtro (ver todo). Los
+   * demás tiles del mismo grupo (`gruposTiles`) pierden el resaltado
+   * "activo" al elegir uno nuevo — como un selector de opciones, no un
+   * toggle independiente por tile.
+   */
+  function wireKpiFiltro(tile, motorTabla, clave, prueba, grupoTiles) {
+    if (!tile) return;
+    tile.classList.add('stat-tile-clickable');
+    tile.addEventListener('click', () => {
+      (grupoTiles || []).forEach((t) => t && t.classList.remove('stat-tile-activo'));
+      tile.classList.add('stat-tile-activo');
+      if (prueba) motorTabla.aplicarFiltro(clave, { tipo: 'personalizado', prueba });
+      else motorTabla.quitarFiltro(clave);
+    });
+  }
+
+  /**
+   * Guarda varios cambios de un tirón para los módulos (Verificaciones,
+   * Sensores, Hologramas) cuyo servidor solo expone "actualizar UN campo"
+   * (apiActualizarCampoX(token, id, campo, valor)), no un actualizar()
+   * general — para que su ventana de "Editar" pueda mandar todo el
+   * formulario de golpe, se llama una vez por cada campo que de verdad
+   * cambió. SIEMPRE una tras otra (nunca Promise.all): cada llamada relee
+   * y regraba la fila COMPLETA, así que dos a la vez sobre la misma fila
+   * podrían pisarse (la segunda escribiría encima con datos de antes de
+   * que la primera terminara). Regresa el registro tal como lo dejó la
+   * ÚLTIMA llamada (ya con todos los cambios aplicados).
+   */
+  async function guardarCambiosCampoPorCampo(id, cambios, funcionApi) {
+    let actualizado = null;
+    for (const campo of Object.keys(cambios)) {
+      actualizado = await funcionApi(id, campo, cambios[campo]);
+    }
+    return actualizado;
+  }
+
+  function wireTabsSimple(contenedor) {
+    const botones = contenedor.querySelectorAll('.tab-btn');
+    botones.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        botones.forEach((b) => b.classList.toggle('active', b === btn));
+        contenedor.querySelectorAll('.tab-panel').forEach((panel) => {
+          panel.hidden = panel.dataset.tabPanel !== btn.dataset.tab;
+        });
+      });
+    });
+  }
+
+  /**
+   * Hace clickeable la fila COMPLETA de una tabla (antes solo la primera
+   * celda, la que trae la clase "tabla-clickable", abría el detalle). Cada
+   * <tr> debe traer adentro una celda <td class="tabla-clickable" data-...>
+   * (la sigue marcando visualmente y trae los data-* con el id/folio/etc.) —
+   * este helper solo agrega el click a toda la fila, delegando en un solo
+   * listener por tabla en vez de uno por fila. Los clics dentro de
+   * .tabla-actions (o cualquier <a>/<button>, ej. editar/eliminar/ver
+   * documento) NO abren el detalle — se ignoran para que esos botones
+   * sigan funcionando normal.
+   *
+   * Se llama de nuevo en cada render (cada vez que se filtra/ordena/cambia
+   * de página) porque las filas son nuevas, pero el <tbody> en sí es el
+   * mismo elemento durante toda la vida del módulo — el listener delegado
+   * solo se engancha la PRIMERA vez (dataset.filasClickablesWired) para no
+   * ir acumulando uno nuevo por cada render.
+   */
+  function wireFilasClickables(tbody, callback) {
+    tbody.querySelectorAll('.tabla-clickable').forEach((celda) => {
+      celda.closest('tr').classList.add('fila-clickable');
+    });
+    if (tbody.dataset.filasClickablesWired) return;
+    tbody.dataset.filasClickablesWired = '1';
+    tbody.addEventListener('click', (ev) => {
+      if (ev.target.closest('a, button')) return;
+      const fila = ev.target.closest('tr');
+      const celda = fila && fila.querySelector('.tabla-clickable');
+      if (celda) callback(celda.dataset, celda);
+    });
+  }
+
+  /**
+   * Notificación flotante de cargando/éxito/error — para Registrar/Editar/
+   * Eliminar en todos los módulos. Un solo slot (el siguiente toast
+   * reemplaza al anterior, no se apilan). toastCargando() se usa al
+   * empezar la operación; toastExito()/toastError() cierran ese mismo
+   * toast con el resultado — no hace falta llamar a toastCargando() de
+   * nuevo, solo pasar el mensaje final.
+   */
+  let toastActual = null;
+  let toastTimeoutId = null;
+  function toastCargando(mensaje) {
+    const contenedor = document.getElementById('toast-container');
+    if (toastTimeoutId) { clearTimeout(toastTimeoutId); toastTimeoutId = null; }
+    contenedor.innerHTML = '';
+    const el = document.createElement('div');
+    el.className = 'toast toast-cargando';
+    el.innerHTML = `<span class="toast-icon"><span class="spinner"></span></span><span class="toast-mensaje">${mensaje}</span>`;
+    contenedor.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('show'));
+    toastActual = el;
+  }
+  function toastExito(mensaje) {
+    if (!toastActual) toastCargando('');
+    toastActual.className = 'toast toast-exito show';
+    toastActual.innerHTML = `<span class="toast-icon"><i data-lucide="circle-check" class="ico"></i></span><span class="toast-mensaje">${mensaje}</span>`;
+    refreshIcons();
+    toastTimeoutId = setTimeout(() => { if (toastActual) toastActual.classList.remove('show'); }, 2800);
+  }
+  function toastError(mensaje) {
+    if (!toastActual) toastCargando('');
+    toastActual.className = 'toast toast-error show';
+    toastActual.innerHTML = `<span class="toast-icon"><i data-lucide="x" class="ico"></i></span><span class="toast-mensaje">${mensaje}</span>`;
+    refreshIcons();
+    toastTimeoutId = setTimeout(() => { if (toastActual) toastActual.classList.remove('show'); }, 4500);
+  }
+
   // Tema (claro/oscuro) — se aplica antes de montar cualquier vista para evitar parpadeo.
   // Los botones de tema viven en dos lugares (login y sidebar del app-shell), así que
   // se identifican por clase (.theme-btn + data-tema), no por id, y se manejan con
@@ -34,6 +161,130 @@
     document.querySelectorAll('.theme-btn').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.tema === tema);
     });
+    // Si el slideshow del fondo del login está activo, refresca las
+    // imágenes ya pintadas a la variante del tema nuevo — si no, se
+    // quedarían con la del tema anterior hasta el siguiente cambio de slide.
+    if (typeof actualizarHeroLoginTema === 'function') actualizarHeroLoginTema();
+  }
+
+  /**
+   * Slideshow del fondo del login: varias fotos de marca (no una sola fija)
+   * — cada una con su propia variante clara/oscura (ver IMAGENES_HERO_LOGIN)
+   * — se van turnando cada 7s con un fundido cruzado entre dos capas
+   * apiladas (#login-hero-bg-a / #login-hero-bg-b). Cuando le toca a una
+   * capa aparecer, la OTRA ya viene precargada con la imagen que sigue
+   * después de esa, para que no se note un salto al cargar justo cuando le
+   * toca mostrarse. Si cambia el tema mientras el login está abierto,
+   * aplicarTema() llama a actualizarHeroLoginTema (definida aquí abajo)
+   * para no esperar hasta el siguiente cambio de slide.
+   */
+  const IMAGENES_HERO_LOGIN = [
+    { light: 'login-bg.jpg', dark: 'login-bg-dark.jpg' },
+    { light: 'EntradaCM-Light.jpg', dark: 'EntradaCM-Dark.png' },
+    { light: 'FamilyClub-Light.jpg', dark: 'FamilyClub-Dark.png' },
+    { light: 'Terrrenos-Light.jpg', dark: 'Terrrenos-Dark.png' },
+  ];
+  // "\/\/" (no "//") — Apps Script le borra a los .html todo lo que
+  // encuentre después de "//" pensando que es un comentario, incluso
+  // dentro de un string (ver CLAUDE.md). "\/" en un string de JS es
+  // idéntico a "/", así que el resultado es la misma URL de siempre.
+  const BASE_ASSETS = 'https:\/\/raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/';
+  const GRADIENTE_HERO_LIGHT = 'linear-gradient(100deg, rgba(6,20,30,.88) 0%, rgba(6,20,30,.55) 45%, rgba(6,20,30,.25) 75%)';
+  const GRADIENTE_HERO_DARK = 'linear-gradient(100deg, rgba(3,10,16,.80) 0%, rgba(3,10,16,.50) 45%, rgba(3,10,16,.20) 75%)';
+
+  let detenerHeroLogin = null;
+  let actualizarHeroLoginTema = null;
+
+  // Cache de precarga por URL — así, si una imagen ya se pidió antes (ej.
+  // al regresar al login, o al volver a tocarle su turno en otra vuelta
+  // del ciclo), no se vuelve a descargar de cero.
+  const cachePrecargaHero = {};
+  function precargarImagen_(url) {
+    if (!cachePrecargaHero[url]) {
+      cachePrecargaHero[url] = new Promise((resolve) => {
+        const img = new Image();
+        img.onload = resolve;
+        img.onerror = resolve; // si falla, igual se resuelve — no se traba el slideshow por una imagen caída
+        img.src = url;
+      });
+    }
+    return cachePrecargaHero[url];
+  }
+
+  function initLoginHeroSlideshow() {
+    // Por si initLogin() se vuelve a llamar en la misma carga de página
+    // (ej. sesión expirada, regresa al login) — sin esto quedarían varios
+    // ciclos corriendo a la vez.
+    if (detenerHeroLogin) { detenerHeroLogin(); detenerHeroLogin = null; }
+
+    const capaA = document.getElementById('login-hero-bg-a');
+    const capaB = document.getElementById('login-hero-bg-b');
+    if (!capaA || !capaB) return;
+
+    let indice = 0;
+    let visible = capaA;
+    let oculta = capaB;
+    let detenido = false;
+    let idEspera = null;
+
+    function urlPara(i) {
+      const set = IMAGENES_HERO_LOGIN[i];
+      const esOscuro = document.documentElement.getAttribute('data-theme') === 'dark';
+      const gradiente = esOscuro ? GRADIENTE_HERO_DARK : GRADIENTE_HERO_LIGHT;
+      const archivo = esOscuro ? set.dark : set.light;
+      return gradiente + ', url("' + BASE_ASSETS + archivo + '")';
+    }
+
+    const DURACION_VISIBLE_MS = 7000;
+
+    /**
+     * Antes este slideshow avanzaba en un reloj fijo (setInterval) sin
+     * importar si la imagen que seguía ya había terminado de bajar —
+     * algunas de estas fotos pesan varios MB (los PNG de tema oscuro), así
+     * que a veces le tocaba su turno a una que apenas iba a la mitad de la
+     * descarga: se veía aparecer de golpe/tarde, y por lo mismo la de
+     * antes se sentía "durar menos" de lo que debía. Ahora cada vuelta:
+     *   1. Lanza la precarga de la SIGUIENTE imagen de una vez (para que
+     *      tenga toda la ventana de "duración visible" para bajar).
+     *   2. Espera esa duración.
+     *   3. Si la imagen YA está lista, hace el fundido al toque (caso
+     *      normal). Si no, ESPERA a que sí esté lista antes de fundir —
+     *      la imagen actual se queda un poco más en vez de cambiar a una
+     *      a medio cargar.
+     */
+    async function ciclo() {
+      const siguiente = (indice + 1) % IMAGENES_HERO_LOGIN.length;
+      const listaSiguiente = precargarImagen_(urlPara(siguiente));
+
+      await new Promise((resolve) => { idEspera = setTimeout(resolve, DURACION_VISIBLE_MS); });
+      if (detenido) return;
+
+      await listaSiguiente;
+      if (detenido) return;
+
+      indice = siguiente;
+      oculta.style.backgroundImage = urlPara(indice);
+      oculta.classList.add('login-hero-bg-visible');
+      visible.classList.remove('login-hero-bg-visible');
+      const anteriorVisible = visible;
+      visible = oculta;
+      oculta = anteriorVisible;
+
+      ciclo();
+    }
+
+    visible.style.backgroundImage = urlPara(indice);
+    visible.classList.add('login-hero-bg-visible');
+    ciclo();
+
+    actualizarHeroLoginTema = () => {
+      visible.style.backgroundImage = urlPara(indice);
+    };
+
+    detenerHeroLogin = () => {
+      detenido = true;
+      if (idEspera) clearTimeout(idEspera);
+    };
   }
 
   // Fecha de hoy en la barra superior, formato "Martes 10 de agosto del 2026".
@@ -58,22 +309,6 @@
     } catch (e) { /* no-op */ }
   })();
 
-  function cerrarMenuMovil() {
-    const sidebar = document.getElementById('sidebar');
-    const boton = document.getElementById('mobile-menu-btn');
-    sidebar.classList.remove('mobile-open');
-    document.body.classList.remove('sidebar-mobile-open');
-    if (boton) boton.setAttribute('aria-expanded', 'false');
-  }
-
-  function alternarMenuMovil() {
-    const sidebar = document.getElementById('sidebar');
-    const boton = document.getElementById('mobile-menu-btn');
-    const abierto = sidebar.classList.toggle('mobile-open');
-    document.body.classList.toggle('sidebar-mobile-open', abierto);
-    if (boton) boton.setAttribute('aria-expanded', String(abierto));
-  }
-
   document.addEventListener('click', (ev) => {
     const btnTema = ev.target.closest('.theme-btn');
     if (btnTema) { aplicarTema(btnTema.dataset.tema); return; }
@@ -82,27 +317,65 @@
       const sidebar = document.getElementById('sidebar');
       const colapsado = sidebar.classList.toggle('collapsed');
       try { localStorage.setItem('sidebarColapsado', colapsado ? '1' : '0'); } catch (e) { /* no-op */ }
-      return;
     }
-
-    if (ev.target.closest('#mobile-menu-btn')) { alternarMenuMovil(); return; }
-    if (ev.target.closest('#sidebar-backdrop')) { cerrarMenuMovil(); return; }
   });
 
-  document.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Escape') cerrarMenuMovil();
+  // Tooltip del sidebar colapsado (ver .sidebar-tooltip en styles.html —
+  // vive en <body>, no dentro de #sidebar, para no toparse con su
+  // overflow-x:hidden). Delegado en document: los grupos se regeneran con
+  // innerHTML, así que no sirve engancharlo elemento por elemento.
+  const tooltipSidebar = document.createElement('div');
+  tooltipSidebar.className = 'sidebar-tooltip';
+  document.body.appendChild(tooltipSidebar);
+
+  document.addEventListener('mouseover', (ev) => {
+    const el = ev.target.closest('[data-tooltip]');
+    const sidebar = document.getElementById('sidebar');
+    if (!el || !sidebar.contains(el) || !sidebar.classList.contains('collapsed')) return;
+    const rect = el.getBoundingClientRect();
+    tooltipSidebar.textContent = el.dataset.tooltip;
+    tooltipSidebar.style.top = (rect.top + rect.height / 2) + 'px';
+    tooltipSidebar.style.left = (rect.right + 12) + 'px';
+    tooltipSidebar.classList.add('show');
+  });
+  document.addEventListener('mouseout', (ev) => {
+    if (ev.target.closest('[data-tooltip]')) tooltipSidebar.classList.remove('show');
   });
 
   const state = {
     token: sessionStorage.getItem('token') || null,
     sesion: JSON.parse(sessionStorage.getItem('sesion') || 'null'),
+    // Permisos por módulo (rama `ayrton`: PermisosService/Modulos.gs), se leen del
+    // servidor en cada carga (ver render). Aditivo: el menú lateral (NAV_GRUPOS,
+    // renderNavGrupos) sigue siendo estático y siempre visible como hasta ahora —
+    // esto solo alimenta a los módulos nuevos que si consultan permiso fino
+    // (Verificaciones/Sensores/Hologramas/Inspección Vehicular).
+    permisos: {},
   };
+
+  /** ¿Qué puede hacer esta persona en un módulo? 'LECTURA' | 'EDICION' | undefined */
+  const permisoDe = (modulo) => (state.permisos || {})[modulo];
+  const puedeEditarModulo = (modulo) => permisoDe(modulo) === 'EDICION';
+
+  /** Escapa HTML al insertar texto dinámico con innerHTML (evita XSS con datos de hojas) */
+  function escaparHtml(valor) {
+    return String(valor == null ? '' : valor).replace(/[&<>"']/g, (c) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+  }
+
+  /** Fecha de hoy en horario LOCAL como "YYYY-MM-DD" (a diferencia de hoyISO(), que usa UTC) */
+  function hoyLocal() {
+    const f = new Date();
+    return [f.getFullYear(), String(f.getMonth() + 1).padStart(2, '0'), String(f.getDate()).padStart(2, '0')].join('-');
+  }
 
   function guardarSesion(resultadoLogin) {
     state.token = resultadoLogin.token;
     state.sesion = resultadoLogin;
     sessionStorage.setItem('token', state.token);
     sessionStorage.setItem('sesion', JSON.stringify(resultadoLogin));
+    sesionExpiradaManejada = false; // por si la siguiente sesión también llega a expirar
   }
 
   function cerrarSesion() {
@@ -116,6 +389,30 @@
     try { await callServer('apiLogout', state.token); } catch (e) { /* no-op */ }
   }
 
+  /**
+   * Cualquier llamada al servidor (desde cualquier pantalla/módulo) que
+   * truene con "Sesión expirada" llega aquí, vía callServer (api.html).
+   * Antes cada módulo lo manejaba (o no) por su cuenta — se veía como
+   * catálogos/selects vacíos sin explicación (ej. Arqueos). Ahora: se
+   * regresa al login de una vez, con un aviso claro ahí mismo.
+   * sesionExpiradaManejada evita procesarlo varias veces si revientan
+   * varias llamadas en paralelo (ej. un Promise.all) por la misma causa.
+   */
+  let sesionExpiradaManejada = false;
+  function manejarSesionExpirada() {
+    if (sesionExpiradaManejada || !state.token) return;
+    sesionExpiradaManejada = true;
+    state.token = null;
+    state.sesion = null;
+    sessionStorage.clear();
+    render();
+    const errorBox = document.getElementById('login-error');
+    if (errorBox) {
+      errorBox.textContent = 'Tu sesión expiró — vuelve a iniciar sesión.';
+      errorBox.hidden = false;
+    }
+  }
+
   function render() {
     document.getElementById('app-shell').hidden = !state.token;
     document.getElementById('login-screen-container').hidden = !!state.token;
@@ -125,6 +422,13 @@
       return;
     }
     document.getElementById('user-name').textContent = state.sesion.nombre + ' · ' + state.sesion.rol;
+    // Aditivo (rama `ayrton`): permisos finos por módulo para Verificaciones/Sensores/
+    // Hologramas/Inspección Vehicular. No bloquea la navegación ni afecta el menú
+    // (NAV_GRUPOS sigue siempre visible) — si falla, esos módulos simplemente quedan
+    // en modo solo-lectura (puedeEditarModulo devuelve false con permisos vacíos).
+    callServer('apiMisPermisos', state.token).then((info) => {
+      state.permisos = (info && info.permisos) || {};
+    }).catch(() => { /* no-op: ver comentario arriba */ });
     navegarA('dashboard');
   }
 
@@ -135,6 +439,19 @@
    * darle personalidad a la espera en vez de un spinner genérico.
    */
   function mostrarPantallaCarga(callback) {
+    // El login (#login-screen-container) se quedaba visible DEBAJO de la
+    // pantalla de carga durante toda la animación — no se ocultaba hasta el
+    // callback final (render()). No se notaba mientras la pantalla de carga
+    // estaba a opacidad completa, pero en su fade-out final (ver abajo) sí
+    // se iba transparentando y dejaba ver el formulario de login por
+    // debajo un instante, justo antes de pasar al sistema. Ocultarlo desde
+    // aquí (apenas arranca la animación, no hasta que termina) lo evita.
+    document.getElementById('login-screen-container').hidden = true;
+    // El login ya no se va a volver a ver — apaga el slideshow de su fondo
+    // en vez de dejarlo corriendo de fondo apuntando a elementos ocultos.
+    if (detenerHeroLogin) { detenerHeroLogin(); detenerHeroLogin = null; }
+    actualizarHeroLoginTema = null;
+
     const container = document.getElementById('loading-screen-container');
     montarVista('tpl-loading', null, container);
 
@@ -144,7 +461,7 @@
       { icono: 'loading-icon-2', mensaje: 'Revisando accesorios…' },
       { icono: 'loading-icon-3', mensaje: 'Cerrando caja chica del día…' },
     ];
-    const duracionTotal = 750;
+    const duracionTotal = 1900;
     const porPaso = duracionTotal / pasos.length;
 
     const barra = document.getElementById('loading-bar-fill');
@@ -162,7 +479,7 @@
         setTimeout(() => {
           mensaje.textContent = paso.mensaje;
           mensaje.classList.remove('fade');
-        }, 70);
+        }, 150);
       }, i * porPaso);
     });
 
@@ -172,8 +489,8 @@
       setTimeout(() => {
         container.innerHTML = '';
         callback();
-      }, 180);
-    }, duracionTotal + 80);
+      }, 450);
+    }, duracionTotal + 250);
   }
 
   function montarVista(templateId, initFn, container) {
@@ -214,35 +531,29 @@
     requestAnimationFrame(() => overlay.classList.add('show'));
 
     setTimeout(() => {
-      try {
-        montarVistaReal();
-      } finally {
-        overlay.classList.remove('show');
-        setTimeout(() => overlay.remove(), 160);
-      }
-    }, 60);
+      montarVistaReal();
+      overlay.classList.remove('show');
+      setTimeout(() => overlay.remove(), 300);
+    }, 2500);
   }
 
   function navegarA(vista, etiqueta) {
-    document.dispatchEvent(new CustomEvent('app:before-navigate'));
-    cerrarMenuMovil();
     document.querySelectorAll('.nav-item, .nav-subitem').forEach((el) => {
       el.classList.toggle('active', el.dataset.view === vista);
     });
 
     transicionVista(vista, etiqueta, () => {
       if (vista === 'dashboard') { montarVista('tpl-dashboard', initDashboard); return; }
-      if (vista === 'accesorios') { montarVista('tpl-accesorios', initAccesorios); return; }
-      if (vista === 'incidencias') { montarVista('tpl-incidencias', initIncidencias); return; }
+      // --- Líneas (rama emmanuel): el módulo vive en html/js/lineas.html (namespace Lineas) ---
       if (vista === 'lineas-telefonicas') { montarVista('tpl-lineas-telefonicas', Lineas.initTelefonicas); return; }
-      if (vista === 'detalles-lineas-telefonicas') { montarVista('tpl-lineas-detalles', Lineas.initDetalles); return; }
       if (vista === 'gestion-activos') { montarVista('tpl-lineas-gestion-activos', Lineas.initGestionActivos); return; }
+      if (vista === 'detalles-lineas-telefonicas') { montarVista('tpl-lineas-detalles', Lineas.initDetalles); return; }
       if (vista === 'accesorios-lineas') { montarVista('tpl-lineas-accesorios', Lineas.initAccesoriosLineas); return; }
       if (vista === 'reactivacion-lineas') { montarVista('tpl-lineas-operativa', Lineas.initReactivacion); return; }
-      if (vista === 'solicitud-lineas') { montarVista('tpl-lineas-operativa', Lineas.initSolicitud); return; }
-      if (vista === 'lineas-post-venta') { montarVista('tpl-lineas-operativa', Lineas.initPostVenta); return; }
-      if (vista === 'cambios-lineas') { montarVista('tpl-lineas-bitacora', Lineas.initCambios); return; }
       if (vista === 'reasignaciones-lineas') { montarVista('tpl-lineas-bitacora', Lineas.initReasignaciones); return; }
+      if (vista === 'solicitud-lineas') { montarVista('tpl-lineas-operativa', Lineas.initSolicitud); return; }
+      if (vista === 'cambios-lineas') { montarVista('tpl-lineas-bitacora', Lineas.initCambios); return; }
+      if (vista === 'lineas-post-venta') { montarVista('tpl-lineas-operativa', Lineas.initPostVenta); return; }
       if (vista === 'bitacora-desechos') { montarVista('tpl-lineas-bitacora', Lineas.initDesechos); return; }
       mostrarProximamente(etiqueta || vista);
     });
@@ -261,67 +572,45 @@
   }
 
   /**
-   * Estructura del sidebar por área. La mayoría de estos sub-módulos todavía
-   * no están construidos (ver mostrarProximamente); "accesorios" es el único
-   * que ya apunta a un módulo real y funcional.
+   * Estructura del sidebar por área. En la rama emmanuel solo va el grupo de
+   * Líneas (los demás grupos viven en las ramas de sus responsables y se juntan
+   * al unir en master).
    */
   const NAV_GRUPOS = [
     {
-      id: 'servicios-vehiculares', icono: 'car', etiqueta: 'Servicios Vehiculares',
+      id: 'lineas', icono: 'smartphone', etiqueta: 'Líneas',
       items: [
-        { vista: 'incidencias', etiqueta: 'Incidencias' },
-        { vista: 'vehiculos', etiqueta: 'Vehículos' },
-        { vista: 'cambios-vehiculos', etiqueta: 'Cambios Vehículos' },
-        { vista: 'reasignaciones-vehiculares', etiqueta: 'Reasignaciones Vehiculares' },
-        { vista: 'verificaciones', etiqueta: 'Verificaciones' },
-        { vista: 'instalacion-sensores', etiqueta: 'Instalación de Sensores' },
-        { vista: 'servicios', etiqueta: 'Servicios' },
-        { vista: 'hologramas', etiqueta: 'Hologramas' },
-      ],
-    },
-    {
-      id: 'lineas', icono: 'phone', etiqueta: 'Líneas',
-      items: [
-        { vista: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas' },
-        { vista: 'gestion-activos', etiqueta: 'Gestión de Activos' },
-        { vista: 'detalles-lineas-telefonicas', etiqueta: 'Detalles Líneas Telefónicas' },
-        { vista: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios' },
-        { vista: 'reactivacion-lineas', etiqueta: 'Reactivación de Líneas' },
-        { vista: 'reasignaciones-lineas', etiqueta: 'Control de Reasignaciones - Líneas' },
-        { vista: 'solicitud-lineas', etiqueta: 'Solicitud de Líneas' },
-        { vista: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas' },
-        { vista: 'lineas-post-venta', etiqueta: 'Líneas Post Venta' },
-        { vista: 'bitacora-desechos', etiqueta: 'Bitácora de Desechos' },
-      ],
-    },
-    {
-      id: 'arqueos', icono: 'wallet', etiqueta: 'Arqueos',
-      items: [
-        { vista: 'arqueos', etiqueta: 'Arqueos' },
-        { vista: 'caja-chica', etiqueta: 'Caja Chica' },
-      ],
-    },
-    {
-      id: 'uber', icono: 'car-taxi-front', etiqueta: 'Uber',
-      items: [
-        { vista: 'uber', etiqueta: 'Uber' },
-        { vista: 'tickets', etiqueta: 'Tickets' },
+        { vista: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas', icono: 'phone' },
+        { vista: 'gestion-activos', etiqueta: 'Gestión de Activos', icono: 'briefcase' },
+        { vista: 'detalles-lineas-telefonicas', etiqueta: 'Detalles Líneas Telefónicas', icono: 'file-search' },
+        { vista: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios', icono: 'backpack' },
+        { vista: 'reactivacion-lineas', etiqueta: 'Reactivación de Líneas', icono: 'refresh-cw' },
+        { vista: 'reasignaciones-lineas', etiqueta: 'Control de Reasignaciones - Líneas', icono: 'arrow-left-right' },
+        { vista: 'solicitud-lineas', etiqueta: 'Solicitud de Líneas', icono: 'file-plus' },
+        { vista: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas', icono: 'repeat' },
+        { vista: 'lineas-post-venta', etiqueta: 'Líneas Post Venta', icono: 'headphones' },
+        { vista: 'bitacora-desechos', etiqueta: 'Bitácora de Desechos', icono: 'trash-2' },
       ],
     },
   ];
 
+  // Los grupos ya no son acordeón (se abren/cierran) — se quedan siempre
+  // abiertos, el encabezado es nomás la etiqueta de la sección.
   function renderNavGrupos() {
     const contenedor = document.getElementById('nav-groups');
     contenedor.innerHTML = NAV_GRUPOS.map((grupo) => `
       <div class="nav-group" id="nav-group-${grupo.id}">
-        <button type="button" class="nav-group-header" data-grupo="${grupo.id}" aria-expanded="false" aria-controls="nav-items-${grupo.id}">
+        <div class="nav-group-header" data-tooltip="${grupo.etiqueta}">
           <span class="nav-icon"><i data-lucide="${grupo.icono}" class="ico"></i></span>
           <span class="nav-label">${grupo.etiqueta}</span>
           <span class="nav-group-chevron"><i data-lucide="chevron-right" class="ico"></i></span>
-        </button>
-        <div class="nav-group-items" id="nav-items-${grupo.id}">
+        </div>
+        <div class="nav-group-items">
           ${grupo.items.map((item) => `
-            <button type="button" class="nav-subitem" data-view="${item.vista}" data-etiqueta="${item.etiqueta}">${item.etiqueta}</button>
+            <div class="nav-subitem" data-view="${item.vista}" data-etiqueta="${item.etiqueta}">
+              <span class="nav-subitem-icon"><i data-lucide="${item.icono}" class="ico"></i></span>
+              <span class="nav-subitem-label">${item.etiqueta}</span>
+            </div>
           `).join('')}
         </div>
       </div>
@@ -329,8 +618,17 @@
 
     contenedor.querySelectorAll('.nav-group-header').forEach((header) => {
       header.addEventListener('click', () => {
-        const expandido = document.getElementById('nav-group-' + header.dataset.grupo).classList.toggle('expanded');
-        header.setAttribute('aria-expanded', String(expandido));
+        const grupoEl = header.closest('.nav-group');
+        const sidebar = document.getElementById('sidebar');
+        if (sidebar.classList.contains('collapsed')) {
+          // Con el sidebar colapsado, picarle a un grupo lo expande de una
+          // vez Y abre ese submenú en específico (no solo un toggle normal).
+          sidebar.classList.remove('collapsed');
+          try { localStorage.setItem('sidebarColapsado', '0'); } catch (e) { /* no-op */ }
+          grupoEl.classList.add('expanded');
+        } else {
+          grupoEl.classList.toggle('expanded');
+        }
       });
     });
     contenedor.querySelectorAll('.nav-subitem').forEach((el) => {
@@ -345,6 +643,7 @@
     montarVista('tpl-login', null, login);
 
     aplicarTema(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
+    initLoginHeroSlideshow();
 
     const inputPassword = document.getElementById('login-password');
     document.getElementById('toggle-password').addEventListener('click', (ev) => {
@@ -362,13 +661,35 @@
       const password = document.getElementById('login-password').value;
       const errorBox = document.getElementById('login-error');
       errorBox.hidden = true;
+      const btn = document.getElementById('btn-login');
+      // Sin esto: el primer clic sí manda la petición, pero como
+      // google.script.run tarda (sobre todo el primero de la sesión) el
+      // botón se ve exactamente igual que antes de darle clic — parece
+      // "congelado" y es fácil volver a darle, lo que manda una SEGUNDA
+      // petición en paralelo; cuando ambas responden, la pantalla de carga
+      // (mostrarPantallaCarga) se dispara dos veces seguidas y se ve como
+      // que la animación "brinca"/se repite. Deshabilitar los dos botones
+      // de inicio de sesión (no solo este) evita ambos casos: doble clic en
+      // el mismo, y clic en el OTRO método mientras este ya está en curso.
+      if (btn.disabled) return;
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Ingresando…';
+      const chip = document.getElementById('google-account-chip');
+      if (chip) chip.disabled = true;
       try {
         const resultado = await callServer('apiLogin', correo, password);
         guardarSesion(resultado);
         mostrarPantallaCarga(() => render());
+        // A propósito NO se reactivan los botones en éxito: ya se está
+        // navegando a la pantalla de carga, no debería poder volver a
+        // usarse este formulario.
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.hidden = false;
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+        if (chip) chip.disabled = false;
       }
     });
   }
@@ -380,6 +701,7 @@
    * botón de acceso directo "Continuar como [nombre]".
    */
   async function initGoogleQuickLogin() {
+    const detectando = document.getElementById('google-account-detectando');
     const chip = document.getElementById('google-account-chip');
     const divisor = document.getElementById('login-or-divider');
     try {
@@ -394,79 +716,46 @@
       divisor.hidden = false;
 
       chip.addEventListener('click', async () => {
+        if (chip.disabled) return; // mismo motivo que en btn-login — evita doble petición por clics repetidos
         const errorBox = document.getElementById('login-error');
         errorBox.hidden = true;
+        const contenidoOriginal = chip.innerHTML;
+        chip.disabled = true;
+        chip.innerHTML = '<span class="spinner"></span>';
+        const btnLogin = document.getElementById('btn-login');
+        if (btnLogin) btnLogin.disabled = true;
         try {
           const resultado = await callServer('apiLoginConGoogle');
           guardarSesion(resultado);
           mostrarPantallaCarga(() => render());
+          // Tampoco se reactiva en éxito — ver comentario en form-login.
         } catch (err) {
           errorBox.textContent = err.message;
           errorBox.hidden = false;
+          chip.disabled = false;
+          chip.innerHTML = contenidoOriginal;
+          if (btnLogin) btnLogin.disabled = false;
         }
       });
     } catch (err) {
       // Si falla la detección (poco común), simplemente se queda el formulario manual.
+    } finally {
+      detectando.hidden = true;
     }
   }
 
   // ---------- Dashboard ----------
   function initDashboard() {
     document.querySelectorAll('.nav-module[data-view]').forEach((el) => {
-      el.addEventListener('click', () => navegarA(el.dataset.view));
+      el.addEventListener('click', () => navegarA(el.dataset.view, el.dataset.etiqueta));
     });
+    // Líneas: calienta en segundo plano los datos del inventario (no bloquea el dashboard)
     const prepararTelefonia = () => { if (typeof Lineas !== 'undefined' && Lineas.precargar) Lineas.precargar(); };
     if (window.requestIdleCallback) requestIdleCallback(prepararTelefonia, { timeout: 2500 });
     else setTimeout(prepararTelefonia, 900);
   }
 
-  // ---------- Accesorios ----------
-  async function initAccesorios() {
-    const selectArticulo = document.getElementById('mov-articulo');
-    const tabla = document.getElementById('tabla-articulos');
-
-    async function cargar() {
-      const articulos = await callServer('apiListarArticulosConStock', state.token);
-
-      selectArticulo.innerHTML = articulos
-        .map((a) => `<option value="${a.ID}">${a.NOMBRE}</option>`).join('');
-
-      tabla.innerHTML = articulos.map((a) => {
-        const bajo = Number(a.STOCK) <= Number(a.STOCK_MINIMO || 0);
-        return `<tr>
-          <td>${a.CATEGORIA || ''}</td>
-          <td>${a.NOMBRE || ''}</td>
-          <td>${a.MARCA || ''}</td>
-          <td><span class="badge ${bajo ? 'low' : 'ok'}">${a.STOCK}</span></td>
-        </tr>`;
-      }).join('');
-    }
-
-    document.getElementById('form-movimiento').addEventListener('submit', async (ev) => {
-      ev.preventDefault();
-      const errorBox = document.getElementById('mov-error');
-      errorBox.hidden = true;
-      try {
-        await callServer(
-          'apiRegistrarMovimiento',
-          state.token,
-          selectArticulo.value,
-          document.getElementById('mov-tipo').value,
-          Number(document.getElementById('mov-cantidad').value),
-          ''
-        );
-        document.getElementById('mov-cantidad').value = '';
-        await cargar();
-      } catch (err) {
-        errorBox.textContent = err.message;
-        errorBox.hidden = false;
-      }
-    });
-
-    await cargar();
-  }
-
-  // ---------- Incidencias ----------
+  // ---------- Helpers compartidos (fechas, tabla interactiva, detalle) ----------
   function hoyISO() {
     return new Date().toISOString().slice(0, 10);
   }
@@ -478,250 +767,400 @@
     const f = new Date(valor);
     return isNaN(f) ? '' : f.toISOString().slice(0, 10);
   }
+  function formatearFecha(valor) {
+    if (!valor) return '—';
+    const f = new Date(valor);
+    return isNaN(f) ? '—' : f.toLocaleDateString('es-MX');
+  }
+  /** Formatea un monto como pesos mexicanos ($1,234.56) — solo para mostrar
+   * en tablas/detalle; los campos de captura siguen siendo number normal. */
+  function formatearMoneda(valor) {
+    if (valor === '' || valor === null || valor === undefined) return '—';
+    const n = Number(valor);
+    return isNaN(n) ? '—' : n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
+  }
 
-  async function initIncidencias() {
-    const lista = document.getElementById('lista-incidencias');
-    const vacio = document.getElementById('incidencias-vacio');
-    const modal = document.getElementById('modal-cerrar');
-    const modalEditar = document.getElementById('modal-editar');
-    let incidenciasPorId = {};
+  // ============================================================
+  // Motor genérico de "tabla interactiva": buscador global, orden
+  // y filtro por columna (menú desplegable en cada encabezado, al
+  // estilo Contiene/Es igual a/Vacío…) y paginación. Cada módulo
+  // sigue pintando su propio <tbody> (con badges, tags y botones de
+  // acción) — este motor solo decide QUÉ subconjunto/orden de datos
+  // le toca pintar, y arma el encabezado interactivo + el pie de
+  // paginación.
+  // ============================================================
+  const OPERADORES_FILTRO_TABLA = [
+    { valor: 'contiene', texto: 'Contiene' },
+    { valor: 'no-contiene', texto: 'No contiene' },
+    { valor: 'igual', texto: 'Es igual a' },
+    { valor: 'empieza', texto: 'Empieza con' },
+    { valor: 'termina', texto: 'Termina con' },
+    { valor: 'vacio', texto: 'Está vacío' },
+    { valor: 'no-vacio', texto: 'No está vacío' },
+  ];
 
-    // Fecha de registro: siempre hoy, no editable (el servidor la fuerza igual).
-    fijarFechaRegistroHoy();
-    document.getElementById('inc-fecha-inspeccion').value = hoyISO();
+  function crearTablaInteractiva(cfg) {
+    const {
+      thead,               // <thead> a llenar dinámicamente
+      columnas,            // [{clave, etiqueta}] — una por cada columna filtrable (sin contar acciones)
+      conAcciones = true,  // agrega un <th></th> extra al final (columna de botones, sin filtro)
+      buscadorGlobal,      // <input type="search"> opcional
+      piePaginacion,       // contenedor donde se pinta "Mostrando X-Y de Z" + selector + flechas
+      onRenderPagina,      // (datosDePagina, totalFiltrado) => pinta el <tbody>
+      porPagina = 25,
+    } = cfg;
 
-    // Autollenado: el folio del vehículo trae Departamento/Modelo desde Vehículos
-    const vehiculosPorFolio = {};
-    try {
-      const vehiculos = await callServer('apiListarVehiculosBasico', state.token);
-      const datalist = document.getElementById('lista-folios-vehiculo');
-      datalist.innerHTML = vehiculos.map((v) => {
-        vehiculosPorFolio[v.FOLIO] = v;
-        const etiqueta = [v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ');
-        return `<option value="${v.FOLIO}">${etiqueta}</option>`;
-      }).join('');
-    } catch (err) {
-      // Antes esto se ignoraba en silencio — ahora se ve para poder diagnosticar.
-      console.error('No se pudo cargar el catálogo de vehículos:', err);
-      const errorBox = document.getElementById('inc-error');
-      errorBox.textContent = 'No se pudo cargar el catálogo de vehículos para autocompletar: ' + err.message;
-      errorBox.hidden = false;
-    }
+    let datosOriginales = [];
+    let pagina = 1;
+    let filasPorPagina = porPagina;
+    const filtros = {};
+    let orden = null;
+    let popoverAbierto = null;
+    let cerrarSiFueraFn = null;
 
-    document.getElementById('inc-folio').addEventListener('input', (ev) => {
-      const vehiculo = vehiculosPorFolio[ev.target.value];
-      const campoDepto = document.getElementById('inc-departamento');
-      const campoModelo = document.getElementById('inc-modelo');
-      if (vehiculo) {
-        campoDepto.value = vehiculo.DEPARTAMENTO;
-        campoModelo.value = [vehiculo.MARCA, vehiculo.LINEA_VEHICULO].filter(Boolean).join(' ');
-        document.getElementById('inc-anio').value = vehiculo.MODELO || '';
-        document.getElementById('tag-departamento').hidden = false;
-        document.getElementById('tag-modelo').hidden = false;
-      } else {
-        document.getElementById('tag-departamento').hidden = true;
-        document.getElementById('tag-modelo').hidden = true;
-      }
-    });
-
-    function formatearFecha(valor) {
-      if (!valor) return '—';
-      const f = new Date(valor);
-      return isNaN(f) ? '—' : f.toLocaleDateString('es-MX');
-    }
-
-    function abrirModalCierre(id, folio) {
-      document.getElementById('cerrar-id').value = id;
-      document.getElementById('cerrar-folio').textContent = 'Folio: ' + folio;
-      document.getElementById('cerrar-fecha-trabajo').value = hoyISO();
-      modal.hidden = false;
-    }
-    function cerrarModal() {
-      modal.hidden = true;
-      document.getElementById('form-cerrar-incidencia').reset();
-      document.getElementById('cerrar-error').hidden = true;
-    }
-
-    function abrirModalEditar(inc) {
-      if (!inc) return;
-      document.getElementById('editar-id').value = inc.ID;
-      document.getElementById('editar-folio-label').textContent = 'Folio: ' + inc.FOLIO;
-      document.getElementById('editar-folio').value = inc.FOLIO || '';
-      document.getElementById('editar-departamento').value = inc.DEPARTAMENTO || '';
-      document.getElementById('editar-modelo').value = inc.MODELO || '';
-      document.getElementById('editar-anio').value = inc.ANIO || '';
-      document.getElementById('editar-fecha-inspeccion').value = fechaParaInput(inc.FECHA_INSPECCION);
-      document.getElementById('editar-kilometraje').value = inc.KILOMETRAJE || '';
-      document.getElementById('editar-ticket').value = inc.TICKET || '';
-      document.getElementById('editar-periodo-verificacion').value = inc.PERIODO_VERIFICACION || '';
-      document.getElementById('editar-seguro-auto').value = inc.SEGURO_AUTO || '';
-      document.getElementById('editar-motivo').value = inc.INSPECCION_INGRESO || '';
-      document.getElementById('editar-trabajo').value = inc.DESCRIPCION_TRABAJO || '';
-      document.getElementById('editar-fecha-trabajo').value = fechaParaInput(inc.FECHA_TRABAJO);
-      document.getElementById('editar-mecanico').value = inc.MECANICO || '';
-      document.getElementById('editar-salida').value = inc.INSPECCION_SALIDA || '';
-      document.getElementById('editar-error').hidden = true;
-      modalEditar.hidden = false;
-    }
-    function cerrarModalEditar() {
-      modalEditar.hidden = true;
-      document.getElementById('form-editar-incidencia').reset();
-      document.getElementById('editar-error').hidden = true;
-    }
-
-    async function eliminarIncidencia(id, folio) {
-      if (!confirm('¿Eliminar la incidencia del folio ' + folio + '? Esta acción no se puede deshacer.')) return;
-      try {
-        await callServer('apiEliminarIncidencia', state.token, id);
-        await cargar();
-      } catch (err) {
-        alert('No se pudo eliminar: ' + err.message);
+    function coincideOperador(valorCelda, operador, valorFiltro) {
+      const a = String(valorCelda == null ? '' : valorCelda).toLowerCase();
+      const b = String(valorFiltro || '').toLowerCase();
+      switch (operador) {
+        case 'contiene': return a.includes(b);
+        case 'no-contiene': return !a.includes(b);
+        case 'igual': return a === b;
+        case 'empieza': return a.startsWith(b);
+        case 'termina': return a.endsWith(b);
+        case 'vacio': return a === '';
+        case 'no-vacio': return a !== '';
+        default: return true;
       }
     }
 
-    async function cargar() {
-      const errorBox = document.getElementById('inc-error');
-      let incidencias;
-      try {
-        incidencias = await callServer('apiListarIncidencias', state.token);
-      } catch (err) {
-        console.error('No se pudo cargar el historial de incidencias:', err);
-        errorBox.textContent = 'No se pudo cargar el historial de incidencias: ' + err.message;
-        errorBox.hidden = false;
-        return;
+    // Si la columna tiene pocos valores distintos en los datos actuales (ej.
+    // Estado, Estatus, Rol — no Departamento/Nombre, que tienen decenas o
+    // cientos), el filtro se pinta como checklist de esos valores reales en
+    // vez del cuadro de texto genérico — no hay que escribir ni acertarle a
+    // como está capturado. filtro.tipo === 'lista'. Con más valores que esto
+    // sigue siendo el filtro de texto (contiene/igual/etc.), como antes.
+    const UMBRAL_FILTRO_LISTA = 15;
+
+    function coincideFiltro(valorCelda, filtro) {
+      if (filtro.tipo === 'lista') {
+        return filtro.valores.includes(String(valorCelda == null ? '' : valorCelda));
       }
-      errorBox.hidden = true;
-      // google.script.run entrega null en vez de [] cuando el servidor regresa
-      // un arreglo vacío — normalizamos aquí para no tronar en .forEach/.map.
-      incidencias = incidencias || [];
+      // 'personalizado': para los KPI clickeables (ver aplicarFiltro más
+      // abajo) — misma función que ya se usa para contar ese KPI, en vez de
+      // tener que traducirla a una lista de valores exactos.
+      if (filtro.tipo === 'personalizado') {
+        return filtro.prueba(valorCelda);
+      }
+      return coincideOperador(valorCelda, filtro.operador, filtro.valor);
+    }
 
-      incidenciasPorId = {};
-      incidencias.forEach((inc) => { incidenciasPorId[inc.ID] = inc; });
+    function datosFiltrados() {
+      let r = datosOriginales;
+      const global = (buscadorGlobal && buscadorGlobal.value.trim().toLowerCase()) || '';
+      if (global) {
+        r = r.filter((fila) => columnas.some((c) => String(fila[c.clave] == null ? '' : fila[c.clave]).toLowerCase().includes(global)));
+      }
+      Object.keys(filtros).forEach((clave) => {
+        const f = filtros[clave];
+        if (!f) return;
+        r = r.filter((fila) => coincideFiltro(fila[clave], f));
+      });
+      if (orden) {
+        const dir = orden.dir === 'desc' ? -1 : 1;
+        r = r.slice().sort((a, b) => String(a[orden.clave] == null ? '' : a[orden.clave])
+          .localeCompare(String(b[orden.clave] == null ? '' : b[orden.clave]), 'es', { numeric: true, sensitivity: 'base' }) * dir);
+      }
+      return r;
+    }
 
-      document.getElementById('stat-total').textContent = incidencias.length;
-      document.getElementById('stat-abiertas').textContent = incidencias.filter((i) => i.ESTADO === 'ABIERTA').length;
-      document.getElementById('stat-cerradas').textContent = incidencias.filter((i) => i.ESTADO === 'CERRADA').length;
+    function cerrarPopover() {
+      if (popoverAbierto) { popoverAbierto.remove(); popoverAbierto = null; }
+      if (cerrarSiFueraFn) { document.removeEventListener('click', cerrarSiFueraFn); cerrarSiFueraFn = null; }
+    }
 
-      vacio.hidden = incidencias.length > 0;
-      lista.innerHTML = incidencias.map((inc) => {
-        const abierta = inc.ESTADO === 'ABIERTA';
-        return `
-          <div class="incidencia-item">
-            <div class="incidencia-icon"><i data-lucide="car" class="ico"></i></div>
-            <div class="incidencia-main">
-              <div class="incidencia-folio">${inc.FOLIO}${inc.DEPARTAMENTO ? ' · ' + inc.DEPARTAMENTO : ''}</div>
-              <div class="incidencia-meta">${inc.INSPECCION_INGRESO || 'Sin motivo registrado'}</div>
-            </div>
-            <div class="incidencia-fecha">${formatearFecha(inc.FECHA_REGISTRO)}</div>
-            <span class="badge-estado ${abierta ? 'abierta' : 'cerrada'}">${abierta ? '<i data-lucide="lock-open" class="ico"></i> Abierta' : '<i data-lucide="circle-check" class="ico"></i> Cerrada'}</span>
-            <div class="incidencia-actions">
-              ${abierta ? `<button type="button" class="secondary btn-cerrar-incidencia" data-id="${inc.ID}" data-folio="${inc.FOLIO}">Cerrar</button>` : ''}
-              <button type="button" class="secondary btn-editar-incidencia" data-id="${inc.ID}" title="Editar"><i data-lucide="pencil" class="ico"></i></button>
-              <button type="button" class="danger btn-eliminar-incidencia" data-id="${inc.ID}" data-folio="${inc.FOLIO}" title="Eliminar"><i data-lucide="trash-2" class="ico"></i></button>
-            </div>
+    function abrirPopover(boton, columna) {
+      if (popoverAbierto) { cerrarPopover(); return; }
+      const rect = boton.getBoundingClientRect();
+      const pop = document.createElement('div');
+      pop.className = 'th-popover';
+      const actual = filtros[columna.clave];
+      const ordenAsc = !!(orden && orden.clave === columna.clave && orden.dir === 'asc');
+      const ordenDesc = !!(orden && orden.clave === columna.clave && orden.dir === 'desc');
+
+      // Valores realmente presentes en los datos actuales para esta
+      // columna — si son pocos, el filtro se pinta como checklist en vez
+      // de texto libre (ver UMBRAL_FILTRO_LISTA arriba).
+      const valoresPresentes = new Set();
+      datosOriginales.forEach((fila) => {
+        const v = fila[columna.clave];
+        if (v !== '' && v !== null && v !== undefined) valoresPresentes.add(String(v));
+      });
+      const listaValores = [...valoresPresentes].sort((a, b) => a.localeCompare(b, 'es', { numeric: true, sensitivity: 'base' }));
+      const esLista = listaValores.length > 0 && listaValores.length <= UMBRAL_FILTRO_LISTA;
+
+      const ordenHtml = `
+        <div class="th-popover-orden">
+          <button type="button" class="secondary ${ordenAsc ? 'activo' : ''}" data-dir="asc">A → Z</button>
+          <button type="button" class="secondary ${ordenDesc ? 'activo' : ''}" data-dir="desc">Z → A</button>
+        </div>
+      `;
+
+      let cuerpoHtml;
+      if (esLista) {
+        // Sin filtro activo (o filtro de otro tipo, ej. cambiaron de dirty
+        // los datos): todo marcado = "no estoy filtrando nada todavía".
+        const seleccionados = actual && actual.tipo === 'lista' ? new Set(actual.valores) : null;
+        cuerpoHtml = `
+          <div class="th-popover-lista-acciones">
+            <button type="button" class="th-popover-marcar-todos">Marcar todos</button>
+            <button type="button" class="th-popover-marcar-ninguno">Ninguno</button>
+          </div>
+          <div class="th-popover-lista">
+            ${listaValores.map((v) => `
+              <label class="th-popover-opcion">
+                <input type="checkbox" value="${v.replace(/"/g, '&quot;')}" ${!seleccionados || seleccionados.has(v) ? 'checked' : ''} />
+                <span>${v}</span>
+              </label>
+            `).join('')}
           </div>
         `;
-      }).join('');
+      } else {
+        const valorActual = (actual && actual.tipo !== 'lista') ? actual : { operador: 'contiene', valor: '' };
+        cuerpoHtml = `
+          <select class="th-popover-operador">
+            ${OPERADORES_FILTRO_TABLA.map((o) => `<option value="${o.valor}" ${o.valor === valorActual.operador ? 'selected' : ''}>${o.texto}</option>`).join('')}
+          </select>
+          <input type="text" class="th-popover-valor" placeholder="Valor" value="${String(valorActual.valor || '').replace(/"/g, '&quot;')}" />
+        `;
+      }
 
-      refreshIcons();
-      lista.querySelectorAll('.btn-cerrar-incidencia').forEach((btn) => {
-        btn.addEventListener('click', () => abrirModalCierre(btn.dataset.id, btn.dataset.folio));
+      pop.innerHTML = `
+        <div class="th-popover-titulo">${columna.etiqueta}</div>
+        ${ordenHtml}
+        ${cuerpoHtml}
+        <div class="th-popover-acciones">
+          <button type="button" class="secondary th-popover-quitar">Quitar filtro</button>
+          <button type="button" class="th-popover-aplicar">Aplicar</button>
+        </div>
+      `;
+      document.body.appendChild(pop);
+      const ancho = 230;
+      pop.style.left = Math.max(8, Math.min(rect.left + window.scrollX, window.innerWidth - ancho - 8)) + 'px';
+      pop.style.top = (rect.bottom + window.scrollY + 6) + 'px';
+
+      pop.querySelectorAll('.th-popover-orden button').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          orden = { clave: columna.clave, dir: btn.dataset.dir };
+          pagina = 1;
+          cerrarPopover();
+          renderTodo();
+        });
       });
-      lista.querySelectorAll('.btn-editar-incidencia').forEach((btn) => {
-        btn.addEventListener('click', () => abrirModalEditar(incidenciasPorId[btn.dataset.id]));
+
+      if (esLista) {
+        pop.querySelector('.th-popover-marcar-todos').addEventListener('click', () => {
+          pop.querySelectorAll('.th-popover-lista input').forEach((el) => { el.checked = true; });
+        });
+        pop.querySelector('.th-popover-marcar-ninguno').addEventListener('click', () => {
+          pop.querySelectorAll('.th-popover-lista input').forEach((el) => { el.checked = false; });
+        });
+        pop.querySelector('.th-popover-aplicar').addEventListener('click', () => {
+          const marcados = [...pop.querySelectorAll('.th-popover-lista input:checked')].map((el) => el.value);
+          // Nada marcado (no tendría match nunca) o todo marcado (equivale
+          // a "sin filtro") — en ambos casos mejor quitar el filtro.
+          if (marcados.length === 0 || marcados.length === listaValores.length) delete filtros[columna.clave];
+          else filtros[columna.clave] = { tipo: 'lista', valores: marcados };
+          pagina = 1;
+          cerrarPopover();
+          renderTodo();
+        });
+      } else {
+        const valorInput = pop.querySelector('.th-popover-valor');
+        const operadorSelect = pop.querySelector('.th-popover-operador');
+        function actualizarValorVisible() {
+          valorInput.hidden = ['vacio', 'no-vacio'].includes(operadorSelect.value);
+        }
+        actualizarValorVisible();
+        operadorSelect.addEventListener('change', actualizarValorVisible);
+        if (!valorInput.hidden) valorInput.focus();
+
+        pop.querySelector('.th-popover-aplicar').addEventListener('click', () => {
+          const operador = operadorSelect.value;
+          const valor = valorInput.value.trim();
+          if (['vacio', 'no-vacio'].includes(operador) || valor) filtros[columna.clave] = { tipo: 'texto', operador, valor };
+          else delete filtros[columna.clave];
+          pagina = 1;
+          cerrarPopover();
+          renderTodo();
+        });
+      }
+
+      pop.querySelector('.th-popover-quitar').addEventListener('click', () => {
+        delete filtros[columna.clave];
+        pagina = 1;
+        cerrarPopover();
+        renderTodo();
       });
-      lista.querySelectorAll('.btn-eliminar-incidencia').forEach((btn) => {
-        btn.addEventListener('click', () => eliminarIncidencia(btn.dataset.id, btn.dataset.folio));
-      });
+
+      popoverAbierto = pop;
+      setTimeout(() => {
+        cerrarSiFueraFn = (ev) => { if (!pop.contains(ev.target) && !boton.contains(ev.target)) cerrarPopover(); };
+        document.addEventListener('click', cerrarSiFueraFn);
+      }, 0);
     }
 
-    document.getElementById('form-incidencia').addEventListener('submit', async (ev) => {
-      ev.preventDefault();
-      const errorBox = document.getElementById('inc-error');
-      errorBox.hidden = true;
-      try {
-        await callServer('apiCrearIncidencia', state.token, {
-          FOLIO: document.getElementById('inc-folio').value.trim(),
-          DEPARTAMENTO: document.getElementById('inc-departamento').value.trim(),
-          MODELO: document.getElementById('inc-modelo').value.trim(),
-          ANIO: document.getElementById('inc-anio').value,
-          FECHA_INSPECCION: document.getElementById('inc-fecha-inspeccion').value,
-          KILOMETRAJE: document.getElementById('inc-kilometraje').value,
-          TICKET: document.getElementById('inc-ticket').value.trim(),
-          PERIODO_VERIFICACION: document.getElementById('inc-periodo-verificacion').value.trim(),
-          SEGURO_AUTO: document.getElementById('inc-seguro-auto').value.trim(),
-          INSPECCION_INGRESO: document.getElementById('inc-motivo').value.trim(),
+    function renderEncabezado() {
+      thead.innerHTML = '<tr>' + columnas.map((c) => {
+        const activo = !!filtros[c.clave] || (orden && orden.clave === c.clave);
+        return `<th class="th-interactivo ${activo ? 'activo' : ''}" data-clave="${c.clave}">
+          <span class="th-interactivo-label">${c.etiqueta}<i data-lucide="chevron-down" class="ico"></i></span>
+        </th>`;
+      }).join('') + (conAcciones ? '<th></th>' : '') + '</tr>';
+      thead.querySelectorAll('.th-interactivo').forEach((th) => {
+        const columna = columnas.find((c) => c.clave === th.dataset.clave);
+        th.querySelector('.th-interactivo-label').addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          abrirPopover(th, columna);
         });
-        ev.target.reset();
-        fijarFechaRegistroHoy();
-        document.getElementById('inc-fecha-inspeccion').value = hoyISO();
-        await cargar();
-      } catch (err) {
-        errorBox.textContent = err.message;
-        errorBox.hidden = false;
-      }
-    });
+      });
+      refreshIcons();
+    }
 
-    document.getElementById('btn-cancelar-cierre').addEventListener('click', cerrarModal);
-    modal.addEventListener('click', (ev) => { if (ev.target === modal) cerrarModal(); });
+    function renderPie(totalFiltrado) {
+      if (!piePaginacion) return;
+      const totalPaginas = Math.max(1, Math.ceil(totalFiltrado / filasPorPagina));
+      if (pagina > totalPaginas) pagina = totalPaginas;
+      const inicio = totalFiltrado === 0 ? 0 : (pagina - 1) * filasPorPagina + 1;
+      const fin = Math.min(pagina * filasPorPagina, totalFiltrado);
+      piePaginacion.innerHTML = `
+        <span>Mostrando ${inicio}-${fin} de ${totalFiltrado}</span>
+        <div class="tabla-pie-paginas">
+          <select class="tabla-pie-tamano">
+            ${[10, 25, 50, 100].map((n) => `<option value="${n}" ${n === filasPorPagina ? 'selected' : ''}>${n} por página</option>`).join('')}
+          </select>
+          <button type="button" class="tp-prev" ${pagina <= 1 ? 'disabled' : ''}><i data-lucide="chevron-left" class="ico"></i></button>
+          <span>Página ${pagina} de ${totalPaginas}</span>
+          <button type="button" class="tp-next" ${pagina >= totalPaginas ? 'disabled' : ''}><i data-lucide="chevron-right" class="ico"></i></button>
+        </div>
+      `;
+      piePaginacion.querySelector('.tabla-pie-tamano').addEventListener('change', (ev) => {
+        filasPorPagina = Number(ev.target.value);
+        pagina = 1;
+        renderTodo();
+      });
+      piePaginacion.querySelector('.tp-prev').addEventListener('click', () => { pagina -= 1; renderTodo(); });
+      piePaginacion.querySelector('.tp-next').addEventListener('click', () => { pagina += 1; renderTodo(); });
+      refreshIcons();
+    }
 
-    document.getElementById('form-cerrar-incidencia').addEventListener('submit', async (ev) => {
-      ev.preventDefault();
-      const errorBox = document.getElementById('cerrar-error');
-      errorBox.hidden = true;
-      try {
-        await callServer('apiCerrarIncidencia', state.token, document.getElementById('cerrar-id').value, {
-          DESCRIPCION_TRABAJO: document.getElementById('cerrar-trabajo').value.trim(),
-          FECHA_TRABAJO: document.getElementById('cerrar-fecha-trabajo').value,
-          INSPECCION_SALIDA: document.getElementById('cerrar-salida').value.trim(),
-          MECANICO: document.getElementById('cerrar-mecanico').value.trim(),
-        });
-        cerrarModal();
-        await cargar();
-      } catch (err) {
-        errorBox.textContent = err.message;
-        errorBox.hidden = false;
-      }
-    });
+    function renderTodo() {
+      const filtrado = datosFiltrados();
+      const totalPaginas = Math.max(1, Math.ceil(filtrado.length / filasPorPagina));
+      if (pagina > totalPaginas) pagina = totalPaginas;
+      const inicio = (pagina - 1) * filasPorPagina;
+      const pageData = filtrado.slice(inicio, inicio + filasPorPagina);
+      renderEncabezado();
+      onRenderPagina(pageData, filtrado.length);
+      renderPie(filtrado.length);
+    }
 
-    document.getElementById('btn-cancelar-editar').addEventListener('click', cerrarModalEditar);
-    modalEditar.addEventListener('click', (ev) => { if (ev.target === modalEditar) cerrarModalEditar(); });
+    if (buscadorGlobal) buscadorGlobal.addEventListener('input', () => { pagina = 1; renderTodo(); });
 
-    document.getElementById('form-editar-incidencia').addEventListener('submit', async (ev) => {
-      ev.preventDefault();
-      const errorBox = document.getElementById('editar-error');
-      errorBox.hidden = true;
-      try {
-        await callServer('apiActualizarIncidencia', state.token, document.getElementById('editar-id').value, {
-          FOLIO: document.getElementById('editar-folio').value.trim(),
-          DEPARTAMENTO: document.getElementById('editar-departamento').value.trim(),
-          MODELO: document.getElementById('editar-modelo').value.trim(),
-          ANIO: document.getElementById('editar-anio').value,
-          FECHA_INSPECCION: document.getElementById('editar-fecha-inspeccion').value,
-          KILOMETRAJE: document.getElementById('editar-kilometraje').value,
-          TICKET: document.getElementById('editar-ticket').value.trim(),
-          PERIODO_VERIFICACION: document.getElementById('editar-periodo-verificacion').value.trim(),
-          SEGURO_AUTO: document.getElementById('editar-seguro-auto').value.trim(),
-          INSPECCION_INGRESO: document.getElementById('editar-motivo').value.trim(),
-          DESCRIPCION_TRABAJO: document.getElementById('editar-trabajo').value.trim(),
-          FECHA_TRABAJO: document.getElementById('editar-fecha-trabajo').value,
-          MECANICO: document.getElementById('editar-mecanico').value.trim(),
-          INSPECCION_SALIDA: document.getElementById('editar-salida').value.trim(),
-        });
-        cerrarModalEditar();
-        await cargar();
-      } catch (err) {
-        errorBox.textContent = err.message;
-        errorBox.hidden = false;
-      }
-    });
+    return {
+      setDatos(datos) { datosOriginales = datos || []; renderTodo(); },
+      refrescar: renderTodo,
+      // Filtrado + ordenado actual, SIN recortar por página — para exportar
+      // exactamente lo que el usuario está viendo (con sus filtros aplicados).
+      obtenerFiltrados: datosFiltrados,
+      // Para que los KPI (stat-tiles) de cada módulo funcionen como filtro
+      // de la tabla con solo darles clic — ver wireKpiFiltro más abajo.
+      aplicarFiltro(clave, filtro) {
+        filtros[clave] = filtro;
+        pagina = 1;
+        renderTodo();
+      },
+      quitarFiltro(clave) {
+        delete filtros[clave];
+        pagina = 1;
+        renderTodo();
+      },
+    };
+  }
 
-    await cargar();
+  /** Descarga un arreglo de objetos como .csv (Excel lo abre nativo, con
+   *  acentos/ñ correctos gracias al BOM). `columnas` = [{clave, etiqueta}],
+   *  igual que las que ya usa crearTablaInteractiva. */
+  function exportarCSV(nombreArchivo, columnas, filas) {
+    const escapar = (valor) => {
+      const texto = String(valor == null ? '' : valor);
+      return /[",\n]/.test(texto) ? '"' + texto.replace(/"/g, '""') + '"' : texto;
+    };
+    const encabezado = columnas.map((c) => escapar(c.etiqueta)).join(',');
+    const cuerpo = (filas || []).map((fila) => columnas.map((c) => escapar(fila[c.clave])).join(',')).join('\r\n');
+    const contenido = '﻿' + encabezado + '\r\n' + cuerpo;
+    const blob = new Blob([contenido], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const enlace = document.createElement('a');
+    enlace.href = url;
+    enlace.download = nombreArchivo;
+    document.body.appendChild(enlace);
+    enlace.click();
+    enlace.remove();
+    URL.revokeObjectURL(url);
+  }
+  // Helpers compartidos para las tarjetas de "detalle completo" (Incidencias y Vehículos).
+  function tituloDesdeClave(clave) {
+    return clave.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+  }
+  function formatearValorInfo(valor) {
+    if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(valor)) return formatearFecha(valor);
+    if (typeof valor === 'string' && /^https?:\/\//.test(valor)) {
+      return `<a href="${valor}" target="_blank" rel="noopener">📎 Ver archivo</a>`;
+    }
+    return String(valor);
+  }
+  function itemInfo(etiqueta, valor) {
+    return `
+      <div class="info-item">
+        <div class="info-label">${etiqueta}</div>
+        <div class="info-value">${formatearValorInfo(valor)}</div>
+      </div>
+    `;
+  }
+  function seccionInfo(icono, titulo) {
+    return `<div class="info-section-title"><i data-lucide="${icono}" class="ico"></i> ${titulo}</div>`;
   }
 
   document.getElementById('btn-logout').addEventListener('click', cerrarSesion);
   document.querySelectorAll('#sidebar .nav-item[data-view]').forEach((el) => {
     el.addEventListener('click', () => navegarA(el.dataset.view));
+  });
+
+  /**
+   * Mayúsculas automáticas en todos los campos de texto de los formularios
+   * (Registrar/Editar/modales, de cualquier módulo) — a excepción de
+   * números y fechas, que no tienen letras que convertir. Un solo listener
+   * delegado en #view-container (los formularios/modales de cada vista
+   * viven adentro, aunque montarVista los reemplace en cada navegación) —
+   * no hay que tocarle nada a cada campo/módulo uno por uno. Se excluyen
+   * a propósito los cuadros de búsqueda/filtro (buscador global de cada
+   * tabla y el del popover de filtro por columna): son para BUSCAR, no
+   * datos que se vayan a guardar, y ya comparan sin importar mayúsculas.
+   */
+  document.getElementById('view-container').addEventListener('input', (ev) => {
+    const el = ev.target;
+    const esTexto = el.tagName === 'TEXTAREA' ||
+      (el.tagName === 'INPUT' && ['text', 'email', 'tel', 'url'].includes(el.type));
+    if (!esTexto) return;
+    if (el.classList.contains('tabla-buscar-global') || el.classList.contains('th-popover-valor')) return;
+    // Campos que se guardan tal cual (correos, contraseñas, buscadores): data-respetar-texto
+    if (el.closest('[data-respetar-texto]')) return;
+    const inicio = el.selectionStart;
+    const fin = el.selectionEnd;
+    el.value = el.value.toUpperCase();
+    // toUpperCase() no mueve el cursor solo — sin esto, cada letra que se
+    // escribe salta al final del campo en vez de seguir donde se iba escribiendo.
+    if (inicio !== null && el.setSelectionRange) el.setSelectionRange(inicio, fin);
   });
 
   renderNavGrupos();

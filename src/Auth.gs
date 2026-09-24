@@ -1,9 +1,17 @@
 
 const Auth = (function () {
-  const COLUMNAS_USUARIOS = ['CORREO', 'ROL'];
+  // Nombre real de la pestaña ya confirmado ("USUARIOS") — se busca directo
+  // por nombre, no por firma de columnas (SheetUtils.getSheetByColumns).
+  // Esto SÍ importa para la velocidad: ese spreadsheet tiene ~50 pestañas
+  // (es el mismo compartido de AppSheet), y buscar por columnas implica
+  // abrir y leer los encabezados de CADA UNA hasta encontrar la que
+  // coincide — lento la primera vez que se pide en el día (después queda
+  // 6h en caché, pero la detección automática de Google al abrir el login
+  // es justo la más sensible a esa primera vez lenta).
+  const NOMBRE_HOJA_USUARIOS = 'USUARIOS';
 
   function hojaUsuarios_() {
-    return SheetUtils.getSheetByColumns(Config.SPREADSHEET_IDS.USUARIOS(), COLUMNAS_USUARIOS);
+    return SheetUtils.getSheet(Config.SPREADSHEET_IDS.USUARIOS(), NOMBRE_HOJA_USUARIOS);
   }
 
   function hashPassword_(password, salt) {
@@ -39,7 +47,14 @@ const Auth = (function () {
 
   /** El spreadsheet original solo distingue ADMIN / USER; todo lo que no sea ADMIN opera como OPERADOR */
   function mapearRol_(rolOriginal) {
-    return String(rolOriginal || '').toUpperCase() === 'ADMIN' ? Config.ROLES.ADMIN : Config.ROLES.OPERADOR;
+    // Dentro de la función (no al cargar el archivo): Config.gs podría cargarse después que Auth.gs
+    const roles = {
+      ADMIN: Config.ROLES.ADMIN,
+      SUPER: Config.ROLES.ADMIN,
+      USER: Config.ROLES.OPERADOR,
+      VIEWER: Config.ROLES.LECTURA,
+    };
+    return roles[String(rolOriginal || '').trim().toUpperCase()] || Config.ROLES.LECTURA;
   }
 
   function buscarUsuarioPorCorreo_(correo) {

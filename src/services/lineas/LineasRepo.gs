@@ -550,6 +550,9 @@ const LineasRepo = (function () {
 
   // ---------------- Bitácoras (vistas de control) ----------------
 
+  /** Máximo de filas por petición para las tablas del cliente. */
+  const MAX_FILAS_TABLA = 5000;
+
   /** Pestañas que se consultan como bitácora completa desde el menú. */
   const BITACORAS = {
     CAMBIOS: { tabla: TAB.CAMBIOS, ocultarSecretos: 'CAMPO' },
@@ -565,7 +568,8 @@ const LineasRepo = (function () {
   function bitacora(tipo, q, pagina, porPagina, puedeVerSecretos) {
     const cfg = BITACORAS[tipo];
     if (!cfg) throw new Error('Bitácora desconocida: ' + tipo);
-    porPagina = Math.min(Math.max(Number(porPagina) || 50, 10), 200);
+    // Hasta 5000 por petición: las tablas del cliente (DataTable) piden de golpe lo más reciente
+    porPagina = Math.min(Math.max(Number(porPagina) || 50, 10), MAX_FILAS_TABLA);
     pagina = Math.max(Number(pagina) || 0, 0);
     const t = LineasDatos.tabla(cfg.tabla);
     const texto = String(q || '').trim();
@@ -601,17 +605,19 @@ const LineasRepo = (function () {
 
   // ---------------- Vistas operativas heredadas de AppSheet ----------------
 
+  // Encabezados tal como están en la hoja del AppSheet (incluida la errata "LINIEA SUSPENDIDA":
+  // así se llama la columna; AppSheet solo la muestra como "LINEA SUSPENDIDA").
   const VISTAS_OPERATIVAS = {
     REACTIVACION: {
       tabla: TAB.REACTIVACION, grupo: 'ESTATUS',
-      encabezados: ['FOLIO', 'LINEA SUSPENDIDA', 'COMPAÑIA', 'SIM', 'CORREO / TICKET', 'FECHA DE SUSPENSION',
+      encabezados: ['FOLIO', 'LINIEA SUSPENDIDA', 'COMPAÑIA', 'SIM', 'CORREO / TICKET', 'FECHA DE SUSPENSION',
         'ESTATUS', 'ESTADO DEL EQUIPO', 'IMEI', 'RETRO DE SOLICITUD', 'FECHA DE REACTIVACION', 'NUEVO NUMERO',
         'FECHA DE REGISTRO', 'QUIEN REGISTRO', 'COMENTARIOS'],
     },
     SOLICITUD: {
       tabla: TAB.SOLICITUD, grupo: 'ESTATUS',
-      encabezados: ['FOLIO', 'FECHA DE SOLICITUD', 'TIPO DE PLAN', 'TICKET', 'NÚMERO DE EMPLEADO DEL SOLICITANTE',
-        'NOMBRE COMPLETO DEL SOLICITANTE', 'PUESTO DEL SOLICITANTE', 'DEPARTAMENTO DEL SOLICITANTE', 'SEDE',
+      encabezados: ['FOLIO', 'FECHA DE SOLICITUD', 'TIPO DE PLAN', 'TICKET', 'NO EMPLEADO SOLICITANTE',
+        'NOMBRE SOLICITANTE', 'PUESTO SOLICITANTE', 'DEPARTAMENTO SOLICITANTE', 'SEDE',
         'DEPARTAMENTO', 'TIPO', 'PUESTO', 'COLABORADOR', 'SOLICITANTE', 'FECHA DE ENTREGA', 'ASIGNACION',
         'REASIGNACION', 'COMPAÑIA', 'EQUIPO', 'NUMERO ANTERIOR', 'NUMERO ACTUAL', 'IMEI', 'SIM', 'ESTATUS',
         'FECHA DE REGISTRO', 'QUIEN REGISTRO', 'COMENTARIOS'],
@@ -626,10 +632,10 @@ const LineasRepo = (function () {
   };
 
   const CAMPOS_ALTA_OPERATIVA = {
-    REACTIVACION: ['LINEA SUSPENDIDA', 'COMPAÑIA', 'SIM', 'CORREO / TICKET', 'FECHA DE SUSPENSION', 'ESTATUS',
+    REACTIVACION: ['LINIEA SUSPENDIDA', 'COMPAÑIA', 'SIM', 'CORREO / TICKET', 'FECHA DE SUSPENSION', 'ESTATUS',
       'ESTADO DEL EQUIPO', 'IMEI', 'RETRO DE SOLICITUD', 'FECHA DE REACTIVACION', 'NUEVO NUMERO', 'COMENTARIOS'],
-    SOLICITUD: ['FECHA DE SOLICITUD', 'TIPO DE PLAN', 'TICKET', 'NÚMERO DE EMPLEADO DEL SOLICITANTE',
-      'NOMBRE COMPLETO DEL SOLICITANTE', 'PUESTO DEL SOLICITANTE', 'DEPARTAMENTO DEL SOLICITANTE', 'SEDE',
+    SOLICITUD: ['FECHA DE SOLICITUD', 'TIPO DE PLAN', 'TICKET', 'NO EMPLEADO SOLICITANTE',
+      'NOMBRE SOLICITANTE', 'PUESTO SOLICITANTE', 'DEPARTAMENTO SOLICITANTE', 'SEDE',
       'DEPARTAMENTO', 'TIPO', 'PUESTO', 'COLABORADOR', 'SOLICITANTE', 'FECHA DE ENTREGA', 'ASIGNACION',
       'REASIGNACION', 'COMPAÑIA', 'EQUIPO', 'NUMERO ANTERIOR', 'NUMERO ACTUAL', 'IMEI', 'SIM', 'ESTATUS', 'COMENTARIOS'],
   };
@@ -646,7 +652,7 @@ const LineasRepo = (function () {
 
     const o = opciones || {};
     const pagina = Math.max(0, Number(o.pagina) || 0);
-    const porPagina = Math.min(200, Math.max(10, Number(o.porPagina) || 50));
+    const porPagina = Math.min(MAX_FILAS_TABLA, Math.max(10, Number(o.porPagina) || 50));
     const q = String(o.q || '').trim().toUpperCase();
     const grupo = String(o.grupo || '').trim().toUpperCase();
     const tabla = LineasDatos.tabla(cfg.tabla);
@@ -700,7 +706,7 @@ const LineasRepo = (function () {
     const permitidos = CAMPOS_ALTA_OPERATIVA[clave];
     if (!cfg || !permitidos) throw new Error('Este módulo no admite altas.');
     datos = datos || {};
-    const requeridos = clave === 'REACTIVACION' ? ['LINEA SUSPENDIDA', 'ESTATUS'] : ['FECHA DE SOLICITUD', 'TIPO DE PLAN'];
+    const requeridos = clave === 'REACTIVACION' ? ['LINIEA SUSPENDIDA', 'ESTATUS'] : ['FECHA DE SOLICITUD', 'TIPO DE PLAN'];
     requeridos.forEach((campo) => {
       if (datos[campo] === null || datos[campo] === undefined || String(datos[campo]).trim() === '') {
         throw new Error('El campo "' + campo + '" es obligatorio.');

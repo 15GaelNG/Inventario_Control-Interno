@@ -1,53 +1,35 @@
 <template id="tpl-lineas-telefonicas">
   <div class="ln-modulo" id="ln-telefonicas">
 
-    <!-- Listado -->
+    <!-- Listado (mismo esqueleto que los módulos de la rama jorge: encabezado, KPIs, pestañas y DataTable) -->
     <section id="ln-listado">
-      <div class="page-header ln-page-header">
+      <div class="page-header">
         <div>
-          <h2 class="ln-titulo"><span class="ln-titulo-icono" data-ln-icon="smartphone"></span> Líneas Telefónicas</h2>
+          <h2><i data-lucide="phone" class="ico"></i> Líneas Telefónicas</h2>
           <p class="page-subtitle">Inventario de equipos y líneas: responsables, estatus, inspecciones e historial</p>
         </div>
-        <div class="ln-acciones-header">
-          <button type="button" class="primary ln-btn-icono" id="ln-nuevo-registro"><span data-ln-icon="plus"></span> Agregar NUCO</button>
-          <button type="button" class="secondary ln-btn-icono" id="ln-recargar" hidden title="Vaciar caché y volver a leer la hoja"><span data-ln-icon="refresh-cw"></span> Recargar datos</button>
+        <div class="page-header-actions">
+          <button type="button" class="secondary" id="ln-recargar" hidden title="Vaciar caché y volver a leer la hoja"><i data-lucide="refresh-cw" class="ico"></i> Recargar datos</button>
+          <button type="button" id="ln-nuevo-registro"><i data-lucide="plus" class="ico"></i> Agregar NUCO</button>
         </div>
       </div>
 
       <div class="stat-row" id="ln-indicadores">
-        <div class="stat-tile"><div class="stat-icon" data-ln-icon="loader-circle"></div><div><div class="stat-value">…</div><div class="stat-label">Cargando</div></div></div>
+        <div class="stat-tile"><div class="stat-icon"><i data-lucide="loader-circle" class="ico"></i></div><div><div class="stat-value">…</div><div class="stat-label">Cargando</div></div></div>
       </div>
 
-      <div class="card">
-        <div class="ln-toolbar">
-          <div class="ln-tabs" role="tablist">
-            <button type="button" class="ln-tab ln-btn-icono active" data-modulo="equipos" role="tab"><span data-ln-icon="smartphone"></span> Equipos <span class="ln-tab-num" id="ln-num-equipos"></span></button>
-            <button type="button" class="ln-tab ln-btn-icono" data-modulo="lineas" role="tab"><span data-ln-icon="card-sim"></span> Líneas <span class="ln-tab-num" id="ln-num-lineas"></span></button>
-          </div>
-          <button type="button" class="secondary ln-btn-icono" id="ln-exportar"><span data-ln-icon="download"></span> Exportar CSV</button>
-        </div>
-
-        <div class="ln-filtros" id="ln-filtros"></div>
-
-        <div class="ln-tabla-wrap">
-          <table class="ln-tabla">
-            <thead id="ln-thead"></thead>
-            <tbody id="ln-tbody">
-              <tr><td class="empty-state">Cargando inventario…</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="ln-paginacion">
-          <span class="ln-conteo" id="ln-conteo"></span>
-          <div class="ln-paginas">
-            <button type="button" class="secondary ln-btn-icono" id="ln-anterior"><span data-ln-icon="chevron-left"></span> Anterior</button>
-            <span id="ln-pagina"></span>
-            <button type="button" class="secondary ln-btn-icono" id="ln-siguiente">Siguiente <span data-ln-icon="chevron-right"></span></button>
-          </div>
-        </div>
-        <div class="error-msg" id="ln-error" hidden></div>
+      <div class="tabs-simple" id="ln-tabs">
+        <button type="button" class="tab-btn active" data-tab="equipos"><i data-lucide="smartphone" class="ico"></i> Equipos <span class="ln-tab-num" id="ln-num-equipos"></span></button>
+        <button type="button" class="tab-btn" data-tab="lineas"><i data-lucide="card-sim" class="ico"></i> Líneas <span class="ln-tab-num" id="ln-num-lineas"></span></button>
       </div>
+
+      <div class="tab-panel" data-tab-panel="equipos">
+        <div class="card card-compacta"><div id="ln-tabla-equipos"></div></div>
+      </div>
+      <div class="tab-panel" data-tab-panel="lineas" hidden>
+        <div class="card card-compacta"><div id="ln-tabla-lineas"></div></div>
+      </div>
+      <p class="ln-conteo" id="ln-conteo"></p>
     </section>
 
     <!-- Detalle de equipo / línea / inspección (se pinta desde lineas.html) -->

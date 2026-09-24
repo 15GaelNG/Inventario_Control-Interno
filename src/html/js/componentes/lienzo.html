@@ -1,0 +1,210 @@
+<style>
+  /* ============ Lienzo: marcas sobre un dibujo ============ */
+  /* Fondo blanco SIEMPRE, también en tema oscuro: los diagramas son líneas negras sobre
+     transparente; en fondo oscuro no se verían. */
+  .lienzo {
+    position: relative; background: #fff; border: 1px solid var(--color-border); border-radius: 10px;
+    overflow: hidden; line-height: 0;
+  }
+  .lienzo canvas {
+    display: block; width: 100%; height: auto; margin: 0 auto; cursor: crosshair;
+    touch-action: none;   /* sin esto, en celular el dedo desplaza la página en vez de dibujar */
+    user-select: none; -webkit-user-select: none;
+  }
+  .lienzo-guia {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    font-size: 12.5px; line-height: 1.3; color: #8a959b; pointer-events: none; text-align: center;
+  }
+  .lienzo.con-trazos .lienzo-guia { display: none; }
+  .lienzo-herramientas { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  /* Acciones discretas, las mismas que las de Firma: no compiten con "Siguiente" y, sin
+     marcas, se ven apagadas (antes parecían activas aunque no hubiera nada que deshacer) */
+  .lienzo-herramientas button {
+    display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; font-size: 12px; font-weight: 500;
+    background: transparent; border: none; color: var(--color-text-muted); box-shadow: none;
+  }
+  .lienzo-herramientas button:hover { background: var(--color-bg); color: var(--color-text); }
+  .lienzo-herramientas button:disabled { opacity: .45; cursor: default; background: transparent; }
+</style>
+
+<script>
+  /**
+   * Lienzo — marcar encima de un dibujo con el dedo o el mouse (los daños sobre el
+   * diagrama de la unidad). Para firmas está el componente Firma, que tiene su propio
+   * motor de trazo tipo pluma; aquí basta un trazo parejo, pero hace falta "deshacer".
+   *
+   *   const daños = Lienzo.crear(contenedor, { fondo: 'data:image/png;base64,…', color: '#1f6fd1' });
+   *   daños.vacio() · daños.deshacer() · daños.limpiar() · daños.ajustar()
+   *   await daños.exportar()   → { base64, mimeType: 'image/png' }  (dibujo + trazos, listo para Drive)
+   *
+   * Los trazos se guardan en coordenadas relativas (0 a 1), no en pixeles: así el dibujo
+   * sobrevive a que cambie el tamaño de la pantalla (girar el celular, abrir el menú) y se
+   * exporta a la resolución del dibujo original, no a la de la pantalla.
+   */
+  const Lienzo = (function () {
+    function crear(contenedor, config) {
+      const cfg = Object.assign({
+        fondo: null,          // dataURL del dibujo de fondo
+        relacion: 2.5,        // ancho / alto cuando no hay fondo
+        color: '#0b2233',
+        grosor: 2.2,          // en pixeles de pantalla, medido sobre un lienzo de 400 px de ancho
+        guia: '',             // texto de ayuda mientras está vacío
+        anchoExportar: 900,   // sin fondo; con fondo se usa el ancho natural del dibujo
+        altoMaximo: 0,        // px en pantalla; un dibujo alto (una moto de frente) se angosta para caber
+        alCambiar: null,
+      }, config);
+
+      contenedor.innerHTML = `<div class="lienzo">
+        <canvas></canvas>
+        ${cfg.guia ? `<div class="lienzo-guia"></div>` : ''}
+      </div>`;
+      const caja = contenedor.querySelector('.lienzo');
+      const canvas = caja.querySelector('canvas');
+      if (cfg.guia) caja.querySelector('.lienzo-guia').textContent = cfg.guia;
+
+      let trazos = [];          // [{ puntos: [[x, y], …] }] en 0..1
+      let actual = null;
+      let imagen = null;        // fondo ya cargado
+      let relacion = cfg.relacion;
+
+      const listo = new Promise((resolver) => {
+        if (!cfg.fondo) { resolver(); return; }
+        const img = new Image();
+        img.onload = () => {
+          imagen = img;
+          if (img.naturalWidth && img.naturalHeight) relacion = img.naturalWidth / img.naturalHeight;
+          ajustar();
+          resolver();
+        };
+        img.onerror = () => resolver();
+        img.src = cfg.fondo;
+      });
+
+      // ---------- dibujo ----------
+      function pintar(ctx, ancho, alto) {
+        ctx.clearRect(0, 0, ancho, alto);
+        if (imagen) ctx.drawImage(imagen, 0, 0, ancho, alto);
+        ctx.strokeStyle = cfg.color;
+        ctx.fillStyle = cfg.color;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = Math.max(1, (cfg.grosor / 400) * ancho);
+        trazos.forEach((t) => {
+          const p = t.puntos.map(([x, y]) => [x * ancho, y * alto]);
+          if (p.length === 1) {   // un toque: un punto
+            ctx.beginPath();
+            ctx.arc(p[0][0], p[0][1], ctx.lineWidth / 2, 0, Math.PI * 2);
+            ctx.fill();
+            return;
+          }
+          // Curva suave por los puntos medios: la firma no se ve "de segmentos"
+          ctx.beginPath();
+          ctx.moveTo(p[0][0], p[0][1]);
+          for (let i = 1; i < p.length - 1; i++) {
+            ctx.quadraticCurveTo(p[i][0], p[i][1], (p[i][0] + p[i + 1][0]) / 2, (p[i][1] + p[i + 1][1]) / 2);
+          }
+          ctx.lineTo(p[p.length - 1][0], p[p.length - 1][1]);
+          ctx.stroke();
+        });
+      }
+
+      /** Ajusta la resolución del canvas a su tamaño en pantalla (nítido en pantallas retina) */
+      function ajustar() {
+        let ancho = caja.clientWidth;
+        if (!ancho) return;   // oculto (otro paso del formulario): se ajusta al mostrarse
+        if (cfg.altoMaximo && ancho / relacion > cfg.altoMaximo) ancho = cfg.altoMaximo * relacion;
+        canvas.style.width = ancho + 'px';
+        const escala = window.devicePixelRatio || 1;
+        canvas.width = Math.round(ancho * escala);
+        canvas.height = Math.round((ancho / relacion) * escala);
+        canvas.style.height = (ancho / relacion) + 'px';
+        redibujar();
+      }
+
+      /** Solo repinta (sin cambiar el tamaño): es lo que se hace mientras se dibuja */
+      function redibujar() {
+        const ctx = canvas.getContext && canvas.getContext('2d');
+        if (ctx && canvas.width) pintar(ctx, canvas.width, canvas.height);
+      }
+
+      function avisar() {
+        caja.classList.toggle('con-trazos', trazos.length > 0);
+        if (cfg.alCambiar) cfg.alCambiar(trazos.length === 0);
+      }
+
+      // ---------- captura del trazo ----------
+      function punto(ev) {
+        const r = canvas.getBoundingClientRect();
+        if (!r.width || !r.height) return null;
+        return [
+          Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)),
+          Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height)),
+        ];
+      }
+
+      canvas.addEventListener('pointerdown', (ev) => {
+        if (ev.button !== undefined && ev.button > 0) return;
+        const p = punto(ev);
+        if (!p) return;
+        ev.preventDefault();
+        if (canvas.setPointerCapture && ev.pointerId !== undefined) {
+          try { canvas.setPointerCapture(ev.pointerId); } catch (e) { /* no-op */ }
+        }
+        actual = { puntos: [p] };
+        trazos.push(actual);
+        redibujar();
+        avisar();
+      });
+      canvas.addEventListener('pointermove', (ev) => {
+        if (!actual) return;
+        // En tabletas y plumas llegan varios puntos por evento: se toman todos (trazo fino)
+        const eventos = ev.getCoalescedEvents ? ev.getCoalescedEvents() : [ev];
+        (eventos.length ? eventos : [ev]).forEach((e) => {
+          const p = punto(e);
+          if (p) actual.puntos.push(p);
+        });
+        redibujar();
+      });
+      const terminar = () => { actual = null; };
+      canvas.addEventListener('pointerup', terminar);
+      canvas.addEventListener('pointercancel', terminar);
+      canvas.addEventListener('pointerleave', terminar);
+
+      // Redibujar al cambiar de tamaño (girar el celular, colapsar el menú)
+      let observador = null;
+      if (typeof ResizeObserver !== 'undefined') {
+        observador = new ResizeObserver(() => ajustar());
+        observador.observe(caja);
+      }
+      ajustar();
+
+      return {
+        listo,
+        vacio: () => trazos.length === 0,
+        deshacer() { trazos.pop(); redibujar(); avisar(); },
+        limpiar() { trazos = []; redibujar(); avisar(); },
+        ajustar,
+        /**
+         * El dibujo con sus trazos, como PNG. Con fondo, a la resolución del dibujo original
+         * (tope 1600 px para no mandar archivos enormes); sin fondo, a anchoExportar.
+         */
+        async exportar() {
+          await listo;
+          const ancho = Math.round(Math.min(1600, imagen ? imagen.naturalWidth || cfg.anchoExportar : cfg.anchoExportar));
+          const alto = Math.round(ancho / relacion);
+          const salida = document.createElement('canvas');
+          salida.width = ancho;
+          salida.height = alto;
+          const ctx = salida.getContext && salida.getContext('2d');
+          if (!ctx) throw new Error('Este navegador no puede generar la imagen del dibujo');
+          pintar(ctx, ancho, alto);
+          const url = salida.toDataURL('image/png');
+          return { base64: url.slice(url.indexOf(',') + 1), mimeType: 'image/png' };
+        },
+        destruir() { if (observador) observador.disconnect(); contenedor.innerHTML = ''; },
+      };
+    }
+
+    return { crear };
+  })();
+</script>

@@ -74,6 +74,14 @@ function apiLineasBitacora(token, tipo, opciones) {
 function apiLineasVistaOperativa(token, tipo, opciones) {
   return TelefoniaService.vistaOperativa(token, tipo, opciones);
 }
+// Tabla completa para DataTable (hasta 5000 filas). Viaja como texto JSON:
+// google.script.run pierde respuestas grandes de forma intermitente (ver rama jorge, 9196f11).
+function apiLineasBitacoraTabla(token, tipo, opciones) {
+  return JSON.stringify(TelefoniaService.bitacora(token, tipo, Object.assign({}, opciones, { pagina: 0, porPagina: 5000 })));
+}
+function apiLineasVistaOperativaTabla(token, tipo, opciones) {
+  return JSON.stringify(TelefoniaService.vistaOperativa(token, tipo, Object.assign({}, opciones, { pagina: 0, porPagina: 5000 })));
+}
 function apiLineasCrearVistaOperativa(token, tipo, datos) {
   return TelefoniaService.crearVistaOperativa(token, tipo, datos);
 }
@@ -141,4 +149,13 @@ function apiEliminarIncidencia(token, id) {
 }
 function apiDiagnosticoIncidencias(token) {
   return IncidenciasService.diagnostico(token);
+}
+
+// --- Permisos por módulo (rama `ayrton`; ver PermisosService.gs — se apoya en Auth.validarSesion) ---
+function apiMisPermisos(token) {
+  return Permisos.mios(token);
+}
+function apiRevisarCatalogoPermisos(token) {
+  Permisos.puedeEditar(token, 'usuarios');
+  return Permisos.revisarCatalogo();
 }

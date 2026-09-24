@@ -1,0 +1,79 @@
+<style>
+  /* Complementa .ico (styles.html): los íconos dentro de botones y textos se alinean solos */
+  .ico-respaldo { display: inline-block; width: 1.15em; text-align: center; line-height: 1; }
+</style>
+
+<script>
+  /**
+   * Iconos — íconos Lucide (https://lucide.dev) como texto HTML listo para usar en plantillas.
+   *
+   *   Iconos.svg('editar')                 // nombre propio de la app (ver ICONOS abajo)
+   *   Iconos.svg('car')                    // o cualquier nombre de lucide.dev/icons
+   *   `<button>${Iconos.svg('eliminar')} Eliminar</button>`
+   *
+   * A diferencia de <i data-lucide="…"> no hace falta llamar lucide.createIcons() después de
+   * pintar: sirve dentro de tablas que se redibujan a cada rato. El SVG toma el color del texto.
+   * Si la librería no cargó (sin internet, CDN caído), muestra el emoji de respaldo.
+   *
+   * Para cambiar un ícono en TODA la app, edita su renglón en ICONOS.
+   */
+  const Iconos = (function () {
+    // nombre en la app → [nombre en Lucide, emoji de respaldo]
+    const ICONOS = {
+      editar: ['pencil', '✏️'],
+      eliminar: ['trash-2', '🗑️'],
+      ver: ['eye', '🔍'],
+      copiar: ['copy', '📋'],
+      exportar: ['download', '📥'],
+      vista: ['columns-3', '☰'],
+      fijar: ['pin', '📌'],
+      desfijar: ['pin-off', '📌'],
+      ocultar: ['eye-off', '🙈'],
+      atajos: ['keyboard', '⌨️'],
+      ayuda: ['info', 'ⓘ'],
+      guardar: ['check', '✓'],
+      cancelar: ['x', '✕'],
+      cerrar: ['x', '✕'],
+      restablecer: ['rotate-ccw', '↺'],
+      filtro: ['chevron-down', '▾'],
+      primera: ['chevrons-left', '«'],
+      anterior: ['chevron-left', '‹'],
+      siguiente: ['chevron-right', '›'],
+      ultima: ['chevrons-right', '»'],
+      subir: ['arrow-up', '↑'],
+      bajar: ['arrow-down', '↓'],
+      ordenAsc: ['arrow-up', '▲'],
+      ordenDesc: ['arrow-down', '▼'],
+      alerta: ['triangle-alert', '⚠️'],
+      exito: ['circle-check', '✅'],
+      info: ['info', 'ℹ️'],
+      imagen: ['image', '🖼️'],
+      documento: ['file-text', '📋'],
+      externo: ['external-link', '↗'],
+    };
+    const cache = {};
+
+    /** "trash-2" → "Trash2" (así se llaman en window.lucide.icons) */
+    const aPascal = (nombre) => nombre.replace(/(^|-)(\w)/g, (_, __, letra) => letra.toUpperCase());
+
+    function svg(nombre, clase) {
+      const [lucide, respaldo] = ICONOS[nombre] || [nombre, ''];
+      const clave = lucide + '|' + (clase || '');
+      if (cache[clave]) return cache[clave];
+
+      const lib = window.lucide;
+      const nodo = lib && lib.icons && lib.icons[aPascal(lucide)];
+      if (!nodo || typeof lib.createElement !== 'function') {
+        // Sin caché: si la librería carga después, el siguiente pintado ya usa el SVG
+        return respaldo ? `<span class="ico-respaldo ${clase || ''}" aria-hidden="true">${respaldo}</span>` : '';
+      }
+      const el = lib.createElement(nodo);
+      el.setAttribute('class', 'ico' + (clase ? ' ' + clase : ''));
+      el.setAttribute('aria-hidden', 'true');
+      el.setAttribute('focusable', 'false');
+      return (cache[clave] = el.outerHTML);
+    }
+
+    return { svg, nombres: () => Object.keys(ICONOS) };
+  })();
+</script>

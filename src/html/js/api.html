@@ -7,8 +7,43 @@
     return new Promise((resolve, reject) => {
       google.script.run
         .withSuccessHandler(resolve)
-        .withFailureHandler((err) => reject(new Error(err.message || String(err))))
+        .withFailureHandler((err) => {
+          const mensaje = err.message || String(err);
+          // Sesión expirada (Auth.validarSesion, server-side): sin importar
+          // desde qué pantalla/módulo venga la llamada, se maneja aquí una
+          // sola vez — regresa al login con un aviso, en vez de dejar cada
+          // pantalla a medias cargar (selects vacíos, etc.) sin explicación.
+          if (/sesi[oó]n expirada/i.test(mensaje) && typeof manejarSesionExpirada === 'function') {
+            manejarSesionExpirada();
+          }
+          reject(new Error(mensaje));
+        })
         [fnName](...args);
     });
+  }
+
+  /**
+   * Igual que callServer, pero para catálogos de referencia que casi nunca
+   * cambian (Departamentos, Sedes, Marcas, Razones sociales, Oficinas,
+   * Ubicaciones por sede, los 17 reactivos fijos de Arqueos...) — se piden
+   * una sola vez por sesión (no una vez por cada visita al módulo, que es
+   * lo que pasaba antes: cada navegación a Vehículos/Uber/Tickets/etc.
+   * volvía a pedirle lo mismo al servidor). El resultado (o la promesa en
+   * curso, para no duplicar la llamada si dos módulos lo piden casi al
+   * mismo tiempo) se guarda en memoria; recargar la página limpia la caché
+   * sola. A propósito NO se usa para catálogos que sí cambian seguido con
+   * el uso normal del sistema (ej. folios de vehículos, solicitantes de
+   * tickets) — esos siguen pidiéndose fresco cada vez con callServer.
+   */
+  const cacheCatalogos = {};
+  function callServerCacheado(fnName, ...args) {
+    const clave = fnName + JSON.stringify(args);
+    if (!cacheCatalogos[clave]) {
+      cacheCatalogos[clave] = callServer(fnName, ...args).catch((err) => {
+        delete cacheCatalogos[clave]; // si falla, la próxima vez se reintenta en vez de quedar cacheado el error
+        throw err;
+      });
+    }
+    return cacheCatalogos[clave];
   }
 </script>

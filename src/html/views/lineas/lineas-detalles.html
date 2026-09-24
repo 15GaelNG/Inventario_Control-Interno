@@ -1,15 +1,15 @@
 <template id="tpl-lineas-detalles">
   <div class="ln-modulo" id="ln-detalles-lineas">
-    <div class="page-header ln-page-header">
+    <div class="page-header">
       <div>
-        <h2 class="ln-titulo"><span class="ln-titulo-icono" data-ln-icon="search"></span> Detalles Líneas Telefónicas</h2>
+        <h2><i data-lucide="file-search" class="ico"></i> Detalles Líneas Telefónicas</h2>
         <p class="page-subtitle">Búsqueda rápida: escribe un NUCO, número, IMEI, SIM o responsable para ir directo a la ficha</p>
       </div>
     </div>
 
-    <div class="kpi-chips ln-cuadros-kpis">
-      <span class="kpi-chip">Registros <strong id="lnd-total">—</strong></span>
-      <span class="kpi-chip">Mostrados <strong id="lnd-filtrados">—</strong></span>
+    <div class="stat-row">
+      <div class="stat-tile"><div class="stat-icon"><i data-lucide="database" class="ico"></i></div><div><div class="stat-value" id="lnd-total">—</div><div class="stat-label">Registros</div></div></div>
+      <div class="stat-tile"><div class="stat-icon"><i data-lucide="list-filter" class="ico"></i></div><div><div class="stat-value" id="lnd-filtrados">—</div><div class="stat-label">Mostrados</div></div></div>
     </div>
 
     <div class="card ln-cuadros-toolbar">

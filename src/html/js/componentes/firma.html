@@ -1,0 +1,421 @@
+<style>
+  /* ============ Firma ============ */
+  /* Fondo blanco también en tema oscuro: la tinta es negra y va a papel. */
+  .firma-caja {
+    /* Gris fijo: la caja es blanca en los dos temas y el borde del tema oscuro se veía pesado */
+    position: relative; border: 2px dashed #cfd6d9; border-radius: 10px;
+    background: #fff; overflow: hidden;
+    touch-action: none;   /* sin esto, en celular el scroll se roba el trazo */
+    transition: border-color .2s ease;
+  }
+  .firma-caja.con-trazo { border-style: solid; border-color: var(--color-success); }
+  /* 200 px de alto: el grosor del trazo (PERFIL) está calibrado para ese alto */
+  .firma-caja canvas { display: block; width: 100%; height: 200px; cursor: crosshair; }
+  /* Como en la hoja impresa: se firma sobre la línea y debajo va el nombre de quien firma.
+     La línea y el nombre se quedan al firmar (identifican la firma); la indicación se va. */
+  .firma-linea {
+    position: absolute; left: 9%; right: 9%; bottom: 44px;
+    border-bottom: 1px solid #c3cbcf; pointer-events: none;
+  }
+  .firma-nombre {
+    position: absolute; left: 9%; right: 9%; bottom: 20px; text-align: center;
+    font-size: 11.5px; font-weight: 600; letter-spacing: .2px; color: #3d4a51; pointer-events: none;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .firma-marca {
+    position: absolute; left: 0; right: 0; top: 42%; text-align: center;
+    font-size: 12.5px; font-weight: 300; color: #8a959b; pointer-events: none; transition: opacity .2s ease;
+  }
+  .firma-caja.con-trazo .firma-marca { opacity: 0; }
+  /* Debajo: el estado a la izquierda y acciones discretas a la derecha (no compiten con
+     "Guardar", que es la acción principal del formulario) */
+  .firma-barra { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 6px; min-height: 28px; }
+  .firma-estado { font-size: 12px; font-weight: 500; color: var(--color-text-muted); }
+  .firma-caja.con-trazo + .firma-barra .firma-estado { color: var(--color-success); }
+  .firma-botones { display: flex; gap: 2px; flex-wrap: wrap; justify-content: flex-end; }
+  .firma-barra button {
+    display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; font-size: 12px; font-weight: 500;
+    background: transparent; border: none; color: var(--color-text-muted); box-shadow: none;
+  }
+  .firma-barra button:hover { background: var(--color-bg); color: var(--color-text); }
+  .firma-barra button:disabled { opacity: .45; cursor: default; background: transparent; }
+  /* Firma subida como foto: se ve en lugar del lienzo */
+  .firma-imagen {
+    position: absolute; left: 0; right: 0; top: 0; bottom: 48px; width: 100%; height: calc(100% - 48px);
+    object-fit: contain; background: #fff; padding: 10px 10px 2px; box-sizing: border-box;
+  }
+</style>
+
+<script>
+  /**
+   * Firma — captura de firma con el dedo, pluma o mouse.
+   *
+   *   const f = Firma.crear(contenedor, { nombre: 'JUAN PÉREZ', marca: 'Firma aquí con el dedo', alCambiar: (vacia) => … });
+   *   f.vacia() · f.limpiar() · f.ajustar() · f.setNombre('…')
+   *   f.exportar()  → { base64, mimeType }: el trazo recortado (PNG transparente) o la foto subida
+   *
+   * Plan B: "Subir foto de la firma" (permitirImagen, activo por defecto). Para cuando el
+   * trazo no funciona en el equipo, o la persona firmó en papel y no está presente. La foto
+   * se reduce a 1200 px antes de mandarla: la de un celular pesa 3-5 MB.
+   *
+   * El motor es el de la responsiva de sensores (Sistemas/Sensores/terminus/responsiva-sensores,
+   * web/Cliente.html), calibrado a mano contra una firma real con pluma. Se trae tal cual,
+   * solo encapsulado para poder tener varias firmas en la misma pantalla:
+   *
+   *  1. getCoalescedEvents(): el navegador entrega pointermove a ~60 Hz pero la pantalla
+   *     muestrea el dedo a 120-240 Hz; sin los puntos intermedios el trazo sale poligonal.
+   *  2. Bézier cúbica por cada terna de puntos (algoritmo "Smoother Signatures" de Square,
+   *     el de signature_pad): la curva pasa POR los puntos capturados.
+   *  3. Grosor inverso a la velocidad, con paso-bajo sobre la VELOCIDAD (no sobre la
+   *     posición: eso mete retraso entre el dedo y la tinta).
+   *  4. Afilado de arranque: la pluma entra delgada y se asienta; sin esto cada trazo
+   *     abre con un borrón.
+   *  5. Perfil por dispositivo: un mouse va 2-15 px/ms y un dedo 0.5-2, así que con la
+   *     fórmula del dedo el mouse siempre caía al mínimo y el trazo se veía muerto.
+   *
+   * Se exporta recortada al trazo: así en el PDF la firma llena su caja en vez de quedar
+   * chiquita en medio de un rectángulo vacío.
+   */
+  const Firma = (function () {
+    // Radios calibrados para un lienzo de 200 px de alto (ver el archivo original).
+    // La razón max/min (1.83x) es la de la pluma: si se adelgaza, bajar los dos igual.
+    const PERFIL = {
+      touch: { min: 1.91, max: 3.49, techo: 0 },
+      pen: { min: 1.91, max: 3.49, techo: 0 },
+      mouse: { min: 1.11, max: 2.03, techo: 7.0 },
+    };
+    const PESO_VELOCIDAD = 0.7;
+    const LARGO_TAPER = 16;   // px de recorrido en los que el trazo abre
+
+    function crear(contenedor, config) {
+      const cfg = Object.assign({ nombre: '', marca: 'Firma aquí con el dedo', alCambiar: null, permitirImagen: true, maxMB: 10 }, config);
+      const ic = (nombre) => (typeof Iconos !== 'undefined' ? Iconos.svg(nombre) : '');
+      contenedor.innerHTML = `
+        <div class="firma-caja">
+          <canvas aria-label="Área para firmar"></canvas>
+          <div class="firma-linea"></div>
+          <div class="firma-nombre"></div>
+          <div class="firma-marca"></div>
+        </div>
+        <div class="firma-barra">
+          <span class="firma-estado">Sin firmar</span>
+          <span class="firma-botones">
+            ${cfg.permitirImagen ? `<button type="button" class="firma-subir" title="Para cuando no se puede firmar en pantalla, o ya se firmó en papel">${ic('imagen')} Usar foto</button>
+              <input type="file" class="firma-archivo" accept="image/png,image/jpeg" hidden />` : ''}
+            <button type="button" class="firma-borrar" disabled>${ic('restablecer')} Borrar</button>
+          </span>
+        </div>`;
+      const caja = contenedor.querySelector('.firma-caja');
+      const lienzo = caja.querySelector('canvas');
+      const estado = contenedor.querySelector('.firma-estado');
+      caja.querySelector('.firma-marca').textContent = cfg.marca;
+      const nombre = caja.querySelector('.firma-nombre');
+      const setNombre = (texto) => { nombre.textContent = texto || ''; nombre.title = texto || ''; };
+      setNombre(cfg.nombre);
+      const borrar = contenedor.querySelector('.firma-borrar');
+      /** El estado de abajo: "Sin firmar" / "Firmado" / "Firmado con foto" */
+      function pintarEstado(texto) {
+        estado.textContent = texto;
+        borrar.disabled = texto === 'Sin firmar';
+      }
+      const ctx = lienzo.getContext ? lienzo.getContext('2d') : null;
+
+      let dibujando = false;
+      let hayTrazo = false;
+      let limites = null;       // bounding box del trazo, para recortar al exportar
+      let anchoActual = 0;
+      let perfil = PERFIL.touch;
+      let puntos = [];          // ventana de 4 puntos {x, y, t}
+      let velocidadAnterior = 0;
+      let anchoAnterior = (perfil.min + perfil.max) / 2;
+      let recorrido = 0;
+      let foto = null;          // { base64, mimeType } si se subió una imagen en vez de trazar
+
+      // ---------- tamaño ----------
+      function dimensionar() {
+        const ancho = lienzo.clientWidth;
+        const alto = lienzo.clientHeight;
+        if (!ancho || !ctx) return;   // oculto: se dimensiona al mostrarse
+        const dpr = window.devicePixelRatio || 1;
+        anchoActual = ancho;
+        // Redimensionar el canvas lo borra: se conserva y se repinta el trazo
+        const respaldo = hayTrazo ? lienzo.toDataURL('image/png') : null;
+        lienzo.width = Math.round(ancho * dpr);
+        lienzo.height = Math.round(alto * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        // Se pinta con discos rellenos de radio variable: canvas no sabe hacer un
+        // stroke de ancho variable a lo largo de una curva
+        ctx.fillStyle = '#000000';
+        ctx.strokeStyle = '#000000';
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        if (respaldo) {
+          const img = new Image();
+          img.onload = () => ctx.drawImage(img, 0, 0, ancho, alto);
+          img.src = respaldo;
+        }
+      }
+      /** En móvil, resize se dispara al ocultarse la barra de direcciones sin que cambie
+          el ancho: redimensionar ahí borraría el trazo. Solo si cambió de verdad. */
+      function ajustar() {
+        if (lienzo.clientWidth !== anchoActual) dimensionar();
+      }
+
+      // ---------- trazo ----------
+      function posicion(evento) {
+        const r = lienzo.getBoundingClientRect();
+        // La marca de tiempo es del evento: los puntos agrupados traen la suya
+        return { x: evento.clientX - r.left, y: evento.clientY - r.top, t: evento.timeStamp || Date.now() };
+      }
+
+      function registrarLimite(p) {
+        if (!limites) { limites = { minX: p.x, maxX: p.x, minY: p.y, maxY: p.y }; return; }
+        limites.minX = Math.min(limites.minX, p.x);
+        limites.maxX = Math.max(limites.maxX, p.x);
+        limites.minY = Math.min(limites.minY, p.y);
+        limites.maxY = Math.max(limites.maxY, p.y);
+      }
+
+      /** Puntos de control de la Bézier que une s2 con s3 (medianas de los segmentos vecinos) */
+      function controles(s1, s2, s3) {
+        const m1 = { x: (s1.x + s2.x) / 2, y: (s1.y + s2.y) / 2 };
+        const m2 = { x: (s2.x + s3.x) / 2, y: (s2.y + s3.y) / 2 };
+        const l1 = Math.hypot(s1.x - s2.x, s1.y - s2.y);
+        const l2 = Math.hypot(s2.x - s3.x, s2.y - s3.y);
+        const k = (l1 + l2) === 0 ? 0 : l2 / (l1 + l2);   // dos muestras en el mismo pixel
+        const cm = { x: m2.x + (m1.x - m2.x) * k, y: m2.y + (m1.y - m2.y) * k };
+        const tx = s2.x - cm.x;
+        const ty = s2.y - cm.y;
+        return { c1: { x: m1.x + tx, y: m1.y + ty }, c2: { x: m2.x + tx, y: m2.y + ty } };
+      }
+
+      /** Ancho por velocidad (más rápido, más delgado), con paso-bajo sobre la velocidad */
+      function anchosDeCurva(ini, fin) {
+        const dt = fin.t - ini.t;
+        const v = dt > 0 ? Math.hypot(fin.x - ini.x, fin.y - ini.y) / dt : 0;
+        const filtrada = PESO_VELOCIDAD * v + (1 - PESO_VELOCIDAD) * velocidadAnterior;
+        const nuevo = perfil.techo
+          ? perfil.max - (perfil.max - perfil.min) * Math.min(filtrada / perfil.techo, 1)   // mouse
+          : Math.max(perfil.max / (filtrada + 1), perfil.min);                                // dedo/pluma
+        const res = { ini: anchoAnterior, fin: nuevo };
+        velocidadAnterior = filtrada;
+        anchoAnterior = nuevo;
+        return res;
+      }
+
+      /** Bézier cúbica muestreada con un disco por muestra (así varía el grosor) */
+      function dibujarCurva(p0, c1, c2, p3, anchoIni, anchoFin) {
+        const largo = Math.hypot(c1.x - p0.x, c1.y - p0.y) + Math.hypot(c2.x - c1.x, c2.y - c1.y) +
+          Math.hypot(p3.x - c2.x, p3.y - c2.y);
+        const pasos = Math.max(Math.ceil(largo) * 2, 2);
+        const delta = anchoFin - anchoIni;
+        ctx.beginPath();
+        for (let i = 0; i < pasos; i++) {
+          const t = i / pasos;
+          const u = 1 - t;
+          const x = u * u * u * p0.x + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * p3.x;
+          const y = u * u * u * p0.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * p3.y;
+          // t³ concentra el cambio de grosor al final del tramo, como la tinta
+          const radio = Math.min(anchoIni + t * t * t * delta, perfil.max);
+          ctx.moveTo(x + radio, y);
+          ctx.arc(x, y, radio, 0, Math.PI * 2, false);
+        }
+        ctx.fill();
+      }
+
+      /** La raíz del trazo abre rápido y luego se asienta; nunca llega a 0 */
+      const factorTaper = (d) => (d >= LARGO_TAPER ? 1 : 0.4 + 0.6 * Math.sqrt(d / LARGO_TAPER));
+
+      function agregarPunto(p) {
+        registrarLimite(p);
+        puntos.push(p);
+        if (puntos.length <= 2 || !ctx) return;
+        // Con 3 puntos se duplica el primero para pintar el tramo inicial sin esperar al cuarto
+        if (puntos.length === 3) puntos.unshift(puntos[0]);
+        const anchos = anchosDeCurva(puntos[1], puntos[2]);
+        const c2 = controles(puntos[0], puntos[1], puntos[2]).c2;
+        const c3 = controles(puntos[1], puntos[2], puntos[3]).c1;
+        // El afilado se aplica al dibujar, no al estado: la cadena de anchos sigue continua
+        const fIni = factorTaper(recorrido);
+        recorrido += Math.hypot(puntos[2].x - puntos[1].x, puntos[2].y - puntos[1].y);
+        const fFin = factorTaper(recorrido);
+        dibujarCurva(puntos[1], c2, c3, puntos[2], anchos.ini * fIni, anchos.fin * fFin);
+        puntos.shift();
+      }
+
+      function marcarConTrazo() {
+        if (hayTrazo) return;
+        hayTrazo = true;
+        caja.classList.add('con-trazo');
+        pintarEstado('✓ Firmado');
+        if (cfg.alCambiar) cfg.alCambiar(false);
+      }
+
+      function iniciar(evento) {
+        evento.preventDefault();
+        ajustar();
+        dibujando = true;
+        if (lienzo.setPointerCapture && evento.pointerId !== undefined) {
+          try { lienzo.setPointerCapture(evento.pointerId); } catch (e) { /* no-op */ }
+        }
+        puntos = [];
+        velocidadAnterior = 0;
+        // Por trazo y no una sola vez: hay equipos táctiles donde se alterna dedo y mouse
+        perfil = PERFIL[evento.pointerType] || PERFIL.touch;
+        anchoAnterior = (perfil.min + perfil.max) / 2;
+        recorrido = 0;
+        const p = posicion(evento);
+        // Un toque simple deja un punto discreto (con el radio afilado)
+        if (ctx) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, perfil.min * factorTaper(0), 0, Math.PI * 2, false);
+          ctx.fill();
+        }
+        agregarPunto(p);
+        marcarConTrazo();
+      }
+
+      function mover(evento) {
+        if (!dibujando) return;
+        evento.preventDefault();
+        let muestras = null;
+        if (typeof evento.getCoalescedEvents === 'function') {
+          try { muestras = evento.getCoalescedEvents(); } catch (e) { muestras = null; }
+        }
+        if (!muestras || !muestras.length) muestras = [evento];
+        muestras.forEach((m) => agregarPunto(posicion(m)));
+      }
+
+      function terminar(evento) {
+        if (!dibujando) return;
+        evento.preventDefault();
+        dibujando = false;
+        puntos = [];
+      }
+
+      function limpiar() {
+        if (ctx) ctx.clearRect(0, 0, lienzo.width, lienzo.height);
+        const tenia = hayTrazo || !!foto;
+        hayTrazo = false;
+        foto = null;
+        const vista = caja.querySelector('.firma-imagen');
+        if (vista) vista.remove();
+        limites = null;
+        puntos = [];
+        velocidadAnterior = 0;
+        recorrido = 0;
+        caja.classList.remove('con-trazo');
+        pintarEstado('Sin firmar');
+        if (tenia && cfg.alCambiar) cfg.alCambiar(true);
+      }
+
+      /** PNG recortado al trazo con un margen (en el PDF la firma llena su caja) */
+      function exportar() {
+        if (foto) return { base64: foto.base64, mimeType: foto.mimeType };
+        if (!hayTrazo || !limites) return null;
+        const dpr = window.devicePixelRatio || 1;
+        const margen = 10;
+        const x = Math.max(0, limites.minX - margen);
+        const y = Math.max(0, limites.minY - margen);
+        // Una firma casi plana (una raya) igual conserva altura utilizable
+        const ancho = Math.max(Math.min(lienzo.clientWidth - x, (limites.maxX - limites.minX) + margen * 2), 20);
+        const alto = Math.max(Math.min(lienzo.clientHeight - y, (limites.maxY - limites.minY) + margen * 2), 20);
+        const recorte = document.createElement('canvas');
+        recorte.width = Math.round(ancho * dpr);
+        recorte.height = Math.round(alto * dpr);
+        const ctxRecorte = recorte.getContext && recorte.getContext('2d');
+        if (!ctxRecorte) throw new Error('Este navegador no puede generar la imagen de la firma');
+        ctxRecorte.drawImage(lienzo,
+          Math.round(x * dpr), Math.round(y * dpr), Math.round(ancho * dpr), Math.round(alto * dpr),
+          0, 0, Math.round(ancho * dpr), Math.round(alto * dpr));
+        const url = recorte.toDataURL('image/png');
+        return { base64: url.slice(url.indexOf(',') + 1), mimeType: 'image/png' };
+      }
+
+      lienzo.addEventListener('pointerdown', iniciar);
+      lienzo.addEventListener('pointermove', mover);
+      lienzo.addEventListener('pointerup', terminar);
+      lienzo.addEventListener('pointercancel', terminar);
+      lienzo.addEventListener('pointerleave', terminar);
+      contenedor.querySelector('.firma-borrar').addEventListener('click', limpiar);
+
+      // ---------- plan B: foto de la firma ----------
+      /** Reduce la foto a 1200 px de ancho (JPEG); si el navegador no puede, va la original */
+      function reducir(dataUrl, mimeType) {
+        const original = { base64: dataUrl.slice(dataUrl.indexOf(',') + 1), mimeType: mimeType };
+        const prueba = document.createElement('canvas');
+        if (!(prueba.getContext && prueba.getContext('2d'))) return Promise.resolve(original);
+        return new Promise((resolver) => {
+          const img = new Image();
+          img.onload = () => {
+            const escala = Math.min(1, 1200 / (img.naturalWidth || 1200));
+            if (escala === 1 && mimeType === 'image/png') { resolver(original); return; }
+            const c = document.createElement('canvas');
+            c.width = Math.round(img.naturalWidth * escala);
+            c.height = Math.round(img.naturalHeight * escala);
+            const x = c.getContext('2d');
+            x.fillStyle = '#ffffff';   // JPEG no tiene transparencia: fondo blanco de papel
+            x.fillRect(0, 0, c.width, c.height);
+            x.drawImage(img, 0, 0, c.width, c.height);
+            const url = c.toDataURL('image/jpeg', 0.85);
+            resolver({ base64: url.slice(url.indexOf(',') + 1), mimeType: 'image/jpeg' });
+          };
+          img.onerror = () => resolver(original);
+          img.src = dataUrl;
+        });
+      }
+
+      const archivo = contenedor.querySelector('.firma-archivo');
+      if (archivo) {
+        contenedor.querySelector('.firma-subir').addEventListener('click', () => archivo.click());
+        archivo.addEventListener('change', () => {
+          const elegido = archivo.files && archivo.files[0];
+          archivo.value = '';
+          if (!elegido) return;
+          if (['image/png', 'image/jpeg'].indexOf(elegido.type) === -1) {
+            if (typeof Notificar !== 'undefined') Notificar.error('La firma debe ser una imagen PNG o JPG');
+            return;
+          }
+          if (elegido.size > cfg.maxMB * 1024 * 1024) {
+            if (typeof Notificar !== 'undefined') Notificar.error('La imagen pesa más de ' + cfg.maxMB + ' MB');
+            return;
+          }
+          const lector = new FileReader();
+          lector.onload = async () => {
+            const reducida = await reducir(String(lector.result), elegido.type);
+            limpiar();
+            foto = reducida;
+            const vista = document.createElement('img');
+            vista.className = 'firma-imagen';
+            vista.alt = 'Firma subida';
+            vista.src = 'data:' + foto.mimeType + ';base64,' + foto.base64;
+            caja.appendChild(vista);
+            caja.classList.add('con-trazo');
+            pintarEstado('✓ Firmado con foto');
+            if (cfg.alCambiar) cfg.alCambiar(false);
+          };
+          lector.readAsDataURL(elegido);
+        });
+      }
+      window.addEventListener('resize', ajustar);
+      window.addEventListener('orientationchange', dimensionar);
+      dimensionar();
+
+      return {
+        vacia: () => !hayTrazo && !foto,
+        setNombre,
+        esFoto: () => !!foto,
+        limpiar,
+        ajustar,
+        exportar,
+        destruir() {
+          window.removeEventListener('resize', ajustar);
+          window.removeEventListener('orientationchange', dimensionar);
+          contenedor.innerHTML = '';
+        },
+      };
+    }
+
+    return { crear };
+  })();
+</script>
