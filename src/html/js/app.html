@@ -579,17 +579,18 @@
     {
       id: 'lineas', icono: 'smartphone', etiqueta: 'Líneas',
       items: [
-        { vista: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas', icono: 'phone' },
-        { vista: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios', icono: 'backpack' },
-        { vista: 'reactivacion-lineas', etiqueta: 'Reactivación de Líneas', icono: 'refresh-cw' },
-        { vista: 'reasignaciones-lineas', etiqueta: 'Control de Reasignaciones - Líneas', icono: 'arrow-left-right' },
-        { vista: 'solicitud-lineas', etiqueta: 'Solicitud de Líneas', icono: 'file-plus' },
-        { vista: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas', icono: 'repeat' },
+        // Íconos equivalentes a los del menú del AppSheet (Font Awesome → Lucide)
+        { vista: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas', icono: 'smartphone' },
+        { vista: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios', icono: 'boxes' },
+        { vista: 'reactivacion-lineas', etiqueta: 'Reactivación de Líneas', icono: 'check-check' },
+        { vista: 'reasignaciones-lineas', etiqueta: 'Control de Reasignaciones - Líneas', icono: 'recycle' },
+        { vista: 'solicitud-lineas', etiqueta: 'Solicitud de Líneas', icono: 'target' },
+        { vista: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas', icono: 'eye' },
         { vista: 'bitacora-desechos', etiqueta: 'Bitácora de Desechos', icono: 'trash-2' },
       ],
     },
     // Activos por colaborador de todas las áreas (líneas hoy; vehículos, Uber y cajas al unir en master)
-    { id: 'gestion-activos', vista: 'gestion-activos', icono: 'briefcase', etiqueta: 'Gestión de Activos' },
+    { id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de Activos' },
   ];
 
   // Los grupos ya no son acordeón (se abren/cierran) — se quedan siempre

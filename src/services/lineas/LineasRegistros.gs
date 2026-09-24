@@ -86,10 +86,15 @@ const LineasRegistros = (function () {
     const excepcionEquipo = coord === 'AUDITORIAS Y CALIDAD' || String(usuario.correo || '').toLowerCase() === 'auxiliartelefonia1.ci@ciudadmaderas.com';
     const v = (c) => (base[c] === undefined || base[c] === null ? '' : base[c]);
     const lista = (columna, opciones) => campo_(columna, columna, listaLibre ? 'listaAbierta' : 'lista', siEditable({ valor: v(columna), opciones: opciones, valida: listaLibre ? null : 'LISTA' }));
+    // Mejora sobre AppSheet (texto libre): lista desplegable con COLABORADORES / valores ya capturados.
+    // `sugerencias` las completa el navegador; `autollenar` copia datos del colaborador elegido.
+    const puestos = catalogos.puestos || [];
     const responsableExtra = (n, previo, pregunta) => [
       campo_(pregunta, '¿EXISTE OTRO COLABORADOR QUE USE EL EQUIPO?', 'escala', { valor: v(pregunta), opciones: ['SI', 'NO'], mostrar: previo ? { campo: previo, igual: 'SI' } : 'SIEMPRE' }),
-      campo_('NOMBRE ' + n + ' RESPONSABLE', 'NOMBRE ' + n + ' RESPONSABLE', 'texto', { valor: v('NOMBRE ' + n + ' RESPONSABLE'), mostrar: { campo: pregunta, igual: 'SI' } }),
-      campo_('PUESTO ' + n + ' RESPONSABLE', 'PUESTO ' + n + ' RESPONSABLE', 'texto', { valor: v('PUESTO ' + n + ' RESPONSABLE'), mostrar: { campo: pregunta, igual: 'SI' } }),
+      campo_('NOMBRE ' + n + ' RESPONSABLE', 'NOMBRE ' + n + ' RESPONSABLE', 'listaAbierta', { valor: v('NOMBRE ' + n + ' RESPONSABLE'), mostrar: { campo: pregunta, igual: 'SI' },
+        sugerencias: 'PERSONAS', autollenar: { ['PUESTO ' + n + ' RESPONSABLE']: 'puesto' } }),
+      campo_('PUESTO ' + n + ' RESPONSABLE', 'PUESTO ' + n + ' RESPONSABLE', 'listaAbierta', { valor: v('PUESTO ' + n + ' RESPONSABLE'), mostrar: { campo: pregunta, igual: 'SI' },
+        opciones: puestos, sugerencias: 'PUESTOS' }),
     ];
     const elementos = [
       campo_('FOLIO', 'FOLIO', 'calculado', { formula: 'FOLIO', valor: v('FOLIO'), soloLectura: true }),
@@ -103,17 +108,20 @@ const LineasRegistros = (function () {
         valor: v('EQUIPO'), opciones: catalogos.modelos || [], valida: excepcionEquipo ? null : 'EQUIPO',
         editable: { y: [conTipo, { tipoNoEn: ['LINEA'] }] }, reset: { cuando: { tipoEn: ['LINEA'] }, valor: NO_APLICA },
       }),
-      campo_('NO EMPLEADO', 'No EMPLEADO', 'texto', siEditable({ valor: v('NO EMPLEADO'), valida: 'MAYUS' })),
+      campo_('NO EMPLEADO', 'No EMPLEADO', 'listaAbierta', siEditable({ valor: v('NO EMPLEADO'), valida: 'MAYUS',
+        sugerencias: 'NO_EMPLEADO', autollenar: { 'RESPONSABLE': 'nombre', 'PUESTO': 'puesto' } })),
       campo_('ESTATUS GENERAL', 'ESTATUS GENERAL', 'calculado', { formula: 'ESTATUS_GENERAL', valor: v('ESTATUS GENERAL'), soloLectura: true }),
-      campo_('RESPONSABLE', 'RESPONSABLE', 'texto', siEditable({ valor: v('RESPONSABLE'), valida: 'MAYUS' })),
-      campo_('PUESTO', 'PUESTO', 'texto', siEditable({ valor: v('PUESTO'), valida: 'MAYUS' })),
+      campo_('RESPONSABLE', 'RESPONSABLE', 'listaAbierta', siEditable({ valor: v('RESPONSABLE'), valida: 'MAYUS',
+        sugerencias: 'PERSONAS', autollenar: { 'NO EMPLEADO': 'noEmpleado', 'PUESTO': 'puesto' } })),
+      campo_('PUESTO', 'PUESTO', 'listaAbierta', siEditable({ valor: v('PUESTO'), valida: 'MAYUS', opciones: puestos, sugerencias: 'PUESTOS' })),
       campo_('RESPONSABLE USA EL EQUIPO', '¿EL RESPONSABLE SERÁ QUIEN USE EL EQUIPO?', 'escala', { valor: v('RESPONSABLE USA EL EQUIPO'), opciones: ['SI', 'NO'] }),
-      campo_('NOMBRE QUIEN USA', 'NOMBRE DEL COLABORADOR QUE USARÁ EL EQUIPO', 'texto', {
+      campo_('NOMBRE QUIEN USA', 'NOMBRE DEL COLABORADOR QUE USARÁ EL EQUIPO', 'listaAbierta', {
         valor: v('NOMBRE QUIEN USA'), mostrar: { campo: 'RESPONSABLE USA EL EQUIPO', igual: 'NO' },
+        sugerencias: 'PERSONAS', autollenar: { 'PUESTO QUIEN USA': 'puesto' },
         reset: { cuando: { campo: 'RESPONSABLE USA EL EQUIPO', igual: 'SI' }, copiar: 'RESPONSABLE' },
       }),
-      campo_('PUESTO QUIEN USA', 'PUESTO DEL COLABORADOR QUE USARÁ EL EQUIPO', 'texto', {
-        valor: v('PUESTO QUIEN USA'), mostrar: { campo: 'RESPONSABLE USA EL EQUIPO', igual: 'NO' },
+      campo_('PUESTO QUIEN USA', 'PUESTO DEL COLABORADOR QUE USARÁ EL EQUIPO', 'listaAbierta', {
+        valor: v('PUESTO QUIEN USA'), mostrar: { campo: 'RESPONSABLE USA EL EQUIPO', igual: 'NO' }, opciones: puestos, sugerencias: 'PUESTOS',
         reset: { cuando: { campo: 'RESPONSABLE USA EL EQUIPO', igual: 'SI' }, copiar: 'PUESTO' },
       }),
     ]
@@ -132,8 +140,8 @@ const LineasRegistros = (function () {
         lista('OFICINA / DESARROLLO', catalogos.oficinas || []),
         lista('DEPARTAMENTO', catalogos.departamentos || []),
         lista('AREA', catalogos.areas || []),
-        campo_('JEFE DIRECTO', 'JEFE DIRECTO', 'texto', siEditable({ valor: v('JEFE DIRECTO'), valida: 'MAYUS' })),
-        campo_('DIRECTOR', 'DIRECTOR', 'texto', siEditable({ valor: v('DIRECTOR'), valida: 'MAYUS' })),
+        campo_('JEFE DIRECTO', 'JEFE DIRECTO', 'listaAbierta', siEditable({ valor: v('JEFE DIRECTO'), valida: 'MAYUS', opciones: catalogos.jefes || [], sugerencias: 'PERSONAS' })),
+        campo_('DIRECTOR', 'DIRECTOR', 'listaAbierta', siEditable({ valor: v('DIRECTOR'), valida: 'MAYUS', opciones: catalogos.directores || [], sugerencias: 'PERSONAS' })),
         campo_('RAZON SOCIAL', 'RAZON SOCIAL', 'lista', siEditable({ valor: v('RAZON SOCIAL'), opciones: catalogos.razonesSociales || [], valida: 'LISTA' })),
         campo_('PIN WHATSAPP', 'PIN WHATSAPP', 'texto', {
           valor: v('PIN WHATSAPP'), valida: 'PIN_WA', literal: true, secreto: true,
@@ -160,7 +168,7 @@ const LineasRegistros = (function () {
         campo_('COMENTARIOS', 'COMENTARIOS', 'texto', { valor: v('COMENTARIOS'), valida: 'COMENTARIOS' }),
         // ---- Agregados por el sistema nuevo (no están en el formulario del AppSheet) ----
         { tipo: 'titulo', texto: 'DATOS DEL SISTEMA NUEVO', icono: 'sparkles' },
-        campo_('COLOR', 'COLOR', 'texto', { valor: v('COLOR'), extra: true }),
+        campo_('COLOR', 'COLOR', 'listaAbierta', { valor: v('COLOR'), opciones: catalogos.colores || [], extra: true }),
         campo_('CONTRASEÑA MODEM', 'CONTRASEÑA MODEM', 'texto', { valor: v('CONTRASEÑA MODEM'), mostrar: { tipoEn: ['MODEM', 'BANDA ANCHA'] }, literal: true, secreto: true, extra: true }),
         campo_('PATRON', 'PATRÓN DEL EQUIPO', 'patron', { valor: v('PATRON'), mostrar: { tipoEn: ['EQUIPO + SIM', 'EQUIPO'] }, secreto: true, extra: true }),
       ]);

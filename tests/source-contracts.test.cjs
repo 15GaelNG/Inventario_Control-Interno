@@ -54,7 +54,7 @@ test('Telefonía muestra sus módulos en orden y Gestión de Activos queda fuera
     'cambios-lineas', 'bitacora-desechos'];
   assert.deepEqual([...lineas.matchAll(/vista: '([^']+)'/g)].map((m) => m[1]), orden);
   // Acceso directo debajo del desplegable de Líneas
-  assert.match(app, /\{ id: 'gestion-activos', vista: 'gestion-activos', icono: 'briefcase', etiqueta: 'Gestión de Activos' \}/);
+  assert.match(app, /\{ id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de Activos' \}/);
   assert.match(app, /grupo\.vista \? `/);
   orden.concat('gestion-activos')
     .forEach((route) => assert.match(app, new RegExp(`vista === '${route}'`), `falta montar ${route}`));
@@ -154,7 +154,7 @@ test('no se descargan CSV y los botones usan los mismos nombres y medidas', () =
   assert.match(lineas, /textoAlta: 'Registrar desecho'/);
   assert.match(lineas, /\(id \? ' Guardar cambios' : ' Registrar'\)/);
   // Acciones de la ficha con color (botón principal, sin .secondary)
-  const botones = lineas.slice(lineas.indexOf('function botonesFicha'), lineas.indexOf('// ---- Detalles para copiar'));
+  const botones = lineas.slice(lineas.indexOf('function botonesFicha'), lineas.indexOf('// ---- Detalles: la columna'));
   assert.doesNotMatch(botones, /secondary/);
   assert.match(lineas, /'<a class="externo ln-boton"/);
   const estilos = read('src/html/lineas-estilos.html');
@@ -219,7 +219,7 @@ test('los formularios de inspección y responsiva siguen el orden y las etiqueta
     'RESPONSABLE', 'IDENTIFICACION', 'RAZON SOCIAL', 'FECHA RESPONSIVA', 'SEDE', 'OFICINA / DESARROLLO', 'AREA', 'PUESTO', 'DIRECTOR', 'CORREO',
     'No TELEFONO', 'COMPAÑIA', 'DEPARTAMENTO', 'MODELO', 'SIM', 'IMEI', 'COLOR', 'ACCESORIOS', 'PIN WHATSAPP', 'PIN EQUIPO', 'CONTRASEÑA',
     'OBSERVACIONES', 'FIRMA RESPONSABLE', 'NOMBRE CI', 'FIRMA CI']);
-  assert.match(captura, /'MES', 'MES', 'texto', \{ valor: mes/);
+  assert.match(captura, /'MES', 'MES', 'lista', \{ valor: mes, requerido: 'SIEMPRE', literal: true, opciones: MESES \}/);
   assert.match(captura, /'Septiembre'/);
   assert.match(captura, /'FECHA RESPONSIVA': '', 'TIPO CONTRASEÑA': ''/);
   assert.doesNotMatch(captura, /ESTATUS EQUIPO/);
@@ -351,4 +351,69 @@ test('la bitácora automática registra exactamente los 23 campos del bot CAMBIO
   const campos = [...lista.matchAll(/'([^']+)'/g)].map((m) => m[1]);
   assert.equal(campos.length, 23);
   for (const fuera of ['IMEI', 'COLOR', 'PATRON', 'CONTRASEÑA MODEM']) assert.ok(!campos.includes(fuera), fuera);
+});
+
+test('las reglas de formato y los íconos son los del AppSheet (flechas, colores y estilos)', () => {
+  const lineas = read('src/html/js/lineas.html');
+  const reglas = lineas.slice(lineas.indexOf('const REGLAS_FORMATO'), lineas.indexOf('function estiloAppSheet'));
+  // HISTORIAL_REASIGNACIONES: Entrada (verde, fa-angle-double-up) y Salida (rojo, fa-angle-double-down)
+  assert.match(reglas, /'Responsable Entrante': \{ '\*': \{ color: 'green', icono: 'chevrons-up', fondo: true \} \}/);
+  assert.match(reglas, /'Responsable Saliente': \{ '\*': \{ color: 'red', icono: 'chevrons-down', fondo: true \} \}/);
+  // CAMBIOS: ANTES / DESPUES con fa-caret-circle-down / up y negritas
+  assert.match(reglas, /'ANTES': \{ '\*': \{ color: '#b78360', icono: 'circle-chevron-down', bold: true, fondo: true \} \}/);
+  assert.match(reglas, /'DESPUES': \{ '\*': \{ color: 'themeMainColor', icono: 'circle-chevron-up', bold: true, fondo: true \} \}/);
+  // RETRO DE SOLICITUD y SOLICITUD van en cursiva (no negrita); TIPO en negrita y cursiva
+  assert.match(reglas, /'SUSPENSION DE LINEA': \{ color: 'orange', tam: 0\.9, italic: true, fondo: true \}/);
+  assert.match(reglas, /'FINALIZADO': \{ color: 'green', tam: 0\.9, italic: true, fondo: true \}/);
+  assert.match(reglas, /'MODEM': \{ color: 'themeMainColor', icono: 'hard-drive', bold: true, italic: true, fondo: true \}/);
+  assert.match(reglas, /'Cargadores': \{ color: '#006699', bold: true, italic: true \}/);
+  // ESTATUS TEMPORAL (13 días) y View Ref (fa-chevron-circle-right)
+  assert.match(lineas, /function usoTemporalVencido\(l\)/);
+  assert.match(lineas, /13 \* 24/);
+  assert.match(lineas, /icono: 'circle-chevron-right', titulo: 'Ver línea', visible: \(f\) => !!f\._ref/);
+  // Menú con los íconos de las vistas del AppSheet
+  const app = read('src/html/js/app.html');
+  [['lineas-telefonicas', 'smartphone'], ['accesorios-lineas', 'boxes'], ['reactivacion-lineas', 'check-check'],
+    ['reasignaciones-lineas', 'recycle'], ['solicitud-lineas', 'target'], ['cambios-lineas', 'eye']].forEach(([vista, icono]) => {
+    assert.match(app, new RegExp(`vista: '${vista}', etiqueta: '[^']+', icono: '${icono}'`), vista);
+  });
+});
+
+test('los campos de texto libre del AppSheet ahora tienen lista desplegable', () => {
+  const reg = read('src/services/lineas/LineasRegistros.gs');
+  const cap = read('src/services/lineas/LineasCaptura.gs');
+  const ope = read('src/services/lineas/LineasOperativas.gs');
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  const lineas = read('src/html/js/lineas.html');
+  const control = (src, columna) => (new RegExp(`campo_\\('${columna.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}', '[^']+', '([a-zA-Z]+)'`).exec(src) || [])[1];
+  ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'NOMBRE QUIEN USA', 'PUESTO QUIEN USA', 'JEFE DIRECTO', 'DIRECTOR', 'COLOR']
+    .forEach((c) => assert.equal(control(reg, c), 'listaAbierta', 'LINEAS ' + c));
+  ['RESPONSABLE', 'PUESTO', 'JEFE DIRECTO', 'MODELO', 'COMPAÑIA', 'RAZON SOCIAL', 'OTRA', 'IDENTIFICACION']
+    .forEach((c) => assert.equal(control(cap, c), 'listaAbierta', 'captura ' + c));
+  ['TIPO', 'DIA', 'MES', 'AÑO'].forEach((c) => assert.equal(control(cap, c), 'lista', 'captura ' + c));
+  ['NO EMPLEADO SOLICITANTE', 'NOMBRE SOLICITANTE', 'PUESTO SOLICITANTE', 'DEPARTAMENTO SOLICITANTE', 'COLABORADOR',
+    'NUMERO ANTERIOR', 'NUMERO ACTUAL', 'MOTIVO'].forEach((c) => assert.equal(control(ope, c), 'listaAbierta', 'operativas ' + c));
+  assert.match(repo, /catalogos_telefonia_v3/);
+  ['colores', 'puestos', 'jefes', 'directores', 'otrasApps', 'identificaciones', 'motivosDesecho'].forEach((k) => assert.match(repo, new RegExp(k + ': ')));
+  // El navegador completa personas / números y copia los datos de la persona elegida
+  assert.match(lineas, /function opcionesSugeridas\(tipo\)/);
+  assert.match(lineas, /if \(e\.autollenar && opcion && opcion\.datos\)/);
+  assert.match(lineas, /activarCombosEn\(cuerpo, captura\.contexto\.formulario\);/);
+  // Accesorios: listas en el alta y sin duplicados
+  assert.match(lineas, /Combobox\.crear\(\$\('#lac-marca', raiz\)/);
+  assert.match(read('src/services/lineas/LineasAccesorios.gs'), /Ese artículo ya existe/);
+});
+
+test('todos los módulos tienen KPIs con línea lateral y la tarjeta se llama Detalles', () => {
+  const lineas = read('src/html/js/lineas.html');
+  const estilos = read('src/html/lineas-estilos.html');
+  assert.match(estilos, /\.ln-modulo \.stat-tile::before \{/);
+  assert.match(read('src/html/views/lineas/lineas-gestion-activos.html'), /id="lnga-kpis"/);
+  assert.match(lineas, /etiqueta: 'Sin activos'/);
+  assert.match(lineas, /etiqueta: 'Sin stock'/);
+  assert.match(lineas, /etiqueta: 'Cambios de estatus'/);
+  assert.match(lineas, /etiqueta: 'Activos reasignados'/);
+  assert.match(lineas, /etiqueta: 'En ' \+ anio/);
+  assert.match(lineas, /' Detalles<\/h3>'/);
+  assert.doesNotMatch(lineas, /Detalles para copiar|se escriben aquí antes de copiar/);
 });

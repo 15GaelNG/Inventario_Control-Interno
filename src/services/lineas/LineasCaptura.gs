@@ -104,23 +104,23 @@ const LineasCaptura = (function () {
       campo_('ID', 'ID', 'texto', { valor: id, soloLectura: true }),
       campo_('ID LINEA', 'ID LINEA', 'texto', { valor: v('IMEI') || v('ID'), soloLectura: true }),
       campo_('NUCO', 'NUCO', 'texto', Object.assign({ valor: v('NUCO') }, req)),
-      campo_('RESPONSABLE', 'RESPONSABLE', 'texto', Object.assign({ valor: v('RESPONSABLE') }, req)),
+      campo_('RESPONSABLE', 'RESPONSABLE', 'listaAbierta', Object.assign({ valor: v('RESPONSABLE'), sugerencias: 'PERSONAS', autollenar: { 'PUESTO': 'puesto' } }, req)),
       campo_('DEPARTAMENTO', 'DEPARTAMENTO', 'lista', Object.assign({ valor: v('DEPARTAMENTO'), opciones: catalogos.departamentos || [] }, req)),
       campo_('AREA', 'AREA', 'lista', Object.assign({ valor: v('AREA'), opciones: catalogos.areas || [] }, req)),
       campo_('SEDE', 'SEDE', 'lista', Object.assign({ valor: v('SEDE'), opciones: catalogos.sedes || [] }, req)),
       campo_('OFICINA / DESARROLLO', 'OFICINA / DESARROLLO', 'lista', Object.assign({ valor: v('OFICINA / DESARROLLO'), opciones: catalogos.oficinas || [] }, req)),
-      campo_('PUESTO', 'PUESTO', 'texto', Object.assign({ valor: v('PUESTO') }, req)),
-      campo_('JEFE DIRECTO', 'JEFE DIRECTO', 'texto', Object.assign({ valor: v('JEFE DIRECTO') }, req)),
+      campo_('PUESTO', 'PUESTO', 'listaAbierta', Object.assign({ valor: v('PUESTO'), opciones: catalogos.puestos || [], sugerencias: 'PUESTOS' }, req)),
+      campo_('JEFE DIRECTO', 'JEFE DIRECTO', 'listaAbierta', Object.assign({ valor: v('JEFE DIRECTO'), opciones: catalogos.jefes || [], sugerencias: 'PERSONAS' }, req)),
       campo_('CORREO', 'CORREO', 'texto', Object.assign({ valor: v('CUENTA GOOGLE'), literal: true }, req)),
-      campo_('TIPO', 'TIPO', 'texto', Object.assign({ valor: v('TIPO'), controlaTipo: true }, req)),
+      campo_('TIPO', 'TIPO', 'lista', Object.assign({ valor: v('TIPO'), opciones: LineasRepo.CATALOGO.tipos, controlaTipo: true }, req)),
       campo_('No TELEFONO', 'No TELEFONO', 'texto', Object.assign({ valor: v('NUMERO TELEFONO') }, req)),
       campo_('IMEI', 'IMEI', 'texto', Object.assign({ valor: v('IMEI') }, req)),
       campo_('SIM', 'SIM', 'texto', Object.assign({ valor: v('NUMERO SIM') }, req)),
-      campo_('MODELO', 'MODELO', 'texto', Object.assign({ valor: v('EQUIPO') }, req)),
-      campo_('COLOR', 'COLOR', 'texto', Object.assign({ valor: v('COLOR') }, req)),
-      campo_('COMPAÑIA', 'COMPAÑIA', 'texto', { valor: esEquipo ? '' : v('COMPAÑIA'), mostrar: 'NO_EQUIPO' }),
+      campo_('MODELO', 'MODELO', 'listaAbierta', Object.assign({ valor: v('EQUIPO'), opciones: catalogos.modelos || [] }, req)),
+      campo_('COLOR', 'COLOR', 'listaAbierta', Object.assign({ valor: v('COLOR'), opciones: catalogos.colores || [] }, req)),
+      campo_('COMPAÑIA', 'COMPAÑIA', 'listaAbierta', { valor: esEquipo ? '' : v('COMPAÑIA'), opciones: catalogos.companias || [], mostrar: 'NO_EQUIPO' }),
       campo_('PLAN', 'PLAN', 'texto', { valor: esEquipo ? '' : v('COSTO PLAN'), mostrar: 'NO_EQUIPO' }),
-      campo_('RAZON SOCIAL', 'RAZON SOCIAL', 'texto', { valor: v('RAZON SOCIAL') }),
+      campo_('RAZON SOCIAL', 'RAZON SOCIAL', 'listaAbierta', { valor: v('RAZON SOCIAL'), opciones: catalogos.razonesSociales || [] }),
     ];
     const agregarSeccion = (nombre) => {
       const s = LineasChecklist.secciones().filter((x) => x.seccion === nombre)[0];
@@ -141,7 +141,7 @@ const LineasCaptura = (function () {
     );
     agregarSeccion('APPS INSTALADAS');
     elementos.push(
-      campo_('OTRA', 'OTRA', 'texto', { valor: '', mostrar: 'EQUIPOS' }),
+      campo_('OTRA', 'OTRA', 'listaAbierta', { valor: '', opciones: catalogos.otrasApps || [], mostrar: 'EQUIPOS' }),
       titulo_('CALIFICACIÓN, OBSERVACIONES Y FIRMAS'),
       campo_('CALIFICACION', 'CALIFICACION', 'calculado', { valor: '', soloLectura: true }),
       campo_('TICKET', 'TICKET', 'texto', { valor: '' }),
@@ -154,7 +154,7 @@ const LineasCaptura = (function () {
   }
 
   /** RESPONSIVAS LINEAS_Form (sin Show_If; TIPO CONTRASEÑA está oculta en el AppSheet). */
-  function formularioResponsiva_(fila, usuario, id, ahora) {
+  function formularioResponsiva_(fila, catalogos, usuario, id, ahora) {
     const v = (c) => valorLinea_(fila, c);
     const ro = (columna, etiqueta, valor) => campo_(columna, etiqueta, 'texto', { valor: valor, soloLectura: true });
     const dia = Utilities.formatDate(ahora, ZONA, 'd');
@@ -165,11 +165,12 @@ const LineasCaptura = (function () {
       ro('ID LINEA', 'ID LINEA', v('IMEI') || v('ID')),
       ro('NUCO', 'NUCO', v('NUCO')),
       ro('No EMPLEADO', 'NÚMERO DE EMPLEADO', v('NO EMPLEADO')),
-      campo_('DIA', 'DIA', 'texto', { valor: dia, requerido: 'SIEMPRE' }),
-      campo_('MES', 'MES', 'texto', { valor: mes, requerido: 'SIEMPRE', literal: true }),
-      campo_('AÑO', 'AÑO', 'texto', { valor: anio, requerido: 'SIEMPRE' }),
+      // Mejora: DIA / MES / AÑO eran texto libre en AppSheet; ahora se eligen de una lista
+      campo_('DIA', 'DIA', 'lista', { valor: dia, requerido: 'SIEMPRE', opciones: Array.from({ length: 31 }, (_, i) => String(i + 1)) }),
+      campo_('MES', 'MES', 'lista', { valor: mes, requerido: 'SIEMPRE', literal: true, opciones: MESES }),
+      campo_('AÑO', 'AÑO', 'lista', { valor: anio, requerido: 'SIEMPRE', opciones: [Number(anio) - 1, Number(anio), Number(anio) + 1].map(String) }),
       ro('RESPONSABLE', 'RESPONSABLE', v('RESPONSABLE')),
-      campo_('IDENTIFICACION', 'IDENTIFICACION', 'texto', { valor: '', requerido: 'SIEMPRE' }),
+      campo_('IDENTIFICACION', 'IDENTIFICACION', 'listaAbierta', { valor: '', requerido: 'SIEMPRE', opciones: catalogos.identificaciones || [] }),
       ro('RAZON SOCIAL', 'RAZON SOCIAL', v('RAZON SOCIAL')),
       ro('FECHA RESPONSIVA', 'FECHA DE REGISTRO DE RESPONSIVA', ''),
       ro('SEDE', 'SEDE', v('SEDE')),
@@ -184,7 +185,7 @@ const LineasCaptura = (function () {
       ro('MODELO', 'MODELO', v('EQUIPO')),
       ro('SIM', 'SIM', v('NUMERO SIM')),
       ro('IMEI', 'IMEI', v('IMEI')),
-      campo_('COLOR', 'COLOR', 'texto', { valor: v('COLOR'), requerido: 'SIEMPRE' }),
+      campo_('COLOR', 'COLOR', 'listaAbierta', { valor: v('COLOR'), requerido: 'SIEMPRE', opciones: catalogos.colores || [] }),
       ro('ACCESORIOS', 'ACCESORIOS', v('ACCESORIOS')),
       campo_('PIN WHATSAPP', 'PIN WHATSAPP', 'texto', { valor: v('PIN WHATSAPP'), literal: true, secreto: true }),
       campo_('PIN EQUIPO', 'PIN EQUIPO', 'texto', { valor: v('PIN EQUIPO'), literal: true, secreto: true }),
@@ -221,7 +222,7 @@ const LineasCaptura = (function () {
     const ahora = new Date();
     return {
       equipo: obj.equipo, linea: obj.linea, idPropuesto: LineasDatos.nuevoIdCorto(), nombreCI: usuario.nombre,
-      _armar: (id) => ocultarSecretos_(formularioResponsiva_(obj.fila, usuario, id, ahora), puedeVerSecretos),
+      _armar: (id) => ocultarSecretos_(formularioResponsiva_(obj.fila, LineasRepo.catalogos(), usuario, id, ahora), puedeVerSecretos),
     };
   }
 
@@ -353,7 +354,7 @@ const LineasCaptura = (function () {
     const res = LineasDatos.conCandado(() => {
       const ahora = new Date();
       const obj = objetivoCaptura_(ref);
-      const elementos = formularioResponsiva_(obj.fila, usuario, id, ahora)
+      const elementos = formularioResponsiva_(obj.fila, LineasRepo.catalogos(), usuario, id, ahora)
         .map((e) => (e.secreto && !puedeVerSecretos ? Object.assign({}, e, { valorOculto: true }) : e));
       const ocultos = {};
       elementos.forEach((e) => { if (e.secreto) ocultos[e.columna] = e.valor; });

@@ -792,12 +792,12 @@ const LineasRepo = (function () {
     if (String(tipo).toUpperCase() === 'REACTIVACION') {
       const imeiPorId = {};
       LineasDatos.leerTabla(TAB.LINEAS).forEach((l) => { imeiPorId[String(l['ID'])] = col(l, 'IMEI'); });
-      filas = filas.map((f) => (f['IMEI'] && imeiPorId[String(f['IMEI'])] !== undefined ? Object.assign({}, f, { 'IMEI': imeiPorId[String(f['IMEI'])] }) : f));
+      filas = filas.map((f) => (f['IMEI'] && imeiPorId[String(f['IMEI'])] !== undefined ? Object.assign({}, f, { 'IMEI': imeiPorId[String(f['IMEI'])], _ref: String(f['IMEI']) }) : f));
     }
     const total = filas.length;
     const desde = pagina * porPagina;
     const salida = filas.slice(desde, desde + porPagina).map((f) => {
-      const fila = { _fila: f._fila };
+      const fila = { _fila: f._fila, _ref: f._ref || null };
       encabezados.forEach((h) => {
         const secreto = /^(PIN WHATSAPP|PIN EQUIPO|CONTRASEÑA MODEM)$/i.test(h);
         fila[h] = secreto && !puedeVerSecretos && f[h] ? '••••' : f[h];
@@ -813,9 +813,14 @@ const LineasRepo = (function () {
 
   // ---------------- Catálogos y colaboradores ----------------
 
-  /** Catálogos para formularios: enums del AppSheet + valores de LISTAS TELEFONOS y BITACORA DE DESECHO. */
+  /**
+   * Catálogos para formularios: enums del AppSheet + valores de LISTAS TELEFONOS y BITACORA DE DESECHO,
+   * y sugerencias (valores ya capturados) para los campos que en AppSheet eran texto libre: así se elige de
+   * una lista en vez de escribir (personas, puestos y números se completan en el navegador con COLABORADORES
+   * y el índice).
+   */
   function catalogos() {
-    const enCache = LineasDatos.cacheLeer('catalogos_telefonia_v2');
+    const enCache = LineasDatos.cacheLeer('catalogos_telefonia_v3');
     if (enCache) return enCache;
     const unicos = (filas, columna) => {
       const m = {};
@@ -824,6 +829,12 @@ const LineasRepo = (function () {
     };
     const listas = LineasDatos.existeTabla(TAB.LISTAS) ? LineasDatos.leerTabla(TAB.LISTAS) : [];
     const desechos = LineasDatos.leerTabla(TAB.DESECHO);
+    const lineas = LineasDatos.leerTabla(TAB.LINEAS);
+    const inspecciones = LineasDatos.leerTabla(TAB.INSP);
+    const responsivas = LineasDatos.leerTabla(TAB.RESP);
+    const juntar = function () {
+      return Array.prototype.concat.apply([], arguments).filter((v, i, a) => a.indexOf(v) === i).sort();
+    };
     // Listas de LISTAS TELEFONOS con que el AppSheet valida (Valid_If = IN(..., SORT(SELECT(LISTAS TELEFONOS[...]))))
     const c = Object.assign({}, CATALOGO, {
       sedes: unicos(listas, 'SEDE'),
@@ -835,8 +846,16 @@ const LineasRepo = (function () {
       companias: CATALOGO.companias.concat(unicos(listas, 'COMPAÑIA')).filter((v, i, a) => a.indexOf(v) === i),
       lugaresDesecho: unicos(desechos, 'LUGAR DE DESECHO'),
       estadosDesecho: unicos(desechos, 'ESTADO'),
+      // Sugerencias (lo que ya se ha capturado)
+      motivosDesecho: unicos(desechos, 'MOTIVO'),
+      colores: juntar(unicos(lineas, 'COLOR'), unicos(inspecciones, 'COLOR'), unicos(responsivas, 'COLOR')),
+      puestos: juntar(unicos(lineas, 'PUESTO'), unicos(inspecciones, 'PUESTO')),
+      jefes: juntar(unicos(lineas, 'JEFE DIRECTO'), unicos(inspecciones, 'JEFE DIRECTO')),
+      directores: unicos(lineas, 'DIRECTOR'),
+      otrasApps: unicos(inspecciones, 'OTRA'),
+      identificaciones: unicos(responsivas, 'IDENTIFICACION'),
     });
-    LineasDatos.cacheGuardar('catalogos_telefonia_v2', c, 21600);
+    LineasDatos.cacheGuardar('catalogos_telefonia_v3', c, 21600);
     return c;
   }
 
@@ -855,7 +874,7 @@ const LineasRepo = (function () {
 
   /** Vacía las cachés del módulo (índices, catálogos y carpetas). */
   function borrarCaches() {
-    ['indice_telefonia_v2', 'indice_colaboradores', 'carpetas_nucos', 'catalogos_telefonia_v2'].forEach(LineasDatos.cacheBorrar);
+    ['indice_telefonia_v2', 'indice_colaboradores', 'carpetas_nucos', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3'].forEach(LineasDatos.cacheBorrar);
   }
 
   return {

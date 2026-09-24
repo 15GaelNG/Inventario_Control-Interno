@@ -85,6 +85,9 @@ const LineasAccesorios = (function () {
     Auth.requiereRol(token, rolesOperan_());
     if (CATEGORIAS.indexOf(String(datos.categoria || '')) < 0) throw new Error('Categoria es obligatorio (Micas, Fundas o Cargadores).');
     if (!LineasUtil.txt(datos.nombre)) throw new Error('Nombre del Articulo es obligatorio.');
+    const clave = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+    const existe = LineasDatos.leerTabla(TAB_ART).some((f) => String(f['Categoria']) === String(datos.categoria) && clave(f['Nombre del Articulo']) === clave(datos.nombre));
+    if (existe) throw new Error('Ese artículo ya existe en ' + datos.categoria + ': registra una entrada en su fila.');
     const id = LineasDatos.nuevoIdCorto();
     LineasDatos.agregarFilas(TAB_ART, [{
       'ID_Accesorio': id, 'Categoria': String(datos.categoria),

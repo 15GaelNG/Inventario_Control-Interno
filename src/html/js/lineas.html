@@ -106,65 +106,77 @@
       themeMainColor: 'var(--color-primary)', minorText: 'var(--color-text-muted)',
     };
     const colorAppSheet = (c) => COLOR_APPSHEET[c] || COLOR_APPSHEET[String(c).toLowerCase()] || c;
+    // `fondo`: la regla trae Highlight color (se pinta como etiqueta con fondo tenue del mismo color).
+    // `fondo`: la regla trae Highlight color (se pinta como etiqueta con fondo tenue del mismo color).
     const REGLAS_FORMATO = {
       REACTIVACION: {
         'ESTATUS': {
-          'EN USO': { color: 'green', tam: 1.1, bold: true, italic: true },
-          'DISPONIBLE': { color: '#006400', tam: 1.1, bold: true, italic: true },
-          'EN PROCESO DE ASIGNACION': { color: 'themeMainColor', tam: 1.1, bold: true, italic: true },
-          'CANCELADA': { color: 'red', bold: true },
-          'PROCESO DE CANCELACION': { color: 'orange', bold: true },
-          'ACTUALIZACIÓN DE LINEA TELEFONICA': { color: '#305496', bold: true },
+          'EN USO': { color: 'green', tam: 1.1, bold: true, italic: true, fondo: true },
+          'DISPONIBLE': { color: '#006400', tam: 1.1, bold: true, italic: true, fondo: true },
+          'EN PROCESO DE ASIGNACION': { color: 'themeMainColor', tam: 1.1, bold: true, italic: true, fondo: true },
+          'CANCELADA': { color: 'red', bold: true, italic: true, fondo: true },
+          'PROCESO DE CANCELACION': { color: 'orange', bold: true, italic: true, fondo: true },
+          'ACTUALIZACIÓN DE LINEA TELEFONICA': { color: '#305496', bold: true, italic: true, fondo: true },
         },
         'RETRO DE SOLICITUD': {
-          'SUSPENSION DE LINEA': { color: 'orange', tam: 0.9, bold: true },
-          'ACTIVACION DE LINEA': { color: 'yellow', tam: 0.9, bold: true },
-          'CAMBIO DE NUMERO': { color: 'themeMainColor', tam: 0.9, bold: true },
-          'TRAMITE CONCLUIDO': { color: 'green', tam: 0.9, bold: true },
-          'PENDIENTE DE ENTREGA': { color: 'red', tam: 0.9, bold: true },
-          'CANCELACION': { color: '#8B0000', bold: true },
+          'SUSPENSION DE LINEA': { color: 'orange', tam: 0.9, italic: true, fondo: true },
+          'ACTIVACION DE LINEA': { color: 'yellow', tam: 0.9, italic: true, fondo: true },
+          'CAMBIO DE NUMERO': { color: 'themeMainColor', tam: 0.9, italic: true, fondo: true },
+          'TRAMITE CONCLUIDO': { color: 'green', tam: 0.9, italic: true, fondo: true },
+          'PENDIENTE DE ENTREGA': { color: 'red', tam: 0.9, italic: true, fondo: true },
+          'CANCELACION': { color: '#8B0000', italic: true, fondo: true },
         },
       },
       SOLICITUD: {
         'ESTATUS': {
-          'PROCESO DE ADQUISICION': { color: 'themeMainColor', tam: 0.9, bold: true },
-          'FINALIZADO': { color: 'green', tam: 0.9, bold: true },
-          'TRAMITE CANCELADO': { color: 'orange', tam: 0.9, bold: true },
+          'PROCESO DE ADQUISICION': { color: 'themeMainColor', tam: 0.9, italic: true, fondo: true },
+          'FINALIZADO': { color: 'green', tam: 0.9, italic: true, fondo: true },
+          'TRAMITE CANCELADO': { color: 'orange', tam: 0.9, italic: true, fondo: true },
         },
       },
       LINEAS: {
         'TIPO': {
-          'MODEM': { color: 'themeMainColor', icono: 'hard-drive', bold: true },
-          'LINEA': { color: 'yellow', icono: 'card-sim', bold: true },
-          'EQUIPO + SIM': { color: 'green', icono: 'smartphone', bold: true },
-          'BANDA ANCHA': { color: 'pink', icono: 'radio-tower', bold: true },
-          'EQUIPO': { color: 'minorText', icono: 'smartphone', bold: true },
-          'EQUIPO + SIM BASICO': { color: '#54AE98', icono: 'card-sim', bold: true },
-          'CAMARA': { color: '#004734', icono: 'camera', bold: true },
-          'LINEA BASICA': { color: '#B3A184', icono: 'card-sim', bold: true },
+          'MODEM': { color: 'themeMainColor', icono: 'hard-drive', bold: true, italic: true, fondo: true },
+          'LINEA': { color: 'yellow', icono: 'card-sim', bold: true, italic: true, fondo: true },
+          'EQUIPO + SIM': { color: 'green', icono: 'smartphone', bold: true, italic: true, fondo: true },
+          'BANDA ANCHA': { color: 'pink', icono: 'radio-tower', bold: true, italic: true, fondo: true },
+          'EQUIPO': { color: 'minorText', icono: 'smartphone', bold: true, italic: true, fondo: true },
+          'EQUIPO + SIM BASICO': { color: '#54AE98', icono: 'card-sim', bold: true, italic: true, fondo: true },
+          'CAMARA': { color: '#004734', icono: 'camera', bold: true, italic: true, fondo: true },
+          'LINEA BASICA': { color: '#B3A184', icono: 'card-sim', bold: true, italic: true, fondo: true },
         },
       },
+      // Bitácora: ANTES con flecha hacia abajo y DESPUES hacia arriba (fa-caret-circle-down / up)
       CAMBIOS: {
-        'ANTES': { '*': { color: '#b78360' } },
-        'DESPUES': { '*': { color: 'themeMainColor' } },
+        'ANTES': { '*': { color: '#b78360', icono: 'circle-chevron-down', bold: true, fondo: true } },
+        'DESPUES': { '*': { color: 'themeMainColor', icono: 'circle-chevron-up', bold: true, fondo: true } },
+      },
+      // Control de reasignaciones: quién entra (flechas arriba, verde) y quién sale (flechas abajo, rojo)
+      REASIGNACIONES: {
+        'Responsable Entrante': { '*': { color: 'green', icono: 'chevrons-up', fondo: true } },
+        'Responsable Saliente': { '*': { color: 'red', icono: 'chevrons-down', fondo: true } },
       },
       ACCESORIOS: {
-        'Categoria': { 'Cargadores': { color: '#006699' }, 'Fundas': { color: 'pink' }, 'Micas': { color: '#998459' } },
+        'Categoria': {
+          'Cargadores': { color: '#006699', bold: true, italic: true },
+          'Fundas': { color: 'pink', bold: true, italic: true },
+          'Micas': { color: '#998459', bold: true, italic: true },
+        },
       },
     };
 
     /** HTML con la regla de formato del AppSheet para ese valor (o null si no hay regla). */
-    function estiloAppSheet(regla, texto, conFondo) {
+    function estiloAppSheet(regla, texto) {
       const c = colorAppSheet(regla.color);
       const estilo = 'color:' + c + ';' + (regla.tam ? 'font-size:' + regla.tam + 'em;' : '') + (regla.bold ? 'font-weight:700;' : '') + (regla.italic ? 'font-style:italic;' : '') +
-        (conFondo ? 'background:color-mix(in srgb, ' + c + ' 12%, transparent);border:1px solid color-mix(in srgb, ' + c + ' 45%, transparent);' : '');
-      return '<span class="ln-regla' + (conFondo ? ' ln-regla-chip' : '') + '" style="' + estilo + '">' + (regla.icono ? ico(regla.icono) + ' ' : '') + esc(texto) + '</span>';
+        (regla.fondo ? 'background:color-mix(in srgb, ' + c + ' 12%, transparent);border:1px solid color-mix(in srgb, ' + c + ' 45%, transparent);' : '');
+      return '<span class="ln-regla' + (regla.fondo ? ' ln-regla-chip' : '') + '" style="' + estilo + '">' + (regla.icono ? ico(regla.icono) + ' ' : '') + esc(texto) + '</span>';
     }
     function formatoAppSheet(modulo, columna, valor) {
       const porColumna = (REGLAS_FORMATO[modulo] || {})[columna];
       if (!porColumna || valor === null || valor === undefined || valor === '') return null;
       const regla = porColumna[String(valor).trim().toUpperCase()] || porColumna[String(valor).trim()] || porColumna['*'];
-      return regla ? estiloAppSheet(regla, String(valor), !porColumna['*']) : null;
+      return regla ? estiloAppSheet(regla, String(valor)) : null;
     }
 
     let tiposTablaListos = false;
@@ -445,17 +457,86 @@
     }
 
     /** Listas abiertas (Enum con AllowOtherValues) y referencias con el Combobox de la librería del sistema. */
+    /** Mayúsculas y sin acentos (la Ñ se conserva), como piden las validaciones MAYUS del AppSheet. */
+    const mayusSinAcentos = (v) => String(v === null || v === undefined ? '' : v).trim().toUpperCase()
+      .replace(/[ÁÀÄÂ]/g, 'A').replace(/[ÉÈËÊ]/g, 'E').replace(/[ÍÌÏÎ]/g, 'I').replace(/[ÓÒÖÔ]/g, 'O').replace(/[ÚÙÜÛ]/g, 'U');
+
+    /**
+     * Opciones que completa el navegador para campos que en AppSheet eran texto libre:
+     * PERSONAS / NO_EMPLEADO / PUESTOS / DEPARTAMENTOS salen de COLABORADORES (Gestión de Activos) y
+     * NUMEROS / IMEIS / SIMS del índice de Líneas. Las de personas traen `datos` para autollenar.
+     */
+    function opcionesSugeridas(tipo) {
+      if (tipo === 'NUMEROS' || tipo === 'IMEIS' || tipo === 'SIMS') {
+        const campo = { NUMEROS: 'numero', IMEIS: 'imei', SIMS: 'sim' }[tipo];
+        return cargarIndice().then((ix) => {
+          const vistos = {};
+          return ix.equipos.concat(ix.lineas).reduce((ops, r) => {
+            const v = r[campo];
+            if (!v || vistos[v]) return ops;
+            vistos[v] = true;
+            const nuco = r.nuco || r.nucoEquipo;
+            ops.push({ valor: String(v), etiqueta: [nuco ? 'NUCO ' + nuco : '', r.responsable || ''].filter(Boolean).join(' · ') });
+            return ops;
+          }, []);
+        });
+      }
+      return cargarColaboradores().then((r) => {
+        const gente = filasComoObjetos(r).map((c) => ({
+          nombre: mayusSinAcentos(c.nombre), noEmpleado: c.noEmpleado ? String(c.noEmpleado).trim().toUpperCase() : '',
+          puesto: mayusSinAcentos(c.puesto), departamento: mayusSinAcentos(c.departamento),
+          baja: c.estatus && String(c.estatus).toUpperCase() !== 'ACTIVO',
+        })).filter((c) => c.nombre);
+        const distintos = (campo) => gente.map((c) => c[campo]).filter((v, i, a) => v && a.indexOf(v) === i).sort();
+        const etiquetaDe = (partes, c) => partes.filter(Boolean).join(' · ') + (c.baja ? ' · BAJA' : '');
+        if (tipo === 'PUESTOS') return distintos('puesto');
+        if (tipo === 'DEPARTAMENTOS') return distintos('departamento');
+        if (tipo === 'NO_EMPLEADO') {
+          return gente.filter((c) => c.noEmpleado).map((c) => ({ valor: c.noEmpleado, etiqueta: etiquetaDe([c.nombre, c.puesto], c), datos: c }));
+        }
+        return gente.map((c) => ({ valor: c.nombre, etiqueta: etiquetaDe([c.noEmpleado ? 'No. ' + c.noEmpleado : '', c.puesto], c), datos: c }));
+      });
+    }
+
+    /** Une listas de opciones (texto u objetos { valor, etiqueta }) sin repetir valores. */
+    function unirOpciones(a, b) {
+      const vistos = {};
+      return (a || []).concat(b || []).map((o) => (typeof o === 'object' ? o : { valor: String(o), etiqueta: '' }))
+        .filter((o) => { const k = String(o.valor).toUpperCase(); if (!o.valor || vistos[k]) return false; vistos[k] = true; return true; });
+    }
+
+    /**
+     * Listas desplegables con búsqueda (Combobox) para las listas abiertas y referencias del formulario.
+     * `e.sugerencias` agrega opciones de COLABORADORES o del índice; `e.autollenar` ({ COLUMNA: dato })
+     * copia datos de la persona elegida en otros campos editables del mismo formulario.
+     */
     function activarCombosEn(cuerpo, elementos) {
       if (typeof Combobox === 'undefined') return;
       (elementos || []).forEach((e) => {
         if (e.tipo !== 'campo' || (e.control !== 'listaAbierta' && e.control !== 'referencia')) return;
         const input = cuerpo.querySelector('[data-columna="' + CSS.escape(e.columna) + '"]');
-        if (!input) return;
-        Combobox.crear(input, {
-          opciones: e.control === 'referencia' ? (e.opciones || []).map((o) => ({ valor: o.etiqueta, etiqueta: '' })) : (e.opciones || []),
+        if (!input || input.dataset.comboListo) return;
+        input.dataset.comboListo = '1';
+        const cbx = Combobox.crear(input, {
+          opciones: e.control === 'referencia' ? (e.opciones || []).map((o) => ({ valor: o.etiqueta, etiqueta: '' })) : unirOpciones(e.opciones),
           maximo: 50,
-          alElegir: () => input.dispatchEvent(new Event('change', { bubbles: true })),
+          alElegir: (opcion) => {
+            if (e.autollenar && opcion && opcion.datos) {
+              Object.keys(e.autollenar).forEach((columna) => {
+                const destino = cuerpo.querySelector('[data-columna="' + CSS.escape(columna) + '"]');
+                const valor = opcion.datos[e.autollenar[columna]];
+                if (!destino || destino.disabled || destino.readOnly || !valor) return;
+                destino.value = valor;
+                // solo "change": "input" abriría la lista del otro campo
+                destino.dispatchEvent(new Event('change', { bubbles: true }));
+              });
+            }
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+          },
         });
+        if (e.sugerencias) {
+          opcionesSugeridas(e.sugerencias).then((ops) => cbx.setOpciones(unirOpciones(ops, e.opciones))).catch(() => { /* quedan las del servidor */ });
+        }
       });
     }
 
@@ -847,7 +928,7 @@
       const filtrosActuales = { equipos: {}, lineas: {} };
       const PASO_TARJETAS = 48; // vista de tarjetas: cuántas se agregan con "Mostrar más"
       const tarjetasVisibles = { equipos: PASO_TARJETAS, lineas: PASO_TARJETAS };
-      let detallesFicha = null; // datos de "Detalles para copiar" de la ficha abierta
+      let detallesFicha = null; // datos de la tarjeta "Detalles" de la ficha abierta
       let tablaHistorial = null; // DataTable del historial de la ficha abierta
       let marcarKpi = null;
       raiz.querySelectorAll('#ln-tabs .tab-btn').forEach((tab) => {
@@ -1218,7 +1299,7 @@
           pila[pila.length - 1].etiqueta = 'NUCO ' + (e.nuco || '—');
           detalle.innerHTML = migas() +
             encabezado('smartphone', 'NUCO ' + esc(e.nuco || '—'),
-              chip(e.estatus) + chip(TIPO_EQUIPO[e.tipo] || e.tipo, 'neutro') + (l ? chip('Con línea', 'verde') : chip('Sin línea', 'ambar')),
+              chip(e.estatus) + chip(TIPO_EQUIPO[e.tipo] || e.tipo, 'neutro') + (l ? chip('Con línea', 'verde') + usoTemporalVencido(l) : chip('Sin línea', 'ambar')),
               (puedeOperar ? botonesFicha('data-equipo-id', id) : '') +
               (e.carpetaDriveId ? enlaceDrive(e.carpetaDriveId, 'Ver carpeta en Drive') : '')) +
             (e._secretosVisibles ? '' : '<div class="ln-nota">' + icono('lock') + ' Los PIN, patrones y contraseñas están ocultos para tu rol.</div>') +
@@ -1256,7 +1337,7 @@
           const puedeOperarLinea = !e && memoria.permisos && memoria.permisos.puedeOperar;
           pila[pila.length - 1].etiqueta = e ? 'NUCO ' + (e.nuco || '—') : 'Línea ' + (l.numero || '—');
           detalle.innerHTML = migas() +
-            encabezado('card-sim', esc(l.numero || 'Línea sin número'), chip(l.estatus) + (e ? chip('En NUCO ' + (e.nuco || '—'), 'neutro') : chip('Suelta', 'ambar')),
+            encabezado('card-sim', esc(l.numero || 'Línea sin número'), chip(l.estatus) + usoTemporalVencido(l) + (e ? chip('En NUCO ' + (e.nuco || '—'), 'neutro') : chip('Suelta', 'ambar')),
               puedeOperarLinea ? botonesFicha('data-linea-id', id) : (e ? '<button type="button" class="ln-btn-icono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' Ver equipo</button>' : '')) +
             tarjetaDetallesCopiar(r.detalles) +
             '<div class="ln-grid-2">' +
@@ -1280,6 +1361,14 @@
         });
       }
 
+      /** Regla ESTATUS TEMPORAL del AppSheet: USO TEMPORAL con 13 días o más desde FECHA CAMBIO TEMPORAL (rojo, triángulo). */
+      function usoTemporalVencido(l) {
+        const desde = l && l.usoTemporal && l.usoTemporal.desde ? new Date(l.usoTemporal.desde) : null;
+        if (!desde || isNaN(desde) || (Date.now() - desde.getTime()) / 3600000 < 13 * 24) return '';
+        return '<span class="ln-regla ln-regla-chip" style="color:#F80000;font-weight:700;background:color-mix(in srgb, #F80000 12%, transparent);border:1px solid color-mix(in srgb, #F80000 45%, transparent)">' +
+          ico('triangle-alert') + ' Uso temporal de ' + Math.floor((Date.now() - desde.getTime()) / 86400000) + ' días</span>';
+      }
+
       /** Acciones de la ficha: botones principales (con color) para que se reconozcan como botones. */
       function botonesFicha(atributoRef, id) {
         return '<button type="button" class="ln-btn-icono" data-ln-editar="' + esc(id) + '">' + icono('pencil') + ' Editar información</button>' +
@@ -1287,7 +1376,7 @@
           '<button type="button" class="ln-btn-icono" data-ln-captura="RESPONSIVA" ' + atributoRef + '="' + esc(id) + '">' + icono('signature') + ' Nueva responsiva</button>';
       }
 
-      // ---- Detalles para copiar: la columna DETALLES LINEAS TELEFONICAS del AppSheet ----
+      // ---- Detalles: la columna DETALLES LINEAS TELEFONICAS del AppSheet, con botón para copiarla ----
       // Mismo texto y orden que copiaban del módulo "Detalles Líneas Telefónicas". AppSheet deja en blanco
       // motivo, ticket y estatus actual para llenarlos al pegar; aquí se escriben antes de copiar (no se guardan)
       // y el estatus actual se propone con ESTATUS LINEA.
@@ -1320,9 +1409,8 @@
           '<input type="text" id="ln-copiar-' + clave + '" data-ln-copiar-campo="' + clave + '" value="' + esc(valor || '') + '" autocomplete="off"></div>';
         setTimeout(pintarTextoDetalles, 0);
         return '<div class="card ln-card ln-copiar" data-ln-copiar data-respetar-texto>' +
-          '<div class="ln-copiar-cabecera"><h3>' + icono('clipboard-list') + ' Detalles para copiar</h3>' +
+          '<div class="ln-copiar-cabecera"><h3>' + icono('clipboard-list') + ' Detalles</h3>' +
           '<button type="button" class="ln-btn-icono" data-ln-copiar-detalles>' + icono('copy') + ' Copiar detalles</button></div>' +
-          '<p class="ln-tenue ln-copiar-ayuda">El mismo texto que “Detalles Líneas Telefónicas” en AppSheet. Motivo, ticket y estatus actual se escriben aquí antes de copiar; no se guardan en la hoja.</p>' +
           '<div class="ln-copiar-cuerpo"><div class="ln-copiar-campos">' +
             campo('motivo', 'Motivo de resguardo', '') + campo('ticket', 'Ticket / Asunto', '') + campo('estatus', 'Estatus actual de la línea', d.estatusLinea) +
           '</div><pre class="ln-copiar-texto" data-ln-copiar-texto aria-label="Texto que se copiará"></pre></div></div>';
@@ -1514,6 +1602,7 @@
             captura.controlPatron = activarPatron(id + '-patron', captura.patronInicial ? captura.patronInicial.split('-') : []);
           }
         });
+        activarCombosEn(cuerpo, captura.contexto.formulario);
         cuerpo.addEventListener('input', (ev) => { if (ev.target.matches('[data-columna]')) actualizarFormularioAppSheet(); });
         cuerpo.addEventListener('change', (ev) => { if (ev.target.matches('[data-columna]')) actualizarFormularioAppSheet(); });
         actualizarFormularioAppSheet();
@@ -2079,6 +2168,40 @@
         clearTimeout(temporizador);
         temporizador = setTimeout(aplicarFiltros, 150);
       });
+      // KPIs: clic = filtro "Con / Sin activos" (el mismo del selector); otro clic lo quita
+      function pintarKpis() {
+        const con = colaboradores.filter((c) => c.totalActivos).length;
+        const activosAsignados = colaboradores.reduce((t, c) => t + c.totalActivos, 0);
+        const defs = [
+          { icono: 'users', valor: colaboradores.length, etiqueta: 'Colaboradores', filtro: 'TODOS' },
+          { icono: 'user-check', valor: con, etiqueta: 'Con activos', clase: 'stat-tile-ok', filtro: 'CON' },
+          { icono: 'user-x', valor: colaboradores.length - con, etiqueta: 'Sin activos', clase: 'stat-tile-warn', filtro: 'SIN' },
+          { icono: 'smartphone', valor: activosAsignados, etiqueta: 'Equipos y líneas asignados' },
+        ];
+        const cont = $('#lnga-kpis', raiz);
+        cont.innerHTML = defs.map((d, i) => '<div class="stat-tile ' + (d.clase || '') + (d.filtro ? ' stat-tile-clickable' : '') + '" data-kpi="' + i + '"' +
+          (d.filtro ? ' role="button" tabindex="0"' : '') + '><div class="stat-icon">' + ico(d.icono) + '</div><div><div class="stat-value">' + miles(d.valor) + '</div>' +
+          '<div class="stat-label">' + esc(d.etiqueta) + '</div></div></div>').join('');
+        const marcar = () => cont.querySelectorAll('[data-kpi]').forEach((t) => {
+          const d = defs[Number(t.dataset.kpi)];
+          t.classList.toggle('stat-tile-activo', !!d.filtro && d.filtro !== 'TODOS' && $('#lnga-filtro-activos', raiz).value === d.filtro);
+        });
+        cont.querySelectorAll('[data-kpi]').forEach((t) => {
+          const d = defs[Number(t.dataset.kpi)];
+          if (!d.filtro) return;
+          const clic = () => {
+            const select = $('#lnga-filtro-activos', raiz);
+            select.value = select.value === d.filtro ? 'TODOS' : d.filtro;
+            aplicarFiltros();
+            marcar();
+          };
+          t.addEventListener('click', clic);
+          t.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); clic(); } });
+        });
+        $('#lnga-filtro-activos', raiz).addEventListener('change', marcar);
+        marcar();
+      }
+
       $('#lnga-filtro-activos', raiz).addEventListener('change', aplicarFiltros);
       $('#lnga-mas', raiz).addEventListener('click', () => { visibles += paso; pintarCuadros(); });
       raiz.addEventListener('click', (ev) => {
@@ -2098,8 +2221,7 @@
         indice.equipos.forEach((a) => { const k = normal(a.responsable); if (k) conteo[k] = (conteo[k] || 0) + 1; });
         indice.lineas.filter((a) => a.suelta).forEach((a) => { const k = normal(a.responsable); if (k) conteo[k] = (conteo[k] || 0) + 1; });
         colaboradores = filasComoObjetos(r).map((c, i) => Object.assign(c, { _i: i, totalActivos: conteo[normal(c.nombre)] || 0 }));
-        $('#lnga-total', raiz).textContent = miles(colaboradores.length);
-        $('#lnga-con-activos', raiz).textContent = miles(colaboradores.filter((c) => c.totalActivos).length);
+        pintarKpis();
         aplicarFiltros();
       }).catch((e) => {
         if (!vigente()) return;
@@ -2137,6 +2259,8 @@
           { icono: 'triangle-alert', valor: miles(filas.filter((a) => a.reabasto).length), etiqueta: 'Por reabastecer',
             titulo: 'Aviso del AppSheet: Cargadores ≤ 10, Micas ≤ 182, Fundas ≤ 182',
             clase: 'stat-tile-warn', filtros: { reabasto: { valores: ['Sí'] } } },
+          { icono: 'package-x', valor: miles(filas.filter((a) => (Number(a.stock) || 0) <= 0).length), etiqueta: 'Sin stock',
+            clase: 'stat-tile-warn', filtros: { stock: { op: '<=', v1: 0 } } },
           { icono: 'circle-check', valor: miles(filas.reduce((t, a) => t + (Number(a.stock) || 0), 0)), etiqueta: 'Piezas en stock', clase: 'stat-tile-ok', filtros: false },
         ], () => tabla);
         marcarKpi(filtrosAcc);
@@ -2203,7 +2327,27 @@
         });
       }
 
+      // Nombre y Marca: listas con lo ya registrado (se puede escribir uno nuevo)
+      let combosArticulo = null;
+      function opcionesArticulo() {
+        const filas = (indiceAcc && indiceAcc.filas) || [];
+        const marcas = filas.map((a) => String(a.marca || '').trim()).filter((v, i, x) => v && x.indexOf(v) === i).sort();
+        return {
+          nombres: filas.map((a) => ({ valor: a.nombre, etiqueta: [a.categoria, a.marca, 'stock ' + a.stock].filter(Boolean).join(' · ') })),
+          marcas: marcas,
+        };
+      }
       function abrirModalNuevo() {
+        const ops = opcionesArticulo();
+        if (!combosArticulo && typeof Combobox !== 'undefined') {
+          combosArticulo = {
+            nombre: Combobox.crear($('#lac-nombre', raiz), { opciones: ops.nombres, maximo: 50 }),
+            marca: Combobox.crear($('#lac-marca', raiz), { opciones: ops.marcas, maximo: 50 }),
+          };
+        } else if (combosArticulo) {
+          combosArticulo.nombre.setOpciones(ops.nombres);
+          combosArticulo.marca.setOpciones(ops.marcas);
+        }
         $('#lac-nombre', raiz).value = ''; $('#lac-categoria', raiz).value = ''; $('#lac-marca', raiz).value = '';
         $('#lac-nuevo-error', raiz).hidden = true;
         $('#lac-modal-nuevo', raiz).hidden = false;
@@ -2243,6 +2387,8 @@
         const categoria = $('#lac-categoria', raiz).value;
         const faltan = [!categoria && 'Categoria', !nombre && 'Nombre del Articulo'].filter(Boolean);
         if (faltan.length) { $('#lac-nuevo-error', raiz).textContent = faltan.join(', ') + (faltan.length > 1 ? ' son obligatorios.' : ' es obligatorio.'); $('#lac-nuevo-error', raiz).hidden = false; return; }
+        const repetido = ((indiceAcc && indiceAcc.filas) || []).some((a) => a.categoria === categoria && normal(a.nombre).trim() === normal(nombre));
+        if (repetido) { $('#lac-nuevo-error', raiz).textContent = 'Ese artículo ya existe en ' + categoria + ': registra una entrada con la flecha de su fila.'; $('#lac-nuevo-error', raiz).hidden = false; return; }
         estadoAccesorio('#lac-modal-nuevo', true);
         llamar('apiLineasAccesoriosAgregarArticulo', { nombre: nombre, categoria: $('#lac-categoria', raiz).value, marca: $('#lac-marca', raiz).value })
           .then(() => { guardandoAccesorio = false; cerrarModalNuevo(); aviso('Artículo guardado correctamente.', 6000); cargar(true); })
@@ -2274,7 +2420,7 @@
         resumen: ['FOLIO', 'LINIEA SUSPENDIDA', 'COMPAÑIA', 'SIM', 'CORREO / TICKET', 'FECHA DE SUSPENSION', 'ESTATUS', 'ESTADO DEL EQUIPO', 'IMEI',
           'RETRO DE SOLICITUD', 'FECHA DE REACTIVACION', 'NUEVO NUMERO', 'FECHA DE REGISTRO', 'QUIEN REGISTRO', 'COMENTARIOS'],
         agrupar: 'ESTATUS',
-        titulo: 'Reactivación de Líneas', icono: 'refresh-cw', textoAlta: 'Registrar reactivación',
+        titulo: 'Reactivación de Líneas', icono: 'check-check', textoAlta: 'Registrar reactivación',
         subtitulo: 'Seguimiento de líneas suspendidas, canceladas y reactivadas', filtro: 'Todos los estatus',
         altas: true,
         // Display name de las columnas en el AppSheet
@@ -2285,7 +2431,7 @@
         resumen: ['FOLIO', 'FECHA DE SOLICITUD', 'TIPO DE PLAN', 'TICKET', 'NO EMPLEADO SOLICITANTE', 'NOMBRE SOLICITANTE', 'PUESTO SOLICITANTE',
           'DEPARTAMENTO SOLICITANTE', 'SEDE', 'DEPARTAMENTO', 'TIPO', 'PUESTO', 'COLABORADOR', 'SOLICITANTE', 'FECHA DE ENTREGA', 'ASIGNACION',
           'REASIGNACION', 'COMPAÑIA', 'EQUIPO', 'NUMERO ANTERIOR', 'NUMERO ACTUAL', 'IMEI', 'SIM', 'ESTATUS', 'FECHA DE REGISTRO', 'QUIEN REGISTRO', 'COMENTARIOS'],
-        titulo: 'Solicitud de Líneas', icono: 'clipboard-list', textoAlta: 'Registrar solicitud',
+        titulo: 'Solicitud de Líneas', icono: 'target', textoAlta: 'Registrar solicitud',
         subtitulo: 'Solicitudes de asignación y reasignación de líneas telefónicas', filtro: 'Todos los estatus',
         altas: true,
         // Display name de las columnas en el AppSheet
@@ -2366,6 +2512,8 @@
               exportar: { nombreArchivo: cfg.titulo },
               etiquetaFila: (f) => (campoFolio && f[campoFolio] ? String(f[campoFolio]) : 'Registro'),
               detalle: { titulo: (f) => cfg.titulo + (campoFolio && f[campoFolio] ? ' · ' + f[campoFolio] : '') },
+              // View Ref (IMEI) del AppSheet: abre la línea referenciada
+              accionesFila: [{ icono: 'circle-chevron-right', titulo: 'Ver línea', visible: (f) => !!f._ref, alHacer: (f) => irARegistro(f._ref) }],
               ayuda: 'El ojo en Acciones muestra todos los campos del registro. "Columnas" agrega los que no se ven; la flecha de cada columna filtra y ordena.',
               alCambiarFiltros: (f) => { filtrosOp = f || {}; if (marcarKpi) marcarKpi(filtrosOp); },
             });
@@ -2452,9 +2600,16 @@
 
     const BITACORAS = {
       CAMBIOS: {
-        titulo: 'Control de Cambios - Líneas', icono: 'file-pen-line',
+        titulo: 'Control de Cambios - Líneas', icono: 'eye',
         subtitulo: 'Bitácora de campos modificados en LINEAS TELEFONICAS (AppSheet y nuevo sistema)',
         idRegistro: 'ID_LINEA', fecha: 'FECHA ACTUALIZACION',
+        kpis: (filas) => {
+          const deCampo = (lista) => filas.filter((f) => lista.indexOf(String(f['CAMPO'] || '').trim()) >= 0).length;
+          return [
+            { icono: 'toggle-right', valor: miles(deCampo(['ESTATUS LINEA', 'ESTATUS EQUIPO'])), etiqueta: 'Cambios de estatus', filtros: { CAMPO: { valores: ['ESTATUS LINEA', 'ESTATUS EQUIPO'] } } },
+            { icono: 'recycle', valor: miles(deCampo(['RESPONSABLE'])), etiqueta: 'Cambios de responsable', filtros: { CAMPO: { valores: ['RESPONSABLE'] } } },
+          ];
+        },
         // Vista CONTROL DE CAMBIOS - LINEAS del AppSheet
         columnas: [
           ['NUCO', 'NUCO'], ['IMEI', 'IMEI'], ['CAMPO', 'Campo'], ['ANTES', 'Antes'], ['DESPUES', 'Después'],
@@ -2462,9 +2617,16 @@
         ],
       },
       REASIGNACIONES: {
-        titulo: 'Control de Reasignaciones - Líneas', icono: 'repeat',
+        titulo: 'Control de Reasignaciones - Líneas', icono: 'recycle',
         subtitulo: 'Cambios de responsable de equipos y líneas',
         idRegistro: 'ID Linea', fecha: 'Fecha de Reasignacion',
+        kpis: (filas) => {
+          const distintos = (campo) => filas.map((f) => String(f[campo] || '').trim()).filter((v, i, a) => v && a.indexOf(v) === i).length;
+          return [
+            { icono: 'smartphone', valor: miles(distintos('ID Linea')), etiqueta: 'Activos reasignados', filtros: false },
+            { icono: 'users', valor: miles(distintos('Responsable Entrante')), etiqueta: 'Responsables entrantes', filtros: false },
+          ];
+        },
         // Vista CONTROL DE REASIGNACIONES - LINEAS del AppSheet: todas las columnas en el orden de la tabla
         columnas: [
           ['Fecha de Reasignacion', 'Fecha de reasignación'], ['NUCO', 'NUCO'], ['No Empleado Saliente', 'No. empleado saliente'],
@@ -2478,6 +2640,15 @@
         alta: 'DESECHO', textoAlta: 'Registrar desecho',
         subtitulo: 'Equipos dados de baja definitiva (folio DR)',
         idRegistro: 'ID_EQUIPO', fecha: 'FECHA DE DESECHO',
+        kpis: (filas, encabezados, hFecha) => {
+          const anio = String(new Date().getFullYear());
+          const esteAnio = hFecha ? filas.filter((f) => f[hFecha] && !isNaN(new Date(f[hFecha])) && String(new Date(f[hFecha]).getFullYear()) === anio).length : 0;
+          const lugares = contarPor(filas, 'LUGAR DE DESECHO');
+          const top = Object.keys(lugares).filter(Boolean).sort((a, b) => lugares[b] - lugares[a])[0];
+          const defs = hFecha ? [{ icono: 'calendar-range', valor: miles(esteAnio), etiqueta: 'En ' + anio, filtros: { [hFecha]: { op: 'entre', v1: anio + '-01-01', v2: diaClave(0) } } }] : [];
+          if (top) defs.push({ icono: 'map-pin', valor: miles(lugares[top]), etiqueta: top, titulo: 'Lugar de desecho más frecuente', filtros: { 'LUGAR DE DESECHO': { valores: [top] } } });
+          return defs;
+        },
         // Vista BITACORA DE DESECHOS del AppSheet (ID_EQUIPO se muestra con su etiqueta: el IMEI)
         columnas: [
           ['FOLIO DESECHO', 'Folio desecho'], ['IMEI', 'IMEI equipo'], ['FOLIO EQUIPO', 'Folio equipo'], ['EQUIPO', 'Equipo'],
@@ -2522,7 +2693,7 @@
           exportar: { nombreArchivo: cfg.titulo },
           etiquetaFila: (f) => [hFolio && f[hFolio], hFecha && fechaTabla(f[hFecha])].filter(Boolean).join(' · ') || 'Registro',
           detalle: { titulo: (f) => cfg.titulo + (hFolio && f[hFolio] ? ' · ' + f[hFolio] : '') },
-          accionesFila: hId ? [{ icono: 'smartphone', titulo: 'Ver activo', visible: (f) => !!f[hId], alHacer: (f) => irARegistro(f[hId]) }] : [],
+          accionesFila: hId ? [{ icono: 'circle-chevron-right', titulo: 'Ver activo', visible: (f) => !!f[hId], alHacer: (f) => irARegistro(f[hId]) }] : [],
           ayuda: 'Bitácora de solo lectura. El ojo abre todos los campos del registro y el celular abre la ficha del activo.',
           alCambiarFiltros: (f) => { filtrosBit = f || {}; if (marcarKpi) marcarKpi(filtrosBit); },
         });
@@ -2532,11 +2703,11 @@
       function pintarKpis(r) {
         const hFecha = tabla && tabla.hFecha;
         const defs = [{ icono: cfg.icono, valor: miles(r.total), etiqueta: busqueda ? 'Coinciden con "' + busqueda + '"' : 'Registros en la hoja' }];
-        if (r.filas.length < r.total) defs.push({ icono: 'layers', valor: miles(r.filas.length), etiqueta: 'Cargados (los más recientes)', filtros: false });
         if (hFecha) {
           defs.push({ icono: 'calendar-days', valor: miles(contarDesde(r.filas, hFecha, 29)), etiqueta: 'Últimos 30 días', filtros: { [hFecha]: { op: 'entre', v1: diaClave(29), v2: diaClave(0) } } });
           defs.push({ icono: 'clock', valor: miles(contarDesde(r.filas, hFecha, 0)), etiqueta: 'Hoy', clase: 'stat-tile-ok', filtros: { [hFecha]: { op: 'igual', v1: diaClave(0) } } });
         }
+        (cfg.kpis ? cfg.kpis(r.filas, r.encabezados, hFecha) : []).forEach((d) => defs.push(d));
         marcarKpi = tilesKpi($('#ln-bit-kpis', raiz), defs, () => tabla);
         marcarKpi(filtrosBit);
       }
