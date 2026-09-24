@@ -732,7 +732,7 @@ const LineasRepo = (function () {
 
   /** Catálogos para formularios: enums del AppSheet + valores de LISTAS TELEFONOS y BITACORA DE DESECHO. */
   function catalogos() {
-    const enCache = LineasDatos.cacheLeer('catalogos_telefonia');
+    const enCache = LineasDatos.cacheLeer('catalogos_telefonia_v2');
     if (enCache) return enCache;
     const unicos = (filas, columna) => {
       const m = {};
@@ -741,14 +741,19 @@ const LineasRepo = (function () {
     };
     const listas = LineasDatos.existeTabla(TAB.LISTAS) ? LineasDatos.leerTabla(TAB.LISTAS) : [];
     const desechos = LineasDatos.leerTabla(TAB.DESECHO);
+    // Listas de LISTAS TELEFONOS con que el AppSheet valida (Valid_If = IN(..., SORT(SELECT(LISTAS TELEFONOS[...]))))
     const c = Object.assign({}, CATALOGO, {
+      sedes: unicos(listas, 'SEDE'),
+      departamentos: unicos(listas, 'DEPARTAMENTO'),
+      areas: unicos(listas, 'AREA'),
+      oficinas: unicos(listas, 'OFICINA / DESARROLLO'),
       modelos: unicos(listas, 'EQUIPO'),
       razonesSociales: unicos(listas, 'RAZON SOCIAL'),
       companias: CATALOGO.companias.concat(unicos(listas, 'COMPAÑIA')).filter((v, i, a) => a.indexOf(v) === i),
       lugaresDesecho: unicos(desechos, 'LUGAR DE DESECHO'),
       estadosDesecho: unicos(desechos, 'ESTADO'),
     });
-    LineasDatos.cacheGuardar('catalogos_telefonia', c, 21600);
+    LineasDatos.cacheGuardar('catalogos_telefonia_v2', c, 21600);
     return c;
   }
 
@@ -767,7 +772,7 @@ const LineasRepo = (function () {
 
   /** Vacía las cachés del módulo (índices, catálogos y carpetas). */
   function borrarCaches() {
-    ['indice_telefonia', 'indice_colaboradores', 'carpetas_nucos', 'catalogos_telefonia'].forEach(LineasDatos.cacheBorrar);
+    ['indice_telefonia', 'indice_colaboradores', 'carpetas_nucos', 'catalogos_telefonia_v2'].forEach(LineasDatos.cacheBorrar);
   }
 
   return {

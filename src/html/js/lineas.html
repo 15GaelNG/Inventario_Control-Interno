@@ -955,35 +955,10 @@
         }
       }
 
-      function opcionesEstatus(lista, actual) {
-        return (lista || []).map((v) => '<option value="' + esc(v) + '"' + (v === actual ? ' selected' : '') + '>' + esc(v) + '</option>').join('');
-      }
-
-      function grupoEscala(escala, valorPrevio) {
-        const opciones = { SI_NO: ['SI', 'NO', 'N/A'], CALIDAD: ['BUENO', 'REGULAR', 'MALO'], APP: ['INSTALADA', 'NO INSTALADA'] }[escala] || [];
+      function grupoEscala(opciones, valorPrevio) {
         const claseMala = { NO: 'ln-pastilla-mal', MALO: 'ln-pastilla-mal', REGULAR: 'ln-pastilla-media' };
         return '<div class="ln-pastillas">' + opciones.map((v) =>
           '<button type="button" class="ln-pastilla' + (v === valorPrevio ? ' activa' : '') + (claseMala[v] ? ' ' + claseMala[v] : '') + '" data-valor="' + esc(v) + '">' + esc(v) + '</button>').join('') + '</div>';
-      }
-
-      function introduccionCaptura(ctx, tipo) {
-        const equipo = ctx.equipo || {};
-        const linea = ctx.linea || {};
-        const responsable = ctx.responsable || {};
-        const valor = (v) => esc(v === null || v === undefined || v === '' ? '—' : String(v));
-        const activo = equipo.nuco
-          ? 'NUCO ' + valor(equipo.nuco) + (equipo.modelo ? ' · ' + valor(equipo.modelo) : '')
-          : 'Línea ' + valor(linea.numero);
-        const pasos = tipo === 'INSPECCION'
-          ? [['Datos', 'Información general'], ['Checklist', 'Revisión del activo'], ['Seguridad', 'PIN o patrón'], ['Evidencia', 'Fotos y notas'], ['Firmas', 'Validación y PDF']]
-          : [['Datos', 'Responsable'], ['Seguridad', 'Equipo y acceso'], ['Evidencia', 'Notas y patrón'], ['Firmas', 'Validación y PDF']];
-        return '<div class="ln-captura-guia">' + pasos.map((p, i) =>
-          '<div class="ln-captura-paso"><span class="ln-captura-paso-num">' + (i + 1) + '</span><span><b>' + p[0] + '</b>' + p[1] + '</span></div>').join('') +
-          '</div><div class="ln-captura-resumen">' +
-            '<div class="ln-captura-dato">' + icono(equipo.nuco ? 'smartphone' : 'card-sim') + '<span><small>Activo seleccionado</small><b>' + activo + '</b></span></div>' +
-            '<div class="ln-captura-dato">' + icono('phone') + '<span><small>Número telefónico</small><b>' + valor(linea.numero) + '</b></span></div>' +
-            '<div class="ln-captura-dato">' + icono('user-round') + '<span><small>Responsable</small><b>' + valor(responsable.nombre) + '</b></span></div>' +
-          '</div>';
       }
 
       function seccionCaptura(numero, ico, titulo, ayuda, contenido) {
@@ -992,24 +967,194 @@
           '<div class="ln-form-seccion-contenido">' + contenido + '</div></section>';
       }
 
-      function leerChecklistFormulario() {
-        const checklist = {};
-        raiz.querySelectorAll('#ln-captura-cuerpo .ln-checklist-punto').forEach((fila) => {
-          const activa = fila.querySelector('.ln-pastilla.activa');
-          if (activa) checklist[fila.dataset.clave] = activa.dataset.valor;
+      // ---- Formularios del AppSheet (INSPECCIONES LINEAS_Form / RESPONSIVAS LINEAS_Form) ----
+      // El servidor manda los elementos en el orden del AppSheet; aquí se dibujan y se aplican
+      // los Show_If / Required_If sobre [TIPO] con los mismos códigos (LineasChecklist.CONDICIONES).
+      const CONDICIONES_APPSHEET = {
+        SIEMPRE: () => true,
+        NUNCA: () => false,
+        NO_LINEA: (t) => t !== 'LINEA',
+        NO_EQUIPO: (t) => t !== 'EQUIPO',
+        EQUIPOS: (t) => t === 'EQUIPO + SIM' || t === 'EQUIPO',
+        VOZ: (t) => t === 'EQUIPO + SIM' || t === 'LINEA',
+        BATERIA: (t) => ['EQUIPO + SIM', 'EQUIPO', 'BANDA ANCHA'].indexOf(t) >= 0,
+        EQUIPOS_Y_MODEMS: (t) => ['EQUIPO + SIM', 'EQUIPO', 'MODEM', 'BANDA ANCHA'].indexOf(t) >= 0,
+        MODEM: (t) => t.indexOf('MODEM') >= 0 || t.indexOf('BANDA ANCHA') >= 0,
+        MODEM_Y_BANDA: (t) => t.indexOf('MODEM') >= 0 && t.indexOf('BANDA ANCHA') >= 0,
+      };
+      const cumpleCondicion = (codigo, tipo) => !!CONDICIONES_APPSHEET[codigo] && CONDICIONES_APPSHEET[codigo](String(tipo || '').trim().toUpperCase());
+
+      // CALIFICACION: misma AppFormula del AppSheet (ver LineasChecklist.calificacion)
+      const CALIFICACION_SI = ['IDENTIFICACION', 'CUBO', 'CABLE', 'FUNDA', 'MICA', 'PANTALLA', 'BOTONES VOLUMEN', 'BOTON ENCENDIDO',
+        'CUERPO EQUIPO', 'CAMARA', 'PUERTO CARGA', 'ALTAVOZ', 'BOCINAS', 'MICROFONO', 'LINEA DE VOZ'];
+      const CALIFICACION_DESEMPENO = { 'DURACION BATERIA': 1, 'TEMPERATURA': 1, 'DESEMPEÑO': 1 };
+      function calificacionAppSheet(valores) {
+        let suma = 0;
+        let contestados = 0;
+        CALIFICACION_SI.forEach((c) => { if (valores[c] === 'SI') { suma++; contestados++; } else if (valores[c] === 'NO') contestados++; });
+        Object.keys(CALIFICACION_DESEMPENO).forEach((c) => {
+          const n = { BUENO: 1, REGULAR: 0.5, MALO: 0 }[valores[c]];
+          if (n !== undefined) { suma += n; contestados++; }
         });
-        return checklist;
+        return suma / Math.max(1, contestados);
       }
 
-      function actualizarProgresoChecklist(incompleto) {
-        const progreso = $('#cap-checklist-avance', raiz);
-        if (!progreso) return;
-        const filas = Array.from(raiz.querySelectorAll('#ln-captura-cuerpo .ln-checklist-punto'));
-        const contestadas = filas.filter((fila) => fila.querySelector('.ln-pastilla.activa')).length;
-        const total = filas.length;
-        $('#cap-checklist-conteo', raiz).textContent = contestadas + ' de ' + total + ' puntos con respuesta';
-        $('#cap-checklist-barra', raiz).style.width = (total ? Math.round(contestadas / total * 100) : 0) + '%';
-        progreso.classList.toggle('incompleto', !!incompleto && contestadas < total);
+      const esPuntosPatron = (v) => /^[1-9](-[1-9])*$/.test(String(v || ''));
+
+      function htmlElementoFormulario(e) {
+        if (e.tipo === 'titulo') return '<h4 class="ln-af-titulo">' + (e.icono ? icono(e.icono) + ' ' : '') + esc(e.texto) + '</h4>';
+        const id = 'af-' + e.columna.replace(/[^A-Za-z0-9]+/g, '-');
+        const attrs = ' id="' + id + '" data-columna="' + esc(e.columna) + '"' + (e.literal || e.secreto ? ' data-respetar-texto' : '') + (e.soloLectura ? ' readonly tabindex="-1"' : '');
+        const valor = e.valor === null || e.valor === undefined ? '' : String(e.valor);
+        let control;
+        if (e.control === 'escala') {
+          control = '<div class="ln-checklist-punto" data-columna="' + esc(e.columna) + '">' + grupoEscala(e.opciones || [], valor || null) + '</div>';
+        } else if (e.control === 'lista') {
+          const opciones = (e.opciones || []).slice();
+          const fuera = valor && opciones.map((o) => String(o).toUpperCase()).indexOf(valor.toUpperCase()) < 0;
+          control = '<select' + attrs + '><option value="">Selecciona…</option>' +
+            (fuera ? '<option value="' + esc(valor) + '" selected>' + esc(valor) + ' (no está en la lista)</option>' : '') +
+            opciones.map((o) => '<option value="' + esc(o) + '"' + (String(o).toUpperCase() === valor.toUpperCase() ? ' selected' : '') + '>' + esc(o) + '</option>').join('') + '</select>';
+        } else if (e.control === 'area') {
+          control = '<textarea' + attrs + ' rows="4">' + esc(valor) + '</textarea>';
+        } else if (e.control === 'fechaHora') {
+          control = '<input type="datetime-local"' + attrs + ' value="' + esc(valor) + '" />';
+        } else if (e.control === 'patron') {
+          const nota = e.valorOculto ? 'Registrado (solo administradores lo ven). Si no trazas uno nuevo, se conserva.'
+            : (valor && !esPuntosPatron(valor) ? 'Hay un patrón capturado en AppSheet (imagen). Si no trazas uno nuevo, se conserva.' : '');
+          control = (nota ? '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' ' + esc(nota) + '</div>' : '') + htmlPatron(id + '-patron', false);
+        } else if (e.control === 'firma') {
+          control = '<div class="ln-firma-caja"><canvas id="' + id + '-firma"></canvas><div class="ln-firma-acciones"><span class="ln-firma-vacia">Dibuja con el dedo o el mouse</span>' +
+            '<button type="button" class="secondary ln-btn-chico" data-limpiar-firma="' + esc(e.columna) + '">Limpiar</button></div></div>';
+        } else if (e.control === 'calculado') {
+          control = '<div class="ln-af-calculado" id="' + id + '">—</div>';
+        } else {
+          control = '<input type="text"' + attrs + ' value="' + esc(valor) + '" autocomplete="off"' + (e.valorOculto ? ' placeholder="•••• (se conserva el valor registrado)"' : '') + ' />';
+        }
+        const ancho = ['escala', 'area', 'patron', 'firma'].indexOf(e.control) >= 0 ? ' ln-af-ancho' : '';
+        return '<div class="field ln-af-campo' + ancho + (e.soloLectura ? ' ln-af-lectura' : '') + '" data-af-columna="' + esc(e.columna) + '" data-mostrar="' + esc(e.mostrar) + '" data-requerido="' + esc(e.requerido) + '">' +
+          '<label for="' + id + '">' + esc(e.etiqueta) + '<span class="ln-af-req" hidden> *</span></label>' + control + '</div>';
+      }
+
+      /** Dibuja el formulario agrupando cada título del AppSheet con sus campos. */
+      function htmlFormularioAppSheet(elementos) {
+        let html = '';
+        let abierto = false;
+        elementos.forEach((e) => {
+          if (e.tipo === 'titulo') {
+            if (abierto) html += '</div></section>';
+            html += '<section class="ln-af-seccion">' + htmlElementoFormulario(e) + '<div class="ln-af-grid">';
+            abierto = true;
+            return;
+          }
+          if (!abierto) { html += '<section class="ln-af-seccion"><div class="ln-af-grid">'; abierto = true; }
+          html += htmlElementoFormulario(e);
+        });
+        return html + (abierto ? '</div></section>' : '');
+      }
+
+      /** Valores actuales del formulario, por columna del AppSheet. */
+      function leerFormularioAppSheet() {
+        const valores = {};
+        const cuerpo = $('#ln-captura-cuerpo', raiz);
+        cuerpo.querySelectorAll('input[data-columna], select[data-columna], textarea[data-columna]').forEach((el) => {
+          if (!el.readOnly) valores[el.dataset.columna] = el.value.trim();
+        });
+        cuerpo.querySelectorAll('.ln-checklist-punto[data-columna]').forEach((fila) => {
+          const activa = fila.querySelector('.ln-pastilla.activa');
+          valores[fila.dataset.columna] = activa ? activa.dataset.valor : '';
+        });
+        return valores;
+      }
+
+      function tipoFormulario() {
+        const el = raiz.querySelector('#ln-captura-cuerpo [data-columna="TIPO"]');
+        return el ? el.value : (captura && captura.tipoFijo) || '';
+      }
+
+      /** Show_If / Required_If en vivo y la CALIFICACION calculada. */
+      function actualizarFormularioAppSheet() {
+        if (!captura) return;
+        const tipo = tipoFormulario();
+        raiz.querySelectorAll('#ln-captura-cuerpo .ln-af-campo').forEach((campo) => {
+          const visible = cumpleCondicion(campo.dataset.mostrar, tipo);
+          campo.hidden = !visible;
+          campo.querySelector('.ln-af-req').hidden = !(visible && cumpleCondicion(campo.dataset.requerido, tipo));
+        });
+        raiz.querySelectorAll('#ln-captura-cuerpo .ln-af-seccion').forEach((sec) => {
+          sec.hidden = !sec.querySelector('.ln-af-campo:not([hidden])');
+        });
+        const calif = $('#af-CALIFICACION', raiz);
+        if (calif) calif.textContent = (calificacionAppSheet(leerFormularioAppSheet()) * 100).toFixed(2) + '%';
+      }
+      const actualizarProgresoChecklist = actualizarFormularioAppSheet;
+
+      /** Obligatorios visibles vacíos (misma regla que el servidor). */
+      function faltantesFormularioAppSheet() {
+        const tipo = tipoFormulario();
+        const valores = leerFormularioAppSheet();
+        const faltan = [];
+        (captura.contexto.formulario || []).forEach((e) => {
+          if (e.tipo !== 'campo' || e.soloLectura || e.control === 'calculado' || e.valorOculto) return;
+          if (!cumpleCondicion(e.mostrar, tipo) || !cumpleCondicion(e.requerido, tipo)) return;
+          if (e.control === 'firma') {
+            const f = captura.firmas[e.columna];
+            if (!f || f.estaVacia()) faltan.push(e);
+            return;
+          }
+          if (e.control === 'patron') return;
+          if (!valores[e.columna]) faltan.push(e);
+        });
+        return faltan;
+      }
+
+      function iniciarFormularioAppSheet() {
+        const cuerpo = $('#ln-captura-cuerpo', raiz);
+        (captura.contexto.formulario || []).forEach((e) => {
+          if (e.tipo !== 'campo') return;
+          const id = 'af-' + e.columna.replace(/[^A-Za-z0-9]+/g, '-');
+          if (e.control === 'firma') captura.firmas[e.columna] = activarFirma(id + '-firma');
+          if (e.control === 'patron') {
+            captura.columnaPatron = e.columna;
+            captura.patronInicial = esPuntosPatron(e.valor) ? e.valor : null;
+            captura.controlPatron = activarPatron(id + '-patron', captura.patronInicial ? captura.patronInicial.split('-') : []);
+          }
+        });
+        cuerpo.addEventListener('input', (ev) => { if (ev.target.matches('[data-columna]')) actualizarFormularioAppSheet(); });
+        cuerpo.addEventListener('change', (ev) => { if (ev.target.matches('[data-columna]')) actualizarFormularioAppSheet(); });
+        actualizarFormularioAppSheet();
+      }
+
+      /**
+       * PATRON a enviar: los puntos trazados, '' si se borró uno que venía en puntos, o undefined para
+       * conservar el valor inicial (p. ej. la imagen que dejó AppSheet).
+       */
+      function patronParaGuardar() {
+        if (!captura.controlPatron) return undefined;
+        const actual = captura.controlPatron.valor();
+        if (actual) return actual;
+        return captura.patronInicial ? '' : undefined;
+      }
+
+      /** Valida antes de enviar; regresa false y lleva al primer campo faltante. */
+      function validarFormularioAppSheet() {
+        const faltan = faltantesFormularioAppSheet();
+        // Valid_If de las listas (IN(..., LISTAS TELEFONOS[...])): un valor fuera de la lista no se acepta
+        const tipo = tipoFormulario();
+        const valores = leerFormularioAppSheet();
+        const fueraDeLista = (captura.contexto.formulario || []).filter((e) => e.tipo === 'campo' && e.control === 'lista' && cumpleCondicion(e.mostrar, tipo) &&
+          valores[e.columna] && (e.opciones || []).map((o) => String(o).toUpperCase()).indexOf(valores[e.columna].toUpperCase()) < 0);
+        if (!faltan.length && fueraDeLista.length) {
+          const campo = raiz.querySelector('#ln-captura-cuerpo [data-af-columna="' + CSS.escape(fueraDeLista[0].columna) + '"] select');
+          mostrarErrorCaptura(fueraDeLista.map((e) => e.etiqueta).join(', ') + ': elige un valor de la lista (VALOR NO ENCONTRADO EN LA LISTA).', campo ? '#' + campo.id : null);
+          return false;
+        }
+        if (!faltan.length) return true;
+        const primero = faltan[0];
+        const destino = raiz.querySelector('#ln-captura-cuerpo [data-af-columna="' + CSS.escape(primero.columna) + '"]');
+        mostrarErrorCaptura(faltan.map((e) => e.etiqueta).slice(0, 6).join(', ') + (faltan.length > 6 ? '…' : '') + (faltan.length === 1 ? ' es obligatorio.' : ' son obligatorios.'),
+          destino ? '#' + (destino.querySelector('[id]') || destino).id : null);
+        return false;
       }
 
       function activarFirma(id) {
@@ -1186,100 +1331,42 @@
         generar();
       }
 
-      // -- Inspección --
+      // -- Inspección (INSPECCIONES LINEAS_Form) --
 
       function formularioInspeccion(ctx) {
-        const secciones = ctx.secciones.map((s) => '<div class="ln-checklist-tarjeta"><h4>' + icono('list-checks') + ' ' + esc(s.seccion) + '</h4><div class="ln-checklist-seccion">' +
-          s.puntos.map((p) => '<div class="ln-checklist-punto" data-clave="' + esc(p.clave) + '">' +
-            '<span class="ln-checklist-etiqueta">' + esc(p.etiqueta) + '</span>' +
-            grupoEscala(p.escala, null) + '</div>').join('') +
-          (normal(s.seccion).indexOf('app') === 0 || normal(s.seccion).indexOf('aplicacion') >= 0 ? '<div class="field ln-otra-app"><label for="cap-otra-app">Otra aplicación (opcional)</label><input type="text" id="cap-otra-app" placeholder="Nombre de otra aplicación revisada" autocomplete="off" /></div>' : '') + '</div></div>').join('');
-        const datos = tarjetaResponsable(ctx.responsable, 'Responsable del activo') +
-          (ctx.equipo ? '<div class="ln-captura-datos-grid"><div class="ln-captura-dato"><span><small>Color del equipo</small><b>' + esc(ctx.equipo.color || '—') + '</b></span></div>' +
-            '<div class="ln-captura-dato"><span><small>Estatus actual del equipo</small><b>' + esc(ctx.equipo.estatus || '—') + '</b></span></div></div>' : '') +
-          '<div class="field ln-campo-separado"><label for="cap-ticket">Ticket <span class="ln-tenue">(opcional)</span></label><input type="text" id="cap-ticket" autocomplete="off" /></div>';
-        const seguridad = ctx.equipo ? '<div class="ln-editor-grid"><div class="field"><label for="cap-insp-tipo-contrasena">Seguridad del equipo</label><select id="cap-insp-tipo-contrasena"><option value="">Sin registrar</option><option value="PIN">PIN</option><option value="PATRON">Patrón</option><option value="CONTRASEÑA">Contraseña</option></select></div>' +
-          '<div class="field" id="cap-insp-pin-campo" hidden><label for="cap-insp-pin">PIN o contraseña</label><input type="text" id="cap-insp-pin" data-respetar-texto autocomplete="new-password" /></div></div>' +
-          '<div class="ln-nota" id="cap-insp-patron-ayuda" hidden>' + icono('info', 'ln-icon-sm') + ' Traza el patrón que debe quedar en la inspección.</div>' + htmlPatron('cap-insp-patron', true) :
-          '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' Esta inspección corresponde a una línea sin equipo; no aplica seguridad del dispositivo.</div>';
-        const evidencia = '<div class="field"><label for="cap-observaciones">Observaciones de la inspección (opcional)</label><textarea id="cap-observaciones" rows="6" placeholder="Agrega hallazgos, daños o información útil para el seguimiento"></textarea></div>' +
-          '<label class="ln-upload">' + icono('images') + '<span><b>Agregar fotografías</b><small>Puedes seleccionar varias imágenes; se guardarán en la carpeta de evidencia.</small></span>' +
-          '<input type="file" id="cap-fotos" accept="image/*" capture="environment" multiple /></label><div class="ln-fotos-lista" id="cap-fotos-lista"></div>';
-        const firmas = '<div class="ln-grid-2">' +
-          tarjeta(icono('badge-check') + ' Control Interno' + (ctx.inspector ? ' · ' + esc(ctx.inspector) : '') + ' · obligatoria', '<div class="ln-firma-caja"><canvas id="cap-firma-inspector"></canvas>' +
-              '<div class="ln-firma-acciones"><span class="ln-firma-vacia">Dibuja con el dedo o el mouse</span><button type="button" class="secondary ln-btn-chico" data-limpiar-firma="inspector">Limpiar</button></div></div>') +
-          tarjeta(icono('signature') + ' Firma del responsable · opcional', '<div class="ln-firma-caja"><canvas id="cap-firma-responsable"></canvas>' +
-              '<div class="ln-firma-acciones"><span class="ln-firma-vacia">Dibuja con el dedo o el mouse</span><button type="button" class="secondary ln-btn-chico" data-limpiar-firma="responsable">Limpiar</button></div></div>') +
-          '</div>';
-        return introduccionCaptura(ctx, 'INSPECCION') +
-          seccionCaptura(1, 'clipboard-list', 'Datos de la inspección', 'Confirma el responsable y completa los datos generales.', datos) +
-          seccionCaptura(2, 'list-checks', 'Revisión del activo', 'Marca el estado actual de cada componente y servicio.',
-            '<div class="ln-checklist-avance" id="cap-checklist-avance"><div class="ln-checklist-avance-cabecera"><b>Avance del checklist</b><span id="cap-checklist-conteo"></span></div>' +
-            '<div class="ln-checklist-avance-barra"><span id="cap-checklist-barra"></span></div></div>' +
-            secciones) +
-          seccionCaptura(3, 'shield-check', 'Seguridad del equipo', 'Registra el PIN, contraseña o patrón solicitado en el proceso de inspección.', seguridad) +
-          seccionCaptura(4, 'camera', 'Evidencia y observaciones', 'Documenta los hallazgos que deben acompañar al archivo.', evidencia) +
-          seccionCaptura(5, 'signature', 'Firmas de validación', 'Control Interno debe firmar para poder generar el documento.', firmas) +
-          '<div class="error-msg" id="cap-error" hidden></div>' +
+        const fotos = '<section class="ln-af-seccion ln-af-extra"><h4 class="ln-af-titulo">' + icono('images') + ' FOTOGRAFÍAS <span class="ln-tenue">(del sistema nuevo, opcional)</span></h4>' +
+          '<label class="ln-upload">' + icono('images') + '<span><b>Agregar fotografías</b><small>Se guardan en la carpeta de evidencia del NUCO en Drive.</small></span>' +
+          '<input type="file" id="cap-fotos" accept="image/*" capture="environment" multiple /></label><div class="ln-fotos-lista" id="cap-fotos-lista"></div></section>';
+        return htmlFormularioAppSheet(ctx.formulario) + fotos +
+          '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div>' +
           '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
             '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + ' Guardar y generar PDF</button></div>';
       }
 
       function iniciarFormularioInspeccion() {
-        captura.firmas.inspector = activarFirma('cap-firma-inspector');
-        captura.firmas.responsable = activarFirma('cap-firma-responsable');
-        captura.controlPatron = activarPatron('cap-insp-patron');
-        const tipoSeguridad = $('#cap-insp-tipo-contrasena', raiz);
-        if (tipoSeguridad) {
-          const alternarSeguridad = () => {
-            const modo = tipoSeguridad.value;
-            $('#cap-insp-pin-campo', raiz).hidden = modo !== 'PIN' && modo !== 'CONTRASEÑA';
-            $('#cap-insp-patron-bloque', raiz).hidden = modo !== 'PATRON';
-            $('#cap-insp-patron-ayuda', raiz).hidden = modo !== 'PATRON';
-          };
-          tipoSeguridad.addEventListener('change', alternarSeguridad); alternarSeguridad();
-        }
+        iniciarFormularioAppSheet();
         manejarSubidaArchivo('cap-fotos', 'cap-fotos-lista', () => captura.fotosCarpetaId, true, (s) => { if (s) captura.fotos.push(s); });
         $('#cap-guardar', raiz).addEventListener('click', guardarInspeccionDesdeFormulario);
-        actualizarProgresoChecklist();
       }
 
       function guardarInspeccionDesdeFormulario() {
-        const boton = $('#cap-guardar', raiz);
-        const errorBox = $('#cap-error', raiz);
-        errorBox.hidden = true;
-        const firmaInspector = captura.firmas.inspector;
-        const firmaResponsable = captura.firmas.responsable;
-        if (!firmaInspector || firmaInspector.estaVacia()) { mostrarErrorCaptura('La firma del inspector o Control Interno es obligatoria.', '#cap-firma-inspector'); return; }
-        const checklist = leerChecklistFormulario();
-        const totalPuntos = raiz.querySelectorAll('#ln-captura-cuerpo .ln-checklist-punto').length;
-        if (Object.keys(checklist).length < totalPuntos) {
-          mostrarErrorCaptura('Completa todos los puntos del checklist antes de generar el documento.', '#cap-checklist-avance');
-          actualizarProgresoChecklist(true);
-          $('#cap-checklist-avance', raiz).scrollIntoView({ behavior: 'smooth', block: 'center' });
-          return;
-        }
-        const tipoSeguridad = $('#cap-insp-tipo-contrasena', raiz) ? $('#cap-insp-tipo-contrasena', raiz).value : '';
-        const pinEquipo = $('#cap-insp-pin', raiz) ? $('#cap-insp-pin', raiz).value.trim() : '';
-        if ((tipoSeguridad === 'PIN' || tipoSeguridad === 'CONTRASEÑA') && !pinEquipo) { mostrarErrorCaptura('Captura el PIN o la contraseña revisada.', '#cap-insp-pin'); return; }
-        if (tipoSeguridad === 'PATRON' && captura.controlPatron.puntos().length < 2) { mostrarErrorCaptura('Traza al menos dos puntos para registrar el patrón de la inspección.', '#cap-insp-patron-bloque'); return; }
-        const idAbierto = captura.idObjetivo;
-        const refCaptura = captura.ref;
-        const carpetaId = captura.carpetaId;
-        const fotosCarpetaId = captura.fotosCarpetaId;
-        const ruta = captura.ruta;
-        const fotos = captura.fotos;
+        $('#cap-error', raiz).hidden = true;
+        if (!validarFormularioAppSheet()) return;
         if (raiz.querySelector('.ln-foto-subiendo')) { mostrarErrorCaptura('Espera a que terminen de subir las imágenes.', '#cap-fotos-lista'); return; }
-        captura.pdfFirmas = { inspector: firmaInspector.base64('#ddebf7'), responsable: firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ddebf7') : null,
-          patron: tipoSeguridad === 'PATRON' ? captura.controlPatron.base64('#ddebf7') : null };
+        const firmaInspector = captura.firmas['FIRMA INSPECTOR'];
+        const firmaResponsable = captura.firmas['FIRMA RESPONSABLE'];
+        const idAbierto = captura.idObjetivo;
+        const patron = patronParaGuardar();
+        captura.pdfFirmas = {
+          inspector: firmaInspector.base64('#ddebf7'),
+          responsable: firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ddebf7') : null,
+          patron: captura.controlPatron ? captura.controlPatron.base64('#ddebf7') : null,
+        };
         estadoGuardado('Guardando inspección');
-        llamar('apiLineasGuardarInspeccion', Object.assign({}, refCaptura, {
-          carpetaId: carpetaId, fotosCarpetaId: fotosCarpetaId, ruta: ruta, checklist: checklist,
-          otraApp: $('#cap-otra-app', raiz) ? $('#cap-otra-app', raiz).value : '', ticket: $('#cap-ticket', raiz).value,
-          observaciones: $('#cap-observaciones', raiz).value,
-          tipoContrasena: tipoSeguridad, pinEquipo: pinEquipo, patron: tipoSeguridad === 'PATRON' ? captura.controlPatron.valor() : '', patronBase64: captura.pdfFirmas.patron,
-          estatusEquipo: ctxEstatusActual_(),
-          fotos: fotos, firmaInspectorBase64: captura.pdfFirmas.inspector, firmaResponsableBase64: captura.pdfFirmas.responsable,
+        llamar('apiLineasGuardarInspeccion', Object.assign({}, captura.ref, {
+          id: captura.contexto.idPropuesto, valores: leerFormularioAppSheet(), patron: patron,
+          carpetaId: captura.carpetaId, fotosCarpetaId: captura.fotosCarpetaId, ruta: captura.ruta, fotos: captura.fotos,
+          firmaInspectorBase64: captura.pdfFirmas.inspector, firmaResponsableBase64: captura.pdfFirmas.responsable, patronBase64: captura.pdfFirmas.patron,
         })).then((r) => {
           refrescarDespuesDeCaptura(idAbierto, 'INSPECCION', r.id);
         }).catch((e) => {
@@ -1288,69 +1375,36 @@
         });
       }
 
-      function ctxEstatusActual_() {
-        return captura && captura.contexto && captura.contexto.equipo ? (captura.contexto.equipo.estatus || '') : '';
-      }
-
-      // -- Responsiva --
+      // -- Responsiva (RESPONSIVAS LINEAS_Form) --
 
       function formularioResponsiva(ctx) {
-        const datos = tarjetaResponsable(ctx.responsable, 'Responsable que recibe el activo') +
-          '<div class="grid" style="grid-template-columns: repeat(2, 1fr)"><div class="field"><label>Identificación presentada *</label><input type="text" id="cap-identificacion" placeholder="INE, pasaporte u otra identificación" autocomplete="off" required /></div>' +
-          (ctx.equipo ? '<div class="ln-captura-dato"><span><small>Color del equipo</small><b>' + esc(ctx.equipo.color || '—') + '</b></span></div>' : '') + '</div>';
-        const seguridad = '<div class="grid" style="grid-template-columns: repeat(2, 1fr)"><div class="field"><label>Tipo de contraseña</label><select id="cap-tipo-contrasena"><option value="">Sin contraseña</option><option value="PIN">PIN</option><option value="PATRON">Patrón</option><option value="CONTRASEÑA">Contraseña</option></select></div>' +
-          (ctx.equipo ? '<div class="ln-captura-dato"><span><small>Estatus actual del equipo</small><b>' + esc(ctx.equipo.estatus || '—') + '</b></span></div>' : '') + '</div>';
-        const evidencia = '<div class="ln-nota" id="cap-patron-no-aplica">' + icono('info', 'ln-icon-sm') + ' Selecciona Patrón para habilitar el trazado de 9 puntos.</div>' + htmlPatron('cap-patron', true) +
-          '<div class="field" style="margin-top:14px"><label for="cap-observaciones">Observaciones de la entrega (opcional)</label><textarea id="cap-observaciones" rows="6" placeholder="Condiciones de entrega, acuerdos o comentarios adicionales"></textarea></div>';
-        const firmas = '<div class="ln-grid-2">' +
-          tarjeta(icono('signature') + ' Firma del responsable · opcional', '<div class="ln-firma-caja"><canvas id="cap-firma-responsable"></canvas>' +
-              '<div class="ln-firma-acciones"><span class="ln-firma-vacia">Dibuja con el dedo o el mouse</span><button type="button" class="secondary ln-btn-chico" data-limpiar-firma="responsable">Limpiar</button></div></div>') +
-          tarjeta(icono('badge-check') + ' Control Interno' + (ctx.nombreCI ? ' · ' + esc(ctx.nombreCI) : '') + ' · obligatoria', '<div class="ln-firma-caja"><canvas id="cap-firma-ci"></canvas>' +
-              '<div class="ln-firma-acciones"><span class="ln-firma-vacia">Dibuja con el dedo o el mouse</span><button type="button" class="secondary ln-btn-chico" data-limpiar-firma="ci">Limpiar</button></div></div>') +
-          '</div>';
-        return introduccionCaptura(ctx, 'RESPONSIVA') +
-          seccionCaptura(1, 'user-check', 'Datos del responsable', 'Verifica a quién se entrega el activo y registra su identificación.', datos) +
-          seccionCaptura(2, 'shield-check', 'Equipo y seguridad', 'Registra la modalidad de acceso y cualquier cambio de estatus.', seguridad) +
-          seccionCaptura(3, 'paperclip', 'Evidencia y observaciones', 'Adjunta el patrón cuando aplique y deja constancia de la entrega.', evidencia) +
-          seccionCaptura(4, 'signature', 'Firmas de conformidad', 'La firma de Control Interno es obligatoria; la del responsable es opcional.', firmas) +
-          '<div class="error-msg" id="cap-error" hidden></div>' +
+        return htmlFormularioAppSheet(ctx.formulario) +
+          '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div>' +
           '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
             '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + ' Guardar y generar PDF</button></div>';
       }
 
       function iniciarFormularioResponsiva() {
-        captura.firmas.responsable = activarFirma('cap-firma-responsable');
-        captura.firmas.ci = activarFirma('cap-firma-ci');
-        captura.controlPatron = activarPatron('cap-patron');
-        const tipoContrasena = $('#cap-tipo-contrasena', raiz);
-        const alternarPatron = () => {
-          const usaPatron = normal(tipoContrasena.value).indexOf('patron') >= 0;
-          $('#cap-patron-bloque', raiz).hidden = !usaPatron;
-          $('#cap-patron-no-aplica', raiz).hidden = usaPatron;
-        };
-        tipoContrasena.addEventListener('input', alternarPatron);
-        alternarPatron();
+        iniciarFormularioAppSheet();
         $('#cap-guardar', raiz).addEventListener('click', guardarResponsivaDesdeFormulario);
       }
 
       function guardarResponsivaDesdeFormulario() {
-        const boton = $('#cap-guardar', raiz);
-        const errorBox = $('#cap-error', raiz);
-        errorBox.hidden = true;
-        const identificacion = $('#cap-identificacion', raiz).value.trim();
-        const firmaResponsable = captura.firmas.responsable;
-        const firmaCi = captura.firmas.ci;
-        if (!identificacion) { mostrarErrorCaptura('La identificación es obligatoria.', '#cap-identificacion'); return; }
-        if (!firmaCi || firmaCi.estaVacia()) { mostrarErrorCaptura('La firma de Control Interno es obligatoria.', '#cap-firma-ci'); return; }
-        if ($('#cap-tipo-contrasena', raiz).value === 'PATRON' && captura.controlPatron.puntos().length < 2) { mostrarErrorCaptura('Traza al menos dos puntos para registrar el patrón.', '#cap-patron-bloque'); return; }
+        $('#cap-error', raiz).hidden = true;
+        if (!validarFormularioAppSheet()) return;
+        const firmaResponsable = captura.firmas['FIRMA RESPONSABLE'];
+        const firmaCi = captura.firmas['FIRMA CI'];
         const idAbierto = captura.idObjetivo;
-        const refCaptura = captura.ref;
-        const carpetaId = captura.carpetaId;
-        captura.pdfFirmas = { responsable: firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ffffff') : null, ci: firmaCi.base64('#ffffff'), patron: captura.controlPatron.base64('#ffffff') };
+        const patron = patronParaGuardar();
+        captura.pdfFirmas = {
+          responsable: firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ffffff') : null,
+          ci: firmaCi.base64('#ffffff'),
+          patron: captura.controlPatron ? captura.controlPatron.base64('#ffffff') : null,
+        };
         estadoGuardado('Guardando responsiva');
-        llamar('apiLineasGuardarResponsiva', Object.assign({}, refCaptura, {
-          carpetaId: carpetaId, identificacion: identificacion, tipoContrasena: $('#cap-tipo-contrasena', raiz).value,
-          observaciones: $('#cap-observaciones', raiz).value, estatusEquipo: ctxEstatusActual_(), patron: captura.controlPatron.valor(),
+        llamar('apiLineasGuardarResponsiva', Object.assign({}, captura.ref, {
+          id: captura.contexto.idPropuesto, valores: leerFormularioAppSheet(), patron: patron,
+          carpetaId: captura.carpetaId, ruta: captura.ruta,
           firmaResponsableBase64: captura.pdfFirmas.responsable, firmaCiBase64: captura.pdfFirmas.ci, patronBase64: captura.pdfFirmas.patron,
         })).then((r) => {
           refrescarDespuesDeCaptura(idAbierto, 'RESPONSIVA', r.id);
@@ -1383,8 +1437,8 @@
           captura.fotosCarpetaId = carpeta.fotosCarpetaId || carpeta.carpetaId;
           captura.ruta = carpeta.ruta;
           $('#ln-captura-subtitulo', raiz).textContent = tipo === 'INSPECCION'
-            ? 'Revisa el estado del activo, agrega evidencia y valida con firma.'
-            : 'Confirma la entrega, registra la evidencia y recaba la validación de Control Interno.';
+            ? 'Mismo formulario que en AppSheet: los campos cambian según el TIPO.'
+            : 'Mismo formulario que en AppSheet. La firma de Control Interno es obligatoria.';
           if (tipo === 'INSPECCION') {
             $('#ln-captura-cuerpo', raiz).innerHTML = formularioInspeccion(ctx);
             pintarIconos($('#ln-captura-cuerpo', raiz));

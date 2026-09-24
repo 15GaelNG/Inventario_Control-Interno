@@ -426,4 +426,23 @@
   .ln-historial-completo input { max-width: 340px; flex: 1 1 220px; }
   .ln-historial-completo button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; font-size: 13px; }
   .lac-stock { min-width: 34px; }
+
+  /* ---- Formularios del AppSheet (inspección / responsiva): títulos de página y campos en rejilla ---- */
+  .ln-af-seccion { border: 1px solid var(--color-border); border-radius: 12px; padding: 14px 16px 6px; margin-bottom: 12px; background: var(--color-surface); }
+  .ln-af-seccion[hidden] { display: none; }
+  .ln-af-titulo { display: flex; align-items: center; gap: 7px; margin: 0 0 12px; font-size: 13px; letter-spacing: .3px; color: var(--color-primary); }
+  :root[data-theme="dark"] .ln-af-titulo { color: var(--color-accent); }
+  .ln-af-titulo .ln-icon { color: var(--color-accent-hover); }
+  .ln-af-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 14px; }
+  .ln-af-campo[hidden] { display: none; }
+  .ln-af-campo label { font-size: 11.5px; letter-spacing: .2px; }
+  .ln-af-campo .ln-af-req { color: var(--ln-rojo-tx); }
+  .ln-af-lectura input { background: var(--color-bg); color: var(--color-text-muted); cursor: default; }
+  .ln-af-seccion .ln-checklist-punto { border-bottom: none; padding: 2px 0 0; }
+  .ln-af-calculado { font-size: 20px; font-weight: 700; color: var(--color-primary); padding: 4px 0 8px; }
+  :root[data-theme="dark"] .ln-af-calculado { color: var(--color-accent); }
+  .ln-af-ancho .ln-firma-caja canvas { min-height: 150px; }
+  .ln-af-extra { background: var(--color-bg); }
+  @media (max-width: 900px) { .ln-af-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 560px) { .ln-af-grid { grid-template-columns: 1fr; } }
 </style>

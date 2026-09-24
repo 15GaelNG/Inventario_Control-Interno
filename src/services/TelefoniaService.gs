@@ -212,13 +212,13 @@ const TelefoniaService = (function () {
   /** Datos precargados para el formulario de una inspección nueva. */
   function contextoInspeccion(token, ref) {
     const sesion = Auth.requiereRol(token, rolesOperan_());
-    return LineasUtil.paraCliente(LineasCaptura.contextoInspeccion(ref, usuarioOperacion_(sesion)));
+    return LineasUtil.paraCliente(LineasCaptura.contextoInspeccion(ref, usuarioOperacion_(sesion), puedeVerSecretos_(sesion)));
   }
 
   /** Datos precargados para el formulario de una responsiva nueva. */
   function contextoResponsiva(token, ref) {
     const sesion = Auth.requiereRol(token, rolesOperan_());
-    return LineasUtil.paraCliente(LineasCaptura.contextoResponsiva(ref, usuarioOperacion_(sesion)));
+    return LineasUtil.paraCliente(LineasCaptura.contextoResponsiva(ref, usuarioOperacion_(sesion), puedeVerSecretos_(sesion)));
   }
 
   /** Crea la carpeta de evidencia en Drive (NUCOS) para una inspección o responsiva nueva. */
@@ -245,13 +245,13 @@ const TelefoniaService = (function () {
   /** Guarda una inspección nueva (checklist, snapshot y bitácora). El PDF se pide aparte. */
   function guardarInspeccion(token, datos) {
     const sesion = Auth.requiereRol(token, rolesOperan_());
-    return LineasUtil.paraCliente(LineasCaptura.guardarInspeccion(datos, usuarioOperacion_(sesion)));
+    return LineasUtil.paraCliente(LineasCaptura.guardarInspeccion(datos, usuarioOperacion_(sesion), puedeVerSecretos_(sesion)));
   }
 
   /** Guarda una responsiva nueva. El PDF se pide aparte. */
   function guardarResponsiva(token, datos) {
     const sesion = Auth.requiereRol(token, rolesOperan_());
-    return LineasUtil.paraCliente(LineasCaptura.guardarResponsiva(datos, usuarioOperacion_(sesion)));
+    return LineasUtil.paraCliente(LineasCaptura.guardarResponsiva(datos, usuarioOperacion_(sesion), puedeVerSecretos_(sesion)));
   }
 
   /** Genera (o regenera) el PDF de una inspección/responsiva capturada en el sistema. */

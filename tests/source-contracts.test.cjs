@@ -104,37 +104,54 @@ test('Telefonía permite alta y edición directa con bitácora y color persisten
 
 test('las firmas nuevas no se almacenan como archivos de Drive', () => {
   const captura = read('src/services/lineas/LineasCaptura.gs');
-  const cliente = read('src/html/js/lineas.html');
   assert.match(captura, /firmaInspectorBase64/);
   assert.match(captura, /firmaCiBase64/);
   assert.match(captura, /'FIRMA RESPONSABLE': '', 'FIRMA INSPECTOR': ''/);
-  assert.match(captura, /'FIRMA RESPONSABLE': '', 'NOMBRE CI': usuario\.nombre, 'FIRMA CI': ''/);
-  assert.doesNotMatch(cliente, /'FIRMA INSPECTOR\.png'/);
-  assert.doesNotMatch(cliente, /'FIRMA CI\.png'/);
+  assert.match(captura, /'NOMBRE CI': usuario\.nombre, 'FIRMA RESPONSABLE': '', 'FIRMA CI': ''/);
 });
 
-test('los formularios muestran el estado y color actuales y trazan patrón de nueve puntos', () => {
-  const cliente = read('src/html/js/lineas.html');
-  assert.doesNotMatch(cliente, /Conservar estatus actual/);
-  assert.match(cliente, /Estatus actual del equipo/);
-  assert.match(cliente, /ctx\.equipo\.color/);
-  assert.match(cliente, /Array\.from\(\{ length: 9 \}/);
-  assert.match(cliente, /Otra aplicación \(opcional\)/);
-  assert.match(cliente, /responsable es opcional/i);
-});
-
-test('edición e inspección comparten patrón, navegación y fondos de firma del PDF', () => {
-  const cliente = read('src/html/js/lineas.html');
+test('los formularios de inspección y responsiva siguen el orden y las etiquetas del AppSheet', () => {
   const captura = read('src/services/lineas/LineasCaptura.gs');
-  assert.match(cliente, /function activarPatron\(prefijo, inicial\)/);
-  assert.match(cliente, /htmlPatron\('reg-patron'/);
-  assert.match(cliente, /htmlPatron\('cap-insp-patron'/);
-  assert.match(cliente, /data-ln-miga=/);
-  assert.match(cliente, /Control Interno'.*ctx\.inspector.*' · obligatoria'/s);
-  assert.match(cliente, /Control Interno'.*ctx\.nombreCI.*' · obligatoria'/s);
-  assert.match(cliente, /firmaInspector\.base64\('#ddebf7'\)/);
-  assert.match(cliente, /firmaCi\.base64\('#ffffff'\)/);
-  assert.match(captura, /'PATRON': firmasBase64 \? blobBase64_\(firmasBase64\.patron/);
+  const orden = (desde, hasta) => [...captura.slice(captura.indexOf(desde), captura.indexOf(hasta)).matchAll(/(?:campo_|ro)\('([^']+)'/g)].map((m) => m[1]);
+  assert.deepEqual(orden('function formularioInspeccion_', 'const agregarSeccion'), ['FECHA DE REGISTRO', 'ID', 'ID LINEA', 'NUCO', 'RESPONSABLE',
+    'DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO', 'PUESTO', 'JEFE DIRECTO', 'CORREO', 'TIPO', 'No TELEFONO', 'IMEI', 'SIM', 'MODELO',
+    'COLOR', 'COMPAÑIA', 'PLAN', 'RAZON SOCIAL']);
+  assert.deepEqual(orden('function formularioResponsiva_', 'function ocultarSecretos_').filter((c) => c !== 'columna'), ['ID', 'ID LINEA', 'NUCO', 'No EMPLEADO', 'DIA', 'MES', 'AÑO',
+    'RESPONSABLE', 'IDENTIFICACION', 'RAZON SOCIAL', 'FECHA RESPONSIVA', 'SEDE', 'OFICINA / DESARROLLO', 'AREA', 'PUESTO', 'DIRECTOR', 'CORREO',
+    'No TELEFONO', 'COMPAÑIA', 'DEPARTAMENTO', 'MODELO', 'SIM', 'IMEI', 'COLOR', 'ACCESORIOS', 'PIN WHATSAPP', 'PIN EQUIPO', 'CONTRASEÑA',
+    'OBSERVACIONES', 'FIRMA RESPONSABLE', 'NOMBRE CI', 'FIRMA CI']);
+  assert.match(captura, /'MES', 'MES', 'texto', \{ valor: mes/);
+  assert.match(captura, /'Septiembre'/);
+  assert.match(captura, /'FECHA RESPONSIVA': '', 'TIPO CONTRASEÑA': ''/);
+  assert.doesNotMatch(captura, /ESTATUS EQUIPO/);
+  assert.doesNotMatch(captura, /'RESPONSIVA': urlArchivo_/);
+});
+
+test('la inspección replica el bot ACTUALIZAR DESDE INSPECCION', () => {
+  const captura = read('src/services/lineas/LineasCaptura.gs');
+  const copia = captura.slice(captura.indexOf('const COPIA_INSPECCION_A_LINEA'), captura.indexOf('function guardarInspeccion'));
+  assert.deepEqual([...copia.matchAll(/\['([^']+)', '([^']+)'\]/g)].map((m) => m[1]), ['RESPONSABLE', 'DEPARTAMENTO', 'AREA', 'SEDE',
+    'OFICINA / DESARROLLO', 'PUESTO', 'JEFE DIRECTO', 'CUENTA GOOGLE', 'PIN WHATSAPP', 'PIN EQUIPO', 'PATRON', 'CONTRASEÑA MODEM']);
+  assert.match(captura, /'FECHA INSPECCION': new Date\(/);
+  assert.match(captura, /LineasRepo\.guardarCambiosRegistro\(obj\.fila, copia, usuario, ahora\)/);
+});
+
+test('el checklist replica Show_If, orden de secciones y la CALIFICACION del AppSheet', () => {
+  const Checklist = new Function(read('src/services/lineas/LineasChecklist.gs') + '; return LineasChecklist;')();
+  assert.deepEqual(Checklist.secciones().map((s) => s.seccion), ['DOCUMENTACIÓN / ACCESORIOS', 'SISTEMA', 'CONECTIVIDAD',
+    'ESTADO FÍSICO GENERAL', 'DESEMPEÑO', 'APPS INSTALADAS']);
+  const visibles = (tipo) => Checklist.seccionesVisibles(tipo).reduce((l, s) => l.concat(s.puntos.map((p) => p.columna)), []);
+  assert.deepEqual(visibles('LINEA'), ['IDENTIFICACION', 'RED MOVIL', 'USO DATOS', 'LINEA DE VOZ']);
+  assert.deepEqual(visibles('MODEM'), ['IDENTIFICACION', 'CUBO', 'CABLE', 'RED MOVIL', 'USO DATOS', 'BOTON ENCENDIDO', 'CUERPO EQUIPO',
+    'PUERTO CARGA', 'TEMPERATURA', 'DESEMPEÑO']);
+  assert.equal(visibles('EQUIPO').indexOf('RED MOVIL'), -1);
+  assert.equal(visibles('EQUIPO + SIM').length, 36);
+  assert.ok(!visibles('EQUIPO + SIM').includes('CUBO 2'));
+  // Fórmula: SI de 15 puntos + BUENO/REGULAR/MALO, entre los contestados (N/A y conectividad no cuentan)
+  assert.equal(Checklist.calificacion({}), 0);
+  assert.equal(Checklist.calificacion({ IDENTIFICACION: 'N/A', CUBO: 'SI', WIFI: 'NO', SO: 'NO' }), 1);
+  assert.equal(Checklist.calificacion({ CUBO: 'SI', CABLE: 'NO', 'DURACION BATERIA': 'REGULAR', TEMPERATURA: 'MALO' }), 1.5 / 4);
+  assert.equal(Checklist.calificacionTexto(0.9444444), '94.44%');
 });
 
 test('el patrón conserva su proporción y cabe completo en las plantillas PDF', () => {
@@ -147,11 +164,9 @@ test('el patrón conserva su proporción y cabe completo en las plantillas PDF',
 test('cada inspección inicia limpia y no modifica accesorios desde el checklist', () => {
   const cliente = read('src/html/js/lineas.html');
   const captura = read('src/services/lineas/LineasCaptura.gs');
-  assert.match(cliente, /grupoEscala\(p\.escala, null\)/);
+  assert.match(captura, /valor: '', checklist: true/);
   assert.doesNotMatch(cliente, /cap-actualizar-accesorios/);
-  assert.doesNotMatch(cliente, /ctx\.anterior/);
   assert.doesNotMatch(captura, /actualizarAccesorios/);
-  assert.doesNotMatch(captura, /inspeccionesPrevias_/);
 });
 
 test('el patrón usa fondo azul en inspección y blanco en responsiva solo al exportar', () => {
