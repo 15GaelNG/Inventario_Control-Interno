@@ -1897,11 +1897,15 @@
     async function mostrarDetalleVehiculoEnPanel(vResumen, contenedor) {
       contenedor.innerHTML = '<div class="loading-inline"><span class="spinner"></span> Cargando…</div>';
       try {
-        const [completo, cambios, reasignaciones] = await Promise.all([
+        const [completo, cambiosTexto, reasignaciones] = await Promise.all([
           callServer('apiBuscarVehiculoPorFolio', state.token, vResumen.FOLIO),
           callServer('apiListarCambiosVehiculosPorFolio', state.token, vResumen.FOLIO),
           callServer('apiListarReasignacionesVehicularesPorFolio', state.token, vResumen.FOLIO),
         ]);
+        // apiListarCambiosVehiculosPorFolio regresa JSON.stringify — ver la nota
+        // en ClientApi.gs (google.script.run pierde arreglos grandes de forma
+        // intermitente; como texto viaja confiable).
+        const cambios = JSON.parse(cambiosTexto || '[]');
         if (!completo) {
           contenedor.innerHTML = '<p class="empty-state">No se encontró el registro completo.</p>';
           return;
@@ -2023,6 +2027,10 @@
         tabla.setError('No se pudo cargar el catálogo de vehículos: ' + err.message);
         return;
       }
+      // Si mientras tanto se navegó a otra vista, el router ya destruyó este
+      // DOM (montarVista hace container.innerHTML = '') — escribir aquí
+      // tronaría con "Cannot set properties of null".
+      if (!document.body.contains(modalEditar)) return;
 
       vehiculosPorId = {};
       todosLosVehiculos.forEach((v) => { vehiculosPorId[v.ID_VEHICULO] = v; });

@@ -351,6 +351,77 @@ function revisarRelacionesSoloReporte() {
 }
 
 /**
+ * Diagnóstico de solo lectura para la hoja "CAMBIOS VEHICULOS": cuántas filas tiene,
+ * qué encabezados encontró y cuáles de las 8 columnas esperadas SÍ pudo emparejar
+ * (mismo problema que ya se vio antes con encabezados casi-duplicados en otras
+ * hojas: un espacio o acento de más y la columna se da por "no encontrada" sin
+ * avisar). No cambia nada.
+ *
+ * Correr desde el editor: seleccionar "diagnosticoCambiosVehiculos" arriba y
+ * "Ejecutar"; el resultado sale en Ver > Registros (Ctrl+Enter).
+ */
+function diagnosticoCambiosVehiculos() {
+  const ssId = Config.SPREADSHEET_IDS.VEHICULOS();
+  const NOMBRE_HOJA = 'CAMBIOS VEHICULOS';
+  const ESPERADAS = ['ID_CAMBIO', 'FOLIO', 'TABLA', 'CAMPO', 'ANTES', 'DESPUES', 'ACTUALIZADO POR', 'FECHA ACTUALIZACION'];
+
+  const ss = SpreadsheetApp.openById(ssId);
+  const hoja = ss.getSheetByName(NOMBRE_HOJA);
+  if (!hoja) {
+    const nombres = ss.getSheets().map((s) => s.getName());
+    const parecidos = nombres.filter((n) => n.toUpperCase().indexOf('CAMBIOS') !== -1 || n.toUpperCase().indexOf('VEHICULO') !== -1);
+    const mensaje = 'No existe una pestaña llamada exactamente "' + NOMBRE_HOJA + '" en ese spreadsheet.\n' +
+      'Pestañas parecidas encontradas: ' + (parecidos.length ? parecidos.join(', ') : '(ninguna)');
+    Logger.log(mensaje);
+    return mensaje;
+  }
+
+  const lastRow = hoja.getLastRow();
+  const lastCol = hoja.getLastColumn();
+  const encabezados = lastCol ? hoja.getRange(1, 1, 1, lastCol).getValues()[0] : [];
+  const indices = SheetUtils.indiceDeColumnas(encabezados, ESPERADAS);
+  const encontradas = ESPERADAS.filter((c) => indices[c] !== -1);
+  const faltantes = ESPERADAS.filter((c) => indices[c] === -1);
+
+  const lineas = [
+    'Pestaña "' + hoja.getName() + '" — ' + Math.max(0, lastRow - 1) + ' fila(s) de datos, ' + lastCol + ' columna(s).',
+    'Encabezados reales (fila 1): ' + JSON.stringify(encabezados),
+    '',
+    'De las 8 columnas esperadas, encontró ' + encontradas.length + ': ' + (encontradas.join(', ') || '(ninguna)'),
+    faltantes.length ? 'NO encontró: ' + faltantes.join(', ') : 'Encontró las 8.',
+  ];
+
+  if (lastRow >= 2 && indices['FOLIO'] !== -1) {
+    const ultimasFilas = Math.min(5, lastRow - 1);
+    const muestra = hoja.getRange(lastRow - ultimasFilas + 1, 1, ultimasFilas, lastCol).getValues();
+    lineas.push('', 'Últimas ' + ultimasFilas + ' fila(s) de la hoja (tal cual, sin procesar):');
+    muestra.forEach((fila) => lineas.push('  ' + JSON.stringify(fila)));
+  }
+
+  // Ahora, la parte que de verdad importa: correr EXACTAMENTE lo mismo que hace
+  // CambiosVehiculosService.listarResumen() (mismo leerColumnasDeHoja, mismo
+  // bucle de abajo hacia arriba) y ver en qué momento se pierden los datos.
+  const ESPERADAS_SERVICIO = ['ID_CAMBIO', 'FOLIO', 'TABLA', 'CAMPO', 'ANTES', 'DESPUES', 'ACTUALIZADO POR', 'FECHA ACTUALIZACION'];
+  const leido = SheetUtils.leerColumnasDeHoja(hoja, ESPERADAS_SERVICIO);
+  lineas.push('', '--- Simulación de listarResumen() ---');
+  lineas.push('leerColumnasDeHoja: filas=' + leido.filas + ', datos.FOLIO.length=' + leido.datos.FOLIO.length);
+  lineas.push('Últimos 5 valores de datos.FOLIO (los que debería leer primero, de abajo hacia arriba): ' +
+    JSON.stringify(leido.datos.FOLIO.slice(-5)));
+
+  let encontradosEnBucle = 0;
+  for (let i = leido.filas - 1; i >= 0 && encontradosEnBucle < 5; i--) {
+    if (!leido.datos.FOLIO[i]) continue;
+    encontradosEnBucle++;
+    lineas.push('  fila índice ' + i + ' → FOLIO="' + leido.datos.FOLIO[i] + '", CAMPO="' + leido.datos.CAMPO[i] + '"');
+  }
+  lineas.push('Filas que el bucle SÍ hubiera regresado (de las primeras 5 que encontró): ' + encontradosEnBucle);
+
+  const mensaje = lineas.join('\n');
+  Logger.log(mensaje);
+  return mensaje;
+}
+
+/**
  * Igual que revisarRelacionesSoloReporte(), pero además CORRIGE las diferencias que
  * encuentre (sobrescribe la copia con el valor de Vehículos). Correrla una vez ya
  * revisado el log de la corrida en modo reporte — después de esto, se puede dejar

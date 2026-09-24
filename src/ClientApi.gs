@@ -63,11 +63,15 @@ function apiEliminarVehiculo(token, id) {
 function apiSubirArchivoVehiculo(token, nombreArchivo, mimeType, base64Data) {
   return VehiculosService.subirArchivo(token, nombreArchivo, mimeType, base64Data);
 }
+// Van como JSON.stringify (no el arreglo/objeto directo): con ~500 filas,
+// google.script.run pierde la respuesta de forma intermitente (confirmado con
+// pruebas — el servidor sí arma las 500 filas, pero a veces el cliente recibe
+// vacío). Como texto viaja confiable; el cliente hace JSON.parse().
 function apiListarCambiosVehiculos(token) {
-  return CambiosVehiculosService.listarResumen(token);
+  return JSON.stringify(CambiosVehiculosService.listarResumen(token));
 }
 function apiListarCambiosVehiculosPorFolio(token, folio) {
-  return CambiosVehiculosService.listarPorFolio(token, folio);
+  return JSON.stringify(CambiosVehiculosService.listarPorFolio(token, folio));
 }
 function apiListarReasignacionesVehicularesPorFolio(token, folio) {
   return ReasignacionesVehicularesService.listarPorFolio(token, folio);

@@ -625,7 +625,10 @@
       tabla.setCargando(true);
       let crudos;
       try {
-        crudos = await callServer('apiListarCambiosVehiculos', state.token) || [];
+        // apiListarCambiosVehiculos regresa JSON.stringify (ver ClientApi.gs) —
+        // con ~500 filas, google.script.run pierde el arreglo directo de forma
+        // intermitente; como texto viaja confiable.
+        crudos = JSON.parse((await callServer('apiListarCambiosVehiculos', state.token)) || '[]');
       } catch (err) {
         tabla.setError('No se pudo cargar el historial: ' + err.message);
         return;

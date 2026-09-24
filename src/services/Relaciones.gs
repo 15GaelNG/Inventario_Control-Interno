@@ -120,7 +120,15 @@ const Relaciones = (function () {
     return idx + 1;
   }
 
-  function registrarLog_(ssId, tipo, hoja, clave, columna, tenia, quedo) {
+  /**
+   * Escribe TODAS las entradas del log de una sola vez (una llamada a setValues, no
+   * una por diferencia) — revisar() puede encontrar cientos de diferencias la primera
+   * vez que corre, y escribirlas una por una con appendRow() era lentísimo (y arriesgaba
+   * el límite de 6 minutos de Apps Script). `entradas` = [{tipo, hoja, clave, columna,
+   * tenia, quedo}, …].
+   */
+  function escribirLog_(ssId, entradas) {
+    if (!entradas.length) return;
     try {
       const ss = SpreadsheetApp.openById(ssId);
       let log = ss.getSheetByName('LOG_RELACIONES');
@@ -128,9 +136,11 @@ const Relaciones = (function () {
         log = ss.insertSheet('LOG_RELACIONES');
         log.appendRow(['FECHA', 'TIPO', 'HOJA', 'CLAVE', 'COLUMNA', 'TENIA', 'QUEDO']);
       }
-      log.appendRow([new Date(), tipo, hoja, clave, columna, tenia, quedo]);
+      const ahora = new Date();
+      const filas = entradas.map((e) => [ahora, e.tipo, e.hoja, e.clave, e.columna, e.tenia, e.quedo]);
+      log.getRange(log.getLastRow() + 1, 1, filas.length, 7).setValues(filas);
     } catch (err) {
-      console.error('Relaciones: no se pudo escribir en LOG_RELACIONES: ' + err.message);
+      console.error('Relaciones: no se pudo escribir en LOG_RELACIONES (' + entradas.length + ' entradas): ' + err.message);
     }
   }
 
@@ -261,6 +271,10 @@ const Relaciones = (function () {
         });
       });
 
+      // Todo lo que hay que loguear se junta aquí y se escribe de UNA sola vez al
+      // final (una llamada a setValues, no una por diferencia — ver escribirLog_).
+      const entradasLog = [];
+
       origenDef.copias.forEach((copia) => {
         const hoja = hojaCopia_(copia, ssId);
         const filasCopia = SheetUtils.getAll(ssId, hoja.getName());
@@ -275,13 +289,13 @@ const Relaciones = (function () {
 
           if (duplicados[copia.claveOrigen][claveValor]) {
             duplicadosOmitidos++;
-            registrarLog_(ssId, 'CLAVE_DUPLICADA_EN_ORIGEN', hoja.getName(), claveValor, copia.clave, '', '');
+            entradasLog.push({ tipo: 'CLAVE_DUPLICADA_EN_ORIGEN', hoja: hoja.getName(), clave: claveValor, columna: copia.clave, tenia: '', quedo: '' });
             return;
           }
           const filaOrigen = indice[copia.claveOrigen][claveValor];
           if (!filaOrigen) {
             huerfanos++;
-            registrarLog_(ssId, 'HUERFANO', hoja.getName(), claveValor, copia.clave, '', '');
+            entradasLog.push({ tipo: 'HUERFANO', hoja: hoja.getName(), clave: claveValor, columna: copia.clave, tenia: '', quedo: '' });
             return;
           }
 
@@ -291,7 +305,7 @@ const Relaciones = (function () {
             const debiaSer = filaOrigen[colOrigen];
             if (mismoValor_(tenia, debiaSer)) return;
             diferencias++;
-            registrarLog_(ssId, 'DIFERENCIA', hoja.getName(), claveValor, colDestino, tenia, debiaSer);
+            entradasLog.push({ tipo: 'DIFERENCIA', hoja: hoja.getName(), clave: claveValor, columna: colDestino, tenia: tenia, quedo: debiaSer });
             if (corregir) {
               correcciones[colDestino] = correcciones[colDestino] || {};
               const valorNuevo = debiaSer === undefined || debiaSer === null ? '' : debiaSer;
@@ -316,6 +330,8 @@ const Relaciones = (function () {
           clavesDuplicadasOmitidas: duplicadosOmitidos, corregido: corregir,
         };
       });
+
+      escribirLog_(ssId, entradasLog);
     });
 
     return resultado;
