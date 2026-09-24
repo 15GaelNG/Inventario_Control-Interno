@@ -37,11 +37,11 @@ Líneas con el lenguaje visual de jorge: `page-header` + `stat-tile` clicables
 (filtran la tabla, otro clic quita el filtro) + `DataTable` en Líneas Telefónicas
 (pestañas Equipos/Líneas; ojo o doble clic abre la ficha), Inventario de
 Accesorios (panel con movimientos; flechas para entrada/salida), Reactivación,
-Solicitud, Post Venta (panel con todos los campos) y las tres bitácoras. Las
+Solicitud (panel con todos los campos) y las tres bitácoras. Las
 tablas llegan completas como texto JSON (`apiLineasBitacoraTabla`,
 `apiLineasVistaOperativaTabla`, hasta 5000 filas); Control de Cambios carga los
-5000 más recientes y ofrece “Buscar en todo el historial”. Gestión de Activos y
-Detalles conservan sus tarjetas tipo AppSheet. Los avisos usan `Notificar`.
+5000 más recientes y ofrece “Buscar en todo el historial”. Gestión de Activos
+conserva sus tarjetas tipo AppSheet (Detalles pasó a ser la vista de tarjetas, ver 0c). Los avisos usan `Notificar`.
 Helpers en `lineas.html`: `tablaLineas`, `columnasDeHoja`, `tilesKpi`.
 
 De paso se corrigieron encabezados que no coincidían con la hoja (se perdían en
@@ -68,6 +68,39 @@ aplicar Editable/Reset/Valid_If al guardar. Para portar otra tabla del AppSheet 
 
 Mejoras sobre AppSheet ya decididas: CONTRASEÑA MODEM se precarga en la inspección; se conservan fotos, patrón
 de 9 puntos, COLOR persistente y la carpeta NUCOS para PDFs.
+
+## 0c. Cambios pedidos por el área (2026-09-24, después de la réplica)
+
+Primeras mejoras que AppSheet no permitía:
+
+- **Menú.** Se retiró *Líneas Post Venta* (el módulo deja de existir). *Gestión de Activos* sale del grupo
+  Líneas y queda como acceso propio debajo del desplegable (en `NAV_GRUPOS`, una entrada con `vista` y sin
+  `items` es un acceso suelto; en `Modulos.gs` es su propio grupo). *Detalles Líneas Telefónicas* dejó de ser
+  módulo: era la misma tabla con otra vista.
+- **Tabla / Tarjetas.** Líneas Telefónicas tiene un selector *Tabla | Tarjetas* (se recuerda en el navegador).
+  Las tarjetas muestran exactamente lo que filtra la tabla (búsqueda, filtros de columna, orden y KPIs): se
+  agregó `getFiltradas()` al DataTable (solo lectura) y un `MutationObserver` repinta las tarjetas cuando la
+  tabla se repinta.
+- **Detalles para copiar.** La ficha de equipo y de línea muestra el texto de la columna virtual
+  `DETALLES LINEAS TELEFONICAS` del AppSheet, en su orden (NUCO, Motivo de resguardo, Ticket / Asunto, Código de
+  resguardo = RESPONSABLE, IMEI, SIM, Número, Modelo, Compañía, Razón Social, Estatus de adendum = FIN PLAN,
+  Estatus actual de la línea), con botón *Copiar detalles*. Motivo, ticket y estatus actual (que AppSheet dejaba
+  en blanco) se escriben ahí antes de copiar y no se guardan; el estatus actual se propone con ESTATUS LINEA.
+  Los valores salen crudos de la fila (`convertirRegistro` → `detalles`), igual que la fórmula.
+- **Historial filtrable y exportable.** `LineasRepo.historialDeRegistro` regresa una lista plana
+  (`{ eventos }`, una fila por evento o por campo cambiado) que junta CAMBIOS, HISTORIAL_REASIGNACIONES,
+  BITACORA DE DESECHO, REACTIVACION DE LINEAS, inspecciones y responsivas (AppSheet, Drive y sistema nuevo) y
+  APP_MOVIMIENTOS. Cada fila tiene un *Movimiento* (`movimientoDeCampo`: Reasignación, Cambio de estatus, de
+  línea, de plan, de equipo, de área o ubicación, de accesos, Otros cambios; más Alta, Inspección, Responsiva,
+  Reactivación y Desecho). En la ficha es un DataTable con un selector *Movimiento* (solo los tipos que existen,
+  con su conteo), filtros por columna y *Exportar a Excel*. Un cambio de RESPONSABLE de la bitácora no se repite
+  si ese día ya hay reasignación con el mismo responsable entrante. De paso: la edición ahora marca su
+  reasignación (`idsReasignacion`) para no duplicarla.
+- **Excel y botones.** Ya no hay descargas CSV: todo se exporta con *Exportar a Excel* del DataTable. Nombres
+  únicos: *Registrar …* para altas (NUCO, artículo, reactivación, solicitud, desecho), *Guardar cambios* al
+  editar, *Ver PDF*, *Ver carpeta en Drive*, *Limpiar firma*. Medidas únicas (las de la barra del DataTable) y
+  colores del sistema: acciones en azul de marca, `.secondary` para cancelar/volver, `a.externo` para Drive/PDF,
+  verde para Excel (sección "Botones" de `lineas-estilos.html`).
 
 ## 1. Contexto
 
