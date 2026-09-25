@@ -1,0 +1,63 @@
+<template id="tpl-lineas-telefonicas">
+  <div class="ln-modulo" id="ln-telefonicas">
+
+    <!-- Listado (mismo esqueleto que los módulos de la rama jorge: encabezado, KPIs, pestañas y DataTable) -->
+    <section id="ln-listado">
+      <div class="page-header">
+        <div>
+          <h2><i data-lucide="smartphone" class="ico"></i> Líneas Telefónicas</h2>
+          <p class="page-subtitle">Inventario de equipos y líneas: responsables, estatus, inspecciones e historial</p>
+        </div>
+        <div class="page-header-actions">
+          <button type="button" class="secondary" id="ln-recargar" hidden title="Vaciar caché y volver a leer la hoja"><i data-lucide="refresh-cw" class="ico"></i> Recargar datos</button>
+          <button type="button" id="ln-nuevo-registro"><i data-lucide="plus" class="ico"></i> Registrar NUCO</button>
+        </div>
+      </div>
+
+      <div class="stat-row" id="ln-indicadores">
+        <div class="stat-tile"><div class="stat-icon"><i data-lucide="loader-circle" class="ico"></i></div><div><div class="stat-value">…</div><div class="stat-label">Cargando</div></div></div>
+      </div>
+
+      <div class="ln-tabs-fila">
+        <div class="tabs-simple" id="ln-tabs">
+          <button type="button" class="tab-btn active" data-tab="equipos"><i data-lucide="smartphone" class="ico"></i> Equipos <span class="ln-tab-num" id="ln-num-equipos"></span></button>
+          <button type="button" class="tab-btn" data-tab="lineas"><i data-lucide="card-sim" class="ico"></i> Líneas <span class="ln-tab-num" id="ln-num-lineas"></span></button>
+        </div>
+        <!-- Antes "Detalles Líneas Telefónicas" era otro módulo con la misma información en tarjetas -->
+        <div class="ln-segmentado" id="ln-modo-vista" role="group" aria-label="Forma de ver el inventario">
+          <button type="button" class="secondary activo" data-modo="tabla" aria-pressed="true"><i data-lucide="table" class="ico"></i> Tabla</button>
+          <button type="button" class="secondary" data-modo="tarjetas" aria-pressed="false"><i data-lucide="layout-grid" class="ico"></i> Tarjetas</button>
+        </div>
+      </div>
+
+      <div class="tab-panel" data-tab-panel="equipos">
+        <div class="card card-compacta"><div id="ln-tabla-equipos"></div><div class="ln-tarjetas" id="ln-tarjetas-equipos" hidden></div></div>
+      </div>
+      <div class="tab-panel" data-tab-panel="lineas" hidden>
+        <div class="card card-compacta"><div id="ln-tabla-lineas"></div><div class="ln-tarjetas" id="ln-tarjetas-lineas" hidden></div></div>
+      </div>
+      <p class="ln-conteo" id="ln-conteo"></p>
+    </section>
+
+    <!-- Detalle de equipo / línea / inspección (se pinta desde lineas.html) -->
+    <section id="ln-detalle" hidden></section>
+
+    <!-- Captura de inspección / responsiva nueva -->
+    <div class="modal-backdrop" id="ln-modal-captura" hidden>
+      <div class="modal-card modal-card-wide ln-captura-modal" role="dialog" aria-modal="true" aria-labelledby="ln-captura-titulo">
+        <div class="modal-header ln-captura-cabecera">
+          <div class="ln-captura-cabecera-principal">
+            <span class="ln-captura-icono" id="ln-captura-icono"><span data-ln-icon="file-text"></span></span>
+            <div>
+            <span class="ln-captura-tipo" id="ln-captura-tipo">Documento</span>
+            <h3 class="ln-titulo" style="margin:3px 0 0" id="ln-captura-titulo"></h3>
+            <p class="modal-subtitle" id="ln-captura-subtitulo"></p>
+            </div>
+          </div>
+          <button type="button" class="modal-close" data-cerrar-modal aria-label="Cerrar"><span data-ln-icon="x"></span></button>
+        </div>
+        <div class="modal-form-scroll" id="ln-captura-cuerpo"><p class="empty-state">Cargando…</p></div>
+      </div>
+    </div>
+  </div>
+</template>

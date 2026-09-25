@@ -458,6 +458,15 @@
   .kpi-chip.kpi-warn { border-left-color: var(--color-danger); }
   .kpi-chip.kpi-danger { border-color: var(--color-danger); }
 
+  /* KPI clickeable: filtra la tabla del mismo módulo con solo darle clic
+     (ver wireKpiFiltro en app.html). */
+  .stat-tile-clickable { cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+  .stat-tile-clickable:hover { border-color: var(--color-primary); }
+  .stat-tile-clickable.stat-tile-activo {
+    border-color: var(--color-primary); border-width: 2px; padding: 15px;
+    box-shadow: 0 0 0 3px var(--color-primary-soft);
+  }
+
   /* ========== Tarjeta de formulario con ícono de encabezado ========== */
   .form-card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
   .form-card-icon {

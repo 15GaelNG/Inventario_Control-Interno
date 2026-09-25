@@ -25,6 +25,26 @@ const Auth = (function () {
     return { salt: salt, hash: hashPassword_(password, salt) };
   }
 
+  function compararSeguro_(a, b) {
+    a = String(a || '');
+    b = String(b || '');
+    let diferencia = a.length ^ b.length;
+    const longitud = Math.max(a.length, b.length);
+    for (let i = 0; i < longitud; i++) diferencia |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+    return diferencia === 0;
+  }
+
+  /** Acepta el esquema nuevo con hash y mantiene compatibilidad con la hoja histórica. */
+  function passwordValido_(found, password) {
+    if (found.SALT && found.PASSWORD_HASH) {
+      return compararSeguro_(hashPassword_(String(password), String(found.SALT)), found.PASSWORD_HASH);
+    }
+    if (found['CONTRASEÑA'] !== undefined && found['CONTRASEÑA'] !== '') {
+      return compararSeguro_(found['CONTRASEÑA'], password);
+    }
+    return false;
+  }
+
   /** El spreadsheet original solo distingue ADMIN / USER; todo lo que no sea ADMIN opera como OPERADOR */
   function mapearRol_(rolOriginal) {
     // Dentro de la función (no al cargar el archivo): Config.gs podría cargarse después que Auth.gs
@@ -68,7 +88,7 @@ const Auth = (function () {
     const found = buscarUsuarioPorCorreo_(correo);
     if (!found) throw new Error('Usuario o contraseña incorrectos');
     if (String(found.ACTIVO).toUpperCase() !== 'TRUE') throw new Error('Usuario inactivo, contacta al administrador');
-    if (String(found['CONTRASEÑA']) !== String(password)) throw new Error('Usuario o contraseña incorrectos');
+    if (!passwordValido_(found, password)) throw new Error('Usuario o contraseña incorrectos');
     return construirSesion_(found);
   }
 
