@@ -168,6 +168,7 @@ y capturar responsivas e inspecciones.
   al subir la primera foto o al guardar (`asegurarCarpeta`), no al abrir. En el detalle de una inspección ya
   guardada se pueden agregar fotos (`apiLineasFotosInspeccion` 'preparar' / 'actualizar'); si la inspección no
   tenía carpeta (p. ej. del AppSheet) se crea con la misma estructura y se registra en APP_EVIDENCIAS.
+  La sección de fotos lleva `.ln-af-extra` para que la regla que oculta secciones sin campos visibles no la oculte.
 - **Cambiar estatus** desde la ficha (`apiLineasCambiarEstatus` → `LineasRegistros.cambiarEstatus`): listas del
   AppSheet, bitácora CAMBIOS, ESTATUS GENERAL recalculado y el motivo en APP_MOVIMIENTOS (sale en el historial).
 - **Velocidad**: `transicionVista` monta la vista a los 180 ms (antes esperaba 2.5 s fijos) y la animación del login
