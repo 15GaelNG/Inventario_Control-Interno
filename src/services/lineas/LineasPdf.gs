@@ -201,6 +201,9 @@ const LineasPdf = (function () {
       });
       doc.saveAndClose();
       const pdf = carpeta.createFile(copia.getAs('application/pdf').setName(nombrePdf));
+      // Sin esto, el PDF solo lo puede ver la cuenta que despliega la app
+      // (quien lo creó) — nadie más puede abrir el link, aunque sea válido.
+      pdf.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
       return { id: pdf.getId(), nombre: pdf.getName(), url: pdf.getUrl(), avisos: avisos };
     } finally {
       copia.setTrashed(true); // la copia temporal es nuestra; la plantilla original no se toca
