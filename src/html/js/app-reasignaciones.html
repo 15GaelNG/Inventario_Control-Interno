@@ -9,6 +9,14 @@
    * y el componente DataTable (rama `ayrton`) para la tabla.
    */
 
+  // Tal cual se veía en AppSheet: flecha de color antes del nombre — roja hacia
+  // abajo para quien sale, verde hacia arriba para quien entra.
+  function flechaResponsable_(icono, color, valor) {
+    if (!valor) return '';
+    return `<span style="display:inline-flex; align-items:center; gap:5px; color:${color}">` +
+      `${Iconos.svg(icono)} ${escaparHtml(valor)}</span>`;
+  }
+
   // ---------- Reasignaciones Vehiculares ----------
   async function initReasignacionesVehiculares() {
     wireTabsSimple(document.getElementById('view-container'));
@@ -63,9 +71,11 @@
       columnas: [
         { campo: 'FOLIO_VEHICULO', titulo: 'Folio', tipo: 'texto', fijada: true },
         { campo: 'FECHA', titulo: 'Fecha', tipo: 'fecha' },
-        { campo: 'RESPONSABLE_SALIENTE', titulo: 'Responsable saliente', tipo: 'texto' },
+        { campo: 'RESPONSABLE_SALIENTE', titulo: 'Responsable saliente', tipo: 'texto',
+          render: (v) => flechaResponsable_('arrow-down', '#e02020', v) },
         { campo: 'DEPARTAMENTO_SALIENTE', titulo: 'Departamento saliente', tipo: 'lista' },
-        { campo: 'RESPONSABLE_ENTRANTE', titulo: 'Responsable entrante', tipo: 'texto' },
+        { campo: 'RESPONSABLE_ENTRANTE', titulo: 'Responsable entrante', tipo: 'texto',
+          render: (v) => flechaResponsable_('arrow-up', '#2ba02b', v) },
         { campo: 'DEPARTAMENTO_ENTRANTE', titulo: 'Departamento entrante', tipo: 'lista' },
         { campo: 'QUIEN_REGISTRO', titulo: 'Quién registró', tipo: 'lista' },
         { campo: 'VIN', titulo: 'VIN', tipo: 'texto', visible: false },

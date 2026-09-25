@@ -228,15 +228,17 @@
       }
     }
 
+    // Tal cual se veía en AppSheet: texto en mayúsculas, negritas e itálicas,
+    // ícono + color (rojo/verde reales, no el bronce de marca) — sin fondo de pastilla.
     function badgeEstatusCaja(estatus) {
       const valor = String(estatus || '').toUpperCase();
       if (valor === 'CERRADA') {
-        return '<span class="badge-estado baja"><i data-lucide="ban" class="ico"></i> Cerrada</span>';
+        return '<span class="estatus-appsheet" style="color:#e02020"><i data-lucide="circle-x" class="ico"></i> CERRADA</span>';
       }
       if (valor === 'EN PROCESO DE CIERRE') {
-        return '<span class="badge-estado pendiente"><i data-lucide="clock" class="ico"></i> En proceso de cierre</span>';
+        return '<span class="estatus-appsheet" style="color:#e0a020"><i data-lucide="clock" class="ico"></i> EN PROCESO DE CIERRE</span>';
       }
-      return '<span class="badge-estado activo"><i data-lucide="circle-check" class="ico"></i> Vigente</span>';
+      return '<span class="estatus-appsheet" style="color:#2ba02b"><i data-lucide="circle-check" class="ico"></i> VIGENTE</span>';
     }
 
     const tabla = DataTable.crear(document.getElementById('cch-tabla'), {

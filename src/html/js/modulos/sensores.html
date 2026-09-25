@@ -68,6 +68,19 @@
       return `<span class="badge-estado ${clase}">${Iconos.svg(icono)} ${escaparHtml(valor)}${velocidad}</span>`;
     }
 
+    // Tal cual se veía en AppSheet: sin fondo de pastilla, ícono + texto en
+    // mayúsculas/negritas del color del estatus (rojo/verde reales).
+    function badgeEstatusSensor(valor) {
+      const v = String(valor || '').toUpperCase();
+      if (v === 'BAJA') {
+        return `<span style="display:inline-flex; align-items:center; gap:5px; color:#e02020; font-weight:700; text-transform:uppercase">${Iconos.svg('ban')} BAJA</span>`;
+      }
+      if (v === 'ACTIVO') {
+        return `<span style="display:inline-flex; align-items:center; gap:5px; color:#2ba02b; font-weight:700; text-transform:uppercase">${Iconos.svg('refresh-cw')} ACTIVO</span>`;
+      }
+      return escaparHtml(valor || '—');
+    }
+
     // ----- Tabla -----
     const tabla = DataTable.crear(document.getElementById('sen-tabla'), {
       idCampo: 'ID',
@@ -96,7 +109,7 @@
         { campo: 'MODELO', titulo: 'Año', tipo: 'texto' },
         { campo: 'CLASE', titulo: 'Clase', tipo: 'lista' },
         { campo: 'COMBUSTIBLE', titulo: 'Combustible', tipo: 'lista' },
-        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista' },
+        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', render: (v) => badgeEstatusSensor(v) },
         { campo: 'FECHA_INSTALACION', titulo: 'Instalación', tipo: 'fecha' },
         { campo: 'RENDIMIENTO', titulo: 'Rendimiento (km/L)', tipo: 'numero' },
         { campo: 'RALENTI', titulo: 'Ralentí (L/h)', tipo: 'numero' },

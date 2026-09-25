@@ -251,6 +251,9 @@
    *         opciones: ['ACTIVO', 'BAJA'] },     // si se omite, usa los valores existentes
    *       { campo: 'FOTO', titulo: 'Foto', filtrable: false, ordenable: false,
    *         render: (valor, fila) => '<button …>' },  // HTML propio (el módulo escapa lo que use)
+   *       { campo: 'CLASE', titulo: 'Clase', tipo: 'lista',
+   *         render: (v) => tagConIcono(v),        // cómo se ve en la celda
+   *         renderFiltro: (v) => tagConIcono(v) },  // cómo se ve en el popover de filtro (checklist) — opcional, si se omite usa el texto plano
    *       { campo: 'DIAS', titulo: 'Días', tipo: 'numero',
    *         valor: (fila) => calcularDias(fila) },    // columna calculada
    *     ],
@@ -1171,7 +1174,7 @@
           </div>
           <div class="dt-lista-valores">${valores.map((v) => `
             <label data-texto="${esc(normalizar(v))}"><input type="checkbox" value="${esc(v)}" ${marcados.has(v) ? 'checked' : ''} />
-              <span>${v === '' ? '<em>(vacío)</em>' : esc(v)}</span>
+              <span>${v === '' ? '<em>(vacío)</em>' : (col.renderFiltro ? col.renderFiltro(v) : esc(v))}</span>
               <button type="button" class="dt-solo" data-solo="${esc(v)}" title="Filtrar solo por este valor">solo</button>
               <span class="dt-conteo">${conteo.get(v)}</span></label>`).join('')}
           </div>${abajo}`, (pop) => {
@@ -1891,6 +1894,8 @@
         },
         setError(mensaje) { st.error = mensaje || null; st.cargando = false; st.refrescando = false; render(); },
         getDatos: () => st.datos.slice(),
+        // Filas con filtros, búsqueda y orden aplicados (todas las páginas) — usado por Líneas.
+        getFiltradas: () => (st.cargando || st.error ? [] : filasFiltradas()),
         getSeleccion: () => st.datos.filter((f) => st.seleccion.has(idDe(f))),
         limpiarSeleccion,
         copiarSeleccion,

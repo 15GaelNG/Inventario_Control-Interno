@@ -505,7 +505,7 @@
   /** Ícono (nombre de Lucide) temático según a qué área pertenece la vista. */
   function iconoDeVista(vista) {
     if (vista === 'dashboard') return 'home';
-    const grupo = NAV_GRUPOS.find((g) => g.items.some((it) => it.vista === vista));
+    const grupo = NAV_GRUPOS.find((g) => g.vista === vista || (g.items || []).some((it) => it.vista === vista));
     return grupo ? grupo.icono : 'file-text';
   }
 
@@ -806,25 +806,138 @@
   // ---------- Accesorios ----------
   async function initAccesorios() {
     wireTabsSimple(document.getElementById('view-container'));
+    const puedeEditar = puedeEditarModulo('accesorios');
+    if (!puedeEditar) document.querySelector('#acc-tabs .tab-btn[data-tab="registrar"]').remove();
     const selectArticulo = document.getElementById('mov-articulo');
-    const tabla = document.getElementById('tabla-articulos');
+    const modalEditar = document.getElementById('modal-editar-articulo');
+    let todosLosArticulos = [];
+
+    /** Historial de entradas/salidas de un artículo, en el panel de detalle. */
+    async function historialArticulo(articulo, contenedor) {
+      contenedor.innerHTML = '<div class="loading-inline"><span class="spinner"></span> Cargando…</div>';
+      try {
+        const movs = await callServer('apiHistorialMovimientos', state.token, articulo.ID);
+        if (!document.body.contains(contenedor)) return; // el panel se cerró mientras cargaba
+        contenedor.innerHTML = (movs || []).length
+          ? '<div class="historial-timeline">' + movs.map((m) => `
+              <div class="historial-item">
+                <div class="historial-icon ${m.TIPO === 'SALIDA' ? 'historial-icon-accent' : ''}">
+                  <i data-lucide="${m.TIPO === 'ENTRADA' ? 'arrow-down' : 'arrow-up'}" class="ico"></i>
+                </div>
+                <div class="historial-main">
+                  <div class="historial-campo">${m.TIPO === 'ENTRADA' ? 'Entrada' : 'Salida'} de ${escaparHtml(String(m.CANTIDAD))}</div>
+                  ${m.COMENTARIOS ? `<div class="historial-valores">${escaparHtml(m.COMENTARIOS)}</div>` : ''}
+                </div>
+                <div class="historial-meta">
+                  <div>${escaparHtml(m.USUARIO || '—')}</div>
+                  <div>${formatearFecha(m.FECHA)}</div>
+                </div>
+              </div>
+            `).join('') + '</div>'
+          : '<p class="empty-state">Sin movimientos registrados para este artículo.</p>';
+        refreshIcons();
+      } catch (err) {
+        contenedor.innerHTML = '<p class="error-msg">No se pudo cargar: ' + escaparHtml(err.message) + '</p>';
+      }
+    }
+
+    const tabla = DataTable.crear(document.getElementById('acc-tabla'), {
+      idCampo: 'ID',
+      idTabla: 'accesorios',
+      textoVacio: 'Todavía no hay artículos registrados',
+      exportar: { nombreArchivo: 'Accesorios' },
+      etiquetaFila: (a) => a.NOMBRE,
+      detalle: {
+        titulo: (a) => a.NOMBRE || '',
+        contenidoExtra: (a, contenedor) => historialArticulo(a, contenedor),
+      },
+      columnas: [
+        { campo: 'CATEGORIA', titulo: 'Categoría', tipo: 'lista', fijada: true },
+        { campo: 'NOMBRE', titulo: 'Artículo', tipo: 'texto' },
+        { campo: 'MARCA', titulo: 'Marca', tipo: 'lista' },
+        { campo: 'STOCK', titulo: 'Stock', tipo: 'numero', agregado: 'suma',
+          render: (v, a) => `<span style="font-weight:700; color:${Number(a.STOCK) <= Number(a.STOCK_MINIMO || 0) ? 'var(--color-danger)' : 'var(--color-success)'}">${escaparHtml(String(v))}</span>` },
+      ],
+      accionesFila: puedeEditar ? [{
+        icono: 'pencil', titulo: 'Editar', alHacer: (a) => abrirEditarArticulo(a),
+      }] : [],
+      motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
+    });
 
     async function cargar() {
-      const articulos = await callServerListaCacheada('apiListarArticulosConStock', state.token);
+      tabla.setCargando(true);
+      try {
+        todosLosArticulos = (await callServerListaCacheada('apiListarArticulosConStock', state.token)) || [];
+      } catch (err) {
+        tabla.setError('No se pudo cargar el catálogo: ' + err.message);
+        return;
+      }
 
-      selectArticulo.innerHTML = articulos
-        .map((a) => `<option value="${a.ID}">${a.NOMBRE}</option>`).join('');
+      selectArticulo.innerHTML = todosLosArticulos.map((a) => `<option value="${a.ID}">${escaparHtml(a.NOMBRE)}</option>`).join('');
 
-      tabla.innerHTML = articulos.map((a) => {
-        const bajo = Number(a.STOCK) <= Number(a.STOCK_MINIMO || 0);
-        return `<tr>
-          <td>${a.CATEGORIA || ''}</td>
-          <td>${a.NOMBRE || ''}</td>
-          <td>${a.MARCA || ''}</td>
-          <td><span class="badge ${bajo ? 'low' : 'ok'}">${a.STOCK}</span></td>
-        </tr>`;
-      }).join('');
+      document.getElementById('acc-stat-total').textContent = todosLosArticulos.length;
+      document.getElementById('acc-stat-bajo').textContent =
+        todosLosArticulos.filter((a) => Number(a.STOCK) <= Number(a.STOCK_MINIMO || 0)).length;
+
+      tabla.setDatos(todosLosArticulos);
     }
+
+    function abrirEditarArticulo(articulo) {
+      document.getElementById('editar-articulo-titulo').textContent = 'Editar artículo';
+      document.getElementById('editar-articulo-id').value = articulo.ID;
+      document.getElementById('editar-articulo-label').textContent = articulo.NOMBRE || '';
+      document.getElementById('editar-articulo-categoria').value = articulo.CATEGORIA || '';
+      document.getElementById('editar-articulo-nombre').value = articulo.NOMBRE || '';
+      document.getElementById('editar-articulo-marca').value = articulo.MARCA || '';
+      document.getElementById('editar-articulo-error').hidden = true;
+      modalEditar.hidden = false;
+    }
+    function abrirNuevoArticulo() {
+      document.getElementById('editar-articulo-titulo').textContent = 'Nuevo artículo';
+      document.getElementById('editar-articulo-id').value = '';
+      document.getElementById('editar-articulo-label').textContent = '';
+      document.getElementById('form-editar-articulo').reset();
+      document.getElementById('editar-articulo-error').hidden = true;
+      modalEditar.hidden = false;
+    }
+    function cerrarEditarArticulo() {
+      modalEditar.hidden = true;
+      document.getElementById('form-editar-articulo').reset();
+      document.getElementById('editar-articulo-error').hidden = true;
+    }
+    document.getElementById('btn-cancelar-editar-articulo').addEventListener('click', cerrarEditarArticulo);
+    modalEditar.addEventListener('click', (ev) => { if (ev.target === modalEditar) cerrarEditarArticulo(); });
+
+    if (puedeEditar) {
+      const wrap = document.getElementById('acc-nuevo-wrap');
+      wrap.hidden = false;
+      document.getElementById('btn-nuevo-articulo').addEventListener('click', abrirNuevoArticulo);
+    }
+
+    document.getElementById('form-editar-articulo').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('editar-articulo-error');
+      errorBox.hidden = true;
+      const id = document.getElementById('editar-articulo-id').value;
+      const datos = {
+        CATEGORIA: document.getElementById('editar-articulo-categoria').value.trim(),
+        NOMBRE: document.getElementById('editar-articulo-nombre').value.trim(),
+        MARCA: document.getElementById('editar-articulo-marca').value.trim(),
+      };
+      toastCargando(id ? 'Guardando cambios…' : 'Registrando…');
+      try {
+        if (id) await callServer('apiActualizarArticulo', state.token, id, datos);
+        else await callServer('apiCrearArticulo', state.token, datos);
+        cerrarEditarArticulo();
+        invalidarCacheLista('apiListarArticulosConStock', state.token);
+        await cargar();
+        toastExito(id ? 'Actualizado exitosamente' : 'Registrado exitosamente');
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+        toastError('No se pudo guardar: ' + err.message);
+      }
+    });
 
     document.getElementById('form-movimiento').addEventListener('submit', async (ev) => {
       ev.preventDefault();
@@ -1905,17 +2018,23 @@
       return `<span class="badge-estado ${esBaja ? 'baja' : 'activo'}"><i data-lucide="${esBaja ? 'ban' : 'circle-check'}" class="ico"></i> ${esBaja ? 'De baja' : 'Activo'}</span>`;
     }
 
-    // Color determinístico por clase (misma clase = mismo color siempre),
-    // sin necesidad de saber de antemano qué clases existen en la hoja.
-    const PALETA_CLASES = ['tag-navy', 'tag-gold', 'tag-green', 'tag-brown', 'tag-slate'];
-    function colorClase(clase) {
-      if (!clase) return 'tag-slate';
-      let hash = 0;
-      for (let i = 0; i < clase.length; i++) hash = (hash * 31 + clase.charCodeAt(i)) >>> 0;
-      return PALETA_CLASES[hash % PALETA_CLASES.length];
-    }
+    // Color + ícono por clase, tal cual se veían en AppSheet.
+    const CLASE_ESTILO = {
+      'AUTOMOVIL': { icono: 'car', color: '#2979ff' },
+      'CAMION': { icono: 'truck', color: '#212121' },
+      'CAMIONETA': { icono: 'car-front', color: '#ff9800' },
+      'CUATRIMOTO': { icono: 'tractor', color: '#d4b106' },
+      'MOTOCARRO': { icono: 'bike', color: '#9c27b0' },
+      'MOTOCICLETA': { icono: 'bike', color: '#212121' },
+      'NUCO SIN INFORMACION': { icono: 'triangle-alert', color: '#d32f2f' },
+      'REMOLQUE': { icono: 'container', color: '#43a047' },
+      'MAQUINARIA MENOR': { icono: 'wrench', color: '#607d8b' },
+    };
     function etiquetaClase(clase) {
-      return clase ? `<span class="tag ${colorClase(clase)}">${clase}</span>` : '—';
+      if (!clase) return '—';
+      const e = CLASE_ESTILO[String(clase).toUpperCase()] || { icono: 'circle', color: 'var(--color-text-muted)' };
+      return `<span style="display:inline-flex; align-items:center; gap:5px; color:${e.color}; font-weight:700; font-style:italic">` +
+        `${Iconos.svg(e.icono)} ${escaparHtml(clase)}</span>`;
     }
 
     /** Panel de detalle: el registro completo (41 columnas, no las 13 del
@@ -2003,7 +2122,7 @@
         { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', fijada: true, enDetalle: false },
         { campo: 'NUCCO', titulo: 'Nucco', tipo: 'texto', enDetalle: false },
         { campo: 'DEPARTAMENTO', titulo: 'Departamento', tipo: 'lista', enDetalle: false },
-        { campo: 'CLASE', titulo: 'Clase', tipo: 'lista', render: (v) => etiquetaClase(v), enDetalle: false },
+        { campo: 'CLASE', titulo: 'Clase', tipo: 'lista', render: (v) => etiquetaClase(v), renderFiltro: (v) => etiquetaClase(v), enDetalle: false },
         { campo: 'MARCA', titulo: 'Marca', tipo: 'lista', enDetalle: false },
         { campo: 'LINEA_VEHICULO', titulo: 'Línea', tipo: 'lista', enDetalle: false },
         { campo: 'MODELO', titulo: 'Año', tipo: 'texto', enDetalle: false },

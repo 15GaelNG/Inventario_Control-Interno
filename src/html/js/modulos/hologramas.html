@@ -48,6 +48,12 @@
         : `<span style="color:var(--color-text-muted)">${escaparHtml(valor || '—')}</span>`;
     }
     const pesos = (v) => (v === '' || v === null || v === undefined ? '' : '$' + Number(v).toLocaleString('es-MX'));
+    /** Ícono + valor en negritas, tal cual se veía en AppSheet (monedas verdes / gota azul). */
+    function iconoValor_(icono, color, texto) {
+      if (texto === '') return '';
+      return `<span style="display:inline-flex; align-items:center; gap:5px; color:${color}; font-weight:700">` +
+        `${Iconos.svg(icono)} ${escaparHtml(texto)}</span>`;
+    }
 
     /** Estado frente al catálogo de Vehículos, que es el que manda */
     const estadoCatalogo = (h) => (!h.EN_CATALOGO ? 'Fuera del catálogo'
@@ -122,8 +128,11 @@
           opciones: catalogos.estatusEox, render: (v) => badgeEstatus(v) },
         { campo: 'COMBUSTIBLE', titulo: 'Combustible', tipo: 'lista', opciones: catalogos.combustibles },
         { campo: 'AUTORIZADO_PESOS', titulo: 'Autorizado ($)', tipo: 'numero',
-          agregado: 'suma', render: (v) => escaparHtml(pesos(v)), valorExportar: (h) => h.AUTORIZADO_PESOS },
-        { campo: 'AUTORIZADO_LITROS', titulo: 'Autorizado (L)', tipo: 'numero', agregado: 'suma' },
+          agregado: 'suma', render: (v) => iconoValor_('coins', 'var(--color-success)', pesos(v)),
+          valorExportar: (h) => h.AUTORIZADO_PESOS },
+        { campo: 'AUTORIZADO_LITROS', titulo: 'Autorizado (L)', tipo: 'numero', agregado: 'suma',
+          render: (v) => iconoValor_('droplet', 'var(--color-primary)', v === '' || v === null || v === undefined ? '' : String(v)),
+          valorExportar: (h) => h.AUTORIZADO_LITROS },
         { campo: 'ESTATUS_VEHICULO', titulo: 'Uso', tipo: 'lista', opciones: catalogos.estatusVehiculo },
         { campo: 'MARCA', titulo: 'Marca', tipo: 'lista' },
         { campo: 'LINEA', titulo: 'Línea', tipo: 'lista' },

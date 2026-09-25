@@ -500,6 +500,13 @@
   }
   .badge-estado.abierta { background: #F3ECD6; color: var(--color-danger); }
   .badge-estado.cerrada { background: #e5f6ec; color: var(--color-success); }
+
+  /* Estatus tal cual AppSheet (Caja Chica): sin fondo de pastilla, solo
+     ícono + texto en mayúsculas/negritas/itálicas del color del estatus. */
+  .estatus-appsheet {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-weight: 700; font-style: italic; text-transform: uppercase; font-size: 12px;
+  }
   .incidencia-actions { display: flex; gap: 6px; flex-shrink: 0; }
   .incidencia-actions button { padding: 7px 10px; }
 
