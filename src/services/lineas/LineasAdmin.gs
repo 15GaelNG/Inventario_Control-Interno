@@ -11,8 +11,11 @@
 const LINEAS_DEV_SPREADSHEET_ID = '1fC77Uu1ePVUySNvhgWXMHqWpLhGhBMTZZMEblU2nUhI';
 /** Hoja que usaba Líneas antes: la de la copia del AppSheet "COPIA PRUEBAS APPSCRIPT CVT" (referencia de estructura). */
 const LINEAS_COPIA_APPSHEET_ID = '1_47fd5nCcg4M6Qnsxmk14r9aTJG2bCPSW86ig_r2478';
-/** Carpeta de pruebas de Líneas en Drive (inventarios de NUCOS, evidencias de prueba). */
+/** Carpeta de pruebas de Líneas en Drive: ahí se GUARDA lo nuevo en DEV (inspecciones, fotos, PDF, responsivas). */
 const LINEAS_DEV_CARPETA_RAIZ = '1ZNI2tVANe3qBglcQ5sisCctGBe4Qetmk';
+/** Carpetas de producción que se LEEN (25-sep): raíz del AppSheet (<TABLA>_Files_, _Images) y NUCOS. */
+const LINEAS_DRIVE_APPSHEET_ID = '1FsC5mloJNhi_TR7pBX1KMEjUZfN_M9OM';
+const LINEAS_DRIVE_NUCOS_ID = '12SRBi1nZlIzfNx0d2y1fAtzOydA2QrT-';
 
 /** Pestañas del AppSheet que Líneas necesita (las APP_ las crea el sistema cuando hacen falta). */
 function pestanasLineas_() {
@@ -74,6 +77,8 @@ function apuntarLineasA_(destinoId) {
   PropertiesService.getScriptProperties().setProperties({
     SS_ID_TELEFONIA: destinoId,
     LINEAS_DRIVE_CARPETA_RAIZ: LINEAS_DEV_CARPETA_RAIZ,
+    LINEAS_DRIVE_APPSHEET: LINEAS_DRIVE_APPSHEET_ID,
+    LINEAS_DRIVE_NUCOS: LINEAS_DRIVE_NUCOS_ID,
   });
 
   // Toca la hoja para que Google pida los permisos desde ya.

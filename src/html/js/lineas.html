@@ -63,6 +63,53 @@
       return callServer(fn, state.token, ...args);
     }
 
+    // ---------------- Archivos del AppSheet ----------------
+    // Las columnas File/Image/Signature del AppSheet guardan "TABLA_Files_/archivo.ext" (relativo a su carpeta
+    // raíz en Drive). Se muestran con su ícono, como en AppSheet, y al hacer clic el servidor busca el archivo
+    // (apiLineasArchivo) y se abre. Los enlaces de Drive que guarda el sistema nuevo se abren directo.
+    // Algunas filas guardan el enlace del AppSheet (appsheet.com/template/gettablefileurl?…&fileName=TABLA_Files_/…):
+    // se toma la ruta de fileName y se abre desde Drive igual que las demás.
+    const rutaDeEnlaceAppSheet = (v) => {
+      const m = /appsheet\.com[\/]template[\/]gettablefileurl/i.test(v) && String(v).match(/[?&]fileName=([^&#]+)/i);
+      if (!m) return null;
+      try { return decodeURIComponent(m[1].replace(/\+/g, ' ')); } catch (e) { return null; }
+    };
+    const esRutaArchivo = (v) => /^[^\/]+_(Files_|Images)\/[^\/].*\.\w{2,5}$/i.test(String(v || '').trim()) ||
+      /^https?:\/\/(drive|docs)\.google\.com[\/]/i.test(String(v || '').trim()) || !!rutaDeEnlaceAppSheet(String(v || '').trim());
+    function botonArchivo(ruta, texto) {
+      let v = String(ruta === null || ruta === undefined ? '' : ruta).trim();
+      if (!v) return vacio;
+      v = rutaDeEnlaceAppSheet(v) || v;
+      if (!esRutaArchivo(v)) return esc(v); // "••••" (oculto para el rol) o texto que no es archivo
+      let nombre = v.split('/').pop().split('?')[0];
+      try { nombre = decodeURIComponent(nombre); } catch (e) { /* nombre con "%" suelto: se deja igual */ }
+      const ic = icono(/\.pdf$/i.test(nombre) ? 'file-text' : /\.(jpe?g|png|gif|webp|heic|heif|bmp)$/i.test(nombre) ? 'image' : 'file');
+      const etiqueta = ic + ' ' + esc(texto || 'Ver archivo');
+      if (/^https?:/i.test(v)) return '<a class="ln-btn-icono ln-archivo" target="_blank" rel="noopener" href="' + esc(v) + '" title="' + esc(nombre) + '">' + etiqueta + '</a>';
+      return '<button type="button" class="ln-btn-icono ln-archivo" data-ln-archivo="' + esc(v) + '" title="' + esc(nombre) + '">' + etiqueta + '</button>';
+    }
+    async function abrirArchivoAppSheet(boton) {
+      // La ventana se abre en el clic (si no, el navegador la bloquea) y se le da la dirección al llegar
+      const ventana = window.open('', '_blank');
+      boton.disabled = true;
+      try {
+        const r = await llamar('apiLineasArchivo', boton.dataset.lnArchivo);
+        if (ventana) ventana.location.href = r.url; else window.open(r.url, '_blank');
+      } catch (e) {
+        if (ventana) ventana.close();
+        Notificar.error(mensajeError(e));
+      } finally {
+        boton.disabled = false;
+      }
+    }
+    document.addEventListener('click', (ev) => {
+      const b = ev.target.closest && ev.target.closest('[data-ln-archivo]');
+      if (!b) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      abrirArchivoAppSheet(b);
+    }, true);
+
     const COLOR_ESTATUS = {
       'USO': 'verde', 'EN USO': 'verde', 'RENOVADA': 'verde',
       'RESGUARDO': 'azul', 'EN ENVIO': 'azul', 'ESPERA DE RESPONSIVA': 'azul', 'ESPERA DE EQUIPO': 'azul',
@@ -228,6 +275,7 @@
         if (focoPrevio && document.body.contains(focoPrevio)) focoPrevio.focus();
       }
       document.addEventListener('keydown', alTecla, true);
+      document.addEventListener('app:before-navigate', cerrar, { once: true });
       fondo.addEventListener('click', cerrar);
       elemento.querySelector('.dt-panel-cerrar').addEventListener('click', cerrar);
       panelAbierto = api;
@@ -292,6 +340,11 @@
         else if (valores.length && valores.every(esBooleano)) { col.tipo = 'lista'; col.valor = (f) => booleano(f[h]); }
         else if (/ESTATUS|ESTADO|COMPA[ÑN]IA|^TIPO|SEDE|DEPARTAMENTO|MOTIVO|LUGAR|CAMPO$/.test(norm(h))) col.tipo = 'lista';
         if (/ESTATUS|ESTADO/.test(norm(h))) col.render = (v) => chip(v);
+        // Columna File/Image del AppSheet (p. ej. EVIDENCIA y AUTORIZACION de desechos): ícono que abre el archivo
+        if (valores.length && valores.filter(esRutaArchivo).length >= valores.length * 0.8) {
+          col.render = (v) => botonArchivo(v, 'Ver');
+          col.exportarComo = 'texto';
+        }
         const reglasCol = modulo && (REGLAS_FORMATO[modulo] || {})[h];
         if (reglasCol) col.render = (v) => formatoAppSheet(modulo, h, v) || (/ESTATUS|ESTADO/.test(norm(h)) ? chip(v) : esc(v));
         if (i === 0 && col.visible) col.fijada = true;
@@ -1718,9 +1771,11 @@
                 ['Modelo', e.modelo], ['IMEI', e.imei], ['Color', e.color], ['Accesorios', (e.accesorios || []).join(', ')],
                 e.tipo !== 'MODEM' && e.tipo !== 'BANDA_ANCHA' && e.tipo !== 'CAMARA' ? ['Cuenta Google', e.cuentaGoogle] : null,
                 e.tipo === 'CELULAR' || e.tipo === 'CELULAR_BASICO' ? ['PIN equipo', e.pinEquipo] : null,
-                e.tipo === 'CELULAR' || e.tipo === 'CELULAR_BASICO' ? ['Patrón', e.patronRuta] : null,
+                e.tipo === 'CELULAR' || e.tipo === 'CELULAR_BASICO' ? ['Patrón', botonArchivo(e.patronRuta, 'Ver patrón'), true] : null,
                 e.tipo === 'MODEM' || e.tipo === 'BANDA_ANCHA' ? ['Contraseña módem', e.contrasenaModem] : null,
                 e.simResidual ? ['SIM residual', chip(e.simResidual, 'ambar'), true] : null,
+                e.legado && e.legado.responsivaRuta ? ['Responsiva', botonArchivo(e.legado.responsivaRuta, 'Ver responsiva'), true] : null,
+                e.legado && e.legado.formatoInspeccionRuta ? ['Formato inspección', botonArchivo(e.legado.formatoInspeccionRuta, 'Ver formato'), true] : null,
               ])) +
               tarjeta(icono('card-sim') + ' Línea asignada', l ? campos([
                 ['Número', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + icono('phone') + ' ' + esc(l.numero || '(sin número)') + ' ' + icono('chevron-right') + '</a>', true],
@@ -1860,6 +1915,7 @@
 
       function accionPdf(d, tipo) {
         if (d.pdfId) return enlaceDrive(d.pdfId, 'Ver PDF', true);
+        if (d.pdfRuta) return botonArchivo(d.pdfRuta, 'Ver PDF');
         return d.pdfPendiente ? '<button type="button" class="ln-btn-icono" data-ln-pdf="' + tipo + '" data-id="' + esc(d.id) + '" data-carpeta="' + esc(d.carpetaId || '') + '">' + icono('file-text') + ' Generar PDF</button>' : vacio;
       }
 

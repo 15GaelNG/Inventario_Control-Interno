@@ -32,13 +32,18 @@ const LineasEvidencias = (function () {
     return padre.createFolder(candidato);
   }
 
-  /** Carpeta del NUCO: reutiliza la que ya existe (inventario de NUCOS) o crea una nueva por nombre. */
+  /**
+   * Carpeta del NUCO donde se GUARDA lo nuevo. Si la carpeta de escritura es NUCOS (producción) se reutiliza la
+   * del NUCO; si es otra (DEV: carpeta de pruebas) se usa <carpeta de pruebas>/<NUCO> y producción no se toca.
+   */
   function carpetaNuco_(nuco) {
     const raiz = carpetaRaiz_();
     const nuco4 = nuco ? LineasUtil.nuco4(nuco) : null;
-    const id = nuco4 && LineasUtil.carpetasNucos()[nuco4];
-    if (id) {
-      try { return DriveApp.getFolderById(id); } catch (e) { /* la carpeta del inventario ya no existe: se crea una nueva abajo */ }
+    if (LineasArchivos.escribeEnProduccion()) {
+      const id = nuco4 && LineasUtil.carpetasNucos()[nuco4];
+      if (id) {
+        try { return DriveApp.getFolderById(id); } catch (e) { /* la carpeta ya no existe: se crea una nueva abajo */ }
+      }
     }
     return subcarpeta_(raiz, nuco4 || 'SIN NUCO');
   }
@@ -120,12 +125,14 @@ const LineasEvidencias = (function () {
 
   /** Autoriza (1 h) al usuario a subir archivos en estas carpetas (p. ej. fotos de una inspección ya guardada). */
   function autorizarSubida(correo, ids) {
+    (ids || []).filter(Boolean).forEach(LineasArchivos.exigirEscribible);
     const cache = CacheService.getScriptCache();
     (ids || []).filter(Boolean).forEach((id) => cache.put('ln_subida_' + correo + '_' + id, '1', 3600));
   }
 
   /** Subcarpeta FOTOS de la carpeta de una evidencia (la crea si no existe). */
   function carpetaFotos(carpetaId) {
+    LineasArchivos.exigirEscribible(carpetaId);
     return subcarpeta_(DriveApp.getFolderById(carpetaId), 'FOTOS').getId();
   }
 

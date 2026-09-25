@@ -89,6 +89,8 @@ const TelefoniaService = (function () {
         pdfPendiente: d.origen === 'SISTEMA' && !pdf,
         responsable: d.snapshot ? d.snapshot.responsable : (d.responsable ? d.responsable.nombre : null),
         fotos: d.drive ? d.drive.fotos : 0, carpetaId: d.drive ? d.drive.carpetaId : null, pdfId: pdf,
+        // PDF del AppSheet ("<TABLA>_Files_/…pdf"): se abre desde la carpeta del AppSheet
+        pdfRuta: pdf ? null : (d.pdfRuta || null),
       };
     }).sort((a, b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
   }
@@ -134,6 +136,7 @@ const TelefoniaService = (function () {
 
     const fotos = [];
     const firmas = [];
+    const pdfs = insp.drive && insp.drive.pdfs ? insp.drive.pdfs.slice() : [];
     if (insp.drive) {
       const vistos = {};
       [insp.drive.fotosCarpetaId, insp.drive.carpetaId].filter(Boolean).forEach((c) => {
@@ -147,15 +150,37 @@ const TelefoniaService = (function () {
         });
       });
     }
+    // Inspección del AppSheet: su PDF y sus firmas están en la carpeta del AppSheet (rutas relativas)
+    if (!pdfs.length && insp.pdfRuta) {
+      const pdf = LineasArchivos.imagen(insp.pdfRuta, true);
+      if (pdf) pdfs.push({ id: pdf.id, nombre: pdf.nombre });
+    }
+    if (!firmas.length && puedeVerSecretos_(sesion) && insp.firmas) {
+      [insp.firmas.responsableRuta, insp.firmas.inspectorRuta, insp.patronRuta].forEach((ruta) => {
+        const img = ruta ? LineasArchivos.imagen(ruta, true) : null;
+        if (img) firmas.push(img);
+      });
+    }
     return LineasUtil.paraCliente({
       inspeccion: insp,
       equipo: eq,
       checklist: LineasChecklist.secciones(),
       fotos: fotos,
       firmas: puedeVerSecretos_(sesion) ? firmas : [],
-      pdfs: insp.drive && insp.drive.pdfs ? insp.drive.pdfs : [],
+      pdfs: pdfs,
       puedeOperar: rolesOperan_().indexOf(sesion.rol) >= 0,
     });
+  }
+
+  /**
+   * Abre un archivo guardado por el AppSheet como ruta relativa ("BITACORA DE DESECHO_Files_/…"): lo busca en la
+   * carpeta del AppSheet y regresa { id, nombre, url }. Patrones, contraseñas y firmas solo para ADMIN.
+   */
+  function archivo(token, ruta) {
+    const sesion = Auth.validarSesion(token);
+    const f = LineasArchivos.resolver(ruta, puedeVerSecretos_(sesion));
+    if (!f) throw new Error('No se encontró el archivo en la carpeta del AppSheet: ' + String(ruta || '').split('/').pop());
+    return f;
   }
 
   /** Catálogos para formularios (enums + LISTAS TELEFONOS + lugares de desecho). */
@@ -301,6 +326,6 @@ const TelefoniaService = (function () {
   return {
     permisos, indice, equipo, linea, evidencias, historial, inspeccion, catalogos, colaboradores, bitacora, vistaOperativa, formularioOperativa, crearVistaOperativa, formularioRegistro, recargarDatos,
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf, crearRegistro, editarRegistro,
-    cambiarEstatus, fotosInspeccion, exportarBase,
+    cambiarEstatus, fotosInspeccion, exportarBase, archivo,
   };
 })();

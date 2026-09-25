@@ -450,6 +450,7 @@ const LineasRepo = (function () {
       responsable: { nombre: txt(col(f, 'RESPONSABLE')) },
       responsableCI: txt(col(f, 'NOMBRE CI')), drive: driveDeEvidencia_(ev),
       pdf: ev && ev.pdfs && ev.pdfs.length ? { id: ev.pdfs[0].id } : null,
+      pdfRuta: txt(col(f, 'FORMATO RESPONSIVA')),
     };
   }
 
@@ -874,7 +875,7 @@ const LineasRepo = (function () {
 
   /** Vacía las cachés del módulo (índices, catálogos y carpetas). */
   function borrarCaches() {
-    ['indice_telefonia_v2', 'indice_colaboradores', 'carpetas_nucos', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3'].forEach(LineasDatos.cacheBorrar);
+    ['indice_telefonia_v2', 'indice_colaboradores', 'carpetas_nucos', 'carpetas_nucos_v2', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3'].forEach(LineasDatos.cacheBorrar);
   }
 
   return {
