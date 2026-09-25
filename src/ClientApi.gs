@@ -24,6 +24,10 @@ function apiLoginConGoogle() {
 function apiCompartirArchivosExistentes(token) {
   return compartirArchivosExistentes(token);
 }
+// Igual, pero para la carpeta de Líneas (ver LineasAdmin.gs).
+function apiCompartirArchivosLineasExistentes(token) {
+  return compartirArchivosLineasExistentes(token);
+}
 function apiLogout(token) {
   return Auth.logout(token);
 }
@@ -34,6 +38,9 @@ function apiListarArticulosConStock(token) {
 }
 function apiCrearArticulo(token, articulo) {
   return AccesoriosService.crearArticulo(token, articulo);
+}
+function apiActualizarArticulo(token, id, cambios) {
+  return AccesoriosService.actualizarArticulo(token, id, cambios);
 }
 function apiRegistrarMovimiento(token, idArticulo, tipo, cantidad, comentarios) {
   return AccesoriosService.registrarMovimiento(token, idArticulo, tipo, cantidad, comentarios);
