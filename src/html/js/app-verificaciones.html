@@ -111,6 +111,7 @@
       seleccionable: true,
       alEliminar: puedeEditar ? async (filas) => {
         await callServer('apiEliminarVerificaciones', state.token, filas.map((f) => f.ID));
+        invalidarCacheLista('apiListarVerificaciones', state.token);
         const ids = new Set(filas.map((f) => f.ID));
         verificaciones = conDerivados(verificaciones.filter((v) => !ids.has(v.ID)));
         tabla.setDatos(verificaciones);
@@ -188,6 +189,7 @@
       try {
         const actualizada = await guardarCambiosCampoPorCampo(id, cambios,
           (id, campo, valor) => callServer('apiActualizarCampoVerificacion', state.token, id, campo, valor));
+        invalidarCacheLista('apiListarVerificaciones', state.token);
         verificaciones = conDerivados(verificaciones.map((v) => (v.ID === id ? actualizada : v)));
         tabla.setDatos(verificaciones);
         pintarStats();
@@ -243,7 +245,7 @@
     async function cargar() {
       tabla.setCargando(true);   // primera vez: filas grises; al refrescar: barra arriba sin borrar lo que se ve
       try {
-        verificaciones = conDerivados((await callServer('apiListarVerificaciones', state.token)) || []);
+        verificaciones = conDerivados((await callServerListaCacheada('apiListarVerificaciones', state.token)) || []);
       } catch (err) {
         tabla.setError('No se pudieron cargar las verificaciones: ' + err.message);
         document.getElementById('ver-vacio').textContent = 'No se pudieron cargar las verificaciones.';
@@ -297,7 +299,7 @@
           campo: 'FOLIO',
           etiqueta: 'Folio del vehículo',
           ayuda: 'Al escribirlo se muestran los datos de la unidad para confirmar',
-          opciones: async () => ((await callServer('apiListarVehiculosBasico', state.token)) || []).map((v) => ({
+          opciones: async () => ((await callServerCacheado('apiListarVehiculosBasico', state.token)) || []).map((v) => ({
             valor: v.FOLIO,
             etiqueta: [v.PLACA, v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' · '),
           })),
@@ -343,6 +345,7 @@
         textoExito: (valores) => 'Verificación del folio ' + valores.FOLIO + ' registrada',
         alGuardado: async () => {
           tabs.mostrar('registros');
+          invalidarCacheLista('apiListarVerificaciones', state.token);
           await cargar();
         },
       });

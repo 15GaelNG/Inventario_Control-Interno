@@ -23,7 +23,7 @@
 
     // Catálogo de vehículos (para el datalist de Folio y para autollenar VIN
     // + responsable/departamento salientes sin ida y vuelta al servidor).
-    callServer('apiListarVehiculosBasico', state.token).then((vehiculos) => {
+    callServerCacheado('apiListarVehiculosBasico', state.token).then((vehiculos) => {
       (vehiculos || []).forEach((v) => { vehiculosPorFolio[v.FOLIO] = v; });
       document.getElementById('rv-folio-lista').innerHTML =
         (vehiculos || []).map((v) => `<option value="${v.FOLIO}"></option>`).join('');
@@ -109,7 +109,7 @@
     async function cargar() {
       tabla.setCargando(true);
       try {
-        todasLasReasignaciones = (await callServer('apiListarReasignacionesVehiculares', state.token)) || [];
+        todasLasReasignaciones = (await callServerListaCacheada('apiListarReasignacionesVehiculares', state.token)) || [];
       } catch (err) {
         tabla.setError('No se pudo cargar el historial: ' + err.message);
         return;
@@ -142,9 +142,13 @@
         document.getElementById('rv-responsable-saliente').value = '';
         document.getElementById('rv-departamento-saliente').value = '';
         // El vehículo reasignado ya trae otro responsable — refresca el
-        // catálogo en memoria para que una segunda reasignación seguida no
-        // muestre datos salientes obsoletos.
-        callServer('apiListarVehiculosBasico', state.token).then((vehiculos) => {
+        // catálogo en memoria (y el caché compartido, que también usan
+        // Sensores/Hologramas/Inspecciones/Verificaciones) para que una
+        // segunda reasignación seguida, o esos otros módulos, no muestren
+        // datos salientes obsoletos.
+        invalidarCacheCatalogo('apiListarVehiculosBasico', state.token);
+        invalidarCacheLista('apiListarReasignacionesVehiculares', state.token);
+        callServerCacheado('apiListarVehiculosBasico', state.token).then((vehiculos) => {
           vehiculosPorFolio = {};
           (vehiculos || []).forEach((v) => { vehiculosPorFolio[v.FOLIO] = v; });
         }).catch(() => {});

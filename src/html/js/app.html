@@ -787,7 +787,7 @@
     const tabla = document.getElementById('tabla-articulos');
 
     async function cargar() {
-      const articulos = await callServer('apiListarArticulosConStock', state.token);
+      const articulos = await callServerListaCacheada('apiListarArticulosConStock', state.token);
 
       selectArticulo.innerHTML = articulos
         .map((a) => `<option value="${a.ID}">${a.NOMBRE}</option>`).join('');
@@ -818,6 +818,7 @@
           ''
         );
         document.getElementById('mov-cantidad').value = '';
+        invalidarCacheLista('apiListarArticulosConStock', state.token);
         await cargar();
         toastExito('Registrado exitosamente');
       } catch (err) {
@@ -1483,7 +1484,7 @@
     // petición tras otra — cada una puede tardar un rato y sumadas se sentía
     // muy lento.
     const vehiculosPorFolio = {};
-    const promesaVehiculos = callServer('apiListarVehiculosBasico', state.token)
+    const promesaVehiculos = callServerCacheado('apiListarVehiculosBasico', state.token)
       .then((vehiculos) => {
         const datalist = document.getElementById('lista-folios-vehiculo');
         datalist.innerHTML = vehiculos.map((v) => {
@@ -1592,6 +1593,7 @@
           INSPECCION_SALIDA: document.getElementById('editar-salida').value.trim(),
         });
         cerrarModalEditar();
+        invalidarCacheLista('apiListarIncidencias', state.token);
         await cargar();
         toastExito('Actualizado exitosamente');
       } catch (err) {
@@ -1670,6 +1672,7 @@
       seleccionable: true,
       alEliminar: puedeEditar ? async (filas) => {
         await Promise.all(filas.map((f) => callServer('apiEliminarIncidencia', state.token, f.ID)));
+        invalidarCacheLista('apiListarIncidencias', state.token);
       } : null,
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
@@ -1697,7 +1700,7 @@
       try {
         // google.script.run entrega null en vez de [] cuando el servidor regresa
         // un arreglo vacío — normalizamos aquí para no tronar en .forEach/.map.
-        todasLasIncidencias = (await callServer('apiListarIncidencias', state.token)) || [];
+        todasLasIncidencias = (await callServerListaCacheada('apiListarIncidencias', state.token)) || [];
       } catch (err) {
         tabla.setError('No se pudo cargar el historial de incidencias: ' + err.message);
         return;
@@ -1732,6 +1735,7 @@
         ev.target.reset();
         fijarFechaRegistroHoy();
         document.getElementById('inc-fecha-inspeccion').value = hoyISO();
+        invalidarCacheLista('apiListarIncidencias', state.token);
         await cargar();
         toastExito('Registrado exitosamente');
       } catch (err) {
@@ -1757,6 +1761,7 @@
           MECANICO: document.getElementById('cerrar-mecanico').value.trim(),
         });
         cerrarModal();
+        invalidarCacheLista('apiListarIncidencias', state.token);
         await cargar();
         toastExito('Actualizado exitosamente');
       } catch (err) {
@@ -1993,6 +1998,7 @@
       }] : [],
       alEliminar: puedeEditar ? async (filas) => {
         await Promise.all(filas.map((f) => callServer('apiEliminarVehiculo', state.token, f.ID_VEHICULO)));
+        invalidarCacheLista('apiListarVehiculosResumen', state.token);
       } : null,
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
@@ -2022,7 +2028,7 @@
     async function cargar() {
       tabla.setCargando(true);
       try {
-        todosLosVehiculos = (await callServer('apiListarVehiculosResumen', state.token)) || [];
+        todosLosVehiculos = (await callServerListaCacheada('apiListarVehiculosResumen', state.token)) || [];
       } catch (err) {
         tabla.setError('No se pudo cargar el catálogo de vehículos: ' + err.message);
         return;
@@ -2086,6 +2092,7 @@
         const datos = Object.assign(recolectarDatosVehiculo('editar-vehiculo'), archivos);
         await callServer('apiActualizarVehiculo', state.token, document.getElementById('editar-vehiculo-id').value, datos);
         cerrarEditarVehiculo();
+        invalidarCacheLista('apiListarVehiculosResumen', state.token);
         await cargar();
         toastExito('Actualizado exitosamente');
       } catch (err) {
@@ -2114,6 +2121,7 @@
         ev.target.reset();
         document.getElementById('veh-fecha-registro-sistema-ci').value = hoyISO();
         previsualizarNuccoVeh();
+        invalidarCacheLista('apiListarVehiculosResumen', state.token);
         await cargar();
         toastExito('Registrado exitosamente');
       } catch (err) {
@@ -2277,6 +2285,7 @@
       }] : [],
       alEliminar: puedeEditar ? async (filas) => {
         await Promise.all(filas.map((f) => callServer('apiEliminarUber', state.token, f.ID)));
+        invalidarCacheLista('apiListarUberResumen', state.token);
       } : null,
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
@@ -2310,7 +2319,7 @@
     async function cargar() {
       tabla.setCargando(true);
       try {
-        todosLosUsuarios = (await callServer('apiListarUberResumen', state.token)) || [];
+        todosLosUsuarios = (await callServerListaCacheada('apiListarUberResumen', state.token)) || [];
       } catch (err) {
         tabla.setError('No se pudo cargar el catálogo: ' + err.message);
         return;
@@ -2369,6 +2378,7 @@
         const datos = Object.assign(recolectarUber('editar-uber'), archivo);
         await callServer('apiActualizarUber', state.token, document.getElementById('editar-uber-id').value, datos);
         cerrarEditarUber();
+        invalidarCacheLista('apiListarUberResumen', state.token);
         await cargar();
         toastExito('Actualizado exitosamente');
       } catch (err) {
@@ -2396,6 +2406,7 @@
         await callServer('apiCrearUber', state.token, datos);
         ev.target.reset();
         document.getElementById('uber-fecha-de-alta').value = new Date().toLocaleDateString('es-MX');
+        invalidarCacheLista('apiListarUberResumen', state.token);
         await cargar();
         toastExito('Registrado exitosamente');
       } catch (err) {
@@ -2431,7 +2442,7 @@
       try {
         const [departamentos, solicitantes] = await Promise.all([
           callServerCacheado('apiListarDepartamentos', state.token),
-          callServer('apiListarSolicitantesTickets', state.token),
+          callServerCacheado('apiListarSolicitantesTickets', state.token),
         ]);
         // Departamento ahora es <input list="..."> igual que Solicitante
         // (se puede escribir uno nuevo que todavía no esté en la lista).
@@ -2487,6 +2498,7 @@
       seleccionable: true,
       alEliminar: puedeEditar ? async (filas) => {
         await Promise.all(filas.map((f) => callServer('apiEliminarTicket', state.token, f.ID)));
+        invalidarCacheLista('apiListarTicketsResumen', state.token);
       } : null,
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
@@ -2517,6 +2529,7 @@
       try {
         await callServer('apiActualizarTicket', state.token, document.getElementById('editar-ticket-id').value, recolectarTicket('editar-ticket'));
         cerrarEditarTicket();
+        invalidarCacheLista('apiListarTicketsResumen', state.token);
         await cargar();
         toastExito('Actualizado exitosamente');
       } catch (err) {
@@ -2529,7 +2542,7 @@
     async function cargar() {
       tabla.setCargando(true);
       try {
-        todosLosTickets = (await callServer('apiListarTicketsResumen', state.token)) || [];
+        todosLosTickets = (await callServerListaCacheada('apiListarTicketsResumen', state.token)) || [];
       } catch (err) {
         tabla.setError('No se pudo cargar el historial: ' + err.message);
         return;
@@ -2548,6 +2561,7 @@
         ev.target.reset();
         document.getElementById('ticket-fecha-registro').value = new Date().toLocaleDateString('es-MX');
         document.getElementById('ticket-fecha').value = hoyISO();
+        invalidarCacheLista('apiListarTicketsResumen', state.token);
         await cargar();
         toastExito('Registrado exitosamente');
       } catch (err) {

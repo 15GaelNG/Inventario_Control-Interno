@@ -46,4 +46,48 @@
     }
     return cacheCatalogos[clave];
   }
+
+  /**
+   * Igual que callServerCacheado, pero para las listas PRINCIPALES de cada
+   * tabla (apiListarXResumen) — a diferencia de los catálogos, estas sí
+   * cambian con el uso normal, así que el caché vence solo a los
+   * TTL_LISTAS_MS (15s). Sirve para que entrar-salir-entrar al mismo módulo
+   * (o pasar de un módulo a otro y regresar) se sienta instantáneo en vez de
+   * volver a pagar el costo de abrir el spreadsheet compartido cada vez.
+   * Además, cada crear/editar/eliminar invalida a mano (invalidarCacheLista)
+   * la lista de SU PROPIO módulo justo después de guardar — así el cargar()
+   * que corre a continuación siempre trae el dato recién guardado, sin
+   * esperar el TTL.
+   */
+  const TTL_LISTAS_MS = 15000;
+  const cacheListas = {};
+  function callServerListaCacheada(fnName, ...args) {
+    const clave = fnName + JSON.stringify(args);
+    const entrada = cacheListas[clave];
+    if (entrada && (Date.now() - entrada.ts) < TTL_LISTAS_MS) {
+      return entrada.promesa;
+    }
+    const promesa = callServer(fnName, ...args).catch((err) => {
+      delete cacheListas[clave]; // si falla, la próxima vez se reintenta en vez de quedar cacheado el error
+      throw err;
+    });
+    cacheListas[clave] = { ts: Date.now(), promesa };
+    return promesa;
+  }
+
+  /** Borra una entrada de callServerListaCacheada — se llama justo después de
+   * crear/editar/eliminar un registro EN ESE MISMO módulo, para que el
+   * siguiente cargar() (que corre de inmediato) traiga el dato fresco en vez
+   * de esperar a que venzan los 15s. */
+  function invalidarCacheLista(fnName, ...args) {
+    delete cacheListas[fnName + JSON.stringify(args)];
+  }
+
+  /** Igual, pero para callServerCacheado (catálogos de sesión completa) —
+   * se usa cuando una acción cambia un dato que otro módulo trae cacheado
+   * como catálogo (ej. una reasignación cambia el RESPONSABLE de un
+   * vehículo, y apiListarVehiculosBasico lo usan Sensores/Hologramas/etc.). */
+  function invalidarCacheCatalogo(fnName, ...args) {
+    delete cacheCatalogos[fnName + JSON.stringify(args)];
+  }
 </script>

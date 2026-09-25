@@ -484,7 +484,7 @@
 
     try {
       const [cajas, items] = await Promise.all([
-        callServer('apiListarCajasChicasResumen', state.token),
+        callServerListaCacheada('apiListarCajasChicasResumen', state.token),
         callServerCacheado('apiListarAuditItems', state.token),
       ]);
       auditItems = items || [];
@@ -657,6 +657,9 @@
       ),
       alEliminar: puedeEditar ? async (filas) => {
         await Promise.all(filas.map((f) => callServer('apiEliminarArqueo', state.token, f.ID)));
+        // También invalida Caja Chica: CALIFICACION PROMEDIO se calcula a partir de los Arqueos.
+        invalidarCacheLista('apiListarArqueosResumen', state.token);
+        invalidarCacheLista('apiListarCajasChicasResumen', state.token);
       } : null,
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
@@ -680,7 +683,7 @@
     async function cargar() {
       tabla.setCargando(true);
       try {
-        todosLosArqueos = (await callServer('apiListarArqueosResumen', state.token)) || [];
+        todosLosArqueos = (await callServerListaCacheada('apiListarArqueosResumen', state.token)) || [];
       } catch (err) {
         tabla.setError('No se pudo cargar el historial: ' + err.message);
         return;
@@ -766,6 +769,8 @@
         const datos = Object.assign(recolectarDatosArqueo('editar-arqueo'), archivos, firmas);
         await callServer('apiActualizarArqueo', state.token, document.getElementById('editar-arqueo-id').value, datos);
         cerrarEditarArqueo();
+        invalidarCacheLista('apiListarArqueosResumen', state.token);
+        invalidarCacheLista('apiListarCajasChicasResumen', state.token);
         await cargar();
         toastExito('Actualizado exitosamente');
       } catch (err) {
@@ -799,6 +804,8 @@
         datos['ID CCH'] = selectCajaArqueo.value;
         await callServer('apiCrearArqueo', state.token, datos);
         ev.target.reset();
+        invalidarCacheLista('apiListarArqueosResumen', state.token);
+        invalidarCacheLista('apiListarCajasChicasResumen', state.token);
         document.querySelectorAll('#campos-form-arqueo .firma-pad').forEach((canvas) => limpiarFirmaPad(canvas));
         campoIdArqueoPreview.value = '';
         document.getElementById(idArq('arq', 'QUIEN REGISTRO')).value = (state.sesion && state.sesion.nombre) || '';

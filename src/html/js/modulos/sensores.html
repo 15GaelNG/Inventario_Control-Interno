@@ -138,6 +138,7 @@
       seleccionable: true,
       alEliminar: puedeEditar ? async (filas) => {
         await callServer('apiEliminarSensores', state.token, filas.map((f) => f.ID));
+        invalidarCacheLista('apiListarSensores', state.token);
         const ids = new Set(filas.map((f) => f.ID));
         sensores = sensores.filter((s) => !ids.has(s.ID));
         refrescarTabla();
@@ -248,6 +249,7 @@
       try {
         const actualizada = await guardarCambiosCampoPorCampo(id, cambios,
           (id, campo, valor) => callServer('apiActualizarCampoSensor', state.token, id, campo, valor));
+        invalidarCacheLista('apiListarSensores', state.token);
         sensores = sensores.map((s) => (s.ID === id ? actualizada : s));
         refrescarTabla();
         pintarStats();
@@ -349,7 +351,7 @@
     async function cargar() {
       tabla.setCargando(true);
       try {
-        sensores = (await callServer('apiListarSensores', state.token)) || [];
+        sensores = (await callServerListaCacheada('apiListarSensores', state.token)) || [];
       } catch (err) {
         tabla.setError('No se pudieron cargar las instalaciones: ' + err.message);
         return;
@@ -396,7 +398,7 @@
           campo: 'FOLIO',
           etiqueta: 'Folio del vehículo',
           ayuda: 'Al escribirlo se muestran los datos de la unidad para confirmar',
-          opciones: async () => ((await callServer('apiListarVehiculosBasico', state.token)) || []).map((v) => ({
+          opciones: async () => ((await callServerCacheado('apiListarVehiculosBasico', state.token)) || []).map((v) => ({
             valor: v.FOLIO,
             etiqueta: [v.PLACA, v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' · '),
           })),
@@ -479,6 +481,7 @@
         textoExito: (valores) => 'Instalación registrada en el folio ' + valores.FOLIO,
         alGuardado: async () => {
           tabs.mostrar('registros');
+          invalidarCacheLista('apiListarSensores', state.token);
           await cargar();
         },
       });

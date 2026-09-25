@@ -222,7 +222,7 @@
       }
       tabla.setCargando(true);
       try {
-        inspecciones = (await callServer('apiListarInspecciones', state.token)) || [];
+        inspecciones = (await callServerListaCacheada('apiListarInspecciones', state.token)) || [];
       } catch (err) {
         if (previas) {
           tabla.setCargando(false);
@@ -411,7 +411,7 @@
 
     // ----- catálogos -----
     const catalogos = Promise.all([
-      callServer('apiListarVehiculosBasico', state.token).then((vehiculos) => {
+      callServerCacheado('apiListarVehiculosBasico', state.token).then((vehiculos) => {
         Combobox.crear(campoFolio, {
           opciones: (vehiculos || []).map((v) => ({
             valor: v.FOLIO,
@@ -421,7 +421,7 @@
         });
       }).catch((err) => Notificar.error('No se pudo cargar el catálogo de vehículos: ' + err.message)),
 
-      callServer('apiTiposInspeccion', state.token).then((tipos) => {
+      callServerCacheado('apiTiposInspeccion', state.token).then((tipos) => {
         campoTipo.innerHTML = '<option value=""></option>' + (tipos || [])
           .map((t) => `<option value="${escaparHtml(t.tipo)}" ${t.listo ? '' : 'disabled'}>` +
             `${escaparHtml(t.tipo)}${t.listo ? '' : ' (sin formato)'}</option>`).join('');
@@ -1005,6 +1005,7 @@
         pintarFicha();
         armarPasos();
         tabs.mostrar('registros');
+        invalidarCacheLista('apiListarInspecciones', state.token);
         await recargar();
       } catch (err) {
         errorGeneral(err.message);

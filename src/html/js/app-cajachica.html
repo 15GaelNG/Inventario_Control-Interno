@@ -281,6 +281,7 @@
       }] : [],
       alEliminar: puedeEditar ? async (filas) => {
         await Promise.all(filas.map((f) => callServer('apiEliminarCajaChica', state.token, f['ID CCH'])));
+        invalidarCacheLista('apiListarCajasChicasResumen', state.token);
       } : null,
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
@@ -310,7 +311,7 @@
     async function cargar() {
       tabla.setCargando(true);
       try {
-        todasLasCajas = (await callServer('apiListarCajasChicasResumen', state.token)) || [];
+        todasLasCajas = (await callServerListaCacheada('apiListarCajasChicasResumen', state.token)) || [];
       } catch (err) {
         tabla.setError('No se pudo cargar el catálogo: ' + err.message);
         return;
@@ -364,6 +365,7 @@
         const datos = recolectarDatosCajaChica('editar-cajachica');
         await callServer('apiActualizarCajaChica', state.token, document.getElementById('editar-cajachica-id').value, datos);
         cerrarEditarCajaChica();
+        invalidarCacheLista('apiListarCajasChicasResumen', state.token);
         await cargar();
         toastExito('Actualizado exitosamente');
       } catch (err) {
@@ -389,6 +391,7 @@
         const datos = recolectarDatosCajaChica('cch');
         await callServer('apiCrearCajaChica', state.token, datos);
         ev.target.reset();
+        invalidarCacheLista('apiListarCajasChicasResumen', state.token);
         await cargar();
         toastExito('Registrado exitosamente');
       } catch (err) {
@@ -434,7 +437,7 @@
       if (promesaCatalogoCajas) return promesaCatalogoCajas;
       promesaCatalogoCajas = (async () => {
         try {
-          const cajas = await callServer('apiListarCajasChicasResumen', state.token);
+          const cajas = await callServerListaCacheada('apiListarCajasChicasResumen', state.token);
           (cajas || []).forEach((c) => { cajasPorId[c.ID_CCH] = c; });
           selectCaja.innerHTML = '<option value="">Selecciona…</option>' +
             (cajas || []).map((c) => `<option value="${c.ID_CCH}">${c.ID_CCH} — ${c.RESPONSABLE || 'Sin responsable'}</option>`).join('');
@@ -489,6 +492,7 @@
       ],
       alEliminar: puedeEditar ? async (filas) => {
         await Promise.all(filas.map((f) => callServer('apiEliminarCambioMontoCCH', state.token, f.ID)));
+        invalidarCacheLista('apiListarCambiosMontoCCH', state.token);
       } : null,
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
@@ -521,7 +525,7 @@
       try {
         [, cambios] = await Promise.all([
           cargarCatalogoCajas(),
-          callServer('apiListarCambiosMontoCCH', state.token),
+          callServerListaCacheada('apiListarCambiosMontoCCH', state.token),
         ]);
       } catch (err) {
         tabla.setError('No se pudo cargar el historial: ' + err.message);
@@ -559,7 +563,12 @@
         ev.target.reset();
         tagAnterior.hidden = true;
         // Refresca también el catálogo de cajas chicas en memoria: el monto
-        // actual de la que se acaba de cambiar ya no es el mismo.
+        // actual de la que se acaba de cambiar ya no es el mismo. Se invalida
+        // el caché de ambas listas (esta y la de Caja Chica, que también
+        // muestra MONTO ACTUAL) para no servir el valor viejo hasta que
+        // venzan los 15s solos.
+        invalidarCacheLista('apiListarCajasChicasResumen', state.token);
+        invalidarCacheLista('apiListarCambiosMontoCCH', state.token);
         const cajas = await callServer('apiListarCajasChicasResumen', state.token);
         cajasPorId = {};
         (cajas || []).forEach((c) => { cajasPorId[c.ID_CCH] = c; });
@@ -628,7 +637,7 @@
         // apiListarCambiosVehiculos regresa JSON.stringify (ver ClientApi.gs) —
         // con ~500 filas, google.script.run pierde el arreglo directo de forma
         // intermitente; como texto viaja confiable.
-        crudos = JSON.parse((await callServer('apiListarCambiosVehiculos', state.token)) || '[]');
+        crudos = JSON.parse((await callServerListaCacheada('apiListarCambiosVehiculos', state.token)) || '[]');
       } catch (err) {
         tabla.setError('No se pudo cargar el historial: ' + err.message);
         return;

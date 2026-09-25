@@ -158,6 +158,7 @@
       seleccionable: true,
       alEliminar: puedeEditar ? async (filas) => {
         await callServer('apiEliminarHologramas', state.token, filas.map((f) => f.ID));
+        invalidarCacheLista('apiListarHologramas', state.token);
         const ids = new Set(filas.map((f) => f.ID));
         hologramas = hologramas.filter((h) => !ids.has(h.ID));
         tabla.setDatos(conEstado(hologramas));
@@ -254,6 +255,7 @@
       try {
         const actualizada = await guardarCambiosCampoPorCampo(id, cambios,
           (id, campo, valor) => callServer('apiActualizarCampoHolograma', state.token, id, campo, valor));
+        invalidarCacheLista('apiListarHologramas', state.token);
         hologramas = hologramas.map((h) => (h.ID === id ? actualizada : h));
         tabla.setDatos(conEstado(hologramas));
         pintarStats();
@@ -317,7 +319,7 @@
     async function cargar() {
       tabla.setCargando(true);
       try {
-        hologramas = (await callServer('apiListarHologramas', state.token)) || [];
+        hologramas = (await callServerListaCacheada('apiListarHologramas', state.token)) || [];
       } catch (err) {
         tabla.setError('No se pudieron cargar los hologramas: ' + err.message);
         return;
@@ -330,7 +332,7 @@
     if (!puedeEditar) {
       document.querySelector('#hol-tabs .tab-btn[data-tab="nuevo"]').remove();
     } else {
-      catalogos = (await callServer('apiCatalogosHologramas', state.token)) || catalogos;
+      catalogos = (await callServerCacheado('apiCatalogosHologramas', state.token)) || catalogos;
       prepararFormulario();
     }
 
@@ -361,7 +363,7 @@
           requerido: false,   // no aplica cuando la unidad es personal
           visibleSi: (v) => v.TIPO_UNIDAD === 'FLOTA',
           ayuda: 'Escribe o elige el folio: los datos de la unidad se llenan solos',
-          opciones: async () => ((await callServer('apiListarVehiculosBasico', state.token)) || []).map((v) => ({
+          opciones: async () => ((await callServerCacheado('apiListarVehiculosBasico', state.token)) || []).map((v) => ({
             valor: v.FOLIO,
             etiqueta: [v.PLACA, v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' · '),
           })),
@@ -447,6 +449,7 @@
         textoExito: (valores) => 'Holograma registrado para la placa ' + valores.PLACA,
         alGuardado: async () => {
           tabs.mostrar('registros');
+          invalidarCacheLista('apiListarHologramas', state.token);
           await cargar();
         },
       });
