@@ -20,6 +20,10 @@ const VehiculosService = (function () {
   // La columna ID real de esta hoja es ID_VEHICULO, no "ID" (a diferencia de
   // las hojas nuevas) — hay que pasarla explícitamente a SheetUtils.update/remove.
   const ID_COLUMN = 'ID_VEHICULO';
+  // Campos tipo archivo (ver buscarPorFolio): en datos migrados de AppSheet
+  // guardan una ruta relativa, no una URL — hay que resolverlos antes de
+  // mandarlos al cliente.
+  const CAMPOS_ARCHIVO = ['RESPONSIVA', 'DOCUMENTO BAJA', 'POLIZA SEGURO', 'ARCHIVO TENENCIA'];
 
   function ssId() {
     return Config.SPREADSHEET_IDS.VEHICULOS();
@@ -153,6 +157,30 @@ const VehiculosService = (function () {
       // google.script.run puede fallar con Date crudo — se manda como texto ISO.
       limpio[h] = valor instanceof Date ? valor.toISOString() : valor;
     });
+
+    // Responsiva/Documento de baja/Póliza/Archivo de tenencia: en datos viejos
+    // (migrados de AppSheet) el valor es una RUTA relativa ("VEHICULOS_Files_/
+    // AUT0017.DOCUMENTO BAJA...pdf"), no una URL — el cliente solo convierte en
+    // link lo que empieza con "http", así que se veían como texto suelto sin
+    // poder abrirse. Se resuelve aquí a la URL real de Drive antes de mandarla
+    // (los archivos subidos con esta app ya guardan la URL directa, así que
+    // esos quedan igual).
+    const indicesArchivo = SheetUtils.indiceDeColumnas(headers, CAMPOS_ARCHIVO);
+    CAMPOS_ARCHIVO.forEach((campo) => {
+      const idx = indicesArchivo[campo];
+      if (idx === -1) return;
+      const headerReal = headers[idx];
+      const valor = limpio[headerReal];
+      if (valor && typeof valor === 'string' && !/^https?:\/\//.test(valor)) {
+        try {
+          const url = DriveUtils.urlDeRutaProfunda(valor, Config.DRIVE_FOLDERS.RAIZ());
+          if (url) limpio[headerReal] = url;
+        } catch (err) {
+          console.error('No se pudo resolver el archivo "' + valor + '": ' + err.message);
+        }
+      }
+    });
+
     return limpio;
   }
 
@@ -319,6 +347,9 @@ const VehiculosService = (function () {
     const blob = Utilities.newBlob(bytes, mimeType || 'application/octet-stream', nombreArchivo || 'archivo');
     const carpeta = DriveApp.getFolderById(CARPETA_ADJUNTOS_ID);
     const archivo = carpeta.createFile(blob);
+    // Sin esto, el archivo solo lo puede ver la cuenta que despliega la app
+    // (quien lo creó) — nadie más puede abrir el link, aunque sea válido.
+    archivo.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
 
     return { url: archivo.getUrl(), id: archivo.getId(), nombre: nombreArchivo };
   }

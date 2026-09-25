@@ -454,6 +454,9 @@ const ArqueosService = (function () {
     const blob = Utilities.newBlob(bytes, mimeType || 'application/octet-stream', nombreArchivo || 'archivo');
     const carpeta = DriveApp.getFolderById(CARPETA_ARCHIVOS_ID);
     const archivo = carpeta.createFile(blob);
+    // Sin esto, el archivo solo lo puede ver la cuenta que despliega la app
+    // (quien lo creó) — nadie más puede abrir el link, aunque sea válido.
+    archivo.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
 
     return { url: archivo.getUrl(), id: archivo.getId(), nombre: nombreArchivo };
   }
@@ -603,6 +606,7 @@ const ArqueosService = (function () {
 
     const pdfBlob = DriveApp.getFileById(copia.getId()).getAs('application/pdf');
     const pdfFile = DriveApp.getFolderById(CARPETA_ARCHIVOS_ID).createFile(pdfBlob).setName(copia.getName() + '.pdf');
+    pdfFile.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
     DriveApp.getFileById(copia.getId()).setTrashed(true); // ya no se necesita el Doc, solo el PDF
 
     return pdfFile.getUrl();

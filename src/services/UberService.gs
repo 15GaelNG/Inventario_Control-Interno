@@ -113,6 +113,9 @@ const UberService = (function () {
     const blob = Utilities.newBlob(bytes, mimeType || 'application/octet-stream', nombreArchivo || 'archivo');
     const carpeta = DriveApp.getFolderById(CARPETA_SOLICITUDES_ID);
     const archivo = carpeta.createFile(blob);
+    // Sin esto, el archivo solo lo puede ver la cuenta que despliega la app
+    // (quien lo creó) — nadie más puede abrir el link, aunque sea válido.
+    archivo.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
 
     return { url: archivo.getUrl(), id: archivo.getId(), nombre: nombreArchivo };
   }

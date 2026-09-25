@@ -322,6 +322,9 @@ const PdfService = (function () {
 
       const pdf = carpeta.createFile(DriveApp.getFileById(copia.getId()).getAs('application/pdf'))
         .setName(nombre + '.pdf');
+      // Sin esto, el PDF solo lo puede ver la cuenta que despliega la app
+      // (quien lo creó) — nadie más puede abrir el link, aunque sea válido.
+      pdf.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
       return {
         url: pdf.getUrl(),
         fileId: pdf.getId(),
