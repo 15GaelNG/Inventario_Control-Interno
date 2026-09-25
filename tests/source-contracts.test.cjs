@@ -533,3 +533,14 @@ test('Exportar a Excel descarga la base completa del módulo, no solo lo que se 
   assert.equal(mod.baseCompleta('ACCESORIOS', false).hojas.length, 2);
   assert.throws(() => mod.baseCompleta('OTRO', false), /desconocido/);
 });
+
+test('Líneas usa la BD de pruebas del equipo y revisa la estructura antes de cambiar', () => {
+  const admin = read('src/services/lineas/LineasAdmin.gs');
+  assert.match(admin, /const LINEAS_DEV_SPREADSHEET_ID = '1fC77Uu1ePVUySNvhgWXMHqWpLhGhBMTZZMEblU2nUhI';/);
+  assert.match(admin, /function usarCopiaAppSheetLineas\(\)/);
+  // Si faltan pestañas o columnas no cambia nada: el error sale antes de setProperties
+  const f = admin.slice(admin.indexOf('function apuntarLineasA_'));
+  assert.ok(f.indexOf("throw new Error('No se cambió nada") < f.indexOf('setProperties('));
+  // Las cachés de Líneas llevan el ID de la hoja: al cambiar de hoja no se mezclan datos
+  assert.match(read('src/services/lineas/LineasDatos.gs'), /return 'ln_' \+ clave \+ '_' \+ id\(\)\.slice\(0, 10\);/);
+});

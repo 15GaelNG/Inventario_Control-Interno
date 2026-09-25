@@ -151,6 +151,12 @@ y capturar responsivas e inspecciones.
   franja deslizable; inventario en tarjetas por defecto (si no hay preferencia guardada) y más compactas;
   botones de la ficha en rejilla de 2; opciones del checklist más grandes para el dedo.
 
+## 0g. Hoja de Líneas en DEV (2026-09-25)
+
+Líneas pasa a la BD de pruebas del equipo (`1fC77…`), la misma de Usuarios, Vehículos y Accesorios.
+`configurarLineasDev()` revisa pestañas y columnas contra la copia del AppSheet (`1_47fd…`) antes de cambiar
+`SS_ID_TELEFONIA`; `usarCopiaAppSheetLineas()` regresa a la copia.
+
 ## 0f. Exportar a Excel = base completa del módulo (2026-09-25, commit `cf63f59`)
 
 Antes el botón descargaba lo que se veía (columnas visibles, filtros, búsqueda) y en las bitácoras solo las 5000
