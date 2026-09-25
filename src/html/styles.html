@@ -418,8 +418,8 @@
 
   /* KPI clickeable: filtra la tabla del mismo módulo con solo darle clic
      (ver wireKpiFiltro en app.html). */
-  .stat-tile-clickable { cursor: pointer; transition: border-color .15s, box-shadow .15s; }
-  .stat-tile-clickable:hover { border-color: var(--color-primary); }
+  .stat-tile-clickable { cursor: pointer; transition: border-color .15s, box-shadow .15s, background-color .15s; }
+  .stat-tile-clickable:hover { border-color: var(--color-primary); background: var(--color-primary-soft); }
   .stat-tile-clickable.stat-tile-activo {
     border-color: var(--color-primary); border-width: 2px; padding: 13px 17px;
     box-shadow: 0 0 0 3px var(--color-primary-soft);
@@ -428,17 +428,20 @@
   /* ========== KPI chips (Sensores, Hologramas, Verificaciones, Inspecciones) ==========
      Tarjeta minimalista: etiqueta chica en mayúsculas arriba, valor grande abajo,
      sin ícono — mismo tipo de fila de KPIs que otros sistemas de reporting. */
-  .kpi-chips { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; }
+  /* Mismo grid que .stat-row (auto-fit + 1fr): reparte todo el ancho disponible
+     entre parejo, en vez de flex (que solo ocupaba lo que su contenido necesitaba
+     y dejaba hueco vacío cuando había pocos KPIs). */
+  .kpi-chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-top: 14px; }
   .kpi-chip {
     display: flex; flex-direction: column; align-items: flex-start; gap: 5px;
     background: var(--color-surface); border: 1px solid var(--color-border);
     border-left: 4px solid var(--color-primary);
-    border-radius: var(--radius); padding: 13px 18px; min-width: 130px;
+    border-radius: var(--radius); padding: 13px 18px;
     box-shadow: var(--shadow); text-align: left; cursor: pointer;
-    transition: border-color .15s, box-shadow .15s;
+    transition: border-color .15s, box-shadow .15s, background-color .15s;
   }
   .kpi-chip:disabled { cursor: default; }
-  .kpi-chip:not(:disabled):hover { border-color: var(--color-primary); }
+  .kpi-chip:not(:disabled):hover { border-color: var(--color-primary); background: var(--color-primary-soft); }
   .kpi-chip.activo {
     border-color: var(--color-primary); border-width: 2px; padding: 12px 17px;
     box-shadow: 0 0 0 3px var(--color-primary-soft);
