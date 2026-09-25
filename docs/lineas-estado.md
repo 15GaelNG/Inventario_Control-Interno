@@ -151,6 +151,30 @@ y capturar responsivas e inspecciones.
   franja deslizable; inventario en tarjetas por defecto (si no hay preferencia guardada) y más compactas;
   botones de la ficha en rejilla de 2; opciones del checklist más grandes para el dedo.
 
+## 0e. Captura más clara y velocidad (2026-09-24, commit `218573d`)
+
+- **Detalles** con el diseño de General (`campos()`); los tres datos a escribir son entradas dentro de la lista y
+  al copiar sale el mismo texto del AppSheet (`textoDetalles`).
+- **Bloqueo del equipo** en inspección y responsiva: lista virtual `_BLOQUEO` (PIN · PATRÓN · CONTRASEÑA · SIN
+  BLOQUEO; `conSelectorBloqueo`, `aplicarBloqueo`) que muestra el PIN, la contraseña o el patrón. Se guarda igual
+  que en AppSheet: PIN EQUIPO lleva el PIN, la contraseña, "PATRON" o "N/A"; la lista no se envía (`data-virtual`).
+- **Firmas** con el componente `Firma` del sistema (`crearFirma`): trazo suavizado, nombre de quien firma bajo la
+  línea (`NOMBRE_DE_FIRMA`), opción "Usar foto", marco dorado para el responsable y azul para Control Interno,
+  240 px de alto. Se exportan recortadas al trazo sobre el color de la celda del PDF; `LineasPdf` las acomoda en
+  160 × 70. Corrige que en un paso oculto el lienzo midiera 0 px (se ajusta al mostrarse el paso).
+- **Acomodo** (`htmlFormularioAppSheet(…, { acomodar: true })`): por sección, primero lo que ya se sabe (datos),
+  luego lo que se captura, los campos anchos (observaciones, patrón) y las firmas lado a lado.
+- **Fotos** opcionales con "Tomar foto" (solo en pantallas táctiles) o "Elegir fotos". La carpeta de Drive se crea
+  al subir la primera foto o al guardar (`asegurarCarpeta`), no al abrir. En el detalle de una inspección ya
+  guardada se pueden agregar fotos (`apiLineasFotosInspeccion` 'preparar' / 'actualizar'); si la inspección no
+  tenía carpeta (p. ej. del AppSheet) se crea con la misma estructura y se registra en APP_EVIDENCIAS.
+- **Cambiar estatus** desde la ficha (`apiLineasCambiarEstatus` → `LineasRegistros.cambiarEstatus`): listas del
+  AppSheet, bitácora CAMBIOS, ESTATUS GENERAL recalculado y el motivo en APP_MOVIMIENTOS (sale en el historial).
+- **Velocidad**: `transicionVista` monta la vista a los 180 ms (antes esperaba 2.5 s fijos) y la animación del login
+  dura 1.1 s y precarga Líneas; catálogos y colaboradores quedan en memoria; bitácoras y trámites se pintan al
+  instante con la última copia (`memoria.tablas`) y se actualizan en segundo plano. **Al unir con master**: los
+  tiempos de `app.html` son del shell común.
+
 ## 1. Contexto
 
 El módulo viene de un prototipo propio ("CI Control Activos") que ya funcionaba
