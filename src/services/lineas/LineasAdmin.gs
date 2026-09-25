@@ -84,7 +84,7 @@ function apuntarLineasA_(destinoId) {
   // La API de Sheets es opcional (acelera lecturas/escrituras); sin ella se usa SpreadsheetApp.
   let api = 'API de Sheets habilitada.';
   try {
-    LineasDatos.sheetsApi('?fields=properties.title');
+    Sheets.Spreadsheets.get(destinoId, { fields: 'properties.title' });
   } catch (e) {
     api = 'API de Sheets NO habilitada en el proyecto de Google Cloud (se usará SpreadsheetApp, más lento): ' + String(e.message).slice(0, 160);
   }
