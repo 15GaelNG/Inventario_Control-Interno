@@ -441,7 +441,8 @@
         if (!acomodar) {
           cuerpo = '<div class="ln-af-grid">' + html(sec.campos) + '</div>';
         } else {
-          const nombresDeFirma = Object.keys(NOMBRE_DE_FIRMA).map((k) => NOMBRE_DE_FIRMA[k]);
+          const nombresDeFirma = sec.campos.filter((e) => e.control === 'firma' && NOMBRE_DE_FIRMA[e.columna] && NOMBRE_DE_FIRMA[e.columna] !== 'RESPONSABLE')
+            .map((e) => NOMBRE_DE_FIRMA[e.columna]);
           const ocultos = sec.campos.filter((e) => e.soloLectura && nombresDeFirma.indexOf(e.columna) >= 0);
           const lectura = sec.campos.filter((e) => e.soloLectura && e.control !== 'calculado' && ocultos.indexOf(e) < 0);
           const firmas = sec.campos.filter((e) => e.control === 'firma');
@@ -467,7 +468,7 @@
       const v = String(pin.valor || '').trim().toUpperCase();
       const inicial = v === 'PATRON' || v === 'PATRÓN' || esPuntosPatron(patron.valor) ? 'PATRÓN'
         : (/^\d+$/.test(v) ? 'PIN' : (/^(N\/A|NA|NO APLICA|NINGUNO|SIN BLOQUEO)$/.test(v) ? 'SIN BLOQUEO' : (v ? 'CONTRASEÑA' : '')));
-      const selector = { tipo: 'campo', columna: '_BLOQUEO', etiqueta: 'TIPO DE BLOQUEO DEL EQUIPO', control: 'lista', opciones: OPCIONES_BLOQUEO, valor: inicial, mostrar: pin.mostrar, virtual: true };
+      const selector = { tipo: 'campo', columna: '_BLOQUEO', etiqueta: 'TIPO DE BLOQUEO DEL EQUIPO', control: 'lista', opciones: OPCIONES_BLOQUEO, valor: inicial, mostrar: pin.mostrar, requerido: 'NUNCA', virtual: true };
       const i = elementos.indexOf(pin);
       return elementos.slice(0, i).concat([selector], elementos.slice(i));
     }
@@ -2009,7 +2010,7 @@
         const valores = leerFormularioAppSheet();
         const faltan = [];
         (captura.contexto.formulario || []).forEach((e) => {
-          if (e.tipo !== 'campo' || e.soloLectura || e.control === 'calculado' || e.valorOculto) return;
+          if (e.tipo !== 'campo' || e.soloLectura || e.control === 'calculado' || e.valorOculto || e.virtual) return;
           if (!cumpleCondicion(e.mostrar, tipo) || !cumpleCondicion(e.requerido, tipo)) return;
           if (e.control === 'firma') {
             const f = captura.firmas[e.columna];
@@ -2064,7 +2065,7 @@
         const valores = leerFormularioAppSheet();
         const errores = faltantesFormularioAppSheet().map((e) => ({ columna: e.columna, etiqueta: e.etiqueta, msg: e.control === 'firma' ? 'Falta la firma' : 'Obligatorio' }));
         (captura.contexto.formulario || []).forEach((e) => {
-          if (e.tipo !== 'campo' || e.control !== 'lista' || !cumpleCondicion(e.mostrar, tipo) || !valores[e.columna]) return;
+          if (e.tipo !== 'campo' || e.control !== 'lista' || e.virtual || !cumpleCondicion(e.mostrar, tipo) || !valores[e.columna]) return;
           if ((e.opciones || []).map((o) => String(o).toUpperCase()).indexOf(valores[e.columna].toUpperCase()) < 0) {
             errores.push({ columna: e.columna, etiqueta: e.etiqueta, msg: 'Elige un valor de la lista' });
           }
