@@ -17,6 +17,13 @@ function apiIdentidadGoogle() {
 function apiLoginConGoogle() {
   return Auth.loginConGoogle();
 }
+// Temporal, para el arreglo retroactivo de archivos sin compartir (ver
+// compartirArchivosExistentes en SetupInicial.gs) — hay que correrla como
+// la cuenta que desplegó la app (dueña de los archivos), no como quien esté
+// en el editor, así que se llama desde la consola con la app abierta.
+function apiCompartirArchivosExistentes(token) {
+  return compartirArchivosExistentes(token);
+}
 function apiLogout(token) {
   return Auth.logout(token);
 }

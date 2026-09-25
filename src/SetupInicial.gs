@@ -422,6 +422,318 @@ function diagnosticoCambiosVehiculos() {
 }
 
 /**
+ * Diagnóstico del PDF de Inspección Vehicular: InspeccionesService.registrar()
+ * GUARDA el PDF dentro de Config.DRIVE_FOLDERS.REPORTES() + subcarpeta del
+ * tipo, pero urlFormato() lo BUSCA después caminando desde
+ * Config.DRIVE_FOLDERS.RAIZ() + "INSPECCIONES VEHICULARES" + esa subcarpeta —
+ * si REPORTES y RAIZ no son la misma carpeta (o una no contiene a la otra
+ * con esa estructura exacta), el PDF se genera bien pero nunca se vuelve a
+ * encontrar. Esto lo confirma.
+ */
+function diagnosticoRutaFormatoInspeccion() {
+  function terminar(mensaje) {
+    Logger.log(mensaje);
+    return mensaje;
+  }
+  const lineas = [];
+
+  let reportesId, raizId;
+  try { reportesId = PropertiesService.getScriptProperties().getProperty('DRIVE_FOLDER_ID_REPORTES'); }
+  catch (e) { /* no-op */ }
+  try { raizId = Config.DRIVE_FOLDERS.RAIZ(); } catch (e) { /* no-op */ }
+
+  lineas.push('DRIVE_FOLDER_ID_REPORTES = ' + (reportesId || '(no configurado)'));
+  lineas.push('DRIVE_FOLDER_ID_RAIZ     = ' + (raizId || '(no configurado)'));
+  if (!reportesId || !raizId) return terminar(lineas.join('\n') + '\n\nFalta configurar una de las dos.');
+
+  if (reportesId === raizId) {
+    lineas.push('→ Son la MISMA carpeta.');
+  } else {
+    const reportes = DriveApp.getFolderById(reportesId);
+    const raiz = DriveApp.getFolderById(raizId);
+    lineas.push('→ Son carpetas DISTINTAS: "' + reportes.getName() + '" vs "' + raiz.getName() + '"');
+
+    const tieneSubcarpeta = raiz.getFoldersByName('INSPECCIONES VEHICULARES');
+    if (tieneSubcarpeta.hasNext()) {
+      lineas.push('  RAIZ sí tiene una subcarpeta "INSPECCIONES VEHICULARES".');
+    } else {
+      lineas.push('  ✗ RAIZ NO tiene ninguna subcarpeta "INSPECCIONES VEHICULARES" — ahí se rompe la búsqueda.');
+    }
+  }
+
+  // Busca una inspección real con PDF ya guardado y prueba a resolverla tal
+  // cual lo hace urlFormato().
+  const ssId = Config.SPREADSHEET_IDS.VEHICULOS();
+  const hoja = SpreadsheetApp.openById(ssId).getSheetByName('INSPECCION VEHICULAR');
+  if (!hoja) return terminar(lineas.join('\n') + '\n\nNo existe la pestaña "INSPECCION VEHICULAR".');
+
+  const leido = SheetUtils.leerColumnasDeHoja(hoja, ['ID INSPECCION', 'FORMATO INSPECCION VEHICULAR']);
+  let ejemploRuta = null, ejemploId = null;
+  for (let i = 0; i < leido.filas; i++) {
+    if (leido.datos['FORMATO INSPECCION VEHICULAR'][i]) {
+      ejemploRuta = leido.datos['FORMATO INSPECCION VEHICULAR'][i];
+      ejemploId = leido.datos['ID INSPECCION'][i];
+      break;
+    }
+  }
+  if (!ejemploRuta) {
+    lineas.push('', 'Ninguna inspección tiene algo guardado en "FORMATO INSPECCION VEHICULAR" todavía.');
+    return terminar(lineas.join('\n'));
+  }
+  lineas.push('', 'Ejemplo — ID Inspección "' + ejemploId + '", ruta guardada: "' + ejemploRuta + '"');
+  const url = DriveUtils.urlDeRutaProfunda(ejemploRuta, raizId);
+  lineas.push(url ? '✓ Se resolvió: ' + url : '✗ NO se pudo encontrar ese archivo caminando desde RAIZ.');
+
+  return terminar(lineas.join('\n'));
+}
+
+/**
+ * Busca un FOLIO de Vehículos cuyos 4 campos de archivo (RESPONSIVA, DOCUMENTO
+ * BAJA, POLIZA SEGURO, ARCHIVO TENENCIA) tengan dato en la hoja Y además el
+ * archivo exista de verdad en la carpeta de Drive "VEHICULOS_Files_" — para
+ * probar la resolución de rutas con un caso que sí debería funcionar.
+ */
+function diagnosticoBuscarVehiculoConArchivos() {
+  function terminar(mensaje) {
+    Logger.log(mensaje);
+    return mensaje;
+  }
+
+  const ssId = Config.SPREADSHEET_IDS.VEHICULOS();
+  const hoja = SpreadsheetApp.openById(ssId).getSheetByName('VEHICULOS');
+  if (!hoja) return terminar('No existe la pestaña "VEHICULOS".');
+
+  const CAMPOS = ['FOLIO', 'RESPONSIVA', 'DOCUMENTO BAJA', 'POLIZA SEGURO', 'ARCHIVO TENENCIA'];
+  const leido = SheetUtils.leerColumnasDeHoja(hoja, CAMPOS);
+
+  // Nombres reales de archivo que SÍ existen en la carpeta (una sola pasada,
+  // en vez de un getFilesByName() por candidato).
+  const raiz = DriveApp.getFolderById(Config.DRIVE_FOLDERS.RAIZ());
+  const subcarpetas = raiz.getFoldersByName('VEHICULOS_Files_');
+  if (!subcarpetas.hasNext()) return terminar('No existe la subcarpeta "VEHICULOS_Files_" dentro de la raíz.');
+  const carpeta = subcarpetas.next();
+  const existentes = new Set();
+  const archivos = carpeta.getFiles();
+  while (archivos.hasNext()) existentes.add(archivos.next().getName());
+
+  const nombreDe = (ruta) => String(ruta || '').split('/').pop();
+
+  // Por columna (no los 4 a la vez — no siempre aplican los 4 al mismo
+  // vehículo): cuántas filas tienen dato, cuántas de esas SÍ existen de
+  // verdad en Drive, y un ejemplo de folio que sí funciona.
+  const CAMPOS_ARCHIVO = ['RESPONSIVA', 'DOCUMENTO BAJA', 'POLIZA SEGURO', 'ARCHIVO TENENCIA'];
+  const lineas = [];
+  CAMPOS_ARCHIVO.forEach((campo) => {
+    let conDato = 0, existenDeVerdad = 0, ejemplo = null;
+    for (let i = 0; i < leido.filas; i++) {
+      const ruta = leido.datos[campo][i];
+      if (!ruta) continue;
+      conDato++;
+      if (existentes.has(nombreDe(ruta))) {
+        existenDeVerdad++;
+        if (!ejemplo) ejemplo = { folio: leido.datos.FOLIO[i], ruta: ruta };
+      }
+    }
+    lineas.push(campo + ': ' + conDato + ' fila(s) con dato, ' + existenDeVerdad + ' con el archivo real en Drive' +
+      (ejemplo ? ' — ejemplo: folio "' + ejemplo.folio + '" (' + ejemplo.ruta + ')' : ' — ninguno encontrado'));
+  });
+  return terminar(lineas.join('\n'));
+}
+
+/**
+ * Comparte (DOMAIN, VIEW) todos los archivos que YA existen en las 3 carpetas
+ * de adjuntos de la app (Uber, Vehículos, Arqueos) — los subidos antes de que
+ * subirArchivo() empezara a compartirlos solos quedaron visibles nada más para
+ * la cuenta que despliega la app; nadie más podía abrir el link aunque fuera
+ * válido (por eso "no dejaba ver los PDF"). Correrla UNA vez desde el editor.
+ *
+ * A propósito NO toca la carpeta de Reportes (Config.DRIVE_FOLDERS.REPORTES):
+ * es la misma que usa AppSheet, compartida y con muchos más archivos que no
+ * son nuestros — los reportes nuevos que genera esta app ya se comparten
+ * solos (PdfService.gs), pero los viejos habría que revisarlos aparte.
+ */
+function compartirArchivosExistentes(token) {
+  // Solo el dueño de un archivo puede cambiarle el compartir (setSharing) —
+  // "Ejecutar" desde el editor corre con la cuenta que tengas abierta ahí,
+  // que puede NO ser la que desplegó la app (dueña de los archivos que sube
+  // la app en vivo). Por eso esta función también se puede llamar desde la
+  // consola del navegador con la app abierta (corre como USER_DEPLOYING,
+  // la cuenta correcta):
+  //   google.script.run
+  //     .withSuccessHandler(r => console.log(r))
+  //     .withFailureHandler(e => console.error('FALLÓ:', e.message))
+  //     .apiCompartirArchivosExistentes(state.token)
+  if (token) Permisos.puedeEditar(token, 'usuarios');
+  const CARPETAS = [
+    { id: '1lNo-vHXVT8R2ZMgj2FK2awfIcW17JdY8', nombre: 'Uber (solicitudes)' },
+    { id: '1gmu5Gs6thEwOv7tcwe0KWQaWTRhFr4-l', nombre: 'Vehículos (adjuntos)' },
+    { id: '1UMHf-zKY6sRz-0Zkt_CxnNCPdrJMHF5o', nombre: 'Arqueos (archivos)' },
+  ];
+  const lineas = [];
+  CARPETAS.forEach((c) => {
+    let carpeta;
+    try {
+      carpeta = DriveApp.getFolderById(c.id);
+    } catch (err) {
+      lineas.push(c.nombre + ': no se pudo abrir la carpeta (' + err.message + ')');
+      return;
+    }
+    let revisados = 0, compartidos = 0, yaEstaban = 0, fallaron = 0, primerError = null;
+    const archivos = carpeta.getFiles();
+    while (archivos.hasNext()) {
+      const archivo = archivos.next();
+      revisados++;
+      try {
+        const acceso = archivo.getSharingAccess();
+        if (acceso === DriveApp.Access.DOMAIN || acceso === DriveApp.Access.ANYONE || acceso === DriveApp.Access.ANYONE_WITH_LINK) {
+          yaEstaban++;
+        } else {
+          archivo.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
+          compartidos++;
+        }
+      } catch (err) {
+        fallaron++;
+        if (!primerError) primerError = archivo.getName() + ': ' + err.message;
+      }
+    }
+    lineas.push(c.nombre + ': ' + revisados + ' archivo(s) — ' + compartidos + ' recién compartido(s), ' +
+      yaEstaban + ' ya estaban, ' + fallaron + ' fallaron.' +
+      (primerError ? '\n  Primer error: ' + primerError : ''));
+  });
+  const mensaje = lineas.join('\n');
+  Logger.log(mensaje);
+  return mensaje;
+}
+
+/**
+ * Diagnóstico de solo lectura: compara los 4 campos de archivo de Vehículos
+ * (RESPONSIVA, DOCUMENTO BAJA, POLIZA SEGURO, ARCHIVO TENENCIA — los nombres
+ * que usa el cliente en CAMPOS_VEHICULO) contra los encabezados REALES de la
+ * hoja VEHICULOS, y cuenta cuántas filas sí tienen algo guardado en cada uno.
+ * Si el nombre no calza exacto (mayúsculas/espacios/acentos distintos), el
+ * archivo se sube a Drive pero la URL nunca llega a la columna correcta —
+ * el campo se queda vacío para siempre sin ningún error visible.
+ */
+function diagnosticoArchivosVehiculos() {
+  const ssId = Config.SPREADSHEET_IDS.VEHICULOS();
+  const NOMBRE_HOJA = 'VEHICULOS';
+  const ESPERADOS = ['RESPONSIVA', 'DOCUMENTO BAJA', 'POLIZA SEGURO', 'ARCHIVO TENENCIA'];
+
+  const ss = SpreadsheetApp.openById(ssId);
+  const hoja = ss.getSheetByName(NOMBRE_HOJA);
+  if (!hoja) return 'No existe una pestaña llamada "' + NOMBRE_HOJA + '".';
+
+  const lastRow = hoja.getLastRow();
+  const lastCol = hoja.getLastColumn();
+  const encabezados = lastCol ? hoja.getRange(1, 1, 1, lastCol).getValues()[0] : [];
+  const indices = SheetUtils.indiceDeColumnas(encabezados, ESPERADOS);
+
+  const lineas = ['Encabezados reales de "' + NOMBRE_HOJA + '" (' + lastCol + ' columnas):', JSON.stringify(encabezados), ''];
+
+  ESPERADOS.forEach((clave) => {
+    const idx = indices[clave];
+    if (idx === -1) {
+      lineas.push('✗ "' + clave + '" — NO se encontró ni siquiera con coincidencia tolerante (espacios/acentos). Revisa el nombre real arriba.');
+      return;
+    }
+    const nombreReal = encabezados[idx];
+    const coincideExacto = nombreReal === clave;
+    let conDato = 0;
+    if (lastRow >= 2) {
+      const columna = hoja.getRange(2, idx + 1, lastRow - 1, 1).getValues();
+      columna.forEach((fila) => { if (fila[0]) conDato++; });
+    }
+    lineas.push('✓ "' + clave + '" → columna real: "' + nombreReal + '"' +
+      (coincideExacto ? ' (coincide exacto)' : ' (¡OJO! coincide solo tolerante, no exacto)') +
+      ' — ' + conDato + ' de ' + Math.max(0, lastRow - 1) + ' fila(s) con algo guardado.');
+  });
+
+  const mensaje = lineas.join('\n');
+  Logger.log(mensaje);
+  return mensaje;
+}
+
+/**
+ * Diagnóstico paso a paso de por qué una ruta tipo AppSheet ("VEHICULOS_Files_/
+ * AUT0024.ARCHIVO TENENCIA.181951.pdf") no se resuelve a una URL real —
+ * corre exactamente lo mismo que VehiculosService.buscarPorFolio() ahora hace,
+ * pero reportando en qué paso se pierde. Correr desde el editor cambiando la
+ * variable RUTA de abajo por el valor real que sale en la vista.
+ */
+function diagnosticoRutaArchivoVehiculo() {
+  const RUTA = 'VEHICULOS_Files_/AUT0024.ARCHIVO TENENCIA.181951.pdf';
+  const lineas = ['Ruta a resolver: "' + RUTA + '"', ''];
+
+  let raizId;
+  try {
+    raizId = Config.DRIVE_FOLDERS.RAIZ();
+    lineas.push('DRIVE_FOLDER_ID_RAIZ = ' + raizId);
+  } catch (err) {
+    lineas.push('✗ Config.DRIVE_FOLDERS.RAIZ() falló: ' + err.message);
+    lineas.push('  → Falta la Script Property DRIVE_FOLDER_ID_RAIZ. Sin esto no se puede resolver nada.');
+    const mensaje = lineas.join('\n');
+    Logger.log(mensaje);
+    return mensaje;
+  }
+
+  let raiz;
+  try {
+    raiz = DriveApp.getFolderById(raizId);
+    lineas.push('Carpeta raíz encontrada: "' + raiz.getName() + '"');
+  } catch (err) {
+    lineas.push('✗ No se pudo abrir la carpeta raíz (' + raizId + '): ' + err.message);
+    const mensaje = lineas.join('\n');
+    Logger.log(mensaje);
+    return mensaje;
+  }
+
+  const partes = RUTA.split('/').map((p) => p.trim()).filter(Boolean);
+  lineas.push('Partes de la ruta: ' + JSON.stringify(partes));
+
+  let inicio = 0;
+  if (partes[0].toUpperCase() === raiz.getName().toUpperCase()) {
+    inicio = 1;
+    lineas.push('(La primera parte coincide con el nombre de la raíz, se salta)');
+  }
+
+  let carpeta = raiz;
+  for (let i = inicio; i < partes.length - 1; i++) {
+    const nombreBuscado = partes[i];
+    const subcarpetas = carpeta.getFoldersByName(nombreBuscado);
+    if (subcarpetas.hasNext()) {
+      carpeta = subcarpetas.next();
+      lineas.push('✓ Subcarpeta "' + nombreBuscado + '" encontrada dentro de "' + (i === inicio ? raiz.getName() : partes[i - 1]) + '"');
+    } else {
+      lineas.push('✗ NO se encontró una subcarpeta llamada exactamente "' + nombreBuscado + '" dentro de "' + carpeta.getName() + '"');
+      const nombresReales = [];
+      const todas = carpeta.getFolders();
+      while (todas.hasNext() && nombresReales.length < 30) nombresReales.push(todas.next().getName());
+      lineas.push('  Subcarpetas reales que sí hay ahí: ' + (nombresReales.join(', ') || '(ninguna)'));
+      const mensaje = lineas.join('\n');
+      Logger.log(mensaje);
+      return mensaje;
+    }
+  }
+
+  const nombreArchivo = partes[partes.length - 1];
+  const archivos = carpeta.getFilesByName(nombreArchivo);
+  if (archivos.hasNext()) {
+    const archivo = archivos.next();
+    lineas.push('✓ Archivo encontrado: "' + archivo.getName() + '" → ' + archivo.getUrl());
+  } else {
+    lineas.push('✗ NO se encontró un archivo llamado exactamente "' + nombreArchivo + '" dentro de "' + carpeta.getName() + '"');
+    const nombresReales = [];
+    const todosArchivos = carpeta.getFiles();
+    while (todosArchivos.hasNext() && nombresReales.length < 10) nombresReales.push(todosArchivos.next().getName());
+    lineas.push('  Algunos archivos reales que sí hay ahí: ' + (nombresReales.join(', ') || '(ninguno)'));
+  }
+
+  const mensaje = lineas.join('\n');
+  Logger.log(mensaje);
+  return mensaje;
+}
+
+/**
  * Igual que revisarRelacionesSoloReporte(), pero además CORRIGE las diferencias que
  * encuentre (sobrescribe la copia con el valor de Vehículos). Correrla una vez ya
  * revisado el log de la corrida en modo reporte — después de esto, se puede dejar
