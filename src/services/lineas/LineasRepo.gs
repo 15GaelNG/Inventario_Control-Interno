@@ -571,7 +571,7 @@ const LineasRepo = (function () {
       const porCampo = (motivo) => cambios.forEach((c) => agregar(Object.assign({}, base, {
         movimiento: movimientoDeCampo(c.campo), campo: c.campo, antes: c.antes, despues: c.despues, detalle: motivo,
       })));
-      if (tipo === 'EDICION') { porCampo('Edición del registro'); return; }
+      if (tipo === 'EDICION') { porCampo(txt(f['MOTIVO']) || 'Edición del registro'); return; }
       if (tipo === 'INSPECCION') {
         if (detalle.inspeccionId) inspeccionesSistema[detalle.inspeccionId] = true;
         const cal = despues.calificacion;

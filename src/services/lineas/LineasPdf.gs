@@ -306,8 +306,10 @@ const LineasPdf = (function () {
               img.setHeight(Math.max(1, Math.round(alto * escala)));
               parrafo.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
             } else {
-              const max = 160;
-              if (ancho > max) { img.setWidth(max); img.setHeight(Math.round(alto * max / ancho)); }
+              // Firmas: llegan recortadas al trazo (componente Firma); caben en 160 × 70 sin deformarse
+              const escala = Math.min(1, 160 / ancho, 70 / alto);
+              img.setWidth(Math.max(1, Math.round(ancho * escala)));
+              img.setHeight(Math.max(1, Math.round(alto * escala)));
             }
           } catch (e) {
             avisos.push('No se pudo insertar la imagen ' + nombreImagen + ': ' + e.message);

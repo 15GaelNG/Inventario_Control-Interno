@@ -450,3 +450,38 @@ test('experiencia de uso: menú en celular, ficha en pestañas y formularios por
   assert.match(estilos, /\.ln-captura-modal \.modal-form-scroll, #ln-op-modal \.modal-form-scroll \{ max-height: none; flex: 1 1 auto; min-height: 0; overflow-y: auto; \}/);
   assert.match(lineas, /matchMedia\('\(max-width: 700px\)'\)\.matches \? 'tarjetas' : 'tabla'/);
 });
+
+test('inspección y responsiva: bloqueo en lista, firmas del sistema, acomodo, fotos y estatus', () => {
+  const lineas = read('src/html/js/lineas.html');
+  const app = read('src/html/js/app.html');
+  // Bloqueo: una lista decide PIN / patrón / contraseña y el valor sigue yendo en PIN EQUIPO
+  assert.match(lineas, /const OPCIONES_BLOQUEO = \['PIN', 'PATRÓN', 'CONTRASEÑA', 'SIN BLOQUEO'\];/);
+  assert.match(lineas, /if \(t === 'PATRÓN'\) input\.value = 'PATRON';/);
+  assert.match(lineas, /el\.hasAttribute\('data-virtual'\)/);
+  // Firmas: componente Firma del sistema, con el nombre de quien firma y ajuste al mostrarse el paso
+  assert.match(lineas, /Firma\.crear\(contenedor, \{ nombre: nombre \|\| '', marca: 'Firma aquí con el dedo' \}\)/);
+  assert.match(lineas, /'FIRMA RESPONSABLE': 'RESPONSABLE'/);
+  assert.match(lineas, /alMostrar: \(\) => Object\.keys\(captura\.firmas\)/);
+  assert.doesNotMatch(lineas, /function activarFirma\(/);
+  assert.match(lineas, /\{ acomodar: true \}/);
+  // Fotos: opcionales, cámara o galería, y también después de guardar la inspección
+  assert.match(lineas, /function htmlSubirFotos\(prefijo, nota\)/);
+  assert.match(lineas, /apiLineasFotosInspeccion', id, 'preparar'/);
+  assert.match(read('src/services/lineas/LineasCaptura.gs'), /function fotosInspeccion\(id, accion, correo\)/);
+  // La carpeta de Drive se crea al subir la primera foto o al guardar, no al abrir
+  assert.match(lineas, /function asegurarCarpeta\(\)/);
+  assert.doesNotMatch(lineas, /Promise\.all\(\[pedirContexto, llamar\('apiLineasPrepararEvidencia'/);
+  // Cambio rápido de estatus con las listas del AppSheet
+  assert.match(lineas, /data-ln-estatus=/);
+  const reg = read('src/services/lineas/LineasRegistros.gs');
+  assert.match(reg, /function cambiarEstatus\(id, datos, usuario\)/);
+  assert.match(reg, /LineasRepo\.CATALOGO\.estatusEquipo\], \['ESTATUS LINEA'/);
+  assert.match(read('src/ClientApi.gs'), /function apiLineasCambiarEstatus\(token, id, datos\)/);
+  // Velocidad: sin esperas fijas largas y con datos en memoria
+  assert.match(app, /\}, 180\);/);
+  assert.doesNotMatch(app, /\}, 2500\);/);
+  assert.match(lineas, /memoria\.tablas\[clave\] = texto;/);
+  assert.match(lineas, /function cargarCatalogos\(forzar\)/);
+  // PDF: la firma recortada cabe en 160 × 70
+  assert.match(read('src/services/lineas/LineasPdf.gs'), /Math\.min\(1, 160 \/ ancho, 70 \/ alto\)/);
+});

@@ -461,8 +461,50 @@ const LineasCaptura = (function () {
     }
   }
 
+  /**
+   * Fotos de una inspección ya guardada (mejora: en AppSheet no se podían agregar después).
+   * 'preparar' → { fotosCarpetaId } autorizada para el usuario; crea la carpeta con la estructura
+   * <NUCO>/INSPECCIONES/<AÑO>/<CUATRIMESTRE>/<MES>/INSP DD MM/FOTOS si la inspección no tenía (p. ej. del
+   * AppSheet) y la registra en APP_EVIDENCIAS. 'actualizar' → recuenta las fotos y regresa { fotos }.
+   */
+  function fotosInspeccion(id, accion, correo) {
+    const insp = LineasRepo.leerInspeccion(id);
+    if (!insp) throw new Error('No existe la inspección ' + id);
+    const TAB_EV = LineasRepo.TAB.APP_EVID;
+    LineasRepo.asegurarPestanaApp(TAB_EV);
+    const esDrive = /^drive_/.test(id);
+    const filas = LineasDatos.buscarFilas(TAB_EV, esDrive ? 'CARPETA_ID' : 'ID_REGISTRO', esDrive ? id.slice(6) : id);
+    const fila = filas.length ? LineasDatos.leerFilas([{ tabla: TAB_EV, filas: filas.slice(0, 1) }])[0][0] : null;
+    let carpetaId = fila ? String(fila['CARPETA_ID'] || '') : '';
+    let fotosId = fila ? String(fila['FOTOS_CARPETA_ID'] || '') : '';
+
+    if (accion === 'preparar') {
+      if (!carpetaId) {
+        const c = LineasEvidencias.prepararCarpetaEvidencia('INSPECCION', insp.nuco || 'SIN NUCO', insp.fecha ? new Date(insp.fecha) : new Date(), correo);
+        LineasDatos.agregarFilas(TAB_EV, [{
+          'ID': LineasDatos.nuevoIdCorto(), 'TIPO': 'INSPECCION', 'ORIGEN': insp.origen === 'SISTEMA' ? 'SISTEMA' : 'APPSHEET', 'ID_REGISTRO': id,
+          'ID_LINEA': insp.registroId || '', 'NUCO': insp.nuco || '', 'FECHA': insp.fecha ? new Date(insp.fecha) : new Date(),
+          'CARPETA_ID': c.carpetaId, 'RUTA': c.ruta, 'FOTOS_CARPETA_ID': c.fotosCarpetaId, 'FOTOS': '0', 'PDFS_JSON': '[]',
+          'COINCIDENCIA_EXACTA': 'TRUE', 'ALERTAS_JSON': '[]', 'ID_ANTERIOR': '', 'ACTUALIZADO_EN': new Date(),
+        }]);
+        return { fotosCarpetaId: c.fotosCarpetaId };
+      }
+      if (!fotosId) {
+        fotosId = LineasEvidencias.carpetaFotos(carpetaId);
+        LineasDatos.actualizarFila(TAB_EV, fila._fila, { 'FOTOS_CARPETA_ID': fotosId });
+      }
+      LineasEvidencias.autorizarSubida(correo, [fotosId]);
+      return { fotosCarpetaId: fotosId };
+    }
+
+    if (!fila || !fotosId) return { fotos: 0 };
+    const n = LineasEvidencias.contarImagenes(fotosId);
+    LineasDatos.actualizarFila(TAB_EV, fila._fila, { 'FOTOS': String(n), 'ACTUALIZADO_EN': new Date() });
+    return { fotos: n };
+  }
+
   return {
-    objetivo: objetivoCaptura_, guardarInspeccion, guardarResponsiva, generarPdf,
+    objetivo: objetivoCaptura_, guardarInspeccion, guardarResponsiva, generarPdf, fotosInspeccion,
     contextoInspeccion: (ref, usuario, puedeVerSecretos) => paraCliente_(contextoInspeccion(ref, usuario, puedeVerSecretos)),
     contextoResponsiva: (ref, usuario, puedeVerSecretos) => paraCliente_(contextoResponsiva(ref, usuario, puedeVerSecretos)),
     // Para pruebas: las definiciones de los formularios

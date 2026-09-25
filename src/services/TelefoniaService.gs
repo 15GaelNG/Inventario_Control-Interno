@@ -210,6 +210,19 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente(LineasRegistros.editar(id, datos || {}, usuarioOperacion_(sesion), puedeVerSecretos_(sesion)));
   }
 
+  /** Cambio rápido de estatus del equipo o de la línea. */
+  function cambiarEstatus(token, id, datos) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    return LineasUtil.paraCliente(LineasRegistros.cambiarEstatus(id, datos || {}, usuarioOperacion_(sesion)));
+  }
+
+  /** Fotos de una inspección ya guardada: 'preparar' (carpeta autorizada) o 'actualizar' (recuento). */
+  function fotosInspeccion(token, id, accion) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    if (accion !== 'preparar' && accion !== 'actualizar') throw new Error('Acción inválida.');
+    return LineasUtil.paraCliente(LineasCaptura.fotosInspeccion(id, accion, sesion.correo));
+  }
+
   /** Vacía las cachés del módulo (después de editar la hoja a mano). Solo ADMIN. */
   function recargarDatos(token) {
     Auth.requiereRol(token, [Config.ROLES.ADMIN]);
@@ -277,5 +290,6 @@ const TelefoniaService = (function () {
   return {
     permisos, indice, equipo, linea, evidencias, historial, inspeccion, catalogos, colaboradores, bitacora, vistaOperativa, formularioOperativa, crearVistaOperativa, formularioRegistro, recargarDatos,
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf, crearRegistro, editarRegistro,
+    cambiarEstatus, fotosInspeccion,
   };
 })();

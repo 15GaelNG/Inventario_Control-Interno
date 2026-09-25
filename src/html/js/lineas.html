@@ -362,7 +362,7 @@
     function htmlElementoFormulario(e) {
       if (e.tipo === 'titulo') return '<h4 class="ln-af-titulo">' + (e.icono ? icono(e.icono) + ' ' : '') + esc(e.texto) + '</h4>';
       const id = 'af-' + e.columna.replace(/[^A-Za-z0-9]+/g, '-');
-      const attrs = ' id="' + id + '" data-columna="' + esc(e.columna) + '"' + (e.deriva ? ' data-deriva-de="' + esc(e.deriva.de) + '" data-deriva-dato="' + esc(e.deriva.dato) + '"' : '') + (e.literal || e.secreto ? ' data-respetar-texto' : '') + (e.soloLectura ? ' readonly tabindex="-1"' : '');
+      const attrs = ' id="' + id + '" data-columna="' + esc(e.columna) + '"' + (e.virtual ? ' data-virtual' : '') + (e.deriva ? ' data-deriva-de="' + esc(e.deriva.de) + '" data-deriva-dato="' + esc(e.deriva.dato) + '"' : '') + (e.literal || e.secreto ? ' data-respetar-texto' : '') + (e.soloLectura ? ' readonly tabindex="-1"' : '');
       const valor = e.valor === null || e.valor === undefined ? '' : String(e.valor);
       let control;
       if (e.control === 'escala') {
@@ -404,8 +404,10 @@
           : (valor && !esPuntosPatron(valor) ? 'Hay un patrón capturado en AppSheet (imagen). Si no trazas uno nuevo, se conserva.' : '');
         control = (nota ? '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' ' + esc(nota) + '</div>' : '') + htmlPatron(id + '-patron', false);
       } else if (e.control === 'firma') {
-        control = '<div class="ln-firma-caja"><canvas id="' + id + '-firma"></canvas><div class="ln-firma-acciones"><span class="ln-firma-vacia">Dibuja con el dedo o el mouse</span>' +
-          '<button type="button" class="secondary ln-btn-chico" data-limpiar-firma="' + esc(e.columna) + '">Limpiar firma</button></div></div>';
+        // Componente Firma del sistema; marco dorado para el responsable y azul para Control Interno
+        const rol = ROL_FIRMA[e.columna] || 'ci';
+        control = '<div class="ln-firma ln-firma-' + rol + '"><div class="ln-firma-cabecera">' + icono(rol === 'ci' ? 'shield-check' : 'user') + ' ' +
+          (rol === 'ci' ? 'Firma de Control Interno' : 'Firma del responsable') + '</div><div class="ln-firma-lienzo" id="' + id + '-firma"></div></div>';
       } else if (e.control === 'calculado') {
         control = '<div class="ln-af-calculado' + (e.formula ? '' : ' ln-af-calculado-texto') + '" id="' + id + '"' + (e.formula ? ' data-formula="' + esc(e.formula) + '"' : '') + '>' + (valor ? esc(valor) : '—') + '</div>';
       } else {
@@ -416,21 +418,111 @@
         '<label for="' + id + '">' + esc(e.etiqueta) + '<span class="ln-af-req"' + (e.requerido === 'SIEMPRE' ? '' : ' hidden') + '> *</span></label>' + control + '</div>';
     }
 
-    /** Dibuja el formulario agrupando cada título del AppSheet con sus campos. */
-    function htmlFormularioAppSheet(elementos) {
-      let html = '';
-      let abierto = false;
+    // Firmas: quién firma (su nombre va debajo de la línea) y de qué lado
+    const NOMBRE_DE_FIRMA = { 'FIRMA INSPECTOR': 'NOMBRE INSPECTOR', 'FIRMA CI': 'NOMBRE CI', 'FIRMA RESPONSABLE': 'RESPONSABLE' };
+    const ROL_FIRMA = { 'FIRMA INSPECTOR': 'ci', 'FIRMA CI': 'ci', 'FIRMA RESPONSABLE': 'responsable' };
+
+    /**
+     * Dibuja el formulario agrupando cada título del AppSheet con sus campos. Con `acomodar` (inspección y
+     * responsiva) cada sección muestra primero lo que ya se sabe (solo lectura, como datos), luego lo que se
+     * captura, después los campos anchos (observaciones, patrón) y al final las firmas lado a lado. Es solo
+     * acomodo visual: el orden, las condiciones y lo que se guarda siguen siendo los del AppSheet.
+     */
+    function htmlFormularioAppSheet(elementos, opciones) {
+      const acomodar = opciones && opciones.acomodar;
+      const secciones = [];
       elementos.forEach((e) => {
-        if (e.tipo === 'titulo') {
-          if (abierto) html += '</div></section>';
-          html += '<section class="ln-af-seccion">' + htmlElementoFormulario(e) + '<div class="ln-af-grid">';
-          abierto = true;
-          return;
-        }
-        if (!abierto) { html += '<section class="ln-af-seccion"><div class="ln-af-grid">'; abierto = true; }
-        html += htmlElementoFormulario(e);
+        if (e.tipo === 'titulo' || !secciones.length) secciones.push({ titulo: e.tipo === 'titulo' ? e : null, campos: [] });
+        if (e.tipo !== 'titulo') secciones[secciones.length - 1].campos.push(e);
       });
-      return html + (abierto ? '</div></section>' : '');
+      const html = (lista) => lista.map(htmlElementoFormulario).join('');
+      return secciones.map((sec) => {
+        let cuerpo;
+        if (!acomodar) {
+          cuerpo = '<div class="ln-af-grid">' + html(sec.campos) + '</div>';
+        } else {
+          const nombresDeFirma = Object.keys(NOMBRE_DE_FIRMA).map((k) => NOMBRE_DE_FIRMA[k]);
+          const ocultos = sec.campos.filter((e) => e.soloLectura && nombresDeFirma.indexOf(e.columna) >= 0);
+          const lectura = sec.campos.filter((e) => e.soloLectura && e.control !== 'calculado' && ocultos.indexOf(e) < 0);
+          const firmas = sec.campos.filter((e) => e.control === 'firma');
+          const anchos = sec.campos.filter((e) => e.control === 'area' || e.control === 'patron');
+          const resto = sec.campos.filter((e) => [ocultos, lectura, firmas, anchos].every((g) => g.indexOf(e) < 0));
+          cuerpo = (lectura.length ? '<div class="ln-af-grid ln-af-datos">' + html(lectura) + '</div>' : '') +
+            (resto.length ? '<div class="ln-af-grid">' + html(resto) + '</div>' : '') +
+            anchos.map((e) => '<div class="ln-af-completo">' + htmlElementoFormulario(e) + '</div>').join('') +
+            (firmas.length ? '<div class="ln-firmas">' + html(firmas) + '</div>' : '') +
+            (ocultos.length ? '<div hidden>' + html(ocultos) + '</div>' : '');
+        }
+        return '<section class="ln-af-seccion">' + (sec.titulo ? htmlElementoFormulario(sec.titulo) : '') + cuerpo + '</section>';
+      }).join('');
+    }
+
+    // ---- Bloqueo del equipo (mejora): una lista decide si se captura PIN, patrón o contraseña ----
+    // El valor se sigue guardando como en AppSheet: PIN EQUIPO lleva el PIN, la contraseña o "PATRON".
+    const OPCIONES_BLOQUEO = ['PIN', 'PATRÓN', 'CONTRASEÑA', 'SIN BLOQUEO'];
+    function conSelectorBloqueo(elementos) {
+      const pin = elementos.filter((e) => e.columna === 'PIN EQUIPO')[0];
+      const patron = elementos.filter((e) => e.control === 'patron')[0];
+      if (!pin || !patron || elementos.some((e) => e.columna === '_BLOQUEO')) return elementos;
+      const v = String(pin.valor || '').trim().toUpperCase();
+      const inicial = v === 'PATRON' || v === 'PATRÓN' || esPuntosPatron(patron.valor) ? 'PATRÓN'
+        : (/^\d+$/.test(v) ? 'PIN' : (/^(N\/A|NA|NO APLICA|NINGUNO|SIN BLOQUEO)$/.test(v) ? 'SIN BLOQUEO' : (v ? 'CONTRASEÑA' : '')));
+      const selector = { tipo: 'campo', columna: '_BLOQUEO', etiqueta: 'TIPO DE BLOQUEO DEL EQUIPO', control: 'lista', opciones: OPCIONES_BLOQUEO, valor: inicial, mostrar: pin.mostrar, virtual: true };
+      const i = elementos.indexOf(pin);
+      return elementos.slice(0, i).concat([selector], elementos.slice(i));
+    }
+    /** Muestra el PIN, la contraseña o el patrón según el bloqueo elegido. `cambio`: el usuario acaba de elegirlo. */
+    function aplicarBloqueo(cuerpo, cambio) {
+      const sel = cuerpo.querySelector('select[data-columna="_BLOQUEO"]');
+      if (!sel) return;
+      const t = sel.value;
+      const campoPin = cuerpo.querySelector('.ln-af-campo[data-af-columna="PIN EQUIPO"]');
+      const lienzo = cuerpo.querySelector('.ln-patron');
+      const campoPatron = lienzo && lienzo.closest('.ln-af-campo');
+      if (campoPin) {
+        const input = campoPin.querySelector('input');
+        campoPin.classList.toggle('ln-oculto', t !== 'PIN' && t !== 'CONTRASEÑA');
+        const etiqueta = campoPin.querySelector('label');
+        if (etiqueta && etiqueta.firstChild) etiqueta.firstChild.textContent = t === 'CONTRASEÑA' ? 'CONTRASEÑA DEL EQUIPO' : 'PIN DEL EQUIPO';
+        if (input) {
+          input.inputMode = t === 'PIN' ? 'numeric' : 'text';
+          if (cambio) {
+            if (t === 'PATRÓN') input.value = 'PATRON';
+            else if (t === 'SIN BLOQUEO') input.value = 'N/A';
+            else if (/^(PATRON|N\/A)$/i.test(input.value)) input.value = '';
+          }
+        }
+      }
+      if (campoPatron) campoPatron.classList.toggle('ln-oculto', t !== 'PATRÓN');
+    }
+
+    /** Firma con el componente del sistema; misma interfaz que antes (estaVacia, limpiar, base64 → promesa). */
+    function crearFirma(contenedor, nombre) {
+      if (!contenedor || typeof Firma === 'undefined') return null;
+      const f = Firma.crear(contenedor, { nombre: nombre || '', marca: 'Firma aquí con el dedo' });
+      return {
+        estaVacia: () => f.vacia(),
+        limpiar: () => f.limpiar(),
+        ajustar: () => f.ajustar(),
+        setNombre: (n) => f.setNombre(n || ''),
+        /** PNG con el color de la celda del PDF (la firma llega recortada al trazo). */
+        base64: (fondo) => {
+          const x = f.exportar();
+          if (!x) return Promise.resolve(null);
+          return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+              const c = document.createElement('canvas');
+              c.width = img.naturalWidth; c.height = img.naturalHeight;
+              const g = c.getContext('2d');
+              g.fillStyle = fondo || '#ffffff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0);
+              resolve(c.toDataURL('image/png').split(',')[1]);
+            };
+            img.onerror = () => resolve(x.base64);
+            img.src = 'data:' + x.mimeType + ';base64,' + x.base64;
+          });
+        },
+      };
     }
 
     // ---------------- Formularios por pasos ----------------
@@ -483,7 +575,7 @@
     }
 
     /** Indicador de pasos + un <section class="form-paso"> por paso. `extras`: { índice: html } al final del paso. */
-    function htmlPasosAppSheet(elementos, pasos, extras) {
+    function htmlPasosAppSheet(elementos, pasos, extras, opciones) {
       const grupos = repartirEnPasos(elementos, pasos);
       return '<div class="ln-pasos-barra"><ol class="form-pasos">' + pasos.map((p, i) =>
         '<li><button type="button" class="form-paso-chip" data-ir-paso="' + i + '"' + (i ? ' disabled' : '') + '><span class="form-paso-num">' + (i + 1) + '</span>' + esc(p.titulo) + '</button></li>').join('') +
@@ -491,7 +583,7 @@
         pasos.map((p, i) => '<section class="form-paso ln-paso" data-paso="' + i + '"' + (p.siempre ? ' data-paso-siempre' : '') + (i ? ' hidden' : '') + '>' +
           '<h3 class="form-paso-titulo" tabindex="-1">' + (p.icono ? icono(p.icono) + ' ' : '') + esc(p.titulo) + '</h3>' +
           (p.descripcion ? '<p class="form-paso-desc">' + esc(p.descripcion) + '</p>' : '') +
-          (grupos[i].length ? htmlFormularioAppSheet(grupos[i]) : '') + ((extras || {})[i] || '') + '</section>').join('');
+          (grupos[i].length ? htmlFormularioAppSheet(grupos[i], opciones) : '') + ((extras || {})[i] || '') + '</section>').join('');
     }
 
     /** Botones del pie para un formulario por pasos (Cancelar · Paso x de y · Atrás · Siguiente · Guardar). */
@@ -542,6 +634,7 @@
         vistos[i] = true;
         secciones.forEach((sec, k) => { sec.hidden = k !== i; });
         pintar();
+        if (cfg.alMostrar) cfg.alMostrar(i);
         if (!sinFoco) {
           scroll.scrollTop = 0;
           const titulo = secciones[i].querySelector('.form-paso-titulo');
@@ -619,7 +712,7 @@
     function leerFormularioEn(cuerpo, elementos) {
       const valores = {};
       cuerpo.querySelectorAll('input[data-columna], select[data-columna], textarea[data-columna]').forEach((el) => {
-        if (el.readOnly) return;
+        if (el.readOnly || el.hasAttribute('data-virtual')) return;
         let v = el.value.trim();
         if (el.dataset.referencia) {
           const def = (elementos || []).filter((e) => e.columna === el.dataset.columna)[0];
@@ -978,6 +1071,10 @@
       accesorios: null,
       accesoriosCargadosEn: 0,
       accesoriosPendientes: null,
+      catalogos: null,
+      catalogosCargadosEn: 0,
+      catalogosPendientes: null,
+      tablas: {}, // última respuesta de cada bitácora / trámite: se pinta al instante y luego se actualiza
       modulo: 'equipos',
       modoVista: null, // 'tabla' | 'tarjetas' (se recuerda en el navegador)
       abrirAlEntrar: null, // id de registro a abrir al entrar a Líneas Telefónicas (desde una bitácora)
@@ -1046,8 +1143,24 @@
       return memoria.accesoriosPendientes;
     }
 
+    /** Catálogos de los formularios (se guardan en memoria; el servidor ya los tiene en caché). */
+    function cargarCatalogos(forzar) {
+      if (!forzar && memoria.catalogos && Date.now() - memoria.catalogosCargadosEn < VIGENCIA_CATALOGO_MS) return Promise.resolve(memoria.catalogos);
+      if (!forzar && memoria.catalogosPendientes) return memoria.catalogosPendientes;
+      memoria.catalogosPendientes = llamar('apiLineasCatalogos').then((c) => {
+        memoria.catalogos = c;
+        memoria.catalogosCargadosEn = Date.now();
+        return c;
+      });
+      memoria.catalogosPendientes.then(() => { memoria.catalogosPendientes = null; }, () => { memoria.catalogosPendientes = null; });
+      return memoria.catalogosPendientes;
+    }
+
+    /** Calienta en segundo plano lo que usan las vistas y los formularios (no bloquea nada). */
     function precargar() {
-      Promise.all([cargarPermisos(), cargarIndice()]).catch(() => {});
+      Promise.all([cargarPermisos(), cargarIndice()])
+        .then(() => Promise.all([cargarCatalogos(), cargarColaboradores()]))
+        .catch(() => {});
     }
 
     function contarPor(filas, campo) {
@@ -1114,6 +1227,7 @@
       let detallesFicha = null; // datos de la tarjeta "Detalles" de la ficha abierta
       let tablaHistorial = null; // DataTable del historial de la ficha abierta
       let nombreHistorial = ''; // para el nombre del Excel del historial
+      let fichaActual = null; // estatus de la ficha abierta (para "Cambiar estatus")
       let marcarKpi = null;
       raiz.querySelectorAll('#ln-tabs .tab-btn').forEach((tab) => {
         tab.addEventListener('click', () => mostrarModulo(tab.dataset.tab));
@@ -1181,6 +1295,8 @@
           abrirCaptura(btnCaptura.dataset.lnCaptura, ref);
           return;
         }
+        const btnEstatus = ev.target.closest('[data-ln-estatus]');
+        if (btnEstatus) { ev.preventDefault(); abrirCambioEstatus(); return; }
         const btnEditar = ev.target.closest('[data-ln-editar]');
         if (btnEditar) { ev.preventDefault(); abrirEditor(btnEditar.dataset.lnEditar); return; }
         const pastilla = ev.target.closest('.ln-pastilla');
@@ -1188,11 +1304,6 @@
           pastilla.parentElement.querySelectorAll('.ln-pastilla').forEach((b) => b.classList.remove('activa'));
           pastilla.classList.add('activa');
           actualizarProgresoChecklist();
-          return;
-        }
-        const limpiarFirma = ev.target.closest('[data-limpiar-firma]');
-        if (limpiarFirma) {
-          if (captura && captura.firmas[limpiarFirma.dataset.limpiarFirma]) captura.firmas[limpiarFirma.dataset.limpiarFirma].limpiar();
           return;
         }
         const quitarFoto = ev.target.closest('[data-quitar-foto]');
@@ -1527,6 +1638,7 @@
           const puedeOperar = memoria.permisos && memoria.permisos.puedeOperar;
           pila[pila.length - 1].etiqueta = 'NUCO ' + (e.nuco || '—');
           const resp = e.responsable || {};
+          fichaActual = { id: id, titulo: 'NUCO ' + (e.nuco || '—'), estatusEquipo: e.estatus || '', estatusLinea: l ? (l.estatus || '') : null };
           detalle.innerHTML = migas() +
             encabezado('smartphone', 'NUCO ' + esc(e.nuco || '—'),
               chip(e.estatus) + chip(TIPO_EQUIPO[e.tipo] || e.tipo, 'neutro') + (l ? chip('Con línea', 'verde') + usoTemporalVencido(l) : chip('Sin línea', 'ambar')),
@@ -1568,6 +1680,7 @@
           const puedeOperarLinea = !e && memoria.permisos && memoria.permisos.puedeOperar;
           pila[pila.length - 1].etiqueta = e ? 'NUCO ' + (e.nuco || '—') : 'Línea ' + (l.numero || '—');
           const respL = (e ? e.responsable : l.responsable) || {};
+          fichaActual = { id: id, titulo: 'Línea ' + (l.numero || '—'), estatusEquipo: null, estatusLinea: l.estatus || '' };
           detalle.innerHTML = migas() +
             encabezado('card-sim', esc(l.numero || 'Línea sin número'), chip(l.estatus) + usoTemporalVencido(l) + (e ? chip('En NUCO ' + (e.nuco || '—'), 'neutro') : chip('Suelta', 'ambar')),
               puedeOperarLinea ? botonesFicha('data-linea-id', id) : (e ? '<button type="button" class="ln-btn-icono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' Ver equipo</button>' : ''),
@@ -1604,6 +1717,7 @@
       /** Acciones de la ficha: botones principales (con color) para que se reconozcan como botones. */
       function botonesFicha(atributoRef, id) {
         return '<button type="button" class="ln-btn-icono" data-ln-editar="' + esc(id) + '">' + icono('pencil') + ' Editar información</button>' +
+          '<button type="button" class="ln-btn-icono" data-ln-estatus="' + esc(id) + '">' + icono('toggle-right') + ' Cambiar estatus</button>' +
           '<button type="button" class="ln-btn-icono" data-ln-captura="INSPECCION" ' + atributoRef + '="' + esc(id) + '">' + icono('clipboard-check') + ' Nueva inspección</button>' +
           '<button type="button" class="ln-btn-icono" data-ln-captura="RESPONSIVA" ' + atributoRef + '="' + esc(id) + '">' + icono('signature') + ' Nueva responsiva</button>';
       }
@@ -1637,15 +1751,26 @@
       function tarjetaDetallesCopiar(d) {
         detallesFicha = d || null;
         if (!d) return '';
-        const campo = (clave, etiqueta, valor) => '<div class="field"><label for="ln-copiar-' + clave + '">' + esc(etiqueta) + '</label>' +
-          '<input type="text" id="ln-copiar-' + clave + '" data-ln-copiar-campo="' + clave + '" value="' + esc(valor || '') + '" autocomplete="off"></div>';
-        setTimeout(pintarTextoDetalles, 0);
+        const valor = (v) => (v === null || v === undefined ? '' : (esFechaIso(v) ? fechaTabla(v) : String(v)));
+        const entrada = (clave, v, ayuda) => '<input type="text" class="ln-detalle-entrada" data-ln-copiar-campo="' + clave + '" value="' + esc(v || '') + '" autocomplete="off" placeholder="' + esc(ayuda) + '">';
+        // Mismo diseño que General (etiqueta · valor); al copiar sale el texto del AppSheet (textoDetalles)
         return '<div class="card ln-card ln-copiar" data-ln-copiar data-respetar-texto>' +
           '<div class="ln-copiar-cabecera"><h3>' + icono('clipboard-list') + ' Detalles</h3>' +
           '<button type="button" class="ln-btn-icono" data-ln-copiar-detalles>' + icono('copy') + ' Copiar detalles</button></div>' +
-          '<div class="ln-copiar-cuerpo"><div class="ln-copiar-campos">' +
-            campo('motivo', 'Motivo de resguardo', '') + campo('ticket', 'Ticket / Asunto', '') + campo('estatus', 'Estatus actual de la línea', d.estatusLinea) +
-          '</div><pre class="ln-copiar-texto" data-ln-copiar-texto aria-label="Texto que se copiará"></pre></div></div>';
+          campos([
+            ['NUCO', valor(d.nuco)],
+            ['Motivo de resguardo', entrada('motivo', '', 'Escribe el motivo'), true],
+            ['Ticket / Asunto', entrada('ticket', '', 'Escribe el ticket o asunto'), true],
+            ['Código de resguardo', valor(d.responsable)],
+            ['IMEI', valor(d.imei)],
+            ['SIM', valor(d.sim)],
+            ['Número', valor(d.numero)],
+            ['Modelo', valor(d.modelo)],
+            ['Compañía', valor(d.compania)],
+            ['Razón Social', valor(d.razonSocial)],
+            ['Estatus de adendum', valor(d.finPlan)],
+            ['Estatus actual de la línea', entrada('estatus', d.estatusLinea, 'Escribe el estatus'), true],
+          ]) + '</div>';
       }
       function copiarDetalles(boton) {
         copiarTexto(textoDetalles()).then((ok) => {
@@ -1695,6 +1820,54 @@
           : '<p class="empty-state">Sin responsivas registradas.</p>';
         contarEnPestana('documentos', inspecciones.length + responsivas.length);
         return tarjeta(icono('clipboard-check') + ' Inspecciones (' + inspecciones.length + ')', listaInsp) + tarjeta(icono('signature') + ' Responsivas (' + responsivas.length + ')', listaResp);
+      }
+
+      /**
+       * Cambio rápido de ESTATUS EQUIPO / ESTATUS LINEA (mejora: sin abrir todo el formulario). Usa las listas
+       * del AppSheet y deja la bitácora igual que una edición; el motivo queda en el historial.
+       */
+      function abrirCambioEstatus() {
+        const f = fichaActual;
+        if (!f) return;
+        $('#ln-modal-captura', raiz).hidden = false;
+        $('#ln-captura-icono', raiz).innerHTML = icono('toggle-right');
+        $('#ln-captura-tipo', raiz).textContent = 'LINEAS TELEFONICAS';
+        $('#ln-captura-titulo', raiz).textContent = 'Cambiar estatus';
+        $('#ln-captura-subtitulo', raiz).textContent = f.titulo + ' · el cambio queda en la bitácora';
+        const cuerpo = $('#ln-captura-cuerpo', raiz);
+        cuerpo.innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando…</p>';
+        const sesion = captura = { tipo: 'ESTATUS', firmas: {} };
+        cargarCatalogos().then((cat) => {
+          if (captura !== sesion) return;
+          const lista = (clave, etiqueta, opciones, actual) => {
+            const fuera = actual && opciones.indexOf(actual) < 0;
+            return '<div class="field ln-af-campo"><label for="ln-estatus-' + clave + '">' + esc(etiqueta) + '</label><select id="ln-estatus-' + clave + '" data-estatus="' + clave + '">' +
+              (fuera ? '<option value="" selected>' + esc(actual) + ' (actual, no está en la lista)</option>' : '') +
+              opciones.map((o) => '<option value="' + esc(o) + '"' + (o === actual ? ' selected' : '') + '>' + esc(o) + (o === actual ? ' (actual)' : '') + '</option>').join('') + '</select></div>';
+          };
+          cuerpo.innerHTML = '<section class="ln-af-seccion"><div class="ln-af-grid ln-estatus-grid">' +
+            (f.estatusEquipo !== null ? lista('equipo', 'ESTATUS DEL EQUIPO', cat.estatusEquipo || [], f.estatusEquipo) : '') +
+            (f.estatusLinea !== null ? lista('linea', 'ESTATUS DE LA LÍNEA', cat.estatusLinea || [], f.estatusLinea) : '') +
+            '</div><div class="field ln-af-campo"><label for="ln-estatus-motivo">MOTIVO (opcional)</label>' +
+            '<textarea id="ln-estatus-motivo" rows="3" placeholder="Por qué cambia; queda en el historial"></textarea></div></section>' +
+            '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div><div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
+            '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + ' Guardar cambios</button></div>';
+          $('#cap-guardar', raiz).addEventListener('click', () => {
+            const elegido = (clave, actual) => {
+              const sel = cuerpo.querySelector('[data-estatus="' + clave + '"]');
+              return sel && sel.value && sel.value !== actual ? sel.value : '';
+            };
+            const datos = { estatusEquipo: elegido('equipo', f.estatusEquipo), estatusLinea: elegido('linea', f.estatusLinea), motivo: $('#ln-estatus-motivo', raiz).value };
+            if (!datos.estatusEquipo && !datos.estatusLinea) { mostrarErrorCaptura('Elige un estatus diferente al actual.'); return; }
+            estadoGuardado('Guardando estatus');
+            llamar('apiLineasCambiarEstatus', f.id, datos).then(() => cargarIndice(true)).then(() => {
+              cerrarCaptura(true);
+              aviso('Estatus actualizado.', 5000);
+              const actual = pila[pila.length - 1];
+              if (actual) abrir(actual.tipo, actual.id, true);
+            }).catch((e) => { mostrarErrorCaptura(mensajeError(e)); restaurarGuardado(); });
+          });
+        }).catch((e) => { cuerpo.innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>'; });
       }
 
       // ---- Alta y edición directa del inventario ----
@@ -1819,6 +1992,14 @@
         });
         const calif = $('#af-CALIFICACION', raiz);
         if (calif) calif.textContent = (calificacionAppSheet(leerFormularioAppSheet()) * 100).toFixed(2) + '%';
+        const cuerpo = $('#ln-captura-cuerpo', raiz);
+        aplicarBloqueo(cuerpo, false);
+        // El nombre de quien firma va debajo de su firma
+        Object.keys(captura.firmas || {}).forEach((col) => {
+          const f = captura.firmas[col];
+          const origen = NOMBRE_DE_FIRMA[col] && cuerpo.querySelector('[data-columna="' + CSS.escape(NOMBRE_DE_FIRMA[col]) + '"]');
+          if (f && f.setNombre && origen) f.setNombre(origen.value);
+        });
       }
       const actualizarProgresoChecklist = actualizarFormularioAppSheet;
 
@@ -1846,7 +2027,10 @@
         (captura.contexto.formulario || []).forEach((e) => {
           if (e.tipo !== 'campo') return;
           const id = 'af-' + e.columna.replace(/[^A-Za-z0-9]+/g, '-');
-          if (e.control === 'firma') captura.firmas[e.columna] = activarFirma(id + '-firma');
+          if (e.control === 'firma') {
+            const origen = NOMBRE_DE_FIRMA[e.columna] && cuerpo.querySelector('[data-columna="' + CSS.escape(NOMBRE_DE_FIRMA[e.columna]) + '"]');
+            captura.firmas[e.columna] = crearFirma(document.getElementById(id + '-firma'), origen ? origen.value : '');
+          }
           if (e.control === 'patron') {
             captura.columnaPatron = e.columna;
             captura.patronInicial = esPuntosPatron(e.valor) ? e.valor : null;
@@ -1854,6 +2038,7 @@
           }
         });
         activarCombosEn(cuerpo, captura.contexto.formulario);
+        cuerpo.addEventListener('change', (ev) => { if (ev.target.matches('[data-columna="_BLOQUEO"]')) aplicarBloqueo(cuerpo, true); });
         cuerpo.addEventListener('input', (ev) => { if (ev.target.matches('[data-columna]')) actualizarFormularioAppSheet(); });
         cuerpo.addEventListener('change', (ev) => { if (ev.target.matches('[data-columna]')) actualizarFormularioAppSheet(); });
         actualizarFormularioAppSheet();
@@ -1861,6 +2046,8 @@
           captura.pasos = activarPasos(cuerpo, {
             atras: cuerpo.querySelector('[data-paso-atras]'), siguiente: cuerpo.querySelector('[data-paso-siguiente]'),
             guardar: $('#cap-guardar', raiz), cuenta: cuerpo.querySelector('.form-cuenta'),
+            // El lienzo de firma se mide al mostrarse (en un paso oculto mediría 0)
+            alMostrar: () => Object.keys(captura.firmas).forEach((c) => { if (captura.firmas[c] && captura.firmas[c].ajustar) captura.firmas[c].ajustar(); }),
             validar: (seccion) => {
               const errores = erroresCaptura(seccion);
               marcarErroresEn(cuerpo, errores);
@@ -1927,39 +2114,6 @@
         return false;
       }
 
-      function activarFirma(id) {
-        const canvas = document.getElementById(id);
-        if (!canvas) return null;
-        const ctx2d = canvas.getContext('2d');
-        const rect = canvas.getBoundingClientRect();
-        const escala = window.devicePixelRatio || 1;
-        canvas.width = Math.max(1, rect.width) * escala;
-        canvas.height = Math.max(1, rect.height) * escala;
-        ctx2d.scale(escala, escala);
-        ctx2d.lineWidth = 2.2; ctx2d.lineCap = 'round'; ctx2d.lineJoin = 'round'; ctx2d.strokeStyle = '#111';
-        const estado = { vacia: true, dibujando: false };
-        const posicion = (ev) => {
-          const r = canvas.getBoundingClientRect();
-          return { x: ev.clientX - r.left, y: ev.clientY - r.top };
-        };
-        const empezar = (ev) => { ev.preventDefault(); estado.dibujando = true; estado.vacia = false; const p = posicion(ev); ctx2d.beginPath(); ctx2d.moveTo(p.x, p.y); };
-        const mover = (ev) => { if (!estado.dibujando) return; ev.preventDefault(); const p = posicion(ev); ctx2d.lineTo(p.x, p.y); ctx2d.stroke(); };
-        const terminar = () => { estado.dibujando = false; };
-        canvas.addEventListener('pointerdown', empezar);
-        canvas.addEventListener('pointermove', mover);
-        canvas.addEventListener('pointerup', terminar);
-        canvas.addEventListener('pointerleave', terminar);
-        return {
-          estaVacia: () => estado.vacia,
-          limpiar: () => { ctx2d.clearRect(0, 0, rect.width, rect.height); estado.vacia = true; },
-          base64: (fondoPdf) => {
-            const salida = document.createElement('canvas'); salida.width = canvas.width; salida.height = canvas.height;
-            const x = salida.getContext('2d'); x.fillStyle = fondoPdf || '#ffffff'; x.fillRect(0, 0, salida.width, salida.height); x.drawImage(canvas, 0, 0);
-            return salida.toDataURL('image/png').split(',')[1];
-          },
-        };
-      }
-
       function activarPatron(prefijo, inicial) {
         const bloque = $('#' + prefijo + '-bloque', raiz);
         if (!bloque) return { puntos: () => [], valor: () => '', base64: () => null };
@@ -1989,19 +2143,19 @@
         };
       }
 
-      function subirImagenCaptura(archivo, listaId, carpetaId, onSubido) {
+      function subirImagenCaptura(archivo, listaId, carpetaId, onSubido, sinQuitar) {
         const lista = document.getElementById(listaId);
-        if (!lista) return;
+        if (!lista) return Promise.resolve();
         const chip = document.createElement('span');
         chip.className = 'ln-foto-chip ln-foto-subiendo';
         chip.innerHTML = icono('loader-circle', 'ln-icon-sm') + '<span class="ln-foto-nombre">' + esc(archivo.name) + '</span>';
         lista.appendChild(chip);
-        redimensionarImagen(archivo, 1600)
-          .then((img) => llamar('apiLineasSubirArchivo', carpetaId, archivo.name, img.mime, img.base64))
+        return Promise.all([redimensionarImagen(archivo, 1600), Promise.resolve(typeof carpetaId === 'function' ? carpetaId() : carpetaId)])
+          .then(([img, carpeta]) => llamar('apiLineasSubirArchivo', carpeta, archivo.name, img.mime, img.base64))
           .then((subido) => {
             chip.className = 'ln-foto-chip';
             chip.innerHTML = icono('check', 'ln-icon-sm') + '<span class="ln-foto-nombre">' + esc(subido.nombre) + '</span>' +
-              '<button type="button" data-quitar-foto="' + esc(subido.id) + '">' + icono('x', 'ln-icon-sm') + '</button>';
+              (sinQuitar ? '' : '<button type="button" data-quitar-foto="' + esc(subido.id) + '">' + icono('x', 'ln-icon-sm') + '</button>');
             onSubido(subido);
           }).catch((e) => {
             chip.className = 'ln-foto-chip';
@@ -2011,15 +2165,38 @@
           });
       }
 
-      function manejarSubidaArchivo(inputId, listaId, obtenerCarpetaId, multiple, onSubido) {
+      function manejarSubidaArchivo(inputId, listaId, obtenerCarpetaId, multiple, onSubido, alTerminar, sinQuitar) {
         const input = document.getElementById(inputId);
         if (!input) return;
         input.addEventListener('change', () => {
           const archivos = Array.from(input.files || []);
           input.value = '';
+          if (!archivos.length) return;
           if (!multiple) document.getElementById(listaId).innerHTML = '';
-          archivos.slice(0, multiple ? archivos.length : 1).forEach((archivo) => subirImagenCaptura(archivo, listaId, obtenerCarpetaId(), onSubido));
+          Promise.all(archivos.slice(0, multiple ? archivos.length : 1).map((archivo) => subirImagenCaptura(archivo, listaId, obtenerCarpetaId, onSubido, sinQuitar)))
+            .then(() => { if (alTerminar) alTerminar(); });
         });
+      }
+
+      /**
+       * Carpeta de evidencia en Drive: se crea al subir la primera foto o al guardar, no al abrir el formulario
+       * (abre más rápido y si se cancela sin fotos no queda nada que limpiar).
+       */
+      function asegurarCarpeta() {
+        const sesion = captura;
+        if (!sesion) return Promise.reject(new Error('La captura se cerró.'));
+        if (!sesion.carpetaPromesa) {
+          sesion.carpetaPromesa = llamar('apiLineasPrepararEvidencia', sesion.tipo, sesion.ref).then((c) => {
+            sesion.carpetaId = c.carpetaId;
+            sesion.fotosCarpetaId = c.fotosCarpetaId || c.carpetaId;
+            sesion.ruta = c.ruta;
+            // Si se canceló mientras se creaba, se descarta
+            if (captura !== sesion && !sesion.guardada) llamar('apiLineasCancelarEvidencia', c.carpetaId, c.fotosCarpetaId).catch(() => {});
+            return c;
+          });
+          sesion.carpetaPromesa.catch(() => { sesion.carpetaPromesa = null; });
+        }
+        return sesion.carpetaPromesa;
       }
 
       function estadoGuardado(texto) {
@@ -2103,18 +2280,28 @@
 
       const BOTON_GUARDAR_PDF = '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + ' Guardar y generar PDF</button>';
 
+      /** Botones para agregar fotos: cámara (solo en pantallas táctiles) y galería / archivos. Opcional. */
+      function htmlSubirFotos(prefijo, nota) {
+        return '<div class="ln-fotos-botones">' +
+          '<label class="ln-upload ln-solo-tactil">' + icono('camera') + '<span><b>Tomar foto</b><small>Con la cámara del equipo</small></span>' +
+          '<input type="file" id="' + prefijo + '-camara" accept="image/*" capture="environment" multiple /></label>' +
+          '<label class="ln-upload">' + icono('images') + '<span><b>Elegir fotos</b><small>De la galería o de la computadora</small></span>' +
+          '<input type="file" id="' + prefijo + '" accept="image/*" multiple /></label></div>' +
+          '<div class="ln-fotos-lista" id="' + prefijo + '-lista"></div>' + (nota ? '<p class="ln-tenue ln-fotos-nota">' + esc(nota) + '</p>' : '');
+      }
+
       function formularioInspeccion(ctx) {
         const pasos = PASOS_FORMULARIO.INSPECCION;
         const fotos = '<section class="ln-af-seccion ln-af-extra">' +
-          '<label class="ln-upload">' + icono('camera') + '<span><b>Tomar o agregar fotografías</b><small>Se guardan en la carpeta de evidencia del NUCO en Drive.</small></span>' +
-          '<input type="file" id="cap-fotos" accept="image/*" capture="environment" multiple /></label><div class="ln-fotos-lista" id="cap-fotos-lista"></div></section>';
-        return htmlPasosAppSheet(ctx.formulario, pasos, { [pasos.findIndex((p) => p.desde === 'extra:FOTOS')]: fotos }) +
+          htmlSubirFotos('cap-fotos', 'Opcional. Se guardan en la carpeta de la inspección en Drive: NUCO / INSPECCIONES / año / cuatrimestre / mes / INSP DD MM / FOTOS.') + '</section>';
+        return htmlPasosAppSheet(ctx.formulario, pasos, { [pasos.findIndex((p) => p.desde === 'extra:FOTOS')]: fotos }, { acomodar: true }) +
           '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div>' + htmlAccionesPasos(BOTON_GUARDAR_PDF);
       }
 
       function iniciarFormularioInspeccion() {
         iniciarFormularioAppSheet();
-        manejarSubidaArchivo('cap-fotos', 'cap-fotos-lista', () => captura.fotosCarpetaId, true, (s) => { if (s) captura.fotos.push(s); });
+        ['cap-fotos', 'cap-fotos-camara'].forEach((inputId) => manejarSubidaArchivo(inputId, 'cap-fotos-lista',
+          () => asegurarCarpeta().then(() => captura.fotosCarpetaId), true, (s) => { if (s && captura) captura.fotos.push(s); }));
         $('#cap-guardar', raiz).addEventListener('click', guardarInspeccionDesdeFormulario);
       }
 
@@ -2126,17 +2313,17 @@
         const firmaResponsable = captura.firmas['FIRMA RESPONSABLE'];
         const idAbierto = captura.idObjetivo;
         const patron = patronParaGuardar();
-        captura.pdfFirmas = {
-          inspector: firmaInspector.base64('#ddebf7'),
-          responsable: firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ddebf7') : null,
-          patron: captura.controlPatron ? captura.controlPatron.base64('#ddebf7') : null,
-        };
+        const valores = leerFormularioAppSheet();
+        const sesion = captura;
         estadoGuardado('Guardando inspección');
-        llamar('apiLineasGuardarInspeccion', Object.assign({}, captura.ref, {
-          id: captura.contexto.idPropuesto, valores: leerFormularioAppSheet(), patron: patron,
-          carpetaId: captura.carpetaId, fotosCarpetaId: captura.fotosCarpetaId, ruta: captura.ruta, fotos: captura.fotos,
-          firmaInspectorBase64: captura.pdfFirmas.inspector, firmaResponsableBase64: captura.pdfFirmas.responsable, patronBase64: captura.pdfFirmas.patron,
-        })).then((r) => {
+        Promise.all([firmaInspector.base64('#ddebf7'), firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ddebf7') : null, asegurarCarpeta()]).then(([inspector, responsable]) => {
+          sesion.pdfFirmas = { inspector: inspector, responsable: responsable, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ddebf7') : null };
+          return llamar('apiLineasGuardarInspeccion', Object.assign({}, sesion.ref, {
+            id: sesion.contexto.idPropuesto, valores: valores, patron: patron,
+            carpetaId: sesion.carpetaId, fotosCarpetaId: sesion.fotosCarpetaId, ruta: sesion.ruta, fotos: sesion.fotos,
+            firmaInspectorBase64: sesion.pdfFirmas.inspector, firmaResponsableBase64: sesion.pdfFirmas.responsable, patronBase64: sesion.pdfFirmas.patron,
+          }));
+        }).then((r) => {
           refrescarDespuesDeCaptura(idAbierto, 'INSPECCION', r.id);
         }).catch((e) => {
           mostrarErrorCaptura(mensajeError(e));
@@ -2147,7 +2334,7 @@
       // -- Responsiva (RESPONSIVAS LINEAS_Form) --
 
       function formularioResponsiva(ctx) {
-        return htmlPasosAppSheet(ctx.formulario, PASOS_FORMULARIO.RESPONSIVA) +
+        return htmlPasosAppSheet(ctx.formulario, PASOS_FORMULARIO.RESPONSIVA, null, { acomodar: true }) +
           '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div>' + htmlAccionesPasos(BOTON_GUARDAR_PDF);
       }
 
@@ -2163,17 +2350,17 @@
         const firmaCi = captura.firmas['FIRMA CI'];
         const idAbierto = captura.idObjetivo;
         const patron = patronParaGuardar();
-        captura.pdfFirmas = {
-          responsable: firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ffffff') : null,
-          ci: firmaCi.base64('#ffffff'),
-          patron: captura.controlPatron ? captura.controlPatron.base64('#ffffff') : null,
-        };
+        const valores = leerFormularioAppSheet();
+        const sesion = captura;
         estadoGuardado('Guardando responsiva');
-        llamar('apiLineasGuardarResponsiva', Object.assign({}, captura.ref, {
-          id: captura.contexto.idPropuesto, valores: leerFormularioAppSheet(), patron: patron,
-          carpetaId: captura.carpetaId, ruta: captura.ruta,
-          firmaResponsableBase64: captura.pdfFirmas.responsable, firmaCiBase64: captura.pdfFirmas.ci, patronBase64: captura.pdfFirmas.patron,
-        })).then((r) => {
+        Promise.all([firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ffffff') : null, firmaCi.base64('#ffffff'), asegurarCarpeta()]).then(([responsable, ci]) => {
+          sesion.pdfFirmas = { responsable: responsable, ci: ci, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ffffff') : null };
+          return llamar('apiLineasGuardarResponsiva', Object.assign({}, sesion.ref, {
+            id: sesion.contexto.idPropuesto, valores: valores, patron: patron,
+            carpetaId: sesion.carpetaId, ruta: sesion.ruta,
+            firmaResponsableBase64: sesion.pdfFirmas.responsable, firmaCiBase64: sesion.pdfFirmas.ci, patronBase64: sesion.pdfFirmas.patron,
+          }));
+        }).then((r) => {
           refrescarDespuesDeCaptura(idAbierto, 'RESPONSIVA', r.id);
         }).catch((e) => {
           mostrarErrorCaptura(mensajeError(e));
@@ -2193,16 +2380,12 @@
         captura = { tipo: tipo, ref: ref, idObjetivo: ref.equipoId || ref.lineaId, fotos: [], patronId: null, firmas: {} };
 
         const pedirContexto = tipo === 'INSPECCION' ? llamar('apiLineasContextoInspeccion', ref) : llamar('apiLineasContextoResponsiva', ref);
-        Promise.all([pedirContexto, llamar('apiLineasPrepararEvidencia', tipo, ref), llamar('apiLineasCatalogos')]).then(([ctx, carpeta, catalogos]) => {
-          if (!captura) {
-            llamar('apiLineasCancelarEvidencia', carpeta.carpetaId, carpeta.fotosCarpetaId).catch(() => {});
-            return;
-          }
+        const sesion = captura;
+        Promise.all([pedirContexto, cargarCatalogos()]).then(([ctx, catalogos]) => {
+          if (captura !== sesion) return;
           ctx.catalogos = catalogos;
+          ctx.formulario = conSelectorBloqueo(ctx.formulario || []);
           captura.contexto = ctx;
-          captura.carpetaId = carpeta.carpetaId;
-          captura.fotosCarpetaId = carpeta.fotosCarpetaId || carpeta.carpetaId;
-          captura.ruta = carpeta.ruta;
           const valorDe = (c) => ((ctx.formulario || []).filter((e) => e.columna === c)[0] || {}).valor || '';
           $('#ln-captura-subtitulo', raiz).textContent = ['NUCO ' + (valorDe('NUCO') || '—'), valorDe('MODELO'), valorDe('RESPONSABLE')].filter(Boolean).join(' · ');
           if (tipo === 'INSPECCION') {
@@ -2343,9 +2526,21 @@
             seccion(3, 'camera', 'Evidencia y observaciones', 'Abre cualquier archivo para consultar la imagen completa en Drive.',
               '<h4>Observaciones</h4><p class="ln-lectura-notas">' + esc(i.observaciones || 'Sin observaciones registradas.') + '</p>' +
               '<h4>Fotografías (' + fotos.length + ')</h4>' + (fotos.length ? galeria(fotos) : '<p class="empty-state">No se adjuntaron fotografías a esta inspección.</p>') +
+              (r.puedeOperar ? '<div class="ln-fotos-despues"><h4>' + icono('image-plus') + ' Agregar fotos</h4>' +
+                htmlSubirFotos('insp-fotos', 'Se guardan en la carpeta FOTOS de esta inspección en Drive.') + '</div>' : '') +
               (i.drive ? '<details class="ln-pie"><summary>Ubicación de los archivos</summary><p>' + esc(i.drive.ruta || '') + '</p></details>' : '')) +
             seccion(4, 'signature', 'Firmas de validación', 'Firmas disponibles en la carpeta de esta inspección.',
               firmas.length ? galeria(firmas, true) : '<p class="empty-state">No hay imágenes de firmas disponibles en esta carpeta. Consulta el PDF para revisar el documento.</p>');
+          if (r.puedeOperar) {
+            // Mejora: subir fotos a una inspección ya registrada (la carpeta se prepara al elegir la primera)
+            let carpeta = null;
+            const obtener = () => (carpeta = carpeta || llamar('apiLineasFotosInspeccion', id, 'preparar').then((c) => c.fotosCarpetaId));
+            const terminar = () => llamar('apiLineasFotosInspeccion', id, 'actualizar').then(() => {
+              aviso('Fotos agregadas a la inspección.', 4000);
+              if (vigente() && pila.length && pila[pila.length - 1].id === id) abrir('inspeccion', id, true);
+            }).catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 8000));
+            ['insp-fotos', 'insp-fotos-camara'].forEach((inputId) => manejarSubidaArchivo(inputId, 'insp-fotos-lista', obtener, true, () => {}, terminar, true));
+          }
           detalle.querySelectorAll('.ln-evidencia img').forEach((img) => img.addEventListener('error', () => {
             img.parentElement.innerHTML = icono('image-off') + '<span>Vista previa no disponible</span>';
           }, { once: true }));
@@ -2798,9 +2993,26 @@
 
       function cargar() {
         const turno = ++solicitud;
-        if (tabla) tabla.setCargando(true);
+        const clave = 'op:' + tipo;
+        const previo = memoria.tablas[clave];
+        if (previo) procesar(previo); else if (tabla) tabla.setCargando(true);
         llamar('apiLineasVistaOperativaTabla', tipo, {}).then((texto) => {
           if (!vigente() || turno !== solicitud) return;
+          memoria.tablas[clave] = texto;
+          if (texto !== previo) procesar(texto);
+        }).catch((e) => {
+          if (!vigente() || turno !== solicitud) return;
+          if (previo) return; // se queda lo último que se vio
+          if (!tabla) {
+            tabla = tablaLineas($('#ln-op-tabla', raiz), { idCampo: '_fila', columnas: [{ campo: '_fila', titulo: 'Fila' }], detalle: false, exportar: false });
+          }
+          tabla.setError('No se pudo cargar ' + cfg.titulo + ': ' + mensajeError(e));
+        });
+      }
+
+      /** Pinta la respuesta del servidor (o la que quedó en memoria de la visita anterior). */
+      function procesar(texto) {
+        {
           const r = JSON.parse(texto);
           const campoGrupo = r.campoGrupo;
           if (!tabla) {
@@ -2843,13 +3055,7 @@
             }))), () => tabla);
           marcarKpi(filtrosOp);
           tabla.setDatos(r.filas);
-        }).catch((e) => {
-          if (!vigente() || turno !== solicitud) return;
-          if (!tabla) {
-            tabla = tablaLineas($('#ln-op-tabla', raiz), { idCampo: '_fila', columnas: [{ campo: '_fila', titulo: 'Fila' }], detalle: false, exportar: false });
-          }
-          tabla.setError('No se pudo cargar ' + cfg.titulo + ': ' + mensajeError(e));
-        });
+        }
       }
 
       $('#ln-op-nuevo', raiz).addEventListener('click', abrirAlta);
@@ -2893,6 +3099,7 @@
           guardando = false;
           cerrarAlta();
           aviso(icono('circle-check') + ' Registro ' + esc(r.folio) + ' guardado correctamente.', 6000);
+          delete memoria.tablas['op:' + tipo];
           cargar();
         }).catch((e) => {
           const box = $('#ln-op-alta-error');
@@ -3030,9 +3237,24 @@
 
       function cargar() {
         const turno = ++solicitud;
-        if (tabla) tabla.setCargando(true);
+        const clave = 'bit:' + tipo;
+        const previo = busqueda ? null : memoria.tablas[clave];
+        if (previo) procesar(previo); else if (tabla) tabla.setCargando(true);
         llamar('apiLineasBitacoraTabla', tipo, { q: busqueda }).then((texto) => {
           if (!vigente() || turno !== solicitud) return;
+          if (!busqueda) memoria.tablas[clave] = texto;
+          if (texto !== previo) procesar(texto);
+        }).catch((e) => {
+          if (!vigente() || turno !== solicitud) return;
+          if (previo) return;
+          if (!tabla) tabla = tablaLineas($('#ln-bit-tabla', raiz), { idCampo: '_fila', columnas: [{ campo: '_fila', titulo: 'Fila' }], detalle: false, exportar: false });
+          tabla.setError('No se pudo cargar la bitácora: ' + mensajeError(e));
+        });
+      }
+
+      /** Pinta la respuesta del servidor (o la que quedó en memoria de la visita anterior). */
+      function procesar(texto) {
+        {
           const r = JSON.parse(texto);
           if (!tabla) crearTabla(r);
           pintarKpis(r);
@@ -3044,17 +3266,13 @@
           $('#ln-bit-aviso', raiz).textContent = busqueda
             ? miles(r.total) + ' coincidencia(s) en todo el historial' + (r.filas.length < r.total ? ' (se muestran las ' + miles(r.filas.length) + ' más recientes)' : '') + '.'
             : 'Se muestran los ' + miles(r.filas.length) + ' registros más recientes de ' + miles(r.total) + '.';
-        }).catch((e) => {
-          if (!vigente() || turno !== solicitud) return;
-          if (!tabla) tabla = tablaLineas($('#ln-bit-tabla', raiz), { idCampo: '_fila', columnas: [{ campo: '_fila', titulo: 'Fila' }], detalle: false, exportar: false });
-          tabla.setError('No se pudo cargar la bitácora: ' + mensajeError(e));
-        });
+        }
       }
 
       if (cfg.alta) {
         cargarPermisos().then((p) => { if (vigente()) $('#ln-bit-nuevo', raiz).hidden = !p.puedeOperar; });
         $('#ln-bit-nuevo', raiz).innerHTML = ico('plus') + ' ' + esc(cfg.textoAlta);
-        $('#ln-bit-nuevo', raiz).addEventListener('click', () => abrirAltaAppSheet(cfg.alta, cfg.textoAlta, () => { if (vigente()) cargar(); }));
+        $('#ln-bit-nuevo', raiz).addEventListener('click', () => abrirAltaAppSheet(cfg.alta, cfg.textoAlta, () => { delete memoria.tablas['bit:' + tipo]; if (vigente()) cargar(); }));
       }
 
       $('#ln-bit-form', raiz).addEventListener('submit', (ev) => {

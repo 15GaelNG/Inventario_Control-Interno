@@ -461,7 +461,9 @@
       { icono: 'loading-icon-2', mensaje: 'Revisando accesorios…' },
       { icono: 'loading-icon-3', mensaje: 'Cerrando caja chica del día…' },
     ];
-    const duracionTotal = 1900;
+    // Mientras corre la animación se precargan en segundo plano los datos de Líneas
+    if (typeof Lineas !== 'undefined' && Lineas.precargar) setTimeout(Lineas.precargar, 0);
+    const duracionTotal = 1100;
     const porPaso = duracionTotal / pasos.length;
 
     const barra = document.getElementById('loading-bar-fill');
@@ -530,11 +532,12 @@
     refreshIcons();
     requestAnimationFrame(() => overlay.classList.add('show'));
 
+    // La vista se monta casi de inmediato (antes se esperaban 2.5 s fijos): el aviso solo suaviza el cambio
     setTimeout(() => {
       montarVistaReal();
       overlay.classList.remove('show');
       setTimeout(() => overlay.remove(), 300);
-    }, 2500);
+    }, 180);
   }
 
   function navegarA(vista, etiqueta) {

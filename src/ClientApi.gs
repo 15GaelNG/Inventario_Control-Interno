@@ -124,6 +124,12 @@ function apiLineasCrearRegistro(token, datos) {
 function apiLineasEditarRegistro(token, id, datos) {
   return TelefoniaService.editarRegistro(token, id, datos);
 }
+function apiLineasCambiarEstatus(token, id, datos) {
+  return TelefoniaService.cambiarEstatus(token, id, datos);
+}
+function apiLineasFotosInspeccion(token, id, accion) {
+  return TelefoniaService.fotosInspeccion(token, id, accion);
+}
 function apiLineasAccesoriosIndice(token) {
   return LineasAccesorios.indice(token);
 }

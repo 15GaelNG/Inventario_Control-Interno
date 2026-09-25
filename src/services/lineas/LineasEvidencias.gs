@@ -118,5 +118,30 @@ const LineasEvidencias = (function () {
     });
   }
 
-  return { prepararCarpetaEvidencia, cancelarCarpetaEvidencia, subirArchivo, guardarArchivoDeRegistro, blobDeArchivo, validarArchivosEnCarpeta };
+  /** Autoriza (1 h) al usuario a subir archivos en estas carpetas (p. ej. fotos de una inspección ya guardada). */
+  function autorizarSubida(correo, ids) {
+    const cache = CacheService.getScriptCache();
+    (ids || []).filter(Boolean).forEach((id) => cache.put('ln_subida_' + correo + '_' + id, '1', 3600));
+  }
+
+  /** Subcarpeta FOTOS de la carpeta de una evidencia (la crea si no existe). */
+  function carpetaFotos(carpetaId) {
+    return subcarpeta_(DriveApp.getFolderById(carpetaId), 'FOTOS').getId();
+  }
+
+  /** Fotos (imágenes que no son firma ni patrón) de una carpeta. */
+  function contarImagenes(carpetaId) {
+    const it = DriveApp.getFolderById(carpetaId).getFiles();
+    let n = 0;
+    while (it.hasNext()) {
+      const f = it.next();
+      if (/^image\//.test(f.getMimeType()) && !/^(FIRMA|PATRON)/i.test(f.getName())) n++;
+    }
+    return n;
+  }
+
+  return {
+    prepararCarpetaEvidencia, cancelarCarpetaEvidencia, subirArchivo, guardarArchivoDeRegistro, blobDeArchivo, validarArchivosEnCarpeta,
+    autorizarSubida, carpetaFotos, contarImagenes,
+  };
 })();

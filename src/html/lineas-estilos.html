@@ -644,4 +644,38 @@
     .ln-captura-acciones .primary { min-width: 0; }
     .ln-pasos-barra { top: -16px; }
   }
+  /* ================= Inspección y responsiva: acomodo, firmas, bloqueo y fotos ================= */
+  .ln-oculto { display: none !important; }
+  /* Lo que ya se sabe va primero, como datos (no como campos) */
+  .ln-af-grid.ln-af-datos { gap: 2px 14px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px dashed var(--color-border); }
+  .ln-af-datos .ln-af-campo { margin-bottom: 6px; }
+  .ln-af-completo { margin-top: 4px; }
+  .ln-af-completo .ln-af-campo { margin-bottom: 14px; }
+  /* Firmas lado a lado, grandes, con marco de color según quién firma */
+  .ln-firmas { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 6px; }
+  .ln-firmas .ln-af-campo > label { display: none; }
+  .ln-firma { border-radius: 12px; padding: 10px 12px 8px; border: 2px solid var(--color-border); background: var(--color-bg); }
+  .ln-firma-cabecera { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+  .ln-firma-responsable { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface)); }
+  .ln-firma-responsable .ln-firma-cabecera { color: var(--color-accent-hover); }
+  .ln-firma-ci { border-color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface)); }
+  .ln-firma-ci .ln-firma-cabecera { color: var(--color-primary); }
+  :root[data-theme="dark"] .ln-firma-ci .ln-firma-cabecera { color: var(--color-text); }
+  .ln-firma .firma-caja canvas { height: 240px; }
+  .ln-af-campo.form-campo-error .ln-firma { border-color: var(--color-danger); }
+  /* Detalles con el diseño de General: los campos a llenar se ven como parte de la lista */
+  .ln-copiar .ln-campos dd { white-space: normal; }
+  .ln-detalle-entrada { padding: 6px 10px; min-height: 0; font-size: 13px; max-width: 420px; }
+  /* Fotos: cámara (solo en pantallas táctiles) y galería */
+  .ln-fotos-botones { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+  @media (hover: hover) and (pointer: fine) { .ln-solo-tactil { display: none !important; } }
+  .ln-fotos-nota { font-size: 12px; margin: 8px 0 0; }
+  .ln-fotos-despues { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--color-border); }
+  .ln-fotos-despues h4 { display: flex; align-items: center; gap: 7px; }
+  .ln-estatus-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  @media (max-width: 700px) {
+    .ln-firmas { grid-template-columns: 1fr; }
+    .ln-firma .firma-caja canvas { height: 220px; }
+    .ln-detalle-entrada { max-width: none; }
+  }
 </style>

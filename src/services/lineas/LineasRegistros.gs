@@ -377,5 +377,35 @@ const LineasRegistros = (function () {
     return { id: id, cambios: resultado.campos, filas: LineasRepo.refrescarIndice([id]) };
   }
 
-  return { formulario, crear, editar, _elementos: elementos_, _resolver: resolver_, _cumple: cumple_ };
+  /**
+   * Cambio rápido de ESTATUS EQUIPO / ESTATUS LINEA desde la ficha (mejora: en AppSheet había que abrir todo el
+   * formulario). Solo acepta valores de las listas del AppSheet; deja la bitácora CAMBIOS (bot de 23 campos),
+   * recalcula ESTATUS GENERAL y registra el motivo en APP_MOVIMIENTOS.
+   */
+  function cambiarEstatus(id, datos, usuario) {
+    const d = datos || {};
+    const pedidos = {};
+    [['ESTATUS EQUIPO', d.estatusEquipo, LineasRepo.CATALOGO.estatusEquipo], ['ESTATUS LINEA', d.estatusLinea, LineasRepo.CATALOGO.estatusLinea]]
+      .forEach(([columna, valor, lista]) => {
+        if (valor === undefined || valor === null || valor === '') return;
+        const v = String(valor).trim().toUpperCase();
+        if (lista.indexOf(v) < 0) throw new Error(columna + ': el valor no está en la lista.');
+        pedidos[columna] = v;
+      });
+    if (!Object.keys(pedidos).length) throw new Error('Elige el nuevo estatus.');
+    const resultado = LineasDatos.conCandado(() => {
+      const fila = LineasRepo.leerRegistroObligatorio(id, 'el registro');
+      const guardado = LineasRepo.guardarCambiosRegistro(fila, pedidos, usuario, new Date());
+      if (!guardado.campos.length) throw new Error('El estatus ya tenía ese valor.');
+      const motivo = texto_(d.motivo).trim();
+      LineasRepo.registrarMovimiento('EDICION', { motivo: 'Cambio de estatus' + (motivo ? ': ' + motivo : '') }, usuario, new Date(), {
+        refs: [id], nuco: LineasUtil.col(fila, 'NUCO'), numero: LineasUtil.col(fila, 'NUMERO TELEFONO'), antes: {}, despues: pedidos,
+        detalle: { idsCambios: guardado.idsCambios, idsReasignacion: [], cambios: guardado.campos },
+      });
+      return guardado;
+    });
+    return { id: id, cambios: resultado.campos, filas: LineasRepo.refrescarIndice([id]) };
+  }
+
+  return { formulario, crear, editar, cambiarEstatus, _elementos: elementos_, _resolver: resolver_, _cumple: cumple_ };
 })();
