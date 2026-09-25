@@ -21,6 +21,9 @@
    *   });
    *
    * El DataTable ya lo usa con su botón "Exportar a Excel"; esto es para exportar desde otro lado.
+   *
+   * Varias hojas en un archivo (acepta además el tipo 'fechaHora': "yyyy-MM-ddTHH:mm:ss" → dd/mm/yyyy hh:mm):
+   *   await ExportarExcel.descargarLibro({ nombreArchivo: 'Accesorios', hojas: [{ nombre, columnas, filas }, …] });
    */
   const ExportarExcel = (function () {
     // "\/\/" (no "//") — Apps Script bug, ver CLAUDE.md
@@ -71,14 +74,19 @@
       return `${f.getFullYear()}-${p(f.getMonth() + 1)}-${p(f.getDate())}_${p(f.getHours())}${p(f.getMinutes())}`;
     }
 
-    async function descargar(opciones) {
-      const XLSX = await cargarLibreria();
-      const columnas = opciones.columnas;
+    /** Serie de Excel con hora, desde "yyyy-MM-ddTHH:mm:ss" (hora de reloj, sin zona horaria). */
+    function serialExcelHora(valor) {
+      const p = typeof valor === 'string' && valor.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
+      if (!p) return serialExcel(valor);
+      return (Date.UTC(+p[1], +p[2] - 1, +p[3], +p[4], +p[5], +(p[6] || 0)) - Date.UTC(1899, 11, 30)) / 86400000;
+    }
 
-      const cuerpo = opciones.filas.map((fila) => fila.map((valor, i) => {
+    function armarHoja(XLSX, columnas, filas) {
+      const cuerpo = filas.map((fila) => fila.map((valor, i) => {
         const tipo = columnas[i].tipo;
         if (tipo === 'numero') return aNumero(valor);
         if (tipo === 'fecha') return serialExcel(valor);
+        if (tipo === 'fechaHora') return serialExcelHora(valor);
         return valor === null || valor === undefined ? '' : String(valor);
       }));
 
@@ -86,33 +94,49 @@
 
       // Formato de fecha en las columnas de fecha
       columnas.forEach((col, c) => {
-        if (col.tipo !== 'fecha') return;
+        if (col.tipo !== 'fecha' && col.tipo !== 'fechaHora') return;
         for (let r = 1; r <= cuerpo.length; r++) {
           const celda = hoja[XLSX.utils.encode_cell({ r, c })];
-          if (celda && celda.t === 'n') celda.z = 'dd/mm/yyyy';
+          if (celda && celda.t === 'n') celda.z = col.tipo === 'fecha' ? 'dd/mm/yyyy' : 'dd/mm/yyyy hh:mm';
         }
       });
 
       // Ancho de columna aproximado al contenido y autofiltro en el encabezado
       hoja['!cols'] = columnas.map((col, c) => {
         const largo = Math.max(String(col.titulo).length, ...cuerpo.slice(0, 500).map((f) => (
-          col.tipo === 'fecha' ? 10 : String(f[c] === null ? '' : f[c]).length
+          col.tipo === 'fecha' ? 10 : col.tipo === 'fechaHora' ? 16 : String(f[c] === null ? '' : f[c]).length
         )));
         return { wch: Math.min(50, Math.max(8, largo + 2)) };
       });
       if (cuerpo.length) {
         hoja['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: cuerpo.length, c: columnas.length - 1 } }) };
       }
+      return hoja;
+    }
 
-      const libro = XLSX.utils.book_new();
-      // Nombre de hoja: máx. 31 caracteres y sin : \ / ? * [ ]
-      const nombreHoja = String(opciones.nombreHoja || opciones.nombreArchivo || 'Datos').replace(/[:\\/?*\[\]]/g, ' ').slice(0, 31);
-      XLSX.utils.book_append_sheet(libro, hoja, nombreHoja);
+    // Nombre de hoja: máx. 31 caracteres y sin : \ / ? * [ ]
+    const nombreDeHoja = (nombre) => String(nombre || 'Datos').replace(/[:\\/?*\[\]]/g, ' ').slice(0, 31);
 
-      const nombreArchivo = String(opciones.nombreArchivo || 'Datos').replace(/[\\/:*?"<>|]/g, ' ').trim();
+    function guardar(XLSX, libro, nombre) {
+      const nombreArchivo = String(nombre || 'Datos').replace(/[\\/:*?"<>|]/g, ' ').trim();
       XLSX.writeFile(libro, `${nombreArchivo}_${marcaDeTiempo()}.xlsx`, { compression: true });
     }
 
-    return { descargar };
+    async function descargar(opciones) {
+      const XLSX = await cargarLibreria();
+      const libro = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(libro, armarHoja(XLSX, opciones.columnas, opciones.filas), nombreDeHoja(opciones.nombreHoja || opciones.nombreArchivo));
+      guardar(XLSX, libro, opciones.nombreArchivo);
+    }
+
+    /** Varias hojas en un archivo: { nombreArchivo, hojas: [{ nombre, columnas, filas }] }. */
+    async function descargarLibro(opciones) {
+      const XLSX = await cargarLibreria();
+      const libro = XLSX.utils.book_new();
+      opciones.hojas.forEach((h) => XLSX.utils.book_append_sheet(libro, armarHoja(XLSX, h.columnas, h.filas), nombreDeHoja(h.nombre)));
+      guardar(XLSX, libro, opciones.nombreArchivo);
+    }
+
+    return { descargar, descargarLibro };
   })();
 </script>

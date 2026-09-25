@@ -177,6 +177,17 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente(LineasRepo.bitacora(tipo, o.q, o.pagina, o.porPagina, puedeVerSecretos_(sesion)));
   }
 
+  /**
+   * "Exportar a Excel": base completa del módulo (todas las filas y columnas de su pestaña).
+   * Viaja comprimida (gzip en base64) salvo que el navegador no pueda descomprimir.
+   */
+  function exportarBase(token, modulo, comprimir) {
+    const sesion = Auth.validarSesion(token);
+    const json = JSON.stringify(LineasExportar.baseCompleta(modulo, puedeVerSecretos_(sesion)));
+    if (!comprimir) return json;
+    return Utilities.base64Encode(Utilities.gzip(Utilities.newBlob(json, 'application/json')).getBytes());
+  }
+
   /** Reactivación, Solicitud y Post Venta, conservando las tablas del AppSheet. */
   function vistaOperativa(token, tipo, opciones) {
     const sesion = Auth.validarSesion(token);
@@ -290,6 +301,6 @@ const TelefoniaService = (function () {
   return {
     permisos, indice, equipo, linea, evidencias, historial, inspeccion, catalogos, colaboradores, bitacora, vistaOperativa, formularioOperativa, crearVistaOperativa, formularioRegistro, recargarDatos,
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf, crearRegistro, editarRegistro,
-    cambiarEstatus, fotosInspeccion,
+    cambiarEstatus, fotosInspeccion, exportarBase,
   };
 })();

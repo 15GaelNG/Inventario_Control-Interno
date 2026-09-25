@@ -491,3 +491,45 @@ test('la sección de fotos de la inspección no se oculta con las condiciones de
   assert.doesNotMatch(lineas, /\.ln-af-seccion'\)\.forEach\(/);
   assert.match(lineas, /#ln-captura-cuerpo \.ln-af-seccion:not\(\.ln-af-extra\)'\)\.forEach\(/);
 });
+
+test('Exportar a Excel descarga la base completa del módulo, no solo lo que se ve', () => {
+  const lineas = read('src/html/js/lineas.html');
+  // Todas las tablas de módulo usan la base completa; el historial de una ficha sigue exportando lo filtrado
+  assert.match(lineas, /exportar: exportarBase\('INVENTARIO', /);
+  assert.match(lineas, /exportar: exportarBase\('ACCESORIOS', /);
+  assert.equal((lineas.match(/exportar: exportarBase\(tipo, cfg\.titulo\)/g) || []).length, 2);
+  assert.doesNotMatch(lineas, /exportar: \{ nombreArchivo: (cfg\.|'Inventario)/);
+  assert.match(lineas, /DecompressionStream\('gzip'\)/);
+  const dt = read('src/html/js/componentes/datatable.html');
+  assert.match(dt, /if \(cfg\.exportar\.descargar\) \{/);
+  const xl = read('src/html/js/componentes/exportar-excel.html');
+  assert.match(xl, /return \{ descargar, descargarLibro \};/);
+  assert.match(read('src/ClientApi.gs'), /function apiLineasExportarBase\(token, modulo, comprimir\)/);
+
+  // Servidor: todas las filas y columnas, tipos para Excel y secretos ocultos si no es ADMIN
+  const fecha = (s) => new Date(s);
+  const valores = [
+    ['A1', 350000000000001, 'PIN EQUIPO', '1234', '5678', fecha('2026-09-24T00:00:00'), fecha('2026-09-24T10:30:00'), 3],
+    ['', '', '', '', '', '', '', ''],
+    ['A2', 350000000000002, 'RESPONSABLE', 'ANA', 'LUIS', fecha('2026-09-25T00:00:00'), fecha('2026-09-25T08:05:00'), 7],
+  ];
+  const encabezados = ['ID', 'IMEI', 'CAMPO', 'ANTES', 'DESPUES', 'FECHA', 'FECHA ACTUALIZACION', 'CANTIDAD'];
+  const hoja = { getLastRow: () => valores.length + 1, getRange: () => ({ getValues: () => valores }) };
+  const LineasDatos = { existeTabla: () => true, zona: () => 'X', tablaFresca: () => ({ encabezados, hoja }) };
+  const pad = (n) => String(n).padStart(2, '0');
+  const Utilities = {
+    formatDate: (d, z, f) => f
+      .replace('yyyy', d.getFullYear()).replace('MM', pad(d.getMonth() + 1)).replace('dd', pad(d.getDate()))
+      .replace('HH', pad(d.getHours())).replace('mm', pad(d.getMinutes())).replace('ss', pad(d.getSeconds())).replace(/'/g, ''),
+  };
+  const LineasRepo = { TAB: { LINEAS: 'L', CAMBIOS: 'C', REASIG: 'R', DESECHO: 'D', REACTIVACION: 'RA', SOLICITUD: 'S' } };
+  const mod = new Function('LineasDatos', 'Utilities', 'LineasRepo', read('src/services/lineas/LineasExportar.gs') + '\nreturn LineasExportar;')(LineasDatos, Utilities, LineasRepo);
+  const operador = mod.baseCompleta('CAMBIOS', false).hojas[0];
+  assert.deepEqual(operador.columnas.map((c) => c.tipo), ['texto', 'texto', 'texto', 'texto', 'texto', 'fecha', 'fechaHora', 'numero']);
+  assert.equal(operador.filas.length, 2);   // la fila vacía no se exporta
+  assert.deepEqual(operador.filas[0], ['A1', '350000000000001', 'PIN EQUIPO', '••••', '••••', '2026-09-24', '2026-09-24T10:30:00', 3]);
+  assert.deepEqual(operador.filas[1].slice(3, 5), ['ANA', 'LUIS']);
+  assert.deepEqual(mod.baseCompleta('CAMBIOS', true).hojas[0].filas[0].slice(3, 5), ['1234', '5678']);
+  assert.equal(mod.baseCompleta('ACCESORIOS', false).hojas.length, 2);
+  assert.throws(() => mod.baseCompleta('OTRO', false), /desconocido/);
+});

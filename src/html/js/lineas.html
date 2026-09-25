@@ -197,6 +197,29 @@
     }
 
     /**
+     * "Exportar a Excel" de los módulos: descarga la base completa (todas las filas y todas las columnas de
+     * su pestaña, sin importar filtros ni búsqueda), no solo lo que se ve. Llega del servidor comprimida.
+     * modulo: INVENTARIO | CAMBIOS | REASIGNACIONES | DESECHOS | REACTIVACION | SOLICITUD | ACCESORIOS
+     */
+    function exportarBase(modulo, nombreArchivo) {
+      const descomprimir = async (b64) => {
+        const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+        return new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+      };
+      return {
+        nombreArchivo: nombreArchivo,
+        titulo: 'Descarga la base completa del módulo: todas las filas y columnas de la hoja, sin importar filtros ni búsqueda',
+        descargar: async () => {
+          const comprimir = typeof DecompressionStream === 'function';
+          const r = await llamar('apiLineasExportarBase', modulo, comprimir);
+          const base = JSON.parse(comprimir ? await descomprimir(r) : r);
+          await ExportarExcel.descargarLibro({ nombreArchivo: nombreArchivo, hojas: base.hojas });
+          return base.hojas[0].filas.length;
+        },
+      };
+    }
+
+    /**
      * Columnas de DataTable a partir de los encabezados de una hoja del AppSheet: las de `visibles`
      * se muestran en ese orden y las demás quedan ocultas (se activan desde "Columnas" y salen en
      * el panel de detalle y en el Excel). Detecta fechas y casillas por su contenido.
@@ -1178,7 +1201,7 @@
     /** Columnas del inventario (DataTable). Las ocultas se activan desde "Columnas". */
     const TABLAS_INVENTARIO = {
       equipos: {
-        detalle: 'equipo', nombreArchivo: 'Equipos telefonicos', textoVacio: 'Sin equipos',
+        detalle: 'equipo', textoVacio: 'Sin equipos',
         etiqueta: (r) => 'NUCO ' + (r.nuco || '—') + (r.modelo ? ' · ' + r.modelo : ''),
         columnas: [
           { campo: 'nuco', titulo: 'NUCO', tipo: 'texto', fijada: true, render: (v) => '<span class="ln-mono ln-fuerte">' + guion(v) + '</span>' },
@@ -1195,7 +1218,7 @@
         ],
       },
       lineas: {
-        detalle: 'linea', nombreArchivo: 'Lineas telefonicas', textoVacio: 'Sin líneas',
+        detalle: 'linea', textoVacio: 'Sin líneas',
         etiqueta: (r) => 'Línea ' + (r.numero || '—'),
         columnas: [
           { campo: 'numero', titulo: 'Número', tipo: 'texto', fijada: true, render: (v) => '<span class="ln-mono ln-fuerte">' + guion(v) + '</span>' },
@@ -1403,7 +1426,7 @@
           idTabla: 'lineas-' + modulo,
           columnas: cfg.columnas,
           textoVacio: cfg.textoVacio,
-          exportar: { nombreArchivo: cfg.nombreArchivo },
+          exportar: exportarBase('INVENTARIO', 'Lineas telefonicas'),
           etiquetaFila: cfg.etiqueta,
           detalle: false, // la ficha completa (responsable, evidencias, historial) es su propia pantalla
           accionesFila: [{ icono: 'eye', titulo: 'Ver ficha', alHacer: (r) => abrir(cfg.detalle, r.id) }],
@@ -2774,7 +2797,7 @@
           idTabla: 'lineas-accesorios-v2',
           ordenInicial: { campo: 'categoria', dir: 'asc' },
           textoVacio: 'Sin artículos',
-          exportar: { nombreArchivo: 'Inventario de accesorios' },
+          exportar: exportarBase('ACCESORIOS', 'Inventario de accesorios'),
           etiquetaFila: (a) => a.nombre,
           detalle: { titulo: (a) => a.nombre, contenidoExtra: movimientosEnPanel },
           ayuda: 'El ojo en Acciones muestra el artículo y sus movimientos. Las flechas registran entradas y salidas.',
@@ -3036,7 +3059,7 @@
               ordenInicial: cfg.agrupar && columnas.some((c) => c.campo === cfg.agrupar) ? { campo: cfg.agrupar, dir: 'asc' }
                 : (campoFolio && /FOLIO/i.test(campoFolio) ? { campo: campoFolio, dir: 'desc' } : undefined),
               textoVacio: 'Sin registros',
-              exportar: { nombreArchivo: cfg.titulo },
+              exportar: exportarBase(tipo, cfg.titulo),
               etiquetaFila: (f) => (campoFolio && f[campoFolio] ? String(f[campoFolio]) : 'Registro'),
               detalle: { titulo: (f) => cfg.titulo + (campoFolio && f[campoFolio] ? ' · ' + f[campoFolio] : '') },
               // View Ref (IMEI) del AppSheet: abre la línea referenciada
@@ -3214,7 +3237,7 @@
           columnas: columnas,
           ordenInicial: hFecha ? { campo: hFecha, dir: 'desc' } : undefined,
           textoVacio: 'Sin registros',
-          exportar: { nombreArchivo: cfg.titulo },
+          exportar: exportarBase(tipo, cfg.titulo),
           etiquetaFila: (f) => [hFolio && f[hFolio], hFecha && fechaTabla(f[hFecha])].filter(Boolean).join(' · ') || 'Registro',
           detalle: { titulo: (f) => cfg.titulo + (hFolio && f[hFolio] ? ' · ' + f[hFolio] : '') },
           accionesFila: hId ? [{ icono: 'circle-chevron-right', titulo: 'Ver activo', visible: (f) => !!f[hId], alHacer: (f) => irARegistro(f[hId]) }] : [],
