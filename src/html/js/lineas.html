@@ -433,6 +433,188 @@
       return html + (abierto ? '</div></section>' : '');
     }
 
+    // ---------------- Formularios por pasos ----------------
+    // Mismo aspecto y comportamiento que el componente Formulario del sistema (.form-pasos, .form-paso-chip,
+    // "Paso x de y", Atrás / Siguiente): se valida cada paso antes de avanzar, solo se salta a pasos ya
+    // vistos y los pasos sin campos visibles (Show_If según el TIPO) se omiten. Los elementos conservan el
+    // orden del AppSheet: cada paso empieza en la columna o el título (`titulo:…`) que indica `desde`.
+    const PASOS_FORMULARIO = {
+      INSPECCION: [
+        { titulo: 'Datos', icono: 'id-card', desde: 'titulo:FORMATO DE INSPECCIÓN CELULAR', descripcion: 'Vienen del registro. Confirma que coinciden con el equipo que tienes enfrente.' },
+        { titulo: 'Accesorios y sistema', icono: 'package-check', desde: 'titulo:DOCUMENTACIÓN / ACCESORIOS', descripcion: 'Marca lo que trae el equipo y cómo funciona.' },
+        { titulo: 'Estado físico', icono: 'smartphone', desde: 'titulo:ESTADO FÍSICO GENERAL', descripcion: 'Revisa pantalla, botones, cámara, puertos y desempeño.' },
+        { titulo: 'Accesos y apps', icono: 'key-round', desde: 'titulo:BLOQUEO Y CONTRASEÑAS', descripcion: 'Bloqueo del equipo y aplicaciones instaladas.' },
+        { titulo: 'Fotos', icono: 'camera', desde: 'extra:FOTOS', descripcion: 'Opcional: toma o agrega fotos del equipo.', siempre: true },
+        { titulo: 'Firmas', icono: 'signature', desde: 'titulo:CALIFICACIÓN, OBSERVACIONES Y FIRMAS', descripcion: 'Revisa la calificación, agrega observaciones y firma.' },
+      ],
+      RESPONSIVA: [
+        { titulo: 'Responsable', icono: 'user', desde: 'ID', descripcion: 'Fecha del documento e identificación de quien recibe.' },
+        { titulo: 'Equipo', icono: 'smartphone', desde: 'No TELEFONO', descripcion: 'Confirma el equipo que se entrega y sus accesos.' },
+        { titulo: 'Firmas', icono: 'signature', desde: 'OBSERVACIONES', descripcion: 'Observaciones y firmas de entrega.' },
+      ],
+      REGISTRO: [
+        { titulo: 'Identificación', icono: 'tag', desde: 'FOLIO', descripcion: 'Elige primero el TIPO: los demás campos se habilitan según él, igual que en AppSheet.' },
+        { titulo: 'Responsable', icono: 'user', desde: 'NO EMPLEADO', descripcion: 'Quién tiene el equipo y quién lo usa.' },
+        { titulo: 'Equipo y ubicación', icono: 'map-pin', desde: 'IMEI' },
+        { titulo: 'Accesos y plan', icono: 'key-round', desde: 'PIN WHATSAPP' },
+        { titulo: 'Estatus', icono: 'toggle-right', desde: 'ESTATUS LINEA' },
+        { titulo: 'Sistema nuevo', icono: 'sparkles', desde: 'titulo:DATOS DEL SISTEMA NUEVO' },
+      ],
+      SOLICITUD: [
+        { titulo: 'Solicitud', icono: 'file-plus', desde: 'FOLIO' },
+        { titulo: 'Solicitante', icono: 'user', desde: 'NO EMPLEADO SOLICITANTE', descripcion: 'Elige a la persona y se llenan sus datos.' },
+        { titulo: 'Asignación', icono: 'users', desde: 'SEDE' },
+        { titulo: 'Línea y equipo', icono: 'smartphone', desde: 'COMPAÑIA' },
+      ],
+    };
+
+    /** Reparte los elementos (en orden del AppSheet) entre los pasos según `desde`. */
+    function repartirEnPasos(elementos, pasos) {
+      const grupos = pasos.map(() => []);
+      let actual = 0;
+      elementos.forEach((e) => {
+        const clave = e.tipo === 'titulo' ? 'titulo:' + e.texto : e.columna;
+        const siguiente = pasos.findIndex((p, k) => k > actual && p.desde === clave);
+        if (siguiente > actual) actual = siguiente;
+        grupos[actual].push(e);
+      });
+      // Un paso que es una sola sección del AppSheet no repite su título (ya lo dice el paso)
+      return grupos.map((g) => (g.filter((e) => e.tipo === 'titulo').length === 1 && g[0] && g[0].tipo === 'titulo' ? g.slice(1) : g));
+    }
+
+    /** Indicador de pasos + un <section class="form-paso"> por paso. `extras`: { índice: html } al final del paso. */
+    function htmlPasosAppSheet(elementos, pasos, extras) {
+      const grupos = repartirEnPasos(elementos, pasos);
+      return '<div class="ln-pasos-barra"><ol class="form-pasos">' + pasos.map((p, i) =>
+        '<li><button type="button" class="form-paso-chip" data-ir-paso="' + i + '"' + (i ? ' disabled' : '') + '><span class="form-paso-num">' + (i + 1) + '</span>' + esc(p.titulo) + '</button></li>').join('') +
+        '</ol></div>' +
+        pasos.map((p, i) => '<section class="form-paso ln-paso" data-paso="' + i + '"' + (p.siempre ? ' data-paso-siempre' : '') + (i ? ' hidden' : '') + '>' +
+          '<h3 class="form-paso-titulo" tabindex="-1">' + (p.icono ? icono(p.icono) + ' ' : '') + esc(p.titulo) + '</h3>' +
+          (p.descripcion ? '<p class="form-paso-desc">' + esc(p.descripcion) + '</p>' : '') +
+          (grupos[i].length ? htmlFormularioAppSheet(grupos[i]) : '') + ((extras || {})[i] || '') + '</section>').join('');
+    }
+
+    /** Botones del pie para un formulario por pasos (Cancelar · Paso x de y · Atrás · Siguiente · Guardar). */
+    function htmlAccionesPasos(botonGuardar) {
+      return '<div class="ln-captura-acciones ln-acciones-pasos"><button type="button" class="secondary ln-pasos-cancelar" data-cerrar-modal>Cancelar</button>' +
+        '<span class="form-cuenta" aria-live="polite"></span>' +
+        '<button type="button" class="secondary" data-paso-atras hidden>' + icono('chevron-left') + ' Atrás</button>' +
+        '<button type="button" data-paso-siguiente>Siguiente ' + icono('chevron-right') + '</button>' + botonGuardar + '</div>';
+    }
+
+    /**
+     * Navegación de un formulario por pasos. cfg: { atras, siguiente, guardar, cuenta, validar(seccion) → errores,
+     * libre (edición: se puede ir a cualquier paso y guardar desde cualquiera) }. Regresa { ir, irAlCampo }.
+     */
+    function activarPasos(cont, cfg) {
+      const secciones = Array.from(cont.querySelectorAll('.form-paso[data-paso]'));
+      const chips = Array.from(cont.querySelectorAll('.form-paso-chip[data-ir-paso]'));
+      const vistos = {};
+      let actual = 0;
+      const aplica = (s) => s.hasAttribute('data-paso-siempre') || !!s.querySelector('.ln-af-campo:not([hidden]):not(.ln-af-lectura), .ln-af-campo:not([hidden]) .ln-pastillas');
+      const visibles = () => secciones.map((s, i) => i).filter((i) => aplica(secciones[i]));
+      const scroll = cont.closest('.modal-form-scroll') || cont;
+      function pintar() {
+        const vis = visibles();
+        const pos = vis.indexOf(actual);
+        chips.forEach((chip, i) => {
+          const si = vis.indexOf(i) >= 0;
+          chip.closest('li').hidden = !si;
+          chip.classList.toggle('activo', i === actual);
+          chip.classList.toggle('completado', si && vis.indexOf(i) < pos && !!vistos[i]);
+          chip.disabled = !cfg.libre && !vistos[i] && i > actual;
+          chip.querySelector('.form-paso-num').textContent = vis.indexOf(i) + 1;
+        });
+        const ultimo = pos === vis.length - 1;
+        cfg.atras.hidden = pos <= 0;
+        cfg.siguiente.hidden = ultimo;
+        cfg.guardar.hidden = !ultimo && !cfg.libre;
+        if (cfg.cuenta) cfg.cuenta.textContent = 'Paso ' + (pos + 1) + ' de ' + vis.length;
+      }
+      function ir(i, sinFoco) {
+        const vis = visibles();
+        if (vis.indexOf(i) < 0) {
+          const despues = vis.filter((x) => x > i)[0];
+          i = despues !== undefined ? despues : vis.filter((x) => x < i).pop();
+        }
+        if (i === undefined) return;
+        actual = i;
+        vistos[i] = true;
+        secciones.forEach((sec, k) => { sec.hidden = k !== i; });
+        pintar();
+        if (!sinFoco) {
+          scroll.scrollTop = 0;
+          const titulo = secciones[i].querySelector('.form-paso-titulo');
+          if (titulo) titulo.focus({ preventScroll: true });
+        }
+      }
+      function avanzar() {
+        if (cfg.validar && cfg.validar(secciones[actual]).length) return;
+        const sig = visibles().filter((x) => x > actual)[0];
+        if (sig !== undefined) ir(sig);
+      }
+      cfg.siguiente.addEventListener('click', avanzar);
+      cfg.atras.addEventListener('click', () => { const ant = visibles().filter((x) => x < actual).pop(); if (ant !== undefined) ir(ant); });
+      chips.forEach((chip, i) => chip.addEventListener('click', () => {
+        if (i <= actual || cfg.libre || vistos[i]) ir(i);
+        else if (!cfg.validar || !cfg.validar(secciones[actual]).length) ir(i);
+      }));
+      // Enter avanza de paso en vez de guardar a medias (si la lista del Combobox no lo usó)
+      cont.addEventListener('keydown', (ev) => {
+        if (ev.key !== 'Enter' || ev.defaultPrevented || ev.target.tagName !== 'INPUT' || !cfg.siguiente || cfg.siguiente.hidden) return;
+        ev.preventDefault();
+        avanzar();
+      });
+      // Show_If puede ocultar o mostrar pasos completos al cambiar el TIPO
+      cont.addEventListener('change', () => setTimeout(pintar, 0));
+      ir(0, true);
+      return {
+        ir: ir,
+        pintar: pintar,
+        /** Lleva al paso donde está la columna (p. ej. el primer error al guardar). */
+        irAlCampo: (columna) => {
+          const k = secciones.findIndex((sec) => sec.querySelector('[data-af-columna="' + CSS.escape(columna) + '"]'));
+          if (k >= 0 && k !== actual) ir(k, true);
+        },
+      };
+    }
+
+    /**
+     * Marca los campos con error (borde y mensaje debajo, como el componente Formulario) y lleva al primero.
+     * errores: [{ columna, msg }]. Un campo deja de marcarse en cuanto se corrige.
+     */
+    function marcarErroresEn(cuerpo, errores) {
+      cuerpo.querySelectorAll('.ln-af-campo.form-campo-error').forEach((c) => {
+        c.classList.remove('form-campo-error');
+        const m = c.querySelector('.form-error-campo');
+        if (m) m.remove();
+      });
+      errores.forEach((x) => {
+        const campo = cuerpo.querySelector('.ln-af-campo[data-af-columna="' + CSS.escape(x.columna) + '"]');
+        if (!campo || campo.classList.contains('form-campo-error')) return;
+        campo.classList.add('form-campo-error');
+        campo.insertAdjacentHTML('beforeend', '<span class="form-error-campo">' + esc(x.msg) + '</span>');
+      });
+      if (!cuerpo.dataset.limpiaErrores) {
+        cuerpo.dataset.limpiaErrores = '1';
+        const limpiar = (ev) => {
+          const campo = ev.target.closest && ev.target.closest('.ln-af-campo.form-campo-error');
+          if (!campo) return;
+          campo.classList.remove('form-campo-error');
+          const m = campo.querySelector('.form-error-campo');
+          if (m) m.remove();
+        };
+        ['input', 'change', 'click'].forEach((t) => cuerpo.addEventListener(t, limpiar));
+      }
+      const primero = errores.length && cuerpo.querySelector('.ln-af-campo.form-campo-error');
+      if (primero) {
+        primero.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Las listas con búsqueda se abren al enfocarse y taparían el mensaje: esas solo se muestran
+        const control = primero.querySelector('input:not([type="file"]):not([data-lista-abierta]):not([data-referencia]), select, textarea, .ln-pastilla');
+        if (control) control.focus({ preventScroll: true });
+      }
+    }
+
     /** Valores por columna del AppSheet dentro de `cuerpo` (las referencias se traducen a ID). */
     function leerFormularioEn(cuerpo, elementos) {
       const valores = {};
@@ -575,11 +757,12 @@
         if (e.tipo !== 'campo' || e.soloLectura || e.control === 'calculado' || e.control === 'firma' || e.control === 'patron' || e.control === 'archivo' || e.valorOculto) return;
         if (!cumpleCondicion(e.mostrar, t, valores, ctx)) return;
         const v = valores[e.columna] || '';
-        if (!v) { if (cumpleCondicion(e.requerido, t, valores, ctx)) errores.push({ e: e, msg: e.etiqueta + ' es obligatorio' }); return; }
-        if (e.control === 'lista' && (e.opciones || []).map((o) => String(o).toUpperCase()).indexOf(v.toUpperCase()) < 0) { errores.push({ e: e, msg: e.etiqueta + ': ' + (e.mensaje || 'VALOR NO ENCONTRADO EN LA LISTA') }); return; }
-        if (e.control === 'referencia' && v.charAt(0) === '¿') errores.push({ e: e, msg: e.etiqueta + ': elige un valor de la lista' });
+        const error = (corto) => errores.push({ e: e, columna: e.columna, corto: corto, msg: e.etiqueta + ': ' + corto });
+        if (!v) { if (cumpleCondicion(e.requerido, t, valores, ctx)) errores.push({ e: e, columna: e.columna, corto: 'Obligatorio', msg: e.etiqueta + ' es obligatorio' }); return; }
+        if (e.control === 'lista' && (e.opciones || []).map((o) => String(o).toUpperCase()).indexOf(v.toUpperCase()) < 0) { error(e.mensaje || 'VALOR NO ENCONTRADO EN LA LISTA'); return; }
+        if (e.control === 'referencia' && v.charAt(0) === '¿') error('Elige un valor de la lista');
         const regla = e.valida && VALIDA_CLIENTE[e.valida];
-        if (regla && !regla.f(v, t)) errores.push({ e: e, msg: e.etiqueta + ': ' + regla.msg });
+        if (regla && !regla.f(v, t)) error(regla.msg);
       });
       return errores;
     }
@@ -930,6 +1113,7 @@
       const tarjetasVisibles = { equipos: PASO_TARJETAS, lineas: PASO_TARJETAS };
       let detallesFicha = null; // datos de la tarjeta "Detalles" de la ficha abierta
       let tablaHistorial = null; // DataTable del historial de la ficha abierta
+      let nombreHistorial = ''; // para el nombre del Excel del historial
       let marcarKpi = null;
       raiz.querySelectorAll('#ln-tabs .tab-btn').forEach((tab) => {
         tab.addEventListener('click', () => mostrarModulo(tab.dataset.tab));
@@ -974,6 +1158,8 @@
           abrir(ir.dataset.lnIr, ir.dataset.id);
           return;
         }
+        const pestana = ev.target.closest('[data-ficha-tab]');
+        if (pestana) { mostrarPestanaFicha(pestana.dataset.fichaTab); return; }
         const mas = ev.target.closest('[data-ln-mas-tarjetas]');
         if (mas) { tarjetasVisibles[mas.dataset.lnMasTarjetas] += PASO_TARJETAS; pintarTarjetas(mas.dataset.lnMasTarjetas); return; }
         const copiar = ev.target.closest('[data-ln-copiar-detalles]');
@@ -1030,7 +1216,11 @@
 
       // ---- Carga inicial ----
       if (!memoria.modoVista) {
-        try { memoria.modoVista = localStorage.getItem('lineas.modoVista') === 'tarjetas' ? 'tarjetas' : 'tabla'; } catch (e) { memoria.modoVista = 'tabla'; }
+        // Sin preferencia guardada: tarjetas en celular (una tabla de 10 columnas no cabe) y tabla en lo demás
+        const porDefecto = window.matchMedia && window.matchMedia('(max-width: 700px)').matches ? 'tarjetas' : 'tabla';
+        let guardado = null;
+        try { guardado = localStorage.getItem('lineas.modoVista'); } catch (e) { guardado = null; }
+        memoria.modoVista = guardado === 'tarjetas' || guardado === 'tabla' ? guardado : porDefecto;
       }
       mostrarModulo(memoria.modulo, true);
       crearTabla(memoria.modulo).setCargando(true);
@@ -1279,14 +1469,53 @@
           ['ID', l.id], ['Folio', l.folio], ['Tipo', l.tipo], ['Fila en hoja', l.fila],
           ['Estatus general', chip(l.estatusGeneral), true], ['Fecha registro', fecha(l.fechaRegistro)], ['Última inspección', fecha(l.fechaInspeccion)],
           ['Comentarios', l.comentarios],
-        ]));
+        ]), 'ln-solo-escritorio');
       }
 
-      function encabezado(ico, titulo, chips, botones) {
+      /**
+       * Encabezado de la ficha: qué es, su estado, las acciones y un resumen rápido con lo que más se
+       * consulta (para revisar un equipo o línea sin bajar por la página).
+       */
+      function encabezado(ico, titulo, chips, botones, resumen) {
+        const datos = (resumen || []).filter(Boolean);
         return '<div class="ln-detalle-header card">' +
           '<div class="ln-detalle-icono">' + icono(ico) + '</div>' +
           '<div class="ln-detalle-titulo"><h2>' + titulo + '</h2><div class="ln-chips">' + chips + '</div></div>' +
-          '<div class="ln-detalle-botones">' + (botones || '') + '</div></div>';
+          '<div class="ln-detalle-botones">' + (botones || '') + '</div>' +
+          (datos.length ? '<dl class="ln-resumen-rapido">' + datos.map((d) => '<div><dt>' + esc(d[0]) + '</dt><dd>' + (d[2] ? (d[1] || vacio) : guion(d[1])) + '</dd></div>').join('') + '</dl>' : '') +
+          '</div>';
+      }
+
+      /**
+       * Ficha en pestañas: General (datos), Detalles (texto para copiar), Documentos (inspecciones y
+       * responsivas) e Historial. Lo esencial queda arriba y el resto a un toque, en vez de una página larguísima.
+       */
+      function fichaEnPestanas(general, detalles, conDocumentos) {
+        const pestanas = [['general', 'General', 'layout-grid'], ['detalles', 'Detalles', 'clipboard-list'],
+          conDocumentos ? ['documentos', 'Documentos', 'folder-check'] : null, ['historial', 'Historial', 'history']].filter(Boolean);
+        const cargando = '<div class="card ln-card"><p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p></div>';
+        return '<div class="tabs-simple ln-ficha-tabs" role="tablist" aria-label="Secciones de la ficha">' + pestanas.map((t, n) =>
+          '<button type="button" class="tab-btn' + (n ? '' : ' active') + '" role="tab" aria-selected="' + (n ? 'false' : 'true') + '" data-ficha-tab="' + t[0] + '">' +
+          icono(t[2]) + ' ' + t[1] + ' <span class="ln-tab-num" data-ficha-num="' + t[0] + '"></span></button>').join('') + '</div>' +
+          '<div data-ficha-panel="general">' + general + '</div>' +
+          '<div data-ficha-panel="detalles" hidden>' + detalles + '</div>' +
+          (conDocumentos ? '<div data-ficha-panel="documentos" hidden><div id="ln-evidencias">' + cargando + '</div></div>' : '') +
+          '<div data-ficha-panel="historial" hidden><div id="ln-historial">' + cargando + '</div></div>';
+      }
+
+      function mostrarPestanaFicha(nombre) {
+        raiz.querySelectorAll('[data-ficha-tab]').forEach((b) => {
+          const activa = b.dataset.fichaTab === nombre;
+          b.classList.toggle('active', activa);
+          b.setAttribute('aria-selected', String(activa));
+        });
+        raiz.querySelectorAll('[data-ficha-panel]').forEach((p) => { p.hidden = p.dataset.fichaPanel !== nombre; });
+        if (nombre === 'historial' && tablaHistorial) tablaHistorial.ajustarAlto();
+      }
+
+      function contarEnPestana(nombre, n) {
+        const el = raiz.querySelector('[data-ficha-num="' + nombre + '"]');
+        if (el) el.textContent = miles(n);
       }
 
       function pintarEquipo(detalle, id) {
@@ -1297,13 +1526,17 @@
           const costo = l && l.costoPlan !== null && l.costoPlan !== undefined ? '$' + Number(l.costoPlan).toLocaleString('es-MX') : null;
           const puedeOperar = memoria.permisos && memoria.permisos.puedeOperar;
           pila[pila.length - 1].etiqueta = 'NUCO ' + (e.nuco || '—');
+          const resp = e.responsable || {};
           detalle.innerHTML = migas() +
             encabezado('smartphone', 'NUCO ' + esc(e.nuco || '—'),
               chip(e.estatus) + chip(TIPO_EQUIPO[e.tipo] || e.tipo, 'neutro') + (l ? chip('Con línea', 'verde') + usoTemporalVencido(l) : chip('Sin línea', 'ambar')),
               (puedeOperar ? botonesFicha('data-equipo-id', id) : '') +
-              (e.carpetaDriveId ? enlaceDrive(e.carpetaDriveId, 'Ver carpeta en Drive') : '')) +
-            (e._secretosVisibles ? '' : '<div class="ln-nota">' + icono('lock') + ' Los PIN, patrones y contraseñas están ocultos para tu rol.</div>') +
-            tarjetaDetallesCopiar(r.detalles) +
+              (e.carpetaDriveId ? enlaceDrive(e.carpetaDriveId, 'Ver carpeta en Drive') : ''),
+              [['Responsable', resp.nombre], ['Modelo', e.modelo], ['IMEI', e.imei],
+                ['Línea', l ? '<a href="#" class="ln-enlace ln-mono" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + esc(l.numero || '(sin número)') + '</a>' + (l.compania ? ' · ' + esc(l.compania) : '') : '<span class="ln-tenue">Sin línea</span>', true],
+                ['Departamento', resp.departamento]]) +
+            fichaEnPestanas(
+              (e._secretosVisibles ? '' : '<div class="ln-nota">' + icono('lock') + ' Los PIN, patrones y contraseñas están ocultos para tu rol.</div>') +
             '<div class="ln-grid-2">' +
               tarjeta(icono('smartphone') + ' Equipo', campos([
                 ['Modelo', e.modelo], ['IMEI', e.imei], ['Color', e.color], ['Accesorios', (e.accesorios || []).join(', ')],
@@ -1320,9 +1553,7 @@
               ]) : '<p class="empty-state">Este equipo no tiene línea asignada.</p>') +
               tarjetaResponsable(e.responsable) +
               tarjetaRegistro(e.legado) +
-            '</div>' +
-            '<div id="ln-evidencias">' + tarjeta(icono('clipboard-check') + ' Inspecciones y responsivas', '<p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p>') + '</div>' +
-            '<div id="ln-historial">' + tarjeta(icono('history') + ' Historial', '<p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p>') + '</div>';
+            '</div>', tarjetaDetallesCopiar(r.detalles), true);
           cargarEvidencias(id);
           cargarHistorial(id, 'NUCO ' + (e.nuco || id));
         });
@@ -1336,10 +1567,13 @@
           const costo = l.costoPlan !== null && l.costoPlan !== undefined ? '$' + Number(l.costoPlan).toLocaleString('es-MX') : null;
           const puedeOperarLinea = !e && memoria.permisos && memoria.permisos.puedeOperar;
           pila[pila.length - 1].etiqueta = e ? 'NUCO ' + (e.nuco || '—') : 'Línea ' + (l.numero || '—');
+          const respL = (e ? e.responsable : l.responsable) || {};
           detalle.innerHTML = migas() +
             encabezado('card-sim', esc(l.numero || 'Línea sin número'), chip(l.estatus) + usoTemporalVencido(l) + (e ? chip('En NUCO ' + (e.nuco || '—'), 'neutro') : chip('Suelta', 'ambar')),
-              puedeOperarLinea ? botonesFicha('data-linea-id', id) : (e ? '<button type="button" class="ln-btn-icono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' Ver equipo</button>' : '')) +
-            tarjetaDetallesCopiar(r.detalles) +
+              puedeOperarLinea ? botonesFicha('data-linea-id', id) : (e ? '<button type="button" class="ln-btn-icono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' Ver equipo</button>' : ''),
+              [['Responsable', respL.nombre], ['Compañía', l.compania], ['SIM', l.sim], ['Fin de plan', fecha(l.finPlan)],
+                ['Equipo', e ? '<a href="#" class="ln-enlace ln-mono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">NUCO ' + esc(e.nuco || '—') + '</a>' + (e.modelo ? ' · ' + esc(e.modelo) : '') : '<span class="ln-tenue">Suelta</span>', true]]) +
+            fichaEnPestanas(
             '<div class="ln-grid-2">' +
               tarjeta(icono('card-sim') + ' Línea', campos([
                 ['Compañía', l.compania], ['SIM', l.sim], ['PIN WhatsApp', l.pinWhatsapp], ['Razón social', l.razonSocial],
@@ -1353,9 +1587,7 @@
               ]) : '<p class="empty-state">Línea suelta: no está instalada en un equipo de la empresa.</p>') +
               tarjetaResponsable(e ? e.responsable : l.responsable, e ? 'Responsable (del equipo)' : 'Responsable') +
               tarjetaRegistro(l.legado) +
-            '</div>' +
-            (e ? '' : '<div id="ln-evidencias">' + tarjeta(icono('clipboard-check') + ' Inspecciones y responsivas', '<p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p>') + '</div>') +
-            '<div id="ln-historial">' + tarjeta(icono('history') + ' Historial', '<p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p>') + '</div>';
+            '</div>', tarjetaDetallesCopiar(r.detalles), !e);
           if (!e) cargarEvidencias(id);
           cargarHistorial(id, e ? 'NUCO ' + (e.nuco || id) : 'Linea ' + (l.numero || id));
         });
@@ -1442,22 +1674,27 @@
         return d.pdfPendiente ? '<button type="button" class="ln-btn-icono" data-ln-pdf="' + tipo + '" data-id="' + esc(d.id) + '" data-carpeta="' + esc(d.carpetaId || '') + '">' + icono('file-text') + ' Generar PDF</button>' : vacio;
       }
 
+      /** Inspecciones y responsivas como lista: fecha y tipo arriba, datos en una línea y acciones a la derecha. */
       function tarjetaEvidencias(inspecciones, responsivas) {
-        const tablaInsp = inspecciones.length
-          ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Fecha</th><th>Origen</th><th>Calificación</th><th>Fotos</th><th>Responsable</th><th>Inspector</th><th>Consulta</th><th>Documento</th></tr></thead><tbody>' +
-            inspecciones.map((i) => '<tr class="ln-fila-clic" data-ln-ir="inspeccion" data-id="' + esc(i.id) + '"><td>' + guion(fecha(i.fecha)) + '</td><td>' + (ORIGEN[i.origen] || '') + '</td>' +
-              '<td>' + guion(porcentaje(i.calificacion)) + '</td><td>' + (i.fotos || '<span class="ln-tenue">0</span>') + '</td>' +
-              '<td>' + guion(i.responsable) + '</td><td class="ln-tenue">' + guion(i.inspector) + '</td><td><button type="button" class="ln-btn-icono" data-ln-ir="inspeccion" data-id="' + esc(i.id) + '">' + icono('eye') + ' Ver inspección</button></td><td>' + accionPdf(i, 'INSPECCION') + '</td></tr>').join('') +
-            '</tbody></table></div>'
+        const item = (ico, titulo, chips, datos, acciones, ir) => '<li class="ln-doc' + (ir ? ' ln-fila-clic' : '') + '"' + (ir ? ' data-ln-ir="inspeccion" data-id="' + esc(ir) + '"' : '') + '>' +
+          '<span class="ln-doc-icono">' + icono(ico) + '</span>' +
+          '<div class="ln-doc-cuerpo"><div class="ln-doc-titulo"><b>' + titulo + '</b>' + chips + '</div>' +
+          '<div class="ln-doc-datos">' + datos.filter(Boolean).map(esc).join(' · ') + '</div></div>' +
+          '<div class="ln-doc-acciones">' + acciones + '</div></li>';
+        const listaInsp = inspecciones.length
+          ? '<ul class="ln-docs">' + inspecciones.map((i) => item('clipboard-check', esc(fecha(i.fecha) || 'Sin fecha'),
+              (ORIGEN[i.origen] || '') + (i.calificacion !== null && i.calificacion !== undefined ? chip(porcentaje(i.calificacion), 'neutro') : ''),
+              [i.responsable, i.inspector ? 'Inspector: ' + i.inspector : '', i.fotos ? i.fotos + ' foto(s)' : ''],
+              '<button type="button" class="ln-btn-icono" data-ln-ir="inspeccion" data-id="' + esc(i.id) + '">' + icono('eye') + ' Ver</button>' + accionPdf(i, 'INSPECCION').replace(vacio, ''),
+              i.id)).join('') + '</ul>'
           : '<p class="empty-state">Sin inspecciones registradas.</p>';
-        const tablaResp = responsivas.length
-          ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Fecha</th><th>Origen</th><th>Responsable</th><th>Documento</th><th>Carpeta</th></tr></thead><tbody>' +
-            responsivas.map((r) => '<tr><td>' + guion(fecha(r.fecha)) + '</td><td>' + (ORIGEN[r.origen] || '') + '</td><td>' + guion(r.responsable) + '</td>' +
-              '<td>' + accionPdf(r, 'RESPONSIVA') + '</td>' +
-              '<td>' + (r.carpetaId ? enlaceDrive(r.carpetaId, 'Ver carpeta') : vacio) + '</td></tr>').join('') +
-            '</tbody></table></div>'
+        const listaResp = responsivas.length
+          ? '<ul class="ln-docs">' + responsivas.map((r) => item('signature', esc(fecha(r.fecha) || 'Sin fecha'), ORIGEN[r.origen] || '',
+              [r.responsable],
+              accionPdf(r, 'RESPONSIVA').replace(vacio, '') + (r.carpetaId ? enlaceDrive(r.carpetaId, 'Carpeta') : ''))).join('') + '</ul>'
           : '<p class="empty-state">Sin responsivas registradas.</p>';
-        return tarjeta(icono('clipboard-check') + ' Inspecciones (' + inspecciones.length + ')', tablaInsp) + tarjeta(icono('signature') + ' Responsivas (' + responsivas.length + ')', tablaResp);
+        contarEnPestana('documentos', inspecciones.length + responsivas.length);
+        return tarjeta(icono('clipboard-check') + ' Inspecciones (' + inspecciones.length + ')', listaInsp) + tarjeta(icono('signature') + ' Responsivas (' + responsivas.length + ')', listaResp);
       }
 
       // ---- Alta y edición directa del inventario ----
@@ -1476,11 +1713,13 @@
           const tipoInicial = (elementos.filter((e) => e.columna === 'TIPO')[0] || {}).valor || '';
           const ctx = { nuevo: form.nuevo, id: id, tipoInicial: tipoInicial };
           captura.contexto = { formulario: elementos };
-          $('#ln-captura-subtitulo', raiz).textContent = id ? 'Mismo formulario que en AppSheet. Cada cambio queda en la bitácora.' : 'Mismo formulario que en AppSheet. Elige primero el TIPO.';
-          cuerpo.innerHTML = '<div class="ln-nota">' + icono('history') + ' Los campos se habilitan según el TIPO, igual que en AppSheet.</div>' +
-            htmlFormularioAppSheet(elementos) +
-            '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div><div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
-            '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + (id ? ' Guardar cambios' : ' Registrar') + '</button></div>';
+          const valorDe = (c) => ((elementos.filter((e) => e.columna === c)[0] || {}).valor) || '';
+          $('#ln-captura-subtitulo', raiz).textContent = id ? ['NUCO ' + (valorDe('NUCO') || '—'), valorDe('EQUIPO'), valorDe('RESPONSABLE')].filter(Boolean).join(' · ') + ' · cada cambio queda en la bitácora'
+            : 'Elige primero el TIPO: los campos se habilitan según él, igual que en AppSheet.';
+          // Alta: paso por paso. Edición: se salta a cualquier sección y se guarda desde cualquiera.
+          cuerpo.innerHTML = htmlPasosAppSheet(elementos, PASOS_FORMULARIO.REGISTRO) +
+            '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div>' +
+            htmlAccionesPasos('<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + (id ? ' Guardar cambios' : ' Registrar') + '</button>');
           pintarIconos(cuerpo);
           activarCombosEn(cuerpo, elementos);
           const patron = elementos.filter((e) => e.control === 'patron')[0];
@@ -1497,13 +1736,25 @@
             if (ev.target.closest('.ln-pastilla')) setTimeout(aplicar, 0);
           }, true);
           aplicar();
+          const conCorto = (lista) => lista.map((x) => ({ columna: x.columna, msg: x.corto }));
+          captura.reaplicar = aplicar; // al reactivar tras un error, los campos no editables vuelven a bloquearse
+          const pasos = captura.pasos = activarPasos(cuerpo, {
+            atras: cuerpo.querySelector('[data-paso-atras]'), siguiente: cuerpo.querySelector('[data-paso-siguiente]'),
+            guardar: $('#cap-guardar', raiz), cuenta: cuerpo.querySelector('.form-cuenta'), libre: !!id,
+            validar: (seccion) => {
+              const errores = erroresFormularioEn(cuerpo, elementos, '', ctx).filter((x) => seccion.querySelector('[data-af-columna="' + CSS.escape(x.columna) + '"]'));
+              marcarErroresEn(cuerpo, conCorto(errores));
+              $('#cap-error', raiz).hidden = true;
+              return errores;
+            },
+          });
           $('#cap-guardar', raiz).addEventListener('click', () => {
             $('#cap-error', raiz).hidden = true;
             const errores = erroresFormularioEn(cuerpo, elementos, '', ctx);
             if (errores.length) {
-              const col = errores[0].e.columna;
-              const campo = cuerpo.querySelector('[data-af-columna="' + CSS.escape(col) + '"] input, [data-af-columna="' + CSS.escape(col) + '"] select, [data-af-columna="' + CSS.escape(col) + '"] .ln-pastilla');
-              mostrarErrorCaptura(errores.map((x) => x.msg).slice(0, 6).join(' · '), campo && campo.id ? '#' + campo.id : null);
+              pasos.irAlCampo(errores[0].columna);
+              marcarErroresEn(cuerpo, conCorto(errores));
+              mostrarErrorCaptura(errores.map((x) => x.msg).slice(0, 4).join(' · ') + (errores.length > 4 ? '…' : ''), null);
               return;
             }
             const valores = leerFormularioEn(cuerpo, elementos);
@@ -1606,6 +1857,32 @@
         cuerpo.addEventListener('input', (ev) => { if (ev.target.matches('[data-columna]')) actualizarFormularioAppSheet(); });
         cuerpo.addEventListener('change', (ev) => { if (ev.target.matches('[data-columna]')) actualizarFormularioAppSheet(); });
         actualizarFormularioAppSheet();
+        if (cuerpo.querySelector('.form-paso')) {
+          captura.pasos = activarPasos(cuerpo, {
+            atras: cuerpo.querySelector('[data-paso-atras]'), siguiente: cuerpo.querySelector('[data-paso-siguiente]'),
+            guardar: $('#cap-guardar', raiz), cuenta: cuerpo.querySelector('.form-cuenta'),
+            validar: (seccion) => {
+              const errores = erroresCaptura(seccion);
+              marcarErroresEn(cuerpo, errores);
+              $('#cap-error', raiz).hidden = true;
+              return errores;
+            },
+          });
+        }
+      }
+
+      /** Obligatorios vacíos, firmas y valores fuera de lista (todo el formulario o solo un paso). */
+      function erroresCaptura(seccion) {
+        const tipo = tipoFormulario();
+        const valores = leerFormularioAppSheet();
+        const errores = faltantesFormularioAppSheet().map((e) => ({ columna: e.columna, etiqueta: e.etiqueta, msg: e.control === 'firma' ? 'Falta la firma' : 'Obligatorio' }));
+        (captura.contexto.formulario || []).forEach((e) => {
+          if (e.tipo !== 'campo' || e.control !== 'lista' || !cumpleCondicion(e.mostrar, tipo) || !valores[e.columna]) return;
+          if ((e.opciones || []).map((o) => String(o).toUpperCase()).indexOf(valores[e.columna].toUpperCase()) < 0) {
+            errores.push({ columna: e.columna, etiqueta: e.etiqueta, msg: 'Elige un valor de la lista' });
+          }
+        });
+        return seccion ? errores.filter((x) => seccion.querySelector('[data-af-columna="' + CSS.escape(x.columna) + '"]')) : errores;
       }
 
       /**
@@ -1619,8 +1896,18 @@
         return captura.patronInicial ? '' : undefined;
       }
 
-      /** Valida antes de enviar; regresa false y lleva al primer campo faltante. */
+      /** Valida antes de enviar; regresa false y lleva al paso y campo del primer error. */
       function validarFormularioAppSheet() {
+        if (captura.pasos) {
+          const errores = erroresCaptura();
+          if (!errores.length) return true;
+          captura.pasos.irAlCampo(errores[0].columna);
+          const cuerpo = $('#ln-captura-cuerpo', raiz);
+          marcarErroresEn(cuerpo, errores);
+          mostrarErrorCaptura(errores.length === 1 ? errores[0].etiqueta + ': ' + errores[0].msg : 'Faltan ' + errores.length + ' datos: ' + errores.slice(0, 4).map((x) => x.etiqueta).join(', ') + (errores.length > 4 ? '…' : ''),
+            null);
+          return false;
+        }
         const faltan = faltantesFormularioAppSheet();
         // Valid_If de las listas (IN(..., LISTAS TELEFONOS[...])): un valor fuera de la lista no se acepta
         const tipo = tipoFormulario();
@@ -1740,6 +2027,7 @@
         captura.guardando = true;
         const modal = $('#ln-modal-captura', raiz);
         modal.querySelectorAll('button, input, select, textarea').forEach((el) => { el.disabled = true; });
+        captura.textoGuardar = $('#cap-guardar', raiz).innerHTML;
         $('#cap-guardar', raiz).innerHTML = '<span class="ln-spinner"></span> ' + esc(texto);
         $('#ln-captura-subtitulo', raiz).textContent = texto + '. Mantén esta ventana abierta.';
         modal.setAttribute('aria-busy', 'true');
@@ -1751,7 +2039,9 @@
         const modal = $('#ln-modal-captura', raiz);
         modal.removeAttribute('aria-busy');
         modal.querySelectorAll('button, input, select, textarea').forEach((el) => { el.disabled = false; });
-        $('#cap-guardar', raiz).innerHTML = icono('circle-check') + ' Guardar y generar PDF';
+        if (captura.textoGuardar) $('#cap-guardar', raiz).innerHTML = captura.textoGuardar;
+        if (captura.pasos) captura.pasos.pintar();
+        if (captura.reaplicar) captura.reaplicar();
         $('#ln-captura-subtitulo', raiz).textContent = 'No se completó el guardado. Revisa el mensaje y vuelve a intentar.';
       }
 
@@ -1760,7 +2050,8 @@
         if (!errorBox) return;
         errorBox.textContent = mensaje;
         errorBox.hidden = false;
-        const objetivo = destino ? $(destino, raiz) : errorBox;
+        const marcado = raiz.querySelector('#ln-captura-cuerpo .form-campo-error');
+        const objetivo = destino ? $(destino, raiz) : (marcado || errorBox);
         (objetivo || errorBox).scrollIntoView({ behavior: 'smooth', block: 'center' });
         errorBox.setAttribute('tabindex', '-1');
         errorBox.focus({ preventScroll: true });
@@ -1810,14 +2101,15 @@
 
       // -- Inspección (INSPECCIONES LINEAS_Form) --
 
+      const BOTON_GUARDAR_PDF = '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + ' Guardar y generar PDF</button>';
+
       function formularioInspeccion(ctx) {
-        const fotos = '<section class="ln-af-seccion ln-af-extra"><h4 class="ln-af-titulo">' + icono('images') + ' FOTOGRAFÍAS <span class="ln-tenue">(del sistema nuevo, opcional)</span></h4>' +
-          '<label class="ln-upload">' + icono('images') + '<span><b>Agregar fotografías</b><small>Se guardan en la carpeta de evidencia del NUCO en Drive.</small></span>' +
+        const pasos = PASOS_FORMULARIO.INSPECCION;
+        const fotos = '<section class="ln-af-seccion ln-af-extra">' +
+          '<label class="ln-upload">' + icono('camera') + '<span><b>Tomar o agregar fotografías</b><small>Se guardan en la carpeta de evidencia del NUCO en Drive.</small></span>' +
           '<input type="file" id="cap-fotos" accept="image/*" capture="environment" multiple /></label><div class="ln-fotos-lista" id="cap-fotos-lista"></div></section>';
-        return htmlFormularioAppSheet(ctx.formulario) + fotos +
-          '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div>' +
-          '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
-            '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + ' Guardar y generar PDF</button></div>';
+        return htmlPasosAppSheet(ctx.formulario, pasos, { [pasos.findIndex((p) => p.desde === 'extra:FOTOS')]: fotos }) +
+          '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div>' + htmlAccionesPasos(BOTON_GUARDAR_PDF);
       }
 
       function iniciarFormularioInspeccion() {
@@ -1855,10 +2147,8 @@
       // -- Responsiva (RESPONSIVAS LINEAS_Form) --
 
       function formularioResponsiva(ctx) {
-        return htmlFormularioAppSheet(ctx.formulario) +
-          '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div>' +
-          '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
-            '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + ' Guardar y generar PDF</button></div>';
+        return htmlPasosAppSheet(ctx.formulario, PASOS_FORMULARIO.RESPONSIVA) +
+          '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div>' + htmlAccionesPasos(BOTON_GUARDAR_PDF);
       }
 
       function iniciarFormularioResponsiva() {
@@ -1913,9 +2203,8 @@
           captura.carpetaId = carpeta.carpetaId;
           captura.fotosCarpetaId = carpeta.fotosCarpetaId || carpeta.carpetaId;
           captura.ruta = carpeta.ruta;
-          $('#ln-captura-subtitulo', raiz).textContent = tipo === 'INSPECCION'
-            ? 'Mismo formulario que en AppSheet: los campos cambian según el TIPO.'
-            : 'Mismo formulario que en AppSheet. La firma de Control Interno es obligatoria.';
+          const valorDe = (c) => ((ctx.formulario || []).filter((e) => e.columna === c)[0] || {}).valor || '';
+          $('#ln-captura-subtitulo', raiz).textContent = ['NUCO ' + (valorDe('NUCO') || '—'), valorDe('MODELO'), valorDe('RESPONSABLE')].filter(Boolean).join(' · ');
           if (tipo === 'INSPECCION') {
             $('#ln-captura-cuerpo', raiz).innerHTML = formularioInspeccion(ctx);
             pintarIconos($('#ln-captura-cuerpo', raiz));
@@ -1947,6 +2236,7 @@
       }
 
       function cargarHistorial(id, nombre) {
+        if (nombre) nombreHistorial = nombre; else nombre = nombreHistorial;
         const pila0 = pila.length;
         llamar('apiLineasHistorial', id).then((h) => {
           const cont = $('#ln-historial', raiz);
@@ -1959,6 +2249,7 @@
       }
 
       function pintarHistorial(cont, eventos, nombre) {
+        contarEnPestana('historial', eventos.length);
         const conteo = contarPor(eventos, 'movimiento');
         const movimientos = Object.keys(conteo).sort((a, b) => conteo[b] - conteo[a] || a.localeCompare(b));
         cont.innerHTML = '<div class="card ln-card ln-historial">' +
@@ -2465,6 +2756,7 @@
       }
 
       let elementosAlta = [];
+      let pasosAlta = null;
       function abrirAlta() {
         const cuerpo = $('#ln-op-campos');
         $('#ln-op-modal-titulo').textContent = cfg.textoAlta;
@@ -2474,10 +2766,32 @@
         llamar('apiLineasFormularioOperativa', tipo).then((elementos) => {
           if (!vigente() || modal.hidden) return;
           elementosAlta = elementos;
-          cuerpo.innerHTML = htmlFormularioAppSheet(elementos);
+          const pasos = PASOS_FORMULARIO[tipo];
+          cuerpo.innerHTML = pasos ? htmlPasosAppSheet(elementos, pasos) : htmlFormularioAppSheet(elementos);
           activarCombosEn(cuerpo, elementosAlta);
           actualizarDerivadosEn(cuerpo, elementosAlta);
-          const primero = cuerpo.querySelector('input:not([readonly]), select, textarea');
+          pasosAlta = null;
+          const acciones = $('#ln-op-alta-form .ln-captura-acciones');
+          acciones.querySelectorAll('[data-paso-atras], [data-paso-siguiente], .form-cuenta').forEach((b) => b.remove());
+          acciones.classList.toggle('ln-acciones-pasos', !!pasos);
+          $('#ln-op-guardar').hidden = false;
+          if (pasos) {
+            acciones.insertAdjacentHTML('beforeend', '<span class="form-cuenta" aria-live="polite"></span>' +
+              '<button type="button" class="secondary" data-paso-atras hidden>' + icono('chevron-left') + ' Atrás</button>' +
+              '<button type="button" data-paso-siguiente>Siguiente ' + icono('chevron-right') + '</button>');
+            acciones.appendChild($('#ln-op-guardar'));
+            pasosAlta = activarPasos(cuerpo, {
+              atras: acciones.querySelector('[data-paso-atras]'), siguiente: acciones.querySelector('[data-paso-siguiente]'),
+              guardar: $('#ln-op-guardar'), cuenta: acciones.querySelector('.form-cuenta'),
+              validar: (seccion) => {
+                const errores = erroresFormularioEn(cuerpo, elementosAlta, '').filter((x) => seccion.querySelector('[data-af-columna="' + CSS.escape(x.columna) + '"]'));
+                marcarErroresEn(cuerpo, errores.map((x) => ({ columna: x.columna, msg: x.corto })));
+                $('#ln-op-alta-error').hidden = true;
+                return errores;
+              },
+            });
+          }
+          const primero = cuerpo.querySelector('.form-paso:not([hidden]) input:not([readonly]), .form-paso:not([hidden]) select') || cuerpo.querySelector('input:not([readonly]), select, textarea');
           if (primero) primero.focus();
         }).catch((e) => { cuerpo.innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>'; });
       }
@@ -2558,6 +2872,8 @@
         const cuerpo = $('#ln-op-campos');
         const errores = erroresFormularioEn(cuerpo, elementosAlta, '');
         if (errores.length) {
+          if (pasosAlta) pasosAlta.irAlCampo(errores[0].columna);
+          marcarErroresEn(cuerpo, errores.map((x) => ({ columna: x.columna, msg: x.corto })));
           const box = $('#ln-op-alta-error');
           box.textContent = errores.map((x) => x.msg).slice(0, 6).join(' · ');
           box.hidden = false;

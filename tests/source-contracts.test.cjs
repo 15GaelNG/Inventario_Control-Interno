@@ -417,3 +417,36 @@ test('todos los módulos tienen KPIs con línea lateral y la tarjeta se llama De
   assert.match(lineas, /' Detalles<\/h3>'/);
   assert.doesNotMatch(lineas, /Detalles para copiar|se escriben aquí antes de copiar/);
 });
+
+test('experiencia de uso: menú en celular, ficha en pestañas y formularios por pasos', () => {
+  const index = read('src/html/Index.html');
+  const movil = read('src/html/shell-movil.html');
+  const lineas = read('src/html/js/lineas.html');
+  const estilos = read('src/html/lineas-estilos.html');
+  // Menú en celular: archivo aparte, incluido al final
+  assert.match(index, /include\('html\/shell-movil'\)/);
+  assert.match(movil, /@media \(max-width: 900px\)/);
+  assert.match(movil, /shell-menu-abierto/);
+  // Ficha: resumen rápido + pestañas; documentos como lista
+  assert.match(lineas, /function fichaEnPestanas\(general, detalles, conDocumentos\)/);
+  assert.match(lineas, /class="ln-resumen-rapido"/);
+  assert.match(lineas, /<ul class="ln-docs">/);
+  // Formularios por pasos con el mismo marcado del componente Formulario
+  const pasos = lineas.slice(lineas.indexOf('const PASOS_FORMULARIO'), lineas.indexOf('function repartirEnPasos'));
+  ['INSPECCION', 'RESPONSIVA', 'REGISTRO', 'SOLICITUD'].forEach((k) => assert.ok(pasos.includes(k + ': ['), k));
+  assert.match(lineas, /class="form-pasos"/);
+  assert.match(lineas, /class="form-paso-chip"/);
+  assert.match(lineas, /function activarPasos\(cont, cfg\)/);
+  assert.match(lineas, /function marcarErroresEn\(cuerpo, errores\)/);
+  assert.match(lineas, /libre: !!id/);
+  // Repartir en pasos conserva el orden del AppSheet
+  const cuerpo = lineas.slice(lineas.indexOf('function repartirEnPasos'), lineas.indexOf('/** Indicador de pasos'));
+  const repartir = new Function(cuerpo + '\nreturn repartirEnPasos;')();
+  const grupos = repartir([{ tipo: 'campo', columna: 'A' }, { tipo: 'campo', columna: 'B' }, { tipo: 'titulo', texto: 'S' }, { tipo: 'campo', columna: 'C' }],
+    [{ desde: 'A' }, { desde: 'titulo:S' }]);
+  assert.deepEqual(grupos.map((g) => g.map((e) => e.columna || e.texto)), [['A', 'B'], ['C']]);
+  // En celular el modal ocupa la pantalla y el formulario desplaza con el pie a la vista
+  assert.match(estilos, /height: 100dvh/);
+  assert.match(estilos, /\.ln-captura-modal \.modal-form-scroll, #ln-op-modal \.modal-form-scroll \{ max-height: none; flex: 1 1 auto; min-height: 0; overflow-y: auto; \}/);
+  assert.match(lineas, /matchMedia\('\(max-width: 700px\)'\)\.matches \? 'tarjetas' : 'tabla'/);
+});

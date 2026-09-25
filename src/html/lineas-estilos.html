@@ -495,7 +495,7 @@
   .ln-cuadro-tipo .ln-regla { font-size: 11px; }
 
   /* Detalles para copiar (DETALLES LINEAS TELEFONICAS del AppSheet) */
-  .ln-copiar-cabecera { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .ln-copiar-cabecera { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
   .ln-copiar-cabecera h3 { margin: 0; }
   .ln-copiar-ayuda { font-size: 12px; margin: 6px 0 12px; }
   .ln-copiar-cuerpo { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(0, 1.4fr); gap: 16px; align-items: start; }
@@ -516,4 +516,132 @@
   .ln-movimiento .ico { color: var(--color-accent-hover); }
   /* El DataTable calcula su alto con lo que queda de ventana; en la ficha el historial está abajo y quedaría chico */
   .ln-historial .dt-scroll { max-height: min(70vh, 640px) !important; }
+  /* ================= Experiencia de uso (24-sep): ficha en pestañas, formularios por pasos y celular ================= */
+
+  /* Ficha: resumen rápido dentro del encabezado (lo que más se consulta, sin bajar) */
+  .ln-resumen-rapido {
+    flex: 1 1 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 18px;
+    margin: 4px 0 0; padding-top: 14px; border-top: 1px solid var(--color-border);
+  }
+  .ln-resumen-rapido > div { min-width: 0; }
+  .ln-resumen-rapido dt { font-size: 11px; font-weight: 600; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: .3px; }
+  .ln-resumen-rapido dd { margin: 2px 0 0; font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
+  .ln-ficha-tabs { margin: 4px 0 14px; }
+  [data-ficha-panel][hidden] { display: none; }
+
+  /* Documentos (inspecciones y responsivas) como lista: se lee igual en escritorio y en celular */
+  .ln-docs { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .ln-doc {
+    display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+    border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface);
+  }
+  .ln-doc.ln-fila-clic:hover { border-color: var(--color-accent); background: var(--color-bg); }
+  .ln-doc-icono {
+    width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+    background: var(--color-primary-soft); color: var(--color-primary);
+  }
+  :root[data-theme="dark"] .ln-doc-icono { color: var(--color-text); }
+  .ln-doc-cuerpo { flex: 1 1 auto; min-width: 0; }
+  .ln-doc-titulo { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .ln-doc-datos { font-size: 12px; color: var(--color-text-muted); margin-top: 3px; overflow-wrap: anywhere; }
+  .ln-doc-acciones { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .ln-doc-acciones button, .ln-doc-acciones a.ln-boton {
+    display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 6px 11px; font-size: 12.5px; font-weight: 600; border-radius: 8px; white-space: nowrap;
+  }
+
+  /* Formularios por pasos (mismo indicador que el componente Formulario) */
+  .ln-pasos-barra {
+    position: sticky; top: -24px; z-index: 5; margin: -4px -4px 14px; padding: 8px 4px 2px;
+    background: var(--color-surface); border-bottom: 1px solid var(--color-border);
+  }
+  .ln-pasos-barra .form-pasos { margin-bottom: 8px; }
+  .ln-pasos-barra .form-paso-chip { min-height: 0; }
+  .ln-paso[hidden] { display: none; }
+  .ln-paso .form-paso-titulo { display: flex; align-items: center; gap: 8px; font-size: 16px; }
+  .ln-paso .form-paso-titulo .ln-icon { color: var(--color-accent-hover); }
+  .ln-acciones-pasos { align-items: center; }
+  .ln-acciones-pasos .ln-pasos-cancelar { margin-right: auto; }
+  .ln-acciones-pasos .form-cuenta { font-size: 12px; color: var(--color-text-muted); margin-right: 4px; }
+  #ln-op-alta-form .ln-acciones-pasos #ln-op-cancelar { margin-right: auto; }
+  #ln-op-campos .form-paso { padding-top: 2px; }
+  /* Error en el campo (mismo aspecto que el componente Formulario) */
+  .ln-af-campo.form-campo-error input, .ln-af-campo.form-campo-error select, .ln-af-campo.form-campo-error textarea,
+  .ln-af-campo.form-campo-error .ln-firma-caja { border-color: var(--color-danger); }
+  .ln-af-campo.form-campo-error .ln-pastillas { outline: 2px solid color-mix(in srgb, var(--color-danger) 55%, transparent); outline-offset: 3px; border-radius: 999px; }
+  .ln-af-campo .form-error-campo { display: block; margin-top: 4px; font-size: 12px; color: var(--color-danger); font-weight: 600; }
+
+  /* Lo que el sistema ya sabe no parece un campo por llenar: se muestra como dato */
+  .ln-af-lectura input, .ln-af-lectura textarea {
+    border: 0; background: transparent; padding: 2px 0; min-height: 0; font-weight: 600; color: var(--color-text); box-shadow: none;
+  }
+  .ln-af-lectura input:focus { box-shadow: none; }
+  /* Identificadores internos: no aportan a quien captura */
+  .ln-af-lectura[data-af-columna="ID"], .ln-af-lectura[data-af-columna="ID LINEA"] { display: none; }
+
+  /* Pantallas grandes solamente (se ocultan en celular para dejar lo esencial) */
+  @media (max-width: 700px) {
+    .ln-solo-escritorio { display: none !important; }
+  }
+
+  /* ---------------- Tableta ---------------- */
+  @media (max-width: 1024px) {
+    .ln-af-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .ln-captura-modal { max-width: 96vw; }
+  }
+
+  /* ---------------- Celular ---------------- */
+  @media (max-width: 700px) {
+    /* KPIs en una franja que se desliza, en vez de ocupar media pantalla */
+    .ln-modulo .stat-row { display: flex; overflow-x: auto; gap: 10px; margin-bottom: 14px; padding-bottom: 4px; scroll-snap-type: x proximity; scrollbar-width: none; }
+    .ln-modulo .stat-row::-webkit-scrollbar, .ln-ficha-tabs::-webkit-scrollbar { display: none; }
+    .ln-ficha-tabs { scrollbar-width: none; }
+    .ln-ficha-tabs .tab-btn .ln-icon { display: none; }
+    /* Tarjetas del inventario más compactas: caben más por pantalla */
+    #ln-telefonicas button.ln-cuadro { min-height: 0; padding: 12px 14px; gap: 4px; }
+    #ln-telefonicas .ln-cuadro-principal { margin-top: 4px; font-size: 16px; }
+    #ln-telefonicas .ln-cuadro-secundario { min-height: 0; }
+    .ln-modulo .stat-tile { flex: 0 0 150px; padding: 12px; gap: 10px; scroll-snap-align: start; }
+    .ln-modulo .stat-icon { width: 34px; height: 34px; font-size: 16px; }
+    .ln-modulo .stat-value { font-size: 18px; }
+    .ln-tabs-fila { align-items: stretch; }
+    .ln-segmentado { width: 100%; }
+    .ln-segmentado button { flex: 1 1 50%; }
+    .ln-modulo .dt-ayuda, .ln-modulo .dt-atajos { display: none; }
+    .ln-modulo .dt-toolbar .dt-buscar { max-width: none; flex: 1 1 100%; }
+
+    /* Ficha */
+    .ln-migas { margin-bottom: 10px; }
+    .ln-migas > span { display: none; }
+    .ln-detalle-header { padding: 14px; gap: 10px; }
+    .ln-detalle-icono { width: 40px; height: 40px; border-radius: 12px; }
+    .ln-detalle-titulo h2 { font-size: 18px; }
+    .ln-detalle-botones { display: grid; grid-template-columns: 1fr 1fr; width: 100%; gap: 8px; }
+    .ln-detalle-botones > button, .ln-detalle-botones > a.ln-boton { width: 100%; white-space: normal; text-align: center; }
+    .ln-resumen-rapido { grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+    .ln-ficha-tabs .tab-btn { padding: 10px 12px; font-size: 13px; }
+    .ln-doc { flex-wrap: wrap; }
+    .ln-doc-acciones { width: 100%; justify-content: stretch; }
+    .ln-doc-acciones > * { flex: 1 1 auto; justify-content: center; }
+    .ln-copiar-cabecera button { width: 100%; }
+
+    /* Formularios: pantalla completa, controles grandes para el dedo y pie fijo con lo necesario */
+    /* El modal ocupa la pantalla: encabezado arriba, el formulario desplaza y el pie queda siempre a la vista */
+    .ln-captura-modal, #ln-op-modal .modal-card {
+      max-width: none; width: 100%; height: 100%; height: 100dvh; min-height: 0; border-radius: 0;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    #ln-modal-captura, #ln-op-modal { padding: 0; align-items: stretch; }
+    .ln-captura-modal .modal-header, #ln-op-modal .modal-header { flex: 0 0 auto; }
+    #ln-op-alta-form { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+    .ln-captura-modal .modal-form-scroll, #ln-op-modal .modal-form-scroll { max-height: none; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+    .ln-af-grid { grid-template-columns: 1fr; }
+    .ln-pastilla { padding: 8px 14px; font-size: 13px; }
+    .ln-af-seccion { padding: 12px 12px 4px; }
+    .ln-acciones-pasos { display: flex; flex-wrap: wrap; gap: 8px; }
+    .ln-acciones-pasos .ln-pasos-cancelar, #ln-op-alta-form .ln-acciones-pasos #ln-op-cancelar { display: none; }
+    .ln-acciones-pasos .form-cuenta { flex: 1 1 100%; text-align: center; margin: 0; }
+    .ln-acciones-pasos > button { flex: 1 1 0; min-width: 0; }
+    .ln-captura-acciones .primary { min-width: 0; }
+    .ln-pasos-barra { top: -16px; }
+  }
 </style>
