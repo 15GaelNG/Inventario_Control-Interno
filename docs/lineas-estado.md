@@ -151,6 +151,28 @@ y capturar responsivas e inspecciones.
   franja deslizable; inventario en tarjetas por defecto (si no hay preferencia guardada) y más compactas;
   botones de la ficha en rejilla de 2; opciones del checklist más grandes para el dedo.
 
+## 0f. Exportar a Excel = base completa del módulo (2026-09-25, commit `cf63f59`)
+
+Antes el botón descargaba lo que se veía (columnas visibles, filtros, búsqueda) y en las bitácoras solo las 5000
+filas más recientes que carga la tabla. Ahora "Exportar a Excel" descarga **todas las filas y todas las columnas**
+de la pestaña del módulo, sin importar filtros:
+
+| Módulo | Pestaña(s) |
+|---|---|
+| Líneas telefónicas (Equipos y Líneas) | LINEAS TELEFONICAS |
+| Inventario de accesorios | ACCESORIOS CELULARES + MOVIMIENTOS_ACCESORIOS (dos hojas en el archivo) |
+| Reactivación / Solicitud | REACTIVACION DE LINEAS / SOLICITUD DE LINEAS |
+| Control de Cambios / Reasignaciones / Desechos | CAMBIOS LINEAS TELEFONICAS / HISTORIAL_REASIGNACIONES / BITACORA DE DESECHO |
+
+- Servidor: `LineasExportar.baseCompleta(modulo)` (`apiLineasExportarBase`). Fechas como fecha de Excel (con hora
+  cuando la tienen), cantidades como número e identificadores (IMEI, SIM, número, folio, NUCO…) como texto para
+  no perder dígitos. PIN, patrones y contraseñas (y su antes/después en CAMBIOS) salen como `••••` si el usuario no
+  es ADMIN. Viaja comprimida (gzip) y el navegador la descomprime.
+- Cliente: `exportarBase(modulo, nombreArchivo)` en `lineas.html`. El **historial de la ficha** sigue exportando lo
+  filtrado (ya es completo por registro y el filtro por movimiento sirve para auditar).
+- Componentes compartidos (avisar a Jorge al unir): `ExportarExcel.descargarLibro` (varias hojas) y el tipo
+  `fechaHora`; `DataTable` acepta `exportar.descargar` y `exportar.titulo`. Sin cambios para quien no los usa.
+
 ## 0e. Captura más clara y velocidad (2026-09-24, commit `218573d`)
 
 - **Detalles** con el diseño de General (`campos()`); los tres datos a escribir son entradas dentro de la lista y
