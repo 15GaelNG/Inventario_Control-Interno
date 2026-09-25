@@ -1799,9 +1799,11 @@
         const lapiz = ev.target.closest('.dt-btn-editar-celda');
         if (lapiz) { iniciarEdicion(lapiz.closest('td')); return; }
 
-        // En pantallas táctiles (sin doble clic ni hover), tocar la fila abre el detalle
+        // Clic en cualquier parte de la fila (no solo el ícono de "Ver detalle")
+        // abre el detalle — en pantallas táctiles siempre fue así (sin doble clic
+        // ni hover); en escritorio antes solo abría con ese ícono exacto.
         const interactivo = ev.target.closest('button, a, input, select, label, .dt-editor');
-        if (esTactil() && conDetalle && !st.editando && !interactivo) abrirPanel(tr.dataset.id);
+        if (conDetalle && !st.editando && !interactivo) abrirPanel(tr.dataset.id);
       });
 
       // Doble clic (atajo para quien ya lo conoce) y F2 con foco en el lápiz, como en Excel
