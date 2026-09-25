@@ -900,7 +900,7 @@
         campo.classList.toggle('ln-af-bloqueado', !editable);
         campo.querySelectorAll('input:not([readonly]), select, textarea, .ln-pastilla, input[type="file"]').forEach((el) => { el.disabled = !editable; });
       });
-      cuerpo.querySelectorAll('.ln-af-seccion').forEach((sec) => { sec.hidden = !sec.querySelector('.ln-af-campo:not([hidden])'); });
+      cuerpo.querySelectorAll('.ln-af-seccion:not(.ln-af-extra)').forEach((sec) => { sec.hidden = !sec.querySelector('.ln-af-campo:not([hidden])'); });
       cuerpo.querySelectorAll('[data-formula]').forEach((el) => {
         if (el.dataset.formula === 'NO_ASIGNACION') return;
         el.textContent = formulaRegistro(el.dataset.formula, valores, ctx.id) || '—';
@@ -1988,7 +1988,7 @@
           campo.hidden = !visible;
           campo.querySelector('.ln-af-req').hidden = !(visible && cumpleCondicion(campo.dataset.requerido, tipo));
         });
-        raiz.querySelectorAll('#ln-captura-cuerpo .ln-af-seccion').forEach((sec) => {
+        raiz.querySelectorAll('#ln-captura-cuerpo .ln-af-seccion:not(.ln-af-extra)').forEach((sec) => {
           sec.hidden = !sec.querySelector('.ln-af-campo:not([hidden])');
         });
         const calif = $('#af-CALIFICACION', raiz);

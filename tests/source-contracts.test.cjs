@@ -485,3 +485,9 @@ test('inspección y responsiva: bloqueo en lista, firmas del sistema, acomodo, f
   // PDF: la firma recortada cabe en 160 × 70
   assert.match(read('src/services/lineas/LineasPdf.gs'), /Math\.min\(1, 160 \/ ancho, 70 \/ alto\)/);
 });
+
+test('la sección de fotos de la inspección no se oculta con las condiciones del AppSheet', () => {
+  const lineas = read('src/html/js/lineas.html');
+  assert.doesNotMatch(lineas, /\.ln-af-seccion'\)\.forEach\(/);
+  assert.match(lineas, /#ln-captura-cuerpo \.ln-af-seccion:not\(\.ln-af-extra\)'\)\.forEach\(/);
+});
