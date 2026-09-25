@@ -1,0 +1,68 @@
+<template id="tpl-reasignaciones-vehiculares">
+  <div class="page-header">
+    <div>
+      <h2><i data-lucide="arrow-left-right" class="ico"></i> Reasignaciones Vehiculares</h2>
+      <p class="page-subtitle">Historial de cambio de responsable de cada vehículo</p>
+    </div>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat-tile">
+      <div class="stat-icon"><i data-lucide="arrow-left-right" class="ico"></i></div>
+      <div><div class="stat-value" id="rv-stat-total">0</div><div class="stat-label">Total</div></div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-icon"><i data-lucide="calendar" class="ico"></i></div>
+      <div><div class="stat-value" id="rv-stat-hoy">0</div><div class="stat-label">Hoy</div></div>
+    </div>
+  </div>
+
+  <div class="tabs-simple" id="rv-tabs">
+    <button type="button" class="tab-btn active" data-tab="lista"><i data-lucide="list" class="ico"></i> Historial</button>
+    <button type="button" class="tab-btn" data-tab="registrar"><i data-lucide="plus" class="ico"></i> Registrar</button>
+  </div>
+
+  <div class="tab-panel" data-tab-panel="registrar" hidden>
+    <div class="card form-card" style="margin-bottom:18px">
+      <div class="form-card-header">
+        <div class="form-card-icon"><i data-lucide="arrow-left-right" class="ico"></i></div>
+        <div>
+          <h3>Registrar reasignación</h3>
+          <p>Cambia el responsable actual de un vehículo</p>
+        </div>
+      </div>
+      <form id="form-reasignacion-vehicular" class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 14px;">
+        <div class="field">
+          <label>Folio del vehículo</label>
+          <input type="text" id="rv-folio" list="rv-folio-lista" autocomplete="off" placeholder="Escribe o elige…" required />
+          <datalist id="rv-folio-lista"></datalist>
+        </div>
+        <div class="field"><label>Fecha de reasignación</label><input type="date" id="rv-fecha" /></div>
+        <div class="field"><label>VIN <span class="auto-tag">auto</span></label><input type="text" id="rv-vin" disabled placeholder="Elige un vehículo" /></div>
+
+        <div class="info-section-title">Responsable saliente (actual)</div>
+        <div class="field"><label>No. de empleado <span class="auto-tag">auto</span></label><input type="text" id="rv-no-empleado-saliente" disabled /></div>
+        <div class="field"><label>Responsable <span class="auto-tag">auto</span></label><input type="text" id="rv-responsable-saliente" disabled /></div>
+        <div class="field"><label>Departamento <span class="auto-tag">auto</span></label><input type="text" id="rv-departamento-saliente" disabled /></div>
+
+        <div class="info-section-title">Responsable entrante (nuevo)</div>
+        <div class="field"><label>No. de empleado</label><input type="text" id="rv-no-empleado-entrante" /></div>
+        <div class="field"><label>Responsable</label><input type="text" id="rv-responsable-entrante" required /></div>
+        <div class="field">
+          <label>Departamento</label>
+          <input type="text" id="rv-departamento-entrante" list="rv-departamento-entrante-lista" autocomplete="off" placeholder="Escribe o elige…" />
+          <datalist id="rv-departamento-entrante-lista"></datalist>
+        </div>
+
+        <div style="grid-column: 1 / -1;"><button type="submit" id="btn-guardar-reasignacion-vehicular"><i data-lucide="arrow-left-right" class="ico"></i> Registrar reasignación</button></div>
+      </form>
+      <div class="error-msg" id="rv-error" hidden></div>
+    </div>
+  </div>
+
+  <div class="tab-panel" data-tab-panel="lista">
+    <div class="card card-compacta">
+      <div id="rv-tabla"></div>
+    </div>
+  </div>
+</template>

@@ -1,0 +1,460 @@
+<script>
+  /**
+   * hologramas.js — Hologramas / tarjetas de combustible.
+   *
+   * Lo propio de este módulo (ver HologramasService.gs para el detalle):
+   * - El folio del vehículo es OPCIONAL: 111 de 255 hologramas de producción son de
+   *   vehículos personales que no están en el catálogo. Si el folio existe, los datos
+   *   del vehículo se llenan solos; si no, se capturan a mano.
+   * - **El catálogo de Vehículos manda**: cuando la unidad existe ahí, la tabla muestra
+   *   SUS datos (no los de esta hoja) y marca la fila como desactualizada si difieren.
+   *   El botón "Actualizar desde el catálogo" escribe la corrección en la hoja.
+   * - La solicitud puede ser PDF o foto.
+   */
+
+  const HOLOGRAMA_BADGE = {
+    HABILITADO: ['cerrada', 'circle-check'],
+    DESHABILITADO: ['abierta', 'ban'],
+  };
+
+  async function abrirSolicitudHolograma(ruta) {
+    const pestana = window.open('', '_blank');   // se abre antes para que no la bloqueen
+    try {
+      pestana.location.href = await callServer('apiUrlSolicitudHolograma', state.token, ruta);
+    } catch (err) {
+      if (pestana) pestana.close();
+      Notificar.error(err.message);
+    }
+  }
+
+  async function initHologramas() {
+    // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
+    const puedeEditar = puedeEditarModulo('hologramas');
+    const modalEditar = document.getElementById('modal-editar-holograma');
+
+    let hologramas = [];
+    let catalogos = {
+      proveedores: ['EOX', 'EDENRED', 'N/A'],
+      razonesSociales: [],
+      estatusEox: ['HABILITADO', 'DESHABILITADO'],
+      estatusVehiculo: ['UTILITARIO', 'PERSONAL'],
+      combustibles: ['MAGNA', 'PREMIUM', 'DIESEL', 'GASOLINA', 'TODOS LOS PRODUCTOS'],
+    };
+
+    function badgeEstatus(valor) {
+      const b = HOLOGRAMA_BADGE[String(valor).toUpperCase()];
+      return b
+        ? `<span class="badge-estado ${b[0]}">${Iconos.svg(b[1])} ${escaparHtml(valor)}</span>`
+        : `<span style="color:var(--color-text-muted)">${escaparHtml(valor || '—')}</span>`;
+    }
+    const pesos = (v) => (v === '' || v === null || v === undefined ? '' : '$' + Number(v).toLocaleString('es-MX'));
+
+    /** Estado frente al catálogo de Vehículos, que es el que manda */
+    const estadoCatalogo = (h) => (!h.EN_CATALOGO ? 'Fuera del catálogo'
+      : h.DESACTUALIZADOS.length ? 'Desactualizado' : 'Al día');
+    const conEstado = (lista) => lista.map((h) => Object.assign({}, h, { CATALOGO: estadoCatalogo(h) }));
+
+    function badgeCatalogo(valor, h) {
+      if (valor === 'Al día') return `<span class="badge-estado cerrada">${Iconos.svg('circle-check')} Al día</span>`;
+      if (valor === 'Desactualizado') {
+        const campos = h.DESACTUALIZADOS.map((c) => ETIQUETA_CAMPO[c] || c).join(', ');
+        return `<span class="badge-estado abierta" title="Difiere del catálogo en: ${escaparHtml(campos)}">
+          ${Iconos.svg('alerta')} Desactualizado</span>`;
+      }
+      return `<span class="badge-estado baja" title="Este vehículo no está en el catálogo: sus datos se capturan aquí">
+        ${Iconos.svg('user')} Fuera del catálogo</span>`;
+    }
+
+    const ETIQUETA_CAMPO = {
+      PLACA: 'placa', MARCA: 'marca', LINEA: 'línea', MODELO: 'año',
+      RESPONSABLE: 'responsable', DEPARTAMENTO: 'departamento', CAPACIDAD: 'capacidad',
+    };
+
+    /** Escribe en la hoja los datos del catálogo (para que AppSheet también los vea) */
+    async function sincronizar(filas, boton) {
+      const pendientes = filas.filter((h) => h.EN_CATALOGO && h.DESACTUALIZADOS.length);
+      if (!pendientes.length) {
+        Notificar.info('Esos hologramas ya están al día con el catálogo');
+        return;
+      }
+      const ok = await Confirmar.pedir({
+        titulo: pendientes.length === 1 ? '¿Actualizar desde el catálogo?' : `¿Actualizar ${pendientes.length} hologramas?`,
+        mensaje: 'Se escribirán en la hoja los datos que hoy tiene el catálogo de Vehículos:',
+        detalle: pendientes.slice(0, 10).map((h) =>
+          `${h.PLACA || h.CALCOMANIA}: ${h.DESACTUALIZADOS.map((c) => ETIQUETA_CAMPO[c] || c).join(', ')}`),
+        textoConfirmar: 'Actualizar',
+      });
+      if (!ok) return;
+      try {
+        const r = await callServer('apiSincronizarHologramas', state.token, pendientes.map((h) => h.ID));
+        const porId = {};
+        (r.filas || []).forEach((f) => { porId[f.ID] = f; });
+        hologramas = hologramas.map((h) => porId[h.ID] || h);
+        tabla.setDatos(conEstado(hologramas));
+        pintarStats();
+        Notificar.exito(`${r.filas.length} ${r.filas.length === 1 ? 'holograma actualizado' : 'hologramas actualizados'} · ${r.campos} datos corregidos`);
+      } catch (err) {
+        Notificar.error('No se pudo actualizar: ' + err.message);
+      }
+    }
+
+    // ----- Tabla -----
+    const tabla = DataTable.crear(document.getElementById('hol-tabla'), {
+      idCampo: 'ID',
+      idTabla: 'hologramas',
+      ordenInicial: { campo: 'FECHA_REGISTRO', dir: 'desc' },
+      textoVacio: 'Todavía no hay hologramas registrados',
+      ayuda: 'El holograma autoriza a cargar combustible en una unidad. Los datos del vehículo se toman del ' +
+        'catálogo de Vehículos, que es el que se mantiene al día: aquí no se editan, se corrigen allá y se ' +
+        'usa "Actualizar desde el catálogo". Los vehículos personales no están en el catálogo, así que esos ' +
+        'sí se capturan aquí. La flecha de cada columna filtra, ordena, fija u oculta.',
+      exportar: { nombreArchivo: 'Hologramas' },
+      alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
+      etiquetaFila: (h) => [h.PLACA, h.CALCOMANIA].filter(Boolean).join(' · '),
+      detalle: { titulo: (h) => 'Holograma ' + (h.PLACA || h.CALCOMANIA || '') },
+      columnas: [
+        { campo: 'PLACA', titulo: 'Placa', tipo: 'texto', fijada: true },
+        { campo: 'CATALOGO', titulo: 'Catálogo', tipo: 'lista', enDetalle: false,
+          render: (v, h) => badgeCatalogo(v, h) },
+        { campo: 'CALCOMANIA', titulo: 'Calcomanía', tipo: 'texto' },
+        { campo: 'PROVEEDOR', titulo: 'Proveedor', tipo: 'lista', opciones: catalogos.proveedores },
+        { campo: 'ESTATUS_EOX', titulo: 'Estatus', tipo: 'lista',
+          opciones: catalogos.estatusEox, render: (v) => badgeEstatus(v) },
+        { campo: 'COMBUSTIBLE', titulo: 'Combustible', tipo: 'lista', opciones: catalogos.combustibles },
+        { campo: 'AUTORIZADO_PESOS', titulo: 'Autorizado ($)', tipo: 'numero',
+          agregado: 'suma', render: (v) => escaparHtml(pesos(v)), valorExportar: (h) => h.AUTORIZADO_PESOS },
+        { campo: 'AUTORIZADO_LITROS', titulo: 'Autorizado (L)', tipo: 'numero', agregado: 'suma' },
+        { campo: 'ESTATUS_VEHICULO', titulo: 'Uso', tipo: 'lista', opciones: catalogos.estatusVehiculo },
+        { campo: 'MARCA', titulo: 'Marca', tipo: 'lista' },
+        { campo: 'LINEA', titulo: 'Línea', tipo: 'lista' },
+        { campo: 'MODELO', titulo: 'Año', tipo: 'texto' },
+        { campo: 'RESPONSABLE', titulo: 'Responsable', tipo: 'texto' },
+        { campo: 'DEPARTAMENTO', titulo: 'Departamento', tipo: 'lista' },
+        { campo: 'RAZON_SOCIAL', titulo: 'Razón social', tipo: 'lista', opciones: catalogos.razonesSociales },
+        { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', visible: false },
+        { campo: 'SERIE_VEHICULO', titulo: 'Serie', tipo: 'texto', visible: false },
+        { campo: 'CAPACIDAD', titulo: 'Capacidad (L)', tipo: 'numero', visible: false },
+        { campo: 'FECHA_REGISTRO', titulo: 'Registro', tipo: 'fecha', visible: false },
+        { campo: 'FECHA_MODIFICACION', titulo: 'Última modificación', tipo: 'fecha', visible: false },
+        {
+          campo: 'SOLICITUD', titulo: 'Solicitud', filtrable: false, ordenable: false, enDetalle: false,
+          render: (ruta) => (ruta
+            ? `<button type="button" class="secondary btn-ver-solicitud" data-ruta="${escaparHtml(ruta)}" style="padding:4px 8px; display:inline-flex; align-items:center; gap:5px">${Iconos.svg(/\.pdf$/i.test(ruta) ? 'documento' : 'imagen')} Ver</button>`
+            : '—'),
+        },
+      ],
+      accionesFila: [].concat(
+        puedeEditar ? [{
+          icono: 'restablecer', titulo: 'Actualizar desde el catálogo de Vehículos',
+          visible: (h) => h.EN_CATALOGO && h.DESACTUALIZADOS.length > 0,
+          alHacer: (h) => sincronizar([h]),
+        }] : [],
+        puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (h) => abrirEditarHolograma(h) }] : []
+      ),
+      accionesSeleccion: puedeEditar ? [{
+        icono: 'restablecer', texto: 'Actualizar desde el catálogo',
+        alHacer: (filas) => sincronizar(filas),
+      }] : [],
+      seleccionable: true,
+      alEliminar: puedeEditar ? async (filas) => {
+        await callServer('apiEliminarHologramas', state.token, filas.map((f) => f.ID));
+        invalidarCacheLista('apiListarHologramas', state.token);
+        const ids = new Set(filas.map((f) => f.ID));
+        hologramas = hologramas.filter((h) => !ids.has(h.ID));
+        tabla.setDatos(conEstado(hologramas));
+        pintarStats();
+      } : null,
+      motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
+    });
+
+    document.getElementById('hol-tabla').addEventListener('click', (ev) => {
+      const btn = ev.target.closest('.btn-ver-solicitud');
+      if (btn) abrirSolicitudHolograma(btn.dataset.ruta);
+    });
+
+    /** Ventana de edición general (todos los campos capturables de golpe, en vez de
+     *  celda por celda) — los datos del vehículo solo los acepta el servidor si el
+     *  holograma es de un vehículo fuera del catálogo (personal); si no, rechaza esos
+     *  campos con un mensaje claro, igual que ya hacía la edición en la celda. */
+    function llenarSelectHolograma(id, valores, actual) {
+      const el = document.getElementById(id);
+      el.innerHTML = '<option value="">Selecciona…</option>' +
+        (valores || []).map((v) => `<option value="${v}">${v}</option>`).join('');
+      el.value = actual || '';
+    }
+    function abrirEditarHolograma(h) {
+      document.getElementById('editar-holograma-id').value = h.ID;
+      document.getElementById('editar-holograma-label').textContent = [h.PLACA, h.CALCOMANIA].filter(Boolean).join(' · ');
+      document.getElementById('editar-holograma-calcomania').value = h.CALCOMANIA || '';
+      llenarSelectHolograma('editar-holograma-proveedor', catalogos.proveedores, h.PROVEEDOR);
+      llenarSelectHolograma('editar-holograma-estatus-eox', catalogos.estatusEox, h.ESTATUS_EOX);
+      llenarSelectHolograma('editar-holograma-combustible', catalogos.combustibles, h.COMBUSTIBLE);
+      document.getElementById('editar-holograma-autorizado-pesos').value = h.AUTORIZADO_PESOS || '';
+      document.getElementById('editar-holograma-autorizado-litros').value = h.AUTORIZADO_LITROS || '';
+      llenarSelectHolograma('editar-holograma-estatus-vehiculo', catalogos.estatusVehiculo, h.ESTATUS_VEHICULO);
+      document.getElementById('editar-holograma-placa').value = h.PLACA || '';
+      document.getElementById('editar-holograma-marca').value = h.MARCA || '';
+      document.getElementById('editar-holograma-linea').value = h.LINEA || '';
+      document.getElementById('editar-holograma-modelo').value = h.MODELO || '';
+      document.getElementById('editar-holograma-responsable').value = h.RESPONSABLE || '';
+      document.getElementById('editar-holograma-departamento').value = h.DEPARTAMENTO || '';
+      llenarSelectHolograma('editar-holograma-razon-social', catalogos.razonesSociales, h.RAZON_SOCIAL);
+      document.getElementById('editar-holograma-serie-vehiculo').value = h.SERIE_VEHICULO || '';
+      document.getElementById('editar-holograma-capacidad').value = h.CAPACIDAD || '';
+      // Los datos del vehículo (los del bloque de abajo) no se pueden editar si está en
+      // catálogo — se deshabilitan aquí para que no dé falsa esperanza de que se guardarán.
+      const soloSiFueraDelCatalogo = ['placa', 'marca', 'linea', 'modelo', 'responsable', 'departamento', 'serie-vehiculo', 'capacidad'];
+      soloSiFueraDelCatalogo.forEach((id) => {
+        document.getElementById('editar-holograma-' + id).disabled = !!h.EN_CATALOGO;
+      });
+      document.getElementById('editar-holograma-razon-social').disabled = !!h.EN_CATALOGO;
+      document.getElementById('editar-holograma-error').hidden = true;
+      modalEditar.hidden = false;
+    }
+    function cerrarEditarHolograma() {
+      modalEditar.hidden = true;
+      document.getElementById('form-editar-holograma').reset();
+      document.getElementById('editar-holograma-error').hidden = true;
+    }
+    document.getElementById('btn-cancelar-editar-holograma').addEventListener('click', cerrarEditarHolograma);
+    modalEditar.addEventListener('click', (ev) => { if (ev.target === modalEditar) cerrarEditarHolograma(); });
+
+    document.getElementById('form-editar-holograma').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('editar-holograma-error');
+      errorBox.hidden = true;
+      const id = document.getElementById('editar-holograma-id').value;
+      const original = hologramas.find((h) => h.ID === id) || {};
+      const val = (id) => document.getElementById(id).value.trim();
+      const nuevo = {
+        CALCOMANIA: val('editar-holograma-calcomania'),
+        PROVEEDOR: val('editar-holograma-proveedor'),
+        ESTATUS_EOX: val('editar-holograma-estatus-eox'),
+        COMBUSTIBLE: val('editar-holograma-combustible'),
+        AUTORIZADO_PESOS: val('editar-holograma-autorizado-pesos'),
+        AUTORIZADO_LITROS: val('editar-holograma-autorizado-litros'),
+        ESTATUS_VEHICULO: val('editar-holograma-estatus-vehiculo'),
+        PLACA: val('editar-holograma-placa'),
+        MARCA: val('editar-holograma-marca'),
+        LINEA: val('editar-holograma-linea'),
+        MODELO: val('editar-holograma-modelo'),
+        RESPONSABLE: val('editar-holograma-responsable'),
+        DEPARTAMENTO: val('editar-holograma-departamento'),
+        RAZON_SOCIAL: val('editar-holograma-razon-social'),
+        SERIE_VEHICULO: val('editar-holograma-serie-vehiculo'),
+        CAPACIDAD: val('editar-holograma-capacidad'),
+      };
+      const cambios = {};
+      Object.keys(nuevo).forEach((campo) => {
+        if (String(nuevo[campo]) !== String(original[campo] || '')) cambios[campo] = nuevo[campo];
+      });
+      if (!Object.keys(cambios).length) { cerrarEditarHolograma(); return; }
+
+      const btn = ev.target.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      try {
+        const actualizada = await guardarCambiosCampoPorCampo(id, cambios,
+          (id, campo, valor) => callServer('apiActualizarCampoHolograma', state.token, id, campo, valor));
+        invalidarCacheLista('apiListarHologramas', state.token);
+        hologramas = hologramas.map((h) => (h.ID === id ? actualizada : h));
+        tabla.setDatos(conEstado(hologramas));
+        pintarStats();
+        cerrarEditarHolograma();
+        Notificar.exito('Actualizado exitosamente');
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+        Notificar.error('No se pudo actualizar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // ----- KPIs -----
+    function pintarStats() {
+      const habilitados = hologramas.filter((h) => String(h.ESTATUS_EOX).toUpperCase() === 'HABILITADO').length;
+      const personales = hologramas.filter((h) => String(h.ESTATUS_VEHICULO).toUpperCase() === 'PERSONAL').length;
+      const viejos = hologramas.filter((h) => estadoCatalogo(h) === 'Desactualizado').length;
+      document.getElementById('hol-stat-total').textContent = hologramas.length;
+      document.getElementById('hol-stat-habilitados').textContent = habilitados;
+      document.getElementById('hol-stat-deshabilitados').textContent = hologramas.length - habilitados;
+      document.getElementById('hol-stat-personales').textContent = personales;
+      document.getElementById('hol-stat-viejos').textContent = viejos;
+      document.getElementById('hol-kpi-viejos').hidden = viejos === 0;
+    }
+
+    const KPI_FILTRO = {
+      'hol-kpi-habilitados': { campo: 'ESTATUS_EOX', valor: 'HABILITADO' },
+      'hol-kpi-deshabilitados': { campo: 'ESTATUS_EOX', valor: 'DESHABILITADO' },
+      'hol-kpi-personales': { campo: 'ESTATUS_VEHICULO', valor: 'PERSONAL' },
+      'hol-kpi-viejos': { campo: 'CATALOGO', valor: 'Desactualizado' },
+    };
+    function marcarKpiActivo(filtros) {
+      Object.keys(KPI_FILTRO).forEach((id) => {
+        const f = KPI_FILTRO[id];
+        const valores = filtros[f.campo] && filtros[f.campo].valores;
+        document.getElementById(id).classList.toggle('activo', !!(valores && valores.length === 1 && valores[0] === f.valor));
+      });
+    }
+
+    const tabs = Tabs.iniciar(document.getElementById('hol-tabs'), {
+      inicial: 'registros',
+      alCambiar: (nombre) => { if (nombre === 'registros') requestAnimationFrame(tabla.ajustarAlto); },
+    });
+
+    Object.keys(KPI_FILTRO).forEach((id) => {
+      document.getElementById(id).addEventListener('click', (ev) => {
+        const f = KPI_FILTRO[id];
+        const yaActivo = ev.currentTarget.classList.contains('activo');
+        tabs.mostrar('registros');
+        tabla.setFiltro(f.campo, yaActivo ? null : { valores: [f.valor] });
+      });
+    });
+    document.getElementById('hol-kpi-total').addEventListener('click', () => {
+      tabs.mostrar('registros');
+      tabla.limpiarFiltros();
+    });
+
+    // ----- Carga -----
+    async function cargar() {
+      tabla.setCargando(true);
+      try {
+        hologramas = (await callServerListaCacheada('apiListarHologramas', state.token)) || [];
+      } catch (err) {
+        tabla.setError('No se pudieron cargar los hologramas: ' + err.message);
+        return;
+      }
+      tabla.setDatos(conEstado(hologramas));
+      pintarStats();
+    }
+
+    // ----- Alta -----
+    if (!puedeEditar) {
+      document.querySelector('#hol-tabs .tab-btn[data-tab="nuevo"]').remove();
+    } else {
+      catalogos = (await callServerCacheado('apiCatalogosHologramas', state.token)) || catalogos;
+      prepararFormulario();
+    }
+
+    function prepararFormulario() {
+      /** Campos del vehículo que el folio llena solos (y que si no, se capturan).
+       *  ESTATUS_VEHICULO no va aquí: sale de la primera pregunta (flota o personal). */
+      const DEL_VEHICULO = ['SERIE_VEHICULO', 'PLACA', 'MARCA', 'LINEA', 'MODELO', 'RAZON_SOCIAL',
+        'DEPARTAMENTO', 'RESPONSABLE', 'CAPACIDAD'];
+
+      Formulario.crear(document.getElementById('hol-form'), {
+        ancho: 'medio',
+        columnas: 2,
+        panel: true,
+        // La primera pregunta decide el resto: una unidad de la flota se busca por folio
+        // (y sus datos los manda el catálogo); una personal se captura completa.
+        pasos: [
+          { titulo: 'Tipo de unidad', descripcion: '¿De quién es el vehículo al que se le va a poner el holograma?',
+            campos: ['TIPO_UNIDAD'] },
+          { titulo: 'Vehículo', descripcion: 'De la flota: se busca por folio. Personal: se capturan sus datos',
+            campos: ['FOLIO'].concat(DEL_VEHICULO) },
+          { titulo: 'Tarjeta', descripcion: 'Proveedor, calcomanía y lo autorizado',
+            campos: ['PROVEEDOR', 'CALCOMANIA', 'ESTATUS_EOX', 'COMBUSTIBLE', 'AUTORIZADO_PESOS', 'AUTORIZADO_LITROS', 'SOLICITUD'] },
+        ],
+        resumen: true,
+        buscar: {
+          campo: 'FOLIO',
+          etiqueta: 'Folio del vehículo',
+          requerido: false,   // no aplica cuando la unidad es personal
+          visibleSi: (v) => v.TIPO_UNIDAD === 'FLOTA',
+          ayuda: 'Escribe o elige el folio: los datos de la unidad se llenan solos',
+          opciones: async () => ((await callServerCacheado('apiListarVehiculosBasico', state.token)) || []).map((v) => ({
+            valor: v.FOLIO,
+            etiqueta: [v.PLACA, v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' · '),
+          })),
+          cargar: (folio) => callServer('apiDatosVehiculoParaHolograma', state.token, folio),
+          ficha: (d) => ({
+            titulo: d.PLACA || 'Sin placa',
+            subtitulo: [d.MARCA, d.LINEA, d.MODELO].filter(Boolean).join(' · '),
+            avisos: [{ tipo: 'info', texto: 'Los datos se copiaron del catálogo; puedes corregirlos abajo si cambiaron' }],
+            datos: [
+              ['Serie', d.SERIE_VEHICULO],
+              ['Departamento', d.DEPARTAMENTO],
+              ['Responsable', d.RESPONSABLE],
+              ['Razón social', d.RAZON_SOCIAL],
+              ['Capacidad', d.CAPACIDAD ? d.CAPACIDAD + ' L' : ''],
+              ['Estatus en el catálogo', d.estatusVehiculoCatalogo],
+              ['Combustible del vehículo', d.tipoCombustibleVehiculo],
+            ],
+            pie: 'El catálogo de Vehículos manda: estos datos no se editan aquí',
+          }),
+          // Encontrado: se llenan y se bloquean, porque el catálogo manda.
+          // No encontrado: se liberan para capturarlos a mano (vehículo personal).
+          alCargar: (d, form) => DEL_VEHICULO.forEach((campo) => {
+            form.setValor(campo, d[campo] || '');
+            form.setSoloLectura(campo, true, 'Viene del catálogo de Vehículos: se corrige allá');
+          }),
+          alNoEncontrar: (texto, form) => {
+            DEL_VEHICULO.forEach((campo) => form.setSoloLectura(campo, false));
+            Notificar.info(
+              `El folio ${texto} no está en el catálogo: captura los datos del vehículo a mano`, { duracion: 6000 }
+            );
+          },
+        },
+        campos: [
+          {
+            id: 'TIPO_UNIDAD', tipo: 'opciones', etiqueta: '¿Qué tipo de unidad es?', requerido: true,
+            opciones: [
+              { valor: 'FLOTA', etiqueta: 'De la flota', descripcion: 'Está en el catálogo de Vehículos; se busca por folio' },
+              { valor: 'PERSONAL', etiqueta: 'Personal', descripcion: 'De un empleado; sus datos se capturan aquí' },
+            ],
+          },
+          { id: 'PLACA', etiqueta: 'Placa', requerido: true, mayusculas: true, seccion: 'Datos del vehículo' },
+          { id: 'SERIE_VEHICULO', etiqueta: 'Serie del vehículo', requerido: true, mayusculas: true },
+          { id: 'MARCA', etiqueta: 'Marca', requerido: true, mayusculas: true },
+          { id: 'LINEA', etiqueta: 'Línea', requerido: true, mayusculas: true },
+          { id: 'MODELO', etiqueta: 'Año', requerido: true, mayusculas: true },
+          { id: 'RESPONSABLE', etiqueta: 'Responsable', requerido: true },
+          { id: 'DEPARTAMENTO', etiqueta: 'Departamento', requerido: true, mayusculas: true },
+          { id: 'RAZON_SOCIAL', etiqueta: 'Razón social del contrato', tipo: 'lista', requerido: true,
+            opciones: catalogos.razonesSociales },
+          { id: 'CAPACIDAD', etiqueta: 'Capacidad del tanque (L)', tipo: 'numero', min: 0, requerido: true },
+
+          { id: 'PROVEEDOR', etiqueta: 'Proveedor', tipo: 'lista', requerido: true,
+            opciones: catalogos.proveedores, seccion: 'Tarjeta de combustible' },
+          { id: 'CALCOMANIA', etiqueta: 'Calcomanía', requerido: true, mayusculas: true,
+            ayuda: 'El código impreso en la calcomanía; no se puede repetir' },
+          { id: 'ESTATUS_EOX', etiqueta: 'Estatus', tipo: 'lista', requerido: true,
+            opciones: catalogos.estatusEox, valor: 'HABILITADO' },
+          { id: 'COMBUSTIBLE', etiqueta: 'Producto autorizado', tipo: 'lista', requerido: true,
+            opciones: catalogos.combustibles, ayuda: 'Lo que puede cargar la tarjeta, no el tipo del vehículo' },
+          { id: 'AUTORIZADO_PESOS', etiqueta: 'Autorizado en pesos', tipo: 'numero', min: 0, requerido: true },
+          { id: 'AUTORIZADO_LITROS', etiqueta: 'Autorizado en litros', tipo: 'numero', min: 0, requerido: true },
+          { id: 'SOLICITUD', etiqueta: 'Solicitud firmada', tipo: 'archivo',
+            acepta: 'application/pdf,image/png,image/jpeg', maxMB: 10, requerido: true,
+            ayuda: 'PDF o foto del formato firmado' },
+        ],
+        // Si cambia la respuesta a personal, los datos vuelven a ser capturables
+        alCambiar: (campo, valores, form) => {
+          if (campo !== 'TIPO_UNIDAD') return;
+          const personal = valores.TIPO_UNIDAD === 'PERSONAL';
+          DEL_VEHICULO.forEach((id) => form.setSoloLectura(id, false));
+          if (personal) form.setValor('FOLIO', '');
+        },
+        textoGuardar: 'Registrar holograma',
+        iconoGuardar: 'save',
+        alGuardar: async (valores, archivos) => {
+          // El uso de la unidad sale de la primera pregunta, no de un campo aparte
+          valores.ESTATUS_VEHICULO = valores.TIPO_UNIDAD === 'PERSONAL' ? 'PERSONAL' : 'UTILITARIO';
+          await callServer('apiRegistrarHolograma', state.token, valores, {
+            base64: await leerArchivoBase64(archivos.SOLICITUD),
+            mimeType: archivos.SOLICITUD.type,
+          });
+        },
+        textoExito: (valores) => 'Holograma registrado para la placa ' + valores.PLACA,
+        alGuardado: async () => {
+          tabs.mostrar('registros');
+          invalidarCacheLista('apiListarHologramas', state.token);
+          await cargar();
+        },
+      });
+    }
+
+    await cargar();
+  }
+</script>

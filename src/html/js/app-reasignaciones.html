@@ -1,0 +1,169 @@
+<script>
+  /**
+   * app-reasignaciones.js — Reasignaciones Vehiculares, en su propio
+   * archivo/<script> por el mismo motivo que Arqueos/Caja Chica (ver
+   * comentario en app-arqueos.html): mantener cada <script> con margen
+   * frente al límite de tamaño de Apps Script. Comparte el mismo scope
+   * global del navegador que app.html (state, callServer, wireTabsSimple,
+   * toastCargando, toastExito, toastError, hoyISO, puedeEditarModulo, etc.)
+   * y el componente DataTable (rama `ayrton`) para la tabla.
+   */
+
+  // ---------- Reasignaciones Vehiculares ----------
+  async function initReasignacionesVehiculares() {
+    wireTabsSimple(document.getElementById('view-container'));
+    // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
+    const puedeEditar = puedeEditarModulo('reasignaciones-vehiculares');
+    if (!puedeEditar) document.querySelector('#rv-tabs .tab-btn[data-tab="registrar"]').remove();
+
+    let vehiculosPorFolio = {};
+    let todasLasReasignaciones = [];
+
+    document.getElementById('rv-fecha').value = hoyISO();
+
+    // Catálogo de vehículos (para el datalist de Folio y para autollenar VIN
+    // + responsable/departamento salientes sin ida y vuelta al servidor).
+    callServerCacheado('apiListarVehiculosBasico', state.token).then((vehiculos) => {
+      (vehiculos || []).forEach((v) => { vehiculosPorFolio[v.FOLIO] = v; });
+      document.getElementById('rv-folio-lista').innerHTML =
+        (vehiculos || []).map((v) => `<option value="${v.FOLIO}"></option>`).join('');
+    }).catch((err) => {
+      console.error('No se pudo cargar el catálogo de vehículos:', err);
+      const errorBox = document.getElementById('rv-error');
+      errorBox.textContent = 'No se pudo cargar el catálogo de vehículos: ' + err.message;
+      errorBox.hidden = false;
+    });
+
+    // Departamento (catálogo real, mismo que usan Vehículos/Uber/Tickets).
+    callServerCacheado('apiListarDepartamentos', state.token).then((departamentos) => {
+      document.getElementById('rv-departamento-entrante-lista').innerHTML =
+        (departamentos || []).map((d) => `<option value="${d}"></option>`).join('');
+    }).catch((err) => {
+      console.error('No se pudo cargar el catálogo de departamentos:', err);
+    });
+
+    document.getElementById('rv-folio').addEventListener('input', (ev) => {
+      const vehiculo = vehiculosPorFolio[ev.target.value];
+      document.getElementById('rv-vin').value = vehiculo ? vehiculo.VIN : '';
+      document.getElementById('rv-no-empleado-saliente').value = vehiculo ? vehiculo.NO_EMPLEADO : '';
+      document.getElementById('rv-responsable-saliente').value = vehiculo ? vehiculo.RESPONSABLE_VEHICULO : '';
+      document.getElementById('rv-departamento-saliente').value = vehiculo ? vehiculo.DEPARTAMENTO : '';
+    });
+
+    const tabla = DataTable.crear(document.getElementById('rv-tabla'), {
+      idCampo: 'ID',
+      idTabla: 'reasignaciones-vehiculares',
+      ordenInicial: { campo: 'FECHA', dir: 'desc' },
+      textoVacio: 'Todavía no hay reasignaciones registradas',
+      ayuda: 'Eliminar aquí NO revierte el responsable actual del vehículo — solo borra el registro del historial.',
+      exportar: { nombreArchivo: 'Reasignaciones Vehiculares' },
+      etiquetaFila: (r) => r.FOLIO_VEHICULO,
+      detalle: { titulo: (r) => 'Folio: ' + (r.FOLIO_VEHICULO || '') },
+      alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
+      columnas: [
+        { campo: 'FOLIO_VEHICULO', titulo: 'Folio', tipo: 'texto', fijada: true },
+        { campo: 'FECHA', titulo: 'Fecha', tipo: 'fecha' },
+        { campo: 'RESPONSABLE_SALIENTE', titulo: 'Responsable saliente', tipo: 'texto' },
+        { campo: 'DEPARTAMENTO_SALIENTE', titulo: 'Departamento saliente', tipo: 'lista' },
+        { campo: 'RESPONSABLE_ENTRANTE', titulo: 'Responsable entrante', tipo: 'texto' },
+        { campo: 'DEPARTAMENTO_ENTRANTE', titulo: 'Departamento entrante', tipo: 'lista' },
+        { campo: 'QUIEN_REGISTRO', titulo: 'Quién registró', tipo: 'lista' },
+        { campo: 'VIN', titulo: 'VIN', tipo: 'texto', visible: false },
+        { campo: 'NUCO', titulo: 'Nuco', tipo: 'texto', visible: false },
+        { campo: 'NO_EMPLEADO_SALIENTE', titulo: 'No. de empleado saliente', tipo: 'texto', visible: false },
+        { campo: 'NO_EMPLEADO_ENTRANTE', titulo: 'No. de empleado entrante', tipo: 'texto', visible: false },
+      ],
+      seleccionable: true,
+      alEliminar: puedeEditar ? async (filas) => {
+        await Promise.all(filas.map((f) => callServer('apiEliminarReasignacionVehicular', state.token, f.ID)));
+        const ids = new Set(filas.map((f) => f.ID));
+        todasLasReasignaciones = todasLasReasignaciones.filter((r) => !ids.has(r.ID));
+        tabla.setDatos(todasLasReasignaciones);
+        pintarStats();
+      } : null,
+      motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
+    });
+
+    // KPI clickeables: Total limpia el filtro, Hoy filtra por la fecha de hoy.
+    const tileTotal = document.getElementById('rv-stat-total').closest('.stat-tile');
+    const tileHoy = document.getElementById('rv-stat-hoy').closest('.stat-tile');
+    [tileTotal, tileHoy].forEach((t) => t.classList.add('stat-tile-clickable'));
+    tileTotal.addEventListener('click', () => tabla.setFiltro('FECHA', null));
+    tileHoy.addEventListener('click', () => {
+      const yaActivo = tileHoy.classList.contains('stat-tile-activo');
+      tabla.setFiltro('FECHA', yaActivo ? null : { op: 'igual', v1: hoyISO() });
+    });
+    function marcarKpiActivo(filtros) {
+      const f = filtros.FECHA;
+      tileHoy.classList.toggle('stat-tile-activo', !!(f && f.op === 'igual' && f.v1 === hoyISO()));
+      tileTotal.classList.toggle('stat-tile-activo', !f);
+    }
+
+    function pintarStats() {
+      document.getElementById('rv-stat-total').textContent = todasLasReasignaciones.length;
+      const hoyStr = hoyISO();
+      document.getElementById('rv-stat-hoy').textContent =
+        todasLasReasignaciones.filter((r) => r.FECHA && r.FECHA.slice(0, 10) === hoyStr).length;
+    }
+
+    async function cargar() {
+      tabla.setCargando(true);
+      try {
+        todasLasReasignaciones = (await callServerListaCacheada('apiListarReasignacionesVehiculares', state.token)) || [];
+      } catch (err) {
+        tabla.setError('No se pudo cargar el historial: ' + err.message);
+        return;
+      }
+      pintarStats();
+      tabla.setDatos(todasLasReasignaciones);
+    }
+
+    document.getElementById('form-reasignacion-vehicular').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('rv-error');
+      errorBox.hidden = true;
+      const btn = document.getElementById('btn-guardar-reasignacion-vehicular');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
+      toastCargando('Registrando…');
+      try {
+        await callServer('apiCrearReasignacionVehicular', state.token, {
+          'Folio Vehiculo': document.getElementById('rv-folio').value.trim(),
+          'Fecha de Reasignacion': document.getElementById('rv-fecha').value,
+          'No Empleado Entrante': document.getElementById('rv-no-empleado-entrante').value.trim(),
+          'Responsable Entrante': document.getElementById('rv-responsable-entrante').value.trim(),
+          'Departamento Entrante': document.getElementById('rv-departamento-entrante').value.trim(),
+        });
+        ev.target.reset();
+        document.getElementById('rv-fecha').value = hoyISO();
+        document.getElementById('rv-vin').value = '';
+        document.getElementById('rv-no-empleado-saliente').value = '';
+        document.getElementById('rv-responsable-saliente').value = '';
+        document.getElementById('rv-departamento-saliente').value = '';
+        // El vehículo reasignado ya trae otro responsable — refresca el
+        // catálogo en memoria (y el caché compartido, que también usan
+        // Sensores/Hologramas/Inspecciones/Verificaciones) para que una
+        // segunda reasignación seguida, o esos otros módulos, no muestren
+        // datos salientes obsoletos.
+        invalidarCacheCatalogo('apiListarVehiculosBasico', state.token);
+        invalidarCacheLista('apiListarReasignacionesVehiculares', state.token);
+        callServerCacheado('apiListarVehiculosBasico', state.token).then((vehiculos) => {
+          vehiculosPorFolio = {};
+          (vehiculos || []).forEach((v) => { vehiculosPorFolio[v.FOLIO] = v; });
+        }).catch(() => {});
+        await cargar();
+        toastExito('Registrado exitosamente');
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+        toastError('No se pudo registrar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+      }
+    });
+
+    await cargar();
+  }
+</script>

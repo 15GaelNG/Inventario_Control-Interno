@@ -1,0 +1,662 @@
+<script>
+  /**
+   * app-cajachica.js — Caja Chica, Cambios de Monto y Cambios Vehículos, en
+   * su propio archivo/<script> por el mismo motivo que Arqueos
+   * (app-arqueos.html): un solo <script> de app.html creciendo sin límite
+   * llegó otra vez cerca del tamaño que ya rompió la carga de TODA la app
+   * una vez (ver comentario en app-arqueos.html) — se parte aquí para
+   * quedar con margen de nuevo. Comparte el mismo scope global del
+   * navegador que app.html (state, callServer, crearTablaInteractiva,
+   * formatearMoneda, toastCargando, slugCampo, fechaParaInput, hoyISO,
+   * etc.) — mismo patrón ya usado por Arqueos.
+   */
+
+  /**
+   * Las 27 columnas editables de la hoja de Cajas Chicas (todo menos ID CCH,
+   * que se genera solo, y CALIFICACION PROMEDIO, que es un promedio calculado
+   * a partir de los Arqueos — módulo que todavía no existe). Mismo patrón
+   * data-driven que CAMPOS_VEHICULO: una sola definición para Registrar y
+   * Editar, agrupada por secciones. Todos los campos "no catalogados" quedan
+   * como texto libre por ahora — se van convirtiendo a lista desplegable
+   * conforme se confirmen los valores reales, igual que se hizo con Vehículos.
+   */
+  const CAMPOS_CAJACHICA = [
+    { grupo: 'Identificación', clave: 'ID CCH', etiqueta: 'ID CCH', tipo: 'text', soloLectura: true, placeholder: 'Se genera solo' },
+    {
+      // En AppSheet, el "Valid If" de este campo era:
+      //   IF(IN([ID CCH], CAJAS CHICAS[ID CCH]), LIST("VIGENTE","CERRADA","EN PROCESO DE CIERRE"), LIST("VIGENTE"))
+      // Es decir: al crear (el ID CCH todavía no existe en la tabla) solo se
+      // permite "VIGENTE"; al editar (el ID CCH ya existe) se puede cambiar
+      // entre las 3. bloqueadoAlCrear + valorPorDefecto replican justo eso.
+      grupo: 'Identificación', clave: 'ESTATUS', etiqueta: 'Estatus', tipo: 'select',
+      opciones: ['VIGENTE', 'CERRADA', 'EN PROCESO DE CIERRE'],
+      bloqueadoAlCrear: true, valorPorDefecto: 'VIGENTE',
+    },
+    {
+      grupo: 'Identificación', clave: 'EMPRESA ORIGEN', etiqueta: 'Empresa origen', tipo: 'select',
+      opciones: ['CIB', 'FRO', 'IID', 'IPQ', 'GPH AC', 'GPH SC', 'MULTI', 'PHC', 'PRE', 'VME'],
+    },
+    { grupo: 'Identificación', clave: 'RESPONSABLE DE CAJA CHICA', etiqueta: 'Responsable', tipo: 'text' },
+    { grupo: 'Identificación', clave: 'PUESTO DE RESPONSABLE', etiqueta: 'Puesto del responsable', tipo: 'text' },
+
+    { grupo: 'Jefe y captura', clave: 'JEFE INMEDIATO DEL REPSONSABLE', etiqueta: 'Jefe inmediato del responsable', tipo: 'text' },
+    {
+      grupo: 'Jefe y captura', clave: 'ADMINISTRADA POR', etiqueta: 'Administrada por', tipo: 'select',
+      opciones: ['RESPONSABLE', 'CAPTURISTA'],
+    },
+    { grupo: 'Jefe y captura', clave: 'CAPTURISTA DE CAJA CHICA', etiqueta: 'Capturista', tipo: 'text' },
+    { grupo: 'Jefe y captura', clave: 'PUESTO DE CAPTURISTA', etiqueta: 'Puesto del capturista', tipo: 'text' },
+
+    { grupo: 'Ubicación', clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select', catalogo: true },
+    { grupo: 'Ubicación', clave: 'OFICINA', etiqueta: 'Oficina', tipo: 'select', catalogo: true },
+    { grupo: 'Ubicación', clave: 'SEDE', etiqueta: 'Sede', tipo: 'select', catalogo: true },
+
+    { grupo: 'Fechas y configuración', clave: 'FECHA DE APERTURA', etiqueta: 'Fecha de apertura', tipo: 'date' },
+    { grupo: 'Fechas y configuración', clave: 'FECHA DE CIERRE', etiqueta: 'Fecha de cierre', tipo: 'date', soloEdicion: true },
+    { grupo: 'Fechas y configuración', clave: 'FECHA DE RESPONSIVA CI', etiqueta: 'Fecha de autorización por DG', tipo: 'date' },
+    {
+      grupo: 'Fechas y configuración', clave: 'TIPO DE AUTORIZACIÓN', etiqueta: 'Tipo de autorización', tipo: 'select',
+      opciones: ['FISICA', 'CORREO'],
+    },
+    { grupo: 'Fechas y configuración', clave: 'MONTO ACTUAL', etiqueta: 'Monto actual', tipo: 'number', moneda: true },
+    {
+      grupo: 'Fechas y configuración', clave: 'METODO DE REEMBOLSO', etiqueta: 'Método de reembolso', tipo: 'select',
+      opciones: ['ECHQ', 'TEA', 'EFEC', 'NA', 'EFEC NA'],
+    },
+
+    { grupo: 'Contacto', clave: 'CORREO ELECTRONICO DE RESPONSABLE', etiqueta: 'Correo del responsable', tipo: 'email' },
+    { grupo: 'Contacto', clave: 'CORREO ELECTRONICO CAPTURISTA', etiqueta: 'Correo del capturista', tipo: 'email' },
+    { grupo: 'Contacto', clave: 'TELEFONO DE RESPONSABLE', etiqueta: 'Teléfono del responsable', tipo: 'text' },
+    { grupo: 'Contacto', clave: 'TELEFONO DE CAPTURISTA', etiqueta: 'Teléfono del capturista', tipo: 'text' },
+
+    {
+      grupo: 'Identificación oficial', clave: 'TIPO IDENTIFICACION RESPONSABLE', etiqueta: 'Tipo de identificación (responsable)', tipo: 'select',
+      opciones: ['INE', 'PASAPORTE'],
+    },
+    { grupo: 'Identificación oficial', clave: 'VIGENCIA IDENTIFICACION OFICIAL RESPONSABLE', etiqueta: 'Vigencia de identificación (responsable)', tipo: 'date' },
+    {
+      grupo: 'Identificación oficial', clave: 'TIPO IDENTIFICACION JEFE DIRECTO', etiqueta: 'Tipo de identificación (jefe directo)', tipo: 'select',
+      opciones: ['INE', 'PASAPORTE'],
+    },
+    { grupo: 'Identificación oficial', clave: 'VIGENCIA IDENTIFICACION OFICIAL JEFE DIRECTO', etiqueta: 'Vigencia de identificación (jefe directo)', tipo: 'date' },
+
+    { grupo: 'Notas', clave: 'OBSERVACIONES', etiqueta: 'Observaciones', tipo: 'text' },
+  ];
+
+  /** Genera los <div class="field"> agrupados por sección para un formulario de caja chica. */
+  function renderCamposCajaChica(prefijo, esEdicion) {
+    const grupos = [];
+    const porGrupo = {};
+    CAMPOS_CAJACHICA.forEach((campo) => {
+      // soloEdicion: campos que no aplican al dar de alta (ej. Fecha de
+      // cierre — no tiene sentido cerrarla antes de que exista).
+      if (campo.soloEdicion && !esEdicion) return;
+      if (!porGrupo[campo.grupo]) { porGrupo[campo.grupo] = []; grupos.push(campo.grupo); }
+      porGrupo[campo.grupo].push(campo);
+    });
+    return grupos.map((grupo) => {
+      const campos = porGrupo[grupo].map((campo) => {
+        const id = prefijo + '-' + slugCampo(campo.clave);
+        const disabled = campo.soloLectura ? ' disabled' : '';
+        const placeholder = campo.placeholder ? ` placeholder="${campo.placeholder}"` : '';
+        // step="any": sin esto, type="number" solo acepta enteros por
+        // default (step="1" implícito) — los montos necesitan decimales.
+        const step = campo.tipo === 'number' ? ' step="any"' : '';
+        // Campos "bloqueados al crear" (ej. Estatus: solo VIGENTE al dar de
+        // alta, editable a sus 3 opciones después) — en Registrar se ven
+        // fijos y deshabilitados; en Editar sí son un select normal.
+        if (campo.tipo === 'select' && campo.bloqueadoAlCrear && !esEdicion) {
+          return `<div class="field"><label>${campo.etiqueta}</label><input type="text" id="${id}" value="${campo.valorPorDefecto}" disabled /></div>`;
+        }
+        if (campo.tipo === 'select' && campo.catalogo) {
+          // catalogo: true — caja de texto con sugerencias (datalist), se
+          // puede escribir una opción nueva que todavía no esté ahí.
+          return `<div class="field"><label>${campo.etiqueta}</label><input type="text" id="${id}" list="${id}-lista" autocomplete="off" placeholder="Escribe o elige…" /><datalist id="${id}-lista"></datalist></div>`;
+        }
+        if (campo.tipo === 'select') {
+          const opciones = (campo.opciones || []).map((o) => `<option value="${o}">${o}</option>`).join('');
+          return `<div class="field"><label>${campo.etiqueta}</label><select id="${id}"><option value="">Selecciona…</option>${opciones}</select></div>`;
+        }
+        const input = `<input type="${campo.tipo}" id="${id}"${step}${disabled}${placeholder} />`;
+        // moneda: solo un "$" fijo a la izquierda, puro visual.
+        if (campo.moneda) {
+          return `<div class="field"><label>${campo.etiqueta}</label><div class="input-moneda-wrap">${input}</div></div>`;
+        }
+        return `<div class="field"><label>${campo.etiqueta}</label>${input}</div>`;
+      }).join('');
+      return `<div class="info-section-title">${grupo}</div>${campos}`;
+    }).join('');
+  }
+
+  /** Lee los valores actuales del formulario, devuelve un objeto {columna real: valor}. */
+  function recolectarDatosCajaChica(prefijo) {
+    const datos = {};
+    CAMPOS_CAJACHICA.forEach((campo) => {
+      if (campo.soloLectura) return;
+      const el = document.getElementById(prefijo + '-' + slugCampo(campo.clave));
+      if (el) datos[campo.clave] = el.value.trim();
+    });
+    return datos;
+  }
+
+  /**
+   * "Administrada por": si es CAPTURISTA se liberan (habilitan) sus 4 campos
+   * de captura (Capturista, Puesto, Correo, Teléfono); si es RESPONSABLE
+   * quedan bloqueados — así funcionaba el formulario original de AppSheet.
+   * limpiarSiBloqueado=true además vacía esos campos al bloquearlos: se usa
+   * al cambiar el select a mano (ya no aplica un capturista que se quitó),
+   * pero NO al abrir Editar (ahí solo se refleja el estado guardado, sin
+   * borrar datos existentes con solo abrir el modal).
+   */
+  const CAMPOS_CAPTURISTA = ['CAPTURISTA DE CAJA CHICA', 'PUESTO DE CAPTURISTA', 'CORREO ELECTRONICO CAPTURISTA', 'TELEFONO DE CAPTURISTA'];
+  function actualizarBloqueoCapturista(prefijo, limpiarSiBloqueado) {
+    const select = document.getElementById(prefijo + '-administrada-por');
+    if (!select) return;
+    const liberar = select.value === 'CAPTURISTA';
+    CAMPOS_CAPTURISTA.forEach((clave) => {
+      const el = document.getElementById(prefijo + '-' + slugCampo(clave));
+      if (!el) return;
+      el.disabled = !liberar;
+      if (!liberar && limpiarSiBloqueado) el.value = '';
+    });
+  }
+
+  /** Llena el formulario con un objeto {columna real: valor} (ej. de buscarPorId). */
+  function poblarFormularioCajaChica(prefijo, datos) {
+    CAMPOS_CAJACHICA.forEach((campo) => {
+      const el = document.getElementById(prefijo + '-' + slugCampo(campo.clave));
+      if (!el) return;
+      const valor = (datos && datos[campo.clave]) || '';
+      el.value = campo.tipo === 'date' ? fechaParaInput(valor) : valor;
+      // ADMINISTRADA POR va antes que los 4 campos de capturista en
+      // CAMPOS_CAJACHICA, así que para cuando este forEach llegue a esos
+      // campos el bloqueo/desbloqueo ya refleja el valor recién cargado.
+      if (campo.clave === 'ADMINISTRADA POR') actualizarBloqueoCapturista(prefijo, false);
+    });
+  }
+
+  // ---------- Caja Chica ----------
+  async function initCajaChica() {
+    wireTabsSimple(document.getElementById('view-container'));
+    // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
+    const puedeEditar = puedeEditarModulo('caja-chica');
+    if (!puedeEditar) document.querySelector('#cch-tabs .tab-btn[data-tab="registrar"]').remove();
+    const modalEditar = document.getElementById('modal-editar-cajachica');
+    let todasLasCajas = [];
+
+    document.getElementById('campos-form-cajachica').innerHTML = renderCamposCajaChica('cch', false);
+    document.getElementById('campos-form-editar-cajachica').innerHTML = renderCamposCajaChica('editar-cajachica', true);
+
+    // Administrada por → Capturista/Puesto/Correo/Teléfono del capturista:
+    // estado inicial (recién armado el formulario, "Administrada por" vacío
+    // → bloqueados) y wiring del cambio manual del select.
+    ['cch', 'editar-cajachica'].forEach((prefijo) => {
+      actualizarBloqueoCapturista(prefijo, false);
+      document.getElementById(prefijo + '-administrada-por').addEventListener('change', () => {
+        actualizarBloqueoCapturista(prefijo, true);
+      });
+    });
+
+    // Departamento / Sede / Oficina: catálogos reales de la hoja
+    // "DEPARTAMENTOS" (distinta de "LISTAS VEHICULOS" — es la que usan
+    // Vehículos/Uber/Tickets), mismas opciones en Registrar y Editar. Son
+    // <input list="..."> — se puede escribir una opción nueva.
+    function llenarSelect(id, valores) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (el.tagName === 'INPUT') {
+        const datalist = document.getElementById(el.getAttribute('list'));
+        if (datalist) datalist.innerHTML = (valores || []).map((v) => `<option value="${v}"></option>`).join('');
+        return;
+      }
+      el.innerHTML = '<option value="">Selecciona…</option>' +
+        (valores || []).map((v) => `<option value="${v}">${v}</option>`).join('');
+    }
+    // En su propia función para correr en paralelo con cargar() más abajo.
+    async function cargarCatalogosCajaChica() {
+      try {
+        const [departamentos, sedes, oficinas] = await Promise.all([
+          callServerCacheado('apiListarDepartamentosCCH', state.token),
+          callServerCacheado('apiListarSedesCCH', state.token),
+          callServerCacheado('apiListarOficinasCCH', state.token),
+        ]);
+        ['cch-departamento', 'editar-cajachica-departamento'].forEach((id) => llenarSelect(id, departamentos));
+        ['cch-sede', 'editar-cajachica-sede'].forEach((id) => llenarSelect(id, sedes));
+        ['cch-oficina', 'editar-cajachica-oficina'].forEach((id) => llenarSelect(id, oficinas));
+      } catch (err) {
+        console.error('No se pudieron cargar los catálogos de Departamento/Sede/Oficina:', err);
+      }
+    }
+
+    function badgeEstatusCaja(estatus) {
+      const valor = String(estatus || '').toUpperCase();
+      if (valor === 'CERRADA') {
+        return '<span class="badge-estado baja"><i data-lucide="ban" class="ico"></i> Cerrada</span>';
+      }
+      if (valor === 'EN PROCESO DE CIERRE') {
+        return '<span class="badge-estado pendiente"><i data-lucide="clock" class="ico"></i> En proceso de cierre</span>';
+      }
+      return '<span class="badge-estado activo"><i data-lucide="circle-check" class="ico"></i> Vigente</span>';
+    }
+
+    const tabla = DataTable.crear(document.getElementById('cch-tabla'), {
+      idCampo: 'ID CCH',
+      idTabla: 'cajas-chicas',
+      textoVacio: 'Todavía no hay cajas chicas registradas',
+      exportar: { nombreArchivo: 'Cajas Chicas' },
+      etiquetaFila: (c) => c.RESPONSABLE || ('ID CCH ' + c['ID CCH']),
+      detalle: { titulo: (c) => 'ID CCH: ' + c['ID CCH'] },
+      alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
+      columnas: [
+        { campo: 'ID CCH', titulo: 'ID CCH', tipo: 'texto', fijada: true },
+        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', render: (v) => badgeEstatusCaja(v) },
+        { campo: 'RESPONSABLE DE CAJA CHICA', titulo: 'Responsable', tipo: 'texto' },
+        { campo: 'DEPARTAMENTO', titulo: 'Departamento', tipo: 'lista' },
+        { campo: 'OFICINA', titulo: 'Oficina', tipo: 'lista' },
+        { campo: 'SEDE', titulo: 'Sede', tipo: 'lista' },
+        { campo: 'MONTO ACTUAL', titulo: 'Monto actual', tipo: 'numero', render: (v) => escaparHtml(formatearMoneda(v)) },
+        { campo: 'EMPRESA ORIGEN', titulo: 'Empresa origen', tipo: 'lista', visible: false },
+        { campo: 'PUESTO DE RESPONSABLE', titulo: 'Puesto del responsable', tipo: 'texto', visible: false },
+        { campo: 'JEFE INMEDIATO DEL REPSONSABLE', titulo: 'Jefe inmediato del responsable', tipo: 'texto', visible: false },
+        { campo: 'ADMINISTRADA POR', titulo: 'Administrada por', tipo: 'lista', visible: false },
+        { campo: 'CAPTURISTA DE CAJA CHICA', titulo: 'Capturista', tipo: 'texto', visible: false },
+        { campo: 'PUESTO DE CAPTURISTA', titulo: 'Puesto del capturista', tipo: 'texto', visible: false },
+        { campo: 'FECHA DE APERTURA', titulo: 'Fecha de apertura', tipo: 'fecha', visible: false },
+        { campo: 'FECHA DE CIERRE', titulo: 'Fecha de cierre', tipo: 'fecha', visible: false },
+        { campo: 'FECHA DE RESPONSIVA CI', titulo: 'Fecha de autorización por DG', tipo: 'fecha', visible: false },
+        { campo: 'TIPO DE AUTORIZACIÓN', titulo: 'Tipo de autorización', tipo: 'lista', visible: false },
+        { campo: 'METODO DE REEMBOLSO', titulo: 'Método de reembolso', tipo: 'lista', visible: false },
+        { campo: 'CORREO ELECTRONICO DE RESPONSABLE', titulo: 'Correo del responsable', tipo: 'texto', visible: false },
+        { campo: 'CORREO ELECTRONICO CAPTURISTA', titulo: 'Correo del capturista', tipo: 'texto', visible: false },
+        { campo: 'TELEFONO DE RESPONSABLE', titulo: 'Teléfono del responsable', tipo: 'texto', visible: false },
+        { campo: 'TELEFONO DE CAPTURISTA', titulo: 'Teléfono del capturista', tipo: 'texto', visible: false },
+        { campo: 'TIPO IDENTIFICACION RESPONSABLE', titulo: 'Tipo de identificación (responsable)', tipo: 'lista', visible: false },
+        { campo: 'VIGENCIA IDENTIFICACION OFICIAL RESPONSABLE', titulo: 'Vigencia de identificación (responsable)', tipo: 'fecha', visible: false },
+        { campo: 'TIPO IDENTIFICACION JEFE DIRECTO', titulo: 'Tipo de identificación (jefe directo)', tipo: 'lista', visible: false },
+        { campo: 'VIGENCIA IDENTIFICACION OFICIAL JEFE DIRECTO', titulo: 'Vigencia de identificación (jefe directo)', tipo: 'fecha', visible: false },
+        { campo: 'OBSERVACIONES', titulo: 'Observaciones', tipo: 'texto', visible: false },
+      ],
+      accionesFila: puedeEditar ? [{
+        icono: 'pencil', titulo: 'Editar', alHacer: (c) => abrirEditarCajaChica(c),
+      }] : [],
+      alEliminar: puedeEditar ? async (filas) => {
+        await Promise.all(filas.map((f) => callServer('apiEliminarCajaChica', state.token, f['ID CCH'])));
+        invalidarCacheLista('apiListarCajasChicasResumen', state.token);
+      } : null,
+      motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
+    });
+
+    const KPI_FILTRO_CCH = { 'cch-stat-vigentes': 'VIGENTE', 'cch-stat-proceso-cierre': 'EN PROCESO DE CIERRE', 'cch-stat-cerradas': 'CERRADA' };
+    const tileTotalCch = document.getElementById('cch-stat-total').closest('.stat-tile');
+    tileTotalCch.classList.add('stat-tile-clickable');
+    tileTotalCch.addEventListener('click', () => tabla.setFiltro('ESTATUS', null));
+    Object.keys(KPI_FILTRO_CCH).forEach((id) => {
+      const tile = document.getElementById(id).closest('.stat-tile');
+      tile.classList.add('stat-tile-clickable');
+      tile.addEventListener('click', () => {
+        const yaActivo = tile.classList.contains('stat-tile-activo');
+        tabla.setFiltro('ESTATUS', yaActivo ? null : { valores: [KPI_FILTRO_CCH[id]] });
+      });
+    });
+    function marcarKpiActivo(filtros) {
+      const valores = filtros.ESTATUS && filtros.ESTATUS.valores;
+      tileTotalCch.classList.toggle('stat-tile-activo', !valores);
+      Object.keys(KPI_FILTRO_CCH).forEach((id) => {
+        document.getElementById(id).closest('.stat-tile').classList.toggle(
+          'stat-tile-activo', !!(valores && valores.length === 1 && valores[0] === KPI_FILTRO_CCH[id])
+        );
+      });
+    }
+
+    async function cargar() {
+      tabla.setCargando(true);
+      try {
+        todasLasCajas = (await callServerListaCacheada('apiListarCajasChicasResumen', state.token)) || [];
+      } catch (err) {
+        tabla.setError('No se pudo cargar el catálogo: ' + err.message);
+        return;
+      }
+
+      document.getElementById('cch-stat-total').textContent = todasLasCajas.length;
+      document.getElementById('cch-stat-vigentes').textContent =
+        todasLasCajas.filter((c) => String(c.ESTATUS || '').toUpperCase() === 'VIGENTE').length;
+      document.getElementById('cch-stat-proceso-cierre').textContent =
+        todasLasCajas.filter((c) => String(c.ESTATUS || '').toUpperCase() === 'EN PROCESO DE CIERRE').length;
+      document.getElementById('cch-stat-cerradas').textContent =
+        todasLasCajas.filter((c) => String(c.ESTATUS || '').toUpperCase() === 'CERRADA').length;
+
+      tabla.setDatos(todasLasCajas);
+    }
+
+    async function abrirEditarCajaChica(resumen) {
+      if (!resumen) return;
+      const id = resumen['ID CCH'];
+      document.getElementById('editar-cajachica-id').value = id;
+      document.getElementById('editar-cajachica-label').textContent = 'ID CCH: ' + id;
+      document.getElementById('editar-cajachica-error').hidden = true;
+      modalEditar.hidden = false;
+      try {
+        const completo = await callServer('apiBuscarCajaChicaPorId', state.token, id);
+        if (completo) poblarFormularioCajaChica('editar-cajachica', completo);
+      } catch (err) {
+        const errorBox = document.getElementById('editar-cajachica-error');
+        errorBox.textContent = 'No se pudo cargar el registro: ' + err.message;
+        errorBox.hidden = false;
+      }
+    }
+    function cerrarEditarCajaChica() {
+      modalEditar.hidden = true;
+      document.getElementById('form-editar-cajachica').reset();
+      document.getElementById('editar-cajachica-error').hidden = true;
+    }
+    document.getElementById('btn-cancelar-editar-cajachica').addEventListener('click', cerrarEditarCajaChica);
+    modalEditar.addEventListener('click', (ev) => { if (ev.target === modalEditar) cerrarEditarCajaChica(); });
+
+    document.getElementById('form-editar-cajachica').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('editar-cajachica-error');
+      errorBox.hidden = true;
+      const btn = document.getElementById('btn-guardar-editar-cajachica');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
+      toastCargando('Guardando cambios…');
+      try {
+        const datos = recolectarDatosCajaChica('editar-cajachica');
+        await callServer('apiActualizarCajaChica', state.token, document.getElementById('editar-cajachica-id').value, datos);
+        cerrarEditarCajaChica();
+        invalidarCacheLista('apiListarCajasChicasResumen', state.token);
+        await cargar();
+        toastExito('Actualizado exitosamente');
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+        toastError('No se pudo actualizar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+      }
+    });
+
+    document.getElementById('form-cajachica').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('cch-error');
+      errorBox.hidden = true;
+      const btn = document.getElementById('btn-guardar-cajachica');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
+      toastCargando('Registrando…');
+      try {
+        const datos = recolectarDatosCajaChica('cch');
+        await callServer('apiCrearCajaChica', state.token, datos);
+        ev.target.reset();
+        invalidarCacheLista('apiListarCajasChicasResumen', state.token);
+        await cargar();
+        toastExito('Registrado exitosamente');
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+        toastError('No se pudo registrar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+      }
+    });
+
+    document.getElementById('btn-calendario-cajachica').addEventListener('click', () => {
+      // "\/\/" (no "//") — ver comentario en app.html, botón de reporte de Vehículos.
+      window.open('https:\/\/script.google.com/a/macros/ciudadmaderas.com/s/AKfycbwAgUrG2tEiZSxMtNO7hvXlyjfurJnuXIVXUDwyJF99Eci6UbvRtJqmpoCfXGGCdWad1A/exec', '_blank', 'noopener');
+    });
+
+    await Promise.all([cargarCatalogosCajaChica(), cargar()]);
+  }
+
+  // ---------- Cambios de Monto (Caja Chica) ----------
+  async function initCambiosMontoCCH() {
+    wireTabsSimple(document.getElementById('view-container'));
+    // Mismo módulo de permisos que Caja Chica (no tiene id propio en Modulos.gs)
+    const puedeEditar = puedeEditarModulo('caja-chica');
+    if (!puedeEditar) document.querySelector('#cm-tabs .tab-btn[data-tab="registrar"]').remove();
+    let cajasPorId = {};
+    let todosLosCambios = [];
+
+    const selectCaja = document.getElementById('cm-id-cch');
+    const campoAnterior = document.getElementById('cm-cantidad-anterior');
+    const tagAnterior = document.getElementById('cm-tag-anterior');
+
+    // cargar() necesita cajasPorId ya lleno (para poner Responsable en cada
+    // renglón), así que no se puede simplemente "correr en paralelo y ya" —
+    // pero SÍ se puede pedir el catálogo y el historial al mismo tiempo, y
+    // solo esperar a que ambos terminen antes de armar la tabla. Memoizada
+    // en una promesa: la primera vez de verdad pide el catálogo; llamadas
+    // posteriores a cargar() (tras crear/eliminar) reusan el mismo resultado
+    // ya resuelto, sin volver a pedirlo ni resetear el <select>.
+    let promesaCatalogoCajas = null;
+    function cargarCatalogoCajas() {
+      if (promesaCatalogoCajas) return promesaCatalogoCajas;
+      promesaCatalogoCajas = (async () => {
+        try {
+          const cajas = await callServerListaCacheada('apiListarCajasChicasResumen', state.token);
+          (cajas || []).forEach((c) => { cajasPorId[c.ID_CCH] = c; });
+          selectCaja.innerHTML = '<option value="">Selecciona…</option>' +
+            (cajas || []).map((c) => `<option value="${c.ID_CCH}">${c.ID_CCH} — ${c.RESPONSABLE || 'Sin responsable'}</option>`).join('');
+        } catch (err) {
+          console.error('No se pudo cargar el catálogo de cajas chicas:', err);
+          const errorBox = document.getElementById('cm-error');
+          errorBox.textContent = 'No se pudo cargar el catálogo de cajas chicas: ' + err.message;
+          errorBox.hidden = false;
+        }
+      })();
+      return promesaCatalogoCajas;
+    }
+    cargarCatalogoCajas(); // arranca de una vez, sin esperar aquí — cargar() la espera abajo
+
+    selectCaja.addEventListener('change', () => {
+      const caja = cajasPorId[selectCaja.value];
+      if (caja) {
+        campoAnterior.value = formatearMoneda(caja.MONTO_ACTUAL || 0);
+        tagAnterior.hidden = false;
+      } else {
+        campoAnterior.value = '';
+        tagAnterior.hidden = true;
+      }
+    });
+
+    function etiquetaTipo(tipo) {
+      const esIncremento = String(tipo || '').toUpperCase() === 'INCREMENTO';
+      return `<span class="tag ${esIncremento ? 'tag-green' : 'tag-gold'}">${tipo || '—'}</span>`;
+    }
+    function nombreResponsable(idCch) {
+      const caja = cajasPorId[idCch];
+      return caja ? (caja.RESPONSABLE || '—') : '—';
+    }
+
+    const tabla = DataTable.crear(document.getElementById('cm-tabla'), {
+      idCampo: 'ID',
+      idTabla: 'cambios-monto-cch',
+      ordenInicial: { campo: 'FECHA', dir: 'desc' },
+      textoVacio: 'Todavía no hay cambios de monto registrados',
+      exportar: { nombreArchivo: 'Cambios de Monto' },
+      etiquetaFila: (c) => c.RESPONSABLE || c.ID_CCH,
+      alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
+      columnas: [
+        { campo: 'ID_CCH', titulo: 'ID CCH', tipo: 'texto', fijada: true },
+        { campo: 'RESPONSABLE', titulo: 'Responsable', tipo: 'texto' },
+        { campo: 'TIPO', titulo: 'Tipo', tipo: 'lista', render: (v) => etiquetaTipo(v) },
+        { campo: 'CANTIDAD', titulo: 'Cantidad', tipo: 'numero', render: (v) => escaparHtml(formatearMoneda(v)) },
+        { campo: 'CANTIDAD_ANTERIOR', titulo: 'Cantidad anterior', tipo: 'numero', render: (v) => escaparHtml(formatearMoneda(v)) },
+        { campo: 'CANTIDAD_ACTUALIZADA', titulo: 'Cantidad actualizada', tipo: 'numero', render: (v) => escaparHtml(formatearMoneda(v)) },
+        { campo: 'FECHA', titulo: 'Fecha', tipo: 'fecha' },
+        { campo: 'QUIEN_REALIZO', titulo: 'Quién realizó', tipo: 'texto' },
+      ],
+      alEliminar: puedeEditar ? async (filas) => {
+        await Promise.all(filas.map((f) => callServer('apiEliminarCambioMontoCCH', state.token, f.ID)));
+        invalidarCacheLista('apiListarCambiosMontoCCH', state.token);
+      } : null,
+      motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
+    });
+
+    const KPI_FILTRO_CM = { 'cmcch-stat-incrementos': 'INCREMENTO', 'cmcch-stat-reducciones': 'REDUCCION' };
+    const tileTotalCm = document.getElementById('cmcch-stat-total').closest('.stat-tile');
+    tileTotalCm.classList.add('stat-tile-clickable');
+    tileTotalCm.addEventListener('click', () => tabla.setFiltro('TIPO', null));
+    Object.keys(KPI_FILTRO_CM).forEach((id) => {
+      const tile = document.getElementById(id).closest('.stat-tile');
+      tile.classList.add('stat-tile-clickable');
+      tile.addEventListener('click', () => {
+        const yaActivo = tile.classList.contains('stat-tile-activo');
+        tabla.setFiltro('TIPO', yaActivo ? null : { valores: [KPI_FILTRO_CM[id]] });
+      });
+    });
+    function marcarKpiActivo(filtros) {
+      const valores = filtros.TIPO && filtros.TIPO.valores;
+      tileTotalCm.classList.toggle('stat-tile-activo', !valores);
+      Object.keys(KPI_FILTRO_CM).forEach((id) => {
+        document.getElementById(id).closest('.stat-tile').classList.toggle(
+          'stat-tile-activo', !!(valores && valores.length === 1 && valores[0] === KPI_FILTRO_CM[id])
+        );
+      });
+    }
+
+    async function cargar() {
+      tabla.setCargando(true);
+      let cambios;
+      try {
+        [, cambios] = await Promise.all([
+          cargarCatalogoCajas(),
+          callServerListaCacheada('apiListarCambiosMontoCCH', state.token),
+        ]);
+      } catch (err) {
+        tabla.setError('No se pudo cargar el historial: ' + err.message);
+        return;
+      }
+      // RESPONSABLE no viene del servidor (el historial solo guarda ID CCH) —
+      // se agrega aquí como un dato real más del objeto, para que la tabla
+      // (encabezado, filtro, orden, búsqueda y exportar) lo trate igual que
+      // cualquier otra columna, en vez de solo "pintarlo" en la celda.
+      todosLosCambios = (cambios || []).map((c) => Object.assign({}, c, { RESPONSABLE: nombreResponsable(c.ID_CCH) }));
+
+      document.getElementById('cmcch-stat-total').textContent = todosLosCambios.length;
+      document.getElementById('cmcch-stat-incrementos').textContent =
+        todosLosCambios.filter((c) => String(c.TIPO || '').toUpperCase() === 'INCREMENTO').length;
+      document.getElementById('cmcch-stat-reducciones').textContent =
+        todosLosCambios.filter((c) => String(c.TIPO || '').toUpperCase() === 'REDUCCION').length;
+
+      tabla.setDatos(todosLosCambios);
+    }
+
+    document.getElementById('form-cambio-monto').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('cm-error');
+      errorBox.hidden = true;
+      const btn = document.getElementById('btn-guardar-cambio-monto');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
+      toastCargando('Registrando…');
+      try {
+        await callServer('apiCrearCambioMontoCCH', state.token, {
+          'ID CCH': selectCaja.value,
+          'CANTIDAD ACTUALIZADA': document.getElementById('cm-cantidad-actualizada').value,
+        });
+        ev.target.reset();
+        tagAnterior.hidden = true;
+        // Refresca también el catálogo de cajas chicas en memoria: el monto
+        // actual de la que se acaba de cambiar ya no es el mismo. Se invalida
+        // el caché de ambas listas (esta y la de Caja Chica, que también
+        // muestra MONTO ACTUAL) para no servir el valor viejo hasta que
+        // venzan los 15s solos.
+        invalidarCacheLista('apiListarCajasChicasResumen', state.token);
+        invalidarCacheLista('apiListarCambiosMontoCCH', state.token);
+        const cajas = await callServer('apiListarCajasChicasResumen', state.token);
+        cajasPorId = {};
+        (cajas || []).forEach((c) => { cajasPorId[c.ID_CCH] = c; });
+        selectCaja.innerHTML = '<option value="">Selecciona…</option>' +
+          (cajas || []).map((c) => `<option value="${c.ID_CCH}">${c.ID_CCH} — ${c.RESPONSABLE || 'Sin responsable'}</option>`).join('');
+        await cargar();
+        toastExito('Registrado exitosamente');
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+        toastError('No se pudo registrar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+      }
+    });
+
+    await cargar();
+  }
+
+  // ---------- Cambios Vehículos (bitácora automática, solo lectura) ----------
+  async function initCambiosVehiculos() {
+    let todosLosCambios = [];
+
+    const tabla = DataTable.crear(document.getElementById('cv-tabla'), {
+      idCampo: 'ID',
+      idTabla: 'cambios-vehiculos',
+      ordenInicial: { campo: 'FECHA', dir: 'desc' },
+      textoVacio: 'Todavía no hay cambios registrados',
+      exportar: { nombreArchivo: 'Cambios Vehículos' },
+      etiquetaFila: (c) => [c.FOLIO, c.CAMPO].filter(Boolean).join(' · '),
+      detalle: false, // bitácora de solo lectura, sin panel de detalle ni edición
+      alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
+      columnas: [
+        { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', fijada: true },
+        { campo: 'CAMPO', titulo: 'Campo', tipo: 'texto' },
+        { campo: 'ANTES', titulo: 'Antes', tipo: 'texto',
+          render: (v) => (v ? escaparHtml(v) : '<span class="empty-state" style="padding:0">(vacío)</span>') },
+        { campo: 'DESPUES', titulo: 'Después', tipo: 'texto',
+          render: (v) => (v ? escaparHtml(v) : '<span class="empty-state" style="padding:0">(vacío)</span>') },
+        { campo: 'ACTUALIZADO_POR', titulo: 'Actualizado por', tipo: 'texto' },
+        { campo: 'FECHA', titulo: 'Fecha', tipo: 'fecha' },
+      ],
+    });
+
+    // Solo Total/Hoy son "categorías" clickeables — Vehículos con cambios
+    // es un conteo de folios distintos, no algo filtrable como categoría.
+    const tileTotal = document.getElementById('cv-stat-total').closest('.stat-tile');
+    const tileHoy = document.getElementById('cv-stat-hoy').closest('.stat-tile');
+    [tileTotal, tileHoy].forEach((t) => t.classList.add('stat-tile-clickable'));
+    tileTotal.addEventListener('click', () => tabla.setFiltro('FECHA', null));
+    tileHoy.addEventListener('click', () => {
+      const yaActivo = tileHoy.classList.contains('stat-tile-activo');
+      tabla.setFiltro('FECHA', yaActivo ? null : { op: 'igual', v1: hoyISO() });
+    });
+    function marcarKpiActivo(filtros) {
+      const f = filtros.FECHA;
+      tileHoy.classList.toggle('stat-tile-activo', !!(f && f.op === 'igual' && f.v1 === hoyISO()));
+      tileTotal.classList.toggle('stat-tile-activo', !f);
+    }
+
+    async function cargar() {
+      tabla.setCargando(true);
+      let crudos;
+      try {
+        // apiListarCambiosVehiculos regresa JSON.stringify (ver ClientApi.gs) —
+        // con ~500 filas, google.script.run pierde el arreglo directo de forma
+        // intermitente; como texto viaja confiable.
+        crudos = JSON.parse((await callServerListaCacheada('apiListarCambiosVehiculos', state.token)) || '[]');
+      } catch (err) {
+        tabla.setError('No se pudo cargar el historial: ' + err.message);
+        return;
+      }
+      // Los renglones de antes de este módulo nunca tuvieron ID_CAMBIO asignado
+      // (ver CambiosVehiculosService.gs) — sin un ID único DataTable no puede
+      // llevar el rastro de cada fila, así que se completa uno aquí.
+      todosLosCambios = crudos.map((c, i) => Object.assign({}, c, { ID: c.ID || ('sin-id-' + i) }));
+
+      document.getElementById('cv-stat-total').textContent = todosLosCambios.length;
+      document.getElementById('cv-stat-vehiculos').textContent =
+        new Set(todosLosCambios.map((c) => c.FOLIO).filter(Boolean)).size;
+      const hoyStr = hoyISO();
+      document.getElementById('cv-stat-hoy').textContent =
+        todosLosCambios.filter((c) => c.FECHA && c.FECHA.slice(0, 10) === hoyStr).length;
+
+      tabla.setDatos(todosLosCambios);
+    }
+
+    await cargar();
+  }
+</script>

@@ -1,0 +1,77 @@
+<template id="tpl-cajachica">
+  <div class="page-header">
+    <div>
+      <h2><i data-lucide="wallet" class="ico"></i> Caja Chica</h2>
+      <p class="page-subtitle">Catálogo de cajas chicas — un registro por responsable</p>
+    </div>
+    <div class="page-header-actions">
+      <button type="button" class="externo" id="btn-calendario-cajachica" title="Cronograma de arqueos"><i data-lucide="calendar" class="ico"></i> Cronograma</button>
+    </div>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat-tile">
+      <div class="stat-icon"><i data-lucide="wallet" class="ico"></i></div>
+      <div><div class="stat-value" id="cch-stat-total">0</div><div class="stat-label">Total</div></div>
+    </div>
+    <div class="stat-tile stat-tile-ok">
+      <div class="stat-icon"><i data-lucide="circle-check" class="ico"></i></div>
+      <div><div class="stat-value" id="cch-stat-vigentes">0</div><div class="stat-label">Vigentes</div></div>
+    </div>
+    <div class="stat-tile stat-tile-warn">
+      <div class="stat-icon"><i data-lucide="clock" class="ico"></i></div>
+      <div><div class="stat-value" id="cch-stat-proceso-cierre">0</div><div class="stat-label">En proceso de cierre</div></div>
+    </div>
+    <div class="stat-tile stat-tile-warn">
+      <div class="stat-icon"><i data-lucide="ban" class="ico"></i></div>
+      <div><div class="stat-value" id="cch-stat-cerradas">0</div><div class="stat-label">Cerradas</div></div>
+    </div>
+  </div>
+
+  <div class="tabs-simple" id="cch-tabs">
+    <button type="button" class="tab-btn active" data-tab="lista"><i data-lucide="list" class="ico"></i> Catálogo</button>
+    <button type="button" class="tab-btn" data-tab="registrar"><i data-lucide="plus" class="ico"></i> Registrar</button>
+  </div>
+
+  <div class="tab-panel" data-tab-panel="registrar" hidden>
+    <div class="card form-card" style="margin-bottom:18px">
+      <div class="form-card-header">
+        <div class="form-card-icon"><i data-lucide="wallet" class="ico"></i></div>
+        <div>
+          <h3>Registrar caja chica</h3>
+          <p>Da de alta una nueva caja chica</p>
+        </div>
+      </div>
+      <form id="form-cajachica">
+        <div id="campos-form-cajachica" class="modal-form-scroll grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 14px;"></div>
+        <div style="margin-top:14px;"><button type="submit" id="btn-guardar-cajachica"><i data-lucide="wallet" class="ico"></i> Registrar caja chica</button></div>
+      </form>
+      <div class="error-msg" id="cch-error" hidden></div>
+    </div>
+  </div>
+
+  <div class="tab-panel" data-tab-panel="lista">
+    <div class="card card-compacta">
+      <div id="cch-tabla"></div>
+    </div>
+  </div>
+
+  <!-- Modal: editar caja chica -->
+  <div class="modal-backdrop" id="modal-editar-cajachica" hidden>
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <div>
+          <h3 style="margin:0">Editar caja chica</h3>
+          <p class="modal-subtitle" id="editar-cajachica-label"></p>
+        </div>
+        <button type="button" class="modal-close" id="btn-cancelar-editar-cajachica"><i data-lucide="x" class="ico"></i></button>
+      </div>
+      <form id="form-editar-cajachica">
+        <input type="hidden" id="editar-cajachica-id" />
+        <div id="campos-form-editar-cajachica" class="modal-form-scroll grid" style="grid-template-columns: repeat(2, 1fr); gap: 0 14px;"></div>
+        <div class="error-msg" id="editar-cajachica-error" hidden></div>
+        <button type="submit" id="btn-guardar-editar-cajachica" style="width:100%; margin-top:10px"><i data-lucide="save" class="ico"></i> Guardar cambios</button>
+      </form>
+    </div>
+  </div>
+</template>

@@ -1,0 +1,111 @@
+<template id="tpl-hologramas">
+  <div class="page-header-compacto">
+    <div>
+      <h2><i data-lucide="fuel" class="ico"></i> Hologramas</h2>
+      <p class="page-subtitle">Tarjetas de combustible por unidad — autorización, calcomanía y solicitud</p>
+    </div>
+    <!-- KPIs: clic = filtrar la tabla -->
+    <div class="kpi-chips">
+      <button type="button" class="kpi-chip" id="hol-kpi-total" title="Ver todos los hologramas">
+        <span class="kpi-chip-label">Hologramas</span>
+        <strong class="kpi-chip-value" id="hol-stat-total">0</strong>
+      </button>
+      <button type="button" class="kpi-chip" id="hol-kpi-habilitados" title="Filtrar: habilitados para cargar">
+        <span class="kpi-chip-label">Habilitados</span>
+        <strong class="kpi-chip-value" id="hol-stat-habilitados">0</strong>
+      </button>
+      <button type="button" class="kpi-chip kpi-warn" id="hol-kpi-deshabilitados" title="Filtrar: deshabilitados">
+        <span class="kpi-chip-label">Deshabilitados</span>
+        <strong class="kpi-chip-value" id="hol-stat-deshabilitados">0</strong>
+      </button>
+      <button type="button" class="kpi-chip" id="hol-kpi-personales" title="Filtrar: vehículos personales (no son de la flota)">
+        <span class="kpi-chip-label">Personales</span>
+        <strong class="kpi-chip-value" id="hol-stat-personales">0</strong>
+      </button>
+      <button type="button" class="kpi-chip kpi-danger" id="hol-kpi-viejos" title="Filtrar: difieren del catálogo de Vehículos" hidden>
+        <span class="kpi-chip-label">Desactualizados</span>
+        <strong class="kpi-chip-value" id="hol-stat-viejos">0</strong>
+      </button>
+    </div>
+  </div>
+
+  <div id="hol-tabs">
+    <div class="tabs-lista">
+      <button type="button" class="tab-btn" data-tab="registros"><i data-lucide="table" class="ico"></i> Hologramas</button>
+      <button type="button" class="tab-btn" data-tab="nuevo"><i data-lucide="plus" class="ico"></i> Nuevo holograma</button>
+    </div>
+
+    <!-- Pestaña 1: tabla -->
+    <div class="card card-compacta" data-panel="registros">
+      <div id="hol-tabla"></div>
+    </div>
+
+    <!-- Pestaña 2: alta -->
+    <div class="card form-card" data-panel="nuevo">
+      <div class="form-card-header">
+        <div class="form-card-icon"><i data-lucide="fuel" class="ico"></i></div>
+        <div>
+          <h3>Registrar holograma</h3>
+          <p>Si la unidad está en el catálogo, sus datos se llenan con el folio; si es un vehículo personal, se capturan a mano</p>
+        </div>
+      </div>
+      <div id="hol-form"></div>
+    </div>
+  </div>
+
+  <!-- Modal: editar holograma -->
+  <div class="modal-backdrop" id="modal-editar-holograma" hidden>
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <div>
+          <h3 style="margin:0">Editar holograma</h3>
+          <p class="modal-subtitle" id="editar-holograma-label"></p>
+        </div>
+        <button type="button" class="modal-close" id="btn-cancelar-editar-holograma"><i data-lucide="x" class="ico"></i></button>
+      </div>
+      <form id="form-editar-holograma">
+        <input type="hidden" id="editar-holograma-id" />
+        <div class="modal-form-scroll grid" style="grid-template-columns: repeat(2, 1fr); gap: 0 14px;">
+          <div class="info-section-title" style="grid-column: 1 / -1;">Tarjeta</div>
+          <div class="field"><label>Calcomanía</label><input type="text" id="editar-holograma-calcomania" /></div>
+          <div class="field">
+            <label>Proveedor</label>
+            <select id="editar-holograma-proveedor"><option value="">Selecciona…</option></select>
+          </div>
+          <div class="field">
+            <label>Estatus</label>
+            <select id="editar-holograma-estatus-eox"><option value="">Selecciona…</option></select>
+          </div>
+          <div class="field">
+            <label>Combustible</label>
+            <select id="editar-holograma-combustible"><option value="">Selecciona…</option></select>
+          </div>
+          <div class="field"><label>Autorizado ($)</label><div class="input-moneda-wrap"><input type="number" step="any" id="editar-holograma-autorizado-pesos" /></div></div>
+          <div class="field"><label>Autorizado (L)</label><input type="number" step="any" id="editar-holograma-autorizado-litros" /></div>
+          <div class="field">
+            <label>Uso</label>
+            <select id="editar-holograma-estatus-vehiculo"><option value="">Selecciona…</option></select>
+          </div>
+
+          <div class="info-section-title" style="grid-column: 1 / -1;">
+            Datos del vehículo — solo se editan aquí si es personal (fuera del catálogo)
+          </div>
+          <div class="field"><label>Placa</label><input type="text" id="editar-holograma-placa" /></div>
+          <div class="field"><label>Marca</label><input type="text" id="editar-holograma-marca" /></div>
+          <div class="field"><label>Línea</label><input type="text" id="editar-holograma-linea" /></div>
+          <div class="field"><label>Año</label><input type="text" id="editar-holograma-modelo" /></div>
+          <div class="field"><label>Responsable</label><input type="text" id="editar-holograma-responsable" /></div>
+          <div class="field"><label>Departamento</label><input type="text" id="editar-holograma-departamento" /></div>
+          <div class="field">
+            <label>Razón social</label>
+            <select id="editar-holograma-razon-social"><option value="">Selecciona…</option></select>
+          </div>
+          <div class="field"><label>Serie del vehículo</label><input type="text" id="editar-holograma-serie-vehiculo" /></div>
+          <div class="field"><label>Capacidad (L)</label><input type="number" step="any" id="editar-holograma-capacidad" /></div>
+        </div>
+        <div class="error-msg" id="editar-holograma-error" hidden></div>
+        <button type="submit" style="width:100%; margin-top:10px"><i data-lucide="save" class="ico"></i> Guardar cambios</button>
+      </form>
+    </div>
+  </div>
+</template>

@@ -1,0 +1,108 @@
+<style>
+  /* Prefijo "notif-" en todo: el sistema de toasts propio de la app
+     (ver styles.html, #toast-container / .toast / .toast-exito / .toast-error)
+     ya usa esos mismos nombres de clase con reglas incompatibles (su .toast
+     parte de opacity:0 y solo se ve con .show, que este componente nunca
+     agrega) — sin el prefijo, los toasts de Notificar quedarían invisibles. */
+  .notif-toast-contenedor {
+    position: fixed; right: 20px; bottom: 20px; z-index: 900;
+    display: flex; flex-direction: column; gap: 8px; max-width: min(420px, calc(100vw - 40px));
+  }
+  .notif-toast {
+    display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px;
+    background: var(--color-surface); color: var(--color-text);
+    border: 1px solid var(--color-border); border-left: 4px solid var(--color-primary);
+    border-radius: 10px; box-shadow: var(--shadow-lg); font-size: 13px;
+    animation: notif-toast-entrar .18s ease-out;
+  }
+  .notif-toast.saliendo { animation: notif-toast-salir .18s ease-in forwards; }
+  .notif-toast-exito { border-left-color: var(--color-success); }
+  .notif-toast-error { border-left-color: var(--color-danger); }
+  .notif-toast-icono { flex-shrink: 0; font-size: 16px; line-height: 1; color: var(--color-primary); }
+  .notif-toast-exito .notif-toast-icono { color: var(--color-success); }
+  .notif-toast-error .notif-toast-icono { color: var(--color-danger); }
+  .notif-toast-texto { flex: 1; line-height: 1.4; word-break: break-word; }
+  .notif-toast button { padding: 2px 8px; font-size: 12px; }
+  .notif-toast .notif-toast-cerrar { background: transparent; color: var(--color-text-muted); border: none; }
+  @keyframes notif-toast-entrar { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes notif-toast-salir { to { opacity: 0; transform: translateY(8px); } }
+</style>
+
+<script>
+  /**
+   * Notificar — mensajes breves (toasts) abajo a la derecha. Reemplaza alert().
+   *
+   *   Notificar.exito('Verificación registrada');
+   *   Notificar.error('No se pudo guardar: ' + err.message);    // dura más y se puede cerrar
+   *   Notificar.info('Exportando…', { duracion: 2000 });
+   *   Notificar.exito('Registro archivado', { accion: { texto: 'Deshacer', alHacer: () => … } });
+   *
+   * Se anuncia a lectores de pantalla (aria-live).
+   */
+  const Notificar = (function () {
+    const ICONOS = { exito: 'exito', error: 'alerta', info: 'info' };   // nombres de Iconos
+    const DURACION = { exito: 3500, info: 4000, error: 8000 };
+    let contenedor = null;
+
+    function obtenerContenedor() {
+      if (!contenedor || !document.body.contains(contenedor)) {
+        contenedor = document.createElement('div');
+        contenedor.className = 'notif-toast-contenedor';
+        contenedor.setAttribute('role', 'status');
+        contenedor.setAttribute('aria-live', 'polite');
+        document.body.appendChild(contenedor);
+      }
+      return contenedor;
+    }
+
+    function mostrar(tipo, mensaje, opciones) {
+      opciones = opciones || {};
+      const toast = document.createElement('div');
+      toast.className = 'notif-toast notif-toast-' + tipo;
+
+      const icono = document.createElement('span');
+      icono.className = 'notif-toast-icono';
+      icono.innerHTML = Iconos.svg(ICONOS[tipo]);
+      const texto = document.createElement('span');
+      texto.className = 'notif-toast-texto';
+      texto.textContent = mensaje;
+      toast.append(icono, texto);
+
+      let timer = null;
+      const cerrar = () => {
+        clearTimeout(timer);
+        toast.classList.add('saliendo');
+        setTimeout(() => toast.remove(), 180);
+      };
+
+      if (opciones.accion) {
+        const boton = document.createElement('button');
+        boton.type = 'button';
+        boton.className = 'secondary';
+        boton.textContent = opciones.accion.texto;
+        boton.addEventListener('click', () => { cerrar(); opciones.accion.alHacer(); });
+        toast.appendChild(boton);
+      }
+      const x = document.createElement('button');
+      x.type = 'button';
+      x.className = 'notif-toast-cerrar';
+      x.setAttribute('aria-label', 'Cerrar');
+      x.innerHTML = Iconos.svg('cerrar');
+      x.addEventListener('click', cerrar);
+      toast.appendChild(x);
+
+      obtenerContenedor().appendChild(toast);
+      timer = setTimeout(cerrar, opciones.duracion || DURACION[tipo]);
+      // Pausar mientras el mouse está encima, para alcanzar a leer
+      toast.addEventListener('mouseenter', () => clearTimeout(timer));
+      toast.addEventListener('mouseleave', () => { timer = setTimeout(cerrar, 2000); });
+      return { cerrar };
+    }
+
+    return {
+      exito: (mensaje, opciones) => mostrar('exito', mensaje, opciones),
+      error: (mensaje, opciones) => mostrar('error', mensaje, opciones),
+      info: (mensaje, opciones) => mostrar('info', mensaje, opciones),
+    };
+  })();
+</script>

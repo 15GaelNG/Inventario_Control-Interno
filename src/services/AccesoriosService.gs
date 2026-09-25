@@ -19,19 +19,22 @@
  */
 
 const AccesoriosService = (function () {
-  const COLUMNAS_ARTICULOS = ['ID_Accesorio', 'Categoria', 'Nombre del Articulo', 'Marca'];
-  const COLUMNAS_MOVIMIENTOS = ['ID_Movimiento', 'ID_Accesorio', 'Tipo_movimiento', 'Cantidad'];
+  // Nombres reales ya confirmados — directo por nombre, no por firma de
+  // columnas (evita escanear las ~50 pestañas del spreadsheet con la
+  // caché fría; ver mismo comentario en ArqueosService).
+  const NOMBRE_HOJA_ARTICULOS = 'ACCESORIOS CELULARES';
+  const NOMBRE_HOJA_MOVIMIENTOS = 'MOVIMIENTOS_ACCESORIOS';
 
   function ssId() {
     return Config.SPREADSHEET_IDS.ACCESORIOS();
   }
 
   function hojaArticulos_() {
-    return SheetUtils.getSheetByColumns(ssId(), COLUMNAS_ARTICULOS);
+    return SheetUtils.getSheet(ssId(), NOMBRE_HOJA_ARTICULOS);
   }
 
   function hojaMovimientos_() {
-    return SheetUtils.getSheetByColumns(ssId(), COLUMNAS_MOVIMIENTOS);
+    return SheetUtils.getSheet(ssId(), NOMBRE_HOJA_MOVIMIENTOS);
   }
 
   function articuloDesdeOriginal_(row) {
@@ -57,14 +60,14 @@ const AccesoriosService = (function () {
   }
 
   function listarArticulos(token) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'accesorios');
     const hoja = hojaArticulos_();
     return SheetUtils.getAll(ssId(), hoja.getName()).map(articuloDesdeOriginal_);
   }
 
   /** Catálogo + stock calculado, en una sola llamada (evita N+1 desde el cliente) */
   function listarArticulosConStock(token) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'accesorios');
     const articulos = SheetUtils.getAll(ssId(), hojaArticulos_().getName()).map(articuloDesdeOriginal_);
     const movimientos = SheetUtils.getAll(ssId(), hojaMovimientos_().getName()).map(movimientoDesdeOriginal_);
 
@@ -79,7 +82,7 @@ const AccesoriosService = (function () {
   }
 
   function crearArticulo(token, articulo) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    Permisos.puedeEditar(token, 'accesorios');
     const id = Utilities.getUuid().slice(0, 8);
     SheetUtils.insert(ssId(), hojaArticulos_().getName(), {
       'ID_Accesorio': id,
@@ -91,7 +94,7 @@ const AccesoriosService = (function () {
   }
 
   function actualizarArticulo(token, id, cambios) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    Permisos.puedeEditar(token, 'accesorios');
     const cambiosOriginal = {};
     if (cambios.CATEGORIA !== undefined) cambiosOriginal['Categoria'] = cambios.CATEGORIA;
     if (cambios.NOMBRE !== undefined) cambiosOriginal['Nombre del Articulo'] = cambios.NOMBRE;
@@ -102,7 +105,7 @@ const AccesoriosService = (function () {
 
   /** Registra una entrada o salida de stock y devuelve el stock resultante */
   function registrarMovimiento(token, idArticulo, tipo, cantidad, comentarios) {
-    const sesion = Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    const sesion = Permisos.puedeEditar(token, 'accesorios');
 
     if (tipo !== 'ENTRADA' && tipo !== 'SALIDA') {
       throw new Error('Tipo de movimiento inválido: ' + tipo);
@@ -141,7 +144,7 @@ const AccesoriosService = (function () {
   }
 
   function historialMovimientos(token, idArticulo) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'accesorios');
     return SheetUtils.getAll(ssId(), hojaMovimientos_().getName())
       .map(movimientoDesdeOriginal_)
       .filter((m) => String(m.ID_ARTICULO) === String(idArticulo))

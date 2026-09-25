@@ -15,14 +15,16 @@
  */
 
 const IncidenciasService = (function () {
-  const COLUMNAS = ['ID_INCIDENCIA', 'FOLIO', 'DEPARTAMENTO'];
+  // Nombre real ya confirmado ("INCIDENCIAS") — directo por nombre, no por
+  // firma de columnas (ver mismo comentario en ArqueosService).
+  const NOMBRE_HOJA = 'INCIDENCIAS';
 
   function ssId() {
     return Config.SPREADSHEET_IDS.VEHICULOS();
   }
 
   function hoja_() {
-    return SheetUtils.getSheetByColumns(ssId(), COLUMNAS);
+    return SheetUtils.getSheet(ssId(), NOMBRE_HOJA);
   }
 
   /**
@@ -60,7 +62,7 @@ const IncidenciasService = (function () {
   }
 
   function listar(token) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'incidencias');
     return SheetUtils.getAll(ssId(), hoja_().getName())
       .map(desdeOriginal_)
       .sort((a, b) => new Date(b.FECHA_REGISTRO) - new Date(a.FECHA_REGISTRO));
@@ -68,7 +70,7 @@ const IncidenciasService = (function () {
 
   /** Abre una nueva incidencia (ingreso del vehículo al taller) */
   function crear(token, datos) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    Permisos.puedeEditar(token, 'incidencias');
     if (!datos.FOLIO) throw new Error('El folio del vehículo es obligatorio');
 
     const id = Utilities.getUuid().slice(0, 8);
@@ -94,7 +96,7 @@ const IncidenciasService = (function () {
 
   /** Cierra una incidencia abierta (trabajo realizado + inspección de salida) */
   function cerrar(token, id, datos) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    Permisos.puedeEditar(token, 'incidencias');
     if (!datos.DESCRIPCION_TRABAJO) throw new Error('Describe el trabajo realizado');
 
     SheetUtils.update(ssId(), hoja_().getName(), id, {
@@ -108,7 +110,7 @@ const IncidenciasService = (function () {
 
   /** Corrige cualquier campo de una incidencia existente (abierta o cerrada) */
   function actualizar(token, id, datos) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+    Permisos.puedeEditar(token, 'incidencias');
     const cambios = {};
     if (datos.FOLIO !== undefined) cambios['FOLIO'] = datos.FOLIO;
     if (datos.DEPARTAMENTO !== undefined) cambios['DEPARTAMENTO'] = datos.DEPARTAMENTO;
@@ -129,13 +131,16 @@ const IncidenciasService = (function () {
     if (datos.INSPECCION_SALIDA !== undefined) cambios['INSPECCION SALIDA'] = datos.INSPECCION_SALIDA;
     if (datos.MECANICO !== undefined) cambios['NOMBRE MECANICO'] = datos.MECANICO;
 
-    SheetUtils.update(ssId(), hoja_().getName(), id, cambios, 'ID_INCIDENCIA');
-    return { ID: id };
+    // Regresa el registro ya con el cambio aplicado (no solo el ID): así el
+    // cliente puede refrescar esa fila sola (ej. DataTable.alEditar) sin
+    // tener que recargar todo el historial.
+    const actualizado = SheetUtils.update(ssId(), hoja_().getName(), id, cambios, 'ID_INCIDENCIA');
+    return desdeOriginal_(actualizado);
   }
 
   /** Elimina por completo una incidencia (borrado físico de la fila) — solo ADMIN */
   function eliminar(token, id) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN]);
+    Permisos.puedeEditar(token, 'incidencias');
     const ok = SheetUtils.remove(ssId(), hoja_().getName(), id, 'ID_INCIDENCIA');
     if (!ok) throw new Error('No se encontró la incidencia con ID=' + id);
     return { ID: id };
@@ -148,7 +153,7 @@ const IncidenciasService = (function () {
    */
   function diagnostico(token) {
     try {
-      Auth.validarSesion(token);
+      Permisos.puedeLeer(token, 'incidencias');
       const hoja = hoja_();
       const crudos = SheetUtils.getAll(ssId(), hoja.getName());
       return {

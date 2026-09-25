@@ -6,6 +6,9 @@
  *
  * Hojas previstas en Config.SPREADSHEET_IDS.VEHICULOS():
  *   VEHICULOS          — catálogo de unidades
+ *   CAMBIOS VEHICULOS  — bitácora automática de ediciones (ver
+ *                         CambiosVehiculosService, se llena sola desde
+ *                         actualizar(), nadie la captura a mano)
  *   REASIGNACIONES     — historial de cambio de responsable
  *   VERIFICACIONES     — verificación vehicular periódica
  *   SERVICIOS          — mantenimiento (aceite, llantas, etc.)
@@ -17,6 +20,10 @@ const VehiculosService = (function () {
   // La columna ID real de esta hoja es ID_VEHICULO, no "ID" (a diferencia de
   // las hojas nuevas) — hay que pasarla explícitamente a SheetUtils.update/remove.
   const ID_COLUMN = 'ID_VEHICULO';
+  // Campos tipo archivo (ver buscarPorFolio): en datos migrados de AppSheet
+  // guardan una ruta relativa, no una URL — hay que resolverlos antes de
+  // mandarlos al cliente.
+  const CAMPOS_ARCHIVO = ['RESPONSIVA', 'DOCUMENTO BAJA', 'POLIZA SEGURO', 'ARCHIVO TENENCIA'];
 
   function ssId() {
     return Config.SPREADSHEET_IDS.VEHICULOS();
@@ -31,7 +38,7 @@ const VehiculosService = (function () {
   /** Catálogo completo, todas las columnas. Pesado (648 filas x 41 columnas) —
    * usar listarResumen() para listas/tarjetas y buscarPorFolio() para detalle. */
   function listar(token) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'vehiculos');
     return SheetUtils.getAll(ssId(), SHEET_VEHICULOS).map((row) => {
       const limpio = {};
       Object.keys(row).forEach((k) => { limpio[k] = limpiarValor_(row[k]); });
@@ -41,67 +48,47 @@ const VehiculosService = (function () {
 
   /**
    * Catálogo ligero (FOLIO + datos clave) para autocompletar otros módulos
-   * que referencian un vehículo por folio (ej. Incidencias). Excluye
-   * vehículos dados de baja. MODELO en esta hoja es el año del vehículo,
-   * no el nombre del modelo (ese es LINEA VEHICULO).
+   * que referencian un vehículo por folio (ej. Incidencias, Reasignaciones
+   * Vehiculares). Excluye vehículos dados de baja. MODELO en esta hoja es
+   * el año del vehículo, no el nombre del modelo (ese es LINEA VEHICULO).
    *
    * Optimizado: en vez de leer las 41 columnas completas (SheetUtils.getAll)
-   * solo para quedarse con 6, lee únicamente esas 6 columnas — de ~26,500
-   * celdas a ~3,900.
+   * solo para quedarse con unas cuantas, lee únicamente esas columnas — de
+   * ~26,500 celdas a ~5,800.
    */
+  const COLUMNAS_BASICO = [
+    'FOLIO', 'DEPARTAMENTO', 'MARCA', 'LINEA VEHICULO', 'MODELO', 'ESTATUS',
+    'RESPONSABLE VEHICULO', 'NO EMPLEADO', 'SERIE VEHICULO', 'NUCCO',
+  ];
+
   function listarBasico(token) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'vehiculos');
     const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
-    const lastRow = sheet.getLastRow();
-    if (lastRow < 2) return [];
-
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    const idx = (nombre) => headers.indexOf(nombre);
-    const leerColumna = (nombre) => {
-      const col = idx(nombre);
-      return col === -1 ? [] : sheet.getRange(2, col + 1, lastRow - 1, 1).getValues().map((f) => f[0]);
-    };
-
-    const folios = leerColumna('FOLIO');
-    const deptos = leerColumna('DEPARTAMENTO');
-    const marcas = leerColumna('MARCA');
-    const lineas = leerColumna('LINEA VEHICULO');
-    const modelos = leerColumna('MODELO');
-    const estatus = leerColumna('ESTATUS');
+    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_BASICO);
 
     const resultado = [];
-    for (let i = 0; i < folios.length; i++) {
-      if (!folios[i]) continue;
-      if (String(estatus[i] || '').toUpperCase() === 'BAJA VEHICULAR') continue;
+    for (let i = 0; i < filas; i++) {
+      if (!datos['FOLIO'][i]) continue;
+      if (String(datos['ESTATUS'][i] || '').toUpperCase() === 'BAJA VEHICULAR') continue;
       resultado.push({
-        FOLIO: folios[i],
-        DEPARTAMENTO: deptos[i] || '',
-        MARCA: marcas[i] || '',
-        LINEA_VEHICULO: lineas[i] || '',
-        MODELO: modelos[i] || '',
+        FOLIO: datos['FOLIO'][i],
+        DEPARTAMENTO: datos['DEPARTAMENTO'][i] || '',
+        MARCA: datos['MARCA'][i] || '',
+        LINEA_VEHICULO: datos['LINEA VEHICULO'][i] || '',
+        MODELO: datos['MODELO'][i] || '',
+        RESPONSABLE_VEHICULO: datos['RESPONSABLE VEHICULO'][i] || '',
+        NO_EMPLEADO: datos['NO EMPLEADO'][i] || '',
+        VIN: datos['SERIE VEHICULO'][i] || '',
+        NUCO: datos['NUCCO'][i] || '',
       });
     }
     return resultado.sort((a, b) => String(a.FOLIO).localeCompare(String(b.FOLIO)));
   }
 
   const COLUMNAS_RESUMEN = [
-    'ID_VEHICULO', 'FOLIO', 'DEPARTAMENTO', 'NO ECONOMICO', 'MARCA', 'CLASE',
+    'ID_VEHICULO', 'FOLIO', 'NUCCO', 'DEPARTAMENTO', 'NO ECONOMICO', 'MARCA', 'CLASE',
     'LINEA VEHICULO', 'MODELO', 'COLOR', 'PLACA', 'SEDE', 'ESTATUS',
   ];
-
-  /** Lee solo las columnas dadas (no toda la hoja) — {filas, datos: {columna: [valores]}} */
-  function leerColumnas_(sheet, columnas) {
-    const lastRow = sheet.getLastRow();
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    const datos = {};
-    columnas.forEach((nombre) => {
-      const col = headers.indexOf(nombre);
-      datos[nombre] = (col === -1 || lastRow < 2)
-        ? []
-        : sheet.getRange(2, col + 1, lastRow - 1, 1).getValues().map((f) => f[0]);
-    });
-    return { filas: Math.max(0, lastRow - 1), datos: datos };
-  }
 
   /**
    * Catálogo ligero para la lista/tarjetas del módulo (solo las columnas que
@@ -109,9 +96,9 @@ const VehiculosService = (function () {
    * listarBasico, que es para autocompletar y los excluye).
    */
   function listarResumen(token) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'vehiculos');
     const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
-    const { filas, datos } = leerColumnas_(sheet, COLUMNAS_RESUMEN);
+    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
 
     const resultado = [];
     for (let i = 0; i < filas; i++) {
@@ -119,6 +106,7 @@ const VehiculosService = (function () {
       resultado.push({
         ID_VEHICULO: datos['ID_VEHICULO'][i],
         FOLIO: datos['FOLIO'][i],
+        NUCCO: datos['NUCCO'][i] || '',
         DEPARTAMENTO: datos['DEPARTAMENTO'][i] || '',
         NO_ECONOMICO: datos['NO ECONOMICO'][i] || '',
         MARCA: datos['MARCA'][i] || '',
@@ -141,7 +129,7 @@ const VehiculosService = (function () {
    * más la columna FOLIO para ubicar el renglón, y luego lee solo esa fila.
    */
   function buscarPorFolio(token, folio) {
-    Auth.validarSesion(token);
+    Permisos.puedeLeer(token, 'vehiculos');
     if (!folio) return null;
 
     const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
@@ -169,23 +157,156 @@ const VehiculosService = (function () {
       // google.script.run puede fallar con Date crudo — se manda como texto ISO.
       limpio[h] = valor instanceof Date ? valor.toISOString() : valor;
     });
+
+    // Responsiva/Documento de baja/Póliza/Archivo de tenencia: en datos viejos
+    // (migrados de AppSheet) el valor es una RUTA relativa ("VEHICULOS_Files_/
+    // AUT0017.DOCUMENTO BAJA...pdf"), no una URL — el cliente solo convierte en
+    // link lo que empieza con "http", así que se veían como texto suelto sin
+    // poder abrirse. Se resuelve aquí a la URL real de Drive antes de mandarla
+    // (los archivos subidos con esta app ya guardan la URL directa, así que
+    // esos quedan igual).
+    const indicesArchivo = SheetUtils.indiceDeColumnas(headers, CAMPOS_ARCHIVO);
+    CAMPOS_ARCHIVO.forEach((campo) => {
+      const idx = indicesArchivo[campo];
+      if (idx === -1) return;
+      const headerReal = headers[idx];
+      const valor = limpio[headerReal];
+      if (valor && typeof valor === 'string' && !/^https?:\/\//.test(valor)) {
+        try {
+          const url = DriveUtils.urlDeRutaProfunda(valor, Config.DRIVE_FOLDERS.RAIZ());
+          if (url) limpio[headerReal] = url;
+        } catch (err) {
+          console.error('No se pudo resolver el archivo "' + valor + '": ' + err.message);
+        }
+      }
+    });
+
     return limpio;
   }
 
-  /** Da de alta un vehículo. La columna ID_VEHICULO no la trae SheetUtils.insert
-   * sola (solo autogenera si la columna se llama literalmente "ID") — se genera aquí. */
-  function crear(token, datos) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
-    if (!datos.FOLIO) throw new Error('El folio es obligatorio');
-    const fila = Object.assign({}, datos);
-    fila[ID_COLUMN] = Utilities.getUuid().slice(0, 8);
-    SheetUtils.insert(ssId(), SHEET_VEHICULOS, fila);
-    return { ID: fila[ID_COLUMN] };
+  // Prefijo de folio según Clase — folio = PREFIJO + consecutivo de 4 dígitos,
+  // el siguiente disponible para ESE prefijo (no se reutilizan aunque se
+  // borre a la mitad un vehículo). Clases sin prefijo propio (CUATRIMOTO,
+  // NUCO SIN INFORMACION, MOTOCARRO, etc.) caen en el prefijo genérico "FOL".
+  const PREFIJOS_CLASE = {
+    AUTOMOVIL: 'AUT',
+    CAMION: 'CON',
+    CAMIONETA: 'CTA',
+    MOTOCICLETA: 'MOT',
+    REMOLQUE: 'REM',
+    'MAQUINARIA MENOR': 'MAQ',
+  };
+  const PREFIJO_POR_DEFECTO = 'FOL';
+
+  /** Calcula el siguiente folio disponible para el prefijo de una Clase dada. */
+  function generarFolio_(clase) {
+    const prefijo = PREFIJOS_CLASE[String(clase || '').toUpperCase().trim()] || PREFIJO_POR_DEFECTO;
+    const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
+    const lastRow = sheet.getLastRow();
+    let maximo = 0;
+    if (lastRow >= 2) {
+      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      const col = headers.indexOf('FOLIO');
+      if (col !== -1) {
+        const patron = new RegExp('^' + prefijo + '(\\d+)$', 'i');
+        sheet.getRange(2, col + 1, lastRow - 1, 1).getValues().forEach((fila) => {
+          const match = patron.exec(String(fila[0] || '').trim());
+          if (match) maximo = Math.max(maximo, parseInt(match[1], 10));
+        });
+      }
+    }
+    return prefijo + String(maximo + 1).padStart(4, '0');
   }
 
+  /** Solo para mostrarlo en el formulario de Registrar mientras se llena (el
+   * campo Folio es de solo lectura) — NO reserva el folio, es una vista previa;
+   * el que de verdad queda asignado se recalcula bajo candado dentro de crear(). */
+  function previsualizarFolio(token, clase) {
+    Permisos.puedeLeer(token, 'vehiculos');
+    return generarFolio_(clase);
+  }
+
+  /** NUCCO: consecutivo simple (no depende de la Clase, a diferencia del
+   * Folio) — el siguiente número disponible es el máximo NUCCO numérico ya
+   * usado + 1, con ceros a la izquierda a 5 dígitos (00001, 00002…). Valores
+   * viejos que no sean puramente numéricos se ignoran al calcular el máximo. */
+  function generarNucco_() {
+    const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
+    const lastRow = sheet.getLastRow();
+    let maximo = 0;
+    if (lastRow >= 2) {
+      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      const col = headers.indexOf('NUCCO');
+      if (col !== -1) {
+        sheet.getRange(2, col + 1, lastRow - 1, 1).getValues().forEach((fila) => {
+          const texto = String(fila[0] || '').trim();
+          if (/^\d+$/.test(texto)) maximo = Math.max(maximo, parseInt(texto, 10));
+        });
+      }
+    }
+    return String(maximo + 1).padStart(5, '0');
+  }
+
+  /** Vista previa de NUCCO para el formulario de Registrar (mismo criterio que
+   * previsualizarFolio: no reserva nada, el valor real se recalcula bajo
+   * candado dentro de crear()). No depende de ningún otro campo del formulario,
+   * así que se pide una sola vez al abrir el módulo. */
+  function previsualizarNucco(token) {
+    Permisos.puedeLeer(token, 'vehiculos');
+    return generarNucco_();
+  }
+
+  /** Da de alta un vehículo. El FOLIO no lo manda el cliente — se calcula aquí
+   * a partir de la Clase (ver generarFolio_) — y la columna ID_VEHICULO no la
+   * trae SheetUtils.insert sola (solo autogenera si la columna se llama
+   * literalmente "ID") — se genera aquí también. FECHA REGISTRO SISTEMA CI
+   * siempre es "hoy" (no la manda el cliente, mismo patrón que FECHA DE
+   * REGISTRO en Tickets). NUCCO también se calcula aquí (ver generarNucco_).
+   * Con LockService: dos altas al mismo tiempo no deben terminar con el mismo
+   * folio NI el mismo NUCCO. */
+  function crear(token, datos) {
+    Permisos.puedeEditar(token, 'vehiculos');
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+      const fila = Object.assign({}, datos);
+      fila.FOLIO = generarFolio_(datos.CLASE);
+      fila.NUCCO = generarNucco_();
+      fila[ID_COLUMN] = Utilities.getUuid().slice(0, 8);
+      fila['FECHA REGISTRO SISTEMA CI'] = new Date();
+      SheetUtils.insert(ssId(), SHEET_VEHICULOS, fila);
+      return { ID: fila[ID_COLUMN], FOLIO: fila.FOLIO };
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  /** Edita un vehículo. Además de guardar, compara contra el registro que
+   * había antes y manda la diferencia campo por campo a la bitácora de
+   * Cambios Vehículos (ver CambiosVehiculosService) — así queda quién
+   * cambió qué y cuándo, sin que nadie tenga que anotarlo a mano. También
+   * propaga los campos copiados (placa, marca, línea…) a Instalación de
+   * Sensores, Verificaciones y Hologramas (ver Relaciones.gs / docs/relaciones.md). */
   function actualizar(token, id, cambios) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
-    SheetUtils.update(ssId(), SHEET_VEHICULOS, id, cambios, ID_COLUMN);
+    const sesion = Permisos.puedeEditar(token, 'vehiculos');
+    const datos = Object.assign({}, cambios);
+    delete datos.FOLIO; // no se edita, se fija solo al crear
+    delete datos.NUCCO; // ídem
+    delete datos['FECHA REGISTRO SISTEMA CI']; // ídem
+
+    const encontrado = SheetUtils.findById(ssId(), SHEET_VEHICULOS, id, ID_COLUMN);
+    const actualizado = SheetUtils.update(ssId(), SHEET_VEHICULOS, id, datos, ID_COLUMN);
+
+    if (encontrado) {
+      CambiosVehiculosService.registrarCambios(encontrado.data.FOLIO, encontrado.data, datos, sesion.nombre);
+    }
+    // El vehículo YA se guardó bien en este punto — si propagar falla, no se revierte
+    // nada: solo se avisa en los logs y revisar() lo corrige en la corrida nocturna.
+    try {
+      Relaciones.propagar('VEHICULOS', actualizado, datos);
+    } catch (err) {
+      console.error('Relaciones.propagar falló para el vehículo ' + id + ': ' + err.message);
+    }
     return { ID: id };
   }
 
@@ -193,7 +314,7 @@ const VehiculosService = (function () {
    * OJO: el negocio normalmente "da de baja" (ESTATUS = BAJA VEHICULAR) en
    * vez de borrar — esto es un borrado real, para altas hechas por error. */
   function eliminar(token, id) {
-    Auth.requiereRol(token, [Config.ROLES.ADMIN]);
+    Permisos.puedeEditar(token, 'vehiculos');
     const ok = SheetUtils.remove(ssId(), SHEET_VEHICULOS, id, ID_COLUMN);
     if (!ok) throw new Error('No se encontró el vehículo con ID=' + id);
     return { ID: id };
@@ -202,5 +323,36 @@ const VehiculosService = (function () {
   // TODO: reasignarResponsable, registrarVerificacion, registrarServicio,
   //       guardarInspeccion (usa PdfService.generarReporteDanios)
 
-  return { listar, listarBasico, listarResumen, buscarPorFolio, crear, actualizar, eliminar };
+  // Carpeta de Drive donde se guardan los archivos adjuntos (responsiva,
+  // documento de baja, archivo de tenencia). No se cambia la seguridad del
+  // archivo — hereda los permisos que ya tenga esa carpeta compartida.
+  const CARPETA_ADJUNTOS_ID = '1gmu5Gs6thEwOv7tcwe0KWQaWTRhFr4-l';
+  const TAMANO_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+
+  /**
+   * Sube un archivo (PDF/imagen) codificado en base64 a la carpeta de Drive
+   * de adjuntos y regresa su URL — el cliente guarda esa URL en la columna
+   * correspondiente (RESPONSIVA / DOCUMENTO BAJA / ARCHIVO TENENCIA) al
+   * llamar crear()/actualizar(), igual que cualquier otro campo de texto.
+   */
+  function subirArchivo(token, nombreArchivo, mimeType, base64Data) {
+    Permisos.puedeEditar(token, 'vehiculos');
+    if (!base64Data) throw new Error('No se recibió ningún archivo.');
+
+    const bytes = Utilities.base64Decode(base64Data);
+    if (bytes.length > TAMANO_MAX_BYTES) {
+      throw new Error('El archivo pesa más de 10 MB — súbelo más ligero.');
+    }
+
+    const blob = Utilities.newBlob(bytes, mimeType || 'application/octet-stream', nombreArchivo || 'archivo');
+    const carpeta = DriveApp.getFolderById(CARPETA_ADJUNTOS_ID);
+    const archivo = carpeta.createFile(blob);
+    // Sin esto, el archivo solo lo puede ver la cuenta que despliega la app
+    // (quien lo creó) — nadie más puede abrir el link, aunque sea válido.
+    archivo.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
+
+    return { url: archivo.getUrl(), id: archivo.getId(), nombre: nombreArchivo };
+  }
+
+  return { listar, listarBasico, listarResumen, buscarPorFolio, previsualizarFolio, previsualizarNucco, crear, actualizar, eliminar, subirArchivo };
 })();

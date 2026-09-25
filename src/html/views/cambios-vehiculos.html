@@ -1,0 +1,27 @@
+<template id="tpl-cambios-vehiculos">
+  <div class="page-header">
+    <div>
+      <h2><i data-lucide="history" class="ico"></i> Cambios Vehículos</h2>
+      <p class="page-subtitle">Bitácora automática: qué campo cambió, de qué valor a cuál, quién y cuándo — se llena sola al editar un vehículo (los 500 más recientes)</p>
+    </div>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat-tile">
+      <div class="stat-icon"><i data-lucide="history" class="ico"></i></div>
+      <div><div class="stat-value" id="cv-stat-total">0</div><div class="stat-label">Total de cambios</div></div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-icon"><i data-lucide="car" class="ico"></i></div>
+      <div><div class="stat-value" id="cv-stat-vehiculos">0</div><div class="stat-label">Vehículos con cambios</div></div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-icon"><i data-lucide="clock" class="ico"></i></div>
+      <div><div class="stat-value" id="cv-stat-hoy">0</div><div class="stat-label">Hoy</div></div>
+    </div>
+  </div>
+
+  <div class="card card-compacta">
+    <div id="cv-tabla"></div>
+  </div>
+</template>
