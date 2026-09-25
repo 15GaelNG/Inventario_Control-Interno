@@ -7,19 +7,24 @@
     <!-- KPIs: clic = filtrar la tabla -->
     <div class="kpi-chips">
       <button type="button" class="kpi-chip" id="hol-kpi-total" title="Ver todos los hologramas">
-        <strong id="hol-stat-total">0</strong> hologramas
+        <span class="kpi-chip-label">Hologramas</span>
+        <strong class="kpi-chip-value" id="hol-stat-total">0</strong>
       </button>
       <button type="button" class="kpi-chip" id="hol-kpi-habilitados" title="Filtrar: habilitados para cargar">
-        <i data-lucide="circle-check" class="ico"></i> <strong id="hol-stat-habilitados">0</strong> habilitados
+        <span class="kpi-chip-label">Habilitados</span>
+        <strong class="kpi-chip-value" id="hol-stat-habilitados">0</strong>
       </button>
       <button type="button" class="kpi-chip kpi-warn" id="hol-kpi-deshabilitados" title="Filtrar: deshabilitados">
-        <i data-lucide="ban" class="ico"></i> <strong id="hol-stat-deshabilitados">0</strong> deshabilitados
+        <span class="kpi-chip-label">Deshabilitados</span>
+        <strong class="kpi-chip-value" id="hol-stat-deshabilitados">0</strong>
       </button>
       <button type="button" class="kpi-chip" id="hol-kpi-personales" title="Filtrar: vehículos personales (no son de la flota)">
-        <i data-lucide="user" class="ico"></i> <strong id="hol-stat-personales">0</strong> personales
+        <span class="kpi-chip-label">Personales</span>
+        <strong class="kpi-chip-value" id="hol-stat-personales">0</strong>
       </button>
       <button type="button" class="kpi-chip kpi-danger" id="hol-kpi-viejos" title="Filtrar: difieren del catálogo de Vehículos" hidden>
-        <i data-lucide="triangle-alert" class="ico"></i> <strong id="hol-stat-viejos">0</strong> desactualizados
+        <span class="kpi-chip-label">Desactualizados</span>
+        <strong class="kpi-chip-value" id="hol-stat-viejos">0</strong>
       </button>
     </div>
   </div>

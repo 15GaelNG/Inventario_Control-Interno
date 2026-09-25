@@ -7,16 +7,20 @@
     <!-- KPIs: clic = filtrar la tabla -->
     <div class="kpi-chips">
       <button type="button" class="kpi-chip" id="sen-kpi-total" title="Ver todas las instalaciones">
-        <strong id="sen-stat-total">0</strong> instalaciones
+        <span class="kpi-chip-label">Instalaciones</span>
+        <strong class="kpi-chip-value" id="sen-stat-total">0</strong>
       </button>
       <button type="button" class="kpi-chip" id="sen-kpi-activos" title="Filtrar: sensores activos">
-        <i data-lucide="circle-check" class="ico"></i> <strong id="sen-stat-activos">0</strong> activos
+        <span class="kpi-chip-label">Activos</span>
+        <strong class="kpi-chip-value" id="sen-stat-activos">0</strong>
       </button>
       <button type="button" class="kpi-chip kpi-warn" id="sen-kpi-baja" title="Filtrar: sensores dados de baja">
-        <i data-lucide="ban" class="ico"></i> <strong id="sen-stat-baja">0</strong> de baja
+        <span class="kpi-chip-label">De baja</span>
+        <strong class="kpi-chip-value" id="sen-stat-baja">0</strong>
       </button>
       <button type="button" class="kpi-chip" id="sen-kpi-viajando" title="Filtrar: unidades que van circulando ahora" hidden>
-        <i data-lucide="navigation" class="ico"></i> <strong id="sen-stat-viajando">0</strong> viajando
+        <span class="kpi-chip-label">Viajando</span>
+        <strong class="kpi-chip-value" id="sen-stat-viajando">0</strong>
       </button>
     </div>
   </div>

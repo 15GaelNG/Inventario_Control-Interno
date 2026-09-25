@@ -392,34 +392,68 @@
   .page-header-actions button { white-space: nowrap; }
   .page-subtitle { margin: 0; color: var(--color-text-muted); font-size: 13px; }
 
-  .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 20px; }
+  .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-bottom: 20px; }
+  /* Tarjeta minimalista (sin ícono): etiqueta chica en mayúsculas arriba,
+     valor grande abajo — mismo lenguaje visual que .kpi-chip. El ícono
+     (.stat-icon) se deja oculto en vez de quitarlo del HTML de cada vista,
+     para no tener que tocar los 9 templates que lo usan. */
   .stat-tile {
-    display: flex; align-items: center; gap: 12px;
+    display: flex; align-items: center;
     background: var(--color-surface); border: 1px solid var(--color-border);
-    border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow);
+    border-left: 4px solid var(--color-primary);
+    border-radius: var(--radius); padding: 14px 18px; box-shadow: var(--shadow);
   }
-  .stat-icon {
-    width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center; font-size: 19px;
-    background: var(--color-primary-soft);
-  }
-  /* color explícito (no solo el fondo pastel): en modo oscuro el texto se
-     vuelve claro, y sin esto el ícono (hereda color vía currentColor)
-     quedaba clarito sobre un fondo pastel que no cambia con el tema —
-     prácticamente invisible. Mismo patrón que .badge/.badge-estado. */
-  .stat-tile-warn .stat-icon { background: #F3ECD6; color: var(--color-danger); }
-  .stat-tile-ok .stat-icon { background: #e5f6ec; color: var(--color-success); }
+  .stat-icon { display: none; }
+  .stat-tile > div:last-child { display: flex; flex-direction: column-reverse; gap: 4px; }
   .stat-value { font-size: 22px; font-weight: 700; color: var(--color-text); line-height: 1.1; }
-  .stat-label { font-size: 12px; color: var(--color-text-muted); margin-top: 2px; }
+  .stat-label {
+    font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+  /* Antes coloreaban el ícono; ahora, sin ícono, colorean el valor y la franja izquierda. */
+  .stat-tile-warn { border-left-color: var(--color-danger); }
+  .stat-tile-warn .stat-value { color: var(--color-danger); }
+  .stat-tile-ok { border-left-color: var(--color-success); }
+  .stat-tile-ok .stat-value { color: var(--color-success); }
 
   /* KPI clickeable: filtra la tabla del mismo módulo con solo darle clic
      (ver wireKpiFiltro en app.html). */
   .stat-tile-clickable { cursor: pointer; transition: border-color .15s, box-shadow .15s; }
   .stat-tile-clickable:hover { border-color: var(--color-primary); }
   .stat-tile-clickable.stat-tile-activo {
-    border-color: var(--color-primary); border-width: 2px; padding: 15px;
+    border-color: var(--color-primary); border-width: 2px; padding: 13px 17px;
     box-shadow: 0 0 0 3px var(--color-primary-soft);
   }
+
+  /* ========== KPI chips (Sensores, Hologramas, Verificaciones, Inspecciones) ==========
+     Tarjeta minimalista: etiqueta chica en mayúsculas arriba, valor grande abajo,
+     sin ícono — mismo tipo de fila de KPIs que otros sistemas de reporting. */
+  .kpi-chips { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; }
+  .kpi-chip {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 5px;
+    background: var(--color-surface); border: 1px solid var(--color-border);
+    border-left: 4px solid var(--color-primary);
+    border-radius: var(--radius); padding: 13px 18px; min-width: 130px;
+    box-shadow: var(--shadow); text-align: left; cursor: pointer;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .kpi-chip:disabled { cursor: default; }
+  .kpi-chip:not(:disabled):hover { border-color: var(--color-primary); }
+  .kpi-chip.activo {
+    border-color: var(--color-primary); border-width: 2px; padding: 12px 17px;
+    box-shadow: 0 0 0 3px var(--color-primary-soft);
+  }
+  .kpi-chip-label {
+    font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+  .kpi-chip-value { font-size: 22px; font-weight: 700; color: var(--color-text); line-height: 1.1; }
+  .kpi-chip-sub { font-size: 11.5px; color: var(--color-text-muted); }
+  /* kpi-warn: llama la atención sin ser una alerta real (bronce de marca).
+     kpi-danger: alerta real — mismo color de valor, pero además el borde tiñe el color. */
+  .kpi-chip.kpi-warn .kpi-chip-value, .kpi-chip.kpi-danger .kpi-chip-value { color: var(--color-danger); }
+  .kpi-chip.kpi-warn { border-left-color: var(--color-danger); }
+  .kpi-chip.kpi-danger { border-color: var(--color-danger); }
 
   /* ========== Tarjeta de formulario con ícono de encabezado ========== */
   .form-card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }

@@ -7,16 +7,20 @@
     <!-- KPIs: clic = filtrar la tabla -->
     <div class="kpi-chips">
       <button type="button" class="kpi-chip" id="ins-kpi-total" title="Ver todas las inspecciones">
-        <strong id="ins-stat-total">0</strong> inspecciones
+        <span class="kpi-chip-label">Inspecciones</span>
+        <strong class="kpi-chip-value" id="ins-stat-total">0</strong>
       </button>
       <button type="button" class="kpi-chip" id="ins-kpi-mes" title="Filtrar: inspecciones de los últimos 30 días">
-        <i data-lucide="calendar-clock" class="ico"></i> <strong id="ins-stat-mes">0</strong> este mes
+        <span class="kpi-chip-label">Este mes</span>
+        <strong class="kpi-chip-value" id="ins-stat-mes">0</strong>
       </button>
       <button type="button" class="kpi-chip kpi-warn" id="ins-kpi-bajas" title="Filtrar: puntaje menor a 80%">
-        <i data-lucide="triangle-alert" class="ico"></i> <strong id="ins-stat-bajas">0</strong> con puntaje bajo
+        <span class="kpi-chip-label">Puntaje bajo</span>
+        <strong class="kpi-chip-value" id="ins-stat-bajas">0</strong>
       </button>
       <button type="button" class="kpi-chip" id="ins-kpi-promedio" title="Promedio de puntaje de lo que se ve en la tabla" disabled>
-        <i data-lucide="gauge" class="ico"></i> <strong id="ins-stat-promedio">—</strong> promedio
+        <span class="kpi-chip-label">Promedio</span>
+        <strong class="kpi-chip-value" id="ins-stat-promedio">—</strong>
       </button>
     </div>
   </div>
