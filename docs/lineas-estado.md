@@ -124,6 +124,33 @@ Segunda ronda (commit `0932115`):
   responsable), Reasignaciones (+ activos y responsables distintos), Desechos (+ año en curso y lugar más frecuente).
 - La tarjeta de la ficha se llama **Detalles** y ya no lleva texto de ayuda.
 
+## 0d. Experiencia de uso y diseño (2026-09-24, commit `44a8949`)
+
+El sistema se usará en tabletas y teléfonos; lo principal es revisar rápido un equipo o línea, hacer un ajuste
+y capturar responsivas e inspecciones.
+
+- **Menú en celular y tableta vertical** (`html/shell-movil.html`, incluido con una línea al final de
+  `Index.html` para no tocar el shell de la rama jorge): por debajo de 900px el menú lateral es un panel que se
+  abre con el botón de menú de la barra superior y se cierra al elegir un módulo. La barra superior se compacta
+  (sin fecha; sin nombre de usuario en teléfono). **Al unir con master** conviene llevar esto al shell común.
+- **Ficha** (`encabezado`, `fichaEnPestanas`): el encabezado trae un *resumen rápido* (responsable, modelo, IMEI,
+  línea, departamento; en líneas: compañía, SIM, fin de plan, equipo) y las acciones. Debajo, pestañas
+  `tabs-simple` (las mismas del listado): General · Detalles · Documentos · Historial, con conteos. Inspecciones y
+  responsivas son una lista (`.ln-docs`) en vez de tablas anchas. "Registro en la hoja" solo en pantallas
+  grandes (`.ln-solo-escritorio`).
+- **Formularios por pasos** (`PASOS_FORMULARIO`, `htmlPasosAppSheet`, `activarPasos`, `marcarErroresEn`): mismo
+  marcado y comportamiento que el componente `Formulario` (`.form-pasos`, `.form-paso-chip`, "Paso x de y",
+  Atrás / Siguiente). Los pasos se definen por la columna o el título del AppSheet con que empiezan, así que el
+  orden del AppSheet y sus condiciones no cambian. Inspección: Datos · Accesorios y sistema · Estado físico ·
+  Accesos y apps · Fotos · Firmas. Responsiva: Responsable · Equipo · Firmas. LINEAS: Identificación ·
+  Responsable · Equipo y ubicación · Accesos y plan · Estatus · Sistema nuevo (en edición se salta a cualquier
+  paso y se guarda desde cualquiera). Solicitud: Solicitud · Solicitante · Asignación · Línea y equipo. Se valida
+  el paso antes de avanzar; los errores se marcan en el campo; al guardar se va al paso del primer error. Los
+  pasos que no aplican al TIPO se omiten. Los datos de solo lectura se ven como dato y los ID internos se ocultan.
+- **Celular** (≤ 700px): modales a pantalla completa con el formulario desplazable y el pie fijo; KPIs en una
+  franja deslizable; inventario en tarjetas por defecto (si no hay preferencia guardada) y más compactas;
+  botones de la ficha en rejilla de 2; opciones del checklist más grandes para el dedo.
+
 ## 1. Contexto
 
 El módulo viene de un prototipo propio ("CI Control Activos") que ya funcionaba
