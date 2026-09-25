@@ -151,6 +151,13 @@ y capturar responsivas e inspecciones.
   franja deslizable; inventario en tarjetas por defecto (si no hay preferencia guardada) y más compactas;
   botones de la ficha en rejilla de 2; opciones del checklist más grandes para el dedo.
 
+## 0i. Archivos del AppSheet y carpetas de Drive (2026-09-25)
+
+`LineasArchivos.gs` abre los archivos que el AppSheet guarda como ruta relativa (desde la carpeta raíz del AppSheet,
+`LINEAS_DRIVE_APPSHEET`) y lee las carpetas de NUCO de `LINEAS_DRIVE_NUCOS`; ambas son de producción y solo se leen.
+Lo nuevo se guarda en `LINEAS_DRIVE_CARPETA_RAIZ` (pruebas en DEV) y escribir en producción desde DEV se bloquea.
+En el cliente, `botonArchivo(ruta, texto)` pinta el ícono y `apiLineasArchivo` resuelve la ruta al hacer clic.
+
 ## 0h. Panel lateral en Gestión de Activos (2026-09-25)
 
 El colaborador se abre en `abrirPanelLateral` (mismas clases `.dt-panel` del detalle de DataTable), no al final de

@@ -82,6 +82,8 @@ const LineasUtil = (function () {
 
   /** NUCO → id de su carpeta en NUCOS (del último inventario; caché 6 h). */
   function carpetasNucos() {
+    // La carpeta NUCOS de producción (solo lectura); el inventario JSON queda de respaldo si no se puede leer
+    try { return LineasArchivos.carpetasNucos(); } catch (e) { console.warn('carpetasNucos: ' + e.message); }
     let mapa = LineasDatos.cacheLeer('carpetas_nucos');
     if (mapa) return mapa;
     mapa = {};

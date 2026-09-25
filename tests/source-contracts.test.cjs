@@ -554,3 +554,50 @@ test('Gestión de Activos abre al colaborador en el panel lateral, no al final d
   assert.doesNotMatch(gestion, /scrollIntoView|lnga-resultado/);
   assert.doesNotMatch(read('src/html/views/lineas/lineas-gestion-activos.html'), /lnga-resultado/);
 });
+
+test('archivos del AppSheet: se abren desde su carpeta, NUCOS se lee de producción y lo nuevo va a pruebas', () => {
+  // Servidor: resuelve "TABLA_Files_/archivo" caminando desde la carpeta del AppSheet
+  const carpeta = (id, sub, archivos) => ({
+    getId: () => id,
+    getFoldersByName: (n) => { const c = (sub || {})[n]; return { hasNext: () => !!c, next: () => c }; },
+    getFilesByName: (n) => { const f = (archivos || {})[n]; return { hasNext: () => !!f, next: () => f }; },
+  });
+  const archivo = { getId: () => 'ARCH1', getName: () => 'a1.EVIDENCIA.1.jpg', getUrl: () => 'https://drive.google.com/file/d/ARCH1/view' };
+  const raiz = carpeta('RAIZ', { 'BITACORA DE DESECHO_Files_': carpeta('DES', {}, { 'a1.EVIDENCIA.1.jpg': archivo }) });
+  const memoria = {};
+  const globales = {
+    PropertiesService: { getScriptProperties: () => ({ getProperty: () => null }) },
+    CacheService: { getScriptCache: () => ({ get: (k) => memoria[k] || null, put: (k, v) => { memoria[k] = v; } }) },
+    Utilities: { base64EncodeWebSafe: (b) => String(b), computeDigest: (a, t) => t, DigestAlgorithm: {}, Charset: {} },
+    DriveApp: { getFolderById: () => raiz },
+  };
+  const LA = new Function(...Object.keys(globales), read('src/services/lineas/LineasArchivos.gs') + '\nreturn LineasArchivos;')(...Object.values(globales));
+  assert.equal(LA.resolver('BITACORA DE DESECHO_Files_/a1.EVIDENCIA.1.jpg', false).id, 'ARCH1');
+  assert.equal(LA.resolver('BITACORA DE DESECHO_Files_/no-existe.jpg', false), null);
+  assert.equal(LA.resolver('https://www.appsheet.com/template/gettablefileurl?appName=X&tableName=Y&fileName=BITACORA%20DE%20DESECHO_Files_%2Fa1.EVIDENCIA.1.jpg', false).id, 'ARCH1');
+  assert.equal(LA.resolver('https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz/view', false).id, '1AbCdEfGhIjKlMnOpQrStUvWxYz');
+  assert.throws(() => LA.resolver('LINEAS TELEFONICAS_Images/x.PATRON.1.png', false), /administrador/);
+  assert.equal(LA.resolver('../otra/x.jpg', true), null);
+  // Carpetas de producción por omisión (las que indicó el usuario) y escritura fuera de ellas
+  assert.equal(LA.carpetaAppSheetId(), '1FsC5mloJNhi_TR7pBX1KMEjUZfN_M9OM');
+  assert.equal(LA.carpetaNucosId(), '12SRBi1nZlIzfNx0d2y1fAtzOydA2QrT-');
+  assert.equal(LA.escribeEnProduccion(), false);
+
+  const ev = read('src/services/lineas/LineasEvidencias.gs');
+  assert.match(ev, /if \(LineasArchivos\.escribeEnProduccion\(\)\) \{/);
+  assert.match(ev, /LineasArchivos\.exigirEscribible\(carpetaId\);/);
+  assert.match(read('src/services/lineas/LineasCaptura.gs'), /LineasArchivos\.exigirEscribible\(ev\.carpetaId\);/);
+  assert.match(read('src/services/lineas/LineasUtil.gs'), /try \{ return LineasArchivos\.carpetasNucos\(\); \}/);
+  assert.match(read('src/ClientApi.gs'), /function apiLineasArchivo\(token, ruta\)/);
+
+  // Cliente: ícono que abre el archivo en tablas, ficha y documentos
+  const lineas = read('src/html/js/lineas.html');
+  assert.match(lineas, /col\.render = \(v\) => botonArchivo\(v, 'Ver'\);/);
+  assert.match(lineas, /\['Patrón', botonArchivo\(e\.patronRuta, 'Ver patrón'\), true\]/);
+  assert.match(lineas, /if \(d\.pdfRuta\) return botonArchivo\(d\.pdfRuta, 'Ver PDF'\);/);
+  // Apps Script corta lo que sigue a "//" en los .html: la expresión de enlaces no puede terminar en "\//"
+  const i = lineas.indexOf('const esRutaArchivo');
+  const expresion = lineas.slice(i, lineas.indexOf('\n', lineas.indexOf('\n', i) + 1));
+  assert.ok(expresion.indexOf('com[\\/]/i') > 0);
+  assert.equal(expresion.indexOf('\\//'), -1);
+});
