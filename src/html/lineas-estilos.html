@@ -104,7 +104,12 @@
   .ln-cuadros-mas { display: flex; justify-content: center; align-items: center; gap: 14px; flex-wrap: wrap; margin: 16px 0; font-size: 12.5px; }
   .ln-cuadros-mas button { min-width: 180px; }
   .ln-cuadro-cargando, .ln-cuadro-vacio { grid-column: 1 / -1; min-height: 120px; display: flex; align-items: center; justify-content: center; gap: 8px; }
-  .ln-cuadro-detalle { scroll-margin-top: 16px; }
+  /* Panel lateral de Líneas (mismo .dt-panel del detalle de DataTable) */
+  .ln-panel .dt-panel-cuerpo { padding-top: 14px; }
+  .ln-panel .ln-panel-resumen { margin-bottom: 14px; }
+  .ln-panel .ln-panel-resumen .ln-pie { margin: 8px 0 0; }
+  .ln-panel .card { margin-bottom: 12px; box-shadow: none; }
+  .ln-panel .card h3 { display: flex; align-items: center; gap: 8px; }
   .ln-check { display: flex; align-items: center; gap: 8px; font-size: 12.5px; margin-bottom: 12px; cursor: pointer; }
   .ln-check input { width: auto; }
 

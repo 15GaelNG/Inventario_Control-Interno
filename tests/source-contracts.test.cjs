@@ -544,3 +544,13 @@ test('Líneas usa la BD de pruebas del equipo y revisa la estructura antes de ca
   // Las cachés de Líneas llevan el ID de la hoja: al cambiar de hoja no se mezclan datos
   assert.match(read('src/services/lineas/LineasDatos.gs'), /return 'ln_' \+ clave \+ '_' \+ id\(\)\.slice\(0, 10\);/);
 });
+
+test('Gestión de Activos abre al colaborador en el panel lateral, no al final de la página', () => {
+  const lineas = read('src/html/js/lineas.html');
+  assert.match(lineas, /function abrirPanelLateral\(titulo, subtitulo\)/);
+  assert.match(lineas, /elemento\.className = 'dt-panel ln-panel';/);   // mismo panel que el detalle de DataTable
+  const gestion = lineas.slice(lineas.indexOf('function initGestionActivos'), lineas.indexOf('function pintarCuadros'));
+  assert.match(gestion, /const panel = abrirPanelLateral\(/);
+  assert.doesNotMatch(gestion, /scrollIntoView|lnga-resultado/);
+  assert.doesNotMatch(read('src/html/views/lineas/lineas-gestion-activos.html'), /lnga-resultado/);
+});

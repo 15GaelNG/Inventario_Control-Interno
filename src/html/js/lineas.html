@@ -197,6 +197,46 @@
     }
 
     /**
+     * Panel lateral con el mismo aspecto y comportamiento que el detalle de DataTable (clases .dt-panel):
+     * se cierra con Esc, con la X o con clic fuera, y regresa el foco a donde estaba.
+     * Regresa { cuerpo, cerrar, alCerrar }. Solo hay uno abierto a la vez.
+     */
+    let panelAbierto = null;
+    function abrirPanelLateral(titulo, subtitulo) {
+      if (panelAbierto) panelAbierto.cerrar();
+      const focoPrevio = document.activeElement;
+      const fondo = document.createElement('div');
+      fondo.className = 'dt-panel-fondo';
+      const elemento = document.createElement('aside');
+      elemento.className = 'dt-panel ln-panel';
+      elemento.setAttribute('role', 'dialog');
+      elemento.setAttribute('aria-modal', 'true');
+      elemento.setAttribute('aria-label', titulo);
+      elemento.innerHTML = '<div class="dt-panel-header"><div><h3>' + esc(titulo) + '</h3>' + (subtitulo ? '<p>' + esc(subtitulo) + '</p>' : '') + '</div>' +
+        '<button type="button" class="modal-close dt-panel-cerrar" title="Cerrar" aria-label="Cerrar">' + icono('x') + '</button></div>' +
+        '<div class="dt-panel-cuerpo"></div>';
+      document.body.append(fondo, elemento);
+      const alTecla = (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); cerrar(); } };
+      const api = { elemento: elemento, cuerpo: elemento.querySelector('.dt-panel-cuerpo'), cerrar: cerrar, alCerrar: null };
+      function cerrar() {
+        if (panelAbierto !== api) return;
+        panelAbierto = null;
+        fondo.remove();
+        elemento.remove();
+        document.removeEventListener('keydown', alTecla, true);
+        if (api.alCerrar) api.alCerrar();
+        if (focoPrevio && document.body.contains(focoPrevio)) focoPrevio.focus();
+      }
+      document.addEventListener('keydown', alTecla, true);
+      fondo.addEventListener('click', cerrar);
+      elemento.querySelector('.dt-panel-cerrar').addEventListener('click', cerrar);
+      panelAbierto = api;
+      pintarIconos(elemento);
+      elemento.querySelector('.dt-panel-cerrar').focus();
+      return api;
+    }
+
+    /**
      * "Exportar a Excel" de los módulos: descarga la base completa (todas las filas y todas las columnas de
      * su pestaña, sin importar filtros ni búsqueda), no solo lo que se ve. Llega del servidor comprimida.
      * modulo: INVENTARIO | CAMBIOS | REASIGNACIONES | DESECHOS | REACTIVACION | SOLICITUD | ACCESORIOS
@@ -2622,22 +2662,36 @@
           '<p class="ln-tenue">Esta información aún no está disponible en esta vista.</p></div>';
       }
 
+      /** Asignaciones del colaborador en el panel lateral (como el detalle de los demás módulos): la lista no se mueve. */
       function mostrarColaborador(c, tarjeta) {
+        raiz.querySelectorAll('.ln-cuadro-colaborador.seleccionado').forEach((el) => el.classList.remove('seleccionado'));
+        if (tarjeta) tarjeta.classList.add('seleccionado');
+        const panel = abrirPanelLateral(c.nombre || 'Colaborador', [c.puesto, c.departamento].filter(Boolean).join(' · ') || 'Activos asignados');
+        panel.alCerrar = () => { if (tarjeta) tarjeta.classList.remove('seleccionado'); };
+        panel.cuerpo.innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Consultando asignaciones…</p>';
+        // Ir a una línea o equipo: se cierra el panel y se abre su ficha
+        panel.cuerpo.addEventListener('click', (ev) => {
+          const f = ev.target.closest('[data-ir]');
+          if (!f) return;
+          panel.cerrar();
+          irARegistro(f.dataset.ir);
+        });
         cargarIndice().then((indice) => {
-          if (!vigente()) return;
+          if (!vigente() || panelAbierto !== panel) return;
           const datos = filasPorResponsable(indice, c.nombre);
-          raiz.querySelectorAll('.ln-cuadro-colaborador.seleccionado').forEach((el) => el.classList.remove('seleccionado'));
-          if (tarjeta) tarjeta.classList.add('seleccionado');
-          $('#lnga-resultado', raiz).innerHTML =
-            '<div class="ln-detalle-header card"><div class="ln-detalle-icono">' + icono('user') + '</div>' +
-            '<div class="ln-detalle-titulo"><h2>' + esc(c.nombre) + '</h2><div class="ln-chips">' +
-              (c.puesto ? chip(c.puesto, 'neutro') : '') + (c.departamento ? chip(c.departamento, 'azul') : '') + (c.estatus ? chip(c.estatus) : '') +
-            '</div><p class="ln-pie ln-tenue">' + [c.noEmpleado ? 'Empleado ' + esc(c.noEmpleado) : '', c.sede, c.oficina].filter(Boolean).join(' · ') + '</p></div></div>' +
+          const pie = [c.noEmpleado ? 'Empleado ' + c.noEmpleado : '', c.area, c.sede, c.oficina].filter(Boolean).map(esc).join(' · ');
+          panel.cuerpo.innerHTML =
+            '<div class="ln-panel-resumen"><div class="ln-chips">' +
+              (c.estatus ? chip(c.estatus, String(c.estatus).toUpperCase() === 'ACTIVO' ? 'verde' : 'neutro') : '') +
+              (c.departamento ? chip(c.departamento, 'azul') : '') +
+            '</div>' + (pie ? '<p class="ln-pie ln-tenue">' + pie + '</p>' : '') + '</div>' +
             tarjetaLineas(c.nombre, datos) +
-            '<div class="ln-grid-2">' + tarjetaPendiente('Vehículos', 'car') + tarjetaPendiente('Hologramas / combustible', 'fuel') + '</div>' +
-            '<div class="ln-grid-2">' + tarjetaPendiente('Uber', 'car-front') + tarjetaPendiente('Cajas chicas', 'wallet') + '</div>';
-          $('#lnga-resultado', raiz).scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }).catch((e) => { if (vigente()) $('#lnga-resultado', raiz).innerHTML = '<p class="error-msg">No se pudieron consultar las asignaciones: ' + mensajeError(e) + '</p>'; });
+            tarjetaPendiente('Vehículos', 'car') + tarjetaPendiente('Hologramas / combustible', 'fuel') +
+            tarjetaPendiente('Uber', 'car-front') + tarjetaPendiente('Cajas chicas', 'wallet');
+          pintarIconos(panel.cuerpo);
+        }).catch((e) => {
+          if (panelAbierto === panel) panel.cuerpo.innerHTML = '<p class="error-msg">No se pudieron consultar las asignaciones: ' + mensajeError(e) + '</p>';
+        });
       }
 
       function tarjetaColaborador(c) {

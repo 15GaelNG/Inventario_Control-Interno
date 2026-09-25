@@ -151,6 +151,11 @@ y capturar responsivas e inspecciones.
   franja deslizable; inventario en tarjetas por defecto (si no hay preferencia guardada) y más compactas;
   botones de la ficha en rejilla de 2; opciones del checklist más grandes para el dedo.
 
+## 0h. Panel lateral en Gestión de Activos (2026-09-25)
+
+El colaborador se abre en `abrirPanelLateral` (mismas clases `.dt-panel` del detalle de DataTable), no al final de
+la página. El ayudante sirve para cualquier otro detalle de Líneas que no venga de una DataTable.
+
 ## 0g. Hoja de Líneas en DEV (2026-09-25)
 
 Líneas pasa a la BD de pruebas del equipo (`1fC77…`), la misma de Usuarios, Vehículos y Accesorios.
