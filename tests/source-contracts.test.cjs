@@ -624,6 +624,9 @@ test('Drive: todo en la carpeta de la app AppSheet con sus rutas; NUCOS de produ
   assert.match(lineas, /contarEnPestana\('documentos', filas\.length\);/);
   assert.match(lineas, /etiqueta: 'Inspecciones', titulo: 'Mostrar solo inspecciones', filtros: \{ documento: \{ valores: \['Inspección'\] \} \}/);
   assert.match(lineas, /\{ icono: 'file-plus', titulo: 'Generar PDF', visible: \(d\) => !!d\.pdfPendiente,/);
+  // Sin Excel; doble clic abre la inspección (o el PDF de la responsiva)
+  assert.match(lineas, /idTabla: 'lineas-documentos-v1',\n\s+exportar: false,/);
+  assert.match(lineas, /\$\('\.ln-docs-tabla', cont\)\.addEventListener\('dblclick'/);
   assert.match(lineas, /const ORIGEN_DOCUMENTO = \{ APPSHEET: 'AppSheet', SISTEMA: 'Sistema nuevo', DRIVE: 'Carpeta NUCOS' \};/);
 });
 

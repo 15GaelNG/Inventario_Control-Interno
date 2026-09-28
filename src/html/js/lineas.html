@@ -2046,11 +2046,11 @@
         const tabla = tablaDocumentos = tablaLineas($('.ln-docs-tabla', cont), {
           idCampo: '_clave',
           idTabla: 'lineas-documentos-v1',
+          exportar: false,
           tamanoPagina: 25,
           seleccionable: false,
           ordenInicial: { campo: 'fecha', dir: 'desc' },
           textoVacio: 'Sin documentos con esos filtros',
-          exportar: { nombreArchivo: 'Documentos ' + ((fichaActual && fichaActual.titulo) || id), nombreHoja: 'Documentos' },
           etiquetaFila: (d) => d.documento + ' · ' + (fecha(d.fecha) || 'Sin fecha'),
           detalle: false,
           alCambiarFiltros: marcar,
@@ -2062,7 +2062,8 @@
               alHacer: (d) => window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(d.carpetaId), '_blank', 'noopener') },
             { icono: 'file-plus', titulo: 'Generar PDF', visible: (d) => !!d.pdfPendiente, alHacer: (d) => generarPdfPendiente(d.tipoPdf, d.id, d.carpetaId) },
           ],
-          ayuda: 'Inspecciones y responsivas del registro. Los indicadores de arriba filtran por tipo; la flecha de cada columna filtra u ordena. ' +
+          ayuda: 'Inspecciones y responsivas del registro. Doble clic en una fila abre la inspección, o el PDF de la responsiva. ' +
+            'Los indicadores de arriba filtran por tipo; la flecha de cada columna filtra u ordena. ' +
             'Origen: AppSheet y Sistema nuevo son registros de la hoja; Carpeta NUCOS son los que solo están en Drive.',
           columnas: [
             { campo: 'fecha', titulo: 'Fecha', tipo: 'lnFechaHora', fijada: true, ancho: 130, render: (v) => esc(fecha(v) || 'Sin fecha') },
@@ -2076,6 +2077,17 @@
           ],
         });
         tabla.setDatos(filas);
+        // Doble clic en la fila: la inspección; en una responsiva, su PDF (o su carpeta si no tiene PDF)
+        const porClave = {};
+        filas.forEach((d) => { porClave[d._clave] = d; });
+        $('.ln-docs-tabla', cont).addEventListener('dblclick', (ev) => {
+          const tr = ev.target.closest('tbody tr[data-id]');
+          const d = tr && !ev.target.closest('button, input, a') ? porClave[tr.dataset.id] : null;
+          if (!d) return;
+          if (d.documento === 'Inspección') abrir('inspeccion', d.id);
+          else if (d.pdfId) window.open('https:\/\/drive.google.com/file/d/' + encodeURIComponent(d.pdfId) + '/view', '_blank', 'noopener');
+          else if (d.carpetaId) window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(d.carpetaId), '_blank', 'noopener');
+        });
       }
 
       /**
