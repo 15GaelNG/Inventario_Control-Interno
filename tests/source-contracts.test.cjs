@@ -534,13 +534,16 @@ test('Exportar a Excel descarga la base completa del módulo, no solo lo que se 
   assert.throws(() => mod.baseCompleta('OTRO', false), /desconocido/);
 });
 
-test('Líneas usa la BD de pruebas del equipo y revisa la estructura antes de cambiar', () => {
+test('Líneas usa la BD de pruebas del equipo y ninguna carpeta personal de pruebas', () => {
   const admin = read('src/services/lineas/LineasAdmin.gs');
   assert.match(admin, /const LINEAS_DEV_SPREADSHEET_ID = '1fC77Uu1ePVUySNvhgWXMHqWpLhGhBMTZZMEblU2nUhI';/);
-  assert.match(admin, /function usarCopiaAppSheetLineas\(\)/);
-  // Si faltan pestañas o columnas no cambia nada: el error sale antes de setProperties
-  const f = admin.slice(admin.indexOf('function apuntarLineasA_'));
+  // Si faltan pestañas no cambia nada: el error sale antes de setProperties; la carpeta personal se borra
+  const f = admin.slice(admin.indexOf('function configurarLineasDev'));
   assert.ok(f.indexOf("throw new Error('No se cambió nada") < f.indexOf('setProperties('));
+  assert.match(f, /props\.deleteProperty\('LINEAS_DRIVE_CARPETA_RAIZ'\);/);
+  // Ninguna conexión a la carpeta de pruebas personal (1ZNI2…), al inventario JSON ni a la copia vieja del AppSheet
+  const codigo = filesBelow(path.join(root, 'src')).filter((x) => /\.(gs|html)$/.test(x)).map((x) => fs.readFileSync(x, 'utf8')).join('\n');
+  assert.doesNotMatch(codigo, /1ZNI2tVANe3qBglcQ5sisCctGBe4Qetmk|1_47fd5nCcg4M6Qnsxmk14r9aTJG2bCPSW86ig_r2478|inventario_NUCOS_|getProperty\('LINEAS_DRIVE_CARPETA_RAIZ'\)/);
   // Las cachés de Líneas llevan el ID de la hoja: al cambiar de hoja no se mezclan datos
   assert.match(read('src/services/lineas/LineasDatos.gs'), /return 'ln_' \+ clave \+ '_' \+ id\(\)\.slice\(0, 10\);/);
 });
@@ -555,12 +558,15 @@ test('Gestión de Activos abre al colaborador en el panel lateral, no al final d
   assert.doesNotMatch(read('src/html/views/lineas/lineas-gestion-activos.html'), /lnga-resultado/);
 });
 
-test('archivos del AppSheet: se abren desde su carpeta, NUCOS se lee de producción y lo nuevo va a pruebas', () => {
-  // Servidor: resuelve "TABLA_Files_/archivo" caminando desde la carpeta del AppSheet
+test('Drive: todo en la carpeta de la app AppSheet con sus rutas; NUCOS de producción solo se lee', () => {
+  // Servidor: resuelve "TABLA_Files_/archivo" caminando desde la carpeta de la app y guarda con el nombre del AppSheet
+  const creados = [];
   const carpeta = (id, sub, archivos) => ({
     getId: () => id,
     getFoldersByName: (n) => { const c = (sub || {})[n]; return { hasNext: () => !!c, next: () => c }; },
     getFilesByName: (n) => { const f = (archivos || {})[n]; return { hasNext: () => !!f, next: () => f }; },
+    createFolder: (n) => { const c = carpeta('NUEVA-' + n); (sub || {})[n] = c; return c; },
+    createFile: (blob) => { creados.push({ carpeta: id, nombre: blob.nombre, mime: blob.mime }); return { getId: () => 'F' + creados.length }; },
   });
   const archivo = { getId: () => 'ARCH1', getName: () => 'a1.EVIDENCIA.1.jpg', getUrl: () => 'https://drive.google.com/file/d/ARCH1/view' };
   const raiz = carpeta('RAIZ', { 'BITACORA DE DESECHO_Files_': carpeta('DES', {}, { 'a1.EVIDENCIA.1.jpg': archivo }) });
@@ -568,7 +574,10 @@ test('archivos del AppSheet: se abren desde su carpeta, NUCOS se lee de producci
   const globales = {
     PropertiesService: { getScriptProperties: () => ({ getProperty: () => null }) },
     CacheService: { getScriptCache: () => ({ get: (k) => memoria[k] || null, put: (k, v) => { memoria[k] = v; } }) },
-    Utilities: { base64EncodeWebSafe: (b) => String(b), computeDigest: (a, t) => t, DigestAlgorithm: {}, Charset: {} },
+    Utilities: {
+      base64EncodeWebSafe: (b) => String(b), computeDigest: (a, t) => t, DigestAlgorithm: {}, Charset: {},
+      base64Decode: () => [1, 2, 3], newBlob: (bytes, mime, nombre) => ({ mime, nombre }), formatDate: () => '101530',
+    },
     DriveApp: { getFolderById: () => raiz },
   };
   const LA = new Function(...Object.keys(globales), read('src/services/lineas/LineasArchivos.gs') + '\nreturn LineasArchivos;')(...Object.values(globales));
@@ -578,26 +587,99 @@ test('archivos del AppSheet: se abren desde su carpeta, NUCOS se lee de producci
   assert.equal(LA.resolver('https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz/view', false).id, '1AbCdEfGhIjKlMnOpQrStUvWxYz');
   assert.throws(() => LA.resolver('LINEAS TELEFONICAS_Images/x.PATRON.1.png', false), /administrador/);
   assert.equal(LA.resolver('../otra/x.jpg', true), null);
-  // Carpetas de producción por omisión (las que indicó el usuario) y escritura fuera de ellas
+  assert.equal(LA.guardarComoAppSheet('BITACORA DE DESECHO_Files_', 'd9f2', 'EVIDENCIA', 'image/jpeg', 'AAA'), 'BITACORA DE DESECHO_Files_/d9f2.EVIDENCIA.101530.jpg');
+  assert.deepEqual(creados[0], { carpeta: 'DES', nombre: 'd9f2.EVIDENCIA.101530.jpg', mime: 'image/jpeg' });
+  assert.throws(() => LA.guardarComoAppSheet('X_Files_', 'k', 'C', 'text/html', 'AAA'), /no permitido/);
+  // Las dos carpetas: la de la app (pruebas "PruebasCONTROLVEHICYTELEF-172665033") y NUCOS de producción
   assert.equal(LA.carpetaAppSheetId(), '1FsC5mloJNhi_TR7pBX1KMEjUZfN_M9OM');
   assert.equal(LA.carpetaNucosId(), '12SRBi1nZlIzfNx0d2y1fAtzOydA2QrT-');
-  assert.equal(LA.escribeEnProduccion(), false);
+  assert.equal(typeof LA.escribeEnProduccion, 'undefined');   // nunca se escribe en NUCOS
 
+  // Rutas del AppSheet al guardar: PDF (acciones GUARDAR de sus bots), desechos y archivos de LINEAS
+  const captura = read('src/services/lineas/LineasCaptura.gs');
+  assert.match(captura, /carpeta: 'INSPECCIONES_Files_', nombre: \(id\) => 'INSPECCION - ' \+ id \+ '\.pdf', columna: 'FORMATO INSPECCIONES LINEAS'/);
+  assert.match(captura, /carpeta: 'Files', nombre: \(id\) => 'RESPONSIVA' \+ id \+ '\.pdf', columna: 'FORMATO RESPONSIVA'/);
+  assert.match(captura, /ligarPdf_\(tabla, destino\.columna, id, pdf, destino\.carpeta \+ '\/' \+ nombre\)/);
+  assert.match(read('src/services/lineas/LineasOperativas.gs'), /guardarComoAppSheet\('BITACORA DE DESECHO_Files_', fila\['ID_DESECHO'\], c, a\.mime, a\.base64\)/);
+  assert.match(read('src/services/lineas/LineasRegistros.gs'), /guardarComoAppSheet\('LINEAS TELEFONICAS_Files_', id, columna, a\.mime, a\.base64\)/);
+  // Fotos de inspección en la carpeta de la app; cancelar solo borra la carpeta que creó el mismo usuario
   const ev = read('src/services/lineas/LineasEvidencias.gs');
-  assert.match(ev, /if \(LineasArchivos\.escribeEnProduccion\(\)\) \{/);
-  assert.match(ev, /LineasArchivos\.exigirEscribible\(carpetaId\);/);
-  assert.match(read('src/services/lineas/LineasCaptura.gs'), /LineasArchivos\.exigirEscribible\(ev\.carpetaId\);/);
+  assert.match(ev, /const CARPETA_FOTOS = 'INSPECCIONES LINEAS_Images';/);
+  assert.match(ev, /carpetaUnica_\(LineasArchivos\.carpetaDeApp\(CARPETA_FOTOS\), 'FOTOS ' \+ id\)/);
+  assert.match(ev, /if \(!carpetaId \|\| !cache\.get\(claveBorrador_\(correo, carpetaId\)\)\) return \{ ok: false \};/);
+  assert.match(read('src/services/lineas/LineasArchivos.gs'), /if \(!carpetaId \|\| !estaDentroDe\(carpetaId, carpetaAppSheetId\(\)\)\)/);
   assert.match(read('src/services/lineas/LineasUtil.gs'), /try \{ return LineasArchivos\.carpetasNucos\(\); \}/);
   assert.match(read('src/ClientApi.gs'), /function apiLineasArchivo\(token, ruta\)/);
+  assert.match(read('src/ClientApi.gs'), /function apiLineasDocumentosNuco\(token, id\)/);
 
-  // Cliente: ícono que abre el archivo en tablas, ficha y documentos
+  // Cliente: ícono que abre el archivo en tablas, ficha y documentos; Documentos muestra NUCOS
   const lineas = read('src/html/js/lineas.html');
-  assert.match(lineas, /col\.render = \(v\) => botonArchivo\(v, 'Ver'\);/);
+  assert.match(lineas, /if \(clase === 'archivo'\) c\.render = \(v\) => botonArchivo\(v, 'Ver'\);/);
   assert.match(lineas, /\['Patrón', botonArchivo\(e\.patronRuta, 'Ver patrón'\), true\]/);
   assert.match(lineas, /if \(d\.pdfRuta\) return botonArchivo\(d\.pdfRuta, 'Ver PDF'\);/);
-  // Apps Script corta lo que sigue a "//" en los .html: la expresión de enlaces no puede terminar en "\//"
-  const i = lineas.indexOf('const esRutaArchivo');
-  const expresion = lineas.slice(i, lineas.indexOf('\n', lineas.indexOf('\n', i) + 1));
-  assert.ok(expresion.indexOf('com[\\/]/i') > 0);
-  assert.equal(expresion.indexOf('\\//'), -1);
+  assert.match(lineas, /if \(nombre === 'documentos'\) cargarNucos\(\);/);
+  assert.match(lineas, /llamar\('apiLineasDocumentosNuco', f\.id\)/);
+});
+
+test('los .html de Líneas no llevan "//" fuera de comentarios (Apps Script corta lo que sigue)', () => {
+  const archivos = filesBelow(path.join(root, 'src/html')).filter((f) => /lineas|views[\\/]lineas|componentes/.test(f));
+  archivos.forEach((f) => {
+    const texto = fs.readFileSync(f, 'utf8');
+    assert.equal(texto.indexOf('\\//'), -1, path.relative(root, f));
+  });
+});
+
+test('la tabla de Líneas Telefónicas tiene las columnas de la vista del AppSheet, en su orden', () => {
+  // ViewDefinition.ColumnOrder de la vista LINEAS TELEFONICAS (sin ID, oculta; "No EMPLEADO" = "NO EMPLEADO")
+  const appsheet = ['NUMERO TELEFONO', 'NUCO', 'TIPO', 'ESTATUS GENERAL', 'NO EMPLEADO', 'RESPONSABLE', 'PUESTO',
+    'NOMBRE RESPONSABLES 2', 'PUESTO RESPONSABLES 2', 'EQUIPO', 'IMEI', 'NUMERO SIM', 'ACCESORIOS', 'SEDE', 'OFICINA / DESARROLLO',
+    'DEPARTAMENTO', 'AREA', 'JEFE DIRECTO', 'DIRECTOR', 'FOLIO', 'RAZON SOCIAL', 'PIN WHATSAPP', 'PIN EQUIPO', 'CUENTA GOOGLE',
+    'COMPAÑIA', 'COSTO PLAN', 'FECHA REGISTRO', 'INICIO PLAN', 'FIN PLAN', 'ESTATUS LINEA', 'FECHA CAMBIO TEMPORAL',
+    'EMAIL USUARIO', 'ESTATUS EQUIPO', 'RESPONSIVA', 'COMENTARIOS', 'FECHA INSPECCION', 'FORMATO INSPECCION'];
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  const servidor = repo.slice(repo.indexOf('const COLS_VISTA_LINEAS'), repo.indexOf('];', repo.indexOf('const COLS_VISTA_LINEAS')));
+  assert.deepEqual([...servidor.matchAll(/'([^']+)'/g)].map((m) => m[1]), appsheet);
+  const lineas = read('src/html/js/lineas.html');
+  const cliente = lineas.slice(lineas.indexOf('const COLUMNAS_VISTA_LINEAS'), lineas.indexOf('function columnasVistaLineas'));
+  assert.deepEqual([...cliente.matchAll(/\['([^']+)', '[^']+'/g)].map((m) => m[1]), appsheet);
+  // DisplayName del AppSheet, archivos con "Ver", correo, agrupación por TIPO y PIN solo para ADMIN
+  assert.match(cliente, /\['NOMBRE RESPONSABLES 2', 'Nombre colaborador\/es'\]/);
+  assert.match(cliente, /\['RESPONSIVA', 'Responsiva', 'archivo'\]/);
+  assert.match(cliente, /\['FORMATO INSPECCION', 'Formato inspección', 'archivo'\]/);
+  assert.match(lineas, /ordenInicial: \{ campo: 'TIPO', dir: 'asc' \},/);
+  assert.match(lineas, /idTabla: 'lineas-' \+ modulo \+ '-v3',/);
+  assert.match(read('src/services/TelefoniaService.gs'), /posiciones\.forEach\(\(i\) => \{ if \(copia\[i\]\) copia\[i\] = '••••'; \}\);/);
+  assert.match(repo, /if \(c === 'FOLIO'\) return legado\.folio \|\| null;/);
+});
+
+test('vistas de detalle del AppSheet: ficha, inspección y responsiva', () => {
+  const servicio = read('src/services/TelefoniaService.gs');
+  // LINEAS TELEFONICAS_Detail: TOTAL ROTACIONES = COUNT de HISTORIAL_REASIGNACIONES del registro
+  assert.match(servicio, /return LineasDatos\.buscarFilas\(LineasRepo\.TAB\.REASIG, 'ID Linea', id\)\.length;/);
+  const lineas = read('src/html/js/lineas.html');
+  assert.equal((lineas.match(/\['Total de rotaciones', miles\(r\.totalRotaciones \|\| 0\)\]/g) || []).length, 2);
+  // RESPONSIVAS LINEAS_Detail con su ColumnOrder y DisplayName; INSPECCIONES LINEAS_Detail con todas las columnas
+  const resp = servicio.slice(servicio.indexOf('const DETALLE_RESPONSIVA'), servicio.indexOf('const COLUMNA_SECRETA_DETALLE'));
+  assert.equal([...resp.matchAll(/\['([^']+)'/g)].length, 31);
+  assert.match(resp, /\['CONTRASEÑA', 'PATRÓN'\]/);
+  assert.match(servicio, /\['E COMMERCE', 'ENLACE A WINDOWS'\]/);
+  assert.match(servicio, /if \(v !== null && !ver && COLUMNA_SECRETA_DETALLE\.test\(columna\)\) v = '••••';/);
+  // PIN y patrón de la inspección ocultos para quien no es ADMIN
+  assert.match(servicio, /insp\.pinEquipo = insp\.pinEquipo \? '••••' : null;/);
+  assert.match(lineas, /llamar\('apiLineasResponsiva', id\)/);
+  assert.match(lineas, /seccion\(5, 'table-properties', 'Registro completo'/);
+});
+
+test('Reactivación, Solicitud y Desechos se pueden editar como con la acción EDIT del AppSheet', () => {
+  const op = read('src/services/lineas/LineasOperativas.gs');
+  assert.match(op, /function formularioEdicion\(tipo, numeroFila, llave, usuario\)/);
+  assert.match(op, /function editar\(tipo, numeroFila, llave, datos, usuario\)/);
+  // La fila se confirma por su llave; folio, fecha y quién registró no cambian; solo se escribe lo que cambió
+  assert.match(op, /String\(LineasUtil\.col\(f, LLAVE\[clave\]\) \|\| ''\) !== String\(llave \|\| ''\)/);
+  assert.match(op, /\['FOLIO', 'FECHA DE REGISTRO', 'QUIEN REGISTRO'\]\.forEach\(\(c\) => \{ delete valores\[c\]; \}\);/);
+  assert.match(op, /valores\['REASIGNACION'\] = !valores\['ASIGNACION'\];/);
+  const lineas = read('src/html/js/lineas.html');
+  assert.match(lineas, /function abrirAltaAppSheet\(tipo, titulo, alGuardar, edicion\)/);
+  assert.equal((lineas.match(/\{ icono: 'pencil', titulo: 'Editar'/g) || []).length, 2);
+  assert.match(read('src/services/lineas/LineasRepo.gs'), /_id: f\['ID'\] === undefined/);
 });

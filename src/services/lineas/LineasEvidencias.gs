@@ -1,29 +1,15 @@
 /**
  * LineasEvidencias.gs
- * Carpetas y archivos de evidencia (fotos, firmas) en Drive para inspecciones y responsivas
- * capturadas desde el sistema (misma carpeta NUCOS que ya lee LineasUtil.carpetasNucos()).
+ * Fotos de las inspecciones (mejora del sistema nuevo: el AppSheet no tenía columna de fotos).
  *
- * Estructura (igual a la de producción):
- *   <NUCO>/INSPECCIONES/<AÑO>/<N> CUATRIMESTRE/<MES>/INSP DD MM/FOTOS
- *   <NUCO>/CARTA RESPONSIVA/<AÑO>/RESP DD MM
- *
- * Script Property: LINEAS_DRIVE_CARPETA_RAIZ (misma que usa LineasUtil para el inventario de NUCOS).
+ * Todo va en la carpeta de la app AppSheet (LineasArchivos.carpetaAppSheetId), junto a sus imágenes:
+ *   INSPECCIONES LINEAS_Images/FOTOS <ID de la inspección>
+ * Firmas, PDF y archivos de columnas File se guardan con las rutas del AppSheet (LineasArchivos.guardarComoAppSheet,
+ * LineasCaptura.generarPdf). NUCOS de producción es de solo lectura.
  */
 
 const LineasEvidencias = (function () {
-  const MESES_MAYUS = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
-  const CUATRIMESTRES = ['1ER CUATRIMESTRE', '2DO CUATRIMESTRE', '3ER CUATRIMESTRE'];
-
-  function carpetaRaiz_() {
-    const raiz = PropertiesService.getScriptProperties().getProperty('LINEAS_DRIVE_CARPETA_RAIZ');
-    if (!raiz) throw new Error('Falta configurar LINEAS_DRIVE_CARPETA_RAIZ (corre LineasAdmin.configurarLineasDev()).');
-    return DriveApp.getFolderById(raiz);
-  }
-
-  function subcarpeta_(padre, nombre) {
-    const it = padre.getFoldersByName(nombre);
-    return it.hasNext() ? it.next() : padre.createFolder(nombre);
-  }
+  const CARPETA_FOTOS = 'INSPECCIONES LINEAS_Images';
 
   /** Crea una carpeta con nombre único (agrega " (2)", " (3)"… si ya existe). */
   function carpetaUnica_(padre, nombre) {
@@ -32,49 +18,34 @@ const LineasEvidencias = (function () {
     return padre.createFolder(candidato);
   }
 
+  const claveSubida_ = (correo, id) => 'ln_subida_' + correo + '_' + id;
+  const claveBorrador_ = (correo, id) => 'ln_borrador_' + correo + '_' + id;
+
   /**
-   * Carpeta del NUCO donde se GUARDA lo nuevo. Si la carpeta de escritura es NUCOS (producción) se reutiliza la
-   * del NUCO; si es otra (DEV: carpeta de pruebas) se usa <carpeta de pruebas>/<NUCO> y producción no se toca.
+   * Carpeta de fotos de una inspección nueva (se crea al subir la primera foto) y autoriza (1 h) al usuario a subir
+   * archivos en ella. Las responsivas no llevan fotos: no se crea nada.
    */
-  function carpetaNuco_(nuco) {
-    const raiz = carpetaRaiz_();
-    const nuco4 = nuco ? LineasUtil.nuco4(nuco) : null;
-    if (LineasArchivos.escribeEnProduccion()) {
-      const id = nuco4 && LineasUtil.carpetasNucos()[nuco4];
-      if (id) {
-        try { return DriveApp.getFolderById(id); } catch (e) { /* la carpeta ya no existe: se crea una nueva abajo */ }
-      }
-    }
-    return subcarpeta_(raiz, nuco4 || 'SIN NUCO');
-  }
-
-  /** Crea la carpeta de una evidencia nueva y autoriza (1 h) al usuario a subir archivos en ella. */
-  function prepararCarpetaEvidencia(tipo, nuco, fecha, correo) {
-    const nucoCarpeta = carpetaNuco_(nuco);
-    const anio = Utilities.formatDate(fecha, 'America/Mexico_City', 'yyyy');
-    const mes = Number(Utilities.formatDate(fecha, 'America/Mexico_City', 'M'));
-    const ddmm = Utilities.formatDate(fecha, 'America/Mexico_City', 'dd MM');
-    let carpeta, fotos = null;
-    if (tipo === 'INSPECCION') {
-      const base = subcarpeta_(subcarpeta_(subcarpeta_(subcarpeta_(nucoCarpeta, 'INSPECCIONES'), anio), CUATRIMESTRES[Math.floor((mes - 1) / 4)]), MESES_MAYUS[mes - 1]);
-      carpeta = carpetaUnica_(base, 'INSP ' + ddmm);
-      fotos = carpeta.createFolder('FOTOS');
-    } else {
-      carpeta = carpetaUnica_(subcarpeta_(subcarpeta_(nucoCarpeta, 'CARTA RESPONSIVA'), anio), 'RESP ' + ddmm);
-    }
-    const permitidas = [carpeta.getId()].concat(fotos ? [fotos.getId()] : []);
+  function prepararCarpetaEvidencia(tipo, idRegistro, correo) {
+    if (tipo !== 'INSPECCION') return { carpetaId: null, fotosCarpetaId: null, ruta: '' };
+    const id = /^[\w-]{4,40}$/.test(String(idRegistro || '')) ? String(idRegistro) : Utilities.formatDate(new Date(), 'America/Mexico_City', 'yyyyMMdd HHmmss');
+    const carpeta = carpetaUnica_(LineasArchivos.carpetaDeApp(CARPETA_FOTOS), 'FOTOS ' + id);
     const cache = CacheService.getScriptCache();
-    permitidas.forEach((id) => cache.put('ln_subida_' + correo + '_' + id, '1', 3600));
-    return {
-      carpetaId: carpeta.getId(), fotosCarpetaId: fotos ? fotos.getId() : null,
-      ruta: [nuco || 'SIN NUCO', tipo === 'INSPECCION' ? 'INSPECCIONES' : 'CARTA RESPONSIVA', anio, carpeta.getName()].join('/'),
-    };
+    cache.put(claveSubida_(correo, carpeta.getId()), '1', 3600);
+    cache.put(claveBorrador_(correo, carpeta.getId()), '1', 3600);
+    return { carpetaId: carpeta.getId(), fotosCarpetaId: carpeta.getId(), ruta: CARPETA_FOTOS + '/' + carpeta.getName() };
   }
 
-  /** Sube un archivo (base64) a una carpeta previamente autorizada para este usuario (prepararCarpetaEvidencia). */
+  /** Carpeta de fotos para una inspección ya guardada que no tenía (p. ej. del AppSheet). */
+  function crearCarpetaFotos(idRegistro, correo) {
+    const c = prepararCarpetaEvidencia('INSPECCION', idRegistro, correo);
+    CacheService.getScriptCache().remove(claveBorrador_(correo, c.carpetaId)); // ya no es borrador: no se descarta
+    return c;
+  }
+
+  /** Sube un archivo (base64) a una carpeta previamente autorizada para este usuario. */
   function subirArchivo(correo, carpetaId, nombre, mime, base64) {
-    if (!CacheService.getScriptCache().get('ln_subida_' + correo + '_' + carpetaId)) {
-      throw new Error('Carpeta no autorizada para subir archivos (o la sesión de captura expiró: vuelve a empezar la inspección/responsiva).');
+    if (!CacheService.getScriptCache().get(claveSubida_(correo, carpetaId))) {
+      throw new Error('Carpeta no autorizada para subir archivos (o la sesión de captura expiró: vuelve a empezar la inspección).');
     }
     if (!/^(image\/(jpeg|png|webp|heic|heif)|application\/pdf)$/.test(mime)) throw new Error('Tipo de archivo no permitido: ' + mime);
     const bytes = Utilities.base64Decode(base64);
@@ -83,37 +54,17 @@ const LineasEvidencias = (function () {
     return { id: archivo.getId(), nombre: archivo.getName() };
   }
 
-  /** Envía a la papelera una carpeta de borrador que el mismo usuario acaba de preparar. */
-  function cancelarCarpetaEvidencia(correo, carpetaId, fotosCarpetaId) {
+  /** Envía a la papelera una carpeta de borrador que el mismo usuario acaba de crear (nunca otra). */
+  function cancelarCarpetaEvidencia(correo, carpetaId) {
     const cache = CacheService.getScriptCache();
-    const clave = 'ln_subida_' + correo + '_' + carpetaId;
-    if (!carpetaId || !cache.get(clave)) return { ok: false };
+    if (!carpetaId || !cache.get(claveBorrador_(correo, carpetaId))) return { ok: false };
     DriveApp.getFolderById(carpetaId).setTrashed(true);
-    cache.remove(clave);
-    if (fotosCarpetaId) cache.remove('ln_subida_' + correo + '_' + fotosCarpetaId);
+    cache.remove(claveBorrador_(correo, carpetaId));
+    cache.remove(claveSubida_(correo, carpetaId));
     return { ok: true };
   }
 
-  /**
-   * Archivo de una columna File de LINEAS TELEFONICAS (RESPONSIVA, FORMATO INSPECCION) capturado desde el
-   * formulario del registro: se guarda en <NUCO>/<subcarpeta> y regresa el enlace que queda en la hoja.
-   */
-  function guardarArchivoDeRegistro(nuco, subcarpeta, nombre, mime, base64) {
-    if (!/^(image\/(jpeg|png|webp|heic|heif)|application\/pdf)$/.test(mime)) throw new Error('Tipo de archivo no permitido: ' + mime);
-    const bytes = Utilities.base64Decode(base64);
-    if (bytes.length > 15 * 1024 * 1024) throw new Error('El archivo supera 15 MB.');
-    const carpeta = subcarpeta_(carpetaNuco_(nuco), subcarpeta);
-    const archivo = carpeta.createFile(Utilities.newBlob(bytes, mime, String(nombre || 'archivo').replace(/[\/]/g, '_')));
-    return 'https://drive.google.com/file/d/' + archivo.getId() + '/view';
-  }
-
-  /** Blob de un archivo de Drive (para insertar firmas en el PDF). null si no existe o no hay id. */
-  function blobDeArchivo(id) {
-    if (!id) return null;
-    try { return DriveApp.getFileById(id).getBlob(); } catch (e) { return null; }
-  }
-
-  /** Valida que los archivos (fotos/firmas) estén dentro de las carpetas autorizadas de la evidencia. */
+  /** Valida que los archivos (fotos) estén dentro de las carpetas autorizadas de la evidencia. */
   function validarArchivosEnCarpeta(ids, carpetaIds) {
     (ids || []).filter(Boolean).forEach((id) => {
       const padres = DriveApp.getFileById(id).getParents();
@@ -123,17 +74,11 @@ const LineasEvidencias = (function () {
     });
   }
 
-  /** Autoriza (1 h) al usuario a subir archivos en estas carpetas (p. ej. fotos de una inspección ya guardada). */
+  /** Autoriza (1 h) al usuario a subir archivos en estas carpetas (solo si son de la carpeta de la app). */
   function autorizarSubida(correo, ids) {
     (ids || []).filter(Boolean).forEach(LineasArchivos.exigirEscribible);
     const cache = CacheService.getScriptCache();
-    (ids || []).filter(Boolean).forEach((id) => cache.put('ln_subida_' + correo + '_' + id, '1', 3600));
-  }
-
-  /** Subcarpeta FOTOS de la carpeta de una evidencia (la crea si no existe). */
-  function carpetaFotos(carpetaId) {
-    LineasArchivos.exigirEscribible(carpetaId);
-    return subcarpeta_(DriveApp.getFolderById(carpetaId), 'FOTOS').getId();
+    (ids || []).filter(Boolean).forEach((id) => cache.put(claveSubida_(correo, id), '1', 3600));
   }
 
   /** Fotos (imágenes que no son firma ni patrón) de una carpeta. */
@@ -148,7 +93,7 @@ const LineasEvidencias = (function () {
   }
 
   return {
-    prepararCarpetaEvidencia, cancelarCarpetaEvidencia, subirArchivo, guardarArchivoDeRegistro, blobDeArchivo, validarArchivosEnCarpeta,
-    autorizarSubida, carpetaFotos, contarImagenes,
+    CARPETA_FOTOS, prepararCarpetaEvidencia, crearCarpetaFotos, cancelarCarpetaEvidencia, subirArchivo,
+    validarArchivosEnCarpeta, autorizarSubida, contarImagenes,
   };
 })();

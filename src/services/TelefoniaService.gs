@@ -43,16 +43,34 @@ const TelefoniaService = (function () {
     };
   }
 
-  /** Índices de equipos y líneas para los listados (caché 30 min). */
+  /** Índices de equipos y líneas para los listados, con las columnas de la vista del AppSheet (caché 30 min). */
   function indice(token) {
-    Auth.validarSesion(token);
+    const sesion = Auth.validarSesion(token);
     const ix = LineasRepo.indice();
-    return { equipos: Object.assign({ generadoEn: ix.generadoEn }, ix.equipos), lineas: ix.lineas };
+    let vista = ix.vista || { columnas: [], secretas: [], filas: [] };
+    // PIN WHATSAPP / PIN EQUIPO: solo ADMIN (la caché es la misma para todos: se copia antes de ocultar)
+    if (!puedeVerSecretos_(sesion)) {
+      const posiciones = (vista.secretas || []).map((c) => vista.columnas.indexOf(c) + 1).filter((i) => i > 0);
+      vista = Object.assign({}, vista, {
+        filas: vista.filas.map((fila) => {
+          if (!posiciones.some((i) => fila[i])) return fila;
+          const copia = fila.slice();
+          posiciones.forEach((i) => { if (copia[i]) copia[i] = '••••'; });
+          return copia;
+        }),
+      });
+    }
+    return { equipos: Object.assign({ generadoEn: ix.generadoEn }, ix.equipos), lineas: ix.lineas, vista: vista };
   }
 
   function registro_(id) {
     const f = LineasRepo.leerRegistroPorId(id);
     return f ? LineasRepo.convertirRegistro(f, LineasUtil.carpetasNucos()) : null;
+  }
+
+  /** TOTAL ROTACIONES del AppSheet: COUNT(SELECT(HISTORIAL_REASIGNACIONES[ID Historial], [ID Linea] = [_THISROW].[ID])). */
+  function totalRotaciones_(id) {
+    return LineasDatos.buscarFilas(LineasRepo.TAB.REASIG, 'ID Linea', id).length;
   }
 
   /** Ficha de un equipo con su línea (evidencias e historial se piden aparte, en paralelo). */
@@ -64,6 +82,7 @@ const TelefoniaService = (function () {
       equipo: ocultarSecretos_(r.equipo, CAMPOS_SECRETOS_EQUIPO, sesion),
       linea: ocultarSecretos_(r.linea, CAMPOS_SECRETOS_LINEA, sesion),
       detalles: r.detalles,
+      totalRotaciones: totalRotaciones_(id),
     });
   }
 
@@ -76,7 +95,78 @@ const TelefoniaService = (function () {
       linea: ocultarSecretos_(r.linea, CAMPOS_SECRETOS_LINEA, sesion),
       equipo: ocultarSecretos_(r.equipo, CAMPOS_SECRETOS_EQUIPO, sesion),
       detalles: r.detalles,
+      totalRotaciones: totalRotaciones_(id),
     });
+  }
+
+  /**
+   * Archivos de la carpeta del NUCO en NUCOS de producción (solo lectura), para "Documentos" de la ficha.
+   * Firmas, patrones y contraseñas solo para ADMIN. Caché 10 min por NUCO.
+   */
+  function documentosNuco(token, id) {
+    const sesion = Auth.validarSesion(token);
+    const f = LineasRepo.leerRegistroPorId(id);
+    if (!f) throw new Error('No existe el registro ' + id);
+    const nuco = LineasUtil.nuco4(LineasUtil.col(f, 'NUCO'));
+    if (!nuco) return { nuco: null, carpetaId: null, grupos: [] };
+    const clave = 'nucos_archivos_v2_' + nuco;
+    let r = LineasDatos.cacheLeer(clave);
+    if (!r) {
+      r = LineasUtil.paraCliente(LineasArchivos.archivosNuco(nuco));
+      LineasDatos.cacheGuardar(clave, r, 600);
+    }
+    let grupos = r.grupos;
+    if (!puedeVerSecretos_(sesion)) {
+      grupos = grupos.map((g) => Object.assign({}, g, { archivos: g.archivos.filter((a) => !/^(FIRMA|PATRON|CONTRASE)/i.test(a.nombre)) }))
+        .filter((g) => g.archivos.length);
+    }
+    return { nuco: nuco, carpetaId: r.carpetaId, grupos: grupos };
+  }
+
+  // ---------------- Vistas de detalle del AppSheet (columnas en su orden, con su DisplayName) ----------------
+
+  /** INSPECCIONES LINEAS_Detail: ColumnOrder vacío = todas las columnas de la tabla en su orden. */
+  const DETALLE_INSPECCION = [['ID'], ['ID LINEA'], ['NUCO'], ['RESPONSABLE'], ['DEPARTAMENTO'], ['AREA'], ['SEDE'],
+    ['OFICINA / DESARROLLO'], ['PUESTO'], ['JEFE DIRECTO'], ['CORREO'], ['TIPO'], ['No TELEFONO'], ['IMEI'], ['SIM'], ['MODELO'],
+    ['COLOR'], ['COMPAÑIA'], ['PLAN'], ['RAZON SOCIAL'], ['IDENTIFICACION'], ['CUBO'], ['CABLE'], ['FUNDA'], ['MICA'],
+    ['MULTITAREA'], ['WIFI'], ['RED MOVIL'], ['GPS'], ['USO DATOS'], ['PANTALLA'], ['BOTONES VOLUMEN'], ['BOTON ENCENDIDO'],
+    ['CUERPO EQUIPO'], ['CAMARA'], ['PUERTO CARGA'], ['ALTAVOZ'], ['BOCINAS'], ['MICROFONO'], ['LINEA DE VOZ'],
+    ['DURACION BATERIA'], ['TEMPERATURA'], ['DESEMPEÑO'], ['CONTRASEÑA MODEM'], ['PIN WHATSAPP'], ['PIN EQUIPO'], ['PATRON'],
+    ['WHATSAPP'], ['E COMMERCE', 'ENLACE A WINDOWS'], ['MOVILIDAD / DELIVERY', 'UBER'], ['TIKTOK', 'WAZE'],
+    ['NETFLIX', 'LECTOR/ESCANER DE DOCUMENTOS'], ['MUSICA', 'LECTOR DE CODIGO QR'],
+    ['GMAIL', 'APPS DE GOOGLE (GMAIL, DRIVE, ENTRE OTRAS)'], ['YOUTUBE'], ['JUEGOS', 'TIMESTAMP'], ['TIMEMARK'], ['OTRA'],
+    ['OBSERVACIONES'], ['TICKET'], ['FIRMA RESPONSABLE'], ['NOMBRE INSPECTOR'], ['FIRMA INSPECTOR'], ['FECHA DE REGISTRO'],
+    ['FORMATO INSPECCIONES LINEAS'], ['SO', 'SISTEMA OPERATIVO'], ['ACTUALIZACIONES'], ['PANTALLA TACTIL'], ['CUBO 2'],
+    ['CABLE 2'], ['CALIFICACION']];
+  /** RESPONSIVAS LINEAS_Detail: su ColumnOrder. */
+  const DETALLE_RESPONSIVA = [['ID'], ['ID LINEA'], ['NUCO'], ['No EMPLEADO', 'NÚMERO DE EMPLEADO'], ['RESPONSABLE'],
+    ['IDENTIFICACION'], ['FECHA RESPONSIVA', 'FECHA DE REGISTRO DE RESPONSIVA'], ['SEDE'], ['OFICINA / DESARROLLO', 'OFICINA O DESARROLLO'],
+    ['AREA'], ['PUESTO'], ['DIRECTOR'], ['CORREO', 'CORREO ELECTRÓNICO'], ['No TELEFONO', 'NÚMERO DE TELÉFONO'], ['COMPAÑIA'],
+    ['DEPARTAMENTO'], ['MODELO'], ['SIM'], ['IMEI'], ['COLOR'], ['ACCESORIOS'], ['PIN WHATSAPP'], ['CONTRASEÑA', 'PATRÓN'],
+    ['OBSERVACIONES'], ['FIRMA RESPONSABLE'], ['NOMBRE CI', 'NOMBRE RESPONSABLE DE CONTROL INTERNO'],
+    ['FIRMA CI', 'FIRMA RESPONSABLE DE CONTROL INTERNO'], ['FORMATO RESPONSIVA'], ['DIA'], ['MES'], ['AÑO']];
+  const COLUMNA_SECRETA_DETALLE = /^(PIN WHATSAPP|PIN EQUIPO|PATRON|CONTRASEÑA|CONTRASEÑA MODEM|FIRMA .+)$/;
+
+  /** Fila de la tabla en el orden de su vista de detalle del AppSheet: [{ columna, titulo, valor }]. */
+  function registroDetalle_(tabla, id, definicion, sesion) {
+    const filas = LineasDatos.buscarFilas(tabla, 'ID', id);
+    if (!filas.length) return null;
+    const f = LineasDatos.leerFilas([{ tabla: tabla, filas: filas.slice(0, 1) }])[0][0];
+    const ver = puedeVerSecretos_(sesion);
+    return definicion.map(([columna, titulo]) => {
+      let v = LineasUtil.col(f, columna);
+      if (v === '' || v === undefined) v = null;
+      if (v !== null && !ver && COLUMNA_SECRETA_DETALLE.test(columna)) v = '••••';
+      return { columna: columna, titulo: titulo || columna, valor: v };
+    });
+  }
+
+  /** Responsiva con su vista de detalle del AppSheet (RESPONSIVAS LINEAS_Detail). */
+  function responsiva(token, id) {
+    const sesion = Auth.validarSesion(token);
+    const detalle = registroDetalle_(LineasRepo.TAB.RESP, id, DETALLE_RESPONSIVA, sesion);
+    if (!detalle) throw new Error('No existe la responsiva ' + id);
+    return LineasUtil.paraCliente({ detalle: detalle });
   }
 
   /** Resumen ligero de inspecciones/responsivas para tablas (sin checklist completo). */
@@ -127,6 +217,12 @@ const TelefoniaService = (function () {
     const sesion = Auth.validarSesion(token);
     const insp = LineasRepo.leerInspeccion(id);
     if (!insp) throw new Error('No existe la inspección ' + id);
+    // PIN, patrón y firmas solo para ADMIN (igual que en la ficha)
+    if (!puedeVerSecretos_(sesion)) {
+      insp.pinEquipo = insp.pinEquipo ? '••••' : null;
+      insp.patronRuta = insp.patronRuta ? '••••' : null;
+      insp.firmas = null;
+    }
     let eq = null;
     if (insp.registroId) {
       const f = LineasRepo.leerRegistroPorId(insp.registroId);
@@ -168,6 +264,8 @@ const TelefoniaService = (function () {
       fotos: fotos,
       firmas: puedeVerSecretos_(sesion) ? firmas : [],
       pdfs: pdfs,
+      // INSPECCIONES LINEAS_Detail del AppSheet (las históricas solo en Drive no tienen fila)
+      detalle: /^drive_/.test(id) ? null : registroDetalle_(LineasRepo.TAB.INSP, id, DETALLE_INSPECCION, sesion),
       puedeOperar: rolesOperan_().indexOf(sesion.rol) >= 0,
     });
   }
@@ -223,6 +321,17 @@ const TelefoniaService = (function () {
   function formularioOperativa(token, tipo) {
     const sesion = Auth.requiereRol(token, rolesOperan_());
     return LineasUtil.paraCliente(LineasOperativas.formulario(tipo, usuarioOperacion_(sesion)));
+  }
+
+  /** Formulario de edición de un registro de Reactivación, Solicitud o Desecho (acción EDIT del AppSheet). */
+  function formularioEdicionOperativa(token, tipo, fila, llave) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    return LineasUtil.paraCliente(LineasOperativas.formularioEdicion(tipo, fila, llave, usuarioOperacion_(sesion)));
+  }
+
+  function editarVistaOperativa(token, tipo, fila, llave, datos) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    return LineasUtil.paraCliente(LineasOperativas.editar(tipo, fila, llave, datos || {}, usuarioOperacion_(sesion)));
   }
 
   function crearVistaOperativa(token, tipo, datos) {
@@ -285,24 +394,23 @@ const TelefoniaService = (function () {
   }
 
   /** Crea la carpeta de evidencia en Drive (NUCOS) para una inspección o responsiva nueva. */
-  function prepararEvidencia(token, tipo, ref) {
+  function prepararEvidencia(token, tipo, ref, idRegistro) {
     const sesion = Auth.requiereRol(token, rolesOperan_());
     if (tipo !== 'INSPECCION' && tipo !== 'RESPONSIVA') throw new Error('Tipo de evidencia inválido.');
-    const obj = LineasCaptura.objetivo(ref);
-    const nuco = obj.reg.nuco || ('LINEA ' + (obj.linea && obj.linea.numero || ''));
-    return LineasUtil.paraCliente(LineasEvidencias.prepararCarpetaEvidencia(tipo, nuco, new Date(), sesion.correo));
+    LineasCaptura.objetivo(ref); // valida que el equipo o la línea existan
+    return LineasUtil.paraCliente(LineasEvidencias.prepararCarpetaEvidencia(tipo, idRegistro, sesion.correo));
   }
 
-  /** Sube una foto o evidencia (base64) a una carpeta ya preparada. Las firmas no se persisten en Drive. */
+  /** Sube una foto (base64) a la carpeta de fotos ya preparada. Las firmas llegan al guardar. */
   function subirArchivo(token, carpetaId, nombre, mime, base64) {
     const sesion = Auth.requiereRol(token, rolesOperan_());
     return LineasUtil.paraCliente(LineasEvidencias.subirArchivo(sesion.correo, carpetaId, nombre, mime, base64));
   }
 
   /** Descarta una carpeta creada para una captura que el usuario canceló. */
-  function cancelarEvidencia(token, carpetaId, fotosCarpetaId) {
+  function cancelarEvidencia(token, carpetaId) {
     const sesion = Auth.requiereRol(token, rolesOperan_());
-    return LineasEvidencias.cancelarCarpetaEvidencia(sesion.correo, carpetaId, fotosCarpetaId);
+    return LineasEvidencias.cancelarCarpetaEvidencia(sesion.correo, carpetaId);
   }
 
   /** Guarda una inspección nueva (checklist, snapshot y bitácora). El PDF se pide aparte. */
@@ -326,6 +434,7 @@ const TelefoniaService = (function () {
   return {
     permisos, indice, equipo, linea, evidencias, historial, inspeccion, catalogos, colaboradores, bitacora, vistaOperativa, formularioOperativa, crearVistaOperativa, formularioRegistro, recargarDatos,
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf, crearRegistro, editarRegistro,
-    cambiarEstatus, fotosInspeccion, exportarBase, archivo,
+    cambiarEstatus, fotosInspeccion, exportarBase, archivo, documentosNuco, responsiva,
+    formularioEdicionOperativa, editarVistaOperativa,
   };
 })();

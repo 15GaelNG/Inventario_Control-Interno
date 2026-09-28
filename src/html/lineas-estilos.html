@@ -104,6 +104,20 @@
   .ln-cuadros-mas { display: flex; justify-content: center; align-items: center; gap: 14px; flex-wrap: wrap; margin: 16px 0; font-size: 12.5px; }
   .ln-cuadros-mas button { min-width: 180px; }
   .ln-cuadro-cargando, .ln-cuadro-vacio { grid-column: 1 / -1; min-height: 120px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  /* Registro completo de una inspección (vista de detalle del AppSheet) */
+  .ln-registro-completo > summary { cursor: pointer; font-weight: 600; margin-bottom: 8px; }
+
+  /* Documentos: carpeta NUCOS de producción (solo consulta) */
+  .ln-nucos-cabecera { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .ln-nucos-cabecera p { margin: 0; }
+  .ln-nucos-grupo { border: 1px solid var(--color-border); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; background: var(--color-surface); }
+  .ln-nucos-grupo > summary { cursor: pointer; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .ln-nucos-grupo > summary .ln-tenue { font-size: 12px; }
+  .ln-nucos-grupo[open] > summary { margin-bottom: 6px; }
+  .ln-nucos-grupo .ln-pie { margin: 0 0 8px; font-size: 12px; overflow-wrap: anywhere; }
+  .ln-nucos-archivos { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+  .ln-nucos-archivos a.ln-boton { max-width: 100%; overflow-wrap: anywhere; }
+
   /* Panel lateral de Líneas (mismo .dt-panel del detalle de DataTable) */
   .ln-panel .dt-panel-cuerpo { padding-top: 14px; }
   .ln-panel .ln-panel-resumen { margin-bottom: 14px; }

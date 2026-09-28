@@ -313,12 +313,16 @@ const LineasRegistros = (function () {
     return salida;
   }
 
-  /** Sube los archivos de las columnas File (RESPONSIVA, FORMATO INSPECCION) a la carpeta del NUCO. */
-  function subirArchivos_(archivos, nuco, valores) {
+  /**
+   * Columnas File (RESPONSIVA, FORMATO INSPECCION): como el AppSheet, en "LINEAS TELEFONICAS_Files_" de la carpeta de
+   * la app con nombre <ID>.<COLUMNA>.<HHmmss>.<ext>; en la hoja queda esa ruta.
+   */
+  function subirArchivos_(archivos, id, valores) {
     Object.keys(archivos || {}).forEach((columna) => {
       const a = archivos[columna];
       if (!a || !a.base64) return;
-      valores[columna] = LineasEvidencias.guardarArchivoDeRegistro(nuco, columna === 'RESPONSIVA' ? 'CARTA RESPONSIVA' : 'INSPECCIONES', a.nombre, a.mime, a.base64);
+      if (['RESPONSIVA', 'FORMATO INSPECCION'].indexOf(columna) < 0) throw new Error('Columna de archivo inválida: ' + columna);
+      valores[columna] = LineasArchivos.guardarComoAppSheet('LINEAS TELEFONICAS_Files_', id, columna, a.mime, a.base64);
     });
   }
 
@@ -330,8 +334,8 @@ const LineasRegistros = (function () {
     const r = resolver_(elementos, baseNueva_(), enviados, ctx);
     if (r.errores.length) throw new Error(r.errores.slice(0, 8).join(' · '));
     const valores = aHoja_(elementos, r.valores);
-    subirArchivos_(datos && datos.archivos, valores['NUCO'], valores);
     const id = LineasDatos.nuevoIdCorto();
+    subirArchivos_(datos && datos.archivos, id, valores);
     const ahora = new Date();
     valores.ID = id;
     valores['FECHA REGISTRO'] = ahora;
@@ -358,7 +362,7 @@ const LineasRegistros = (function () {
       const r = resolver_(elementos, base, enviados, ctx);
       if (r.errores.length) throw new Error(r.errores.slice(0, 8).join(' · '));
       const valores = aHoja_(elementos, r.valores);
-      subirArchivos_(datos && datos.archivos, valores['NUCO'], valores);
+      subirArchivos_(datos && datos.archivos, id, valores);
       // Solo lo que cambió (las fechas sin cambio se comparan por texto para no reescribirlas)
       const cambios = {};
       Object.keys(valores).forEach((c) => {

@@ -88,6 +88,19 @@
       if (/^https?:/i.test(v)) return '<a class="ln-btn-icono ln-archivo" target="_blank" rel="noopener" href="' + esc(v) + '" title="' + esc(nombre) + '">' + etiqueta + '</a>';
       return '<button type="button" class="ln-btn-icono ln-archivo" data-ln-archivo="' + esc(v) + '" title="' + esc(nombre) + '">' + etiqueta + '</button>';
     }
+    /** Valor de un campo de una vista de detalle del AppSheet (archivos con "Ver", fechas y porcentaje con formato). */
+    function valorDetalleAppSheet(d) {
+      const v = d.valor;
+      if (v === null || v === undefined || v === '') return vacio;
+      if (/^(FORMATO|FIRMA|PATRON$|CONTRASEÑA$)/.test(d.columna)) return botonArchivo(v, 'Ver');
+      if (d.columna === 'CALIFICACION' && !isNaN(Number(v))) return esc(porcentaje(Number(v)));
+      if (esFechaIso(v)) return esc(fechaTabla(v));
+      return esc(v);
+    }
+    function camposDetalleAppSheet(detalle) {
+      return '<dl class="ln-campos">' + (detalle || []).map((d) => '<dt>' + esc(d.titulo) + '</dt><dd>' + valorDetalleAppSheet(d) + '</dd>').join('') + '</dl>';
+    }
+
     async function abrirArchivoAppSheet(boton) {
       // La ventana se abre en el clic (si no, el navegador la bloquea) y se le da la dirección al llegar
       const ventana = window.open('', '_blank');
@@ -500,8 +513,7 @@
         control = '<div class="ln-multi" data-columna="' + esc(e.columna) + '"><div class="ln-pastillas">' + (e.opciones || []).map((o) =>
           '<button type="button" class="ln-pastilla ln-pastilla-multi' + (elegidas.indexOf(String(o).toUpperCase()) >= 0 ? ' activa' : '') + '" data-valor="' + esc(o) + '">' + esc(o) + '</button>').join('') + '</div></div>';
       } else if (e.control === 'archivo') {
-        const enlace = /^https?:/.test(valor) ? '<a class="ln-enlace" target="_blank" rel="noopener" href="' + esc(valor) + '">' + icono('file-text') + ' Ver archivo actual</a>'
-          : (valor ? '<span class="ln-tenue">' + esc(valor) + '</span>' : '<span class="ln-tenue">Sin archivo</span>');
+        const enlace = valor ? botonArchivo(valor, 'Ver archivo actual') : '<span class="ln-tenue">Sin archivo</span>';
         control = '<div class="ln-af-archivo">' + enlace + '<input type="file" id="' + id + '" data-archivo="' + esc(e.columna) + '" accept="application/pdf,image/*" /></div>';
       } else if (e.control === 'fecha') {
         control = '<input type="date"' + attrs + ' value="' + esc(valor) + '" />';
@@ -510,7 +522,8 @@
           [['TRUE', 'Sí'], ['FALSE', 'No']].map(([v, t]) => '<button type="button" class="ln-pastilla' + (valor.toUpperCase() === v ? ' activa' : '') + (v === 'FALSE' ? ' ln-pastilla-mal' : '') + '" data-valor="' + v + '">' + t + '</button>').join('') + '</div></div>';
       } else if (e.control === 'referencia') {
         // Ref del AppSheet: se elige por etiqueta y se guarda el ID de la fila
-        control = '<input type="text"' + attrs + ' data-referencia="1" autocomplete="off" placeholder="Escribe para buscar…" />';
+        const elegida = valor ? (e.opciones || []).filter((o) => String(o.id) === valor)[0] : null;
+        control = '<input type="text"' + attrs + ' data-referencia="1" autocomplete="off" placeholder="Escribe para buscar…" value="' + esc(elegida ? elegida.etiqueta : '') + '" />';
       } else if (e.control === 'area') {
         control = '<textarea' + attrs + ' rows="4">' + esc(valor) + '</textarea>';
       } else if (e.control === 'fechaHora') {
@@ -1041,15 +1054,20 @@
      * Lo usa la Bitácora de Desechos; soporta referencias, listas abiertas, fechas y archivos.
      * `titulo` es el del botón que lo abre (p. ej. "Registrar desecho").
      */
-    function abrirAltaAppSheet(tipo, titulo, alGuardar) {
+    /**
+     * Formulario del AppSheet en un modal: alta, o edición si llega `edicion` = { fila, llave } (acción EDIT del
+     * AppSheet: el mismo formulario con los valores del registro; folio, fecha y quién registró no cambian).
+     */
+    function abrirAltaAppSheet(tipo, titulo, alGuardar, edicion) {
       const fondo = document.createElement('div');
       fondo.className = 'modal-backdrop';
       fondo.innerHTML = '<div class="modal-card modal-card-wide" role="dialog" aria-modal="true" style="max-width:960px">' +
-        '<div class="modal-header"><div><h3 style="margin:0">' + esc(titulo) + '</h3><p class="modal-subtitle">Mismo formulario que en AppSheet. Los campos con * son obligatorios.</p></div>' +
+        '<div class="modal-header"><div><h3 style="margin:0">' + esc(titulo) + '</h3><p class="modal-subtitle">Mismo formulario que en AppSheet. Los campos con * son obligatorios.' +
+        (edicion ? ' Los archivos solo se reemplazan si eliges uno nuevo.' : '') + '</p></div>' +
         '<button type="button" class="modal-close" data-cerrar aria-label="Cerrar">' + ico('x') + '</button></div>' +
         '<div class="ln-alta-cuerpo modal-form-scroll"><p class="empty-state"><span class="ln-spinner"></span> Cargando formulario…</p></div>' +
         '<div class="error-msg" data-error hidden></div>' +
-        '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar>Cancelar</button><button type="button" data-guardar>' + ico('save') + ' Registrar</button></div></div>';
+        '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar>Cancelar</button><button type="button" data-guardar>' + ico('save') + (edicion ? ' Guardar cambios' : ' Registrar') + '</button></div></div>';
       document.getElementById('view-container').appendChild(fondo);
       const cuerpo = fondo.querySelector('.ln-alta-cuerpo');
       const errorBox = fondo.querySelector('[data-error]');
@@ -1067,7 +1085,8 @@
       });
       cuerpo.addEventListener('input', () => actualizarDerivadosEn(cuerpo, elementos));
       cuerpo.addEventListener('change', () => actualizarDerivadosEn(cuerpo, elementos));
-      callServer('apiLineasFormularioOperativa', state.token, tipo).then((els) => {
+      (edicion ? callServer('apiLineasFormularioEdicionOperativa', state.token, tipo, edicion.fila, edicion.llave)
+        : callServer('apiLineasFormularioOperativa', state.token, tipo)).then((els) => {
         elementos = els;
         cuerpo.innerHTML = htmlFormularioAppSheet(elementos);
         activarCombosEn(cuerpo, elementos);
@@ -1088,8 +1107,15 @@
         boton.innerHTML = '<span class="ln-spinner"></span> Guardando…';
         fondo.querySelectorAll('button, input, select, textarea').forEach((el) => { el.disabled = true; });
         leerArchivosEn(cuerpo)
-          .then((archivos) => callServer('apiLineasCrearVistaOperativa', state.token, tipo, { valores: leerFormularioEn(cuerpo, elementos), archivos: archivos }))
-          .then((r) => { guardando = false; fondo.remove(); aviso(ico('circle-check') + ' Registro ' + esc(r.folio) + ' guardado correctamente.', 6000); if (alGuardar) alGuardar(r); })
+          .then((archivos) => (edicion
+            ? callServer('apiLineasEditarVistaOperativa', state.token, tipo, edicion.fila, edicion.llave, { valores: leerFormularioEn(cuerpo, elementos), archivos: archivos })
+            : callServer('apiLineasCrearVistaOperativa', state.token, tipo, { valores: leerFormularioEn(cuerpo, elementos), archivos: archivos })))
+          .then((r) => {
+            guardando = false;
+            fondo.remove();
+            aviso(ico('circle-check') + ' Registro ' + esc(r.folio) + (edicion ? (r.cambios && r.cambios.length ? ' actualizado.' : ': no había cambios.') : ' guardado correctamente.'), 6000);
+            if (alGuardar) alGuardar(r);
+          })
           .catch((e) => {
             guardando = false;
             boton.innerHTML = texto;
@@ -1218,10 +1244,18 @@
           if (isNaN(nb)) return -1;
           return na - nb;
         };
+        // Columnas de la vista de tabla del AppSheet (por ID del registro) dentro de cada fila del índice
+        const vista = {};
+        ((r.vista && r.vista.filas) || []).forEach((f) => {
+          const o = {};
+          r.vista.columnas.forEach((c, i) => { o[c] = f[i + 1]; });
+          vista[f[0]] = o;
+        });
+        const conVista = (x) => Object.assign(x, vista[x.id] || {});
         memoria.indice = {
           columnas: { equipos: r.equipos.columnas, lineas: r.lineas.columnas },
-          equipos: filasComoObjetos(r.equipos).sort(porNuco),
-          lineas: filasComoObjetos(r.lineas).sort(porNuco),
+          equipos: filasComoObjetos(r.equipos).map(conVista).sort(porNuco),
+          lineas: filasComoObjetos(r.lineas).map(conVista).sort(porNuco),
           generadoEn: r.equipos.generadoEn,
         };
         memoria.cargadoEn = Date.now();
@@ -1292,38 +1326,57 @@
     // ======================================================================
 
     /** Columnas del inventario (DataTable). Las ocultas se activan desde "Columnas". */
+    /**
+     * Columnas de la vista de tabla LINEAS TELEFONICAS del AppSheet, en su orden (llegan en el índice, bloque
+     * "vista"). Títulos = nombre de la columna o su DisplayName del AppSheet. Las columnas File se abren con "Ver"
+     * (como la acción Open File) y EMAIL USUARIO con correo (acción Compose Email).
+     */
+    const COLUMNAS_VISTA_LINEAS = [
+      ['NUMERO TELEFONO', 'Número teléfono', 'mono'], ['NUCO', 'NUCO', 'mono'], ['TIPO', 'Tipo', 'tipo'],
+      ['ESTATUS GENERAL', 'Estatus general', 'chip'], ['NO EMPLEADO', 'No. empleado', 'mono'], ['RESPONSABLE', 'Responsable'],
+      ['PUESTO', 'Puesto'], ['NOMBRE RESPONSABLES 2', 'Nombre colaborador/es'], ['PUESTO RESPONSABLES 2', 'Puesto colaborador/es'],
+      ['EQUIPO', 'Equipo', 'lista'], ['IMEI', 'IMEI', 'mono'], ['NUMERO SIM', 'Número SIM', 'mono'], ['ACCESORIOS', 'Accesorios'],
+      ['SEDE', 'Sede', 'lista'], ['OFICINA / DESARROLLO', 'Oficina / desarrollo', 'lista'], ['DEPARTAMENTO', 'Departamento', 'lista'],
+      ['AREA', 'Área', 'lista'], ['JEFE DIRECTO', 'Jefe directo'], ['DIRECTOR', 'Director'], ['FOLIO', 'Folio', 'mono'],
+      ['RAZON SOCIAL', 'Razón social', 'lista'], ['PIN WHATSAPP', 'PIN WhatsApp', 'mono'], ['PIN EQUIPO', 'PIN equipo', 'mono'],
+      ['CUENTA GOOGLE', 'Cuenta Google'], ['COMPAÑIA', 'Compañía', 'lista'], ['COSTO PLAN', 'Costo plan', 'precio'],
+      ['FECHA REGISTRO', 'Fecha registro', 'fecha'], ['INICIO PLAN', 'Inicio plan', 'fecha'], ['FIN PLAN', 'Fin plan', 'fecha'],
+      ['ESTATUS LINEA', 'Estatus línea', 'chip'], ['FECHA CAMBIO TEMPORAL', 'Fecha cambio temporal', 'fecha'],
+      ['EMAIL USUARIO', 'Email usuario', 'correo'], ['ESTATUS EQUIPO', 'Estatus equipo', 'chip'], ['RESPONSIVA', 'Responsiva', 'archivo'],
+      ['COMENTARIOS', 'Comentarios'], ['FECHA INSPECCION', 'Fecha inspección', 'fecha'], ['FORMATO INSPECCION', 'Formato inspección', 'archivo'],
+    ];
+    function columnasVistaLineas(fijada) {
+      return COLUMNAS_VISTA_LINEAS.map(([campo, titulo, clase]) => {
+        const c = { campo: campo, titulo: titulo, tipo: 'texto' };
+        if (campo === fijada) c.fijada = true;
+        if (clase === 'mono') c.render = (v) => '<span class="ln-mono">' + guion(v) + '</span>';
+        if (clase === 'lista') c.tipo = 'lista';
+        if (clase === 'tipo') { c.tipo = 'lista'; c.render = (v) => formatoAppSheet('LINEAS', 'TIPO', v) || guion(v); }
+        if (clase === 'chip') { c.tipo = 'lista'; c.render = (v) => chip(v); }
+        if (clase === 'fecha') c.tipo = 'lnFechaHora';
+        if (clase === 'precio') { c.tipo = 'numero'; c.render = (v) => (v === null || v === undefined || v === '' ? vacio : '$' + Number(v).toLocaleString('es-MX')); }
+        if (clase === 'archivo') c.render = (v) => botonArchivo(v, 'Ver');
+        if (clase === 'correo') c.render = (v) => (v ? '<a class="ln-enlace" href="mailto:' + esc(v) + '">' + icono('mail') + ' ' + esc(v) + '</a>' : vacio);
+        return c;
+      });
+    }
+
     const TABLAS_INVENTARIO = {
       equipos: {
         detalle: 'equipo', textoVacio: 'Sin equipos',
         etiqueta: (r) => 'NUCO ' + (r.nuco || '—') + (r.modelo ? ' · ' + r.modelo : ''),
-        columnas: [
-          { campo: 'nuco', titulo: 'NUCO', tipo: 'texto', fijada: true, render: (v) => '<span class="ln-mono ln-fuerte">' + guion(v) + '</span>' },
-          { campo: 'tipoHoja', titulo: 'Tipo', tipo: 'lista', render: (v) => formatoAppSheet('LINEAS', 'TIPO', v) || guion(v) },
-          { campo: 'modelo', titulo: 'Modelo', tipo: 'texto' },
-          { campo: 'imei', titulo: 'IMEI', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
-          { campo: 'estatus', titulo: 'Estatus', tipo: 'lista', render: (v) => chip(v) },
-          { campo: 'numero', titulo: 'Línea', tipo: 'texto', render: (v) => (v ? '<span class="ln-mono">' + esc(v) + '</span>' : '<span class="ln-tenue">Sin línea</span>') },
-          { campo: 'compania', titulo: 'Compañía', tipo: 'lista', visible: false },
-          { campo: 'estatusLinea', titulo: 'Estatus de la línea', tipo: 'lista', visible: false, render: (v) => chip(v) },
-          { campo: 'responsable', titulo: 'Responsable', tipo: 'texto' },
-          { campo: 'departamento', titulo: 'Departamento', tipo: 'lista' },
-          { campo: 'sede', titulo: 'Sede', tipo: 'lista', visible: false },
-        ],
+        // Las de la vista del AppSheet; "Línea asignada" (del índice) la usa el indicador "Equipos sin línea"
+        columnas: columnasVistaLineas('NUCO').concat([
+          { campo: 'numero', titulo: 'Línea asignada', tipo: 'texto', visible: false },
+        ]),
       },
       lineas: {
         detalle: 'linea', textoVacio: 'Sin líneas',
         etiqueta: (r) => 'Línea ' + (r.numero || '—'),
-        columnas: [
-          { campo: 'numero', titulo: 'Número', tipo: 'texto', fijada: true, render: (v) => '<span class="ln-mono ln-fuerte">' + guion(v) + '</span>' },
-          { campo: 'tipoHoja', titulo: 'Tipo', tipo: 'lista', render: (v) => formatoAppSheet('LINEAS', 'TIPO', v) || guion(v) },
-          { campo: 'compania', titulo: 'Compañía', tipo: 'lista' },
-          { campo: 'estatus', titulo: 'Estatus', tipo: 'lista', render: (v) => chip(v) },
-          { campo: 'suelta', titulo: 'Suelta', tipo: 'lista', valor: (r) => (r.suelta ? 'Sí' : 'No'), render: (v) => (v === 'Sí' ? chip('Suelta', 'ambar') : '<span class="ln-tenue">En equipo</span>') },
-          { campo: 'nucoEquipo', titulo: 'Equipo (NUCO)', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
-          { campo: 'sim', titulo: 'SIM', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
-          { campo: 'responsable', titulo: 'Responsable', tipo: 'texto' },
-          { campo: 'departamento', titulo: 'Departamento', tipo: 'lista' },
-        ],
+        columnas: columnasVistaLineas('NUMERO TELEFONO').concat([
+          { campo: 'suelta', titulo: 'Línea suelta', tipo: 'lista', visible: false, valor: (r) => (r.suelta ? 'Sí' : 'No'), render: (v) => (v === 'Sí' ? chip('Suelta', 'ambar') : '<span class="ln-tenue">En equipo</span>') },
+          { campo: 'nucoEquipo', titulo: 'Equipo (NUCO)', tipo: 'texto', visible: false, render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
+        ]),
       },
     };
 
@@ -1367,6 +1420,8 @@
 
       // Clic en filas, enlaces internos y botones del detalle (delegación).
       raiz.addEventListener('click', (ev) => {
+        const verResp = ev.target.closest('[data-ln-responsiva]');
+        if (verResp) { abrirResponsiva(verResp.dataset.lnResponsiva, verResp.dataset.titulo, verResp.dataset.responsable); return; }
         const seccion = ev.target.closest('[data-ln-seccion]');
         if (seccion) {
           const destino = document.getElementById(seccion.dataset.lnSeccion);
@@ -1475,7 +1530,7 @@
         const li = ix.lineas;
         const defs = [
           { icono: 'smartphone', valor: miles(eq.length), etiqueta: 'Equipos', modulo: 'equipos', filtros: {} },
-          { icono: 'circle-check', valor: miles(eq.filter((e) => e.estatus === 'USO').length), etiqueta: 'Equipos en uso', clase: 'stat-tile-ok', modulo: 'equipos', filtros: { estatus: { valores: ['USO'] } } },
+          { icono: 'circle-check', valor: miles(eq.filter((e) => e['ESTATUS EQUIPO'] === 'USO').length), etiqueta: 'Equipos en uso', clase: 'stat-tile-ok', modulo: 'equipos', filtros: { 'ESTATUS EQUIPO': { valores: ['USO'] } } },
           { icono: 'unplug', valor: miles(eq.filter((e) => !e.lineaId).length), etiqueta: 'Equipos sin línea', modulo: 'equipos', filtros: { numero: { op: 'vacio' } } },
           { icono: 'card-sim', valor: miles(li.length), etiqueta: 'Líneas', modulo: 'lineas', filtros: {} },
           { icono: 'unlink', valor: miles(li.filter((l) => l.suelta).length), etiqueta: 'Líneas sueltas', clase: 'stat-tile-warn', modulo: 'lineas', filtros: { suelta: { valores: ['Sí'] } } },
@@ -1483,7 +1538,7 @@
         const cont = $('#ln-indicadores', raiz);
         cont.innerHTML = defs.map((d, i) => '<div class="stat-tile stat-tile-clickable ' + (d.clase || '') + '" data-kpi="' + i + '" role="button" tabindex="0">' +
           '<div class="stat-icon">' + ico(d.icono) + '</div><div><div class="stat-value">' + d.valor + '</div><div class="stat-label">' + esc(d.etiqueta) + '</div></div></div>').join('');
-        const campos = { equipos: ['estatus', 'numero'], lineas: ['suelta'] };
+        const campos = { equipos: ['ESTATUS EQUIPO', 'numero'], lineas: ['suelta'] };
         const igual = (x, y) => JSON.stringify(x || null) === JSON.stringify(y || null);
         marcarKpi = () => {
           cont.querySelectorAll('[data-kpi]').forEach((t) => {
@@ -1516,15 +1571,17 @@
         const contenedor = $('#ln-tabla-' + modulo, raiz);
         tablas[modulo] = tablaLineas(contenedor, {
           idCampo: 'id',
-          idTabla: 'lineas-' + modulo,
+          idTabla: 'lineas-' + modulo + '-v3',
           columnas: cfg.columnas,
+          // La vista del AppSheet agrupa por TIPO (DataTable no agrupa: se ordena por TIPO)
+          ordenInicial: { campo: 'TIPO', dir: 'asc' },
           textoVacio: cfg.textoVacio,
           exportar: exportarBase('INVENTARIO', 'Lineas telefonicas'),
           etiquetaFila: cfg.etiqueta,
           detalle: false, // la ficha completa (responsable, evidencias, historial) es su propia pantalla
           accionesFila: [{ icono: 'eye', titulo: 'Ver ficha', alHacer: (r) => abrir(cfg.detalle, r.id) }],
-          ayuda: 'Doble clic en una fila (o el ojo en Acciones) abre su ficha. La flecha de cada columna filtra, ordena, fija u oculta; ' +
-            '"Columnas" agrega compañía, sede y otros datos. Los indicadores de arriba filtran con un clic.',
+          ayuda: 'Las columnas y su orden son las de la tabla LINEAS TELEFONICAS del AppSheet. Doble clic en una fila (o el ojo en Acciones) abre su ficha. ' +
+            'La flecha de cada columna filtra, ordena, fija u oculta; "Vista" oculta o muestra columnas. "Ver" abre la responsiva o el formato de inspección.',
           alCambiarFiltros: (filtros) => { filtrosActuales[modulo] = filtros || {}; if (marcarKpi) marcarKpi(); },
         });
         // Doble clic en la fila = abrir la ficha (DataTable no trae clic de fila propio)
@@ -1696,7 +1753,6 @@
         return tarjeta(icono('file-spreadsheet') + ' Registro en la hoja', campos([
           ['ID', l.id], ['Folio', l.folio], ['Tipo', l.tipo], ['Fila en hoja', l.fila],
           ['Estatus general', chip(l.estatusGeneral), true], ['Fecha registro', fecha(l.fechaRegistro)], ['Última inspección', fecha(l.fechaInspeccion)],
-          ['Comentarios', l.comentarios],
         ]), 'ln-solo-escritorio');
       }
 
@@ -1727,7 +1783,7 @@
           icono(t[2]) + ' ' + t[1] + ' <span class="ln-tab-num" data-ficha-num="' + t[0] + '"></span></button>').join('') + '</div>' +
           '<div data-ficha-panel="general">' + general + '</div>' +
           '<div data-ficha-panel="detalles" hidden>' + detalles + '</div>' +
-          (conDocumentos ? '<div data-ficha-panel="documentos" hidden><div id="ln-evidencias">' + cargando + '</div></div>' : '') +
+          (conDocumentos ? '<div data-ficha-panel="documentos" hidden><div id="ln-evidencias">' + cargando + '</div><div id="ln-docs-nucos"></div></div>' : '') +
           '<div data-ficha-panel="historial" hidden><div id="ln-historial">' + cargando + '</div></div>';
       }
 
@@ -1739,6 +1795,68 @@
         });
         raiz.querySelectorAll('[data-ficha-panel]').forEach((p) => { p.hidden = p.dataset.fichaPanel !== nombre; });
         if (nombre === 'historial' && tablaHistorial) tablaHistorial.ajustarAlto();
+        if (nombre === 'documentos') cargarNucos();
+      }
+
+      /** Conteo de "Documentos": inspecciones y responsivas registradas + carpetas con archivos en NUCOS. */
+      function contarDocumentos() {
+        const f = fichaActual || {};
+        contarEnPestana('documentos', (f.docsRegistros || 0) + (f.docsNucos || 0));
+      }
+
+      /** Galería de archivos de Drive (miniatura y nombre; se abren en Drive). */
+      function galeriaDrive(lista, firma) {
+        return '<div class="ln-galeria">' + lista.map((f) =>
+          '<a class="ln-evidencia" target="_blank" rel="noopener" href="' + esc(f.enlace) + '">' +
+          '<span class="ln-foto' + (firma ? ' ln-firma' : '') + '">' +
+          (f.miniatura ? '<img loading="lazy" referrerpolicy="no-referrer" src="' + esc(f.miniatura) + '" alt="' + esc(f.nombre) + '">' : icono(f.video ? 'video' : 'image')) +
+          '</span><span class="ln-evidencia-nombre">' + esc(f.nombre || 'Archivo') + '<small>' + icono('external-link') + ' Abrir en Drive</small></span></a>').join('') + '</div>';
+      }
+
+      /**
+       * Carpeta del NUCO en NUCOS de producción (solo consulta): las carpetas con archivos (INSP DD MM, FOTOS,
+       * RESP DD MM…) con sus imágenes y PDF. Se pide al abrir "Documentos" (no retrasa la ficha).
+       */
+      function cargarNucos() {
+        const f = fichaActual;
+        const cont = $('#ln-docs-nucos', raiz);
+        if (!f || !cont || f.nucosPedido) return;
+        f.nucosPedido = true;
+        cont.innerHTML = tarjeta(icono('folder-open') + ' Carpeta NUCOS', '<p class="ln-tenue"><span class="ln-spinner"></span> Consultando la carpeta NUCOS en Drive…</p>');
+        llamar('apiLineasDocumentosNuco', f.id).then((r) => {
+          if (fichaActual !== f || !document.body.contains(cont)) return;
+          f.docsNucos = r.grupos.length;
+          cont.innerHTML = tarjetaNucos(r);
+          contarDocumentos();
+        }).catch((e) => {
+          if (fichaActual !== f || !document.body.contains(cont)) return;
+          f.nucosPedido = false;
+          cont.innerHTML = tarjeta(icono('folder-open') + ' Carpeta NUCOS', '<p class="error-msg">No se pudo leer la carpeta NUCOS: ' + mensajeError(e) + '</p>');
+        });
+      }
+
+      function tarjetaNucos(r) {
+        const titulo = icono('folder-open') + ' Carpeta NUCOS' + (r.nuco ? ' · ' + esc(r.nuco) : '') + (r.grupos.length ? ' (' + r.grupos.length + ')' : '');
+        if (!r.carpetaId) {
+          return tarjeta(titulo, '<p class="empty-state">' + (r.nuco ? 'No hay carpeta de este NUCO en NUCOS.' : 'Este registro no tiene NUCO: no tiene carpeta en NUCOS.') + '</p>');
+        }
+        const cabecera = '<div class="ln-nucos-cabecera"><p class="ln-tenue">Archivos de la carpeta NUCOS en Drive (solo consulta).</p>' + enlaceDrive(r.carpetaId, 'Abrir carpeta') + '</div>';
+        if (!r.grupos.length) return tarjeta(titulo, cabecera + '<p class="empty-state">La carpeta del NUCO no tiene archivos.</p>');
+        const TIPOS = { INSPECCION: ['clipboard-check', 'Inspección'], RESPONSIVA: ['signature', 'Carta responsiva'], OTRO: ['folder', 'Otros archivos'] };
+        const grupos = r.grupos.map((g, i) => {
+          const partes = g.ruta ? g.ruta.split('/') : [];
+          const nombre = partes.length ? partes.slice(-2).join(' / ') : 'Carpeta del NUCO';
+          const tipo = TIPOS[g.tipo] || TIPOS.OTRO;
+          const imagenes = g.archivos.filter((a) => String(a.mime || '').indexOf('image') === 0 || a.video);
+          const otros = g.archivos.filter((a) => imagenes.indexOf(a) < 0);
+          return '<details class="ln-nucos-grupo"' + (i < 2 ? ' open' : '') + '><summary>' + icono(tipo[0]) + ' <b>' + esc(nombre) + '</b>' +
+            '<span class="ln-tenue">' + esc(tipo[1]) + ' · ' + g.archivos.length + ' archivo(s)' + (g.fecha ? ' · ' + esc(fecha(g.fecha)) : '') + '</span></summary>' +
+            '<p class="ln-pie ln-tenue">' + esc(g.ruta || '(raíz de la carpeta del NUCO)') + '</p>' +
+            (otros.length ? '<div class="ln-nucos-archivos">' + otros.map((a) => '<a class="externo ln-boton" target="_blank" rel="noopener" href="' + esc(a.enlace) + '">' +
+              icono(/pdf/.test(a.mime) ? 'file-text' : 'file') + ' ' + esc(a.nombre) + '</a>').join('') + '</div>' : '') +
+            (imagenes.length ? galeriaDrive(imagenes) : '') + '</details>';
+        }).join('');
+        return tarjeta(titulo, cabecera + grupos);
       }
 
       function contarEnPestana(nombre, n) {
@@ -1776,6 +1894,8 @@
                 e.simResidual ? ['SIM residual', chip(e.simResidual, 'ambar'), true] : null,
                 e.legado && e.legado.responsivaRuta ? ['Responsiva', botonArchivo(e.legado.responsivaRuta, 'Ver responsiva'), true] : null,
                 e.legado && e.legado.formatoInspeccionRuta ? ['Formato inspección', botonArchivo(e.legado.formatoInspeccionRuta, 'Ver formato'), true] : null,
+                ['Total de rotaciones', miles(r.totalRotaciones || 0)],
+                ['Comentarios', e.legado && e.legado.comentarios],
               ])) +
               tarjeta(icono('card-sim') + ' Línea asignada', l ? campos([
                 ['Número', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + icono('phone') + ' ' + esc(l.numero || '(sin número)') + ' ' + icono('chevron-right') + '</a>', true],
@@ -1812,6 +1932,8 @@
                 ['Costo plan', costo], ['Inicio plan', fecha(l.inicioPlan)], ['Fin plan', fecha(l.finPlan)],
                 l.usoTemporal ? ['Uso temporal', 'Desde ' + esc(fecha(l.usoTemporal.desde) || '—') + ' · ' + esc(l.usoTemporal.correo || ''), true] : null,
                 !e && l.nucoLegado ? ['NUCO (anterior)', l.nucoLegado] : null,
+                ['Total de rotaciones', miles(r.totalRotaciones || 0)],
+                ['Comentarios', l.legado && l.legado.comentarios],
               ])) +
               tarjeta(icono('smartphone') + ' Equipo', e ? campos([
                 ['NUCO', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' ' + esc(e.nuco || '—') + ' ' + icono('chevron-right') + '</a>', true],
@@ -1901,6 +2023,17 @@
         });
       }
 
+      /** Responsiva en el panel lateral, con la vista RESPONSIVAS LINEAS_Detail del AppSheet (sus columnas y nombres). */
+      function abrirResponsiva(id, fechaTexto, responsable) {
+        const panel = abrirPanelLateral('Responsiva' + (fechaTexto ? ' · ' + fechaTexto : ''), responsable || 'RESPONSIVAS LINEAS');
+        panel.cuerpo.innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando responsiva…</p>';
+        llamar('apiLineasResponsiva', id).then((r) => {
+          if (panelAbierto !== panel) return;
+          panel.cuerpo.innerHTML = camposDetalleAppSheet(r.detalle);
+          pintarIconos(panel.cuerpo);
+        }).catch((e) => { if (panelAbierto === panel) panel.cuerpo.innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>'; });
+      }
+
       function cargarEvidencias(id) {
         const pila0 = pila.length;
         llamar('apiLineasEvidencias', id).then((ev) => {
@@ -1936,9 +2069,11 @@
         const listaResp = responsivas.length
           ? '<ul class="ln-docs">' + responsivas.map((r) => item('signature', esc(fecha(r.fecha) || 'Sin fecha'), ORIGEN[r.origen] || '',
               [r.responsable],
+              (/^drive_/.test(r.id) ? '' : '<button type="button" class="ln-btn-icono" data-ln-responsiva="' + esc(r.id) + '" data-titulo="' + esc(fecha(r.fecha) || '') + '" data-responsable="' + esc(r.responsable || '') + '">' + icono('eye') + ' Ver</button>') +
               accionPdf(r, 'RESPONSIVA').replace(vacio, '') + (r.carpetaId ? enlaceDrive(r.carpetaId, 'Carpeta') : ''))).join('') + '</ul>'
           : '<p class="empty-state">Sin responsivas registradas.</p>';
-        contarEnPestana('documentos', inspecciones.length + responsivas.length);
+        if (fichaActual) fichaActual.docsRegistros = inspecciones.length + responsivas.length;
+        contarDocumentos();
         return tarjeta(icono('clipboard-check') + ' Inspecciones (' + inspecciones.length + ')', listaInsp) + tarjeta(icono('signature') + ' Responsivas (' + responsivas.length + ')', listaResp);
       }
 
@@ -2299,19 +2434,19 @@
       }
 
       /**
-       * Carpeta de evidencia en Drive: se crea al subir la primera foto o al guardar, no al abrir el formulario
-       * (abre más rápido y si se cancela sin fotos no queda nada que limpiar).
+       * Carpeta de fotos de la inspección en Drive (INSPECCIONES LINEAS_Images/FOTOS <ID>): se crea al subir la
+       * primera foto, no al abrir el formulario (abre más rápido y sin fotos no queda nada que limpiar).
        */
       function asegurarCarpeta() {
         const sesion = captura;
         if (!sesion) return Promise.reject(new Error('La captura se cerró.'));
         if (!sesion.carpetaPromesa) {
-          sesion.carpetaPromesa = llamar('apiLineasPrepararEvidencia', sesion.tipo, sesion.ref).then((c) => {
+          sesion.carpetaPromesa = llamar('apiLineasPrepararEvidencia', sesion.tipo, sesion.ref, sesion.contexto && sesion.contexto.idPropuesto).then((c) => {
             sesion.carpetaId = c.carpetaId;
             sesion.fotosCarpetaId = c.fotosCarpetaId || c.carpetaId;
             sesion.ruta = c.ruta;
             // Si se canceló mientras se creaba, se descarta
-            if (captura !== sesion && !sesion.guardada) llamar('apiLineasCancelarEvidencia', c.carpetaId, c.fotosCarpetaId).catch(() => {});
+            if (captura !== sesion && !sesion.guardada) llamar('apiLineasCancelarEvidencia', c.carpetaId).catch(() => {});
             return c;
           });
           sesion.carpetaPromesa.catch(() => { sesion.carpetaPromesa = null; });
@@ -2413,7 +2548,7 @@
       function formularioInspeccion(ctx) {
         const pasos = PASOS_FORMULARIO.INSPECCION;
         const fotos = '<section class="ln-af-seccion ln-af-extra">' +
-          htmlSubirFotos('cap-fotos', 'Opcional. Se guardan en la carpeta de la inspección en Drive: NUCO / INSPECCIONES / año / cuatrimestre / mes / INSP DD MM / FOTOS.') + '</section>';
+          htmlSubirFotos('cap-fotos', 'Opcional. Se guardan en Drive junto con la inspección (INSPECCIONES LINEAS_Images / FOTOS y el ID de la inspección).') + '</section>';
         return htmlPasosAppSheet(ctx.formulario, pasos, { [pasos.findIndex((p) => p.desde === 'extra:FOTOS')]: fotos }, { acomodar: true }) +
           '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div>' + htmlAccionesPasos(BOTON_GUARDAR_PDF);
       }
@@ -2436,11 +2571,12 @@
         const valores = leerFormularioAppSheet();
         const sesion = captura;
         estadoGuardado('Guardando inspección');
-        Promise.all([firmaInspector.base64('#ddebf7'), firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ddebf7') : null, asegurarCarpeta()]).then(([inspector, responsable]) => {
+        // La carpeta de fotos solo existe si se subió alguna (ya quedó creada al subirla)
+        Promise.all([firmaInspector.base64('#ddebf7'), firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ddebf7') : null, sesion.carpetaPromesa || null]).then(([inspector, responsable]) => {
           sesion.pdfFirmas = { inspector: inspector, responsable: responsable, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ddebf7') : null };
           return llamar('apiLineasGuardarInspeccion', Object.assign({}, sesion.ref, {
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron,
-            carpetaId: sesion.carpetaId, fotosCarpetaId: sesion.fotosCarpetaId, ruta: sesion.ruta, fotos: sesion.fotos,
+            carpetaId: sesion.carpetaId || null, fotosCarpetaId: sesion.fotosCarpetaId || null, ruta: sesion.ruta || '', fotos: sesion.fotos,
             firmaInspectorBase64: sesion.pdfFirmas.inspector, firmaResponsableBase64: sesion.pdfFirmas.responsable, patronBase64: sesion.pdfFirmas.patron,
           }));
         }).then((r) => {
@@ -2473,11 +2609,10 @@
         const valores = leerFormularioAppSheet();
         const sesion = captura;
         estadoGuardado('Guardando responsiva');
-        Promise.all([firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ffffff') : null, firmaCi.base64('#ffffff'), asegurarCarpeta()]).then(([responsable, ci]) => {
+        Promise.all([firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ffffff') : null, firmaCi.base64('#ffffff')]).then(([responsable, ci]) => {
           sesion.pdfFirmas = { responsable: responsable, ci: ci, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ffffff') : null };
           return llamar('apiLineasGuardarResponsiva', Object.assign({}, sesion.ref, {
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron,
-            carpetaId: sesion.carpetaId, ruta: sesion.ruta,
             firmaResponsableBase64: sesion.pdfFirmas.responsable, firmaCiBase64: sesion.pdfFirmas.ci, patronBase64: sesion.pdfFirmas.patron,
           }));
         }).then((r) => {
@@ -2636,7 +2771,7 @@
               (r.pdfs || []).map((p, indice) => enlaceDrive(p.id, 'Ver PDF' + (r.pdfs.length > 1 ? ' ' + (indice + 1) : ''), true)).join('')) +
             '<div class="ln-captura-resumen">' + resumen('user', 'Inspector', i.inspector) + resumen('clipboard-check', 'Calificación', porcentaje(i.calificacion)) + resumen('images', 'Evidencia fotográfica', fotos.length + ' archivo(s)') + '</div>' +
             '<nav class="ln-secciones-nav" aria-label="Secciones de la inspección">' +
-              ['Datos', 'Checklist', 'Fotos y observaciones', 'Firmas'].map((t, n) => '<button type="button" class="secondary" data-ln-seccion="ln-consulta-' + (n + 1) + '">' + (n + 1) + '. ' + t + '</button>').join('') + '</nav>' +
+              ['Datos', 'Checklist', 'Fotos y observaciones', 'Firmas'].concat(r.detalle ? ['Registro completo'] : []).map((t, n) => '<button type="button" class="secondary" data-ln-seccion="ln-consulta-' + (n + 1) + '">' + (n + 1) + '. ' + t + '</button>').join('') + '</nav>' +
             seccion(1, 'user', 'Datos de la inspección', 'Información registrada al realizar la revisión.',
               i.origen !== 'DRIVE' ? '<div class="ln-grid-2">' +
                 tarjeta(icono('user') + ' Responsable', campos([['Nombre', s.responsable], ['Departamento', s.departamento], ['Sede', s.sede], ['Puesto', s.puesto]])) +
@@ -2650,7 +2785,9 @@
                 htmlSubirFotos('insp-fotos', 'Se guardan en la carpeta FOTOS de esta inspección en Drive.') + '</div>' : '') +
               (i.drive ? '<details class="ln-pie"><summary>Ubicación de los archivos</summary><p>' + esc(i.drive.ruta || '') + '</p></details>' : '')) +
             seccion(4, 'signature', 'Firmas de validación', 'Firmas disponibles en la carpeta de esta inspección.',
-              firmas.length ? galeria(firmas, true) : '<p class="empty-state">No hay imágenes de firmas disponibles en esta carpeta. Consulta el PDF para revisar el documento.</p>');
+              firmas.length ? galeria(firmas, true) : '<p class="empty-state">No hay imágenes de firmas disponibles en esta carpeta. Consulta el PDF para revisar el documento.</p>') +
+            (r.detalle ? seccion(5, 'table-properties', 'Registro completo', 'Todas las columnas de la inspección, en el orden y con los nombres de la vista del AppSheet.',
+              '<details class="ln-registro-completo"><summary>Mostrar las ' + r.detalle.length + ' columnas</summary>' + camposDetalleAppSheet(r.detalle) + '</details>') : '');
           if (r.puedeOperar) {
             // Mejora: subir fotos a una inspección ya registrada (la carpeta se prepara al elegir la primera)
             let carpeta = null;
@@ -3173,7 +3310,13 @@
               etiquetaFila: (f) => (campoFolio && f[campoFolio] ? String(f[campoFolio]) : 'Registro'),
               detalle: { titulo: (f) => cfg.titulo + (campoFolio && f[campoFolio] ? ' · ' + f[campoFolio] : '') },
               // View Ref (IMEI) del AppSheet: abre la línea referenciada
-              accionesFila: [{ icono: 'circle-chevron-right', titulo: 'Ver línea', visible: (f) => !!f._ref, alHacer: (f) => irARegistro(f._ref) }],
+              accionesFila: [
+                { icono: 'circle-chevron-right', titulo: 'Ver línea', visible: (f) => !!f._ref, alHacer: (f) => irARegistro(f._ref) },
+                // Acción EDIT del AppSheet
+                { icono: 'pencil', titulo: 'Editar', visible: (f) => !!f._id && !!(memoria.permisos && memoria.permisos.puedeOperar),
+                  alHacer: (f) => abrirAltaAppSheet(tipo, 'Editar · ' + cfg.titulo + (campoFolio && f[campoFolio] ? ' ' + f[campoFolio] : ''),
+                    () => { delete memoria.tablas['op:' + tipo]; if (vigente()) cargar(); }, { fila: f._fila, llave: f._id }) },
+              ],
               ayuda: 'El ojo en Acciones muestra todos los campos del registro. "Columnas" agrega los que no se ven; la flecha de cada columna filtra y ordena.',
               alCambiarFiltros: (f) => { filtrosOp = f || {}; if (marcarKpi) marcarKpi(filtrosOp); },
             });
@@ -3350,7 +3493,10 @@
           exportar: exportarBase(tipo, cfg.titulo),
           etiquetaFila: (f) => [hFolio && f[hFolio], hFecha && fechaTabla(f[hFecha])].filter(Boolean).join(' · ') || 'Registro',
           detalle: { titulo: (f) => cfg.titulo + (hFolio && f[hFolio] ? ' · ' + f[hFolio] : '') },
-          accionesFila: hId ? [{ icono: 'circle-chevron-right', titulo: 'Ver activo', visible: (f) => !!f[hId], alHacer: (f) => irARegistro(f[hId]) }] : [],
+          accionesFila: (hId ? [{ icono: 'circle-chevron-right', titulo: 'Ver activo', visible: (f) => !!f[hId], alHacer: (f) => irARegistro(f[hId]) }] : [])
+            .concat(cfg.alta ? [{ icono: 'pencil', titulo: 'Editar', visible: (f) => !!f['ID_DESECHO'] && !!(memoria.permisos && memoria.permisos.puedeOperar),
+              alHacer: (f) => abrirAltaAppSheet(cfg.alta, 'Editar · ' + cfg.titulo + (f['FOLIO DESECHO'] ? ' ' + f['FOLIO DESECHO'] : ''),
+                () => { delete memoria.tablas['bit:' + tipo]; if (vigente()) cargar(); }, { fila: f._fila, llave: f['ID_DESECHO'] }) }] : []),
           ayuda: 'Bitácora de solo lectura. El ojo abre todos los campos del registro y el celular abre la ficha del activo.',
           alCambiarFiltros: (f) => { filtrosBit = f || {}; if (marcarKpi) marcarKpi(filtrosBit); },
         });

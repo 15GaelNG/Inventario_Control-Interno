@@ -82,6 +82,12 @@ function apiLineasBitacoraTabla(token, tipo, opciones) {
 function apiLineasVistaOperativaTabla(token, tipo, opciones) {
   return JSON.stringify(TelefoniaService.vistaOperativa(token, tipo, Object.assign({}, opciones, { pagina: 0, porPagina: 5000 })));
 }
+function apiLineasResponsiva(token, id) {
+  return TelefoniaService.responsiva(token, id);
+}
+function apiLineasDocumentosNuco(token, id) {
+  return TelefoniaService.documentosNuco(token, id);
+}
 function apiLineasArchivo(token, ruta) {
   return TelefoniaService.archivo(token, ruta);
 }
@@ -90,6 +96,12 @@ function apiLineasExportarBase(token, modulo, comprimir) {
 }
 function apiLineasFormularioOperativa(token, tipo) {
   return TelefoniaService.formularioOperativa(token, tipo);
+}
+function apiLineasFormularioEdicionOperativa(token, tipo, fila, llave) {
+  return TelefoniaService.formularioEdicionOperativa(token, tipo, fila, llave);
+}
+function apiLineasEditarVistaOperativa(token, tipo, fila, llave, datos) {
+  return TelefoniaService.editarVistaOperativa(token, tipo, fila, llave, datos);
 }
 function apiLineasCrearVistaOperativa(token, tipo, datos) {
   return TelefoniaService.crearVistaOperativa(token, tipo, datos);
@@ -103,11 +115,11 @@ function apiLineasContextoInspeccion(token, ref) {
 function apiLineasContextoResponsiva(token, ref) {
   return TelefoniaService.contextoResponsiva(token, ref);
 }
-function apiLineasPrepararEvidencia(token, tipo, ref) {
-  return TelefoniaService.prepararEvidencia(token, tipo, ref);
+function apiLineasPrepararEvidencia(token, tipo, ref, idRegistro) {
+  return TelefoniaService.prepararEvidencia(token, tipo, ref, idRegistro);
 }
-function apiLineasCancelarEvidencia(token, carpetaId, fotosCarpetaId) {
-  return TelefoniaService.cancelarEvidencia(token, carpetaId, fotosCarpetaId);
+function apiLineasCancelarEvidencia(token, carpetaId) {
+  return TelefoniaService.cancelarEvidencia(token, carpetaId);
 }
 function apiLineasSubirArchivo(token, carpetaId, nombre, mime, base64) {
   return TelefoniaService.subirArchivo(token, carpetaId, nombre, mime, base64);

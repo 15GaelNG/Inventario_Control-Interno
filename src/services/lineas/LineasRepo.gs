@@ -72,6 +72,18 @@ const LineasRepo = (function () {
   const COLS_INDICE_EQUIPOS = ['id', 'nuco', 'tipo', 'modelo', 'imei', 'estatus', 'responsable', 'departamento', 'sede', 'lineaId', 'numero', 'compania', 'estatusLinea', 'tipoHoja'];
   const COLS_INDICE_LINEAS = ['id', 'numero', 'sim', 'compania', 'estatus', 'equipoId', 'nucoEquipo', 'responsable', 'departamento', 'suelta', 'tipoHoja'];
   const SEG_CACHE_INDICE = 30 * 60;
+  const CLAVE_INDICE = 'indice_telefonia_v3';
+  /**
+   * Vista de tabla LINEAS TELEFONICAS del AppSheet: sus columnas en su orden (ViewDefinition.ColumnOrder; ID va
+   * oculta y "No EMPLEADO" / "NO EMPLEADO" es la misma columna). FOLIO y ESTATUS GENERAL son fórmulas del AppSheet.
+   */
+  const COLS_VISTA_LINEAS = ['NUMERO TELEFONO', 'NUCO', 'TIPO', 'ESTATUS GENERAL', 'NO EMPLEADO', 'RESPONSABLE', 'PUESTO',
+    'NOMBRE RESPONSABLES 2', 'PUESTO RESPONSABLES 2', 'EQUIPO', 'IMEI', 'NUMERO SIM', 'ACCESORIOS', 'SEDE', 'OFICINA / DESARROLLO',
+    'DEPARTAMENTO', 'AREA', 'JEFE DIRECTO', 'DIRECTOR', 'FOLIO', 'RAZON SOCIAL', 'PIN WHATSAPP', 'PIN EQUIPO', 'CUENTA GOOGLE',
+    'COMPAÑIA', 'COSTO PLAN', 'FECHA REGISTRO', 'INICIO PLAN', 'FIN PLAN', 'ESTATUS LINEA', 'FECHA CAMBIO TEMPORAL',
+    'EMAIL USUARIO', 'ESTATUS EQUIPO', 'RESPONSIVA', 'COMENTARIOS', 'FECHA INSPECCION', 'FORMATO INSPECCION'];
+  /** Columnas de la vista con secretos (solo ADMIN las ve). */
+  const COLS_VISTA_SECRETAS = ['PIN WHATSAPP', 'PIN EQUIPO'];
 
   // Atajos (se resuelven al llamar, no al cargar el archivo).
   function txt(v) { return LineasUtil.txt(v); }
@@ -220,26 +232,43 @@ const LineasRepo = (function () {
       ((equipo || linea).legado || {}).tipo || null];
   }
 
-  /** Índices de equipos y líneas (1 lectura de la pestaña; caché 30 min). */
+  /** Valores de la fila para la vista de tabla del AppSheet: [id, …COLS_VISTA_LINEAS]. */
+  function filaVista_(f, r) {
+    const legado = ((r.equipo || r.linea) || {}).legado || {};
+    return [r.id].concat(COLS_VISTA_LINEAS.map((c) => {
+      if (c === 'FOLIO') return legado.folio || null;
+      if (c === 'ESTATUS GENERAL') return legado.estatusGeneral || null;
+      const v = col(f, c);
+      if (v === '' || v === null || v === undefined) return null;
+      if (v instanceof Date) return v;
+      // Identificadores y textos como texto (un IMEI o SIM numérico no se debe redondear); COSTO PLAN y NUCO, número
+      return typeof v === 'number' && c !== 'COSTO PLAN' && c !== 'NUCO' ? String(v) : v;
+    }));
+  }
+
+  /** Índices de equipos y líneas + columnas de la vista de tabla del AppSheet (1 lectura de la pestaña; caché 30 min). */
   function indice(forzar) {
     if (!forzar) {
-      const enCache = LineasDatos.cacheLeer('indice_telefonia_v2');
+      const enCache = LineasDatos.cacheLeer(CLAVE_INDICE);
       if (enCache) return enCache;
     }
     const equipos = [];
     const lineas = [];
+    const vista = [];
     LineasDatos.leerTabla(TAB.LINEAS).forEach((f) => {
       const r = convertirRegistro(f);
       if (!r) return;
       if (r.equipo) equipos.push(filaIndiceEquipo_(r.equipo, r.linea));
       if (r.linea) lineas.push(filaIndiceLinea_(r.linea, r.equipo));
+      if (r.equipo || r.linea) vista.push(filaVista_(f, r));
     });
     const ix = LineasUtil.paraCliente({
       equipos: { columnas: COLS_INDICE_EQUIPOS, filas: equipos },
       lineas: { columnas: COLS_INDICE_LINEAS, filas: lineas },
+      vista: { columnas: COLS_VISTA_LINEAS, secretas: COLS_VISTA_SECRETAS, filas: vista },
       generadoEn: new Date(),
     });
-    LineasDatos.cacheGuardar('indice_telefonia_v2', ix, SEG_CACHE_INDICE);
+    LineasDatos.cacheGuardar(CLAVE_INDICE, ix, SEG_CACHE_INDICE);
     return ix;
   }
 
@@ -250,13 +279,17 @@ const LineasRepo = (function () {
    */
   function refrescarIndice(ids) {
     const cambios = { equipos: [], lineas: [], quitar: { equipos: [], lineas: [] } };
-    const ix = LineasDatos.cacheLeer('indice_telefonia_v2');
+    const ix = LineasDatos.cacheLeer(CLAVE_INDICE);
     (ids || []).filter(Boolean).forEach((id) => {
       const f = leerRegistroPorId(id);
       const r = f ? convertirRegistro(f) : null;
       if (ix) {
         ix.equipos.filas = ix.equipos.filas.filter((x) => x[0] !== id);
         ix.lineas.filas = ix.lineas.filas.filter((x) => x[0] !== id);
+        if (ix.vista) {
+          ix.vista.filas = ix.vista.filas.filter((x) => x[0] !== id);
+          if (r && (r.equipo || r.linea)) ix.vista.filas.push(LineasUtil.paraCliente(filaVista_(f, r)));
+        }
       }
       if (r && r.equipo) {
         const fe = LineasUtil.paraCliente(filaIndiceEquipo_(r.equipo, r.linea));
@@ -273,7 +306,7 @@ const LineasRepo = (function () {
         cambios.quitar.lineas.push(id);
       }
     });
-    if (ix) LineasDatos.cacheGuardar('indice_telefonia_v2', ix, SEG_CACHE_INDICE);
+    if (ix) LineasDatos.cacheGuardar(CLAVE_INDICE, ix, SEG_CACHE_INDICE);
     return cambios;
   }
 
@@ -798,7 +831,7 @@ const LineasRepo = (function () {
     const total = filas.length;
     const desde = pagina * porPagina;
     const salida = filas.slice(desde, desde + porPagina).map((f) => {
-      const fila = { _fila: f._fila, _ref: f._ref || null };
+      const fila = { _fila: f._fila, _ref: f._ref || null, _id: f['ID'] === undefined || f['ID'] === null ? '' : String(f['ID']) };
       encabezados.forEach((h) => {
         const secreto = /^(PIN WHATSAPP|PIN EQUIPO|CONTRASEÑA MODEM)$/i.test(h);
         fila[h] = secreto && !puedeVerSecretos && f[h] ? '••••' : f[h];
@@ -875,7 +908,7 @@ const LineasRepo = (function () {
 
   /** Vacía las cachés del módulo (índices, catálogos y carpetas). */
   function borrarCaches() {
-    ['indice_telefonia_v2', 'indice_colaboradores', 'carpetas_nucos', 'carpetas_nucos_v2', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3'].forEach(LineasDatos.cacheBorrar);
+    ['indice_telefonia_v2', CLAVE_INDICE, 'indice_colaboradores', 'carpetas_nucos', 'carpetas_nucos_v2', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3'].forEach(LineasDatos.cacheBorrar);
   }
 
   return {
