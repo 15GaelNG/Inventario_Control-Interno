@@ -473,12 +473,12 @@ const LineasCaptura = (function () {
    * APP_EVIDENCIAS. 'actualizar' → recuenta las fotos y regresa { fotos }.
    */
   function fotosInspeccion(id, accion, correo) {
+    if (/^drive_/.test(id)) throw new Error('Las inspecciones de la carpeta NUCOS son de solo consulta: no se les agregan fotos.');
     const insp = LineasRepo.leerInspeccion(id);
     if (!insp) throw new Error('No existe la inspección ' + id);
     const TAB_EV = LineasRepo.TAB.APP_EVID;
     LineasRepo.asegurarPestanaApp(TAB_EV);
-    const esDrive = /^drive_/.test(id);
-    const filas = LineasDatos.buscarFilas(TAB_EV, esDrive ? 'CARPETA_ID' : 'ID_REGISTRO', esDrive ? id.slice(6) : id);
+    const filas = LineasDatos.buscarFilas(TAB_EV, 'ID_REGISTRO', id);
     const fila = filas.length ? LineasDatos.leerFilas([{ tabla: TAB_EV, filas: filas.slice(0, 1) }])[0][0] : null;
     let carpetaId = fila ? String(fila['CARPETA_ID'] || '') : '';
     let fotosId = fila ? String(fila['FOTOS_CARPETA_ID'] || '') : '';
@@ -489,7 +489,7 @@ const LineasCaptura = (function () {
         LineasEvidencias.autorizarSubida(correo, [fotosId]);
         return { fotosCarpetaId: fotosId };
       }
-      const c = LineasEvidencias.crearCarpetaFotos(esDrive ? 'SIN ID' : id, correo);
+      const c = LineasEvidencias.crearCarpetaFotos(id, correo);
       if (fila) {
         LineasDatos.actualizarFila(TAB_EV, fila._fila, Object.assign({ 'FOTOS_CARPETA_ID': c.fotosCarpetaId, 'ACTUALIZADO_EN': new Date() },
           carpetaId ? {} : { 'CARPETA_ID': c.carpetaId, 'RUTA': c.ruta }));

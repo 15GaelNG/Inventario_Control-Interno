@@ -1781,7 +1781,7 @@
         l = l || {};
         return tarjeta(icono('file-spreadsheet') + ' Registro en la hoja', campos([
           ['ID', l.id], ['Folio', l.folio], ['Tipo', l.tipo], ['Fila en hoja', l.fila],
-          ['Estatus general', chip(l.estatusGeneral), true], ['Fecha registro', fecha(l.fechaRegistro)], ['Última inspección', fecha(l.fechaInspeccion)],
+          ['Estatus general', chip(l.estatusGeneral), true], ['Fecha registro', fecha(l.fechaRegistro)], ['Fecha inspección', fecha(l.fechaInspeccion)],
           ['Comentarios', l.comentarios],
         ]), 'ln-solo-escritorio');
       }
@@ -2776,10 +2776,10 @@
                 tarjeta(icono('message-square-text') + ' Observaciones', '<p class="ln-lectura-notas">' + esc(i.observaciones || 'Sin observaciones registradas.') + '</p>')) +
             tarjeta(icono('images') + ' Fotografías (' + fotos.length + ')',
               (fotos.length ? galeria(fotos) : '<p class="empty-state">No hay fotografías de esta inspección.</p>') +
-              (r.puedeOperar ? '<div class="ln-fotos-despues"><h4>' + icono('image-plus') + ' Agregar fotos</h4>' +
+              (r.puedeOperar && !deDrive ? '<div class="ln-fotos-despues"><h4>' + icono('image-plus') + ' Agregar fotos</h4>' +
                 htmlSubirFotos('insp-fotos', 'Se guardan en la carpeta FOTOS de esta inspección en Drive.') + '</div>' : ''));
-          if (r.puedeOperar) {
-            // Mejora: subir fotos a una inspección ya registrada (la carpeta se prepara al elegir la primera)
+          if (r.puedeOperar && !deDrive) {
+            // Mejora: subir fotos (no a las de NUCOS: es de solo lectura) a una inspección ya registrada (la carpeta se prepara al elegir la primera)
             let carpeta = null;
             const obtener = () => (carpeta = carpeta || llamar('apiLineasFotosInspeccion', id, 'preparar').then((c) => c.fotosCarpetaId));
             const terminar = () => llamar('apiLineasFotosInspeccion', id, 'actualizar').then(() => {
