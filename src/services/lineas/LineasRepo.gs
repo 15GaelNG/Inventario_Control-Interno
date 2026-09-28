@@ -345,17 +345,22 @@ const LineasRepo = (function () {
   function guardarCambiosRegistro(f, cambios, usuario, ahora) {
     const t = LineasDatos.tablaFresca(TAB.LINEAS);
     const efectivos = [];
+    const soloFormato = {}; // NUCO "5" → "0005": se escribe homologado, pero no es un cambio para la bitácora
     const nuevo = Object.assign({}, f);
     Object.keys(cambios).forEach((c) => {
       if (LineasDatos.colIndice(t, c) < 0) return;
       const antes = col(f, c);
       if (normalizarComparacion_(antes) === normalizarComparacion_(cambios[c])) return;
-      efectivos.push({ campo: c, antes: antes, despues: cambios[c] });
       nuevo[t.encabezados[LineasDatos.colIndice(t, c)]] = cambios[c];
+      if (LineasDatos.normCol(c) === 'NUCO' && LineasUtil.nucoVisible(antes) === LineasUtil.nucoVisible(cambios[c])) {
+        soloFormato[c] = cambios[c];
+        return;
+      }
+      efectivos.push({ campo: c, antes: antes, despues: cambios[c] });
     });
-    if (!efectivos.length) return { idsCambios: [], idReasignacion: null, campos: [] };
+    if (!efectivos.length && !Object.keys(soloFormato).length) return { idsCambios: [], idReasignacion: null, campos: [] };
 
-    const escribir = {};
+    const escribir = Object.assign({}, soloFormato);
     efectivos.forEach((e) => { escribir[e.campo] = e.despues; });
     const tipoNuevo = (txt(col(nuevo, 'TIPO')) || '').toUpperCase();
     if (LineasDatos.colIndice(t, 'FOLIO') >= 0) escribir['FOLIO'] = folioRegistro(tipoNuevo, col(nuevo, 'NUCO'));
@@ -366,7 +371,7 @@ const LineasRepo = (function () {
 
     const bitacora = efectivos.filter((e) => CAMPOS_BITACORA.indexOf(LineasDatos.normCol(e.campo)) >= 0).map((e) => ({
       // NUCO e IMEI ya actualizados, como [NUCO] / [IMEI] en las acciones del bot
-      'ID_CAMBIO': LineasDatos.nuevoIdCorto(), 'ID_LINEA': f['ID'], 'NUCO': col(nuevo, 'NUCO'), 'IMEI': col(nuevo, 'IMEI'), 'TABLA': TAB.LINEAS,
+      'ID_CAMBIO': LineasDatos.nuevoIdCorto(), 'ID_LINEA': f['ID'], 'NUCO': LineasUtil.nucoVisible(col(nuevo, 'NUCO')) || '', 'IMEI': col(nuevo, 'IMEI'), 'TABLA': TAB.LINEAS,
       'CAMPO': e.campo, 'ANTES': textoBitacora_(e.antes), 'DESPUES': textoBitacora_(e.despues),
       'ACTUALIZADO POR': usuario.nombre, 'FECHA ACTUALIZACION': ahora,
     }));
@@ -376,7 +381,7 @@ const LineasRepo = (function () {
     if (efectivos.some((e) => LineasDatos.normCol(e.campo) === 'RESPONSABLE')) {
       idReasignacion = LineasDatos.nuevoIdCorto();
       LineasDatos.agregarFilas(TAB.REASIG, [{
-        'ID Historial': idReasignacion, 'ID Linea': f['ID'], 'Fecha de Reasignacion': ahora, 'NUCO': col(f, 'NUCO'),
+        'ID Historial': idReasignacion, 'ID Linea': f['ID'], 'Fecha de Reasignacion': ahora, 'NUCO': LineasUtil.nucoVisible(col(nuevo, 'NUCO')) || '',
         'No Empleado Saliente': col(f, 'NO EMPLEADO'), 'Responsable Saliente': col(f, 'RESPONSABLE'), 'Departamento Saliente': col(f, 'DEPARTAMENTO'),
         'No Empleado Entrante': col(nuevo, 'NO EMPLEADO'), 'Responsable Entrante': col(nuevo, 'RESPONSABLE'), 'Departamento Entrante': col(nuevo, 'DEPARTAMENTO'),
         'QUIEN REGISTRO': usuario.nombre,
@@ -404,7 +409,7 @@ const LineasRepo = (function () {
     const id = LineasDatos.nuevoIdCorto();
     LineasDatos.agregarFilas(TAB.APP_MOV, [{
       'ID': id, 'FECHA': ahora, 'TIPO': tipo, 'REFS': ',' + (extra.refs || []).filter(Boolean).join(',') + ',',
-      'NUCO': extra.nuco || '', 'NUMERO': extra.numero || '', 'NUCO_DESTINO': extra.nucoDestino || '',
+      'NUCO': LineasUtil.nucoVisible(extra.nuco) || '', 'NUMERO': extra.numero || '', 'NUCO_DESTINO': LineasUtil.nucoVisible(extra.nucoDestino) || '',
       'MOTIVO': txt(datos.motivo) || '', 'TICKET': txt(datos.ticket) || '',
       'USUARIO_CORREO': usuario.correo, 'USUARIO_NOMBRE': usuario.nombre,
       'ANTES_JSON': JSON.stringify(extra.antes || {}), 'DESPUES_JSON': JSON.stringify(extra.despues || {}),

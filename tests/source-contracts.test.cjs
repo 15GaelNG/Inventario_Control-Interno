@@ -181,24 +181,32 @@ test('el alta y edición de LINEAS TELEFONICAS sigue LINEAS TELEFONICAS_Form del
   const orden = ['FOLIO', 'TIPO', 'NUMERO TELEFONO', 'NUCO', 'EQUIPO', 'NO EMPLEADO', 'ESTATUS GENERAL', 'RESPONSABLE', 'PUESTO',
     'RESPONSABLE USA EL EQUIPO', 'NOMBRE QUIEN USA', 'PUESTO QUIEN USA', 'IMEI', 'NUMERO SIM', 'ACCESORIOS', 'SEDE', 'OFICINA / DESARROLLO',
     'DEPARTAMENTO', 'AREA', 'JEFE DIRECTO', 'DIRECTOR', 'RAZON SOCIAL', 'PIN WHATSAPP', 'PIN EQUIPO', 'CUENTA GOOGLE', 'COMPAÑIA',
-    'COSTO PLAN', 'FECHA REGISTRO', 'INICIO PLAN', 'FIN PLAN', 'ESTATUS LINEA', 'ESTATUS EQUIPO', 'RESPONSIVA', 'FECHA INSPECCION',
-    'FORMATO INSPECCION', 'COMENTARIOS'];
+    'COSTO PLAN', 'FECHA REGISTRO', 'INICIO PLAN', 'FIN PLAN', 'ESTATUS LINEA', 'ESTATUS EQUIPO', 'FECHA INSPECCION', 'COMENTARIOS'];
+  // RESPONSIVA y FORMATO INSPECCION (archivos) se quitaron el 28-sep: esos documentos se consultan en NUCOS
   assert.deepEqual(directos.filter((c) => !/ $/.test(c)), orden);
+  assert.doesNotMatch(reg, /'archivo'|guardarComoAppSheet|subirArchivos_/);
   assert.match(reg, /responsableExtra\('QUINTO', 'CUARTO RESPONSABLE', 'QUINTO RESPONSABLE'\)/);
   assert.match(reg, /PIN_EQ: 'INGRESE UN VALOR VALIDO, Y NO MAYOR A 6 CARACTERES'/);
   assert.match(reg, /mostrar: \{ nuevo: true \}, requerido: \{ nuevo: true \}/);
   // Simulación: un alta de EQUIPO toma los valores iniciales "NO APLICA" y valida mayúsculas
-  const Reg = new Function('LineasRepo', 'CacheService', 'Utilities', 'SpreadsheetApp', 'Config',
+  const LineasUtil = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '; return LineasUtil;')({}, {});
+  const Reg = new Function('LineasRepo', 'CacheService', 'Utilities', 'SpreadsheetApp', 'Config', 'LineasUtil',
     reg + '; return LineasRegistros;')(
     { CATALOGO: { tipos: ['EQUIPO', 'LINEA'], estatusLinea: ['USO'], estatusEquipo: ['USO'] } },
     { getScriptCache: () => ({ get: () => '', put: () => {} }) },
-    { formatDate: () => '2026-09-24' }, {}, {});
+    { formatDate: () => '2026-09-24' }, {}, {}, LineasUtil);
   const ctx = { nuevo: true, nucoRepetido: () => false, telefonoRepetido: () => false };
   const els = Reg._elementos({}, {}, { correo: 'x@y.z' }, ctx);
   const r = Reg._resolver(els, {}, { TIPO: 'EQUIPO', NUCO: '12', RESPONSABLE: 'juan', 'INICIO PLAN': '2026-09-01', 'FIN PLAN': '2027-09-01' }, ctx);
   assert.equal(r.valores['NUMERO TELEFONO'], 'NO APLICA');
   assert.equal(r.valores['NUMERO SIM'], 'NO APLICA');
   assert.ok(r.errores.some((e) => /RESPONSABLE: ESCRIBIR EN MAYUSCULAS/.test(e)));
+  // NUCO homologado: el formulario lo muestra a 4 dígitos y se guarda así
+  const edicion = Reg._elementos({ NUCO: 5 }, {}, { correo: 'x@y.z' }, Object.assign({}, ctx, { nuevo: false }));
+  assert.equal(edicion.filter((e) => e.columna === 'NUCO')[0].valor, '0005');
+  assert.match(reg, /const valores = homologarNuco_\(aHoja_\(elementos, r\.valores\)\);/);
+  // La bitácora no registra "5 → 0005" como un cambio (solo se escribe homologado)
+  assert.match(read('src/services/lineas/LineasRepo.gs'), /LineasUtil\.nucoVisible\(antes\) === LineasUtil\.nucoVisible\(cambios\[c\]\)/);
 });
 
 test('las firmas nuevas no se almacenan como archivos de Drive', () => {
@@ -601,7 +609,6 @@ test('Drive: todo en la carpeta de la app AppSheet con sus rutas; NUCOS de produ
   assert.match(captura, /carpeta: 'Files', nombre: \(id\) => 'RESPONSIVA' \+ id \+ '\.pdf', columna: 'FORMATO RESPONSIVA'/);
   assert.match(captura, /ligarPdf_\(tabla, destino\.columna, id, pdf, destino\.carpeta \+ '\/' \+ nombre\)/);
   assert.match(read('src/services/lineas/LineasOperativas.gs'), /guardarComoAppSheet\('BITACORA DE DESECHO_Files_', fila\['ID_DESECHO'\], c, a\.mime, a\.base64\)/);
-  assert.match(read('src/services/lineas/LineasRegistros.gs'), /guardarComoAppSheet\('LINEAS TELEFONICAS_Files_', id, columna, a\.mime, a\.base64\)/);
   // Fotos de inspección en la carpeta de la app; cancelar solo borra la carpeta que creó el mismo usuario
   const ev = read('src/services/lineas/LineasEvidencias.gs');
   assert.match(ev, /const CARPETA_FOTOS = 'INSPECCIONES LINEAS_Images';/);
@@ -616,7 +623,10 @@ test('Drive: todo en la carpeta de la app AppSheet con sus rutas; NUCOS de produ
   assert.doesNotMatch(lineas, /\['Patrón'/);
   assert.match(lineas, /e\.nuco \? \['Última responsiva', botonUltimoNucos\('RESPONSIVA', id\), true\] : null,/);
   assert.match(lineas, /e\.nuco \? \['Última inspección', botonUltimoNucos\('INSPECCION', id\), true\] : null,/);
-  assert.match(lineas, /\['Comentarios', l\.comentarios\],/);
+  // Sin la tarjeta "Registro en la hoja" (ID, folio, fila, estatus general, fechas, comentarios); Tipo en Equipo o Línea
+  assert.doesNotMatch(lineas, /tarjetaRegistro|Registro en la hoja|ln-solo-escritorio/);
+  assert.match(lineas, /\['Tipo', tipoRegistro\(e\.legado\), true\],/);
+  assert.match(lineas, /!e \? \['Tipo', tipoRegistro\(l\.legado\), true\] : null,/);
   assert.doesNotMatch(lineas, /d\.pdfRuta|responsivaRuta|formatoInspeccionRuta|apiLineasResponsiva|apiLineasDocumentosNuco|ln-docs-nucos|totalRotaciones/);
   const servicio = read('src/services/TelefoniaService.gs');
   assert.doesNotMatch(servicio, /pdfRuta|totalRotaciones|LineasArchivos\.imagen\(insp/);

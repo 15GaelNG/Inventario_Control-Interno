@@ -1777,13 +1777,10 @@
         ]) + adicionales);
       }
 
-      function tarjetaRegistro(l) {
-        l = l || {};
-        return tarjeta(icono('file-spreadsheet') + ' Registro en la hoja', campos([
-          ['ID', l.id], ['Folio', l.folio], ['Tipo', l.tipo], ['Fila en hoja', l.fila],
-          ['Estatus general', chip(l.estatusGeneral), true], ['Fecha registro', fecha(l.fechaRegistro)], ['Fecha inspección', fecha(l.fechaInspeccion)],
-          ['Comentarios', l.comentarios],
-        ]), 'ln-solo-escritorio');
+      /** TIPO del registro (columna TIPO del AppSheet) con su color e ícono. */
+      function tipoRegistro(legado) {
+        const t = legado && legado.tipo;
+        return t ? formatoAppSheet('LINEAS', 'TIPO', t) || esc(t) : vacio;
       }
 
       /**
@@ -1855,6 +1852,7 @@
               (e._secretosVisibles ? '' : '<div class="ln-nota">' + icono('lock') + ' Los PIN, patrones y contraseñas están ocultos para tu rol.</div>') +
             '<div class="ln-grid-2">' +
               tarjeta(icono('smartphone') + ' Equipo', campos([
+                ['Tipo', tipoRegistro(e.legado), true],
                 ['Modelo', e.modelo], ['IMEI', e.imei], ['Color', e.color], ['Accesorios', (e.accesorios || []).join(', ')],
                 e.tipo !== 'MODEM' && e.tipo !== 'BANDA_ANCHA' && e.tipo !== 'CAMARA' ? ['Cuenta Google', e.cuentaGoogle] : null,
                 e.tipo === 'CELULAR' || e.tipo === 'CELULAR_BASICO' ? ['PIN equipo', e.pinEquipo] : null,
@@ -1869,7 +1867,6 @@
                 ['Costo plan', costo], ['Plan', [fecha(l.inicioPlan), fecha(l.finPlan)].filter(Boolean).join(' → ')],
               ]) : '<p class="empty-state">Este equipo no tiene línea asignada.</p>') +
               tarjetaResponsable(e.responsable) +
-              tarjetaRegistro(e.legado) +
             '</div>', tarjetaDetallesCopiar(r.detalles), true);
           cargarEvidencias(id);
           cargarHistorial(id, 'NUCO ' + (e.nuco || id));
@@ -1894,6 +1891,7 @@
             fichaEnPestanas(
             '<div class="ln-grid-2">' +
               tarjeta(icono('card-sim') + ' Línea', campos([
+                !e ? ['Tipo', tipoRegistro(l.legado), true] : null,
                 ['Compañía', l.compania], ['SIM', l.sim], ['PIN WhatsApp', l.pinWhatsapp], ['Razón social', l.razonSocial],
                 ['Costo plan', costo], ['Inicio plan', fecha(l.inicioPlan)], ['Fin plan', fecha(l.finPlan)],
                 l.usoTemporal ? ['Uso temporal', 'Desde ' + esc(fecha(l.usoTemporal.desde) || '—') + ' · ' + esc(l.usoTemporal.correo || ''), true] : null,
@@ -1901,10 +1899,9 @@
               ])) +
               tarjeta(icono('smartphone') + ' Equipo', e ? campos([
                 ['NUCO', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' ' + esc(e.nuco || '—') + ' ' + icono('chevron-right') + '</a>', true],
-                ['Tipo', TIPO_EQUIPO[e.tipo] || e.tipo], ['Modelo', e.modelo], ['IMEI', e.imei], ['Estatus', chip(e.estatus), true],
+                ['Tipo', tipoRegistro(e.legado), true], ['Modelo', e.modelo], ['IMEI', e.imei], ['Estatus', chip(e.estatus), true],
               ]) : '<p class="empty-state">Línea suelta: no está instalada en un equipo de la empresa.</p>') +
               tarjetaResponsable(e ? e.responsable : l.responsable, e ? 'Responsable (del equipo)' : 'Responsable') +
-              tarjetaRegistro(l.legado) +
             '</div>', tarjetaDetallesCopiar(r.detalles), !e);
           if (!e) cargarEvidencias(id);
           cargarHistorial(id, e ? 'NUCO ' + (e.nuco || id) : 'Linea ' + (l.numero || id));

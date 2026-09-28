@@ -106,7 +106,7 @@ const LineasCaptura = (function () {
       campo_('FECHA DE REGISTRO', 'FECHA DE REGISTRO', 'fechaHora', Object.assign({ valor: Utilities.formatDate(ahora, ZONA, "yyyy-MM-dd'T'HH:mm") }, req)),
       campo_('ID', 'ID', 'texto', { valor: id, soloLectura: true }),
       campo_('ID LINEA', 'ID LINEA', 'texto', { valor: v('IMEI') || v('ID'), soloLectura: true }),
-      campo_('NUCO', 'NUCO', 'texto', Object.assign({ valor: v('NUCO') }, req)),
+      campo_('NUCO', 'NUCO', 'texto', Object.assign({ valor: LineasUtil.nucoVisible(v('NUCO')) || '' }, req)),
       campo_('RESPONSABLE', 'RESPONSABLE', 'listaAbierta', Object.assign({ valor: v('RESPONSABLE'), sugerencias: 'PERSONAS', autollenar: { 'PUESTO': 'puesto' } }, req)),
       campo_('DEPARTAMENTO', 'DEPARTAMENTO', 'lista', Object.assign({ valor: v('DEPARTAMENTO'), opciones: catalogos.departamentos || [] }, req)),
       campo_('AREA', 'AREA', 'lista', Object.assign({ valor: v('AREA'), opciones: catalogos.areas || [] }, req)),
@@ -166,7 +166,7 @@ const LineasCaptura = (function () {
     return [
       ro('ID', 'ID', id),
       ro('ID LINEA', 'ID LINEA', v('IMEI') || v('ID')),
-      ro('NUCO', 'NUCO', v('NUCO')),
+      ro('NUCO', 'NUCO', LineasUtil.nucoVisible(v('NUCO')) || ''),
       ro('No EMPLEADO', 'NÚMERO DE EMPLEADO', v('NO EMPLEADO')),
       // Mejora: DIA / MES / AÑO eran texto libre en AppSheet; ahora se eligen de una lista
       campo_('DIA', 'DIA', 'lista', { valor: dia, requerido: 'SIEMPRE', opciones: Array.from({ length: 31 }, (_, i) => String(i + 1)) }),
@@ -310,7 +310,7 @@ const LineasCaptura = (function () {
 
       // 1) Fila en INSPECCIONES LINEAS con las columnas del AppSheet (las firmas, como imágenes del AppSheet).
       const fila = Object.assign({}, valores, {
-        'ID': id, 'ID LINEA': obj.reg.id, 'FECHA DE REGISTRO': isNaN(fechaRegistro) ? ahora : fechaRegistro,
+        'ID': id, 'ID LINEA': obj.reg.id, 'NUCO': LineasUtil.nucoVisible(valores['NUCO']) || '', 'FECHA DE REGISTRO': isNaN(fechaRegistro) ? ahora : fechaRegistro,
         'CALIFICACION': calificacion, 'NOMBRE INSPECTOR': usuario.nombre, 'FIRMA RESPONSABLE': '', 'FIRMA INSPECTOR': '',
       });
       LineasDatos.agregarFilas(LineasRepo.TAB.INSP, [fila]);
@@ -369,7 +369,7 @@ const LineasCaptura = (function () {
       valores['OBSERVACIONES'] = String(valores['OBSERVACIONES'] || '').toUpperCase();
 
       const fila = Object.assign({}, valores, {
-        'ID': id, 'ID LINEA': obj.reg.id, 'FECHA RESPONSIVA': '', 'TIPO CONTRASEÑA': '',
+        'ID': id, 'ID LINEA': obj.reg.id, 'NUCO': LineasUtil.nucoVisible(valores['NUCO']) || '', 'FECHA RESPONSIVA': '', 'TIPO CONTRASEÑA': '',
         'NOMBRE CI': usuario.nombre, 'FIRMA RESPONSABLE': '', 'FIRMA CI': '',
       });
       LineasDatos.agregarFilas(LineasRepo.TAB.RESP, [fila]);

@@ -167,6 +167,9 @@ y capturar responsivas e inspecciones.
   `soltarDocumentos`; `exportar: false`; doble clic abre la inspección o el PDF de la responsiva);
   `generarPdfPendiente` reemplaza el botón `data-ln-pdf`. Detalle de inspección con `encabezado`
   y `tarjeta` (sin checklist, firmas ni `DETALLE_INSPECCION`); sin Patrón en General.
+- Después de la auditoría: sin `tarjetaRegistro` (Tipo con `tipoRegistro` en Equipo / Línea); formulario de LINEAS
+  sin campos de archivo (`subirArchivos_` se quitó); NUCO homologado al guardar (`homologarNuco_`, y en
+  `guardarCambiosRegistro` "5" → "0005" se escribe sin entrar a la bitácora).
 
 ## 0j. Vista del AppSheet, NUCOS y una sola carpeta de Drive (2026-09-28; tabla y documentos ajustados en §0k)
 
