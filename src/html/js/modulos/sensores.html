@@ -159,7 +159,7 @@
         const ids = new Set(filas.map((f) => f.ID));
         sensores = sensores.filter((s) => !ids.has(s.ID));
         refrescarTabla();
-        pintarStats();
+        pintarStats(tabla.getFiltradas());
       } : null,
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
@@ -269,7 +269,7 @@
         invalidarCacheLista('apiListarSensores', state.token);
         sensores = sensores.map((s) => (s.ID === id ? actualizada : s));
         refrescarTabla();
-        pintarStats();
+        pintarStats(tabla.getFiltradas());
         cerrarEditarSensor();
         Notificar.exito('Actualizado exitosamente');
       } catch (err) {
@@ -317,17 +317,17 @@
     }
 
     // ----- KPIs -----
-    function pintarStats() {
-      const activos = sensores.filter((s) => String(s.ESTATUS).toUpperCase() === 'ACTIVO').length;
-      document.getElementById('sen-stat-total').textContent = sensores.length;
+    function pintarStats(filas) {
+      const activos = filas.filter((s) => String(s.ESTATUS).toUpperCase() === 'ACTIVO').length;
+      document.getElementById('sen-stat-total').textContent = filas.length;
       document.getElementById('sen-stat-activos').textContent = activos;
-      document.getElementById('sen-stat-baja').textContent = sensores.length - activos;
+      document.getElementById('sen-stat-baja').textContent = filas.length - activos;
 
       const chipViajando = document.getElementById('sen-kpi-viajando');
       chipViajando.hidden = !vivo.disponible;
       if (vivo.disponible) {
         document.getElementById('sen-stat-viajando').textContent =
-          sensores.filter((s) => estadoDe(s) === 'Viajando').length;
+          filas.filter((s) => (s.EN_VIVO || estadoDe(s)) === 'Viajando').length;
       }
     }
 
@@ -344,6 +344,7 @@
         const activo = !!(valores && valores.length === 1 && valores[0] === f.valor);
         document.getElementById(id).classList.toggle('activo', activo);
       });
+      pintarStats(tabla.getFiltradas());
     }
 
     const tabs = Tabs.iniciar(document.getElementById('sen-tabs'), {
@@ -374,7 +375,7 @@
         return;
       }
       refrescarTabla();
-      pintarStats();
+      pintarStats(tabla.getFiltradas());
     }
 
     /** Estado en vivo: la tabla ya se ve aunque Geotab tarde o no esté configurado */
@@ -386,7 +387,7 @@
       }
       if (!document.body.contains(document.getElementById('sen-tabla'))) return;   // se salieron de la pantalla
       refrescarTabla();
-      pintarStats();
+      pintarStats(tabla.getFiltradas());
     }
 
     /** Se refresca solo cada minuto; se detiene al salir de la pantalla */

@@ -683,6 +683,16 @@
       const f = filtros.DIFERENCIA;
       tileTotalArq.classList.toggle('stat-tile-activo', !f);
       tileDiferenciasArq.classList.toggle('stat-tile-activo', !!(f && f.op === '!=' && f.v1 === 0));
+      actualizarKpis(tabla.getFiltradas());
+    }
+
+    function actualizarKpis(filas) {
+      document.getElementById('arq-stat-total').textContent = filas.length;
+      const calificaciones = filas.map((a) => Number(a.CALIFICACION)).filter((n) => !isNaN(n));
+      const promedio = calificaciones.length ? calificaciones.reduce((a, b) => a + b, 0) / calificaciones.length : 0;
+      document.getElementById('arq-stat-calificacion').textContent = Math.round(promedio * 100) / 100 + '%';
+      document.getElementById('arq-stat-diferencias').textContent =
+        filas.filter((a) => (Number(a.DIFERENCIA) || 0) !== 0).length;
     }
 
     async function cargar() {
@@ -697,13 +707,7 @@
       arqueosPorId = {};
       todosLosArqueos.forEach((a) => { arqueosPorId[a.ID] = a; });
 
-      document.getElementById('arq-stat-total').textContent = todosLosArqueos.length;
-      const calificaciones = todosLosArqueos.map((a) => Number(a.CALIFICACION)).filter((n) => !isNaN(n));
-      const promedio = calificaciones.length ? calificaciones.reduce((a, b) => a + b, 0) / calificaciones.length : 0;
-      document.getElementById('arq-stat-calificacion').textContent = Math.round(promedio * 100) / 100 + '%';
-      document.getElementById('arq-stat-diferencias').textContent =
-        todosLosArqueos.filter((a) => (Number(a.DIFERENCIA) || 0) !== 0).length;
-
+      actualizarKpis(todosLosArqueos);
       tabla.setDatos(todosLosArqueos);
     }
 

@@ -845,6 +845,7 @@
       idCampo: 'ID',
       idTabla: 'accesorios',
       textoVacio: 'Todavía no hay artículos registrados',
+      alCambiarFiltros: () => actualizarKpis(tabla.getFiltradas()),
       exportar: {
         nombreArchivo: 'Accesorios',
         titulo: 'Descarga la base completa: todas las filas y columnas de las hojas de artículos y movimientos, sin importar filtros ni búsqueda',
@@ -874,6 +875,12 @@
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
 
+    function actualizarKpis(filas) {
+      document.getElementById('acc-stat-total').textContent = filas.length;
+      document.getElementById('acc-stat-bajo').textContent =
+        filas.filter((a) => Number(a.STOCK) <= Number(a.STOCK_MINIMO || 0)).length;
+    }
+
     async function cargar() {
       tabla.setCargando(true);
       try {
@@ -885,10 +892,7 @@
 
       selectArticulo.innerHTML = todosLosArticulos.map((a) => `<option value="${a.ID}">${escaparHtml(a.NOMBRE)}</option>`).join('');
 
-      document.getElementById('acc-stat-total').textContent = todosLosArticulos.length;
-      document.getElementById('acc-stat-bajo').textContent =
-        todosLosArticulos.filter((a) => Number(a.STOCK) <= Number(a.STOCK_MINIMO || 0)).length;
-
+      actualizarKpis(todosLosArticulos);
       tabla.setDatos(todosLosArticulos);
     }
 
@@ -1848,6 +1852,13 @@
         const activo = valor ? !!(valores && valores.length === 1 && valores[0] === valor) : !valores;
         document.getElementById(id).closest('.stat-tile').classList.toggle('stat-tile-activo', activo);
       });
+      actualizarKpis(tabla.getFiltradas());
+    }
+
+    function actualizarKpis(filas) {
+      document.getElementById('stat-total').textContent = filas.length;
+      document.getElementById('stat-abiertas').textContent = filas.filter((i) => i.ESTADO === 'ABIERTA').length;
+      document.getElementById('stat-cerradas').textContent = filas.filter((i) => i.ESTADO === 'CERRADA').length;
     }
 
     async function cargar() {
@@ -1861,11 +1872,7 @@
         return;
       }
 
-      // Los totales son del historial completo, sin importar el filtro.
-      document.getElementById('stat-total').textContent = todasLasIncidencias.length;
-      document.getElementById('stat-abiertas').textContent = todasLasIncidencias.filter((i) => i.ESTADO === 'ABIERTA').length;
-      document.getElementById('stat-cerradas').textContent = todasLasIncidencias.filter((i) => i.ESTADO === 'CERRADA').length;
-
+      actualizarKpis(todasLasIncidencias);
       tabla.setDatos(todasLasIncidencias);
     }
 
@@ -2190,6 +2197,17 @@
           'stat-tile-activo', !!(f && f.op === KPI_FILTRO_VEHICULOS[id] && f.v1 === 'BAJA')
         );
       });
+      // Los KPIs reflejan lo que hay bajo los filtros activos (los de columna, búsqueda,
+      // etc.), no siempre el catálogo completo — igual que el pie de "N de M" de la tabla.
+      actualizarKpis(tabla.getFiltradas());
+    }
+
+    function actualizarKpis(filas) {
+      document.getElementById('veh-stat-total').textContent = filas.length;
+      document.getElementById('veh-stat-activos').textContent =
+        filas.filter((v) => !String(v.ESTATUS || '').toUpperCase().includes('BAJA')).length;
+      document.getElementById('veh-stat-baja').textContent =
+        filas.filter((v) => String(v.ESTATUS || '').toUpperCase().includes('BAJA')).length;
     }
 
     async function cargar() {
@@ -2209,13 +2227,7 @@
       vehiculosPorId = {};
       todosLosVehiculos.forEach((v) => { vehiculosPorId[v.ID_VEHICULO] = v; });
 
-      // Los totales son del catálogo completo, sin importar el filtro.
-      document.getElementById('veh-stat-total').textContent = todosLosVehiculos.length;
-      document.getElementById('veh-stat-activos').textContent =
-        todosLosVehiculos.filter((v) => !String(v.ESTATUS || '').toUpperCase().includes('BAJA')).length;
-      document.getElementById('veh-stat-baja').textContent =
-        todosLosVehiculos.filter((v) => String(v.ESTATUS || '').toUpperCase().includes('BAJA')).length;
-
+      actualizarKpis(todosLosVehiculos);
       tabla.setDatos(todosLosVehiculos);
     }
 
@@ -2487,6 +2499,17 @@
           'stat-tile-activo', !!(valores && valores.length === 1 && valores[0] === KPI_FILTRO_UBER[id])
         );
       });
+      actualizarKpis(tabla.getFiltradas());
+    }
+
+    function actualizarKpis(filas) {
+      document.getElementById('uber-stat-total').textContent = filas.length;
+      document.getElementById('uber-stat-activos').textContent =
+        filas.filter((u) => String(u.ESTATUS || '').toUpperCase().includes('ACTIVO')).length;
+      document.getElementById('uber-stat-pendientes').textContent =
+        filas.filter((u) => String(u.ESTATUS || '').toUpperCase().includes('PENDIENTE')).length;
+      document.getElementById('uber-stat-baja').textContent =
+        filas.filter((u) => String(u.ESTATUS || '').toUpperCase().includes('BAJA')).length;
     }
 
     async function cargar() {
@@ -2501,15 +2524,7 @@
       usuariosPorId = {};
       todosLosUsuarios.forEach((u) => { usuariosPorId[u.ID] = u; });
 
-      // Los totales son del catálogo completo, sin importar el filtro.
-      document.getElementById('uber-stat-total').textContent = todosLosUsuarios.length;
-      document.getElementById('uber-stat-activos').textContent =
-        todosLosUsuarios.filter((u) => String(u.ESTATUS || '').toUpperCase().includes('ACTIVO')).length;
-      document.getElementById('uber-stat-pendientes').textContent =
-        todosLosUsuarios.filter((u) => String(u.ESTATUS || '').toUpperCase().includes('PENDIENTE')).length;
-      document.getElementById('uber-stat-baja').textContent =
-        todosLosUsuarios.filter((u) => String(u.ESTATUS || '').toUpperCase().includes('BAJA')).length;
-
+      actualizarKpis(todosLosUsuarios);
       tabla.setDatos(todosLosUsuarios);
     }
 
@@ -2653,6 +2668,7 @@
       idTabla: 'tickets',
       ordenInicial: { campo: 'FECHA', dir: 'desc' },
       textoVacio: 'Todavía no hay tickets registrados',
+      alCambiarFiltros: () => actualizarKpis(tabla.getFiltradas()),
       exportar: {
         nombreArchivo: 'Tickets',
         titulo: 'Descarga la base completa: todas las filas y columnas de la hoja, sin importar filtros ni búsqueda',
@@ -2717,6 +2733,10 @@
       }
     });
 
+    function actualizarKpis(filas) {
+      document.getElementById('tickets-stat-total').textContent = filas.length;
+    }
+
     async function cargar() {
       tabla.setCargando(true);
       try {
@@ -2725,7 +2745,7 @@
         tabla.setError('No se pudo cargar el historial: ' + err.message);
         return;
       }
-      document.getElementById('tickets-stat-total').textContent = todosLosTickets.length;
+      actualizarKpis(todosLosTickets);
       tabla.setDatos(todosLosTickets);
     }
 

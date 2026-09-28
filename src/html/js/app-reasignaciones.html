@@ -94,7 +94,7 @@
         const ids = new Set(filas.map((f) => f.ID));
         todasLasReasignaciones = todasLasReasignaciones.filter((r) => !ids.has(r.ID));
         tabla.setDatos(todasLasReasignaciones);
-        pintarStats();
+        pintarStats(todasLasReasignaciones);
       } : null,
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
@@ -112,13 +112,14 @@
       const f = filtros.FECHA;
       tileHoy.classList.toggle('stat-tile-activo', !!(f && f.op === 'igual' && f.v1 === hoyISO()));
       tileTotal.classList.toggle('stat-tile-activo', !f);
+      pintarStats(tabla.getFiltradas());
     }
 
-    function pintarStats() {
-      document.getElementById('rv-stat-total').textContent = todasLasReasignaciones.length;
+    function pintarStats(filas) {
+      document.getElementById('rv-stat-total').textContent = filas.length;
       const hoyStr = hoyISO();
       document.getElementById('rv-stat-hoy').textContent =
-        todasLasReasignaciones.filter((r) => r.FECHA && r.FECHA.slice(0, 10) === hoyStr).length;
+        filas.filter((r) => r.FECHA && r.FECHA.slice(0, 10) === hoyStr).length;
     }
 
     async function cargar() {
@@ -129,7 +130,7 @@
         tabla.setError('No se pudo cargar el historial: ' + err.message);
         return;
       }
-      pintarStats();
+      pintarStats(todasLasReasignaciones);
       tabla.setDatos(todasLasReasignaciones);
     }
 

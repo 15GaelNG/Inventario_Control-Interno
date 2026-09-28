@@ -97,7 +97,7 @@
         (r.filas || []).forEach((f) => { porId[f.ID] = f; });
         hologramas = hologramas.map((h) => porId[h.ID] || h);
         tabla.setDatos(conEstado(hologramas));
-        pintarStats();
+        pintarStats(tabla.getFiltradas());
         Notificar.exito(`${r.filas.length} ${r.filas.length === 1 ? 'holograma actualizado' : 'hologramas actualizados'} · ${r.campos} datos corregidos`);
       } catch (err) {
         Notificar.error('No se pudo actualizar: ' + err.message);
@@ -175,7 +175,7 @@
         const ids = new Set(filas.map((f) => f.ID));
         hologramas = hologramas.filter((h) => !ids.has(h.ID));
         tabla.setDatos(conEstado(hologramas));
-        pintarStats();
+        pintarStats(tabla.getFiltradas());
       } : null,
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
@@ -271,7 +271,7 @@
         invalidarCacheLista('apiListarHologramas', state.token);
         hologramas = hologramas.map((h) => (h.ID === id ? actualizada : h));
         tabla.setDatos(conEstado(hologramas));
-        pintarStats();
+        pintarStats(tabla.getFiltradas());
         cerrarEditarHolograma();
         Notificar.exito('Actualizado exitosamente');
       } catch (err) {
@@ -284,13 +284,13 @@
     });
 
     // ----- KPIs -----
-    function pintarStats() {
-      const habilitados = hologramas.filter((h) => String(h.ESTATUS_EOX).toUpperCase() === 'HABILITADO').length;
-      const personales = hologramas.filter((h) => String(h.ESTATUS_VEHICULO).toUpperCase() === 'PERSONAL').length;
-      const viejos = hologramas.filter((h) => estadoCatalogo(h) === 'Desactualizado').length;
-      document.getElementById('hol-stat-total').textContent = hologramas.length;
+    function pintarStats(filas) {
+      const habilitados = filas.filter((h) => String(h.ESTATUS_EOX).toUpperCase() === 'HABILITADO').length;
+      const personales = filas.filter((h) => String(h.ESTATUS_VEHICULO).toUpperCase() === 'PERSONAL').length;
+      const viejos = filas.filter((h) => h.CATALOGO === 'Desactualizado').length;
+      document.getElementById('hol-stat-total').textContent = filas.length;
       document.getElementById('hol-stat-habilitados').textContent = habilitados;
-      document.getElementById('hol-stat-deshabilitados').textContent = hologramas.length - habilitados;
+      document.getElementById('hol-stat-deshabilitados').textContent = filas.length - habilitados;
       document.getElementById('hol-stat-personales').textContent = personales;
       document.getElementById('hol-stat-viejos').textContent = viejos;
       document.getElementById('hol-kpi-viejos').hidden = viejos === 0;
@@ -308,6 +308,7 @@
         const valores = filtros[f.campo] && filtros[f.campo].valores;
         document.getElementById(id).classList.toggle('activo', !!(valores && valores.length === 1 && valores[0] === f.valor));
       });
+      pintarStats(tabla.getFiltradas());
     }
 
     const tabs = Tabs.iniciar(document.getElementById('hol-tabs'), {
@@ -338,7 +339,7 @@
         return;
       }
       tabla.setDatos(conEstado(hologramas));
-      pintarStats();
+      pintarStats(tabla.getFiltradas());
     }
 
     // ----- Alta -----

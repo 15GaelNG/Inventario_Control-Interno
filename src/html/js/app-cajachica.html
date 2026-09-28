@@ -313,6 +313,17 @@
           'stat-tile-activo', !!(valores && valores.length === 1 && valores[0] === KPI_FILTRO_CCH[id])
         );
       });
+      actualizarKpisCch(tabla.getFiltradas());
+    }
+
+    function actualizarKpisCch(filas) {
+      document.getElementById('cch-stat-total').textContent = filas.length;
+      document.getElementById('cch-stat-vigentes').textContent =
+        filas.filter((c) => String(c.ESTATUS || '').toUpperCase() === 'VIGENTE').length;
+      document.getElementById('cch-stat-proceso-cierre').textContent =
+        filas.filter((c) => String(c.ESTATUS || '').toUpperCase() === 'EN PROCESO DE CIERRE').length;
+      document.getElementById('cch-stat-cerradas').textContent =
+        filas.filter((c) => String(c.ESTATUS || '').toUpperCase() === 'CERRADA').length;
     }
 
     async function cargar() {
@@ -324,14 +335,7 @@
         return;
       }
 
-      document.getElementById('cch-stat-total').textContent = todasLasCajas.length;
-      document.getElementById('cch-stat-vigentes').textContent =
-        todasLasCajas.filter((c) => String(c.ESTATUS || '').toUpperCase() === 'VIGENTE').length;
-      document.getElementById('cch-stat-proceso-cierre').textContent =
-        todasLasCajas.filter((c) => String(c.ESTATUS || '').toUpperCase() === 'EN PROCESO DE CIERRE').length;
-      document.getElementById('cch-stat-cerradas').textContent =
-        todasLasCajas.filter((c) => String(c.ESTATUS || '').toUpperCase() === 'CERRADA').length;
-
+      actualizarKpisCch(todasLasCajas);
       tabla.setDatos(todasLasCajas);
     }
 
@@ -529,6 +533,15 @@
           'stat-tile-activo', !!(valores && valores.length === 1 && valores[0] === KPI_FILTRO_CM[id])
         );
       });
+      actualizarKpisCm(tabla.getFiltradas());
+    }
+
+    function actualizarKpisCm(filas) {
+      document.getElementById('cmcch-stat-total').textContent = filas.length;
+      document.getElementById('cmcch-stat-incrementos').textContent =
+        filas.filter((c) => String(c.TIPO || '').toUpperCase() === 'INCREMENTO').length;
+      document.getElementById('cmcch-stat-reducciones').textContent =
+        filas.filter((c) => String(c.TIPO || '').toUpperCase() === 'REDUCCION').length;
     }
 
     async function cargar() {
@@ -549,12 +562,7 @@
       // cualquier otra columna, en vez de solo "pintarlo" en la celda.
       todosLosCambios = (cambios || []).map((c) => Object.assign({}, c, { RESPONSABLE: nombreResponsable(c.ID_CCH) }));
 
-      document.getElementById('cmcch-stat-total').textContent = todosLosCambios.length;
-      document.getElementById('cmcch-stat-incrementos').textContent =
-        todosLosCambios.filter((c) => String(c.TIPO || '').toUpperCase() === 'INCREMENTO').length;
-      document.getElementById('cmcch-stat-reducciones').textContent =
-        todosLosCambios.filter((c) => String(c.TIPO || '').toUpperCase() === 'REDUCCION').length;
-
+      actualizarKpisCm(todosLosCambios);
       tabla.setDatos(todosLosCambios);
     }
 
@@ -645,6 +653,16 @@
       const f = filtros.FECHA;
       tileHoy.classList.toggle('stat-tile-activo', !!(f && f.op === 'igual' && f.v1 === hoyISO()));
       tileTotal.classList.toggle('stat-tile-activo', !f);
+      actualizarKpisCv(tabla.getFiltradas());
+    }
+
+    function actualizarKpisCv(filas) {
+      document.getElementById('cv-stat-total').textContent = filas.length;
+      document.getElementById('cv-stat-vehiculos').textContent =
+        new Set(filas.map((c) => c.FOLIO).filter(Boolean)).size;
+      const hoyStr = hoyISO();
+      document.getElementById('cv-stat-hoy').textContent =
+        filas.filter((c) => c.FECHA && c.FECHA.slice(0, 10) === hoyStr).length;
     }
 
     async function cargar() {
@@ -664,13 +682,7 @@
       // llevar el rastro de cada fila, así que se completa uno aquí.
       todosLosCambios = crudos.map((c, i) => Object.assign({}, c, { ID: c.ID || ('sin-id-' + i) }));
 
-      document.getElementById('cv-stat-total').textContent = todosLosCambios.length;
-      document.getElementById('cv-stat-vehiculos').textContent =
-        new Set(todosLosCambios.map((c) => c.FOLIO).filter(Boolean)).size;
-      const hoyStr = hoyISO();
-      document.getElementById('cv-stat-hoy').textContent =
-        todosLosCambios.filter((c) => c.FECHA && c.FECHA.slice(0, 10) === hoyStr).length;
-
+      actualizarKpisCv(todosLosCambios);
       tabla.setDatos(todosLosCambios);
     }
 

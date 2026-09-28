@@ -63,10 +63,10 @@
         : `<span style="color:var(--color-text-muted)">${escaparHtml(estado)}</span>`;
     }
 
-    function pintarStats() {
-      document.getElementById('ver-stat-total').textContent = verificaciones.length;
-      document.getElementById('ver-stat-vencidas').textContent = verificaciones.filter((v) => v.ESTADO === 'Vencida').length;
-      document.getElementById('ver-stat-por-vencer').textContent = verificaciones.filter((v) => v.ESTADO === 'Por vencer').length;
+    function pintarStats(filas) {
+      document.getElementById('ver-stat-total').textContent = filas.length;
+      document.getElementById('ver-stat-vencidas').textContent = filas.filter((v) => v.ESTADO === 'Vencida').length;
+      document.getElementById('ver-stat-por-vencer').textContent = filas.filter((v) => v.ESTADO === 'Por vencer').length;
     }
 
     /** Chip de KPI → valor de la columna ESTADO que filtra */
@@ -119,7 +119,7 @@
         const ids = new Set(filas.map((f) => f.ID));
         verificaciones = conDerivados(verificaciones.filter((v) => !ids.has(v.ID)));
         tabla.setDatos(verificaciones);
-        pintarStats();
+        pintarStats(tabla.getFiltradas());
         pintarHistorial();
       } : null,
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
@@ -196,7 +196,7 @@
         invalidarCacheLista('apiListarVerificaciones', state.token);
         verificaciones = conDerivados(verificaciones.map((v) => (v.ID === id ? actualizada : v)));
         tabla.setDatos(verificaciones);
-        pintarStats();
+        pintarStats(tabla.getFiltradas());
         pintarHistorial();
         cerrarEditarVerificacion();
         Notificar.exito('Actualizado exitosamente');
@@ -258,7 +258,7 @@
       }
       document.getElementById('ver-vacio').textContent = 'No hay verificaciones que coincidan.';
       tabla.setDatos(verificaciones);
-      pintarStats();
+      pintarStats(verificaciones);
       pintarHistorial();
     }
 
@@ -278,6 +278,7 @@
       Object.keys(KPI_ESTADO).forEach((id) => {
         document.getElementById(id).classList.toggle('activo', KPI_ESTADO[id] === soloUno);
       });
+      pintarStats(tabla.getFiltradas());
     }
     Object.keys(KPI_ESTADO).forEach((id) => {
       document.getElementById(id).addEventListener('click', (ev) => {
