@@ -2177,7 +2177,8 @@
     async function cargar() {
       tabla.setCargando(true);
       try {
-        todosLosVehiculos = (await callServerListaCacheada('apiListarVehiculosResumen', state.token)) || [];
+        const texto = await callServerListaCacheada('apiListarVehiculosResumen', state.token);
+        todosLosVehiculos = texto ? JSON.parse(texto) : [];
       } catch (err) {
         tabla.setError('No se pudo cargar el catálogo de vehículos: ' + err.message);
         return;
