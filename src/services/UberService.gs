@@ -117,17 +117,28 @@ const UberService = (function () {
     }
 
     const blob = Utilities.newBlob(bytes, mimeType || 'application/octet-stream', nombreArchivo || 'archivo');
-    let carpeta;
+    const cuenta = () => Session.getEffectiveUser().getEmail();
+    let carpeta, archivo;
     try {
       carpeta = DriveApp.getFolderById(CARPETA_SOLICITUDES_ID);
     } catch (e) {
       throw new Error('No se pudo abrir la carpeta de solicitudes de Uber en Drive. La cuenta con la que ' +
-        'corre la app ahora mismo (' + Session.getEffectiveUser().getEmail() + ') no tiene acceso a esa carpeta.');
+        'corre la app ahora mismo (' + cuenta() + ') no tiene acceso a esa carpeta.');
     }
-    const archivo = carpeta.createFile(blob);
-    // Sin esto, el archivo solo lo puede ver la cuenta que despliega la app
-    // (quien lo creó) — nadie más puede abrir el link, aunque sea válido.
-    archivo.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
+    try {
+      archivo = carpeta.createFile(blob);
+    } catch (e) {
+      throw new Error('Se pudo abrir la carpeta de solicitudes de Uber, pero no crear el archivo ahí. La cuenta ' +
+        cuenta() + ' necesita permiso de editor (no solo lector) en esa carpeta. Error original: ' + e.message);
+    }
+    try {
+      // Sin esto, el archivo solo lo puede ver la cuenta que despliega la app
+      // (quien lo creó) — nadie más puede abrir el link, aunque sea válido.
+      archivo.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
+    } catch (e) {
+      throw new Error('El archivo se subió, pero no se pudo compartir con el dominio (cuenta ' + cuenta() +
+        '). Error original: ' + e.message);
+    }
 
     return { url: archivo.getUrl(), id: archivo.getId(), nombre: nombreArchivo };
   }
