@@ -163,6 +163,9 @@ y capturar responsivas e inspecciones.
 - Segundo ajuste: botón "Ver"; General como antes (sin total de rotaciones); Documentos como antes, con las de NUCOS
   en la misma lista: `TelefoniaService.evidencias` agrega `evidenciasNucos_` (una por carpeta INSP/RESP DD MM) y
   `inspeccion('drive_<carpeta>')` usa `inspeccionNucos_` si no hay APP_EVIDENCIAS. Sin `apiLineasDocumentosNuco`.
+- Tercer ajuste: Documentos = `pintarDocumentos` (KPIs con `tilesKpi` + DataTable `lineas-documentos-v1`, liberada con
+  `soltarDocumentos`); `generarPdfPendiente` reemplaza el botón `data-ln-pdf`. Detalle de inspección con `encabezado`
+  y `tarjeta` (sin checklist, firmas ni `DETALLE_INSPECCION`); sin Patrón en General.
 
 ## 0j. Vista del AppSheet, NUCOS y una sola carpeta de Drive (2026-09-28; tabla y documentos ajustados en §0k)
 

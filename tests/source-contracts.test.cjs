@@ -427,10 +427,10 @@ test('experiencia de uso: menú en celular, ficha en pestañas y formularios por
   assert.match(index, /include\('html\/shell-movil'\)/);
   assert.match(movil, /@media \(max-width: 900px\)/);
   assert.match(movil, /shell-menu-abierto/);
-  // Ficha: resumen rápido + pestañas; documentos como lista
+  // Ficha: resumen rápido + pestañas; Documentos con indicadores y tabla, como Historial
   assert.match(lineas, /function fichaEnPestanas\(general, detalles, conDocumentos\)/);
   assert.match(lineas, /class="ln-resumen-rapido"/);
-  assert.match(lineas, /<ul class="ln-docs">/);
+  assert.match(lineas, /function pintarDocumentos\(cont, inspecciones, responsivas, id\)/);
   // Formularios por pasos con el mismo marcado del componente Formulario
   const pasos = lineas.slice(lineas.indexOf('const PASOS_FORMULARIO'), lineas.indexOf('function repartirEnPasos'));
   ['INSPECCION', 'RESPONSIVA', 'REGISTRO', 'SOLICITUD'].forEach((k) => assert.ok(pasos.includes(k + ': ['), k));
@@ -611,15 +611,20 @@ test('Drive: todo en la carpeta de la app AppSheet con sus rutas; NUCOS de produ
   assert.match(read('src/services/lineas/LineasUtil.gs'), /try \{ return LineasArchivos\.carpetasNucos\(\); \}/);
   assert.match(read('src/ClientApi.gs'), /function apiLineasArchivo\(token, ruta\)/);
 
-  // Cliente: la ficha como antes; Responsiva y Formato inspección abren la última de NUCOS; Documentos sin PDF del AppSheet
+  // Cliente: General sin Patrón, con Última responsiva / Última inspección de NUCOS; nada abre la carpeta del AppSheet
   const lineas = read('src/html/js/lineas.html');
-  assert.match(lineas, /\['Patrón', botonArchivo\(e\.patronRuta, 'Ver patrón'\), true\]/);
-  assert.match(lineas, /e\.nuco \? \['Responsiva', botonUltimoNucos\('RESPONSIVA', id\), true\] : null,/);
-  assert.match(lineas, /e\.nuco \? \['Formato inspección', botonUltimoNucos\('INSPECCION', id\), true\] : null,/);
+  assert.doesNotMatch(lineas, /\['Patrón'/);
+  assert.match(lineas, /e\.nuco \? \['Última responsiva', botonUltimoNucos\('RESPONSIVA', id\), true\] : null,/);
+  assert.match(lineas, /e\.nuco \? \['Última inspección', botonUltimoNucos\('INSPECCION', id\), true\] : null,/);
   assert.match(lineas, /\['Comentarios', l\.comentarios\],/);
   assert.doesNotMatch(lineas, /d\.pdfRuta|responsivaRuta|formatoInspeccionRuta|apiLineasResponsiva|apiLineasDocumentosNuco|ln-docs-nucos|totalRotaciones/);
-  assert.doesNotMatch(read('src/services/TelefoniaService.gs'), /pdfRuta: pdf \?|totalRotaciones/);
-  assert.match(lineas, /contarEnPestana\('documentos', inspecciones\.length \+ responsivas\.length\);/);
+  const servicio = read('src/services/TelefoniaService.gs');
+  assert.doesNotMatch(servicio, /pdfRuta|totalRotaciones|LineasArchivos\.imagen\(insp/);
+  // Documentos: indicadores que filtran por tipo y una tabla con acciones por fila
+  assert.match(lineas, /contarEnPestana\('documentos', filas\.length\);/);
+  assert.match(lineas, /etiqueta: 'Inspecciones', titulo: 'Mostrar solo inspecciones', filtros: \{ documento: \{ valores: \['Inspección'\] \} \}/);
+  assert.match(lineas, /\{ icono: 'file-plus', titulo: 'Generar PDF', visible: \(d\) => !!d\.pdfPendiente,/);
+  assert.match(lineas, /const ORIGEN_DOCUMENTO = \{ APPSHEET: 'AppSheet', SISTEMA: 'Sistema nuevo', DRIVE: 'Carpeta NUCOS' \};/);
 });
 
 test('Documentos: inspecciones y responsivas de la hoja y de la carpeta del NUCO en NUCOS', () => {
@@ -697,16 +702,18 @@ test('la tabla de Líneas Telefónicas tiene las columnas de siempre y agrega la
   assert.match(repo, /if \(c === 'FOLIO'\) return legado\.folio \|\| null;/);
 });
 
-test('vista de detalle del AppSheet: inspección', () => {
+test('detalle de la inspección: mismo diseño que la ficha, sin revisión del activo, firmas ni registro completo', () => {
   const servicio = read('src/services/TelefoniaService.gs');
   const lineas = read('src/html/js/lineas.html');
-  // INSPECCIONES LINEAS_Detail con todas las columnas (la responsiva se consulta en NUCOS, no en un panel del AppSheet)
-  assert.match(servicio, /\['E COMMERCE', 'ENLACE A WINDOWS'\]/);
-  assert.doesNotMatch(servicio, /DETALLE_RESPONSIVA/);
-  assert.match(servicio, /if \(v !== null && !ver && COLUMNA_SECRETA_DETALLE\.test\(columna\)\) v = '••••';/);
-  // PIN y patrón de la inspección ocultos para quien no es ADMIN
+  assert.doesNotMatch(servicio, /DETALLE_RESPONSIVA|DETALLE_INSPECCION|registroDetalle_|checklist: LineasChecklist\.secciones\(\)|firmas: puedeVerSecretos_/);
+  // Firmas y patrón no se listan como fotos; PIN y patrón ocultos para quien no es ADMIN
+  assert.match(servicio, /if \(\/\^\(FIRMA\|PATRON\)\/i\.test\(f\.name\)\) return;/);
   assert.match(servicio, /insp\.pinEquipo = insp\.pinEquipo \? '••••' : null;/);
-  assert.match(lineas, /seccion\(5, 'table-properties', 'Registro completo'/);
+  // Una inspección de la hoja sin carpeta toma la de NUCOS del mismo día
+  assert.match(servicio, /dia_\(x\.doc\.fecha\) === dia_\(insp\.fecha\)/);
+  const detalle = lineas.slice(lineas.indexOf('function pintarInspeccion('), lineas.indexOf('/** Desde una bitácora: abre el registro'));
+  assert.doesNotMatch(detalle, /Registro completo|Firmas de validación|Revisión del activo|ln-secciones-nav/);
+  assert.match(detalle, /tarjeta\(icono\('images'\) \+ ' Fotografías \('/);
 });
 
 test('Reactivación, Solicitud y Desechos se pueden editar como con la acción EDIT del AppSheet', () => {

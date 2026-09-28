@@ -88,19 +88,6 @@
       if (/^https?:/i.test(v)) return '<a class="ln-btn-icono ln-archivo" target="_blank" rel="noopener" href="' + esc(v) + '" title="' + esc(nombre) + '">' + etiqueta + '</a>';
       return '<button type="button" class="ln-btn-icono ln-archivo" data-ln-archivo="' + esc(v) + '" title="' + esc(nombre) + '">' + etiqueta + '</button>';
     }
-    /** Valor de un campo de una vista de detalle del AppSheet (archivos con "Ver", fechas y porcentaje con formato). */
-    function valorDetalleAppSheet(d) {
-      const v = d.valor;
-      if (v === null || v === undefined || v === '') return vacio;
-      if (/^(FORMATO|FIRMA|PATRON$|CONTRASEÑA$)/.test(d.columna)) return botonArchivo(v, 'Ver');
-      if (d.columna === 'CALIFICACION' && !isNaN(Number(v))) return esc(porcentaje(Number(v)));
-      if (esFechaIso(v)) return esc(fechaTabla(v));
-      return esc(v);
-    }
-    function camposDetalleAppSheet(detalle) {
-      return '<dl class="ln-campos">' + (detalle || []).map((d) => '<dt>' + esc(d.titulo) + '</dt><dd>' + valorDetalleAppSheet(d) + '</dd>').join('') + '</dl>';
-    }
-
     async function abrirArchivoAppSheet(boton) {
       // La ventana se abre en el clic (si no, el navegador la bloquea) y se le da la dirección al llegar
       const ventana = window.open('', '_blank');
@@ -160,11 +147,6 @@
       return '<span class="ln-chip ' + (clase || COLOR_ESTATUS[String(estatus).toUpperCase()] || '') + '">' + esc(estatus) + '</span>';
     };
     const TIPO_EQUIPO = { CELULAR: 'Celular', CELULAR_BASICO: 'Celular básico', MODEM: 'Módem', BANDA_ANCHA: 'Banda ancha', CAMARA: 'Cámara' };
-    const ORIGEN = {
-      DRIVE: '<span class="ln-chip">Solo Drive</span>',
-      SISTEMA: '<span class="ln-chip verde">Nuevo sistema</span>',
-      APPSHEET: '<span class="ln-chip azul">AppSheet</span>',
-    };
 
     // ---------------- Tablas y KPIs con los componentes del sistema (rama jorge) ----------------
     /** Ícono con la clase .ico del sistema, para HTML que se repinta (tablas, KPIs, títulos). */
@@ -1458,6 +1440,7 @@
       const tarjetasVisibles = { equipos: PASO_TARJETAS, lineas: PASO_TARJETAS };
       let detallesFicha = null; // datos de la tarjeta "Detalles" de la ficha abierta
       let tablaHistorial = null; // DataTable del historial de la ficha abierta
+      let tablaDocumentos = null; // DataTable de Documentos (inspecciones y responsivas) de la ficha abierta
       let nombreHistorial = ''; // para el nombre del Excel del historial
       let fichaActual = null; // estatus de la ficha abierta (para "Cambiar estatus")
       let marcarKpi = null;
@@ -1482,21 +1465,6 @@
 
       // Clic en filas, enlaces internos y botones del detalle (delegación).
       raiz.addEventListener('click', (ev) => {
-        const seccion = ev.target.closest('[data-ln-seccion]');
-        if (seccion) {
-          const destino = document.getElementById(seccion.dataset.lnSeccion);
-          if (destino) { destino.scrollIntoView({ behavior: 'smooth', block: 'start' }); destino.focus({ preventScroll: true }); }
-          return;
-        }
-        const pdfPendiente = ev.target.closest('[data-ln-pdf]');
-        if (pdfPendiente) {
-          ev.preventDefault();
-          captura = { guardada: true, firmas: {}, carpetaId: pdfPendiente.dataset.carpeta };
-          $('#ln-modal-captura', raiz).hidden = false;
-          $('#ln-captura-titulo', raiz).textContent = 'Generar PDF pendiente';
-          refrescarDespuesDeCaptura(pila[pila.length - 1].id, pdfPendiente.dataset.lnPdf, pdfPendiente.dataset.id);
-          return;
-        }
         if (ev.target.closest('a[target="_blank"]')) return;
         const ir = ev.target.closest('[data-ln-ir]');
         if (ir) {
@@ -1734,6 +1702,7 @@
         }
         $('#ln-listado', raiz).hidden = true;
         soltarHistorial();
+        soltarDocumentos();
         const detalle = $('#ln-detalle', raiz);
         detalle.hidden = false;
         detalle.innerHTML = migas() + '<div class="card ln-cargando"><span class="ln-spinner"></span> Cargando…</div>';
@@ -1761,6 +1730,7 @@
 
       function cerrarDetalle() {
         soltarHistorial();
+        soltarDocumentos();
         pila.length = 0;
         $('#ln-detalle', raiz).hidden = true;
         $('#ln-detalle', raiz).innerHTML = '';
@@ -1855,6 +1825,7 @@
         });
         raiz.querySelectorAll('[data-ficha-panel]').forEach((p) => { p.hidden = p.dataset.fichaPanel !== nombre; });
         if (nombre === 'historial' && tablaHistorial) tablaHistorial.ajustarAlto();
+        if (nombre === 'documentos' && tablaDocumentos) tablaDocumentos.ajustarAlto();
       }
 
       function contarEnPestana(nombre, n) {
@@ -1887,11 +1858,10 @@
                 ['Modelo', e.modelo], ['IMEI', e.imei], ['Color', e.color], ['Accesorios', (e.accesorios || []).join(', ')],
                 e.tipo !== 'MODEM' && e.tipo !== 'BANDA_ANCHA' && e.tipo !== 'CAMARA' ? ['Cuenta Google', e.cuentaGoogle] : null,
                 e.tipo === 'CELULAR' || e.tipo === 'CELULAR_BASICO' ? ['PIN equipo', e.pinEquipo] : null,
-                e.tipo === 'CELULAR' || e.tipo === 'CELULAR_BASICO' ? ['Patrón', botonArchivo(e.patronRuta, 'Ver patrón'), true] : null,
                 e.tipo === 'MODEM' || e.tipo === 'BANDA_ANCHA' ? ['Contraseña módem', e.contrasenaModem] : null,
                 e.simResidual ? ['SIM residual', chip(e.simResidual, 'ambar'), true] : null,
-                e.nuco ? ['Responsiva', botonUltimoNucos('RESPONSIVA', id), true] : null,
-                e.nuco ? ['Formato inspección', botonUltimoNucos('INSPECCION', id), true] : null,
+                e.nuco ? ['Última responsiva', botonUltimoNucos('RESPONSIVA', id), true] : null,
+                e.nuco ? ['Última inspección', botonUltimoNucos('INSPECCION', id), true] : null,
               ])) +
               tarjeta(icono('card-sim') + ' Línea asignada', l ? campos([
                 ['Número', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + icono('phone') + ' ' + esc(l.numero || '(sin número)') + ' ' + icono('chevron-right') + '</a>', true],
@@ -2022,39 +1992,90 @@
         llamar('apiLineasEvidencias', id).then((ev) => {
           const cont = $('#ln-evidencias', raiz);
           if (!vigente() || !cont || pila.length !== pila0) return;
-          cont.innerHTML = tarjetaEvidencias(ev.inspecciones || [], ev.responsivas || []);
+          pintarDocumentos(cont, ev.inspecciones || [], ev.responsivas || [], id);
         }).catch((e) => {
           const cont = $('#ln-evidencias', raiz);
           if (cont) cont.innerHTML = tarjeta(icono('clipboard-check') + ' Inspecciones y responsivas', '<p class="error-msg">' + mensajeError(e) + '</p>');
         });
       }
 
-      function accionPdf(d, tipo) {
-        if (d.pdfId) return enlaceDrive(d.pdfId, 'Ver PDF', true);
-        return d.pdfPendiente ? '<button type="button" class="ln-btn-icono" data-ln-pdf="' + tipo + '" data-id="' + esc(d.id) + '" data-carpeta="' + esc(d.carpetaId || '') + '">' + icono('file-text') + ' Generar PDF</button>' : vacio;
+      /** PDF que el sistema no alcanzó a generar al guardar una inspección o responsiva. */
+      function generarPdfPendiente(tipo, idDoc, carpetaId) {
+        captura = { guardada: true, firmas: {}, carpetaId: carpetaId || '' };
+        $('#ln-modal-captura', raiz).hidden = false;
+        $('#ln-captura-titulo', raiz).textContent = 'Generar PDF pendiente';
+        refrescarDespuesDeCaptura(pila[pila.length - 1].id, tipo, idDoc);
       }
 
-      /** Inspecciones y responsivas como lista: fecha y tipo arriba, datos en una línea y acciones a la derecha. */
-      function tarjetaEvidencias(inspecciones, responsivas) {
-        const item = (ico, titulo, chips, datos, acciones, ir) => '<li class="ln-doc' + (ir ? ' ln-fila-clic' : '') + '"' + (ir ? ' data-ln-ir="inspeccion" data-id="' + esc(ir) + '"' : '') + '>' +
-          '<span class="ln-doc-icono">' + icono(ico) + '</span>' +
-          '<div class="ln-doc-cuerpo"><div class="ln-doc-titulo"><b>' + titulo + '</b>' + chips + '</div>' +
-          '<div class="ln-doc-datos">' + datos.filter(Boolean).map(esc).join(' · ') + '</div></div>' +
-          '<div class="ln-doc-acciones">' + acciones + '</div></li>';
-        const listaInsp = inspecciones.length
-          ? '<ul class="ln-docs">' + inspecciones.map((i) => item('clipboard-check', esc(fecha(i.fecha) || 'Sin fecha'),
-              (ORIGEN[i.origen] || '') + (i.calificacion !== null && i.calificacion !== undefined ? chip(porcentaje(i.calificacion), 'neutro') : ''),
-              [i.responsable, i.inspector ? 'Inspector: ' + i.inspector : '', i.fotos ? i.fotos + ' foto(s)' : ''],
-              '<button type="button" class="ln-btn-icono" data-ln-ir="inspeccion" data-id="' + esc(i.id) + '">' + icono('eye') + ' Ver</button>' + accionPdf(i, 'INSPECCION').replace(vacio, ''),
-              i.id)).join('') + '</ul>'
-          : '<p class="empty-state">Sin inspecciones registradas.</p>';
-        const listaResp = responsivas.length
-          ? '<ul class="ln-docs">' + responsivas.map((r) => item('signature', esc(fecha(r.fecha) || 'Sin fecha'), ORIGEN[r.origen] || '',
-              [r.responsable],
-              accionPdf(r, 'RESPONSIVA').replace(vacio, '') + (r.carpetaId ? enlaceDrive(r.carpetaId, 'Carpeta') : ''))).join('') + '</ul>'
-          : '<p class="empty-state">Sin responsivas registradas.</p>';
-        contarEnPestana('documentos', inspecciones.length + responsivas.length);
-        return tarjeta(icono('clipboard-check') + ' Inspecciones (' + inspecciones.length + ')', listaInsp) + tarjeta(icono('signature') + ' Responsivas (' + responsivas.length + ')', listaResp);
+      function soltarDocumentos() {
+        if (tablaDocumentos) tablaDocumentos.destruir();
+        tablaDocumentos = null;
+      }
+
+      const ORIGEN_DOCUMENTO = { APPSHEET: 'AppSheet', SISTEMA: 'Sistema nuevo', DRIVE: 'Carpeta NUCOS' };
+      const COLOR_ORIGEN_DOCUMENTO = { AppSheet: 'azul', 'Sistema nuevo': 'verde', 'Carpeta NUCOS': 'neutro' };
+
+      /**
+       * Documentos de la ficha, con el mismo diseño que Historial: indicadores (cuántas hay y la más reciente) y una
+       * sola tabla de inspecciones y responsivas, de la hoja (AppSheet o sistema nuevo) y de la carpeta NUCOS.
+       * Cada fila tiene sus acciones: ver la inspección, abrir el PDF o la carpeta.
+       */
+      function pintarDocumentos(cont, inspecciones, responsivas, id) {
+        const filas = inspecciones.map((d) => Object.assign({}, d, { documento: 'Inspección', tipoPdf: 'INSPECCION' }))
+          .concat(responsivas.map((d) => Object.assign({}, d, { documento: 'Responsiva', tipoPdf: 'RESPONSIVA' })))
+          .map((d, n) => Object.assign(d, { _clave: 'doc' + n, origenTexto: ORIGEN_DOCUMENTO[d.origen] || d.origen || '' }));
+        contarEnPestana('documentos', filas.length);
+        // El servidor las manda de la más reciente a la más antigua
+        const ultimaInsp = inspecciones[0];
+        const ultimaResp = responsivas[0];
+        cont.innerHTML = '<div class="stat-row ln-docs-kpis"></div>' +
+          '<div class="card ln-card ln-historial">' +
+          '<div class="ln-historial-cabecera"><h3>' + icono('folder-check') + ' Inspecciones y responsivas (' + miles(filas.length) + ')</h3></div>' +
+          '<p class="ln-tenue ln-docs-ayuda">Las registradas en AppSheet o en el sistema nuevo y las guardadas en la carpeta NUCOS de Drive. ' +
+          'Con los botones de cada fila ves la inspección, abres el PDF o la carpeta.</p>' +
+          (filas.length ? '<div class="ln-docs-tabla"></div>' : '<p class="empty-state">Este registro no tiene inspecciones ni responsivas.</p>') + '</div>';
+        const conFecha = (d) => (d ? fecha(d.fecha) || 'Sin fecha' : 'Ninguna');
+        const marcar = tilesKpi($('.ln-docs-kpis', cont), [
+          { icono: 'clipboard-check', valor: miles(inspecciones.length), etiqueta: 'Inspecciones', titulo: 'Mostrar solo inspecciones', filtros: { documento: { valores: ['Inspección'] } } },
+          { icono: 'calendar-check', valor: conFecha(ultimaInsp), etiqueta: 'Última inspección', filtros: false },
+          { icono: 'signature', valor: miles(responsivas.length), etiqueta: 'Responsivas', titulo: 'Mostrar solo responsivas', filtros: { documento: { valores: ['Responsiva'] } } },
+          { icono: 'calendar-check', valor: conFecha(ultimaResp), etiqueta: 'Última responsiva', filtros: false },
+        ], () => tablaDocumentos);
+        if (!filas.length) return;
+        soltarDocumentos();
+        const tabla = tablaDocumentos = tablaLineas($('.ln-docs-tabla', cont), {
+          idCampo: '_clave',
+          idTabla: 'lineas-documentos-v1',
+          tamanoPagina: 25,
+          seleccionable: false,
+          ordenInicial: { campo: 'fecha', dir: 'desc' },
+          textoVacio: 'Sin documentos con esos filtros',
+          exportar: { nombreArchivo: 'Documentos ' + ((fichaActual && fichaActual.titulo) || id), nombreHoja: 'Documentos' },
+          etiquetaFila: (d) => d.documento + ' · ' + (fecha(d.fecha) || 'Sin fecha'),
+          detalle: false,
+          alCambiarFiltros: marcar,
+          accionesFila: [
+            { icono: 'eye', titulo: 'Ver inspección', visible: (d) => d.documento === 'Inspección', alHacer: (d) => abrir('inspeccion', d.id) },
+            { icono: 'file-text', titulo: 'Ver PDF', visible: (d) => !!d.pdfId,
+              alHacer: (d) => window.open('https:\/\/drive.google.com/file/d/' + encodeURIComponent(d.pdfId) + '/view', '_blank', 'noopener') },
+            { icono: 'folder-open', titulo: 'Abrir carpeta en Drive', visible: (d) => !!d.carpetaId,
+              alHacer: (d) => window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(d.carpetaId), '_blank', 'noopener') },
+            { icono: 'file-plus', titulo: 'Generar PDF', visible: (d) => !!d.pdfPendiente, alHacer: (d) => generarPdfPendiente(d.tipoPdf, d.id, d.carpetaId) },
+          ],
+          ayuda: 'Inspecciones y responsivas del registro. Los indicadores de arriba filtran por tipo; la flecha de cada columna filtra u ordena. ' +
+            'Origen: AppSheet y Sistema nuevo son registros de la hoja; Carpeta NUCOS son los que solo están en Drive.',
+          columnas: [
+            { campo: 'fecha', titulo: 'Fecha', tipo: 'lnFechaHora', fijada: true, ancho: 130, render: (v) => esc(fecha(v) || 'Sin fecha') },
+            { campo: 'documento', titulo: 'Documento', tipo: 'lista', ancho: 150,
+              render: (v) => '<span class="ln-movimiento">' + ico(v === 'Inspección' ? 'clipboard-check' : 'signature') + ' ' + esc(v) + '</span>' },
+            { campo: 'origenTexto', titulo: 'Origen', tipo: 'lista', ancho: 150, render: (v) => chip(v, COLOR_ORIGEN_DOCUMENTO[v] || 'neutro') },
+            { campo: 'responsable', titulo: 'Responsable', tipo: 'texto', ancho: 230 },
+            { campo: 'inspector', titulo: 'Realizó', tipo: 'texto', ancho: 210 },
+            { campo: 'calificacion', titulo: 'Calificación', tipo: 'numero', ancho: 120, render: (v) => (v === null || v === undefined ? vacio : esc(porcentaje(v))) },
+            { campo: 'fotos', titulo: 'Fotos', tipo: 'numero', ancho: 90, render: (v) => (v ? miles(v) : vacio) },
+          ],
+        });
+        tabla.setDatos(filas);
       }
 
       /**
@@ -2195,12 +2216,6 @@
           llamar('apiLineasCancelarEvidencia', borrador.carpetaId, borrador.fotosCarpetaId)
             .catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' No se pudo limpiar la carpeta cancelada: ' + mensajeError(e), 9000));
         }
-      }
-
-      function seccionCaptura(numero, ico, titulo, ayuda, contenido) {
-        return '<section class="ln-form-seccion"><div class="ln-form-seccion-cabecera"><span class="ln-form-seccion-num">' + numero + '</span><div>' +
-          '<h3>' + icono(ico) + ' ' + esc(titulo) + '</h3><p>' + esc(ayuda) + '</p></div></div>' +
-          '<div class="ln-form-seccion-contenido">' + contenido + '</div></section>';
       }
 
       /** Valores actuales del formulario, por columna del AppSheet. */
@@ -2725,49 +2740,32 @@
           const s = i.snapshot || {};
           const fotos = r.fotos || [];
           const firmas = r.firmas || [];
-          const CLASE_VALOR = { SI: 'verde', BUENO: 'verde', INSTALADA: 'verde', REGULAR: 'ambar', NO: 'rojo', MALO: 'rojo', 'NO INSTALADA': 'neutro' };
-          const checklist = i.origen === 'DRIVE'
-            ? '<div class="ln-nota">Esta inspección se conserva en Drive. Consulta sus archivos; no hay respuestas de checklist registradas en el sistema.</div>'
-            : '<div class="ln-grid-2">' + (r.checklist || []).map((sec) => {
-                const puntos = sec.puntos.filter((p) => i.checklist && i.checklist[p.clave]);
-                if (!puntos.length) return '';
-                return tarjeta(icono('list-checks') + ' ' + esc(sec.seccion), campos(puntos.map((p) => {
-                  const v = i.checklist[p.clave];
-                  return [p.etiqueta, chip(v, CLASE_VALOR[v] || 'neutro'), true];
-                })));
-              }).join('') + '</div>';
-          const galeria = (lista, firma) => '<div class="ln-galeria">' + lista.map((f) =>
+          const galeria = (lista) => '<div class="ln-galeria">' + lista.map((f) =>
             '<a class="ln-evidencia" target="_blank" rel="noopener" href="' + esc(f.enlace) + '">' +
-            '<span class="ln-foto' + (firma ? ' ln-firma' : '') + '">' +
+            '<span class="ln-foto">' +
             (f.miniatura ? '<img loading="lazy" referrerpolicy="no-referrer" src="' + esc(f.miniatura) + '" alt="' + esc(f.nombre) + '">' : icono(f.video ? 'video' : 'image')) +
             '</span><span class="ln-evidencia-nombre">' + esc(f.nombre || 'Evidencia') + '<small>' + icono('external-link') + ' Abrir en Drive</small></span></a>').join('') + '</div>';
-          const seccion = (num, ico, titulo, ayuda, contenido) => '<section class="ln-seccion-consulta" id="ln-consulta-' + num + '" tabindex="-1">' + seccionCaptura(num, ico, titulo, ayuda, contenido) + '</section>';
-          const resumen = (ico, etiqueta, valor) => '<div class="ln-captura-dato">' + icono(ico) + '<span><small>' + esc(etiqueta) + '</small><b>' + guion(valor) + '</b></span></div>';
+          const deDrive = i.origen === 'DRIVE';
           detalle.innerHTML = migas() +
             encabezado('clipboard-check', 'Inspección ' + esc(fecha(i.fecha) || ''),
-              (ORIGEN[i.origen] || '') + (e ? chip('NUCO ' + (e.nuco || '—'), 'neutro') : ''),
+              chip(ORIGEN_DOCUMENTO[i.origen] || i.origen, COLOR_ORIGEN_DOCUMENTO[ORIGEN_DOCUMENTO[i.origen]] || 'neutro') + (e ? chip('NUCO ' + (e.nuco || '—'), 'neutro') : ''),
               (e ? '<button type="button" class="ln-btn-icono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' Ver equipo</button>' : '') +
               (i.drive ? enlaceDrive(i.drive.carpetaId, 'Ver carpeta en Drive') : '') +
-              (r.pdfs || []).map((p, indice) => enlaceDrive(p.id, 'Ver PDF' + (r.pdfs.length > 1 ? ' ' + (indice + 1) : ''), true)).join('')) +
-            '<div class="ln-captura-resumen">' + resumen('user', 'Inspector', i.inspector) + resumen('clipboard-check', 'Calificación', porcentaje(i.calificacion)) + resumen('images', 'Evidencia fotográfica', fotos.length + ' archivo(s)') + '</div>' +
-            '<nav class="ln-secciones-nav" aria-label="Secciones de la inspección">' +
-              ['Datos', 'Checklist', 'Fotos y observaciones', 'Firmas'].concat(r.detalle ? ['Registro completo'] : []).map((t, n) => '<button type="button" class="secondary" data-ln-seccion="ln-consulta-' + (n + 1) + '">' + (n + 1) + '. ' + t + '</button>').join('') + '</nav>' +
-            seccion(1, 'user', 'Datos de la inspección', 'Información registrada al realizar la revisión.',
-              i.origen !== 'DRIVE' ? '<div class="ln-grid-2">' +
+              (r.pdfs || []).map((p, indice) => enlaceDrive(p.id, 'Ver PDF' + (r.pdfs.length > 1 ? ' ' + (indice + 1) : ''), true)).join(''),
+              deDrive
+                ? [['NUCO', i.nuco || (e && e.nuco)], ['Fotos', miles(fotos.length)], ['PDF', (r.pdfs || []).length ? 'Sí' : 'No']]
+                : [['Responsable', s.responsable], ['Inspector', i.inspector], ['Calificación', porcentaje(i.calificacion)], ['Fotos', miles(fotos.length)], ['Ticket', i.ticket]]) +
+            (deDrive
+              ? '<div class="ln-nota">' + icono('info') + ' Esta inspección está en la carpeta NUCOS de Drive: sus datos y firmas vienen en el PDF.</div>'
+              : '<div class="ln-grid-2">' +
                 tarjeta(icono('user') + ' Responsable', campos([['Nombre', s.responsable], ['Departamento', s.departamento], ['Sede', s.sede], ['Puesto', s.puesto]])) +
-                tarjeta(icono('smartphone') + ' Activo revisado', campos([['Número', s.numero], ['IMEI', s.imei], ['Modelo', s.modelo], ['Compañía', s.compania], ['Ticket', i.ticket]])) + '</div>'
-                : '<p class="ln-tenue">Los datos de esta inspección histórica se encuentran en el documento PDF.</p>') +
-            seccion(2, 'list-checks', 'Revisión del activo', 'Respuestas y estado de cada componente al momento de la inspección.', checklist) +
-            seccion(3, 'camera', 'Evidencia y observaciones', 'Abre cualquier archivo para consultar la imagen completa en Drive.',
-              '<h4>Observaciones</h4><p class="ln-lectura-notas">' + esc(i.observaciones || 'Sin observaciones registradas.') + '</p>' +
-              '<h4>Fotografías (' + fotos.length + ')</h4>' + (fotos.length ? galeria(fotos) : '<p class="empty-state">No se adjuntaron fotografías a esta inspección.</p>') +
+                tarjeta(icono('smartphone') + ' Activo revisado', campos([['Número', s.numero], ['IMEI', s.imei], ['Modelo', s.modelo], ['Compañía', s.compania]])) +
+                '</div>' +
+                tarjeta(icono('message-square-text') + ' Observaciones', '<p class="ln-lectura-notas">' + esc(i.observaciones || 'Sin observaciones registradas.') + '</p>')) +
+            tarjeta(icono('images') + ' Fotografías (' + fotos.length + ')',
+              (fotos.length ? galeria(fotos) : '<p class="empty-state">No hay fotografías de esta inspección.</p>') +
               (r.puedeOperar ? '<div class="ln-fotos-despues"><h4>' + icono('image-plus') + ' Agregar fotos</h4>' +
-                htmlSubirFotos('insp-fotos', 'Se guardan en la carpeta FOTOS de esta inspección en Drive.') + '</div>' : '') +
-              (i.drive ? '<details class="ln-pie"><summary>Ubicación de los archivos</summary><p>' + esc(i.drive.ruta || '') + '</p></details>' : '')) +
-            seccion(4, 'signature', 'Firmas de validación', 'Firmas disponibles en la carpeta de esta inspección.',
-              firmas.length ? galeria(firmas, true) : '<p class="empty-state">No hay imágenes de firmas disponibles en esta carpeta. Consulta el PDF para revisar el documento.</p>') +
-            (r.detalle ? seccion(5, 'table-properties', 'Registro completo', 'Todas las columnas de la inspección, en el orden y con los nombres de la vista del AppSheet.',
-              '<details class="ln-registro-completo"><summary>Mostrar las ' + r.detalle.length + ' columnas</summary>' + camposDetalleAppSheet(r.detalle) + '</details>') : '');
+                htmlSubirFotos('insp-fotos', 'Se guardan en la carpeta FOTOS de esta inspección en Drive.') + '</div>' : ''));
           if (r.puedeOperar) {
             // Mejora: subir fotos a una inspección ya registrada (la carpeta se prepara al elegir la primera)
             let carpeta = null;

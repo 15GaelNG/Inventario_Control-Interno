@@ -188,37 +188,6 @@ const TelefoniaService = (function () {
     return String(v).slice(0, 10);
   }
 
-  // ---------------- Vistas de detalle del AppSheet (columnas en su orden, con su DisplayName) ----------------
-
-  /** INSPECCIONES LINEAS_Detail: ColumnOrder vacío = todas las columnas de la tabla en su orden. */
-  const DETALLE_INSPECCION = [['ID'], ['ID LINEA'], ['NUCO'], ['RESPONSABLE'], ['DEPARTAMENTO'], ['AREA'], ['SEDE'],
-    ['OFICINA / DESARROLLO'], ['PUESTO'], ['JEFE DIRECTO'], ['CORREO'], ['TIPO'], ['No TELEFONO'], ['IMEI'], ['SIM'], ['MODELO'],
-    ['COLOR'], ['COMPAÑIA'], ['PLAN'], ['RAZON SOCIAL'], ['IDENTIFICACION'], ['CUBO'], ['CABLE'], ['FUNDA'], ['MICA'],
-    ['MULTITAREA'], ['WIFI'], ['RED MOVIL'], ['GPS'], ['USO DATOS'], ['PANTALLA'], ['BOTONES VOLUMEN'], ['BOTON ENCENDIDO'],
-    ['CUERPO EQUIPO'], ['CAMARA'], ['PUERTO CARGA'], ['ALTAVOZ'], ['BOCINAS'], ['MICROFONO'], ['LINEA DE VOZ'],
-    ['DURACION BATERIA'], ['TEMPERATURA'], ['DESEMPEÑO'], ['CONTRASEÑA MODEM'], ['PIN WHATSAPP'], ['PIN EQUIPO'], ['PATRON'],
-    ['WHATSAPP'], ['E COMMERCE', 'ENLACE A WINDOWS'], ['MOVILIDAD / DELIVERY', 'UBER'], ['TIKTOK', 'WAZE'],
-    ['NETFLIX', 'LECTOR/ESCANER DE DOCUMENTOS'], ['MUSICA', 'LECTOR DE CODIGO QR'],
-    ['GMAIL', 'APPS DE GOOGLE (GMAIL, DRIVE, ENTRE OTRAS)'], ['YOUTUBE'], ['JUEGOS', 'TIMESTAMP'], ['TIMEMARK'], ['OTRA'],
-    ['OBSERVACIONES'], ['TICKET'], ['FIRMA RESPONSABLE'], ['NOMBRE INSPECTOR'], ['FIRMA INSPECTOR'], ['FECHA DE REGISTRO'],
-    ['FORMATO INSPECCIONES LINEAS'], ['SO', 'SISTEMA OPERATIVO'], ['ACTUALIZACIONES'], ['PANTALLA TACTIL'], ['CUBO 2'],
-    ['CABLE 2'], ['CALIFICACION']];
-  const COLUMNA_SECRETA_DETALLE = /^(PIN WHATSAPP|PIN EQUIPO|PATRON|CONTRASEÑA|CONTRASEÑA MODEM|FIRMA .+)$/;
-
-  /** Fila de la tabla en el orden de su vista de detalle del AppSheet: [{ columna, titulo, valor }]. */
-  function registroDetalle_(tabla, id, definicion, sesion) {
-    const filas = LineasDatos.buscarFilas(tabla, 'ID', id);
-    if (!filas.length) return null;
-    const f = LineasDatos.leerFilas([{ tabla: tabla, filas: filas.slice(0, 1) }])[0][0];
-    const ver = puedeVerSecretos_(sesion);
-    return definicion.map(([columna, titulo]) => {
-      let v = LineasUtil.col(f, columna);
-      if (v === '' || v === undefined) v = null;
-      if (v !== null && !ver && COLUMNA_SECRETA_DETALLE.test(columna)) v = '••••';
-      return { columna: columna, titulo: titulo || columna, valor: v };
-    });
-  }
-
   /** Resumen ligero de inspecciones/responsivas para tablas (sin checklist completo). */
   function resumirEvidencias_(docs) {
     return (docs || []).map((d) => {
@@ -316,7 +285,10 @@ const TelefoniaService = (function () {
     return JSON.parse(resp.getContentText()).files || [];
   }
 
-  /** Detalle de inspección con checklist y fotos de Drive. */
+  /**
+   * Detalle de una inspección: datos, observaciones, fotos y PDF. Los archivos vienen de NUCOS: su carpeta, o la de
+   * NUCOS del mismo día si la inspección es de la hoja y no tiene carpeta.
+   */
   function inspeccion(token, id) {
     const sesion = Auth.validarSesion(token);
     const insp = LineasRepo.leerInspeccion(id) || (/^drive_/.test(id) ? inspeccionNucos_(id.slice(6)) : null);
@@ -334,8 +306,16 @@ const TelefoniaService = (function () {
       if (r && r.equipo) eq = { _id: r.id, nuco: r.equipo.nuco, modelo: r.equipo.modelo, imei: r.equipo.imei, tipo: r.equipo.tipo };
     }
 
+    if (!insp.drive && insp.registroId && insp.fecha) {
+      try {
+        const n = evidenciasNucos_(insp.registroId, sesion).filter((x) => x.tipo === 'INSPECCION' && dia_(x.doc.fecha) === dia_(insp.fecha))[0];
+        if (n) insp.drive = n.doc.drive;
+      } catch (e) {
+        console.warn('inspección ' + id + ' en NUCOS: ' + e.message);
+      }
+    }
+
     const fotos = [];
-    const firmas = [];
     const pdfs = insp.drive && insp.drive.pdfs ? insp.drive.pdfs.slice() : [];
     if (insp.drive) {
       const vistos = {};
@@ -344,32 +324,16 @@ const TelefoniaService = (function () {
           if (vistos[f.id]) return;
           vistos[f.id] = true;
           if (!/^(image|video)\//.test(f.mimeType)) return;
-          const item = { id: f.id, nombre: f.name, miniatura: f.thumbnailLink || null, enlace: f.webViewLink, video: /^video\//.test(f.mimeType) };
-          if (/^(FIRMA|PATRON)/i.test(f.name)) firmas.push(item);
-          else fotos.push(item);
+          if (/^(FIRMA|PATRON)/i.test(f.name)) return; // las firmas y el patrón solo van en el PDF
+          fotos.push({ id: f.id, nombre: f.name, miniatura: f.thumbnailLink || null, enlace: f.webViewLink, video: /^video\//.test(f.mimeType) });
         });
-      });
-    }
-    // Inspección del AppSheet: su PDF y sus firmas están en la carpeta del AppSheet (rutas relativas)
-    if (!pdfs.length && insp.pdfRuta) {
-      const pdf = LineasArchivos.imagen(insp.pdfRuta, true);
-      if (pdf) pdfs.push({ id: pdf.id, nombre: pdf.nombre });
-    }
-    if (!firmas.length && puedeVerSecretos_(sesion) && insp.firmas) {
-      [insp.firmas.responsableRuta, insp.firmas.inspectorRuta, insp.patronRuta].forEach((ruta) => {
-        const img = ruta ? LineasArchivos.imagen(ruta, true) : null;
-        if (img) firmas.push(img);
       });
     }
     return LineasUtil.paraCliente({
       inspeccion: insp,
       equipo: eq,
-      checklist: LineasChecklist.secciones(),
       fotos: fotos,
-      firmas: puedeVerSecretos_(sesion) ? firmas : [],
       pdfs: pdfs,
-      // INSPECCIONES LINEAS_Detail del AppSheet (las históricas solo en Drive no tienen fila)
-      detalle: /^drive_/.test(id) ? null : registroDetalle_(LineasRepo.TAB.INSP, id, DETALLE_INSPECCION, sesion),
       puedeOperar: rolesOperan_().indexOf(sesion.rol) >= 0,
     });
   }
