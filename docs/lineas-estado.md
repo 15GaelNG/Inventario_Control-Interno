@@ -161,7 +161,7 @@ y capturar responsivas e inspecciones.
 - Detalles: `DETALLE_INSPECCION` / `DETALLE_RESPONSIVA` (TelefoniaService) con el orden y DisplayName del AppSheet.
 - Edición de operativas: `LineasOperativas.formularioEdicion` / `editar` y `abrirAltaAppSheet(…, edicion)`.
 
-## 0i. Archivos del AppSheet y carpetas de Drive (2026-09-25)
+## 0i. Archivos del AppSheet y carpetas de Drive (2026-09-25; carpetas reemplazadas por §0j)
 
 `LineasArchivos.gs` abre los archivos que el AppSheet guarda como ruta relativa (desde la carpeta raíz del AppSheet,
 `LINEAS_DRIVE_APPSHEET`) y lee las carpetas de NUCO de `LINEAS_DRIVE_NUCOS`; ambas son de producción y solo se leen.
@@ -173,7 +173,7 @@ En el cliente, `botonArchivo(ruta, texto)` pinta el ícono y `apiLineasArchivo` 
 El colaborador se abre en `abrirPanelLateral` (mismas clases `.dt-panel` del detalle de DataTable), no al final de
 la página. El ayudante sirve para cualquier otro detalle de Líneas que no venga de una DataTable.
 
-## 0g. Hoja de Líneas en DEV (2026-09-25)
+## 0g. Hoja de Líneas en DEV (2026-09-25; `usarCopiaAppSheetLineas` y la copia `1_47fd…` se retiraron el 28-sep)
 
 Líneas pasa a la BD de pruebas del equipo (`1fC77…`), la misma de Usuarios, Vehículos y Accesorios.
 `configurarLineasDev()` revisa pestañas y columnas contra la copia del AppSheet (`1_47fd…`) antes de cambiar
@@ -244,16 +244,20 @@ Reglas vigentes:
 
 | Qué | Dónde |
 |---|---|
-| Hoja de Líneas (DEV) | `1_47fd5nCcg4M6Qnsxmk14r9aTJG2bCPSW86ig_r2478` — copia del AppSheet con datos de prueba y pestañas `APP_` |
+| Hoja de Líneas (DEV) | `1fC77Uu1ePVUySNvhgWXMHqWpLhGhBMTZZMEblU2nUhI` — "VEHICULOS", BD de pruebas del equipo y hoja de la app AppSheet de pruebas (desde el 25-sep) |
 | Hoja de producción (bloqueada) | `1h5ibDsmVtrG27rwMaOvj-lm08QZUHzDv3woPmkfRQrk` |
-| Carpeta de pruebas en Drive | `1ZNI2tVANe3qBglcQ5sisCctGBe4Qetmk` (inventarios de NUCOS y evidencias) |
+| Carpeta de la app AppSheet de pruebas | `1FsC5mloJNhi_TR7pBX1KMEjUZfN_M9OM` — "PruebasCONTROLVEHICYTELEF-172665033": se lee y se escribe con las rutas del AppSheet |
+| NUCOS de producción | `12SRBi1nZlIzfNx0d2y1fAtzOydA2QrT-` — solo lectura (Documentos de la ficha) |
 | Proyecto DEV de Apps Script | `1rpvvay1hBTFfm5paVyvy6-Thmx-CQ6uUWVef20Jr8VmHQxkCWZ7UmeOa` |
 | URL de pruebas | `https://script.google.com/a/macros/ciudadmaderas.com/s/AKfycbwNWp2uwP_jqCayH6hJhCJh2TiudyC8heqOhZ8NuU90/dev` |
 
 Script Properties que usa Líneas (las deja `configurarLineasDev()`):
 
 - `SS_ID_TELEFONIA` → hoja de Líneas.
-- `LINEAS_DRIVE_CARPETA_RAIZ` → carpeta de pruebas (para las carpetas de evidencia por NUCO).
+- `LINEAS_DRIVE_APPSHEET` → carpeta de la app AppSheet (archivos, PDF y fotos).
+- `LINEAS_DRIVE_NUCOS` → NUCOS de producción (solo lectura).
+
+`LINEAS_DRIVE_CARPETA_RAIZ` (carpeta personal de pruebas) ya no se usa; `configurarLineasDev()` la borra.
 
 **API de Sheets:** el proyecto DEV ya tiene agregado el servicio avanzado
 **Google Sheets API v4** (Editor → Servicios → +), declarado en `src/appsscript.json`.
