@@ -121,7 +121,10 @@ const LineasArchivos = (function () {
     const bytes = Utilities.base64Decode(base64);
     if (bytes.length > 15 * 1024 * 1024) throw new Error('El archivo supera 15 MB.');
     const nombre = String(llave).replace(/[\\/]/g, '_') + '.' + columna + '.' + Utilities.formatDate(new Date(), ZONA, 'HHmmss') + '.' + EXTENSION[mime];
-    carpetaDeApp(carpeta).createFile(Utilities.newBlob(bytes, mime, nombre));
+    const archivo = carpetaDeApp(carpeta).createFile(Utilities.newBlob(bytes, mime, nombre));
+    // Sin esto, el archivo solo lo puede ver la cuenta que despliega la app
+    // (quien lo creó) — nadie más puede abrir el link, aunque sea válido.
+    archivo.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
     return carpeta + '/' + nombre;
   }
 
