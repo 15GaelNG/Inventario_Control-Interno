@@ -170,6 +170,9 @@ y capturar responsivas e inspecciones.
 - Después de la auditoría: sin `tarjetaRegistro` (Tipo con `tipoRegistro` en Equipo / Línea); formulario de LINEAS
   sin campos de archivo (`subirArchivos_` se quitó); NUCO homologado al guardar (`homologarNuco_`, y en
   `guardarCambiosRegistro` "5" → "0005" se escribe sin entrar a la bitácora).
+- Prueba real en DEV (28-sep): alta y edición correctas; NUCO "2" se guardó "0002" (texto) y la bitácora dejó
+  9999 → 0002. Inspección, responsiva y fotos quedan para prueba manual (el navegador integrado no firma ni elige
+  archivos).
 
 ## 0j. Vista del AppSheet, NUCOS y una sola carpeta de Drive (2026-09-28; tabla y documentos ajustados en §0k)
 
