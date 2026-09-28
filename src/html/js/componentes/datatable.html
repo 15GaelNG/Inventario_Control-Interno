@@ -778,7 +778,7 @@
       const buscador = $('.dt-buscar');
       let popover = null;
       let panel = null;
-      let ultimaFirmaFiltros = '{}';
+      let ultimaFirmaFiltros = '{}|';
       let ultimaFirmaVista = '';
 
       const celdaCheck = (contenido) => (cfg.seleccionable ? `<td class="dt-col-check dt-fija">${contenido || ''}</td>` : '');
@@ -1032,10 +1032,14 @@
       }
 
       function avisarCambioDeFiltros() {
-        const firma = JSON.stringify(st.filtros);
-        if (!cfg.alCambiarFiltros || firma === ultimaFirmaFiltros) return;
+        if (!cfg.alCambiarFiltros) return;
+        // La firma incluye la búsqueda: si no, escribir en el buscador filtra la tabla
+        // pero nunca avisa (los KPIs que dependen de esto se quedan con el número viejo).
+        const filtros = JSON.stringify(st.filtros);
+        const firma = filtros + '|' + st.busqueda.trim();
+        if (firma === ultimaFirmaFiltros) return;
         ultimaFirmaFiltros = firma;
-        cfg.alCambiarFiltros(JSON.parse(firma));
+        cfg.alCambiarFiltros(JSON.parse(filtros));
       }
 
       // ---------- cambios de estado + repintado ----------
