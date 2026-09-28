@@ -167,6 +167,16 @@ const InspeccionesService = (function () {
   }
 
   /**
+   * Todas las 195 columnas de TODAS las inspecciones (para exportar completo) — a
+   * diferencia de listar()/detalle(), que evitan leer la hoja entera por lo pesado
+   * que es (ver el comentario de COLUMNAS_LISTA); aquí sí se lee completa, a propósito.
+   */
+  function completo(token) {
+    Permisos.puedeLeer(token, MODULO);
+    return SheetUtils.getAll(ssId(), hoja_().getName());
+  }
+
+  /**
    * Una inspección completa: cabecera, llantas, puntuaciones por sección y el checklist
    * agrupado. Se lee la fila entera (195 columnas) solo cuando alguien abre el detalle.
    */
@@ -599,7 +609,7 @@ const InspeccionesService = (function () {
   }
 
   return {
-    listar, detalle, registrar, urlFormato, previsualizarImagen,
+    listar, completo, detalle, registrar, urlFormato, previsualizarImagen,
     estructuraDeTipo, olvidarTipo, tipos,
     nombrePlantilla_, carpetaDe_,   // las usa configurarInspecciones
     calcularPuntaje_, valorDeRespuesta_,   // expuestas para las pruebas

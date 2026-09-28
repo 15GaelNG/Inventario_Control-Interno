@@ -28,6 +28,8 @@
    * Arreglo de objetos crudos (una fila por objeto, llaves = encabezado): adivina el tipo de cada
    * columna solo, como si se descargara la hoja completa de la base de datos:
    *   await ExportarExcel.descargarCrudo({ nombreArchivo: 'Vehículos', filas: [{ FOLIO: 'A1', … }] });
+   * Igual pero con varias hojas (una por tabla):
+   *   await ExportarExcel.descargarLibroCrudo({ nombreArchivo: 'Accesorios', hojas: [{ nombre, filas }, …] });
    */
   const ExportarExcel = (function () {
     // "\/\/" (no "//") — Apps Script bug, ver CLAUDE.md
@@ -150,6 +152,15 @@
       return 'texto';
     }
 
+    /** { columnas, filas } (formato de armarHoja) a partir de un arreglo de objetos crudos. */
+    function crudoAHoja_(filas) {
+      const encabezados = filas.length ? Object.keys(filas[0]) : [];
+      return {
+        columnas: encabezados.map((h) => ({ titulo: h, tipo: tipoDeColumna_(filas.map((f) => f[h])) })),
+        filas: filas.map((f) => encabezados.map((h) => f[h])),
+      };
+    }
+
     /**
      * Descarga un arreglo de objetos "crudos" (una fila por objeto, llaves = encabezado de la
      * columna) tal cual, con los mismos encabezados y sin transformar nada — como si se
@@ -158,16 +169,19 @@
      *   await ExportarExcel.descargarCrudo({ nombreArchivo: 'Vehículos', filas: [{ FOLIO: 'A1', … }] });
      */
     async function descargarCrudo({ nombreArchivo, nombreHoja, filas }) {
-      const encabezados = filas.length ? Object.keys(filas[0]) : [];
-      const columnas = encabezados.map((h) => ({ titulo: h, tipo: tipoDeColumna_(filas.map((f) => f[h])) }));
-      await descargar({
-        nombreArchivo, nombreHoja,
-        columnas: columnas.map((c) => ({ titulo: c.titulo, tipo: c.tipo })),
-        filas: filas.map((f) => encabezados.map((h) => f[h])),
-      });
+      await descargar(Object.assign({ nombreArchivo, nombreHoja }, crudoAHoja_(filas)));
       return filas.length;
     }
 
-    return { descargar, descargarLibro, descargarCrudo };
+    /** Igual que descargarCrudo pero varias hojas: { nombreArchivo, hojas: [{ nombre, filas }] }. */
+    async function descargarLibroCrudo({ nombreArchivo, hojas }) {
+      await descargarLibro({
+        nombreArchivo,
+        hojas: hojas.map((h) => Object.assign({ nombre: h.nombre }, crudoAHoja_(h.filas))),
+      });
+      return hojas.reduce((n, h) => n + h.filas.length, 0);
+    }
+
+    return { descargar, descargarLibro, descargarCrudo, descargarLibroCrudo };
   })();
 </script>

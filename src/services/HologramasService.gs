@@ -193,6 +193,12 @@ const HologramasService = (function () {
       .sort((a, b) => (b.FECHA_REGISTRO || '').localeCompare(a.FECHA_REGISTRO || ''));
   }
 
+  /** Todas las columnas de TODOS los hologramas (para exportar completo). */
+  function completo(token) {
+    Permisos.puedeLeer(token, 'hologramas');
+    return SheetUtils.getAll(ssId(), hoja_().getName());
+  }
+
   /**
    * Escribe en la hoja los datos del catálogo de los hologramas indicados, para que
    * AppSheet también los vea corregidos. Devuelve cuántas filas cambiaron y en qué campos.
@@ -381,5 +387,5 @@ const HologramasService = (function () {
     return url;
   }
 
-  return { listar, catalogos, datosDeVehiculo, registrar, actualizarCampo, sincronizar, eliminar, urlSolicitud };
+  return { listar, completo, catalogos, datosDeVehiculo, registrar, actualizarCampo, sincronizar, eliminar, urlSolicitud };
 })();

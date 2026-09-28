@@ -845,7 +845,17 @@
       idCampo: 'ID',
       idTabla: 'accesorios',
       textoVacio: 'Todavía no hay artículos registrados',
-      exportar: { nombreArchivo: 'Accesorios' },
+      exportar: {
+        nombreArchivo: 'Accesorios',
+        titulo: 'Descarga la base completa: todas las filas y columnas de las hojas de artículos y movimientos, sin importar filtros ni búsqueda',
+        descargar: async () => {
+          const base = JSON.parse(await callServer('apiAccesoriosCompleto', state.token));
+          return ExportarExcel.descargarLibroCrudo({
+            nombreArchivo: 'Accesorios',
+            hojas: [{ nombre: 'Artículos', filas: base.articulos }, { nombre: 'Movimientos', filas: base.movimientos }],
+          });
+        },
+      },
       etiquetaFila: (a) => a.NOMBRE,
       detalle: {
         titulo: (a) => a.NOMBRE || '',
@@ -1777,7 +1787,11 @@
       idTabla: 'incidencias',
       ordenInicial: { campo: 'FECHA_REGISTRO', dir: 'desc' },
       textoVacio: 'Todavía no hay incidencias registradas',
-      exportar: { nombreArchivo: 'Incidencias' },
+      exportar: {
+        nombreArchivo: 'Incidencias',
+        titulo: 'Descarga la base completa: todas las filas y columnas de la hoja, sin importar filtros ni búsqueda',
+        descargar: async () => ExportarExcel.descargarCrudo({ nombreArchivo: 'Incidencias', filas: JSON.parse(await callServer('apiIncidenciasCompleto', state.token)) }),
+      },
       etiquetaFila: (inc) => inc.FOLIO,
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
       detalle: {

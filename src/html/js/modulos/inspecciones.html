@@ -54,7 +54,11 @@
         'verde arriba de 90%, ámbar entre 80 y 90, rojo abajo de 80. Abre el detalle (el ojo) ' +
         'para ver las piezas que salieron mal, los diagramas de daños y las firmas. ' +
         'El botón de PDF abre el formato tal como se firmó.',
-      exportar: { nombreArchivo: 'Inspecciones vehiculares' },
+      exportar: {
+        nombreArchivo: 'Inspecciones vehiculares',
+        titulo: 'Descarga la base completa: las 195 columnas de la hoja, sin importar filtros ni búsqueda (puede tardar un poco)',
+        descargar: async () => ExportarExcel.descargarCrudo({ nombreArchivo: 'Inspecciones vehiculares', filas: JSON.parse(await callServer('apiInspeccionesCompleto', state.token)) }),
+      },
       alCambiarFiltros: (filtros) => { marcarKpiActivo(filtros); },
       etiquetaFila: (i) => [i.FOLIO, i.PLACAS, formatearFecha(i.FECHA)].filter(Boolean).join(' · '),
       detalle: {

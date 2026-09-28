@@ -82,7 +82,11 @@
         'El folio se cambia desde "Ver detalle" (el ojo en Acciones). La flecha de cada columna: filtrar, ordenar, fijar u ocultar. ' +
         'Para eliminar: el bote de basura de la fila, o marca varias casillas. Shift+clic en casillas selecciona un rango.',
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
-      exportar: { nombreArchivo: 'Verificaciones' },
+      exportar: {
+        nombreArchivo: 'Verificaciones',
+        titulo: 'Descarga la base completa: todas las filas y columnas de la hoja, sin importar filtros ni búsqueda',
+        descargar: async () => ExportarExcel.descargarCrudo({ nombreArchivo: 'Verificaciones', filas: JSON.parse(await callServer('apiVerificacionesCompleto', state.token)) }),
+      },
       etiquetaFila: (v) => [v.FOLIO, v.PLACA, v.FECHA_VERIFICACION ? 'verificó ' + formatearFecha(v.FECHA_VERIFICACION) : '']
         .filter(Boolean).join(' · '),
       detalle: {

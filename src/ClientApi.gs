@@ -36,6 +36,9 @@ function apiLogout(token) {
 function apiListarArticulosConStock(token) {
   return AccesoriosService.listarArticulosConStock(token);
 }
+function apiAccesoriosCompleto(token) {
+  return JSON.stringify(AccesoriosService.completo(token));
+}
 function apiCrearArticulo(token, articulo) {
   return AccesoriosService.crearArticulo(token, articulo);
 }
@@ -379,6 +382,9 @@ function apiLineasAccesoriosRegistrarMovimiento(token, datos) {
 function apiListarIncidencias(token) {
   return IncidenciasService.listar(token);
 }
+function apiIncidenciasCompleto(token) {
+  return JSON.stringify(IncidenciasService.completo(token));
+}
 function apiCrearIncidencia(token, datos) {
   return IncidenciasService.crear(token, datos);
 }
@@ -399,6 +405,9 @@ function apiDiagnosticoIncidencias(token) {
 function apiListarVerificaciones(token) {
   return VerificacionesService.listar(token);
 }
+function apiVerificacionesCompleto(token) {
+  return JSON.stringify(VerificacionesService.completo(token));
+}
 function apiRegistrarVerificacion(token, datos, archivo) {
   return VerificacionesService.registrar(token, datos, archivo);
 }
@@ -418,6 +427,9 @@ function apiUrlComprobanteVerificacion(token, ruta) {
 // --- Instalación de sensores (rama `ayrton`) ---
 function apiListarSensores(token) {
   return SensoresService.listar(token);
+}
+function apiSensoresCompleto(token) {
+  return JSON.stringify(SensoresService.completo(token));
 }
 function apiDatosVehiculoParaSensor(token, folio) {
   return SensoresService.datosParaFormulario(token, folio);
@@ -449,6 +461,9 @@ function apiResumenGeotabSensor(token, id, dias) {
 // --- Hologramas / tarjetas de combustible (rama `ayrton`) ---
 function apiListarHologramas(token) {
   return HologramasService.listar(token);
+}
+function apiHologramasCompleto(token) {
+  return JSON.stringify(HologramasService.completo(token));
 }
 function apiCatalogosHologramas(token) {
   return HologramasService.catalogos(token);
@@ -484,6 +499,9 @@ function apiRevisarCatalogoPermisos(token) {
 // --- Inspección vehicular (rama `ayrton`) ---
 function apiListarInspecciones(token) {
   return InspeccionesService.listar(token);
+}
+function apiInspeccionesCompleto(token) {
+  return JSON.stringify(InspeccionesService.completo(token));
 }
 function apiDetalleInspeccion(token, id) {
   return InspeccionesService.detalle(token, id);

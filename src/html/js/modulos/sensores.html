@@ -91,7 +91,11 @@
         'se corrigen en el módulo de Vehículos. "En vivo" viene de Geotab y se actualiza cada minuto. ' +
         'El botón de actividad en cada fila muestra viajes, combustible y ralentí de los últimos 30 días ' +
         '(solo consulta). El rendimiento y el consumo en ralentí de la tabla se capturan a mano.',
-      exportar: { nombreArchivo: 'Instalacion de sensores' },
+      exportar: {
+        nombreArchivo: 'Instalacion de sensores',
+        titulo: 'Descarga la base completa: todas las filas y columnas de la hoja, sin importar filtros ni búsqueda',
+        descargar: async () => ExportarExcel.descargarCrudo({ nombreArchivo: 'Instalacion de sensores', filas: JSON.parse(await callServer('apiSensoresCompleto', state.token)) }),
+      },
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
       etiquetaFila: (s) => [s.FOLIO, s.SERIE_SENSOR, s.PLACA].filter(Boolean).join(' · '),
       detalle: {

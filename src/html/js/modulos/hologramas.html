@@ -114,7 +114,11 @@
         'catálogo de Vehículos, que es el que se mantiene al día: aquí no se editan, se corrigen allá y se ' +
         'usa "Actualizar desde el catálogo". Los vehículos personales no están en el catálogo, así que esos ' +
         'sí se capturan aquí. La flecha de cada columna filtra, ordena, fija u oculta.',
-      exportar: { nombreArchivo: 'Hologramas' },
+      exportar: {
+        nombreArchivo: 'Hologramas',
+        titulo: 'Descarga la base completa: todas las filas y columnas de la hoja, sin importar filtros ni búsqueda',
+        descargar: async () => ExportarExcel.descargarCrudo({ nombreArchivo: 'Hologramas', filas: JSON.parse(await callServer('apiHologramasCompleto', state.token)) }),
+      },
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
       etiquetaFila: (h) => [h.PLACA, h.CALCOMANIA].filter(Boolean).join(' · '),
       detalle: { titulo: (h) => 'Holograma ' + (h.PLACA || h.CALCOMANIA || '') },
