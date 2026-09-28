@@ -2748,7 +2748,7 @@
           ],
           ayuda: 'Todos los movimientos del registro: reasignaciones, cambios de cada campo, inspecciones, responsivas, reactivaciones y desechos, ' +
             'del AppSheet y del sistema nuevo. "Movimiento" filtra por tipo; la flecha de cada columna filtra por campo, usuario, origen o rango de fechas. ' +
-            '"Exportar a Excel" descarga lo filtrado.',
+            '"Exportar a Excel" descarga todo (respeta los filtros activos) y puede limitarse a un rango de fecha aparte.',
           alCambiarFiltros: (f) => {
             const valores = f && f.movimiento && f.movimiento.valores;
             select.value = valores && valores.length === 1 ? valores[0] : '';
