@@ -58,6 +58,12 @@ const UberService = (function () {
     return resultado.sort((a, b) => String(a.NOMBRE_COMPLETO).localeCompare(String(b.NOMBRE_COMPLETO)));
   }
 
+  /** Todas las columnas de TODOS los usuarios (para "Vista": mostrar/exportar cualquier columna). */
+  function completo(token) {
+    Permisos.puedeLeer(token, 'uber');
+    return SheetUtils.getAll(ssId(), NOMBRE_HOJA);
+  }
+
   /** Registro completo por ID (para el modal de detalle/editar). */
   function buscarPorId(token, id) {
     Permisos.puedeLeer(token, 'uber');
@@ -120,5 +126,5 @@ const UberService = (function () {
     return { url: archivo.getUrl(), id: archivo.getId(), nombre: nombreArchivo };
   }
 
-  return { listarResumen, buscarPorId, crear, actualizar, eliminar, subirArchivo };
+  return { listarResumen, completo, buscarPorId, crear, actualizar, eliminar, subirArchivo };
 })();

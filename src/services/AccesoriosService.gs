@@ -81,6 +81,15 @@ const AccesoriosService = (function () {
     return articulos.map((a) => Object.assign({}, a, { STOCK: stockPorArticulo[a.ID] || 0 }));
   }
 
+  /** Todas las columnas de las dos hojas (artículos y movimientos), para exportar completo. */
+  function completo(token) {
+    Permisos.puedeLeer(token, 'accesorios');
+    return {
+      articulos: SheetUtils.getAll(ssId(), hojaArticulos_().getName()),
+      movimientos: SheetUtils.getAll(ssId(), hojaMovimientos_().getName()),
+    };
+  }
+
   function crearArticulo(token, articulo) {
     Permisos.puedeEditar(token, 'accesorios');
     const id = Utilities.getUuid().slice(0, 8);
@@ -154,6 +163,7 @@ const AccesoriosService = (function () {
   return {
     listarArticulos,
     listarArticulosConStock,
+    completo,
     crearArticulo,
     actualizarArticulo,
     registrarMovimiento,

@@ -75,6 +75,12 @@ const CambiosMontoCCHService = (function () {
     return resultado.sort((a, b) => new Date(b.FECHA) - new Date(a.FECHA));
   }
 
+  /** Todas las columnas de la hoja (para "Vista": mostrar/exportar cualquier columna). */
+  function completo(token) {
+    Permisos.puedeLeer(token, 'caja-chica');
+    return SheetUtils.getAll(ssId(), NOMBRE_HOJA);
+  }
+
   /**
    * Registra un cambio de monto para una Caja Chica y, en la misma
    * operación, actualiza su MONTO ACTUAL.
@@ -122,5 +128,5 @@ const CambiosMontoCCHService = (function () {
     return { ID: id };
   }
 
-  return { listarResumen, crear, eliminar };
+  return { listarResumen, completo, crear, eliminar };
 })();

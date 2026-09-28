@@ -82,6 +82,12 @@ const ReasignacionesVehicularesService = (function () {
     return resultado.sort((a, b) => new Date(b.FECHA) - new Date(a.FECHA));
   }
 
+  /** Todas las columnas de la hoja (para "Vista": mostrar/exportar cualquier columna). */
+  function completo(token) {
+    Permisos.puedeLeer(token, 'reasignaciones-vehiculares');
+    return SheetUtils.getAll(ssId(), NOMBRE_HOJA);
+  }
+
   /**
    * Registra una reasignación de vehículo y, en la misma operación,
    * actualiza el responsable/departamento ACTUAL de ese vehículo.
@@ -166,5 +172,5 @@ const ReasignacionesVehicularesService = (function () {
     return resultado;
   }
 
-  return { listarResumen, crear, eliminar, listarPorFolio };
+  return { listarResumen, completo, crear, eliminar, listarPorFolio };
 })();

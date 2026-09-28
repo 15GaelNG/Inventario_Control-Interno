@@ -48,6 +48,12 @@
         : `<span style="color:var(--color-text-muted)">${escaparHtml(valor || '—')}</span>`;
     }
     const pesos = (v) => (v === '' || v === null || v === undefined ? '' : '$' + Number(v).toLocaleString('es-MX'));
+    /** Ícono + valor en negritas, tal cual se veía en AppSheet (monedas verdes / gota azul). */
+    function iconoValor_(icono, color, texto) {
+      if (texto === '') return '';
+      return `<span style="display:inline-flex; align-items:center; gap:5px; color:${color}; font-weight:700">` +
+        `${Iconos.svg(icono)} ${escaparHtml(texto)}</span>`;
+    }
 
     /** Estado frente al catálogo de Vehículos, que es el que manda */
     const estadoCatalogo = (h) => (!h.EN_CATALOGO ? 'Fuera del catálogo'
@@ -91,7 +97,7 @@
         (r.filas || []).forEach((f) => { porId[f.ID] = f; });
         hologramas = hologramas.map((h) => porId[h.ID] || h);
         tabla.setDatos(conEstado(hologramas));
-        pintarStats();
+        pintarStats(tabla.getFiltradas());
         Notificar.exito(`${r.filas.length} ${r.filas.length === 1 ? 'holograma actualizado' : 'hologramas actualizados'} · ${r.campos} datos corregidos`);
       } catch (err) {
         Notificar.error('No se pudo actualizar: ' + err.message);
@@ -108,7 +114,11 @@
         'catálogo de Vehículos, que es el que se mantiene al día: aquí no se editan, se corrigen allá y se ' +
         'usa "Actualizar desde el catálogo". Los vehículos personales no están en el catálogo, así que esos ' +
         'sí se capturan aquí. La flecha de cada columna filtra, ordena, fija u oculta.',
-      exportar: { nombreArchivo: 'Hologramas' },
+      exportar: {
+        nombreArchivo: 'Hologramas',
+        titulo: 'Descarga la base completa: todas las filas y columnas de la hoja, sin importar filtros ni búsqueda',
+        descargar: async () => ExportarExcel.descargarCrudo({ nombreArchivo: 'Hologramas', filas: JSON.parse(await callServer('apiHologramasCompleto', state.token)) }),
+      },
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
       etiquetaFila: (h) => [h.PLACA, h.CALCOMANIA].filter(Boolean).join(' · '),
       detalle: { titulo: (h) => 'Holograma ' + (h.PLACA || h.CALCOMANIA || '') },
@@ -122,8 +132,11 @@
           opciones: catalogos.estatusEox, render: (v) => badgeEstatus(v) },
         { campo: 'COMBUSTIBLE', titulo: 'Combustible', tipo: 'lista', opciones: catalogos.combustibles },
         { campo: 'AUTORIZADO_PESOS', titulo: 'Autorizado ($)', tipo: 'numero',
-          agregado: 'suma', render: (v) => escaparHtml(pesos(v)), valorExportar: (h) => h.AUTORIZADO_PESOS },
-        { campo: 'AUTORIZADO_LITROS', titulo: 'Autorizado (L)', tipo: 'numero', agregado: 'suma' },
+          agregado: 'suma', render: (v) => iconoValor_('coins', 'var(--color-success)', pesos(v)),
+          valorExportar: (h) => h.AUTORIZADO_PESOS },
+        { campo: 'AUTORIZADO_LITROS', titulo: 'Autorizado (L)', tipo: 'numero', agregado: 'suma',
+          render: (v) => iconoValor_('droplet', 'var(--color-primary)', v === '' || v === null || v === undefined ? '' : String(v)),
+          valorExportar: (h) => h.AUTORIZADO_LITROS },
         { campo: 'ESTATUS_VEHICULO', titulo: 'Uso', tipo: 'lista', opciones: catalogos.estatusVehiculo },
         { campo: 'MARCA', titulo: 'Marca', tipo: 'lista' },
         { campo: 'LINEA', titulo: 'Línea', tipo: 'lista' },
@@ -162,7 +175,7 @@
         const ids = new Set(filas.map((f) => f.ID));
         hologramas = hologramas.filter((h) => !ids.has(h.ID));
         tabla.setDatos(conEstado(hologramas));
-        pintarStats();
+        pintarStats(tabla.getFiltradas());
       } : null,
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
@@ -258,7 +271,7 @@
         invalidarCacheLista('apiListarHologramas', state.token);
         hologramas = hologramas.map((h) => (h.ID === id ? actualizada : h));
         tabla.setDatos(conEstado(hologramas));
-        pintarStats();
+        pintarStats(tabla.getFiltradas());
         cerrarEditarHolograma();
         Notificar.exito('Actualizado exitosamente');
       } catch (err) {
@@ -271,13 +284,13 @@
     });
 
     // ----- KPIs -----
-    function pintarStats() {
-      const habilitados = hologramas.filter((h) => String(h.ESTATUS_EOX).toUpperCase() === 'HABILITADO').length;
-      const personales = hologramas.filter((h) => String(h.ESTATUS_VEHICULO).toUpperCase() === 'PERSONAL').length;
-      const viejos = hologramas.filter((h) => estadoCatalogo(h) === 'Desactualizado').length;
-      document.getElementById('hol-stat-total').textContent = hologramas.length;
+    function pintarStats(filas) {
+      const habilitados = filas.filter((h) => String(h.ESTATUS_EOX).toUpperCase() === 'HABILITADO').length;
+      const personales = filas.filter((h) => String(h.ESTATUS_VEHICULO).toUpperCase() === 'PERSONAL').length;
+      const viejos = filas.filter((h) => h.CATALOGO === 'Desactualizado').length;
+      document.getElementById('hol-stat-total').textContent = filas.length;
       document.getElementById('hol-stat-habilitados').textContent = habilitados;
-      document.getElementById('hol-stat-deshabilitados').textContent = hologramas.length - habilitados;
+      document.getElementById('hol-stat-deshabilitados').textContent = filas.length - habilitados;
       document.getElementById('hol-stat-personales').textContent = personales;
       document.getElementById('hol-stat-viejos').textContent = viejos;
       document.getElementById('hol-kpi-viejos').hidden = viejos === 0;
@@ -295,6 +308,7 @@
         const valores = filtros[f.campo] && filtros[f.campo].valores;
         document.getElementById(id).classList.toggle('activo', !!(valores && valores.length === 1 && valores[0] === f.valor));
       });
+      pintarStats(tabla.getFiltradas());
     }
 
     const tabs = Tabs.iniciar(document.getElementById('hol-tabs'), {
@@ -325,7 +339,7 @@
         return;
       }
       tabla.setDatos(conEstado(hologramas));
-      pintarStats();
+      pintarStats(tabla.getFiltradas());
     }
 
     // ----- Alta -----

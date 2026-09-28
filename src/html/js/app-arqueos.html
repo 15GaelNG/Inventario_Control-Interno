@@ -98,25 +98,27 @@
     { grupo: 'Auditoría', clave: 'REALIZAR_AUDITORIA', etiqueta: '¿Se realiza auditoría?', tipo: 'select', opciones: ['SI', 'NO'] },
     // Los 17 AUDIT_XX van aquí también (mismo grupo), pero sin "opciones":
     // se llenan por JS con el catálogo real (apiListarAuditItems).
-    { grupo: 'Auditoría', clave: 'AUDIT_01_Facturas_Pendientes', etiqueta: 'Facturas pendientes', tipo: 'select' },
-    { grupo: 'Auditoría', clave: 'AUDIT_02_Folios_Rechazados', etiqueta: 'Folios rechazados', tipo: 'select' },
-    { grupo: 'Auditoría', clave: 'AUDIT_03_Folios_No_Reembolsados', etiqueta: 'Folios no reembolsados', tipo: 'select' },
-    { grupo: 'Auditoría', clave: 'AUDIT_04_Folios_Errores_Captura', etiqueta: 'Folios con errores de captura', tipo: 'select' },
-    { grupo: 'Auditoría', clave: 'AUDIT_05_Gastos_No_Capturados', etiqueta: 'Gastos no capturados', tipo: 'select' },
-    { grupo: 'Auditoría', clave: 'AUDIT_06_Seguimiento_No_Facturados', etiqueta: 'Seguimiento a no facturados', tipo: 'select' },
-    { grupo: 'Auditoría', clave: 'AUDIT_07_Vales_Rosas', etiqueta: 'Vales rosas', tipo: 'select' },
-    { grupo: 'Auditoría', clave: 'AUDIT_08_Comprobante_Transferencia', etiqueta: 'Comprobante de transferencia', tipo: 'select' },
-    { grupo: 'Auditoría', clave: 'AUDIT_09_Transferencias_No_Enviadas', etiqueta: 'Transferencias no enviadas', tipo: 'select' },
-    { grupo: 'Auditoría', clave: 'AUDIT_10_Gastos_No_Deducibles', etiqueta: 'Gastos no deducibles', tipo: 'select' },
-    { grupo: 'Auditoría', clave: 'AUDIT_11_Sobrante_Dinero', etiqueta: 'Sobrante de dinero', tipo: 'select' },
-    { grupo: 'Auditoría', clave: 'AUDIT_12_Faltante_Dinero_1', etiqueta: 'Faltante de dinero', tipo: 'select' },
-    { grupo: 'Auditoría', clave: 'AUDIT_13_Prestamo_Dinero', etiqueta: 'Préstamo de dinero', tipo: 'select' },
-    { grupo: 'Auditoría', clave: 'AUDIT_14_Cuenta_Para_CCH', etiqueta: 'Cuenta exclusiva para CCH', tipo: 'select' },
-    { grupo: 'Auditoría', clave: 'AUDIT_15_Cambio_Titular', etiqueta: 'Cambio de titular', tipo: 'select' },
-    { grupo: 'Auditoría', clave: 'AUDIT_16_Gastos_No_Permitioos', etiqueta: 'Gastos no permitidos', tipo: 'select' },
-    { grupo: 'Auditoría', clave: 'AUDIT_17_Incidencias_contempladas', etiqueta: 'Incidencias contempladas', tipo: 'select' },
-    { grupo: 'Auditoría', clave: 'CALIFICACION_AUDITORIA_FINAL', etiqueta: 'Calificación final', tipo: 'text', soloLectura: true, placeholder: '0%' },
-    { grupo: 'Auditoría', clave: 'OBSERVACIONES FINALES', etiqueta: 'Observaciones finales', tipo: 'text' },
+    // mostrarSiCampo/mostrarSiValor: no aparecen (ni deshabilitados) hasta que
+    // "¿Se realiza auditoría?" sea SI — vista más limpia cuando la respuesta es NO.
+    { grupo: 'Auditoría', clave: 'AUDIT_01_Facturas_Pendientes', etiqueta: 'Facturas pendientes', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_02_Folios_Rechazados', etiqueta: 'Folios rechazados', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_03_Folios_No_Reembolsados', etiqueta: 'Folios no reembolsados', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_04_Folios_Errores_Captura', etiqueta: 'Folios con errores de captura', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_05_Gastos_No_Capturados', etiqueta: 'Gastos no capturados', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_06_Seguimiento_No_Facturados', etiqueta: 'Seguimiento a no facturados', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_07_Vales_Rosas', etiqueta: 'Vales rosas', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_08_Comprobante_Transferencia', etiqueta: 'Comprobante de transferencia', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_09_Transferencias_No_Enviadas', etiqueta: 'Transferencias no enviadas', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_10_Gastos_No_Deducibles', etiqueta: 'Gastos no deducibles', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_11_Sobrante_Dinero', etiqueta: 'Sobrante de dinero', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_12_Faltante_Dinero_1', etiqueta: 'Faltante de dinero', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_13_Prestamo_Dinero', etiqueta: 'Préstamo de dinero', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_14_Cuenta_Para_CCH', etiqueta: 'Cuenta exclusiva para CCH', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_15_Cambio_Titular', etiqueta: 'Cambio de titular', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_16_Gastos_No_Permitioos', etiqueta: 'Gastos no permitidos', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_17_Incidencias_contempladas', etiqueta: 'Incidencias contempladas', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'CALIFICACION_AUDITORIA_FINAL', etiqueta: 'Calificación final', tipo: 'text', soloLectura: true, placeholder: '0%', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'OBSERVACIONES FINALES', etiqueta: 'Observaciones finales', tipo: 'text', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
 
     { grupo: 'Firmas y evidencia', clave: 'CUENTA CON FIRMA RESPONSABLE', etiqueta: 'Cuenta con firma del responsable', tipo: 'select', opciones: ['SI', 'NO'] },
     { grupo: 'Firmas y evidencia', clave: 'CUENTA CON FIRMA ESPECIALISTA', etiqueta: 'Cuenta con firma del especialista', tipo: 'select', opciones: ['SI', 'NO'] },
@@ -633,7 +635,12 @@
       idTabla: 'arqueos',
       ordenInicial: { campo: 'FECHA_INICIO', dir: 'desc' },
       textoVacio: 'Todavía no hay arqueos registrados',
-      exportar: { nombreArchivo: 'Arqueos' },
+      exportar: {
+        nombreArchivo: 'Arqueos',
+        titulo: 'Descarga la base completa: todas las filas y columnas de la hoja, sin importar filtros ni búsqueda',
+        descargar: async () => ExportarExcel.descargarCrudo({ nombreArchivo: 'Arqueos', filas: JSON.parse(await callServer('apiArqueosCompleto', state.token)) }),
+      },
+      columnasCompletas: { idHoja: 'ID ARQUEO', cargar: async () => JSON.parse(await callServer('apiArqueosCompleto', state.token)) },
       etiquetaFila: (a) => a.ID,
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
       detalle: {
@@ -678,6 +685,16 @@
       const f = filtros.DIFERENCIA;
       tileTotalArq.classList.toggle('stat-tile-activo', !f);
       tileDiferenciasArq.classList.toggle('stat-tile-activo', !!(f && f.op === '!=' && f.v1 === 0));
+      actualizarKpis(tabla.getFiltradas());
+    }
+
+    function actualizarKpis(filas) {
+      document.getElementById('arq-stat-total').textContent = filas.length;
+      const calificaciones = filas.map((a) => Number(a.CALIFICACION)).filter((n) => !isNaN(n));
+      const promedio = calificaciones.length ? calificaciones.reduce((a, b) => a + b, 0) / calificaciones.length : 0;
+      document.getElementById('arq-stat-calificacion').textContent = Math.round(promedio * 100) / 100 + '%';
+      document.getElementById('arq-stat-diferencias').textContent =
+        filas.filter((a) => (Number(a.DIFERENCIA) || 0) !== 0).length;
     }
 
     async function cargar() {
@@ -692,13 +709,7 @@
       arqueosPorId = {};
       todosLosArqueos.forEach((a) => { arqueosPorId[a.ID] = a; });
 
-      document.getElementById('arq-stat-total').textContent = todosLosArqueos.length;
-      const calificaciones = todosLosArqueos.map((a) => Number(a.CALIFICACION)).filter((n) => !isNaN(n));
-      const promedio = calificaciones.length ? calificaciones.reduce((a, b) => a + b, 0) / calificaciones.length : 0;
-      document.getElementById('arq-stat-calificacion').textContent = Math.round(promedio * 100) / 100 + '%';
-      document.getElementById('arq-stat-diferencias').textContent =
-        todosLosArqueos.filter((a) => (Number(a.DIFERENCIA) || 0) !== 0).length;
-
+      actualizarKpis(todosLosArqueos);
       tabla.setDatos(todosLosArqueos);
     }
 

@@ -68,6 +68,12 @@ const IncidenciasService = (function () {
       .sort((a, b) => new Date(b.FECHA_REGISTRO) - new Date(a.FECHA_REGISTRO));
   }
 
+  /** Todas las columnas de TODAS las incidencias (para exportar completo). */
+  function completo(token) {
+    Permisos.puedeLeer(token, 'incidencias');
+    return SheetUtils.getAll(ssId(), hoja_().getName());
+  }
+
   /** Abre una nueva incidencia (ingreso del vehículo al taller) */
   function crear(token, datos) {
     Permisos.puedeEditar(token, 'incidencias');
@@ -170,5 +176,5 @@ const IncidenciasService = (function () {
     }
   }
 
-  return { listar, crear, cerrar, actualizar, eliminar, diagnostico };
+  return { listar, completo, crear, cerrar, actualizar, eliminar, diagnostico };
 })();

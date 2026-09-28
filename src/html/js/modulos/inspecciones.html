@@ -54,7 +54,11 @@
         'verde arriba de 90%, ámbar entre 80 y 90, rojo abajo de 80. Abre el detalle (el ojo) ' +
         'para ver las piezas que salieron mal, los diagramas de daños y las firmas. ' +
         'El botón de PDF abre el formato tal como se firmó.',
-      exportar: { nombreArchivo: 'Inspecciones vehiculares' },
+      exportar: {
+        nombreArchivo: 'Inspecciones vehiculares',
+        titulo: 'Descarga la base completa: las 195 columnas de la hoja, sin importar filtros ni búsqueda (puede tardar un poco)',
+        descargar: async () => ExportarExcel.descargarCrudo({ nombreArchivo: 'Inspecciones vehiculares', filas: JSON.parse(await callServer('apiInspeccionesCompleto', state.token)) }),
+      },
       alCambiarFiltros: (filtros) => { marcarKpiActivo(filtros); },
       etiquetaFila: (i) => [i.FOLIO, i.PLACAS, formatearFecha(i.FECHA)].filter(Boolean).join(' · '),
       detalle: {
@@ -172,16 +176,16 @@
     }
 
     // ----- KPIs -----
-    function pintarStats() {
+    function pintarStats(filas) {
       const hace30 = Date.now() - 30 * DIA_MS;
-      const conPuntaje = inspecciones.filter((i) => i.PUNTAJE !== '');
+      const conPuntaje = filas.filter((i) => i.PUNTAJE !== '');
       const promedio = conPuntaje.length
         ? Math.round(conPuntaje.reduce((s, i) => s + i.PUNTAJE, 0) / conPuntaje.length * 10) / 10
         : null;
 
-      document.getElementById('ins-stat-total').textContent = inspecciones.length;
+      document.getElementById('ins-stat-total').textContent = filas.length;
       document.getElementById('ins-stat-mes').textContent =
-        inspecciones.filter((i) => i.FECHA && new Date(i.FECHA).getTime() >= hace30).length;
+        filas.filter((i) => i.FECHA && new Date(i.FECHA).getTime() >= hace30).length;
       document.getElementById('ins-stat-bajas').textContent =
         conPuntaje.filter((i) => i.PUNTAJE < PUNTAJE_BAJO).length;
       document.getElementById('ins-stat-promedio').textContent = promedio === null ? '—' : promedio + '%';
@@ -194,6 +198,7 @@
       );
       const fecha = filtros.FECHA;
       document.getElementById('ins-kpi-mes').classList.toggle('activo', !!(fecha && fecha.op === 'despues'));
+      pintarStats(tabla.getFiltradas());
     }
 
     document.getElementById('ins-kpi-bajas').addEventListener('click', (ev) => {
@@ -218,7 +223,7 @@
       if (previas) {
         inspecciones = previas;
         tabla.setDatos(previas);
-        pintarStats();
+        pintarStats(tabla.getFiltradas());
       }
       tabla.setCargando(true);
       try {
@@ -234,7 +239,7 @@
       }
       inspeccionesPrevias = { token: state.token, datos: inspecciones };
       tabla.setDatos(inspecciones);
-      pintarStats();
+      pintarStats(tabla.getFiltradas());
     }
 
     // La captura (y sus catálogos) se prepara hasta que hace falta: al abrir la pestaña,

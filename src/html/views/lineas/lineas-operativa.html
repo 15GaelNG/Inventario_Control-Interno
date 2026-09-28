@@ -1,0 +1,39 @@
+<template id="tpl-lineas-operativa">
+  <section id="ln-operativa" class="ln-modulo">
+    <div class="page-header">
+      <div>
+        <h2><span id="ln-op-titulo-icono"></span> <span id="ln-op-titulo">Módulo de líneas</span></h2>
+        <p id="ln-op-subtitulo" class="page-subtitle"></p>
+      </div>
+      <div class="page-header-actions">
+        <button id="ln-op-nuevo" type="button" hidden><i data-lucide="plus" class="ico"></i> Nuevo registro</button>
+      </div>
+    </div>
+
+    <div class="stat-row" id="ln-op-kpis">
+      <div class="stat-tile"><div class="stat-icon"><i data-lucide="loader-circle" class="ico"></i></div><div><div class="stat-value">…</div><div class="stat-label">Cargando</div></div></div>
+    </div>
+
+    <div class="card card-compacta"><div id="ln-op-tabla"></div></div>
+  </section>
+
+  <div id="ln-op-modal" class="modal-backdrop" hidden>
+    <div class="modal-card modal-card-wide" role="dialog" aria-modal="true" aria-labelledby="ln-op-modal-titulo">
+      <div class="modal-header">
+        <div>
+          <h3 id="ln-op-modal-titulo" style="margin:0">Nuevo registro</h3>
+          <p class="modal-subtitle">Los campos con * son obligatorios.</p>
+        </div>
+        <button id="ln-op-cerrar" type="button" class="modal-close" aria-label="Cerrar"><i data-lucide="x" class="ico"></i></button>
+      </div>
+      <form id="ln-op-alta-form">
+        <div id="ln-op-campos" class="ln-op-campos modal-form-scroll"></div>
+        <div id="ln-op-alta-error" class="error-msg" hidden></div>
+        <div class="ln-captura-acciones">
+          <button id="ln-op-cancelar" type="button" class="secondary">Cancelar</button>
+          <button id="ln-op-guardar" type="submit"><i data-lucide="save" class="ico"></i> Registrar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</template>

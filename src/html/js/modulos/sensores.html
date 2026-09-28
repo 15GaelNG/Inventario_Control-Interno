@@ -68,6 +68,19 @@
       return `<span class="badge-estado ${clase}">${Iconos.svg(icono)} ${escaparHtml(valor)}${velocidad}</span>`;
     }
 
+    // Tal cual se veía en AppSheet: sin fondo de pastilla, ícono + texto en
+    // mayúsculas/negritas del color del estatus (rojo/verde reales).
+    function badgeEstatusSensor(valor) {
+      const v = String(valor || '').toUpperCase();
+      if (v === 'BAJA') {
+        return `<span style="display:inline-flex; align-items:center; gap:5px; color:#e02020; font-weight:700; text-transform:uppercase">${Iconos.svg('ban')} BAJA</span>`;
+      }
+      if (v === 'ACTIVO') {
+        return `<span style="display:inline-flex; align-items:center; gap:5px; color:#2ba02b; font-weight:700; text-transform:uppercase">${Iconos.svg('refresh-cw')} ACTIVO</span>`;
+      }
+      return escaparHtml(valor || '—');
+    }
+
     // ----- Tabla -----
     const tabla = DataTable.crear(document.getElementById('sen-tabla'), {
       idCampo: 'ID',
@@ -78,7 +91,11 @@
         'se corrigen en el módulo de Vehículos. "En vivo" viene de Geotab y se actualiza cada minuto. ' +
         'El botón de actividad en cada fila muestra viajes, combustible y ralentí de los últimos 30 días ' +
         '(solo consulta). El rendimiento y el consumo en ralentí de la tabla se capturan a mano.',
-      exportar: { nombreArchivo: 'Instalacion de sensores' },
+      exportar: {
+        nombreArchivo: 'Instalacion de sensores',
+        titulo: 'Descarga la base completa: todas las filas y columnas de la hoja, sin importar filtros ni búsqueda',
+        descargar: async () => ExportarExcel.descargarCrudo({ nombreArchivo: 'Instalacion de sensores', filas: JSON.parse(await callServer('apiSensoresCompleto', state.token)) }),
+      },
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
       etiquetaFila: (s) => [s.FOLIO, s.SERIE_SENSOR, s.PLACA].filter(Boolean).join(' · '),
       detalle: {
@@ -96,7 +113,7 @@
         { campo: 'MODELO', titulo: 'Año', tipo: 'texto' },
         { campo: 'CLASE', titulo: 'Clase', tipo: 'lista' },
         { campo: 'COMBUSTIBLE', titulo: 'Combustible', tipo: 'lista' },
-        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista' },
+        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', render: (v) => badgeEstatusSensor(v) },
         { campo: 'FECHA_INSTALACION', titulo: 'Instalación', tipo: 'fecha' },
         { campo: 'RENDIMIENTO', titulo: 'Rendimiento (km/L)', tipo: 'numero' },
         { campo: 'RALENTI', titulo: 'Ralentí (L/h)', tipo: 'numero' },
@@ -142,7 +159,7 @@
         const ids = new Set(filas.map((f) => f.ID));
         sensores = sensores.filter((s) => !ids.has(s.ID));
         refrescarTabla();
-        pintarStats();
+        pintarStats(tabla.getFiltradas());
       } : null,
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
@@ -252,7 +269,7 @@
         invalidarCacheLista('apiListarSensores', state.token);
         sensores = sensores.map((s) => (s.ID === id ? actualizada : s));
         refrescarTabla();
-        pintarStats();
+        pintarStats(tabla.getFiltradas());
         cerrarEditarSensor();
         Notificar.exito('Actualizado exitosamente');
       } catch (err) {
@@ -300,17 +317,17 @@
     }
 
     // ----- KPIs -----
-    function pintarStats() {
-      const activos = sensores.filter((s) => String(s.ESTATUS).toUpperCase() === 'ACTIVO').length;
-      document.getElementById('sen-stat-total').textContent = sensores.length;
+    function pintarStats(filas) {
+      const activos = filas.filter((s) => String(s.ESTATUS).toUpperCase() === 'ACTIVO').length;
+      document.getElementById('sen-stat-total').textContent = filas.length;
       document.getElementById('sen-stat-activos').textContent = activos;
-      document.getElementById('sen-stat-baja').textContent = sensores.length - activos;
+      document.getElementById('sen-stat-baja').textContent = filas.length - activos;
 
       const chipViajando = document.getElementById('sen-kpi-viajando');
       chipViajando.hidden = !vivo.disponible;
       if (vivo.disponible) {
         document.getElementById('sen-stat-viajando').textContent =
-          sensores.filter((s) => estadoDe(s) === 'Viajando').length;
+          filas.filter((s) => (s.EN_VIVO || estadoDe(s)) === 'Viajando').length;
       }
     }
 
@@ -327,6 +344,7 @@
         const activo = !!(valores && valores.length === 1 && valores[0] === f.valor);
         document.getElementById(id).classList.toggle('activo', activo);
       });
+      pintarStats(tabla.getFiltradas());
     }
 
     const tabs = Tabs.iniciar(document.getElementById('sen-tabs'), {
@@ -357,7 +375,7 @@
         return;
       }
       refrescarTabla();
-      pintarStats();
+      pintarStats(tabla.getFiltradas());
     }
 
     /** Estado en vivo: la tabla ya se ve aunque Geotab tarde o no esté configurado */
@@ -369,7 +387,7 @@
       }
       if (!document.body.contains(document.getElementById('sen-tabla'))) return;   // se salieron de la pantalla
       refrescarTabla();
-      pintarStats();
+      pintarStats(tabla.getFiltradas());
     }
 
     /** Se refresca solo cada minuto; se detiene al salir de la pantalla */

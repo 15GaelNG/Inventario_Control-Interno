@@ -341,6 +341,12 @@ const ArqueosService = (function () {
     return resultado.sort((a, b) => new Date(b.FECHA_INICIO) - new Date(a.FECHA_INICIO));
   }
 
+  /** Todas las columnas de TODOS los arqueos (para "Vista": mostrar/exportar cualquier columna). */
+  function completo(token) {
+    Permisos.puedeLeer(token, 'arqueos');
+    return SheetUtils.getAll(ssId(), NOMBRE_HOJA);
+  }
+
   /** Registro completo por ID ARQUEO (para el modal de detalle/editar). */
   function buscarPorId(token, id) {
     Permisos.puedeLeer(token, 'arqueos');
@@ -634,7 +640,7 @@ const ArqueosService = (function () {
   }
 
   return {
-    AUDIT_ITEMS, listarResumen, buscarPorId, previsualizarIdArqueo,
+    AUDIT_ITEMS, listarResumen, completo, buscarPorId, previsualizarIdArqueo,
     crear, actualizar, eliminar, subirArchivo,
   };
 })();

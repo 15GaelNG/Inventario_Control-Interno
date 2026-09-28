@@ -185,7 +185,9 @@
   .dt-lista-valores .dt-solo { visibility: hidden; background: transparent; border: none; color: var(--color-primary); padding: 0 4px; font-size: 11px; text-decoration: underline; }
   .dt-lista-valores label:hover .dt-solo, .dt-lista-valores .dt-solo:focus-visible { visibility: visible; }
 
-  .dt-columnas { display: flex; flex-direction: column; gap: 2px; }
+  .dt-columnas { display: flex; flex-direction: column; gap: 2px; max-height: 240px; overflow-y: auto; }
+  .dt-columnas-acciones { display: flex; gap: 6px; margin-bottom: 6px; }
+  .dt-columnas-acciones button { flex: 1; padding: 5px 8px; font-size: 12px; }
   .dt-columna-item { display: flex; align-items: center; gap: 4px; padding: 2px; border-radius: 6px; }
   .dt-columna-item:hover { background: var(--color-bg); }
   .dt-columna-item label { flex: 1; display: flex; align-items: center; gap: 8px; margin: 0; color: var(--color-text); font-weight: 400; cursor: pointer; font-size: 12.5px; }
@@ -251,6 +253,9 @@
    *         opciones: ['ACTIVO', 'BAJA'] },     // si se omite, usa los valores existentes
    *       { campo: 'FOTO', titulo: 'Foto', filtrable: false, ordenable: false,
    *         render: (valor, fila) => '<button …>' },  // HTML propio (el módulo escapa lo que use)
+   *       { campo: 'CLASE', titulo: 'Clase', tipo: 'lista',
+   *         render: (v) => tagConIcono(v),        // cómo se ve en la celda
+   *         renderFiltro: (v) => tagConIcono(v) },  // cómo se ve en el popover de filtro (checklist) — opcional, si se omite usa el texto plano
    *       { campo: 'DIAS', titulo: 'Días', tipo: 'numero',
    *         valor: (fila) => calcularDias(fila) },    // columna calculada
    *     ],
@@ -265,7 +270,16 @@
    *     etiquetaFila: (fila) => fila.FOLIO,     // cómo nombrar una fila en confirmaciones y avisos
    *     tamanoPagina: 25,  densidad: 'normal',  ordenInicial: { campo: 'FECHA', dir: 'desc' },
    *     textoVacio: 'Sin registros',  ayuda: 'Texto de ayuda…',
-   *     exportar: { nombreArchivo: 'Verificaciones' },   // botón verde; false lo oculta
+   *     exportar: { nombreArchivo: 'Verificaciones' },   // botón verde; false lo oculta. Exporta TODAS las
+   *                    // columnas exportables (no solo las visibles en pantalla), sin preguntar nada.
+   *                    // exportar.descargar: async () => nFilas  → en vez de exportar las filas ya
+   *                    //   cargadas en el navegador, el módulo trae los datos (p. ej. la base completa del
+   *                    //   servidor). exportar.titulo: tooltip del botón.
+   *     columnasCompletas: { idHoja: 'ID_VEHICULO', cargar: async () => [{ 'ID_VEHICULO': 1, … }] },
+   *                    // opcional: al abrir "Vista" trae sola TODA la hoja (todas las columnas crudas, no
+   *                    // solo el resumen) y agrega las que falten como columnas nuevas (ocultas, se activan
+   *                    // ahí mismo o con "Mostrar todas"), casando cada fila por idHoja (el encabezado
+   *                    // crudo que hace de id). Se pide una sola vez por carga de la tabla.
    *     alCambiarFiltros: (filtros) => {},      // p. ej. para marcar chips de KPI
    *     umbralPalabraClave: 10,                 // eliminar pide escribir "ELIMINAR" desde N filas
    *   });
@@ -578,6 +592,7 @@
         busqueda: '',
         filtros: {},                 // campo -> { op, v1, v2 } | { valores: [..] }
         pagina: 1,
+        columnasExtra: { cargando: false, cargadas: false },  // ver cfg.columnasCompletas
         seleccion: new Set(),
         ancla: null,                 // última casilla marcada (para Shift+clic)
         editando: null,
@@ -644,6 +659,11 @@
       function columnasVisibles() {
         const ordenadas = st.ordenColumnas.map(colPorCampo).filter((c) => c && !st.ocultas.has(c.campo));
         return ordenadas.filter((c) => st.fijadas.has(c.campo)).concat(ordenadas.filter((c) => !st.fijadas.has(c.campo)));
+      }
+
+      /** Todas las exportables, sin importar si el usuario las ocultó en "Vista" (el Excel siempre sale completo) */
+      function columnasExportables() {
+        return columnas.filter((c) => c.exportable);
       }
 
       // =====================================================================
@@ -731,7 +751,7 @@
             <span class="dt-espacio"></span>
             <span class="dt-seleccion-info" hidden></span>
             ${accionesSeleccion.map((a, i) => `<button type="button" class="${a.peligro ? 'danger' : 'secondary'} ${a.clase || ''}" data-accion-sel="${i}" ${a.titulo ? `title="${esc(a.titulo)}"` : ''} hidden>${ic(a.icono)} ${esc(a.texto)}</button>`).join('')}
-            ${cfg.exportar ? `<button type="button" class="btn-excel dt-btn-excel" title="Descarga lo que ves: columnas visibles, filtros, búsqueda y orden (todas las páginas)">${ic('exportar')} Exportar a Excel</button>` : ''}
+            ${cfg.exportar ? `<button type="button" class="btn-excel dt-btn-excel" title="${esc(cfg.exportar.titulo || 'Descarga la tabla completa (todas las columnas, todas las páginas); respeta los filtros y la búsqueda activos')}">${ic('exportar')} Exportar a Excel</button>` : ''}
           </div>
           <div class="dt-filtros-activos" hidden></div>
           <div class="dt-banner" hidden></div>
@@ -758,7 +778,7 @@
       const buscador = $('.dt-buscar');
       let popover = null;
       let panel = null;
-      let ultimaFirmaFiltros = '{}';
+      let ultimaFirmaFiltros = '{}|';
       let ultimaFirmaVista = '';
 
       const celdaCheck = (contenido) => (cfg.seleccionable ? `<td class="dt-col-check dt-fija">${contenido || ''}</td>` : '');
@@ -1012,10 +1032,14 @@
       }
 
       function avisarCambioDeFiltros() {
-        const firma = JSON.stringify(st.filtros);
-        if (!cfg.alCambiarFiltros || firma === ultimaFirmaFiltros) return;
+        if (!cfg.alCambiarFiltros) return;
+        // La firma incluye la búsqueda: si no, escribir en el buscador filtra la tabla
+        // pero nunca avisa (los KPIs que dependen de esto se quedan con el número viejo).
+        const filtros = JSON.stringify(st.filtros);
+        const firma = filtros + '|' + st.busqueda.trim();
+        if (firma === ultimaFirmaFiltros) return;
         ultimaFirmaFiltros = firma;
-        cfg.alCambiarFiltros(JSON.parse(firma));
+        cfg.alCambiarFiltros(JSON.parse(filtros));
       }
 
       // ---------- cambios de estado + repintado ----------
@@ -1070,6 +1094,13 @@
       }
       function setDensidad(densidad) {
         if (DENSIDADES[densidad]) cambiarVista(() => { st.densidad = densidad; });
+      }
+      /** Muestra/oculta TODAS las columnas de golpe (siempre queda al menos la primera visible). */
+      function mostrarTodasLasColumnas() {
+        cambiarVista(() => st.ordenColumnas.forEach((campo) => st.ocultas.delete(campo)));
+      }
+      function ocultarTodasLasColumnas() {
+        cambiarVista(() => st.ordenColumnas.slice(1).forEach((campo) => { st.ocultas.add(campo); st.fijadas.delete(campo); }));
       }
       /** Orden desde el encabezado: clic = solo esta columna (asc → desc → nada); Shift+clic = agrega a las demás */
       function alternarOrden(col, multiple) {
@@ -1171,7 +1202,7 @@
           </div>
           <div class="dt-lista-valores">${valores.map((v) => `
             <label data-texto="${esc(normalizar(v))}"><input type="checkbox" value="${esc(v)}" ${marcados.has(v) ? 'checked' : ''} />
-              <span>${v === '' ? '<em>(vacío)</em>' : esc(v)}</span>
+              <span>${v === '' ? '<em>(vacío)</em>' : (col.renderFiltro ? col.renderFiltro(v) : esc(v))}</span>
               <button type="button" class="dt-solo" data-solo="${esc(v)}" title="Filtrar solo por este valor">solo</button>
               <span class="dt-conteo">${conteo.get(v)}</span></label>`).join('')}
           </div>${abajo}`, (pop) => {
@@ -1235,11 +1266,74 @@
         });
       }
 
+      /** "NO ECONOMICO" → "No economico" (siglas cortas de 3 letras o menos se quedan igual: NUCO, IMEI…) */
+      function tituloDesdeEncabezado_(h) {
+        const t = String(h || '').trim();
+        return t.length <= 3 && !/\s/.test(t) ? t : t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+      }
+      const normCampo_ = (s) => String(s || '').replace(/_/g, ' ').trim().toUpperCase().replace(/\s+/g, ' ');
+
+      /**
+       * cfg.columnasCompletas = { idHoja, cargar }: trae TODAS las columnas de la hoja del servidor
+       * (cargar() → [{ encabezado: valor, … }]) y agrega las que no estaban ya como columnas nuevas
+       * (ocultas, exportables). Se llama una sola vez, automático al abrir "Vista" (ver abrirVista).
+       */
+      async function cargarColumnasCompletas(boton) {
+        if (!cfg.columnasCompletas || st.columnasExtra.cargando || st.columnasExtra.cargadas) return;
+        st.columnasExtra.cargando = true;
+        try {
+          await conBotonOcupado(boton, 'Cargando…', async () => {
+            const raw = await cfg.columnasCompletas.cargar();
+            const yaExisten = new Set(columnas.map((c) => normCampo_(c.campo)));
+            const encabezados = raw.length ? Object.keys(raw[0]) : [];
+            const nuevas = encabezados.filter((h) => h && !yaExisten.has(normCampo_(h))).map((h) => {
+              const muestra = raw.slice(0, 60).map((r) => r[h]).filter((v) => v !== '' && v !== null && v !== undefined);
+              const esFecha = muestra.length > 0 && muestra.every((v) => /^\d{4}-\d{2}-\d{2}/.test(String(v)));
+              const esNumero = !esFecha && muestra.length > 0 && muestra.every((v) => typeof v === 'number' || (String(v).trim() !== '' && !isNaN(Number(String(v).replace(/[$,\s]/g, '')))));
+              return {
+                campo: h, titulo: tituloDesdeEncabezado_(h), tipo: esFecha ? 'fecha' : (esNumero ? 'numero' : 'texto'),
+                editable: false, filtrable: true, ordenable: true, visible: false, exportable: true, enDetalle: true,
+              };
+            });
+            columnas.push(...nuevas);
+            st.ordenColumnas = st.ordenColumnas.concat(nuevas.map((c) => c.campo));
+            nuevas.forEach((c) => st.ocultas.add(c.campo));
+
+            // Ids vacíos NO se indexan: varias filas sin id (ej. renglones viejos sin ID_CAMBIO en
+            // Cambios Vehículos) terminarían compartiendo por error los datos extra de la última.
+            const porId = {};
+            raw.forEach((r) => {
+              const idVal = String(r[cfg.columnasCompletas.idHoja] == null ? '' : r[cfg.columnasCompletas.idHoja]);
+              if (idVal) porId[idVal] = r;
+            });
+            st.datos.forEach((fila) => {
+              const id = idDe(fila);
+              const r = id && porId[id];
+              if (r) nuevas.forEach((c) => { fila[c.campo] = r[c.campo]; });
+            });
+
+            st.columnasExtra.cargadas = true;
+            Notificar.exito(nuevas.length ? `${nuevas.length} columna(s) más disponibles: actívalas en "Vista"` : 'La tabla ya tenía todas las columnas de la base de datos');
+          });
+        } catch (err) {
+          Notificar.error('No se pudieron traer todas las columnas: ' + err.message);
+        } finally {
+          st.columnasExtra.cargando = false;
+        }
+      }
+
       /** Menú "Vista": columnas visibles, fijar, reordenar, densidad y restablecer */
       function abrirVista(ancla) {
         const pintar = (pop) => {
           const orden = st.ordenColumnas.map(colPorCampo);
-          pop.innerHTML = `<h4>Columnas</h4><div class="dt-columnas">${orden.map((c, i) => {
+          const todasVisibles = orden.every((c) => !st.ocultas.has(c.campo));
+          const soloUnaVisible = orden.filter((c) => !st.ocultas.has(c.campo)).length <= 1;
+          pop.innerHTML = `<h4>Columnas</h4>
+            <div class="dt-columnas-acciones">
+              <button type="button" class="secondary dt-marcar-todas" ${todasVisibles ? 'disabled' : ''}>Mostrar todas</button>
+              <button type="button" class="secondary dt-desmarcar-todas" ${soloUnaVisible ? 'disabled' : ''}>Ocultar todas</button>
+            </div>
+            <div class="dt-columnas">${orden.map((c, i) => {
             const campo = esc(c.campo);
             const fijada = st.fijadas.has(c.campo);
             return `<div class="dt-columna-item">
@@ -1257,6 +1351,7 @@
               </label>
               <button type="button" class="secondary dt-restablecer">${ic('restablecer')} Restablecer vista</button>
               ${cfg.idTabla ? '<span class="page-subtitle" style="font-size:11px">Tu vista se guarda en este navegador.</span>' : ''}
+              ${st.columnasExtra.cargando ? '<span class="page-subtitle" style="font-size:11px">Cargando todas las columnas de la base de datos…</span>' : ''}
             </div>`;
 
           // Cada cambio repinta la tabla y también este menú (queda abierto)
@@ -1269,9 +1364,19 @@
           alClic('[data-subir]', (b) => moverColumna(b.dataset.subir, st.ordenColumnas[st.ordenColumnas.indexOf(b.dataset.subir) - 1]));
           alClic('[data-bajar]', (b) => moverColumna(b.dataset.bajar, st.ordenColumnas[st.ordenColumnas.indexOf(b.dataset.bajar) + 2] || null));
           alClic('.dt-restablecer', () => { restablecerVista(); Notificar.info('Vista restablecida'); });
+          alClic('.dt-marcar-todas', () => mostrarTodasLasColumnas());
+          alClic('.dt-desmarcar-todas', () => ocultarTodasLasColumnas());
           pop.querySelector('.dt-densidad').addEventListener('change', (ev) => setDensidad(ev.target.value));
         };
         abrirPopover(ancla, '', pintar);
+        // Trae TODAS las columnas de la base de datos la primera vez que se abre "Vista"
+        // (antes había que pedirlo con un botón aparte); el menú ya está abierto mientras carga.
+        if (cfg.columnasCompletas && !st.columnasExtra.cargadas && !st.columnasExtra.cargando) {
+          const miPopover = popover;
+          const promesa = cargarColumnasCompletas();
+          pintar(miPopover);   // ya cargando = true (se puso antes del primer await): refleja "Cargando…"
+          promesa.then(() => { if (popover === miPopover) pintar(miPopover); });
+        }
       }
 
       // =====================================================================
@@ -1487,8 +1592,22 @@
         return texto;
       }
 
+      /** cfg.exportar.descargar: el módulo trae la base completa del servidor en vez de las filas cargadas. */
+      async function exportarConDescarga(boton) {
+        await conBotonOcupado(boton, 'Exportando…', async () => {
+          try {
+            const n = await cfg.exportar.descargar();
+            Notificar.exito(`${n} ${plural(n, 'registro')} ${plural(n, 'exportado')}`);
+          } catch (err) {
+            Notificar.error('No se pudo exportar: ' + err.message);
+          }
+        });
+        render();
+      }
+
       async function exportarExcel(boton) {
-        const cols = columnasVisibles().filter((c) => c.exportable);
+        if (typeof cfg.exportar.descargar === 'function') return exportarConDescarga(boton);
+        const cols = columnasExportables();
         const filas = filasFiltradas();
         if (!filas.length) { Notificar.error('No hay registros para exportar con los filtros actuales'); return; }
         await conBotonOcupado(boton, 'Exportando…', async () => {
@@ -1891,6 +2010,8 @@
         },
         setError(mensaje) { st.error = mensaje || null; st.cargando = false; st.refrescando = false; render(); },
         getDatos: () => st.datos.slice(),
+        // Filas con filtros, búsqueda y orden aplicados (todas las páginas) — usado por Líneas.
+        getFiltradas: () => (st.cargando || st.error ? [] : filasFiltradas()),
         getSeleccion: () => st.datos.filter((f) => st.seleccion.has(idDe(f))),
         limpiarSeleccion,
         copiarSeleccion,

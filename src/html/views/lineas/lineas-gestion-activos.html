@@ -1,0 +1,32 @@
+<template id="tpl-lineas-gestion-activos">
+  <div class="ln-modulo" id="ln-gestion-activos">
+    <div class="page-header">
+      <div>
+        <h2><i data-lucide="contact" class="ico"></i> Gestión de Activos</h2>
+        <p class="page-subtitle">Busca a un colaborador y abre su tarjeta para consultar sus líneas y equipos asignados</p>
+      </div>
+    </div>
+
+    <div class="stat-row" id="lnga-kpis">
+      <div class="stat-tile"><div class="stat-icon"><i data-lucide="loader-circle" class="ico"></i></div><div><div class="stat-value">…</div><div class="stat-label">Cargando</div></div></div>
+    </div>
+
+    <div class="card ln-cuadros-toolbar">
+      <div class="ln-filtros ln-cuadros-filtros">
+        <input aria-label="Buscar por nombre, empleado, puesto, área o sede…" type="search" id="lnga-q" placeholder="Buscar por nombre, empleado, puesto, área o sede…" autocomplete="off" autofocus />
+        <select id="lnga-filtro-activos" aria-label="Filtrar por activos">
+          <option value="TODOS">Todos los colaboradores</option>
+          <option value="CON">Con activos asociados</option>
+          <option value="SIN">Sin activos asociados</option>
+        </select>
+      </div>
+      <p id="lnga-conteo" class="ln-conteo"></p>
+    </div>
+
+    <div id="lnga-error" class="error-msg" hidden></div>
+    <div id="lnga-grid" class="ln-cuadros-grid" aria-live="polite">
+      <div class="card ln-cuadro-cargando"><span class="ln-spinner"></span> Cargando colaboradores…</div>
+    </div>
+    <div class="ln-cuadros-mas"><button id="lnga-mas" type="button" class="secondary" hidden>Mostrar más</button></div>
+  </div>
+</template>

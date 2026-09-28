@@ -228,22 +228,29 @@
       }
     }
 
+    // Tal cual se veía en AppSheet: texto en mayúsculas, negritas e itálicas,
+    // ícono + color (rojo/verde reales, no el bronce de marca) — sin fondo de pastilla.
     function badgeEstatusCaja(estatus) {
       const valor = String(estatus || '').toUpperCase();
       if (valor === 'CERRADA') {
-        return '<span class="badge-estado baja"><i data-lucide="ban" class="ico"></i> Cerrada</span>';
+        return '<span class="estatus-appsheet" style="color:#e02020"><i data-lucide="circle-x" class="ico"></i> CERRADA</span>';
       }
       if (valor === 'EN PROCESO DE CIERRE') {
-        return '<span class="badge-estado pendiente"><i data-lucide="clock" class="ico"></i> En proceso de cierre</span>';
+        return '<span class="estatus-appsheet" style="color:#e0a020"><i data-lucide="clock" class="ico"></i> EN PROCESO DE CIERRE</span>';
       }
-      return '<span class="badge-estado activo"><i data-lucide="circle-check" class="ico"></i> Vigente</span>';
+      return '<span class="estatus-appsheet" style="color:#2ba02b"><i data-lucide="circle-check" class="ico"></i> VIGENTE</span>';
     }
 
     const tabla = DataTable.crear(document.getElementById('cch-tabla'), {
       idCampo: 'ID CCH',
       idTabla: 'cajas-chicas',
       textoVacio: 'Todavía no hay cajas chicas registradas',
-      exportar: { nombreArchivo: 'Cajas Chicas' },
+      exportar: {
+        nombreArchivo: 'Cajas Chicas',
+        titulo: 'Descarga la base completa: todas las filas y columnas de la hoja, sin importar filtros ni búsqueda',
+        descargar: async () => ExportarExcel.descargarCrudo({ nombreArchivo: 'Cajas Chicas', filas: JSON.parse(await callServer('apiCajasChicasCompleto', state.token)) }),
+      },
+      columnasCompletas: { idHoja: 'ID CCH', cargar: async () => JSON.parse(await callServer('apiCajasChicasCompleto', state.token)) },
       etiquetaFila: (c) => c.RESPONSABLE || ('ID CCH ' + c['ID CCH']),
       detalle: { titulo: (c) => 'ID CCH: ' + c['ID CCH'] },
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
@@ -306,6 +313,17 @@
           'stat-tile-activo', !!(valores && valores.length === 1 && valores[0] === KPI_FILTRO_CCH[id])
         );
       });
+      actualizarKpisCch(tabla.getFiltradas());
+    }
+
+    function actualizarKpisCch(filas) {
+      document.getElementById('cch-stat-total').textContent = filas.length;
+      document.getElementById('cch-stat-vigentes').textContent =
+        filas.filter((c) => String(c.ESTATUS || '').toUpperCase() === 'VIGENTE').length;
+      document.getElementById('cch-stat-proceso-cierre').textContent =
+        filas.filter((c) => String(c.ESTATUS || '').toUpperCase() === 'EN PROCESO DE CIERRE').length;
+      document.getElementById('cch-stat-cerradas').textContent =
+        filas.filter((c) => String(c.ESTATUS || '').toUpperCase() === 'CERRADA').length;
     }
 
     async function cargar() {
@@ -317,14 +335,7 @@
         return;
       }
 
-      document.getElementById('cch-stat-total').textContent = todasLasCajas.length;
-      document.getElementById('cch-stat-vigentes').textContent =
-        todasLasCajas.filter((c) => String(c.ESTATUS || '').toUpperCase() === 'VIGENTE').length;
-      document.getElementById('cch-stat-proceso-cierre').textContent =
-        todasLasCajas.filter((c) => String(c.ESTATUS || '').toUpperCase() === 'EN PROCESO DE CIERRE').length;
-      document.getElementById('cch-stat-cerradas').textContent =
-        todasLasCajas.filter((c) => String(c.ESTATUS || '').toUpperCase() === 'CERRADA').length;
-
+      actualizarKpisCch(todasLasCajas);
       tabla.setDatos(todasLasCajas);
     }
 
@@ -477,7 +488,12 @@
       idTabla: 'cambios-monto-cch',
       ordenInicial: { campo: 'FECHA', dir: 'desc' },
       textoVacio: 'Todavía no hay cambios de monto registrados',
-      exportar: { nombreArchivo: 'Cambios de Monto' },
+      exportar: {
+        nombreArchivo: 'Cambios de Monto',
+        titulo: 'Descarga la base completa: todas las filas y columnas de la hoja, sin importar filtros ni búsqueda',
+        descargar: async () => ExportarExcel.descargarCrudo({ nombreArchivo: 'Cambios de Monto', filas: JSON.parse(await callServer('apiCambiosMontoCCHCompleto', state.token)) }),
+      },
+      columnasCompletas: { idHoja: 'ID', cargar: async () => JSON.parse(await callServer('apiCambiosMontoCCHCompleto', state.token)) },
       etiquetaFila: (c) => c.RESPONSABLE || c.ID_CCH,
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
       columnas: [
@@ -517,6 +533,15 @@
           'stat-tile-activo', !!(valores && valores.length === 1 && valores[0] === KPI_FILTRO_CM[id])
         );
       });
+      actualizarKpisCm(tabla.getFiltradas());
+    }
+
+    function actualizarKpisCm(filas) {
+      document.getElementById('cmcch-stat-total').textContent = filas.length;
+      document.getElementById('cmcch-stat-incrementos').textContent =
+        filas.filter((c) => String(c.TIPO || '').toUpperCase() === 'INCREMENTO').length;
+      document.getElementById('cmcch-stat-reducciones').textContent =
+        filas.filter((c) => String(c.TIPO || '').toUpperCase() === 'REDUCCION').length;
     }
 
     async function cargar() {
@@ -537,12 +562,7 @@
       // cualquier otra columna, en vez de solo "pintarlo" en la celda.
       todosLosCambios = (cambios || []).map((c) => Object.assign({}, c, { RESPONSABLE: nombreResponsable(c.ID_CCH) }));
 
-      document.getElementById('cmcch-stat-total').textContent = todosLosCambios.length;
-      document.getElementById('cmcch-stat-incrementos').textContent =
-        todosLosCambios.filter((c) => String(c.TIPO || '').toUpperCase() === 'INCREMENTO').length;
-      document.getElementById('cmcch-stat-reducciones').textContent =
-        todosLosCambios.filter((c) => String(c.TIPO || '').toUpperCase() === 'REDUCCION').length;
-
+      actualizarKpisCm(todosLosCambios);
       tabla.setDatos(todosLosCambios);
     }
 
@@ -598,7 +618,12 @@
       idTabla: 'cambios-vehiculos',
       ordenInicial: { campo: 'FECHA', dir: 'desc' },
       textoVacio: 'Todavía no hay cambios registrados',
-      exportar: { nombreArchivo: 'Cambios Vehículos' },
+      exportar: {
+        nombreArchivo: 'Cambios Vehículos',
+        titulo: 'Descarga la base completa: todas las filas y columnas de la hoja, sin importar filtros ni búsqueda',
+        descargar: async () => ExportarExcel.descargarCrudo({ nombreArchivo: 'Cambios Vehículos', filas: JSON.parse(await callServer('apiCambiosVehiculosCompleto', state.token)) }),
+      },
+      columnasCompletas: { idHoja: 'ID_CAMBIO', cargar: async () => JSON.parse(await callServer('apiCambiosVehiculosCompleto', state.token)) },
       etiquetaFila: (c) => [c.FOLIO, c.CAMPO].filter(Boolean).join(' · '),
       detalle: false, // bitácora de solo lectura, sin panel de detalle ni edición
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
@@ -628,6 +653,16 @@
       const f = filtros.FECHA;
       tileHoy.classList.toggle('stat-tile-activo', !!(f && f.op === 'igual' && f.v1 === hoyISO()));
       tileTotal.classList.toggle('stat-tile-activo', !f);
+      actualizarKpisCv(tabla.getFiltradas());
+    }
+
+    function actualizarKpisCv(filas) {
+      document.getElementById('cv-stat-total').textContent = filas.length;
+      document.getElementById('cv-stat-vehiculos').textContent =
+        new Set(filas.map((c) => c.FOLIO).filter(Boolean)).size;
+      const hoyStr = hoyISO();
+      document.getElementById('cv-stat-hoy').textContent =
+        filas.filter((c) => c.FECHA && c.FECHA.slice(0, 10) === hoyStr).length;
     }
 
     async function cargar() {
@@ -647,13 +682,7 @@
       // llevar el rastro de cada fila, así que se completa uno aquí.
       todosLosCambios = crudos.map((c, i) => Object.assign({}, c, { ID: c.ID || ('sin-id-' + i) }));
 
-      document.getElementById('cv-stat-total').textContent = todosLosCambios.length;
-      document.getElementById('cv-stat-vehiculos').textContent =
-        new Set(todosLosCambios.map((c) => c.FOLIO).filter(Boolean)).size;
-      const hoyStr = hoyISO();
-      document.getElementById('cv-stat-hoy').textContent =
-        todosLosCambios.filter((c) => c.FECHA && c.FECHA.slice(0, 10) === hoyStr).length;
-
+      actualizarKpisCv(todosLosCambios);
       tabla.setDatos(todosLosCambios);
     }
 

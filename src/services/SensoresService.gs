@@ -145,6 +145,12 @@ const SensoresService = (function () {
       .sort((a, b) => (b.FECHA_INSTALACION || '').localeCompare(a.FECHA_INSTALACION || ''));
   }
 
+  /** Todas las columnas de TODOS los sensores (para exportar completo). */
+  function completo(token) {
+    Permisos.puedeLeer(token, 'instalacion-sensores');
+    return SheetUtils.getAll(ssId(), hoja_().getName());
+  }
+
   /**
    * Datos que el formulario llena solos al escribir un folio: lo copiado del vehículo,
    * los combustibles válidos, la serie del sensor que ya trae VEHICULOS y si ya tiene
@@ -332,7 +338,7 @@ const SensoresService = (function () {
   }
 
   return {
-    listar, datosParaFormulario, registrar, actualizarCampo, eliminar, urlResponsiva,
+    listar, completo, datosParaFormulario, registrar, actualizarCampo, eliminar, urlResponsiva,
     geotabDisponible, estadoEnVivo, resumenGeotab,
   };
 })();

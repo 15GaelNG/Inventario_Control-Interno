@@ -87,7 +87,7 @@ const VehiculosService = (function () {
 
   const COLUMNAS_RESUMEN = [
     'ID_VEHICULO', 'FOLIO', 'NUCCO', 'DEPARTAMENTO', 'NO ECONOMICO', 'MARCA', 'CLASE',
-    'LINEA VEHICULO', 'MODELO', 'COLOR', 'PLACA', 'SEDE', 'ESTATUS',
+    'LINEA VEHICULO', 'MODELO', 'COLOR', 'PLACA', 'SEDE', 'ESTATUS', 'FECHA REGISTRO SISTEMA CI',
   ];
 
   /**
@@ -117,9 +117,16 @@ const VehiculosService = (function () {
         PLACA: datos['PLACA'][i] || '',
         SEDE: datos['SEDE'][i] || '',
         ESTATUS: datos['ESTATUS'][i] || '',
+        FECHA_REGISTRO: datos['FECHA REGISTRO SISTEMA CI'][i] || '',
       });
     }
     return resultado.sort((a, b) => String(a.FOLIO).localeCompare(String(b.FOLIO)));
+  }
+
+  /** Todas las columnas de TODOS los vehículos (para "Vista": mostrar/exportar cualquier columna). */
+  function completo(token) {
+    Permisos.puedeLeer(token, 'vehiculos');
+    return SheetUtils.getAll(ssId(), SHEET_VEHICULOS);
   }
 
   /**
@@ -354,5 +361,5 @@ const VehiculosService = (function () {
     return { url: archivo.getUrl(), id: archivo.getId(), nombre: nombreArchivo };
   }
 
-  return { listar, listarBasico, listarResumen, buscarPorFolio, previsualizarFolio, previsualizarNucco, crear, actualizar, eliminar, subirArchivo };
+  return { listar, listarBasico, listarResumen, completo, buscarPorFolio, previsualizarFolio, previsualizarNucco, crear, actualizar, eliminar, subirArchivo };
 })();

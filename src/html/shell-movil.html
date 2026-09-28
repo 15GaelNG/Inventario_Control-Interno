@@ -1,0 +1,87 @@
+<style>
+  /* ============ Esqueleto en celular y tableta vertical (rama emmanuel) ============
+     Archivo aparte (se incluye con una línea en Index.html) para no mezclarlo con los estilos del shell.
+     Por debajo de 900px el menú lateral deja de ocupar ancho: se abre como panel con el botón de menú
+     de la barra superior, con un fondo oscuro detrás, y se cierra al elegir un módulo o tocar fuera. */
+  .shell-menu-btn, .shell-fondo { display: none; }
+
+  @media (max-width: 900px) {
+    .shell-menu-btn {
+      display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+      width: 40px; height: 40px; padding: 0; border-radius: 10px;
+      background: transparent; color: var(--color-text); border: 1px solid var(--color-border);
+    }
+    .shell-menu-btn:hover { background: var(--color-bg); }
+    .shell-menu-btn .ico { width: 20px; height: 20px; }
+
+    #sidebar, #sidebar.collapsed {
+      position: fixed; top: 0; left: 0; bottom: 0; z-index: 900; width: 280px; max-width: 86vw;
+      transform: translateX(-100%); transition: transform .25s ease;
+    }
+    body.shell-menu-abierto #sidebar { transform: none; box-shadow: 0 0 40px rgba(0, 0, 0, .35); }
+    /* En el panel siempre se ven los nombres, aunque en escritorio el menú esté colapsado */
+    #sidebar.collapsed .sidebar-title, #sidebar.collapsed .nav-label,
+    #sidebar.collapsed .nav-group-header .nav-label { display: inline; }
+    #sidebar.collapsed .nav-group-chevron { display: inline-flex; }
+    #sidebar.collapsed .nav-item { justify-content: flex-start; }
+    #sidebar.collapsed .nav-group-items { display: block !important; }
+    .sidebar-collapse-btn { display: none; }
+
+    .shell-fondo { position: fixed; inset: 0; z-index: 890; background: rgba(6, 20, 30, .45); }
+    body.shell-menu-abierto .shell-fondo { display: block; }
+
+    .topbar { padding: 8px 14px; margin-bottom: 12px; gap: 10px; }
+    .topbar-left { gap: 10px; min-width: 0; }
+    .topbar-cm-logo { height: 28px; }
+    .topbar-date { display: none; }
+    #view-container { padding: 0 14px 20px; }
+    .page-header { margin-bottom: 14px; }
+  }
+
+  @media (max-width: 600px) {
+    .topbar-user { display: none; }
+    .topbar-right { gap: 8px; }
+    .page-header h2 { font-size: 19px; }
+    .page-subtitle { font-size: 12px; }
+    .page-header-actions { width: 100%; }
+    .page-header-actions > button { flex: 1 1 auto; }
+  }
+</style>
+
+<script>
+  /** Botón de menú y fondo del panel lateral en pantallas angostas (ver estilos arriba). */
+  (function () {
+    const sidebar = document.getElementById('sidebar');
+    const barra = document.querySelector('.topbar-left');
+    if (!sidebar || !barra) return;
+    const angosta = window.matchMedia('(max-width: 900px)');
+
+    const boton = document.createElement('button');
+    boton.type = 'button';
+    boton.className = 'shell-menu-btn';
+    boton.setAttribute('aria-label', 'Abrir menú');
+    boton.setAttribute('aria-controls', 'sidebar');
+    boton.setAttribute('aria-expanded', 'false');
+    boton.innerHTML = '<i data-lucide="menu" class="ico"></i>';
+    barra.insertBefore(boton, barra.firstChild);
+
+    const fondo = document.createElement('div');
+    fondo.className = 'shell-fondo';
+    document.body.appendChild(fondo);
+
+    function abrir(si) {
+      document.body.classList.toggle('shell-menu-abierto', si);
+      boton.setAttribute('aria-expanded', String(si));
+      boton.setAttribute('aria-label', si ? 'Cerrar menú' : 'Abrir menú');
+    }
+    boton.addEventListener('click', () => abrir(!document.body.classList.contains('shell-menu-abierto')));
+    fondo.addEventListener('click', () => abrir(false));
+    document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') abrir(false); });
+    // Elegir un módulo cierra el panel (los grupos solo se despliegan)
+    sidebar.addEventListener('click', (ev) => {
+      if (angosta.matches && ev.target.closest('.nav-item[data-view], .nav-subitem')) abrir(false);
+    });
+    angosta.addEventListener('change', (ev) => { if (!ev.matches) abrir(false); });
+    if (window.lucide && window.lucide.createIcons) window.lucide.createIcons();
+  })();
+</script>

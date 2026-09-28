@@ -24,6 +24,10 @@ function apiLoginConGoogle() {
 function apiCompartirArchivosExistentes(token) {
   return compartirArchivosExistentes(token);
 }
+// Igual, pero para la carpeta de Líneas (ver LineasAdmin.gs).
+function apiCompartirArchivosLineasExistentes(token) {
+  return compartirArchivosLineasExistentes(token);
+}
 function apiLogout(token) {
   return Auth.logout(token);
 }
@@ -32,8 +36,14 @@ function apiLogout(token) {
 function apiListarArticulosConStock(token) {
   return AccesoriosService.listarArticulosConStock(token);
 }
+function apiAccesoriosCompleto(token) {
+  return JSON.stringify(AccesoriosService.completo(token));
+}
 function apiCrearArticulo(token, articulo) {
   return AccesoriosService.crearArticulo(token, articulo);
+}
+function apiActualizarArticulo(token, id, cambios) {
+  return AccesoriosService.actualizarArticulo(token, id, cambios);
 }
 function apiRegistrarMovimiento(token, idArticulo, tipo, cantidad, comentarios) {
   return AccesoriosService.registrarMovimiento(token, idArticulo, tipo, cantidad, comentarios);
@@ -49,8 +59,15 @@ function apiListarVehiculosBasico(token) {
 function apiBuscarVehiculoPorFolio(token, folio) {
   return VehiculosService.buscarPorFolio(token, folio);
 }
+// JSON.stringify (no el arreglo directo): con FECHA_REGISTRO (Date) en cada fila,
+// google.script.run pierde la respuesta de forma intermitente (confirmado con
+// pruebas — regresa null aunque el servidor sí arma las filas). Como texto viaja
+// confiable; el cliente hace JSON.parse().
 function apiListarVehiculosResumen(token) {
-  return VehiculosService.listarResumen(token);
+  return JSON.stringify(VehiculosService.listarResumen(token));
+}
+function apiVehiculosCompleto(token) {
+  return JSON.stringify(VehiculosService.completo(token));
 }
 function apiPrevisualizarFolioVehiculo(token, clase) {
   return VehiculosService.previsualizarFolio(token, clase);
@@ -77,6 +94,9 @@ function apiSubirArchivoVehiculo(token, nombreArchivo, mimeType, base64Data) {
 function apiListarCambiosVehiculos(token) {
   return JSON.stringify(CambiosVehiculosService.listarResumen(token));
 }
+function apiCambiosVehiculosCompleto(token) {
+  return JSON.stringify(CambiosVehiculosService.completo(token));
+}
 function apiListarCambiosVehiculosPorFolio(token, folio) {
   return JSON.stringify(CambiosVehiculosService.listarPorFolio(token, folio));
 }
@@ -87,6 +107,9 @@ function apiListarReasignacionesVehicularesPorFolio(token, folio) {
 // --- Uber ---
 function apiListarUberResumen(token) {
   return UberService.listarResumen(token);
+}
+function apiUberCompleto(token) {
+  return JSON.stringify(UberService.completo(token));
 }
 function apiBuscarUberPorId(token, id) {
   return UberService.buscarPorId(token, id);
@@ -108,6 +131,9 @@ function apiSubirArchivoUber(token, nombreArchivo, mimeType, base64Data) {
 function apiListarTicketsResumen(token) {
   return TicketsService.listarResumen(token);
 }
+function apiTicketsCompleto(token) {
+  return JSON.stringify(TicketsService.completo(token));
+}
 function apiBuscarTicketPorId(token, id) {
   return TicketsService.buscarPorId(token, id);
 }
@@ -124,6 +150,9 @@ function apiEliminarTicket(token, id) {
 // --- Cajas Chicas ---
 function apiListarCajasChicasResumen(token) {
   return CajasChicasService.listarResumen(token);
+}
+function apiCajasChicasCompleto(token) {
+  return JSON.stringify(CajasChicasService.completo(token));
 }
 function apiBuscarCajaChicaPorId(token, id) {
   return CajasChicasService.buscarPorId(token, id);
@@ -142,6 +171,9 @@ function apiEliminarCajaChica(token, id) {
 function apiListarCambiosMontoCCH(token) {
   return CambiosMontoCCHService.listarResumen(token);
 }
+function apiCambiosMontoCCHCompleto(token) {
+  return JSON.stringify(CambiosMontoCCHService.completo(token));
+}
 function apiCrearCambioMontoCCH(token, datos) {
   return CambiosMontoCCHService.crear(token, datos);
 }
@@ -152,6 +184,9 @@ function apiEliminarCambioMontoCCH(token, id) {
 // --- Reasignaciones Vehiculares ---
 function apiListarReasignacionesVehiculares(token) {
   return ReasignacionesVehicularesService.listarResumen(token);
+}
+function apiReasignacionesVehicularesCompleto(token) {
+  return JSON.stringify(ReasignacionesVehicularesService.completo(token));
 }
 function apiCrearReasignacionVehicular(token, datos) {
   return ReasignacionesVehicularesService.crear(token, datos);
@@ -167,6 +202,9 @@ function apiListarAuditItems(token) {
 }
 function apiListarArqueosResumen(token) {
   return ArqueosService.listarResumen(token);
+}
+function apiArqueosCompleto(token) {
+  return JSON.stringify(ArqueosService.completo(token));
 }
 function apiBuscarArqueoPorId(token, id) {
   return ArqueosService.buscarPorId(token, id);
@@ -222,9 +260,130 @@ function apiListarOficinasCCH(token) {
   return ListasService.listarOficinasCCH(token);
 }
 
+// --- Líneas (equipos y líneas telefónicas) ---
+function apiLineasPermisos(token) {
+  return TelefoniaService.permisos(token);
+}
+function apiLineasIndice(token) {
+  return TelefoniaService.indice(token);
+}
+function apiLineasEquipo(token, id) {
+  return TelefoniaService.equipo(token, id);
+}
+function apiLineasLinea(token, id) {
+  return TelefoniaService.linea(token, id);
+}
+function apiLineasEvidencias(token, id) {
+  return TelefoniaService.evidencias(token, id);
+}
+function apiLineasHistorial(token, id) {
+  return TelefoniaService.historial(token, id);
+}
+function apiLineasInspeccion(token, id) {
+  return TelefoniaService.inspeccion(token, id);
+}
+function apiLineasCatalogos(token) {
+  return TelefoniaService.catalogos(token);
+}
+function apiLineasColaboradores(token) {
+  return TelefoniaService.colaboradores(token);
+}
+function apiLineasBitacora(token, tipo, opciones) {
+  return TelefoniaService.bitacora(token, tipo, opciones);
+}
+function apiLineasVistaOperativa(token, tipo, opciones) {
+  return TelefoniaService.vistaOperativa(token, tipo, opciones);
+}
+// Tabla completa para DataTable (hasta 5000 filas). Viaja como texto JSON:
+// google.script.run pierde respuestas grandes de forma intermitente (ver rama jorge, 9196f11).
+function apiLineasBitacoraTabla(token, tipo, opciones) {
+  return JSON.stringify(TelefoniaService.bitacora(token, tipo, Object.assign({}, opciones, { pagina: 0, porPagina: 5000 })));
+}
+function apiLineasVistaOperativaTabla(token, tipo, opciones) {
+  return JSON.stringify(TelefoniaService.vistaOperativa(token, tipo, Object.assign({}, opciones, { pagina: 0, porPagina: 5000 })));
+}
+function apiLineasUltimoDocumentoNuco(token, id, tipo) {
+  return TelefoniaService.ultimoDocumentoNuco(token, id, tipo);
+}
+function apiLineasArchivo(token, ruta) {
+  return TelefoniaService.archivo(token, ruta);
+}
+function apiLineasExportarBase(token, modulo, comprimir) {
+  return TelefoniaService.exportarBase(token, modulo, comprimir);
+}
+function apiLineasFormularioOperativa(token, tipo) {
+  return TelefoniaService.formularioOperativa(token, tipo);
+}
+function apiLineasFormularioEdicionOperativa(token, tipo, fila, llave) {
+  return TelefoniaService.formularioEdicionOperativa(token, tipo, fila, llave);
+}
+function apiLineasEditarVistaOperativa(token, tipo, fila, llave, datos) {
+  return TelefoniaService.editarVistaOperativa(token, tipo, fila, llave, datos);
+}
+function apiLineasCrearVistaOperativa(token, tipo, datos) {
+  return TelefoniaService.crearVistaOperativa(token, tipo, datos);
+}
+function apiLineasRecargarDatos(token) {
+  return TelefoniaService.recargarDatos(token);
+}
+function apiLineasContextoInspeccion(token, ref) {
+  return TelefoniaService.contextoInspeccion(token, ref);
+}
+function apiLineasContextoResponsiva(token, ref) {
+  return TelefoniaService.contextoResponsiva(token, ref);
+}
+function apiLineasPrepararEvidencia(token, tipo, ref, idRegistro) {
+  return TelefoniaService.prepararEvidencia(token, tipo, ref, idRegistro);
+}
+function apiLineasCancelarEvidencia(token, carpetaId) {
+  return TelefoniaService.cancelarEvidencia(token, carpetaId);
+}
+function apiLineasSubirArchivo(token, carpetaId, nombre, mime, base64) {
+  return TelefoniaService.subirArchivo(token, carpetaId, nombre, mime, base64);
+}
+function apiLineasGuardarInspeccion(token, datos) {
+  return TelefoniaService.guardarInspeccion(token, datos);
+}
+function apiLineasGuardarResponsiva(token, datos) {
+  return TelefoniaService.guardarResponsiva(token, datos);
+}
+function apiLineasGenerarPdf(token, tipo, id, forzar, firmas) {
+  return TelefoniaService.generarPdf(token, tipo, id, forzar, firmas);
+}
+function apiLineasFormularioRegistro(token, id) {
+  return TelefoniaService.formularioRegistro(token, id);
+}
+function apiLineasCrearRegistro(token, datos) {
+  return TelefoniaService.crearRegistro(token, datos);
+}
+function apiLineasEditarRegistro(token, id, datos) {
+  return TelefoniaService.editarRegistro(token, id, datos);
+}
+function apiLineasCambiarEstatus(token, id, datos) {
+  return TelefoniaService.cambiarEstatus(token, id, datos);
+}
+function apiLineasFotosInspeccion(token, id, accion) {
+  return TelefoniaService.fotosInspeccion(token, id, accion);
+}
+function apiLineasAccesoriosIndice(token) {
+  return LineasAccesorios.indice(token);
+}
+function apiLineasAccesoriosMovimientos(token, id) {
+  return LineasAccesorios.movimientosDeArticulo(token, id);
+}
+function apiLineasAccesoriosAgregarArticulo(token, datos) {
+  return LineasAccesorios.agregarArticulo(token, datos);
+}
+function apiLineasAccesoriosRegistrarMovimiento(token, datos) {
+  return LineasAccesorios.registrarMovimiento(token, datos);
+}
+
 // --- Incidencias ---
 function apiListarIncidencias(token) {
   return IncidenciasService.listar(token);
+}
+function apiIncidenciasCompleto(token) {
+  return JSON.stringify(IncidenciasService.completo(token));
 }
 function apiCrearIncidencia(token, datos) {
   return IncidenciasService.crear(token, datos);
@@ -246,6 +405,9 @@ function apiDiagnosticoIncidencias(token) {
 function apiListarVerificaciones(token) {
   return VerificacionesService.listar(token);
 }
+function apiVerificacionesCompleto(token) {
+  return JSON.stringify(VerificacionesService.completo(token));
+}
 function apiRegistrarVerificacion(token, datos, archivo) {
   return VerificacionesService.registrar(token, datos, archivo);
 }
@@ -265,6 +427,9 @@ function apiUrlComprobanteVerificacion(token, ruta) {
 // --- Instalación de sensores (rama `ayrton`) ---
 function apiListarSensores(token) {
   return SensoresService.listar(token);
+}
+function apiSensoresCompleto(token) {
+  return JSON.stringify(SensoresService.completo(token));
 }
 function apiDatosVehiculoParaSensor(token, folio) {
   return SensoresService.datosParaFormulario(token, folio);
@@ -296,6 +461,9 @@ function apiResumenGeotabSensor(token, id, dias) {
 // --- Hologramas / tarjetas de combustible (rama `ayrton`) ---
 function apiListarHologramas(token) {
   return HologramasService.listar(token);
+}
+function apiHologramasCompleto(token) {
+  return JSON.stringify(HologramasService.completo(token));
 }
 function apiCatalogosHologramas(token) {
   return HologramasService.catalogos(token);
@@ -331,6 +499,9 @@ function apiRevisarCatalogoPermisos(token) {
 // --- Inspección vehicular (rama `ayrton`) ---
 function apiListarInspecciones(token) {
   return InspeccionesService.listar(token);
+}
+function apiInspeccionesCompleto(token) {
+  return JSON.stringify(InspeccionesService.completo(token));
 }
 function apiDetalleInspeccion(token, id) {
   return InspeccionesService.detalle(token, id);

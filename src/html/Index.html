@@ -3,7 +3,7 @@
 <head>
   <base target="_top">
   <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/logo.png">
-  <script src="https://unpkg.com/lucide@0.462.0/dist/umd/lucide.min.js"></script>
+  <script src="https://unpkg.com/lucide@0.513.0/dist/umd/lucide.min.js"></script>
   <?!= include('html/styles'); ?>
 </head>
 <body>
@@ -81,6 +81,13 @@
   <?!= include('html/views/hologramas'); ?>
   <?!= include('html/views/inspecciones'); ?>
 
+  <!-- Líneas (rama emmanuel) -->
+  <?!= include('html/views/lineas/lineas-telefonicas'); ?>
+  <?!= include('html/views/lineas/lineas-bitacora'); ?>
+  <?!= include('html/views/lineas/lineas-gestion-activos'); ?>
+  <?!= include('html/views/lineas/lineas-accesorios'); ?>
+  <?!= include('html/views/lineas/lineas-operativa'); ?>
+
   <?!= include('html/js/api'); ?>
   <?!= include('html/js/app'); ?>
   <?!= include('html/js/app-arqueos'); ?>
@@ -103,5 +110,12 @@
   <?!= include('html/js/modulos/sensores'); ?>
   <?!= include('html/js/modulos/hologramas'); ?>
   <?!= include('html/js/modulos/inspecciones'); ?>
+
+  <!-- Módulo de Líneas (rama emmanuel): usa los helpers de app y la librería de componentes -->
+  <?!= include('html/lineas-estilos'); ?>
+  <?!= include('html/js/lineas'); ?>
+
+  <!-- Menú en celular y tableta vertical (rama emmanuel): archivo aparte para no tocar el shell -->
+  <?!= include('html/shell-movil'); ?>
 </body>
 </html>

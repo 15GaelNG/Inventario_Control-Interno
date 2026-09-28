@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "description": "Sistema de Control Interno (vehículos, telefonía, accesorios, caja chica) — Google Apps Script",
   "scripts": {
+    "test": "node --test tests/*.test.cjs",
     "login": "clasp login",
     "push": "clasp push",
     "watch": "clasp push --watch",

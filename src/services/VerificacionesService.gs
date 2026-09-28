@@ -74,6 +74,12 @@ const VerificacionesService = (function () {
       .sort((a, b) => (b.FECHA_REGISTRO || '').localeCompare(a.FECHA_REGISTRO || ''));
   }
 
+  /** Todas las columnas de TODAS las verificaciones (para exportar completo). */
+  function completo(token) {
+    Permisos.puedeLeer(token, 'verificaciones');
+    return SheetUtils.getAll(ssId(), hoja_().getName());
+  }
+
   /**
    * @param {{FOLIO: string, FECHA_VERIFICACION: string, FECHA_PROXIMA: string}} datos  fechas "yyyy-MM-dd"
    * @param {{base64: string, mimeType: string}} archivo  comprobante
@@ -189,5 +195,5 @@ const VerificacionesService = (function () {
     return vista;
   }
 
-  return { listar, registrar, actualizarCampo, eliminar, urlComprobante, previsualizarComprobante };
+  return { listar, completo, registrar, actualizarCampo, eliminar, urlComprobante, previsualizarComprobante };
 })();
