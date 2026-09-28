@@ -1622,6 +1622,10 @@
     const vehiculosPorFolio = {};
     const promesaVehiculos = callServerCacheado('apiListarVehiculosBasico', state.token)
       .then((vehiculos) => {
+        // Si mientras tanto se navegó a otra vista, el router ya destruyó este
+        // DOM (montarVista hace container.innerHTML = '') — escribir aquí
+        // tronaría con "Cannot set properties of null".
+        if (!document.body.contains(modal)) return;
         const datalist = document.getElementById('lista-folios-vehiculo');
         datalist.innerHTML = vehiculos.map((v) => {
           vehiculosPorFolio[v.FOLIO] = v;
@@ -1632,6 +1636,7 @@
       .catch((err) => {
         // Antes esto se ignoraba en silencio — ahora se ve para poder diagnosticar.
         console.error('No se pudo cargar el catálogo de vehículos:', err);
+        if (!document.body.contains(modal)) return;
         const errorBox = document.getElementById('inc-error');
         errorBox.textContent = 'No se pudo cargar el catálogo de vehículos para autocompletar: ' + err.message;
         errorBox.hidden = false;
