@@ -72,6 +72,18 @@ const LineasRepo = (function () {
   const COLS_INDICE_EQUIPOS = ['id', 'nuco', 'tipo', 'modelo', 'imei', 'estatus', 'responsable', 'departamento', 'sede', 'lineaId', 'numero', 'compania', 'estatusLinea', 'tipoHoja'];
   const COLS_INDICE_LINEAS = ['id', 'numero', 'sim', 'compania', 'estatus', 'equipoId', 'nucoEquipo', 'responsable', 'departamento', 'suelta', 'tipoHoja'];
   const SEG_CACHE_INDICE = 30 * 60;
+  const CLAVE_INDICE = 'indice_telefonia_v4'; // v4: NUCO de la vista a 4 dígitos
+  /**
+   * Vista de tabla LINEAS TELEFONICAS del AppSheet: sus columnas en su orden (ViewDefinition.ColumnOrder; ID va
+   * oculta y "No EMPLEADO" / "NO EMPLEADO" es la misma columna). FOLIO y ESTATUS GENERAL son fórmulas del AppSheet.
+   */
+  const COLS_VISTA_LINEAS = ['NUMERO TELEFONO', 'NUCO', 'TIPO', 'ESTATUS GENERAL', 'NO EMPLEADO', 'RESPONSABLE', 'PUESTO',
+    'NOMBRE RESPONSABLES 2', 'PUESTO RESPONSABLES 2', 'EQUIPO', 'IMEI', 'NUMERO SIM', 'ACCESORIOS', 'SEDE', 'OFICINA / DESARROLLO',
+    'DEPARTAMENTO', 'AREA', 'JEFE DIRECTO', 'DIRECTOR', 'FOLIO', 'RAZON SOCIAL', 'PIN WHATSAPP', 'PIN EQUIPO', 'CUENTA GOOGLE',
+    'COMPAÑIA', 'COSTO PLAN', 'FECHA REGISTRO', 'INICIO PLAN', 'FIN PLAN', 'ESTATUS LINEA', 'FECHA CAMBIO TEMPORAL',
+    'EMAIL USUARIO', 'ESTATUS EQUIPO', 'RESPONSIVA', 'COMENTARIOS', 'FECHA INSPECCION', 'FORMATO INSPECCION'];
+  /** Columnas de la vista con secretos (solo ADMIN las ve). */
+  const COLS_VISTA_SECRETAS = ['PIN WHATSAPP', 'PIN EQUIPO'];
 
   // Atajos (se resuelven al llamar, no al cargar el archivo).
   function txt(v) { return LineasUtil.txt(v); }
@@ -124,7 +136,7 @@ const LineasRepo = (function () {
     };
     const legado = {
       id: id, fila: f._fila, folio: folioRegistro(tipo, col(f, 'NUCO')), tipo: tipo || null,
-      nuco: txt(col(f, 'NUCO')) === null ? null : String(col(f, 'NUCO')),
+      nuco: txt(col(f, 'NUCO')) === null ? null : LineasUtil.nucoVisible(col(f, 'NUCO')),
       estatusGeneral: estatusGeneralRegistro(id, tipo, txt(col(f, 'ESTATUS EQUIPO')), txt(col(f, 'ESTATUS LINEA'))),
       comentarios: txt(col(f, 'COMENTARIOS')),
       responsivaRuta: txt(col(f, 'RESPONSIVA')), formatoInspeccionRuta: txt(col(f, 'FORMATO INSPECCION')),
@@ -162,7 +174,7 @@ const LineasRepo = (function () {
       return v === null || v === undefined ? '' : (v instanceof Date ? v : String(v).trim());
     };
     const detalles = {
-      nuco: crudo('NUCO'), responsable: crudo('RESPONSABLE'), imei: crudo('IMEI'), sim: crudo('NUMERO SIM'),
+      nuco: LineasUtil.nucoVisible(crudo('NUCO')) || '', responsable: crudo('RESPONSABLE'), imei: crudo('IMEI'), sim: crudo('NUMERO SIM'),
       numero: crudo('NUMERO TELEFONO'), modelo: crudo('EQUIPO'), compania: crudo('COMPAÑIA'), razonSocial: crudo('RAZON SOCIAL'),
       finPlan: crudo('FIN PLAN'), estatusLinea: estatusLinea || '',
     };
@@ -220,26 +232,44 @@ const LineasRepo = (function () {
       ((equipo || linea).legado || {}).tipo || null];
   }
 
-  /** Índices de equipos y líneas (1 lectura de la pestaña; caché 30 min). */
+  /** Valores de la fila para la vista de tabla del AppSheet: [id, …COLS_VISTA_LINEAS]. */
+  function filaVista_(f, r) {
+    const legado = ((r.equipo || r.linea) || {}).legado || {};
+    return [r.id].concat(COLS_VISTA_LINEAS.map((c) => {
+      if (c === 'FOLIO') return legado.folio || null;
+      if (c === 'ESTATUS GENERAL') return legado.estatusGeneral || null;
+      const v = col(f, c);
+      if (v === '' || v === null || v === undefined) return null;
+      if (v instanceof Date) return v;
+      if (c === 'NUCO') return LineasUtil.nucoVisible(v); // siempre a 4 dígitos
+      // Identificadores y textos como texto (un IMEI o SIM numérico no se debe redondear); COSTO PLAN, número
+      return typeof v === 'number' && c !== 'COSTO PLAN' ? String(v) : v;
+    }));
+  }
+
+  /** Índices de equipos y líneas + columnas de la vista de tabla del AppSheet (1 lectura de la pestaña; caché 30 min). */
   function indice(forzar) {
     if (!forzar) {
-      const enCache = LineasDatos.cacheLeer('indice_telefonia_v2');
+      const enCache = LineasDatos.cacheLeer(CLAVE_INDICE);
       if (enCache) return enCache;
     }
     const equipos = [];
     const lineas = [];
+    const vista = [];
     LineasDatos.leerTabla(TAB.LINEAS).forEach((f) => {
       const r = convertirRegistro(f);
       if (!r) return;
       if (r.equipo) equipos.push(filaIndiceEquipo_(r.equipo, r.linea));
       if (r.linea) lineas.push(filaIndiceLinea_(r.linea, r.equipo));
+      if (r.equipo || r.linea) vista.push(filaVista_(f, r));
     });
     const ix = LineasUtil.paraCliente({
       equipos: { columnas: COLS_INDICE_EQUIPOS, filas: equipos },
       lineas: { columnas: COLS_INDICE_LINEAS, filas: lineas },
+      vista: { columnas: COLS_VISTA_LINEAS, secretas: COLS_VISTA_SECRETAS, filas: vista },
       generadoEn: new Date(),
     });
-    LineasDatos.cacheGuardar('indice_telefonia_v2', ix, SEG_CACHE_INDICE);
+    LineasDatos.cacheGuardar(CLAVE_INDICE, ix, SEG_CACHE_INDICE);
     return ix;
   }
 
@@ -250,13 +280,17 @@ const LineasRepo = (function () {
    */
   function refrescarIndice(ids) {
     const cambios = { equipos: [], lineas: [], quitar: { equipos: [], lineas: [] } };
-    const ix = LineasDatos.cacheLeer('indice_telefonia_v2');
+    const ix = LineasDatos.cacheLeer(CLAVE_INDICE);
     (ids || []).filter(Boolean).forEach((id) => {
       const f = leerRegistroPorId(id);
       const r = f ? convertirRegistro(f) : null;
       if (ix) {
         ix.equipos.filas = ix.equipos.filas.filter((x) => x[0] !== id);
         ix.lineas.filas = ix.lineas.filas.filter((x) => x[0] !== id);
+        if (ix.vista) {
+          ix.vista.filas = ix.vista.filas.filter((x) => x[0] !== id);
+          if (r && (r.equipo || r.linea)) ix.vista.filas.push(LineasUtil.paraCliente(filaVista_(f, r)));
+        }
       }
       if (r && r.equipo) {
         const fe = LineasUtil.paraCliente(filaIndiceEquipo_(r.equipo, r.linea));
@@ -273,7 +307,7 @@ const LineasRepo = (function () {
         cambios.quitar.lineas.push(id);
       }
     });
-    if (ix) LineasDatos.cacheGuardar('indice_telefonia_v2', ix, SEG_CACHE_INDICE);
+    if (ix) LineasDatos.cacheGuardar(CLAVE_INDICE, ix, SEG_CACHE_INDICE);
     return cambios;
   }
 
@@ -311,17 +345,22 @@ const LineasRepo = (function () {
   function guardarCambiosRegistro(f, cambios, usuario, ahora) {
     const t = LineasDatos.tablaFresca(TAB.LINEAS);
     const efectivos = [];
+    const soloFormato = {}; // NUCO "5" → "0005": se escribe homologado, pero no es un cambio para la bitácora
     const nuevo = Object.assign({}, f);
     Object.keys(cambios).forEach((c) => {
       if (LineasDatos.colIndice(t, c) < 0) return;
       const antes = col(f, c);
       if (normalizarComparacion_(antes) === normalizarComparacion_(cambios[c])) return;
-      efectivos.push({ campo: c, antes: antes, despues: cambios[c] });
       nuevo[t.encabezados[LineasDatos.colIndice(t, c)]] = cambios[c];
+      if (LineasDatos.normCol(c) === 'NUCO' && LineasUtil.nucoVisible(antes) === LineasUtil.nucoVisible(cambios[c])) {
+        soloFormato[c] = cambios[c];
+        return;
+      }
+      efectivos.push({ campo: c, antes: antes, despues: cambios[c] });
     });
-    if (!efectivos.length) return { idsCambios: [], idReasignacion: null, campos: [] };
+    if (!efectivos.length && !Object.keys(soloFormato).length) return { idsCambios: [], idReasignacion: null, campos: [] };
 
-    const escribir = {};
+    const escribir = Object.assign({}, soloFormato);
     efectivos.forEach((e) => { escribir[e.campo] = e.despues; });
     const tipoNuevo = (txt(col(nuevo, 'TIPO')) || '').toUpperCase();
     if (LineasDatos.colIndice(t, 'FOLIO') >= 0) escribir['FOLIO'] = folioRegistro(tipoNuevo, col(nuevo, 'NUCO'));
@@ -332,7 +371,7 @@ const LineasRepo = (function () {
 
     const bitacora = efectivos.filter((e) => CAMPOS_BITACORA.indexOf(LineasDatos.normCol(e.campo)) >= 0).map((e) => ({
       // NUCO e IMEI ya actualizados, como [NUCO] / [IMEI] en las acciones del bot
-      'ID_CAMBIO': LineasDatos.nuevoIdCorto(), 'ID_LINEA': f['ID'], 'NUCO': col(nuevo, 'NUCO'), 'IMEI': col(nuevo, 'IMEI'), 'TABLA': TAB.LINEAS,
+      'ID_CAMBIO': LineasDatos.nuevoIdCorto(), 'ID_LINEA': f['ID'], 'NUCO': LineasUtil.nucoVisible(col(nuevo, 'NUCO')) || '', 'IMEI': col(nuevo, 'IMEI'), 'TABLA': TAB.LINEAS,
       'CAMPO': e.campo, 'ANTES': textoBitacora_(e.antes), 'DESPUES': textoBitacora_(e.despues),
       'ACTUALIZADO POR': usuario.nombre, 'FECHA ACTUALIZACION': ahora,
     }));
@@ -342,7 +381,7 @@ const LineasRepo = (function () {
     if (efectivos.some((e) => LineasDatos.normCol(e.campo) === 'RESPONSABLE')) {
       idReasignacion = LineasDatos.nuevoIdCorto();
       LineasDatos.agregarFilas(TAB.REASIG, [{
-        'ID Historial': idReasignacion, 'ID Linea': f['ID'], 'Fecha de Reasignacion': ahora, 'NUCO': col(f, 'NUCO'),
+        'ID Historial': idReasignacion, 'ID Linea': f['ID'], 'Fecha de Reasignacion': ahora, 'NUCO': LineasUtil.nucoVisible(col(nuevo, 'NUCO')) || '',
         'No Empleado Saliente': col(f, 'NO EMPLEADO'), 'Responsable Saliente': col(f, 'RESPONSABLE'), 'Departamento Saliente': col(f, 'DEPARTAMENTO'),
         'No Empleado Entrante': col(nuevo, 'NO EMPLEADO'), 'Responsable Entrante': col(nuevo, 'RESPONSABLE'), 'Departamento Entrante': col(nuevo, 'DEPARTAMENTO'),
         'QUIEN REGISTRO': usuario.nombre,
@@ -370,7 +409,7 @@ const LineasRepo = (function () {
     const id = LineasDatos.nuevoIdCorto();
     LineasDatos.agregarFilas(TAB.APP_MOV, [{
       'ID': id, 'FECHA': ahora, 'TIPO': tipo, 'REFS': ',' + (extra.refs || []).filter(Boolean).join(',') + ',',
-      'NUCO': extra.nuco || '', 'NUMERO': extra.numero || '', 'NUCO_DESTINO': extra.nucoDestino || '',
+      'NUCO': LineasUtil.nucoVisible(extra.nuco) || '', 'NUMERO': extra.numero || '', 'NUCO_DESTINO': LineasUtil.nucoVisible(extra.nucoDestino) || '',
       'MOTIVO': txt(datos.motivo) || '', 'TICKET': txt(datos.ticket) || '',
       'USUARIO_CORREO': usuario.correo, 'USUARIO_NOMBRE': usuario.nombre,
       'ANTES_JSON': JSON.stringify(extra.antes || {}), 'DESPUES_JSON': JSON.stringify(extra.despues || {}),
@@ -485,6 +524,7 @@ const LineasRepo = (function () {
   /** Inspección por id: fila de INSPECCIONES LINEAS, o "drive_<carpetaId>" si solo existe en Drive. */
   function leerInspeccion(id) {
     if (/^drive_/.test(id)) {
+      if (!LineasDatos.existeTabla(TAB.APP_EVID)) return null; // sin la pestaña: se lee de NUCOS (TelefoniaService)
       const filas = LineasDatos.buscarFilas(TAB.APP_EVID, 'CARPETA_ID', id.slice(6));
       if (!filas.length) return null;
       return inspeccionDesdeEvidencia(evidenciaDesdeFila(LineasDatos.leerFilas([{ tabla: TAB.APP_EVID, filas: filas.slice(0, 1) }])[0][0]));
@@ -546,6 +586,9 @@ const LineasRepo = (function () {
     const eventos = [];
     let n = 0;
     const agregar = (e) => {
+      if (/^NUCO$/i.test(String(e.campo || '').trim())) {
+        e = Object.assign({}, e, { antes: LineasUtil.nucoVisible(texto(e.antes)), despues: LineasUtil.nucoVisible(texto(e.despues)) });
+      }
       eventos.push({
         id: 'h' + (++n), fecha: e.fecha || null, movimiento: e.movimiento, campo: e.campo || '',
         antes: ocultar(e.campo, texto(e.antes)), despues: ocultar(e.campo, texto(e.despues)), detalle: e.detalle || '',
@@ -728,6 +771,11 @@ const LineasRepo = (function () {
       .map((f) => {
         const o = { _fila: f._fila };
         encabezados.forEach((h) => { o[h] = f[h]; });
+        // NUCO siempre a 4 dígitos (la hoja lo guarda como número: 234)
+        encabezados.forEach((h) => { if (/^NUCO( |_|$)/i.test(h) && o[h] !== '' && o[h] !== null) o[h] = LineasUtil.nucoVisible(o[h]); });
+        if (/^NUCO$/i.test(String(f['CAMPO'] || '').trim())) {
+          ['ANTES', 'DESPUES'].forEach((h) => { if (o[h] !== undefined && o[h] !== '' && o[h] !== null) o[h] = LineasUtil.nucoVisible(o[h]); });
+        }
         if (cfg.ocultarSecretos && !puedeVerSecretos && /PIN|PATRON|CONTRASE/i.test(String(f[cfg.ocultarSecretos] || ''))) {
           if (o['ANTES']) o['ANTES'] = '••••';
           if (o['DESPUES']) o['DESPUES'] = '••••';
@@ -798,7 +846,7 @@ const LineasRepo = (function () {
     const total = filas.length;
     const desde = pagina * porPagina;
     const salida = filas.slice(desde, desde + porPagina).map((f) => {
-      const fila = { _fila: f._fila, _ref: f._ref || null };
+      const fila = { _fila: f._fila, _ref: f._ref || null, _id: f['ID'] === undefined || f['ID'] === null ? '' : String(f['ID']) };
       encabezados.forEach((h) => {
         const secreto = /^(PIN WHATSAPP|PIN EQUIPO|CONTRASEÑA MODEM)$/i.test(h);
         fila[h] = secreto && !puedeVerSecretos && f[h] ? '••••' : f[h];
@@ -875,7 +923,7 @@ const LineasRepo = (function () {
 
   /** Vacía las cachés del módulo (índices, catálogos y carpetas). */
   function borrarCaches() {
-    ['indice_telefonia_v2', 'indice_colaboradores', 'carpetas_nucos', 'carpetas_nucos_v2', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3'].forEach(LineasDatos.cacheBorrar);
+    ['indice_telefonia_v2', 'indice_telefonia_v3', CLAVE_INDICE, 'indice_colaboradores', 'carpetas_nucos', 'carpetas_nucos_v2', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3'].forEach(LineasDatos.cacheBorrar);
   }
 
   return {

@@ -1,6 +1,6 @@
 # Líneas — estado del módulo
 
-Rama `emmanuel` · Última actualización: 2026-09-24
+Rama `emmanuel` · Última actualización: 2026-09-28
 
 Documento de continuidad del módulo **Líneas** (equipos y líneas telefónicas).
 El plan de la mudanza está en [lineas-plan.md](lineas-plan.md); aquí se registra
@@ -151,7 +151,37 @@ y capturar responsivas e inspecciones.
   franja deslizable; inventario en tarjetas por defecto (si no hay preferencia guardada) y más compactas;
   botones de la ficha en rejilla de 2; opciones del checklist más grandes para el dedo.
 
-## 0i. Archivos del AppSheet y carpetas de Drive (2026-09-25)
+## 0k. Tabla como antes y documentos desde NUCOS (2026-09-28, segundo ajuste)
+
+- NUCO a 4 dígitos al mostrar: `LineasUtil.nucoVisible` (vista, `legado`, Detalles, bitácoras, historial, Excel).
+  Índice en caché `indice_telefonia_v4`.
+- Tabla: `TABLAS_INVENTARIO` vuelve a las columnas del índice; `columnasVistaLineas(sinEstas)` agrega las de la vista
+  del AppSheet que faltan, ocultas. RESPONSIVA / FORMATO INSPECCION = `botonUltimoNucos` ("Última responsiva" /
+  "Última inspección") → `apiLineasUltimoDocumentoNuco` → `TelefoniaService.ultimoDocumentoNuco` (carpeta más
+  reciente del tipo en NUCOS y su PDF RESP/INSP; sin PDF, la carpeta). Vista guardada `lineas-<modulo>-v4`.
+- Ficha: sin `pdfRuta` (PDF de la carpeta de la app) ni `DETALLE_RESPONSIVA` / `apiLineasResponsiva`.
+- Segundo ajuste: botón "Ver"; General como antes (sin total de rotaciones); Documentos como antes, con las de NUCOS
+  en la misma lista: `TelefoniaService.evidencias` agrega `evidenciasNucos_` (una por carpeta INSP/RESP DD MM) y
+  `inspeccion('drive_<carpeta>')` usa `inspeccionNucos_` si no hay APP_EVIDENCIAS. Sin `apiLineasDocumentosNuco`.
+- Tercer ajuste: Documentos = `pintarDocumentos` (KPIs con `tilesKpi` + DataTable `lineas-documentos-v1`, liberada con
+  `soltarDocumentos`; `exportar: false`; doble clic abre la inspección o el PDF de la responsiva);
+  `generarPdfPendiente` reemplaza el botón `data-ln-pdf`. Detalle de inspección con `encabezado`
+  y `tarjeta` (sin checklist, firmas ni `DETALLE_INSPECCION`); sin Patrón en General.
+- Después de la auditoría: sin `tarjetaRegistro` (Tipo con `tipoRegistro` en Equipo / Línea); formulario de LINEAS
+  sin campos de archivo (`subirArchivos_` se quitó); NUCO homologado al guardar (`homologarNuco_`, y en
+  `guardarCambiosRegistro` "5" → "0005" se escribe sin entrar a la bitácora).
+
+## 0j. Vista del AppSheet, NUCOS y una sola carpeta de Drive (2026-09-28; tabla y documentos ajustados en §0k)
+
+- Tabla: `COLS_VISTA_LINEAS` (servidor) y `COLUMNAS_VISTA_LINEAS` (cliente) = ColumnOrder de la vista LINEAS
+  TELEFONICAS; el índice trae el bloque `vista` (una fila por registro) y el cliente lo une a cada fila.
+- Drive (`LineasArchivos`): `LINEAS_DRIVE_APPSHEET` (app AppSheet de pruebas, se lee y escribe con rutas del
+  AppSheet: `guardarComoAppSheet`, PDF en `INSPECCIONES_Files_` y `Files`) y `LINEAS_DRIVE_NUCOS` (producción, solo
+  lectura: `archivosNuco` para Documentos). Ya no existe `LINEAS_DRIVE_CARPETA_RAIZ`.
+- Detalles: `DETALLE_INSPECCION` / `DETALLE_RESPONSIVA` (TelefoniaService) con el orden y DisplayName del AppSheet.
+- Edición de operativas: `LineasOperativas.formularioEdicion` / `editar` y `abrirAltaAppSheet(…, edicion)`.
+
+## 0i. Archivos del AppSheet y carpetas de Drive (2026-09-25; carpetas reemplazadas por §0j)
 
 `LineasArchivos.gs` abre los archivos que el AppSheet guarda como ruta relativa (desde la carpeta raíz del AppSheet,
 `LINEAS_DRIVE_APPSHEET`) y lee las carpetas de NUCO de `LINEAS_DRIVE_NUCOS`; ambas son de producción y solo se leen.
@@ -163,7 +193,7 @@ En el cliente, `botonArchivo(ruta, texto)` pinta el ícono y `apiLineasArchivo` 
 El colaborador se abre en `abrirPanelLateral` (mismas clases `.dt-panel` del detalle de DataTable), no al final de
 la página. El ayudante sirve para cualquier otro detalle de Líneas que no venga de una DataTable.
 
-## 0g. Hoja de Líneas en DEV (2026-09-25)
+## 0g. Hoja de Líneas en DEV (2026-09-25; `usarCopiaAppSheetLineas` y la copia `1_47fd…` se retiraron el 28-sep)
 
 Líneas pasa a la BD de pruebas del equipo (`1fC77…`), la misma de Usuarios, Vehículos y Accesorios.
 `configurarLineasDev()` revisa pestañas y columnas contra la copia del AppSheet (`1_47fd…`) antes de cambiar
@@ -234,16 +264,20 @@ Reglas vigentes:
 
 | Qué | Dónde |
 |---|---|
-| Hoja de Líneas (DEV) | `1_47fd5nCcg4M6Qnsxmk14r9aTJG2bCPSW86ig_r2478` — copia del AppSheet con datos de prueba y pestañas `APP_` |
+| Hoja de Líneas (DEV) | `1fC77Uu1ePVUySNvhgWXMHqWpLhGhBMTZZMEblU2nUhI` — "VEHICULOS", BD de pruebas del equipo y hoja de la app AppSheet de pruebas (desde el 25-sep) |
 | Hoja de producción (bloqueada) | `1h5ibDsmVtrG27rwMaOvj-lm08QZUHzDv3woPmkfRQrk` |
-| Carpeta de pruebas en Drive | `1ZNI2tVANe3qBglcQ5sisCctGBe4Qetmk` (inventarios de NUCOS y evidencias) |
+| Carpeta de la app AppSheet de pruebas | `1FsC5mloJNhi_TR7pBX1KMEjUZfN_M9OM` — "PruebasCONTROLVEHICYTELEF-172665033": se lee y se escribe con las rutas del AppSheet |
+| NUCOS de producción | `12SRBi1nZlIzfNx0d2y1fAtzOydA2QrT-` — solo lectura (Documentos de la ficha) |
 | Proyecto DEV de Apps Script | `1rpvvay1hBTFfm5paVyvy6-Thmx-CQ6uUWVef20Jr8VmHQxkCWZ7UmeOa` |
 | URL de pruebas | `https://script.google.com/a/macros/ciudadmaderas.com/s/AKfycbwNWp2uwP_jqCayH6hJhCJh2TiudyC8heqOhZ8NuU90/dev` |
 
 Script Properties que usa Líneas (las deja `configurarLineasDev()`):
 
 - `SS_ID_TELEFONIA` → hoja de Líneas.
-- `LINEAS_DRIVE_CARPETA_RAIZ` → carpeta de pruebas (para las carpetas de evidencia por NUCO).
+- `LINEAS_DRIVE_APPSHEET` → carpeta de la app AppSheet (archivos, PDF y fotos).
+- `LINEAS_DRIVE_NUCOS` → NUCOS de producción (solo lectura).
+
+`LINEAS_DRIVE_CARPETA_RAIZ` (carpeta personal de pruebas) ya no se usa; `configurarLineasDev()` la borra.
 
 **API de Sheets:** el proyecto DEV ya tiene agregado el servicio avanzado
 **Google Sheets API v4** (Editor → Servicios → +), declarado en `src/appsscript.json`.

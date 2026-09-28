@@ -14,21 +14,24 @@
  *   - Responsiva  → fila en RESPONSIVAS LINEAS; bot MAYUSCULAS (IDENTIFICACION, OBSERVACIONES).
  *                   No toca LINEAS TELEFONICAS (igual que el AppSheet).
  *   - Ambos       → PDF con las plantillas del AppSheet, después de guardar (generarPdf).
- * Del sistema nuevo se conservan: carpeta de evidencia en NUCOS, fotos opcionales de la
- * inspección, APP_EVIDENCIAS y APP_MOVIMIENTOS (pestañas propias, no las lee AppSheet).
+ * PDF en la carpeta de la app AppSheet, con sus mismas rutas (LineasArchivos):
+ *   INSPECCIONES_Files_/INSPECCION - <ID>.pdf   (acción GUARDAR del bot PDF de inspecciones)
+ *   Files/RESPONSIVA<ID>.pdf                    (acción GUARDAR del bot PDF RESPONSIVA)
+ * Las firmas NO se guardan como archivos (acuerdo del 18-sep): viajan en memoria para el PDF y las columnas
+ * FIRMA quedan vacías. En AppSheet eran imágenes en <TABLA>_Images.
+ * Del sistema nuevo se conservan: fotos opcionales de la inspección (INSPECCIONES LINEAS_Images/FOTOS <ID>),
+ * APP_EVIDENCIAS y APP_MOVIMIENTOS (pestañas propias, no las lee AppSheet).
  */
 
 const LineasCaptura = (function () {
   const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
   const ZONA = 'America/Mexico_City';
 
-  function urlArchivo_(id) {
-    return id ? 'https://drive.google.com/file/d/' + id + '/view' : '';
-  }
-  function idDeUrlDrive_(url) {
-    const m = /\/d\/([\w-]{20,})/.exec(String(url || ''));
-    return m ? m[1] : null;
-  }
+  // Rutas del AppSheet para los PDF (acciones GUARDAR de sus bots)
+  const PDF = {
+    INSPECCION: { carpeta: 'INSPECCIONES_Files_', nombre: (id) => 'INSPECCION - ' + id + '.pdf', columna: 'FORMATO INSPECCIONES LINEAS' },
+    RESPONSIVA: { carpeta: 'Files', nombre: (id) => 'RESPONSIVA' + id + '.pdf', columna: 'FORMATO RESPONSIVA' },
+  };
   function blobBase64_(base64, nombre) {
     return base64 ? Utilities.newBlob(Utilities.base64Decode(String(base64)), 'image/png', nombre || 'firma.png') : null;
   }
@@ -103,7 +106,7 @@ const LineasCaptura = (function () {
       campo_('FECHA DE REGISTRO', 'FECHA DE REGISTRO', 'fechaHora', Object.assign({ valor: Utilities.formatDate(ahora, ZONA, "yyyy-MM-dd'T'HH:mm") }, req)),
       campo_('ID', 'ID', 'texto', { valor: id, soloLectura: true }),
       campo_('ID LINEA', 'ID LINEA', 'texto', { valor: v('IMEI') || v('ID'), soloLectura: true }),
-      campo_('NUCO', 'NUCO', 'texto', Object.assign({ valor: v('NUCO') }, req)),
+      campo_('NUCO', 'NUCO', 'texto', Object.assign({ valor: LineasUtil.nucoVisible(v('NUCO')) || '' }, req)),
       campo_('RESPONSABLE', 'RESPONSABLE', 'listaAbierta', Object.assign({ valor: v('RESPONSABLE'), sugerencias: 'PERSONAS', autollenar: { 'PUESTO': 'puesto' } }, req)),
       campo_('DEPARTAMENTO', 'DEPARTAMENTO', 'lista', Object.assign({ valor: v('DEPARTAMENTO'), opciones: catalogos.departamentos || [] }, req)),
       campo_('AREA', 'AREA', 'lista', Object.assign({ valor: v('AREA'), opciones: catalogos.areas || [] }, req)),
@@ -163,7 +166,7 @@ const LineasCaptura = (function () {
     return [
       ro('ID', 'ID', id),
       ro('ID LINEA', 'ID LINEA', v('IMEI') || v('ID')),
-      ro('NUCO', 'NUCO', v('NUCO')),
+      ro('NUCO', 'NUCO', LineasUtil.nucoVisible(v('NUCO')) || ''),
       ro('No EMPLEADO', 'NÚMERO DE EMPLEADO', v('NO EMPLEADO')),
       // Mejora: DIA / MES / AÑO eran texto libre en AppSheet; ahora se eligen de una lista
       campo_('DIA', 'DIA', 'lista', { valor: dia, requerido: 'SIEMPRE', opciones: Array.from({ length: 31 }, (_, i) => String(i + 1)) }),
@@ -285,10 +288,10 @@ const LineasCaptura = (function () {
 
   function guardarInspeccion(datos, usuario, puedeVerSecretos) {
     const ref = { equipoId: datos.equipoId || null, lineaId: datos.equipoId ? null : datos.lineaId };
-    if (!datos.carpetaId) throw new Error('Falta la carpeta de evidencia.');
     if (!datos.firmaInspectorBase64) throw new Error('FIRMA INSPECTOR es obligatorio');
     const id = /^[\w-]{6,40}$/.test(String(datos.id || '')) ? String(datos.id) : LineasDatos.nuevoIdCorto();
-    LineasEvidencias.validarArchivosEnCarpeta((datos.fotos || []).map((f) => f.id), [datos.carpetaId, datos.fotosCarpetaId].filter(Boolean));
+    // Las fotos son opcionales: la carpeta existe solo si se subió alguna
+    if (datos.carpetaId) LineasEvidencias.validarArchivosEnCarpeta((datos.fotos || []).map((f) => f.id), [datos.carpetaId, datos.fotosCarpetaId].filter(Boolean));
 
     const res = LineasDatos.conCandado(() => {
       const ahora = new Date();
@@ -305,9 +308,9 @@ const LineasCaptura = (function () {
       const fechaRegistro = valores['FECHA DE REGISTRO'] ? new Date(valores['FECHA DE REGISTRO']) : ahora;
       const calificacion = LineasChecklist.calificacion(valores);
 
-      // 1) Fila en INSPECCIONES LINEAS con las columnas del AppSheet.
+      // 1) Fila en INSPECCIONES LINEAS con las columnas del AppSheet (las firmas, como imágenes del AppSheet).
       const fila = Object.assign({}, valores, {
-        'ID': id, 'ID LINEA': obj.reg.id, 'FECHA DE REGISTRO': isNaN(fechaRegistro) ? ahora : fechaRegistro,
+        'ID': id, 'ID LINEA': obj.reg.id, 'NUCO': LineasUtil.nucoVisible(valores['NUCO']) || '', 'FECHA DE REGISTRO': isNaN(fechaRegistro) ? ahora : fechaRegistro,
         'CALIFICACION': calificacion, 'NOMBRE INSPECTOR': usuario.nombre, 'FIRMA RESPONSABLE': '', 'FIRMA INSPECTOR': '',
       });
       LineasDatos.agregarFilas(LineasRepo.TAB.INSP, [fila]);
@@ -323,7 +326,7 @@ const LineasCaptura = (function () {
       LineasRepo.asegurarPestanaApp(LineasRepo.TAB.APP_EVID);
       LineasDatos.agregarFilas(LineasRepo.TAB.APP_EVID, [{
         'ID': LineasDatos.nuevoIdCorto(), 'TIPO': 'INSPECCION', 'ORIGEN': 'SISTEMA', 'ID_REGISTRO': id, 'ID_LINEA': obj.reg.id, 'NUCO': obj.reg.nuco || '',
-        'FECHA': ahora, 'CARPETA_ID': datos.carpetaId, 'RUTA': datos.ruta || '', 'FOTOS_CARPETA_ID': datos.fotosCarpetaId || '',
+        'FECHA': ahora, 'CARPETA_ID': datos.carpetaId || '', 'RUTA': datos.ruta || '', 'FOTOS_CARPETA_ID': datos.fotosCarpetaId || '',
         'FOTOS': String((datos.fotos || []).length), 'PDFS_JSON': '[]', 'COINCIDENCIA_EXACTA': 'TRUE',
         'ALERTAS_JSON': '[]', 'ID_ANTERIOR': '', 'ACTUALIZADO_EN': ahora,
       }]);
@@ -347,7 +350,6 @@ const LineasCaptura = (function () {
 
   function guardarResponsiva(datos, usuario, puedeVerSecretos) {
     const ref = { equipoId: datos.equipoId || null, lineaId: datos.equipoId ? null : datos.lineaId };
-    if (!datos.carpetaId) throw new Error('Falta la carpeta de evidencia.');
     if (!datos.firmaCiBase64) throw new Error('FIRMA RESPONSABLE DE CONTROL INTERNO es obligatorio');
     const id = /^[\w-]{6,40}$/.test(String(datos.id || '')) ? String(datos.id) : LineasDatos.nuevoIdCorto();
 
@@ -367,7 +369,7 @@ const LineasCaptura = (function () {
       valores['OBSERVACIONES'] = String(valores['OBSERVACIONES'] || '').toUpperCase();
 
       const fila = Object.assign({}, valores, {
-        'ID': id, 'ID LINEA': obj.reg.id, 'FECHA RESPONSIVA': '', 'TIPO CONTRASEÑA': '',
+        'ID': id, 'ID LINEA': obj.reg.id, 'NUCO': LineasUtil.nucoVisible(valores['NUCO']) || '', 'FECHA RESPONSIVA': '', 'TIPO CONTRASEÑA': '',
         'NOMBRE CI': usuario.nombre, 'FIRMA RESPONSABLE': '', 'FIRMA CI': '',
       });
       LineasDatos.agregarFilas(LineasRepo.TAB.RESP, [fila]);
@@ -375,7 +377,7 @@ const LineasCaptura = (function () {
       LineasRepo.asegurarPestanaApp(LineasRepo.TAB.APP_EVID);
       LineasDatos.agregarFilas(LineasRepo.TAB.APP_EVID, [{
         'ID': LineasDatos.nuevoIdCorto(), 'TIPO': 'RESPONSIVA', 'ORIGEN': 'SISTEMA', 'ID_REGISTRO': id, 'ID_LINEA': obj.reg.id, 'NUCO': obj.reg.nuco || '',
-        'FECHA': ahora, 'CARPETA_ID': datos.carpetaId, 'RUTA': datos.ruta || '', 'FOTOS': '0',
+        'FECHA': ahora, 'CARPETA_ID': '', 'RUTA': '', 'FOTOS': '0',
         'PDFS_JSON': '[]', 'COINCIDENCIA_EXACTA': 'TRUE', 'ACTUALIZADO_EN': ahora,
       }]);
       LineasRepo.registrarMovimiento('RESPONSIVA', { motivo: 'Responsiva firmada' }, usuario, ahora, {
@@ -416,10 +418,10 @@ const LineasCaptura = (function () {
     return registro;
   }
 
-  /** Escribe el enlace del PDF en la fila (columna File del AppSheet) y en APP_EVIDENCIAS. */
-  function ligarPdf_(tabla, columnaPdf, id, pdf) {
+  /** Escribe la ruta del PDF en la fila (columna File del AppSheet, igual que su acción GUARDAR) y en APP_EVIDENCIAS. */
+  function ligarPdf_(tabla, columnaPdf, id, pdf, ruta) {
     const filas = LineasDatos.buscarFilas(tabla, 'ID', id);
-    if (filas.length) { const o = {}; o[columnaPdf] = urlArchivo_(pdf.id); LineasDatos.actualizarFila(tabla, filas[0], o); }
+    if (filas.length) { const o = {}; o[columnaPdf] = ruta; LineasDatos.actualizarFila(tabla, filas[0], o); }
     if (LineasDatos.existeTabla(LineasRepo.TAB.APP_EVID)) {
       const filasEv = LineasDatos.buscarFilas(LineasRepo.TAB.APP_EVID, 'ID_REGISTRO', id);
       if (filasEv.length) LineasDatos.actualizarFila(LineasRepo.TAB.APP_EVID, filasEv[0], { 'PDFS_JSON': JSON.stringify([{ id: pdf.id, nombre: pdf.nombre }]), 'ACTUALIZADO_EN': new Date() });
@@ -438,23 +440,25 @@ const LineasCaptura = (function () {
     if (!forzar && ev.pdfs && ev.pdfs.length) return ev.pdfs[0];
 
     const firmas = firmasCache_(tipo, id, firmasNuevas);
-    const archivo = (col) => LineasEvidencias.blobDeArchivo(idDeUrlDrive_(LineasUtil.col(fila, col)));
+    // Firmas: las de esta sesión (caché 6 h); si la fila trae una ruta de imagen, se busca en la carpeta de la app
+    const archivo = (col) => LineasArchivos.blob(LineasUtil.col(fila, col));
     const imagen = (clave, col, nombre) => (firmas && firmas[clave] ? blobBase64_(firmas[clave], nombre) : archivo(col));
-    if (!firmas && !idDeUrlDrive_(LineasUtil.col(fila, esInspeccion ? 'FIRMA INSPECTOR' : 'FIRMA CI'))) {
+    if (!firmas && !LineasUtil.col(fila, esInspeccion ? 'FIRMA INSPECTOR' : 'FIRMA CI')) {
       throw new Error('La firma temporal ya no está disponible. Captura ' + (esInspeccion ? 'una inspección nueva.' : 'una responsiva nueva.'));
     }
-    const fecha = LineasUtil.fecha(LineasUtil.col(fila, esInspeccion ? 'FECHA DE REGISTRO' : 'FECHA RESPONSIVA')) || ev.fecha || new Date();
-    const nuco = LineasUtil.nuco4(LineasUtil.col(fila, 'NUCO')) || 'SIN NUCO';
-    const nombre = (esInspeccion ? 'INSP ' : 'RESP ') + nuco + ' ' + Utilities.formatDate(fecha, ZONA, 'dd MM') + '.pdf';
+    const destino = PDF[tipo];
+    const nombre = destino.nombre(id);
+    const carpeta = LineasArchivos.carpetaDeApp(destino.carpeta);
+    // Regenerar: el PDF anterior de este registro (mismo nombre) se reemplaza
+    if (forzar) { const viejos = carpeta.getFilesByName(nombre); while (viejos.hasNext()) viejos.next().setTrashed(true); }
     const imagenes = esInspeccion
       ? { 'FIRMA RESPONSABLE': imagen('responsable', 'FIRMA RESPONSABLE', 'firma-responsable.png'), 'FIRMA INSPECTOR': imagen('inspector', 'FIRMA INSPECTOR', 'firma-inspector.png'), 'PATRON': imagen('patron', 'PATRON', 'patron.png') }
       : { 'FIRMA RESPONSABLE': imagen('responsable', 'FIRMA RESPONSABLE', 'firma-responsable.png'), 'FIRMA CI': imagen('ci', 'FIRMA CI', 'firma-ci.png'), 'CONTRASEÑA': imagen('patron', 'CONTRASEÑA', 'patron.png') };
-    LineasArchivos.exigirEscribible(ev.carpetaId);
     try {
       const pdf = LineasPdf.generarPdfDesdePlantilla(
         esInspeccion ? LineasPdf.PLANTILLAS.INSPECCION_CELULAR : LineasPdf.PLANTILLAS.RESPONSIVA_CELULAR,
-        registroPlantilla_(fila), imagenes, DriveApp.getFolderById(ev.carpetaId), nombre);
-      LineasDatos.conCandado(() => ligarPdf_(tabla, esInspeccion ? 'FORMATO INSPECCIONES LINEAS' : 'FORMATO RESPONSIVA', id, pdf));
+        registroPlantilla_(fila), imagenes, carpeta, nombre);
+      LineasDatos.conCandado(() => ligarPdf_(tabla, destino.columna, id, pdf, destino.carpeta + '/' + nombre));
       return pdf;
     } catch (e) {
       console.error('generarPdf ' + tipo + ' (' + id + '): ' + e.message);
@@ -464,38 +468,40 @@ const LineasCaptura = (function () {
 
   /**
    * Fotos de una inspección ya guardada (mejora: en AppSheet no se podían agregar después).
-   * 'preparar' → { fotosCarpetaId } autorizada para el usuario; crea la carpeta con la estructura
-   * <NUCO>/INSPECCIONES/<AÑO>/<CUATRIMESTRE>/<MES>/INSP DD MM/FOTOS si la inspección no tenía (p. ej. del
-   * AppSheet) y la registra en APP_EVIDENCIAS. 'actualizar' → recuenta las fotos y regresa { fotos }.
+   * 'preparar' → { fotosCarpetaId } autorizada para el usuario; si la inspección no tenía carpeta de fotos en la
+   * carpeta de la app (p. ej. del AppSheet), crea INSPECCIONES LINEAS_Images/FOTOS <ID> y la registra en
+   * APP_EVIDENCIAS. 'actualizar' → recuenta las fotos y regresa { fotos }.
    */
   function fotosInspeccion(id, accion, correo) {
+    if (/^drive_/.test(id)) throw new Error('Las inspecciones de la carpeta NUCOS son de solo consulta: no se les agregan fotos.');
     const insp = LineasRepo.leerInspeccion(id);
     if (!insp) throw new Error('No existe la inspección ' + id);
     const TAB_EV = LineasRepo.TAB.APP_EVID;
     LineasRepo.asegurarPestanaApp(TAB_EV);
-    const esDrive = /^drive_/.test(id);
-    const filas = LineasDatos.buscarFilas(TAB_EV, esDrive ? 'CARPETA_ID' : 'ID_REGISTRO', esDrive ? id.slice(6) : id);
+    const filas = LineasDatos.buscarFilas(TAB_EV, 'ID_REGISTRO', id);
     const fila = filas.length ? LineasDatos.leerFilas([{ tabla: TAB_EV, filas: filas.slice(0, 1) }])[0][0] : null;
     let carpetaId = fila ? String(fila['CARPETA_ID'] || '') : '';
     let fotosId = fila ? String(fila['FOTOS_CARPETA_ID'] || '') : '';
 
     if (accion === 'preparar') {
-      if (!carpetaId) {
-        const c = LineasEvidencias.prepararCarpetaEvidencia('INSPECCION', insp.nuco || 'SIN NUCO', insp.fecha ? new Date(insp.fecha) : new Date(), correo);
+      // Ya tiene carpeta de fotos en la carpeta de la app: se reutiliza
+      if (fotosId && LineasArchivos.estaDentroDe(fotosId, LineasArchivos.carpetaAppSheetId())) {
+        LineasEvidencias.autorizarSubida(correo, [fotosId]);
+        return { fotosCarpetaId: fotosId };
+      }
+      const c = LineasEvidencias.crearCarpetaFotos(id, correo);
+      if (fila) {
+        LineasDatos.actualizarFila(TAB_EV, fila._fila, Object.assign({ 'FOTOS_CARPETA_ID': c.fotosCarpetaId, 'ACTUALIZADO_EN': new Date() },
+          carpetaId ? {} : { 'CARPETA_ID': c.carpetaId, 'RUTA': c.ruta }));
+      } else {
         LineasDatos.agregarFilas(TAB_EV, [{
           'ID': LineasDatos.nuevoIdCorto(), 'TIPO': 'INSPECCION', 'ORIGEN': insp.origen === 'SISTEMA' ? 'SISTEMA' : 'APPSHEET', 'ID_REGISTRO': id,
           'ID_LINEA': insp.registroId || '', 'NUCO': insp.nuco || '', 'FECHA': insp.fecha ? new Date(insp.fecha) : new Date(),
           'CARPETA_ID': c.carpetaId, 'RUTA': c.ruta, 'FOTOS_CARPETA_ID': c.fotosCarpetaId, 'FOTOS': '0', 'PDFS_JSON': '[]',
           'COINCIDENCIA_EXACTA': 'TRUE', 'ALERTAS_JSON': '[]', 'ID_ANTERIOR': '', 'ACTUALIZADO_EN': new Date(),
         }]);
-        return { fotosCarpetaId: c.fotosCarpetaId };
       }
-      if (!fotosId) {
-        fotosId = LineasEvidencias.carpetaFotos(carpetaId);
-        LineasDatos.actualizarFila(TAB_EV, fila._fila, { 'FOTOS_CARPETA_ID': fotosId });
-      }
-      LineasEvidencias.autorizarSubida(correo, [fotosId]);
-      return { fotosCarpetaId: fotosId };
+      return { fotosCarpetaId: c.fotosCarpetaId };
     }
 
     if (!fila || !fotosId) return { fotos: 0 };

@@ -80,9 +80,13 @@ const LineasExportar = (function () {
 
     const filas = crudas.map((v) => {
       const ocultarCambio = !puedeVerSecretos && iCampo && /PIN|PATRON|CONTRASE/i.test(String(v[iCampo.i] || ''));
+      const cambioNuco = iCampo && /^NUCO$/i.test(String(v[iCampo.i] || '').trim());
       return cols.map((c) => {
         const valor = v[c.i];
         if ((secretas.indexOf(c.i) >= 0 || (ocultarCambio && iAntesDespues.indexOf(c.i) >= 0)) && valor !== '' && valor !== null) return '••••';
+        // NUCO siempre a 4 dígitos (columna NUCO, NUCO_DESTINO… y cambios del campo NUCO)
+        if (valor !== '' && valor !== null && !(valor instanceof Date) &&
+          (/^NUCO( |_|$)/i.test(c.titulo) || (cambioNuco && iAntesDespues.indexOf(c.i) >= 0))) return LineasUtil.nucoVisible(valor);
         return formato(valor, c.tipo);
       });
     });

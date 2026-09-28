@@ -104,6 +104,7 @@
   .ln-cuadros-mas { display: flex; justify-content: center; align-items: center; gap: 14px; flex-wrap: wrap; margin: 16px 0; font-size: 12.5px; }
   .ln-cuadros-mas button { min-width: 180px; }
   .ln-cuadro-cargando, .ln-cuadro-vacio { grid-column: 1 / -1; min-height: 120px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+
   /* Panel lateral de Líneas (mismo .dt-panel del detalle de DataTable) */
   .ln-panel .dt-panel-cuerpo { padding-top: 14px; }
   .ln-panel .ln-panel-resumen { margin-bottom: 14px; }
@@ -386,8 +387,8 @@
   .ln-campos dd { white-space: pre-wrap; }
   .ln-captura-dato b { white-space: normal; overflow-wrap: anywhere; }
   .ln-lectura-notas { white-space: pre-wrap; line-height: 1.7; margin: 0; padding: 16px; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 10px; }
-  .ln-secciones-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; }
-  .ln-seccion-consulta { scroll-margin-top: 20px; }
+  .ln-docs-ayuda { margin: -4px 0 10px; font-size: 12.5px; }
+  .ln-docs-kpis { margin-bottom: 14px; }
   .ln-galeria { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
   .ln-evidencia { color: var(--color-text); text-decoration: none; border: 1px solid var(--color-border); border-radius: 12px; overflow: hidden; background: var(--color-surface); }
   .ln-evidencia:hover { border-color: var(--color-accent); box-shadow: var(--shadow); }
@@ -464,7 +465,7 @@
      Dentro de tablas (.ln-tabla) los botones son compactos, pero con los mismos colores. */
   .ln-modulo .page-header-actions button, .ln-detalle-botones > button, .ln-migas > button, .ln-captura-acciones button,
   .ln-pdf-acciones > button, .ln-cuadros-mas button, .ln-copiar-cabecera button, .ln-segmentado button,
-  .ln-historial-completo button, .ln-secciones-nav button, .ln-modulo .modal-card .modal-acciones button, a.ln-boton {
+  .ln-historial-completo button, .ln-modulo .modal-card .modal-acciones button, a.ln-boton {
     display: inline-flex; align-items: center; justify-content: center; gap: 6px;
     min-height: 36px; padding: 8px 12px; font-size: 13px; font-weight: 600; line-height: 1.2; border-radius: 8px; white-space: nowrap;
   }
@@ -524,26 +525,6 @@
   .ln-ficha-tabs { margin: 4px 0 14px; }
   [data-ficha-panel][hidden] { display: none; }
 
-  /* Documentos (inspecciones y responsivas) como lista: se lee igual en escritorio y en celular */
-  .ln-docs { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-  .ln-doc {
-    display: flex; align-items: center; gap: 12px; padding: 10px 12px;
-    border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface);
-  }
-  .ln-doc.ln-fila-clic:hover { border-color: var(--color-accent); background: var(--color-bg); }
-  .ln-doc-icono {
-    width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
-    background: var(--color-primary-soft); color: var(--color-primary);
-  }
-  :root[data-theme="dark"] .ln-doc-icono { color: var(--color-text); }
-  .ln-doc-cuerpo { flex: 1 1 auto; min-width: 0; }
-  .ln-doc-titulo { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .ln-doc-datos { font-size: 12px; color: var(--color-text-muted); margin-top: 3px; overflow-wrap: anywhere; }
-  .ln-doc-acciones { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-  .ln-doc-acciones button, .ln-doc-acciones a.ln-boton {
-    display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 6px 11px; font-size: 12.5px; font-weight: 600; border-radius: 8px; white-space: nowrap;
-  }
-
   /* Formularios por pasos (mismo indicador que el componente Formulario) */
   .ln-pasos-barra {
     position: sticky; top: -24px; z-index: 5; margin: -4px -4px 14px; padding: 8px 4px 2px;
@@ -575,7 +556,6 @@
 
   /* Pantallas grandes solamente (se ocultan en celular para dejar lo esencial) */
   @media (max-width: 700px) {
-    .ln-solo-escritorio { display: none !important; }
   }
 
   /* ---------------- Tableta ---------------- */
@@ -614,9 +594,6 @@
     .ln-detalle-botones > button, .ln-detalle-botones > a.ln-boton { width: 100%; white-space: normal; text-align: center; }
     .ln-resumen-rapido { grid-template-columns: 1fr 1fr; gap: 10px 12px; }
     .ln-ficha-tabs .tab-btn { padding: 10px 12px; font-size: 13px; }
-    .ln-doc { flex-wrap: wrap; }
-    .ln-doc-acciones { width: 100%; justify-content: stretch; }
-    .ln-doc-acciones > * { flex: 1 1 auto; justify-content: center; }
     .ln-copiar-cabecera button { width: 100%; }
 
     /* Formularios: pantalla completa, controles grandes para el dedo y pie fijo con lo necesario */

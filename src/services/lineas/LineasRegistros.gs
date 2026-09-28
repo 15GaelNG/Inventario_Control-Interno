@@ -103,7 +103,8 @@ const LineasRegistros = (function () {
         valor: v('NUMERO TELEFONO'), requerido: 'SIEMPRE', valida: 'TELEFONO',
         editable: { y: [conTipo, { tipoNoEn: ['EQUIPO'] }] }, reset: { cuando: { tipoEn: ['EQUIPO'] }, valor: NO_APLICA },
       }),
-      campo_('NUCO', 'NUCO', 'numero', siEditable({ valor: v('NUCO'), requerido: 'SIEMPRE', valida: 'NUCO' })),
+      // NUCO homologado a 4 dígitos ("0005"): se muestra y se guarda así (como texto)
+      campo_('NUCO', 'NUCO', 'numero', siEditable({ valor: LineasUtil.nucoVisible(v('NUCO')) || '', requerido: 'SIEMPRE', valida: 'NUCO' })),
       campo_('EQUIPO', 'EQUIPO', 'listaAbierta', {
         valor: v('EQUIPO'), opciones: catalogos.modelos || [], valida: excepcionEquipo ? null : 'EQUIPO',
         editable: { y: [conTipo, { tipoNoEn: ['LINEA'] }] }, reset: { cuando: { tipoEn: ['LINEA'] }, valor: NO_APLICA },
@@ -162,9 +163,8 @@ const LineasRegistros = (function () {
         campo_('FIN PLAN', 'FIN PLAN', 'fecha', { valor: v('FIN PLAN'), mostrar: { nuevo: true }, requerido: { nuevo: true } }),
         campo_('ESTATUS LINEA', 'ESTATUS LINEA', 'lista', siEditable({ valor: v('ESTATUS LINEA'), opciones: LineasRepo.CATALOGO.estatusLinea, valida: 'MAYUS' })),
         campo_('ESTATUS EQUIPO', 'ESTATUS EQUIPO', 'lista', siEditable({ valor: v('ESTATUS EQUIPO'), opciones: LineasRepo.CATALOGO.estatusEquipo, valida: 'MAYUS' })),
-        campo_('RESPONSIVA', 'RESPONSIVA', 'archivo', siEditable({ valor: v('RESPONSIVA') })),
+        // RESPONSIVA y FORMATO INSPECCION (archivos) no van: la responsiva y la inspección se consultan en NUCOS
         campo_('FECHA INSPECCION', 'FECHA INSPECCION', 'fecha', { valor: v('FECHA INSPECCION') }),
-        campo_('FORMATO INSPECCION', 'FORMATO INSPECCION', 'archivo', { valor: v('FORMATO INSPECCION') }),
         campo_('COMENTARIOS', 'COMENTARIOS', 'texto', { valor: v('COMENTARIOS'), valida: 'COMENTARIOS' }),
         // ---- Agregados por el sistema nuevo (no están en el formulario del AppSheet) ----
         { tipo: 'titulo', texto: 'DATOS DEL SISTEMA NUEVO', icono: 'sparkles' },
@@ -313,13 +313,10 @@ const LineasRegistros = (function () {
     return salida;
   }
 
-  /** Sube los archivos de las columnas File (RESPONSIVA, FORMATO INSPECCION) a la carpeta del NUCO. */
-  function subirArchivos_(archivos, nuco, valores) {
-    Object.keys(archivos || {}).forEach((columna) => {
-      const a = archivos[columna];
-      if (!a || !a.base64) return;
-      valores[columna] = LineasEvidencias.guardarArchivoDeRegistro(nuco, columna === 'RESPONSIVA' ? 'CARTA RESPONSIVA' : 'INSPECCIONES', a.nombre, a.mime, a.base64);
-    });
+  /** NUCO homologado: siempre a 4 dígitos ("5" → "0005"). */
+  function homologarNuco_(valores) {
+    if (valores.NUCO !== undefined && valores.NUCO !== null && valores.NUCO !== '') valores.NUCO = LineasUtil.nucoVisible(valores.NUCO);
+    return valores;
   }
 
   function crear(datos, usuario) {
@@ -329,8 +326,7 @@ const LineasRegistros = (function () {
     const elementos = elementos_(baseNueva_(), LineasRepo.catalogos(), usuario, ctx);
     const r = resolver_(elementos, baseNueva_(), enviados, ctx);
     if (r.errores.length) throw new Error(r.errores.slice(0, 8).join(' · '));
-    const valores = aHoja_(elementos, r.valores);
-    subirArchivos_(datos && datos.archivos, valores['NUCO'], valores);
+    const valores = homologarNuco_(aHoja_(elementos, r.valores));
     const id = LineasDatos.nuevoIdCorto();
     const ahora = new Date();
     valores.ID = id;
@@ -357,8 +353,7 @@ const LineasRegistros = (function () {
         .map((e) => (e.secreto && !puedeVerSecretos ? Object.assign({}, e, { valorOculto: true }) : e));
       const r = resolver_(elementos, base, enviados, ctx);
       if (r.errores.length) throw new Error(r.errores.slice(0, 8).join(' · '));
-      const valores = aHoja_(elementos, r.valores);
-      subirArchivos_(datos && datos.archivos, valores['NUCO'], valores);
+      const valores = homologarNuco_(aHoja_(elementos, r.valores));
       // Solo lo que cambió (las fechas sin cambio se comparan por texto para no reescribirlas)
       const cambios = {};
       Object.keys(valores).forEach((c) => {

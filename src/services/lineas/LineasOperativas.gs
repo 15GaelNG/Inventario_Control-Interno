@@ -1,8 +1,9 @@
 /**
  * LineasOperativas.gs
- * Altas de REACTIVACION DE LINEAS y SOLICITUD DE LINEAS, réplica del AppSheet (v1.001924):
- * mismos campos y orden del formulario, mismas opciones (y en el mismo orden), "Initial value",
- * obligatorios, Valid_If contra LISTAS TELEFONOS y folios.
+ * Altas y ediciones de REACTIVACION DE LINEAS, SOLICITUD DE LINEAS y BITACORA DE DESECHO, réplica del AppSheet
+ * (v1.001924): mismos campos y orden del formulario, mismas opciones (y en el mismo orden), "Initial value",
+ * obligatorios, Valid_If contra LISTAS TELEFONOS y folios. La edición es la acción EDIT del AppSheet: el mismo
+ * formulario con los valores de la fila (folio, fecha y quién registró no cambian).
  *
  * Controles: texto | area | fecha | lista (Valid_If: solo valores de la lista) |
  *   listaAbierta (Enum con AllowOtherValues: sugerencias + cualquier otro valor) |
@@ -27,8 +28,8 @@ const LineasOperativas = (function () {
       if (!id) return null;
       return {
         id: id,
-        etiqueta: (t('IMEI') || 'SIN IMEI') + ' · ' + (t('NUMERO TELEFONO') || '—') + (t('NUCO') ? ' · NUCO ' + t('NUCO') : ''),
-        datos: { 'NUMERO TELEFONO': t('NUMERO TELEFONO'), 'NUMERO SIM': t('NUMERO SIM'), 'FOLIO': t('FOLIO'), 'EQUIPO': t('EQUIPO'), 'NUCO': t('NUCO') },
+        etiqueta: (t('IMEI') || 'SIN IMEI') + ' · ' + (t('NUMERO TELEFONO') || '—') + (t('NUCO') ? ' · NUCO ' + LineasUtil.nucoVisible(t('NUCO')) : ''),
+        datos: { 'NUMERO TELEFONO': t('NUMERO TELEFONO'), 'NUMERO SIM': t('NUMERO SIM'), 'FOLIO': t('FOLIO'), 'EQUIPO': t('EQUIPO'), 'NUCO': LineasUtil.nucoVisible(t('NUCO')) || '' },
       };
     }).filter(Boolean);
   }
@@ -165,10 +166,10 @@ const LineasOperativas = (function () {
         fila['IMEI'] = LineasUtil.col(equipo, 'IMEI');
         // FECHA DE REGISTRO = TODAY()
         fila['FECHA DE REGISTRO'] = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
-        const nuco = LineasUtil.col(equipo, 'NUCO');
+        // Como el AppSheet: "BITACORA DE DESECHO_Files_/<ID_DESECHO>.<COLUMNA>.<HHmmss>.<ext>" en la carpeta de la app
         ['EVIDENCIA', 'AUTORIZACION'].forEach((c) => {
           const a = archivos[c];
-          fila[c] = LineasEvidencias.guardarArchivoDeRegistro(nuco, 'DESECHO', c + ' ' + (a.nombre || ''), a.mime, a.base64);
+          fila[c] = LineasArchivos.guardarComoAppSheet('BITACORA DE DESECHO_Files_', fila['ID_DESECHO'], c, a.mime, a.base64);
         });
       } else if (clave === 'REACTIVACION') {
         // IMEI es Ref a LINEAS TELEFONICAS: guarda el ID; LINEA SUSPENDIDA y SIM = [IMEI].[...]
@@ -199,5 +200,93 @@ const LineasOperativas = (function () {
     });
   }
 
-  return { formulario, crear };
+  // ---------------- Edición (acción EDIT del AppSheet) ----------------
+
+  const LLAVE = { REACTIVACION: 'ID', SOLICITUD: 'ID', DESECHO: 'ID_DESECHO' };
+
+  /** Fila a editar, comprobando que la llave coincida (la hoja pudo cambiar desde que se abrió la tabla). */
+  function filaParaEditar_(clave, numeroFila, llave) {
+    const tabla = TABLAS[clave]();
+    const n = Number(numeroFila);
+    if (!(n >= 2)) throw new Error('Fila inválida.');
+    const f = LineasDatos.leerFilas([{ tabla: tabla, filas: [n] }])[0][0];
+    if (!f || String(LineasUtil.col(f, LLAVE[clave]) || '') !== String(llave || '')) {
+      throw new Error('El registro cambió de lugar en la hoja. Recarga la tabla e intenta de nuevo.');
+    }
+    return { tabla: tabla, fila: f, numero: n };
+  }
+
+  /** Valor de la hoja como lo espera el control del formulario. */
+  function valorParaControl_(e, v) {
+    if (v === null || v === undefined) return '';
+    if (v instanceof Date) return Utilities.formatDate(v, ZONA, e.control === 'fecha' ? 'yyyy-MM-dd' : 'dd/MM/yyyy HH:mm');
+    if (e.control === 'siNo') return String(v).toUpperCase() === 'TRUE' ? 'TRUE' : (String(v) === '' ? '' : 'FALSE');
+    return String(v);
+  }
+
+  /** Formulario de edición: el del alta con los valores de la fila. Los archivos se pueden reemplazar (no son obligatorios). */
+  function formularioEdicion(tipo, numeroFila, llave, usuario) {
+    const clave = String(tipo || '').toUpperCase();
+    if (!FORMULARIOS[clave]) throw new Error('Este módulo no admite ediciones.');
+    const r = filaParaEditar_(clave, numeroFila, llave);
+    return FORMULARIOS[clave](usuario, LineasRepo.catalogos(), true).map((e) => {
+      const extra = { valor: valorParaControl_(e, LineasUtil.col(r.fila, e.columna)) };
+      if (e.control === 'archivo') extra.requerido = 'NUNCA';
+      if (e.columna === 'FOLIO' || e.columna === 'FECHA DE REGISTRO' || e.columna === 'QUIEN REGISTRO') extra.soloLectura = true;
+      return Object.assign({}, e, extra);
+    });
+  }
+
+  /** Guarda la edición: solo las columnas del formulario que cambiaron, con las mismas derivaciones del alta. */
+  function editar(tipo, numeroFila, llave, datos, usuario) {
+    const clave = String(tipo || '').toUpperCase();
+    if (!FORMULARIOS[clave]) throw new Error('Este módulo no admite ediciones.');
+    const enviados = (datos && datos.valores) || {};
+    const archivos = (datos && datos.archivos) || {};
+    const elementos = FORMULARIOS[clave](usuario, LineasRepo.catalogos(), false)
+      .map((e) => (e.control === 'archivo' ? Object.assign({}, e, { requerido: 'NUNCA' }) : e));
+    const v = validar_(elementos, enviados);
+    if (v.errores.length) throw new Error(v.errores.join(' · '));
+    const valores = v.valores;
+    ['FOLIO', 'FECHA DE REGISTRO', 'QUIEN REGISTRO'].forEach((c) => { delete valores[c]; });
+
+    return LineasDatos.conCandado(() => {
+      const r = filaParaEditar_(clave, numeroFila, llave);
+      const leerLinea = (id, etiqueta) => {
+        const filas = LineasDatos.buscarFilas(LineasRepo.TAB.LINEAS, 'ID', id);
+        if (!filas.length) throw new Error(etiqueta + ': selecciona un registro de la lista.');
+        return LineasDatos.leerFilas([{ tabla: LineasRepo.TAB.LINEAS, filas: filas.slice(0, 1) }])[0][0];
+      };
+      if (clave === 'DESECHO') {
+        if (String(valores['ID_EQUIPO']) !== String(LineasUtil.col(r.fila, 'ID_EQUIPO'))) {
+          const equipo = leerLinea(valores['ID_EQUIPO'], 'IMEI EQUIPO');
+          valores['FOLIO EQUIPO'] = LineasUtil.col(equipo, 'FOLIO');
+          valores['EQUIPO'] = LineasUtil.col(equipo, 'EQUIPO');
+          valores['IMEI'] = LineasUtil.col(equipo, 'IMEI');
+        }
+        ['EVIDENCIA', 'AUTORIZACION'].forEach((c) => {
+          const a = archivos[c];
+          if (a && a.base64) valores[c] = LineasArchivos.guardarComoAppSheet('BITACORA DE DESECHO_Files_', llave, c, a.mime, a.base64);
+        });
+      } else if (clave === 'REACTIVACION') {
+        if (String(valores['IMEI']) !== String(LineasUtil.col(r.fila, 'IMEI'))) {
+          const linea = leerLinea(valores['IMEI'], 'IMEI');
+          valores['LINIEA SUSPENDIDA'] = LineasUtil.col(linea, 'NUMERO TELEFONO');
+          valores['SIM'] = LineasUtil.col(linea, 'NUMERO SIM');
+        }
+      } else {
+        valores['REASIGNACION'] = !valores['ASIGNACION'];
+      }
+      // Solo lo que cambió (texto normalizado; las fechas por día)
+      const comparable = (x) => (x instanceof Date ? Utilities.formatDate(x, ZONA, 'yyyy-MM-dd') : String(x === null || x === undefined ? '' : x).trim().toUpperCase());
+      const cambios = {};
+      Object.keys(valores).forEach((c) => {
+        if (comparable(valores[c]) !== comparable(LineasUtil.col(r.fila, c))) cambios[c] = valores[c];
+      });
+      if (Object.keys(cambios).length) LineasDatos.actualizarFila(r.tabla, r.numero, cambios);
+      return { ok: true, cambios: Object.keys(cambios), folio: LineasUtil.col(r.fila, clave === 'DESECHO' ? 'FOLIO DESECHO' : 'FOLIO') };
+    });
+  }
+
+  return { formulario, crear, formularioEdicion, editar };
 })();

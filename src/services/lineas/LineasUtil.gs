@@ -1,10 +1,7 @@
 /**
  * LineasUtil.gs
  * Normalización de valores de la hoja del AppSheet (N/A, ceros de relleno, NUCO a 4 dígitos…)
- * y lectura del inventario de carpetas de evidencias (NUCOS) en Drive.
- *
- * Script Properties opcionales:
- *   LINEAS_DRIVE_CARPETA_RAIZ   carpeta con los inventarios JSON de NUCOS (inventario_NUCOS_*.json)
+ * y carpeta de cada NUCO en NUCOS de producción (LineasArchivos, solo lectura).
  */
 
 const LineasUtil = (function () {
@@ -32,6 +29,17 @@ const LineasUtil = (function () {
     const d = digitos(v);
     if (!d) return null;
     return d.length >= 4 ? d : ('0000' + d).slice(-4);
+  }
+
+  /**
+   * NUCO para mostrar: siempre a 4 dígitos ("234" o 234 → "0234"). Lo que no es un número (p. ej. "N/A") se deja
+   * igual; vacío → null. No cambia lo guardado en la hoja.
+   */
+  function nucoVisible(v) {
+    if (v === null || v === undefined) return null;
+    const s = String(v).trim();
+    if (!s) return null;
+    return /^\d+$/.test(s) ? (s.length >= 4 ? s : ('0000' + s).slice(-4)) : s;
   }
 
   function fecha(v) {
@@ -67,38 +75,10 @@ const LineasUtil = (function () {
     return JSON.parse(JSON.stringify(obj === undefined ? null : obj));
   }
 
-  /** Último inventario JSON de la carpeta NUCOS (lista plana de carpetas/archivos). */
-  function leerInventarioNucos_() {
-    const raiz = PropertiesService.getScriptProperties().getProperty('LINEAS_DRIVE_CARPETA_RAIZ');
-    if (!raiz) return null;
-    const archivos = DriveApp.getFolderById(raiz).getFilesByType('application/json');
-    let ultimo = null;
-    while (archivos.hasNext()) {
-      const f = archivos.next();
-      if (/^inventario_NUCOS_/.test(f.getName()) && (!ultimo || f.getDateCreated() > ultimo.getDateCreated())) ultimo = f;
-    }
-    return ultimo ? JSON.parse(ultimo.getBlob().getDataAsString()).elementos : null;
-  }
-
-  /** NUCO → id de su carpeta en NUCOS (del último inventario; caché 6 h). */
+  /** NUCO → id de su carpeta en NUCOS de producción (solo lectura; caché 6 h). Sin acceso: {} y la ficha no muestra el enlace. */
   function carpetasNucos() {
-    // La carpeta NUCOS de producción (solo lectura); el inventario JSON queda de respaldo si no se puede leer
-    try { return LineasArchivos.carpetasNucos(); } catch (e) { console.warn('carpetasNucos: ' + e.message); }
-    let mapa = LineasDatos.cacheLeer('carpetas_nucos');
-    if (mapa) return mapa;
-    mapa = {};
-    try {
-      (leerInventarioNucos_() || []).forEach((x) => {
-        if (x.nivel === 1 && x.mimeType === 'application/vnd.google-apps.folder' && /^\d+$/.test(x.name.trim())) {
-          mapa[nuco4(x.name)] = x.id;
-        }
-      });
-    } catch (e) {
-      // Sin inventario accesible: la ficha simplemente no muestra el enlace a la carpeta.
-    }
-    LineasDatos.cacheGuardar('carpetas_nucos', mapa, 21600);
-    return mapa;
+    try { return LineasArchivos.carpetasNucos(); } catch (e) { console.warn('carpetasNucos: ' + e.message); return {}; }
   }
 
-  return { txt, digitos, nuco4, fecha, numero, col, mesNumero, paraCliente, carpetasNucos };
+  return { txt, digitos, nuco4, nucoVisible, fecha, numero, col, mesNumero, paraCliente, carpetasNucos };
 })();

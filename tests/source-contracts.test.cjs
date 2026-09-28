@@ -181,24 +181,32 @@ test('el alta y edición de LINEAS TELEFONICAS sigue LINEAS TELEFONICAS_Form del
   const orden = ['FOLIO', 'TIPO', 'NUMERO TELEFONO', 'NUCO', 'EQUIPO', 'NO EMPLEADO', 'ESTATUS GENERAL', 'RESPONSABLE', 'PUESTO',
     'RESPONSABLE USA EL EQUIPO', 'NOMBRE QUIEN USA', 'PUESTO QUIEN USA', 'IMEI', 'NUMERO SIM', 'ACCESORIOS', 'SEDE', 'OFICINA / DESARROLLO',
     'DEPARTAMENTO', 'AREA', 'JEFE DIRECTO', 'DIRECTOR', 'RAZON SOCIAL', 'PIN WHATSAPP', 'PIN EQUIPO', 'CUENTA GOOGLE', 'COMPAÑIA',
-    'COSTO PLAN', 'FECHA REGISTRO', 'INICIO PLAN', 'FIN PLAN', 'ESTATUS LINEA', 'ESTATUS EQUIPO', 'RESPONSIVA', 'FECHA INSPECCION',
-    'FORMATO INSPECCION', 'COMENTARIOS'];
+    'COSTO PLAN', 'FECHA REGISTRO', 'INICIO PLAN', 'FIN PLAN', 'ESTATUS LINEA', 'ESTATUS EQUIPO', 'FECHA INSPECCION', 'COMENTARIOS'];
+  // RESPONSIVA y FORMATO INSPECCION (archivos) se quitaron el 28-sep: esos documentos se consultan en NUCOS
   assert.deepEqual(directos.filter((c) => !/ $/.test(c)), orden);
+  assert.doesNotMatch(reg, /'archivo'|guardarComoAppSheet|subirArchivos_/);
   assert.match(reg, /responsableExtra\('QUINTO', 'CUARTO RESPONSABLE', 'QUINTO RESPONSABLE'\)/);
   assert.match(reg, /PIN_EQ: 'INGRESE UN VALOR VALIDO, Y NO MAYOR A 6 CARACTERES'/);
   assert.match(reg, /mostrar: \{ nuevo: true \}, requerido: \{ nuevo: true \}/);
   // Simulación: un alta de EQUIPO toma los valores iniciales "NO APLICA" y valida mayúsculas
-  const Reg = new Function('LineasRepo', 'CacheService', 'Utilities', 'SpreadsheetApp', 'Config',
+  const LineasUtil = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '; return LineasUtil;')({}, {});
+  const Reg = new Function('LineasRepo', 'CacheService', 'Utilities', 'SpreadsheetApp', 'Config', 'LineasUtil',
     reg + '; return LineasRegistros;')(
     { CATALOGO: { tipos: ['EQUIPO', 'LINEA'], estatusLinea: ['USO'], estatusEquipo: ['USO'] } },
     { getScriptCache: () => ({ get: () => '', put: () => {} }) },
-    { formatDate: () => '2026-09-24' }, {}, {});
+    { formatDate: () => '2026-09-24' }, {}, {}, LineasUtil);
   const ctx = { nuevo: true, nucoRepetido: () => false, telefonoRepetido: () => false };
   const els = Reg._elementos({}, {}, { correo: 'x@y.z' }, ctx);
   const r = Reg._resolver(els, {}, { TIPO: 'EQUIPO', NUCO: '12', RESPONSABLE: 'juan', 'INICIO PLAN': '2026-09-01', 'FIN PLAN': '2027-09-01' }, ctx);
   assert.equal(r.valores['NUMERO TELEFONO'], 'NO APLICA');
   assert.equal(r.valores['NUMERO SIM'], 'NO APLICA');
   assert.ok(r.errores.some((e) => /RESPONSABLE: ESCRIBIR EN MAYUSCULAS/.test(e)));
+  // NUCO homologado: el formulario lo muestra a 4 dígitos y se guarda así
+  const edicion = Reg._elementos({ NUCO: 5 }, {}, { correo: 'x@y.z' }, Object.assign({}, ctx, { nuevo: false }));
+  assert.equal(edicion.filter((e) => e.columna === 'NUCO')[0].valor, '0005');
+  assert.match(reg, /const valores = homologarNuco_\(aHoja_\(elementos, r\.valores\)\);/);
+  // La bitácora no registra "5 → 0005" como un cambio (solo se escribe homologado)
+  assert.match(read('src/services/lineas/LineasRepo.gs'), /LineasUtil\.nucoVisible\(antes\) === LineasUtil\.nucoVisible\(cambios\[c\]\)/);
 });
 
 test('las firmas nuevas no se almacenan como archivos de Drive', () => {
@@ -427,10 +435,10 @@ test('experiencia de uso: menú en celular, ficha en pestañas y formularios por
   assert.match(index, /include\('html\/shell-movil'\)/);
   assert.match(movil, /@media \(max-width: 900px\)/);
   assert.match(movil, /shell-menu-abierto/);
-  // Ficha: resumen rápido + pestañas; documentos como lista
+  // Ficha: resumen rápido + pestañas; Documentos con indicadores y tabla, como Historial
   assert.match(lineas, /function fichaEnPestanas\(general, detalles, conDocumentos\)/);
   assert.match(lineas, /class="ln-resumen-rapido"/);
-  assert.match(lineas, /<ul class="ln-docs">/);
+  assert.match(lineas, /function pintarDocumentos\(cont, inspecciones, responsivas, id\)/);
   // Formularios por pasos con el mismo marcado del componente Formulario
   const pasos = lineas.slice(lineas.indexOf('const PASOS_FORMULARIO'), lineas.indexOf('function repartirEnPasos'));
   ['INSPECCION', 'RESPONSIVA', 'REGISTRO', 'SOLICITUD'].forEach((k) => assert.ok(pasos.includes(k + ': ['), k));
@@ -534,13 +542,16 @@ test('Exportar a Excel descarga la base completa del módulo, no solo lo que se 
   assert.throws(() => mod.baseCompleta('OTRO', false), /desconocido/);
 });
 
-test('Líneas usa la BD de pruebas del equipo y revisa la estructura antes de cambiar', () => {
+test('Líneas usa la BD de pruebas del equipo y ninguna carpeta personal de pruebas', () => {
   const admin = read('src/services/lineas/LineasAdmin.gs');
   assert.match(admin, /const LINEAS_DEV_SPREADSHEET_ID = '1fC77Uu1ePVUySNvhgWXMHqWpLhGhBMTZZMEblU2nUhI';/);
-  assert.match(admin, /function usarCopiaAppSheetLineas\(\)/);
-  // Si faltan pestañas o columnas no cambia nada: el error sale antes de setProperties
-  const f = admin.slice(admin.indexOf('function apuntarLineasA_'));
+  // Si faltan pestañas no cambia nada: el error sale antes de setProperties; la carpeta personal se borra
+  const f = admin.slice(admin.indexOf('function configurarLineasDev'));
   assert.ok(f.indexOf("throw new Error('No se cambió nada") < f.indexOf('setProperties('));
+  assert.match(f, /props\.deleteProperty\('LINEAS_DRIVE_CARPETA_RAIZ'\);/);
+  // Ninguna conexión a la carpeta de pruebas personal (1ZNI2…), al inventario JSON ni a la copia vieja del AppSheet
+  const codigo = filesBelow(path.join(root, 'src')).filter((x) => /\.(gs|html)$/.test(x)).map((x) => fs.readFileSync(x, 'utf8')).join('\n');
+  assert.doesNotMatch(codigo, /1ZNI2tVANe3qBglcQ5sisCctGBe4Qetmk|1_47fd5nCcg4M6Qnsxmk14r9aTJG2bCPSW86ig_r2478|inventario_NUCOS_|getProperty\('LINEAS_DRIVE_CARPETA_RAIZ'\)/);
   // Las cachés de Líneas llevan el ID de la hoja: al cambiar de hoja no se mezclan datos
   assert.match(read('src/services/lineas/LineasDatos.gs'), /return 'ln_' \+ clave \+ '_' \+ id\(\)\.slice\(0, 10\);/);
 });
@@ -555,12 +566,15 @@ test('Gestión de Activos abre al colaborador en el panel lateral, no al final d
   assert.doesNotMatch(read('src/html/views/lineas/lineas-gestion-activos.html'), /lnga-resultado/);
 });
 
-test('archivos del AppSheet: se abren desde su carpeta, NUCOS se lee de producción y lo nuevo va a pruebas', () => {
-  // Servidor: resuelve "TABLA_Files_/archivo" caminando desde la carpeta del AppSheet
+test('Drive: todo en la carpeta de la app AppSheet con sus rutas; NUCOS de producción solo se lee', () => {
+  // Servidor: resuelve "TABLA_Files_/archivo" caminando desde la carpeta de la app y guarda con el nombre del AppSheet
+  const creados = [];
   const carpeta = (id, sub, archivos) => ({
     getId: () => id,
     getFoldersByName: (n) => { const c = (sub || {})[n]; return { hasNext: () => !!c, next: () => c }; },
     getFilesByName: (n) => { const f = (archivos || {})[n]; return { hasNext: () => !!f, next: () => f }; },
+    createFolder: (n) => { const c = carpeta('NUEVA-' + n); (sub || {})[n] = c; return c; },
+    createFile: (blob) => { creados.push({ carpeta: id, nombre: blob.nombre, mime: blob.mime }); return { getId: () => 'F' + creados.length }; },
   });
   const archivo = { getId: () => 'ARCH1', getName: () => 'a1.EVIDENCIA.1.jpg', getUrl: () => 'https://drive.google.com/file/d/ARCH1/view' };
   const raiz = carpeta('RAIZ', { 'BITACORA DE DESECHO_Files_': carpeta('DES', {}, { 'a1.EVIDENCIA.1.jpg': archivo }) });
@@ -568,7 +582,10 @@ test('archivos del AppSheet: se abren desde su carpeta, NUCOS se lee de producci
   const globales = {
     PropertiesService: { getScriptProperties: () => ({ getProperty: () => null }) },
     CacheService: { getScriptCache: () => ({ get: (k) => memoria[k] || null, put: (k, v) => { memoria[k] = v; } }) },
-    Utilities: { base64EncodeWebSafe: (b) => String(b), computeDigest: (a, t) => t, DigestAlgorithm: {}, Charset: {} },
+    Utilities: {
+      base64EncodeWebSafe: (b) => String(b), computeDigest: (a, t) => t, DigestAlgorithm: {}, Charset: {},
+      base64Decode: () => [1, 2, 3], newBlob: (bytes, mime, nombre) => ({ mime, nombre }), formatDate: () => '101530',
+    },
     DriveApp: { getFolderById: () => raiz },
   };
   const LA = new Function(...Object.keys(globales), read('src/services/lineas/LineasArchivos.gs') + '\nreturn LineasArchivos;')(...Object.values(globales));
@@ -578,26 +595,207 @@ test('archivos del AppSheet: se abren desde su carpeta, NUCOS se lee de producci
   assert.equal(LA.resolver('https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz/view', false).id, '1AbCdEfGhIjKlMnOpQrStUvWxYz');
   assert.throws(() => LA.resolver('LINEAS TELEFONICAS_Images/x.PATRON.1.png', false), /administrador/);
   assert.equal(LA.resolver('../otra/x.jpg', true), null);
-  // Carpetas de producción por omisión (las que indicó el usuario) y escritura fuera de ellas
+  assert.equal(LA.guardarComoAppSheet('BITACORA DE DESECHO_Files_', 'd9f2', 'EVIDENCIA', 'image/jpeg', 'AAA'), 'BITACORA DE DESECHO_Files_/d9f2.EVIDENCIA.101530.jpg');
+  assert.deepEqual(creados[0], { carpeta: 'DES', nombre: 'd9f2.EVIDENCIA.101530.jpg', mime: 'image/jpeg' });
+  assert.throws(() => LA.guardarComoAppSheet('X_Files_', 'k', 'C', 'text/html', 'AAA'), /no permitido/);
+  // Las dos carpetas: la de la app (pruebas "PruebasCONTROLVEHICYTELEF-172665033") y NUCOS de producción
   assert.equal(LA.carpetaAppSheetId(), '1FsC5mloJNhi_TR7pBX1KMEjUZfN_M9OM');
   assert.equal(LA.carpetaNucosId(), '12SRBi1nZlIzfNx0d2y1fAtzOydA2QrT-');
-  assert.equal(LA.escribeEnProduccion(), false);
+  assert.equal(typeof LA.escribeEnProduccion, 'undefined');   // nunca se escribe en NUCOS
 
+  // Rutas del AppSheet al guardar: PDF (acciones GUARDAR de sus bots), desechos y archivos de LINEAS
+  const captura = read('src/services/lineas/LineasCaptura.gs');
+  assert.match(captura, /carpeta: 'INSPECCIONES_Files_', nombre: \(id\) => 'INSPECCION - ' \+ id \+ '\.pdf', columna: 'FORMATO INSPECCIONES LINEAS'/);
+  assert.match(captura, /carpeta: 'Files', nombre: \(id\) => 'RESPONSIVA' \+ id \+ '\.pdf', columna: 'FORMATO RESPONSIVA'/);
+  assert.match(captura, /ligarPdf_\(tabla, destino\.columna, id, pdf, destino\.carpeta \+ '\/' \+ nombre\)/);
+  assert.match(read('src/services/lineas/LineasOperativas.gs'), /guardarComoAppSheet\('BITACORA DE DESECHO_Files_', fila\['ID_DESECHO'\], c, a\.mime, a\.base64\)/);
+  // Fotos de inspección en la carpeta de la app; cancelar solo borra la carpeta que creó el mismo usuario
   const ev = read('src/services/lineas/LineasEvidencias.gs');
-  assert.match(ev, /if \(LineasArchivos\.escribeEnProduccion\(\)\) \{/);
-  assert.match(ev, /LineasArchivos\.exigirEscribible\(carpetaId\);/);
-  assert.match(read('src/services/lineas/LineasCaptura.gs'), /LineasArchivos\.exigirEscribible\(ev\.carpetaId\);/);
+  assert.match(ev, /const CARPETA_FOTOS = 'INSPECCIONES LINEAS_Images';/);
+  assert.match(ev, /carpetaUnica_\(LineasArchivos\.carpetaDeApp\(CARPETA_FOTOS\), 'FOTOS ' \+ id\)/);
+  assert.match(ev, /if \(!carpetaId \|\| !cache\.get\(claveBorrador_\(correo, carpetaId\)\)\) return \{ ok: false \};/);
+  assert.match(read('src/services/lineas/LineasArchivos.gs'), /if \(!carpetaId \|\| !estaDentroDe\(carpetaId, carpetaAppSheetId\(\)\)\)/);
   assert.match(read('src/services/lineas/LineasUtil.gs'), /try \{ return LineasArchivos\.carpetasNucos\(\); \}/);
   assert.match(read('src/ClientApi.gs'), /function apiLineasArchivo\(token, ruta\)/);
 
-  // Cliente: ícono que abre el archivo en tablas, ficha y documentos
+  // Cliente: General sin Patrón, con Última responsiva / Última inspección de NUCOS; nada abre la carpeta del AppSheet
   const lineas = read('src/html/js/lineas.html');
-  assert.match(lineas, /col\.render = \(v\) => botonArchivo\(v, 'Ver'\);/);
-  assert.match(lineas, /\['Patrón', botonArchivo\(e\.patronRuta, 'Ver patrón'\), true\]/);
-  assert.match(lineas, /if \(d\.pdfRuta\) return botonArchivo\(d\.pdfRuta, 'Ver PDF'\);/);
-  // Apps Script corta lo que sigue a "//" en los .html: la expresión de enlaces no puede terminar en "\//"
-  const i = lineas.indexOf('const esRutaArchivo');
-  const expresion = lineas.slice(i, lineas.indexOf('\n', lineas.indexOf('\n', i) + 1));
-  assert.ok(expresion.indexOf('com[\\/]/i') > 0);
-  assert.equal(expresion.indexOf('\\//'), -1);
+  assert.doesNotMatch(lineas, /\['Patrón'/);
+  assert.match(lineas, /e\.nuco \? \['Última responsiva', botonUltimoNucos\('RESPONSIVA', id\), true\] : null,/);
+  assert.match(lineas, /e\.nuco \? \['Última inspección', botonUltimoNucos\('INSPECCION', id\), true\] : null,/);
+  // Sin la tarjeta "Registro en la hoja" (ID, folio, fila, estatus general, fechas, comentarios); Tipo en Equipo o Línea
+  assert.doesNotMatch(lineas, /tarjetaRegistro|Registro en la hoja|ln-solo-escritorio/);
+  assert.match(lineas, /\['Tipo', tipoRegistro\(e\.legado\), true\],/);
+  assert.match(lineas, /!e \? \['Tipo', tipoRegistro\(l\.legado\), true\] : null,/);
+  assert.doesNotMatch(lineas, /d\.pdfRuta|responsivaRuta|formatoInspeccionRuta|apiLineasResponsiva|apiLineasDocumentosNuco|ln-docs-nucos|totalRotaciones/);
+  const servicio = read('src/services/TelefoniaService.gs');
+  assert.doesNotMatch(servicio, /pdfRuta|totalRotaciones|LineasArchivos\.imagen\(insp/);
+  // Documentos: indicadores que filtran por tipo y una tabla con acciones por fila
+  assert.match(lineas, /contarEnPestana\('documentos', filas\.length\);/);
+  assert.match(lineas, /etiqueta: 'Inspecciones', titulo: 'Mostrar solo inspecciones', filtros: \{ documento: \{ valores: \['Inspección'\] \} \}/);
+  assert.match(lineas, /\{ icono: 'file-plus', titulo: 'Generar PDF', visible: \(d\) => !!d\.pdfPendiente,/);
+  // Sin Excel; doble clic abre la inspección (o el PDF de la responsiva)
+  assert.match(lineas, /idTabla: 'lineas-documentos-v1',\n\s+exportar: false,/);
+  assert.match(lineas, /\$\('\.ln-docs-tabla', cont\)\.addEventListener\('dblclick'/);
+  assert.match(lineas, /const ORIGEN_DOCUMENTO = \{ APPSHEET: 'AppSheet', SISTEMA: 'Sistema nuevo', DRIVE: 'Carpeta NUCOS' \};/);
+});
+
+test('Documentos: inspecciones y responsivas de la hoja y de la carpeta del NUCO en NUCOS', () => {
+  const grupos = [
+    { carpetaId: 'r1', ruta: 'CARTA RESPONSIVA/2026/RESP 02 01', tipo: 'RESPONSIVA', fecha: '2026-01-02T12:00:00', archivos: [
+      { id: 'ine', nombre: 'INE 0005.pdf', mime: 'application/pdf', fecha: '2026-02-16' },
+      { id: 'resp', nombre: 'RESP 0005 02 01.pdf', mime: 'application/pdf', fecha: '2026-01-11' },
+    ] },
+    { carpetaId: 'i1', ruta: 'INSPECCIONES/2026/ENERO/INSP 02 01', tipo: 'INSPECCION', fecha: '2026-01-02T12:00:00', archivos: [
+      { id: 'insp', nombre: 'INSP 0005 02 01.pdf', mime: 'application/pdf' }] },
+    { carpetaId: 'f1', ruta: 'INSPECCIONES/2026/ENERO/INSP 02 01/FOTOS', tipo: 'INSPECCION', fecha: '2026-01-02T12:00:00', archivos: [
+      { id: 'a', nombre: 'a.jpg', mime: 'image/jpeg' }, { id: 'b', nombre: 'b.jpg', mime: 'image/jpeg' }] },
+    { carpetaId: 'f0', ruta: 'INSPECCIONES/2025/DICIEMBRE/INSP 10 12/FOTOS', tipo: 'INSPECCION', fecha: '2025-12-10T12:00:00', archivos: [
+      { id: 'c', nombre: 'c.jpg', mime: 'image/jpeg' }] },
+  ];
+  const hoja = {
+    // Inspección del AppSheet del 10-dic (sin carpeta): toma la carpeta de NUCOS de ese día en vez de repetirse
+    inspecciones: [{ _id: 'AP1', origen: 'APPSHEET', fecha: new Date(2025, 11, 10, 9), calificacion: 1, snapshot: { responsable: 'R' } }],
+    responsivas: [],
+  };
+  const globales = {
+    Auth: { validarSesion: () => ({ rol: 'OPERADOR' }) },
+    Config: { ROLES: { ADMIN: 'ADMIN', OPERADOR: 'OPERADOR' } },
+    LineasRepo: { leerRegistroPorId: () => ({ NUCO: 5 }), evidenciasDeRegistro: () => hoja },
+    LineasUtil: { nuco4: (v) => ('0000' + v).slice(-4), col: (f, c) => f[c], paraCliente: (o) => JSON.parse(JSON.stringify(o)) },
+    LineasDatos: { cacheLeer: () => null, cacheGuardar: () => {}, ZONA_APP: 'X' },
+    LineasArchivos: { archivosNuco: () => ({ carpetaId: 'raiz', grupos: grupos }) },
+    Utilities: { formatDate: (d) => [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-') },
+  };
+  const S = new Function(...Object.keys(globales), read('src/services/TelefoniaService.gs') + '\nreturn TelefoniaService;')(...Object.values(globales));
+  const r = S.evidencias('t', 'x');
+  assert.deepEqual(r.inspecciones.map((i) => [i.id, i.origen, i.pdfId, i.fotos, i.carpetaId]), [
+    ['drive_i1', 'DRIVE', 'insp', 2, 'i1'],
+    ['AP1', 'APPSHEET', null, 1, 'f0'],
+  ]);
+  assert.deepEqual(r.responsivas.map((i) => [i.id, i.pdfId]), [['drive_r1', 'resp']]);
+  assert.match(read('src/services/TelefoniaService.gs'), /LineasRepo\.leerInspeccion\(id\) \|\| \(\/\^drive_\/\.test\(id\) \? inspeccionNucos_\(id\.slice\(6\)\) : null\)/);
+  assert.match(read('src/services/TelefoniaService.gs'), /if \(!LineasArchivos\.estaDentroDe\(carpetaId, LineasArchivos\.carpetaNucosId\(\)\)\) return null;/);
+});
+
+test('los .html de Líneas no llevan "//" fuera de comentarios (Apps Script corta lo que sigue)', () => {
+  const archivos = filesBelow(path.join(root, 'src/html')).filter((f) => /lineas|views[\\/]lineas|componentes/.test(f));
+  archivos.forEach((f) => {
+    const texto = fs.readFileSync(f, 'utf8');
+    assert.equal(texto.indexOf('\\//'), -1, path.relative(root, f));
+  });
+});
+
+test('la tabla de Líneas Telefónicas tiene las columnas de siempre y agrega las de la vista del AppSheet', () => {
+  // ViewDefinition.ColumnOrder de la vista LINEAS TELEFONICAS (sin ID, oculta; "No EMPLEADO" = "NO EMPLEADO")
+  const appsheet = ['NUMERO TELEFONO', 'NUCO', 'TIPO', 'ESTATUS GENERAL', 'NO EMPLEADO', 'RESPONSABLE', 'PUESTO',
+    'NOMBRE RESPONSABLES 2', 'PUESTO RESPONSABLES 2', 'EQUIPO', 'IMEI', 'NUMERO SIM', 'ACCESORIOS', 'SEDE', 'OFICINA / DESARROLLO',
+    'DEPARTAMENTO', 'AREA', 'JEFE DIRECTO', 'DIRECTOR', 'FOLIO', 'RAZON SOCIAL', 'PIN WHATSAPP', 'PIN EQUIPO', 'CUENTA GOOGLE',
+    'COMPAÑIA', 'COSTO PLAN', 'FECHA REGISTRO', 'INICIO PLAN', 'FIN PLAN', 'ESTATUS LINEA', 'FECHA CAMBIO TEMPORAL',
+    'EMAIL USUARIO', 'ESTATUS EQUIPO', 'RESPONSIVA', 'COMENTARIOS', 'FECHA INSPECCION', 'FORMATO INSPECCION'];
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  const servidor = repo.slice(repo.indexOf('const COLS_VISTA_LINEAS'), repo.indexOf('];', repo.indexOf('const COLS_VISTA_LINEAS')));
+  assert.deepEqual([...servidor.matchAll(/'([^']+)'/g)].map((m) => m[1]), appsheet);
+  const lineas = read('src/html/js/lineas.html');
+  const cliente = lineas.slice(lineas.indexOf('const COLUMNAS_VISTA_LINEAS'), lineas.indexOf('function columnasVistaLineas'));
+  assert.deepEqual([...cliente.matchAll(/\['([^']+)', '[^']+'/g)].map((m) => m[1]), appsheet);
+  // DisplayName del AppSheet; RESPONSIVA y FORMATO INSPECCION = la última de NUCOS; PIN solo para ADMIN
+  assert.match(cliente, /\['NOMBRE RESPONSABLES 2', 'Nombre colaborador\/es'\]/);
+  assert.match(cliente, /\['RESPONSIVA', 'Última responsiva', 'ultimo'\]/);
+  assert.match(cliente, /\['FORMATO INSPECCION', 'Última inspección', 'ultimo'\]/);
+  // Las columnas de antes a la vista; las del AppSheet que faltaban, ocultas (se agregan desde "Vista")
+  assert.match(lineas, /const c = \{ campo: campo, titulo: titulo, tipo: 'texto', visible: false \};/);
+  assert.match(lineas, /\{ campo: 'nuco', titulo: 'NUCO', tipo: 'texto', fijada: true,/);
+  assert.match(lineas, /\{ campo: 'numero', titulo: 'Número', tipo: 'texto', fijada: true,/);
+  assert.doesNotMatch(lineas, /ordenInicial: \{ campo: 'TIPO'/);
+  assert.match(lineas, /idTabla: 'lineas-' \+ modulo \+ '-v4',/);
+  assert.match(lineas, /llamar\('apiLineasUltimoDocumentoNuco', boton\.dataset\.id, boton\.dataset\.lnUltimo\)/);
+  assert.match(read('src/ClientApi.gs'), /function apiLineasUltimoDocumentoNuco\(token, id, tipo\)/);
+  assert.match(read('src/services/TelefoniaService.gs'), /posiciones\.forEach\(\(i\) => \{ if \(copia\[i\]\) copia\[i\] = '••••'; \}\);/);
+  assert.match(repo, /if \(c === 'FOLIO'\) return legado\.folio \|\| null;/);
+});
+
+test('detalle de la inspección: mismo diseño que la ficha, sin revisión del activo, firmas ni registro completo', () => {
+  const servicio = read('src/services/TelefoniaService.gs');
+  const lineas = read('src/html/js/lineas.html');
+  assert.doesNotMatch(servicio, /DETALLE_RESPONSIVA|DETALLE_INSPECCION|registroDetalle_|checklist: LineasChecklist\.secciones\(\)|firmas: puedeVerSecretos_/);
+  // Firmas y patrón no se listan como fotos; PIN y patrón ocultos para quien no es ADMIN
+  assert.match(servicio, /if \(\/\^\(FIRMA\|PATRON\)\/i\.test\(f\.name\)\) return;/);
+  assert.match(servicio, /insp\.pinEquipo = insp\.pinEquipo \? '••••' : null;/);
+  // Una inspección de la hoja sin carpeta toma la de NUCOS del mismo día
+  assert.match(servicio, /dia_\(x\.doc\.fecha\) === dia_\(insp\.fecha\)/);
+  const detalle = lineas.slice(lineas.indexOf('function pintarInspeccion('), lineas.indexOf('/** Desde una bitácora: abre el registro'));
+  assert.doesNotMatch(detalle, /Registro completo|Firmas de validación|Revisión del activo|ln-secciones-nav/);
+  assert.match(detalle, /tarjeta\(icono\('images'\) \+ ' Fotografías \('/);
+});
+
+test('Reactivación, Solicitud y Desechos se pueden editar como con la acción EDIT del AppSheet', () => {
+  const op = read('src/services/lineas/LineasOperativas.gs');
+  assert.match(op, /function formularioEdicion\(tipo, numeroFila, llave, usuario\)/);
+  assert.match(op, /function editar\(tipo, numeroFila, llave, datos, usuario\)/);
+  // La fila se confirma por su llave; folio, fecha y quién registró no cambian; solo se escribe lo que cambió
+  assert.match(op, /String\(LineasUtil\.col\(f, LLAVE\[clave\]\) \|\| ''\) !== String\(llave \|\| ''\)/);
+  assert.match(op, /\['FOLIO', 'FECHA DE REGISTRO', 'QUIEN REGISTRO'\]\.forEach\(\(c\) => \{ delete valores\[c\]; \}\);/);
+  assert.match(op, /valores\['REASIGNACION'\] = !valores\['ASIGNACION'\];/);
+  const lineas = read('src/html/js/lineas.html');
+  assert.match(lineas, /function abrirAltaAppSheet\(tipo, titulo, alGuardar, edicion\)/);
+  assert.equal((lineas.match(/\{ icono: 'pencil', titulo: 'Editar'/g) || []).length, 2);
+  assert.match(read('src/services/lineas/LineasRepo.gs'), /_id: f\['ID'\] === undefined/);
+});
+
+test('NUCO siempre a 4 dígitos (tabla, ficha, detalles, bitácoras, historial y Excel)', () => {
+  const Util = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '\nreturn LineasUtil;')({}, {});
+  assert.equal(Util.nucoVisible(234), '0234');
+  assert.equal(Util.nucoVisible('5'), '0005');
+  assert.equal(Util.nucoVisible(' 0234 '), '0234');
+  assert.equal(Util.nucoVisible(12345), '12345');
+  assert.equal(Util.nucoVisible('N/A'), 'N/A');
+  assert.equal(Util.nucoVisible(''), null);
+  assert.equal(Util.nucoVisible(null), null);
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  assert.match(repo, /if \(c === 'NUCO'\) return LineasUtil\.nucoVisible\(v\);/);
+  assert.match(repo, /nuco: LineasUtil\.nucoVisible\(crudo\('NUCO'\)\) \|\| '',/);
+  assert.match(repo, /nuco: txt\(col\(f, 'NUCO'\)\) === null \? null : LineasUtil\.nucoVisible\(col\(f, 'NUCO'\)\),/);
+  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v4';/);
+  assert.match(read('src/services/lineas/LineasExportar.gs'), /return LineasUtil\.nucoVisible\(valor\);/);
+});
+
+test('"Última responsiva" / "Última inspección" abren la más reciente de la carpeta del NUCO en NUCOS', () => {
+  const grupos = [
+    { carpetaId: 'f1', ruta: 'INSPECCIONES/2026/INSP 12 08/FOTOS', tipo: 'INSPECCION', fecha: '2026-08-12T12:00:00', archivos: [{ nombre: 'a.jpg', mime: 'image/jpeg', enlace: 'u-foto' }] },
+    { carpetaId: 'i1', ruta: 'INSPECCIONES/2026/INSP 12 08', tipo: 'INSPECCION', fecha: '2026-08-12T12:00:00', archivos: [{ nombre: 'INSP 0234 12 08.pdf', mime: 'application/pdf', enlace: 'u-insp', fecha: '2026-08-12' }] },
+    { carpetaId: 'r2', ruta: 'CARTA RESPONSIVA/2026/RESP 03 09', tipo: 'RESPONSIVA', fecha: '2026-09-03T12:00:00', archivos: [{ nombre: 'FIRMA.png', mime: 'image/png', enlace: 'u-firma' }] },
+    { carpetaId: 'i0', ruta: 'INSPECCIONES/2025/INSP 02 10', tipo: 'INSPECCION', fecha: '2025-10-02T12:00:00', archivos: [{ nombre: 'vieja.pdf', mime: 'application/pdf', enlace: 'u-vieja' }] },
+  ];
+  const rol = { rol: 'ADMIN' };
+  const globales = {
+    Auth: { validarSesion: () => rol },
+    Config: { ROLES: { ADMIN: 'ADMIN', OPERADOR: 'OPERADOR' } },
+    LineasRepo: { leerRegistroPorId: (id) => (id === 'sin' ? { NUCO: '' } : { NUCO: 234 }) },
+    LineasUtil: {
+      nuco4: (v) => (String(v || '').replace(/\D/g, '') ? ('0000' + String(v)).slice(-4) : null),
+      col: (f, c) => f[c], paraCliente: (o) => JSON.parse(JSON.stringify(o)),
+    },
+    LineasDatos: { cacheLeer: () => null, cacheGuardar: () => {} },
+    LineasArchivos: { archivosNuco: () => ({ carpetaId: 'raiz', grupos: grupos }) },
+  };
+  const S = new Function(...Object.keys(globales), read('src/services/TelefoniaService.gs') + '\nreturn TelefoniaService;')(...Object.values(globales));
+  // Inspección: la carpeta más reciente, su PDF (no el de 2025)
+  assert.deepEqual(S.ultimoDocumentoNuco('t', 'x', 'INSPECCION'), { nuco: '0234', fecha: '2026-08-12T12:00:00', nombre: 'INSP 0234 12 08.pdf', url: 'u-insp', carpeta: false });
+  // Responsiva sin PDF: se abre su carpeta
+  const resp = S.ultimoDocumentoNuco('t', 'x', 'RESPONSIVA');
+  assert.equal(resp.carpeta, true);
+  assert.equal(resp.url, 'https://drive.google.com/drive/folders/r2');
+  // Con varios PDF en la carpeta, el formato de la responsiva (no la INE, aunque sea más reciente)
+  grupos.unshift({ carpetaId: 'r3', ruta: 'CARTA RESPONSIVA/2026/RESP 20 09', tipo: 'RESPONSIVA', fecha: '2026-09-20T12:00:00', archivos: [
+    { nombre: 'INE 0234.pdf', mime: 'application/pdf', enlace: 'u-ine', fecha: '2026-09-21' },
+    { nombre: 'RESP 0234 20 09.pdf', mime: 'application/pdf', enlace: 'u-resp', fecha: '2026-09-20' },
+  ] });
+  assert.equal(S.ultimoDocumentoNuco('t', 'x', 'RESPONSIVA').url, 'u-resp');
+  grupos.shift();
+  assert.throws(() => S.ultimoDocumentoNuco('t', 'sin', 'RESPONSIVA'), /no tiene NUCO/);
+  assert.throws(() => S.ultimoDocumentoNuco('t', 'x', 'OTRO'), /inválido/);
+  // Sin responsiva visible para el rol (solo había una firma): mensaje claro
+  rol.rol = 'OPERADOR';
+  assert.throws(() => S.ultimoDocumentoNuco('t', 'x', 'RESPONSIVA'), /No hay responsiva en la carpeta NUCOS del NUCO 0234/);
 });
