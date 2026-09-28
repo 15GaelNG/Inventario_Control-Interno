@@ -151,6 +151,16 @@ y capturar responsivas e inspecciones.
   franja deslizable; inventario en tarjetas por defecto (si no hay preferencia guardada) y más compactas;
   botones de la ficha en rejilla de 2; opciones del checklist más grandes para el dedo.
 
+## 0j. Vista del AppSheet, NUCOS y una sola carpeta de Drive (2026-09-28)
+
+- Tabla: `COLS_VISTA_LINEAS` (servidor) y `COLUMNAS_VISTA_LINEAS` (cliente) = ColumnOrder de la vista LINEAS
+  TELEFONICAS; el índice trae el bloque `vista` (una fila por registro) y el cliente lo une a cada fila.
+- Drive (`LineasArchivos`): `LINEAS_DRIVE_APPSHEET` (app AppSheet de pruebas, se lee y escribe con rutas del
+  AppSheet: `guardarComoAppSheet`, PDF en `INSPECCIONES_Files_` y `Files`) y `LINEAS_DRIVE_NUCOS` (producción, solo
+  lectura: `archivosNuco` para Documentos). Ya no existe `LINEAS_DRIVE_CARPETA_RAIZ`.
+- Detalles: `DETALLE_INSPECCION` / `DETALLE_RESPONSIVA` (TelefoniaService) con el orden y DisplayName del AppSheet.
+- Edición de operativas: `LineasOperativas.formularioEdicion` / `editar` y `abrirAltaAppSheet(…, edicion)`.
+
 ## 0i. Archivos del AppSheet y carpetas de Drive (2026-09-25)
 
 `LineasArchivos.gs` abre los archivos que el AppSheet guarda como ruta relativa (desde la carpeta raíz del AppSheet,
