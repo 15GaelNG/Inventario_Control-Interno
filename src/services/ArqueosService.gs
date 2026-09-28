@@ -458,7 +458,13 @@ const ArqueosService = (function () {
     }
 
     const blob = Utilities.newBlob(bytes, mimeType || 'application/octet-stream', nombreArchivo || 'archivo');
-    const carpeta = DriveApp.getFolderById(CARPETA_ARCHIVOS_ID);
+    let carpeta;
+    try {
+      carpeta = DriveApp.getFolderById(CARPETA_ARCHIVOS_ID);
+    } catch (e) {
+      throw new Error('No se pudo abrir la carpeta de archivos de Arqueos en Drive. La cuenta con la que ' +
+        'corre la app ahora mismo (' + Session.getEffectiveUser().getEmail() + ') no tiene acceso a esa carpeta.');
+    }
     const archivo = carpeta.createFile(blob);
     // Sin esto, el archivo solo lo puede ver la cuenta que despliega la app
     // (quien lo creó) — nadie más puede abrir el link, aunque sea válido.
