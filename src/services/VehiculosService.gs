@@ -87,7 +87,7 @@ const VehiculosService = (function () {
 
   const COLUMNAS_RESUMEN = [
     'ID_VEHICULO', 'FOLIO', 'NUCCO', 'DEPARTAMENTO', 'NO ECONOMICO', 'MARCA', 'CLASE',
-    'LINEA VEHICULO', 'MODELO', 'COLOR', 'PLACA', 'SEDE', 'ESTATUS',
+    'LINEA VEHICULO', 'MODELO', 'COLOR', 'PLACA', 'SEDE', 'ESTATUS', 'FECHA REGISTRO SISTEMA CI',
   ];
 
   /**
@@ -117,6 +117,7 @@ const VehiculosService = (function () {
         PLACA: datos['PLACA'][i] || '',
         SEDE: datos['SEDE'][i] || '',
         ESTATUS: datos['ESTATUS'][i] || '',
+        FECHA_REGISTRO: datos['FECHA REGISTRO SISTEMA CI'][i] || '',
       });
     }
     return resultado.sort((a, b) => String(a.FOLIO).localeCompare(String(b.FOLIO)));
