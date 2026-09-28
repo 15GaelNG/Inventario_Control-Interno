@@ -275,6 +275,11 @@
    *                    //   cargadas en el navegador, el módulo trae los datos (p. ej. la base completa del
    *                    //   servidor); rango es { campo, desde, hasta } (el título de la columna de fecha
    *                    //   elegida) o null si no se limitó por fecha. exportar.titulo: tooltip del botón.
+   *     columnasCompletas: { idHoja: 'ID_VEHICULO', cargar: async () => [{ 'ID_VEHICULO': 1, … }] },
+   *                    // opcional: en "Vista" aparece "Mostrar todas las columnas de la base de datos"; al
+   *                    // pedirlo trae TODA la hoja (todas las columnas crudas, no solo el resumen) y agrega
+   *                    // las que falten como columnas nuevas (ocultas), casando cada fila por idHoja (el
+   *                    // encabezado crudo que hace de id). Se pide una sola vez por carga de la tabla.
    *     alCambiarFiltros: (filtros) => {},      // p. ej. para marcar chips de KPI
    *     umbralPalabraClave: 10,                 // eliminar pide escribir "ELIMINAR" desde N filas
    *   });
@@ -587,6 +592,7 @@
         busqueda: '',
         filtros: {},                 // campo -> { op, v1, v2 } | { valores: [..] }
         pagina: 1,
+        columnasExtra: { cargando: false, cargadas: false },  // ver cfg.columnasCompletas
         seleccion: new Set(),
         ancla: null,                 // última casilla marcada (para Shift+clic)
         editando: null,
@@ -1249,6 +1255,62 @@
         });
       }
 
+      /** "NO ECONOMICO" → "No economico" (siglas cortas de 3 letras o menos se quedan igual: NUCO, IMEI…) */
+      function tituloDesdeEncabezado_(h) {
+        const t = String(h || '').trim();
+        return t.length <= 3 && !/\s/.test(t) ? t : t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+      }
+      const normCampo_ = (s) => String(s || '').replace(/_/g, ' ').trim().toUpperCase().replace(/\s+/g, ' ');
+
+      /**
+       * cfg.columnasCompletas = { idHoja, cargar }: trae TODAS las columnas de la hoja del servidor
+       * (cargar() → [{ encabezado: valor, … }]) y agrega las que no estaban ya como columnas nuevas
+       * (ocultas, exportables). Se llama una sola vez, desde el botón en "Vista".
+       */
+      async function cargarColumnasCompletas(boton) {
+        if (!cfg.columnasCompletas || st.columnasExtra.cargando || st.columnasExtra.cargadas) return;
+        st.columnasExtra.cargando = true;
+        try {
+          await conBotonOcupado(boton, 'Cargando…', async () => {
+            const raw = await cfg.columnasCompletas.cargar();
+            const yaExisten = new Set(columnas.map((c) => normCampo_(c.campo)));
+            const encabezados = raw.length ? Object.keys(raw[0]) : [];
+            const nuevas = encabezados.filter((h) => h && !yaExisten.has(normCampo_(h))).map((h) => {
+              const muestra = raw.slice(0, 60).map((r) => r[h]).filter((v) => v !== '' && v !== null && v !== undefined);
+              const esFecha = muestra.length > 0 && muestra.every((v) => /^\d{4}-\d{2}-\d{2}/.test(String(v)));
+              const esNumero = !esFecha && muestra.length > 0 && muestra.every((v) => typeof v === 'number' || (String(v).trim() !== '' && !isNaN(Number(String(v).replace(/[$,\s]/g, '')))));
+              return {
+                campo: h, titulo: tituloDesdeEncabezado_(h), tipo: esFecha ? 'fecha' : (esNumero ? 'numero' : 'texto'),
+                editable: false, filtrable: true, ordenable: true, visible: false, exportable: true, enDetalle: true,
+              };
+            });
+            columnas.push(...nuevas);
+            st.ordenColumnas = st.ordenColumnas.concat(nuevas.map((c) => c.campo));
+            nuevas.forEach((c) => st.ocultas.add(c.campo));
+
+            // Ids vacíos NO se indexan: varias filas sin id (ej. renglones viejos sin ID_CAMBIO en
+            // Cambios Vehículos) terminarían compartiendo por error los datos extra de la última.
+            const porId = {};
+            raw.forEach((r) => {
+              const idVal = String(r[cfg.columnasCompletas.idHoja] == null ? '' : r[cfg.columnasCompletas.idHoja]);
+              if (idVal) porId[idVal] = r;
+            });
+            st.datos.forEach((fila) => {
+              const id = idDe(fila);
+              const r = id && porId[id];
+              if (r) nuevas.forEach((c) => { fila[c.campo] = r[c.campo]; });
+            });
+
+            st.columnasExtra.cargadas = true;
+            Notificar.exito(nuevas.length ? `${nuevas.length} columna(s) más disponibles: actívalas en "Vista"` : 'La tabla ya tenía todas las columnas de la base de datos');
+          });
+        } catch (err) {
+          Notificar.error('No se pudieron traer todas las columnas: ' + err.message);
+        } finally {
+          st.columnasExtra.cargando = false;
+        }
+      }
+
       /** Menú "Vista": columnas visibles, fijar, reordenar, densidad y restablecer */
       function abrirVista(ancla) {
         const pintar = (pop) => {
@@ -1271,6 +1333,7 @@
               </label>
               <button type="button" class="secondary dt-restablecer">${ic('restablecer')} Restablecer vista</button>
               ${cfg.idTabla ? '<span class="page-subtitle" style="font-size:11px">Tu vista se guarda en este navegador.</span>' : ''}
+              ${cfg.columnasCompletas && !st.columnasExtra.cargadas ? `<button type="button" class="secondary dt-cargar-completas">${ic('vista')} Mostrar todas las columnas de la base de datos</button>` : ''}
             </div>`;
 
           // Cada cambio repinta la tabla y también este menú (queda abierto)
@@ -1284,6 +1347,8 @@
           alClic('[data-bajar]', (b) => moverColumna(b.dataset.bajar, st.ordenColumnas[st.ordenColumnas.indexOf(b.dataset.bajar) + 2] || null));
           alClic('.dt-restablecer', () => { restablecerVista(); Notificar.info('Vista restablecida'); });
           pop.querySelector('.dt-densidad').addEventListener('change', (ev) => setDensidad(ev.target.value));
+          const btnCompletas = pop.querySelector('.dt-cargar-completas');
+          if (btnCompletas) btnCompletas.addEventListener('click', async () => { await cargarColumnasCompletas(btnCompletas); pintar(pop); });
         };
         abrirPopover(ancla, '', pintar);
       }

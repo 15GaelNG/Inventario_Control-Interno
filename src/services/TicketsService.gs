@@ -54,6 +54,12 @@ const TicketsService = (function () {
     return resultado.sort((a, b) => new Date(b['FECHA']) - new Date(a['FECHA']));
   }
 
+  /** Todas las columnas de TODOS los tickets (para "Vista": mostrar/exportar cualquier columna). */
+  function completo(token) {
+    Permisos.puedeLeer(token, 'tickets');
+    return SheetUtils.getAll(ssId(), NOMBRE_HOJA);
+  }
+
   /** Registro completo por ID (para el modal de detalle/editar). */
   function buscarPorId(token, id) {
     Permisos.puedeLeer(token, 'tickets');
@@ -120,5 +126,5 @@ const TicketsService = (function () {
     return Array.from(valores).sort((a, b) => a.localeCompare(b));
   }
 
-  return { listarResumen, buscarPorId, crear, actualizar, eliminar, listarSolicitantes };
+  return { listarResumen, completo, buscarPorId, crear, actualizar, eliminar, listarSolicitantes };
 })();

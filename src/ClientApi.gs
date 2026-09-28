@@ -59,6 +59,9 @@ function apiBuscarVehiculoPorFolio(token, folio) {
 function apiListarVehiculosResumen(token) {
   return VehiculosService.listarResumen(token);
 }
+function apiVehiculosCompleto(token) {
+  return JSON.stringify(VehiculosService.completo(token));
+}
 function apiPrevisualizarFolioVehiculo(token, clase) {
   return VehiculosService.previsualizarFolio(token, clase);
 }
@@ -84,6 +87,9 @@ function apiSubirArchivoVehiculo(token, nombreArchivo, mimeType, base64Data) {
 function apiListarCambiosVehiculos(token) {
   return JSON.stringify(CambiosVehiculosService.listarResumen(token));
 }
+function apiCambiosVehiculosCompleto(token) {
+  return JSON.stringify(CambiosVehiculosService.completo(token));
+}
 function apiListarCambiosVehiculosPorFolio(token, folio) {
   return JSON.stringify(CambiosVehiculosService.listarPorFolio(token, folio));
 }
@@ -94,6 +100,9 @@ function apiListarReasignacionesVehicularesPorFolio(token, folio) {
 // --- Uber ---
 function apiListarUberResumen(token) {
   return UberService.listarResumen(token);
+}
+function apiUberCompleto(token) {
+  return JSON.stringify(UberService.completo(token));
 }
 function apiBuscarUberPorId(token, id) {
   return UberService.buscarPorId(token, id);
@@ -115,6 +124,9 @@ function apiSubirArchivoUber(token, nombreArchivo, mimeType, base64Data) {
 function apiListarTicketsResumen(token) {
   return TicketsService.listarResumen(token);
 }
+function apiTicketsCompleto(token) {
+  return JSON.stringify(TicketsService.completo(token));
+}
 function apiBuscarTicketPorId(token, id) {
   return TicketsService.buscarPorId(token, id);
 }
@@ -131,6 +143,9 @@ function apiEliminarTicket(token, id) {
 // --- Cajas Chicas ---
 function apiListarCajasChicasResumen(token) {
   return CajasChicasService.listarResumen(token);
+}
+function apiCajasChicasCompleto(token) {
+  return JSON.stringify(CajasChicasService.completo(token));
 }
 function apiBuscarCajaChicaPorId(token, id) {
   return CajasChicasService.buscarPorId(token, id);
@@ -149,6 +164,9 @@ function apiEliminarCajaChica(token, id) {
 function apiListarCambiosMontoCCH(token) {
   return CambiosMontoCCHService.listarResumen(token);
 }
+function apiCambiosMontoCCHCompleto(token) {
+  return JSON.stringify(CambiosMontoCCHService.completo(token));
+}
 function apiCrearCambioMontoCCH(token, datos) {
   return CambiosMontoCCHService.crear(token, datos);
 }
@@ -159,6 +177,9 @@ function apiEliminarCambioMontoCCH(token, id) {
 // --- Reasignaciones Vehiculares ---
 function apiListarReasignacionesVehiculares(token) {
   return ReasignacionesVehicularesService.listarResumen(token);
+}
+function apiReasignacionesVehicularesCompleto(token) {
+  return JSON.stringify(ReasignacionesVehicularesService.completo(token));
 }
 function apiCrearReasignacionVehicular(token, datos) {
   return ReasignacionesVehicularesService.crear(token, datos);
@@ -174,6 +195,9 @@ function apiListarAuditItems(token) {
 }
 function apiListarArqueosResumen(token) {
   return ArqueosService.listarResumen(token);
+}
+function apiArqueosCompleto(token) {
+  return JSON.stringify(ArqueosService.completo(token));
 }
 function apiBuscarArqueoPorId(token, id) {
   return ArqueosService.buscarPorId(token, id);

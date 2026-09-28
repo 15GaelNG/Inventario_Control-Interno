@@ -246,6 +246,7 @@
       idTabla: 'cajas-chicas',
       textoVacio: 'Todavía no hay cajas chicas registradas',
       exportar: { nombreArchivo: 'Cajas Chicas' },
+      columnasCompletas: { idHoja: 'ID CCH', cargar: async () => JSON.parse(await callServer('apiCajasChicasCompleto', state.token)) },
       etiquetaFila: (c) => c.RESPONSABLE || ('ID CCH ' + c['ID CCH']),
       detalle: { titulo: (c) => 'ID CCH: ' + c['ID CCH'] },
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
@@ -480,6 +481,7 @@
       ordenInicial: { campo: 'FECHA', dir: 'desc' },
       textoVacio: 'Todavía no hay cambios de monto registrados',
       exportar: { nombreArchivo: 'Cambios de Monto' },
+      columnasCompletas: { idHoja: 'ID', cargar: async () => JSON.parse(await callServer('apiCambiosMontoCCHCompleto', state.token)) },
       etiquetaFila: (c) => c.RESPONSABLE || c.ID_CCH,
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
       columnas: [
@@ -601,6 +603,7 @@
       ordenInicial: { campo: 'FECHA', dir: 'desc' },
       textoVacio: 'Todavía no hay cambios registrados',
       exportar: { nombreArchivo: 'Cambios Vehículos' },
+      columnasCompletas: { idHoja: 'ID_CAMBIO', cargar: async () => JSON.parse(await callServer('apiCambiosVehiculosCompleto', state.token)) },
       etiquetaFila: (c) => [c.FOLIO, c.CAMPO].filter(Boolean).join(' · '),
       detalle: false, // bitácora de solo lectura, sin panel de detalle ni edición
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),

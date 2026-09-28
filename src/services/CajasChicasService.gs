@@ -87,6 +87,12 @@ const CajasChicasService = (function () {
     return resultado.sort((a, b) => Number(a.ID_CCH) - Number(b.ID_CCH));
   }
 
+  /** Todas las columnas de TODAS las cajas chicas (para "Vista": mostrar/exportar cualquier columna). */
+  function completo(token) {
+    Permisos.puedeLeer(token, 'caja-chica');
+    return SheetUtils.getAll(ssId(), NOMBRE_HOJA);
+  }
+
   /** Registro completo por ID CCH (para el modal de detalle/editar). */
   function buscarPorId(token, id) {
     Permisos.puedeLeer(token, 'caja-chica');
@@ -158,5 +164,5 @@ const CajasChicasService = (function () {
     return { ID: id };
   }
 
-  return { listarResumen, buscarPorId, crear, actualizar, eliminar };
+  return { listarResumen, completo, buscarPorId, crear, actualizar, eliminar };
 })();

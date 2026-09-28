@@ -114,6 +114,15 @@ const CambiosVehiculosService = (function () {
   }
 
   /**
+   * Todas las columnas Y TODAS las filas (no solo las MAXIMO_CAMBIOS más recientes), para "Vista":
+   * mostrar/exportar cualquier columna. La hoja tiene miles de filas — se pide solo bajo demanda.
+   */
+  function completo(token) {
+    Permisos.puedeLeer(token, 'cambios-vehiculos');
+    return SheetUtils.getAll(ssId(), NOMBRE_HOJA);
+  }
+
+  /**
    * Historial de cambios de UN vehículo (para enlazarlo desde el detalle
    * de Vehículos) — recorre la hoja de abajo hacia arriba, igual que
    * listarResumen (mismo motivo: evitar el bug de .sort() con 9,000+
@@ -146,5 +155,5 @@ const CambiosVehiculosService = (function () {
     return resultado;
   }
 
-  return { registrarCambios, listarResumen, listarPorFolio };
+  return { registrarCambios, listarResumen, completo, listarPorFolio };
 })();

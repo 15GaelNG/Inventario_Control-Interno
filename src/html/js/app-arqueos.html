@@ -634,6 +634,7 @@
       ordenInicial: { campo: 'FECHA_INICIO', dir: 'desc' },
       textoVacio: 'Todavía no hay arqueos registrados',
       exportar: { nombreArchivo: 'Arqueos' },
+      columnasCompletas: { idHoja: 'ID ARQUEO', cargar: async () => JSON.parse(await callServer('apiArqueosCompleto', state.token)) },
       etiquetaFila: (a) => a.ID,
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
       detalle: {

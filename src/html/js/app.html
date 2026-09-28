@@ -2112,6 +2112,7 @@
       idTabla: 'vehiculos',
       textoVacio: 'Todavía no hay vehículos registrados',
       exportar: { nombreArchivo: 'Vehículos' },
+      columnasCompletas: { idHoja: 'ID_VEHICULO', cargar: async () => JSON.parse(await callServer('apiVehiculosCompleto', state.token)) },
       etiquetaFila: (v) => v.FOLIO,
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
       detalle: {
@@ -2401,6 +2402,7 @@
       idTabla: 'uber',
       textoVacio: 'Todavía no hay usuarios registrados',
       exportar: { nombreArchivo: 'Uber' },
+      columnasCompletas: { idHoja: 'ID', cargar: async () => JSON.parse(await callServer('apiUberCompleto', state.token)) },
       etiquetaFila: (u) => u.NOMBRE_COMPLETO,
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
       detalle: { titulo: (u) => u.NOMBRE_COMPLETO || '' },
@@ -2624,6 +2626,7 @@
       ordenInicial: { campo: 'FECHA', dir: 'desc' },
       textoVacio: 'Todavía no hay tickets registrados',
       exportar: { nombreArchivo: 'Tickets' },
+      columnasCompletas: { idHoja: 'ID', cargar: async () => JSON.parse(await callServer('apiTicketsCompleto', state.token)) },
       etiquetaFila: (t) => t['TICKET'],
       detalle: { titulo: (t) => 'Ticket: ' + (t['TICKET'] || '') },
       columnas: [

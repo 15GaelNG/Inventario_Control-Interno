@@ -65,6 +65,7 @@
       textoVacio: 'Todavía no hay reasignaciones registradas',
       ayuda: 'Eliminar aquí NO revierte el responsable actual del vehículo — solo borra el registro del historial.',
       exportar: { nombreArchivo: 'Reasignaciones Vehiculares' },
+      columnasCompletas: { idHoja: 'ID Reasignacion Vehicular', cargar: async () => JSON.parse(await callServer('apiReasignacionesVehicularesCompleto', state.token)) },
       etiquetaFila: (r) => r.FOLIO_VEHICULO,
       detalle: { titulo: (r) => 'Folio: ' + (r.FOLIO_VEHICULO || '') },
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
