@@ -68,11 +68,6 @@ const TelefoniaService = (function () {
     return f ? LineasRepo.convertirRegistro(f, LineasUtil.carpetasNucos()) : null;
   }
 
-  /** TOTAL ROTACIONES del AppSheet: COUNT(SELECT(HISTORIAL_REASIGNACIONES[ID Historial], [ID Linea] = [_THISROW].[ID])). */
-  function totalRotaciones_(id) {
-    return LineasDatos.buscarFilas(LineasRepo.TAB.REASIG, 'ID Linea', id).length;
-  }
-
   /** Ficha de un equipo con su línea (evidencias e historial se piden aparte, en paralelo). */
   function equipo(token, id) {
     const sesion = Auth.validarSesion(token);
@@ -82,7 +77,6 @@ const TelefoniaService = (function () {
       equipo: ocultarSecretos_(r.equipo, CAMPOS_SECRETOS_EQUIPO, sesion),
       linea: ocultarSecretos_(r.linea, CAMPOS_SECRETOS_LINEA, sesion),
       detalles: r.detalles,
-      totalRotaciones: totalRotaciones_(id),
     });
   }
 
@@ -95,17 +89,7 @@ const TelefoniaService = (function () {
       linea: ocultarSecretos_(r.linea, CAMPOS_SECRETOS_LINEA, sesion),
       equipo: ocultarSecretos_(r.equipo, CAMPOS_SECRETOS_EQUIPO, sesion),
       detalles: r.detalles,
-      totalRotaciones: totalRotaciones_(id),
     });
-  }
-
-  /**
-   * Archivos de la carpeta del NUCO en NUCOS de producción (solo lectura), para "Documentos" de la ficha.
-   * Firmas, patrones y contraseñas solo para ADMIN. Caché 10 min por NUCO.
-   */
-  function documentosNuco(token, id) {
-    const sesion = Auth.validarSesion(token);
-    return carpetaNucoDe_(id, sesion);
   }
 
   /** Carpeta del NUCO del registro en NUCOS (caché 10 min por NUCO), sin firmas ni patrones si no es ADMIN. */
@@ -144,10 +128,8 @@ const TelefoniaService = (function () {
     if (!grupos.length) throw new Error('No hay ' + nombreTipo + ' en la carpeta NUCOS del NUCO ' + r.nuco + '.');
     const ultimos = grupos.filter((g) => g.fecha === grupos[0].fecha);
     const pdfs = [];
-    ultimos.forEach((g) => g.archivos.forEach((a) => { if (/pdf/i.test(a.mime || '') || /\.pdf$/i.test(a.nombre || '')) pdfs.push(a); }));
-    // Primero el formato ("RESP 0005 02 01.pdf" / "INSP 0005 02 01.pdf"), no otros PDF de la carpeta (p. ej. "INE 0005.pdf")
-    const prefijo = tipo === 'INSPECCION' ? /^INSP/i : /^RESP/i;
-    pdfs.sort((a, b) => (prefijo.test(b.nombre) - prefijo.test(a.nombre)) || (String(a.fecha || '') < String(b.fecha || '') ? 1 : -1));
+    ultimos.forEach((g) => g.archivos.forEach((a) => { if (esPdf_(a)) pdfs.push(a); }));
+    ordenarPdfs_(pdfs, tipo);
     if (pdfs.length) return { nuco: r.nuco, fecha: grupos[0].fecha, nombre: pdfs[0].nombre, url: pdfs[0].enlace, carpeta: false };
     // Sin PDF: la carpeta de esa fecha (la de ruta más corta: "INSP 02 10" antes que "INSP 02 10/FOTOS")
     const carpeta = ultimos.slice().sort((a, b) => a.ruta.length - b.ruta.length)[0];
@@ -155,6 +137,55 @@ const TelefoniaService = (function () {
       nuco: r.nuco, fecha: grupos[0].fecha, nombre: carpeta.ruta.split('/').pop(), carpeta: true,
       url: 'https://drive.google.com/drive/folders/' + carpeta.carpetaId,
     };
+  }
+
+  const esPdf_ = (a) => /pdf/i.test(a.mime || '') || /\.pdf$/i.test(a.nombre || '');
+
+  /** Primero el formato ("RESP 0005 02 01.pdf" / "INSP 0005 02 01.pdf"), no otros PDF de la carpeta (p. ej. "INE 0005.pdf"). */
+  function ordenarPdfs_(pdfs, tipo) {
+    const prefijo = tipo === 'INSPECCION' ? /^INSP/i : /^RESP/i;
+    return pdfs.sort((a, b) => (prefijo.test(b.nombre) - prefijo.test(a.nombre)) || (String(a.fecha || '') < String(b.fecha || '') ? 1 : -1));
+  }
+
+  /**
+   * Inspecciones y responsivas de la carpeta del NUCO en NUCOS (solo lectura), una por carpeta "INSP DD MM" /
+   * "RESP DD MM" (junto con su FOTOS): fecha de la ruta, su PDF, número de fotos y la carpeta. Mismo modelo que las
+   * históricas "solo en Drive" (origen DRIVE, id "drive_<carpeta>").
+   */
+  function evidenciasNucos_(id, sesion) {
+    const r = carpetaNucoDe_(id, sesion);
+    const eventos = {};
+    r.grupos.forEach((g) => {
+      if (g.tipo !== 'INSPECCION' && g.tipo !== 'RESPONSIVA') return;
+      const partes = g.ruta.split('/');
+      const i = partes.map((p) => /^(INSP|RESP)\s+\d/i.test(p.trim())).lastIndexOf(true);
+      const clave = g.tipo + '|' + (i >= 0 ? partes.slice(0, i + 1).join('/') : g.ruta);
+      const ev = eventos[clave] || (eventos[clave] = { tipo: g.tipo, fecha: g.fecha, carpetaId: null, fotosCarpetaId: null, pdfs: [], fotos: 0 });
+      if (i < 0 || i === partes.length - 1) ev.carpetaId = g.carpetaId;
+      else if (!ev.fotosCarpetaId) ev.fotosCarpetaId = g.carpetaId;
+      g.archivos.forEach((a) => {
+        if (esPdf_(a)) ev.pdfs.push(a);
+        else if (/^(image|video)\//.test(a.mime || '') && !/^(FIRMA|PATRON)/i.test(a.nombre || '')) ev.fotos++;
+      });
+    });
+    return Object.keys(eventos).map((k) => {
+      const ev = eventos[k];
+      const carpeta = ev.carpetaId || ev.fotosCarpetaId;
+      return {
+        tipo: ev.tipo,
+        doc: {
+          _id: 'drive_' + carpeta, origen: 'DRIVE', nuco: r.nuco, fecha: ev.fecha, calificacion: null,
+          drive: { carpetaId: carpeta, fotosCarpetaId: ev.fotosCarpetaId, fotos: ev.fotos, pdfs: ordenarPdfs_(ev.pdfs, ev.tipo).map((a) => ({ id: a.id, nombre: a.nombre })) },
+        },
+      };
+    });
+  }
+
+  /** Día "yyyy-MM-dd" de una fecha de la hoja (Date) o de NUCOS (texto ISO). */
+  function dia_(v) {
+    if (!v) return '';
+    if (v instanceof Date) return Utilities.formatDate(v, LineasDatos.ZONA_APP, 'yyyy-MM-dd');
+    return String(v).slice(0, 10);
   }
 
   // ---------------- Vistas de detalle del AppSheet (columnas en su orden, con su DisplayName) ----------------
@@ -202,11 +233,67 @@ const TelefoniaService = (function () {
     }).sort((a, b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
   }
 
-  /** Inspecciones y responsivas de un registro. */
+  /**
+   * Inspecciones y responsivas de un registro: las de la hoja (AppSheet y sistema) y las de la carpeta del NUCO en
+   * NUCOS. Una de la hoja sin carpeta y del mismo día que una de NUCOS toma su PDF y su carpeta (no se repite).
+   */
   function evidencias(token, id) {
-    Auth.validarSesion(token);
+    const sesion = Auth.validarSesion(token);
     const ev = LineasRepo.evidenciasDeRegistro(id);
+    let nucos = [];
+    try {
+      nucos = evidenciasNucos_(id, sesion);
+    } catch (e) {
+      console.warn('evidencias NUCOS ' + id + ': ' + e.message); // sin acceso a NUCOS: solo lo de la hoja
+    }
+    const listas = { INSPECCION: ev.inspecciones, RESPONSIVA: ev.responsivas };
+    const conCarpeta = {};
+    ev.inspecciones.concat(ev.responsivas).forEach((d) => { if (d.drive && d.drive.carpetaId) conCarpeta[d.drive.carpetaId] = true; });
+    nucos.forEach((n) => {
+      if (conCarpeta[n.doc.drive.carpetaId]) return;
+      const lista = listas[n.tipo];
+      const mismoDia = lista.filter((d) => !(d.drive && d.drive.carpetaId) && d.fecha && dia_(d.fecha) === dia_(n.doc.fecha))[0];
+      if (mismoDia) mismoDia.drive = n.doc.drive;
+      else lista.push(n.doc);
+    });
     return LineasUtil.paraCliente({ inspecciones: resumirEvidencias_(ev.inspecciones), responsivas: resumirEvidencias_(ev.responsivas) });
+  }
+
+  /**
+   * Inspección que solo existe en NUCOS ("drive_<carpeta>"): fecha y NUCO de su ruta, su PDF y sus fotos. Solo
+   * carpetas dentro de NUCOS.
+   */
+  function inspeccionNucos_(carpetaId) {
+    if (!LineasArchivos.estaDentroDe(carpetaId, LineasArchivos.carpetaNucosId())) return null;
+    let carpeta = DriveApp.getFolderById(carpetaId);
+    if (/^FOTOS$/i.test(carpeta.getName().trim()) && carpeta.getParents().hasNext()) carpeta = carpeta.getParents().next();
+    const nombres = [];
+    let nuco = null;
+    for (let c = carpeta, n = 0; c && n < 10; n++) {
+      const padres = c.getParents();
+      const padre = padres.hasNext() ? padres.next() : null;
+      if (padre && padre.getId() === LineasArchivos.carpetaNucosId()) nuco = LineasUtil.nuco4(c.getName());
+      nombres.push(c.getName().trim());
+      c = padre;
+    }
+    const anio = nombres.filter((x) => /^\d{4}$/.test(x) && x !== nuco)[0];
+    const dm = nombres.map((x) => x.match(/^(?:INSP|RESP)\s+(\d{1,2})\s+(\d{1,2})\b/i)).filter(Boolean)[0];
+    const archivos = archivosCarpeta_(carpeta.getId(), 200);
+    const fotos = archivos.filter((a) => a.mimeType === 'application/vnd.google-apps.folder' && /^FOTOS$/i.test(a.name.trim()))[0];
+    const pdfs = ordenarPdfs_(archivos.filter((a) => /pdf/i.test(a.mimeType)).map((a) => ({ id: a.id, nombre: a.name })), 'INSPECCION');
+    let registroId = null;
+    if (nuco) {
+      const ix = LineasRepo.indice();
+      const iNuco = ix.equipos.columnas.indexOf('nuco');
+      const fila = ix.equipos.filas.filter((f) => f[iNuco] === nuco)[0];
+      registroId = fila ? fila[0] : null;
+    }
+    return {
+      _id: 'drive_' + carpetaId, origen: 'DRIVE', registroId: registroId, nuco: nuco,
+      fecha: anio && dm ? new Date(Number(anio), Number(dm[2]) - 1, Number(dm[1]), 12) : null,
+      checklist: {}, calificacion: null,
+      drive: { carpetaId: carpeta.getId(), fotosCarpetaId: fotos ? fotos.id : null, pdfs: pdfs, fotos: 0 },
+    };
   }
 
   /** Historial de un registro (bitácora, reasignaciones, desechos y operaciones del sistema). */
@@ -232,7 +319,7 @@ const TelefoniaService = (function () {
   /** Detalle de inspección con checklist y fotos de Drive. */
   function inspeccion(token, id) {
     const sesion = Auth.validarSesion(token);
-    const insp = LineasRepo.leerInspeccion(id);
+    const insp = LineasRepo.leerInspeccion(id) || (/^drive_/.test(id) ? inspeccionNucos_(id.slice(6)) : null);
     if (!insp) throw new Error('No existe la inspección ' + id);
     // PIN, patrón y firmas solo para ADMIN (igual que en la ficha)
     if (!puedeVerSecretos_(sesion)) {
@@ -451,7 +538,7 @@ const TelefoniaService = (function () {
   return {
     permisos, indice, equipo, linea, evidencias, historial, inspeccion, catalogos, colaboradores, bitacora, vistaOperativa, formularioOperativa, crearVistaOperativa, formularioRegistro, recargarDatos,
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf, crearRegistro, editarRegistro,
-    cambiarEstatus, fotosInspeccion, exportarBase, archivo, documentosNuco, ultimoDocumentoNuco,
+    cambiarEstatus, fotosInspeccion, exportarBase, archivo, ultimoDocumentoNuco,
     formularioEdicionOperativa, editarVistaOperativa,
   };
 })();

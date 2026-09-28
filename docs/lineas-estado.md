@@ -160,6 +160,9 @@ y capturar responsivas e inspecciones.
   "Última inspección") → `apiLineasUltimoDocumentoNuco` → `TelefoniaService.ultimoDocumentoNuco` (carpeta más
   reciente del tipo en NUCOS y su PDF RESP/INSP; sin PDF, la carpeta). Vista guardada `lineas-<modulo>-v4`.
 - Ficha: sin `pdfRuta` (PDF de la carpeta de la app) ni `DETALLE_RESPONSIVA` / `apiLineasResponsiva`.
+- Segundo ajuste: botón "Ver"; General como antes (sin total de rotaciones); Documentos como antes, con las de NUCOS
+  en la misma lista: `TelefoniaService.evidencias` agrega `evidenciasNucos_` (una por carpeta INSP/RESP DD MM) y
+  `inspeccion('drive_<carpeta>')` usa `inspeccionNucos_` si no hay APP_EVIDENCIAS. Sin `apiLineasDocumentosNuco`.
 
 ## 0j. Vista del AppSheet, NUCOS y una sola carpeta de Drive (2026-09-28; tabla y documentos ajustados en §0k)
 

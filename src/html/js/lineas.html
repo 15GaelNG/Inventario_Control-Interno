@@ -128,7 +128,7 @@
       const ventana = window.open('', '_blank');
       const original = boton.innerHTML;
       boton.disabled = true;
-      boton.innerHTML = '<span class="ln-spinner"></span> Buscando en NUCOS…';
+      boton.innerHTML = '<span class="ln-spinner"></span> Ver';
       try {
         const r = await llamar('apiLineasUltimoDocumentoNuco', boton.dataset.id, boton.dataset.lnUltimo);
         if (ventana) ventana.location.href = r.url; else window.open(r.url, '_blank');
@@ -1371,11 +1371,11 @@
       ['EMAIL USUARIO', 'Email usuario', 'correo'], ['ESTATUS EQUIPO', 'Estatus equipo', 'chip'], ['RESPONSIVA', 'Última responsiva', 'ultimo'],
       ['COMENTARIOS', 'Comentarios'], ['FECHA INSPECCION', 'Fecha inspección', 'fecha'], ['FORMATO INSPECCION', 'Última inspección', 'ultimo'],
     ];
-    /** Botón que abre la última inspección o responsiva de la carpeta del NUCO en NUCOS (se busca al hacer clic). */
+    /** "Ver": abre la última inspección o responsiva de la carpeta del NUCO en NUCOS (se busca al hacer clic). */
     function botonUltimoNucos(tipo, id) {
-      const texto = tipo === 'INSPECCION' ? 'Última inspección' : 'Última responsiva';
-      return '<button type="button" class="ln-btn-icono ln-archivo" data-ln-ultimo="' + tipo + '" data-id="' + esc(id) + '" title="' + texto + ' en la carpeta NUCOS">' +
-        icono(tipo === 'INSPECCION' ? 'clipboard-check' : 'signature') + ' ' + texto + '</button>';
+      const titulo = (tipo === 'INSPECCION' ? 'Última inspección' : 'Última responsiva') + ' en la carpeta NUCOS';
+      return '<button type="button" class="ln-btn-icono ln-archivo" data-ln-ultimo="' + tipo + '" data-id="' + esc(id) + '" title="' + titulo + '">' +
+        icono('file-text') + ' Ver</button>';
     }
     const tieneNuco = (r) => !!(r.NUCO || r.nuco || r.nucoEquipo);
     /**
@@ -1812,6 +1812,7 @@
         return tarjeta(icono('file-spreadsheet') + ' Registro en la hoja', campos([
           ['ID', l.id], ['Folio', l.folio], ['Tipo', l.tipo], ['Fila en hoja', l.fila],
           ['Estatus general', chip(l.estatusGeneral), true], ['Fecha registro', fecha(l.fechaRegistro)], ['Última inspección', fecha(l.fechaInspeccion)],
+          ['Comentarios', l.comentarios],
         ]), 'ln-solo-escritorio');
       }
 
@@ -1842,7 +1843,7 @@
           icono(t[2]) + ' ' + t[1] + ' <span class="ln-tab-num" data-ficha-num="' + t[0] + '"></span></button>').join('') + '</div>' +
           '<div data-ficha-panel="general">' + general + '</div>' +
           '<div data-ficha-panel="detalles" hidden>' + detalles + '</div>' +
-          (conDocumentos ? '<div data-ficha-panel="documentos" hidden><div id="ln-evidencias">' + cargando + '</div><div id="ln-docs-nucos"></div></div>' : '') +
+          (conDocumentos ? '<div data-ficha-panel="documentos" hidden><div id="ln-evidencias">' + cargando + '</div></div>' : '') +
           '<div data-ficha-panel="historial" hidden><div id="ln-historial">' + cargando + '</div></div>';
       }
 
@@ -1854,68 +1855,6 @@
         });
         raiz.querySelectorAll('[data-ficha-panel]').forEach((p) => { p.hidden = p.dataset.fichaPanel !== nombre; });
         if (nombre === 'historial' && tablaHistorial) tablaHistorial.ajustarAlto();
-        if (nombre === 'documentos') cargarNucos();
-      }
-
-      /** Conteo de "Documentos": inspecciones y responsivas registradas + carpetas con archivos en NUCOS. */
-      function contarDocumentos() {
-        const f = fichaActual || {};
-        contarEnPestana('documentos', (f.docsRegistros || 0) + (f.docsNucos || 0));
-      }
-
-      /** Galería de archivos de Drive (miniatura y nombre; se abren en Drive). */
-      function galeriaDrive(lista, firma) {
-        return '<div class="ln-galeria">' + lista.map((f) =>
-          '<a class="ln-evidencia" target="_blank" rel="noopener" href="' + esc(f.enlace) + '">' +
-          '<span class="ln-foto' + (firma ? ' ln-firma' : '') + '">' +
-          (f.miniatura ? '<img loading="lazy" referrerpolicy="no-referrer" src="' + esc(f.miniatura) + '" alt="' + esc(f.nombre) + '">' : icono(f.video ? 'video' : 'image')) +
-          '</span><span class="ln-evidencia-nombre">' + esc(f.nombre || 'Archivo') + '<small>' + icono('external-link') + ' Abrir en Drive</small></span></a>').join('') + '</div>';
-      }
-
-      /**
-       * Carpeta del NUCO en NUCOS de producción (solo consulta): las carpetas con archivos (INSP DD MM, FOTOS,
-       * RESP DD MM…) con sus imágenes y PDF. Se pide al abrir "Documentos" (no retrasa la ficha).
-       */
-      function cargarNucos() {
-        const f = fichaActual;
-        const cont = $('#ln-docs-nucos', raiz);
-        if (!f || !cont || f.nucosPedido) return;
-        f.nucosPedido = true;
-        cont.innerHTML = tarjeta(icono('folder-open') + ' Carpeta NUCOS', '<p class="ln-tenue"><span class="ln-spinner"></span> Consultando la carpeta NUCOS en Drive…</p>');
-        llamar('apiLineasDocumentosNuco', f.id).then((r) => {
-          if (fichaActual !== f || !document.body.contains(cont)) return;
-          f.docsNucos = r.grupos.length;
-          cont.innerHTML = tarjetaNucos(r);
-          contarDocumentos();
-        }).catch((e) => {
-          if (fichaActual !== f || !document.body.contains(cont)) return;
-          f.nucosPedido = false;
-          cont.innerHTML = tarjeta(icono('folder-open') + ' Carpeta NUCOS', '<p class="error-msg">No se pudo leer la carpeta NUCOS: ' + mensajeError(e) + '</p>');
-        });
-      }
-
-      function tarjetaNucos(r) {
-        const titulo = icono('folder-open') + ' Carpeta NUCOS' + (r.nuco ? ' · ' + esc(r.nuco) : '') + (r.grupos.length ? ' (' + r.grupos.length + ')' : '');
-        if (!r.carpetaId) {
-          return tarjeta(titulo, '<p class="empty-state">' + (r.nuco ? 'No hay carpeta de este NUCO en NUCOS.' : 'Este registro no tiene NUCO: no tiene carpeta en NUCOS.') + '</p>');
-        }
-        const cabecera = '<div class="ln-nucos-cabecera"><p class="ln-tenue">Archivos de la carpeta NUCOS en Drive (solo consulta).</p>' + enlaceDrive(r.carpetaId, 'Abrir carpeta') + '</div>';
-        if (!r.grupos.length) return tarjeta(titulo, cabecera + '<p class="empty-state">La carpeta del NUCO no tiene archivos.</p>');
-        const TIPOS = { INSPECCION: ['clipboard-check', 'Inspección'], RESPONSIVA: ['signature', 'Carta responsiva'], OTRO: ['folder', 'Otros archivos'] };
-        const grupos = r.grupos.map((g, i) => {
-          const partes = g.ruta ? g.ruta.split('/') : [];
-          const nombre = partes.length ? partes.slice(-2).join(' / ') : 'Carpeta del NUCO';
-          const tipo = TIPOS[g.tipo] || TIPOS.OTRO;
-          const imagenes = g.archivos.filter((a) => String(a.mime || '').indexOf('image') === 0 || a.video);
-          const otros = g.archivos.filter((a) => imagenes.indexOf(a) < 0);
-          return '<details class="ln-nucos-grupo"' + (i < 2 ? ' open' : '') + '><summary>' + icono(tipo[0]) + ' <b>' + esc(nombre) + '</b>' +
-            '<span class="ln-tenue">' + esc(tipo[1]) + ' · ' + g.archivos.length + ' archivo(s)' + (g.fecha ? ' · ' + esc(fecha(g.fecha)) : '') + '</span></summary>' +
-            '<p class="ln-pie ln-tenue">' + esc(g.ruta || '(raíz de la carpeta del NUCO)') + '</p>' +
-            (otros.length ? '<div class="ln-nucos-archivos">' + otros.map((a) => '<a class="externo ln-boton" target="_blank" rel="noopener" href="' + esc(a.enlace) + '">' +
-              icono(/pdf/.test(a.mime) ? 'file-text' : 'file') + ' ' + esc(a.nombre) + '</a>').join('') + '</div>' : '') +
-            (imagenes.length ? galeriaDrive(imagenes) : '') + '</details>';
-        }).join('');
-        return tarjeta(titulo, cabecera + grupos);
       }
 
       function contarEnPestana(nombre, n) {
@@ -1952,9 +1891,7 @@
                 e.tipo === 'MODEM' || e.tipo === 'BANDA_ANCHA' ? ['Contraseña módem', e.contrasenaModem] : null,
                 e.simResidual ? ['SIM residual', chip(e.simResidual, 'ambar'), true] : null,
                 e.nuco ? ['Responsiva', botonUltimoNucos('RESPONSIVA', id), true] : null,
-                e.nuco ? ['Inspección', botonUltimoNucos('INSPECCION', id), true] : null,
-                ['Total de rotaciones', miles(r.totalRotaciones || 0)],
-                ['Comentarios', e.legado && e.legado.comentarios],
+                e.nuco ? ['Formato inspección', botonUltimoNucos('INSPECCION', id), true] : null,
               ])) +
               tarjeta(icono('card-sim') + ' Línea asignada', l ? campos([
                 ['Número', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + icono('phone') + ' ' + esc(l.numero || '(sin número)') + ' ' + icono('chevron-right') + '</a>', true],
@@ -1991,10 +1928,6 @@
                 ['Costo plan', costo], ['Inicio plan', fecha(l.inicioPlan)], ['Fin plan', fecha(l.finPlan)],
                 l.usoTemporal ? ['Uso temporal', 'Desde ' + esc(fecha(l.usoTemporal.desde) || '—') + ' · ' + esc(l.usoTemporal.correo || ''), true] : null,
                 !e && l.nucoLegado ? ['NUCO (anterior)', l.nucoLegado] : null,
-                !e && l.nucoLegado ? ['Responsiva', botonUltimoNucos('RESPONSIVA', id), true] : null,
-                !e && l.nucoLegado ? ['Inspección', botonUltimoNucos('INSPECCION', id), true] : null,
-                ['Total de rotaciones', miles(r.totalRotaciones || 0)],
-                ['Comentarios', l.legado && l.legado.comentarios],
               ])) +
               tarjeta(icono('smartphone') + ' Equipo', e ? campos([
                 ['NUCO', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' ' + esc(e.nuco || '—') + ' ' + icono('chevron-right') + '</a>', true],
@@ -2120,8 +2053,7 @@
               [r.responsable],
               accionPdf(r, 'RESPONSIVA').replace(vacio, '') + (r.carpetaId ? enlaceDrive(r.carpetaId, 'Carpeta') : ''))).join('') + '</ul>'
           : '<p class="empty-state">Sin responsivas registradas.</p>';
-        if (fichaActual) fichaActual.docsRegistros = inspecciones.length + responsivas.length;
-        contarDocumentos();
+        contarEnPestana('documentos', inspecciones.length + responsivas.length);
         return tarjeta(icono('clipboard-check') + ' Inspecciones (' + inspecciones.length + ')', listaInsp) + tarjeta(icono('signature') + ' Responsivas (' + responsivas.length + ')', listaResp);
       }
 

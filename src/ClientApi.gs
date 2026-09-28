@@ -85,9 +85,6 @@ function apiLineasVistaOperativaTabla(token, tipo, opciones) {
 function apiLineasUltimoDocumentoNuco(token, id, tipo) {
   return TelefoniaService.ultimoDocumentoNuco(token, id, tipo);
 }
-function apiLineasDocumentosNuco(token, id) {
-  return TelefoniaService.documentosNuco(token, id);
-}
 function apiLineasArchivo(token, ruta) {
   return TelefoniaService.archivo(token, ruta);
 }

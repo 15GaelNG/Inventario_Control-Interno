@@ -610,15 +610,54 @@ test('Drive: todo en la carpeta de la app AppSheet con sus rutas; NUCOS de produ
   assert.match(read('src/services/lineas/LineasArchivos.gs'), /if \(!carpetaId \|\| !estaDentroDe\(carpetaId, carpetaAppSheetId\(\)\)\)/);
   assert.match(read('src/services/lineas/LineasUtil.gs'), /try \{ return LineasArchivos\.carpetasNucos\(\); \}/);
   assert.match(read('src/ClientApi.gs'), /function apiLineasArchivo\(token, ruta\)/);
-  assert.match(read('src/ClientApi.gs'), /function apiLineasDocumentosNuco\(token, id\)/);
 
-  // Cliente: Documentos muestra NUCOS; la ficha y su lista de documentos ya no abren PDF de la carpeta del AppSheet
+  // Cliente: la ficha como antes; Responsiva y Formato inspección abren la última de NUCOS; Documentos sin PDF del AppSheet
   const lineas = read('src/html/js/lineas.html');
   assert.match(lineas, /\['Patrón', botonArchivo\(e\.patronRuta, 'Ver patrón'\), true\]/);
-  assert.doesNotMatch(lineas, /d\.pdfRuta|responsivaRuta|formatoInspeccionRuta|apiLineasResponsiva/);
-  assert.doesNotMatch(read('src/services/TelefoniaService.gs'), /pdfRuta: pdf \?/);
-  assert.match(lineas, /if \(nombre === 'documentos'\) cargarNucos\(\);/);
-  assert.match(lineas, /llamar\('apiLineasDocumentosNuco', f\.id\)/);
+  assert.match(lineas, /e\.nuco \? \['Responsiva', botonUltimoNucos\('RESPONSIVA', id\), true\] : null,/);
+  assert.match(lineas, /e\.nuco \? \['Formato inspección', botonUltimoNucos\('INSPECCION', id\), true\] : null,/);
+  assert.match(lineas, /\['Comentarios', l\.comentarios\],/);
+  assert.doesNotMatch(lineas, /d\.pdfRuta|responsivaRuta|formatoInspeccionRuta|apiLineasResponsiva|apiLineasDocumentosNuco|ln-docs-nucos|totalRotaciones/);
+  assert.doesNotMatch(read('src/services/TelefoniaService.gs'), /pdfRuta: pdf \?|totalRotaciones/);
+  assert.match(lineas, /contarEnPestana\('documentos', inspecciones\.length \+ responsivas\.length\);/);
+});
+
+test('Documentos: inspecciones y responsivas de la hoja y de la carpeta del NUCO en NUCOS', () => {
+  const grupos = [
+    { carpetaId: 'r1', ruta: 'CARTA RESPONSIVA/2026/RESP 02 01', tipo: 'RESPONSIVA', fecha: '2026-01-02T12:00:00', archivos: [
+      { id: 'ine', nombre: 'INE 0005.pdf', mime: 'application/pdf', fecha: '2026-02-16' },
+      { id: 'resp', nombre: 'RESP 0005 02 01.pdf', mime: 'application/pdf', fecha: '2026-01-11' },
+    ] },
+    { carpetaId: 'i1', ruta: 'INSPECCIONES/2026/ENERO/INSP 02 01', tipo: 'INSPECCION', fecha: '2026-01-02T12:00:00', archivos: [
+      { id: 'insp', nombre: 'INSP 0005 02 01.pdf', mime: 'application/pdf' }] },
+    { carpetaId: 'f1', ruta: 'INSPECCIONES/2026/ENERO/INSP 02 01/FOTOS', tipo: 'INSPECCION', fecha: '2026-01-02T12:00:00', archivos: [
+      { id: 'a', nombre: 'a.jpg', mime: 'image/jpeg' }, { id: 'b', nombre: 'b.jpg', mime: 'image/jpeg' }] },
+    { carpetaId: 'f0', ruta: 'INSPECCIONES/2025/DICIEMBRE/INSP 10 12/FOTOS', tipo: 'INSPECCION', fecha: '2025-12-10T12:00:00', archivos: [
+      { id: 'c', nombre: 'c.jpg', mime: 'image/jpeg' }] },
+  ];
+  const hoja = {
+    // Inspección del AppSheet del 10-dic (sin carpeta): toma la carpeta de NUCOS de ese día en vez de repetirse
+    inspecciones: [{ _id: 'AP1', origen: 'APPSHEET', fecha: new Date(2025, 11, 10, 9), calificacion: 1, snapshot: { responsable: 'R' } }],
+    responsivas: [],
+  };
+  const globales = {
+    Auth: { validarSesion: () => ({ rol: 'OPERADOR' }) },
+    Config: { ROLES: { ADMIN: 'ADMIN', OPERADOR: 'OPERADOR' } },
+    LineasRepo: { leerRegistroPorId: () => ({ NUCO: 5 }), evidenciasDeRegistro: () => hoja },
+    LineasUtil: { nuco4: (v) => ('0000' + v).slice(-4), col: (f, c) => f[c], paraCliente: (o) => JSON.parse(JSON.stringify(o)) },
+    LineasDatos: { cacheLeer: () => null, cacheGuardar: () => {}, ZONA_APP: 'X' },
+    LineasArchivos: { archivosNuco: () => ({ carpetaId: 'raiz', grupos: grupos }) },
+    Utilities: { formatDate: (d) => [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-') },
+  };
+  const S = new Function(...Object.keys(globales), read('src/services/TelefoniaService.gs') + '\nreturn TelefoniaService;')(...Object.values(globales));
+  const r = S.evidencias('t', 'x');
+  assert.deepEqual(r.inspecciones.map((i) => [i.id, i.origen, i.pdfId, i.fotos, i.carpetaId]), [
+    ['drive_i1', 'DRIVE', 'insp', 2, 'i1'],
+    ['AP1', 'APPSHEET', null, 1, 'f0'],
+  ]);
+  assert.deepEqual(r.responsivas.map((i) => [i.id, i.pdfId]), [['drive_r1', 'resp']]);
+  assert.match(read('src/services/TelefoniaService.gs'), /LineasRepo\.leerInspeccion\(id\) \|\| \(\/\^drive_\/\.test\(id\) \? inspeccionNucos_\(id\.slice\(6\)\) : null\)/);
+  assert.match(read('src/services/TelefoniaService.gs'), /if \(!LineasArchivos\.estaDentroDe\(carpetaId, LineasArchivos\.carpetaNucosId\(\)\)\) return null;/);
 });
 
 test('los .html de Líneas no llevan "//" fuera de comentarios (Apps Script corta lo que sigue)', () => {
@@ -658,12 +697,9 @@ test('la tabla de Líneas Telefónicas tiene las columnas de siempre y agrega la
   assert.match(repo, /if \(c === 'FOLIO'\) return legado\.folio \|\| null;/);
 });
 
-test('vistas de detalle del AppSheet: ficha e inspección', () => {
+test('vista de detalle del AppSheet: inspección', () => {
   const servicio = read('src/services/TelefoniaService.gs');
-  // LINEAS TELEFONICAS_Detail: TOTAL ROTACIONES = COUNT de HISTORIAL_REASIGNACIONES del registro
-  assert.match(servicio, /return LineasDatos\.buscarFilas\(LineasRepo\.TAB\.REASIG, 'ID Linea', id\)\.length;/);
   const lineas = read('src/html/js/lineas.html');
-  assert.equal((lineas.match(/\['Total de rotaciones', miles\(r\.totalRotaciones \|\| 0\)\]/g) || []).length, 2);
   // INSPECCIONES LINEAS_Detail con todas las columnas (la responsiva se consulta en NUCOS, no en un panel del AppSheet)
   assert.match(servicio, /\['E COMMERCE', 'ENLACE A WINDOWS'\]/);
   assert.doesNotMatch(servicio, /DETALLE_RESPONSIVA/);

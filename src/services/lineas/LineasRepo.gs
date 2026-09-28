@@ -519,6 +519,7 @@ const LineasRepo = (function () {
   /** Inspección por id: fila de INSPECCIONES LINEAS, o "drive_<carpetaId>" si solo existe en Drive. */
   function leerInspeccion(id) {
     if (/^drive_/.test(id)) {
+      if (!LineasDatos.existeTabla(TAB.APP_EVID)) return null; // sin la pestaña: se lee de NUCOS (TelefoniaService)
       const filas = LineasDatos.buscarFilas(TAB.APP_EVID, 'CARPETA_ID', id.slice(6));
       if (!filas.length) return null;
       return inspeccionDesdeEvidencia(evidenciaDesdeFila(LineasDatos.leerFilas([{ tabla: TAB.APP_EVID, filas: filas.slice(0, 1) }])[0][0]));
