@@ -352,7 +352,15 @@ const VehiculosService = (function () {
     }
 
     const blob = Utilities.newBlob(bytes, mimeType || 'application/octet-stream', nombreArchivo || 'archivo');
-    const carpeta = DriveApp.getFolderById(CARPETA_ADJUNTOS_ID);
+    let carpeta;
+    try {
+      carpeta = DriveApp.getFolderById(CARPETA_ADJUNTOS_ID);
+    } catch (e) {
+      // El mensaje genérico de Drive ("Acceso denegado") no dice qué cuenta falló —
+      // aquí sí, para no tener que adivinar cada vez que pase.
+      throw new Error('No se pudo abrir la carpeta de adjuntos de Vehículos en Drive. La cuenta con la que ' +
+        'corre la app ahora mismo (' + Session.getEffectiveUser().getEmail() + ') no tiene acceso a esa carpeta.');
+    }
     const archivo = carpeta.createFile(blob);
     // Sin esto, el archivo solo lo puede ver la cuenta que despliega la app
     // (quien lo creó) — nadie más puede abrir el link, aunque sea válido.
