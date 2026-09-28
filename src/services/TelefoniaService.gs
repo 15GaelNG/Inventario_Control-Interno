@@ -105,6 +105,11 @@ const TelefoniaService = (function () {
    */
   function documentosNuco(token, id) {
     const sesion = Auth.validarSesion(token);
+    return carpetaNucoDe_(id, sesion);
+  }
+
+  /** Carpeta del NUCO del registro en NUCOS (caché 10 min por NUCO), sin firmas ni patrones si no es ADMIN. */
+  function carpetaNucoDe_(id, sesion) {
     const f = LineasRepo.leerRegistroPorId(id);
     if (!f) throw new Error('No existe el registro ' + id);
     const nuco = LineasUtil.nuco4(LineasUtil.col(f, 'NUCO'));
@@ -123,6 +128,35 @@ const TelefoniaService = (function () {
     return { nuco: nuco, carpetaId: r.carpetaId, grupos: grupos };
   }
 
+  /**
+   * Última inspección o responsiva del registro en su carpeta de NUCOS (solo lectura): la carpeta más reciente de
+   * INSPECCIONES o CARTA RESPONSIVA (fecha de su ruta: ".../2025/.../INSP 02 10") y su PDF; si esa carpeta no tiene
+   * PDF, la carpeta. Botones "Última inspección" / "Última responsiva" de la tabla y de la ficha.
+   */
+  function ultimoDocumentoNuco(token, id, tipo) {
+    const sesion = Auth.validarSesion(token);
+    if (tipo !== 'INSPECCION' && tipo !== 'RESPONSIVA') throw new Error('Tipo de documento inválido.');
+    const nombreTipo = tipo === 'INSPECCION' ? 'inspección' : 'responsiva';
+    const r = carpetaNucoDe_(id, sesion);
+    if (!r.nuco) throw new Error('Este registro no tiene NUCO: no tiene carpeta en NUCOS.');
+    if (!r.carpetaId) throw new Error('No hay carpeta del NUCO ' + r.nuco + ' en NUCOS.');
+    const grupos = r.grupos.filter((g) => g.tipo === tipo); // ya vienen de la más reciente a la más antigua
+    if (!grupos.length) throw new Error('No hay ' + nombreTipo + ' en la carpeta NUCOS del NUCO ' + r.nuco + '.');
+    const ultimos = grupos.filter((g) => g.fecha === grupos[0].fecha);
+    const pdfs = [];
+    ultimos.forEach((g) => g.archivos.forEach((a) => { if (/pdf/i.test(a.mime || '') || /\.pdf$/i.test(a.nombre || '')) pdfs.push(a); }));
+    // Primero el formato ("RESP 0005 02 01.pdf" / "INSP 0005 02 01.pdf"), no otros PDF de la carpeta (p. ej. "INE 0005.pdf")
+    const prefijo = tipo === 'INSPECCION' ? /^INSP/i : /^RESP/i;
+    pdfs.sort((a, b) => (prefijo.test(b.nombre) - prefijo.test(a.nombre)) || (String(a.fecha || '') < String(b.fecha || '') ? 1 : -1));
+    if (pdfs.length) return { nuco: r.nuco, fecha: grupos[0].fecha, nombre: pdfs[0].nombre, url: pdfs[0].enlace, carpeta: false };
+    // Sin PDF: la carpeta de esa fecha (la de ruta más corta: "INSP 02 10" antes que "INSP 02 10/FOTOS")
+    const carpeta = ultimos.slice().sort((a, b) => a.ruta.length - b.ruta.length)[0];
+    return {
+      nuco: r.nuco, fecha: grupos[0].fecha, nombre: carpeta.ruta.split('/').pop(), carpeta: true,
+      url: 'https://drive.google.com/drive/folders/' + carpeta.carpetaId,
+    };
+  }
+
   // ---------------- Vistas de detalle del AppSheet (columnas en su orden, con su DisplayName) ----------------
 
   /** INSPECCIONES LINEAS_Detail: ColumnOrder vacío = todas las columnas de la tabla en su orden. */
@@ -138,13 +172,6 @@ const TelefoniaService = (function () {
     ['OBSERVACIONES'], ['TICKET'], ['FIRMA RESPONSABLE'], ['NOMBRE INSPECTOR'], ['FIRMA INSPECTOR'], ['FECHA DE REGISTRO'],
     ['FORMATO INSPECCIONES LINEAS'], ['SO', 'SISTEMA OPERATIVO'], ['ACTUALIZACIONES'], ['PANTALLA TACTIL'], ['CUBO 2'],
     ['CABLE 2'], ['CALIFICACION']];
-  /** RESPONSIVAS LINEAS_Detail: su ColumnOrder. */
-  const DETALLE_RESPONSIVA = [['ID'], ['ID LINEA'], ['NUCO'], ['No EMPLEADO', 'NÚMERO DE EMPLEADO'], ['RESPONSABLE'],
-    ['IDENTIFICACION'], ['FECHA RESPONSIVA', 'FECHA DE REGISTRO DE RESPONSIVA'], ['SEDE'], ['OFICINA / DESARROLLO', 'OFICINA O DESARROLLO'],
-    ['AREA'], ['PUESTO'], ['DIRECTOR'], ['CORREO', 'CORREO ELECTRÓNICO'], ['No TELEFONO', 'NÚMERO DE TELÉFONO'], ['COMPAÑIA'],
-    ['DEPARTAMENTO'], ['MODELO'], ['SIM'], ['IMEI'], ['COLOR'], ['ACCESORIOS'], ['PIN WHATSAPP'], ['CONTRASEÑA', 'PATRÓN'],
-    ['OBSERVACIONES'], ['FIRMA RESPONSABLE'], ['NOMBRE CI', 'NOMBRE RESPONSABLE DE CONTROL INTERNO'],
-    ['FIRMA CI', 'FIRMA RESPONSABLE DE CONTROL INTERNO'], ['FORMATO RESPONSIVA'], ['DIA'], ['MES'], ['AÑO']];
   const COLUMNA_SECRETA_DETALLE = /^(PIN WHATSAPP|PIN EQUIPO|PATRON|CONTRASEÑA|CONTRASEÑA MODEM|FIRMA .+)$/;
 
   /** Fila de la tabla en el orden de su vista de detalle del AppSheet: [{ columna, titulo, valor }]. */
@@ -161,14 +188,6 @@ const TelefoniaService = (function () {
     });
   }
 
-  /** Responsiva con su vista de detalle del AppSheet (RESPONSIVAS LINEAS_Detail). */
-  function responsiva(token, id) {
-    const sesion = Auth.validarSesion(token);
-    const detalle = registroDetalle_(LineasRepo.TAB.RESP, id, DETALLE_RESPONSIVA, sesion);
-    if (!detalle) throw new Error('No existe la responsiva ' + id);
-    return LineasUtil.paraCliente({ detalle: detalle });
-  }
-
   /** Resumen ligero de inspecciones/responsivas para tablas (sin checklist completo). */
   function resumirEvidencias_(docs) {
     return (docs || []).map((d) => {
@@ -179,8 +198,6 @@ const TelefoniaService = (function () {
         pdfPendiente: d.origen === 'SISTEMA' && !pdf,
         responsable: d.snapshot ? d.snapshot.responsable : (d.responsable ? d.responsable.nombre : null),
         fotos: d.drive ? d.drive.fotos : 0, carpetaId: d.drive ? d.drive.carpetaId : null, pdfId: pdf,
-        // PDF del AppSheet ("<TABLA>_Files_/…pdf"): se abre desde la carpeta del AppSheet
-        pdfRuta: pdf ? null : (d.pdfRuta || null),
       };
     }).sort((a, b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
   }
@@ -434,7 +451,7 @@ const TelefoniaService = (function () {
   return {
     permisos, indice, equipo, linea, evidencias, historial, inspeccion, catalogos, colaboradores, bitacora, vistaOperativa, formularioOperativa, crearVistaOperativa, formularioRegistro, recargarDatos,
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf, crearRegistro, editarRegistro,
-    cambiarEstatus, fotosInspeccion, exportarBase, archivo, documentosNuco, responsiva,
+    cambiarEstatus, fotosInspeccion, exportarBase, archivo, documentosNuco, ultimoDocumentoNuco,
     formularioEdicionOperativa, editarVistaOperativa,
   };
 })();

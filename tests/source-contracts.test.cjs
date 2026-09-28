@@ -612,11 +612,11 @@ test('Drive: todo en la carpeta de la app AppSheet con sus rutas; NUCOS de produ
   assert.match(read('src/ClientApi.gs'), /function apiLineasArchivo\(token, ruta\)/);
   assert.match(read('src/ClientApi.gs'), /function apiLineasDocumentosNuco\(token, id\)/);
 
-  // Cliente: ícono que abre el archivo en tablas, ficha y documentos; Documentos muestra NUCOS
+  // Cliente: Documentos muestra NUCOS; la ficha y su lista de documentos ya no abren PDF de la carpeta del AppSheet
   const lineas = read('src/html/js/lineas.html');
-  assert.match(lineas, /if \(clase === 'archivo'\) c\.render = \(v\) => botonArchivo\(v, 'Ver'\);/);
   assert.match(lineas, /\['Patrón', botonArchivo\(e\.patronRuta, 'Ver patrón'\), true\]/);
-  assert.match(lineas, /if \(d\.pdfRuta\) return botonArchivo\(d\.pdfRuta, 'Ver PDF'\);/);
+  assert.doesNotMatch(lineas, /d\.pdfRuta|responsivaRuta|formatoInspeccionRuta|apiLineasResponsiva/);
+  assert.doesNotMatch(read('src/services/TelefoniaService.gs'), /pdfRuta: pdf \?/);
   assert.match(lineas, /if \(nombre === 'documentos'\) cargarNucos\(\);/);
   assert.match(lineas, /llamar\('apiLineasDocumentosNuco', f\.id\)/);
 });
@@ -629,7 +629,7 @@ test('los .html de Líneas no llevan "//" fuera de comentarios (Apps Script cort
   });
 });
 
-test('la tabla de Líneas Telefónicas tiene las columnas de la vista del AppSheet, en su orden', () => {
+test('la tabla de Líneas Telefónicas tiene las columnas de siempre y agrega las de la vista del AppSheet', () => {
   // ViewDefinition.ColumnOrder de la vista LINEAS TELEFONICAS (sin ID, oculta; "No EMPLEADO" = "NO EMPLEADO")
   const appsheet = ['NUMERO TELEFONO', 'NUCO', 'TIPO', 'ESTATUS GENERAL', 'NO EMPLEADO', 'RESPONSABLE', 'PUESTO',
     'NOMBRE RESPONSABLES 2', 'PUESTO RESPONSABLES 2', 'EQUIPO', 'IMEI', 'NUMERO SIM', 'ACCESORIOS', 'SEDE', 'OFICINA / DESARROLLO',
@@ -642,31 +642,34 @@ test('la tabla de Líneas Telefónicas tiene las columnas de la vista del AppShe
   const lineas = read('src/html/js/lineas.html');
   const cliente = lineas.slice(lineas.indexOf('const COLUMNAS_VISTA_LINEAS'), lineas.indexOf('function columnasVistaLineas'));
   assert.deepEqual([...cliente.matchAll(/\['([^']+)', '[^']+'/g)].map((m) => m[1]), appsheet);
-  // DisplayName del AppSheet, archivos con "Ver", correo, agrupación por TIPO y PIN solo para ADMIN
+  // DisplayName del AppSheet; RESPONSIVA y FORMATO INSPECCION = la última de NUCOS; PIN solo para ADMIN
   assert.match(cliente, /\['NOMBRE RESPONSABLES 2', 'Nombre colaborador\/es'\]/);
-  assert.match(cliente, /\['RESPONSIVA', 'Responsiva', 'archivo'\]/);
-  assert.match(cliente, /\['FORMATO INSPECCION', 'Formato inspección', 'archivo'\]/);
-  assert.match(lineas, /ordenInicial: \{ campo: 'TIPO', dir: 'asc' \},/);
-  assert.match(lineas, /idTabla: 'lineas-' \+ modulo \+ '-v3',/);
+  assert.match(cliente, /\['RESPONSIVA', 'Última responsiva', 'ultimo'\]/);
+  assert.match(cliente, /\['FORMATO INSPECCION', 'Última inspección', 'ultimo'\]/);
+  // Las columnas de antes a la vista; las del AppSheet que faltaban, ocultas (se agregan desde "Vista")
+  assert.match(lineas, /const c = \{ campo: campo, titulo: titulo, tipo: 'texto', visible: false \};/);
+  assert.match(lineas, /\{ campo: 'nuco', titulo: 'NUCO', tipo: 'texto', fijada: true,/);
+  assert.match(lineas, /\{ campo: 'numero', titulo: 'Número', tipo: 'texto', fijada: true,/);
+  assert.doesNotMatch(lineas, /ordenInicial: \{ campo: 'TIPO'/);
+  assert.match(lineas, /idTabla: 'lineas-' \+ modulo \+ '-v4',/);
+  assert.match(lineas, /llamar\('apiLineasUltimoDocumentoNuco', boton\.dataset\.id, boton\.dataset\.lnUltimo\)/);
+  assert.match(read('src/ClientApi.gs'), /function apiLineasUltimoDocumentoNuco\(token, id, tipo\)/);
   assert.match(read('src/services/TelefoniaService.gs'), /posiciones\.forEach\(\(i\) => \{ if \(copia\[i\]\) copia\[i\] = '••••'; \}\);/);
   assert.match(repo, /if \(c === 'FOLIO'\) return legado\.folio \|\| null;/);
 });
 
-test('vistas de detalle del AppSheet: ficha, inspección y responsiva', () => {
+test('vistas de detalle del AppSheet: ficha e inspección', () => {
   const servicio = read('src/services/TelefoniaService.gs');
   // LINEAS TELEFONICAS_Detail: TOTAL ROTACIONES = COUNT de HISTORIAL_REASIGNACIONES del registro
   assert.match(servicio, /return LineasDatos\.buscarFilas\(LineasRepo\.TAB\.REASIG, 'ID Linea', id\)\.length;/);
   const lineas = read('src/html/js/lineas.html');
   assert.equal((lineas.match(/\['Total de rotaciones', miles\(r\.totalRotaciones \|\| 0\)\]/g) || []).length, 2);
-  // RESPONSIVAS LINEAS_Detail con su ColumnOrder y DisplayName; INSPECCIONES LINEAS_Detail con todas las columnas
-  const resp = servicio.slice(servicio.indexOf('const DETALLE_RESPONSIVA'), servicio.indexOf('const COLUMNA_SECRETA_DETALLE'));
-  assert.equal([...resp.matchAll(/\['([^']+)'/g)].length, 31);
-  assert.match(resp, /\['CONTRASEÑA', 'PATRÓN'\]/);
+  // INSPECCIONES LINEAS_Detail con todas las columnas (la responsiva se consulta en NUCOS, no en un panel del AppSheet)
   assert.match(servicio, /\['E COMMERCE', 'ENLACE A WINDOWS'\]/);
+  assert.doesNotMatch(servicio, /DETALLE_RESPONSIVA/);
   assert.match(servicio, /if \(v !== null && !ver && COLUMNA_SECRETA_DETALLE\.test\(columna\)\) v = '••••';/);
   // PIN y patrón de la inspección ocultos para quien no es ADMIN
   assert.match(servicio, /insp\.pinEquipo = insp\.pinEquipo \? '••••' : null;/);
-  assert.match(lineas, /llamar\('apiLineasResponsiva', id\)/);
   assert.match(lineas, /seccion\(5, 'table-properties', 'Registro completo'/);
 });
 
@@ -682,4 +685,61 @@ test('Reactivación, Solicitud y Desechos se pueden editar como con la acción E
   assert.match(lineas, /function abrirAltaAppSheet\(tipo, titulo, alGuardar, edicion\)/);
   assert.equal((lineas.match(/\{ icono: 'pencil', titulo: 'Editar'/g) || []).length, 2);
   assert.match(read('src/services/lineas/LineasRepo.gs'), /_id: f\['ID'\] === undefined/);
+});
+
+test('NUCO siempre a 4 dígitos (tabla, ficha, detalles, bitácoras, historial y Excel)', () => {
+  const Util = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '\nreturn LineasUtil;')({}, {});
+  assert.equal(Util.nucoVisible(234), '0234');
+  assert.equal(Util.nucoVisible('5'), '0005');
+  assert.equal(Util.nucoVisible(' 0234 '), '0234');
+  assert.equal(Util.nucoVisible(12345), '12345');
+  assert.equal(Util.nucoVisible('N/A'), 'N/A');
+  assert.equal(Util.nucoVisible(''), null);
+  assert.equal(Util.nucoVisible(null), null);
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  assert.match(repo, /if \(c === 'NUCO'\) return LineasUtil\.nucoVisible\(v\);/);
+  assert.match(repo, /nuco: LineasUtil\.nucoVisible\(crudo\('NUCO'\)\) \|\| '',/);
+  assert.match(repo, /nuco: txt\(col\(f, 'NUCO'\)\) === null \? null : LineasUtil\.nucoVisible\(col\(f, 'NUCO'\)\),/);
+  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v4';/);
+  assert.match(read('src/services/lineas/LineasExportar.gs'), /return LineasUtil\.nucoVisible\(valor\);/);
+});
+
+test('"Última responsiva" / "Última inspección" abren la más reciente de la carpeta del NUCO en NUCOS', () => {
+  const grupos = [
+    { carpetaId: 'f1', ruta: 'INSPECCIONES/2026/INSP 12 08/FOTOS', tipo: 'INSPECCION', fecha: '2026-08-12T12:00:00', archivos: [{ nombre: 'a.jpg', mime: 'image/jpeg', enlace: 'u-foto' }] },
+    { carpetaId: 'i1', ruta: 'INSPECCIONES/2026/INSP 12 08', tipo: 'INSPECCION', fecha: '2026-08-12T12:00:00', archivos: [{ nombre: 'INSP 0234 12 08.pdf', mime: 'application/pdf', enlace: 'u-insp', fecha: '2026-08-12' }] },
+    { carpetaId: 'r2', ruta: 'CARTA RESPONSIVA/2026/RESP 03 09', tipo: 'RESPONSIVA', fecha: '2026-09-03T12:00:00', archivos: [{ nombre: 'FIRMA.png', mime: 'image/png', enlace: 'u-firma' }] },
+    { carpetaId: 'i0', ruta: 'INSPECCIONES/2025/INSP 02 10', tipo: 'INSPECCION', fecha: '2025-10-02T12:00:00', archivos: [{ nombre: 'vieja.pdf', mime: 'application/pdf', enlace: 'u-vieja' }] },
+  ];
+  const rol = { rol: 'ADMIN' };
+  const globales = {
+    Auth: { validarSesion: () => rol },
+    Config: { ROLES: { ADMIN: 'ADMIN', OPERADOR: 'OPERADOR' } },
+    LineasRepo: { leerRegistroPorId: (id) => (id === 'sin' ? { NUCO: '' } : { NUCO: 234 }) },
+    LineasUtil: {
+      nuco4: (v) => (String(v || '').replace(/\D/g, '') ? ('0000' + String(v)).slice(-4) : null),
+      col: (f, c) => f[c], paraCliente: (o) => JSON.parse(JSON.stringify(o)),
+    },
+    LineasDatos: { cacheLeer: () => null, cacheGuardar: () => {} },
+    LineasArchivos: { archivosNuco: () => ({ carpetaId: 'raiz', grupos: grupos }) },
+  };
+  const S = new Function(...Object.keys(globales), read('src/services/TelefoniaService.gs') + '\nreturn TelefoniaService;')(...Object.values(globales));
+  // Inspección: la carpeta más reciente, su PDF (no el de 2025)
+  assert.deepEqual(S.ultimoDocumentoNuco('t', 'x', 'INSPECCION'), { nuco: '0234', fecha: '2026-08-12T12:00:00', nombre: 'INSP 0234 12 08.pdf', url: 'u-insp', carpeta: false });
+  // Responsiva sin PDF: se abre su carpeta
+  const resp = S.ultimoDocumentoNuco('t', 'x', 'RESPONSIVA');
+  assert.equal(resp.carpeta, true);
+  assert.equal(resp.url, 'https://drive.google.com/drive/folders/r2');
+  // Con varios PDF en la carpeta, el formato de la responsiva (no la INE, aunque sea más reciente)
+  grupos.unshift({ carpetaId: 'r3', ruta: 'CARTA RESPONSIVA/2026/RESP 20 09', tipo: 'RESPONSIVA', fecha: '2026-09-20T12:00:00', archivos: [
+    { nombre: 'INE 0234.pdf', mime: 'application/pdf', enlace: 'u-ine', fecha: '2026-09-21' },
+    { nombre: 'RESP 0234 20 09.pdf', mime: 'application/pdf', enlace: 'u-resp', fecha: '2026-09-20' },
+  ] });
+  assert.equal(S.ultimoDocumentoNuco('t', 'x', 'RESPONSIVA').url, 'u-resp');
+  grupos.shift();
+  assert.throws(() => S.ultimoDocumentoNuco('t', 'sin', 'RESPONSIVA'), /no tiene NUCO/);
+  assert.throws(() => S.ultimoDocumentoNuco('t', 'x', 'OTRO'), /inválido/);
+  // Sin responsiva visible para el rol (solo había una firma): mensaje claro
+  rol.rol = 'OPERADOR';
+  assert.throws(() => S.ultimoDocumentoNuco('t', 'x', 'RESPONSIVA'), /No hay responsiva en la carpeta NUCOS del NUCO 0234/);
 });

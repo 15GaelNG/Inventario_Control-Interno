@@ -151,7 +151,17 @@ y capturar responsivas e inspecciones.
   franja deslizable; inventario en tarjetas por defecto (si no hay preferencia guardada) y más compactas;
   botones de la ficha en rejilla de 2; opciones del checklist más grandes para el dedo.
 
-## 0j. Vista del AppSheet, NUCOS y una sola carpeta de Drive (2026-09-28)
+## 0k. Tabla como antes y documentos desde NUCOS (2026-09-28, segundo ajuste)
+
+- NUCO a 4 dígitos al mostrar: `LineasUtil.nucoVisible` (vista, `legado`, Detalles, bitácoras, historial, Excel).
+  Índice en caché `indice_telefonia_v4`.
+- Tabla: `TABLAS_INVENTARIO` vuelve a las columnas del índice; `columnasVistaLineas(sinEstas)` agrega las de la vista
+  del AppSheet que faltan, ocultas. RESPONSIVA / FORMATO INSPECCION = `botonUltimoNucos` ("Última responsiva" /
+  "Última inspección") → `apiLineasUltimoDocumentoNuco` → `TelefoniaService.ultimoDocumentoNuco` (carpeta más
+  reciente del tipo en NUCOS y su PDF RESP/INSP; sin PDF, la carpeta). Vista guardada `lineas-<modulo>-v4`.
+- Ficha: sin `pdfRuta` (PDF de la carpeta de la app) ni `DETALLE_RESPONSIVA` / `apiLineasResponsiva`.
+
+## 0j. Vista del AppSheet, NUCOS y una sola carpeta de Drive (2026-09-28; tabla y documentos ajustados en §0k)
 
 - Tabla: `COLS_VISTA_LINEAS` (servidor) y `COLUMNAS_VISTA_LINEAS` (cliente) = ColumnOrder de la vista LINEAS
   TELEFONICAS; el índice trae el bloque `vista` (una fila por registro) y el cliente lo une a cada fila.

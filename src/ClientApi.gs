@@ -82,8 +82,8 @@ function apiLineasBitacoraTabla(token, tipo, opciones) {
 function apiLineasVistaOperativaTabla(token, tipo, opciones) {
   return JSON.stringify(TelefoniaService.vistaOperativa(token, tipo, Object.assign({}, opciones, { pagina: 0, porPagina: 5000 })));
 }
-function apiLineasResponsiva(token, id) {
-  return TelefoniaService.responsiva(token, id);
+function apiLineasUltimoDocumentoNuco(token, id, tipo) {
+  return TelefoniaService.ultimoDocumentoNuco(token, id, tipo);
 }
 function apiLineasDocumentosNuco(token, id) {
   return TelefoniaService.documentosNuco(token, id);

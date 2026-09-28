@@ -31,6 +31,17 @@ const LineasUtil = (function () {
     return d.length >= 4 ? d : ('0000' + d).slice(-4);
   }
 
+  /**
+   * NUCO para mostrar: siempre a 4 dígitos ("234" o 234 → "0234"). Lo que no es un número (p. ej. "N/A") se deja
+   * igual; vacío → null. No cambia lo guardado en la hoja.
+   */
+  function nucoVisible(v) {
+    if (v === null || v === undefined) return null;
+    const s = String(v).trim();
+    if (!s) return null;
+    return /^\d+$/.test(s) ? (s.length >= 4 ? s : ('0000' + s).slice(-4)) : s;
+  }
+
   function fecha(v) {
     return v instanceof Date && !isNaN(v.getTime()) ? v : null;
   }
@@ -69,5 +80,5 @@ const LineasUtil = (function () {
     try { return LineasArchivos.carpetasNucos(); } catch (e) { console.warn('carpetasNucos: ' + e.message); return {}; }
   }
 
-  return { txt, digitos, nuco4, fecha, numero, col, mesNumero, paraCliente, carpetasNucos };
+  return { txt, digitos, nuco4, nucoVisible, fecha, numero, col, mesNumero, paraCliente, carpetasNucos };
 })();

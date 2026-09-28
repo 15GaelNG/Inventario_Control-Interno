@@ -123,6 +123,32 @@
       abrirArchivoAppSheet(b);
     }, true);
 
+    /** "Última responsiva" / "Última inspección": la más reciente de la carpeta del NUCO en NUCOS (solo consulta). */
+    async function abrirUltimoNucos(boton) {
+      const ventana = window.open('', '_blank');
+      const original = boton.innerHTML;
+      boton.disabled = true;
+      boton.innerHTML = '<span class="ln-spinner"></span> Buscando en NUCOS…';
+      try {
+        const r = await llamar('apiLineasUltimoDocumentoNuco', boton.dataset.id, boton.dataset.lnUltimo);
+        if (ventana) ventana.location.href = r.url; else window.open(r.url, '_blank');
+        if (r.carpeta) Notificar.info('La última carpeta (' + r.nombre + ') no tiene PDF: se abrió la carpeta.');
+      } catch (e) {
+        if (ventana) ventana.close();
+        Notificar.error(mensajeError(e));
+      } finally {
+        boton.disabled = false;
+        boton.innerHTML = original;
+      }
+    }
+    document.addEventListener('click', (ev) => {
+      const b = ev.target.closest && ev.target.closest('[data-ln-ultimo]');
+      if (!b) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (!b.disabled) abrirUltimoNucos(b);
+    }, true);
+
     const COLOR_ESTATUS = {
       'USO': 'verde', 'EN USO': 'verde', 'RENOVADA': 'verde',
       'RESGUARDO': 'azul', 'EN ENVIO': 'azul', 'ESPERA DE RESPONSIVA': 'azul', 'ESPERA DE EQUIPO': 'azul',
@@ -1325,11 +1351,11 @@
     // Líneas Telefónicas
     // ======================================================================
 
-    /** Columnas del inventario (DataTable). Las ocultas se activan desde "Columnas". */
     /**
      * Columnas de la vista de tabla LINEAS TELEFONICAS del AppSheet, en su orden (llegan en el índice, bloque
-     * "vista"). Títulos = nombre de la columna o su DisplayName del AppSheet. Las columnas File se abren con "Ver"
-     * (como la acción Open File) y EMAIL USUARIO con correo (acción Compose Email).
+     * "vista"). Títulos = nombre de la columna o su DisplayName del AppSheet; EMAIL USUARIO con correo (acción
+     * Compose Email). RESPONSIVA y FORMATO INSPECCION son "Última responsiva" / "Última inspección": abren la más
+     * reciente de la carpeta del NUCO en NUCOS (no el archivo del AppSheet).
      */
     const COLUMNAS_VISTA_LINEAS = [
       ['NUMERO TELEFONO', 'Número teléfono', 'mono'], ['NUCO', 'NUCO', 'mono'], ['TIPO', 'Tipo', 'tipo'],
@@ -1342,41 +1368,77 @@
       ['CUENTA GOOGLE', 'Cuenta Google'], ['COMPAÑIA', 'Compañía', 'lista'], ['COSTO PLAN', 'Costo plan', 'precio'],
       ['FECHA REGISTRO', 'Fecha registro', 'fecha'], ['INICIO PLAN', 'Inicio plan', 'fecha'], ['FIN PLAN', 'Fin plan', 'fecha'],
       ['ESTATUS LINEA', 'Estatus línea', 'chip'], ['FECHA CAMBIO TEMPORAL', 'Fecha cambio temporal', 'fecha'],
-      ['EMAIL USUARIO', 'Email usuario', 'correo'], ['ESTATUS EQUIPO', 'Estatus equipo', 'chip'], ['RESPONSIVA', 'Responsiva', 'archivo'],
-      ['COMENTARIOS', 'Comentarios'], ['FECHA INSPECCION', 'Fecha inspección', 'fecha'], ['FORMATO INSPECCION', 'Formato inspección', 'archivo'],
+      ['EMAIL USUARIO', 'Email usuario', 'correo'], ['ESTATUS EQUIPO', 'Estatus equipo', 'chip'], ['RESPONSIVA', 'Última responsiva', 'ultimo'],
+      ['COMENTARIOS', 'Comentarios'], ['FECHA INSPECCION', 'Fecha inspección', 'fecha'], ['FORMATO INSPECCION', 'Última inspección', 'ultimo'],
     ];
-    function columnasVistaLineas(fijada) {
-      return COLUMNAS_VISTA_LINEAS.map(([campo, titulo, clase]) => {
-        const c = { campo: campo, titulo: titulo, tipo: 'texto' };
-        if (campo === fijada) c.fijada = true;
+    /** Botón que abre la última inspección o responsiva de la carpeta del NUCO en NUCOS (se busca al hacer clic). */
+    function botonUltimoNucos(tipo, id) {
+      const texto = tipo === 'INSPECCION' ? 'Última inspección' : 'Última responsiva';
+      return '<button type="button" class="ln-btn-icono ln-archivo" data-ln-ultimo="' + tipo + '" data-id="' + esc(id) + '" title="' + texto + ' en la carpeta NUCOS">' +
+        icono(tipo === 'INSPECCION' ? 'clipboard-check' : 'signature') + ' ' + texto + '</button>';
+    }
+    const tieneNuco = (r) => !!(r.NUCO || r.nuco || r.nucoEquipo);
+    /**
+     * Columnas de la vista del AppSheet que la tabla aún no tiene (`sinEstas`): ocultas, salvo "Última responsiva" y
+     * "Última inspección", que van al final.
+     */
+    function columnasVistaLineas(sinEstas) {
+      return COLUMNAS_VISTA_LINEAS.filter(([campo]) => sinEstas.indexOf(campo) < 0).map(([campo, titulo, clase]) => {
+        const c = { campo: campo, titulo: titulo, tipo: 'texto', visible: false };
         if (clase === 'mono') c.render = (v) => '<span class="ln-mono">' + guion(v) + '</span>';
         if (clase === 'lista') c.tipo = 'lista';
         if (clase === 'tipo') { c.tipo = 'lista'; c.render = (v) => formatoAppSheet('LINEAS', 'TIPO', v) || guion(v); }
         if (clase === 'chip') { c.tipo = 'lista'; c.render = (v) => chip(v); }
         if (clase === 'fecha') c.tipo = 'lnFechaHora';
         if (clase === 'precio') { c.tipo = 'numero'; c.render = (v) => (v === null || v === undefined || v === '' ? vacio : '$' + Number(v).toLocaleString('es-MX')); }
-        if (clase === 'archivo') c.render = (v) => botonArchivo(v, 'Ver');
+        if (clase === 'ultimo') {
+          const tipo = campo === 'RESPONSIVA' ? 'RESPONSIVA' : 'INSPECCION';
+          c.visible = true;
+          c.tipo = 'lista';
+          c.valor = (r) => (tieneNuco(r) ? titulo : '');
+          c.render = (v, r) => (tieneNuco(r) ? botonUltimoNucos(tipo, r.id) : vacio);
+        }
         if (clase === 'correo') c.render = (v) => (v ? '<a class="ln-enlace" href="mailto:' + esc(v) + '">' + icono('mail') + ' ' + esc(v) + '</a>' : vacio);
         return c;
       });
     }
 
+    /**
+     * Columnas del inventario (DataTable): las de siempre a la vista; las demás de la vista del AppSheet, ocultas
+     * (se agregan desde "Vista").
+     */
     const TABLAS_INVENTARIO = {
       equipos: {
         detalle: 'equipo', textoVacio: 'Sin equipos',
         etiqueta: (r) => 'NUCO ' + (r.nuco || '—') + (r.modelo ? ' · ' + r.modelo : ''),
-        // Las de la vista del AppSheet; "Línea asignada" (del índice) la usa el indicador "Equipos sin línea"
-        columnas: columnasVistaLineas('NUCO').concat([
-          { campo: 'numero', titulo: 'Línea asignada', tipo: 'texto', visible: false },
-        ]),
+        columnas: [
+          { campo: 'nuco', titulo: 'NUCO', tipo: 'texto', fijada: true, render: (v) => '<span class="ln-mono ln-fuerte">' + guion(v) + '</span>' },
+          { campo: 'tipoHoja', titulo: 'Tipo', tipo: 'lista', render: (v) => formatoAppSheet('LINEAS', 'TIPO', v) || guion(v) },
+          { campo: 'modelo', titulo: 'Modelo', tipo: 'texto' },
+          { campo: 'imei', titulo: 'IMEI', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
+          { campo: 'estatus', titulo: 'Estatus', tipo: 'lista', render: (v) => chip(v) },
+          { campo: 'numero', titulo: 'Línea', tipo: 'texto', render: (v) => (v ? '<span class="ln-mono">' + esc(v) + '</span>' : '<span class="ln-tenue">Sin línea</span>') },
+          { campo: 'compania', titulo: 'Compañía', tipo: 'lista' },
+          { campo: 'estatusLinea', titulo: 'Estatus de la línea', tipo: 'lista', render: (v) => chip(v) },
+          { campo: 'responsable', titulo: 'Responsable', tipo: 'texto' },
+          { campo: 'departamento', titulo: 'Departamento', tipo: 'lista' },
+          { campo: 'sede', titulo: 'Sede', tipo: 'lista', visible: false },
+        ].concat(columnasVistaLineas(['NUCO', 'TIPO', 'EQUIPO', 'IMEI', 'ESTATUS EQUIPO', 'NUMERO TELEFONO', 'COMPAÑIA', 'ESTATUS LINEA', 'RESPONSABLE', 'DEPARTAMENTO', 'SEDE'])),
       },
       lineas: {
         detalle: 'linea', textoVacio: 'Sin líneas',
         etiqueta: (r) => 'Línea ' + (r.numero || '—'),
-        columnas: columnasVistaLineas('NUMERO TELEFONO').concat([
-          { campo: 'suelta', titulo: 'Línea suelta', tipo: 'lista', visible: false, valor: (r) => (r.suelta ? 'Sí' : 'No'), render: (v) => (v === 'Sí' ? chip('Suelta', 'ambar') : '<span class="ln-tenue">En equipo</span>') },
-          { campo: 'nucoEquipo', titulo: 'Equipo (NUCO)', tipo: 'texto', visible: false, render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
-        ]),
+        columnas: [
+          { campo: 'numero', titulo: 'Número', tipo: 'texto', fijada: true, render: (v) => '<span class="ln-mono ln-fuerte">' + guion(v) + '</span>' },
+          { campo: 'tipoHoja', titulo: 'Tipo', tipo: 'lista', render: (v) => formatoAppSheet('LINEAS', 'TIPO', v) || guion(v) },
+          { campo: 'compania', titulo: 'Compañía', tipo: 'lista' },
+          { campo: 'estatus', titulo: 'Estatus', tipo: 'lista', render: (v) => chip(v) },
+          { campo: 'suelta', titulo: 'Suelta', tipo: 'lista', valor: (r) => (r.suelta ? 'Sí' : 'No'), render: (v) => (v === 'Sí' ? chip('Suelta', 'ambar') : '<span class="ln-tenue">En equipo</span>') },
+          { campo: 'nucoEquipo', titulo: 'Equipo (NUCO)', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
+          { campo: 'sim', titulo: 'SIM', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
+          { campo: 'responsable', titulo: 'Responsable', tipo: 'texto' },
+          { campo: 'departamento', titulo: 'Departamento', tipo: 'lista' },
+        ].concat(columnasVistaLineas(['NUMERO TELEFONO', 'TIPO', 'COMPAÑIA', 'ESTATUS LINEA', 'NUCO', 'NUMERO SIM', 'RESPONSABLE', 'DEPARTAMENTO'])),
       },
     };
 
@@ -1420,8 +1482,6 @@
 
       // Clic en filas, enlaces internos y botones del detalle (delegación).
       raiz.addEventListener('click', (ev) => {
-        const verResp = ev.target.closest('[data-ln-responsiva]');
-        if (verResp) { abrirResponsiva(verResp.dataset.lnResponsiva, verResp.dataset.titulo, verResp.dataset.responsable); return; }
         const seccion = ev.target.closest('[data-ln-seccion]');
         if (seccion) {
           const destino = document.getElementById(seccion.dataset.lnSeccion);
@@ -1530,7 +1590,7 @@
         const li = ix.lineas;
         const defs = [
           { icono: 'smartphone', valor: miles(eq.length), etiqueta: 'Equipos', modulo: 'equipos', filtros: {} },
-          { icono: 'circle-check', valor: miles(eq.filter((e) => e['ESTATUS EQUIPO'] === 'USO').length), etiqueta: 'Equipos en uso', clase: 'stat-tile-ok', modulo: 'equipos', filtros: { 'ESTATUS EQUIPO': { valores: ['USO'] } } },
+          { icono: 'circle-check', valor: miles(eq.filter((e) => e.estatus === 'USO').length), etiqueta: 'Equipos en uso', clase: 'stat-tile-ok', modulo: 'equipos', filtros: { estatus: { valores: ['USO'] } } },
           { icono: 'unplug', valor: miles(eq.filter((e) => !e.lineaId).length), etiqueta: 'Equipos sin línea', modulo: 'equipos', filtros: { numero: { op: 'vacio' } } },
           { icono: 'card-sim', valor: miles(li.length), etiqueta: 'Líneas', modulo: 'lineas', filtros: {} },
           { icono: 'unlink', valor: miles(li.filter((l) => l.suelta).length), etiqueta: 'Líneas sueltas', clase: 'stat-tile-warn', modulo: 'lineas', filtros: { suelta: { valores: ['Sí'] } } },
@@ -1538,7 +1598,7 @@
         const cont = $('#ln-indicadores', raiz);
         cont.innerHTML = defs.map((d, i) => '<div class="stat-tile stat-tile-clickable ' + (d.clase || '') + '" data-kpi="' + i + '" role="button" tabindex="0">' +
           '<div class="stat-icon">' + ico(d.icono) + '</div><div><div class="stat-value">' + d.valor + '</div><div class="stat-label">' + esc(d.etiqueta) + '</div></div></div>').join('');
-        const campos = { equipos: ['ESTATUS EQUIPO', 'numero'], lineas: ['suelta'] };
+        const campos = { equipos: ['estatus', 'numero'], lineas: ['suelta'] };
         const igual = (x, y) => JSON.stringify(x || null) === JSON.stringify(y || null);
         marcarKpi = () => {
           cont.querySelectorAll('[data-kpi]').forEach((t) => {
@@ -1571,17 +1631,16 @@
         const contenedor = $('#ln-tabla-' + modulo, raiz);
         tablas[modulo] = tablaLineas(contenedor, {
           idCampo: 'id',
-          idTabla: 'lineas-' + modulo + '-v3',
+          idTabla: 'lineas-' + modulo + '-v4',
           columnas: cfg.columnas,
-          // La vista del AppSheet agrupa por TIPO (DataTable no agrupa: se ordena por TIPO)
-          ordenInicial: { campo: 'TIPO', dir: 'asc' },
           textoVacio: cfg.textoVacio,
           exportar: exportarBase('INVENTARIO', 'Lineas telefonicas'),
           etiquetaFila: cfg.etiqueta,
           detalle: false, // la ficha completa (responsable, evidencias, historial) es su propia pantalla
           accionesFila: [{ icono: 'eye', titulo: 'Ver ficha', alHacer: (r) => abrir(cfg.detalle, r.id) }],
-          ayuda: 'Las columnas y su orden son las de la tabla LINEAS TELEFONICAS del AppSheet. Doble clic en una fila (o el ojo en Acciones) abre su ficha. ' +
-            'La flecha de cada columna filtra, ordena, fija u oculta; "Vista" oculta o muestra columnas. "Ver" abre la responsiva o el formato de inspección.',
+          ayuda: 'Doble clic en una fila (o el ojo en Acciones) abre su ficha. La flecha de cada columna filtra, ordena, fija u oculta; ' +
+            '"Vista" agrega las demás columnas del AppSheet (compañía, sede, comentarios, PIN…). "Última responsiva" y "Última inspección" ' +
+            'abren la más reciente de la carpeta del NUCO en NUCOS. Los indicadores de arriba filtran con un clic.',
           alCambiarFiltros: (filtros) => { filtrosActuales[modulo] = filtros || {}; if (marcarKpi) marcarKpi(); },
         });
         // Doble clic en la fila = abrir la ficha (DataTable no trae clic de fila propio)
@@ -1892,8 +1951,8 @@
                 e.tipo === 'CELULAR' || e.tipo === 'CELULAR_BASICO' ? ['Patrón', botonArchivo(e.patronRuta, 'Ver patrón'), true] : null,
                 e.tipo === 'MODEM' || e.tipo === 'BANDA_ANCHA' ? ['Contraseña módem', e.contrasenaModem] : null,
                 e.simResidual ? ['SIM residual', chip(e.simResidual, 'ambar'), true] : null,
-                e.legado && e.legado.responsivaRuta ? ['Responsiva', botonArchivo(e.legado.responsivaRuta, 'Ver responsiva'), true] : null,
-                e.legado && e.legado.formatoInspeccionRuta ? ['Formato inspección', botonArchivo(e.legado.formatoInspeccionRuta, 'Ver formato'), true] : null,
+                e.nuco ? ['Responsiva', botonUltimoNucos('RESPONSIVA', id), true] : null,
+                e.nuco ? ['Inspección', botonUltimoNucos('INSPECCION', id), true] : null,
                 ['Total de rotaciones', miles(r.totalRotaciones || 0)],
                 ['Comentarios', e.legado && e.legado.comentarios],
               ])) +
@@ -1932,6 +1991,8 @@
                 ['Costo plan', costo], ['Inicio plan', fecha(l.inicioPlan)], ['Fin plan', fecha(l.finPlan)],
                 l.usoTemporal ? ['Uso temporal', 'Desde ' + esc(fecha(l.usoTemporal.desde) || '—') + ' · ' + esc(l.usoTemporal.correo || ''), true] : null,
                 !e && l.nucoLegado ? ['NUCO (anterior)', l.nucoLegado] : null,
+                !e && l.nucoLegado ? ['Responsiva', botonUltimoNucos('RESPONSIVA', id), true] : null,
+                !e && l.nucoLegado ? ['Inspección', botonUltimoNucos('INSPECCION', id), true] : null,
                 ['Total de rotaciones', miles(r.totalRotaciones || 0)],
                 ['Comentarios', l.legado && l.legado.comentarios],
               ])) +
@@ -2023,17 +2084,6 @@
         });
       }
 
-      /** Responsiva en el panel lateral, con la vista RESPONSIVAS LINEAS_Detail del AppSheet (sus columnas y nombres). */
-      function abrirResponsiva(id, fechaTexto, responsable) {
-        const panel = abrirPanelLateral('Responsiva' + (fechaTexto ? ' · ' + fechaTexto : ''), responsable || 'RESPONSIVAS LINEAS');
-        panel.cuerpo.innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando responsiva…</p>';
-        llamar('apiLineasResponsiva', id).then((r) => {
-          if (panelAbierto !== panel) return;
-          panel.cuerpo.innerHTML = camposDetalleAppSheet(r.detalle);
-          pintarIconos(panel.cuerpo);
-        }).catch((e) => { if (panelAbierto === panel) panel.cuerpo.innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>'; });
-      }
-
       function cargarEvidencias(id) {
         const pila0 = pila.length;
         llamar('apiLineasEvidencias', id).then((ev) => {
@@ -2048,7 +2098,6 @@
 
       function accionPdf(d, tipo) {
         if (d.pdfId) return enlaceDrive(d.pdfId, 'Ver PDF', true);
-        if (d.pdfRuta) return botonArchivo(d.pdfRuta, 'Ver PDF');
         return d.pdfPendiente ? '<button type="button" class="ln-btn-icono" data-ln-pdf="' + tipo + '" data-id="' + esc(d.id) + '" data-carpeta="' + esc(d.carpetaId || '') + '">' + icono('file-text') + ' Generar PDF</button>' : vacio;
       }
 
@@ -2069,7 +2118,6 @@
         const listaResp = responsivas.length
           ? '<ul class="ln-docs">' + responsivas.map((r) => item('signature', esc(fecha(r.fecha) || 'Sin fecha'), ORIGEN[r.origen] || '',
               [r.responsable],
-              (/^drive_/.test(r.id) ? '' : '<button type="button" class="ln-btn-icono" data-ln-responsiva="' + esc(r.id) + '" data-titulo="' + esc(fecha(r.fecha) || '') + '" data-responsable="' + esc(r.responsable || '') + '">' + icono('eye') + ' Ver</button>') +
               accionPdf(r, 'RESPONSIVA').replace(vacio, '') + (r.carpetaId ? enlaceDrive(r.carpetaId, 'Carpeta') : ''))).join('') + '</ul>'
           : '<p class="empty-state">Sin responsivas registradas.</p>';
         if (fichaActual) fichaActual.docsRegistros = inspecciones.length + responsivas.length;

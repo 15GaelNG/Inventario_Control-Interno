@@ -28,7 +28,7 @@ const LineasOperativas = (function () {
       if (!id) return null;
       return {
         id: id,
-        etiqueta: (t('IMEI') || 'SIN IMEI') + ' · ' + (t('NUMERO TELEFONO') || '—') + (t('NUCO') ? ' · NUCO ' + t('NUCO') : ''),
+        etiqueta: (t('IMEI') || 'SIN IMEI') + ' · ' + (t('NUMERO TELEFONO') || '—') + (t('NUCO') ? ' · NUCO ' + LineasUtil.nucoVisible(t('NUCO')) : ''),
         datos: { 'NUMERO TELEFONO': t('NUMERO TELEFONO'), 'NUMERO SIM': t('NUMERO SIM'), 'FOLIO': t('FOLIO'), 'EQUIPO': t('EQUIPO'), 'NUCO': t('NUCO') },
       };
     }).filter(Boolean);

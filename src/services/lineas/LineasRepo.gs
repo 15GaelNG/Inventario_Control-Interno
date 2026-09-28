@@ -72,7 +72,7 @@ const LineasRepo = (function () {
   const COLS_INDICE_EQUIPOS = ['id', 'nuco', 'tipo', 'modelo', 'imei', 'estatus', 'responsable', 'departamento', 'sede', 'lineaId', 'numero', 'compania', 'estatusLinea', 'tipoHoja'];
   const COLS_INDICE_LINEAS = ['id', 'numero', 'sim', 'compania', 'estatus', 'equipoId', 'nucoEquipo', 'responsable', 'departamento', 'suelta', 'tipoHoja'];
   const SEG_CACHE_INDICE = 30 * 60;
-  const CLAVE_INDICE = 'indice_telefonia_v3';
+  const CLAVE_INDICE = 'indice_telefonia_v4'; // v4: NUCO de la vista a 4 dígitos
   /**
    * Vista de tabla LINEAS TELEFONICAS del AppSheet: sus columnas en su orden (ViewDefinition.ColumnOrder; ID va
    * oculta y "No EMPLEADO" / "NO EMPLEADO" es la misma columna). FOLIO y ESTATUS GENERAL son fórmulas del AppSheet.
@@ -136,7 +136,7 @@ const LineasRepo = (function () {
     };
     const legado = {
       id: id, fila: f._fila, folio: folioRegistro(tipo, col(f, 'NUCO')), tipo: tipo || null,
-      nuco: txt(col(f, 'NUCO')) === null ? null : String(col(f, 'NUCO')),
+      nuco: txt(col(f, 'NUCO')) === null ? null : LineasUtil.nucoVisible(col(f, 'NUCO')),
       estatusGeneral: estatusGeneralRegistro(id, tipo, txt(col(f, 'ESTATUS EQUIPO')), txt(col(f, 'ESTATUS LINEA'))),
       comentarios: txt(col(f, 'COMENTARIOS')),
       responsivaRuta: txt(col(f, 'RESPONSIVA')), formatoInspeccionRuta: txt(col(f, 'FORMATO INSPECCION')),
@@ -174,7 +174,7 @@ const LineasRepo = (function () {
       return v === null || v === undefined ? '' : (v instanceof Date ? v : String(v).trim());
     };
     const detalles = {
-      nuco: crudo('NUCO'), responsable: crudo('RESPONSABLE'), imei: crudo('IMEI'), sim: crudo('NUMERO SIM'),
+      nuco: LineasUtil.nucoVisible(crudo('NUCO')) || '', responsable: crudo('RESPONSABLE'), imei: crudo('IMEI'), sim: crudo('NUMERO SIM'),
       numero: crudo('NUMERO TELEFONO'), modelo: crudo('EQUIPO'), compania: crudo('COMPAÑIA'), razonSocial: crudo('RAZON SOCIAL'),
       finPlan: crudo('FIN PLAN'), estatusLinea: estatusLinea || '',
     };
@@ -241,8 +241,9 @@ const LineasRepo = (function () {
       const v = col(f, c);
       if (v === '' || v === null || v === undefined) return null;
       if (v instanceof Date) return v;
-      // Identificadores y textos como texto (un IMEI o SIM numérico no se debe redondear); COSTO PLAN y NUCO, número
-      return typeof v === 'number' && c !== 'COSTO PLAN' && c !== 'NUCO' ? String(v) : v;
+      if (c === 'NUCO') return LineasUtil.nucoVisible(v); // siempre a 4 dígitos
+      // Identificadores y textos como texto (un IMEI o SIM numérico no se debe redondear); COSTO PLAN, número
+      return typeof v === 'number' && c !== 'COSTO PLAN' ? String(v) : v;
     }));
   }
 
@@ -579,6 +580,9 @@ const LineasRepo = (function () {
     const eventos = [];
     let n = 0;
     const agregar = (e) => {
+      if (/^NUCO$/i.test(String(e.campo || '').trim())) {
+        e = Object.assign({}, e, { antes: LineasUtil.nucoVisible(texto(e.antes)), despues: LineasUtil.nucoVisible(texto(e.despues)) });
+      }
       eventos.push({
         id: 'h' + (++n), fecha: e.fecha || null, movimiento: e.movimiento, campo: e.campo || '',
         antes: ocultar(e.campo, texto(e.antes)), despues: ocultar(e.campo, texto(e.despues)), detalle: e.detalle || '',
@@ -761,6 +765,11 @@ const LineasRepo = (function () {
       .map((f) => {
         const o = { _fila: f._fila };
         encabezados.forEach((h) => { o[h] = f[h]; });
+        // NUCO siempre a 4 dígitos (la hoja lo guarda como número: 234)
+        encabezados.forEach((h) => { if (/^NUCO( |_|$)/i.test(h) && o[h] !== '' && o[h] !== null) o[h] = LineasUtil.nucoVisible(o[h]); });
+        if (/^NUCO$/i.test(String(f['CAMPO'] || '').trim())) {
+          ['ANTES', 'DESPUES'].forEach((h) => { if (o[h] !== undefined && o[h] !== '' && o[h] !== null) o[h] = LineasUtil.nucoVisible(o[h]); });
+        }
         if (cfg.ocultarSecretos && !puedeVerSecretos && /PIN|PATRON|CONTRASE/i.test(String(f[cfg.ocultarSecretos] || ''))) {
           if (o['ANTES']) o['ANTES'] = '••••';
           if (o['DESPUES']) o['DESPUES'] = '••••';
@@ -908,7 +917,7 @@ const LineasRepo = (function () {
 
   /** Vacía las cachés del módulo (índices, catálogos y carpetas). */
   function borrarCaches() {
-    ['indice_telefonia_v2', CLAVE_INDICE, 'indice_colaboradores', 'carpetas_nucos', 'carpetas_nucos_v2', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3'].forEach(LineasDatos.cacheBorrar);
+    ['indice_telefonia_v2', 'indice_telefonia_v3', CLAVE_INDICE, 'indice_colaboradores', 'carpetas_nucos', 'carpetas_nucos_v2', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3'].forEach(LineasDatos.cacheBorrar);
   }
 
   return {
