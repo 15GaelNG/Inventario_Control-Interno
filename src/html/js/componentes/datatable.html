@@ -185,7 +185,9 @@
   .dt-lista-valores .dt-solo { visibility: hidden; background: transparent; border: none; color: var(--color-primary); padding: 0 4px; font-size: 11px; text-decoration: underline; }
   .dt-lista-valores label:hover .dt-solo, .dt-lista-valores .dt-solo:focus-visible { visibility: visible; }
 
-  .dt-columnas { display: flex; flex-direction: column; gap: 2px; }
+  .dt-columnas { display: flex; flex-direction: column; gap: 2px; max-height: 240px; overflow-y: auto; }
+  .dt-columnas-acciones { display: flex; gap: 6px; margin-bottom: 6px; }
+  .dt-columnas-acciones button { flex: 1; padding: 5px 8px; font-size: 12px; }
   .dt-columna-item { display: flex; align-items: center; gap: 4px; padding: 2px; border-radius: 6px; }
   .dt-columna-item:hover { background: var(--color-bg); }
   .dt-columna-item label { flex: 1; display: flex; align-items: center; gap: 8px; margin: 0; color: var(--color-text); font-weight: 400; cursor: pointer; font-size: 12.5px; }
@@ -276,10 +278,10 @@
    *                    //   servidor); rango es { campo, desde, hasta } (el título de la columna de fecha
    *                    //   elegida) o null si no se limitó por fecha. exportar.titulo: tooltip del botón.
    *     columnasCompletas: { idHoja: 'ID_VEHICULO', cargar: async () => [{ 'ID_VEHICULO': 1, … }] },
-   *                    // opcional: en "Vista" aparece "Mostrar todas las columnas de la base de datos"; al
-   *                    // pedirlo trae TODA la hoja (todas las columnas crudas, no solo el resumen) y agrega
-   *                    // las que falten como columnas nuevas (ocultas), casando cada fila por idHoja (el
-   *                    // encabezado crudo que hace de id). Se pide una sola vez por carga de la tabla.
+   *                    // opcional: al abrir "Vista" trae sola TODA la hoja (todas las columnas crudas, no
+   *                    // solo el resumen) y agrega las que falten como columnas nuevas (ocultas, se activan
+   *                    // ahí mismo o con "Mostrar todas"), casando cada fila por idHoja (el encabezado
+   *                    // crudo que hace de id). Se pide una sola vez por carga de la tabla.
    *     alCambiarFiltros: (filtros) => {},      // p. ej. para marcar chips de KPI
    *     umbralPalabraClave: 10,                 // eliminar pide escribir "ELIMINAR" desde N filas
    *   });
@@ -1091,6 +1093,13 @@
       function setDensidad(densidad) {
         if (DENSIDADES[densidad]) cambiarVista(() => { st.densidad = densidad; });
       }
+      /** Muestra/oculta TODAS las columnas de golpe (siempre queda al menos la primera visible). */
+      function mostrarTodasLasColumnas() {
+        cambiarVista(() => st.ordenColumnas.forEach((campo) => st.ocultas.delete(campo)));
+      }
+      function ocultarTodasLasColumnas() {
+        cambiarVista(() => st.ordenColumnas.slice(1).forEach((campo) => { st.ocultas.add(campo); st.fijadas.delete(campo); }));
+      }
       /** Orden desde el encabezado: clic = solo esta columna (asc → desc → nada); Shift+clic = agrega a las demás */
       function alternarOrden(col, multiple) {
         cambiarVista(() => {
@@ -1265,7 +1274,7 @@
       /**
        * cfg.columnasCompletas = { idHoja, cargar }: trae TODAS las columnas de la hoja del servidor
        * (cargar() → [{ encabezado: valor, … }]) y agrega las que no estaban ya como columnas nuevas
-       * (ocultas, exportables). Se llama una sola vez, desde el botón en "Vista".
+       * (ocultas, exportables). Se llama una sola vez, automático al abrir "Vista" (ver abrirVista).
        */
       async function cargarColumnasCompletas(boton) {
         if (!cfg.columnasCompletas || st.columnasExtra.cargando || st.columnasExtra.cargadas) return;
@@ -1315,7 +1324,14 @@
       function abrirVista(ancla) {
         const pintar = (pop) => {
           const orden = st.ordenColumnas.map(colPorCampo);
-          pop.innerHTML = `<h4>Columnas</h4><div class="dt-columnas">${orden.map((c, i) => {
+          const todasVisibles = orden.every((c) => !st.ocultas.has(c.campo));
+          const soloUnaVisible = orden.filter((c) => !st.ocultas.has(c.campo)).length <= 1;
+          pop.innerHTML = `<h4>Columnas</h4>
+            <div class="dt-columnas-acciones">
+              <button type="button" class="secondary dt-marcar-todas" ${todasVisibles ? 'disabled' : ''}>Mostrar todas</button>
+              <button type="button" class="secondary dt-desmarcar-todas" ${soloUnaVisible ? 'disabled' : ''}>Ocultar todas</button>
+            </div>
+            <div class="dt-columnas">${orden.map((c, i) => {
             const campo = esc(c.campo);
             const fijada = st.fijadas.has(c.campo);
             return `<div class="dt-columna-item">
@@ -1333,7 +1349,7 @@
               </label>
               <button type="button" class="secondary dt-restablecer">${ic('restablecer')} Restablecer vista</button>
               ${cfg.idTabla ? '<span class="page-subtitle" style="font-size:11px">Tu vista se guarda en este navegador.</span>' : ''}
-              ${cfg.columnasCompletas && !st.columnasExtra.cargadas ? `<button type="button" class="secondary dt-cargar-completas">${ic('vista')} Mostrar todas las columnas de la base de datos</button>` : ''}
+              ${st.columnasExtra.cargando ? '<span class="page-subtitle" style="font-size:11px">Cargando todas las columnas de la base de datos…</span>' : ''}
             </div>`;
 
           // Cada cambio repinta la tabla y también este menú (queda abierto)
@@ -1346,11 +1362,19 @@
           alClic('[data-subir]', (b) => moverColumna(b.dataset.subir, st.ordenColumnas[st.ordenColumnas.indexOf(b.dataset.subir) - 1]));
           alClic('[data-bajar]', (b) => moverColumna(b.dataset.bajar, st.ordenColumnas[st.ordenColumnas.indexOf(b.dataset.bajar) + 2] || null));
           alClic('.dt-restablecer', () => { restablecerVista(); Notificar.info('Vista restablecida'); });
+          alClic('.dt-marcar-todas', () => mostrarTodasLasColumnas());
+          alClic('.dt-desmarcar-todas', () => ocultarTodasLasColumnas());
           pop.querySelector('.dt-densidad').addEventListener('change', (ev) => setDensidad(ev.target.value));
-          const btnCompletas = pop.querySelector('.dt-cargar-completas');
-          if (btnCompletas) btnCompletas.addEventListener('click', async () => { await cargarColumnasCompletas(btnCompletas); pintar(pop); });
         };
         abrirPopover(ancla, '', pintar);
+        // Trae TODAS las columnas de la base de datos la primera vez que se abre "Vista"
+        // (antes había que pedirlo con un botón aparte); el menú ya está abierto mientras carga.
+        if (cfg.columnasCompletas && !st.columnasExtra.cargadas && !st.columnasExtra.cargando) {
+          const miPopover = popover;
+          const promesa = cargarColumnasCompletas();
+          pintar(miPopover);   // ya cargando = true (se puso antes del primer await): refleja "Cargando…"
+          promesa.then(() => { if (popover === miPopover) pintar(miPopover); });
+        }
       }
 
       // =====================================================================
