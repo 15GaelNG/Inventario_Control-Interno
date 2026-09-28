@@ -245,7 +245,11 @@
       idCampo: 'ID CCH',
       idTabla: 'cajas-chicas',
       textoVacio: 'Todavía no hay cajas chicas registradas',
-      exportar: { nombreArchivo: 'Cajas Chicas' },
+      exportar: {
+        nombreArchivo: 'Cajas Chicas',
+        titulo: 'Descarga la base completa: todas las filas y columnas de la hoja, sin importar filtros ni búsqueda',
+        descargar: async () => ExportarExcel.descargarCrudo({ nombreArchivo: 'Cajas Chicas', filas: JSON.parse(await callServer('apiCajasChicasCompleto', state.token)) }),
+      },
       columnasCompletas: { idHoja: 'ID CCH', cargar: async () => JSON.parse(await callServer('apiCajasChicasCompleto', state.token)) },
       etiquetaFila: (c) => c.RESPONSABLE || ('ID CCH ' + c['ID CCH']),
       detalle: { titulo: (c) => 'ID CCH: ' + c['ID CCH'] },
@@ -480,7 +484,11 @@
       idTabla: 'cambios-monto-cch',
       ordenInicial: { campo: 'FECHA', dir: 'desc' },
       textoVacio: 'Todavía no hay cambios de monto registrados',
-      exportar: { nombreArchivo: 'Cambios de Monto' },
+      exportar: {
+        nombreArchivo: 'Cambios de Monto',
+        titulo: 'Descarga la base completa: todas las filas y columnas de la hoja, sin importar filtros ni búsqueda',
+        descargar: async () => ExportarExcel.descargarCrudo({ nombreArchivo: 'Cambios de Monto', filas: JSON.parse(await callServer('apiCambiosMontoCCHCompleto', state.token)) }),
+      },
       columnasCompletas: { idHoja: 'ID', cargar: async () => JSON.parse(await callServer('apiCambiosMontoCCHCompleto', state.token)) },
       etiquetaFila: (c) => c.RESPONSABLE || c.ID_CCH,
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
@@ -602,7 +610,11 @@
       idTabla: 'cambios-vehiculos',
       ordenInicial: { campo: 'FECHA', dir: 'desc' },
       textoVacio: 'Todavía no hay cambios registrados',
-      exportar: { nombreArchivo: 'Cambios Vehículos' },
+      exportar: {
+        nombreArchivo: 'Cambios Vehículos',
+        titulo: 'Descarga la base completa: todas las filas y columnas de la hoja, sin importar filtros ni búsqueda',
+        descargar: async () => ExportarExcel.descargarCrudo({ nombreArchivo: 'Cambios Vehículos', filas: JSON.parse(await callServer('apiCambiosVehiculosCompleto', state.token)) }),
+      },
       columnasCompletas: { idHoja: 'ID_CAMBIO', cargar: async () => JSON.parse(await callServer('apiCambiosVehiculosCompleto', state.token)) },
       etiquetaFila: (c) => [c.FOLIO, c.CAMPO].filter(Boolean).join(' · '),
       detalle: false, // bitácora de solo lectura, sin panel de detalle ni edición

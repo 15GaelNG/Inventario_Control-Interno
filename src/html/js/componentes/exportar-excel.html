@@ -24,6 +24,10 @@
    *
    * Varias hojas en un archivo (acepta además el tipo 'fechaHora': "yyyy-MM-ddTHH:mm:ss" → dd/mm/yyyy hh:mm):
    *   await ExportarExcel.descargarLibro({ nombreArchivo: 'Accesorios', hojas: [{ nombre, columnas, filas }, …] });
+   *
+   * Arreglo de objetos crudos (una fila por objeto, llaves = encabezado): adivina el tipo de cada
+   * columna solo, como si se descargara la hoja completa de la base de datos:
+   *   await ExportarExcel.descargarCrudo({ nombreArchivo: 'Vehículos', filas: [{ FOLIO: 'A1', … }] });
    */
   const ExportarExcel = (function () {
     // "\/\/" (no "//") — Apps Script bug, ver CLAUDE.md
@@ -137,6 +141,33 @@
       guardar(XLSX, libro, opciones.nombreArchivo);
     }
 
-    return { descargar, descargarLibro };
+    /** 'texto' | 'numero' | 'fecha' a partir de una muestra de valores crudos de una columna. */
+    function tipoDeColumna_(valores) {
+      const muestra = valores.filter((v) => v !== '' && v !== null && v !== undefined).slice(0, 60);
+      if (!muestra.length) return 'texto';
+      if (muestra.every((v) => v instanceof Date || (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)))) return 'fecha';
+      if (muestra.every((v) => typeof v === 'number' || (String(v).trim() !== '' && !isNaN(Number(String(v).replace(/[$,\s]/g, '')))))) return 'numero';
+      return 'texto';
+    }
+
+    /**
+     * Descarga un arreglo de objetos "crudos" (una fila por objeto, llaves = encabezado de la
+     * columna) tal cual, con los mismos encabezados y sin transformar nada — como si se
+     * descargara la hoja de la base de datos completa. El tipo de cada columna (texto/número/
+     * fecha) se adivina solo con una muestra de sus valores.
+     *   await ExportarExcel.descargarCrudo({ nombreArchivo: 'Vehículos', filas: [{ FOLIO: 'A1', … }] });
+     */
+    async function descargarCrudo({ nombreArchivo, nombreHoja, filas }) {
+      const encabezados = filas.length ? Object.keys(filas[0]) : [];
+      const columnas = encabezados.map((h) => ({ titulo: h, tipo: tipoDeColumna_(filas.map((f) => f[h])) }));
+      await descargar({
+        nombreArchivo, nombreHoja,
+        columnas: columnas.map((c) => ({ titulo: c.titulo, tipo: c.tipo })),
+        filas: filas.map((f) => encabezados.map((h) => f[h])),
+      });
+      return filas.length;
+    }
+
+    return { descargar, descargarLibro, descargarCrudo };
   })();
 </script>

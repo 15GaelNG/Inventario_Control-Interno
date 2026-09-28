@@ -633,7 +633,11 @@
       idTabla: 'arqueos',
       ordenInicial: { campo: 'FECHA_INICIO', dir: 'desc' },
       textoVacio: 'Todavía no hay arqueos registrados',
-      exportar: { nombreArchivo: 'Arqueos' },
+      exportar: {
+        nombreArchivo: 'Arqueos',
+        titulo: 'Descarga la base completa: todas las filas y columnas de la hoja, sin importar filtros ni búsqueda',
+        descargar: async () => ExportarExcel.descargarCrudo({ nombreArchivo: 'Arqueos', filas: JSON.parse(await callServer('apiArqueosCompleto', state.token)) }),
+      },
       columnasCompletas: { idHoja: 'ID ARQUEO', cargar: async () => JSON.parse(await callServer('apiArqueosCompleto', state.token)) },
       etiquetaFila: (a) => a.ID,
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
