@@ -305,21 +305,9 @@
       return api;
     }
 
-    /** Valor de una celda de la base → "yyyy-MM-dd" comparable, o '' si no es fecha. */
-    function claveFechaValor(v) {
-      if (v === null || v === undefined || v === '') return '';
-      if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
-      const d = v instanceof Date ? v : new Date(v);
-      if (isNaN(d)) return '';
-      const dos = (x) => String(x).padStart(2, '0');
-      return d.getFullYear() + '-' + dos(d.getMonth() + 1) + '-' + dos(d.getDate());
-    }
-
     /**
      * "Exportar a Excel" de los módulos: descarga la base completa (todas las filas y todas las columnas de
      * su pestaña, sin importar filtros ni búsqueda), no solo lo que se ve. Llega del servidor comprimida.
-     * `rango` ({ campo, desde, hasta }, opcional) lo pide DataTable si detecta una columna de fecha visible
-     * y limita las filas de cada hoja que tenga una columna con ese mismo título.
      * modulo: INVENTARIO | CAMBIOS | REASIGNACIONES | DESECHOS | REACTIVACION | SOLICITUD | ACCESORIOS
      */
     function exportarBase(modulo, nombreArchivo) {
@@ -330,28 +318,12 @@
       return {
         nombreArchivo: nombreArchivo,
         titulo: 'Descarga la base completa del módulo: todas las filas y columnas de la hoja, sin importar filtros ni búsqueda',
-        descargar: async (rango) => {
+        descargar: async () => {
           const comprimir = typeof DecompressionStream === 'function';
           const r = await llamar('apiLineasExportarBase', modulo, comprimir);
           const base = JSON.parse(comprimir ? await descomprimir(r) : r);
-          let hojas = base.hojas;
-          if (rango && (rango.desde || rango.hasta)) {
-            hojas = hojas.map((h) => {
-              const iCol = h.columnas.findIndex((c) => c.titulo === rango.campo);
-              if (iCol < 0) return h;
-              return Object.assign({}, h, {
-                filas: h.filas.filter((fila) => {
-                  const k = claveFechaValor(fila[iCol]);
-                  if (!k) return false;
-                  if (rango.desde && k < rango.desde) return false;
-                  if (rango.hasta && k > rango.hasta) return false;
-                  return true;
-                }),
-              });
-            });
-          }
-          await ExportarExcel.descargarLibro({ nombreArchivo: nombreArchivo, hojas: hojas });
-          return hojas.reduce((n, h) => n + h.filas.length, 0);
+          await ExportarExcel.descargarLibro({ nombreArchivo: nombreArchivo, hojas: base.hojas });
+          return base.hojas.reduce((n, h) => n + h.filas.length, 0);
         },
       };
     }
@@ -2748,7 +2720,7 @@
           ],
           ayuda: 'Todos los movimientos del registro: reasignaciones, cambios de cada campo, inspecciones, responsivas, reactivaciones y desechos, ' +
             'del AppSheet y del sistema nuevo. "Movimiento" filtra por tipo; la flecha de cada columna filtra por campo, usuario, origen o rango de fechas. ' +
-            '"Exportar a Excel" descarga todo (respeta los filtros activos) y puede limitarse a un rango de fecha aparte.',
+            '"Exportar a Excel" descarga todo (respeta los filtros activos).',
           alCambiarFiltros: (f) => {
             const valores = f && f.movimiento && f.movimiento.valores;
             select.value = valores && valores.length === 1 ? valores[0] : '';

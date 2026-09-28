@@ -271,12 +271,10 @@
    *     tamanoPagina: 25,  densidad: 'normal',  ordenInicial: { campo: 'FECHA', dir: 'desc' },
    *     textoVacio: 'Sin registros',  ayuda: 'Texto de ayuda…',
    *     exportar: { nombreArchivo: 'Verificaciones' },   // botón verde; false lo oculta. Exporta TODAS las
-   *                    // columnas exportables (no solo las visibles en pantalla) y, si hay columna de tipo
-   *                    // "fecha", antes pregunta un rango opcional para limitar el Excel.
-   *                    // exportar.descargar: async (rango) => nFilas  → en vez de exportar las filas ya
+   *                    // columnas exportables (no solo las visibles en pantalla), sin preguntar nada.
+   *                    // exportar.descargar: async () => nFilas  → en vez de exportar las filas ya
    *                    //   cargadas en el navegador, el módulo trae los datos (p. ej. la base completa del
-   *                    //   servidor); rango es { campo, desde, hasta } (el título de la columna de fecha
-   *                    //   elegida) o null si no se limitó por fecha. exportar.titulo: tooltip del botón.
+   *                    //   servidor). exportar.titulo: tooltip del botón.
    *     columnasCompletas: { idHoja: 'ID_VEHICULO', cargar: async () => [{ 'ID_VEHICULO': 1, … }] },
    *                    // opcional: al abrir "Vista" trae sola TODA la hoja (todas las columnas crudas, no
    *                    // solo el resumen) y agrega las que falten como columnas nuevas (ocultas, se activan
@@ -753,7 +751,7 @@
             <span class="dt-espacio"></span>
             <span class="dt-seleccion-info" hidden></span>
             ${accionesSeleccion.map((a, i) => `<button type="button" class="${a.peligro ? 'danger' : 'secondary'} ${a.clase || ''}" data-accion-sel="${i}" ${a.titulo ? `title="${esc(a.titulo)}"` : ''} hidden>${ic(a.icono)} ${esc(a.texto)}</button>`).join('')}
-            ${cfg.exportar ? `<button type="button" class="btn-excel dt-btn-excel" title="${esc(cfg.exportar.titulo || 'Descarga la tabla completa (todas las columnas, todas las páginas); respeta los filtros y la búsqueda activos, y puedes limitar por fecha')}">${ic('exportar')} Exportar a Excel</button>` : ''}
+            ${cfg.exportar ? `<button type="button" class="btn-excel dt-btn-excel" title="${esc(cfg.exportar.titulo || 'Descarga la tabla completa (todas las columnas, todas las páginas); respeta los filtros y la búsqueda activos')}">${ic('exportar')} Exportar a Excel</button>` : ''}
           </div>
           <div class="dt-filtros-activos" hidden></div>
           <div class="dt-banner" hidden></div>
@@ -1590,71 +1588,11 @@
         return texto;
       }
 
-      /** Modal para filtrar por fecha (opcional) antes de exportar. null = canceló. */
-      function pedirRangoFechaExportar(colsFecha) {
-        return new Promise((resolve) => {
-          const fondo = document.createElement('div');
-          fondo.className = 'modal-backdrop';
-          fondo.innerHTML = `
-            <div class="modal-card confirmar-card" role="dialog" aria-modal="true" aria-labelledby="dt-export-titulo">
-              <h3 id="dt-export-titulo">Exportar a Excel</h3>
-              <p class="confirmar-mensaje">Se exporta toda la tabla (todas las columnas). Si quieres, limita por fecha — déjalo en blanco para exportar todo.</p>
-              ${colsFecha.length > 1 ? `<div class="field">
-                <label for="dt-export-campo">Columna de fecha</label>
-                <select id="dt-export-campo">${colsFecha.map((c) => `<option value="${esc(c.campo)}">${esc(c.titulo)}</option>`).join('')}</select>
-              </div>` : ''}
-              <div class="field">
-                <label for="dt-export-desde">Desde</label>
-                <input type="date" id="dt-export-desde" />
-              </div>
-              <div class="field">
-                <label for="dt-export-hasta">Hasta</label>
-                <input type="date" id="dt-export-hasta" />
-              </div>
-              <div class="confirmar-acciones">
-                <button type="button" class="secondary" data-accion="cancelar">Cancelar</button>
-                <button type="button" data-accion="exportar">${ic('exportar')} Exportar</button>
-              </div>
-            </div>`;
-          document.body.appendChild(fondo);
-
-          const campoSel = fondo.querySelector('#dt-export-campo');
-          const desdeEl = fondo.querySelector('#dt-export-desde');
-          const hastaEl = fondo.querySelector('#dt-export-hasta');
-          const focoPrevio = document.activeElement;
-
-          const terminar = (resultado) => {
-            document.removeEventListener('keydown', alTecla, true);
-            fondo.remove();
-            if (focoPrevio && focoPrevio.focus) focoPrevio.focus();
-            resolve(resultado);
-          };
-          const alTecla = (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); terminar(null); } };
-          fondo.querySelector('[data-accion="cancelar"]').addEventListener('click', () => terminar(null));
-          fondo.querySelector('[data-accion="exportar"]').addEventListener('click', () => terminar({
-            campo: campoSel ? campoSel.value : colsFecha[0].campo,
-            desde: desdeEl.value || '',
-            hasta: hastaEl.value || '',
-          }));
-          fondo.addEventListener('mousedown', (ev) => { if (ev.target === fondo) terminar(null); });
-          document.addEventListener('keydown', alTecla, true);
-          desdeEl.focus();
-        });
-      }
-
-      /** cfg.exportar.descargar(rango): el módulo trae la base completa del servidor en vez de las filas cargadas. */
+      /** cfg.exportar.descargar: el módulo trae la base completa del servidor en vez de las filas cargadas. */
       async function exportarConDescarga(boton) {
-        const colsFecha = columnasExportables().filter((c) => tipoDe(c).exportarComo === 'fecha');
-        let rango = null;
-        if (colsFecha.length) {
-          const eleccion = await pedirRangoFechaExportar(colsFecha);
-          if (!eleccion) return;   // canceló
-          // campo (no titulo): en Lineas es el mismo encabezado crudo que usa la hoja del lado del servidor
-          if (eleccion.desde || eleccion.hasta) rango = { campo: eleccion.campo, desde: eleccion.desde, hasta: eleccion.hasta };
-        }
         await conBotonOcupado(boton, 'Exportando…', async () => {
           try {
-            const n = await cfg.exportar.descargar(rango);
+            const n = await cfg.exportar.descargar();
             Notificar.exito(`${n} ${plural(n, 'registro')} ${plural(n, 'exportado')}`);
           } catch (err) {
             Notificar.error('No se pudo exportar: ' + err.message);
@@ -1666,27 +1604,8 @@
       async function exportarExcel(boton) {
         if (typeof cfg.exportar.descargar === 'function') return exportarConDescarga(boton);
         const cols = columnasExportables();
-        const colsFecha = cols.filter((c) => tipoDe(c).exportarComo === 'fecha');
-        let filas = filasFiltradas();
-        let avisoVacio = 'No hay registros para exportar con los filtros actuales';
-
-        if (colsFecha.length) {
-          const eleccion = await pedirRangoFechaExportar(colsFecha);
-          if (!eleccion) return;   // canceló
-          if (eleccion.desde || eleccion.hasta) {
-            const col = colPorCampo(eleccion.campo);
-            filas = filas.filter((f) => {
-              const k = claveFecha(valorDe(col, f));
-              if (!k) return false;
-              if (eleccion.desde && k < eleccion.desde) return false;
-              if (eleccion.hasta && k > eleccion.hasta) return false;
-              return true;
-            });
-            avisoVacio = 'No hay registros para exportar en ese rango de fechas';
-          }
-        }
-
-        if (!filas.length) { Notificar.error(avisoVacio); return; }
+        const filas = filasFiltradas();
+        if (!filas.length) { Notificar.error('No hay registros para exportar con los filtros actuales'); return; }
         await conBotonOcupado(boton, 'Exportando…', async () => {
           try {
             await ExportarExcel.descargar({
