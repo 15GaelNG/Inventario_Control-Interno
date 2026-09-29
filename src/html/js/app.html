@@ -2256,7 +2256,7 @@
     function abrirAgregarVerificacion(vResumen) {
       const cuerpo = abrirCapturaVehiculo('clipboard-check', 'VERIFICACIÓN', 'Nueva verificación', 'Folio ' + vResumen.FOLIO);
       Formulario.crear(cuerpo, {
-        ancho: 'uno',
+        ancho: 'medio', columnas: 2,
         campos: [
           { id: 'FECHA_VERIFICACION', etiqueta: 'Fecha de verificación', tipo: 'fecha', requerido: true, valor: hoyLocal() },
           { id: 'FECHA_PROXIMA', etiqueta: 'Próxima verificación', tipo: 'fecha', requerido: true,
@@ -2280,7 +2280,7 @@
     function abrirAgregarIncidencia(vResumen, completo) {
       const cuerpo = abrirCapturaVehiculo('wrench', 'INCIDENCIA', 'Nueva incidencia', 'Folio ' + vResumen.FOLIO);
       Formulario.crear(cuerpo, {
-        ancho: 'uno',
+        ancho: 'medio', columnas: 2,
         campos: [
           { id: 'DEPARTAMENTO', etiqueta: 'Departamento', valor: completo['DEPARTAMENTO'] || '' },
           { id: 'MODELO', etiqueta: 'Modelo', valor: completo['LINEA VEHICULO'] || '' },
@@ -2314,7 +2314,7 @@
       if (document.getElementById('veh-modal-captura').hidden) return; // se cerró mientras cargaba
       cuerpo.innerHTML = '';
       const form = Formulario.crear(cuerpo, {
-        ancho: 'uno',
+        ancho: 'medio', columnas: 2,
         campos: [
           { id: 'SERIE_SENSOR', etiqueta: 'Serie del sensor', requerido: true, mayusculas: true,
             ayuda: 'La que trae la etiqueta del equipo, ej. G9HT5CEWRJV7', valor: datos.serieSensorSugerida || '' },
@@ -2351,7 +2351,7 @@
     function abrirAgregarHolograma(vResumen, completo) {
       const cuerpo = abrirCapturaVehiculo('credit-card', 'HOLOGRAMA', 'Nuevo holograma', 'Folio ' + vResumen.FOLIO);
       const form = Formulario.crear(cuerpo, {
-        ancho: 'uno',
+        ancho: 'medio', columnas: 2,
         campos: [
           { id: 'PROVEEDOR', etiqueta: 'Proveedor', tipo: 'lista', requerido: true, opciones: PROVEEDORES_HOLOGRAMA },
           { id: 'CALCOMANIA', etiqueta: 'Calcomanía', requerido: true, mayusculas: true,
