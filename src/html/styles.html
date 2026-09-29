@@ -21,6 +21,7 @@
     --color-success: #1e7d4f;
     --color-note-bg: var(--color-primary-soft);
     --color-badge-bg: #ffffff; /* fijo: el logo (navy+dorado) siempre necesita fondo claro, en cualquier tema */
+    --color-neutro-fuerte: #212121; /* etiquetas "neutras" (ej. Clase Camión/Motocicleta) */
 
     /* Sidebar: fondo navy fijo de marca, NO cambia con el tema claro/oscuro. */
     --color-sidebar-bg: #06263A;
@@ -48,6 +49,7 @@
     --color-text-muted: #9db0b8;
     --color-border: #26404c;
     --color-note-bg: #16344450;
+    --color-neutro-fuerte: #c9ccd1; /* casi negro en claro se perdía contra el fondo oscuro */
   }
 
   /* Transición suave al cambiar de tema (no anima layout, solo color/fondo) */
@@ -64,6 +66,11 @@
     font-family: 'Poppins', 'Segoe UI', system-ui, -apple-system, sans-serif;
     font-size: 14px;
   }
+
+  /* Enlaces (ej. "Ver archivo" de PDFs/imágenes adjuntos): sin esto usan el azul
+     por default del navegador, que en modo oscuro casi no se distingue del fondo. */
+  a { color: var(--color-primary); }
+  a:hover { color: var(--color-primary-hover); }
 
   /* #app ocupa exactamente el alto de la pantalla y no se desplaza — el
      sidebar y la topbar quedan fijos; solo el contenido de #view-container

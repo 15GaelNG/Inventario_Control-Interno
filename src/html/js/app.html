@@ -2047,11 +2047,13 @@
     // Color + ícono por clase, tal cual se veían en AppSheet.
     const CLASE_ESTILO = {
       'AUTOMOVIL': { icono: 'car', color: '#2979ff' },
-      'CAMION': { icono: 'truck', color: '#212121' },
+      // var(--color-neutro-fuerte) en vez de un negro fijo: se pierde contra
+      // el fondo del modo oscuro si no se adapta con el tema.
+      'CAMION': { icono: 'truck', color: 'var(--color-neutro-fuerte)' },
       'CAMIONETA': { icono: 'car-front', color: '#ff9800' },
       'CUATRIMOTO': { icono: 'tractor', color: '#d4b106' },
       'MOTOCARRO': { icono: 'bike', color: '#9c27b0' },
-      'MOTOCICLETA': { icono: 'bike', color: '#212121' },
+      'MOTOCICLETA': { icono: 'bike', color: 'var(--color-neutro-fuerte)' },
       'NUCO SIN INFORMACION': { icono: 'triangle-alert', color: '#d32f2f' },
       'REMOLQUE': { icono: 'container', color: '#43a047' },
       'MAQUINARIA MENOR': { icono: 'wrench', color: '#607d8b' },
