@@ -1,25 +1,84 @@
 <template id="tpl-dashboard">
-  <h2>Módulos</h2>
-  <div class="grid grid-modules">
-    <div class="card nav-module" data-view="accesorios" style="cursor:pointer">
-      <strong><i data-lucide="backpack" class="ico"></i> Accesorios</strong>
-      <p style="color:var(--color-text-muted); font-size:13px">Catálogo y movimientos de stock</p>
+  <h2>Inicio</h2>
+
+  <div class="dash-section">
+    <h3 class="dash-section-title">Resumen</h3>
+    <div class="stat-row" id="dash-kpis">
+      <div class="stat-tile stat-tile-clickable nav-module" data-view="vehiculos" style="cursor:pointer">
+        <div class="stat-icon"><i data-lucide="truck" class="ico"></i></div>
+        <div><div class="stat-value" id="dash-kpi-vehiculos-activos">—</div><div class="stat-label">Vehículos activos</div></div>
+      </div>
+      <div class="stat-tile stat-tile-clickable nav-module" data-view="vehiculos" style="cursor:pointer">
+        <div class="stat-icon"><i data-lucide="ban" class="ico"></i></div>
+        <div><div class="stat-value" id="dash-kpi-vehiculos-baja">—</div><div class="stat-label">Vehículos de baja</div></div>
+      </div>
+      <div class="stat-tile stat-tile-clickable nav-module" data-view="incidencias" style="cursor:pointer">
+        <div class="stat-icon"><i data-lucide="wrench" class="ico"></i></div>
+        <div><div class="stat-value" id="dash-kpi-incidencias-abiertas">—</div><div class="stat-label">Incidencias abiertas</div></div>
+      </div>
+      <div class="stat-tile stat-tile-clickable nav-module" data-view="tickets" style="cursor:pointer">
+        <div class="stat-icon"><i data-lucide="ticket" class="ico"></i></div>
+        <div><div class="stat-value" id="dash-kpi-tickets-recientes">—</div><div class="stat-label">Tickets (últimos 30 días)</div></div>
+      </div>
+      <div class="stat-tile stat-tile-clickable nav-module" data-view="caja-chica" style="cursor:pointer">
+        <div class="stat-icon"><i data-lucide="circle-check" class="ico"></i></div>
+        <div><div class="stat-value" id="dash-kpi-cch-vigentes">—</div><div class="stat-label">Cajas chicas vigentes</div></div>
+      </div>
+      <div class="stat-tile stat-tile-clickable nav-module" data-view="caja-chica" style="cursor:pointer">
+        <div class="stat-icon"><i data-lucide="clock" class="ico"></i></div>
+        <div><div class="stat-value" id="dash-kpi-cch-proceso">—</div><div class="stat-label">Cajas chicas en cierre</div></div>
+      </div>
+      <div class="stat-tile stat-tile-clickable nav-module" data-view="lineas-telefonicas" style="cursor:pointer">
+        <div class="stat-icon"><i data-lucide="smartphone" class="ico"></i></div>
+        <div><div class="stat-value" id="dash-kpi-equipos-activos">—</div><div class="stat-label">Equipos activos</div></div>
+      </div>
+      <div class="stat-tile stat-tile-clickable nav-module" data-view="lineas-telefonicas" style="cursor:pointer">
+        <div class="stat-icon"><i data-lucide="phone" class="ico"></i></div>
+        <div><div class="stat-value" id="dash-kpi-lineas-activas">—</div><div class="stat-label">Líneas activas</div></div>
+      </div>
     </div>
-    <div class="card nav-module" data-view="lineas-telefonicas" data-etiqueta="Líneas Telefónicas" style="cursor:pointer">
-      <strong><i data-lucide="smartphone" class="ico"></i> Líneas Telefónicas</strong>
-      <p style="color:var(--color-text-muted); font-size:13px">Equipos, líneas, inspecciones e historial</p>
+  </div>
+
+  <div class="dash-section">
+    <h3 class="dash-section-title">Pendientes que necesitan atención</h3>
+    <div class="stat-row" id="dash-alertas">
+      <div class="stat-tile stat-tile-warn stat-tile-clickable nav-module" data-view="verificaciones" style="cursor:pointer">
+        <div class="stat-icon"><i data-lucide="triangle-alert" class="ico"></i></div>
+        <div><div class="stat-value" id="dash-alerta-verif-vencidas">—</div><div class="stat-label">Verificaciones vencidas</div></div>
+      </div>
+      <div class="stat-tile stat-tile-warn stat-tile-clickable nav-module" data-view="verificaciones" style="cursor:pointer">
+        <div class="stat-icon"><i data-lucide="hourglass" class="ico"></i></div>
+        <div><div class="stat-value" id="dash-alerta-verif-por-vencer">—</div><div class="stat-label">Verificaciones por vencer</div></div>
+      </div>
+      <div class="stat-tile stat-tile-warn stat-tile-clickable nav-module" data-view="inspeccion-vehicular" style="cursor:pointer">
+        <div class="stat-icon"><i data-lucide="clipboard-x" class="ico"></i></div>
+        <div><div class="stat-value" id="dash-alerta-insp-atrasadas">—</div><div class="stat-label">Inspecciones atrasadas</div></div>
+      </div>
     </div>
-    <div class="card nav-module" data-view="gestion-activos" data-etiqueta="Gestión de Activos" style="cursor:pointer">
-      <strong><i data-lucide="contact" class="ico"></i> Gestión de Activos</strong>
-      <p style="color:var(--color-text-muted); font-size:13px">Activos asignados por colaborador</p>
+  </div>
+
+  <div class="dash-grid-2">
+    <div class="dash-section">
+      <h3 class="dash-section-title">Actividad reciente</h3>
+      <div id="dash-actividad"><p class="empty-state">Cargando…</p></div>
     </div>
-    <div class="card nav-module" data-view="accesorios-lineas" data-etiqueta="Inventario de Accesorios (Líneas)" style="cursor:pointer">
-      <strong><i data-lucide="boxes" class="ico"></i> Inventario de Accesorios (Líneas)</strong>
-      <p style="color:var(--color-text-muted); font-size:13px">Stock, entradas y salidas de accesorios</p>
-    </div>
-    <div class="card nav-module" data-view="cambios-lineas" data-etiqueta="Control de Cambios - Líneas" style="cursor:pointer">
-      <strong><i data-lucide="eye" class="ico"></i> Control de Cambios</strong>
-      <p style="color:var(--color-text-muted); font-size:13px">Bitácora de cambios y reasignaciones</p>
+
+    <div class="dash-section">
+      <h3 class="dash-section-title">Accesos rápidos</h3>
+      <div class="grid grid-accesos">
+        <div class="card nav-module" data-view="incidencias" data-etiqueta="Incidencias" style="cursor:pointer">
+          <strong><i data-lucide="wrench" class="ico"></i> Registrar incidencia</strong>
+        </div>
+        <div class="card nav-module" data-view="tickets" data-etiqueta="Tickets" style="cursor:pointer">
+          <strong><i data-lucide="ticket" class="ico"></i> Nuevo ticket</strong>
+        </div>
+        <div class="card nav-module" data-view="arqueos" data-etiqueta="Arqueos" style="cursor:pointer">
+          <strong><i data-lucide="wallet" class="ico"></i> Registrar arqueo</strong>
+        </div>
+        <div class="card nav-module" data-view="inspeccion-vehicular" data-etiqueta="Inspección Vehicular" style="cursor:pointer">
+          <strong><i data-lucide="clipboard-check" class="ico"></i> Nueva inspección vehicular</strong>
+        </div>
+      </div>
     </div>
   </div>
 </template>

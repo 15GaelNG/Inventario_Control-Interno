@@ -7,6 +7,13 @@
  * lugar (services/*.gs) y aquí solo se decide qué queda expuesto al cliente.
  */
 
+// --- Dashboard ---
+// JSON.stringify: incluye fechas (Date/ISO) mezcladas en varias secciones —
+// mismo motivo que apiListarVehiculosResumen (ver comentario más abajo).
+function apiResumenInicio(token) {
+  return JSON.stringify(DashboardService.resumen(token));
+}
+
 // --- Auth ---
 function apiLogin(correo, password) {
   return Auth.login(correo, password);

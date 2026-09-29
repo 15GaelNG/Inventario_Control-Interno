@@ -309,6 +309,16 @@
   .tab-panel[hidden] { display: none; }
   .grid { display: grid; gap: 16px; }
   .grid-modules { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  .grid-accesos { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+
+  /* Panel de Inicio: secciones apiladas, y "Actividad reciente" + "Accesos
+     rápidos" lado a lado en pantallas anchas. */
+  .dash-section { margin-bottom: 24px; }
+  .dash-section-title { margin: 0 0 12px; font-size: 15px; }
+  .dash-grid-2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 24px; align-items: start; }
+  @media (max-width: 900px) {
+    .dash-grid-2 { grid-template-columns: 1fr; }
+  }
 
   h2 { margin-top: 0; font-weight: 600; }
 

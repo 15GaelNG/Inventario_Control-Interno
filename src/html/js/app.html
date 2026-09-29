@@ -801,6 +801,52 @@
     document.querySelectorAll('.nav-module[data-view]').forEach((el) => {
       el.addEventListener('click', () => navegarA(el.dataset.view));
     });
+    cargarResumenInicio();
+  }
+
+  /** Números del panel de Inicio (KPIs, alertas y actividad reciente) — un solo viaje al servidor. */
+  async function cargarResumenInicio() {
+    const contActividad = document.getElementById('dash-actividad');
+    if (!contActividad) return; // se navegó a otra vista antes de terminar de montar esta
+    try {
+      const r = JSON.parse(await callServer('apiResumenInicio', state.token));
+      if (!document.body.contains(contActividad)) return; // se navegó a otra vista mientras cargaba
+
+      const set = (id, valor) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = (valor === null || valor === undefined) ? '—' : valor;
+      };
+
+      set('dash-kpi-vehiculos-activos', r.vehiculos && r.vehiculos.activos);
+      set('dash-kpi-vehiculos-baja', r.vehiculos && r.vehiculos.baja);
+      set('dash-kpi-incidencias-abiertas', r.ticketsIncidencias && r.ticketsIncidencias.incidenciasAbiertas);
+      set('dash-kpi-tickets-recientes', r.ticketsIncidencias && r.ticketsIncidencias.ticketsRecientes);
+      set('dash-kpi-cch-vigentes', r.cajasChicas && r.cajasChicas.vigentes);
+      set('dash-kpi-cch-proceso', r.cajasChicas && r.cajasChicas.enProcesoCierre);
+      set('dash-kpi-equipos-activos', r.telefonia && r.telefonia.equiposActivos);
+      set('dash-kpi-lineas-activas', r.telefonia && r.telefonia.lineasActivas);
+      set('dash-alerta-verif-vencidas', r.alertas.verificaciones && r.alertas.verificaciones.vencidas);
+      set('dash-alerta-verif-por-vencer', r.alertas.verificaciones && r.alertas.verificaciones.porVencer);
+      set('dash-alerta-insp-atrasadas', r.alertas.inspecciones && r.alertas.inspecciones.atrasadas);
+
+      contActividad.innerHTML = (r.actividad || []).length
+        ? '<div class="historial-timeline">' + r.actividad.map((e) => `
+            <div class="historial-item">
+              <div class="historial-icon"><i data-lucide="${e.icono}" class="ico"></i></div>
+              <div class="historial-main">
+                <div class="historial-campo">${escaparHtml(e.tipo)}</div>
+                <div class="historial-valores">${escaparHtml(e.texto || '')}</div>
+              </div>
+              <div class="historial-meta"><div>${formatearFecha(e.fecha)}</div></div>
+            </div>
+          `).join('') + '</div>'
+        : '<p class="empty-state">Sin actividad reciente.</p>';
+      refreshIcons();
+    } catch (err) {
+      if (document.body.contains(contActividad)) {
+        contActividad.innerHTML = '<p class="empty-state">No se pudo cargar la actividad reciente.</p>';
+      }
+    }
   }
 
   // ---------- Accesorios ----------
