@@ -50,13 +50,15 @@ test('Telefonía muestra sus módulos en orden y Gestión de Activos queda fuera
   const app = read('src/html/js/app.html');
   const lineas = app.slice(app.indexOf("id: 'lineas'"), app.indexOf("id: 'gestion-activos'"));
   assert.equal((lineas.match(/Inventario de Accesorios/g) || []).length, 1);
-  const orden = ['lineas-telefonicas', 'accesorios-lineas', 'reactivacion-lineas', 'reasignaciones-lineas', 'solicitud-lineas',
+  // Panorama primero (29-sep); Reactivación oculta del menú (línea comentada) pero su vista se sigue montando
+  const orden = ['panorama-lineas', 'lineas-telefonicas', 'accesorios-lineas', 'reasignaciones-lineas', 'solicitud-lineas',
     'cambios-lineas', 'bitacora-desechos'];
-  assert.deepEqual([...lineas.matchAll(/vista: '([^']+)'/g)].map((m) => m[1]), orden);
+  const sinComentarios = lineas.split(/\r?\n/).filter((l) => !/^\s*\/\//.test(l)).join('\n');
+  assert.deepEqual([...sinComentarios.matchAll(/vista: '([^']+)'/g)].map((m) => m[1]), orden);
   // Acceso directo debajo del desplegable de Líneas
   assert.match(app, /\{ id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de Activos' \}/);
   assert.match(app, /grupo\.vista \? `/);
-  orden.concat('gestion-activos')
+  orden.concat('gestion-activos', 'reactivacion-lineas')
     .forEach((route) => assert.match(app, new RegExp(`vista === '${route}'`), `falta montar ${route}`));
   // Retirados: Post Venta (ya no existe) y Detalles (ahora es la vista de tarjetas de Líneas Telefónicas)
   ['lineas-post-venta', 'detalles-lineas-telefonicas'].forEach((retirado) => {
@@ -1026,4 +1028,35 @@ test('Reasignar uno por uno: cada equipo con su responsable; los que no cambian 
   const cliente = read('src/html/js/lineas.html');
   assert.match(cliente, /data-modo="INDIVIDUAL"[^>]*>' \+ icono\('list'\) \+ ' Uno por uno/);
   assert.match(cliente, /const columnaFila = \(id, c\) => 'FILA\|' \+ id \+ '\|' \+ c;/);
+});
+
+test('Panorama: estatus al cierre de cada mes reconstruido hacia atrás con la bitácora (también con el ID viejo)', () => {
+  const P = new Function('LineasDatos', 'LineasRepo', 'LineasUtil', 'Utilities',
+    read('src/services/lineas/LineasPanorama.gs') + '; return LineasPanorama;')(
+    { ZONA_APP: 'America/Mexico_City' }, {}, {},
+    { parseDate: (s) => new Date(s.replace(' ', 'T') + '-06:00'), formatDate: () => '' });
+  assert.deepEqual(P._mesesEntre('2025-11', '2026-02'), ['2025-11', '2025-12', '2026-01', '2026-02']);
+  const t = (s) => new Date(s + 'T12:00:00-06:00').getTime();
+  const meses = ['2026-01', '2026-02', '2026-03'];
+  const regs = [
+    // Hoy VENDIDO; en feb pasó de USO a RESGUARDO y en mar de RESGUARDO a VENDIDO (bitácora con el ID viejo "x1")
+    { ids: ['LIN-1', 'x1'], actual: 'VENDIDO', alta: null },
+    // Dado de alta en marzo: no cuenta en enero ni febrero
+    { ids: ['LIN-2'], actual: 'USO', alta: t('2026-03-05') },
+    // Sin cambios: el mismo estatus hacia atrás
+    { ids: ['LIN-3'], actual: 'USO', alta: null },
+  ];
+  const eventos = { x1: [{ t: t('2026-02-10'), antes: 'USO' }, { t: t('2026-03-02'), antes: 'RESGUARDO' }] };
+  const h = P._historico(regs, eventos, meses, t('2026-03-20'));
+  assert.deepEqual(h.USO, [2, 1, 2]);
+  assert.deepEqual(h.RESGUARDO, [0, 1, 0]);
+  assert.deepEqual(h.VENDIDO, [0, 0, 1]);
+  // Menú: Panorama primero y Reactivación oculta (su vista se conserva)
+  const app = read('src/html/js/app.html');
+  assert.match(app, /\{ vista: 'panorama-lineas', etiqueta: 'Panorama', icono: 'layout-dashboard' \},\s*\{ vista: 'lineas-telefonicas'/);
+  assert.match(app, /\/\/ \{ vista: 'reactivacion-lineas'/);
+  assert.match(app, /if \(vista === 'reactivacion-lineas'\)/);
+  assert.match(app, /montarVista\('tpl-lineas-panorama', Lineas\.initPanorama\)/);
+  assert.match(read('src/html/Index.html'), /include\('html\/views\/lineas\/lineas-panorama'\)/);
+  assert.match(read('src/ClientApi.gs'), /function apiLineasPanorama\(token, forzar\)/);
 });

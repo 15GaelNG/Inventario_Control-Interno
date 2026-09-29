@@ -1,0 +1,53 @@
+<template id="tpl-lineas-panorama">
+  <section id="ln-panorama" class="ln-modulo ln-panorama">
+    <div class="page-header">
+      <div>
+        <h2><i data-lucide="layout-dashboard" class="ico"></i> Panorama de Líneas</h2>
+        <p class="page-subtitle">Equipos y líneas por estatus: cómo están hoy y cómo han cambiado mes a mes.</p>
+      </div>
+      <div class="page-header-actions">
+        <button type="button" class="secondary" id="lnp-actualizar"><i data-lucide="refresh-cw" class="ico"></i> Actualizar</button>
+      </div>
+    </div>
+
+    <div class="stat-row" id="lnp-kpis">
+      <div class="stat-tile"><div class="stat-icon"><i data-lucide="loader-circle" class="ico"></i></div><div><div class="stat-value">…</div><div class="stat-label">Cargando</div></div></div>
+    </div>
+
+    <h3 class="lnp-seccion">Hoy</h3>
+    <div class="lnp-hoy">
+      <div class="card lnp-tarjeta">
+        <div class="lnp-cabeza"><h4><i data-lucide="smartphone" class="ico"></i> Equipos por estatus</h4><span class="lnp-total" id="lnp-total-equipos"></span></div>
+        <div class="lnp-barras" id="lnp-barras-equipos"><p class="ln-tenue">Cargando…</p></div>
+      </div>
+      <div class="card lnp-tarjeta">
+        <div class="lnp-cabeza"><h4><i data-lucide="card-sim" class="ico"></i> Líneas por estatus</h4><span class="lnp-total" id="lnp-total-lineas"></span></div>
+        <div class="lnp-barras" id="lnp-barras-lineas"><p class="ln-tenue">Cargando…</p></div>
+      </div>
+    </div>
+
+    <h3 class="lnp-seccion">Mes a mes</h3>
+    <div class="card lnp-tarjeta lnp-evolucion">
+      <div class="lnp-controles">
+        <div class="ln-segmentado" id="lnp-conjunto" role="group" aria-label="Qué contar">
+          <button type="button" class="secondary activo" data-valor="equipos" aria-pressed="true"><i data-lucide="smartphone" class="ico"></i> Equipos</button>
+          <button type="button" class="secondary" data-valor="lineas" aria-pressed="false"><i data-lucide="card-sim" class="ico"></i> Líneas</button>
+        </div>
+        <div class="ln-segmentado" id="lnp-rango" role="group" aria-label="Periodo">
+          <button type="button" class="secondary" data-valor="6" aria-pressed="false">6 meses</button>
+          <button type="button" class="secondary activo" data-valor="12" aria-pressed="true">12 meses</button>
+          <button type="button" class="secondary" data-valor="0" aria-pressed="false">Todo</button>
+        </div>
+        <div class="ln-segmentado" id="lnp-forma" role="group" aria-label="Forma de ver">
+          <button type="button" class="secondary activo" data-valor="grafica" aria-pressed="true"><i data-lucide="chart-line" class="ico"></i> Gráfica</button>
+          <button type="button" class="secondary" data-valor="tabla" aria-pressed="false"><i data-lucide="table" class="ico"></i> Tabla</button>
+        </div>
+      </div>
+      <div class="lnp-chips" id="lnp-chips" role="group" aria-label="Estatus en la gráfica"></div>
+      <div class="lnp-grafica" id="lnp-grafica"></div>
+      <div class="lnp-tabla" id="lnp-tabla" hidden></div>
+      <p class="lnp-nota" id="lnp-nota"></p>
+    </div>
+    <p class="ln-tenue lnp-generado" id="lnp-generado"></p>
+  </section>
+</template>

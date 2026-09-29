@@ -505,6 +505,12 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente(LineasCaptura.generarPdf(tipo, id, !!forzar, usuarioOperacion_(sesion), firmas || null));
   }
 
+  /** Panorama de Líneas: equipos y líneas por estatus, hoy y al cierre de cada mes. */
+  function panorama(token, forzar) {
+    Auth.validarSesion(token);
+    return LineasPanorama.panorama(!!forzar);
+  }
+
   /** Acciones masivas de equipos (resguardo, reasignar, cancelar): formulario y aplicación. */
   function formularioMasivo(token, accion) {
     const sesion = Auth.requiereRol(token, rolesOperan_());
@@ -531,6 +537,6 @@ const TelefoniaService = (function () {
     permisos, indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, catalogos, colaboradores, bitacora, vistaOperativa, formularioOperativa, crearVistaOperativa, formularioRegistro, recargarDatos,
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf, crearRegistro, editarRegistro,
     cambiarEstatus, fotosInspeccion, exportarBase, archivo, ultimoDocumentoNuco,
-    formularioEdicionOperativa, editarVistaOperativa, notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva,
+    formularioEdicionOperativa, editarVistaOperativa, notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva, panorama,
   };
 })();

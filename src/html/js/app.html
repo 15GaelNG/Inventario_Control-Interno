@@ -548,6 +548,7 @@
     transicionVista(vista, etiqueta, () => {
       if (vista === 'dashboard') { montarVista('tpl-dashboard', initDashboard); return; }
       // --- Líneas (rama emmanuel): el módulo vive en html/js/lineas.html (namespace Lineas) ---
+      if (vista === 'panorama-lineas') { montarVista('tpl-lineas-panorama', Lineas.initPanorama); return; }
       if (vista === 'lineas-telefonicas') { montarVista('tpl-lineas-telefonicas', Lineas.initTelefonicas); return; }
       if (vista === 'gestion-activos') { montarVista('tpl-lineas-gestion-activos', Lineas.initGestionActivos); return; }
       if (vista === 'accesorios-lineas') { montarVista('tpl-lineas-accesorios', Lineas.initAccesoriosLineas); return; }
@@ -585,9 +586,11 @@
       id: 'lineas', icono: 'smartphone', etiqueta: 'Líneas',
       items: [
         // Íconos equivalentes a los del menú del AppSheet (Font Awesome → Lucide)
+        { vista: 'panorama-lineas', etiqueta: 'Panorama', icono: 'layout-dashboard' },
         { vista: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas', icono: 'smartphone' },
         { vista: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios', icono: 'boxes' },
-        { vista: 'reactivacion-lineas', etiqueta: 'Reactivación de Líneas', icono: 'check-check' },
+        // Reactivación de Líneas: oculta del menú (29-sep) por si la vuelven a pedir; su vista sigue en navegarA
+        // { vista: 'reactivacion-lineas', etiqueta: 'Reactivación de Líneas', icono: 'check-check' },
         { vista: 'reasignaciones-lineas', etiqueta: 'Control de Reasignaciones - Líneas', icono: 'recycle' },
         { vista: 'solicitud-lineas', etiqueta: 'Solicitud de Líneas', icono: 'target' },
         { vista: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas', icono: 'eye' },

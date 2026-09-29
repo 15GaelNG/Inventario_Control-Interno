@@ -1229,6 +1229,7 @@
       modulo: 'equipos',
       modoVista: null, // 'tabla' | 'tarjetas' (se recuerda en el navegador)
       abrirAlEntrar: null, // id de registro a abrir al entrar a Líneas Telefónicas (desde una bitácora)
+      filtrarAlEntrar: null, // { modulo, estatus }: filtro al entrar a Líneas Telefónicas (desde el Panorama)
     };
     let montaje = 0; // cambia en cada init: respuestas tardías de una vista anterior se ignoran
 
@@ -1559,6 +1560,11 @@
           const id = memoria.abrirAlEntrar;
           memoria.abrirAlEntrar = null;
           abrirRegistro(id);
+        }
+        if (memoria.filtrarAlEntrar) {
+          const f = memoria.filtrarAlEntrar;
+          memoria.filtrarAlEntrar = null;
+          crearTabla(f.modulo).setFiltro('estatus', { valores: [f.estatus] });
         }
       }).catch((e) => {
         if (!vigente()) return;
@@ -3179,6 +3185,291 @@
       navegarA('lineas-telefonicas', 'Líneas Telefónicas');
     }
 
+    /** Desde el Panorama: abre Líneas Telefónicas en Equipos o Líneas, filtrada por un estatus. */
+    function irConEstatus(modulo, estatus) {
+      memoria.modulo = modulo;
+      memoria.filtrarAlEntrar = estatus && estatus !== 'SIN ESTATUS' ? { modulo: modulo, estatus: estatus } : null;
+      navegarA('lineas-telefonicas', 'Líneas Telefónicas');
+    }
+
+    // ======================================================================
+    // Panorama de Líneas: equipos y líneas por estatus, hoy y al cierre de cada mes (apiLineasPanorama)
+    // ======================================================================
+    const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const mesCorto = (ym) => MESES_CORTOS[Number(ym.slice(5, 7)) - 1] + ' ' + ym.slice(2, 4);
+    const mesLargo = (ym) => MESES_CORTOS[Number(ym.slice(5, 7)) - 1] + ' ' + ym.slice(0, 4);
+    const SERIES_PANORAMA = 7; // colores fijos (--lnp-s1…s7); el resto se junta en "OTROS"
+
+    /** Techo "redondo" del eje y (1, 2, 2.5, 5 × 10^n) y sus marcas. */
+    function ejeRedondo(maximo) {
+      const max = Math.max(1, maximo);
+      const bruto = max / 4;
+      const pot = Math.pow(10, Math.floor(Math.log10(bruto)));
+      const paso = [1, 2, 2.5, 5, 10].map((m) => m * pot).find((p) => p >= bruto);
+      const techo = Math.ceil(max / paso) * paso;
+      const marcas = [];
+      for (let v = 0; v <= techo + 1e-9; v += paso) marcas.push(Math.round(v * 100) / 100);
+      return { techo: techo, marcas: marcas };
+    }
+
+    function initPanorama() {
+      const n = ++montaje;
+      const raiz = document.getElementById('ln-panorama');
+      const vigente = () => n === montaje && document.body.contains(raiz);
+      const est = { conjunto: 'equipos', rango: 12, forma: 'grafica', seleccion: { equipos: null, lineas: null }, datos: null };
+      let tabla = null;
+
+      const pct = (v, total) => (total ? (Math.round((v / total) * 1000) / 10).toLocaleString('es-MX') + '%' : '—');
+
+      /** Estatus del conjunto en orden fijo (más registros hoy primero); los 7 primeros tienen color, el resto va a OTROS. */
+      function seriesDe(conjunto) {
+        const b = est.datos[conjunto];
+        const nombres = Object.keys(Object.assign({}, b.historico, b.actual));
+        const ultimo = (s) => (b.historico[s] || []).reduce((m, v) => Math.max(m, v), 0);
+        nombres.sort((a, c) => ((b.actual[c] || 0) - (b.actual[a] || 0)) || (ultimo(c) - ultimo(a)) || a.localeCompare(c));
+        const conColor = nombres.slice(0, SERIES_PANORAMA);
+        const resto = nombres.slice(SERIES_PANORAMA);
+        const series = conColor.map((s, i) => ({ clave: s, nombre: s, color: 'var(--lnp-s' + (i + 1) + ')', valores: b.historico[s] || est.datos.meses.map(() => 0) }));
+        if (resto.length) {
+          series.push({
+            clave: '__OTROS', nombre: 'OTROS (' + resto.length + ')', color: 'var(--lnp-otros)', detalle: resto,
+            valores: est.datos.meses.map((_, k) => resto.reduce((s, x) => s + ((b.historico[x] || [])[k] || 0), 0)),
+          });
+        }
+        return series;
+      }
+
+      function tile(icono, valor, etiqueta, clase, destino) {
+        return '<div class="stat-tile' + (destino ? ' stat-tile-clickable' : '') + (clase ? ' ' + clase : '') + '"' +
+          (destino ? ' role="button" tabindex="0" data-lnp-ir="' + esc(destino[0]) + '" data-estatus="' + esc(destino[1] || '') + '" title="Ver en Líneas Telefónicas"' : '') + '>' +
+          '<div class="stat-icon">' + ico(icono) + '</div><div><div class="stat-value">' + valor + '</div><div class="stat-label">' + esc(etiqueta) + '</div></div></div>';
+      }
+
+      function pintarKpis() {
+        const d = est.datos;
+        const a = (c, s) => d[c].actual[s] || 0;
+        $('#lnp-kpis', raiz).innerHTML =
+          tile('smartphone', miles(d.equipos.total), 'Equipos', '', ['equipos', '']) +
+          tile('circle-check', miles(a('equipos', 'USO')), 'Equipos en uso · ' + pct(a('equipos', 'USO'), d.equipos.total), 'stat-tile-ok', ['equipos', 'USO']) +
+          tile('archive', miles(a('equipos', 'RESGUARDO')), 'Equipos en resguardo · ' + pct(a('equipos', 'RESGUARDO'), d.equipos.total), '', ['equipos', 'RESGUARDO']) +
+          tile('card-sim', miles(d.lineas.total), 'Líneas', '', ['lineas', '']) +
+          tile('phone', miles(a('lineas', 'USO')), 'Líneas en uso · ' + pct(a('lineas', 'USO'), d.lineas.total), 'stat-tile-ok', ['lineas', 'USO']);
+      }
+
+      /** Hoy: una barra por estatus (un solo color: se compara cantidad, no identidad). Clic = ver esos registros. */
+      function pintarBarras(conjunto) {
+        const b = est.datos[conjunto];
+        const filas = Object.keys(b.actual).map((s) => [s, b.actual[s]]).sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]));
+        const max = filas.length ? filas[0][1] : 1;
+        $('#lnp-total-' + conjunto, raiz).textContent = miles(b.total) + ' en total';
+        $('#lnp-barras-' + conjunto, raiz).innerHTML = filas.length ? filas.map(([s, v]) =>
+          '<button type="button" class="lnp-barra" data-lnp-ir="' + conjunto + '" data-estatus="' + esc(s) + '" title="Ver ' + esc(s) + ' en Líneas Telefónicas">' +
+            '<span class="lnp-barra-nombre">' + esc(s) + '</span>' +
+            '<span class="lnp-barra-pista"><span class="lnp-barra-valor" style="width:' + Math.max(1.5, (v / max) * 100) + '%"></span></span>' +
+            '<span class="lnp-barra-num">' + miles(v) + '</span><span class="lnp-barra-pct">' + pct(v, b.total) + '</span></button>').join('')
+          : '<p class="ln-tenue">Sin registros.</p>';
+      }
+
+      function mesesVisibles() {
+        const todos = est.datos.meses;
+        const desde = est.rango ? Math.max(0, todos.length - est.rango) : 0;
+        return { desde: desde, meses: todos.slice(desde) };
+      }
+
+      function pintarChips(series) {
+        const sel = est.seleccion[est.conjunto];
+        $('#lnp-chips', raiz).innerHTML = series.map((s) =>
+          '<button type="button" class="lnp-chip' + (sel.indexOf(s.clave) >= 0 ? ' activo' : '') + '" data-serie="' + esc(s.clave) + '" aria-pressed="' + (sel.indexOf(s.clave) >= 0) + '"' +
+            (s.detalle ? ' title="' + esc(s.detalle.join(', ')) + '"' : '') + '>' +
+            '<span class="lnp-chip-marca" style="background:' + s.color + '"></span>' + esc(s.nombre) + '</button>').join('');
+      }
+
+      /** Líneas por estatus al cierre de cada mes, con cruz que sigue al puntero y etiqueta al final de cada línea. */
+      function pintarGrafica(series) {
+        const cont = $('#lnp-grafica', raiz);
+        const { desde, meses } = mesesVisibles();
+        const visibles = series.filter((s) => est.seleccion[est.conjunto].indexOf(s.clave) >= 0).map((s) => Object.assign({}, s, { valores: s.valores.slice(desde) }));
+        if (!visibles.length) { cont.innerHTML = '<p class="ln-tenue lnp-vacio">Elige al menos un estatus arriba.</p>'; return; }
+        const ancho = Math.max(300, cont.clientWidth || 700);
+        const angosto = ancho < 560;
+        const m = { arriba: 14, derecha: angosto ? 12 : 150, abajo: 30, izquierda: 44 };
+        const alto = 300;
+        const w = ancho - m.izquierda - m.derecha;
+        const h = alto - m.arriba - m.abajo;
+        const eje = ejeRedondo(visibles.reduce((mx, s) => Math.max(mx, ...s.valores), 0));
+        const x = (k) => m.izquierda + (meses.length === 1 ? w / 2 : (k * w) / (meses.length - 1));
+        const y = (v) => m.arriba + h - (v / eje.techo) * h;
+        const cadaCuanto = Math.max(1, Math.ceil(meses.length / (angosto ? 4 : 8)));
+
+        let svg = '<svg class="lnp-svg" viewBox="0 0 ' + ancho + ' ' + alto + '" width="' + ancho + '" height="' + alto + '" role="img" aria-label="' +
+          esc((est.conjunto === 'equipos' ? 'Equipos' : 'Líneas') + ' por estatus al cierre de cada mes') + '" tabindex="0">';
+        eje.marcas.forEach((v) => {
+          svg += '<line class="lnp-rejilla" x1="' + m.izquierda + '" x2="' + (m.izquierda + w) + '" y1="' + y(v) + '" y2="' + y(v) + '"></line>' +
+            '<text class="lnp-eje" x="' + (m.izquierda - 8) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + miles(v) + '</text>';
+        });
+        meses.forEach((ym, k) => {
+          const ultimo = meses.length - 1;
+          if (k !== ultimo && (k % cadaCuanto || ultimo - k < Math.max(2, cadaCuanto))) return; // sin encimarse con "Hoy"
+          svg += '<text class="lnp-eje" x="' + x(k) + '" y="' + (alto - 8) + '" text-anchor="middle">' + esc(k === meses.length - 1 ? 'Hoy' : mesCorto(ym)) + '</text>';
+        });
+        visibles.forEach((s) => {
+          const d = s.valores.map((v, k) => (k ? 'L' : 'M') + x(k).toFixed(1) + ' ' + y(v).toFixed(1)).join(' ');
+          svg += '<path class="lnp-linea" d="' + d + '" style="stroke:' + s.color + '"></path>';
+          const u = s.valores.length - 1;
+          svg += '<circle class="lnp-punto" cx="' + x(u) + '" cy="' + y(s.valores[u]) + '" r="4" style="fill:' + s.color + '"></circle>';
+        });
+        // Etiquetas al final: las de más valor primero; si chocan, la otra se queda en la leyenda y el tooltip
+        if (!angosto) {
+          const puestas = [];
+          visibles.slice().sort((a, b) => b.valores[b.valores.length - 1] - a.valores[a.valores.length - 1]).forEach((s) => {
+            const v = s.valores[s.valores.length - 1];
+            const yy = y(v);
+            if (puestas.some((p) => Math.abs(p - yy) < 15)) return;
+            puestas.push(yy);
+            svg += '<text class="lnp-etiqueta" x="' + (m.izquierda + w + 10) + '" y="' + (yy + 4) + '"><tspan class="lnp-etiqueta-valor">' + miles(v) + '</tspan> ' +
+              esc(s.nombre.length > 16 ? s.nombre.slice(0, 15) + '…' : s.nombre) + '</text>';
+          });
+        }
+        svg += '<line class="lnp-cruz" y1="' + m.arriba + '" y2="' + (m.arriba + h) + '" hidden></line>';
+        svg += '<rect class="lnp-captura" x="' + m.izquierda + '" y="' + m.arriba + '" width="' + w + '" height="' + h + '"></rect></svg>';
+        cont.innerHTML = svg + '<div class="lnp-tooltip" hidden></div>';
+
+        // Tooltip: el mes más cercano al puntero y el valor de todas las series visibles
+        const lienzo = cont.querySelector('svg');
+        const cruz = cont.querySelector('.lnp-cruz');
+        const tip = cont.querySelector('.lnp-tooltip');
+        let actual = -1;
+        const mostrar = (k) => {
+          actual = k;
+          cruz.setAttribute('x1', x(k)); cruz.setAttribute('x2', x(k)); cruz.removeAttribute('hidden');
+          const filas = visibles.map((s) => [s, s.valores[k]]).sort((a, b) => b[1] - a[1]);
+          tip.innerHTML = '<div class="lnp-tooltip-mes">' + esc(k === meses.length - 1 ? 'Hoy' : 'Cierre de ' + mesLargo(meses[k])) + '</div>' +
+            filas.map(([s, v]) => '<div class="lnp-tooltip-fila"><span class="lnp-tooltip-clave" style="background:' + s.color + '"></span><strong>' + miles(v) + '</strong><span>' + esc(s.nombre) + '</span></div>').join('');
+          tip.hidden = false;
+          const escala = lienzo.getBoundingClientRect().width / ancho;
+          const px = x(k) * escala;
+          tip.style.left = Math.min(Math.max(0, px + 12), cont.clientWidth - tip.offsetWidth) + 'px';
+          if (px + 12 + tip.offsetWidth > cont.clientWidth) tip.style.left = Math.max(0, px - tip.offsetWidth - 12) + 'px';
+          tip.style.top = '8px';
+        };
+        const ocultar = () => { actual = -1; cruz.setAttribute('hidden', ''); tip.hidden = true; };
+        const cercano = (ev) => {
+          const r = lienzo.getBoundingClientRect();
+          const px = ((ev.clientX - r.left) / r.width) * ancho;
+          return Math.max(0, Math.min(meses.length - 1, Math.round(((px - m.izquierda) / (w || 1)) * (meses.length - 1))));
+        };
+        lienzo.addEventListener('pointermove', (ev) => mostrar(cercano(ev)));
+        lienzo.addEventListener('pointerleave', ocultar);
+        lienzo.addEventListener('focus', () => mostrar(meses.length - 1));
+        lienzo.addEventListener('blur', ocultar);
+        lienzo.addEventListener('keydown', (ev) => {
+          if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
+          ev.preventDefault();
+          mostrar(Math.max(0, Math.min(meses.length - 1, (actual < 0 ? meses.length - 1 : actual) + (ev.key === 'ArrowLeft' ? -1 : 1))));
+        });
+      }
+
+      /** Tabla: un renglón por mes y una columna por estatus (todos, no solo los elegidos). Exportable a Excel. */
+      function pintarTabla(series) {
+        const cont = $('#lnp-tabla', raiz);
+        if (tabla) { tabla.destruir(); tabla = null; }
+        cont.innerHTML = '<div></div>';
+        const { desde, meses } = mesesVisibles();
+        const b = est.datos[est.conjunto];
+        const nombres = series.reduce((l, s) => l.concat(s.detalle || [s.clave]), []);
+        const filas = meses.map((ym, k) => {
+          const f = { _id: ym, mes: k === meses.length - 1 ? 'Hoy (' + mesLargo(ym) + ')' : mesLargo(ym), orden: ym };
+          let total = 0;
+          nombres.forEach((s) => { const v = (b.historico[s] || [])[desde + k] || 0; f[s] = v; total += v; });
+          f._total = total;
+          return f;
+        });
+        tabla = tablaLineas(cont.firstChild, {
+          idCampo: '_id', idTabla: 'lineas-panorama-' + est.conjunto + '-v1', seleccionable: false, detalle: false,
+          columnas: [{ campo: 'orden', titulo: 'Mes', tipo: 'texto', fijada: true, render: (v, f) => esc(f.mes), valorExportar: (f) => f.mes }]
+            .concat(nombres.map((s) => ({ campo: s, titulo: s, tipo: 'numero' })))
+            .concat([{ campo: '_total', titulo: 'Total', tipo: 'numero' }]),
+          ordenInicial: { campo: 'orden', dir: 'desc' },
+          exportar: { nombreArchivo: 'Panorama ' + (est.conjunto === 'equipos' ? 'equipos' : 'lineas') + ' por estatus', nombreHoja: 'Por mes' },
+          textoVacio: 'Sin datos',
+        });
+        tabla.setDatos(filas);
+      }
+
+      function pintarEvolucion() {
+        const series = seriesDe(est.conjunto);
+        if (!est.seleccion[est.conjunto]) est.seleccion[est.conjunto] = series.slice(0, 4).map((s) => s.clave);
+        pintarChips(series);
+        $('#lnp-grafica', raiz).hidden = est.forma !== 'grafica';
+        $('#lnp-chips', raiz).hidden = est.forma !== 'grafica';
+        $('#lnp-tabla', raiz).hidden = est.forma !== 'tabla';
+        if (est.forma === 'grafica') pintarGrafica(series); else pintarTabla(series);
+        const d = est.datos;
+        $('#lnp-nota', raiz).textContent = d.desde
+          ? 'Al cierre de cada mes, reconstruido con la bitácora de cambios de estatus (' + miles(d.cambiosDeEstatus) + ' cambios desde ' + fecha(d.desde) +
+            '). Antes de su primer cambio registrado, cada registro conserva el estatus que tenía; cuenta desde su fecha de registro. El último punto es hoy.'
+          : 'La bitácora no tiene cambios de estatus: solo se muestra el estatus de hoy.';
+      }
+
+      function pintar() {
+        pintarKpis();
+        pintarBarras('equipos');
+        pintarBarras('lineas');
+        pintarEvolucion();
+        $('#lnp-generado', raiz).textContent = 'Datos de la hoja al ' + fechaHora(est.datos.generadoEn) + ' (se guardan 30 min; "Actualizar" los vuelve a calcular).';
+        refreshIcons();
+      }
+
+      async function cargar(forzar) {
+        const boton = $('#lnp-actualizar', raiz);
+        boton.disabled = true;
+        try {
+          const r = await llamar('apiLineasPanorama', !!forzar);
+          if (!vigente()) return;
+          est.datos = r;
+          pintar();
+        } catch (e) {
+          if (vigente()) $('#lnp-kpis', raiz).innerHTML = '<p class="error-msg">No se pudo cargar el panorama: ' + esc(mensajeError(e)) + '</p>';
+        } finally {
+          boton.disabled = false;
+        }
+      }
+
+      const segmentado = (id, alElegir) => $(id, raiz).addEventListener('click', (ev) => {
+        const b = ev.target.closest('[data-valor]');
+        if (!b || !est.datos) return;
+        $(id, raiz).querySelectorAll('[data-valor]').forEach((x) => { x.classList.toggle('activo', x === b); x.setAttribute('aria-pressed', String(x === b)); });
+        alElegir(b.dataset.valor);
+        pintarEvolucion();
+      });
+      segmentado('#lnp-conjunto', (v) => { est.conjunto = v; });
+      segmentado('#lnp-rango', (v) => { est.rango = Number(v); });
+      segmentado('#lnp-forma', (v) => { est.forma = v; });
+      $('#lnp-chips', raiz).addEventListener('click', (ev) => {
+        const b = ev.target.closest('[data-serie]');
+        if (!b) return;
+        const sel = est.seleccion[est.conjunto];
+        const i = sel.indexOf(b.dataset.serie);
+        if (i >= 0) sel.splice(i, 1); else sel.push(b.dataset.serie);
+        pintarEvolucion();
+      });
+      const ir = (ev) => {
+        const b = ev.target.closest('[data-lnp-ir]');
+        if (b) irConEstatus(b.dataset.lnpIr, b.dataset.estatus);
+      };
+      raiz.addEventListener('click', ir);
+      raiz.addEventListener('keydown', (ev) => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches('.stat-tile[data-lnp-ir]')) { ev.preventDefault(); ir(ev); } });
+      $('#lnp-actualizar', raiz).addEventListener('click', () => cargar(true));
+      let espera = null;
+      const alRedimensionar = () => {
+        if (!vigente()) { window.removeEventListener('resize', alRedimensionar); return; }
+        clearTimeout(espera);
+        espera = setTimeout(() => { if (est.datos && est.forma === 'grafica') pintarGrafica(seriesDe(est.conjunto)); }, 150);
+      };
+      window.addEventListener('resize', alRedimensionar);
+      cargar(false);
+    }
+
     // ======================================================================
     // Gestión de Activos: busca un colaborador y muestra sus líneas/equipos
     // (vehículos, hologramas, Uber y cajas chicas se integran con los demás módulos)
@@ -3947,6 +4238,7 @@
       initDesechos: () => initBitacora('DESECHOS'),
       precargar: precargar,
       irARegistro: irARegistro, // desde Notificaciones: "Ver línea"
+      initPanorama: initPanorama,
     };
   })();
 </script>

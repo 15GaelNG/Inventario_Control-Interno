@@ -191,6 +191,40 @@ el sistema avisa (más adelante también por correo).
 - Pruebas: `INICIO / FIN PLAN solo se capturan en el alta…` y `Notificaciones: adendum por vencer…` en
   `tests/source-contracts.test.cjs` (45/45). Falta la prueba en /dev.
 
+## 0o. Panorama de Líneas y Reactivación oculta (2026-09-29)
+
+- **Reactivación de Líneas** sale del menú: su línea en `NAV_GRUPOS` está comentada. La vista, la ruta en `navegarA`,
+  el módulo en `Modulos.gs` y el código se conservan por si la vuelven a pedir; para regresarla basta con quitar el
+  comentario.
+- **Panorama** (`panorama-lineas`) es el primer elemento del grupo Líneas y tiene tarjeta en Inicio. Pedido del área:
+  ver de un vistazo cuántos equipos y líneas hay por estatus, hoy y mes a mes.
+  - Servidor: `LineasPanorama.panorama(forzar)` (`apiLineasPanorama`, caché 30 min, "Actualizar" la rehace).
+    - Hoy: el estatus de cada equipo y de cada línea, igual que en el índice de Líneas Telefónicas.
+    - Mes a mes: se reconstruye hacia atrás desde hoy con los cambios de ESTATUS EQUIPO / ESTATUS LINEA de CAMBIOS
+      LINEAS TELEFONICAS (el ANTES de cada cambio posterior al cierre del mes). En producción la bitácora empieza el
+      22-abr-2025 (unos 4,800 cambios de estatus). Antes de eso, cada registro conserva el estatus que tenía antes
+      de su primer cambio. Un registro cuenta desde su FECHA REGISTRO; las fechas antes del 2000 o en el futuro (hay
+      1969 y 2027) se ignoran. Máximo 36 meses. El último punto es hoy y coincide con los indicadores.
+    - La bitácora se busca por ID y por ID APPSHEET (migración de IDs de la BD de pruebas).
+  - Cliente (`initPanorama`, `views/lineas/lineas-panorama.html`, estilos `.lnp-*`):
+    - Indicadores: equipos, en uso, en resguardo, líneas y líneas en uso.
+    - "Hoy": barras por estatus de equipos y de líneas, en un solo color porque se compara cantidad. Clic en una
+      barra o en un indicador abre Líneas Telefónicas con ese estatus filtrado (`irConEstatus`,
+      `memoria.filtrarAlEntrar`).
+    - "Mes a mes": Equipos | Líneas, 6 meses | 12 meses | Todo, y Gráfica | Tabla.
+      - La gráfica es de líneas: 2 px, punto final con aro y etiqueta al final (las que chocan se omiten). La cruz
+        sigue al puntero y el tooltip muestra todas las series; también funciona con las flechas del teclado.
+      - Los estatus se eligen con pastillas, 4 por omisión. Los 7 con más registros hoy tienen color fijo; el resto
+        va en OTROS.
+      - La tabla tiene un renglón por mes y todos los estatus, y se exporta a Excel.
+    - Colores validados con el validador de la guía de visualización contra las superficies del sistema (claro
+      `#ffffff`, oscuro `#142732`): pasan en los dos modos. En claro, tres colores tienen poco contraste, así que
+      llevan etiquetas visibles y la tabla.
+- Probado en /dev (29-sep):
+  - datos: 1,584 equipos (886 en uso) y 1,012 líneas; "Hoy" coincide con los indicadores;
+  - funcionan el tooltip, la tabla, el modo oscuro y el clic de RESGUARDO (abre Líneas con 77 de 1,012).
+- Prueba: `Panorama: estatus al cierre de cada mes…` en `tests/source-contracts.test.cjs`.
+
 ## 0n. Acciones masivas de equipos (2026-09-29)
 
 Pedido del área: al seleccionar dos o más equipos en Líneas Telefónicas, mandar a resguardo, reasignar o cancelar.

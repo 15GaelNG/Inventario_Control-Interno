@@ -30,8 +30,10 @@ const Modulos = (function () {
       // Rama emmanuel: los módulos de Telefonía (ver html/js/lineas.html). "Detalles Líneas
       // Telefónicas" quedó como la vista de tarjetas de Líneas Telefónicas y Post Venta se retiró.
       modulos: [
+        { id: 'panorama-lineas', etiqueta: 'Panorama de Líneas', listo: true },
         { id: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas', listo: true },
         { id: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios (Líneas)', listo: true },
+        // Oculto del menú desde el 29-sep (se conserva por si lo vuelven a pedir)
         { id: 'reactivacion-lineas', etiqueta: 'Reactivación de Líneas', listo: true },
         { id: 'reasignaciones-lineas', etiqueta: 'Control de Reasignaciones - Líneas', listo: true },
         { id: 'solicitud-lineas', etiqueta: 'Solicitud de Líneas', listo: true },
