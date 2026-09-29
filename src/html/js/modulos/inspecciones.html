@@ -415,51 +415,32 @@
     };
 
     // ----- catálogos -----
-    // Clase de cada "tipo" (en realidad la Línea del vehículo: HONDA 150XR, L200…),
-    // confirmada a mano con Jorge — no viene de ninguna hoja ni catálogo.
-    const CLASE_POR_TIPO = {
-      'NP300 ESTACA': 'CAMIONETA',
-      'RIFTER': 'CAMIONETA',
-      'ITALIKA DM250': 'MOTOCICLETA',
-      'MOTOCARRO KINGWAY': 'MOTOCARRO',
-      'KWID': 'AUTOMOVIL',
-      'ITALIKA AT125': 'MOTOCARRO',
-      'PIPA': 'CAMION',
-      'URVAN': 'CAMIONETA',
-      'SAVEIRO': 'CAMIONETA',
-      'AUTOS': 'AUTOMOVIL',
-      'HONDA 150XR': 'MOTOCARRO',
-      'NP300 CABINA REDILAS': 'CAMIONETA',
-      'MOTOCARRO MUEVETEC': 'MOTOCARRO',
-      'RAM 700': 'CAMIONETA',
-      'RAM 4000': 'CAMION',
-      'MOTOCARRO': 'MOTOCARRO',
-      'XPANDER': 'CAMIONETA',
-      'L200': 'CAMIONETA',
+    // Prefijo del folio (VehiculosService.PREFIJOS_CLASE) → lista exacta de "tipo" que
+    // debe mostrar, confirmada a mano con Jorge (no viene de ninguna hoja ni catálogo).
+    // Los 3 "motocarro" (KINGWAY/MUEVETEC/genérico) no están en ningún prefijo — Jorge
+    // los quiere fuera de MOT. Sus folios reales caen en el prefijo genérico "FOL", que
+    // no filtra (no se puede distinguir Motocarro/Cuatrimoto/Nuco sin información solo
+    // con el folio) — igual que cualquier prefijo no reconocido: se muestran todos los
+    // tipos, como antes.
+    const TIPOS_POR_PREFIJO_FOLIO = {
+      AUT: ['KWID', 'AUTOS'],
+      CTA: ['NP300 ESTACA', 'RIFTER', 'URVAN', 'SAVEIRO', 'NP300 CABINA REDILAS', 'RAM 700', 'XPANDER', 'L200'],
+      CON: ['PIPA', 'RAM 4000'],
+      MOT: ['ITALIKA DM250', 'HONDA 150XR', 'ITALIKA AT125'],
     };
-    // Prefijo del folio (VehiculosService.PREFIJOS_CLASE) → clases que debe filtrar
-    // (MOT muestra Motocicleta Y Motocarro juntas: para el filtro cuentan como el mismo
-    // grupo). "FOL" (Motocarro/Cuatrimoto/Nuco sin información comparten ese prefijo
-    // genérico, no se puede saber cuál es solo con el folio) y cualquier prefijo no
-    // reconocido no filtran: se muestran todos los tipos, como antes.
-    const CLASES_POR_PREFIJO_FOLIO = {
-      AUT: ['AUTOMOVIL'], CTA: ['CAMIONETA'], CON: ['CAMION'], MOT: ['MOTOCICLETA', 'MOTOCARRO'],
-      REM: ['REMOLQUE'], MAQ: ['MAQUINARIA MENOR'],
-    };
-    /** "AUT0640" → ['AUTOMOVIL']; folios sin prefijo reconocido (ej. FOL0650) → null (no filtra). */
-    function clasesDelFolio(folio) {
+    /** "AUT0640" → ['KWID', 'AUTOS']; folios sin prefijo reconocido (ej. FOL0650) → null (no filtra). */
+    function tiposDelFolio(folio) {
       const prefijo = String(folio || '').trim().match(/^[A-Za-z]+/);
-      return (prefijo && CLASES_POR_PREFIJO_FOLIO[prefijo[0].toUpperCase()]) || null;
+      return (prefijo && TIPOS_POR_PREFIJO_FOLIO[prefijo[0].toUpperCase()]) || null;
     }
 
     let todosLosTipos = [];
-    /** Repinta "Tipo de unidad": si el folio filtra por clase(s), solo esos tipos (más
-     *  los que no tienen clase conocida en CLASE_POR_TIPO, para no ocultar de más). */
+    /** Repinta "Tipo de unidad": si el folio filtra, solo esos tipos exactos. */
     function pintarOpcionesTipo(folio) {
       const anterior = campoTipo.value;
-      const clases = clasesDelFolio(folio);
-      const visibles = clases
-        ? todosLosTipos.filter((t) => !CLASE_POR_TIPO[t.tipo.toUpperCase()] || clases.indexOf(CLASE_POR_TIPO[t.tipo.toUpperCase()]) >= 0)
+      const permitidos = tiposDelFolio(folio);
+      const visibles = permitidos
+        ? todosLosTipos.filter((t) => permitidos.indexOf(t.tipo.toUpperCase()) >= 0)
         : todosLosTipos;
       campoTipo.innerHTML = '<option value=""></option>' + visibles
         .map((t) => `<option value="${escaparHtml(t.tipo)}" ${t.listo ? '' : 'disabled'}>` +
