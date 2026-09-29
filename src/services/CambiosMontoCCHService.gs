@@ -81,6 +81,12 @@ const CambiosMontoCCHService = (function () {
     return SheetUtils.getAll(ssId(), NOMBRE_HOJA);
   }
 
+  /** Cambios de monto de una sola caja chica (ficha de Caja Chica). */
+  function listarPorIdCch(token, idCch) {
+    if (!idCch) return [];
+    return listarResumen(token).filter((c) => c.ID_CCH === idCch);
+  }
+
   /**
    * Registra un cambio de monto para una Caja Chica y, en la misma
    * operación, actualiza su MONTO ACTUAL.
@@ -128,5 +134,5 @@ const CambiosMontoCCHService = (function () {
     return { ID: id };
   }
 
-  return { listarResumen, completo, crear, eliminar };
+  return { listarResumen, completo, listarPorIdCch, crear, eliminar };
 })();

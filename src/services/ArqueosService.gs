@@ -347,6 +347,12 @@ const ArqueosService = (function () {
     return SheetUtils.getAll(ssId(), NOMBRE_HOJA);
   }
 
+  /** Arqueos de una sola caja chica (ficha de Caja Chica). */
+  function listarPorIdCch(token, idCch) {
+    if (!idCch) return [];
+    return listarResumen(token).filter((a) => a.ID_CCH === idCch);
+  }
+
   /** Registro completo por ID ARQUEO (para el modal de detalle/editar). */
   function buscarPorId(token, id) {
     Permisos.puedeLeer(token, 'arqueos');
@@ -657,7 +663,7 @@ const ArqueosService = (function () {
   }
 
   return {
-    AUDIT_ITEMS, listarResumen, completo, buscarPorId, previsualizarIdArqueo,
+    AUDIT_ITEMS, listarResumen, completo, buscarPorId, listarPorIdCch, previsualizarIdArqueo,
     crear, actualizar, eliminar, subirArchivo,
   };
 })();

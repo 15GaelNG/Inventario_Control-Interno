@@ -1,4 +1,5 @@
 <template id="tpl-cajachica">
+  <section id="cch-listado">
   <div class="page-header">
     <div>
       <h2><i data-lucide="wallet" class="ico"></i> Caja Chica</h2>
@@ -55,6 +56,11 @@
       <div id="cch-tabla"></div>
     </div>
   </div>
+  </section>
+
+  <!-- Ficha de una caja chica (doble clic o "Ver ficha" en la tabla) — pantalla propia
+       dentro del módulo, mismo patrón que Vehículos. -->
+  <section id="cch-detalle" hidden></section>
 
   <!-- Modal: editar caja chica -->
   <div class="modal-backdrop" id="modal-editar-cajachica" hidden>

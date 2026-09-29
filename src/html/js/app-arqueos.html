@@ -659,7 +659,10 @@
         { campo: 'ESTADO_PDF', titulo: 'Estado PDF', tipo: 'lista', enDetalle: false },
       ],
       accionesFila: [].concat(
-        [{ icono: 'documento', titulo: 'Ver PDF', visible: (a) => !!a.FORMATO_ARQUEO, alHacer: (a) => window.open(a.FORMATO_ARQUEO, '_blank', 'noopener') }],
+        [
+          { icono: 'wallet', titulo: 'Ver caja chica', alHacer: (a) => verFichaCajaChicaDesdeOtroModulo(a.ID_CCH) },
+          { icono: 'documento', titulo: 'Ver PDF', visible: (a) => !!a.FORMATO_ARQUEO, alHacer: (a) => window.open(a.FORMATO_ARQUEO, '_blank', 'noopener') },
+        ],
         puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (a) => abrirEditarArqueo(a.ID) }] : []
       ),
       alEliminar: puedeEditar ? async (filas) => {

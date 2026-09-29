@@ -549,6 +549,14 @@
     navegarA('vehiculos', 'Vehículos');
   }
 
+  // Mismo mecanismo, para la ficha de Caja Chica — la usan Arqueos y Cambios de Monto.
+  let idCchFichaPendiente = null;
+  function verFichaCajaChicaDesdeOtroModulo(idCch) {
+    if (!idCch) return;
+    idCchFichaPendiente = idCch;
+    navegarA('caja-chica', 'Caja Chica');
+  }
+
   function navegarA(vista, etiqueta) {
     document.querySelectorAll('.nav-item, .nav-subitem').forEach((el) => {
       el.classList.toggle('active', el.dataset.view === vista);
@@ -1994,6 +2002,43 @@
     await Promise.all([promesaVehiculos, cargar()]);
   }
 
+  // ---------- Ficha por pestañas (genérica: la usa cualquier módulo con una "ficha
+  // única" — Vehículos, Caja Chica, ...) ----------
+
+  /** pestanas: [{id, titulo, icono, contenido, num?}], la primera queda activa.
+   *  num (si viene) se muestra como contador junto al título. */
+  function fichaEnPestanas(pestanas) {
+    return '<div class="tabs-simple ln-ficha-tabs" role="tablist" aria-label="Secciones de la ficha">' + pestanas.map((t, n) =>
+      '<button type="button" class="tab-btn' + (n ? '' : ' active') + '" role="tab" aria-selected="' + (n ? 'false' : 'true') + '" data-ficha-tab="' + t.id + '">' +
+      '<i data-lucide="' + t.icono + '" class="ico"></i> ' + t.titulo +
+      (t.num === undefined ? '' : ' <span class="ln-tab-num">' + t.num + '</span>') + '</button>').join('') + '</div>' +
+      pestanas.map((t, n) => '<div data-ficha-panel="' + t.id + '"' + (n ? ' hidden' : '') + '>' + t.contenido + '</div>').join('');
+  }
+  function mostrarPestanaFicha(contenedor, nombre) {
+    contenedor.querySelectorAll('[data-ficha-tab]').forEach((b) => {
+      const activa = b.dataset.fichaTab === nombre;
+      b.classList.toggle('active', activa);
+      b.setAttribute('aria-selected', String(activa));
+    });
+    contenedor.querySelectorAll('[data-ficha-panel]').forEach((p) => { p.hidden = p.dataset.fichaPanel !== nombre; });
+  }
+  /** Tabla sencilla de solo lectura (sin filtros/orden/edición) para las pestañas de una
+   *  ficha que muestran lo que hay de este registro en otro módulo. */
+  function tablaFicha(columnas, filas) {
+    return '<div style="overflow-x:auto"><table><thead><tr>' + columnas.map((c) => '<th>' + c.t + '</th>').join('') +
+      '</tr></thead><tbody>' + filas.map((f) => '<tr>' + columnas.map((c) => '<td>' + c.r(f) + '</td>').join('') + '</tr>').join('') +
+      '</tbody></table></div>';
+  }
+  /** agregar: {tipo, texto} agrega un botón "+ Agregar" en la cabecera (data-agregar="tipo"). */
+  function pestanaFicha(icono, titulo, columnas, filas, vacio, agregar) {
+    const boton = agregar
+      ? '<button type="button" class="secondary" data-agregar="' + agregar.tipo + '" style="margin-left:auto"><i data-lucide="plus" class="ico"></i> ' + agregar.texto + '</button>'
+      : '';
+    return '<div class="card ln-card"><h3 style="display:flex; align-items:center; gap:8px">' +
+      '<i data-lucide="' + icono + '" class="ico ln-icon"></i> ' + titulo + boton + '</h3>' +
+      (filas.length ? tablaFicha(columnas, filas) : '<p class="empty-state">' + vacio + '</p>') + '</div>';
+  }
+
   // ---------- Vehículos ----------
   async function initVehiculos() {
     wireTabsSimple(document.getElementById('view-container'));
@@ -2182,34 +2227,6 @@
 
     const GRUPOS_FICHA_GENERAL = ['Vehículo', 'Identificación'];
 
-    /** Mismo patrón de pestañas que la ficha de equipo/línea en Líneas Telefónicas
-     *  (fichaEnPestanas). pestanas: [{id, titulo, icono, contenido, num?}], la primera
-     *  queda activa. num (si viene) se muestra como contador junto al título. */
-    function fichaVehiculoEnPestanas(pestanas) {
-      return '<div class="tabs-simple ln-ficha-tabs" role="tablist" aria-label="Secciones de la ficha">' + pestanas.map((t, n) =>
-        '<button type="button" class="tab-btn' + (n ? '' : ' active') + '" role="tab" aria-selected="' + (n ? 'false' : 'true') + '" data-ficha-tab="' + t.id + '">' +
-        '<i data-lucide="' + t.icono + '" class="ico"></i> ' + t.titulo +
-        (t.num === undefined ? '' : ' <span class="ln-tab-num">' + t.num + '</span>') + '</button>').join('') + '</div>' +
-        pestanas.map((t, n) => '<div data-ficha-panel="' + t.id + '"' + (n ? ' hidden' : '') + '>' + t.contenido + '</div>').join('');
-    }
-
-    /** Tabla sencilla de solo lectura (sin filtros/orden/edición) para las pestañas
-     *  de la ficha que muestran lo que hay de este folio en otro módulo. */
-    function tablaFichaVehiculo(columnas, filas) {
-      return '<div style="overflow-x:auto"><table><thead><tr>' + columnas.map((c) => '<th>' + c.t + '</th>').join('') +
-        '</tr></thead><tbody>' + filas.map((f) => '<tr>' + columnas.map((c) => '<td>' + c.r(f) + '</td>').join('') + '</tr>').join('') +
-        '</tbody></table></div>';
-    }
-    /** agregar: {tipo, texto} agrega un botón "+ Agregar" en la cabecera (data-agregar="tipo"),
-     *  cableado por delegación más abajo hacia abrirCapturaVehiculo/las 4 abrirAgregarXxx. */
-    function pestanaFichaVehiculo(icono, titulo, columnas, filas, vacio, agregar) {
-      const boton = agregar
-        ? '<button type="button" class="secondary" data-agregar="' + agregar.tipo + '" style="margin-left:auto"><i data-lucide="plus" class="ico"></i> ' + agregar.texto + '</button>'
-        : '';
-      return '<div class="card ln-card"><h3 style="display:flex; align-items:center; gap:8px">' +
-        '<i data-lucide="' + icono + '" class="ico ln-icon"></i> ' + titulo + boton + '</h3>' +
-        (filas.length ? tablaFichaVehiculo(columnas, filas) : '<p class="empty-state">' + vacio + '</p>') + '</div>';
-    }
     function botonArchivoFicha(tipo, ruta) {
       return ruta ? '<button type="button" class="secondary" data-archivo="' + tipo + '" data-ruta="' + escaparHtml(ruta) + '">Ver</button>' : '—';
     }
@@ -2395,13 +2412,7 @@
     }
 
     function mostrarPestanaFichaVehiculo(nombre) {
-      const detalle = document.getElementById('veh-detalle');
-      detalle.querySelectorAll('[data-ficha-tab]').forEach((b) => {
-        const activa = b.dataset.fichaTab === nombre;
-        b.classList.toggle('active', activa);
-        b.setAttribute('aria-selected', String(activa));
-      });
-      detalle.querySelectorAll('[data-ficha-panel]').forEach((p) => { p.hidden = p.dataset.fichaPanel !== nombre; });
+      mostrarPestanaFicha(document.getElementById('veh-detalle'), nombre);
     }
 
     async function abrirFichaVehiculo(vResumen, pestanaInicial) {
@@ -2507,13 +2518,13 @@
               </div>
             `).join('') + '</div>' : '<p class="empty-state">Sin reasignaciones registradas para este vehículo.</p>') + '</div>';
 
-        html += fichaVehiculoEnPestanas([
+        html += fichaEnPestanas([
           { id: 'general', titulo: 'General', icono: 'layout-grid', contenido: general },
           { id: 'detalles', titulo: 'Detalles', icono: 'clipboard-list', contenido: detalles },
           { id: 'historial', titulo: 'Historial', icono: 'history', contenido: historial, num: (cambios || []).length + (reasignaciones || []).length },
           {
             id: 'verificaciones', titulo: 'Verificaciones', icono: 'clipboard-check', num: verificaciones.length,
-            contenido: pestanaFichaVehiculo('clipboard-check', 'Verificaciones', [
+            contenido: pestanaFicha('clipboard-check', 'Verificaciones', [
               { t: 'Verificación', r: (v) => formatearFecha(v.FECHA_VERIFICACION) },
               { t: 'Próxima', r: (v) => formatearFecha(v.FECHA_PROXIMA) },
               { t: 'Comprobante', r: (v) => botonArchivoFicha('verificacion', v.COMPROBANTE) },
@@ -2522,7 +2533,7 @@
           },
           {
             id: 'inspecciones', titulo: 'Inspecciones', icono: 'clipboard-list', num: inspecciones.length,
-            contenido: pestanaFichaVehiculo('clipboard-list', 'Inspecciones', [
+            contenido: pestanaFicha('clipboard-list', 'Inspecciones', [
               { t: 'Fecha', r: (i) => formatearFecha(i.FECHA) },
               { t: 'Tipo', r: (i) => escaparHtml(i.TIPO || '—') },
               { t: 'Inspector', r: (i) => escaparHtml(i.INSPECTOR || '—') },
@@ -2533,7 +2544,7 @@
           },
           {
             id: 'sensor', titulo: 'Sensor', icono: 'radio', num: sensores.length,
-            contenido: pestanaFichaVehiculo('radio', 'Sensor', [
+            contenido: pestanaFicha('radio', 'Sensor', [
               { t: 'Instalación', r: (s) => formatearFecha(s.FECHA_INSTALACION) },
               { t: 'Serie', r: (s) => escaparHtml(s.SERIE_SENSOR || '—') },
               { t: 'Estatus', r: (s) => escaparHtml(s.ESTATUS || '—') },
@@ -2543,7 +2554,7 @@
           },
           {
             id: 'hologramas', titulo: 'Hologramas', icono: 'credit-card', num: hologramas.length,
-            contenido: pestanaFichaVehiculo('credit-card', 'Hologramas', [
+            contenido: pestanaFicha('credit-card', 'Hologramas', [
               { t: 'Proveedor', r: (h) => escaparHtml(h.PROVEEDOR || '—') },
               { t: 'Estatus', r: (h) => escaparHtml(h.ESTATUS_EOX || '—') },
               { t: 'Calcomanía', r: (h) => escaparHtml(h.CALCOMANIA || '—') },
@@ -2554,7 +2565,7 @@
           },
           {
             id: 'incidencias', titulo: 'Incidencias', icono: 'wrench', num: incidencias.length,
-            contenido: pestanaFichaVehiculo('wrench', 'Incidencias', [
+            contenido: pestanaFicha('wrench', 'Incidencias', [
               { t: 'Fecha', r: (i) => formatearFecha(i.FECHA_REGISTRO) },
               { t: 'Motivo', r: (i) => escaparHtml(i.INSPECCION_INGRESO || '—') },
               { t: 'Estado', r: (i) => '<span class="badge-estado ' + (i.ESTADO === 'ABIERTA' ? 'abierta' : 'cerrada') + '">' + (i.ESTADO === 'ABIERTA' ? 'Abierta' : 'Cerrada') + '</span>' },

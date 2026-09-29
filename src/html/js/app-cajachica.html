@@ -241,6 +241,127 @@
       return '<span class="estatus-appsheet" style="color:#2ba02b"><i data-lucide="circle-check" class="ico"></i> VIGENTE</span>';
     }
 
+    // ---------- Ficha de una caja chica: pantalla propia dentro del módulo (oculta la
+    // lista, muestra esto), mismo patrón que Vehículos — migas para volver, encabezado
+    // con ícono/estatus, y pestañas con lo relacionado (Arqueos, Cambios de Monto). ----------
+    function migasCajaChica() {
+      return '<div class="ln-migas"><button type="button" class="secondary ln-btn-icono" id="cch-btn-volver">' +
+        '<i data-lucide="chevron-left" class="ico"></i> Volver</button>' +
+        '<span><a href="#" class="ln-enlace" id="cch-enlace-lista">Caja Chica</a></span></div>';
+    }
+    function wireMigasCajaChica() {
+      const volver = document.getElementById('cch-btn-volver');
+      const enlace = document.getElementById('cch-enlace-lista');
+      if (volver) volver.addEventListener('click', cerrarFichaCajaChica);
+      if (enlace) enlace.addEventListener('click', (ev) => { ev.preventDefault(); cerrarFichaCajaChica(); });
+    }
+    function cerrarFichaCajaChica() {
+      document.getElementById('cch-detalle').hidden = true;
+      document.getElementById('cch-detalle').innerHTML = '';
+      document.getElementById('cch-listado').hidden = false;
+    }
+
+    const ICONO_GRUPO_CAJACHICA = {
+      'Identificación': 'id-card', 'Jefe y captura': 'user', 'Ubicación': 'map-pin',
+      'Fechas y configuración': 'calendar', 'Contacto': 'phone', 'Identificación oficial': 'badge-check', 'Notas': 'sticky-note',
+    };
+    const GRUPOS_FICHA_GENERAL_CCH = ['Identificación', 'Fechas y configuración'];
+
+    /** Igual que renderCamposCajaChica pero para MOSTRAR (no capturar): mismos grupos y
+     *  etiquetas legibles que Registrar/Editar. soloGrupos filtra a solo esos grupos. */
+    function seccionesFichaCajaChica(completo, soloGrupos) {
+      const porGrupo = {};
+      const grupos = [];
+      CAMPOS_CAJACHICA.forEach((campo) => {
+        if (soloGrupos && soloGrupos.indexOf(campo.grupo) === -1) return;
+        const valor = completo[campo.clave];
+        if (valor === '' || valor === null || valor === undefined) return;
+        if (!porGrupo[campo.grupo]) { porGrupo[campo.grupo] = []; grupos.push(campo.grupo); }
+        porGrupo[campo.grupo].push(itemInfo(campo.etiqueta, campo.moneda ? formatearMoneda(valor) : valor));
+      });
+      return grupos.map((g) => '<div class="card ln-card"><h3><i data-lucide="' + (ICONO_GRUPO_CAJACHICA[g] || 'info') +
+        '" class="ico ln-icon"></i> ' + g + '</h3><div class="info-grid">' + porGrupo[g].join('') + '</div></div>').join('');
+    }
+
+    async function abrirFichaCajaChica(cResumen) {
+      const listado = document.getElementById('cch-listado');
+      const detalle = document.getElementById('cch-detalle');
+      listado.hidden = true;
+      detalle.hidden = false;
+      detalle.innerHTML = migasCajaChica() + '<div class="card ln-card"><p class="ln-tenue"><span class="spinner"></span> Cargando…</p></div>';
+      wireMigasCajaChica();
+      document.getElementById('view-container').scrollTop = 0;
+      window.scrollTo(0, 0);
+
+      const id = cResumen['ID CCH'];
+      try {
+        const [completo, arqueosTexto, cambiosTexto] = await Promise.all([
+          callServer('apiBuscarCajaChicaPorId', state.token, id),
+          callServer('apiArqueosPorIdCch', state.token, id).catch(() => '[]'),
+          callServer('apiCambiosMontoPorIdCch', state.token, id).catch(() => '[]'),
+        ]);
+        const arqueos = JSON.parse(arqueosTexto || '[]');
+        const cambios = JSON.parse(cambiosTexto || '[]');
+        if (detalle.hidden || !document.body.contains(detalle)) return;
+        if (!completo) {
+          detalle.innerHTML = migasCajaChica() + '<p class="empty-state">No se encontró el registro completo.</p>';
+          wireMigasCajaChica();
+          return;
+        }
+
+        let html = migasCajaChica();
+        html += '<div class="ln-detalle-header card">' +
+          '<div class="ln-detalle-icono"><i data-lucide="wallet" class="ico ln-icon"></i></div>' +
+          '<div class="ln-detalle-titulo"><h2>ID CCH: ' + escaparHtml(String(id || '')) + '</h2>' +
+          '<div class="ln-chips">' + badgeEstatusCaja(completo['ESTATUS']) + '</div></div>' +
+          '<div class="ln-detalle-botones">' +
+          (puedeEditar ? '<button type="button" id="cch-btn-editar-ficha"><i data-lucide="pencil" class="ico"></i> Editar</button>' : '') +
+          '</div></div>';
+
+        const general = seccionesFichaCajaChica(completo, GRUPOS_FICHA_GENERAL_CCH);
+        const detalles = seccionesFichaCajaChica(completo, CAMPOS_CAJACHICA.map((c) => c.grupo)
+          .filter((g, i, arr) => arr.indexOf(g) === i && GRUPOS_FICHA_GENERAL_CCH.indexOf(g) === -1));
+
+        html += fichaEnPestanas([
+          { id: 'general', titulo: 'General', icono: 'layout-grid', contenido: general },
+          { id: 'detalles', titulo: 'Detalles', icono: 'clipboard-list', contenido: detalles },
+          {
+            id: 'arqueos', titulo: 'Arqueos', icono: 'clipboard-check', num: arqueos.length,
+            contenido: pestanaFicha('clipboard-check', 'Arqueos', [
+              { t: 'Fecha', r: (a) => formatearFecha(a.FECHA_INICIO) },
+              { t: 'Responsable', r: (a) => escaparHtml(a.RESPONSABLE || '—') },
+              { t: 'Tipo', r: (a) => escaparHtml(a.TIPO_ARQUEO || '—') },
+              { t: 'Total general', r: (a) => (a.TOTAL_GENERAL === '' || a.TOTAL_GENERAL === null || a.TOTAL_GENERAL === undefined) ? '—' : formatearMoneda(a.TOTAL_GENERAL) },
+              { t: 'Diferencia', r: (a) => (a.DIFERENCIA === '' || a.DIFERENCIA === null || a.DIFERENCIA === undefined) ? '—' : formatearMoneda(a.DIFERENCIA) },
+            ], arqueos, 'Sin arqueos registrados para esta caja chica.'),
+          },
+          {
+            id: 'cambios-monto', titulo: 'Cambios de monto', icono: 'trending-up', num: cambios.length,
+            contenido: pestanaFicha('trending-up', 'Cambios de monto', [
+              { t: 'Fecha', r: (c) => formatearFecha(c.FECHA) },
+              { t: 'Tipo', r: (c) => escaparHtml(c.TIPO || '—') },
+              { t: 'Anterior', r: (c) => (c.CANTIDAD_ANTERIOR === '' || c.CANTIDAD_ANTERIOR === null || c.CANTIDAD_ANTERIOR === undefined) ? '—' : formatearMoneda(c.CANTIDAD_ANTERIOR) },
+              { t: 'Actualizada', r: (c) => (c.CANTIDAD_ACTUALIZADA === '' || c.CANTIDAD_ACTUALIZADA === null || c.CANTIDAD_ACTUALIZADA === undefined) ? '—' : formatearMoneda(c.CANTIDAD_ACTUALIZADA) },
+              { t: 'Quién realizó', r: (c) => escaparHtml(c.QUIEN_REALIZO || '—') },
+            ], cambios, 'Sin cambios de monto registrados para esta caja chica.'),
+          },
+        ]);
+
+        detalle.innerHTML = html;
+        wireMigasCajaChica();
+        const btnEditar = document.getElementById('cch-btn-editar-ficha');
+        if (btnEditar) btnEditar.addEventListener('click', () => abrirEditarCajaChica(cResumen));
+        detalle.querySelectorAll('[data-ficha-tab]').forEach((btn) => {
+          btn.addEventListener('click', () => mostrarPestanaFicha(detalle, btn.dataset.fichaTab));
+        });
+        refreshIcons();
+      } catch (err) {
+        if (detalle.hidden || !document.body.contains(detalle)) return;
+        detalle.innerHTML = migasCajaChica() + '<p class="error-msg">No se pudo cargar: ' + escaparHtml(err.message) + '</p>';
+        wireMigasCajaChica();
+      }
+    }
+
     const tabla = DataTable.crear(document.getElementById('cch-tabla'), {
       idCampo: 'ID CCH',
       idTabla: 'cajas-chicas',
@@ -252,7 +373,9 @@
       },
       columnasCompletas: { idHoja: 'ID CCH', cargar: async () => JSON.parse(await callServer('apiCajasChicasCompleto', state.token)) },
       etiquetaFila: (c) => c.RESPONSABLE || ('ID CCH ' + c['ID CCH']),
-      detalle: { titulo: (c) => 'ID CCH: ' + c['ID CCH'] },
+      // false (no panel lateral): la ficha completa es su propia pantalla —
+      // se abre con doble clic en la fila o el ícono de "ojo" (ver más abajo).
+      detalle: false,
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
       columnas: [
         { campo: 'ID CCH', titulo: 'ID CCH', tipo: 'texto', fijada: true },
@@ -283,14 +406,22 @@
         { campo: 'VIGENCIA IDENTIFICACION OFICIAL JEFE DIRECTO', titulo: 'Vigencia de identificación (jefe directo)', tipo: 'fecha', visible: false },
         { campo: 'OBSERVACIONES', titulo: 'Observaciones', tipo: 'texto', visible: false },
       ],
-      accionesFila: puedeEditar ? [{
-        icono: 'pencil', titulo: 'Editar', alHacer: (c) => abrirEditarCajaChica(c),
-      }] : [],
+      accionesFila: [{ icono: 'eye', titulo: 'Ver ficha', alHacer: (c) => abrirFichaCajaChica(c) }]
+        .concat(puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (c) => abrirEditarCajaChica(c) }] : []),
       alEliminar: puedeEditar ? async (filas) => {
         await Promise.all(filas.map((f) => callServer('apiEliminarCajaChica', state.token, f['ID CCH'])));
         invalidarCacheLista('apiListarCajasChicasResumen', state.token);
       } : null,
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
+    });
+
+    // Doble clic en la fila = abrir la ficha (DataTable no trae clic de fila propio
+    // cuando detalle:false) — mismo patrón que Vehículos.
+    document.getElementById('cch-tabla').addEventListener('dblclick', (ev) => {
+      const tr = ev.target.closest('tbody tr[data-id]');
+      if (!tr || ev.target.closest('button, input, a')) return;
+      const c = todasLasCajas.find((x) => String(x['ID CCH']) === tr.dataset.id);
+      if (c) abrirFichaCajaChica(c);
     });
 
     const KPI_FILTRO_CCH = { 'cch-stat-vigentes': 'VIGENTE', 'cch-stat-proceso-cierre': 'EN PROCESO DE CIERRE', 'cch-stat-cerradas': 'CERRADA' };
@@ -421,6 +552,16 @@
     });
 
     await Promise.all([cargarCatalogosCajaChica(), cargar()]);
+
+    // Se llegó aquí desde "Ver caja chica" en otra tabla (verFichaCajaChicaDesdeOtroModulo):
+    // abre esa ficha directo, sin que el usuario tenga que buscar el ID CCH a mano.
+    if (idCchFichaPendiente) {
+      const id = idCchFichaPendiente;
+      idCchFichaPendiente = null;
+      const c = todasLasCajas.find((x) => String(x['ID CCH']) === String(id));
+      if (c) abrirFichaCajaChica(c);
+      else toastError('No se encontró la caja chica con ID ' + id);
+    }
   }
 
   // ---------- Cambios de Monto (Caja Chica) ----------
@@ -506,6 +647,7 @@
         { campo: 'FECHA', titulo: 'Fecha', tipo: 'fecha' },
         { campo: 'QUIEN_REALIZO', titulo: 'Quién realizó', tipo: 'texto' },
       ],
+      accionesFila: [{ icono: 'wallet', titulo: 'Ver caja chica', alHacer: (c) => verFichaCajaChicaDesdeOtroModulo(c.ID_CCH) }],
       alEliminar: puedeEditar ? async (filas) => {
         await Promise.all(filas.map((f) => callServer('apiEliminarCambioMontoCCH', state.token, f.ID)));
         invalidarCacheLista('apiListarCambiosMontoCCH', state.token);

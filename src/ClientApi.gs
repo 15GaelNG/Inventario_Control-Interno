@@ -190,6 +190,12 @@ function apiActualizarCajaChica(token, id, cambios) {
 function apiEliminarCajaChica(token, id) {
   return CajasChicasService.eliminar(token, id);
 }
+function apiArqueosPorIdCch(token, idCch) {
+  return JSON.stringify(ArqueosService.listarPorIdCch(token, idCch));
+}
+function apiCambiosMontoPorIdCch(token, idCch) {
+  return JSON.stringify(CambiosMontoCCHService.listarPorIdCch(token, idCch));
+}
 
 // --- Historial de cambios de monto (Caja Chica) ---
 function apiListarCambiosMontoCCH(token) {
