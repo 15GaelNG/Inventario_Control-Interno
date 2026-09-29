@@ -60,6 +60,16 @@ function migracion4Auditar() {
   return auditarIds();
 }
 
+/** Mueve la columna ID al inicio de cada hoja, ensayo — Solo lee. */
+function migracionMoverIdsAlInicioEnsayo() {
+  return moverIdsAlInicio();
+}
+
+/** Mueve la columna ID al inicio de cada hoja, de verdad — MUEVE columnas. */
+function migracionMoverIdsAlInicioEscribir() {
+  return moverIdsAlInicio({ escribir: true });
+}
+
 /** Quita las columnas ID APPSHEET que sobran, ensayo — Solo lee. */
 function migracionLimpiarRespaldoEnsayo() {
   return limpiarRespaldoRedundante();
@@ -577,6 +587,62 @@ function reescribirReferencias(opciones) {
     huerfanas.forEach((h) => lineas.push('  - ' + h));
   }
   if (!cfg.escribir) lineas.push('', 'Para escribir de verdad, corre: migracion3ReferenciasEscribir');
+  const texto = lineas.join('\n');
+  Logger.log(texto);
+  return texto;
+}
+
+// ---------------------------------------------------------------- acomodo
+
+/**
+ * Deja la columna ID como la PRIMERA de cada hoja.
+ *
+ * La migración la agregó al final, que es lo seguro para escribir pero incómodo para leer:
+ * en INSPECCION VEHICULAR quedó en la columna 197, o sea invisible sin desplazarse a lo
+ * ancho. Al inicio se ve de un vistazo.
+ *
+ * Nuestro código no se entera: busca las columnas por su ENCABEZADO, no por su posición
+ * (ver SheetUtils.indiceDeColumnas y migColumna_). La excepción está abajo.
+ *
+ * OJO PARA PRODUCCIÓN: reordenar columnas rompe la app de AppSheet igual que agregarlas,
+ * hasta que alguien regenere el esquema (ver docs/ids.md). En la copia de pruebas da lo
+ * mismo porque AppSheet no la lee, pero allá esto va junto con el apagado.
+ */
+function moverIdsAlInicio(opciones) {
+  const cfg = Object.assign({ escribir: false }, opciones || {});
+  const ssId = migracionSs_(cfg);
+  const ss = SpreadsheetApp.openById(ssId);
+  const lineas = [(cfg.escribir ? 'MOVIENDO LA COLUMNA ID AL INICIO' : 'ENSAYO (no mueve nada)') + ' — ' + ssId, ''];
+  let movidas = 0;
+
+  Entidades.todas().forEach((h) => {
+    const sheet = ss.getSheetByName(h.hoja);
+    if (!sheet) return;
+    const enc = migEncabezados_(sheet);
+    const pos = migColumna_(enc, Entidades.COLUMNA_ID);
+    if (!pos) { lineas.push('  ' + h.hoja + ': todavía no tiene columna ID, se salta'); return; }
+    if (pos === 1) { lineas.push('  ' + h.hoja + ': ya está al inicio'); return; }
+
+    // La única que depende de POSICIONES y no de encabezados: su llave vieja está en la
+    // columna 1 y no tiene nombre, así que moverle algo adelante la correría a la 2 y
+    // Entidades apuntaría al lugar equivocado. Se arregla poniéndole nombre (paso 1).
+    if (!h.llaveAnterior && h.columnaAnterior) {
+      lineas.push('  ' + h.hoja + ': NO se mueve — su llave vieja va por posición (columna ' +
+        h.columnaAnterior + ') porque no tiene encabezado. Ponle nombre primero.');
+      return;
+    }
+
+    lineas.push('  ' + h.hoja + ': de la columna ' + pos + ' a la 1' +
+      (cfg.escribir ? '  MOVIDA' : ''));
+    if (cfg.escribir) {
+      sheet.moveColumns(sheet.getRange(1, pos, 1, 1), 1);
+      SpreadsheetApp.flush();
+    }
+    movidas++;
+  });
+
+  lineas.push('', movidas + ' hojas por mover.');
+  if (!cfg.escribir && movidas) lineas.push('Para moverlas, corre: migracionMoverIdsAlInicioEscribir');
   const texto = lineas.join('\n');
   Logger.log(texto);
   return texto;
