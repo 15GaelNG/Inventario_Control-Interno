@@ -2346,6 +2346,18 @@
       });
     }
 
+    /** A diferencia de las otras 4, esto reutiliza el wizard REAL de Inspección Vehicular
+     *  (checklist dinámico, diagramas y firmas) — prepararCaptura ya acepta un contenedor
+     *  cualquiera (ver modulos/inspecciones.html), así que aquí solo se le da el cuerpo del
+     *  modal, el folio (ya lo sabemos) y qué hacer al guardar en vez de "listo para el siguiente". */
+    function abrirAgregarInspeccion(vResumen) {
+      const cuerpo = abrirCapturaVehiculo('clipboard-list', 'INSPECCIÓN', 'Nueva inspección', 'Folio ' + vResumen.FOLIO);
+      prepararCaptura(cuerpo, {
+        folioFijo: vResumen.FOLIO,
+        alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'inspecciones'); },
+      });
+    }
+
     function mostrarPestanaFichaVehiculo(nombre) {
       const detalle = document.getElementById('veh-detalle');
       detalle.querySelectorAll('[data-ficha-tab]').forEach((b) => {
@@ -2481,9 +2493,7 @@
               { t: 'Puntaje', r: (i) => (i.PUNTAJE === '' || i.PUNTAJE === null || i.PUNTAJE === undefined) ? '—' : i.PUNTAJE + '%' },
               { t: 'Formato', r: (i) => botonArchivoFicha('inspeccion', i.PDF) },
             ], inspecciones, 'Sin inspecciones registradas para este vehículo.',
-            // Su formulario es un wizard completo (checklist + diagramas + firmas): no cabe
-            // embebido, así que este botón navega al módulo en vez de abrir la captura.
-            puedeEditarModulo('inspeccion-vehicular') ? { tipo: 'ir-inspeccion', texto: 'Nueva inspección' } : null),
+            puedeEditarModulo('inspeccion-vehicular') ? { tipo: 'inspeccion', texto: 'Agregar' } : null),
           },
           {
             id: 'sensor', titulo: 'Sensor', icono: 'radio', num: sensores.length,
@@ -2530,7 +2540,7 @@
             else if (tipo === 'sensor') abrirAgregarSensor(vResumen, completo);
             else if (tipo === 'holograma') abrirAgregarHolograma(vResumen, completo);
             else if (tipo === 'incidencia') abrirAgregarIncidencia(vResumen, completo);
-            else if (tipo === 'ir-inspeccion') navegarA('inspeccion-vehicular', 'Inspección Vehicular');
+            else if (tipo === 'inspeccion') abrirAgregarInspeccion(vResumen);
           });
         });
         refreshIcons();

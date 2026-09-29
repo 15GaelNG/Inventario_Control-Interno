@@ -246,7 +246,7 @@
     // o en cuanto termina de cargar la tabla. Así no compite con la lista por el servidor.
     let captura = null;
     const prepararSiFalta = () => {
-      if (puedeEditar && !captura) captura = prepararCaptura(tabs, cargar);
+      if (puedeEditar && !captura) captura = prepararCaptura(document.getElementById('ins-form'), { tabs: tabs, recargar: cargar });
     };
 
     const tabs = Tabs.iniciar(document.getElementById('ins-tabs'), {
@@ -338,8 +338,21 @@
    * Las piezas sin responder NO bloquean el avance (así lo permitía AppSheet y no cuentan
    * para el puntaje); el paso de revisión dice cuáles faltan y deja saltar a ellas.
    */
-  function prepararCaptura(tabs, recargar) {
-    const contenedor = document.getElementById('ins-form');
+  /**
+   * contenedor: dónde se pinta el wizard (Inspecciones le pasa #ins-form; la ficha de
+   * Vehículos le pasa el cuerpo de su modal de captura).
+   * opciones.tabs/recargar: pestañas y tabla a refrescar tras guardar (propias de
+   *   Inspecciones) — se ignoran si viene opciones.alGuardado.
+   * opciones.folioFijo: precarga el folio y salta directo a elegir el tipo de unidad
+   *   (la ficha de Vehículos ya sabe qué folio es).
+   * opciones.alGuardado: si viene, se usa en vez de "límpiate y espera el siguiente
+   *   folio" (que es lo que quiere Inspecciones) — la ficha de Vehículos la usa para
+   *   cerrar su modal y refrescar su pestaña de Inspecciones.
+   */
+  function prepararCaptura(contenedor, opciones) {
+    opciones = opciones || {};
+    const tabs = opciones.tabs;
+    const recargar = opciones.recargar;
     let estructura = null;      // secciones, llantas y diagramas del tipo elegido
     let vehiculo = null;
     let pasos = [];
@@ -464,6 +477,15 @@
         pintarOpcionesTipo(campoFolio.value);
       }).catch((err) => Notificar.error('No se pudieron cargar los tipos: ' + err.message)),
     ]);
+
+    // Folio ya conocido (ficha de Vehículos): hasta que el combobox y los tipos estén
+    // listos, para que el filtro por prefijo y la ficha del vehículo salgan bien.
+    if (opciones.folioFijo) {
+      catalogos.then(() => {
+        campoFolio.value = opciones.folioFijo;
+        buscarVehiculo();
+      });
+    }
 
     // ----- vehículo -----
     function pintarFicha() {
@@ -1032,19 +1054,25 @@
           accion: res.pdf ? { texto: 'Ver PDF', alHacer: () => window.open(res.pdf, '_blank') } : null,
         });
         if (res.advertencia) Notificar.info(res.advertencia, { duracion: 12000 });
-        // Se deja listo para la siguiente unidad
-        campoFolio.value = '';
-        campoTipo.value = '';
-        tipoAnterior = '';
-        pedido = '';
-        vehiculo = null;
-        estructura = null;
-        $('#ins-cargando-checklist').innerHTML = '';
-        pintarFicha();
-        armarPasos();
-        tabs.mostrar('registros');
         invalidarCacheLista('apiListarInspecciones', state.token);
-        await recargar();
+        if (opciones.alGuardado) {
+          // La ficha de Vehículos: ella decide qué hacer (cerrar su modal y refrescar
+          // su propia pestaña), no tiene sentido dejar esto listo para "la siguiente".
+          await opciones.alGuardado(res);
+        } else {
+          // Se deja listo para la siguiente unidad
+          campoFolio.value = '';
+          campoTipo.value = '';
+          tipoAnterior = '';
+          pedido = '';
+          vehiculo = null;
+          estructura = null;
+          $('#ins-cargando-checklist').innerHTML = '';
+          pintarFicha();
+          armarPasos();
+          tabs.mostrar('registros');
+          await recargar();
+        }
       } catch (err) {
         errorGeneral(err.message);
       } finally {
