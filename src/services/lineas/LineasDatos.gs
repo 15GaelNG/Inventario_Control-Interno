@@ -257,6 +257,12 @@ const LineasDatos = (function () {
   function leerFilas(peticiones) {
     const total = peticiones.reduce((s, p) => s + p.filas.length, 0);
     if (!total) return peticiones.map(() => []);
+    // Una petición sin filas no abre su pestaña: puede no existir (p. ej. APP_MOVIMIENTOS en una hoja sin el sistema nuevo)
+    if (peticiones.some((p) => !p.filas.length)) {
+      const leidas = leerFilas(peticiones.filter((p) => p.filas.length));
+      let i = 0;
+      return peticiones.map((p) => (p.filas.length ? leidas[i++] : []));
+    }
 
     // Pocas filas: SpreadsheetApp directo (fechas nativas).
     if (total <= 3) {

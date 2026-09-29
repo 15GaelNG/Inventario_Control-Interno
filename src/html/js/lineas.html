@@ -2161,7 +2161,8 @@
             : 'Elige primero el TIPO: los campos se habilitan según él, igual que en AppSheet.';
           // Alta: paso por paso. Edición: se salta a cualquier sección y se guarda desde cualquiera.
           cuerpo.innerHTML = htmlPasosAppSheet(elementos, PASOS_FORMULARIO.REGISTRO) +
-            (id ? '<section class="ln-af-seccion" id="cap-motivo-asignacion" hidden><div class="field ln-af-campo"><label for="cap-motivo">MOTIVO DEL CAMBIO DE NÚMERO O NUCO</label>' +
+            // Motivo: clases propias (no ln-af-campo ni sección de reglas): aplicarReglasEn no lo toca, lo muestra aplicar()
+            (id ? '<section class="ln-af-seccion ln-af-extra" id="cap-motivo-asignacion" hidden><div class="field"><label for="cap-motivo">MOTIVO DEL CAMBIO DE NÚMERO O NUCO</label>' +
               '<textarea id="cap-motivo" rows="2" placeholder="Por qué cambia; queda en el historial (Números que ha tenido / Equipos en los que ha estado)"></textarea></div></section>' : '') +
             '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div>' +
             htmlAccionesPasos('<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + (id ? ' Guardar cambios' : ' Registrar') + '</button>');

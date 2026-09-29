@@ -167,6 +167,10 @@ Pedido del área: saber qué números tuvo un NUCO (y en qué NUCOs estuvo un n�
 - Controles del historial en su propia barra (`.ln-historial-filtros`, debajo del título y encima de la búsqueda de
   la tabla): "Movimiento" con ícono y, al lado, la casilla "Ocultar «Sin línea»" como pastilla (resaltada al
   marcarla, solo en asignaciones). En escritorio van en una fila; en pantallas angostas se acomodan en dos.
+- Correcciones (29-sep): "Editar información" fallaba ("Cannot set properties of null") porque el campo de motivo
+  usaba la clase de los campos del AppSheet (`ln-af-campo`); ahora es `ln-af-seccion ln-af-extra` + `field`.
+  `LineasDatos.leerFilas` ya no abre pestañas de las que no se pide ninguna fila (una hoja sin `APP_MOVIMIENTOS`
+  hacía fallar "Números que ha tenido").
 - Sin pestaña nueva: `LineasRepo.asignacionesDeRegistro(id, vista)` (→ `TelefoniaService.asignaciones` →
   `apiLineasAsignaciones`, pedido en paralelo al historial) reconstruye cada fila de LINEAS TELEFONICAS donde
   aparece el NUCO o el número, desde su estado actual hacia atrás con los cambios de NUMERO TELEFONO y NUCO de
