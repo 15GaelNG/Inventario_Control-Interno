@@ -369,13 +369,16 @@ const VehiculosService = (function () {
       throw new Error('Se pudo abrir la carpeta de adjuntos de Vehículos, pero no crear el archivo ahí. La cuenta ' +
         cuenta() + ' necesita permiso de editor (no solo lector) en esa carpeta. Error original: ' + e.message);
     }
-    // Sin esto, el archivo solo lo puede ver la cuenta que despliega la app
-    // (quien lo creó) — nadie más puede abrir el link, aunque sea válido. Si
-    // Workspace bloquea compartir con el dominio, prueba con "cualquiera con
-    // el enlace" antes de rendirse.
+    // Mejor esfuerzo, no bloquea el registro: la carpeta de adjuntos ya tiene
+    // acceso general (grupo/dominio) configurado, así que un archivo nuevo
+    // casi siempre hereda ese compartir solo — esto es un respaldo extra por
+    // si algún día esa carpeta cambia y deja de compartirse por default.
+    // Si una política de Workspace bloquea el compartir explícito (le pasa a
+    // algunas cuentas en carpetas que no son suyas), no vale la pena tronar
+    // el registro completo por eso: el archivo ya quedó guardado.
     if (!DriveUtils.compartirLoMasAmplioPosible(archivo)) {
-      throw new Error('El archivo se subió, pero no se pudo compartir (ni con el dominio ni con el enlace) — cuenta ' +
-        cuenta() + '. Pide a quien administra esa carpeta de Drive que revise los permisos.');
+      console.warn('No se pudo compartir explícitamente el archivo de Vehículos (cuenta ' + cuenta() +
+        '); se deja como quedó por default de la carpeta. Archivo: ' + archivo.getUrl());
     }
 
     return { url: archivo.getUrl(), id: archivo.getId(), nombre: nombreArchivo };

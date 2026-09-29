@@ -131,13 +131,13 @@ const UberService = (function () {
       throw new Error('Se pudo abrir la carpeta de solicitudes de Uber, pero no crear el archivo ahí. La cuenta ' +
         cuenta() + ' necesita permiso de editor (no solo lector) en esa carpeta. Error original: ' + e.message);
     }
-    // Sin esto, el archivo solo lo puede ver la cuenta que despliega la app
-    // (quien lo creó) — nadie más puede abrir el link, aunque sea válido. Si
-    // Workspace bloquea compartir con el dominio, prueba con "cualquiera con
-    // el enlace" antes de rendirse.
+    // Mejor esfuerzo, no bloquea el registro: la carpeta de solicitudes ya
+    // tiene acceso general configurado, así que casi siempre hereda el
+    // compartir sola. Si una política de Workspace bloquea el compartir
+    // explícito, no vale la pena tronar todo el registro por eso.
     if (!DriveUtils.compartirLoMasAmplioPosible(archivo)) {
-      throw new Error('El archivo se subió, pero no se pudo compartir (ni con el dominio ni con el enlace) — cuenta ' +
-        cuenta() + '. Pide a quien administra esa carpeta de Drive que revise los permisos.');
+      console.warn('No se pudo compartir explícitamente el archivo de Uber (cuenta ' + cuenta() +
+        '); se deja como quedó por default de la carpeta. Archivo: ' + archivo.getUrl());
     }
 
     return { url: archivo.getUrl(), id: archivo.getId(), nombre: nombreArchivo };
