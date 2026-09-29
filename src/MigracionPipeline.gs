@@ -41,6 +41,24 @@ function pipelineEstado() {
   return migracionEstado();
 }
 
+/**
+ * Qué pestañas compiten por cada servicio. Solo lee. Córrela cuando se agregue o se copie
+ * una pestaña: es la que avisa si un módulo está a punto de escribir en la equivocada.
+ */
+function pipelineRevisarFirmas() {
+  return revisarFirmasDeHojas();
+}
+
+/** Recortar filas vacías, ensayo — Solo dice cuántas quitaría. */
+function pipelineLimpiarFilasVaciasEnsayo() {
+  return limpiarFilasVacias();
+}
+
+/** Recortar filas vacías, de verdad — quita GRID vacío, ningún dato. */
+function pipelineLimpiarFilasVaciasEscribir() {
+  return limpiarFilasVacias({ escribir: true });
+}
+
 /** Deshacer, ensayo — Solo dice qué haría. */
 function pipelineRevertirEnsayo() {
   return migracionRevertir();
@@ -182,6 +200,159 @@ function pipeRespaldo_() {
   const id = pipeProps_().getProperty(PIPE_PROP_RESPALDO);
   if (!id) return null;
   return { id: id, fecha: pipeProps_().getProperty(PIPE_PROP_RESPALDO_FECHA) || '' };
+}
+
+// ---------------------------------------------------------------- firmas de columnas
+
+/**
+ * Las firmas con las que cuatro servicios eligen su hoja. No están aquí para duplicarlas:
+ * están para poder AVISAR cuando más de una pestaña coincida.
+ *
+ * Por qué importa: SheetUtils.getSheetByColumns no busca la hoja por su nombre, la busca
+ * por qué COLUMNAS tiene (SheetUtils.gs:268-324). Y cuando varias coinciden, desempata
+ * quedándose con la que tenga MÁS FILAS. Así que una pestaña de respaldo con la misma
+ * forma no es inerte: compite. Si algún día tiene más filas que la viva, el servicio se
+ * cambia de hoja sin avisar y empieza a leer y escribir en el respaldo.
+ *
+ * Medido en producción el 29/09/2026: INSTALACION DE SENSORES gana con 208 filas contra
+ * las 207 de "Copia de INSTALACION DE SENSORES". Un renglón de diferencia.
+ */
+const PIPE_FIRMAS = [
+  { servicio: 'VerificacionesService', firma: ['ID_VERIFICACION', 'FOLIO VEHICULO', 'COMPROBANTE VERIFICACION'] },
+  { servicio: 'SensoresService', firma: ['ID_SENSOR', 'FOLIO', 'SERIE SENSOR'] },
+  { servicio: 'HologramasService', firma: ['ID_HOLOGRAMA', 'CALCOMANIA EOX', 'ESTATUS EOX'] },
+  { servicio: 'InspeccionesService', firma: ['ID INSPECCION', 'FOLIO', 'TIPO'] },
+  { servicio: 'PermisosService (autenticación)', firma: ['CORREO', 'ROL'] },
+];
+
+/** Cuántas pestañas coinciden con cada firma, y por cuánto va ganando la que gana. */
+function revisarFirmasDeHojas(opciones) {
+  const cfg = opciones || {};
+  const ssId = cfg.spreadsheetId || Config.SPREADSHEET_IDS.VEHICULOS();
+  const ss = SpreadsheetApp.openById(ssId);
+  const hojas = ss.getSheets();
+  const lineas = ['QUÉ PESTAÑAS COMPITEN POR CADA SERVICIO — ' + ssId, ''];
+  const avisos = [];
+
+  // Encabezados de todas, una sola pasada
+  const encabezados = hojas.map((h) => ({
+    hoja: h,
+    nombre: h.getName(),
+    filas: h.getLastRow(),
+    enc: migEncabezados_(h).map(migClave_),
+  }));
+
+  PIPE_FIRMAS.forEach((f) => {
+    const req = f.firma.map(migClave_);
+    const cand = encabezados
+      .filter((e) => req.every((c) => e.enc.indexOf(c) !== -1))
+      .sort((a, b) => b.filas - a.filas);
+
+    lineas.push('  ' + f.servicio);
+    lineas.push('     busca: ' + f.firma.join(' + '));
+    if (!cand.length) {
+      lineas.push('     NINGUNA pestaña coincide: este servicio truena');
+      avisos.push(f.servicio + ': ninguna hoja coincide con su firma');
+      return;
+    }
+    cand.forEach((e, i) => {
+      lineas.push('     ' + (i === 0 ? '-> USA  ' : '   compite ') + e.filas + ' filas  ' + e.nombre);
+    });
+    if (cand.length > 1) {
+      const ventaja = cand[0].filas - cand[1].filas;
+      lineas.push('     ventaja: ' + ventaja + ' filas');
+      if (ventaja < 50) {
+        const aviso = f.servicio + ': "' + cand[0].nombre + '" le gana a "' + cand[1].nombre +
+          '" por solo ' + ventaja + ' fila(s). Con ' + (ventaja + 1) + ' más en la segunda, el ' +
+          'servicio se cambia de hoja sin avisar.';
+        lineas.push('     *** OJO: ' + aviso);
+        avisos.push(aviso);
+      }
+    }
+    lineas.push('');
+  });
+
+  if (avisos.length) {
+    lineas.push('AVISOS (' + avisos.length + '):');
+    avisos.forEach((a) => lineas.push('  - ' + a));
+    lineas.push('', 'Cómo se arregla: quitar la pestaña que compite, o cambiarle un encabezado',
+      'para que deje de coincidir con la firma. Quitar una competidora siempre deja la',
+      'elección MÁS determinista, nunca menos.');
+  } else {
+    lineas.push('Sin competencia apretada: cada servicio tiene su hoja clara.');
+  }
+  const texto = lineas.join('\n');
+  Logger.log(texto);
+  return texto;
+}
+
+// ---------------------------------------------------------------- filas vacías
+
+/** Filas de colchón que se dejan debajo de los datos, para que AppSheet siga insertando */
+const PIPE_COLCHON_FILAS = 200;
+
+/**
+ * Quita las filas del GRID que están debajo del último dato. NO borra ningún dato: solo
+ * espacio vacío. Es lo que más rinde de toda la limpieza y no es destructivo.
+ *
+ * El caso extremo en producción: VEHICULOS tiene un grid de 50,497 filas x 43 columnas
+ * para 648 filas con datos. Gasta 2.1 millones de celdas en vacío — el 37% del archivo
+ * entero, y cuatro veces más de lo que liberaría borrar las 12 pestañas de respaldo.
+ *
+ * Y no es solo espacio: la documentación de rendimiento de AppSheet dice que al doblar el
+ * número de filas de la hoja se puede doblar la longitud de su Calc Chain. O sea que ese
+ * grid vacío está haciendo a AppSheet recalcular de más, y recortarlo debería acelerarlo.
+ *
+ * SE PUEDE CORRER CON APPSHEET VIVO. La regeneración de esquema que exige AppSheet está
+ * amarrada a las COLUMNAS ("add, reorder, or delete columns"); las filas no aparecen en
+ * ninguna de esas listas. Aun así, conviene correrlo primero en la copia del paso 0 y
+ * mirar AppSheet antes de tocar producción: la documentación nunca dice "borrar filas es
+ * seguro", solo nunca las menciona, y eso es inferencia por ausencia.
+ */
+function limpiarFilasVacias(opciones) {
+  // appsheetPuedeSeguirVivo: esto no cambia el esquema, así que no exige el apagado.
+  // Sigue pidiendo autorización de producción y respaldo.
+  const cfg = Object.assign(
+    { escribir: false, colchon: PIPE_COLCHON_FILAS, appsheetPuedeSeguirVivo: true },
+    opciones || {});
+  const ssId = migracionSs_(cfg);
+  const ss = SpreadsheetApp.openById(ssId);
+  const lineas = [(cfg.escribir ? 'RECORTANDO FILAS VACÍAS' : 'ENSAYO (no recorta nada)') + ' — ' + ssId, ''];
+  let liberadas = 0, tocadas = 0;
+
+  ss.getSheets().forEach((sheet) => {
+    const nombre = sheet.getName();
+    const columnas = sheet.getMaxColumns();
+    const grid = sheet.getMaxRows();
+    // getLastRow es la última fila CON ALGO. Debajo de eso solo hay grid vacío.
+    const conDatos = sheet.getLastRow();
+    const desde = Math.max(conDatos + cfg.colchon + 1, 2);
+    if (desde > grid) {
+      lineas.push('  ' + nombre + ': ya está justa (' + grid + ' filas)');
+      return;
+    }
+    const cuantas = grid - desde + 1;
+    const celdas = cuantas * columnas;
+    lineas.push('  ' + nombre + ': ' + grid.toLocaleString() + ' filas de grid, ' +
+      conDatos.toLocaleString() + ' con algo -> quita ' + cuantas.toLocaleString() +
+      ' (' + celdas.toLocaleString() + ' celdas)');
+    if (cfg.escribir) {
+      sheet.deleteRows(desde, cuantas);
+      SpreadsheetApp.flush();
+    }
+    liberadas += celdas;
+    tocadas++;
+  });
+
+  lineas.push('', tocadas + ' pestañas por recortar, ' + liberadas.toLocaleString() + ' celdas liberadas.',
+    'Se deja un colchón de ' + cfg.colchon + ' filas debajo de los datos en cada una.');
+  if (!cfg.escribir) lineas.push('', 'Para recortar de verdad: pipelineLimpiarFilasVaciasEscribir');
+  else lineas.push('', 'Ahora abre AppSheet y comprueba que la app sigue entrando bien.');
+  const texto = lineas.join('\n');
+  pipeLog_(ssId, 'Recortar filas vacías', cfg.escribir ? 'ESCRITURA' : 'ENSAYO', 'OK',
+    tocadas + ' pestañas, ' + liberadas + ' celdas');
+  Logger.log(texto);
+  return texto;
 }
 
 // ---------------------------------------------------------------- estado

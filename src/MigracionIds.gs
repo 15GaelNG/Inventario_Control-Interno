@@ -153,7 +153,12 @@ function migracionSs_(opciones) {
     }
     // Segunda llave, distinta a propósito: que autorizar producción y declarar AppSheet
     // apagado sean dos actos separados, para que ninguno se dé por hecho.
-    if (props.getProperty('MIGRACION_APPSHEET_APAGADO') !== id) {
+    //
+    // La excepción son las operaciones que NO cambian el esquema. Recortar filas vacías es
+    // la única hasta ahora: AppSheet amarra su regeneración a las COLUMNAS ("add, reorder,
+    // or delete columns"), y las filas no aparecen en ninguna de esas listas. Esas pasan
+    // con { appsheetPuedeSeguirVivo: true } y solo piden autorización y respaldo.
+    if (!opciones.appsheetPuedeSeguirVivo && props.getProperty('MIGRACION_APPSHEET_APAGADO') !== id) {
       throw new Error(
         'Falta declarar que AppSheet ya está apagado. Pon la Script Property ' +
         'MIGRACION_APPSHEET_APAGADO con el id del spreadsheet. ' +
