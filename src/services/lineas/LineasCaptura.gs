@@ -214,7 +214,7 @@ const LineasCaptura = (function () {
     const obj = objetivoCaptura_(ref);
     const ahora = new Date();
     return {
-      equipo: obj.equipo, linea: obj.linea, idPropuesto: LineasDatos.nuevoIdCorto(),
+      equipo: obj.equipo, linea: obj.linea, idPropuesto: Ids.nuevo(Entidades.prefijo(LineasRepo.TAB.INSP)),
       formulario: null, inspector: usuario.nombre, condiciones: LineasChecklist.CONDICIONES,
       _armar: (id) => ocultarSecretos_(formularioInspeccion_(obj.fila, LineasRepo.catalogos(), usuario, id, ahora), puedeVerSecretos),
     };
@@ -224,7 +224,7 @@ const LineasCaptura = (function () {
     const obj = objetivoCaptura_(ref);
     const ahora = new Date();
     return {
-      equipo: obj.equipo, linea: obj.linea, idPropuesto: LineasDatos.nuevoIdCorto(), nombreCI: usuario.nombre,
+      equipo: obj.equipo, linea: obj.linea, idPropuesto: Ids.nuevo(Entidades.prefijo(LineasRepo.TAB.RESP)), nombreCI: usuario.nombre,
       _armar: (id) => ocultarSecretos_(formularioResponsiva_(obj.fila, LineasRepo.catalogos(), usuario, id, ahora), puedeVerSecretos),
     };
   }
@@ -289,7 +289,7 @@ const LineasCaptura = (function () {
   function guardarInspeccion(datos, usuario, puedeVerSecretos) {
     const ref = { equipoId: datos.equipoId || null, lineaId: datos.equipoId ? null : datos.lineaId };
     if (!datos.firmaInspectorBase64) throw new Error('FIRMA INSPECTOR es obligatorio');
-    const id = /^[\w-]{6,40}$/.test(String(datos.id || '')) ? String(datos.id) : LineasDatos.nuevoIdCorto();
+    const id = /^[\w-]{6,40}$/.test(String(datos.id || '')) ? String(datos.id) : Ids.nuevo(Entidades.prefijo(LineasRepo.TAB.INSP));
     // Las fotos son opcionales: la carpeta existe solo si se subió alguna
     if (datos.carpetaId) LineasEvidencias.validarArchivosEnCarpeta((datos.fotos || []).map((f) => f.id), [datos.carpetaId, datos.fotosCarpetaId].filter(Boolean));
 
@@ -325,7 +325,7 @@ const LineasCaptura = (function () {
       // 3) Evidencia del sistema nuevo (carpeta y fotos) y movimiento.
       LineasRepo.asegurarPestanaApp(LineasRepo.TAB.APP_EVID);
       LineasDatos.agregarFilas(LineasRepo.TAB.APP_EVID, [{
-        'ID': LineasDatos.nuevoIdCorto(), 'TIPO': 'INSPECCION', 'ORIGEN': 'SISTEMA', 'ID_REGISTRO': id, 'ID_LINEA': obj.reg.id, 'NUCO': obj.reg.nuco || '',
+        'TIPO': 'INSPECCION', 'ORIGEN': 'SISTEMA', 'ID_REGISTRO': id, 'ID_LINEA': obj.reg.id, 'NUCO': obj.reg.nuco || '',
         'FECHA': ahora, 'CARPETA_ID': datos.carpetaId || '', 'RUTA': datos.ruta || '', 'FOTOS_CARPETA_ID': datos.fotosCarpetaId || '',
         'FOTOS': String((datos.fotos || []).length), 'PDFS_JSON': '[]', 'COINCIDENCIA_EXACTA': 'TRUE',
         'ALERTAS_JSON': '[]', 'ID_ANTERIOR': '', 'ACTUALIZADO_EN': ahora,
@@ -351,7 +351,7 @@ const LineasCaptura = (function () {
   function guardarResponsiva(datos, usuario, puedeVerSecretos) {
     const ref = { equipoId: datos.equipoId || null, lineaId: datos.equipoId ? null : datos.lineaId };
     if (!datos.firmaCiBase64) throw new Error('FIRMA RESPONSABLE DE CONTROL INTERNO es obligatorio');
-    const id = /^[\w-]{6,40}$/.test(String(datos.id || '')) ? String(datos.id) : LineasDatos.nuevoIdCorto();
+    const id = /^[\w-]{6,40}$/.test(String(datos.id || '')) ? String(datos.id) : Ids.nuevo(Entidades.prefijo(LineasRepo.TAB.RESP));
 
     const res = LineasDatos.conCandado(() => {
       const ahora = new Date();
@@ -376,7 +376,7 @@ const LineasCaptura = (function () {
 
       LineasRepo.asegurarPestanaApp(LineasRepo.TAB.APP_EVID);
       LineasDatos.agregarFilas(LineasRepo.TAB.APP_EVID, [{
-        'ID': LineasDatos.nuevoIdCorto(), 'TIPO': 'RESPONSIVA', 'ORIGEN': 'SISTEMA', 'ID_REGISTRO': id, 'ID_LINEA': obj.reg.id, 'NUCO': obj.reg.nuco || '',
+        'TIPO': 'RESPONSIVA', 'ORIGEN': 'SISTEMA', 'ID_REGISTRO': id, 'ID_LINEA': obj.reg.id, 'NUCO': obj.reg.nuco || '',
         'FECHA': ahora, 'CARPETA_ID': '', 'RUTA': '', 'FOTOS': '0',
         'PDFS_JSON': '[]', 'COINCIDENCIA_EXACTA': 'TRUE', 'ACTUALIZADO_EN': ahora,
       }]);
@@ -495,7 +495,7 @@ const LineasCaptura = (function () {
           carpetaId ? {} : { 'CARPETA_ID': c.carpetaId, 'RUTA': c.ruta }));
       } else {
         LineasDatos.agregarFilas(TAB_EV, [{
-          'ID': LineasDatos.nuevoIdCorto(), 'TIPO': 'INSPECCION', 'ORIGEN': insp.origen === 'SISTEMA' ? 'SISTEMA' : 'APPSHEET', 'ID_REGISTRO': id,
+          'TIPO': 'INSPECCION', 'ORIGEN': insp.origen === 'SISTEMA' ? 'SISTEMA' : 'APPSHEET', 'ID_REGISTRO': id,
           'ID_LINEA': insp.registroId || '', 'NUCO': insp.nuco || '', 'FECHA': insp.fecha ? new Date(insp.fecha) : new Date(),
           'CARPETA_ID': c.carpetaId, 'RUTA': c.ruta, 'FOTOS_CARPETA_ID': c.fotosCarpetaId, 'FOTOS': '0', 'PDFS_JSON': '[]',
           'COINCIDENCIA_EXACTA': 'TRUE', 'ALERTAS_JSON': '[]', 'ID_ANTERIOR': '', 'ACTUALIZADO_EN': new Date(),

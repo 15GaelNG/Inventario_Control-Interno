@@ -78,7 +78,7 @@ const TicketsService = (function () {
     Permisos.puedeEditar(token, 'tickets');
     if (!datos['TIPO ATENCION']) throw new Error('El tipo de atención es obligatorio');
     const fila = Object.assign({}, datos);
-    fila[ID_COLUMN] = Utilities.getUuid().slice(0, 8);
+    // El ID lo pone SheetUtils.insert con el formato del sistema (ver docs/ids-asignacion.md)
     fila['FECHA DE REGISTRO'] = new Date();
     if (datos['FECHA']) fila['FECHA'] = new Date(datos['FECHA']);
     SheetUtils.insert(ssId(), hoja_().getName(), fila);

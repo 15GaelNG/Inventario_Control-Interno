@@ -21,39 +21,59 @@
  * MIGRACION_IDS_AUTORIZAR_PRODUCCION en el id del spreadsheet.
  */
 
+// ================================================================
+// LAS QUE SE CORREN DESDE EL EDITOR
+// El desplegable de funciones solo ejecuta funciones SIN argumentos, así que estas son
+// las que hay que seleccionar ahí. Van numeradas en el orden en que se usan.
+// Las de abajo (asignarIds, reescribirReferencias) reciben opciones y son para llamarlas
+// desde código o desde la consola.
+// ================================================================
+
+/** PASO 1 — Solo lee. Qué está roto y qué se va a tocar. */
+function migracion1Revisar() {
+  return revisarAntesDeMigrar();
+}
+
+/** PASO 2, ensayo — Solo dice qué IDs generaría. No escribe nada. */
+function migracion2AsignarEnsayo() {
+  return asignarIds();
+}
+
+/** PASO 2, de verdad — ESCRIBE la columna ID y guarda el valor viejo en ID APPSHEET.
+ *  Se puede volver a correr: las hojas ya migradas se saltan solas. */
+function migracion2AsignarEscribir() {
+  return asignarIds({ escribir: true });
+}
+
+/** PASO 3, ensayo — Solo dice qué referencias cambiaría y cuántas quedarían huérfanas. */
+function migracion3ReferenciasEnsayo() {
+  return reescribirReferencias();
+}
+
+/** PASO 3, de verdad — ESCRIBE las columnas que apuntan a otra hoja. */
+function migracion3ReferenciasEscribir() {
+  return reescribirReferencias({ escribir: true });
+}
+
+/** Comprobación final — Solo lee. Se puede correr cuando sea. */
+function migracion4Auditar() {
+  return auditarIds();
+}
+
+/** Quita las columnas ID APPSHEET que sobran, ensayo — Solo lee. */
+function migracionLimpiarRespaldoEnsayo() {
+  return limpiarRespaldoRedundante();
+}
+
+/** Quita las columnas ID APPSHEET que sobran, de verdad — BORRA columnas.
+ *  Solo borra donde el valor sigue existiendo íntegro en su columna original. */
+function migracionLimpiarRespaldoEscribir() {
+  return limpiarRespaldoRedundante({ escribir: true });
+}
+
 /** El spreadsheet de producción. Aquí NO se escribe mientras AppSheet siga vivo. */
 const MIGRACION_SS_PRODUCCION = '1h5ibDsmVtrG27rwMaOvj-lm08QZUHzDv3woPmkfRQrk';
 
-/**
- * Una entrada por hoja de registros. `idActual` es de dónde se copia el valor viejo;
- * `columna` es su posición (base 1) cuando el encabezado está vacío o no es confiable.
- */
-const MIGRACION_HOJAS = [
-  { hoja: 'VEHICULOS', prefijo: 'VEH', idActual: 'ID_VEHICULO' },
-  { hoja: 'CAMBIOS VEHICULOS', prefijo: 'CVE', idActual: 'ID_CAMBIO' },
-  { hoja: 'REASIGNACIONES_VEHICULOS', prefijo: 'RVE', idActual: 'ID Reasignacion Vehicular' },
-  { hoja: 'VERIFICACIONES', prefijo: 'VER', idActual: 'ID_VERIFICACION' },
-  { hoja: 'INSPECCION VEHICULAR', prefijo: 'INS', idActual: 'ID INSPECCION' },
-  { hoja: 'INSTALACION DE SENSORES', prefijo: 'SEN', idActual: 'ID_SENSOR' },
-  { hoja: 'HOLOGRAMAS', prefijo: 'HOL', idActual: 'ID_HOLOGRAMA' },
-  { hoja: 'INCIDENCIAS', prefijo: 'INC', idActual: 'ID_INCIDENCIA' },
-  { hoja: 'LINEAS TELEFONICAS', prefijo: 'LIN', idActual: 'ID' },
-  { hoja: 'INSPECCIONES LINEAS', prefijo: 'ILI', idActual: 'ID' },
-  { hoja: 'RESPONSIVAS LINEAS', prefijo: 'RLI', idActual: 'ID' },
-  { hoja: 'REACTIVACION DE LINEAS', prefijo: 'REA', idActual: 'ID' },
-  { hoja: 'SOLICITUD DE LINEAS', prefijo: 'SOL', idActual: 'ID' },
-  // Su columna de ID no tiene encabezado (dice ' '), por eso va por posición
-  { hoja: 'CAMBIOS LINEAS TELEFONICAS', prefijo: 'CLI', idActual: null, columna: 1 },
-  { hoja: 'BITACORA DE DESECHO', prefijo: 'DES', idActual: 'ID_DESECHO' },
-  { hoja: 'ACCESORIOS CELULARES', prefijo: 'ACC', idActual: 'ID_Accesorio' },
-  { hoja: 'MOVIMIENTOS_ACCESORIOS', prefijo: 'MAC', idActual: 'ID_Movimiento' },
-  { hoja: 'ARQUEOS', prefijo: 'ARQ', idActual: 'ID ARQUEO' },
-  { hoja: 'CAJAS CHICAS', prefijo: 'CCH', idActual: 'ID CCH' },
-  { hoja: 'INCREMENTOS', prefijo: 'MON', idActual: 'ID' },
-  { hoja: 'UBER', prefijo: 'UBE', idActual: 'ID' },
-  { hoja: 'TICKETS', prefijo: 'TCK', idActual: 'ID' },
-  { hoja: 'COLABORADORES', prefijo: 'COL', idActual: 'No EMPLEADO' },
-];
 
 /**
  * Las referencias medidas contra los datos reales (no supuestas). El % es cuántos valores
@@ -75,10 +95,17 @@ const MIGRACION_REFERENCIAS = [
   { hoja: 'MOVIMIENTOS_ACCESORIOS', columna: 'ID_Accesorio', padre: 'ACCESORIOS CELULARES', esperado: 0.95 },
   { hoja: 'ARQUEOS', columna: 'ID CCH', padre: 'CAJAS CHICAS', porLlaveNegocio: 'ID CCH', esperado: 1.00 },
   { hoja: 'INCREMENTOS', columna: 'ID CCH', padre: 'CAJAS CHICAS', porLlaveNegocio: 'ID CCH', esperado: 1.00 },
+  // Se me había escapado: 1,470 filas en producción, con 99.9% de coincidencia. Al migrar
+  // LINEAS TELEFONICAS sin reescribir esta columna, sus 1,167 referencias en la copia de
+  // pruebas quedaron huérfanas de un jalón.
+  { hoja: 'HISTORIAL_REASIGNACIONES', columna: 'ID Linea', padre: 'LINEAS TELEFONICAS', esperado: 0.999 },
+  // Pestañas del sistema nuevo (solo existen en pruebas). ID_REGISTRO es polimórfica:
+  // apunta a INSPECCIONES LINEAS o a RESPONSIVAS LINEAS según la columna TIPO.
+  { hoja: 'APP_EVIDENCIAS', columna: 'ID_LINEA', padre: 'LINEAS TELEFONICAS', esperado: 1.00 },
 ];
 
-const COL_ID = 'ID';
-const COL_ID_VIEJO = 'ID APPSHEET';
+
+
 
 // ---------------------------------------------------------------- utilidades
 
@@ -134,6 +161,21 @@ function migFilas_(sheet) {
   return Math.max(0, sheet.getLastRow() - 1);
 }
 
+/**
+ * Qué renglones están COMPLETAMENTE vacíos.
+ *
+ * getLastRow() cuenta renglones en blanco que quedaron dentro del rango usado (en la copia
+ * de pruebas son 147: 101 en LINEAS TELEFONICAS, 29 en RESPONSIVAS LINEAS, etc.). Si se les
+ * pone ID, se convierten en registros fantasma con llave propia. Se detectan leyendo la
+ * hoja completa una sola vez.
+ */
+function migFilasVacias_(sheet, filas) {
+  const columnas = Math.max(1, sheet.getLastColumn());
+  if (!filas) return [];
+  const valores = sheet.getRange(2, 1, filas, columnas).getValues();
+  return valores.map((fila) => fila.every((c) => migLimpio_(c) === ''));
+}
+
 /** Una columna completa como arreglo de textos, en el orden de la hoja */
 function migLeerColumna_(sheet, columna, filas) {
   if (!columna || !filas) return [];
@@ -152,18 +194,19 @@ function revisarAntesDeMigrar(opciones) {
   const lineas = ['REVISIÓN PREVIA — spreadsheet ' + ssId, ''];
   const problemas = [];
 
-  MIGRACION_HOJAS.forEach((h) => {
+  Entidades.migrables().forEach((h) => {
     const sheet = ss.getSheetByName(h.hoja);
     if (!sheet) { problemas.push('FALTA la hoja "' + h.hoja + '"'); return; }
     const enc = migEncabezados_(sheet);
     const filas = migFilas_(sheet);
-    const posId = h.idActual ? migColumna_(enc, h.idActual) : (h.columna || 0);
+    const posId = h.llaveAnterior ? migColumna_(enc, h.llaveAnterior) : (h.columnaAnterior || 0);
     const detalles = [];
 
     if (!posId) {
-      problemas.push(h.hoja + ': no encuentro su columna de ID ("' + h.idActual + '")');
+      problemas.push(h.hoja + ': no encuentro su columna de ID ("' + h.llaveAnterior + '")');
     } else {
       const valores = migLeerColumna_(sheet, posId, filas);
+      const vacias = migFilasVacias_(sheet, filas);
       const llenos = valores.filter(Boolean);
       const distintos = {};
       let repetidos = 0;
@@ -171,13 +214,20 @@ function revisarAntesDeMigrar(opciones) {
         const k = migClave_(v);
         if (distintos[k]) repetidos++; else distintos[k] = true;
       });
-      detalles.push(filas + ' filas, ' + llenos.length + ' con ID');
-      if (filas - llenos.length) detalles.push((filas - llenos.length) + ' SIN ID');
-      if (repetidos) problemas.push(h.hoja + ': ' + repetidos + ' IDs repetidos en "' + h.idActual + '"');
+      // Un renglón en blanco no es un registro: se queda sin ID y no cuenta como problema
+      const enBlanco = vacias.filter(Boolean).length;
+      const sinIdConDatos = valores.filter((v, i) => !v && !vacias[i]).length;
+      detalles.push(filas + ' filas');
+      detalles.push(llenos.length + ' con ID');
+      if (enBlanco) detalles.push(enBlanco + ' en blanco (se saltan)');
+      if (sinIdConDatos) {
+        problemas.push(h.hoja + ': ' + sinIdConDatos + ' renglones CON DATOS pero sin ID');
+      }
+      if (repetidos) problemas.push(h.hoja + ': ' + repetidos + ' IDs repetidos en "' + h.llaveAnterior + '"');
     }
 
-    if (migColumna_(enc, COL_ID) && h.idActual !== COL_ID) detalles.push('ya tiene columna ID');
-    if (migColumna_(enc, COL_ID_VIEJO)) detalles.push('ya tiene ' + COL_ID_VIEJO);
+    if (migColumna_(enc, Entidades.COLUMNA_ID) && h.llaveAnterior !== Entidades.COLUMNA_ID) detalles.push('ya tiene columna ID');
+    if (migColumna_(enc, Entidades.COLUMNA_ID_ANTERIOR)) detalles.push('ya tiene ' + Entidades.COLUMNA_ID_ANTERIOR);
     enc.forEach((c, i) => {
       if (!c) problemas.push(h.hoja + ': la columna ' + (i + 1) + ' no tiene encabezado');
     });
@@ -186,7 +236,12 @@ function revisarAntesDeMigrar(opciones) {
 
   lineas.push('', problemas.length ? 'PROBLEMAS (' + problemas.length + '):' : 'Sin problemas.');
   problemas.forEach((p) => lineas.push('  - ' + p));
-  lineas.push('', 'Si todo se ve bien: asignarIds({ escribir: true })');
+  lineas.push('', 'Si todo se ve bien, lo que sigue es el ENSAYO, que tampoco escribe:',
+    '    migracion2AsignarEnsayo',
+    'y hasta que su salida cuadre:',
+    '    migracion2AsignarEscribir',
+    '',
+    'Si truena por tiempo, vuelve a correr lo mismo: sigue donde se quedó.');
   const texto = lineas.join('\n');
   Logger.log(texto);
   return texto;
@@ -195,64 +250,160 @@ function revisarAntesDeMigrar(opciones) {
 // ---------------------------------------------------------------- paso 2
 
 /**
+ * ¿Esta hoja ya está migrada? Lo está si todos los renglones CON DATOS traen un ID con la
+ * forma correcta y el prefijo de la hoja.
+ */
+function migYaMigrada_(sheet, prefijo, filas, vacias) {
+  const pos = migColumna_(migEncabezados_(sheet), Entidades.COLUMNA_ID);
+  if (!pos) return false;
+  const ids = migLeerColumna_(sheet, pos, filas);
+  for (let i = 0; i < filas; i++) {
+    if (vacias[i]) continue;
+    if (!ids[i] || !Ids.tieneForma(ids[i]) || Ids.prefijo(ids[i]) !== prefijo) return false;
+  }
+  return true;
+}
+
+/**
  * Llena la columna ID de cada hoja y guarda el valor viejo en ID APPSHEET.
  * Sin { escribir: true } solo dice qué haría.
  *
  * El ID de cada renglón sale de su POSICIÓN en la hoja, no de ninguna columna de fecha:
- * ver docs/ids-asignacion.md, sección 2. Es repetible: correrlo dos veces sobre la misma
- * hoja da el mismo orden (los símbolos al azar cambian, el orden no).
+ * ver docs/ids-asignacion.md, sección 2.
+ *
+ * SE PUEDE VOLVER A CORRER sin miedo. Apps Script corta la ejecución a los minutos, y con
+ * 23 hojas (una de 33,640 renglones) es probable que se interrumpa a medias:
+ *
+ *   - Una hoja ya migrada se SALTA. La segunda corrida sigue donde se quedó.
+ *   - ID APPSHEET nunca se pisa si ya trae datos. Es el único valor irrecuperable: en las
+ *     hojas cuya columna se llama "ID", volver a leer de ahí daría los IDs NUEVOS y los
+ *     copiaría encima de los originales, borrándolos para siempre.
+ *   - Se detiene sola antes del límite de tiempo y dice en qué hoja se quedó.
+ *
+ * Con { rehacer: true } vuelve a generar el ID aunque la hoja ya esté migrada (el valor
+ * viejo se sigue respetando, porque se lee de ID APPSHEET).
  */
 function asignarIds(opciones) {
-  const cfg = Object.assign({ escribir: false, hojas: null }, opciones || {});
+  const cfg = Object.assign({ escribir: false, hojas: null, rehacer: false }, opciones || {});
   const ssId = migracionSs_(cfg);
   const ss = SpreadsheetApp.openById(ssId);
   const lineas = [(cfg.escribir ? 'ASIGNANDO IDs' : 'ENSAYO (no escribe nada)') + ' — ' + ssId, ''];
-  let total = 0;
+  const arranque = Date.now();
+  const LIMITE_MS = 4.5 * 60 * 1000;   // Apps Script corta a los 6 min; paramos antes
+  let total = 0, hechas = 0, saltadas = 0;
+  const pendientes = [];
 
-  MIGRACION_HOJAS.forEach((h) => {
+  Entidades.migrables().forEach((h) => {
     if (cfg.hojas && cfg.hojas.indexOf(h.hoja) === -1) return;
+    if (pendientes.length) { pendientes.push(h.hoja); return; }   // ya se acabó el tiempo
+
     const sheet = ss.getSheetByName(h.hoja);
     if (!sheet) { lineas.push('  ' + h.hoja + ': NO EXISTE, se salta'); return; }
     const filas = migFilas_(sheet);
     if (!filas) { lineas.push('  ' + h.hoja + ': vacía, se salta'); return; }
 
-    const enc = migEncabezados_(sheet);
-    const posVieja = h.idActual ? migColumna_(enc, h.idActual) : (h.columna || 0);
-    if (!posVieja) { lineas.push('  ' + h.hoja + ': SIN columna de ID, se salta'); return; }
+    if (Date.now() - arranque > LIMITE_MS) { pendientes.push(h.hoja); return; }
 
-    // Los IDs, uno por renglón, en el orden de la hoja
+    const enc = migEncabezados_(sheet);
+    const vacias = migFilasVacias_(sheet, filas);
+
+    if (!cfg.rehacer && migYaMigrada_(sheet, h.prefijo, filas, vacias)) {
+      lineas.push('  ' + h.hoja + ' [' + h.prefijo + ']: YA MIGRADA, se salta');
+      saltadas++;
+      return;
+    }
+
+    // ¿El ID nuevo va a PISAR la columna vieja? Solo cuando esa columna ya se llama "ID"
+    // (Líneas, Uber, Tickets, Reactivación, Solicitud, Incrementos y las dos de Líneas).
+    // En las demás la columna original —ID_VEHICULO, ID_SENSOR, ID CCH…— se queda intacta
+    // y el ID nuevo se crea aparte, así que respaldarla sería guardar dos veces lo mismo.
+    const sobrescribe = h.pisaLlaveAnterior;
+
+    // Si ID APPSHEET ya tiene datos, ESA es la verdad: la columna original pudo haber sido
+    // sobrescrita por una corrida anterior.
+    const posGuardada = migColumna_(enc, Entidades.COLUMNA_ID_ANTERIOR);
+    const yaGuardado = posGuardada ? migLeerColumna_(sheet, posGuardada, filas) : [];
+    const tieneGuardado = yaGuardado.some(Boolean);
+    const posVieja = h.llaveAnterior ? migColumna_(enc, h.llaveAnterior) : (h.columnaAnterior || 0);
+    if (!tieneGuardado && !posVieja) {
+      lineas.push('  ' + h.hoja + ': SIN columna de ID, se salta');
+      return;
+    }
+
+    // Los IDs, uno por renglón, en el orden de la hoja.
+    //  - Los renglones en blanco se quedan SIN ID: ponerles uno los haría registros fantasma.
+    //  - Un renglón que YA tiene un ID bueno lo conserva. La hoja sigue viva mientras
+    //    migramos (aparecieron 2 inspecciones nuevas entre una corrida y otra), y
+    //    regenerarlos rompería las referencias que el paso 3 ya hubiera reescrito.
+    const posIdActual = migColumna_(enc, Entidades.COLUMNA_ID);
+    const idsPrevios = posIdActual ? migLeerColumna_(sheet, posIdActual, filas) : [];
     const nuevos = [];
     const vistos = {};
+    let conservados = 0, generados = 0;
     for (let i = 0; i < filas; i++) {
+      if (vacias[i]) { nuevos.push(['']); continue; }
+      const previo = idsPrevios[i];
+      if (!cfg.rehacer && previo && Ids.tieneForma(previo) && Ids.prefijo(previo) === h.prefijo && !vistos[previo]) {
+        vistos[previo] = true;
+        nuevos.push([previo]);
+        conservados++;
+        continue;
+      }
       let id = Ids.deLegado(h.prefijo, i);
       let intentos = 0;
       while (vistos[id] && intentos < 10) { id = Ids.deLegado(h.prefijo, i); intentos++; }
       if (vistos[id]) throw new Error('No pude generar un ID único en ' + h.hoja + ', renglón ' + (i + 2));
       vistos[id] = true;
       nuevos.push([id]);
+      generados++;
     }
+    const conId = conservados + generados;
+    const enBlanco = filas - conId;
+    const resumen = generados + ' IDs nuevos' +
+      (conservados ? ', ' + conservados + ' que ya tenían se conservan' : '') +
+      (enBlanco ? ', ' + enBlanco + ' en blanco sin tocar' : '');
+
+    const respaldo = sobrescribe
+      ? (tieneGuardado ? ', ' + Entidades.COLUMNA_ID_ANTERIOR + ' ya estaba' : ', el viejo se respalda en ' + Entidades.COLUMNA_ID_ANTERIOR)
+      : ', el viejo se queda en "' + h.llaveAnterior + '"';
 
     if (!cfg.escribir) {
-      lineas.push('  ' + h.hoja + ' [' + h.prefijo + ']: ' + filas + ' IDs, ej ' + nuevos[0][0]);
-      total += filas;
+      const ejemplo = (nuevos.find((f) => f[0]) || [''])[0];
+      lineas.push('  ' + h.hoja + ' [' + h.prefijo + ']: ' + resumen +
+        (ejemplo ? ', ej ' + ejemplo : '') + respaldo);
+      total += conId;
+      hechas++;
       return;
     }
 
-    const colVieja = migLeerColumna_(sheet, posVieja, filas);
-    const destinoViejo = migColumnaOCrear_(sheet, COL_ID_VIEJO, true);
-    sheet.getRange(2, destinoViejo.columna, filas, 1).setValues(colVieja.map((v) => [v]));
+    // 1. El valor viejo PRIMERO, y solo si de verdad se va a perder
+    if (sobrescribe && !tieneGuardado) {
+      const colVieja = migLeerColumna_(sheet, posVieja, filas);
+      const destinoViejo = migColumnaOCrear_(sheet, Entidades.COLUMNA_ID_ANTERIOR, true);
+      sheet.getRange(2, destinoViejo.columna, filas, 1).setValues(colVieja.map((v) => [v]));
+      SpreadsheetApp.flush();   // que quede en la hoja antes de pisar la columna original
+    }
 
-    const destino = migColumnaOCrear_(sheet, COL_ID, true);
+    // 2. Ahora sí, el ID nuevo
+    const destino = migColumnaOCrear_(sheet, Entidades.COLUMNA_ID, true);
     sheet.getRange(2, destino.columna, filas, 1).setValues(nuevos);
 
-    lineas.push('  ' + h.hoja + ' [' + h.prefijo + ']: ' + filas + ' IDs escritos en la columna ' +
-      destino.columna + ', valor viejo en la ' + destinoViejo.columna);
-    total += filas;
+    lineas.push('  ' + h.hoja + ' [' + h.prefijo + ']: ' + resumen +
+      ', en la columna ' + destino.columna + respaldo);
+    total += conId;
+    hechas++;
   });
 
-  lineas.push('', total + ' renglones en total.');
-  if (!cfg.escribir) lineas.push('Para escribir de verdad: asignarIds({ escribir: true })');
-  else lineas.push('Ahora: auditarIds() y después reescribirReferencias({ escribir: true })');
+  lineas.push('', hechas + ' hojas procesadas, ' + saltadas + ' ya migradas, ' + total + ' renglones.');
+  if (pendientes.length) {
+    lineas.push('', 'SE ACABÓ EL TIEMPO. Faltan ' + pendientes.length + ' hojas:',
+      '  ' + pendientes.join(', '),
+      'Vuelve a correr lo mismo: las ya migradas se saltan solas y sigue donde se quedó.');
+  } else if (!cfg.escribir) {
+    lineas.push('Para escribir de verdad, corre: migracion2AsignarEscribir');
+  } else {
+    lineas.push('Ahora: migracion4Auditar, y después migracion3ReferenciasEnsayo');
+  }
   const texto = lineas.join('\n');
   Logger.log(texto);
   return texto;
@@ -266,13 +417,13 @@ function migMapaDelPadre_(ss, nombrePadre, porLlaveNegocio) {
   if (!sheet) throw new Error('No existe la hoja padre "' + nombrePadre + '"');
   const enc = migEncabezados_(sheet);
   const filas = migFilas_(sheet);
-  const posId = migColumna_(enc, COL_ID);
+  const posId = migColumna_(enc, Entidades.COLUMNA_ID);
   if (!posId) throw new Error('"' + nombrePadre + '" todavía no tiene columna ID: corre asignarIds primero');
   // Por omisión se une por el ID viejo; algunas hojas se unen por su llave de negocio
   const posOrigen = porLlaveNegocio
     ? migColumna_(enc, porLlaveNegocio)
-    : migColumna_(enc, COL_ID_VIEJO);
-  if (!posOrigen) throw new Error('"' + nombrePadre + '" no tiene la columna "' + (porLlaveNegocio || COL_ID_VIEJO) + '"');
+    : migColumna_(enc, Entidades.COLUMNA_ID_ANTERIOR);
+  if (!posOrigen) throw new Error('"' + nombrePadre + '" no tiene la columna "' + (porLlaveNegocio || Entidades.COLUMNA_ID_ANTERIOR) + '"');
 
   const ids = migLeerColumna_(sheet, posId, filas);
   const origen = migLeerColumna_(sheet, posOrigen, filas);
@@ -321,10 +472,13 @@ function reescribirReferencias(opciones) {
     const mapa = migMapaDelPadre_(ss, ref.padre, ref.porLlaveNegocio);
     const valores = migLeerColumna_(sheet, pos, filas);
     const salida = [];
-    let cambiadas = 0, sueltas = 0, vacias = 0;
+    let cambiadas = 0, sueltas = 0, vacias = 0, yaEstaban = 0;
 
     valores.forEach((v, i) => {
       if (!v) { salida.push(['']); vacias++; return; }
+      // Ya tiene la forma nueva: viene de una corrida anterior. Se deja y no cuenta como
+      // huérfana — es lo que hace que volver a correr esto sea inofensivo.
+      if (Ids.tieneForma(v)) { salida.push([v]); yaEstaban++; return; }
       const nuevo = migBuscar_(mapa, v);
       if (nuevo) { salida.push([nuevo]); cambiadas++; }
       else {
@@ -334,6 +488,11 @@ function reescribirReferencias(opciones) {
       }
     });
 
+    if (yaEstaban && !cambiadas && !sueltas) {
+      lineas.push('  ' + ref.hoja + '.' + ref.columna + ' -> ' + ref.padre + ': YA MIGRADA (' +
+        yaEstaban + ' referencias), se salta');
+      return;
+    }
     const tasa = cambiadas / Math.max(1, cambiadas + sueltas);
     let nota = '';
     if (ref.esperado && Math.abs(tasa - ref.esperado) > 0.05) {
@@ -341,8 +500,9 @@ function reescribirReferencias(opciones) {
     }
     if (ref.revisar) nota += '  (columna marcada para revisar con Emmanuel)';
     lineas.push('  ' + ref.hoja + '.' + ref.columna + ' -> ' + ref.padre + ': ' +
-      cambiadas + ' cambiadas, ' + sueltas + ' huérfanas, ' + vacias + ' vacías (' +
-      Math.round(tasa * 100) + '%)' + nota);
+      cambiadas + ' cambiadas, ' + sueltas + ' huérfanas, ' + vacias + ' vacías' +
+      (yaEstaban ? ', ' + yaEstaban + ' ya migradas' : '') +
+      ' (' + Math.round(tasa * 100) + '%)' + nota);
 
     if (cfg.escribir) sheet.getRange(2, pos, filas, 1).setValues(salida);
   });
@@ -351,7 +511,72 @@ function reescribirReferencias(opciones) {
     lineas.push('', 'HUÉRFANAS (se dejaron intactas, primeras ' + huerfanas.length + '):');
     huerfanas.forEach((h) => lineas.push('  - ' + h));
   }
-  if (!cfg.escribir) lineas.push('', 'Para escribir de verdad: reescribirReferencias({ escribir: true })');
+  if (!cfg.escribir) lineas.push('', 'Para escribir de verdad, corre: migracion3ReferenciasEscribir');
+  const texto = lineas.join('\n');
+  Logger.log(texto);
+  return texto;
+}
+
+// ---------------------------------------------------------------- limpieza
+
+/**
+ * Quita la columna ID APPSHEET de las hojas donde sobra.
+ *
+ * Solo hace falta en las hojas cuya columna original se llama "ID", porque ahí el ID nuevo
+ * la pisa. En las demás —ID_VEHICULO, ID_SENSOR, ID CCH…— la original se queda intacta, así
+ * que el respaldo guarda dos veces lo mismo. Una versión anterior lo creaba en las 23.
+ *
+ * Nunca borra a ciegas: comprueba renglón por renglón que el valor respaldado siga
+ * existiendo igualito en la columna original. Si difiere en uno solo, no toca esa hoja.
+ */
+function limpiarRespaldoRedundante(opciones) {
+  const cfg = Object.assign({ escribir: false }, opciones || {});
+  const ssId = migracionSs_(cfg);
+  const ss = SpreadsheetApp.openById(ssId);
+  const lineas = [(cfg.escribir ? 'QUITANDO RESPALDOS QUE SOBRAN' : 'ENSAYO (no borra nada)') + ' — ' + ssId, ''];
+  let quitadas = 0;
+
+  Entidades.migrables().forEach((h) => {
+    const sheet = ss.getSheetByName(h.hoja);
+    if (!sheet) return;
+    const filas = migFilas_(sheet);
+    if (!filas) return;
+
+    const enc = migEncabezados_(sheet);
+    const posGuardada = migColumna_(enc, Entidades.COLUMNA_ID_ANTERIOR);
+    if (!posGuardada) return;   // no tiene respaldo, nada que hacer
+
+    if (h.pisaLlaveAnterior) {
+      lineas.push('  ' + h.hoja + ': el respaldo SÍ hace falta (su columna se llama ID), se deja');
+      return;
+    }
+    const posVieja = h.llaveAnterior ? migColumna_(enc, h.llaveAnterior) : (h.columnaAnterior || 0);
+    if (!posVieja) {
+      lineas.push("  " + h.hoja + ": ya no encuentro su llave anterior, NO se toca el respaldo");
+      return;
+    }
+
+    const guardado = migLeerColumna_(sheet, posGuardada, filas);
+    const original = migLeerColumna_(sheet, posVieja, filas);
+    let distintos = 0;
+    for (let i = 0; i < filas; i++) {
+      if (migClave_(guardado[i]) !== migClave_(original[i])) distintos++;
+    }
+    if (distintos) {
+      lineas.push('  ' + h.hoja + ': el respaldo NO coincide con "' + h.llaveAnterior + '" en ' +
+        distintos + ' renglones, NO se toca');
+      return;
+    }
+
+    const nombreVieja = h.llaveAnterior || ('la columna ' + h.columnaAnterior + ', que no tiene encabezado');
+    lineas.push('  ' + h.hoja + ': sobra (idéntico a "' + nombreVieja + '" en ' + filas + ' renglones)' +
+      (cfg.escribir ? ', columna ' + posGuardada + ' BORRADA' : ''));
+    if (cfg.escribir) sheet.deleteColumn(posGuardada);
+    quitadas++;
+  });
+
+  lineas.push('', quitadas + ' hojas con respaldo de más.');
+  if (!cfg.escribir && quitadas) lineas.push('Para borrarlas, corre: migracionLimpiarRespaldoEscribir');
   const texto = lineas.join('\n');
   Logger.log(texto);
   return texto;
@@ -366,17 +591,19 @@ function auditarIds(opciones) {
   const lineas = ['AUDITORÍA — ' + ssId, ''];
   const fallas = [];
 
-  MIGRACION_HOJAS.forEach((h) => {
+  Entidades.migrables().forEach((h) => {
     const sheet = ss.getSheetByName(h.hoja);
     if (!sheet) return;
     const filas = migFilas_(sheet);
     if (!filas) return;
     const enc = migEncabezados_(sheet);
-    const pos = migColumna_(enc, COL_ID);
-    if (!pos) { fallas.push(h.hoja + ': no tiene columna ' + COL_ID); return; }
+    const pos = migColumna_(enc, Entidades.COLUMNA_ID);
+    if (!pos) { fallas.push(h.hoja + ': no tiene columna ' + Entidades.COLUMNA_ID); return; }
 
     const ids = migLeerColumna_(sheet, pos, filas);
-    const vacios = ids.filter((v) => !v).length;
+    const enBlanco = migFilasVacias_(sheet, filas);
+    // Un renglón en blanco sin ID está bien; uno CON datos y sin ID, no
+    const vacios = ids.filter((v, i) => !v && !enBlanco[i]).length;
     const malos = ids.filter((v) => v && !Ids.tieneForma(v)).length;
     const ajenos = ids.filter((v) => v && Ids.tieneForma(v) && Ids.prefijo(v) !== h.prefijo).length;
     const vistos = {};
@@ -385,7 +612,7 @@ function auditarIds(opciones) {
     let desordenados = 0;
     for (let i = 1; i < ids.length; i++) if (ids[i] && ids[i - 1] && ids[i] < ids[i - 1]) desordenados++;
 
-    if (vacios) fallas.push(h.hoja + ': ' + vacios + ' renglones sin ID');
+    if (vacios) fallas.push(h.hoja + ': ' + vacios + ' renglones CON DATOS y sin ID');
     if (malos) fallas.push(h.hoja + ': ' + malos + ' IDs con forma inválida');
     if (ajenos) fallas.push(h.hoja + ': ' + ajenos + ' IDs con el prefijo de otra hoja');
     if (repetidos) fallas.push(h.hoja + ': ' + repetidos + ' IDs repetidos');

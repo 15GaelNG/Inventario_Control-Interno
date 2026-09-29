@@ -327,7 +327,7 @@ const LineasRegistros = (function () {
     const r = resolver_(elementos, baseNueva_(), enviados, ctx);
     if (r.errores.length) throw new Error(r.errores.slice(0, 8).join(' · '));
     const valores = homologarNuco_(aHoja_(elementos, r.valores));
-    const id = LineasDatos.nuevoIdCorto();
+    const id = Ids.nuevo(Entidades.prefijo(LineasRepo.TAB.LINEAS));
     const ahora = new Date();
     valores.ID = id;
     valores['FECHA REGISTRO'] = ahora;

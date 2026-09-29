@@ -109,7 +109,7 @@ tiempo del renglón i  =  i           // i = 0, 1, 2, … en el orden de la hoja
                                      // o sea 1 milisegundo por renglón desde 2020-01-01
 ```
 
-- La hoja más grande son 20,000 renglones = **20 segundos** de ventana. Cabe de sobra.
+- La hoja más grande son 35,538 renglones = **36 segundos** de ventana. Cabe de sobra.
 - Ordenan correctamente entre ellos, en el orden de la hoja.
 - Ordenan **antes** que todos los nuevos, que arrancan en la fecha real de la migración.
 - Un timestamp de **2020-01-01** es obviamente no real, así que nadie se confunde.
@@ -134,11 +134,22 @@ Esto **no invalida el método**, porque con el bloque reservado no estamos afirm
 es la fecha de creación" sino "este es el orden de la hoja", que es cierto por
 construcción. El riesgo desaparece al dejar de prometer algo que no sabemos.
 
-### 2.4 El valor viejo se conserva
+### 2.4 El valor viejo se conserva, pero solo donde haría falta
 
-El ID que tenía cada renglón se copia a una columna nueva **`ID APPSHEET`**, para que
-cualquier PDF o reporte impreso que lo cite se siga pudiendo encontrar. Se borra cuando ya
-nadie lo busque.
+El ID viejo nunca se pierde, para que cualquier PDF o reporte impreso que lo cite se siga
+pudiendo encontrar. Pero **no siempre hay que copiarlo a ningún lado**:
+
+- **8 hojas** tienen su columna original llamada literalmente `ID`: `LINEAS TELEFONICAS`,
+  `INSPECCIONES LINEAS`, `RESPONSIVAS LINEAS`, `REACTIVACION DE LINEAS`,
+  `SOLICITUD DE LINEAS`, `INCREMENTOS`, `UBER` y `TICKETS`. Ahí el ID nuevo **pisa** la
+  columna, así que el valor viejo se respalda antes en **`ID APPSHEET`**.
+- **Las otras 15** tienen la suya con otro nombre (`ID_VEHICULO`, `ID_SENSOR`, `ID CCH`,
+  `No EMPLEADO`…). Esa columna **no se toca**: el `ID` nuevo se crea aparte, al final. Ahí
+  un `ID APPSHEET` guardaría dos veces lo mismo, así que no se crea.
+
+> Una versión anterior lo creaba en las 23 hojas. Si ya corriste esa, `limpiarRespaldoRedundante()`
+> quita las que sobran — y solo borra la columna después de comprobar renglón por renglón
+> que el valor sigue existiendo igualito en su columna original.
 
 ---
 
@@ -161,7 +172,7 @@ Una hoja de registros = un prefijo. Las vistas no llevan prefijo propio.
 | `RESPONSIVAS LINEAS` | `RLI` | `ID` | 899 |
 | `REACTIVACION DE LINEAS` | `REA` | `ID` | 359 |
 | `SOLICITUD DE LINEAS` | `SOL` | `ID` | 229 |
-| `CAMBIOS LINEAS TELEFONICAS` | `CLI` | **columna A, sin encabezado** | 19,999 |
+| `CAMBIOS LINEAS TELEFONICAS` | `CLI` | **columna A, sin encabezado** | 35,538 |
 | `BITACORA DE DESECHO` | `DES` | `ID_DESECHO` | 234 |
 | `ACCESORIOS CELULARES` | `ACC` | `ID_Accesorio` | 65 |
 | `MOVIMIENTOS_ACCESORIOS` | `MAC` | `ID_Movimiento` | 269 |
@@ -220,7 +231,40 @@ normalizar(v) = String(v).trim().toUpperCase()
 Y si no hay coincidencia directa, se reintenta rellenando con ceros a la izquierda hasta 8,
 que es lo que recupera el `01092110` que Sheets convirtió en `1092110`.
 
-### 4.3 Lo que NO se une por ID
+### 4.3 Punteros vivos contra fotos del pasado
+
+El módulo de Líneas guarda dos pestañas propias, `APP_EVIDENCIAS` y `APP_MOVIMIENTOS`, que
+**no vienen de AppSheet**: las crea el sistema nuevo. Solo existen en la copia de pruebas;
+en producción no hay ninguna `APP_*`.
+
+Traen IDs en columnas de dos naturalezas distintas, y **se tratan al revés una de otra**:
+
+| Columna | Hoja | Qué es | Se migra |
+|---|---|---|---|
+| `ID_REGISTRO` | `APP_EVIDENCIAS` | Puntero a la inspección o responsiva. Se busca con `buscarFilas` en 4 lugares | **Sí** |
+| `ID_LINEA` | `APP_EVIDENCIAS` | Puntero a la línea. Se busca con `buscarFilas` | **Sí** |
+| `REFS` | `APP_MOVIMIENTOS` | Lista de IDs entre comas (`,id1,id2,`). Se busca por subcadena `,id,` | **Sí**, partiendo por comas |
+| `ANTES_JSON` | `APP_MOVIMIENTOS` | Foto de cómo estaba el registro | **No** |
+| `DESPUES_JSON` | `APP_MOVIMIENTOS` | Foto de cómo quedó | **No** |
+| `DETALLE_JSON` | `APP_MOVIMIENTOS` | Qué cambió (`idsCambios`, `responsivaId`) | **No** |
+
+**Por qué los JSON no se tocan.** Son un snapshot: registran cómo se veía la información en
+un momento. Un JSON que dice `"id":"5c7e9e2a"` está afirmando algo que **era cierto
+entonces**. Cambiarle el ID haría que el historial afirmara algo que nunca pasó, y el
+usuario vería un identificador que no existía en esa fecha. Además no se usan para buscar:
+se leen en un solo lugar (`LineasRepo`, al armar el historial) y solo para mostrarlos.
+
+Para saltar del historial al registro de hoy está la columna `ID_ANTERIOR` que ya existe en
+`APP_EVIDENCIAS`. Ese es el puente, no falsificar la foto.
+
+### 4.4 IDs que no viven en ninguna hoja
+
+`LineasRepo` fabrica identificadores `drive_<carpetaId>` para las inspecciones que solo
+existen en la carpeta de Drive de NUCOS, sin renglón en ninguna hoja. **Nunca pasan por
+`Ids`**: ni el generador, ni el activador, ni la validación de forma. El código ya los
+distingue con `/^drive_/`.
+
+### 4.5 Lo que NO se une por ID
 
 - **`NUCO` / `NUCCO`** es la parte numérica del `FOLIO`: un dato derivado, no una llave.
   Nada se une por ahí. (Medido: Inspección 298/298, Vehículos 645/652, Líneas 1504/1615 —
@@ -251,13 +295,61 @@ Por cada hoja, en el orden de la tabla de la sección 3:
 1. Si no existe la columna `ID`, se agrega **al final**.
 2. Si no existe `ID APPSHEET`, se agrega al final.
 3. Se lee la columna de ID de hoy (sección 3) completa, **en el orden de la hoja**.
-4. Por cada renglón `i`: `ID = prefijo + '-' + base32(i, 8) + base32(azar, 6)`
-5. Se copia el valor viejo a `ID APPSHEET`.
-6. Se escribe todo con **una sola** llamada por columna (`setValues` sobre el rango
+4. Se detectan los **renglones en blanco** (ver abajo) y se saltan.
+5. Por cada renglón `i` con datos: `ID = prefijo + '-' + base32(i, 8) + base32(azar, 6)`
+6. Se copia el valor viejo a `ID APPSHEET`.
+7. Se escribe todo con **una sola** llamada por columna (`setValues` sobre el rango
    completo), no renglón por renglón.
-7. Se verifica que no haya repetidos antes de escribir. Si hay, **aborta** sin escribir.
+8. Se verifica que no haya repetidos antes de escribir. Si hay, **aborta** sin escribir.
 
 Todavía nadie lee la columna `ID`: este paso es seguro y repetible.
+
+#### Se puede volver a correr sin miedo
+
+Apps Script corta la ejecución a los minutos, y con 23 hojas (una de 35,538 renglones) es
+probable que se interrumpa a la mitad. Por eso:
+
+- **Una hoja ya migrada se salta.** Se considera migrada si todos sus renglones con datos
+  traen un ID con la forma correcta y el prefijo de esa hoja. La segunda corrida sigue
+  donde se quedó.
+- **`ID APPSHEET` nunca se pisa si ya trae datos.** Es el único valor irrecuperable. Y hay
+  una trampa concreta: en las hojas cuya columna original se llama `ID` (Líneas, Uber,
+  Tickets, Reactivación, Solicitud, Incrementos), la primera corrida la sobrescribe con el
+  ID nuevo. Si la segunda volviera a leer de ahí, copiaría los IDs **nuevos** encima de
+  `ID APPSHEET` y borraría los originales para siempre. Por eso, cuando `ID APPSHEET` ya
+  tiene datos, **esa** es la fuente de la verdad, no la columna original.
+- **Se escribe en orden y con `flush()`**: primero `ID APPSHEET`, se fuerza el guardado, y
+  hasta entonces se pisa la columna original.
+- **Se detiene sola a los 4.5 minutos** y dice en qué hoja se quedó y cuáles faltan.
+
+Con `{ rehacer: true }` vuelve a generar el ID aunque la hoja ya esté migrada; el valor
+viejo se sigue respetando porque se lee de `ID APPSHEET`.
+
+El paso 3 tiene la misma protección: una referencia que ya trae un ID con la forma nueva se
+deja como está y no cuenta como huérfana.
+
+#### Los renglones en blanco NO reciben ID
+
+`getLastRow()` cuenta renglones vacíos que quedaron dentro del rango usado de la hoja. En
+la copia de pruebas son **147**, y no están al final sino repartidos:
+
+| Hoja | En blanco | De un total de |
+|---|---|---|
+| `LINEAS TELEFONICAS` | 101 | 1,716 |
+| `RESPONSIVAS LINEAS` | 29 | 771 |
+| `INSPECCIONES LINEAS` | 5 | 1,436 |
+| `INSPECCION VEHICULAR` | 4 | 302 |
+| `REACTIVACION DE LINEAS` | 3 | 324 |
+| `ACCESORIOS CELULARES` | 3 | 65 |
+| `HOLOGRAMAS` | 1 | 256 |
+| `MOVIMIENTOS_ACCESORIOS` | 1 | 228 |
+
+Ponerles ID los convertiría en **147 registros fantasma con llave propia** — 101 líneas
+telefónicas que de pronto parecen reales. Se detectan leyendo la hoja completa una vez y
+comprobando que **todas** sus celdas estén vacías, y se dejan intactos.
+
+Un renglón **con datos pero sin ID** es distinto: ese sí es un problema y
+`revisarAntesDeMigrar()` lo reporta como tal. En la copia de pruebas no hay ninguno.
 
 ### Paso 3 — Reescribir las referencias (`reescribirReferencias`)
 
@@ -303,3 +395,79 @@ Después del paso 3, en cada referencia:
 - Cada valor no huérfano existe en la columna `ID` del padre.
 - El número de huérfanos coincide con lo reportado (7 conocidas hoy, más las 228 de
   `CAMBIOS VEHICULOS` si se decide migrar esa bitácora).
+
+---
+
+## 8. De dónde nacen los IDs de aquí en adelante
+
+La migración le pone ID a lo que ya existe. Esta sección es lo otro: cómo lo recibe cada
+registro nuevo, desde el día uno.
+
+### 8.1 Por dónde entra un renglón a una hoja
+
+| Camino | Quién lo hace | Cómo recibe su ID |
+|---|---|---|
+| La web app | `SheetUtils.insert` (15 servicios) y `LineasDatos.agregarFilas` (Líneas) | Al escribir, con `Ids.nuevo()` |
+| AppSheet, mientras viva | Escribe directo en la hoja | Llega **sin** ID → lo pone el activador |
+| Alguien editando el Sheet a mano | — | Llega **sin** ID → lo pone el activador |
+
+Los dos primeros caminos son los únicos que escriben desde nuestro código: **solo hay dos
+funciones que agregan renglones**. Los demás servicios les pasan el objeto y ya. Por eso la
+generación se arregla en dos lugares y no en los diecisiete que la calculan hoy por su
+cuenta.
+
+### 8.2 La regla de `SheetUtils.insert`
+
+```
+si el objeto ya trae ID            → se respeta
+si la hoja no tiene columna ID     → no se hace nada (p. ej. USUARIOS)
+si la hoja tiene columna ID:
+    está en Entidades              → ID = Ids.nuevo(prefijo)
+    no está en Entidades           → TRUENA
+```
+
+Las dos primeras condiciones importan:
+
+- **"Si ya trae ID, se respeta"** no es una cortesía: hay casos donde el ID hace falta
+  *antes* de escribir. `InspeccionesService` lo necesita para nombrar las imágenes con la
+  convención de AppSheet (`INSPECCION VEHICULAR_Images/<id>.<COLUMNA>.<hora>.png`), y
+  `LineasCaptura` arma el formulario alrededor de un `idPropuesto`. Esos llaman
+  `Ids.nuevo()` ellos mismos y lo pasan.
+- **"Si no tiene columna ID, no se hace nada"** evita romper `USUARIOS`, que se da de alta
+  con `SheetUtils.insert` y no está en el catálogo porque no guarda registros con ID. Si la
+  regla fuera "hoja desconocida truena" a secas, dar de alta un usuario dejaría de
+  funcionar.
+
+### 8.3 El activador
+
+Por tiempo, no `onEdit`: **`onEdit` no se dispara ni con las escrituras de AppSheet ni con
+las de Apps Script**, así que se perderían renglones sin avisar (la misma razón por la que
+se descartó en [relaciones.md](relaciones.md)).
+
+Recorre las hojas de `Entidades`, busca renglones con datos y sin `ID`, y se los pone con
+`Ids.nuevo()` — con la hora real del momento en que los encuentra, no la del bloque de
+legado. El margen de unos minutos es honesto; decir "no sé" cuando sí sabemos
+aproximadamente sería peor.
+
+Sigue haciendo falta después de apagar AppSheet, porque la gente edita las hojas a mano.
+
+### 8.4 La columna vieja durante la transición
+
+En las 15 hojas donde el ID nuevo no pisa nada, después de migrar conviven las dos
+columnas: la de siempre (`ID_VEHICULO`, `ID_SENSOR`…) y la nueva `ID`.
+
+**Mientras AppSheet viva hay que llenar las dos.** La vieja es su llave: si le llega vacía,
+no puede trabajar ese renglón. Al apagarlo, esa columna se puede tirar.
+
+### 8.5 Lo que esto arregla de paso
+
+`CajasChicasService.generarIdCch_` hace "el máximo que exista, más uno". Dos altas
+simultáneas leen el mismo máximo y producen el mismo número. Es una carrera real, hoy sin
+consecuencias solo porque casi nadie da de alta cajas chicas al mismo tiempo. Con
+`Ids.nuevo()` esa clase de error desaparece sin necesidad de candados.
+
+### 8.6 Los tres IDs compuestos no se van
+
+`InspeccionesService.nuevoId_` (`2026_451_1`), `ArqueosService.generarIdArqueo_`
+(`2026_225_001`) y `generarIdCch_` (1, 2, 3) siguen generando, pero llenando la **llave de
+negocio** — `FOLIO INSPECCION`, `FOLIO ARQUEO`, `ID CCH` — no la columna `ID`.

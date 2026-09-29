@@ -134,11 +134,11 @@ existieron jamás* — el problema del cumpleaños. Con 8 hexadecimales:
 
 | Registros en la tabla | Probabilidad de al menos una colisión |
 |---|---|
-| 2,000 (Tickets) | 0.05 % |
-| 20,000 (Cambios Líneas, **hoy**) | **4.6 %** |
+| 2,062 (Tickets) | 0.05 % |
+| 35,538 (Cambios Líneas, **hoy**) | **13.7 %** |
 | 50,000 (esa misma, en unos años) | **25 %** |
 
-`CAMBIOS LINEAS TELEFONICAS` ya trae ~20,000 renglones y es una bitácora: crece un renglón
+`CAMBIOS LINEAS TELEFONICAS` ya trae 35,538 renglones y es una bitácora: crece un renglón
 por cada campo que alguien modifica, sin techo.
 
 Con el tiempo adentro, dos registros solo pueden chocar si se crearon **en el mismo
@@ -148,7 +148,7 @@ por personas es uno. La probabilidad deja de crecer con el tamaño de la tabla.
 
 De regalo: como el tiempo va al inicio y con ancho fijo, **ordenar alfabéticamente es
 ordenar por fecha de creación**, sin depender de una columna de fecha. Útil justo en las
-tablas que más crecen (`CAMBIOS VEHICULOS` 9,214, `CAMBIOS LINEAS` ~20,000, Tickets 2,060).
+tablas que más crecen (`CAMBIOS VEHICULOS` 9,214, `CAMBIOS LINEAS` 35,538, Tickets 2,062).
 
 ### El ID se genera solo en el servidor
 
@@ -297,7 +297,7 @@ Los registros viejos **no reciben una fecha que parezca real**. Si a uno se le p
 marzo de 2024, `Ids.fecha()` devolvería esa fecha con total confianza y estaría mintiendo.
 
 En vez de eso van a un bloque al inicio de la época: **1 milisegundo por renglón desde
-2020-01-01**. La hoja más grande son 20,000 renglones, o sea 20 segundos. Ordenan entre
+2020-01-01**. La hoja más grande son 35,538 renglones, o sea 36 segundos. Ordenan entre
 ellos en el orden de la hoja, ordenan antes que todos los nuevos, y un timestamp de 2020 es
 obviamente no real. `Ids.fecha()` devuelve `null` para ellos: es la diferencia entre "no sé
 cuándo se creó" y una mentira con cara de dato.
