@@ -717,11 +717,16 @@
     border: 1px solid var(--color-border); border-left: 4px solid var(--color-border);
     border-radius: var(--radius); box-shadow: var(--shadow-lg);
     padding: 13px 16px; min-width: 260px; max-width: 380px;
-    pointer-events: auto; font-size: 13px; font-weight: 500;
+    pointer-events: none; font-size: 13px; font-weight: 500;
     transform: translateX(30px); opacity: 0;
     transition: transform .25s ease, opacity .25s ease;
   }
-  .toast.show { transform: translateX(0); opacity: 1; }
+  /* pointer-events solo mientras se ve — el div del aviso NUNCA se quita del
+     DOM (queda "escondido" nomás con opacity:0), y este rincón (arriba a la
+     derecha) es el mismo donde vive "Cerrar sesión": sin esto, un aviso ya
+     desvanecido se quedaba atrapando el clic invisible, como si el botón de
+     cerrar sesión estuviera congelado. */
+  .toast.show { transform: translateX(0); opacity: 1; pointer-events: auto; }
   .toast-icon { flex-shrink: 0; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; }
   .toast-mensaje { flex: 1; line-height: 1.4; }
   .toast-exito { border-left-color: var(--color-success); }
