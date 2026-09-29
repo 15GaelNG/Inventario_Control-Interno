@@ -2205,23 +2205,39 @@
     // ---------- Captura de verificación/sensor/holograma/incidencia desde la ficha ----------
     // Mismo "formato de captura" que Líneas Telefónicas (ln-captura-*): un modal con ícono,
     // tipo, título y cuerpo scrollable. El folio ya se sabe (es el de la ficha abierta), así
-    // que aquí no hay paso de "buscar vehículo" como en el formulario propio de cada módulo.
-    function abrirCapturaVehiculo(icono, tipo, titulo, subtitulo) {
+    // que aquí no hay paso de "buscar vehículo" como en el formulario propio de cada módulo —
+    // en su lugar, un resumen fijo arriba (resumenVehiculoCaptura) para confirmar la unidad.
+    function resumenVehiculoCaptura(completo) {
+      const datos = [
+        ['Placa', completo['PLACA']],
+        ['Marca / Línea', [completo['MARCA'], completo['LINEA VEHICULO']].filter(Boolean).join(' · ')],
+        ['Año', completo['MODELO']],
+        ['Departamento', completo['DEPARTAMENTO']],
+        ['Responsable', completo['RESPONSABLE VEHICULO']],
+        ['Estatus', completo['ESTATUS']],
+      ].filter((d) => d[1]);
+      return '<div class="info-grid" style="margin-bottom:16px">' + datos.map((d) => itemInfo(d[0], d[1])).join('') + '</div>';
+    }
+    /** Devuelve el contenedor donde va el formulario (NO el cuerpo completo: el resumen del
+     *  vehículo, si viene "completo", queda arriba y no se debe borrar al mostrar "Cargando…"). */
+    function abrirCapturaVehiculo(icono, tipo, titulo, subtitulo, completo) {
       document.getElementById('veh-captura-icono').innerHTML = Iconos.svg(icono);
       document.getElementById('veh-captura-tipo').textContent = tipo;
       document.getElementById('veh-captura-titulo').textContent = titulo;
       document.getElementById('veh-captura-subtitulo').textContent = subtitulo || '';
-      document.getElementById('veh-captura-cuerpo').innerHTML = '';
+      const cuerpo = document.getElementById('veh-captura-cuerpo');
+      cuerpo.innerHTML = (completo ? resumenVehiculoCaptura(completo) : '') + '<div id="veh-captura-form"></div>';
       document.getElementById('veh-modal-captura').hidden = false;
-      return document.getElementById('veh-captura-cuerpo');
+      refreshIcons();
+      return document.getElementById('veh-captura-form');
     }
     function cerrarCapturaVehiculo() {
       document.getElementById('veh-modal-captura').hidden = true;
       document.getElementById('veh-captura-cuerpo').innerHTML = '';
     }
 
-    function abrirAgregarVerificacion(vResumen) {
-      const cuerpo = abrirCapturaVehiculo('clipboard-check', 'VERIFICACIÓN', 'Nueva verificación', 'Folio ' + vResumen.FOLIO);
+    function abrirAgregarVerificacion(vResumen, completo) {
+      const cuerpo = abrirCapturaVehiculo('clipboard-check', 'VERIFICACIÓN', 'Nueva verificación', 'Folio ' + vResumen.FOLIO, completo);
       Formulario.crear(cuerpo, {
         ancho: 'uno',
         campos: [
@@ -2245,7 +2261,7 @@
     }
 
     function abrirAgregarIncidencia(vResumen, completo) {
-      const cuerpo = abrirCapturaVehiculo('wrench', 'INCIDENCIA', 'Nueva incidencia', 'Folio ' + vResumen.FOLIO);
+      const cuerpo = abrirCapturaVehiculo('wrench', 'INCIDENCIA', 'Nueva incidencia', 'Folio ' + vResumen.FOLIO, completo);
       Formulario.crear(cuerpo, {
         ancho: 'uno',
         campos: [
@@ -2269,7 +2285,7 @@
     }
 
     async function abrirAgregarSensor(vResumen, completo) {
-      const cuerpo = abrirCapturaVehiculo('radio', 'SENSOR', 'Instalar sensor', 'Folio ' + vResumen.FOLIO);
+      const cuerpo = abrirCapturaVehiculo('radio', 'SENSOR', 'Instalar sensor', 'Folio ' + vResumen.FOLIO, completo);
       cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
       let datos;
       try {
@@ -2280,15 +2296,14 @@
       }
       if (document.getElementById('veh-modal-captura').hidden) return; // se cerró mientras cargaba
       cuerpo.innerHTML = '';
-      Formulario.crear(cuerpo, {
+      const form = Formulario.crear(cuerpo, {
         ancho: 'uno',
         campos: [
           { id: 'SERIE_SENSOR', etiqueta: 'Serie del sensor', requerido: true, mayusculas: true,
             ayuda: 'La que trae la etiqueta del equipo, ej. G9HT5CEWRJV7', valor: datos.serieSensorSugerida || '' },
-          { id: 'COMBUSTIBLE', etiqueta: 'Combustible que carga', tipo: 'lista', requerido: true,
-            opciones: datos.combustibles, valor: datos.combustibles.length === 1 ? datos.combustibles[0] : '' },
+          { id: 'COMBUSTIBLE', etiqueta: 'Combustible que carga', tipo: 'lista', requerido: true, opciones: datos.combustibles },
           { id: 'FECHA_INSTALACION', etiqueta: 'Fecha de instalación', tipo: 'fecha', requerido: true, valor: hoyLocal() },
-          { id: 'ESTATUS', etiqueta: 'Estatus del sensor', tipo: 'lista', opciones: ['ACTIVO', 'BAJA'], valor: 'ACTIVO' },
+          { id: 'ESTATUS', etiqueta: 'Estatus del sensor', tipo: 'lista', opciones: ['ACTIVO', 'BAJA'] },
           { id: 'RESPONSIVA', etiqueta: 'Responsiva del sensor', tipo: 'archivo', acepta: 'application/pdf',
             maxMB: 10, requerido: true, ayuda: 'PDF firmado, máximo 10 MB' },
           { id: 'RENDIMIENTO', etiqueta: 'Rendimiento (km/L)', tipo: 'numero', min: 0, paso: 0.01 },
@@ -2304,6 +2319,10 @@
         textoExito: () => 'Instalación registrada',
         alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'sensor'); },
       });
+      // tipo:'lista' no toma su "valor" inicial de cfg.campos (ver formulario.html) — el
+      // default de un <select> se fija así, con setOpciones (mismo patrón que usa Sensores).
+      form.setOpciones('COMBUSTIBLE', datos.combustibles, datos.combustibles.length === 1 ? datos.combustibles[0] : '');
+      form.setOpciones('ESTATUS', ['ACTIVO', 'BAJA'], 'ACTIVO');
       if (datos.sensoresActivos && datos.sensoresActivos.length) {
         Notificar.info('Esta unidad ya tiene un sensor activo: ' + datos.sensoresActivos.join(', '), { duracion: 6000 });
       }
@@ -2313,14 +2332,14 @@
     const COMBUSTIBLES_HOLOGRAMA = ['MAGNA', 'PREMIUM', 'DIESEL', 'GASOLINA', 'TODOS LOS PRODUCTOS'];
 
     function abrirAgregarHolograma(vResumen, completo) {
-      const cuerpo = abrirCapturaVehiculo('credit-card', 'HOLOGRAMA', 'Nuevo holograma', 'Folio ' + vResumen.FOLIO);
-      Formulario.crear(cuerpo, {
+      const cuerpo = abrirCapturaVehiculo('credit-card', 'HOLOGRAMA', 'Nuevo holograma', 'Folio ' + vResumen.FOLIO, completo);
+      const form = Formulario.crear(cuerpo, {
         ancho: 'uno',
         campos: [
           { id: 'PROVEEDOR', etiqueta: 'Proveedor', tipo: 'lista', requerido: true, opciones: PROVEEDORES_HOLOGRAMA },
           { id: 'CALCOMANIA', etiqueta: 'Calcomanía', requerido: true, mayusculas: true,
             ayuda: 'El código impreso en la calcomanía; no se puede repetir' },
-          { id: 'ESTATUS_EOX', etiqueta: 'Estatus', tipo: 'lista', requerido: true, opciones: ['HABILITADO', 'DESHABILITADO'], valor: 'HABILITADO' },
+          { id: 'ESTATUS_EOX', etiqueta: 'Estatus', tipo: 'lista', requerido: true, opciones: ['HABILITADO', 'DESHABILITADO'] },
           { id: 'COMBUSTIBLE', etiqueta: 'Producto autorizado', tipo: 'lista', requerido: true, opciones: COMBUSTIBLES_HOLOGRAMA,
             ayuda: 'Lo que puede cargar la tarjeta, no el tipo del vehículo' },
           { id: 'AUTORIZADO_PESOS', etiqueta: 'Autorizado en pesos', tipo: 'numero', min: 0, requerido: true },
@@ -2344,14 +2363,15 @@
         textoExito: () => 'Holograma registrado',
         alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'hologramas'); },
       });
+      form.setOpciones('ESTATUS_EOX', ['HABILITADO', 'DESHABILITADO'], 'HABILITADO');
     }
 
     /** A diferencia de las otras 4, esto reutiliza el wizard REAL de Inspección Vehicular
      *  (checklist dinámico, diagramas y firmas) — prepararCaptura ya acepta un contenedor
      *  cualquiera (ver modulos/inspecciones.html), así que aquí solo se le da el cuerpo del
      *  modal, el folio (ya lo sabemos) y qué hacer al guardar en vez de "listo para el siguiente". */
-    function abrirAgregarInspeccion(vResumen) {
-      const cuerpo = abrirCapturaVehiculo('clipboard-list', 'INSPECCIÓN', 'Nueva inspección', 'Folio ' + vResumen.FOLIO);
+    function abrirAgregarInspeccion(vResumen, completo) {
+      const cuerpo = abrirCapturaVehiculo('clipboard-list', 'INSPECCIÓN', 'Nueva inspección', 'Folio ' + vResumen.FOLIO, completo);
       prepararCaptura(cuerpo, {
         folioFijo: vResumen.FOLIO,
         alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'inspecciones'); },
@@ -2536,11 +2556,11 @@
         detalle.querySelectorAll('[data-agregar]').forEach((btn) => {
           btn.addEventListener('click', () => {
             const tipo = btn.dataset.agregar;
-            if (tipo === 'verificacion') abrirAgregarVerificacion(vResumen);
+            if (tipo === 'verificacion') abrirAgregarVerificacion(vResumen, completo);
             else if (tipo === 'sensor') abrirAgregarSensor(vResumen, completo);
             else if (tipo === 'holograma') abrirAgregarHolograma(vResumen, completo);
             else if (tipo === 'incidencia') abrirAgregarIncidencia(vResumen, completo);
-            else if (tipo === 'inspeccion') abrirAgregarInspeccion(vResumen);
+            else if (tipo === 'inspeccion') abrirAgregarInspeccion(vResumen, completo);
           });
         });
         refreshIcons();
