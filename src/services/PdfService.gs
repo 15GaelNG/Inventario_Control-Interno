@@ -275,8 +275,29 @@ const PdfService = (function () {
    */
   function generar(p) {
     if (!p || !p.plantillaId) throw new Error('Falta indicar la plantilla');
-    let carpeta = p.carpetaId ? DriveApp.getFolderById(p.carpetaId) : carpetaReportes_();
-    if (p.subcarpeta) carpeta = subcarpeta_(carpeta, p.subcarpeta);
+    const cuenta = () => Session.getEffectiveUser().getEmail();
+    let carpeta;
+    try {
+      carpeta = p.carpetaId ? DriveApp.getFolderById(p.carpetaId) : carpetaReportes_();
+    } catch (err) {
+      // "Falta configurar ..." (la Script Property ni existe) ya es clarísimo tal cual —
+      // no lo tapamos con el mensaje de "sin acceso", que es un problema distinto.
+      if (/^Falta configurar/.test(err.message)) throw err;
+      throw new Error(
+        'No se pudo abrir la carpeta donde se guarda el PDF. La cuenta con la que corre la app ahora ' +
+        'mismo (' + cuenta() + ') no tiene acceso a esa carpeta de Drive. ' + err.message
+      );
+    }
+    if (p.subcarpeta) {
+      try {
+        carpeta = subcarpeta_(carpeta, p.subcarpeta);
+      } catch (err) {
+        throw new Error(
+          'Se pudo abrir la carpeta de reportes, pero no crear/usar la subcarpeta "' + p.subcarpeta +
+          '". La cuenta ' + cuenta() + ' necesita permiso de editor ahí. ' + err.message
+        );
+      }
+    }
 
     let nombre = p.nombre || ('Documento ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH.mm.ss'));
     // Dos inspecciones de la misma unidad el mismo día: se distingue con la hora, en vez
@@ -320,11 +341,24 @@ const PdfService = (function () {
       if (p.formato) aplicarFormato_(body, p.formato);
       doc.saveAndClose();
 
-      const pdf = carpeta.createFile(DriveApp.getFileById(copia.getId()).getAs('application/pdf'))
-        .setName(nombre + '.pdf');
-      // Sin esto, el PDF solo lo puede ver la cuenta que despliega la app
-      // (quien lo creó) — nadie más puede abrir el link, aunque sea válido.
-      pdf.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
+      let pdf;
+      try {
+        pdf = carpeta.createFile(DriveApp.getFileById(copia.getId()).getAs('application/pdf')).setName(nombre + '.pdf');
+      } catch (err) {
+        throw new Error(
+          'Se armó el documento, pero no se pudo guardar el PDF en la carpeta. La cuenta ' + cuenta() +
+          ' necesita permiso de editor ahí. ' + err.message
+        );
+      }
+      // Mejor esfuerzo, no bloquea: sin esto el PDF solo lo puede ver la cuenta que lo
+      // creó, pero la carpeta de reportes normalmente ya tiene su propio acceso general
+      // (grupo/dominio) y el PDF lo hereda solo. Si una política de Workspace bloquea el
+      // compartir explícito (pasa con cuentas que no son dueñas de la carpeta), no vale
+      // la pena tronar todo el guardado por eso — el PDF ya quedó generado.
+      if (!DriveUtils.compartirLoMasAmplioPosible(pdf)) {
+        console.warn('No se pudo compartir explícitamente el PDF (cuenta ' + cuenta() +
+          '); se deja como quedó por default de la carpeta. Archivo: ' + pdf.getUrl());
+      }
       return {
         url: pdf.getUrl(),
         fileId: pdf.getId(),
