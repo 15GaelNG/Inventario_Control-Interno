@@ -159,8 +159,10 @@ const LineasRegistros = (function () {
         campo_('COMPAÑIA', 'COMPAÑIA', 'listaAbierta', siEditable({ valor: v('COMPAÑIA'), opciones: ['TELCEL', 'AT&T', 'BAIT'], valida: 'MAYUS' })),
         campo_('COSTO PLAN', 'COSTO PLAN', 'numero', { valor: v('COSTO PLAN'), editable: { tipoNoEn: ['EQUIPO'] } }),
         campo_('FECHA REGISTRO', 'FECHA REGISTRO', 'calculado', { valor: v('FECHA REGISTRO'), soloLectura: true }),
-        campo_('INICIO PLAN', 'INICIO PLAN', 'fecha', { valor: v('INICIO PLAN'), mostrar: { nuevo: true }, requerido: { nuevo: true } }),
-        campo_('FIN PLAN', 'FIN PLAN', 'fecha', { valor: v('FIN PLAN'), mostrar: { nuevo: true }, requerido: { nuevo: true } }),
+        // Fechas del adendum: solo se capturan en el alta. Después no se pueden cambiar (pedido del área, 29-sep):
+        // el formulario de edición no las muestra y el servidor ignora lo que llegue (Editable_If solo en el alta).
+        campo_('INICIO PLAN', 'INICIO PLAN', 'fecha', { valor: v('INICIO PLAN'), mostrar: { nuevo: true }, requerido: { nuevo: true }, editable: { nuevo: true } }),
+        campo_('FIN PLAN', 'FIN PLAN', 'fecha', { valor: v('FIN PLAN'), mostrar: { nuevo: true }, requerido: { nuevo: true }, editable: { nuevo: true } }),
         campo_('ESTATUS LINEA', 'ESTATUS LINEA', 'lista', siEditable({ valor: v('ESTATUS LINEA'), opciones: LineasRepo.CATALOGO.estatusLinea, valida: 'MAYUS' })),
         campo_('ESTATUS EQUIPO', 'ESTATUS EQUIPO', 'lista', siEditable({ valor: v('ESTATUS EQUIPO'), opciones: LineasRepo.CATALOGO.estatusEquipo, valida: 'MAYUS' })),
         // RESPONSIVA y FORMATO INSPECCION (archivos) no van: la responsiva y la inspección se consultan en NUCOS
@@ -339,6 +341,7 @@ const LineasRegistros = (function () {
         refs: [id], nuco: valores.NUCO, numero: valores['NUMERO TELEFONO'], antes: {}, despues: valores, detalle: {},
       });
     });
+    LineasNotificaciones.revisarPronto(); // si el adendum ya vence esta semana, el aviso sale en la siguiente consulta
     return { id: id, filas: LineasRepo.refrescarIndice([id]) };
   }
 

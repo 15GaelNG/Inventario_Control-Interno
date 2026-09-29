@@ -151,6 +151,46 @@ y capturar responsivas e inspecciones.
   franja deslizable; inventario en tarjetas por defecto (si no hay preferencia guardada) y más compactas;
   botones de la ficha en rejilla de 2; opciones del checklist más grandes para el dedo.
 
+## 0m. Fechas del adendum bloqueadas y notificaciones (2026-09-29)
+
+Pedido del área: la fecha de fin de adendum solo se captura al registrar la línea, y una semana antes de que venza
+el sistema avisa (más adelante también por correo).
+
+- **Bloqueo.** INICIO PLAN y FIN PLAN solo se capturan en el alta. En el AppSheet ya solo se mostraban en el alta,
+  pero el servidor aceptaba un valor en la edición. Ahora también llevan `editable: { nuevo: true }` y el servidor
+  ignora lo que llegue al editar. El bot de la inspección no las toca.
+- **Renovación: pendiente.** Hay que confirmar con el área si al vencer el adendum se renueva y si se conserva el
+  número. Todo indica que sí: en la conciliación 19 de 302 líneas de GPH cambiaron su fin de plazo de julio a agosto
+  con el mismo número; el inventario del 29-sep tiene 282 líneas activas con el adendum vencido; y el catálogo de
+  ESTATUS LINEA trae RENOVADA. Si se confirma, la opción "Renovar adendum" será el único camino para cambiar las
+  fechas (con bitácora CAMBIOS y motivo).
+- **Notificaciones** (`services/lineas/LineasNotificaciones.gs`, pestaña `APP_NOTIFICACIONES`):
+  - Regla. Se avisa de una línea cuando le faltan 7 días o menos para el FIN PLAN. Se omiten:
+    - las de ESTATUS LINEA CANCELADA, SIN LINEA o EN PROCESO DE CANCELACION;
+    - los TIPO sin adendum: EQUIPO, EQUIPO + SIM BASICO y LINEA BASICA (los SIM básicos no tienen fin de plazo
+      aunque la fila guarde el del plan anterior);
+    - las filas sin número de 10 dígitos;
+    - las fechas que no son fecha, como "00/01/1900" o "N/A".
+  - Una notificación por línea y fecha (`CLAVE` = `ADENDUM|<ID>|<yyyy-MM-dd>`). Si el adendum cambia, sale otra.
+  - Las que ya estaban vencidas al activar los avisos no se notifican: Script Property `LINEAS_NOTIF_ADENDUM_DESDE`
+    (la fecha del primer uso). El área pedirá un histórico de líneas para decidir si se agrega una pestaña de vencidas.
+  - Sin disparador: se revisa al consultar la campana, como mucho cada 30 min (`revisar`). Un alta borra esa marca
+    (`revisarPronto`). Para el correo: un disparador diario que llame a `LineasNotificaciones.revisar(true)` y mande las
+    que no tengan `CORREO_ENVIADO_EN`.
+  - Leídas por persona (`LEIDA_POR` = `,correo,`). La ve cualquier sesión (`TelefoniaService.notificaciones`,
+    `marcarNotificaciones`; `apiLineasNotificaciones(token, limite)`, `apiLineasMarcarNotificaciones(token, ids)`).
+- **Campana y vista** (`html/notificaciones.html`, una línea en `Index.html` y una en `navegarA`):
+  - La campana se inserta sola al inicio de `.topbar-right`, con un contador de no leídas. Muestra las 8 más
+    recientes, "Marcar todas como leídas" y "Ver todas".
+  - Se revisa al entrar, cada 10 min y al volver a la pestaña.
+  - Clic en un aviso: lo marca como leído y abre la ficha (`Lineas.irARegistro`).
+  - La vista `notificaciones` tiene KPIs (sin leer, vencen esta semana, ya vencieron, total), pestañas No leídas /
+    Todas, y "Ver línea" / "Marcar como leída" en cada aviso.
+  - **Al unir con master**: la campana es del shell común; los avisos de otros módulos pueden usar la misma pestaña
+    y la misma vista.
+- Pruebas: `INICIO / FIN PLAN solo se capturan en el alta…` y `Notificaciones: adendum por vencer…` en
+  `tests/source-contracts.test.cjs` (45/45). Falta la prueba en /dev.
+
 ## 0l. Historial de asignaciones número ↔ NUCO (2026-09-29)
 
 Pedido del área: saber qué números tuvo un NUCO (y en qué NUCOs estuvo un número), con fechas y motivo.

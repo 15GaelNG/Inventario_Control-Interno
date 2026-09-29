@@ -505,10 +505,21 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente(LineasCaptura.generarPdf(tipo, id, !!forzar, usuarioOperacion_(sesion), firmas || null));
   }
 
+  /** Notificaciones de la campana (adendum por vencer). Las ve cualquier sesión; cada quien marca las suyas. */
+  function notificaciones(token, limite) {
+    const sesion = Auth.validarSesion(token);
+    return LineasUtil.paraCliente(LineasNotificaciones.bandeja(sesion.correo, Number(limite) || 0));
+  }
+
+  function marcarNotificaciones(token, ids) {
+    const sesion = Auth.validarSesion(token);
+    return LineasNotificaciones.marcarLeidas(sesion.correo, Array.isArray(ids) ? ids : null);
+  }
+
   return {
     permisos, indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, catalogos, colaboradores, bitacora, vistaOperativa, formularioOperativa, crearVistaOperativa, formularioRegistro, recargarDatos,
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf, crearRegistro, editarRegistro,
     cambiarEstatus, fotosInspeccion, exportarBase, archivo, ultimoDocumentoNuco,
-    formularioEdicionOperativa, editarVistaOperativa,
+    formularioEdicionOperativa, editarVistaOperativa, notificaciones, marcarNotificaciones,
   };
 })();

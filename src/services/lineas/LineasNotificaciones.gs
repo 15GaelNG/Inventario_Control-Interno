@@ -1,0 +1,191 @@
+/**
+ * LineasNotificaciones.gs
+ * Avisos del sistema (campana de la barra superior y vista Notificaciones). Hoy: adendum por vencer.
+ *
+ * Regla (pedido del área, 29-sep-2026): una semana antes de que venza el adendum (FIN PLAN) de una línea
+ * activa se crea UNA notificación para esa línea y esa fecha. Las líneas que ya estaban vencidas cuando se
+ * activaron los avisos no se notifican (quedan fuera por LINEAS_NOTIF_ADENDUM_DESDE); más adelante se
+ * decidirá si van en una pestaña aparte con el histórico de líneas.
+ *
+ * Las notificaciones viven en la pestaña APP_NOTIFICACIONES de la hoja de Líneas (AppSheet la ignora):
+ *   CLAVE       "ADENDUM|<ID>|<yyyy-MM-dd>": evita repetir el aviso; si el adendum cambia, sale otro.
+ *   VENCE       fecha de fin del adendum como texto yyyy-MM-dd (sin zona horaria de por medio).
+ *   LEIDA_POR   ",correo1,correo2,": cada persona marca las suyas.
+ *   CORREO_ENVIADO_EN  reservado para el envío por correo (siguiente fase: un disparador diario que llame a
+ *                      revisar(true) y mande las que no tengan fecha aquí).
+ *
+ * No hace falta un disparador para que aparezcan: se revisa al consultar la campana, como mucho cada 30 min.
+ */
+const LineasNotificaciones = (function () {
+  const TAB = 'APP_NOTIFICACIONES';
+  const ENCABEZADOS = ['ID', 'FECHA', 'TIPO', 'CLAVE', 'REF_ID', 'NUCO', 'NUMERO', 'TITULO', 'MENSAJE', 'VENCE', 'LEIDA_POR', 'CORREO_ENVIADO_EN'];
+  const DIAS_AVISO = 7;
+  const PROP_DESDE = 'LINEAS_NOTIF_ADENDUM_DESDE';
+  const CLAVE_REVISION = 'ln_notif_revision_v1';
+  const SEG_REVISION = 30 * 60;
+  /** Estatus en los que la línea ya no corre (no tiene caso avisar su adendum). */
+  const ESTATUS_SIN_LINEA = ['CANCELADA', 'SIN LINEA', 'EN PROCESO DE CANCELACION'];
+  /**
+   * Tipos sin adendum: EQUIPO no tiene línea; los SIM básicos (cuenta AT&T 643495915) se ponen en equipos con el
+   * adendum ya vencido y no tienen fin de plazo, aunque la fila conserve la fecha del plan anterior.
+   */
+  const TIPOS_SIN_ADENDUM = ['EQUIPO', 'EQUIPO + SIM BASICO', 'LINEA BASICA'];
+
+  const txt = (v) => (v === null || v === undefined ? '' : String(v).trim());
+  const zona = () => LineasDatos.ZONA_APP;
+  const dia = (d) => Utilities.formatDate(d, zona(), 'yyyy-MM-dd');
+
+  /** Días entre dos fechas yyyy-MM-dd (b − a). */
+  function diasEntre(a, b) {
+    const utc = (s) => Date.UTC(Number(s.slice(0, 4)), Number(s.slice(5, 7)) - 1, Number(s.slice(8, 10)));
+    return Math.round((utc(b) - utc(a)) / 864e5);
+  }
+
+  /** FIN PLAN como yyyy-MM-dd, o '' si no es una fecha (vacío, "N/A", "00/01/1900", "Fuera de adendum"…). */
+  function diaFinPlan(v) {
+    if (v instanceof Date) {
+      if (isNaN(v.getTime()) || v.getFullYear() < 2000) return '';
+      return dia(v);
+    }
+    const s = txt(v);
+    let m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+    if (m) return Number(m[1]) < 2000 ? '' : m[1] + '-' + m[2] + '-' + m[3];
+    m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
+    if (m) return Number(m[3]) < 2000 ? '' : m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+    return '';
+  }
+
+  /** Fecha desde la que se avisa (la primera vez que corre: hoy). Lo vencido antes de esa fecha no se notifica. */
+  function desde_(hoy) {
+    const props = PropertiesService.getScriptProperties();
+    let d = props.getProperty(PROP_DESDE);
+    if (!d) { d = hoy; props.setProperty(PROP_DESDE, d); }
+    return d;
+  }
+
+  /**
+   * Líneas cuyo adendum vence dentro de los próximos DIAS_AVISO días (o ya venció después de `desde`).
+   * filas = filas de LINEAS TELEFONICAS. Regresa [{ clave, refId, nuco, numero, vence, dias, fila }].
+   */
+  function pendientes(filas, hoy, desde) {
+    const salida = [];
+    filas.forEach((f) => {
+      const id = txt(f['ID']);
+      if (!id) return;
+      const tipo = txt(LineasUtil.col(f, 'TIPO')).toUpperCase();
+      if (TIPOS_SIN_ADENDUM.indexOf(tipo) >= 0) return;
+      if (ESTATUS_SIN_LINEA.indexOf(txt(LineasUtil.col(f, 'ESTATUS LINEA')).toUpperCase()) >= 0) return;
+      const numero = txt(LineasUtil.col(f, 'NUMERO TELEFONO'));
+      if ((LineasUtil.digitos(numero) || '').length < 10) return;
+      const vence = diaFinPlan(LineasUtil.col(f, 'FIN PLAN'));
+      if (!vence || vence < desde) return;
+      const dias = diasEntre(hoy, vence);
+      if (dias > DIAS_AVISO) return;
+      salida.push({ clave: 'ADENDUM|' + id + '|' + vence, refId: id, nuco: LineasUtil.nucoVisible(LineasUtil.col(f, 'NUCO')) || '', numero: numero, vence: vence, dias: dias, fila: f });
+    });
+    return salida;
+  }
+
+  function fechaCorta_(ymd) { return ymd.slice(8, 10) + '/' + ymd.slice(5, 7) + '/' + ymd.slice(0, 4); }
+
+  function notificacionAdendum_(p, ahora) {
+    const f = p.fila;
+    const detalle = [
+      p.nuco ? 'NUCO ' + p.nuco : '',
+      txt(LineasUtil.col(f, 'COMPAÑIA')),
+      txt(LineasUtil.col(f, 'RESPONSABLE')) ? 'Responsable: ' + txt(LineasUtil.col(f, 'RESPONSABLE')) : '',
+    ].filter(Boolean).join(' · ');
+    return {
+      'ID': LineasDatos.nuevoIdCorto(), 'FECHA': ahora, 'TIPO': 'ADENDUM', 'CLAVE': p.clave, 'REF_ID': p.refId, 'NUCO': p.nuco,
+      'NUMERO': p.numero,
+      'TITULO': (p.dias < 0 ? 'Adendum vencido · ' : 'Adendum por vencer · ') + p.numero,
+      'MENSAJE': 'El adendum de la línea ' + p.numero + (p.dias < 0 ? ' venció el ' : ' vence el ') + fechaCorta_(p.vence) + '.' + (detalle ? ' ' + detalle + '.' : ''),
+      'VENCE': p.vence, 'LEIDA_POR': ',', 'CORREO_ENVIADO_EN': '',
+    };
+  }
+
+  /**
+   * Crea las notificaciones que falten. Sin `forzar`, como mucho una vez cada SEG_REVISION.
+   * Regresa cuántas se crearon.
+   */
+  function revisar(forzar) {
+    const cache = CacheService.getScriptCache();
+    const ahora = new Date();
+    const hoy = dia(ahora);
+    if (!forzar && cache.get(CLAVE_REVISION) === hoy) return 0;
+    const candidatas = pendientes(LineasDatos.leerTabla(LineasRepo.TAB.LINEAS), hoy, desde_(hoy));
+    let creadas = 0;
+    if (candidatas.length) {
+      creadas = LineasDatos.conCandado(() => {
+        if (!LineasDatos.existeTabla(TAB)) LineasDatos.asegurarPestana(TAB, ENCABEZADOS);
+        const existentes = {};
+        LineasDatos.leerTabla(TAB).forEach((n) => { existentes[txt(n['CLAVE'])] = true; });
+        const nuevas = candidatas.filter((p) => !existentes[p.clave]).map((p) => notificacionAdendum_(p, ahora));
+        LineasDatos.agregarFilas(TAB, nuevas);
+        return nuevas.length;
+      });
+    }
+    cache.put(CLAVE_REVISION, hoy, SEG_REVISION);
+    return creadas;
+  }
+
+  /** Tras un alta: que la siguiente consulta vuelva a revisar sin esperar los 30 min. */
+  function revisarPronto() {
+    try { CacheService.getScriptCache().remove(CLAVE_REVISION); } catch (e) { /* sin caché: revisa al expirar */ }
+  }
+
+  const marcaCorreo_ = (correo) => ',' + String(correo || '').trim().toLowerCase() + ',';
+
+  /**
+   * Notificaciones de la persona: { noLeidas, total, hoy, items: [...] } de la más reciente a la más antigua.
+   * `limite` recorta items (la campana pide pocas; la vista, todas).
+   */
+  function bandeja(correo, limite) {
+    try { revisar(false); } catch (e) { console.warn('LineasNotificaciones.revisar: ' + e.message); }
+    const hoy = dia(new Date());
+    if (!LineasDatos.existeTabla(TAB)) return { noLeidas: 0, total: 0, hoy: hoy, items: [] };
+    const marca = marcaCorreo_(correo);
+    const items = LineasDatos.leerTabla(TAB).map((n) => {
+      const vence = txt(n['VENCE']);
+      return {
+        id: txt(n['ID']), fecha: n['FECHA'] instanceof Date ? n['FECHA'] : null, tipo: txt(n['TIPO']),
+        refId: txt(n['REF_ID']), nuco: txt(n['NUCO']), numero: txt(n['NUMERO']),
+        titulo: txt(n['TITULO']), mensaje: txt(n['MENSAJE']), vence: vence,
+        dias: /^\d{4}-\d{2}-\d{2}$/.test(vence) ? diasEntre(hoy, vence) : null,
+        leida: String(n['LEIDA_POR'] || '').toLowerCase().indexOf(marca) >= 0,
+      };
+    }).sort((a, b) => (b.fecha ? b.fecha.getTime() : 0) - (a.fecha ? a.fecha.getTime() : 0));
+    const noLeidas = items.filter((x) => !x.leida).length;
+    return { noLeidas: noLeidas, total: items.length, hoy: hoy, items: limite ? items.slice(0, limite) : items };
+  }
+
+  /** Marca como leídas para la persona las notificaciones `ids` (o todas si no se pasan). */
+  function marcarLeidas(correo, ids) {
+    if (!LineasDatos.existeTabla(TAB)) return { marcadas: 0 };
+    const marca = marcaCorreo_(correo);
+    const buscar = ids && ids.length ? ids.map(String) : null;
+    return LineasDatos.conCandado(() => {
+      const t = LineasDatos.tablaFresca(TAB);
+      const ultima = t.hoja.getLastRow();
+      if (ultima < 2) return { marcadas: 0 };
+      const cId = LineasDatos.colIndice(t, 'ID');
+      const cLeida = LineasDatos.colIndice(t, 'LEIDA_POR');
+      const idsHoja = t.hoja.getRange(2, cId + 1, ultima - 1, 1).getValues();
+      const rango = t.hoja.getRange(2, cLeida + 1, ultima - 1, 1);
+      const leidas = rango.getValues();
+      let marcadas = 0;
+      idsHoja.forEach((fila, i) => {
+        const id = txt(fila[0]);
+        if (!id || (buscar && buscar.indexOf(id) < 0)) return;
+        const actual = String(leidas[i][0] || ',');
+        if (actual.toLowerCase().indexOf(marca) >= 0) return;
+        leidas[i][0] = (actual.slice(-1) === ',' ? actual : actual + ',') + marca.slice(1);
+        marcadas++;
+      });
+      if (marcadas) rango.setValues(leidas);
+      return { marcadas: marcadas };
+    });
+  }
+
+  return { revisar, revisarPronto, bandeja, marcarLeidas, _pendientes: pendientes, _diaFinPlan: diaFinPlan, DIAS_AVISO };
+})();

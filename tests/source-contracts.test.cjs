@@ -865,3 +865,58 @@ test('Historial: números que ha tenido un NUCO y NUCOs por los que pasó un nú
   assert.match(cliente, /<optgroup label="Historial de asignaciones">/);
   assert.match(cliente, /\['Documentos', \['Inspección', 'Responsiva'\]\]/);
 });
+
+test('INICIO / FIN PLAN solo se capturan en el alta; después no se pueden cambiar (29-sep)', () => {
+  const reg = read('src/services/lineas/LineasRegistros.gs');
+  const LineasUtil = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '; return LineasUtil;')({}, {});
+  const Reg = new Function('LineasRepo', 'CacheService', 'Utilities', 'SpreadsheetApp', 'Config', 'LineasUtil',
+    reg + '; return LineasRegistros;')(
+    { CATALOGO: { tipos: ['EQUIPO + SIM', 'LINEA'], estatusLinea: ['USO'], estatusEquipo: ['USO'] } },
+    { getScriptCache: () => ({ get: () => '', put: () => {} }) },
+    { formatDate: () => '2026-09-29' }, {}, {}, LineasUtil);
+  const ctx = { nuevo: false, nucoRepetido: () => false, telefonoRepetido: () => false };
+  const base = { TIPO: 'LINEA', 'NUMERO TELEFONO': '4420000001', 'INICIO PLAN': '2025-01-01', 'FIN PLAN': '2027-01-01', COMENTARIOS: 'SIN CAMBIOS' };
+  const els = Reg._elementos(base, {}, { correo: 'x@y.z' }, ctx);
+  const r = Reg._resolver(els, base, Object.assign({}, base, { 'INICIO PLAN': '2026-09-01', 'FIN PLAN': '2030-01-01', COMENTARIOS: 'CAMBIO DE PRUEBA' }), ctx);
+  assert.equal(r.valores['FIN PLAN'], '2027-01-01');
+  assert.equal(r.valores['INICIO PLAN'], '2025-01-01');
+  assert.equal(r.valores.COMENTARIOS, 'CAMBIO DE PRUEBA'); // lo demás sí se edita
+  // En el alta sí se toman y son obligatorias
+  const alta = Reg._elementos({}, {}, { correo: 'x@y.z' }, Object.assign({}, ctx, { nuevo: true }));
+  const ra = Reg._resolver(alta, {}, { TIPO: 'LINEA', 'FIN PLAN': '2028-05-01' }, Object.assign({}, ctx, { nuevo: true }));
+  assert.equal(ra.valores['FIN PLAN'], '2028-05-01');
+  assert.ok(ra.errores.some((e) => /^INICIO PLAN es obligatorio/.test(e)));
+});
+
+test('Notificaciones: adendum por vencer una semana antes, sin las ya vencidas ni SIM básicos', () => {
+  const LineasUtil = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '; return LineasUtil;')({ normCol: (c) => String(c).toUpperCase().trim() }, {});
+  const Ntf = new Function('LineasUtil', 'LineasDatos', 'Utilities', read('src/services/lineas/LineasNotificaciones.gs') + '; return LineasNotificaciones;')(
+    LineasUtil, { ZONA_APP: 'America/Mexico_City' },
+    { formatDate: (d) => d.toISOString().slice(0, 10) });
+  const d = (s) => new Date(s + 'T12:00:00Z');
+  const fila = (id, tipo, estatus, fin, numero) => ({ ID: id, TIPO: tipo, 'ESTATUS LINEA': estatus, 'FIN PLAN': fin, 'NUMERO TELEFONO': numero || '44200000' + id.padStart(2, '0'), NUCO: 7 });
+  const filas = [
+    fila('1', 'EQUIPO + SIM', 'USO', d('2026-10-06')),          // vence en 7 días → sí
+    fila('2', 'LINEA', 'RESGUARDO', d('2026-09-30')),           // mañana → sí
+    fila('3', 'EQUIPO + SIM', 'USO', d('2026-10-07')),          // en 8 días → todavía no
+    fila('4', 'EQUIPO + SIM', 'USO', d('2026-08-01')),          // ya vencida antes de activar avisos → no
+    fila('5', 'EQUIPO + SIM BASICO', 'USO', d('2026-10-01')),   // SIM básico: sin adendum → no
+    fila('6', 'LINEA', 'CANCELADA', d('2026-10-01')),           // cancelada → no
+    fila('7', 'EQUIPO', 'SIN LINEA', d('2026-10-01'), 'NO APLICA'), // sin línea → no
+    fila('8', 'MODEM', 'USO', '00/01/1900'),                    // fecha basura → no
+    fila('9', 'LINEA', 'USO', '2026-10-02'),                    // fecha como texto → sí
+  ];
+  const p = Ntf._pendientes(filas, '2026-09-29', '2026-09-29');
+  assert.deepEqual(p.map((x) => [x.refId, x.dias]), [['1', 7], ['2', 1], ['9', 3]]);
+  assert.equal(p[0].clave, 'ADENDUM|1|2026-10-06');
+  assert.equal(p[0].nuco, '0007');
+  // Vencida después de activar los avisos (nadie abrió el sistema esa semana): sí se avisa
+  assert.deepEqual(Ntf._pendientes([fila('4', 'LINEA', 'USO', d('2026-10-01'))], '2026-10-03', '2026-09-29').map((x) => x.dias), [-2]);
+  assert.equal(Ntf.DIAS_AVISO, 7);
+  // Enganches: API, alta que pide revisar, campana en el shell y vista
+  assert.match(read('src/ClientApi.gs'), /function apiLineasNotificaciones\(token, limite\)/);
+  assert.match(read('src/services/lineas/LineasRegistros.gs'), /LineasNotificaciones\.revisarPronto\(\);/);
+  assert.match(read('src/html/Index.html'), /include\('html\/notificaciones'\)/);
+  assert.match(read('src/html/js/app.html'), /montarVista\('tpl-notificaciones', Notificaciones\.initVista\)/);
+  assert.match(read('src/html/js/lineas.html'), /irARegistro: irARegistro/);
+});
