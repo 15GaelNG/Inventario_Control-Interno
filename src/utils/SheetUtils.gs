@@ -111,12 +111,26 @@ const SheetUtils = (function () {
     return null;
   }
 
-  /** Inserta una fila nueva. Si el objeto no trae ID, genera uno (uuid corto). */
+  /**
+   * Inserta una fila nueva y le pone su ID. Es uno de los DOS únicos lugares del sistema
+   * donde nace un ID (el otro es LineasDatos.agregarFilas). Ver docs/ids-asignacion.md.
+   *
+   *   si el objeto ya trae ID         → se respeta
+   *   si la hoja no tiene columna ID  → no se hace nada (p. ej. USUARIOS)
+   *   si la tiene y está en Entidades → ID = Ids.nuevo(prefijo)
+   *   si la tiene y NO está           → truena
+   *
+   * Que se respete un ID que ya viene no es cortesía: hay casos donde hace falta ANTES de
+   * escribir, para nombrar los archivos de Drive con la convención de AppSheet
+   * ("<TABLA>_Images/<id>.<COLUMNA>.<hora>.png"). Esos lo piden con Ids.nuevo() y lo pasan.
+   */
   function insert(spreadsheetId, sheetName, obj) {
     const sheet = getSheet(spreadsheetId, sheetName);
     const headers = getHeaders_(sheet);
     if (indiceDeColumnas(headers, ['ID'])['ID'] !== -1 && !obj.ID) {
-      obj.ID = Utilities.getUuid().slice(0, 8);
+      // Entidades truena si la hoja no está en el catálogo. Es a propósito: generar en
+      // silencio un ID con el formato equivocado es justo de lo que estamos saliendo.
+      obj.ID = Ids.nuevo(Entidades.prefijo(sheetName));
     }
     const row = objectToRow_(headers, obj);
     sheet.appendRow(row);

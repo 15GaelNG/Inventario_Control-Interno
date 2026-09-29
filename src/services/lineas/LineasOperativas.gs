@@ -152,7 +152,7 @@ const LineasOperativas = (function () {
     return LineasDatos.conCandado(() => {
       const ahora = new Date();
       const fila = Object.assign({}, valores, {
-        'ID': LineasDatos.nuevoIdCorto(), 'FECHA DE REGISTRO': ahora, 'QUIEN REGISTRO': usuario.nombre || usuario.correo,
+        'FECHA DE REGISTRO': ahora, 'QUIEN REGISTRO': usuario.nombre || usuario.correo,
       });
       if (clave === 'DESECHO') {
         // ID_EQUIPO es Ref a LINEAS TELEFONICAS; FOLIO EQUIPO / EQUIPO / IMEI = [ID_EQUIPO].[...]

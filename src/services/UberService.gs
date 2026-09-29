@@ -79,7 +79,7 @@ const UberService = (function () {
     Permisos.puedeEditar(token, 'uber');
     if (!datos['NOMBRE COMPLETO']) throw new Error('El nombre completo es obligatorio');
     const fila = Object.assign({}, datos);
-    fila[ID_COLUMN] = Utilities.getUuid().slice(0, 8);
+    // El ID lo pone SheetUtils.insert con el formato del sistema (ver docs/ids-asignacion.md)
     fila['FECHA DE ALTA'] = new Date();
     SheetUtils.insert(ssId(), hoja_().getName(), fila);
     return { ID: fila[ID_COLUMN] };

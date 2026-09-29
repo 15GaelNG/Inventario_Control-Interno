@@ -406,7 +406,7 @@ const LineasRepo = (function () {
   /** Registro de la operación en APP_MOVIMIENTOS (motivo, ticket y resumen antes/después). */
   function registrarMovimiento(tipo, datos, usuario, ahora, extra) {
     asegurarPestanaApp(TAB.APP_MOV);
-    const id = LineasDatos.nuevoIdCorto();
+    const id = Ids.nuevo(Entidades.prefijo(TAB.APP_MOV));
     LineasDatos.agregarFilas(TAB.APP_MOV, [{
       'ID': id, 'FECHA': ahora, 'TIPO': tipo, 'REFS': ',' + (extra.refs || []).filter(Boolean).join(',') + ',',
       'NUCO': LineasUtil.nucoVisible(extra.nuco) || '', 'NUMERO': extra.numero || '', 'NUCO_DESTINO': LineasUtil.nucoVisible(extra.nucoDestino) || '',

@@ -447,10 +447,18 @@ const LineasDatos = (function () {
   }
 
   /** Agrega filas al final. objetos = [{ 'COLUMNA': valor }]. Devuelve los números de fila. */
+  /**
+   * Agrega renglones y les pone su ID. Junto con SheetUtils.insert son los DOS únicos
+   * lugares del sistema donde nace un ID (ver docs/ids-asignacion.md, sección 8).
+   * Misma regla que allá: se respeta el que ya venga, y las hojas sin columna ID no se
+   * tocan (LISTAS TELEFONOS, DEPARTAMENTOS…).
+   */
   function agregarFilas(nombre, objetos) {
     if (!objetos || !objetos.length) return [];
     const t = tablaFresca(nombre);
+    const tieneId = colIndice(t, 'ID') >= 0;
     const filas = objetos.map((o) => {
+      if (tieneId && !o['ID']) o['ID'] = Ids.nuevo(Entidades.prefijo(nombre));
       const fila = t.encabezados.map(() => '');
       Object.keys(o).forEach((k) => {
         const c = colIndice(t, k);
@@ -482,6 +490,15 @@ const LineasDatos = (function () {
   }
 
   /** ID corto como UNIQUEID() del AppSheet (8 caracteres hex), que Sheets nunca interprete como número. */
+  /**
+   * DESUSO: ahora los IDs salen de Ids.nuevo(prefijo), que además dice de qué hoja es el
+   * registro. Se queda solo mientras quedan llamadas por migrar.
+   *
+   * El `while` de abajo cuenta una historia: descartaba los IDs que fueran puros dígitos o
+   * con forma de notación científica, porque Sheets los guardaba como NÚMERO y las
+   * comparaciones dejaban de casar. Era un parche al mismo problema que ahora resuelve el
+   * prefijo de raíz: "LIN-68708292" no hay forma de que se lea como número.
+   */
   function nuevoIdCorto() {
     let nuevo;
     do { nuevo = Utilities.getUuid().replace(/-/g, '').slice(0, 8); } while (/^\d+$/.test(nuevo) || /^\d+e\d+$/i.test(nuevo));

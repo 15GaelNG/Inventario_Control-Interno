@@ -103,7 +103,7 @@ const CambiosMontoCCHService = (function () {
       }
 
       const fila = {};
-      fila[ID_COLUMN] = Utilities.getUuid().slice(0, 8);
+      // El ID lo pone SheetUtils.insert con el formato del sistema (ver docs/ids-asignacion.md)
       fila['ID CCH'] = idCch;
       fila['TIPO'] = nueva > anterior ? 'INCREMENTO' : 'REDUCCION';
       fila['CANTIDAD'] = Math.abs(nueva - anterior);
