@@ -853,6 +853,11 @@ test('Historial: números que ha tenido un NUCO y NUCOs por los que pasó un nú
   const cliente = read('src/html/js/lineas.html');
   assert.match(cliente, /llamar\('apiLineasAsignaciones', id, vista\)/);
   assert.match(cliente, /equipo: 'Números que ha tenido', linea: 'Equipos en los que ha estado'/);
+  // Número / NUCO / IMEI como botón visible que abre la ficha (asignaciones y cambios de línea o equipo)
+  assert.match(cliente, /function botonIr\(tipo, id, texto\) \{\s*return '<a href="#" class="ln-ir-chip" data-ln-ir="' \+ tipo/);
+  assert.match(cliente, /porNuco && p\.irId \? botonIr\('linea', p\.irId, v\)/);
+  assert.match(cliente, /render: valorCambio\('ANTES'\)[\s\S]*render: valorCambio\('DESPUES'\)/);
+  assert.match(cliente, /if \(c === 'IMEI'\)/);
   // Los "Sin línea" se pueden ocultar con el filtro, sin quitarlos de los datos
   assert.match(cliente, /return \(a\.periodos \|\| \[\]\)\.filter\(\(p\) => !ocultarSinAsignar \|\| p\[campo\]\)/);
   assert.doesNotMatch(cliente, /el motivo solo existe si se capturó/);

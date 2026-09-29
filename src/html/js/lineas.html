@@ -2699,6 +2699,39 @@
       };
       const COLOR_ORIGEN = { 'Nuevo sistema': 'verde', AppSheet: 'azul', Drive: 'neutro' };
 
+      /** Botón visible dentro de una tabla que abre la ficha de una línea o un equipo (delegación data-ln-ir). */
+      function botonIr(tipo, id, texto) {
+        return '<a href="#" class="ln-ir-chip" data-ln-ir="' + tipo + '" data-id="' + esc(id) + '" title="Abrir ' +
+          (tipo === 'linea' ? 'la línea' : 'el equipo') + '">' + ico(tipo === 'linea' ? 'card-sim' : 'smartphone') + '<span>' + esc(texto) + '</span>' +
+          ico('chevron-right') + '</a>';
+      }
+
+      /**
+       * A quién pertenece hoy un número, NUCO o IMEI (índice del inventario), para los cambios de línea y de equipo
+       * del historial. Se arma una vez por historial.
+       */
+      function destinosInventario() {
+        const ix = memoria.indice || { equipos: [], lineas: [] };
+        const d = { numero: {}, nuco: {}, imei: {} };
+        const digitos = (v) => String(v || '').replace(/\D/g, '');
+        const nuco4 = (v) => { const t = String(v || '').trim(); return /^\d+$/.test(t) ? t.padStart(4, '0') : t.toUpperCase(); };
+        ix.lineas.forEach((l) => { const n = digitos(l.numero); if (n && !(n in d.numero)) d.numero[n] = l.id; });
+        ix.equipos.forEach((e) => {
+          const n = nuco4(e.nuco); if (n && !(n in d.nuco)) d.nuco[n] = e.id;
+          const i = digitos(e.imei); if (i && !(i in d.imei)) d.imei[i] = e.id;
+        });
+        return {
+          /** { tipo, id } del registro que hoy tiene ese valor, o null. */
+          de: (campo, valor) => {
+            const c = String(campo || '').toUpperCase().trim();
+            if (c === 'NUMERO TELEFONO') { const id = d.numero[digitos(valor)]; return id ? { tipo: 'linea', id: id } : null; }
+            if (c === 'NUCO') { const id = d.nuco[nuco4(valor)]; return id ? { tipo: 'equipo', id: id } : null; }
+            if (c === 'IMEI') { const id = d.imei[digitos(valor)]; return id ? { tipo: 'equipo', id: id } : null; }
+            return null;
+          },
+        };
+      }
+
       /** Opción del filtro Movimiento que cambia la tabla por la de asignaciones número ↔ NUCO. */
       const MOV_ASIGNACIONES = '__asignaciones';
       const TITULO_ASIGNACIONES = { equipo: 'Números que ha tenido', linea: 'Equipos en los que ha estado' };
@@ -2784,6 +2817,11 @@
         const ocultar = $('#ln-asig-ocultar', cont);
         soltarHistorial();
         let tabla = null;
+        const destinos = destinosInventario();
+        const valorCambio = (columna) => (v, m) => {
+          const destino = v ? destinos.de(m.campo, v) : null;
+          return destino ? botonIr(destino.tipo, destino.id, v) : (formatoAppSheet('CAMBIOS', columna, v) || vacio);
+        };
         $('#ln-asig-ocultar-check', cont).addEventListener('change', (ev) => {
           ocultarSinAsignar = ev.target.checked;
           if (tablaAsignaciones && asignaciones) tablaAsignaciones.setDatos(periodosVisibles(asignaciones));
@@ -2823,8 +2861,8 @@
             { campo: 'fecha', titulo: 'Fecha', tipo: 'lnFechaHora', fijada: true, ancho: 140 },
             { campo: 'movimiento', titulo: 'Movimiento', tipo: 'lista', ancho: 220, render: (v) => '<span class="ln-movimiento">' + ico(ICONO_MOVIMIENTO[v] || 'dot') + ' ' + esc(v) + '</span>' },
             { campo: 'campo', titulo: 'Campo', tipo: 'lista', ancho: 170 },
-            { campo: 'antes', titulo: 'Antes', tipo: 'texto', ancho: 200, render: (v) => formatoAppSheet('CAMBIOS', 'ANTES', v) || vacio },
-            { campo: 'despues', titulo: 'Después', tipo: 'texto', ancho: 200, render: (v) => formatoAppSheet('CAMBIOS', 'DESPUES', v) || vacio },
+            { campo: 'antes', titulo: 'Antes', tipo: 'texto', ancho: 200, render: valorCambio('ANTES') },
+            { campo: 'despues', titulo: 'Después', tipo: 'texto', ancho: 200, render: valorCambio('DESPUES') },
             { campo: 'detalle', titulo: 'Detalle', tipo: 'texto', ancho: 260 },
             { campo: 'usuario', titulo: 'Usuario', tipo: 'lista', ancho: 190 },
             { campo: 'origen', titulo: 'Origen', tipo: 'lista', ancho: 130, render: (v) => chip(v, COLOR_ORIGEN[v] || 'neutro') },
@@ -2849,8 +2887,11 @@
         }
         panel.innerHTML = (a.incompleto ? '<div class="ln-nota">' + icono('info') + ' Se muestran los primeros 25 registros relacionados.</div>' : '') +
           '<div class="ln-asignaciones-tabla"></div>';
-        const numeroTexto = (v) => (v ? '<span class="ln-mono">' + esc(v) + '</span>' : '<span class="ln-tenue">' + (porNuco ? 'Sin línea' : 'Sin número') + '</span>');
-        const nucoTexto = (v) => (v ? '<span class="ln-mono">' + esc(v) + '</span>' : '<span class="ln-tenue">Sin equipo (suelta)</span>');
+        // La columna principal (el otro lado de la asignación) es un botón que abre su ficha si sigue en el inventario
+        const numeroTexto = (v, p) => (!v ? '<span class="ln-tenue">' + (porNuco ? 'Sin línea' : 'Sin número') + '</span>'
+          : (porNuco && p.irId ? botonIr('linea', p.irId, v) : '<span class="ln-mono">' + esc(v) + '</span>'));
+        const nucoTexto = (v, p) => (!v ? '<span class="ln-tenue">Sin equipo (suelta)</span>'
+          : (!porNuco && p.irId ? botonIr('equipo', p.irId, v) : '<span class="ln-mono">' + esc(v) + '</span>'));
         const columnaNumero = { campo: 'numero', titulo: 'Número', tipo: 'texto', ancho: 150, render: numeroTexto };
         const columnaNuco = { campo: 'nuco', titulo: 'NUCO', tipo: 'texto', ancho: 150, render: nucoTexto };
         const principal = porNuco ? columnaNumero : columnaNuco;
