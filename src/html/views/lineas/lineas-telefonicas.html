@@ -54,6 +54,12 @@
             <p class="modal-subtitle" id="ln-captura-subtitulo"></p>
             </div>
           </div>
+          <!-- Calificación de la inspección en vivo (se actualiza al llenar el checklist) -->
+          <div class="ln-calif-vivo" id="ln-calif-vivo" role="status" aria-live="polite" hidden>
+            <div class="ln-calif-vivo-valor"><span class="ln-calif-vivo-etiqueta">Calificación</span><strong id="ln-calif-vivo-numero">—</strong></div>
+            <div class="ln-calif-vivo-pista"><span id="ln-calif-vivo-barra"></span></div>
+            <div class="ln-calif-vivo-pie" id="ln-calif-vivo-pie">0 de 0 puntos calificados</div>
+          </div>
           <button type="button" class="modal-close" data-cerrar-modal aria-label="Cerrar"><span data-ln-icon="x"></span></button>
         </div>
         <div class="modal-form-scroll" id="ln-captura-cuerpo"><p class="empty-state">Cargando…</p></div>

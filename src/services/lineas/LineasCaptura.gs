@@ -156,10 +156,18 @@ const LineasCaptura = (function () {
     return elementos;
   }
 
-  /** RESPONSIVAS LINEAS_Form (sin Show_If; TIPO CONTRASEÑA está oculta en el AppSheet). */
+  /**
+   * RESPONSIVAS LINEAS_Form (sin Show_If; TIPO CONTRASEÑA está oculta en el AppSheet).
+   * Mejora (pedido del área, 29-sep): los datos del responsable y del equipo vienen de la línea, como en el AppSheet,
+   * pero se pueden corregir antes de firmar, igual que en la inspección (listas y autollenado del colaborador). Lo
+   * corregido queda en la responsiva y su PDF; LINEAS TELEFONICAS no cambia (la responsiva no tiene el bot de la
+   * inspección). Solo ID, ID LINEA, NUCO, FECHA RESPONSIVA y NOMBRE CI siguen fijos.
+   */
   function formularioResponsiva_(fila, catalogos, usuario, id, ahora) {
     const v = (c) => valorLinea_(fila, c);
     const ro = (columna, etiqueta, valor) => campo_(columna, etiqueta, 'texto', { valor: valor, soloLectura: true });
+    const ed = (columna, etiqueta, control, valor, extra) => campo_(columna, etiqueta, control, Object.assign({ valor: valor }, extra || {}));
+    const autoResponsable = { 'No EMPLEADO': 'noEmpleado', 'PUESTO': 'puesto', 'DEPARTAMENTO': 'departamento' };
     const dia = Utilities.formatDate(ahora, ZONA, 'd');
     const mes = MESES[Number(Utilities.formatDate(ahora, ZONA, 'M')) - 1];
     const anio = Utilities.formatDate(ahora, ZONA, 'yyyy');
@@ -167,29 +175,35 @@ const LineasCaptura = (function () {
       ro('ID', 'ID', id),
       ro('ID LINEA', 'ID LINEA', v('IMEI') || v('ID')),
       ro('NUCO', 'NUCO', LineasUtil.nucoVisible(v('NUCO')) || ''),
-      ro('No EMPLEADO', 'NÚMERO DE EMPLEADO', v('NO EMPLEADO')),
+      ed('No EMPLEADO', 'NÚMERO DE EMPLEADO', 'listaAbierta', v('NO EMPLEADO'), { sugerencias: 'NO_EMPLEADO', autollenar: { 'RESPONSABLE': 'nombre', 'PUESTO': 'puesto', 'DEPARTAMENTO': 'departamento' } }),
       // Mejora: DIA / MES / AÑO eran texto libre en AppSheet; ahora se eligen de una lista
       campo_('DIA', 'DIA', 'lista', { valor: dia, requerido: 'SIEMPRE', opciones: Array.from({ length: 31 }, (_, i) => String(i + 1)) }),
       campo_('MES', 'MES', 'lista', { valor: mes, requerido: 'SIEMPRE', literal: true, opciones: MESES }),
       campo_('AÑO', 'AÑO', 'lista', { valor: anio, requerido: 'SIEMPRE', opciones: [Number(anio) - 1, Number(anio), Number(anio) + 1].map(String) }),
-      ro('RESPONSABLE', 'RESPONSABLE', v('RESPONSABLE')),
+      ed('RESPONSABLE', 'RESPONSABLE', 'listaAbierta', v('RESPONSABLE'), { requerido: 'SIEMPRE', sugerencias: 'PERSONAS', autollenar: autoResponsable }),
       campo_('IDENTIFICACION', 'IDENTIFICACION', 'listaAbierta', { valor: '', requerido: 'SIEMPRE', opciones: catalogos.identificaciones || [] }),
-      ro('RAZON SOCIAL', 'RAZON SOCIAL', v('RAZON SOCIAL')),
+      ed('RAZON SOCIAL', 'RAZON SOCIAL', 'listaAbierta', v('RAZON SOCIAL'), { opciones: catalogos.razonesSociales || [] }),
       ro('FECHA RESPONSIVA', 'FECHA DE REGISTRO DE RESPONSIVA', ''),
-      ro('SEDE', 'SEDE', v('SEDE')),
-      ro('OFICINA / DESARROLLO', 'OFICINA O DESARROLLO', v('OFICINA / DESARROLLO')),
-      ro('AREA', 'AREA', v('AREA')),
-      ro('PUESTO', 'PUESTO', v('PUESTO')),
-      ro('DIRECTOR', 'DIRECTOR', v('DIRECTOR')),
-      ro('CORREO', 'CORREO ELECTRÓNICO', v('CUENTA GOOGLE')),
-      ro('No TELEFONO', 'NÚMERO DE TELÉFONO', v('NUMERO TELEFONO')),
-      ro('COMPAÑIA', 'COMPAÑIA', v('COMPAÑIA')),
-      ro('DEPARTAMENTO', 'DEPARTAMENTO', v('DEPARTAMENTO')),
-      ro('MODELO', 'MODELO', v('EQUIPO')),
-      ro('SIM', 'SIM', v('NUMERO SIM')),
-      ro('IMEI', 'IMEI', v('IMEI')),
+      // Listas abiertas (no cerradas como en la inspección): antes eran de solo lectura y un valor viejo fuera de la
+      // lista no debe impedir firmar la responsiva
+      ed('SEDE', 'SEDE', 'listaAbierta', v('SEDE'), { opciones: catalogos.sedes || [] }),
+      ed('OFICINA / DESARROLLO', 'OFICINA O DESARROLLO', 'listaAbierta', v('OFICINA / DESARROLLO'), { opciones: catalogos.oficinas || [] }),
+      ed('AREA', 'AREA', 'listaAbierta', v('AREA'), { opciones: catalogos.areas || [] }),
+      ed('PUESTO', 'PUESTO', 'listaAbierta', v('PUESTO'), { opciones: catalogos.puestos || [], sugerencias: 'PUESTOS' }),
+      ed('DIRECTOR', 'DIRECTOR', 'listaAbierta', v('DIRECTOR'), { opciones: catalogos.directores || [], sugerencias: 'PERSONAS' }),
+      ed('CORREO', 'CORREO ELECTRÓNICO', 'texto', v('CUENTA GOOGLE'), { literal: true }),
+      ed('No TELEFONO', 'NÚMERO DE TELÉFONO', 'texto', v('NUMERO TELEFONO')),
+      ed('COMPAÑIA', 'COMPAÑIA', 'listaAbierta', v('COMPAÑIA'), { opciones: catalogos.companias || [] }),
+      ed('DEPARTAMENTO', 'DEPARTAMENTO', 'listaAbierta', v('DEPARTAMENTO'), { opciones: catalogos.departamentos || [], sugerencias: 'DEPARTAMENTOS' }),
+      ed('MODELO', 'MODELO', 'listaAbierta', v('EQUIPO'), { opciones: catalogos.modelos || [] }),
+      ed('SIM', 'SIM', 'texto', v('NUMERO SIM')),
+      ed('IMEI', 'IMEI', 'texto', v('IMEI')),
       campo_('COLOR', 'COLOR', 'listaAbierta', { valor: v('COLOR'), requerido: 'SIEMPRE', opciones: catalogos.colores || [] }),
-      ro('ACCESORIOS', 'ACCESORIOS', v('ACCESORIOS')),
+      // Pastillas con la lista del AppSheet más lo que ya traiga la línea (para no perder un accesorio fuera de la lista)
+      ed('ACCESORIOS', 'ACCESORIOS', 'multi', v('ACCESORIOS'), {
+        opciones: LineasRepo.CATALOGO.accesorios.concat(String(v('ACCESORIOS') || '').split(',').map((x) => x.trim().toUpperCase())
+          .filter((x) => x && LineasRepo.CATALOGO.accesorios.indexOf(x) < 0)),
+      }),
       campo_('PIN WHATSAPP', 'PIN WHATSAPP', 'texto', { valor: v('PIN WHATSAPP'), literal: true, secreto: true }),
       campo_('PIN EQUIPO', 'PIN EQUIPO', 'texto', { valor: v('PIN EQUIPO'), literal: true, secreto: true }),
       campo_('CONTRASEÑA', 'PATRÓN', 'patron', { valor: v('PATRON'), secreto: true }),

@@ -191,6 +191,37 @@ el sistema avisa (más adelante también por correo).
 - Pruebas: `INICIO / FIN PLAN solo se capturan en el alta…` y `Notificaciones: adendum por vencer…` en
   `tests/source-contracts.test.cjs` (45/45). Falta la prueba en /dev.
 
+## 0p. Vista rápida, responsiva editable y calificación en vivo (2026-09-29)
+
+- **Vista rápida** en Líneas Telefónicas (`vistaRapida`, panel lateral `abrirPanelLateral` con el aspecto del detalle
+  de DataTable):
+  - El ojo de cada fila abre un panel a la derecha. El botón de ampliar (o doble clic en la fila) abre la ficha
+    completa, como antes.
+  - Lo fundamental: estatus del equipo y de la línea, TIPO, responsable (No. empleado, puesto, departamento, área,
+    sede, oficina, jefe), equipo (NUCO, modelo, IMEI, accesorios, última inspección), línea (número, SIM, compañía,
+    razón social, costo) y fin del adendum con chip "Vencido hace N días / Vence en N días / Vigente". También lleva
+    los comentarios y los botones "Abrir ficha completa", "Última responsiva" y "Última inspección".
+  - Sale del índice y la vista del AppSheet que ya están en memoria, así que abre al instante.
+- **Responsiva editable** (`formularioResponsiva_`):
+  - Los datos del responsable y del equipo se precargan y ahora se pueden corregir, como en la inspección:
+    - listas abiertas y autollenado del colaborador (No. empleado, puesto, departamento);
+    - RESPONSABLE es obligatorio;
+    - ACCESORIOS con pastillas (la lista del AppSheet más lo que ya traiga la línea).
+  - Siguen fijos: ID, ID LINEA, NUCO, FECHA RESPONSIVA y NOMBRE CI.
+  - Lo corregido va a RESPONSIVAS LINEAS y a su PDF. **LINEAS TELEFONICAS no cambia**: la responsiva no tiene el bot
+    de la inspección. Pendiente preguntar al usuario si debe copiarse a la línea.
+  - Son listas abiertas (no cerradas como en la inspección) para que un valor viejo fuera del catálogo no impida
+    firmar.
+- **Calificación en vivo** en la inspección (`pintarCalificacionVivo`, `#ln-calif-vivo` en el encabezado de la
+  captura, que no se desplaza):
+  - Porcentaje con la misma fórmula del AppSheet, más una barra y "N de M puntos calificados". Solo cuentan los
+    puntos que califican y se ven para el TIPO.
+  - Sin colores de "buena/mala": el AppSheet no define umbrales.
+  - En celular va debajo del título.
+- Probado en /dev (29-sep, sin guardar): vista rápida del NUCO 0008, calificación 66.67% con 3 de 18 puntos, y la
+  responsiva con sus campos editables.
+- Prueba: `Vista rápida en Líneas Telefónicas, responsiva editable y calificación en vivo…`.
+
 ## 0o. Panorama de Líneas y Reactivación oculta (2026-09-29)
 
 - **Reactivación de Líneas** sale del menú: su línea en `NAV_GRUPOS` está comentada. La vista, la ruta en `navegarA`,

@@ -770,4 +770,37 @@
     .lnp-controles .ln-segmentado { flex: 1 1 100%; }
     .lnp-controles .ln-segmentado button { flex: 1 1 auto; }
   }
+
+  /* ============ Calificación en vivo (encabezado de la inspección) ============ */
+  .ln-captura-cabecera { gap: 14px; }
+  .ln-calif-vivo {
+    margin-left: auto; flex: 0 0 auto; min-width: 170px; padding: 8px 12px; border-radius: 12px;
+    background: var(--color-surface); border: 1px solid var(--color-border); box-shadow: var(--shadow);
+  }
+  .ln-calif-vivo[hidden] { display: none; }
+  .ln-calif-vivo-valor { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .ln-calif-vivo-etiqueta { font-size: 11.5px; font-weight: 600; color: var(--color-text-muted); }
+  .ln-calif-vivo-valor strong { font-size: 20px; color: var(--color-text); }
+  .ln-calif-vivo-pista { height: 6px; border-radius: 999px; background: var(--color-primary-soft); margin: 6px 0 4px; overflow: hidden; }
+  .ln-calif-vivo-pista span { display: block; height: 100%; width: 0; border-radius: 999px; background: var(--color-primary); transition: width .25s ease; }
+  :root[data-theme="dark"] .ln-calif-vivo-pista span { background: var(--color-accent); }
+  .ln-calif-vivo-pie { font-size: 11px; color: var(--color-text-muted); }
+  @media (max-width: 760px) {
+    .ln-captura-cabecera { flex-wrap: wrap; }
+    .ln-calif-vivo { order: 3; width: 100%; margin-left: 0; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px 10px; padding: 6px 10px; }
+    .ln-calif-vivo[hidden] { display: none; }
+    .ln-calif-vivo-valor strong { font-size: 16px; }
+    .ln-calif-vivo-pista { margin: 0; }
+  }
+
+  /* ============ Vista rápida de Líneas Telefónicas (panel lateral) ============ */
+  .ln-vr-resumen { padding: 10px 0 12px; border-bottom: 1px solid var(--color-border); }
+  .ln-vr-resumen .ln-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ln-vr-acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .ln-vr-acciones > button { font-size: 12.5px; padding: 7px 12px; }
+  .ln-vr-seccion { margin-top: 14px; }
+  .ln-vr-seccion h4 { display: flex; align-items: center; gap: 7px; margin: 0 0 2px; font-size: 13px; color: var(--color-text); }
+  .ln-vr-seccion .dt-campo:last-child { border-bottom: none; }
+  .ln-vr-seccion .dt-campo-valor .ln-chip { margin-left: 4px; }
+  .ln-vr-comentario { font-size: 13px; margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 </style>

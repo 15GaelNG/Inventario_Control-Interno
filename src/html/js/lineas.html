@@ -1625,12 +1625,17 @@
           exportar: exportarBase('INVENTARIO', 'Lineas telefonicas'),
           etiquetaFila: cfg.etiqueta,
           detalle: false, // la ficha completa (responsable, evidencias, historial) es su propia pantalla
-          accionesFila: [{ icono: 'eye', titulo: 'Ver ficha', alHacer: (r) => abrir(cfg.detalle, r.id) }],
+          // Vista rápida a la derecha (como el detalle de los otros módulos); la ficha completa sigue a un clic
+          accionesFila: [
+            { icono: 'eye', titulo: 'Vista rápida', alHacer: (r) => vistaRapida(cfg.detalle, r) },
+            { icono: 'maximize-2', titulo: 'Abrir ficha completa', alHacer: (r) => abrir(cfg.detalle, r.id) },
+          ],
           // Acciones masivas: solo equipos y desde 2 seleccionados (las de líneas están por definirse con el área)
           accionesSeleccion: modulo === 'equipos' ? ACCIONES_MASIVAS.map((a) => ({
             icono: a.icono, texto: a.texto, titulo: a.ayuda, minimo: 2, peligro: !!a.peligro, alHacer: (filas) => abrirMasiva(a, filas),
           })) : [],
-          ayuda: 'Doble clic en una fila (o el ojo en Acciones) abre su ficha. La flecha de cada columna filtra, ordena, fija u oculta; ' +
+          ayuda: 'El ojo en Acciones abre la vista rápida a la derecha; doble clic en una fila (o el botón de ampliar) abre la ficha completa. ' +
+            'La flecha de cada columna filtra, ordena, fija u oculta; ' +
             '"Vista" agrega las demás columnas del AppSheet (compañía, sede, comentarios, PIN…). "Última responsiva" y "Última inspección" ' +
             'abren la más reciente de la carpeta del NUCO en NUCOS. Los indicadores de arriba filtran con un clic.',
           alCambiarFiltros: (filtros) => { filtrosActuales[modulo] = filtros || {}; if (marcarKpi) marcarKpi(); },
@@ -1649,6 +1654,59 @@
         }).observe(contenedor.querySelector('tbody'), { childList: true });
         if (memoria.indice) tablas[modulo].setDatos(memoria.indice[modulo]);
         return tablas[modulo];
+      }
+
+      // ---- Vista rápida: panel lateral con lo fundamental (sin ir al servidor: sale del índice y la vista) ----
+      /** Días al fin del adendum como chip (vencido / vence pronto / vigente). */
+      function chipAdendum(valor) {
+        if (!valor) return '';
+        const d = new Date(valor);
+        if (isNaN(d)) return '';
+        const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+        const dias = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - hoy) / 864e5);
+        if (dias < 0) return chip('Vencido hace ' + miles(-dias) + ' días', 'rojo');
+        if (dias <= 30) return chip(dias === 0 ? 'Vence hoy' : 'Vence en ' + dias + ' días', 'ambar');
+        return chip('Vigente', 'verde');
+      }
+
+      function vistaRapida(tipo, r) {
+        const v = (c) => (r[c] === undefined || r[c] === null ? '' : r[c]);
+        const nuco = r.nuco || r.nucoEquipo || v('NUCO');
+        const titulo = tipo === 'equipo' ? 'NUCO ' + (nuco || '—') : 'Línea ' + (r.numero || v('NUMERO TELEFONO') || '—');
+        const sub = tipo === 'equipo' ? [r.modelo || v('EQUIPO'), r.numero ? 'Línea ' + r.numero : 'Sin línea'].filter(Boolean).join(' · ')
+          : [r.compania || v('COMPAÑIA'), nuco ? 'NUCO ' + nuco : 'Suelta'].filter(Boolean).join(' · ');
+        const panel = abrirPanelLateral(titulo, sub);
+        const campo = (t, valor, html) => '<div class="dt-campo"><div class="dt-campo-titulo">' + esc(t) + '</div><div class="dt-campo-valor">' +
+          (html ? (valor || vacio) : guion(valor)) + '</div></div>';
+        const seccion = (icono, t, filas) => '<section class="ln-vr-seccion"><h4>' + ico(icono) + ' ' + esc(t) + '</h4>' + filas.join('') + '</section>';
+        const finPlan = v('FIN PLAN');
+        panel.cuerpo.innerHTML =
+          '<div class="ln-vr-resumen"><div class="ln-chips">' +
+            (v('ESTATUS EQUIPO') ? chip('Equipo: ' + v('ESTATUS EQUIPO'), COLOR_ESTATUS[String(v('ESTATUS EQUIPO')).toUpperCase()]) : '') +
+            (v('ESTATUS LINEA') ? chip('Línea: ' + v('ESTATUS LINEA'), COLOR_ESTATUS[String(v('ESTATUS LINEA')).toUpperCase()]) : '') +
+            (formatoAppSheet('LINEAS', 'TIPO', r.tipoHoja) || (r.tipoHoja ? chip(r.tipoHoja) : '')) +
+          '</div><div class="ln-vr-acciones">' +
+            '<button type="button" class="ln-btn-icono" data-vr-ficha>' + icono('maximize-2') + ' Abrir ficha completa</button>' +
+            (tieneNuco(r) ? botonUltimoNucos('RESPONSIVA', r.id).replace(' Ver</button>', ' Última responsiva</button>') +
+              botonUltimoNucos('INSPECCION', r.id).replace(' Ver</button>', ' Última inspección</button>') : '') +
+          '</div></div>' +
+          seccion('user', 'Responsable', [
+            campo('Responsable', v('RESPONSABLE') || r.responsable), campo('No. empleado', v('NO EMPLEADO')), campo('Puesto', v('PUESTO')),
+            campo('Departamento', v('DEPARTAMENTO') || r.departamento), campo('Área', v('AREA')),
+            campo('Sede', v('SEDE') || r.sede), campo('Oficina / desarrollo', v('OFICINA / DESARROLLO')), campo('Jefe directo', v('JEFE DIRECTO')),
+          ]) +
+          seccion('smartphone', 'Equipo', [
+            campo('NUCO', nuco), campo('Modelo', r.modelo || v('EQUIPO')), campo('IMEI', v('IMEI') || r.imei),
+            campo('Accesorios', v('ACCESORIOS')), campo('Última inspección', fecha(v('FECHA INSPECCION'))),
+          ]) +
+          seccion('card-sim', 'Línea', [
+            campo('Número', r.numero || v('NUMERO TELEFONO')), campo('SIM', v('NUMERO SIM') || r.sim), campo('Compañía', r.compania || v('COMPAÑIA')),
+            campo('Razón social', v('RAZON SOCIAL')), campo('Costo del plan', v('COSTO PLAN') !== '' ? '$' + Number(v('COSTO PLAN')).toLocaleString('es-MX') : ''),
+            campo('Fin del adendum', finPlan ? esc(fecha(finPlan) || finPlan) + ' ' + chipAdendum(finPlan) : '', true),
+          ]) +
+          (v('COMENTARIOS') ? seccion('message-square-text', 'Comentarios', ['<p class="ln-vr-comentario">' + esc(v('COMENTARIOS')) + '</p>']) : '');
+        panel.cuerpo.querySelector('[data-vr-ficha]').addEventListener('click', () => { panel.cerrar(); abrir(tipo, r.id); });
+        pintarIconos(panel.cuerpo);
       }
 
       // ---- Vista de tarjetas (antes el módulo "Detalles Líneas Telefónicas") ----
@@ -2441,6 +2499,7 @@
         if (captura && captura.guardando && !guardada) return;
         const borrador = captura;
         $('#ln-modal-captura', raiz).hidden = true;
+        $('#ln-calif-vivo', raiz).hidden = true;
         $('#ln-captura-cuerpo', raiz).innerHTML = '';
         captura = null;
         if (!guardada && borrador && !borrador.guardada && borrador.carpetaId) {
@@ -2473,6 +2532,7 @@
         });
         const calif = $('#af-CALIFICACION', raiz);
         if (calif) calif.textContent = (calificacionAppSheet(leerFormularioAppSheet()) * 100).toFixed(2) + '%';
+        if (captura.tipo === 'INSPECCION') pintarCalificacionVivo();
         const cuerpo = $('#ln-captura-cuerpo', raiz);
         aplicarBloqueo(cuerpo, false);
         // El nombre de quien firma va debajo de su firma
@@ -2483,6 +2543,27 @@
         });
       }
       const actualizarProgresoChecklist = actualizarFormularioAppSheet;
+
+      /**
+       * Calificación en vivo en la esquina del encabezado (misma fórmula del AppSheet que CALIFICACION). Cuenta solo los
+       * puntos que califican y que se ven para el TIPO; sin umbrales de color porque el AppSheet no define "buena/mala".
+       */
+      function pintarCalificacionVivo() {
+        const caja = $('#ln-calif-vivo', raiz);
+        if (!caja) return;
+        const valores = leerFormularioAppSheet();
+        const califican = CALIFICACION_SI.concat(Object.keys(CALIFICACION_DESEMPENO));
+        const visibles = califican.filter((c) => {
+          const campo = raiz.querySelector('#ln-captura-cuerpo .ln-af-campo[data-af-columna="' + CSS.escape(c) + '"]');
+          return campo && !campo.hidden;
+        });
+        const contestados = visibles.filter((c) => valores[c] === 'SI' || valores[c] === 'NO' || /^(BUENO|REGULAR|MALO)$/.test(valores[c] || '')).length;
+        const valor = calificacionAppSheet(valores);
+        $('#ln-calif-vivo-numero', raiz).textContent = contestados ? (valor * 100).toFixed(2) + '%' : '—';
+        $('#ln-calif-vivo-barra', raiz).style.width = (visibles.length ? (contestados / visibles.length) * 100 : 0) + '%';
+        $('#ln-calif-vivo-pie', raiz).textContent = contestados + ' de ' + visibles.length + ' puntos calificados';
+        caja.hidden = false;
+      }
 
       /** Obligatorios visibles vacíos (misma regla que el servidor). */
       function faltantesFormularioAppSheet() {
@@ -2859,6 +2940,7 @@
         $('#ln-captura-subtitulo', raiz).textContent = 'Preparando datos y carpeta de evidencia…';
         $('#ln-captura-cuerpo', raiz).innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando…</p>';
         captura = { tipo: tipo, ref: ref, idObjetivo: ref.equipoId || ref.lineaId, fotos: [], patronId: null, firmas: {} };
+        $('#ln-calif-vivo', raiz).hidden = true; // aparece cuando la inspección ya está en pantalla
 
         const pedirContexto = tipo === 'INSPECCION' ? llamar('apiLineasContextoInspeccion', ref) : llamar('apiLineasContextoResponsiva', ref);
         const sesion = captura;

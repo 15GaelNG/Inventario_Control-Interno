@@ -221,7 +221,7 @@ test('las firmas nuevas no se almacenan como archivos de Drive', () => {
 
 test('los formularios de inspección y responsiva siguen el orden y las etiquetas del AppSheet', () => {
   const captura = read('src/services/lineas/LineasCaptura.gs');
-  const orden = (desde, hasta) => [...captura.slice(captura.indexOf(desde), captura.indexOf(hasta)).matchAll(/(?:campo_|ro)\('([^']+)'/g)].map((m) => m[1]);
+  const orden = (desde, hasta) => [...captura.slice(captura.indexOf(desde), captura.indexOf(hasta)).matchAll(/(?:campo_|ro|ed)\('([^']+)'/g)].map((m) => m[1]);
   assert.deepEqual(orden('function formularioInspeccion_', 'const agregarSeccion'), ['FECHA DE REGISTRO', 'ID', 'ID LINEA', 'NUCO', 'RESPONSABLE',
     'DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO', 'PUESTO', 'JEFE DIRECTO', 'CORREO', 'TIPO', 'No TELEFONO', 'IMEI', 'SIM', 'MODELO',
     'COLOR', 'COMPAÑIA', 'PLAN', 'RAZON SOCIAL']);
@@ -1059,4 +1059,20 @@ test('Panorama: estatus al cierre de cada mes reconstruido hacia atrás con la b
   assert.match(app, /montarVista\('tpl-lineas-panorama', Lineas\.initPanorama\)/);
   assert.match(read('src/html/Index.html'), /include\('html\/views\/lineas\/lineas-panorama'\)/);
   assert.match(read('src/ClientApi.gs'), /function apiLineasPanorama\(token, forzar\)/);
+});
+
+test('Vista rápida en Líneas Telefónicas, responsiva editable y calificación en vivo de la inspección', () => {
+  const captura = read('src/services/lineas/LineasCaptura.gs');
+  const resp = captura.slice(captura.indexOf('function formularioResponsiva_'), captura.indexOf('function ocultarSecretos_'));
+  // Fijos: ID, ID LINEA, NUCO, FECHA RESPONSIVA y NOMBRE CI; lo demás del responsable y del equipo se puede corregir
+  const fijos = [...resp.matchAll(/ro\('([^']+)'/g)].map((m) => m[1]);
+  assert.deepEqual(fijos, ['ID', 'ID LINEA', 'NUCO', 'FECHA RESPONSIVA', 'NOMBRE CI']);
+  assert.match(resp, /ed\('RESPONSABLE', 'RESPONSABLE', 'listaAbierta', v\('RESPONSABLE'\), \{ requerido: 'SIEMPRE', sugerencias: 'PERSONAS', autollenar: autoResponsable \}\)/);
+  assert.match(resp, /ed\('ACCESORIOS', 'ACCESORIOS', 'multi'/);
+  const cliente = read('src/html/js/lineas.html');
+  assert.match(cliente, /\{ icono: 'eye', titulo: 'Vista rápida', alHacer: \(r\) => vistaRapida\(cfg\.detalle, r\) \}/);
+  assert.match(cliente, /\{ icono: 'maximize-2', titulo: 'Abrir ficha completa', alHacer: \(r\) => abrir\(cfg\.detalle, r\.id\) \}/);
+  assert.match(cliente, /function vistaRapida\(tipo, r\) \{/);
+  assert.match(cliente, /if \(captura\.tipo === 'INSPECCION'\) pintarCalificacionVivo\(\);/);
+  assert.match(read('src/html/views/lineas/lineas-telefonicas.html'), /id="ln-calif-vivo" role="status" aria-live="polite" hidden/);
 });
