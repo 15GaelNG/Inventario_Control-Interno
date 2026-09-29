@@ -437,28 +437,29 @@
       'XPANDER': 'CAMIONETA',
       'L200': 'CAMIONETA',
     };
-    // Prefijo del folio (VehiculosService.PREFIJOS_CLASE) → clase que debe filtrar.
-    // "FOL" (Motocarro/Cuatrimoto/Nuco sin información comparten ese prefijo genérico,
-    // no se puede saber cuál es solo con el folio) y cualquier prefijo no reconocido
-    // no filtran: se muestran todos los tipos, como antes.
-    const CLASE_POR_PREFIJO_FOLIO = {
-      AUT: 'AUTOMOVIL', CTA: 'CAMIONETA', CON: 'CAMION', MOT: 'MOTOCICLETA',
-      REM: 'REMOLQUE', MAQ: 'MAQUINARIA MENOR',
+    // Prefijo del folio (VehiculosService.PREFIJOS_CLASE) → clases que debe filtrar
+    // (MOT muestra Motocicleta Y Motocarro juntas: para el filtro cuentan como el mismo
+    // grupo). "FOL" (Motocarro/Cuatrimoto/Nuco sin información comparten ese prefijo
+    // genérico, no se puede saber cuál es solo con el folio) y cualquier prefijo no
+    // reconocido no filtran: se muestran todos los tipos, como antes.
+    const CLASES_POR_PREFIJO_FOLIO = {
+      AUT: ['AUTOMOVIL'], CTA: ['CAMIONETA'], CON: ['CAMION'], MOT: ['MOTOCICLETA', 'MOTOCARRO'],
+      REM: ['REMOLQUE'], MAQ: ['MAQUINARIA MENOR'],
     };
-    /** "AUT0640" → "AUTOMOVIL"; folios sin prefijo reconocido (ej. FOL0650) → null (no filtra). */
-    function claseDelFolio(folio) {
+    /** "AUT0640" → ['AUTOMOVIL']; folios sin prefijo reconocido (ej. FOL0650) → null (no filtra). */
+    function clasesDelFolio(folio) {
       const prefijo = String(folio || '').trim().match(/^[A-Za-z]+/);
-      return (prefijo && CLASE_POR_PREFIJO_FOLIO[prefijo[0].toUpperCase()]) || null;
+      return (prefijo && CLASES_POR_PREFIJO_FOLIO[prefijo[0].toUpperCase()]) || null;
     }
 
     let todosLosTipos = [];
-    /** Repinta "Tipo de unidad": si el folio filtra por clase, solo esos tipos (más los
-     *  que no tienen clase conocida en CLASE_POR_TIPO, para no ocultar de más). */
+    /** Repinta "Tipo de unidad": si el folio filtra por clase(s), solo esos tipos (más
+     *  los que no tienen clase conocida en CLASE_POR_TIPO, para no ocultar de más). */
     function pintarOpcionesTipo(folio) {
       const anterior = campoTipo.value;
-      const clase = claseDelFolio(folio);
-      const visibles = clase
-        ? todosLosTipos.filter((t) => !CLASE_POR_TIPO[t.tipo.toUpperCase()] || CLASE_POR_TIPO[t.tipo.toUpperCase()] === clase)
+      const clases = clasesDelFolio(folio);
+      const visibles = clases
+        ? todosLosTipos.filter((t) => !CLASE_POR_TIPO[t.tipo.toUpperCase()] || clases.indexOf(CLASE_POR_TIPO[t.tipo.toUpperCase()]) >= 0)
         : todosLosTipos;
       campoTipo.innerHTML = '<option value=""></option>' + visibles
         .map((t) => `<option value="${escaparHtml(t.tipo)}" ${t.listo ? '' : 'disabled'}>` +
