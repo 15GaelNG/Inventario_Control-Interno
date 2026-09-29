@@ -508,3 +508,98 @@ consecuencias solo porque casi nadie da de alta cajas chicas al mismo tiempo. Co
 `InspeccionesService.nuevoId_` (`2026_451_1`), `ArqueosService.generarIdArqueo_`
 (`2026_225_001`) y `generarIdCch_` (1, 2, 3) siguen generando, pero llenando la **llave de
 negocio** — `FOLIO INSPECCION`, `FOLIO ARQUEO`, `ID CCH` — no la columna `ID`.
+
+---
+
+## 9. El pipeline: respaldo, bitácora, estado y reversa
+
+`src/MigracionIds.gs` tiene los **pasos**; `src/MigracionPipeline.gs` tiene el **orden y la
+seguridad**. No duplica lógica: llama a las funciones de allá.
+
+Los pasos funcionaron en la copia de pruebas, pero tenían tres huecos que en producción no
+se pueden dejar: no había respaldo, no había reversa, y no quedaba registro de qué se
+corrió.
+
+### 9.1 Antes de cualquier cosa: `pipeline0Respaldar`
+
+Copia fechada del spreadsheet completo. Es la **red externa**: la reversa deshace paso por
+paso, pero si la reversa misma falla, esto es lo único que queda. Guarda el id en la Script
+Property `MIGRACION_RESPALDO_ID`.
+
+Y sirve doble: esa copia es una réplica exacta de producción, así que **el pipeline completo
+se ensaya ahí** pasando `{ spreadsheetId: <id de la copia> }`, sin tocar el original.
+
+### 9.2 Tres llaves para escribir en producción
+
+No una, tres, y separadas a propósito para que ninguna se dé por hecha:
+
+| Script Property | Qué declara |
+|---|---|
+| `MIGRACION_IDS_AUTORIZAR_PRODUCCION` | "sé que es producción" |
+| `MIGRACION_APPSHEET_APAGADO` | "AppSheet ya no está escribiendo" |
+| `MIGRACION_RESPALDO_ID` | la escribe el paso 0; sin ella no se escribe |
+
+Las tres tienen que **ser iguales al id del spreadsheet**, no solo estar puestas.
+
+### 9.3 `pipelineEstado` — "¿dónde estoy?"
+
+Solo lee. Dice si hay respaldo, qué pasos están hechos y cuál sigue con su nombre de
+función. Lo mide **en los datos**, no en una bandera de progreso: una bandera puede quedar
+mal si algo se interrumpe, la hoja no.
+
+### 9.4 El candado
+
+`MigracionIds` no tomaba ninguno, mientras los servicios en vivo (`SheetUtils.removeMany`,
+`VehiculosService`, `Relaciones.propagar`) todos usan `LockService.getScriptLock()`. El
+pipeline lo toma por paso, con `tryLock` y no `waitLock`: si alguien más está escribiendo,
+falla rápido en vez de esperar minutos.
+
+### 9.5 La reversa — `pipelineRevertirEnsayo` / `pipelineRevertirEscribir`
+
+El orden es el inverso del avance, y **no es negociable**:
+
+1. **Las referencias que se pisaron** (hijas de `LINEAS TELEFONICAS`). Su valor viejo no se
+   respaldó, pero se **reconstruye**: valor nuevo → fila del padre por su `ID` → su
+   `ID APPSHEET`. Tiene que ir **antes** de borrar el respaldo del padre.
+2. **Las 8 hojas cuya columna `ID` se pisó**: `ID` ← `ID APPSHEET`, y luego se borra el
+   respaldo.
+3. **Borrar lo que agregamos**: `ID` en las 16 que no se pisaron, y `ID VEHICULO` /
+   `ID ACCESORIO` / `ID CAJA CHICA`.
+
+Las columnas movidas no requieren nada: al borrar `ID`, el acomodo desaparece solo.
+
+**Dos cosas que la reversa NO hace, a propósito:**
+
+- **No borra el `ID APPSHEET` de `CAMBIOS LINEAS TELEFONICAS`.** Esa columna es la
+  original —la que no tenía encabezado y se nombró a mano—, no algo que creamos. El
+  catálogo lo distingue con `pisaLlaveAnterior`, y hay una prueba dedicada a que siga así.
+- **No inventa valores viejos para filas nacidas después de migrar.** Su `ID APPSHEET`
+  está vacío y su `ID` queda vacío. Es lo correcto —nunca tuvieron id viejo— pero significa
+  que **la reversa no es una máquina del tiempo**. Para eso está la copia del paso 0.
+
+### 9.6 Formato de texto en la columna `ID`
+
+`migColumnaOCrear_` le pone `setNumberFormat('@')` a cada columna que crea. El prefijo ya
+hace imposible que Sheets lea un ID como número; el formato lo hace imposible **también si
+alguien pega valores a mano**. Es la misma precaución que toma
+`LineasDatos.asegurarPestana`, y cierra por completo el agujero que costó 23 IDs
+convertidos en número y un cero a la izquierda perdido.
+
+### 9.7 Cómo se ensaya el ciclo completo
+
+Sobre la copia del paso 0, no sobre producción:
+
+```
+pipeline0Respaldar                  → da el id de la copia
+pipelineEstado                      → "sin migrar, sigue el paso 1"
+migracion1Revisar
+migracion2AsignarEscribir
+migracion4Auditar                   → tiene que decir "todo cuadra"
+migracion3ReferenciasEscribir
+migracionLimpiarRespaldoEscribir
+migracionMoverIdsAlInicioEscribir
+pipelineRevertirEscribir
+pipelineEstado                      → tiene que volver a decir "sin migrar"
+```
+
+Si el estado final vuelve al inicial y la auditoría cuadra en medio, el pipeline sirve.
