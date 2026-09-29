@@ -2217,15 +2217,19 @@
       window.scrollTo(0, 0);
 
       try {
+        // Las últimas 5 van con .catch propio: si el usuario no tiene permiso de leer
+        // ESE módulo (o falla por lo que sea), esa pestaña sale vacía en vez de tumbar
+        // toda la ficha — a diferencia de completo/cambios/reasignaciones, que si fallan
+        // sí es un error real (no se pudo ni cargar el vehículo).
         const [completo, cambiosTexto, reasignaciones, verifTexto, inspTexto, sensorTexto, holoTexto, incTexto] = await Promise.all([
           callServer('apiBuscarVehiculoPorFolio', state.token, vResumen.FOLIO),
           callServer('apiListarCambiosVehiculosPorFolio', state.token, vResumen.FOLIO),
           callServer('apiListarReasignacionesVehicularesPorFolio', state.token, vResumen.FOLIO),
-          callServer('apiVerificacionesPorFolio', state.token, vResumen.FOLIO),
-          callServer('apiInspeccionesPorFolio', state.token, vResumen.FOLIO),
-          callServer('apiSensoresPorFolio', state.token, vResumen.FOLIO),
-          callServer('apiHologramasPorFolio', state.token, vResumen.FOLIO),
-          callServer('apiIncidenciasPorFolio', state.token, vResumen.FOLIO),
+          callServer('apiVerificacionesPorFolio', state.token, vResumen.FOLIO).catch(() => '[]'),
+          callServer('apiInspeccionesPorFolio', state.token, vResumen.FOLIO).catch(() => '[]'),
+          callServer('apiSensoresPorFolio', state.token, vResumen.FOLIO).catch(() => '[]'),
+          callServer('apiHologramasPorFolio', state.token, vResumen.FOLIO).catch(() => '[]'),
+          callServer('apiIncidenciasPorFolio', state.token, vResumen.FOLIO).catch(() => '[]'),
         ]);
         // Estas regresan JSON.stringify — ver la nota en ClientApi.gs
         // (google.script.run pierde arreglos grandes de forma intermitente;
