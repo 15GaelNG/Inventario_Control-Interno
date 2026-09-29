@@ -43,8 +43,12 @@ const Entidades = (function () {
     'RESPONSIVAS LINEAS': { prefijo: 'RLI', llaveAnterior: 'ID' },
     'REACTIVACION DE LINEAS': { prefijo: 'REA', llaveAnterior: 'ID' },
     'SOLICITUD DE LINEAS': { prefijo: 'SOL', llaveAnterior: 'ID' },
-    // Su columna de ID no tiene encabezado (dice ' '), por eso va por posición
-    'CAMBIOS LINEAS TELEFONICAS': { prefijo: 'CLI', llaveAnterior: null, columnaAnterior: 1 },
+    // Caso especial: su columna de ID no tenía encabezado y se le puso "ID APPSHEET"
+    // (29/09/2026), que es justo lo que guarda: el id que traía de AppSheet. Así que aquí
+    // la llave anterior Y la columna de respaldo son la MISMA. Eso quita la dependencia de
+    // la posición —ya se puede reacomodar— pero obliga a que limpiarRespaldoRedundante no
+    // la compare consigo misma y la borre.
+    'CAMBIOS LINEAS TELEFONICAS': { prefijo: 'CLI', llaveAnterior: 'ID APPSHEET' },
     'BITACORA DE DESECHO': { prefijo: 'DES', llaveAnterior: 'ID_DESECHO' },
     'ACCESORIOS CELULARES': { prefijo: 'ACC', llaveAnterior: 'ID_Accesorio' },
     'MOVIMIENTOS_ACCESORIOS': { prefijo: 'MAC', llaveAnterior: 'ID_Movimiento' },

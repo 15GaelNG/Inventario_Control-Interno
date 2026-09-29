@@ -78,13 +78,19 @@ ok(Entidades.prefijo('HISTORIAL_REASIGNACIONES') === 'HIS', 'con prefijo HIS');
 ok(Entidades.de('HISTORIAL_REASIGNACIONES').llaveAnterior === 'ID Historial',
    'y su llave anterior es "ID Historial", no "ID"');
 
-console.log('\n7. Todas dicen dónde estaba su llave anterior');
+console.log('\n7. Todas dicen dónde estaba su llave anterior, POR NOMBRE');
 ok(todas.every((e) => e.llaveAnterior || e.columnaAnterior),
    'ninguna se quedó sin decir de dónde leer el valor viejo');
-const sinEncabezado = todas.filter((e) => !e.llaveAnterior);
-ok(sinEncabezado.length === 1 && sinEncabezado[0].hoja === 'CAMBIOS LINEAS TELEFONICAS',
-   'la única sin encabezado es CAMBIOS LINEAS TELEFONICAS, que va por posición');
-ok(sinEncabezado[0].columnaAnterior === 1, 'y su llave está en la columna 1');
+ok(todas.every((e) => e.llaveAnterior), 'y todas por nombre: ya ninguna depende de la posición');
+ok(Entidades.de('CAMBIOS LINEAS TELEFONICAS').llaveAnterior === 'ID APPSHEET',
+   'a la que no tenía encabezado se le puso "ID APPSHEET", que es justo lo que guarda');
+
+console.log('\n7b. El caso donde la llave anterior ES la columna de respaldo');
+const cli = Entidades.de('CAMBIOS LINEAS TELEFONICAS');
+ok(cli.llaveAnterior === Entidades.COLUMNA_ID_ANTERIOR,
+   'en esa hoja coinciden, y limpiarRespaldoRedundante tiene que NO borrarla');
+ok(todas.filter((e) => e.llaveAnterior === Entidades.COLUMNA_ID_ANTERIOR).length === 1,
+   'es la única así: si aparece otra, hay que revisar esa salvaguarda');
 
 console.log('\n8. Los nombres de columna son los mismos para todos');
 ok(Entidades.COLUMNA_ID === 'ID', 'la llave propia se llama ID');

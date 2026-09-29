@@ -142,14 +142,28 @@ const MIGRACION_REFERENCIAS = [
 function migracionSs_(opciones) {
   const id = (opciones && opciones.spreadsheetId) || Config.SPREADSHEET_IDS.VEHICULOS();
   if (id === MIGRACION_SS_PRODUCCION && opciones && opciones.escribir) {
-    const permiso = PropertiesService.getScriptProperties()
-      .getProperty('MIGRACION_IDS_AUTORIZAR_PRODUCCION');
+    const props = PropertiesService.getScriptProperties();
+    const permiso = props.getProperty('MIGRACION_IDS_AUTORIZAR_PRODUCCION');
     if (permiso !== id) {
       throw new Error(
         'Este es el spreadsheet de PRODUCCIÓN. Agregar una columna rompe la app de AppSheet ' +
         'hasta que alguien regenere el esquema, y deja sin trabajar a la gente en campo. ' +
         'Si AppSheet ya está apagado, pon la Script Property ' +
         'MIGRACION_IDS_AUTORIZAR_PRODUCCION con el id del spreadsheet.');
+    }
+    // Segunda llave, distinta a propósito: que autorizar producción y declarar AppSheet
+    // apagado sean dos actos separados, para que ninguno se dé por hecho.
+    if (props.getProperty('MIGRACION_APPSHEET_APAGADO') !== id) {
+      throw new Error(
+        'Falta declarar que AppSheet ya está apagado. Pon la Script Property ' +
+        'MIGRACION_APPSHEET_APAGADO con el id del spreadsheet. ' +
+        'Si AppSheet sigue vivo, esto NO se corre: ver src/MigracionPipeline.gs.');
+    }
+    // Sin red externa no se escribe en producción. En pruebas sí, para no estorbar.
+    if (!props.getProperty('MIGRACION_RESPALDO_ID')) {
+      throw new Error(
+        'No hay respaldo. Corre pipeline0Respaldar primero: es la única red que queda ' +
+        'si la reversa misma falla.');
     }
   }
   return id;
@@ -173,7 +187,15 @@ function migColumna_(encabezados, nombre) {
   return 0;
 }
 
-/** La columna, y si no existe la agrega al final (devolviendo su posición) */
+/**
+ * La columna, y si no existe la agrega al final (devolviendo su posición).
+ *
+ * A la columna nueva se le fuerza formato de TEXTO ('@'). El prefijo ya hace imposible que
+ * Sheets lea un ID como número, pero el formato lo hace imposible también si alguien pega
+ * valores a mano ahí. Es la misma precaución que LineasDatos.asegurarPestana toma con sus
+ * columnas de texto, y cierra por completo el agujero que nos costó 23 IDs convertidos en
+ * número y un cero a la izquierda perdido para siempre.
+ */
 function migColumnaOCrear_(sheet, nombre, escribir) {
   const enc = migEncabezados_(sheet);
   const pos = migColumna_(enc, nombre);
@@ -184,6 +206,7 @@ function migColumnaOCrear_(sheet, nombre, escribir) {
     sheet.insertColumnsAfter(sheet.getMaxColumns(), destino - sheet.getMaxColumns());
   }
   sheet.getRange(1, destino).setValue(nombre);
+  sheet.getRange(2, destino, Math.max(1, sheet.getMaxRows() - 1), 1).setNumberFormat('@');
   return { columna: destino, creada: true };
 }
 
@@ -684,6 +707,14 @@ function limpiarRespaldoRedundante(opciones) {
     const posVieja = h.llaveAnterior ? migColumna_(enc, h.llaveAnterior) : (h.columnaAnterior || 0);
     if (!posVieja) {
       lineas.push("  " + h.hoja + ": ya no encuentro su llave anterior, NO se toca el respaldo");
+      return;
+    }
+    // La llave anterior Y el respaldo son la MISMA columna. Pasa en CAMBIOS LINEAS
+    // TELEFONICAS: a su columna sin nombre se le puso "ID APPSHEET", que es justo lo que
+    // guarda. Compararla consigo misma daría "idéntica" y borraría el original.
+    if (posVieja === posGuardada) {
+      lineas.push('  ' + h.hoja + ': su llave anterior ES la columna ' +
+        Entidades.COLUMNA_ID_ANTERIOR + ', no es un respaldo de más. NO se toca.');
       return;
     }
 
