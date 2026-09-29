@@ -637,6 +637,7 @@
         { campo: 'ACTUALIZADO_POR', titulo: 'Actualizado por', tipo: 'texto' },
         { campo: 'FECHA', titulo: 'Fecha', tipo: 'fecha' },
       ],
+      accionesFila: [{ icono: 'car', titulo: 'Ver vehículo', alHacer: (c) => verFichaVehiculoDesdeOtroModulo(c.FOLIO) }],
     });
 
     // Solo Total/Hoy son "categorías" clickeables — Vehículos con cambios

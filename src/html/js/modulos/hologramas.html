@@ -157,6 +157,7 @@
         },
       ],
       accionesFila: [].concat(
+        [{ icono: 'car', titulo: 'Ver vehículo', visible: (h) => !!h.FOLIO, alHacer: (h) => verFichaVehiculoDesdeOtroModulo(h.FOLIO) }],
         puedeEditar ? [{
           icono: 'restablecer', titulo: 'Actualizar desde el catálogo de Vehículos',
           visible: (h) => h.EN_CATALOGO && h.DESACTUALIZADOS.length > 0,

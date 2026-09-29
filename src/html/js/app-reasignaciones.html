@@ -88,6 +88,7 @@
         { campo: 'NO_EMPLEADO_SALIENTE', titulo: 'No. de empleado saliente', tipo: 'texto', visible: false },
         { campo: 'NO_EMPLEADO_ENTRANTE', titulo: 'No. de empleado entrante', tipo: 'texto', visible: false },
       ],
+      accionesFila: [{ icono: 'car', titulo: 'Ver vehículo', alHacer: (r) => verFichaVehiculoDesdeOtroModulo(r.FOLIO_VEHICULO) }],
       seleccionable: true,
       alEliminar: puedeEditar ? async (filas) => {
         await Promise.all(filas.map((f) => callServer('apiEliminarReasignacionVehicular', state.token, f.ID)));

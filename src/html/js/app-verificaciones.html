@@ -110,7 +110,8 @@
             : '—'),
         },
       ],
-      accionesFila: puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (v) => abrirEditarVerificacion(v) }] : [],
+      accionesFila: [{ icono: 'car', titulo: 'Ver vehículo', alHacer: (v) => verFichaVehiculoDesdeOtroModulo(v.FOLIO) }]
+        .concat(puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (v) => abrirEditarVerificacion(v) }] : []),
       // Casillas para todos: copiar sirve a cualquiera; sin permiso, la barra explica por qué no hay "Eliminar"
       seleccionable: true,
       alEliminar: puedeEditar ? async (filas) => {

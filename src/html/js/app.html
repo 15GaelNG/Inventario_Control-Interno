@@ -537,6 +537,18 @@
     }, 2500);
   }
 
+  // Folio pendiente de abrir en la ficha de Vehículos: lo usan los botones "Ver
+  // vehículo" de otras tablas (Verificaciones, Inspecciones, Sensor, Hologramas,
+  // Incidencias, Cambios y Reasignaciones) — navegan a Vehículos y, en cuanto ese
+  // módulo termina de montarse y cargar su lista, initVehiculos lo revisa y abre
+  // la ficha directo, sin que el usuario tenga que buscar el folio a mano.
+  let folioFichaVehiculoPendiente = null;
+  function verFichaVehiculoDesdeOtroModulo(folio) {
+    if (!folio) return;
+    folioFichaVehiculoPendiente = folio;
+    navegarA('vehiculos', 'Vehículos');
+  }
+
   function navegarA(vista, etiqueta) {
     document.querySelectorAll('.nav-item, .nav-subitem').forEach((el) => {
       el.classList.toggle('active', el.dataset.view === vista);
@@ -1866,14 +1878,14 @@
         { campo: 'INSPECCION_SALIDA', titulo: 'Inspección de salida', tipo: 'texto', visible: false },
         { campo: 'MECANICO', titulo: 'Mecánico', tipo: 'texto', visible: false },
       ],
-      accionesFila: puedeEditar ? [
+      accionesFila: [{ icono: 'car', titulo: 'Ver vehículo', alHacer: (inc) => verFichaVehiculoDesdeOtroModulo(inc.FOLIO) }].concat(puedeEditar ? [
         {
           icono: 'lock-open', titulo: 'Cerrar incidencia',
           visible: (inc) => inc.ESTADO === 'ABIERTA',
           alHacer: (inc) => abrirModalCierre(inc.ID, inc.FOLIO),
         },
         { icono: 'pencil', titulo: 'Editar', alHacer: (inc) => abrirModalEditar(inc) },
-      ] : [],
+      ] : []),
       seleccionable: true,
       alEliminar: puedeEditar ? async (filas) => {
         await Promise.all(filas.map((f) => callServer('apiEliminarIncidencia', state.token, f.ID)));
@@ -2794,6 +2806,16 @@
     // En paralelo, no uno tras otro — los catálogos no dependen de la lista
     // de vehículos ni viceversa.
     await Promise.all([cargarCatalogosVehiculo(), cargar()]);
+
+    // Se llegó aquí desde "Ver vehículo" en otra tabla (verFichaVehiculoDesdeOtroModulo):
+    // abre esa ficha directo, sin que el usuario tenga que buscar el folio a mano.
+    if (folioFichaVehiculoPendiente) {
+      const folio = folioFichaVehiculoPendiente;
+      folioFichaVehiculoPendiente = null;
+      const v = todosLosVehiculos.find((x) => x.FOLIO === folio);
+      if (v) abrirFichaVehiculo(v);
+      else toastError('No se encontró el vehículo con folio ' + folio);
+    }
   }
 
   // ---------- Uber (usuarios autorizados) ----------
