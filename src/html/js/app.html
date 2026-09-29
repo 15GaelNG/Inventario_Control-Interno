@@ -2231,42 +2231,30 @@
       return ruta ? '<button type="button" class="secondary" data-archivo="' + tipo + '" data-ruta="' + escaparHtml(ruta) + '">Ver</button>' : '—';
     }
 
-    // ---------- Captura de verificación/sensor/holograma/incidencia desde la ficha ----------
+    // ---------- Captura de verificación/sensor/holograma/incidencia/inspección desde la
+    // ficha ----------
     // Mismo "formato de captura" que Líneas Telefónicas (ln-captura-*): un modal con ícono,
-    // tipo, título y cuerpo scrollable. El folio ya se sabe (es el de la ficha abierta), así
-    // que aquí no hay paso de "buscar vehículo" como en el formulario propio de cada módulo —
-    // en su lugar, un resumen fijo arriba (resumenVehiculoCaptura) para confirmar la unidad.
-    function resumenVehiculoCaptura(completo) {
-      const datos = [
-        ['Placa', completo['PLACA']],
-        ['Marca / Línea', [completo['MARCA'], completo['LINEA VEHICULO']].filter(Boolean).join(' · ')],
-        ['Año', completo['MODELO']],
-        ['Departamento', completo['DEPARTAMENTO']],
-        ['Responsable', completo['RESPONSABLE VEHICULO']],
-        ['Estatus', completo['ESTATUS']],
-      ].filter((d) => d[1]);
-      return '<div class="info-grid" style="margin-bottom:16px">' + datos.map((d) => itemInfo(d[0], d[1])).join('') + '</div>';
-    }
-    /** Devuelve el contenedor donde va el formulario (NO el cuerpo completo: el resumen del
-     *  vehículo, si viene "completo", queda arriba y no se debe borrar al mostrar "Cargando…"). */
-    function abrirCapturaVehiculo(icono, tipo, titulo, subtitulo, completo) {
+    // tipo, título y cuerpo scrollable. El folio ya se sabe (es el de la ficha abierta y
+    // queda en el subtítulo del modal), así que aquí no hay paso de "buscar vehículo" como
+    // en el formulario propio de cada módulo.
+    function abrirCapturaVehiculo(icono, tipo, titulo, subtitulo) {
       document.getElementById('veh-captura-icono').innerHTML = Iconos.svg(icono);
       document.getElementById('veh-captura-tipo').textContent = tipo;
       document.getElementById('veh-captura-titulo').textContent = titulo;
       document.getElementById('veh-captura-subtitulo').textContent = subtitulo || '';
       const cuerpo = document.getElementById('veh-captura-cuerpo');
-      cuerpo.innerHTML = (completo ? resumenVehiculoCaptura(completo) : '') + '<div id="veh-captura-form"></div>';
+      cuerpo.innerHTML = '';
       document.getElementById('veh-modal-captura').hidden = false;
       refreshIcons();
-      return document.getElementById('veh-captura-form');
+      return cuerpo;
     }
     function cerrarCapturaVehiculo() {
       document.getElementById('veh-modal-captura').hidden = true;
       document.getElementById('veh-captura-cuerpo').innerHTML = '';
     }
 
-    function abrirAgregarVerificacion(vResumen, completo) {
-      const cuerpo = abrirCapturaVehiculo('clipboard-check', 'VERIFICACIÓN', 'Nueva verificación', 'Folio ' + vResumen.FOLIO, completo);
+    function abrirAgregarVerificacion(vResumen) {
+      const cuerpo = abrirCapturaVehiculo('clipboard-check', 'VERIFICACIÓN', 'Nueva verificación', 'Folio ' + vResumen.FOLIO);
       Formulario.crear(cuerpo, {
         ancho: 'uno',
         campos: [
@@ -2290,7 +2278,7 @@
     }
 
     function abrirAgregarIncidencia(vResumen, completo) {
-      const cuerpo = abrirCapturaVehiculo('wrench', 'INCIDENCIA', 'Nueva incidencia', 'Folio ' + vResumen.FOLIO, completo);
+      const cuerpo = abrirCapturaVehiculo('wrench', 'INCIDENCIA', 'Nueva incidencia', 'Folio ' + vResumen.FOLIO);
       Formulario.crear(cuerpo, {
         ancho: 'uno',
         campos: [
@@ -2313,8 +2301,8 @@
       });
     }
 
-    async function abrirAgregarSensor(vResumen, completo) {
-      const cuerpo = abrirCapturaVehiculo('radio', 'SENSOR', 'Instalar sensor', 'Folio ' + vResumen.FOLIO, completo);
+    async function abrirAgregarSensor(vResumen) {
+      const cuerpo = abrirCapturaVehiculo('radio', 'SENSOR', 'Instalar sensor', 'Folio ' + vResumen.FOLIO);
       cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
       let datos;
       try {
@@ -2361,7 +2349,7 @@
     const COMBUSTIBLES_HOLOGRAMA = ['MAGNA', 'PREMIUM', 'DIESEL', 'GASOLINA', 'TODOS LOS PRODUCTOS'];
 
     function abrirAgregarHolograma(vResumen, completo) {
-      const cuerpo = abrirCapturaVehiculo('credit-card', 'HOLOGRAMA', 'Nuevo holograma', 'Folio ' + vResumen.FOLIO, completo);
+      const cuerpo = abrirCapturaVehiculo('credit-card', 'HOLOGRAMA', 'Nuevo holograma', 'Folio ' + vResumen.FOLIO);
       const form = Formulario.crear(cuerpo, {
         ancho: 'uno',
         campos: [
@@ -2400,7 +2388,7 @@
      *  cualquiera (ver modulos/inspecciones.html), así que aquí solo se le da el cuerpo del
      *  modal, el folio (ya lo sabemos) y qué hacer al guardar en vez de "listo para el siguiente". */
     function abrirAgregarInspeccion(vResumen, completo, hologramas) {
-      const cuerpo = abrirCapturaVehiculo('clipboard-list', 'INSPECCIÓN', 'Nueva inspección', 'Folio ' + vResumen.FOLIO, completo);
+      const cuerpo = abrirCapturaVehiculo('clipboard-list', 'INSPECCIÓN', 'Nueva inspección', 'Folio ' + vResumen.FOLIO);
       prepararCaptura(cuerpo, {
         folioFijo: vResumen.FOLIO,
         // El "Cierre" pide Conductor y Holograma: se sugieren con el responsable del
@@ -2583,8 +2571,8 @@
         detalle.querySelectorAll('[data-agregar]').forEach((btn) => {
           btn.addEventListener('click', () => {
             const tipo = btn.dataset.agregar;
-            if (tipo === 'verificacion') abrirAgregarVerificacion(vResumen, completo);
-            else if (tipo === 'sensor') abrirAgregarSensor(vResumen, completo);
+            if (tipo === 'verificacion') abrirAgregarVerificacion(vResumen);
+            else if (tipo === 'sensor') abrirAgregarSensor(vResumen);
             else if (tipo === 'holograma') abrirAgregarHolograma(vResumen, completo);
             else if (tipo === 'incidencia') abrirAgregarIncidencia(vResumen, completo);
             else if (tipo === 'inspeccion') abrirAgregarInspeccion(vResumen, completo, hologramas);
