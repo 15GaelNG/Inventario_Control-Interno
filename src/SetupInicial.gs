@@ -323,10 +323,32 @@ function verPerfiles() {
 }
 
 /**
+/**
+ * Arma la línea de resumen de una hoja para los dos reportes de Relaciones, para que
+ * ambos muestren lo mismo. Los tres números que NO son "diferencias" importan tanto
+ * como ellas (ver el MAPA en Relaciones.gs):
+ *   histórica  — una bitácora fechada que se dejó como estaba a propósito
+ *   centinela  — el catálogo traía un estatus ('BAJA VEHICULAR') en vez de un dato
+ *   huérfana   — la copia apunta a un folio/serie que ya no existe en Vehículos
+ */
+function lineaRelaciones_(hoja, r, verbo) {
+  const partes = [r.revisadas + ' filas revisadas', r.diferencias + ' ' + verbo];
+  if (r.diferenciasHistoricas) partes.push(r.diferenciasHistoricas + ' histórica(s) sin tocar');
+  if (r.centinelasOmitidos) partes.push(r.centinelasOmitidos + ' omitida(s) por centinela en el catálogo');
+  if (r.huerfanos) partes.push(r.huerfanos + ' huérfana(s)');
+  if (r.clavesDuplicadasOmitidas) partes.push(r.clavesDuplicadasOmitidas + ' con clave duplicada en el origen (no se revisaron)');
+  return '  · ' + hoja + ' [' + (r.tipo || 'cache') + ']: ' + partes.join(', ');
+}
+
+/**
  * Corre Relaciones.revisar() en modo SOLO REPORTE (corregir: false) — compara lo que
  * copiaron Instalación de Sensores, Verificaciones y Hologramas contra el catálogo
  * de Vehículos y dice cuántas diferencias hay, sin tocar ni una celda. Úsalo antes
  * de decidir si vale la pena activar la corrección automática (ver Relaciones.gs).
+ *
+ * Las hojas marcadas [bitacora] salen con sus diferencias como "histórica(s) sin
+ * tocar": son inspecciones e incidencias fechadas, y su departamento es el que tenía
+ * la unidad ESE día. No son deriva que haya que arreglar.
  *
  * Correr desde el editor: seleccionar "revisarRelacionesSoloReporte" arriba y
  * "Ejecutar"; el resultado sale en Ver > Registros (Ctrl+Enter) y además queda
@@ -337,12 +359,7 @@ function revisarRelacionesSoloReporte() {
   const resultado = Relaciones.revisar({ corregir: false });
   const lineas = ['Relaciones.revisar({corregir: false}) —', ''];
   Object.keys(resultado).forEach((hoja) => {
-    const r = resultado[hoja];
-    lineas.push(
-      '  · ' + hoja + ': ' + r.revisadas + ' filas revisadas, ' + r.diferencias + ' diferencia(s), ' +
-      r.huerfanos + ' huérfana(s)' +
-      (r.clavesDuplicadasOmitidas ? ', ' + r.clavesDuplicadasOmitidas + ' con clave duplicada en el origen (no se revisaron)' : '')
-    );
+    lineas.push(lineaRelaciones_(hoja, resultado[hoja], 'diferencia(s)'));
   });
   lineas.push('', 'Detalle de cada diferencia: hoja LOG_RELACIONES, en el mismo spreadsheet de Vehículos.');
   const mensaje = lineas.join('\n');
@@ -745,9 +762,10 @@ function revisarRelacionesYCorregir() {
   const resultado = Relaciones.revisar({ corregir: true });
   const lineas = ['Relaciones.revisar({corregir: true}) —', ''];
   Object.keys(resultado).forEach((hoja) => {
-    const r = resultado[hoja];
-    lineas.push('  · ' + hoja + ': ' + r.revisadas + ' filas revisadas, ' + r.diferencias + ' corregida(s), ' + r.huerfanos + ' huérfana(s)');
+    lineas.push(lineaRelaciones_(hoja, resultado[hoja], 'corregida(s)'));
   });
+  lineas.push('', 'Lo que dice "histórica(s) sin tocar" y "omitida(s) por centinela" NO se corrigió,');
+  lineas.push('a propósito. El detalle de cada caso está en LOG_RELACIONES con su propio TIPO.');
   const mensaje = lineas.join('\n');
   Logger.log(mensaje);
   return mensaje;

@@ -17,6 +17,15 @@
  * completo (no solo un valor de clave) para poder resolver cualquiera de los
  * dos.
  *
+ * DOS CLASES DE COPIA, y se tratan al revés (`tipo` en cada entrada del MAPA):
+ *   - `cache`    — describe el estado de HOY (la instalación del sensor, la tarjeta de
+ *                  combustible). Si el dueño cambia, la copia está vieja: se pisa.
+ *   - `bitacora` — describe el estado del DÍA DE UN EVENTO fechado (la inspección, la
+ *                  incidencia). Si el dueño cambia, la copia NO está vieja: está
+ *                  correcta, y pisarla borraría la evidencia. Solo se reporta.
+ *   La misma columna (DEPARTAMENTO) se propaga en una y se congela en la otra. No es
+ *   una excepción: es la diferencia entre un caché y un libro de registro.
+ *
  * Piezas (ver docs/relaciones.md para el detalle de cada una):
  *   MAPA                — el único bloque que se edita a mano
  *   propagar()           — llamar después de editar el registro dueño
@@ -48,6 +57,7 @@ const Relaciones = (function () {
           // Firma de columnas para ubicar la pestaña real (igual que hacen
           // los Services de cada módulo con SheetUtils.getSheetByColumns).
           firma: ['ID_SENSOR', 'FOLIO', 'SERIE SENSOR'],
+          tipo: 'cache',   // describe la instalación de HOY: se pisa sin pensarlo
           claveOrigen: 'FOLIO',
           clave: 'FOLIO',
           // columna en VEHICULOS → columna en esta hoja (ver SensoresService.COPIADAS_DE_VEHICULO)
@@ -70,6 +80,7 @@ const Relaciones = (function () {
         {
           nombre: 'VERIFICACIONES',
           firma: ['ID_VERIFICACION', 'FOLIO VEHICULO', 'COMPROBANTE VERIFICACION'],
+          tipo: 'cache',   // solo copia PLACA, y la placa del vehículo es la de hoy
           claveOrigen: 'FOLIO',
           clave: 'FOLIO VEHICULO',
           columnas: { 'PLACA': 'PLACA' },
@@ -77,6 +88,7 @@ const Relaciones = (function () {
         {
           nombre: 'HOLOGRAMAS',
           firma: ['ID_HOLOGRAMA', 'CALCOMANIA EOX', 'ESTATUS EOX'],
+          tipo: 'cache',   // la tarjeta de combustible describe al vehículo de HOY
           claveOrigen: 'SERIE VEHICULO',
           clave: 'SERIE VEHICULO',
           // ver HologramasService.DEL_CATALOGO — aquí NO van TIPO COMBUSTIBLE (es el
@@ -92,9 +104,65 @@ const Relaciones = (function () {
             'CAPACIDAD COMBUSTIBLE (LTS)': 'CAPACIDAD DEL TANQUE',
           },
         },
+        {
+          // BITÁCORA, no caché. Cada renglón es una inspección con FECHA: su
+          // DEPARTAMENTO es el que tenía la unidad EL DÍA que se inspeccionó. Si se
+          // propagara, se borraría a qué área se le revisó el carro — y con eso el
+          // valor de la inspección como evidencia. Está en el MAPA a propósito, para
+          // que revisar() REPORTE la deriva sin tocarla, y para que la próxima persona
+          // vea que no se olvidó: se decidió congelarla.
+          nombre: 'INSPECCION VEHICULAR',
+          firma: ['ID INSPECCION', 'FOLIO', 'PUNTAJE FINAL INSPECCION'],
+          tipo: 'bitacora',
+          claveOrigen: 'FOLIO',
+          clave: 'FOLIO',
+          columnas: {
+            'DEPARTAMENTO': 'DEPARTAMENTO',
+            'SEDE': 'SEDE',
+            'UBICACION': 'OFICINA / DESARROLLO',
+            'RESPONSABLE VEHICULO': 'RESPONSABLE',
+          },
+        },
+        {
+          // BITÁCORA por la misma razón: cada renglón es una incidencia fechada.
+          nombre: 'INCIDENCIAS',
+          firma: ['ID_INCIDENCIA', 'FOLIO', 'NOMBRE MECANICO'],
+          tipo: 'bitacora',
+          claveOrigen: 'FOLIO',
+          clave: 'FOLIO',
+          columnas: {
+            'DEPARTAMENTO': 'DEPARTAMENTO',
+            'MODELO': 'MODELO',
+          },
+        },
+        // TICKETS NO va aquí, aunque tenga DEPARTAMENTO y PLACA. Su DEPARTAMENTO es el
+        // de quien LEVANTÓ el ticket (va pegado a SOLICITANTE), no el del vehículo:
+        // medido en producción, 320 de sus filas no coinciden con el catálogo y eso es
+        // correcto. Compararla contra VEHICULOS sería comparar dos cosas distintas.
       ],
     },
   };
+
+  /**
+   * Valores que VEHICULOS guarda en una columna pero que NO son un dato de esa columna:
+   * son estatus o relleno. Medido en producción el 29/09/2026, la columna DEPARTAMENTO
+   * traía 123 filas con 'BAJA VEHICULAR', 14 con 'NUCO SIN INFORMACION' y 2 con
+   * 'SIN ESPECIFICAR' — 139 de 648 (21%).
+   *
+   * Importa porque propagar esos valores no corrige nada: PISA el departamento bueno
+   * que la copia sí tiene. Con los números de ese día, una corrida de
+   * revisar({corregir:true}) sin esta guarda habría escrito 'BAJA VEHICULAR' encima de
+   * 9 hologramas que tenían su área de verdad.
+   *
+   * 'OOAM TECNICO' y 'OOAM ADMINISTRATIVO' (25 filas) NO van en esta lista: parecen
+   * departamentos reales que faltan en el catálogo DEPARTAMENTOS, no centinelas. Lo
+   * correcto ahí es darlos de alta en el catálogo, no dejar de propagarlos.
+   */
+  const CENTINELAS = {
+    'DEPARTAMENTO': ['BAJA VEHICULAR', 'NUCO SIN INFORMACION', 'SIN ESPECIFICAR'],
+  };
+
+  const esBitacora_ = (copia) => copia.tipo === 'bitacora';
 
   const limpiar_ = (v) => String(v == null ? '' : v);
   const normalizar_ = (v) => limpiar_(v).trim().toUpperCase();
@@ -105,6 +173,15 @@ const Relaciones = (function () {
     const nb = Number(limpiar_(b).replace(/[$,\s]/g, ''));
     if (limpiar_(a).trim() !== '' && limpiar_(b).trim() !== '' && !isNaN(na) && !isNaN(nb)) return na === nb;
     return normalizar_(a) === normalizar_(b);
+  }
+
+  /**
+   * ¿El dueño trae un centinela en esta columna? (ver CENTINELAS). Un centinela nunca
+   * se propaga ni se corrige: escribirlo borraría el dato bueno de la copia.
+   */
+  function esCentinela_(colOrigen, valor) {
+    const lista = CENTINELAS[colOrigen];
+    return !!lista && lista.indexOf(normalizar_(valor)) !== -1;
   }
 
   function hojaCopia_(copia, ssId) {
@@ -167,7 +244,15 @@ const Relaciones = (function () {
     lock.waitLock(20000);
     try {
       definicion.copias.forEach((copia) => {
-        const columnasTocadas = Object.keys(cambios).filter((c) => copia.columnas[c] !== undefined);
+        // Una bitácora guarda el valor del DÍA DEL EVENTO: propagarle el de hoy
+        // reescribiría el pasado. Ver el comentario de cada una en el MAPA.
+        if (esBitacora_(copia)) return;
+
+        const columnasTocadas = Object.keys(cambios)
+          .filter((c) => copia.columnas[c] !== undefined)
+          // Un centinela ('BAJA VEHICULAR' y compañía) no es un dato: no se pisa con él
+          // lo que la copia sí tiene bueno.
+          .filter((c) => !esCentinela_(c, cambios[c]));
         if (!columnasTocadas.length) return; // costo cero: esta copia no copia nada de lo que cambió
 
         const valorClave = filaOrigen[copia.claveOrigen];
@@ -228,6 +313,10 @@ const Relaciones = (function () {
       throw new Error('El ' + copia.claveOrigen + ' "' + valorClave + '" no existe en ' + origenNombre);
     }
 
+    // Aquí SÍ se copia aunque la copia sea una bitácora, y aunque el valor sea un
+    // centinela: al dar de alta el registro, el valor de hoy ES el del día del evento.
+    // Congelarlo es justo lo que se quiere — lo que no se hace es volver a tocarlo
+    // después (ver propagar()).
     const datos = {};
     datos[copia.clave] = valorClave;
     Object.keys(copia.columnas).forEach((colOrigen) => {
@@ -280,6 +369,7 @@ const Relaciones = (function () {
         const filasCopia = SheetUtils.getAll(ssId, hoja.getName());
         const columnasOrigen = Object.keys(copia.columnas);
         let revisadas = 0, diferencias = 0, huerfanos = 0, duplicadosOmitidos = 0;
+        let centinelasOmitidos = 0, historicas = 0;
         const correcciones = {}; // columna destino → { valorNuevo: [numFila, …] }
 
         filasCopia.forEach((filaCopia, i) => {
@@ -304,6 +394,25 @@ const Relaciones = (function () {
             const tenia = filaCopia[colDestino];
             const debiaSer = filaOrigen[colOrigen];
             if (mismoValor_(tenia, debiaSer)) return;
+
+            // El dueño trae un estatus o relleno donde debería ir un dato. No se cuenta
+            // como diferencia porque no hay nada que corregir: lo que está mal es el
+            // catálogo, no la copia. Se loguea para que se vea y se arregle allá.
+            if (esCentinela_(colOrigen, debiaSer)) {
+              centinelasOmitidos++;
+              entradasLog.push({ tipo: 'OMITIDO_CENTINELA', hoja: hoja.getName(), clave: claveValor, columna: colDestino, tenia: tenia, quedo: debiaSer });
+              return;
+            }
+
+            // En una bitácora la diferencia se REPORTA pero no se toca — con un tipo
+            // propio para poder filtrarla en LOG_RELACIONES y no confundirla con deriva
+            // que sí hay que arreglar.
+            if (esBitacora_(copia)) {
+              historicas++;
+              entradasLog.push({ tipo: 'DIFERENCIA_HISTORICA', hoja: hoja.getName(), clave: claveValor, columna: colDestino, tenia: tenia, quedo: debiaSer });
+              return;
+            }
+
             diferencias++;
             entradasLog.push({ tipo: 'DIFERENCIA', hoja: hoja.getName(), clave: claveValor, columna: colDestino, tenia: tenia, quedo: debiaSer });
             if (corregir) {
@@ -326,8 +435,13 @@ const Relaciones = (function () {
         }
 
         resultado[copia.nombre] = {
+          tipo: copia.tipo || 'cache',
           revisadas: revisadas, diferencias: diferencias, huerfanos: huerfanos,
-          clavesDuplicadasOmitidas: duplicadosOmitidos, corregido: corregir,
+          clavesDuplicadasOmitidas: duplicadosOmitidos,
+          centinelasOmitidos: centinelasOmitidos,
+          diferenciasHistoricas: historicas,
+          // una bitácora nunca se corrige, aunque se haya pedido corregir
+          corregido: corregir && !esBitacora_(copia),
         };
       });
 
@@ -385,6 +499,10 @@ const Relaciones = (function () {
     lock.waitLock(20000);
     try {
       SheetUtils.update(ssId, definicion.hoja, claveVieja, { [claveNombre]: claveNueva }, claveNombre);
+      // OJO: aquí NO se excluyen las bitácoras, al contrario de propagar(). Lo que cambia
+      // es la CLAVE, no un atributo: si el FOLIO de una inspección vieja no sigue al
+      // vehículo, la inspección se vuelve huérfana y se pierde de qué unidad era. La
+      // bitácora congela el atributo, no el vínculo.
       definicion.copias.filter((c) => c.claveOrigen === claveNombre).forEach((copia) => {
         const hoja = hojaCopia_(copia, ssId);
         const encabezados = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0];

@@ -26,7 +26,7 @@ Por dónde entrar según lo que traigas.
 
 ## Lo que hay que saber antes de tocar producción
 
-Tres cosas que no están en el código y que muerden:
+Cuatro cosas que no están en el código y que muerden:
 
 1. **Agregar, mover o quitar una COLUMNA rompe la app de AppSheet** hasta que alguien
    regenere el esquema en su editor, y les pega a los usuarios en campo. Quitar *filas* no.
@@ -38,6 +38,11 @@ Tres cosas que no están en el código y que muerden:
    todos entran. Correr `configurarPermisos()` allá dejaría a 40 personas sin módulos hasta
    que alguien les asigne perfil. Detalle en
    [limpieza-spreadsheet.md](limpieza-spreadsheet.md).
+4. **`VEHICULOS.DEPARTAMENTO` guarda estatus, no solo departamentos**: 123 de 648 filas
+   dicen `BAJA VEHICULAR`. Sincronizar esa columna sin filtrarlos *borra* el área buena de
+   los otros módulos. Y ojo con la otra mitad: `INSPECCION VEHICULAR` e `INCIDENCIAS` son
+   **bitácoras fechadas**, no cachés — su departamento es el del día del evento y
+   corregirlo reescribe el pasado. Detalle en [relaciones.md](relaciones.md).
 
 ## Los Excel de apoyo, en la raíz del repo
 
