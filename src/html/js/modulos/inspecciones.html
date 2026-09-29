@@ -360,7 +360,7 @@
               <div class="field" data-campo="FOLIO">
                 <label for="ins-folio">Folio del vehículo</label>
                 <input type="text" id="ins-folio" required autocomplete="off" />
-                <span class="form-ayuda">Al elegirlo se traen sus datos y se sugiere el tipo de unidad</span>
+                <span class="form-ayuda">Al elegirlo se traen sus datos y el tipo de unidad se limita a su clase</span>
                 <span class="form-error-campo" hidden></span>
               </div>
               <div class="field" data-campo="TIPO">
@@ -415,6 +415,57 @@
     };
 
     // ----- catálogos -----
+    // Clase de cada "tipo" (en realidad la Línea del vehículo: HONDA 150XR, L200…),
+    // confirmada a mano con Jorge — no viene de ninguna hoja ni catálogo.
+    const CLASE_POR_TIPO = {
+      'NP300 ESTACA': 'CAMIONETA',
+      'RIFTER': 'CAMIONETA',
+      'ITALIKA DM250': 'MOTOCICLETA',
+      'MOTOCARRO KINGWAY': 'MOTOCARRO',
+      'KWID': 'AUTOMOVIL',
+      'ITALIKA AT125': 'MOTOCARRO',
+      'PIPA': 'CAMION',
+      'URVAN': 'CAMIONETA',
+      'SAVEIRO': 'CAMIONETA',
+      'AUTOS': 'AUTOMOVIL',
+      'HONDA 150XR': 'MOTOCARRO',
+      'NP300 CABINA REDILAS': 'CAMIONETA',
+      'MOTOCARRO MUEVETEC': 'MOTOCARRO',
+      'RAM 700': 'CAMIONETA',
+      'RAM 4000': 'CAMION',
+      'MOTOCARRO': 'MOTOCARRO',
+      'XPANDER': 'CAMIONETA',
+      'L200': 'CAMIONETA',
+    };
+    // Prefijo del folio (VehiculosService.PREFIJOS_CLASE) → clase que debe filtrar.
+    // "FOL" (Motocarro/Cuatrimoto/Nuco sin información comparten ese prefijo genérico,
+    // no se puede saber cuál es solo con el folio) y cualquier prefijo no reconocido
+    // no filtran: se muestran todos los tipos, como antes.
+    const CLASE_POR_PREFIJO_FOLIO = {
+      AUT: 'AUTOMOVIL', CTA: 'CAMIONETA', CON: 'CAMION', MOT: 'MOTOCICLETA',
+      REM: 'REMOLQUE', MAQ: 'MAQUINARIA MENOR',
+    };
+    /** "AUT0640" → "AUTOMOVIL"; folios sin prefijo reconocido (ej. FOL0650) → null (no filtra). */
+    function claseDelFolio(folio) {
+      const prefijo = String(folio || '').trim().match(/^[A-Za-z]+/);
+      return (prefijo && CLASE_POR_PREFIJO_FOLIO[prefijo[0].toUpperCase()]) || null;
+    }
+
+    let todosLosTipos = [];
+    /** Repinta "Tipo de unidad": si el folio filtra por clase, solo esos tipos (más los
+     *  que no tienen clase conocida en CLASE_POR_TIPO, para no ocultar de más). */
+    function pintarOpcionesTipo(folio) {
+      const anterior = campoTipo.value;
+      const clase = claseDelFolio(folio);
+      const visibles = clase
+        ? todosLosTipos.filter((t) => !CLASE_POR_TIPO[t.tipo.toUpperCase()] || CLASE_POR_TIPO[t.tipo.toUpperCase()] === clase)
+        : todosLosTipos;
+      campoTipo.innerHTML = '<option value=""></option>' + visibles
+        .map((t) => `<option value="${escaparHtml(t.tipo)}" ${t.listo ? '' : 'disabled'}>` +
+          `${escaparHtml(t.tipo)}${t.listo ? '' : ' (sin formato)'}</option>`).join('');
+      if (anterior && visibles.some((t) => t.tipo === anterior)) campoTipo.value = anterior;
+    }
+
     const catalogos = Promise.all([
       callServerCacheado('apiListarVehiculosBasico', state.token).then((vehiculos) => {
         Combobox.crear(campoFolio, {
@@ -427,9 +478,8 @@
       }).catch((err) => Notificar.error('No se pudo cargar el catálogo de vehículos: ' + err.message)),
 
       callServerCacheado('apiTiposInspeccion', state.token).then((tipos) => {
-        campoTipo.innerHTML = '<option value=""></option>' + (tipos || [])
-          .map((t) => `<option value="${escaparHtml(t.tipo)}" ${t.listo ? '' : 'disabled'}>` +
-            `${escaparHtml(t.tipo)}${t.listo ? '' : ' (sin formato)'}</option>`).join('');
+        todosLosTipos = tipos || [];
+        pintarOpcionesTipo(campoFolio.value);
       }).catch((err) => Notificar.error('No se pudieron cargar los tipos: ' + err.message)),
     ]);
 
@@ -457,6 +507,7 @@
     let buscando = null;   // la búsqueda en curso, para que "Siguiente" la espere
     function buscarVehiculo() {
       const folio = campoFolio.value.trim();
+      pintarOpcionesTipo(folio);   // por el prefijo (AUT/CTA/CON/MOT…), sin esperar al vehículo
       if (folio === pedido && (vehiculo || buscando)) return buscando || Promise.resolve();
       pedido = folio;
       if (!folio) { vehiculo = null; pintarFicha(); return Promise.resolve(); }
