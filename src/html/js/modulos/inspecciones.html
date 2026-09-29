@@ -422,7 +422,8 @@
      *  esa clase (más los que no tienen clase detectada, para no ocultar de más). */
     function pintarOpcionesTipo(clase) {
       const anterior = campoTipo.value;
-      const visibles = clase ? todosLosTipos.filter((t) => !t.clase || t.clase === clase) : todosLosTipos;
+      const claseNorm = String(clase || '').trim().toUpperCase();
+      const visibles = claseNorm ? todosLosTipos.filter((t) => !t.clase || t.clase === claseNorm) : todosLosTipos;
       campoTipo.innerHTML = '<option value=""></option>' + visibles
         .map((t) => `<option value="${escaparHtml(t.tipo)}" ${t.listo ? '' : 'disabled'}>` +
           `${escaparHtml(t.tipo)}${t.listo ? '' : ' (sin formato)'}</option>`).join('');
