@@ -1389,6 +1389,16 @@
      * Columnas del inventario (DataTable): las de siempre a la vista; las demás de la vista del AppSheet, ocultas
      * (se agregan desde "Vista").
      */
+    /** Acciones masivas de equipos (barra de la tabla con 2 o más seleccionados). `clave` = LineasRegistros.MASIVAS. */
+    const ACCIONES_MASIVAS = [
+      { clave: 'RESGUARDO', texto: 'Mandar a resguardo', boton: 'Mandar a resguardo', icono: 'archive',
+        ayuda: 'Pone los equipos seleccionados en RESGUARDO', efecto: 'El ESTATUS DEL EQUIPO de cada uno cambia a RESGUARDO; el responsable no cambia.' },
+      { clave: 'REASIGNAR', texto: 'Reasignar', boton: 'Reasignar', icono: 'user-round-pen',
+        ayuda: 'Asigna los equipos seleccionados a otro responsable', efecto: 'Todos los equipos pasan al nuevo responsable; lo que dejes vacío (No. empleado, puesto, departamento) queda como estaba en cada equipo.' },
+      { clave: 'CANCELAR', texto: 'Cancelar equipos', boton: 'Cancelar equipos', icono: 'circle-x', peligro: true,
+        ayuda: 'Pone los equipos seleccionados en CANCELADO', efecto: 'El ESTATUS DEL EQUIPO de cada uno cambia a CANCELADO.' },
+    ];
+
     const TABLAS_INVENTARIO = {
       equipos: {
         detalle: 'equipo', textoVacio: 'Sin equipos',
@@ -1610,6 +1620,10 @@
           etiquetaFila: cfg.etiqueta,
           detalle: false, // la ficha completa (responsable, evidencias, historial) es su propia pantalla
           accionesFila: [{ icono: 'eye', titulo: 'Ver ficha', alHacer: (r) => abrir(cfg.detalle, r.id) }],
+          // Acciones masivas: solo equipos y desde 2 seleccionados (las de líneas están por definirse con el área)
+          accionesSeleccion: modulo === 'equipos' ? ACCIONES_MASIVAS.map((a) => ({
+            icono: a.icono, texto: a.texto, titulo: a.ayuda, minimo: 2, peligro: !!a.peligro, alHacer: (filas) => abrirMasiva(a, filas),
+          })) : [],
           ayuda: 'Doble clic en una fila (o el ojo en Acciones) abre su ficha. La flecha de cada columna filtra, ordena, fija u oculta; ' +
             '"Vista" agrega las demás columnas del AppSheet (compañía, sede, comentarios, PIN…). "Última responsiva" y "Última inspección" ' +
             'abren la más reciente de la carpeta del NUCO en NUCOS. Los indicadores de arriba filtran con un clic.',
@@ -2138,6 +2152,82 @@
             }).catch((e) => { mostrarErrorCaptura(mensajeError(e)); restaurarGuardado(); });
           });
         }).catch((e) => { cuerpo.innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>'; });
+      }
+
+      /**
+       * Acción masiva sobre los equipos seleccionados (2 o más): el servidor arma el formulario
+       * (apiLineasFormularioMasivo) y aplica el cambio equipo por equipo con su bitácora (apiLineasAccionMasiva).
+       * La línea de cada equipo no cambia.
+       */
+      async function abrirMasiva(accion, filas) {
+        const permisos = await cargarPermisos().catch(() => null);
+        if (!permisos || !permisos.puedeOperar) { aviso(icono('triangle-alert', 'ln-alerta') + ' Tu rol no permite modificar equipos.', 6000); return; }
+        const ids = filas.map((r) => r.id);
+        const etiqueta = (r) => 'NUCO ' + (r.nuco || '—') + ' · ' + (r.modelo || 'Sin modelo') + ' · ' + (r.responsable || 'Sin responsable') + ' · ' + (r.estatus || 'Sin estatus');
+        $('#ln-modal-captura', raiz).hidden = false;
+        $('#ln-captura-icono', raiz).innerHTML = icono(accion.icono);
+        $('#ln-captura-tipo', raiz).textContent = 'ACCIÓN MASIVA';
+        $('#ln-captura-titulo', raiz).textContent = accion.texto;
+        $('#ln-captura-subtitulo', raiz).textContent = miles(filas.length) + ' equipos seleccionados · cada cambio queda en la bitácora de su equipo';
+        const cuerpo = $('#ln-captura-cuerpo', raiz);
+        cuerpo.innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando…</p>';
+        const sesion = captura = { tipo: 'MASIVA', firmas: {} };
+        let form;
+        try {
+          form = await llamar('apiLineasFormularioMasivo', accion.clave);
+        } catch (e) {
+          if (captura === sesion) cuerpo.innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>';
+          return;
+        }
+        if (captura !== sesion) return;
+        const elementos = form.elementos;
+        captura.contexto = { formulario: elementos };
+        const excede = filas.length > form.maximo;
+        cuerpo.innerHTML =
+          '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' ' + esc(accion.efecto) + ' <strong>La línea de cada equipo no cambia.</strong></div>' +
+          (excede ? '<div class="error-msg">Son ' + miles(filas.length) + ' equipos; el máximo por operación es ' + form.maximo + '. Quita algunos de la selección.</div>' : '') +
+          '<details class="ln-masiva-lista"><summary>' + icono('list') + ' Ver los ' + miles(filas.length) + ' equipos seleccionados</summary><ul>' +
+            filas.map((r) => '<li>' + esc(etiqueta(r)) + '</li>').join('') + '</ul></details>' +
+          htmlFormularioAppSheet(elementos) +
+          '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div><div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
+          '<button type="button" class="' + (accion.peligro ? 'danger' : 'primary') + ' ln-btn-icono" id="cap-guardar"' + (excede ? ' disabled' : '') + '>' +
+            icono(accion.icono) + ' ' + esc(accion.boton) + ' (' + miles(filas.length) + ')</button></div>';
+        pintarIconos(cuerpo);
+        activarCombosEn(cuerpo, elementos);
+        const ctx = { nuevo: false, tipoInicial: '' };
+        $('#cap-guardar', raiz).addEventListener('click', async () => {
+          $('#cap-error', raiz).hidden = true;
+          const errores = erroresFormularioEn(cuerpo, elementos, '', ctx);
+          marcarErroresEn(cuerpo, errores.map((x) => ({ columna: x.columna, msg: x.corto })));
+          if (errores.length) { mostrarErrorCaptura(errores.map((x) => x.msg).slice(0, 4).join(' · ')); return; }
+          const valores = leerFormularioEn(cuerpo, elementos);
+          const ok = await Confirmar.pedir({
+            titulo: '¿' + accion.boton + ' ' + miles(filas.length) + ' equipos?',
+            mensaje: accion.efecto + (valores.RESPONSABLE ? ' Nuevo responsable: ' + valores.RESPONSABLE + '.' : '') + ' Cada equipo deja su bitácora.',
+            detalle: filas.slice(0, 12).map(etiqueta).concat(filas.length > 12 ? ['… y ' + (filas.length - 12) + ' más'] : []),
+            textoConfirmar: accion.boton, peligro: !!accion.peligro,
+            palabraClave: accion.peligro && filas.length >= 10 ? 'CANCELAR' : undefined,
+          });
+          if (!ok || captura !== sesion) return;
+          estadoGuardado('Aplicando a ' + miles(filas.length) + ' equipos');
+          try {
+            const r = await llamar('apiLineasAccionMasiva', accion.clave, ids, { valores: valores });
+            await cargarIndice(true);
+            cerrarCaptura(true);
+            if (tablas.equipos) tablas.equipos.limpiarSeleccion();
+            if (vigente()) { pintarIndicadores(); pintarListado(); }
+            const omitidos = r.omitidos || [];
+            aviso(icono('circle-check') + ' ' + accion.texto + ': ' + miles(r.hechos.length) + ' equipos actualizados' +
+              (omitidos.length ? ' · ' + omitidos.length + ' sin cambio' : '') + '.', 8000);
+            if (omitidos.length) {
+              aviso(icono('triangle-alert', 'ln-alerta') + ' Sin cambio: ' + omitidos.slice(0, 6).map((o) => 'NUCO ' + (o.nuco || o.id) + ' (' + o.motivo + ')').join(' · ') +
+                (omitidos.length > 6 ? ' · …' : ''), 12000);
+            }
+          } catch (e) {
+            mostrarErrorCaptura(mensajeError(e));
+            restaurarGuardado();
+          }
+        });
       }
 
       // ---- Alta y edición directa del inventario ----

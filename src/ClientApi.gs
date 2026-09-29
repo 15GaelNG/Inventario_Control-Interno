@@ -160,6 +160,12 @@ function apiLineasAccesoriosAgregarArticulo(token, datos) {
 function apiLineasAccesoriosRegistrarMovimiento(token, datos) {
   return LineasAccesorios.registrarMovimiento(token, datos);
 }
+function apiLineasFormularioMasivo(token, accion) {
+  return TelefoniaService.formularioMasivo(token, accion);
+}
+function apiLineasAccionMasiva(token, accion, ids, datos) {
+  return TelefoniaService.accionMasiva(token, accion, ids, datos);
+}
 function apiLineasNotificaciones(token, limite) {
   return TelefoniaService.notificaciones(token, limite);
 }

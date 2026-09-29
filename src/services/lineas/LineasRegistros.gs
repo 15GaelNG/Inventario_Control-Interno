@@ -243,7 +243,8 @@ const LineasRegistros = (function () {
       if (!cumple_(e.editable, valores, ctx)) return;
       if (Object.prototype.hasOwnProperty.call(enviados, e.columna)) valores[e.columna] = texto_(enviados[e.columna]);
     };
-    tomar(orden.filter((e) => e.columna === 'TIPO')[0]);
+    const campoTipo = orden.filter((e) => e.columna === 'TIPO')[0];
+    if (campoTipo) tomar(campoTipo); // las acciones masivas no traen TIPO
     const tipo = texto_(valores['TIPO']).toUpperCase();
     if (ctx.nuevo) {
       // Initial value del AppSheet para un alta
@@ -411,5 +412,113 @@ const LineasRegistros = (function () {
     return { id: id, cambios: resultado.campos, filas: LineasRepo.refrescarIndice([id]) };
   }
 
-  return { formulario, crear, editar, cambiarEstatus, _elementos: elementos_, _resolver: resolver_, _cumple: cumple_ };
+  // ---------------- Acciones masivas de equipos (pedido del área, 29-sep) ----------------
+  //
+  // Con dos o más equipos seleccionados en Líneas Telefónicas: mandar a resguardo, reasignar o cancelar.
+  // Solo cambian el EQUIPO: la línea (número, ESTATUS LINEA) queda igual hasta que el área diga qué le pasa a la
+  // línea en cada caso. Cada equipo deja su bitácora CAMBIOS (y HISTORIAL_REASIGNACIONES al reasignar) y su
+  // movimiento con el motivo, igual que una edición individual.
+
+  const MASIVAS = {
+    RESGUARDO: { titulo: 'Mandar a resguardo', estatusEquipo: 'RESGUARDO' },
+    REASIGNAR: { titulo: 'Reasignar equipos' },
+    CANCELAR: { titulo: 'Cancelar equipos', estatusEquipo: 'CANCELADO' },
+  };
+  const MASIVA_MINIMO = 2;
+  const MASIVA_MAXIMO = 150; // cada equipo son ~4 escrituras: que quepa en el límite de 6 min de Apps Script
+  const COLS_REASIGNAR = ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'DEPARTAMENTO'];
+
+  function masiva_(accion) {
+    const cfg = MASIVAS[String(accion || '').toUpperCase()];
+    if (!cfg) throw new Error('Acción masiva desconocida: ' + accion);
+    return cfg;
+  }
+
+  /**
+   * Campos del formulario de la acción. Reasignar usa los mismos campos, listas y autollenado del colaborador que
+   * "Editar información" (se toman de elementos_), editables siempre porque aquí no hay TIPO.
+   */
+  function elementosMasivos_(accion, catalogos, usuario) {
+    const salida = [];
+    if (accion === 'REASIGNAR') {
+      const base = elementos_({}, catalogos, usuario, { nuevo: false });
+      const de = (c) => Object.assign({}, base.filter((e) => e.columna === c)[0], { editable: 'SIEMPRE', valor: '' });
+      salida.push({ tipo: 'titulo', texto: 'NUEVO RESPONSABLE', icono: 'user-round-check' });
+      COLS_REASIGNAR.forEach((c) => salida.push(Object.assign(de(c), c === 'RESPONSABLE' ? { requerido: 'SIEMPRE' } : {})));
+      salida.push(campo_('ESTATUS EQUIPO', 'ESTATUS DEL EQUIPO (si no eliges uno, queda como está)', 'lista', {
+        opciones: LineasRepo.CATALOGO.estatusEquipo, valor: '',
+      }));
+    }
+    salida.push({ tipo: 'titulo', texto: 'MOTIVO', icono: 'message-square-text' });
+    salida.push(campo_('_MOTIVO', 'MOTIVO (queda en el historial de cada equipo)', 'area', { requerido: 'SIEMPRE', valida: 'COMENTARIOS' }));
+    return salida;
+  }
+
+  function formularioMasivo(accion, usuario) {
+    const cfg = masiva_(accion);
+    const clave = String(accion).toUpperCase();
+    return { accion: clave, titulo: cfg.titulo, minimo: MASIVA_MINIMO, maximo: MASIVA_MAXIMO, elementos: elementosMasivos_(clave, LineasRepo.catalogos(), usuario) };
+  }
+
+  /**
+   * Aplica la acción a los equipos `ids`. Regresa { hechos: [{ id, nuco, campos }], omitidos: [{ id, nuco, motivo }] }.
+   * Se omiten (sin error) los que ya no existen, los que no son equipo y los que ya tenían esos datos.
+   */
+  function accionMasiva(accion, ids, datos, usuario) {
+    const cfg = masiva_(accion);
+    const clave = String(accion).toUpperCase();
+    const lista = (Array.isArray(ids) ? ids : []).map(texto_).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i);
+    if (lista.length < MASIVA_MINIMO) throw new Error('Selecciona dos o más equipos.');
+    if (lista.length > MASIVA_MAXIMO) throw new Error('Son ' + lista.length + ' equipos; el máximo por operación es ' + MASIVA_MAXIMO + '. Divide la selección.');
+
+    const elementos = elementosMasivos_(clave, LineasRepo.catalogos(), usuario);
+    const r = resolver_(elementos, {}, (datos && datos.valores) || {}, { nuevo: false });
+    if (r.errores.length) throw new Error(r.errores.slice(0, 6).join(' · '));
+    const motivo = texto_(r.valores._MOTIVO);
+
+    const pedidos = {};
+    if (cfg.estatusEquipo) pedidos['ESTATUS EQUIPO'] = cfg.estatusEquipo;
+    if (clave === 'REASIGNAR') {
+      COLS_REASIGNAR.forEach((c) => { if (texto_(r.valores[c])) pedidos[c] = texto_(r.valores[c]); });
+      if (texto_(r.valores['ESTATUS EQUIPO'])) pedidos['ESTATUS EQUIPO'] = texto_(r.valores['ESTATUS EQUIPO']).toUpperCase();
+    }
+
+    const hechos = [];
+    const omitidos = [];
+    LineasDatos.conCandado(() => {
+      const porId = {};
+      LineasDatos.leerTabla(LineasRepo.TAB.LINEAS).forEach((f) => { porId[texto_(f['ID'])] = f; });
+      lista.forEach((id) => {
+        const f = porId[id];
+        const nuco = f ? LineasUtil.nucoVisible(LineasUtil.col(f, 'NUCO')) || '' : '';
+        if (!f) { omitidos.push({ id: id, nuco: nuco, motivo: 'Ya no existe en la hoja' }); return; }
+        const tipo = texto_(LineasUtil.col(f, 'TIPO')).toUpperCase();
+        if (!LineasRepo.TIPOS_CON_EQUIPO[tipo]) { omitidos.push({ id: id, nuco: nuco, motivo: 'No es un equipo (TIPO ' + (tipo || 'vacío') + ')' }); return; }
+        const cambios = Object.assign({}, pedidos);
+        // Reset_If del AppSheet: si el responsable es quien usa el equipo, "quien usa" sigue al nuevo responsable
+        if (clave === 'REASIGNAR' && texto_(LineasUtil.col(f, 'RESPONSABLE USA EL EQUIPO')).toUpperCase() === 'SI') {
+          cambios['NOMBRE QUIEN USA'] = pedidos.RESPONSABLE;
+          if (pedidos.PUESTO) cambios['PUESTO QUIEN USA'] = pedidos.PUESTO;
+        }
+        const ahora = new Date();
+        const guardado = LineasRepo.guardarCambiosRegistro(f, cambios, usuario, ahora);
+        if (!guardado.campos.length) { omitidos.push({ id: id, nuco: nuco, motivo: 'Ya tenía esos datos' }); return; }
+        LineasRepo.registrarMovimiento('EDICION', { motivo: 'Acción masiva · ' + cfg.titulo + ': ' + motivo }, usuario, ahora, {
+          refs: [id], nuco: LineasUtil.col(f, 'NUCO'), numero: LineasUtil.col(f, 'NUMERO TELEFONO'), antes: {}, despues: cambios,
+          detalle: {
+            masiva: clave, total: lista.length, idsCambios: guardado.idsCambios,
+            idsReasignacion: guardado.idReasignacion ? [guardado.idReasignacion] : [], cambios: guardado.campos,
+          },
+        });
+        hechos.push({ id: id, nuco: nuco, campos: guardado.campos });
+      });
+    });
+    if (hechos.length) LineasRepo.indice(true); // una sola lectura para el índice (no una por equipo)
+    return { accion: clave, titulo: cfg.titulo, hechos: hechos, omitidos: omitidos };
+  }
+
+  return {
+    formulario, crear, editar, cambiarEstatus, formularioMasivo, accionMasiva,
+    _elementos: elementos_, _resolver: resolver_, _cumple: cumple_, _elementosMasivos: elementosMasivos_,
+  };
 })();

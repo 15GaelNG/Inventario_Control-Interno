@@ -505,6 +505,17 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente(LineasCaptura.generarPdf(tipo, id, !!forzar, usuarioOperacion_(sesion), firmas || null));
   }
 
+  /** Acciones masivas de equipos (resguardo, reasignar, cancelar): formulario y aplicación. */
+  function formularioMasivo(token, accion) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    return LineasUtil.paraCliente(LineasRegistros.formularioMasivo(accion, usuarioOperacion_(sesion)));
+  }
+
+  function accionMasiva(token, accion, ids, datos) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    return LineasUtil.paraCliente(LineasRegistros.accionMasiva(accion, ids, datos || {}, usuarioOperacion_(sesion)));
+  }
+
   /** Notificaciones de la campana (adendum por vencer). Las ve cualquier sesión; cada quien marca las suyas. */
   function notificaciones(token, limite) {
     const sesion = Auth.validarSesion(token);
@@ -520,6 +531,6 @@ const TelefoniaService = (function () {
     permisos, indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, catalogos, colaboradores, bitacora, vistaOperativa, formularioOperativa, crearVistaOperativa, formularioRegistro, recargarDatos,
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf, crearRegistro, editarRegistro,
     cambiarEstatus, fotosInspeccion, exportarBase, archivo, ultimoDocumentoNuco,
-    formularioEdicionOperativa, editarVistaOperativa, notificaciones, marcarNotificaciones,
+    formularioEdicionOperativa, editarVistaOperativa, notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva,
   };
 })();

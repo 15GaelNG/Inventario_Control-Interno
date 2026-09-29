@@ -295,6 +295,7 @@
    *   Acción masiva (aparece en la barra al seleccionar):
    *     accionesSeleccion: [{ icono: 'mail', texto: 'Enviar aviso', alHacer: async (filas) => … }]
    *     (si alHacer regresa una promesa, el botón muestra "Procesando…" mientras tanto)
+   *     minimo: 2 → el botón aparece solo con 2 o más seleccionados (por omisión, con 1)
    *   Tipo de columna nuevo (disponible para todas las tablas):
    *     DataTable.registrarTipo('moneda', { hereda: 'numero',
    *       formatear: (v) => (v == null || v === '' ? '' : '$' + Number(v).toLocaleString('es-MX')) });
@@ -979,7 +980,8 @@
         // Sin permiso para eliminar: decir por qué en vez de esconder la acción sin explicación
         info.textContent = `${nSel} ${plural(nSel, 'seleccionado')}` +
           (!cfg.alEliminar && cfg.motivoSinEliminar ? ` · ${cfg.motivoSinEliminar}` : '');
-        contenedor.querySelectorAll('[data-accion-sel]').forEach((b) => { b.hidden = nSel === 0; });
+        // `minimo` (opcional, rama emmanuel): la acción aparece desde N seleccionados (p. ej. masivas desde 2)
+        contenedor.querySelectorAll('[data-accion-sel]').forEach((b) => { b.hidden = nSel < ((accionesSeleccion[Number(b.dataset.accionSel)] || {}).minimo || 1); });
       }
 
       /** Posición "left" de las columnas fijas, según el ancho real de las anteriores */

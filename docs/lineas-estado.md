@@ -191,6 +191,35 @@ el sistema avisa (más adelante también por correo).
 - Pruebas: `INICIO / FIN PLAN solo se capturan en el alta…` y `Notificaciones: adendum por vencer…` en
   `tests/source-contracts.test.cjs` (45/45). Falta la prueba en /dev.
 
+## 0n. Acciones masivas de equipos (2026-09-29)
+
+Pedido del área: al seleccionar dos o más equipos en Líneas Telefónicas, mandar a resguardo, reasignar o cancelar.
+
+- **Dónde.** Pestaña Equipos de la tabla. Los botones aparecen en la barra de la DataTable desde 2 seleccionados.
+  Para eso se agregó `minimo` a `accionesSeleccion`: es opcional y compatible, pero es del componente compartido,
+  así que hay que avisar a Ayrton y Jorge al unir. Solo los ve quien puede operar (ADMIN u OPERADOR); el servidor
+  lo vuelve a revisar.
+- **Qué hace cada una** (`LineasRegistros.formularioMasivo` / `accionMasiva`, `apiLineasFormularioMasivo` /
+  `apiLineasAccionMasiva`):
+  - *Mandar a resguardo*: ESTATUS EQUIPO = RESGUARDO. El responsable no cambia.
+  - *Reasignar*: RESPONSABLE (obligatorio), No. EMPLEADO, PUESTO y DEPARTAMENTO, con las mismas listas y el
+    autollenado del colaborador que "Editar información". ESTATUS EQUIPO es opcional. Lo que se deja vacío queda como
+    estaba en cada equipo. Si en la fila el responsable es quien usa el equipo, NOMBRE/PUESTO QUIEN USA siguen al
+    nuevo responsable (Reset_If del AppSheet).
+  - *Cancelar equipos*: ESTATUS EQUIPO = CANCELADO. El botón es rojo y desde 10 equipos pide escribir CANCELAR.
+- **Siempre.** El motivo es obligatorio. Antes de aplicar se pide confirmar con la lista de equipos. Cada equipo deja
+  su bitácora CAMBIOS (y HISTORIAL_REASIGNACIONES al reasignar) y su movimiento `EDICION` con el motivo
+  "Acción masiva · …", así su historial muestra solo sus cambios. Se omiten sin error los que ya no existen, los que
+  no son equipo y los que ya tenían esos datos; se avisan al terminar. Máximo 150 por operación (límite de 6 min de
+  Apps Script). Al final se rehace el índice una sola vez.
+- **La línea no se toca** (número ni ESTATUS LINEA). El área va a confirmar qué le pasa a la línea cuando su equipo
+  se manda a resguardo, se cancela o se reasigna, y qué acciones masivas habrá para líneas.
+- Probado en /dev (29-sep):
+  - con 1 seleccionado solo aparece Copiar; con 2 aparecen las tres acciones;
+  - el formulario de Reasignar valida los obligatorios y autollena No. empleado y puesto;
+  - no se aplicó ninguna acción a la BD compartida.
+- Prueba: `Acciones masivas de equipos…` en `tests/source-contracts.test.cjs`.
+
 ## 0l. Historial de asignaciones número ↔ NUCO (2026-09-29)
 
 Pedido del área: saber qué números tuvo un NUCO (y en qué NUCOs estuvo un número), con fechas y motivo.

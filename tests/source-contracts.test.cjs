@@ -920,3 +920,61 @@ test('Notificaciones: adendum por vencer una semana antes, sin las ya vencidas n
   assert.match(read('src/html/js/app.html'), /montarVista\('tpl-notificaciones', Notificaciones\.initVista\)/);
   assert.match(read('src/html/js/lineas.html'), /irARegistro: irARegistro/);
 });
+
+test('Acciones masivas de equipos: resguardo, reasignar y cancelar desde 2 seleccionados, sin tocar la línea', () => {
+  const reg = read('src/services/lineas/LineasRegistros.gs');
+  const LineasUtil = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '; return LineasUtil;')({ normCol: (c) => String(c).toUpperCase().trim() }, {});
+  const hoja = [
+    { _fila: 2, ID: 'a', NUCO: '0001', TIPO: 'EQUIPO + SIM', RESPONSABLE: 'ANA', 'ESTATUS EQUIPO': 'USO', 'ESTATUS LINEA': 'USO', 'NUMERO TELEFONO': '4420000001', 'RESPONSABLE USA EL EQUIPO': 'SI' },
+    { _fila: 3, ID: 'b', NUCO: '0002', TIPO: 'EQUIPO', RESPONSABLE: 'LUIS', 'ESTATUS EQUIPO': 'RESGUARDO', 'ESTATUS LINEA': 'SIN LINEA', 'NUMERO TELEFONO': 'NO APLICA' },
+    { _fila: 4, ID: 'c', NUCO: '', TIPO: 'LINEA', RESPONSABLE: 'EVA', 'ESTATUS LINEA': 'USO', 'NUMERO TELEFONO': '4420000003' },
+  ];
+  const guardados = [];
+  const movimientos = [];
+  const Repo = {
+    CATALOGO: { tipos: ['EQUIPO', 'EQUIPO + SIM', 'LINEA'], estatusLinea: ['USO', 'SIN LINEA'], estatusEquipo: ['USO', 'RESGUARDO', 'CANCELADO'] },
+    TAB: { LINEAS: 'LINEAS TELEFONICAS' }, TIPOS_CON_EQUIPO: { 'EQUIPO': 'CELULAR', 'EQUIPO + SIM': 'CELULAR' },
+    catalogos: () => ({ departamentos: ['VENTAS', 'SISTEMAS'] }),
+    guardarCambiosRegistro: (f, cambios) => {
+      guardados.push([f.ID, cambios]);
+      const campos = Object.keys(cambios).filter((c) => String(f[c] || '') !== String(cambios[c])).map((c) => ({ campo: c, antes: f[c] || '', despues: cambios[c] }));
+      return { idsCambios: campos.map((_, i) => f.ID + i), idReasignacion: null, campos: campos };
+    },
+    registrarMovimiento: (tipo, datos, u, ahora, extra) => movimientos.push([tipo, datos.motivo, extra.refs]),
+    indice: () => ({}),
+  };
+  const Datos = { leerTabla: () => hoja, conCandado: (fn) => fn() };
+  const Reg = new Function('LineasRepo', 'CacheService', 'Utilities', 'SpreadsheetApp', 'Config', 'LineasUtil', 'LineasDatos',
+    reg + '; return LineasRegistros;')(Repo, { getScriptCache: () => ({ get: () => '', put: () => {} }) }, { formatDate: () => '2026-09-29' }, {}, {}, LineasUtil, Datos);
+  const u = { correo: 'x@y.z', nombre: 'X' };
+
+  // Resguardo: "b" ya estaba en resguardo y "c" no es equipo → se omiten sin error; la línea no se toca
+  const r = Reg.accionMasiva('RESGUARDO', ['a', 'b', 'c'], { valores: { _MOTIVO: 'CIERRE DE OFICINA' } }, u);
+  assert.deepEqual(r.hechos.map((h) => h.id), ['a']);
+  assert.deepEqual(r.omitidos.map((o) => o.id), ['b', 'c']);
+  assert.deepEqual(guardados[0], ['a', { 'ESTATUS EQUIPO': 'RESGUARDO' }]);
+  assert.ok(guardados.every(([, c]) => !('ESTATUS LINEA' in c) && !('NUMERO TELEFONO' in c)));
+  assert.deepEqual(movimientos[0], ['EDICION', 'Acción masiva · Mandar a resguardo: CIERRE DE OFICINA', ['a']]);
+
+  // Reasignar: responsable obligatorio y "quien usa" sigue al responsable si él usa el equipo
+  assert.throws(() => Reg.accionMasiva('REASIGNAR', ['a', 'b'], { valores: { _MOTIVO: 'CAMBIO DE AREA' } }, u), /RESPONSABLE es obligatorio/);
+  guardados.length = 0;
+  Reg.accionMasiva('REASIGNAR', ['a', 'b'], { valores: { RESPONSABLE: 'PEDRO PEREZ', 'NO EMPLEADO': '123', PUESTO: 'GERENTE', _MOTIVO: 'CAMBIO DE AREA' } }, u);
+  assert.deepEqual(guardados[0], ['a', { 'NO EMPLEADO': '123', RESPONSABLE: 'PEDRO PEREZ', PUESTO: 'GERENTE', 'NOMBRE QUIEN USA': 'PEDRO PEREZ', 'PUESTO QUIEN USA': 'GERENTE' }]);
+  assert.deepEqual(guardados[1], ['b', { 'NO EMPLEADO': '123', RESPONSABLE: 'PEDRO PEREZ', PUESTO: 'GERENTE' }]);
+
+  // Cancelar pone CANCELADO; con uno solo o sin motivo, error
+  guardados.length = 0;
+  Reg.accionMasiva('CANCELAR', ['a', 'b'], { valores: { _MOTIVO: 'EQUIPOS OBSOLETOS' } }, u);
+  assert.deepEqual(guardados.map(([id, c]) => [id, c['ESTATUS EQUIPO']]), [['a', 'CANCELADO'], ['b', 'CANCELADO']]);
+  assert.throws(() => Reg.accionMasiva('CANCELAR', ['a'], { valores: { _MOTIVO: 'EQUIPOS OBSOLETOS' } }, u), /dos o más/);
+  assert.throws(() => Reg.accionMasiva('CANCELAR', ['a', 'b'], { valores: {} }, u), /MOTIVO/);
+
+  // Cliente: botones solo en Equipos y desde 2 seleccionados (DataTable `minimo`)
+  const cliente = read('src/html/js/lineas.html');
+  assert.match(cliente, /accionesSeleccion: modulo === 'equipos' \? ACCIONES_MASIVAS\.map/);
+  assert.match(cliente, /minimo: 2/);
+  assert.match(cliente, /llamar\('apiLineasAccionMasiva', accion\.clave, ids, \{ valores: valores \}\)/);
+  assert.match(read('src/html/js/componentes/datatable.html'), /b\.hidden = nSel < \(\(accionesSeleccion\[Number\(b\.dataset\.accionSel\)\] \|\| \{\}\)\.minimo \|\| 1\)/);
+  assert.match(read('src/ClientApi.gs'), /function apiLineasAccionMasiva\(token, accion, ids, datos\)/);
+});
