@@ -516,10 +516,18 @@
   /* Historial filtrable */
   .ln-historial-cabecera { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
   .ln-historial-cabecera h3 { margin: 0; }
+  /* Barra de filtros del historial: Movimiento y, en asignaciones, la casilla para ocultar transiciones */
+  .ln-historial-filtros { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; margin-bottom: 12px; padding: 10px 12px;
+    background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 10px; }
   .ln-historial-filtro { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 12.5px; font-weight: 600; color: var(--color-text-muted); }
-  .ln-historial-filtro select { width: auto; min-width: 240px; max-width: 100%; }
-  .ln-historial-check { cursor: pointer; }
+  .ln-historial-filtro .ico { color: var(--color-accent-hover); }
+  .ln-historial-filtro select { width: auto; min-width: 260px; max-width: 100%; background: var(--color-surface); }
+  .ln-historial-check { display: inline-flex; align-items: center; gap: 8px; margin: 0; padding: 7px 12px; cursor: pointer; font-size: 12.5px; font-weight: 600;
+    color: var(--color-text); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 999px; white-space: nowrap; }
+  .ln-historial-check:has(input:checked) { border-color: var(--color-accent); background: var(--color-accent-soft); }
+  .ln-historial-check[hidden] { display: none; }
   .ln-historial-check input { width: auto; margin: 0; }
+  @media (max-width: 560px) { .ln-historial-filtro { flex-wrap: wrap; } .ln-historial-filtro select { min-width: 0; width: 100%; } }
   .ln-movimiento { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; white-space: nowrap; }
   .ln-movimiento .ico { color: var(--color-accent-hover); }
   /* El DataTable calcula su alto con lo que queda de ventana; en la ficha el historial está abajo y quedaría chico */

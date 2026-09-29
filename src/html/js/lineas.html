@@ -2767,11 +2767,13 @@
         contarEnPestana('historial', eventos.length);
         const conteo = contarPor(eventos, 'movimiento');
         cont.innerHTML = '<div class="card ln-card ln-historial">' +
-          '<div class="ln-historial-cabecera"><h3>' + icono('history') + ' Historial (' + miles(eventos.length) + ')</h3>' +
-          '<label class="ln-historial-filtro"><span>Movimiento</span><select id="ln-historial-mov">' +
+          '<div class="ln-historial-cabecera"><h3>' + icono('history') + ' Historial (' + miles(eventos.length) + ')</h3></div>' +
+          // Barra de filtros propia del historial: qué movimiento ver y, en asignaciones, ocultar las transiciones
+          '<div class="ln-historial-filtros">' +
+          '<label class="ln-historial-filtro">' + icono('list-filter') + '<span>Movimiento</span><select id="ln-historial-mov">' +
             '<option value="">Todos los movimientos (' + miles(eventos.length) + ')</option>' + opcionesMovimiento(conteo) +
           '</select></label>' +
-          '<label class="ln-historial-filtro ln-historial-check" id="ln-asig-ocultar" hidden><input type="checkbox" id="ln-asig-ocultar-check"' + (ocultarSinAsignar ? ' checked' : '') + ' /> ' +
+          '<label class="ln-historial-check" id="ln-asig-ocultar" hidden><input type="checkbox" id="ln-asig-ocultar-check"' + (ocultarSinAsignar ? ' checked' : '') + ' />' +
             '<span>Ocultar «' + (vistaHistorial === 'equipo' ? 'Sin línea' : 'Sin equipo') + '»</span></label></div>' +
           '<div id="ln-historial-tabla">' + (eventos.length ? '' : '<p class="empty-state">Sin movimientos registrados.</p>') + '</div>' +
           '<div id="ln-asignaciones" hidden></div></div>';

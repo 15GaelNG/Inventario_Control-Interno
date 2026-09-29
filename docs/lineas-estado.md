@@ -164,6 +164,9 @@ Pedido del área: saber qué números tuvo un NUCO (y en qué NUCOs estuvo un n�
 - Filtro Movimiento agrupado (`GRUPOS_MOVIMIENTO`, `opcionesMovimiento`), en orden fijo y solo con lo que hay:
   Historial de asignaciones · Responsable y ubicación · Equipo y línea · Documentos · Alta, reactivación y
   desecho · Otros.
+- Controles del historial en su propia barra (`.ln-historial-filtros`, debajo del título y encima de la búsqueda de
+  la tabla): "Movimiento" con ícono y, al lado, la casilla "Ocultar «Sin línea»" como pastilla (resaltada al
+  marcarla, solo en asignaciones). En escritorio van en una fila; en pantallas angostas se acomodan en dos.
 - Sin pestaña nueva: `LineasRepo.asignacionesDeRegistro(id, vista)` (→ `TelefoniaService.asignaciones` →
   `apiLineasAsignaciones`, pedido en paralelo al historial) reconstruye cada fila de LINEAS TELEFONICAS donde
   aparece el NUCO o el número, desde su estado actual hacia atrás con los cambios de NUMERO TELEFONO y NUCO de
