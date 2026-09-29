@@ -78,30 +78,50 @@ const MIGRACION_SS_PRODUCCION = '1h5ibDsmVtrG27rwMaOvj-lm08QZUHzDv3woPmkfRQrk';
 /**
  * Las referencias medidas contra los datos reales (no supuestas). El % es cuántos valores
  * del hijo existían en el padre al 29/09/2026; sirve para saber si el resultado cuadra.
+ *
+ * DÓNDE SE ESCRIBE EL ID NUEVO — y esto NO es uniforme, depende de qué guarda el hijo:
+ *
+ *   a) El hijo guarda una LLAVE DE NEGOCIO del padre (FOLIO, SERIE VEHICULO, ID CCH).
+ *      Esa columna NO se toca: es lo que la gente lee en la tabla y lo que AppSheet usa,
+ *      y sigue siendo válida porque la llave de negocio del padre no cambió. El ID nuevo
+ *      va en una columna NUEVA, la que dice `destino`.
+ *
+ *   b) El hijo guarda el ID VIEJO del padre (ID LINEA, ID_EQUIPO, ID_LINEA…) y ese padre
+ *      es de los 8 cuya columna se llamaba "ID", así que la migración se la pisó. Entonces
+ *      la columna del hijo ya no apunta a nada y hay que reescribirla EN SU LUGAR.
+ *
+ * Cuál de los dos casos es se deduce del catálogo (`pisaLlaveAnterior` del padre), no se
+ * escribe a mano. Una versión anterior de este archivo pisaba la columna en los dos casos:
+ * habría convertido los folios "CTA0100" en "VEH-…", tirando la llave de negocio y
+ * rompiendo AppSheet de paso.
  */
 const MIGRACION_REFERENCIAS = [
-  { hoja: 'VERIFICACIONES', columna: 'FOLIO VEHICULO', padre: 'VEHICULOS', porLlaveNegocio: 'FOLIO', esperado: 1.00 },
-  { hoja: 'REASIGNACIONES_VEHICULOS', columna: 'Folio Vehiculo', padre: 'VEHICULOS', porLlaveNegocio: 'FOLIO', esperado: 1.00 },
-  { hoja: 'INSTALACION DE SENSORES', columna: 'FOLIO', padre: 'VEHICULOS', porLlaveNegocio: 'FOLIO', esperado: 0.99 },
-  { hoja: 'INSPECCION VEHICULAR', columna: 'FOLIO', padre: 'VEHICULOS', porLlaveNegocio: 'FOLIO', esperado: 0.996 },
-  { hoja: 'HOLOGRAMAS', columna: 'SERIE VEHICULO', padre: 'VEHICULOS', porLlaveNegocio: 'SERIE VEHICULO', opcional: true },
-  { hoja: 'CAMBIOS VEHICULOS', columna: 'FOLIO', padre: 'VEHICULOS', porLlaveNegocio: 'FOLIO', esperado: 0.73 },
+  { hoja: 'VERIFICACIONES', columna: 'FOLIO VEHICULO', padre: 'VEHICULOS', porLlaveNegocio: 'FOLIO', destino: 'ID VEHICULO', esperado: 1.00 },
+  { hoja: 'REASIGNACIONES_VEHICULOS', columna: 'Folio Vehiculo', padre: 'VEHICULOS', porLlaveNegocio: 'FOLIO', destino: 'ID VEHICULO', esperado: 1.00 },
+  { hoja: 'INSTALACION DE SENSORES', columna: 'FOLIO', padre: 'VEHICULOS', porLlaveNegocio: 'FOLIO', destino: 'ID VEHICULO', esperado: 0.99 },
+  { hoja: 'INSPECCION VEHICULAR', columna: 'FOLIO', padre: 'VEHICULOS', porLlaveNegocio: 'FOLIO', destino: 'ID VEHICULO', esperado: 0.996 },
+  { hoja: 'HOLOGRAMAS', columna: 'SERIE VEHICULO', padre: 'VEHICULOS', porLlaveNegocio: 'SERIE VEHICULO', destino: 'ID VEHICULO', opcional: true },
+  { hoja: 'CAMBIOS VEHICULOS', columna: 'FOLIO', padre: 'VEHICULOS', porLlaveNegocio: 'FOLIO', destino: 'ID VEHICULO', esperado: 0.73 },
+  // Padre LINEAS TELEFONICAS: su columna se llamaba "ID" y la migración la pisó, así que
+  // estas columnas se reescriben en su lugar (si no, ya no apuntan a nada).
   { hoja: 'INSPECCIONES LINEAS', columna: 'ID LINEA', padre: 'LINEAS TELEFONICAS', esperado: 0.999 },
   { hoja: 'RESPONSIVAS LINEAS', columna: 'ID LINEA', padre: 'LINEAS TELEFONICAS', esperado: 0.998 },
   { hoja: 'BITACORA DE DESECHO', columna: 'ID_EQUIPO', padre: 'LINEAS TELEFONICAS', esperado: 1.00 },
   { hoja: 'CAMBIOS LINEAS TELEFONICAS', columna: 'ID_LINEA', padre: 'LINEAS TELEFONICAS', esperado: 0.981 },
   // La columna se llama IMEI pero 290 de 321 valores son IDs de línea (pendiente Emmanuel)
   { hoja: 'REACTIVACION DE LINEAS', columna: 'IMEI', padre: 'LINEAS TELEFONICAS', esperado: 0.89, revisar: true },
-  { hoja: 'MOVIMIENTOS_ACCESORIOS', columna: 'ID_Accesorio', padre: 'ACCESORIOS CELULARES', esperado: 0.95 },
-  { hoja: 'ARQUEOS', columna: 'ID CCH', padre: 'CAJAS CHICAS', porLlaveNegocio: 'ID CCH', esperado: 1.00 },
-  { hoja: 'INCREMENTOS', columna: 'ID CCH', padre: 'CAJAS CHICAS', porLlaveNegocio: 'ID CCH', esperado: 1.00 },
   // Se me había escapado: 1,470 filas en producción, con 99.9% de coincidencia. Al migrar
   // LINEAS TELEFONICAS sin reescribir esta columna, sus 1,167 referencias en la copia de
   // pruebas quedaron huérfanas de un jalón.
   { hoja: 'HISTORIAL_REASIGNACIONES', columna: 'ID Linea', padre: 'LINEAS TELEFONICAS', esperado: 0.999 },
-  // Pestañas del sistema nuevo (solo existen en pruebas). ID_REGISTRO es polimórfica:
-  // apunta a INSPECCIONES LINEAS o a RESPONSIVAS LINEAS según la columna TIPO.
+  // Pestaña del sistema nuevo (solo existe en pruebas). ID_REGISTRO queda pendiente: es
+  // polimórfica, apunta a INSPECCIONES LINEAS o a RESPONSIVAS LINEAS según la columna TIPO.
   { hoja: 'APP_EVIDENCIAS', columna: 'ID_LINEA', padre: 'LINEAS TELEFONICAS', esperado: 1.00 },
+  // Padres cuya llave NO se pisó: la columna del hijo sigue sirviendo y el ID va aparte.
+  // El destino no puede llamarse "ID CCH" porque esa columna ya existe con otro contenido.
+  { hoja: 'MOVIMIENTOS_ACCESORIOS', columna: 'ID_Accesorio', padre: 'ACCESORIOS CELULARES', porLlaveNegocio: 'ID_Accesorio', destino: 'ID ACCESORIO', esperado: 0.95 },
+  { hoja: 'ARQUEOS', columna: 'ID CCH', padre: 'CAJAS CHICAS', porLlaveNegocio: 'ID CCH', destino: 'ID CAJA CHICA', esperado: 1.00 },
+  { hoja: 'INCREMENTOS', columna: 'ID CCH', padre: 'CAJAS CHICAS', porLlaveNegocio: 'ID CCH', destino: 'ID CAJA CHICA', esperado: 1.00 },
 ];
 
 
@@ -376,12 +396,29 @@ function asignarIds(opciones) {
       return;
     }
 
-    // 1. El valor viejo PRIMERO, y solo si de verdad se va a perder
-    if (sobrescribe && !tieneGuardado) {
+    // 1. El valor viejo PRIMERO, y solo donde de verdad se va a perder.
+    //    Renglón por renglón, no de golpe: la hoja sigue viva mientras migramos, y una
+    //    fila que llegó después de la primera corrida tiene su valor viejo intacto pero
+    //    su celda de respaldo vacía. Si el respaldo se saltara por estar "ya hecho", esa
+    //    fila perdería su valor original al escribirle el ID nuevo encima.
+    if (sobrescribe) {
       const colVieja = migLeerColumna_(sheet, posVieja, filas);
-      const destinoViejo = migColumnaOCrear_(sheet, Entidades.COLUMNA_ID_ANTERIOR, true);
-      sheet.getRange(2, destinoViejo.columna, filas, 1).setValues(colVieja.map((v) => [v]));
-      SpreadsheetApp.flush();   // que quede en la hoja antes de pisar la columna original
+      const respaldoFinal = [];
+      let respaldados = 0;
+      for (let i = 0; i < filas; i++) {
+        if (yaGuardado[i]) { respaldoFinal.push([yaGuardado[i]]); continue; }
+        const original = colVieja[i] || '';
+        // Si la columna original ya trae un ID del sistema nuevo, no hay nada viejo que
+        // guardar: esa fila nació después de la migración.
+        const viejo = Ids.tieneForma(original) ? '' : original;
+        respaldoFinal.push([viejo]);
+        if (viejo) respaldados++;
+      }
+      if (respaldados || !tieneGuardado) {
+        const destinoViejo = migColumnaOCrear_(sheet, Entidades.COLUMNA_ID_ANTERIOR, true);
+        sheet.getRange(2, destinoViejo.columna, filas, 1).setValues(respaldoFinal);
+        SpreadsheetApp.flush();   // que quede en la hoja antes de pisar la columna original
+      }
     }
 
     // 2. Ahora sí, el ID nuevo
@@ -453,7 +490,11 @@ function migBuscar_(mapa, valor) {
   return null;
 }
 
-/** Cambia las columnas que apuntan a otra hoja, del valor viejo al ID nuevo. */
+/**
+ * Pone el ID nuevo del padre en cada hoja hija. Ver MIGRACION_REFERENCIAS arriba: según el
+ * caso escribe EN SU LUGAR (cuando la columna del hijo guardaba el ID viejo de un padre que
+ * sí se pisó) o en una COLUMNA NUEVA (cuando guarda una llave de negocio, que no se toca).
+ */
 function reescribirReferencias(opciones) {
   const cfg = Object.assign({ escribir: false }, opciones || {});
   const ssId = migracionSs_(cfg);
@@ -466,23 +507,44 @@ function reescribirReferencias(opciones) {
     if (!sheet) { lineas.push('  ' + ref.hoja + ': NO EXISTE, se salta'); return; }
     const filas = migFilas_(sheet);
     if (!filas) return;
-    const pos = migColumna_(migEncabezados_(sheet), ref.columna);
+    const enc = migEncabezados_(sheet);
+    const pos = migColumna_(enc, ref.columna);
     if (!pos) { lineas.push('  ' + ref.hoja + '.' + ref.columna + ': no existe la columna'); return; }
+
+    // ¿La columna del hijo se pisa, o el ID va aparte? Lo dice el catálogo, no se escribe
+    // a mano: si al padre le pisamos su columna "ID", la del hijo ya no apunta a nada.
+    const padreDef = Entidades.de(ref.padre);
+    const enSitio = !!(padreDef && padreDef.pisaLlaveAnterior);
+    if (!enSitio && !ref.destino) {
+      lineas.push('  ' + ref.hoja + '.' + ref.columna + ': le falta "destino" en el catálogo, se salta');
+      return;
+    }
+    const nombreDestino = enSitio ? ref.columna : ref.destino;
+    const posDestino = enSitio ? pos : migColumnaOCrear_(sheet, nombreDestino, cfg.escribir).columna;
+    if (!enSitio && !posDestino && cfg.escribir) {
+      lineas.push('  ' + ref.hoja + ': no pude crear la columna "' + nombreDestino + '"');
+      return;
+    }
 
     const mapa = migMapaDelPadre_(ss, ref.padre, ref.porLlaveNegocio);
     const valores = migLeerColumna_(sheet, pos, filas);
+    // Lo que ya haya en el destino: así volver a correr esto no rehace lo hecho
+    const yaEnDestino = (!enSitio && posDestino) ? migLeerColumna_(sheet, posDestino, filas) : valores;
     const salida = [];
     let cambiadas = 0, sueltas = 0, vacias = 0, yaEstaban = 0;
 
     valores.forEach((v, i) => {
-      if (!v) { salida.push(['']); vacias++; return; }
+      const puesto = yaEnDestino[i];
       // Ya tiene la forma nueva: viene de una corrida anterior. Se deja y no cuenta como
       // huérfana — es lo que hace que volver a correr esto sea inofensivo.
-      if (Ids.tieneForma(v)) { salida.push([v]); yaEstaban++; return; }
+      if (puesto && Ids.tieneForma(puesto)) { salida.push([puesto]); yaEstaban++; return; }
+      if (!v) { salida.push(['']); vacias++; return; }
       const nuevo = migBuscar_(mapa, v);
       if (nuevo) { salida.push([nuevo]); cambiadas++; }
       else {
-        salida.push([v]);   // nunca se inventa un padre ni se borra el renglón
+        // Nunca se inventa un padre ni se borra nada. En su lugar se conserva lo que había;
+        // aparte, el destino se queda vacío para que la huérfana se vea.
+        salida.push([enSitio ? v : '']);
         sueltas++;
         if (huerfanas.length < 40) huerfanas.push(ref.hoja + '.' + ref.columna + ' fila ' + (i + 2) + ': ' + v);
       }
@@ -499,12 +561,15 @@ function reescribirReferencias(opciones) {
       nota = '  <-- OJO: esperaba ' + Math.round(ref.esperado * 100) + '%';
     }
     if (ref.revisar) nota += '  (columna marcada para revisar con Emmanuel)';
+    const donde = enSitio
+      ? 'sobre la misma columna'
+      : 'en la columna nueva "' + nombreDestino + '" (se respeta "' + ref.columna + '")';
     lineas.push('  ' + ref.hoja + '.' + ref.columna + ' -> ' + ref.padre + ': ' +
       cambiadas + ' cambiadas, ' + sueltas + ' huérfanas, ' + vacias + ' vacías' +
       (yaEstaban ? ', ' + yaEstaban + ' ya migradas' : '') +
-      ' (' + Math.round(tasa * 100) + '%)' + nota);
+      ' (' + Math.round(tasa * 100) + '%), ' + donde + nota);
 
-    if (cfg.escribir) sheet.getRange(2, pos, filas, 1).setValues(salida);
+    if (cfg.escribir) sheet.getRange(2, posDestino, filas, 1).setValues(salida);
   });
 
   if (huerfanas.length) {
@@ -558,18 +623,24 @@ function limpiarRespaldoRedundante(opciones) {
 
     const guardado = migLeerColumna_(sheet, posGuardada, filas);
     const original = migLeerColumna_(sheet, posVieja, filas);
-    let distintos = 0;
+    // Solo importan los respaldos que SÍ traen algo. Uno vacío no guarda nada, así que
+    // borrar la columna no pierde nada — y pasa seguido: estas hojas siguen recibiendo
+    // registros, y una fila más nueva que el respaldo lo tiene vacío mientras su valor
+    // real sigue intacto en su columna de siempre.
+    let distintos = 0, vacios = 0;
     for (let i = 0; i < filas; i++) {
+      if (!guardado[i]) { if (original[i]) vacios++; continue; }
       if (migClave_(guardado[i]) !== migClave_(original[i])) distintos++;
     }
     if (distintos) {
-      lineas.push('  ' + h.hoja + ': el respaldo NO coincide con "' + h.llaveAnterior + '" en ' +
-        distintos + ' renglones, NO se toca');
+      lineas.push('  ' + h.hoja + ': el respaldo guarda algo DISTINTO de "' + h.llaveAnterior +
+        '" en ' + distintos + ' renglones, NO se toca');
       return;
     }
+    const nota = vacios ? ' (' + vacios + ' filas más nuevas que el respaldo, su valor sigue en su columna)' : '';
 
     const nombreVieja = h.llaveAnterior || ('la columna ' + h.columnaAnterior + ', que no tiene encabezado');
-    lineas.push('  ' + h.hoja + ': sobra (idéntico a "' + nombreVieja + '" en ' + filas + ' renglones)' +
+    lineas.push('  ' + h.hoja + ': sobra (idéntico a "' + nombreVieja + '")' + nota +
       (cfg.escribir ? ', columna ' + posGuardada + ' BORRADA' : ''));
     if (cfg.escribir) sheet.deleteColumn(posGuardada);
     quitadas++;

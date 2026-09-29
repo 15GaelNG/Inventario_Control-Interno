@@ -209,7 +209,44 @@ en el padre.
 | `ARQUEOS` | `ID CCH` | `CAJAS CHICAS.ID CCH` | 100% |
 | `INCREMENTOS` | `ID CCH` | `CAJAS CHICAS.ID CCH` | 100% |
 
-### 4.1 Cómo se reescriben
+### 4.1 Dónde se escribe el ID nuevo, y por qué NO es uniforme
+
+Depende de qué guarda la columna del hijo, y equivocarse aquí destruye datos:
+
+**Caso (a) — el hijo guarda una LLAVE DE NEGOCIO del padre** (`FOLIO`, `SERIE VEHICULO`,
+`ID CCH`, `ID_Accesorio`). Esa columna **no se toca**: es lo que la gente lee en la tabla y
+lo que AppSheet usa, y sigue siendo válida porque la llave de negocio del padre nunca
+cambió. El ID nuevo va en una **columna nueva**:
+
+| Hoja | Columna que se respeta | Columna nueva |
+|---|---|---|
+| `VERIFICACIONES` | `FOLIO VEHICULO` | `ID VEHICULO` |
+| `REASIGNACIONES_VEHICULOS` | `Folio Vehiculo` | `ID VEHICULO` |
+| `INSTALACION DE SENSORES` | `FOLIO` | `ID VEHICULO` |
+| `INSPECCION VEHICULAR` | `FOLIO` | `ID VEHICULO` |
+| `HOLOGRAMAS` | `SERIE VEHICULO` | `ID VEHICULO` |
+| `CAMBIOS VEHICULOS` | `FOLIO` | `ID VEHICULO` |
+| `MOVIMIENTOS_ACCESORIOS` | `ID_Accesorio` | `ID ACCESORIO` |
+| `ARQUEOS` | `ID CCH` | `ID CAJA CHICA` |
+| `INCREMENTOS` | `ID CCH` | `ID CAJA CHICA` |
+
+> Los dos últimos no pueden llamar a su columna nueva `ID CCH`: ya existe con otro
+> contenido. De ahí `ID CAJA CHICA`.
+
+**Caso (b) — el hijo guarda el ID VIEJO del padre** (`ID LINEA`, `ID_EQUIPO`, `ID_LINEA`,
+`ID Linea`, `IMEI` de Reactivación) **y ese padre es de los 8 cuya columna se llamaba
+`ID`**, así que la migración se la pisó. Entonces la columna del hijo ya no apunta a nada y
+hay que **reescribirla en su lugar**. Son 7 columnas, todas hijas de `LINEAS TELEFONICAS`.
+
+Cuál de los dos casos aplica **se deduce del catálogo** (`pisaLlaveAnterior` del padre), no
+se escribe a mano en cada entrada.
+
+> **Un error que estuvo a punto de correrse.** La primera versión pisaba la columna en los
+> dos casos. Habría convertido los folios `CTA0100` en `VEH-…`, tirando la llave de negocio
+> que la gente lee y rompiendo AppSheet, que une por ahí. Se detectó antes de ejecutar el
+> paso 3; los folios de la copia de pruebas están intactos.
+
+### 4.2 Cómo se reescriben
 
 Por cada hoja hija y cada columna de referencia:
 
@@ -219,7 +256,7 @@ Por cada hoja hija y cada columna de referencia:
 3. Un valor que **no esté en el mapa** no se toca y se reporta como huérfano. Nunca se
    inventa un padre ni se borra el renglón.
 
-### 4.2 Comparación normalizada
+### 4.3 Comparación normalizada
 
 Un valor del hijo puede venir como número donde el padre lo tiene como texto (ya pasó: 23
 IDs se guardaron como número y uno perdió un cero a la izquierda). Antes de comparar:
@@ -231,7 +268,7 @@ normalizar(v) = String(v).trim().toUpperCase()
 Y si no hay coincidencia directa, se reintenta rellenando con ceros a la izquierda hasta 8,
 que es lo que recupera el `01092110` que Sheets convirtió en `1092110`.
 
-### 4.3 Punteros vivos contra fotos del pasado
+### 4.4 Punteros vivos contra fotos del pasado
 
 El módulo de Líneas guarda dos pestañas propias, `APP_EVIDENCIAS` y `APP_MOVIMIENTOS`, que
 **no vienen de AppSheet**: las crea el sistema nuevo. Solo existen en la copia de pruebas;
@@ -257,14 +294,14 @@ se leen en un solo lugar (`LineasRepo`, al armar el historial) y solo para mostr
 Para saltar del historial al registro de hoy está la columna `ID_ANTERIOR` que ya existe en
 `APP_EVIDENCIAS`. Ese es el puente, no falsificar la foto.
 
-### 4.4 IDs que no viven en ninguna hoja
+### 4.5 IDs que no viven en ninguna hoja
 
 `LineasRepo` fabrica identificadores `drive_<carpetaId>` para las inspecciones que solo
 existen en la carpeta de Drive de NUCOS, sin renglón en ninguna hoja. **Nunca pasan por
 `Ids`**: ni el generador, ni el activador, ni la validación de forma. El código ya los
 distingue con `/^drive_/`.
 
-### 4.5 Lo que NO se une por ID
+### 4.6 Lo que NO se une por ID
 
 - **`NUCO` / `NUCCO`** es la parte numérica del `FOLIO`: un dato derivado, no una llave.
   Nada se une por ahí. (Medido: Inspección 298/298, Vehículos 645/652, Líneas 1504/1615 —
