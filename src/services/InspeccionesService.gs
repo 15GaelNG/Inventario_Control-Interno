@@ -596,14 +596,7 @@ const InspeccionesService = (function () {
     return 'Listo: se volverá a leer la plantilla de "' + tipo + '".';
   }
 
-  /**
-   * Tipos disponibles, para el formulario. Cada "tipo" es en realidad la Línea del
-   * vehículo (HONDA 150XR, L200…), con su Clase (Automóvil, Camioneta…) tal cual está
-   * en la columna CLASE de la hoja (ver SetupInicial.agregarClaseATiposInspeccion) —
-   * el cliente muestra en "Tipo de unidad" solo los tipos de la clase del folio
-   * elegido. clase sale vacía si esa fila todavía no tiene CLASE en la hoja; el
-   * cliente no filtra por esos (para no ocultar un tipo por un dato faltante).
-   */
+  /** Tipos disponibles, para el formulario */
   function tipos(token) {
     Permisos.puedeLeer(token, MODULO);
     return SheetUtils.getAll(ssId(), HOJA_MODELOS)
@@ -611,7 +604,6 @@ const InspeccionesService = (function () {
       .map((f) => ({
         tipo: limpiar_(f['TIPO']),
         listo: !!limpiar_(f[COL_PLANTILLA]),
-        clase: limpiar_(f['CLASE']).toUpperCase(),
       }))
       .sort((a, b) => a.tipo.localeCompare(b.tipo));
   }
