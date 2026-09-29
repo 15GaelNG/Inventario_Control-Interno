@@ -2658,7 +2658,16 @@
     document.getElementById('veh-captura-cerrar').addEventListener('click', cerrarCapturaVehiculo);
     modalCaptura.addEventListener('click', (ev) => { if (ev.target === modalCaptura) cerrarCapturaVehiculo(); });
 
-    const KPI_FILTRO_VEHICULOS = { 'veh-stat-activos': 'no_contiene', 'veh-stat-baja': 'contiene' };
+    // Los 6 valores reales de ESTATUS (ver CAMPOS_VEHICULO) — un KPI clickeable por cada uno,
+    // en vez del binario "Activos/De baja" de antes.
+    const KPI_FILTRO_VEHICULOS = {
+      'veh-stat-utilitario': 'UTILITARIO',
+      'veh-stat-no-utilitario': 'NO UTILITARIO',
+      'veh-stat-prestamo': 'PRESTAMO',
+      'veh-stat-fuera-servicio': 'FUERA DE SERVICIO',
+      'veh-stat-nuco-sin-info': 'NUCO SIN INFORMACION',
+      'veh-stat-baja': 'BAJA VEHICULAR',
+    };
     const tileTotalVeh = document.getElementById('veh-stat-total').closest('.stat-tile');
     tileTotalVeh.classList.add('stat-tile-clickable');
     tileTotalVeh.addEventListener('click', () => tabla.setFiltro('ESTATUS', null));
@@ -2667,7 +2676,7 @@
       tile.classList.add('stat-tile-clickable');
       tile.addEventListener('click', () => {
         const yaActivo = tile.classList.contains('stat-tile-activo');
-        tabla.setFiltro('ESTATUS', yaActivo ? null : { op: KPI_FILTRO_VEHICULOS[id], v1: 'BAJA' });
+        tabla.setFiltro('ESTATUS', yaActivo ? null : { op: 'igual', v1: KPI_FILTRO_VEHICULOS[id] });
       });
     });
     function marcarKpiActivo(filtros) {
@@ -2675,7 +2684,7 @@
       tileTotalVeh.classList.toggle('stat-tile-activo', !f);
       Object.keys(KPI_FILTRO_VEHICULOS).forEach((id) => {
         document.getElementById(id).closest('.stat-tile').classList.toggle(
-          'stat-tile-activo', !!(f && f.op === KPI_FILTRO_VEHICULOS[id] && f.v1 === 'BAJA')
+          'stat-tile-activo', !!(f && f.op === 'igual' && f.v1 === KPI_FILTRO_VEHICULOS[id])
         );
       });
       // Los KPIs reflejan lo que hay bajo los filtros activos (los de columna, búsqueda,
@@ -2685,10 +2694,11 @@
 
     function actualizarKpis(filas) {
       document.getElementById('veh-stat-total').textContent = filas.length;
-      document.getElementById('veh-stat-activos').textContent =
-        filas.filter((v) => !String(v.ESTATUS || '').toUpperCase().includes('BAJA')).length;
-      document.getElementById('veh-stat-baja').textContent =
-        filas.filter((v) => String(v.ESTATUS || '').toUpperCase().includes('BAJA')).length;
+      Object.keys(KPI_FILTRO_VEHICULOS).forEach((id) => {
+        const valor = KPI_FILTRO_VEHICULOS[id];
+        document.getElementById(id).textContent =
+          filas.filter((v) => String(v.ESTATUS || '').toUpperCase() === valor).length;
+      });
     }
 
     async function cargar() {
