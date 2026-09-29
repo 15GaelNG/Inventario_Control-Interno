@@ -3,6 +3,11 @@
 > **Estado:** diseño aprobado, **pendiente de implementar**. Se construirá al final,
 > cuando los módulos principales ya existan. Mientras tanto, sigue las
 > [reglas para desarrollar mientras tanto](#reglas-para-desarrollar-mientras-tanto).
+>
+> **Léase junto con [ids.md](ids.md).** Casi todo lo de aquí existe porque las hojas se
+> unen por `FOLIO`, que es un dato que cambia. Con el modelo de IDs puesto, propagar deja
+> de hacer falta para las llaves; lo que sigue sirviendo es `revisar()`, para las columnas
+> que se copian por comodidad de lectura.
 
 ## El problema
 
@@ -176,8 +181,21 @@ por todo el código:
 > `ESTATUS SENSOR`, `RESPONSIVA SENSOR`, `RENDIMIENTO (KM/L)`, `CONSUMO RALENTI (L/HR)` y
 > `COMENTARIOS` se capturan (los dos numéricos también se pueden calcular con Geotab).
 >
-> **Pendiente:** `SERIE SENSOR` también está en `VEHICULOS` (207/207) y ahí la escribe un bot de
-> AppSheet al instalar. El módulo todavía **no** la escribe de vuelta; falta revisar ese bot.
+> **`SERIE SENSOR` se captura a mano, no la pone ningún bot.** Viene impresa en el sensor
+> y alguien la teclea. (Una versión anterior de esta nota decía que un bot de AppSheet la
+> escribía; es falso, confirmado con Ayrton el 29/09/2026.) Eso simplifica el asunto: al
+> apagar AppSheet no hay bot que reemplazar.
+>
+> **Lo que sí queda pendiente:** la serie vive en dos hojas — `VEHICULOS` (212 de 652) y
+> `INSTALACION DE SENSORES` (209 de 209) — y coinciden en 97.6%: hay 5 series en
+> `VEHICULOS` que no están en la hoja de instalaciones. Hay que decidir **quién manda**.
+> Como la instalación es el hecho que genera el dato, lo natural es que mande
+> `INSTALACION DE SENSORES` y que en `VEHICULOS` sea copia, mantenida por `Relaciones`.
+>
+> **Ojo con el renglón que se sobrescribe:** una instalación por vehículo, y al cambiar de
+> sensor se sobrescribe la misma fila (209 folios únicos en 209 filas). Así que no hay
+> histórico de reemplazos de sensor: la serie anterior se pierde. Si algún día se quiere
+> ese histórico, hay que dejar de sobrescribir y agregar renglón.
 
 | `HOLOGRAMAS` | `SERIE VEHICULO` | `PLACA`, `MARCA`, `LINEA VEHICULO`, `MODELO`, `RESPONSABLE` (← `RESPONSABLE VEHICULO`), `DEPARTAMENTO`, `CAPACIDAD DEL TANQUE` (← `CAPACIDAD COMBUSTIBLE (LTS)`) | `VEHICULOS` | `HologramasService`: se leen del catálogo al listar (el catálogo manda) y `sincronizar()` los escribe en la hoja | Reemplazar por `Relaciones.propagar` + `revisar` |
 

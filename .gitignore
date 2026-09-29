@@ -6,6 +6,8 @@ node_modules/
 !.clasp.json.example
 *.log
 .DS_Store
+# Archivo temporal que crea Excel mientras tienes un libro abierto
+~$*
 
 # Formatos y PDFs reales de consulta (traen datos de personas): nunca al repo
 basura/
