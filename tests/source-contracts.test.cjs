@@ -849,4 +849,7 @@ test('Historial: números que ha tenido un NUCO y NUCOs por los que pasó un nú
   const cliente = read('src/html/js/lineas.html');
   assert.match(cliente, /llamar\('apiLineasAsignaciones', id, vista\)/);
   assert.match(cliente, /equipo: 'Números que ha tenido', linea: 'Equipos en los que ha estado'/);
+  // Los "Sin línea" se pueden ocultar con el filtro, sin quitarlos de los datos
+  assert.match(cliente, /return \(a\.periodos \|\| \[\]\)\.filter\(\(p\) => !ocultarSinAsignar \|\| p\[campo\]\)/);
+  assert.doesNotMatch(cliente, /el motivo solo existe si se capturó/);
 });

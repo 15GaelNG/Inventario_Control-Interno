@@ -1445,6 +1445,7 @@
       let vistaHistorial = 'equipo'; // 'equipo' o 'linea': qué asignaciones muestra el historial
       let asignaciones = null; // números del NUCO o NUCOs del número de la ficha abierta (null mientras carga)
       let tablaAsignaciones = null; // DataTable de esas asignaciones
+      let ocultarSinAsignar = false; // oculta los periodos "Sin línea" / "Sin equipo" (suelen ser transiciones)
       let fichaActual = null; // estatus de la ficha abierta (para "Cambiar estatus")
       let marcarKpi = null;
       raiz.querySelectorAll('#ln-tabs .tab-btn').forEach((tab) => {
@@ -2752,18 +2753,26 @@
             '<option value="">Todos los movimientos (' + miles(eventos.length) + ')</option>' +
             movimientos.map((m) => '<option value="' + esc(m) + '">' + esc(m) + ' (' + miles(conteo[m]) + ')</option>').join('') +
             '<option value="' + MOV_ASIGNACIONES + '">' + esc(textoOpcionAsignaciones()) + '</option>' +
-          '</select></label></div>' +
+          '</select></label>' +
+          '<label class="ln-historial-filtro ln-historial-check" id="ln-asig-ocultar" hidden><input type="checkbox" id="ln-asig-ocultar-check"' + (ocultarSinAsignar ? ' checked' : '') + ' /> ' +
+            '<span>Ocultar «' + (vistaHistorial === 'equipo' ? 'Sin línea' : 'Sin equipo') + '»</span></label></div>' +
           '<div id="ln-historial-tabla">' + (eventos.length ? '' : '<p class="empty-state">Sin movimientos registrados.</p>') + '</div>' +
           '<div id="ln-asignaciones" hidden></div></div>';
         const select = $('#ln-historial-mov', cont);
         const principal = $('#ln-historial-tabla', cont);
         const panel = $('#ln-asignaciones', cont);
+        const ocultar = $('#ln-asig-ocultar', cont);
         soltarHistorial();
         let tabla = null;
+        $('#ln-asig-ocultar-check', cont).addEventListener('change', (ev) => {
+          ocultarSinAsignar = ev.target.checked;
+          if (tablaAsignaciones && asignaciones) tablaAsignaciones.setDatos(periodosVisibles(asignaciones));
+        });
         select.addEventListener('change', () => {
           const verAsignaciones = select.value === MOV_ASIGNACIONES;
           principal.hidden = verAsignaciones;
           panel.hidden = !verAsignaciones;
+          ocultar.hidden = !verAsignaciones;
           if (verAsignaciones) { if (!tablaAsignaciones) pintarAsignaciones(panel); else tablaAsignaciones.ajustarAlto(); return; }
           if (tabla) { tabla.setFiltro('movimiento', select.value ? { valores: [select.value] } : null); tabla.ajustarAlto(); }
         });
@@ -2818,10 +2827,8 @@
           panel.innerHTML = '<p class="empty-state">' + (porNuco ? 'Este registro no tiene NUCO' : 'Esta línea no tiene número') + ': no hay periodos que reconstruir.</p>';
           return;
         }
-        panel.innerHTML = '<div class="ln-nota">' + icono('info') + ' ' +
-          (porNuco ? 'Cada número que ha tenido el NUCO ' + esc(a.clave) : 'Cada NUCO en el que ha estado el número ' + esc(a.clave)) +
-          ', con sus fechas. Sale de la bitácora de cambios; el motivo solo existe si se capturó (reactivaciones y cambios hechos en el sistema nuevo).' +
-          (a.incompleto ? ' Se muestran los primeros 25 registros relacionados.' : '') + '</div><div class="ln-asignaciones-tabla"></div>';
+        panel.innerHTML = (a.incompleto ? '<div class="ln-nota">' + icono('info') + ' Se muestran los primeros 25 registros relacionados.</div>' : '') +
+          '<div class="ln-asignaciones-tabla"></div>';
         const numeroTexto = (v) => (v ? '<span class="ln-mono">' + esc(v) + '</span>' : '<span class="ln-tenue">' + (porNuco ? 'Sin línea' : 'Sin número') + '</span>');
         const nucoTexto = (v) => (v ? '<span class="ln-mono">' + esc(v) + '</span>' : '<span class="ln-tenue">Sin equipo (suelta)</span>');
         const columnaNumero = { campo: 'numero', titulo: 'Número', tipo: 'texto', ancho: 150, render: numeroTexto };
@@ -2854,8 +2861,14 @@
             { campo: 'origen', titulo: 'Origen', tipo: 'lista', ancho: 130, render: (v) => (v ? chip(v, COLOR_ORIGEN[v] || 'neutro') : vacio) },
           ],
         });
-        tablaAsignaciones.setDatos(a.periodos || []);
+        tablaAsignaciones.setDatos(periodosVisibles(a));
         pintarIconos(panel);
+      }
+
+      /** Periodos a mostrar: sin los "Sin línea" / "Sin equipo" si se pidió ocultarlos (no se borran). */
+      function periodosVisibles(a) {
+        const campo = a.vista === 'equipo' ? 'numero' : 'nuco';
+        return (a.periodos || []).filter((p) => !ocultarSinAsignar || p[campo]);
       }
 
       // ---- Inspección ----
