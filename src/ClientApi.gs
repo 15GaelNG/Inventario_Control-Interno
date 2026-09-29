@@ -59,6 +59,9 @@ function apiLineasEvidencias(token, id) {
 function apiLineasHistorial(token, id) {
   return TelefoniaService.historial(token, id);
 }
+function apiLineasAsignaciones(token, id, vista) {
+  return TelefoniaService.asignaciones(token, id, vista);
+}
 function apiLineasInspeccion(token, id) {
   return TelefoniaService.inspeccion(token, id);
 }

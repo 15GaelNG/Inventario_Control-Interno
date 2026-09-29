@@ -361,9 +361,15 @@ const LineasRegistros = (function () {
         const despues = valores[c] instanceof Date ? Utilities.formatDate(valores[c], ZONA, 'yyyy-MM-dd') : texto_(valores[c]);
         if (texto_(antes) !== despues) cambios[c] = valores[c];
       });
+      // Cambiar el número o el NUCO pide el motivo: es el "por qué" del historial de asignaciones
+      const motivo = texto_(datos && datos.motivo);
+      const cambiaNuco = 'NUCO' in cambios && LineasUtil.nucoVisible(texto_(base['NUCO'])) !== LineasUtil.nucoVisible(texto_(valores['NUCO']));
+      if (('NUMERO TELEFONO' in cambios || cambiaNuco) && !motivo) {
+        throw new Error('Escribe el motivo del cambio de número o NUCO; queda en el historial.');
+      }
       const antes = LineasRepo.convertirRegistro(fila);
       const guardado = LineasRepo.guardarCambiosRegistro(fila, cambios, usuario, new Date());
-      LineasRepo.registrarMovimiento('EDICION', { motivo: 'Edición del registro' }, usuario, new Date(), {
+      LineasRepo.registrarMovimiento('EDICION', { motivo: motivo || 'Edición del registro' }, usuario, new Date(), {
         refs: [id], nuco: valores.NUCO, numero: valores['NUMERO TELEFONO'], antes: antes, despues: cambios,
         detalle: { idsCambios: guardado.idsCambios, idsReasignacion: guardado.idReasignacion ? [guardado.idReasignacion] : [], cambios: guardado.campos },
       });

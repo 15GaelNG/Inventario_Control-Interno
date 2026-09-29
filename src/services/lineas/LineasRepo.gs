@@ -725,6 +725,168 @@ const LineasRepo = (function () {
     return { eventos: eventos, total: eventos.length };
   }
 
+  // ---------------- Asignaciones número ↔ NUCO ----------------
+
+  /** NUCO a 4 dígitos, o null si está vacío o es "NO APLICA". */
+  function nucoDe_(v) {
+    const t = txt(v);
+    return t === null || t instanceof Date ? null : LineasUtil.nucoVisible(t);
+  }
+
+  /** Cambios que caen en la misma edición (el bot escribe un campo tras otro con NOW()). */
+  const MS_MISMA_EDICION = 2 * 60 * 1000;
+  /** Tope de filas de LINEAS TELEFONICAS por consulta (una línea o un NUCO pasan por pocas filas). */
+  const MAX_FILAS_ASIGNACION = 25;
+
+  /**
+   * Periodos en los que un número estuvo en un NUCO. Se reconstruyen fila por fila de LINEAS TELEFONICAS con su
+   * estado actual y, hacia atrás, los cambios de NUMERO TELEFONO y NUCO de la bitácora CAMBIOS (el AppSheet y el
+   * sistema nuevo escriben ahí). El motivo sale de APP_MOVIMIENTOS (sistema nuevo) o de REACTIVACION DE LINEAS.
+   * vista 'equipo' → números que ha tenido el NUCO del registro; 'linea' → NUCOs en los que ha estado su número.
+   */
+  function asignacionesDeRegistro(id, vista) {
+    const porNuco = vista !== 'linea';
+    const actual = leerRegistroObligatorio(id, 'el registro');
+    const clave = porNuco ? nucoDe_(col(actual, 'NUCO')) : digitos(col(actual, 'NUMERO TELEFONO'));
+    const salida = { vista: porNuco ? 'equipo' : 'linea', clave: clave, periodos: [], incompleto: false };
+    if (!clave || !/\d/.test(clave)) return salida; // un NUCO sin número ("N/A"…) no identifica a un equipo
+
+    // 1) Dónde aparece la clave: filas actuales y cambios (el NUCO de la fila en cada cambio, o el campo cambiado)
+    const variantes = porNuco && /^\d+$/.test(clave) ? [clave, String(Number(clave))].filter((v, i, a) => a.indexOf(v) === i) : [clave];
+    const filasLineas = {};
+    const filasCambios = {};
+    variantes.forEach((v) => {
+      LineasDatos.buscarFilas(TAB.LINEAS, porNuco ? 'NUCO' : 'NUMERO TELEFONO', v).forEach((n) => { filasLineas[n] = true; });
+      (porNuco ? ['NUCO', 'ANTES', 'DESPUES'] : ['ANTES', 'DESPUES'])
+        .forEach((c) => LineasDatos.buscarFilas(TAB.CAMBIOS, c, v).forEach((n) => { filasCambios[n] = true; }));
+    });
+    const numeros = (o) => Object.keys(o).map(Number);
+    const primera = LineasDatos.leerFilas([{ tabla: TAB.LINEAS, filas: numeros(filasLineas) }, { tabla: TAB.CAMBIOS, filas: numeros(filasCambios) }]);
+    const campoAsignacion = (f) => {
+      const c = sinAcentos_(col(f, 'CAMPO'));
+      return c === 'NUMERO TELEFONO' ? 'numero' : (c === 'NUCO' ? 'nuco' : null);
+    };
+    const valorDe = (campo, v) => (campo === 'nuco' ? nucoDe_(v) : digitos(v));
+    const ids = {};
+    const filaActual = {};
+    primera[0].forEach((f) => { const k = txt(f['ID']); if (k) { ids[k] = true; filaActual[k] = f; } });
+    primera[1].forEach((f) => {
+      const k = txt(f['ID_LINEA']);
+      if (!k) return;
+      const campo = campoAsignacion(f);
+      // La clave en el NUCO de la fila, o como antes/después de un cambio de número o NUCO (no de otro campo)
+      const enNucoFila = porNuco && nucoDe_(f['NUCO']) === clave;
+      const enCambio = campo === (porNuco ? 'nuco' : 'numero') && (valorDe(campo, col(f, 'ANTES')) === clave || valorDe(campo, col(f, 'DESPUES')) === clave);
+      if (enNucoFila || enCambio) ids[k] = true;
+    });
+    let listaIds = Object.keys(ids);
+    if (listaIds.length > MAX_FILAS_ASIGNACION) { listaIds = listaIds.slice(0, MAX_FILAS_ASIGNACION); salida.incompleto = true; }
+
+    // 2) Toda la bitácora de número y NUCO de esas filas, su fila actual si falta, y los motivos
+    const hayMov = LineasDatos.existeTabla(TAB.APP_MOV);
+    const hayReact = LineasDatos.existeTabla(TAB.REACTIVACION);
+    const faltantes = listaIds.filter((k) => !filaActual[k]);
+    const segunda = LineasDatos.leerFilas([
+      { tabla: TAB.CAMBIOS, filas: [].concat.apply([], listaIds.map((k) => LineasDatos.buscarFilas(TAB.CAMBIOS, 'ID_LINEA', k))) },
+      { tabla: TAB.LINEAS, filas: [].concat.apply([], faltantes.map((k) => LineasDatos.buscarFilas(TAB.LINEAS, 'ID', k))) },
+      { tabla: TAB.APP_MOV, filas: hayMov ? [].concat.apply([], listaIds.map((k) => LineasDatos.buscarFilas(TAB.APP_MOV, 'REFS', ',' + k + ',', true))) : [] },
+      { tabla: TAB.REACTIVACION, filas: hayReact ? [].concat.apply([], listaIds.map((k) => LineasDatos.buscarFilas(TAB.REACTIVACION, 'IMEI', k))) : [] },
+    ]);
+    segunda[1].forEach((f) => { const k = txt(f['ID']); if (k) filaActual[k] = f; });
+    const motivoCambio = {};
+    segunda[2].forEach((f) => {
+      let detalle = {};
+      try { detalle = JSON.parse(f['DETALLE_JSON'] || '{}'); } catch (e) { /* sin detalle */ }
+      const motivo = [txt(f['MOTIVO']), txt(f['TICKET']) ? 'Ticket ' + txt(f['TICKET']) : null].filter(Boolean).join(' · ');
+      (detalle.idsCambios || []).forEach((x) => { motivoCambio[x] = motivo; });
+    });
+    const reactivaciones = segunda[3].map((f) => ({
+      id: txt(col(f, 'IMEI')), numero: digitos(col(f, 'NUEVO NUMERO')),
+      motivo: ['Reactivación', txt(col(f, 'FOLIO')) ? 'folio ' + txt(col(f, 'FOLIO')) : null, txt(col(f, 'RETRO DE SOLICITUD')), txt(col(f, 'CORREO / TICKET'))].filter(Boolean).join(' · '),
+    })).filter((r) => r.id && r.numero);
+    const cambiosPorId = {};
+    segunda[0].forEach((f) => {
+      const campo = campoAsignacion(f);
+      const k = txt(f['ID_LINEA']);
+      const cuando = fecha(col(f, 'FECHA ACTUALIZACION'));
+      if (!campo || !k || !cuando || !ids[k]) return;
+      const idCambio = txt(f['ID_CAMBIO']);
+      (cambiosPorId[k] = cambiosPorId[k] || []).push({
+        campo: campo, antes: valorDe(campo, col(f, 'ANTES')), despues: valorDe(campo, col(f, 'DESPUES')), fecha: cuando,
+        nucoFila: nucoDe_(f['NUCO']), usuario: txt(col(f, 'ACTUALIZADO POR')) || '',
+        nuevoSistema: idCambio in motivoCambio, motivo: motivoCambio[idCambio] || '',
+      });
+    });
+
+    // 3) Línea de tiempo de cada fila, del estado actual hacia atrás
+    const periodos = [];
+    listaIds.forEach((k) => {
+      const f = filaActual[k];
+      const cambios = (cambiosPorId[k] || []).sort((a, b) => a.fecha - b.fecha);
+      const ultimo = (campo) => cambios.filter((c) => c.campo === campo).pop();
+      // Si la fila ya no existe, su último estado sale de la bitácora
+      let estado = f ? { nuco: nucoDe_(col(f, 'NUCO')), numero: digitos(col(f, 'NUMERO TELEFONO')) } : {
+        nuco: ultimo('nuco') ? ultimo('nuco').despues : (cambios.length ? cambios[cambios.length - 1].nucoFila : null),
+        numero: ultimo('numero') ? ultimo('numero').despues : null,
+      };
+      const grupos = [];
+      cambios.forEach((c) => {
+        const g = grupos[grupos.length - 1];
+        if (g && c.fecha - g.fin <= MS_MISMA_EDICION) { g.cambios.push(c); g.fin = c.fecha; } else grupos.push({ fecha: c.fecha, fin: c.fecha, cambios: [c] });
+      });
+      const tramos = [];
+      let hasta = null;
+      for (let i = grupos.length - 1; i >= 0; i--) {
+        const g = grupos[i];
+        tramos.unshift({ nuco: estado.nuco, numero: estado.numero, desde: g.fecha, hasta: hasta, inicio: g });
+        estado = Object.assign({}, estado);
+        g.cambios.forEach((c) => { estado[c.campo] = c.antes; });
+        hasta = g.fecha;
+      }
+      // Primer tramo: desde el alta de la fila (FECHA REGISTRO = NOW() al crearla) si es anterior al primer cambio
+      const alta = f ? fecha(col(f, 'FECHA REGISTRO')) : null;
+      tramos.unshift({ nuco: estado.nuco, numero: estado.numero, desde: alta && (!hasta || alta <= hasta) ? alta : null, hasta: hasta, inicio: null, alta: true });
+      // Tramos seguidos con el mismo número y NUCO son uno solo (p. ej. cambió otro dato en la misma edición)
+      const unidos = [];
+      tramos.forEach((t) => {
+        const previo = unidos[unidos.length - 1];
+        if (previo && previo.nuco === t.nuco && previo.numero === t.numero) previo.hasta = t.hasta;
+        else unidos.push(Object.assign({}, t));
+      });
+      unidos.forEach((t) => {
+        if ((porNuco ? t.nuco : t.numero) !== clave) return;
+        const g = t.inicio;
+        const reactivacion = t.numero ? reactivaciones.filter((r) => r.id === k && r.numero === t.numero)[0] : null;
+        const conMotivo = g ? g.cambios.filter((c) => c.motivo)[0] : null;
+        periodos.push({
+          registroId: k, nuco: t.nuco, numero: t.numero, desde: t.desde, hasta: t.hasta,
+          vigente: !!f && t.hasta === null, registroExiste: !!f,
+          motivo: conMotivo ? conMotivo.motivo : (reactivacion ? reactivacion.motivo : (g ? '' : (t.desde ? 'Alta del registro' : ''))),
+          usuario: g ? g.cambios[0].usuario : '', origen: g ? (g.cambios.some((c) => c.nuevoSistema) ? 'Nuevo sistema' : 'AppSheet') : '',
+        });
+      });
+    });
+
+    // 4) A dónde lleva cada fila: el registro que hoy tiene ese número (vista equipo) o ese NUCO (vista línea)
+    const ix = indice();
+    const destino = {};
+    const tabla = porNuco ? ix.lineas : ix.equipos;
+    const iId = tabla.columnas.indexOf('id');
+    const iClave = tabla.columnas.indexOf(porNuco ? 'numero' : 'nuco');
+    tabla.filas.forEach((x) => {
+      const v = porNuco ? digitos(x[iClave]) : nucoDe_(x[iClave]);
+      if (v && !(v in destino)) destino[v] = x[iId];
+    });
+    periodos.forEach((p, n) => {
+      p.id = 'a' + (n + 1);
+      const otro = porNuco ? p.numero : p.nuco;
+      p.irId = otro ? destino[otro] || null : null;
+    });
+    periodos.sort((a, b) => (b.hasta === null) - (a.hasta === null) || (b.hasta || 0) - (a.hasta || 0) || (b.desde || 0) - (a.desde || 0));
+    salida.periodos = periodos;
+    return salida;
+  }
+
   // ---------------- Bitácoras (vistas de control) ----------------
 
   /** Máximo de filas por petición para las tablas del cliente. */
@@ -933,7 +1095,7 @@ const LineasRepo = (function () {
     indice, refrescarIndice, leerRegistroPorId, leerRegistroObligatorio,
     guardarCambiosRegistro, agregarRegistro, registrarMovimiento, asegurarPestanaApp,
     evidenciaDesdeFila, inspeccionDesdeFila, inspeccionDesdeEvidencia, responsivaDesdeFila,
-    evidenciasDeRegistro, leerInspeccion, historialDeRegistro, movimientoDeCampo, bitacora, vistaOperativa,
+    evidenciasDeRegistro, leerInspeccion, historialDeRegistro, asignacionesDeRegistro, movimientoDeCampo, bitacora, vistaOperativa,
     catalogos, indiceColaboradores, borrarCaches,
   };
 })();

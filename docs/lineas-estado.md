@@ -1,6 +1,6 @@
 # Líneas — estado del módulo
 
-Rama `emmanuel` · Última actualización: 2026-09-28
+Rama `emmanuel` · Última actualización: 2026-09-29
 
 Documento de continuidad del módulo **Líneas** (equipos y líneas telefónicas).
 El plan de la mudanza está en [lineas-plan.md](lineas-plan.md); aquí se registra
@@ -150,6 +150,25 @@ y capturar responsivas e inspecciones.
 - **Celular** (≤ 700px): modales a pantalla completa con el formulario desplazable y el pie fijo; KPIs en una
   franja deslizable; inventario en tarjetas por defecto (si no hay preferencia guardada) y más compactas;
   botones de la ficha en rejilla de 2; opciones del checklist más grandes para el dedo.
+
+## 0l. Historial de asignaciones número ↔ NUCO (2026-09-29)
+
+Pedido del área: saber qué números tuvo un NUCO (y en qué NUCOs estuvo un número), con fechas y motivo.
+
+- En el filtro **Movimiento** del Historial de la ficha: "Números que ha tenido" (ficha de equipo) o "Equipos en
+  los que ha estado" (ficha de línea). Al elegirlo, la tabla cambia a `lineas-asignaciones-v1`: Número / NUCO,
+  Desde, Hasta ("Actual"), Motivo, Usuario y Origen, exportable a Excel, con "Ir al número" / "Ir al NUCO".
+- Sin pestaña nueva: `LineasRepo.asignacionesDeRegistro(id, vista)` (→ `TelefoniaService.asignaciones` →
+  `apiLineasAsignaciones`, pedido en paralelo al historial) reconstruye cada fila de LINEAS TELEFONICAS donde
+  aparece el NUCO o el número, desde su estado actual hacia atrás con los cambios de NUMERO TELEFONO y NUCO de
+  CAMBIOS LINEAS TELEFONICAS (la columna NUCO del bot es el NUCO de la fila después del cambio). Cambios a menos
+  de 2 min son la misma edición; tramos seguidos iguales se unen. El primer tramo empieza en FECHA REGISTRO (NOW()
+  al dar de alta) o se muestra "Antes del …".
+- Motivo: APP_MOVIMIENTOS (por `idsCambios`) o REACTIVACION DE LINEAS (mismo registro y NUEVO NUMERO); el
+  AppSheet no pedía motivo, así que lo anterior sale "Sin motivo registrado".
+- "Editar información" pide el motivo cuando cambia el número o el NUCO (no si solo se homologa "5" → "0005");
+  se guarda en APP_MOVIMIENTOS.MOTIVO. Tope: 25 registros relacionados por consulta (`incompleto`).
+- Prueba: `Historial: números que ha tenido un NUCO…` en `tests/source-contracts.test.cjs` (43/43).
 
 ## 0k. Tabla como antes y documentos desde NUCOS (2026-09-28, segundo ajuste)
 

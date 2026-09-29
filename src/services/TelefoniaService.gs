@@ -271,6 +271,12 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente(LineasRepo.historialDeRegistro(id, puedeVerSecretos_(sesion)));
   }
 
+  /** Números que ha tenido el NUCO del registro (vista 'equipo') o NUCOs por los que pasó su número (vista 'linea'). */
+  function asignaciones(token, id, vista) {
+    Auth.validarSesion(token);
+    return LineasUtil.paraCliente(LineasRepo.asignacionesDeRegistro(id, vista));
+  }
+
   /** Archivos de una carpeta de Drive (fotos/PDF) con miniaturas. */
   function archivosCarpeta_(carpetaId, limite) {
     const url = 'https://www.googleapis.com/drive/v3/files?' + [
@@ -500,7 +506,7 @@ const TelefoniaService = (function () {
   }
 
   return {
-    permisos, indice, equipo, linea, evidencias, historial, inspeccion, catalogos, colaboradores, bitacora, vistaOperativa, formularioOperativa, crearVistaOperativa, formularioRegistro, recargarDatos,
+    permisos, indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, catalogos, colaboradores, bitacora, vistaOperativa, formularioOperativa, crearVistaOperativa, formularioRegistro, recargarDatos,
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf, crearRegistro, editarRegistro,
     cambiarEstatus, fotosInspeccion, exportarBase, archivo, ultimoDocumentoNuco,
     formularioEdicionOperativa, editarVistaOperativa,

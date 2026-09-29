@@ -799,3 +799,54 @@ test('"Última responsiva" / "Última inspección" abren la más reciente de la 
   rol.rol = 'OPERADOR';
   assert.throws(() => S.ultimoDocumentoNuco('t', 'x', 'RESPONSIVA'), /No hay responsiva en la carpeta NUCOS del NUCO 0234/);
 });
+
+test('Historial: números que ha tenido un NUCO y NUCOs por los que pasó un número, desde la bitácora', () => {
+  const Util = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '\nreturn LineasUtil;')({}, {});
+  const d = (s) => new Date(s + 'T12:00:00');
+  const hojas = {
+    'LINEAS TELEFONICAS': [
+      { ID: 'A', NUCO: 1556, 'NUMERO TELEFONO': '4420000002', TIPO: 'EQUIPO + SIM', 'FECHA REGISTRO': d('2025-01-01') },
+      { ID: 'B', NUCO: '200', 'NUMERO TELEFONO': '4420000001', TIPO: 'EQUIPO + SIM', 'FECHA REGISTRO': d('2025-01-01') },
+    ],
+    'CAMBIOS LINEAS TELEFONICAS': [
+      { ID_CAMBIO: 'c1', ID_LINEA: 'A', NUCO: '1556', CAMPO: 'NUMERO TELEFONO', ANTES: '4420000001', DESPUES: '4420000002', 'ACTUALIZADO POR': 'ANA', 'FECHA ACTUALIZACION': d('2025-03-01') },
+      { ID_CAMBIO: 'c2', ID_LINEA: 'B', NUCO: '200', CAMPO: 'NUMERO TELEFONO', ANTES: 'NO APLICA', DESPUES: '4420000001', 'ACTUALIZADO POR': 'LUIS', 'FECHA ACTUALIZACION': d('2025-03-02') },
+      { ID_CAMBIO: 'c3', ID_LINEA: 'B', NUCO: '200', CAMPO: 'COMENTARIOS', ANTES: '1556', DESPUES: 'x', 'ACTUALIZADO POR': 'LUIS', 'FECHA ACTUALIZACION': d('2025-03-03') },
+    ],
+    APP_MOVIMIENTOS: [{ ID: 'm1', REFS: ',B,', MOTIVO: 'Cambio de equipo por daño', TICKET: '', DETALLE_JSON: JSON.stringify({ idsCambios: ['c2'] }) }],
+    'REACTIVACION DE LINEAS': [],
+  };
+  Object.keys(hojas).forEach((h) => hojas[h].forEach((f, i) => { f._fila = i + 2; }));
+  const LineasDatos = {
+    existeTabla: () => true,
+    buscarFilas: (h, c, v, parcial) => hojas[h].filter((f) => (parcial ? String(f[c] || '').includes(v) : String(f[c]).toLowerCase() === String(v).toLowerCase())).map((f) => f._fila),
+    leerFilas: (pets) => pets.map((p) => p.filas.map((n) => hojas[p.tabla][n - 2])),
+    cacheLeer: () => ({
+      equipos: { columnas: ['id', 'nuco'], filas: [['A', '1556'], ['B', '0200']] },
+      lineas: { columnas: ['id', 'numero'], filas: [['A', '4420000002'], ['B', '4420000001']] },
+    }),
+  };
+  const Repo = new Function('LineasUtil', 'LineasDatos', 'Utilities', read('src/services/lineas/LineasRepo.gs') + '\nreturn LineasRepo;')(Util, LineasDatos, {});
+
+  // NUCO 1556: tuvo el 4420000001 desde el alta y el 4420000002 desde el 01/03 (el COMENTARIOS "1556" de B no cuenta)
+  const eq = Repo.asignacionesDeRegistro('A', 'equipo');
+  assert.equal(eq.clave, '1556');
+  assert.deepEqual(eq.periodos.map((p) => [p.numero, p.vigente, p.irId]), [['4420000002', true, 'A'], ['4420000001', false, 'B']]);
+  assert.equal(eq.periodos[0].usuario, 'ANA');
+  assert.equal(eq.periodos[0].origen, 'AppSheet');
+  assert.equal(+eq.periodos[1].desde, +d('2025-01-01'));
+  assert.equal(eq.periodos[1].motivo, 'Alta del registro');
+
+  // Número 4420000001: estuvo en el 1556 y desde el 02/03 en el 0200, con el motivo capturado en el sistema nuevo
+  const ln = Repo.asignacionesDeRegistro('B', 'linea');
+  assert.deepEqual(ln.periodos.map((p) => [p.nuco, p.vigente, p.irId]), [['0200', true, 'B'], ['1556', false, 'A']]);
+  assert.equal(ln.periodos[0].motivo, 'Cambio de equipo por daño');
+  assert.equal(ln.periodos[0].origen, 'Nuevo sistema');
+  assert.equal(+ln.periodos[1].hasta, +d('2025-03-01'));
+
+  // La edición pide el motivo al cambiar el número o el NUCO, y el historial ofrece el movimiento
+  assert.match(read('src/services/lineas/LineasRegistros.gs'), /Escribe el motivo del cambio de número o NUCO/);
+  const cliente = read('src/html/js/lineas.html');
+  assert.match(cliente, /llamar\('apiLineasAsignaciones', id, vista\)/);
+  assert.match(cliente, /equipo: 'Números que ha tenido', linea: 'Equipos en los que ha estado'/);
+});
