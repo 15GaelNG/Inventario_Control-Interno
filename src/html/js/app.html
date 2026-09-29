@@ -2111,12 +2111,41 @@
         `${Iconos.svg(e.icono)} ${escaparHtml(clase)}</span>`;
     }
 
-    /** Panel de detalle: el registro completo (41 columnas, no las 13 del
-     *  resumen) + los dos historiales enlazados — todo lo que antes traía
-     *  el modal de "Detalle completo". Las columnas de la tabla se marcan
-     *  enDetalle:false para no repetir esos mismos 13 campos arriba. */
-    async function mostrarDetalleVehiculoEnPanel(vResumen, contenedor) {
-      contenedor.innerHTML = '<div class="loading-inline"><span class="spinner"></span> Cargando…</div>';
+    /**
+     * Ficha de un vehículo: pantalla propia dentro del módulo (oculta la lista,
+     * muestra esto), mismo patrón que la ficha de equipo/línea en Líneas
+     * Telefónicas — migas para volver, encabezado con ícono/estatus/acciones,
+     * y el registro completo (41 columnas) + los dos historiales enlazados.
+     */
+    function migasVehiculo() {
+      return '<div class="ln-migas"><button type="button" class="secondary ln-btn-icono" id="veh-btn-volver">' +
+        '<i data-lucide="chevron-left" class="ico"></i> Volver</button>' +
+        '<span><a href="#" class="ln-enlace" id="veh-enlace-lista">Vehículos</a></span></div>';
+    }
+
+    function wireMigasVehiculo() {
+      const volver = document.getElementById('veh-btn-volver');
+      const enlace = document.getElementById('veh-enlace-lista');
+      if (volver) volver.addEventListener('click', cerrarFichaVehiculo);
+      if (enlace) enlace.addEventListener('click', (ev) => { ev.preventDefault(); cerrarFichaVehiculo(); });
+    }
+
+    function cerrarFichaVehiculo() {
+      document.getElementById('veh-detalle').hidden = true;
+      document.getElementById('veh-detalle').innerHTML = '';
+      document.getElementById('veh-listado').hidden = false;
+    }
+
+    async function abrirFichaVehiculo(vResumen) {
+      const listado = document.getElementById('veh-listado');
+      const detalle = document.getElementById('veh-detalle');
+      listado.hidden = true;
+      detalle.hidden = false;
+      detalle.innerHTML = migasVehiculo() + '<div class="card ln-card"><p class="ln-tenue"><span class="spinner"></span> Cargando…</p></div>';
+      wireMigasVehiculo();
+      document.getElementById('view-container').scrollTop = 0;
+      window.scrollTo(0, 0);
+
       try {
         const [completo, cambiosTexto, reasignaciones] = await Promise.all([
           callServer('apiBuscarVehiculoPorFolio', state.token, vResumen.FOLIO),
@@ -2127,57 +2156,77 @@
         // en ClientApi.gs (google.script.run pierde arreglos grandes de forma
         // intermitente; como texto viaja confiable).
         const cambios = JSON.parse(cambiosTexto || '[]');
+        // Se pudo haber vuelto a la lista (o abierto otro folio) mientras cargaba.
+        if (detalle.hidden || !document.body.contains(detalle)) return;
         if (!completo) {
-          contenedor.innerHTML = '<p class="empty-state">No se encontró el registro completo.</p>';
+          detalle.innerHTML = migasVehiculo() + '<p class="empty-state">No se encontró el registro completo.</p>';
+          wireMigasVehiculo();
           return;
         }
-        let html = Object.keys(completo)
-          .filter((k) => completo[k] !== '' && completo[k] !== null && completo[k] !== undefined)
-          .map((k) => itemInfo(tituloDesdeClave(k), k === '$ Costo del Sensor' ? formatearMoneda(completo[k]) : completo[k]))
-          .join('');
 
-        html += '<div class="info-section-title" style="margin-top:14px"><i data-lucide="history" class="ico"></i> Historial de cambios</div>';
-        html += (cambios || []).length ? '<div class="historial-timeline">' + cambios.map((c) => `
-            <div class="historial-item">
-              <div class="historial-icon"><i data-lucide="pencil" class="ico"></i></div>
-              <div class="historial-main">
-                <div class="historial-campo">${c.CAMPO || '—'}</div>
-                <div class="historial-valores">
-                  <span class="chip-valor chip-antes">${c.ANTES || '(vacío)'}</span>
-                  <i data-lucide="arrow-right" class="ico historial-flecha"></i>
-                  <span class="chip-valor chip-despues">${c.DESPUES || '(vacío)'}</span>
+        const estilo = CLASE_ESTILO[String(completo['CLASE'] || '').toUpperCase()] || { icono: 'circle', color: 'var(--color-text-muted)' };
+        let html = migasVehiculo();
+        html += '<div class="ln-detalle-header card">' +
+          '<div class="ln-detalle-icono" style="background:none; color:' + estilo.color + '"><i data-lucide="' + estilo.icono + '" class="ico ln-icon"></i></div>' +
+          '<div class="ln-detalle-titulo"><h2>Folio: ' + escaparHtml(vResumen.FOLIO || '') + '</h2>' +
+          '<div class="ln-chips">' + badgeEstatus(completo['ESTATUS']) + '</div></div>' +
+          '<div class="ln-detalle-botones">' +
+          (puedeEditar ? '<button type="button" id="veh-btn-editar-ficha"><i data-lucide="pencil" class="ico"></i> Editar</button>' : '') +
+          '</div></div>';
+
+        html += '<div class="card ln-card"><h3><i data-lucide="info" class="ico ln-icon"></i> Datos del vehículo</h3><div class="info-grid">' +
+          Object.keys(completo)
+            .filter((k) => completo[k] !== '' && completo[k] !== null && completo[k] !== undefined)
+            .map((k) => itemInfo(tituloDesdeClave(k), k === '$ Costo del Sensor' ? formatearMoneda(completo[k]) : completo[k]))
+            .join('') + '</div></div>';
+
+        html += '<div class="card ln-card"><h3><i data-lucide="history" class="ico ln-icon"></i> Historial de cambios</h3>' +
+          ((cambios || []).length ? '<div class="historial-timeline">' + cambios.map((c) => `
+              <div class="historial-item">
+                <div class="historial-icon"><i data-lucide="pencil" class="ico"></i></div>
+                <div class="historial-main">
+                  <div class="historial-campo">${c.CAMPO || '—'}</div>
+                  <div class="historial-valores">
+                    <span class="chip-valor chip-antes">${c.ANTES || '(vacío)'}</span>
+                    <i data-lucide="arrow-right" class="ico historial-flecha"></i>
+                    <span class="chip-valor chip-despues">${c.DESPUES || '(vacío)'}</span>
+                  </div>
+                </div>
+                <div class="historial-meta">
+                  <div>${c.ACTUALIZADO_POR || '—'}</div>
+                  <div>${formatearFecha(c.FECHA)}</div>
                 </div>
               </div>
-              <div class="historial-meta">
-                <div>${c.ACTUALIZADO_POR || '—'}</div>
-                <div>${formatearFecha(c.FECHA)}</div>
-              </div>
-            </div>
-          `).join('') + '</div>' : '<p class="empty-state">Sin cambios registrados para este vehículo.</p>';
+            `).join('') + '</div>' : '<p class="empty-state">Sin cambios registrados para este vehículo.</p>') + '</div>';
 
-        html += '<div class="info-section-title" style="margin-top:14px"><i data-lucide="arrow-left-right" class="ico"></i> Historial de reasignaciones</div>';
-        html += (reasignaciones || []).length ? '<div class="historial-timeline">' + reasignaciones.map((r) => `
-            <div class="historial-item">
-              <div class="historial-icon historial-icon-accent"><i data-lucide="arrow-left-right" class="ico"></i></div>
-              <div class="historial-main">
-                <div class="historial-valores">
-                  <span class="chip-valor chip-antes">${r.RESPONSABLE_SALIENTE || '—'}</span>
-                  <i data-lucide="arrow-right" class="ico historial-flecha"></i>
-                  <span class="chip-valor chip-despues">${r.RESPONSABLE_ENTRANTE || '—'}</span>
+        html += '<div class="card ln-card"><h3><i data-lucide="arrow-left-right" class="ico ln-icon"></i> Historial de reasignaciones</h3>' +
+          ((reasignaciones || []).length ? '<div class="historial-timeline">' + reasignaciones.map((r) => `
+              <div class="historial-item">
+                <div class="historial-icon historial-icon-accent"><i data-lucide="arrow-left-right" class="ico"></i></div>
+                <div class="historial-main">
+                  <div class="historial-valores">
+                    <span class="chip-valor chip-antes">${r.RESPONSABLE_SALIENTE || '—'}</span>
+                    <i data-lucide="arrow-right" class="ico historial-flecha"></i>
+                    <span class="chip-valor chip-despues">${r.RESPONSABLE_ENTRANTE || '—'}</span>
+                  </div>
+                  <div class="historial-departamento">${r.DEPARTAMENTO_ENTRANTE || '—'}</div>
                 </div>
-                <div class="historial-departamento">${r.DEPARTAMENTO_ENTRANTE || '—'}</div>
+                <div class="historial-meta">
+                  <div>${r.QUIEN_REGISTRO || '—'}</div>
+                  <div>${formatearFecha(r.FECHA)}</div>
+                </div>
               </div>
-              <div class="historial-meta">
-                <div>${r.QUIEN_REGISTRO || '—'}</div>
-                <div>${formatearFecha(r.FECHA)}</div>
-              </div>
-            </div>
-          `).join('') + '</div>' : '<p class="empty-state">Sin reasignaciones registradas para este vehículo.</p>';
+            `).join('') + '</div>' : '<p class="empty-state">Sin reasignaciones registradas para este vehículo.</p>') + '</div>';
 
-        contenedor.innerHTML = html;
+        detalle.innerHTML = html;
+        wireMigasVehiculo();
+        const btnEditar = document.getElementById('veh-btn-editar-ficha');
+        if (btnEditar) btnEditar.addEventListener('click', () => abrirEditarVehiculo(vResumen));
         refreshIcons();
       } catch (err) {
-        contenedor.innerHTML = '<p class="error-msg">No se pudo cargar: ' + escaparHtml(err.message) + '</p>';
+        if (detalle.hidden || !document.body.contains(detalle)) return;
+        detalle.innerHTML = migasVehiculo() + '<p class="error-msg">No se pudo cargar: ' + escaparHtml(err.message) + '</p>';
+        wireMigasVehiculo();
       }
     }
 
@@ -2193,10 +2242,10 @@
       columnasCompletas: { idHoja: 'ID_VEHICULO', cargar: async () => JSON.parse(await callServer('apiVehiculosCompleto', state.token)) },
       etiquetaFila: (v) => v.FOLIO,
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
-      detalle: {
-        titulo: (v) => 'Folio: ' + (v.FOLIO || ''),
-        contenidoExtra: (v, contenedor) => mostrarDetalleVehiculoEnPanel(v, contenedor),
-      },
+      // false (no panel lateral): la ficha completa es su propia pantalla —
+      // se abre con doble clic en la fila o el ícono de "ojo" (ver más abajo),
+      // mismo patrón que equipos/líneas en el módulo de Líneas Telefónicas.
+      detalle: false,
       columnas: [
         { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', fijada: true, enDetalle: false },
         { campo: 'NUCCO', titulo: 'Nucco', tipo: 'texto', enDetalle: false },
@@ -2215,14 +2264,23 @@
         { campo: 'SEDE', titulo: 'Sede', tipo: 'lista', visible: false, enDetalle: false },
         { campo: 'FECHA_REGISTRO', titulo: 'Fecha de registro', tipo: 'fecha', visible: false, enDetalle: false },
       ],
-      accionesFila: puedeEditar ? [{
-        icono: 'pencil', titulo: 'Editar', alHacer: (v) => abrirEditarVehiculo(v),
-      }] : [],
+      accionesFila: [
+        { icono: 'eye', titulo: 'Ver ficha', alHacer: (v) => abrirFichaVehiculo(v) },
+      ].concat(puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (v) => abrirEditarVehiculo(v) }] : []),
       alEliminar: puedeEditar ? async (filas) => {
         await Promise.all(filas.map((f) => callServer('apiEliminarVehiculo', state.token, f.ID_VEHICULO)));
         invalidarCacheLista('apiListarVehiculosResumen', state.token);
       } : null,
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
+    });
+
+    // Doble clic en la fila = abrir la ficha (DataTable no trae clic de fila
+    // propio cuando detalle:false) — mismo patrón que Líneas Telefónicas.
+    document.getElementById('veh-tabla').addEventListener('dblclick', (ev) => {
+      const tr = ev.target.closest('tbody tr[data-id]');
+      if (!tr || ev.target.closest('button, input, a')) return;
+      const v = vehiculosPorId[tr.dataset.id];
+      if (v) abrirFichaVehiculo(v);
     });
 
     const KPI_FILTRO_VEHICULOS = { 'veh-stat-activos': 'no_contiene', 'veh-stat-baja': 'contiene' };
