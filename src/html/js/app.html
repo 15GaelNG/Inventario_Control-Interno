@@ -2188,12 +2188,162 @@
         '</tr></thead><tbody>' + filas.map((f) => '<tr>' + columnas.map((c) => '<td>' + c.r(f) + '</td>').join('') + '</tr>').join('') +
         '</tbody></table></div>';
     }
-    function pestanaFichaVehiculo(icono, titulo, columnas, filas, vacio) {
-      return '<div class="card ln-card"><h3><i data-lucide="' + icono + '" class="ico ln-icon"></i> ' + titulo + '</h3>' +
+    /** agregar: {tipo, texto} agrega un botón "+ Agregar" en la cabecera (data-agregar="tipo"),
+     *  cableado por delegación más abajo hacia abrirCapturaVehiculo/las 4 abrirAgregarXxx. */
+    function pestanaFichaVehiculo(icono, titulo, columnas, filas, vacio, agregar) {
+      const boton = agregar
+        ? '<button type="button" class="secondary" data-agregar="' + agregar.tipo + '" style="margin-left:auto"><i data-lucide="plus" class="ico"></i> ' + agregar.texto + '</button>'
+        : '';
+      return '<div class="card ln-card"><h3 style="display:flex; align-items:center; gap:8px">' +
+        '<i data-lucide="' + icono + '" class="ico ln-icon"></i> ' + titulo + boton + '</h3>' +
         (filas.length ? tablaFichaVehiculo(columnas, filas) : '<p class="empty-state">' + vacio + '</p>') + '</div>';
     }
     function botonArchivoFicha(tipo, ruta) {
       return ruta ? '<button type="button" class="secondary" data-archivo="' + tipo + '" data-ruta="' + escaparHtml(ruta) + '">Ver</button>' : '—';
+    }
+
+    // ---------- Captura de verificación/sensor/holograma/incidencia desde la ficha ----------
+    // Mismo "formato de captura" que Líneas Telefónicas (ln-captura-*): un modal con ícono,
+    // tipo, título y cuerpo scrollable. El folio ya se sabe (es el de la ficha abierta), así
+    // que aquí no hay paso de "buscar vehículo" como en el formulario propio de cada módulo.
+    function abrirCapturaVehiculo(icono, tipo, titulo, subtitulo) {
+      document.getElementById('veh-captura-icono').innerHTML = Iconos.svg(icono);
+      document.getElementById('veh-captura-tipo').textContent = tipo;
+      document.getElementById('veh-captura-titulo').textContent = titulo;
+      document.getElementById('veh-captura-subtitulo').textContent = subtitulo || '';
+      document.getElementById('veh-captura-cuerpo').innerHTML = '';
+      document.getElementById('veh-modal-captura').hidden = false;
+      return document.getElementById('veh-captura-cuerpo');
+    }
+    function cerrarCapturaVehiculo() {
+      document.getElementById('veh-modal-captura').hidden = true;
+      document.getElementById('veh-captura-cuerpo').innerHTML = '';
+    }
+
+    function abrirAgregarVerificacion(vResumen) {
+      const cuerpo = abrirCapturaVehiculo('clipboard-check', 'VERIFICACIÓN', 'Nueva verificación', 'Folio ' + vResumen.FOLIO);
+      Formulario.crear(cuerpo, {
+        ancho: 'uno',
+        campos: [
+          { id: 'FECHA_VERIFICACION', etiqueta: 'Fecha de verificación', tipo: 'fecha', requerido: true, valor: hoyLocal() },
+          { id: 'FECHA_PROXIMA', etiqueta: 'Próxima verificación', tipo: 'fecha', requerido: true,
+            ayuda: 'Debe ser posterior a la fecha de verificación' },
+          { id: 'COMPROBANTE', etiqueta: 'Comprobante', tipo: 'archivo', acepta: 'image/png,image/jpeg',
+            maxMB: 10, requerido: true, vistaPrevia: true, ayuda: 'Foto o captura del comprobante (PNG o JPG)' },
+        ],
+        alValidar: (v) => (v.FECHA_PROXIMA && v.FECHA_VERIFICACION && v.FECHA_PROXIMA <= v.FECHA_VERIFICACION
+          ? { FECHA_PROXIMA: 'Debe ser posterior a la fecha de verificación' } : null),
+        textoGuardar: 'Registrar verificación', iconoGuardar: 'save',
+        alGuardar: async (valores, archivos) => {
+          await callServer('apiRegistrarVerificacion', state.token, Object.assign({ FOLIO: vResumen.FOLIO }, valores), {
+            base64: await leerArchivoBase64(archivos.COMPROBANTE), mimeType: archivos.COMPROBANTE.type,
+          });
+        },
+        textoExito: () => 'Verificación registrada',
+        alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'verificaciones'); },
+      });
+    }
+
+    function abrirAgregarIncidencia(vResumen, completo) {
+      const cuerpo = abrirCapturaVehiculo('wrench', 'INCIDENCIA', 'Nueva incidencia', 'Folio ' + vResumen.FOLIO);
+      Formulario.crear(cuerpo, {
+        ancho: 'uno',
+        campos: [
+          { id: 'DEPARTAMENTO', etiqueta: 'Departamento', valor: completo['DEPARTAMENTO'] || '' },
+          { id: 'MODELO', etiqueta: 'Modelo', valor: completo['LINEA VEHICULO'] || '' },
+          { id: 'ANIO', etiqueta: 'Año', tipo: 'numero', valor: completo['MODELO'] || '' },
+          { id: 'FECHA_INSPECCION', etiqueta: 'Fecha de inspección', tipo: 'fecha', valor: hoyLocal() },
+          { id: 'KILOMETRAJE', etiqueta: 'Kilometraje', tipo: 'numero', min: 0 },
+          { id: 'TICKET', etiqueta: 'Ticket' },
+          { id: 'PERIODO_VERIFICACION', etiqueta: 'Periodo de verificación' },
+          { id: 'SEGURO_AUTO', etiqueta: 'Seguro de auto' },
+          { id: 'INSPECCION_INGRESO', etiqueta: 'Motivo', tipo: 'parrafo', requerido: true },
+        ],
+        textoGuardar: 'Registrar incidencia', iconoGuardar: 'save',
+        alGuardar: async (valores) => {
+          await callServer('apiCrearIncidencia', state.token, Object.assign({ FOLIO: vResumen.FOLIO }, valores));
+        },
+        textoExito: () => 'Incidencia registrada',
+        alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'incidencias'); },
+      });
+    }
+
+    async function abrirAgregarSensor(vResumen, completo) {
+      const cuerpo = abrirCapturaVehiculo('radio', 'SENSOR', 'Instalar sensor', 'Folio ' + vResumen.FOLIO);
+      cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
+      let datos;
+      try {
+        datos = await callServer('apiDatosVehiculoParaSensor', state.token, vResumen.FOLIO);
+      } catch (err) {
+        cuerpo.innerHTML = '<p class="error-msg">No se pudo cargar: ' + escaparHtml(err.message) + '</p>';
+        return;
+      }
+      if (document.getElementById('veh-modal-captura').hidden) return; // se cerró mientras cargaba
+      cuerpo.innerHTML = '';
+      Formulario.crear(cuerpo, {
+        ancho: 'uno',
+        campos: [
+          { id: 'SERIE_SENSOR', etiqueta: 'Serie del sensor', requerido: true, mayusculas: true,
+            ayuda: 'La que trae la etiqueta del equipo, ej. G9HT5CEWRJV7', valor: datos.serieSensorSugerida || '' },
+          { id: 'COMBUSTIBLE', etiqueta: 'Combustible que carga', tipo: 'lista', requerido: true,
+            opciones: datos.combustibles, valor: datos.combustibles.length === 1 ? datos.combustibles[0] : '' },
+          { id: 'FECHA_INSTALACION', etiqueta: 'Fecha de instalación', tipo: 'fecha', requerido: true, valor: hoyLocal() },
+          { id: 'ESTATUS', etiqueta: 'Estatus del sensor', tipo: 'lista', opciones: ['ACTIVO', 'BAJA'], valor: 'ACTIVO' },
+          { id: 'RESPONSIVA', etiqueta: 'Responsiva del sensor', tipo: 'archivo', acepta: 'application/pdf',
+            maxMB: 10, requerido: true, ayuda: 'PDF firmado, máximo 10 MB' },
+          { id: 'RENDIMIENTO', etiqueta: 'Rendimiento (km/L)', tipo: 'numero', min: 0, paso: 0.01 },
+          { id: 'RALENTI', etiqueta: 'Consumo en ralentí (L/h)', tipo: 'numero', min: 0, paso: 0.01 },
+          { id: 'COMENTARIOS', etiqueta: 'Comentarios', tipo: 'parrafo' },
+        ],
+        textoGuardar: 'Registrar instalación', iconoGuardar: 'save',
+        alGuardar: async (valores, archivos) => {
+          await callServer('apiRegistrarSensor', state.token, Object.assign({ FOLIO: vResumen.FOLIO }, valores), {
+            base64: await leerArchivoBase64(archivos.RESPONSIVA), mimeType: archivos.RESPONSIVA.type,
+          });
+        },
+        textoExito: () => 'Instalación registrada',
+        alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'sensor'); },
+      });
+      if (datos.sensoresActivos && datos.sensoresActivos.length) {
+        Notificar.info('Esta unidad ya tiene un sensor activo: ' + datos.sensoresActivos.join(', '), { duracion: 6000 });
+      }
+    }
+
+    const PROVEEDORES_HOLOGRAMA = ['EOX', 'EDENRED', 'N/A'];
+    const COMBUSTIBLES_HOLOGRAMA = ['MAGNA', 'PREMIUM', 'DIESEL', 'GASOLINA', 'TODOS LOS PRODUCTOS'];
+
+    function abrirAgregarHolograma(vResumen, completo) {
+      const cuerpo = abrirCapturaVehiculo('credit-card', 'HOLOGRAMA', 'Nuevo holograma', 'Folio ' + vResumen.FOLIO);
+      Formulario.crear(cuerpo, {
+        ancho: 'uno',
+        campos: [
+          { id: 'PROVEEDOR', etiqueta: 'Proveedor', tipo: 'lista', requerido: true, opciones: PROVEEDORES_HOLOGRAMA },
+          { id: 'CALCOMANIA', etiqueta: 'Calcomanía', requerido: true, mayusculas: true,
+            ayuda: 'El código impreso en la calcomanía; no se puede repetir' },
+          { id: 'ESTATUS_EOX', etiqueta: 'Estatus', tipo: 'lista', requerido: true, opciones: ['HABILITADO', 'DESHABILITADO'], valor: 'HABILITADO' },
+          { id: 'COMBUSTIBLE', etiqueta: 'Producto autorizado', tipo: 'lista', requerido: true, opciones: COMBUSTIBLES_HOLOGRAMA,
+            ayuda: 'Lo que puede cargar la tarjeta, no el tipo del vehículo' },
+          { id: 'AUTORIZADO_PESOS', etiqueta: 'Autorizado en pesos', tipo: 'numero', min: 0, requerido: true },
+          { id: 'AUTORIZADO_LITROS', etiqueta: 'Autorizado en litros', tipo: 'numero', min: 0, requerido: true },
+          { id: 'SOLICITUD', etiqueta: 'Solicitud firmada', tipo: 'archivo', acepta: 'application/pdf,image/png,image/jpeg',
+            maxMB: 10, requerido: true, ayuda: 'PDF o foto del formato firmado' },
+        ],
+        textoGuardar: 'Registrar holograma', iconoGuardar: 'save',
+        alGuardar: async (valores, archivos) => {
+          const payload = Object.assign({
+            TIPO_UNIDAD: 'FLOTA', ESTATUS_VEHICULO: 'UTILITARIO', FOLIO: vResumen.FOLIO,
+            SERIE_VEHICULO: completo['SERIE VEHICULO'] || '', PLACA: completo['PLACA'] || '',
+            MARCA: completo['MARCA'] || '', LINEA: completo['LINEA VEHICULO'] || '', MODELO: completo['MODELO'] || '',
+            RAZON_SOCIAL: completo['RAZON SOCIAL'] || '', DEPARTAMENTO: completo['DEPARTAMENTO'] || '',
+            RESPONSABLE: completo['RESPONSABLE VEHICULO'] || '', CAPACIDAD: completo['CAPACIDAD COMBUSTIBLE (LTS)'] || '',
+          }, valores);
+          await callServer('apiRegistrarHolograma', state.token, payload, {
+            base64: await leerArchivoBase64(archivos.SOLICITUD), mimeType: archivos.SOLICITUD.type,
+          });
+        },
+        textoExito: () => 'Holograma registrado',
+        alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'hologramas'); },
+      });
     }
 
     function mostrarPestanaFichaVehiculo(nombre) {
@@ -2206,7 +2356,7 @@
       detalle.querySelectorAll('[data-ficha-panel]').forEach((p) => { p.hidden = p.dataset.fichaPanel !== nombre; });
     }
 
-    async function abrirFichaVehiculo(vResumen) {
+    async function abrirFichaVehiculo(vResumen, pestanaInicial) {
       const listado = document.getElementById('veh-listado');
       const detalle = document.getElementById('veh-detalle');
       listado.hidden = true;
@@ -2319,7 +2469,8 @@
               { t: 'Verificación', r: (v) => formatearFecha(v.FECHA_VERIFICACION) },
               { t: 'Próxima', r: (v) => formatearFecha(v.FECHA_PROXIMA) },
               { t: 'Comprobante', r: (v) => botonArchivoFicha('verificacion', v.COMPROBANTE) },
-            ], verificaciones, 'Sin verificaciones registradas para este vehículo.'),
+            ], verificaciones, 'Sin verificaciones registradas para este vehículo.',
+            puedeEditarModulo('verificaciones') ? { tipo: 'verificacion', texto: 'Agregar' } : null),
           },
           {
             id: 'inspecciones', titulo: 'Inspecciones', icono: 'clipboard-list', num: inspecciones.length,
@@ -2329,7 +2480,10 @@
               { t: 'Inspector', r: (i) => escaparHtml(i.INSPECTOR || '—') },
               { t: 'Puntaje', r: (i) => (i.PUNTAJE === '' || i.PUNTAJE === null || i.PUNTAJE === undefined) ? '—' : i.PUNTAJE + '%' },
               { t: 'Formato', r: (i) => botonArchivoFicha('inspeccion', i.PDF) },
-            ], inspecciones, 'Sin inspecciones registradas para este vehículo.'),
+            ], inspecciones, 'Sin inspecciones registradas para este vehículo.',
+            // Su formulario es un wizard completo (checklist + diagramas + firmas): no cabe
+            // embebido, así que este botón navega al módulo en vez de abrir la captura.
+            puedeEditarModulo('inspeccion-vehicular') ? { tipo: 'ir-inspeccion', texto: 'Nueva inspección' } : null),
           },
           {
             id: 'sensor', titulo: 'Sensor', icono: 'radio', num: sensores.length,
@@ -2338,7 +2492,8 @@
               { t: 'Serie', r: (s) => escaparHtml(s.SERIE_SENSOR || '—') },
               { t: 'Estatus', r: (s) => escaparHtml(s.ESTATUS || '—') },
               { t: 'Responsiva', r: (s) => botonArchivoFicha('sensor', s.RESPONSIVA) },
-            ], sensores, 'Sin sensor instalado para este vehículo.'),
+            ], sensores, 'Sin sensor instalado para este vehículo.',
+            puedeEditarModulo('instalacion-sensores') ? { tipo: 'sensor', texto: 'Agregar' } : null),
           },
           {
             id: 'hologramas', titulo: 'Hologramas', icono: 'credit-card', num: hologramas.length,
@@ -2348,7 +2503,8 @@
               { t: 'Calcomanía', r: (h) => escaparHtml(h.CALCOMANIA || '—') },
               { t: 'Autorizado', r: (h) => (h.AUTORIZADO_PESOS === '' || h.AUTORIZADO_PESOS === null || h.AUTORIZADO_PESOS === undefined) ? '—' : formatearMoneda(h.AUTORIZADO_PESOS) },
               { t: 'Solicitud', r: (h) => botonArchivoFicha('holograma', h.SOLICITUD) },
-            ], hologramas, 'Sin hologramas registrados para este vehículo.'),
+            ], hologramas, 'Sin hologramas registrados para este vehículo.',
+            puedeEditarModulo('hologramas') ? { tipo: 'holograma', texto: 'Agregar' } : null),
           },
           {
             id: 'incidencias', titulo: 'Incidencias', icono: 'wrench', num: incidencias.length,
@@ -2357,14 +2513,26 @@
               { t: 'Motivo', r: (i) => escaparHtml(i.INSPECCION_INGRESO || '—') },
               { t: 'Estado', r: (i) => '<span class="badge-estado ' + (i.ESTADO === 'ABIERTA' ? 'abierta' : 'cerrada') + '">' + (i.ESTADO === 'ABIERTA' ? 'Abierta' : 'Cerrada') + '</span>' },
               { t: 'Mecánico', r: (i) => escaparHtml(i.MECANICO || '—') },
-            ], incidencias, 'Sin incidencias registradas para este vehículo.'),
+            ], incidencias, 'Sin incidencias registradas para este vehículo.',
+            puedeEditarModulo('incidencias') ? { tipo: 'incidencia', texto: 'Agregar' } : null),
           },
         ]);
 
         detalle.innerHTML = html;
         wireMigasVehiculo();
+        if (pestanaInicial) mostrarPestanaFichaVehiculo(pestanaInicial);
         const btnEditar = document.getElementById('veh-btn-editar-ficha');
         if (btnEditar) btnEditar.addEventListener('click', () => abrirEditarVehiculo(vResumen));
+        detalle.querySelectorAll('[data-agregar]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const tipo = btn.dataset.agregar;
+            if (tipo === 'verificacion') abrirAgregarVerificacion(vResumen);
+            else if (tipo === 'sensor') abrirAgregarSensor(vResumen, completo);
+            else if (tipo === 'holograma') abrirAgregarHolograma(vResumen, completo);
+            else if (tipo === 'incidencia') abrirAgregarIncidencia(vResumen, completo);
+            else if (tipo === 'ir-inspeccion') navegarA('inspeccion-vehicular', 'Inspección Vehicular');
+          });
+        });
         refreshIcons();
       } catch (err) {
         if (detalle.hidden || !document.body.contains(detalle)) return;
@@ -2438,6 +2606,11 @@
       const archivo = ev.target.closest('[data-archivo]');
       if (archivo) ABRIR_ARCHIVO_FICHA[archivo.dataset.archivo](archivo.dataset.ruta);
     });
+
+    // Modal de captura (verificación/sensor/holograma/incidencia): cerrar con la X o clic afuera.
+    const modalCaptura = document.getElementById('veh-modal-captura');
+    document.getElementById('veh-captura-cerrar').addEventListener('click', cerrarCapturaVehiculo);
+    modalCaptura.addEventListener('click', (ev) => { if (ev.target === modalCaptura) cerrarCapturaVehiculo(); });
 
     const KPI_FILTRO_VEHICULOS = { 'veh-stat-activos': 'no_contiene', 'veh-stat-baja': 'contiene' };
     const tileTotalVeh = document.getElementById('veh-stat-total').closest('.stat-tile');

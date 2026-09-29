@@ -58,6 +58,25 @@
        dentro del módulo, mismo patrón que Líneas Telefónicas (equipo/línea). -->
   <section id="veh-detalle" hidden></section>
 
+  <!-- Captura de verificación / sensor / holograma / incidencia, sin salir de la ficha
+       del vehículo — mismo formato que "Captura" en Líneas Telefónicas (ln-captura-*). -->
+  <div class="modal-backdrop" id="veh-modal-captura" hidden>
+    <div class="modal-card modal-card-wide ln-captura-modal" role="dialog" aria-modal="true" aria-labelledby="veh-captura-titulo">
+      <div class="modal-header ln-captura-cabecera">
+        <div class="ln-captura-cabecera-principal">
+          <span class="ln-captura-icono" id="veh-captura-icono"></span>
+          <div>
+            <span class="ln-captura-tipo" id="veh-captura-tipo"></span>
+            <h3 class="ln-titulo" style="margin:3px 0 0" id="veh-captura-titulo"></h3>
+            <p class="modal-subtitle" id="veh-captura-subtitulo"></p>
+          </div>
+        </div>
+        <button type="button" class="modal-close" id="veh-captura-cerrar" aria-label="Cerrar"><i data-lucide="x" class="ico"></i></button>
+      </div>
+      <div class="modal-form-scroll" id="veh-captura-cuerpo"></div>
+    </div>
+  </div>
+
   <!-- Modal: editar vehículo -->
   <div class="modal-backdrop" id="modal-editar-vehiculo" hidden>
     <div class="modal-card modal-card-wide">
