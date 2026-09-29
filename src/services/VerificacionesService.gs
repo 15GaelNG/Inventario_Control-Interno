@@ -74,6 +74,12 @@ const VerificacionesService = (function () {
       .sort((a, b) => (b.FECHA_REGISTRO || '').localeCompare(a.FECHA_REGISTRO || ''));
   }
 
+  /** Verificaciones de un solo vehículo (ficha de Vehículos). */
+  function listarPorFolio(token, folio) {
+    if (!folio) return [];
+    return listar(token).filter((v) => v.FOLIO === folio);
+  }
+
   /** Todas las columnas de TODAS las verificaciones (para exportar completo). */
   function completo(token) {
     Permisos.puedeLeer(token, 'verificaciones');
@@ -195,5 +201,5 @@ const VerificacionesService = (function () {
     return vista;
   }
 
-  return { listar, completo, registrar, actualizarCampo, eliminar, urlComprobante, previsualizarComprobante };
+  return { listar, listarPorFolio, completo, registrar, actualizarCampo, eliminar, urlComprobante, previsualizarComprobante };
 })();

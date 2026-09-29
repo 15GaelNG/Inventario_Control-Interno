@@ -166,6 +166,12 @@ const InspeccionesService = (function () {
       .sort((a, b) => (b.FECHA || '').localeCompare(a.FECHA || ''));
   }
 
+  /** Inspecciones de un solo vehículo (ficha de Vehículos). */
+  function listarPorFolio(token, folio) {
+    if (!folio) return [];
+    return listar(token).filter((i) => i.FOLIO === folio);
+  }
+
   /**
    * Todas las 195 columnas de TODAS las inspecciones (para exportar completo) — a
    * diferencia de listar()/detalle(), que evitan leer la hoja entera por lo pesado
@@ -609,7 +615,7 @@ const InspeccionesService = (function () {
   }
 
   return {
-    listar, completo, detalle, registrar, urlFormato, previsualizarImagen,
+    listar, listarPorFolio, completo, detalle, registrar, urlFormato, previsualizarImagen,
     estructuraDeTipo, olvidarTipo, tipos,
     nombrePlantilla_, carpetaDe_,   // las usa configurarInspecciones
     calcularPuntaje_, valorDeRespuesta_,   // expuestas para las pruebas

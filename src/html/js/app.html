@@ -2171,17 +2171,29 @@
     const GRUPOS_FICHA_GENERAL = ['Vehículo', 'Identificación'];
 
     /** Mismo patrón de pestañas que la ficha de equipo/línea en Líneas Telefónicas
-     *  (fichaEnPestanas): General primero, el resto de los datos en Detalles, y el
-     *  historial aparte para no scrollear una página larguísima. */
-    function fichaVehiculoEnPestanas(general, detalles, historial, numHistorial) {
-      const pestanas = [['general', 'General', 'layout-grid'], ['detalles', 'Detalles', 'clipboard-list'], ['historial', 'Historial', 'history']];
+     *  (fichaEnPestanas). pestanas: [{id, titulo, icono, contenido, num?}], la primera
+     *  queda activa. num (si viene) se muestra como contador junto al título. */
+    function fichaVehiculoEnPestanas(pestanas) {
       return '<div class="tabs-simple ln-ficha-tabs" role="tablist" aria-label="Secciones de la ficha">' + pestanas.map((t, n) =>
-        '<button type="button" class="tab-btn' + (n ? '' : ' active') + '" role="tab" aria-selected="' + (n ? 'false' : 'true') + '" data-ficha-tab="' + t[0] + '">' +
-        '<i data-lucide="' + t[2] + '" class="ico"></i> ' + t[1] +
-        (t[0] === 'historial' ? ' <span class="ln-tab-num">' + numHistorial + '</span>' : '') + '</button>').join('') + '</div>' +
-        '<div data-ficha-panel="general">' + general + '</div>' +
-        '<div data-ficha-panel="detalles" hidden>' + detalles + '</div>' +
-        '<div data-ficha-panel="historial" hidden>' + historial + '</div>';
+        '<button type="button" class="tab-btn' + (n ? '' : ' active') + '" role="tab" aria-selected="' + (n ? 'false' : 'true') + '" data-ficha-tab="' + t.id + '">' +
+        '<i data-lucide="' + t.icono + '" class="ico"></i> ' + t.titulo +
+        (t.num === undefined ? '' : ' <span class="ln-tab-num">' + t.num + '</span>') + '</button>').join('') + '</div>' +
+        pestanas.map((t, n) => '<div data-ficha-panel="' + t.id + '"' + (n ? ' hidden' : '') + '>' + t.contenido + '</div>').join('');
+    }
+
+    /** Tabla sencilla de solo lectura (sin filtros/orden/edición) para las pestañas
+     *  de la ficha que muestran lo que hay de este folio en otro módulo. */
+    function tablaFichaVehiculo(columnas, filas) {
+      return '<div style="overflow-x:auto"><table><thead><tr>' + columnas.map((c) => '<th>' + c.t + '</th>').join('') +
+        '</tr></thead><tbody>' + filas.map((f) => '<tr>' + columnas.map((c) => '<td>' + c.r(f) + '</td>').join('') + '</tr>').join('') +
+        '</tbody></table></div>';
+    }
+    function pestanaFichaVehiculo(icono, titulo, columnas, filas, vacio) {
+      return '<div class="card ln-card"><h3><i data-lucide="' + icono + '" class="ico ln-icon"></i> ' + titulo + '</h3>' +
+        (filas.length ? tablaFichaVehiculo(columnas, filas) : '<p class="empty-state">' + vacio + '</p>') + '</div>';
+    }
+    function botonArchivoFicha(tipo, ruta) {
+      return ruta ? '<button type="button" class="secondary" data-archivo="' + tipo + '" data-ruta="' + escaparHtml(ruta) + '">Ver</button>' : '—';
     }
 
     function mostrarPestanaFichaVehiculo(nombre) {
@@ -2205,15 +2217,25 @@
       window.scrollTo(0, 0);
 
       try {
-        const [completo, cambiosTexto, reasignaciones] = await Promise.all([
+        const [completo, cambiosTexto, reasignaciones, verifTexto, inspTexto, sensorTexto, holoTexto, incTexto] = await Promise.all([
           callServer('apiBuscarVehiculoPorFolio', state.token, vResumen.FOLIO),
           callServer('apiListarCambiosVehiculosPorFolio', state.token, vResumen.FOLIO),
           callServer('apiListarReasignacionesVehicularesPorFolio', state.token, vResumen.FOLIO),
+          callServer('apiVerificacionesPorFolio', state.token, vResumen.FOLIO),
+          callServer('apiInspeccionesPorFolio', state.token, vResumen.FOLIO),
+          callServer('apiSensoresPorFolio', state.token, vResumen.FOLIO),
+          callServer('apiHologramasPorFolio', state.token, vResumen.FOLIO),
+          callServer('apiIncidenciasPorFolio', state.token, vResumen.FOLIO),
         ]);
-        // apiListarCambiosVehiculosPorFolio regresa JSON.stringify — ver la nota
-        // en ClientApi.gs (google.script.run pierde arreglos grandes de forma
-        // intermitente; como texto viaja confiable).
+        // Estas regresan JSON.stringify — ver la nota en ClientApi.gs
+        // (google.script.run pierde arreglos grandes de forma intermitente;
+        // como texto viaja confiable).
         const cambios = JSON.parse(cambiosTexto || '[]');
+        const verificaciones = JSON.parse(verifTexto || '[]');
+        const inspecciones = JSON.parse(inspTexto || '[]');
+        const sensores = JSON.parse(sensorTexto || '[]');
+        const hologramas = JSON.parse(holoTexto || '[]');
+        const incidencias = JSON.parse(incTexto || '[]');
         // Se pudo haber vuelto a la lista (o abierto otro folio) mientras cargaba.
         if (detalle.hidden || !document.body.contains(detalle)) return;
         if (!completo) {
@@ -2283,7 +2305,57 @@
               </div>
             `).join('') + '</div>' : '<p class="empty-state">Sin reasignaciones registradas para este vehículo.</p>') + '</div>';
 
-        html += fichaVehiculoEnPestanas(general, detalles, historial, (cambios || []).length + (reasignaciones || []).length);
+        html += fichaVehiculoEnPestanas([
+          { id: 'general', titulo: 'General', icono: 'layout-grid', contenido: general },
+          { id: 'detalles', titulo: 'Detalles', icono: 'clipboard-list', contenido: detalles },
+          { id: 'historial', titulo: 'Historial', icono: 'history', contenido: historial, num: (cambios || []).length + (reasignaciones || []).length },
+          {
+            id: 'verificaciones', titulo: 'Verificaciones', icono: 'clipboard-check', num: verificaciones.length,
+            contenido: pestanaFichaVehiculo('clipboard-check', 'Verificaciones', [
+              { t: 'Verificación', r: (v) => formatearFecha(v.FECHA_VERIFICACION) },
+              { t: 'Próxima', r: (v) => formatearFecha(v.FECHA_PROXIMA) },
+              { t: 'Comprobante', r: (v) => botonArchivoFicha('verificacion', v.COMPROBANTE) },
+            ], verificaciones, 'Sin verificaciones registradas para este vehículo.'),
+          },
+          {
+            id: 'inspecciones', titulo: 'Inspecciones', icono: 'clipboard-list', num: inspecciones.length,
+            contenido: pestanaFichaVehiculo('clipboard-list', 'Inspecciones', [
+              { t: 'Fecha', r: (i) => formatearFecha(i.FECHA) },
+              { t: 'Tipo', r: (i) => escaparHtml(i.TIPO || '—') },
+              { t: 'Inspector', r: (i) => escaparHtml(i.INSPECTOR || '—') },
+              { t: 'Puntaje', r: (i) => (i.PUNTAJE === '' || i.PUNTAJE === null || i.PUNTAJE === undefined) ? '—' : i.PUNTAJE + '%' },
+              { t: 'Formato', r: (i) => botonArchivoFicha('inspeccion', i.PDF) },
+            ], inspecciones, 'Sin inspecciones registradas para este vehículo.'),
+          },
+          {
+            id: 'sensor', titulo: 'Sensor', icono: 'radio', num: sensores.length,
+            contenido: pestanaFichaVehiculo('radio', 'Sensor', [
+              { t: 'Instalación', r: (s) => formatearFecha(s.FECHA_INSTALACION) },
+              { t: 'Serie', r: (s) => escaparHtml(s.SERIE_SENSOR || '—') },
+              { t: 'Estatus', r: (s) => escaparHtml(s.ESTATUS || '—') },
+              { t: 'Responsiva', r: (s) => botonArchivoFicha('sensor', s.RESPONSIVA) },
+            ], sensores, 'Sin sensor instalado para este vehículo.'),
+          },
+          {
+            id: 'hologramas', titulo: 'Hologramas', icono: 'credit-card', num: hologramas.length,
+            contenido: pestanaFichaVehiculo('credit-card', 'Hologramas', [
+              { t: 'Proveedor', r: (h) => escaparHtml(h.PROVEEDOR || '—') },
+              { t: 'Estatus', r: (h) => escaparHtml(h.ESTATUS_EOX || '—') },
+              { t: 'Calcomanía', r: (h) => escaparHtml(h.CALCOMANIA || '—') },
+              { t: 'Autorizado', r: (h) => (h.AUTORIZADO_PESOS === '' || h.AUTORIZADO_PESOS === null || h.AUTORIZADO_PESOS === undefined) ? '—' : formatearMoneda(h.AUTORIZADO_PESOS) },
+              { t: 'Solicitud', r: (h) => botonArchivoFicha('holograma', h.SOLICITUD) },
+            ], hologramas, 'Sin hologramas registrados para este vehículo.'),
+          },
+          {
+            id: 'incidencias', titulo: 'Incidencias', icono: 'wrench', num: incidencias.length,
+            contenido: pestanaFichaVehiculo('wrench', 'Incidencias', [
+              { t: 'Fecha', r: (i) => formatearFecha(i.FECHA_REGISTRO) },
+              { t: 'Motivo', r: (i) => escaparHtml(i.INSPECCION_INGRESO || '—') },
+              { t: 'Estado', r: (i) => '<span class="badge-estado ' + (i.ESTADO === 'ABIERTA' ? 'abierta' : 'cerrada') + '">' + (i.ESTADO === 'ABIERTA' ? 'Abierta' : 'Cerrada') + '</span>' },
+              { t: 'Mecánico', r: (i) => escaparHtml(i.MECANICO || '—') },
+            ], incidencias, 'Sin incidencias registradas para este vehículo.'),
+          },
+        ]);
 
         detalle.innerHTML = html;
         wireMigasVehiculo();
@@ -2350,10 +2422,17 @@
       if (v) abrirFichaVehiculo(v);
     });
 
-    // Clic en una pestaña de la ficha (General / Detalles / Historial).
+    // Clic en una pestaña de la ficha, o en "Ver" de un archivo de otro módulo
+    // (comprobante, formato, responsiva, solicitud — cada uno abre igual que en su propio módulo).
+    const ABRIR_ARCHIVO_FICHA = {
+      verificacion: abrirComprobanteVerificacion, inspeccion: abrirFormatoInspeccion,
+      sensor: abrirResponsivaSensor, holograma: abrirSolicitudHolograma,
+    };
     document.getElementById('veh-detalle').addEventListener('click', (ev) => {
       const pestana = ev.target.closest('[data-ficha-tab]');
-      if (pestana) mostrarPestanaFichaVehiculo(pestana.dataset.fichaTab);
+      if (pestana) { mostrarPestanaFichaVehiculo(pestana.dataset.fichaTab); return; }
+      const archivo = ev.target.closest('[data-archivo]');
+      if (archivo) ABRIR_ARCHIVO_FICHA[archivo.dataset.archivo](archivo.dataset.ruta);
     });
 
     const KPI_FILTRO_VEHICULOS = { 'veh-stat-activos': 'no_contiene', 'veh-stat-baja': 'contiene' };

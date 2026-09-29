@@ -145,6 +145,12 @@ const SensoresService = (function () {
       .sort((a, b) => (b.FECHA_INSTALACION || '').localeCompare(a.FECHA_INSTALACION || ''));
   }
 
+  /** Sensores de un solo vehículo (ficha de Vehículos). */
+  function listarPorFolio(token, folio) {
+    if (!folio) return [];
+    return listar(token).filter((s) => s.FOLIO === folio);
+  }
+
   /** Todas las columnas de TODOS los sensores (para exportar completo). */
   function completo(token) {
     Permisos.puedeLeer(token, 'instalacion-sensores');
@@ -338,7 +344,7 @@ const SensoresService = (function () {
   }
 
   return {
-    listar, completo, datosParaFormulario, registrar, actualizarCampo, eliminar, urlResponsiva,
+    listar, listarPorFolio, completo, datosParaFormulario, registrar, actualizarCampo, eliminar, urlResponsiva,
     geotabDisponible, estadoEnVivo, resumenGeotab,
   };
 })();

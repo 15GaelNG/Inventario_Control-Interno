@@ -68,6 +68,12 @@ const IncidenciasService = (function () {
       .sort((a, b) => new Date(b.FECHA_REGISTRO) - new Date(a.FECHA_REGISTRO));
   }
 
+  /** Incidencias de un solo vehículo (ficha de Vehículos). */
+  function listarPorFolio(token, folio) {
+    if (!folio) return [];
+    return listar(token).filter((i) => i.FOLIO === folio);
+  }
+
   /** Todas las columnas de TODAS las incidencias (para exportar completo). */
   function completo(token) {
     Permisos.puedeLeer(token, 'incidencias');
@@ -176,5 +182,5 @@ const IncidenciasService = (function () {
     }
   }
 
-  return { listar, completo, crear, cerrar, actualizar, eliminar, diagnostico };
+  return { listar, listarPorFolio, completo, crear, cerrar, actualizar, eliminar, diagnostico };
 })();

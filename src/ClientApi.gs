@@ -111,6 +111,23 @@ function apiListarReasignacionesVehicularesPorFolio(token, folio) {
   return ReasignacionesVehicularesService.listarPorFolio(token, folio);
 }
 
+// Ficha de Vehículos: lo que hay de este folio en otros 5 módulos.
+function apiVerificacionesPorFolio(token, folio) {
+  return JSON.stringify(VerificacionesService.listarPorFolio(token, folio));
+}
+function apiInspeccionesPorFolio(token, folio) {
+  return JSON.stringify(InspeccionesService.listarPorFolio(token, folio));
+}
+function apiSensoresPorFolio(token, folio) {
+  return JSON.stringify(SensoresService.listarPorFolio(token, folio));
+}
+function apiHologramasPorFolio(token, folio) {
+  return JSON.stringify(HologramasService.listarPorFolio(token, folio));
+}
+function apiIncidenciasPorFolio(token, folio) {
+  return JSON.stringify(IncidenciasService.listarPorFolio(token, folio));
+}
+
 // --- Uber ---
 function apiListarUberResumen(token) {
   return UberService.listarResumen(token);
