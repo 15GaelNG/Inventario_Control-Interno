@@ -2136,6 +2136,64 @@
       document.getElementById('veh-listado').hidden = false;
     }
 
+    const ICONO_GRUPO_VEHICULO = {
+      'Vehículo': 'car', 'Identificación': 'id-card', 'Documentación y seguro': 'file-text',
+      'Accesorios y sensor': 'radio', 'Ubicación y registro': 'map-pin', 'Otros datos': 'more-horizontal',
+    };
+
+    /** Igual que renderCamposVehiculo pero para MOSTRAR (no capturar): mismos grupos y
+     *  etiquetas legibles que Registrar/Editar, en vez del volcado plano de antes. Lo que
+     *  no está en CAMPOS_VEHICULO (columnas legadas del AppSheet) cae en "Otros datos".
+     *  soloGrupos filtra a solo esos grupos (para repartir "General" vs "Detalles"). */
+    function seccionesFichaVehiculo(completo, soloGrupos) {
+      const porGrupo = {};
+      const grupos = [];
+      const usadas = new Set();
+      CAMPOS_VEHICULO.forEach((campo) => {
+        usadas.add(campo.clave);
+        if (soloGrupos && soloGrupos.indexOf(campo.grupo) === -1) return;
+        const valor = completo[campo.clave];
+        if (valor === '' || valor === null || valor === undefined) return;
+        if (!porGrupo[campo.grupo]) { porGrupo[campo.grupo] = []; grupos.push(campo.grupo); }
+        porGrupo[campo.grupo].push(itemInfo(campo.etiqueta, campo.moneda ? formatearMoneda(valor) : valor));
+      });
+      if (!soloGrupos || soloGrupos.indexOf('Otros datos') !== -1) {
+        const otros = Object.keys(completo)
+          .filter((k) => !usadas.has(k) && completo[k] !== '' && completo[k] !== null && completo[k] !== undefined)
+          .map((k) => itemInfo(tituloDesdeClave(k), completo[k]));
+        if (otros.length) { porGrupo['Otros datos'] = otros; grupos.push('Otros datos'); }
+      }
+
+      return grupos.map((g) => '<div class="card ln-card"><h3><i data-lucide="' + (ICONO_GRUPO_VEHICULO[g] || 'info') +
+        '" class="ico ln-icon"></i> ' + g + '</h3><div class="info-grid">' + porGrupo[g].join('') + '</div></div>').join('');
+    }
+
+    const GRUPOS_FICHA_GENERAL = ['Vehículo', 'Identificación'];
+
+    /** Mismo patrón de pestañas que la ficha de equipo/línea en Líneas Telefónicas
+     *  (fichaEnPestanas): General primero, el resto de los datos en Detalles, y el
+     *  historial aparte para no scrollear una página larguísima. */
+    function fichaVehiculoEnPestanas(general, detalles, historial, numHistorial) {
+      const pestanas = [['general', 'General', 'layout-grid'], ['detalles', 'Detalles', 'clipboard-list'], ['historial', 'Historial', 'history']];
+      return '<div class="tabs-simple ln-ficha-tabs" role="tablist" aria-label="Secciones de la ficha">' + pestanas.map((t, n) =>
+        '<button type="button" class="tab-btn' + (n ? '' : ' active') + '" role="tab" aria-selected="' + (n ? 'false' : 'true') + '" data-ficha-tab="' + t[0] + '">' +
+        '<i data-lucide="' + t[2] + '" class="ico"></i> ' + t[1] +
+        (t[0] === 'historial' ? ' <span class="ln-tab-num">' + numHistorial + '</span>' : '') + '</button>').join('') + '</div>' +
+        '<div data-ficha-panel="general">' + general + '</div>' +
+        '<div data-ficha-panel="detalles" hidden>' + detalles + '</div>' +
+        '<div data-ficha-panel="historial" hidden>' + historial + '</div>';
+    }
+
+    function mostrarPestanaFichaVehiculo(nombre) {
+      const detalle = document.getElementById('veh-detalle');
+      detalle.querySelectorAll('[data-ficha-tab]').forEach((b) => {
+        const activa = b.dataset.fichaTab === nombre;
+        b.classList.toggle('active', activa);
+        b.setAttribute('aria-selected', String(activa));
+      });
+      detalle.querySelectorAll('[data-ficha-panel]').forEach((p) => { p.hidden = p.dataset.fichaPanel !== nombre; });
+    }
+
     async function abrirFichaVehiculo(vResumen) {
       const listado = document.getElementById('veh-listado');
       const detalle = document.getElementById('veh-detalle');
@@ -2165,6 +2223,13 @@
         }
 
         const estilo = CLASE_ESTILO[String(completo['CLASE'] || '').toUpperCase()] || { icono: 'circle', color: 'var(--color-text-muted)' };
+        const resumenRapido = [
+          ['Marca / Línea', [completo['MARCA'], completo['LINEA VEHICULO']].filter(Boolean).join(' · ')],
+          ['Departamento', completo['DEPARTAMENTO']],
+          ['Responsable', completo['RESPONSABLE VEHICULO']],
+          ['Placa', completo['PLACA']],
+        ].filter((d) => d[1]);
+
         let html = migasVehiculo();
         html += '<div class="ln-detalle-header card">' +
           '<div class="ln-detalle-icono" style="background:none; color:' + estilo.color + '"><i data-lucide="' + estilo.icono + '" class="ico ln-icon"></i></div>' +
@@ -2172,15 +2237,16 @@
           '<div class="ln-chips">' + badgeEstatus(completo['ESTATUS']) + '</div></div>' +
           '<div class="ln-detalle-botones">' +
           (puedeEditar ? '<button type="button" id="veh-btn-editar-ficha"><i data-lucide="pencil" class="ico"></i> Editar</button>' : '') +
-          '</div></div>';
+          '</div>' +
+          (resumenRapido.length ? '<dl class="ln-resumen-rapido">' + resumenRapido.map((d) =>
+            '<div><dt>' + d[0] + '</dt><dd>' + escaparHtml(String(d[1])) + '</dd></div>').join('') + '</dl>' : '') +
+          '</div>';
 
-        html += '<div class="card ln-card"><h3><i data-lucide="info" class="ico ln-icon"></i> Datos del vehículo</h3><div class="info-grid">' +
-          Object.keys(completo)
-            .filter((k) => completo[k] !== '' && completo[k] !== null && completo[k] !== undefined)
-            .map((k) => itemInfo(tituloDesdeClave(k), k === '$ Costo del Sensor' ? formatearMoneda(completo[k]) : completo[k]))
-            .join('') + '</div></div>';
+        const general = seccionesFichaVehiculo(completo, GRUPOS_FICHA_GENERAL);
+        const detalles = seccionesFichaVehiculo(completo, CAMPOS_VEHICULO.map((c) => c.grupo)
+          .filter((g, i, arr) => arr.indexOf(g) === i && GRUPOS_FICHA_GENERAL.indexOf(g) === -1).concat('Otros datos'));
 
-        html += '<div class="card ln-card"><h3><i data-lucide="history" class="ico ln-icon"></i> Historial de cambios</h3>' +
+        const historial = '<div class="card ln-card"><h3><i data-lucide="pencil" class="ico ln-icon"></i> Historial de cambios</h3>' +
           ((cambios || []).length ? '<div class="historial-timeline">' + cambios.map((c) => `
               <div class="historial-item">
                 <div class="historial-icon"><i data-lucide="pencil" class="ico"></i></div>
@@ -2197,9 +2263,8 @@
                   <div>${formatearFecha(c.FECHA)}</div>
                 </div>
               </div>
-            `).join('') + '</div>' : '<p class="empty-state">Sin cambios registrados para este vehículo.</p>') + '</div>';
-
-        html += '<div class="card ln-card"><h3><i data-lucide="arrow-left-right" class="ico ln-icon"></i> Historial de reasignaciones</h3>' +
+            `).join('') + '</div>' : '<p class="empty-state">Sin cambios registrados para este vehículo.</p>') + '</div>' +
+          '<div class="card ln-card"><h3><i data-lucide="arrow-left-right" class="ico ln-icon"></i> Historial de reasignaciones</h3>' +
           ((reasignaciones || []).length ? '<div class="historial-timeline">' + reasignaciones.map((r) => `
               <div class="historial-item">
                 <div class="historial-icon historial-icon-accent"><i data-lucide="arrow-left-right" class="ico"></i></div>
@@ -2217,6 +2282,8 @@
                 </div>
               </div>
             `).join('') + '</div>' : '<p class="empty-state">Sin reasignaciones registradas para este vehículo.</p>') + '</div>';
+
+        html += fichaVehiculoEnPestanas(general, detalles, historial, (cambios || []).length + (reasignaciones || []).length);
 
         detalle.innerHTML = html;
         wireMigasVehiculo();
@@ -2281,6 +2348,12 @@
       if (!tr || ev.target.closest('button, input, a')) return;
       const v = vehiculosPorId[tr.dataset.id];
       if (v) abrirFichaVehiculo(v);
+    });
+
+    // Clic en una pestaña de la ficha (General / Detalles / Historial).
+    document.getElementById('veh-detalle').addEventListener('click', (ev) => {
+      const pestana = ev.target.closest('[data-ficha-tab]');
+      if (pestana) mostrarPestanaFichaVehiculo(pestana.dataset.fichaTab);
     });
 
     const KPI_FILTRO_VEHICULOS = { 'veh-stat-activos': 'no_contiene', 'veh-stat-baja': 'contiene' };
