@@ -360,7 +360,7 @@
               <div class="field" data-campo="FOLIO">
                 <label for="ins-folio">Folio del vehículo</label>
                 <input type="text" id="ins-folio" required autocomplete="off" />
-                <span class="form-ayuda">Al elegirlo se traen sus datos y se sugiere el tipo de unidad</span>
+                <span class="form-ayuda">Al elegirlo se traen sus datos y el tipo de unidad se limita a su clase</span>
                 <span class="form-error-campo" hidden></span>
               </div>
               <div class="field" data-campo="TIPO">
@@ -415,6 +415,21 @@
     };
 
     // ----- catálogos -----
+    // todosLosTipos: la lista completa (con su .clase, ej. "Automóvil"/"Camioneta"),
+    // para poder filtrar la lista visible según la clase del folio elegido.
+    let todosLosTipos = [];
+    /** Repinta las opciones de "Tipo de unidad": si se da clase, solo los tipos de
+     *  esa clase (más los que no tienen clase detectada, para no ocultar de más). */
+    function pintarOpcionesTipo(clase) {
+      const anterior = campoTipo.value;
+      const visibles = clase ? todosLosTipos.filter((t) => !t.clase || t.clase === clase) : todosLosTipos;
+      campoTipo.innerHTML = '<option value=""></option>' + visibles
+        .map((t) => `<option value="${escaparHtml(t.tipo)}" ${t.listo ? '' : 'disabled'}>` +
+          `${escaparHtml(t.tipo)}${t.listo ? '' : ' (sin formato)'}</option>`).join('');
+      // Si el tipo que ya tenía elegido sigue en la lista filtrada, no se pierde.
+      if (anterior && visibles.some((t) => t.tipo === anterior)) campoTipo.value = anterior;
+    }
+
     const catalogos = Promise.all([
       callServerCacheado('apiListarVehiculosBasico', state.token).then((vehiculos) => {
         Combobox.crear(campoFolio, {
@@ -427,9 +442,8 @@
       }).catch((err) => Notificar.error('No se pudo cargar el catálogo de vehículos: ' + err.message)),
 
       callServerCacheado('apiTiposInspeccion', state.token).then((tipos) => {
-        campoTipo.innerHTML = '<option value=""></option>' + (tipos || [])
-          .map((t) => `<option value="${escaparHtml(t.tipo)}" ${t.listo ? '' : 'disabled'}>` +
-            `${escaparHtml(t.tipo)}${t.listo ? '' : ' (sin formato)'}</option>`).join('');
+        todosLosTipos = tipos || [];
+        pintarOpcionesTipo(vehiculo && vehiculo.CLASE);
       }).catch((err) => Notificar.error('No se pudieron cargar los tipos: ' + err.message)),
     ]);
 
@@ -459,7 +473,7 @@
       const folio = campoFolio.value.trim();
       if (folio === pedido && (vehiculo || buscando)) return buscando || Promise.resolve();
       pedido = folio;
-      if (!folio) { vehiculo = null; pintarFicha(); return Promise.resolve(); }
+      if (!folio) { vehiculo = null; pintarFicha(); pintarOpcionesTipo(null); return Promise.resolve(); }
       buscando = (async () => {
         try {
           const v = await callServer('apiBuscarVehiculoPorFolio', state.token, folio);
@@ -467,9 +481,12 @@
           vehiculo = v || null;
           pintarFicha();
           error('FOLIO', v ? null : 'No se encontró ese folio');
-          if (!v) return;
-          // La línea del vehículo suele coincidir con el tipo de formato: se sugiere
+          if (!v) { pintarOpcionesTipo(null); return; }
+          // Solo se ofrecen los tipos de la misma clase del vehículo (un folio de
+          // automóvil no debería poder elegir un tipo de motocicleta/camión…), y la
+          // línea del vehículo suele coincidir con el tipo de formato: se sugiere.
           await catalogos;
+          pintarOpcionesTipo(v['CLASE']);
           const sugerido = Array.from(campoTipo.options)
             .find((o) => o.value && !o.disabled && o.value.toUpperCase() === String(v['LINEA VEHICULO'] || '').toUpperCase());
           if (sugerido && !campoTipo.value) { campoTipo.value = sugerido.value; cargarChecklist(); }

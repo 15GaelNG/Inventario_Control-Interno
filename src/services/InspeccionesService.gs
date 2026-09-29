@@ -596,16 +596,33 @@ const InspeccionesService = (function () {
     return 'Listo: se volverá a leer la plantilla de "' + tipo + '".';
   }
 
-  /** Tipos disponibles, para el formulario */
+  /**
+   * Tipos disponibles, para el formulario. Cada "tipo" es en realidad la Línea del
+   * vehículo (HONDA 150XR, L200…) — se le agrega su Clase (Automóvil, Camioneta…)
+   * cruzando con el catálogo de Vehículos, para que el cliente pueda mostrar solo
+   * los tipos que aplican a la clase del folio elegido (ej. un folio AUT no debería
+   * ofrecer tipos de motocicleta). clase sale vacía si no hay ningún vehículo con
+   * esa línea todavía, o si no se pudo leer el catálogo de Vehículos.
+   */
   function tipos(token) {
     Permisos.puedeLeer(token, MODULO);
-    return SheetUtils.getAll(ssId(), HOJA_MODELOS)
+    const modelos = SheetUtils.getAll(ssId(), HOJA_MODELOS)
       .filter((f) => limpiar_(f['TIPO']))
       .map((f) => ({
         tipo: limpiar_(f['TIPO']),
         listo: !!limpiar_(f[COL_PLANTILLA]),
       }))
       .sort((a, b) => a.tipo.localeCompare(b.tipo));
+
+    const claseDeLinea = {};
+    try {
+      VehiculosService.listarResumen(token).forEach((v) => {
+        const linea = String(v.LINEA_VEHICULO || '').trim().toUpperCase();
+        if (linea && v.CLASE && !claseDeLinea[linea]) claseDeLinea[linea] = v.CLASE;
+      });
+    } catch (e) { /* sin acceso a Vehículos: se regresa sin clase, el cliente no filtra */ }
+
+    return modelos.map((m) => Object.assign({ clase: claseDeLinea[m.tipo.toUpperCase()] || '' }, m));
   }
 
   return {
