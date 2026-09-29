@@ -618,6 +618,15 @@
         conectarChecklist();
         prepararDiagramas();
         prepararFirmas();
+        // Conductor/Holograma del paso "Cierre": si la ficha de Vehículos ya sabe quién es
+        // el responsable o qué holograma tiene la unidad, se sugieren (el campo se puede
+        // seguir editando; no viene con soloLectura porque puede no ser el conductor real).
+        if (opciones.conductorSugerido && $('#ins-conductor') && !$('#ins-conductor').value) {
+          $('#ins-conductor').value = opciones.conductorSugerido;
+        }
+        if (opciones.hologramaSugerido && $('#ins-holograma') && !$('#ins-holograma').value) {
+          $('#ins-holograma').value = opciones.hologramaSugerido;
+        }
       }
       $('#ins-panel-avance').hidden = !estructura;
       mostrarPaso(0);

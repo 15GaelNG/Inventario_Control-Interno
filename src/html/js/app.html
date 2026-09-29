@@ -2370,10 +2370,14 @@
      *  (checklist dinámico, diagramas y firmas) — prepararCaptura ya acepta un contenedor
      *  cualquiera (ver modulos/inspecciones.html), así que aquí solo se le da el cuerpo del
      *  modal, el folio (ya lo sabemos) y qué hacer al guardar en vez de "listo para el siguiente". */
-    function abrirAgregarInspeccion(vResumen, completo) {
+    function abrirAgregarInspeccion(vResumen, completo, hologramas) {
       const cuerpo = abrirCapturaVehiculo('clipboard-list', 'INSPECCIÓN', 'Nueva inspección', 'Folio ' + vResumen.FOLIO, completo);
       prepararCaptura(cuerpo, {
         folioFijo: vResumen.FOLIO,
+        // El "Cierre" pide Conductor y Holograma: se sugieren con el responsable del
+        // vehículo y su holograma más reciente (si tiene) — el usuario los puede corregir.
+        conductorSugerido: completo['RESPONSABLE VEHICULO'] || '',
+        hologramaSugerido: (hologramas && hologramas[0] && hologramas[0].CALCOMANIA) || '',
         alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'inspecciones'); },
       });
     }
@@ -2560,7 +2564,7 @@
             else if (tipo === 'sensor') abrirAgregarSensor(vResumen, completo);
             else if (tipo === 'holograma') abrirAgregarHolograma(vResumen, completo);
             else if (tipo === 'incidencia') abrirAgregarIncidencia(vResumen, completo);
-            else if (tipo === 'inspeccion') abrirAgregarInspeccion(vResumen, completo);
+            else if (tipo === 'inspeccion') abrirAgregarInspeccion(vResumen, completo, hologramas);
           });
         });
         refreshIcons();
