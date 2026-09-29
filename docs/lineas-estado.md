@@ -203,8 +203,8 @@ Pedido del área: al seleccionar dos o más equipos en Líneas Telefónicas, man
   `apiLineasAccionMasiva`):
   - *Mandar a resguardo*: ESTATUS EQUIPO = RESGUARDO. El responsable no cambia.
   - *Reasignar*: RESPONSABLE (obligatorio), No. EMPLEADO, PUESTO y DEPARTAMENTO, con las mismas listas y el
-    autollenado del colaborador que "Editar información". ESTATUS EQUIPO es opcional. Lo que se deja vacío queda como
-    estaba en cada equipo. Si en la fila el responsable es quien usa el equipo, NOMBRE/PUESTO QUIEN USA siguen al
+    autollenado del colaborador que "Editar información". ESTATUS EQUIPO queda siempre en RESGUARDO y no se elige
+    (pedido del usuario, 29-sep). Lo que se deja vacío queda como estaba en cada equipo. Si en la fila el responsable es quien usa el equipo, NOMBRE/PUESTO QUIEN USA siguen al
     nuevo responsable (Reset_If del AppSheet).
   - *Reasignar* tiene dos formas, con un selector arriba:
     - **Mismo responsable para todos** (la de arriba).

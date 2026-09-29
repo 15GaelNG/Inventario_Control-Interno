@@ -421,7 +421,8 @@ const LineasRegistros = (function () {
 
   const MASIVAS = {
     RESGUARDO: { titulo: 'Mandar a resguardo', estatusEquipo: 'RESGUARDO' },
-    REASIGNAR: { titulo: 'Reasignar equipos' },
+    // Al reasignar, el equipo queda en RESGUARDO: el estatus no se elige (pedido del usuario, 29-sep)
+    REASIGNAR: { titulo: 'Reasignar equipos', estatusEquipo: 'RESGUARDO' },
     CANCELAR: { titulo: 'Cancelar equipos', estatusEquipo: 'CANCELADO' },
   };
   const MASIVA_MINIMO = 2;
@@ -445,9 +446,6 @@ const LineasRegistros = (function () {
       const de = (c) => Object.assign({}, base.filter((e) => e.columna === c)[0], { editable: 'SIEMPRE', valor: '' });
       salida.push({ tipo: 'titulo', texto: 'NUEVO RESPONSABLE', icono: 'user-round-check' });
       COLS_REASIGNAR.forEach((c) => salida.push(Object.assign(de(c), c === 'RESPONSABLE' ? { requerido: 'SIEMPRE' } : {})));
-      salida.push(campo_('ESTATUS EQUIPO', 'ESTATUS DEL EQUIPO (si no eliges uno, queda como está)', 'lista', {
-        opciones: LineasRepo.CATALOGO.estatusEquipo, valor: '',
-      }));
     }
     salida.push({ tipo: 'titulo', texto: 'MOTIVO', icono: 'message-square-text' });
     salida.push(campo_('_MOTIVO', 'MOTIVO (queda en el historial de cada equipo)', 'area', { requerido: 'SIEMPRE', valida: 'COMENTARIOS' }));
@@ -508,10 +506,7 @@ const LineasRegistros = (function () {
 
     const pedidos = {};
     if (cfg.estatusEquipo) pedidos['ESTATUS EQUIPO'] = cfg.estatusEquipo;
-    if (clave === 'REASIGNAR') {
-      if (!individual) COLS_REASIGNAR.forEach((c) => { if (texto_(r.valores[c])) pedidos[c] = texto_(r.valores[c]); });
-      if (texto_(r.valores['ESTATUS EQUIPO'])) pedidos['ESTATUS EQUIPO'] = texto_(r.valores['ESTATUS EQUIPO']).toUpperCase();
-    }
+    if (clave === 'REASIGNAR' && !individual) COLS_REASIGNAR.forEach((c) => { if (texto_(r.valores[c])) pedidos[c] = texto_(r.valores[c]); });
 
     const hechos = [];
     const omitidos = [];

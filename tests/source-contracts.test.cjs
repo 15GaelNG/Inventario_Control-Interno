@@ -960,8 +960,13 @@ test('Acciones masivas de equipos: resguardo, reasignar y cancelar desde 2 selec
   assert.throws(() => Reg.accionMasiva('REASIGNAR', ['a', 'b'], { valores: { _MOTIVO: 'CAMBIO DE AREA' } }, u), /RESPONSABLE es obligatorio/);
   guardados.length = 0;
   Reg.accionMasiva('REASIGNAR', ['a', 'b'], { valores: { RESPONSABLE: 'PEDRO PEREZ', 'NO EMPLEADO': '123', PUESTO: 'GERENTE', _MOTIVO: 'CAMBIO DE AREA' } }, u);
-  assert.deepEqual(guardados[0], ['a', { 'NO EMPLEADO': '123', RESPONSABLE: 'PEDRO PEREZ', PUESTO: 'GERENTE', 'NOMBRE QUIEN USA': 'PEDRO PEREZ', 'PUESTO QUIEN USA': 'GERENTE' }]);
-  assert.deepEqual(guardados[1], ['b', { 'NO EMPLEADO': '123', RESPONSABLE: 'PEDRO PEREZ', PUESTO: 'GERENTE' }]);
+  assert.deepEqual(guardados[0], ['a', { 'ESTATUS EQUIPO': 'RESGUARDO', 'NO EMPLEADO': '123', RESPONSABLE: 'PEDRO PEREZ', PUESTO: 'GERENTE', 'NOMBRE QUIEN USA': 'PEDRO PEREZ', 'PUESTO QUIEN USA': 'GERENTE' }]);
+  assert.deepEqual(guardados[1], ['b', { 'ESTATUS EQUIPO': 'RESGUARDO', 'NO EMPLEADO': '123', RESPONSABLE: 'PEDRO PEREZ', PUESTO: 'GERENTE' }]);
+  // El estatus no se elige al reasignar: siempre RESGUARDO (aunque llegue otro)
+  assert.ok(!Reg._elementosMasivos('REASIGNAR', {}, u).some((e) => e.columna === 'ESTATUS EQUIPO'));
+  guardados.length = 0;
+  Reg.accionMasiva('REASIGNAR', ['a', 'b'], { valores: { RESPONSABLE: 'PEDRO PEREZ', 'ESTATUS EQUIPO': 'USO', _MOTIVO: 'CAMBIO DE AREA' } }, u);
+  assert.ok(guardados.every(([, c]) => c['ESTATUS EQUIPO'] === 'RESGUARDO'));
 
   // Cancelar pone CANCELADO; con uno solo o sin motivo, error
   guardados.length = 0;
@@ -1010,8 +1015,8 @@ test('Reasignar uno por uno: cada equipo con su responsable; los que no cambian 
     porEquipo: { a: { RESPONSABLE: 'PEDRO', PUESTO: 'SUPERVISOR' }, b: { RESPONSABLE: 'LUIS', PUESTO: 'DIRECTOR' } },
   }, u);
   assert.deepEqual(guardados, [
-    ['a', { RESPONSABLE: 'PEDRO', PUESTO: 'SUPERVISOR', 'NOMBRE QUIEN USA': 'PEDRO', 'PUESTO QUIEN USA': 'SUPERVISOR' }],
-    ['b', { RESPONSABLE: 'LUIS', PUESTO: 'DIRECTOR' }],
+    ['a', { 'ESTATUS EQUIPO': 'RESGUARDO', RESPONSABLE: 'PEDRO', PUESTO: 'SUPERVISOR', 'NOMBRE QUIEN USA': 'PEDRO', 'PUESTO QUIEN USA': 'SUPERVISOR' }],
+    ['b', { 'ESTATUS EQUIPO': 'RESGUARDO', RESPONSABLE: 'LUIS', PUESTO: 'DIRECTOR' }],
   ]);
   assert.deepEqual(r.omitidos.map((o) => [o.id, o.motivo]), [['c', 'Sin cambios']]);
   // Validaciones por equipo (mayúsculas) con el NUCO en el mensaje; sin ningún cambio, error
