@@ -98,9 +98,70 @@ Los dos últimos **no** son centinelas: lo correcto ahí es darlos de alta en
 `DEPARTAMENTOS`, no dejar de propagarlos. Un centinela se loguea como `OMITIDO_CENTINELA`
 y se cuenta aparte, porque **lo que hay que arreglar es el catálogo, no la copia**.
 
-> **Pendiente de negocio, no de código:** `VEHICULOS` ya tiene una columna `ESTATUS`. Que
-> `DEPARTAMENTO` se use además para marcar la baja es lo que obliga a esta guarda. Sacar
-> las 123 bajas a `ESTATUS` dejaría `DEPARTAMENTO` limpia y `CENTINELAS` casi vacía.
+#### Pendiente: limpiar el `DEPARTAMENTO` de los vehículos de baja
+
+Los centinelas son una curita. La causa está en el catálogo, y se puede arreglar — medido
+en producción el 29/09/2026, solo lectura:
+
+- **Las 123 filas con `DEPARTAMENTO = 'BAJA VEHICULAR'` tienen las 123 también
+  `ESTATUS = 'BAJA VEHICULAR'`.** Cero excepciones. La baja **no** depende de
+  `DEPARTAMENTO`: consta en `ESTATUS`, que es la columna que el código lee
+  (`VehiculosService.gs:72`). Limpiar `DEPARTAMENTO` no pierde la baja.
+- Y ya hay **6 vehículos de baja que conservan su área** en `DEPARTAMENTO`: el patrón
+  correcto existe en los datos.
+- De las 123, **7 tienen su área recuperable** desde las copias (`HOLOGRAMAS`,
+  `INSPECCION VEHICULAR`), y las fuentes coinciden en las 7 — sin un solo conflicto. A las
+  otras **116 les toca quedar vacías**: vacío dice la verdad, que no consta el área.
+- `NUCO SIN INFORMACION` (14 filas) y `SIN ESPECIFICAR` (2) son también valores del
+  desplegable de `ESTATUS` (`app.html:1392`) y pintan igual, pero **eso no se ha cruzado
+  contra `ESTATUS` todavía**: hay que medirlo antes de tocarlas.
+
+**La app nueva no puede volver a contaminar esa columna:** `DEPARTAMENTO` es un desplegable
+del catálogo (`app.html:1399`, `tipo: 'select', catalogo: true`). La contaminación entró por
+AppSheet o editando el Excel a mano. O sea que `CENTINELAS` sirve de red mientras AppSheet
+viva, y cuando se apague se puede borrar.
+
+**Orden obligatorio:** primero la regla del vacío
+([arriba](#principio-el-barrido-nocturno-no-vacía-lo-que-sí-tiene-dato)) —ya está—, y
+**después** la limpieza. Al revés, la siguiente corrida nocturna propagaría los 116 vacíos y
+borraría el área de las copias.
+
+**Lo que no se puede verificar desde aquí:** si AppSheet tiene esa columna como obligatoria,
+o alguna vista que agrupe por ella. Con 116 celdas vacías nuevas eso se notaría allá. Se
+revisa en su editor antes de escribir.
+
+### Pieza 1b — Cómo se ve cada caso en `LOG_RELACIONES`
+
+Cinco tipos, y solo uno se corrige:
+
+| `TIPO` | Qué pasó | ¿Se corrige? |
+|---|---|---|
+| `DIFERENCIA` | la copia quedó vieja | **sí** |
+| `DIFERENCIA_HISTORICA` | bitácora fechada: el valor del día del evento | no, a propósito |
+| `OMITIDO_CENTINELA` | el catálogo traía un estatus en vez de un dato | no: arregla el catálogo |
+| `OMITIDO_VACIO` | el catálogo no tiene el dato y la copia sí | no: arregla el catálogo |
+| `HUERFANO` | la copia apunta a un folio/serie que ya no existe | no: no hay con qué |
+| `CLAVE_DUPLICADA_EN_ORIGEN` | dos filas del dueño con la misma clave | no: no se sabe cuál manda |
+
+### Principio: el barrido nocturno no vacía lo que sí tiene dato
+
+`propagar()` y `revisar()` tratan distinto un valor vacío en el dueño, y la diferencia
+es quién lo pidió:
+
+| | Dueño vacío, copia con dato | Por qué |
+|---|---|---|
+| `propagar()` | **vacía la copia** | el usuario acaba de borrar el campo a propósito |
+| `revisar()` | **no la toca**, loguea `OMITIDO_VACIO` | nadie pidió nada: es un barrido a ciegas |
+
+En un barrido, un dueño vacío casi siempre es un dato que falta en el catálogo, no la
+instrucción de borrarlo en tres módulos. Y la asimetría del error importa: borrar a ciegas
+es silencioso y no hay de dónde recuperarlo; dejar el valor viejo se reporta cada noche
+hasta que alguien lo vea.
+
+Esto no es hipotético. Ver [limpieza pendiente del catálogo](#pendiente-limpiar-el-departamento-de-los-vehículos-de-baja):
+a 116 vehículos de baja les toca quedar con `DEPARTAMENTO` vacío, y sin esta regla la
+primera corrida nocturna después de esa limpieza vaciaría también el área que `HOLOGRAMAS`
+e `INSTALACION DE SENSORES` sí conservan.
 
 ### Pieza 1 — El mapa (lo único que se edita a mano)
 

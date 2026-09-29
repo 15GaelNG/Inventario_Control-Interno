@@ -329,12 +329,14 @@ function verPerfiles() {
  * como ellas (ver el MAPA en Relaciones.gs):
  *   histórica  — una bitácora fechada que se dejó como estaba a propósito
  *   centinela  — el catálogo traía un estatus ('BAJA VEHICULAR') en vez de un dato
+ *   vacía      — el catálogo no tiene el dato y la copia sí: no se borra a ciegas
  *   huérfana   — la copia apunta a un folio/serie que ya no existe en Vehículos
  */
 function lineaRelaciones_(hoja, r, verbo) {
   const partes = [r.revisadas + ' filas revisadas', r.diferencias + ' ' + verbo];
   if (r.diferenciasHistoricas) partes.push(r.diferenciasHistoricas + ' histórica(s) sin tocar');
   if (r.centinelasOmitidos) partes.push(r.centinelasOmitidos + ' omitida(s) por centinela en el catálogo');
+  if (r.vaciosOmitidos) partes.push(r.vaciosOmitidos + ' que el catálogo vaciaría (no se borraron)');
   if (r.huerfanos) partes.push(r.huerfanos + ' huérfana(s)');
   if (r.clavesDuplicadasOmitidas) partes.push(r.clavesDuplicadasOmitidas + ' con clave duplicada en el origen (no se revisaron)');
   return '  · ' + hoja + ' [' + (r.tipo || 'cache') + ']: ' + partes.join(', ');
@@ -764,8 +766,9 @@ function revisarRelacionesYCorregir() {
   Object.keys(resultado).forEach((hoja) => {
     lineas.push(lineaRelaciones_(hoja, resultado[hoja], 'corregida(s)'));
   });
-  lineas.push('', 'Lo que dice "histórica(s) sin tocar" y "omitida(s) por centinela" NO se corrigió,');
-  lineas.push('a propósito. El detalle de cada caso está en LOG_RELACIONES con su propio TIPO.');
+  lineas.push('', 'Lo que dice "histórica(s) sin tocar", "omitida(s) por centinela" y "que el');
+  lineas.push('catálogo vaciaría" NO se corrigió, a propósito. El detalle de cada caso está en');
+  lineas.push('LOG_RELACIONES con su propio TIPO.');
   const mensaje = lineas.join('\n');
   Logger.log(mensaje);
   return mensaje;

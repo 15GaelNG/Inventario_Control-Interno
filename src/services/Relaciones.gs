@@ -184,6 +184,24 @@ const Relaciones = (function () {
     return !!lista && lista.indexOf(normalizar_(valor)) !== -1;
   }
 
+  /**
+   * La corrida nocturna NO vacía una copia que sí tiene dato. Es distinto a propagar():
+   *
+   *   - En propagar(), el usuario acaba de borrar el campo a propósito. Se respeta.
+   *   - En revisar(), nadie pidió nada: es un barrido a ciegas. Un dueño vacío casi
+   *     siempre es un dato que falta en el catálogo, no la instrucción de borrar el de
+   *     tres módulos. Y si se equivoca, borra en silencio y no hay de dónde recuperarlo;
+   *     al revés, deja un valor viejo que se reporta cada noche hasta que alguien lo vea.
+   *
+   * Esto importa en concreto: en el catálogo hay 116 vehículos de baja a los que les toca
+   * quedar con DEPARTAMENTO vacío (la baja ya consta en ESTATUS). Sin esta regla, la
+   * primera corrida nocturna después de esa limpieza vaciaría también el área que
+   * HOLOGRAMAS e INSTALACION DE SENSORES sí conservan.
+   */
+  function vaciariaDatoBueno_(tenia, debiaSer) {
+    return normalizar_(debiaSer) === '' && normalizar_(tenia) !== '';
+  }
+
   function hojaCopia_(copia, ssId) {
     return SheetUtils.getSheetByColumns(ssId, copia.firma);
   }
@@ -270,6 +288,8 @@ const Relaciones = (function () {
           claves.forEach((fila, i) => { if (normalizar_(fila[0]) === normalizar_(valorClave)) filas.push(i + 2); });
           if (!filas.length) return;
 
+          // Aquí sí se escribe un valor vacío si el usuario borró el campo: fue explícito.
+          // El barrido nocturno de revisar() es el que no lo hace (ver vaciariaDatoBueno_).
           columnasTocadas.forEach((campoOrigen) => {
             const col = columna1_(hoja, copia.columnas[campoOrigen], encabezados);
             const a1 = filas.map((fila) => hoja.getRange(fila, col).getA1Notation());
@@ -369,7 +389,7 @@ const Relaciones = (function () {
         const filasCopia = SheetUtils.getAll(ssId, hoja.getName());
         const columnasOrigen = Object.keys(copia.columnas);
         let revisadas = 0, diferencias = 0, huerfanos = 0, duplicadosOmitidos = 0;
-        let centinelasOmitidos = 0, historicas = 0;
+        let centinelasOmitidos = 0, historicas = 0, vaciosOmitidos = 0;
         const correcciones = {}; // columna destino → { valorNuevo: [numFila, …] }
 
         filasCopia.forEach((filaCopia, i) => {
@@ -394,6 +414,13 @@ const Relaciones = (function () {
             const tenia = filaCopia[colDestino];
             const debiaSer = filaOrigen[colOrigen];
             if (mismoValor_(tenia, debiaSer)) return;
+
+            // El dueño está vacío y la copia no: no se borra a ciegas (ver vaciariaDatoBueno_).
+            if (vaciariaDatoBueno_(tenia, debiaSer)) {
+              vaciosOmitidos++;
+              entradasLog.push({ tipo: 'OMITIDO_VACIO', hoja: hoja.getName(), clave: claveValor, columna: colDestino, tenia: tenia, quedo: '' });
+              return;
+            }
 
             // El dueño trae un estatus o relleno donde debería ir un dato. No se cuenta
             // como diferencia porque no hay nada que corregir: lo que está mal es el
@@ -439,6 +466,7 @@ const Relaciones = (function () {
           revisadas: revisadas, diferencias: diferencias, huerfanos: huerfanos,
           clavesDuplicadasOmitidas: duplicadosOmitidos,
           centinelasOmitidos: centinelasOmitidos,
+          vaciosOmitidos: vaciosOmitidos,
           diferenciasHistoricas: historicas,
           // una bitácora nunca se corrige, aunque se haya pedido corregir
           corregido: corregir && !esBitacora_(copia),

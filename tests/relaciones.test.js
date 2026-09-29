@@ -79,9 +79,12 @@ const base = {
   MODELO: '2022', COLOR: 'BLANCO', 'CAPACIDAD COMBUSTIBLE (LTS)': 60,
   'RAZON SOCIAL': 'CM', SEDE: 'QRO', UBICACION: 'OFICINA 1', 'RESPONSABLE VEHICULO': 'ANA',
 };
+// CTA0003 es uno de los 116 vehículos de baja a los que les toca quedar con el
+// DEPARTAMENTO vacío (la baja ya consta en ESTATUS), pero sus copias sí conservan el área.
 const vehiculos = [
   Object.assign({ FOLIO: 'CTA0001', 'SERIE VEHICULO': 'SER1', DEPARTAMENTO: 'CONSTRUCCION' }, base),
   Object.assign({ FOLIO: 'CTA0002', 'SERIE VEHICULO': 'SER2', DEPARTAMENTO: 'BAJA VEHICULAR' }, base),
+  Object.assign({ FOLIO: 'CTA0003', 'SERIE VEHICULO': 'SER3', DEPARTAMENTO: '' }, base),
 ];
 
 /** Lo que una copia de Sensores tendría si estuviera al día, con SUS nombres de columna. */
@@ -104,6 +107,8 @@ function armar() {
       Object.assign({ ID_SENSOR: 'SEN-1', 'SERIE SENSOR': 'S1' }, comoSensores(vehiculos[0], 'POST VENTA')),
       // el dueño dice BAJA VEHICULAR; esta copia guarda el área de verdad
       Object.assign({ ID_SENSOR: 'SEN-2', 'SERIE SENSOR': 'S2' }, comoSensores(vehiculos[1], 'POST VENTA')),
+      // el dueño quedó VACÍO; esta copia es la única que conserva el área
+      Object.assign({ ID_SENSOR: 'SEN-3', 'SERIE SENSOR': 'S3' }, comoSensores(vehiculos[2], 'POST VENTA')),
     ]);
 
   hs['VERIFICACIONES'] = hoja('VERIFICACIONES',
@@ -292,6 +297,28 @@ console.log('\n8. Cambiar el FOLIO sí arrastra a la bitácora (o se vuelve hué
   ok(hs['INCIDENCIAS'].valor('CTA9999', 'FOLIO', 'MODELO') === '2022', 'la incidencia también');
   ok(hs['INSTALACION DE SENSORES'].valor('CTA9999', 'FOLIO', 'ID_SENSOR') === 'SEN-1',
     'y el caché igual');
+}
+
+console.log('\n9. La corrida nocturna NO vacía una copia que sí tiene dato');
+{
+  const hs = armar();
+  const R = cargar(hs);
+  const r = R.revisar({ corregir: true });
+  ok(hs['INSTALACION DE SENSORES'].valor('CTA0003', 'FOLIO', 'DEPARTAMENTO') === 'POST VENTA',
+    'el área sobrevivió aunque el catálogo quedó vacío');
+  ok(r['INSTALACION DE SENSORES'].vaciosOmitidos === 1, 'lo cuenta como vacío omitido');
+  ok(logDe(hs, 'OMITIDO_VACIO', 'DEPARTAMENTO').length === 1, 'y lo deja en el log');
+  ok(r['INSTALACION DE SENSORES'].diferencias === 1,
+    'la única diferencia que corrigió es la de CTA0001: ni el centinela ni el vacío cuentan');
+}
+
+console.log('\n10. Pero borrar el campo A MANO sí vacía la copia');
+{
+  const hs = armar();
+  const R = cargar(hs);
+  R.propagar('VEHICULOS', vehiculos[0], { DEPARTAMENTO: '' });
+  ok(hs['INSTALACION DE SENSORES'].valor('CTA0001', 'FOLIO', 'DEPARTAMENTO') === '',
+    'en propagar() el borrado fue explícito, así que se respeta');
 }
 
 console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');
