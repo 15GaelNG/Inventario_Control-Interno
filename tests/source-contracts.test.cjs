@@ -852,4 +852,7 @@ test('Historial: números que ha tenido un NUCO y NUCOs por los que pasó un nú
   // Los "Sin línea" se pueden ocultar con el filtro, sin quitarlos de los datos
   assert.match(cliente, /return \(a\.periodos \|\| \[\]\)\.filter\(\(p\) => !ocultarSinAsignar \|\| p\[campo\]\)/);
   assert.doesNotMatch(cliente, /el motivo solo existe si se capturó/);
+  // Filtro Movimiento agrupado y en orden fijo, con las asignaciones arriba
+  assert.match(cliente, /<optgroup label="Historial de asignaciones">/);
+  assert.match(cliente, /\['Documentos', \['Inspección', 'Responsiva'\]\]/);
 });

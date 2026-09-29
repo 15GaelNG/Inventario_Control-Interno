@@ -161,6 +161,9 @@ Pedido del área: saber qué números tuvo un NUCO (y en qué NUCOs estuvo un n�
   Casilla "Ocultar «Sin línea»" / "Ocultar «Sin equipo»" junto al filtro (`ocultarSinAsignar`, `periodosVisibles`):
   esos periodos suelen ser transiciones; se ocultan de la tabla, no se quitan de los datos. Sin nota de ayuda arriba.
 - Probado en /dev (29-sep) con el NUCO 0234: 9 periodos (5 con número y 4 "Sin línea"); la casilla deja 5.
+- Filtro Movimiento agrupado (`GRUPOS_MOVIMIENTO`, `opcionesMovimiento`), en orden fijo y solo con lo que hay:
+  Historial de asignaciones · Responsable y ubicación · Equipo y línea · Documentos · Alta, reactivación y
+  desecho · Otros.
 - Sin pestaña nueva: `LineasRepo.asignacionesDeRegistro(id, vista)` (→ `TelefoniaService.asignaciones` →
   `apiLineasAsignaciones`, pedido en paralelo al historial) reconstruye cada fila de LINEAS TELEFONICAS donde
   aparece el NUCO o el número, desde su estado actual hacia atrás con los cambios de NUMERO TELEFONO y NUCO de

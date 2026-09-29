@@ -2743,16 +2743,33 @@
         return TITULO_ASIGNACIONES[vistaHistorial] + n;
       }
 
+      /** Grupos del filtro Movimiento, en orden fijo (lo que no esté aquí va a "Otros"). */
+      const GRUPOS_MOVIMIENTO = [
+        ['Responsable y ubicación', ['Reasignación', 'Cambio de área o ubicación']],
+        ['Equipo y línea', ['Cambio de equipo', 'Cambio de línea', 'Cambio de plan', 'Cambio de estatus', 'Cambio de accesos']],
+        ['Documentos', ['Inspección', 'Responsiva']],
+        ['Alta, reactivación y desecho', ['Alta de registro', 'Reactivación', 'Desecho']],
+      ];
+
+      /** Opciones del filtro: asignaciones arriba y luego cada grupo con sus movimientos presentes. */
+      function opcionesMovimiento(conteo) {
+        const opcion = (m) => '<option value="' + esc(m) + '">' + esc(m) + ' (' + miles(conteo[m]) + ')</option>';
+        const agrupados = [].concat.apply([], GRUPOS_MOVIMIENTO.map((g) => g[1]));
+        const otros = Object.keys(conteo).filter((m) => agrupados.indexOf(m) < 0).sort((a, b) => (a === 'Otros cambios') - (b === 'Otros cambios') || a.localeCompare(b));
+        return '<optgroup label="Historial de asignaciones"><option value="' + MOV_ASIGNACIONES + '">' + esc(textoOpcionAsignaciones()) + '</option></optgroup>' +
+          GRUPOS_MOVIMIENTO.concat([['Otros', otros]]).map((g) => {
+            const presentes = g[1].filter((m) => conteo[m]);
+            return presentes.length ? '<optgroup label="' + esc(g[0]) + '">' + presentes.map(opcion).join('') + '</optgroup>' : '';
+          }).join('');
+      }
+
       function pintarHistorial(cont, eventos, nombre) {
         contarEnPestana('historial', eventos.length);
         const conteo = contarPor(eventos, 'movimiento');
-        const movimientos = Object.keys(conteo).sort((a, b) => conteo[b] - conteo[a] || a.localeCompare(b));
         cont.innerHTML = '<div class="card ln-card ln-historial">' +
           '<div class="ln-historial-cabecera"><h3>' + icono('history') + ' Historial (' + miles(eventos.length) + ')</h3>' +
           '<label class="ln-historial-filtro"><span>Movimiento</span><select id="ln-historial-mov">' +
-            '<option value="">Todos los movimientos (' + miles(eventos.length) + ')</option>' +
-            movimientos.map((m) => '<option value="' + esc(m) + '">' + esc(m) + ' (' + miles(conteo[m]) + ')</option>').join('') +
-            '<option value="' + MOV_ASIGNACIONES + '">' + esc(textoOpcionAsignaciones()) + '</option>' +
+            '<option value="">Todos los movimientos (' + miles(eventos.length) + ')</option>' + opcionesMovimiento(conteo) +
           '</select></label>' +
           '<label class="ln-historial-filtro ln-historial-check" id="ln-asig-ocultar" hidden><input type="checkbox" id="ln-asig-ocultar-check"' + (ocultarSinAsignar ? ' checked' : '') + ' /> ' +
             '<span>Ocultar «' + (vistaHistorial === 'equipo' ? 'Sin línea' : 'Sin equipo') + '»</span></label></div>' +
