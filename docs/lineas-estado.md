@@ -171,6 +171,10 @@ Pedido del área: saber qué números tuvo un NUCO (y en qué NUCOs estuvo un n�
   usaba la clase de los campos del AppSheet (`ln-af-campo`); ahora es `ln-af-seccion ln-af-extra` + `field`.
   `LineasDatos.leerFilas` ya no abre pestañas de las que no se pide ninguna fila (una hoja sin `APP_MOVIMIENTOS`
   hacía fallar "Números que ha tenido").
+- Botón para ir (29-sep): en asignaciones, el número o NUCO de cada periodo es una pastilla (`botonIr`, `.ln-ir-chip`)
+  que abre su ficha; en el historial normal, Antes/Después de NUMERO TELEFONO, NUCO e IMEI abren la ficha de quien lo
+  tiene hoy (`destinosInventario`, con el índice del inventario). Si ya no está en el inventario, queda como texto.
+  Probado en DEV con el NUCO 0234 (abre la línea 4423382586, hoy en el NUCO 0274).
 - Sin pestaña nueva: `LineasRepo.asignacionesDeRegistro(id, vista)` (→ `TelefoniaService.asignaciones` →
   `apiLineasAsignaciones`, pedido en paralelo al historial) reconstruye cada fila de LINEAS TELEFONICAS donde
   aparece el NUCO o el número, desde su estado actual hacia atrás con los cambios de NUMERO TELEFONO y NUCO de
