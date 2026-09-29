@@ -477,7 +477,8 @@ test('inspección y responsiva: bloqueo en lista, firmas del sistema, acomodo, f
   // Fotos: opcionales, cámara o galería, y también después de guardar la inspección
   assert.match(lineas, /function htmlSubirFotos\(prefijo, nota\)/);
   assert.match(lineas, /apiLineasFotosInspeccion', id, 'preparar'/);
-  assert.match(read('src/services/lineas/LineasCaptura.gs'), /function fotosInspeccion\(id, accion, correo\)/);
+  // `externa`: inspección de NUCOS (solo lectura) cuyas fotos nuevas van a una carpeta de la app (30-sep)
+  assert.match(read('src/services/lineas/LineasCaptura.gs'), /function fotosInspeccion\(id, accion, correo, externa\)/);
   // La carpeta de Drive se crea al subir la primera foto o al guardar, no al abrir
   assert.match(lineas, /function asegurarCarpeta\(\)/);
   assert.doesNotMatch(lineas, /Promise\.all\(\[pedirContexto, llamar\('apiLineasPrepararEvidencia'/);
@@ -1075,4 +1076,31 @@ test('Vista rápida en Líneas Telefónicas, responsiva editable y calificación
   assert.match(cliente, /function vistaRapida\(tipo, r\) \{/);
   assert.match(cliente, /if \(captura\.tipo === 'INSPECCION'\) pintarCalificacionVivo\(\);/);
   assert.match(read('src/html/views/lineas/lineas-telefonicas.html'), /id="ln-calif-vivo" role="status" aria-live="polite" hidden/);
+});
+
+test('Navegación de la ficha: migas por lo que es cada nivel, pestaña recordada, clic = vista rápida, fotos en NUCOS y tema marcado', () => {
+  const cliente = read('src/html/js/lineas.html');
+  // La línea se nombra por su número (antes decía el NUCO de su equipo) y la inspección por su fecha
+  assert.match(cliente, /pila\[pila\.length - 1\]\.etiqueta = 'Línea ' \+ \(l\.numero \|\| '—'\);/);
+  assert.doesNotMatch(cliente, /etiqueta = e \? 'NUCO ' \+ \(e\.nuco \|\| '—'\) : 'Línea '/);
+  assert.match(cliente, /pila\[pila\.length - 1\]\.etiqueta = 'Inspección' \+ \(fecha\(i\.fecha\)/);
+  assert.match(cliente, /'<span class="ln-miga-actual" aria-current="page">'/);
+  assert.match(cliente, /Volver a ' \+ esc\(etiquetaMiga\(anterior\)\)/);
+  // Pestaña recordada al regresar
+  assert.match(cliente, /if \(pila\.length\) pila\[pila\.length - 1\]\.pestana = nombre;/);
+  assert.match(cliente, /const guardada = \(pila\[pila\.length - 1\] \|\| \{\}\)\.pestana;/);
+  // Un clic = vista rápida (espera por si es doble clic); doble clic = ficha completa
+  assert.match(cliente, /clicPendiente = setTimeout\(\(\) => \{[\s\S]*?vistaRapida\(cfg\.detalle, r\);[\s\S]*?\}, 260\);/);
+  assert.match(cliente, /clearTimeout\(clicPendiente\);\s*abrir\(cfg\.detalle, tr\.dataset\.id\);/);
+  // Fotos también en inspecciones de NUCOS y sin la advertencia
+  assert.doesNotMatch(cliente, /Esta inspección está en la carpeta NUCOS de Drive/);
+  assert.match(cliente, /\(r\.puedeOperar \? '<div class="ln-fotos-despues">/);
+  const tel = read('src/services/TelefoniaService.gs');
+  assert.match(tel, /const externa = \/\^drive_\/\.test\(String\(id\)\) \? inspeccionNucos_\(String\(id\)\.slice\(6\)\) : null;/);
+  assert.match(tel, /function carpetaFotosExtra_\(id\)/);
+  assert.match(read('src/services/lineas/LineasCaptura.gs'), /'ORIGEN': externa \? 'NUCOS_FOTOS'/);
+  // Tema: el botón del modo actual se marca también al entrar con la sesión guardada
+  const app = read('src/html/js/app.html');
+  assert.match(app, /function marcarTemaActual\(\)/);
+  assert.match(app, /marcarTemaActual\(\); \/\/ entrar con la sesión guardada/);
 });

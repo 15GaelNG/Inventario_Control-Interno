@@ -126,9 +126,17 @@
   .ln-conteo { font-size: 12px; color: var(--color-text-muted); }
 
   /* Detalle */
+  /* Migas: la página actual en negritas; los niveles anteriores, enlaces discretos (antes el anterior resaltaba más) */
   .ln-migas { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; font-size: 12.5px; color: var(--color-text-muted); }
-  .ln-migas > span { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-  .ln-migas .ln-miga-enlace { padding: 0; min-height: auto; border: 0; background: none; color: var(--color-primary); font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+  .ln-migas-ruta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; list-style: none; margin: 0; padding: 0; min-width: 0; }
+  .ln-migas-ruta li { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+  .ln-migas .ln-miga-enlace {
+    padding: 2px 4px; margin: 0 -2px; min-height: auto; border: 0; border-radius: 6px; background: none; color: var(--color-text-muted);
+    font: inherit; font-weight: 500; cursor: pointer; text-decoration: none;
+  }
+  .ln-migas .ln-miga-enlace:hover, .ln-migas .ln-miga-enlace:focus-visible { color: var(--color-text); background: var(--color-bg); text-decoration: underline; text-underline-offset: 2px; }
+  .ln-miga-actual { color: var(--color-text); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ln-migas-volver { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ln-detalle-header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
   .ln-detalle-icono {
     width: 48px; height: 48px; border-radius: 14px; background: var(--color-primary-soft);
@@ -614,7 +622,10 @@
 
     /* Ficha */
     .ln-migas { margin-bottom: 10px; }
-    .ln-migas > span { display: none; }
+    /* En celular: Volver y la página actual (sin los niveles intermedios) */
+    .ln-migas-ruta li:not(:last-child) { display: none; }
+    .ln-migas-ruta li:last-child > .ln-icon { display: none; }
+    .ln-migas-volver { max-width: 130px; }
     .ln-detalle-header { padding: 14px; gap: 10px; }
     .ln-detalle-icono { width: 40px; height: 40px; border-radius: 12px; }
     .ln-detalle-titulo h2 { font-size: 18px; }

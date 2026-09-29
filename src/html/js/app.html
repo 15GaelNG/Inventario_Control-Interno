@@ -158,14 +158,26 @@
       document.documentElement.removeAttribute('data-theme');
     }
     try { localStorage.setItem('tema', tema); } catch (e) { /* no-op */ }
-    document.querySelectorAll('.theme-btn').forEach((btn) => {
-      btn.classList.toggle('active', btn.dataset.tema === tema);
-    });
+    marcarTemaActual();
     // Si el slideshow del fondo del login está activo, refresca las
     // imágenes ya pintadas a la variante del tema nuevo — si no, se
     // quedarían con la del tema anterior hasta el siguiente cambio de slide.
     if (typeof actualizarHeroLoginTema === 'function') actualizarHeroLoginTema();
   }
+
+  /**
+   * Marca el botón del tema actual (rama emmanuel). Antes solo se marcaba al mostrar el login: si se entraba con la
+   * sesión guardada (recargar la página), ningún botón aparecía como activo.
+   */
+  function marcarTemaActual() {
+    const tema = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+    document.querySelectorAll('.theme-btn').forEach((btn) => {
+      const activo = btn.dataset.tema === tema;
+      btn.classList.toggle('active', activo);
+      btn.setAttribute('aria-pressed', String(activo));
+    });
+  }
+  marcarTemaActual();
 
   /**
    * Slideshow del fondo del login: varias fotos de marca (no una sola fija)
@@ -422,6 +434,7 @@
       return;
     }
     document.getElementById('user-name').textContent = state.sesion.nombre + ' · ' + state.sesion.rol;
+    marcarTemaActual(); // entrar con la sesión guardada no pasa por el login, que era quien marcaba el botón
     // Aditivo (rama `ayrton`): permisos finos por módulo para Verificaciones/Sensores/
     // Hologramas/Inspección Vehicular. No bloquea la navegación ni afecta el menú
     // (NAV_GRUPOS sigue siempre visible) — si falla, esos módulos simplemente quedan

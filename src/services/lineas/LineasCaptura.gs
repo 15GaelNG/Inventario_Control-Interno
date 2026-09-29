@@ -486,9 +486,14 @@ const LineasCaptura = (function () {
    * carpeta de la app (p. ej. del AppSheet), crea INSPECCIONES LINEAS_Images/FOTOS <ID> y la registra en
    * APP_EVIDENCIAS. 'actualizar' → recuenta las fotos y regresa { fotos }.
    */
-  function fotosInspeccion(id, accion, correo) {
-    if (/^drive_/.test(id)) throw new Error('Las inspecciones de la carpeta NUCOS son de solo consulta: no se les agregan fotos.');
-    const insp = LineasRepo.leerInspeccion(id);
+  /**
+   * Agregar fotos a una inspección ya registrada. `externa` = la inspección de la carpeta NUCOS ("drive_<carpeta>",
+   * la arma TelefoniaService): NUCOS es de producción y solo se lee, así que sus fotos nuevas van a una carpeta de la
+   * app y se ligan en APP_EVIDENCIAS (ORIGEN NUCOS_FOTOS, ID_REGISTRO = "drive_<carpeta>"). No es ORIGEN DRIVE para
+   * no aparecer como otra inspección en Documentos.
+   */
+  function fotosInspeccion(id, accion, correo, externa) {
+    const insp = externa || (/^drive_/.test(id) ? null : LineasRepo.leerInspeccion(id));
     if (!insp) throw new Error('No existe la inspección ' + id);
     const TAB_EV = LineasRepo.TAB.APP_EVID;
     LineasRepo.asegurarPestanaApp(TAB_EV);
@@ -509,7 +514,7 @@ const LineasCaptura = (function () {
           carpetaId ? {} : { 'CARPETA_ID': c.carpetaId, 'RUTA': c.ruta }));
       } else {
         LineasDatos.agregarFilas(TAB_EV, [{
-          'ID': LineasDatos.nuevoIdCorto(), 'TIPO': 'INSPECCION', 'ORIGEN': insp.origen === 'SISTEMA' ? 'SISTEMA' : 'APPSHEET', 'ID_REGISTRO': id,
+          'ID': LineasDatos.nuevoIdCorto(), 'TIPO': 'INSPECCION', 'ORIGEN': externa ? 'NUCOS_FOTOS' : (insp.origen === 'SISTEMA' ? 'SISTEMA' : 'APPSHEET'), 'ID_REGISTRO': id,
           'ID_LINEA': insp.registroId || '', 'NUCO': insp.nuco || '', 'FECHA': insp.fecha ? new Date(insp.fecha) : new Date(),
           'CARPETA_ID': c.carpetaId, 'RUTA': c.ruta, 'FOTOS_CARPETA_ID': c.fotosCarpetaId, 'FOTOS': '0', 'PDFS_JSON': '[]',
           'COINCIDENCIA_EXACTA': 'TRUE', 'ALERTAS_JSON': '[]', 'ID_ANTERIOR': '', 'ACTUALIZADO_EN': new Date(),

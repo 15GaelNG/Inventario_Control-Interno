@@ -1634,16 +1634,34 @@
           accionesSeleccion: modulo === 'equipos' ? ACCIONES_MASIVAS.map((a) => ({
             icono: a.icono, texto: a.texto, titulo: a.ayuda, minimo: 2, peligro: !!a.peligro, alHacer: (filas) => abrirMasiva(a, filas),
           })) : [],
-          ayuda: 'El ojo en Acciones abre la vista rápida a la derecha; doble clic en una fila (o el botón de ampliar) abre la ficha completa. ' +
+          ayuda: 'Un clic en una fila (o el ojo en Acciones) abre la vista rápida a la derecha; doble clic (o el botón de ampliar) abre la ficha completa. ' +
             'La flecha de cada columna filtra, ordena, fija u oculta; ' +
             '"Vista" agrega las demás columnas del AppSheet (compañía, sede, comentarios, PIN…). "Última responsiva" y "Última inspección" ' +
             'abren la más reciente de la carpeta del NUCO en NUCOS. Los indicadores de arriba filtran con un clic.',
           alCambiarFiltros: (filtros) => { filtrosActuales[modulo] = filtros || {}; if (marcarKpi) marcarKpi(); },
         });
-        // Doble clic en la fila = abrir la ficha (DataTable no trae clic de fila propio)
-        contenedor.addEventListener('dblclick', (ev) => {
+        // Un clic en la fila = vista rápida; doble clic = ficha completa (DataTable no trae clic de fila propio).
+        // El clic espera un momento: si llega el segundo clic es doble clic y la vista rápida no se abre.
+        const filaDe = (ev) => {
           const tr = ev.target.closest('tbody tr[data-id]');
-          if (tr && !ev.target.closest('button, input, a')) abrir(cfg.detalle, tr.dataset.id);
+          return tr && !ev.target.closest('button, input, a, select, textarea, label, .dt-col-check') ? tr : null;
+        };
+        const registroDe = (id) => (memoria.indice ? memoria.indice[modulo].filter((x) => x.id === id)[0] : null);
+        let clicPendiente = null;
+        contenedor.addEventListener('click', (ev) => {
+          const tr = filaDe(ev);
+          if (!tr || ev.detail > 1) return;
+          clearTimeout(clicPendiente);
+          clicPendiente = setTimeout(() => {
+            const r = registroDe(tr.dataset.id);
+            if (r && vigente()) vistaRapida(cfg.detalle, r);
+          }, 260);
+        });
+        contenedor.addEventListener('dblclick', (ev) => {
+          const tr = filaDe(ev);
+          if (!tr) return;
+          clearTimeout(clicPendiente);
+          abrir(cfg.detalle, tr.dataset.id);
         });
         // La tabla se repinta con cada filtro, búsqueda, orden o KPI: las tarjetas la siguen
         let repintePendiente = false;
@@ -1821,13 +1839,21 @@
         if (memoria.indice) { pintarIndicadores(); pintarListado(); }
       }
 
+      /**
+       * Migas: Líneas Telefónicas › NUCO 0008 › Línea 4421155221 › Inspección 18 ago 2026. Cada nivel se nombra por lo que
+       * ES (un equipo por su NUCO, una línea por su número, una inspección por su fecha), la página actual va en negritas
+       * y los anteriores son enlaces discretos. "Volver" dice a dónde regresa. En celular solo se ven Volver y la actual.
+       */
+      const ETIQUETA_MIGA = { equipo: 'Equipo', linea: 'Línea', inspeccion: 'Inspección' };
+      const etiquetaMiga = (p) => (p ? p.etiqueta || ETIQUETA_MIGA[p.tipo] : 'Líneas Telefónicas');
       function migas() {
-        const etiquetas = { equipo: 'Equipo', linea: 'Línea', inspeccion: 'Inspección' };
-        return '<div class="ln-migas"><button type="button" class="secondary ln-btn-icono" data-ln-volver>' + icono('chevron-left') + ' Volver</button>' +
-          '<span><a href="#" class="ln-enlace" data-ln-lista>Líneas Telefónicas</a>' +
-          pila.map((p, i) => ' ' + icono('chevron-right', 'ln-icon-sm') + ' ' +
-            (i < pila.length - 1 ? '<button type="button" class="ln-miga-enlace" data-ln-miga="' + i + '">' + esc(p.etiqueta || etiquetas[p.tipo]) + '</button>' :
-              '<span aria-current="page">' + esc(p.etiqueta || etiquetas[p.tipo]) + '</span>')).join('') + '</span></div>';
+        const anterior = pila.length > 1 ? pila[pila.length - 2] : null;
+        return '<nav class="ln-migas" aria-label="Ruta"><button type="button" class="secondary ln-btn-icono" data-ln-volver title="Volver a ' +
+          esc(etiquetaMiga(anterior)) + '">' + icono('chevron-left') + ' <span class="ln-migas-volver">Volver a ' + esc(etiquetaMiga(anterior)) + '</span></button>' +
+          '<ol class="ln-migas-ruta"><li><a href="#" class="ln-miga-enlace" data-ln-lista>Líneas Telefónicas</a></li>' +
+          pila.map((p, i) => '<li>' + icono('chevron-right', 'ln-icon-sm') +
+            (i < pila.length - 1 ? '<button type="button" class="ln-miga-enlace" data-ln-miga="' + i + '">' + esc(etiquetaMiga(p)) + '</button>' :
+              '<span class="ln-miga-actual" aria-current="page">' + esc(etiquetaMiga(p)) + '</span>') + '</li>').join('') + '</ol></nav>';
       }
 
       function campos(pares) {
@@ -1886,17 +1912,21 @@
       function fichaEnPestanas(general, detalles, conDocumentos) {
         const pestanas = [['general', 'General', 'layout-grid'], ['detalles', 'Detalles', 'clipboard-list'],
           conDocumentos ? ['documentos', 'Documentos', 'folder-check'] : null, ['historial', 'Historial', 'history']].filter(Boolean);
+        // Al regresar a esta ficha (Volver o migas) se abre en la pestaña donde se estaba, no siempre en General
+        const guardada = (pila[pila.length - 1] || {}).pestana;
+        const activa = pestanas.some((t) => t[0] === guardada) ? guardada : 'general';
         const cargando = '<div class="card ln-card"><p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p></div>';
-        return '<div class="tabs-simple ln-ficha-tabs" role="tablist" aria-label="Secciones de la ficha">' + pestanas.map((t, n) =>
-          '<button type="button" class="tab-btn' + (n ? '' : ' active') + '" role="tab" aria-selected="' + (n ? 'false' : 'true') + '" data-ficha-tab="' + t[0] + '">' +
+        return '<div class="tabs-simple ln-ficha-tabs" role="tablist" aria-label="Secciones de la ficha">' + pestanas.map((t) =>
+          '<button type="button" class="tab-btn' + (t[0] === activa ? ' active' : '') + '" role="tab" aria-selected="' + (t[0] === activa) + '" data-ficha-tab="' + t[0] + '">' +
           icono(t[2]) + ' ' + t[1] + ' <span class="ln-tab-num" data-ficha-num="' + t[0] + '"></span></button>').join('') + '</div>' +
-          '<div data-ficha-panel="general">' + general + '</div>' +
-          '<div data-ficha-panel="detalles" hidden>' + detalles + '</div>' +
-          (conDocumentos ? '<div data-ficha-panel="documentos" hidden><div id="ln-evidencias">' + cargando + '</div></div>' : '') +
-          '<div data-ficha-panel="historial" hidden><div id="ln-historial">' + cargando + '</div></div>';
+          '<div data-ficha-panel="general"' + (activa === 'general' ? '' : ' hidden') + '>' + general + '</div>' +
+          '<div data-ficha-panel="detalles"' + (activa === 'detalles' ? '' : ' hidden') + '>' + detalles + '</div>' +
+          (conDocumentos ? '<div data-ficha-panel="documentos"' + (activa === 'documentos' ? '' : ' hidden') + '><div id="ln-evidencias">' + cargando + '</div></div>' : '') +
+          '<div data-ficha-panel="historial"' + (activa === 'historial' ? '' : ' hidden') + '><div id="ln-historial">' + cargando + '</div></div>';
       }
 
       function mostrarPestanaFicha(nombre) {
+        if (pila.length) pila[pila.length - 1].pestana = nombre;
         raiz.querySelectorAll('[data-ficha-tab]').forEach((b) => {
           const activa = b.dataset.fichaTab === nombre;
           b.classList.toggle('active', activa);
@@ -1963,7 +1993,8 @@
           const e = r.equipo;
           const costo = l.costoPlan !== null && l.costoPlan !== undefined ? '$' + Number(l.costoPlan).toLocaleString('es-MX') : null;
           const puedeOperarLinea = !e && memoria.permisos && memoria.permisos.puedeOperar;
-          pila[pila.length - 1].etiqueta = e ? 'NUCO ' + (e.nuco || '—') : 'Línea ' + (l.numero || '—');
+          // La miga nombra lo que se está viendo: la línea (antes decía el NUCO de su equipo y confundía)
+          pila[pila.length - 1].etiqueta = 'Línea ' + (l.numero || '—');
           const respL = (e ? e.responsable : l.responsable) || {};
           fichaActual = { id: id, titulo: 'Línea ' + (l.numero || '—'), estatusEquipo: null, estatusLinea: l.estatus || '' };
           detalle.innerHTML = migas() +
@@ -3223,6 +3254,7 @@
             (f.miniatura ? '<img loading="lazy" referrerpolicy="no-referrer" src="' + esc(f.miniatura) + '" alt="' + esc(f.nombre) + '">' : icono(f.video ? 'video' : 'image')) +
             '</span><span class="ln-evidencia-nombre">' + esc(f.nombre || 'Evidencia') + '<small>' + icono('external-link') + ' Abrir en Drive</small></span></a>').join('') + '</div>';
           const deDrive = i.origen === 'DRIVE';
+          pila[pila.length - 1].etiqueta = 'Inspección' + (fecha(i.fecha) ? ' ' + fecha(i.fecha) : '');
           detalle.innerHTML = migas() +
             encabezado('clipboard-check', 'Inspección ' + esc(fecha(i.fecha) || ''),
               chip(ORIGEN_DOCUMENTO[i.origen] || i.origen, COLOR_ORIGEN_DOCUMENTO[ORIGEN_DOCUMENTO[i.origen]] || 'neutro') + (e ? chip('NUCO ' + (e.nuco || '—'), 'neutro') : ''),
@@ -3233,7 +3265,7 @@
                 ? [['NUCO', i.nuco || (e && e.nuco)], ['Fotos', miles(fotos.length)], ['PDF', (r.pdfs || []).length ? 'Sí' : 'No']]
                 : [['Responsable', s.responsable], ['Inspector', i.inspector], ['Calificación', porcentaje(i.calificacion)], ['Fotos', miles(fotos.length)], ['Ticket', i.ticket]]) +
             (deDrive
-              ? '<div class="ln-nota">' + icono('info') + ' Esta inspección está en la carpeta NUCOS de Drive: sus datos y firmas vienen en el PDF.</div>'
+              ? ''
               : '<div class="ln-grid-2">' +
                 tarjeta(icono('user') + ' Responsable', campos([['Nombre', s.responsable], ['Departamento', s.departamento], ['Sede', s.sede], ['Puesto', s.puesto]])) +
                 tarjeta(icono('smartphone') + ' Activo revisado', campos([['Número', s.numero], ['IMEI', s.imei], ['Modelo', s.modelo], ['Compañía', s.compania]])) +
@@ -3241,10 +3273,13 @@
                 tarjeta(icono('message-square-text') + ' Observaciones', '<p class="ln-lectura-notas">' + esc(i.observaciones || 'Sin observaciones registradas.') + '</p>')) +
             tarjeta(icono('images') + ' Fotografías (' + fotos.length + ')',
               (fotos.length ? galeria(fotos) : '<p class="empty-state">No hay fotografías de esta inspección.</p>') +
-              (r.puedeOperar && !deDrive ? '<div class="ln-fotos-despues"><h4>' + icono('image-plus') + ' Agregar fotos</h4>' +
-                htmlSubirFotos('insp-fotos', 'Se guardan en la carpeta FOTOS de esta inspección en Drive.') + '</div>' : ''));
-          if (r.puedeOperar && !deDrive) {
-            // Mejora: subir fotos (no a las de NUCOS: es de solo lectura) a una inspección ya registrada (la carpeta se prepara al elegir la primera)
+              (r.puedeOperar ? '<div class="ln-fotos-despues"><h4>' + icono('image-plus') + ' Agregar fotos</h4>' +
+                htmlSubirFotos('insp-fotos', deDrive
+                  ? 'Se guardan en Drive, en la carpeta de la app (la de NUCOS es de solo consulta), y se ven aquí con las demás.'
+                  : 'Se guardan en la carpeta FOTOS de esta inspección en Drive.') + '</div>' : ''));
+          if (r.puedeOperar) {
+            // Mejora: subir fotos a una inspección ya registrada (la carpeta se prepara al elegir la primera). Las de NUCOS
+            // (solo lectura) van a una carpeta de la app ligada a la inspección (LineasCaptura.fotosInspeccion)
             let carpeta = null;
             const obtener = () => (carpeta = carpeta || llamar('apiLineasFotosInspeccion', id, 'preparar').then((c) => c.fotosCarpetaId));
             const terminar = () => llamar('apiLineasFotosInspeccion', id, 'actualizar').then(() => {

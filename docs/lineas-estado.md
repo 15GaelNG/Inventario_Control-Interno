@@ -191,6 +191,41 @@ el sistema avisa (más adelante también por correo).
 - Pruebas: `INICIO / FIN PLAN solo se capturan en el alta…` y `Notificaciones: adendum por vencer…` en
   `tests/source-contracts.test.cjs` (45/45). Falta la prueba en /dev.
 
+## 0q. Navegación de la ficha, fotos en NUCOS y tema (2026-09-30)
+
+- **Clic y doble clic** en la tabla de Líneas Telefónicas: un clic en la fila abre la vista rápida y el doble clic la
+  ficha completa. El clic espera 260 ms: si llega el segundo, es doble clic y la vista rápida no se abre. El ojo y el
+  botón de ampliar siguen en Acciones.
+- **Auditoría de las migas** (`migas`, `etiquetaMiga`). Cada nivel se nombra por lo que es: el equipo por su NUCO, la
+  línea por su número y la inspección por su fecha. Se corrigió:
+  - la línea decía "NUCO …" cuando estaba en un equipo;
+  - la inspección decía solo "Inspección";
+  - el nivel anterior (NUCO) se veía más resaltado que la página actual. Ahora la actual va en negritas y los
+    anteriores son enlaces discretos;
+  - "Volver" dice a dónde regresa ("Volver a NUCO 0008" / "Volver a Líneas Telefónicas");
+  - en celular solo se ven Volver y la página actual.
+- **Pestaña recordada:** cada nivel de la pila guarda su pestaña (`pila[...].pestana`, lo guarda
+  `mostrarPestanaFicha`). Al volver de una inspección abierta desde Documentos, la ficha regresa a Documentos, no a
+  General.
+- **Fotos en inspecciones de NUCOS:**
+  - "Agregar fotos" había desaparecido porque se ocultaba en las inspecciones de la carpeta NUCOS, que desde §0k son
+    la mayoría. NUCOS es de producción y solo se lee, así que las fotos nuevas van a una carpeta de la app.
+  - Se ligan en APP_EVIDENCIAS con ORIGEN `NUCOS_FOTOS` e ID_REGISTRO `drive_<carpeta>`. No es ORIGEN DRIVE, para no
+    duplicar la inspección en Documentos.
+  - La vista de la inspección las junta con las de NUCOS (`carpetaFotosExtra_`).
+  - Se quitó la nota "Esta inspección está en la carpeta NUCOS…".
+- **Tema claro/oscuro:** el botón del modo actual solo se marcaba al mostrar el login; entrando con la sesión guardada
+  ninguno aparecía activo. `marcarTemaActual()` en `app.html` (compartido: avisar al unir) lo marca al cargar y en
+  cada render.
+- Pregunta nueva para el área: CO3, qué debe traer la vista rápida.
+- Probado en /dev (30-sep):
+  - clic abre la vista rápida y doble clic la ficha;
+  - migas NUCO 0008 › Línea 4421155221 › Inspección 18 ago 2026;
+  - "Agregar fotos" visible en una inspección de NUCOS (no se subió ninguna: el navegador integrado no elige archivos);
+  - Volver regresa a Documentos;
+  - tema marcado al recargar;
+  - migas en celular.
+
 ## 0p. Vista rápida, responsiva editable y calificación en vivo (2026-09-29)
 
 - **Vista rápida** en Líneas Telefónicas (`vistaRapida`, panel lateral `abrirPanelLateral` con el aspecto del detalle
