@@ -457,7 +457,33 @@ const LineasRegistros = (function () {
   function formularioMasivo(accion, usuario) {
     const cfg = masiva_(accion);
     const clave = String(accion).toUpperCase();
-    return { accion: clave, titulo: cfg.titulo, minimo: MASIVA_MINIMO, maximo: MASIVA_MAXIMO, elementos: elementosMasivos_(clave, LineasRepo.catalogos(), usuario) };
+    return {
+      accion: clave, titulo: cfg.titulo, minimo: MASIVA_MINIMO, maximo: MASIVA_MAXIMO, elementos: elementosMasivos_(clave, LineasRepo.catalogos(), usuario),
+      columnasResponsable: clave === 'REASIGNAR' ? COLS_REASIGNAR : [],
+    };
+  }
+
+  /**
+   * Reasignar "uno por uno": cada equipo trae sus datos de responsable (porEquipo = { id: { RESPONSABLE, … } }).
+   * Se validan con los mismos campos del formulario; un equipo sin RESPONSABLE se deja como está.
+   * Regresa { id: cambios }.
+   */
+  function reasignacionIndividual_(elementos, porEquipo, ids) {
+    const campos = elementos.filter((e) => COLS_REASIGNAR.indexOf(e.columna) >= 0);
+    const errores = [];
+    const salida = {};
+    ids.forEach((id) => {
+      const vals = (porEquipo || {})[id] || {};
+      if (!texto_(vals.RESPONSABLE)) return;
+      const r = resolver_(campos, {}, vals, { nuevo: false });
+      r.errores.forEach((e) => errores.push((vals._ETIQUETA ? vals._ETIQUETA + ' · ' : '') + e));
+      const cambios = {};
+      COLS_REASIGNAR.forEach((c) => { if (texto_(r.valores[c])) cambios[c] = texto_(r.valores[c]); });
+      salida[id] = cambios;
+    });
+    if (errores.length) throw new Error(errores.slice(0, 6).join(' · '));
+    if (!Object.keys(salida).length) throw new Error('Escribe el responsable de al menos un equipo.');
+    return salida;
   }
 
   /**
@@ -472,14 +498,18 @@ const LineasRegistros = (function () {
     if (lista.length > MASIVA_MAXIMO) throw new Error('Son ' + lista.length + ' equipos; el máximo por operación es ' + MASIVA_MAXIMO + '. Divide la selección.');
 
     const elementos = elementosMasivos_(clave, LineasRepo.catalogos(), usuario);
-    const r = resolver_(elementos, {}, (datos && datos.valores) || {}, { nuevo: false });
+    // Reasignar uno por uno: los datos del responsable vienen por equipo; aquí solo estatus y motivo (comunes)
+    const individual = clave === 'REASIGNAR' && datos && datos.modo === 'INDIVIDUAL';
+    const comunes = individual ? elementos.filter((e) => e.tipo !== 'campo' || COLS_REASIGNAR.indexOf(e.columna) < 0) : elementos;
+    const r = resolver_(comunes, {}, (datos && datos.valores) || {}, { nuevo: false });
     if (r.errores.length) throw new Error(r.errores.slice(0, 6).join(' · '));
     const motivo = texto_(r.valores._MOTIVO);
+    const porEquipo = individual ? reasignacionIndividual_(elementos, datos.porEquipo, lista) : null;
 
     const pedidos = {};
     if (cfg.estatusEquipo) pedidos['ESTATUS EQUIPO'] = cfg.estatusEquipo;
     if (clave === 'REASIGNAR') {
-      COLS_REASIGNAR.forEach((c) => { if (texto_(r.valores[c])) pedidos[c] = texto_(r.valores[c]); });
+      if (!individual) COLS_REASIGNAR.forEach((c) => { if (texto_(r.valores[c])) pedidos[c] = texto_(r.valores[c]); });
       if (texto_(r.valores['ESTATUS EQUIPO'])) pedidos['ESTATUS EQUIPO'] = texto_(r.valores['ESTATUS EQUIPO']).toUpperCase();
     }
 
@@ -494,19 +524,20 @@ const LineasRegistros = (function () {
         if (!f) { omitidos.push({ id: id, nuco: nuco, motivo: 'Ya no existe en la hoja' }); return; }
         const tipo = texto_(LineasUtil.col(f, 'TIPO')).toUpperCase();
         if (!LineasRepo.TIPOS_CON_EQUIPO[tipo]) { omitidos.push({ id: id, nuco: nuco, motivo: 'No es un equipo (TIPO ' + (tipo || 'vacío') + ')' }); return; }
-        const cambios = Object.assign({}, pedidos);
+        if (porEquipo && !porEquipo[id]) { omitidos.push({ id: id, nuco: nuco, motivo: 'Sin cambios' }); return; }
+        const cambios = Object.assign({}, pedidos, porEquipo ? porEquipo[id] : {});
         // Reset_If del AppSheet: si el responsable es quien usa el equipo, "quien usa" sigue al nuevo responsable
-        if (clave === 'REASIGNAR' && texto_(LineasUtil.col(f, 'RESPONSABLE USA EL EQUIPO')).toUpperCase() === 'SI') {
-          cambios['NOMBRE QUIEN USA'] = pedidos.RESPONSABLE;
-          if (pedidos.PUESTO) cambios['PUESTO QUIEN USA'] = pedidos.PUESTO;
+        if (clave === 'REASIGNAR' && cambios.RESPONSABLE && texto_(LineasUtil.col(f, 'RESPONSABLE USA EL EQUIPO')).toUpperCase() === 'SI') {
+          cambios['NOMBRE QUIEN USA'] = cambios.RESPONSABLE;
+          if (cambios.PUESTO) cambios['PUESTO QUIEN USA'] = cambios.PUESTO;
         }
         const ahora = new Date();
         const guardado = LineasRepo.guardarCambiosRegistro(f, cambios, usuario, ahora);
         if (!guardado.campos.length) { omitidos.push({ id: id, nuco: nuco, motivo: 'Ya tenía esos datos' }); return; }
-        LineasRepo.registrarMovimiento('EDICION', { motivo: 'Acción masiva · ' + cfg.titulo + ': ' + motivo }, usuario, ahora, {
+        LineasRepo.registrarMovimiento('EDICION', { motivo: 'Acción masiva · ' + cfg.titulo + (individual ? ' (uno por uno)' : '') + ': ' + motivo }, usuario, ahora, {
           refs: [id], nuco: LineasUtil.col(f, 'NUCO'), numero: LineasUtil.col(f, 'NUMERO TELEFONO'), antes: {}, despues: cambios,
           detalle: {
-            masiva: clave, total: lista.length, idsCambios: guardado.idsCambios,
+            masiva: clave, individual: !!individual, total: lista.length, idsCambios: guardado.idsCambios,
             idsReasignacion: guardado.idReasignacion ? [guardado.idReasignacion] : [], cambios: guardado.campos,
           },
         });

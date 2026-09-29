@@ -2183,11 +2183,40 @@
         const elementos = form.elementos;
         captura.contexto = { formulario: elementos };
         const excede = filas.length > form.maximo;
+
+        // Reasignar "uno por uno": por cada equipo, sus datos de responsable (precargados con los actuales para
+        // editarlos rápido). Las columnas llevan prefijo "FILA|<id>|" para que cada campo sea único.
+        const colsResp = form.columnasResponsable || [];
+        const esReasignar = colsResp.length > 0;
+        const columnaFila = (id, c) => 'FILA|' + id + '|' + c;
+        const actualDe = (r) => ({ 'NO EMPLEADO': r['NO EMPLEADO'], RESPONSABLE: r.RESPONSABLE || r.responsable, PUESTO: r.PUESTO, DEPARTAMENTO: r.DEPARTAMENTO || r.departamento });
+        const elementosFila = {};
+        if (esReasignar) {
+          filas.forEach((r) => {
+            const actual = actualDe(r);
+            elementosFila[r.id] = colsResp.map((c) => {
+              const base = elementos.filter((e) => e.columna === c)[0];
+              const autollenar = base.autollenar ? Object.fromEntries(Object.entries(base.autollenar).map(([k, v]) => [columnaFila(r.id, k), v])) : undefined;
+              return Object.assign({}, base, { columna: columnaFila(r.id, c), valor: actual[c] || '', requerido: 'NUNCA', autollenar: autollenar });
+            });
+          });
+        }
+        const htmlIndividual = !esReasignar ? '' : '<div class="ln-masiva-individual" hidden>' +
+          '<p class="ln-tenue ln-masiva-ayuda">Cada equipo trae su responsable actual: cambia solo los que necesites. Los que dejes igual no se tocan.</p>' +
+          filas.map((r) => '<section class="ln-af-seccion ln-masiva-fila" data-masiva-fila="' + esc(r.id) + '"><h4 class="ln-af-titulo">' + icono('smartphone') + ' NUCO ' +
+            esc(r.nuco || '—') + ' · ' + esc(r.modelo || 'Sin modelo') + '</h4><div class="ln-af-grid">' + elementosFila[r.id].map(htmlElementoFormulario).join('') + '</div></section>').join('') +
+          '</div>';
+        const htmlModo = !esReasignar ? '' : '<div class="ln-segmentado ln-masiva-modo" role="group" aria-label="Cómo reasignar">' +
+          '<button type="button" class="secondary activo" data-modo="TODOS" aria-pressed="true">' + icono('users') + ' Mismo responsable para todos</button>' +
+          '<button type="button" class="secondary" data-modo="INDIVIDUAL" aria-pressed="false">' + icono('list') + ' Uno por uno</button></div>';
+
         cuerpo.innerHTML =
-          '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' ' + esc(accion.efecto) + ' <strong>La línea de cada equipo no cambia.</strong></div>' +
+          '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' <span class="ln-masiva-efecto">' + esc(accion.efecto) + '</span> <strong>La línea de cada equipo no cambia.</strong></div>' +
           (excede ? '<div class="error-msg">Son ' + miles(filas.length) + ' equipos; el máximo por operación es ' + form.maximo + '. Quita algunos de la selección.</div>' : '') +
+          htmlModo +
           '<details class="ln-masiva-lista"><summary>' + icono('list') + ' Ver los ' + miles(filas.length) + ' equipos seleccionados</summary><ul>' +
             filas.map((r) => '<li>' + esc(etiqueta(r)) + '</li>').join('') + '</ul></details>' +
+          htmlIndividual +
           htmlFormularioAppSheet(elementos) +
           '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div><div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
           '<button type="button" class="' + (accion.peligro ? 'danger' : 'primary') + ' ln-btn-icono" id="cap-guardar"' + (excede ? ' disabled' : '') + '>' +
@@ -2195,23 +2224,92 @@
         pintarIconos(cuerpo);
         activarCombosEn(cuerpo, elementos);
         const ctx = { nuevo: false, tipoInicial: '' };
+
+        let modo = 'TODOS';
+        if (esReasignar) {
+          const cambiarModo = (nuevo) => {
+            modo = nuevo;
+            cuerpo.querySelectorAll('.ln-masiva-modo [data-modo]').forEach((b) => {
+              b.classList.toggle('activo', b.dataset.modo === modo);
+              b.setAttribute('aria-pressed', String(b.dataset.modo === modo));
+            });
+            $('.ln-masiva-individual', cuerpo).hidden = modo !== 'INDIVIDUAL';
+            $('.ln-masiva-efecto', cuerpo).textContent = modo === 'INDIVIDUAL'
+              ? 'Cada equipo pasa al responsable que le pongas; los que dejes igual no se modifican.' : accion.efecto;
+            $('.ln-masiva-lista', cuerpo).hidden = modo === 'INDIVIDUAL';
+            colsResp.forEach((c) => {
+              const campo = cuerpo.querySelector('.ln-af-campo[data-af-columna="' + CSS.escape(c) + '"]');
+              if (campo) campo.classList.toggle('ln-oculto', modo === 'INDIVIDUAL');
+            });
+            marcarErroresEn(cuerpo, []);
+          };
+          cuerpo.querySelector('.ln-masiva-modo').addEventListener('click', (ev) => {
+            const b = ev.target.closest('[data-modo]');
+            if (b) cambiarModo(b.dataset.modo);
+          });
+          // Las listas de colaboradores de cada equipo se activan al entrar a su sección (con 150 equipos serían cientos)
+          cuerpo.addEventListener('focusin', (ev) => {
+            const sec = ev.target.closest && ev.target.closest('[data-masiva-fila]');
+            if (!sec || sec.dataset.combos) return;
+            sec.dataset.combos = '1';
+            activarCombosEn(sec, elementosFila[sec.dataset.masivaFila]);
+          });
+        }
+        /** Lo que se valida y se lee según el modo: en "uno por uno", los campos de cada equipo en vez de los comunes. */
+        const elementosActivos = () => (modo !== 'INDIVIDUAL' ? elementos
+          : elementos.filter((e) => e.tipo !== 'campo' || colsResp.indexOf(e.columna) < 0)
+            .concat(filas.reduce((todos, r) => todos.concat(elementosFila[r.id]), [])));
+        const nucoDeColumna = (columna) => {
+          const partes = String(columna).split('|');
+          const r = partes[0] === 'FILA' ? filas.filter((x) => x.id === partes[1])[0] : null;
+          return r ? 'NUCO ' + (r.nuco || '—') + ' · ' : '';
+        };
+
         $('#cap-guardar', raiz).addEventListener('click', async () => {
           $('#cap-error', raiz).hidden = true;
-          const errores = erroresFormularioEn(cuerpo, elementos, '', ctx);
+          const activos = elementosActivos();
+          const valores = leerFormularioEn(cuerpo, activos);
+          const datos = { valores: valores };
+          let detalle = filas.slice(0, 12).map(etiqueta).concat(filas.length > 12 ? ['… y ' + (filas.length - 12) + ' más'] : []);
+          let cuantos = filas.length;
+          // Uno por uno: solo cuentan (y se validan) los campos que se cambiaron; un equipo sin cambios no se toca
+          const cambiadas = {};
+          if (modo === 'INDIVIDUAL') {
+            datos.modo = 'INDIVIDUAL';
+            datos.porEquipo = {};
+            const resumen = [];
+            filas.forEach((r) => {
+              const actual = actualDe(r);
+              const nuevo = (c) => String(valores[columnaFila(r.id, c)] || '').trim();
+              const campos = colsResp.filter((c) => nuevo(c) && nuevo(c) !== String(actual[c] || '').trim());
+              if (!campos.length) return;
+              campos.forEach((c) => { cambiadas[columnaFila(r.id, c)] = true; });
+              const v = { _ETIQUETA: 'NUCO ' + (r.nuco || '—'), RESPONSABLE: nuevo('RESPONSABLE') };
+              campos.forEach((c) => { v[c] = nuevo(c); });
+              datos.porEquipo[r.id] = v;
+              resumen.push('NUCO ' + (r.nuco || '—') + ': ' + (campos.indexOf('RESPONSABLE') >= 0 ? (actual.RESPONSABLE || 'Sin responsable') + ' → ' + v.RESPONSABLE
+                : v.RESPONSABLE + ' (' + campos.map((c) => c.toLowerCase()).join(', ') + ')'));
+            });
+            if (!resumen.length) { mostrarErrorCaptura('No cambiaste los datos de ningún equipo.'); return; }
+            cuantos = resumen.length;
+            detalle = resumen.slice(0, 12).concat(resumen.length > 12 ? ['… y ' + (resumen.length - 12) + ' más'] : []);
+          }
+          const errores = erroresFormularioEn(cuerpo, activos, '', ctx)
+            .filter((x) => modo !== 'INDIVIDUAL' || String(x.columna).indexOf('FILA|') !== 0 || cambiadas[x.columna]);
           marcarErroresEn(cuerpo, errores.map((x) => ({ columna: x.columna, msg: x.corto })));
-          if (errores.length) { mostrarErrorCaptura(errores.map((x) => x.msg).slice(0, 4).join(' · ')); return; }
-          const valores = leerFormularioEn(cuerpo, elementos);
+          if (errores.length) { mostrarErrorCaptura(errores.map((x) => nucoDeColumna(x.columna) + x.msg).slice(0, 4).join(' · ')); return; }
           const ok = await Confirmar.pedir({
-            titulo: '¿' + accion.boton + ' ' + miles(filas.length) + ' equipos?',
-            mensaje: accion.efecto + (valores.RESPONSABLE ? ' Nuevo responsable: ' + valores.RESPONSABLE + '.' : '') + ' Cada equipo deja su bitácora.',
-            detalle: filas.slice(0, 12).map(etiqueta).concat(filas.length > 12 ? ['… y ' + (filas.length - 12) + ' más'] : []),
+            titulo: '¿' + accion.boton + ' ' + miles(cuantos) + ' equipos?',
+            mensaje: (modo === 'INDIVIDUAL' ? 'Cada equipo pasa al responsable que le pusiste.' : accion.efecto) +
+              (modo !== 'INDIVIDUAL' && valores.RESPONSABLE ? ' Nuevo responsable: ' + valores.RESPONSABLE + '.' : '') + ' Cada equipo deja su bitácora.',
+            detalle: detalle,
             textoConfirmar: accion.boton, peligro: !!accion.peligro,
             palabraClave: accion.peligro && filas.length >= 10 ? 'CANCELAR' : undefined,
           });
           if (!ok || captura !== sesion) return;
-          estadoGuardado('Aplicando a ' + miles(filas.length) + ' equipos');
+          estadoGuardado('Aplicando a ' + miles(cuantos) + ' equipos');
           try {
-            const r = await llamar('apiLineasAccionMasiva', accion.clave, ids, { valores: valores });
+            const r = await llamar('apiLineasAccionMasiva', accion.clave, ids, datos);
             await cargarIndice(true);
             cerrarCaptura(true);
             if (tablas.equipos) tablas.equipos.limpiarSeleccion();

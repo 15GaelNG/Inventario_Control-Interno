@@ -206,6 +206,13 @@ Pedido del área: al seleccionar dos o más equipos en Líneas Telefónicas, man
     autollenado del colaborador que "Editar información". ESTATUS EQUIPO es opcional. Lo que se deja vacío queda como
     estaba en cada equipo. Si en la fila el responsable es quien usa el equipo, NOMBRE/PUESTO QUIEN USA siguen al
     nuevo responsable (Reset_If del AppSheet).
+  - *Reasignar* tiene dos formas, con un selector arriba:
+    - **Mismo responsable para todos** (la de arriba).
+    - **Uno por uno**: una sección por equipo con No. EMPLEADO, RESPONSABLE, PUESTO y DEPARTAMENTO precargados con
+      los actuales, para editarlos rápido. Solo se validan y se envían los campos que cambiaron
+      (`datos.modo = 'INDIVIDUAL'`, `datos.porEquipo = { id: {...} }`, `reasignacionIndividual_`). Un equipo sin
+      cambios no se toca. Las columnas de cada equipo llevan el prefijo `FILA|<id>|`. Las listas de colaboradores
+      de cada sección se activan al entrar a ella, para no crear cientos de listas de golpe.
   - *Cancelar equipos*: ESTATUS EQUIPO = CANCELADO. El botón es rojo y desde 10 equipos pide escribir CANCELAR.
 - **Siempre.** El motivo es obligatorio. Antes de aplicar se pide confirmar con la lista de equipos. Cada equipo deja
   su bitácora CAMBIOS (y HISTORIAL_REASIGNACIONES al reasignar) y su movimiento `EDICION` con el motivo
@@ -214,6 +221,13 @@ Pedido del área: al seleccionar dos o más equipos en Líneas Telefónicas, man
   Apps Script). Al final se rehace el índice una sola vez.
 - **La línea no se toca** (número ni ESTATUS LINEA). El área va a confirmar qué le pasa a la línea cuando su equipo
   se manda a resguardo, se cancela o se reasigna, y qué acciones masivas habrá para líneas.
+- **Pendiente de la reunión con Líneas (30-sep).** Las preguntas están en la carpeta de documentación,
+  `migracion/PREGUNTAS_REUNION_LINEAS.md`:
+  - quién queda como responsable al mandar a resguardo;
+  - si al cancelar se quita el responsable;
+  - qué otros campos cambian en cada acción;
+  - qué le pasa a la línea.
+  Hoy las tres acciones solo cambian lo descrito arriba.
 - Probado en /dev (29-sep):
   - con 1 seleccionado solo aparece Copiar; con 2 aparecen las tres acciones;
   - el formulario de Reasignar valida los obligatorios y autollena No. empleado y puesto;

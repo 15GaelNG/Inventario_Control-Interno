@@ -974,7 +974,51 @@ test('Acciones masivas de equipos: resguardo, reasignar y cancelar desde 2 selec
   const cliente = read('src/html/js/lineas.html');
   assert.match(cliente, /accionesSeleccion: modulo === 'equipos' \? ACCIONES_MASIVAS\.map/);
   assert.match(cliente, /minimo: 2/);
-  assert.match(cliente, /llamar\('apiLineasAccionMasiva', accion\.clave, ids, \{ valores: valores \}\)/);
+  assert.match(cliente, /llamar\('apiLineasAccionMasiva', accion\.clave, ids, datos\)/);
   assert.match(read('src/html/js/componentes/datatable.html'), /b\.hidden = nSel < \(\(accionesSeleccion\[Number\(b\.dataset\.accionSel\)\] \|\| \{\}\)\.minimo \|\| 1\)/);
   assert.match(read('src/ClientApi.gs'), /function apiLineasAccionMasiva\(token, accion, ids, datos\)/);
+});
+
+test('Reasignar uno por uno: cada equipo con su responsable; los que no cambian no se tocan', () => {
+  const reg = read('src/services/lineas/LineasRegistros.gs');
+  const LineasUtil = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '; return LineasUtil;')({ normCol: (c) => String(c).toUpperCase().trim() }, {});
+  const hoja = [
+    { _fila: 2, ID: 'a', NUCO: '0001', TIPO: 'EQUIPO', RESPONSABLE: 'ANA', PUESTO: 'AUXILIAR', 'ESTATUS EQUIPO': 'USO', 'RESPONSABLE USA EL EQUIPO': 'SI' },
+    { _fila: 3, ID: 'b', NUCO: '0002', TIPO: 'EQUIPO', RESPONSABLE: 'LUIS', PUESTO: 'GERENTE', 'ESTATUS EQUIPO': 'USO' },
+    { _fila: 4, ID: 'c', NUCO: '0003', TIPO: 'EQUIPO', RESPONSABLE: 'EVA', 'ESTATUS EQUIPO': 'USO' },
+  ];
+  const guardados = [];
+  const Repo = {
+    CATALOGO: { tipos: ['EQUIPO'], estatusLinea: ['USO'], estatusEquipo: ['USO', 'RESGUARDO'] },
+    TAB: { LINEAS: 'LINEAS TELEFONICAS' }, TIPOS_CON_EQUIPO: { 'EQUIPO': 'CELULAR' },
+    catalogos: () => ({ departamentos: ['VENTAS'] }),
+    guardarCambiosRegistro: (f, cambios) => {
+      guardados.push([f.ID, cambios]);
+      return { idsCambios: [], idReasignacion: null, campos: Object.keys(cambios).filter((c) => String(f[c] || '') !== String(cambios[c])).map((c) => ({ campo: c })) };
+    },
+    registrarMovimiento: () => {}, indice: () => ({}),
+  };
+  const Reg = new Function('LineasRepo', 'CacheService', 'Utilities', 'SpreadsheetApp', 'Config', 'LineasUtil', 'LineasDatos', reg + '; return LineasRegistros;')(
+    Repo, { getScriptCache: () => ({ get: () => '', put: () => {} }) }, { formatDate: () => '2026-09-29' }, {}, {}, LineasUtil,
+    { leerTabla: () => hoja, conCandado: (fn) => fn() });
+  const u = { correo: 'x@y.z', nombre: 'X' };
+  assert.deepEqual(Reg.formularioMasivo('REASIGNAR', u).columnasResponsable, ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'DEPARTAMENTO']);
+
+  // "a" cambia de responsable, "b" solo de puesto, "c" no viene (sin cambios); no pide el responsable común
+  const r = Reg.accionMasiva('REASIGNAR', ['a', 'b', 'c'], {
+    modo: 'INDIVIDUAL', valores: { _MOTIVO: 'AJUSTE DE PLANTILLA' },
+    porEquipo: { a: { RESPONSABLE: 'PEDRO', PUESTO: 'SUPERVISOR' }, b: { RESPONSABLE: 'LUIS', PUESTO: 'DIRECTOR' } },
+  }, u);
+  assert.deepEqual(guardados, [
+    ['a', { RESPONSABLE: 'PEDRO', PUESTO: 'SUPERVISOR', 'NOMBRE QUIEN USA': 'PEDRO', 'PUESTO QUIEN USA': 'SUPERVISOR' }],
+    ['b', { RESPONSABLE: 'LUIS', PUESTO: 'DIRECTOR' }],
+  ]);
+  assert.deepEqual(r.omitidos.map((o) => [o.id, o.motivo]), [['c', 'Sin cambios']]);
+  // Validaciones por equipo (mayúsculas) con el NUCO en el mensaje; sin ningún cambio, error
+  assert.throws(() => Reg.accionMasiva('REASIGNAR', ['a', 'b'], { modo: 'INDIVIDUAL', valores: { _MOTIVO: 'AJUSTE' }, porEquipo: { a: { RESPONSABLE: 'pedro', _ETIQUETA: 'NUCO 0001' } } }, u), /NUCO 0001 · RESPONSABLE: ESCRIBIR EN MAYUSCULAS/);
+  assert.throws(() => Reg.accionMasiva('REASIGNAR', ['a', 'b'], { modo: 'INDIVIDUAL', valores: { _MOTIVO: 'AJUSTE' }, porEquipo: {} }, u), /al menos un equipo/);
+
+  const cliente = read('src/html/js/lineas.html');
+  assert.match(cliente, /data-modo="INDIVIDUAL"[^>]*>' \+ icono\('list'\) \+ ' Uno por uno/);
+  assert.match(cliente, /const columnaFila = \(id, c\) => 'FILA\|' \+ id \+ '\|' \+ c;/);
 });
