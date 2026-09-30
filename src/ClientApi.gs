@@ -214,6 +214,10 @@ function apiArqueosPorIdCch(token, idCch) {
 function apiCambiosMontoPorIdCch(token, idCch) {
   return JSON.stringify(CambiosMontoCCHService.listarPorIdCch(token, idCch));
 }
+// "Ver completo" desde la ficha de Caja Chica: el registro entero, no el resumen curado.
+function apiBuscarCambioMontoPorId(token, id) {
+  return CambiosMontoCCHService.buscarPorId(token, id);
+}
 
 // --- Historial de cambios de monto (Caja Chica) ---
 function apiListarCambiosMontoCCH(token) {

@@ -87,6 +87,19 @@ const CambiosMontoCCHService = (function () {
     return listarResumen(token).filter((c) => c.ID_CCH === idCch);
   }
 
+  /** Registro completo (todas las columnas) por ID -- "Ver completo" desde la ficha de Caja Chica. */
+  function buscarPorId(token, id) {
+    Permisos.puedeLeer(token, 'caja-chica');
+    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, ID_COLUMN);
+    if (!encontrado) return null;
+    const limpio = {};
+    Object.keys(encontrado.data).forEach((k) => {
+      const v = encontrado.data[k];
+      limpio[k] = v instanceof Date ? v.toISOString() : v;
+    });
+    return limpio;
+  }
+
   /**
    * Registra un cambio de monto para una Caja Chica y, en la misma
    * operación, actualiza su MONTO ACTUAL.
@@ -134,5 +147,5 @@ const CambiosMontoCCHService = (function () {
     return { ID: id };
   }
 
-  return { listarResumen, completo, listarPorIdCch, crear, eliminar };
+  return { listarResumen, completo, listarPorIdCch, buscarPorId, crear, eliminar };
 })();

@@ -582,11 +582,17 @@
    * contenedor, ya con la caja chica fija (sin selector, autollenado de una vez) y
    * llama a alGuardado() en vez de "listo para el siguiente".
    */
-  async function construirCapturaArqueo(contenedor, prefijo, caja, alGuardado) {
+  async function construirCapturaArqueo(contenedor, prefijo, caja, alGuardado, idEditar) {
     contenedor.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
-    let auditItems;
+    let auditItems, completo;
     try {
-      auditItems = (await callServerCacheado('apiListarAuditItems', state.token)) || [];
+      const resultados = await Promise.all([
+        callServerCacheado('apiListarAuditItems', state.token),
+        idEditar ? callServer('apiBuscarArqueoPorId', state.token, idEditar) : Promise.resolve(null),
+      ]);
+      auditItems = resultados[0] || [];
+      completo = resultados[1];
+      if (idEditar && !completo) throw new Error('No se encontró el arqueo ' + idEditar);
     } catch (err) {
       contenedor.innerHTML = '<p class="error-msg">No se pudo cargar: ' + escaparHtml(err.message) + '</p>';
       return;
@@ -610,7 +616,8 @@
       '<div id="' + prefijo + '-campos" class="modal-form-scroll"></div>' +
       '</form><div class="error-msg" id="' + prefijo + '-error" hidden></div>';
 
-    document.getElementById(prefijo + '-campos').innerHTML = renderPasosArqueo(prefijo, prefijo + '-btn-guardar', 'Registrar arqueo', 'clipboard-check');
+    document.getElementById(prefijo + '-campos').innerHTML = renderPasosArqueo(prefijo, prefijo + '-btn-guardar',
+      idEditar ? 'Guardar cambios' : 'Registrar arqueo', idEditar ? 'save' : 'clipboard-check');
     wirePasosArqueo(document.getElementById(prefijo + '-campos'));
     refreshIcons();
 
@@ -647,7 +654,13 @@
 
     wireRecalculoArqueo(prefijo, auditItems);
     wireVisibilidadCondicionalArqueo(prefijo);
-    actualizarBloqueoAuditoria(prefijo, false);
+    if (idEditar && completo) {
+      // poblarFormularioArqueo ya llama actualizarBloqueoAuditoria/actualizarVisibilidadCondicionalArqueo
+      // con el valor REAL guardado (no el "false" de un formulario recién armado).
+      poblarFormularioArqueo(prefijo, completo);
+    } else {
+      actualizarBloqueoAuditoria(prefijo, false);
+    }
     document.getElementById(idArq(prefijo, 'REALIZAR_AUDITORIA')).addEventListener('change', () => {
       actualizarBloqueoAuditoria(prefijo, true);
       recalcularTotalesArqueo(prefijo, auditItems); // refleja de una vez la calificación en 0% si se acaba de bloquear
@@ -662,21 +675,25 @@
       const textoOriginal = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner"></span> Subiendo archivos y guardando…';
-      toastCargando('Registrando…');
+      toastCargando(idEditar ? 'Guardando cambios…' : 'Registrando…');
       try {
         const archivos = await subirArchivosArqueo(prefijo);
         const firmas = await subirFirmasArqueo(prefijo);
         const datos = Object.assign(recolectarDatosArqueo(prefijo), archivos, firmas);
-        datos['ID CCH'] = caja.ID_CCH || caja['ID CCH'];
-        await callServer('apiCrearArqueo', state.token, datos);
+        if (idEditar) {
+          await callServer('apiActualizarArqueo', state.token, idEditar, datos);
+        } else {
+          datos['ID CCH'] = caja.ID_CCH || caja['ID CCH'];
+          await callServer('apiCrearArqueo', state.token, datos);
+        }
         invalidarCacheLista('apiListarArqueosResumen', state.token);
         invalidarCacheLista('apiListarCajasChicasResumen', state.token);
-        toastExito('Registrado exitosamente');
+        toastExito(idEditar ? 'Actualizado exitosamente' : 'Registrado exitosamente');
         alGuardado();
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.hidden = false;
-        toastError('No se pudo registrar: ' + err.message);
+        toastError((idEditar ? 'No se pudo actualizar: ' : 'No se pudo registrar: ') + err.message);
       } finally {
         btn.disabled = false;
         btn.innerHTML = textoOriginal;

@@ -337,8 +337,79 @@
       });
     }
 
+    /** Editar arqueo desde la ficha: mismo construirCapturaArqueo, con idEditar --
+     *  precarga el registro (poblarFormularioArqueo) y guarda con apiActualizarArqueo
+     *  en vez de apiCrearArqueo. Cambio de monto no tiene Editar: es un registro de
+     *  solo alta a propósito (ver el comentario en CambiosMontoCCHService.gs). */
+    async function abrirEditarArqueoFicha(arqueo, cResumen) {
+      const cuerpo = abrirCapturaCajaChica('clipboard-check', 'ARQUEO', 'Editar arqueo', 'ID CCH: ' + cResumen['ID CCH']);
+      await construirCapturaArqueo(cuerpo, 'cch-arq', cResumen, () => {
+        cerrarCapturaCajaChica();
+        abrirFichaCajaChica(cResumen, 'arqueos');
+      }, arqueo.ID);
+    }
+
     function mostrarPestanaFichaCajaChica(nombre) {
       mostrarPestanaFicha(document.getElementById('cch-detalle'), nombre);
+    }
+
+    // ---------- Ver completo / Editar / Eliminar de un arqueo/cambio de monto, sin
+    // salir de la ficha de la caja chica. Cambio de monto solo lleva "Ver completo" y
+    // "Eliminar" -- no tiene Editar, es un registro de solo alta a propósito. ----------
+
+    const API_VER_FICHA_CAJACHICA = {
+      arqueo: { api: 'apiBuscarArqueoPorId', titulo: 'Arqueo' },
+      'cambio-monto': { api: 'apiBuscarCambioMontoPorId', titulo: 'Cambio de monto' },
+    };
+    async function verRegistroFichaCajaChica(tipo, id) {
+      const cfg = API_VER_FICHA_CAJACHICA[tipo];
+      if (!cfg) return;
+      document.getElementById('cch-ver-registro-titulo').textContent = cfg.titulo;
+      document.getElementById('cch-ver-registro-subtitulo').textContent = 'ID: ' + id;
+      const cuerpo = document.getElementById('cch-ver-registro-cuerpo');
+      cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
+      document.getElementById('cch-modal-ver-registro').hidden = false;
+      try {
+        const registro = await callServer(cfg.api, state.token, id);
+        if (document.getElementById('cch-modal-ver-registro').hidden) return; // se cerró mientras cargaba
+        if (!registro) { cuerpo.innerHTML = '<p class="empty-state">No se encontró el registro.</p>'; return; }
+        const items = Object.keys(registro)
+          .filter((k) => registro[k] !== '' && registro[k] !== null && registro[k] !== undefined)
+          .map((k) => itemInfo(tituloDesdeClave(k), registro[k]));
+        cuerpo.innerHTML = '<div class="card ln-card"><div class="info-grid">' + items.join('') + '</div></div>';
+      } catch (err) {
+        cuerpo.innerHTML = '<p class="error-msg">' + escaparHtml(err.message) + '</p>';
+      }
+    }
+    function cerrarVerRegistroFichaCajaChica() {
+      document.getElementById('cch-modal-ver-registro').hidden = true;
+      document.getElementById('cch-ver-registro-cuerpo').innerHTML = '';
+    }
+
+    const TAB_FICHA_CAJACHICA_POR_TIPO = { arqueo: 'arqueos', 'cambio-monto': 'cambios-monto' };
+    const API_ELIMINAR_FICHA_CAJACHICA = {
+      arqueo: { api: 'apiEliminarArqueo', lista: 'apiListarArqueosResumen' },
+      'cambio-monto': { api: 'apiEliminarCambioMontoCCH', lista: 'apiListarCambiosMontoCCH' },
+    };
+    async function eliminarRegistroFichaCajaChica(tipo, id, cResumen) {
+      const cfg = API_ELIMINAR_FICHA_CAJACHICA[tipo];
+      if (!cfg) return;
+      const ok = await Confirmar.pedir({
+        titulo: '¿Eliminar este registro?',
+        mensaje: 'Esta acción no se puede deshacer.',
+        textoConfirmar: 'Eliminar',
+        peligro: true,
+      });
+      if (!ok) return;
+      try {
+        await callServer(cfg.api, state.token, id);
+        invalidarCacheLista(cfg.lista, state.token);
+        invalidarCacheLista('apiListarCajasChicasResumen', state.token);
+        toastExito('Eliminado exitosamente');
+        abrirFichaCajaChica(cResumen, TAB_FICHA_CAJACHICA_POR_TIPO[tipo]);
+      } catch (err) {
+        toastError('No se pudo eliminar: ' + err.message);
+      }
     }
 
     async function abrirFichaCajaChica(cResumen, pestanaInicial) {
@@ -393,6 +464,7 @@
               { t: 'Diferencia', r: (a) => (a.DIFERENCIA === '' || a.DIFERENCIA === null || a.DIFERENCIA === undefined) ? '—' : formatearMoneda(a.DIFERENCIA) },
               { t: 'Calificación', r: (a) => (a.CALIFICACION === '' || a.CALIFICACION === null || a.CALIFICACION === undefined) ? '—' : escaparHtml(a.CALIFICACION + '%') },
               { t: 'Archivo', r: (a) => a.FORMATO_ARQUEO ? '<a href="' + escaparHtml(a.FORMATO_ARQUEO) + '" target="_blank" rel="noopener">📎 Ver PDF</a>' : '<span class="empty-state" style="margin:0">Sin archivo</span>' },
+              { t: '', r: (a) => accionesFichaRegistro('arqueo', a.ID, { editar: puedeEditarModulo('arqueos'), eliminar: puedeEditarModulo('arqueos') }) },
             ], arqueos, 'Sin arqueos registrados para esta caja chica.',
             puedeEditarModulo('arqueos') ? { tipo: 'arqueo', texto: 'Agregar' } : null),
           },
@@ -404,6 +476,7 @@
               { t: 'Anterior', r: (c) => (c.CANTIDAD_ANTERIOR === '' || c.CANTIDAD_ANTERIOR === null || c.CANTIDAD_ANTERIOR === undefined) ? '—' : formatearMoneda(c.CANTIDAD_ANTERIOR) },
               { t: 'Actualizada', r: (c) => (c.CANTIDAD_ACTUALIZADA === '' || c.CANTIDAD_ACTUALIZADA === null || c.CANTIDAD_ACTUALIZADA === undefined) ? '—' : formatearMoneda(c.CANTIDAD_ACTUALIZADA) },
               { t: 'Quién realizó', r: (c) => escaparHtml(c.QUIEN_REALIZO || '—') },
+              { t: '', r: (c) => accionesFichaRegistro('cambio-monto', c.ID, { eliminar: puedeEditar }) },
             ], cambios, 'Sin cambios de monto registrados para esta caja chica.',
             puedeEditar ? { tipo: 'cambio-monto', texto: 'Agregar' } : null),
           },
@@ -423,6 +496,22 @@
             if (tipo === 'arqueo') abrirAgregarArqueo(cResumen);
             else if (tipo === 'cambio-monto') abrirAgregarCambioMonto(cResumen);
           });
+        });
+        // Ver completo/Editar/Eliminar por fila: el registro completo (para Editar
+        // arqueo) ya está en memoria en el arreglo que se acaba de pedir -- se indexa
+        // por ID una vez, sin volver a pedirlo.
+        const arqueosPorIdFicha = Object.fromEntries(arqueos.map((a) => [a.ID, a]));
+        detalle.querySelectorAll('[data-ficha-ver]').forEach((btn) => {
+          btn.addEventListener('click', () => verRegistroFichaCajaChica(btn.dataset.fichaVer, btn.dataset.id));
+        });
+        detalle.querySelectorAll('[data-ficha-editar]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const arqueo = arqueosPorIdFicha[btn.dataset.id];
+            if (arqueo) abrirEditarArqueoFicha(arqueo, cResumen);
+          });
+        });
+        detalle.querySelectorAll('[data-ficha-eliminar]').forEach((btn) => {
+          btn.addEventListener('click', () => eliminarRegistroFichaCajaChica(btn.dataset.fichaEliminar, btn.dataset.id, cResumen));
         });
         refreshIcons();
       } catch (err) {
@@ -625,6 +714,11 @@
     const modalCapturaCajaChica = document.getElementById('cch-modal-captura');
     document.getElementById('cch-captura-cerrar').addEventListener('click', cerrarCapturaCajaChica);
     modalCapturaCajaChica.addEventListener('click', (ev) => { if (ev.target === modalCapturaCajaChica) cerrarCapturaCajaChica(); });
+
+    // Modal "Ver completo" (Arqueos/Cambios de monto desde la ficha): cerrar con la X o clic afuera.
+    const modalVerRegistroCajaChica = document.getElementById('cch-modal-ver-registro');
+    document.getElementById('cch-ver-registro-cerrar').addEventListener('click', cerrarVerRegistroFichaCajaChica);
+    modalVerRegistroCajaChica.addEventListener('click', (ev) => { if (ev.target === modalVerRegistroCajaChica) cerrarVerRegistroFichaCajaChica(); });
 
     await Promise.all([cargarCatalogosCajaChica(), cargar()]);
 
