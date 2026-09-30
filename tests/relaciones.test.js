@@ -18,6 +18,16 @@ function ok(condicion, descripcion) {
   if (!condicion) fallas++;
 }
 
+/** true si `fn` truena con un mensaje que casa `patron`. Un throw distinto NO cuenta. */
+function truena(fn, patron) {
+  try {
+    fn();
+    return false;
+  } catch (e) {
+    return patron.test(e.message);
+  }
+}
+
 // ---------------------------------------------------------------- hojas falsas
 
 /** Hoja falsa con lo que Relaciones.gs usa: rangos por fila/columna y getRangeList. */
@@ -68,7 +78,10 @@ function hoja(nombre, encabezados, filasObj) {
 
 // --------------------------------------------------------------------- datos
 
-const COL_VEH = ['FOLIO', 'SERIE VEHICULO', 'PLACA', 'MARCA', 'CLASE', 'LINEA VEHICULO',
+// 'ID' va primero, como en la hoja de verdad después de la migración. Hace falta porque
+// datosParaNuevo entrega la llave foránea leyéndola de aquí: sin esta columna el dueño no
+// tiene ID que dar, y truena a propósito.
+const COL_VEH = ['ID', 'FOLIO', 'SERIE VEHICULO', 'PLACA', 'MARCA', 'CLASE', 'LINEA VEHICULO',
   'MODELO', 'COLOR', 'CAPACIDAD COMBUSTIBLE (LTS)', 'RAZON SOCIAL', 'DEPARTAMENTO',
   'SEDE', 'UBICACION', 'RESPONSABLE VEHICULO'];
 
@@ -82,14 +95,15 @@ const base = {
 // CTA0003 es uno de los 116 vehículos de baja a los que les toca quedar con el
 // DEPARTAMENTO vacío (la baja ya consta en ESTATUS), pero sus copias sí conservan el área.
 const vehiculos = [
-  Object.assign({ FOLIO: 'CTA0001', 'SERIE VEHICULO': 'SER1', DEPARTAMENTO: 'CONSTRUCCION' }, base),
+  Object.assign({ ID: 'VEH-00000000AAAAAA', FOLIO: 'CTA0001', 'SERIE VEHICULO': 'SER1', DEPARTAMENTO: 'CONSTRUCCION' }, base),
   // CTA0002 está de baja, y quien la dio de baja escribió la palabra en TRES columnas:
   // DEPARTAMENTO, PLACA y RESPONSABLE. Así está en producción, medido el 30/09/2026.
   Object.assign({}, base, {
+    ID: 'VEH-00000000BBBBBB',
     FOLIO: 'CTA0002', 'SERIE VEHICULO': 'SER2', DEPARTAMENTO: 'BAJA VEHICULAR',
     PLACA: 'BAJA VEHICULAR', 'RESPONSABLE VEHICULO': 'BAJA VEHICULAR',
   }),
-  Object.assign({ FOLIO: 'CTA0003', 'SERIE VEHICULO': 'SER3', DEPARTAMENTO: '' }, base),
+  Object.assign({ ID: 'VEH-00000000CCCCCC', FOLIO: 'CTA0003', 'SERIE VEHICULO': 'SER3', DEPARTAMENTO: '' }, base),
 ];
 
 /** Lo que una copia de Sensores tendría si estuviera al día, con SUS nombres de columna. */
@@ -205,8 +219,16 @@ function cargar(hs) {
       },
     },
   });
+  // Ids va primero: datosParaNuevo usa Ids.tieneForma para distinguir si le dieron el ID
+  // del dueño o su llave de negocio. En Apps Script es un global; aquí hay que dárselo, y
+  // así la prueba ejercita el validador de verdad en vez de una copia.
+  const ids = path.join(__dirname, '..', 'src', 'utils', 'Ids.gs');
   const ruta = path.join(__dirname, '..', 'src', 'services', 'Relaciones.gs');
-  vm.runInContext(fs.readFileSync(ruta, 'utf8') + '\nthis.Relaciones = Relaciones;', ctx);
+  vm.runInContext(
+    fs.readFileSync(ids, 'utf8') + '\n' + fs.readFileSync(ruta, 'utf8') +
+    '\nthis.Relaciones = Relaciones; this.Ids = Ids;',
+    ctx
+  );
   return ctx.Relaciones;
 }
 
@@ -321,6 +343,63 @@ console.log('\n7. Al CREAR un registro sí se copia el valor de hoy, bitácora i
     'y al crear no se filtra el centinela: es el estado real en ese momento');
   ok(sen.datos['FOLIO'] === 'CTA0002',
     'el folio llega como atributo copiado, ya que dejó de ser llave');
+}
+
+console.log('\n7b. Y nace con la LLAVE FORÁNEA puesta, que es el vínculo de verdad');
+{
+  // Esto es lo que faltaba y por lo que un sensor creado desde la app quedaba con
+  // ID VEHICULO vacío: la FK solo la llenaba el paso por lotes de la migración.
+  const hs = armar();
+  const R = cargar(hs);
+  ['INSTALACION DE SENSORES', 'VERIFICACIONES', 'HOLOGRAMAS', 'INSPECCION VEHICULAR',
+    'INCIDENCIAS'].forEach((hoja) => {
+    const clave = (hoja === 'VERIFICACIONES' || hoja === 'INCIDENCIAS') ? 'CTA0001' : 'SER1';
+    const r = R.datosParaNuevo(hoja, clave);
+    ok(r.datos['ID VEHICULO'] === 'VEH-00000000AAAAAA',
+      hoja + ' nace con ID VEHICULO = el ID del dueño');
+  });
+}
+
+console.log('\n7c. Da lo mismo si le dan el ID del dueño o su llave de negocio');
+{
+  // Es lo que permite mover el frontend módulo por módulo: mientras unos formularios
+  // manden folio y otros ya manden ID, los dos caminos llegan al mismo renglón.
+  const hs = armar();
+  const R = cargar(hs);
+  const porFolio = R.datosParaNuevo('VERIFICACIONES', 'CTA0001');
+  const porId = R.datosParaNuevo('VERIFICACIONES', 'VEH-00000000AAAAAA');
+  ok(JSON.stringify(porFolio.datos) === JSON.stringify(porId.datos),
+    'por folio y por ID producen exactamente lo mismo');
+  ok(porId.datos['FOLIO VEHICULO'] === 'CTA0001',
+    'y buscando por ID, la columna del folio recibe el FOLIO — no el ID');
+  console.log('     (ese último importa: sin él, el ID se escribiría dentro de la columna del folio)');
+
+  const serie = R.datosParaNuevo('INSTALACION DE SENSORES', 'VEH-00000000BBBBBB');
+  ok(serie.datos['SERIE VEHICULO'] === 'SER2',
+    'y en las que se emparejan por serie, la columna de la serie recibe la SERIE');
+}
+
+console.log('\n7d. Si el dueño no existe, o no tiene ID, truena antes de escribir nada');
+{
+  const hs = armar();
+  const R = cargar(hs);
+  ok(truena(() => R.datosParaNuevo('VERIFICACIONES', 'CTA9999'), /no existe/i),
+    'una llave que no existe truena, no devuelve un vínculo vacío');
+  ok(truena(() => R.datosParaNuevo('VERIFICACIONES', 'VEH-00000000ZZZZZZ'), /no existe/i),
+    'y un ID que no existe, igual');
+
+  // El libro sin migrar: el dueño está, pero no tiene ID que dar. La hoja se arma sin la
+  // columna desde el principio — quitársela después desalinea los datos de los encabezados.
+  const sinId = armar();
+  sinId['VEHICULOS'] = hoja('VEHICULOS', COL_VEH.filter((c) => c !== 'ID'),
+    vehiculos.map((v) => {
+      const copia = Object.assign({}, v);
+      delete copia.ID;
+      return copia;
+    }));
+  const R2 = cargar(sinId);
+  ok(truena(() => R2.datosParaNuevo('VERIFICACIONES', 'CTA0001'), /no tiene ID|pipeline/i),
+    'y si la hoja del dueño no tiene columna ID, lo dice y manda a correr el pipeline');
 }
 
 console.log('\n8. Cambiar la SERIE arrastra a todo lo que se empareja por ella');

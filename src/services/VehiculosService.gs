@@ -301,8 +301,15 @@ const VehiculosService = (function () {
    * cambió qué y cuándo, sin que nadie tenga que anotarlo a mano. También
    * propaga los campos copiados (placa, marca, línea…) a Instalación de
    * Sensores, Verificaciones y Hologramas (ver Relaciones.gs / docs/relaciones.md). */
-  function actualizar(token, id, cambios) {
+  /**
+   * @param opciones.candadoTomado  true si el llamador YA tiene el candado del script.
+   *   waitLock() no es reentrante, asi que propagar() se colgaria 20 s y moriria en el
+   *   catch de abajo, perdiendo la propagacion sin que nadie se enterara. Lo usa
+   *   ReasignacionesVehicularesService.crear().
+   */
+  function actualizar(token, id, cambios, opciones) {
     const sesion = Permisos.puedeEditar(token, 'vehiculos');
+    const cfg = opciones || {};
     const datos = Object.assign({}, cambios);
     delete datos.FOLIO; // no se edita, se fija solo al crear
     delete datos.NUCCO; // ídem
@@ -317,7 +324,8 @@ const VehiculosService = (function () {
     // El vehículo YA se guardó bien en este punto — si propagar falla, no se revierte
     // nada: solo se avisa en los logs y revisar() lo corrige en la corrida nocturna.
     try {
-      Relaciones.propagar('VEHICULOS', actualizado, datos);
+      if (cfg.candadoTomado) Relaciones.propagarSinCandado('VEHICULOS', actualizado, datos);
+      else Relaciones.propagar('VEHICULOS', actualizado, datos);
     } catch (err) {
       console.error('Relaciones.propagar falló para el vehículo ' + id + ': ' + err.message);
     }

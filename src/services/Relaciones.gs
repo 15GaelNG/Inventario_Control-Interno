@@ -65,13 +65,21 @@
  */
 
 const Relaciones = (function () {
-  const MAPA = {
+  /**
+ * `llaveForanea` es la columna que la migración le agregó a cada copia para guardar el ID
+ * del dueño. Es el vínculo de VERDAD: `clave` (el folio o la serie) se queda porque hace la
+ * hoja legible y porque AppSheet la usa, pero es un dato que la gente puede editar, y el ID
+ * no. Antes de esto, la FK solo la llenaba el paso por lotes de la migración, así que existía
+ * para los 60,000 renglones viejos y moría para todo lo nuevo.
+ */
+const MAPA = {
     VEHICULOS: {
       spreadsheet: () => Config.SPREADSHEET_IDS.VEHICULOS(),
       hoja: 'VEHICULOS',
       copias: [
         {
           nombre: 'INSTALACION DE SENSORES',
+          llaveForanea: 'ID VEHICULO',
           // Firma de columnas para ubicar la pestaña real (igual que hacen los Services
           // de cada módulo con SheetUtils.getSheetByColumns). NINGUNA firma incluye "ID" a
           // propósito: después de la migración lo tienen las 24 hojas, así que meterlo haría
@@ -103,6 +111,7 @@ const Relaciones = (function () {
         },
         {
           nombre: 'VERIFICACIONES',
+          llaveForanea: 'ID VEHICULO',
           firma: ['FOLIO VEHICULO', 'COMPROBANTE VERIFICACION'],
           tipo: 'cache',   // solo copia PLACA, y la placa del vehículo es la de hoy
           // Se queda con FOLIO, y no por descuido: esta hoja NO TIENE columna de serie.
@@ -116,6 +125,7 @@ const Relaciones = (function () {
         },
         {
           nombre: 'HOLOGRAMAS',
+          llaveForanea: 'ID VEHICULO',
           firma: ['CALCOMANIA EOX', 'ESTATUS EOX'],
           tipo: 'cache',   // la tarjeta de combustible describe al vehículo de HOY
           claveOrigen: 'SERIE VEHICULO',
@@ -141,6 +151,7 @@ const Relaciones = (function () {
           // que revisar() REPORTE la deriva sin tocarla, y para que la próxima persona
           // vea que no se olvidó: se decidió congelarla.
           nombre: 'INSPECCION VEHICULAR',
+          llaveForanea: 'ID VEHICULO',
           firma: ['FOLIO', 'PUNTAJE FINAL INSPECCION'],
           tipo: 'bitacora',
           claveOrigen: 'SERIE VEHICULO',
@@ -156,6 +167,7 @@ const Relaciones = (function () {
           // BITÁCORA por la misma razón: cada renglón es una incidencia fechada.
           // Se queda con FOLIO porque no tiene NI serie NI placa: es su única llave posible.
           nombre: 'INCIDENCIAS',
+          llaveForanea: 'ID VEHICULO',
           firma: ['FOLIO', 'NOMBRE MECANICO', 'KILOMETRAJE'],
           tipo: 'bitacora',
           claveOrigen: 'FOLIO',
@@ -306,7 +318,13 @@ const Relaciones = (function () {
   /**
    * El cuerpo de propagar(), sin tomar el candado. Existe porque cambiarClave() ya lo
    * tiene tomado cuando necesita propagar, y waitLock() no es reentrante: pedirlo dos
-   * veces desde el mismo hilo se cuelga hasta el timeout. No se exporta.
+   * veces desde el mismo hilo se cuelga hasta el timeout.
+   *
+   * SE EXPORTA, aunque sea la version peligrosa, porque el mismo choque aparece desde
+   * fuera: ReasignacionesVehicularesService.crear() toma el candado y desde ahi llama a
+   * VehiculosService.actualizar(), que propaga. Sin esta salida, esa propagacion esperaba
+   * 20 segundos y moria en el catch, en silencio. Quien la llame DEBE tener el candado
+   * tomado; si no, usa propagar().
    */
   function propagarSinCandado_(origen, filaOrigen, cambios) {
     const definicion = MAPA[origen];
@@ -370,9 +388,16 @@ const Relaciones = (function () {
    * `valorClave` (folio o serie, según a qué columna apunte esa copia) y regresa las
    * columnas ya traducidas a los nombres de la hoja copia, listas para SheetUtils.insert.
    *
+   * Acepta el ID del dueño O su llave de negocio, y lo distingue solo con Ids.tieneForma.
+   * Eso permite migrar el frontend módulo por módulo sin romper los que todavía manden
+   * folio — y sin cambiar la firma de ninguna función api*, que importa más de lo que
+   * parece: la clave del caché del cliente es el nombre de la función más sus argumentos,
+   * así que cambiar una firma desalinea en silencio las invalidaciones que la nombran.
+   *
    * @param {string} nombreCopia  el 'nombre' de la copia dentro del MAPA (ej. 'VERIFICACIONES')
-   * @param {string} valorClave   folio o serie a buscar en la hoja dueña
-   * @return {{datos: Object, origen: Object}} datos ya con la clave propia de la copia puesta
+   * @param {string} valorClave   el ID del dueño, o su folio/serie
+   * @return {{datos: Object, origen: Object}} datos con la llave foránea, la clave de
+   *   negocio y las columnas copiadas — listos para SheetUtils.insert
    */
   function datosParaNuevo(nombreCopia, valorClave) {
     const origenNombre = Object.keys(MAPA).find((o) => MAPA[o].copias.some((c) => c.nombre === nombreCopia));
@@ -381,9 +406,13 @@ const Relaciones = (function () {
     const copia = origenDef.copias.find((c) => c.nombre === nombreCopia);
 
     const ssId = origenDef.spreadsheet();
-    const encontrado = SheetUtils.findById(ssId, origenDef.hoja, valorClave, copia.claveOrigen);
+    // Si viene con la forma de un ID nuevo, se busca por ID; si no, por la llave de negocio
+    // que esta copia use (folio o serie).
+    const porId = Ids.tieneForma(valorClave);
+    const columnaBusqueda = porId ? 'ID' : copia.claveOrigen;
+    const encontrado = SheetUtils.findById(ssId, origenDef.hoja, valorClave, columnaBusqueda);
     if (!encontrado) {
-      throw new Error('El ' + copia.claveOrigen + ' "' + valorClave + '" no existe en ' + origenNombre);
+      throw new Error('El ' + columnaBusqueda + ' "' + valorClave + '" no existe en ' + origenNombre);
     }
 
     // Aquí SÍ se copia aunque la copia sea una bitácora, y aunque el valor sea un
@@ -391,7 +420,26 @@ const Relaciones = (function () {
     // Congelarlo es justo lo que se quiere — lo que no se hace es volver a tocarlo
     // después (ver propagar()).
     const datos = {};
-    datos[copia.clave] = valorClave;
+
+    // La llave foránea: el vínculo de verdad.
+    if (copia.llaveForanea) {
+      const idDueno = encontrado.data['ID'];
+      if (!idDueno) {
+        throw new Error(origenNombre + ' no tiene ID en el renglón de "' + valorClave +
+          '". Corre el pipeline de IDs sobre este libro antes de dar de alta en ' +
+          nombreCopia + '.');
+      }
+      datos[copia.llaveForanea] = idDueno;
+    }
+
+    // Y la clave de negocio, que sale del renglón del DUEÑO y no del valor que nos
+    // pasaron. Si no, cuando `valorClave` es un ID acabaríamos escribiendo el ID dentro de
+    // la columna del folio.
+    const claveDelDueno = encontrado.data[copia.claveOrigen];
+    datos[copia.clave] = claveDelDueno === undefined || claveDelDueno === null
+      ? (porId ? '' : valorClave)
+      : claveDelDueno;
+
     Object.keys(copia.columnas).forEach((colOrigen) => {
       const valor = encontrado.data[colOrigen];
       datos[copia.columnas[colOrigen]] = valor === undefined || valor === null ? '' : valor;
@@ -617,5 +665,9 @@ const Relaciones = (function () {
     return { impacto: impacto, aplicado: true };
   }
 
-  return { propagar, datosParaNuevo, revisar, cambiarClave };
+  return {
+    propagar, datosParaNuevo, revisar, cambiarClave,
+    // Solo para quien ya tiene el candado tomado. Ver su comentario.
+    propagarSinCandado: propagarSinCandado_,
+  };
 })();
