@@ -35,7 +35,9 @@ const contexto = vm.createContext({
     normalizarEncabezado_: (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toUpperCase(),
     getSheetByColumns: () => ({ getName: () => 'INSPECCION VEHICULAR' }),
     leerColumnas: () => ({ filas: 0, datos: { 'ID INSPECCION': [] } }),
-    findById: () => ({ data: { FOLIO: 'AUT0025', NUCCO: '25', 'RESPONSABLE VEHICULO': 'JORGE AVECILLA', PLACA: 'GGR658F' } }),
+    // 'ID' va aquí porque la inspección nueva guarda la llave foránea del vehículo, y el
+    // servicio se niega a registrar si el vehículo no tiene ID (libro sin migrar).
+    findById: () => ({ data: { ID: 'VEH-00000000AAAAAA', FOLIO: 'AUT0025', NUCCO: '25', 'RESPONSABLE VEHICULO': 'JORGE AVECILLA', PLACA: 'GGR658F' } }),
     insert: (id, hoja, datos) => { fila = datos; },
     update: () => {},
   },
@@ -74,7 +76,12 @@ const resultado = contexto.InspeccionesService.registrar('token', {
   'FIRMA INSPECTOR': { base64: 'FIRMA', mimeType: 'image/png' },
 });
 
-console.log('1. Diagramas');
+console.log('0. La inspección nace amarrada al vehículo por ID');
+ok(fila['ID VEHICULO'] === 'VEH-00000000AAAAAA',
+  'guarda ID VEHICULO, no solo el folio: el folio se puede editar y el ID no');
+ok(fila['FOLIO'] === 'AUT0025', 'y el folio también, para que la hoja se lea');
+
+console.log('\n1. Diagramas');
 ok(/^INSPECCION VEHICULAR_Images\/.+\.INS FRONTAL\.\d+\.png$/.test(fila['INS FRONTAL']),
   'el diagrama marcado se sube con la ruta de AppSheet: ' + fila['INS FRONTAL']);
 ok(fila['INS TRASERA'] === ESTRUCTURA.diagramas[1].ruta && paraPdf.imagenes['INS TRASERA'].blob === 'blob-trasera',
