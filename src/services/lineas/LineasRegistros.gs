@@ -85,6 +85,7 @@ const LineasRegistros = (function () {
     const listaLibre = coord === 'LINEAS';
     const excepcionEquipo = coord === 'AUDITORIAS Y CALIDAD' || String(usuario.correo || '').toLowerCase() === 'auxiliartelefonia1.ci@ciudadmaderas.com';
     const v = (c) => (base[c] === undefined || base[c] === null ? '' : base[c]);
+    const enBlanco = (c) => (((LineasRepo.ESTATUS_EN_BLANCO || {})[c] || []).indexOf(String(v(c)).trim().toUpperCase()) >= 0 ? '' : v(c));
     const lista = (columna, opciones) => campo_(columna, columna, listaLibre ? 'listaAbierta' : 'lista', siEditable({ valor: v(columna), opciones: opciones, valida: listaLibre ? null : 'LISTA' }));
     // Mejora sobre AppSheet (texto libre): lista desplegable con COLABORADORES / valores ya capturados.
     // `sugerencias` las completa el navegador; `autollenar` copia datos del colaborador elegido.
@@ -163,8 +164,10 @@ const LineasRegistros = (function () {
         // el formulario de edición no las muestra y el servidor ignora lo que llegue (Editable_If solo en el alta).
         campo_('INICIO PLAN', 'INICIO PLAN', 'fecha', { valor: v('INICIO PLAN'), mostrar: { nuevo: true }, requerido: { nuevo: true }, editable: { nuevo: true } }),
         campo_('FIN PLAN', 'FIN PLAN', 'fecha', { valor: v('FIN PLAN'), mostrar: { nuevo: true }, requerido: { nuevo: true }, editable: { nuevo: true } }),
-        campo_('ESTATUS LINEA', 'ESTATUS LINEA', 'lista', siEditable({ valor: v('ESTATUS LINEA'), opciones: LineasRepo.CATALOGO.estatusLinea, valida: 'MAYUS' })),
-        campo_('ESTATUS EQUIPO', 'ESTATUS EQUIPO', 'lista', siEditable({ valor: v('ESTATUS EQUIPO'), opciones: LineasRepo.CATALOGO.estatusEquipo, valida: 'MAYUS' })),
+        // Listas del 30-sep. "SIN LINEA" y "N/A" viejos se muestran en blanco; cualquier otro valor viejo sale
+        // "(no está en la lista)" y hay que elegir uno nuevo para guardar. El servidor solo revisa la lista si cambió.
+        campo_('ESTATUS LINEA', 'ESTATUS LINEA', 'lista', siEditable({ valor: enBlanco('ESTATUS LINEA'), opciones: LineasRepo.CATALOGO.estatusLinea, valida: 'LISTA', validaSiCambia: true })),
+        campo_('ESTATUS EQUIPO', 'ESTATUS EQUIPO', 'lista', siEditable({ valor: enBlanco('ESTATUS EQUIPO'), opciones: LineasRepo.CATALOGO.estatusEquipo, valida: 'LISTA', validaSiCambia: true })),
         // RESPONSIVA y FORMATO INSPECCION (archivos) no van: la responsiva y la inspección se consultan en NUCOS
         campo_('FECHA INSPECCION', 'FECHA INSPECCION', 'fecha', { valor: v('FECHA INSPECCION') }),
         campo_('COMENTARIOS', 'COMENTARIOS', 'texto', { valor: v('COMENTARIOS'), valida: 'COMENTARIOS' }),
@@ -276,6 +279,8 @@ const LineasRegistros = (function () {
         errores.push(e.etiqueta + ': ' + MENSAJES.LISTA);
         return;
       }
+      // Un valor viejo que no se tocó no se vuelve a validar (p. ej. un estatus de antes del 30-sep en una edición)
+      if (e.validaSiCambia && valor.toUpperCase() === texto_(base[e.columna]).toUpperCase()) return;
       if (e.valida && !valida_(e.valida, valor, valores, e, ctx)) errores.push(e.etiqueta + ': ' + MENSAJES[e.valida]);
     });
     return { valores: valores, errores: errores };
@@ -416,7 +421,7 @@ const LineasRegistros = (function () {
 
   // ---------------- Acciones masivas de equipos (pedido del área, 29-sep) ----------------
   //
-  // Con dos o más equipos seleccionados en Líneas Telefónicas: mandar a resguardo, reasignar o cancelar.
+  // Con dos o más equipos seleccionados en Líneas Telefónicas: mandar a resguardo o reasignar.
   // Solo cambian el EQUIPO: la línea (número, ESTATUS LINEA) queda igual hasta que el área diga qué le pasa a la
   // línea en cada caso. Cada equipo deja su bitácora CAMBIOS (y HISTORIAL_REASIGNACIONES al reasignar) y su
   // movimiento con el motivo, igual que una edición individual.
@@ -425,7 +430,7 @@ const LineasRegistros = (function () {
     RESGUARDO: { titulo: 'Mandar a resguardo', estatusEquipo: 'RESGUARDO' },
     // Al reasignar, el equipo queda en RESGUARDO: el estatus no se elige (pedido del usuario, 29-sep)
     REASIGNAR: { titulo: 'Reasignar equipos', estatusEquipo: 'RESGUARDO' },
-    CANCELAR: { titulo: 'Cancelar equipos', estatusEquipo: 'CANCELADO' },
+    // "Cancelar equipos" se quitó el 30-sep: los equipos no se cancelan, solo las líneas (reunión con Líneas)
   };
   const MASIVA_MINIMO = 2;
   const MASIVA_MAXIMO = 150; // cada equipo son ~4 escrituras: que quepa en el límite de 6 min de Apps Script

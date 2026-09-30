@@ -50,15 +50,18 @@ test('Telefonía muestra sus módulos en orden y Gestión de Activos queda fuera
   const app = read('src/html/js/app.html');
   const lineas = app.slice(app.indexOf("id: 'lineas'"), app.indexOf("id: 'gestion-activos'"));
   assert.equal((lineas.match(/Inventario de Accesorios/g) || []).length, 1);
-  // Panorama primero (29-sep); Reactivación oculta del menú (línea comentada) pero su vista se sigue montando
-  const orden = ['panorama-lineas', 'lineas-telefonicas', 'accesorios-lineas', 'reasignaciones-lineas', 'solicitud-lineas',
-    'cambios-lineas', 'bitacora-desechos'];
+  // Panorama primero (29-sep). Fuera del menú (líneas comentadas) pero sus vistas se siguen montando: Reactivación
+  // (29-sep) y Reasignaciones, Solicitud, Control de Cambios y Bitácora de Desechos (reunión con Líneas, 30-sep)
+  const orden = ['panorama-lineas', 'lineas-telefonicas', 'accesorios-lineas'];
+  const ocultos = ['reactivacion-lineas', 'reasignaciones-lineas', 'solicitud-lineas', 'cambios-lineas', 'bitacora-desechos'];
   const sinComentarios = lineas.split(/\r?\n/).filter((l) => !/^\s*\/\//.test(l)).join('\n');
   assert.deepEqual([...sinComentarios.matchAll(/vista: '([^']+)'/g)].map((m) => m[1]), orden);
+  ocultos.forEach((v) => assert.match(lineas, new RegExp(`// \{ vista: '${v}'`), `${v} debe seguir comentado`));
+  assert.doesNotMatch(read('src/html/views/dashboard.html'), /data-view="cambios-lineas"/);
   // Acceso directo debajo del desplegable de Líneas
   assert.match(app, /\{ id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de Activos' \}/);
   assert.match(app, /grupo\.vista \? `/);
-  orden.concat('gestion-activos', 'reactivacion-lineas')
+  orden.concat('gestion-activos', ocultos)
     .forEach((route) => assert.match(app, new RegExp(`vista === '${route}'`), `falta montar ${route}`));
   // Retirados: Post Venta (ya no existe) y Detalles (ahora es la vista de tarjetas de Líneas Telefónicas)
   ['lineas-post-venta', 'detalles-lineas-telefonicas'].forEach((retirado) => {
@@ -403,7 +406,7 @@ test('los campos de texto libre del AppSheet ahora tienen lista desplegable', ()
   ['TIPO', 'DIA', 'MES', 'AÑO'].forEach((c) => assert.equal(control(cap, c), 'lista', 'captura ' + c));
   ['NO EMPLEADO SOLICITANTE', 'NOMBRE SOLICITANTE', 'PUESTO SOLICITANTE', 'DEPARTAMENTO SOLICITANTE', 'COLABORADOR',
     'NUMERO ANTERIOR', 'NUMERO ACTUAL', 'MOTIVO'].forEach((c) => assert.equal(control(ope, c), 'listaAbierta', 'operativas ' + c));
-  assert.match(repo, /catalogos_telefonia_v3/);
+  assert.match(repo, /catalogos_telefonia_v4/);
   ['colores', 'puestos', 'jefes', 'directores', 'otrasApps', 'identificaciones', 'motivosDesecho'].forEach((k) => assert.match(repo, new RegExp(k + ': ')));
   // El navegador completa personas / números y copia los datos de la persona elegida
   assert.match(lineas, /function opcionesSugeridas\(tipo\)/);
@@ -939,7 +942,7 @@ test('Notificaciones: adendum por vencer una semana antes, sin las ya vencidas n
   assert.match(read('src/html/js/lineas.html'), /irARegistro: irARegistro/);
 });
 
-test('Acciones masivas de equipos: resguardo, reasignar y cancelar desde 2 seleccionados, sin tocar la línea', () => {
+test('Acciones masivas de equipos: resguardo y reasignar desde 2 seleccionados, sin tocar la línea', () => {
   const reg = read('src/services/lineas/LineasRegistros.gs');
   const LineasUtil = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '; return LineasUtil;')({ normCol: (c) => String(c).toUpperCase().trim() }, {});
   const hoja = [
@@ -986,12 +989,14 @@ test('Acciones masivas de equipos: resguardo, reasignar y cancelar desde 2 selec
   Reg.accionMasiva('REASIGNAR', ['a', 'b'], { valores: { RESPONSABLE: 'PEDRO PEREZ', 'ESTATUS EQUIPO': 'USO', _MOTIVO: 'CAMBIO DE AREA' } }, u);
   assert.ok(guardados.every(([, c]) => c['ESTATUS EQUIPO'] === 'RESGUARDO'));
 
-  // Cancelar pone CANCELADO; con uno solo o sin motivo, error
+  // Con uno solo o sin motivo, error
+  assert.throws(() => Reg.accionMasiva('RESGUARDO', ['a'], { valores: { _MOTIVO: 'CIERRE DE OFICINA' } }, u), /dos o más/);
+  assert.throws(() => Reg.accionMasiva('RESGUARDO', ['a', 'b'], { valores: {} }, u), /MOTIVO/);
+  // "Cancelar equipos" ya no existe (30-sep): los equipos no se cancelan, solo las líneas
   guardados.length = 0;
-  Reg.accionMasiva('CANCELAR', ['a', 'b'], { valores: { _MOTIVO: 'EQUIPOS OBSOLETOS' } }, u);
-  assert.deepEqual(guardados.map(([id, c]) => [id, c['ESTATUS EQUIPO']]), [['a', 'CANCELADO'], ['b', 'CANCELADO']]);
-  assert.throws(() => Reg.accionMasiva('CANCELAR', ['a'], { valores: { _MOTIVO: 'EQUIPOS OBSOLETOS' } }, u), /dos o más/);
-  assert.throws(() => Reg.accionMasiva('CANCELAR', ['a', 'b'], { valores: {} }, u), /MOTIVO/);
+  assert.throws(() => Reg.accionMasiva('CANCELAR', ['a', 'b'], { valores: { _MOTIVO: 'EQUIPOS OBSOLETOS' } }, u));
+  assert.equal(guardados.length, 0);
+  assert.doesNotMatch(read('src/html/js/lineas.html'), /clave: 'CANCELAR'/);
 
   // Cliente: botones solo en Equipos y desde 2 seleccionados (DataTable `minimo`)
   const cliente = read('src/html/js/lineas.html');
@@ -1223,3 +1228,53 @@ test('Selección como en los equipos Apple: cuadro con el mouse, Shift+clic, Ctr
   assert.match(dt, /if \(!panel && !st\.editando && st\.modoSeleccion && enEsta\) setModoSeleccion\(false\);/);
 });
 
+
+test('Estatus del 30-sep: listas nuevas, línea sin estatus en blanco, valores viejos y departamento DISPONIBLE', () => {
+  const repoSrc = read('src/services/lineas/LineasRepo.gs');
+  // Listas acordadas con Líneas (sin acentos, como el AppSheet)
+  assert.match(repoSrc, /estatusEquipo: \['USO', 'RESGUARDO', 'DONADO', 'PARA VENTA', 'VENDIDO', 'POSIBLE VENTA-DAÑO', 'EXTRAVIO-ROBO', 'PARA DESECHO', 'DESECHADO'\]/);
+  assert.match(repoSrc, /estatusLinea: \['USO', 'DISPONIBLE', 'EN PROCESO DE CANCELACION', 'CANCELADA'\]/);
+  // Quitar la línea deja ESTATUS LINEA en blanco (antes "SIN LINEA")
+  assert.match(repoSrc, /'FIN PLAN': '', 'ESTATUS LINEA': '', 'FECHA CAMBIO TEMPORAL'/);
+  // DISPONIBLE se agrega a la lista de departamentos; CONTROL INTERNO no se quita
+  assert.match(repoSrc, /departamentos: juntar\(\[DEPARTAMENTO_DISPONIBLE\], unicos\(listas, 'DEPARTAMENTO'\)\)/);
+  assert.match(repoSrc, /const DEPARTAMENTO_DISPONIBLE = 'DISPONIBLE';/);
+
+  const LineasUtil = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '; return LineasUtil;')({ normCol: (c) => String(c).toUpperCase().trim() }, {});
+  const Repo = {
+    CATALOGO: {
+      tipos: ['EQUIPO', 'EQUIPO + SIM', 'LINEA'],
+      estatusEquipo: ['USO', 'RESGUARDO', 'DONADO', 'PARA VENTA', 'VENDIDO', 'POSIBLE VENTA-DAÑO', 'EXTRAVIO-ROBO', 'PARA DESECHO', 'DESECHADO'],
+      estatusLinea: ['USO', 'DISPONIBLE', 'EN PROCESO DE CANCELACION', 'CANCELADA'],
+    },
+    ESTATUS_EN_BLANCO: { 'ESTATUS LINEA': ['SIN LINEA'], 'ESTATUS EQUIPO': ['N/A'] },
+    TAB: { LINEAS: 'LINEAS TELEFONICAS' }, TIPOS_CON_EQUIPO: { 'EQUIPO': 'CELULAR', 'EQUIPO + SIM': 'CELULAR' },
+  };
+  const Reg = new Function('LineasRepo', 'CacheService', 'Utilities', 'SpreadsheetApp', 'Config', 'LineasUtil', 'LineasDatos',
+    read('src/services/lineas/LineasRegistros.gs') + '; return LineasRegistros;')(Repo, { getScriptCache: () => ({ get: () => '', put: () => {} }) }, {}, {}, {}, LineasUtil, {});
+  const u = { correo: 'x@y.z', nombre: 'X' };
+  const cat = { departamentos: ['CONTROL INTERNO', 'DISPONIBLE', 'VENTAS'] };
+  const campo = (els, c) => els.filter((e) => e.columna === c)[0];
+
+  // "SIN LINEA" y "N/A" viejos se muestran en blanco; otro valor viejo se conserva para que el formulario lo marque
+  const base = { TIPO: 'EQUIPO', 'ESTATUS LINEA': 'SIN LINEA', 'ESTATUS EQUIPO': 'FUERA DE INVENTARIO', DEPARTAMENTO: 'CONTROL INTERNO' };
+  const els = Reg._elementos(base, cat, u, { nuevo: false });
+  assert.equal(campo(els, 'ESTATUS LINEA').valor, '');
+  assert.equal(campo(els, 'ESTATUS EQUIPO').valor, 'FUERA DE INVENTARIO');
+  assert.deepEqual(campo(els, 'ESTATUS EQUIPO').opciones, Repo.CATALOGO.estatusEquipo);
+  assert.ok(campo(els, 'DEPARTAMENTO').opciones.indexOf('DISPONIBLE') >= 0 && campo(els, 'DEPARTAMENTO').opciones.indexOf('CONTROL INTERNO') >= 0);
+  assert.equal(Reg._elementos({ TIPO: 'LINEA', 'ESTATUS EQUIPO': 'N/A' }, cat, u, { nuevo: false }).filter((e) => e.columna === 'ESTATUS EQUIPO')[0].valor, '');
+
+  // Servidor: un estatus nuevo fuera de la lista se rechaza; el valor viejo sin tocar no bloquea otros cambios
+  const soloEstatus = els.filter((e) => e.tipo !== 'campo' || ['TIPO', 'ESTATUS LINEA', 'ESTATUS EQUIPO'].indexOf(e.columna) >= 0);
+  assert.match(Reg._resolver(soloEstatus, base, { 'ESTATUS EQUIPO': 'CANCELADO' }, { nuevo: false }).errores.join(' | '), /ESTATUS EQUIPO: VALOR NO ENCONTRADO EN LA LISTA/);
+  assert.deepEqual(Reg._resolver(soloEstatus, base, { 'ESTATUS LINEA': '' }, { nuevo: false }).errores, []);
+  const ok = Reg._resolver(soloEstatus, base, { 'ESTATUS EQUIPO': 'EXTRAVIO-ROBO', 'ESTATUS LINEA': '' }, { nuevo: false });
+  assert.deepEqual(ok.errores, []);
+  assert.equal(ok.valores['ESTATUS EQUIPO'], 'EXTRAVIO-ROBO');
+  assert.equal(ok.valores['ESTATUS LINEA'], '');
+
+  // Colores de los estatus nuevos
+  const cliente = read('src/html/js/lineas.html');
+  ['DISPONIBLE', 'PARA VENTA', 'POSIBLE VENTA-DAÑO', 'PARA DESECHO', 'EXTRAVIO-ROBO'].forEach((e) => assert.match(cliente, new RegExp(`'${e}': '(azul|ambar|rojo)'`), e));
+});

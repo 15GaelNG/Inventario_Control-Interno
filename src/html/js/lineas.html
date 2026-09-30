@@ -169,9 +169,12 @@
 
     const COLOR_ESTATUS = {
       'USO': 'verde', 'EN USO': 'verde', 'RENOVADA': 'verde',
-      'RESGUARDO': 'azul', 'EN ENVIO': 'azul', 'ESPERA DE RESPONSIVA': 'azul', 'ESPERA DE EQUIPO': 'azul',
-      'SUSPENDIDA': 'ambar', 'POSIBLE VENTA': 'ambar', 'VENTA': 'ambar', 'USO TEMPORAL': 'ambar', 'SIN LINEA': 'ambar', 'EN PROCESO DE CANCELACION': 'ambar',
-      'EXTRAVIADO': 'rojo', 'ROBO': 'rojo', 'ROBADO': 'rojo', 'CANCELADA': 'rojo', 'CANCELADO': 'rojo', 'DESECHO': 'rojo', 'DESECHADO': 'rojo', 'BLOQUEADO': 'rojo',
+      'RESGUARDO': 'azul', 'DISPONIBLE': 'azul', 'EN ENVIO': 'azul', 'ESPERA DE RESPONSIVA': 'azul', 'ESPERA DE EQUIPO': 'azul',
+      'PARA VENTA': 'ambar', 'POSIBLE VENTA-DAÑO': 'ambar', 'PARA DESECHO': 'ambar', 'EN PROCESO DE CANCELACION': 'ambar',
+      'SUSPENDIDA': 'ambar', 'POSIBLE VENTA': 'ambar', 'VENTA': 'ambar', 'USO TEMPORAL': 'ambar', 'SIN LINEA': 'ambar',
+      'EXTRAVIO-ROBO': 'rojo', 'CANCELADA': 'rojo', 'DESECHADO': 'rojo',
+      // Valores de antes del 30-sep que siguen en la hoja hasta que Líneas los corrija
+      'EXTRAVIADO': 'rojo', 'ROBO': 'rojo', 'ROBADO': 'rojo', 'CANCELADO': 'rojo', 'DESECHO': 'rojo', 'BLOQUEADO': 'rojo', 'FUERA DE INVENTARIO': 'rojo',
     };
     const chip = (estatus, clase) => {
       if (!estatus) return vacio;
@@ -1428,8 +1431,7 @@
         ayuda: 'Pone los equipos seleccionados en RESGUARDO', efecto: 'El ESTATUS DEL EQUIPO de cada uno cambia a RESGUARDO; el responsable no cambia.' },
       { clave: 'REASIGNAR', texto: 'Reasignar', boton: 'Reasignar', icono: 'user-round-pen',
         ayuda: 'Asigna los equipos seleccionados a otro responsable', efecto: 'Todos los equipos pasan al nuevo responsable y su ESTATUS DEL EQUIPO queda en RESGUARDO; lo que dejes vacío (No. empleado, puesto, departamento) queda como estaba en cada equipo.' },
-      { clave: 'CANCELAR', texto: 'Cancelar equipos', boton: 'Cancelar equipos', icono: 'circle-x', peligro: true,
-        ayuda: 'Pone los equipos seleccionados en CANCELADO', efecto: 'El ESTATUS DEL EQUIPO de cada uno cambia a CANCELADO.' },
+      // "Cancelar equipos" se quitó el 30-sep: los equipos no se cancelan, solo las líneas
     ];
 
     const TABLAS_INVENTARIO = {

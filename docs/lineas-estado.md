@@ -13,9 +13,9 @@ qué está hecho, cómo probarlo y qué sigue.
   terminar la ronda**, como pidió el usuario. DEV está al día con `emmanuel`.
 - `npm test`: 53 aprobadas, 0 fallidas. Las pruebas de Ayrton se corren aparte: `node tests/ids.test.js` y
   `node tests/entidades.test.js`.
-- **Reunión con Líneas (30-sep):** 12 temas con claves (E, M, R, L, P, C, A, AM, CO, RO, O, PA) en
-  `migracion/PREGUNTAS_REUNION_LINEAS.md` de la carpeta de documentación. El usuario trae las respuestas una por
-  una. Con ellas se ajustan:
+- **Reunión con Líneas (30-sep): ya ocurrió.** Respuestas y pedidos nuevos en
+  `migracion/RESULTADOS_REUNION_LINEAS_30SEP.md` de la carpeta de documentación. Primer paso hecho: §0u (estatus
+  nuevos, DISPONIBLE y menú). Lo que sigue (orden de la sección 8 de ese documento):
   - las acciones masivas (qué campos cambian y qué pasa con la línea);
   - la vista de aprobación de Pao y su correo semanal;
   - la automatización de adendums vigentes y la renovación;
@@ -216,6 +216,42 @@ el sistema avisa (más adelante también por correo).
     y la misma vista.
 - Pruebas: `INICIO / FIN PLAN solo se capturan en el alta…` y `Notificaciones: adendum por vencer…` en
   `tests/source-contracts.test.cjs` (45/45). Falta la prueba en /dev.
+
+## 0u. Estatus nuevos, departamento DISPONIBLE y menú (2026-09-30, reunión con Líneas)
+
+Primer paso de lo acordado con Líneas el 30-sep. Detalle de la reunión en la carpeta de documentación:
+`migracion/RESULTADOS_REUNION_LINEAS_30SEP.md`; conversión de datos en `migracion/CONVERSION_ESTATUS_LINEAS.md`.
+
+- **Listas** (`LineasRepo.CATALOGO`), sin acentos como pide el AppSheet:
+  - **Equipo:** USO, RESGUARDO, DONADO, PARA VENTA, VENDIDO, POSIBLE VENTA-DAÑO, EXTRAVIO-ROBO, PARA DESECHO y
+    DESECHADO.
+  - **Línea:** USO, DISPONIBLE, EN PROCESO DE CANCELACION y CANCELADA.
+  - Los equipos ya no se cancelan: solo las líneas.
+- **Sin línea = ESTATUS LINEA en blanco.**
+  - `VALORES_SIN_LINEA` escribe `''` (antes "SIN LINEA").
+  - En el formulario, "SIN LINEA" y el "N/A" del equipo se muestran en blanco (`ESTATUS_EN_BLANCO`); al guardar queda
+    en blanco.
+- **Valores viejos** (FUERA DE INVENTARIO, VENTA, CANCELADO…):
+  - se ven con su chip y en el formulario "(no está en la lista)";
+  - para guardar hay que elegir uno nuevo;
+  - el servidor solo revisa la lista si el valor cambió (`validaSiCambia`), así un valor viejo sin tocar no bloquea las
+    acciones masivas.
+  - Los corrige Líneas; no se convierten solos todavía.
+- **Departamento DISPONIBLE:** se agrega a la lista de departamentos (`DEPARTAMENTO_DISPONIBLE`); CONTROL INTERNO se
+  queda. Caché de catálogos `catalogos_telefonia_v4`.
+- **Acciones masivas:** se quitó "Cancelar equipos". Quedan "Mandar a resguardo" y "Reasignar", que se rehacen en el
+  siguiente paso (N/A automáticos, captura por NUCO, bandeja de Pau).
+- **Menú:** fuera Control de Reasignaciones, Solicitud, Control de Cambios y Bitácora de Desechos, además de
+  Reactivación. Sus líneas en `NAV_GRUPOS` están comentadas y sus vistas siguen en `navegarA`. **La bitácora CAMBIOS no
+  se toca:** alimenta el Historial, "Números que ha tenido" y el Panorama. Se quitó la tarjeta de Control de Cambios del
+  Inicio.
+- Colores nuevos en `COLOR_ESTATUS`: DISPONIBLE azul; PARA VENTA, POSIBLE VENTA-DAÑO y PARA DESECHO ámbar;
+  EXTRAVIO-ROBO rojo.
+- **Probado en /dev** (30-sep, sin guardar):
+  - el menú tiene 3 módulos;
+  - el NUCO 0003 (FUERA DE INVENTARIO) muestra la lista nueva con el valor viejo marcado y ESTATUS LINEA en blanco;
+  - DISPONIBLE está en DEPARTAMENTO.
+- Prueba nueva: `Estatus del 30-sep: …` en `tests/source-contracts.test.cjs` (54/54).
 
 ## 0t. Selección como en los equipos Apple (2026-09-30)
 

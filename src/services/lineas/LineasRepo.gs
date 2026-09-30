@@ -47,18 +47,30 @@ const LineasRepo = (function () {
   /** Catálogos del AppSheet (enums de LINEAS TELEFONICAS). */
   const CATALOGO = {
     tipos: ['EQUIPO', 'EQUIPO + SIM', 'EQUIPO + SIM BASICO', 'LINEA', 'LINEA BASICA', 'BANDA ANCHA', 'MODEM', 'CAMARA'],
-    estatusEquipo: ['USO', 'RESGUARDO', 'ESPERA DE EQUIPO', 'ESPERA DE RESPONSIVA', 'EN ENVIO', 'CANCELADO', 'EXTRAVIADO', 'VENDIDO', 'DONADO', 'VENTA', 'POSIBLE VENTA', 'DESECHO', 'DESECHADO', 'BLOQUEADO', 'ROBO'],
-    estatusLinea: ['USO', 'SUSPENDIDA', 'RESGUARDO', 'ESPERA DE EQUIPO', 'ESPERA DE RESPONSIVA', 'EN ENVIO', 'RENOVADA', 'SIN LINEA', 'EN PROCESO DE CANCELACION', 'CANCELADA'],
+    // Estatus acordados con Líneas el 30-sep (ya no son los del AppSheet). Los equipos no se cancelan: solo las líneas.
+    // Sin acentos, como pide el AppSheet ("MAYÚSCULAS Y SIN ACENTOS"). Los valores viejos que sigan en la hoja se
+    // muestran "(no está en la lista)" y Líneas los corrige; la conversión propuesta está en
+    // migracion/CONVERSION_ESTATUS_LINEAS.md de la carpeta de documentación.
+    estatusEquipo: ['USO', 'RESGUARDO', 'DONADO', 'PARA VENTA', 'VENDIDO', 'POSIBLE VENTA-DAÑO', 'EXTRAVIO-ROBO', 'PARA DESECHO', 'DESECHADO'],
+    // Un registro sin línea deja ESTATUS LINEA en blanco (antes "SIN LINEA").
+    estatusLinea: ['USO', 'DISPONIBLE', 'EN PROCESO DE CANCELACION', 'CANCELADA'],
     companias: ['TELCEL', 'AT&T', 'BAIT'],
     accesorios: ['CAJA', 'CARGADOR', 'CABLE', 'CUBO', 'FUNDA', 'MICA', 'SD', 'NINGUNO'],
   };
+  /** Valores viejos que hoy significan "sin estatus": el formulario los muestra en blanco. */
+  const ESTATUS_EN_BLANCO = { 'ESTATUS LINEA': ['SIN LINEA'], 'ESTATUS EQUIPO': ['N/A'] };
+  /**
+   * Departamento de lo que no está asignado a nadie (resguardo o libre), pedido de Líneas el 30-sep. Se agrega a la
+   * lista; CONTROL INTERNO sigue para lo que usa su propio personal.
+   */
+  const DEPARTAMENTO_DISPONIBLE = 'DISPONIBLE';
 
   /** Columnas que describen la línea dentro de una fila. */
   const COLS_LINEA = ['NUMERO TELEFONO', 'NUMERO SIM', 'COMPAÑIA', 'COSTO PLAN', 'INICIO PLAN', 'FIN PLAN', 'ESTATUS LINEA', 'PIN WHATSAPP', 'FECHA CAMBIO TEMPORAL', 'EMAIL USUARIO'];
   /** Valores con los que el área de líneas deja una fila de equipo al quitarle la línea. */
   const VALORES_SIN_LINEA = {
     'NUMERO TELEFONO': 'NO APLICA', 'NUMERO SIM': 'NO APLICA', 'PIN WHATSAPP': 'NO APLICA', 'COMPAÑIA': '',
-    'COSTO PLAN': 0, 'INICIO PLAN': '', 'FIN PLAN': '', 'ESTATUS LINEA': 'SIN LINEA', 'FECHA CAMBIO TEMPORAL': '', 'EMAIL USUARIO': '',
+    'COSTO PLAN': 0, 'INICIO PLAN': '', 'FIN PLAN': '', 'ESTATUS LINEA': '', 'FECHA CAMBIO TEMPORAL': '', 'EMAIL USUARIO': '',
   };
   const COLS_RESPONSABLE = {
     noEmpleado: 'NO EMPLEADO', nombre: 'RESPONSABLE', puesto: 'PUESTO', departamento: 'DEPARTAMENTO', area: 'AREA',
@@ -1095,7 +1107,7 @@ const LineasRepo = (function () {
    * y el índice).
    */
   function catalogos() {
-    const enCache = LineasDatos.cacheLeer('catalogos_telefonia_v3');
+    const enCache = LineasDatos.cacheLeer('catalogos_telefonia_v4');
     if (enCache) return enCache;
     const unicos = (filas, columna) => {
       const m = {};
@@ -1113,7 +1125,7 @@ const LineasRepo = (function () {
     // Listas de LISTAS TELEFONOS con que el AppSheet valida (Valid_If = IN(..., SORT(SELECT(LISTAS TELEFONOS[...]))))
     const c = Object.assign({}, CATALOGO, {
       sedes: unicos(listas, 'SEDE'),
-      departamentos: unicos(listas, 'DEPARTAMENTO'),
+      departamentos: juntar([DEPARTAMENTO_DISPONIBLE], unicos(listas, 'DEPARTAMENTO')),
       areas: unicos(listas, 'AREA'),
       oficinas: unicos(listas, 'OFICINA / DESARROLLO'),
       modelos: unicos(listas, 'EQUIPO'),
@@ -1130,7 +1142,7 @@ const LineasRepo = (function () {
       otrasApps: unicos(inspecciones, 'OTRA'),
       identificaciones: unicos(responsivas, 'IDENTIFICACION'),
     });
-    LineasDatos.cacheGuardar('catalogos_telefonia_v3', c, 21600);
+    LineasDatos.cacheGuardar('catalogos_telefonia_v4', c, 21600);
     return c;
   }
 
@@ -1149,12 +1161,12 @@ const LineasRepo = (function () {
 
   /** Vacía las cachés del módulo (índices, catálogos y carpetas). */
   function borrarCaches() {
-    ['indice_telefonia_v2', 'indice_telefonia_v3', CLAVE_INDICE, 'indice_colaboradores', 'carpetas_nucos', 'carpetas_nucos_v2', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3', CLAVE_IDS].forEach(LineasDatos.cacheBorrar);
+    ['indice_telefonia_v2', 'indice_telefonia_v3', CLAVE_INDICE, 'indice_colaboradores', 'carpetas_nucos', 'carpetas_nucos_v2', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3', 'catalogos_telefonia_v4', CLAVE_IDS].forEach(LineasDatos.cacheBorrar);
   }
 
   return {
     TAB, ENCABEZADOS_APP, TIPOS_CON_EQUIPO, TIPOS_CON_LINEA, TIPOS_LINEA_OPCIONAL, CATALOGO,
-    COLS_LINEA, VALORES_SIN_LINEA, COLS_RESPONSABLE, CAMPOS_BITACORA,
+    COLS_LINEA, VALORES_SIN_LINEA, ESTATUS_EN_BLANCO, DEPARTAMENTO_DISPONIBLE, COLS_RESPONSABLE, CAMPOS_BITACORA,
     tipoConLinea, tipoSinLinea, convertirRegistro, folioRegistro, estatusGeneralRegistro,
     indice, refrescarIndice, leerRegistroPorId, leerRegistroObligatorio, idActual, idsDeRegistro,
     guardarCambiosRegistro, agregarRegistro, registrarMovimiento, asegurarPestanaApp,
