@@ -108,6 +108,93 @@ Todo esto es basura medible, no decisiones de modelado:
    a poner un `LIN-…` uniforme, pero conviene saber que el "id de AppSheet" de esta hoja no
    siempre lo generó AppSheet.
 
+## Lo básico SÍ se puede hacer ya: el ID y la sincronización
+
+Esta es la parte que no necesita esperar al rediseño.
+
+### Dónde ya existe el vínculo, y dónde no
+
+| Hoja | Vínculo hoy | Estado |
+|---|---|---|
+| `INSPECCIONES LINEAS` | `ID LINEA` | **listo**, 1,596/1,599 emparejan |
+| `RESPONSIVAS LINEAS` | `ID LINEA` | **listo**, 850/854 (48 filas lo traen vacío) |
+| `CAMBIOS LINEAS TELEFONICAS` | `ID_LINEA` | **listo**, 35,428/35,542 |
+| `REACTIVACION DE LINEAS` | **ninguno** | su `FOLIO` es `1, 2, 3, 4…`: un contador, no una referencia |
+| `SOLICITUD DE LINEAS` | **ninguno** | igual |
+| `BITACORA DE DESECHO` | **ninguno** | su `ID_EQUIPO` y `FOLIO EQUIPO` no emparejan con nada de la madre (0%) |
+
+> **Corrección a una lectura anterior de este análisis:** se dijo que "0 filas de
+> Reactivación o Solicitud apuntan a un FOLIO ambiguo". Es cierto, pero engañoso: **no
+> apuntan a ninguno**. El `FOLIO` de la hoja madre es `EQP0179`, `EQS1001`…, y el de esas dos
+> hojas es un consecutivo propio. Son vocabularios distintos.
+
+### El vínculo se puede rellenar, por cascada IMEI → SIM → número
+
+Medido contra la hoja madre:
+
+| Hoja | por `IMEI` | por `SIM` | por número | **cualquiera** |
+|---|---|---|---|---|
+| `BITACORA DE DESECHO` | **228/228 (100%)** | — | — | **100%** |
+| `SOLICITUD DE LINEAS` | 199/205 (97%) | 154/207 (74%) | 127/204 (62%) | **206/229 (90%)** |
+| `REACTIVACION DE LINEAS` | 28/358 (8%) | 250/353 (71%) | 204/278 (73%) | **301/361 (83%)** |
+
+El orden de la cascada no es arbitrario: **`IMEI` nunca cambia y no tiene duplicados**, así
+que es el vínculo más confiable; el `SIM` y el número cambian, así que van después. Lo que no
+empareje se deja **vacío y reportado**, nunca adivinado.
+
+`REACTIVACION` sale baja por IMEI porque casi no lo captura (28 de 358), no porque el dato
+esté mal.
+
+### Y la sincronización: resulta que casi no hay nada que sincronizar
+
+Las hijas copian **mucho** de la madre — `INSPECCIONES LINEAS` y `RESPONSIVAS LINEAS` traen
+unas 16 columnas cada una (NUCO, RESPONSABLE, DEPARTAMENTO, AREA, SEDE, PUESTO, No TELEFONO,
+IMEI, SIM, MODELO, COMPAÑIA, RAZON SOCIAL…). Pero **todas las hijas de `LINEAS TELEFONICAS`
+son bitácoras**, no cachés:
+
+| Hoja | Por qué es bitácora |
+|---|---|
+| `INSPECCIONES LINEAS` | inspección fechada, con firmas y PDF |
+| `RESPONSIVAS LINEAS` | documento **firmado**: dice quién recibió qué ese día |
+| `REACTIVACION DE LINEAS` | evento con `FECHA DE SUSPENSION` y `FECHA DE REACTIVACION` |
+| `SOLICITUD DE LINEAS` | evento con `FECHA DE SOLICITUD` y `FECHA DE ENTREGA` |
+| `CAMBIOS LINEAS TELEFONICAS` | el log mismo |
+| `BITACORA DE DESECHO` | lo dice su nombre |
+
+Así que la regla de [relaciones.md](relaciones.md) aplica entera: **se reportan, no se
+corrigen.** Es lo contrario de Vehículos, donde 3 de 5 hijas sí eran cachés. En Líneas, el
+trabajo es **poner el vínculo**, no propagar datos.
+
+Sincronizar una responsiva firmada sería, literalmente, alterar un documento firmado.
+
+### La única sincronización real de Líneas apunta hacia otro lado
+
+No es madre → hijas. Es **`COLABORADORES` → `LINEAS TELEFONICAS`**: los datos de la persona
+que trae la línea (departamento, puesto, área, sede) pertenecen al catálogo de personas.
+
+Medido, y aquí hay que frenar antes de sincronizar nada:
+
+- **Solo 709 de 1,615 líneas (44%)** tienen un `NO EMPLEADO` que exista en `COLABORADORES`.
+  Las otras 906 apuntan a alguien que no está en el catálogo — probablemente ex-empleados, o
+  líneas asignadas a algo que no es una persona (una oficina, un módem, un vehículo).
+- Y donde sí emparejan, el desacuerdo es grande:
+
+| Columna | Iguales | Distintos |
+|---|---|---|
+| `SEDE` | 177 | **532** |
+| `AREA` | 489 | 220 |
+| `PUESTO` | 599 | 110 |
+| `DEPARTAMENTO` | 661 | 48 |
+
+**El 75% de las sedes no coincide.** Eso es demasiado para ser deriva, y probablemente
+significa que las dos columnas miden cosas distintas: la sede del **equipo** contra la sede
+donde **trabaja** la persona. Antes de sincronizar esa columna hay que preguntarlo — si
+resulta que sí es deriva, `COLABORADORES` manda; si son cosas distintas, la columna de
+`LINEAS` no es una copia y hay que renombrarla.
+
+`RESPONSABLE`, `JEFE DIRECTO`, `DIRECTOR` y `RAZON SOCIAL` **no existen en `COLABORADORES`**
+(que solo tiene `NOMBRE COMPLETO`), así que esas no son copias de nadie.
+
 ## La recomendación
 
 **Para el viernes: tratar Líneas como todo lo demás.** Asignarle `LIN-…` con `NUCO` como
