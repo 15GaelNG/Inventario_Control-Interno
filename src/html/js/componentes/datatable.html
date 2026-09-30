@@ -78,6 +78,10 @@
   .dt.dt-modo-seleccion tbody tr { cursor: pointer; user-select: none; }
   .dt.dt-modo-seleccion .dt-col-check { touch-action: none; }
   .dt .dt-btn-modo-seleccion.activo { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+  /* Cuadro de selección con el mouse (como en el Finder): arrastrar sobre las filas marca las que toca */
+  .dt-marco { position: absolute; z-index: 6; pointer-events: none; border: 1px solid var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 14%, transparent); border-radius: 3px; }
+  .dt.dt-marcando, .dt.dt-marcando * { user-select: none !important; cursor: default !important; }
 
   /* Columna de acciones por fila: fija a la DERECHA, siempre a la vista aunque haya scroll */
   .dt .dt-col-acciones {
@@ -260,9 +264,12 @@
    *         valor: (fila) => calcularDias(fila) },    // columna calculada
    *     ],
    *     seleccionable: true,                   // casillas (copiar, eliminar y acciones masivas)
-   *     modoSeleccion: true,                   // (rama emmanuel) casillas ocultas hasta tocar "Seleccionar", como en iOS:
-   *                                            // en ese modo el clic en la fila la marca, arrastrar marca varias,
-   *                                            // Shift+clic un rango; Ctrl/Cmd+clic entra al modo desde la fila
+   *     modoSeleccion: true,                   // (rama emmanuel) selección como en los equipos Apple:
+   *                                            // - Mouse (Finder): arrastrar dibuja un cuadro y marca las filas que toca
+   *                                            //   (con Ctrl/Cmd alterna, con Shift agrega); Ctrl/Cmd+clic y
+   *                                            //   Shift+clic desde la última fila tocada; Ctrl/Cmd+A todas; Esc sale
+   *                                            // - Dedo (iOS): botón "Seleccionar"; arrastrar sobre las casillas
+   *                                            // Las casillas se ven solo mientras hay selección (modo)
    *     alEditar: async (fila, campo, valorNuevo) => filaActualizada,   // lanza error para rechazar
    *     alEliminar: async (filas) => {},        // si se omite, no aparece "Eliminar"
    *     motivoSinEliminar: 'Solo administradores pueden eliminar',
@@ -1803,6 +1810,7 @@
       // ---- Modo selección (cfg.modoSeleccion): como "Seleccionar" en iOS ----
       function setModoSeleccion(activo) {
         if (!cfg.modoSeleccion) return;
+        if (st.modoSeleccion === !!activo && activo) { render(); return; }
         st.modoSeleccion = !!activo;
         raiz.classList.toggle('dt-modo-seleccion', st.modoSeleccion);
         const b = $('.dt-btn-modo-seleccion');
@@ -1821,9 +1829,10 @@
       const arrastre = { inicio: null, marcar: true, movio: false, ignorarClic: false };
       const filasVisibles = () => Array.from(tbody.querySelectorAll('tr[data-id]')).map((tr) => tr.dataset.id);
       tbody.addEventListener('pointerdown', (ev) => {
-        if (!st.modoSeleccion || ev.button !== 0 || ev.shiftKey) return;
-        // Con el dedo solo se arrastra desde la columna de casillas (el resto de la fila desplaza la tabla)
-        if (ev.pointerType !== 'mouse' && !ev.target.closest('.dt-col-check')) return;
+        // Con el mouse se usa el cuadro de selección (abajo); con el dedo, solo desde la columna de casillas
+        // (el resto de la fila desplaza la tabla)
+        if (!st.modoSeleccion || ev.button !== 0 || ev.shiftKey || ev.pointerType === 'mouse') return;
+        if (!ev.target.closest('.dt-col-check')) return;
         const tr = ev.target.closest('tr[data-id]');
         if (!tr || ev.target.closest('button, a, select, textarea, .dt-editor')) return;
         arrastre.inicio = tr.dataset.id;
@@ -1853,6 +1862,124 @@
       document.addEventListener('pointerup', terminarArrastre);
       document.addEventListener('pointercancel', terminarArrastre);
 
+      // Cuadro de selección con el mouse, como en el Finder: se presiona sobre la tabla (no en un botón, enlace o
+      // encabezado), se arrastra y quedan marcadas las filas que toca el cuadro. Sin tecla reemplaza la selección,
+      // con Ctrl/Cmd alterna las que toca y con Shift las agrega. Cerca del borde de arriba o de abajo, la tabla se
+      // desplaza sola. Al terminar entra al modo selección; un clic suelto sigue siendo un clic normal.
+      const marco = { x0: 0, y0: 0, x: 0, y: 0, activo: false, pendiente: false, base: null, modo: 'reemplazar', el: null, raf: 0, ultimo: '' };
+      const scrollTabla = $('.dt-scroll');
+      const UMBRAL_MARCO = 6;
+      const puntoEnScroll = (ev) => {
+        const r = scrollTabla.getBoundingClientRect();
+        return { x: ev.clientX - r.left + scrollTabla.scrollLeft, y: ev.clientY - r.top + scrollTabla.scrollTop };
+      };
+      scrollTabla.addEventListener('pointerdown', (ev) => {
+        if (!cfg.modoSeleccion || ev.pointerType !== 'mouse' || ev.button !== 0 || st.editando || st.cargando) return;
+        if (ev.target.closest('thead, tfoot, button, a, input, select, textarea, label, .dt-editor, .dt-editando')) return;
+        // La barra de desplazamiento también está dentro del contenedor
+        const r = scrollTabla.getBoundingClientRect();
+        if (ev.clientX - r.left >= scrollTabla.clientWidth || ev.clientY - r.top >= scrollTabla.clientHeight) return;
+        const p = puntoEnScroll(ev);
+        Object.assign(marco, { x0: p.x, y0: p.y, x: p.x, y: p.y, activo: false, pendiente: true, ultimo: '', arriba: r.top,
+          modo: ev.ctrlKey || ev.metaKey ? 'alternar' : (ev.shiftKey ? 'agregar' : 'reemplazar'),
+          base: new Set(ev.ctrlKey || ev.metaKey || ev.shiftKey || st.modoSeleccion ? st.seleccion : []) });
+        // Sin tecla y fuera del modo, el cuadro empieza de cero; dentro del modo, sin tecla también reemplaza
+        if (marco.modo === 'reemplazar') marco.base = new Set();
+      });
+      function pintarMarco() {
+        const x = Math.min(marco.x0, marco.x);
+        const y = Math.min(marco.y0, marco.y);
+        const w = Math.abs(marco.x - marco.x0);
+        const h = Math.abs(marco.y - marco.y0);
+        Object.assign(marco.el.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' });
+        // Filas que toca el cuadro (en coordenadas del contenido desplazable)
+        const r = scrollTabla.getBoundingClientRect();
+        const tocadas = [];
+        tbody.querySelectorAll('tr[data-id]').forEach((tr) => {
+          const b = tr.getBoundingClientRect();
+          const top = b.top - r.top + scrollTabla.scrollTop;
+          if (top < y + h && top + b.height > y) tocadas.push(tr.dataset.id);
+        });
+        const clave = tocadas.join('|');
+        if (clave === marco.ultimo) return;
+        marco.ultimo = clave;
+        const nueva = new Set(marco.base);
+        tocadas.forEach((id) => {
+          if (marco.modo === 'alternar' && marco.base.has(id)) nueva.delete(id); else nueva.add(id);
+        });
+        st.seleccion = nueva;
+        if (tocadas.length) st.ancla = tocadas[marco.y >= marco.y0 ? tocadas.length - 1 : 0];
+        if (!st.modoSeleccion && nueva.size) setModoSeleccion(true); else render();
+        mantenerTablaQuieta_();
+      }
+      // Al marcar la primera fila aparecen las casillas y la barra de seleccionados, que empujan la tabla hacia abajo.
+      // Se desplaza la página lo mismo para que la tabla no se mueva bajo el cursor (si no, el cuadro pierde filas).
+      function mantenerTablaQuieta_() {
+        const delta = scrollTabla.getBoundingClientRect().top - marco.arriba;
+        if (!delta) return;
+        let el = contenedor.parentElement;
+        while (el && el !== document.body) {
+          const oy = getComputedStyle(el).overflowY;
+          if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight) break;
+          el = el.parentElement;
+        }
+        const desplazable = el && el !== document.body ? el : (document.scrollingElement || document.documentElement);
+        desplazable.scrollTop += delta;
+      }
+      // Desplazamiento automático cerca de los bordes mientras se arrastra
+      function autoDesplazar(clientY) {
+        cancelAnimationFrame(marco.raf);
+        const r = scrollTabla.getBoundingClientRect();
+        const borde = 28;
+        const paso = clientY < r.top + borde ? -Math.ceil((r.top + borde - clientY) / 3) : (clientY > r.bottom - borde ? Math.ceil((clientY - (r.bottom - borde)) / 3) : 0);
+        if (!paso || !marco.activo) return;
+        marco.raf = requestAnimationFrame(() => {
+          const antes = scrollTabla.scrollTop;
+          scrollTabla.scrollTop += paso;
+          marco.y += scrollTabla.scrollTop - antes;
+          pintarMarco();
+          autoDesplazar(clientY);
+        });
+      }
+      document.addEventListener('pointermove', (ev) => {
+        if (!marco.pendiente || desmontado()) return;
+        if (!(ev.buttons & 1)) { terminarMarco(); return; }
+        const p = puntoEnScroll(ev);
+        if (!marco.activo) {
+          if (Math.abs(p.x - marco.x0) < UMBRAL_MARCO && Math.abs(p.y - marco.y0) < UMBRAL_MARCO) return;
+          marco.activo = true;
+          if (window.getSelection) window.getSelection().removeAllRanges();
+          raiz.classList.add('dt-marcando');
+          marco.el = document.createElement('div');
+          marco.el.className = 'dt-marco';
+          scrollTabla.appendChild(marco.el);
+        }
+        ev.preventDefault();
+        marco.x = p.x;
+        marco.y = p.y;
+        pintarMarco();
+        autoDesplazar(ev.clientY);
+      });
+      function terminarMarco() {
+        if (!marco.pendiente) return;
+        const huboCuadro = marco.activo;
+        cancelAnimationFrame(marco.raf);
+        if (marco.el) marco.el.remove();
+        raiz.classList.remove('dt-marcando');
+        Object.assign(marco, { activo: false, pendiente: false, el: null, base: null });
+        // El clic que llega al soltar no es un clic: no abre ni desmarca nada
+        if (huboCuadro) arrastre.ignorarClic = true;
+      }
+      document.addEventListener('pointerup', terminarMarco);
+      document.addEventListener('pointercancel', terminarMarco);
+      // Tras un cuadro, el clic de soltar no llega a nadie (ni a los manejadores del módulo, p. ej. la vista rápida)
+      raiz.addEventListener('click', (ev) => {
+        if (!arrastre.ignorarClic || !ev.target.closest('.dt-scroll')) return;
+        arrastre.ignorarClic = false;
+        ev.stopPropagation();
+        ev.preventDefault();
+      }, true);
+
       function alternarSeleccion(id, marcar, enRangoDesdeAncla) {
         const aplicar = (x) => (marcar ? st.seleccion.add(x) : st.seleccion.delete(x));
         const ids = enRangoDesdeAncla && st.ancla && st.ancla !== id ? filasFiltradas().map(idDe) : null;
@@ -1877,7 +2004,16 @@
         if (cfg.modoSeleccion && !ev.target.closest('button, a, input, select, textarea, label, .dt-editor')) {
           // En modo selección el clic en cualquier parte de la fila la marca; Ctrl/Cmd+clic entra al modo con esa fila
           if (!st.modoSeleccion && (ev.ctrlKey || ev.metaKey)) { setModoSeleccion(true); alternarSeleccion(tr.dataset.id, true, false); return; }
+          // Shift+clic fuera del modo: rango desde la última fila tocada (como en Mail y el Finder)
+          if (!st.modoSeleccion && ev.shiftKey) {
+            const ancla = st.ancla;
+            setModoSeleccion(true);
+            st.ancla = ancla;
+            alternarSeleccion(tr.dataset.id, true, true);
+            return;
+          }
           if (st.modoSeleccion) { alternarSeleccion(tr.dataset.id, !st.seleccion.has(tr.dataset.id), ev.shiftKey); return; }
+          st.ancla = tr.dataset.id; // un clic normal (p. ej. abre la vista rápida) deja el punto de partida del Shift+clic
         }
 
         const botonFila = ev.target.closest('[data-accion-fila]');
@@ -1926,15 +2062,28 @@
         if (desmontado()) return;
         if (ev.key === 'Escape') {
           if (popover) { cerrarPopover(); return; }
-          // Quitar selección solo si el usuario está trabajando dentro de esta tabla
-          if (!panel && !st.editando && st.seleccion.size && contenedor.contains(document.activeElement)) limpiarSeleccion();
-          else if (!panel && !st.editando && st.modoSeleccion && contenedor.contains(document.activeElement)) setModoSeleccion(false);
+          // Quitar selección solo si el usuario está trabajando dentro de esta tabla (o, en modo selección, sin foco
+          // en otro lado: tras el cuadro del mouse el foco queda en la página)
+          const enEsta = contenedor.contains(document.activeElement) || (st.modoSeleccion && document.activeElement === document.body && visible());
+          // En modo selección, un solo Esc quita la selección y sale del modo
+          if (!panel && !st.editando && st.modoSeleccion && enEsta) setModoSeleccion(false);
+          else if (!panel && !st.editando && st.seleccion.size && enEsta) limpiarSeleccion();
           return;
         }
         const ctrl = ev.ctrlKey || ev.metaKey;
         if (!ctrl || panel || st.editando || escribiendo(ev.target) || document.querySelector('.confirmar-card') || !visible()) return;
         const tecla = ev.key.toLowerCase();
 
+        // Ctrl/Cmd+A (como en el Finder): marca todas las filas que pasan los filtros
+        if (tecla === 'a' && cfg.modoSeleccion && !ev.shiftKey) {
+          const enTabla = contenedor.contains(document.activeElement) || document.activeElement === document.body;
+          if (enTabla) {
+            ev.preventDefault();
+            st.seleccion = new Set(filasFiltradas().map(idDe));
+            if (!st.modoSeleccion) setModoSeleccion(true); else render();
+            return;
+          }
+        }
         if (tecla === 'z' && !ev.shiftKey && st.historial.length) {
           ev.preventDefault();
           deshacer(st.historial[st.historial.length - 1]);

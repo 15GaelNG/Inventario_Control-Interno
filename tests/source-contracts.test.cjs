@@ -1205,3 +1205,21 @@ test('IDs estandarizados (LIN-…): la ficha encuentra lo que las demás pestañ
   assert.match(read('src/config/Entidades.gs'), /'APP_NOTIFICACIONES': \{ prefijo: 'NTF'/);
 });
 
+test('Selección como en los equipos Apple: cuadro con el mouse, Shift+clic, Ctrl/Cmd+A y un Esc para salir', () => {
+  const dt = read('src/html/js/componentes/datatable.html');
+  // Cuadro (Finder): solo con mouse y solo en tablas con modoSeleccion (las de los compañeros no cambian)
+  assert.match(dt, /scrollTabla\.addEventListener\('pointerdown', \(ev\) => \{\s*if \(!cfg\.modoSeleccion \|\| ev\.pointerType !== 'mouse'/);
+  assert.match(dt, /modo: ev\.ctrlKey \|\| ev\.metaKey \? 'alternar' : \(ev\.shiftKey \? 'agregar' : 'reemplazar'\)/);
+  assert.match(dt, /const UMBRAL_MARCO = 6;/);
+  // La tabla no brinca al aparecer la barra de seleccionados, y el clic de soltar no abre la vista rápida
+  assert.match(dt, /function mantenerTablaQuieta_\(\)/);
+  assert.match(dt, /raiz\.addEventListener\('click', \(ev\) => \{\s*if \(!arrastre\.ignorarClic[\s\S]*?ev\.stopPropagation\(\);/);
+  // El arrastre por filas queda para el dedo (desde las casillas)
+  assert.match(dt, /if \(!st\.modoSeleccion \|\| ev\.button !== 0 \|\| ev\.shiftKey \|\| ev\.pointerType === 'mouse'\) return;/);
+  // Shift+clic fuera del modo: rango desde la última fila tocada (Mail)
+  assert.match(dt, /if \(!st\.modoSeleccion && ev\.shiftKey\) \{/);
+  // Ctrl/Cmd+A marca las filas filtradas; un Esc quita la selección y sale del modo
+  assert.match(dt, /if \(tecla === 'a' && cfg\.modoSeleccion && !ev\.shiftKey\)/);
+  assert.match(dt, /if \(!panel && !st\.editando && st\.modoSeleccion && enEsta\) setModoSeleccion\(false\);/);
+});
+

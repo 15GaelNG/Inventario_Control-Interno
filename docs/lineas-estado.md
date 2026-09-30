@@ -8,10 +8,11 @@ qué está hecho, cómo probarlo y qué sigue.
 
 **Dónde quedamos (cierre del 30-sep):**
 
-- Rama `emmanuel`: en GitHub hasta `10dc7eb`, 29-sep. En local hay 10 commits más, de `644ba14` a `120c713`, con
-  la ronda de cambios del 29 y 30-sep. Se suben a GitHub **al terminar la ronda**, como pidió el usuario. DEV está
-  al día con `emmanuel`.
-- `npm test`: 51 aprobadas, 0 fallidas.
+- Rama `emmanuel`: en GitHub hasta `10dc7eb`, 29-sep. En local hay más commits (desde `644ba14`) con la ronda de
+  cambios del 29 y 30-sep, los IDs estandarizados (§0s) y la selección tipo Apple (§0t). Se suben a GitHub **al
+  terminar la ronda**, como pidió el usuario. DEV está al día con `emmanuel`.
+- `npm test`: 53 aprobadas, 0 fallidas. Las pruebas de Ayrton se corren aparte: `node tests/ids.test.js` y
+  `node tests/entidades.test.js`.
 - **Reunión con Líneas (30-sep):** 12 temas con claves (E, M, R, L, P, C, A, AM, CO, RO, O, PA) en
   `migracion/PREGUNTAS_REUNION_LINEAS.md` de la carpeta de documentación. El usuario trae las respuestas una por
   una. Con ellas se ajustan:
@@ -27,6 +28,8 @@ qué está hecho, cómo probarlo y qué sigue.
   - `app.html`: `HistorialApp.alNavegar` en `navegarA` y `marcarTemaActual`;
   - `Index.html`: `notificaciones`, `lineas-panorama` y `historial-navegador`;
   - `Modulos.gs`: `panorama-lineas`.
+  - `Entidades.gs` (de Ayrton): se agregó `APP_NOTIFICACIONES` con prefijo `NTF`, y su prueba cuenta 27 hojas.
+  - DataTable: cuadro de selección con el mouse, Shift+clic, Ctrl/Cmd+A y Esc (§0t), todo dentro de `modoSeleccion`.
 
 
 ## 0. Diseño de la rama `jorge` (2026-09-24, commit `d2b316c`)
@@ -213,6 +216,56 @@ el sistema avisa (más adelante también por correo).
     y la misma vista.
 - Pruebas: `INICIO / FIN PLAN solo se capturan en el alta…` y `Notificaciones: adendum por vencer…` en
   `tests/source-contracts.test.cjs` (45/45). Falta la prueba en /dev.
+
+## 0t. Selección como en los equipos Apple (2026-09-30)
+
+Referencia: el Finder y Mail en Mac (cuadro de selección, Cmd+clic, Shift+clic) y las listas de iPhone y iPad (botón
+"Seleccionar", arrastrar para marcar varias). Todo vive en la opción `modoSeleccion` del DataTable, así que las tablas
+de los compañeros no cambian.
+
+| Cómo | Qué hace |
+|---|---|
+| Arrastrar con el mouse sobre la tabla | Dibuja un cuadro y marca las filas que toca; entra al modo selección |
+| Arrastrar con Ctrl/Cmd | Alterna las filas que toca, sin perder las demás |
+| Arrastrar con Shift | Agrega las filas que toca |
+| Ctrl/Cmd+clic | Marca o desmarca una fila |
+| Shift+clic | Rango desde la última fila tocada, aunque ese clic haya abierto la vista rápida |
+| Ctrl/Cmd+A | Todas las filas que pasan los filtros |
+| Esc | Quita la selección y sale del modo, en un solo paso |
+| Botón "Seleccionar" / "Listo" | Igual que en iPhone; con el dedo se arrastra sobre las casillas |
+
+- Un clic suelto sigue abriendo la vista rápida: el cuadro empieza después de mover 6 px.
+- El clic que llega al soltar el cuadro no llega al módulo (no abre la vista rápida).
+- Cerca del borde de arriba o de abajo, la tabla se desplaza sola.
+- Al marcar la primera fila aparecen las casillas y la barra de seleccionados. La página se desplaza lo mismo para
+  que la tabla no brinque bajo el cursor; antes, el cuadro perdía filas.
+- Probado en /dev: cuadro de 4 filas, clic = vista rápida, Shift+clic, Esc y Ctrl+A (1,584).
+
+## 0s. IDs estandarizados de Ayrton (2026-09-30)
+
+El 29-sep Ayrton migró la hoja de pruebas al modelo de IDs (`docs/ids.md`, `docs/ids-asignacion.md`):
+- cada pestaña tiene `ID` en la columna A con prefijo (`LIN-`, `ILI-`, `RLI-`, `CLI-`, `HIS-`, `DES-`…);
+- en las 8 pestañas cuya columna ya se llamaba `ID`, el valor anterior quedó en `ID APPSHEET`.
+
+El paso 3 (reescribir las referencias) **no se ha corrido** en la hoja de pruebas: las pestañas que citan a una línea
+siguen con el ID del AppSheet (`ID LINEA`, `ID_LINEA`, `ID Linea`, `ID_EQUIPO`, `IMEI` de Reactivación,
+`APP_EVIDENCIAS.ID_REGISTRO`, `REFS`). Por eso la ficha salía sin historial ni documentos.
+
+Qué se hizo, para que funcione antes y después del paso 3:
+- **Búsquedas con los dos IDs.** `LineasRepo.idsDeRegistro(id)` da `[ID, ID APPSHEET]` (mapa en caché 6 h);
+  `idActual(id)` convierte el del AppSheet al vigente. Historial, documentos, asignaciones, inspecciones, PDF y
+  Reactivación buscan con los dos. `LineasDatos.buscarFilasPorId` cae a `ID APPSHEET` si no encuentra el ID.
+- **Lo que el sistema nuevo registró antes de migrar** (APP_MOVIMIENTOS con `idsCambios` viejos) sigue ocultando
+  sus filas de la bitácora: se compara contra `ID`, `ID_CAMBIO` e `ID APPSHEET`.
+- **CAMBIOS LINEAS TELEFONICAS:** sus encabezados en blanco se ubican por la columna vecina de `ID_LINEA` y no por
+  posición (la columna `ID` nueva recorrió todo). La bitácora nueva escribe el mismo valor en `ID` y en `ID_CAMBIO`.
+- **PERSONAL DG:** la fórmula lo reconoce por el ID del AppSheet (`DG001`), también en el formulario.
+- **IDs nuevos:** `src/utils/Ids.gs` y `src/config/Entidades.gs` vienen de la rama `ayrton` sin cambios, más
+  `APP_NOTIFICACIONES` (`NTF`). `LineasDatos.agregarFilas` pone el ID con el prefijo de la pestaña si no viene (la
+  misma regla que `SheetUtils.insert`). Las llaves que el AppSheet sigue usando se llenan igual: `ID_DESECHO`,
+  `ID Historial`, `ID_Accesorio`, `ID_Movimiento`.
+- **No se tocó la hoja** ni `SheetUtils.insert` (los módulos de los compañeros lo reciben al unir con master).
+- **Probado en /dev:** el NUCO 0234 pasó de 0 a 129 movimientos y 9 documentos. Su inspección abre con la foto.
 
 ## 0r. Modo selección, Atrás/Adelante, vista rápida conectada y "Última …" más rápida (2026-09-30)
 
