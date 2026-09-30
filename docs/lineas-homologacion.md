@@ -195,6 +195,69 @@ resulta que sí es deriva, `COLABORADORES` manda; si son cosas distintas, la col
 `RESPONSABLE`, `JEFE DIRECTO`, `DIRECTOR` y `RAZON SOCIAL` **no existen en `COLABORADORES`**
 (que solo tiene `NOMBRE COMPLETO`), así que esas no son copias de nadie.
 
+### Probado contra `COLABORADORES ACTUALIZADO`: no mejora, y eso es la respuesta
+
+En el laboratorio hay un catálogo nuevo, `COLABORADORES ACTUALIZADO`: **15,229 filas y 26
+columnas** contra las 3,627 y 8 del viejo, e incluye justo las que faltaban (`DIRECTOR`,
+`JEFE DIRECTO`, `RAZON SOCIAL`, `TELEFONO`, `STATUS`, `FECHA DE BAJA`,
+`N. EMPLEADO ANTERIOR`). Parecía la solución al 44%. **No lo es:**
+
+| | Emparejan | |
+|---|---|---|
+| `COLABORADORES` (viejo) | 709 | 44% |
+| `COLABORADORES ACTUALIZADO` | 729 | 45% |
+| + rescate por `N. EMPLEADO ANTERIOR` | **732** | **45%** |
+
+**+23 líneas.** Y no es porque al catálogo le falte gente: tiene **14,236 números de empleado
+únicos**, casi cuatro veces el viejo. El problema es la columna `NO EMPLEADO` de
+`LINEAS TELEFONICAS`.
+
+De las 886 líneas que no emparejan:
+
+| Qué dice la celda | Filas | |
+|---|---|---|
+| `NO SE ENCUENTRA EN CH` | **596** | alguien escribió "no está en Capital Humano" **dentro** del campo |
+| `N/A` | 168 | |
+| `-` | 11 | |
+| **Subtotal: texto, no un número** | **775** | **87% de las fallas** |
+| `AC01553 / AC01935`, `AC02531 / AC02919 / AC00707 / IPQ01103`… | ~111 | **varias personas en una celda**, separadas por " / " |
+
+Ningún catálogo puede arreglar eso. Las 775 son captura, y las ~111 multivaluadas son el
+modelo: una línea compartida entre varias personas necesita **un renglón por asignación**, no
+una celda con diagonales. Es el mismo problema que el grupo repetido de `SEGUNDO
+RESPONSABLE`, resuelto a mano y peor.
+
+El rescate por nombre tampoco sirve: de las 886, solo **8 (1%)** tienen su `RESPONSABLE` en
+el catálogo. Y se entiende viendo qué traen esas filas en esa columna: `DS0054`,
+`PV-1007 (08/04/2026)` — códigos y fechas donde debería ir un nombre.
+
+### Qué columnas SÍ se pueden sincronizar desde el catálogo
+
+Donde el vínculo existe, es correcto: `RESPONSABLE` contra `NOMBRE COMPLETO` coincide en
+**98%**. La persona está bien identificada. Pero no todas las columnas se comportan igual:
+
+| Columna de `LINEAS` | De acuerdo (catálogo nuevo) | Veredicto |
+|---|---|---|
+| `RESPONSABLE` ← `NOMBRE COMPLETO` | **98%** | sincronizable |
+| `DEPARTAMENTO` | **93%** | sincronizable |
+| `PUESTO` | 83% | probablemente |
+| `AREA` | 68% | revisar antes |
+| `OFICINA / DESARROLLO` | 61% | revisar antes |
+| `DIRECTOR` | 45% | no |
+| `JEFE DIRECTO` | 39% | no |
+| **`SEDE`** | **25%** | **no: significan cosas distintas** |
+| **`RAZON SOCIAL`** | **8%** | **no: significan cosas distintas** |
+
+**`SEDE` siguió en 25% con el catálogo nuevo**, igual que con el viejo. Eso descarta que sea
+un catálogo viejo: es una diferencia de significado. Lo mismo `RAZON SOCIAL` con 8% — casi
+seguro la empresa del **contrato de la línea** contra la empresa que **nomina** a la persona,
+el mismo patrón que ya se documentó en `HOLOGRAMAS`.
+
+> **Al indexar el catálogo nuevo hay que elegir renglón:** tiene **993 números de empleado
+> repetidos** y **11,941 filas en `STATUS = BAJA`** contra 3,288 activas. La medición de
+> arriba prefiere la fila `ACTIVO` cuando hay varias. Sin esa regla, una línea puede acabar
+> copiando el puesto que la persona tenía en un empleo anterior.
+
 ## La recomendación
 
 **Para el viernes: tratar Líneas como todo lo demás.** Asignarle `LIN-…` con `NUCO` como
