@@ -2370,8 +2370,26 @@
     const PROVEEDORES_HOLOGRAMA = ['EOX', 'EDENRED', 'N/A'];
     const COMBUSTIBLES_HOLOGRAMA = ['MAGNA', 'PREMIUM', 'DIESEL', 'GASOLINA', 'TODOS LOS PRODUCTOS'];
 
-    function abrirAgregarHolograma(vResumen, completo) {
+    async function abrirAgregarHolograma(vResumen, completo) {
       const cuerpo = abrirCapturaVehiculo('credit-card', 'HOLOGRAMA', 'Nuevo holograma', 'Folio ' + vResumen.FOLIO);
+      cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
+      let catalogos;
+      try {
+        catalogos = await callServer('apiCatalogosHologramas', state.token);
+      } catch (err) {
+        cuerpo.innerHTML = '<p class="error-msg">No se pudo cargar: ' + escaparHtml(err.message) + '</p>';
+        return;
+      }
+      if (document.getElementById('veh-modal-captura').hidden) return; // se cerró mientras cargaba
+      cuerpo.innerHTML = '';
+      // RAZON SOCIAL del vehículo es la empresa DUEÑA de la unidad; la del holograma es
+      // la empresa del CONTRATO con la gasolinera -- son cosas distintas (ver comentario
+      // de HologramasService.DEL_CATALOGO), así que NO se autollena de golpe como los
+      // demás datos del vehículo: se sugiere como opción ya elegida solo si por
+      // casualidad coincide con una de las 3 del catálogo, si no, se deja en blanco y la
+      // elige quien captura (por eso es su propio campo, no algo fijo en el payload).
+      const razonVehiculo = String(completo['RAZON SOCIAL'] || '').trim().toUpperCase();
+      const razonSugerida = catalogos.razonesSociales.indexOf(razonVehiculo) !== -1 ? razonVehiculo : '';
       const form = Formulario.crear(cuerpo, {
         ancho: 'medio', columnas: 2,
         campos: [
@@ -2381,6 +2399,7 @@
           { id: 'ESTATUS_EOX', etiqueta: 'Estatus', tipo: 'lista', requerido: true, opciones: ['HABILITADO', 'DESHABILITADO'] },
           { id: 'COMBUSTIBLE', etiqueta: 'Producto autorizado', tipo: 'lista', requerido: true, opciones: COMBUSTIBLES_HOLOGRAMA,
             ayuda: 'Lo que puede cargar la tarjeta, no el tipo del vehículo' },
+          { id: 'RAZON_SOCIAL', etiqueta: 'Razón social del contrato', tipo: 'lista', requerido: true, opciones: catalogos.razonesSociales },
           { id: 'AUTORIZADO_PESOS', etiqueta: 'Autorizado en pesos', tipo: 'numero', min: 0, requerido: true },
           { id: 'AUTORIZADO_LITROS', etiqueta: 'Autorizado en litros', tipo: 'numero', min: 0, requerido: true },
           { id: 'SOLICITUD', etiqueta: 'Solicitud firmada', tipo: 'archivo', acepta: 'application/pdf,image/png,image/jpeg',
@@ -2392,7 +2411,7 @@
             TIPO_UNIDAD: 'FLOTA', ESTATUS_VEHICULO: 'UTILITARIO', FOLIO: vResumen.FOLIO,
             SERIE_VEHICULO: completo['SERIE VEHICULO'] || '', PLACA: completo['PLACA'] || '',
             MARCA: completo['MARCA'] || '', LINEA: completo['LINEA VEHICULO'] || '', MODELO: completo['MODELO'] || '',
-            RAZON_SOCIAL: completo['RAZON SOCIAL'] || '', DEPARTAMENTO: completo['DEPARTAMENTO'] || '',
+            DEPARTAMENTO: completo['DEPARTAMENTO'] || '',
             RESPONSABLE: completo['RESPONSABLE VEHICULO'] || '', CAPACIDAD: completo['CAPACIDAD COMBUSTIBLE (LTS)'] || '',
           }, valores);
           await callServer('apiRegistrarHolograma', state.token, payload, {
@@ -2403,6 +2422,7 @@
         alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'hologramas'); },
       });
       form.setOpciones('ESTATUS_EOX', ['HABILITADO', 'DESHABILITADO'], 'HABILITADO');
+      form.setOpciones('RAZON_SOCIAL', catalogos.razonesSociales, razonSugerida);
     }
 
     /** A diferencia de las otras 4, esto reutiliza el wizard REAL de Inspección Vehicular
