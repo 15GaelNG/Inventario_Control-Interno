@@ -105,8 +105,11 @@ function armar() {
   const hs = {};
   hs['VEHICULOS'] = hoja('VEHICULOS', COL_VEH, vehiculos);
 
+  // ESTATUS SENSOR va en la firma de la hoja desde el 30/09/2026, cuando se le quitó
+  // ID_SENSOR: sin esta columna, getSheetByColumns no encuentra la pestaña.
   hs['INSTALACION DE SENSORES'] = hoja('INSTALACION DE SENSORES',
-    ['ID_SENSOR', 'SERIE SENSOR'].concat(Object.keys(comoSensores(vehiculos[0], ''))),
+    ['ID_SENSOR', 'SERIE SENSOR', 'ESTATUS SENSOR']
+      .concat(Object.keys(comoSensores(vehiculos[0], ''))),
     [
       // al día en todo MENOS el departamento: se quedó con el viejo
       Object.assign({ ID_SENSOR: 'SEN-1', 'SERIE SENSOR': 'S1' }, comoSensores(vehiculos[0], 'POST VENTA')),
@@ -142,9 +145,13 @@ function armar() {
       'OFICINA / DESARROLLO': 'OFICINA 1', RESPONSABLE: 'ANA',
     }]);
 
+  // KILOMETRAJE también entró a su firma al quitarle ID_INCIDENCIA.
   hs['INCIDENCIAS'] = hoja('INCIDENCIAS',
-    ['ID_INCIDENCIA', 'FOLIO', 'NOMBRE MECANICO', 'DEPARTAMENTO', 'MODELO'],
-    [{ ID_INCIDENCIA: 'INC-1', FOLIO: 'CTA0001', 'NOMBRE MECANICO': 'LUIS', DEPARTAMENTO: 'CONSTRUCCION', MODELO: '2022' }]);
+    ['ID_INCIDENCIA', 'FOLIO', 'NOMBRE MECANICO', 'KILOMETRAJE', 'DEPARTAMENTO', 'MODELO'],
+    [{
+      ID_INCIDENCIA: 'INC-1', FOLIO: 'CTA0001', 'NOMBRE MECANICO': 'LUIS',
+      KILOMETRAJE: 120000, DEPARTAMENTO: 'CONSTRUCCION', MODELO: '2022',
+    }]);
 
   hs['LOG_RELACIONES'] = hoja('LOG_RELACIONES',
     ['FECHA', 'TIPO', 'HOJA', 'CLAVE', 'COLUMNA', 'TENIA', 'QUEDO'], []);
