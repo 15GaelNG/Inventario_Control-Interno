@@ -69,7 +69,7 @@ function cargar(hojas) {
   vm.runInContext(lee('utils', 'Ids.gs'), ctx);
   vm.runInContext(lee('MigracionIds.gs') +
     '\nthis.api = { renombrarLlaveAnterior, migColumnaAnterior_, migColumna_,' +
-    ' revisarAntesDeMigrar, migDeducidoDonde_, ENCABEZADOS_DEDUCIDOS };', ctx);
+    ' revisarAntesDeMigrar, migDeducidoDonde_, ENCABEZADOS_DEDUCIDOS, auditarIds };', ctx);
   return ctx.api;
 }
 
@@ -315,6 +315,36 @@ console.log('\nY la deducción se COMPRUEBA: una columna impostora no se nombra'
   ok(rep.indexOf('PROBLEMAS') !== -1,
      'lo reporta como PROBLEMA, así que detiene la corrida que escribe');
   console.log('     (sin esta comprobación, el nombre equivocado se habría escrito solo)');
+}
+
+console.log('\nEl orden de los IDs se mide por su TIEMPO, no por su parte aleatoria');
+{
+  // La auditoría reportó "7 IDs fuera del orden de la hoja" en el libro del equipo, y era
+  // falso. Los 7 pares tenían el MISMO tiempo (mismos 8 caracteres) y solo diferían en los
+  // 6 de azar: nacieron en el mismo milisegundo, en un lote de altas. Comparar el id
+  // completo hacía que el azar decidiera, así que un lote normal salía como falla.
+  const PARES = [
+    ['CLI-66AQBBDGR31FXM', 'CLI-66AQBBDGQ4TGEK'],
+    ['CLI-66AQBE3VYF2EZC', 'CLI-66AQBE3V0D86CS'],
+    ['CLI-66AQG0VFZD8ZMT', 'CLI-66AQG0VF22G9TW'],
+    ['CLI-66B1122KD9VKC0', 'CLI-66B1122K5EZCN4'],
+  ];
+  const tiempoDe = (v) => String(v).split('-')[1].slice(0, 8);
+
+  const porEntero = PARES.filter(([a, b]) => b < a).length;
+  const porTiempo = PARES.filter(([a, b]) => tiempoDe(b) < tiempoDe(a)).length;
+  ok(porEntero === PARES.length,
+     'los ' + PARES.length + ' pares reales salían desordenados comparando el id entero');
+  ok(porTiempo === 0, 'y ninguno lo está comparando solo el tiempo: es el mismo milisegundo');
+
+  // Y que siga viendo un desorden DE VERDAD, que es para lo que existe la comprobación.
+  ok(tiempoDe('CLI-66AQBBDGQ4TGEK') < tiempoDe('CLI-66B1122KD9VKC0'),
+     'un id de otro día sigue detectándose como fuera de orden');
+
+  const fuente = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'MigracionIds.gs'), 'utf8');
+  ok(/const tiempoDe = \(v\) => String\(v\)\.split\('-'\)\[1\]\.slice\(0, 8\)/.test(fuente),
+     'y la auditoría usa esa comparación, no el id completo');
 }
 
 console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');

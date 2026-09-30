@@ -1255,8 +1255,20 @@ function auditarIds(opciones) {
     const vistos = {};
     let repetidos = 0;
     ids.forEach((v) => { if (v) { if (vistos[v]) repetidos++; else vistos[v] = true; } });
+    // Se compara SOLO la parte del tiempo del id (los 8 caracteres despues del prefijo),
+    // no el id completo. Antes se comparaba entero, y como los ultimos 6 caracteres son
+    // AZAR, dos renglones nacidos en el mismo milisegundo salian "fuera de orden" segun
+    // cual azar resulto menor. Eso reportaba 7 fallas falsas en CAMBIOS LINEAS TELEFONICAS
+    // del libro del equipo: los 7 pares tenian el MISMO tiempo (66AQBBDG y compania) y
+    // solo diferian en el azar. Un lote de altas hecho en el mismo segundo es lo normal,
+    // no un sintoma.
+    const tiempoDe = (v) => String(v).split('-')[1].slice(0, 8);
     let desordenados = 0;
-    for (let i = 1; i < ids.length; i++) if (ids[i] && ids[i - 1] && ids[i] < ids[i - 1]) desordenados++;
+    for (let i = 1; i < ids.length; i++) {
+      if (!ids[i] || !ids[i - 1]) continue;
+      if (!Ids.tieneForma(ids[i]) || !Ids.tieneForma(ids[i - 1])) continue;
+      if (tiempoDe(ids[i]) < tiempoDe(ids[i - 1])) desordenados++;
+    }
 
     if (vacios) fallas.push(h.hoja + ': ' + vacios + ' renglones CON DATOS y sin ID');
     if (malos) fallas.push(h.hoja + ': ' + malos + ' IDs con forma inválida');
