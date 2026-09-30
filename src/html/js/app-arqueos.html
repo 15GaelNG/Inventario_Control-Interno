@@ -438,14 +438,31 @@
     document.getElementById(prefijo + '-' + slugCampo('DIFERENCIA')).value = formatearMoneda(diferencia);
 
     let sumaAudit = 0;
+    let contestadas = 0;
     (auditItems || []).forEach((item) => {
       const el = document.getElementById(prefijo + '-' + slugCampo(item.clave));
       const seleccion = el ? el.value : '';
+      if (seleccion) contestadas++;
       const opcion = (item.opciones || []).find((o) => o.texto === seleccion);
       sumaAudit += opcion ? opcion.puntos : 0;
     });
+    const total = (auditItems || []).length || 17;
     const calificacion = Math.round((sumaAudit / 17) * 100) / 100;
     document.getElementById(prefijo + '-' + slugCampo('CALIFICACION_AUDITORIA_FINAL')).value = calificacion + '%';
+    actualizarBadgeCalificacionArqueo(prefijo, contestadas, total, calificacion);
+  }
+
+  /** Insignia "Calificación" de la cabecera (ver imagen de referencia: Líneas
+   * Telefónicas usa el mismo patrón) — mientras no se haya contestado ningún
+   * reactivo se ve "—"; ya con al menos uno, muestra el % en vivo. */
+  function actualizarBadgeCalificacionArqueo(prefijo, contestadas, total, calificacion) {
+    const valor = document.getElementById(prefijo + '-calif-badge-valor');
+    const barra = document.getElementById(prefijo + '-calif-badge-barra');
+    const nota = document.getElementById(prefijo + '-calif-badge-nota');
+    if (!valor || !barra || !nota) return;
+    valor.textContent = contestadas ? calificacion + '%' : '—';
+    barra.style.width = (total ? (contestadas / total) * 100 : 0) + '%';
+    nota.textContent = contestadas + ' de ' + total + ' puntos calificados';
   }
 
 

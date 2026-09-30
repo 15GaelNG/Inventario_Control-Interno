@@ -333,6 +333,8 @@
               { t: 'Tipo', r: (a) => escaparHtml(a.TIPO_ARQUEO || '—') },
               { t: 'Total general', r: (a) => (a.TOTAL_GENERAL === '' || a.TOTAL_GENERAL === null || a.TOTAL_GENERAL === undefined) ? '—' : formatearMoneda(a.TOTAL_GENERAL) },
               { t: 'Diferencia', r: (a) => (a.DIFERENCIA === '' || a.DIFERENCIA === null || a.DIFERENCIA === undefined) ? '—' : formatearMoneda(a.DIFERENCIA) },
+              { t: 'Calificación', r: (a) => (a.CALIFICACION === '' || a.CALIFICACION === null || a.CALIFICACION === undefined) ? '—' : escaparHtml(a.CALIFICACION + '%') },
+              { t: 'Archivo', r: (a) => a.FORMATO_ARQUEO ? '<a href="' + escaparHtml(a.FORMATO_ARQUEO) + '" target="_blank" rel="noopener">📎 Ver PDF</a>' : '<span class="empty-state" style="margin:0">Sin archivo</span>' },
             ], arqueos, 'Sin arqueos registrados para esta caja chica.'),
           },
           {
