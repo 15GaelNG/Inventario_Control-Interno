@@ -741,6 +741,26 @@ const InspeccionesService = (function () {
       { titulo: 'Niveles', peso: 10, piezas: ['ACEITE MOTOR', 'LIQUIDO FRENOS'] },
       { titulo: 'Batería', peso: 5, piezas: ['TERMINALES CON SARRO', 'DERRAME LIQUIDO / MAL OLOR', 'BATERIA INFLADA'] },
     ],
+    // ITALIKA DM250: mismo bug que MOTOCARRO MUEVETEC -- "Carburador", "Clutch" y
+    // "Transmisión/cadena" (con N/A) aparecen en el texto plano justo después de
+    // "Niveles 10%" (que solo trae Aceite de motor/Liquido de frenos, sin N/A),
+    // pero son piezas mecánicas de "Sistema mecánico". Se reagrupan ahí. El campo
+    // de "Posapies" usa el nombre interno [PASAPIES] (typo de la plantilla, no mío).
+    // Confirmado contra su propio PDF crudo.
+    'ITALIKA DM250': [
+      { titulo: 'Documentación', peso: 5, piezas: ['GAFETTE', 'TARJETA CIRCULACION', 'LICENCIA', 'POLIZA SEGURO', 'VERIFICACION', 'KARDEX'] },
+      { titulo: 'Cristalería', peso: 10, piezas: ['FAROS DELANTEROS', 'CALAVERAS TRASERAS', 'DIRECCIONALES', 'RETROVISOR IZQUIERDO', 'RETROVISOR DERECHO'] },
+      { titulo: 'Latonería y pintura', peso: 5, piezas: ['SALPICADERA DELANTERA', 'PROTECTORES / EMBELLECEDORES DE BARRAS', 'SALPICADERA TRASERA / GUARDAFANGO', 'PROTECTOR / CARCASA FARO', 'PROTECTOR / EMBELLECEDOR LADO DERECHO', 'PROTECTOR / EMBELLECEDOR LADO IZQUIERDO', 'SLIDER PROTECTOR DERECHO', 'SLIDER PROTECTOR IZQUIERDO', 'TAPA DERECHA', 'TAPA IZQUIERDA', 'ESCAPE', 'PASAPIES', 'MANUBRIO'] },
+      { titulo: 'Neumáticos', peso: 15, piezas: ['RINES', 'TUERCAS / BIRLOS'] },
+      { titulo: 'Inventarios', peso: 10, piezas: ['LLAVE CRUZ', 'DADO'] },
+      { titulo: 'Cerraduras', peso: 5, piezas: ['SWITCH', 'CERRADURA TAPON TANQUE GASOLINA'] },
+      { titulo: 'Limpieza', peso: 5, piezas: ['ASIENTO', 'EXTERIOR DE UNIDAD'] },
+      { titulo: 'Interiores', peso: 5, piezas: ['ASIENTO DE CONDUCTOR', 'ASIENTO DE COPILOTO'] },
+      { titulo: 'Sistemas interiores', peso: 10, piezas: ['MANDOS / BOTONERA VIDRIOS Y SEGUROS', 'CLUSTER / TABLERO', 'LUCES ALTAS', 'LUCES BAJAS', 'CUARTOS', 'DIRECCIONALES IZQUIERDAS', 'DIRECCIONALES DERECHAS', 'INTERMITENTES', 'NIEBLEROS / OTROS', 'STOP', 'CLAXON', 'PUÑO ACELERADOR'] },
+      { titulo: 'Sistema mecánico', peso: 15, piezas: ['FRENOS DELANTEROS', 'FRENOS TRASEROS', 'AMORTIGUADORES DELANTEROS', 'AMORTIGUADOR TRASERO', 'SOPORTES DE MOTOR', 'CARBURADOR', 'CLUTCH', 'TRANSMISION / CADENA'] },
+      { titulo: 'Niveles', peso: 10, piezas: ['ACEITE MOTOR', 'LIQUIDO FRENOS'] },
+      { titulo: 'Batería', peso: 5, piezas: ['TERMINALES CON SARRO', 'DERRAME LIQUIDO / MAL OLOR', 'BATERIA INFLADA'] },
+    ],
   };
   // KWID usa el mismo formato que AUTOS, pieza por pieza (confirmado contra el PDF
   // crudo de ambas plantillas: mismo Maletero, mismo Limpiaparabrisas trasero, todo
