@@ -1113,7 +1113,7 @@ test('Tablas con modo selección, gestos Atrás/Adelante, vista rápida conectad
   assert.match(dt, /tbody\.addEventListener\('pointermove', \(ev\) => \{\s*if \(!arrastre\.inicio/);
   assert.match(dt, /setModoSeleccion, enModoSeleccion: \(\) => st\.modoSeleccion,/);
   const lineas = read('src/html/js/lineas.html');
-  assert.match(lineas, /seleccionable: true, modoSeleccion: true, seleccionDrive: true \}, config\)/);
+  assert.match(lineas, /seleccionable: true, modoSeleccion: true, seleccionDrive: true, accionesDeTabla: false,/);
   // Historial del navegador
   const hist = read('src/html/historial-navegador.html');
   assert.match(hist, /google\.script\.history/);
@@ -1406,4 +1406,21 @@ test('Selección como en Google Drive y "Mandar a cancelación" (usuario, 30-sep
   assert.match(resg, /if \(cancelando\[claveCancelacion_\(f\['ID'\], numero\)\]\)/);
   // Una línea suelta conserva su número al confirmar la cancelación
   assert.match(resg, /if \(!LineasRepo\.TIPOS_CON_EQUIPO\[tipo\]\) return \{ 'ESTATUS LINEA': 'CANCELADA' \};/);
+});
+
+test('Ajustes a la selección estilo Drive: contador simple, clic fuera, sin Copiar/Exportar/Abrir ficha, documentos separados', () => {
+  const dt = read('src/html/js/componentes/datatable.html');
+  assert.match(dt, /const cuenta = `\$\{filas\.length\} \$\{plural\(filas\.length, 'seleccionado'\)\}`;/);
+  assert.doesNotMatch(dt, /1 seleccionado · \$\{etiquetaDe/);
+  assert.match(dt, /document\.addEventListener\('pointerdown', alPresionarFuera\);/);
+  assert.match(dt, /cfg\.accionesDeTabla === false \? \[\] : \[accionCopiar\]/);
+  assert.match(dt, /class="dt-menu-titulo">\$\{esc\(a\.tituloGrupo\)\}/);
+  const lineas = read('src/html/js/lineas.html');
+  assert.doesNotMatch(lineas, /texto: 'Abrir ficha'/);
+  assert.match(lineas, /texto: 'Ver última inspección', maximo: 1, enBarra: false, grupo: 'inspeccion', tituloGrupo: 'Inspección'/);
+  assert.match(lineas, /texto: 'Nueva responsiva', maximo: 1, enBarra: false, grupo: 'responsiva', tituloGrupo: 'Responsiva'/);
+  assert.match(lineas, /conservarSeleccion: \(el\) => !!el\.closest\('#ln-listado \.ln-cuadro, #ln-modal-captura, \.ln-menu-flotante'\)/);
+  // Documentos, historial, bandeja…: sin columna de Acciones; sus botones van a la barra y al clic derecho
+  assert.match(dt, /const hayAccionesFila = accionesFila\.length > 0 && !\(cfg\.seleccionDrive && cfg\.seleccionable\);/);
+  assert.match(dt, /visible: \(filas\) => !a\.visible \|\| a\.visible\(filas\[0\]\), alHacer: \(filas\) => a\.alHacer\(filas\[0\]\),/);
 });

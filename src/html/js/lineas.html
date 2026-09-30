@@ -300,7 +300,12 @@
       }
       // Selección como en Google Drive (30-sep): un clic selecciona y arriba salen sus acciones (⋮ con las demás, también
       // con clic derecho); doble clic abre; Ctrl/Shift para varias; el cuadro se arrastra desde fuera de las filas
-      return DataTable.crear(contenedor, Object.assign({ tamanoPagina: 50, seleccionable: true, modoSeleccion: true, seleccionDrive: true }, config));
+      // Sin Copiar ni Exportar selección en el menú (usuario, 30-sep; Ctrl+C sigue copiando). La selección se conserva
+      // al usar las tarjetas, la captura o el ⋮ de la ficha; cualquier otro clic fuera de la tabla la quita
+      return DataTable.crear(contenedor, Object.assign({
+        tamanoPagina: 50, seleccionable: true, modoSeleccion: true, seleccionDrive: true, accionesDeTabla: false,
+        conservarSeleccion: (el) => !!el.closest('#ln-listado .ln-cuadro, #ln-modal-captura, .ln-menu-flotante'),
+      }, config));
     }
 
     /**
@@ -362,8 +367,9 @@
       const menu = document.createElement('div');
       menu.className = 'dt-popover dt-menu ln-menu-flotante';
       menu.setAttribute('role', 'menu');
-      menu.innerHTML = items.map((it, i) => (it.separador && i ? '<hr>' : '') + '<button type="button" data-i="' + i + '"' + (it.peligro ? ' class="dt-peligro"' : '') + '>' +
-        icono(it.icono) + ' ' + esc(it.texto) + '</button>').join('');
+      menu.innerHTML = items.map((it, i) => ((it.separador || it.titulo) && i ? '<hr>' : '') +
+        (it.titulo ? '<div class="dt-menu-titulo">' + esc(it.titulo) + '</div>' : '') +
+        '<button type="button" data-i="' + i + '"' + (it.peligro ? ' class="dt-peligro"' : '') + '>' + icono(it.icono) + ' ' + esc(it.texto) + '</button>').join('');
       document.body.appendChild(menu);
       pintarIconos(menu);
       const r = ancla.getBoundingClientRect();
@@ -1688,7 +1694,6 @@
           activo: () => detallesAbiertos, alHacer: (f) => (detallesAbiertos && panelAbierto ? panelAbierto.cerrar() : mostrarDetalles(tipo, f[0])) };
         const estatus = { icono: 'toggle-right', texto: 'Cambiar estatus', maximo: 1, grupo: 'ver', visible: operar,
           alHacer: (f) => abrirCambioEstatus(fichaDeFila(tipo, f[0])) };
-        const ficha = { icono: 'maximize-2', texto: 'Abrir ficha', maximo: 1, enBarra: false, grupo: 'abrir', alHacer: (f) => abrir(tipo, f[0].id) };
         const editar = { icono: 'pencil', texto: 'Editar información', maximo: 1, enBarra: false, grupo: 'abrir', visible: operar, alHacer: (f) => abrirEditor(f[0].id) };
         const historial = { icono: 'history', texto: 'Historial', maximo: 1, enBarra: false, grupo: 'linea', alHacer: (f) => abrirEnPestana(tipo, f[0].id, 'historial') };
         if (modulo === 'equipos') {
@@ -1699,11 +1704,16 @@
               alHacer: (f) => abrirMasiva(ACCION_REASIGNAR, f) },
             { icono: 'phone-off', texto: 'Mandar líneas a cancelación', titulo: 'Sus líneas pasan a la bandeja de cancelaciones; los equipos no cambian', minimo: 2,
               grupo: 'mover', visible: conLinea, alHacer: (f) => abrirCancelacion(f) },
-            ficha, editar,
-            { icono: 'clipboard-check', texto: 'Nueva inspección', maximo: 1, enBarra: false, grupo: 'docs', visible: operar, alHacer: (f) => abrirCaptura('INSPECCION', { equipoId: f[0].id }) },
-            { icono: 'signature', texto: 'Nueva responsiva', maximo: 1, enBarra: false, grupo: 'docs', visible: operar, alHacer: (f) => abrirCaptura('RESPONSIVA', { equipoId: f[0].id }) },
-            { icono: 'file-text', texto: 'Última responsiva', maximo: 1, enBarra: false, grupo: 'docs', visible: (f) => tieneNuco(f[0]), alHacer: (f) => abrirUltimoDesdeMenu('RESPONSIVA', f[0].id) },
-            { icono: 'file-search', texto: 'Última inspección', maximo: 1, enBarra: false, grupo: 'docs', visible: (f) => tieneNuco(f[0]), alHacer: (f) => abrirUltimoDesdeMenu('INSPECCION', f[0].id) },
+            editar,
+            // Documentos separados por tipo, con su título, para no confundir "nueva" con "ver la última" (usuario, 30-sep)
+            { icono: 'clipboard-check', texto: 'Nueva inspección', maximo: 1, enBarra: false, grupo: 'inspeccion', tituloGrupo: 'Inspección', visible: operar,
+              alHacer: (f) => abrirCaptura('INSPECCION', { equipoId: f[0].id }) },
+            { icono: 'file-search', texto: 'Ver última inspección', maximo: 1, enBarra: false, grupo: 'inspeccion', tituloGrupo: 'Inspección', visible: (f) => tieneNuco(f[0]),
+              alHacer: (f) => abrirUltimoDesdeMenu('INSPECCION', f[0].id) },
+            { icono: 'signature', texto: 'Nueva responsiva', maximo: 1, enBarra: false, grupo: 'responsiva', tituloGrupo: 'Responsiva', visible: operar,
+              alHacer: (f) => abrirCaptura('RESPONSIVA', { equipoId: f[0].id }) },
+            { icono: 'file-text', texto: 'Ver última responsiva', maximo: 1, enBarra: false, grupo: 'responsiva', tituloGrupo: 'Responsiva', visible: (f) => tieneNuco(f[0]),
+              alHacer: (f) => abrirUltimoDesdeMenu('RESPONSIVA', f[0].id) },
             { icono: 'phone-off', texto: 'Mandar línea a cancelación', titulo: 'La línea pasa a la bandeja de cancelaciones; el equipo no cambia', maximo: 1, enBarra: false,
               grupo: 'linea', visible: conLinea, alHacer: (f) => abrirCancelacion(f) },
             historial];
@@ -1712,7 +1722,7 @@
           { icono: 'phone-off', texto: 'Mandar a cancelación', titulo: 'Pasan a la bandeja de cancelaciones de quien las tramita; el equipo no cambia', grupo: 'mover',
             visible: operar, alHacer: (f) => abrirCancelacion(f) },
           { icono: 'smartphone', texto: 'Ir al equipo', maximo: 1, grupo: 'mover', visible: (f) => !!f[0].equipoId, alHacer: (f) => abrir('equipo', f[0].equipoId) },
-          ficha, editar, historial];
+          editar, historial];
       }
 
       // "Detalles" = la vista rápida como el panel "Ver detalles" de Drive: abierto, sigue a la fila seleccionada
@@ -2194,8 +2204,8 @@
           { icono: 'archive', texto: 'Mandar a resguardo', alHacer: () => abrirResguardo([r]) },
           { icono: 'user-round-pen', texto: 'Reasignar', alHacer: () => abrirMasiva(ACCION_REASIGNAR, [r]) },
           r.numero ? { icono: 'phone-off', texto: 'Mandar línea a cancelación', alHacer: () => abrirCancelacion([r]) } : null,
-          tieneNuco(r) ? { icono: 'file-text', texto: 'Última responsiva', separador: true, alHacer: () => abrirUltimoDesdeMenu('RESPONSIVA', id) } : null,
-          tieneNuco(r) ? { icono: 'file-search', texto: 'Última inspección', alHacer: () => abrirUltimoDesdeMenu('INSPECCION', id) } : null,
+          tieneNuco(r) ? { icono: 'file-search', texto: 'Ver última inspección', titulo: 'Documentos', alHacer: () => abrirUltimoDesdeMenu('INSPECCION', id) } : null,
+          tieneNuco(r) ? { icono: 'file-text', texto: 'Ver última responsiva', alHacer: () => abrirUltimoDesdeMenu('RESPONSIVA', id) } : null,
           { icono: 'history', texto: 'Historial', separador: !tieneNuco(r), alHacer: () => mostrarPestanaFicha('historial') },
         ] : [
           { icono: 'phone-off', texto: 'Mandar a cancelación', alHacer: () => abrirCancelacion([r]) },
@@ -2310,7 +2320,7 @@
           '<div class="card ln-card ln-historial">' +
           '<div class="ln-historial-cabecera"><h3>' + icono('folder-check') + ' Inspecciones y responsivas (' + miles(filas.length) + ')</h3></div>' +
           '<p class="ln-tenue ln-docs-ayuda">Las registradas en AppSheet o en el sistema nuevo y las guardadas en la carpeta NUCOS de Drive. ' +
-          'Con los botones de cada fila ves la inspección, abres el PDF o la carpeta.</p>' +
+          'Selecciona una fila: en la barra (o con clic derecho) ves la inspección, abres el PDF o la carpeta.</p>' +
           (filas.length ? '<div class="ln-docs-tabla"></div>' : '<p class="empty-state">Este registro no tiene inspecciones ni responsivas.</p>') + '</div>';
         const conFecha = (d) => (d ? fecha(d.fecha) || 'Sin fecha' : 'Ninguna');
         const marcar = tilesKpi($('.ln-docs-kpis', cont), [
@@ -2326,7 +2336,7 @@
           idTabla: 'lineas-documentos-v1',
           exportar: false,
           tamanoPagina: 25,
-          seleccionable: false,
+          // Seleccionable (30-sep): sus botones (ver inspección, PDF, carpeta) van en la barra y el clic derecho
           ordenInicial: { campo: 'fecha', dir: 'desc' },
           textoVacio: 'Sin documentos con esos filtros',
           etiquetaFila: (d) => d.documento + ' · ' + (fecha(d.fecha) || 'Sin fecha'),
@@ -3521,7 +3531,7 @@
           idCampo: 'id',
           idTabla: 'lineas-historial-v2',
           tamanoPagina: 25,
-          seleccionable: false,
+          // Seleccionable (30-sep): Ver detalle, Ver inspección y Ver PDF van en la barra y el clic derecho
           ordenInicial: { campo: 'fecha', dir: 'desc' },
           textoVacio: 'Sin movimientos con esos filtros',
           exportar: { nombreArchivo: 'Historial ' + nombre, nombreHoja: 'Historial' },
@@ -3582,7 +3592,7 @@
           idCampo: 'id',
           idTabla: 'lineas-asignaciones-v1',
           tamanoPagina: 25,
-          seleccionable: false,
+          // Seleccionable para que "Ir al número / Ir al NUCO" salga en la barra y el clic derecho (sin columna, 30-sep)
           textoVacio: porNuco ? 'La bitácora no registra números para este NUCO' : 'La bitácora no registra equipos para este número',
           exportar: { nombreArchivo: (porNuco ? 'Números del NUCO ' : 'Equipos de la línea ') + a.clave, nombreHoja: 'Asignaciones' },
           etiquetaFila: (p) => (porNuco ? 'Número ' + (p.numero || 'sin línea') : 'NUCO ' + (p.nuco || 'sin equipo')),
@@ -4197,7 +4207,8 @@
           exportar: exportarBase('ACCESORIOS', 'Inventario de accesorios'),
           etiquetaFila: (a) => a.nombre,
           detalle: { titulo: (a) => a.nombre, contenidoExtra: movimientosEnPanel },
-          ayuda: 'El ojo en Acciones muestra el artículo y sus movimientos. Las flechas registran entradas y salidas.',
+          ayuda: 'Selecciona un artículo: en la barra (o con clic derecho) "Ver detalle" muestra el artículo y sus movimientos, y ' +
+            '"Registrar entrada" / "Registrar salida" sus movimientos.',
           alCambiarFiltros: (f) => { filtrosAcc = f || {}; if (marcarKpi) marcarKpi(filtrosAcc); },
           accionesFila: [
             { icono: 'arrow-down-to-line', titulo: 'Registrar entrada', alHacer: (a) => abrirModalMovimiento(a.id, 'ENTRADA') },

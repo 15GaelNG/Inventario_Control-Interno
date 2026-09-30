@@ -84,6 +84,17 @@ Pedido del usuario: tres lugares para las opciones (una fila, varias filas y la 
   CANCELACION y POR FIRMAR en Cancelaciones (dato de prueba).
 - **Sin probar en vivo:** gestos con el dedo (el navegador integrado manda clics de mouse) y "Última responsiva /
   inspección" desde el menú (abre otra pestaña).
+- **Ajustes pedidos por el usuario (30-sep, noche), probados en /dev:**
+  - la barra dice solo "1 seleccionado" (sin el NUCO) y no tiene barra de desplazamiento visible;
+  - un clic fuera de la tabla quita la selección (no en menús, diálogos, paneles, avisos, tarjetas ni la captura:
+    `conservarSeleccion`);
+  - sin "Copiar", "Exportar selección a Excel" ni "Abrir ficha" en los menús (`accionesDeTabla: false`; el doble clic
+    abre y Ctrl+C sigue copiando);
+  - documentos del menú separados con título: INSPECCIÓN (Nueva / Ver última) y RESPONSIVA (Nueva / Ver última);
+    en el ⋮ de la ficha, "Documentos" con Ver última inspección / responsiva;
+  - Documentos, Historial, Asignaciones, Accesorios y la bandeja: **sin columna de Acciones**; sus botones (Ver
+    detalle, Ver inspección, Ver PDF, Abrir carpeta, Ir al NUCO, Registrar entrada/salida, Ver equipo) salen en la
+    barra y el clic derecho con una fila seleccionada (DataTable los convierte con `maximo: 1`).
 
 ## 0x. PARA VENTA y PARA DESECHO como Mandar a resguardo (2026-09-30)
 

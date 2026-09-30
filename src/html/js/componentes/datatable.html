@@ -92,6 +92,8 @@
     flex-wrap: nowrap; overflow-x: auto; padding: 4px 8px; border-radius: 10px; background: var(--color-primary-soft);
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 18%, transparent); }
   .dt-barra-sel > * { flex-shrink: 0; }
+  .dt-barra-sel { scrollbar-width: none; }
+  .dt-barra-sel::-webkit-scrollbar { display: none; }
   .dt-barra-sel[hidden] { display: none; }
   .dt-barra-sel .dt-sel-cuenta { font-weight: 600; font-size: 13px; margin: 0 6px 0 2px; white-space: nowrap; }
   .dt-barra-sel button { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; font-size: 12.5px; white-space: nowrap; }
@@ -113,6 +115,8 @@
   .dt-popover.dt-menu button:hover, .dt-popover.dt-menu button:focus-visible { background: var(--color-bg); }
   .dt-popover.dt-menu button.dt-peligro { color: var(--color-danger); }
   .dt-popover.dt-menu hr { border: 0; border-top: 1px solid var(--color-border); margin: 4px 0; }
+  .dt-popover.dt-menu .dt-menu-titulo { padding: 6px 10px 2px; font-size: 11px; font-weight: 600; letter-spacing: .04em;
+    text-transform: uppercase; color: var(--color-text-muted); }
 
   /* Columna de acciones por fila: fija a la DERECHA, siempre a la vista aunque haya scroll */
   .dt .dt-col-acciones {
@@ -308,7 +312,11 @@
    *                                            // - el cuadro se arrastra solo desde fuera de las filas
    *                                            // - dedo: tocar → cfg.alTocarFila(fila); mantener presionado = modo selección
    *                                            // - cfg.alCambiarSeleccion(filas) avisa cada cambio de selección
-   *                                            // Acción: { enBarra, maximo, grupo, visible(filas), activo() } además de las de siempre
+   *                                            // Acción: { enBarra, maximo, grupo, tituloGrupo, visible(filas), activo() }
+   *                                            // - accionesDeTabla: false quita Copiar y Exportar selección del menú
+   *                                            // - accionesFila se muestran en la barra y el clic derecho (sin columna)
+   *                                            // - un clic fuera de la tabla quita la selección, salvo en menús, diálogos,
+   *                                            //   paneles, avisos o lo que diga cfg.conservarSeleccion(elemento)
    *     alEditar: async (fila, campo, valorNuevo) => filaActualizada,   // lanza error para rechazar
    *     alEliminar: async (filas) => {},        // si se omite, no aparece "Eliminar"
    *     motivoSinEliminar: 'Solo administradores pueden eliminar',
@@ -625,11 +633,18 @@
       const accionEliminar = cfg.alEliminar ? [{ icono: 'eliminar', texto: 'Eliminar seleccionados', clase: 'dt-btn-eliminar', propia: true, peligro: true, alHacer: (filas, boton) => eliminarFilas(filas, boton), enBarra: false, grupo: 'eliminar' }] : [];
       // Estilo Drive: primero las del módulo (en su orden), luego las de la tabla dentro del ⋮
       const accionesSeleccion = cfg.seleccionDrive
-        ? [].concat(cfg.accionesSeleccion.map((a) => Object.assign({ enBarra: true }, a)), [accionCopiar],
-          cfg.exportar ? [{ icono: 'exportar', texto: 'Exportar selección a Excel', propia: true, enBarra: false, grupo: 'tabla', alHacer: (filas) => exportarFilas(filas, null) }] : [],
+        ? [].concat(cfg.accionesSeleccion.map((a) => Object.assign({ enBarra: true }, a)),
+          // Los botones de la fila (Ver detalle, Ver PDF, Ir al NUCO…) pasan a la barra y al clic derecho con una fila
+          cfg.seleccionable ? accionesFila.filter((a) => a.clase !== 'dt-btn-eliminar-fila').map((a) => ({
+            icono: a.icono, texto: a.texto || a.titulo, titulo: a.titulo, peligro: !!a.peligro, maximo: 1, enBarra: true, grupo: 'fila',
+            visible: (filas) => !a.visible || a.visible(filas[0]), alHacer: (filas) => a.alHacer(filas[0]),
+          })) : [],
+          cfg.accionesDeTabla === false ? [] : [accionCopiar],
+          cfg.exportar && cfg.accionesDeTabla !== false ? [{ icono: 'exportar', texto: 'Exportar selección a Excel', propia: true, enBarra: false, grupo: 'tabla', alHacer: (filas) => exportarFilas(filas, null) }] : [],
           accionEliminar)
         : [].concat([accionCopiar], cfg.accionesSeleccion, accionEliminar);
-      const hayAccionesFila = accionesFila.length > 0;
+      // Estilo Drive (con casillas): sin columna de Acciones; sus botones están en la barra y el clic derecho
+      const hayAccionesFila = accionesFila.length > 0 && !(cfg.seleccionDrive && cfg.seleccionable);
       const conMenuFila = !!cfg.seleccionDrive;   // ⋮ al final de cada fila (estilo Drive)
 
       const st = {
@@ -1068,7 +1083,7 @@
         barra.style.minHeight = $('.dt-toolbar').offsetHeight + 'px';   // mismo alto que lo que tapa
         const aplican = accionesAplicables(filas);
         const enBarra = aplican.filter((a) => a.enBarra);
-        const cuenta = filas.length === 1 && cfg.etiquetaFila ? `1 seleccionado · ${etiquetaDe(filas[0])}` : `${filas.length} ${plural(filas.length, 'seleccionado')}`;
+        const cuenta = `${filas.length} ${plural(filas.length, 'seleccionado')}`;
         barra.innerHTML = botonIcono('secondary dt-sel-icono', 'x', 'Quitar la selección (Esc)', 'data-sel-quitar') +
           `<span class="dt-sel-cuenta">${esc(cuenta)}</span>` +
           enBarra.map((a) => `<button type="button" class="${a.peligro ? 'danger' : 'secondary'}${a.activo && a.activo() ? ' activo' : ''}" data-accion-sel="${accionesSeleccion.indexOf(a)}"${a.titulo ? ` title="${esc(a.titulo)}"` : ''}>${ic(a.icono)} ${esc(a.texto)}</button>`).join('') +
@@ -1090,7 +1105,8 @@
         if (!lista.length) return;
         let grupo;
         const html = lista.map((a, n) => {
-          const separador = n && a.grupo !== grupo ? '<hr>' : '';
+          const nuevoGrupo = n === 0 || a.grupo !== grupo;
+          const separador = (n && nuevoGrupo ? '<hr>' : '') + (nuevoGrupo && a.tituloGrupo ? `<div class="dt-menu-titulo">${esc(a.tituloGrupo)}</div>` : '');
           grupo = a.grupo;
           return `${separador}<button type="button" data-menu-accion="${accionesSeleccion.indexOf(a)}" class="${a.peligro ? 'dt-peligro' : ''}"${a.titulo ? ` title="${esc(a.titulo)}"` : ''}>${ic(a.icono)} ${esc(a.texto)}</button>`;
         }).join('');
@@ -2341,16 +2357,28 @@
         }
       };
 
+      // Estilo Drive: presionar fuera de la tabla quita la selección (no en menús, diálogos, paneles ni avisos)
+      const FUERA_QUE_CONSERVA = '.dt-popover, .dt-panel, .dt-panel-fondo, .modal-backdrop, [role="dialog"], [role="menu"], .cbx-lista, .notif-toast-contenedor';
+      const alPresionarFuera = (ev) => {
+        if (desmontado() || !cfg.seleccionDrive || !st.seleccion.size || !visible()) return;
+        const t = ev.target;
+        if (!(t instanceof Element) || contenedor.contains(t) || t.closest(FUERA_QUE_CONSERVA)) return;
+        if (cfg.conservarSeleccion && cfg.conservarSeleccion(t)) return;
+        if (st.modoSeleccion) setModoSeleccion(false); else limpiarSeleccion();
+      };
+
       const alRedimensionar = () => { if (!desmontado()) { ajustarAlto(); aplicarFijadas(); } };
 
       function limpiarGlobales() {
         cerrarPopover();
         cerrarPanel();
         document.removeEventListener('mousedown', alClicFuera);
+        document.removeEventListener('pointerdown', alPresionarFuera);
         document.removeEventListener('keydown', alTecla);
         window.removeEventListener('resize', alRedimensionar);
       }
       document.addEventListener('mousedown', alClicFuera);
+      document.addEventListener('pointerdown', alPresionarFuera);
       document.addEventListener('keydown', alTecla);
       window.addEventListener('resize', alRedimensionar);
 
