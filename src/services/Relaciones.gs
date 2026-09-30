@@ -73,6 +73,65 @@ const Relaciones = (function () {
  * para los 60,000 renglones viejos y moría para todo lo nuevo.
  */
 const MAPA = {
+    // ------------------------------------------------------------------ CAJA CHICA
+    //
+    // Las dos copias son BITACORA, y eso no es una suposicion. Medido el 30/09/2026 en el
+    // laboratorio, ya con la llave foranea puesta (145/145 y 9/9, cero huerfanas): de las
+    // 6 columnas que ARQUEOS copia, cuatro no difieren en NINGUN renglon, PUESTO difiere
+    // en 1 y MONTO CAJA en 4. Cinco celdas de 870.
+    //
+    // Y esas cinco son historia correcta, no deriva: un arqueo es un conteo hecho por una
+    // persona, con un puesto y un monto, en una fecha. Las 4 de MONTO CAJA quedaron
+    // explicadas una por una con los renglones de INCREMENTOS. Propagar aqui destruiria
+    // 5 registros buenos para arreglar 0 problemas, asi que `propagar` las salta y
+    // `revisar` las reporta como DIFERENCIA_HISTORICA sin tocarlas.
+    //
+    // Entonces para que estan aqui, si no se propagan: para que revisar() las vigile. Antes
+    // de esto Caja Chica no tenia NINGUNA deteccion de deriva ni de huerfanas, y para que
+    // la decision "esto se congela" quede escrita donde la vea el siguiente que lo lea.
+    'CAJAS CHICAS': {
+      spreadsheet: () => Config.SPREADSHEET_IDS.CAJACHICA(),
+      hoja: 'CAJAS CHICAS',
+      // 'ID CCH' es el consecutivo 1,2,3 que usa la gente. Es dato de negocio, no un id
+      // de AppSheet (ver llaveEsDato en Entidades.gs), asi que conserva su nombre.
+      llaveDeNegocio: 'ID CCH',
+      copias: [
+        {
+          nombre: 'ARQUEOS',
+          llaveForanea: 'ID CAJA CHICA',
+          // Verificada unica en produccion, el laboratorio y el libro compartido el
+          // 30/09/2026. Sin 'ID', igual que todas las demas.
+          firma: ['ID ARQUEO', 'TOTAL GENERAL'],
+          tipo: 'bitacora',
+          claveOrigen: 'ID CCH',
+          clave: 'ID CCH',
+          // Las 6 que ArqueosService.crear copia de la caja al dar de alta el arqueo.
+          columnas: {
+            'RESPONSABLE DE CAJA CHICA': 'RESPONSABLE',
+            'PUESTO DE RESPONSABLE': 'PUESTO',
+            'DEPARTAMENTO': 'AREA / DEPARTAMENTO',
+            'EMPRESA ORIGEN': 'RAZON SOCIAL',
+            'METODO DE REEMBOLSO': 'METODO REEMBOLSO',
+            'MONTO ACTUAL': 'MONTO CAJA',
+          },
+        },
+        {
+          nombre: 'INCREMENTOS',
+          llaveForanea: 'ID CAJA CHICA',
+          firma: ['CANTIDAD ANTERIOR', 'CANTIDAD ACTUALIZADA'],
+          tipo: 'bitacora',
+          claveOrigen: 'ID CCH',
+          clave: 'ID CCH',
+          // Vacio a proposito: esta hoja NO copia ningun atributo del catalogo. Sus
+          // columnas son TIPO, CANTIDAD, CANTIDAD ANTERIOR/ACTUALIZADA, FECHA y QUIEN
+          // REALIZO, y todas son del movimiento, no de la caja. Esta en el MAPA para que
+          // revisar() detecte sus huerfanas: un incremento que apunta a una caja que ya
+          // no existe es un problema real, y hasta hoy nada lo miraba.
+          columnas: {},
+        },
+      ],
+    },
+
     VEHICULOS: {
       spreadsheet: () => Config.SPREADSHEET_IDS.VEHICULOS(),
       hoja: 'VEHICULOS',

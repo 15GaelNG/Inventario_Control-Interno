@@ -167,6 +167,39 @@ function armar() {
       KILOMETRAJE: 120000, DEPARTAMENTO: 'CONSTRUCCION', MODELO: '2022',
     }]);
 
+  // ------------------------------------------------------------------ CAJA CHICA
+  // La caja 1 tiene $10,000 y a ANA. Su arqueo la retrata con $8,000 y con el PUESTO que
+  // ANA tenía ese día: las dos diferencias son historia, no deriva, y por eso ARQUEOS es
+  // bitácora. El incremento de $2,000 es justamente lo que explica la diferencia.
+  hs['CAJAS CHICAS'] = hoja('CAJAS CHICAS',
+    ['ID', 'ID CCH', 'RESPONSABLE DE CAJA CHICA', 'PUESTO DE RESPONSABLE', 'DEPARTAMENTO',
+      'EMPRESA ORIGEN', 'METODO DE REEMBOLSO', 'MONTO ACTUAL', 'ESTATUS'],
+    [{
+      ID: 'CCH-00000000AAAAAA', 'ID CCH': '1', 'RESPONSABLE DE CAJA CHICA': 'ANA',
+      'PUESTO DE RESPONSABLE': 'GERENTE', DEPARTAMENTO: 'CONSTRUCCION',
+      'EMPRESA ORIGEN': 'CM', 'METODO DE REEMBOLSO': 'TRANSFERENCIA',
+      'MONTO ACTUAL': 10000, ESTATUS: 'VIGENTE',
+    }]);
+
+  hs['ARQUEOS'] = hoja('ARQUEOS',
+    ['ID', 'ID CCH', 'ID ARQUEO', 'ID CAJA CHICA', 'TOTAL GENERAL', 'RESPONSABLE',
+      'PUESTO', 'AREA / DEPARTAMENTO', 'RAZON SOCIAL', 'METODO REEMBOLSO', 'MONTO CAJA'],
+    [{
+      ID: 'ARQ-00000000AAAAAA', 'ID CCH': '1', 'ID ARQUEO': '2026_1_001',
+      'ID CAJA CHICA': 'CCH-00000000AAAAAA', 'TOTAL GENERAL': 8000, RESPONSABLE: 'ANA',
+      PUESTO: 'SUPERVISORA', 'AREA / DEPARTAMENTO': 'CONSTRUCCION', 'RAZON SOCIAL': 'CM',
+      'METODO REEMBOLSO': 'TRANSFERENCIA', 'MONTO CAJA': 8000,
+    }]);
+
+  hs['INCREMENTOS'] = hoja('INCREMENTOS',
+    ['ID', 'ID CCH', 'ID CAJA CHICA', 'TIPO', 'CANTIDAD', 'CANTIDAD ANTERIOR',
+      'CANTIDAD ACTUALIZADA', 'FECHA', 'QUIEN REALIZO'],
+    [{
+      ID: 'MON-00000000AAAAAA', 'ID CCH': '1', 'ID CAJA CHICA': 'CCH-00000000AAAAAA',
+      TIPO: 'INCREMENTO', CANTIDAD: 2000, 'CANTIDAD ANTERIOR': 8000,
+      'CANTIDAD ACTUALIZADA': 10000, FECHA: '2026-09-01', 'QUIEN REALIZO': 'ANA',
+    }]);
+
   hs['LOG_RELACIONES'] = hoja('LOG_RELACIONES',
     ['FECHA', 'TIPO', 'HOJA', 'CLAVE', 'COLUMNA', 'TENIA', 'QUEDO'], []);
   return hs;
@@ -192,7 +225,9 @@ function cargar(hs) {
     },
     Utilities: { formatDate: () => '2026-09-29' },
     Session: { getScriptTimeZone: () => 'America/Mexico_City' },
-    Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'SS' } },
+    // Los dos apuntan al mismo libro falso: aquí lo que importa es que el MAPA pueda
+    // resolver su spreadsheet, no en qué archivo vive cada familia.
+    Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'SS', CAJACHICA: () => 'SS' } },
     SheetUtils: {
       getSheetByColumns: (ssId, firma) => {
         const cand = Object.keys(hs).filter((n) => firma.every((c) => hs[n].enc.indexOf(c) !== -1));
@@ -523,6 +558,40 @@ console.log('\n14. Si la fila tiene FK de OTRO dueño, su llave de negocio NO ma
   R.propagar('VEHICULOS', vehiculos[0], { DEPARTAMENTO: 'OOAM ADMINISTRATIVO' });
   ok(hs['INSTALACION DE SENSORES'].valor('SEN-3', 'ID', 'DEPARTAMENTO') === 'POST VENTA',
      'no se tocó: su FK dice que es de otro vehículo, aunque la serie coincida');
+}
+
+// ------------------------------------------------------------------ CAJA CHICA
+//
+// La familia entró al MAPA como bitácora, y estas dos pruebas son la razón de que eso
+// importe: un arqueo retrata la caja del día en que se contó. Medido en el laboratorio el
+// 30/09/2026, de las 6 columnas que copia, cuatro no difieren en ningún renglón, PUESTO
+// difiere en 1 y MONTO CAJA en 4 — y esas 4 las explica INCREMENTOS una por una.
+
+console.log('\n15. Editar una caja chica NO reescribe sus arqueos');
+{
+  const hs = armar();
+  const R = cargar(hs);
+  R.propagar('CAJAS CHICAS', { 'ID CCH': '1', ID: 'CCH-00000000AAAAAA' },
+    { 'MONTO ACTUAL': 15000, 'PUESTO DE RESPONSABLE': 'DIRECTORA' });
+  ok(hs['ARQUEOS'].valor('ARQ-00000000AAAAAA', 'ID', 'MONTO CAJA') === 8000,
+     'el arqueo conserva los $8,000 que se contaron ese día');
+  ok(hs['ARQUEOS'].valor('ARQ-00000000AAAAAA', 'ID', 'PUESTO') === 'SUPERVISORA',
+     'y el puesto que tenía la responsable entonces');
+  console.log('     (si esto se propagara, el arqueo dejaría de servir como evidencia)');
+}
+
+console.log('\n16. Pero revisar() sí las REPORTA, que es para lo que están en el MAPA');
+{
+  const hs = armar();
+  const R = cargar(hs);
+  const r = R.revisar({ corregir: true });   // incluso pidiendo corregir
+  ok(hs['ARQUEOS'].valor('ARQ-00000000AAAAAA', 'ID', 'MONTO CAJA') === 8000,
+     'ni con corregir:true se toca una bitácora');
+  const hist = logDe(hs, 'DIFERENCIA_HISTORICA', 'MONTO CAJA');
+  ok(hist.length === 1, 'queda en el log como DIFERENCIA_HISTORICA');
+  ok(!!r['ARQUEOS'], 'y ARQUEOS aparece en el reporte: antes Caja Chica no se vigilaba');
+  ok(!!r['INCREMENTOS'],
+     'INCREMENTOS también, aunque no copie columnas: sirve para ver sus huérfanas');
 }
 
 console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');

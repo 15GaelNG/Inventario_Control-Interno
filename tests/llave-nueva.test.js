@@ -240,12 +240,27 @@ console.log('\n8. Cada hijo escribe su LLAVE FORÁNEA, no solo la llave de negoc
        : 'los ' + Object.keys(HIJOS).length + ' hijos de Vehículos y Caja Chica escriben su FK');
 
   // Y que el resolvedor compartido siga entregándola: si alguien le quita la llaveForanea
-  // al MAPA, los cinco que delegan se quedarían sin FK y la revisión de arriba no lo vería.
+  // al MAPA, los que delegan se quedarían sin FK y la revisión de arriba no lo vería.
+  //
+  // Se comprueba copia por copia en vez de contar, para que agregar una familia al MAPA no
+  // rompa la prueba por el número — pero sí la rompa si a la copia nueva se le olvida su FK.
   const rel = lee('services', 'Relaciones.gs');
-  const cuantas = (rel.match(/llaveForanea:/g) || []).length;
-  ok(cuantas === 5, 'las 5 copias del MAPA declaran su llaveForanea (encontré ' + cuantas + ')');
+  const COPIAS = rel.match(/nombre: '([^']+)'/g) || [];
+  const sinFk = [];
+  COPIAS.forEach((m) => {
+    const nombre = m.replace(/nombre: '|'/g, '');
+    const re = new RegExp("nombre: '" + nombre.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') +
+      "',\\s*\\n\\s*llaveForanea: '");
+    if (!re.test(rel)) sinFk.push(nombre);
+  });
+  ok(sinFk.length === 0,
+     sinFk.length
+       ? 'copias del MAPA sin llaveForanea: ' + sinFk.join(', ')
+       : 'las ' + COPIAS.length + ' copias del MAPA declaran su llaveForanea');
   ok(/datos\[copia\.llaveForanea\]\s*=/.test(rel),
      'y datosParaNuevo la pone en los datos del registro nuevo');
+  ok(/if \(fk\)/.test(rel) && /porFk\+\+/.test(rel),
+     'y propagar() empareja por la llave foránea, no solo por la de negocio');
 }
 
 console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');
