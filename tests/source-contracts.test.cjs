@@ -1400,9 +1400,11 @@ test('Selección como en Google Drive y "Mandar a cancelación" (usuario, 30-sep
   // Ficha: solo Nueva inspección y Nueva responsiva a la vista, el resto en ⋮; la línea también (con equipo sin capturas)
   assert.match(lineas, /data-ln-ficha-mas="' \+ esc\(tipo\)/);
   assert.doesNotMatch(lineas, /data-ln-estatus=|data-ln-editar=/);
-  // "Ver carpeta en Drive" del equipo va en el ⋮ (sección Documentos), no a la vista
+  // "Ver carpeta en Drive" del equipo va en el ⋮, sola (fuera de Documentos); mismo nombre en la tabla Documentos
   assert.match(lineas, /botonesFicha\('data-equipo-id', id, 'equipo', puedeOperar, '', true\)/);
-  assert.match(lineas, /texto: 'Ver carpeta en Drive',/);
+  assert.match(lineas, /texto: 'Ver carpeta en Drive', separador: true,/);
+  assert.match(lineas, /\.concat\(drive, documentos, \[/);
+  assert.doesNotMatch(lineas, /Abrir carpeta/);
   assert.match(lineas, /botonesFicha\('data-linea-id', id, 'linea', puedeOperarLinea && !e,/);
   assert.match(lineas, /function abrirMenuFicha\(boton\)/);
   // Mandar a cancelación: cliente, API y servidor; la pestaña Resguardos solo muestra renglones con equipo

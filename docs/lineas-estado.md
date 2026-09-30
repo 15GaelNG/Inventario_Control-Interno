@@ -93,13 +93,14 @@ Pedido del usuario: tres lugares para las opciones (una fila, varias filas y la 
   - documentos del menú separados con título: INSPECCIÓN (Nueva / Ver última) y RESPONSIVA (Nueva / Ver última);
     en el ⋮ de la ficha, "Documentos" con Ver última inspección / responsiva;
   - Documentos, Historial, Asignaciones, Accesorios y la bandeja: **sin columna de Acciones**; sus botones (Ver
-    detalle, Ver inspección, Ver PDF, Abrir carpeta, Ir al NUCO, Registrar entrada/salida, Ver equipo) salen en la
+    detalle, Ver inspección, Ver PDF, Ver carpeta en Drive, Ir al NUCO, Registrar entrada/salida, Ver equipo) salen en la
     barra y el clic derecho con una fila seleccionada (DataTable los convierte con `maximo: 1`);
   - Documentos e Historial: **una fila a la vez** (`seleccionUnica: true`: Ctrl/Shift se portan como clic normal, sin
     cuadro ni Ctrl+A), porque no tienen acciones masivas.
 - **Ficha con dos botones** (usuario, 30-sep): en el equipo solo se ven **Nueva inspección** y **Nueva responsiva**
-  y ⋮ con Cambiar estatus, Editar información, Mandar a resguardo, Reasignar, Mandar línea a cancelación, Documentos
-  (Ver carpeta en Drive, Ver última inspección / responsiva) e Historial. Sin permiso de operar, el ⋮ del equipo solo
+  y ⋮ con Cambiar estatus, Editar información, Mandar a resguardo, Reasignar, Mandar línea a cancelación, Ver carpeta
+  en Drive (sola, separada), Documentos (Ver última inspección / responsiva) e Historial. La tabla Documentos usa el
+  mismo nombre ("Ver carpeta en Drive"; antes "Abrir carpeta en Drive"). Sin permiso de operar, el ⋮ del equipo solo
   trae Documentos e Historial. General → Equipo ya no
   muestra "Última responsiva / inspección" (solo en ⋮). La **línea** también tiene ⋮ (Cambiar estatus, Editar
   información, Mandar a cancelación, Historial), aunque esté en un equipo: con equipo se ve "Ver equipo" + ⋮ (sus

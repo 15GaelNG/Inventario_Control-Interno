@@ -2201,10 +2201,11 @@
           { icono: 'toggle-right', texto: 'Cambiar estatus', alHacer: () => abrirCambioEstatus() },
           { icono: 'pencil', texto: 'Editar información', alHacer: () => abrirEditor(id) },
         ];
+        // La carpeta de Drive va sola, separada de inspección y responsiva (usuario, 30-sep)
         const carpeta = fichaActual && fichaActual.id === id ? fichaActual.carpetaDriveId : null;
+        const drive = carpeta ? [{ icono: 'folder-open', texto: 'Ver carpeta en Drive', separador: true,
+          alHacer: () => window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(carpeta), '_blank', 'noopener') }] : [];
         const documentos = [
-          carpeta ? { icono: 'folder-open', texto: 'Ver carpeta en Drive',
-            alHacer: () => window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(carpeta), '_blank', 'noopener') } : null,
           tieneNuco(r) ? { icono: 'file-search', texto: 'Ver última inspección', alHacer: () => abrirUltimoDesdeMenu('INSPECCION', id) } : null,
           tieneNuco(r) ? { icono: 'file-text', texto: 'Ver última responsiva', alHacer: () => abrirUltimoDesdeMenu('RESPONSIVA', id) } : null,
         ].filter(Boolean);
@@ -2213,7 +2214,7 @@
           { icono: 'archive', texto: 'Mandar a resguardo', separador: true, alHacer: () => abrirResguardo([r]) },
           { icono: 'user-round-pen', texto: 'Reasignar', alHacer: () => abrirMasiva(ACCION_REASIGNAR, [r]) },
           r.numero ? { icono: 'phone-off', texto: 'Mandar línea a cancelación', alHacer: () => abrirCancelacion([r]) } : null,
-        ]) : []).concat(documentos, [
+        ]) : []).concat(drive, documentos, [
           { icono: 'history', texto: 'Historial', separador: true, alHacer: () => mostrarPestanaFicha('historial') },
         ]) : comunes.concat([
           r.numero ? { icono: 'phone-off', texto: 'Mandar a cancelación', separador: true, alHacer: () => abrirCancelacion([r]) } : null,
@@ -2355,7 +2356,7 @@
             { icono: 'eye', titulo: 'Ver inspección', visible: (d) => d.documento === 'Inspección', alHacer: (d) => abrir('inspeccion', d.id) },
             { icono: 'file-text', titulo: 'Ver PDF', visible: (d) => !!d.pdfId,
               alHacer: (d) => window.open('https:\/\/drive.google.com/file/d/' + encodeURIComponent(d.pdfId) + '/view', '_blank', 'noopener') },
-            { icono: 'folder-open', titulo: 'Abrir carpeta en Drive', visible: (d) => !!d.carpetaId,
+            { icono: 'folder-open', titulo: 'Ver carpeta en Drive', visible: (d) => !!d.carpetaId,
               alHacer: (d) => window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(d.carpetaId), '_blank', 'noopener') },
             { icono: 'file-plus', titulo: 'Generar PDF', visible: (d) => !!d.pdfPendiente, alHacer: (d) => generarPdfPendiente(d.tipoPdf, d.id, d.carpetaId) },
           ],
