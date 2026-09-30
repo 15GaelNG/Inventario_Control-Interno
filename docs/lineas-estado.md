@@ -191,6 +191,38 @@ el sistema avisa (más adelante también por correo).
 - Pruebas: `INICIO / FIN PLAN solo se capturan en el alta…` y `Notificaciones: adendum por vencer…` en
   `tests/source-contracts.test.cjs` (45/45). Falta la prueba en /dev.
 
+## 0r. Modo selección, Atrás/Adelante, vista rápida conectada y "Última …" más rápida (2026-09-30)
+
+- **Modo selección** (opción `modoSeleccion` del DataTable, compartido; avisar al unir):
+  - Las casillas quedan ocultas hasta tocar "Seleccionar", como en iOS.
+  - En el modo, el clic en cualquier parte de la fila la marca, arrastrar marca o desmarca varias y Shift+clic marca
+    un rango.
+  - Ctrl/Cmd+clic entra al modo desde una fila.
+  - "Listo" o Esc sale y quita la selección.
+  - Con el dedo se arrastra desde la columna de casillas (el resto de la fila desplaza la tabla).
+  - Las tablas que no piden la opción no cambian. Líneas la activa en todas sus tablas (`tablaLineas`).
+  - Corrección incluida: `render()` reescribe `className` de la tabla; ahora conserva las clases del modo.
+- **Sin columna de Acciones** en Líneas Telefónicas: se quitaron el ojo y el botón de ampliar. Un clic en la fila abre
+  la vista rápida (que trae "Abrir ficha completa", así también funciona en celular) y el doble clic la ficha. En
+  modo selección, o con Ctrl/Cmd/Shift, el clic marca filas y no abre nada.
+- **Atrás / Adelante del navegador** (`html/historial-navegador.html`, `HistorialApp`):
+  - Usa `google.script.history`. Lo disparan el gesto de dos dedos del touchpad en Chrome, los botones del mouse y
+    Alt+←/→.
+  - Cada cambio de módulo es un paso (una línea en `navegarA` de `app.html`, compartido).
+  - En Líneas Telefónicas cada ficha que se abre es otro paso (`pasoHistorial`, `restaurarPaso`). La pestaña solo
+    actualiza el paso actual.
+  - Al restaurar no se guardan pasos nuevos (`abrir(…, sinHistorial)`, `cerrarDetalle(true)`).
+  - Probado en /dev: Atrás desde la ficha regresa a la lista y Adelante la reabre. Atrás entre módulos no se pudo
+    probar con el navegador integrado (no manda Alt+← al navegador).
+- **Vista rápida conectada:** en la de un equipo, el número de su línea es un botón que cambia a la vista rápida de
+  la línea; en la de la línea, "NUCO …" regresa al equipo. Probado con NUCO 0012 ↔ Línea 4421090805.
+- **"Última responsiva / inspección" más rápida:**
+  - Servidor: `archivosNuco(nuco, soloTipo)` recorre solo INSPECCIONES o CARTA RESPONSIVA, no todo el NUCO. Caché
+    aparte de 10 min; si el NUCO completo ya estaba en caché, se usa ese.
+  - Cliente: la respuesta se pide antes del clic y se guarda 9 min (`ultimoNucos`, `precargarUltimosNucos`). Se pide
+    al abrir la vista rápida o la ficha y al dejar el mouse 150 ms sobre el botón.
+  - La pestaña nueva dice "Buscando el documento…" en vez de quedarse en blanco.
+
 ## 0q. Navegación de la ficha, fotos en NUCOS y tema (2026-09-30)
 
 - **Clic y doble clic** en la tabla de Líneas Telefónicas: un clic en la fila abre la vista rápida y el doble clic la

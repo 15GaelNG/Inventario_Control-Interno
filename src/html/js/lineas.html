@@ -110,14 +110,45 @@
       abrirArchivoAppSheet(b);
     }, true);
 
-    /** "Última responsiva" / "Última inspección": la más reciente de la carpeta del NUCO en NUCOS (solo consulta). */
+    /**
+     * "Última responsiva" / "Última inspección": la más reciente de la carpeta del NUCO en NUCOS (solo consulta).
+     * Para que abra rápido, la respuesta se pide antes de dar clic (al abrir la vista rápida o la ficha, o al dejar el
+     * mouse sobre el botón) y se guarda 9 min en memoria; el servidor ya solo recorre la rama de ese tipo.
+     */
+    const ultimosNucos = {};
+    function ultimoNucos(id, tipo) {
+      const k = id + '|' + tipo;
+      const c = ultimosNucos[k];
+      if (c && Date.now() - c.en < 9 * 60 * 1000) return c.promesa;
+      const promesa = llamar('apiLineasUltimoDocumentoNuco', id, tipo);
+      ultimosNucos[k] = { en: Date.now(), promesa: promesa };
+      promesa.catch(() => { if (ultimosNucos[k] && ultimosNucos[k].promesa === promesa) delete ultimosNucos[k]; });
+      return promesa;
+    }
+    function precargarUltimosNucos(id) {
+      if (id) ['RESPONSIVA', 'INSPECCION'].forEach((t) => ultimoNucos(id, t).catch(() => { /* se avisa si le dan clic */ }));
+    }
+    let esperaUltimo = null;
+    document.addEventListener('pointerover', (ev) => {
+      const b = ev.target.closest && ev.target.closest('[data-ln-ultimo]');
+      clearTimeout(esperaUltimo);
+      if (b) esperaUltimo = setTimeout(() => ultimoNucos(b.dataset.id, b.dataset.lnUltimo).catch(() => {}), 150);
+    });
+
     async function abrirUltimoNucos(boton) {
       const ventana = window.open('', '_blank');
+      // Mientras llega la dirección, la pestaña nueva dice qué está pasando (antes se quedaba en blanco)
+      if (ventana) {
+        try {
+          ventana.document.title = 'Buscando documento…';
+          ventana.document.body.innerHTML = '<p style="font:15px system-ui,sans-serif;color:#5c6b72;padding:32px">Buscando el documento en la carpeta NUCOS de Drive…</p>';
+        } catch (e) { /* otra ventana sin acceso: solo queda en blanco */ }
+      }
       const original = boton.innerHTML;
       boton.disabled = true;
-      boton.innerHTML = '<span class="ln-spinner"></span> Ver';
+      boton.innerHTML = '<span class="ln-spinner"></span> ' + boton.textContent.trim();
       try {
-        const r = await llamar('apiLineasUltimoDocumentoNuco', boton.dataset.id, boton.dataset.lnUltimo);
+        const r = await ultimoNucos(boton.dataset.id, boton.dataset.lnUltimo);
         if (ventana) ventana.location.href = r.url; else window.open(r.url, '_blank');
         if (r.carpeta) Notificar.info('La última carpeta (' + r.nombre + ') no tiene PDF: se abrió la carpeta.');
       } catch (e) {
@@ -261,7 +292,8 @@
           },
         });
       }
-      return DataTable.crear(contenedor, Object.assign({ tamanoPagina: 50, seleccionable: true }, config));
+      // modoSeleccion: casillas ocultas hasta "Seleccionar" (como iOS); clic, arrastre o Shift+clic para marcar varias
+      return DataTable.crear(contenedor, Object.assign({ tamanoPagina: 50, seleccionable: true, modoSeleccion: true }, config));
     }
 
     /**
@@ -1551,11 +1583,14 @@
       mostrarModulo(memoria.modulo, true);
       crearTabla(memoria.modulo).setCargando(true);
       aplicarModoVista();
+      // Atrás / Adelante del navegador (gesto de dos dedos): la ficha que se veía en ese paso
+      const subInicial = typeof HistorialApp !== 'undefined' ? HistorialApp.registrar('lineas-telefonicas', (sub) => { if (vigente()) restaurarPaso(sub); }) : null;
       Promise.all([cargarPermisos(), cargarIndice()]).then(([permisos]) => {
         if (!vigente()) return;
         $('#ln-recargar', raiz).hidden = !permisos.esAdmin;
         pintarIndicadores();
         pintarListado();
+        if (subInicial) restaurarPaso(subInicial);
         if (memoria.abrirAlEntrar) {
           const id = memoria.abrirAlEntrar;
           memoria.abrirAlEntrar = null;
@@ -1625,16 +1660,14 @@
           exportar: exportarBase('INVENTARIO', 'Lineas telefonicas'),
           etiquetaFila: cfg.etiqueta,
           detalle: false, // la ficha completa (responsable, evidencias, historial) es su propia pantalla
-          // Vista rápida a la derecha (como el detalle de los otros módulos); la ficha completa sigue a un clic
-          accionesFila: [
-            { icono: 'eye', titulo: 'Vista rápida', alHacer: (r) => vistaRapida(cfg.detalle, r) },
-            { icono: 'maximize-2', titulo: 'Abrir ficha completa', alHacer: (r) => abrir(cfg.detalle, r.id) },
-          ],
+          // Sin columna de Acciones (30-sep): un clic en la fila abre la vista rápida (que trae "Abrir ficha completa",
+          // así también funciona en celular y tableta) y el doble clic la ficha completa
           // Acciones masivas: solo equipos y desde 2 seleccionados (las de líneas están por definirse con el área)
           accionesSeleccion: modulo === 'equipos' ? ACCIONES_MASIVAS.map((a) => ({
             icono: a.icono, texto: a.texto, titulo: a.ayuda, minimo: 2, peligro: !!a.peligro, alHacer: (filas) => abrirMasiva(a, filas),
           })) : [],
-          ayuda: 'Un clic en una fila (o el ojo en Acciones) abre la vista rápida a la derecha; doble clic (o el botón de ampliar) abre la ficha completa. ' +
+          ayuda: 'Un clic en una fila abre la vista rápida a la derecha y el doble clic la ficha completa. "Seleccionar" muestra las casillas: ' +
+            'ahí el clic marca la fila, arrastrar marca varias y Shift+clic un rango (Ctrl+clic también entra al modo). ' +
             'La flecha de cada columna filtra, ordena, fija u oculta; ' +
             '"Vista" agrega las demás columnas del AppSheet (compañía, sede, comentarios, PIN…). "Última responsiva" y "Última inspección" ' +
             'abren la más reciente de la carpeta del NUCO en NUCOS. Los indicadores de arriba filtran con un clic.',
@@ -1648,9 +1681,11 @@
         };
         const registroDe = (id) => (memoria.indice ? memoria.indice[modulo].filter((x) => x.id === id)[0] : null);
         let clicPendiente = null;
+        // En modo selección (o con Ctrl/Cmd/Shift) el clic es de la tabla: marca filas, no abre nada
+        const seleccionando = (ev) => tablas[modulo].enModoSeleccion() || ev.ctrlKey || ev.metaKey || ev.shiftKey;
         contenedor.addEventListener('click', (ev) => {
           const tr = filaDe(ev);
-          if (!tr || ev.detail > 1) return;
+          if (!tr || ev.detail > 1 || seleccionando(ev)) return;
           clearTimeout(clicPendiente);
           clicPendiente = setTimeout(() => {
             const r = registroDe(tr.dataset.id);
@@ -1659,7 +1694,7 @@
         });
         contenedor.addEventListener('dblclick', (ev) => {
           const tr = filaDe(ev);
-          if (!tr) return;
+          if (!tr || seleccionando(ev)) return;
           clearTimeout(clicPendiente);
           abrir(cfg.detalle, tr.dataset.id);
         });
@@ -1694,10 +1729,20 @@
         const sub = tipo === 'equipo' ? [r.modelo || v('EQUIPO'), r.numero ? 'Línea ' + r.numero : 'Sin línea'].filter(Boolean).join(' · ')
           : [r.compania || v('COMPAÑIA'), nuco ? 'NUCO ' + nuco : 'Suelta'].filter(Boolean).join(' · ');
         const panel = abrirPanelLateral(titulo, sub);
+        if (tieneNuco(r)) precargarUltimosNucos(r.id); // "Última responsiva / inspección" listos al dar clic
         const campo = (t, valor, html) => '<div class="dt-campo"><div class="dt-campo-titulo">' + esc(t) + '</div><div class="dt-campo-valor">' +
           (html ? (valor || vacio) : guion(valor)) + '</div></div>';
         const seccion = (icono, t, filas) => '<section class="ln-vr-seccion"><h4>' + ico(icono) + ' ' + esc(t) + '</h4>' + filas.join('') + '</section>';
         const finPlan = v('FIN PLAN');
+        // Todo conectado: desde el equipo se salta a su línea y desde la línea a su equipo, sin salir de la vista rápida
+        const ix = memoria.indice || { equipos: [], lineas: [] };
+        const suLinea = tipo === 'equipo' ? ix.lineas.filter((x) => x.id === r.id)[0] : null;
+        const suEquipo = tipo === 'linea' ? ix.equipos.filter((x) => x.id === (r.equipoId || r.id))[0] : null;
+        const saltar = (destino, texto, icon) => '<button type="button" class="ln-ir-chip" data-vr-ir="' + destino + '">' + ico(icon) +
+          '<span>' + esc(texto) + '</span>' + ico('chevron-right') + '</button>';
+        const numero = r.numero || v('NUMERO TELEFONO');
+        const celdaNumero = suLinea && numero ? saltar('linea', numero, 'card-sim') : numero;
+        const celdaNuco = suEquipo && nuco ? saltar('equipo', 'NUCO ' + nuco, 'smartphone') : nuco;
         panel.cuerpo.innerHTML =
           '<div class="ln-vr-resumen"><div class="ln-chips">' +
             (v('ESTATUS EQUIPO') ? chip('Equipo: ' + v('ESTATUS EQUIPO'), COLOR_ESTATUS[String(v('ESTATUS EQUIPO')).toUpperCase()]) : '') +
@@ -1714,16 +1759,22 @@
             campo('Sede', v('SEDE') || r.sede), campo('Oficina / desarrollo', v('OFICINA / DESARROLLO')), campo('Jefe directo', v('JEFE DIRECTO')),
           ]) +
           seccion('smartphone', 'Equipo', [
-            campo('NUCO', nuco), campo('Modelo', r.modelo || v('EQUIPO')), campo('IMEI', v('IMEI') || r.imei),
+            campo('NUCO', celdaNuco, !!suEquipo && !!nuco), campo('Modelo', r.modelo || v('EQUIPO')), campo('IMEI', v('IMEI') || r.imei),
             campo('Accesorios', v('ACCESORIOS')), campo('Última inspección', fecha(v('FECHA INSPECCION'))),
           ]) +
           seccion('card-sim', 'Línea', [
-            campo('Número', r.numero || v('NUMERO TELEFONO')), campo('SIM', v('NUMERO SIM') || r.sim), campo('Compañía', r.compania || v('COMPAÑIA')),
+            campo('Número', celdaNumero, !!suLinea && !!numero), campo('SIM', v('NUMERO SIM') || r.sim), campo('Compañía', r.compania || v('COMPAÑIA')),
             campo('Razón social', v('RAZON SOCIAL')), campo('Costo del plan', v('COSTO PLAN') !== '' ? '$' + Number(v('COSTO PLAN')).toLocaleString('es-MX') : ''),
             campo('Fin del adendum', finPlan ? esc(fecha(finPlan) || finPlan) + ' ' + chipAdendum(finPlan) : '', true),
           ]) +
           (v('COMENTARIOS') ? seccion('message-square-text', 'Comentarios', ['<p class="ln-vr-comentario">' + esc(v('COMENTARIOS')) + '</p>']) : '');
         panel.cuerpo.querySelector('[data-vr-ficha]').addEventListener('click', () => { panel.cerrar(); abrir(tipo, r.id); });
+        panel.cuerpo.addEventListener('click', (ev) => {
+          const b = ev.target.closest('[data-vr-ir]');
+          if (!b) return;
+          if (b.dataset.vrIr === 'linea' && suLinea) vistaRapida('linea', suLinea);
+          if (b.dataset.vrIr === 'equipo' && suEquipo) vistaRapida('equipo', suEquipo);
+        });
         pintarIconos(panel.cuerpo);
       }
 
@@ -1793,13 +1844,29 @@
         $('#ln-conteo', raiz).textContent = 'Datos de la hoja al ' + fechaHora(memoria.indice.generadoEn) + '.';
       }
 
+      // ---- Atrás / Adelante del navegador (html/historial-navegador.html) ----
+      // Cada ficha que se abre es un paso; la pestaña solo actualiza el paso actual (no llena el historial).
+      const pilaParaHistorial = () => ({ pila: pila.map((p) => ({ tipo: p.tipo, id: p.id, etiqueta: p.etiqueta || null, pestana: p.pestana || null })) });
+      function pasoHistorial() { if (typeof HistorialApp !== 'undefined') HistorialApp.paso(pilaParaHistorial()); }
+      /** Aplica un paso guardado: la lista (sin pila) o la ficha de hasta arriba de su pila. No guarda otro paso. */
+      function restaurarPaso(sub) {
+        if (panelAbierto) panelAbierto.cerrar();
+        const destino = sub && sub.pila && sub.pila.length ? sub.pila : null;
+        if (!destino) { if (pila.length) cerrarDetalle(true); return; }
+        pila.length = 0;
+        destino.forEach((p) => pila.push(Object.assign({}, p)));
+        const arriba = pila[pila.length - 1];
+        abrir(arriba.tipo, arriba.id, true, true);
+      }
+
       // ---- Detalle ----
-      function abrir(tipo, id, sinApilar) {
+      function abrir(tipo, id, sinApilar, sinHistorial) {
         if (!sinApilar) {
           const existente = pila.findIndex((p) => p.tipo === tipo && p.id === id);
           if (existente >= 0) pila.splice(existente + 1);
           else pila.push({ tipo: tipo, id: id, etiqueta: tipo === 'inspeccion' ? 'Inspección' : null });
         }
+        if (!sinHistorial) pasoHistorial();
         $('#ln-listado', raiz).hidden = true;
         soltarHistorial();
         soltarDocumentos();
@@ -1828,7 +1895,8 @@
         else cerrarDetalle();
       }
 
-      function cerrarDetalle() {
+      function cerrarDetalle(sinHistorial) {
+        if (sinHistorial !== true && typeof HistorialApp !== 'undefined') HistorialApp.paso(null);
         soltarHistorial();
         soltarDocumentos();
         pila.length = 0;
@@ -1927,6 +1995,7 @@
 
       function mostrarPestanaFicha(nombre) {
         if (pila.length) pila[pila.length - 1].pestana = nombre;
+        if (typeof HistorialApp !== 'undefined') HistorialApp.actualizar(pilaParaHistorial());
         raiz.querySelectorAll('[data-ficha-tab]').forEach((b) => {
           const activa = b.dataset.fichaTab === nombre;
           b.classList.toggle('active', activa);
@@ -1953,6 +2022,7 @@
           pila[pila.length - 1].etiqueta = 'NUCO ' + (e.nuco || '—');
           const resp = e.responsable || {};
           fichaActual = { id: id, titulo: 'NUCO ' + (e.nuco || '—'), estatusEquipo: e.estatus || '', estatusLinea: l ? (l.estatus || '') : null };
+          if (e.nuco) precargarUltimosNucos(id);
           detalle.innerHTML = migas() +
             encabezado('smartphone', 'NUCO ' + esc(e.nuco || '—'),
               chip(e.estatus) + chip(TIPO_EQUIPO[e.tipo] || e.tipo, 'neutro') + (l ? chip('Con línea', 'verde') + usoTemporalVencido(l) : chip('Sin línea', 'ambar')),

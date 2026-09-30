@@ -712,7 +712,9 @@ test('la tabla de Líneas Telefónicas tiene las columnas de siempre y agrega la
   assert.match(lineas, /\{ campo: 'numero', titulo: 'Número', tipo: 'texto', fijada: true,/);
   assert.doesNotMatch(lineas, /ordenInicial: \{ campo: 'TIPO'/);
   assert.match(lineas, /idTabla: 'lineas-' \+ modulo \+ '-v4',/);
-  assert.match(lineas, /llamar\('apiLineasUltimoDocumentoNuco', boton\.dataset\.id, boton\.dataset\.lnUltimo\)/);
+  // Se pide antes del clic y se guarda 9 min (30-sep): el clic usa la misma promesa
+  assert.match(lineas, /const promesa = llamar\('apiLineasUltimoDocumentoNuco', id, tipo\);/);
+  assert.match(lineas, /const r = await ultimoNucos\(boton\.dataset\.id, boton\.dataset\.lnUltimo\);/);
   assert.match(read('src/ClientApi.gs'), /function apiLineasUltimoDocumentoNuco\(token, id, tipo\)/);
   assert.match(read('src/services/TelefoniaService.gs'), /posiciones\.forEach\(\(i\) => \{ if \(copia\[i\]\) copia\[i\] = '••••'; \}\);/);
   assert.match(repo, /if \(c === 'FOLIO'\) return legado\.folio \|\| null;/);
@@ -1071,8 +1073,9 @@ test('Vista rápida en Líneas Telefónicas, responsiva editable y calificación
   assert.match(resp, /ed\('RESPONSABLE', 'RESPONSABLE', 'listaAbierta', v\('RESPONSABLE'\), \{ requerido: 'SIEMPRE', sugerencias: 'PERSONAS', autollenar: autoResponsable \}\)/);
   assert.match(resp, /ed\('ACCESORIOS', 'ACCESORIOS', 'multi'/);
   const cliente = read('src/html/js/lineas.html');
-  assert.match(cliente, /\{ icono: 'eye', titulo: 'Vista rápida', alHacer: \(r\) => vistaRapida\(cfg\.detalle, r\) \}/);
-  assert.match(cliente, /\{ icono: 'maximize-2', titulo: 'Abrir ficha completa', alHacer: \(r\) => abrir\(cfg\.detalle, r\.id\) \}/);
+  // Sin columna de Acciones (30-sep): clic = vista rápida, doble clic = ficha; la vista rápida trae "Abrir ficha completa"
+  assert.doesNotMatch(cliente, /titulo: 'Vista rápida', alHacer/);
+  assert.match(cliente, /data-vr-ficha>' \+ icono\('maximize-2'\) \+ ' Abrir ficha completa/);
   assert.match(cliente, /function vistaRapida\(tipo, r\) \{/);
   assert.match(cliente, /if \(captura\.tipo === 'INSPECCION'\) pintarCalificacionVivo\(\);/);
   assert.match(read('src/html/views/lineas/lineas-telefonicas.html'), /id="ln-calif-vivo" role="status" aria-live="polite" hidden/);
@@ -1103,4 +1106,30 @@ test('Navegación de la ficha: migas por lo que es cada nivel, pestaña recordad
   const app = read('src/html/js/app.html');
   assert.match(app, /function marcarTemaActual\(\)/);
   assert.match(app, /marcarTemaActual\(\); \/\/ entrar con la sesión guardada/);
+});
+
+test('Tablas con modo selección, gestos Atrás/Adelante, vista rápida conectada y "Última …" más rápida', () => {
+  const dt = read('src/html/js/componentes/datatable.html');
+  // Modo selección opcional (no cambia las tablas que no lo piden)
+  assert.match(dt, /\$\{cfg\.seleccionable && cfg\.modoSeleccion \? `<button type="button" class="secondary dt-btn-modo-seleccion"/);
+  assert.match(dt, /\.dt\.dt-con-modo-seleccion:not\(\.dt-modo-seleccion\) \.dt-col-check \{ display: none; \}/);
+  assert.match(dt, /if \(!st\.modoSeleccion && \(ev\.ctrlKey \|\| ev\.metaKey\)\) \{ setModoSeleccion\(true\);/);
+  assert.match(dt, /tbody\.addEventListener\('pointermove', \(ev\) => \{\s*if \(!arrastre\.inicio/);
+  assert.match(dt, /setModoSeleccion, enModoSeleccion: \(\) => st\.modoSeleccion,/);
+  const lineas = read('src/html/js/lineas.html');
+  assert.match(lineas, /seleccionable: true, modoSeleccion: true \}, config\)/);
+  assert.match(lineas, /const seleccionando = \(ev\) => tablas\[modulo\]\.enModoSeleccion\(\) \|\| ev\.ctrlKey/);
+  // Historial del navegador
+  const hist = read('src/html/historial-navegador.html');
+  assert.match(hist, /google\.script\.history/);
+  assert.match(hist, /api\(\)\.setChangeHandler\(alCambiar\)/);
+  assert.match(read('src/html/js/app.html'), /if \(typeof HistorialApp !== 'undefined'\) HistorialApp\.alNavegar\(vista, etiqueta\);/);
+  assert.match(read('src/html/Index.html'), /include\('html\/historial-navegador'\)/);
+  assert.match(lineas, /if \(!sinHistorial\) pasoHistorial\(\);/);
+  assert.match(lineas, /HistorialApp\.registrar\('lineas-telefonicas'/);
+  // Vista rápida conectada: equipo ↔ línea
+  assert.match(lineas, /if \(b\.dataset\.vrIr === 'linea' && suLinea\) vistaRapida\('linea', suLinea\);/);
+  // "Última …": el servidor solo recorre la rama del tipo
+  assert.match(read('src/services/lineas/LineasArchivos.gs'), /function archivosNuco\(nuco, soloTipo\)/);
+  assert.match(read('src/services/TelefoniaService.gs'), /const r = carpetaNucoDe_\(id, sesion, tipo\);/);
 });

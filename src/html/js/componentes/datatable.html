@@ -73,6 +73,11 @@
   /* Columna de casillas */
   .dt .dt-col-check { width: 36px; min-width: 36px; text-align: center; padding: 0 8px; }
   .dt .dt-col-check input { width: auto; cursor: pointer; }
+  /* Modo selección (cfg.modoSeleccion): casillas ocultas hasta "Seleccionar"; en el modo, la fila entera se marca */
+  .dt.dt-con-modo-seleccion:not(.dt-modo-seleccion) .dt-col-check { display: none; }
+  .dt.dt-modo-seleccion tbody tr { cursor: pointer; user-select: none; }
+  .dt.dt-modo-seleccion .dt-col-check { touch-action: none; }
+  .dt .dt-btn-modo-seleccion.activo { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
 
   /* Columna de acciones por fila: fija a la DERECHA, siempre a la vista aunque haya scroll */
   .dt .dt-col-acciones {
@@ -255,6 +260,9 @@
    *         valor: (fila) => calcularDias(fila) },    // columna calculada
    *     ],
    *     seleccionable: true,                   // casillas (copiar, eliminar y acciones masivas)
+   *     modoSeleccion: true,                   // (rama emmanuel) casillas ocultas hasta tocar "Seleccionar", como en iOS:
+   *                                            // en ese modo el clic en la fila la marca, arrastrar marca varias,
+   *                                            // Shift+clic un rango; Ctrl/Cmd+clic entra al modo desde la fila
    *     alEditar: async (fila, campo, valorNuevo) => filaActualizada,   // lanza error para rechazar
    *     alEliminar: async (filas) => {},        // si se omite, no aparece "Eliminar"
    *     motivoSinEliminar: 'Solo administradores pueden eliminar',
@@ -584,6 +592,7 @@
         pagina: 1,
         seleccion: new Set(),
         ancla: null,                 // última casilla marcada (para Shift+clic)
+        modoSeleccion: false,        // con cfg.modoSeleccion: casillas visibles y clic en la fila = marcar
         editando: null,
         detalleId: null,
         historial: [],               // ediciones para Ctrl+Z
@@ -733,6 +742,7 @@
             <button type="button" class="secondary dt-btn-columnas" title="Columnas, orden, ancho y densidad">${ic('vista')} Vista</button>
             ${cfg.ayuda ? `<span class="dt-ayuda" title="${esc(cfg.ayuda)}">${ic('ayuda')} Ayuda</span>` : ''}
             <span class="dt-espacio"></span>
+            ${cfg.seleccionable && cfg.modoSeleccion ? `<button type="button" class="secondary dt-btn-modo-seleccion" aria-pressed="false" title="Mostrar casillas para elegir varios registros (clic, arrastrar o Shift+clic)">${ic('list-checks')} <span>Seleccionar</span></button>` : ''}
             <span class="dt-seleccion-info" hidden></span>
             ${accionesSeleccion.map((a, i) => `<button type="button" class="${a.peligro ? 'danger' : 'secondary'} ${a.clase || ''}" data-accion-sel="${i}" ${a.titulo ? `title="${esc(a.titulo)}"` : ''} hidden>${ic(a.icono)} ${esc(a.texto)}</button>`).join('')}
             ${cfg.exportar ? `<button type="button" class="btn-excel dt-btn-excel" title="${esc(cfg.exportar.titulo || 'Descarga lo que ves: columnas visibles, filtros, búsqueda y orden (todas las páginas)')}">${ic('exportar')} Exportar a Excel</button>` : ''}
@@ -827,7 +837,9 @@
 
       function render() {
         const m = calcularModelo();
-        raiz.className = 'dt dt-densidad-' + st.densidad;
+        raiz.className = 'dt dt-densidad-' + st.densidad +
+          // modoSeleccion (rama emmanuel): className se reescribe en cada render, así que el modo va aquí
+          (cfg.modoSeleccion ? ' dt-con-modo-seleccion' : '') + (st.modoSeleccion ? ' dt-modo-seleccion' : '');
         pintarEncabezado(m);
         pintarCuerpo(m);
         pintarTotales(m);
@@ -1666,6 +1678,9 @@
       $('.dt-ultima').addEventListener('click', irAPagina(() => Infinity));   // render() lo limita a la última
       if (cfg.exportar) $('.dt-btn-excel').addEventListener('click', (ev) => exportarExcel(ev.currentTarget));
 
+      if (cfg.modoSeleccion && $('.dt-btn-modo-seleccion')) {
+        $('.dt-btn-modo-seleccion').addEventListener('click', () => setModoSeleccion(!st.modoSeleccion));
+      }
       $('.dt-toolbar').addEventListener('click', (ev) => {
         const boton = ev.target.closest('[data-accion-sel]');
         if (!boton) return;
@@ -1785,6 +1800,59 @@
         if (ev.shiftKey && ev.target.classList.contains('dt-check')) ev.preventDefault();
       });
 
+      // ---- Modo selección (cfg.modoSeleccion): como "Seleccionar" en iOS ----
+      function setModoSeleccion(activo) {
+        if (!cfg.modoSeleccion) return;
+        st.modoSeleccion = !!activo;
+        raiz.classList.toggle('dt-modo-seleccion', st.modoSeleccion);
+        const b = $('.dt-btn-modo-seleccion');
+        if (b) {
+          b.setAttribute('aria-pressed', String(st.modoSeleccion));
+          b.classList.toggle('activo', st.modoSeleccion);
+          b.querySelector('span').textContent = st.modoSeleccion ? 'Listo' : 'Seleccionar';
+        }
+        if (!st.modoSeleccion) { st.seleccion.clear(); st.ancla = null; }
+        render();
+        if (cfg.alCambiarModoSeleccion) cfg.alCambiarModoSeleccion(st.modoSeleccion);
+      }
+      if (cfg.modoSeleccion) raiz.classList.add('dt-con-modo-seleccion');
+
+      // Arrastrar sobre las filas (en modo selección) marca o desmarca todas las que toca, según la primera
+      const arrastre = { inicio: null, marcar: true, movio: false, ignorarClic: false };
+      const filasVisibles = () => Array.from(tbody.querySelectorAll('tr[data-id]')).map((tr) => tr.dataset.id);
+      tbody.addEventListener('pointerdown', (ev) => {
+        if (!st.modoSeleccion || ev.button !== 0 || ev.shiftKey) return;
+        // Con el dedo solo se arrastra desde la columna de casillas (el resto de la fila desplaza la tabla)
+        if (ev.pointerType !== 'mouse' && !ev.target.closest('.dt-col-check')) return;
+        const tr = ev.target.closest('tr[data-id]');
+        if (!tr || ev.target.closest('button, a, select, textarea, .dt-editor')) return;
+        arrastre.inicio = tr.dataset.id;
+        arrastre.marcar = !st.seleccion.has(tr.dataset.id);
+        arrastre.movio = false;
+      });
+      tbody.addEventListener('pointermove', (ev) => {
+        if (!arrastre.inicio || !(ev.buttons & 1)) return;
+        const bajo = document.elementFromPoint(ev.clientX, ev.clientY);
+        const tr = bajo && bajo.closest && bajo.closest('tbody tr[data-id]');
+        if (!tr || !tbody.contains(tr)) return;
+        if (tr.dataset.id === arrastre.inicio && !arrastre.movio) return;
+        ev.preventDefault();
+        arrastre.movio = true;
+        const ids = filasVisibles();
+        const a = ids.indexOf(arrastre.inicio);
+        const b = ids.indexOf(tr.dataset.id);
+        if (a < 0 || b < 0) return;
+        ids.slice(Math.min(a, b), Math.max(a, b) + 1).forEach((id) => (arrastre.marcar ? st.seleccion.add(id) : st.seleccion.delete(id)));
+        st.ancla = tr.dataset.id;
+        render();
+      });
+      const terminarArrastre = () => {
+        if (arrastre.inicio && arrastre.movio) arrastre.ignorarClic = true; // el clic que llega al soltar no desmarca
+        arrastre.inicio = null;
+      };
+      document.addEventListener('pointerup', terminarArrastre);
+      document.addEventListener('pointercancel', terminarArrastre);
+
       function alternarSeleccion(id, marcar, enRangoDesdeAncla) {
         const aplicar = (x) => (marcar ? st.seleccion.add(x) : st.seleccion.delete(x));
         const ids = enRangoDesdeAncla && st.ancla && st.ancla !== id ? filasFiltradas().map(idDe) : null;
@@ -1803,8 +1871,14 @@
         const tr = ev.target.closest('tr[data-id]');
         if (!tr) return;
 
+        if (arrastre.ignorarClic) { arrastre.ignorarClic = false; return; }
         const check = ev.target.closest('.dt-check');
         if (check) { alternarSeleccion(tr.dataset.id, check.checked, ev.shiftKey); return; }
+        if (cfg.modoSeleccion && !ev.target.closest('button, a, input, select, textarea, label, .dt-editor')) {
+          // En modo selección el clic en cualquier parte de la fila la marca; Ctrl/Cmd+clic entra al modo con esa fila
+          if (!st.modoSeleccion && (ev.ctrlKey || ev.metaKey)) { setModoSeleccion(true); alternarSeleccion(tr.dataset.id, true, false); return; }
+          if (st.modoSeleccion) { alternarSeleccion(tr.dataset.id, !st.seleccion.has(tr.dataset.id), ev.shiftKey); return; }
+        }
 
         const botonFila = ev.target.closest('[data-accion-fila]');
         if (botonFila) {
@@ -1854,6 +1928,7 @@
           if (popover) { cerrarPopover(); return; }
           // Quitar selección solo si el usuario está trabajando dentro de esta tabla
           if (!panel && !st.editando && st.seleccion.size && contenedor.contains(document.activeElement)) limpiarSeleccion();
+          else if (!panel && !st.editando && st.modoSeleccion && contenedor.contains(document.activeElement)) setModoSeleccion(false);
           return;
         }
         const ctrl = ev.ctrlKey || ev.metaKey;
@@ -1908,6 +1983,7 @@
         getDatos: () => st.datos.slice(),
         getFiltradas: () => (st.cargando || st.error ? [] : filasFiltradas()),
         getSeleccion: () => st.datos.filter((f) => st.seleccion.has(idDe(f))),
+        setModoSeleccion, enModoSeleccion: () => st.modoSeleccion,
         limpiarSeleccion,
         copiarSeleccion,
         textoSeleccion,

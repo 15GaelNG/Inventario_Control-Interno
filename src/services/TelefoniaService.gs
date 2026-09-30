@@ -93,13 +93,25 @@ const TelefoniaService = (function () {
   }
 
   /** Carpeta del NUCO del registro en NUCOS (caché 10 min por NUCO), sin firmas ni patrones si no es ADMIN. */
-  function carpetaNucoDe_(id, sesion) {
+  /**
+   * `soloTipo`: solo la rama INSPECCIONES o CARTA RESPONSIVA (para "Última …"). Si ya está en caché el NUCO completo
+   * se usa ese; si no, se recorre solo esa rama (mucho más rápido) y se guarda aparte.
+   */
+  function carpetaNucoDe_(id, sesion, soloTipo) {
     const f = LineasRepo.leerRegistroPorId(id);
     if (!f) throw new Error('No existe el registro ' + id);
     const nuco = LineasUtil.nuco4(LineasUtil.col(f, 'NUCO'));
     if (!nuco) return { nuco: null, carpetaId: null, grupos: [] };
     const clave = 'nucos_archivos_v2_' + nuco;
     let r = LineasDatos.cacheLeer(clave);
+    if (!r && soloTipo) {
+      const claveRama = clave + '_' + soloTipo;
+      r = LineasDatos.cacheLeer(claveRama);
+      if (!r) {
+        r = LineasUtil.paraCliente(LineasArchivos.archivosNuco(nuco, soloTipo));
+        LineasDatos.cacheGuardar(claveRama, r, 600);
+      }
+    }
     if (!r) {
       r = LineasUtil.paraCliente(LineasArchivos.archivosNuco(nuco));
       LineasDatos.cacheGuardar(clave, r, 600);
@@ -121,7 +133,7 @@ const TelefoniaService = (function () {
     const sesion = Auth.validarSesion(token);
     if (tipo !== 'INSPECCION' && tipo !== 'RESPONSIVA') throw new Error('Tipo de documento inválido.');
     const nombreTipo = tipo === 'INSPECCION' ? 'inspección' : 'responsiva';
-    const r = carpetaNucoDe_(id, sesion);
+    const r = carpetaNucoDe_(id, sesion, tipo);
     if (!r.nuco) throw new Error('Este registro no tiene NUCO: no tiene carpeta en NUCOS.');
     if (!r.carpetaId) throw new Error('No hay carpeta del NUCO ' + r.nuco + ' en NUCOS.');
     const grupos = r.grupos.filter((g) => g.tipo === tipo); // ya vienen de la más reciente a la más antigua

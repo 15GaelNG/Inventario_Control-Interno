@@ -554,6 +554,8 @@
   }
 
   function navegarA(vista, etiqueta) {
+    // Rama emmanuel: cada cambio de módulo es un paso de Atrás/Adelante (html/historial-navegador.html)
+    if (typeof HistorialApp !== 'undefined') HistorialApp.alNavegar(vista, etiqueta);
     document.querySelectorAll('.nav-item, .nav-subitem').forEach((el) => {
       el.classList.toggle('active', el.dataset.view === vista);
     });
