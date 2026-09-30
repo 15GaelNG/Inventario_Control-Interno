@@ -44,6 +44,7 @@ function cargar(salidas) {
     Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'SS_LAB' } },
     pipeLog_: (ssId, paso, modo, res, resumen) => logueado.push({ paso, modo, res, resumen }),
     revisarAntesDeMigrar: espia('revisar'),
+    renombrarLlaveAnterior: espia('renombrar'),
     asignarIds: espia('ids'),
     reescribirReferencias: espia('referencias'),
     moverIdsAlInicio: espia('mover'),
@@ -73,9 +74,11 @@ console.log('\n2. El ensayo corre los seis pasos, y ninguno escribe');
 {
   const { api, llamadas } = cargar();
   api.correrFamilia('vehiculos');
-  ok(llamadas.length === 6, 'corrió los 6 pasos');
-  ok(llamadas.map((l) => l.paso).join(',') === 'revisar,ids,referencias,mover,respaldo,auditar',
+  ok(llamadas.length === 7, 'corrió los 7 pasos');
+  ok(llamadas.map((l) => l.paso).join(',') === 'revisar,renombrar,ids,referencias,mover,respaldo,auditar',
      'en el orden correcto: ' + llamadas.map((l) => l.paso).join(' → '));
+  ok(llamadas[1].paso === 'renombrar',
+     'y renombrar va ANTES de ids: si la columna se llamaba ID, la hoja queda sin ID y el paso 3 crea uno limpio');
   ok(llamadas.every((l) => l.escribir === false), 'ninguno recibió escribir:true');
   ok(llamadas.every((l) => l.familia === 'vehiculos'), 'todos recibieron la familia');
 }
@@ -88,14 +91,14 @@ console.log('\n3. Escribiendo, los pasos de SOLO LECTURA siguen sin escribir');
   ok(llamadas.filter((l) => soloLee.indexOf(l.paso) !== -1).every((l) => l.escribir === false),
      'revisar y auditar reciben escribir:false aunque la corrida escriba');
   ok(llamadas.filter((l) => soloLee.indexOf(l.paso) === -1).every((l) => l.escribir === true),
-     'y los otros cuatro sí reciben escribir:true');
+     'y los otros cinco sí reciben escribir:true');
 }
 
 console.log('\n4. El nombre de la familia se normaliza');
 {
   const { api, llamadas } = cargar();
   api.correrFamilia('  VEHICULOS  ');
-  ok(llamadas.length === 6 && llamadas[0].familia === 'vehiculos',
+  ok(llamadas.length === 7 && llamadas[0].familia === 'vehiculos',
      'con espacios y mayúsculas corre igual, y pasa la familia en minúsculas');
 }
 
@@ -113,7 +116,7 @@ console.log('\n6. Pero en ENSAYO no se detiene: se quiere ver todo');
 {
   const { api, llamadas } = cargar({ revisar: 'REVISIÓN\n\nPROBLEMAS (3):\n  - algo' });
   const rep = api.correrFamilia('vehiculos');
-  ok(llamadas.length === 6, 'corrió los 6 para dar el panorama completo');
+  ok(llamadas.length === 7, 'corrió los 7 para dar el panorama completo');
   ok(rep.indexOf('en ensayo seguimos para ver todo') !== -1, 'y explica por qué siguió');
 }
 
@@ -121,10 +124,10 @@ console.log('\n7. Si un paso truena, se para ahí');
 {
   const { api, llamadas } = cargar({ referencias: new Error('no existe la columna X') });
   const rep = api.correrFamilia('vehiculos', { escribir: true });
-  ok(llamadas.length === 3, 'corrió revisar, ids y referencias, y ya');
+  ok(llamadas.length === 4, 'corrió revisar, renombrar, ids y referencias, y ya');
   ok(rep.indexOf('TRONÓ: no existe la columna X') !== -1, 'el reporte trae el error');
   ok(rep.indexOf('SE DETUVO en "referencias"') !== -1, 'y dice dónde se detuvo');
-  ok(rep.indexOf('pasos corridos: 2 de 6') !== -1,
+  ok(rep.indexOf('pasos corridos: 3 de 7') !== -1,
      'el que tronó no cuenta como corrido');
 }
 
@@ -137,13 +140,13 @@ console.log('\n7b. En ENSAYO, un paso que no se puede ensayar NO tumba la corrid
     referencias: new Error('"VEHICULOS" todavía no tiene columna ID: corre asignarIds primero'),
   });
   const rep = api.correrFamilia('vehiculos');
-  ok(llamadas.length === 6, 'siguió con los 6 pasos en vez de pararse: ' + llamadas.length);
+  ok(llamadas.length === 7, 'siguió con los 7 pasos en vez de pararse: ' + llamadas.length);
   ok(rep.indexOf('NO SE PUDO ENSAYAR') !== -1, 'lo reporta como no ensayable');
   ok(rep.indexOf('SE DETUVO') === -1, 'y NO dice que se detuvo, porque no se detuvo');
   ok(rep.indexOf('no ensayables todavía: referencias') !== -1,
      'el resumen los junta: los que leen lo que escribe el paso 2');
   ok(rep.indexOf('No es un error') !== -1, 'y lo dice con esas palabras, para no asustar');
-  ok(rep.indexOf('pasos corridos: 5 de 6') !== -1,
+  ok(rep.indexOf('pasos corridos: 6 de 7') !== -1,
      'el no ensayable no cuenta como corrido');
 }
 
@@ -151,7 +154,7 @@ console.log('\n8. La auditoría con fallas se reporta, pero ya no hay nada que d
 {
   const { api, llamadas } = cargar({ auditar: 'AUDITORÍA\n\nFALLAS (2):\n  - algo' });
   const rep = api.correrFamilia('vehiculos', { escribir: true });
-  ok(llamadas.length === 6, 'corrieron los 6: la auditoría es el último');
+  ok(llamadas.length === 7, 'corrieron los 7: la auditoría es el último');
   ok(rep.indexOf('SE DETUVO en "auditar"') !== -1, 'se marca como detenido para que se note');
 }
 
@@ -162,7 +165,7 @@ console.log('\n9. Queda constancia en la bitácora');
   ok(logueado.length === 1, 'una entrada');
   ok(logueado[0].paso === 'homologarFamilia:vehiculos', 'con la familia en el nombre del paso');
   ok(logueado[0].modo === 'ESCRIBIR' && logueado[0].res === 'OK', 'y el modo y el resultado');
-  ok(logueado[0].resumen.indexOf('6/6 pasos') !== -1, 'más el resumen: ' + logueado[0].resumen);
+  ok(logueado[0].resumen.indexOf('7/7 pasos') !== -1, 'más el resumen: ' + logueado[0].resumen);
 }
 
 console.log('\n10. familiasEstado enseña el reparto sin tocar nada');

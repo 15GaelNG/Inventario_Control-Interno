@@ -192,6 +192,27 @@ function migEncabezados_(sheet) {
   return sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(migLimpio_);
 }
 
+/**
+ * Dónde está la llave ANTERIOR de una hoja, aguantando que ya se haya renombrado.
+ *
+ * Existe porque el paso `renombrar` cambia el nombre de esa columna a "ID ANTERIOR", y los
+ * pasos que la leen tienen que funcionar ANTES y DESPUÉS de ese cambio — si no, el orden de
+ * los pasos se vuelve una trampa y correr dos veces rompe la migración. Busca primero el
+ * nombre nuevo, luego el del catálogo, y hasta el final la posición (la única hoja que
+ * depende de posición es la que no tenía encabezado).
+ *
+ * @return {number} posición base 1, o 0 si no está
+ */
+function migColumnaAnterior_(encabezados, h) {
+  const yaRenombrada = migColumna_(encabezados, Entidades.COLUMNA_ID_ANTERIOR);
+  if (yaRenombrada) return yaRenombrada;
+  if (h.llaveAnterior) {
+    const porNombre = migColumna_(encabezados, h.llaveAnterior);
+    if (porNombre) return porNombre;
+  }
+  return h.columnaAnterior || 0;
+}
+
 /** Posición (base 1) de una columna, o 0 si no está */
 function migColumna_(encabezados, nombre) {
   const buscado = migClave_(nombre);
@@ -268,7 +289,7 @@ function revisarAntesDeMigrar(opciones) {
     if (!sheet) { problemas.push('FALTA la hoja "' + h.hoja + '"'); return; }
     const enc = migEncabezados_(sheet);
     const filas = migFilas_(sheet);
-    const posId = h.llaveAnterior ? migColumna_(enc, h.llaveAnterior) : (h.columnaAnterior || 0);
+    const posId = migColumnaAnterior_(enc, h);
     const detalles = [];
 
     if (!posId) {
@@ -400,7 +421,7 @@ function asignarIds(opciones) {
     const posGuardada = migColumna_(enc, Entidades.COLUMNA_ID_ANTERIOR);
     const yaGuardado = posGuardada ? migLeerColumna_(sheet, posGuardada, filas) : [];
     const tieneGuardado = yaGuardado.some(Boolean);
-    const posVieja = h.llaveAnterior ? migColumna_(enc, h.llaveAnterior) : (h.columnaAnterior || 0);
+    const posVieja = migColumnaAnterior_(enc, h);
     if (!tieneGuardado && !posVieja) {
       lineas.push('  ' + h.hoja + ': SIN columna de ID, se salta');
       return;
@@ -708,6 +729,94 @@ function moverIdsAlInicio(opciones) {
 // ---------------------------------------------------------------- limpieza
 
 /**
+ * Le pone a la llave vieja de cada hoja el MISMO nombre en todas: "ID ANTERIOR".
+ *
+ * La idea es de Ayrton (30/09/2026) y simplifica mucho: hoy cada hoja llama distinto a lo
+ * que identificaba al renglón antes de migrar — `ID_VEHICULO`, `ID_CAMBIO`, `ID ARQUEO`,
+ * `ID_Accesorio`, `No EMPLEADO`, y en ocho hojas simplemente `ID`. Después de este paso,
+ * TODAS quedan con dos columnas y nada más: `ID` (la llave nueva) y `ID ANTERIOR`.
+ *
+ * Lo que eso mata:
+ *   - El concepto "ID APPSHEET" desaparece: ya no hay que crear una columna de respaldo
+ *     aparte, porque la original SE VUELVE el respaldo al renombrarse.
+ *   - Con él se va `pisaLlaveAnterior` y la rama de respaldar-y-pisar: si la columna se
+ *     llamaba `ID` y ahora se llama `ID ANTERIOR`, la hoja se queda SIN `ID` y el paso de
+ *     ids simplemente crea uno nuevo, igual que en las demás.
+ *   - Y el caso especial de CAMBIOS LINEAS TELEFONICAS, cuya columna no tenía encabezado:
+ *     aquí se le pone, y deja de depender de la posición.
+ *
+ * VA ANTES DEL PASO DE IDS, por lo de arriba. El orden está en FAM_PASOS.
+ *
+ * CUIDADO — esto cambia nombres de columna que el código de la app usa para buscar
+ * renglones (`SheetUtils.findById(..., 'ID_HOLOGRAMA')`) y para identificar hojas
+ * (`COLUMNAS_CLAVE`, las `firma` de `Relaciones.MAPA`). Correrlo en un libro que la app lea
+ * SIN haber actualizado esos nombres deja módulos sin encontrar su hoja. En el laboratorio
+ * no importa; ver docs/ids-asignacion.md antes de hacerlo en el libro bueno.
+ */
+function renombrarLlaveAnterior(opciones) {
+  const cfg = Object.assign({ escribir: false, familia: null }, opciones || {});
+  const ssId = migracionSs_(cfg);
+  const ss = SpreadsheetApp.openById(ssId);
+  const lineas = [(cfg.escribir ? 'RENOMBRANDO LA LLAVE VIEJA A "' + Entidades.COLUMNA_ID_ANTERIOR + '"'
+    : 'ENSAYO (no renombra nada)') + ' — ' + ssId, ''];
+  let renombradas = 0, yaEstaban = 0;
+  const problemas = [];
+
+  Entidades.deFamilia(cfg.familia).forEach((h) => {
+    const sheet = ss.getSheetByName(h.hoja);
+    if (!sheet) { lineas.push('  ' + h.hoja + ': NO EXISTE, se salta'); return; }
+    const enc = migEncabezados_(sheet);
+
+    const yaTiene = migColumna_(enc, Entidades.COLUMNA_ID_ANTERIOR);
+    if (yaTiene) {
+      yaEstaban++;
+      lineas.push('  ' + h.hoja + ': ya tiene "' + Entidades.COLUMNA_ID_ANTERIOR +
+        '" en la columna ' + yaTiene + ', nada que hacer');
+      return;
+    }
+
+    const pos = h.llaveAnterior ? migColumna_(enc, h.llaveAnterior) : (h.columnaAnterior || 0);
+    if (!pos) {
+      problemas.push(h.hoja + ': no encuentro su llave vieja ("' +
+        (h.llaveAnterior || 'columna ' + h.columnaAnterior) + '")');
+      lineas.push('  ' + h.hoja + ': NO encuentro su llave vieja, se salta');
+      return;
+    }
+
+    // Que no haya DOS columnas con el nombre nuevo: si la llave vieja ya se llamara igual
+    // que el nombre nuevo, el caso lo cubre `yaTiene` de arriba y no llegamos aquí.
+    const comoSeLlama = migLimpio_(enc[pos - 1]);
+    lineas.push('  ' + h.hoja + ': columna ' + pos + '  "' +
+      (comoSeLlama || '(sin encabezado)') + '"  ->  "' + Entidades.COLUMNA_ID_ANTERIOR + '"');
+    if (cfg.escribir) {
+      sheet.getRange(1, pos).setValue(Entidades.COLUMNA_ID_ANTERIOR);
+      renombradas++;
+    } else {
+      renombradas++;
+    }
+  });
+
+  lineas.push('');
+  lineas.push('  ' + renombradas + ' columnas ' + (cfg.escribir ? 'renombradas' : 'por renombrar') +
+    (yaEstaban ? ', ' + yaEstaban + ' ya estaban' : ''));
+  if (problemas.length) {
+    lineas.push('');
+    lineas.push('PROBLEMAS (' + problemas.length + '):');
+    problemas.forEach((p) => lineas.push('  - ' + p));
+  }
+  if (cfg.escribir && renombradas) {
+    SpreadsheetApp.flush();
+    lineas.push('');
+    lineas.push('  OJO: la app busca renglones por los nombres VIEJOS (ID_HOLOGRAMA,');
+    lineas.push('  ID_SENSOR...). Si este libro lo lee la app, hay que actualizar esos');
+    lineas.push('  nombres en el código. Ver docs/ids-asignacion.md.');
+  }
+  const texto = lineas.join('\n');
+  Logger.log(texto);
+  return texto;
+}
+
+/**
  * Quita la columna ID ANTERIOR de las hojas donde sobra.
  *
  * Solo hace falta en las hojas cuya columna original se llama "ID", porque ahí el ID nuevo
@@ -738,7 +847,7 @@ function limpiarRespaldoRedundante(opciones) {
       lineas.push('  ' + h.hoja + ': el respaldo SÍ hace falta (su columna se llama ID), se deja');
       return;
     }
-    const posVieja = h.llaveAnterior ? migColumna_(enc, h.llaveAnterior) : (h.columnaAnterior || 0);
+    const posVieja = migColumnaAnterior_(enc, h);
     if (!posVieja) {
       lineas.push("  " + h.hoja + ": ya no encuentro su llave anterior, NO se toca el respaldo");
       return;

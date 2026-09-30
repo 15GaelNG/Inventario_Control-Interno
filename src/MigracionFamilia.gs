@@ -8,15 +8,20 @@
  * muy distintos (ver docs/lineas-homologacion.md), y conviene dejar Vehículos terminado y
  * probado antes de tocar Líneas. La familia de cada hoja vive en `src/config/Entidades.gs`.
  *
- * LOS SEIS PASOS, en este orden y por una razón:
+ * LOS SIETE PASOS, en este orden y por una razón:
  *
  *   1. revisar       — solo lee. Si hay problemas, se detiene ANTES de escribir nada.
- *   2. ids           — llena la columna ID de cada hoja de la familia.
- *   3. referencias   — reescribe lo que apuntaba al ID viejo del padre (MIGRACION_REFERENCIAS).
+ *   2. renombrar     — la llave vieja de cada hoja pasa a llamarse "ID ANTERIOR", igual en
+ *                      todas. Va ANTES de los ids a propósito: si la columna se llamaba
+ *                      "ID" (ocho hojas de Líneas), al renombrarse la hoja se queda SIN ID
+ *                      y el paso 3 crea uno nuevo, sin respaldar ni pisar nada.
+ *   3. ids           — llena la columna ID de cada hoja de la familia.
+ *   4. referencias   — reescribe lo que apuntaba al ID viejo del padre (MIGRACION_REFERENCIAS).
  *                      Va DESPUÉS de los ids: necesita que el padre ya tenga el suyo.
- *   4. mover         — pone la columna ID al inicio, para que se vea al abrir la hoja.
- *   5. respaldo      — quita las columnas ID ANTERIOR que sobran.
- *   6. auditar       — solo lee. Dice si todo cuadró.
+ *   5. mover         — pone la columna ID al inicio, para que se vea al abrir la hoja.
+ *   6. respaldo      — quita las columnas ID ANTERIOR que sobran. Después del paso 2 casi
+ *                      nunca sobra ninguna: la original SE VOLVIÓ el respaldo.
+ *   7. auditar       — solo lee. Dice si todo cuadró.
  *
  * NO GUARDA AVANCE, y es a propósito: los seis pasos son idempotentes. Si se corta por
  * tiempo, se vuelve a correr lo mismo y los pasos ya hechos se saltan solos (asignarIds no
@@ -28,6 +33,8 @@
 const FAM_PASOS = [
   { nombre: 'revisar', soloLee: true, marcaMala: 'PROBLEMAS (',
     corre: (o) => revisarAntesDeMigrar(o) },
+  { nombre: 'renombrar', marcaMala: 'PROBLEMAS (',
+    corre: (o) => renombrarLlaveAnterior(o) },
   { nombre: 'ids', corre: (o) => asignarIds(o) },
   { nombre: 'referencias', corre: (o) => reescribirReferencias(o) },
   { nombre: 'mover', corre: (o) => moverIdsAlInicio(o) },

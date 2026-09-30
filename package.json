@@ -5,7 +5,7 @@
   "description": "Sistema de Control Interno (vehículos, telefonía, accesorios, caja chica) — Google Apps Script",
   "scripts": {
     "test": "npm run test:comportamiento && npm run test:contratos",
-    "test:comportamiento": "node tests/datatable.test.js && node tests/formulario.test.js && node tests/permisos.test.js && node tests/plantilla.test.js && node tests/sheetutils.test.js && node tests/driveutils.test.js && node tests/ids.test.js && node tests/entidades.test.js && node tests/insert-ids.test.js && node tests/relaciones.test.js && node tests/replanche.test.js && node tests/migracion-familia.test.js && node tests/migracion-pipeline.test.js && node tests/pdf.test.js && node tests/inspecciones.test.js && node tests/inspecciones-captura.test.js && node tests/inspecciones-registrar.test.js && node tests/geotab.test.js",
+    "test:comportamiento": "node tests/datatable.test.js && node tests/formulario.test.js && node tests/permisos.test.js && node tests/plantilla.test.js && node tests/sheetutils.test.js && node tests/driveutils.test.js && node tests/ids.test.js && node tests/entidades.test.js && node tests/insert-ids.test.js && node tests/relaciones.test.js && node tests/replanche.test.js && node tests/migracion-familia.test.js && node tests/renombrar-llave.test.js && node tests/migracion-pipeline.test.js && node tests/pdf.test.js && node tests/inspecciones.test.js && node tests/inspecciones-captura.test.js && node tests/inspecciones-registrar.test.js && node tests/geotab.test.js",
     "test:contratos": "node --test tests/*.test.cjs",
     "captura": "node tools/vista-previa/capturar.js",
     "login": "clasp login",
