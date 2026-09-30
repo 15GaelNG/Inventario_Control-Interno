@@ -672,11 +672,14 @@ const ArqueosService = (function () {
       throw new Error('Se generó el PDF pero no se pudo guardar en la carpeta de Arqueos en Drive (ID ' +
         CARPETA_ARCHIVOS_ID + '). La cuenta ' + cuenta() + ' necesita permiso de editor ahí. Error original: ' + e.message);
     }
-    try {
-      pdfFile.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
-    } catch (e) {
-      throw new Error('El PDF se generó y se guardó, pero no se pudo compartir con todo el dominio -- puede ser ' +
-        'una restricción para compartir de Workspace en esta carpeta/archivo. Error original: ' + e.message);
+    // Mejor esfuerzo, no bloquea el registro (mismo patrón que subirArchivo(), arriba):
+    // la carpeta de Arqueos ya tiene acceso general configurado, así que casi siempre el
+    // PDF hereda el compartir solo. Si una política de Workspace bloquea CUALQUIER
+    // compartir explícito en esta carpeta/archivo (ni DOMAIN ni ANYONE_WITH_LINK), no vale
+    // la pena tronar el registro solo por eso -- el PDF ya se generó y se guardó bien.
+    if (!DriveUtils.compartirLoMasAmplioPosible(pdfFile)) {
+      console.warn('No se pudo compartir explícitamente el PDF de Arqueo (cuenta ' + cuenta() +
+        '); se deja como quedó por default de la carpeta. Archivo: ' + pdfFile.getUrl());
     }
     try {
       DriveApp.getFileById(copia.getId()).setTrashed(true); // ya no se necesita el Doc, solo el PDF
