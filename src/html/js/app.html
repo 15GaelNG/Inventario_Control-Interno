@@ -1004,6 +1004,10 @@
         NOMBRE: document.getElementById('editar-articulo-nombre').value.trim(),
         MARCA: document.getElementById('editar-articulo-marca').value.trim(),
       };
+      const btn = ev.target.querySelector('button[type="submit"]');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> ' + (id ? 'Guardando…' : 'Registrando…');
       toastCargando(id ? 'Guardando cambios…' : 'Registrando…');
       try {
         if (id) await callServer('apiActualizarArticulo', state.token, id, datos);
@@ -1016,6 +1020,9 @@
         errorBox.textContent = err.message;
         errorBox.hidden = false;
         toastError('No se pudo guardar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
       }
     });
 
@@ -1023,6 +1030,10 @@
       ev.preventDefault();
       const errorBox = document.getElementById('mov-error');
       errorBox.hidden = true;
+      const btn = ev.target.querySelector('button[type="submit"]');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Registrando…';
       toastCargando('Registrando movimiento…');
       try {
         await callServer(
@@ -1041,6 +1052,9 @@
         errorBox.textContent = err.message;
         errorBox.hidden = false;
         toastError('No se pudo registrar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
       }
     });
 
@@ -1795,6 +1809,10 @@
       ev.preventDefault();
       const errorBox = document.getElementById('editar-error');
       errorBox.hidden = true;
+      const btn = ev.target.querySelector('button[type="submit"]');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
       toastCargando('Guardando cambios…');
       try {
         await callServer('apiActualizarIncidencia', state.token, document.getElementById('editar-id').value, {
@@ -1821,6 +1839,9 @@
         errorBox.textContent = err.message;
         errorBox.hidden = false;
         toastError('No se pudo actualizar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
       }
     });
 
@@ -1946,6 +1967,10 @@
       ev.preventDefault();
       const errorBox = document.getElementById('inc-error');
       errorBox.hidden = true;
+      const btn = ev.target.querySelector('button[type="submit"]');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Registrando…';
       toastCargando('Registrando…');
       try {
         await callServer('apiCrearIncidencia', state.token, {
@@ -1970,6 +1995,9 @@
         errorBox.textContent = err.message;
         errorBox.hidden = false;
         toastError('No se pudo registrar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
       }
     });
 
@@ -1980,6 +2008,10 @@
       ev.preventDefault();
       const errorBox = document.getElementById('cerrar-error');
       errorBox.hidden = true;
+      const btn = ev.target.querySelector('button[type="submit"]');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
       toastCargando('Guardando cambios…');
       try {
         await callServer('apiCerrarIncidencia', state.token, document.getElementById('cerrar-id').value, {
@@ -1996,6 +2028,9 @@
         errorBox.textContent = err.message;
         errorBox.hidden = false;
         toastError('No se pudo actualizar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
       }
     });
 
@@ -3551,6 +3586,10 @@
       ev.preventDefault();
       const errorBox = document.getElementById('editar-ticket-error');
       errorBox.hidden = true;
+      const btn = ev.target.querySelector('button[type="submit"]');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
       toastCargando('Guardando cambios…');
       try {
         await callServer('apiActualizarTicket', state.token, document.getElementById('editar-ticket-id').value, recolectarTicket('editar-ticket'));
@@ -3562,6 +3601,9 @@
         errorBox.textContent = err.message;
         errorBox.hidden = false;
         toastError('No se pudo actualizar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
       }
     });
 
@@ -3585,6 +3627,10 @@
       ev.preventDefault();
       const errorBox = document.getElementById('ticket-error');
       errorBox.hidden = true;
+      const btn = ev.target.querySelector('button[type="submit"]');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Registrando…';
       toastCargando('Registrando…');
       try {
         await callServer('apiCrearTicket', state.token, recolectarTicket('ticket'));
@@ -3598,6 +3644,9 @@
         errorBox.textContent = err.message;
         errorBox.hidden = false;
         toastError('No se pudo registrar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
       }
     });
 

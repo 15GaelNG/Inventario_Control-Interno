@@ -906,7 +906,7 @@
         const valores = getValores();
         const htmlBoton = botonGuardar.innerHTML;
         botonGuardar.disabled = true;
-        botonGuardar.textContent = 'Guardando…';
+        botonGuardar.innerHTML = '<span class="spinner"></span> Guardando…';
         try {
           await cfg.alGuardar(valores, Object.assign({}, archivos));
           limpiar();

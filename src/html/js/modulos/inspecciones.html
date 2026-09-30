@@ -1076,7 +1076,7 @@
 
       const htmlBoton = boton.innerHTML;
       boton.disabled = true;
-      boton.textContent = 'Guardando…';
+      boton.innerHTML = '<span class="spinner"></span> Guardando…';
       try {
         // Solo se mandan los diagramas marcados: de los demás el servidor guarda el dibujo
         // en blanco del tipo (como AppSheet), sin subir una copia idéntica cada vez
