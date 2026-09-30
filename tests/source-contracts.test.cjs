@@ -476,7 +476,7 @@ test('inspección y responsiva: bloqueo en lista, firmas del sistema, acomodo, f
   assert.match(lineas, /function asegurarCarpeta\(\)/);
   assert.doesNotMatch(lineas, /Promise\.all\(\[pedirContexto, llamar\('apiLineasPrepararEvidencia'/);
   // Cambio rápido de estatus con las listas del AppSheet
-  assert.match(lineas, /data-ln-estatus=/);
+  assert.match(lineas, /texto: 'Cambiar estatus', alHacer: \(\) => abrirCambioEstatus\(\) \}/);   // en el ⋮ de la ficha
   const reg = read('src/services/lineas/LineasRegistros.gs');
   assert.match(reg, /function cambiarEstatus\(id, datos, usuario\)/);
   assert.match(reg, /LineasRepo\.CATALOGO\.estatusEquipo\], \['ESTATUS LINEA'/);
@@ -613,11 +613,11 @@ test('Drive: todo en la carpeta de la app AppSheet con sus rutas; NUCOS de produ
   assert.match(read('src/services/lineas/LineasUtil.gs'), /try \{ return LineasArchivos\.carpetasNucos\(\); \}/);
   assert.match(read('src/ClientApi.gs'), /function apiLineasArchivo\(token, ruta\)/);
 
-  // Cliente: General sin Patrón, con Última responsiva / Última inspección de NUCOS; nada abre la carpeta del AppSheet
+  // Cliente: General sin Patrón; Última responsiva / inspección de NUCOS solo en el ⋮ de la ficha (usuario, 30-sep)
   const lineas = read('src/html/js/lineas.html');
   assert.doesNotMatch(lineas, /\['Patrón'/);
-  assert.match(lineas, /e\.nuco \? \['Última responsiva', botonUltimoNucos\('RESPONSIVA', id\), true\] : null,/);
-  assert.match(lineas, /e\.nuco \? \['Última inspección', botonUltimoNucos\('INSPECCION', id\), true\] : null,/);
+  assert.doesNotMatch(lineas, /\['Última responsiva', botonUltimoNucos/);
+  assert.match(lineas, /texto: 'Ver última responsiva', alHacer: \(\) => abrirUltimoDesdeMenu\('RESPONSIVA', id\)/);
   // Sin la tarjeta "Registro en la hoja" (ID, folio, fila, estatus general, fechas, comentarios); Tipo en Equipo o Línea
   assert.doesNotMatch(lineas, /tarjetaRegistro|Registro en la hoja|ln-solo-escritorio/);
   assert.match(lineas, /\['Tipo', tipoRegistro\(e\.legado\), true\],/);
@@ -1375,6 +1375,10 @@ test('Selección como en Google Drive y "Mandar a cancelación" (usuario, 30-sep
   const dt = read('src/html/js/componentes/datatable.html');
   // Clic = seleccionar esa fila; Ctrl alterna; Shift rango; sin reescribir las filas (el doble clic sigue llegando)
   assert.match(dt, /function clicDrive\(id, teclasOriginales\)/);
+  // Como en Drive: el clic espera un momento y el doble clic lo cancela (no se asoma la barra al abrir)
+  assert.match(dt, /const ESPERA_DOBLE_CLIC = 250;/);
+  assert.match(dt, /if \(ev && ev\.detail >= 2\) return;/);
+  assert.match(dt, /clicDriveConEspera\(id, ev\);/);
   assert.match(dt, /else st\.seleccion = new Set\(\[id\]\);/);
   assert.match(dt, /function pintarSeleccion\(\)/);
   // Barra con lo más usado y ⋮ con el resto; clic derecho y ⋮ de la fila con todas
@@ -1393,8 +1397,10 @@ test('Selección como en Google Drive y "Mandar a cancelación" (usuario, 30-sep
   assert.match(lineas, /function accionesSeleccionDe\(modulo\)/);
   assert.match(lineas, /if \(detallesAbiertos && filas\.length === 1 && modulo === memoria\.modulo && vigente\(\)\) mostrarDetalles/);
   assert.match(lineas, /if \(o\.noModal\) document\.body\.append\(elemento\); else document\.body\.append\(fondo, elemento\);/);
-  // Ficha: cuatro a la vista y ⋮
+  // Ficha: solo Nueva inspección y Nueva responsiva a la vista, el resto en ⋮; la línea también (con equipo sin capturas)
   assert.match(lineas, /data-ln-ficha-mas="' \+ esc\(tipo\)/);
+  assert.doesNotMatch(lineas, /data-ln-estatus=|data-ln-editar=/);
+  assert.match(lineas, /botonesFicha\('data-linea-id', id, 'linea', puedeOperarLinea && !e,/);
   assert.match(lineas, /function abrirMenuFicha\(boton\)/);
   // Mandar a cancelación: cliente, API y servidor; la pestaña Resguardos solo muestra renglones con equipo
   assert.match(lineas, /llamar\('apiLineasMandarCancelacion', conNumero\.map\(\(x\) => x\.id\)/);

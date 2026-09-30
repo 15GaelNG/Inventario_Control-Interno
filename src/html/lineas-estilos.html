@@ -421,6 +421,7 @@
     .ln-detalle-header { padding: 16px; }
     .ln-detalle-botones { width: 100%; }
     .ln-detalle-botones > * { flex: 1 1 auto; }
+    .ln-detalle-botones > .ln-btn-mas { flex: 0 0 auto; }
     .ln-campos { grid-template-columns: minmax(90px, 36%) 1fr; }
     .ln-form-seccion { padding: 14px; }
     .ln-galeria { grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); }
@@ -635,8 +636,9 @@
     .ln-detalle-header { padding: 14px; gap: 10px; }
     .ln-detalle-icono { width: 40px; height: 40px; border-radius: 12px; }
     .ln-detalle-titulo h2 { font-size: 18px; }
-    .ln-detalle-botones { display: grid; grid-template-columns: 1fr 1fr; width: 100%; gap: 8px; }
-    .ln-detalle-botones > button, .ln-detalle-botones > a.ln-boton { width: 100%; white-space: normal; text-align: center; }
+    .ln-detalle-botones { display: flex; flex-wrap: wrap; width: 100%; gap: 8px; }
+    .ln-detalle-botones > button, .ln-detalle-botones > a.ln-boton { flex: 1 1 40%; white-space: normal; text-align: center; }
+    .ln-detalle-botones > .ln-btn-mas { flex: 0 0 auto; }
     .ln-resumen-rapido { grid-template-columns: 1fr 1fr; gap: 10px 12px; }
     .ln-ficha-tabs .tab-btn { padding: 10px 12px; font-size: 13px; }
     .ln-copiar-cabecera button { width: 100%; }

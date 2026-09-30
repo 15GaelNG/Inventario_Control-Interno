@@ -1540,10 +1540,6 @@
           abrirCaptura(btnCaptura.dataset.lnCaptura, ref);
           return;
         }
-        const btnEstatus = ev.target.closest('[data-ln-estatus]');
-        if (btnEstatus) { ev.preventDefault(); abrirCambioEstatus(); return; }
-        const btnEditar = ev.target.closest('[data-ln-editar]');
-        if (btnEditar) { ev.preventDefault(); abrirEditor(btnEditar.dataset.lnEditar); return; }
         const pastilla = ev.target.closest('.ln-pastilla');
         if (pastilla) {
           pastilla.parentElement.querySelectorAll('.ln-pastilla').forEach((b) => b.classList.remove('activa'));
@@ -2108,8 +2104,7 @@
           detalle.innerHTML = migas() +
             encabezado('smartphone', 'NUCO ' + esc(e.nuco || '—'),
               chip(e.estatus) + chip(TIPO_EQUIPO[e.tipo] || e.tipo, 'neutro') + (l ? chip('Con línea', 'verde') + usoTemporalVencido(l) : chip('Sin línea', 'ambar')),
-              (puedeOperar ? botonesFicha('data-equipo-id', id, 'equipo') : '') +
-              (e.carpetaDriveId ? enlaceDrive(e.carpetaDriveId, 'Ver carpeta en Drive') : ''),
+              botonesFicha('data-equipo-id', id, 'equipo', puedeOperar, e.carpetaDriveId ? enlaceDrive(e.carpetaDriveId, 'Ver carpeta en Drive') : ''),
               [['Responsable', resp.nombre], ['Modelo', e.modelo], ['IMEI', e.imei],
                 ['Línea', l ? '<a href="#" class="ln-enlace ln-mono" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + esc(l.numero || '(sin número)') + '</a>' + (l.compania ? ' · ' + esc(l.compania) : '') : '<span class="ln-tenue">Sin línea</span>', true],
                 ['Departamento', resp.departamento]]) +
@@ -2123,8 +2118,6 @@
                 e.tipo === 'CELULAR' || e.tipo === 'CELULAR_BASICO' ? ['PIN equipo', e.pinEquipo] : null,
                 e.tipo === 'MODEM' || e.tipo === 'BANDA_ANCHA' ? ['Contraseña módem', e.contrasenaModem] : null,
                 e.simResidual ? ['SIM residual', chip(e.simResidual, 'ambar'), true] : null,
-                e.nuco ? ['Última responsiva', botonUltimoNucos('RESPONSIVA', id), true] : null,
-                e.nuco ? ['Última inspección', botonUltimoNucos('INSPECCION', id), true] : null,
               ])) +
               tarjeta(icono('card-sim') + ' Línea asignada', l ? campos([
                 ['Número', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + icono('phone') + ' ' + esc(l.numero || '(sin número)') + ' ' + icono('chevron-right') + '</a>', true],
@@ -2144,14 +2137,16 @@
           const l = r.linea;
           const e = r.equipo;
           const costo = l.costoPlan !== null && l.costoPlan !== undefined ? '$' + Number(l.costoPlan).toLocaleString('es-MX') : null;
-          const puedeOperarLinea = !e && memoria.permisos && memoria.permisos.puedeOperar;
+          const puedeOperarLinea = memoria.permisos && memoria.permisos.puedeOperar;
           // La miga nombra lo que se está viendo: la línea (antes decía el NUCO de su equipo y confundía)
           pila[pila.length - 1].etiqueta = 'Línea ' + (l.numero || '—');
           const respL = (e ? e.responsable : l.responsable) || {};
           fichaActual = { id: id, titulo: 'Línea ' + (l.numero || '—'), estatusEquipo: null, estatusLinea: l.estatus || '' };
           detalle.innerHTML = migas() +
             encabezado('card-sim', esc(l.numero || 'Línea sin número'), chip(l.estatus) + usoTemporalVencido(l) + (e ? chip('En NUCO ' + (e.nuco || '—'), 'neutro') : chip('Suelta', 'ambar')),
-              puedeOperarLinea ? botonesFicha('data-linea-id', id, 'linea') : (e ? '<button type="button" class="ln-btn-icono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' Ver equipo</button>' : ''),
+              // Con equipo, las capturas son del equipo: a la vista "Ver equipo"; suelta: sus capturas. El resto en ⋮
+              botonesFicha('data-linea-id', id, 'linea', puedeOperarLinea && !e,
+                e ? '<button type="button" class="ln-btn-icono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' Ver equipo</button>' : '', puedeOperarLinea),
               [['Responsable', respL.nombre], ['Compañía', l.compania], ['SIM', l.sim], ['Fin de plan', fecha(l.finPlan)],
                 ['Equipo', e ? '<a href="#" class="ln-enlace ln-mono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">NUCO ' + esc(e.nuco || '—') + '</a>' + (e.modelo ? ' · ' + esc(e.modelo) : '') : '<span class="ln-tenue">Suelta</span>', true]]) +
             fichaEnPestanas(
@@ -2183,15 +2178,16 @@
       }
 
       /**
-       * Acciones de la ficha (estilo Drive, 30-sep): las cuatro más usadas a la vista y el resto en ⋮
-       * (abrirMenuFicha: resguardo, reasignar, cancelación, últimos documentos e historial).
+       * Acciones de la ficha (estilo Drive, usuario 30-sep): a la vista solo Nueva inspección y Nueva responsiva
+       * (`conCaptura`; una línea en un equipo no captura, lo hace su equipo), luego `extra` (Drive o Ver equipo) y
+       * al final ⋮ con todo lo demás (abrirMenuFicha). Sin permiso de operar solo queda `extra`.
        */
-      function botonesFicha(atributoRef, id, tipo) {
-        return '<button type="button" class="ln-btn-icono" data-ln-estatus="' + esc(id) + '">' + icono('toggle-right') + ' Cambiar estatus</button>' +
-          '<button type="button" class="ln-btn-icono" data-ln-editar="' + esc(id) + '">' + icono('pencil') + ' Editar información</button>' +
+      function botonesFicha(atributoRef, id, tipo, conCaptura, extra, conMas) {
+        const mas = conMas === undefined ? conCaptura : conMas;
+        return (!conCaptura ? '' :
           '<button type="button" class="ln-btn-icono" data-ln-captura="INSPECCION" ' + atributoRef + '="' + esc(id) + '">' + icono('clipboard-check') + ' Nueva inspección</button>' +
-          '<button type="button" class="ln-btn-icono" data-ln-captura="RESPONSIVA" ' + atributoRef + '="' + esc(id) + '">' + icono('signature') + ' Nueva responsiva</button>' +
-          '<button type="button" class="ln-btn-icono ln-btn-mas" data-ln-ficha-mas="' + esc(tipo) + '" data-id="' + esc(id) + '" title="Más opciones" aria-label="Más opciones">' + icono('ellipsis-vertical') + '</button>';
+          '<button type="button" class="ln-btn-icono" data-ln-captura="RESPONSIVA" ' + atributoRef + '="' + esc(id) + '">' + icono('signature') + ' Nueva responsiva</button>') +
+          (extra || '') + (!mas ? '' : '<button type="button" class="ln-btn-icono ln-btn-mas" data-ln-ficha-mas="' + esc(tipo) + '" data-id="' + esc(id) + '" title="Más opciones" aria-label="Más opciones">' + icono('ellipsis-vertical') + '</button>');
       }
 
       /** ⋮ de la ficha: lo que no está a la vista, según sea equipo o línea (con los datos del índice). */
@@ -2200,18 +2196,21 @@
         const id = boton.dataset.id;
         const ix = memoria.indice || { equipos: [], lineas: [] };
         const r = (tipo === 'equipo' ? ix.equipos : ix.lineas).filter((x) => x.id === id)[0] || { id: id };
-        const items = tipo === 'equipo' ? [
-          { icono: 'archive', texto: 'Mandar a resguardo', alHacer: () => abrirResguardo([r]) },
+        const comunes = [
+          { icono: 'toggle-right', texto: 'Cambiar estatus', alHacer: () => abrirCambioEstatus() },
+          { icono: 'pencil', texto: 'Editar información', alHacer: () => abrirEditor(id) },
+        ];
+        const items = tipo === 'equipo' ? comunes.concat([
+          { icono: 'archive', texto: 'Mandar a resguardo', separador: true, alHacer: () => abrirResguardo([r]) },
           { icono: 'user-round-pen', texto: 'Reasignar', alHacer: () => abrirMasiva(ACCION_REASIGNAR, [r]) },
           r.numero ? { icono: 'phone-off', texto: 'Mandar línea a cancelación', alHacer: () => abrirCancelacion([r]) } : null,
           tieneNuco(r) ? { icono: 'file-search', texto: 'Ver última inspección', titulo: 'Documentos', alHacer: () => abrirUltimoDesdeMenu('INSPECCION', id) } : null,
           tieneNuco(r) ? { icono: 'file-text', texto: 'Ver última responsiva', alHacer: () => abrirUltimoDesdeMenu('RESPONSIVA', id) } : null,
-          { icono: 'history', texto: 'Historial', separador: !tieneNuco(r), alHacer: () => mostrarPestanaFicha('historial') },
-        ] : [
-          { icono: 'phone-off', texto: 'Mandar a cancelación', alHacer: () => abrirCancelacion([r]) },
-          r.equipoId ? { icono: 'smartphone', texto: 'Ir al equipo', alHacer: () => abrir('equipo', r.equipoId) } : null,
           { icono: 'history', texto: 'Historial', separador: true, alHacer: () => mostrarPestanaFicha('historial') },
-        ];
+        ]) : comunes.concat([
+          r.numero ? { icono: 'phone-off', texto: 'Mandar a cancelación', separador: true, alHacer: () => abrirCancelacion([r]) } : null,
+          { icono: 'history', texto: 'Historial', separador: true, alHacer: () => mostrarPestanaFicha('historial') },
+        ]);
         menuFlotante(boton, items.filter(Boolean));
       }
 

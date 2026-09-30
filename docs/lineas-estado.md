@@ -71,7 +71,7 @@ Pedido del usuario: tres lugares para las opciones (una fila, varias filas y la 
   ficha, editar, inspección y responsiva (nueva y última), mandar la línea a cancelación, historial, copiar, exportar.
   Línea → Detalles, Cambiar estatus, Mandar a cancelación, Ir al equipo; en ⋮ abrir ficha, editar, historial.
   Varios equipos → Mandar a resguardo, Reasignar, Mandar líneas a cancelación. Varias líneas → Mandar a cancelación.
-  Ficha → Cambiar estatus, Editar, Nueva inspección, Nueva responsiva y ⋮ (`abrirMenuFicha`).
+  Ficha → ver "Ficha con dos botones" abajo (antes eran cuatro a la vista).
 - **Reasignar** ya funciona con un solo equipo (`MASIVA_MINIMO = 1`).
 - **Mandar a cancelación** (`LineasResguardos.mandarCancelacion`, `apiLineasMandarCancelacion`): la línea queda EN
   PROCESO DE CANCELACION y entra a la pestaña Cancelaciones (POR FIRMAR, con asesor) **sin mandar el equipo a
@@ -97,6 +97,16 @@ Pedido del usuario: tres lugares para las opciones (una fila, varias filas y la 
     barra y el clic derecho con una fila seleccionada (DataTable los convierte con `maximo: 1`);
   - Documentos e Historial: **una fila a la vez** (`seleccionUnica: true`: Ctrl/Shift se portan como clic normal, sin
     cuadro ni Ctrl+A), porque no tienen acciones masivas.
+- **Ficha con dos botones** (usuario, 30-sep): en el equipo solo se ven **Nueva inspección** y **Nueva responsiva**,
+  luego "Ver carpeta en Drive" y al final ⋮ con Cambiar estatus, Editar información, Mandar a resguardo, Reasignar,
+  Mandar línea a cancelación, Documentos (Ver última inspección / responsiva) e Historial. General → Equipo ya no
+  muestra "Última responsiva / inspección" (solo en ⋮). La **línea** también tiene ⋮ (Cambiar estatus, Editar
+  información, Mandar a cancelación, Historial), aunque esté en un equipo: con equipo se ve "Ver equipo" + ⋮ (sus
+  capturas son del equipo); suelta, Nueva inspección + Nueva responsiva + ⋮. Antes una línea con equipo solo tenía
+  "Ver equipo". En celular el ⋮ ya no ocupa media fila.
+- **Espera del clic** (usuario, 30-sep, como en Drive): un clic con el mouse selecciona 250 ms después
+  (`ESPERA_DOBLE_CLIC`, `clicDriveConEspera`); si llega el segundo clic de un doble clic se cancela y solo se abre la
+  ficha, sin que se asome la barra. Ctrl/Shift, teclado y dedo siguen al instante. También aplica a las tarjetas.
 
 ## 0x. PARA VENTA y PARA DESECHO como Mandar a resguardo (2026-09-30)
 

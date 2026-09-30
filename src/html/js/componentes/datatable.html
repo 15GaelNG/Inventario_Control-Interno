@@ -1167,6 +1167,20 @@
         st.ancla = id;
         pintarSeleccion();
       }
+      /**
+       * Clic con el mouse como en Drive: la selección (y su barra) espera un momento; si llega el segundo clic de
+       * un doble clic se cancela y solo se abre, sin que alcance a asomarse la barra. Ctrl/Shift o el teclado: al instante.
+       */
+      const ESPERA_DOBLE_CLIC = 250;
+      let clicPendiente = null;
+      function clicDriveConEspera(id, ev) {
+        clearTimeout(clicPendiente);
+        clicPendiente = null;
+        if (ev && ev.detail >= 2) return;   // segundo clic de un doble clic: lo abre el dblclick
+        const teclas = ev ? { ctrlKey: ev.ctrlKey, metaKey: ev.metaKey, shiftKey: ev.shiftKey } : {};
+        if (!ev || !ev.detail || teclas.ctrlKey || teclas.metaKey || teclas.shiftKey) { clicDrive(id, teclas); return; }
+        clicPendiente = setTimeout(() => { clicPendiente = null; if (!desmontado()) clicDrive(id, teclas); }, ESPERA_DOBLE_CLIC);
+      }
       /** Deja seleccionada esa fila si todavía no lo estaba (antes de abrir su menú) */
       function asegurarSeleccionada(id) {
         if (st.seleccion.has(id)) return;
@@ -2241,7 +2255,7 @@
               if (fila && cfg.alTocarFila) cfg.alTocarFila(fila);
               return;
             }
-            clicDrive(id, ev);
+            clicDriveConEspera(id, ev);
             return;
           }
         }
@@ -2413,7 +2427,7 @@
         getSeleccion: () => st.datos.filter((f) => st.seleccion.has(idDe(f))),
         setModoSeleccion, enModoSeleccion: () => st.modoSeleccion,
         /** Estilo Drive desde fuera de la tabla (p. ej. las tarjetas): mismo clic, mismo menú, repintar la barra */
-        clicSeleccion: (id, teclas) => clicDrive(String(id), teclas || {}),
+        clicSeleccion: (id, teclas) => clicDriveConEspera(String(id), teclas || null),
         asegurarSeleccionada: (id) => asegurarSeleccionada(String(id)),
         abrirMenu: (x, y) => abrirMenuAcciones({ x: x, y: y }, false),
         refrescarSeleccion: () => pintarSeleccion(),
