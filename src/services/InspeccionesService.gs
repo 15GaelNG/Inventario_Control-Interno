@@ -596,16 +596,28 @@ const InspeccionesService = (function () {
       { titulo: 'Batería', peso: 5, piezas: ['TERMINALES CON SARRO', 'DERRAME LIQUIDO / MAL OLOR', 'BATERIA INFLADA'] },
     ],
   };
+  /** Sin espacios ni mayúsculas/minúsculas: una palabra que se corta a la mitad de
+   *  línea en el documento a veces pierde el espacio al leerse como texto plano
+   *  (pasó con "ASIENTOS TRASEROS 2" -> "ASIENTOS TRASEROS2" al leer el PDF de la
+   *  plantilla), así que comparar ignorando espacios es más confiable que esperar
+   *  que el nombre de REAGRUPAR_SECCIONES calce carácter por carácter. */
+  function normalizarNombrePieza_(nombre) {
+    return String(nombre || '').toUpperCase().replace(/\s+/g, '');
+  }
   function reagruparSiAplica_(tipo, secciones) {
     const mapa = REAGRUPAR_SECCIONES[String(tipo || '').trim().toUpperCase()];
     if (!mapa) return secciones;
 
     const porPieza = {};
-    secciones.forEach((s) => s.campos.forEach((c) => { porPieza[c.campo] = c; }));
+    secciones.forEach((s) => s.campos.forEach((c) => { porPieza[normalizarNombrePieza_(c.campo)] = c; }));
 
     const usadas = {};
     const reagrupadas = mapa.map((grupo) => {
-      const campos = grupo.piezas.map((nombre) => { usadas[nombre] = true; return porPieza[nombre]; }).filter(Boolean);
+      const campos = grupo.piezas.map((nombre) => {
+        const clave = normalizarNombrePieza_(nombre);
+        usadas[clave] = true;
+        return porPieza[clave];
+      }).filter(Boolean);
       return { titulo: grupo.titulo, peso: grupo.peso, campos: campos };
     });
 
@@ -614,7 +626,7 @@ const InspeccionesService = (function () {
     // aparte con peso 0 (no afecta la calificación) para que se note y se pueda
     // agregar aquí.
     const faltantes = [];
-    secciones.forEach((s) => s.campos.forEach((c) => { if (!usadas[c.campo]) faltantes.push(c); }));
+    secciones.forEach((s) => s.campos.forEach((c) => { if (!usadas[normalizarNombrePieza_(c.campo)]) faltantes.push(c); }));
     if (faltantes.length) reagrupadas.push({ titulo: 'Otras piezas (revisar agrupación)', peso: 0, campos: faltantes });
     return reagrupadas;
   }
