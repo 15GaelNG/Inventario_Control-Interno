@@ -88,8 +88,12 @@ const VehiculosService = (function () {
     return resultado.sort((a, b) => String(a.FOLIO).localeCompare(String(b.FOLIO)));
   }
 
+  // Ojo: la propiedad de salida sigue llamandose ID_VEHICULO porque es el contrato con
+  // el frontend (app.html usa idCampo: 'ID_VEHICULO'), pero el VALOR sale de la columna
+  // 'ID'. Antes leia 'ID_VEHICULO', que la migracion renombro a ID ANTERIOR: la lista
+  // cargaba pero con el id en undefined, y editar/eliminar desde ahi no servian.
   const COLUMNAS_RESUMEN = [
-    'ID_VEHICULO', 'FOLIO', 'NUCCO', 'DEPARTAMENTO', 'NO ECONOMICO', 'MARCA', 'CLASE',
+    'ID', 'FOLIO', 'NUCCO', 'DEPARTAMENTO', 'NO ECONOMICO', 'MARCA', 'CLASE',
     'LINEA VEHICULO', 'MODELO', 'COLOR', 'PLACA', 'SEDE', 'ESTATUS', 'FECHA REGISTRO SISTEMA CI',
   ];
 
@@ -107,7 +111,7 @@ const VehiculosService = (function () {
     for (let i = 0; i < filas; i++) {
       if (!datos['FOLIO'][i]) continue;
       resultado.push({
-        ID_VEHICULO: datos['ID_VEHICULO'][i],
+        ID_VEHICULO: datos['ID'][i],
         FOLIO: datos['FOLIO'][i],
         NUCCO: datos['NUCCO'][i] || '',
         DEPARTAMENTO: datos['DEPARTAMENTO'][i] || '',

@@ -141,7 +141,7 @@ const SensoresService = (function () {
   function listar(token) {
     Permisos.puedeLeer(token, 'instalacion-sensores');
     return SheetUtils.getAll(ssId(), hoja_().getName())
-      .filter((r) => r['ID_SENSOR'])
+      .filter((r) => r['ID'])
       .map(desdeOriginal_)
       .sort((a, b) => (b.FECHA_INSTALACION || '').localeCompare(a.FECHA_INSTALACION || ''));
   }
@@ -292,7 +292,7 @@ const SensoresService = (function () {
   function eliminar(token, ids) {
     Permisos.puedeEditar(token, 'instalacion-sensores');
     if (!Array.isArray(ids) || !ids.length) throw new Error('No se indicaron registros a eliminar');
-    return { eliminadas: SheetUtils.removeMany(ssId(), hoja_().getName(), ids, 'ID_SENSOR') };
+    return { eliminadas: SheetUtils.removeMany(ssId(), hoja_().getName(), ids, 'ID') };
   }
 
   function urlResponsiva(token, ruta) {

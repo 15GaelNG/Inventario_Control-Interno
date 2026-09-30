@@ -17,7 +17,9 @@ const CambiosVehiculosService = (function () {
   // por columnas encuentre una pestaña equivocada (ej. una copia/respaldo
   // con las mismas 8 columnas) y la deje cacheada 6 horas.
   const NOMBRE_HOJA = 'CAMBIOS VEHICULOS';
-  const COLUMNAS_FIRMA = ['ID_CAMBIO', 'FOLIO', 'TABLA', 'CAMPO', 'ANTES', 'DESPUES', 'ACTUALIZADO POR', 'FECHA ACTUALIZACION'];
+  // No es una huella de pestana aunque se llame FIRMA: se usa con leerColumnasDeHoja,
+  // no con getSheetByColumns. 'ID' en vez de 'ID_CAMBIO', que la migracion renombro.
+  const COLUMNAS_FIRMA = ['ID', 'FOLIO', 'TABLA', 'CAMPO', 'ANTES', 'DESPUES', 'ACTUALIZADO POR', 'FECHA ACTUALIZACION'];
 
   function ssId() {
     return Config.SPREADSHEET_IDS.VEHICULOS();
@@ -101,7 +103,7 @@ const CambiosVehiculosService = (function () {
       // confiable de que el renglón es real.
       if (!datos.FOLIO[i]) continue;
       resultado.push({
-        ID: datos.ID_CAMBIO[i] || '',
+        ID: datos.ID[i] || '',
         FOLIO: datos.FOLIO[i] || '',
         CAMPO: datos.CAMPO[i] || '',
         ANTES: datos.ANTES[i] || '',
@@ -143,7 +145,7 @@ const CambiosVehiculosService = (function () {
     for (let i = filas - 1; i >= 0 && resultado.length < MAXIMO_CAMBIOS_POR_VEHICULO; i--) {
       if (String(datos.FOLIO[i] || '') !== String(folio)) continue;
       resultado.push({
-        ID: datos.ID_CAMBIO[i] || '',
+        ID: datos.ID[i] || '',
         FOLIO: datos.FOLIO[i] || '',
         CAMPO: datos.CAMPO[i] || '',
         ANTES: datos.ANTES[i] || '',

@@ -110,7 +110,7 @@ const IncidenciasService = (function () {
       'FECHA TRABAJO REALIZADO': datos.FECHA_TRABAJO ? new Date(datos.FECHA_TRABAJO) : new Date(),
       'INSPECCION SALIDA': datos.INSPECCION_SALIDA || '',
       'NOMBRE MECANICO': datos.MECANICO || '',
-    }, 'ID_INCIDENCIA');
+    }, 'ID');
     return { ID: id };
   }
 

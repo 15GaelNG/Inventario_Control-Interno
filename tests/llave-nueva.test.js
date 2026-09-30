@@ -156,5 +156,51 @@ console.log('\n6. Lo que queda pendiente está declarado, no olvidado');
   console.log('      MOVIMIENTOS_ACCESORIOS, así que su cambio va con el pipeline 3, en pausa)');
 }
 
+console.log('\n7. NINGUNA mención al nombre viejo, aunque no sea una búsqueda');
+{
+  // Esta revisión existe porque las de arriba no alcanzaron. Buscaban LLAMADAS
+  // (findById/update/remove) y se les escaparon 12 lugares reales, cada uno por una razón
+  // distinta y todas aburridas:
+  //
+  //   - `removeMany(` no empata con `remove\(`, así que tres eliminar() pasaron derecho.
+  //   - La llamada de IncidenciasService.cerrar() lleva un objeto de 4 campos en medio y
+  //     pasa de los 220 caracteres que miraba el regex.
+  //   - `.filter((r) => r['ID_HOLOGRAMA'])` no es una llamada a SheetUtils: es el filtro
+  //     de listar(). Con el nombre viejo devolvía undefined en cada renglón, así que
+  //     listar() regresaba CERO filas — el módulo entero se veía vacío.
+  //   - COLUMNAS_RESUMEN y COLUMNAS_FIRMA son arreglos de nombres, tampoco llamadas.
+  //
+  // La lección: mientras la revisión intente adivinar CÓMO se usa el nombre, va a haber
+  // una forma más de usarlo. Así que esta no adivina: el nombre viejo no aparece, punto.
+  // Si algún día uno de estos hace falta de verdad, va en PENDIENTES con su razón escrita.
+  const sinComentarios = (t) => t
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').filter((l) => !/^\s*(\/\/|\*)/.test(l)).join('\n');
+
+  const culpables = [];
+  servicios.forEach((s) => {
+    if (PENDIENTES.indexOf(s.nombre) !== -1) return;
+    const limpio = sinComentarios(s.texto);
+    VIEJOS.forEach((v) => {
+      // La propiedad de SALIDA ID_VEHICULO es el contrato con el frontend (app.html usa
+      // idCampo: 'ID_VEHICULO'), así que esa sí puede aparecer; lo que no puede es leerse
+      // de la hoja con ese nombre, o sea entre comillas.
+      const re = new RegExp("['\"]" + v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "['\"]", 'g');
+      const cuantas = (limpio.match(re) || []).length;
+      if (cuantas) culpables.push(s.nombre + ' -> ' + v + ' x' + cuantas);
+    });
+  });
+  ok(culpables.length === 0,
+     culpables.length
+       ? 'quedan nombres viejos entre comillas:\n       ' + culpables.join('\n       ')
+       : 'ningún servicio revisado nombra una columna vieja de id, en ningún contexto');
+
+  // Y que la propiedad de salida del frontend siga intacta: arreglar lo de arriba
+  // cambiando ESTO habría roto la lista de vehículos de otra manera.
+  const veh = lee('services', 'VehiculosService.gs');
+  ok(/ID_VEHICULO: datos\['ID'\]\[i\]/.test(veh),
+     "VehiculosService entrega la propiedad ID_VEHICULO leyéndola de la columna 'ID'");
+}
+
 console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');
 process.exit(fallas ? 1 : 0);

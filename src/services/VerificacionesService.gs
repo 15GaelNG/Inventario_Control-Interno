@@ -70,7 +70,7 @@ const VerificacionesService = (function () {
   function listar(token) {
     Permisos.puedeLeer(token, 'verificaciones');
     return SheetUtils.getAll(ssId(), hoja_().getName())
-      .filter((r) => r['ID_VERIFICACION'])
+      .filter((r) => r['ID'])
       .map(desdeOriginal_)
       .sort((a, b) => (b.FECHA_REGISTRO || '').localeCompare(a.FECHA_REGISTRO || ''));
   }
@@ -170,7 +170,7 @@ const VerificacionesService = (function () {
   function eliminar(token, ids) {
     Permisos.puedeEditar(token, 'verificaciones');
     if (!Array.isArray(ids) || !ids.length) throw new Error('No se indicaron registros a eliminar');
-    const borradas = SheetUtils.removeMany(ssId(), hoja_().getName(), ids, 'ID_VERIFICACION');
+    const borradas = SheetUtils.removeMany(ssId(), hoja_().getName(), ids, 'ID');
     return { eliminadas: borradas };
   }
 

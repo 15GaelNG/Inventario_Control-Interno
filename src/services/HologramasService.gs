@@ -192,7 +192,7 @@ const HologramasService = (function () {
     Permisos.puedeLeer(token, 'hologramas');
     const catalogo = catalogoPorSerie_();
     return SheetUtils.getAll(ssId(), hoja_().getName())
-      .filter((r) => r['ID_HOLOGRAMA'])
+      .filter((r) => r['ID'])
       .map((r) => conCatalogo_(desdeOriginal_(r), catalogo[enMayusculas_(r['SERIE VEHICULO'])]))
       .sort((a, b) => (b.FECHA_REGISTRO || '').localeCompare(a.FECHA_REGISTRO || ''));
   }
@@ -286,7 +286,7 @@ const HologramasService = (function () {
     const calcomania = enMayusculas_(datos.CALCOMANIA);
     const serie = enMayusculas_(datos.SERIE_VEHICULO);
     filas.forEach((r) => {
-      if (r['ID_HOLOGRAMA'] === idActual) return;
+      if (r['ID'] === idActual) return;
       if (calcomania && enMayusculas_(r['CALCOMANIA EOX']) === calcomania) {
         throw new Error('La calcomanía ' + calcomania + ' ya está registrada en otro holograma');
       }
@@ -378,7 +378,7 @@ const HologramasService = (function () {
   function eliminar(token, ids) {
     Permisos.puedeEditar(token, 'hologramas');
     if (!Array.isArray(ids) || !ids.length) throw new Error('No se indicaron registros a eliminar');
-    return { eliminadas: SheetUtils.removeMany(ssId(), hoja_().getName(), ids, 'ID_HOLOGRAMA') };
+    return { eliminadas: SheetUtils.removeMany(ssId(), hoja_().getName(), ids, 'ID') };
   }
 
   function urlSolicitud(token, ruta) {
