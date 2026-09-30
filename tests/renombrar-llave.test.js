@@ -198,7 +198,13 @@ console.log('\n8. La columna SIN ENCABEZADO se encuentra por posición');
   // llaveAnterior estaba puesta, así que reportaba PROBLEMAS y detenía la corrida.
   const hojas = {
     'CAMBIOS LINEAS TELEFONICAS': hojaFalsa(['', 'ID_LINEA', '', 'IMEI'],
-      [['ee398840', 'dv1sd13', '0', '35']]),
+      [['ee398840', 'dv1sd13', '0', '35'],
+       ['ee398841', 'dv1sd14', '1080', '36']]),
+    // El catálogo hace falta porque la deducción del NUCO se COMPRUEBA contra él: sus
+    // valores tienen que existir de verdad en LINEAS TELEFONICAS.NUCO. Sin esta hoja, la
+    // comprobación no se puede hacer y se reporta como problema — bien, pero no es lo que
+    // esta prueba mide.
+    'LINEAS TELEFONICAS': hojaFalsa(['ID', 'NUCO'], [['LIN-1', '0'], ['LIN-2', '1080']]),
   };
   const api = cargar(hojas);
   const rep = api.renombrarLlaveAnterior({ familia: 'lineas', escribir: true });
@@ -206,6 +212,10 @@ console.log('\n8. La columna SIN ENCABEZADO se encuentra por posición');
     'le puso nombre a la columna 1, que no tenía');
   ok(rep.indexOf('por POSICION') !== -1, 'y el reporte dice que la encontró por posición');
   ok(rep.indexOf('PROBLEMAS') === -1, 'sin reportar problemas: ya no detiene el pipeline');
+  ok(hojas['CAMBIOS LINEAS TELEFONICAS'].enc[2] === 'NUCO',
+    'y a la columna 3 le puso NUCO, tras comprobar que sus valores SÍ son NUCOs');
+  ok(/100% de sus 2 valores son LINEAS TELEFONICAS\.NUCO/.test(rep),
+    'el reporte dice la tasa que midió, no solo que lo dedujo');
   ok(hojas['CAMBIOS LINEAS TELEFONICAS'].datos[0][0] === 'ee398840', 'y el valor sigue ahí');
 }
 
@@ -280,6 +290,31 @@ console.log('\nLos encabezados deducidos se ubican por sus VECINOS, no por un n�
   const sinVecino = api.migDeducidoDonde_(['ID', 'ID_LINEA', '', 'OTRA'], d);
   ok(!!sinVecino.error && /no encuentro sus vecinos/.test(sinVecino.error),
      'y si falta un vecino, lo dice en vez de tronar');
+}
+
+console.log('\nY la deducción se COMPRUEBA: una columna impostora no se nombra');
+{
+  // Esto es lo que hace segura la "intuición". Ubicar por vecinos dice DÓNDE está la
+  // columna; comprobar contra el catálogo dice que además ES la que creemos. Si alguien
+  // mete otra columna entre ID_LINEA e IMEI, los vecinos solos la nombrarían NUCO.
+  //
+  // Medido el 30/09/2026: la columna real da 99.67%–99.74% en los tres libros, y la
+  // columna IMEI, de control, da 0.00%. No hay zona gris.
+  const hojas = {
+    'CAMBIOS LINEAS TELEFONICAS': hojaFalsa(['', 'ID_LINEA', '', 'IMEI'],
+      [['ee398840', 'dv1sd13', '866867066468484', '35'],
+       ['ee398841', 'dv1sd14', '866867066468485', '36']]),
+    'LINEAS TELEFONICAS': hojaFalsa(['ID', 'NUCO'], [['LIN-1', '0'], ['LIN-2', '1080']]),
+  };
+  const api = cargar(hojas);
+  const rep = api.renombrarLlaveAnterior({ familia: 'lineas', escribir: true });
+  ok(hojas['CAMBIOS LINEAS TELEFONICAS'].enc[2] === '',
+     'la columna 3 se queda SIN nombre: sus valores son IMEIs, no NUCOs');
+  ok(/NO parece "NUCO"/.test(rep) && /solo 0%/.test(rep),
+     'y el reporte dice por qué, con el número que midió');
+  ok(rep.indexOf('PROBLEMAS') !== -1,
+     'lo reporta como PROBLEMA, así que detiene la corrida que escribe');
+  console.log('     (sin esta comprobación, el nombre equivocado se habría escrito solo)');
 }
 
 console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');

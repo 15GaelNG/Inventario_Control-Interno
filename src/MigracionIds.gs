@@ -882,6 +882,15 @@ const ENCABEZADOS_DEDUCIDOS = [
     // Los vecinos son lo único que no se mueve. En el libro del equipo el número fijo
     // apuntaba a ID_LINEA, y el guardián se negó a escribirle encima — hizo bien.
     entre: ['ID_LINEA', 'IMEI'],
+    // Y antes de escribir el nombre se VUELVE A MEDIR la evidencia: sus valores tienen que
+    // ser NUCOs de verdad, de los que están en LINEAS TELEFONICAS. Ubicar por vecinos dice
+    // DÓNDE está la columna; esto dice que además es la que creemos. Si alguien mete otra
+    // columna entre ID_LINEA e IMEI, los vecinos solos la nombrarían NUCO por error.
+    //
+    // Medido el 30/09/2026 en los tres libros: 99.74% en producción, 99.74% en el
+    // laboratorio y 99.67% en el del equipo. La columna IMEI, de control, da 0.00%. No hay
+    // zona gris, así que el mínimo de 0.90 no es un número peleado.
+    comprueba: { hoja: 'LINEAS TELEFONICAS', columna: 'NUCO', minimo: 0.90 },
     evidencia: 'De 35,428 filas con línea padre, 35,425 traen exactamente el NUCO de esa ' +
       'línea (99.99%). Las 3 que no son dedazos: 110000 donde va 10001 (un cero de más), ' +
       '1483 donde va 1484, y 1297 donde va 1080. Idéntico en producción y en el ' +
@@ -917,6 +926,42 @@ function migDeducidoDonde_(encabezados, d) {
   return { columna: izq + 1 };
 }
 
+/**
+ * Vuelve a medir la evidencia de una deducción: qué tanto de la columna existe de verdad en
+ * la columna del catálogo con la que se justificó. Devuelve {tasa, valores} o {error}.
+ *
+ * No depende de llaves foráneas ni de qué versión migró el libro: compara CONTRA UN
+ * CONJUNTO de valores válidos, y eso se ve igual antes y después de migrar.
+ */
+function migDeducidoComprueba_(ss, sheet, columna, d) {
+  const catalogo = ss.getSheetByName(d.comprueba.hoja);
+  if (!catalogo) {
+    return { error: 'no existe "' + d.comprueba.hoja + '", no puedo comprobar la deducción' };
+  }
+  const posCat = migColumna_(migEncabezados_(catalogo), d.comprueba.columna);
+  if (!posCat) {
+    return { error: '"' + d.comprueba.hoja + '" no tiene columna "' + d.comprueba.columna +
+      '", no puedo comprobar la deducción' };
+  }
+  const filasCat = migFilas_(catalogo);
+  if (!filasCat) return { error: '"' + d.comprueba.hoja + '" está vacía' };
+
+  const validos = {};
+  migLeerColumna_(catalogo, posCat, filasCat).forEach((v) => {
+    const x = migLimpio_(v);
+    if (x) validos[x.toUpperCase()] = true;
+  });
+
+  const filas = migFilas_(sheet);
+  if (!filas) return { error: 'la hoja está vacía' };
+  const conDato = migLeerColumna_(sheet, columna, filas)
+    .map((v) => migLimpio_(v)).filter(Boolean);
+  if (!conDato.length) return { error: 'esa columna no tiene ni un valor' };
+
+  const dentro = conDato.filter((v) => validos[v.toUpperCase()]).length;
+  return { tasa: dentro / conDato.length, valores: conDato.length, dentro: dentro };
+}
+
 function ponerEncabezadosDeducidos_(ss, cfg, lineas, problemas) {
   let puestos = 0;
   ENCABEZADOS_DEDUCIDOS.forEach((d) => {
@@ -941,6 +986,32 @@ function ponerEncabezadosDeducidos_(ss, cfg, lineas, problemas) {
         'revisa la deducción antes de seguir (ver ENCABEZADOS_DEDUCIDOS).');
       return;
     }
+    // La evidencia, otra vez, aquí y ahora. Ubicar por vecinos dice DÓNDE; esto dice que
+    // es la columna que creemos. Sin este paso, una columna nueva metida entre los dos
+    // vecinos se llamaría NUCO sin que nadie se enterara.
+    if (d.comprueba) {
+      const c = migDeducidoComprueba_(ss, sheet, donde.columna, d);
+      if (c.error) {
+        problemas.push(d.hoja + ': ' + c.error + ' para la columna ' + donde.columna +
+          ' ("' + d.nombre + '")');
+        return;
+      }
+      if (c.tasa < d.comprueba.minimo) {
+        problemas.push(d.hoja + ': la columna ' + donde.columna + ' NO parece "' + d.nombre +
+          '": solo ' + Math.round(c.tasa * 1000) / 10 + '% de sus ' + c.valores +
+          ' valores están en ' + d.comprueba.hoja + '.' + d.comprueba.columna +
+          ', y se esperaba al menos ' + Math.round(d.comprueba.minimo * 100) + '%. ' +
+          'La hoja cambió de forma: revisa la deducción (ver ENCABEZADOS_DEDUCIDOS).');
+        return;
+      }
+      lineas.push('  ' + d.hoja + ': columna ' + donde.columna + '  "(sin encabezado)"  ->  "' +
+        d.nombre + '"   (' + Math.round(c.tasa * 1000) / 10 + '% de sus ' + c.valores +
+        ' valores son ' + d.comprueba.hoja + '.' + d.comprueba.columna + ')');
+      if (cfg.escribir) sheet.getRange(1, donde.columna).setValue(d.nombre);
+      puestos++;
+      return;
+    }
+
     lineas.push('  ' + d.hoja + ': columna ' + donde.columna + '  "(sin encabezado)"  ->  "' +
       d.nombre + '"   (deducido del contenido, ubicada entre "' + d.entre[0] + '" y "' +
       d.entre[1] + '")');
