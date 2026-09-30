@@ -112,6 +112,15 @@ const MIGRACION_REFERENCIAS = [
   { hoja: 'INSPECCION VEHICULAR', columna: 'FOLIO', padre: 'VEHICULOS', porLlaveNegocio: 'FOLIO', destino: 'ID VEHICULO', esperado: 0.996 },
   { hoja: 'HOLOGRAMAS', columna: 'SERIE VEHICULO', padre: 'VEHICULOS', porLlaveNegocio: 'SERIE VEHICULO', destino: 'ID VEHICULO', opcional: true },
   { hoja: 'CAMBIOS VEHICULOS', columna: 'FOLIO', padre: 'VEHICULOS', porLlaveNegocio: 'FOLIO', destino: 'ID VEHICULO', esperado: 0.73 },
+  // Se me habia escapado, igual que HISTORIAL_REASIGNACIONES: es de la familia de
+  // vehiculos y no estaba en el mapa. Hoy trae 1 sola fila y empareja al 100%, asi que
+  // cuesta nada; pero si no esta aqui, el dia que crezca queda huerfana en silencio.
+  { hoja: 'INCIDENCIAS', columna: 'FOLIO', padre: 'VEHICULOS', porLlaveNegocio: 'FOLIO', destino: 'ID VEHICULO', esperado: 1.00 },
+  // TICKETS NO va aqui, aunque tenga PLACA. Medido el 30/09/2026: su columna PLACA trae
+  // 'VARIAS' x119, 'VARIOS' x17, celdas con DOS placas ('UKR913H, ULP697K') y 202 vacias.
+  // Un ticket puede no hablar de ningun vehiculo, de uno, o de varios, asi que una sola
+  // columna ID VEHICULO no lo puede representar: seria una tabla puente. Y sus TIPO
+  // ATENCION son de tarjetas de combustible, hologramas y Uber, no de una unidad.
   // Padre LINEAS TELEFONICAS: su columna se llamaba "ID" y la migración la pisó, así que
   // estas columnas se reescriben en su lugar (si no, ya no apuntan a nada).
   { hoja: 'INSPECCIONES LINEAS', columna: 'ID LINEA', padre: 'LINEAS TELEFONICAS', esperado: 0.999 },

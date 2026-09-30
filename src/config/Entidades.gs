@@ -21,28 +21,36 @@
 
 const Entidades = (function () {
   /**
+   * `familia` agrupa las hojas por módulo para poder migrar y homologar **una familia a la
+   * vez** en vez de las 26 de golpe. Es lo que permite dejar Vehículos terminado y probado
+   * antes de tocar Líneas, que es mucho más revoltoso (ver docs/lineas-homologacion.md).
+   *
+   * OJO con `NUCO`: NO es un inventario global. `LINEAS TELEFONICAS.NUCO` (1,615 valores) y
+   * `VEHICULOS.NUCCO` (648) **se traslapan en 497**, significando cosas distintas. Sirve de
+   * llave DENTRO de una familia, nunca entre familias (medido el 30/09/2026).
+   *
    * `llaveAnterior` es la columna que identificaba al renglón ANTES de la migración. Se usa
    * para dos cosas: saber de dónde leer el valor viejo, y saber si el ID nuevo va a pisar
    * esa columna (solo pasa cuando ya se llama "ID", y solo entonces hace falta respaldarla).
    * Cuando es null, la hoja la tiene sin encabezado y va por posición (base 1).
    */
   const POR_HOJA = {
-    'VEHICULOS': { prefijo: 'VEH', llaveAnterior: 'ID_VEHICULO' },
-    'CAMBIOS VEHICULOS': { prefijo: 'CVE', llaveAnterior: 'ID_CAMBIO' },
-    'REASIGNACIONES_VEHICULOS': { prefijo: 'RVE', llaveAnterior: 'ID Reasignacion Vehicular' },
+    'VEHICULOS': { prefijo: 'VEH', llaveAnterior: 'ID_VEHICULO', familia: 'vehiculos' },
+    'CAMBIOS VEHICULOS': { prefijo: 'CVE', llaveAnterior: 'ID_CAMBIO', familia: 'vehiculos' },
+    'REASIGNACIONES_VEHICULOS': { prefijo: 'RVE', llaveAnterior: 'ID Reasignacion Vehicular', familia: 'vehiculos' },
     // Reasignaciones de LÍNEAS (no de vehículos, pese a lo parecido del nombre).
     // La escribe LineasRepo; su "ID Linea" apunta a LINEAS TELEFONICAS (99.9% en producción).
-    'HISTORIAL_REASIGNACIONES': { prefijo: 'HIS', llaveAnterior: 'ID Historial' },
-    'VERIFICACIONES': { prefijo: 'VER', llaveAnterior: 'ID_VERIFICACION' },
-    'INSPECCION VEHICULAR': { prefijo: 'INS', llaveAnterior: 'ID INSPECCION' },
-    'INSTALACION DE SENSORES': { prefijo: 'SEN', llaveAnterior: 'ID_SENSOR' },
-    'HOLOGRAMAS': { prefijo: 'HOL', llaveAnterior: 'ID_HOLOGRAMA' },
-    'INCIDENCIAS': { prefijo: 'INC', llaveAnterior: 'ID_INCIDENCIA' },
-    'LINEAS TELEFONICAS': { prefijo: 'LIN', llaveAnterior: 'ID' },
-    'INSPECCIONES LINEAS': { prefijo: 'ILI', llaveAnterior: 'ID' },
-    'RESPONSIVAS LINEAS': { prefijo: 'RLI', llaveAnterior: 'ID' },
-    'REACTIVACION DE LINEAS': { prefijo: 'REA', llaveAnterior: 'ID' },
-    'SOLICITUD DE LINEAS': { prefijo: 'SOL', llaveAnterior: 'ID' },
+    'HISTORIAL_REASIGNACIONES': { prefijo: 'HIS', llaveAnterior: 'ID Historial', familia: 'lineas' },
+    'VERIFICACIONES': { prefijo: 'VER', llaveAnterior: 'ID_VERIFICACION', familia: 'vehiculos' },
+    'INSPECCION VEHICULAR': { prefijo: 'INS', llaveAnterior: 'ID INSPECCION', familia: 'vehiculos' },
+    'INSTALACION DE SENSORES': { prefijo: 'SEN', llaveAnterior: 'ID_SENSOR', familia: 'vehiculos' },
+    'HOLOGRAMAS': { prefijo: 'HOL', llaveAnterior: 'ID_HOLOGRAMA', familia: 'vehiculos' },
+    'INCIDENCIAS': { prefijo: 'INC', llaveAnterior: 'ID_INCIDENCIA', familia: 'vehiculos' },
+    'LINEAS TELEFONICAS': { prefijo: 'LIN', llaveAnterior: 'ID', familia: 'lineas' },
+    'INSPECCIONES LINEAS': { prefijo: 'ILI', llaveAnterior: 'ID', familia: 'lineas' },
+    'RESPONSIVAS LINEAS': { prefijo: 'RLI', llaveAnterior: 'ID', familia: 'lineas' },
+    'REACTIVACION DE LINEAS': { prefijo: 'REA', llaveAnterior: 'ID', familia: 'lineas' },
+    'SOLICITUD DE LINEAS': { prefijo: 'SOL', llaveAnterior: 'ID', familia: 'lineas' },
     // Caso especial: su columna de ID no tenía encabezado y se le puso "ID APPSHEET"
     // (29/09/2026), que es justo lo que guarda: el id que traía de AppSheet.
     //
@@ -53,23 +61,23 @@ const Entidades = (function () {
     //
     // El nombre NO choca con COLUMNA_ID_ANTERIOR ('ID ANTERIOR') a propósito: son dos cosas
     // distintas y ahora se llaman distinto. Ver la nota de COLUMNA_ID_ANTERIOR abajo.
-    'CAMBIOS LINEAS TELEFONICAS': { prefijo: 'CLI', llaveAnterior: 'ID APPSHEET' },
-    'BITACORA DE DESECHO': { prefijo: 'DES', llaveAnterior: 'ID_DESECHO' },
-    'ACCESORIOS CELULARES': { prefijo: 'ACC', llaveAnterior: 'ID_Accesorio' },
-    'MOVIMIENTOS_ACCESORIOS': { prefijo: 'MAC', llaveAnterior: 'ID_Movimiento' },
-    'ARQUEOS': { prefijo: 'ARQ', llaveAnterior: 'ID ARQUEO' },
-    'CAJAS CHICAS': { prefijo: 'CCH', llaveAnterior: 'ID CCH' },
-    'INCREMENTOS': { prefijo: 'MON', llaveAnterior: 'ID' },
-    'UBER': { prefijo: 'UBE', llaveAnterior: 'ID' },
-    'TICKETS': { prefijo: 'TCK', llaveAnterior: 'ID' },
+    'CAMBIOS LINEAS TELEFONICAS': { prefijo: 'CLI', llaveAnterior: 'ID APPSHEET', familia: 'lineas' },
+    'BITACORA DE DESECHO': { prefijo: 'DES', llaveAnterior: 'ID_DESECHO', familia: 'lineas' },
+    'ACCESORIOS CELULARES': { prefijo: 'ACC', llaveAnterior: 'ID_Accesorio', familia: 'lineas' },
+    'MOVIMIENTOS_ACCESORIOS': { prefijo: 'MAC', llaveAnterior: 'ID_Movimiento', familia: 'lineas' },
+    'ARQUEOS': { prefijo: 'ARQ', llaveAnterior: 'ID ARQUEO', familia: 'cajachica' },
+    'CAJAS CHICAS': { prefijo: 'CCH', llaveAnterior: 'ID CCH', familia: 'cajachica' },
+    'INCREMENTOS': { prefijo: 'MON', llaveAnterior: 'ID', familia: 'cajachica' },
+    'UBER': { prefijo: 'UBE', llaveAnterior: 'ID', familia: 'otros' },
+    'TICKETS': { prefijo: 'TCK', llaveAnterior: 'ID', familia: 'otros' },
     // Catálogo de personas: su identidad es el número de empleado, no un ID generado
-    'COLABORADORES': { prefijo: 'COL', llaveAnterior: 'No EMPLEADO' },
+    'COLABORADORES': { prefijo: 'COL', llaveAnterior: 'No EMPLEADO', familia: 'otros' },
 
     // --- Pestañas del sistema nuevo: NO vienen de AppSheet, las crea el módulo de Líneas ---
     // No pasan por MigracionIds (no hay nada viejo que convertir), pero sí necesitan prefijo
     // para que sus altas nazcan con el formato correcto.
-    'APP_EVIDENCIAS': { prefijo: 'EVI', llaveAnterior: 'ID', delSistemaNuevo: true },
-    'APP_MOVIMIENTOS': { prefijo: 'MOV', llaveAnterior: 'ID', delSistemaNuevo: true },
+    'APP_EVIDENCIAS': { prefijo: 'EVI', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
+    'APP_MOVIMIENTOS': { prefijo: 'MOV', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
   };
 
   /** Cómo se llama la columna de la llave nueva, en todas las hojas */
@@ -113,6 +121,8 @@ const Entidades = (function () {
     e.prefijo = POR_HOJA[hoja].prefijo;
     e.llaveAnterior = POR_HOJA[hoja].llaveAnterior;
     e.columnaAnterior = POR_HOJA[hoja].columnaAnterior || 0;
+    // Sin esta línea, deFamilia() lee undefined y todas las hojas caen en 'otros'.
+    e.familia = POR_HOJA[hoja].familia || 'otros';
     // Nació con el sistema nuevo: no hay IDs viejos que convertir, así que MigracionIds
     // no la toca. Sí tiene prefijo, para que sus altas nazcan bien.
     e.delSistemaNuevo = !!POR_HOJA[hoja].delSistemaNuevo;
@@ -167,8 +177,27 @@ const Entidades = (function () {
     return { hojas: todas().length, problemas: problemas };
   }
 
+  /** Los nombres de familia que existen, sin repetir y en orden estable. */
+  function familias() {
+    const vistas = {};
+    Object.keys(POR_HOJA).forEach((h) => { vistas[POR_HOJA[h].familia || 'otros'] = true; });
+    return Object.keys(vistas).sort();
+  }
+
+  /**
+   * Las entidades migrables de una familia. Sin argumento devuelve todas, así que
+   * `deFamilia()` y `migrables()` son lo mismo: el filtro se puede pasar sin condicionales.
+   */
+  function deFamilia(nombre) {
+    const todas = migrables();
+    if (!nombre) return todas;
+    const f = String(nombre).trim().toLowerCase();
+    return todas.filter((e) => (e.familia || 'otros') === f);
+  }
+
   return {
     de, existe, prefijo, hojaDe, todas, migrables, revisarCatalogo,
+    familias, deFamilia,
     COLUMNA_ID, COLUMNA_ID_ANTERIOR, COLUMNA_ID_ANTERIOR_LEGADO,
   };
 })();

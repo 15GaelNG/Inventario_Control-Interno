@@ -97,6 +97,29 @@ const cli = Entidades.de('CAMBIOS LINEAS TELEFONICAS');
 ok(cli.llaveAnterior === Entidades.COLUMNA_ID_ANTERIOR_LEGADO,
    'la que chocaba usa el nombre VIEJO del respaldo, que ya no se escribe: ' + cli.llaveAnterior);
 
+console.log('\n7c. Las familias: migrar y homologar un módulo a la vez');
+const fams = Entidades.familias();
+ok(JSON.stringify(fams) === JSON.stringify(['cajachica', 'lineas', 'otros', 'vehiculos']),
+   'son las cuatro esperadas: ' + fams.join(', '));
+const suma = fams.reduce((a, f) => a + Entidades.deFamilia(f).length, 0);
+ok(suma === Entidades.migrables().length,
+   'cada migrable cae en exactamente una familia (' + suma + ' = ' + Entidades.migrables().length + ')');
+ok(Entidades.deFamilia().length === Entidades.migrables().length,
+   'deFamilia() sin filtro es lo mismo que migrables(): se puede pasar el filtro sin condicionales');
+ok(Entidades.deFamilia('vehiculos').length === 8, 'la familia de vehículos son 8 hojas');
+ok(Entidades.deFamilia(' VEHICULOS ').length === 8,
+   'y el nombre se normaliza: con espacios y en mayúsculas da lo mismo');
+ok(Entidades.deFamilia('no-existe').length === 0, 'una familia inventada da vacío, no todo');
+ok(Entidades.deFamilia('vehiculos').every((e) => e.familia === 'vehiculos'),
+   'y todas traen su familia puesta en el objeto, no solo en el catálogo');
+// La trampa: el nombre dice REASIGNACIONES pero su columna es "ID Linea", no un folio.
+ok(Entidades.de('HISTORIAL_REASIGNACIONES').familia === 'lineas',
+   'HISTORIAL_REASIGNACIONES es de LÍNEAS aunque el nombre suene a vehículos');
+ok(Entidades.de('REASIGNACIONES_VEHICULOS').familia === 'vehiculos',
+   'la de vehículos es REASIGNACIONES_VEHICULOS, que sí trae Folio Vehiculo');
+ok(Entidades.de('TICKETS').familia === 'otros',
+   'TICKETS no es de vehículos: su PLACA puede decir VARIAS o traer dos placas');
+
 console.log('\n8. Los nombres de columna son los mismos para todos');
 ok(Entidades.COLUMNA_ID === 'ID', 'la llave propia se llama ID');
 ok(Entidades.COLUMNA_ID_ANTERIOR === 'ID ANTERIOR', 'el respaldo se llama ID ANTERIOR');
