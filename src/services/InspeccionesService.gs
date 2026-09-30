@@ -612,6 +612,10 @@ const InspeccionesService = (function () {
       { titulo: 'Batería', peso: 5, piezas: ['TERMINALES CON SARRO', 'DERRAME LIQUIDO / MAL OLOR', 'BATERIA INFLADA'] },
     ],
   };
+  // KWID usa el mismo formato que AUTOS, pieza por pieza (confirmado contra el PDF
+  // crudo de ambas plantillas: mismo Maletero, mismo Limpiaparabrisas trasero, todo
+  // igual) -- se le apunta a la misma tabla en vez de repetirla.
+  REAGRUPAR_SECCIONES['KWID'] = REAGRUPAR_SECCIONES['AUTOS'];
   /** Sin espacios ni mayúsculas/minúsculas: una palabra que se corta a la mitad de
    *  línea en el documento a veces pierde el espacio al leerse como texto plano
    *  (pasó con "ASIENTOS TRASEROS 2" -> "ASIENTOS TRASEROS2" al leer el PDF de la
