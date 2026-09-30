@@ -10,15 +10,18 @@ qué está hecho, cómo probarlo y qué sigue.
 
 - **Rama `emmanuel`:** en GitHub hasta `10dc7eb` (29-sep). En local hay 17 commits más (`644ba14` … `d8a80a1`).
   Se suben a GitHub **al terminar la ronda**, como pidió el usuario. DEV está al día con `emmanuel`.
-- **Pruebas:** `npm test` da 54 aprobadas y 0 fallidas. Las de Ayrton se corren aparte (`node tests/ids.test.js` y
+- **Pruebas:** `npm test` da 55 aprobadas y 0 fallidas. Las de Ayrton se corren aparte (`node tests/ids.test.js` y
   `node tests/entidades.test.js`) y dan TODO OK.
 - **Reunión con Líneas (30-sep): ya ocurrió.** Lo hecho después:
   - §0u: estatus nuevos, DISPONIBLE y menú;
   - §0v: pestañas de módulos retirados, migradas y borradas;
   - §0w: "Mandar a resguardo" por NUCO y bandeja "Resguardos y cancelaciones", probada de punta a punta con los
     NUCO 0101 y 0556.
+  - §0x: PARA VENTA y PARA DESECHO con la misma lógica que Mandar a resguardo (en DEV, sin commit; probado en /dev con el
+    NUCO 0002).
 - **Lo que sigue, en orden:** pendiente 0 de `migracion/ESTADO_TELEFONIA.md`, en la carpeta de documentación.
-  1. Conversión de estatus viejos: faltan 5 confirmaciones del usuario.
+  1. Conversión de estatus viejos: ya no hay confirmaciones del usuario; lo que requiere decisión va al módulo de
+     correcciones de Líneas (el usuario solo migra).
   2. Dudas abiertas de la reunión.
   3. Responsiva que actualiza la línea: la jefatura dijo que sí; falta confirmarlo e implementarlo.
   4. Pedidos nuevos: comentarios con contexto, accesorios por NUCO, patrón con flecha, firmas, PDF firmado, QR,
@@ -39,6 +42,29 @@ qué está hecho, cómo probarlo y qué sigue.
   - `Entidades.gs`: `APP_RESGUARDOS` (prefijo RSG); su prueba cuenta 28 hojas y 4 APP_. `Modulos.gs`: `resguardos-lineas`.
   - APP_NOTIFICACIONES: columna nueva `PARA`.
 
+
+## 0x. PARA VENTA y PARA DESECHO como Mandar a resguardo (2026-09-30)
+
+Pedido del usuario: "que tenga la misma lógica que mandar a resguardar, que ponga los campos en N/A y permita
+seleccionar lo demás". Aplica a los cuatro estatus de `LineasResguardos.ESTATUS_EQUIPO_RESGUARDO`: RESGUARDO, PARA
+VENTA, POSIBLE VENTA-DAÑO y PARA DESECHO.
+
+- **Cambiar estatus** (ficha): si se elige uno de esos estatus para el equipo, se abre el formulario de resguardo con
+  ese estatus ya elegido (título "Pasar a PARA VENTA"). Ahí los datos de la persona pasan a N/A, el patrón se borra
+  y se eligen departamento, sede, oficina, estatus de la línea y comentario.
+- **Servidor:** `cambiarEstatus` y `editar` ya no aceptan esos estatus directo (`exigirFormularioResguardo_`); el
+  mensaje dice que se use Cambiar estatus o Mandar a resguardo. El alta (`crear`) no cambia.
+- **Equipo que ya estaba guardado** (p. ej. RESGUARDO → PARA VENTA): no se le pide a Pau otra recepción. Se actualiza
+  su renglón abierto de APP_RESGUARDOS; si no tiene y la línea va a cancelación, se crea ya EN RESGUARDO (RECIBIO =
+  "Ya estaba en resguardo"). El movimiento dice "Cambio a PARA VENTA: …".
+- **Probado en /dev (30-sep), BD de pruebas, NUCO 0002 ("PRUEBA MODELO"):**
+  1. USO → Cambiar estatus → PARA VENTA: abrió "Pasar a PARA VENTA" con el estatus elegido, DISPONIBLE, sede y
+     oficina. Al guardar: responsable en N/A, departamento DISPONIBLE y 1 renglón PENDIENTE DE RECEPCION en la bandeja.
+  2. PARA VENTA → PARA DESECHO: "Ya estaban en resguardo: no se pide otra recepción"; la bandeja sigue con 1 solo
+     renglón de 0002, ahora con estatus PARA DESECHO.
+  3. Editar información → PARA VENTA: no guardó y mostró el mensaje de usar Cambiar estatus.
+  - Sin probar en vivo: equipo ya guardado **sin** renglón abierto cuya línea va a cancelación (se crea EN RESGUARDO).
+  - El NUCO 0002 quedó en PARA DESECHO con su renglón en APP_RESGUARDOS (datos de prueba).
 
 ## 0. Diseño de la rama `jorge` (2026-09-24, commit `d2b316c`)
 

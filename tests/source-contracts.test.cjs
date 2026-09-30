@@ -1343,11 +1343,29 @@ test('Mandar a resguardo (30-sep): N/A automáticos, línea según el adendum, a
   assert.match(notif, /return !para \|\| \(para === PARA_APROBADORES && esAprobador\);/);
   // Cliente: Mandar a resguardo desde 1, con su propio formulario; vista de la bandeja
   const cliente = read('src/html/js/lineas.html');
-  assert.match(cliente, /async function abrirResguardo\(filas\)/);
+  assert.match(cliente, /async function abrirResguardo\(filas, opciones\)/);
   assert.match(cliente, /llamar\('apiLineasMandarResguardo', equipos\.map\(\(q\) => q\.id\), \{ motivo: valores\._MOTIVO, porEquipo: porEquipo \}\)/);
   assert.match(cliente, /function initResguardos\(\)/);
   assert.match(read('src/html/js/app.html'), /if \(vista === 'resguardos-lineas'\) \{ montarVista\('tpl-lineas-resguardos', Lineas\.initResguardos\); return; \}/);
   assert.match(read('src/config/Entidades.gs'), /'APP_RESGUARDOS': \{ prefijo: 'RSG'/);
   // En el historial se leen con nombre (no RESGUARDO / CANCELACION_LINEA)
   assert.match(read('src/services/lineas/LineasRepo.gs'), /RESGUARDO: 'Resguardo', CANCELACION_LINEA: 'Cancelación de línea', VENTA: 'Venta'/);
+});
+
+test('PARA VENTA y PARA DESECHO siguen la lógica de Mandar a resguardo (usuario, 30-sep)', () => {
+  const reg = read('src/services/lineas/LineasRegistros.gs');
+  const resg = read('src/services/lineas/LineasResguardos.gs');
+  const cliente = read('src/html/js/lineas.html');
+  // El servidor no deja llegar a esos estatus por el cambio rápido ni por la edición directa
+  assert.match(reg, /function exigirFormularioResguardo_\(tipo, estatusAntes, estatusNuevo\)/);
+  assert.match(reg, /LineasResguardos\.ESTATUS_EQUIPO_RESGUARDO\.indexOf\(nuevo\)/);
+  assert.equal((reg.match(/exigirFormularioResguardo_\(/g) || []).length, 3, 'definición + editar + cambiarEstatus');
+  // "Cambiar estatus" abre el formulario de resguardo con el estatus elegido
+  assert.match(cliente, /const ESTATUS_EQUIPO_RESGUARDO = \['RESGUARDO', 'PARA VENTA', 'POSIBLE VENTA-DAÑO', 'PARA DESECHO'\];/);
+  assert.match(cliente, /abrirResguardo\(\[\{ id: f\.id \}\], \{ estatus: datos\.estatusEquipo \}\)/);
+  assert.match(cliente, /valor: estatusInicial, requerido: 'SIEMPRE'/);
+  // Si ya estaba guardado no se pide otra recepción: se actualiza el renglón abierto de la bandeja
+  assert.match(resg, /const yaGuardado = ESTATUS_EQUIPO_RESGUARDO\.indexOf\(may\(antes\.estatus\)\) >= 0;/);
+  assert.match(resg, /LineasDatos\.actualizarFila\(TAB, abierto\._fila,/);
+  assert.match(resg, /'ESTADO': yaGuardado \? ESTADO\.RESGUARDO : ESTADO\.PENDIENTE/);
 });

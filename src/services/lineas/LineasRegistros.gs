@@ -378,6 +378,7 @@ const LineasRegistros = (function () {
       if (('NUMERO TELEFONO' in cambios || cambiaNuco) && !motivo) {
         throw new Error('Escribe el motivo del cambio de número o NUCO; queda en el historial.');
       }
+      if ('ESTATUS EQUIPO' in cambios) exigirFormularioResguardo_(valores.TIPO || base.TIPO, base['ESTATUS EQUIPO'], valores['ESTATUS EQUIPO']);
       const antes = LineasRepo.convertirRegistro(fila);
       const guardado = LineasRepo.guardarCambiosRegistro(fila, cambios, usuario, new Date());
       LineasRepo.registrarMovimiento('EDICION', { motivo: motivo || 'Edición del registro' }, usuario, new Date(), {
@@ -387,6 +388,20 @@ const LineasRegistros = (function () {
       return guardado;
     });
     return { id: id, cambios: resultado.campos, filas: LineasRepo.refrescarIndice([id]) };
+  }
+
+  /**
+   * RESGUARDO, PARA VENTA, POSIBLE VENTA-DAÑO y PARA DESECHO siguen la lógica de "Mandar a resguardo" (pedido del
+   * usuario, 30-sep): los datos de la persona pasan a N/A y se eligen departamento, sede, oficina y el estatus de la
+   * línea. Por eso un equipo no llega a esos estatus por el cambio rápido ni por la edición directa: la ficha abre el
+   * formulario de resguardo (LineasResguardos).
+   */
+  function exigirFormularioResguardo_(tipo, estatusAntes, estatusNuevo) {
+    const nuevo = texto_(estatusNuevo).trim().toUpperCase();
+    if (!LineasRepo.TIPOS_CON_EQUIPO[texto_(tipo).trim().toUpperCase()]) return;
+    if (LineasResguardos.ESTATUS_EQUIPO_RESGUARDO.indexOf(nuevo) < 0 || nuevo === texto_(estatusAntes).trim().toUpperCase()) return;
+    throw new Error('Para pasar el equipo a ' + nuevo + ' usa «Cambiar estatus» en la ficha o «Mandar a resguardo»: ' +
+      'ese formulario pone en N/A los datos de la persona y pide departamento, sede y oficina.');
   }
 
   /**
@@ -407,6 +422,7 @@ const LineasRegistros = (function () {
     if (!Object.keys(pedidos).length) throw new Error('Elige el nuevo estatus.');
     const resultado = LineasDatos.conCandado(() => {
       const fila = LineasRepo.leerRegistroObligatorio(id, 'el registro');
+      if (pedidos['ESTATUS EQUIPO']) exigirFormularioResguardo_(LineasUtil.col(fila, 'TIPO'), LineasUtil.col(fila, 'ESTATUS EQUIPO'), pedidos['ESTATUS EQUIPO']);
       const guardado = LineasRepo.guardarCambiosRegistro(fila, pedidos, usuario, new Date());
       if (!guardado.campos.length) throw new Error('El estatus ya tenía ese valor.');
       const motivo = texto_(d.motivo).trim();
