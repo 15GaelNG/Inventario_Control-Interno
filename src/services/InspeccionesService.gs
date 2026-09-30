@@ -633,6 +633,11 @@ const InspeccionesService = (function () {
   // crudo de ambas plantillas: mismo Maletero, mismo Limpiaparabrisas trasero, todo
   // igual) -- se le apunta a la misma tabla en vez de repetirla.
   REAGRUPAR_SECCIONES['KWID'] = REAGRUPAR_SECCIONES['AUTOS'];
+  // RIFTER también es igual a AUTOS pieza por pieza (confirmado contra su PDF crudo:
+  // Latonería con puertas traseras + Maletero, Cerraduras con tapa batea/maletero,
+  // Limpieza con Asientos traseros2, Interiores con tapa de puerta trasera, y
+  // Sistemas interiores con Limpiaparabrisas trasero -- las 16 piezas) -- mismo alias.
+  REAGRUPAR_SECCIONES['RIFTER'] = REAGRUPAR_SECCIONES['AUTOS'];
   /** Sin espacios ni mayúsculas/minúsculas: una palabra que se corta a la mitad de
    *  línea en el documento a veces pierde el espacio al leerse como texto plano
    *  (pasó con "ASIENTOS TRASEROS 2" -> "ASIENTOS TRASEROS2" al leer el PDF de la
