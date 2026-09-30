@@ -191,6 +191,31 @@ Script Property `MIGRACION_IDS_SELLADOS`, y después hay que volver a correr
 
 El paso que más importa y el único que no se puede automatizar.
 
+### Antes de abrirla: en qué URL, y contra qué libro
+
+Cada proyecto de Apps Script tiene su propio despliegue y sus propias Script Properties, así
+que **la URL decide contra qué libro escribes**. El proyecto compartido del equipo apunta al
+libro del equipo, no al laboratorio: abrir esa URL para "probar la migración" escribiría
+sobre los datos de tus compañeros.
+
+| Proyecto | Libro | URL de prueba (`/dev`, sirve el código recién subido) |
+|---|---|---|
+| **Laboratorio** | Inventario Reemplazable | `.../s/AKfycbz-FdQnK_pssrbGHaWLkJQ8LGYTg0g52NoOQewx_Kk/dev` |
+| DEV compartido | VEHICULOS (del equipo) | `.../s/AKfycbzEe27kyyVpmcgg7He1aly7Ij4wBx66DT5kDL3b35_S/dev` |
+
+El prefijo completo es `https:/⁠/script.google.com/a/macros/ciudadmaderas.com`. Los ids de
+despliegue salen de `npx clasp list-deployments -P .clasp.lab.json`.
+
+**Y hay un caso que muerde:** los cinco libros se configuran en propiedades SEPARADAS
+(`SS_ID_VEHICULOS`, `SS_ID_CAJACHICA`, …), así que un proyecto puede apuntar al laboratorio
+en Vehículos y al libro compartido en Caja Chica **al mismo tiempo**. Se ve como si
+estuvieras en el laboratorio y no lo estás.
+
+Para no adivinar, corre **`diagnosticoEntorno`** en el proyecto que vayas a usar (solo lee).
+Dice a qué libro va cada módulo, cuáles de las 12 propiedades obligatorias faltan, en qué
+estado está la migración de ese libro, si está sellado, y si existe la hoja `PERFILES`.
+Su veredicto tiene que ser `SIN ALERTAS`. Si reporta `MEZCLA`, **no abras la app**.
+
 Se le cambió la identidad de renglón a **7 servicios** y la huella a **8 pestañas**. Las
 pruebas leen el *código fuente*: verifican que ningún servicio use el nombre viejo, **no que
 la app funcione**. Eso se comprueba usándola.
