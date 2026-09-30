@@ -759,13 +759,21 @@ function renombrarLlaveAnterior(opciones) {
   const ss = SpreadsheetApp.openById(ssId);
   const lineas = [(cfg.escribir ? 'RENOMBRANDO LA LLAVE VIEJA A "' + Entidades.COLUMNA_ID_ANTERIOR + '"'
     : 'ENSAYO (no renombra nada)') + ' — ' + ssId, ''];
-  let renombradas = 0, yaEstaban = 0;
+  let renombradas = 0, yaEstaban = 0, respetadas = 0;
   const problemas = [];
 
   Entidades.deFamilia(cfg.familia).forEach((h) => {
     const sheet = ss.getSheetByName(h.hoja);
     if (!sheet) { lineas.push('  ' + h.hoja + ': NO EXISTE, se salta'); return; }
     const enc = migEncabezados_(sheet);
+
+    // Su llave vieja es un dato de la empresa, no un id de AppSheet: conserva su nombre.
+    if (h.llaveEsDato) {
+      respetadas++;
+      lineas.push('  ' + h.hoja + ': "' + h.llaveAnterior + '" se QUEDA como está — no es un ' +
+        'id de AppSheet, es un dato de negocio (ver llaveEsDato en Entidades.gs)');
+      return;
+    }
 
     const yaTiene = migColumna_(enc, Entidades.COLUMNA_ID_ANTERIOR);
     if (yaTiene) {
@@ -807,7 +815,8 @@ function renombrarLlaveAnterior(opciones) {
 
   lineas.push('');
   lineas.push('  ' + renombradas + ' columnas ' + (cfg.escribir ? 'renombradas' : 'por renombrar') +
-    (yaEstaban ? ', ' + yaEstaban + ' ya estaban' : ''));
+    (yaEstaban ? ', ' + yaEstaban + ' ya estaban' : '') +
+    (respetadas ? ', ' + respetadas + ' respetadas por ser dato de negocio' : ''));
   if (problemas.length) {
     lineas.push('');
     lineas.push('PROBLEMAS (' + problemas.length + '):');

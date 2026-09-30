@@ -72,9 +72,12 @@ const Relaciones = (function () {
       copias: [
         {
           nombre: 'INSTALACION DE SENSORES',
-          // Firma de columnas para ubicar la pestaña real (igual que hacen
-          // los Services de cada módulo con SheetUtils.getSheetByColumns).
-          firma: ['ID_SENSOR', 'FOLIO', 'SERIE SENSOR'],
+          // Firma de columnas para ubicar la pestaña real (igual que hacen los Services
+          // de cada módulo con SheetUtils.getSheetByColumns). NINGUNA firma incluye "ID" a
+          // propósito: después de la migración lo tienen las 24 hojas, así que meterlo haría
+          // la huella menos específica, no más. Verificado el 30/09/2026 en producción, el
+          // laboratorio y el libro compartido: cada una identifica una sola pestaña.
+          firma: ['FOLIO', 'SERIE SENSOR', 'ESTATUS SENSOR'],
           tipo: 'cache',   // describe la instalación de HOY: se pisa sin pensarlo
           claveOrigen: 'SERIE VEHICULO',
           clave: 'SERIE VEHICULO',
@@ -100,7 +103,7 @@ const Relaciones = (function () {
         },
         {
           nombre: 'VERIFICACIONES',
-          firma: ['ID_VERIFICACION', 'FOLIO VEHICULO', 'COMPROBANTE VERIFICACION'],
+          firma: ['FOLIO VEHICULO', 'COMPROBANTE VERIFICACION'],
           tipo: 'cache',   // solo copia PLACA, y la placa del vehículo es la de hoy
           // Se queda con FOLIO, y no por descuido: esta hoja NO TIENE columna de serie.
           // Emparejar por PLACA perdería 93 de sus 426 filas (78% de acierto contra 100%),
@@ -113,7 +116,7 @@ const Relaciones = (function () {
         },
         {
           nombre: 'HOLOGRAMAS',
-          firma: ['ID_HOLOGRAMA', 'CALCOMANIA EOX', 'ESTATUS EOX'],
+          firma: ['CALCOMANIA EOX', 'ESTATUS EOX'],
           tipo: 'cache',   // la tarjeta de combustible describe al vehículo de HOY
           claveOrigen: 'SERIE VEHICULO',
           clave: 'SERIE VEHICULO',
@@ -138,7 +141,7 @@ const Relaciones = (function () {
           // que revisar() REPORTE la deriva sin tocarla, y para que la próxima persona
           // vea que no se olvidó: se decidió congelarla.
           nombre: 'INSPECCION VEHICULAR',
-          firma: ['ID INSPECCION', 'FOLIO', 'PUNTAJE FINAL INSPECCION'],
+          firma: ['FOLIO', 'PUNTAJE FINAL INSPECCION'],
           tipo: 'bitacora',
           claveOrigen: 'SERIE VEHICULO',
           clave: 'NO SERIE',
@@ -153,7 +156,7 @@ const Relaciones = (function () {
           // BITÁCORA por la misma razón: cada renglón es una incidencia fechada.
           // Se queda con FOLIO porque no tiene NI serie NI placa: es su única llave posible.
           nombre: 'INCIDENCIAS',
-          firma: ['ID_INCIDENCIA', 'FOLIO', 'NOMBRE MECANICO'],
+          firma: ['FOLIO', 'NOMBRE MECANICO', 'KILOMETRAJE'],
           tipo: 'bitacora',
           claveOrigen: 'FOLIO',
           clave: 'FOLIO',

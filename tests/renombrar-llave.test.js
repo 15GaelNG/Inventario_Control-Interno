@@ -97,7 +97,9 @@ console.log('1. El ensayo no toca ni un encabezado');
   ok(rep.indexOf('ENSAYO') !== -1, 'el reporte lo dice');
   ok(rep.indexOf('"ID_VEHICULO"  ->  "ID ANTERIOR"') !== -1,
      'y enseña el cambio que haría, con los dos nombres');
-  ok(rep.indexOf('8 columnas por renombrar') !== -1, 'las 8 hojas de la familia');
+  ok(rep.indexOf('7 columnas por renombrar') !== -1, '7 de las 8 hojas de la familia');
+  ok(rep.indexOf('1 respetadas por ser dato de negocio') !== -1,
+     'y la octava se respeta: el folio de INSPECCION VEHICULAR');
 }
 
 console.log('\n2. Escribiendo, las 8 quedan con el MISMO nombre');
@@ -105,9 +107,12 @@ console.log('\n2. Escribiendo, las 8 quedan con el MISMO nombre');
   const hojas = escenarioVehiculos();
   const api = cargar(hojas);
   api.renombrarLlaveAnterior({ familia: 'vehiculos', escribir: true });
-  const nombres = Object.keys(hojas).map((h) => hojas[h].enc[0]);
-  ok(nombres.every((n) => n === 'ID ANTERIOR'),
-     'las 8 primeras columnas dicen "ID ANTERIOR": ' + nombres.join(', '));
+  const renombradas = Object.keys(hojas).filter((h) => h !== 'INSPECCION VEHICULAR');
+  ok(renombradas.every((h) => hojas[h].enc[0] === 'ID ANTERIOR'),
+     'las 7 dicen "ID ANTERIOR": ' + renombradas.map((h) => hojas[h].enc[0]).join(', '));
+  // ID INSPECCION es un folio de negocio (2026_451_1), no un id de AppSheet: se queda.
+  ok(hojas['INSPECCION VEHICULAR'].enc[0] === 'ID INSPECCION',
+     'y INSPECCION VEHICULAR conserva su folio de negocio');
   ok(hojas['VEHICULOS'].datos[0][0] === 'refwf1',
      'y el VALOR no se tocó: solo cambió el encabezado');
   ok(hojas['VEHICULOS'].enc[1] === 'FOLIO', 'las demás columnas quedan en su lugar');
@@ -124,7 +129,7 @@ console.log('\n3. Correrlo dos veces no crea una segunda columna');
   ok(hojas['VEHICULOS'].enc.filter((c) => c === 'ID ANTERIOR').length === 1,
      'y solo UNA se llama ID ANTERIOR');
   ok(rep.indexOf('ya tiene "ID ANTERIOR"') !== -1, 'el reporte dice que ya estaba');
-  ok(rep.indexOf('8 ya estaban') !== -1, 'y las cuenta aparte de las renombradas');
+  ok(rep.indexOf('7 ya estaban') !== -1, 'y las cuenta aparte de las renombradas');
 }
 
 console.log('\n4. Si no encuentra la llave vieja, NO toca la hoja');

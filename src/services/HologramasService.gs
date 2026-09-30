@@ -29,7 +29,11 @@
 const HologramasService = (function () {
   const TABLA = 'HOLOGRAMAS';
   const COL_SOLICITUD = 'SOLICITUD';
-  const COLUMNAS_CLAVE = ['ID_HOLOGRAMA', 'CALCOMANIA EOX', 'ESTATUS EOX'];
+  // Huella para ubicar la pestaña, NO llave de renglon. Sin 'ID_HOLOGRAMA' a proposito:
+  // despues de la migracion TODAS las hojas tienen 'ID', asi que meterlo aqui haria la
+  // huella menos especifica, no mas. Verificado el 30/09/2026 en los tres libros: estas
+  // dos columnas identifican una sola pestaña.
+  const COLUMNAS_CLAVE = ['CALCOMANIA EOX', 'ESTATUS EOX'];
 
   const PROVEEDORES = ['EOX', 'EDENRED', 'N/A'];
   const ESTATUS_EOX = ['HABILITADO', 'DESHABILITADO'];
@@ -120,7 +124,7 @@ const HologramasService = (function () {
   }
 
   function desdeOriginal_(row) {
-    const fila = { ID: row['ID_HOLOGRAMA'] };
+    const fila = { ID: row['ID'] };
     Object.keys(CAMPOS).forEach((campo) => {
       const valor = row[CAMPOS[campo]];
       fila[campo] = valor === undefined || valor === null ? '' : valor;
@@ -212,7 +216,7 @@ const HologramasService = (function () {
     let campos = 0;
 
     ids.forEach((id) => {
-      const actual = SheetUtils.findById(ssId(), nombreHoja, id, 'ID_HOLOGRAMA');
+      const actual = SheetUtils.findById(ssId(), nombreHoja, id, 'ID');
       if (!actual) return;
       const vehiculo = catalogo[enMayusculas_(actual.data['SERIE VEHICULO'])];
       if (!vehiculo) return;                       // sin vehículo en el catálogo no hay qué copiar
@@ -228,7 +232,7 @@ const HologramasService = (function () {
       campos += Object.keys(cambios).length;
       if (cambios['PLACA'] !== undefined) cambios['NO ECONOMICO'] = cambios['PLACA'];
       cambios['FECHA ULTIMA MODIFICACION'] = new Date();
-      actualizadas.push(conCatalogo_(desdeOriginal_(SheetUtils.update(ssId(), nombreHoja, id, cambios, 'ID_HOLOGRAMA')), vehiculo));
+      actualizadas.push(conCatalogo_(desdeOriginal_(SheetUtils.update(ssId(), nombreHoja, id, cambios, 'ID')), vehiculo));
     });
 
     return { filas: actualizadas, campos: campos };
@@ -325,12 +329,12 @@ const HologramasService = (function () {
       });
     }
 
-    const id = Utilities.getUuid().slice(0, 8);
+    const id = Ids.nuevo(Entidades.prefijo('HOLOGRAMAS'));
     const guardado = guardarSolicitud_(id, archivo);
     const ahora = new Date();
     try {
       SheetUtils.insert(ssId(), hoja_().getName(), Object.assign(fila, {
-        'ID_HOLOGRAMA': id,
+        'ID': id,
         // En esta hoja NO ECONOMICO trae la placa (ver comentario del encabezado)
         'NO ECONOMICO': fila['PLACA'],
         [COL_SOLICITUD]: guardado.ruta,
@@ -349,7 +353,7 @@ const HologramasService = (function () {
     Permisos.puedeEditar(token, 'hologramas');
     if (!CAMPOS[campo]) throw new Error('El campo "' + campo + '" no se puede editar aquí');
     const nombreHoja = hoja_().getName();
-    const actual = SheetUtils.findById(ssId(), nombreHoja, id, 'ID_HOLOGRAMA');
+    const actual = SheetUtils.findById(ssId(), nombreHoja, id, 'ID');
     if (!actual) throw new Error('No se encontró el holograma ' + id);
 
     // Lo que manda el catálogo no se corrige aquí: se corrige en Vehículos y se sincroniza
@@ -367,7 +371,7 @@ const HologramasService = (function () {
     }
     const cambios = { [CAMPOS[campo]]: limpio, 'FECHA ULTIMA MODIFICACION': new Date() };
     if (campo === 'PLACA') cambios['NO ECONOMICO'] = limpio;   // se mantienen iguales
-    return desdeOriginal_(SheetUtils.update(ssId(), nombreHoja, id, cambios, 'ID_HOLOGRAMA'));
+    return desdeOriginal_(SheetUtils.update(ssId(), nombreHoja, id, cambios, 'ID'));
   }
 
   /** Borra hologramas — solo ADMIN. Las solicitudes NO se borran de Drive. */

@@ -41,7 +41,7 @@ const IncidenciasService = (function () {
   function desdeOriginal_(row) {
     const trabajoHecho = !!(row['DESCRIPCION TRABAJO REALIZADO'] || row['INSPECCION SALIDA']);
     return {
-      ID: row['ID_INCIDENCIA'],
+      ID: row['ID'],
       FOLIO: row['FOLIO'] || '',
       DEPARTAMENTO: row['DEPARTAMENTO'] || '',
       MODELO: row['MODELO'] || '',
@@ -79,10 +79,10 @@ const IncidenciasService = (function () {
     Permisos.puedeEditar(token, 'incidencias');
     if (!datos.FOLIO) throw new Error('El folio del vehículo es obligatorio');
 
-    const id = Utilities.getUuid().slice(0, 8);
+    const id = Ids.nuevo(Entidades.prefijo('INCIDENCIAS'));
     const ahora = new Date();
     SheetUtils.insert(ssId(), hoja_().getName(), {
-      'ID_INCIDENCIA': id,
+      'ID': id,
       'FOLIO': datos.FOLIO,
       'DEPARTAMENTO': datos.DEPARTAMENTO || '',
       'MODELO': datos.MODELO || '',
@@ -140,14 +140,14 @@ const IncidenciasService = (function () {
     // Regresa el registro ya con el cambio aplicado (no solo el ID): así el
     // cliente puede refrescar esa fila sola (ej. DataTable.alEditar) sin
     // tener que recargar todo el historial.
-    const actualizado = SheetUtils.update(ssId(), hoja_().getName(), id, cambios, 'ID_INCIDENCIA');
+    const actualizado = SheetUtils.update(ssId(), hoja_().getName(), id, cambios, 'ID');
     return desdeOriginal_(actualizado);
   }
 
   /** Elimina por completo una incidencia (borrado físico de la fila) — solo ADMIN */
   function eliminar(token, id) {
     Permisos.puedeEditar(token, 'incidencias');
-    const ok = SheetUtils.remove(ssId(), hoja_().getName(), id, 'ID_INCIDENCIA');
+    const ok = SheetUtils.remove(ssId(), hoja_().getName(), id, 'ID');
     if (!ok) throw new Error('No se encontró la incidencia con ID=' + id);
     return { ID: id };
   }

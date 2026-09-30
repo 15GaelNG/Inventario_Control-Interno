@@ -22,7 +22,8 @@ const SensoresService = (function () {
   const TABLA = 'INSTALACION DE SENSORES';
   const CARPETA_RELATIVA = TABLA + '_Files_';
   const COL_RESPONSIVA = 'RESPONSIVA SENSOR';
-  const COLUMNAS_CLAVE = ['ID_SENSOR', 'FOLIO', 'SERIE SENSOR'];
+  // Huella de la pestaña, no llave de renglon (ver la nota en HologramasService).
+  const COLUMNAS_CLAVE = ['FOLIO', 'SERIE SENSOR', 'ESTATUS SENSOR'];
   const ESTATUS = ['ACTIVO', 'BAJA'];
 
   /**
@@ -89,7 +90,7 @@ const SensoresService = (function () {
 
   function desdeOriginal_(row) {
     return {
-      ID: row['ID_SENSOR'],
+      ID: row['ID'],
       FOLIO: row['FOLIO'] || '',
       SERIE_SENSOR: row['SERIE SENSOR'] || '',
       SERIE_VEHICULO: row['SERIE VEHICULO'] || '',
@@ -210,7 +211,7 @@ const SensoresService = (function () {
       throw new Error('La serie ' + serieSensor + ' ya está instalada y activa en el folio ' + duplicado['FOLIO']);
     }
 
-    const id = Utilities.getUuid().slice(0, 8);
+    const id = Ids.nuevo(Entidades.prefijo('INSTALACION DE SENSORES'));
     const guardado = DriveUtils.guardarArchivoAppSheet({
       carpetaId: Config.DRIVE_FOLDERS.SENSORES(),
       carpetaRelativa: CARPETA_RELATIVA,
@@ -223,7 +224,7 @@ const SensoresService = (function () {
 
     try {
       SheetUtils.insert(ssId(), hoja_().getName(), Object.assign({}, columnas, {
-        'ID_SENSOR': id,
+        'ID': id,
         'SERIE SENSOR': serieSensor,
         [COL_RESPONSIVA]: guardado.ruta,
         'TIPO DE COMBUSTIBLE': combustible,
@@ -248,7 +249,7 @@ const SensoresService = (function () {
   function actualizarCampo(token, id, campo, valor) {
     Permisos.puedeEditar(token, 'instalacion-sensores');
     const nombreHoja = hoja_().getName();
-    const actual = SheetUtils.findById(ssId(), nombreHoja, id, 'ID_SENSOR');
+    const actual = SheetUtils.findById(ssId(), nombreHoja, id, 'ID');
     if (!actual) throw new Error('No se encontró la instalación ' + id);
 
     const cambios = {};
@@ -284,7 +285,7 @@ const SensoresService = (function () {
       throw new Error('El campo "' + campo + '" no se puede editar aquí');
     }
 
-    return desdeOriginal_(SheetUtils.update(ssId(), nombreHoja, id, cambios, 'ID_SENSOR'));
+    return desdeOriginal_(SheetUtils.update(ssId(), nombreHoja, id, cambios, 'ID'));
   }
 
   /** Borra instalaciones — solo ADMIN. Las responsivas NO se borran de Drive (quedan de respaldo). */
@@ -330,7 +331,7 @@ const SensoresService = (function () {
    */
   function resumenGeotab(token, id, dias) {
     Permisos.puedeLeer(token, 'instalacion-sensores');
-    const actual = SheetUtils.findById(ssId(), hoja_().getName(), id, 'ID_SENSOR');
+    const actual = SheetUtils.findById(ssId(), hoja_().getName(), id, 'ID');
     if (!actual) throw new Error('No se encontró la instalación ' + id);
     const serie = limpiar_(actual.data['SERIE SENSOR']);
     if (!serie) throw new Error('Esta instalación no tiene serie de sensor');

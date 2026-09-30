@@ -62,7 +62,7 @@ const CambiosVehiculosService = (function () {
         const despues = normalizar_(datosNuevos[campo]);
         if (antes === despues) return;
         SheetUtils.insert(ssId(), sheet.getName(), {
-          ID_CAMBIO: Utilities.getUuid().slice(0, 8),
+          ID: Ids.nuevo(Entidades.prefijo('CAMBIOS VEHICULOS')),
           FOLIO: folio || '',
           TABLA: 'VEHICULOS',
           CAMPO: campo,

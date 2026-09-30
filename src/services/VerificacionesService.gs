@@ -18,7 +18,8 @@
 const VerificacionesService = (function () {
   const TABLA = 'VERIFICACIONES';
   const COL_COMPROBANTE = 'COMPROBANTE VERIFICACION';
-  const COLUMNAS = ['ID_VERIFICACION', 'FOLIO VEHICULO', COL_COMPROBANTE];
+  // Huella de la pestaña, no llave de renglon (ver la nota en HologramasService).
+  const COLUMNAS = ['FOLIO VEHICULO', COL_COMPROBANTE];
 
   function ssId() {
     return Config.SPREADSHEET_IDS.VEHICULOS();
@@ -55,7 +56,7 @@ const VerificacionesService = (function () {
 
   function desdeOriginal_(row) {
     return {
-      ID: row['ID_VERIFICACION'],
+      ID: row['ID'],
       FOLIO: row['FOLIO VEHICULO'] || '',
       PLACA: row['PLACA'] || '',
       FECHA_REGISTRO: fechaISO_(row['FECHA REGISTRO']),
@@ -99,7 +100,7 @@ const VerificacionesService = (function () {
     }
     if (!archivo || !archivo.base64) throw new Error('Adjunta el comprobante de verificación');
 
-    const id = Utilities.getUuid().slice(0, 8);
+    const id = Ids.nuevo(Entidades.prefijo('VERIFICACIONES'));
     const imagen = DriveUtils.guardarImagenAppSheet({
       carpetaId: Config.DRIVE_FOLDERS.VERIFICACIONES(),
       tabla: TABLA,
@@ -110,7 +111,7 @@ const VerificacionesService = (function () {
 
     try {
       SheetUtils.insert(ssId(), hoja_().getName(), {
-        'ID_VERIFICACION': id,
+        'ID': id,
         'FOLIO VEHICULO': folio,
         'PLACA': vehiculo.data['PLACA'] || '',
         'FECHA REGISTRO': new Date(),
@@ -136,7 +137,7 @@ const VerificacionesService = (function () {
   function actualizarCampo(token, id, campo, valor) {
     Permisos.puedeEditar(token, 'verificaciones');
     const nombreHoja = hoja_().getName();
-    const actual = SheetUtils.findById(ssId(), nombreHoja, id, 'ID_VERIFICACION');
+    const actual = SheetUtils.findById(ssId(), nombreHoja, id, 'ID');
     if (!actual) throw new Error('No se encontró la verificación ' + id);
 
     const cambios = {};
@@ -159,7 +160,7 @@ const VerificacionesService = (function () {
       throw new Error('El campo "' + campo + '" no se puede editar');
     }
 
-    return desdeOriginal_(SheetUtils.update(ssId(), nombreHoja, id, cambios, 'ID_VERIFICACION'));
+    return desdeOriginal_(SheetUtils.update(ssId(), nombreHoja, id, cambios, 'ID'));
   }
 
   /**

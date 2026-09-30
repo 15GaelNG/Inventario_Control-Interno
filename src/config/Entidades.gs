@@ -21,6 +21,21 @@
 
 const Entidades = (function () {
   /**
+   * `llaveEsDato` marca las hojas cuya "llave vieja" NO es un id desechable de AppSheet
+   * sino un dato de la empresa, y que por eso **conservan el nombre de su columna**. Medido
+   * el 30/09/2026 y confirmado con Ayrton: de las 23 hojas con llave anterior, 19 guardan
+   * un id generado (8 hex como `E5818DE5`, o prefijo+contador como `REFWF1`, `FECED1`,
+   * `JNJDC53`) y esas sí se renombran a `ID ANTERIOR`. Las otras 4 no:
+   *
+   *   COLABORADORES.No EMPLEADO      CIB01608       el número de empleado de Capital Humano
+   *   ARQUEOS.ID ARQUEO              2026_225_001   folio de negocio año_nuco_secuencia
+   *   INSPECCION VEHICULAR.ID INSPECCION  2026_451_1   igual
+   *   CAJAS CHICAS.ID CCH            1, 2, 3        el número de caja que la gente usa
+   *
+   * Sin esta distinción, `ID ANTERIOR` significaría dos cosas según la hoja —a veces un id
+   * muerto, a veces un dato vivo—, que es exactamente el problema del que se salió al
+   * dejar de llamarla `ID APPSHEET`.
+   *
    * `familia` agrupa las hojas por módulo para poder migrar y homologar **una familia a la
    * vez** en vez de las 26 de golpe. Es lo que permite dejar Vehículos terminado y probado
    * antes de tocar Líneas, que es mucho más revoltoso (ver docs/lineas-homologacion.md).
@@ -42,7 +57,9 @@ const Entidades = (function () {
     // La escribe LineasRepo; su "ID Linea" apunta a LINEAS TELEFONICAS (99.9% en producción).
     'HISTORIAL_REASIGNACIONES': { prefijo: 'HIS', llaveAnterior: 'ID Historial', familia: 'lineas' },
     'VERIFICACIONES': { prefijo: 'VER', llaveAnterior: 'ID_VERIFICACION', familia: 'vehiculos' },
-    'INSPECCION VEHICULAR': { prefijo: 'INS', llaveAnterior: 'ID INSPECCION', familia: 'vehiculos' },
+    // llaveEsDato: su "llave vieja" no es un id de AppSheet, es un FOLIO de negocio
+    // (2026_451_1 = año_nuco_secuencia). Conserva su nombre. Ver la nota de llaveEsDato.
+    'INSPECCION VEHICULAR': { prefijo: 'INS', llaveAnterior: 'ID INSPECCION', llaveEsDato: true, familia: 'vehiculos' },
     'INSTALACION DE SENSORES': { prefijo: 'SEN', llaveAnterior: 'ID_SENSOR', familia: 'vehiculos' },
     'HOLOGRAMAS': { prefijo: 'HOL', llaveAnterior: 'ID_HOLOGRAMA', familia: 'vehiculos' },
     'INCIDENCIAS': { prefijo: 'INC', llaveAnterior: 'ID_INCIDENCIA', familia: 'vehiculos' },
@@ -69,13 +86,17 @@ const Entidades = (function () {
     'BITACORA DE DESECHO': { prefijo: 'DES', llaveAnterior: 'ID_DESECHO', familia: 'lineas' },
     'ACCESORIOS CELULARES': { prefijo: 'ACC', llaveAnterior: 'ID_Accesorio', familia: 'lineas' },
     'MOVIMIENTOS_ACCESORIOS': { prefijo: 'MAC', llaveAnterior: 'ID_Movimiento', familia: 'lineas' },
-    'ARQUEOS': { prefijo: 'ARQ', llaveAnterior: 'ID ARQUEO', familia: 'cajachica' },
-    'CAJAS CHICAS': { prefijo: 'CCH', llaveAnterior: 'ID CCH', familia: 'cajachica' },
+    // Mismo caso: 2026_225_001 es un folio de negocio, no un id generado.
+    'ARQUEOS': { prefijo: 'ARQ', llaveAnterior: 'ID ARQUEO', llaveEsDato: true, familia: 'cajachica' },
+    // 1, 2, 3... El número de caja que la gente dice en voz alta ("la caja 45").
+    'CAJAS CHICAS': { prefijo: 'CCH', llaveAnterior: 'ID CCH', llaveEsDato: true, familia: 'cajachica' },
     'INCREMENTOS': { prefijo: 'MON', llaveAnterior: 'ID', familia: 'cajachica' },
     'UBER': { prefijo: 'UBE', llaveAnterior: 'ID', familia: 'otros' },
     'TICKETS': { prefijo: 'TCK', llaveAnterior: 'ID', familia: 'otros' },
     // Catálogo de personas: su identidad es el número de empleado, no un ID generado
-    'COLABORADORES': { prefijo: 'COL', llaveAnterior: 'No EMPLEADO', familia: 'otros' },
+    // El más claro de los cuatro: CIB01608 es el número de empleado de Capital Humano.
+    // Renombrarlo a "ID ANTERIOR" sería borrarle el nombre a un dato de la empresa.
+    'COLABORADORES': { prefijo: 'COL', llaveAnterior: 'No EMPLEADO', llaveEsDato: true, familia: 'otros' },
 
     // --- Pestañas del sistema nuevo: NO vienen de AppSheet, las crea el módulo de Líneas ---
     // No pasan por MigracionIds (no hay nada viejo que convertir), pero sí necesitan prefijo
@@ -127,6 +148,7 @@ const Entidades = (function () {
     e.columnaAnterior = POR_HOJA[hoja].columnaAnterior || 0;
     // Sin esta línea, deFamilia() lee undefined y todas las hojas caen en 'otros'.
     e.familia = POR_HOJA[hoja].familia || 'otros';
+    e.llaveEsDato = !!POR_HOJA[hoja].llaveEsDato;
     // Nació con el sistema nuevo: no hay IDs viejos que convertir, así que MigracionIds
     // no la toca. Sí tiene prefijo, para que sus altas nazcan bien.
     e.delSistemaNuevo = !!POR_HOJA[hoja].delSistemaNuevo;

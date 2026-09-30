@@ -33,7 +33,8 @@ const ReasignacionesVehicularesService = (function () {
   // Nombre real ya confirmado ("REASIGNACIONES_VEHICULOS") — directo por
   // nombre, no por firma de columnas (ver mismo comentario en ArqueosService).
   const NOMBRE_HOJA = 'REASIGNACIONES_VEHICULOS';
-  const ID_COLUMN = 'ID Reasignacion Vehicular';
+  // La llave de renglon es la NUEVA (ver la nota en VehiculosService).
+  const ID_COLUMN = 'ID';
 
   function ssId() {
     return Config.SPREADSHEET_IDS.VEHICULOS();
@@ -106,7 +107,7 @@ const ReasignacionesVehicularesService = (function () {
       if (!vehiculo) throw new Error('No se encontró el vehículo con Folio=' + folio);
 
       const fila = {};
-      fila[ID_COLUMN] = Utilities.getUuid().slice(0, 8);
+      fila[ID_COLUMN] = Ids.nuevo(Entidades.prefijo('REASIGNACIONES_VEHICULOS'));
       fila['Folio Vehiculo'] = folio;
       fila['Fecha de Reasignacion'] = datos['Fecha de Reasignacion'] ? new Date(datos['Fecha de Reasignacion']) : new Date();
       fila['VIN'] = vehiculo['SERIE VEHICULO'] || '';

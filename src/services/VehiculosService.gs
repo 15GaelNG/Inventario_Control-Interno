@@ -19,7 +19,10 @@ const VehiculosService = (function () {
   const SHEET_VEHICULOS = 'VEHICULOS';
   // La columna ID real de esta hoja es ID_VEHICULO, no "ID" (a diferencia de
   // las hojas nuevas) — hay que pasarla explícitamente a SheetUtils.update/remove.
-  const ID_COLUMN = 'ID_VEHICULO';
+  // La llave de renglon es la NUEVA. La columna 'ID_VEHICULO' pasa a llamarse
+  // "ID ANTERIOR" en el paso 2 del pipeline de IDs y queda solo como rastro: sus valores
+  // (REFWF1, REFWF2...) eran un prefijo mas un contador de AppSheet, no un dato.
+  const ID_COLUMN = 'ID';
   // Campos tipo archivo (ver buscarPorFolio): en datos migrados de AppSheet
   // guardan una ruta relativa, no una URL — hay que resolverlos antes de
   // mandarlos al cliente.
@@ -279,7 +282,7 @@ const VehiculosService = (function () {
       const fila = Object.assign({}, datos);
       fila.FOLIO = generarFolio_(datos.CLASE);
       fila.NUCCO = generarNucco_();
-      fila[ID_COLUMN] = Utilities.getUuid().slice(0, 8);
+      fila[ID_COLUMN] = Ids.nuevo(Entidades.prefijo(SHEET_VEHICULOS));
       fila['FECHA REGISTRO SISTEMA CI'] = new Date();
       SheetUtils.insert(ssId(), SHEET_VEHICULOS, fila);
       return { ID: fila[ID_COLUMN], FOLIO: fila.FOLIO };
