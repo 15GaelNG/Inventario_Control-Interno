@@ -1,10 +1,33 @@
 # Líneas — estado del módulo
 
-Rama `emmanuel` · Última actualización: 2026-09-29
+Rama `emmanuel` · Última actualización: 2026-09-30
 
 Documento de continuidad del módulo **Líneas** (equipos y líneas telefónicas).
 El plan de la mudanza está en [lineas-plan.md](lineas-plan.md); aquí se registra
 qué está hecho, cómo probarlo y qué sigue.
+
+**Dónde quedamos (cierre del 30-sep):**
+
+- Rama `emmanuel`: en GitHub hasta `10dc7eb`, 29-sep. En local hay 10 commits más, de `644ba14` a `120c713`, con
+  la ronda de cambios del 29 y 30-sep. Se suben a GitHub **al terminar la ronda**, como pidió el usuario. DEV está
+  al día con `emmanuel`.
+- `npm test`: 51 aprobadas, 0 fallidas.
+- **Reunión con Líneas (30-sep):** 12 temas con claves (E, M, R, L, P, C, A, AM, CO, RO, O, PA) en
+  `migracion/PREGUNTAS_REUNION_LINEAS.md` de la carpeta de documentación. El usuario trae las respuestas una por
+  una. Con ellas se ajustan:
+  - las acciones masivas (qué campos cambian y qué pasa con la línea);
+  - la vista de aprobación de Pao y su correo semanal;
+  - la automatización de adendums vigentes y la renovación;
+  - las columnas y la vista rápida.
+- **Por decidir con el usuario:** si la responsiva corregida debe actualizar LINEAS TELEFONICAS (como la inspección).
+- **Por probar a mano** (el navegador integrado no puede): subir fotos a una inspección de NUCOS, el gesto de dos
+  dedos, Atrás entre módulos y la velocidad real de "Última responsiva / inspección".
+- **Avisar a Jorge y Ayrton al unir con master** los cambios en archivos compartidos:
+  - DataTable: opciones `minimo` y `modoSeleccion`, y el `className` en `render`;
+  - `app.html`: `HistorialApp.alNavegar` en `navegarA` y `marcarTemaActual`;
+  - `Index.html`: `notificaciones`, `lineas-panorama` y `historial-navegador`;
+  - `Modulos.gs`: `panorama-lineas`.
+
 
 ## 0. Diseño de la rama `jorge` (2026-09-24, commit `d2b316c`)
 
