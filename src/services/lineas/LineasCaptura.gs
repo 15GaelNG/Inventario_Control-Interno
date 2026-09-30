@@ -228,7 +228,7 @@ const LineasCaptura = (function () {
     const obj = objetivoCaptura_(ref);
     const ahora = new Date();
     return {
-      equipo: obj.equipo, linea: obj.linea, idPropuesto: LineasDatos.nuevoIdCorto(),
+      equipo: obj.equipo, linea: obj.linea, idPropuesto: LineasDatos.nuevoId(LineasRepo.TAB.INSP),
       formulario: null, inspector: usuario.nombre, condiciones: LineasChecklist.CONDICIONES,
       _armar: (id) => ocultarSecretos_(formularioInspeccion_(obj.fila, LineasRepo.catalogos(), usuario, id, ahora), puedeVerSecretos),
     };
@@ -238,7 +238,7 @@ const LineasCaptura = (function () {
     const obj = objetivoCaptura_(ref);
     const ahora = new Date();
     return {
-      equipo: obj.equipo, linea: obj.linea, idPropuesto: LineasDatos.nuevoIdCorto(), nombreCI: usuario.nombre,
+      equipo: obj.equipo, linea: obj.linea, idPropuesto: LineasDatos.nuevoId(LineasRepo.TAB.RESP), nombreCI: usuario.nombre,
       _armar: (id) => ocultarSecretos_(formularioResponsiva_(obj.fila, LineasRepo.catalogos(), usuario, id, ahora), puedeVerSecretos),
     };
   }
@@ -303,7 +303,7 @@ const LineasCaptura = (function () {
   function guardarInspeccion(datos, usuario, puedeVerSecretos) {
     const ref = { equipoId: datos.equipoId || null, lineaId: datos.equipoId ? null : datos.lineaId };
     if (!datos.firmaInspectorBase64) throw new Error('FIRMA INSPECTOR es obligatorio');
-    const id = /^[\w-]{6,40}$/.test(String(datos.id || '')) ? String(datos.id) : LineasDatos.nuevoIdCorto();
+    const id = /^[\w-]{6,40}$/.test(String(datos.id || '')) ? String(datos.id) : LineasDatos.nuevoId(LineasRepo.TAB.INSP);
     // Las fotos son opcionales: la carpeta existe solo si se subió alguna
     if (datos.carpetaId) LineasEvidencias.validarArchivosEnCarpeta((datos.fotos || []).map((f) => f.id), [datos.carpetaId, datos.fotosCarpetaId].filter(Boolean));
 
@@ -339,7 +339,7 @@ const LineasCaptura = (function () {
       // 3) Evidencia del sistema nuevo (carpeta y fotos) y movimiento.
       LineasRepo.asegurarPestanaApp(LineasRepo.TAB.APP_EVID);
       LineasDatos.agregarFilas(LineasRepo.TAB.APP_EVID, [{
-        'ID': LineasDatos.nuevoIdCorto(), 'TIPO': 'INSPECCION', 'ORIGEN': 'SISTEMA', 'ID_REGISTRO': id, 'ID_LINEA': obj.reg.id, 'NUCO': obj.reg.nuco || '',
+        'TIPO': 'INSPECCION', 'ORIGEN': 'SISTEMA', 'ID_REGISTRO': id, 'ID_LINEA': obj.reg.id, 'NUCO': obj.reg.nuco || '',
         'FECHA': ahora, 'CARPETA_ID': datos.carpetaId || '', 'RUTA': datos.ruta || '', 'FOTOS_CARPETA_ID': datos.fotosCarpetaId || '',
         'FOTOS': String((datos.fotos || []).length), 'PDFS_JSON': '[]', 'COINCIDENCIA_EXACTA': 'TRUE',
         'ALERTAS_JSON': '[]', 'ID_ANTERIOR': '', 'ACTUALIZADO_EN': ahora,
@@ -365,7 +365,7 @@ const LineasCaptura = (function () {
   function guardarResponsiva(datos, usuario, puedeVerSecretos) {
     const ref = { equipoId: datos.equipoId || null, lineaId: datos.equipoId ? null : datos.lineaId };
     if (!datos.firmaCiBase64) throw new Error('FIRMA RESPONSABLE DE CONTROL INTERNO es obligatorio');
-    const id = /^[\w-]{6,40}$/.test(String(datos.id || '')) ? String(datos.id) : LineasDatos.nuevoIdCorto();
+    const id = /^[\w-]{6,40}$/.test(String(datos.id || '')) ? String(datos.id) : LineasDatos.nuevoId(LineasRepo.TAB.RESP);
 
     const res = LineasDatos.conCandado(() => {
       const ahora = new Date();
@@ -390,7 +390,7 @@ const LineasCaptura = (function () {
 
       LineasRepo.asegurarPestanaApp(LineasRepo.TAB.APP_EVID);
       LineasDatos.agregarFilas(LineasRepo.TAB.APP_EVID, [{
-        'ID': LineasDatos.nuevoIdCorto(), 'TIPO': 'RESPONSIVA', 'ORIGEN': 'SISTEMA', 'ID_REGISTRO': id, 'ID_LINEA': obj.reg.id, 'NUCO': obj.reg.nuco || '',
+        'TIPO': 'RESPONSIVA', 'ORIGEN': 'SISTEMA', 'ID_REGISTRO': id, 'ID_LINEA': obj.reg.id, 'NUCO': obj.reg.nuco || '',
         'FECHA': ahora, 'CARPETA_ID': '', 'RUTA': '', 'FOTOS': '0',
         'PDFS_JSON': '[]', 'COINCIDENCIA_EXACTA': 'TRUE', 'ACTUALIZADO_EN': ahora,
       }]);
@@ -412,13 +412,14 @@ const LineasCaptura = (function () {
   // ======================================================================
 
   function leerFilaPorId_(tabla, id) {
-    const filas = LineasDatos.buscarFilas(tabla, 'ID', id);
+    const filas = LineasDatos.buscarFilasPorId(tabla, id);
     if (!filas.length) return null;
     return LineasDatos.leerFilas([{ tabla: tabla, filas: filas.slice(0, 1) }])[0][0];
   }
 
-  function evidenciaSistema_(id) {
-    const filasEv = LineasDatos.existeTabla(LineasRepo.TAB.APP_EVID) ? LineasDatos.buscarFilas(LineasRepo.TAB.APP_EVID, 'ID_REGISTRO', id) : [];
+  /** ids = los de la fila (el suyo y el del AppSheet): la evidencia pudo ligarse con cualquiera. */
+  function evidenciaSistema_(ids) {
+    const filasEv = LineasDatos.existeTabla(LineasRepo.TAB.APP_EVID) ? LineasDatos.buscarFilasVarios(LineasRepo.TAB.APP_EVID, 'ID_REGISTRO', ids) : [];
     if (!filasEv.length) return null;
     const ev = LineasRepo.evidenciaDesdeFila(LineasDatos.leerFilas([{ tabla: LineasRepo.TAB.APP_EVID, filas: filasEv.slice(0, 1) }])[0][0]);
     return ev && ev.origen === 'SISTEMA' ? ev : null;
@@ -433,11 +434,11 @@ const LineasCaptura = (function () {
   }
 
   /** Escribe la ruta del PDF en la fila (columna File del AppSheet, igual que su acción GUARDAR) y en APP_EVIDENCIAS. */
-  function ligarPdf_(tabla, columnaPdf, id, pdf, ruta) {
-    const filas = LineasDatos.buscarFilas(tabla, 'ID', id);
+  function ligarPdf_(tabla, columnaPdf, ids, pdf, ruta) {
+    const filas = LineasDatos.buscarFilasPorId(tabla, ids[0]);
     if (filas.length) { const o = {}; o[columnaPdf] = ruta; LineasDatos.actualizarFila(tabla, filas[0], o); }
     if (LineasDatos.existeTabla(LineasRepo.TAB.APP_EVID)) {
-      const filasEv = LineasDatos.buscarFilas(LineasRepo.TAB.APP_EVID, 'ID_REGISTRO', id);
+      const filasEv = LineasDatos.buscarFilasVarios(LineasRepo.TAB.APP_EVID, 'ID_REGISTRO', ids);
       if (filasEv.length) LineasDatos.actualizarFila(LineasRepo.TAB.APP_EVID, filasEv[0], { 'PDFS_JSON': JSON.stringify([{ id: pdf.id, nombre: pdf.nombre }]), 'ACTUALIZADO_EN': new Date() });
     }
   }
@@ -449,7 +450,8 @@ const LineasCaptura = (function () {
     const tabla = esInspeccion ? LineasRepo.TAB.INSP : LineasRepo.TAB.RESP;
     const fila = leerFilaPorId_(tabla, id);
     if (!fila) throw new Error('No existe ' + (esInspeccion ? 'la inspección ' : 'la responsiva ') + id);
-    const ev = evidenciaSistema_(id);
+    const ids = LineasDatos.idsDeFila(fila);
+    const ev = evidenciaSistema_(ids);
     if (!ev) throw new Error('Solo se generan PDF de registros capturados en el sistema.');
     if (!forzar && ev.pdfs && ev.pdfs.length) return ev.pdfs[0];
 
@@ -472,7 +474,7 @@ const LineasCaptura = (function () {
       const pdf = LineasPdf.generarPdfDesdePlantilla(
         esInspeccion ? LineasPdf.PLANTILLAS.INSPECCION_CELULAR : LineasPdf.PLANTILLAS.RESPONSIVA_CELULAR,
         registroPlantilla_(fila), imagenes, carpeta, nombre);
-      LineasDatos.conCandado(() => ligarPdf_(tabla, destino.columna, id, pdf, destino.carpeta + '/' + nombre));
+      LineasDatos.conCandado(() => ligarPdf_(tabla, destino.columna, ids, pdf, destino.carpeta + '/' + nombre));
       return pdf;
     } catch (e) {
       console.error('generarPdf ' + tipo + ' (' + id + '): ' + e.message);
@@ -497,7 +499,7 @@ const LineasCaptura = (function () {
     if (!insp) throw new Error('No existe la inspección ' + id);
     const TAB_EV = LineasRepo.TAB.APP_EVID;
     LineasRepo.asegurarPestanaApp(TAB_EV);
-    const filas = LineasDatos.buscarFilas(TAB_EV, 'ID_REGISTRO', id);
+    const filas = LineasDatos.buscarFilasVarios(TAB_EV, 'ID_REGISTRO', [id].concat(insp._idAnterior ? [insp._idAnterior] : []));
     const fila = filas.length ? LineasDatos.leerFilas([{ tabla: TAB_EV, filas: filas.slice(0, 1) }])[0][0] : null;
     let carpetaId = fila ? String(fila['CARPETA_ID'] || '') : '';
     let fotosId = fila ? String(fila['FOTOS_CARPETA_ID'] || '') : '';
@@ -514,7 +516,7 @@ const LineasCaptura = (function () {
           carpetaId ? {} : { 'CARPETA_ID': c.carpetaId, 'RUTA': c.ruta }));
       } else {
         LineasDatos.agregarFilas(TAB_EV, [{
-          'ID': LineasDatos.nuevoIdCorto(), 'TIPO': 'INSPECCION', 'ORIGEN': externa ? 'NUCOS_FOTOS' : (insp.origen === 'SISTEMA' ? 'SISTEMA' : 'APPSHEET'), 'ID_REGISTRO': id,
+          'TIPO': 'INSPECCION', 'ORIGEN': externa ? 'NUCOS_FOTOS' : (insp.origen === 'SISTEMA' ? 'SISTEMA' : 'APPSHEET'), 'ID_REGISTRO': id,
           'ID_LINEA': insp.registroId || '', 'NUCO': insp.nuco || '', 'FECHA': insp.fecha ? new Date(insp.fecha) : new Date(),
           'CARPETA_ID': c.carpetaId, 'RUTA': c.ruta, 'FOTOS_CARPETA_ID': c.fotosCarpetaId, 'FOTOS': '0', 'PDFS_JSON': '[]',
           'COINCIDENCIA_EXACTA': 'TRUE', 'ALERTAS_JSON': '[]', 'ID_ANTERIOR': '', 'ACTUALIZADO_EN': new Date(),

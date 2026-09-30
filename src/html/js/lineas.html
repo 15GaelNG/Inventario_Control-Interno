@@ -1072,7 +1072,7 @@
       cuerpo.querySelectorAll('.ln-af-seccion:not(.ln-af-extra)').forEach((sec) => { sec.hidden = !sec.querySelector('.ln-af-campo:not([hidden])'); });
       cuerpo.querySelectorAll('[data-formula]').forEach((el) => {
         if (el.dataset.formula === 'NO_ASIGNACION') return;
-        el.textContent = formulaRegistro(el.dataset.formula, valores, ctx.id) || '—';
+        el.textContent = formulaRegistro(el.dataset.formula, valores, ctx.idDG || ctx.id) || '—';
       });
     }
 
@@ -2507,7 +2507,7 @@
           const cuerpo = $('#ln-captura-cuerpo', raiz);
           const elementos = form.elementos;
           const tipoInicial = (elementos.filter((e) => e.columna === 'TIPO')[0] || {}).valor || '';
-          const ctx = { nuevo: form.nuevo, id: id, tipoInicial: tipoInicial };
+          const ctx = { nuevo: form.nuevo, id: id, idDG: form.idDG || null, tipoInicial: tipoInicial };
           captura.contexto = { formulario: elementos };
           const valorDe = (c) => ((elementos.filter((e) => e.columna === c)[0] || {}).valor) || '';
           $('#ln-captura-subtitulo', raiz).textContent = id ? ['NUCO ' + (valorDe('NUCO') || '—'), valorDe('EQUIPO'), valorDe('RESPONSABLE')].filter(Boolean).join(' · ') + ' · cada cambio queda en la bitácora'

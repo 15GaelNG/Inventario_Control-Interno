@@ -152,15 +152,14 @@ const LineasOperativas = (function () {
     return LineasDatos.conCandado(() => {
       const ahora = new Date();
       const fila = Object.assign({}, valores, {
-        'ID': LineasDatos.nuevoIdCorto(), 'FECHA DE REGISTRO': ahora, 'QUIEN REGISTRO': usuario.nombre || usuario.correo,
+        'FECHA DE REGISTRO': ahora, 'QUIEN REGISTRO': usuario.nombre || usuario.correo,
       });
       if (clave === 'DESECHO') {
         // ID_EQUIPO es Ref a LINEAS TELEFONICAS; FOLIO EQUIPO / EQUIPO / IMEI = [ID_EQUIPO].[...]
-        const filas = LineasDatos.buscarFilas(LineasRepo.TAB.LINEAS, 'ID', valores['ID_EQUIPO']);
+        const filas = LineasDatos.buscarFilasPorId(LineasRepo.TAB.LINEAS, valores['ID_EQUIPO']);
         if (!filas.length) throw new Error('IMEI EQUIPO: selecciona un equipo de la lista.');
         const equipo = LineasDatos.leerFilas([{ tabla: LineasRepo.TAB.LINEAS, filas: filas.slice(0, 1) }])[0][0];
-        delete fila['ID'];
-        fila['ID_DESECHO'] = LineasDatos.nuevoIdCorto();
+        fila['ID_DESECHO'] = LineasDatos.nuevoIdCorto(); // llave del AppSheet; la columna ID (DES-…) la pone agregarFilas
         fila['FOLIO EQUIPO'] = LineasUtil.col(equipo, 'FOLIO');
         fila['EQUIPO'] = LineasUtil.col(equipo, 'EQUIPO');
         fila['IMEI'] = LineasUtil.col(equipo, 'IMEI');
@@ -173,7 +172,7 @@ const LineasOperativas = (function () {
         });
       } else if (clave === 'REACTIVACION') {
         // IMEI es Ref a LINEAS TELEFONICAS: guarda el ID; LINEA SUSPENDIDA y SIM = [IMEI].[...]
-        const filas = LineasDatos.buscarFilas(LineasRepo.TAB.LINEAS, 'ID', valores['IMEI']);
+        const filas = LineasDatos.buscarFilasPorId(LineasRepo.TAB.LINEAS, valores['IMEI']);
         if (!filas.length) throw new Error('IMEI: selecciona una línea de la lista.');
         const linea = LineasDatos.leerFilas([{ tabla: LineasRepo.TAB.LINEAS, filas: filas.slice(0, 1) }])[0][0];
         fila['LINIEA SUSPENDIDA'] = LineasUtil.col(linea, 'NUMERO TELEFONO');
@@ -253,7 +252,7 @@ const LineasOperativas = (function () {
     return LineasDatos.conCandado(() => {
       const r = filaParaEditar_(clave, numeroFila, llave);
       const leerLinea = (id, etiqueta) => {
-        const filas = LineasDatos.buscarFilas(LineasRepo.TAB.LINEAS, 'ID', id);
+        const filas = LineasDatos.buscarFilasPorId(LineasRepo.TAB.LINEAS, id);
         if (!filas.length) throw new Error(etiqueta + ': selecciona un registro de la lista.');
         return LineasDatos.leerFilas([{ tabla: LineasRepo.TAB.LINEAS, filas: filas.slice(0, 1) }])[0][0];
       };

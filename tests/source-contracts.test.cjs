@@ -610,7 +610,7 @@ test('Drive: todo en la carpeta de la app AppSheet con sus rutas; NUCOS de produ
   const captura = read('src/services/lineas/LineasCaptura.gs');
   assert.match(captura, /carpeta: 'INSPECCIONES_Files_', nombre: \(id\) => 'INSPECCION - ' \+ id \+ '\.pdf', columna: 'FORMATO INSPECCIONES LINEAS'/);
   assert.match(captura, /carpeta: 'Files', nombre: \(id\) => 'RESPONSIVA' \+ id \+ '\.pdf', columna: 'FORMATO RESPONSIVA'/);
-  assert.match(captura, /ligarPdf_\(tabla, destino\.columna, id, pdf, destino\.carpeta \+ '\/' \+ nombre\)/);
+  assert.match(captura, /ligarPdf_\(tabla, destino\.columna, ids, pdf, destino\.carpeta \+ '\/' \+ nombre\)/);
   assert.match(read('src/services/lineas/LineasOperativas.gs'), /guardarComoAppSheet\('BITACORA DE DESECHO_Files_', fila\['ID_DESECHO'\], c, a\.mime, a\.base64\)/);
   // Fotos de inspección en la carpeta de la app; cancelar solo borra la carpeta que creó el mismo usuario
   const ev = read('src/services/lineas/LineasEvidencias.gs');
@@ -805,6 +805,23 @@ test('"Última responsiva" / "Última inspección" abren la más reciente de la 
   assert.throws(() => S.ultimoDocumentoNuco('t', 'x', 'RESPONSIVA'), /No hay responsiva en la carpeta NUCOS del NUCO 0234/);
 });
 
+/** LineasDatos de mentira sobre { pestaña: [filas] }, con las mismas búsquedas por ID que el real. */
+function datosDePrueba_(hojas) {
+  Object.keys(hojas).forEach((h) => hojas[h].forEach((f, i) => { f._fila = i + 2; }));
+  const buscarFilas = (h, c, v, parcial) => (hojas[h] || []).filter((f) => (parcial ? String(f[c] || '').includes(v) : String(f[c]).toLowerCase() === String(v).toLowerCase())).map((f) => f._fila);
+  return {
+    COL_ID_ANTERIOR: 'ID APPSHEET',
+    existeTabla: () => true,
+    buscarFilas: buscarFilas,
+    buscarFilasVarios: (h, c, valores, parcial) => [...new Set([].concat(...valores.map((v) => buscarFilas(h, c, v, parcial))))].sort((a, b) => a - b),
+    buscarFilasPorId: (h, id) => { const f = buscarFilas(h, 'ID', id); return f.length ? f : buscarFilas(h, 'ID APPSHEET', id); },
+    idsDeFila: (f) => [...new Set([f.ID, f['ID APPSHEET']].filter(Boolean).map(String))],
+    leerTabla: (h) => hojas[h] || [],
+    leerFilas: (pets) => pets.map((p) => p.filas.map((n) => hojas[p.tabla][n - 2])),
+    cacheLeer: () => null, cacheGuardar: () => {},
+  };
+}
+
 test('Historial: números que ha tenido un NUCO y NUCOs por los que pasó un número, desde la bitácora', () => {
   const Util = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '\nreturn LineasUtil;')({}, {});
   const d = (s) => new Date(s + 'T12:00:00');
@@ -821,16 +838,12 @@ test('Historial: números que ha tenido un NUCO y NUCOs por los que pasó un nú
     APP_MOVIMIENTOS: [{ ID: 'm1', REFS: ',B,', MOTIVO: 'Cambio de equipo por daño', TICKET: '', DETALLE_JSON: JSON.stringify({ idsCambios: ['c2'] }) }],
     'REACTIVACION DE LINEAS': [],
   };
-  Object.keys(hojas).forEach((h) => hojas[h].forEach((f, i) => { f._fila = i + 2; }));
-  const LineasDatos = {
-    existeTabla: () => true,
-    buscarFilas: (h, c, v, parcial) => hojas[h].filter((f) => (parcial ? String(f[c] || '').includes(v) : String(f[c]).toLowerCase() === String(v).toLowerCase())).map((f) => f._fila),
-    leerFilas: (pets) => pets.map((p) => p.filas.map((n) => hojas[p.tabla][n - 2])),
-    cacheLeer: () => ({
+  const LineasDatos = Object.assign(datosDePrueba_(hojas), {
+    cacheLeer: (k) => (k === 'ids_lineas_v1' ? null : {
       equipos: { columnas: ['id', 'nuco'], filas: [['A', '1556'], ['B', '0200']] },
       lineas: { columnas: ['id', 'numero'], filas: [['A', '4420000002'], ['B', '4420000001']] },
     }),
-  };
+  });
   const Repo = new Function('LineasUtil', 'LineasDatos', 'Utilities', read('src/services/lineas/LineasRepo.gs') + '\nreturn LineasRepo;')(Util, LineasDatos, {});
 
   // NUCO 1556: tuvo el 4420000001 desde el alta y el 4420000002 desde el 01/03 (el COMENTARIOS "1556" de B no cuenta)
@@ -948,7 +961,7 @@ test('Acciones masivas de equipos: resguardo, reasignar y cancelar desde 2 selec
     registrarMovimiento: (tipo, datos, u, ahora, extra) => movimientos.push([tipo, datos.motivo, extra.refs]),
     indice: () => ({}),
   };
-  const Datos = { leerTabla: () => hoja, conCandado: (fn) => fn() };
+  const Datos = { leerTabla: () => hoja, conCandado: (fn) => fn(), idsDeFila: (f) => [f.ID] };
   const Reg = new Function('LineasRepo', 'CacheService', 'Utilities', 'SpreadsheetApp', 'Config', 'LineasUtil', 'LineasDatos',
     reg + '; return LineasRegistros;')(Repo, { getScriptCache: () => ({ get: () => '', put: () => {} }) }, { formatDate: () => '2026-09-29' }, {}, {}, LineasUtil, Datos);
   const u = { correo: 'x@y.z', nombre: 'X' };
@@ -1010,7 +1023,7 @@ test('Reasignar uno por uno: cada equipo con su responsable; los que no cambian 
   };
   const Reg = new Function('LineasRepo', 'CacheService', 'Utilities', 'SpreadsheetApp', 'Config', 'LineasUtil', 'LineasDatos', reg + '; return LineasRegistros;')(
     Repo, { getScriptCache: () => ({ get: () => '', put: () => {} }) }, { formatDate: () => '2026-09-29' }, {}, {}, LineasUtil,
-    { leerTabla: () => hoja, conCandado: (fn) => fn() });
+    { leerTabla: () => hoja, conCandado: (fn) => fn(), idsDeFila: (f) => [f.ID] });
   const u = { correo: 'x@y.z', nombre: 'X' };
   assert.deepEqual(Reg.formularioMasivo('REASIGNAR', u).columnasResponsable, ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'DEPARTAMENTO']);
 
@@ -1133,3 +1146,62 @@ test('Tablas con modo selección, gestos Atrás/Adelante, vista rápida conectad
   assert.match(read('src/services/lineas/LineasArchivos.gs'), /function archivosNuco\(nuco, soloTipo\)/);
   assert.match(read('src/services/TelefoniaService.gs'), /const r = carpetaNucoDe_\(id, sesion, tipo\);/);
 });
+
+test('IDs estandarizados (LIN-…): la ficha encuentra lo que las demás pestañas citan con el ID del AppSheet', () => {
+  const normCol = (h) => String(h || '').toUpperCase().replace(/\s+/g, ' ').trim();
+  const Util = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '\nreturn LineasUtil;')({ normCol: normCol }, {});
+  const d = (s) => new Date(s + 'T12:00:00');
+  // Como quedó la hoja de pruebas el 29-sep: el padre ya migró y los hijos siguen con el ID viejo
+  const hojas = {
+    'LINEAS TELEFONICAS': [
+      { ID: 'LIN-00000000AAAAAA', 'ID APPSHEET': 'a1b2c3d4', NUCO: '0234', 'NUMERO TELEFONO': '4420000009', TIPO: 'EQUIPO + SIM', 'FECHA REGISTRO': d('2025-01-01') },
+      { ID: 'LIN-00000001BBBBBB', 'ID APPSHEET': 'DG001', NUCO: '0900', TIPO: 'EQUIPO + SIM', 'ESTATUS LINEA': 'USO' },
+    ],
+    'CAMBIOS LINEAS TELEFONICAS': [
+      { ID: 'CLI-00000000CCCCCC', 'ID APPSHEET': 'e1', ID_LINEA: 'a1b2c3d4', NUCO: '0234', CAMPO: 'ESTATUS EQUIPO', ANTES: 'RESGUARDO', DESPUES: 'USO', 'FECHA ACTUALIZACION': d('2025-04-22') },
+      { ID: 'CLI-00000001DDDDDD', 'ID APPSHEET': 'e2', ID_LINEA: 'a1b2c3d4', NUCO: '0234', CAMPO: 'COMENTARIOS', ANTES: '', DESPUES: 'x', 'FECHA ACTUALIZACION': d('2025-04-23') },
+    ],
+    HISTORIAL_REASIGNACIONES: [{ ID: 'HIS-00000000EEEEEE', 'ID Historial': 'h1', 'ID Linea': 'a1b2c3d4', 'Fecha de Reasignacion': d('2025-05-01'), 'Responsable Entrante': 'ANA' }],
+    'BITACORA DE DESECHO': [],
+    'INSPECCIONES LINEAS': [{ ID: 'ILI-00000000FFFFFF', 'ID APPSHEET': '97eb2ad7', 'ID LINEA': 'a1b2c3d4', NUCO: '0234', 'FECHA DE REGISTRO': d('2025-06-01') }],
+    'RESPONSIVAS LINEAS': [],
+    APP_EVIDENCIAS: [{ ID: 'a6d54e23', TIPO: 'INSPECCION', ORIGEN: 'APPSHEET', ID_REGISTRO: '97eb2ad7', ID_LINEA: 'a1b2c3d4', CARPETA_ID: 'carp1', PDFS_JSON: '[{"id":"pdf1"}]' }],
+    // Un movimiento del sistema nuevo registrado antes de migrar: oculta su fila de la bitácora por el ID viejo (e2)
+    APP_MOVIMIENTOS: [{ ID: 'd45f50e1', TIPO: 'EDICION', REFS: ',a1b2c3d4,', MOTIVO: 'Prueba', DETALLE_JSON: JSON.stringify({ idsCambios: ['e2'], cambios: [{ campo: 'COMENTARIOS', antes: '', despues: 'x' }] }) }],
+    'REACTIVACION DE LINEAS': [],
+  };
+  const LineasDatos = datosDePrueba_(hojas);
+  const Chk = { puntos: () => [] };
+  const Repo = new Function('LineasUtil', 'LineasDatos', 'LineasChecklist', 'Utilities', read('src/services/lineas/LineasRepo.gs') + '\nreturn LineasRepo;')(
+    Util, LineasDatos, Chk, { formatDate: (f) => f.toISOString().slice(0, 10) });
+
+  // El ID viejo lleva al vigente, y el vigente a los dos
+  assert.equal(Repo.idActual('a1b2c3d4'), 'LIN-00000000AAAAAA');
+  assert.deepEqual(Repo.idsDeRegistro('LIN-00000000AAAAAA'), ['LIN-00000000AAAAAA', 'a1b2c3d4']);
+  assert.equal(Repo.leerRegistroPorId('a1b2c3d4').NUCO, '0234');
+
+  // Historial con el ID nuevo: bitácora, reasignación, inspección con su PDF; el cambio del sistema nuevo no se repite
+  const h = Repo.historialDeRegistro('LIN-00000000AAAAAA', true).eventos;
+  assert.deepEqual(h.map((e) => e.movimiento).sort(), ['Cambio de estatus', 'Inspección', 'Otros cambios', 'Reasignación']);
+  assert.equal(h.filter((e) => e.campo === 'COMENTARIOS').length, 1);
+  const insp = h.filter((e) => e.movimiento === 'Inspección')[0];
+  assert.equal(insp.refId, 'ILI-00000000FFFFFF');
+  assert.equal(insp.pdfId, 'pdf1');
+  // La inspección apunta a la línea con su ID vigente, no con el del AppSheet
+  assert.equal(Repo.evidenciasDeRegistro('LIN-00000000AAAAAA').inspecciones[0].registroId, 'LIN-00000000AAAAAA');
+
+  // Personal de DG: la fórmula lo reconoce por el ID del AppSheet (DG001), aunque el ID ya sea LIN-…
+  assert.equal(Repo.convertirRegistro(hojas['LINEAS TELEFONICAS'][1]).equipo.legado.estatusGeneral, 'PERSONAL DG');
+
+  // Lo nuevo nace con el prefijo de su hoja; la bitácora lleva el mismo ID en ID e ID_CAMBIO
+  const datos = read('src/services/lineas/LineasDatos.gs');
+  assert.match(datos, /if \(tieneId && !o\['ID'\]\) o\['ID'\] = nuevoId\(nombre\);/);
+  assert.match(datos, /return Ids\.nuevo\(Entidades\.prefijo\(nombre\)\);/);
+  // Los encabezados en blanco de CAMBIOS se ubican por la columna vecina, no por posición
+  assert.match(datos, /'CAMBIOS LINEAS TELEFONICAS': \[\{ vecina: 'ID_LINEA', lado: -1, nombre: 'ID_CAMBIO' \}, \{ vecina: 'ID_LINEA', lado: 1, nombre: 'NUCO' \}\]/);
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  assert.match(repo, /bitacora\.forEach\(\(b\) => \{ b\['ID_CAMBIO'\] = b\['ID'\]; \}\);/);
+  assert.doesNotMatch(read('src/services/lineas/LineasRegistros.gs') + read('src/services/lineas/LineasCaptura.gs') + read('src/services/lineas/LineasNotificaciones.gs'), /\['ID'\]: LineasDatos\.nuevoIdCorto\(\)|'ID': LineasDatos\.nuevoIdCorto\(\)|const id = LineasDatos\.nuevoIdCorto\(\)/);
+  assert.match(read('src/config/Entidades.gs'), /'APP_NOTIFICACIONES': \{ prefijo: 'NTF'/);
+});
+

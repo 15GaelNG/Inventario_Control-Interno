@@ -135,9 +135,9 @@ const LineasRepo = (function () {
       usuariosAdicionales: usuariosAdicionales_(f),
     };
     const legado = {
-      id: id, fila: f._fila, folio: folioRegistro(tipo, col(f, 'NUCO')), tipo: tipo || null,
+      id: id, idAnterior: txt(col(f, LineasDatos.COL_ID_ANTERIOR)), fila: f._fila, folio: folioRegistro(tipo, col(f, 'NUCO')), tipo: tipo || null,
       nuco: txt(col(f, 'NUCO')) === null ? null : LineasUtil.nucoVisible(col(f, 'NUCO')),
-      estatusGeneral: estatusGeneralRegistro(id, tipo, txt(col(f, 'ESTATUS EQUIPO')), txt(col(f, 'ESTATUS LINEA'))),
+      estatusGeneral: estatusGeneralRegistro(idParaDG_(f), tipo, txt(col(f, 'ESTATUS EQUIPO')), txt(col(f, 'ESTATUS LINEA'))),
       comentarios: txt(col(f, 'COMENTARIOS')),
       responsivaRuta: txt(col(f, 'RESPONSIVA')), formatoInspeccionRuta: txt(col(f, 'FORMATO INSPECCION')),
       fechaInspeccion: fecha(col(f, 'FECHA INSPECCION')), fechaRegistro: fecha(col(f, 'FECHA REGISTRO')),
@@ -201,6 +201,14 @@ const LineasRepo = (function () {
   function folioRegistro(tipo, nuco) {
     const prefijo = { 'EQUIPO + SIM': 'EQS', 'LINEA': 'LIN', 'MODEM': 'MOD', 'CAMARA': 'CAM', 'BANDA ANCHA': 'BAN', 'EQUIPO': 'EQP' }[tipo] || '';
     return prefijo + ('0000' + (nuco === null || nuco === undefined ? '' : String(nuco))).slice(-4);
+  }
+
+  /**
+   * ID con el que la fórmula reconoce al personal de DG (DG001, DG002…). Tras la migración de IDs ese valor quedó en
+   * ID APPSHEET y el ID es LIN-…
+   */
+  function idParaDG_(f) {
+    return txt(col(f, LineasDatos.COL_ID_ANTERIOR)) || txt(f['ID']);
   }
 
   /** Fórmula ESTATUS GENERAL del AppSheet. */
@@ -311,8 +319,46 @@ const LineasRepo = (function () {
     return cambios;
   }
 
+  // ---------------- IDs de antes y después de la migración ----------------
+
+  const CLAVE_IDS = 'ids_lineas_v1';
+
+  /**
+   * { viejo: {idAppSheet → ID}, nuevo: {ID → idAppSheet} } de LINEAS TELEFONICAS (claves en minúsculas).
+   * La migración de IDs (29-sep) puso LIN-… en ID y dejó el anterior en ID APPSHEET, pero las pestañas que citan
+   * al registro (inspecciones, responsivas, bitácoras) pueden seguir con el anterior hasta que se reescriban.
+   */
+  function equivalenciasIds_() {
+    const enCache = LineasDatos.cacheLeer(CLAVE_IDS);
+    if (enCache && enCache.viejo) return enCache;
+    const m = { viejo: {}, nuevo: {} };
+    LineasDatos.leerTabla(TAB.LINEAS).forEach((f) => {
+      const ids = LineasDatos.idsDeFila(f);
+      if (ids.length < 2) return;
+      m.viejo[ids[1].toLowerCase()] = ids[0];
+      m.nuevo[ids[0].toLowerCase()] = ids[1];
+    });
+    LineasDatos.cacheGuardar(CLAVE_IDS, m, 6 * 3600); // los registros nuevos no traen ID viejo: no hay que invalidarla
+    return m;
+  }
+
+  /** ID vigente de un registro citado con su ID nuevo o con el del AppSheet. */
+  function idActual(id) {
+    const t = txt(id);
+    if (!t) return t;
+    return equivalenciasIds_().viejo[String(t).toLowerCase()] || String(t);
+  }
+
+  /** Todos los IDs con los que las demás pestañas pueden citar al registro: [ID, ID del AppSheet]. */
+  function idsDeRegistro(id) {
+    const actual = idActual(id);
+    if (!actual) return [];
+    const viejo = equivalenciasIds_().nuevo[actual.toLowerCase()];
+    return viejo ? [actual, viejo] : [actual];
+  }
+
   function leerRegistroPorId(id) {
-    const filas = LineasDatos.buscarFilas(TAB.LINEAS, 'ID', id);
+    const filas = LineasDatos.buscarFilasPorId(TAB.LINEAS, id);
     if (!filas.length) return null;
     if (filas.length > 1) throw new Error('El ID ' + id + ' está repetido en LINEAS TELEFONICAS (filas ' + filas.join(', ') + ').');
     return LineasDatos.leerFilas([{ tabla: TAB.LINEAS, filas: filas }])[0][0];
@@ -365,30 +411,33 @@ const LineasRepo = (function () {
     const tipoNuevo = (txt(col(nuevo, 'TIPO')) || '').toUpperCase();
     if (LineasDatos.colIndice(t, 'FOLIO') >= 0) escribir['FOLIO'] = folioRegistro(tipoNuevo, col(nuevo, 'NUCO'));
     if (LineasDatos.colIndice(t, 'ESTATUS GENERAL') >= 0) {
-      escribir['ESTATUS GENERAL'] = estatusGeneralRegistro(f['ID'], tipoNuevo, txt(col(nuevo, 'ESTATUS EQUIPO')), txt(col(nuevo, 'ESTATUS LINEA')));
+      escribir['ESTATUS GENERAL'] = estatusGeneralRegistro(idParaDG_(f), tipoNuevo, txt(col(nuevo, 'ESTATUS EQUIPO')), txt(col(nuevo, 'ESTATUS LINEA')));
     }
     LineasDatos.actualizarFila(TAB.LINEAS, f._fila, escribir);
 
     const bitacora = efectivos.filter((e) => CAMPOS_BITACORA.indexOf(LineasDatos.normCol(e.campo)) >= 0).map((e) => ({
       // NUCO e IMEI ya actualizados, como [NUCO] / [IMEI] en las acciones del bot
-      'ID_CAMBIO': LineasDatos.nuevoIdCorto(), 'ID_LINEA': f['ID'], 'NUCO': LineasUtil.nucoVisible(col(nuevo, 'NUCO')) || '', 'IMEI': col(nuevo, 'IMEI'), 'TABLA': TAB.LINEAS,
+      'ID': idCambio_(), 'ID_LINEA': f['ID'], 'NUCO': LineasUtil.nucoVisible(col(nuevo, 'NUCO')) || '', 'IMEI': col(nuevo, 'IMEI'), 'TABLA': TAB.LINEAS,
       'CAMPO': e.campo, 'ANTES': textoBitacora_(e.antes), 'DESPUES': textoBitacora_(e.despues),
       'ACTUALIZADO POR': usuario.nombre, 'FECHA ACTUALIZACION': ahora,
     }));
+    // Mismo valor en ID y en ID_CAMBIO: la hoja tiene una u otra según esté o no migrada
+    bitacora.forEach((b) => { b['ID_CAMBIO'] = b['ID']; });
     LineasDatos.agregarFilas(TAB.CAMBIOS, bitacora);
 
     let idReasignacion = null;
     if (efectivos.some((e) => LineasDatos.normCol(e.campo) === 'RESPONSABLE')) {
-      idReasignacion = LineasDatos.nuevoIdCorto();
+      idReasignacion = LineasDatos.nuevoId(TAB.REASIG);
       LineasDatos.agregarFilas(TAB.REASIG, [{
-        'ID Historial': idReasignacion, 'ID Linea': f['ID'], 'Fecha de Reasignacion': ahora, 'NUCO': LineasUtil.nucoVisible(col(nuevo, 'NUCO')) || '',
+        // ID Historial es la llave del AppSheet: se sigue llenando mientras viva
+        'ID': idReasignacion, 'ID Historial': LineasDatos.nuevoIdCorto(), 'ID Linea': f['ID'], 'Fecha de Reasignacion': ahora, 'NUCO': LineasUtil.nucoVisible(col(nuevo, 'NUCO')) || '',
         'No Empleado Saliente': col(f, 'NO EMPLEADO'), 'Responsable Saliente': col(f, 'RESPONSABLE'), 'Departamento Saliente': col(f, 'DEPARTAMENTO'),
         'No Empleado Entrante': col(nuevo, 'NO EMPLEADO'), 'Responsable Entrante': col(nuevo, 'RESPONSABLE'), 'Departamento Entrante': col(nuevo, 'DEPARTAMENTO'),
         'QUIEN REGISTRO': usuario.nombre,
       }]);
     }
     return {
-      idsCambios: bitacora.map((b) => b['ID_CAMBIO']),
+      idsCambios: bitacora.map((b) => b['ID']),
       idReasignacion: idReasignacion,
       campos: efectivos.map((e) => ({ campo: e.campo, antes: textoBitacora_(e.antes), despues: textoBitacora_(e.despues) })),
     };
@@ -403,10 +452,15 @@ const LineasRepo = (function () {
     return LineasDatos.agregarFilas(TAB.LINEAS, [datos])[0];
   }
 
+  /** ID de una fila de la bitácora CAMBIOS (CLI-…). */
+  function idCambio_() {
+    return LineasDatos.nuevoId(TAB.CAMBIOS);
+  }
+
   /** Registro de la operación en APP_MOVIMIENTOS (motivo, ticket y resumen antes/después). */
   function registrarMovimiento(tipo, datos, usuario, ahora, extra) {
     asegurarPestanaApp(TAB.APP_MOV);
-    const id = LineasDatos.nuevoIdCorto();
+    const id = LineasDatos.nuevoId(TAB.APP_MOV);
     LineasDatos.agregarFilas(TAB.APP_MOV, [{
       'ID': id, 'FECHA': ahora, 'TIPO': tipo, 'REFS': ',' + (extra.refs || []).filter(Boolean).join(',') + ',',
       'NUCO': LineasUtil.nucoVisible(extra.nuco) || '', 'NUMERO': extra.numero || '', 'NUCO_DESTINO': LineasUtil.nucoVisible(extra.nucoDestino) || '',
@@ -447,7 +501,8 @@ const LineasRepo = (function () {
     });
     const ticket = txt(col(f, 'TICKET'));
     return {
-      _id: txt(f['ID']), origen: ev && ev.origen === 'SISTEMA' ? 'SISTEMA' : 'APPSHEET', registroId: txt(col(f, 'ID LINEA')),
+      _id: txt(f['ID']), _idAnterior: txt(col(f, LineasDatos.COL_ID_ANTERIOR)), origen: ev && ev.origen === 'SISTEMA' ? 'SISTEMA' : 'APPSHEET',
+      registroId: idActual(col(f, 'ID LINEA')),
       nuco: nuco4(col(f, 'NUCO')), fecha: fecha(col(f, 'FECHA DE REGISTRO')), tipoRegistro: txt(col(f, 'TIPO')),
       snapshot: {
         responsable: txt(col(f, 'RESPONSABLE')), departamento: txt(col(f, 'DEPARTAMENTO')), area: txt(col(f, 'AREA')),
@@ -470,7 +525,7 @@ const LineasRepo = (function () {
   /** Inspección histórica que solo existe como carpeta en Drive. */
   function inspeccionDesdeEvidencia(ev) {
     return {
-      _id: 'drive_' + ev.carpetaId, origen: 'DRIVE', registroId: ev.idLinea, nuco: ev.nuco, fecha: ev.fecha,
+      _id: 'drive_' + ev.carpetaId, origen: 'DRIVE', registroId: idActual(ev.idLinea), nuco: ev.nuco, fecha: ev.fecha,
       checklist: {}, calificacion: null, drive: driveDeEvidencia_(ev),
     };
   }
@@ -484,7 +539,8 @@ const LineasRepo = (function () {
       if (dia && mes && anio) fch = new Date(anio, mes - 1, dia, 12);
     }
     return {
-      _id: txt(f['ID']), origen: ev && ev.origen === 'SISTEMA' ? 'SISTEMA' : 'APPSHEET', registroId: txt(col(f, 'ID LINEA')),
+      _id: txt(f['ID']), _idAnterior: txt(col(f, LineasDatos.COL_ID_ANTERIOR)), origen: ev && ev.origen === 'SISTEMA' ? 'SISTEMA' : 'APPSHEET',
+      registroId: idActual(col(f, 'ID LINEA')),
       nuco: nuco4(col(f, 'NUCO')), fecha: fch,
       responsable: { nombre: txt(col(f, 'RESPONSABLE')) },
       responsableCI: txt(col(f, 'NOMBRE CI')), drive: driveDeEvidencia_(ev),
@@ -498,23 +554,25 @@ const LineasRepo = (function () {
    * las del AppSheet/sistema (por ID LINEA) + las históricas solo en Drive (por NUCO).
    */
   function evidenciasDeRegistro(id) {
+    const ids = idsDeRegistro(id);
     const hayApp = LineasDatos.existeTabla(TAB.APP_EVID);
     const peticiones = [
-      { tabla: TAB.INSP, filas: LineasDatos.buscarFilas(TAB.INSP, 'ID LINEA', id) },
-      { tabla: TAB.RESP, filas: LineasDatos.buscarFilas(TAB.RESP, 'ID LINEA', id) },
+      { tabla: TAB.INSP, filas: LineasDatos.buscarFilasVarios(TAB.INSP, 'ID LINEA', ids) },
+      { tabla: TAB.RESP, filas: LineasDatos.buscarFilasVarios(TAB.RESP, 'ID LINEA', ids) },
     ];
     // Las carpetas históricas (solo Drive) quedan con ID_LINEA del equipo de su NUCO al sincronizar.
-    if (hayApp) peticiones.push({ tabla: TAB.APP_EVID, filas: LineasDatos.buscarFilas(TAB.APP_EVID, 'ID_LINEA', id) });
+    if (hayApp) peticiones.push({ tabla: TAB.APP_EVID, filas: LineasDatos.buscarFilasVarios(TAB.APP_EVID, 'ID_LINEA', ids) });
     const r = LineasDatos.leerFilas(peticiones);
     const evidencias = hayApp ? r[2].map(evidenciaDesdeFila) : [];
     const evPorRegistro = {};
     evidencias.forEach((e) => { if (e.idRegistro) evPorRegistro[e.idRegistro] = e; });
+    const evDe = (f) => LineasDatos.idsDeFila(f).map((k) => evPorRegistro[k]).filter(Boolean)[0];
 
-    const inspecciones = r[0].map((f) => inspeccionDesdeFila(f, evPorRegistro[txt(f['ID'])]));
-    const responsivas = r[1].map((f) => responsivaDesdeFila(f, evPorRegistro[txt(f['ID'])]));
+    const inspecciones = r[0].map((f) => inspeccionDesdeFila(f, evDe(f)));
+    const responsivas = r[1].map((f) => responsivaDesdeFila(f, evDe(f)));
     evidencias.forEach((e) => {
       if (e.origen !== 'DRIVE') return;
-      if (e.idLinea && e.idLinea !== id) return;
+      if (e.idLinea && idActual(e.idLinea) !== ids[0]) return;
       if (e.tipo === 'INSPECCION') inspecciones.push(inspeccionDesdeEvidencia(e));
       else responsivas.push({ _id: 'drive_' + e.carpetaId, origen: 'DRIVE', nuco: e.nuco, fecha: e.fecha, drive: driveDeEvidencia_(e) });
     });
@@ -529,10 +587,10 @@ const LineasRepo = (function () {
       if (!filas.length) return null;
       return inspeccionDesdeEvidencia(evidenciaDesdeFila(LineasDatos.leerFilas([{ tabla: TAB.APP_EVID, filas: filas.slice(0, 1) }])[0][0]));
     }
-    const filas = LineasDatos.buscarFilas(TAB.INSP, 'ID', id);
+    const filas = LineasDatos.buscarFilasPorId(TAB.INSP, id);
     if (!filas.length) return null;
     const f = LineasDatos.leerFilas([{ tabla: TAB.INSP, filas: filas.slice(0, 1) }])[0][0];
-    const filasEv = LineasDatos.existeTabla(TAB.APP_EVID) ? LineasDatos.buscarFilas(TAB.APP_EVID, 'ID_REGISTRO', id) : [];
+    const filasEv = LineasDatos.existeTabla(TAB.APP_EVID) ? LineasDatos.buscarFilasVarios(TAB.APP_EVID, 'ID_REGISTRO', LineasDatos.idsDeFila(f)) : [];
     const ev = filasEv.length ? evidenciaDesdeFila(LineasDatos.leerFilas([{ tabla: TAB.APP_EVID, filas: filasEv.slice(0, 1) }])[0][0]) : null;
     return inspeccionDesdeFila(f, ev);
   }
@@ -566,15 +624,19 @@ const LineasRepo = (function () {
    * Lo que el sistema nuevo registró en APP_MOVIMIENTOS oculta sus propias filas de las pestañas del AppSheet.
    */
   function historialDeRegistro(id, puedeVerSecretos) {
+    const ids = idsDeRegistro(id);
+    id = ids[0] || id;
     const hayMov = LineasDatos.existeTabla(TAB.APP_MOV);
     const hayReact = LineasDatos.existeTabla(TAB.REACTIVACION);
     const peticiones = [
-      { tabla: TAB.CAMBIOS, filas: LineasDatos.buscarFilas(TAB.CAMBIOS, 'ID_LINEA', id).slice(-1500) }, // las más recientes
-      { tabla: TAB.REASIG, filas: LineasDatos.buscarFilas(TAB.REASIG, 'ID Linea', id) },
-      { tabla: TAB.DESECHO, filas: LineasDatos.buscarFilas(TAB.DESECHO, 'ID_EQUIPO', id) },
-      { tabla: TAB.APP_MOV, filas: hayMov ? LineasDatos.buscarFilas(TAB.APP_MOV, 'REFS', ',' + id + ',', true) : [] },
-      { tabla: TAB.REACTIVACION, filas: hayReact ? LineasDatos.buscarFilas(TAB.REACTIVACION, 'IMEI', id) : [] },
+      { tabla: TAB.CAMBIOS, filas: LineasDatos.buscarFilasVarios(TAB.CAMBIOS, 'ID_LINEA', ids).slice(-1500) }, // las más recientes
+      { tabla: TAB.REASIG, filas: LineasDatos.buscarFilasVarios(TAB.REASIG, 'ID Linea', ids) },
+      { tabla: TAB.DESECHO, filas: LineasDatos.buscarFilasVarios(TAB.DESECHO, 'ID_EQUIPO', ids) },
+      { tabla: TAB.APP_MOV, filas: hayMov ? LineasDatos.buscarFilasVarios(TAB.APP_MOV, 'REFS', ids.map((k) => ',' + k + ','), true) : [] },
+      { tabla: TAB.REACTIVACION, filas: hayReact ? LineasDatos.buscarFilasVarios(TAB.REACTIVACION, 'IMEI', ids) : [] },
     ].filter((p) => p.filas.length);
+    // Una fila está oculta si el sistema nuevo la registró con cualquiera de sus IDs (el de hoy o el de antes)
+    const oculta = (mapa, f, ...columnas) => columnas.concat(['ID', LineasDatos.COL_ID_ANTERIOR]).some((c) => mapa[txt(f[c])]);
     const leidas = peticiones.length ? LineasDatos.leerFilas(peticiones) : [];
     const r = {};
     peticiones.forEach((p, i) => { r[p.tabla] = leidas[i]; });
@@ -651,7 +713,7 @@ const LineasRepo = (function () {
     const diaDe = (d) => (d ? Utilities.formatDate(d, LineasDatos.ZONA_APP, 'yyyy-MM-dd') : '');
     const reasignadoEl = {};
     de(TAB.REASIG).forEach((f) => {
-      if (ocultasReasig[txt(f['ID Historial'])]) return;
+      if (oculta(ocultasReasig, f, 'ID Historial')) return;
       const cuando = fecha(col(f, 'Fecha de Reasignacion'));
       const entrante = txt(col(f, 'Responsable Entrante'));
       reasignadoEl[diaDe(cuando) + '|' + sinAcentos_(entrante)] = true;
@@ -668,7 +730,7 @@ const LineasRepo = (function () {
     // 3) Bitácora CAMBIOS LINEAS TELEFONICAS (una fila por campo). El cambio de RESPONSABLE que ya
     //    aparece como reasignación ese mismo día no se repite.
     de(TAB.CAMBIOS).forEach((f) => {
-      if (ocultosCambios[txt(f['ID_CAMBIO'])]) return;
+      if (oculta(ocultosCambios, f, 'ID_CAMBIO')) return;
       const campo = txt(col(f, 'CAMPO'));
       const cuando = fecha(col(f, 'FECHA ACTUALIZACION'));
       const despues = txt(col(f, 'DESPUES'));
@@ -681,7 +743,7 @@ const LineasRepo = (function () {
 
     // 4) BITACORA DE DESECHO
     de(TAB.DESECHO).forEach((f) => {
-      if (ocultosDesechos[txt(f['ID_DESECHO'])]) return;
+      if (oculta(ocultosDesechos, f, 'ID_DESECHO')) return;
       agregar({
         fecha: fecha(col(f, 'FECHA DE DESECHO')) || fecha(col(f, 'FECHA DE REGISTRO')), origen: 'AppSheet', movimiento: 'Desecho',
         detalle: unir([txt(col(f, 'FOLIO DESECHO')) ? 'Folio ' + txt(col(f, 'FOLIO DESECHO')) : null, txt(col(f, 'MOTIVO')),
@@ -705,7 +767,7 @@ const LineasRepo = (function () {
     const origenEv = (o) => (o === 'DRIVE' ? 'Drive' : (o === 'SISTEMA' ? 'Nuevo sistema' : 'AppSheet'));
     const ev = evidenciasDeRegistro(id);
     ev.inspecciones.forEach((i) => {
-      if (inspeccionesSistema[i._id]) return;
+      if (inspeccionesSistema[i._id] || inspeccionesSistema[i._idAnterior]) return;
       const cal = i.calificacion;
       agregar({
         fecha: i.fecha, origen: origenEv(i.origen), movimiento: 'Inspección', refTipo: 'inspeccion', refId: i._id, pdfId: i.pdf ? i.pdf.id : null,
@@ -714,7 +776,7 @@ const LineasRepo = (function () {
       });
     });
     ev.responsivas.forEach((x) => {
-      if (responsivasSistema[x._id]) return;
+      if (responsivasSistema[x._id] || responsivasSistema[x._idAnterior]) return;
       agregar({
         fecha: x.fecha, origen: origenEv(x.origen), movimiento: 'Responsiva', refTipo: 'responsiva', refId: x._id, pdfId: x.pdf ? x.pdf.id : null,
         detalle: x.responsable && x.responsable.nombre ? 'Responsable: ' + x.responsable.nombre : '', usuario: x.responsableCI,
@@ -771,7 +833,7 @@ const LineasRepo = (function () {
     const filaActual = {};
     primera[0].forEach((f) => { const k = txt(f['ID']); if (k) { ids[k] = true; filaActual[k] = f; } });
     primera[1].forEach((f) => {
-      const k = txt(f['ID_LINEA']);
+      const k = idActual(f['ID_LINEA']);
       if (!k) return;
       const campo = campoAsignacion(f);
       // La clave en el NUCO de la fila, o como antes/después de un cambio de número o NUCO (no de otro campo)
@@ -786,11 +848,12 @@ const LineasRepo = (function () {
     const hayMov = LineasDatos.existeTabla(TAB.APP_MOV);
     const hayReact = LineasDatos.existeTabla(TAB.REACTIVACION);
     const faltantes = listaIds.filter((k) => !filaActual[k]);
+    const todosLosIds = [].concat.apply([], listaIds.map(idsDeRegistro));
     const segunda = LineasDatos.leerFilas([
-      { tabla: TAB.CAMBIOS, filas: [].concat.apply([], listaIds.map((k) => LineasDatos.buscarFilas(TAB.CAMBIOS, 'ID_LINEA', k))) },
-      { tabla: TAB.LINEAS, filas: [].concat.apply([], faltantes.map((k) => LineasDatos.buscarFilas(TAB.LINEAS, 'ID', k))) },
-      { tabla: TAB.APP_MOV, filas: hayMov ? [].concat.apply([], listaIds.map((k) => LineasDatos.buscarFilas(TAB.APP_MOV, 'REFS', ',' + k + ',', true))) : [] },
-      { tabla: TAB.REACTIVACION, filas: hayReact ? [].concat.apply([], listaIds.map((k) => LineasDatos.buscarFilas(TAB.REACTIVACION, 'IMEI', k))) : [] },
+      { tabla: TAB.CAMBIOS, filas: LineasDatos.buscarFilasVarios(TAB.CAMBIOS, 'ID_LINEA', todosLosIds) },
+      { tabla: TAB.LINEAS, filas: [].concat.apply([], faltantes.map((k) => LineasDatos.buscarFilasPorId(TAB.LINEAS, k))) },
+      { tabla: TAB.APP_MOV, filas: hayMov ? LineasDatos.buscarFilasVarios(TAB.APP_MOV, 'REFS', todosLosIds.map((k) => ',' + k + ','), true) : [] },
+      { tabla: TAB.REACTIVACION, filas: hayReact ? LineasDatos.buscarFilasVarios(TAB.REACTIVACION, 'IMEI', todosLosIds) : [] },
     ]);
     segunda[1].forEach((f) => { const k = txt(f['ID']); if (k) filaActual[k] = f; });
     const motivoCambio = {};
@@ -801,16 +864,16 @@ const LineasRepo = (function () {
       (detalle.idsCambios || []).forEach((x) => { motivoCambio[x] = motivo; });
     });
     const reactivaciones = segunda[3].map((f) => ({
-      id: txt(col(f, 'IMEI')), numero: digitos(col(f, 'NUEVO NUMERO')),
+      id: idActual(col(f, 'IMEI')), numero: digitos(col(f, 'NUEVO NUMERO')),
       motivo: ['Reactivación', txt(col(f, 'FOLIO')) ? 'folio ' + txt(col(f, 'FOLIO')) : null, txt(col(f, 'RETRO DE SOLICITUD')), txt(col(f, 'CORREO / TICKET'))].filter(Boolean).join(' · '),
     })).filter((r) => r.id && r.numero);
     const cambiosPorId = {};
     segunda[0].forEach((f) => {
       const campo = campoAsignacion(f);
-      const k = txt(f['ID_LINEA']);
+      const k = idActual(f['ID_LINEA']);
       const cuando = fecha(col(f, 'FECHA ACTUALIZACION'));
       if (!campo || !k || !cuando || !ids[k]) return;
-      const idCambio = txt(f['ID_CAMBIO']);
+      const idCambio = ['ID', 'ID_CAMBIO', LineasDatos.COL_ID_ANTERIOR].map((c) => txt(f[c])).filter((x) => x && x in motivoCambio)[0];
       (cambiosPorId[k] = cambiosPorId[k] || []).push({
         campo: campo, antes: valorDe(campo, col(f, 'ANTES')), despues: valorDe(campo, col(f, 'DESPUES')), fecha: cuando,
         nucoFila: nucoDe_(f['NUCO']), usuario: txt(col(f, 'ACTUALIZADO POR')) || '',
@@ -1001,9 +1064,10 @@ const LineasRepo = (function () {
     });
 
     if (String(tipo).toUpperCase() === 'REACTIVACION') {
+      // Su columna IMEI guarda el ID del registro: el de hoy o el del AppSheet
       const imeiPorId = {};
-      LineasDatos.leerTabla(TAB.LINEAS).forEach((l) => { imeiPorId[String(l['ID'])] = col(l, 'IMEI'); });
-      filas = filas.map((f) => (f['IMEI'] && imeiPorId[String(f['IMEI'])] !== undefined ? Object.assign({}, f, { 'IMEI': imeiPorId[String(f['IMEI'])], _ref: String(f['IMEI']) }) : f));
+      LineasDatos.leerTabla(TAB.LINEAS).forEach((l) => { LineasDatos.idsDeFila(l).forEach((k) => { imeiPorId[k] = col(l, 'IMEI'); }); });
+      filas = filas.map((f) => (f['IMEI'] && imeiPorId[String(f['IMEI'])] !== undefined ? Object.assign({}, f, { 'IMEI': imeiPorId[String(f['IMEI'])], _ref: idActual(f['IMEI']) }) : f));
     }
     const total = filas.length;
     const desde = pagina * porPagina;
@@ -1085,14 +1149,14 @@ const LineasRepo = (function () {
 
   /** Vacía las cachés del módulo (índices, catálogos y carpetas). */
   function borrarCaches() {
-    ['indice_telefonia_v2', 'indice_telefonia_v3', CLAVE_INDICE, 'indice_colaboradores', 'carpetas_nucos', 'carpetas_nucos_v2', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3'].forEach(LineasDatos.cacheBorrar);
+    ['indice_telefonia_v2', 'indice_telefonia_v3', CLAVE_INDICE, 'indice_colaboradores', 'carpetas_nucos', 'carpetas_nucos_v2', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3', CLAVE_IDS].forEach(LineasDatos.cacheBorrar);
   }
 
   return {
     TAB, ENCABEZADOS_APP, TIPOS_CON_EQUIPO, TIPOS_CON_LINEA, TIPOS_LINEA_OPCIONAL, CATALOGO,
     COLS_LINEA, VALORES_SIN_LINEA, COLS_RESPONSABLE, CAMPOS_BITACORA,
     tipoConLinea, tipoSinLinea, convertirRegistro, folioRegistro, estatusGeneralRegistro,
-    indice, refrescarIndice, leerRegistroPorId, leerRegistroObligatorio,
+    indice, refrescarIndice, leerRegistroPorId, leerRegistroObligatorio, idActual, idsDeRegistro,
     guardarCambiosRegistro, agregarRegistro, registrarMovimiento, asegurarPestanaApp,
     evidenciaDesdeFila, inspeccionDesdeFila, inspeccionDesdeEvidencia, responsivaDesdeFila,
     evidenciasDeRegistro, leerInspeccion, historialDeRegistro, asignacionesDeRegistro, movimientoDeCampo, bitacora, vistaOperativa,

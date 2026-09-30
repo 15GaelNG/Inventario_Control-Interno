@@ -24,12 +24,17 @@ const LineasDatos = (function () {
   const SEG_CACHE_ENCABEZADOS = 3600;
 
   /**
-   * Encabezados que en la hoja están en blanco pero que el AppSheet conoce por posición
-   * (índice de columna, base 0).
+   * Encabezados que en la hoja están en blanco pero que el AppSheet conoce. Se ubican por la columna vecina y no por
+   * posición, porque la migración de IDs (29-sep) puso "ID" al inicio y recorrió todo:
+   *   antes:  [' ', ID_LINEA, ' ', IMEI…]             → ID_CAMBIO, ID_LINEA, NUCO
+   *   ahora:  [ID, ID APPSHEET, ID_LINEA, ' ', IMEI…]  → el ID viejo del cambio quedó en ID APPSHEET; NUCO sigue en blanco
    */
-  const ENCABEZADOS_POR_POSICION = {
-    'CAMBIOS LINEAS TELEFONICAS': { 0: 'ID_CAMBIO', 2: 'NUCO' },
+  const ENCABEZADOS_EN_BLANCO = {
+    'CAMBIOS LINEAS TELEFONICAS': [{ vecina: 'ID_LINEA', lado: -1, nombre: 'ID_CAMBIO' }, { vecina: 'ID_LINEA', lado: 1, nombre: 'NUCO' }],
   };
+
+  /** Columna donde la migración de IDs dejó el ID que tenía el registro en el AppSheet. */
+  const COL_ID_ANTERIOR = 'ID APPSHEET';
 
   // Estado por ejecución (cada llamada de google.script.run empieza de cero).
   const bd = { id: null, libro: null, tablas: {}, zona: null, apiSheets: undefined };
@@ -132,8 +137,7 @@ const LineasDatos = (function () {
     if (!hoja) throw new Error('No existe la pestaña "' + nombre + '" en la base de datos de Líneas.');
     const encabezados = hoja.getRange(1, 1, 1, Math.max(1, hoja.getLastColumn())).getValues()[0]
       .map((h) => String(h).trim());
-    const porPosicion = ENCABEZADOS_POR_POSICION[nombre] || {};
-    Object.keys(porPosicion).forEach((i) => { if (!encabezados[i]) encabezados[i] = porPosicion[i]; });
+    nombrarEnBlanco_(nombre, encabezados);
     while (encabezados.length && !encabezados[encabezados.length - 1]) encabezados.pop();
     cacheGuardar('enc_' + nombre, encabezados, SEG_CACHE_ENCABEZADOS);
     const t = armarTabla_(nombre, encabezados, hoja);
@@ -141,7 +145,16 @@ const LineasDatos = (function () {
     return t;
   }
 
+  function nombrarEnBlanco_(nombre, encabezados) {
+    (ENCABEZADOS_EN_BLANCO[nombre] || []).forEach((r) => {
+      const v = encabezados.findIndex((h) => normCol(h) === r.vecina);
+      const i = v + r.lado;
+      if (v >= 0 && i >= 0 && i < encabezados.length && !String(encabezados[i] || '').trim()) encabezados[i] = r.nombre;
+    });
+  }
+
   function armarTabla_(nombre, encabezados, hoja) {
+    nombrarEnBlanco_(nombre, encabezados); // también a los encabezados en caché, guardados antes de esta regla
     const indice = {};
     encabezados.forEach((h, i) => {
       const k = normCol(h);
@@ -235,6 +248,33 @@ const LineasDatos = (function () {
     return t.hoja.getRange(2, c + 1, ultima - 1, 1)
       .createTextFinder(String(valor)).matchEntireCell(!parcial).matchCase(false)
       .findAll().map((r) => r.getRow());
+  }
+
+  /** buscarFilas con varios valores (p. ej. el ID nuevo y el viejo de un registro): filas sin repetir, en orden. */
+  function buscarFilasVarios(nombre, columna, valores, parcial) {
+    const vistas = {};
+    (valores || []).forEach((v) => buscarFilas(nombre, columna, v, parcial).forEach((n) => { vistas[n] = true; }));
+    return Object.keys(vistas).map(Number).sort((a, b) => a - b);
+  }
+
+  /**
+   * Filas de un registro por su ID. Si no aparece, se busca como ID del AppSheet (columna ID APPSHEET): así siguen
+   * sirviendo las referencias, enlaces y PDFs que traen el ID de antes de la migración.
+   */
+  function buscarFilasPorId(nombre, id) {
+    const filas = buscarFilas(nombre, 'ID', id);
+    if (filas.length || !id) return filas;
+    return colIndice(tabla(nombre), COL_ID_ANTERIOR) >= 0 ? buscarFilas(nombre, COL_ID_ANTERIOR, id) : [];
+  }
+
+  /** IDs con los que se puede citar una fila: el suyo y, si lo tiene, el que traía del AppSheet. */
+  function idsDeFila(f) {
+    const ids = [];
+    [f && f['ID'], f && f[COL_ID_ANTERIOR]].forEach((v) => {
+      const t = v === null || v === undefined ? '' : String(v).trim();
+      if (t && ids.indexOf(t) < 0) ids.push(t);
+    });
+    return ids;
   }
 
   /** Filas (sin repetir) que contienen `texto` en cualquier columna. */
@@ -452,11 +492,17 @@ const LineasDatos = (function () {
     });
   }
 
-  /** Agrega filas al final. objetos = [{ 'COLUMNA': valor }]. Devuelve los números de fila. */
+  /**
+   * Agrega filas al final. objetos = [{ 'COLUMNA': valor }]. Devuelve los números de fila.
+   * Junto con SheetUtils.insert es uno de los dos lugares donde nace un ID (docs/ids-asignacion.md, sección 8):
+   * se respeta el que ya venga, y las pestañas sin columna ID no se tocan (LISTAS TELEFONOS, DEPARTAMENTOS…).
+   */
   function agregarFilas(nombre, objetos) {
     if (!objetos || !objetos.length) return [];
     const t = tablaFresca(nombre);
+    const tieneId = colIndice(t, 'ID') >= 0;
     const filas = objetos.map((o) => {
+      if (tieneId && !o['ID']) o['ID'] = nuevoId(nombre);
       const fila = t.encabezados.map(() => '');
       Object.keys(o).forEach((k) => {
         const c = colIndice(t, k);
@@ -487,7 +533,16 @@ const LineasDatos = (function () {
     }
   }
 
-  /** ID corto como UNIQUEID() del AppSheet (8 caracteres hex), que Sheets nunca interprete como número. */
+  /** ID nuevo para una pestaña, con su prefijo del catálogo (LIN-…, ILI-…, CLI-…). Ver src/utils/Ids.gs. */
+  function nuevoId(nombre) {
+    return Ids.nuevo(Entidades.prefijo(nombre));
+  }
+
+  /**
+   * ID corto como UNIQUEID() del AppSheet (8 caracteres hex), que Sheets nunca interprete como número.
+   * Ya no va en la columna ID (esa usa nuevoId): solo llena las llaves que el AppSheet sigue usando mientras viva
+   * (ID_DESECHO, ID Historial, ID_Accesorio, ID_Movimiento).
+   */
   function nuevoIdCorto() {
     let nuevo;
     do { nuevo = Utilities.getUuid().replace(/-/g, '').slice(0, 8); } while (/^\d+$/.test(nuevo) || /^\d+e\d+$/i.test(nuevo));
@@ -529,7 +584,7 @@ const LineasDatos = (function () {
     id, libro, zona, normCol, esColumnaFecha, letraColumna, sheetsApi,
     cacheGuardar, cacheLeer, cacheBorrar,
     tabla, tablaFresca, existeTabla, colIndice, deHoraHoja, aHoraHoja,
-    leerTabla, ultimaFila, buscarFilas, buscarEnTabla, leerFilas, leerRango,
-    actualizarFila, agregarFilas, eliminarFila, conCandado, nuevoIdCorto, asegurarPestana,
+    leerTabla, ultimaFila, buscarFilas, buscarFilasVarios, buscarFilasPorId, idsDeFila, buscarEnTabla, leerFilas, leerRango,
+    actualizarFila, agregarFilas, eliminarFila, conCandado, nuevoId, nuevoIdCorto, asegurarPestana, COL_ID_ANTERIOR,
   };
 })();

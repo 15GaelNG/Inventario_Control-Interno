@@ -96,7 +96,7 @@ const LineasNotificaciones = (function () {
       txt(LineasUtil.col(f, 'RESPONSABLE')) ? 'Responsable: ' + txt(LineasUtil.col(f, 'RESPONSABLE')) : '',
     ].filter(Boolean).join(' · ');
     return {
-      'ID': LineasDatos.nuevoIdCorto(), 'FECHA': ahora, 'TIPO': 'ADENDUM', 'CLAVE': p.clave, 'REF_ID': p.refId, 'NUCO': p.nuco,
+      'ID': LineasDatos.nuevoId(TAB), 'FECHA': ahora, 'TIPO': 'ADENDUM', 'CLAVE': p.clave, 'REF_ID': p.refId, 'NUCO': p.nuco,
       'NUMERO': p.numero,
       'TITULO': (p.dias < 0 ? 'Adendum vencido · ' : 'Adendum por vencer · ') + p.numero,
       'MENSAJE': 'El adendum de la línea ' + p.numero + (p.dias < 0 ? ' venció el ' : ' vence el ') + fechaCorta_(p.vence) + '.' + (detalle ? ' ' + detalle + '.' : ''),

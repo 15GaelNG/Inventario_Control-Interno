@@ -205,7 +205,9 @@ const LineasRegistros = (function () {
     const fila = id ? LineasRepo.leerRegistroObligatorio(id, 'el registro') : null;
     const base = fila ? baseDeFila_(fila) : baseNueva_();
     const ctx = { nuevo: !fila };
-    return { nuevo: ctx.nuevo, elementos: ocultarSecretos_(elementos_(base, LineasRepo.catalogos(), usuario, ctx), puedeVerSecretos) };
+    // idDG: el ID con el que ESTATUS GENERAL reconoce al personal de DG (DG001…); tras migrar quedó en ID APPSHEET
+    const idDG = fila ? LineasDatos.idsDeFila(fila).filter((k) => /^DG/i.test(k))[0] || null : null;
+    return { nuevo: ctx.nuevo, idDG: idDG, elementos: ocultarSecretos_(elementos_(base, LineasRepo.catalogos(), usuario, ctx), puedeVerSecretos) };
   }
 
   // ---------------- Valid_If ----------------
@@ -330,7 +332,7 @@ const LineasRegistros = (function () {
     const r = resolver_(elementos, baseNueva_(), enviados, ctx);
     if (r.errores.length) throw new Error(r.errores.slice(0, 8).join(' · '));
     const valores = homologarNuco_(aHoja_(elementos, r.valores));
-    const id = LineasDatos.nuevoIdCorto();
+    const id = LineasDatos.nuevoId(LineasRepo.TAB.LINEAS);
     const ahora = new Date();
     valores.ID = id;
     valores['FECHA REGISTRO'] = ahora;
@@ -512,7 +514,7 @@ const LineasRegistros = (function () {
     const omitidos = [];
     LineasDatos.conCandado(() => {
       const porId = {};
-      LineasDatos.leerTabla(LineasRepo.TAB.LINEAS).forEach((f) => { porId[texto_(f['ID'])] = f; });
+      LineasDatos.leerTabla(LineasRepo.TAB.LINEAS).forEach((f) => { LineasDatos.idsDeFila(f).forEach((k) => { porId[k] = f; }); });
       lista.forEach((id) => {
         const f = porId[id];
         const nuco = f ? LineasUtil.nucoVisible(LineasUtil.col(f, 'NUCO')) || '' : '';
