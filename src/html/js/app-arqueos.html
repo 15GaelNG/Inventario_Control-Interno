@@ -146,11 +146,14 @@
     { grupo: 'Firmas y evidencia', clave: 'FORMATO ARQUEO', etiqueta: 'Formato de arqueo (PDF)', tipo: 'file', soloLectura: true },
   ];
 
-  /** Genera los <div class="field"> agrupados por sección para un formulario de arqueo. */
-  function renderCamposArqueo(prefijo) {
+  /** Genera los <div class="field"> agrupados por sección para un formulario de arqueo.
+   *  soloGrupos (opcional): limita a esos grupos -- lo usa renderPasosArqueo para
+   *  pintar solo los campos del paso actual. */
+  function renderCamposArqueo(prefijo, soloGrupos) {
     const grupos = [];
     const porGrupo = {};
     CAMPOS_ARQUEO.forEach((campo) => {
+      if (soloGrupos && soloGrupos.indexOf(campo.grupo) === -1) return;
       if (!porGrupo[campo.grupo]) { porGrupo[campo.grupo] = []; grupos.push(campo.grupo); }
       porGrupo[campo.grupo].push(campo);
     });
@@ -203,6 +206,77 @@
       }).join('');
       return `<div class="info-section-title">${grupo}</div>${campos}`;
     }).join('');
+  }
+
+  /** Agrupa los 9 "grupo" de CAMPOS_ARQUEO en 5 pasos, mismo patrón visual que
+   *  el wizard de Inspección Vehicular (chips + Atrás/Siguiente). */
+  const PASOS_ARQUEO = [
+    { titulo: 'Identificación', grupos: ['Identificación', 'Cuenta bancaria', 'Fechas y método'] },
+    { titulo: 'Efectivo', grupos: ['Efectivo — Monedas', 'Efectivo — Billetes', 'Cheques'] },
+    { titulo: 'Gastos', grupos: ['Totales de gasto'] },
+    { titulo: 'Auditoría', grupos: ['Auditoría'] },
+    { titulo: 'Firmas y evidencia', grupos: ['Firmas y evidencia'] },
+  ];
+
+  /**
+   * Arma el formulario de Arqueo por pasos: chips arriba + un <section class="form-paso">
+   * por paso (mismo CSS que ya usa Inspección Vehicular, definido en formulario.html) +
+   * Atrás/Siguiente/Guardar al final. Ningún campo de Arqueo es "requerido" (el checklist
+   * de auditoría se valida aparte, con REALIZAR_AUDITORIA), así que a diferencia de
+   * Inspección los pasos se navegan libres, sin bloquear "Siguiente".
+   *
+   * El botón final ES el submit real del <form> que envuelve al contenedor donde se
+   * inserta esto (se le pone id y texto a la medida de quien llama, para no duplicar
+   * el wiring de "deshabilitar mientras guarda" que ya existe por fuera).
+   */
+  function renderPasosArqueo(prefijo, idBotonGuardar, textoBotonGuardar, iconoBotonGuardar) {
+    const secciones = PASOS_ARQUEO.map((p, i) => `
+      <section class="form-paso" data-paso="${i}"${i ? ' hidden' : ''}>
+        <h3 class="form-paso-titulo" tabindex="-1">${p.titulo}</h3>
+        <div class="form-campos" style="--form-columnas:2">${renderCamposArqueo(prefijo, p.grupos)}</div>
+      </section>`).join('');
+    return '<ol class="form-pasos" data-arq-pasos></ol>' + secciones +
+      '<div class="form-acciones form-acciones-pasos">' +
+      '<button type="button" class="secondary" data-arq-atras hidden>' + Iconos.svg('anterior') + ' Atrás</button>' +
+      '<button type="button" data-arq-siguiente>Siguiente ' + Iconos.svg('siguiente') + '</button>' +
+      '<button type="submit" id="' + idBotonGuardar + '" data-arq-guardar hidden><i data-lucide="' + iconoBotonGuardar + '" class="ico"></i> ' + textoBotonGuardar + '</button>' +
+      '<span class="form-cuenta" data-arq-cuenta></span></div>';
+  }
+
+  /** Conecta la navegación de los pasos que pintó renderPasosArqueo -- se llama una sola
+   *  vez, después de insertar ese HTML en el DOM. `contenedor` = el elemento que recibió
+   *  ese innerHTML directo (ahí adentro están los .form-paso, los chips y los botones). */
+  function wirePasosArqueo(contenedor) {
+    let pasoActual = 0;
+    function actualizarChips() {
+      const lista = contenedor.querySelector('[data-arq-pasos]');
+      lista.innerHTML = PASOS_ARQUEO.map((p, i) => `
+        <li><button type="button" class="form-paso-chip ${i === pasoActual ? 'activo' : ''}" data-ir="${i}">
+          <span class="form-paso-num">${i + 1}</span>${escaparHtml(p.titulo)}</button></li>`).join('');
+      lista.querySelectorAll('[data-ir]').forEach((b) => b.addEventListener('click', () => mostrarPaso(Number(b.dataset.ir))));
+      const ultimo = pasoActual === PASOS_ARQUEO.length - 1;
+      contenedor.querySelector('[data-arq-atras]').hidden = pasoActual === 0;
+      contenedor.querySelector('[data-arq-siguiente]').hidden = ultimo;
+      contenedor.querySelector('[data-arq-guardar]').hidden = !ultimo;
+      contenedor.querySelector('[data-arq-cuenta]').textContent = `Paso ${pasoActual + 1} de ${PASOS_ARQUEO.length}`;
+    }
+    function mostrarPaso(i) {
+      pasoActual = i;
+      contenedor.querySelectorAll('.form-paso').forEach((s) => { s.hidden = Number(s.dataset.paso) !== i; });
+      actualizarChips();
+      refreshIcons();
+      const titulo = contenedor.querySelector(`.form-paso[data-paso="${i}"] .form-paso-titulo`);
+      if (titulo) titulo.focus({ preventScroll: true });
+      if (i > 0 && contenedor.scrollIntoView) contenedor.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+    contenedor.querySelector('[data-arq-siguiente]').addEventListener('click', () => {
+      if (pasoActual < PASOS_ARQUEO.length - 1) mostrarPaso(pasoActual + 1);
+    });
+    contenedor.querySelector('[data-arq-atras]').addEventListener('click', () => {
+      if (pasoActual > 0) mostrarPaso(pasoActual - 1);
+    });
+    mostrarPaso(0);
+    return { irAPaso: mostrarPaso };
   }
 
   /** Lee los campos de captura manual (deja fuera soloLectura, file y firma — esos se manejan aparte). */
@@ -526,11 +600,11 @@
       '<div class="calif-badge-barra"><div class="calif-badge-barra-fill" id="' + prefijo + '-calif-badge-barra" style="width:0%"></div></div>' +
       '<span class="calif-badge-nota" id="' + prefijo + '-calif-badge-nota">0 de 17 puntos calificados</span></div>' +
       '<form id="' + prefijo + '-form" novalidate>' +
-      '<div id="' + prefijo + '-campos" class="modal-form-scroll grid" style="grid-template-columns: repeat(2, 1fr); gap: 0 14px;"></div>' +
-      '<div style="margin-top:14px;"><button type="submit" id="' + prefijo + '-btn-guardar"><i data-lucide="clipboard-check" class="ico"></i> Registrar arqueo</button></div>' +
+      '<div id="' + prefijo + '-campos" class="modal-form-scroll"></div>' +
       '</form><div class="error-msg" id="' + prefijo + '-error" hidden></div>';
 
-    document.getElementById(prefijo + '-campos').innerHTML = renderCamposArqueo(prefijo);
+    document.getElementById(prefijo + '-campos').innerHTML = renderPasosArqueo(prefijo, prefijo + '-btn-guardar', 'Registrar arqueo', 'clipboard-check');
+    wirePasosArqueo(document.getElementById(prefijo + '-campos'));
     refreshIcons();
 
     contenedor.querySelectorAll('.firma-pad').forEach((canvas) => crearFirmaPad(canvas));
@@ -614,8 +688,10 @@
     let todosLosArqueos = [];
     let auditItems = [];
 
-    document.getElementById('campos-form-arqueo').innerHTML = renderCamposArqueo('arq');
-    document.getElementById('campos-form-editar-arqueo').innerHTML = renderCamposArqueo('editar-arqueo');
+    document.getElementById('campos-form-arqueo').innerHTML = renderPasosArqueo('arq', 'btn-guardar-arqueo', 'Registrar arqueo', 'wallet');
+    document.getElementById('campos-form-editar-arqueo').innerHTML = renderPasosArqueo('editar-arqueo', 'btn-guardar-editar-arqueo', 'Guardar cambios', 'save');
+    const pasosArq = wirePasosArqueo(document.getElementById('campos-form-arqueo'));
+    const pasosEditarArq = wirePasosArqueo(document.getElementById('campos-form-editar-arqueo'));
 
     // Recuadros de firma: conecta el dibujo en cada canvas y el botón
     // "Limpiar firma" de cada uno.
@@ -888,6 +964,7 @@
       modalEditar.hidden = true;
       document.getElementById('form-editar-arqueo').reset();
       document.getElementById('editar-arqueo-error').hidden = true;
+      pasosEditarArq.irAPaso(0);
     }
     document.getElementById('btn-cancelar-editar-arqueo').addEventListener('click', cerrarEditarArqueo);
     modalEditar.addEventListener('click', (ev) => { if (ev.target === modalEditar) cerrarEditarArqueo(); });
@@ -942,6 +1019,7 @@
         datos['ID CCH'] = selectCajaArqueo.value;
         await callServer('apiCrearArqueo', state.token, datos);
         ev.target.reset();
+        pasosArq.irAPaso(0);
         invalidarCacheLista('apiListarArqueosResumen', state.token);
         invalidarCacheLista('apiListarCajasChicasResumen', state.token);
         document.querySelectorAll('#campos-form-arqueo .firma-pad').forEach((canvas) => limpiarFirmaPad(canvas));
