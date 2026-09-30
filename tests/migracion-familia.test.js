@@ -83,7 +83,7 @@ console.log('\n2. El PIPELINE 1 NO filtra por familia: son TODAS las hojas');
   const { api, llamadas } = cargar();
   api.correrIdsTodo();
   ok(llamadas.every((l) => l.familia === undefined),
-     'ningún paso recibe familia, así que cada uno recorre las 24 hojas');
+     'ningún paso recibe familia, así que cada uno recorre las 20 hojas');
   // Si esto se rompiera, el pipeline de IDs dejaría hojas sin ID y las
   // homologaciones fallarían después sin decir por qué.
 }
@@ -202,7 +202,8 @@ console.log('\n13. Queda constancia en la bitácora, y se distingue cuál pipeli
   b.api.correrFamilia('lineas', { escribir: true });
   ok(b.logueado[0].paso === 'homologarFamilia:lineas',
      'y el de homologación trae la familia en el nombre');
-  ok(b.logueado[0].resumen.indexOf('10 hojas') !== -1, 'y cuántas hojas tocó');
+  // 6, no 10: el 30/09/2026 se eliminaron 4 pestañas de Líneas (ver Entidades.gs).
+  ok(b.logueado[0].resumen.indexOf('6 hojas') !== -1, 'y cuántas hojas tocó');
 }
 
 console.log('\n14. pipelinesEstado enseña los cuatro sin tocar nada');
@@ -210,11 +211,11 @@ console.log('\n14. pipelinesEstado enseña los cuatro sin tocar nada');
   const { api, llamadas } = cargar();
   const rep = api.pipelinesEstado();
   ok(llamadas.length === 0, 'no corre ningún paso');
-  ok(rep.indexOf('1. IDS, todas las hojas (24)') !== -1, 'el pipeline 1, con las 24 hojas');
+  ok(rep.indexOf('1. IDS, todas las hojas (20)') !== -1, 'el pipeline 1, con las 20 hojas');
   ok(rep.indexOf('ids1Ensayo') !== -1 && rep.indexOf('vehiculos1Ensayo') !== -1 &&
      rep.indexOf('cajaChica1Ensayo') !== -1, 'los atajos de cada uno');
   ok(rep.indexOf('HOMOLOGAR VEHICULOS (8 hojas)') !== -1, 'vehículos con sus 8');
-  ok(rep.indexOf('HOMOLOGAR LINEAS (10 hojas)') !== -1, 'líneas con sus 10');
+  ok(rep.indexOf('HOMOLOGAR LINEAS (6 hojas)') !== -1, 'líneas con sus 6, ya sin las 4 eliminadas');
   ok(rep.indexOf('INSTALACION DE SENSORES [SEN]') !== -1, 'y las nombra con su prefijo');
   ok(rep.indexOf('El pipeline 1 va PRIMERO') !== -1, 'y dice el orden');
 }

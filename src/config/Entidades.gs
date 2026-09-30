@@ -49,13 +49,27 @@ const Entidades = (function () {
    * esa columna (solo pasa cuando ya se llama "ID", y solo entonces hace falta respaldarla).
    * Cuando es null, la hoja la tiene sin encabezado y va por posición (base 1).
    */
+  // CUATRO HOJAS QUE YA NO ESTAN, y no fue un descuido:
+  //
+  //   HISTORIAL_REASIGNACIONES · REACTIVACION DE LINEAS · SOLICITUD DE LINEAS ·
+  //   BITACORA DE DESECHO
+  //
+  // El area de Lineas tuvo junta el 30/09/2026 y Emmanuel las elimino. Verificado en el
+  // libro compartido del equipo ese mismo dia: 37 pestanas, y de las 24 migrables solo
+  // quedan 20. Mientras estuvieran aqui, revisarAntesDeMigrar reportaba "FALTA la hoja"
+  // cuatro veces y detenia cualquier corrida que escribiera.
+  //
+  // Sus prefijos HIS, REA, SOL y DES quedan LIBRES pero NO se reusan: los ids que ya se
+  // generaron con ellos siguen existiendo en los libros viejos y en los respaldos.
+  //
+  // Produccion todavia las tiene. El dia que se saque el libro bueno hay que borrarlas
+  // alla tambien, DESPUES de que corra el pipeline. Ver docs/lineas-homologacion.md.
   const POR_HOJA = {
     'VEHICULOS': { prefijo: 'VEH', llaveAnterior: 'ID_VEHICULO', familia: 'vehiculos' },
     'CAMBIOS VEHICULOS': { prefijo: 'CVE', llaveAnterior: 'ID_CAMBIO', familia: 'vehiculos' },
     'REASIGNACIONES_VEHICULOS': { prefijo: 'RVE', llaveAnterior: 'ID Reasignacion Vehicular', familia: 'vehiculos' },
     // Reasignaciones de LÍNEAS (no de vehículos, pese a lo parecido del nombre).
     // La escribe LineasRepo; su "ID Linea" apunta a LINEAS TELEFONICAS (99.9% en producción).
-    'HISTORIAL_REASIGNACIONES': { prefijo: 'HIS', llaveAnterior: 'ID Historial', familia: 'lineas' },
     'VERIFICACIONES': { prefijo: 'VER', llaveAnterior: 'ID_VERIFICACION', familia: 'vehiculos' },
     // llaveEsDato: su "llave vieja" no es un id de AppSheet, es un FOLIO de negocio
     // (2026_451_1 = año_nuco_secuencia). Conserva su nombre. Ver la nota de llaveEsDato.
@@ -66,8 +80,6 @@ const Entidades = (function () {
     'LINEAS TELEFONICAS': { prefijo: 'LIN', llaveAnterior: 'ID', familia: 'lineas' },
     'INSPECCIONES LINEAS': { prefijo: 'ILI', llaveAnterior: 'ID', familia: 'lineas' },
     'RESPONSIVAS LINEAS': { prefijo: 'RLI', llaveAnterior: 'ID', familia: 'lineas' },
-    'REACTIVACION DE LINEAS': { prefijo: 'REA', llaveAnterior: 'ID', familia: 'lineas' },
-    'SOLICITUD DE LINEAS': { prefijo: 'SOL', llaveAnterior: 'ID', familia: 'lineas' },
     // Caso especial: su columna de ID no tenía encabezado y se le puso "ID APPSHEET"
     // (29/09/2026), que es justo lo que guarda: el id que traía de AppSheet.
     //
@@ -83,7 +95,6 @@ const Entidades = (function () {
     // produccion y el laboratorio, donde esa columna sigue SIN encabezado (medido el
     // 30/09/2026). Sin el respaldo por posicion, el paso `renombrar` se detiene aqui.
     'CAMBIOS LINEAS TELEFONICAS': { prefijo: 'CLI', llaveAnterior: 'ID APPSHEET', columnaAnterior: 1, familia: 'lineas' },
-    'BITACORA DE DESECHO': { prefijo: 'DES', llaveAnterior: 'ID_DESECHO', familia: 'lineas' },
     'ACCESORIOS CELULARES': { prefijo: 'ACC', llaveAnterior: 'ID_Accesorio', familia: 'lineas' },
     'MOVIMIENTOS_ACCESORIOS': { prefijo: 'MAC', llaveAnterior: 'ID_Movimiento', familia: 'lineas' },
     // Mismo caso: 2026_225_001 es un folio de negocio, no un id generado.

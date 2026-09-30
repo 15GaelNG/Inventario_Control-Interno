@@ -27,9 +27,9 @@ function truena(fn, texto) {
 console.log('1. El catálogo está sano');
 const revision = Entidades.revisarCatalogo();
 ok(revision.problemas.length === 0, 'sin problemas: ' + (revision.problemas.join(' | ') || 'ninguno'));
-ok(revision.hojas === 26, 'tiene las 26 hojas de registros, no ' + revision.hojas);
-ok(Entidades.migrables().length === 24,
-   'de ellas 24 vienen de AppSheet y sí se migran, no ' + Entidades.migrables().length);
+ok(revision.hojas === 22, 'tiene las 22 hojas de registros, no ' + revision.hojas);
+ok(Entidades.migrables().length === 20,
+   'de ellas 20 vienen de AppSheet y sí se migran, no ' + Entidades.migrables().length);
 
 console.log('\n2. Los prefijos son únicos y bien formados');
 const todas = Entidades.todas();
@@ -57,7 +57,7 @@ ok(Entidades.hojaDe('XXX') === null, 'un prefijo inventado da null');
 
 console.log('\n6. Cuáles hojas necesitan respaldar su llave vieja');
 const pisan = Entidades.migrables().filter((e) => e.pisaLlaveAnterior).map((e) => e.hoja);
-ok(pisan.length === 8, 'son 8 las hojas migrables cuya columna ya se llama ID, no ' + pisan.length);
+ok(pisan.length === 6, 'son 6 las hojas migrables cuya columna ya se llama ID, no ' + pisan.length);
 ok(pisan.indexOf('LINEAS TELEFONICAS') !== -1 && pisan.indexOf('UBER') !== -1,
    'entre ellas Líneas y Uber');
 ok(pisan.indexOf('VEHICULOS') === -1,
@@ -71,12 +71,26 @@ ok(Entidades.migrables().every((e) => !e.delSistemaNuevo), 'y quedan fuera de mi
 ok(Entidades.prefijo('APP_EVIDENCIAS') === 'EVI',
    'pero sí tienen prefijo, para que sus altas nazcan bien');
 
-console.log('\n6c. La hoja que se me había escapado');
-ok(Entidades.existe('HISTORIAL_REASIGNACIONES'),
-   'HISTORIAL_REASIGNACIONES está en el catálogo (1,470 filas en producción)');
-ok(Entidades.prefijo('HISTORIAL_REASIGNACIONES') === 'HIS', 'con prefijo HIS');
-ok(Entidades.de('HISTORIAL_REASIGNACIONES').llaveAnterior === 'ID Historial',
-   'y su llave anterior es "ID Historial", no "ID"');
+console.log('\n6c. Las cuatro hojas que Líneas eliminó ya NO están en el catálogo');
+// Antes esta prueba aseguraba lo contrario: que HISTORIAL_REASIGNACIONES SÍ estuviera,
+// porque se me había escapado del catálogo. El 30/09/2026 el área tuvo junta y Emmanuel
+// eliminó cuatro pestañas, así que ahora lo que hay que asegurar es su ausencia —
+// mientras estuvieran, revisarAntesDeMigrar detenía cualquier corrida que escribiera.
+const ELIMINADAS = ['HISTORIAL_REASIGNACIONES', 'REACTIVACION DE LINEAS',
+  'SOLICITUD DE LINEAS', 'BITACORA DE DESECHO'];
+const quedan = ELIMINADAS.filter((h) => Entidades.existe(h));
+ok(quedan.length === 0,
+   quedan.length ? 'siguen en el catálogo: ' + quedan.join(', ')
+   : 'las 4 salieron de Entidades');
+
+// Y que el catálogo no quede a medias: una hoja fuera de Entidades pero con su
+// referencia viva haría que reescribirReferencias buscara una hoja que no existe.
+const fuente = fs.readFileSync(
+  path.join(__dirname, '..', 'src', 'MigracionIds.gs'), 'utf8');
+const conRef = ELIMINADAS.filter((h) => new RegExp("hoja: '" + h + "'").test(fuente));
+ok(conRef.length === 0,
+   conRef.length ? 'siguen en MIGRACION_REFERENCIAS: ' + conRef.join(', ')
+   : 'y también de MIGRACION_REFERENCIAS, así que el catálogo no quedó a medias');
 
 console.log('\n7. Todas dicen dónde estaba su llave anterior, POR NOMBRE');
 ok(todas.every((e) => e.llaveAnterior || e.columnaAnterior),
@@ -112,9 +126,9 @@ ok(Entidades.deFamilia(' VEHICULOS ').length === 8,
 ok(Entidades.deFamilia('no-existe').length === 0, 'una familia inventada da vacío, no todo');
 ok(Entidades.deFamilia('vehiculos').every((e) => e.familia === 'vehiculos'),
    'y todas traen su familia puesta en el objeto, no solo en el catálogo');
-// La trampa: el nombre dice REASIGNACIONES pero su columna es "ID Linea", no un folio.
-ok(Entidades.de('HISTORIAL_REASIGNACIONES').familia === 'lineas',
-   'HISTORIAL_REASIGNACIONES es de LÍNEAS aunque el nombre suene a vehículos');
+// La trampa que valía la pena recordar: había DOS hojas de reasignaciones, y la que se
+// llamaba HISTORIAL_REASIGNACIONES era de LÍNEAS, no de vehículos — su columna era
+// "ID Linea", no un folio. Ya se eliminó; la que queda es la de vehículos.
 ok(Entidades.de('REASIGNACIONES_VEHICULOS').familia === 'vehiculos',
    'la de vehículos es REASIGNACIONES_VEHICULOS, que sí trae Folio Vehiculo');
 ok(Entidades.de('TICKETS').familia === 'otros',

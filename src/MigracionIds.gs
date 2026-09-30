@@ -201,14 +201,11 @@ const MIGRACION_REFERENCIAS = [
   // estas columnas se reescriben en su lugar (si no, ya no apuntan a nada).
   { hoja: 'INSPECCIONES LINEAS', columna: 'ID LINEA', padre: 'LINEAS TELEFONICAS', esperado: 0.999 },
   { hoja: 'RESPONSIVAS LINEAS', columna: 'ID LINEA', padre: 'LINEAS TELEFONICAS', esperado: 0.998 },
-  { hoja: 'BITACORA DE DESECHO', columna: 'ID_EQUIPO', padre: 'LINEAS TELEFONICAS', esperado: 1.00 },
   { hoja: 'CAMBIOS LINEAS TELEFONICAS', columna: 'ID_LINEA', padre: 'LINEAS TELEFONICAS', esperado: 0.981 },
-  // La columna se llama IMEI pero 290 de 321 valores son IDs de línea (pendiente Emmanuel)
-  { hoja: 'REACTIVACION DE LINEAS', columna: 'IMEI', padre: 'LINEAS TELEFONICAS', esperado: 0.89, revisar: true },
-  // Se me había escapado: 1,470 filas en producción, con 99.9% de coincidencia. Al migrar
-  // LINEAS TELEFONICAS sin reescribir esta columna, sus 1,167 referencias en la copia de
-  // pruebas quedaron huérfanas de un jalón.
-  { hoja: 'HISTORIAL_REASIGNACIONES', columna: 'ID Linea', padre: 'LINEAS TELEFONICAS', esperado: 0.999 },
+  // Aquí estaban las referencias de HISTORIAL_REASIGNACIONES, REACTIVACION DE LINEAS y
+  // BITACORA DE DESECHO. Las tres hojas se eliminaron el 30/09/2026 (ver la nota de las
+  // cuatro hojas en Entidades.gs). Si vuelven, sus tasas medidas en producción eran
+  // 99.9%, 89% (columna IMEI, que en realidad guardaba IDs de línea) y 100%.
   // Pestaña del sistema nuevo (solo existe en pruebas). ID_REGISTRO queda pendiente: es
   // polimórfica, apunta a INSPECCIONES LINEAS o a RESPONSIVAS LINEAS según la columna TIPO.
   { hoja: 'APP_EVIDENCIAS', columna: 'ID_LINEA', padre: 'LINEAS TELEFONICAS', esperado: 1.00 },
