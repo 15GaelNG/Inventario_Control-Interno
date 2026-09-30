@@ -68,6 +68,25 @@ const IncidenciasService = (function () {
       .sort((a, b) => new Date(b.FECHA_REGISTRO) - new Date(a.FECHA_REGISTRO));
   }
 
+  /** Incidencias de un solo vehículo (ficha de Vehículos). */
+  function listarPorFolio(token, folio) {
+    if (!folio) return [];
+    return listar(token).filter((i) => i.FOLIO === folio);
+  }
+
+  /** Registro completo (todas las columnas) por ID -- "Ver completo" desde la ficha de Vehículos. */
+  function buscarPorId(token, id) {
+    Permisos.puedeLeer(token, 'incidencias');
+    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, 'ID');
+    if (!encontrado) return null;
+    const limpio = {};
+    Object.keys(encontrado.data).forEach((k) => {
+      const v = encontrado.data[k];
+      limpio[k] = v instanceof Date ? v.toISOString() : v;
+    });
+    return limpio;
+  }
+
   /** Todas las columnas de TODAS las incidencias (para exportar completo). */
   function completo(token) {
     Permisos.puedeLeer(token, 'incidencias');
@@ -176,5 +195,5 @@ const IncidenciasService = (function () {
     }
   }
 
-  return { listar, completo, crear, cerrar, actualizar, eliminar, diagnostico };
+  return { listar, listarPorFolio, buscarPorId, completo, crear, cerrar, actualizar, eliminar, diagnostico };
 })();

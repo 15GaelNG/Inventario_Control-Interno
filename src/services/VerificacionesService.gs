@@ -75,6 +75,25 @@ const VerificacionesService = (function () {
       .sort((a, b) => (b.FECHA_REGISTRO || '').localeCompare(a.FECHA_REGISTRO || ''));
   }
 
+  /** Verificaciones de un solo vehículo (ficha de Vehículos). */
+  function listarPorFolio(token, folio) {
+    if (!folio) return [];
+    return listar(token).filter((v) => v.FOLIO === folio);
+  }
+
+  /** Registro completo (todas las columnas) por ID -- "Ver completo" desde la ficha de Vehículos. */
+  function buscarPorId(token, id) {
+    Permisos.puedeLeer(token, 'verificaciones');
+    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, 'ID');
+    if (!encontrado) return null;
+    const limpio = {};
+    Object.keys(encontrado.data).forEach((k) => {
+      const v = encontrado.data[k];
+      limpio[k] = v instanceof Date ? v.toISOString() : v;
+    });
+    return limpio;
+  }
+
   /** Todas las columnas de TODAS las verificaciones (para exportar completo). */
   function completo(token) {
     Permisos.puedeLeer(token, 'verificaciones');
@@ -196,5 +215,5 @@ const VerificacionesService = (function () {
     return vista;
   }
 
-  return { listar, completo, registrar, actualizarCampo, eliminar, urlComprobante, previsualizarComprobante };
+  return { listar, listarPorFolio, buscarPorId, completo, registrar, actualizarCampo, eliminar, urlComprobante, previsualizarComprobante };
 })();

@@ -12,15 +12,15 @@
   <div class="stat-row">
     <div class="stat-tile">
       <div class="stat-icon"><i data-lucide="wallet" class="ico"></i></div>
-      <div><div class="stat-value" id="arq-stat-total">0</div><div class="stat-label">Total</div></div>
+      <div><div class="stat-value" id="arq-stat-total">0</div><div class="stat-label">Total de arqueos</div></div>
     </div>
     <div class="stat-tile stat-tile-ok">
       <div class="stat-icon"><i data-lucide="circle-check" class="ico"></i></div>
-      <div><div class="stat-value" id="arq-stat-calificacion">0%</div><div class="stat-label">Calificación promedio</div></div>
+      <div><div class="stat-value" id="arq-stat-calificacion">0%</div><div class="stat-label">Calificación promedio de auditoría</div></div>
     </div>
     <div class="stat-tile stat-tile-warn">
       <div class="stat-icon"><i data-lucide="ban" class="ico"></i></div>
-      <div><div class="stat-value" id="arq-stat-diferencias">0</div><div class="stat-label">Con diferencia</div></div>
+      <div><div class="stat-value" id="arq-stat-diferencias">0</div><div class="stat-label">Arqueos con diferencia</div></div>
     </div>
   </div>
 
@@ -37,6 +37,12 @@
           <h3>Registrar arqueo</h3>
           <p>Auditoría y conteo de efectivo de una caja chica</p>
         </div>
+        <div class="calif-badge" id="arq-calif-badge" style="margin-left:auto">
+          <span class="calif-badge-titulo">Calificación</span>
+          <span class="calif-badge-valor" id="arq-calif-badge-valor">—</span>
+          <div class="calif-badge-barra"><div class="calif-badge-barra-fill" id="arq-calif-badge-barra" style="width:0%"></div></div>
+          <span class="calif-badge-nota" id="arq-calif-badge-nota">0 de 17 puntos calificados</span>
+        </div>
       </div>
       <form id="form-arqueo">
         <div class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 14px; margin-bottom: 4px;">
@@ -49,8 +55,7 @@
             <input type="text" id="arq-id-arqueo" disabled placeholder="Elige una caja chica" />
           </div>
         </div>
-        <div id="campos-form-arqueo" class="modal-form-scroll grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 14px;"></div>
-        <div style="margin-top:14px;"><button type="submit" id="btn-guardar-arqueo"><i data-lucide="wallet" class="ico"></i> Registrar arqueo</button></div>
+        <div id="campos-form-arqueo" class="modal-form-scroll"></div>
       </form>
       <div class="error-msg" id="arq-error" hidden></div>
     </div>
@@ -70,6 +75,12 @@
           <h3 style="margin:0">Editar arqueo</h3>
           <p class="modal-subtitle" id="editar-arqueo-label"></p>
         </div>
+        <div class="calif-badge" id="editar-arqueo-calif-badge" style="margin-left:auto; margin-right:10px">
+          <span class="calif-badge-titulo">Calificación</span>
+          <span class="calif-badge-valor" id="editar-arqueo-calif-badge-valor">—</span>
+          <div class="calif-badge-barra"><div class="calif-badge-barra-fill" id="editar-arqueo-calif-badge-barra" style="width:0%"></div></div>
+          <span class="calif-badge-nota" id="editar-arqueo-calif-badge-nota">0 de 17 puntos calificados</span>
+        </div>
         <button type="button" class="modal-close" id="btn-cancelar-editar-arqueo"><i data-lucide="x" class="ico"></i></button>
       </div>
       <form id="form-editar-arqueo">
@@ -84,9 +95,8 @@
             <input type="text" id="editar-arqueo-id-arqueo" disabled />
           </div>
         </div>
-        <div id="campos-form-editar-arqueo" class="modal-form-scroll grid" style="grid-template-columns: repeat(2, 1fr); gap: 0 14px;"></div>
+        <div id="campos-form-editar-arqueo" class="modal-form-scroll"></div>
         <div class="error-msg" id="editar-arqueo-error" hidden></div>
-        <button type="submit" id="btn-guardar-editar-arqueo" style="width:100%; margin-top:10px"><i data-lucide="save" class="ico"></i> Guardar cambios</button>
       </form>
     </div>
   </div>

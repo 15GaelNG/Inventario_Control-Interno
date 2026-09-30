@@ -136,12 +136,16 @@
       ],
       accionesFila: [].concat(
         [
+          { icono: 'car', titulo: 'Ver vehículo', alHacer: (s) => verFichaVehiculoDesdeOtroModulo(s.FOLIO) },
           {
             icono: 'map-pin', titulo: 'Ver en el mapa',
             visible: (s) => !!(infoVivoDe(s) && infoVivoDe(s).lat),
             alHacer: (s) => {
               const info = infoVivoDe(s);
-              window.open('https://www.google.com/maps?q=' + info.lat + ',' + info.lon, '_blank');
+              // "\/\/" (no "//"): Apps Script le borra a los .html todo lo que encuentre
+              // después de "//" pensando que es un comentario — incluso dentro de un
+              // string. "\/" en un string de JS es simplemente "/".
+              window.open('https:\/\/www.google.com/maps?q=' + info.lat + ',' + info.lon, '_blank');
             },
           },
           {
@@ -187,7 +191,7 @@
           <div class="dt-campo-titulo" style="margin:14px 0 6px">Estado en vivo (Geotab)</div>
           <div>${badgeEnVivo(estadoDe(sensor), sensor)}</div>
           <p class="page-subtitle" style="margin:6px 0 0">Última comunicación: ${escaparHtml(cuando)}</p>
-          ${info.lat ? `<p style="margin:6px 0 0"><a href="https://www.google.com/maps?q=${info.lat},${info.lon}" target="_blank" rel="noopener">Ver en el mapa ↗</a></p>` : ''}`);
+          ${info.lat ? `<p style="margin:6px 0 0"><a href="https:\/\/www.google.com/maps?q=${info.lat},${info.lon}" target="_blank" rel="noopener">Ver en el mapa ↗</a></p>` : ''}`);
       }
       if (vivo.disponible && sensor.SERIE_SENSOR) {
         partes.push(
@@ -262,7 +266,9 @@
       if (!Object.keys(cambios).length) { cerrarEditarSensor(); return; }
 
       const btn = ev.target.querySelector('button[type="submit"]');
+      const textoOriginal = btn.innerHTML;
       btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
       try {
         const actualizada = await guardarCambiosCampoPorCampo(id, cambios,
           (id, campo, valor) => callServer('apiActualizarCampoSensor', state.token, id, campo, valor));
@@ -278,6 +284,7 @@
         Notificar.error('No se pudo actualizar: ' + err.message);
       } finally {
         btn.disabled = false;
+        btn.innerHTML = textoOriginal;
       }
     });
 

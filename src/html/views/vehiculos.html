@@ -1,4 +1,5 @@
 <template id="tpl-vehiculos">
+  <section id="veh-listado">
   <div class="page-header">
     <div>
       <h2><i data-lucide="car" class="ico"></i> Vehículos</h2>
@@ -12,7 +13,7 @@
   <div class="stat-row">
     <div class="stat-tile">
       <div class="stat-icon"><i data-lucide="car" class="ico"></i></div>
-      <div><div class="stat-value" id="veh-stat-total">0</div><div class="stat-label">Total</div></div>
+      <div><div class="stat-value" id="veh-stat-total">0</div><div class="stat-label">Total de vehículos</div></div>
     </div>
     <div class="stat-tile stat-tile-ok">
       <div class="stat-icon"><i data-lucide="circle-check" class="ico"></i></div>
@@ -20,7 +21,31 @@
     </div>
     <div class="stat-tile stat-tile-warn">
       <div class="stat-icon"><i data-lucide="ban" class="ico"></i></div>
-      <div><div class="stat-value" id="veh-stat-baja">0</div><div class="stat-label">De baja</div></div>
+      <div><div class="stat-value" id="veh-stat-inactivos">0</div><div class="stat-label">Inactivos</div></div>
+    </div>
+    <div class="stat-tile stat-tile-ok">
+      <div class="stat-icon"><i data-lucide="circle-check" class="ico"></i></div>
+      <div><div class="stat-value" id="veh-stat-utilitario">0</div><div class="stat-label">Utilitario</div></div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-icon"><i data-lucide="circle-minus" class="ico"></i></div>
+      <div><div class="stat-value" id="veh-stat-no-utilitario">0</div><div class="stat-label">No utilitario</div></div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-icon"><i data-lucide="repeat" class="ico"></i></div>
+      <div><div class="stat-value" id="veh-stat-prestamo">0</div><div class="stat-label">Préstamo</div></div>
+    </div>
+    <div class="stat-tile stat-tile-warn">
+      <div class="stat-icon"><i data-lucide="wrench" class="ico"></i></div>
+      <div><div class="stat-value" id="veh-stat-fuera-servicio">0</div><div class="stat-label">Fuera de servicio</div></div>
+    </div>
+    <div class="stat-tile stat-tile-warn">
+      <div class="stat-icon"><i data-lucide="help-circle" class="ico"></i></div>
+      <div><div class="stat-value" id="veh-stat-nuco-sin-info">0</div><div class="stat-label">Nuco sin información</div></div>
+    </div>
+    <div class="stat-tile stat-tile-warn">
+      <div class="stat-icon"><i data-lucide="ban" class="ico"></i></div>
+      <div><div class="stat-value" id="veh-stat-baja">0</div><div class="stat-label">Baja vehicular</div></div>
     </div>
   </div>
 
@@ -49,6 +74,53 @@
   <div class="tab-panel" data-tab-panel="lista">
     <div class="card card-compacta">
       <div id="veh-tabla"></div>
+    </div>
+  </div>
+  </section>
+
+  <!-- Ficha de un vehículo (doble clic o "Ver ficha" en la tabla) — pantalla propia
+       dentro del módulo, mismo patrón que Líneas Telefónicas (equipo/línea). -->
+  <section id="veh-detalle" hidden></section>
+
+  <!-- Captura de verificación / sensor / holograma / incidencia, sin salir de la ficha
+       del vehículo — mismo formato que "Captura" en Líneas Telefónicas (ln-captura-*). -->
+  <div class="modal-backdrop" id="veh-modal-captura" hidden>
+    <div class="modal-card modal-card-wide ln-captura-modal" role="dialog" aria-modal="true" aria-labelledby="veh-captura-titulo">
+      <div class="modal-header ln-captura-cabecera">
+        <div class="ln-captura-cabecera-principal">
+          <span class="ln-captura-icono" id="veh-captura-icono"></span>
+          <div>
+            <span class="ln-captura-tipo" id="veh-captura-tipo"></span>
+            <h3 class="ln-titulo" style="margin:3px 0 0" id="veh-captura-titulo"></h3>
+            <p class="modal-subtitle" id="veh-captura-subtitulo"></p>
+          </div>
+        </div>
+        <!-- Solo Inspección la usa (de las 5 capturas que comparten este modal) -- empieza
+             oculta, prepararCaptura la destapa; abrirCapturaVehiculo la vuelve a ocultar. -->
+        <div class="calif-badge" id="ins-calif-badge" style="margin-left:auto; margin-right:10px" hidden>
+          <span class="calif-badge-titulo">Calificación</span>
+          <span class="calif-badge-valor" id="ins-calif-badge-valor">—</span>
+          <div class="calif-badge-barra"><div class="calif-badge-barra-fill" id="ins-calif-badge-barra" style="width:0%"></div></div>
+          <span class="calif-badge-nota" id="ins-calif-badge-nota">Elige el tipo de unidad</span>
+        </div>
+        <button type="button" class="modal-close" id="veh-captura-cerrar" aria-label="Cerrar"><i data-lucide="x" class="ico"></i></button>
+      </div>
+      <div class="modal-form-scroll" id="veh-captura-cuerpo"></div>
+    </div>
+  </div>
+
+  <!-- "Ver completo" de una verificación/inspección/sensor/holograma/incidencia,
+       sin salir de la ficha del vehículo -- todas las columnas del registro. -->
+  <div class="modal-backdrop" id="veh-modal-ver-registro" hidden>
+    <div class="modal-card modal-card-wide" role="dialog" aria-modal="true" aria-labelledby="veh-ver-registro-titulo">
+      <div class="modal-header">
+        <div>
+          <h3 style="margin:0" id="veh-ver-registro-titulo"></h3>
+          <p class="modal-subtitle" id="veh-ver-registro-subtitulo"></p>
+        </div>
+        <button type="button" class="modal-close" id="veh-ver-registro-cerrar" aria-label="Cerrar"><i data-lucide="x" class="ico"></i></button>
+      </div>
+      <div class="modal-form-scroll" id="veh-ver-registro-cuerpo"></div>
     </div>
   </div>
 

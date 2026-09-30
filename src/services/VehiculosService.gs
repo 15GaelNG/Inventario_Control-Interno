@@ -359,19 +359,34 @@ const VehiculosService = (function () {
     }
 
     const blob = Utilities.newBlob(bytes, mimeType || 'application/octet-stream', nombreArchivo || 'archivo');
-    let carpeta;
+    // El mensaje genérico de Drive ("Acceso denegado") no dice qué cuenta ni en qué paso
+    // falló (abrir la carpeta / crear el archivo / compartirlo) — aquí sí, para no tener
+    // que adivinar cada vez que pase.
+    const cuenta = () => Session.getEffectiveUser().getEmail();
+    let carpeta, archivo;
     try {
       carpeta = DriveApp.getFolderById(CARPETA_ADJUNTOS_ID);
     } catch (e) {
-      // El mensaje genérico de Drive ("Acceso denegado") no dice qué cuenta falló —
-      // aquí sí, para no tener que adivinar cada vez que pase.
       throw new Error('No se pudo abrir la carpeta de adjuntos de Vehículos en Drive. La cuenta con la que ' +
-        'corre la app ahora mismo (' + Session.getEffectiveUser().getEmail() + ') no tiene acceso a esa carpeta.');
+        'corre la app ahora mismo (' + cuenta() + ') no tiene acceso a esa carpeta.');
     }
-    const archivo = carpeta.createFile(blob);
-    // Sin esto, el archivo solo lo puede ver la cuenta que despliega la app
-    // (quien lo creó) — nadie más puede abrir el link, aunque sea válido.
-    archivo.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
+    try {
+      archivo = carpeta.createFile(blob);
+    } catch (e) {
+      throw new Error('Se pudo abrir la carpeta de adjuntos de Vehículos, pero no crear el archivo ahí. La cuenta ' +
+        cuenta() + ' necesita permiso de editor (no solo lector) en esa carpeta. Error original: ' + e.message);
+    }
+    // Mejor esfuerzo, no bloquea el registro: la carpeta de adjuntos ya tiene
+    // acceso general (grupo/dominio) configurado, así que un archivo nuevo
+    // casi siempre hereda ese compartir solo — esto es un respaldo extra por
+    // si algún día esa carpeta cambia y deja de compartirse por default.
+    // Si una política de Workspace bloquea el compartir explícito (le pasa a
+    // algunas cuentas en carpetas que no son suyas), no vale la pena tronar
+    // el registro completo por eso: el archivo ya quedó guardado.
+    if (!DriveUtils.compartirLoMasAmplioPosible(archivo)) {
+      console.warn('No se pudo compartir explícitamente el archivo de Vehículos (cuenta ' + cuenta() +
+        '); se deja como quedó por default de la carpeta. Archivo: ' + archivo.getUrl());
+    }
 
     return { url: archivo.getUrl(), id: archivo.getId(), nombre: nombreArchivo };
   }

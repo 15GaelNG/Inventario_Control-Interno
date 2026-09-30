@@ -7,6 +7,13 @@
  * lugar (services/*.gs) y aquí solo se decide qué queda expuesto al cliente.
  */
 
+// --- Dashboard ---
+// JSON.stringify: incluye fechas (Date/ISO) mezcladas en varias secciones —
+// mismo motivo que apiListarVehiculosResumen (ver comentario más abajo).
+function apiResumenInicio(token) {
+  return JSON.stringify(DashboardService.resumen(token));
+}
+
 // --- Auth ---
 function apiLogin(correo, password) {
   return Auth.login(correo, password);
@@ -104,6 +111,41 @@ function apiListarReasignacionesVehicularesPorFolio(token, folio) {
   return ReasignacionesVehicularesService.listarPorFolio(token, folio);
 }
 
+// Ficha de Vehículos: lo que hay de este folio en otros 5 módulos.
+function apiVerificacionesPorFolio(token, folio) {
+  return JSON.stringify(VerificacionesService.listarPorFolio(token, folio));
+}
+function apiInspeccionesPorFolio(token, folio) {
+  return JSON.stringify(InspeccionesService.listarPorFolio(token, folio));
+}
+function apiSensoresPorFolio(token, folio) {
+  return JSON.stringify(SensoresService.listarPorFolio(token, folio));
+}
+function apiHologramasPorFolio(token, folio) {
+  return JSON.stringify(HologramasService.listarPorFolio(token, folio));
+}
+function apiIncidenciasPorFolio(token, folio) {
+  return JSON.stringify(IncidenciasService.listarPorFolio(token, folio));
+}
+
+// "Ver completo" desde la ficha de Vehículos: el registro entero (todas las columnas
+// de la hoja), no el resumen curado que ya traen los *PorFolio de arriba.
+function apiBuscarVerificacionPorId(token, id) {
+  return VerificacionesService.buscarPorId(token, id);
+}
+function apiBuscarInspeccionPorId(token, id) {
+  return InspeccionesService.buscarPorId(token, id);
+}
+function apiBuscarSensorPorId(token, id) {
+  return SensoresService.buscarPorId(token, id);
+}
+function apiBuscarHologramaPorId(token, id) {
+  return HologramasService.buscarPorId(token, id);
+}
+function apiBuscarIncidenciaPorId(token, id) {
+  return IncidenciasService.buscarPorId(token, id);
+}
+
 // --- Uber ---
 function apiListarUberResumen(token) {
   return UberService.listarResumen(token);
@@ -165,6 +207,16 @@ function apiActualizarCajaChica(token, id, cambios) {
 }
 function apiEliminarCajaChica(token, id) {
   return CajasChicasService.eliminar(token, id);
+}
+function apiArqueosPorIdCch(token, idCch) {
+  return JSON.stringify(ArqueosService.listarPorIdCch(token, idCch));
+}
+function apiCambiosMontoPorIdCch(token, idCch) {
+  return JSON.stringify(CambiosMontoCCHService.listarPorIdCch(token, idCch));
+}
+// "Ver completo" desde la ficha de Caja Chica: el registro entero, no el resumen curado.
+function apiBuscarCambioMontoPorId(token, id) {
+  return CambiosMontoCCHService.buscarPorId(token, id);
 }
 
 // --- Historial de cambios de monto (Caja Chica) ---
@@ -517,6 +569,11 @@ function apiTiposInspeccion(token) {
 }
 function apiEstructuraInspeccion(token, tipo) {
   return InspeccionesService.estructuraDeTipo(token, tipo);
+}
+// Vacía la caché de 6h de estructuraDeTipo -- se necesita después de editar una
+// plantilla (o su REAGRUPAR_SECCIONES) para verlo de inmediato, sin esperar.
+function apiOlvidarTipoInspeccion(token, tipo) {
+  return InspeccionesService.olvidarTipo(token, tipo);
 }
 function apiRegistrarInspeccion(token, datos, imagenes) {
   return InspeccionesService.registrar(token, datos, imagenes);

@@ -196,8 +196,31 @@ const DriveUtils = (function () {
     try { DriveApp.getFileById(fileId).setTrashed(true); } catch (e) { /* no-op */ }
   }
 
+  /**
+   * Comparte un archivo recién creado lo más ampliamente posible: primero con
+   * todo el dominio (lo normal); si una política de Workspace lo bloquea
+   * (pasa en algunas carpetas que no son de quien sube el archivo), intenta
+   * "cualquiera con el enlace" como respaldo — algunas políticas bloquean una
+   * forma de compartir pero no la otra. Regresa 'DOMAIN' | 'ANYONE_WITH_LINK'
+   * si logró alguna, o null si ninguna (el archivo ya se creó de todos modos,
+   * solo quedó visible nada más para quien lo subió).
+   */
+  function compartirLoMasAmplioPosible(archivo) {
+    try {
+      archivo.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
+      return 'DOMAIN';
+    } catch (e) {
+      try {
+        archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        return 'ANYONE_WITH_LINK';
+      } catch (e2) {
+        return null;
+      }
+    }
+  }
+
   return {
     guardarArchivoAppSheet, guardarImagenAppSheet, archivoDeRuta, urlDeRuta, previsualizarRuta,
-    archivoDeRutaProfunda, urlDeRutaProfunda, previsualizarRutaProfunda, eliminar,
+    archivoDeRutaProfunda, urlDeRutaProfunda, previsualizarRutaProfunda, eliminar, compartirLoMasAmplioPosible,
   };
 })();

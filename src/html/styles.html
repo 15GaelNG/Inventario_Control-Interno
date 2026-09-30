@@ -21,6 +21,7 @@
     --color-success: #1e7d4f;
     --color-note-bg: var(--color-primary-soft);
     --color-badge-bg: #ffffff; /* fijo: el logo (navy+dorado) siempre necesita fondo claro, en cualquier tema */
+    --color-neutro-fuerte: #212121; /* etiquetas "neutras" (ej. Clase Camión/Motocicleta) */
 
     /* Sidebar: fondo navy fijo de marca, NO cambia con el tema claro/oscuro. */
     --color-sidebar-bg: #06263A;
@@ -48,6 +49,7 @@
     --color-text-muted: #9db0b8;
     --color-border: #26404c;
     --color-note-bg: #16344450;
+    --color-neutro-fuerte: #c9ccd1; /* casi negro en claro se perdía contra el fondo oscuro */
   }
 
   /* Transición suave al cambiar de tema (no anima layout, solo color/fondo) */
@@ -64,6 +66,11 @@
     font-family: 'Poppins', 'Segoe UI', system-ui, -apple-system, sans-serif;
     font-size: 14px;
   }
+
+  /* Enlaces (ej. "Ver archivo" de PDFs/imágenes adjuntos): sin esto usan el azul
+     por default del navegador, que en modo oscuro casi no se distingue del fondo. */
+  a { color: var(--color-primary); }
+  a:hover { color: var(--color-primary-hover); }
 
   /* #app ocupa exactamente el alto de la pantalla y no se desplaza — el
      sidebar y la topbar quedan fijos; solo el contenido de #view-container
@@ -302,6 +309,16 @@
   .tab-panel[hidden] { display: none; }
   .grid { display: grid; gap: 16px; }
   .grid-modules { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  .grid-accesos { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+
+  /* Panel de Inicio: secciones apiladas, y "Actividad reciente" + "Accesos
+     rápidos" lado a lado en pantallas anchas. */
+  .dash-section { margin-bottom: 24px; }
+  .dash-section-title { margin: 0 0 12px; font-size: 15px; }
+  .dash-grid-2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 24px; align-items: start; }
+  @media (max-width: 900px) {
+    .dash-grid-2 { grid-template-columns: 1fr; }
+  }
 
   h2 { margin-top: 0; font-weight: 600; }
 
@@ -397,28 +414,26 @@
   .page-subtitle { margin: 0; color: var(--color-text-muted); font-size: 13px; }
 
   .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-bottom: 20px; }
-  /* Tarjeta minimalista (sin ícono): etiqueta chica en mayúsculas arriba,
-     valor grande abajo — mismo lenguaje visual que .kpi-chip. El ícono
-     (.stat-icon) se deja oculto en vez de quitarlo del HTML de cada vista,
-     para no tener que tocar los 9 templates que lo usan. */
   .stat-tile {
-    display: flex; align-items: center;
+    display: flex; align-items: center; gap: 14px;
     background: var(--color-surface); border: 1px solid var(--color-border);
     border-left: 4px solid var(--color-primary);
     border-radius: var(--radius); padding: 14px 18px; box-shadow: var(--shadow);
   }
-  .stat-icon { display: none; }
-  .stat-tile > div:last-child { display: flex; flex-direction: column-reverse; gap: 4px; }
-  .stat-value { font-size: 22px; font-weight: 700; color: var(--color-text); line-height: 1.1; }
-  .stat-label {
-    font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
-    color: var(--color-text-muted);
+  .stat-icon {
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    width: 40px; height: 40px; border-radius: 10px;
+    background: var(--color-primary-soft); color: var(--color-primary);
   }
-  /* Antes coloreaban el ícono; ahora, sin ícono, colorean el valor y la franja izquierda. */
+  .stat-icon .ico { width: 20px; height: 20px; }
+  .stat-tile > div:last-child { display: flex; flex-direction: column; gap: 2px; }
+  .stat-value { font-size: 22px; font-weight: 700; color: var(--color-text); line-height: 1.1; }
+  .stat-label { font-size: 12.5px; font-weight: 500; color: var(--color-text-muted); }
   .stat-tile-warn { border-left-color: var(--color-danger); }
-  .stat-tile-warn .stat-value { color: var(--color-danger); }
+  .stat-tile-warn .stat-icon { background: var(--color-accent-soft); color: var(--color-danger); }
   .stat-tile-ok { border-left-color: var(--color-success); }
-  .stat-tile-ok .stat-value { color: var(--color-success); }
+  .stat-tile-ok .stat-icon { background: #DCF1E6; color: var(--color-success); }
+  :root[data-theme="dark"] .stat-tile-ok .stat-icon { background: #123024; }
 
   /* KPI clickeable: filtra la tabla del mismo módulo con solo darle clic
      (ver wireKpiFiltro en app.html). */
@@ -469,6 +484,23 @@
   .stat-tile-clickable.stat-tile-activo {
     border-color: var(--color-primary); border-width: 2px; padding: 15px;
     box-shadow: 0 0 0 3px var(--color-primary-soft);
+  }
+
+  /* ========== Panorama Vehicular (KPIs + gráficas + filtros) ========== */
+  .pv-filtros { margin-bottom: 20px; }
+  .pv-filtros-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; align-items: end; }
+  .pv-filtros-grid .field { margin-bottom: 0; }
+  .pv-filtros-grid > button { height: 38px; white-space: nowrap; }
+  .pv-grid-graficas { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
+  .pv-card-grafica-grande { grid-column: 1 / -1; }
+  .pv-card-grafica h3 {
+    display: flex; align-items: center; gap: 8px; margin: 0 0 16px; font-size: 14px; font-weight: 600;
+  }
+  .pv-lienzo-wrap { position: relative; height: 280px; }
+  .pv-card-grafica-grande .pv-lienzo-wrap { height: 320px; }
+  @media (max-width: 640px) {
+    .pv-grid-graficas { grid-template-columns: 1fr; }
+    .pv-lienzo-wrap, .pv-card-grafica-grande .pv-lienzo-wrap { height: 240px; }
   }
 
   /* ========== Tarjeta de formulario con ícono de encabezado ========== */
@@ -696,6 +728,38 @@
   }
   .info-section-title:first-child { margin-top: 0; }
 
+  /* Ver/Editar/Eliminar por fila en las tablas de solo lectura de una ficha
+     (pestañas de Verificaciones/Inspecciones/Sensor/Hologramas/Incidencias dentro
+     de la ficha de Vehículos) -- mismo trato visual que .dt-btn-fila de DataTable,
+     pero sin depender de su ancestro .dt (esta tabla no es un DataTable). */
+  .ficha-acciones-fila { display: inline-flex; gap: 2px; white-space: nowrap; }
+  .ficha-btn-fila {
+    display: inline-flex; align-items: center; background: transparent; border: none;
+    padding: 5px 6px; border-radius: 6px; font-size: 13px; color: var(--color-text-muted);
+  }
+  .ficha-btn-fila:hover, .ficha-btn-fila:focus-visible { background: var(--color-primary-soft); color: var(--color-text); }
+  .ficha-btn-fila.ficha-peligro:hover, .ficha-btn-fila.ficha-peligro:focus-visible { background: #F3ECD6; color: var(--color-danger); }
+  :root[data-theme="dark"] .ficha-btn-fila.ficha-peligro:hover { background: rgba(255,138,128,.15); color: #ff8a80; }
+
+  /* Mini-tablas de solo lectura dentro de una ficha (Verificaciones/Inspecciones/
+     Sensor/Hologramas/Incidencias en Vehículos; Arqueos/Cambios de monto en Caja
+     Chica) -- antes heredaban el <table> pelón de toda la app (tablaFicha en
+     app.html); ahora con tarjeta redondeada, encabezado distinguible y renglones
+     alternados, para que se lean de un vistazo en vez de verse una hoja de cálculo. */
+  .ficha-tabla-wrap { overflow-x: auto; border: 1px solid var(--color-border); border-radius: 12px; }
+  .ficha-tabla-wrap table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .ficha-tabla-wrap th {
+    background: var(--color-bg); color: var(--color-text-muted); font-weight: 700;
+    font-size: 11px; text-transform: uppercase; letter-spacing: .3px; white-space: nowrap;
+    text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--color-border);
+  }
+  .ficha-tabla-wrap td { padding: 10px 14px; border-bottom: 1px solid var(--color-border); vertical-align: middle; }
+  .ficha-tabla-wrap tbody tr:last-child td { border-bottom: none; }
+  .ficha-tabla-wrap tbody tr:nth-child(even) { background: var(--color-bg); }
+  .ficha-tabla-wrap tbody tr:hover { background: var(--color-primary-soft); }
+  .ficha-tabla-wrap th:first-child, .ficha-tabla-wrap td:first-child { padding-left: 16px; }
+  .ficha-tabla-wrap th:last-child, .ficha-tabla-wrap td:last-child { padding-right: 16px; }
+
   .spinner {
     width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
     border: 2.5px solid var(--color-border); border-top-color: var(--color-accent);
@@ -714,11 +778,16 @@
     border: 1px solid var(--color-border); border-left: 4px solid var(--color-border);
     border-radius: var(--radius); box-shadow: var(--shadow-lg);
     padding: 13px 16px; min-width: 260px; max-width: 380px;
-    pointer-events: auto; font-size: 13px; font-weight: 500;
+    pointer-events: none; font-size: 13px; font-weight: 500;
     transform: translateX(30px); opacity: 0;
     transition: transform .25s ease, opacity .25s ease;
   }
-  .toast.show { transform: translateX(0); opacity: 1; }
+  /* pointer-events solo mientras se ve — el div del aviso NUNCA se quita del
+     DOM (queda "escondido" nomás con opacity:0), y este rincón (arriba a la
+     derecha) es el mismo donde vive "Cerrar sesión": sin esto, un aviso ya
+     desvanecido se quedaba atrapando el clic invisible, como si el botón de
+     cerrar sesión estuviera congelado. */
+  .toast.show { transform: translateX(0); opacity: 1; pointer-events: auto; }
   .toast-icon { flex-shrink: 0; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; }
   .toast-mensaje { flex: 1; line-height: 1.4; }
   .toast-exito { border-left-color: var(--color-success); }
@@ -763,6 +832,26 @@
     width: 28px; height: 28px; border-radius: 8px; padding: 0; font-size: 13px;
   }
   .modal-close:hover { background: var(--color-bg); }
+
+  /* Insignia "Calificación" con barra de progreso — cabecera de los
+     formularios que generan una calificación en vivo (Arqueo: 17
+     reactivos de auditoría). Muestra cuántos puntos ya se calificaron,
+     no el resultado final (ese sigue en su campo de solo lectura). */
+  .calif-badge {
+    display: flex; flex-direction: column; gap: 6px; align-items: flex-end;
+    min-width: 168px; padding: 10px 14px; border-radius: 12px;
+    background: var(--color-primary-soft); border: 1px solid var(--color-border);
+    flex-shrink: 0;
+  }
+  .calif-badge-titulo {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+    color: var(--color-text-muted);
+  }
+  .calif-badge-valor { font-size: 20px; font-weight: 700; color: var(--color-primary); line-height: 1; }
+  .calif-badge-barra { width: 100%; height: 5px; border-radius: 999px; overflow: hidden; background: rgba(0,0,0,.08); }
+  :root[data-theme="dark"] .calif-badge-barra { background: rgba(255,255,255,.12); }
+  .calif-badge-barra-fill { height: 100%; border-radius: 999px; background: var(--color-primary); transition: width .2s ease; }
+  .calif-badge-nota { font-size: 11px; color: var(--color-text-muted); white-space: nowrap; }
 
   /* ========== Login ========== */
   #login-screen {

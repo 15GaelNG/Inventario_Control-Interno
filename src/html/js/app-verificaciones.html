@@ -110,7 +110,8 @@
             : '—'),
         },
       ],
-      accionesFila: puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (v) => abrirEditarVerificacion(v) }] : [],
+      accionesFila: [{ icono: 'car', titulo: 'Ver vehículo', alHacer: (v) => verFichaVehiculoDesdeOtroModulo(v.FOLIO) }]
+        .concat(puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (v) => abrirEditarVerificacion(v) }] : []),
       // Casillas para todos: copiar sirve a cualquiera; sin permiso, la barra explica por qué no hay "Eliminar"
       seleccionable: true,
       alEliminar: puedeEditar ? async (filas) => {
@@ -189,7 +190,9 @@
       if (!Object.keys(cambios).length) { cerrarEditarVerificacion(); return; }
 
       const btn = ev.target.querySelector('button[type="submit"]');
+      const textoOriginal = btn.innerHTML;
       btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
       try {
         const actualizada = await guardarCambiosCampoPorCampo(id, cambios,
           (id, campo, valor) => callServer('apiActualizarCampoVerificacion', state.token, id, campo, valor));
@@ -206,6 +209,7 @@
         Notificar.error('No se pudo actualizar: ' + err.message);
       } finally {
         btn.disabled = false;
+        btn.innerHTML = textoOriginal;
       }
     });
 

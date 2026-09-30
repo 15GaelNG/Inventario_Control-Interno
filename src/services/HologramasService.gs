@@ -197,6 +197,25 @@ const HologramasService = (function () {
       .sort((a, b) => (b.FECHA_REGISTRO || '').localeCompare(a.FECHA_REGISTRO || ''));
   }
 
+  /** Hologramas de un solo vehículo (ficha de Vehículos). */
+  function listarPorFolio(token, folio) {
+    if (!folio) return [];
+    return listar(token).filter((h) => h.FOLIO === folio);
+  }
+
+  /** Registro completo (todas las columnas) por ID -- "Ver completo" desde la ficha de Vehículos. */
+  function buscarPorId(token, id) {
+    Permisos.puedeLeer(token, 'hologramas');
+    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, 'ID');
+    if (!encontrado) return null;
+    const limpio = {};
+    Object.keys(encontrado.data).forEach((k) => {
+      const v = encontrado.data[k];
+      limpio[k] = v instanceof Date ? v.toISOString() : v;
+    });
+    return limpio;
+  }
+
   /** Todas las columnas de TODOS los hologramas (para exportar completo). */
   function completo(token) {
     Permisos.puedeLeer(token, 'hologramas');
@@ -391,5 +410,5 @@ const HologramasService = (function () {
     return url;
   }
 
-  return { listar, completo, catalogos, datosDeVehiculo, registrar, actualizarCampo, sincronizar, eliminar, urlSolicitud };
+  return { listar, listarPorFolio, buscarPorId, completo, catalogos, datosDeVehiculo, registrar, actualizarCampo, sincronizar, eliminar, urlSolicitud };
 })();

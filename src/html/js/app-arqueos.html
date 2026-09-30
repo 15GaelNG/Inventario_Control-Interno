@@ -146,11 +146,14 @@
     { grupo: 'Firmas y evidencia', clave: 'FORMATO ARQUEO', etiqueta: 'Formato de arqueo (PDF)', tipo: 'file', soloLectura: true },
   ];
 
-  /** Genera los <div class="field"> agrupados por sección para un formulario de arqueo. */
-  function renderCamposArqueo(prefijo) {
+  /** Genera los <div class="field"> agrupados por sección para un formulario de arqueo.
+   *  soloGrupos (opcional): limita a esos grupos -- lo usa renderPasosArqueo para
+   *  pintar solo los campos del paso actual. */
+  function renderCamposArqueo(prefijo, soloGrupos) {
     const grupos = [];
     const porGrupo = {};
     CAMPOS_ARQUEO.forEach((campo) => {
+      if (soloGrupos && soloGrupos.indexOf(campo.grupo) === -1) return;
       if (!porGrupo[campo.grupo]) { porGrupo[campo.grupo] = []; grupos.push(campo.grupo); }
       porGrupo[campo.grupo].push(campo);
     });
@@ -203,6 +206,77 @@
       }).join('');
       return `<div class="info-section-title">${grupo}</div>${campos}`;
     }).join('');
+  }
+
+  /** Agrupa los 9 "grupo" de CAMPOS_ARQUEO en 5 pasos, mismo patrón visual que
+   *  el wizard de Inspección Vehicular (chips + Atrás/Siguiente). */
+  const PASOS_ARQUEO = [
+    { titulo: 'Identificación', grupos: ['Identificación', 'Cuenta bancaria', 'Fechas y método'] },
+    { titulo: 'Efectivo', grupos: ['Efectivo — Monedas', 'Efectivo — Billetes', 'Cheques'] },
+    { titulo: 'Gastos', grupos: ['Totales de gasto'] },
+    { titulo: 'Auditoría', grupos: ['Auditoría'] },
+    { titulo: 'Firmas y evidencia', grupos: ['Firmas y evidencia'] },
+  ];
+
+  /**
+   * Arma el formulario de Arqueo por pasos: chips arriba + un <section class="form-paso">
+   * por paso (mismo CSS que ya usa Inspección Vehicular, definido en formulario.html) +
+   * Atrás/Siguiente/Guardar al final. Ningún campo de Arqueo es "requerido" (el checklist
+   * de auditoría se valida aparte, con REALIZAR_AUDITORIA), así que a diferencia de
+   * Inspección los pasos se navegan libres, sin bloquear "Siguiente".
+   *
+   * El botón final ES el submit real del <form> que envuelve al contenedor donde se
+   * inserta esto (se le pone id y texto a la medida de quien llama, para no duplicar
+   * el wiring de "deshabilitar mientras guarda" que ya existe por fuera).
+   */
+  function renderPasosArqueo(prefijo, idBotonGuardar, textoBotonGuardar, iconoBotonGuardar) {
+    const secciones = PASOS_ARQUEO.map((p, i) => `
+      <section class="form-paso" data-paso="${i}"${i ? ' hidden' : ''}>
+        <h3 class="form-paso-titulo" tabindex="-1">${p.titulo}</h3>
+        <div class="form-campos" style="--form-columnas:2">${renderCamposArqueo(prefijo, p.grupos)}</div>
+      </section>`).join('');
+    return '<ol class="form-pasos" data-arq-pasos></ol>' + secciones +
+      '<div class="form-acciones form-acciones-pasos">' +
+      '<button type="button" class="secondary" data-arq-atras hidden>' + Iconos.svg('anterior') + ' Atrás</button>' +
+      '<button type="button" data-arq-siguiente>Siguiente ' + Iconos.svg('siguiente') + '</button>' +
+      '<button type="submit" id="' + idBotonGuardar + '" data-arq-guardar hidden><i data-lucide="' + iconoBotonGuardar + '" class="ico"></i> ' + textoBotonGuardar + '</button>' +
+      '<span class="form-cuenta" data-arq-cuenta></span></div>';
+  }
+
+  /** Conecta la navegación de los pasos que pintó renderPasosArqueo -- se llama una sola
+   *  vez, después de insertar ese HTML en el DOM. `contenedor` = el elemento que recibió
+   *  ese innerHTML directo (ahí adentro están los .form-paso, los chips y los botones). */
+  function wirePasosArqueo(contenedor) {
+    let pasoActual = 0;
+    function actualizarChips() {
+      const lista = contenedor.querySelector('[data-arq-pasos]');
+      lista.innerHTML = PASOS_ARQUEO.map((p, i) => `
+        <li><button type="button" class="form-paso-chip ${i === pasoActual ? 'activo' : ''}" data-ir="${i}">
+          <span class="form-paso-num">${i + 1}</span>${escaparHtml(p.titulo)}</button></li>`).join('');
+      lista.querySelectorAll('[data-ir]').forEach((b) => b.addEventListener('click', () => mostrarPaso(Number(b.dataset.ir))));
+      const ultimo = pasoActual === PASOS_ARQUEO.length - 1;
+      contenedor.querySelector('[data-arq-atras]').hidden = pasoActual === 0;
+      contenedor.querySelector('[data-arq-siguiente]').hidden = ultimo;
+      contenedor.querySelector('[data-arq-guardar]').hidden = !ultimo;
+      contenedor.querySelector('[data-arq-cuenta]').textContent = `Paso ${pasoActual + 1} de ${PASOS_ARQUEO.length}`;
+    }
+    function mostrarPaso(i) {
+      pasoActual = i;
+      contenedor.querySelectorAll('.form-paso').forEach((s) => { s.hidden = Number(s.dataset.paso) !== i; });
+      actualizarChips();
+      refreshIcons();
+      const titulo = contenedor.querySelector(`.form-paso[data-paso="${i}"] .form-paso-titulo`);
+      if (titulo) titulo.focus({ preventScroll: true });
+      if (i > 0 && contenedor.scrollIntoView) contenedor.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+    contenedor.querySelector('[data-arq-siguiente]').addEventListener('click', () => {
+      if (pasoActual < PASOS_ARQUEO.length - 1) mostrarPaso(pasoActual + 1);
+    });
+    contenedor.querySelector('[data-arq-atras]').addEventListener('click', () => {
+      if (pasoActual > 0) mostrarPaso(pasoActual - 1);
+    });
+    mostrarPaso(0);
+    return { irAPaso: mostrarPaso };
   }
 
   /** Lee los campos de captura manual (deja fuera soloLectura, file y firma — esos se manejan aparte). */
@@ -438,18 +512,195 @@
     document.getElementById(prefijo + '-' + slugCampo('DIFERENCIA')).value = formatearMoneda(diferencia);
 
     let sumaAudit = 0;
+    let contestadas = 0;
     (auditItems || []).forEach((item) => {
       const el = document.getElementById(prefijo + '-' + slugCampo(item.clave));
       const seleccion = el ? el.value : '';
+      if (seleccion) contestadas++;
       const opcion = (item.opciones || []).find((o) => o.texto === seleccion);
       sumaAudit += opcion ? opcion.puntos : 0;
     });
+    const total = (auditItems || []).length || 17;
     const calificacion = Math.round((sumaAudit / 17) * 100) / 100;
     document.getElementById(prefijo + '-' + slugCampo('CALIFICACION_AUDITORIA_FINAL')).value = calificacion + '%';
+    actualizarBadgeCalificacionArqueo(prefijo, contestadas, total, calificacion);
+  }
+
+  /** Insignia "Calificación" de la cabecera (ver imagen de referencia: Líneas
+   * Telefónicas usa el mismo patrón) — mientras no se haya contestado ningún
+   * reactivo se ve "—"; ya con al menos uno, muestra el % en vivo. */
+  function actualizarBadgeCalificacionArqueo(prefijo, contestadas, total, calificacion) {
+    const valor = document.getElementById(prefijo + '-calif-badge-valor');
+    const barra = document.getElementById(prefijo + '-calif-badge-barra');
+    const nota = document.getElementById(prefijo + '-calif-badge-nota');
+    if (!valor || !barra || !nota) return;
+    valor.textContent = contestadas ? calificacion + '%' : '—';
+    barra.style.width = (total ? (contestadas / total) * 100 : 0) + '%';
+    nota.textContent = contestadas + ' de ' + total + ' puntos calificados';
   }
 
 
   // ---------- Arqueos ----------
+  function idArq(prefijo, clave) { return prefijo + '-' + slugCampo(clave); }
+
+  // Campos que afectan Total M/B/Efectivo/General/Diferencia — se les
+  // engancha "input" para recalcular en vivo (los 17 de auditoría van
+  // aparte, con "change", porque son <select>).
+  const CAMPOS_QUE_AFECTAN_TOTALES_ARQUEO = [
+    'M 0,50', 'M 1,00', 'M 2,00', 'M 5,00', 'M 10,00', 'M 20,00',
+    'B 20,00', 'B 50,00', 'B 100,00', 'B 200,00', 'B 500,00', 'B 1000,00',
+    'DISPONIBLE CUENTA BANCARIA', 'TOTAL CHEQUES',
+    'TOTAL CAJA CHICA CON FACTURAS / XML', 'TOTAL CAJA CHICA GASTOS NO DEDUCIBLES',
+    'TOTAL VIATICOS CON FACTURAS / XML', 'TOTAL VIATICOS NO DEDUCIBLES',
+    'TOTAL CAJA CHICA CON FACTURAS (PENDIENTES)', 'TOTAL VIATICOS CON FACTURAS (PENDIENTES)',
+    'TOTAL CAJA CHICA NO DEDUCIBLES (PENDIENTES)', 'TOTAL VIATICOS NO DEDUCIBLES (PENDIENTES)', 'OTROS',
+  ];
+  /** A nivel de módulo (no solo dentro de initArqueos) porque construirCapturaArqueo
+   *  (el arqueo embebido en la ficha de Caja Chica) también lo necesita, con su
+   *  propio prefijo. */
+  function wireRecalculoArqueo(prefijo, auditItems) {
+    CAMPOS_QUE_AFECTAN_TOTALES_ARQUEO.forEach((clave) => {
+      const el = document.getElementById(idArq(prefijo, clave));
+      if (el) el.addEventListener('input', () => recalcularTotalesArqueo(prefijo, auditItems));
+    });
+    (auditItems || []).forEach((item) => {
+      const el = document.getElementById(idArq(prefijo, item.clave));
+      if (el) el.addEventListener('change', () => recalcularTotalesArqueo(prefijo, auditItems));
+    });
+  }
+  function wireVisibilidadCondicionalArqueo(prefijo) {
+    CAMPOS_ARQUEO.filter((c) => c.mostrarSiCampo).forEach((campo) => {
+      const dependeDe = document.getElementById(idArq(prefijo, campo.mostrarSiCampo));
+      if (dependeDe) dependeDe.addEventListener('change', () => actualizarVisibilidadCondicionalArqueo(prefijo));
+    });
+    actualizarVisibilidadCondicionalArqueo(prefijo);
+  }
+
+  /**
+   * Arqueo embebido en la ficha de Caja Chica (mismo patrón que prepararCaptura de
+   * Inspección Vehicular): arma el formulario COMPLETO de Arqueo dentro de cualquier
+   * contenedor, ya con la caja chica fija (sin selector, autollenado de una vez) y
+   * llama a alGuardado() en vez de "listo para el siguiente".
+   */
+  async function construirCapturaArqueo(contenedor, prefijo, caja, alGuardado, idEditar) {
+    contenedor.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
+    let auditItems, completo;
+    try {
+      const resultados = await Promise.all([
+        callServerCacheado('apiListarAuditItems', state.token),
+        idEditar ? callServer('apiBuscarArqueoPorId', state.token, idEditar) : Promise.resolve(null),
+      ]);
+      auditItems = resultados[0] || [];
+      completo = resultados[1];
+      if (idEditar && !completo) throw new Error('No se encontró el arqueo ' + idEditar);
+    } catch (err) {
+      contenedor.innerHTML = '<p class="error-msg">No se pudo cargar: ' + escaparHtml(err.message) + '</p>';
+      return;
+    }
+    if (!document.body.contains(contenedor) || !contenedor.offsetParent) return; // se cerró mientras cargaba
+
+    // Insignia "Calificación": vive en la cabecera de verdad del modal
+    // (#cch-modal-captura), no aquí adentro -- para que salga arriba del todo,
+    // igual que en Registrar/Editar arqueo. Empieza oculta ahí (la comparte con
+    // Cambio de monto, que no tiene calificación); se destapa y resetea aquí.
+    const badge = document.getElementById(prefijo + '-calif-badge');
+    if (badge) {
+      badge.hidden = false;
+      document.getElementById(prefijo + '-calif-badge-valor').textContent = '—';
+      document.getElementById(prefijo + '-calif-badge-barra').style.width = '0%';
+      document.getElementById(prefijo + '-calif-badge-nota').textContent = '0 de 17 puntos calificados';
+    }
+
+    contenedor.innerHTML =
+      '<form id="' + prefijo + '-form" novalidate>' +
+      '<div id="' + prefijo + '-campos" class="modal-form-scroll"></div>' +
+      '</form><div class="error-msg" id="' + prefijo + '-error" hidden></div>';
+
+    document.getElementById(prefijo + '-campos').innerHTML = renderPasosArqueo(prefijo, prefijo + '-btn-guardar',
+      idEditar ? 'Guardar cambios' : 'Registrar arqueo', idEditar ? 'save' : 'clipboard-check');
+    wirePasosArqueo(document.getElementById(prefijo + '-campos'));
+    refreshIcons();
+
+    contenedor.querySelectorAll('.firma-pad').forEach((canvas) => crearFirmaPad(canvas));
+    contenedor.querySelectorAll('.firma-pad-limpiar').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const canvas = document.getElementById(btn.dataset.target);
+        if (canvas) limpiarFirmaPad(canvas);
+      });
+    });
+
+    document.getElementById(idArq(prefijo, 'QUIEN REGISTRO')).value = (state.sesion && state.sesion.nombre) || '';
+    ['FECHA DEL ULTIMO ARQUEO', 'FECHA INICIO', 'FECHA FIN'].forEach((clave) => {
+      const el = document.getElementById(idArq(prefijo, clave));
+      if (el) el.value = new Date().toLocaleDateString('es-MX');
+    });
+
+    auditItems.forEach((item) => {
+      const el = document.getElementById(idArq(prefijo, item.clave));
+      if (!el) return;
+      el.innerHTML = '<option value="">Selecciona…</option>' +
+        item.opciones.map((o) => `<option value="${o.texto}">${o.texto}</option>`).join('');
+    });
+
+    // Ya se sabe la caja chica (se abrió desde su ficha) — se autollena de una vez,
+    // sin el selector "Caja chica" que sí necesita el módulo de Arqueos por su cuenta.
+    document.getElementById(idArq(prefijo, 'RESPONSABLE')).value = caja.RESPONSABLE || '';
+    document.getElementById(idArq(prefijo, 'PUESTO')).value = caja.PUESTO || '';
+    document.getElementById(idArq(prefijo, 'AREA / DEPARTAMENTO')).value = caja.DEPARTAMENTO || '';
+    document.getElementById(idArq(prefijo, 'RAZON SOCIAL')).value = caja.EMPRESA_ORIGEN || '';
+    document.getElementById(idArq(prefijo, 'METODO REEMBOLSO')).value = caja.METODO_REEMBOLSO || '';
+    const montoEl = document.getElementById(idArq(prefijo, 'MONTO CAJA'));
+    if (montoEl) { montoEl.value = formatearMoneda(caja.MONTO_ACTUAL || 0); montoEl.dataset.valor = caja.MONTO_ACTUAL || 0; }
+
+    wireRecalculoArqueo(prefijo, auditItems);
+    wireVisibilidadCondicionalArqueo(prefijo);
+    if (idEditar && completo) {
+      // poblarFormularioArqueo ya llama actualizarBloqueoAuditoria/actualizarVisibilidadCondicionalArqueo
+      // con el valor REAL guardado (no el "false" de un formulario recién armado).
+      poblarFormularioArqueo(prefijo, completo);
+    } else {
+      actualizarBloqueoAuditoria(prefijo, false);
+    }
+    document.getElementById(idArq(prefijo, 'REALIZAR_AUDITORIA')).addEventListener('change', () => {
+      actualizarBloqueoAuditoria(prefijo, true);
+      recalcularTotalesArqueo(prefijo, auditItems); // refleja de una vez la calificación en 0% si se acaba de bloquear
+    });
+    recalcularTotalesArqueo(prefijo, auditItems);
+
+    document.getElementById(prefijo + '-form').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById(prefijo + '-error');
+      errorBox.hidden = true;
+      const btn = document.getElementById(prefijo + '-btn-guardar');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Subiendo archivos y guardando…';
+      toastCargando(idEditar ? 'Guardando cambios…' : 'Registrando…');
+      try {
+        const archivos = await subirArchivosArqueo(prefijo);
+        const firmas = await subirFirmasArqueo(prefijo);
+        const datos = Object.assign(recolectarDatosArqueo(prefijo), archivos, firmas);
+        if (idEditar) {
+          await callServer('apiActualizarArqueo', state.token, idEditar, datos);
+        } else {
+          datos['ID CCH'] = caja.ID_CCH || caja['ID CCH'];
+          await callServer('apiCrearArqueo', state.token, datos);
+        }
+        invalidarCacheLista('apiListarArqueosResumen', state.token);
+        invalidarCacheLista('apiListarCajasChicasResumen', state.token);
+        toastExito(idEditar ? 'Actualizado exitosamente' : 'Registrado exitosamente');
+        alGuardado();
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+        toastError((idEditar ? 'No se pudo actualizar: ' : 'No se pudo registrar: ') + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+      }
+    });
+  }
+
   async function initArqueos() {
     wireTabsSimple(document.getElementById('view-container'));
     // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
@@ -461,10 +712,10 @@
     let todosLosArqueos = [];
     let auditItems = [];
 
-    function idArq(prefijo, clave) { return prefijo + '-' + slugCampo(clave); }
-
-    document.getElementById('campos-form-arqueo').innerHTML = renderCamposArqueo('arq');
-    document.getElementById('campos-form-editar-arqueo').innerHTML = renderCamposArqueo('editar-arqueo');
+    document.getElementById('campos-form-arqueo').innerHTML = renderPasosArqueo('arq', 'btn-guardar-arqueo', 'Registrar arqueo', 'wallet');
+    document.getElementById('campos-form-editar-arqueo').innerHTML = renderPasosArqueo('editar-arqueo', 'btn-guardar-editar-arqueo', 'Guardar cambios', 'save');
+    const pasosArq = wirePasosArqueo(document.getElementById('campos-form-arqueo'));
+    const pasosEditarArq = wirePasosArqueo(document.getElementById('campos-form-editar-arqueo'));
 
     // Recuadros de firma: conecta el dibujo en cada canvas y el botón
     // "Limpiar firma" de cada uno.
@@ -510,37 +761,10 @@
       errorBox.hidden = false;
     }
 
-    // Campos que afectan Total M/B/Efectivo/General/Diferencia — se les
-    // engancha "input" para recalcular en vivo (los 17 de auditoría van
-    // aparte, con "change", porque son <select>).
-    const CAMPOS_QUE_AFECTAN_TOTALES = [
-      'M 0,50', 'M 1,00', 'M 2,00', 'M 5,00', 'M 10,00', 'M 20,00',
-      'B 20,00', 'B 50,00', 'B 100,00', 'B 200,00', 'B 500,00', 'B 1000,00',
-      'DISPONIBLE CUENTA BANCARIA', 'TOTAL CHEQUES',
-      'TOTAL CAJA CHICA CON FACTURAS / XML', 'TOTAL CAJA CHICA GASTOS NO DEDUCIBLES',
-      'TOTAL VIATICOS CON FACTURAS / XML', 'TOTAL VIATICOS NO DEDUCIBLES',
-      'TOTAL CAJA CHICA CON FACTURAS (PENDIENTES)', 'TOTAL VIATICOS CON FACTURAS (PENDIENTES)',
-      'TOTAL CAJA CHICA NO DEDUCIBLES (PENDIENTES)', 'TOTAL VIATICOS NO DEDUCIBLES (PENDIENTES)', 'OTROS',
-    ];
-    function wireRecalculoArqueo(prefijo) {
-      CAMPOS_QUE_AFECTAN_TOTALES.forEach((clave) => {
-        const el = document.getElementById(idArq(prefijo, clave));
-        if (el) el.addEventListener('input', () => recalcularTotalesArqueo(prefijo, auditItems));
-      });
-      auditItems.forEach((item) => {
-        const el = document.getElementById(idArq(prefijo, item.clave));
-        if (el) el.addEventListener('change', () => recalcularTotalesArqueo(prefijo, auditItems));
-      });
-    }
-    function wireVisibilidadCondicionalArqueo(prefijo) {
-      CAMPOS_ARQUEO.filter((c) => c.mostrarSiCampo).forEach((campo) => {
-        const dependeDe = document.getElementById(idArq(prefijo, campo.mostrarSiCampo));
-        if (dependeDe) dependeDe.addEventListener('change', () => actualizarVisibilidadCondicionalArqueo(prefijo));
-      });
-      actualizarVisibilidadCondicionalArqueo(prefijo);
-    }
-    wireRecalculoArqueo('arq');
-    wireRecalculoArqueo('editar-arqueo');
+    // wireRecalculoArqueo/wireVisibilidadCondicionalArqueo son de nivel de módulo
+    // (construirCapturaArqueo, el arqueo embebido en Caja Chica, también las usa).
+    wireRecalculoArqueo('arq', auditItems);
+    wireRecalculoArqueo('editar-arqueo', auditItems);
     wireVisibilidadCondicionalArqueo('arq');
     wireVisibilidadCondicionalArqueo('editar-arqueo');
 
@@ -659,7 +883,10 @@
         { campo: 'ESTADO_PDF', titulo: 'Estado PDF', tipo: 'lista', enDetalle: false },
       ],
       accionesFila: [].concat(
-        [{ icono: 'documento', titulo: 'Ver PDF', visible: (a) => !!a.FORMATO_ARQUEO, alHacer: (a) => window.open(a.FORMATO_ARQUEO, '_blank', 'noopener') }],
+        [
+          { icono: 'wallet', titulo: 'Ver caja chica', alHacer: (a) => verFichaCajaChicaDesdeOtroModulo(a.ID_CCH) },
+          { icono: 'documento', titulo: 'Ver PDF', visible: (a) => !!a.FORMATO_ARQUEO, alHacer: (a) => window.open(a.FORMATO_ARQUEO, '_blank', 'noopener') },
+        ],
         puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (a) => abrirEditarArqueo(a.ID) }] : []
       ),
       alEliminar: puedeEditar ? async (filas) => {
@@ -761,6 +988,7 @@
       modalEditar.hidden = true;
       document.getElementById('form-editar-arqueo').reset();
       document.getElementById('editar-arqueo-error').hidden = true;
+      pasosEditarArq.irAPaso(0);
     }
     document.getElementById('btn-cancelar-editar-arqueo').addEventListener('click', cerrarEditarArqueo);
     modalEditar.addEventListener('click', (ev) => { if (ev.target === modalEditar) cerrarEditarArqueo(); });
@@ -815,6 +1043,7 @@
         datos['ID CCH'] = selectCajaArqueo.value;
         await callServer('apiCrearArqueo', state.token, datos);
         ev.target.reset();
+        pasosArq.irAPaso(0);
         invalidarCacheLista('apiListarArqueosResumen', state.token);
         invalidarCacheLista('apiListarCajasChicasResumen', state.token);
         document.querySelectorAll('#campos-form-arqueo .firma-pad').forEach((canvas) => limpiarFirmaPad(canvas));

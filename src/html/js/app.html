@@ -537,6 +537,26 @@
     }, 2500);
   }
 
+  // Folio pendiente de abrir en la ficha de Vehículos: lo usan los botones "Ver
+  // vehículo" de otras tablas (Verificaciones, Inspecciones, Sensor, Hologramas,
+  // Incidencias, Cambios y Reasignaciones) — navegan a Vehículos y, en cuanto ese
+  // módulo termina de montarse y cargar su lista, initVehiculos lo revisa y abre
+  // la ficha directo, sin que el usuario tenga que buscar el folio a mano.
+  let folioFichaVehiculoPendiente = null;
+  function verFichaVehiculoDesdeOtroModulo(folio) {
+    if (!folio) return;
+    folioFichaVehiculoPendiente = folio;
+    navegarA('vehiculos', 'Vehículos');
+  }
+
+  // Mismo mecanismo, para la ficha de Caja Chica — la usan Arqueos y Cambios de Monto.
+  let idCchFichaPendiente = null;
+  function verFichaCajaChicaDesdeOtroModulo(idCch) {
+    if (!idCch) return;
+    idCchFichaPendiente = idCch;
+    navegarA('caja-chica', 'Caja Chica');
+  }
+
   function navegarA(vista, etiqueta) {
     document.querySelectorAll('.nav-item, .nav-subitem').forEach((el) => {
       el.classList.toggle('active', el.dataset.view === vista);
@@ -545,6 +565,7 @@
     transicionVista(vista, etiqueta, () => {
       if (vista === 'dashboard') { montarVista('tpl-dashboard', initDashboard); return; }
       if (vista === 'accesorios') { montarVista('tpl-accesorios', initAccesorios); return; }
+      if (vista === 'panorama-vehiculos') { montarVista('tpl-panorama-vehiculos', initPanoramaVehiculos); return; }
       if (vista === 'incidencias') { montarVista('tpl-incidencias', initIncidencias); return; }
       if (vista === 'vehiculos') { montarVista('tpl-vehiculos', initVehiculos); return; }
       if (vista === 'cambios-vehiculos') { montarVista('tpl-cambios-vehiculos', initCambiosVehiculos); return; }
@@ -592,6 +613,7 @@
     {
       id: 'servicios-vehiculares', icono: 'car', etiqueta: 'Control Vehicular',
       items: [
+        { vista: 'panorama-vehiculos', etiqueta: 'Panorama', icono: 'bar-chart-3' },
         { vista: 'incidencias', etiqueta: 'Incidencias', icono: 'wrench' },
         { vista: 'vehiculos', etiqueta: 'Vehículos', icono: 'car' },
         { vista: 'cambios-vehiculos', etiqueta: 'Cambios Vehículos', icono: 'history' },
@@ -801,6 +823,52 @@
     document.querySelectorAll('.nav-module[data-view]').forEach((el) => {
       el.addEventListener('click', () => navegarA(el.dataset.view));
     });
+    cargarResumenInicio();
+  }
+
+  /** Números del panel de Inicio (KPIs, alertas y actividad reciente) — un solo viaje al servidor. */
+  async function cargarResumenInicio() {
+    const contActividad = document.getElementById('dash-actividad');
+    if (!contActividad) return; // se navegó a otra vista antes de terminar de montar esta
+    try {
+      const r = JSON.parse(await callServer('apiResumenInicio', state.token));
+      if (!document.body.contains(contActividad)) return; // se navegó a otra vista mientras cargaba
+
+      const set = (id, valor) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = (valor === null || valor === undefined) ? '—' : valor;
+      };
+
+      set('dash-kpi-vehiculos-activos', r.vehiculos && r.vehiculos.activos);
+      set('dash-kpi-vehiculos-baja', r.vehiculos && r.vehiculos.baja);
+      set('dash-kpi-incidencias-abiertas', r.ticketsIncidencias && r.ticketsIncidencias.incidenciasAbiertas);
+      set('dash-kpi-tickets-recientes', r.ticketsIncidencias && r.ticketsIncidencias.ticketsRecientes);
+      set('dash-kpi-cch-vigentes', r.cajasChicas && r.cajasChicas.vigentes);
+      set('dash-kpi-cch-proceso', r.cajasChicas && r.cajasChicas.enProcesoCierre);
+      set('dash-kpi-equipos-activos', r.telefonia && r.telefonia.equiposActivos);
+      set('dash-kpi-lineas-activas', r.telefonia && r.telefonia.lineasActivas);
+      set('dash-alerta-verif-vencidas', r.alertas.verificaciones && r.alertas.verificaciones.vencidas);
+      set('dash-alerta-verif-por-vencer', r.alertas.verificaciones && r.alertas.verificaciones.porVencer);
+      set('dash-alerta-insp-atrasadas', r.alertas.inspecciones && r.alertas.inspecciones.atrasadas);
+
+      contActividad.innerHTML = (r.actividad || []).length
+        ? '<div class="historial-timeline">' + r.actividad.map((e) => `
+            <div class="historial-item">
+              <div class="historial-icon"><i data-lucide="${e.icono}" class="ico"></i></div>
+              <div class="historial-main">
+                <div class="historial-campo">${escaparHtml(e.tipo)}</div>
+                <div class="historial-valores">${escaparHtml(e.texto || '')}</div>
+              </div>
+              <div class="historial-meta"><div>${formatearFecha(e.fecha)}</div></div>
+            </div>
+          `).join('') + '</div>'
+        : '<p class="empty-state">Sin actividad reciente.</p>';
+      refreshIcons();
+    } catch (err) {
+      if (document.body.contains(contActividad)) {
+        contActividad.innerHTML = '<p class="empty-state">No se pudo cargar la actividad reciente.</p>';
+      }
+    }
   }
 
   // ---------- Accesorios ----------
@@ -938,6 +1006,10 @@
         NOMBRE: document.getElementById('editar-articulo-nombre').value.trim(),
         MARCA: document.getElementById('editar-articulo-marca').value.trim(),
       };
+      const btn = ev.target.querySelector('button[type="submit"]');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> ' + (id ? 'Guardando…' : 'Registrando…');
       toastCargando(id ? 'Guardando cambios…' : 'Registrando…');
       try {
         if (id) await callServer('apiActualizarArticulo', state.token, id, datos);
@@ -950,6 +1022,9 @@
         errorBox.textContent = err.message;
         errorBox.hidden = false;
         toastError('No se pudo guardar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
       }
     });
 
@@ -957,6 +1032,10 @@
       ev.preventDefault();
       const errorBox = document.getElementById('mov-error');
       errorBox.hidden = true;
+      const btn = ev.target.querySelector('button[type="submit"]');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Registrando…';
       toastCargando('Registrando movimiento…');
       try {
         await callServer(
@@ -975,6 +1054,9 @@
         errorBox.textContent = err.message;
         errorBox.hidden = false;
         toastError('No se pudo registrar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
       }
     });
 
@@ -1729,6 +1811,10 @@
       ev.preventDefault();
       const errorBox = document.getElementById('editar-error');
       errorBox.hidden = true;
+      const btn = ev.target.querySelector('button[type="submit"]');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
       toastCargando('Guardando cambios…');
       try {
         await callServer('apiActualizarIncidencia', state.token, document.getElementById('editar-id').value, {
@@ -1755,6 +1841,9 @@
         errorBox.textContent = err.message;
         errorBox.hidden = false;
         toastError('No se pudo actualizar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
       }
     });
 
@@ -1820,14 +1909,14 @@
         { campo: 'INSPECCION_SALIDA', titulo: 'Inspección de salida', tipo: 'texto', visible: false },
         { campo: 'MECANICO', titulo: 'Mecánico', tipo: 'texto', visible: false },
       ],
-      accionesFila: puedeEditar ? [
+      accionesFila: [{ icono: 'car', titulo: 'Ver vehículo', alHacer: (inc) => verFichaVehiculoDesdeOtroModulo(inc.FOLIO) }].concat(puedeEditar ? [
         {
           icono: 'lock-open', titulo: 'Cerrar incidencia',
           visible: (inc) => inc.ESTADO === 'ABIERTA',
           alHacer: (inc) => abrirModalCierre(inc.ID, inc.FOLIO),
         },
         { icono: 'pencil', titulo: 'Editar', alHacer: (inc) => abrirModalEditar(inc) },
-      ] : [],
+      ] : []),
       seleccionable: true,
       alEliminar: puedeEditar ? async (filas) => {
         await Promise.all(filas.map((f) => callServer('apiEliminarIncidencia', state.token, f.ID)));
@@ -1856,7 +1945,12 @@
     }
 
     function actualizarKpis(filas) {
-      document.getElementById('stat-total').textContent = filas.length;
+      // Si cargar() tardó y mientras tanto se navegó a otra vista, view-container
+      // ya no tiene estos elementos -- sin esto, tronaba al volver de un módulo
+      // rápido (ej. Panorama) antes de que esta carga terminara.
+      const total = document.getElementById('stat-total');
+      if (!total) return;
+      total.textContent = filas.length;
       document.getElementById('stat-abiertas').textContent = filas.filter((i) => i.ESTADO === 'ABIERTA').length;
       document.getElementById('stat-cerradas').textContent = filas.filter((i) => i.ESTADO === 'CERRADA').length;
     }
@@ -1880,6 +1974,10 @@
       ev.preventDefault();
       const errorBox = document.getElementById('inc-error');
       errorBox.hidden = true;
+      const btn = ev.target.querySelector('button[type="submit"]');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Registrando…';
       toastCargando('Registrando…');
       try {
         await callServer('apiCrearIncidencia', state.token, {
@@ -1904,6 +2002,9 @@
         errorBox.textContent = err.message;
         errorBox.hidden = false;
         toastError('No se pudo registrar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
       }
     });
 
@@ -1914,6 +2015,10 @@
       ev.preventDefault();
       const errorBox = document.getElementById('cerrar-error');
       errorBox.hidden = true;
+      const btn = ev.target.querySelector('button[type="submit"]');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
       toastCargando('Guardando cambios…');
       try {
         await callServer('apiCerrarIncidencia', state.token, document.getElementById('cerrar-id').value, {
@@ -1930,10 +2035,67 @@
         errorBox.textContent = err.message;
         errorBox.hidden = false;
         toastError('No se pudo actualizar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
       }
     });
 
     await Promise.all([promesaVehiculos, cargar()]);
+  }
+
+  // ---------- Ficha por pestañas (genérica: la usa cualquier módulo con una "ficha
+  // única" — Vehículos, Caja Chica, ...) ----------
+
+  /** pestanas: [{id, titulo, icono, contenido, num?}], la primera queda activa.
+   *  num (si viene) se muestra como contador junto al título. */
+  function fichaEnPestanas(pestanas) {
+    return '<div class="tabs-simple ln-ficha-tabs" role="tablist" aria-label="Secciones de la ficha">' + pestanas.map((t, n) =>
+      '<button type="button" class="tab-btn' + (n ? '' : ' active') + '" role="tab" aria-selected="' + (n ? 'false' : 'true') + '" data-ficha-tab="' + t.id + '">' +
+      '<i data-lucide="' + t.icono + '" class="ico"></i> ' + t.titulo +
+      (t.num === undefined ? '' : ' <span class="ln-tab-num">' + t.num + '</span>') + '</button>').join('') + '</div>' +
+      pestanas.map((t, n) => '<div data-ficha-panel="' + t.id + '"' + (n ? ' hidden' : '') + '>' + t.contenido + '</div>').join('');
+  }
+  function mostrarPestanaFicha(contenedor, nombre) {
+    contenedor.querySelectorAll('[data-ficha-tab]').forEach((b) => {
+      const activa = b.dataset.fichaTab === nombre;
+      b.classList.toggle('active', activa);
+      b.setAttribute('aria-selected', String(activa));
+    });
+    contenedor.querySelectorAll('[data-ficha-panel]').forEach((p) => { p.hidden = p.dataset.fichaPanel !== nombre; });
+  }
+  /** Tabla sencilla de solo lectura (sin filtros/orden/edición) para las pestañas de una
+   *  ficha que muestran lo que hay de este registro en otro módulo. */
+  function tablaFicha(columnas, filas) {
+    return '<div class="ficha-tabla-wrap"><table><thead><tr>' + columnas.map((c) => '<th>' + c.t + '</th>').join('') +
+      '</tr></thead><tbody>' + filas.map((f) => '<tr>' + columnas.map((c) => '<td>' + c.r(f) + '</td>').join('') + '</tr>').join('') +
+      '</tbody></table></div>';
+  }
+  /** agregar: {tipo, texto} agrega un botón "+ Agregar" en la cabecera (data-agregar="tipo"). */
+  function pestanaFicha(icono, titulo, columnas, filas, vacio, agregar) {
+    const boton = agregar
+      ? '<button type="button" class="secondary" data-agregar="' + agregar.tipo + '" style="margin-left:auto"><i data-lucide="plus" class="ico"></i> ' + agregar.texto + '</button>'
+      : '';
+    return '<div class="card ln-card"><h3 style="display:flex; align-items:center; gap:8px">' +
+      '<i data-lucide="' + icono + '" class="ico ln-icon"></i> ' + titulo + boton + '</h3>' +
+      (filas.length ? tablaFicha(columnas, filas) : '<p class="empty-state">' + vacio + '</p>') + '</div>';
+  }
+
+  /** Ver completo/Editar/Eliminar por fila en las tablas de solo lectura de una ficha
+   *  (Vehículos: Verificaciones/Inspecciones/Sensor/Hologramas/Incidencias; Caja Chica:
+   *  Arqueos/Cambios de monto) -- de nivel de módulo, como fichaEnPestanas/pestanaFicha/
+   *  tablaFicha, porque ambas fichas la usan. */
+  function accionesFichaRegistro(tipo, id, opciones) {
+    const o = Object.assign({ editar: false, eliminar: false }, opciones);
+    let html = '<div class="ficha-acciones-fila">' +
+      '<button type="button" class="ficha-btn-fila" data-ficha-ver="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Ver completo">' + Iconos.svg('ver') + '</button>';
+    if (o.editar) {
+      html += '<button type="button" class="ficha-btn-fila" data-ficha-editar="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Editar">' + Iconos.svg('editar') + '</button>';
+    }
+    if (o.eliminar) {
+      html += '<button type="button" class="ficha-btn-fila ficha-peligro" data-ficha-eliminar="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Eliminar">' + Iconos.svg('eliminar') + '</button>';
+    }
+    return html + '</div>';
   }
 
   // ---------- Vehículos ----------
@@ -2047,11 +2209,13 @@
     // Color + ícono por clase, tal cual se veían en AppSheet.
     const CLASE_ESTILO = {
       'AUTOMOVIL': { icono: 'car', color: '#2979ff' },
-      'CAMION': { icono: 'truck', color: '#212121' },
+      // var(--color-neutro-fuerte) en vez de un negro fijo: se pierde contra
+      // el fondo del modo oscuro si no se adapta con el tema.
+      'CAMION': { icono: 'truck', color: 'var(--color-neutro-fuerte)' },
       'CAMIONETA': { icono: 'car-front', color: '#ff9800' },
       'CUATRIMOTO': { icono: 'tractor', color: '#d4b106' },
       'MOTOCARRO': { icono: 'bike', color: '#9c27b0' },
-      'MOTOCICLETA': { icono: 'bike', color: '#212121' },
+      'MOTOCICLETA': { icono: 'bike', color: 'var(--color-neutro-fuerte)' },
       'NUCO SIN INFORMACION': { icono: 'triangle-alert', color: '#d32f2f' },
       'REMOLQUE': { icono: 'container', color: '#43a047' },
       'MAQUINARIA MENOR': { icono: 'wrench', color: '#607d8b' },
@@ -2063,73 +2227,712 @@
         `${Iconos.svg(e.icono)} ${escaparHtml(clase)}</span>`;
     }
 
-    /** Panel de detalle: el registro completo (41 columnas, no las 13 del
-     *  resumen) + los dos historiales enlazados — todo lo que antes traía
-     *  el modal de "Detalle completo". Las columnas de la tabla se marcan
-     *  enDetalle:false para no repetir esos mismos 13 campos arriba. */
-    async function mostrarDetalleVehiculoEnPanel(vResumen, contenedor) {
-      contenedor.innerHTML = '<div class="loading-inline"><span class="spinner"></span> Cargando…</div>';
+    /**
+     * Ficha de un vehículo: pantalla propia dentro del módulo (oculta la lista,
+     * muestra esto), mismo patrón que la ficha de equipo/línea en Líneas
+     * Telefónicas — migas para volver, encabezado con ícono/estatus/acciones,
+     * y el registro completo (41 columnas) + los dos historiales enlazados.
+     */
+    function migasVehiculo() {
+      return '<div class="ln-migas"><button type="button" class="secondary ln-btn-icono" id="veh-btn-volver">' +
+        '<i data-lucide="chevron-left" class="ico"></i> Volver</button>' +
+        '<span><a href="#" class="ln-enlace" id="veh-enlace-lista">Vehículos</a></span></div>';
+    }
+
+    function wireMigasVehiculo() {
+      const volver = document.getElementById('veh-btn-volver');
+      const enlace = document.getElementById('veh-enlace-lista');
+      if (volver) volver.addEventListener('click', cerrarFichaVehiculo);
+      if (enlace) enlace.addEventListener('click', (ev) => { ev.preventDefault(); cerrarFichaVehiculo(); });
+    }
+
+    function cerrarFichaVehiculo() {
+      document.getElementById('veh-detalle').hidden = true;
+      document.getElementById('veh-detalle').innerHTML = '';
+      document.getElementById('veh-listado').hidden = false;
+    }
+
+    const ICONO_GRUPO_VEHICULO = {
+      'Vehículo': 'car', 'Identificación': 'id-card', 'Documentación y seguro': 'file-text',
+      'Accesorios y sensor': 'radio', 'Ubicación y registro': 'map-pin', 'Otros datos': 'more-horizontal',
+    };
+
+    /** Igual que renderCamposVehiculo pero para MOSTRAR (no capturar): mismos grupos y
+     *  etiquetas legibles que Registrar/Editar, en vez del volcado plano de antes. Lo que
+     *  no está en CAMPOS_VEHICULO (columnas legadas del AppSheet) cae en "Otros datos".
+     *  soloGrupos filtra a solo esos grupos (para repartir "General" vs "Detalles"). */
+    function seccionesFichaVehiculo(completo, soloGrupos) {
+      const porGrupo = {};
+      const grupos = [];
+      const usadas = new Set();
+      CAMPOS_VEHICULO.forEach((campo) => {
+        usadas.add(campo.clave);
+        if (soloGrupos && soloGrupos.indexOf(campo.grupo) === -1) return;
+        const valor = completo[campo.clave];
+        if (valor === '' || valor === null || valor === undefined) return;
+        if (!porGrupo[campo.grupo]) { porGrupo[campo.grupo] = []; grupos.push(campo.grupo); }
+        porGrupo[campo.grupo].push(itemInfo(campo.etiqueta, campo.moneda ? formatearMoneda(valor) : valor));
+      });
+      if (!soloGrupos || soloGrupos.indexOf('Otros datos') !== -1) {
+        const otros = Object.keys(completo)
+          .filter((k) => !usadas.has(k) && completo[k] !== '' && completo[k] !== null && completo[k] !== undefined)
+          .map((k) => itemInfo(tituloDesdeClave(k), completo[k]));
+        if (otros.length) { porGrupo['Otros datos'] = otros; grupos.push('Otros datos'); }
+      }
+
+      return grupos.map((g) => '<div class="card ln-card"><h3><i data-lucide="' + (ICONO_GRUPO_VEHICULO[g] || 'info') +
+        '" class="ico ln-icon"></i> ' + g + '</h3><div class="info-grid">' + porGrupo[g].join('') + '</div></div>').join('');
+    }
+
+    const GRUPOS_FICHA_GENERAL = ['Vehículo', 'Identificación'];
+
+    function botonArchivoFicha(tipo, ruta) {
+      return ruta ? '<button type="button" class="secondary" data-archivo="' + tipo + '" data-ruta="' + escaparHtml(ruta) + '">Ver</button>' : '—';
+    }
+
+    // ---------- Captura de verificación/sensor/holograma/incidencia/inspección desde la
+    // ficha ----------
+    // Mismo "formato de captura" que Líneas Telefónicas (ln-captura-*): un modal con ícono,
+    // tipo, título y cuerpo scrollable. El folio ya se sabe (es el de la ficha abierta y
+    // queda en el subtítulo del modal), así que aquí no hay paso de "buscar vehículo" como
+    // en el formulario propio de cada módulo.
+    function abrirCapturaVehiculo(icono, tipo, titulo, subtitulo) {
+      document.getElementById('veh-captura-icono').innerHTML = Iconos.svg(icono);
+      document.getElementById('veh-captura-tipo').textContent = tipo;
+      document.getElementById('veh-captura-titulo').textContent = titulo;
+      document.getElementById('veh-captura-subtitulo').textContent = subtitulo || '';
+      const cuerpo = document.getElementById('veh-captura-cuerpo');
+      cuerpo.innerHTML = '';
+      // La insignia "Calificación" solo la usa Inspección -- de las 5 capturas que
+      // comparten este modal, es la única con checklist calificable. Se oculta aquí
+      // por si la captura anterior fue una inspección; abrirAgregarInspeccion (vía
+      // prepararCaptura) la vuelve a destapar.
+      document.getElementById('ins-calif-badge').hidden = true;
+      document.getElementById('veh-modal-captura').hidden = false;
+      refreshIcons();
+      return cuerpo;
+    }
+    function cerrarCapturaVehiculo() {
+      document.getElementById('veh-modal-captura').hidden = true;
+      document.getElementById('veh-captura-cuerpo').innerHTML = '';
+    }
+
+    function abrirAgregarVerificacion(vResumen) {
+      const cuerpo = abrirCapturaVehiculo('clipboard-check', 'VERIFICACIÓN', 'Nueva verificación', 'Folio ' + vResumen.FOLIO);
+      Formulario.crear(cuerpo, {
+        ancho: 'medio', columnas: 2,
+        campos: [
+          { id: 'FECHA_VERIFICACION', etiqueta: 'Fecha de verificación', tipo: 'fecha', requerido: true, valor: hoyLocal() },
+          { id: 'FECHA_PROXIMA', etiqueta: 'Próxima verificación', tipo: 'fecha', requerido: true,
+            ayuda: 'Debe ser posterior a la fecha de verificación' },
+          { id: 'COMPROBANTE', etiqueta: 'Comprobante', tipo: 'archivo', acepta: 'image/png,image/jpeg',
+            maxMB: 10, requerido: true, vistaPrevia: true, ayuda: 'Foto o captura del comprobante (PNG o JPG)' },
+        ],
+        alValidar: (v) => (v.FECHA_PROXIMA && v.FECHA_VERIFICACION && v.FECHA_PROXIMA <= v.FECHA_VERIFICACION
+          ? { FECHA_PROXIMA: 'Debe ser posterior a la fecha de verificación' } : null),
+        textoGuardar: 'Registrar verificación', iconoGuardar: 'save',
+        alGuardar: async (valores, archivos) => {
+          await callServer('apiRegistrarVerificacion', state.token, Object.assign({ FOLIO: vResumen.FOLIO }, valores), {
+            base64: await leerArchivoBase64(archivos.COMPROBANTE), mimeType: archivos.COMPROBANTE.type,
+          });
+        },
+        textoExito: () => 'Verificación registrada',
+        alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'verificaciones'); },
+      });
+    }
+
+    function abrirAgregarIncidencia(vResumen, completo) {
+      const cuerpo = abrirCapturaVehiculo('wrench', 'INCIDENCIA', 'Nueva incidencia', 'Folio ' + vResumen.FOLIO);
+      Formulario.crear(cuerpo, {
+        ancho: 'medio', columnas: 2,
+        campos: [
+          { id: 'DEPARTAMENTO', etiqueta: 'Departamento', valor: completo['DEPARTAMENTO'] || '' },
+          { id: 'MODELO', etiqueta: 'Modelo', valor: completo['LINEA VEHICULO'] || '' },
+          { id: 'ANIO', etiqueta: 'Año', tipo: 'numero', valor: completo['MODELO'] || '' },
+          { id: 'FECHA_INSPECCION', etiqueta: 'Fecha de inspección', tipo: 'fecha', valor: hoyLocal() },
+          { id: 'KILOMETRAJE', etiqueta: 'Kilometraje', tipo: 'numero', min: 0 },
+          { id: 'TICKET', etiqueta: 'Ticket' },
+          { id: 'PERIODO_VERIFICACION', etiqueta: 'Periodo de verificación' },
+          { id: 'SEGURO_AUTO', etiqueta: 'Seguro de auto' },
+          { id: 'INSPECCION_INGRESO', etiqueta: 'Motivo', tipo: 'parrafo', requerido: true },
+        ],
+        textoGuardar: 'Registrar incidencia', iconoGuardar: 'save',
+        alGuardar: async (valores) => {
+          await callServer('apiCrearIncidencia', state.token, Object.assign({ FOLIO: vResumen.FOLIO }, valores));
+        },
+        textoExito: () => 'Incidencia registrada',
+        alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'incidencias'); },
+      });
+    }
+
+    async function abrirAgregarSensor(vResumen) {
+      const cuerpo = abrirCapturaVehiculo('radio', 'SENSOR', 'Instalar sensor', 'Folio ' + vResumen.FOLIO);
+      cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
+      let datos;
       try {
-        const [completo, cambiosTexto, reasignaciones] = await Promise.all([
+        datos = await callServer('apiDatosVehiculoParaSensor', state.token, vResumen.FOLIO);
+      } catch (err) {
+        cuerpo.innerHTML = '<p class="error-msg">No se pudo cargar: ' + escaparHtml(err.message) + '</p>';
+        return;
+      }
+      if (document.getElementById('veh-modal-captura').hidden) return; // se cerró mientras cargaba
+      cuerpo.innerHTML = '';
+      const form = Formulario.crear(cuerpo, {
+        ancho: 'medio', columnas: 2,
+        campos: [
+          { id: 'SERIE_SENSOR', etiqueta: 'Serie del sensor', requerido: true, mayusculas: true,
+            ayuda: 'La que trae la etiqueta del equipo, ej. G9HT5CEWRJV7', valor: datos.serieSensorSugerida || '' },
+          { id: 'COMBUSTIBLE', etiqueta: 'Combustible que carga', tipo: 'lista', requerido: true, opciones: datos.combustibles },
+          { id: 'FECHA_INSTALACION', etiqueta: 'Fecha de instalación', tipo: 'fecha', requerido: true, valor: hoyLocal() },
+          { id: 'ESTATUS', etiqueta: 'Estatus del sensor', tipo: 'lista', opciones: ['ACTIVO', 'BAJA'] },
+          { id: 'RESPONSIVA', etiqueta: 'Responsiva del sensor', tipo: 'archivo', acepta: 'application/pdf',
+            maxMB: 10, requerido: true, ayuda: 'PDF firmado, máximo 10 MB' },
+          { id: 'RENDIMIENTO', etiqueta: 'Rendimiento (km/L)', tipo: 'numero', min: 0, paso: 0.01 },
+          { id: 'RALENTI', etiqueta: 'Consumo en ralentí (L/h)', tipo: 'numero', min: 0, paso: 0.01 },
+          { id: 'COMENTARIOS', etiqueta: 'Comentarios', tipo: 'parrafo' },
+        ],
+        textoGuardar: 'Registrar instalación', iconoGuardar: 'save',
+        alGuardar: async (valores, archivos) => {
+          await callServer('apiRegistrarSensor', state.token, Object.assign({ FOLIO: vResumen.FOLIO }, valores), {
+            base64: await leerArchivoBase64(archivos.RESPONSIVA), mimeType: archivos.RESPONSIVA.type,
+          });
+        },
+        textoExito: () => 'Instalación registrada',
+        alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'sensor'); },
+      });
+      // tipo:'lista' no toma su "valor" inicial de cfg.campos (ver formulario.html) — el
+      // default de un <select> se fija así, con setOpciones (mismo patrón que usa Sensores).
+      form.setOpciones('COMBUSTIBLE', datos.combustibles, datos.combustibles.length === 1 ? datos.combustibles[0] : '');
+      form.setOpciones('ESTATUS', ['ACTIVO', 'BAJA'], 'ACTIVO');
+      if (datos.sensoresActivos && datos.sensoresActivos.length) {
+        Notificar.info('Esta unidad ya tiene un sensor activo: ' + datos.sensoresActivos.join(', '), { duracion: 6000 });
+      }
+    }
+
+    const PROVEEDORES_HOLOGRAMA = ['EOX', 'EDENRED', 'N/A'];
+    const COMBUSTIBLES_HOLOGRAMA = ['MAGNA', 'PREMIUM', 'DIESEL', 'GASOLINA', 'TODOS LOS PRODUCTOS'];
+
+    async function abrirAgregarHolograma(vResumen, completo) {
+      const cuerpo = abrirCapturaVehiculo('credit-card', 'HOLOGRAMA', 'Nuevo holograma', 'Folio ' + vResumen.FOLIO);
+      cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
+      let catalogos;
+      try {
+        catalogos = await callServer('apiCatalogosHologramas', state.token);
+      } catch (err) {
+        cuerpo.innerHTML = '<p class="error-msg">No se pudo cargar: ' + escaparHtml(err.message) + '</p>';
+        return;
+      }
+      if (document.getElementById('veh-modal-captura').hidden) return; // se cerró mientras cargaba
+      cuerpo.innerHTML = '';
+      // RAZON SOCIAL del vehículo es la empresa DUEÑA de la unidad; la del holograma es
+      // la empresa del CONTRATO con la gasolinera -- son cosas distintas (ver comentario
+      // de HologramasService.DEL_CATALOGO), así que NO se autollena de golpe como los
+      // demás datos del vehículo: se sugiere como opción ya elegida solo si por
+      // casualidad coincide con una de las 3 del catálogo, si no, se deja en blanco y la
+      // elige quien captura (por eso es su propio campo, no algo fijo en el payload).
+      const razonVehiculo = String(completo['RAZON SOCIAL'] || '').trim().toUpperCase();
+      const razonSugerida = catalogos.razonesSociales.indexOf(razonVehiculo) !== -1 ? razonVehiculo : '';
+      const form = Formulario.crear(cuerpo, {
+        ancho: 'medio', columnas: 2,
+        campos: [
+          { id: 'PROVEEDOR', etiqueta: 'Proveedor', tipo: 'lista', requerido: true, opciones: PROVEEDORES_HOLOGRAMA },
+          { id: 'CALCOMANIA', etiqueta: 'Calcomanía', requerido: true, mayusculas: true,
+            ayuda: 'El código impreso en la calcomanía; no se puede repetir' },
+          { id: 'ESTATUS_EOX', etiqueta: 'Estatus', tipo: 'lista', requerido: true, opciones: ['HABILITADO', 'DESHABILITADO'] },
+          { id: 'COMBUSTIBLE', etiqueta: 'Producto autorizado', tipo: 'lista', requerido: true, opciones: COMBUSTIBLES_HOLOGRAMA,
+            ayuda: 'Lo que puede cargar la tarjeta, no el tipo del vehículo' },
+          { id: 'RAZON_SOCIAL', etiqueta: 'Razón social del contrato', tipo: 'lista', requerido: true, opciones: catalogos.razonesSociales },
+          { id: 'AUTORIZADO_PESOS', etiqueta: 'Autorizado en pesos', tipo: 'numero', min: 0, requerido: true },
+          { id: 'AUTORIZADO_LITROS', etiqueta: 'Autorizado en litros', tipo: 'numero', min: 0, requerido: true },
+          { id: 'SOLICITUD', etiqueta: 'Solicitud firmada', tipo: 'archivo', acepta: 'application/pdf,image/png,image/jpeg',
+            maxMB: 10, requerido: true, ayuda: 'PDF o foto del formato firmado' },
+        ],
+        textoGuardar: 'Registrar holograma', iconoGuardar: 'save',
+        alGuardar: async (valores, archivos) => {
+          const payload = Object.assign({
+            TIPO_UNIDAD: 'FLOTA', ESTATUS_VEHICULO: 'UTILITARIO', FOLIO: vResumen.FOLIO,
+            SERIE_VEHICULO: completo['SERIE VEHICULO'] || '', PLACA: completo['PLACA'] || '',
+            MARCA: completo['MARCA'] || '', LINEA: completo['LINEA VEHICULO'] || '', MODELO: completo['MODELO'] || '',
+            DEPARTAMENTO: completo['DEPARTAMENTO'] || '',
+            RESPONSABLE: completo['RESPONSABLE VEHICULO'] || '', CAPACIDAD: completo['CAPACIDAD COMBUSTIBLE (LTS)'] || '',
+          }, valores);
+          await callServer('apiRegistrarHolograma', state.token, payload, {
+            base64: await leerArchivoBase64(archivos.SOLICITUD), mimeType: archivos.SOLICITUD.type,
+          });
+        },
+        textoExito: () => 'Holograma registrado',
+        alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'hologramas'); },
+      });
+      form.setOpciones('ESTATUS_EOX', ['HABILITADO', 'DESHABILITADO'], 'HABILITADO');
+      form.setOpciones('RAZON_SOCIAL', catalogos.razonesSociales, razonSugerida);
+    }
+
+    /** A diferencia de las otras 4, esto reutiliza el wizard REAL de Inspección Vehicular
+     *  (checklist dinámico, diagramas y firmas) — prepararCaptura ya acepta un contenedor
+     *  cualquiera (ver modulos/inspecciones.html), así que aquí solo se le da el cuerpo del
+     *  modal, el folio (ya lo sabemos) y qué hacer al guardar en vez de "listo para el siguiente". */
+    function abrirAgregarInspeccion(vResumen, completo, hologramas) {
+      const cuerpo = abrirCapturaVehiculo('clipboard-list', 'INSPECCIÓN', 'Nueva inspección', 'Folio ' + vResumen.FOLIO);
+      prepararCaptura(cuerpo, {
+        folioFijo: vResumen.FOLIO,
+        // El "Cierre" pide Conductor y Holograma: se sugieren con el responsable del
+        // vehículo y su holograma más reciente (si tiene) — el usuario los puede corregir.
+        conductorSugerido: completo['RESPONSABLE VEHICULO'] || '',
+        hologramaSugerido: (hologramas && hologramas[0] && hologramas[0].CALCOMANIA) || '',
+        alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'inspecciones'); },
+      });
+    }
+
+    function mostrarPestanaFichaVehiculo(nombre) {
+      mostrarPestanaFicha(document.getElementById('veh-detalle'), nombre);
+    }
+
+    // ---------- Ver completo / Editar / Eliminar de un registro de las 5 pestañas,
+    // sin salir de la ficha del vehículo. Inspección solo lleva "Ver completo": es un
+    // acta firmada, misma regla de negocio que ya rige su propio módulo. ----------
+
+    const API_VER_FICHA_REGISTRO = {
+      verificacion: { api: 'apiBuscarVerificacionPorId', titulo: 'Verificación' },
+      inspeccion: { api: 'apiBuscarInspeccionPorId', titulo: 'Inspección' },
+      sensor: { api: 'apiBuscarSensorPorId', titulo: 'Sensor' },
+      holograma: { api: 'apiBuscarHologramaPorId', titulo: 'Holograma' },
+      incidencia: { api: 'apiBuscarIncidenciaPorId', titulo: 'Incidencia' },
+    };
+    async function verRegistroFicha(tipo, id) {
+      const cfg = API_VER_FICHA_REGISTRO[tipo];
+      if (!cfg) return;
+      document.getElementById('veh-ver-registro-titulo').textContent = cfg.titulo;
+      document.getElementById('veh-ver-registro-subtitulo').textContent = 'ID: ' + id;
+      const cuerpo = document.getElementById('veh-ver-registro-cuerpo');
+      cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
+      document.getElementById('veh-modal-ver-registro').hidden = false;
+      try {
+        const registro = await callServer(cfg.api, state.token, id);
+        if (document.getElementById('veh-modal-ver-registro').hidden) return; // se cerró mientras cargaba
+        if (!registro) { cuerpo.innerHTML = '<p class="empty-state">No se encontró el registro.</p>'; return; }
+        const items = Object.keys(registro)
+          .filter((k) => registro[k] !== '' && registro[k] !== null && registro[k] !== undefined)
+          .map((k) => itemInfo(tituloDesdeClave(k), registro[k]));
+        cuerpo.innerHTML = '<div class="card ln-card"><div class="info-grid">' + items.join('') + '</div></div>';
+      } catch (err) {
+        cuerpo.innerHTML = '<p class="error-msg">' + escaparHtml(err.message) + '</p>';
+      }
+    }
+    function cerrarVerRegistroFicha() {
+      document.getElementById('veh-modal-ver-registro').hidden = true;
+      document.getElementById('veh-ver-registro-cuerpo').innerHTML = '';
+    }
+
+    const TAB_FICHA_POR_TIPO = {
+      verificacion: 'verificaciones', inspeccion: 'inspecciones', sensor: 'sensor',
+      holograma: 'hologramas', incidencia: 'incidencias',
+    };
+    // multiple: true → la API pide un arreglo de IDs (aunque aquí siempre se manda uno solo)
+    const API_ELIMINAR_FICHA_REGISTRO = {
+      verificacion: { api: 'apiEliminarVerificaciones', lista: 'apiListarVerificaciones', multiple: true },
+      sensor: { api: 'apiEliminarSensores', lista: 'apiListarSensores', multiple: true },
+      holograma: { api: 'apiEliminarHologramas', lista: 'apiListarHologramas', multiple: true },
+      incidencia: { api: 'apiEliminarIncidencia', lista: 'apiListarIncidencias', multiple: false },
+    };
+    async function eliminarRegistroFicha(tipo, id, vResumen) {
+      const cfg = API_ELIMINAR_FICHA_REGISTRO[tipo];
+      if (!cfg) return;
+      const ok = await Confirmar.pedir({
+        titulo: '¿Eliminar este registro?',
+        mensaje: 'Esta acción no se puede deshacer.',
+        textoConfirmar: 'Eliminar',
+        peligro: true,
+      });
+      if (!ok) return;
+      try {
+        if (cfg.multiple) await callServer(cfg.api, state.token, [id]);
+        else await callServer(cfg.api, state.token, id);
+        invalidarCacheLista(cfg.lista, state.token);
+        toastExito('Eliminado exitosamente');
+        abrirFichaVehiculo(vResumen, TAB_FICHA_POR_TIPO[tipo]);
+      } catch (err) {
+        toastError('No se pudo eliminar: ' + err.message);
+      }
+    }
+
+    /** Editar verificación: 3 campos, actualiza campo por campo (mismo que su
+     *  módulo -- guardarCambiosCampoPorCampo + apiActualizarCampoVerificacion). */
+    function abrirEditarVerificacionFicha(v, vResumen) {
+      const cuerpo = abrirCapturaVehiculo('clipboard-check', 'VERIFICACIÓN', 'Editar verificación', 'Folio ' + (v.FOLIO || vResumen.FOLIO));
+      Formulario.crear(cuerpo, {
+        ancho: 'medio', columnas: 2,
+        campos: [
+          { id: 'FOLIO', etiqueta: 'Folio', valor: v.FOLIO || '' },
+          { id: 'FECHA_VERIFICACION', etiqueta: 'Fecha de verificación', tipo: 'fecha', requerido: true, valor: fechaParaInput(v.FECHA_VERIFICACION) },
+          { id: 'FECHA_PROXIMA', etiqueta: 'Próxima verificación', tipo: 'fecha', requerido: true, valor: fechaParaInput(v.FECHA_PROXIMA) },
+        ],
+        alValidar: (val) => (val.FECHA_PROXIMA && val.FECHA_VERIFICACION && val.FECHA_PROXIMA <= val.FECHA_VERIFICACION
+          ? { FECHA_PROXIMA: 'Debe ser posterior a la fecha de verificación' } : null),
+        textoGuardar: 'Guardar cambios', iconoGuardar: 'save',
+        alGuardar: async (valores) => {
+          const cambios = {};
+          if (valores.FOLIO !== (v.FOLIO || '')) cambios.FOLIO = valores.FOLIO;
+          if (valores.FECHA_VERIFICACION !== fechaParaInput(v.FECHA_VERIFICACION)) cambios.FECHA_VERIFICACION = valores.FECHA_VERIFICACION;
+          if (valores.FECHA_PROXIMA !== fechaParaInput(v.FECHA_PROXIMA)) cambios.FECHA_PROXIMA = valores.FECHA_PROXIMA;
+          if (Object.keys(cambios).length) {
+            await guardarCambiosCampoPorCampo(v.ID, cambios, (id, campo, valor) => callServer('apiActualizarCampoVerificacion', state.token, id, campo, valor));
+            invalidarCacheLista('apiListarVerificaciones', state.token);
+          }
+        },
+        textoExito: () => 'Verificación actualizada',
+        alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'verificaciones'); },
+      });
+    }
+
+    /** Editar sensor: mismos campos que abrirAgregarSensor + FOLIO (sí se puede
+     *  reasignar a otro vehículo, igual que en su módulo), actualiza campo por campo. */
+    async function abrirEditarSensorFicha(s, vResumen) {
+      const cuerpo = abrirCapturaVehiculo('radio', 'SENSOR', 'Editar sensor', 'Folio ' + (s.FOLIO || vResumen.FOLIO));
+      cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
+      let datos;
+      try {
+        datos = await callServer('apiDatosVehiculoParaSensor', state.token, s.FOLIO || vResumen.FOLIO);
+      } catch (err) {
+        cuerpo.innerHTML = '<p class="error-msg">No se pudo cargar: ' + escaparHtml(err.message) + '</p>';
+        return;
+      }
+      if (document.getElementById('veh-modal-captura').hidden) return;
+      cuerpo.innerHTML = '';
+      const form = Formulario.crear(cuerpo, {
+        ancho: 'medio', columnas: 2,
+        campos: [
+          { id: 'FOLIO', etiqueta: 'Folio', requerido: true, valor: s.FOLIO || '' },
+          { id: 'SERIE_SENSOR', etiqueta: 'Serie del sensor', requerido: true, mayusculas: true, valor: s.SERIE_SENSOR || '' },
+          { id: 'COMBUSTIBLE', etiqueta: 'Combustible que carga', tipo: 'lista', requerido: true, opciones: datos.combustibles },
+          { id: 'FECHA_INSTALACION', etiqueta: 'Fecha de instalación', tipo: 'fecha', requerido: true, valor: fechaParaInput(s.FECHA_INSTALACION) },
+          { id: 'ESTATUS', etiqueta: 'Estatus del sensor', tipo: 'lista', opciones: ['ACTIVO', 'BAJA'] },
+          { id: 'RENDIMIENTO', etiqueta: 'Rendimiento (km/L)', tipo: 'numero', min: 0, paso: 0.01, valor: s.RENDIMIENTO || '' },
+          { id: 'RALENTI', etiqueta: 'Consumo en ralentí (L/h)', tipo: 'numero', min: 0, paso: 0.01, valor: s.RALENTI || '' },
+          { id: 'COMENTARIOS', etiqueta: 'Comentarios', tipo: 'parrafo', valor: s.COMENTARIOS || '' },
+        ],
+        textoGuardar: 'Guardar cambios', iconoGuardar: 'save',
+        alGuardar: async (valores) => {
+          const cambios = {};
+          Object.keys(valores).forEach((campo) => {
+            const antes = campo === 'FECHA_INSTALACION' ? fechaParaInput(s[campo]) : String(s[campo] || '');
+            if (String(valores[campo]) !== antes) cambios[campo] = valores[campo];
+          });
+          if (Object.keys(cambios).length) {
+            await guardarCambiosCampoPorCampo(s.ID, cambios, (id, campo, valor) => callServer('apiActualizarCampoSensor', state.token, id, campo, valor));
+            invalidarCacheLista('apiListarSensores', state.token);
+          }
+        },
+        textoExito: () => 'Sensor actualizado',
+        alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'sensor'); },
+      });
+      form.setOpciones('COMBUSTIBLE', datos.combustibles, s.COMBUSTIBLE || '');
+      form.setOpciones('ESTATUS', ['ACTIVO', 'BAJA'], s.ESTATUS || 'ACTIVO');
+    }
+
+    /** Editar holograma: mismos 16 campos que su módulo (con catálogos), actualiza
+     *  campo por campo. Si EN_CATALOGO, los datos del vehículo (bloque de abajo) se
+     *  bloquean -- igual que en Hologramas, se sincronizan solos desde Vehículos. */
+    async function abrirEditarHologramaFicha(h, vResumen) {
+      const cuerpo = abrirCapturaVehiculo('credit-card', 'HOLOGRAMA', 'Editar holograma', 'Folio ' + (h.FOLIO || vResumen.FOLIO));
+      cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
+      let catalogos;
+      try {
+        catalogos = await callServer('apiCatalogosHologramas', state.token);
+      } catch (err) {
+        cuerpo.innerHTML = '<p class="error-msg">No se pudo cargar: ' + escaparHtml(err.message) + '</p>';
+        return;
+      }
+      if (document.getElementById('veh-modal-captura').hidden) return;
+      cuerpo.innerHTML = '';
+      const soloSiFueraDelCatalogo = ['PLACA', 'MARCA', 'LINEA', 'MODELO', 'RESPONSABLE', 'DEPARTAMENTO', 'RAZON_SOCIAL', 'SERIE_VEHICULO', 'CAPACIDAD'];
+      const form = Formulario.crear(cuerpo, {
+        ancho: 'medio', columnas: 2,
+        campos: [
+          { id: 'CALCOMANIA', etiqueta: 'Calcomanía', requerido: true, mayusculas: true, valor: h.CALCOMANIA || '' },
+          { id: 'PROVEEDOR', etiqueta: 'Proveedor', tipo: 'lista', requerido: true, opciones: catalogos.proveedores },
+          { id: 'ESTATUS_EOX', etiqueta: 'Estatus', tipo: 'lista', requerido: true, opciones: catalogos.estatusEox },
+          { id: 'COMBUSTIBLE', etiqueta: 'Producto autorizado', tipo: 'lista', requerido: true, opciones: catalogos.combustibles },
+          { id: 'AUTORIZADO_PESOS', etiqueta: 'Autorizado en pesos', tipo: 'numero', min: 0, valor: h.AUTORIZADO_PESOS || '' },
+          { id: 'AUTORIZADO_LITROS', etiqueta: 'Autorizado en litros', tipo: 'numero', min: 0, valor: h.AUTORIZADO_LITROS || '' },
+          { id: 'ESTATUS_VEHICULO', etiqueta: 'Estatus del vehículo', tipo: 'lista', opciones: catalogos.estatusVehiculo },
+          { id: 'PLACA', etiqueta: 'Placa', valor: h.PLACA || '' },
+          { id: 'MARCA', etiqueta: 'Marca', valor: h.MARCA || '' },
+          { id: 'LINEA', etiqueta: 'Línea', valor: h.LINEA || '' },
+          { id: 'MODELO', etiqueta: 'Modelo', valor: h.MODELO || '' },
+          { id: 'RESPONSABLE', etiqueta: 'Responsable', valor: h.RESPONSABLE || '' },
+          { id: 'DEPARTAMENTO', etiqueta: 'Departamento', valor: h.DEPARTAMENTO || '' },
+          { id: 'RAZON_SOCIAL', etiqueta: 'Razón social', tipo: 'lista', opciones: catalogos.razonesSociales },
+          { id: 'SERIE_VEHICULO', etiqueta: 'Serie del vehículo', valor: h.SERIE_VEHICULO || '' },
+          { id: 'CAPACIDAD', etiqueta: 'Capacidad de combustible', tipo: 'numero', min: 0, valor: h.CAPACIDAD || '' },
+        ],
+        textoGuardar: 'Guardar cambios', iconoGuardar: 'save',
+        alGuardar: async (valores) => {
+          const cambios = {};
+          Object.keys(valores).forEach((campo) => {
+            if (String(valores[campo]) !== String(h[campo] || '')) cambios[campo] = valores[campo];
+          });
+          if (Object.keys(cambios).length) {
+            await guardarCambiosCampoPorCampo(h.ID, cambios, (id, campo, valor) => callServer('apiActualizarCampoHolograma', state.token, id, campo, valor));
+            invalidarCacheLista('apiListarHologramas', state.token);
+          }
+        },
+        textoExito: () => 'Holograma actualizado',
+        alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'hologramas'); },
+      });
+      form.setOpciones('PROVEEDOR', catalogos.proveedores, h.PROVEEDOR || '');
+      form.setOpciones('ESTATUS_EOX', catalogos.estatusEox, h.ESTATUS_EOX || '');
+      form.setOpciones('COMBUSTIBLE', catalogos.combustibles, h.COMBUSTIBLE || '');
+      form.setOpciones('ESTATUS_VEHICULO', catalogos.estatusVehiculo, h.ESTATUS_VEHICULO || '');
+      form.setOpciones('RAZON_SOCIAL', catalogos.razonesSociales, h.RAZON_SOCIAL || '');
+      if (h.EN_CATALOGO) {
+        soloSiFueraDelCatalogo.forEach((id) => form.setSoloLectura(id, true, 'Viene del catálogo de Vehículos -- se sincroniza sola'));
+      }
+    }
+
+    /** Editar incidencia: mismos 14 campos que su módulo, un solo apiActualizarIncidencia
+     *  con el objeto completo (a diferencia de las otras 3, que van campo por campo). */
+    function abrirEditarIncidenciaFicha(inc, vResumen) {
+      const cuerpo = abrirCapturaVehiculo('wrench', 'INCIDENCIA', 'Editar incidencia', 'Folio ' + (inc.FOLIO || vResumen.FOLIO));
+      Formulario.crear(cuerpo, {
+        ancho: 'medio', columnas: 2,
+        campos: [
+          { id: 'FOLIO', etiqueta: 'Folio', valor: inc.FOLIO || '' },
+          { id: 'DEPARTAMENTO', etiqueta: 'Departamento', valor: inc.DEPARTAMENTO || '' },
+          { id: 'MODELO', etiqueta: 'Modelo', valor: inc.MODELO || '' },
+          { id: 'ANIO', etiqueta: 'Año', tipo: 'numero', valor: inc.ANIO || '' },
+          { id: 'FECHA_INSPECCION', etiqueta: 'Fecha de inspección', tipo: 'fecha', valor: fechaParaInput(inc.FECHA_INSPECCION) },
+          { id: 'KILOMETRAJE', etiqueta: 'Kilometraje', tipo: 'numero', min: 0, valor: inc.KILOMETRAJE || '' },
+          { id: 'TICKET', etiqueta: 'Ticket', valor: inc.TICKET || '' },
+          { id: 'PERIODO_VERIFICACION', etiqueta: 'Periodo de verificación', valor: inc.PERIODO_VERIFICACION || '' },
+          { id: 'SEGURO_AUTO', etiqueta: 'Seguro de auto', valor: inc.SEGURO_AUTO || '' },
+          { id: 'INSPECCION_INGRESO', etiqueta: 'Motivo', tipo: 'parrafo', requerido: true, valor: inc.INSPECCION_INGRESO || '' },
+          { id: 'DESCRIPCION_TRABAJO', etiqueta: 'Descripción del trabajo', tipo: 'parrafo', valor: inc.DESCRIPCION_TRABAJO || '' },
+          { id: 'FECHA_TRABAJO', etiqueta: 'Fecha de trabajo', tipo: 'fecha', valor: fechaParaInput(inc.FECHA_TRABAJO) },
+          { id: 'MECANICO', etiqueta: 'Mecánico', valor: inc.MECANICO || '' },
+          { id: 'INSPECCION_SALIDA', etiqueta: 'Inspección de salida', valor: inc.INSPECCION_SALIDA || '' },
+        ],
+        textoGuardar: 'Guardar cambios', iconoGuardar: 'save',
+        alGuardar: async (valores) => {
+          await callServer('apiActualizarIncidencia', state.token, inc.ID, valores);
+          invalidarCacheLista('apiListarIncidencias', state.token);
+        },
+        textoExito: () => 'Incidencia actualizada',
+        alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'incidencias'); },
+      });
+    }
+
+    async function abrirFichaVehiculo(vResumen, pestanaInicial) {
+      const listado = document.getElementById('veh-listado');
+      const detalle = document.getElementById('veh-detalle');
+      listado.hidden = true;
+      detalle.hidden = false;
+      detalle.innerHTML = migasVehiculo() + '<div class="card ln-card"><p class="ln-tenue"><span class="spinner"></span> Cargando…</p></div>';
+      wireMigasVehiculo();
+      document.getElementById('view-container').scrollTop = 0;
+      window.scrollTo(0, 0);
+
+      try {
+        // Las últimas 5 van con .catch propio: si el usuario no tiene permiso de leer
+        // ESE módulo (o falla por lo que sea), esa pestaña sale vacía en vez de tumbar
+        // toda la ficha — a diferencia de completo/cambios/reasignaciones, que si fallan
+        // sí es un error real (no se pudo ni cargar el vehículo).
+        const [completo, cambiosTexto, reasignaciones, verifTexto, inspTexto, sensorTexto, holoTexto, incTexto] = await Promise.all([
           callServer('apiBuscarVehiculoPorFolio', state.token, vResumen.FOLIO),
           callServer('apiListarCambiosVehiculosPorFolio', state.token, vResumen.FOLIO),
           callServer('apiListarReasignacionesVehicularesPorFolio', state.token, vResumen.FOLIO),
+          callServer('apiVerificacionesPorFolio', state.token, vResumen.FOLIO).catch(() => '[]'),
+          callServer('apiInspeccionesPorFolio', state.token, vResumen.FOLIO).catch(() => '[]'),
+          callServer('apiSensoresPorFolio', state.token, vResumen.FOLIO).catch(() => '[]'),
+          callServer('apiHologramasPorFolio', state.token, vResumen.FOLIO).catch(() => '[]'),
+          callServer('apiIncidenciasPorFolio', state.token, vResumen.FOLIO).catch(() => '[]'),
         ]);
-        // apiListarCambiosVehiculosPorFolio regresa JSON.stringify — ver la nota
-        // en ClientApi.gs (google.script.run pierde arreglos grandes de forma
-        // intermitente; como texto viaja confiable).
+        // Estas regresan JSON.stringify — ver la nota en ClientApi.gs
+        // (google.script.run pierde arreglos grandes de forma intermitente;
+        // como texto viaja confiable).
         const cambios = JSON.parse(cambiosTexto || '[]');
+        const verificaciones = JSON.parse(verifTexto || '[]');
+        const inspecciones = JSON.parse(inspTexto || '[]');
+        const sensores = JSON.parse(sensorTexto || '[]');
+        const hologramas = JSON.parse(holoTexto || '[]');
+        const incidencias = JSON.parse(incTexto || '[]');
+        // Se pudo haber vuelto a la lista (o abierto otro folio) mientras cargaba.
+        if (detalle.hidden || !document.body.contains(detalle)) return;
         if (!completo) {
-          contenedor.innerHTML = '<p class="empty-state">No se encontró el registro completo.</p>';
+          detalle.innerHTML = migasVehiculo() + '<p class="empty-state">No se encontró el registro completo.</p>';
+          wireMigasVehiculo();
           return;
         }
-        let html = Object.keys(completo)
-          .filter((k) => completo[k] !== '' && completo[k] !== null && completo[k] !== undefined)
-          .map((k) => itemInfo(tituloDesdeClave(k), k === '$ Costo del Sensor' ? formatearMoneda(completo[k]) : completo[k]))
-          .join('');
 
-        html += '<div class="info-section-title" style="margin-top:14px"><i data-lucide="history" class="ico"></i> Historial de cambios</div>';
-        html += (cambios || []).length ? '<div class="historial-timeline">' + cambios.map((c) => `
-            <div class="historial-item">
-              <div class="historial-icon"><i data-lucide="pencil" class="ico"></i></div>
-              <div class="historial-main">
-                <div class="historial-campo">${c.CAMPO || '—'}</div>
-                <div class="historial-valores">
-                  <span class="chip-valor chip-antes">${c.ANTES || '(vacío)'}</span>
-                  <i data-lucide="arrow-right" class="ico historial-flecha"></i>
-                  <span class="chip-valor chip-despues">${c.DESPUES || '(vacío)'}</span>
+        const estilo = CLASE_ESTILO[String(completo['CLASE'] || '').toUpperCase()] || { icono: 'circle', color: 'var(--color-text-muted)' };
+        const resumenRapido = [
+          ['Marca / Línea', [completo['MARCA'], completo['LINEA VEHICULO']].filter(Boolean).join(' · ')],
+          ['Departamento', completo['DEPARTAMENTO']],
+          ['Responsable', completo['RESPONSABLE VEHICULO']],
+          ['Placa', completo['PLACA']],
+        ].filter((d) => d[1]);
+
+        let html = migasVehiculo();
+        html += '<div class="ln-detalle-header card">' +
+          '<div class="ln-detalle-icono" style="background:none; color:' + estilo.color + '"><i data-lucide="' + estilo.icono + '" class="ico ln-icon"></i></div>' +
+          '<div class="ln-detalle-titulo"><h2>Nucco: ' + escaparHtml(vResumen.NUCCO || '') + '</h2>' +
+          '<div class="ln-chips">' + badgeEstatus(completo['ESTATUS']) + '</div></div>' +
+          '<div class="ln-detalle-botones">' +
+          (puedeEditar ? '<button type="button" id="veh-btn-editar-ficha"><i data-lucide="pencil" class="ico"></i> Editar</button>' : '') +
+          '</div>' +
+          (resumenRapido.length ? '<dl class="ln-resumen-rapido">' + resumenRapido.map((d) =>
+            '<div><dt>' + d[0] + '</dt><dd>' + escaparHtml(String(d[1])) + '</dd></div>').join('') + '</dl>' : '') +
+          '</div>';
+
+        const general = seccionesFichaVehiculo(completo, GRUPOS_FICHA_GENERAL);
+        const detalles = seccionesFichaVehiculo(completo, CAMPOS_VEHICULO.map((c) => c.grupo)
+          .filter((g, i, arr) => arr.indexOf(g) === i && GRUPOS_FICHA_GENERAL.indexOf(g) === -1).concat('Otros datos'));
+
+        const historial = '<div class="card ln-card"><h3><i data-lucide="pencil" class="ico ln-icon"></i> Historial de cambios</h3>' +
+          ((cambios || []).length ? '<div class="historial-timeline">' + cambios.map((c) => `
+              <div class="historial-item">
+                <div class="historial-icon"><i data-lucide="pencil" class="ico"></i></div>
+                <div class="historial-main">
+                  <div class="historial-campo">${c.CAMPO || '—'}</div>
+                  <div class="historial-valores">
+                    <span class="chip-valor chip-antes">${c.ANTES || '(vacío)'}</span>
+                    <i data-lucide="arrow-right" class="ico historial-flecha"></i>
+                    <span class="chip-valor chip-despues">${c.DESPUES || '(vacío)'}</span>
+                  </div>
+                </div>
+                <div class="historial-meta">
+                  <div>${c.ACTUALIZADO_POR || '—'}</div>
+                  <div>${formatearFecha(c.FECHA)}</div>
                 </div>
               </div>
-              <div class="historial-meta">
-                <div>${c.ACTUALIZADO_POR || '—'}</div>
-                <div>${formatearFecha(c.FECHA)}</div>
-              </div>
-            </div>
-          `).join('') + '</div>' : '<p class="empty-state">Sin cambios registrados para este vehículo.</p>';
-
-        html += '<div class="info-section-title" style="margin-top:14px"><i data-lucide="arrow-left-right" class="ico"></i> Historial de reasignaciones</div>';
-        html += (reasignaciones || []).length ? '<div class="historial-timeline">' + reasignaciones.map((r) => `
-            <div class="historial-item">
-              <div class="historial-icon historial-icon-accent"><i data-lucide="arrow-left-right" class="ico"></i></div>
-              <div class="historial-main">
-                <div class="historial-valores">
-                  <span class="chip-valor chip-antes">${r.RESPONSABLE_SALIENTE || '—'}</span>
-                  <i data-lucide="arrow-right" class="ico historial-flecha"></i>
-                  <span class="chip-valor chip-despues">${r.RESPONSABLE_ENTRANTE || '—'}</span>
+            `).join('') + '</div>' : '<p class="empty-state">Sin cambios registrados para este vehículo.</p>') + '</div>' +
+          '<div class="card ln-card"><h3><i data-lucide="arrow-left-right" class="ico ln-icon"></i> Historial de reasignaciones</h3>' +
+          ((reasignaciones || []).length ? '<div class="historial-timeline">' + reasignaciones.map((r) => `
+              <div class="historial-item">
+                <div class="historial-icon historial-icon-accent"><i data-lucide="arrow-left-right" class="ico"></i></div>
+                <div class="historial-main">
+                  <div class="historial-valores">
+                    <span class="chip-valor chip-antes">${r.RESPONSABLE_SALIENTE || '—'}</span>
+                    <i data-lucide="arrow-right" class="ico historial-flecha"></i>
+                    <span class="chip-valor chip-despues">${r.RESPONSABLE_ENTRANTE || '—'}</span>
+                  </div>
+                  <div class="historial-departamento">${r.DEPARTAMENTO_ENTRANTE || '—'}</div>
                 </div>
-                <div class="historial-departamento">${r.DEPARTAMENTO_ENTRANTE || '—'}</div>
+                <div class="historial-meta">
+                  <div>${r.QUIEN_REGISTRO || '—'}</div>
+                  <div>${formatearFecha(r.FECHA)}</div>
+                </div>
               </div>
-              <div class="historial-meta">
-                <div>${r.QUIEN_REGISTRO || '—'}</div>
-                <div>${formatearFecha(r.FECHA)}</div>
-              </div>
-            </div>
-          `).join('') + '</div>' : '<p class="empty-state">Sin reasignaciones registradas para este vehículo.</p>';
+            `).join('') + '</div>' : '<p class="empty-state">Sin reasignaciones registradas para este vehículo.</p>') + '</div>';
 
-        contenedor.innerHTML = html;
+        html += fichaEnPestanas([
+          { id: 'general', titulo: 'General', icono: 'layout-grid', contenido: general },
+          { id: 'detalles', titulo: 'Detalles', icono: 'clipboard-list', contenido: detalles },
+          { id: 'historial', titulo: 'Historial', icono: 'history', contenido: historial, num: (cambios || []).length + (reasignaciones || []).length },
+          {
+            id: 'verificaciones', titulo: 'Verificaciones', icono: 'clipboard-check', num: verificaciones.length,
+            contenido: pestanaFicha('clipboard-check', 'Verificaciones', [
+              { t: 'Verificación', r: (v) => formatearFecha(v.FECHA_VERIFICACION) },
+              { t: 'Próxima', r: (v) => formatearFecha(v.FECHA_PROXIMA) },
+              { t: 'Comprobante', r: (v) => botonArchivoFicha('verificacion', v.COMPROBANTE) },
+              { t: '', r: (v) => accionesFichaRegistro('verificacion', v.ID, { editar: puedeEditarModulo('verificaciones'), eliminar: puedeEditarModulo('verificaciones') }) },
+            ], verificaciones, 'Sin verificaciones registradas para este vehículo.',
+            puedeEditarModulo('verificaciones') ? { tipo: 'verificacion', texto: 'Agregar' } : null),
+          },
+          {
+            id: 'inspecciones', titulo: 'Inspecciones', icono: 'clipboard-list', num: inspecciones.length,
+            contenido: pestanaFicha('clipboard-list', 'Inspecciones', [
+              { t: 'Fecha', r: (i) => formatearFecha(i.FECHA) },
+              { t: 'Tipo', r: (i) => escaparHtml(i.TIPO || '—') },
+              { t: 'Inspector', r: (i) => escaparHtml(i.INSPECTOR || '—') },
+              { t: 'Puntaje', r: (i) => (i.PUNTAJE === '' || i.PUNTAJE === null || i.PUNTAJE === undefined) ? '—' : i.PUNTAJE + '%' },
+              { t: 'Formato', r: (i) => botonArchivoFicha('inspeccion', i.PDF) },
+              { t: '', r: (i) => accionesFichaRegistro('inspeccion', i.ID, {}) },
+            ], inspecciones, 'Sin inspecciones registradas para este vehículo.',
+            puedeEditarModulo('inspeccion-vehicular') ? { tipo: 'inspeccion', texto: 'Agregar' } : null),
+          },
+          {
+            id: 'sensor', titulo: 'Sensor', icono: 'radio', num: sensores.length,
+            contenido: pestanaFicha('radio', 'Sensor', [
+              { t: 'Instalación', r: (s) => formatearFecha(s.FECHA_INSTALACION) },
+              { t: 'Serie', r: (s) => escaparHtml(s.SERIE_SENSOR || '—') },
+              { t: 'Estatus', r: (s) => escaparHtml(s.ESTATUS || '—') },
+              { t: 'Responsiva', r: (s) => botonArchivoFicha('sensor', s.RESPONSIVA) },
+              { t: '', r: (s) => accionesFichaRegistro('sensor', s.ID, { editar: puedeEditarModulo('instalacion-sensores'), eliminar: puedeEditarModulo('instalacion-sensores') }) },
+            ], sensores, 'Sin sensor instalado para este vehículo.',
+            puedeEditarModulo('instalacion-sensores') ? { tipo: 'sensor', texto: 'Agregar' } : null),
+          },
+          {
+            id: 'hologramas', titulo: 'Hologramas', icono: 'credit-card', num: hologramas.length,
+            contenido: pestanaFicha('credit-card', 'Hologramas', [
+              { t: 'Proveedor', r: (h) => escaparHtml(h.PROVEEDOR || '—') },
+              { t: 'Estatus', r: (h) => escaparHtml(h.ESTATUS_EOX || '—') },
+              { t: 'Calcomanía', r: (h) => escaparHtml(h.CALCOMANIA || '—') },
+              { t: 'Autorizado', r: (h) => (h.AUTORIZADO_PESOS === '' || h.AUTORIZADO_PESOS === null || h.AUTORIZADO_PESOS === undefined) ? '—' : formatearMoneda(h.AUTORIZADO_PESOS) },
+              { t: 'Solicitud', r: (h) => botonArchivoFicha('holograma', h.SOLICITUD) },
+              { t: '', r: (h) => accionesFichaRegistro('holograma', h.ID, { editar: puedeEditarModulo('hologramas'), eliminar: puedeEditarModulo('hologramas') }) },
+            ], hologramas, 'Sin hologramas registrados para este vehículo.',
+            puedeEditarModulo('hologramas') ? { tipo: 'holograma', texto: 'Agregar' } : null),
+          },
+          {
+            id: 'incidencias', titulo: 'Incidencias', icono: 'wrench', num: incidencias.length,
+            contenido: pestanaFicha('wrench', 'Incidencias', [
+              { t: 'Fecha', r: (i) => formatearFecha(i.FECHA_REGISTRO) },
+              { t: 'Motivo', r: (i) => escaparHtml(i.INSPECCION_INGRESO || '—') },
+              { t: 'Estado', r: (i) => '<span class="badge-estado ' + (i.ESTADO === 'ABIERTA' ? 'abierta' : 'cerrada') + '">' + (i.ESTADO === 'ABIERTA' ? 'Abierta' : 'Cerrada') + '</span>' },
+              { t: 'Mecánico', r: (i) => escaparHtml(i.MECANICO || '—') },
+              { t: '', r: (i) => accionesFichaRegistro('incidencia', i.ID, { editar: puedeEditarModulo('incidencias'), eliminar: puedeEditarModulo('incidencias') }) },
+            ], incidencias, 'Sin incidencias registradas para este vehículo.',
+            puedeEditarModulo('incidencias') ? { tipo: 'incidencia', texto: 'Agregar' } : null),
+          },
+        ]);
+
+        detalle.innerHTML = html;
+        wireMigasVehiculo();
+        if (pestanaInicial) mostrarPestanaFichaVehiculo(pestanaInicial);
+        const btnEditar = document.getElementById('veh-btn-editar-ficha');
+        if (btnEditar) btnEditar.addEventListener('click', () => abrirEditarVehiculo(vResumen));
+        detalle.querySelectorAll('[data-agregar]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const tipo = btn.dataset.agregar;
+            if (tipo === 'verificacion') abrirAgregarVerificacion(vResumen);
+            else if (tipo === 'sensor') abrirAgregarSensor(vResumen);
+            else if (tipo === 'holograma') abrirAgregarHolograma(vResumen, completo);
+            else if (tipo === 'incidencia') abrirAgregarIncidencia(vResumen, completo);
+            else if (tipo === 'inspeccion') abrirAgregarInspeccion(vResumen, completo, hologramas);
+          });
+        });
+        // Ver completo/Editar/Eliminar por fila: el registro completo (para Editar) ya
+        // está en memoria en los arreglos que se acaban de pedir -- se indexa por ID una
+        // vez, sin volver a pedirlo al servidor (Ver completo sí pide el suyo aparte,
+        // porque necesita TODAS las columnas, no solo las de este resumen curado).
+        const porIdFicha = {
+          verificacion: Object.fromEntries(verificaciones.map((v) => [v.ID, v])),
+          sensor: Object.fromEntries(sensores.map((s) => [s.ID, s])),
+          holograma: Object.fromEntries(hologramas.map((h) => [h.ID, h])),
+          incidencia: Object.fromEntries(incidencias.map((i) => [i.ID, i])),
+        };
+        detalle.querySelectorAll('[data-ficha-ver]').forEach((btn) => {
+          btn.addEventListener('click', () => verRegistroFicha(btn.dataset.fichaVer, btn.dataset.id));
+        });
+        detalle.querySelectorAll('[data-ficha-editar]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const tipo = btn.dataset.fichaEditar;
+            const registro = porIdFicha[tipo] && porIdFicha[tipo][btn.dataset.id];
+            if (!registro) return;
+            if (tipo === 'verificacion') abrirEditarVerificacionFicha(registro, vResumen);
+            else if (tipo === 'sensor') abrirEditarSensorFicha(registro, vResumen);
+            else if (tipo === 'holograma') abrirEditarHologramaFicha(registro, vResumen);
+            else if (tipo === 'incidencia') abrirEditarIncidenciaFicha(registro, vResumen);
+          });
+        });
+        detalle.querySelectorAll('[data-ficha-eliminar]').forEach((btn) => {
+          btn.addEventListener('click', () => eliminarRegistroFicha(btn.dataset.fichaEliminar, btn.dataset.id, vResumen));
+        });
         refreshIcons();
       } catch (err) {
-        contenedor.innerHTML = '<p class="error-msg">No se pudo cargar: ' + escaparHtml(err.message) + '</p>';
+        if (detalle.hidden || !document.body.contains(detalle)) return;
+        detalle.innerHTML = migasVehiculo() + '<p class="error-msg">No se pudo cargar: ' + escaparHtml(err.message) + '</p>';
+        wireMigasVehiculo();
       }
     }
 
@@ -2145,10 +2948,10 @@
       columnasCompletas: { idHoja: 'ID_VEHICULO', cargar: async () => JSON.parse(await callServer('apiVehiculosCompleto', state.token)) },
       etiquetaFila: (v) => v.FOLIO,
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
-      detalle: {
-        titulo: (v) => 'Folio: ' + (v.FOLIO || ''),
-        contenidoExtra: (v, contenedor) => mostrarDetalleVehiculoEnPanel(v, contenedor),
-      },
+      // false (no panel lateral): la ficha completa es su propia pantalla —
+      // se abre con doble clic en la fila o el ícono de "ojo" (ver más abajo),
+      // mismo patrón que equipos/líneas en el módulo de Líneas Telefónicas.
+      detalle: false,
       columnas: [
         { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', fijada: true, enDetalle: false },
         { campo: 'NUCCO', titulo: 'Nucco', tipo: 'texto', enDetalle: false },
@@ -2167,9 +2970,9 @@
         { campo: 'SEDE', titulo: 'Sede', tipo: 'lista', visible: false, enDetalle: false },
         { campo: 'FECHA_REGISTRO', titulo: 'Fecha de registro', tipo: 'fecha', visible: false, enDetalle: false },
       ],
-      accionesFila: puedeEditar ? [{
-        icono: 'pencil', titulo: 'Editar', alHacer: (v) => abrirEditarVehiculo(v),
-      }] : [],
+      accionesFila: [
+        { icono: 'eye', titulo: 'Ver ficha', alHacer: (v) => abrirFichaVehiculo(v) },
+      ].concat(puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (v) => abrirEditarVehiculo(v) }] : []),
       alEliminar: puedeEditar ? async (filas) => {
         await Promise.all(filas.map((f) => callServer('apiEliminarVehiculo', state.token, f.ID_VEHICULO)));
         invalidarCacheLista('apiListarVehiculosResumen', state.token);
@@ -2177,24 +2980,80 @@
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
 
-    const KPI_FILTRO_VEHICULOS = { 'veh-stat-activos': 'no_contiene', 'veh-stat-baja': 'contiene' };
+    // Doble clic en la fila = abrir la ficha (DataTable no trae clic de fila
+    // propio cuando detalle:false) — mismo patrón que Líneas Telefónicas.
+    document.getElementById('veh-tabla').addEventListener('dblclick', (ev) => {
+      const tr = ev.target.closest('tbody tr[data-id]');
+      if (!tr || ev.target.closest('button, input, a')) return;
+      const v = vehiculosPorId[tr.dataset.id];
+      if (v) abrirFichaVehiculo(v);
+    });
+
+    // Clic en una pestaña de la ficha, o en "Ver" de un archivo de otro módulo
+    // (comprobante, formato, responsiva, solicitud — cada uno abre igual que en su propio módulo).
+    const ABRIR_ARCHIVO_FICHA = {
+      verificacion: abrirComprobanteVerificacion, inspeccion: abrirFormatoInspeccion,
+      sensor: abrirResponsivaSensor, holograma: abrirSolicitudHolograma,
+    };
+    document.getElementById('veh-detalle').addEventListener('click', (ev) => {
+      const pestana = ev.target.closest('[data-ficha-tab]');
+      if (pestana) { mostrarPestanaFichaVehiculo(pestana.dataset.fichaTab); return; }
+      const archivo = ev.target.closest('[data-archivo]');
+      if (archivo) ABRIR_ARCHIVO_FICHA[archivo.dataset.archivo](archivo.dataset.ruta);
+    });
+
+    // Modal de captura (verificación/sensor/holograma/incidencia): cerrar con la X o clic afuera.
+    const modalCaptura = document.getElementById('veh-modal-captura');
+    document.getElementById('veh-captura-cerrar').addEventListener('click', cerrarCapturaVehiculo);
+    modalCaptura.addEventListener('click', (ev) => { if (ev.target === modalCaptura) cerrarCapturaVehiculo(); });
+
+    // Modal "Ver completo" (Verificaciones/Inspecciones/Sensor/Hologramas/Incidencias
+    // desde la ficha): cerrar con la X o clic afuera.
+    const modalVerRegistro = document.getElementById('veh-modal-ver-registro');
+    document.getElementById('veh-ver-registro-cerrar').addEventListener('click', cerrarVerRegistroFicha);
+    modalVerRegistro.addEventListener('click', (ev) => { if (ev.target === modalVerRegistro) cerrarVerRegistroFicha(); });
+
+    // Binario de antes (Activos = no es baja / Inactivos = es baja), más un KPI clickeable
+    // por cada uno de los 6 valores reales de ESTATUS (ver CAMPOS_VEHICULO).
+    const KPI_AGREGADO_VEHICULOS = { 'veh-stat-activos': 'no_contiene', 'veh-stat-inactivos': 'contiene' };
+    const KPI_FILTRO_VEHICULOS = {
+      'veh-stat-utilitario': 'UTILITARIO',
+      'veh-stat-no-utilitario': 'NO UTILITARIO',
+      'veh-stat-prestamo': 'PRESTAMO',
+      'veh-stat-fuera-servicio': 'FUERA DE SERVICIO',
+      'veh-stat-nuco-sin-info': 'NUCO SIN INFORMACION',
+      'veh-stat-baja': 'BAJA VEHICULAR',
+    };
     const tileTotalVeh = document.getElementById('veh-stat-total').closest('.stat-tile');
     tileTotalVeh.classList.add('stat-tile-clickable');
     tileTotalVeh.addEventListener('click', () => tabla.setFiltro('ESTATUS', null));
+    Object.keys(KPI_AGREGADO_VEHICULOS).forEach((id) => {
+      const tile = document.getElementById(id).closest('.stat-tile');
+      tile.classList.add('stat-tile-clickable');
+      tile.addEventListener('click', () => {
+        const yaActivo = tile.classList.contains('stat-tile-activo');
+        tabla.setFiltro('ESTATUS', yaActivo ? null : { op: KPI_AGREGADO_VEHICULOS[id], v1: 'BAJA' });
+      });
+    });
     Object.keys(KPI_FILTRO_VEHICULOS).forEach((id) => {
       const tile = document.getElementById(id).closest('.stat-tile');
       tile.classList.add('stat-tile-clickable');
       tile.addEventListener('click', () => {
         const yaActivo = tile.classList.contains('stat-tile-activo');
-        tabla.setFiltro('ESTATUS', yaActivo ? null : { op: KPI_FILTRO_VEHICULOS[id], v1: 'BAJA' });
+        tabla.setFiltro('ESTATUS', yaActivo ? null : { op: 'igual', v1: KPI_FILTRO_VEHICULOS[id] });
       });
     });
     function marcarKpiActivo(filtros) {
       const f = filtros.ESTATUS;
       tileTotalVeh.classList.toggle('stat-tile-activo', !f);
+      Object.keys(KPI_AGREGADO_VEHICULOS).forEach((id) => {
+        document.getElementById(id).closest('.stat-tile').classList.toggle(
+          'stat-tile-activo', !!(f && f.op === KPI_AGREGADO_VEHICULOS[id] && f.v1 === 'BAJA')
+        );
+      });
       Object.keys(KPI_FILTRO_VEHICULOS).forEach((id) => {
         document.getElementById(id).closest('.stat-tile').classList.toggle(
-          'stat-tile-activo', !!(f && f.op === KPI_FILTRO_VEHICULOS[id] && f.v1 === 'BAJA')
+          'stat-tile-activo', !!(f && f.op === 'igual' && f.v1 === KPI_FILTRO_VEHICULOS[id])
         );
       });
       // Los KPIs reflejan lo que hay bajo los filtros activos (los de columna, búsqueda,
@@ -2206,8 +3065,13 @@
       document.getElementById('veh-stat-total').textContent = filas.length;
       document.getElementById('veh-stat-activos').textContent =
         filas.filter((v) => !String(v.ESTATUS || '').toUpperCase().includes('BAJA')).length;
-      document.getElementById('veh-stat-baja').textContent =
+      document.getElementById('veh-stat-inactivos').textContent =
         filas.filter((v) => String(v.ESTATUS || '').toUpperCase().includes('BAJA')).length;
+      Object.keys(KPI_FILTRO_VEHICULOS).forEach((id) => {
+        const valor = KPI_FILTRO_VEHICULOS[id];
+        document.getElementById(id).textContent =
+          filas.filter((v) => String(v.ESTATUS || '').toUpperCase() === valor).length;
+      });
     }
 
     async function cargar() {
@@ -2325,6 +3189,16 @@
     // En paralelo, no uno tras otro — los catálogos no dependen de la lista
     // de vehículos ni viceversa.
     await Promise.all([cargarCatalogosVehiculo(), cargar()]);
+
+    // Se llegó aquí desde "Ver vehículo" en otra tabla (verFichaVehiculoDesdeOtroModulo):
+    // abre esa ficha directo, sin que el usuario tenga que buscar el folio a mano.
+    if (folioFichaVehiculoPendiente) {
+      const folio = folioFichaVehiculoPendiente;
+      folioFichaVehiculoPendiente = null;
+      const v = todosLosVehiculos.find((x) => x.FOLIO === folio);
+      if (v) abrirFichaVehiculo(v);
+      else toastError('No se encontró el vehículo con folio ' + folio);
+    }
   }
 
   // ---------- Uber (usuarios autorizados) ----------
@@ -2719,6 +3593,10 @@
       ev.preventDefault();
       const errorBox = document.getElementById('editar-ticket-error');
       errorBox.hidden = true;
+      const btn = ev.target.querySelector('button[type="submit"]');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
       toastCargando('Guardando cambios…');
       try {
         await callServer('apiActualizarTicket', state.token, document.getElementById('editar-ticket-id').value, recolectarTicket('editar-ticket'));
@@ -2730,6 +3608,9 @@
         errorBox.textContent = err.message;
         errorBox.hidden = false;
         toastError('No se pudo actualizar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
       }
     });
 
@@ -2753,6 +3634,10 @@
       ev.preventDefault();
       const errorBox = document.getElementById('ticket-error');
       errorBox.hidden = true;
+      const btn = ev.target.querySelector('button[type="submit"]');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Registrando…';
       toastCargando('Registrando…');
       try {
         await callServer('apiCrearTicket', state.token, recolectarTicket('ticket'));
@@ -2766,6 +3651,9 @@
         errorBox.textContent = err.message;
         errorBox.hidden = false;
         toastError('No se pudo registrar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
       }
     });
 

@@ -1,0 +1,193 @@
+<script>
+  /**
+   * app-panorama-vehiculos.html — "Panorama" dentro de Control Vehicular: KPIs y
+   * gráficas (Chart.js, cargado en Index.html) del catálogo de vehículos, con
+   * filtros que se aplican a todo en vivo. En su propio archivo por el mismo
+   * motivo que Arqueos/Caja Chica/Verificaciones (ver comentario en
+   * app-arqueos.html) — nada de esto vive en app.html.
+   *
+   * Todo corre sobre apiListarVehiculosResumen (el mismo catálogo que ya usa la
+   * tabla de Vehículos, cacheado) — sin pedir nada nuevo al servidor: los
+   * filtros solo reducen el arreglo en memoria y se vuelve a pintar.
+   */
+
+  // Mismos 6 valores reales de ESTATUS que CAMPOS_VEHICULO — colores fijos (no
+  // reasignados por orden) para que cada estatus se vea siempre del mismo color
+  // sin importar cómo cambien los filtros.
+  const PV_COLOR_ESTATUS = {
+    'UTILITARIO': '#1e7d4f',
+    'NO UTILITARIO': '#2f7bb0',
+    'PRESTAMO': '#B4A169',
+    'FUERA DE SERVICIO': '#c47b3d',
+    'NUCO SIN INFORMACION': '#5c6b72',
+    'BAJA VEHICULAR': '#8a6d3a',
+  };
+  const PV_ORDEN_ESTATUS = ['UTILITARIO', 'NO UTILITARIO', 'PRESTAMO', 'FUERA DE SERVICIO', 'NUCO SIN INFORMACION', 'BAJA VEHICULAR'];
+  // Mismas etiquetas legibles que ya usa el stat-row de Vehículos (badgeEstatus/
+  // vehiculos.html) -- tituloDesdeClave no sirve aquí: pondría "No Utilitario"
+  // (mayúscula por palabra) en vez de "No utilitario", y sin acentos.
+  const PV_ETIQUETA_ESTATUS = {
+    'UTILITARIO': 'Utilitario', 'NO UTILITARIO': 'No utilitario', 'PRESTAMO': 'Préstamo',
+    'FUERA DE SERVICIO': 'Fuera de servicio', 'NUCO SIN INFORMACION': 'Nuco sin información', 'BAJA VEHICULAR': 'Baja vehicular',
+  };
+
+  async function initPanoramaVehiculos() {
+    const cuerpo = document.getElementById('view-container');
+    let todos = [];
+    const graficas = {}; // id → instancia de Chart, para destruir antes de repintar
+
+    try {
+      // apiListarVehiculosResumen manda JSON.stringify (arreglo grande con Date,
+      // google.script.run lo pierde a veces si no) -- hay que parsearlo, mismo
+      // patrón que ya usa initVehiculos().
+      const texto = await callServerListaCacheada('apiListarVehiculosResumen', state.token);
+      todos = texto ? JSON.parse(texto) : [];
+    } catch (err) {
+      if (!document.getElementById('pv-filtros')) return; // se navegó a otra vista mientras cargaba
+      cuerpo.innerHTML = '<p class="error-msg">No se pudo cargar el catálogo de vehículos: ' + escaparHtml(err.message) + '</p>';
+      return;
+    }
+    if (!document.getElementById('pv-filtros')) return; // se navegó a otra vista mientras cargaba
+
+    // ---------- Filtros ----------
+    const FILTROS = [
+      { id: 'pv-f-estatus', campo: 'ESTATUS' },
+      { id: 'pv-f-departamento', campo: 'DEPARTAMENTO' },
+      { id: 'pv-f-sede', campo: 'SEDE' },
+      { id: 'pv-f-marca', campo: 'MARCA' },
+      { id: 'pv-f-clase', campo: 'CLASE' },
+    ];
+
+    function llenarOpcionesFiltro(campo, id) {
+      const select = document.getElementById(id);
+      const valorActual = select.value;
+      const valores = Array.from(new Set(todos.map((v) => v[campo]).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+      select.innerHTML = '<option value="">' + select.options[0].textContent + '</option>' +
+        valores.map((v) => `<option value="${escaparHtml(v)}">${escaparHtml(v)}</option>`).join('');
+      if (valores.indexOf(valorActual) !== -1) select.value = valorActual;
+    }
+    FILTROS.forEach((f) => llenarOpcionesFiltro(f.campo, f.id));
+
+    function filasFiltradas() {
+      return todos.filter((v) => FILTROS.every((f) => {
+        const elegido = document.getElementById(f.id).value;
+        return !elegido || v[f.campo] === elegido;
+      }));
+    }
+
+    FILTROS.forEach((f) => document.getElementById(f.id).addEventListener('change', () => pintarTodo()));
+    document.getElementById('pv-limpiar-filtros').addEventListener('click', () => {
+      FILTROS.forEach((f) => { document.getElementById(f.id).value = ''; });
+      pintarTodo();
+    });
+
+    // ---------- KPIs ----------
+    const ICONO_ESTATUS = {
+      'UTILITARIO': 'circle-check', 'NO UTILITARIO': 'circle-minus', 'PRESTAMO': 'repeat',
+      'FUERA DE SERVICIO': 'wrench', 'NUCO SIN INFORMACION': 'help-circle', 'BAJA VEHICULAR': 'ban',
+    };
+    function pintarKpis(filas) {
+      const porEstatus = {};
+      PV_ORDEN_ESTATUS.forEach((e) => { porEstatus[e] = 0; });
+      filas.forEach((v) => {
+        const e = String(v.ESTATUS || '').toUpperCase();
+        if (porEstatus[e] !== undefined) porEstatus[e]++;
+      });
+      const activos = filas.length - porEstatus['BAJA VEHICULAR'];
+
+      const tiles = [
+        { id: 'total', etiqueta: 'Total de vehículos', valor: filas.length, icono: 'car', clase: '' },
+        { id: 'activos', etiqueta: 'Activos', valor: activos, icono: 'circle-check', clase: 'stat-tile-ok' },
+      ].concat(PV_ORDEN_ESTATUS.map((e) => ({
+        id: e, etiqueta: PV_ETIQUETA_ESTATUS[e], valor: porEstatus[e], icono: ICONO_ESTATUS[e],
+        clase: e === 'BAJA VEHICULAR' ? 'stat-tile-warn' : '',
+      })));
+
+      document.getElementById('pv-kpis').innerHTML = tiles.map((t) => `
+        <div class="stat-tile ${t.clase}">
+          <div class="stat-icon"><i data-lucide="${t.icono}" class="ico"></i></div>
+          <div><div class="stat-value">${t.valor}</div><div class="stat-label">${escaparHtml(t.etiqueta)}</div></div>
+        </div>`).join('');
+      refreshIcons();
+    }
+
+    // ---------- Gráficas ----------
+    function colorTexto() { return getComputedStyle(document.documentElement).getPropertyValue('--color-text-muted').trim(); }
+    function colorBorde() { return getComputedStyle(document.documentElement).getPropertyValue('--color-border').trim(); }
+    function colorPrimario() { return getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim(); }
+
+    /** Cuenta ocurrencias de `campo` entre las filas, de mayor a menor. */
+    function contarPor(filas, campo) {
+      const conteo = {};
+      filas.forEach((f) => {
+        const v = f[campo] || 'Sin dato';
+        conteo[v] = (conteo[v] || 0) + 1;
+      });
+      return Object.keys(conteo).map((k) => [k, conteo[k]]).sort((a, b) => b[1] - a[1]);
+    }
+    /** Para barras: se queda con los primeros `n`, el resto se junta en "Otros". */
+    function limitarConOtros(pares, n) {
+      if (pares.length <= n) return pares;
+      const top = pares.slice(0, n);
+      const restoSuma = pares.slice(n).reduce((acc, p) => acc + p[1], 0);
+      return top.concat([['Otros', restoSuma]]);
+    }
+
+    function crearOActualizarGrafica(id, config) {
+      if (graficas[id]) graficas[id].destroy();
+      graficas[id] = new Chart(document.getElementById(id), config);
+    }
+
+    function graficaDona(filas) {
+      const valores = PV_ORDEN_ESTATUS.map((e) => filas.filter((v) => String(v.ESTATUS || '').toUpperCase() === e).length);
+      crearOActualizarGrafica('pv-chart-estatus', {
+        type: 'doughnut',
+        data: {
+          labels: PV_ORDEN_ESTATUS.map((e) => PV_ETIQUETA_ESTATUS[e]),
+          datasets: [{ data: valores, backgroundColor: PV_ORDEN_ESTATUS.map((e) => PV_COLOR_ESTATUS[e]), borderWidth: 2, borderColor: getComputedStyle(document.documentElement).getPropertyValue('--color-surface').trim() }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, cutout: '62%',
+          plugins: {
+            legend: { position: 'right', labels: { color: colorTexto(), boxWidth: 13, padding: 14, font: { size: 12 } } },
+            tooltip: { callbacks: { label: (ctx) => ` ${ctx.label}: ${ctx.parsed} (${filas.length ? Math.round(ctx.parsed / filas.length * 100) : 0}%)` } },
+          },
+        },
+      });
+    }
+
+    function graficaBarras(id, filas, campo, n) {
+      const pares = limitarConOtros(contarPor(filas, campo), n);
+      crearOActualizarGrafica(id, {
+        type: 'bar',
+        data: {
+          labels: pares.map((p) => p[0]),
+          datasets: [{ data: pares.map((p) => p[1]), backgroundColor: colorPrimario(), borderRadius: 6, maxBarThickness: 34 }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+          plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => ` ${ctx.parsed.x} vehículo(s)` } } },
+          scales: {
+            x: { beginAtZero: true, ticks: { color: colorTexto(), precision: 0 }, grid: { color: colorBorde() } },
+            y: { ticks: { color: colorTexto(), font: { size: 11.5 } }, grid: { display: false } },
+          },
+        },
+      });
+    }
+
+    function pintarTodo() {
+      const filas = filasFiltradas();
+      document.getElementById('pv-sin-datos').hidden = filas.length > 0;
+      document.getElementById('pv-graficas').hidden = filas.length === 0;
+      pintarKpis(filas);
+      if (!filas.length) return;
+      graficaDona(filas);
+      graficaBarras('pv-chart-departamento', filas, 'DEPARTAMENTO', 8);
+      graficaBarras('pv-chart-sede', filas, 'SEDE', 8);
+      graficaBarras('pv-chart-marca', filas, 'MARCA', 8);
+      graficaBarras('pv-chart-clase', filas, 'CLASE', 8);
+    }
+
+    pintarTodo();
+  }
+</script>

@@ -347,6 +347,12 @@ const ArqueosService = (function () {
     return SheetUtils.getAll(ssId(), NOMBRE_HOJA);
   }
 
+  /** Arqueos de una sola caja chica (ficha de Caja Chica). */
+  function listarPorIdCch(token, idCch) {
+    if (!idCch) return [];
+    return listarResumen(token).filter((a) => a.ID_CCH === idCch);
+  }
+
   /** Registro completo por ID ARQUEO (para el modal de detalle/editar). */
   function buscarPorId(token, id) {
     Permisos.puedeLeer(token, 'arqueos');
@@ -458,17 +464,28 @@ const ArqueosService = (function () {
     }
 
     const blob = Utilities.newBlob(bytes, mimeType || 'application/octet-stream', nombreArchivo || 'archivo');
-    let carpeta;
+    const cuenta = () => Session.getEffectiveUser().getEmail();
+    let carpeta, archivo;
     try {
       carpeta = DriveApp.getFolderById(CARPETA_ARCHIVOS_ID);
     } catch (e) {
       throw new Error('No se pudo abrir la carpeta de archivos de Arqueos en Drive. La cuenta con la que ' +
-        'corre la app ahora mismo (' + Session.getEffectiveUser().getEmail() + ') no tiene acceso a esa carpeta.');
+        'corre la app ahora mismo (' + cuenta() + ') no tiene acceso a esa carpeta.');
     }
-    const archivo = carpeta.createFile(blob);
-    // Sin esto, el archivo solo lo puede ver la cuenta que despliega la app
-    // (quien lo creó) — nadie más puede abrir el link, aunque sea válido.
-    archivo.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
+    try {
+      archivo = carpeta.createFile(blob);
+    } catch (e) {
+      throw new Error('Se pudo abrir la carpeta de archivos de Arqueos, pero no crear el archivo ahí. La cuenta ' +
+        cuenta() + ' necesita permiso de editor (no solo lector) en esa carpeta. Error original: ' + e.message);
+    }
+    // Mejor esfuerzo, no bloquea el registro: la carpeta de archivos ya
+    // tiene acceso general configurado, así que casi siempre hereda el
+    // compartir sola. Si una política de Workspace bloquea el compartir
+    // explícito, no vale la pena tronar todo el registro por eso.
+    if (!DriveUtils.compartirLoMasAmplioPosible(archivo)) {
+      console.warn('No se pudo compartir explícitamente el archivo de Arqueos (cuenta ' + cuenta() +
+        '); se deja como quedó por default de la carpeta. Archivo: ' + archivo.getUrl());
+    }
 
     return { url: archivo.getUrl(), id: archivo.getId(), nombre: nombreArchivo };
   }
@@ -532,10 +549,31 @@ const ArqueosService = (function () {
    * calcularCampos_ + lo copiado de la Caja Chica). Regresa la URL del PDF.
    */
   function generarPdfArqueo_(fila) {
-    const copia = DriveApp.getFileById(PLANTILLA_ARQUEO_DOC_ID).makeCopy(
-      'Arqueo_' + (fila['ID ARQUEO'] || Utilities.getUuid()),
-      DriveApp.getFolderById(CARPETA_ARCHIVOS_ID)
-    );
+    // Mismo patrón defensivo que subirArchivo(): "Acceso denegado: DriveApp" a secas no
+    // dice ni qué recurso ni con qué cuenta -- aquí sí, para poder arreglarlo sin adivinar
+    // (compartir la plantilla/carpeta con la cuenta que despliega este proyecto).
+    const cuenta = () => Session.getEffectiveUser().getEmail();
+    let plantilla;
+    try {
+      plantilla = DriveApp.getFileById(PLANTILLA_ARQUEO_DOC_ID);
+    } catch (e) {
+      throw new Error('No se pudo abrir la plantilla del PDF de Arqueo en Drive (ID ' + PLANTILLA_ARQUEO_DOC_ID +
+        '). La cuenta con la que corre la app ahora mismo (' + cuenta() + ') no tiene acceso a ese documento.');
+    }
+    let carpeta;
+    try {
+      carpeta = DriveApp.getFolderById(CARPETA_ARCHIVOS_ID);
+    } catch (e) {
+      throw new Error('No se pudo abrir la carpeta de archivos de Arqueos en Drive (ID ' + CARPETA_ARCHIVOS_ID +
+        '). La cuenta con la que corre la app ahora mismo (' + cuenta() + ') no tiene acceso a esa carpeta.');
+    }
+    let copia;
+    try {
+      copia = plantilla.makeCopy('Arqueo_' + (fila['ID ARQUEO'] || Utilities.getUuid()), carpeta);
+    } catch (e) {
+      throw new Error('Se pudo abrir la plantilla y la carpeta de Arqueos, pero no copiar el documento ahí. La ' +
+        'cuenta ' + cuenta() + ' necesita permiso de editor (no solo lector) en la carpeta. Error original: ' + e.message);
+    }
     const doc = DocumentApp.openById(copia.getId());
     const body = doc.getBody();
 
@@ -614,12 +652,41 @@ const ArqueosService = (function () {
     insertarFirma_(body, '<<[FIRMA ESPECIALISTA]>>', fila['FIRMA ESPECIALISTA']);
     insertarFirma_(body, '<<[FIRMA ASISTENTE]>>', fila['FIRMA ASISTENTE']);
 
-    doc.saveAndClose();
+    try {
+      doc.saveAndClose();
+    } catch (e) {
+      throw new Error('No se pudo guardar el documento ya llenado con los datos del arqueo. Error original: ' + e.message);
+    }
 
-    const pdfBlob = DriveApp.getFileById(copia.getId()).getAs('application/pdf');
-    const pdfFile = DriveApp.getFolderById(CARPETA_ARCHIVOS_ID).createFile(pdfBlob).setName(copia.getName() + '.pdf');
-    pdfFile.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
-    DriveApp.getFileById(copia.getId()).setTrashed(true); // ya no se necesita el Doc, solo el PDF
+    let pdfBlob;
+    try {
+      pdfBlob = DriveApp.getFileById(copia.getId()).getAs('application/pdf');
+    } catch (e) {
+      throw new Error('El documento se llenó bien, pero no se pudo exportar a PDF. La cuenta ' + cuenta() +
+        ' necesita permiso de editor en la carpeta de Arqueos. Error original: ' + e.message);
+    }
+    let pdfFile;
+    try {
+      pdfFile = carpeta.createFile(pdfBlob).setName(copia.getName() + '.pdf');
+    } catch (e) {
+      throw new Error('Se generó el PDF pero no se pudo guardar en la carpeta de Arqueos en Drive (ID ' +
+        CARPETA_ARCHIVOS_ID + '). La cuenta ' + cuenta() + ' necesita permiso de editor ahí. Error original: ' + e.message);
+    }
+    // Mejor esfuerzo, no bloquea el registro (mismo patrón que subirArchivo(), arriba):
+    // la carpeta de Arqueos ya tiene acceso general configurado, así que casi siempre el
+    // PDF hereda el compartir solo. Si una política de Workspace bloquea CUALQUIER
+    // compartir explícito en esta carpeta/archivo (ni DOMAIN ni ANYONE_WITH_LINK), no vale
+    // la pena tronar el registro solo por eso -- el PDF ya se generó y se guardó bien.
+    if (!DriveUtils.compartirLoMasAmplioPosible(pdfFile)) {
+      console.warn('No se pudo compartir explícitamente el PDF de Arqueo (cuenta ' + cuenta() +
+        '); se deja como quedó por default de la carpeta. Archivo: ' + pdfFile.getUrl());
+    }
+    try {
+      DriveApp.getFileById(copia.getId()).setTrashed(true); // ya no se necesita el Doc, solo el PDF
+    } catch (e) {
+      // Mejor esfuerzo: el PDF ya se generó y se compartió bien -- que sobreviva el Doc
+      // temporal (mínimo) no vale la pena tronar el registro por esto.
+    }
 
     return pdfFile.getUrl();
   }
@@ -646,7 +713,7 @@ const ArqueosService = (function () {
   }
 
   return {
-    AUDIT_ITEMS, listarResumen, completo, buscarPorId, previsualizarIdArqueo,
+    AUDIT_ITEMS, listarResumen, completo, buscarPorId, listarPorIdCch, previsualizarIdArqueo,
     crear, actualizar, eliminar, subirArchivo,
   };
 })();

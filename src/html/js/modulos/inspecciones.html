@@ -96,6 +96,7 @@
             : '—'),
         },
       ],
+      accionesFila: [{ icono: 'car', titulo: 'Ver vehículo', alHacer: (i) => verFichaVehiculoDesdeOtroModulo(i.FOLIO) }],
       seleccionable: true,
       // Una inspección es un acta firmada: no se corrige, se levanta otra
       motivoSinEliminar: 'Una inspección firmada no se edita: si algo cambió, levanta una nueva',
@@ -246,7 +247,7 @@
     // o en cuanto termina de cargar la tabla. Así no compite con la lista por el servidor.
     let captura = null;
     const prepararSiFalta = () => {
-      if (puedeEditar && !captura) captura = prepararCaptura(tabs, cargar);
+      if (puedeEditar && !captura) captura = prepararCaptura(document.getElementById('ins-form'), { tabs: tabs, recargar: cargar });
     };
 
     const tabs = Tabs.iniciar(document.getElementById('ins-tabs'), {
@@ -338,8 +339,21 @@
    * Las piezas sin responder NO bloquean el avance (así lo permitía AppSheet y no cuentan
    * para el puntaje); el paso de revisión dice cuáles faltan y deja saltar a ellas.
    */
-  function prepararCaptura(tabs, recargar) {
-    const contenedor = document.getElementById('ins-form');
+  /**
+   * contenedor: dónde se pinta el wizard (Inspecciones le pasa #ins-form; la ficha de
+   * Vehículos le pasa el cuerpo de su modal de captura).
+   * opciones.tabs/recargar: pestañas y tabla a refrescar tras guardar (propias de
+   *   Inspecciones) — se ignoran si viene opciones.alGuardado.
+   * opciones.folioFijo: precarga el folio y salta directo a elegir el tipo de unidad
+   *   (la ficha de Vehículos ya sabe qué folio es).
+   * opciones.alGuardado: si viene, se usa en vez de "límpiate y espera el siguiente
+   *   folio" (que es lo que quiere Inspecciones) — la ficha de Vehículos la usa para
+   *   cerrar su modal y refrescar su pestaña de Inspecciones.
+   */
+  function prepararCaptura(contenedor, opciones) {
+    opciones = opciones || {};
+    const tabs = opciones.tabs;
+    const recargar = opciones.recargar;
     let estructura = null;      // secciones, llantas y diagramas del tipo elegido
     let vehiculo = null;
     let pasos = [];
@@ -360,7 +374,7 @@
               <div class="field" data-campo="FOLIO">
                 <label for="ins-folio">Folio del vehículo</label>
                 <input type="text" id="ins-folio" required autocomplete="off" />
-                <span class="form-ayuda">Al elegirlo se traen sus datos y se sugiere el tipo de unidad</span>
+                <span class="form-ayuda">Al elegirlo se traen sus datos y el tipo de unidad se limita a su clase</span>
                 <span class="form-error-campo" hidden></span>
               </div>
               <div class="field" data-campo="TIPO">
@@ -394,6 +408,22 @@
         </aside>
       </form>`;
 
+    // Insignia "Calificación": vive en la cabecera de verdad (form-card-header del
+    // módulo Inspección Vehicular, o modal-header del captura embebido en la ficha
+    // de Vehículos) -- no aquí adentro, para que salga arriba del todo como en
+    // Líneas Telefónicas. Aquí solo se resetea (puede venir de una captura
+    // anterior en la misma sesión del navegador) y, si es la del modal de
+    // Vehículos (empieza oculta -- la comparten Verificación/Sensor/Holograma/
+    // Incidencia), se destapa.
+    const badgeCaja = document.getElementById('ins-calif-badge');
+    if (badgeCaja) badgeCaja.hidden = false;
+    const badgeValor = document.getElementById('ins-calif-badge-valor');
+    if (badgeValor) badgeValor.textContent = '—';
+    const badgeBarra = document.getElementById('ins-calif-badge-barra');
+    if (badgeBarra) badgeBarra.style.width = '0%';
+    const badgeNota = document.getElementById('ins-calif-badge-nota');
+    if (badgeNota) badgeNota.textContent = 'Elige el tipo de unidad';
+
     const $ = (sel) => contenedor.querySelector(sel);
     const campoFolio = $('#ins-folio');
     const campoTipo = $('#ins-tipo');
@@ -415,6 +445,39 @@
     };
 
     // ----- catálogos -----
+    // Prefijo del folio (VehiculosService.PREFIJOS_CLASE) → lista exacta de "tipo" que
+    // debe mostrar, confirmada a mano con Jorge (no viene de ninguna hoja ni catálogo).
+    // Los 3 "motocarro" (KINGWAY/MUEVETEC/genérico) no están en ningún prefijo — Jorge
+    // los quiere fuera de MOT. Sus folios reales caen en el prefijo genérico "FOL", que
+    // no filtra (no se puede distinguir Motocarro/Cuatrimoto/Nuco sin información solo
+    // con el folio) — igual que cualquier prefijo no reconocido: se muestran todos los
+    // tipos, como antes.
+    const TIPOS_POR_PREFIJO_FOLIO = {
+      AUT: ['KWID', 'AUTOS'],
+      CTA: ['NP300 ESTACA', 'RIFTER', 'URVAN', 'SAVEIRO', 'NP300 CABINA REDILAS', 'RAM 700', 'XPANDER', 'L200'],
+      CON: ['PIPA', 'RAM 4000'],
+      MOT: ['ITALIKA DM250', 'HONDA 150XR', 'ITALIKA AT125'],
+    };
+    /** "AUT0640" → ['KWID', 'AUTOS']; folios sin prefijo reconocido (ej. FOL0650) → null (no filtra). */
+    function tiposDelFolio(folio) {
+      const prefijo = String(folio || '').trim().match(/^[A-Za-z]+/);
+      return (prefijo && TIPOS_POR_PREFIJO_FOLIO[prefijo[0].toUpperCase()]) || null;
+    }
+
+    let todosLosTipos = [];
+    /** Repinta "Tipo de unidad": si el folio filtra, solo esos tipos exactos. */
+    function pintarOpcionesTipo(folio) {
+      const anterior = campoTipo.value;
+      const permitidos = tiposDelFolio(folio);
+      const visibles = permitidos
+        ? todosLosTipos.filter((t) => permitidos.indexOf(t.tipo.toUpperCase()) >= 0)
+        : todosLosTipos;
+      campoTipo.innerHTML = '<option value=""></option>' + visibles
+        .map((t) => `<option value="${escaparHtml(t.tipo)}" ${t.listo ? '' : 'disabled'}>` +
+          `${escaparHtml(t.tipo)}${t.listo ? '' : ' (sin formato)'}</option>`).join('');
+      if (anterior && visibles.some((t) => t.tipo === anterior)) campoTipo.value = anterior;
+    }
+
     const catalogos = Promise.all([
       callServerCacheado('apiListarVehiculosBasico', state.token).then((vehiculos) => {
         Combobox.crear(campoFolio, {
@@ -427,11 +490,19 @@
       }).catch((err) => Notificar.error('No se pudo cargar el catálogo de vehículos: ' + err.message)),
 
       callServerCacheado('apiTiposInspeccion', state.token).then((tipos) => {
-        campoTipo.innerHTML = '<option value=""></option>' + (tipos || [])
-          .map((t) => `<option value="${escaparHtml(t.tipo)}" ${t.listo ? '' : 'disabled'}>` +
-            `${escaparHtml(t.tipo)}${t.listo ? '' : ' (sin formato)'}</option>`).join('');
+        todosLosTipos = tipos || [];
+        pintarOpcionesTipo(campoFolio.value);
       }).catch((err) => Notificar.error('No se pudieron cargar los tipos: ' + err.message)),
     ]);
+
+    // Folio ya conocido (ficha de Vehículos): hasta que el combobox y los tipos estén
+    // listos, para que el filtro por prefijo y la ficha del vehículo salgan bien.
+    if (opciones.folioFijo) {
+      catalogos.then(() => {
+        campoFolio.value = opciones.folioFijo;
+        buscarVehiculo();
+      });
+    }
 
     // ----- vehículo -----
     function pintarFicha() {
@@ -457,6 +528,7 @@
     let buscando = null;   // la búsqueda en curso, para que "Siguiente" la espere
     function buscarVehiculo() {
       const folio = campoFolio.value.trim();
+      pintarOpcionesTipo(folio);   // por el prefijo (AUT/CTA/CON/MOT…), sin esperar al vehículo
       if (folio === pedido && (vehiculo || buscando)) return buscando || Promise.resolve();
       pedido = folio;
       if (!folio) { vehiculo = null; pintarFicha(); return Promise.resolve(); }
@@ -563,6 +635,15 @@
         conectarChecklist();
         prepararDiagramas();
         prepararFirmas();
+        // Conductor/Holograma del paso "Cierre": si la ficha de Vehículos ya sabe quién es
+        // el responsable o qué holograma tiene la unidad, se sugieren (el campo se puede
+        // seguir editando; no viene con soloLectura porque puede no ser el conductor real).
+        if (opciones.conductorSugerido && $('#ins-conductor') && !$('#ins-conductor').value) {
+          $('#ins-conductor').value = opciones.conductorSugerido;
+        }
+        if (opciones.hologramaSugerido && $('#ins-holograma') && !$('#ins-holograma').value) {
+          $('#ins-holograma').value = opciones.hologramaSugerido;
+        }
       }
       $('#ins-panel-avance').hidden = !estructura;
       mostrarPaso(0);
@@ -571,6 +652,13 @@
 
     function htmlSeccion(i) {
       const s = estructura.secciones[i];
+      // No todas las piezas de una sección traen las mismas opciones (algunas tienen una
+      // de más, ej. "N/A", que otras no) -- el encabezado tiene que ser la UNIÓN de las
+      // opciones de TODA la sección, no solo las de la primera pieza. Si no, las piezas
+      // con una opción extra salían con una columna de más sin título ni texto (el bug
+      // reportado: una columna vacía después de BUENO/REGULAR/MALO).
+      const columnas = [];
+      s.campos.forEach((c) => c.opciones.forEach((o) => { if (columnas.indexOf(o) === -1) columnas.push(o); }));
       return `
         <div class="chk-seccion" data-seccion="${i}">
           <div class="chk-seccion-titulo">
@@ -582,11 +670,11 @@
             <span class="chk-avance">0 de ${s.campos.length}</span>
           </div>
           <table class="chk-tabla">
-            <thead><tr><th>Pieza</th>${s.campos[0].opciones.map((o) => `<th>${escaparHtml(o)}</th>`).join('')}</tr></thead>
+            <thead><tr><th>Pieza</th>${columnas.map((o) => `<th>${escaparHtml(o)}</th>`).join('')}</tr></thead>
             <tbody>${s.campos.map((c) => `
               <tr class="sin-responder" data-pieza="${escaparHtml(c.campo)}">
                 <td>${escaparHtml(c.campo)}</td>
-                ${c.opciones.map((o) => `<td class="${/^(MALO|SI|NO PRESENTA)$/i.test(o) ? 'chk-malo' : ''}">
+                ${columnas.map((o) => c.opciones.indexOf(o) === -1 ? '<td></td>' : `<td class="${/^(MALO|SI|NO PRESENTA)$/i.test(o) ? 'chk-malo' : ''}">
                   <label class="chk-opcion" title="${escaparHtml(c.campo)}: ${escaparHtml(o)}">
                     <input type="radio" name="chk-${escaparHtml(c.campo)}" value="${escaparHtml(o)}" />
                   </label></td>`).join('')}
@@ -630,7 +718,7 @@
             <div class="field"><label for="ins-voltaje">Voltaje de la batería</label>
               <input type="number" id="ins-voltaje" step="0.01" min="0" max="20" inputmode="decimal" /></div>`}
             <div class="field form-completo"><label for="ins-observaciones">Observaciones</label>
-              <textarea id="ins-observaciones" rows="3"></textarea></div>
+              <textarea id="ins-observaciones" rows="7"></textarea></div>
           </div>`;
       }
       if (p.id === 'danos') {
@@ -639,6 +727,7 @@
             <div class="ins-diagrama-cabeza">
               <h4>${escaparHtml(d.etiqueta)}</h4>
               <span class="lienzo-herramientas">
+                <span class="lienzo-colores" data-colores></span>
                 <button type="button" class="secondary" data-deshacer disabled>${Iconos.svg('restablecer')} Deshacer</button>
                 <button type="button" class="secondary" data-borrar disabled>${Iconos.svg('cancelar')} Borrar</button>
               </span>
@@ -661,6 +750,9 @@
           </div>
         </div>`;
     }
+
+    // Azul: el mismo con el que se marcaba en AppSheet (sigue siendo el color por default).
+    const COLORES_LIENZO = ['#1f6fd1', '#e02020', '#1e7d4f', '#000000'];
 
     /** Un lienzo por diagrama, con el dibujo en blanco del tipo de fondo. Se piden en cuanto
         llega el checklist: para cuando el inspector llega a este paso, ya están. */
@@ -693,6 +785,15 @@
           lienzos[d.campo] = lienzo;
           caja.querySelector('[data-deshacer]').addEventListener('click', () => lienzo.deshacer());
           caja.querySelector('[data-borrar]').addEventListener('click', () => lienzo.limpiar());
+          const cajaColores = caja.querySelector('[data-colores]');
+          cajaColores.innerHTML = COLORES_LIENZO.map((c) => `<button type="button" class="lienzo-color${c === lienzo.color() ? ' activo' : ''}"
+            style="background:${c}" data-color="${c}" title="Color de la pluma" aria-label="Color de la pluma"></button>`).join('');
+          cajaColores.querySelectorAll('[data-color]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              lienzo.cambiarColor(btn.dataset.color);
+              cajaColores.querySelectorAll('[data-color]').forEach((b) => b.classList.toggle('activo', b === btn));
+            });
+          });
         });
       });
     }
@@ -778,6 +879,12 @@
       });
       $('#ins-puntaje').textContent = r.puntaje + '%';
       $('#ins-avance').textContent = `${r.respondidas} de ${estructura.piezas} piezas respondidas`;
+      // Insignia "Calificación" -- vive en la cabecera de verdad, fuera de este
+      // contenedor (ver el reset al abrir, arriba), así que se busca en todo el
+      // documento en vez de con $ (mismo patrón que Arqueos).
+      if (badgeValor) badgeValor.textContent = r.respondidas ? r.puntaje + '%' : '—';
+      if (badgeBarra) badgeBarra.style.width = (estructura.piezas ? (r.respondidas / estructura.piezas) * 100 : 0) + '%';
+      if (badgeNota) badgeNota.textContent = `${r.respondidas} de ${estructura.piezas} puntos calificados`;
       // Avance por sección en el panel: cada una lleva a su paso
       $('#ins-avance-lista').innerHTML = estructura.secciones.map((s, i) => {
         const a = r.porSeccion[i];
@@ -969,7 +1076,7 @@
 
       const htmlBoton = boton.innerHTML;
       boton.disabled = true;
-      boton.textContent = 'Guardando…';
+      boton.innerHTML = '<span class="spinner"></span> Guardando…';
       try {
         // Solo se mandan los diagramas marcados: de los demás el servidor guarda el dibujo
         // en blanco del tipo (como AppSheet), sin subir una copia idéntica cada vez
@@ -999,19 +1106,25 @@
           accion: res.pdf ? { texto: 'Ver PDF', alHacer: () => window.open(res.pdf, '_blank') } : null,
         });
         if (res.advertencia) Notificar.info(res.advertencia, { duracion: 12000 });
-        // Se deja listo para la siguiente unidad
-        campoFolio.value = '';
-        campoTipo.value = '';
-        tipoAnterior = '';
-        pedido = '';
-        vehiculo = null;
-        estructura = null;
-        $('#ins-cargando-checklist').innerHTML = '';
-        pintarFicha();
-        armarPasos();
-        tabs.mostrar('registros');
         invalidarCacheLista('apiListarInspecciones', state.token);
-        await recargar();
+        if (opciones.alGuardado) {
+          // La ficha de Vehículos: ella decide qué hacer (cerrar su modal y refrescar
+          // su propia pestaña), no tiene sentido dejar esto listo para "la siguiente".
+          await opciones.alGuardado(res);
+        } else {
+          // Se deja listo para la siguiente unidad
+          campoFolio.value = '';
+          campoTipo.value = '';
+          tipoAnterior = '';
+          pedido = '';
+          vehiculo = null;
+          estructura = null;
+          $('#ins-cargando-checklist').innerHTML = '';
+          pintarFicha();
+          armarPasos();
+          tabs.mostrar('registros');
+          await recargar();
+        }
       } catch (err) {
         errorGeneral(err.message);
       } finally {

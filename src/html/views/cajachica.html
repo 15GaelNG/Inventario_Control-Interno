@@ -1,4 +1,5 @@
 <template id="tpl-cajachica">
+  <section id="cch-listado">
   <div class="page-header">
     <div>
       <h2><i data-lucide="wallet" class="ico"></i> Caja Chica</h2>
@@ -12,19 +13,19 @@
   <div class="stat-row">
     <div class="stat-tile">
       <div class="stat-icon"><i data-lucide="wallet" class="ico"></i></div>
-      <div><div class="stat-value" id="cch-stat-total">0</div><div class="stat-label">Total</div></div>
+      <div><div class="stat-value" id="cch-stat-total">0</div><div class="stat-label">Total de cajas chicas</div></div>
     </div>
     <div class="stat-tile stat-tile-ok">
       <div class="stat-icon"><i data-lucide="circle-check" class="ico"></i></div>
-      <div><div class="stat-value" id="cch-stat-vigentes">0</div><div class="stat-label">Vigentes</div></div>
+      <div><div class="stat-value" id="cch-stat-vigentes">0</div><div class="stat-label">Cajas chicas vigentes</div></div>
     </div>
     <div class="stat-tile stat-tile-warn">
       <div class="stat-icon"><i data-lucide="clock" class="ico"></i></div>
-      <div><div class="stat-value" id="cch-stat-proceso-cierre">0</div><div class="stat-label">En proceso de cierre</div></div>
+      <div><div class="stat-value" id="cch-stat-proceso-cierre">0</div><div class="stat-label">Cajas chicas en proceso de cierre</div></div>
     </div>
     <div class="stat-tile stat-tile-warn">
       <div class="stat-icon"><i data-lucide="ban" class="ico"></i></div>
-      <div><div class="stat-value" id="cch-stat-cerradas">0</div><div class="stat-label">Cerradas</div></div>
+      <div><div class="stat-value" id="cch-stat-cerradas">0</div><div class="stat-label">Cajas chicas cerradas</div></div>
     </div>
   </div>
 
@@ -53,6 +54,53 @@
   <div class="tab-panel" data-tab-panel="lista">
     <div class="card card-compacta">
       <div id="cch-tabla"></div>
+    </div>
+  </div>
+  </section>
+
+  <!-- Ficha de una caja chica (doble clic o "Ver ficha" en la tabla) — pantalla propia
+       dentro del módulo, mismo patrón que Vehículos. -->
+  <section id="cch-detalle" hidden></section>
+
+  <!-- Captura de arqueo / cambio de monto, sin salir de la ficha de la caja chica —
+       mismo formato que "Captura" en Vehículos/Líneas Telefónicas (ln-captura-*). -->
+  <div class="modal-backdrop" id="cch-modal-captura" hidden>
+    <div class="modal-card modal-card-wide ln-captura-modal" role="dialog" aria-modal="true" aria-labelledby="cch-captura-titulo">
+      <div class="modal-header ln-captura-cabecera">
+        <div class="ln-captura-cabecera-principal">
+          <span class="ln-captura-icono" id="cch-captura-icono"></span>
+          <div>
+            <span class="ln-captura-tipo" id="cch-captura-tipo"></span>
+            <h3 class="ln-titulo" style="margin:3px 0 0" id="cch-captura-titulo"></h3>
+            <p class="modal-subtitle" id="cch-captura-subtitulo"></p>
+          </div>
+        </div>
+        <!-- Solo Arqueo la usa (de los 2 que comparten este modal) -- empieza oculta,
+             construirCapturaArqueo la destapa; abrirCapturaCajaChica la vuelve a ocultar. -->
+        <div class="calif-badge" id="cch-arq-calif-badge" style="margin-left:auto; margin-right:10px" hidden>
+          <span class="calif-badge-titulo">Calificación</span>
+          <span class="calif-badge-valor" id="cch-arq-calif-badge-valor">—</span>
+          <div class="calif-badge-barra"><div class="calif-badge-barra-fill" id="cch-arq-calif-badge-barra" style="width:0%"></div></div>
+          <span class="calif-badge-nota" id="cch-arq-calif-badge-nota">0 de 17 puntos calificados</span>
+        </div>
+        <button type="button" class="modal-close" id="cch-captura-cerrar" aria-label="Cerrar"><i data-lucide="x" class="ico"></i></button>
+      </div>
+      <div class="modal-form-scroll" id="cch-captura-cuerpo"></div>
+    </div>
+  </div>
+
+  <!-- "Ver completo" de un arqueo/cambio de monto, sin salir de la ficha de la caja
+       chica -- todas las columnas del registro. -->
+  <div class="modal-backdrop" id="cch-modal-ver-registro" hidden>
+    <div class="modal-card modal-card-wide" role="dialog" aria-modal="true" aria-labelledby="cch-ver-registro-titulo">
+      <div class="modal-header">
+        <div>
+          <h3 style="margin:0" id="cch-ver-registro-titulo"></h3>
+          <p class="modal-subtitle" id="cch-ver-registro-subtitulo"></p>
+        </div>
+        <button type="button" class="modal-close" id="cch-ver-registro-cerrar" aria-label="Cerrar"><i data-lucide="x" class="ico"></i></button>
+      </div>
+      <div class="modal-form-scroll" id="cch-ver-registro-cuerpo"></div>
     </div>
   </div>
 
