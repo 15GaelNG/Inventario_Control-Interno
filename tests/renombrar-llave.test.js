@@ -69,7 +69,7 @@ function cargar(hojas) {
   vm.runInContext(lee('utils', 'Ids.gs'), ctx);
   vm.runInContext(lee('MigracionIds.gs') +
     '\nthis.api = { renombrarLlaveAnterior, migColumnaAnterior_, migColumna_,' +
-    ' revisarAntesDeMigrar };', ctx);
+    ' revisarAntesDeMigrar, migDeducidoDonde_, ENCABEZADOS_DEDUCIDOS };', ctx);
   return ctx.api;
 }
 
@@ -248,6 +248,38 @@ console.log('\n10. La revisión previa NO reporta el encabezado que el paso 2 va
     .filter((l) => l.trim().indexOf('- ') === 0 && l.indexOf('no tiene encabezado') !== -1);
   ok(deEncabezado.length === 0,
      'asi que NO queda ningun problema de encabezado: ' + JSON.stringify(deEncabezado));
+}
+
+console.log('\nLos encabezados deducidos se ubican por sus VECINOS, no por un número');
+{
+  // Esto sale de una corrida real sobre el libro del equipo. El catálogo tenía la columna
+  // clavada en la 3, y esa es una coordenada de ANTES de migrar: en cuanto el paso 3
+  // inserta 'ID' al inicio, la columna se corre a la 4. En el libro del equipo, migrado
+  // con la versión 1, el número fijo apuntaba a ID_LINEA — y el guardián se negó a
+  // escribirle encima. Hizo bien, pero el catálogo estaba mal.
+  const api = cargar({});
+  const d = api.ENCABEZADOS_DEDUCIDOS.filter((x) => x.nombre === 'NUCO')[0];
+  ok(!!d && Array.isArray(d.entre) && d.entre.length === 2 && !('columna' in d),
+     'la deducción del NUCO se declara por vecinos y ya no por número de columna');
+
+  // Los tres layouts REALES, medidos el 30/09/2026 en los tres libros.
+  [
+    ['producción, sin migrar', ['', 'ID_LINEA', '', 'IMEI', 'TABLA'], 3],
+    ['laboratorio, ya migrado', ['ID', 'ID ANTERIOR', 'ID_LINEA', 'NUCO', 'IMEI'], 4],
+    ['libro del equipo, migrado con la v1', ['ID', 'ID APPSHEET', 'ID_LINEA', '', 'IMEI'], 4],
+  ].forEach(([nombre, enc, esperada]) => {
+    const r = api.migDeducidoDonde_(enc, d);
+    ok(r.columna === esperada, nombre + ': la ubica en la columna ' + esperada +
+       (r.columna ? '' : ' (dio: ' + r.error + ')'));
+  });
+
+  // Y que se niegue en vez de adivinar cuando la hoja cambió de forma.
+  const dos = api.migDeducidoDonde_(['ID', 'ID_LINEA', '', '', 'IMEI'], d);
+  ok(!!dos.error && /hay 2 columnas/.test(dos.error),
+     'si entre los vecinos hay DOS columnas, se niega en vez de elegir una');
+  const sinVecino = api.migDeducidoDonde_(['ID', 'ID_LINEA', '', 'OTRA'], d);
+  ok(!!sinVecino.error && /no encuentro sus vecinos/.test(sinVecino.error),
+     'y si falta un vecino, lo dice en vez de tronar');
 }
 
 console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');

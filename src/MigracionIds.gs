@@ -384,7 +384,26 @@ function revisarAntesDeMigrar(opciones) {
       detalles.push(llenos.length + ' con ID');
       if (enBlanco) detalles.push(enBlanco + ' en blanco (se saltan)');
       if (sinIdConDatos) {
-        problemas.push(h.hoja + ': ' + sinIdConDatos + ' renglones CON DATOS pero sin ID');
+        // Un renglón con datos y sin llave vieja NO es un problema si la hoja ya está
+        // migrada: significa que nació DESPUÉS, por la app o por AppSheet, y nunca tuvo un
+        // id de AppSheet que respaldar. Su 'ID ANTERIOR' se queda vacío, que es lo
+        // correcto — la reversa tampoco le inventa uno (ver migracion-pipeline.test.js).
+        //
+        // Es problema solo si además les falta el ID NUEVO: ahí sí hay renglones sueltos.
+        const posNueva = migColumna_(enc, Entidades.COLUMNA_ID);
+        let sinNinguno = sinIdConDatos;
+        if (posNueva) {
+          const nuevos = migLeerColumna_(sheet, posNueva, filas);
+          sinNinguno = valores.filter((v, i) =>
+            !v && !vacias[i] && !Ids.tieneForma(migLimpio_(nuevos[i]))).length;
+        }
+        if (sinNinguno) {
+          problemas.push(h.hoja + ': ' + sinNinguno + ' renglones CON DATOS y sin ningún id ' +
+            '(ni el viejo ni el nuevo)');
+        } else {
+          detalles.push(sinIdConDatos + ' nacidos después de migrar (ya traen el ID nuevo, ' +
+            'su "' + Entidades.COLUMNA_ID_ANTERIOR + '" se queda vacío)');
+        }
       }
       if (repetidos) problemas.push(h.hoja + ': ' + repetidos + ' IDs repetidos en "' + h.llaveAnterior + '"');
     }
@@ -412,8 +431,11 @@ function revisarAntesDeMigrar(opciones) {
       // Igual que la de arriba: si el paso "renombrar" le va a poner un nombre deducido
       // del contenido, no es un problema. Si no se filtrara, el paso 1 marcaria PROBLEMAS
       // y detendria la corrida que escribe por una columna que se arregla sola.
-      const deducido = ENCABEZADOS_DEDUCIDOS.filter(
-        (d) => migClave_(d.hoja) === migClave_(h.hoja) && d.columna === (i + 1))[0];
+      const deducido = ENCABEZADOS_DEDUCIDOS.filter((d) => {
+        if (migClave_(d.hoja) !== migClave_(h.hoja)) return false;
+        const donde = migDeducidoDonde_(enc, d);
+        return donde.columna === (i + 1);
+      })[0];
       if (deducido) {
         detalles.push('su columna ' + (i + 1) + ' no tiene encabezado, y el paso ' +
           '"renombrar" le va a poner "' + deducido.nombre + '" (deducido del contenido)');
@@ -848,8 +870,18 @@ function moverIdsAlInicio(opciones) {
 const ENCABEZADOS_DEDUCIDOS = [
   {
     hoja: 'CAMBIOS LINEAS TELEFONICAS',
-    columna: 3,
     nombre: 'NUCO',
+    // Se ubica por sus VECINOS, no por un número de columna. Antes decía `columna: 3`, y
+    // esa es una coordenada de ANTES de migrar: en cuanto el paso 3 inserta la columna
+    // 'ID' al inicio, esta se corre a la 4. Medido en los tres libros el 30/09/2026:
+    //
+    //   PRODUCCIÓN  col1 (vacío)  col2 ID_LINEA     col3 (vacío, el NUCO)  col4 IMEI
+    //   LABORATORIO col1 ID       col2 ID ANTERIOR  col3 ID_LINEA          col4 NUCO
+    //   DEV equipo  col1 ID       col2 ID APPSHEET  col3 ID_LINEA          col4 (vacío)
+    //
+    // Los vecinos son lo único que no se mueve. En el libro del equipo el número fijo
+    // apuntaba a ID_LINEA, y el guardián se negó a escribirle encima — hizo bien.
+    entre: ['ID_LINEA', 'IMEI'],
     evidencia: 'De 35,428 filas con línea padre, 35,425 traen exactamente el NUCO de esa ' +
       'línea (99.99%). Las 3 que no son dedazos: 110000 donde va 10001 (un cero de más), ' +
       '1483 donde va 1484, y 1297 donde va 1080. Idéntico en producción y en el ' +
@@ -865,6 +897,26 @@ const ENCABEZADOS_DEDUCIDOS = [
  * hoja cambió de forma y la deducción dejó de valer, así que lo reporta como problema en
  * vez de escribir encima.
  */
+/**
+ * Dónde está la columna de una deducción, buscándola ENTRE sus dos vecinos.
+ * Devuelve {columna} o {error}. No escribe nada.
+ */
+function migDeducidoDonde_(encabezados, d) {
+  const izq = migColumna_(encabezados, d.entre[0]);
+  const der = migColumna_(encabezados, d.entre[1]);
+  if (!izq || !der) {
+    return { error: 'no encuentro sus vecinos "' + d.entre[0] + '" y "' + d.entre[1] +
+      '" para ubicar "' + d.nombre + '"' };
+  }
+  if (der - izq !== 2) {
+    return { error: 'entre "' + d.entre[0] + '" (columna ' + izq + ') y "' + d.entre[1] +
+      '" (columna ' + der + ') hay ' + Math.max(0, der - izq - 1) + ' columnas, y se ' +
+      'esperaba exactamente 1 para poner "' + d.nombre + '". La hoja cambió de forma: ' +
+      'revisa la deducción antes de seguir (ver ENCABEZADOS_DEDUCIDOS).' };
+  }
+  return { columna: izq + 1 };
+}
+
 function ponerEncabezadosDeducidos_(ss, cfg, lineas, problemas) {
   let puestos = 0;
   ENCABEZADOS_DEDUCIDOS.forEach((d) => {
@@ -873,21 +925,26 @@ function ponerEncabezadosDeducidos_(ss, cfg, lineas, problemas) {
     const sheet = ss.getSheetByName(d.hoja);
     if (!sheet) return;
     const enc = migEncabezados_(sheet);
-    const actual = migLimpio_(enc[d.columna - 1]);
+
+    const donde = migDeducidoDonde_(enc, d);
+    if (donde.error) { problemas.push(d.hoja + ': ' + donde.error); return; }
+
+    const actual = migLimpio_(enc[donde.columna - 1]);
     if (actual && migClave_(actual) === migClave_(d.nombre)) {
-      lineas.push('  ' + d.hoja + ': la columna ' + d.columna + ' ya se llama "' +
+      lineas.push('  ' + d.hoja + ': la columna ' + donde.columna + ' ya se llama "' +
         d.nombre + '"');
       return;
     }
     if (actual) {
-      problemas.push(d.hoja + ': la columna ' + d.columna + ' se llama "' + actual +
+      problemas.push(d.hoja + ': la columna ' + donde.columna + ' se llama "' + actual +
         '" y se esperaba vacía para ponerle "' + d.nombre + '". La hoja cambió de forma: ' +
         'revisa la deducción antes de seguir (ver ENCABEZADOS_DEDUCIDOS).');
       return;
     }
-    lineas.push('  ' + d.hoja + ': columna ' + d.columna + '  "(sin encabezado)"  ->  "' +
-      d.nombre + '"   (deducido del contenido)');
-    if (cfg.escribir) sheet.getRange(1, d.columna).setValue(d.nombre);
+    lineas.push('  ' + d.hoja + ': columna ' + donde.columna + '  "(sin encabezado)"  ->  "' +
+      d.nombre + '"   (deducido del contenido, ubicada entre "' + d.entre[0] + '" y "' +
+      d.entre[1] + '")');
+    if (cfg.escribir) sheet.getRange(1, donde.columna).setValue(d.nombre);
     puestos++;
   });
   return puestos;
