@@ -128,6 +128,25 @@ console.log('\n7. Si un paso truena, se para ahí');
      'el que tronó no cuenta como corrido');
 }
 
+console.log('\n7b. En ENSAYO, un paso que no se puede ensayar NO tumba la corrida');
+{
+  // Esto paso de verdad el 30/09/2026 en el laboratorio: en ensayo el paso 2 no escribe la
+  // columna ID, asi que el 3 no la encuentra y tronaba. No es un error: es "esto se ensaya
+  // despues de escribir el paso 2". Antes, el orquestador lo trataba como caida y se paraba.
+  const { api, llamadas } = cargar({
+    referencias: new Error('"VEHICULOS" todavía no tiene columna ID: corre asignarIds primero'),
+  });
+  const rep = api.correrFamilia('vehiculos');
+  ok(llamadas.length === 6, 'siguió con los 6 pasos en vez de pararse: ' + llamadas.length);
+  ok(rep.indexOf('NO SE PUDO ENSAYAR') !== -1, 'lo reporta como no ensayable');
+  ok(rep.indexOf('SE DETUVO') === -1, 'y NO dice que se detuvo, porque no se detuvo');
+  ok(rep.indexOf('no ensayables todavía: referencias') !== -1,
+     'el resumen los junta: los que leen lo que escribe el paso 2');
+  ok(rep.indexOf('No es un error') !== -1, 'y lo dice con esas palabras, para no asustar');
+  ok(rep.indexOf('pasos corridos: 5 de 6') !== -1,
+     'el no ensayable no cuenta como corrido');
+}
+
 console.log('\n8. La auditoría con fallas se reporta, pero ya no hay nada que detener');
 {
   const { api, llamadas } = cargar({ auditar: 'AUDITORÍA\n\nFALLAS (2):\n  - algo' });

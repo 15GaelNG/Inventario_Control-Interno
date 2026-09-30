@@ -120,6 +120,7 @@ function correrFamilia(familia, opciones) {
     '',
   ];
   const partes = [];
+  const noEnsayables = [];
   let corridos = 0, corte = '', detenido = '';
 
   for (let i = 0; i < FAM_PASOS.length; i++) {
@@ -136,9 +137,24 @@ function correrFamilia(familia, opciones) {
     try {
       salida = paso.corre({ familia: f, escribir: cfg.escribir && !paso.soloLee });
     } catch (err) {
-      partes.push(encabezado, '', 'TRONÓ: ' + err.message, '');
-      detenido = paso.nombre;
-      break;
+      // Escribiendo, un error es un error y se para todo.
+      if (cfg.escribir) {
+        partes.push(encabezado, '', 'TRONÓ: ' + err.message, '');
+        detenido = paso.nombre;
+        break;
+      }
+      // En ENSAYO no. Los pasos 3 al 6 leen lo que ESCRIBE el paso 2, y en ensayo el paso 2
+      // no escribió nada, así que "VEHICULOS todavía no tiene columna ID" es la respuesta
+      // correcta, no una caída: significa "esto se ensaya después de escribir el paso 2".
+      // Se anota y se sigue, porque en un ensayo no hay nada en riesgo y sí información que
+      // juntar: si la hoja YA está migrada de una corrida anterior, el paso sí va a correr.
+      noEnsayables.push(paso.nombre);
+      partes.push(encabezado, '',
+        'NO SE PUDO ENSAYAR: ' + err.message,
+        '',
+        '(normal en ensayo si el paso 2 todavía no ha escrito: este paso lee lo que aquél deja)',
+        '');
+      continue;
     }
     partes.push(encabezado, '', String(salida), '');
     corridos++;
@@ -156,6 +172,10 @@ function correrFamilia(familia, opciones) {
 
   const pie = ['━━━ resumen ━━━', ''];
   pie.push('  pasos corridos: ' + corridos + ' de ' + FAM_PASOS.length);
+  if (noEnsayables.length) {
+    pie.push('  no ensayables todavía: ' + noEnsayables.join(', ') +
+      '   (leen lo que ESCRIBE el paso 2)');
+  }
   if (detenido) {
     pie.push('');
     pie.push('  SE DETUVO en "' + detenido + '".' +
@@ -167,7 +187,13 @@ function correrFamilia(familia, opciones) {
     pie.push('  Vuelve a correr lo mismo: los pasos ya hechos se saltan solos.');
   } else if (!cfg.escribir) {
     pie.push('');
-    pie.push('  Si el ensayo cuadra, corre la versión que escribe.');
+    if (noEnsayables.length) {
+      pie.push('  El ensayo llegó hasta donde se puede SIN escribir. Los pasos ' +
+        noEnsayables.join(', ') + ' se validan en la corrida de verdad,');
+      pie.push('  porque leen la columna ID que escribe el paso 2. No es un error.');
+      pie.push('');
+    }
+    pie.push('  Si lo de arriba cuadra, corre la versión que escribe.');
   } else {
     pie.push('');
     pie.push('  LISTO: los seis pasos corrieron. Lee la auditoría de arriba.');
