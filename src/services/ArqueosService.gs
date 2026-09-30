@@ -549,10 +549,31 @@ const ArqueosService = (function () {
    * calcularCampos_ + lo copiado de la Caja Chica). Regresa la URL del PDF.
    */
   function generarPdfArqueo_(fila) {
-    const copia = DriveApp.getFileById(PLANTILLA_ARQUEO_DOC_ID).makeCopy(
-      'Arqueo_' + (fila['ID ARQUEO'] || Utilities.getUuid()),
-      DriveApp.getFolderById(CARPETA_ARCHIVOS_ID)
-    );
+    // Mismo patrón defensivo que subirArchivo(): "Acceso denegado: DriveApp" a secas no
+    // dice ni qué recurso ni con qué cuenta -- aquí sí, para poder arreglarlo sin adivinar
+    // (compartir la plantilla/carpeta con la cuenta que despliega este proyecto).
+    const cuenta = () => Session.getEffectiveUser().getEmail();
+    let plantilla;
+    try {
+      plantilla = DriveApp.getFileById(PLANTILLA_ARQUEO_DOC_ID);
+    } catch (e) {
+      throw new Error('No se pudo abrir la plantilla del PDF de Arqueo en Drive (ID ' + PLANTILLA_ARQUEO_DOC_ID +
+        '). La cuenta con la que corre la app ahora mismo (' + cuenta() + ') no tiene acceso a ese documento.');
+    }
+    let carpeta;
+    try {
+      carpeta = DriveApp.getFolderById(CARPETA_ARCHIVOS_ID);
+    } catch (e) {
+      throw new Error('No se pudo abrir la carpeta de archivos de Arqueos en Drive (ID ' + CARPETA_ARCHIVOS_ID +
+        '). La cuenta con la que corre la app ahora mismo (' + cuenta() + ') no tiene acceso a esa carpeta.');
+    }
+    let copia;
+    try {
+      copia = plantilla.makeCopy('Arqueo_' + (fila['ID ARQUEO'] || Utilities.getUuid()), carpeta);
+    } catch (e) {
+      throw new Error('Se pudo abrir la plantilla y la carpeta de Arqueos, pero no copiar el documento ahí. La ' +
+        'cuenta ' + cuenta() + ' necesita permiso de editor (no solo lector) en la carpeta. Error original: ' + e.message);
+    }
     const doc = DocumentApp.openById(copia.getId());
     const body = doc.getBody();
 
