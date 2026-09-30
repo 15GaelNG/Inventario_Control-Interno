@@ -97,15 +97,16 @@ Pedido del usuario: tres lugares para las opciones (una fila, varias filas y la 
     barra y el clic derecho con una fila seleccionada (DataTable los convierte con `maximo: 1`);
   - Documentos e Historial: **una fila a la vez** (`seleccionUnica: true`: Ctrl/Shift se portan como clic normal, sin
     cuadro ni Ctrl+A), porque no tienen acciones masivas.
-- **Ficha con dos botones** (usuario, 30-sep): en el equipo solo se ven **Nueva inspección** y **Nueva responsiva**,
-  luego "Ver carpeta en Drive" y al final ⋮ con Cambiar estatus, Editar información, Mandar a resguardo, Reasignar,
-  Mandar línea a cancelación, Documentos (Ver última inspección / responsiva) e Historial. General → Equipo ya no
+- **Ficha con dos botones** (usuario, 30-sep): en el equipo solo se ven **Nueva inspección** y **Nueva responsiva**
+  y ⋮ con Cambiar estatus, Editar información, Mandar a resguardo, Reasignar, Mandar línea a cancelación, Documentos
+  (Ver carpeta en Drive, Ver última inspección / responsiva) e Historial. Sin permiso de operar, el ⋮ del equipo solo
+  trae Documentos e Historial. General → Equipo ya no
   muestra "Última responsiva / inspección" (solo en ⋮). La **línea** también tiene ⋮ (Cambiar estatus, Editar
   información, Mandar a cancelación, Historial), aunque esté en un equipo: con equipo se ve "Ver equipo" + ⋮ (sus
   capturas son del equipo); suelta, Nueva inspección + Nueva responsiva + ⋮. Antes una línea con equipo solo tenía
   "Ver equipo". En celular el ⋮ ya no ocupa media fila.
 - **Barra con entrada retardada** (usuario, 30-sep, como en Drive): la fila se marca **al instante** y solo la barra
-  entra a los 180 ms con una animación CSS (`dt-barra-entra`); con doble clic la ficha se abre antes de que se asome.
+  entra a los 100 ms con una animación CSS (`dt-barra-entra`); con doble clic la ficha se abre antes de que se asome.
   Primero se probó retrasar toda la selección 250 ms y se sentía lenta; se cambió por esto.
 
 ## 0x. PARA VENTA y PARA DESECHO como Mandar a resguardo (2026-09-30)

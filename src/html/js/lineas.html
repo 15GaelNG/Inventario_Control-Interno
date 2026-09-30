@@ -2099,12 +2099,12 @@
           const puedeOperar = memoria.permisos && memoria.permisos.puedeOperar;
           pila[pila.length - 1].etiqueta = 'NUCO ' + (e.nuco || '—');
           const resp = e.responsable || {};
-          fichaActual = { id: id, titulo: 'NUCO ' + (e.nuco || '—'), estatusEquipo: e.estatus || '', estatusLinea: l ? (l.estatus || '') : null };
+          fichaActual = { id: id, titulo: 'NUCO ' + (e.nuco || '—'), estatusEquipo: e.estatus || '', estatusLinea: l ? (l.estatus || '') : null, carpetaDriveId: e.carpetaDriveId || null };
           if (e.nuco) precargarUltimosNucos(id);
           detalle.innerHTML = migas() +
             encabezado('smartphone', 'NUCO ' + esc(e.nuco || '—'),
               chip(e.estatus) + chip(TIPO_EQUIPO[e.tipo] || e.tipo, 'neutro') + (l ? chip('Con línea', 'verde') + usoTemporalVencido(l) : chip('Sin línea', 'ambar')),
-              botonesFicha('data-equipo-id', id, 'equipo', puedeOperar, e.carpetaDriveId ? enlaceDrive(e.carpetaDriveId, 'Ver carpeta en Drive') : ''),
+              botonesFicha('data-equipo-id', id, 'equipo', puedeOperar, '', true),
               [['Responsable', resp.nombre], ['Modelo', e.modelo], ['IMEI', e.imei],
                 ['Línea', l ? '<a href="#" class="ln-enlace ln-mono" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + esc(l.numero || '(sin número)') + '</a>' + (l.compania ? ' · ' + esc(l.compania) : '') : '<span class="ln-tenue">Sin línea</span>', true],
                 ['Departamento', resp.departamento]]) +
@@ -2196,16 +2196,24 @@
         const id = boton.dataset.id;
         const ix = memoria.indice || { equipos: [], lineas: [] };
         const r = (tipo === 'equipo' ? ix.equipos : ix.lineas).filter((x) => x.id === id)[0] || { id: id };
+        const operar = !!(memoria.permisos && memoria.permisos.puedeOperar);
         const comunes = [
           { icono: 'toggle-right', texto: 'Cambiar estatus', alHacer: () => abrirCambioEstatus() },
           { icono: 'pencil', texto: 'Editar información', alHacer: () => abrirEditor(id) },
         ];
-        const items = tipo === 'equipo' ? comunes.concat([
+        const carpeta = fichaActual && fichaActual.id === id ? fichaActual.carpetaDriveId : null;
+        const documentos = [
+          carpeta ? { icono: 'folder-open', texto: 'Ver carpeta en Drive',
+            alHacer: () => window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(carpeta), '_blank', 'noopener') } : null,
+          tieneNuco(r) ? { icono: 'file-search', texto: 'Ver última inspección', alHacer: () => abrirUltimoDesdeMenu('INSPECCION', id) } : null,
+          tieneNuco(r) ? { icono: 'file-text', texto: 'Ver última responsiva', alHacer: () => abrirUltimoDesdeMenu('RESPONSIVA', id) } : null,
+        ].filter(Boolean);
+        if (documentos.length) documentos[0].titulo = 'Documentos';
+        const items = tipo === 'equipo' ? (operar ? comunes.concat([
           { icono: 'archive', texto: 'Mandar a resguardo', separador: true, alHacer: () => abrirResguardo([r]) },
           { icono: 'user-round-pen', texto: 'Reasignar', alHacer: () => abrirMasiva(ACCION_REASIGNAR, [r]) },
           r.numero ? { icono: 'phone-off', texto: 'Mandar línea a cancelación', alHacer: () => abrirCancelacion([r]) } : null,
-          tieneNuco(r) ? { icono: 'file-search', texto: 'Ver última inspección', titulo: 'Documentos', alHacer: () => abrirUltimoDesdeMenu('INSPECCION', id) } : null,
-          tieneNuco(r) ? { icono: 'file-text', texto: 'Ver última responsiva', alHacer: () => abrirUltimoDesdeMenu('RESPONSIVA', id) } : null,
+        ]) : []).concat(documentos, [
           { icono: 'history', texto: 'Historial', separador: true, alHacer: () => mostrarPestanaFicha('historial') },
         ]) : comunes.concat([
           r.numero ? { icono: 'phone-off', texto: 'Mandar a cancelación', separador: true, alHacer: () => abrirCancelacion([r]) } : null,

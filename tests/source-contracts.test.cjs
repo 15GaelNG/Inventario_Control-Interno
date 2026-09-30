@@ -1376,7 +1376,7 @@ test('Selección como en Google Drive y "Mandar a cancelación" (usuario, 30-sep
   // Clic = seleccionar esa fila; Ctrl alterna; Shift rango; sin reescribir las filas (el doble clic sigue llegando)
   assert.match(dt, /function clicDrive\(id, teclasOriginales\)/);
   // Como en Drive: la fila se marca al instante y solo la barra entra después (con doble clic no se asoma)
-  assert.match(dt, /\.dt-barra-sel:not\(\[hidden\]\) \{ animation: dt-barra-entra 90ms ease-out 180ms both; \}/);
+  assert.match(dt, /\.dt-barra-sel:not\(\[hidden\]\) \{ animation: dt-barra-entra 90ms ease-out 100ms both; \}/);
   assert.match(dt, /if \(ev\.detail >= 2\) return;   \/\/ segundo clic de un doble clic/);
   assert.doesNotMatch(dt, /ESPERA_DOBLE_CLIC|clicDriveConEspera/);
   assert.match(dt, /else st\.seleccion = new Set\(\[id\]\);/);
@@ -1400,6 +1400,9 @@ test('Selección como en Google Drive y "Mandar a cancelación" (usuario, 30-sep
   // Ficha: solo Nueva inspección y Nueva responsiva a la vista, el resto en ⋮; la línea también (con equipo sin capturas)
   assert.match(lineas, /data-ln-ficha-mas="' \+ esc\(tipo\)/);
   assert.doesNotMatch(lineas, /data-ln-estatus=|data-ln-editar=/);
+  // "Ver carpeta en Drive" del equipo va en el ⋮ (sección Documentos), no a la vista
+  assert.match(lineas, /botonesFicha\('data-equipo-id', id, 'equipo', puedeOperar, '', true\)/);
+  assert.match(lineas, /texto: 'Ver carpeta en Drive',/);
   assert.match(lineas, /botonesFicha\('data-linea-id', id, 'linea', puedeOperarLinea && !e,/);
   assert.match(lineas, /function abrirMenuFicha\(boton\)/);
   // Mandar a cancelación: cliente, API y servidor; la pestaña Resguardos solo muestra renglones con equipo
