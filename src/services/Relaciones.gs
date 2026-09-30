@@ -266,6 +266,13 @@ const MAPA = {
   }
 
   /** Posición (base 1) de una columna por nombre; truena claro si no existe — nunca escribe en otra. */
+  /** Como columna1_, pero devuelve 0 en vez de tronar si la columna no existe. */
+  function columnaOpcional1_(encabezados, nombre) {
+    if (!nombre) return 0;
+    const idx = SheetUtils.indiceDeColumnas(encabezados, [nombre])[nombre];
+    return idx === -1 ? 0 : idx + 1;
+  }
+
   function columna1_(hoja, nombre, encabezados) {
     const idx = SheetUtils.indiceDeColumnas(encabezados, [nombre])[nombre];
     if (idx === -1) {
@@ -351,8 +358,11 @@ const MAPA = {
           .filter((c) => !esCentinela_(c, cambios[c]));
         if (!columnasTocadas.length) return; // costo cero: esta copia no copia nada de lo que cambió
 
+        // El vínculo de verdad es el ID. La llave de negocio queda como respaldo para las
+        // filas que todavía no tienen FK — ver abajo por qué eso no es opcional.
+        const idDueno = filaOrigen['ID'];
         const valorClave = filaOrigen[copia.claveOrigen];
-        if (!valorClave) return;
+        if (!idDueno && !valorClave) return;
 
         try {
           const hoja = hojaCopia_(copia, ssId);
@@ -362,8 +372,33 @@ const MAPA = {
           const lastRow = hoja.getLastRow();
           if (lastRow < 2) return;
           const claves = hoja.getRange(2, colClave, lastRow - 1, 1).getValues();
+
+          // La columna de la llave foránea, si esta hoja ya la tiene.
+          const colFk = columnaOpcional1_(encabezados, copia.llaveForanea);
+          const fks = colFk ? hoja.getRange(2, colFk, lastRow - 1, 1).getValues() : null;
+
+          // Cada fila se empareja por su FK si la tiene, y por la llave de negocio si no.
+          //
+          // Lo segundo NO es un lujo mientras AppSheet siga vivo: AppSheet escribe en estas
+          // mismas hojas y no llena 'ID VEHICULO', así que emparejar solo por ID dejaría de
+          // propagarle a todo lo que ellos capturen — en silencio, que es lo peor.
+          //
+          // Y lo primero es lo que arregla el caso que encontró Ayrton: CON0618 tenía la FK
+          // puesta en sus dos hijos, pero su serie estaba vacía en ese momento, así que
+          // buscar por serie no encontraba nada y la edición se perdía sin aviso.
+          const idNorm = normalizar_(idDueno);
+          const claveNorm = normalizar_(valorClave);
           const filas = [];
-          claves.forEach((fila, i) => { if (normalizar_(fila[0]) === normalizar_(valorClave)) filas.push(i + 2); });
+          let porFk = 0;
+          let porClave = 0;
+          claves.forEach((fila, i) => {
+            const fk = fks ? normalizar_(fks[i][0]) : '';
+            if (fk) {
+              if (idNorm && fk === idNorm) { filas.push(i + 2); porFk++; }
+              return;   // tiene FK y no es de este dueño: su llave de negocio no manda
+            }
+            if (claveNorm && normalizar_(fila[0]) === claveNorm) { filas.push(i + 2); porClave++; }
+          });
           if (!filas.length) return;
 
           // Aquí sí se escribe un valor vacío si el usuario borró el campo: fue explícito.
@@ -374,6 +409,12 @@ const MAPA = {
             hoja.getRangeList(a1).setValue(cambios[campoOrigen] === undefined ? '' : cambios[campoOrigen]);
           });
           resumen[copia.nombre] = filas.length;
+          if (porClave) {
+            // Vale la pena saberlo: son filas sin FK, y las que la app crea ya nacen con
+            // ella. Casi siempre significa "las capturó AppSheet".
+            console.log('Relaciones: ' + copia.nombre + ' — ' + porFk + ' fila(s) por ID y ' +
+              porClave + ' por ' + copia.clave + ' (sin ' + copia.llaveForanea + ')');
+          }
         } catch (err) {
           errores.push(copia.nombre + ': ' + err.message);
         }

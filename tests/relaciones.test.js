@@ -461,5 +461,69 @@ console.log('\n11. Pero borrar el campo A MANO sí vacía la copia');
     'en propagar() el borrado fue explícito, así que se respeta');
 }
 
+// ---------------------------------------------------------------------------- por ID
+//
+// Esto sale del caso CON0618, que encontró Ayrton usando el laboratorio: cambió el
+// DEPARTAMENTO de un vehículo y no llegó a Hologramas. La FK estaba puesta y correcta en
+// los dos hijos; propagar() no la usaba, iba por la serie, y ese vehículo no tenía serie en
+// ese momento. Así que se salía en silencio y la edición se perdía.
+//
+// La serie era el paso intermedio, de cuando las copias no tenían columna del ID.
+
+/** Sensores con columna 'ID VEHICULO', que es lo que ya tienen las hojas de verdad. */
+function armarConFk(filasSensores) {
+  const hs = armar();
+  hs['INSTALACION DE SENSORES'] = hoja('INSTALACION DE SENSORES',
+    ['ID', 'ID VEHICULO', 'SERIE SENSOR', 'ESTATUS SENSOR']
+      .concat(Object.keys(comoSensores(vehiculos[0], ''))),
+    filasSensores);
+  return hs;
+}
+
+console.log('\n12. Propaga por la LLAVE FORÁNEA, aunque la llave de negocio no sirva');
+{
+  // El sensor apunta a CTA0001 por ID, pero su serie está vacía: por serie no se
+  // encontraría nunca. Es exactamente CON0618.
+  const hs = armarConFk([
+    Object.assign({ ID: 'SEN-1', 'ID VEHICULO': 'VEH-00000000AAAAAA', 'SERIE SENSOR': 'S1' },
+      comoSensores(vehiculos[0], 'POST VENTA'), { 'SERIE VEHICULO': '' }),
+  ]);
+  const R = cargar(hs);
+  R.propagar('VEHICULOS', Object.assign({}, vehiculos[0], { 'SERIE VEHICULO': '' }),
+    { DEPARTAMENTO: 'OOAM ADMINISTRATIVO' });
+  ok(hs['INSTALACION DE SENSORES'].valor('SEN-1', 'ID', 'DEPARTAMENTO') === 'OOAM ADMINISTRATIVO',
+     'llegó el cambio: se emparejó por ID VEHICULO, no por la serie');
+  console.log('     (antes esto se perdía en silencio, y es el bug que encontró Ayrton)');
+}
+
+console.log('\n13. Y una fila SIN llave foránea sigue propagándose por su llave de negocio');
+{
+  // No es un lujo: mientras AppSheet siga vivo escribe en estas hojas y NO llena la FK.
+  // Emparejar solo por ID dejaría de propagarle a todo lo que capturen ellos.
+  const hs = armarConFk([
+    Object.assign({ ID: 'SEN-2', 'ID VEHICULO': '', 'SERIE SENSOR': 'S2' },
+      comoSensores(vehiculos[0], 'POST VENTA')),
+  ]);
+  const R = cargar(hs);
+  R.propagar('VEHICULOS', vehiculos[0], { DEPARTAMENTO: 'OOAM ADMINISTRATIVO' });
+  ok(hs['INSTALACION DE SENSORES'].valor('SEN-2', 'ID', 'DEPARTAMENTO') === 'OOAM ADMINISTRATIVO',
+     'una fila como las que crea AppSheet se sigue actualizando por serie');
+}
+
+console.log('\n14. Si la fila tiene FK de OTRO dueño, su llave de negocio NO manda');
+{
+  // La prueba que de verdad protege. Dos vehículos comparten serie (pasa: 'SIN SERIE',
+  // capturas repetidas, dedazos). Si la llave de negocio pudiera ganarle a la FK, editar
+  // un vehículo pisaría los datos del otro.
+  const hs = armarConFk([
+    Object.assign({ ID: 'SEN-3', 'ID VEHICULO': 'VEH-00000000CCCCCC', 'SERIE SENSOR': 'S3' },
+      comoSensores(vehiculos[0], 'POST VENTA')),
+  ]);
+  const R = cargar(hs);
+  R.propagar('VEHICULOS', vehiculos[0], { DEPARTAMENTO: 'OOAM ADMINISTRATIVO' });
+  ok(hs['INSTALACION DE SENSORES'].valor('SEN-3', 'ID', 'DEPARTAMENTO') === 'POST VENTA',
+     'no se tocó: su FK dice que es de otro vehículo, aunque la serie coincida');
+}
+
 console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');
 process.exit(fallas ? 1 : 0);
