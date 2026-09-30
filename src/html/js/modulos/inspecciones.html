@@ -720,6 +720,7 @@
             <div class="ins-diagrama-cabeza">
               <h4>${escaparHtml(d.etiqueta)}</h4>
               <span class="lienzo-herramientas">
+                <span class="lienzo-colores" data-colores></span>
                 <button type="button" class="secondary" data-deshacer disabled>${Iconos.svg('restablecer')} Deshacer</button>
                 <button type="button" class="secondary" data-borrar disabled>${Iconos.svg('cancelar')} Borrar</button>
               </span>
@@ -742,6 +743,9 @@
           </div>
         </div>`;
     }
+
+    // Azul: el mismo con el que se marcaba en AppSheet (sigue siendo el color por default).
+    const COLORES_LIENZO = ['#1f6fd1', '#e02020', '#1e7d4f', '#000000'];
 
     /** Un lienzo por diagrama, con el dibujo en blanco del tipo de fondo. Se piden en cuanto
         llega el checklist: para cuando el inspector llega a este paso, ya están. */
@@ -774,6 +778,15 @@
           lienzos[d.campo] = lienzo;
           caja.querySelector('[data-deshacer]').addEventListener('click', () => lienzo.deshacer());
           caja.querySelector('[data-borrar]').addEventListener('click', () => lienzo.limpiar());
+          const cajaColores = caja.querySelector('[data-colores]');
+          cajaColores.innerHTML = COLORES_LIENZO.map((c) => `<button type="button" class="lienzo-color${c === lienzo.color() ? ' activo' : ''}"
+            style="background:${c}" data-color="${c}" title="Color de la pluma" aria-label="Color de la pluma"></button>`).join('');
+          cajaColores.querySelectorAll('[data-color]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              lienzo.cambiarColor(btn.dataset.color);
+              cajaColores.querySelectorAll('[data-color]').forEach((b) => b.classList.toggle('activo', b === btn));
+            });
+          });
         });
       });
     }

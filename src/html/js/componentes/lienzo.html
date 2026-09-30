@@ -25,6 +25,16 @@
   }
   .lienzo-herramientas button:hover { background: var(--color-bg); color: var(--color-text); }
   .lienzo-herramientas button:disabled { opacity: .45; cursor: default; background: transparent; }
+
+  /* Colores de pluma: pastillas de color, la activa con un anillo -- mismo patrón que
+     los chips de color de otras partes de la app, pero circulares (paleta, no etiqueta). */
+  .lienzo-colores { display: inline-flex; gap: 5px; align-items: center; }
+  .lienzo-color {
+    width: 20px; height: 20px; border-radius: 50%; padding: 0; border: 2px solid transparent;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); cursor: pointer; flex-shrink: 0;
+  }
+  .lienzo-color.activo { border-color: var(--color-text); }
+  .lienzo-color:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 </style>
 
 <script>
@@ -184,6 +194,10 @@
         deshacer() { trazos.pop(); redibujar(); avisar(); },
         limpiar() { trazos = []; redibujar(); avisar(); },
         ajustar,
+        /** Cambia el color de la pluma -- repinta los trazos ya hechos con el color
+         *  nuevo también (son vectores, no pixeles: no hay forma de que se vean "mezclados"). */
+        cambiarColor(color) { cfg.color = color; redibujar(); },
+        color: () => cfg.color,
         /**
          * El dibujo con sus trazos, como PNG. Con fondo, a la resolución del dibujo original
          * (tope 1600 px para no mandar archivos enormes); sin fondo, a anchoExportar.
