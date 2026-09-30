@@ -1348,4 +1348,6 @@ test('Mandar a resguardo (30-sep): N/A automáticos, línea según el adendum, a
   assert.match(cliente, /function initResguardos\(\)/);
   assert.match(read('src/html/js/app.html'), /if \(vista === 'resguardos-lineas'\) \{ montarVista\('tpl-lineas-resguardos', Lineas\.initResguardos\); return; \}/);
   assert.match(read('src/config/Entidades.gs'), /'APP_RESGUARDOS': \{ prefijo: 'RSG'/);
+  // En el historial se leen con nombre (no RESGUARDO / CANCELACION_LINEA)
+  assert.match(read('src/services/lineas/LineasRepo.gs'), /RESGUARDO: 'Resguardo', CANCELACION_LINEA: 'Cancelación de línea', VENTA: 'Venta'/);
 });
