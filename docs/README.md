@@ -7,6 +7,7 @@ Por dónde entrar según lo que traigas.
 | Documento | Para qué |
 |---|---|
 | [ids.md](ids.md) | **El modelo.** Qué formato tiene un ID, por qué ese y no otro, los prefijos por hoja, y las reglas de negocio ya confirmadas. Empieza aquí. |
+| [ensayo-final.md](ensayo-final.md) | **El guion de la corrida**, paso por paso: el ensayo en el laboratorio y el viernes en el libro bueno. Con qué esperar en cada paso y cuándo NO seguir. |
 | [ids-asignacion.md](ids-asignacion.md) | **El procedimiento.** Cómo se le pone ID a lo que ya existe, dónde va cada referencia, el pipeline con su respaldo y su reversa, y de dónde nacen los IDs nuevos. |
 | [limpieza-spreadsheet.md](limpieza-spreadsheet.md) | **La bitácora.** Lo que de verdad se ejecutó el 29/09/2026, con los números, dónde quedaron los respaldos y qué quedó pendiente. |
 
@@ -24,6 +25,7 @@ Por dónde entrar según lo que traigas.
 | [lineas-homologacion.md](lineas-homologacion.md) | **El diagnóstico de Líneas**, medido contra producción. Por qué la FK NO es el problema, y qué sí. Léelo antes de rediseñar nada de ese módulo. |
 | [lineas-plan.md](lineas-plan.md) | El plan del módulo de Líneas Telefónicas. |
 | [lineas-estado.md](lineas-estado.md) | El estado detallado de Líneas: hojas, carpetas de Drive, NUCOS. |
+| [helpdesk-integracion.md](helpdesk-integracion.md) | Cómo mostrar en la app lo que muestra el helpdesk de TI sin su cooperación (estrategia B: token por usuario). Plan, sin código todavía. |
 
 ## Lo que hay que saber antes de tocar producción
 

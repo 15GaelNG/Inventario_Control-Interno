@@ -1,0 +1,151 @@
+# Helpdesk dentro del Control Interno — estrategia B
+
+> **Qué es esto:** la estrategia elegida para mostrar en nuestra app lo que muestra el
+> helpdesk de TI (`https://helpdesk-maderas.gphsis.com/app/formularios`), con nuestro propio
+> diseño. Es un plan: todavía no hay código. Lo que falta medir está marcado como
+> **pendiente** y no debe darse por hecho.
+
+## El requerimiento
+
+"Que lo que se muestra en el helpdesk se vea en nuestro sistema", y **que se vea bonito**:
+con el diseño de la app, no como una página incrustada.
+
+## Las restricciones que definieron la estrategia
+
+- **El helpdesk es de TI, otro departamento.** No tenemos jurisdicción para pedirles nada:
+  ni API oficial, ni llave de servidor, ni que acepten nuestros tokens, ni webhooks.
+- **Un iframe no basta.** Mostraría su pantalla tal cual, no la nuestra.
+- **El token de Google del usuario no sirve como llave.** El que obtenemos con
+  `ScriptApp.getIdentityToken()` va dirigido (`aud`) a *nuestro* proyecto, no al helpdesk,
+  y no hay forma legítima de pedirle a Google uno dirigido al de ellos.
+
+Lo que queda es usar **la sesión que cada usuario ya tiene en el helpdesk** para consultar
+los mismos endpoints que usa su página, que se ven en la consola del navegador.
+
+## Por qué B y no las otras
+
+| Opción | Por qué no |
+|---|---|
+| Leer los correos que manda el helpdesk | Solo muestra lo que viene en el correo; no alcanza para el requerimiento |
+| Extensión de Chrome que manda los datos (no el token) | Más segura, pero hay que instalarla en cada equipo. Queda como plan de respaldo si los tokens duran poco (ver [Pendientes](#lo-que-falta-medir-antes-de-escribir-código)) |
+| **B: el usuario pega su token en nuestra app** | **Elegida.** No hay que instalar nada |
+
+## Cómo funciona
+
+1. El usuario entra al helpdesk como siempre y copia su token (se le explica cómo en la
+   pantalla de configuración).
+2. Lo pega **una vez** en la pantalla "Conectar helpdesk" de nuestra app.
+3. El servidor lo guarda (ver [Dónde vive el token](#dónde-vive-el-token-y-la-trampa-de-executeas))
+   y, cada vez que el usuario abre el módulo, consulta el helpdesk con `UrlFetchApp`
+   **desde el servidor**, a su nombre.
+4. La respuesta se normaliza a nuestro formato y se pinta con los componentes de la app.
+5. Cuando el helpdesk responda 401/403, el token caducó: se borra y la pantalla le pide al
+   usuario que pegue uno nuevo. No se reintenta.
+
+### Las llamadas van desde el servidor, nunca desde el navegador
+
+- **CORS:** el front de Apps Script corre en `*.googleusercontent.com`; el helpdesk casi
+  seguro no permite llamadas desde ahí.
+- **El token no se expone** en el HTML ni viaja de regreso al cliente después de pegarlo.
+- **El bug del `//`** (ver `CLAUDE.md`): las URLs del helpdesk viven en un `.gs`, no en un
+  `.html`.
+
+El scope `script.external_request` ya está en `src/appsscript.json`, porque Geotab y
+Telefonía ya usan `UrlFetchApp`. No hay que pedir permisos nuevos a los usuarios.
+
+## Dónde vive el token, y la trampa de `executeAs`
+
+**La trampa:** la web app corre como `USER_DEPLOYING` (`src/appsscript.json`). Con eso,
+`PropertiesService.getUserProperties()` **no es por usuario**: es la del que desplegó.
+Si se usara como en los ejemplos de internet, **todos compartirían el mismo token**, y
+cada persona vería los tickets del último que lo pegó.
+
+Tampoco conviene cambiar a `USER_ACCESSING`: cada usuario tendría que tener acceso directo
+al spreadsheet y a las carpetas de Drive, que es justo lo que `USER_DEPLOYING` evita.
+
+**Lo que se hace:**
+
+- Se guarda en **`PropertiesService.getScriptProperties()`**, con una llave por usuario:
+  `HELPDESK_TOKEN:<correo>`.
+- El correo sale de `Session.getActiveUser().getEmail()`, igual que en `src/Auth.gs`, y
+  **nunca del cliente**. Si viniera del cliente, cualquiera podría pedir los tickets de
+  otro cambiando el correo.
+- Si `getActiveUser()` viene vacío, no se lee ni se guarda nada.
+
+**Lo que esto NO protege, dicho sin rodeos:** quien sea **editor del proyecto de Apps
+Script** puede leer esas propiedades. En la práctica, el equipo de desarrollo podría ver
+los tokens. Por eso:
+
+- Se guarda **solo el token**: nada de contraseñas ni cookies completas.
+- Nunca se escribe en una hoja, en `Logger`, en `LOG_MIGRACION` ni en un mensaje de error.
+- Hay un botón "Desconectar" que lo borra, y se borra solo al primer 401/403.
+- No se guarda por más tiempo que el que el propio helpdesk le dé de vida.
+
+## La capa `HelpdeskApi`
+
+`src/services/HelpdeskApi.gs`, siguiendo el patrón de `GeotabService.gs`. **Todas** las
+llamadas al helpdesk pasan por aquí. Cuando TI cambie su API (y lo va a hacer sin avisar,
+porque no es una API pública), se arregla en un solo archivo.
+
+| Función | Qué hace |
+|---|---|
+| `conectar(token)` | valida el token con una llamada barata y, si responde bien, lo guarda |
+| `desconectar()` | borra el token del usuario actual |
+| `estado()` | `{ conectado, correo }`, **sin** devolver el token |
+| `listarTickets(filtros)` | la lista, ya normalizada a nuestro formato |
+| `obtenerTicket(id)` | el detalle de un ticket |
+
+Reglas:
+
+- `muteHttpExceptions: true` y se revisa el código a mano, como en Geotab.
+- **Normalizar en un solo lugar:** las pantallas nunca ven el JSON crudo del helpdesk,
+  solo nuestro formato. Si ellos renombran un campo, no se rompe la pantalla.
+- **Caché corta** con `CacheService.getUserCache()` (unos 60 s). Esta sí es por usuario
+  aunque la app corra como `USER_DEPLOYING`; hay que confirmarlo en la primera prueba. Si
+  no lo fuera, la llave de caché lleva el correo, igual que el token.
+- **Pruebas en `tests/`** con respuestas de ejemplo del helpdesk (con datos falsos),
+  sobre todo de la normalización y del manejo de 401/403.
+
+## La pantalla
+
+- Nuevo módulo en `src/html/js/` (por ejemplo `app-helpdesk.html`), incluido **después**
+  de `app.html` en `src/html/Index.html`. Ver la estructura en `CLAUDE.md`.
+- La primera vez muestra "Conectar helpdesk", con instrucciones paso a paso para copiar el
+  token.
+- Después, lista de tickets con filtros por estatus y el detalle al dar clic.
+- Un enlace "Abrir en helpdesk" en cada ticket, para lo que no replicamos.
+
+## Relación con nuestra hoja `TICKETS`
+
+`TicketsService.gs` ya maneja una bitácora propia de atención (hoja `TICKETS`, con una
+columna `TICKET`). **Pendiente:** confirmar si esa columna guarda el folio del helpdesk.
+Si sí, se pueden ligar los dos: desde un ticket nuestro ver su estatus en el helpdesk.
+
+## Riesgos que se aceptan con esta estrategia
+
+- **La API no es pública.** Cualquier cambio de TI puede romper el módulo sin aviso. Se
+  mitiga con la capa única y con errores claros ("el helpdesk cambió; avisar a sistemas"),
+  no con adivinanzas.
+- **El tráfico sale de servidores de Google**, no de la red de la empresa. TI lo puede ver
+  en sus bitácoras y bloquearlo.
+- **Los editores del proyecto pueden ver los tokens** (ver arriba).
+- **Si el token dura poco**, pegarlo cada rato vuelve incómoda esta opción y conviene pasar
+  a la extensión.
+
+## Lo que falta medir antes de escribir código
+
+Todo se mide desde el navegador de un usuario, con F12 → Network → Fetch/XHR, recargando
+`/app/formularios`. **Nunca se pega un token real en el repo, en un issue ni en un chat.**
+
+- [ ] **Cómo se autentica:** ¿`Authorization: Bearer …` o cookie? Si es cookie `HttpOnly`,
+      el usuario no la puede copiar con facilidad y B se complica.
+- [ ] **Cuánto dura:** si es un JWT, ver el campo `exp` en jwt.io. Esto decide B o la
+      extensión.
+- [ ] **El endpoint de la lista de tickets:** URL, método, parámetros de filtro y
+      paginación.
+- [ ] **La forma de la respuesta:** un ejemplo con datos falsos, que servirá de fixture
+      para las pruebas.
+- [ ] **El endpoint del detalle** de un ticket.
+- [ ] **¿Qué ve cada usuario?** ¿Solo sus tickets, o los de su área? Nuestra app mostrará
+      exactamente lo mismo que el helpdesk le muestre a ese token.
+- [ ] Si la columna `TICKET` de nuestra hoja `TICKETS` es el folio del helpdesk.
