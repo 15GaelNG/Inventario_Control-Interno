@@ -83,7 +83,12 @@ const base = {
 // DEPARTAMENTO vacío (la baja ya consta en ESTATUS), pero sus copias sí conservan el área.
 const vehiculos = [
   Object.assign({ FOLIO: 'CTA0001', 'SERIE VEHICULO': 'SER1', DEPARTAMENTO: 'CONSTRUCCION' }, base),
-  Object.assign({ FOLIO: 'CTA0002', 'SERIE VEHICULO': 'SER2', DEPARTAMENTO: 'BAJA VEHICULAR' }, base),
+  // CTA0002 está de baja, y quien la dio de baja escribió la palabra en TRES columnas:
+  // DEPARTAMENTO, PLACA y RESPONSABLE. Así está en producción, medido el 30/09/2026.
+  Object.assign({}, base, {
+    FOLIO: 'CTA0002', 'SERIE VEHICULO': 'SER2', DEPARTAMENTO: 'BAJA VEHICULAR',
+    PLACA: 'BAJA VEHICULAR', 'RESPONSABLE VEHICULO': 'BAJA VEHICULAR',
+  }),
   Object.assign({ FOLIO: 'CTA0003', 'SERIE VEHICULO': 'SER3', DEPARTAMENTO: '' }, base),
 ];
 
@@ -105,8 +110,10 @@ function armar() {
     [
       // al día en todo MENOS el departamento: se quedó con el viejo
       Object.assign({ ID_SENSOR: 'SEN-1', 'SERIE SENSOR': 'S1' }, comoSensores(vehiculos[0], 'POST VENTA')),
-      // el dueño dice BAJA VEHICULAR; esta copia guarda el área de verdad
-      Object.assign({ ID_SENSOR: 'SEN-2', 'SERIE SENSOR': 'S2' }, comoSensores(vehiculos[1], 'POST VENTA')),
+      // el dueño dice BAJA VEHICULAR en tres columnas; esta copia guarda los datos de verdad
+      Object.assign({ ID_SENSOR: 'SEN-2', 'SERIE SENSOR': 'S2' },
+        comoSensores(vehiculos[1], 'POST VENTA'),
+        { PLACA: 'AAA222', RESPONSABLE: 'LUISA ORTEGA' }),
       // el dueño quedó VACÍO; esta copia es la única que conserva el área
       Object.assign({ ID_SENSOR: 'SEN-3', 'SERIE SENSOR': 'S3' }, comoSensores(vehiculos[2], 'POST VENTA')),
     ]);
@@ -270,9 +277,25 @@ console.log('\n6. revisar({corregir:true}) no pisa nada con un centinela');
   const r = R.revisar({ corregir: true });
   ok(hs['INSTALACION DE SENSORES'].valor('CTA0002', 'FOLIO', 'DEPARTAMENTO') === 'POST VENTA',
     'la corrida nocturna no escribió BAJA VEHICULAR encima del área buena');
-  ok(r['INSTALACION DE SENSORES'].centinelasOmitidos === 1, 'lo cuenta como centinela omitido');
+  // El centinela NO es exclusivo de DEPARTAMENTO: en producción la misma palabra está
+  // escrita en PLACA y en RESPONSABLE. Una versión anterior solo cuidaba DEPARTAMENTO.
+  ok(hs['INSTALACION DE SENSORES'].valor('CTA0002', 'FOLIO', 'PLACA') === 'AAA222',
+    'tampoco encima de la PLACA buena');
+  ok(hs['INSTALACION DE SENSORES'].valor('CTA0002', 'FOLIO', 'RESPONSABLE') === 'LUISA ORTEGA',
+    'ni encima del RESPONSABLE bueno');
+  ok(r['INSTALACION DE SENSORES'].centinelasOmitidos === 3, 'cuenta los tres centinelas');
   ok(logDe(hs, 'OMITIDO_CENTINELA', 'DEPARTAMENTO').length === 1,
-    'y lo deja en el log: lo que hay que arreglar es el catálogo, no la copia');
+    'y los deja en el log: lo que hay que arreglar es VEHICULOS, no la copia');
+  ok(logDe(hs, 'OMITIDO_CENTINELA', 'PLACA').length === 1, 'la PLACA también quedó registrada');
+}
+
+console.log('\n6b. propagar() tampoco escribe un centinela en otra columna');
+{
+  const hs = armar();
+  const R = cargar(hs);
+  R.propagar('VEHICULOS', vehiculos[1], { PLACA: 'BAJA VEHICULAR' });
+  ok(hs['INSTALACION DE SENSORES'].valor('CTA0002', 'FOLIO', 'PLACA') === 'AAA222',
+    'la placa buena sobrevive a una edición que trae el centinela');
 }
 
 console.log('\n7. Al CREAR un registro sí se copia el valor de hoy, bitácora incluida');

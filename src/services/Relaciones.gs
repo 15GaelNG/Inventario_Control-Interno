@@ -145,21 +145,27 @@ const Relaciones = (function () {
 
   /**
    * Valores que VEHICULOS guarda en una columna pero que NO son un dato de esa columna:
-   * son estatus o relleno. Medido en producción el 29/09/2026, la columna DEPARTAMENTO
-   * traía 123 filas con 'BAJA VEHICULAR', 14 con 'NUCO SIN INFORMACION' y 2 con
-   * 'SIN ESPECIFICAR' — 139 de 648 (21%).
+   * son estatus o relleno. Propagarlos no corrige nada — PISA el dato bueno que la copia
+   * sí tiene.
    *
-   * Importa porque propagar esos valores no corrige nada: PISA el departamento bueno
-   * que la copia sí tiene. Con los números de ese día, una corrida de
-   * revisar({corregir:true}) sin esta guarda habría escrito 'BAJA VEHICULAR' encima de
-   * 9 hologramas que tenían su área de verdad.
+   * `'*'` vale para CUALQUIER columna, y así tiene que ser: medido en producción el
+   * 30/09/2026, 'BAJA VEHICULAR' no está solo en DEPARTAMENTO, también está escrito en
+   * PLACA y en RESPONSABLE VEHICULO. Alguien marca la baja de una unidad llenando varias
+   * columnas con la palabra. Una versión anterior de esta constante solo cubría
+   * DEPARTAMENTO, y con eso la corrida nocturna habría escrito 'BAJA VEHICULAR' encima de
+   * 8 placas y 12 responsables de verdad en HOLOGRAMAS, además de 9 departamentos.
    *
-   * 'OOAM TECNICO' y 'OOAM ADMINISTRATIVO' (25 filas) NO van en esta lista: parecen
-   * departamentos reales que faltan en el catálogo DEPARTAMENTOS, no centinelas. Lo
-   * correcto ahí es darlos de alta en el catálogo, no dejar de propagarlos.
+   * Ninguno de estos cuatro es una placa, un nombre, un área ni un color válido, en
+   * ninguna hoja. Si algún día hace falta un centinela que solo aplique a una columna,
+   * se agrega con el nombre de la columna como llave, junto a `'*'`.
+   *
+   * Lo que NO va aquí: 'OOAM TECNICO' y 'OOAM ADMINISTRATIVO' (25 filas) son
+   * departamentos REALES. El catálogo `DEPARTAMENTOS` está desactualizado y no los tiene,
+   * y por eso esta lista es fija y no se consulta contra el catálogo: validar contra él
+   * rechazaría áreas buenas (confirmado con Ayrton el 30/09/2026).
    */
   const CENTINELAS = {
-    'DEPARTAMENTO': ['BAJA VEHICULAR', 'NUCO SIN INFORMACION', 'SIN ESPECIFICAR'],
+    '*': ['BAJA VEHICULAR', 'FUERA DE SERVICIO', 'NUCO SIN INFORMACION', 'SIN ESPECIFICAR'],
   };
 
   const esBitacora_ = (copia) => copia.tipo === 'bitacora';
@@ -180,8 +186,10 @@ const Relaciones = (function () {
    * se propaga ni se corrige: escribirlo borraría el dato bueno de la copia.
    */
   function esCentinela_(colOrigen, valor) {
-    const lista = CENTINELAS[colOrigen];
-    return !!lista && lista.indexOf(normalizar_(valor)) !== -1;
+    const v = normalizar_(valor);
+    if (!v) return false;
+    return (CENTINELAS['*'] || []).indexOf(v) !== -1 ||
+           (CENTINELAS[colOrigen] || []).indexOf(v) !== -1;
   }
 
   /**

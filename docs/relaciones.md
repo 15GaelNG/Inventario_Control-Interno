@@ -76,32 +76,47 @@ Dos consecuencias que parecen contradicciones y no lo son:
 
 ### Principio: un centinela no se propaga
 
-`VEHICULOS.DEPARTAMENTO` no siempre guarda un departamento. Medido en producción el
-29/09/2026 (solo lectura), **164 de 648 filas (25%)** traen un valor que no está en el
-catálogo `DEPARTAMENTOS`:
+Cuando se da de baja una unidad, alguien escribe la palabra **dentro de las columnas de
+datos**, no solo en `ESTATUS`. Esos cuatro valores son estatus o relleno, y viven en la
+constante `CENTINELAS` de `Relaciones.gs`:
 
-| Valor | Filas | Qué es |
+`BAJA VEHICULAR` · `FUERA DE SERVICIO` · `NUCO SIN INFORMACION` · `SIN ESPECIFICAR`
+
+**Aplican a cualquier columna, no solo a `DEPARTAMENTO`**, y eso no es precaución teórica.
+Medido en producción el 30/09/2026 (solo lectura): **1,265 celdas en 14 columnas**, de las
+cuales **1,124 están fuera de lugar** — las otras 141 son la columna `ESTATUS`, donde sí
+pertenecen. **323 de los 648 vehículos (50%) tienen al menos una.**
+
+| Columna | Celdas | Qué trae |
 |---|---|---|
-| `BAJA VEHICULAR` | 123 | un **estatus**, no un área |
-| `NUCO SIN INFORMACION` | 14 | relleno |
-| `SIN ESPECIFICAR` | 2 | relleno |
-| `OOAM TECNICO` | 18 | parece un área **real que falta en el catálogo** |
-| `OOAM ADMINISTRATIVO` | 7 | igual |
+| `SEDE` | 309 | `SIN ESPECIFICAR` 173, `BAJA VEHICULAR` 120, `NUCO SIN INFORMACION` 16 |
+| `UBICACION` | 309 | igual que `SEDE` |
+| `DEPARTAMENTO` | 139 | `BAJA VEHICULAR` 123, `NUCO SIN INFORMACION` 14, `SIN ESPECIFICAR` 2 |
+| `RESPONSABLE VEHICULO` | 125 | `BAJA VEHICULAR` 106, `NUCO SIN INFORMACION` 14, `FUERA DE SERVICIO` 5 |
+| `PLACA` | 84 | `BAJA VEHICULAR` 84 |
+| `COLOR` | 69 | `SIN ESPECIFICAR` 56, `NUCO SIN INFORMACION` 13 |
+| `RAZON SOCIAL`, `MARCA`, `MODELO`, `TIPO DE COMBUSTIBLE`, `CLASE`, `LINEA VEHICULO`, `SERIE VEHICULO` | 11–15 cada una | casi todo `NUCO SIN INFORMACION` |
+| *(`ESTATUS`)* | *141* | *ahí sí pertenecen* |
 
-Los tres primeros están en la constante `CENTINELAS` de `Relaciones.gs` y **nunca se
-propagan ni se corrigen**: escribirlos no arregla nada, *pisa* el área buena que la copia
-sí tiene. Con los números de ese día, una corrida de `revisar({corregir:true})` sin esta
-guarda habría escrito `BAJA VEHICULAR` encima de **9 hologramas**, y de **4 inspecciones**
-si `INSPECCION VEHICULAR` hubiera entrado como caché.
+Un centinela **nunca se propaga ni se corrige**: escribirlo no arregla nada, *pisa* el dato
+bueno que la copia sí tiene. Se registra como `OMITIDO_CENTINELA` y se cuenta aparte,
+porque **lo que hay que arreglar es `VEHICULOS`, no la copia**.
 
-Los dos últimos **no** son centinelas: lo correcto ahí es darlos de alta en
-`DEPARTAMENTOS`, no dejar de propagarlos. Un centinela se loguea como `OMITIDO_CENTINELA`
-y se cuenta aparte, porque **lo que hay que arreglar es el catálogo, no la copia**.
+> **Una versión anterior de `CENTINELAS` solo cubría `DEPARTAMENTO`**, y con eso una corrida
+> de `revisar({corregir:true})` habría escrito `BAJA VEHICULAR` encima de **8 placas y 12
+> responsables de verdad** en `HOLOGRAMAS`, además de los 9 departamentos. El bug salió al
+> armar `inconsistencias-vehiculos.xlsx`, no al leer el código: la lista se había escrito
+> mirando una sola columna.
+
+> **El catálogo `DEPARTAMENTOS` no se usa para decidir esto, y no debe usarse.** Está
+> desactualizado: no tiene `OOAM TECNICO` (18 filas) ni `OOAM ADMINISTRATIVO` (7), que son
+> áreas **reales** (confirmado con Ayrton el 30/09/2026). Validar contra él rechazaría datos
+> buenos. Por eso `CENTINELAS` es una lista fija y corta.
 
 #### Pendiente: limpiar el `DEPARTAMENTO` de los vehículos de baja
 
-Los centinelas son una curita. La causa está en el catálogo, y se puede arreglar — medido
-en producción el 29/09/2026, solo lectura:
+Los centinelas son una curita. La causa está en `VEHICULOS`, y se puede arreglar — medido
+en producción, solo lectura:
 
 - **Las 123 filas con `DEPARTAMENTO = 'BAJA VEHICULAR'` tienen las 123 también
   `ESTATUS = 'BAJA VEHICULAR'`.** Cero excepciones. La baja **no** depende de
@@ -109,9 +124,11 @@ en producción el 29/09/2026, solo lectura:
   (`VehiculosService.gs:72`). Limpiar `DEPARTAMENTO` no pierde la baja.
 - Y ya hay **6 vehículos de baja que conservan su área** en `DEPARTAMENTO`: el patrón
   correcto existe en los datos.
-- De las 123, **7 tienen su área recuperable** desde las copias (`HOLOGRAMAS`,
-  `INSPECCION VEHICULAR`), y las fuentes coinciden en las 7 — sin un solo conflicto. A las
-  otras **116 les toca quedar vacías**: vacío dice la verdad, que no consta el área.
+- De las 123, **8 tienen su área recuperable** desde las copias (`HOLOGRAMAS`,
+  `INSPECCION VEHICULAR`), y las fuentes coinciden en las 8 — sin un solo conflicto. A las
+  otras **115 les toca quedar vacías**: vacío dice la verdad, que no consta el área.
+  (Un primer cálculo dio 7 y 116 porque validaba las áreas contra el catálogo
+  `DEPARTAMENTOS`; al dejar de hacerlo, `CTA0034` se recupera con `OOAM TECNICO`.)
 - `NUCO SIN INFORMACION` (14 filas) y `SIN ESPECIFICAR` (2) son también valores del
   desplegable de `ESTATUS` (`app.html:1392`) y pintan igual, pero **eso no se ha cruzado
   contra `ESTATUS` todavía**: hay que medirlo antes de tocarlas.
@@ -123,11 +140,15 @@ viva, y cuando se apague se puede borrar.
 
 **Orden obligatorio:** primero la regla del vacío
 ([arriba](#principio-el-barrido-nocturno-no-vacía-lo-que-sí-tiene-dato)) —ya está—, y
-**después** la limpieza. Al revés, la siguiente corrida nocturna propagaría los 116 vacíos y
+**después** la limpieza. Al revés, la siguiente corrida nocturna propagaría los 115 vacíos y
 borraría el área de las copias.
 
+**Y `DEPARTAMENTO` es solo la punta:** son 1,124 celdas fuera de lugar en 13 columnas. El
+inventario completo, celda por celda, está en `inconsistencias-vehiculos.xlsx`, hojas
+*Relleno en VEHICULOS* y *Relleno detalle*.
+
 **Lo que no se puede verificar desde aquí:** si AppSheet tiene esa columna como obligatoria,
-o alguna vista que agrupe por ella. Con 116 celdas vacías nuevas eso se notaría allá. Se
+o alguna vista que agrupe por ella. Con 115 celdas vacías nuevas eso se notaría allá. Se
 revisa en su editor antes de escribir.
 
 ### Pieza 1b — Cómo se ve cada caso en `LOG_RELACIONES`
@@ -138,8 +159,8 @@ Cinco tipos, y solo uno se corrige:
 |---|---|---|
 | `DIFERENCIA` | la copia quedó vieja | **sí** |
 | `DIFERENCIA_HISTORICA` | bitácora fechada: el valor del día del evento | no, a propósito |
-| `OMITIDO_CENTINELA` | el catálogo traía un estatus en vez de un dato | no: arregla el catálogo |
-| `OMITIDO_VACIO` | el catálogo no tiene el dato y la copia sí | no: arregla el catálogo |
+| `OMITIDO_CENTINELA` | `VEHICULOS` traía un estatus en vez de un dato | no: arregla `VEHICULOS` |
+| `OMITIDO_VACIO` | `VEHICULOS` no tiene el dato y la copia sí | no: arregla `VEHICULOS` |
 | `HUERFANO` | la copia apunta a un folio/serie que ya no existe | no: no hay con qué |
 | `CLAVE_DUPLICADA_EN_ORIGEN` | dos filas del dueño con la misma clave | no: no se sabe cuál manda |
 
@@ -153,13 +174,13 @@ es quién lo pidió:
 | `propagar()` | **vacía la copia** | el usuario acaba de borrar el campo a propósito |
 | `revisar()` | **no la toca**, loguea `OMITIDO_VACIO` | nadie pidió nada: es un barrido a ciegas |
 
-En un barrido, un dueño vacío casi siempre es un dato que falta en el catálogo, no la
+En un barrido, un dueño vacío casi siempre es un dato que falta en `VEHICULOS`, no la
 instrucción de borrarlo en tres módulos. Y la asimetría del error importa: borrar a ciegas
 es silencioso y no hay de dónde recuperarlo; dejar el valor viejo se reporta cada noche
 hasta que alguien lo vea.
 
 Esto no es hipotético. Ver [limpieza pendiente del catálogo](#pendiente-limpiar-el-departamento-de-los-vehículos-de-baja):
-a 116 vehículos de baja les toca quedar con `DEPARTAMENTO` vacío, y sin esta regla la
+a 115 vehículos de baja les toca quedar con `DEPARTAMENTO` vacío, y sin esta regla la
 primera corrida nocturna después de esa limpieza vaciaría también el área que `HOLOGRAMAS`
 e `INSTALACION DE SENSORES` sí conservan.
 
@@ -298,6 +319,41 @@ por todo el código:
 
 ---
 
+## El reporte de inconsistencias
+
+`inconsistencias-vehiculos.xlsx`, en la raíz del repo. Es una **foto** de producción
+(30/09/2026), no un tablero: para actualizarlo hay que volver a correr el reporte.
+
+| Hoja | Qué trae |
+|---|---|
+| *Resumen* | una fila por hoja copia, con el conteo de cada tipo |
+| *Detalle* | una fila por inconsistencia: hoja, fila, clave, columna, lo que dice cada lado y el tipo |
+| *Leyenda* | qué significa cada tipo y qué haría la corrida nocturna con él |
+| *Relleno en VEHICULOS* | las 14 columnas del catálogo que guardan estatus en vez de datos |
+| *Relleno detalle* | esas 1,265 celdas una por una, con su referencia |
+
+Los mapeos de columnas salen del código (`Relaciones.MAPA` y
+`InspeccionesService.DEL_VEHICULO`), no de la intuición. Lo que midió el 30/09/2026:
+
+| Hoja | Filas | Iguales | `DIFERENCIA` | `VEHICULOS_RELLENO` | `COPIA_VACIA` | `HUERFANO` |
+|---|---|---|---|---|---|---|
+| `INSTALACION DE SENSORES` | 208 | 2,473 | 18 | 0 | 200 | 1 |
+| `HOLOGRAMAS` | 256 | 833 | 146 | 29 | 0 | 111 |
+| `VERIFICACIONES` | 426 | 409 | 12 | 0 | 5 | 0 |
+| `INSPECCION VEHICULAR` | 302 | 2,749 | 186 | 16 | 29 | 0 |
+| `INCIDENCIAS` | 1 | 2 | 0 | 0 | 0 | 0 |
+| **Total** | | **6,466** | **362** | **45** | **234** | **112** |
+
+Tres cosas que salieron de ahí y valen más que los totales:
+
+1. **Las 200 `COPIA_VACIA` de Sensores son casi todas una sola columna**:
+   `CAPACIDAD DE COMBUSTIBLE` (157) y `COLOR` (43). No es deriva, es que nunca se llenaron.
+2. **Los 111 huérfanos de Hologramas ya se conocían**: son vehículos personales que no están
+   en el catálogo, y por diseño ahí los datos se capturan a mano.
+3. **`INSPECCION VEHICULAR` acumula 186 `DIFERENCIA`**, sobre todo `RESPONSABLE` (85) y
+   `OFICINA / DESARROLLO` (69). Es una bitácora: **eso no se corrige**, y ese número es
+   justamente la medida de cuánto se habría reescrito si se tratara como caché.
+
 ## Inventario de copias (mantener al día)
 
 | Hoja que copia | Clave | Columnas copiadas | Desde | Cómo se copia hoy | Pendiente |
@@ -305,7 +361,7 @@ por todo el código:
 | `VERIFICACIONES` | `FOLIO VEHICULO` | `PLACA` | `VEHICULOS` | `VerificacionesService`: al registrar y al cambiar el folio (copia en 2 lugares) | Unificar en `datosDeVehiculo_` (regla 1) |
 | `INCIDENCIAS` | `FOLIO` | `DEPARTAMENTO`, `MODELO` | `VEHICULOS` | **Los manda el formulario** (autocompletado en el navegador) y son editables. En el `MAPA` como **`bitacora`**: se reportan, no se corrigen | Copiarlos en el servidor; quitar edición (regla 2) |
 | `INSPECCION VEHICULAR` | `FOLIO` | `DEPARTAMENTO`, `SEDE`, `OFICINA / DESARROLLO`, `RESPONSABLE` | `VEHICULOS` | En el `MAPA` como **`bitacora`**: se reportan, no se corrigen | Nada: congelada a propósito |
-| `TICKETS` | — | (ninguna) | — | **No está en el `MAPA` y no debe estar.** Su `DEPARTAMENTO` es el de quien **levantó** el ticket (va pegado a `SOLICITANTE`), no el del vehículo: 320 de sus filas no coinciden con el catálogo, y eso es correcto | Nada |
+| `TICKETS` | — | (ninguna) | — | **No está en el `MAPA` y no debe estar.** Su `DEPARTAMENTO` es el de quien **levantó** el ticket (va pegado a `SOLICITANTE`), no el del vehículo: 320 de sus filas no coinciden con `VEHICULOS`, y eso es correcto | Nada |
 | `INSTALACION DE SENSORES` | `FOLIO` | 13 columnas: `SERIE VEHICULO`, `PLACA`, `MARCA`, `CLASE`, `LINEA VEHICULO`, `MODELO`, `COLOR`, `CAPACIDAD DE COMBUSTIBLE`, `RAZON SOCIAL`, `DEPARTAMENTO`, `SEDE`, `OFICINA / DESARROLLO` (← `UBICACION`), `RESPONSABLE` (← `RESPONSABLE VEHICULO`) | `VEHICULOS` | `SensoresService.datosDeVehiculo_` (función temporal, regla 1); no son editables en el módulo | Reemplazar por `Relaciones.datosParaNuevo` |
 
 > **`INSTALACION DE SENSORES` — lo que NO es copia:** `TIPO DE COMBUSTIBLE` es propio

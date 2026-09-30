@@ -26,7 +26,7 @@ Por dónde entrar según lo que traigas.
 
 ## Lo que hay que saber antes de tocar producción
 
-Cuatro cosas que no están en el código y que muerden:
+Cinco cosas que no están en el código y que muerden:
 
 1. **Agregar, mover o quitar una COLUMNA rompe la app de AppSheet** hasta que alguien
    regenere el esquema en su editor, y les pega a los usuarios en campo. Quitar *filas* no.
@@ -38,11 +38,18 @@ Cuatro cosas que no están en el código y que muerden:
    todos entran. Correr `configurarPermisos()` allá dejaría a 40 personas sin módulos hasta
    que alguien les asigne perfil. Detalle en
    [limpieza-spreadsheet.md](limpieza-spreadsheet.md).
-4. **`VEHICULOS.DEPARTAMENTO` guarda estatus, no solo departamentos**: 123 de 648 filas
-   dicen `BAJA VEHICULAR`. Sincronizar esa columna sin filtrarlos *borra* el área buena de
-   los otros módulos. Y ojo con la otra mitad: `INSPECCION VEHICULAR` e `INCIDENCIAS` son
-   **bitácoras fechadas**, no cachés — su departamento es el del día del evento y
-   corregirlo reescribe el pasado. Detalle en [relaciones.md](relaciones.md).
+4. **`VEHICULOS` guarda estatus dentro de sus columnas de datos**: `BAJA VEHICULAR`,
+   `FUERA DE SERVICIO`, `NUCO SIN INFORMACION` y `SIN ESPECIFICAR` ocupan **1,124 celdas
+   fuera de lugar en 13 columnas** — `SEDE` y `UBICACION` 309 cada una, `DEPARTAMENTO` 139,
+   `RESPONSABLE VEHICULO` 125, `PLACA` 84. La mitad de la flota (323 de 648) tiene al menos
+   una. Sincronizar sin filtrarlas *borra* el dato bueno de los otros módulos. Y ojo con la
+   otra mitad del problema: `INSPECCION VEHICULAR` e `INCIDENCIAS` son **bitácoras
+   fechadas**, no cachés — su departamento es el del día del evento y corregirlo reescribe
+   el pasado. Detalle en [relaciones.md](relaciones.md), inventario celda por celda en
+   `inconsistencias-vehiculos.xlsx`.
+5. **El catálogo `DEPARTAMENTOS` está desactualizado** y no sirve para validar: le faltan
+   `OOAM TECNICO` y `OOAM ADMINISTRATIVO`, que son áreas reales de 25 vehículos activos.
+   Validar contra él rechaza datos buenos.
 
 ## Los Excel de apoyo, en la raíz del repo
 
@@ -52,3 +59,4 @@ Cuatro cosas que no están en el código y que muerden:
 | `auditoria-ids.xlsx` | Una fila por hoja: columna vieja, columna nueva y un ejemplo de cada lado para cotejar |
 | `pestanas-sin-uso.xlsx` | Las pestañas que el código no nombra, con su riesgo |
 | `fechas-de-alta.xlsx` | Qué columna de fecha representa el alta de cada hoja |
+| `inconsistencias-vehiculos.xlsx` | `VEHICULOS` contra las 5 hojas que copian sus datos, y el relleno dentro de `VEHICULOS` mismo |
