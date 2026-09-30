@@ -123,6 +123,14 @@ const CambiosMontoCCHService = (function () {
 
       const fila = {};
       // El ID lo pone SheetUtils.insert con el formato del sistema (ver docs/ids-asignacion.md)
+      // 'ID CAJA CHICA' es la llave foránea: 'cajaActual' ya venía completa y su ID se
+      // estaba tirando. 'ID CCH' se queda porque es dato de negocio.
+      const idCaja = cajaActual['ID'];
+      if (!idCaja) {
+        throw new Error('La caja chica con ID CCH=' + idCch + ' no tiene ID. Corre el ' +
+          'pipeline de IDs sobre este libro antes de registrar cambios de monto.');
+      }
+      fila['ID CAJA CHICA'] = idCaja;
       fila['ID CCH'] = idCch;
       fila['TIPO'] = nueva > anterior ? 'INCREMENTO' : 'REDUCCION';
       fila['CANTIDAD'] = Math.abs(nueva - anterior);

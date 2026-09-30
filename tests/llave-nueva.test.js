@@ -202,5 +202,51 @@ console.log('\n7. NINGUNA mención al nombre viejo, aunque no sea una búsqueda'
      "VehiculosService entrega la propiedad ID_VEHICULO leyéndola de la columna 'ID'");
 }
 
+console.log('\n8. Cada hijo escribe su LLAVE FORÁNEA, no solo la llave de negocio');
+{
+  // Por qué existe esta revisión: los IDs ya estaban puestos, pero la FK solo la llenaba
+  // el paso por lotes de la migración. Existía para los 60,000 renglones viejos y moría
+  // para todo lo nuevo — un sensor creado desde la app nacía con ID VEHICULO vacío.
+  //
+  // Se acepta cualquiera de las dos formas, porque las dos son legítimas:
+  //   - nombrar la columna (los servicios cuyo copiado al crear NO coincide con lo que el
+  //     MAPA vigila, así que mover todo a Relaciones les tiraría columnas), o
+  //   - delegar en Relaciones.datosParaNuevo (los que sí coinciden).
+  //
+  // Lo que NO se acepta es que un módulo de estas dos familias no mencione su FK en
+  // ningún lado: eso significa que sus registros nuevos nacen sueltos.
+  const HIJOS = {
+    'SensoresService.gs': 'ID VEHICULO',
+    'VerificacionesService.gs': 'ID VEHICULO',
+    'HologramasService.gs': 'ID VEHICULO',
+    'InspeccionesService.gs': 'ID VEHICULO',
+    'IncidenciasService.gs': 'ID VEHICULO',
+    'ReasignacionesVehicularesService.gs': 'ID VEHICULO',
+    'CambiosVehiculosService.gs': 'ID VEHICULO',
+    'ArqueosService.gs': 'ID CAJA CHICA',
+    'CambiosMontoCCHService.gs': 'ID CAJA CHICA',
+  };
+  const sinVinculo = [];
+  Object.keys(HIJOS).forEach((archivo) => {
+    const s = servicios.filter((x) => x.nombre === archivo)[0];
+    if (!s) { sinVinculo.push(archivo + ' (no encontré el archivo)'); return; }
+    const nombra = s.texto.indexOf("'" + HIJOS[archivo] + "'") !== -1;
+    const delega = /Relaciones\.datosParaNuevo\(/.test(s.texto);
+    if (!nombra && !delega) sinVinculo.push(archivo + ' -> ' + HIJOS[archivo]);
+  });
+  ok(sinVinculo.length === 0,
+     sinVinculo.length
+       ? 'no escriben su llave foránea:\n       ' + sinVinculo.join('\n       ')
+       : 'los ' + Object.keys(HIJOS).length + ' hijos de Vehículos y Caja Chica escriben su FK');
+
+  // Y que el resolvedor compartido siga entregándola: si alguien le quita la llaveForanea
+  // al MAPA, los cinco que delegan se quedarían sin FK y la revisión de arriba no lo vería.
+  const rel = lee('services', 'Relaciones.gs');
+  const cuantas = (rel.match(/llaveForanea:/g) || []).length;
+  ok(cuantas === 5, 'las 5 copias del MAPA declaran su llaveForanea (encontré ' + cuantas + ')');
+  ok(/datos\[copia\.llaveForanea\]\s*=/.test(rel),
+     'y datosParaNuevo la pone en los datos del registro nuevo');
+}
+
 console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');
 process.exit(fallas ? 1 : 0);

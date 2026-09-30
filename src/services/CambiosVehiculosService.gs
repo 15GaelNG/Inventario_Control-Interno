@@ -65,6 +65,11 @@ const CambiosVehiculosService = (function () {
         if (antes === despues) return;
         SheetUtils.insert(ssId(), sheet.getName(), {
           ID: Ids.nuevo(Entidades.prefijo('CAMBIOS VEHICULOS')),
+          // datosAntes ES el renglón completo del vehículo, así que ya trae su ID: no hace
+          // falta cambiarle la firma a esta función ni volver a leer la hoja. Si el
+          // vehículo no tuviera ID se guarda vacío a propósito — esto es una bitácora y
+          // nunca debe poder tumbar el guardado real del vehículo.
+          'ID VEHICULO': (datosAntes && datosAntes['ID']) || '',
           FOLIO: folio || '',
           TABLA: 'VEHICULOS',
           CAMPO: campo,

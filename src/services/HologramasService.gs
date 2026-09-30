@@ -342,6 +342,10 @@ const HologramasService = (function () {
     // Si la unidad está en el catálogo, sus datos ganan sobre lo que haya mandado el cliente
     const vehiculo = catalogoPorSerie_()[enMayusculas_(datos.SERIE_VEHICULO)];
     if (vehiculo) {
+      // La llave foránea. Se queda VACÍA cuando la unidad no está en el catálogo, y eso no
+      // es una falla: 91 de los 255 hologramas son de vehículos PERSONALES, que por diseño
+      // no están ahí. Antes esta columna solo la llenaba el paso por lotes de la migración.
+      fila['ID VEHICULO'] = vehiculo['ID'] || '';
       Object.keys(DEL_CATALOGO).forEach((campo) => {
         const valor = vehiculo[DEL_CATALOGO[campo]];
         fila[CAMPOS[campo]] = valor === undefined || valor === null ? '' : valor;

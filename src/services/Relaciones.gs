@@ -76,6 +76,11 @@ const MAPA = {
     VEHICULOS: {
       spreadsheet: () => Config.SPREADSHEET_IDS.VEHICULOS(),
       hoja: 'VEHICULOS',
+      // La llave con la que la GENTE nombra un vehículo, y la que mandan los formularios.
+      // No es lo mismo que `claveOrigen`: esa es la llave de PROPAGACIÓN de cada copia, y
+      // en tres de ellas es la serie porque la serie no cambia. datosParaNuevo acepta las
+      // dos, más el ID.
+      llaveDeNegocio: 'FOLIO',
       copias: [
         {
           nombre: 'INSTALACION DE SENSORES',
@@ -406,13 +411,27 @@ const MAPA = {
     const copia = origenDef.copias.find((c) => c.nombre === nombreCopia);
 
     const ssId = origenDef.spreadsheet();
-    // Si viene con la forma de un ID nuevo, se busca por ID; si no, por la llave de negocio
-    // que esta copia use (folio o serie).
+
+    // Se acepta, en este orden: el ID del dueño, la llave de propagación de esta copia
+    // (serie o folio), y la llave humana del dueño (el folio). La tercera no es un lujo:
+    // para Sensores, Hologramas e Inspección la llave de propagación es la SERIE, pero
+    // todos los formularios mandan el FOLIO, así que sin ella este camino no serviría
+    // hasta que el frontend entero mandara IDs.
     const porId = Ids.tieneForma(valorClave);
-    const columnaBusqueda = porId ? 'ID' : copia.claveOrigen;
-    const encontrado = SheetUtils.findById(ssId, origenDef.hoja, valorClave, columnaBusqueda);
+    const candidatas = porId
+      ? ['ID']
+      : [copia.claveOrigen, origenDef.llaveDeNegocio].filter(
+          (c, i, arr) => c && arr.indexOf(c) === i);
+
+    let encontrado = null;
+    let columnaBusqueda = candidatas[0];
+    for (let i = 0; i < candidatas.length && !encontrado; i++) {
+      encontrado = SheetUtils.findById(ssId, origenDef.hoja, valorClave, candidatas[i]);
+      if (encontrado) columnaBusqueda = candidatas[i];
+    }
     if (!encontrado) {
-      throw new Error('El ' + columnaBusqueda + ' "' + valorClave + '" no existe en ' + origenNombre);
+      throw new Error('No existe en ' + origenNombre + ' ningún renglón con "' + valorClave +
+        '" en ' + candidatas.join(' ni en '));
     }
 
     // Aquí SÍ se copia aunque la copia sea una bitácora, y aunque el valor sea un

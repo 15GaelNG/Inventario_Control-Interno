@@ -30,21 +30,9 @@ const SensoresService = (function () {
    * TEMPORAL — se reemplaza por Relaciones.datosParaNuevo cuando exista
    * (ver docs/relaciones.md). Columna en esta hoja → columna en VEHICULOS.
    */
-  const COPIADAS_DE_VEHICULO = {
-    'SERIE VEHICULO': 'SERIE VEHICULO',
-    'PLACA': 'PLACA',
-    'MARCA': 'MARCA',
-    'CLASE': 'CLASE',
-    'LINEA VEHICULO': 'LINEA VEHICULO',
-    'MODELO': 'MODELO',
-    'COLOR': 'COLOR',
-    'CAPACIDAD DE COMBUSTIBLE': 'CAPACIDAD COMBUSTIBLE (LTS)',
-    'RAZON SOCIAL': 'RAZON SOCIAL',
-    'DEPARTAMENTO': 'DEPARTAMENTO',
-    'SEDE': 'SEDE',
-    'OFICINA / DESARROLLO': 'UBICACION',
-    'RESPONSABLE': 'RESPONSABLE VEHICULO',
-  };
+  // Las columnas que se copian del vehículo viven en Relaciones.MAPA, no aquí. Antes había
+  // una copia de la lista en este archivo: el mismo juego de 14 columnas escrito dos veces,
+  // y solo una de las dos sabía de la llave foránea.
 
   /** Combustible del vehículo → productos que puede cargar (lo que se elige en esta hoja) */
   const COMBUSTIBLES_POR_TIPO = {
@@ -122,15 +110,16 @@ const SensoresService = (function () {
    * Cuando exista Relaciones.gs, esta función se reemplaza por Relaciones.datosParaNuevo.
    * @return {{columnas: Object, vehiculo: Object}}
    */
-  function datosDeVehiculo_(folio) {
-    const vehiculo = SheetUtils.findById(ssId(), 'VEHICULOS', folio, 'FOLIO');
-    if (!vehiculo) throw new Error('No existe un vehículo con folio ' + folio);
-    const columnas = { 'FOLIO': folio };
-    Object.keys(COPIADAS_DE_VEHICULO).forEach((destino) => {
-      const origen = vehiculo.data[COPIADAS_DE_VEHICULO[destino]];
-      columnas[destino] = origen === undefined || origen === null ? '' : origen;
-    });
-    return { columnas: columnas, vehiculo: vehiculo.data };
+  /**
+   * Las columnas que hereda un sensor del vehículo, más la llave foránea `ID VEHICULO`.
+   *
+   * Acepta el ID del vehículo o su folio: lo resuelve Relaciones.datosParaNuevo. Por eso
+   * el parámetro ya no se llama `folio` — mientras el frontend se mueve, llega cualquiera
+   * de los dos, y el FOLIO que se guarda sale del renglón del vehículo, no de aquí.
+   */
+  function datosDeVehiculo_(idOFolio) {
+    const r = Relaciones.datosParaNuevo('INSTALACION DE SENSORES', idOFolio);
+    return { columnas: r.datos, vehiculo: r.origen };
   }
 
   /** Productos de combustible válidos según el tipo que trae el vehículo */
@@ -206,8 +195,9 @@ const SensoresService = (function () {
   function registrar(token, datos, archivo) {
     Permisos.puedeEditar(token, 'instalacion-sensores');
 
+    // Trae el ID del vehículo o su folio, según qué tan migrado esté el formulario.
     const folio = limpiar_(datos.FOLIO);
-    if (!folio) throw new Error('El folio del vehículo es obligatorio');
+    if (!folio) throw new Error('Selecciona el vehículo');
     const serieSensor = enMayusculas_(datos.SERIE_SENSOR);
     if (!serieSensor) throw new Error('La serie del sensor es obligatoria');
 

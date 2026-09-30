@@ -107,10 +107,12 @@ const VerificacionesService = (function () {
   function registrar(token, datos, archivo) {
     const sesion = Permisos.puedeEditar(token, 'verificaciones');
 
+    // Trae el ID del vehículo o su folio, según qué tan migrado esté el formulario.
     const folio = String(datos.FOLIO || '').trim();
-    if (!folio) throw new Error('El folio del vehículo es obligatorio');
-    const vehiculo = SheetUtils.findById(ssId(), 'VEHICULOS', folio, 'FOLIO');
-    if (!vehiculo) throw new Error('No existe un vehículo con folio ' + folio);
+    if (!folio) throw new Error('Selecciona el vehículo');
+    // Resuelve al vehículo y devuelve ya puestas 'ID VEHICULO', 'FOLIO VEHICULO' y 'PLACA'.
+    // Truena si no existe, igual que antes.
+    const delVehiculo = Relaciones.datosParaNuevo('VERIFICACIONES', folio);
 
     const fechaVerificacion = fechaDesdeInput_(datos.FECHA_VERIFICACION, 'fecha de verificación');
     const fechaProxima = fechaDesdeInput_(datos.FECHA_PROXIMA, 'fecha de próxima verificación');
@@ -129,16 +131,14 @@ const VerificacionesService = (function () {
     });
 
     try {
-      SheetUtils.insert(ssId(), hoja_().getName(), {
+      SheetUtils.insert(ssId(), hoja_().getName(), Object.assign({}, delVehiculo.datos, {
         'ID': id,
-        'FOLIO VEHICULO': folio,
-        'PLACA': vehiculo.data['PLACA'] || '',
         'FECHA REGISTRO': new Date(),
         'FECHA VERIFICACION': fechaVerificacion,
         [COL_COMPROBANTE]: imagen.ruta,
         'FECHA PROXIMA VERIFICACION': fechaProxima,
         'REGISTRADO POR': sesion.nombre,
-      });
+      }));
     } catch (err) {
       DriveUtils.eliminar(imagen.fileId); // no dejar imágenes huérfanas
       throw err;

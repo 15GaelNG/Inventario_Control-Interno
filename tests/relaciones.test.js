@@ -377,6 +377,16 @@ console.log('\n7c. Da lo mismo si le dan el ID del dueño o su llave de negocio'
   const serie = R.datosParaNuevo('INSTALACION DE SENSORES', 'VEH-00000000BBBBBB');
   ok(serie.datos['SERIE VEHICULO'] === 'SER2',
     'y en las que se emparejan por serie, la columna de la serie recibe la SERIE');
+
+  // Esta es la que habilita la transición completa. Sensores, Hologramas e Inspección se
+  // propagan por SERIE (porque la serie no cambia), pero TODOS los formularios mandan el
+  // FOLIO. Sin aceptar la llave humana del dueño, mover esos tres a datosParaNuevo los
+  // habría roto hasta que el frontend entero mandara IDs.
+  const porFolioEnSerie = R.datosParaNuevo('INSTALACION DE SENSORES', 'CTA0001');
+  ok(porFolioEnSerie.datos['SERIE VEHICULO'] === 'SER1',
+    'una copia que se propaga por serie también acepta el FOLIO, que es lo que manda la app');
+  ok(porFolioEnSerie.datos['ID VEHICULO'] === 'VEH-00000000AAAAAA',
+    'y llega al mismo dueño, con la misma llave foránea');
 }
 
 console.log('\n7d. Si el dueño no existe, o no tiene ID, truena antes de escribir nada');
