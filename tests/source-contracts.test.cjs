@@ -554,8 +554,8 @@ test('Líneas usa la BD de pruebas del equipo y ninguna carpeta personal de prue
 
 test('Gestión de Activos abre al colaborador en el panel lateral, no al final de la página', () => {
   const lineas = read('src/html/js/lineas.html');
-  assert.match(lineas, /function abrirPanelLateral\(titulo, subtitulo\)/);
-  assert.match(lineas, /elemento\.className = 'dt-panel ln-panel';/);   // mismo panel que el detalle de DataTable
+  assert.match(lineas, /function abrirPanelLateral\(titulo, subtitulo, opciones\)/);
+  assert.match(lineas, /elemento\.className = 'dt-panel ln-panel' \+ \(o\.noModal \? ' ln-panel-nomodal' : ''\);/);   // mismo panel que el detalle de DataTable
   const gestion = lineas.slice(lineas.indexOf('function initGestionActivos'), lineas.indexOf('function pintarCuadros'));
   assert.match(gestion, /const panel = abrirPanelLateral\(/);
   assert.doesNotMatch(gestion, /scrollIntoView|lnga-resultado/);
@@ -966,7 +966,8 @@ test('Acciones masivas de equipos: reasignar desde 2 seleccionados, sin tocar la
   assert.ok(guardados.every(([, c]) => c['ESTATUS EQUIPO'] === 'RESGUARDO'));
 
   // Con uno solo o sin motivo, error
-  assert.throws(() => Reg.accionMasiva('REASIGNAR', ['a'], { valores: { RESPONSABLE: 'ANA', _MOTIVO: 'CIERRE DE OFICINA' } }, u), /dos o más/);
+  // Desde el 30-sep se puede reasignar un solo equipo (barra de selección tipo Drive); sin ninguno, error
+  assert.throws(() => Reg.accionMasiva('REASIGNAR', [], { valores: { RESPONSABLE: 'ANA', _MOTIVO: 'CIERRE DE OFICINA' } }, u), /al menos un equipo/);
   assert.throws(() => Reg.accionMasiva('REASIGNAR', ['a', 'b'], { valores: { RESPONSABLE: 'ANA' } }, u), /MOTIVO/);
   // "Cancelar equipos" ya no existe (30-sep): los equipos no se cancelan, solo las líneas
   guardados.length = 0;
@@ -974,10 +975,10 @@ test('Acciones masivas de equipos: reasignar desde 2 seleccionados, sin tocar la
   assert.equal(guardados.length, 0);
   assert.doesNotMatch(read('src/html/js/lineas.html'), /clave: 'CANCELAR'/);
 
-  // Cliente: botones solo en Equipos y desde 2 seleccionados (DataTable `minimo`)
+  // Cliente (estilo Drive, 30-sep): las acciones salen de accionesSeleccionDe(modulo); Reasignar ya desde 1
   const cliente = read('src/html/js/lineas.html');
-  assert.match(cliente, /accionesSeleccion: modulo === 'equipos' \? ACCIONES_MASIVAS\.map/);
-  assert.match(cliente, /minimo: a\.minimo \|\| 2/);
+  assert.match(cliente, /accionesSeleccion: accionesSeleccionDe\(modulo\),/);
+  assert.match(cliente, /alHacer: \(f\) => abrirMasiva\(ACCION_REASIGNAR, f\)/);
   assert.match(cliente, /clave: 'RESGUARDO', texto: 'Mandar a resguardo', icono: 'archive', minimo: 1, propia: true/);
   assert.match(cliente, /llamar\('apiLineasAccionMasiva', accion\.clave, ids, datos\)/);
   assert.match(read('src/html/js/componentes/datatable.html'), /b\.hidden = nSel < \(\(accionesSeleccion\[Number\(b\.dataset\.accionSel\)\] \|\| \{\}\)\.minimo \|\| 1\)/);
@@ -1070,7 +1071,7 @@ test('Vista rápida en Líneas Telefónicas, responsiva editable y calificación
   // Sin columna de Acciones (30-sep): clic = vista rápida, doble clic = ficha; la vista rápida trae "Abrir ficha completa"
   assert.doesNotMatch(cliente, /titulo: 'Vista rápida', alHacer/);
   assert.match(cliente, /data-vr-ficha>' \+ icono\('maximize-2'\) \+ ' Abrir ficha completa/);
-  assert.match(cliente, /function vistaRapida\(tipo, r\) \{/);
+  assert.match(cliente, /function vistaRapida\(tipo, r, opciones\) \{/);
   assert.match(cliente, /if \(captura\.tipo === 'INSPECCION'\) pintarCalificacionVivo\(\);/);
   assert.match(read('src/html/views/lineas/lineas-telefonicas.html'), /id="ln-calif-vivo" role="status" aria-live="polite" hidden/);
 });
@@ -1086,9 +1087,10 @@ test('Navegación de la ficha: migas por lo que es cada nivel, pestaña recordad
   // Pestaña recordada al regresar
   assert.match(cliente, /if \(pila\.length\) pila\[pila\.length - 1\]\.pestana = nombre;/);
   assert.match(cliente, /const guardada = \(pila\[pila\.length - 1\] \|\| \{\}\)\.pestana;/);
-  // Un clic = vista rápida (espera por si es doble clic); doble clic = ficha completa
-  assert.match(cliente, /clicPendiente = setTimeout\(\(\) => \{[\s\S]*?vistaRapida\(cfg\.detalle, r\);[\s\S]*?\}, 260\);/);
-  assert.match(cliente, /clearTimeout\(clicPendiente\);\s*abrir\(cfg\.detalle, tr\.dataset\.id\);/);
+  // Estilo Drive (30-sep): el clic selecciona; doble clic = ficha completa; con el dedo, tocar = vista rápida
+  assert.match(cliente, /alAbrirFila: \(r\) => abrir\(cfg\.detalle, r\.id\),/);
+  assert.match(cliente, /alTocarFila: \(r\) => vistaRapida\(cfg\.detalle, r\),/);
+  assert.doesNotMatch(cliente, /clicPendiente/);
   // Fotos también en inspecciones de NUCOS y sin la advertencia
   assert.doesNotMatch(cliente, /Esta inspección está en la carpeta NUCOS de Drive/);
   assert.match(cliente, /\(r\.puedeOperar \? '<div class="ln-fotos-despues">/);
@@ -1105,14 +1107,13 @@ test('Navegación de la ficha: migas por lo que es cada nivel, pestaña recordad
 test('Tablas con modo selección, gestos Atrás/Adelante, vista rápida conectada y "Última …" más rápida', () => {
   const dt = read('src/html/js/componentes/datatable.html');
   // Modo selección opcional (no cambia las tablas que no lo piden)
-  assert.match(dt, /\$\{cfg\.seleccionable && cfg\.modoSeleccion \? `<button type="button" class="secondary dt-btn-modo-seleccion"/);
+  assert.match(dt, /\$\{cfg\.seleccionable && cfg\.modoSeleccion && !cfg\.seleccionDrive \? `<button type="button" class="secondary dt-btn-modo-seleccion"/);
   assert.match(dt, /\.dt\.dt-con-modo-seleccion:not\(\.dt-modo-seleccion\) \.dt-col-check \{ display: none; \}/);
   assert.match(dt, /if \(!st\.modoSeleccion && \(ev\.ctrlKey \|\| ev\.metaKey\)\) \{ setModoSeleccion\(true\);/);
   assert.match(dt, /tbody\.addEventListener\('pointermove', \(ev\) => \{\s*if \(!arrastre\.inicio/);
   assert.match(dt, /setModoSeleccion, enModoSeleccion: \(\) => st\.modoSeleccion,/);
   const lineas = read('src/html/js/lineas.html');
-  assert.match(lineas, /seleccionable: true, modoSeleccion: true \}, config\)/);
-  assert.match(lineas, /const seleccionando = \(ev\) => tablas\[modulo\]\.enModoSeleccion\(\) \|\| ev\.ctrlKey/);
+  assert.match(lineas, /seleccionable: true, modoSeleccion: true, seleccionDrive: true \}, config\)/);
   // Historial del navegador
   const hist = read('src/html/historial-navegador.html');
   assert.match(hist, /google\.script\.history/);
@@ -1122,7 +1123,7 @@ test('Tablas con modo selección, gestos Atrás/Adelante, vista rápida conectad
   assert.match(lineas, /if \(!sinHistorial\) pasoHistorial\(\);/);
   assert.match(lineas, /HistorialApp\.registrar\('lineas-telefonicas'/);
   // Vista rápida conectada: equipo ↔ línea
-  assert.match(lineas, /if \(b\.dataset\.vrIr === 'linea' && suLinea\) vistaRapida\('linea', suLinea\);/);
+  assert.match(lineas, /if \(b\.dataset\.vrIr === 'linea' && suLinea\) vistaRapida\('linea', suLinea, opciones\);/);
   // "Última …": el servidor solo recorre la rama del tipo
   assert.match(read('src/services/lineas/LineasArchivos.gs'), /function archivosNuco\(nuco, soloTipo\)/);
   assert.match(read('src/services/TelefoniaService.gs'), /const r = carpetaNucoDe_\(id, sesion, tipo\);/);
@@ -1368,4 +1369,41 @@ test('PARA VENTA y PARA DESECHO siguen la lógica de Mandar a resguardo (usuario
   assert.match(resg, /const yaGuardado = ESTATUS_EQUIPO_RESGUARDO\.indexOf\(may\(antes\.estatus\)\) >= 0;/);
   assert.match(resg, /LineasDatos\.actualizarFila\(TAB, abierto\._fila,/);
   assert.match(resg, /'ESTADO': yaGuardado \? ESTADO\.RESGUARDO : ESTADO\.PENDIENTE/);
+});
+
+test('Selección como en Google Drive y "Mandar a cancelación" (usuario, 30-sep)', () => {
+  const dt = read('src/html/js/componentes/datatable.html');
+  // Clic = seleccionar esa fila; Ctrl alterna; Shift rango; sin reescribir las filas (el doble clic sigue llegando)
+  assert.match(dt, /function clicDrive\(id, teclas\)/);
+  assert.match(dt, /else st\.seleccion = new Set\(\[id\]\);/);
+  assert.match(dt, /function pintarSeleccion\(\)/);
+  // Barra con lo más usado y ⋮ con el resto; clic derecho y ⋮ de la fila con todas
+  assert.match(dt, /<div class="dt-barra-sel" role="toolbar"/);
+  assert.match(dt, /const enBarra = aplican\.filter\(\(a\) => a\.enBarra\);/);
+  assert.match(dt, /tbody\.addEventListener\('contextmenu'/);
+  assert.match(dt, /celdaMas\(botonIcono\('dt-btn-mas', 'ellipsis-vertical'/);
+  // El cuadro solo empieza fuera de las filas, y queda espacio vacío abajo para arrastrarlo
+  assert.match(dt, /if \(cfg\.seleccionDrive && ev\.target\.closest\('tbody tr\[data-id\]'\)\) return;/);
+  assert.match(dt, /\.dt\.dt-drive \.dt-scroll table \{ margin-bottom: 56px; \}/);
+  // Con el dedo: tocar abre, mantener presionado entra al modo selección
+  assert.match(dt, /if \(fila && cfg\.alTocarFila\) cfg\.alTocarFila\(fila\);/);
+  assert.match(dt, /setModoSeleccion\(true\);\s*if \(navigator\.vibrate\)/);
+  // Líneas: sin botón "Seleccionar"; Detalles sigue a la selección en un panel sin fondo
+  const lineas = read('src/html/js/lineas.html');
+  assert.match(lineas, /function accionesSeleccionDe\(modulo\)/);
+  assert.match(lineas, /if \(detallesAbiertos && filas\.length === 1 && modulo === memoria\.modulo && vigente\(\)\) mostrarDetalles/);
+  assert.match(lineas, /if \(o\.noModal\) document\.body\.append\(elemento\); else document\.body\.append\(fondo, elemento\);/);
+  // Ficha: cuatro a la vista y ⋮
+  assert.match(lineas, /data-ln-ficha-mas="' \+ esc\(tipo\)/);
+  assert.match(lineas, /function abrirMenuFicha\(boton\)/);
+  // Mandar a cancelación: cliente, API y servidor; la pestaña Resguardos solo muestra renglones con equipo
+  assert.match(lineas, /llamar\('apiLineasMandarCancelacion', conNumero\.map\(\(x\) => x\.id\)/);
+  assert.match(lineas, /vista === 'RESGUARDOS' \? todas\.filter\(\(f\) => f\.ESTADO\)/);
+  assert.match(read('src/ClientApi.gs'), /function apiLineasMandarCancelacion\(token, ids, datos\)/);
+  const resg = read('src/services/lineas/LineasResguardos.gs');
+  assert.match(resg, /function mandarCancelacion\(ids, datos, usuario\)/);
+  assert.match(resg, /'SOLICITO_CORREO': usuario\.correo, 'SOLICITO_NOMBRE': usuario\.nombre, 'ESTADO': '',/);
+  assert.match(resg, /if \(cancelando\[claveCancelacion_\(f\['ID'\], numero\)\]\)/);
+  // Una línea suelta conserva su número al confirmar la cancelación
+  assert.match(resg, /if \(!LineasRepo\.TIPOS_CON_EQUIPO\[tipo\]\) return \{ 'ESTATUS LINEA': 'CANCELADA' \};/);
 });

@@ -298,8 +298,9 @@
           },
         });
       }
-      // modoSeleccion: casillas ocultas hasta "Seleccionar" (como iOS); clic, arrastre o Shift+clic para marcar varias
-      return DataTable.crear(contenedor, Object.assign({ tamanoPagina: 50, seleccionable: true, modoSeleccion: true }, config));
+      // Selección como en Google Drive (30-sep): un clic selecciona y arriba salen sus acciones (⋮ con las demás, también
+      // con clic derecho); doble clic abre; Ctrl/Shift para varias; el cuadro se arrastra desde fuera de las filas
+      return DataTable.crear(contenedor, Object.assign({ tamanoPagina: 50, seleccionable: true, modoSeleccion: true, seleccionDrive: true }, config));
     }
 
     /**
@@ -308,22 +309,33 @@
      * Regresa { cuerpo, cerrar, alCerrar }. Solo hay uno abierto a la vez.
      */
     let panelAbierto = null;
-    function abrirPanelLateral(titulo, subtitulo) {
+    function abrirPanelLateral(titulo, subtitulo, opciones) {
+      const o = opciones || {};
+      // "Detalles" (no modal, como en Drive): si ya está abierto se reutiliza, sin animación ni robar el foco
+      if (o.noModal && panelAbierto && panelAbierto.noModal) {
+        const api = panelAbierto;
+        api.elemento.querySelector('.dt-panel-header > div').innerHTML = '<h3>' + esc(titulo) + '</h3>' + (subtitulo ? '<p>' + esc(subtitulo) + '</p>' : '');
+        const nuevo = api.cuerpo.cloneNode(false);
+        api.cuerpo.replaceWith(nuevo);
+        api.cuerpo = nuevo;
+        return api;
+      }
       if (panelAbierto) panelAbierto.cerrar();
       const focoPrevio = document.activeElement;
       const fondo = document.createElement('div');
       fondo.className = 'dt-panel-fondo';
       const elemento = document.createElement('aside');
-      elemento.className = 'dt-panel ln-panel';
+      elemento.className = 'dt-panel ln-panel' + (o.noModal ? ' ln-panel-nomodal' : '');
       elemento.setAttribute('role', 'dialog');
-      elemento.setAttribute('aria-modal', 'true');
+      elemento.setAttribute('aria-modal', o.noModal ? 'false' : 'true');
       elemento.setAttribute('aria-label', titulo);
       elemento.innerHTML = '<div class="dt-panel-header"><div><h3>' + esc(titulo) + '</h3>' + (subtitulo ? '<p>' + esc(subtitulo) + '</p>' : '') + '</div>' +
         '<button type="button" class="modal-close dt-panel-cerrar" title="Cerrar" aria-label="Cerrar">' + icono('x') + '</button></div>' +
         '<div class="dt-panel-cuerpo"></div>';
-      document.body.append(fondo, elemento);
+      // Sin fondo en el modo no modal: la tabla sigue a la mano para elegir otra fila
+      if (o.noModal) document.body.append(elemento); else document.body.append(fondo, elemento);
       const alTecla = (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); cerrar(); } };
-      const api = { elemento: elemento, cuerpo: elemento.querySelector('.dt-panel-cuerpo'), cerrar: cerrar, alCerrar: null };
+      const api = { elemento: elemento, cuerpo: elemento.querySelector('.dt-panel-cuerpo'), cerrar: cerrar, alCerrar: null, noModal: !!o.noModal };
       function cerrar() {
         if (panelAbierto !== api) return;
         panelAbierto = null;
@@ -339,8 +351,50 @@
       elemento.querySelector('.dt-panel-cerrar').addEventListener('click', cerrar);
       panelAbierto = api;
       pintarIconos(elemento);
-      elemento.querySelector('.dt-panel-cerrar').focus();
+      if (!o.noModal) elemento.querySelector('.dt-panel-cerrar').focus();
       return api;
+    }
+
+    /** Menú flotante con el mismo aspecto que el ⋮ de las tablas. items = [{ icono, texto, alHacer, separador, peligro }] */
+    function menuFlotante(ancla, items) {
+      document.querySelectorAll('.ln-menu-flotante').forEach((m) => m.remove());
+      if (!items.length) return;
+      const menu = document.createElement('div');
+      menu.className = 'dt-popover dt-menu ln-menu-flotante';
+      menu.setAttribute('role', 'menu');
+      menu.innerHTML = items.map((it, i) => (it.separador && i ? '<hr>' : '') + '<button type="button" data-i="' + i + '"' + (it.peligro ? ' class="dt-peligro"' : '') + '>' +
+        icono(it.icono) + ' ' + esc(it.texto) + '</button>').join('');
+      document.body.appendChild(menu);
+      pintarIconos(menu);
+      const r = ancla.getBoundingClientRect();
+      menu.style.left = Math.max(8, Math.min(r.right - menu.offsetWidth, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+      menu.style.top = (r.bottom + menu.offsetHeight + 8 > window.innerHeight ? Math.max(8, r.top - menu.offsetHeight - 6) : r.bottom + 6) + 'px';
+      const cerrar = () => {
+        menu.remove();
+        document.removeEventListener('mousedown', fuera, true);
+        document.removeEventListener('keydown', tecla, true);
+      };
+      const fuera = (ev) => { if (!menu.contains(ev.target) && !ancla.contains(ev.target)) cerrar(); };
+      const tecla = (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); cerrar(); } };
+      document.addEventListener('mousedown', fuera, true);
+      document.addEventListener('keydown', tecla, true);
+      document.addEventListener('app:before-navigate', cerrar, { once: true });
+      menu.addEventListener('click', (ev) => {
+        const b = ev.target.closest('[data-i]');
+        if (!b) return;
+        cerrar();
+        items[Number(b.dataset.i)].alHacer();
+      });
+      menu.querySelector('button').focus();
+    }
+
+    /** "Última responsiva / inspección" desde un menú: usa el mismo camino que el botón (pestaña nueva, avisos). */
+    function abrirUltimoDesdeMenu(tipo, id) {
+      const b = document.createElement('button');
+      b.dataset.lnUltimo = tipo;
+      b.dataset.id = id;
+      b.textContent = tipo === 'RESPONSIVA' ? 'Última responsiva' : 'Última inspección';
+      abrirUltimoNucos(b);
     }
 
     /**
@@ -1447,9 +1501,16 @@
         const ir = ev.target.closest('[data-ln-ir]');
         if (ir) {
           ev.preventDefault();
+          // Tarjetas del listado, como en Drive: con el mouse el clic selecciona (doble clic abre); con el dedo o el
+          // teclado (Enter) se abre la ficha
+          const tabla = ir.classList.contains('ln-cuadro') && ir.closest('#ln-listado') ? tablas[memoria.modulo] : null;
+          const conMouse = ev.detail > 0 && (ev.pointerType ? ev.pointerType === 'mouse' : !(window.matchMedia && window.matchMedia('(hover: none)').matches));
+          if (tabla && conMouse) { tabla.clicSeleccion(ir.dataset.id, ev); return; }
           abrir(ir.dataset.lnIr, ir.dataset.id);
           return;
         }
+        const masFicha = ev.target.closest('[data-ln-ficha-mas]');
+        if (masFicha) { ev.preventDefault(); abrirMenuFicha(masFicha); return; }
         const pestana = ev.target.closest('[data-ficha-tab]');
         if (pestana) { mostrarPestanaFicha(pestana.dataset.fichaTab); return; }
         const mas = ev.target.closest('[data-ln-mas-tarjetas]');
@@ -1491,6 +1552,18 @@
           return;
         }
       });
+      raiz.addEventListener('dblclick', (ev) => {
+        const tarjeta = ev.target.closest('#ln-listado .ln-cuadro[data-ln-ir]');
+        if (tarjeta) abrir(tarjeta.dataset.lnIr, tarjeta.dataset.id);
+      });
+      raiz.addEventListener('contextmenu', (ev) => {
+        const tarjeta = ev.target.closest('#ln-listado .ln-cuadro[data-ln-ir]');
+        const tabla = tarjeta ? tablas[memoria.modulo] : null;
+        if (!tabla) return;
+        ev.preventDefault();
+        tabla.asegurarSeleccionada(tarjeta.dataset.id);
+        tabla.abrirMenu(ev.clientX, ev.clientY);
+      });
       raiz.addEventListener('input', (ev) => { if (ev.target.closest('[data-ln-copiar]')) pintarTextoDetalles(); });
       raiz.addEventListener('keydown', (ev) => {
         if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches('[role="button"][tabindex="0"]')) {
@@ -1498,6 +1571,8 @@
           ev.target.click();
         }
         if (ev.key === 'Escape' && !$('#ln-modal-captura', raiz).hidden) cerrarCaptura();
+        // Tarjetas: el foco queda en la tarjeta (no en la tabla), así que Esc quita la selección desde aquí
+        else if (ev.key === 'Escape' && ev.target.closest && ev.target.closest('#ln-listado .ln-cuadro') && tablas[memoria.modulo]) tablas[memoria.modulo].limpiarSeleccion();
       });
       $('#ln-modal-captura', raiz).addEventListener('click', (ev) => {
         if (ev.target.id === 'ln-modal-captura' || ev.target.closest('[data-cerrar-modal]')) cerrarCaptura();
@@ -1578,6 +1653,94 @@
         $('#ln-num-lineas', raiz).textContent = miles(li.length);
       }
 
+      // ---- Selección estilo Google Drive (30-sep): acciones de la barra, del ⋮ y del clic derecho ----
+      let puedeOperarTabla = false;
+      cargarPermisos().then((p) => {
+        puedeOperarTabla = !!(p && p.puedeOperar);
+        Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].refrescarSeleccion(); });
+      }).catch(() => { /* sin permisos: solo las acciones de consulta */ });
+      const ACCION_REASIGNAR = ACCIONES_MASIVAS.filter((a) => a.clave === 'REASIGNAR')[0];
+
+      /** Lo que "Cambiar estatus" necesita de una fila del índice (lo mismo que arma la ficha). */
+      function fichaDeFila(tipo, r) {
+        return tipo === 'equipo'
+          ? { id: r.id, titulo: 'NUCO ' + (r.nuco || '—'), estatusEquipo: r.estatus || '', estatusLinea: r.numero ? (r.estatusLinea || '') : null }
+          : { id: r.id, titulo: 'Línea ' + (r.numero || '—'), estatusEquipo: null, estatusLinea: r.estatus || '' };
+      }
+
+      /** Abre la ficha directo en una pestaña (p. ej. Historial desde el menú). */
+      function abrirEnPestana(tipo, id, pestana) {
+        const existente = pila.findIndex((x) => x.tipo === tipo && x.id === id);
+        if (existente >= 0) pila.splice(existente + 1); else pila.push({ tipo: tipo, id: id, etiqueta: null });
+        pila[pila.length - 1].pestana = pestana;
+        abrir(tipo, id, true);
+      }
+
+      /**
+       * enBarra (por omisión) = a la vista en la barra azul; enBarra: false = dentro de ⋮. El clic derecho y el ⋮ de la
+       * fila muestran todas. `grupo` separa con una línea en el menú. Reparto acordado con el usuario el 30-sep.
+       */
+      function accionesSeleccionDe(modulo) {
+        const tipo = TABLAS_INVENTARIO[modulo].detalle;
+        const operar = () => puedeOperarTabla;
+        const conLinea = (filas) => puedeOperarTabla && filas.some((r) => !!r.numero);
+        const detalles = { icono: 'info', texto: 'Detalles', titulo: 'Panel con lo fundamental; sigue a la fila que selecciones', maximo: 1, grupo: 'ver',
+          activo: () => detallesAbiertos, alHacer: (f) => (detallesAbiertos && panelAbierto ? panelAbierto.cerrar() : mostrarDetalles(tipo, f[0])) };
+        const estatus = { icono: 'toggle-right', texto: 'Cambiar estatus', maximo: 1, grupo: 'ver', visible: operar,
+          alHacer: (f) => abrirCambioEstatus(fichaDeFila(tipo, f[0])) };
+        const ficha = { icono: 'maximize-2', texto: 'Abrir ficha', maximo: 1, enBarra: false, grupo: 'abrir', alHacer: (f) => abrir(tipo, f[0].id) };
+        const editar = { icono: 'pencil', texto: 'Editar información', maximo: 1, enBarra: false, grupo: 'abrir', visible: operar, alHacer: (f) => abrirEditor(f[0].id) };
+        const historial = { icono: 'history', texto: 'Historial', maximo: 1, enBarra: false, grupo: 'linea', alHacer: (f) => abrirEnPestana(tipo, f[0].id, 'historial') };
+        if (modulo === 'equipos') {
+          return [detalles, estatus,
+            { icono: 'archive', texto: 'Mandar a resguardo', titulo: 'Cada equipo con su ubicación y el estatus de su línea; sus datos de persona pasan a N/A', grupo: 'mover',
+              visible: operar, alHacer: (f) => abrirResguardo(f) },
+            { icono: 'user-round-pen', texto: 'Reasignar', titulo: 'Asigna los equipos a otro responsable', grupo: 'mover', visible: operar,
+              alHacer: (f) => abrirMasiva(ACCION_REASIGNAR, f) },
+            { icono: 'phone-off', texto: 'Mandar líneas a cancelación', titulo: 'Sus líneas pasan a la bandeja de cancelaciones; los equipos no cambian', minimo: 2,
+              grupo: 'mover', visible: conLinea, alHacer: (f) => abrirCancelacion(f) },
+            ficha, editar,
+            { icono: 'clipboard-check', texto: 'Nueva inspección', maximo: 1, enBarra: false, grupo: 'docs', visible: operar, alHacer: (f) => abrirCaptura('INSPECCION', { equipoId: f[0].id }) },
+            { icono: 'signature', texto: 'Nueva responsiva', maximo: 1, enBarra: false, grupo: 'docs', visible: operar, alHacer: (f) => abrirCaptura('RESPONSIVA', { equipoId: f[0].id }) },
+            { icono: 'file-text', texto: 'Última responsiva', maximo: 1, enBarra: false, grupo: 'docs', visible: (f) => tieneNuco(f[0]), alHacer: (f) => abrirUltimoDesdeMenu('RESPONSIVA', f[0].id) },
+            { icono: 'file-search', texto: 'Última inspección', maximo: 1, enBarra: false, grupo: 'docs', visible: (f) => tieneNuco(f[0]), alHacer: (f) => abrirUltimoDesdeMenu('INSPECCION', f[0].id) },
+            { icono: 'phone-off', texto: 'Mandar línea a cancelación', titulo: 'La línea pasa a la bandeja de cancelaciones; el equipo no cambia', maximo: 1, enBarra: false,
+              grupo: 'linea', visible: conLinea, alHacer: (f) => abrirCancelacion(f) },
+            historial];
+        }
+        return [detalles, estatus,
+          { icono: 'phone-off', texto: 'Mandar a cancelación', titulo: 'Pasan a la bandeja de cancelaciones de quien las tramita; el equipo no cambia', grupo: 'mover',
+            visible: operar, alHacer: (f) => abrirCancelacion(f) },
+          { icono: 'smartphone', texto: 'Ir al equipo', maximo: 1, grupo: 'mover', visible: (f) => !!f[0].equipoId, alHacer: (f) => abrir('equipo', f[0].equipoId) },
+          ficha, editar, historial];
+      }
+
+      // "Detalles" = la vista rápida como el panel "Ver detalles" de Drive: abierto, sigue a la fila seleccionada
+      let detallesAbiertos = false;
+      function mostrarDetalles(tipo, r) {
+        vistaRapida(tipo, r, { noModal: true });
+        detallesAbiertos = true;
+        if (panelAbierto) {
+          panelAbierto.alCerrar = () => {
+            detallesAbiertos = false;
+            Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].refrescarSeleccion(); });
+          };
+        }
+      }
+      function alCambiarSeleccion(modulo, filas) {
+        if (detallesAbiertos && filas.length === 1 && modulo === memoria.modulo && vigente()) mostrarDetalles(TABLAS_INVENTARIO[modulo].detalle, filas[0]);
+        marcarTarjetasSeleccionadas(modulo);
+      }
+      function marcarTarjetasSeleccionadas(modulo) {
+        const cont = $('#ln-tarjetas-' + modulo, raiz);
+        if (!cont || !tablas[modulo]) return;
+        const sel = new Set(tablas[modulo].getSeleccion().map((r) => r.id));
+        cont.querySelectorAll('.ln-cuadro[data-id]').forEach((b) => {
+          b.classList.toggle('ln-cuadro-sel', sel.has(b.dataset.id));
+          b.setAttribute('aria-pressed', String(sel.has(b.dataset.id)));
+        });
+      }
+
       // ---- Listado: una DataTable por pestaña (se crea al mostrarla) ----
       function crearTabla(modulo) {
         if (tablas[modulo]) return tablas[modulo];
@@ -1591,44 +1754,20 @@
           exportar: exportarBase('INVENTARIO', 'Lineas telefonicas'),
           etiquetaFila: cfg.etiqueta,
           detalle: false, // la ficha completa (responsable, evidencias, historial) es su propia pantalla
-          // Sin columna de Acciones (30-sep): un clic en la fila abre la vista rápida (que trae "Abrir ficha completa",
-          // así también funciona en celular y tableta) y el doble clic la ficha completa
-          // Acciones de selección: solo equipos; Mandar a resguardo desde 1 y Reasignar desde 2 (las de líneas, por definir)
-          accionesSeleccion: modulo === 'equipos' ? ACCIONES_MASIVAS.map((a) => ({
-            icono: a.icono, texto: a.texto, titulo: a.ayuda, minimo: a.minimo || 2, peligro: !!a.peligro,
-            alHacer: (filas) => (a.propia ? abrirResguardo(filas) : abrirMasiva(a, filas)),
-          })) : [],
-          ayuda: 'Un clic en una fila abre la vista rápida a la derecha y el doble clic la ficha completa. "Seleccionar" muestra las casillas: ' +
-            'ahí el clic marca la fila, arrastrar marca varias y Shift+clic un rango (Ctrl+clic también entra al modo). ' +
+          // Estilo Google Drive (30-sep): clic = seleccionar (barra con lo más usado y ⋮), doble clic = ficha,
+          // "Detalles" = la vista rápida que sigue a la selección; con el dedo, tocar abre la vista rápida
+          accionesSeleccion: accionesSeleccionDe(modulo),
+          alAbrirFila: (r) => abrir(cfg.detalle, r.id),
+          alTocarFila: (r) => vistaRapida(cfg.detalle, r),
+          alCambiarSeleccion: (filas) => alCambiarSeleccion(modulo, filas),
+          ayuda: 'Como en Google Drive: un clic selecciona la fila y arriba aparecen sus acciones; ⋮ (o el clic derecho) trae las demás. ' +
+            'Doble clic abre la ficha. Ctrl+clic agrega o quita filas y Shift+clic marca un rango; para marcar varias arrastrando, empieza ' +
+            'fuera de las filas (en el espacio de abajo). "Detalles" abre el panel de la derecha, que sigue a la fila que selecciones. ' +
+            'Esc quita la selección. En celular: tocar abre la vista rápida y mantener presionado selecciona. ' +
             'La flecha de cada columna filtra, ordena, fija u oculta; ' +
             '"Vista" agrega las demás columnas del AppSheet (compañía, sede, comentarios, PIN…). "Última responsiva" y "Última inspección" ' +
             'abren la más reciente de la carpeta del NUCO en NUCOS. Los indicadores de arriba filtran con un clic.',
           alCambiarFiltros: (filtros) => { filtrosActuales[modulo] = filtros || {}; if (marcarKpi) marcarKpi(); },
-        });
-        // Un clic en la fila = vista rápida; doble clic = ficha completa (DataTable no trae clic de fila propio).
-        // El clic espera un momento: si llega el segundo clic es doble clic y la vista rápida no se abre.
-        const filaDe = (ev) => {
-          const tr = ev.target.closest('tbody tr[data-id]');
-          return tr && !ev.target.closest('button, input, a, select, textarea, label, .dt-col-check') ? tr : null;
-        };
-        const registroDe = (id) => (memoria.indice ? memoria.indice[modulo].filter((x) => x.id === id)[0] : null);
-        let clicPendiente = null;
-        // En modo selección (o con Ctrl/Cmd/Shift) el clic es de la tabla: marca filas, no abre nada
-        const seleccionando = (ev) => tablas[modulo].enModoSeleccion() || ev.ctrlKey || ev.metaKey || ev.shiftKey;
-        contenedor.addEventListener('click', (ev) => {
-          const tr = filaDe(ev);
-          if (!tr || ev.detail > 1 || seleccionando(ev)) return;
-          clearTimeout(clicPendiente);
-          clicPendiente = setTimeout(() => {
-            const r = registroDe(tr.dataset.id);
-            if (r && vigente()) vistaRapida(cfg.detalle, r);
-          }, 260);
-        });
-        contenedor.addEventListener('dblclick', (ev) => {
-          const tr = filaDe(ev);
-          if (!tr || seleccionando(ev)) return;
-          clearTimeout(clicPendiente);
-          abrir(cfg.detalle, tr.dataset.id);
         });
         // La tabla se repinta con cada filtro, búsqueda, orden o KPI: las tarjetas la siguen
         let repintePendiente = false;
@@ -1654,13 +1793,13 @@
         return chip('Vigente', 'verde');
       }
 
-      function vistaRapida(tipo, r) {
+      function vistaRapida(tipo, r, opciones) {
         const v = (c) => (r[c] === undefined || r[c] === null ? '' : r[c]);
         const nuco = r.nuco || r.nucoEquipo || v('NUCO');
         const titulo = tipo === 'equipo' ? 'NUCO ' + (nuco || '—') : 'Línea ' + (r.numero || v('NUMERO TELEFONO') || '—');
         const sub = tipo === 'equipo' ? [r.modelo || v('EQUIPO'), r.numero ? 'Línea ' + r.numero : 'Sin línea'].filter(Boolean).join(' · ')
           : [r.compania || v('COMPAÑIA'), nuco ? 'NUCO ' + nuco : 'Suelta'].filter(Boolean).join(' · ');
-        const panel = abrirPanelLateral(titulo, sub);
+        const panel = abrirPanelLateral(titulo, sub, opciones);
         if (tieneNuco(r)) precargarUltimosNucos(r.id); // "Última responsiva / inspección" listos al dar clic
         const campo = (t, valor, html) => '<div class="dt-campo"><div class="dt-campo-titulo">' + esc(t) + '</div><div class="dt-campo-valor">' +
           (html ? (valor || vacio) : guion(valor)) + '</div></div>';
@@ -1704,8 +1843,8 @@
         panel.cuerpo.addEventListener('click', (ev) => {
           const b = ev.target.closest('[data-vr-ir]');
           if (!b) return;
-          if (b.dataset.vrIr === 'linea' && suLinea) vistaRapida('linea', suLinea);
-          if (b.dataset.vrIr === 'equipo' && suEquipo) vistaRapida('equipo', suEquipo);
+          if (b.dataset.vrIr === 'linea' && suLinea) vistaRapida('linea', suLinea, opciones);
+          if (b.dataset.vrIr === 'equipo' && suEquipo) vistaRapida('equipo', suEquipo, opciones);
         });
         pintarIconos(panel.cuerpo);
       }
@@ -1744,6 +1883,7 @@
           : '<p class="empty-state">' + (memoria.indice ? 'No hay registros que coincidan con la búsqueda o los filtros.' : '<span class="ln-spinner"></span> Cargando…') + '</p>') +
           '<div class="ln-cuadros-mas"><span class="ln-tenue">Mostrando ' + miles(visibles) + ' de ' + miles(filas.length) + '</span>' +
           (visibles < filas.length ? '<button type="button" class="secondary" data-ln-mas-tarjetas="' + modulo + '">Mostrar más</button>' : '') + '</div>';
+        marcarTarjetasSeleccionadas(modulo);
       }
 
       function aplicarModoVista() {
@@ -1958,7 +2098,7 @@
           detalle.innerHTML = migas() +
             encabezado('smartphone', 'NUCO ' + esc(e.nuco || '—'),
               chip(e.estatus) + chip(TIPO_EQUIPO[e.tipo] || e.tipo, 'neutro') + (l ? chip('Con línea', 'verde') + usoTemporalVencido(l) : chip('Sin línea', 'ambar')),
-              (puedeOperar ? botonesFicha('data-equipo-id', id) : '') +
+              (puedeOperar ? botonesFicha('data-equipo-id', id, 'equipo') : '') +
               (e.carpetaDriveId ? enlaceDrive(e.carpetaDriveId, 'Ver carpeta en Drive') : ''),
               [['Responsable', resp.nombre], ['Modelo', e.modelo], ['IMEI', e.imei],
                 ['Línea', l ? '<a href="#" class="ln-enlace ln-mono" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + esc(l.numero || '(sin número)') + '</a>' + (l.compania ? ' · ' + esc(l.compania) : '') : '<span class="ln-tenue">Sin línea</span>', true],
@@ -2001,7 +2141,7 @@
           fichaActual = { id: id, titulo: 'Línea ' + (l.numero || '—'), estatusEquipo: null, estatusLinea: l.estatus || '' };
           detalle.innerHTML = migas() +
             encabezado('card-sim', esc(l.numero || 'Línea sin número'), chip(l.estatus) + usoTemporalVencido(l) + (e ? chip('En NUCO ' + (e.nuco || '—'), 'neutro') : chip('Suelta', 'ambar')),
-              puedeOperarLinea ? botonesFicha('data-linea-id', id) : (e ? '<button type="button" class="ln-btn-icono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' Ver equipo</button>' : ''),
+              puedeOperarLinea ? botonesFicha('data-linea-id', id, 'linea') : (e ? '<button type="button" class="ln-btn-icono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' Ver equipo</button>' : ''),
               [['Responsable', respL.nombre], ['Compañía', l.compania], ['SIM', l.sim], ['Fin de plan', fecha(l.finPlan)],
                 ['Equipo', e ? '<a href="#" class="ln-enlace ln-mono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">NUCO ' + esc(e.nuco || '—') + '</a>' + (e.modelo ? ' · ' + esc(e.modelo) : '') : '<span class="ln-tenue">Suelta</span>', true]]) +
             fichaEnPestanas(
@@ -2032,12 +2172,37 @@
           ico('triangle-alert') + ' Uso temporal de ' + Math.floor((Date.now() - desde.getTime()) / 86400000) + ' días</span>';
       }
 
-      /** Acciones de la ficha: botones principales (con color) para que se reconozcan como botones. */
-      function botonesFicha(atributoRef, id) {
-        return '<button type="button" class="ln-btn-icono" data-ln-editar="' + esc(id) + '">' + icono('pencil') + ' Editar información</button>' +
-          '<button type="button" class="ln-btn-icono" data-ln-estatus="' + esc(id) + '">' + icono('toggle-right') + ' Cambiar estatus</button>' +
+      /**
+       * Acciones de la ficha (estilo Drive, 30-sep): las cuatro más usadas a la vista y el resto en ⋮
+       * (abrirMenuFicha: resguardo, reasignar, cancelación, últimos documentos e historial).
+       */
+      function botonesFicha(atributoRef, id, tipo) {
+        return '<button type="button" class="ln-btn-icono" data-ln-estatus="' + esc(id) + '">' + icono('toggle-right') + ' Cambiar estatus</button>' +
+          '<button type="button" class="ln-btn-icono" data-ln-editar="' + esc(id) + '">' + icono('pencil') + ' Editar información</button>' +
           '<button type="button" class="ln-btn-icono" data-ln-captura="INSPECCION" ' + atributoRef + '="' + esc(id) + '">' + icono('clipboard-check') + ' Nueva inspección</button>' +
-          '<button type="button" class="ln-btn-icono" data-ln-captura="RESPONSIVA" ' + atributoRef + '="' + esc(id) + '">' + icono('signature') + ' Nueva responsiva</button>';
+          '<button type="button" class="ln-btn-icono" data-ln-captura="RESPONSIVA" ' + atributoRef + '="' + esc(id) + '">' + icono('signature') + ' Nueva responsiva</button>' +
+          '<button type="button" class="ln-btn-icono ln-btn-mas" data-ln-ficha-mas="' + esc(tipo) + '" data-id="' + esc(id) + '" title="Más opciones" aria-label="Más opciones">' + icono('ellipsis-vertical') + '</button>';
+      }
+
+      /** ⋮ de la ficha: lo que no está a la vista, según sea equipo o línea (con los datos del índice). */
+      function abrirMenuFicha(boton) {
+        const tipo = boton.dataset.lnFichaMas;
+        const id = boton.dataset.id;
+        const ix = memoria.indice || { equipos: [], lineas: [] };
+        const r = (tipo === 'equipo' ? ix.equipos : ix.lineas).filter((x) => x.id === id)[0] || { id: id };
+        const items = tipo === 'equipo' ? [
+          { icono: 'archive', texto: 'Mandar a resguardo', alHacer: () => abrirResguardo([r]) },
+          { icono: 'user-round-pen', texto: 'Reasignar', alHacer: () => abrirMasiva(ACCION_REASIGNAR, [r]) },
+          r.numero ? { icono: 'phone-off', texto: 'Mandar línea a cancelación', alHacer: () => abrirCancelacion([r]) } : null,
+          tieneNuco(r) ? { icono: 'file-text', texto: 'Última responsiva', separador: true, alHacer: () => abrirUltimoDesdeMenu('RESPONSIVA', id) } : null,
+          tieneNuco(r) ? { icono: 'file-search', texto: 'Última inspección', alHacer: () => abrirUltimoDesdeMenu('INSPECCION', id) } : null,
+          { icono: 'history', texto: 'Historial', separador: !tieneNuco(r), alHacer: () => mostrarPestanaFicha('historial') },
+        ] : [
+          { icono: 'phone-off', texto: 'Mandar a cancelación', alHacer: () => abrirCancelacion([r]) },
+          r.equipoId ? { icono: 'smartphone', texto: 'Ir al equipo', alHacer: () => abrir('equipo', r.equipoId) } : null,
+          { icono: 'history', texto: 'Historial', separador: true, alHacer: () => mostrarPestanaFicha('historial') },
+        ];
+        menuFlotante(boton, items.filter(Boolean));
       }
 
       // ---- Detalles: la columna DETALLES LINEAS TELEFONICAS del AppSheet, con botón para copiarla ----
@@ -2207,8 +2372,8 @@
        * Cambio rápido de ESTATUS EQUIPO / ESTATUS LINEA (mejora: sin abrir todo el formulario). Usa las listas
        * del AppSheet y deja la bitácora igual que una edición; el motivo queda en el historial.
        */
-      function abrirCambioEstatus() {
-        const f = fichaActual;
+      function abrirCambioEstatus(desde) {
+        const f = desde && desde.id ? desde : fichaActual; // desde la tabla (barra o menú) o desde la ficha abierta
         if (!f) return;
         $('#ln-modal-captura', raiz).hidden = false;
         $('#ln-captura-icono', raiz).innerHTML = icono('toggle-right');
@@ -2244,6 +2409,14 @@
             if (ESTATUS_EQUIPO_RESGUARDO.indexOf(datos.estatusEquipo) >= 0) {
               cerrarCaptura(true);
               abrirResguardo([{ id: f.id }], { estatus: datos.estatusEquipo });
+              return;
+            }
+            // EN PROCESO DE CANCELACION va por la bandeja de cancelaciones (Mandar a cancelación), no directo
+            if (datos.estatusLinea === 'EN PROCESO DE CANCELACION') {
+              const ix = memoria.indice || { equipos: [], lineas: [] };
+              const r = ix.lineas.filter((x) => x.id === f.id)[0] || ix.equipos.filter((x) => x.id === f.id)[0];
+              cerrarCaptura(true);
+              if (r) abrirCancelacion([r]);
               return;
             }
             estadoGuardado('Guardando estatus');
@@ -2592,6 +2765,36 @@
             restaurarGuardado();
           }
         });
+      }
+
+      /**
+       * "Mandar a cancelación" (30-sep): una o varias líneas pasan a la pestaña Cancelaciones de la bandeja (carta
+       * firmada → enviada → cancelada), sin mandar el equipo a resguardo. La línea queda EN PROCESO DE CANCELACION.
+       */
+      async function abrirCancelacion(filas) {
+        const permisos = await cargarPermisos().catch(() => null);
+        if (!permisos || !permisos.puedeOperar) { aviso(icono('triangle-alert', 'ln-alerta') + ' Tu rol no permite modificar líneas.', 6000); return; }
+        const conNumero = filas.filter((r) => r.numero);
+        if (!conNumero.length) { aviso(icono('triangle-alert', 'ln-alerta') + ' Ninguno de los seleccionados tiene línea.', 6000); return; }
+        const lista = conNumero.slice(0, 6).map((r) => r.numero).join(', ') + (conNumero.length > 6 ? '…' : '');
+        const datos = await pedirDatos('Mandar a cancelación',
+          miles(conNumero.length) + ' línea(s): ' + lista + '. Quedan EN PROCESO DE CANCELACION y pasan a la bandeja de cancelaciones; el equipo no cambia.',
+          [{ clave: 'motivo', etiqueta: 'Motivo (queda en el historial)', requerido: true }, { clave: 'comentario', etiqueta: 'Comentario (opcional)' }],
+          'Mandar a cancelación');
+        if (!datos) return;
+        try {
+          const r = await llamar('apiLineasMandarCancelacion', conNumero.map((x) => x.id), { motivo: datos.motivo, comentario: datos.comentario });
+          await cargarIndice(true);
+          Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].limpiarSeleccion(); });
+          if (vigente()) { pintarIndicadores(); pintarListado(); }
+          const omitidos = r.omitidos || [];
+          aviso(icono('circle-check') + ' ' + miles(r.hechos.length) + ' línea(s) en la bandeja de cancelaciones' + (omitidos.length ? ' · ' + omitidos.length + ' sin cambio: ' +
+            omitidos.slice(0, 4).map((o) => (o.numero || (o.nuco ? 'NUCO ' + o.nuco : o.id)) + ' (' + o.motivo + ')').join(' · ') : '') + '.', 9000);
+          const actual = pila[pila.length - 1];
+          if (actual && conNumero.some((q) => q.id === actual.id)) abrir(actual.tipo, actual.id, true);
+        } catch (e) {
+          aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 10000);
+        }
       }
 
       // ---- Alta y edición directa del inventario ----
@@ -4265,7 +4468,8 @@
 
       function filasVista() {
         const todas = (datos && datos.filas) || [];
-        return vista === 'RESGUARDOS' ? todas : todas.filter((f) => f.CANCELACION);
+        // Las líneas mandadas a cancelación sin resguardo no tienen recepción (ESTADO vacío): solo salen en Cancelaciones
+        return vista === 'RESGUARDOS' ? todas.filter((f) => f.ESTADO) : todas.filter((f) => f.CANCELACION);
       }
 
       function pintarKpis() {

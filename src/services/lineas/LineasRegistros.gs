@@ -448,7 +448,7 @@ const LineasRegistros = (function () {
     REASIGNAR: { titulo: 'Reasignar equipos', estatusEquipo: 'RESGUARDO' },
     // "Cancelar equipos" se quitó el 30-sep: los equipos no se cancelan, solo las líneas (reunión con Líneas)
   };
-  const MASIVA_MINIMO = 2;
+  const MASIVA_MINIMO = 1; // Reasignar también con un solo equipo (barra de selección tipo Drive, 30-sep)
   const MASIVA_MAXIMO = 150; // cada equipo son ~4 escrituras: que quepa en el límite de 6 min de Apps Script
   const COLS_REASIGNAR = ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'DEPARTAMENTO'];
 
@@ -515,7 +515,7 @@ const LineasRegistros = (function () {
     const cfg = masiva_(accion);
     const clave = String(accion).toUpperCase();
     const lista = (Array.isArray(ids) ? ids : []).map(texto_).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i);
-    if (lista.length < MASIVA_MINIMO) throw new Error('Selecciona dos o más equipos.');
+    if (lista.length < MASIVA_MINIMO) throw new Error('Selecciona al menos un equipo.');
     if (lista.length > MASIVA_MAXIMO) throw new Error('Son ' + lista.length + ' equipos; el máximo por operación es ' + MASIVA_MAXIMO + '. Divide la selección.');
 
     const elementos = elementosMasivos_(clave, LineasRepo.catalogos(), usuario);

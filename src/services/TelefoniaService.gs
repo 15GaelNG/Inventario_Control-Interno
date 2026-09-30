@@ -546,6 +546,12 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente(LineasResguardos.mandar(ids, datos || {}, usuarioResguardo_(sesion)));
   }
 
+  /** "Mandar a cancelación": una o varias líneas a la bandeja de cancelaciones sin mandar el equipo a resguardo. */
+  function mandarCancelacion(token, ids, datos) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    return LineasUtil.paraCliente(LineasResguardos.mandarCancelacion(ids, datos || {}, usuarioResguardo_(sesion)));
+  }
+
   /** Bandeja de resguardos y cancelaciones: la ve todo el módulo; los pasos solo quien aprueba. */
   function bandejaResguardos(token) {
     const sesion = Auth.validarSesion(token);
@@ -580,6 +586,6 @@ const TelefoniaService = (function () {
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf, crearRegistro, editarRegistro,
     cambiarEstatus, fotosInspeccion, exportarBase, archivo, ultimoDocumentoNuco,
     notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva, panorama,
-    formularioResguardo, mandarResguardo, bandejaResguardos, accionBandejaResguardo,
+    formularioResguardo, mandarResguardo, mandarCancelacion, bandejaResguardos, accionBandejaResguardo,
   };
 })();

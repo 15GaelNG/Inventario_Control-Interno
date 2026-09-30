@@ -10,7 +10,7 @@ qué está hecho, cómo probarlo y qué sigue.
 
 - **Rama `emmanuel`:** en GitHub hasta `10dc7eb` (29-sep). En local hay 17 commits más (`644ba14` … `d8a80a1`).
   Se suben a GitHub **al terminar la ronda**, como pidió el usuario. DEV está al día con `emmanuel`.
-- **Pruebas:** `npm test` da 55 aprobadas y 0 fallidas. Las de Ayrton se corren aparte (`node tests/ids.test.js` y
+- **Pruebas:** `npm test` da 56 aprobadas y 0 fallidas. Las de Ayrton se corren aparte (`node tests/ids.test.js` y
   `node tests/entidades.test.js`) y dan TODO OK.
 - **Reunión con Líneas (30-sep): ya ocurrió.** Lo hecho después:
   - §0u: estatus nuevos, DISPONIBLE y menú;
@@ -19,6 +19,8 @@ qué está hecho, cómo probarlo y qué sigue.
     NUCO 0101 y 0556.
   - §0x: PARA VENTA y PARA DESECHO con la misma lógica que Mandar a resguardo (en DEV, sin commit; probado en /dev con el
     NUCO 0002).
+  - §0y: selección como en Google Drive (barra, ⋮, clic derecho, Detalles que sigue a la selección) y "Mandar a
+    cancelación" de líneas sin resguardo (en DEV, probado en /dev).
 - **Lo que sigue, en orden:** pendiente 0 de `migracion/ESTADO_TELEFONIA.md`, en la carpeta de documentación.
   1. Conversión de estatus viejos: ya no hay confirmaciones del usuario; lo que requiere decisión va al módulo de
      correcciones de Líneas (el usuario solo migra).
@@ -41,7 +43,47 @@ qué está hecho, cómo probarlo y qué sigue.
     `Modulos.gs` ya no tiene los 4 módulos.
   - `Entidades.gs`: `APP_RESGUARDOS` (prefijo RSG); su prueba cuenta 28 hojas y 4 APP_. `Modulos.gs`: `resguardos-lineas`.
   - APP_NOTIFICACIONES: columna nueva `PARA`.
+  - DataTable (§0y): opción nueva `seleccionDrive` (con `modoSeleccion`), columna ⋮ `dt-col-mas`, barra `.dt-barra-sel`
+    encima de la barra de herramientas, `alAbrirFila`, `alTocarFila`, `alCambiarSeleccion`, acciones con
+    `enBarra/maximo/grupo/visible/activo`, "Exportar selección a Excel" y la API `clicSeleccion`, `asegurarSeleccionada`,
+    `abrirMenu` y `refrescarSeleccion`. Sin `seleccionDrive` la tabla se comporta igual que antes.
 
+
+## 0y. Selección como en Google Drive y "Mandar a cancelación" (2026-09-30)
+
+Pedido del usuario: tres lugares para las opciones (una fila, varias filas y la ficha) con la lógica de Google Drive.
+
+- **Tabla** (todas las de Líneas, vía `tablaLineas` → `seleccionDrive: true`):
+  - pasar el mouse ilumina la fila y muestra su ⋮; **un clic la selecciona** y encima de la barra de herramientas
+    aparece la barra azul "N seleccionados" con las acciones `enBarra` y ⋮ con las demás; ✕ o Esc quitan la selección;
+  - la barra se pone ENCIMA (posición absoluta): la tabla no se mueve, así el segundo clic de un doble clic cae en
+    la misma fila (primero empujaba la tabla y el doble clic podía abrir otra fila);
+  - **doble clic** abre la ficha; **clic derecho** y el ⋮ de la fila abren el menú con todas las acciones;
+  - Ctrl/Cmd+clic agrega o quita; Shift+clic rango; Ctrl+A todas; el **cuadro** solo empieza fuera de las filas
+    (la tabla deja 56 px vacíos abajo para eso); un clic en el vacío quita la selección;
+  - con el dedo: tocar abre la vista rápida; mantener presionado entra al modo selección (con casillas);
+  - el botón "Seleccionar" ya no existe.
+- **Detalles** = la vista rápida como "Ver detalles" de Drive: panel sin fondo (`abrirPanelLateral(..., { noModal })`)
+  que se reutiliza y **sigue a la fila seleccionada**; el botón queda marcado mientras está abierto.
+- **Tarjetas:** el clic con el mouse selecciona (misma selección que la tabla), doble clic abre, clic derecho = menú,
+  Esc quita. Con el dedo o Enter se abre la ficha. (El cuadro de arrastre en tarjetas no se hizo.)
+- **Reparto acordado:** equipo → a la vista Detalles, Cambiar estatus, Mandar a resguardo, Reasignar; en ⋮ abrir
+  ficha, editar, inspección y responsiva (nueva y última), mandar la línea a cancelación, historial, copiar, exportar.
+  Línea → Detalles, Cambiar estatus, Mandar a cancelación, Ir al equipo; en ⋮ abrir ficha, editar, historial.
+  Varios equipos → Mandar a resguardo, Reasignar, Mandar líneas a cancelación. Varias líneas → Mandar a cancelación.
+  Ficha → Cambiar estatus, Editar, Nueva inspección, Nueva responsiva y ⋮ (`abrirMenuFicha`).
+- **Reasignar** ya funciona con un solo equipo (`MASIVA_MINIMO = 1`).
+- **Mandar a cancelación** (`LineasResguardos.mandarCancelacion`, `apiLineasMandarCancelacion`): la línea queda EN
+  PROCESO DE CANCELACION y entra a la pestaña Cancelaciones (POR FIRMAR, con asesor) **sin mandar el equipo a
+  resguardo**; su renglón lleva ESTADO vacío y no sale en la pestaña Resguardos. No duplica una cancelación en curso
+  (tampoco "Mandar a resguardo"). Al confirmarla, una línea suelta (TIPO LINEA) conserva su número y solo queda
+  CANCELADA. En "Cambiar estatus", elegir EN PROCESO DE CANCELACION abre este mismo diálogo.
+- **Probado en /dev (30-sep):** clic, Ctrl+clic, clic derecho, Detalles siguiendo la selección, Esc, doble clic a la
+  ficha, ⋮ de la ficha e Historial, cuadro desde el vacío (y que desde una fila no marca), clic en el vacío, tarjetas y
+  la bandeja. Mandar a cancelación con la línea **4421090805 (NUCO 0012)** de la BD de pruebas: quedó EN PROCESO DE
+  CANCELACION y POR FIRMAR en Cancelaciones (dato de prueba).
+- **Sin probar en vivo:** gestos con el dedo (el navegador integrado manda clics de mouse) y "Última responsiva /
+  inspección" desde el menú (abre otra pestaña).
 
 ## 0x. PARA VENTA y PARA DESECHO como Mandar a resguardo (2026-09-30)
 

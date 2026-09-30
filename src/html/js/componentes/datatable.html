@@ -82,6 +82,37 @@
   .dt-marco { position: absolute; z-index: 6; pointer-events: none; border: 1px solid var(--color-primary);
     background: color-mix(in srgb, var(--color-primary) 14%, transparent); border-radius: 3px; }
   .dt.dt-marcando, .dt.dt-marcando * { user-select: none !important; cursor: default !important; }
+  /* Selección como en Google Drive (cfg.seleccionDrive, rama emmanuel): clic = seleccionar, barra con lo más usado
+     y ⋮ con el resto; el cuadro se arrastra desde fuera de las filas (por eso queda espacio vacío abajo) */
+  .dt.dt-drive tbody tr[data-id] { user-select: none; }
+  .dt.dt-drive .dt-scroll table { margin-bottom: 56px; }
+  /* La barra se pone ENCIMA de la barra de herramientas (como en Drive): la tabla no se mueve al seleccionar, así el
+     segundo clic de un doble clic cae en la misma fila. Si no cabe, se desplaza de lado en vez de crecer. */
+  .dt-barra-sel { position: absolute; top: 0; left: 0; right: 0; z-index: 5; display: flex; align-items: center; gap: 6px;
+    flex-wrap: nowrap; overflow-x: auto; padding: 4px 8px; border-radius: 10px; background: var(--color-primary-soft);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 18%, transparent); }
+  .dt-barra-sel > * { flex-shrink: 0; }
+  .dt-barra-sel[hidden] { display: none; }
+  .dt-barra-sel .dt-sel-cuenta { font-weight: 600; font-size: 13px; margin: 0 6px 0 2px; white-space: nowrap; }
+  .dt-barra-sel button { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; font-size: 12.5px; white-space: nowrap; }
+  .dt-barra-sel .dt-sel-icono { padding: 6px 8px; }
+  .dt-barra-sel button.activo { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+  .dt .dt-col-mas { position: sticky; right: 0; z-index: 1; width: 36px; min-width: 36px; max-width: 36px; padding: 0 4px;
+    text-align: center; background: var(--color-surface); }
+  .dt thead th.dt-col-mas { z-index: 4; }
+  .dt tbody tr:hover td.dt-col-mas { background: var(--color-bg); }
+  .dt tbody tr.dt-fila-seleccionada td.dt-col-mas { background: var(--color-primary-soft); }
+  .dt .dt-btn-mas { display: inline-flex; align-items: center; background: transparent; border: none; padding: 5px;
+    border-radius: 6px; color: var(--color-text-muted); opacity: 0; }
+  .dt tbody tr:hover .dt-btn-mas, .dt tbody tr.dt-fila-seleccionada .dt-btn-mas, .dt .dt-btn-mas:focus-visible { opacity: 1; }
+  .dt .dt-btn-mas:hover { background: var(--color-primary-soft); color: var(--color-text); }
+  @media (hover: none) { .dt .dt-btn-mas { opacity: .7; } }
+  .dt-popover.dt-menu { width: auto; min-width: 230px; max-width: 320px; padding: 4px; }
+  .dt-popover.dt-menu button { display: flex; width: 100%; justify-content: flex-start; gap: 10px; background: transparent;
+    border: none; padding: 8px 10px; border-radius: 8px; font-size: 13px; color: var(--color-text); text-align: left; }
+  .dt-popover.dt-menu button:hover, .dt-popover.dt-menu button:focus-visible { background: var(--color-bg); }
+  .dt-popover.dt-menu button.dt-peligro { color: var(--color-danger); }
+  .dt-popover.dt-menu hr { border: 0; border-top: 1px solid var(--color-border); margin: 4px 0; }
 
   /* Columna de acciones por fila: fija a la DERECHA, siempre a la vista aunque haya scroll */
   .dt .dt-col-acciones {
@@ -270,6 +301,14 @@
    *                                            //   Shift+clic desde la última fila tocada; Ctrl/Cmd+A todas; Esc sale
    *                                            // - Dedo (iOS): botón "Seleccionar"; arrastrar sobre las casillas
    *                                            // Las casillas se ven solo mientras hay selección (modo)
+   *     seleccionDrive: true,                  // (rama emmanuel, con modoSeleccion) como en Google Drive:
+   *                                            // - clic = selecciona esa fila; Ctrl/Cmd+clic alterna; Shift+clic rango
+   *                                            // - doble clic → cfg.alAbrirFila(fila); clic derecho y ⋮ de la fila → menú
+   *                                            // - barra "N seleccionados" con las acciones enBarra y ⋮ con el resto
+   *                                            // - el cuadro se arrastra solo desde fuera de las filas
+   *                                            // - dedo: tocar → cfg.alTocarFila(fila); mantener presionado = modo selección
+   *                                            // - cfg.alCambiarSeleccion(filas) avisa cada cambio de selección
+   *                                            // Acción: { enBarra, maximo, grupo, visible(filas), activo() } además de las de siempre
    *     alEditar: async (fila, campo, valorNuevo) => filaActualizada,   // lanza error para rechazar
    *     alEliminar: async (filas) => {},        // si se omite, no aparece "Eliminar"
    *     motivoSinEliminar: 'Solo administradores pueden eliminar',
@@ -582,12 +621,16 @@
       );
       /** Botones de la barra cuando hay selección: Copiar · (los del módulo) · Eliminar
        *  (propia: la tabla ya maneja sus avisos y el estado "ocupado" del botón) */
-      const accionesSeleccion = [].concat(
-        [{ icono: 'copiar', texto: 'Copiar', clase: 'dt-btn-copiar', propia: true, titulo: 'Copia los seleccionados para pegarlos en Excel (Ctrl+C)', alHacer: () => copiarSeleccion() }],
-        cfg.accionesSeleccion,
-        cfg.alEliminar ? [{ icono: 'eliminar', texto: 'Eliminar seleccionados', clase: 'dt-btn-eliminar', propia: true, peligro: true, alHacer: (filas, boton) => eliminarFilas(filas, boton) }] : []
-      );
+      const accionCopiar = { icono: 'copiar', texto: 'Copiar', clase: 'dt-btn-copiar', propia: true, titulo: 'Copia los seleccionados para pegarlos en Excel (Ctrl+C)', alHacer: () => copiarSeleccion(), enBarra: false, grupo: 'tabla' };
+      const accionEliminar = cfg.alEliminar ? [{ icono: 'eliminar', texto: 'Eliminar seleccionados', clase: 'dt-btn-eliminar', propia: true, peligro: true, alHacer: (filas, boton) => eliminarFilas(filas, boton), enBarra: false, grupo: 'eliminar' }] : [];
+      // Estilo Drive: primero las del módulo (en su orden), luego las de la tabla dentro del ⋮
+      const accionesSeleccion = cfg.seleccionDrive
+        ? [].concat(cfg.accionesSeleccion.map((a) => Object.assign({ enBarra: true }, a)), [accionCopiar],
+          cfg.exportar ? [{ icono: 'exportar', texto: 'Exportar selección a Excel', propia: true, enBarra: false, grupo: 'tabla', alHacer: (filas) => exportarFilas(filas, null) }] : [],
+          accionEliminar)
+        : [].concat([accionCopiar], cfg.accionesSeleccion, accionEliminar);
       const hayAccionesFila = accionesFila.length > 0;
+      const conMenuFila = !!cfg.seleccionDrive;   // ⋮ al final de cada fila (estilo Drive)
 
       const st = {
         datos: cfg.datos || [],
@@ -749,11 +792,12 @@
             <button type="button" class="secondary dt-btn-columnas" title="Columnas, orden, ancho y densidad">${ic('vista')} Vista</button>
             ${cfg.ayuda ? `<span class="dt-ayuda" title="${esc(cfg.ayuda)}">${ic('ayuda')} Ayuda</span>` : ''}
             <span class="dt-espacio"></span>
-            ${cfg.seleccionable && cfg.modoSeleccion ? `<button type="button" class="secondary dt-btn-modo-seleccion" aria-pressed="false" title="Mostrar casillas para elegir varios registros (clic, arrastrar o Shift+clic)">${ic('list-checks')} <span>Seleccionar</span></button>` : ''}
+            ${cfg.seleccionable && cfg.modoSeleccion && !cfg.seleccionDrive ? `<button type="button" class="secondary dt-btn-modo-seleccion" aria-pressed="false" title="Mostrar casillas para elegir varios registros (clic, arrastrar o Shift+clic)">${ic('list-checks')} <span>Seleccionar</span></button>` : ''}
             <span class="dt-seleccion-info" hidden></span>
-            ${accionesSeleccion.map((a, i) => `<button type="button" class="${a.peligro ? 'danger' : 'secondary'} ${a.clase || ''}" data-accion-sel="${i}" ${a.titulo ? `title="${esc(a.titulo)}"` : ''} hidden>${ic(a.icono)} ${esc(a.texto)}</button>`).join('')}
+            ${cfg.seleccionDrive ? '' : accionesSeleccion.map((a, i) => `<button type="button" class="${a.peligro ? 'danger' : 'secondary'} ${a.clase || ''}" data-accion-sel="${i}" ${a.titulo ? `title="${esc(a.titulo)}"` : ''} hidden>${ic(a.icono)} ${esc(a.texto)}</button>`).join('')}
             ${cfg.exportar ? `<button type="button" class="btn-excel dt-btn-excel" title="${esc(cfg.exportar.titulo || 'Descarga lo que ves: columnas visibles, filtros, búsqueda y orden (todas las páginas)')}">${ic('exportar')} Exportar a Excel</button>` : ''}
           </div>
+          ${cfg.seleccionDrive ? '<div class="dt-barra-sel" role="toolbar" aria-label="Acciones de la selección" hidden></div>' : ''}
           <div class="dt-filtros-activos" hidden></div>
           <div class="dt-banner" hidden></div>
           <div class="dt-scroll"><div class="dt-barra-carga" hidden></div><table><thead></thead><tbody></tbody><tfoot></tfoot></table></div>
@@ -784,7 +828,8 @@
 
       const celdaCheck = (contenido) => (cfg.seleccionable ? `<td class="dt-col-check dt-fija">${contenido || ''}</td>` : '');
       const celdaAcciones = (contenido) => (hayAccionesFila ? `<td class="dt-col-acciones">${contenido || ''}</td>` : '');
-      const nColumnasSistema = () => (cfg.seleccionable ? 1 : 0) + (hayAccionesFila ? 1 : 0);
+      const celdaMas = (contenido) => (conMenuFila ? `<td class="dt-col-mas">${contenido || ''}</td>` : '');
+      const nColumnasSistema = () => (cfg.seleccionable ? 1 : 0) + (hayAccionesFila ? 1 : 0) + (conMenuFila ? 1 : 0);
 
       function estiloAncho(campo) {
         const w = st.anchos[campo];
@@ -846,7 +891,7 @@
         const m = calcularModelo();
         raiz.className = 'dt dt-densidad-' + st.densidad +
           // modoSeleccion (rama emmanuel): className se reescribe en cada render, así que el modo va aquí
-          (cfg.modoSeleccion ? ' dt-con-modo-seleccion' : '') + (st.modoSeleccion ? ' dt-modo-seleccion' : '');
+          (cfg.modoSeleccion ? ' dt-con-modo-seleccion' : '') + (st.modoSeleccion ? ' dt-modo-seleccion' : '') + (cfg.seleccionDrive ? ' dt-drive' : '');
         pintarEncabezado(m);
         pintarCuerpo(m);
         pintarTotales(m);
@@ -856,6 +901,7 @@
         aplicarFijadas();
         ajustarAlto();
         avisarCambioDeFiltros();
+        avisarCambioDeSeleccion();
       }
 
       function pintarEncabezado({ visibles, idsPagina, selPagina }) {
@@ -879,6 +925,7 @@
           (cfg.seleccionable ? '<th class="dt-col-check dt-fija"><input type="checkbox" class="dt-check-pagina" title="Seleccionar esta página" aria-label="Seleccionar esta página" /></th>' : '') +
           visibles.map(th).join('') +
           (hayAccionesFila ? '<th class="dt-col-acciones">Acciones</th>' : '') +
+          (conMenuFila ? '<th class="dt-col-mas" aria-label="Más opciones"></th>' : '') +
           '</tr>';
 
         const checkPagina = thead.querySelector('.dt-check-pagina');
@@ -934,6 +981,7 @@
             celdaCheck(`<input type="checkbox" class="dt-check" ${sel ? 'checked' : ''} aria-label="Seleccionar ${esc(etiquetaDe(fila))}" />`) +
             visibles.map((col) => htmlCelda(col, fila, busquedaActiva)).join('') +
             celdaAcciones(htmlAccionesFila(fila)) +
+            celdaMas(botonIcono('dt-btn-mas', 'ellipsis-vertical', `Más opciones de ${etiquetaDe(fila)}`)) +
             '</tr>';
         }).join('');
       }
@@ -946,7 +994,7 @@
           visibles.map((col) => `<td data-campo="${esc(col.campo)}" class="${clasesColumna(col)}"${estiloAncho(col.campo)}>${col.agregado
             ? `<span class="dt-agregado-etiqueta" title="${esc(col.agregado)} de ${filas.length} registros filtrados">${etiquetaAgregado(col)}</span>${esc(calcularAgregado(col, filas))}`
             : ''}</td>`).join('') +
-          celdaAcciones() + '</tr>';
+          celdaAcciones() + celdaMas() + '</tr>';
       }
 
       function pintarChips({ busquedaActiva }) {
@@ -1000,7 +1048,122 @@
         info.textContent = `${nSel} ${plural(nSel, 'seleccionado')}` +
           (!cfg.alEliminar && cfg.motivoSinEliminar ? ` · ${cfg.motivoSinEliminar}` : '');
         // `minimo` (opcional, rama emmanuel): la acción aparece desde N seleccionados (p. ej. masivas desde 2)
-        contenedor.querySelectorAll('[data-accion-sel]').forEach((b) => { b.hidden = nSel < ((accionesSeleccion[Number(b.dataset.accionSel)] || {}).minimo || 1); });
+        contenedor.querySelectorAll('.dt-toolbar [data-accion-sel]').forEach((b) => { b.hidden = nSel < ((accionesSeleccion[Number(b.dataset.accionSel)] || {}).minimo || 1); });
+        if (cfg.seleccionDrive) { info.hidden = true; pintarBarraSeleccion(); }
+      }
+
+      // ---- Selección estilo Drive: barra con lo más usado, ⋮ y menú contextual ----
+      const seleccionadas = () => st.datos.filter((f) => st.seleccion.has(idDe(f)));
+      /** Acciones que aplican a la selección: por cantidad (minimo/maximo) y por su condición visible(filas) */
+      function accionesAplicables(filas) {
+        const n = filas.length;
+        return accionesSeleccion.filter((a) => n >= (a.minimo || 1) && n <= (a.maximo || Infinity) && (!a.visible || a.visible(filas)));
+      }
+      function pintarBarraSeleccion() {
+        const barra = $('.dt-barra-sel');
+        if (!barra) return;
+        const filas = seleccionadas();
+        barra.hidden = !filas.length;
+        if (!filas.length) { barra.innerHTML = ''; return; }
+        barra.style.minHeight = $('.dt-toolbar').offsetHeight + 'px';   // mismo alto que lo que tapa
+        const aplican = accionesAplicables(filas);
+        const enBarra = aplican.filter((a) => a.enBarra);
+        const cuenta = filas.length === 1 && cfg.etiquetaFila ? `1 seleccionado · ${etiquetaDe(filas[0])}` : `${filas.length} ${plural(filas.length, 'seleccionado')}`;
+        barra.innerHTML = botonIcono('secondary dt-sel-icono', 'x', 'Quitar la selección (Esc)', 'data-sel-quitar') +
+          `<span class="dt-sel-cuenta">${esc(cuenta)}</span>` +
+          enBarra.map((a) => `<button type="button" class="${a.peligro ? 'danger' : 'secondary'}${a.activo && a.activo() ? ' activo' : ''}" data-accion-sel="${accionesSeleccion.indexOf(a)}"${a.titulo ? ` title="${esc(a.titulo)}"` : ''}>${ic(a.icono)} ${esc(a.texto)}</button>`).join('') +
+          (aplican.length > enBarra.length ? botonIcono('secondary dt-sel-icono', 'ellipsis-vertical', 'Más opciones', 'data-sel-mas') : '');
+      }
+      /** Ejecuta la acción `i` sobre la selección actual (desde la barra, el ⋮ o el menú contextual) */
+      function ejecutarAccion(i, boton) {
+        const accion = accionesSeleccion[i];
+        const filas = seleccionadas();
+        if (!accion || !filas.length) return;
+        if (accion.propia) { accion.alHacer(filas, boton); return; }
+        // Acciones del módulo: si tardan, el botón muestra que está trabajando; si fallan, se avisa
+        conBotonOcupado(boton, 'Procesando…', async () => accion.alHacer(filas))
+          .catch((err) => Notificar.error(`${accion.texto}: ${err.message}`));
+      }
+      /** Menú de acciones bajo un botón (⋮) o en el punto del clic derecho; soloMenu = sin las que ya están en la barra */
+      function abrirMenuAcciones(posicion, soloMenu) {
+        const lista = accionesAplicables(seleccionadas()).filter((a) => !soloMenu || !a.enBarra);
+        if (!lista.length) return;
+        let grupo;
+        const html = lista.map((a, n) => {
+          const separador = n && a.grupo !== grupo ? '<hr>' : '';
+          grupo = a.grupo;
+          return `${separador}<button type="button" data-menu-accion="${accionesSeleccion.indexOf(a)}" class="${a.peligro ? 'dt-peligro' : ''}"${a.titulo ? ` title="${esc(a.titulo)}"` : ''}>${ic(a.icono)} ${esc(a.texto)}</button>`;
+        }).join('');
+        let ancla = posicion;
+        if (!(posicion instanceof Element)) {
+          ancla = document.createElement('div');
+          Object.assign(ancla.style, { position: 'fixed', left: posicion.x + 'px', top: posicion.y + 'px', width: '0', height: '0' });
+          document.body.appendChild(ancla);
+        }
+        abrirPopover(ancla, html, (pop) => {
+          pop.classList.add('dt-menu');
+          pop.setAttribute('role', 'menu');
+          pop.addEventListener('click', (ev) => {
+            const b = ev.target.closest('[data-menu-accion]');
+            if (!b) return;
+            cerrarPopover();
+            ejecutarAccion(Number(b.dataset.menuAccion), null);
+          });
+          const primero = pop.querySelector('button');
+          if (primero) primero.focus();
+        });
+        if (ancla !== posicion) ancla.remove();
+      }
+      /** Repinta solo lo que cambia con la selección (sin reescribir las filas: así el doble clic sigue llegando) */
+      function pintarSeleccion() {
+        tbody.querySelectorAll('tr[data-id]').forEach((tr) => {
+          const marcada = st.seleccion.has(tr.dataset.id);
+          tr.classList.toggle('dt-fila-seleccionada', marcada);
+          const casilla = tr.querySelector('.dt-check');
+          if (casilla) casilla.checked = marcada;
+        });
+        const m = calcularModelo();
+        pintarEncabezado(m);
+        aplicarFijadas();
+        pintarBanner(m);
+        pintarBarraYPie(m);
+        avisarCambioDeSeleccion();
+      }
+      /** Clic estilo Drive: solo esa fila; Ctrl/Cmd alterna; Shift rango desde la última (con Ctrl lo agrega) */
+      function clicDrive(id, teclas) {
+        const ctrl = !!(teclas && (teclas.ctrlKey || teclas.metaKey));
+        if (teclas && teclas.shiftKey && st.ancla && st.ancla !== id) {
+          const ids = filasFiltradas().map(idDe);
+          const a = ids.indexOf(st.ancla);
+          const b = ids.indexOf(id);
+          if (a !== -1 && b !== -1) {
+            const rango = ids.slice(Math.min(a, b), Math.max(a, b) + 1);
+            st.seleccion = new Set(ctrl ? Array.from(st.seleccion).concat(rango) : rango);
+            pintarSeleccion();
+            return;
+          }
+        }
+        if (ctrl) { if (st.seleccion.has(id)) st.seleccion.delete(id); else st.seleccion.add(id); }
+        else st.seleccion = new Set([id]);
+        st.ancla = id;
+        pintarSeleccion();
+      }
+      /** Deja seleccionada esa fila si todavía no lo estaba (antes de abrir su menú) */
+      function asegurarSeleccionada(id) {
+        if (st.seleccion.has(id)) return;
+        st.seleccion = new Set([id]);
+        st.ancla = id;
+        pintarSeleccion();
+      }
+      let firmaSeleccion = '';
+      let esperaSeleccion = null;
+      function avisarCambioDeSeleccion() {
+        if (!cfg.alCambiarSeleccion) return;
+        const firma = Array.from(st.seleccion).sort().join('|');
+        if (firma === firmaSeleccion) return;
+        firmaSeleccion = firma;
+        clearTimeout(esperaSeleccion);
+        esperaSeleccion = setTimeout(() => { if (!desmontado()) cfg.alCambiarSeleccion(seleccionadas()); }, 0);
       }
 
       /** Posición "left" de las columnas fijas, según el ancho real de las anteriores */
@@ -1524,8 +1687,12 @@
           render();
           return;
         }
+        await exportarFilas(filasFiltradas(), boton);
+      }
+
+      /** Excel de las filas dadas con las columnas visibles (el botón de la barra o "Exportar selección") */
+      async function exportarFilas(filas, boton) {
         const cols = columnasVisibles().filter((c) => c.exportable);
-        const filas = filasFiltradas();
         if (!filas.length) { Notificar.error('No hay registros para exportar con los filtros actuales'); return; }
         await conBotonOcupado(boton, 'Exportando…', async () => {
           try {
@@ -1690,15 +1857,17 @@
       }
       $('.dt-toolbar').addEventListener('click', (ev) => {
         const boton = ev.target.closest('[data-accion-sel]');
-        if (!boton) return;
-        const accion = accionesSeleccion[Number(boton.dataset.accionSel)];
-        const filas = st.datos.filter((f) => st.seleccion.has(idDe(f)));
-        if (!filas.length) return;
-        if (accion.propia) { accion.alHacer(filas, boton); return; }
-        // Acciones del módulo: si tardan, el botón muestra que está trabajando; si fallan, se avisa
-        conBotonOcupado(boton, 'Procesando…', async () => accion.alHacer(filas))
-          .catch((err) => Notificar.error(`${accion.texto}: ${err.message}`));
+        if (boton) ejecutarAccion(Number(boton.dataset.accionSel), boton);
       });
+      if ($('.dt-barra-sel')) {
+        $('.dt-barra-sel').addEventListener('click', (ev) => {
+          if (ev.target.closest('[data-sel-quitar]')) { limpiarSeleccion(); if (st.modoSeleccion) setModoSeleccion(false); return; }
+          const mas = ev.target.closest('[data-sel-mas]');
+          if (mas) { abrirMenuAcciones(mas, true); return; }
+          const boton = ev.target.closest('[data-accion-sel]');
+          if (boton) ejecutarAccion(Number(boton.dataset.accionSel), boton);
+        });
+      }
 
       $('.dt-filtros-activos').addEventListener('click', (ev) => {
         const quitar = ev.target.closest('[data-quitar-filtro]');
@@ -1825,6 +1994,31 @@
       }
       if (cfg.modoSeleccion) raiz.classList.add('dt-con-modo-seleccion');
 
+      // Estilo Drive con el dedo: tocar abre; mantener presionado entra al modo selección con esa fila
+      let ultimoPuntero = 'mouse';
+      const toque = { timer: 0, largo: false, x: 0, y: 0 };
+      const esToque = (ev) => (ev.pointerType ? ev.pointerType !== 'mouse' : ultimoPuntero !== 'mouse');
+      tbody.addEventListener('pointerdown', (ev) => {
+        ultimoPuntero = ev.pointerType || 'mouse';
+        toque.largo = false;   // si el navegador no mandó el clic de la pulsación larga, no se come el siguiente toque
+        if (!cfg.seleccionDrive || ultimoPuntero === 'mouse' || st.modoSeleccion) return;
+        const tr = ev.target.closest('tr[data-id]');
+        if (!tr || ev.target.closest('button, a, input, select, textarea, label')) return;
+        clearTimeout(toque.timer);
+        Object.assign(toque, { x: ev.clientX, y: ev.clientY, largo: false });
+        toque.timer = setTimeout(() => {
+          toque.largo = true;
+          st.seleccion = new Set([tr.dataset.id]);
+          st.ancla = tr.dataset.id;
+          setModoSeleccion(true);
+          if (navigator.vibrate) navigator.vibrate(15);
+        }, 500);
+      });
+      tbody.addEventListener('pointermove', (ev) => {
+        if (toque.timer && (Math.abs(ev.clientX - toque.x) > 8 || Math.abs(ev.clientY - toque.y) > 8)) { clearTimeout(toque.timer); toque.timer = 0; }
+      });
+      ['pointerup', 'pointercancel'].forEach((tipo) => tbody.addEventListener(tipo, () => { clearTimeout(toque.timer); toque.timer = 0; }));
+
       // Arrastrar sobre las filas (en modo selección) marca o desmarca todas las que toca, según la primera
       const arrastre = { inicio: null, marcar: true, movio: false, ignorarClic: false };
       const filasVisibles = () => Array.from(tbody.querySelectorAll('tr[data-id]')).map((tr) => tr.dataset.id);
@@ -1876,6 +2070,8 @@
       scrollTabla.addEventListener('pointerdown', (ev) => {
         if (!cfg.modoSeleccion || ev.pointerType !== 'mouse' || ev.button !== 0 || st.editando || st.cargando) return;
         if (ev.target.closest('thead, tfoot, button, a, input, select, textarea, label, .dt-editor, .dt-editando')) return;
+        // Estilo Drive: el cuadro solo empieza fuera de las filas (sobre una fila, presionar es seleccionarla)
+        if (cfg.seleccionDrive && ev.target.closest('tbody tr[data-id]')) return;
         // La barra de desplazamiento también está dentro del contenedor
         const r = scrollTabla.getBoundingClientRect();
         if (ev.clientX - r.left >= scrollTabla.clientWidth || ev.clientY - r.top >= scrollTabla.clientHeight) return;
@@ -1909,7 +2105,8 @@
         });
         st.seleccion = nueva;
         if (tocadas.length) st.ancla = tocadas[marco.y >= marco.y0 ? tocadas.length - 1 : 0];
-        if (!st.modoSeleccion && nueva.size) setModoSeleccion(true); else render();
+        if (cfg.seleccionDrive) pintarSeleccion();
+        else if (!st.modoSeleccion && nueva.size) setModoSeleccion(true); else render();
         mantenerTablaQuieta_();
       }
       // Al marcar la primera fila aparecen las casillas y la barra de seleccionados, que empujan la tabla hacia abajo.
@@ -2000,7 +2197,33 @@
 
         if (arrastre.ignorarClic) { arrastre.ignorarClic = false; return; }
         const check = ev.target.closest('.dt-check');
-        if (check) { alternarSeleccion(tr.dataset.id, check.checked, ev.shiftKey); return; }
+        if (check) { alternarSeleccion(tr.dataset.id, check.checked, ev.shiftKey); if (cfg.seleccionDrive && !st.seleccion.size) setModoSeleccion(false); return; }
+        if (cfg.seleccionDrive) {
+          const id = tr.dataset.id;
+          // ⋮ de la fila: la selecciona (si no lo estaba) y abre el menú con todas las acciones
+          if (ev.target.closest('.dt-btn-mas')) {
+            asegurarSeleccionada(id);
+            const boton = tbody.querySelector(`tr[data-id="${CSS.escape(id)}"] .dt-btn-mas`);
+            if (boton) abrirMenuAcciones(boton, false);
+            return;
+          }
+          if (!ev.target.closest('button, a, input, select, textarea, label, .dt-editor')) {
+            if (esToque(ev)) {
+              if (toque.largo) { toque.largo = false; return; }   // el clic que sigue a mantener presionado
+              if (st.modoSeleccion) {
+                if (st.seleccion.has(id)) st.seleccion.delete(id); else st.seleccion.add(id);
+                st.ancla = id;
+                if (!st.seleccion.size) setModoSeleccion(false); else pintarSeleccion();
+                return;
+              }
+              const fila = filaPorId(id);
+              if (fila && cfg.alTocarFila) cfg.alTocarFila(fila);
+              return;
+            }
+            clicDrive(id, ev);
+            return;
+          }
+        }
         if (cfg.modoSeleccion && !ev.target.closest('button, a, input, select, textarea, label, .dt-editor')) {
           // En modo selección el clic en cualquier parte de la fila la marca; Ctrl/Cmd+clic entra al modo con esa fila
           if (!st.modoSeleccion && (ev.ctrlKey || ev.metaKey)) { setModoSeleccion(true); alternarSeleccion(tr.dataset.id, true, false); return; }
@@ -2039,6 +2262,28 @@
         return true;
       };
       tbody.addEventListener('dblclick', editarDesde);
+
+      // ---- Estilo Drive: doble clic abre, clic derecho = menú, clic en el vacío quita la selección ----
+      if (cfg.seleccionDrive) {
+        tbody.addEventListener('dblclick', (ev) => {
+          const tr = ev.target.closest('tr[data-id]');
+          if (!tr || ev.target.closest('button, a, input, select, textarea, label, .dt-editor, td.dt-editable')) return;
+          const fila = filaPorId(tr.dataset.id);
+          if (fila && cfg.alAbrirFila) cfg.alAbrirFila(fila);
+        });
+        tbody.addEventListener('contextmenu', (ev) => {
+          const tr = ev.target.closest('tr[data-id]');
+          if (!tr || ev.target.closest('input, textarea, select, .dt-editor')) return;
+          ev.preventDefault();
+          if (ultimoPuntero === 'touch') return;   // con el dedo, mantener presionado es el modo selección
+          asegurarSeleccionada(tr.dataset.id);
+          abrirMenuAcciones({ x: ev.clientX, y: ev.clientY }, false);
+        });
+        scrollTabla.addEventListener('click', (ev) => {
+          if (ev.target.closest('tr[data-id], thead, tfoot, button, a, input, select, textarea, label, .dt-editor')) return;
+          if (st.seleccion.size && !st.modoSeleccion) limpiarSeleccion();
+        });
+      }
       tbody.addEventListener('keydown', (ev) => {
         if (ev.key === 'F2' && editarDesde(ev)) ev.preventDefault();
       });
@@ -2064,7 +2309,7 @@
           if (popover) { cerrarPopover(); return; }
           // Quitar selección solo si el usuario está trabajando dentro de esta tabla (o, en modo selección, sin foco
           // en otro lado: tras el cuadro del mouse el foco queda en la página)
-          const enEsta = contenedor.contains(document.activeElement) || (st.modoSeleccion && document.activeElement === document.body && visible());
+          const enEsta = contenedor.contains(document.activeElement) || ((st.modoSeleccion || cfg.seleccionDrive) && document.activeElement === document.body && visible());
           // En modo selección, un solo Esc quita la selección y sale del modo
           if (!panel && !st.editando && st.modoSeleccion && enEsta) setModoSeleccion(false);
           else if (!panel && !st.editando && st.seleccion.size && enEsta) limpiarSeleccion();
@@ -2080,7 +2325,8 @@
           if (enTabla) {
             ev.preventDefault();
             st.seleccion = new Set(filasFiltradas().map(idDe));
-            if (!st.modoSeleccion) setModoSeleccion(true); else render();
+            if (cfg.seleccionDrive) pintarSeleccion();
+            else if (!st.modoSeleccion) setModoSeleccion(true); else render();
             return;
           }
         }
@@ -2133,6 +2379,11 @@
         getFiltradas: () => (st.cargando || st.error ? [] : filasFiltradas()),
         getSeleccion: () => st.datos.filter((f) => st.seleccion.has(idDe(f))),
         setModoSeleccion, enModoSeleccion: () => st.modoSeleccion,
+        /** Estilo Drive desde fuera de la tabla (p. ej. las tarjetas): mismo clic, mismo menú, repintar la barra */
+        clicSeleccion: (id, teclas) => clicDrive(String(id), teclas || {}),
+        asegurarSeleccionada: (id) => asegurarSeleccionada(String(id)),
+        abrirMenu: (x, y) => abrirMenuAcciones({ x: x, y: y }, false),
+        refrescarSeleccion: () => pintarSeleccion(),
         limpiarSeleccion,
         copiarSeleccion,
         textoSeleccion,

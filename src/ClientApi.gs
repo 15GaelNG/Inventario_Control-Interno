@@ -158,6 +158,9 @@ function apiLineasMandarResguardo(token, ids, datos) {
   return TelefoniaService.mandarResguardo(token, ids, datos);
 }
 // Bandeja de resguardos: viaja como texto JSON (como las demás tablas grandes)
+function apiLineasMandarCancelacion(token, ids, datos) {
+  return TelefoniaService.mandarCancelacion(token, ids, datos);
+}
 function apiLineasBandejaResguardos(token) {
   return TelefoniaService.bandejaResguardos(token);
 }
