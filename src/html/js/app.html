@@ -2025,7 +2025,7 @@
   /** Tabla sencilla de solo lectura (sin filtros/orden/edición) para las pestañas de una
    *  ficha que muestran lo que hay de este registro en otro módulo. */
   function tablaFicha(columnas, filas) {
-    return '<div style="overflow-x:auto"><table><thead><tr>' + columnas.map((c) => '<th>' + c.t + '</th>').join('') +
+    return '<div class="ficha-tabla-wrap"><table><thead><tr>' + columnas.map((c) => '<th>' + c.t + '</th>').join('') +
       '</tr></thead><tbody>' + filas.map((f) => '<tr>' + columnas.map((c) => '<td>' + c.r(f) + '</td>').join('') + '</tr>').join('') +
       '</tbody></table></div>';
   }
