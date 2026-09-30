@@ -283,7 +283,61 @@
         '" class="ico ln-icon"></i> ' + g + '</h3><div class="info-grid">' + porGrupo[g].join('') + '</div></div>').join('');
     }
 
-    async function abrirFichaCajaChica(cResumen) {
+    function abrirCapturaCajaChica(icono, tipo, titulo, subtitulo) {
+      document.getElementById('cch-captura-icono').innerHTML = Iconos.svg(icono);
+      document.getElementById('cch-captura-tipo').textContent = tipo;
+      document.getElementById('cch-captura-titulo').textContent = titulo;
+      document.getElementById('cch-captura-subtitulo').textContent = subtitulo || '';
+      const cuerpo = document.getElementById('cch-captura-cuerpo');
+      cuerpo.innerHTML = '';
+      document.getElementById('cch-modal-captura').hidden = false;
+      refreshIcons();
+      return cuerpo;
+    }
+    function cerrarCapturaCajaChica() {
+      document.getElementById('cch-modal-captura').hidden = true;
+      document.getElementById('cch-captura-cuerpo').innerHTML = '';
+    }
+
+    function abrirAgregarCambioMonto(cResumen) {
+      const cuerpo = abrirCapturaCajaChica('trending-up', 'CAMBIO DE MONTO', 'Nuevo cambio de monto', 'ID CCH: ' + cResumen['ID CCH']);
+      const form = Formulario.crear(cuerpo, {
+        ancho: 'medio', columnas: 2,
+        campos: [
+          { id: 'CANTIDAD_ANTERIOR', etiqueta: 'Cantidad anterior', tipo: 'texto', valor: formatearMoneda(cResumen.MONTO_ACTUAL || 0) },
+          { id: 'CANTIDAD_ACTUALIZADA', etiqueta: 'Cantidad actualizada', tipo: 'numero', min: 0, requerido: true },
+        ],
+        textoGuardar: 'Registrar cambio de monto', iconoGuardar: 'save',
+        alGuardar: async (valores) => {
+          await callServer('apiCrearCambioMontoCCH', state.token, { 'ID CCH': cResumen['ID CCH'], 'CANTIDAD ACTUALIZADA': valores.CANTIDAD_ACTUALIZADA });
+          invalidarCacheLista('apiListarCajasChicasResumen', state.token);
+          invalidarCacheLista('apiListarCambiosMontoCCH', state.token);
+        },
+        textoExito: () => 'Cambio de monto registrado',
+        alGuardado: () => { cerrarCapturaCajaChica(); abrirFichaCajaChica(cResumen, 'cambios-monto'); },
+      });
+      form.setSoloLectura('CANTIDAD_ANTERIOR', true, 'Se autocompleta de la caja chica');
+    }
+
+    /** A diferencia del cambio de monto, esto reutiliza el formulario REAL de Arqueos
+     *  (79 campos, checklist de auditoría, firmas y archivos) — construirCapturaArqueo
+     *  vive en app-arqueos.html y ya acepta cualquier contenedor/prefijo (mismo patrón
+     *  que prepararCaptura de Inspección Vehicular), así que aquí solo se le da el
+     *  cuerpo del modal, la caja chica (ya la sabemos, sin selector) y qué hacer al
+     *  guardar en vez de "listo para el siguiente". */
+    async function abrirAgregarArqueo(cResumen) {
+      const cuerpo = abrirCapturaCajaChica('clipboard-check', 'ARQUEO', 'Nuevo arqueo', 'ID CCH: ' + cResumen['ID CCH']);
+      await construirCapturaArqueo(cuerpo, 'cch-arq', cResumen, () => {
+        cerrarCapturaCajaChica();
+        abrirFichaCajaChica(cResumen, 'arqueos');
+      });
+    }
+
+    function mostrarPestanaFichaCajaChica(nombre) {
+      mostrarPestanaFicha(document.getElementById('cch-detalle'), nombre);
+    }
+
+    async function abrirFichaCajaChica(cResumen, pestanaInicial) {
       const listado = document.getElementById('cch-listado');
       const detalle = document.getElementById('cch-detalle');
       listado.hidden = true;
@@ -335,7 +389,8 @@
               { t: 'Diferencia', r: (a) => (a.DIFERENCIA === '' || a.DIFERENCIA === null || a.DIFERENCIA === undefined) ? '—' : formatearMoneda(a.DIFERENCIA) },
               { t: 'Calificación', r: (a) => (a.CALIFICACION === '' || a.CALIFICACION === null || a.CALIFICACION === undefined) ? '—' : escaparHtml(a.CALIFICACION + '%') },
               { t: 'Archivo', r: (a) => a.FORMATO_ARQUEO ? '<a href="' + escaparHtml(a.FORMATO_ARQUEO) + '" target="_blank" rel="noopener">📎 Ver PDF</a>' : '<span class="empty-state" style="margin:0">Sin archivo</span>' },
-            ], arqueos, 'Sin arqueos registrados para esta caja chica.'),
+            ], arqueos, 'Sin arqueos registrados para esta caja chica.',
+            puedeEditarModulo('arqueos') ? { tipo: 'arqueo', texto: 'Agregar' } : null),
           },
           {
             id: 'cambios-monto', titulo: 'Cambios de monto', icono: 'trending-up', num: cambios.length,
@@ -345,16 +400,25 @@
               { t: 'Anterior', r: (c) => (c.CANTIDAD_ANTERIOR === '' || c.CANTIDAD_ANTERIOR === null || c.CANTIDAD_ANTERIOR === undefined) ? '—' : formatearMoneda(c.CANTIDAD_ANTERIOR) },
               { t: 'Actualizada', r: (c) => (c.CANTIDAD_ACTUALIZADA === '' || c.CANTIDAD_ACTUALIZADA === null || c.CANTIDAD_ACTUALIZADA === undefined) ? '—' : formatearMoneda(c.CANTIDAD_ACTUALIZADA) },
               { t: 'Quién realizó', r: (c) => escaparHtml(c.QUIEN_REALIZO || '—') },
-            ], cambios, 'Sin cambios de monto registrados para esta caja chica.'),
+            ], cambios, 'Sin cambios de monto registrados para esta caja chica.',
+            puedeEditar ? { tipo: 'cambio-monto', texto: 'Agregar' } : null),
           },
         ]);
 
         detalle.innerHTML = html;
         wireMigasCajaChica();
+        if (pestanaInicial) mostrarPestanaFichaCajaChica(pestanaInicial);
         const btnEditar = document.getElementById('cch-btn-editar-ficha');
         if (btnEditar) btnEditar.addEventListener('click', () => abrirEditarCajaChica(cResumen));
         detalle.querySelectorAll('[data-ficha-tab]').forEach((btn) => {
           btn.addEventListener('click', () => mostrarPestanaFicha(detalle, btn.dataset.fichaTab));
+        });
+        detalle.querySelectorAll('[data-agregar]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const tipo = btn.dataset.agregar;
+            if (tipo === 'arqueo') abrirAgregarArqueo(cResumen);
+            else if (tipo === 'cambio-monto') abrirAgregarCambioMonto(cResumen);
+          });
         });
         refreshIcons();
       } catch (err) {
@@ -552,6 +616,11 @@
       // "\/\/" (no "//") — ver comentario en app.html, botón de reporte de Vehículos.
       window.open('https:\/\/script.google.com/a/macros/ciudadmaderas.com/s/AKfycbwAgUrG2tEiZSxMtNO7hvXlyjfurJnuXIVXUDwyJF99Eci6UbvRtJqmpoCfXGGCdWad1A/exec', '_blank', 'noopener');
     });
+
+    // Modal de captura (arqueo/cambio de monto): cerrar con la X o clic afuera.
+    const modalCapturaCajaChica = document.getElementById('cch-modal-captura');
+    document.getElementById('cch-captura-cerrar').addEventListener('click', cerrarCapturaCajaChica);
+    modalCapturaCajaChica.addEventListener('click', (ev) => { if (ev.target === modalCapturaCajaChica) cerrarCapturaCajaChica(); });
 
     await Promise.all([cargarCatalogosCajaChica(), cargar()]);
 

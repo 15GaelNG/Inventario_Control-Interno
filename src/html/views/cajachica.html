@@ -62,6 +62,25 @@
        dentro del módulo, mismo patrón que Vehículos. -->
   <section id="cch-detalle" hidden></section>
 
+  <!-- Captura de arqueo / cambio de monto, sin salir de la ficha de la caja chica —
+       mismo formato que "Captura" en Vehículos/Líneas Telefónicas (ln-captura-*). -->
+  <div class="modal-backdrop" id="cch-modal-captura" hidden>
+    <div class="modal-card modal-card-wide ln-captura-modal" role="dialog" aria-modal="true" aria-labelledby="cch-captura-titulo">
+      <div class="modal-header ln-captura-cabecera">
+        <div class="ln-captura-cabecera-principal">
+          <span class="ln-captura-icono" id="cch-captura-icono"></span>
+          <div>
+            <span class="ln-captura-tipo" id="cch-captura-tipo"></span>
+            <h3 class="ln-titulo" style="margin:3px 0 0" id="cch-captura-titulo"></h3>
+            <p class="modal-subtitle" id="cch-captura-subtitulo"></p>
+          </div>
+        </div>
+        <button type="button" class="modal-close" id="cch-captura-cerrar" aria-label="Cerrar"><i data-lucide="x" class="ico"></i></button>
+      </div>
+      <div class="modal-form-scroll" id="cch-captura-cuerpo"></div>
+    </div>
+  </div>
+
   <!-- Modal: editar caja chica -->
   <div class="modal-backdrop" id="modal-editar-cajachica" hidden>
     <div class="modal-card modal-card-wide">
