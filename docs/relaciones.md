@@ -43,6 +43,65 @@ original. Los módulos no copian datos por su cuenta: le piden a `Relaciones`.
 - En cualquier otra hoja esas columnas son **copias**: en la app **no se editan**
   (se muestran como solo lectura).
 
+### Principio: la llave es la SERIE (el VIN), no el folio
+
+El folio es un número interno que se puede reasignar. La serie es la identidad física de la
+unidad: no cambia mientras el vehículo exista. Por eso el `MAPA` empareja por
+`SERIE VEHICULO` en las tres hojas que tienen la columna.
+
+| Hoja copia | Se empareja por | Columna en la copia |
+|---|---|---|
+| `INSTALACION DE SENSORES` | `SERIE VEHICULO` | `SERIE VEHICULO` |
+| `HOLOGRAMAS` | `SERIE VEHICULO` | `SERIE VEHICULO` |
+| `INSPECCION VEHICULAR` | `SERIE VEHICULO` | `NO SERIE` |
+| `VERIFICACIONES` | `FOLIO` | `FOLIO VEHICULO` |
+| `INCIDENCIAS` | `FOLIO` | `FOLIO` |
+
+**El cambio no movió ni una fila.** Medido en producción el 30/09/2026 antes de hacerlo:
+las dos llaves dan el **mismo** vehículo en las 207 filas de Sensores y las 298 de
+Inspección que emparejan. **0 filas cambiarían de vehículo.** Sin esa comprobación el
+cambio habría sido a ciegas: una llave nueva que apunte a otro renglón propaga datos
+ajenos.
+
+#### La placa NO se usa de llave
+
+Parece la llave natural y es la peor de las tres:
+
+| Llave | Con dato real | Únicas | Relleno | Choques sin filtrar |
+|---|---|---|---|---|
+| `FOLIO` | 648 | 648 | 0 | 0 |
+| `SERIE VEHICULO` | 637 | 637 | 11 | 10 |
+| `PLACA` | **421** | 421 | **227** | **224** |
+
+De las 648 celdas de `PLACA`, **227 no son una placa sino texto**: `SIN PLACA` ×101,
+`BAJA VEHICULAR` ×84, `BAJA DE PLACA` ×42 (y ni una celda vacía — el relleno ocupa el lugar
+del hueco). Tomada tal cual, 224 filas caerían sobre la llave de otra: 101 vehículos
+distintos se fundirían en uno solo. `SIN PLACA` y `BAJA DE PLACA` están en `CENTINELAS`
+bajo la llave `'PLACA'` para que tampoco se propaguen.
+
+#### Las dos que se quedan con el folio, y por qué
+
+- **`VERIFICACIONES` no tiene columna de serie.** Emparejar por placa acertaría 333 de sus
+  426 filas (78%) contra 426 (100%) por folio. Moverla requiere **agregarle la columna**, y
+  agregar columnas rompe AppSheet hasta que alguien regenere el esquema (ver
+  [ids.md](ids.md)).
+- **`INCIDENCIAS` no tiene ni serie ni placa.** El folio es su única llave posible.
+
+#### Lo que el cambio de llave arrastró
+
+`FOLIO` dejó de ser llave en Sensores, así que pasó a ser **un atributo copiado más** —
+está en `columnas` y la corrida nocturna lo mantiene al día. Y `cambiarClave()` tuvo que
+aprender a propagarlo: antes solo reescribía la llave en las copias que emparejan por ella,
+así que cambiar un folio habría dejado esa columna con el valor viejo hasta la noche.
+
+`datosParaNuevo()` **cambió de contrato**: ahora recibe la serie, no el folio, para las tres
+hojas que emparejan por serie. Hoy nadie la llama en producción (`SensoresService` y
+`HologramasService` siguen con sus funciones temporales), así que no rompe nada — pero hay
+que tenerlo presente al reemplazarlas.
+
+> **A dónde va esto:** la llave definitiva es `ID_VEHICULO` (ver [ids.md](ids.md)). La serie
+> es el paso intermedio correcto mientras las copias no tengan la columna del ID nuevo.
+
 ### Principio: una copia es un caché o es una bitácora, y se tratan al revés
 
 Esto es lo que más fácil se hace mal, y hacerlo mal **borra datos buenos**. Cada entrada
@@ -82,10 +141,13 @@ constante `CENTINELAS` de `Relaciones.gs`:
 
 `BAJA VEHICULAR` · `FUERA DE SERVICIO` · `NUCO SIN INFORMACION` · `SIN ESPECIFICAR`
 
+y dos que solo aplican a `PLACA`, porque `SIN PLACA` en un campo de comentarios sí sería un
+dato legítimo: `SIN PLACA` · `BAJA DE PLACA`
+
 **Aplican a cualquier columna, no solo a `DEPARTAMENTO`**, y eso no es precaución teórica.
 Medido en producción el 30/09/2026 (solo lectura): **1,265 celdas en 14 columnas**, de las
-cuales **1,124 están fuera de lugar** — las otras 141 son la columna `ESTATUS`, donde sí
-pertenecen. **323 de los 648 vehículos (50%) tienen al menos una.**
+cuales **1,267 están fuera de lugar** — las otras 141 son la columna `ESTATUS`, donde sí
+pertenecen. **La mitad de la flota tiene al menos una.**
 
 | Columna | Celdas | Qué trae |
 |---|---|---|
@@ -93,7 +155,7 @@ pertenecen. **323 de los 648 vehículos (50%) tienen al menos una.**
 | `UBICACION` | 309 | igual que `SEDE` |
 | `DEPARTAMENTO` | 139 | `BAJA VEHICULAR` 123, `NUCO SIN INFORMACION` 14, `SIN ESPECIFICAR` 2 |
 | `RESPONSABLE VEHICULO` | 125 | `BAJA VEHICULAR` 106, `NUCO SIN INFORMACION` 14, `FUERA DE SERVICIO` 5 |
-| `PLACA` | 84 | `BAJA VEHICULAR` 84 |
+| `PLACA` | 227 | `SIN PLACA` 101, `BAJA VEHICULAR` 84, `BAJA DE PLACA` 42 |
 | `COLOR` | 69 | `SIN ESPECIFICAR` 56, `NUCO SIN INFORMACION` 13 |
 | `RAZON SOCIAL`, `MARCA`, `MODELO`, `TIPO DE COMBUSTIBLE`, `CLASE`, `LINEA VEHICULO`, `SERIE VEHICULO` | 11–15 cada una | casi todo `NUCO SIN INFORMACION` |
 | *(`ESTATUS`)* | *141* | *ahí sí pertenecen* |
@@ -330,19 +392,20 @@ por todo el código:
 | *Detalle* | una fila por inconsistencia: hoja, fila, clave, columna, lo que dice cada lado y el tipo |
 | *Leyenda* | qué significa cada tipo y qué haría la corrida nocturna con él |
 | *Relleno en VEHICULOS* | las 14 columnas del catálogo que guardan estatus en vez de datos |
-| *Relleno detalle* | esas 1,265 celdas una por una, con su referencia |
+| *Relleno detalle* | esas 1,408 celdas una por una, con su referencia |
+| *Calidad de las llaves* | por qué la llave es la serie y no el folio ni la placa, con los números |
 
 Los mapeos de columnas salen del código (`Relaciones.MAPA` y
 `InspeccionesService.DEL_VEHICULO`), no de la intuición. Lo que midió el 30/09/2026:
 
-| Hoja | Filas | Iguales | `DIFERENCIA` | `VEHICULOS_RELLENO` | `COPIA_VACIA` | `HUERFANO` |
-|---|---|---|---|---|---|---|
-| `INSTALACION DE SENSORES` | 208 | 2,473 | 18 | 0 | 200 | 1 |
-| `HOLOGRAMAS` | 256 | 833 | 146 | 29 | 0 | 111 |
-| `VERIFICACIONES` | 426 | 409 | 12 | 0 | 5 | 0 |
-| `INSPECCION VEHICULAR` | 302 | 2,749 | 186 | 16 | 29 | 0 |
-| `INCIDENCIAS` | 1 | 2 | 0 | 0 | 0 | 0 |
-| **Total** | | **6,466** | **362** | **45** | **234** | **112** |
+| Hoja | Se une por | Filas | Iguales | `DIFERENCIA` | `VEH_RELLENO` | `COPIA_VACIA` | `HUERFANO` |
+|---|---|---|---|---|---|---|---|
+| `INSTALACION DE SENSORES` | `SERIE VEHICULO` | 208 | 2,473 | 18 | 0 | 200 | 1 |
+| `HOLOGRAMAS` | `SERIE VEHICULO` | 256 | 833 | 142 | 33 | 0 | 111 |
+| `VERIFICACIONES` | `FOLIO VEHICULO` | 426 | 409 | 7 | 5 | 5 | 0 |
+| `INSPECCION VEHICULAR` | `NO SERIE` | 302 | 2,749 | 184 | 18 | 29 | 0 |
+| `INCIDENCIAS` | `FOLIO` | 1 | 2 | 0 | 0 | 0 | 0 |
+| **Total** | | | **6,466** | **351** | **56** | **234** | **112** |
 
 Tres cosas que salieron de ahí y valen más que los totales:
 
@@ -350,9 +413,15 @@ Tres cosas que salieron de ahí y valen más que los totales:
    `CAPACIDAD DE COMBUSTIBLE` (157) y `COLOR` (43). No es deriva, es que nunca se llenaron.
 2. **Los 111 huérfanos de Hologramas ya se conocían**: son vehículos personales que no están
    en el catálogo, y por diseño ahí los datos se capturan a mano.
-3. **`INSPECCION VEHICULAR` acumula 186 `DIFERENCIA`**, sobre todo `RESPONSABLE` (85) y
-   `OFICINA / DESARROLLO` (69). Es una bitácora: **eso no se corrige**, y ese número es
-   justamente la medida de cuánto se habría reescrito si se tratara como caché.
+3. **`INSPECCION VEHICULAR` acumula 184 `DIFERENCIA`**, sobre todo `RESPONSABLE` (85) y
+   `OFICINA / DESARROLLO` (69). Es una bitácora, y Ayrton lo confirmó el 30/09/2026: *"el
+   responsable que se captura ahí es el del momento en el que se realizó la inspección"*.
+   **Eso no se corrige**, y ese número es justamente la medida de cuánto se habría
+   reescrito si se tratara como caché.
+4. **Los dos centinelas de `PLACA` movieron 11 casos** de `DIFERENCIA` a
+   `VEHICULOS_RELLENO`: son 11 placas buenas en las copias que la corrida nocturna habría
+   pisado con `SIN PLACA` o `BAJA DE PLACA`. Salieron de medir si la placa servía de llave,
+   no de revisar el código.
 
 ## Inventario de copias (mantener al día)
 
@@ -360,9 +429,9 @@ Tres cosas que salieron de ahí y valen más que los totales:
 |---|---|---|---|---|---|
 | `VERIFICACIONES` | `FOLIO VEHICULO` | `PLACA` | `VEHICULOS` | `VerificacionesService`: al registrar y al cambiar el folio (copia en 2 lugares) | Unificar en `datosDeVehiculo_` (regla 1) |
 | `INCIDENCIAS` | `FOLIO` | `DEPARTAMENTO`, `MODELO` | `VEHICULOS` | **Los manda el formulario** (autocompletado en el navegador) y son editables. En el `MAPA` como **`bitacora`**: se reportan, no se corrigen | Copiarlos en el servidor; quitar edición (regla 2) |
-| `INSPECCION VEHICULAR` | `FOLIO` | `DEPARTAMENTO`, `SEDE`, `OFICINA / DESARROLLO`, `RESPONSABLE` | `VEHICULOS` | En el `MAPA` como **`bitacora`**: se reportan, no se corrigen | Nada: congelada a propósito |
+| `INSPECCION VEHICULAR` | `NO SERIE` | `FOLIO`, `DEPARTAMENTO`, `SEDE`, `OFICINA / DESARROLLO`, `RESPONSABLE` | `VEHICULOS` | En el `MAPA` como **`bitacora`**: se reportan, no se corrigen | Nada: congelada a propósito |
 | `TICKETS` | — | (ninguna) | — | **No está en el `MAPA` y no debe estar.** Su `DEPARTAMENTO` es el de quien **levantó** el ticket (va pegado a `SOLICITANTE`), no el del vehículo: 320 de sus filas no coinciden con `VEHICULOS`, y eso es correcto | Nada |
-| `INSTALACION DE SENSORES` | `FOLIO` | 13 columnas: `SERIE VEHICULO`, `PLACA`, `MARCA`, `CLASE`, `LINEA VEHICULO`, `MODELO`, `COLOR`, `CAPACIDAD DE COMBUSTIBLE`, `RAZON SOCIAL`, `DEPARTAMENTO`, `SEDE`, `OFICINA / DESARROLLO` (← `UBICACION`), `RESPONSABLE` (← `RESPONSABLE VEHICULO`) | `VEHICULOS` | `SensoresService.datosDeVehiculo_` (función temporal, regla 1); no son editables en el módulo | Reemplazar por `Relaciones.datosParaNuevo` |
+| `INSTALACION DE SENSORES` | `SERIE VEHICULO` | 13 columnas (incluido `FOLIO`, que dejó de ser llave): `SERIE VEHICULO`, `PLACA`, `MARCA`, `CLASE`, `LINEA VEHICULO`, `MODELO`, `COLOR`, `CAPACIDAD DE COMBUSTIBLE`, `RAZON SOCIAL`, `DEPARTAMENTO`, `SEDE`, `OFICINA / DESARROLLO` (← `UBICACION`), `RESPONSABLE` (← `RESPONSABLE VEHICULO`) | `VEHICULOS` | `SensoresService.datosDeVehiculo_` (función temporal, regla 1); no son editables en el módulo | Reemplazar por `Relaciones.datosParaNuevo` |
 
 > **`INSTALACION DE SENSORES` — lo que NO es copia:** `TIPO DE COMBUSTIBLE` es propio
 > (en `VEHICULOS` es el tipo: GASOLINA/DIESEL; aquí el producto: MAGNA/PREMIUM/DIESEL —

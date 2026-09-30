@@ -17,6 +17,24 @@
  * completo (no solo un valor de clave) para poder resolver cualquiera de los
  * dos.
  *
+ * LA LLAVE ES LA SERIE (el VIN), no el folio, donde la hoja copia tenga la columna.
+ * El folio es un número interno que se puede reasignar; la serie es la identidad física de
+ * la unidad. Medido en producción el 30/09/2026, cambiar de folio a serie NO mueve ni una
+ * fila a otro vehículo: las dos llaves dan el mismo resultado en las 207 filas de Sensores
+ * y las 298 de Inspección. Y la serie es mejor llave: 637 valores únicos de 648 filas,
+ * contra los 648 del folio pero sin un solo duplicado en ninguna de las dos.
+ *
+ * LA PLACA NO SE USA DE LLAVE, aunque parezca natural. En la columna PLACA de VEHICULOS,
+ * 227 de 648 celdas no son una placa sino texto de relleno: 'SIN PLACA' x101,
+ * 'BAJA VEHICULAR' x84, 'BAJA DE PLACA' x42. Usarla de llave fundiría 101 vehículos
+ * distintos en uno solo. Está en CENTINELAS para que tampoco se propague.
+ *
+ * Dos hojas se quedan con FOLIO porque no tienen de otra, y está anotado en su entrada:
+ * VERIFICACIONES no tiene columna de serie, e INCIDENCIAS no tiene ni serie ni placa.
+ *
+ * A dónde va esto: la llave definitiva es `ID_VEHICULO` (ver docs/ids.md). La serie es el
+ * paso intermedio correcto mientras las copias no tengan la columna del ID nuevo.
+ *
  * DOS CLASES DE COPIA, y se tratan al revés (`tipo` en cada entrada del MAPA):
  *   - `cache`    — describe el estado de HOY (la instalación del sensor, la tarjeta de
  *                  combustible). Si el dueño cambia, la copia está vieja: se pisa.
@@ -58,10 +76,14 @@ const Relaciones = (function () {
           // los Services de cada módulo con SheetUtils.getSheetByColumns).
           firma: ['ID_SENSOR', 'FOLIO', 'SERIE SENSOR'],
           tipo: 'cache',   // describe la instalación de HOY: se pisa sin pensarlo
-          claveOrigen: 'FOLIO',
-          clave: 'FOLIO',
+          claveOrigen: 'SERIE VEHICULO',
+          clave: 'SERIE VEHICULO',
           // columna en VEHICULOS → columna en esta hoja (ver SensoresService.COPIADAS_DE_VEHICULO)
+          // SERIE VEHICULO ya no está aquí: es la llave. Se cambia con cambiarClave(), no
+          // propagando. Y FOLIO sí está, porque dejó de ser llave y pasó a ser un atributo
+          // más que hay que mantener al día.
           columnas: {
+            'FOLIO': 'FOLIO',
             'PLACA': 'PLACA',
             'MARCA': 'MARCA',
             'CLASE': 'CLASE',
@@ -74,13 +96,17 @@ const Relaciones = (function () {
             'SEDE': 'SEDE',
             'UBICACION': 'OFICINA / DESARROLLO',
             'RESPONSABLE VEHICULO': 'RESPONSABLE',
-            'SERIE VEHICULO': 'SERIE VEHICULO',
           },
         },
         {
           nombre: 'VERIFICACIONES',
           firma: ['ID_VERIFICACION', 'FOLIO VEHICULO', 'COMPROBANTE VERIFICACION'],
           tipo: 'cache',   // solo copia PLACA, y la placa del vehículo es la de hoy
+          // Se queda con FOLIO, y no por descuido: esta hoja NO TIENE columna de serie.
+          // Emparejar por PLACA perdería 93 de sus 426 filas (78% de acierto contra 100%),
+          // y además la placa no sirve de llave (ver CENTINELAS). Para mover esta hoja a la
+          // serie habría que AGREGARLE la columna, y agregar columnas rompe AppSheet hasta
+          // que alguien regenere el esquema (ver docs/ids.md).
           claveOrigen: 'FOLIO',
           clave: 'FOLIO VEHICULO',
           columnas: { 'PLACA': 'PLACA' },
@@ -114,8 +140,8 @@ const Relaciones = (function () {
           nombre: 'INSPECCION VEHICULAR',
           firma: ['ID INSPECCION', 'FOLIO', 'PUNTAJE FINAL INSPECCION'],
           tipo: 'bitacora',
-          claveOrigen: 'FOLIO',
-          clave: 'FOLIO',
+          claveOrigen: 'SERIE VEHICULO',
+          clave: 'NO SERIE',
           columnas: {
             'DEPARTAMENTO': 'DEPARTAMENTO',
             'SEDE': 'SEDE',
@@ -125,6 +151,7 @@ const Relaciones = (function () {
         },
         {
           // BITÁCORA por la misma razón: cada renglón es una incidencia fechada.
+          // Se queda con FOLIO porque no tiene NI serie NI placa: es su única llave posible.
           nombre: 'INCIDENCIAS',
           firma: ['ID_INCIDENCIA', 'FOLIO', 'NOMBRE MECANICO'],
           tipo: 'bitacora',
@@ -166,6 +193,10 @@ const Relaciones = (function () {
    */
   const CENTINELAS = {
     '*': ['BAJA VEHICULAR', 'FUERA DE SERVICIO', 'NUCO SIN INFORMACION', 'SIN ESPECIFICAR'],
+    // Propios de PLACA, y salieron de medir si la placa servía de llave: no son placas,
+    // son texto. 101 + 42 celdas de 648. Aparecen SOLO en esta columna, así que no van
+    // en '*' — 'SIN PLACA' en un campo de comentarios sí sería un dato legítimo.
+    'PLACA': ['SIN PLACA', 'BAJA DE PLACA'],
   };
 
   const esBitacora_ = (copia) => copia.tipo === 'bitacora';
@@ -260,15 +291,28 @@ const Relaciones = (function () {
    * @return {Object} { 'NOMBRE HOJA': filasActualizadas, ... } — solo las hojas que sí tenían algo que copiar
    */
   function propagar(origen, filaOrigen, cambios) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try {
+      return propagarSinCandado_(origen, filaOrigen, cambios);
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  /**
+   * El cuerpo de propagar(), sin tomar el candado. Existe porque cambiarClave() ya lo
+   * tiene tomado cuando necesita propagar, y waitLock() no es reentrante: pedirlo dos
+   * veces desde el mismo hilo se cuelga hasta el timeout. No se exporta.
+   */
+  function propagarSinCandado_(origen, filaOrigen, cambios) {
     const definicion = MAPA[origen];
     if (!definicion || !cambios || !filaOrigen) return {};
     const ssId = definicion.spreadsheet();
     const resumen = {};
     const errores = [];
 
-    const lock = LockService.getScriptLock();
-    lock.waitLock(20000);
-    try {
+    {
       definicion.copias.forEach((copia) => {
         // Una bitácora guarda el valor del DÍA DEL EVENTO: propagarle el de hoy
         // reescribiría el pasado. Ver el comentario de cada una en el MAPA.
@@ -308,8 +352,6 @@ const Relaciones = (function () {
           errores.push(copia.nombre + ': ' + err.message);
         }
       });
-    } finally {
-      lock.releaseLock();
     }
 
     if (errores.length) {
@@ -535,6 +577,18 @@ const Relaciones = (function () {
     lock.waitLock(20000);
     try {
       SheetUtils.update(ssId, definicion.hoja, claveVieja, { [claveNombre]: claveNueva }, claveNombre);
+
+      // Desde que la llave es la SERIE, el FOLIO quedó como atributo copiado en hojas que
+      // ya NO se emparejan por él (Sensores). Cambiar un folio tiene que actualizarlo ahí
+      // también, o esa columna se queda vieja hasta la corrida nocturna. Se hace con la
+      // misma ruta que cualquier otro atributo — que además respeta bitácoras y centinelas.
+      const llevanLaClaveDeAtributo = definicion.copias.some(
+        (c) => c.claveOrigen !== claveNombre && c.columnas[claveNombre] !== undefined);
+      if (llevanLaClaveDeAtributo) {
+        const dueno = SheetUtils.findById(ssId, definicion.hoja, claveNueva, claveNombre);
+        if (dueno) propagarSinCandado_(origen, dueno.data, { [claveNombre]: claveNueva });
+      }
+
       // OJO: aquí NO se excluyen las bitácoras, al contrario de propagar(). Lo que cambia
       // es la CLAVE, no un atributo: si el FOLIO de una inspección vieja no sigue al
       // vehículo, la inspección se vuelve huérfana y se pierde de qué unidad era. La

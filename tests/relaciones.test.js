@@ -131,13 +131,15 @@ function armar() {
       MODELO: '2022', RESPONSABLE: 'ANA', DEPARTAMENTO: 'CONSTRUCCION', 'CAPACIDAD DEL TANQUE': 60,
     }]);
 
-  // BITÁCORA: la inspección de CTA0001 se hizo cuando la unidad era de ALEBRIJE
+  // BITÁCORA: la inspección de CTA0001 se hizo cuando la unidad era de ALEBRIJE.
+  // Se empareja por NO SERIE, no por FOLIO (la llave es la serie desde el 30/09/2026).
   hs['INSPECCION VEHICULAR'] = hoja('INSPECCION VEHICULAR',
-    ['ID INSPECCION', 'FOLIO', 'PUNTAJE FINAL INSPECCION', 'DEPARTAMENTO', 'SEDE',
-      'OFICINA / DESARROLLO', 'RESPONSABLE'],
+    ['ID INSPECCION', 'FOLIO', 'NO SERIE', 'PUNTAJE FINAL INSPECCION', 'DEPARTAMENTO',
+      'SEDE', 'OFICINA / DESARROLLO', 'RESPONSABLE'],
     [{
-      'ID INSPECCION': 'INS-1', FOLIO: 'CTA0001', 'PUNTAJE FINAL INSPECCION': 90,
-      DEPARTAMENTO: 'ALEBRIJE', SEDE: 'QRO', 'OFICINA / DESARROLLO': 'OFICINA 1', RESPONSABLE: 'ANA',
+      'ID INSPECCION': 'INS-1', FOLIO: 'CTA0001', 'NO SERIE': 'SER1',
+      'PUNTAJE FINAL INSPECCION': 90, DEPARTAMENTO: 'ALEBRIJE', SEDE: 'QRO',
+      'OFICINA / DESARROLLO': 'OFICINA 1', RESPONSABLE: 'ANA',
     }]);
 
   hs['INCIDENCIAS'] = hoja('INCIDENCIAS',
@@ -302,27 +304,46 @@ console.log('\n7. Al CREAR un registro sí se copia el valor de hoy, bitácora i
 {
   const hs = armar();
   const R = cargar(hs);
-  const insp = R.datosParaNuevo('INSPECCION VEHICULAR', 'CTA0001');
+  // Se busca por SERIE, no por folio: es el contrato desde que cambió la llave.
+  const insp = R.datosParaNuevo('INSPECCION VEHICULAR', 'SER1');
   ok(insp.datos['DEPARTAMENTO'] === 'CONSTRUCCION',
     'la inspección nueva nace con el área de HOY: por eso queda congelada después');
-  const sen = R.datosParaNuevo('INSTALACION DE SENSORES', 'CTA0002');
+  ok(insp.datos['NO SERIE'] === 'SER1', 'y trae ya puesta su propia llave');
+  const sen = R.datosParaNuevo('INSTALACION DE SENSORES', 'SER2');
   ok(sen.datos['DEPARTAMENTO'] === 'BAJA VEHICULAR',
     'y al crear no se filtra el centinela: es el estado real en ese momento');
+  ok(sen.datos['FOLIO'] === 'CTA0002',
+    'el folio llega como atributo copiado, ya que dejó de ser llave');
 }
 
-console.log('\n8. Cambiar el FOLIO sí arrastra a la bitácora (o se vuelve huérfana)');
+console.log('\n8. Cambiar la SERIE arrastra a todo lo que se empareja por ella');
+{
+  const hs = armar();
+  const R = cargar(hs);
+  R.cambiarClave('VEHICULOS', 'SERIE VEHICULO', 'SER1', 'SER9', { confirmar: true });
+  ok(hs['INSTALACION DE SENSORES'].valor('SER9', 'SERIE VEHICULO', 'ID_SENSOR') === 'SEN-1',
+    'el sensor siguió al vehículo');
+  ok(hs['HOLOGRAMAS'].valor('SER9', 'SERIE VEHICULO', 'ID_HOLOGRAMA') === 'HOL-1',
+    'el holograma también');
+  ok(hs['INSPECCION VEHICULAR'].valor('SER9', 'NO SERIE', 'DEPARTAMENTO') === 'ALEBRIJE',
+    'y la inspección, conservando su departamento histórico: se movió el vínculo, no el dato');
+}
+
+console.log('\n9. Cambiar el FOLIO: llave donde lo es, atributo donde ya no');
 {
   const hs = armar();
   const R = cargar(hs);
   R.cambiarClave('VEHICULOS', 'FOLIO', 'CTA0001', 'CTA9999', { confirmar: true });
-  ok(hs['INSPECCION VEHICULAR'].valor('CTA9999', 'FOLIO', 'DEPARTAMENTO') === 'ALEBRIJE',
-    'la inspección siguió al vehículo y conservó su departamento histórico');
-  ok(hs['INCIDENCIAS'].valor('CTA9999', 'FOLIO', 'MODELO') === '2022', 'la incidencia también');
-  ok(hs['INSTALACION DE SENSORES'].valor('CTA9999', 'FOLIO', 'ID_SENSOR') === 'SEN-1',
-    'y el caché igual');
+  ok(hs['VERIFICACIONES'].valor('CTA9999', 'FOLIO VEHICULO', 'ID_VERIFICACION') === 'VER-1',
+    'Verificaciones se empareja por folio, así que la llave se reescribió');
+  ok(hs['INCIDENCIAS'].valor('CTA9999', 'FOLIO', 'MODELO') === '2022', 'Incidencias igual');
+  // Desde que la llave es la serie, el FOLIO de Sensores es un atributo copiado. Si
+  // cambiarClave() no lo propagara, esa columna se quedaría con el folio viejo.
+  ok(hs['INSTALACION DE SENSORES'].valor('SER1', 'SERIE VEHICULO', 'FOLIO') === 'CTA9999',
+    'y en Sensores el folio se actualizó como atributo, sin ser su llave');
 }
 
-console.log('\n9. La corrida nocturna NO vacía una copia que sí tiene dato');
+console.log('\n10. La corrida nocturna NO vacía una copia que sí tiene dato');
 {
   const hs = armar();
   const R = cargar(hs);
@@ -335,7 +356,7 @@ console.log('\n9. La corrida nocturna NO vacía una copia que sí tiene dato');
     'la única diferencia que corrigió es la de CTA0001: ni el centinela ni el vacío cuentan');
 }
 
-console.log('\n10. Pero borrar el campo A MANO sí vacía la copia');
+console.log('\n11. Pero borrar el campo A MANO sí vacía la copia');
 {
   const hs = armar();
   const R = cargar(hs);
