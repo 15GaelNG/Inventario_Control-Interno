@@ -721,12 +721,12 @@ const InspeccionesService = (function () {
       { titulo: 'Batería', peso: 5, piezas: ['TERMINALES CON SARRO', 'DERRAME LIQUIDO / MAL OLOR', 'BATERIA INFLADA'] },
     ],
     // MOTOCARRO MUEVETEC: estructura totalmente distinta a los formatos de auto/
-    // pickup, pero tiene el mismo bug de fondo -- "Clutch" y "Cardan" (con opción
-    // N/A) aparecen en el texto plano justo después del encabezado "Niveles 10%"
-    // (que solo trae Aceite de motor/Liquido de frenos, sin N/A), pero son piezas
-    // mecánicas de "Sistema mecánico" (igual que Bandas/Clutch/Transmisión en los
-    // formatos de auto) -- se reagrupan ahí. El resto de las secciones ya caen
-    // correctas sin necesitar ajuste. Confirmado contra su propio PDF crudo.
+    // pickup, pero tiene el mismo bug de fondo -- "Carburador", "Clutch" y "Cardan"
+    // (con opción N/A) aparecen en el texto plano justo después del encabezado
+    // "Niveles 10%" (que solo trae Aceite de motor/Liquido de frenos, sin N/A),
+    // pero son piezas mecánicas de "Sistema mecánico" (igual que Bandas/Clutch/
+    // Transmisión en los formatos de auto) -- se reagrupan ahí. Confirmado con
+    // Jorge (2026-09-30) y contra su propio PDF crudo.
     'MOTOCARRO MUEVETEC': [
       { titulo: 'Documentación', peso: 5, piezas: ['GAFETTE', 'TARJETA CIRCULACION', 'LICENCIA', 'POLIZA SEGURO', 'VERIFICACION', 'KARDEX'] },
       { titulo: 'Cristalería', peso: 10, piezas: ['FAROS DELANTEROS', 'CALAVERAS TRASERAS', 'DIRECCIONALES', 'RETROVISOR IZQUIERDO', 'RETROVISOR DERECHO'] },
@@ -736,8 +736,8 @@ const InspeccionesService = (function () {
       { titulo: 'Limpieza', peso: 5, piezas: ['ASIENTO', 'EXTERIOR DE UNIDAD'] },
       { titulo: 'Neumáticos', peso: 15, piezas: ['RINES', 'TUERCAS/BIRLOS'] },
       { titulo: 'Interiores', peso: 5, piezas: ['ASIENTO DE CONDUCTOR'] },
-      { titulo: 'Sistemas interiores', peso: 10, piezas: ['MANDOS / BOTONERA VIDRIOS Y SEGUROS', 'CLUSTER / TABLERO', 'LUCES ALTAS', 'LUCES BAJAS', 'CUARTOS', 'DIRECCIONALES IZQUIERDAS', 'NIEBLEROS / OTROS', 'STOP', 'CLAXON', 'PUÑO ACELERADOR', 'CARBURADOR', 'DIRECCIONALES DERECHAS', 'INTERMITENTES'] },
-      { titulo: 'Sistema mecánico', peso: 15, piezas: ['FRENOS DELANTEROS', 'FRENOS TRASEROS', 'FRENO DE MANO', 'AMORTIGUADORES DELANTEROS', 'AMORTIGUADOR TRASERO', 'SOPORTES DE MOTOR', 'CLUTCH', 'CARDAN'] },
+      { titulo: 'Sistemas interiores', peso: 10, piezas: ['MANDOS / BOTONERA VIDRIOS Y SEGUROS', 'CLUSTER / TABLERO', 'LUCES ALTAS', 'LUCES BAJAS', 'CUARTOS', 'DIRECCIONALES IZQUIERDAS', 'NIEBLEROS / OTROS', 'STOP', 'CLAXON', 'PUÑO ACELERADOR', 'DIRECCIONALES DERECHAS', 'INTERMITENTES'] },
+      { titulo: 'Sistema mecánico', peso: 15, piezas: ['FRENOS DELANTEROS', 'FRENOS TRASEROS', 'FRENO DE MANO', 'AMORTIGUADORES DELANTEROS', 'AMORTIGUADOR TRASERO', 'SOPORTES DE MOTOR', 'CARBURADOR', 'CLUTCH', 'CARDAN'] },
       { titulo: 'Niveles', peso: 10, piezas: ['ACEITE MOTOR', 'LIQUIDO FRENOS'] },
       { titulo: 'Batería', peso: 5, piezas: ['TERMINALES CON SARRO', 'DERRAME LIQUIDO / MAL OLOR', 'BATERIA INFLADA'] },
     ],
