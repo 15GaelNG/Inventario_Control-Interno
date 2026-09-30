@@ -95,6 +95,14 @@
             <p class="modal-subtitle" id="veh-captura-subtitulo"></p>
           </div>
         </div>
+        <!-- Solo Inspección la usa (de las 5 capturas que comparten este modal) -- empieza
+             oculta, prepararCaptura la destapa; abrirCapturaVehiculo la vuelve a ocultar. -->
+        <div class="calif-badge" id="ins-calif-badge" style="margin-left:auto; margin-right:10px" hidden>
+          <span class="calif-badge-titulo">Calificación</span>
+          <span class="calif-badge-valor" id="ins-calif-badge-valor">—</span>
+          <div class="calif-badge-barra"><div class="calif-badge-barra-fill" id="ins-calif-badge-barra" style="width:0%"></div></div>
+          <span class="calif-badge-nota" id="ins-calif-badge-nota">Elige el tipo de unidad</span>
+        </div>
         <button type="button" class="modal-close" id="veh-captura-cerrar" aria-label="Cerrar"><i data-lucide="x" class="ico"></i></button>
       </div>
       <div class="modal-form-scroll" id="veh-captura-cuerpo"></div>

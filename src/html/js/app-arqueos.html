@@ -593,12 +593,19 @@
     }
     if (!document.body.contains(contenedor) || !contenedor.offsetParent) return; // se cerró mientras cargaba
 
+    // Insignia "Calificación": vive en la cabecera de verdad del modal
+    // (#cch-modal-captura), no aquí adentro -- para que salga arriba del todo,
+    // igual que en Registrar/Editar arqueo. Empieza oculta ahí (la comparte con
+    // Cambio de monto, que no tiene calificación); se destapa y resetea aquí.
+    const badge = document.getElementById(prefijo + '-calif-badge');
+    if (badge) {
+      badge.hidden = false;
+      document.getElementById(prefijo + '-calif-badge-valor').textContent = '—';
+      document.getElementById(prefijo + '-calif-badge-barra').style.width = '0%';
+      document.getElementById(prefijo + '-calif-badge-nota').textContent = '0 de 17 puntos calificados';
+    }
+
     contenedor.innerHTML =
-      '<div class="calif-badge" id="' + prefijo + '-calif-badge" style="margin-left:auto; margin-bottom:14px">' +
-      '<span class="calif-badge-titulo">Calificación</span>' +
-      '<span class="calif-badge-valor" id="' + prefijo + '-calif-badge-valor">—</span>' +
-      '<div class="calif-badge-barra"><div class="calif-badge-barra-fill" id="' + prefijo + '-calif-badge-barra" style="width:0%"></div></div>' +
-      '<span class="calif-badge-nota" id="' + prefijo + '-calif-badge-nota">0 de 17 puntos calificados</span></div>' +
       '<form id="' + prefijo + '-form" novalidate>' +
       '<div id="' + prefijo + '-campos" class="modal-form-scroll"></div>' +
       '</form><div class="error-msg" id="' + prefijo + '-error" hidden></div>';

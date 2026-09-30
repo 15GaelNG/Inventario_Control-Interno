@@ -2244,6 +2244,11 @@
       document.getElementById('veh-captura-subtitulo').textContent = subtitulo || '';
       const cuerpo = document.getElementById('veh-captura-cuerpo');
       cuerpo.innerHTML = '';
+      // La insignia "Calificación" solo la usa Inspección -- de las 5 capturas que
+      // comparten este modal, es la única con checklist calificable. Se oculta aquí
+      // por si la captura anterior fue una inspección; abrirAgregarInspeccion (vía
+      // prepararCaptura) la vuelve a destapar.
+      document.getElementById('ins-calif-badge').hidden = true;
       document.getElementById('veh-modal-captura').hidden = false;
       refreshIcons();
       return cuerpo;

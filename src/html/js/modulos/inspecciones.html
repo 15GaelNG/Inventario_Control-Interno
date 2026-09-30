@@ -365,15 +365,7 @@
     contenedor.innerHTML = `
       <form class="form-medio form-doble" novalidate>
         <div class="form-principal">
-          <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:14px; flex-wrap:wrap">
-            <ol class="form-pasos" id="ins-pasos"></ol>
-            <div class="calif-badge" id="ins-calif-badge">
-              <span class="calif-badge-titulo">Calificación</span>
-              <span class="calif-badge-valor" id="ins-calif-badge-valor">—</span>
-              <div class="calif-badge-barra"><div class="calif-badge-barra-fill" id="ins-calif-badge-barra" style="width:0%"></div></div>
-              <span class="calif-badge-nota" id="ins-calif-badge-nota">Elige el tipo de unidad</span>
-            </div>
-          </div>
+          <ol class="form-pasos" id="ins-pasos"></ol>
           <p class="form-nota">Campos obligatorios</p>
           <section class="form-paso" data-paso="0">
             <h3 class="form-paso-titulo" tabindex="-1">Vehículo</h3>
@@ -415,6 +407,22 @@
           </div>
         </aside>
       </form>`;
+
+    // Insignia "Calificación": vive en la cabecera de verdad (form-card-header del
+    // módulo Inspección Vehicular, o modal-header del captura embebido en la ficha
+    // de Vehículos) -- no aquí adentro, para que salga arriba del todo como en
+    // Líneas Telefónicas. Aquí solo se resetea (puede venir de una captura
+    // anterior en la misma sesión del navegador) y, si es la del modal de
+    // Vehículos (empieza oculta -- la comparten Verificación/Sensor/Holograma/
+    // Incidencia), se destapa.
+    const badgeCaja = document.getElementById('ins-calif-badge');
+    if (badgeCaja) badgeCaja.hidden = false;
+    const badgeValor = document.getElementById('ins-calif-badge-valor');
+    if (badgeValor) badgeValor.textContent = '—';
+    const badgeBarra = document.getElementById('ins-calif-badge-barra');
+    if (badgeBarra) badgeBarra.style.width = '0%';
+    const badgeNota = document.getElementById('ins-calif-badge-nota');
+    if (badgeNota) badgeNota.textContent = 'Elige el tipo de unidad';
 
     const $ = (sel) => contenedor.querySelector(sel);
     const campoFolio = $('#ins-folio');
@@ -851,10 +859,12 @@
       });
       $('#ins-puntaje').textContent = r.puntaje + '%';
       $('#ins-avance').textContent = `${r.respondidas} de ${estructura.piezas} piezas respondidas`;
-      // Insignia "Calificación" de la barra de pasos (mismo patrón que Arqueos)
-      $('#ins-calif-badge-valor').textContent = r.respondidas ? r.puntaje + '%' : '—';
-      $('#ins-calif-badge-barra').style.width = (estructura.piezas ? (r.respondidas / estructura.piezas) * 100 : 0) + '%';
-      $('#ins-calif-badge-nota').textContent = `${r.respondidas} de ${estructura.piezas} puntos calificados`;
+      // Insignia "Calificación" -- vive en la cabecera de verdad, fuera de este
+      // contenedor (ver el reset al abrir, arriba), así que se busca en todo el
+      // documento en vez de con $ (mismo patrón que Arqueos).
+      if (badgeValor) badgeValor.textContent = r.respondidas ? r.puntaje + '%' : '—';
+      if (badgeBarra) badgeBarra.style.width = (estructura.piezas ? (r.respondidas / estructura.piezas) * 100 : 0) + '%';
+      if (badgeNota) badgeNota.textContent = `${r.respondidas} de ${estructura.piezas} puntos calificados`;
       // Avance por sección en el panel: cada una lleva a su paso
       $('#ins-avance-lista').innerHTML = estructura.secciones.map((s, i) => {
         const a = r.porSeccion[i];

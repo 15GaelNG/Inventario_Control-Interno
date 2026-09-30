@@ -75,6 +75,14 @@
             <p class="modal-subtitle" id="cch-captura-subtitulo"></p>
           </div>
         </div>
+        <!-- Solo Arqueo la usa (de los 2 que comparten este modal) -- empieza oculta,
+             construirCapturaArqueo la destapa; abrirCapturaCajaChica la vuelve a ocultar. -->
+        <div class="calif-badge" id="cch-arq-calif-badge" style="margin-left:auto; margin-right:10px" hidden>
+          <span class="calif-badge-titulo">Calificación</span>
+          <span class="calif-badge-valor" id="cch-arq-calif-badge-valor">—</span>
+          <div class="calif-badge-barra"><div class="calif-badge-barra-fill" id="cch-arq-calif-badge-barra" style="width:0%"></div></div>
+          <span class="calif-badge-nota" id="cch-arq-calif-badge-nota">0 de 17 puntos calificados</span>
+        </div>
         <button type="button" class="modal-close" id="cch-captura-cerrar" aria-label="Cerrar"><i data-lucide="x" class="ico"></i></button>
       </div>
       <div class="modal-form-scroll" id="cch-captura-cuerpo"></div>

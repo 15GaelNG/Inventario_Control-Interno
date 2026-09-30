@@ -290,6 +290,10 @@
       document.getElementById('cch-captura-subtitulo').textContent = subtitulo || '';
       const cuerpo = document.getElementById('cch-captura-cuerpo');
       cuerpo.innerHTML = '';
+      // La insignia "Calificación" solo la usa Arqueo -- de los 2 que comparten
+      // este modal, Cambio de monto no tiene calificación. Se oculta aquí por si
+      // la captura anterior fue un arqueo; construirCapturaArqueo la destapa.
+      document.getElementById('cch-arq-calif-badge').hidden = true;
       document.getElementById('cch-modal-captura').hidden = false;
       refreshIcons();
       return cuerpo;
