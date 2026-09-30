@@ -652,12 +652,38 @@ const ArqueosService = (function () {
     insertarFirma_(body, '<<[FIRMA ESPECIALISTA]>>', fila['FIRMA ESPECIALISTA']);
     insertarFirma_(body, '<<[FIRMA ASISTENTE]>>', fila['FIRMA ASISTENTE']);
 
-    doc.saveAndClose();
+    try {
+      doc.saveAndClose();
+    } catch (e) {
+      throw new Error('No se pudo guardar el documento ya llenado con los datos del arqueo. Error original: ' + e.message);
+    }
 
-    const pdfBlob = DriveApp.getFileById(copia.getId()).getAs('application/pdf');
-    const pdfFile = DriveApp.getFolderById(CARPETA_ARCHIVOS_ID).createFile(pdfBlob).setName(copia.getName() + '.pdf');
-    pdfFile.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
-    DriveApp.getFileById(copia.getId()).setTrashed(true); // ya no se necesita el Doc, solo el PDF
+    let pdfBlob;
+    try {
+      pdfBlob = DriveApp.getFileById(copia.getId()).getAs('application/pdf');
+    } catch (e) {
+      throw new Error('El documento se llenó bien, pero no se pudo exportar a PDF. La cuenta ' + cuenta() +
+        ' necesita permiso de editor en la carpeta de Arqueos. Error original: ' + e.message);
+    }
+    let pdfFile;
+    try {
+      pdfFile = carpeta.createFile(pdfBlob).setName(copia.getName() + '.pdf');
+    } catch (e) {
+      throw new Error('Se generó el PDF pero no se pudo guardar en la carpeta de Arqueos en Drive (ID ' +
+        CARPETA_ARCHIVOS_ID + '). La cuenta ' + cuenta() + ' necesita permiso de editor ahí. Error original: ' + e.message);
+    }
+    try {
+      pdfFile.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
+    } catch (e) {
+      throw new Error('El PDF se generó y se guardó, pero no se pudo compartir con todo el dominio -- puede ser ' +
+        'una restricción para compartir de Workspace en esta carpeta/archivo. Error original: ' + e.message);
+    }
+    try {
+      DriveApp.getFileById(copia.getId()).setTrashed(true); // ya no se necesita el Doc, solo el PDF
+    } catch (e) {
+      // Mejor esfuerzo: el PDF ya se generó y se compartió bien -- que sobreviva el Doc
+      // temporal (mínimo) no vale la pena tronar el registro por esto.
+    }
 
     return pdfFile.getUrl();
   }
