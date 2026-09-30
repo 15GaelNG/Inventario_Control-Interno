@@ -132,45 +132,73 @@ configuraciones que conviven: `npm run push` va a dev, `npm run push:lab` al lab
 Si alguien clona el repo y quiere su propio laboratorio, copia
 `.clasp.lab.json.example` y le pega el id de su proyecto.
 
-### Una familia a la vez, con una sola funcion
+### Los cuatro pipelines
 
-`src/MigracionFamilia.gs`. En vez de correr los seis pasos a mano para las 24 hojas,
-`vehiculos1Ensayo` / `vehiculos2Escribir` corren toda la homologacion de **una familia**:
+`src/MigracionFamilia.gs`. `pipelinesEstado` los enseña sin tocar nada.
 
-| Familia | Hojas | Atajos |
-|---|---|---|
-| `vehiculos` | 8 | `vehiculos1Ensayo` / `vehiculos2Escribir` |
-| `lineas` | 10 | `lineas1Ensayo` / `lineas2Escribir` |
-| `cajachica` | 3 | `cajaChica1Ensayo` / `cajaChica2Escribir` |
-| `otros` | 3 | `correrFamilia('otros')` |
+| # | Pipeline | Hojas | Atajos |
+|---|---|---|---|
+| 1 | **IDS**, todas las hojas | 24 | `ids1Ensayo` / `ids2Escribir` |
+| 2 | Homologar **VEHICULOS** | 8 | `vehiculos1Ensayo` / `vehiculos2Escribir` |
+| 3 | Homologar **LINEAS** | 10 | `lineas1Ensayo` / `lineas2Escribir` |
+| 4 | Homologar **CAJA CHICA** | 3 | `cajaChica1Ensayo` / `cajaChica2Escribir` |
 
-`familiasEstado` enseña el reparto sin tocar nada. La familia de cada hoja vive en
-`src/config/Entidades.gs`.
+**El 1 va primero, siempre.** Los otros tres reescriben referencias que apuntan al ID del
+padre, y para eso el padre ya tiene que tenerlo.
 
-**Por que por familia:** Vehiculos y Lineas son problemas de tamanos muy distintos (ver
-[lineas-homologacion.md](lineas-homologacion.md)), y conviene dejar Vehiculos terminado y
-probado antes de tocar Lineas.
+**Por que esta separacion:** asignar los IDs es *una sola decision* -que formato, que
+prefijo, donde queda la llave vieja- y se toma una vez para todo el libro. La homologacion
+es distinta en cada familia: Vehiculos es casi mecanico y Lineas tiene un problema de
+modelado (ver [lineas-homologacion.md](lineas-homologacion.md)). Asi cada familia se revisa
+y se aprueba por separado, sin volver a tocar los IDs.
 
-Los seis pasos, en este orden:
+#### Pipeline 1: los seis pasos de los IDs
 
 | # | Paso | |
 |---|---|---|
-| 1 | `revisar` | **solo lee**. Si encuentra problemas y la corrida escribe, se detiene aqui |
-| 2 | `ids` | llena la columna `ID` de cada hoja de la familia |
-| 3 | `referencias` | reescribe lo que apuntaba al ID viejo del padre. **Despues** de los ids: necesita que el padre ya tenga el suyo |
-| 4 | `mover` | pone la columna `ID` al inicio |
-| 5 | `respaldo` | quita las columnas `ID ANTERIOR` que sobran |
+| 1 | `revisar` | **solo lee**. Si hay problemas y la corrida escribe, se detiene aqui |
+| 2 | `renombrar` | la llave vieja de cada hoja pasa a llamarse igual en todas: **`ID ANTERIOR`** |
+| 3 | `ids` | llena la columna `ID` |
+| 4 | `mover` | la pone al inicio |
+| 5 | `respaldo` | quita las `ID ANTERIOR` que sobren |
 | 6 | `auditar` | **solo lee**. Dice si todo cuadro |
 
-Dos reglas que las pruebas vigilan:
+**`renombrar` va ANTES de `ids`, y es la pieza clave.** Si la columna se llamaba `ID` -las
+ocho hojas de Lineas-, al renombrarse la hoja queda **sin** `ID` y el paso 3 crea uno limpio.
+Eso mata el baile de crear respaldo, pisar y luego limpiar, y con el desaparece el concepto
+"ID APPSHEET": la columna original **se vuelve** el respaldo al renombrarse. Tambien mata el
+caso especial de `CAMBIOS LINEAS TELEFONICAS`, cuya columna no tenia encabezado.
+
+Por eso el paso 5 casi nunca tiene nada que hacer. Se deja como red para los libros que se
+migraron con la version vieja del codigo.
+
+`migColumnaAnterior_` resuelve la llave vieja aguantando los **dos** nombres -primero
+`ID ANTERIOR`, luego el del catalogo, y hasta el final la posicion-. Sin eso, correr el
+pipeline dos veces lo rompia.
+
+> **CUIDADO con el paso 2 en el libro bueno.** Cambia nombres de columna que la app usa para
+> buscar renglones (`SheetUtils.findById(..., 'ID_HOLOGRAMA')`) y para identificar hojas
+> (`COLUMNAS_CLAVE`, las `firma` de `Relaciones.MAPA`): 11 busquedas y 8 firmas, medidas.
+> Correrlo sin actualizar esos nombres deja modulos sin encontrar su hoja. En el laboratorio
+> no importa.
+
+#### Pipelines 2, 3 y 4: la homologacion
+
+Dos pasos hoy: `referencias` (filtrado a las hojas de esa familia) y `auditar`.
+
+**Pendiente:** aqui entran las limpiezas propias de cada familia, ya medidas pero no
+automatizadas — los centinelas de `VEHICULOS` (1,124 celdas en 13 columnas), las 15 columnas
+vacias de `LINEAS TELEFONICAS`, su encabezado `#REF!`. Estan en
+[relaciones.md](relaciones.md) y [lineas-homologacion.md](lineas-homologacion.md).
+
+#### Dos reglas que las pruebas vigilan
 
 - **Un paso de solo lectura NUNCA recibe `escribir: true`**, ni cuando la corrida escribe.
-- **En ensayo no se detiene** aunque un paso reporte problemas: se corren los seis para ver
-  el panorama completo. Escribiendo si se detiene, y no toca nada mas.
+- **En ensayo no se detiene** aunque un paso reporte problemas o no se pueda ensayar: se
+  corren todos para ver el panorama. Escribiendo si se detiene, y no toca nada mas.
 
-**No guarda avance, a proposito.** Los seis pasos son idempotentes: si se corta por tiempo,
-se vuelve a correr lo mismo y los ya hechos se saltan solos. Guardar el avance seria mas
-maquinaria que la que ahorra.
+Ninguno guarda avance, a proposito: todos los pasos son idempotentes, asi que si se corta
+por tiempo se vuelve a correr lo mismo.
 
 ### El orden del ensayo completo
 
@@ -180,7 +208,8 @@ maquinaria que la que ahorra.
    perezoso, asi que no las va a pedir.
 2. `replanche1Ensayo` — leer el reporte, sobre todo las columnas que se perderian.
 3. `replanche2Escribir` — las veces que haga falta hasta que diga LISTO.
-4. `vehiculos1Ensayo` y, si cuadra, `vehiculos2Escribir`. Despues Lineas y Caja Chica.
+4. `ids1Ensayo` y, si cuadra, `ids2Escribir`.
+5. `vehiculos1Ensayo` / `vehiculos2Escribir`, y despues Lineas y Caja Chica.
 
 ### Que el laboratorio se separe de produccion es normal
 

@@ -1,44 +1,69 @@
 /**
  * MigracionFamilia.gs
  *
- * Corre TODA la homologación de una familia de un jalón, en vez de ir función por función.
- * Ver docs/ids-asignacion.md.
+ * Los cuatro pipelines del proyecto. Ver docs/ids-asignacion.md.
  *
- * ¿Por qué por familia y no todo junto? Porque Vehículos y Líneas son problemas de tamaños
- * muy distintos (ver docs/lineas-homologacion.md), y conviene dejar Vehículos terminado y
- * probado antes de tocar Líneas. La familia de cada hoja vive en `src/config/Entidades.gs`.
+ *   1. IDS — para las 24 hojas de un jalón.        ids1Ensayo      / ids2Escribir
+ *   2. HOMOLOGAR VEHÍCULOS (8 hojas).              vehiculos1Ensayo / vehiculos2Escribir
+ *   3. HOMOLOGAR LÍNEAS (10 hojas).                lineas1Ensayo    / lineas2Escribir
+ *   4. HOMOLOGAR CAJA CHICA (3 hojas).             cajaChica1Ensayo / cajaChica2Escribir
  *
- * LOS SIETE PASOS, en este orden y por una razón:
+ * POR QUÉ ASÍ, y no un pipeline completo por familia: asignar los IDs es **una sola
+ * decisión** —qué formato, qué prefijo, dónde queda la llave vieja— y se toma una vez para
+ * todo el libro. La homologación, en cambio, es distinta en cada familia: Vehículos es casi
+ * mecánico y Líneas tiene un problema de modelado (ver docs/lineas-homologacion.md). Así
+ * cada familia se revisa y se aprueba por separado, sin volver a tocar los IDs.
  *
- *   1. revisar       — solo lee. Si hay problemas, se detiene ANTES de escribir nada.
- *   2. renombrar     — la llave vieja de cada hoja pasa a llamarse "ID ANTERIOR", igual en
- *                      todas. Va ANTES de los ids a propósito: si la columna se llamaba
- *                      "ID" (ocho hojas de Líneas), al renombrarse la hoja se queda SIN ID
- *                      y el paso 3 crea uno nuevo, sin respaldar ni pisar nada.
- *   3. ids           — llena la columna ID de cada hoja de la familia.
- *   4. referencias   — reescribe lo que apuntaba al ID viejo del padre (MIGRACION_REFERENCIAS).
- *                      Va DESPUÉS de los ids: necesita que el padre ya tenga el suyo.
- *   5. mover         — pone la columna ID al inicio, para que se vea al abrir la hoja.
- *   6. respaldo      — quita las columnas ID ANTERIOR que sobran. Después del paso 2 casi
- *                      nunca sobra ninguna: la original SE VOLVIÓ el respaldo.
- *   7. auditar       — solo lee. Dice si todo cuadró.
+ * El orden importa: **el pipeline 1 va primero**, siempre. Los otros tres reescriben
+ * referencias que apuntan al ID del padre, y para eso el padre ya tiene que tenerlo.
  *
- * NO GUARDA AVANCE, y es a propósito: los seis pasos son idempotentes. Si se corta por
- * tiempo, se vuelve a correr lo mismo y los pasos ya hechos se saltan solos (asignarIds no
- * repisa lo que ya tiene ID, limpiarRespaldo no borra dos veces). Guardar el avance sería
- * más maquinaria que la que ahorra, y una máquina de estados más que puede quedar mal.
+ * NINGUNO GUARDA AVANCE, y es a propósito: todos los pasos son idempotentes. Si se corta por
+ * tiempo, se vuelve a correr lo mismo y lo ya hecho se salta solo (asignarIds no repisa lo
+ * que ya tiene ID, renombrarLlaveAnterior no crea una segunda columna). Guardar el avance
+ * sería una máquina de estados más que puede quedar mal.
  */
 
-/** Los pasos, en orden. `soloLee` nunca recibe escribir:true. */
-const FAM_PASOS = [
+/**
+ * PIPELINE 1 — los IDs, para TODAS las hojas.
+ *
+ *   revisar    solo lee. Si hay problemas, se detiene ANTES de escribir nada.
+ *   renombrar  la llave vieja de cada hoja pasa a llamarse igual en todas: "ID ANTERIOR".
+ *              Va ANTES de los ids a propósito: si la columna se llamaba "ID" (ocho hojas
+ *              de Líneas), al renombrarse la hoja queda SIN ID y el paso siguiente crea uno
+ *              limpio, sin respaldar ni pisar nada.
+ *   ids        llena la columna ID.
+ *   mover      la pone al inicio, para que se vea al abrir la hoja.
+ *   respaldo   quita las columnas ID ANTERIOR que sobren. Después de `renombrar` casi nunca
+ *              sobra ninguna: la original SE VOLVIÓ el respaldo. Se deja como red para los
+ *              libros que se migraron con la versión vieja del código.
+ *   auditar    solo lee. Dice si todo cuadró.
+ */
+const PASOS_IDS = [
   { nombre: 'revisar', soloLee: true, marcaMala: 'PROBLEMAS (',
     corre: (o) => revisarAntesDeMigrar(o) },
   { nombre: 'renombrar', marcaMala: 'PROBLEMAS (',
     corre: (o) => renombrarLlaveAnterior(o) },
   { nombre: 'ids', corre: (o) => asignarIds(o) },
-  { nombre: 'referencias', corre: (o) => reescribirReferencias(o) },
   { nombre: 'mover', corre: (o) => moverIdsAlInicio(o) },
   { nombre: 'respaldo', corre: (o) => limpiarRespaldoRedundante(o) },
+  { nombre: 'auditar', soloLee: true, marcaMala: 'FALLAS (',
+    corre: (o) => auditarIds(o) },
+];
+
+/**
+ * PIPELINES 2, 3 y 4 — la homologación de una familia. Corren DESPUÉS del pipeline 1.
+ *
+ *   referencias  reescribe lo que apuntaba al ID viejo del padre (MIGRACION_REFERENCIAS),
+ *                solo las hojas de esta familia.
+ *   auditar      solo lee, solo esta familia.
+ *
+ * PENDIENTE: aquí van a entrar las limpiezas propias de cada familia, que hoy están medidas
+ * pero no automatizadas —los centinelas de VEHICULOS (1,124 celdas en 13 columnas), las 15
+ * columnas vacías de LINEAS TELEFONICAS, su encabezado `#REF!`—. Están en
+ * docs/relaciones.md y docs/lineas-homologacion.md.
+ */
+const PASOS_HOMOLOGA = [
+  { nombre: 'referencias', corre: (o) => reescribirReferencias(o) },
   { nombre: 'auditar', soloLee: true, marcaMala: 'FALLAS (',
     corre: (o) => auditarIds(o) },
 ];
@@ -47,63 +72,108 @@ const FAM_PASOS = [
 const FAM_LIMITE_MS = 4.5 * 60 * 1000;
 
 
-// ------------------------------------------------------------- funciones para el editor
+// =========================================================== funciones para el editor
 
-/** VEHÍCULOS, ensayo — no escribe nada. Empieza por aquí. */
+/** PIPELINE 1, ensayo — los IDs de las 24 hojas. No escribe nada. Empieza por aquí. */
+function ids1Ensayo() {
+  return correrIdsTodo();
+}
+
+/** PIPELINE 1, de verdad — ESCRIBE los IDs de las 24 hojas. */
+function ids2Escribir() {
+  return correrIdsTodo({ escribir: true });
+}
+
+/** PIPELINE 2, ensayo — homologa VEHÍCULOS (8 hojas). Requiere el pipeline 1 ya corrido. */
 function vehiculos1Ensayo() {
   return correrFamilia('vehiculos');
 }
 
-/** VEHÍCULOS, de verdad — escribe. Si se corta por tiempo, vuélvela a correr. */
+/** PIPELINE 2, de verdad. */
 function vehiculos2Escribir() {
   return correrFamilia('vehiculos', { escribir: true });
 }
 
-/** LÍNEAS, ensayo. Lee docs/lineas-homologacion.md antes de escribir aquí. */
+/** PIPELINE 3, ensayo — LÍNEAS (10 hojas). Lee docs/lineas-homologacion.md primero. */
 function lineas1Ensayo() {
   return correrFamilia('lineas');
 }
 
-/** LÍNEAS, de verdad. */
+/** PIPELINE 3, de verdad. */
 function lineas2Escribir() {
   return correrFamilia('lineas', { escribir: true });
 }
 
-/** CAJA CHICA, ensayo. */
+/** PIPELINE 4, ensayo — CAJA CHICA (3 hojas). */
 function cajaChica1Ensayo() {
   return correrFamilia('cajachica');
 }
 
-/** CAJA CHICA, de verdad. */
+/** PIPELINE 4, de verdad. */
 function cajaChica2Escribir() {
   return correrFamilia('cajachica', { escribir: true });
 }
 
-/** Qué hojas tiene cada familia, y en qué libro se va a correr. Solo lee. */
-function familiasEstado() {
-  const ssId = Config.SPREADSHEET_IDS.VEHICULOS();
-  const lineas = ['FAMILIAS — el libro apuntado es ' + ssId, ''];
+/** Los cuatro pipelines, qué hojas toca cada uno y en qué libro. Solo lee. */
+function pipelinesEstado() {
+  const lineas = [
+    'LOS CUATRO PIPELINES — el libro apuntado es ' + Config.SPREADSHEET_IDS.VEHICULOS(),
+    '',
+    '  1. IDS, todas las hojas (' + Entidades.migrables().length + ')',
+    '       ids1Ensayo  /  ids2Escribir',
+    '       pasos: ' + PASOS_IDS.map((p) => p.nombre).join(' → '),
+    '',
+  ];
+  const atajos = { vehiculos: 'vehiculos', lineas: 'lineas', cajachica: 'cajaChica' };
+  let n = 2;
   Entidades.familias().forEach((f) => {
     const hojas = Entidades.deFamilia(f);
-    lineas.push('  ' + f + '  (' + hojas.length + ' hojas)');
-    hojas.forEach((h) => lineas.push('      ' + h.hoja + ' [' + h.prefijo + ']'));
+    const atajo = atajos[f];
+    lineas.push('  ' + n + '. HOMOLOGAR ' + f.toUpperCase() + ' (' + hojas.length + ' hojas)');
+    lineas.push(atajo ? '       ' + atajo + '1Ensayo  /  ' + atajo + '2Escribir'
+                      : "       correrFamilia('" + f + "')");
+    lineas.push('       pasos: ' + PASOS_HOMOLOGA.map((p) => p.nombre).join(' → '));
+    hojas.forEach((h) => lineas.push('       · ' + h.hoja + ' [' + h.prefijo + ']'));
     lineas.push('');
+    n++;
   });
-  lineas.push('Para correr una: vehiculos1Ensayo, lineas1Ensayo, cajaChica1Ensayo.');
+  lineas.push('El pipeline 1 va PRIMERO: los otros reescriben referencias al ID del padre.');
   const texto = lineas.join('\n');
   Logger.log(texto);
   return texto;
 }
 
 
-// ------------------------------------------------------------------------ lo de adentro
+// ==================================================================== lo de adentro
 
 /**
- * Corre los seis pasos sobre una familia.
+ * PIPELINE 1: los IDs de todas las hojas migrables.
+ *
+ * @param {{escribir: boolean}} opciones  escribir=false (default) → nadie escribe
+ * @return {string} el reporte de los seis pasos
+ */
+function correrIdsTodo(opciones) {
+  const cfg = Object.assign({ escribir: false }, opciones || {});
+  const hojas = Entidades.migrables();
+  return correrPasos_({
+    titulo: 'PIPELINE 1 — IDS DE TODAS LAS HOJAS',
+    pasos: PASOS_IDS,
+    // familia: null => cada paso recorre todas las hojas
+    opcionesPaso: {},
+    hojas: hojas,
+    escribir: cfg.escribir,
+    etiquetaBitacora: 'pipelineIds',
+    siguiente: 'Ya con los IDs puestos, sigue la homologación por familia: ' +
+      'vehiculos1Ensayo, lineas1Ensayo, cajaChica1Ensayo.',
+  });
+}
+
+/**
+ * PIPELINES 2, 3 y 4: la homologación de una familia.
  *
  * @param {string} familia   'vehiculos' | 'lineas' | 'cajachica' | 'otros'
- * @param {{escribir: boolean}} opciones  escribir=false (default) → nadie escribe
- * @return {string} el reporte de los seis pasos, uno tras otro
+ * @param {{escribir: boolean}} opciones
+ * @return {string} el reporte
  */
 function correrFamilia(familia, opciones) {
   const cfg = Object.assign({ escribir: false }, opciones || {});
@@ -111,65 +181,77 @@ function correrFamilia(familia, opciones) {
   const conocidas = Entidades.familias();
   if (conocidas.indexOf(f) === -1) {
     throw new Error('No conozco la familia "' + familia + '". Las que hay: ' +
-      conocidas.join(', ') + '. Corre familiasEstado para verlas con sus hojas.');
+      conocidas.join(', ') + '. Corre pipelinesEstado para verlas con sus hojas.');
   }
   const hojas = Entidades.deFamilia(f);
   if (!hojas.length) {
     throw new Error('La familia "' + f + '" no tiene hojas migrables.');
   }
+  return correrPasos_({
+    titulo: 'HOMOLOGACIÓN DE LA FAMILIA "' + f.toUpperCase() + '"',
+    pasos: PASOS_HOMOLOGA,
+    opcionesPaso: { familia: f },
+    hojas: hojas,
+    escribir: cfg.escribir,
+    etiquetaBitacora: 'homologarFamilia:' + f,
+    siguiente: 'Si algo quedó huérfano, está en el reporte de referencias de arriba.',
+  });
+}
 
+/**
+ * El motor que los cuatro comparten: corre una lista de pasos, con el freno de tiempo, la
+ * regla de que un paso de solo lectura nunca escribe, y la de que en ensayo no se detiene.
+ */
+function correrPasos_(p) {
   const arranque = Date.now();
   const cabeza = [
-    'HOMOLOGACIÓN DE LA FAMILIA "' + f.toUpperCase() + '"  —  ' +
-      (cfg.escribir ? 'ESCRIBIENDO' : 'ENSAYO, no escribe nada'),
+    p.titulo + '  —  ' + (p.escribir ? 'ESCRIBIENDO' : 'ENSAYO, no escribe nada'),
     '',
-    '  ' + hojas.length + ' hojas: ' + hojas.map((h) => h.hoja).join(', '),
+    '  ' + p.hojas.length + ' hojas: ' + p.hojas.map((h) => h.hoja).join(', '),
     '',
   ];
   const partes = [];
   const noEnsayables = [];
   let corridos = 0, corte = '', detenido = '';
 
-  for (let i = 0; i < FAM_PASOS.length; i++) {
-    const paso = FAM_PASOS[i];
+  for (let i = 0; i < p.pasos.length; i++) {
+    const paso = p.pasos[i];
 
     if (Date.now() - arranque > FAM_LIMITE_MS) {
       corte = paso.nombre;
       break;
     }
 
-    const encabezado = '━━━ paso ' + (i + 1) + '/' + FAM_PASOS.length + ': ' + paso.nombre +
+    const encabezado = '━━━ paso ' + (i + 1) + '/' + p.pasos.length + ': ' + paso.nombre +
       (paso.soloLee ? '  (solo lee)' : '') + ' ━━━';
     let salida;
     try {
-      salida = paso.corre({ familia: f, escribir: cfg.escribir && !paso.soloLee });
+      salida = paso.corre(Object.assign({}, p.opcionesPaso,
+        { escribir: p.escribir && !paso.soloLee }));
     } catch (err) {
       // Escribiendo, un error es un error y se para todo.
-      if (cfg.escribir) {
+      if (p.escribir) {
         partes.push(encabezado, '', 'TRONÓ: ' + err.message, '');
         detenido = paso.nombre;
         break;
       }
-      // En ENSAYO no. Los pasos 3 al 6 leen lo que ESCRIBE el paso 2, y en ensayo el paso 2
-      // no escribió nada, así que "VEHICULOS todavía no tiene columna ID" es la respuesta
-      // correcta, no una caída: significa "esto se ensaya después de escribir el paso 2".
-      // Se anota y se sigue, porque en un ensayo no hay nada en riesgo y sí información que
-      // juntar: si la hoja YA está migrada de una corrida anterior, el paso sí va a correr.
+      // En ENSAYO no. Varios pasos leen lo que ESCRIBE un paso anterior, y en ensayo aquél
+      // no escribió nada, así que "todavía no tiene columna ID" es la respuesta correcta,
+      // no una caída. Se anota y se sigue: en un ensayo no hay nada en riesgo y sí
+      // información que juntar. Si la hoja YA venía migrada, el paso sí corre.
       noEnsayables.push(paso.nombre);
       partes.push(encabezado, '',
         'NO SE PUDO ENSAYAR: ' + err.message,
         '',
-        '(normal en ensayo si el paso 2 todavía no ha escrito: este paso lee lo que aquél deja)',
+        '(normal en ensayo: este paso lee lo que escribe uno anterior)',
         '');
       continue;
     }
     partes.push(encabezado, '', String(salida), '');
     corridos++;
 
-    // El paso dice que algo no cuadra. En ensayo se siguen corriendo los demás para ver
-    // el panorama completo; escribiendo, se para aquí y no se toca nada más.
     if (paso.marcaMala && String(salida).indexOf(paso.marcaMala) !== -1) {
-      if (cfg.escribir) {
+      if (p.escribir) {
         detenido = paso.nombre;
         break;
       }
@@ -178,41 +260,41 @@ function correrFamilia(familia, opciones) {
   }
 
   const pie = ['━━━ resumen ━━━', ''];
-  pie.push('  pasos corridos: ' + corridos + ' de ' + FAM_PASOS.length);
+  pie.push('  pasos corridos: ' + corridos + ' de ' + p.pasos.length);
   if (noEnsayables.length) {
     pie.push('  no ensayables todavía: ' + noEnsayables.join(', ') +
-      '   (leen lo que ESCRIBE el paso 2)');
+      '   (leen lo que escribe un paso anterior)');
   }
   if (detenido) {
     pie.push('');
     pie.push('  SE DETUVO en "' + detenido + '".' +
-      (cfg.escribir ? ' No se corrieron los pasos siguientes, a propósito.' : ''));
+      (p.escribir ? ' No se corrieron los pasos siguientes, a propósito.' : ''));
     pie.push('  Revisa ese paso arriba, arregla lo que diga, y vuelve a correr.');
   } else if (corte) {
     pie.push('');
     pie.push('  SE DETUVO POR TIEMPO antes de "' + corte + '".');
     pie.push('  Vuelve a correr lo mismo: los pasos ya hechos se saltan solos.');
-  } else if (!cfg.escribir) {
+  } else if (!p.escribir) {
     pie.push('');
     if (noEnsayables.length) {
       pie.push('  El ensayo llegó hasta donde se puede SIN escribir. Los pasos ' +
-        noEnsayables.join(', ') + ' se validan en la corrida de verdad,');
-      pie.push('  porque leen la columna ID que escribe el paso 2. No es un error.');
+        noEnsayables.join(', ') + ' se validan en la corrida de verdad. No es un error.');
       pie.push('');
     }
     pie.push('  Si lo de arriba cuadra, corre la versión que escribe.');
   } else {
     pie.push('');
-    pie.push('  LISTO: los seis pasos corrieron. Lee la auditoría de arriba.');
+    pie.push('  LISTO: corrieron los ' + p.pasos.length + ' pasos. Lee la auditoría de arriba.');
+    if (p.siguiente) pie.push('  ' + p.siguiente);
   }
 
   const texto = cabeza.concat(partes, pie).join('\n');
   Logger.log(texto);
   try {
-    pipeLog_(Config.SPREADSHEET_IDS.VEHICULOS(), 'homologarFamilia:' + f,
-      cfg.escribir ? 'ESCRIBIR' : 'ENSAYO',
+    pipeLog_(Config.SPREADSHEET_IDS.VEHICULOS(), p.etiquetaBitacora,
+      p.escribir ? 'ESCRIBIR' : 'ENSAYO',
       detenido ? 'DETENIDO EN ' + detenido : (corte ? 'CORTADO POR TIEMPO' : 'OK'),
-      corridos + '/' + FAM_PASOS.length + ' pasos, ' + hojas.length + ' hojas');
+      corridos + '/' + p.pasos.length + ' pasos, ' + p.hojas.length + ' hojas');
   } catch (err) {
     // La bitácora no puede tumbar la corrida
   }
