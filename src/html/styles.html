@@ -486,6 +486,23 @@
     box-shadow: 0 0 0 3px var(--color-primary-soft);
   }
 
+  /* ========== Panorama Vehicular (KPIs + gráficas + filtros) ========== */
+  .pv-filtros { margin-bottom: 20px; }
+  .pv-filtros-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; align-items: end; }
+  .pv-filtros-grid .field { margin-bottom: 0; }
+  .pv-filtros-grid > button { height: 38px; white-space: nowrap; }
+  .pv-grid-graficas { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
+  .pv-card-grafica-grande { grid-column: 1 / -1; }
+  .pv-card-grafica h3 {
+    display: flex; align-items: center; gap: 8px; margin: 0 0 16px; font-size: 14px; font-weight: 600;
+  }
+  .pv-lienzo-wrap { position: relative; height: 280px; }
+  .pv-card-grafica-grande .pv-lienzo-wrap { height: 320px; }
+  @media (max-width: 640px) {
+    .pv-grid-graficas { grid-template-columns: 1fr; }
+    .pv-lienzo-wrap, .pv-card-grafica-grande .pv-lienzo-wrap { height: 240px; }
+  }
+
   /* ========== Tarjeta de formulario con ícono de encabezado ========== */
   .form-card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
   .form-card-icon {
