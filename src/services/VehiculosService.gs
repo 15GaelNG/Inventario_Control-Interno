@@ -194,12 +194,15 @@ const VehiculosService = (function () {
   // Prefijo de folio según Clase — folio = PREFIJO + consecutivo de 4 dígitos,
   // el siguiente disponible para ESE prefijo (no se reutilizan aunque se
   // borre a la mitad un vehículo). Clases sin prefijo propio (CUATRIMOTO,
-  // NUCO SIN INFORMACION, MOTOCARRO, etc.) caen en el prefijo genérico "FOL".
+  // NUCO SIN INFORMACION, etc.) caen en el prefijo genérico "FOL". MOTOCARRO
+  // comparte el prefijo MOT con MOTOCICLETA (confirmado con Jorge 2026-09-30:
+  // los folios de motocarro ya existentes usan MOT).
   const PREFIJOS_CLASE = {
     AUTOMOVIL: 'AUT',
     CAMION: 'CON',
     CAMIONETA: 'CTA',
     MOTOCICLETA: 'MOT',
+    MOTOCARRO: 'MOT',
     REMOLQUE: 'REM',
     'MAQUINARIA MENOR': 'MAQ',
   };
