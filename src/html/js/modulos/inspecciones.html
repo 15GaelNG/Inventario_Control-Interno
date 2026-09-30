@@ -652,6 +652,13 @@
 
     function htmlSeccion(i) {
       const s = estructura.secciones[i];
+      // No todas las piezas de una sección traen las mismas opciones (algunas tienen una
+      // de más, ej. "N/A", que otras no) -- el encabezado tiene que ser la UNIÓN de las
+      // opciones de TODA la sección, no solo las de la primera pieza. Si no, las piezas
+      // con una opción extra salían con una columna de más sin título ni texto (el bug
+      // reportado: una columna vacía después de BUENO/REGULAR/MALO).
+      const columnas = [];
+      s.campos.forEach((c) => c.opciones.forEach((o) => { if (columnas.indexOf(o) === -1) columnas.push(o); }));
       return `
         <div class="chk-seccion" data-seccion="${i}">
           <div class="chk-seccion-titulo">
@@ -663,11 +670,11 @@
             <span class="chk-avance">0 de ${s.campos.length}</span>
           </div>
           <table class="chk-tabla">
-            <thead><tr><th>Pieza</th>${s.campos[0].opciones.map((o) => `<th>${escaparHtml(o)}</th>`).join('')}</tr></thead>
+            <thead><tr><th>Pieza</th>${columnas.map((o) => `<th>${escaparHtml(o)}</th>`).join('')}</tr></thead>
             <tbody>${s.campos.map((c) => `
               <tr class="sin-responder" data-pieza="${escaparHtml(c.campo)}">
                 <td>${escaparHtml(c.campo)}</td>
-                ${c.opciones.map((o) => `<td class="${/^(MALO|SI|NO PRESENTA)$/i.test(o) ? 'chk-malo' : ''}">
+                ${columnas.map((o) => c.opciones.indexOf(o) === -1 ? '<td></td>' : `<td class="${/^(MALO|SI|NO PRESENTA)$/i.test(o) ? 'chk-malo' : ''}">
                   <label class="chk-opcion" title="${escaparHtml(c.campo)}: ${escaparHtml(o)}">
                     <input type="radio" name="chk-${escaparHtml(c.campo)}" value="${escaparHtml(o)}" />
                   </label></td>`).join('')}
