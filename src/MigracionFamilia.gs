@@ -199,6 +199,29 @@ function correrFamilia(familia, opciones) {
 }
 
 /**
+ * Las lineas de un paso que vale la pena repetir en el reporte final: los totales, los
+ * problemas y las fallas. El detalle hoja por hoja ya quedo en el registro de ejecucion.
+ */
+function resumirPaso_(texto) {
+  const lineas = String(texto).split('\n');
+  const utiles = [];
+  let enLista = false;
+  lineas.forEach((l) => {
+    const t = l.trim();
+    if (!t) return;
+    if (/^(PROBLEMAS|FALLAS)\s*\(/.test(t)) { utiles.push('  ' + t); enLista = true; return; }
+    if (enLista && t.indexOf('- ') === 0) { utiles.push('    ' + t); return; }
+    enLista = false;
+    // los totales de cada paso: empiezan con un numero, o lo dicen sin sangria
+    if (/^\d/.test(t) || /^(Sin problemas|Todo cuadra)/.test(t) ||
+        /(columnas (renombradas|por renombrar)|hojas (procesadas|por mover|con respaldo))/.test(t)) {
+      utiles.push('  ' + t);
+    }
+  });
+  return utiles.length ? utiles.join('\n') : '  (sin nada que resumir; el detalle esta en el registro)';
+}
+
+/**
  * El motor que los cuatro comparten: corre una lista de pasos, con el freno de tiempo, la
  * regla de que un paso de solo lectura nunca escribe, y la de que en ensayo no se detiene.
  */
@@ -206,8 +229,8 @@ function correrPasos_(p) {
   const arranque = Date.now();
   const cabeza = [
     p.titulo + '  —  ' + (p.escribir ? 'ESCRIBIENDO' : 'ENSAYO, no escribe nada'),
-    '',
-    '  ' + p.hojas.length + ' hojas: ' + p.hojas.map((h) => h.hoja).join(', '),
+    '  ' + p.hojas.length + ' hojas.  El detalle de cada paso está arriba, en el registro ' +
+      'de ejecución; aquí va solo el resumen.',
     '',
   ];
   const partes = [];
@@ -231,7 +254,7 @@ function correrPasos_(p) {
     } catch (err) {
       // Escribiendo, un error es un error y se para todo.
       if (p.escribir) {
-        partes.push(encabezado, '', 'TRONÓ: ' + err.message, '');
+        partes.push(encabezado, '  TRONÓ: ' + err.message, '');
         detenido = paso.nombre;
         break;
       }
@@ -240,14 +263,17 @@ function correrPasos_(p) {
       // no una caída. Se anota y se sigue: en un ensayo no hay nada en riesgo y sí
       // información que juntar. Si la hoja YA venía migrada, el paso sí corre.
       noEnsayables.push(paso.nombre);
-      partes.push(encabezado, '',
-        'NO SE PUDO ENSAYAR: ' + err.message,
-        '',
-        '(normal en ensayo: este paso lee lo que escribe uno anterior)',
+      partes.push(encabezado,
+        '  NO SE PUDO ENSAYAR: ' + err.message,
+        '  (normal en ensayo: este paso lee lo que escribe uno anterior)',
         '');
       continue;
     }
-    partes.push(encabezado, '', String(salida), '');
+    // Solo el RESUMEN de cada paso, no su texto completo: cada paso ya se escribio solo
+    // en el registro de ejecucion, y concatenarlos rebasaba el limite de Apps Script
+    // ("Logging output too large. Truncating output."), que cortaba justo el resumen final
+    // —lo unico que de verdad hacia falta leer—.
+    partes.push(encabezado, resumirPaso_(String(salida)), '');
     corridos++;
 
     if (paso.marcaMala && String(salida).indexOf(paso.marcaMala) !== -1) {

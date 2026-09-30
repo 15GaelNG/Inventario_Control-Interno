@@ -68,7 +68,8 @@ function cargar(hojas) {
   vm.runInContext(lee('config', 'Entidades.gs'), ctx);
   vm.runInContext(lee('utils', 'Ids.gs'), ctx);
   vm.runInContext(lee('MigracionIds.gs') +
-    '\nthis.api = { renombrarLlaveAnterior, migColumnaAnterior_, migColumna_ };', ctx);
+    '\nthis.api = { renombrarLlaveAnterior, migColumnaAnterior_, migColumna_,' +
+    ' revisarAntesDeMigrar };', ctx);
   return ctx.api;
 }
 
@@ -220,6 +221,34 @@ console.log('\n9. Si SÍ tiene el nombre, ese manda sobre la posición');
     'renombró la columna 2, la que se llama ID APPSHEET');
   ok(hojas['CAMBIOS LINEAS TELEFONICAS'].enc[0] === 'OTRA',
     'y NO tocó la columna 1, aunque el catálogo también diga posición 1');
+}
+
+console.log('\n10. La revisión previa NO reporta el encabezado que el paso 2 va a poner');
+{
+  // Esto detenía la corrida que escribe. El paso 1 marca PROBLEMAS y el orquestador se
+  // para ahí, así que reportar "la columna 1 no tiene encabezado" en CAMBIOS LINEAS
+  // TELEFONICAS bloqueaba todo el pipeline por una columna que el paso 2 nombra enseguida.
+  const hojas = {
+    'CAMBIOS LINEAS TELEFONICAS': hojaFalsa(['', 'ID_LINEA', '', 'IMEI'],
+      [['ee398840', 'dv1sd13', '0', '35']]),
+  };
+  const api = cargar(hojas);
+  const rep = api.revisarAntesDeMigrar({ familia: 'lineas' });
+  ok(rep.indexOf('la columna 1 no tiene encabezado') === -1,
+     'la columna 1 ya NO se reporta como problema');
+  ok(rep.indexOf('el paso "renombrar" le va a poner') !== -1,
+     'y explica que el paso 2 se lo pone');
+  // La columna 3 sí sigue siendo un problema de verdad: nadie la va a nombrar.
+  ok(rep.indexOf('la columna 3 no tiene encabezado') !== -1,
+     'pero la columna 3, que nadie va a nombrar, sí se sigue reportando');
+  // De encabezados queda UNO, no dos. (Los demás problemas del reporte son "FALTA la
+  // hoja", porque este arnés solo tiene una de las 10 de la familia.)
+  // Solo dentro de la LISTA de problemas (las líneas "  - "): la línea de detalle de la
+  // hoja también menciona el encabezado, y esa es informativa, no un problema.
+  const deEncabezado = rep.split('\n')
+    .filter((l) => l.trim().indexOf('- ') === 0 && l.indexOf('no tiene encabezado') !== -1);
+  ok(deEncabezado.length === 1,
+     'y queda 1 problema de encabezado, no 2: ' + JSON.stringify(deEncabezado));
 }
 
 console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');

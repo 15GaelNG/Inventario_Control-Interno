@@ -326,7 +326,17 @@ function revisarAntesDeMigrar(opciones) {
         'Este código usa "' + Entidades.COLUMNA_ID_ANTERIOR + '": replancha el libro desde producción, o renombra esa columna.');
     }
     enc.forEach((c, i) => {
-      if (!c) problemas.push(h.hoja + ': la columna ' + (i + 1) + ' no tiene encabezado');
+      if (c) return;
+      // La columna que el paso `renombrar` va a nombrar NO es un problema: en dos minutos
+      // se va a llamar "ID ANTERIOR". Reportarla detenia la corrida que escribe, porque
+      // este paso marca PROBLEMAS y el orquestador se para ahi. Es el caso de
+      // CAMBIOS LINEAS TELEFONICAS, cuya llave vive en la columna 1 sin encabezado.
+      if (h.columnaAnterior && (i + 1) === h.columnaAnterior) {
+        detalles.push('su columna ' + (i + 1) + ' no tiene encabezado, y el paso ' +
+          '"renombrar" le va a poner "' + Entidades.COLUMNA_ID_ANTERIOR + '"');
+        return;
+      }
+      problemas.push(h.hoja + ': la columna ' + (i + 1) + ' no tiene encabezado');
     });
     lineas.push('  ' + h.hoja + ' [' + h.prefijo + '] — ' + detalles.join(', '));
   });
@@ -937,6 +947,20 @@ function auditarIds(opciones) {
     const enBlanco = migFilasVacias_(sheet, filas);
     // Un renglón en blanco sin ID está bien; uno CON datos y sin ID, no
     const vacios = ids.filter((v, i) => !v && !enBlanco[i]).length;
+    // Si NINGUNO de los ids tiene la forma nueva, esta hoja no se ha migrado: su columna
+    // ID todavia guarda los valores de antes. Eso NO es "forma invalida", es "sin migrar",
+    // y decirlo mal hace que un ensayo se lea como una catastrofe: en la primera corrida
+    // completa salieron 8 hojas con miles de "IDs con forma invalida" que en realidad eran
+    // los ids viejos de AppSheet esperando su turno.
+    const conDato = ids.filter(Boolean);
+    const sinMigrar = conDato.length > 0 && !conDato.some((v) => Ids.tieneForma(v));
+    if (sinMigrar) {
+      lineas.push('  ' + h.hoja + ' [' + h.prefijo + ']: ' + filas + ' renglones' +
+        '  <-- SIN MIGRAR (su columna ' + Entidades.COLUMNA_ID +
+        ' todavia trae los valores de antes)');
+      return;
+    }
+
     const malos = ids.filter((v) => v && !Ids.tieneForma(v)).length;
     const ajenos = ids.filter((v) => v && Ids.tieneForma(v) && Ids.prefijo(v) !== h.prefijo).length;
     const vistos = {};
