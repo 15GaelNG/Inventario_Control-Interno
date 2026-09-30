@@ -1375,10 +1375,10 @@ test('Selección como en Google Drive y "Mandar a cancelación" (usuario, 30-sep
   const dt = read('src/html/js/componentes/datatable.html');
   // Clic = seleccionar esa fila; Ctrl alterna; Shift rango; sin reescribir las filas (el doble clic sigue llegando)
   assert.match(dt, /function clicDrive\(id, teclasOriginales\)/);
-  // Como en Drive: el clic espera un momento y el doble clic lo cancela (no se asoma la barra al abrir)
-  assert.match(dt, /const ESPERA_DOBLE_CLIC = 250;/);
-  assert.match(dt, /if \(ev && ev\.detail >= 2\) return;/);
-  assert.match(dt, /clicDriveConEspera\(id, ev\);/);
+  // Como en Drive: la fila se marca al instante y solo la barra entra después (con doble clic no se asoma)
+  assert.match(dt, /\.dt-barra-sel:not\(\[hidden\]\) \{ animation: dt-barra-entra 90ms ease-out 180ms both; \}/);
+  assert.match(dt, /if \(ev\.detail >= 2\) return;   \/\/ segundo clic de un doble clic/);
+  assert.doesNotMatch(dt, /ESPERA_DOBLE_CLIC|clicDriveConEspera/);
   assert.match(dt, /else st\.seleccion = new Set\(\[id\]\);/);
   assert.match(dt, /function pintarSeleccion\(\)/);
   // Barra con lo más usado y ⋮ con el resto; clic derecho y ⋮ de la fila con todas

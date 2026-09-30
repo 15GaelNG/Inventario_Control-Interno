@@ -95,6 +95,11 @@
   .dt-barra-sel { scrollbar-width: none; }
   .dt-barra-sel::-webkit-scrollbar { display: none; }
   .dt-barra-sel[hidden] { display: none; }
+  /* Como en Drive: la fila se marca al instante y la barra entra un momento después; con doble clic la ficha se abre
+     antes de que se asome. Solo al aparecer (display none → flex reinicia la animación), no en cada repintado */
+  .dt-barra-sel:not([hidden]) { animation: dt-barra-entra 90ms ease-out 180ms both; }
+  @keyframes dt-barra-entra { from { opacity: 0; visibility: hidden; } to { opacity: 1; visibility: visible; } }
+  @media (prefers-reduced-motion: reduce) { .dt-barra-sel:not([hidden]) { animation-duration: 1ms; } }
   .dt-barra-sel .dt-sel-cuenta { font-weight: 600; font-size: 13px; margin: 0 6px 0 2px; white-space: nowrap; }
   .dt-barra-sel button { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; font-size: 12.5px; white-space: nowrap; }
   .dt-barra-sel .dt-sel-icono { padding: 6px 8px; }
@@ -1166,20 +1171,6 @@
         else st.seleccion = new Set([id]);
         st.ancla = id;
         pintarSeleccion();
-      }
-      /**
-       * Clic con el mouse como en Drive: la selección (y su barra) espera un momento; si llega el segundo clic de
-       * un doble clic se cancela y solo se abre, sin que alcance a asomarse la barra. Ctrl/Shift o el teclado: al instante.
-       */
-      const ESPERA_DOBLE_CLIC = 250;
-      let clicPendiente = null;
-      function clicDriveConEspera(id, ev) {
-        clearTimeout(clicPendiente);
-        clicPendiente = null;
-        if (ev && ev.detail >= 2) return;   // segundo clic de un doble clic: lo abre el dblclick
-        const teclas = ev ? { ctrlKey: ev.ctrlKey, metaKey: ev.metaKey, shiftKey: ev.shiftKey } : {};
-        if (!ev || !ev.detail || teclas.ctrlKey || teclas.metaKey || teclas.shiftKey) { clicDrive(id, teclas); return; }
-        clicPendiente = setTimeout(() => { clicPendiente = null; if (!desmontado()) clicDrive(id, teclas); }, ESPERA_DOBLE_CLIC);
       }
       /** Deja seleccionada esa fila si todavía no lo estaba (antes de abrir su menú) */
       function asegurarSeleccionada(id) {
@@ -2255,7 +2246,8 @@
               if (fila && cfg.alTocarFila) cfg.alTocarFila(fila);
               return;
             }
-            clicDriveConEspera(id, ev);
+            if (ev.detail >= 2) return;   // segundo clic de un doble clic: lo abre el dblclick (la barra no alcanza a salir)
+            clicDrive(id, ev);
             return;
           }
         }
@@ -2427,7 +2419,7 @@
         getSeleccion: () => st.datos.filter((f) => st.seleccion.has(idDe(f))),
         setModoSeleccion, enModoSeleccion: () => st.modoSeleccion,
         /** Estilo Drive desde fuera de la tabla (p. ej. las tarjetas): mismo clic, mismo menú, repintar la barra */
-        clicSeleccion: (id, teclas) => clicDriveConEspera(String(id), teclas || null),
+        clicSeleccion: (id, teclas) => (teclas && teclas.detail >= 2 ? undefined : clicDrive(String(id), teclas || {})),
         asegurarSeleccionada: (id) => asegurarSeleccionada(String(id)),
         abrirMenu: (x, y) => abrirMenuAcciones({ x: x, y: y }, false),
         refrescarSeleccion: () => pintarSeleccion(),

@@ -104,9 +104,9 @@ Pedido del usuario: tres lugares para las opciones (una fila, varias filas y la 
   información, Mandar a cancelación, Historial), aunque esté en un equipo: con equipo se ve "Ver equipo" + ⋮ (sus
   capturas son del equipo); suelta, Nueva inspección + Nueva responsiva + ⋮. Antes una línea con equipo solo tenía
   "Ver equipo". En celular el ⋮ ya no ocupa media fila.
-- **Espera del clic** (usuario, 30-sep, como en Drive): un clic con el mouse selecciona 250 ms después
-  (`ESPERA_DOBLE_CLIC`, `clicDriveConEspera`); si llega el segundo clic de un doble clic se cancela y solo se abre la
-  ficha, sin que se asome la barra. Ctrl/Shift, teclado y dedo siguen al instante. También aplica a las tarjetas.
+- **Barra con entrada retardada** (usuario, 30-sep, como en Drive): la fila se marca **al instante** y solo la barra
+  entra a los 180 ms con una animación CSS (`dt-barra-entra`); con doble clic la ficha se abre antes de que se asome.
+  Primero se probó retrasar toda la selección 250 ms y se sentía lenta; se cambió por esto.
 
 ## 0x. PARA VENTA y PARA DESECHO como Mandar a resguardo (2026-09-30)
 
