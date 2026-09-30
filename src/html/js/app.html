@@ -2039,6 +2039,23 @@
       (filas.length ? tablaFicha(columnas, filas) : '<p class="empty-state">' + vacio + '</p>') + '</div>';
   }
 
+  /** Ver completo/Editar/Eliminar por fila en las tablas de solo lectura de una ficha
+   *  (Vehículos: Verificaciones/Inspecciones/Sensor/Hologramas/Incidencias; Caja Chica:
+   *  Arqueos/Cambios de monto) -- de nivel de módulo, como fichaEnPestanas/pestanaFicha/
+   *  tablaFicha, porque ambas fichas la usan. */
+  function accionesFichaRegistro(tipo, id, opciones) {
+    const o = Object.assign({ editar: false, eliminar: false }, opciones);
+    let html = '<div class="ficha-acciones-fila">' +
+      '<button type="button" class="ficha-btn-fila" data-ficha-ver="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Ver completo">' + Iconos.svg('ver') + '</button>';
+    if (o.editar) {
+      html += '<button type="button" class="ficha-btn-fila" data-ficha-editar="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Editar">' + Iconos.svg('editar') + '</button>';
+    }
+    if (o.eliminar) {
+      html += '<button type="button" class="ficha-btn-fila ficha-peligro" data-ficha-eliminar="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Eliminar">' + Iconos.svg('eliminar') + '</button>';
+    }
+    return html + '</div>';
+  }
+
   // ---------- Vehículos ----------
   async function initVehiculos() {
     wireTabsSimple(document.getElementById('view-container'));
@@ -2229,23 +2246,6 @@
 
     function botonArchivoFicha(tipo, ruta) {
       return ruta ? '<button type="button" class="secondary" data-archivo="' + tipo + '" data-ruta="' + escaparHtml(ruta) + '">Ver</button>' : '—';
-    }
-
-    /** Ver completo/Editar/Eliminar por fila en las pestañas de Verificaciones/
-     *  Inspecciones/Sensor/Hologramas/Incidencias dentro de la ficha. Inspección no
-     *  lleva editar/eliminar -- es un acta firmada, misma regla que en su propio módulo
-     *  ("si algo cambió, levanta una nueva"). */
-    function accionesFichaRegistro(tipo, id, opciones) {
-      const o = Object.assign({ editar: false, eliminar: false }, opciones);
-      let html = '<div class="ficha-acciones-fila">' +
-        '<button type="button" class="ficha-btn-fila" data-ficha-ver="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Ver completo">' + Iconos.svg('ver') + '</button>';
-      if (o.editar) {
-        html += '<button type="button" class="ficha-btn-fila" data-ficha-editar="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Editar">' + Iconos.svg('editar') + '</button>';
-      }
-      if (o.eliminar) {
-        html += '<button type="button" class="ficha-btn-fila ficha-peligro" data-ficha-eliminar="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Eliminar">' + Iconos.svg('eliminar') + '</button>';
-      }
-      return html + '</div>';
     }
 
     // ---------- Captura de verificación/sensor/holograma/incidencia/inspección desde la
