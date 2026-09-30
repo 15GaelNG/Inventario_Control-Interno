@@ -37,11 +37,17 @@
     const graficas = {}; // id → instancia de Chart, para destruir antes de repintar
 
     try {
-      todos = (await callServerListaCacheada('apiListarVehiculosResumen', state.token)) || [];
+      // apiListarVehiculosResumen manda JSON.stringify (arreglo grande con Date,
+      // google.script.run lo pierde a veces si no) -- hay que parsearlo, mismo
+      // patrón que ya usa initVehiculos().
+      const texto = await callServerListaCacheada('apiListarVehiculosResumen', state.token);
+      todos = texto ? JSON.parse(texto) : [];
     } catch (err) {
+      if (!document.getElementById('pv-filtros')) return; // se navegó a otra vista mientras cargaba
       cuerpo.innerHTML = '<p class="error-msg">No se pudo cargar el catálogo de vehículos: ' + escaparHtml(err.message) + '</p>';
       return;
     }
+    if (!document.getElementById('pv-filtros')) return; // se navegó a otra vista mientras cargaba
 
     // ---------- Filtros ----------
     const FILTROS = [

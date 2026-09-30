@@ -1945,7 +1945,12 @@
     }
 
     function actualizarKpis(filas) {
-      document.getElementById('stat-total').textContent = filas.length;
+      // Si cargar() tardó y mientras tanto se navegó a otra vista, view-container
+      // ya no tiene estos elementos -- sin esto, tronaba al volver de un módulo
+      // rápido (ej. Panorama) antes de que esta carga terminara.
+      const total = document.getElementById('stat-total');
+      if (!total) return;
+      total.textContent = filas.length;
       document.getElementById('stat-abiertas').textContent = filas.filter((i) => i.ESTADO === 'ABIERTA').length;
       document.getElementById('stat-cerradas').textContent = filas.filter((i) => i.ESTADO === 'CERRADA').length;
     }
