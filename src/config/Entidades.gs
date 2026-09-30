@@ -44,10 +44,15 @@ const Entidades = (function () {
     'REACTIVACION DE LINEAS': { prefijo: 'REA', llaveAnterior: 'ID' },
     'SOLICITUD DE LINEAS': { prefijo: 'SOL', llaveAnterior: 'ID' },
     // Caso especial: su columna de ID no tenía encabezado y se le puso "ID APPSHEET"
-    // (29/09/2026), que es justo lo que guarda: el id que traía de AppSheet. Así que aquí
-    // la llave anterior Y la columna de respaldo son la MISMA. Eso quita la dependencia de
-    // la posición —ya se puede reacomodar— pero obliga a que limpiarRespaldoRedundante no
-    // la compare consigo misma y la borre.
+    // (29/09/2026), que es justo lo que guarda: el id que traía de AppSheet.
+    //
+    // OJO, PENDIENTE PARA PRODUCCIÓN: ese renombre se hizo SOLO en el libro de pruebas. En
+    // producción esa columna (la A) sigue SIN ENCABEZADO — medido el 30/09/2026, trae
+    // 'ee398840', '4a46be25'… Antes de migrar producción hay que ponerle el encabezado
+    // "ID APPSHEET" a mano, o esta entrada no resuelve y la hoja se migra sin llave anterior.
+    //
+    // El nombre NO choca con COLUMNA_ID_ANTERIOR ('ID ANTERIOR') a propósito: son dos cosas
+    // distintas y ahora se llaman distinto. Ver la nota de COLUMNA_ID_ANTERIOR abajo.
     'CAMBIOS LINEAS TELEFONICAS': { prefijo: 'CLI', llaveAnterior: 'ID APPSHEET' },
     'BITACORA DE DESECHO': { prefijo: 'DES', llaveAnterior: 'ID_DESECHO' },
     'ACCESORIOS CELULARES': { prefijo: 'ACC', llaveAnterior: 'ID_Accesorio' },
@@ -69,8 +74,34 @@ const Entidades = (function () {
 
   /** Cómo se llama la columna de la llave nueva, en todas las hojas */
   const COLUMNA_ID = 'ID';
-  /** Dónde se guarda la llave vieja cuando el ID nuevo la va a pisar */
-  const COLUMNA_ID_ANTERIOR = 'ID APPSHEET';
+  /**
+   * Dónde se guarda la llave vieja cuando el ID nuevo la va a pisar.
+   *
+   * Se llama "ID ANTERIOR" y no "ID APPSHEET" por dos razones (decidido con Ayrton el
+   * 30/09/2026, antes de correr la migración en producción):
+   *
+   *   1. Es lo que de verdad guarda: la llave ANTERIOR del renglón. Que viniera de AppSheet
+   *      es circunstancial, y dejará de ser cierto para todo lo que se dé de alta después.
+   *   2. Quita una colisión de nombres. "ID APPSHEET" ya existe como nombre de una columna
+   *      REAL: es la llave original de CAMBIOS LINEAS TELEFONICAS (ver su entrada arriba).
+   *      Con el nombre viejo, una columna servía para dos papeles distintos —el respaldo
+   *      global y la llave de una hoja— y limpiarRespaldoRedundante necesitaba una guarda
+   *      especial para no borrar el original comparándolo consigo mismo. Con dos nombres
+   *      distintos, esa ambigüedad desaparece.
+   *
+   * Solo se crea en las hojas cuya columna original se llama "ID" (las que tienen
+   * pisaLlaveAnterior), porque ahí el ID nuevo la pisa. En las demás la original sobrevive
+   * intacta y el respaldo no hace falta.
+   */
+  const COLUMNA_ID_ANTERIOR = 'ID ANTERIOR';
+
+  /**
+   * El nombre que se usó ANTES del 30/09/2026 para lo mismo. No se escribe nunca más; está
+   * aquí solo para poder AVISAR si aparece en un libro que se migró con la versión vieja
+   * (el de pruebas, mientras no se replanche desde producción). Verlo significa que ese
+   * libro y este código no están de acuerdo sobre dónde vive la llave vieja.
+   */
+  const COLUMNA_ID_ANTERIOR_LEGADO = 'ID APPSHEET';
 
   /** El nombre de una hoja como se escriba: sin espacios de sobra y en mayúsculas */
   const clave_ = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().toUpperCase();
@@ -138,6 +169,6 @@ const Entidades = (function () {
 
   return {
     de, existe, prefijo, hojaDe, todas, migrables, revisarCatalogo,
-    COLUMNA_ID, COLUMNA_ID_ANTERIOR,
+    COLUMNA_ID, COLUMNA_ID_ANTERIOR, COLUMNA_ID_ANTERIOR_LEGADO,
   };
 })();

@@ -147,7 +147,7 @@ function escenario() {
   // LINEAS TELEFONICAS: su columna se llamaba ID -> se pisó, tiene respaldo.
   // La fila 3 nació DESPUÉS de migrar: su respaldo está vacío.
   hojas['LINEAS TELEFONICAS'] = hojaFalsa(
-    ['ID', 'FOLIO', 'ID APPSHEET'],
+    ['ID', 'FOLIO', 'ID ANTERIOR'],
     [['LIN-00000000AAAAAA', 'EQP0001', 'viejo1'],
      ['LIN-00000001BBBBBB', 'EQP0002', 'viejo2'],
      ['LIN-00000002CCCCCC', 'EQP0003', '']]);
@@ -182,8 +182,8 @@ escenario();
 migracionRevertir({ escribir: true });
 const lin = hojas['LINEAS TELEFONICAS'];
 ok(lin.col('ID')[0] === 'viejo1' && lin.col('ID')[1] === 'viejo2',
-   'ID volvió a "viejo1" y "viejo2", tomados de ID APPSHEET');
-ok(!lin.tiene('ID APPSHEET'), 'y el respaldo se borró: ya cumplió');
+   'ID volvió a "viejo1" y "viejo2", tomados de ID ANTERIOR');
+ok(!lin.tiene('ID ANTERIOR'), 'y el respaldo se borró: ya cumplió');
 
 console.log('\n3. Una fila creada DESPUÉS de migrar no inventa un valor viejo');
 ok(lin.col('ID')[2] === '', 'su ID queda vacío, porque nunca tuvo uno viejo');
@@ -194,7 +194,7 @@ escenario();
 migracionRevertir({ escribir: true });
 const insp = hojas['INSPECCIONES LINEAS'];
 ok(insp.col('ID LINEA')[0] === 'viejo1',
-   'ID LINEA volvió a "viejo1": se resolvió por el ID del padre y su ID APPSHEET');
+   'ID LINEA volvió a "viejo1": se resolvió por el ID del padre y su ID ANTERIOR');
 ok(insp.col('ID LINEA')[1] === 'LIN-00000002CCCCCC',
    'la que apunta a una fila nueva se deja intacta, no se borra');
 

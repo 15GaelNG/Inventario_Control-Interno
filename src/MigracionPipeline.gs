@@ -672,8 +672,8 @@ function migracionEstado(opciones) {
  * EL ORDEN IMPORTA y es el inverso del avance:
  *   1. Las columnas de referencia que se pisaron (hijas de LINEAS TELEFONICAS). Su valor
  *      viejo no se respaldó, pero se RECONSTRUYE: valor nuevo -> fila del padre por su ID
- *      -> su ID APPSHEET. Tiene que ir ANTES de borrar el respaldo del padre.
- *   2. Las 8 hojas cuya columna ID se pisó: ID <- ID APPSHEET.
+ *      -> su ID ANTERIOR. Tiene que ir ANTES de borrar el respaldo del padre.
+ *   2. Las 8 hojas cuya columna ID se pisó: ID <- ID ANTERIOR.
  *   3. Borrar las columnas que agregamos.
  *
  * DOS COSAS QUE NO HACE, a propósito:

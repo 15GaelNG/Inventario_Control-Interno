@@ -69,6 +69,58 @@ uno solo.
 
 ---
 
+## El ensayo sobre datos reales: replanchar desde produccion
+
+`src/MigracionReplanche.gs`, funciones `replanche1Ensayo` y `replanche2Escribir`.
+
+Ensayar la migracion sobre un libro que **ya esta migrado** prueba la idempotencia, no la
+primera corrida, que es lo que de verdad va a pasar en produccion. Para que el ensayo valga,
+el libro de pruebas tiene que empezar como empieza produccion: sin columna `ID`, sin
+respaldo, con los ids viejos de AppSheet en su lugar.
+
+Eso hace el replanchado: copia las 24 hojas migrables de produccion (**solo lectura**)
+encima del libro de experimentos **"Inventario Reemplazable"**
+(`1-RA6lmh-rZ-OKfsZSLl2Qd9lLyuDZ3dx3fP0M7qL-5o`), que es un clon de la base de pruebas hecho
+aparte para no estorbarle a nadie.
+
+### Es el unico archivo que escribe en un libro ajeno, y por eso lleva tres guardas
+
+| Guarda | Que impide |
+|---|---|
+| El destino esta **fijo** en `REPL_DESTINO` | que apuntar el proyecto a otro libro arrastre el replanchado |
+| Lista negra `REPL_PROHIBIDOS` | escribir en **produccion** o en el **libro de pruebas compartido del equipo**, aunque alguien edite la constante |
+| Comprobacion del **nombre** del libro, no solo del id | escribir en un libro desconocido si ese id cambiara de dueno |
+
+No pide respaldo del destino, al contrario que el resto del pipeline: ese libro es
+desechable a proposito y el original de todo lo que se copia sigue en produccion. Si deja
+constancia en `LOG_MIGRACION`, del lado del destino.
+
+### Lo que se pierde, y la diferencia que importa
+
+Replanchar borra las columnas que el destino tiene y produccion no. Se separan en dos:
+
+- **Artefactos de la migracion** (`ID`, `ID ANTERIOR`, `ID APPSHEET`): perderlos **es el
+  objetivo**. Se van sin preguntar.
+- **Cualquier otra** — por ejemplo `COLOR` y `NOMBRE RESPONSABLES 2` en
+  `LINEAS TELEFONICAS`, que alguien capturo a mano: el ensayo las **nombra una por una**, y
+  escribir se **niega** hasta que se ponga la Script Property
+  `REPLANCHE_ACEPTO_PERDER_COLUMNAS` con el id del destino.
+
+### Se corta por tiempo y continua
+
+Son ~861,000 celdas, y `CAMBIOS LINEAS TELEFONICAS` sola son 355,430. Se copia por bloques
+de 4,000 filas, se anota en `REPLANCHE_HOJAS_LISTAS` que hoja ya quedo, y se auto-detiene a
+los 4.5 minutos. Volver a correr `replanche2Escribir` continua donde se quedo; al terminar
+borra el avance. `replancheEstado` dice en que va y `replancheReiniciarAvance` lo olvida.
+
+### El orden del ensayo completo
+
+1. `replanche1Ensayo` — leer el reporte, sobre todo las columnas que se perderian.
+2. `replanche2Escribir` — las veces que haga falta hasta que diga LISTO.
+3. Apuntar el proyecto de Apps Script al libro de experimentos (`SS_ID_VEHICULOS`).
+4. Correr el pipeline completo desde `migracion1Revisar`, como si fuera produccion.
+
+
 ## 2. El ID de los registros que ya existen
 
 ### 2.1 La decisión: se usa el orden de los renglones, no las columnas de fecha

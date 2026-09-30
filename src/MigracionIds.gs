@@ -39,7 +39,7 @@ function migracion2AsignarEnsayo() {
   return asignarIds();
 }
 
-/** PASO 2, de verdad — ESCRIBE la columna ID y guarda el valor viejo en ID APPSHEET.
+/** PASO 2, de verdad — ESCRIBE la columna ID y guarda el valor viejo en ID ANTERIOR.
  *  Se puede volver a correr: las hojas ya migradas se saltan solas. */
 function migracion2AsignarEscribir() {
   return asignarIds({ escribir: true });
@@ -70,12 +70,12 @@ function migracionMoverIdsAlInicioEscribir() {
   return moverIdsAlInicio({ escribir: true });
 }
 
-/** Quita las columnas ID APPSHEET que sobran, ensayo — Solo lee. */
+/** Quita las columnas ID ANTERIOR que sobran, ensayo — Solo lee. */
 function migracionLimpiarRespaldoEnsayo() {
   return limpiarRespaldoRedundante();
 }
 
-/** Quita las columnas ID APPSHEET que sobran, de verdad — BORRA columnas.
+/** Quita las columnas ID ANTERIOR que sobran, de verdad — BORRA columnas.
  *  Solo borra donde el valor sigue existiendo íntegro en su columna original. */
 function migracionLimpiarRespaldoEscribir() {
   return limpiarRespaldoRedundante({ escribir: true });
@@ -286,6 +286,13 @@ function revisarAntesDeMigrar(opciones) {
 
     if (migColumna_(enc, Entidades.COLUMNA_ID) && h.llaveAnterior !== Entidades.COLUMNA_ID) detalles.push('ya tiene columna ID');
     if (migColumna_(enc, Entidades.COLUMNA_ID_ANTERIOR)) detalles.push('ya tiene ' + Entidades.COLUMNA_ID_ANTERIOR);
+    // El libro se migró con la versión vieja del código, que llamaba al respaldo
+    // "ID APPSHEET". No es un error en sí, pero este código ya no la lee: lo que había ahí
+    // es invisible para la reversa y para la limpieza. Se avisa fuerte.
+    if (h.pisaLlaveAnterior && migColumna_(enc, Entidades.COLUMNA_ID_ANTERIOR_LEGADO)) {
+      detalles.push('OJO: trae "' + Entidades.COLUMNA_ID_ANTERIOR_LEGADO + '" (nombre viejo del respaldo). ' +
+        'Este código usa "' + Entidades.COLUMNA_ID_ANTERIOR + '": replancha el libro desde producción, o renombra esa columna.');
+    }
     enc.forEach((c, i) => {
       if (!c) problemas.push(h.hoja + ': la columna ' + (i + 1) + ' no tiene encabezado');
     });
@@ -323,7 +330,7 @@ function migYaMigrada_(sheet, prefijo, filas, vacias) {
 }
 
 /**
- * Llena la columna ID de cada hoja y guarda el valor viejo en ID APPSHEET.
+ * Llena la columna ID de cada hoja y guarda el valor viejo en ID ANTERIOR.
  * Sin { escribir: true } solo dice qué haría.
  *
  * El ID de cada renglón sale de su POSICIÓN en la hoja, no de ninguna columna de fecha:
@@ -333,13 +340,13 @@ function migYaMigrada_(sheet, prefijo, filas, vacias) {
  * 23 hojas (una de 33,640 renglones) es probable que se interrumpa a medias:
  *
  *   - Una hoja ya migrada se SALTA. La segunda corrida sigue donde se quedó.
- *   - ID APPSHEET nunca se pisa si ya trae datos. Es el único valor irrecuperable: en las
+ *   - ID ANTERIOR nunca se pisa si ya trae datos. Es el único valor irrecuperable: en las
  *     hojas cuya columna se llama "ID", volver a leer de ahí daría los IDs NUEVOS y los
  *     copiaría encima de los originales, borrándolos para siempre.
  *   - Se detiene sola antes del límite de tiempo y dice en qué hoja se quedó.
  *
  * Con { rehacer: true } vuelve a generar el ID aunque la hoja ya esté migrada (el valor
- * viejo se sigue respetando, porque se lee de ID APPSHEET).
+ * viejo se sigue respetando, porque se lee de ID ANTERIOR).
  */
 function asignarIds(opciones) {
   const cfg = Object.assign({ escribir: false, hojas: null, rehacer: false }, opciones || {});
@@ -377,7 +384,7 @@ function asignarIds(opciones) {
     // y el ID nuevo se crea aparte, así que respaldarla sería guardar dos veces lo mismo.
     const sobrescribe = h.pisaLlaveAnterior;
 
-    // Si ID APPSHEET ya tiene datos, ESA es la verdad: la columna original pudo haber sido
+    // Si ID ANTERIOR ya tiene datos, ESA es la verdad: la columna original pudo haber sido
     // sobrescrita por una corrida anterior.
     const posGuardada = migColumna_(enc, Entidades.COLUMNA_ID_ANTERIOR);
     const yaGuardado = posGuardada ? migLeerColumna_(sheet, posGuardada, filas) : [];
@@ -679,7 +686,7 @@ function moverIdsAlInicio(opciones) {
 // ---------------------------------------------------------------- limpieza
 
 /**
- * Quita la columna ID APPSHEET de las hojas donde sobra.
+ * Quita la columna ID ANTERIOR de las hojas donde sobra.
  *
  * Solo hace falta en las hojas cuya columna original se llama "ID", porque ahí el ID nuevo
  * la pisa. En las demás —ID_VEHICULO, ID_SENSOR, ID CCH…— la original se queda intacta, así
@@ -714,9 +721,11 @@ function limpiarRespaldoRedundante(opciones) {
       lineas.push("  " + h.hoja + ": ya no encuentro su llave anterior, NO se toca el respaldo");
       return;
     }
-    // La llave anterior Y el respaldo son la MISMA columna. Pasa en CAMBIOS LINEAS
-    // TELEFONICAS: a su columna sin nombre se le puso "ID APPSHEET", que es justo lo que
-    // guarda. Compararla consigo misma daría "idéntica" y borraría el original.
+    // La llave anterior Y el respaldo son la MISMA columna. Desde que el respaldo se llama
+    // "ID ANTERIOR" y no "ID APPSHEET" esto ya no debería ocurrir con ninguna hoja del
+    // catálogo (ver la nota de Entidades.COLUMNA_ID_ANTERIOR). Se deja porque el costo es
+    // una comparación y lo que evita es borrar una columna original: si algún día alguien
+    // nombra "ID ANTERIOR" a la llave de una hoja, esto lo detiene.
     if (posVieja === posGuardada) {
       lineas.push('  ' + h.hoja + ': su llave anterior ES la columna ' +
         Entidades.COLUMNA_ID_ANTERIOR + ', no es un respaldo de más. NO se toca.');

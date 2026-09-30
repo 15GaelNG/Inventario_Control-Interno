@@ -85,16 +85,25 @@ ok(todas.every((e) => e.llaveAnterior), 'y todas por nombre: ya ninguna depende 
 ok(Entidades.de('CAMBIOS LINEAS TELEFONICAS').llaveAnterior === 'ID APPSHEET',
    'a la que no tenía encabezado se le puso "ID APPSHEET", que es justo lo que guarda');
 
-console.log('\n7b. El caso donde la llave anterior ES la columna de respaldo');
+console.log('\n7b. Ninguna llave anterior se llama igual que la columna de respaldo');
+// Antes del 30/09/2026 el respaldo se llamaba "ID APPSHEET" y CAMBIOS LINEAS TELEFONICAS
+// tenía una columna REAL con ese nombre: un mismo nombre para dos papeles, que obligaba a
+// limpiarRespaldoRedundante a cuidar de no borrar el original comparándolo consigo mismo.
+// Al renombrar el respaldo a "ID ANTERIOR", la ambigüedad desapareció. Esto lo vigila.
+const choques = todas.filter((e) => e.llaveAnterior === Entidades.COLUMNA_ID_ANTERIOR);
+ok(choques.length === 0,
+   'cero colisiones: ' + (choques.length ? choques.map((e) => e.hoja).join(', ') : 'ninguna hoja usa ese nombre'));
 const cli = Entidades.de('CAMBIOS LINEAS TELEFONICAS');
-ok(cli.llaveAnterior === Entidades.COLUMNA_ID_ANTERIOR,
-   'en esa hoja coinciden, y limpiarRespaldoRedundante tiene que NO borrarla');
-ok(todas.filter((e) => e.llaveAnterior === Entidades.COLUMNA_ID_ANTERIOR).length === 1,
-   'es la única así: si aparece otra, hay que revisar esa salvaguarda');
+ok(cli.llaveAnterior === Entidades.COLUMNA_ID_ANTERIOR_LEGADO,
+   'la que chocaba usa el nombre VIEJO del respaldo, que ya no se escribe: ' + cli.llaveAnterior);
 
 console.log('\n8. Los nombres de columna son los mismos para todos');
 ok(Entidades.COLUMNA_ID === 'ID', 'la llave propia se llama ID');
-ok(Entidades.COLUMNA_ID_ANTERIOR === 'ID APPSHEET', 'el respaldo se llama ID APPSHEET');
+ok(Entidades.COLUMNA_ID_ANTERIOR === 'ID ANTERIOR', 'el respaldo se llama ID ANTERIOR');
+ok(Entidades.COLUMNA_ID_ANTERIOR_LEGADO === 'ID APPSHEET',
+   'y queda registrado el nombre viejo, solo para poder avisar si aparece en un libro');
+ok(Entidades.COLUMNA_ID_ANTERIOR !== Entidades.COLUMNA_ID_ANTERIOR_LEGADO,
+   'que son distintos es justo el punto del cambio');
 
 console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');
 process.exit(fallas ? 1 : 0);
