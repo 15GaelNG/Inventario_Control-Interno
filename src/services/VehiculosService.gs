@@ -59,8 +59,14 @@ const VehiculosService = (function () {
    * solo para quedarse con unas cuantas, lee únicamente esas columnas — de
    * ~26,500 celdas a ~5,800.
    */
+  // 'ID' va aquí para que el catálogo que consumen los formularios pueda identificar un
+  // vehículo sin depender del folio. Hoy los formularios siguen MANDANDO el folio y el
+  // servidor resuelve el ID: el control de búsqueda de vehículo no es un <select> con
+  // valor oculto, es una caja de texto donde lo que se manda es lo que se ve (ver
+  // Combobox, que mete `valor` en el input). Mandar el ID exigiría agregarle un campo
+  // oculto al componente Formulario, y eso está pendiente a propósito.
   const COLUMNAS_BASICO = [
-    'FOLIO', 'DEPARTAMENTO', 'MARCA', 'LINEA VEHICULO', 'MODELO', 'ESTATUS',
+    'ID', 'FOLIO', 'DEPARTAMENTO', 'MARCA', 'LINEA VEHICULO', 'MODELO', 'ESTATUS',
     'RESPONSABLE VEHICULO', 'NO EMPLEADO', 'SERIE VEHICULO', 'NUCCO',
   ];
 
@@ -74,6 +80,7 @@ const VehiculosService = (function () {
       if (!datos['FOLIO'][i]) continue;
       if (String(datos['ESTATUS'][i] || '').toUpperCase() === 'BAJA VEHICULAR') continue;
       resultado.push({
+        ID: datos['ID'][i],
         FOLIO: datos['FOLIO'][i],
         DEPARTAMENTO: datos['DEPARTAMENTO'][i] || '',
         MARCA: datos['MARCA'][i] || '',

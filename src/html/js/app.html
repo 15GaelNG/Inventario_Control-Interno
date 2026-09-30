@@ -2945,7 +2945,7 @@
         titulo: 'Descarga la base completa: todas las filas y columnas de la hoja, sin importar filtros ni búsqueda',
         descargar: async () => ExportarExcel.descargarCrudo({ nombreArchivo: 'Vehículos', filas: JSON.parse(await callServer('apiVehiculosCompleto', state.token)) }),
       },
-      columnasCompletas: { idHoja: 'ID_VEHICULO', cargar: async () => JSON.parse(await callServer('apiVehiculosCompleto', state.token)) },
+      columnasCompletas: { idHoja: 'ID', cargar: async () => JSON.parse(await callServer('apiVehiculosCompleto', state.token)) },
       etiquetaFila: (v) => v.FOLIO,
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
       // false (no panel lateral): la ficha completa es su propia pantalla —
@@ -2976,6 +2976,7 @@
       alEliminar: puedeEditar ? async (filas) => {
         await Promise.all(filas.map((f) => callServer('apiEliminarVehiculo', state.token, f.ID_VEHICULO)));
         invalidarCacheLista('apiListarVehiculosResumen', state.token);
+        invalidarCacheCatalogo('apiListarVehiculosBasico', state.token);
       } : null,
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
@@ -3137,6 +3138,7 @@
         await callServer('apiActualizarVehiculo', state.token, document.getElementById('editar-vehiculo-id').value, datos);
         cerrarEditarVehiculo();
         invalidarCacheLista('apiListarVehiculosResumen', state.token);
+        invalidarCacheCatalogo('apiListarVehiculosBasico', state.token);
         await cargar();
         toastExito('Actualizado exitosamente');
       } catch (err) {
@@ -3166,6 +3168,7 @@
         document.getElementById('veh-fecha-registro-sistema-ci').value = hoyISO();
         previsualizarNuccoVeh();
         invalidarCacheLista('apiListarVehiculosResumen', state.token);
+        invalidarCacheCatalogo('apiListarVehiculosBasico', state.token);
         await cargar();
         toastExito('Registrado exitosamente');
       } catch (err) {

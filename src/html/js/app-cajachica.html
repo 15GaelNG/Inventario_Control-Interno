@@ -934,7 +934,7 @@
         titulo: 'Descarga la base completa: todas las filas y columnas de la hoja, sin importar filtros ni búsqueda',
         descargar: async () => ExportarExcel.descargarCrudo({ nombreArchivo: 'Cambios Vehículos', filas: JSON.parse(await callServer('apiCambiosVehiculosCompleto', state.token)) }),
       },
-      columnasCompletas: { idHoja: 'ID_CAMBIO', cargar: async () => JSON.parse(await callServer('apiCambiosVehiculosCompleto', state.token)) },
+      columnasCompletas: { idHoja: 'ID', cargar: async () => JSON.parse(await callServer('apiCambiosVehiculosCompleto', state.token)) },
       etiquetaFila: (c) => [c.FOLIO, c.CAMPO].filter(Boolean).join(' · '),
       detalle: false, // bitácora de solo lectura, sin panel de detalle ni edición
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),

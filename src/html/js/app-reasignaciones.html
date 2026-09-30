@@ -69,7 +69,7 @@
         titulo: 'Descarga la base completa: todas las filas y columnas de la hoja, sin importar filtros ni búsqueda',
         descargar: async () => ExportarExcel.descargarCrudo({ nombreArchivo: 'Reasignaciones Vehiculares', filas: JSON.parse(await callServer('apiReasignacionesVehicularesCompleto', state.token)) }),
       },
-      columnasCompletas: { idHoja: 'ID Reasignacion Vehicular', cargar: async () => JSON.parse(await callServer('apiReasignacionesVehicularesCompleto', state.token)) },
+      columnasCompletas: { idHoja: 'ID', cargar: async () => JSON.parse(await callServer('apiReasignacionesVehicularesCompleto', state.token)) },
       etiquetaFila: (r) => r.FOLIO_VEHICULO,
       detalle: { titulo: (r) => 'Folio: ' + (r.FOLIO_VEHICULO || '') },
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
