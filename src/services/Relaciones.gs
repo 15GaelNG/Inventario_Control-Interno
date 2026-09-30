@@ -90,7 +90,13 @@ const MAPA = {
     // de esto Caja Chica no tenia NINGUNA deteccion de deriva ni de huerfanas, y para que
     // la decision "esto se congela" quede escrita donde la vea el siguiente que lo lea.
     'CAJAS CHICAS': {
-      spreadsheet: () => Config.SPREADSHEET_IDS.CAJACHICA(),
+      // VEHICULOS(), no CAJACHICA(): las pestanas de Caja Chica viven en el MISMO libro, y
+      // es lo que usan sus tres servicios (ArqueosService, CajasChicasService y
+      // CambiosMontoCCHService, todos con ssId() -> VEHICULOS()). SS_ID_CAJACHICA esta
+      // declarada en Config pero no hay una sola linea que la llame, asi que pedirla aqui
+      // hacia que revisar() tronara en cualquier proyecto que no la tuviera puesta -- que
+      // es el caso del proyecto DEV del equipo.
+      spreadsheet: () => Config.SPREADSHEET_IDS.VEHICULOS(),
       hoja: 'CAJAS CHICAS',
       // 'ID CCH' es el consecutivo 1,2,3 que usa la gente. Es dato de negocio, no un id
       // de AppSheet (ver llaveEsDato en Entidades.gs), asi que conserva su nombre.
