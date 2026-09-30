@@ -256,12 +256,14 @@ function migLeerColumna_(sheet, columna, filas) {
  * Corre esto primero y lee la salida completa antes de seguir.
  */
 function revisarAntesDeMigrar(opciones) {
-  const ssId = migracionSs_(opciones || {});
+  const cfg = Object.assign({ familia: null }, opciones || {});
+  const ssId = migracionSs_(cfg);
   const ss = SpreadsheetApp.openById(ssId);
-  const lineas = ['REVISIÓN PREVIA — spreadsheet ' + ssId, ''];
+  const lineas = ['REVISIÓN PREVIA — spreadsheet ' + ssId +
+    (cfg.familia ? '  ·  solo la familia "' + cfg.familia + '"' : ''), ''];
   const problemas = [];
 
-  Entidades.migrables().forEach((h) => {
+  Entidades.deFamilia(cfg.familia).forEach((h) => {
     const sheet = ss.getSheetByName(h.hoja);
     if (!sheet) { problemas.push('FALTA la hoja "' + h.hoja + '"'); return; }
     const enc = migEncabezados_(sheet);
@@ -358,7 +360,7 @@ function migYaMigrada_(sheet, prefijo, filas, vacias) {
  * viejo se sigue respetando, porque se lee de ID ANTERIOR).
  */
 function asignarIds(opciones) {
-  const cfg = Object.assign({ escribir: false, hojas: null, rehacer: false }, opciones || {});
+  const cfg = Object.assign({ escribir: false, hojas: null, rehacer: false, familia: null }, opciones || {});
   const ssId = migracionSs_(cfg);
   const ss = SpreadsheetApp.openById(ssId);
   const lineas = [(cfg.escribir ? 'ASIGNANDO IDs' : 'ENSAYO (no escribe nada)') + ' — ' + ssId, ''];
@@ -367,7 +369,7 @@ function asignarIds(opciones) {
   let total = 0, hechas = 0, saltadas = 0;
   const pendientes = [];
 
-  Entidades.migrables().forEach((h) => {
+  Entidades.deFamilia(cfg.familia).forEach((h) => {
     if (cfg.hojas && cfg.hojas.indexOf(h.hoja) === -1) return;
     if (pendientes.length) { pendientes.push(h.hoja); return; }   // ya se acabó el tiempo
 
@@ -550,13 +552,20 @@ function migBuscar_(mapa, valor) {
  * sí se pisó) o en una COLUMNA NUEVA (cuando guarda una llave de negocio, que no se toca).
  */
 function reescribirReferencias(opciones) {
-  const cfg = Object.assign({ escribir: false }, opciones || {});
+  const cfg = Object.assign({ escribir: false, familia: null }, opciones || {});
   const ssId = migracionSs_(cfg);
   const ss = SpreadsheetApp.openById(ssId);
   const lineas = [(cfg.escribir ? 'REESCRIBIENDO REFERENCIAS' : 'ENSAYO (no escribe nada)') + ' — ' + ssId, ''];
   const huerfanas = [];
 
-  MIGRACION_REFERENCIAS.forEach((ref) => {
+  // El filtro va por la familia de la hoja HIJA, no del padre: así, al correr solo
+  // "vehiculos", CAMBIOS LINEAS TELEFONICAS no se toca aunque su padre exista.
+  const refs = MIGRACION_REFERENCIAS.filter((ref) => {
+    if (!cfg.familia) return true;
+    const e = Entidades.existe(ref.hoja) ? Entidades.de(ref.hoja) : null;
+    return !!e && (e.familia || 'otros') === String(cfg.familia).trim().toLowerCase();
+  });
+  refs.forEach((ref) => {
     const sheet = ss.getSheetByName(ref.hoja);
     if (!sheet) { lineas.push('  ' + ref.hoja + ': NO EXISTE, se salta'); return; }
     const filas = migFilas_(sheet);
@@ -653,13 +662,17 @@ function reescribirReferencias(opciones) {
  * mismo porque AppSheet no la lee, pero allá esto va junto con el apagado.
  */
 function moverIdsAlInicio(opciones) {
-  const cfg = Object.assign({ escribir: false }, opciones || {});
+  const cfg = Object.assign({ escribir: false, familia: null }, opciones || {});
   const ssId = migracionSs_(cfg);
   const ss = SpreadsheetApp.openById(ssId);
   const lineas = [(cfg.escribir ? 'MOVIENDO LA COLUMNA ID AL INICIO' : 'ENSAYO (no mueve nada)') + ' — ' + ssId, ''];
   let movidas = 0;
 
-  Entidades.todas().forEach((h) => {
+  // todas(), no migrables(): también mueve el ID de las hojas del sistema nuevo. El filtro
+  // de familia se aplica aquí porque deFamilia() se construye sobre migrables().
+  const aMover = Entidades.todas().filter(
+    (h) => !cfg.familia || (h.familia || 'otros') === String(cfg.familia).trim().toLowerCase());
+  aMover.forEach((h) => {
     const sheet = ss.getSheetByName(h.hoja);
     if (!sheet) return;
     const enc = migEncabezados_(sheet);
@@ -705,13 +718,13 @@ function moverIdsAlInicio(opciones) {
  * existiendo igualito en la columna original. Si difiere en uno solo, no toca esa hoja.
  */
 function limpiarRespaldoRedundante(opciones) {
-  const cfg = Object.assign({ escribir: false }, opciones || {});
+  const cfg = Object.assign({ escribir: false, familia: null }, opciones || {});
   const ssId = migracionSs_(cfg);
   const ss = SpreadsheetApp.openById(ssId);
   const lineas = [(cfg.escribir ? 'QUITANDO RESPALDOS QUE SOBRAN' : 'ENSAYO (no borra nada)') + ' — ' + ssId, ''];
   let quitadas = 0;
 
-  Entidades.migrables().forEach((h) => {
+  Entidades.deFamilia(cfg.familia).forEach((h) => {
     const sheet = ss.getSheetByName(h.hoja);
     if (!sheet) return;
     const filas = migFilas_(sheet);
@@ -777,12 +790,14 @@ function limpiarRespaldoRedundante(opciones) {
 
 /** Comprueba lo de docs/ids-asignacion.md, sección 7. No escribe nada. */
 function auditarIds(opciones) {
-  const ssId = migracionSs_(opciones || {});
+  const cfg = Object.assign({ familia: null }, opciones || {});
+  const ssId = migracionSs_(cfg);
   const ss = SpreadsheetApp.openById(ssId);
-  const lineas = ['AUDITORÍA — ' + ssId, ''];
+  const lineas = ['AUDITORÍA — ' + ssId +
+    (cfg.familia ? '  ·  solo la familia "' + cfg.familia + '"' : ''), ''];
   const fallas = [];
 
-  Entidades.migrables().forEach((h) => {
+  Entidades.deFamilia(cfg.familia).forEach((h) => {
     const sheet = ss.getSheetByName(h.hoja);
     if (!sheet) return;
     const filas = migFilas_(sheet);

@@ -132,6 +132,46 @@ configuraciones que conviven: `npm run push` va a dev, `npm run push:lab` al lab
 Si alguien clona el repo y quiere su propio laboratorio, copia
 `.clasp.lab.json.example` y le pega el id de su proyecto.
 
+### Una familia a la vez, con una sola funcion
+
+`src/MigracionFamilia.gs`. En vez de correr los seis pasos a mano para las 24 hojas,
+`vehiculos1Ensayo` / `vehiculos2Escribir` corren toda la homologacion de **una familia**:
+
+| Familia | Hojas | Atajos |
+|---|---|---|
+| `vehiculos` | 8 | `vehiculos1Ensayo` / `vehiculos2Escribir` |
+| `lineas` | 10 | `lineas1Ensayo` / `lineas2Escribir` |
+| `cajachica` | 3 | `cajaChica1Ensayo` / `cajaChica2Escribir` |
+| `otros` | 3 | `correrFamilia('otros')` |
+
+`familiasEstado` enseña el reparto sin tocar nada. La familia de cada hoja vive en
+`src/config/Entidades.gs`.
+
+**Por que por familia:** Vehiculos y Lineas son problemas de tamanos muy distintos (ver
+[lineas-homologacion.md](lineas-homologacion.md)), y conviene dejar Vehiculos terminado y
+probado antes de tocar Lineas.
+
+Los seis pasos, en este orden:
+
+| # | Paso | |
+|---|---|---|
+| 1 | `revisar` | **solo lee**. Si encuentra problemas y la corrida escribe, se detiene aqui |
+| 2 | `ids` | llena la columna `ID` de cada hoja de la familia |
+| 3 | `referencias` | reescribe lo que apuntaba al ID viejo del padre. **Despues** de los ids: necesita que el padre ya tenga el suyo |
+| 4 | `mover` | pone la columna `ID` al inicio |
+| 5 | `respaldo` | quita las columnas `ID ANTERIOR` que sobran |
+| 6 | `auditar` | **solo lee**. Dice si todo cuadro |
+
+Dos reglas que las pruebas vigilan:
+
+- **Un paso de solo lectura NUNCA recibe `escribir: true`**, ni cuando la corrida escribe.
+- **En ensayo no se detiene** aunque un paso reporte problemas: se corren los seis para ver
+  el panorama completo. Escribiendo si se detiene, y no toca nada mas.
+
+**No guarda avance, a proposito.** Los seis pasos son idempotentes: si se corta por tiempo,
+se vuelve a correr lo mismo y los ya hechos se saltan solos. Guardar el avance seria mas
+maquinaria que la que ahorra.
+
 ### El orden del ensayo completo
 
 1. En el proyecto del laboratorio, Script Property `SS_ID_VEHICULOS` =
@@ -140,7 +180,7 @@ Si alguien clona el repo y quiere su propio laboratorio, copia
    perezoso, asi que no las va a pedir.
 2. `replanche1Ensayo` — leer el reporte, sobre todo las columnas que se perderian.
 3. `replanche2Escribir` — las veces que haga falta hasta que diga LISTO.
-4. Correr el pipeline completo desde `migracion1Revisar`, como si fuera produccion.
+4. `vehiculos1Ensayo` y, si cuadra, `vehiculos2Escribir`. Despues Lineas y Caja Chica.
 
 ### Que el laboratorio se separe de produccion es normal
 
