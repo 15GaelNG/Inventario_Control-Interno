@@ -21,6 +21,7 @@ Por dónde entrar según lo que traigas.
 | Documento | Para qué |
 |---|---|
 | [mapeo-modulos.md](mapeo-modulos.md) | Qué módulo de AppSheet corresponde a qué hoja, y en qué estado está cada uno. |
+| [lineas-homologacion.md](lineas-homologacion.md) | **El diagnóstico de Líneas**, medido contra producción. Por qué la FK NO es el problema, y qué sí. Léelo antes de rediseñar nada de ese módulo. |
 | [lineas-plan.md](lineas-plan.md) | El plan del módulo de Líneas Telefónicas. |
 | [lineas-estado.md](lineas-estado.md) | El estado detallado de Líneas: hojas, carpetas de Drive, NUCOS. |
 
