@@ -184,7 +184,10 @@ const MIGRACION_REFERENCIAS = [
   { hoja: 'INSTALACION DE SENSORES', columna: 'FOLIO', padre: 'VEHICULOS', porLlaveNegocio: 'FOLIO', destino: 'ID VEHICULO', esperado: 0.99 },
   { hoja: 'INSPECCION VEHICULAR', columna: 'FOLIO', padre: 'VEHICULOS', porLlaveNegocio: 'FOLIO', destino: 'ID VEHICULO', esperado: 0.996 },
   { hoja: 'HOLOGRAMAS', columna: 'SERIE VEHICULO', padre: 'VEHICULOS', porLlaveNegocio: 'SERIE VEHICULO', destino: 'ID VEHICULO', opcional: true },
-  { hoja: 'CAMBIOS VEHICULOS', columna: 'FOLIO', padre: 'VEHICULOS', porLlaveNegocio: 'FOLIO', destino: 'ID VEHICULO', esperado: 0.73 },
+  // 0.79, no 0.73: el 0.73 era de una medicion vieja y quedo aqui despues de re-medir, asi
+  // que la corrida del 30/09 grito "OJO: esperaba 73%" habiendo salido MEJOR de lo esperado.
+  // Una alarma que grita sin razon en cada corrida ensena a ignorar las alarmas.
+  { hoja: 'CAMBIOS VEHICULOS', columna: 'FOLIO', padre: 'VEHICULOS', porLlaveNegocio: 'FOLIO', destino: 'ID VEHICULO', esperado: 0.79 },
   // Se me habia escapado, igual que HISTORIAL_REASIGNACIONES: es de la familia de
   // vehiculos y no estaba en el mapa. Hoy trae 1 sola fila y empareja al 100%, asi que
   // cuesta nada; pero si no esta aqui, el dia que crezca queda huerfana en silencio.

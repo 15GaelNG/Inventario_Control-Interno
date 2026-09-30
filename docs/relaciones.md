@@ -411,8 +411,22 @@ Tres cosas que salieron de ahí y valen más que los totales:
 
 1. **Las 200 `COPIA_VACIA` de Sensores son casi todas una sola columna**:
    `CAPACIDAD DE COMBUSTIBLE` (157) y `COLOR` (43). No es deriva, es que nunca se llenaron.
-2. **Los 111 huérfanos de Hologramas ya se conocían**: son vehículos personales que no están
-   en el catálogo, y por diseño ahí los datos se capturan a mano.
+2. **Los 111 huérfanos de Hologramas NO son 111 vehículos personales.** Aquí decía que sí;
+   medidos sobre el laboratorio el 30/09/2026, ya con `ID VEHICULO` escrito, se parten en
+   tres cosas distintas:
+
+   | Qué son | Cuántos | Qué significa |
+   |---|---|---|
+   | **Serie con un `_` de más al inicio** | **13** | Recuperables con certeza: sin el guión bajo, la serie SÍ existe en `VEHICULOS`. Ej. `_VR3EC9HP2MJ503983` |
+   | No tienen forma de VIN (longitud ≠ 17) | 7 | Basura o dedazo: `1`, `123456789`, `UYC383A` (parece placa), `1GNM616030` (10), `L15A77804197` (12), `3MDDJBTVXKM31054` (16, le falta un carácter) |
+   | VIN válido de 17 sin padre | 91 | **Estos sí** son los vehículos personales, que por diseño se capturan a mano |
+
+   Así que la tasa recuperable real es **157/255 (62%)**, no 144/255 (56%): 13 de esas
+   "huérfanas" son un carácter de más, no un vehículo ajeno. Y ni los 91 están del todo
+   limpios — entre ellos hay un `GOLX960529MGTMPC0`, que tiene forma de CURP truncado.
+
+   El pipeline hizo lo correcto con todas: las dejó intactas en vez de inventarles un padre.
+   Corregirlas es limpieza de datos, y está en el Excel.
 3. **`INSPECCION VEHICULAR` acumula 184 `DIFERENCIA`**, sobre todo `RESPONSABLE` (85) y
    `OFICINA / DESARROLLO` (69). Es una bitácora, y Ayrton lo confirmó el 30/09/2026: *"el
    responsable que se captura ahí es el del momento en el que se realizó la inspección"*.

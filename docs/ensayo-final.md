@@ -146,11 +146,19 @@ INSPECCION VEHICULAR       298/302   99%
 INCIDENCIAS                  1/1    100%
 INSTALACION DE SENSORES    207/208   99%
 CAMBIOS VEHICULOS         7309/9213  79%   <- esperado: log de unidades ya borradas
-HOLOGRAMAS                 144/255   56%   <- esperado: 111 vehículos personales
+HOLOGRAMAS                 144/255   56%   <- esperado: 91 personales + 13 con "_" + 7 basura
 ```
 
 Esos dos últimos números **no son fallas**. Están explicados en
 [relaciones.md](relaciones.md) y en el Excel, hoja *Lo que NO se toca*.
+
+De las 111 huérfanas de Hologramas, **13 son recuperables**: su serie trae un `_` de más al
+inicio y sin él sí existe en `VEHICULOS`. Eso es limpieza de datos, no del pipeline, y por eso
+la corrida las dejó intactas en vez de inventarles un padre — que es justo lo que debe hacer.
+Están en el Excel de limpiezas.
+
+Y la única huérfana de `INSTALACION DE SENSORES` es literalmente **`SIN FOLIO`**: un
+centinela. Que aparezca ahí es el diseño funcionando, no una falla.
 
 ### Aquí el libro queda SELLADO
 
