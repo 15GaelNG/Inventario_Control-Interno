@@ -1,7 +1,54 @@
 # Homologar Líneas: el diagnóstico
 
-> **Todo lo de aquí está medido contra producción el 30/09/2026, en solo lectura.** Se lee
-> junto con [ids.md](ids.md) y [relaciones.md](relaciones.md).
+> ## ⚠️ OJO — el módulo se reestructuró el 30/09/2026, DESPUÉS de este análisis
+>
+> Hubo junta del área y Emmanuel aplicó los cambios en el libro compartido del equipo
+> (`1fC77Uu1ePVUySNvhgWXMHqWpLhGhBMTZZMEblU2nUhI`). **Producción todavía no los tiene**, así
+> que este documento sigue describiendo producción — pero hacia dónde va el módulo es otra
+> cosa. Lo medido en el libro compartido ese mismo día:
+>
+> **Se eliminaron 4 pestañas** (el libro pasó de 39 a 35):
+> `HISTORIAL_REASIGNACIONES` · `REACTIVACION DE LINEAS` · `SOLICITUD DE LINEAS` ·
+> `BITACORA DE DESECHO`
+>
+> **Se repararon dos columnas de `LINEAS TELEFONICAS`**: la del encabezado `#REF!` ahora se
+> llama `NOMBRE RESPONSABLES 2`, y se agregó `COLOR`. De 56 a 58 columnas.
+>
+> **Se recortaron filas en las hijas**, con datos al día en los dos libros (o sea: no es que
+> el compartido esté viejo, se quitaron filas):
+> `CAMBIOS LINEAS TELEFONICAS` −1,961 · `INSPECCIONES LINEAS` −170 ·
+> `RESPONSIVAS LINEAS` −133.
+>
+> ### Qué de este documento YA NO APLICA
+>
+> | Sección | Por qué |
+> |---|---|
+> | La tabla de "dónde ya existe el vínculo y dónde no" | 3 de sus 6 hojas fueron eliminadas |
+> | **Todo el relleno de `ID LINEA` por cascada IMEI → SIM → número** (83%–100%) | describe exactamente esas 3 hojas eliminadas. **No lo implementes.** |
+> | La limpieza del encabezado `#REF!` | ya está hecha |
+> | Las 15 columnas vacías | el juego de columnas cambió: hay que volver a medirlo |
+> | Los conteos de filas y el huérfano `EEBA06A3` | los totales de las hijas cambiaron |
+>
+> ### Qué SÍ sigue en pie, y se verificó después de la reestructuración
+>
+> - **`NUCO` sigue siendo llave única**: 1,615 de 1,615, cero repetidas, igual que en
+>   producción. Todo el diagnóstico se apoyaba en eso.
+> - **El grano de la tabla** (97% son `EQUIPO*`, 39% sin línea) y que `IMEI` nunca cambia.
+> - **La clasificación caché/bitácora** de las hojas que quedan.
+> - **El análisis contra `COLABORADORES`** y los centinelas.
+>
+> ### Y lo que hay que arreglar en el código cuando esto llegue a producción
+>
+> `MIGRACION_REFERENCIAS` tiene **3 entradas apuntando a hojas eliminadas**
+> (`HISTORIAL_REASIGNACIONES.ID Linea`, `REACTIVACION DE LINEAS.IMEI`,
+> `BITACORA DE DESECHO.ID_EQUIPO`) y `Entidades` tiene **las 4 como migrables**. Hoy eso no
+> estorba: el laboratorio y producción conservan las 4 pestañas. Pero el día que se apliquen
+> allá, el paso 1 del pipeline va a reportar `FALTA la hoja` cuatro veces y **detenerse** —
+> que es lo correcto. **A propósito no se tocó el catálogo todavía**: cambiarlo ahora lo
+> dejaría describiendo un libro que no es ni el laboratorio ni producción.
+
+> **Todo lo demás de aquí está medido contra producción el 30/09/2026, en solo lectura.** Se
+> lee junto con [ids.md](ids.md) y [relaciones.md](relaciones.md).
 
 ## El resumen, por si no lees lo demás
 
