@@ -1201,7 +1201,7 @@ test('Selección como en los equipos Apple: cuadro con el mouse, Shift+clic, Ctr
   // Shift+clic fuera del modo: rango desde la última fila tocada (Mail)
   assert.match(dt, /if \(!st\.modoSeleccion && ev\.shiftKey\) \{/);
   // Ctrl/Cmd+A marca las filas filtradas; un Esc quita la selección y sale del modo
-  assert.match(dt, /if \(tecla === 'a' && cfg\.modoSeleccion && !ev\.shiftKey\)/);
+  assert.match(dt, /if \(tecla === 'a' && cfg\.modoSeleccion && !cfg\.seleccionUnica && !ev\.shiftKey\)/);
   assert.match(dt, /if \(!panel && !st\.editando && st\.modoSeleccion && enEsta\) setModoSeleccion\(false\);/);
 });
 
@@ -1374,7 +1374,7 @@ test('PARA VENTA y PARA DESECHO siguen la lógica de Mandar a resguardo (usuario
 test('Selección como en Google Drive y "Mandar a cancelación" (usuario, 30-sep)', () => {
   const dt = read('src/html/js/componentes/datatable.html');
   // Clic = seleccionar esa fila; Ctrl alterna; Shift rango; sin reescribir las filas (el doble clic sigue llegando)
-  assert.match(dt, /function clicDrive\(id, teclas\)/);
+  assert.match(dt, /function clicDrive\(id, teclasOriginales\)/);
   assert.match(dt, /else st\.seleccion = new Set\(\[id\]\);/);
   assert.match(dt, /function pintarSeleccion\(\)/);
   // Barra con lo más usado y ⋮ con el resto; clic derecho y ⋮ de la fila con todas
@@ -1423,4 +1423,8 @@ test('Ajustes a la selección estilo Drive: contador simple, clic fuera, sin Cop
   // Documentos, historial, bandeja…: sin columna de Acciones; sus botones van a la barra y al clic derecho
   assert.match(dt, /const hayAccionesFila = accionesFila\.length > 0 && !\(cfg\.seleccionDrive && cfg\.seleccionable\);/);
   assert.match(dt, /visible: \(filas\) => !a\.visible \|\| a\.visible\(filas\[0\]\), alHacer: \(filas\) => a\.alHacer\(filas\[0\]\),/);
+  // Documentos e Historial: una fila a la vez (no hay acciones masivas)
+  assert.match(dt, /const teclas = cfg\.seleccionUnica \? \{\} : teclasOriginales;/);
+  assert.match(dt, /if \(cfg\.seleccionUnica\) return;   \/\/ sin selección de varias, no hay cuadro/);
+  assert.equal((lineas.match(/seleccionUnica: true,/g) || []).length, 2);
 });

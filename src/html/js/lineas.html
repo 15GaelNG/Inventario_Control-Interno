@@ -2336,7 +2336,9 @@
           idTabla: 'lineas-documentos-v1',
           exportar: false,
           tamanoPagina: 25,
-          // Seleccionable (30-sep): sus botones (ver inspección, PDF, carpeta) van en la barra y el clic derecho
+          // Seleccionable (30-sep): sus botones (ver inspección, PDF, carpeta) van en la barra y el clic derecho.
+          // Una fila a la vez: no hay acciones masivas
+          seleccionUnica: true,
           ordenInicial: { campo: 'fecha', dir: 'desc' },
           textoVacio: 'Sin documentos con esos filtros',
           etiquetaFila: (d) => d.documento + ' · ' + (fecha(d.fecha) || 'Sin fecha'),
@@ -3531,7 +3533,9 @@
           idCampo: 'id',
           idTabla: 'lineas-historial-v2',
           tamanoPagina: 25,
-          // Seleccionable (30-sep): Ver detalle, Ver inspección y Ver PDF van en la barra y el clic derecho
+          // Seleccionable (30-sep): Ver detalle, Ver inspección y Ver PDF van en la barra y el clic derecho.
+          // Una fila a la vez: no hay acciones masivas
+          seleccionUnica: true,
           ordenInicial: { campo: 'fecha', dir: 'desc' },
           textoVacio: 'Sin movimientos con esos filtros',
           exportar: { nombreArchivo: 'Historial ' + nombre, nombreHoja: 'Historial' },

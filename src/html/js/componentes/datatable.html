@@ -315,6 +315,8 @@
    *                                            // Acción: { enBarra, maximo, grupo, tituloGrupo, visible(filas), activo() }
    *                                            // - accionesDeTabla: false quita Copiar y Exportar selección del menú
    *                                            // - accionesFila se muestran en la barra y el clic derecho (sin columna)
+   *                                            // - seleccionUnica: true = solo una fila a la vez (sin Ctrl/Shift, cuadro ni
+   *                                            //   Ctrl+A), para tablas sin acciones masivas
    *                                            // - un clic fuera de la tabla quita la selección, salvo en menús, diálogos,
    *                                            //   paneles, avisos o lo que diga cfg.conservarSeleccion(elemento)
    *     alEditar: async (fila, campo, valorNuevo) => filaActualizada,   // lanza error para rechazar
@@ -1146,7 +1148,8 @@
         avisarCambioDeSeleccion();
       }
       /** Clic estilo Drive: solo esa fila; Ctrl/Cmd alterna; Shift rango desde la última (con Ctrl lo agrega) */
-      function clicDrive(id, teclas) {
+      function clicDrive(id, teclasOriginales) {
+        const teclas = cfg.seleccionUnica ? {} : teclasOriginales;   // una sola fila: Ctrl/Shift = clic normal
         const ctrl = !!(teclas && (teclas.ctrlKey || teclas.metaKey));
         if (teclas && teclas.shiftKey && st.ancla && st.ancla !== id) {
           const ids = filasFiltradas().map(idDe);
@@ -2088,6 +2091,7 @@
         if (ev.target.closest('thead, tfoot, button, a, input, select, textarea, label, .dt-editor, .dt-editando')) return;
         // Estilo Drive: el cuadro solo empieza fuera de las filas (sobre una fila, presionar es seleccionarla)
         if (cfg.seleccionDrive && ev.target.closest('tbody tr[data-id]')) return;
+        if (cfg.seleccionUnica) return;   // sin selección de varias, no hay cuadro
         // La barra de desplazamiento también está dentro del contenedor
         const r = scrollTabla.getBoundingClientRect();
         if (ev.clientX - r.left >= scrollTabla.clientWidth || ev.clientY - r.top >= scrollTabla.clientHeight) return;
@@ -2227,7 +2231,8 @@
             if (esToque(ev)) {
               if (toque.largo) { toque.largo = false; return; }   // el clic que sigue a mantener presionado
               if (st.modoSeleccion) {
-                if (st.seleccion.has(id)) st.seleccion.delete(id); else st.seleccion.add(id);
+                if (cfg.seleccionUnica) st.seleccion = new Set(st.seleccion.has(id) ? [] : [id]);
+                else if (st.seleccion.has(id)) st.seleccion.delete(id); else st.seleccion.add(id);
                 st.ancla = id;
                 if (!st.seleccion.size) setModoSeleccion(false); else pintarSeleccion();
                 return;
@@ -2336,7 +2341,7 @@
         const tecla = ev.key.toLowerCase();
 
         // Ctrl/Cmd+A (como en el Finder): marca todas las filas que pasan los filtros
-        if (tecla === 'a' && cfg.modoSeleccion && !ev.shiftKey) {
+        if (tecla === 'a' && cfg.modoSeleccion && !cfg.seleccionUnica && !ev.shiftKey) {
           const enTabla = contenedor.contains(document.activeElement) || document.activeElement === document.body;
           if (enTabla) {
             ev.preventDefault();

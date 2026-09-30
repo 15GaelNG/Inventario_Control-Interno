@@ -10,7 +10,7 @@ qué está hecho, cómo probarlo y qué sigue.
 
 - **Rama `emmanuel`:** en GitHub hasta `10dc7eb` (29-sep). En local hay 17 commits más (`644ba14` … `d8a80a1`).
   Se suben a GitHub **al terminar la ronda**, como pidió el usuario. DEV está al día con `emmanuel`.
-- **Pruebas:** `npm test` da 56 aprobadas y 0 fallidas. Las de Ayrton se corren aparte (`node tests/ids.test.js` y
+- **Pruebas:** `npm test` da 57 aprobadas y 0 fallidas. Las de Ayrton se corren aparte (`node tests/ids.test.js` y
   `node tests/entidades.test.js`) y dan TODO OK.
 - **Reunión con Líneas (30-sep): ya ocurrió.** Lo hecho después:
   - §0u: estatus nuevos, DISPONIBLE y menú;
@@ -94,7 +94,9 @@ Pedido del usuario: tres lugares para las opciones (una fila, varias filas y la 
     en el ⋮ de la ficha, "Documentos" con Ver última inspección / responsiva;
   - Documentos, Historial, Asignaciones, Accesorios y la bandeja: **sin columna de Acciones**; sus botones (Ver
     detalle, Ver inspección, Ver PDF, Abrir carpeta, Ir al NUCO, Registrar entrada/salida, Ver equipo) salen en la
-    barra y el clic derecho con una fila seleccionada (DataTable los convierte con `maximo: 1`).
+    barra y el clic derecho con una fila seleccionada (DataTable los convierte con `maximo: 1`);
+  - Documentos e Historial: **una fila a la vez** (`seleccionUnica: true`: Ctrl/Shift se portan como clic normal, sin
+    cuadro ni Ctrl+A), porque no tienen acciones masivas.
 
 ## 0x. PARA VENTA y PARA DESECHO como Mandar a resguardo (2026-09-30)
 
