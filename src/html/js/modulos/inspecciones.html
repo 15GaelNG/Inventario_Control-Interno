@@ -365,7 +365,15 @@
     contenedor.innerHTML = `
       <form class="form-medio form-doble" novalidate>
         <div class="form-principal">
-          <ol class="form-pasos" id="ins-pasos"></ol>
+          <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:14px; flex-wrap:wrap">
+            <ol class="form-pasos" id="ins-pasos"></ol>
+            <div class="calif-badge" id="ins-calif-badge">
+              <span class="calif-badge-titulo">Calificación</span>
+              <span class="calif-badge-valor" id="ins-calif-badge-valor">—</span>
+              <div class="calif-badge-barra"><div class="calif-badge-barra-fill" id="ins-calif-badge-barra" style="width:0%"></div></div>
+              <span class="calif-badge-nota" id="ins-calif-badge-nota">Elige el tipo de unidad</span>
+            </div>
+          </div>
           <p class="form-nota">Campos obligatorios</p>
           <section class="form-paso" data-paso="0">
             <h3 class="form-paso-titulo" tabindex="-1">Vehículo</h3>
@@ -843,6 +851,10 @@
       });
       $('#ins-puntaje').textContent = r.puntaje + '%';
       $('#ins-avance').textContent = `${r.respondidas} de ${estructura.piezas} piezas respondidas`;
+      // Insignia "Calificación" de la barra de pasos (mismo patrón que Arqueos)
+      $('#ins-calif-badge-valor').textContent = r.respondidas ? r.puntaje + '%' : '—';
+      $('#ins-calif-badge-barra').style.width = (estructura.piezas ? (r.respondidas / estructura.piezas) * 100 : 0) + '%';
+      $('#ins-calif-badge-nota').textContent = `${r.respondidas} de ${estructura.piezas} puntos calificados`;
       // Avance por sección en el panel: cada una lleva a su paso
       $('#ins-avance-lista').innerHTML = estructura.secciones.map((s, i) => {
         const a = r.porSeccion[i];
