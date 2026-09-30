@@ -697,6 +697,10 @@ const InspeccionesService = (function () {
   // puertas traseras + Maletero, Sistemas interiores con Limpiaparabrisas trasero y
   // sin Botones volante) -- confirmado contra su propio PDF crudo.
   REAGRUPAR_SECCIONES['XPANDER'] = REAGRUPAR_SECCIONES['AUTOS'];
+  // NP300 CABINA REDILAS es igual a L200 pieza por pieza (misma Latonería con
+  // Redilas, mismas Cerraduras/Limpieza/Interiores de 4 puertas, y el mismo
+  // Sistemas interiores con "Botones volante") -- confirmado contra su PDF crudo.
+  REAGRUPAR_SECCIONES['NP300 CABINA REDILAS'] = REAGRUPAR_SECCIONES['L200'];
   /** Sin espacios ni mayúsculas/minúsculas: una palabra que se corta a la mitad de
    *  línea en el documento a veces pierde el espacio al leerse como texto plano
    *  (pasó con "ASIENTOS TRASEROS 2" -> "ASIENTOS TRASEROS2" al leer el PDF de la
