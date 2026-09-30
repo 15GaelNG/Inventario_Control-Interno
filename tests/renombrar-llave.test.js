@@ -183,5 +183,39 @@ console.log('\n7. migColumnaAnterior_ funciona ANTES y DESPUÉS del renombrado')
      'la que no tenía encabezado sigue resolviéndose por posición');
 }
 
+console.log('\n8. La columna SIN ENCABEZADO se encuentra por posición');
+{
+  // Esto paró el pipeline 1 en el laboratorio el 30/09/2026. CAMBIOS LINEAS TELEFONICAS
+  // tiene su llave en la columna 1 SIN encabezado, y el catálogo la busca por el nombre
+  // 'ID APPSHEET', que solo existe en el libro compartido del equipo porque Ayrton la nombró
+  // ahí a mano. El ternario de antes nunca caía al respaldo por posición cuando
+  // llaveAnterior estaba puesta, así que reportaba PROBLEMAS y detenía la corrida.
+  const hojas = {
+    'CAMBIOS LINEAS TELEFONICAS': hojaFalsa(['', 'ID_LINEA', '', 'IMEI'],
+      [['ee398840', 'dv1sd13', '0', '35']]),
+  };
+  const api = cargar(hojas);
+  const rep = api.renombrarLlaveAnterior({ familia: 'lineas', escribir: true });
+  ok(hojas['CAMBIOS LINEAS TELEFONICAS'].enc[0] === 'ID ANTERIOR',
+    'le puso nombre a la columna 1, que no tenía');
+  ok(rep.indexOf('por POSICION') !== -1, 'y el reporte dice que la encontró por posición');
+  ok(rep.indexOf('PROBLEMAS') === -1, 'sin reportar problemas: ya no detiene el pipeline');
+  ok(hojas['CAMBIOS LINEAS TELEFONICAS'].datos[0][0] === 'ee398840', 'y el valor sigue ahí');
+}
+
+console.log('\n9. Si SÍ tiene el nombre, ese manda sobre la posición');
+{
+  const hojas = {
+    'CAMBIOS LINEAS TELEFONICAS': hojaFalsa(['OTRA', 'ID APPSHEET', 'ID_LINEA'],
+      [['x', 'ee398840', 'dv1sd13']]),
+  };
+  const api = cargar(hojas);
+  api.renombrarLlaveAnterior({ familia: 'lineas', escribir: true });
+  ok(hojas['CAMBIOS LINEAS TELEFONICAS'].enc[1] === 'ID ANTERIOR',
+    'renombró la columna 2, la que se llama ID APPSHEET');
+  ok(hojas['CAMBIOS LINEAS TELEFONICAS'].enc[0] === 'OTRA',
+    'y NO tocó la columna 1, aunque el catálogo también diga posición 1');
+}
+
 console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');
 process.exit(fallas ? 1 : 0);

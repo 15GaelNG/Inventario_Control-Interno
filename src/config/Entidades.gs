@@ -61,7 +61,11 @@ const Entidades = (function () {
     //
     // El nombre NO choca con COLUMNA_ID_ANTERIOR ('ID ANTERIOR') a propósito: son dos cosas
     // distintas y ahora se llaman distinto. Ver la nota de COLUMNA_ID_ANTERIOR abajo.
-    'CAMBIOS LINEAS TELEFONICAS': { prefijo: 'CLI', llaveAnterior: 'ID APPSHEET', familia: 'lineas' },
+    // Trae las DOS formas de encontrarla a proposito. Por nombre para el libro compartido
+    // del equipo, donde Ayrton la nombro 'ID APPSHEET' a mano; y por POSICION para
+    // produccion y el laboratorio, donde esa columna sigue SIN encabezado (medido el
+    // 30/09/2026). Sin el respaldo por posicion, el paso `renombrar` se detiene aqui.
+    'CAMBIOS LINEAS TELEFONICAS': { prefijo: 'CLI', llaveAnterior: 'ID APPSHEET', columnaAnterior: 1, familia: 'lineas' },
     'BITACORA DE DESECHO': { prefijo: 'DES', llaveAnterior: 'ID_DESECHO', familia: 'lineas' },
     'ACCESORIOS CELULARES': { prefijo: 'ACC', llaveAnterior: 'ID_Accesorio', familia: 'lineas' },
     'MOVIMIENTOS_ACCESORIOS': { prefijo: 'MAC', llaveAnterior: 'ID_Movimiento', familia: 'lineas' },

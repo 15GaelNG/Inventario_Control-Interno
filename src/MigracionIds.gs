@@ -775,7 +775,15 @@ function renombrarLlaveAnterior(opciones) {
       return;
     }
 
-    const pos = h.llaveAnterior ? migColumna_(enc, h.llaveAnterior) : (h.columnaAnterior || 0);
+    // Nombre primero, y si no aparece, la posicion. El ternario de antes nunca caia al
+    // respaldo cuando `llaveAnterior` estaba puesta, y por eso CAMBIOS LINEAS TELEFONICAS
+    // paraba el pipeline: en produccion y en el laboratorio su columna no tiene encabezado.
+    let pos = h.llaveAnterior ? migColumna_(enc, h.llaveAnterior) : 0;
+    let comoSeEncontro = 'por su nombre';
+    if (!pos && h.columnaAnterior) {
+      pos = h.columnaAnterior;
+      comoSeEncontro = 'por POSICION (columna ' + h.columnaAnterior + ', no tiene encabezado)';
+    }
     if (!pos) {
       problemas.push(h.hoja + ': no encuentro su llave vieja ("' +
         (h.llaveAnterior || 'columna ' + h.columnaAnterior) + '")');
@@ -787,7 +795,8 @@ function renombrarLlaveAnterior(opciones) {
     // que el nombre nuevo, el caso lo cubre `yaTiene` de arriba y no llegamos aquí.
     const comoSeLlama = migLimpio_(enc[pos - 1]);
     lineas.push('  ' + h.hoja + ': columna ' + pos + '  "' +
-      (comoSeLlama || '(sin encabezado)') + '"  ->  "' + Entidades.COLUMNA_ID_ANTERIOR + '"');
+      (comoSeLlama || '(sin encabezado)') + '"  ->  "' + Entidades.COLUMNA_ID_ANTERIOR +
+      '"   (' + comoSeEncontro + ')');
     if (cfg.escribir) {
       sheet.getRange(1, pos).setValue(Entidades.COLUMNA_ID_ANTERIOR);
       renombradas++;
