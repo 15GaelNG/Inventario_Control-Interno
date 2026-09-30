@@ -113,12 +113,46 @@ de 4,000 filas, se anota en `REPLANCHE_HOJAS_LISTAS` que hoja ya quedo, y se aut
 los 4.5 minutos. Volver a correr `replanche2Escribir` continua donde se quedo; al terminar
 borra el avance. `replancheEstado` dice en que va y `replancheReiniciarAvance` lo olvida.
 
+### El laboratorio tiene su propio proyecto de Apps Script
+
+| | |
+|---|---|
+| Libro | **Inventario Reemplazable** — `1-RA6lmh-rZ-OKfsZSLl2Qd9lLyuDZ3dx3fP0M7qL-5o` |
+| Proyecto | **Inventario LAB - Ayrton** — `1ie0-yjGLvSLwv3oHgwg_GSrsGgcJjj2mumjfM_sjcbNmP3_-JlqgrFWv`, anclado a ese libro |
+| Config local | `.clasp.lab.json` (como todo `.clasp.*.json`, **no se commitea**: ver `.gitignore`) |
+| Para subir | `npm run push:lab` |
+
+Existe por una razon concreta. El proyecto de pruebas de Ayrton esta anclado al libro
+**compartido** del equipo, asi que cambiarle `SS_ID_VEHICULOS` para apuntarlo al laboratorio
+se lo cambiaria tambien a Jorge y a Emmanuel mientras estuviera cambiado. Con un proyecto
+aparte, el laboratorio queda aislado de verdad.
+
+El `.clasp.json` de la raiz sigue apuntando al proyecto de dev y no se toca. Son dos
+configuraciones que conviven: `npm run push` va a dev, `npm run push:lab` al laboratorio.
+Si alguien clona el repo y quiere su propio laboratorio, copia
+`.clasp.lab.json.example` y le pega el id de su proyecto.
+
 ### El orden del ensayo completo
 
-1. `replanche1Ensayo` — leer el reporte, sobre todo las columnas que se perderian.
-2. `replanche2Escribir` — las veces que haga falta hasta que diga LISTO.
-3. Apuntar el proyecto de Apps Script al libro de experimentos (`SS_ID_VEHICULOS`).
+1. En el proyecto del laboratorio, Script Property `SS_ID_VEHICULOS` =
+   `1-RA6lmh-rZ-OKfsZSLl2Qd9lLyuDZ3dx3fP0M7qL-5o`. Es la unica que pide el pipeline: las
+   carpetas de Drive solo las necesitan los modulos de la app, y `Config.required` es
+   perezoso, asi que no las va a pedir.
+2. `replanche1Ensayo` — leer el reporte, sobre todo las columnas que se perderian.
+3. `replanche2Escribir` — las veces que haga falta hasta que diga LISTO.
 4. Correr el pipeline completo desde `migracion1Revisar`, como si fuera produccion.
+
+### Que el laboratorio se separe de produccion es normal
+
+Verificado el 30/09/2026 despues del primer replanchado: **24 de 24 hojas con las mismas
+columnas que produccion**, incluida `CAMBIOS LINEAS TELEFONICAS` con sus 35,543 filas. Las
+unicas dos diferencias fueron `INSPECCIONES LINEAS` y `RESPONSIVAS LINEAS`, una fila abajo
+cada una — y son registros que produccion recibio **despues** de la copia: el de
+Inspecciones Lineas trae fecha 30/09/2026 09:46, posterior a la corrida.
+
+Con 46 personas trabajando eso pasa siempre: el laboratorio es una **foto**, no un espejo.
+Si la foto se queda vieja, se vuelve a replanchar. Y conviene tenerlo presente al comparar
+conteos: una diferencia de una o dos filas en las hojas de Lineas no es un error de copia.
 
 
 ## 2. El ID de los registros que ya existen

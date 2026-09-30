@@ -10,6 +10,7 @@
     "captura": "node tools/vista-previa/capturar.js",
     "login": "clasp login",
     "push": "clasp push",
+    "push:lab": "clasp push --force -P .clasp.lab.json",
     "watch": "clasp push --watch",
     "open": "clasp open",
     "deploy": "clasp deploy"
