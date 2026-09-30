@@ -6,21 +6,25 @@ Documento de continuidad del módulo **Líneas** (equipos y líneas telefónicas
 El plan de la mudanza está en [lineas-plan.md](lineas-plan.md); aquí se registra
 qué está hecho, cómo probarlo y qué sigue.
 
-**Dónde quedamos (cierre del 30-sep):**
+**Dónde quedamos (cierre del 30-sep, noche):**
 
-- Rama `emmanuel`: en GitHub hasta `10dc7eb`, 29-sep. En local hay más commits (desde `644ba14`) con la ronda de
-  cambios del 29 y 30-sep, los IDs estandarizados (§0s) y la selección tipo Apple (§0t). Se suben a GitHub **al
-  terminar la ronda**, como pidió el usuario. DEV está al día con `emmanuel`.
-- `npm test`: 53 aprobadas, 0 fallidas. Las pruebas de Ayrton se corren aparte: `node tests/ids.test.js` y
-  `node tests/entidades.test.js`.
-- **Reunión con Líneas (30-sep): ya ocurrió.** Respuestas y pedidos nuevos en
-  `migracion/RESULTADOS_REUNION_LINEAS_30SEP.md` de la carpeta de documentación. Primer paso hecho: §0u (estatus
-  nuevos, DISPONIBLE y menú). Lo que sigue (orden de la sección 8 de ese documento):
-  - las acciones masivas (qué campos cambian y qué pasa con la línea);
-  - la vista de aprobación de Pao y su correo semanal;
-  - la automatización de adendums vigentes y la renovación;
-  - las columnas y la vista rápida.
-- **Por decidir con el usuario:** si la responsiva corregida debe actualizar LINEAS TELEFONICAS (como la inspección).
+- **Rama `emmanuel`:** en GitHub hasta `10dc7eb` (29-sep). En local hay 17 commits más (`644ba14` … `d8a80a1`).
+  Se suben a GitHub **al terminar la ronda**, como pidió el usuario. DEV está al día con `emmanuel`.
+- **Pruebas:** `npm test` da 54 aprobadas y 0 fallidas. Las de Ayrton se corren aparte (`node tests/ids.test.js` y
+  `node tests/entidades.test.js`) y dan TODO OK.
+- **Reunión con Líneas (30-sep): ya ocurrió.** Lo hecho después:
+  - §0u: estatus nuevos, DISPONIBLE y menú;
+  - §0v: pestañas de módulos retirados, migradas y borradas;
+  - §0w: "Mandar a resguardo" por NUCO y bandeja "Resguardos y cancelaciones", probada de punta a punta con los
+    NUCO 0101 y 0556.
+- **Lo que sigue, en orden:** pendiente 0 de `migracion/ESTADO_TELEFONIA.md`, en la carpeta de documentación.
+  1. Conversión de estatus viejos: faltan 5 confirmaciones del usuario.
+  2. Dudas abiertas de la reunión.
+  3. Responsiva que actualiza la línea: la jefatura dijo que sí; falta confirmarlo e implementarlo.
+  4. Pedidos nuevos: comentarios con contexto, accesorios por NUCO, patrón con flecha, firmas, PDF firmado, QR,
+     historial número ↔ SIM, adendums y facturas, y resumen para Marisela.
+  5. Pendientes de la bandeja: histórico de la hoja de Bren, ENTREGADO al reasignar y probar "Vendido".
+  6. **Roles y correos al final** (correo de Pau en `LINEAS_APROBADORES_RESGUARDO`).
 - **Por probar a mano** (el navegador integrado no puede): subir fotos a una inspección de NUCOS, el gesto de dos
   dedos, Atrás entre módulos y la velocidad real de "Última responsiva / inspección".
 - **Avisar a Jorge y Ayrton al unir con master** los cambios en archivos compartidos:
