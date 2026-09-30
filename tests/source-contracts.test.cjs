@@ -53,11 +53,17 @@ test('Telefonía muestra sus módulos en orden y Gestión de Activos queda fuera
   // Panorama primero (29-sep). Fuera del menú (líneas comentadas) pero sus vistas se siguen montando: Reactivación
   // (29-sep) y Reasignaciones, Solicitud, Control de Cambios y Bitácora de Desechos (reunión con Líneas, 30-sep)
   const orden = ['panorama-lineas', 'lineas-telefonicas', 'accesorios-lineas'];
-  const ocultos = ['reactivacion-lineas', 'reasignaciones-lineas', 'solicitud-lineas', 'cambios-lineas', 'bitacora-desechos'];
+  const ocultos = ['cambios-lineas'];
+  const retirados = ['reactivacion-lineas', 'reasignaciones-lineas', 'solicitud-lineas', 'bitacora-desechos'];
   const sinComentarios = lineas.split(/\r?\n/).filter((l) => !/^\s*\/\//.test(l)).join('\n');
   assert.deepEqual([...sinComentarios.matchAll(/vista: '([^']+)'/g)].map((m) => m[1]), orden);
   ocultos.forEach((v) => assert.match(lineas, new RegExp(`// \{ vista: '${v}'`), `${v} debe seguir comentado`));
   assert.doesNotMatch(read('src/html/views/dashboard.html'), /data-view="cambios-lineas"/);
+  // Retirados con sus pestañas (30-sep): ni ruta, ni módulo, ni menú
+  retirados.forEach((v) => {
+    assert.doesNotMatch(app, new RegExp(`'${v}'`), v);
+    assert.doesNotMatch(read('src/config/Modulos.gs'), new RegExp(`id: '${v}'`), v);
+  });
   // Acceso directo debajo del desplegable de Líneas
   assert.match(app, /\{ id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de Activos' \}/);
   assert.match(app, /grupo\.vista \? `/);
@@ -72,15 +78,28 @@ test('Telefonía muestra sus módulos en orden y Gestión de Activos queda fuera
   assert.doesNotMatch(read('src/html/Index.html'), /lineas-detalles/);
 });
 
-test('las vistas operativas usan la misma base de AppSheet (sin Post Venta)', () => {
+test('Reactivación, Solicitud, Reasignaciones y Desechos se retiraron con sus pestañas (30-sep)', () => {
   const repo = read('src/services/lineas/LineasRepo.gs');
-  assert.match(repo, /REACTIVACION: 'REACTIVACION DE LINEAS'/);
-  assert.match(repo, /SOLICITUD: 'SOLICITUD DE LINEAS'/);
   assert.doesNotMatch(repo, /POST_VENTA|POST VENTA/);
-  assert.doesNotMatch(read('src/html/js/lineas.html'), /POST_VENTA|initPostVenta/);
-  assert.match(read('src/ClientApi.gs'), /apiLineasVistaOperativa/);
-  assert.match(read('src/ClientApi.gs'), /apiLineasCrearVistaOperativa/);
-  assert.match(read('src/services/lineas/LineasOperativas.gs'), /function crear\(tipo, datos, usuario\)/);
+  assert.doesNotMatch(repo, /VISTAS_OPERATIVAS|function vistaOperativa/);
+  assert.ok(!fs.existsSync(path.join(root, 'src/services/lineas/LineasOperativas.gs')));
+  assert.ok(!fs.existsSync(path.join(root, 'src/html/views/lineas/lineas-operativa.html')));
+  assert.doesNotMatch(read('src/ClientApi.gs') + read('src/services/TelefoniaService.gs'), /VistaOperativa|FormularioOperativa|LineasOperativas/);
+  assert.doesNotMatch(read('src/html/js/lineas.html'), /POST_VENTA|initPostVenta|initOperativa|abrirAltaAppSheet|initReactivacion|initDesechos/);
+  // Ya no se escribe HISTORIAL_REASIGNACIONES; lo migrado se lee de APP_MOVIMIENTOS (TIPO HISTORICO)
+  assert.doesNotMatch(repo, /LineasDatos\.agregarFilas\(TAB\.REASIG/);
+  assert.match(repo, /const HOJAS_MIGRADAS = \[TAB\.REASIG, TAB\.DESECHO, TAB\.REACTIVACION\];/);
+  // Exportar: sin los módulos retirados
+  assert.doesNotMatch(read('src/services/lineas/LineasExportar.gs'), /REASIGNACIONES: \[|DESECHOS: \[|REACTIVACION: \[|SOLICITUD: \[/);
+  // Retiro de pestañas: solo en la BD de pruebas, con respaldo, y CAMBIOS no está en la lista
+  const admin = read('src/services/lineas/LineasAdmin.gs');
+  ['retirarHojasLineas_revisar', 'retirarHojasLineas_migrar', 'retirarHojasLineas_borrar'].forEach((f) => assert.match(admin, new RegExp('function ' + f + '\\(\\)')));
+  assert.match(admin, /if \(id !== LINEAS_DEV_SPREADSHEET_ID\) throw new Error/);
+  assert.match(admin, /if \(!estado\.respaldo\) throw new Error/);
+  assert.match(admin, /LineasDatos\.cacheBorrar\('enc_' \+ nombre\);/); // si no, existeTabla la sigue viendo
+  const lista = admin.slice(admin.indexOf('const HOJAS_RETIRADAS_ = {'), admin.indexOf('const PROP_RESPALDO_RETIRADAS_'));
+  assert.doesNotMatch(lista, /CAMBIOS LINEAS TELEFONICAS/);
+  assert.doesNotMatch(admin.slice(admin.indexOf('function pestanasLineas_'), admin.indexOf('function diferenciasHojaLineas_')), /return \[[^\]]*(REASIG|DESECHO|REACTIVACION|SOLICITUD)/);
 });
 
 test('Líneas Telefónicas ofrece la vista de tarjetas con los mismos filtros de la tabla', () => {
@@ -154,9 +173,6 @@ test('no se descargan CSV y los botones usan los mismos nombres y medidas', () =
   assert.doesNotMatch(todo, /text\/csv|\.csv'|exportarCsv/);
   assert.doesNotMatch(todo, /Exportar vista|Descargar|Bajar Excel|Agregar NUCO|Nuevo registro ·|Nuevo artículo|'Abrir PDF'|'Carpeta en Drive'/);
   const lineas = read('src/html/js/lineas.html');
-  assert.match(lineas, /textoAlta: 'Registrar reactivación'/);
-  assert.match(lineas, /textoAlta: 'Registrar solicitud'/);
-  assert.match(lineas, /textoAlta: 'Registrar desecho'/);
   assert.match(lineas, /\(id \? ' Guardar cambios' : ' Registrar'\)/);
   // Acciones de la ficha con color (botón principal, sin .secondary)
   const botones = lineas.slice(lineas.indexOf('function botonesFicha'), lineas.indexOf('// ---- Detalles: la columna'));
@@ -326,36 +342,16 @@ test('las tablas de Líneas usan el DataTable del sistema con KPIs que filtran',
   const cliente = read('src/html/js/lineas.html');
   const api = read('src/ClientApi.gs');
   assert.match(cliente, /DataTable\.crear\(contenedor/);
-  assert.equal((cliente.match(/tablaLineas\(\$\('#(ln-tabla-' \+ modulo|lac-tabla|ln-op-tabla|ln-bit-tabla)'?/g) || []).length >= 4, true);
+  assert.equal((cliente.match(/tablaLineas\(\$\('#(ln-tabla-' \+ modulo|lac-tabla|ln-bit-tabla)'?/g) || []).length >= 3, true);
   assert.doesNotMatch(cliente, /class="ln-tabla"><thead id=/);
   assert.match(cliente, /function tilesKpi\(/);
   assert.match(api, /function apiLineasBitacoraTabla[\s\S]*?JSON\.stringify/);
-  assert.match(api, /function apiLineasVistaOperativaTabla[\s\S]*?JSON\.stringify/);
   assert.match(read('src/services/lineas/LineasRepo.gs'), /const MAX_FILAS_TABLA = 5000;/);
-  for (const vista of ['lineas-telefonicas', 'lineas-bitacora', 'lineas-operativa', 'lineas-accesorios']) {
+  for (const vista of ['lineas-telefonicas', 'lineas-bitacora', 'lineas-accesorios']) {
     const html = read(`src/html/views/lineas/${vista}.html`);
     assert.match(html, /class="page-header"/, vista);
     assert.match(html, /class="stat-row"/, vista);
   }
-});
-
-test('las altas de Reactivación y Solicitud usan columnas, opciones y folios del AppSheet', () => {
-  const op = read('src/services/lineas/LineasOperativas.gs');
-  const columnas = (desde, hasta) => [...op.slice(op.indexOf(desde), op.indexOf(hasta)).matchAll(/campo_\('([^']+)'/g)].map((m) => m[1]);
-  assert.deepEqual(columnas('REACTIVACION: (usuario', 'SOLICITUD: (usuario'), ['FOLIO', 'LINIEA SUSPENDIDA', 'COMPAÑIA', 'SIM', 'CORREO / TICKET',
-    'FECHA DE SUSPENSION', 'ESTATUS', 'ESTADO DEL EQUIPO', 'IMEI', 'RETRO DE SOLICITUD', 'FECHA DE REACTIVACION', 'NUEVO NUMERO', 'FECHA DE REGISTRO',
-    'QUIEN REGISTRO', 'COMENTARIOS']);
-  assert.deepEqual(columnas('SOLICITUD: (usuario', '// BITACORA DE DESECHO_Form'), ['FOLIO', 'FECHA DE SOLICITUD', 'TIPO DE PLAN', 'TICKET', 'NO EMPLEADO SOLICITANTE',
-    'NOMBRE SOLICITANTE', 'PUESTO SOLICITANTE', 'DEPARTAMENTO SOLICITANTE', 'SEDE', 'DEPARTAMENTO', 'TIPO', 'PUESTO', 'COLABORADOR', 'SOLICITANTE',
-    'FECHA DE ENTREGA', 'ASIGNACION', 'REASIGNACION', 'COMPAÑIA', 'EQUIPO', 'NUMERO ANTERIOR', 'NUMERO ACTUAL', 'IMEI', 'SIM', 'ESTATUS', 'COMENTARIOS',
-    'FECHA DE REGISTRO', 'QUIEN REGISTRO']);
-  assert.match(op, /opciones: \['EN USO', 'DISPONIBLE', 'EN PROCESO DE ASIGNACION', 'PROCESO DE CANCELACION', 'CANCELADA', 'ACTUALIZACIÓN DE LINEA TELEFONICA'\]/);
-  assert.match(op, /fila\['REASIGNACION'\] = !valores\['ASIGNACION'\]/);
-  assert.match(op, /MAX\(REACTIVACION DE LINEAS\[FOLIO\]\) \+ 1/);
-  assert.doesNotMatch(read('src/services/lineas/LineasRepo.gs'), /'LINEA SUSPENDIDA'|NOMBRE COMPLETO DEL SOLICITANTE/);
-  assert.deepEqual(columnas('FORMULARIOS.DESECHO', 'const TABLAS'), ['ID_EQUIPO', 'FOLIO EQUIPO', 'EQUIPO', 'LUGAR DE DESECHO', 'EVIDENCIA',
-    'AUTORIZACION', 'ESTADO', 'MOTIVO', 'FECHA DE DESECHO', 'FECHA DE REGISTRO', 'QUIEN REGISTRO']);
-  assert.match(op, /'DR' \+ \('0000' \+ \(numeroFila - 1\)\)\.slice\(-4\)/);
 });
 
 test('la bitácora automática registra exactamente los 23 campos del bot CAMBIOS TELEFONIA', () => {
@@ -383,11 +379,10 @@ test('las reglas de formato y los íconos son los del AppSheet (flechas, colores
   // ESTATUS TEMPORAL (13 días) y View Ref (fa-chevron-circle-right)
   assert.match(lineas, /function usoTemporalVencido\(l\)/);
   assert.match(lineas, /13 \* 24/);
-  assert.match(lineas, /icono: 'circle-chevron-right', titulo: 'Ver línea', visible: \(f\) => !!f\._ref/);
+  // (View Ref "Ver línea" era de Reactivación, retirada el 30-sep)
   // Menú con los íconos de las vistas del AppSheet
   const app = read('src/html/js/app.html');
-  [['lineas-telefonicas', 'smartphone'], ['accesorios-lineas', 'boxes'], ['reactivacion-lineas', 'check-check'],
-    ['reasignaciones-lineas', 'recycle'], ['solicitud-lineas', 'target'], ['cambios-lineas', 'eye']].forEach(([vista, icono]) => {
+  [['lineas-telefonicas', 'smartphone'], ['accesorios-lineas', 'boxes'], ['cambios-lineas', 'eye']].forEach(([vista, icono]) => {
     assert.match(app, new RegExp(`vista: '${vista}', etiqueta: '[^']+', icono: '${icono}'`), vista);
   });
 });
@@ -395,7 +390,6 @@ test('las reglas de formato y los íconos son los del AppSheet (flechas, colores
 test('los campos de texto libre del AppSheet ahora tienen lista desplegable', () => {
   const reg = read('src/services/lineas/LineasRegistros.gs');
   const cap = read('src/services/lineas/LineasCaptura.gs');
-  const ope = read('src/services/lineas/LineasOperativas.gs');
   const repo = read('src/services/lineas/LineasRepo.gs');
   const lineas = read('src/html/js/lineas.html');
   const control = (src, columna) => (new RegExp(`campo_\\('${columna.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}', '[^']+', '([a-zA-Z]+)'`).exec(src) || [])[1];
@@ -404,8 +398,6 @@ test('los campos de texto libre del AppSheet ahora tienen lista desplegable', ()
   ['RESPONSABLE', 'PUESTO', 'JEFE DIRECTO', 'MODELO', 'COMPAÑIA', 'RAZON SOCIAL', 'OTRA', 'IDENTIFICACION']
     .forEach((c) => assert.equal(control(cap, c), 'listaAbierta', 'captura ' + c));
   ['TIPO', 'DIA', 'MES', 'AÑO'].forEach((c) => assert.equal(control(cap, c), 'lista', 'captura ' + c));
-  ['NO EMPLEADO SOLICITANTE', 'NOMBRE SOLICITANTE', 'PUESTO SOLICITANTE', 'DEPARTAMENTO SOLICITANTE', 'COLABORADOR',
-    'NUMERO ANTERIOR', 'NUMERO ACTUAL', 'MOTIVO'].forEach((c) => assert.equal(control(ope, c), 'listaAbierta', 'operativas ' + c));
   assert.match(repo, /catalogos_telefonia_v4/);
   ['colores', 'puestos', 'jefes', 'directores', 'otrasApps', 'identificaciones', 'motivosDesecho'].forEach((k) => assert.match(repo, new RegExp(k + ': ')));
   // El navegador completa personas / números y copia los datos de la persona elegida
@@ -425,8 +417,6 @@ test('todos los módulos tienen KPIs con línea lateral y la tarjeta se llama De
   assert.match(lineas, /etiqueta: 'Sin activos'/);
   assert.match(lineas, /etiqueta: 'Sin stock'/);
   assert.match(lineas, /etiqueta: 'Cambios de estatus'/);
-  assert.match(lineas, /etiqueta: 'Activos reasignados'/);
-  assert.match(lineas, /etiqueta: 'En ' \+ anio/);
   assert.match(lineas, /' Detalles<\/h3>'/);
   assert.doesNotMatch(lineas, /Detalles para copiar|se escriben aquí antes de copiar/);
 });
@@ -511,7 +501,7 @@ test('Exportar a Excel descarga la base completa del módulo, no solo lo que se 
   // Todas las tablas de módulo usan la base completa; el historial de una ficha sigue exportando lo filtrado
   assert.match(lineas, /exportar: exportarBase\('INVENTARIO', /);
   assert.match(lineas, /exportar: exportarBase\('ACCESORIOS', /);
-  assert.equal((lineas.match(/exportar: exportarBase\(tipo, cfg\.titulo\)/g) || []).length, 2);
+  assert.equal((lineas.match(/exportar: exportarBase\(tipo, cfg\.titulo\)/g) || []).length, 1);
   assert.doesNotMatch(lineas, /exportar: \{ nombreArchivo: (cfg\.|'Inventario)/);
   assert.match(lineas, /DecompressionStream\('gzip'\)/);
   const dt = read('src/html/js/componentes/datatable.html');
@@ -614,7 +604,6 @@ test('Drive: todo en la carpeta de la app AppSheet con sus rutas; NUCOS de produ
   assert.match(captura, /carpeta: 'INSPECCIONES_Files_', nombre: \(id\) => 'INSPECCION - ' \+ id \+ '\.pdf', columna: 'FORMATO INSPECCIONES LINEAS'/);
   assert.match(captura, /carpeta: 'Files', nombre: \(id\) => 'RESPONSIVA' \+ id \+ '\.pdf', columna: 'FORMATO RESPONSIVA'/);
   assert.match(captura, /ligarPdf_\(tabla, destino\.columna, ids, pdf, destino\.carpeta \+ '\/' \+ nombre\)/);
-  assert.match(read('src/services/lineas/LineasOperativas.gs'), /guardarComoAppSheet\('BITACORA DE DESECHO_Files_', fila\['ID_DESECHO'\], c, a\.mime, a\.base64\)/);
   // Fotos de inspección en la carpeta de la app; cancelar solo borra la carpeta que creó el mismo usuario
   const ev = read('src/services/lineas/LineasEvidencias.gs');
   assert.match(ev, /const CARPETA_FOTOS = 'INSPECCIONES LINEAS_Images';/);
@@ -735,20 +724,6 @@ test('detalle de la inspección: mismo diseño que la ficha, sin revisión del a
   const detalle = lineas.slice(lineas.indexOf('function pintarInspeccion('), lineas.indexOf('/** Desde una bitácora: abre el registro'));
   assert.doesNotMatch(detalle, /Registro completo|Firmas de validación|Revisión del activo|ln-secciones-nav/);
   assert.match(detalle, /tarjeta\(icono\('images'\) \+ ' Fotografías \('/);
-});
-
-test('Reactivación, Solicitud y Desechos se pueden editar como con la acción EDIT del AppSheet', () => {
-  const op = read('src/services/lineas/LineasOperativas.gs');
-  assert.match(op, /function formularioEdicion\(tipo, numeroFila, llave, usuario\)/);
-  assert.match(op, /function editar\(tipo, numeroFila, llave, datos, usuario\)/);
-  // La fila se confirma por su llave; folio, fecha y quién registró no cambian; solo se escribe lo que cambió
-  assert.match(op, /String\(LineasUtil\.col\(f, LLAVE\[clave\]\) \|\| ''\) !== String\(llave \|\| ''\)/);
-  assert.match(op, /\['FOLIO', 'FECHA DE REGISTRO', 'QUIEN REGISTRO'\]\.forEach\(\(c\) => \{ delete valores\[c\]; \}\);/);
-  assert.match(op, /valores\['REASIGNACION'\] = !valores\['ASIGNACION'\];/);
-  const lineas = read('src/html/js/lineas.html');
-  assert.match(lineas, /function abrirAltaAppSheet\(tipo, titulo, alGuardar, edicion\)/);
-  assert.equal((lineas.match(/\{ icono: 'pencil', titulo: 'Editar'/g) || []).length, 2);
-  assert.match(read('src/services/lineas/LineasRepo.gs'), /_id: f\['ID'\] === undefined/);
 });
 
 test('NUCO siempre a 4 dígitos (tabla, ficha, detalles, bitácoras, historial y Excel)', () => {
@@ -1072,11 +1047,10 @@ test('Panorama: estatus al cierre de cada mes reconstruido hacia atrás con la b
   assert.deepEqual(h.USO, [2, 1, 2]);
   assert.deepEqual(h.RESGUARDO, [0, 1, 0]);
   assert.deepEqual(h.VENDIDO, [0, 0, 1]);
-  // Menú: Panorama primero y Reactivación oculta (su vista se conserva)
+  // Menú: Panorama primero; Reactivación se retiró con su pestaña (30-sep)
   const app = read('src/html/js/app.html');
   assert.match(app, /\{ vista: 'panorama-lineas', etiqueta: 'Panorama', icono: 'layout-dashboard' \},\s*\{ vista: 'lineas-telefonicas'/);
-  assert.match(app, /\/\/ \{ vista: 'reactivacion-lineas'/);
-  assert.match(app, /if \(vista === 'reactivacion-lineas'\)/);
+  assert.doesNotMatch(app, /'reactivacion-lineas'/);
   assert.match(app, /montarVista\('tpl-lineas-panorama', Lineas\.initPanorama\)/);
   assert.match(read('src/html/Index.html'), /include\('html\/views\/lineas\/lineas-panorama'\)/);
   assert.match(read('src/ClientApi.gs'), /function apiLineasPanorama\(token, forzar\)/);
@@ -1277,4 +1251,42 @@ test('Estatus del 30-sep: listas nuevas, línea sin estatus en blanco, valores v
   // Colores de los estatus nuevos
   const cliente = read('src/html/js/lineas.html');
   ['DISPONIBLE', 'PARA VENTA', 'POSIBLE VENTA-DAÑO', 'PARA DESECHO', 'EXTRAVIO-ROBO'].forEach((e) => assert.match(cliente, new RegExp(`'${e}': '(azul|ambar|rojo)'`), e));
+});
+
+test('Historial con las pestañas retiradas: lee lo migrado a APP_MOVIMIENTOS y no repite si la pestaña aún existe', () => {
+  const normCol = (h) => String(h || '').toUpperCase().replace(/\s+/g, ' ').trim();
+  const Util = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '\nreturn LineasUtil;')({ normCol: normCol }, {});
+  const d = (s) => new Date(s + 'T12:00:00');
+  const reasig = { ID: 'HIS-00000000EEEEEE', 'ID Historial': 'h1', 'ID Linea': 'a1b2c3d4', 'Fecha de Reasignacion': d('2025-05-01'),
+    'Responsable Saliente': 'LUIS', 'Responsable Entrante': 'ANA', 'Departamento Saliente': 'VENTAS', 'Departamento Entrante': 'COBRANZA' };
+  const desecho = { ID: 'DES-00000000GGGGGG', ID_DESECHO: 'x1', ID_EQUIPO: 'a1b2c3d4', 'FOLIO DESECHO': 'DR0007', MOTIVO: 'PANTALLA ROTA', 'FECHA DE DESECHO': d('2025-07-01') };
+  const migrado = (hoja, fila) => ({ ID: 'MOV-' + fila.ID, TIPO: 'HISTORICO', REFS: ',a1b2c3d4,', FECHA: d('2025-05-01'),
+    DETALLE_JSON: JSON.stringify({ hojaAnterior: hoja, fila: fila }) });
+  const base = () => ({
+    'LINEAS TELEFONICAS': [{ ID: 'LIN-00000000AAAAAA', 'ID APPSHEET': 'a1b2c3d4', NUCO: '0234', TIPO: 'EQUIPO', 'FECHA REGISTRO': d('2025-01-01') }],
+    'CAMBIOS LINEAS TELEFONICAS': [],
+    'INSPECCIONES LINEAS': [], 'RESPONSIVAS LINEAS': [], APP_EVIDENCIAS: [],
+    APP_MOVIMIENTOS: [migrado('HISTORIAL_REASIGNACIONES', reasig), migrado('BITACORA DE DESECHO', desecho)],
+  });
+  const repoCon = (hojas) => new Function('LineasUtil', 'LineasDatos', 'LineasChecklist', 'Utilities', read('src/services/lineas/LineasRepo.gs') + '\nreturn LineasRepo;')(
+    Util, datosDePrueba_(hojas), { puntos: () => [] }, { formatDate: (f) => f.toISOString().slice(0, 10) });
+
+  // Sin las pestañas (así queda la BD de pruebas): la reasignación y el desecho salen de APP_MOVIMIENTOS
+  const h = repoCon(base()).historialDeRegistro('LIN-00000000AAAAAA', true).eventos;
+  const reas = h.filter((e) => e.movimiento === 'Reasignación');
+  assert.equal(reas.length, 1);
+  assert.equal(reas[0].despues, 'ANA');
+  assert.match(reas[0].detalle, /VENTAS → COBRANZA/);
+  assert.equal(reas[0].fecha.getTime(), d('2025-05-01').getTime()); // la fecha vuelve a ser Date
+  assert.match(h.filter((e) => e.movimiento === 'Desecho')[0].detalle, /Folio DR0007 · PANTALLA ROTA/);
+  // El movimiento migrado no sale además como movimiento del sistema nuevo
+  assert.equal(h.length, 2);
+
+  // Con la pestaña todavía presente (antes de borrarla, o producción): no se repite
+  const conHoja = base();
+  conHoja.HISTORIAL_REASIGNACIONES = [reasig];
+  conHoja['BITACORA DE DESECHO'] = [desecho];
+  const h2 = repoCon(conHoja).historialDeRegistro('LIN-00000000AAAAAA', true).eventos;
+  assert.equal(h2.filter((e) => e.movimiento === 'Reasignación').length, 1);
+  assert.equal(h2.filter((e) => e.movimiento === 'Desecho').length, 1);
 });

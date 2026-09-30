@@ -30,6 +30,8 @@ qué está hecho, cómo probarlo y qué sigue.
   - `Modulos.gs`: `panorama-lineas`.
   - `Entidades.gs` (de Ayrton): se agregó `APP_NOTIFICACIONES` con prefijo `NTF`, y su prueba cuenta 27 hojas.
   - DataTable: cuadro de selección con el mouse, Shift+clic, Ctrl/Cmd+A y Esc (§0t), todo dentro de `modoSeleccion`.
+  - Pestañas retiradas de la BD de pruebas (§0v): su copia de Líneas las lee; `Entidades.gs` las sigue listando;
+    `Modulos.gs` ya no tiene los 4 módulos.
 
 
 ## 0. Diseño de la rama `jorge` (2026-09-24, commit `d2b316c`)
@@ -216,6 +218,46 @@ el sistema avisa (más adelante también por correo).
     y la misma vista.
 - Pruebas: `INICIO / FIN PLAN solo se capturan en el alta…` y `Notificaciones: adendum por vencer…` en
   `tests/source-contracts.test.cjs` (45/45). Falta la prueba en /dev.
+
+## 0v. Pestañas de los módulos retirados: migradas y borradas de la BD de pruebas (2026-09-30)
+
+Pedido del usuario: borrar de la BD de pruebas (`1fC77Uu1…`) las pestañas de los módulos que ya no existen, para que
+el equipo no las limpie en balde. Lo que el sistema usa se migró antes.
+
+- **Migrado a APP_MOVIMIENTOS:**
+  - HISTORIAL_REASIGNACIONES (1,167), BITACORA DE DESECHO (234) y REACTIVACION DE LINEAS (321);
+  - un movimiento `TIPO = HISTORICO` por renglón, con el renglón original completo en
+    `DETALLE_JSON = { hojaAnterior, fila }`;
+  - `REFS` lleva la referencia al registro (ID Linea, ID_EQUIPO o IMEI) y `FECHA` la del evento.
+- **Cómo se lee:** `LineasRepo.separarMigrados_` los regresa como si vinieran de su pestaña (las fechas vuelven a ser
+  Date), así que el Historial y "Números que ha tenido" los muestran igual que antes.
+  - Si la pestaña todavía existe (por ejemplo, en producción o en la versión de consulta), también se lee, sin repetir
+    los renglones ya migrados (misma ID).
+- **Borradas:** esas tres y SOLICITUD DE LINEAS (229, no la usaba nada). **CAMBIOS LINEAS TELEFONICAS no se toca.**
+- **Respaldo** antes de borrar, en el Drive de auxiliar7datos:
+  - libro "RESPALDO Líneas · pestañas retiradas · 2026-09-30 13:13" (`1aS-9Bo6qOL8G53eBl1QdfeV2ETK2YKObjfpSsIGq0YU`);
+  - su .xlsx (`1YnlMUmO0qE2aCihm6ULKc9_fYaHn4OGT`);
+  - Script Property `LINEAS_RESPALDO_HOJAS_RETIRADAS`.
+- **Funciones** (`LineasAdmin.gs`, desde el editor): `retirarHojasLineas_revisar` (no escribe),
+  `retirarHojasLineas_migrar` (respaldo más migración, sin repetir) y `retirarHojasLineas_borrar`.
+  - Borrar exige respaldo y migración completa, y solo corre en la BD de pruebas.
+  - También limpia la caché de encabezados `enc_<pestaña>`: sin eso, `existeTabla` seguía viendo la pestaña.
+- **Código retirado:**
+  - Reactivación, Solicitud, Reasignaciones y Bitácora de Desechos: rutas, módulos (`Modulos.gs`), vistas y
+    `abrirAltaAppSheet`;
+  - `LineasOperativas.gs`, `lineas-operativa.html`, las API `*Operativa`, sus configuraciones de
+    bitácora y exportación;
+  - `HISTORIAL_REASIGNACIONES` ya no se escribe al reasignar.
+  - Control de Cambios queda fuera del menú, pero su vista sigue.
+- **Probado en /dev** (NUCO 0234) antes y después de borrar: el Historial queda igual (133 movimientos, 13
+  reasignaciones, 1 reactivación) y "Números que ha tenido" trae 9 periodos. Las dos reasignaciones del 17/06/2026 son
+  reales (ida y vuelta el mismo día).
+- **Avisar al unir:**
+  - la copia de Líneas en master y en las ramas de Jorge y Ayrton todavía lee esas pestañas, y su Historial falla en la
+    BD de pruebas hasta unir;
+  - `Entidades.gs` y `MigracionIds.gs` (Ayrton) todavía las listan: siguen existiendo en producción;
+  - si PERFILES tiene renglones de `reactivacion-lineas`, `reasignaciones-lineas`, `solicitud-lineas` o
+    `bitacora-desechos`, `revisarCatalogo` los marcará como desconocidos.
 
 ## 0u. Estatus nuevos, departamento DISPONIBLE y menú (2026-09-30, reunión con Líneas)
 

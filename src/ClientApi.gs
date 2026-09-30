@@ -74,16 +74,10 @@ function apiLineasColaboradores(token) {
 function apiLineasBitacora(token, tipo, opciones) {
   return TelefoniaService.bitacora(token, tipo, opciones);
 }
-function apiLineasVistaOperativa(token, tipo, opciones) {
-  return TelefoniaService.vistaOperativa(token, tipo, opciones);
-}
 // Tabla completa para DataTable (hasta 5000 filas). Viaja como texto JSON:
 // google.script.run pierde respuestas grandes de forma intermitente (ver rama jorge, 9196f11).
 function apiLineasBitacoraTabla(token, tipo, opciones) {
   return JSON.stringify(TelefoniaService.bitacora(token, tipo, Object.assign({}, opciones, { pagina: 0, porPagina: 5000 })));
-}
-function apiLineasVistaOperativaTabla(token, tipo, opciones) {
-  return JSON.stringify(TelefoniaService.vistaOperativa(token, tipo, Object.assign({}, opciones, { pagina: 0, porPagina: 5000 })));
 }
 function apiLineasUltimoDocumentoNuco(token, id, tipo) {
   return TelefoniaService.ultimoDocumentoNuco(token, id, tipo);
@@ -93,18 +87,6 @@ function apiLineasArchivo(token, ruta) {
 }
 function apiLineasExportarBase(token, modulo, comprimir) {
   return TelefoniaService.exportarBase(token, modulo, comprimir);
-}
-function apiLineasFormularioOperativa(token, tipo) {
-  return TelefoniaService.formularioOperativa(token, tipo);
-}
-function apiLineasFormularioEdicionOperativa(token, tipo, fila, llave) {
-  return TelefoniaService.formularioEdicionOperativa(token, tipo, fila, llave);
-}
-function apiLineasEditarVistaOperativa(token, tipo, fila, llave, datos) {
-  return TelefoniaService.editarVistaOperativa(token, tipo, fila, llave, datos);
-}
-function apiLineasCrearVistaOperativa(token, tipo, datos) {
-  return TelefoniaService.crearVistaOperativa(token, tipo, datos);
 }
 function apiLineasRecargarDatos(token) {
   return TelefoniaService.recargarDatos(token);

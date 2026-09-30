@@ -33,13 +33,9 @@ const Modulos = (function () {
         { id: 'panorama-lineas', etiqueta: 'Panorama de Líneas', listo: true },
         { id: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas', listo: true },
         { id: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios (Líneas)', listo: true },
-        // Fuera del menú (Reactivación desde el 29-sep; las otras cuatro desde el 30-sep, reunión con Líneas).
-        // Se conservan aquí para los permisos y por si los vuelven a pedir.
-        { id: 'reactivacion-lineas', etiqueta: 'Reactivación de Líneas', listo: true },
-        { id: 'reasignaciones-lineas', etiqueta: 'Control de Reasignaciones - Líneas', listo: true },
-        { id: 'solicitud-lineas', etiqueta: 'Solicitud de Líneas', listo: true },
+        // Control de Cambios queda fuera del menú (30-sep). Reactivación, Solicitud, Reasignaciones y Desechos se
+        // retiraron con sus pestañas (30-sep, reunión con Líneas).
         { id: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas', listo: true },
-        { id: 'bitacora-desechos', etiqueta: 'Bitácora de Desechos', listo: true },
       ],
     },
     {

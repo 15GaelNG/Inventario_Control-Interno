@@ -437,17 +437,9 @@ const LineasRepo = (function () {
     bitacora.forEach((b) => { b['ID_CAMBIO'] = b['ID']; });
     LineasDatos.agregarFilas(TAB.CAMBIOS, bitacora);
 
-    let idReasignacion = null;
-    if (efectivos.some((e) => LineasDatos.normCol(e.campo) === 'RESPONSABLE')) {
-      idReasignacion = LineasDatos.nuevoId(TAB.REASIG);
-      LineasDatos.agregarFilas(TAB.REASIG, [{
-        // ID Historial es la llave del AppSheet: se sigue llenando mientras viva
-        'ID': idReasignacion, 'ID Historial': LineasDatos.nuevoIdCorto(), 'ID Linea': f['ID'], 'Fecha de Reasignacion': ahora, 'NUCO': LineasUtil.nucoVisible(col(nuevo, 'NUCO')) || '',
-        'No Empleado Saliente': col(f, 'NO EMPLEADO'), 'Responsable Saliente': col(f, 'RESPONSABLE'), 'Departamento Saliente': col(f, 'DEPARTAMENTO'),
-        'No Empleado Entrante': col(nuevo, 'NO EMPLEADO'), 'Responsable Entrante': col(nuevo, 'RESPONSABLE'), 'Departamento Entrante': col(nuevo, 'DEPARTAMENTO'),
-        'QUIEN REGISTRO': usuario.nombre,
-      }]);
-    }
+    // HISTORIAL_REASIGNACIONES ya no se escribe (módulo retirado el 30-sep): el cambio de responsable queda en la
+    // bitácora CAMBIOS y en el movimiento de APP_MOVIMIENTOS de la operación.
+    const idReasignacion = null;
     return {
       idsCambios: bitacora.map((b) => b['ID']),
       idReasignacion: idReasignacion,
@@ -629,6 +621,33 @@ const LineasRepo = (function () {
     return regla ? regla[1] : 'Otros cambios';
   }
 
+  /** Pestañas de módulos retirados cuyos renglones se migraron a APP_MOVIMIENTOS (TIPO HISTORICO), 30-sep. */
+  const HOJAS_MIGRADAS = [TAB.REASIG, TAB.DESECHO, TAB.REACTIVACION];
+  const ISO_FECHA_ = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
+
+  /**
+   * Separa los movimientos migrados de los demás. Cada uno trae en DETALLE_JSON { hojaAnterior, fila } el renglón
+   * original completo; las fechas vuelven a ser Date. Regresa { filas: { hoja: [...] }, ids: { 'hoja|ID': true }, resto }.
+   */
+  function separarMigrados_(filasMov) {
+    const salida = { filas: {}, ids: {}, resto: [] };
+    (filasMov || []).forEach((f) => {
+      let detalle = null;
+      if (txt(f['TIPO']) === 'HISTORICO') {
+        try { detalle = JSON.parse(f['DETALLE_JSON'] || '{}'); } catch (e) { detalle = null; }
+      }
+      if (!detalle || HOJAS_MIGRADAS.indexOf(detalle.hojaAnterior) < 0 || !detalle.fila) { salida.resto.push(f); return; }
+      const fila = {};
+      Object.keys(detalle.fila).forEach((c) => {
+        const v = detalle.fila[c];
+        fila[c] = typeof v === 'string' && ISO_FECHA_.test(v) ? new Date(v) : v;
+      });
+      (salida.filas[detalle.hojaAnterior] = salida.filas[detalle.hojaAnterior] || []).push(fila);
+      salida.ids[detalle.hojaAnterior + '|' + txt(fila['ID'])] = true;
+    });
+    return salida;
+  }
+
   /**
    * Historial de un registro como lista plana de movimientos (una fila por evento o por campo cambiado),
    * para filtrarlo y exportarlo: bitácora CAMBIOS, HISTORIAL_REASIGNACIONES, BITACORA DE DESECHO,
@@ -639,20 +658,25 @@ const LineasRepo = (function () {
     const ids = idsDeRegistro(id);
     id = ids[0] || id;
     const hayMov = LineasDatos.existeTabla(TAB.APP_MOV);
-    const hayReact = LineasDatos.existeTabla(TAB.REACTIVACION);
+    // Las pestañas de los módulos retirados (30-sep) ya no existen en la BD de pruebas: sus renglones viven en
+    // APP_MOVIMIENTOS (TIPO HISTORICO). Si todavía existen (p. ej. producción), también se leen.
+    const siExiste = (tabla, columna) => (LineasDatos.existeTabla(tabla) ? LineasDatos.buscarFilasVarios(tabla, columna, ids) : []);
     const peticiones = [
       { tabla: TAB.CAMBIOS, filas: LineasDatos.buscarFilasVarios(TAB.CAMBIOS, 'ID_LINEA', ids).slice(-1500) }, // las más recientes
-      { tabla: TAB.REASIG, filas: LineasDatos.buscarFilasVarios(TAB.REASIG, 'ID Linea', ids) },
-      { tabla: TAB.DESECHO, filas: LineasDatos.buscarFilasVarios(TAB.DESECHO, 'ID_EQUIPO', ids) },
+      { tabla: TAB.REASIG, filas: siExiste(TAB.REASIG, 'ID Linea') },
+      { tabla: TAB.DESECHO, filas: siExiste(TAB.DESECHO, 'ID_EQUIPO') },
       { tabla: TAB.APP_MOV, filas: hayMov ? LineasDatos.buscarFilasVarios(TAB.APP_MOV, 'REFS', ids.map((k) => ',' + k + ','), true) : [] },
-      { tabla: TAB.REACTIVACION, filas: hayReact ? LineasDatos.buscarFilasVarios(TAB.REACTIVACION, 'IMEI', ids) : [] },
+      { tabla: TAB.REACTIVACION, filas: siExiste(TAB.REACTIVACION, 'IMEI') },
     ].filter((p) => p.filas.length);
     // Una fila está oculta si el sistema nuevo la registró con cualquiera de sus IDs (el de hoy o el de antes)
     const oculta = (mapa, f, ...columnas) => columnas.concat(['ID', LineasDatos.COL_ID_ANTERIOR]).some((c) => mapa[txt(f[c])]);
     const leidas = peticiones.length ? LineasDatos.leerFilas(peticiones) : [];
     const r = {};
     peticiones.forEach((p, i) => { r[p.tabla] = leidas[i]; });
-    const de = (tabla) => r[tabla] || [];
+    // Renglones migrados de las pestañas retiradas: se leen como si vinieran de su pestaña (sin repetir)
+    const migrados = separarMigrados_(r[TAB.APP_MOV] || []);
+    r[TAB.APP_MOV] = migrados.resto;
+    const de = (tabla) => (r[tabla] || []).filter((f) => !migrados.ids[tabla + '|' + txt(f['ID'])]).concat(migrados.filas[tabla] || []);
     const ocultar = (campo, v) => (!puedeVerSecretos && /PIN|PATRON|CONTRASE/i.test(campo || '') && v ? '••••' : v);
     const json = (v) => { try { return JSON.parse(v || '{}'); } catch (e) { return {}; } };
     const texto = (v) => (v === null || v === undefined ? '' : (v instanceof Date ? Utilities.formatDate(v, LineasDatos.ZONA_APP, 'dd/MM/yyyy') : String(v)));
@@ -858,7 +882,7 @@ const LineasRepo = (function () {
 
     // 2) Toda la bitácora de número y NUCO de esas filas, su fila actual si falta, y los motivos
     const hayMov = LineasDatos.existeTabla(TAB.APP_MOV);
-    const hayReact = LineasDatos.existeTabla(TAB.REACTIVACION);
+    const hayReact = LineasDatos.existeTabla(TAB.REACTIVACION); // retirada el 30-sep: sus renglones están en APP_MOVIMIENTOS
     const faltantes = listaIds.filter((k) => !filaActual[k]);
     const todosLosIds = [].concat.apply([], listaIds.map(idsDeRegistro));
     const segunda = LineasDatos.leerFilas([
@@ -868,14 +892,17 @@ const LineasRepo = (function () {
       { tabla: TAB.REACTIVACION, filas: hayReact ? LineasDatos.buscarFilasVarios(TAB.REACTIVACION, 'IMEI', todosLosIds) : [] },
     ]);
     segunda[1].forEach((f) => { const k = txt(f['ID']); if (k) filaActual[k] = f; });
+    const migradosAsig = separarMigrados_(segunda[2]);
+    const reactivacionesHoja = segunda[3].filter((f) => !migradosAsig.ids[TAB.REACTIVACION + '|' + txt(f['ID'])])
+      .concat(migradosAsig.filas[TAB.REACTIVACION] || []);
     const motivoCambio = {};
-    segunda[2].forEach((f) => {
+    migradosAsig.resto.forEach((f) => {
       let detalle = {};
       try { detalle = JSON.parse(f['DETALLE_JSON'] || '{}'); } catch (e) { /* sin detalle */ }
       const motivo = [txt(f['MOTIVO']), txt(f['TICKET']) ? 'Ticket ' + txt(f['TICKET']) : null].filter(Boolean).join(' · ');
       (detalle.idsCambios || []).forEach((x) => { motivoCambio[x] = motivo; });
     });
-    const reactivaciones = segunda[3].map((f) => ({
+    const reactivaciones = reactivacionesHoja.map((f) => ({
       id: idActual(col(f, 'IMEI')), numero: digitos(col(f, 'NUEVO NUMERO')),
       motivo: ['Reactivación', txt(col(f, 'FOLIO')) ? 'folio ' + txt(col(f, 'FOLIO')) : null, txt(col(f, 'RETRO DE SOLICITUD')), txt(col(f, 'CORREO / TICKET'))].filter(Boolean).join(' · '),
     })).filter((r) => r.id && r.numero);
@@ -970,8 +997,7 @@ const LineasRepo = (function () {
   /** Pestañas que se consultan como bitácora completa desde el menú. */
   const BITACORAS = {
     CAMBIOS: { tabla: TAB.CAMBIOS, ocultarSecretos: 'CAMPO' },
-    REASIGNACIONES: { tabla: TAB.REASIG },
-    DESECHOS: { tabla: TAB.DESECHO },
+    // REASIGNACIONES y DESECHOS se retiraron con sus pestañas (30-sep): sus renglones están en APP_MOVIMIENTOS
   };
 
   /**
@@ -1022,81 +1048,6 @@ const LineasRepo = (function () {
     return { encabezados: encabezados, filas: salida, total: total, pagina: pagina, paginas: Math.max(1, Math.ceil(total / porPagina)) };
   }
 
-  // ---------------- Vistas operativas heredadas de AppSheet ----------------
-
-  // Encabezados tal como están en la hoja del AppSheet (incluida la errata "LINIEA SUSPENDIDA":
-  // así se llama la columna; AppSheet solo la muestra como "LINEA SUSPENDIDA").
-  const VISTAS_OPERATIVAS = {
-    REACTIVACION: {
-      tabla: TAB.REACTIVACION, grupo: 'ESTATUS',
-      encabezados: ['FOLIO', 'LINIEA SUSPENDIDA', 'COMPAÑIA', 'SIM', 'CORREO / TICKET', 'FECHA DE SUSPENSION',
-        'ESTATUS', 'ESTADO DEL EQUIPO', 'IMEI', 'RETRO DE SOLICITUD', 'FECHA DE REACTIVACION', 'NUEVO NUMERO',
-        'FECHA DE REGISTRO', 'QUIEN REGISTRO', 'COMENTARIOS'],
-    },
-    SOLICITUD: {
-      tabla: TAB.SOLICITUD, grupo: 'ESTATUS',
-      encabezados: ['FOLIO', 'FECHA DE SOLICITUD', 'TIPO DE PLAN', 'TICKET', 'NO EMPLEADO SOLICITANTE',
-        'NOMBRE SOLICITANTE', 'PUESTO SOLICITANTE', 'DEPARTAMENTO SOLICITANTE', 'SEDE',
-        'DEPARTAMENTO', 'TIPO', 'PUESTO', 'COLABORADOR', 'SOLICITANTE', 'FECHA DE ENTREGA', 'ASIGNACION',
-        'REASIGNACION', 'COMPAÑIA', 'EQUIPO', 'NUMERO ANTERIOR', 'NUMERO ACTUAL', 'IMEI', 'SIM', 'ESTATUS',
-        'FECHA DE REGISTRO', 'QUIEN REGISTRO', 'COMENTARIOS'],
-    },
-  };
-
-
-  /** Página buscable de Reactivación o Solicitud (tablas del AppSheet). */
-  function vistaOperativa(tipo, opciones, puedeVerSecretos) {
-    const cfg = VISTAS_OPERATIVAS[String(tipo || '').toUpperCase()];
-    if (!cfg) throw new Error('Vista operativa desconocida: ' + tipo);
-    if (!LineasDatos.existeTabla(cfg.tabla)) throw new Error('No existe la pestaña "' + cfg.tabla + '" en la base de telefonía.');
-
-    const o = opciones || {};
-    const pagina = Math.max(0, Number(o.pagina) || 0);
-    const porPagina = Math.min(MAX_FILAS_TABLA, Math.max(10, Number(o.porPagina) || 50));
-    const q = String(o.q || '').trim().toUpperCase();
-    const grupo = String(o.grupo || '').trim().toUpperCase();
-    const tabla = LineasDatos.tabla(cfg.tabla);
-    const encabezados = cfg.encabezados.map((h) => {
-      const objetivo = LineasDatos.normCol(h);
-      return tabla.encabezados.find((real) => LineasDatos.normCol(real) === objetivo);
-    }).filter(Boolean);
-
-    let filas = LineasDatos.leerTabla(cfg.tabla);
-
-    const grupos = {};
-    filas.forEach((f) => {
-      const valor = String(col(f, cfg.grupo) || 'SIN ESTATUS').trim().toUpperCase();
-      grupos[valor] = (grupos[valor] || 0) + 1;
-    });
-    const totalSinFiltro = filas.length;
-    filas = filas.filter((f) => {
-      if (grupo && String(col(f, cfg.grupo) || 'SIN ESTATUS').trim().toUpperCase() !== grupo) return false;
-      if (!q) return true;
-      return encabezados.some((h) => String(f[h] === null || f[h] === undefined ? '' : f[h]).toUpperCase().indexOf(q) >= 0);
-    });
-
-    if (String(tipo).toUpperCase() === 'REACTIVACION') {
-      // Su columna IMEI guarda el ID del registro: el de hoy o el del AppSheet
-      const imeiPorId = {};
-      LineasDatos.leerTabla(TAB.LINEAS).forEach((l) => { LineasDatos.idsDeFila(l).forEach((k) => { imeiPorId[k] = col(l, 'IMEI'); }); });
-      filas = filas.map((f) => (f['IMEI'] && imeiPorId[String(f['IMEI'])] !== undefined ? Object.assign({}, f, { 'IMEI': imeiPorId[String(f['IMEI'])], _ref: idActual(f['IMEI']) }) : f));
-    }
-    const total = filas.length;
-    const desde = pagina * porPagina;
-    const salida = filas.slice(desde, desde + porPagina).map((f) => {
-      const fila = { _fila: f._fila, _ref: f._ref || null, _id: f['ID'] === undefined || f['ID'] === null ? '' : String(f['ID']) };
-      encabezados.forEach((h) => {
-        const secreto = /^(PIN WHATSAPP|PIN EQUIPO|CONTRASEÑA MODEM)$/i.test(h);
-        fila[h] = secreto && !puedeVerSecretos && f[h] ? '••••' : f[h];
-      });
-      return fila;
-    });
-    return {
-      encabezados: encabezados, filas: salida, total: total, totalSinFiltro: totalSinFiltro,
-      pagina: pagina, paginas: Math.max(1, Math.ceil(total / porPagina)), campoGrupo: cfg.grupo,
-      grupos: Object.keys(grupos).sort().map((nombre) => ({ nombre: nombre, total: grupos[nombre] })),
-    };
-  }
 
   // ---------------- Catálogos y colaboradores ----------------
 
@@ -1115,7 +1066,7 @@ const LineasRepo = (function () {
       return Object.keys(m).sort();
     };
     const listas = LineasDatos.existeTabla(TAB.LISTAS) ? LineasDatos.leerTabla(TAB.LISTAS) : [];
-    const desechos = LineasDatos.leerTabla(TAB.DESECHO);
+    const desechos = LineasDatos.existeTabla(TAB.DESECHO) ? LineasDatos.leerTabla(TAB.DESECHO) : []; // retirada el 30-sep
     const lineas = LineasDatos.leerTabla(TAB.LINEAS);
     const inspecciones = LineasDatos.leerTabla(TAB.INSP);
     const responsivas = LineasDatos.leerTabla(TAB.RESP);
@@ -1171,7 +1122,7 @@ const LineasRepo = (function () {
     indice, refrescarIndice, leerRegistroPorId, leerRegistroObligatorio, idActual, idsDeRegistro,
     guardarCambiosRegistro, agregarRegistro, registrarMovimiento, asegurarPestanaApp,
     evidenciaDesdeFila, inspeccionDesdeFila, inspeccionDesdeEvidencia, responsivaDesdeFila,
-    evidenciasDeRegistro, leerInspeccion, historialDeRegistro, asignacionesDeRegistro, movimientoDeCampo, bitacora, vistaOperativa,
+    evidenciasDeRegistro, leerInspeccion, historialDeRegistro, asignacionesDeRegistro, movimientoDeCampo, bitacora,
     catalogos, indiceColaboradores, borrarCaches,
   };
 })();

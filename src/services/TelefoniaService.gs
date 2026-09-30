@@ -409,34 +409,6 @@ const TelefoniaService = (function () {
     return Utilities.base64Encode(Utilities.gzip(Utilities.newBlob(json, 'application/json')).getBytes());
   }
 
-  /** Reactivación, Solicitud y Post Venta, conservando las tablas del AppSheet. */
-  function vistaOperativa(token, tipo, opciones) {
-    const sesion = Auth.validarSesion(token);
-    return LineasUtil.paraCliente(LineasRepo.vistaOperativa(tipo, opciones || {}, puedeVerSecretos_(sesion)));
-  }
-
-  /** Formulario de alta de Reactivación / Solicitud tal como el del AppSheet. */
-  function formularioOperativa(token, tipo) {
-    const sesion = Auth.requiereRol(token, rolesOperan_());
-    return LineasUtil.paraCliente(LineasOperativas.formulario(tipo, usuarioOperacion_(sesion)));
-  }
-
-  /** Formulario de edición de un registro de Reactivación, Solicitud o Desecho (acción EDIT del AppSheet). */
-  function formularioEdicionOperativa(token, tipo, fila, llave) {
-    const sesion = Auth.requiereRol(token, rolesOperan_());
-    return LineasUtil.paraCliente(LineasOperativas.formularioEdicion(tipo, fila, llave, usuarioOperacion_(sesion)));
-  }
-
-  function editarVistaOperativa(token, tipo, fila, llave, datos) {
-    const sesion = Auth.requiereRol(token, rolesOperan_());
-    return LineasUtil.paraCliente(LineasOperativas.editar(tipo, fila, llave, datos || {}, usuarioOperacion_(sesion)));
-  }
-
-  function crearVistaOperativa(token, tipo, datos) {
-    const sesion = Auth.requiereRol(token, rolesOperan_());
-    return LineasOperativas.crear(tipo, datos || {}, usuarioOperacion_(sesion));
-  }
-
   /** Formulario de alta (id vacío) o edición de LINEAS TELEFONICAS, como el del AppSheet. */
   function formularioRegistro(token, id) {
     const sesion = Auth.requiereRol(token, rolesOperan_());
@@ -561,9 +533,9 @@ const TelefoniaService = (function () {
   }
 
   return {
-    permisos, indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, catalogos, colaboradores, bitacora, vistaOperativa, formularioOperativa, crearVistaOperativa, formularioRegistro, recargarDatos,
+    permisos, indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, catalogos, colaboradores, bitacora, formularioRegistro, recargarDatos,
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf, crearRegistro, editarRegistro,
     cambiarEstatus, fotosInspeccion, exportarBase, archivo, ultimoDocumentoNuco,
-    formularioEdicionOperativa, editarVistaOperativa, notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva, panorama,
+    notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva, panorama,
   };
 })();

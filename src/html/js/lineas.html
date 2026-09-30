@@ -6,9 +6,8 @@
    *
    *   Lineas.initTelefonicas()     Líneas Telefónicas: inventario (tabla o tarjetas), ficha, inspecciones e historial
    *   Lineas.initGestionActivos()  Gestión de Activos: activos por colaborador (acceso propio en el menú)
-   *   Lineas.initCambios()         Control de Cambios - Líneas (CAMBIOS LINEAS TELEFONICAS)
-   *   Lineas.initReasignaciones()  Control de Reasignaciones - Líneas (HISTORIAL_REASIGNACIONES)
-   *   Lineas.initDesechos()        Bitácora de Desechos (BITACORA DE DESECHO)
+   *   Lineas.initCambios()         Control de Cambios - Líneas (CAMBIOS LINEAS TELEFONICAS), fuera del menú
+   *   (Reactivación, Solicitud, Reasignaciones y Desechos se retiraron el 30-sep con sus pestañas)
    */
   const Lineas = (function () {
     'use strict';
@@ -1090,83 +1089,6 @@
         r.readAsDataURL(f);
       }));
       return Promise.all(lectores).then((pares) => pares.reduce((o, [k, v]) => { o[k] = v; return o; }, {}));
-    }
-
-    /**
-     * Modal de alta con el formulario del AppSheet (apiLineasFormularioOperativa / apiLineasCrearVistaOperativa).
-     * Lo usa la Bitácora de Desechos; soporta referencias, listas abiertas, fechas y archivos.
-     * `titulo` es el del botón que lo abre (p. ej. "Registrar desecho").
-     */
-    /**
-     * Formulario del AppSheet en un modal: alta, o edición si llega `edicion` = { fila, llave } (acción EDIT del
-     * AppSheet: el mismo formulario con los valores del registro; folio, fecha y quién registró no cambian).
-     */
-    function abrirAltaAppSheet(tipo, titulo, alGuardar, edicion) {
-      const fondo = document.createElement('div');
-      fondo.className = 'modal-backdrop';
-      fondo.innerHTML = '<div class="modal-card modal-card-wide" role="dialog" aria-modal="true" style="max-width:960px">' +
-        '<div class="modal-header"><div><h3 style="margin:0">' + esc(titulo) + '</h3><p class="modal-subtitle">Mismo formulario que en AppSheet. Los campos con * son obligatorios.' +
-        (edicion ? ' Los archivos solo se reemplazan si eliges uno nuevo.' : '') + '</p></div>' +
-        '<button type="button" class="modal-close" data-cerrar aria-label="Cerrar">' + ico('x') + '</button></div>' +
-        '<div class="ln-alta-cuerpo modal-form-scroll"><p class="empty-state"><span class="ln-spinner"></span> Cargando formulario…</p></div>' +
-        '<div class="error-msg" data-error hidden></div>' +
-        '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar>Cancelar</button><button type="button" data-guardar>' + ico('save') + (edicion ? ' Guardar cambios' : ' Registrar') + '</button></div></div>';
-      document.getElementById('view-container').appendChild(fondo);
-      const cuerpo = fondo.querySelector('.ln-alta-cuerpo');
-      const errorBox = fondo.querySelector('[data-error]');
-      let elementos = [];
-      let guardando = false;
-      const cerrar = () => { if (!guardando) fondo.remove(); };
-      fondo.addEventListener('click', (ev) => {
-        if (ev.target === fondo || ev.target.closest('[data-cerrar]')) { cerrar(); return; }
-        const pastilla = ev.target.closest('.ln-pastilla');
-        if (pastilla) {
-          pastilla.parentElement.querySelectorAll('.ln-pastilla').forEach((b) => b.classList.remove('activa'));
-          pastilla.classList.add('activa');
-          actualizarDerivadosEn(cuerpo, elementos);
-        }
-      });
-      cuerpo.addEventListener('input', () => actualizarDerivadosEn(cuerpo, elementos));
-      cuerpo.addEventListener('change', () => actualizarDerivadosEn(cuerpo, elementos));
-      (edicion ? callServer('apiLineasFormularioEdicionOperativa', state.token, tipo, edicion.fila, edicion.llave)
-        : callServer('apiLineasFormularioOperativa', state.token, tipo)).then((els) => {
-        elementos = els;
-        cuerpo.innerHTML = htmlFormularioAppSheet(elementos);
-        activarCombosEn(cuerpo, elementos);
-        actualizarDerivadosEn(cuerpo, elementos);
-      }).catch((e) => { cuerpo.innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>'; });
-      fondo.querySelector('[data-guardar]').addEventListener('click', (ev) => {
-        if (guardando) return;
-        errorBox.hidden = true;
-        const errores = erroresFormularioEn(cuerpo, elementos, '');
-        elementos.filter((e) => e.control === 'archivo' && e.requerido === 'SIEMPRE').forEach((e) => {
-          const input = cuerpo.querySelector('input[type="file"][data-archivo="' + CSS.escape(e.columna) + '"]');
-          if (!input || !input.files || !input.files[0]) errores.push({ e: e, msg: e.etiqueta + ' es obligatorio' });
-        });
-        if (errores.length) { errorBox.textContent = errores.map((x) => x.msg).slice(0, 6).join(' · '); errorBox.hidden = false; return; }
-        const boton = ev.currentTarget;
-        const texto = boton.innerHTML;
-        guardando = true;
-        boton.innerHTML = '<span class="ln-spinner"></span> Guardando…';
-        fondo.querySelectorAll('button, input, select, textarea').forEach((el) => { el.disabled = true; });
-        leerArchivosEn(cuerpo)
-          .then((archivos) => (edicion
-            ? callServer('apiLineasEditarVistaOperativa', state.token, tipo, edicion.fila, edicion.llave, { valores: leerFormularioEn(cuerpo, elementos), archivos: archivos })
-            : callServer('apiLineasCrearVistaOperativa', state.token, tipo, { valores: leerFormularioEn(cuerpo, elementos), archivos: archivos })))
-          .then((r) => {
-            guardando = false;
-            fondo.remove();
-            aviso(ico('circle-check') + ' Registro ' + esc(r.folio) + (edicion ? (r.cambios && r.cambios.length ? ' actualizado.' : ': no había cambios.') : ' guardado correctamente.'), 6000);
-            if (alGuardar) alGuardar(r);
-          })
-          .catch((e) => {
-            guardando = false;
-            boton.innerHTML = texto;
-            fondo.querySelectorAll('button, input, select, textarea').forEach((el) => { el.disabled = false; });
-            errorBox.textContent = mensajeError(e);
-            errorBox.hidden = false;
-          });
-      });
     }
 
     /** Redimensiona una imagen en el navegador antes de subirla (máx. `maxDim` px, JPEG calidad .82). */
@@ -4015,234 +3937,7 @@
     }
 
     // ======================================================================
-    // Reactivación y Solicitud de Líneas
-    // ======================================================================
-
-    const OPERATIVAS = {
-      REACTIVACION: {
-        // Vista REACTIVACION DE LINEAS del AppSheet: todas estas columnas, agrupada por ESTATUS
-        resumen: ['FOLIO', 'LINIEA SUSPENDIDA', 'COMPAÑIA', 'SIM', 'CORREO / TICKET', 'FECHA DE SUSPENSION', 'ESTATUS', 'ESTADO DEL EQUIPO', 'IMEI',
-          'RETRO DE SOLICITUD', 'FECHA DE REACTIVACION', 'NUEVO NUMERO', 'FECHA DE REGISTRO', 'QUIEN REGISTRO', 'COMENTARIOS'],
-        agrupar: 'ESTATUS',
-        titulo: 'Reactivación de Líneas', icono: 'check-check', textoAlta: 'Registrar reactivación',
-        subtitulo: 'Seguimiento de líneas suspendidas, canceladas y reactivadas', filtro: 'Todos los estatus',
-        altas: true,
-        // Display name de las columnas en el AppSheet
-        nombres: { 'LINIEA SUSPENDIDA': 'LINEA SUSPENDIDA' },
-      },
-      SOLICITUD: {
-        // Vista SOLICITUD DE LINEAS del AppSheet: todas las columnas en el orden de la tabla
-        resumen: ['FOLIO', 'FECHA DE SOLICITUD', 'TIPO DE PLAN', 'TICKET', 'NO EMPLEADO SOLICITANTE', 'NOMBRE SOLICITANTE', 'PUESTO SOLICITANTE',
-          'DEPARTAMENTO SOLICITANTE', 'SEDE', 'DEPARTAMENTO', 'TIPO', 'PUESTO', 'COLABORADOR', 'SOLICITANTE', 'FECHA DE ENTREGA', 'ASIGNACION',
-          'REASIGNACION', 'COMPAÑIA', 'EQUIPO', 'NUMERO ANTERIOR', 'NUMERO ACTUAL', 'IMEI', 'SIM', 'ESTATUS', 'FECHA DE REGISTRO', 'QUIEN REGISTRO', 'COMENTARIOS'],
-        titulo: 'Solicitud de Líneas', icono: 'target', textoAlta: 'Registrar solicitud',
-        subtitulo: 'Solicitudes de asignación y reasignación de líneas telefónicas', filtro: 'Todos los estatus',
-        altas: true,
-        // Display name de las columnas en el AppSheet
-        nombres: { 'NO EMPLEADO SOLICITANTE': 'NÚMERO DE EMPLEADO DEL SOLICITANTE', 'NOMBRE SOLICITANTE': 'NOMBRE COMPLETO DEL SOLICITANTE', 'PUESTO SOLICITANTE': 'PUESTO DEL SOLICITANTE', 'DEPARTAMENTO SOLICITANTE': 'DEPARTAMENTO DEL SOLICITANTE' },
-      },
-    };
-
-    function initOperativa(tipo) {
-      const n = ++montaje;
-      const cfg = OPERATIVAS[tipo];
-      const raiz = document.getElementById('ln-operativa');
-      const vigente = () => n === montaje && document.body.contains(raiz);
-      let tabla = null;
-      let filtrosOp = {};
-      let marcarKpi = null;
-      let solicitud = 0;
-      let guardando = false;
-      const modal = $('#ln-op-modal');
-
-      $('#ln-op-titulo', raiz).textContent = cfg.titulo;
-      $('#ln-op-subtitulo', raiz).textContent = cfg.subtitulo;
-      $('#ln-op-titulo-icono', raiz).innerHTML = ico(cfg.icono);
-      $('#ln-op-nuevo', raiz).innerHTML = ico('plus') + ' ' + esc(cfg.textoAlta);
-      pintarIconos(raiz);
-      refreshIcons();
-
-      function cerrarAlta() {
-        if (guardando) return;
-        modal.hidden = true;
-        $('#ln-op-alta-error').hidden = true;
-      }
-
-      let elementosAlta = [];
-      let pasosAlta = null;
-      function abrirAlta() {
-        const cuerpo = $('#ln-op-campos');
-        $('#ln-op-modal-titulo').textContent = cfg.textoAlta;
-        $('#ln-op-alta-error').hidden = true;
-        cuerpo.innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando formulario…</p>';
-        modal.hidden = false;
-        llamar('apiLineasFormularioOperativa', tipo).then((elementos) => {
-          if (!vigente() || modal.hidden) return;
-          elementosAlta = elementos;
-          const pasos = PASOS_FORMULARIO[tipo];
-          cuerpo.innerHTML = pasos ? htmlPasosAppSheet(elementos, pasos) : htmlFormularioAppSheet(elementos);
-          activarCombosEn(cuerpo, elementosAlta);
-          actualizarDerivadosEn(cuerpo, elementosAlta);
-          pasosAlta = null;
-          const acciones = $('#ln-op-alta-form .ln-captura-acciones');
-          acciones.querySelectorAll('[data-paso-atras], [data-paso-siguiente], .form-cuenta').forEach((b) => b.remove());
-          acciones.classList.toggle('ln-acciones-pasos', !!pasos);
-          $('#ln-op-guardar').hidden = false;
-          if (pasos) {
-            acciones.insertAdjacentHTML('beforeend', '<span class="form-cuenta" aria-live="polite"></span>' +
-              '<button type="button" class="secondary" data-paso-atras hidden>' + icono('chevron-left') + ' Atrás</button>' +
-              '<button type="button" data-paso-siguiente>Siguiente ' + icono('chevron-right') + '</button>');
-            acciones.appendChild($('#ln-op-guardar'));
-            pasosAlta = activarPasos(cuerpo, {
-              atras: acciones.querySelector('[data-paso-atras]'), siguiente: acciones.querySelector('[data-paso-siguiente]'),
-              guardar: $('#ln-op-guardar'), cuenta: acciones.querySelector('.form-cuenta'),
-              validar: (seccion) => {
-                const errores = erroresFormularioEn(cuerpo, elementosAlta, '').filter((x) => seccion.querySelector('[data-af-columna="' + CSS.escape(x.columna) + '"]'));
-                marcarErroresEn(cuerpo, errores.map((x) => ({ columna: x.columna, msg: x.corto })));
-                $('#ln-op-alta-error').hidden = true;
-                return errores;
-              },
-            });
-          }
-          const primero = cuerpo.querySelector('.form-paso:not([hidden]) input:not([readonly]), .form-paso:not([hidden]) select') || cuerpo.querySelector('input:not([readonly]), select, textarea');
-          if (primero) primero.focus();
-        }).catch((e) => { cuerpo.innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>'; });
-      }
-
-      function cargar() {
-        const turno = ++solicitud;
-        const clave = 'op:' + tipo;
-        const previo = memoria.tablas[clave];
-        if (previo) procesar(previo); else if (tabla) tabla.setCargando(true);
-        llamar('apiLineasVistaOperativaTabla', tipo, {}).then((texto) => {
-          if (!vigente() || turno !== solicitud) return;
-          memoria.tablas[clave] = texto;
-          if (texto !== previo) procesar(texto);
-        }).catch((e) => {
-          if (!vigente() || turno !== solicitud) return;
-          if (previo) return; // se queda lo último que se vio
-          if (!tabla) {
-            tabla = tablaLineas($('#ln-op-tabla', raiz), { idCampo: '_fila', columnas: [{ campo: '_fila', titulo: 'Fila' }], detalle: false, exportar: false });
-          }
-          tabla.setError('No se pudo cargar ' + cfg.titulo + ': ' + mensajeError(e));
-        });
-      }
-
-      /** Pinta la respuesta del servidor (o la que quedó en memoria de la visita anterior). */
-      function procesar(texto) {
-        {
-          const r = JSON.parse(texto);
-          const campoGrupo = r.campoGrupo;
-          if (!tabla) {
-            // Títulos: las etiquetas del formulario de alta y, si no hay, el encabezado en formato de oración
-            const titulos = { FOLIO: 'Folio', 'FECHA DE REGISTRO': 'Fecha de registro', 'QUIEN REGISTRO': 'Registró' };
-            Object.keys(cfg.nombres || {}).forEach((nombre) => { titulos[normEncabezado(nombre)] = tituloLegible(cfg.nombres[nombre]); });
-            const columnas = columnasDeHoja(r.encabezados, r.filas, cfg.resumen, titulos, tipo);
-            // El servidor agrupa en mayúsculas y sin espacios de más: la columna filtra con el mismo valor
-            const colGrupo = columnas.find((c) => c.campo === campoGrupo);
-            if (colGrupo) {
-              colGrupo.tipo = 'lista';
-              colGrupo.valor = (f) => String(f[campoGrupo] === null || f[campoGrupo] === undefined ? '' : f[campoGrupo]).trim().toUpperCase();
-            }
-            const campoFolio = r.encabezados.find((h) => /^FOLIO$/i.test(h)) || r.encabezados.find((h) => /NUCO|NUMERO/i.test(h));
-            tabla = tablaLineas($('#ln-op-tabla', raiz), {
-              idCampo: '_fila',
-              idTabla: 'lineas-' + tipo.toLowerCase() + '-v2',
-              columnas: columnas,
-              // AppSheet agrupa por ESTATUS / TIPO: se ordena por esa columna (DataTable no agrupa)
-              ordenInicial: cfg.agrupar && columnas.some((c) => c.campo === cfg.agrupar) ? { campo: cfg.agrupar, dir: 'asc' }
-                : (campoFolio && /FOLIO/i.test(campoFolio) ? { campo: campoFolio, dir: 'desc' } : undefined),
-              textoVacio: 'Sin registros',
-              exportar: exportarBase(tipo, cfg.titulo),
-              etiquetaFila: (f) => (campoFolio && f[campoFolio] ? String(f[campoFolio]) : 'Registro'),
-              detalle: { titulo: (f) => cfg.titulo + (campoFolio && f[campoFolio] ? ' · ' + f[campoFolio] : '') },
-              // View Ref (IMEI) del AppSheet: abre la línea referenciada
-              accionesFila: [
-                { icono: 'circle-chevron-right', titulo: 'Ver línea', visible: (f) => !!f._ref, alHacer: (f) => irARegistro(f._ref) },
-                // Acción EDIT del AppSheet
-                { icono: 'pencil', titulo: 'Editar', visible: (f) => !!f._id && !!(memoria.permisos && memoria.permisos.puedeOperar),
-                  alHacer: (f) => abrirAltaAppSheet(tipo, 'Editar · ' + cfg.titulo + (campoFolio && f[campoFolio] ? ' ' + f[campoFolio] : ''),
-                    () => { delete memoria.tablas['op:' + tipo]; if (vigente()) cargar(); }, { fila: f._fila, llave: f._id }) },
-              ],
-              ayuda: 'El ojo en Acciones muestra todos los campos del registro. "Columnas" agrega los que no se ven; la flecha de cada columna filtra y ordena.',
-              alCambiarFiltros: (f) => { filtrosOp = f || {}; if (marcarKpi) marcarKpi(filtrosOp); },
-            });
-          }
-          // KPIs: total y los estatus (o tipos) más frecuentes; clic = filtrar
-          const grupos = r.grupos.slice().sort((a, b) => b.total - a.total).slice(0, 4);
-          marcarKpi = tilesKpi($('#ln-op-kpis', raiz), [{ icono: cfg.icono, valor: miles(r.totalSinFiltro), etiqueta: 'Registros' }]
-            .concat(grupos.map((g) => ({
-              icono: /CANCEL|TRAMITE CANCELADO/.test(g.nombre) ? 'circle-x' : /FINALIZADO|EN USO|DISPONIBLE/.test(g.nombre) ? 'circle-check' : 'tag',
-              clase: /CANCEL/.test(g.nombre) ? 'stat-tile-warn' : /FINALIZADO|EN USO|DISPONIBLE/.test(g.nombre) ? 'stat-tile-ok' : '',
-              valor: miles(g.total), etiqueta: g.nombre === 'SIN ESTATUS' ? 'Sin estatus' : g.nombre,
-              filtros: campoGrupo ? { [campoGrupo]: { valores: [g.nombre === 'SIN ESTATUS' ? '' : g.nombre] } } : false,
-            }))), () => tabla);
-          marcarKpi(filtrosOp);
-          tabla.setDatos(r.filas);
-        }
-      }
-
-      $('#ln-op-nuevo', raiz).addEventListener('click', abrirAlta);
-      $('#ln-op-cerrar').addEventListener('click', cerrarAlta);
-      $('#ln-op-cancelar').addEventListener('click', cerrarAlta);
-      modal.addEventListener('click', (ev) => {
-        if (ev.target === modal) { cerrarAlta(); return; }
-        const pastilla = ev.target.closest('.ln-pastilla');
-        if (pastilla) {
-          pastilla.parentElement.querySelectorAll('.ln-pastilla').forEach((b) => b.classList.remove('activa'));
-          pastilla.classList.add('activa');
-          actualizarDerivadosEn($('#ln-op-campos'), elementosAlta);
-        }
-      });
-      $('#ln-op-campos').addEventListener('input', () => actualizarDerivadosEn($('#ln-op-campos'), elementosAlta));
-      $('#ln-op-campos').addEventListener('change', () => actualizarDerivadosEn($('#ln-op-campos'), elementosAlta));
-      $('#ln-op-alta-form').addEventListener('submit', (ev) => {
-        ev.preventDefault();
-        if (guardando) return;
-        const cuerpo = $('#ln-op-campos');
-        const errores = erroresFormularioEn(cuerpo, elementosAlta, '');
-        if (errores.length) {
-          if (pasosAlta) pasosAlta.irAlCampo(errores[0].columna);
-          marcarErroresEn(cuerpo, errores.map((x) => ({ columna: x.columna, msg: x.corto })));
-          const box = $('#ln-op-alta-error');
-          box.textContent = errores.map((x) => x.msg).slice(0, 6).join(' · ');
-          box.hidden = false;
-          const campo = cuerpo.querySelector('[data-af-columna="' + CSS.escape(errores[0].e.columna) + '"] input, [data-af-columna="' + CSS.escape(errores[0].e.columna) + '"] select, [data-af-columna="' + CSS.escape(errores[0].e.columna) + '"] .ln-pastilla');
-          if (campo) { campo.scrollIntoView({ behavior: 'smooth', block: 'center' }); if (campo.focus) campo.focus(); }
-          return;
-        }
-        const datos = leerFormularioEn(cuerpo, elementosAlta);
-        const guardar = $('#ln-op-guardar');
-        guardando = true;
-        const textoGuardar = guardar.innerHTML;
-        guardar.innerHTML = '<span class="ln-spinner"></span> Guardando…';
-        modal.querySelectorAll('button, input, select, textarea').forEach((el) => { el.disabled = true; });
-        $('#ln-op-alta-error').hidden = true;
-        llamar('apiLineasCrearVistaOperativa', tipo, datos).then((r) => {
-          if (!vigente()) return;
-          guardando = false;
-          cerrarAlta();
-          aviso(icono('circle-check') + ' Registro ' + esc(r.folio) + ' guardado correctamente.', 6000);
-          delete memoria.tablas['op:' + tipo];
-          cargar();
-        }).catch((e) => {
-          const box = $('#ln-op-alta-error');
-          box.textContent = mensajeError(e);
-          box.hidden = false;
-        }).finally(() => {
-          guardando = false;
-          guardar.innerHTML = textoGuardar;
-          modal.querySelectorAll('button, input, select, textarea').forEach((el) => { el.disabled = false; });
-        });
-      });
-      if (cfg.altas) {
-        cargarPermisos().then((p) => { if (vigente()) $('#ln-op-nuevo', raiz).hidden = !p.puedeOperar; });
-      }
-      cargar();
-    }
-
-    // ======================================================================
-    // Bitácoras: Control de Cambios, Control de Reasignaciones, Bitácora de Desechos
+    // Bitácora: Control de Cambios (fuera del menú; su pestaña alimenta el Historial y el Panorama)
     // ======================================================================
 
     const BITACORAS = {
@@ -4261,46 +3956,6 @@
         columnas: [
           ['NUCO', 'NUCO'], ['IMEI', 'IMEI'], ['CAMPO', 'Campo'], ['ANTES', 'Antes'], ['DESPUES', 'Después'],
           ['ACTUALIZADO POR', 'Actualizado por'], ['FECHA ACTUALIZACION', 'Fecha actualización'],
-        ],
-      },
-      REASIGNACIONES: {
-        titulo: 'Control de Reasignaciones - Líneas', icono: 'recycle',
-        subtitulo: 'Cambios de responsable de equipos y líneas',
-        idRegistro: 'ID Linea', fecha: 'Fecha de Reasignacion',
-        kpis: (filas) => {
-          const distintos = (campo) => filas.map((f) => String(f[campo] || '').trim()).filter((v, i, a) => v && a.indexOf(v) === i).length;
-          return [
-            { icono: 'smartphone', valor: miles(distintos('ID Linea')), etiqueta: 'Activos reasignados', filtros: false },
-            { icono: 'users', valor: miles(distintos('Responsable Entrante')), etiqueta: 'Responsables entrantes', filtros: false },
-          ];
-        },
-        // Vista CONTROL DE REASIGNACIONES - LINEAS del AppSheet: todas las columnas en el orden de la tabla
-        columnas: [
-          ['Fecha de Reasignacion', 'Fecha de reasignación'], ['NUCO', 'NUCO'], ['No Empleado Saliente', 'No. empleado saliente'],
-          ['Responsable Saliente', 'Responsable saliente'], ['Departamento Saliente', 'Departamento saliente'],
-          ['No Empleado Entrante', 'No. empleado entrante'], ['Responsable Entrante', 'Responsable entrante'],
-          ['Departamento Entrante', 'Departamento entrante'], ['QUIEN REGISTRO', 'Registró'],
-        ],
-      },
-      DESECHOS: {
-        titulo: 'Bitácora de Desechos', icono: 'trash-2',
-        alta: 'DESECHO', textoAlta: 'Registrar desecho',
-        subtitulo: 'Equipos dados de baja definitiva (folio DR)',
-        idRegistro: 'ID_EQUIPO', fecha: 'FECHA DE DESECHO',
-        kpis: (filas, encabezados, hFecha) => {
-          const anio = String(new Date().getFullYear());
-          const esteAnio = hFecha ? filas.filter((f) => f[hFecha] && !isNaN(new Date(f[hFecha])) && String(new Date(f[hFecha]).getFullYear()) === anio).length : 0;
-          const lugares = contarPor(filas, 'LUGAR DE DESECHO');
-          const top = Object.keys(lugares).filter(Boolean).sort((a, b) => lugares[b] - lugares[a])[0];
-          const defs = hFecha ? [{ icono: 'calendar-range', valor: miles(esteAnio), etiqueta: 'En ' + anio, filtros: { [hFecha]: { op: 'entre', v1: anio + '-01-01', v2: diaClave(0) } } }] : [];
-          if (top) defs.push({ icono: 'map-pin', valor: miles(lugares[top]), etiqueta: top, titulo: 'Lugar de desecho más frecuente', filtros: { 'LUGAR DE DESECHO': { valores: [top] } } });
-          return defs;
-        },
-        // Vista BITACORA DE DESECHOS del AppSheet (ID_EQUIPO se muestra con su etiqueta: el IMEI)
-        columnas: [
-          ['FOLIO DESECHO', 'Folio desecho'], ['IMEI', 'IMEI equipo'], ['FOLIO EQUIPO', 'Folio equipo'], ['EQUIPO', 'Equipo'],
-          ['LUGAR DE DESECHO', 'Lugar de desecho'], ['EVIDENCIA', 'Evidencia'], ['AUTORIZACION', 'Autorización'], ['ESTADO', 'Estado'],
-          ['MOTIVO', 'Motivo'], ['FECHA DE DESECHO', 'Fecha de desecho'], ['FECHA DE REGISTRO', 'Fecha de registro'], ['QUIEN REGISTRO', 'Registró'],
         ],
       },
     };
@@ -4340,10 +3995,7 @@
           exportar: exportarBase(tipo, cfg.titulo),
           etiquetaFila: (f) => [hFolio && f[hFolio], hFecha && fechaTabla(f[hFecha])].filter(Boolean).join(' · ') || 'Registro',
           detalle: { titulo: (f) => cfg.titulo + (hFolio && f[hFolio] ? ' · ' + f[hFolio] : '') },
-          accionesFila: (hId ? [{ icono: 'circle-chevron-right', titulo: 'Ver activo', visible: (f) => !!f[hId], alHacer: (f) => irARegistro(f[hId]) }] : [])
-            .concat(cfg.alta ? [{ icono: 'pencil', titulo: 'Editar', visible: (f) => !!f['ID_DESECHO'] && !!(memoria.permisos && memoria.permisos.puedeOperar),
-              alHacer: (f) => abrirAltaAppSheet(cfg.alta, 'Editar · ' + cfg.titulo + (f['FOLIO DESECHO'] ? ' ' + f['FOLIO DESECHO'] : ''),
-                () => { delete memoria.tablas['bit:' + tipo]; if (vigente()) cargar(); }, { fila: f._fila, llave: f['ID_DESECHO'] }) }] : []),
+          accionesFila: hId ? [{ icono: 'circle-chevron-right', titulo: 'Ver activo', visible: (f) => !!f[hId], alHacer: (f) => irARegistro(f[hId]) }] : [],
           ayuda: 'Bitácora de solo lectura. El ojo abre todos los campos del registro y el celular abre la ficha del activo.',
           alCambiarFiltros: (f) => { filtrosBit = f || {}; if (marcarKpi) marcarKpi(filtrosBit); },
         });
@@ -4396,12 +4048,6 @@
         }
       }
 
-      if (cfg.alta) {
-        cargarPermisos().then((p) => { if (vigente()) $('#ln-bit-nuevo', raiz).hidden = !p.puedeOperar; });
-        $('#ln-bit-nuevo', raiz).innerHTML = ico('plus') + ' ' + esc(cfg.textoAlta);
-        $('#ln-bit-nuevo', raiz).addEventListener('click', () => abrirAltaAppSheet(cfg.alta, cfg.textoAlta, () => { delete memoria.tablas['bit:' + tipo]; if (vigente()) cargar(); }));
-      }
-
       $('#ln-bit-form', raiz).addEventListener('submit', (ev) => {
         ev.preventDefault();
         busqueda = $('#ln-bit-q', raiz).value.trim();
@@ -4420,11 +4066,7 @@
       initTelefonicas: initTelefonicas,
       initGestionActivos: initGestionActivos,
       initAccesoriosLineas: initAccesoriosLineas,
-      initReactivacion: () => initOperativa('REACTIVACION'),
-      initSolicitud: () => initOperativa('SOLICITUD'),
       initCambios: () => initBitacora('CAMBIOS'),
-      initReasignaciones: () => initBitacora('REASIGNACIONES'),
-      initDesechos: () => initBitacora('DESECHOS'),
       precargar: precargar,
       irARegistro: irARegistro, // desde Notificaciones: "Ver línea"
       initPanorama: initPanorama,

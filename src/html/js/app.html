@@ -567,11 +567,7 @@
       if (vista === 'lineas-telefonicas') { montarVista('tpl-lineas-telefonicas', Lineas.initTelefonicas); return; }
       if (vista === 'gestion-activos') { montarVista('tpl-lineas-gestion-activos', Lineas.initGestionActivos); return; }
       if (vista === 'accesorios-lineas') { montarVista('tpl-lineas-accesorios', Lineas.initAccesoriosLineas); return; }
-      if (vista === 'reactivacion-lineas') { montarVista('tpl-lineas-operativa', Lineas.initReactivacion); return; }
-      if (vista === 'reasignaciones-lineas') { montarVista('tpl-lineas-bitacora', Lineas.initReasignaciones); return; }
-      if (vista === 'solicitud-lineas') { montarVista('tpl-lineas-operativa', Lineas.initSolicitud); return; }
       if (vista === 'cambios-lineas') { montarVista('tpl-lineas-bitacora', Lineas.initCambios); return; }
-      if (vista === 'bitacora-desechos') { montarVista('tpl-lineas-bitacora', Lineas.initDesechos); return; }
       // Campana de la barra superior → "Ver todas" (html/notificaciones.html, rama emmanuel)
       if (vista === 'notificaciones') { montarVista('tpl-notificaciones', Notificaciones.initVista); return; }
       mostrarProximamente(etiqueta || vista);
@@ -604,15 +600,10 @@
         { vista: 'panorama-lineas', etiqueta: 'Panorama', icono: 'layout-dashboard' },
         { vista: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas', icono: 'smartphone' },
         { vista: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios', icono: 'boxes' },
-        // Fuera del menú, pero sus vistas siguen en navegarA y sus datos no se borran:
-        // - Reactivación de Líneas (29-sep), por si la vuelven a pedir.
-        // - Reasignaciones, Solicitud, Control de Cambios y Bitácora de Desechos (reunión con Líneas, 30-sep):
-        //   el historial de la ficha ya lo muestra todo. La bitácora CAMBIOS alimenta el Historial y el Panorama.
-        // { vista: 'reactivacion-lineas', etiqueta: 'Reactivación de Líneas', icono: 'check-check' },
-        // { vista: 'reasignaciones-lineas', etiqueta: 'Control de Reasignaciones - Líneas', icono: 'recycle' },
-        // { vista: 'solicitud-lineas', etiqueta: 'Solicitud de Líneas', icono: 'target' },
+        // Control de Cambios queda fuera del menú (30-sep) pero su vista sigue en navegarA: su pestaña es la bitácora
+        // del Historial y del Panorama. Reactivación, Solicitud, Reasignaciones y Desechos se retiraron con sus
+        // pestañas (30-sep); sus renglones están en APP_MOVIMIENTOS y se ven en el Historial de la ficha.
         // { vista: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas', icono: 'eye' },
-        // { vista: 'bitacora-desechos', etiqueta: 'Bitácora de Desechos', icono: 'trash-2' },
       ],
     },
     // Activos por colaborador de todas las áreas (líneas hoy; vehículos, Uber y cajas al unir en master)
