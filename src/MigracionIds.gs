@@ -81,6 +81,79 @@ function migracionLimpiarRespaldoEscribir() {
   return limpiarRespaldoRedundante({ escribir: true });
 }
 
+/**
+ * EL SELLO.
+ *
+ * Mientras los IDs solo están en su columna, regenerarlos es inofensivo: se tiran unos
+ * valores y se ponen otros. Pero en cuanto `reescribirReferencias` los copia a las hojas
+ * hijas —`ID VEHICULO`, `ID LINEA`, `ID CAJA CHICA`—, esos IDs dejan de ser un dato y se
+ * vuelven la **llave de la que cuelga todo**. Regenerarlos entonces no los "actualiza":
+ * deja huérfana cada referencia, en silencio y sin forma de reconstruirla, porque el
+ * vínculo viejo ya se sobrescribió.
+ *
+ * Por eso, desde el momento en que se escriben referencias en un libro, ese libro queda
+ * SELLADO: `asignarIds({rehacer:true})` y la reversa se niegan a correr ahí.
+ *
+ * Se guarda el id del libro, no un booleano, para que sellar el laboratorio no selle
+ * producción ni al revés.
+ *
+ * Para quitarlo hace falta borrar la Script Property a mano. Es a propósito: si alguien de
+ * verdad necesita regenerar los IDs de un libro sellado, el camino correcto es volver a
+ * correr `reescribirReferencias` después, y eso más vale que sea una decisión consciente.
+ */
+const MIGRACION_PROP_SELLO = 'MIGRACION_IDS_SELLADOS';
+
+/** ¿Este libro ya tiene referencias escritas contra sus IDs? */
+function migracionSellado_(ssId) {
+  const v = PropertiesService.getScriptProperties().getProperty(MIGRACION_PROP_SELLO) || '';
+  return v.split(',').some((x) => x.trim() === ssId);
+}
+
+/** Deja constancia de que este libro ya tiene referencias colgando de sus IDs. */
+function migracionSellar_(ssId) {
+  const props = PropertiesService.getScriptProperties();
+  const v = props.getProperty(MIGRACION_PROP_SELLO) || '';
+  const ya = v.split(',').map((x) => x.trim()).filter(Boolean);
+  if (ya.indexOf(ssId) !== -1) return false;
+  ya.push(ssId);
+  props.setProperty(MIGRACION_PROP_SELLO, ya.join(','));
+  return true;
+}
+
+/** Truena si el libro está sellado. `que` es lo que se iba a intentar. */
+function migracionExigirSinSello_(ssId, que) {
+  if (!migracionSellado_(ssId)) return;
+  throw new Error(
+    'Este libro está SELLADO: ya tiene referencias escritas contra sus IDs, así que ' + que +
+    ' dejaría huérfana cada una de ellas, en silencio. Si de verdad hace falta, borra la ' +
+    'Script Property ' + MIGRACION_PROP_SELLO + ' y vuelve a correr reescribirReferencias ' +
+    'DESPUÉS. Corre migracionEstadoSello para ver qué libros están sellados.');
+}
+
+/** Qué libros están sellados y qué significa. Solo lee. */
+function migracionEstadoSello() {
+  const v = PropertiesService.getScriptProperties().getProperty(MIGRACION_PROP_SELLO) || '';
+  const libros = v.split(',').map((x) => x.trim()).filter(Boolean);
+  const actual = Config.SPREADSHEET_IDS.VEHICULOS();
+  const lineas = ['SELLO DE LOS IDS', ''];
+  if (!libros.length) {
+    lineas.push('  Ningún libro está sellado todavía.');
+    lineas.push('  Un libro se sella solo, en cuanto reescribirReferencias escribe en él.');
+  } else {
+    lineas.push('  Libros sellados (' + libros.length + '):');
+    libros.forEach((l) => lineas.push('    ' + l + (l === actual ? '   <-- el que está apuntado' : '')));
+  }
+  lineas.push('');
+  lineas.push('  Este proyecto apunta a: ' + actual);
+  lineas.push('  Sellado: ' + (migracionSellado_(actual) ? 'SÍ' : 'no'));
+  lineas.push('');
+  lineas.push('  Sellado significa que ya hay referencias colgando de esos IDs, así que');
+  lineas.push('  regenerarlos o deshacerlos dejaría huérfana cada una. Ver MIGRACION_PROP_SELLO.');
+  const texto = lineas.join('\n');
+  Logger.log(texto);
+  return texto;
+}
+
 /** El spreadsheet de producción. Aquí NO se escribe mientras AppSheet siga vivo. */
 const MIGRACION_SS_PRODUCCION = '1h5ibDsmVtrG27rwMaOvj-lm08QZUHzDv3woPmkfRQrk';
 
@@ -403,6 +476,11 @@ function migYaMigrada_(sheet, prefijo, filas, vacias) {
 function asignarIds(opciones) {
   const cfg = Object.assign({ escribir: false, hojas: null, rehacer: false, familia: null }, opciones || {});
   const ssId = migracionSs_(cfg);
+  // Regenerar con rehacer:true es lo único de este paso que destruye: pisa IDs que ya
+  // existen. Si el libro está sellado, hay referencias colgando de ellos.
+  if (cfg.rehacer && cfg.escribir) {
+    migracionExigirSinSello_(ssId, 'volver a generar los IDs desde cero');
+  }
   const ss = SpreadsheetApp.openById(ssId);
   const lineas = [(cfg.escribir ? 'ASIGNANDO IDs' : 'ENSAYO (no escribe nada)') + ' — ' + ssId, ''];
   const arranque = Date.now();
@@ -679,6 +757,14 @@ function reescribirReferencias(opciones) {
   if (huerfanas.length) {
     lineas.push('', 'HUÉRFANAS (se dejaron intactas, primeras ' + huerfanas.length + '):');
     huerfanas.forEach((h) => lineas.push('  - ' + h));
+  }
+  // Aquí es donde los IDs dejan de ser un dato y se vuelven la llave de la que cuelga todo:
+  // desde esta escritura, regenerarlos o deshacerlos deja huérfano lo que acaba de cablearse.
+  if (cfg.escribir && migracionSellar_(ssId)) {
+    lineas.push('');
+    lineas.push('  Este libro queda SELLADO: desde ahora hay referencias colgando de sus');
+    lineas.push('  IDs, así que regenerarlos o deshacerlos los dejaría huérfanos. Las');
+    lineas.push('  funciones que lo harían se van a negar. Ver migracionEstadoSello.');
   }
   if (!cfg.escribir) lineas.push('', 'Para escribir de verdad, corre: migracion3ReferenciasEscribir');
   const texto = lineas.join('\n');

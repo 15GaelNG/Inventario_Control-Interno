@@ -133,6 +133,9 @@ vm.runInContext(
   lee('MigracionIds.gs') + '\n' + lee('MigracionPipeline.gs') +
   '\nthis.migracionRevertir = migracionRevertir; this.migracionEstado = migracionEstado;' +
   '\nthis.mudarPestanasHistoricas = mudarPestanasHistoricas;' +
+  '\nthis.asignarIds = asignarIds; this.migracionEstadoSello = migracionEstadoSello;' +
+  '\nthis.migracionSellar_ = migracionSellar_; this.migracionSellado_ = migracionSellado_;' +
+  '\nthis.MIGRACION_PROP_SELLO = MIGRACION_PROP_SELLO;' +
   '\nthis.Ids = Ids; this.Entidades = Entidades;',
   contexto
 );
@@ -287,6 +290,72 @@ hojas['Hoja 55'] = hojaFalsa(['X'], [['1']]);
 hojas['Hoja 55'].nombre = 'Hoja 55';
 ok(truenaCon(() => mudarPestanasHistoricas({ escribir: true }), /amarradas|juntas/i),
    'con solo una de las dos presentes, se niega');
+
+// ---------------------------------------------------------------------------- el sello
+//
+// Lo que protege esto: que después de cablear las referencias, nadie pueda regenerar ni
+// deshacer los IDs. No es paranoia — son dos funciones de un clic en el editor de Apps
+// Script, y cualquiera de las dos deja TODOS los `ID VEHICULO` / `ID LINEA` apuntando a
+// IDs que ya no existen, sin error, sin aviso y sin forma de reconstruirlos.
+const LIBRO = 'SS_PRUEBA'; // el que devuelve Config.SPREADSHEET_IDS.VEHICULOS en las pruebas
+const desellar = () => { delete props[contexto.MIGRACION_PROP_SELLO]; };
+
+console.log('\n16. Sin sello, nada estorba');
+escenario();
+desellar();
+ok(!contexto.migracionSellado_(LIBRO), 'el libro arranca sin sello');
+ok(!truenaCon(() => migracionRevertir({ escribir: true }), /SELLADO/),
+   'deshacer corre, porque todavía no hay referencias colgando de los IDs');
+
+console.log('\n17. El sello es por libro, no global');
+desellar();
+ok(contexto.migracionSellar_(LIBRO) === true, 'sellar el libro devuelve true la primera vez');
+ok(contexto.migracionSellar_(LIBRO) === false, 'y false la segunda: no se sella dos veces');
+ok(contexto.migracionSellado_(LIBRO), 'el libro quedó sellado');
+ok(!contexto.migracionSellado_('OTRO_LIBRO'),
+   'y OTRO_LIBRO no: sellar el laboratorio no sella producción');
+ok(contexto.migracionSellar_('OTRO_LIBRO') && contexto.migracionSellado_(LIBRO),
+   'sellar un segundo libro no borra el sello del primero');
+
+console.log('\n18. Con sello, deshacer se niega');
+escenario();
+desellar();
+contexto.migracionSellar_(LIBRO);
+const antesDelSello = JSON.stringify(hojas['LINEAS TELEFONICAS'].datos);
+ok(truenaCon(() => migracionRevertir({ escribir: true }), /SELLADO/),
+   'migracionRevertir({escribir:true}) truena diciendo que el libro está sellado');
+ok(JSON.stringify(hojas['LINEAS TELEFONICAS'].datos) === antesDelSello,
+   'y no alcanzó a tocar una sola celda');
+console.log('     (la guarda de producción NO alcanzaba: el libro nuevo tiene otro id)');
+
+console.log('\n19. Con sello, regenerar los IDs se niega');
+escenario();
+desellar();
+contexto.migracionSellar_(LIBRO);
+ok(truenaCon(() => contexto.asignarIds({ escribir: true, rehacer: true }), /SELLADO/),
+   'asignarIds({rehacer:true, escribir:true}) truena');
+
+console.log('\n20. El sello solo frena lo que destruye');
+escenario();
+desellar();
+contexto.migracionSellar_(LIBRO);
+ok(!truenaCon(() => contexto.asignarIds({ rehacer: true }), /SELLADO/),
+   'el ENSAYO de rehacer sí corre: no escribe nada, y sirve para ver qué pasaría');
+ok(!truenaCon(() => migracionRevertir(), /SELLADO/),
+   'el ensayo de deshacer también');
+ok(!truenaCon(() => contexto.asignarIds({ escribir: true }), /SELLADO/),
+   'y asignarIds SIN rehacer corre aunque esté sellado: solo llena los huecos, no pisa');
+console.log('     (ese último es el que se vuelve a correr cuando la corrida se corta por tiempo)');
+
+console.log('\n21. Y se puede consultar sin cambiar nada');
+desellar();
+const sinSellos = contexto.migracionEstadoSello();
+ok(/Ning[uú]n libro/.test(sinSellos), 'con la lista vacía lo dice claro');
+contexto.migracionSellar_(LIBRO);
+const conSello = contexto.migracionEstadoSello();
+ok(conSello.indexOf(LIBRO) !== -1 && /Sellado: S/.test(conSello),
+   'y con sello nombra el libro y avisa que el apuntado está sellado');
+desellar();
 
 console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');
 process.exit(fallas ? 1 : 0);

@@ -687,6 +687,11 @@ function migracionEstado(opciones) {
 function migracionRevertir(opciones) {
   const cfg = Object.assign({ escribir: false }, opciones || {});
   const ssId = cfg.spreadsheetId || Config.SPREADSHEET_IDS.VEHICULOS();
+  // Deshacer restaura los IDs viejos. Si ya hay referencias apuntando a los nuevos, eso
+  // las deja huérfanas todas: el vínculo nuevo se pierde y el viejo ya se sobrescribió.
+  // La guarda de producción de abajo NO alcanza, porque el libro nuevo tiene otro id.
+  if (cfg.escribir) migracionExigirSinSello_(ssId, 'deshacer la migración');
+
   if (ssId === MIGRACION_SS_PRODUCCION && cfg.escribir) {
     const permiso = pipeProps_().getProperty('MIGRACION_IDS_AUTORIZAR_PRODUCCION');
     if (permiso !== ssId) {
