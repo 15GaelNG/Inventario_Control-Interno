@@ -151,6 +151,19 @@ const SensoresService = (function () {
     return listar(token).filter((s) => s.FOLIO === folio);
   }
 
+  /** Registro completo (todas las columnas) por ID -- "Ver completo" desde la ficha de Vehículos. */
+  function buscarPorId(token, id) {
+    Permisos.puedeLeer(token, 'instalacion-sensores');
+    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, 'ID_SENSOR');
+    if (!encontrado) return null;
+    const limpio = {};
+    Object.keys(encontrado.data).forEach((k) => {
+      const v = encontrado.data[k];
+      limpio[k] = v instanceof Date ? v.toISOString() : v;
+    });
+    return limpio;
+  }
+
   /** Todas las columnas de TODOS los sensores (para exportar completo). */
   function completo(token) {
     Permisos.puedeLeer(token, 'instalacion-sensores');
@@ -344,7 +357,7 @@ const SensoresService = (function () {
   }
 
   return {
-    listar, listarPorFolio, completo, datosParaFormulario, registrar, actualizarCampo, eliminar, urlResponsiva,
+    listar, listarPorFolio, buscarPorId, completo, datosParaFormulario, registrar, actualizarCampo, eliminar, urlResponsiva,
     geotabDisponible, estadoEnVivo, resumenGeotab,
   };
 })();

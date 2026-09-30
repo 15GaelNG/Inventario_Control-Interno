@@ -172,6 +172,20 @@ const InspeccionesService = (function () {
     return listar(token).filter((i) => i.FOLIO === folio);
   }
 
+  /** Registro completo -- TODAS las 195 columnas crudas -- por ID (para "Ver completo" desde
+   *  la ficha de Vehículos; distinto de detalle(), que ya viene agrupado/calculado). */
+  function buscarPorId(token, id) {
+    Permisos.puedeLeer(token, MODULO);
+    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, COL_ID);
+    if (!encontrado) return null;
+    const limpio = {};
+    Object.keys(encontrado.data).forEach((k) => {
+      const v = encontrado.data[k];
+      limpio[k] = v instanceof Date ? v.toISOString() : v;
+    });
+    return limpio;
+  }
+
   /**
    * Todas las 195 columnas de TODAS las inspecciones (para exportar completo) — a
    * diferencia de listar()/detalle(), que evitan leer la hoja entera por lo pesado
@@ -615,7 +629,7 @@ const InspeccionesService = (function () {
   }
 
   return {
-    listar, listarPorFolio, completo, detalle, registrar, urlFormato, previsualizarImagen,
+    listar, listarPorFolio, buscarPorId, completo, detalle, registrar, urlFormato, previsualizarImagen,
     estructuraDeTipo, olvidarTipo, tipos,
     nombrePlantilla_, carpetaDe_,   // las usa configurarInspecciones
     calcularPuntaje_, valorDeRespuesta_,   // expuestas para las pruebas

@@ -711,6 +711,19 @@
   }
   .info-section-title:first-child { margin-top: 0; }
 
+  /* Ver/Editar/Eliminar por fila en las tablas de solo lectura de una ficha
+     (pestañas de Verificaciones/Inspecciones/Sensor/Hologramas/Incidencias dentro
+     de la ficha de Vehículos) -- mismo trato visual que .dt-btn-fila de DataTable,
+     pero sin depender de su ancestro .dt (esta tabla no es un DataTable). */
+  .ficha-acciones-fila { display: inline-flex; gap: 2px; white-space: nowrap; }
+  .ficha-btn-fila {
+    display: inline-flex; align-items: center; background: transparent; border: none;
+    padding: 5px 6px; border-radius: 6px; font-size: 13px; color: var(--color-text-muted);
+  }
+  .ficha-btn-fila:hover, .ficha-btn-fila:focus-visible { background: var(--color-primary-soft); color: var(--color-text); }
+  .ficha-btn-fila.ficha-peligro:hover, .ficha-btn-fila.ficha-peligro:focus-visible { background: #F3ECD6; color: var(--color-danger); }
+  :root[data-theme="dark"] .ficha-btn-fila.ficha-peligro:hover { background: rgba(255,138,128,.15); color: #ff8a80; }
+
   .spinner {
     width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
     border: 2.5px solid var(--color-border); border-top-color: var(--color-accent);

@@ -128,6 +128,24 @@ function apiIncidenciasPorFolio(token, folio) {
   return JSON.stringify(IncidenciasService.listarPorFolio(token, folio));
 }
 
+// "Ver completo" desde la ficha de Vehículos: el registro entero (todas las columnas
+// de la hoja), no el resumen curado que ya traen los *PorFolio de arriba.
+function apiBuscarVerificacionPorId(token, id) {
+  return VerificacionesService.buscarPorId(token, id);
+}
+function apiBuscarInspeccionPorId(token, id) {
+  return InspeccionesService.buscarPorId(token, id);
+}
+function apiBuscarSensorPorId(token, id) {
+  return SensoresService.buscarPorId(token, id);
+}
+function apiBuscarHologramaPorId(token, id) {
+  return HologramasService.buscarPorId(token, id);
+}
+function apiBuscarIncidenciaPorId(token, id) {
+  return IncidenciasService.buscarPorId(token, id);
+}
+
 // --- Uber ---
 function apiListarUberResumen(token) {
   return UberService.listarResumen(token);

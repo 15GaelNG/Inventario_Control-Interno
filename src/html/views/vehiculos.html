@@ -109,6 +109,21 @@
     </div>
   </div>
 
+  <!-- "Ver completo" de una verificación/inspección/sensor/holograma/incidencia,
+       sin salir de la ficha del vehículo -- todas las columnas del registro. -->
+  <div class="modal-backdrop" id="veh-modal-ver-registro" hidden>
+    <div class="modal-card modal-card-wide" role="dialog" aria-modal="true" aria-labelledby="veh-ver-registro-titulo">
+      <div class="modal-header">
+        <div>
+          <h3 style="margin:0" id="veh-ver-registro-titulo"></h3>
+          <p class="modal-subtitle" id="veh-ver-registro-subtitulo"></p>
+        </div>
+        <button type="button" class="modal-close" id="veh-ver-registro-cerrar" aria-label="Cerrar"><i data-lucide="x" class="ico"></i></button>
+      </div>
+      <div class="modal-form-scroll" id="veh-ver-registro-cuerpo"></div>
+    </div>
+  </div>
+
   <!-- Modal: editar vehículo -->
   <div class="modal-backdrop" id="modal-editar-vehiculo" hidden>
     <div class="modal-card modal-card-wide">
