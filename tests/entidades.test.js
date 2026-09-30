@@ -27,7 +27,7 @@ function truena(fn, texto) {
 console.log('1. El catálogo está sano');
 const revision = Entidades.revisarCatalogo();
 ok(revision.problemas.length === 0, 'sin problemas: ' + (revision.problemas.join(' | ') || 'ninguno'));
-ok(revision.hojas === 27, 'tiene las 27 hojas de registros, no ' + revision.hojas);
+ok(revision.hojas === 28, 'tiene las 28 hojas de registros (con APP_RESGUARDOS de Líneas), no ' + revision.hojas);
 ok(Entidades.migrables().length === 24,
    'de ellas 24 vienen de AppSheet y sí se migran, no ' + Entidades.migrables().length);
 
@@ -65,8 +65,8 @@ ok(pisan.indexOf('VEHICULOS') === -1,
 
 console.log('\n6b. Las pestañas del sistema nuevo no pasan por la migración');
 const nuevas = todas.filter((e) => e.delSistemaNuevo).map((e) => e.hoja).sort();
-ok(nuevas.join(',') === 'APP_EVIDENCIAS,APP_MOVIMIENTOS,APP_NOTIFICACIONES',
-   'son las tres APP_ de Líneas: ' + nuevas.join(', '));
+ok(nuevas.join(',') === 'APP_EVIDENCIAS,APP_MOVIMIENTOS,APP_NOTIFICACIONES,APP_RESGUARDOS',
+   'son las cuatro APP_ de Líneas: ' + nuevas.join(', '));
 ok(Entidades.migrables().every((e) => !e.delSistemaNuevo), 'y quedan fuera de migrables()');
 ok(Entidades.prefijo('APP_EVIDENCIAS') === 'EVI',
    'pero sí tienen prefijo, para que sus altas nazcan bien');

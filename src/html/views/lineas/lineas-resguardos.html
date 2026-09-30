@@ -1,0 +1,26 @@
+<template id="tpl-lineas-resguardos">
+  <section id="ln-resguardos" class="ln-modulo">
+    <div class="page-header">
+      <div>
+        <h2><i data-lucide="package-check" class="ico"></i> Resguardos y cancelaciones</h2>
+        <p class="page-subtitle" id="lnr-subtitulo">Equipos mandados a resguardo y líneas en cancelación. La recepción y la cancelación las confirma quien recibe los resguardos.</p>
+      </div>
+      <div class="page-header-actions">
+        <button type="button" class="secondary" id="lnr-actualizar"><i data-lucide="refresh-cw" class="ico"></i> Actualizar</button>
+      </div>
+    </div>
+
+    <div class="ln-segmentado lnr-pestanas" role="tablist" aria-label="Qué ver">
+      <button type="button" class="secondary activo" data-lnr-vista="RESGUARDOS" role="tab" aria-selected="true"><i data-lucide="archive" class="ico"></i> Resguardos</button>
+      <button type="button" class="secondary" data-lnr-vista="CANCELACIONES" role="tab" aria-selected="false"><i data-lucide="phone-off" class="ico"></i> Cancelaciones</button>
+    </div>
+
+    <div class="stat-row" id="lnr-kpis">
+      <div class="stat-tile"><div class="stat-icon"><i data-lucide="loader-circle" class="ico"></i></div><div><div class="stat-value">…</div><div class="stat-label">Cargando</div></div></div>
+    </div>
+
+    <div class="ln-nota" id="lnr-solo-lectura" hidden><i data-lucide="eye" class="ico"></i> Aquí ves el avance. Recibir, entregar y confirmar cancelaciones lo hace quien recibe los resguardos.</div>
+
+    <div class="card card-compacta"><div id="lnr-tabla"></div></div>
+  </section>
+</template>

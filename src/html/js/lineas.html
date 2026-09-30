@@ -6,6 +6,7 @@
    *
    *   Lineas.initTelefonicas()     Líneas Telefónicas: inventario (tabla o tarjetas), ficha, inspecciones e historial
    *   Lineas.initGestionActivos()  Gestión de Activos: activos por colaborador (acceso propio en el menú)
+   *   Lineas.initResguardos()      Resguardos y cancelaciones (APP_RESGUARDOS): bandeja de quien recibe los equipos
    *   Lineas.initCambios()         Control de Cambios - Líneas (CAMBIOS LINEAS TELEFONICAS), fuera del menú
    *   (Reactivación, Solicitud, Reasignaciones y Desechos se retiraron el 30-sep con sus pestañas)
    */
@@ -170,6 +171,9 @@
       'USO': 'verde', 'EN USO': 'verde', 'RENOVADA': 'verde',
       'RESGUARDO': 'azul', 'DISPONIBLE': 'azul', 'EN ENVIO': 'azul', 'ESPERA DE RESPONSIVA': 'azul', 'ESPERA DE EQUIPO': 'azul',
       'PARA VENTA': 'ambar', 'POSIBLE VENTA-DAÑO': 'ambar', 'PARA DESECHO': 'ambar', 'EN PROCESO DE CANCELACION': 'ambar',
+      // Bandeja de resguardos y cancelaciones
+      'PENDIENTE DE RECEPCION': 'ambar', 'EN RESGUARDO': 'azul', 'ENTREGADO A LINEAS': 'verde',
+      'POR FIRMAR': 'ambar', 'CARTA FIRMADA': 'ambar', 'CARTA ENVIADA': 'azul',
       'SUSPENDIDA': 'ambar', 'POSIBLE VENTA': 'ambar', 'VENTA': 'ambar', 'USO TEMPORAL': 'ambar', 'SIN LINEA': 'ambar',
       'EXTRAVIO-ROBO': 'rojo', 'CANCELADA': 'rojo', 'DESECHADO': 'rojo',
       // Valores de antes del 30-sep que siguen en la hoja hasta que Líneas los corrija
@@ -1349,8 +1353,9 @@
      */
     /** Acciones masivas de equipos (barra de la tabla con 2 o más seleccionados). `clave` = LineasRegistros.MASIVAS. */
     const ACCIONES_MASIVAS = [
-      { clave: 'RESGUARDO', texto: 'Mandar a resguardo', boton: 'Mandar a resguardo', icono: 'archive',
-        ayuda: 'Pone los equipos seleccionados en RESGUARDO', efecto: 'El ESTATUS DEL EQUIPO de cada uno cambia a RESGUARDO; el responsable no cambia.' },
+      // Mandar a resguardo tiene su propio formulario (abrirResguardo): datos por NUCO, N/A y bandeja de Pau (30-sep)
+      { clave: 'RESGUARDO', texto: 'Mandar a resguardo', icono: 'archive', minimo: 1, propia: true,
+        ayuda: 'Manda los equipos seleccionados a resguardo: cada uno con su ubicación y el estatus de su línea' },
       { clave: 'REASIGNAR', texto: 'Reasignar', boton: 'Reasignar', icono: 'user-round-pen',
         ayuda: 'Asigna los equipos seleccionados a otro responsable', efecto: 'Todos los equipos pasan al nuevo responsable y su ESTATUS DEL EQUIPO queda en RESGUARDO; lo que dejes vacío (No. empleado, puesto, departamento) queda como estaba en cada equipo.' },
       // "Cancelar equipos" se quitó el 30-sep: los equipos no se cancelan, solo las líneas
@@ -1586,9 +1591,10 @@
           detalle: false, // la ficha completa (responsable, evidencias, historial) es su propia pantalla
           // Sin columna de Acciones (30-sep): un clic en la fila abre la vista rápida (que trae "Abrir ficha completa",
           // así también funciona en celular y tableta) y el doble clic la ficha completa
-          // Acciones masivas: solo equipos y desde 2 seleccionados (las de líneas están por definirse con el área)
+          // Acciones de selección: solo equipos; Mandar a resguardo desde 1 y Reasignar desde 2 (las de líneas, por definir)
           accionesSeleccion: modulo === 'equipos' ? ACCIONES_MASIVAS.map((a) => ({
-            icono: a.icono, texto: a.texto, titulo: a.ayuda, minimo: 2, peligro: !!a.peligro, alHacer: (filas) => abrirMasiva(a, filas),
+            icono: a.icono, texto: a.texto, titulo: a.ayuda, minimo: a.minimo || 2, peligro: !!a.peligro,
+            alHacer: (filas) => (a.propia ? abrirResguardo(filas) : abrirMasiva(a, filas)),
           })) : [],
           ayuda: 'Un clic en una fila abre la vista rápida a la derecha y el doble clic la ficha completa. "Seleccionar" muestra las casillas: ' +
             'ahí el clic marca la fila, arrastrar marca varias y Shift+clic un rango (Ctrl+clic también entra al modo). ' +
@@ -2410,6 +2416,165 @@
               aviso(icono('triangle-alert', 'ln-alerta') + ' Sin cambio: ' + omitidos.slice(0, 6).map((o) => 'NUCO ' + (o.nuco || o.id) + ' (' + o.motivo + ')').join(' · ') +
                 (omitidos.length > 6 ? ' · …' : ''), 12000);
             }
+          } catch (e) {
+            mostrarErrorCaptura(mensajeError(e));
+            restaurarGuardado();
+          }
+        });
+      }
+
+      /**
+       * Mandar a resguardo (reunión con Líneas, 30-sep): uno o varios equipos, cada NUCO con sus datos
+       * (departamento, sede, oficina, estatus del equipo y de la línea, comentario). Los datos de la persona pasan a
+       * N/A en el servidor; la línea se propone DISPONIBLE o EN PROCESO DE CANCELACION según su FIN PLAN.
+       * Al guardar se crea el renglón de la bandeja de Pau (Resguardos y cancelaciones).
+       */
+      async function abrirResguardo(filas) {
+        const permisos = await cargarPermisos().catch(() => null);
+        if (!permisos || !permisos.puedeOperar) { aviso(icono('triangle-alert', 'ln-alerta') + ' Tu rol no permite modificar equipos.', 6000); return; }
+        $('#ln-modal-captura', raiz).hidden = false;
+        $('#ln-captura-icono', raiz).innerHTML = icono('archive');
+        $('#ln-captura-tipo', raiz).textContent = 'RESGUARDO';
+        $('#ln-captura-titulo', raiz).textContent = 'Mandar a resguardo';
+        $('#ln-captura-subtitulo', raiz).textContent = miles(filas.length) + (filas.length === 1 ? ' equipo' : ' equipos') + ' · cada uno con sus datos · el cambio queda en su bitácora';
+        const cuerpo = $('#ln-captura-cuerpo', raiz);
+        cuerpo.innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando…</p>';
+        const sesion = captura = { tipo: 'RESGUARDO', firmas: {} };
+        let form;
+        try {
+          form = await llamar('apiLineasFormularioResguardo', filas.map((r) => r.id));
+        } catch (e) {
+          if (captura === sesion) cuerpo.innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>';
+          return;
+        }
+        if (captura !== sesion) return;
+        const equipos = form.equipos || [];
+        if (!equipos.length) {
+          cuerpo.innerHTML = '<p class="error-msg">Ninguno de los seleccionados es un equipo: ' + esc((form.omitidos || []).map((o) => o.motivo).join(' · ')) + '</p>';
+          return;
+        }
+        const columnaFila = (id, c) => 'FILA|' + id + '|' + c;
+        const base = (c) => (form.campos || []).filter((e) => e.columna === c)[0];
+        const enLista = (e, v) => !v || !e || e.control !== 'lista' || (e.opciones || []).map((o) => String(o).toUpperCase()).indexOf(String(v).toUpperCase()) >= 0;
+        const campo = (columna, etiqueta, control, extra) => Object.assign({ tipo: 'campo', columna: columna, etiqueta: etiqueta, control: control,
+          requerido: 'NUNCA', mostrar: 'SIEMPRE', editable: 'SIEMPRE', soloLectura: false }, extra || {});
+        const ubicacion = ['DEPARTAMENTO', 'SEDE', 'OFICINA / DESARROLLO'];
+        const vigenciaTexto = (q) => (q.vigencia === 'vencido' ? 'Adendum vencido el ' + q.finPlan : (q.vigencia === 'vigente' ? 'Adendum vigente hasta ' + q.finPlan : 'Sin fecha de adendum'));
+
+        // Campos de cada equipo, con prefijo FILA|<id>| para que sean únicos
+        const elementosFila = {};
+        equipos.forEach((q) => {
+          const actual = { DEPARTAMENTO: 'DISPONIBLE', SEDE: q.sede, 'OFICINA / DESARROLLO': q.oficina };
+          const els = ubicacion.map((c) => {
+            const b = base(c);
+            return Object.assign({}, b, { columna: columnaFila(q.id, c), valor: enLista(b, actual[c]) ? actual[c] || '' : '', requerido: 'SIEMPRE', autollenar: undefined });
+          });
+          els.push(campo(columnaFila(q.id, 'ESTATUS EQUIPO'), 'ESTATUS DEL EQUIPO', 'lista', { opciones: form.estatusEquipo, valor: 'RESGUARDO', requerido: 'SIEMPRE' }));
+          if (q.tieneLinea) {
+            els.push(campo(columnaFila(q.id, 'ESTATUS LINEA'), 'ESTATUS DE LA LÍNEA', 'lista', { opciones: form.estatusLinea, valor: q.propuestaLinea, requerido: 'SIEMPRE' }));
+          }
+          els.push(campo(columnaFila(q.id, 'COMENTARIO'), 'COMENTARIO (contexto del resguardo)', 'texto', { valor: '' }));
+          elementosFila[q.id] = els;
+        });
+        // Datos comunes para copiar a todos (opcional)
+        const comunes = ubicacion.map((c) => Object.assign({}, base(c), { columna: 'TODOS|' + c, valor: c === 'DEPARTAMENTO' ? 'DISPONIBLE' : '', requerido: 'NUNCA', autollenar: undefined }))
+          .concat([campo('TODOS|ESTATUS EQUIPO', 'ESTATUS DEL EQUIPO', 'lista', { opciones: form.estatusEquipo, valor: 'RESGUARDO' })]);
+        const motivoEl = campo('_MOTIVO', 'MOTIVO (queda en el historial de cada equipo)', 'area', { requerido: 'SIEMPRE', valor: '' });
+
+        const cabecera = (q) => '<div class="ln-resg-cabecera"><strong>' + icono('smartphone') + ' NUCO ' + esc(q.nuco || '—') + '</strong>' +
+          '<span>' + esc(q.modelo || 'Sin modelo') + '</span><span class="ln-mono">' + esc(q.imei || '') + '</span>' +
+          '<span>' + esc(q.responsable || 'Sin responsable') + '</span>' + chip(q.estatusEquipo) +
+          (q.tieneLinea ? '<span class="ln-mono">' + icono('phone') + ' ' + esc(q.numero) + (q.compania ? ' · ' + esc(q.compania) : '') + '</span>' +
+            chip(vigenciaTexto(q), q.vigencia === 'vencido' ? 'rojo' : (q.vigencia === 'vigente' ? 'verde' : 'ambar'))
+            : '<span class="ln-tenue">Sin línea</span>') + '</div>';
+
+        cuerpo.innerHTML =
+          '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' Cada equipo queda con el estatus que elijas y sus datos de persona en N/A (' +
+            esc((form.camposNA || []).join(', ').toLowerCase()) + '); el patrón se borra. Su línea se propone <strong>DISPONIBLE</strong> si el adendum sigue vigente ' +
+            'o <strong>EN PROCESO DE CANCELACION</strong> si ya venció. Después, en <em>Resguardos y cancelaciones</em>, quien recibe confirma la recepción.</div>' +
+          ((form.omitidos || []).length ? '<div class="ln-nota ln-alerta">' + icono('triangle-alert', 'ln-icon-sm') + ' No se incluyen: ' +
+            esc(form.omitidos.map((o) => (o.nuco ? 'NUCO ' + o.nuco + ' ' : '') + '(' + o.motivo + ')').join(' · ')) + '</div>' : '') +
+          (equipos.length > 1 ? '<section class="ln-af-seccion ln-resg-todos"><h4 class="ln-af-titulo">' + icono('copy') + ' Mismos datos para todos (opcional)</h4><div class="ln-af-grid">' +
+            comunes.map(htmlElementoFormulario).join('') + '</div><button type="button" class="secondary ln-btn-chico" id="ln-resg-copiar">' + icono('copy') +
+            ' Copiar a los ' + miles(equipos.length) + ' equipos</button></section>' : '') +
+          equipos.map((q) => '<section class="ln-af-seccion ln-masiva-fila" data-resg-fila="' + esc(q.id) + '">' + cabecera(q) +
+            '<div class="ln-af-grid">' + elementosFila[q.id].map(htmlElementoFormulario).join('') + '</div></section>').join('') +
+          '<section class="ln-af-seccion"><div class="ln-af-grid">' + htmlElementoFormulario(motivoEl) + '</div></section>' +
+          '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div><div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
+          '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('archive') + ' Mandar a resguardo (' + miles(equipos.length) + ')</button></div>';
+        pintarIconos(cuerpo);
+        if (equipos.length > 1) activarCombosEn($('.ln-resg-todos', cuerpo), comunes);
+        // Las listas de cada equipo se activan al entrar a su sección (con muchos equipos serían cientos)
+        cuerpo.addEventListener('focusin', (ev) => {
+          const sec = ev.target.closest && ev.target.closest('[data-resg-fila]');
+          if (!sec || sec.dataset.combos) return;
+          sec.dataset.combos = '1';
+          activarCombosEn(sec, elementosFila[sec.dataset.resgFila]);
+        });
+        const valorDe = (columna) => {
+          const el = cuerpo.querySelector('[data-columna="' + CSS.escape(columna) + '"]');
+          return el ? String(el.value || '').trim() : '';
+        };
+        const ponerValor = (columna, v) => {
+          const el = cuerpo.querySelector('[data-columna="' + CSS.escape(columna) + '"]');
+          if (el && v) { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }
+        };
+        const copiar = $('#ln-resg-copiar', cuerpo);
+        if (copiar) {
+          copiar.addEventListener('click', () => {
+            const vals = {};
+            ubicacion.concat('ESTATUS EQUIPO').forEach((c) => { vals[c] = valorDe('TODOS|' + c); });
+            if (!Object.keys(vals).some((c) => vals[c])) { mostrarErrorCaptura('Escribe arriba al menos un dato para copiar.'); return; }
+            equipos.forEach((q) => Object.keys(vals).forEach((c) => ponerValor(columnaFila(q.id, c), vals[c])));
+            aviso(icono('circle-check') + ' Datos copiados a los ' + miles(equipos.length) + ' equipos; puedes ajustar cada uno.', 5000);
+          });
+        }
+
+        $('#cap-guardar', raiz).addEventListener('click', async () => {
+          $('#cap-error', raiz).hidden = true;
+          const todos = equipos.reduce((lista, q) => lista.concat(elementosFila[q.id]), []).concat([motivoEl]);
+          const errores = erroresFormularioEn(cuerpo, todos, '', { nuevo: false, tipoInicial: '' });
+          marcarErroresEn(cuerpo, errores.map((x) => ({ columna: x.columna, msg: x.corto })));
+          const nucoDe = (columna) => {
+            const partes = String(columna).split('|');
+            const q = partes[0] === 'FILA' ? equipos.filter((x) => x.id === partes[1])[0] : null;
+            return q ? 'NUCO ' + (q.nuco || '—') + ' · ' : '';
+          };
+          if (errores.length) { mostrarErrorCaptura(errores.map((x) => nucoDe(x.columna) + x.msg).slice(0, 4).join(' · ')); return; }
+          const valores = leerFormularioEn(cuerpo, todos);
+          const porEquipo = {};
+          let cancelan = 0;
+          equipos.forEach((q) => {
+            const v = (c) => String(valores[columnaFila(q.id, c)] || '').trim();
+            porEquipo[q.id] = { _ETIQUETA: 'NUCO ' + (q.nuco || '—'), DEPARTAMENTO: v('DEPARTAMENTO'), SEDE: v('SEDE'), 'OFICINA / DESARROLLO': v('OFICINA / DESARROLLO'),
+              'ESTATUS EQUIPO': v('ESTATUS EQUIPO'), 'ESTATUS LINEA': q.tieneLinea ? v('ESTATUS LINEA') : '', COMENTARIO: v('COMENTARIO') };
+            if (porEquipo[q.id]['ESTATUS LINEA'] === 'EN PROCESO DE CANCELACION') cancelan++;
+          });
+          const ok = await Confirmar.pedir({
+            titulo: '¿Mandar a resguardo ' + miles(equipos.length) + (equipos.length === 1 ? ' equipo?' : ' equipos?'),
+            mensaje: 'Sus datos de persona pasan a N/A y cada uno deja su bitácora.' + (cancelan ? ' ' + cancelan + ' línea(s) quedan EN PROCESO DE CANCELACION.' : '') +
+              ' Se avisa a quien recibe los resguardos.',
+            detalle: equipos.slice(0, 12).map((q) => 'NUCO ' + (q.nuco || '—') + ': ' + porEquipo[q.id]['ESTATUS EQUIPO'] +
+              (q.tieneLinea ? ' · línea ' + porEquipo[q.id]['ESTATUS LINEA'] : '') + ' · ' + porEquipo[q.id].SEDE)
+              .concat(equipos.length > 12 ? ['… y ' + (equipos.length - 12) + ' más'] : []),
+            textoConfirmar: 'Mandar a resguardo',
+          });
+          if (!ok || captura !== sesion) return;
+          estadoGuardado('Mandando ' + miles(equipos.length) + ' a resguardo');
+          try {
+            const r = await llamar('apiLineasMandarResguardo', equipos.map((q) => q.id), { motivo: valores._MOTIVO, porEquipo: porEquipo });
+            await cargarIndice(true);
+            cerrarCaptura(true);
+            if (tablas.equipos) tablas.equipos.limpiarSeleccion();
+            if (vigente()) { pintarIndicadores(); pintarListado(); }
+            const omitidos = r.omitidos || [];
+            aviso(icono('circle-check') + ' ' + miles(r.hechos.length) + ' equipo(s) en resguardo' + (omitidos.length ? ' · ' + omitidos.length + ' sin cambio' : '') +
+              '. Ya aparecen en Resguardos y cancelaciones.', 8000);
+            if (omitidos.length) {
+              aviso(icono('triangle-alert', 'ln-alerta') + ' Sin cambio: ' + omitidos.slice(0, 6).map((o) => 'NUCO ' + (o.nuco || o.id) + ' (' + o.motivo + ')').join(' · '), 12000);
+            }
+            const actual = pila[pila.length - 1];
+            if (actual && equipos.some((q) => q.id === actual.id)) abrir(actual.tipo, actual.id, true);
           } catch (e) {
             mostrarErrorCaptura(mensajeError(e));
             restaurarGuardado();
@@ -3937,6 +4102,231 @@
     }
 
     // ======================================================================
+    // Resguardos y cancelaciones (bandeja de Pau, reunión con Líneas 30-sep)
+    // ======================================================================
+
+    /**
+     * Ventana chica para pedir datos antes de un paso de la bandeja. campos: [{ clave, etiqueta, valor, requerido,
+     * opciones }]. Regresa una promesa con { clave: valor } o null si se cancela.
+     */
+    function pedirDatos(titulo, mensaje, campos, textoConfirmar) {
+      return new Promise((resolve) => {
+        const fondo = document.createElement('div');
+        fondo.className = 'modal-backdrop';
+        fondo.innerHTML = '<div class="modal-card" role="dialog" aria-modal="true" style="max-width:480px">' +
+          '<div class="modal-header"><div><h3 style="margin:0">' + esc(titulo) + '</h3>' + (mensaje ? '<p class="modal-subtitle">' + esc(mensaje) + '</p>' : '') + '</div>' +
+          '<button type="button" class="modal-close" data-cerrar aria-label="Cerrar">' + ico('x') + '</button></div>' +
+          campos.map((c, i) => '<div class="field"><label for="lnr-dato-' + i + '">' + esc(c.etiqueta) + (c.requerido ? ' *' : '') + '</label>' +
+            (c.opciones ? '<select id="lnr-dato-' + i + '" data-clave="' + esc(c.clave) + '">' + c.opciones.map((o) => '<option' + (o === c.valor ? ' selected' : '') + '>' + esc(o) + '</option>').join('') + '</select>'
+              : '<input type="text" id="lnr-dato-' + i + '" data-clave="' + esc(c.clave) + '" value="' + esc(c.valor || '') + '" autocomplete="off" data-respetar-texto />') + '</div>').join('') +
+          '<div class="error-msg" data-error hidden></div>' +
+          '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar>Cancelar</button><button type="button" data-ok>' + esc(textoConfirmar || 'Aceptar') + '</button></div></div>';
+        document.body.appendChild(fondo);
+        const cerrar = (valor) => { fondo.remove(); document.removeEventListener('keydown', tecla, true); resolve(valor); };
+        const tecla = (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); cerrar(null); } };
+        document.addEventListener('keydown', tecla, true);
+        fondo.addEventListener('click', (ev) => { if (ev.target === fondo || ev.target.closest('[data-cerrar]')) cerrar(null); });
+        fondo.querySelector('[data-ok]').addEventListener('click', () => {
+          const valores = {};
+          fondo.querySelectorAll('[data-clave]').forEach((el) => { valores[el.dataset.clave] = String(el.value || '').trim(); });
+          const falta = campos.filter((c) => c.requerido && !valores[c.clave])[0];
+          if (falta) { const e = fondo.querySelector('[data-error]'); e.textContent = falta.etiqueta + ' es obligatorio.'; e.hidden = false; return; }
+          cerrar(valores);
+        });
+        pintarIconos(fondo);
+        const primero = fondo.querySelector('[data-clave]');
+        if (primero) primero.focus();
+      });
+    }
+
+    function initResguardos() {
+      const n = ++montaje;
+      const raiz = document.getElementById('ln-resguardos');
+      const vigente = () => n === montaje && document.body.contains(raiz);
+      let vista = 'RESGUARDOS';
+      let datos = null;
+      let tabla = null;
+      let marcarKpi = null;
+      let filtros = {};
+      refreshIcons();
+
+      const fechaCorta = (v) => (v ? fechaTabla(v) : '');
+      const COLUMNAS = {
+        RESGUARDOS: [
+          { campo: 'FECHA', titulo: 'Mandado', tipo: 'lnFechaHora', fijada: true },
+          { campo: 'NUCO', titulo: 'NUCO', tipo: 'texto', render: (v) => '<span class="ln-mono ln-fuerte">' + guion(v) + '</span>' },
+          { campo: 'ESTADO', titulo: 'Estado', tipo: 'lista', render: (v) => chip(v) },
+          { campo: 'MODELO', titulo: 'Modelo', tipo: 'texto' },
+          { campo: 'IMEI', titulo: 'IMEI', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
+          { campo: 'ESTATUS_EQUIPO', titulo: 'Estatus del equipo', tipo: 'lista', render: (v) => chip(v) },
+          { campo: 'NUMERO', titulo: 'Línea', tipo: 'texto', render: (v) => (v ? '<span class="ln-mono">' + esc(v) + '</span>' : '<span class="ln-tenue">Sin línea</span>') },
+          { campo: 'ESTATUS_LINEA', titulo: 'Estatus de la línea', tipo: 'lista', render: (v) => chip(v) },
+          { campo: 'SEDE', titulo: 'Sede', tipo: 'lista' },
+          { campo: 'OFICINA', titulo: 'Oficina / desarrollo', tipo: 'lista' },
+          { campo: 'SOLICITO_NOMBRE', titulo: 'Mandó', tipo: 'lista' },
+          { campo: 'MOTIVO', titulo: 'Motivo', tipo: 'texto' },
+          { campo: 'COMENTARIO', titulo: 'Comentario', tipo: 'texto', visible: false },
+          { campo: 'RECIBIDO_EN', titulo: 'Recibido', tipo: 'lnFechaHora' },
+          { campo: 'RECIBIO', titulo: 'Recibió', tipo: 'lista', visible: false },
+          { campo: 'ENTREGADO_EN', titulo: 'Entregado', tipo: 'lnFechaHora', visible: false },
+          { campo: 'ENTREGADO_A', titulo: 'Entregado a', tipo: 'lista', visible: false },
+          { campo: 'ENTREGA_ASUNTO', titulo: 'Asunto / correo', tipo: 'texto', visible: false },
+          { campo: 'DEPARTAMENTO', titulo: 'Departamento', tipo: 'lista', visible: false },
+          { campo: 'TIPO', titulo: 'Tipo', tipo: 'lista', visible: false },
+        ],
+        CANCELACIONES: [
+          { campo: 'FECHA', titulo: 'Mandado', tipo: 'lnFechaHora', fijada: true },
+          { campo: 'NUMERO', titulo: 'Línea', tipo: 'texto', render: (v) => '<span class="ln-mono ln-fuerte">' + guion(v) + '</span>' },
+          { campo: 'CANCELACION', titulo: 'Cancelación', tipo: 'lista', render: (v) => chip(v) },
+          { campo: 'NUCO', titulo: 'NUCO', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
+          { campo: 'COMPANIA', titulo: 'Compañía', tipo: 'lista' },
+          { campo: 'RAZON_SOCIAL', titulo: 'Razón social', tipo: 'lista' },
+          { campo: 'FIN_PLAN', titulo: 'Fin del adendum', tipo: 'texto' },
+          { campo: 'ASESOR', titulo: 'Asesor', tipo: 'lista' },
+          { campo: 'CARTA_FIRMADA_EN', titulo: 'Carta firmada', tipo: 'lnFechaHora' },
+          { campo: 'CARTA_ENVIADA_EN', titulo: 'Carta enviada', tipo: 'lnFechaHora' },
+          { campo: 'CANCELADA_EN', titulo: 'Cancelada', tipo: 'lnFechaHora' },
+          { campo: 'CANCELACION_ASUNTO', titulo: 'Asunto / correo', tipo: 'texto' },
+          { campo: 'ESTADO', titulo: 'Equipo (resguardo)', tipo: 'lista', render: (v) => chip(v), visible: false },
+          { campo: 'SOLICITO_NOMBRE', titulo: 'Mandó', tipo: 'lista', visible: false },
+          { campo: 'CANCELO', titulo: 'Confirmó', tipo: 'lista', visible: false },
+        ],
+      };
+
+      /** Paso de la bandeja: pide lo necesario, confirma y llama al servidor. */
+      async function paso(accion, filas, opciones) {
+        const o = opciones || {};
+        let extra = {};
+        if (o.campos) {
+          extra = await pedirDatos(o.titulo, o.mensaje, o.campos, o.boton);
+          if (!extra) return;
+        } else {
+          const ok = await Confirmar.pedir({
+            titulo: o.titulo, mensaje: o.mensaje, textoConfirmar: o.boton, peligro: !!o.peligro,
+            detalle: filas.slice(0, 20).map((f) => 'NUCO ' + (f.NUCO || '—') + (f.NUMERO ? ' · ' + f.NUMERO : '') + ' · ' + (f.ESTADO || '')),
+          });
+          if (!ok) return;
+        }
+        try {
+          const r = await llamar('apiLineasAccionBandejaResguardo', accion, filas.map((f) => f.ID), extra);
+          const omitidos = r.omitidos || [];
+          const avisos = (r.hechos || []).filter((h) => h.aviso);
+          aviso(icono('circle-check') + ' ' + o.hecho + ': ' + miles((r.hechos || []).length) + (omitidos.length ? ' · ' + omitidos.length + ' sin cambio (' +
+            omitidos.slice(0, 4).map((x) => 'NUCO ' + (x.nuco || x.id) + ': ' + x.motivo).join(' · ') + ')' : '') + '.', 8000);
+          avisos.forEach((h) => aviso(icono('triangle-alert', 'ln-alerta') + ' NUCO ' + h.nuco + ': ' + h.aviso, 10000));
+          if (tabla) tabla.limpiarSeleccion();
+          if (o.inventario) memoria.cargadoEn = 0; // el inventario cambió: que Líneas Telefónicas lo vuelva a pedir
+          cargar();
+        } catch (e) {
+          aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 10000);
+        }
+      }
+
+      const ACCIONES = {
+        RESGUARDOS: [
+          { icono: 'package-check', texto: 'Recibir', titulo: 'Confirma que recibiste físicamente los equipos', minimo: 1,
+            alHacer: (filas) => paso('RECIBIR', filas, { titulo: '¿Confirmas que recibiste ' + miles(filas.length) + ' equipo(s)?',
+              mensaje: 'Pasan a EN RESGUARDO con la fecha de hoy.', boton: 'Recibí los equipos', hecho: 'Recibidos' }) },
+          { icono: 'hand-helping', texto: 'Entregar a Líneas', titulo: 'Un equipo guardado se entrega a Líneas para asignarlo', minimo: 1,
+            alHacer: (filas) => paso('ENTREGAR', filas, { titulo: 'Entregar a Líneas', mensaje: miles(filas.length) + ' equipo(s) pasan a ENTREGADO A LINEAS.',
+              campos: [{ clave: 'recibe', etiqueta: 'Quién de Líneas lo recibe', requerido: true }, { clave: 'asunto', etiqueta: 'Asunto del correo o ticket (opcional)' }],
+              boton: 'Entregar', hecho: 'Entregados' }) },
+          { icono: 'badge-dollar-sign', texto: 'Vendido', titulo: 'El equipo se vendió: también cambia su estatus en el inventario', minimo: 1,
+            alHacer: (filas) => paso('VENDIDO', filas, { titulo: 'Marcar como vendido', mensaje: miles(filas.length) + ' equipo(s) pasan a VENDIDO aquí y en el inventario.',
+              campos: [{ clave: 'asunto', etiqueta: 'Referencia de la venta (opcional)' }], boton: 'Marcar vendido', hecho: 'Vendidos', inventario: true }) },
+        ],
+        CANCELACIONES: [
+          { icono: 'signature', texto: 'Carta firmada', titulo: 'La carta de cancelación ya está firmada', minimo: 1,
+            alHacer: (filas) => paso('CARTA_FIRMADA', filas, { titulo: 'Carta firmada', mensaje: miles(filas.length) + ' línea(s) pasan a CARTA FIRMADA.',
+              campos: [{ clave: 'asesor', etiqueta: 'Asesor', valor: filas[0].ASESOR || '', opciones: ['KARLA', 'WILBERTO', 'ALFREDO'].indexOf(filas[0].ASESOR) >= 0 || !filas[0].ASESOR ? ['KARLA', 'WILBERTO', 'ALFREDO'] : null }],
+              boton: 'Guardar', hecho: 'Cartas firmadas' }) },
+          { icono: 'send', texto: 'Carta enviada', titulo: 'La cancelación ya se pidió al proveedor', minimo: 1,
+            alHacer: (filas) => paso('CARTA_ENVIADA', filas, { titulo: 'Carta enviada al proveedor', mensaje: miles(filas.length) + ' línea(s) pasan a CARTA ENVIADA.',
+              campos: [{ clave: 'asunto', etiqueta: 'Asunto del correo (opcional)' }], boton: 'Guardar', hecho: 'Cartas enviadas' }) },
+          { icono: 'phone-off', texto: 'Confirmar cancelada', titulo: 'El proveedor confirmó: la línea queda CANCELADA y el NUCO pasa a solo EQUIPO', minimo: 1, peligro: true,
+            alHacer: (filas) => paso('CANCELADA', filas, { titulo: '¿Confirmar la cancelación de ' + miles(filas.length) + ' línea(s)?',
+              mensaje: 'En el inventario la línea queda CANCELADA, el NUCO pasa a solo EQUIPO y el número queda en su historial.', boton: 'Confirmar cancelada',
+              peligro: true, hecho: 'Canceladas', inventario: true }) },
+        ],
+      };
+
+      function filasVista() {
+        const todas = (datos && datos.filas) || [];
+        return vista === 'RESGUARDOS' ? todas : todas.filter((f) => f.CANCELACION);
+      }
+
+      function pintarKpis() {
+        const filas = filasVista();
+        const cuenta = (campo, valor) => filas.filter((f) => f[campo] === valor).length;
+        const defs = vista === 'RESGUARDOS' ? [
+          { icono: 'archive', valor: miles(filas.length), etiqueta: 'Mandados a resguardo' },
+          { icono: 'clock', valor: miles(cuenta('ESTADO', 'PENDIENTE DE RECEPCION')), etiqueta: 'Por recibir', clase: 'stat-tile-warn', filtros: { ESTADO: { valores: ['PENDIENTE DE RECEPCION'] } } },
+          { icono: 'package-check', valor: miles(cuenta('ESTADO', 'EN RESGUARDO')), etiqueta: 'En resguardo', filtros: { ESTADO: { valores: ['EN RESGUARDO'] } } },
+          { icono: 'hand-helping', valor: miles(cuenta('ESTADO', 'ENTREGADO A LINEAS')), etiqueta: 'Entregados a Líneas', clase: 'stat-tile-ok', filtros: { ESTADO: { valores: ['ENTREGADO A LINEAS'] } } },
+          { icono: 'badge-dollar-sign', valor: miles(cuenta('ESTADO', 'VENDIDO')), etiqueta: 'Vendidos', filtros: { ESTADO: { valores: ['VENDIDO'] } } },
+        ] : [
+          { icono: 'phone-off', valor: miles(filas.length), etiqueta: 'Líneas a cancelar' },
+          { icono: 'pen-line', valor: miles(cuenta('CANCELACION', 'POR FIRMAR')), etiqueta: 'Por firmar', clase: 'stat-tile-warn', filtros: { CANCELACION: { valores: ['POR FIRMAR'] } } },
+          { icono: 'signature', valor: miles(cuenta('CANCELACION', 'CARTA FIRMADA')), etiqueta: 'Carta firmada', filtros: { CANCELACION: { valores: ['CARTA FIRMADA'] } } },
+          { icono: 'send', valor: miles(cuenta('CANCELACION', 'CARTA ENVIADA')), etiqueta: 'Carta enviada', filtros: { CANCELACION: { valores: ['CARTA ENVIADA'] } } },
+          { icono: 'circle-check', valor: miles(cuenta('CANCELACION', 'CANCELADA')), etiqueta: 'Canceladas', clase: 'stat-tile-ok', filtros: { CANCELACION: { valores: ['CANCELADA'] } } },
+        ];
+        marcarKpi = tilesKpi($('#lnr-kpis', raiz), defs, () => tabla);
+        marcarKpi(filtros);
+      }
+
+      function crearTabla() {
+        const puede = !!(datos && datos.puedeAprobar);
+        $('#lnr-tabla', raiz).innerHTML = '';
+        tabla = tablaLineas($('#lnr-tabla', raiz), {
+          idCampo: 'ID',
+          idTabla: 'lineas-resguardos-' + vista.toLowerCase() + '-v1',
+          columnas: COLUMNAS[vista],
+          ordenInicial: { campo: 'FECHA', dir: 'desc' },
+          textoVacio: vista === 'RESGUARDOS' ? 'Todavía no se ha mandado nada a resguardo' : 'No hay líneas en cancelación',
+          exportar: { nombreArchivo: vista === 'RESGUARDOS' ? 'Resguardos' : 'Cancelaciones de lineas' },
+          etiquetaFila: (f) => 'NUCO ' + (f.NUCO || '—') + (f.NUMERO ? ' · ' + f.NUMERO : '') + ' · ' + fechaCorta(f.FECHA),
+          detalle: { titulo: (f) => 'NUCO ' + (f.NUCO || '—') },
+          accionesFila: [{ icono: 'circle-chevron-right', titulo: 'Ver equipo', visible: (f) => !!f.REGISTRO_ID, alHacer: (f) => irARegistro(f.REGISTRO_ID) }],
+          accionesSeleccion: puede ? ACCIONES[vista] : [],
+          ayuda: puede ? 'Selecciona uno o varios renglones para confirmar el paso (recibir, entregar, carta firmada o enviada, cancelada). La flecha abre el equipo.'
+            : 'Aquí ves el avance de lo que se mandó a resguardo y a cancelación. La flecha abre el equipo.',
+          alCambiarFiltros: (f) => { filtros = f || {}; if (marcarKpi) marcarKpi(filtros); },
+        });
+        tabla.setDatos(filasVista());
+        $('#lnr-solo-lectura', raiz).hidden = puede;
+      }
+
+      function cargar() {
+        if (tabla) tabla.setCargando(true);
+        llamar('apiLineasBandejaResguardos').then((texto) => {
+          if (!vigente()) return;
+          datos = JSON.parse(texto);
+          crearTabla();
+          pintarKpis();
+        }).catch((e) => {
+          if (!vigente()) return;
+          if (!tabla) tabla = tablaLineas($('#lnr-tabla', raiz), { idCampo: 'ID', columnas: [{ campo: 'ID', titulo: 'ID' }], detalle: false, exportar: false });
+          tabla.setError('No se pudo cargar la bandeja: ' + mensajeError(e));
+        });
+      }
+
+      raiz.querySelector('.lnr-pestanas').addEventListener('click', (ev) => {
+        const b = ev.target.closest('[data-lnr-vista]');
+        if (!b || b.dataset.lnrVista === vista) return;
+        vista = b.dataset.lnrVista;
+        filtros = {};
+        raiz.querySelectorAll('[data-lnr-vista]').forEach((x) => {
+          x.classList.toggle('activo', x === b);
+          x.setAttribute('aria-selected', String(x === b));
+        });
+        if (datos) { crearTabla(); pintarKpis(); }
+      });
+      $('#lnr-actualizar', raiz).addEventListener('click', cargar);
+      cargar();
+    }
+
+    // ======================================================================
     // Bitácora: Control de Cambios (fuera del menú; su pestaña alimenta el Historial y el Panorama)
     // ======================================================================
 
@@ -4070,6 +4460,7 @@
       precargar: precargar,
       irARegistro: irARegistro, // desde Notificaciones: "Ver línea"
       initPanorama: initPanorama,
+      initResguardos: initResguardos,
     };
   })();
 </script>

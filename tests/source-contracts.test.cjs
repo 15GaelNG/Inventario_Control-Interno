@@ -52,7 +52,7 @@ test('Telefonía muestra sus módulos en orden y Gestión de Activos queda fuera
   assert.equal((lineas.match(/Inventario de Accesorios/g) || []).length, 1);
   // Panorama primero (29-sep). Fuera del menú (líneas comentadas) pero sus vistas se siguen montando: Reactivación
   // (29-sep) y Reasignaciones, Solicitud, Control de Cambios y Bitácora de Desechos (reunión con Líneas, 30-sep)
-  const orden = ['panorama-lineas', 'lineas-telefonicas', 'accesorios-lineas'];
+  const orden = ['panorama-lineas', 'lineas-telefonicas', 'resguardos-lineas', 'accesorios-lineas'];
   const ocultos = ['cambios-lineas'];
   const retirados = ['reactivacion-lineas', 'reasignaciones-lineas', 'solicitud-lineas', 'bitacora-desechos'];
   const sinComentarios = lineas.split(/\r?\n/).filter((l) => !/^\s*\/\//.test(l)).join('\n');
@@ -917,7 +917,7 @@ test('Notificaciones: adendum por vencer una semana antes, sin las ya vencidas n
   assert.match(read('src/html/js/lineas.html'), /irARegistro: irARegistro/);
 });
 
-test('Acciones masivas de equipos: resguardo y reasignar desde 2 seleccionados, sin tocar la línea', () => {
+test('Acciones masivas de equipos: reasignar desde 2 seleccionados, sin tocar la línea', () => {
   const reg = read('src/services/lineas/LineasRegistros.gs');
   const LineasUtil = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '; return LineasUtil;')({ normCol: (c) => String(c).toUpperCase().trim() }, {});
   const hoja = [
@@ -944,13 +944,14 @@ test('Acciones masivas de equipos: resguardo y reasignar desde 2 seleccionados, 
     reg + '; return LineasRegistros;')(Repo, { getScriptCache: () => ({ get: () => '', put: () => {} }) }, { formatDate: () => '2026-09-29' }, {}, {}, LineasUtil, Datos);
   const u = { correo: 'x@y.z', nombre: 'X' };
 
-  // Resguardo: "b" ya estaba en resguardo y "c" no es equipo → se omiten sin error; la línea no se toca
-  const r = Reg.accionMasiva('RESGUARDO', ['a', 'b', 'c'], { valores: { _MOTIVO: 'CIERRE DE OFICINA' } }, u);
+  // "c" no es equipo → se omite sin error; la línea no se toca
+  const r = Reg.accionMasiva('REASIGNAR', ['a', 'c'], { valores: { RESPONSABLE: 'ANA', _MOTIVO: 'CIERRE DE OFICINA' } }, u);
   assert.deepEqual(r.hechos.map((h) => h.id), ['a']);
-  assert.deepEqual(r.omitidos.map((o) => o.id), ['b', 'c']);
-  assert.deepEqual(guardados[0], ['a', { 'ESTATUS EQUIPO': 'RESGUARDO' }]);
+  assert.deepEqual(r.omitidos.map((o) => o.id), ['c']);
   assert.ok(guardados.every(([, c]) => !('ESTATUS LINEA' in c) && !('NUMERO TELEFONO' in c)));
-  assert.deepEqual(movimientos[0], ['EDICION', 'Acción masiva · Mandar a resguardo: CIERRE DE OFICINA', ['a']]);
+  assert.deepEqual(movimientos[0], ['EDICION', 'Acción masiva · Reasignar equipos: CIERRE DE OFICINA', ['a']]);
+  // "Mandar a resguardo" ya no es acción masiva genérica: tiene su propio flujo (LineasResguardos)
+  assert.throws(() => Reg.accionMasiva('RESGUARDO', ['a', 'b'], { valores: { _MOTIVO: 'CIERRE DE OFICINA' } }, u), /desconocida/);
 
   // Reasignar: responsable obligatorio y "quien usa" sigue al responsable si él usa el equipo
   assert.throws(() => Reg.accionMasiva('REASIGNAR', ['a', 'b'], { valores: { _MOTIVO: 'CAMBIO DE AREA' } }, u), /RESPONSABLE es obligatorio/);
@@ -965,8 +966,8 @@ test('Acciones masivas de equipos: resguardo y reasignar desde 2 seleccionados, 
   assert.ok(guardados.every(([, c]) => c['ESTATUS EQUIPO'] === 'RESGUARDO'));
 
   // Con uno solo o sin motivo, error
-  assert.throws(() => Reg.accionMasiva('RESGUARDO', ['a'], { valores: { _MOTIVO: 'CIERRE DE OFICINA' } }, u), /dos o más/);
-  assert.throws(() => Reg.accionMasiva('RESGUARDO', ['a', 'b'], { valores: {} }, u), /MOTIVO/);
+  assert.throws(() => Reg.accionMasiva('REASIGNAR', ['a'], { valores: { RESPONSABLE: 'ANA', _MOTIVO: 'CIERRE DE OFICINA' } }, u), /dos o más/);
+  assert.throws(() => Reg.accionMasiva('REASIGNAR', ['a', 'b'], { valores: { RESPONSABLE: 'ANA' } }, u), /MOTIVO/);
   // "Cancelar equipos" ya no existe (30-sep): los equipos no se cancelan, solo las líneas
   guardados.length = 0;
   assert.throws(() => Reg.accionMasiva('CANCELAR', ['a', 'b'], { valores: { _MOTIVO: 'EQUIPOS OBSOLETOS' } }, u));
@@ -976,7 +977,8 @@ test('Acciones masivas de equipos: resguardo y reasignar desde 2 seleccionados, 
   // Cliente: botones solo en Equipos y desde 2 seleccionados (DataTable `minimo`)
   const cliente = read('src/html/js/lineas.html');
   assert.match(cliente, /accionesSeleccion: modulo === 'equipos' \? ACCIONES_MASIVAS\.map/);
-  assert.match(cliente, /minimo: 2/);
+  assert.match(cliente, /minimo: a\.minimo \|\| 2/);
+  assert.match(cliente, /clave: 'RESGUARDO', texto: 'Mandar a resguardo', icono: 'archive', minimo: 1, propia: true/);
   assert.match(cliente, /llamar\('apiLineasAccionMasiva', accion\.clave, ids, datos\)/);
   assert.match(read('src/html/js/componentes/datatable.html'), /b\.hidden = nSel < \(\(accionesSeleccion\[Number\(b\.dataset\.accionSel\)\] \|\| \{\}\)\.minimo \|\| 1\)/);
   assert.match(read('src/ClientApi.gs'), /function apiLineasAccionMasiva\(token, accion, ids, datos\)/);
@@ -1289,4 +1291,61 @@ test('Historial con las pestañas retiradas: lee lo migrado a APP_MOVIMIENTOS y 
   const h2 = repoCon(conHoja).historialDeRegistro('LIN-00000000AAAAAA', true).eventos;
   assert.equal(h2.filter((e) => e.movimiento === 'Reasignación').length, 1);
   assert.equal(h2.filter((e) => e.movimiento === 'Desecho').length, 1);
+});
+
+test('Mandar a resguardo (30-sep): N/A automáticos, línea según el adendum, asesor y bandeja de Pau', () => {
+  const src = read('src/services/lineas/LineasResguardos.gs');
+  const Util = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '\nreturn LineasUtil;')({ normCol: (c) => String(c).toUpperCase().trim() }, {});
+  const Notif = { _diaFinPlan: (v) => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(v || '')); return m ? m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2) : ''; } };
+  const R = new Function('LineasUtil', 'LineasNotificaciones', 'LineasDatos', 'LineasRepo', 'LineasRegistros', 'PropertiesService', 'Utilities',
+    src + '\nreturn LineasResguardos;')(Util, Notif, { ZONA_APP: 'America/Mexico_City' }, {}, {},
+    { getScriptProperties: () => ({ getProperty: () => 'pau@ciudadmaderas.com, suplente@ciudadmaderas.com' }) }, {});
+
+  // Datos de la persona a N/A; PIN y cuenta solo si tenían algo (NO APLICA se respeta); el patrón se borra
+  const fila = { RESPONSABLE: 'ANA', PUESTO: 'GERENTE', 'JEFE DIRECTO': 'LUIS', DIRECTOR: 'EVA', 'PIN WHATSAPP': '123456', 'PIN EQUIPO': 'NO APLICA',
+    'CUENTA GOOGLE': '', PATRON: '1-2-3', 'RESPONSABLE USA EL EQUIPO': 'SI', 'NOMBRE QUIEN USA': 'ANA' };
+  const pedido = { DEPARTAMENTO: 'DISPONIBLE', SEDE: 'QUERETARO', 'OFICINA / DESARROLLO': 'JARDINES', 'ESTATUS EQUIPO': 'RESGUARDO', 'ESTATUS LINEA': 'DISPONIBLE', COMENTARIO: 'baja por renuncia' };
+  const c = R._cambiosResguardo(fila, pedido, true);
+  ['RESPONSABLE', 'PUESTO', 'JEFE DIRECTO', 'DIRECTOR', 'PIN WHATSAPP', 'NOMBRE QUIEN USA', 'PUESTO QUIEN USA'].forEach((k) => assert.equal(c[k], 'N/A', k));
+  assert.ok(!('PIN EQUIPO' in c) && !('CUENTA GOOGLE' in c));
+  assert.equal(c.PATRON, '');
+  assert.equal(c.DEPARTAMENTO, 'DISPONIBLE');
+  assert.equal(c['ESTATUS LINEA'], 'DISPONIBLE');
+  assert.equal(c.COMENTARIOS, 'BAJA POR RENUNCIA');
+  assert.ok(!('ESTATUS LINEA' in R._cambiosResguardo(fila, pedido, false))); // sin línea no se toca su estatus
+  // Equipo, IMEI, SIM, accesorios, razón social, compañía y costo del plan se conservan
+  ['EQUIPO', 'IMEI', 'NUMERO SIM', 'ACCESORIOS', 'RAZON SOCIAL', 'COMPAÑIA', 'COSTO PLAN', 'NUMERO TELEFONO'].forEach((k) => assert.ok(!(k in c), k));
+
+  // Línea: vencido → cancelación; vigente, sin fecha o SIM básico → disponible
+  assert.equal(R._propuestaLinea('EQUIPO + SIM', R._vigencia('01/01/2025', '2026-09-30')), 'EN PROCESO DE CANCELACION');
+  assert.equal(R._propuestaLinea('EQUIPO + SIM', R._vigencia('28/11/2026', '2026-09-30')), 'DISPONIBLE');
+  assert.equal(R._propuestaLinea('EQUIPO + SIM', R._vigencia('', '2026-09-30')), 'DISPONIBLE');
+  assert.equal(R._propuestaLinea('EQUIPO + SIM BASICO', R._vigencia('01/01/2025', '2026-09-30')), 'DISPONIBLE');
+  assert.deepEqual(R._vigencia('28/11/2026', '2026-09-30'), { fin: '28/11/2026', vigencia: 'vigente' });
+
+  // Asesor por compañía y razón social (hoja de Bren)
+  assert.equal(R.asesorPara('AT&T', 'FRACCIONADORA LA ROMITA SA DE CV'), 'KARLA');
+  assert.equal(R.asesorPara('TELCEL', 'FRACCIONADORA LA ROMITA SA DE CV'), 'WILBERTO');
+  assert.equal(R.asesorPara('TELCEL', 'GPH SERVICIOS CONDOMINALES'), 'ALFREDO');
+
+  // Quién aprueba: la Script Property o ADMIN
+  assert.equal(R.puedeAprobar({ correo: 'PAU@ciudadmaderas.com' }), true);
+  assert.equal(R.puedeAprobar({ correo: 'otro@ciudadmaderas.com' }), false);
+  assert.equal(R.puedeAprobar({ correo: 'otro@ciudadmaderas.com', esAdmin: true }), true);
+  assert.deepEqual(R.ESTATUS_EQUIPO_RESGUARDO, ['RESGUARDO', 'PARA VENTA', 'POSIBLE VENTA-DAÑO', 'PARA DESECHO']);
+
+  // Confirmar la cancelación: línea CANCELADA, TIPO sin línea y solo si el registro conserva ese número
+  assert.match(src, /Object\.assign\(\{\}, LineasRepo\.VALORES_SIN_LINEA, \{ 'ESTATUS LINEA': 'CANCELADA' \}\)/);
+  assert.match(src, /cambios\['TIPO'\] = LineasRepo\.tipoSinLinea/);
+  assert.match(src, /LineasUtil\.digitos\(LineasUtil\.col\(f, 'NUMERO TELEFONO'\)\) !== LineasUtil\.digitos\(sol\['NUMERO'\]\)/);
+  // Aviso solo para quien aprueba
+  const notif = read('src/services/lineas/LineasNotificaciones.gs');
+  assert.match(notif, /return !para \|\| \(para === PARA_APROBADORES && esAprobador\);/);
+  // Cliente: Mandar a resguardo desde 1, con su propio formulario; vista de la bandeja
+  const cliente = read('src/html/js/lineas.html');
+  assert.match(cliente, /async function abrirResguardo\(filas\)/);
+  assert.match(cliente, /llamar\('apiLineasMandarResguardo', equipos\.map\(\(q\) => q\.id\), \{ motivo: valores\._MOTIVO, porEquipo: porEquipo \}\)/);
+  assert.match(cliente, /function initResguardos\(\)/);
+  assert.match(read('src/html/js/app.html'), /if \(vista === 'resguardos-lineas'\) \{ montarVista\('tpl-lineas-resguardos', Lineas\.initResguardos\); return; \}/);
+  assert.match(read('src/config/Entidades.gs'), /'APP_RESGUARDOS': \{ prefijo: 'RSG'/);
 });

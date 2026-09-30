@@ -18,7 +18,9 @@
  */
 const LineasNotificaciones = (function () {
   const TAB = 'APP_NOTIFICACIONES';
-  const ENCABEZADOS = ['ID', 'FECHA', 'TIPO', 'CLAVE', 'REF_ID', 'NUCO', 'NUMERO', 'TITULO', 'MENSAJE', 'VENCE', 'LEIDA_POR', 'CORREO_ENVIADO_EN'];
+  // PARA (30-sep): vacío = todos; PARA_APROBADORES = solo quien aprueba resguardos (Pau y ADMIN)
+  const ENCABEZADOS = ['ID', 'FECHA', 'TIPO', 'CLAVE', 'REF_ID', 'NUCO', 'NUMERO', 'TITULO', 'MENSAJE', 'VENCE', 'LEIDA_POR', 'CORREO_ENVIADO_EN', 'PARA'];
+  const PARA_APROBADORES = 'APROBADORES_RESGUARDO';
   const DIAS_AVISO = 7;
   const PROP_DESDE = 'LINEAS_NOTIF_ADENDUM_DESDE';
   const CLAVE_REVISION = 'ln_notif_revision_v1';
@@ -129,6 +131,23 @@ const LineasNotificaciones = (function () {
     return creadas;
   }
 
+  /**
+   * Aviso de un evento del sistema (p. ej. equipos mandados a resguardo). n = { tipo, titulo, mensaje, para, refId, nuco }.
+   * `para` vacío = lo ven todos; PARA_APROBADORES = solo quien aprueba resguardos.
+   */
+  function crear(n) {
+    return LineasDatos.conCandado(() => {
+      LineasDatos.asegurarPestana(TAB, ENCABEZADOS); // agrega PARA si la pestaña ya existía sin ella
+      const ahora = new Date();
+      LineasDatos.agregarFilas(TAB, [{
+        'ID': LineasDatos.nuevoId(TAB), 'FECHA': ahora, 'TIPO': txt(n.tipo), 'CLAVE': txt(n.tipo) + '|' + ahora.getTime(),
+        'REF_ID': txt(n.refId), 'NUCO': txt(n.nuco), 'NUMERO': '', 'TITULO': txt(n.titulo), 'MENSAJE': txt(n.mensaje),
+        'VENCE': '', 'LEIDA_POR': ',', 'CORREO_ENVIADO_EN': '', 'PARA': txt(n.para),
+      }]);
+      return true;
+    });
+  }
+
   /** Tras un alta: que la siguiente consulta vuelva a revisar sin esperar los 30 min. */
   function revisarPronto() {
     try { CacheService.getScriptCache().remove(CLAVE_REVISION); } catch (e) { /* sin caché: revisa al expirar */ }
@@ -140,12 +159,16 @@ const LineasNotificaciones = (function () {
    * Notificaciones de la persona: { noLeidas, total, hoy, items: [...] } de la más reciente a la más antigua.
    * `limite` recorta items (la campana pide pocas; la vista, todas).
    */
-  function bandeja(correo, limite) {
+  function bandeja(correo, limite, opciones) {
     try { revisar(false); } catch (e) { console.warn('LineasNotificaciones.revisar: ' + e.message); }
     const hoy = dia(new Date());
     if (!LineasDatos.existeTabla(TAB)) return { noLeidas: 0, total: 0, hoy: hoy, items: [] };
     const marca = marcaCorreo_(correo);
-    const items = LineasDatos.leerTabla(TAB).map((n) => {
+    const esAprobador = !!(opciones && opciones.esAprobador);
+    const items = LineasDatos.leerTabla(TAB).filter((n) => {
+      const para = txt(n['PARA']);
+      return !para || (para === PARA_APROBADORES && esAprobador);
+    }).map((n) => {
       const vence = txt(n['VENCE']);
       return {
         id: txt(n['ID']), fecha: n['FECHA'] instanceof Date ? n['FECHA'] : null, tipo: txt(n['TIPO']),
@@ -187,5 +210,5 @@ const LineasNotificaciones = (function () {
     });
   }
 
-  return { revisar, revisarPronto, bandeja, marcarLeidas, _pendientes: pendientes, _diaFinPlan: diaFinPlan, DIAS_AVISO };
+  return { revisar, revisarPronto, bandeja, marcarLeidas, crear, PARA_APROBADORES, _pendientes: pendientes, _diaFinPlan: diaFinPlan, DIAS_AVISO };
 })();

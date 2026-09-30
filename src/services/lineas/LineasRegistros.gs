@@ -421,13 +421,13 @@ const LineasRegistros = (function () {
 
   // ---------------- Acciones masivas de equipos (pedido del área, 29-sep) ----------------
   //
-  // Con dos o más equipos seleccionados en Líneas Telefónicas: mandar a resguardo o reasignar.
+  // Con dos o más equipos seleccionados en Líneas Telefónicas: reasignar.
   // Solo cambian el EQUIPO: la línea (número, ESTATUS LINEA) queda igual hasta que el área diga qué le pasa a la
   // línea en cada caso. Cada equipo deja su bitácora CAMBIOS (y HISTORIAL_REASIGNACIONES al reasignar) y su
   // movimiento con el motivo, igual que una edición individual.
 
   const MASIVAS = {
-    RESGUARDO: { titulo: 'Mandar a resguardo', estatusEquipo: 'RESGUARDO' },
+    // "Mandar a resguardo" vive en LineasResguardos (datos por NUCO, N/A y bandeja de Pau), 30-sep
     // Al reasignar, el equipo queda en RESGUARDO: el estatus no se elige (pedido del usuario, 29-sep)
     REASIGNAR: { titulo: 'Reasignar equipos', estatusEquipo: 'RESGUARDO' },
     // "Cancelar equipos" se quitó el 30-sep: los equipos no se cancelan, solo las líneas (reunión con Líneas)

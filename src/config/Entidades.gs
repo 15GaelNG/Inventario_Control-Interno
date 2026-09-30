@@ -67,6 +67,8 @@ const Entidades = (function () {
     'APP_MOVIMIENTOS': { prefijo: 'MOV', llaveAnterior: 'ID', delSistemaNuevo: true },
     // Avisos de Líneas (adendum por vencer): los crea LineasNotificaciones
     'APP_NOTIFICACIONES': { prefijo: 'NTF', llaveAnterior: 'ID', delSistemaNuevo: true },
+    // Bandeja de resguardos y cancelaciones (Líneas, 30-sep): la crea LineasResguardos
+    'APP_RESGUARDOS': { prefijo: 'RSG', llaveAnterior: 'ID', delSistemaNuevo: true },
   };
 
   /** Cómo se llama la columna de la llave nueva, en todas las hojas */

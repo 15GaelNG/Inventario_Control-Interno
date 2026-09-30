@@ -32,6 +32,8 @@ qué está hecho, cómo probarlo y qué sigue.
   - DataTable: cuadro de selección con el mouse, Shift+clic, Ctrl/Cmd+A y Esc (§0t), todo dentro de `modoSeleccion`.
   - Pestañas retiradas de la BD de pruebas (§0v): su copia de Líneas las lee; `Entidades.gs` las sigue listando;
     `Modulos.gs` ya no tiene los 4 módulos.
+  - `Entidades.gs`: `APP_RESGUARDOS` (prefijo RSG); su prueba cuenta 28 hojas y 4 APP_. `Modulos.gs`: `resguardos-lineas`.
+  - APP_NOTIFICACIONES: columna nueva `PARA`.
 
 
 ## 0. Diseño de la rama `jorge` (2026-09-24, commit `d2b316c`)
@@ -218,6 +220,56 @@ el sistema avisa (más adelante también por correo).
     y la misma vista.
 - Pruebas: `INICIO / FIN PLAN solo se capturan en el alta…` y `Notificaciones: adendum por vencer…` en
   `tests/source-contracts.test.cjs` (45/45). Falta la prueba en /dev.
+
+## 0w. Mandar a resguardo y bandeja de Pau: "Resguardos y cancelaciones" (2026-09-30)
+
+Lo acordado con Líneas el 30-sep. La hoja física de Bren (`INVENTARIO EQUIPOS FISICOS.xlsx`) es el modelo de la
+bandeja.
+
+- **Mandar a resguardo** (`LineasResguardos.formulario` / `mandar`; `apiLineasFormularioResguardo` /
+  `apiLineasMandarResguardo`):
+  - desde **1** equipo seleccionado (DataTable `minimo: 1`);
+  - cada NUCO con su sección: DEPARTAMENTO (DISPONIBLE por omisión), SEDE y OFICINA / DESARROLLO (obligatorios;
+    mismas listas que "Editar información"), ESTATUS EQUIPO (RESGUARDO, PARA VENTA, POSIBLE VENTA-DAÑO o PARA DESECHO),
+    ESTATUS LINEA si tiene línea (DISPONIBLE o EN PROCESO DE CANCELACION) y un comentario;
+  - un bloque opcional "Mismos datos para todos" con "Copiar a los N equipos";
+  - el motivo es obligatorio.
+- **La línea se propone con FIN PLAN:** vencido → EN PROCESO DE CANCELACION; vigente, sin fecha o SIM básico →
+  DISPONIBLE. El encabezado de cada NUCO muestra el número, la compañía y la vigencia del adendum.
+- **En el servidor:**
+  - RESPONSABLE, PUESTO, JEFE DIRECTO y DIRECTOR pasan a N/A;
+  - PIN WHATSAPP, PIN EQUIPO y CUENTA GOOGLE pasan a N/A solo si tenían algo (se respeta NO APLICA);
+  - "quien usa" pasa a N/A si era el responsable;
+  - PATRON se borra;
+  - el comentario va a COMENTARIOS;
+  - bitácora CAMBIOS y movimiento `RESGUARDO` en APP_MOVIMIENTOS.
+- **El estatus cambia al mandar** (como lo describió Gio) y se crea el renglón de la bandeja en **APP_RESGUARDOS**
+  (prefijo `RSG` en `Entidades.gs`).
+  - Recepción: PENDIENTE DE RECEPCION → EN RESGUARDO → ENTREGADO A LINEAS o VENDIDO.
+  - Cancelación (si la línea va a cancelación): POR FIRMAR → CARTA FIRMADA → CARTA ENVIADA → CANCELADA.
+  - El asesor se propone por compañía y razón social: AT&T → KARLA, Telcel FRO → WILBERTO, Telcel GPH → ALFREDO.
+- **Vista "Resguardos y cancelaciones"** (`resguardos-lineas`, en el menú después de Líneas Telefónicas;
+  `initResguardos`, `tpl-lineas-resguardos`):
+  - pestañas Resguardos y Cancelaciones, KPIs que filtran, DataTable exportable y "Ver equipo";
+  - acciones con selección, solo para quien aprueba: Recibir, Entregar a Líneas (quién recibe y asunto), Vendido
+    (también cambia ESTATUS EQUIPO a VENDIDO), Carta firmada (asesor), Carta enviada (asunto) y Confirmar cancelada;
+  - **Confirmar cancelada**: ESTATUS LINEA = CANCELADA, TIPO sin línea (EQUIPO + SIM → EQUIPO) y se limpian los datos
+    de línea (`VALORES_SIN_LINEA`; el número queda en la bitácora). Solo si el registro todavía tiene ese número.
+  - Los demás ven el avance, en solo lectura.
+- **Quién aprueba:** ADMIN o los correos de la Script Property `LINEAS_APROBADORES_RESGUARDO`, separados por coma
+  (Pau y su suplente). **Falta el correo de Pau.** `apiLineasPermisos` trae `puedeAprobarResguardos`.
+- **Aviso:** APP_NOTIFICACIONES tiene una columna nueva `PARA`. Vacía = todos; `APROBADORES_RESGUARDO` = solo quien
+  aprueba (`LineasNotificaciones.crear`). Al mandar a resguardo le llega "Equipos por recibir · N".
+- Ya no hay "Mandar a resguardo" en `LineasRegistros.MASIVAS`; ahí solo queda Reasignar.
+- **Probado en /dev (30-sep, sin guardar):**
+  - el botón aparece con 1 seleccionado;
+  - el formulario precarga sede y oficina y propone la línea;
+  - el NUCO 0101, con el adendum vencido el 08/04/2026, sale con EN PROCESO DE CANCELACION;
+  - con 2 equipos aparece "Mismos datos para todos";
+  - la bandeja carga vacía con sus pestañas y KPIs.
+  - No se mandó nada a resguardo, porque la BD de pruebas la está limpiando el equipo.
+- Prueba: `Mandar a resguardo (30-sep): …` en `tests/source-contracts.test.cjs` (54/54). Ayrton: sus pruebas de
+  Entidades cuentan ahora 28 hojas y 4 APP_.
 
 ## 0v. Pestañas de los módulos retirados: migradas y borradas de la BD de pruebas (2026-09-30)
 

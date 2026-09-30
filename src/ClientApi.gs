@@ -151,6 +151,19 @@ function apiLineasFormularioMasivo(token, accion) {
 function apiLineasAccionMasiva(token, accion, ids, datos) {
   return TelefoniaService.accionMasiva(token, accion, ids, datos);
 }
+function apiLineasFormularioResguardo(token, ids) {
+  return TelefoniaService.formularioResguardo(token, ids);
+}
+function apiLineasMandarResguardo(token, ids, datos) {
+  return TelefoniaService.mandarResguardo(token, ids, datos);
+}
+// Bandeja de resguardos: viaja como texto JSON (como las demás tablas grandes)
+function apiLineasBandejaResguardos(token) {
+  return TelefoniaService.bandejaResguardos(token);
+}
+function apiLineasAccionBandejaResguardo(token, accion, ids, datos) {
+  return TelefoniaService.accionBandejaResguardo(token, accion, ids, datos);
+}
 function apiLineasNotificaciones(token, limite) {
   return TelefoniaService.notificaciones(token, limite);
 }

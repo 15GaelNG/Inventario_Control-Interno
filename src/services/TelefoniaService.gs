@@ -40,6 +40,7 @@ const TelefoniaService = (function () {
       puedeOperar: rolesOperan_().indexOf(sesion.rol) >= 0,
       puedeVerSecretos: puedeVerSecretos_(sesion),
       esAdmin: sesion.rol === Config.ROLES.ADMIN,
+      puedeAprobarResguardos: LineasResguardos.puedeAprobar(usuarioResguardo_(sesion)),
     };
   }
 
@@ -521,10 +522,52 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente(LineasRegistros.accionMasiva(accion, ids, datos || {}, usuarioOperacion_(sesion)));
   }
 
-  /** Notificaciones de la campana (adendum por vencer). Las ve cualquier sesión; cada quien marca las suyas. */
+  /** Notificaciones de la campana. Cada quien marca las suyas; las de resguardos solo las ve quien aprueba. */
   function notificaciones(token, limite) {
     const sesion = Auth.validarSesion(token);
-    return LineasUtil.paraCliente(LineasNotificaciones.bandeja(sesion.correo, Number(limite) || 0));
+    const esAprobador = LineasResguardos.puedeAprobar(usuarioResguardo_(sesion));
+    return LineasUtil.paraCliente(LineasNotificaciones.bandeja(sesion.correo, Number(limite) || 0, { esAprobador: esAprobador }));
+  }
+
+  // ---- Resguardo y bandeja de Pau (reunión con Líneas, 30-sep) ----
+
+  function usuarioResguardo_(sesion) {
+    return Object.assign(usuarioOperacion_(sesion), { esAdmin: sesion.rol === Config.ROLES.ADMIN });
+  }
+
+  /** Formulario de "Mandar a resguardo": datos de cada equipo y la propuesta de su línea. */
+  function formularioResguardo(token, ids) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    return LineasUtil.paraCliente(LineasResguardos.formulario(ids, usuarioResguardo_(sesion)));
+  }
+
+  function mandarResguardo(token, ids, datos) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    return LineasUtil.paraCliente(LineasResguardos.mandar(ids, datos || {}, usuarioResguardo_(sesion)));
+  }
+
+  /** Bandeja de resguardos y cancelaciones: la ve todo el módulo; los pasos solo quien aprueba. */
+  function bandejaResguardos(token) {
+    const sesion = Auth.validarSesion(token);
+    return JSON.stringify(LineasUtil.paraCliente(LineasResguardos.bandeja(usuarioResguardo_(sesion))));
+  }
+
+  /** accion: RECIBIR | ENTREGAR | VENDIDO | CARTA_FIRMADA | CARTA_ENVIADA | CANCELADA. */
+  function accionBandejaResguardo(token, accion, ids, datos) {
+    const sesion = Auth.validarSesion(token);
+    const u = usuarioResguardo_(sesion);
+    const d = datos || {};
+    const R = LineasResguardos;
+    const hacer = {
+      RECIBIR: () => R.recibir(ids, u),
+      ENTREGAR: () => R.entregar(ids, d, u),
+      VENDIDO: () => R.vendido(ids, d, u),
+      CARTA_FIRMADA: () => R.faseCancelacion(ids, R.FASE.FIRMADA, d, u),
+      CARTA_ENVIADA: () => R.faseCancelacion(ids, R.FASE.ENVIADA, d, u),
+      CANCELADA: () => R.confirmarCancelacion(ids, d, u),
+    }[String(accion || '').toUpperCase()];
+    if (!hacer) throw new Error('Acción desconocida: ' + accion);
+    return LineasUtil.paraCliente(hacer());
   }
 
   function marcarNotificaciones(token, ids) {
@@ -537,5 +580,6 @@ const TelefoniaService = (function () {
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf, crearRegistro, editarRegistro,
     cambiarEstatus, fotosInspeccion, exportarBase, archivo, ultimoDocumentoNuco,
     notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva, panorama,
+    formularioResguardo, mandarResguardo, bandejaResguardos, accionBandejaResguardo,
   };
 })();

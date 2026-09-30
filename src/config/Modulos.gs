@@ -32,6 +32,7 @@ const Modulos = (function () {
       modulos: [
         { id: 'panorama-lineas', etiqueta: 'Panorama de Líneas', listo: true },
         { id: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas', listo: true },
+        { id: 'resguardos-lineas', etiqueta: 'Resguardos y cancelaciones', listo: true },
         { id: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios (Líneas)', listo: true },
         // Control de Cambios queda fuera del menú (30-sep). Reactivación, Solicitud, Reasignaciones y Desechos se
         // retiraron con sus pestañas (30-sep, reunión con Líneas).
