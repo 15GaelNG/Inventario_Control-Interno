@@ -336,6 +336,16 @@ function revisarAntesDeMigrar(opciones) {
           '"renombrar" le va a poner "' + Entidades.COLUMNA_ID_ANTERIOR + '"');
         return;
       }
+      // Igual que la de arriba: si el paso "renombrar" le va a poner un nombre deducido
+      // del contenido, no es un problema. Si no se filtrara, el paso 1 marcaria PROBLEMAS
+      // y detendria la corrida que escribe por una columna que se arregla sola.
+      const deducido = ENCABEZADOS_DEDUCIDOS.filter(
+        (d) => migClave_(d.hoja) === migClave_(h.hoja) && d.columna === (i + 1))[0];
+      if (deducido) {
+        detalles.push('su columna ' + (i + 1) + ' no tiene encabezado, y el paso ' +
+          '"renombrar" le va a poner "' + deducido.nombre + '" (deducido del contenido)');
+        return;
+      }
       problemas.push(h.hoja + ': la columna ' + (i + 1) + ' no tiene encabezado');
     });
     lineas.push('  ' + h.hoja + ' [' + h.prefijo + '] — ' + detalles.join(', '));
@@ -739,6 +749,65 @@ function moverIdsAlInicio(opciones) {
 // ---------------------------------------------------------------- limpieza
 
 /**
+ * Columnas que se quedaron SIN ENCABEZADO y cuyo nombre se deduce de lo que guardan.
+ *
+ * El método es de Ayrton, del proyecto OOAM: cuando aparece un encabezado vacío, en vez de
+ * inventarle un nombre o dejarlo así, se cruza su contenido contra las demás hojas hasta
+ * que algo coincide. Aquí funcionó al primer intento.
+ *
+ * Cada entrada exige la EVIDENCIA de por qué se llama así, con números. Sin eso no se
+ * agrega: ponerle a una columna un nombre inventado es peor que dejarla sin nombre, porque
+ * el nombre se vuelve verdad para quien lo lea después.
+ */
+const ENCABEZADOS_DEDUCIDOS = [
+  {
+    hoja: 'CAMBIOS LINEAS TELEFONICAS',
+    columna: 3,
+    nombre: 'NUCO',
+    evidencia: 'De 35,428 filas con línea padre, 35,425 traen exactamente el NUCO de esa ' +
+      'línea (99.99%). Las 3 que no son dedazos: 110000 donde va 10001 (un cero de más), ' +
+      '1483 donde va 1484, y 1297 donde va 1080. Idéntico en producción y en el ' +
+      'laboratorio, así que no es cosa de la copia. Medido el 30/09/2026.',
+  },
+];
+
+/**
+ * Le pone nombre a las columnas de ENCABEZADOS_DEDUCIDOS. Corre junto al renombrado de la
+ * llave, porque es el mismo trabajo: dejar la hoja con todas sus columnas nombradas.
+ *
+ * Nunca pisa un encabezado que ya exista: si la columna de esa posición YA tiene nombre, la
+ * hoja cambió de forma y la deducción dejó de valer, así que lo reporta como problema en
+ * vez de escribir encima.
+ */
+function ponerEncabezadosDeducidos_(ss, cfg, lineas, problemas) {
+  let puestos = 0;
+  ENCABEZADOS_DEDUCIDOS.forEach((d) => {
+    if (cfg.familia && Entidades.existe(d.hoja) &&
+        Entidades.de(d.hoja).familia !== String(cfg.familia).trim().toLowerCase()) return;
+    const sheet = ss.getSheetByName(d.hoja);
+    if (!sheet) return;
+    const enc = migEncabezados_(sheet);
+    const actual = migLimpio_(enc[d.columna - 1]);
+    if (actual && migClave_(actual) === migClave_(d.nombre)) {
+      lineas.push('  ' + d.hoja + ': la columna ' + d.columna + ' ya se llama "' +
+        d.nombre + '"');
+      return;
+    }
+    if (actual) {
+      problemas.push(d.hoja + ': la columna ' + d.columna + ' se llama "' + actual +
+        '" y se esperaba vacía para ponerle "' + d.nombre + '". La hoja cambió de forma: ' +
+        'revisa la deducción antes de seguir (ver ENCABEZADOS_DEDUCIDOS).');
+      return;
+    }
+    lineas.push('  ' + d.hoja + ': columna ' + d.columna + '  "(sin encabezado)"  ->  "' +
+      d.nombre + '"   (deducido del contenido)');
+    if (cfg.escribir) sheet.getRange(1, d.columna).setValue(d.nombre);
+    puestos++;
+  });
+  return puestos;
+}
+
+/**
  * Le pone a la llave vieja de cada hoja el MISMO nombre en todas: "ID ANTERIOR".
  *
  * La idea es de Ayrton (30/09/2026) y simplifica mucho: hoy cada hoja llama distinto a lo
@@ -823,7 +892,13 @@ function renombrarLlaveAnterior(opciones) {
     }
   });
 
+  const deducidos = ponerEncabezadosDeducidos_(ss, cfg, lineas, problemas);
+
   lineas.push('');
+  if (deducidos) {
+    lineas.push('  ' + deducidos + ' encabezado(s) ' +
+      (cfg.escribir ? 'puestos' : 'por poner') + ' deducidos del contenido');
+  }
   lineas.push('  ' + renombradas + ' columnas ' + (cfg.escribir ? 'renombradas' : 'por renombrar') +
     (yaEstaban ? ', ' + yaEstaban + ' ya estaban' : '') +
     (respetadas ? ', ' + respetadas + ' respetadas por ser dato de negocio' : ''));

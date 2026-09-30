@@ -238,17 +238,16 @@ console.log('\n10. La revisión previa NO reporta el encabezado que el paso 2 va
      'la columna 1 ya NO se reporta como problema');
   ok(rep.indexOf('el paso "renombrar" le va a poner') !== -1,
      'y explica que el paso 2 se lo pone');
-  // La columna 3 sí sigue siendo un problema de verdad: nadie la va a nombrar.
-  ok(rep.indexOf('la columna 3 no tiene encabezado') !== -1,
-     'pero la columna 3, que nadie va a nombrar, sí se sigue reportando');
-  // De encabezados queda UNO, no dos. (Los demás problemas del reporte son "FALTA la
-  // hoja", porque este arnés solo tiene una de las 10 de la familia.)
-  // Solo dentro de la LISTA de problemas (las líneas "  - "): la línea de detalle de la
-  // hoja también menciona el encabezado, y esa es informativa, no un problema.
+  // La columna 3 tampoco: se deduce del contenido. Es el NUCO de la linea — 35,425 de
+  // 35,428 filas coinciden con el NUCO de su padre. Ver ENCABEZADOS_DEDUCIDOS.
+  ok(rep.indexOf('(deducido del contenido)') !== -1,
+     'y la columna 3 se deduce del contenido: es el NUCO');
+  // Solo dentro de la LISTA de problemas (las lineas "  - "): las de detalle tambien
+  // mencionan el encabezado, y esas son informativas.
   const deEncabezado = rep.split('\n')
     .filter((l) => l.trim().indexOf('- ') === 0 && l.indexOf('no tiene encabezado') !== -1);
-  ok(deEncabezado.length === 1,
-     'y queda 1 problema de encabezado, no 2: ' + JSON.stringify(deEncabezado));
+  ok(deEncabezado.length === 0,
+     'asi que NO queda ningun problema de encabezado: ' + JSON.stringify(deEncabezado));
 }
 
 console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');
