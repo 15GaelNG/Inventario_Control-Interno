@@ -675,6 +675,10 @@ const InspeccionesService = (function () {
   // Limpieza con Asientos traseros2, Interiores con tapa de puerta trasera, y
   // Sistemas interiores con Limpiaparabrisas trasero -- las 16 piezas) -- mismo alias.
   REAGRUPAR_SECCIONES['RIFTER'] = REAGRUPAR_SECCIONES['AUTOS'];
+  // XPANDER también es igual a AUTOS pieza por pieza (mismo patrón: Latonería con
+  // puertas traseras + Maletero, Sistemas interiores con Limpiaparabrisas trasero y
+  // sin Botones volante) -- confirmado contra su propio PDF crudo.
+  REAGRUPAR_SECCIONES['XPANDER'] = REAGRUPAR_SECCIONES['AUTOS'];
   /** Sin espacios ni mayúsculas/minúsculas: una palabra que se corta a la mitad de
    *  línea en el documento a veces pierde el espacio al leerse como texto plano
    *  (pasó con "ASIENTOS TRASEROS 2" -> "ASIENTOS TRASEROS2" al leer el PDF de la
