@@ -570,6 +570,11 @@ function apiTiposInspeccion(token) {
 function apiEstructuraInspeccion(token, tipo) {
   return InspeccionesService.estructuraDeTipo(token, tipo);
 }
+// Vacía la caché de 6h de estructuraDeTipo -- se necesita después de editar una
+// plantilla (o su REAGRUPAR_SECCIONES) para verlo de inmediato, sin esperar.
+function apiOlvidarTipoInspeccion(token, tipo) {
+  return InspeccionesService.olvidarTipo(token, tipo);
+}
 function apiRegistrarInspeccion(token, datos, imagenes) {
   return InspeccionesService.registrar(token, datos, imagenes);
 }

@@ -562,6 +562,63 @@ const InspeccionesService = (function () {
    * Se guarda en caché 6 horas: leer el documento y analizarlo tarda, y estas plantillas
    * casi no cambian. Si se edita una, con vaciar la caché basta (ver olvidarTipo).
    */
+  /**
+   * Reagrupa a la fuerza las piezas de ciertos tipos en las secciones "correctas" --
+   * Plantilla.seccionesDe arma las secciones en el orden en que el texto plano del
+   * documento (DocumentApp.getBody().getText()) las va encontrando, y cuando una
+   * sección se corta a la mitad por el acomodo a dos columnas de la página SIN
+   * repetir su encabezado (pasa con "Sistemas interiores" y "Sistema mecánico"),
+   * esa segunda mitad se le pega a la sección que el parser haya reconocido más
+   * recientemente en el texto -- no a la suya real. Confirmado con Jorge contra el
+   * PDF crudo de la plantilla de RAM 700 (2026-09-30): "Sistemas interiores" y
+   * "Sistema mecánico" se parten así, y sus piezas de la segunda mitad terminaban
+   * cayendo todas en "Niveles".
+   *
+   * Por tipo: el orden/peso correctos de cada sección, con el nombre EXACTO de cada
+   * pieza tal como aparece en los marcadores <<IF([PIEZA]=...)>> de la plantilla (no
+   * la etiqueta bonita del PDF renderizado) -- si se agrega otro tipo, hay que sacar
+   * los nombres del PDF crudo de esa plantilla (Ctrl+A en el Doc, exportar a PDF, o
+   * pedirlo tal cual), no adivinarlos.
+   */
+  const REAGRUPAR_SECCIONES = {
+    'RAM 700': [
+      { titulo: 'Documentación', peso: 5, piezas: ['GAFETTE', 'TARJETA CIRCULACION', 'LICENCIA', 'POLIZA SEGURO', 'VERIFICACION', 'KARDEX'] },
+      { titulo: 'Cristalería', peso: 10, piezas: ['PARABRISAS', 'MEDALLON', 'CRISTALES PUERTAS', 'RETROVISOR IZQUIERDO', 'RETROVISOR DERECHO', 'FAROS DELANTEROS', 'CALAVERAS TRASERAS'] },
+      { titulo: 'Latonería y pintura', peso: 5, piezas: ['COFRE', 'FASCIA / PARRILLA / DEFENSA DELANTERA', 'FASCIA / DEFENSA TRASERA', 'GUARDAFANGO / SALPICADERA FRONTAL IZQUIERDA', 'GUARDAFANGO / SALPICADERA FRONTAL DERECHA', 'GUARDAFANGO / SALPICADERA POSTERIOR IZQUIERDA', 'GUARDAFANGO / SALPICADERA POSTERIOR DERECHA', 'PUERTA PILOTO', 'PUERTA COPILOTO', 'PUERTA TRASERA IZQUIERDA', 'PUERTA TRASERA DERECHA', 'BATEA / BETLINER', 'CABINA', 'REDILAS'] },
+      { titulo: 'Neumáticos', peso: 15, piezas: ['RINES', 'TAPONES', 'TUERCAS / BIRLOS', 'ALINEACION', 'BALANCEO'] },
+      { titulo: 'Inventarios', peso: 10, piezas: ['LLANTA DE REFACCION', 'GATO MECANICO', 'GATO HIDRAULICO', 'CRUCETA', 'MANERAL', 'EXTINTOR', 'CABLE PASACORRIENTE', 'TRIANGULOS DE SEÑALIZACION', 'TAPETES', 'CUBREASIENTOS', 'CUBREVOLANTE', 'BEDLINER', 'CUBREBATEA', 'PARASOL'] },
+      { titulo: 'Cerraduras', peso: 5, piezas: ['CERRADURA PUERTA PILOTO', 'CERRADURA PUERTA COPILOTO', 'CERRADURA PUERTA TRASERA DERECHA', 'CERRADURA PUERTA TRASERA IZQUIERDA', 'CERRADURA TAPA BATEA/MALETERO'] },
+      { titulo: 'Limpieza', peso: 5, piezas: ['ASIENTOS DELANTEROS', 'ASIENTOS TRASEROS2', 'CIELO Y ALFOMBRA', 'EXTERIOR DE UNIDAD', 'OTROS'] },
+      { titulo: 'Interiores', peso: 5, piezas: ['ASIENTO DE CONDUCTOR', 'ASIENTO DE COPILOTO', 'ASIENTOS TRASEROS', 'ALFOMBRA', 'CIELO', 'TABLERO', 'CONSOLA CENTRAL', 'GUANTERA', 'MANIJAS INTERNAS', 'TAPA PUERTA PILOTO', 'TAPA PUERTA COPILOTO', 'TAPA PUERTA TRASERA DERECHA', 'TAPA PUERTA TRASERA IZQUIERDA'] },
+      { titulo: 'Sistemas interiores', peso: 10, piezas: ['MANDOS / BOTONERA VIDRIOS Y SEGUROS', 'CLUSTER / TABLERO', 'LUCES ALTAS', 'LUCES BAJAS', 'CUARTOS', 'DIRECCIONALES IZQUIERDAS', 'DIRECCIONALES DERECHAS', 'INTERMITENTES', 'NIEBLEROS / OTROS', 'STOP', 'LIMPIAPARABRISAS DELANTERO', 'SISTEMA MULTIMEDIA', 'CLAXON', 'AC / PERILLAS', 'LUCES INTERIORES'] },
+      { titulo: 'Sistema mecánico', peso: 15, piezas: ['FRENOS DELANTEROS', 'FRENOS TRASEROS', 'FRENO DE MANO', 'SUSPENSION', 'AMORTIGUADORES', 'SOPORTES DE MOTOR', 'BANDAS', 'CLUTCH', 'TRANSMISION / CADENA'] },
+      { titulo: 'Niveles', peso: 10, piezas: ['ACEITE MOTOR', 'REFRIGERANTE', 'LIQUIDO FRENOS', 'LIQUIDO DE DIRECCION', 'LIQUIDO LIMPIAPARABRISAS'] },
+      { titulo: 'Batería', peso: 5, piezas: ['TERMINALES CON SARRO', 'DERRAME LIQUIDO / MAL OLOR', 'BATERIA INFLADA'] },
+    ],
+  };
+  function reagruparSiAplica_(tipo, secciones) {
+    const mapa = REAGRUPAR_SECCIONES[String(tipo || '').trim().toUpperCase()];
+    if (!mapa) return secciones;
+
+    const porPieza = {};
+    secciones.forEach((s) => s.campos.forEach((c) => { porPieza[c.campo] = c; }));
+
+    const usadas = {};
+    const reagrupadas = mapa.map((grupo) => {
+      const campos = grupo.piezas.map((nombre) => { usadas[nombre] = true; return porPieza[nombre]; }).filter(Boolean);
+      return { titulo: grupo.titulo, peso: grupo.peso, campos: campos };
+    });
+
+    // Si la plantilla real trae una pieza que este mapa no contempla (se agregó
+    // después, o falta en la lista de arriba), no se pierde en silencio: se deja
+    // aparte con peso 0 (no afecta la calificación) para que se note y se pueda
+    // agregar aquí.
+    const faltantes = [];
+    secciones.forEach((s) => s.campos.forEach((c) => { if (!usadas[c.campo]) faltantes.push(c); }));
+    if (faltantes.length) reagrupadas.push({ titulo: 'Otras piezas (revisar agrupación)', peso: 0, campos: faltantes });
+    return reagrupadas;
+  }
+
   function estructuraDeTipo(token, tipo) {
     Permisos.puedeLeer(token, MODULO);
     const clave = 'inspeccion_tipo_' + SheetUtils.normalizarEncabezado_(tipo);
@@ -591,7 +648,7 @@ const InspeccionesService = (function () {
       tipo: limpiar_(configuracion['TIPO']),
       plantillaId: plantillaId,
       carpeta: carpetaDe_(tipo, configuracion),
-      secciones: Plantilla.seccionesDe(texto),
+      secciones: reagruparSiAplica_(tipo, Plantilla.seccionesDe(texto)),
       // Las llantas que aplican salen de la propia plantilla: un auto trae DD/DI/TD/TI,
       // una moto D/T y un camión de rueda doble las TII/TID/TEI/TED
       llantas: COLUMNAS_LLANTAS
