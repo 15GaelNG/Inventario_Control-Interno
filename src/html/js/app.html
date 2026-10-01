@@ -606,7 +606,7 @@
       if (vista === 'correcciones-lineas') { montarVista('tpl-lineas-correcciones', LineasCorrecciones.init); return; }
       if (vista === 'cambios-lineas') { montarVista('tpl-lineas-bitacora', Lineas.initCambios); return; }
       // Campana de la barra superior → "Ver todas" (html/notificaciones.html, rama emmanuel)
-      if (vista === 'notificaciones') { montarVista('tpl-notificaciones', Notificaciones.initVista); return; }
+      if (vista === 'notificaciones') { montarVista('tpl-notificaciones', NotificacionesLineas.initVista); return; }
       mostrarProximamente(etiqueta || vista);
     });
   }

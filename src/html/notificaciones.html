@@ -106,7 +106,7 @@
   <div class="ntf-vista" id="ntf-vista">
     <div class="page-header">
       <div>
-        <h2><i data-lucide="bell" class="ico"></i> Notificaciones</h2>
+        <h2><i data-lucide="bell" class="ico"></i> Avisos de Líneas</h2>
         <p class="page-subtitle">Avisos de Líneas: adendums por vencer, resguardos, cancelaciones y líneas que se siguen pagando.</p>
       </div>
       <div class="page-header-actions">
@@ -138,7 +138,9 @@
    * Cada tipo (TIPOS) dice su ícono y a dónde lleva: la ficha de la línea, la bandeja de resguardos o Líneas
    * Telefónicas filtrada. Abrir un aviso lo marca como leído.
    */
-  const Notificaciones = (function () {
+  // NotificacionesLineas y no Notificaciones: ese nombre es de la campanita de Vehículos (master,
+  // html/js/componentes/notificaciones.html). Dos `const` globales iguales impiden que corra este script.
+  const NotificacionesLineas = (function () {
     const REVISAR_CADA_MS = 10 * 60 * 1000;
     const EN_CAMPANA = 8;
     const AGRUPAR_DESDE = 3; // más de 3 avisos del mismo tipo en un mismo bloque de fechas se juntan en "Ver N más"
@@ -236,7 +238,7 @@
       if (!contador) return;
       contador.hidden = !noLeidas;
       contador.textContent = noLeidas > 99 ? '99+' : String(noLeidas || '');
-      boton.setAttribute('aria-label', noLeidas ? 'Notificaciones: ' + noLeidas + ' sin leer' : 'Notificaciones');
+      boton.setAttribute('aria-label', noLeidas ? 'Avisos de Líneas: ' + noLeidas + ' sin leer' : 'Avisos de Líneas');
       boton.title = boton.getAttribute('aria-label');
     }
 
@@ -318,10 +320,10 @@
       const caja = document.createElement('div');
       caja.className = 'ntf-campana-caja';
       caja.innerHTML =
-        '<button type="button" class="ntf-campana" aria-haspopup="true" aria-expanded="false" aria-label="Notificaciones" title="Notificaciones">' +
+        '<button type="button" class="ntf-campana" aria-haspopup="true" aria-expanded="false" aria-label="Avisos de Líneas" title="Avisos de Líneas">' +
           icono('bell') + '<span class="ntf-contador" hidden></span></button>' +
-        '<div class="ntf-panel" hidden role="dialog" aria-label="Notificaciones">' +
-          '<div class="ntf-panel-cabeza"><strong>Notificaciones</strong>' +
+        '<div class="ntf-panel" hidden role="dialog" aria-label="Avisos de Líneas">' +
+          '<div class="ntf-panel-cabeza"><strong>Avisos de Líneas</strong>' +
             '<button type="button" class="ntf-enlace" data-ntf-todas-leidas>Marcar todas como leídas</button></div>' +
           '<div class="ntf-panel-lista"></div>' +
           '<div class="ntf-panel-pie"><button type="button" class="ntf-enlace" data-ntf-ver-todas>Ver todas</button></div>' +
@@ -335,7 +337,7 @@
       panel.addEventListener('click', (ev) => {
         ev.stopPropagation();
         if (ev.target.closest('[data-ntf-todas-leidas]')) { marcar(null).catch((e) => Notificar.error(e.message)); return; }
-        if (ev.target.closest('[data-ntf-ver-todas]')) { abrirPanel(false); navegarA('notificaciones', 'Notificaciones'); return; }
+        if (ev.target.closest('[data-ntf-ver-todas]')) { abrirPanel(false); navegarA('notificaciones', 'Avisos de Líneas'); return; }
         const item = ev.target.closest('.ntf-item');
         if (item) abrir(item.dataset.ntfId);
       });

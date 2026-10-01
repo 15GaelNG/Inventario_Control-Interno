@@ -917,7 +917,7 @@ test('Notificaciones: adendum por vencer una semana antes, sin las ya vencidas n
   assert.match(read('src/ClientApi.gs'), /function apiLineasNotificaciones\(token, limite\)/);
   assert.match(read('src/services/lineas/LineasRegistros.gs'), /LineasNotificaciones\.revisarPronto\(\);/);
   assert.match(read('src/html/Index.html'), /include\('html\/notificaciones'\)/);
-  assert.match(read('src/html/js/app.html'), /montarVista\('tpl-notificaciones', Notificaciones\.initVista\)/);
+  assert.match(read('src/html/js/app.html'), /montarVista\('tpl-notificaciones', NotificacionesLineas\.initVista\)/);
   assert.match(read('src/html/js/lineas.html'), /irARegistro: irARegistro/);
 });
 
