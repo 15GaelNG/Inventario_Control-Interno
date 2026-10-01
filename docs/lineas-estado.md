@@ -6,37 +6,32 @@ Documento de continuidad del módulo **Líneas** (equipos y líneas telefónicas
 El plan de la mudanza está en [lineas-plan.md](lineas-plan.md); aquí se registra
 qué está hecho, cómo probarlo y qué sigue.
 
-**Dónde quedamos (cierre del 30-sep, noche):**
+**Dónde quedamos (cierre final del 30-sep, noche):**
 
-- **Rama `emmanuel`:** en GitHub hasta `10dc7eb` (29-sep). En local hay 27 commits más (`644ba14` … `13e2987`).
+- **Rama `emmanuel`:** en GitHub hasta `10dc7eb` (29-sep). En local hay **31 commits más** (`644ba14` … `0bc9b46`).
   Se suben a GitHub **al terminar la ronda**, como pidió el usuario. DEV está al día con `emmanuel`.
-- **Pruebas:** `npm test` da 60 aprobadas y 0 fallidas. Las de Ayrton se corren aparte (`node tests/ids.test.js` y
-  `node tests/entidades.test.js`) y dan TODO OK.
-- **Reunión con Líneas (30-sep): ya ocurrió.** Lo hecho después:
+- **Pruebas:** `npm test` da 60 aprobadas y 0 fallidas. Las de Ayrton (`node tests/ids.test.js` y
+  `node tests/entidades.test.js`) dan TODO OK.
+- **La lista única de pendientes** es `migracion/PENDIENTES_MAESTRO.md` (carpeta de documentación); las preguntas para
+  el área, por rondas, en `migracion/PREGUNTAS_PENDIENTES.md` (Líneas L1–L23; Pau P1–P10 aparte).
+- **Hecho el 30-sep** (después de la reunión con Líneas):
   - §0u: estatus nuevos, DISPONIBLE y menú;
   - §0v: pestañas de módulos retirados, migradas y borradas;
-  - §0w: "Mandar a resguardo" por NUCO y bandeja "Resguardos y cancelaciones", probada de punta a punta con los
-    NUCO 0101 y 0556.
-  - §0x: PARA VENTA y PARA DESECHO con la misma lógica que Mandar a resguardo (`2a4ab57`; probado en /dev con el
-    NUCO 0002).
-  - §0y: selección como en Google Drive (barra, ⋮, clic derecho, Detalles que sigue a la selección) y "Mandar a
-    cancelación" de líneas sin resguardo (en DEV, probado en /dev). Ajustes del mismo día: contador simple, clic
-    fuera quita la selección, sin columna de Acciones, Documentos/Historial de una fila, ficha con solo Nueva
-    inspección y Nueva responsiva a la vista (lo demás en ⋮, también en la línea), "Ver carpeta en Drive" sola en ⋮
-    y con el mismo nombre en la tabla Documentos, y la barra que entra a los 100 ms (con doble clic no se asoma).
-  - §0ac: centro de notificaciones: avisos de seguimiento, ícono y destino por tipo, filtro por tipo y agrupado.
-  - §0ab: Panorama nuevo: líneas activas, renta por cuenta, adendums y departamentos, al cierre del mes que se elija.
-  - §0aa: módulo TEMPORAL "Correcciones de Líneas" (casos de la conciliación para Líneas); se elimina cuando terminen.
-  - §0z: Líneas lee `ID ANTERIOR` tras la segunda corrida de IDs de Ayrton.
-- **Lo que sigue, en orden:** pendiente 0 de `migracion/ESTADO_TELEFONIA.md`, en la carpeta de documentación.
-  1. Conversión de estatus viejos: ya no hay confirmaciones del usuario; lo que requiere decisión va al módulo de
-     correcciones de Líneas (el usuario solo migra).
-  2. Dudas abiertas de la reunión.
-  3. Responsiva que actualiza la línea: la jefatura dijo que sí; falta confirmarlo e implementarlo.
-  4. Pedidos nuevos: comentarios con contexto, accesorios por NUCO, patrón con flecha, firmas, PDF firmado, QR,
-     historial número ↔ SIM, adendums y facturas, y resumen para Marisela.
-  5. Pendientes de la bandeja: histórico de la hoja de Bren, ENTREGADO al reasignar y probar "Vendido".
-  6. **Roles y correos al final** (correo de Pau en `LINEAS_APROBADORES_RESGUARDO`).
+  - §0w: "Mandar a resguardo" por NUCO y bandeja "Resguardos y cancelaciones" (probada con los NUCO 0101 y 0556);
+  - §0x: PARA VENTA y PARA DESECHO con la lógica de Mandar a resguardo;
+  - §0y: selección como en Google Drive y "Mandar a cancelación", con sus ajustes;
+  - §0z: Líneas lee `ID ANTERIOR` tras la segunda corrida de IDs de Ayrton (`13e2987`);
+  - §0aa: módulo TEMPORAL "Correcciones de Líneas" con 565 casos cargados (`df45755`); se elimina cuando terminen;
+  - §0ab: Panorama nuevo (`0de8943`). **Queda abierto:** el usuario lo va a presentar y pueden salir cambios;
+  - §0ac: centro de notificaciones con avisos de seguimiento (`0bc9b46`); días y tipos a confirmar con Líneas (L13).
+- **Lo que sigue** (detalle y orden en la lista maestra):
+  1. cambios del Panorama que salgan de la presentación;
+  2. fotos de la inspección por QR (permiso temporal, sin volver a iniciar sesión);
+  3. análisis de cambios de número entre adendums (misma SIM con otro número = cambio de número);
+  4. inspección obligatoria al mandar a resguardo (acordada en la junta, R6; no está hecha);
+  5. lo que dependa de las respuestas de Líneas (reasignar, responsiva que actualiza la ficha, columnas de inicio,
+     acciones masivas, renovación de adendum) y de Pau;
+  6. **al final:** roles y correos, subir a GitHub, unir con master y avisar a Jorge y Ayrton.
 - **Por probar a mano** (el navegador integrado no puede): subir fotos a una inspección de NUCOS, el gesto de dos
   dedos, Atrás entre módulos y la velocidad real de "Última responsiva / inspección". De §0y: tocar y mantener
   presionado en celular, "Ver última inspección / responsiva" desde el ⋮ (abre otra pestaña) y el ⋮ de la ficha con
