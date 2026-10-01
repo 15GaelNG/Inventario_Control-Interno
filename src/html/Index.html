@@ -96,6 +96,15 @@
   <?!= include('html/views/lineas/lineas-operativa'); ?>
 
   <?!= include('html/js/api'); ?>
+  <!-- Antes de app.html a propósito: su render() llama Notificaciones.iniciar()
+       en la misma pasada síncrona del render() de arranque (línea final del
+       archivo, si ya había sesión guardada) -- si este include fuera después,
+       como el resto de componentes/ (ver más abajo), Notificaciones todavía no
+       existiría en ese primer render() y tronaría con "Notificaciones is not
+       defined". Solo define la función (no toca nada de app.html al cargar);
+       lo que si necesita de app.html (callServer, state, escaparHtml...) lo usa
+       adentro de funciones que no se llaman hasta más tarde, vía iniciar(). -->
+  <?!= include('html/js/componentes/notificaciones'); ?>
   <?!= include('html/js/app'); ?>
   <?!= include('html/js/app-arqueos'); ?>
   <?!= include('html/js/app-cajachica'); ?>
@@ -113,7 +122,6 @@
   <?!= include('html/js/componentes/firma'); ?>
   <?!= include('html/js/componentes/lienzo'); ?>
   <?!= include('html/js/componentes/exportar-excel'); ?>
-  <?!= include('html/js/componentes/notificaciones'); ?>
 
   <?!= include('html/js/app-verificaciones'); ?>
   <?!= include('html/js/modulos/sensores'); ?>
