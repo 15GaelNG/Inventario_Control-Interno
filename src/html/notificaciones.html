@@ -87,14 +87,16 @@
   .ntf-filtro-tipo button { margin-left: 4px; }
   .ntf-modulos { margin-bottom: 12px; }
   .ntf-modulo-titulo {
-    display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 14px; border: none; text-align: left;
+    display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; padding: 10px 14px; border: none; border-radius: 0; text-align: left;
     background: var(--color-bg); border-bottom: 1px solid var(--color-border); color: var(--color-text);
     font-size: 12.5px; font-weight: 700; cursor: pointer;
   }
   .ntf-modulo-titulo span { font-weight: 500; color: var(--color-text-muted); }
-  .ntf-modulo-titulo:hover { filter: brightness(.97); }
+  /* button:hover global pinta de azul oscuro: aquí el hover es suave, como el de los avisos */
+  .ntf-modulo-titulo:hover, .ntf-modulo-titulo:focus-visible { background: var(--color-primary-soft); color: var(--color-text); }
+  .ntf-modulo-titulo:hover span { color: var(--color-text-muted); }
   .ntf-vista .ntf-modulo-titulo { font-size: 13.5px; padding: 12px 18px; cursor: default; }
-  .ntf-vista .ntf-modulo-titulo:hover { filter: none; }
+  .ntf-vista .ntf-modulo-titulo:hover { background: var(--color-bg); }
   .ntf-seccion {
     padding: 10px 18px 8px; font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
     color: var(--color-text-muted); background: var(--color-bg); border-bottom: 1px solid var(--color-border);
@@ -168,8 +170,9 @@
     /** grupo: para filtrar; color: pronto (ámbar) | vencida (rojo) | info (azul); destino: a dónde lleva. */
     const TIPOS = {
       // Vehículos (NotificacionesService.gs): sin leído/no leído, el color sale de la severidad
-      VEH_VERIFICACION: { grupo: 'verificacion', icono: 'clipboard-check', accion: 'Ver vehículo', chipDias: true },
-      VEH_SEGURO: { grupo: 'seguro', icono: 'shield', accion: 'Ver vehículo', chipDias: true },
+      // Sin etiqueta de días: el mensaje de NotificacionesService ya dice cuántos ("vencida hace 427 día(s)")
+      VEH_VERIFICACION: { grupo: 'verificacion', icono: 'clipboard-check', accion: 'Ver vehículo' },
+      VEH_SEGURO: { grupo: 'seguro', icono: 'shield', accion: 'Ver vehículo' },
       VEH_INSPECCION: { grupo: 'inspeccion', icono: 'clipboard-list', accion: 'Ver vehículo' },
       ADENDUM: { grupo: 'adendum', icono: 'calendar-clock', accion: 'Ver línea' },
       RESGUARDO: { grupo: 'resguardo', icono: 'package-check', color: 'info', accion: 'Abrir la bandeja', destino: BANDEJA },
@@ -524,7 +527,7 @@
           tile('', 'bell-dot', noLeidas, 'Por atender', noLeidas ? 'stat-tile-warn' : 'stat-tile-ok') +
           GRUPOS.filter((g) => !modulo || g.modulo === modulo).map((g) => {
             const sin = contar(g.clave, true);
-            return tile(g.clave, g.icono, contar(g.clave, false), g.etiqueta + (sin ? ' · ' + sin + ' sin leer' : ''));
+            return tile(g.clave, g.icono, contar(g.clave, false), g.etiqueta + (sin && g.modulo !== VEHICULOS ? ' · ' + sin + ' sin leer' : ''));
           }).join('');
       }
 
@@ -547,6 +550,7 @@
         ft.hidden = !grupo;
         ft.innerHTML = grupo ? 'Solo: <strong>' + esc(etiquetaGrupo) + '</strong> <button type="button" class="ntf-enlace" data-ntf-quitar-grupo>Ver todos los tipos</button>' : '';
         raiz.querySelector('#ntf-marcar-todas').disabled = !items.some((n) => !n.leida && !esVehiculo(n));
+        raiz.querySelector('#ntf-marcar-todas').hidden = modulo === VEHICULOS; // los de Vehículos no se marcan
 
         const ver = filtro === 'no-leidas' ? noLeidas : delGrupo;
         if (!ver.length) {
