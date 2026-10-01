@@ -54,12 +54,21 @@ const LineasUtil = (function () {
     return isNaN(n) ? null : n;
   }
 
+  // Encabezados ya normalizados: una columna que no está con el nombre exacto recorre toda la fila, y sin esto se
+  // normalizaba cada encabezado otra vez en cada fila (al leer LINEAS TELEFONICAS completa eran ~2 s de 3).
+  const normalizados_ = new Map();
+  const norm_ = (k) => {
+    let n = normalizados_.get(k);
+    if (n === undefined) { n = LineasDatos.normCol(k); normalizados_.set(k, n); }
+    return n;
+  };
+
   /** Valor de una columna tolerando espacios y mayúsculas en el encabezado. */
   function col(fila, nombre) {
     if (nombre in fila) return fila[nombre];
-    const buscado = LineasDatos.normCol(nombre);
+    const buscado = norm_(nombre);
     for (const k in fila) {
-      if (LineasDatos.normCol(k) === buscado) return fila[k];
+      if (norm_(k) === buscado) return fila[k];
     }
     return undefined;
   }

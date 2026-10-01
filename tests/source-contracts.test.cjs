@@ -1057,11 +1057,26 @@ test('Panorama: estatus al cierre de cada mes reconstruido hacia atrás con la b
     lineas: regs.map((r, i) => Object.assign({}, r, { cuenta: ['AT&T', 'TELCEL GPH', ''][i], basico: i === 2, depto: i ? 'POST VENTA' : 'DISPONIBLE', costo: 299, fin: '2027-01-31' })),
     equipos: [Object.assign({}, regs[0], { depto: 'DISPONIBLE' })],
   }, eventos, meses);
-  const estados = (fila) => fila.s.map((k) => (k < 0 ? null : R.dic[k]));
-  assert.deepEqual(estados(R.lineas[0]), ['USO', 'RESGUARDO', 'VENDIDO']);
-  assert.deepEqual(estados(R.lineas[1]), [null, null, 'USO']); // todavía no existía
-  assert.deepEqual([R.lineas[2].b, R.lineas[2].c, R.deps[R.lineas[1].d]], [1, '', 'POST VENTA']);
-  assert.deepEqual(estados(R.equipos[0]), ['USO', 'RESGUARDO', 'VENDIDO']);
+  // Va en columnas y el estatus por mes en corridas: un número si nunca cambió, o [código, meses, código, meses…]
+  const corridas = (s) => {
+    if (typeof s === 'number') return meses.map(() => s);
+    const out = [];
+    for (let i = 0; i < s.length; i += 2) for (let j = 0; j < s[i + 1]; j++) out.push(s[i]);
+    return out;
+  };
+  const estados = (s) => corridas(s).map((k) => (k < 0 ? null : R.dic[k]));
+  assert.deepEqual(estados(R.lineas.s[0]), ['USO', 'RESGUARDO', 'VENDIDO']);
+  assert.deepEqual(estados(R.lineas.s[1]), [null, null, 'USO']); // todavía no existía
+  assert.equal(typeof R.lineas.s[2], 'number'); // sin cambios: un solo número
+  assert.deepEqual([R.lineas.b[2], R.cuentas[R.lineas.c[2]], R.deps[R.lineas.d[1]], R.fechas[R.lineas.f[0]]], [1, '', 'POST VENTA', '2027-01-31']);
+  assert.deepEqual(estados(R.equipos.s[0]), ['USO', 'RESGUARDO', 'VENDIDO']);
+  // La interfaz lo desempaca a un objeto por registro y guarda la última copia para pintar al instante
+  const cli = read('src/html/js/lineas.html');
+  assert.match(cli, /function expandirRegistros\(R\)/);
+  assert.match(cli, /registros: expandirRegistros\(Object\.assign\(\{ mesesTotal: r\.meses\.length \}, r\.registros\)\)/);
+  assert.match(cli, /const copia = !forzar && !est\.datos \? leerCopiaPanorama\(\) : null;/);
+  // La bitácora se lee solo en sus 4 columnas
+  assert.match(read('src/services/lineas/LineasPanorama.gs'), /const COLS_CAMBIOS = \['CAMPO', 'FECHA ACTUALIZACION', 'ID_LINEA', 'ANTES'\];/);
   // Cuenta: AT&T factura todo a FRO; Telcel se separa por razón social
   assert.equal(P._cuentaDe('AT&T', 'GPH SERVICIOS CONDOMINALES'), 'AT&T');
   assert.equal(P._cuentaDe('TELCEL', 'GPH SERVICIOS CONDOMINALES'), 'TELCEL GPH');

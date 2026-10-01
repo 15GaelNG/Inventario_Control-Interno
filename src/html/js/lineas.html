@@ -3754,6 +3754,41 @@
     const dineroCorto = (n) => (Math.abs(n) >= 1e6 ? '$' + (n / 1e6).toLocaleString('es-MX', { maximumFractionDigits: 2 }) + ' M'
       : Math.abs(n) >= 1e4 ? '$' + (n / 1e3).toLocaleString('es-MX', { maximumFractionDigits: 1 }) + ' mil' : dinero(n));
 
+    /**
+     * El servidor manda los registros en columnas y el estatus de cada mes en corridas (LineasPanorama → registros):
+     * aquí se regresan a un objeto por registro con su estatus por mes, que es lo que usa calcularResumen.
+     */
+    function expandirRegistros(R) {
+      if (Array.isArray(R.lineas)) return R; // formato anterior (caché del servidor de antes del 1-oct)
+      const meses = (s, n) => {
+        if (typeof s === 'number') return new Array(n).fill(s);
+        const salida = [];
+        for (let i = 0; i < s.length; i += 2) for (let j = 0; j < s[i + 1]; j++) salida.push(s[i]);
+        return salida;
+      };
+      const n = R.mesesTotal;
+      const L = R.lineas;
+      const E = R.equipos;
+      return {
+        dic: R.dic, deps: R.deps,
+        lineas: L.s.map((s, i) => ({ c: R.cuentas[L.c[i]], b: L.b[i], d: L.d[i], p: L.p[i], f: R.fechas[L.f[i]], s: meses(s, n) })),
+        equipos: E.s.map((s, i) => ({ d: E.d[i], s: meses(s, n) })),
+      };
+    }
+    // Última respuesta del Panorama: al volver a entrar se pinta al instante y se actualiza por detrás. Se guarda
+    // también en este navegador (solo conteos, departamentos y costos; sin nombres ni números) para la primera vez.
+    const COPIA_PANORAMA = 'lineas.panorama.v3';
+    let copiaPanorama = null;
+    function leerCopiaPanorama() {
+      if (copiaPanorama) return copiaPanorama;
+      try { copiaPanorama = JSON.parse(localStorage.getItem(COPIA_PANORAMA) || 'null'); } catch (e) { copiaPanorama = null; }
+      return copiaPanorama && copiaPanorama.meses && copiaPanorama.registros ? copiaPanorama : null;
+    }
+    function guardarCopiaPanorama(r) {
+      copiaPanorama = r;
+      try { localStorage.setItem(COPIA_PANORAMA, JSON.stringify(r)); } catch (e) { /* sin espacio o bloqueado: solo en memoria */ }
+    }
+
     function initPanorama() {
       const n = ++montaje;
       const raiz = document.getElementById('ln-panorama');
@@ -4194,23 +4229,39 @@
         refreshIcons();
       }
 
+      /** Pinta una respuesta del servidor; si es la misma serie de meses, se queda en el mes que se estaba viendo. */
+      function mostrar(r) {
+        const mismosMeses = est.datos && est.datos.meses.join() === r.meses.join();
+        est.datos = Object.assign({}, r, { registros: expandirRegistros(Object.assign({ mesesTotal: r.meses.length }, r.registros)) });
+        if (!mismosMeses) est.k = r.meses.length - 1;
+        est.resumenes = null;
+        est.series = {};
+        pintarTodo();
+      }
+
       async function cargar(forzar) {
         const boton = $('#lnp-actualizar', raiz);
         boton.disabled = true;
-        raiz.classList.add('lnp-cargando');
+        const copia = !forzar && !est.datos ? leerCopiaPanorama() : null;
+        if (copia) {
+          mostrar(copia);
+          raiz.classList.add('lnp-refrescando');
+          $('#lnp-generado', raiz).textContent = 'Datos al ' + fechaHora(copia.generadoEn) + ' · actualizando…';
+        } else {
+          raiz.classList.add('lnp-cargando');
+        }
         try {
           const r = await llamar('apiLineasPanorama', !!forzar);
           if (!vigente()) return;
-          est.datos = r;
-          est.k = r.meses.length - 1;
-          est.resumenes = null;
-          est.series = {};
-          pintarTodo();
+          guardarCopiaPanorama(r);
+          mostrar(r);
         } catch (e) {
-          if (vigente()) $('#lnp-activas', raiz).innerHTML = '<span class="error-msg">No se pudo cargar el panorama: ' + esc(mensajeError(e)) + '</span>';
+          if (!vigente()) return;
+          if (est.datos) Notificar.error('No se pudo actualizar el panorama: ' + mensajeError(e));
+          else $('#lnp-activas', raiz).innerHTML = '<span class="error-msg">No se pudo cargar el panorama: ' + esc(mensajeError(e)) + '</span>';
         } finally {
           boton.disabled = false;
-          raiz.classList.remove('lnp-cargando');
+          raiz.classList.remove('lnp-cargando', 'lnp-refrescando');
         }
       }
 

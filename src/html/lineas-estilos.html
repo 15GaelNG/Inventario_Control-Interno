@@ -799,6 +799,9 @@
   .lnp-filtros select { width: auto; min-width: 170px; padding: 7px 10px; font-weight: 600; }
   .lnp-filtro-nota { font-size: 12px; color: var(--color-text-muted); }
   .ln-panorama.lnp-cargando .lnp-portada, .ln-panorama.lnp-cargando .lnp-dos { opacity: .55; transition: opacity .2s; }
+  /* Con la copia anterior a la vista: solo gira el ícono de Actualizar mientras llega la nueva */
+  .ln-panorama.lnp-refrescando #lnp-actualizar .ico { animation: lnGirar 1s linear infinite; }
+  @media (prefers-reduced-motion: reduce) { .ln-panorama.lnp-refrescando #lnp-actualizar .ico { animation: none; } }
 
   .lnp-portada { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; margin-bottom: 22px; }
   .lnp-heroe, .lnp-dinero { padding: 20px 22px; display: flex; flex-direction: column; gap: 6px; }

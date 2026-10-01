@@ -14,7 +14,8 @@
  * ID APPSHEET.
  */
 const LineasPanorama = (function () {
-  const CLAVE_CACHE = 'ln_panorama_v2'; // v2 (30-sep): también el estatus de cada registro por mes (Panorama nuevo)
+  // v3 (1-oct): registros en columnas y estatus por mes comprimidos (la respuesta pesaba ~10 veces más)
+  const CLAVE_CACHE = 'ln_panorama_v3';
   const SEG_CACHE = 30 * 60;
   const MAX_MESES = 36;
 
@@ -98,27 +99,106 @@ const LineasPanorama = (function () {
   }
 
   /**
-   * Un renglón compacto por registro, con su estatus al cierre de cada mes (índices a `dic`), para que el Panorama
-   * calcule todo para el mes que se elija. Líneas: cuenta, SIM básico, departamento, costo de plan y fin del adendum.
-   * El departamento, la cuenta y el costo son los de HOY (la bitácora no los reconstruye).
+   * Estatus de cada mes en corridas: un número si fue el mismo todo el tiempo (casi siempre) o
+   * [código, meses, código, meses, …]. Ej. [-1, 2, 0, 17] = no existía 2 meses y luego 17 en el estatus 0.
+   */
+  function comprimir(codigos) {
+    if (codigos.every((c) => c === codigos[0])) return codigos[0];
+    const rle = [];
+    codigos.forEach((c) => {
+      if (rle.length && rle[rle.length - 2] === c) rle[rle.length - 1]++;
+      else rle.push(c, 1);
+    });
+    return rle;
+  }
+
+  /**
+   * Los registros para que el Panorama calcule todo para el mes que se elija, en columnas (sin repetir nombres de
+   * campo en cada uno de los ~2,600 renglones) y con textos repetidos como índices a una lista. Líneas: cuenta,
+   * SIM básico, departamento, costo de plan, fin del adendum y estatus al cierre de cada mes (índices a `dic`).
+   * El departamento, la cuenta y el costo son los de HOY (la bitácora no los reconstruye). La interfaz lo
+   * desempaca con Lineas → expandirRegistros.
    */
   function registros(regs, eventos, meses) {
     const cierres = cierresDe(meses);
     const dic = [];
     const deps = [];
+    const cuentas = [];
+    const fechas = [];
     const indice = (lista, v) => { let i = lista.indexOf(v); if (i < 0) { lista.push(v); i = lista.length - 1; } return i; };
-    const codigos = (r) => estadosPorMes(r, eventos, cierres).map((e) => (e === null ? -1 : indice(dic, e)));
-    return {
-      dic: dic, deps: deps,
-      lineas: regs.lineas.map((r) => ({ c: r.cuenta, b: r.basico ? 1 : 0, d: indice(deps, r.depto), p: r.costo, f: r.fin, s: codigos(r) })),
-      equipos: regs.equipos.map((r) => ({ d: indice(deps, r.depto), s: codigos(r) })),
+    const estados = (r) => comprimir(estadosPorMes(r, eventos, cierres).map((e) => (e === null ? -1 : indice(dic, e))));
+    const columnas = (lista, campos) => {
+      const c = {};
+      Object.keys(campos).forEach((k) => { c[k] = lista.map(campos[k]); });
+      return c;
     };
+    return {
+      dic: dic, deps: deps, cuentas: cuentas, fechas: fechas,
+      lineas: columnas(regs.lineas, {
+        c: (r) => indice(cuentas, r.cuenta), b: (r) => (r.basico ? 1 : 0), d: (r) => indice(deps, r.depto),
+        p: (r) => r.costo, f: (r) => indice(fechas, r.fin), s: estados,
+      }),
+      equipos: columnas(regs.equipos, { d: (r) => indice(deps, r.depto), s: estados }),
+    };
+  }
+
+  const COLS_CAMBIOS = ['CAMPO', 'FECHA ACTUALIZACION', 'ID_LINEA', 'ANTES'];
+  const CLAVE_EVENTOS = 'ln_panorama_eventos_v1';
+  const SEG_EVENTOS = 6 * 3600;
+  /**
+   * Cambios de estatus de la bitácora: { eventos: { equipos|lineas: { id: [[ms, antes]] } }, primera (ms), total }.
+   * La bitácora es la pestaña más grande (un renglón por campo cambiado) y solo crece hacia abajo: lo leído se guarda
+   * 6 h en caché con la última fila, y la siguiente vez (también con "Actualizar") solo se leen los renglones
+   * nuevos, en sus 4 columnas. Se vuelve a leer completa si la pestaña tiene menos filas que las ya leídas, si sus
+   * columnas cambiaron de lugar o al vencer la caché.
+   */
+  function eventosDeEstatus_() {
+    const t = LineasDatos.tabla(LineasRepo.TAB.CAMBIOS);
+    const ix = COLS_CAMBIOS.map((c) => LineasDatos.colIndice(t, c));
+    const ultima = t.hoja.getLastRow();
+    const cols = ix.join(',');
+    let acc = LineasDatos.cacheLeer(CLAVE_EVENTOS);
+    if (acc && (acc.cols !== cols || acc.fila > ultima)) acc = null;
+    acc = acc || { cols: cols, fila: 1, total: 0, primera: null, eventos: { equipos: {}, lineas: {} } };
+    const agregar = (fila) => {
+      const campo = LineasDatos.normCol(fila[0]);
+      const tipo = campo === 'ESTATUS EQUIPO' ? 'equipos' : (campo === 'ESTATUS LINEA' ? 'lineas' : null);
+      const cuando = fila[1];
+      const id = txt(fila[2]);
+      if (!tipo || !id || !(cuando instanceof Date) || isNaN(cuando.getTime())) return;
+      (acc.eventos[tipo][id] = acc.eventos[tipo][id] || []).push([cuando.getTime(), estatus(fila[3])]);
+      if (acc.primera === null || cuando.getTime() < acc.primera) acc.primera = cuando.getTime();
+      acc.total++;
+    };
+    if (ix.some((i) => i < 0)) { // pestaña sin alguna columna: lectura normal y sin caché
+      LineasDatos.leerTabla(LineasRepo.TAB.CAMBIOS).forEach((f) => agregar(COLS_CAMBIOS.map((c) => LineasUtil.col(f, c))));
+      return acc;
+    }
+    if (ultima > acc.fila) {
+      const desde = Math.min.apply(null, ix);
+      const hasta = Math.max.apply(null, ix);
+      t.hoja.getRange(acc.fila + 1, desde + 1, ultima - acc.fila, hasta - desde + 1).getValues().forEach((v) => {
+        const fecha = v[ix[1] - desde];
+        agregar([v[ix[0] - desde], fecha instanceof Date ? LineasDatos.deHoraHoja(fecha) : fecha, v[ix[2] - desde], v[ix[3] - desde]]);
+      });
+      acc.fila = ultima;
+      LineasDatos.cacheGuardar(CLAVE_EVENTOS, acc, SEG_EVENTOS);
+    }
+    return acc;
   }
 
   function calcular() {
     const ahora = Date.now();
+    const ms = {}; // tiempos de cada paso (diagnóstico: se ven en la respuesta)
+    let marca = ahora;
+    const tomar = (paso) => { const t = Date.now(); ms[paso] = t - marca; marca = t; };
     const regs = { equipos: [], lineas: [] };
-    LineasDatos.leerTabla(LineasRepo.TAB.LINEAS).forEach((f) => {
+    // Utilities.formatDate cuesta ~1 ms por llamada y los fines de adendum se repiten mucho: uno por fecha distinta
+    const dias = {};
+    const diaDe = (d) => dias[d.getTime()] || (dias[d.getTime()] = Utilities.formatDate(d, zona(), 'yyyy-MM-dd'));
+    const filasLineas = LineasDatos.leerTabla(LineasRepo.TAB.LINEAS);
+    tomar('leerLineas');
+    filasLineas.forEach((f) => {
       const r = LineasRepo.convertirRegistro(f);
       if (!r) return;
       const alta = LineasUtil.col(f, 'FECHA REGISTRO');
@@ -129,7 +209,7 @@ const LineasPanorama = (function () {
       if (r.equipo) regs.equipos.push({ ids: ids, actual: estatus(r.equipo.estatus), alta: altaMs, depto: depto });
       if (r.linea) {
         const fin = r.linea.finPlan instanceof Date && !isNaN(r.linea.finPlan.getTime()) && r.linea.finPlan.getFullYear() >= 2000
-          ? Utilities.formatDate(r.linea.finPlan, zona(), 'yyyy-MM-dd') : '';
+          ? diaDe(r.linea.finPlan) : '';
         regs.lineas.push({
           ids: ids, actual: estatus(r.linea.estatus), alta: altaMs, depto: depto, fin: fin,
           cuenta: cuentaDe(r.linea.compania, r.linea.razonSocial), basico: /B[AÁ]SIC[OA]/.test(r.tipo || ''),
@@ -138,19 +218,15 @@ const LineasPanorama = (function () {
       }
     });
 
+    tomar('convertir');
+    const bit = eventosDeEstatus_();
+    tomar('leerCambios');
     const eventos = { equipos: {}, lineas: {} };
-    let primera = null;
-    let total = 0;
-    LineasDatos.leerTabla(LineasRepo.TAB.CAMBIOS).forEach((c) => {
-      const campo = LineasDatos.normCol(LineasUtil.col(c, 'CAMPO'));
-      const tipo = campo === 'ESTATUS EQUIPO' ? 'equipos' : (campo === 'ESTATUS LINEA' ? 'lineas' : null);
-      const cuando = LineasUtil.col(c, 'FECHA ACTUALIZACION');
-      const id = txt(LineasUtil.col(c, 'ID_LINEA'));
-      if (!tipo || !id || !(cuando instanceof Date) || isNaN(cuando.getTime())) return;
-      (eventos[tipo][id] = eventos[tipo][id] || []).push({ t: cuando.getTime(), antes: estatus(LineasUtil.col(c, 'ANTES')) });
-      if (!primera || cuando < primera) primera = cuando;
-      total++;
+    ['equipos', 'lineas'].forEach((tipo) => {
+      Object.keys(bit.eventos[tipo]).forEach((id) => { eventos[tipo][id] = bit.eventos[tipo][id].map((e) => ({ t: e[0], antes: e[1] })); });
     });
+    const primera = bit.primera === null ? null : new Date(bit.primera);
+    const total = bit.total;
 
     const meses = mesesEntre(mesDe(primera || new Date(ahora)), mesDe(new Date(ahora)));
     const bloque = (tipo) => ({
@@ -158,11 +234,14 @@ const LineasPanorama = (function () {
       actual: contar(regs[tipo].map((r) => r.actual)),
       historico: historico(regs[tipo], eventos[tipo], meses, ahora),
     });
-    return {
+    const salida = {
       generadoEn: new Date(ahora), desde: primera, cambiosDeEstatus: total, meses: meses,
       equipos: bloque('equipos'), lineas: bloque('lineas'),
       registros: registros(regs, eventos, meses),
     };
+    tomar('calcular');
+    salida.ms = ms;
+    return salida;
   }
 
   /** Panorama con caché de 30 min (`forzar` la rehace). */
