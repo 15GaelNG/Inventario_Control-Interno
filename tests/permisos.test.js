@@ -28,20 +28,20 @@ const usuario = (extra) => Object.assign({
 const PERFILES = {
   'CONTROL VEHICULAR': { vehiculos: 'EDICION', verificaciones: 'EDICION', hologramas: 'LECTURA' },
   'AUDITORIAS': { vehiculos: 'LECTURA', hologramas: 'LECTURA' },
-  'LINEAS': { accesorios: 'EDICION' },
+  'LINEAS': { 'accesorios-lineas': 'EDICION' },
 };
 const resolver = (u, perfiles) => Permisos.resolver_(u, perfiles === undefined ? PERFILES : perfiles, Modulos.ids());
 
 console.log('1. Perfiles');
 let p = resolver(usuario({ PERFILES: 'Control vehicular' }));
 ok(p.vehiculos === 'EDICION' && p.hologramas === 'LECTURA', 'el perfil da sus permisos, cada uno con su nivel');
-ok(p.accesorios === undefined, 'lo que el perfil no menciona, no se puede ni ver');
+ok(p['accesorios-lineas'] === undefined, 'lo que el perfil no menciona, no se puede ni ver');
 ok(Object.keys(p).length === 3, 'no aparecen módulos de más');
 
 console.log('2. Varios perfiles: gana el permiso más alto');
 p = resolver(usuario({ PERFILES: 'Auditorias, Control vehicular' }));
 ok(p.vehiculos === 'EDICION', 'lectura + edición sobre el mismo módulo = edición');
-ok(p.accesorios === undefined && p.verificaciones === 'EDICION', 'se suman los módulos de todos los perfiles');
+ok(p['accesorios-lineas'] === undefined && p.verificaciones === 'EDICION', 'se suman los módulos de todos los perfiles');
 
 console.log('3. Los nombres de perfil no distinguen mayúsculas ni espacios');
 p = resolver(usuario({ PERFILES: '  control VEHICULAR ' }));
@@ -74,11 +74,11 @@ ok(p.vehiculos === 'EDICION', 'a un ADMIN no se le quita nada con excepciones: e
 p = resolver(usuario({ ROL: 'SUPER', PERFILES: '' }));
 ok(Object.keys(p).length === Modulos.ids().length, 'SUPER se trata igual que ADMIN (los que quedan de antes)');
 p = resolver(usuario({ ROL: 'USER', PERFILES: 'Lineas' }));
-ok(p.usuarios === undefined && p.accesorios === 'EDICION', 'un USER solo tiene lo de sus perfiles');
+ok(p.usuarios === undefined && p['accesorios-lineas'] === 'EDICION', 'un USER solo tiene lo de sus perfiles');
 
 console.log('7. Mientras no exista la hoja PERFILES (migración)');
 p = resolver(usuario({ ROL: 'VIEWER' }), null);
-ok(p.vehiculos === 'LECTURA' && p.accesorios === 'LECTURA', 'VIEWER: lectura en todo');
+ok(p.vehiculos === 'LECTURA' && p['accesorios-lineas'] === 'LECTURA', 'VIEWER: lectura en todo');
 p = resolver(usuario({ ROL: 'USER' }), null);
 ok(p.vehiculos === 'EDICION', 'USER: edición, como hoy');
 p = resolver(usuario({ ROL: 'ADMIN' }), null);

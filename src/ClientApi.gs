@@ -39,26 +39,6 @@ function apiLogout(token) {
   return Auth.logout(token);
 }
 
-// --- Accesorios ---
-function apiListarArticulosConStock(token) {
-  return AccesoriosService.listarArticulosConStock(token);
-}
-function apiAccesoriosCompleto(token) {
-  return JSON.stringify(AccesoriosService.completo(token));
-}
-function apiCrearArticulo(token, articulo) {
-  return AccesoriosService.crearArticulo(token, articulo);
-}
-function apiActualizarArticulo(token, id, cambios) {
-  return AccesoriosService.actualizarArticulo(token, id, cambios);
-}
-function apiRegistrarMovimiento(token, idArticulo, tipo, cantidad, comentarios) {
-  return AccesoriosService.registrarMovimiento(token, idArticulo, tipo, cantidad, comentarios);
-}
-function apiHistorialMovimientos(token, idArticulo) {
-  return AccesoriosService.historialMovimientos(token, idArticulo);
-}
-
 // --- Vehículos ---
 function apiListarVehiculosBasico(token) {
   return VehiculosService.listarBasico(token);

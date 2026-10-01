@@ -49,10 +49,7 @@
               <button type="button" class="theme-btn" data-tema="dark" title="Modo oscuro"><i data-lucide="moon" class="ico"></i></button>
             </div>
             <div class="topbar-date" id="topbar-date"></div>
-            <button type="button" class="topbar-notif-btn" id="btn-notificaciones" title="Notificaciones">
-              <i data-lucide="bell" class="ico"></i>
-              <span class="topbar-notif-badge" id="notif-badge" hidden>0</span>
-            </button>
+            <!-- Aquí se inserta sola la campana de Notificaciones (html/notificaciones.html) -->
             <div class="topbar-user-menu">
               <div class="topbar-user" id="user-name"></div>
               <button type="button" id="btn-logout" class="topbar-logout-btn" title="Cerrar sesión">
@@ -73,7 +70,6 @@
   <?!= include('html/views/login'); ?>
   <?!= include('html/views/loading'); ?>
   <?!= include('html/views/dashboard'); ?>
-  <?!= include('html/views/accesorios'); ?>
   <?!= include('html/views/incidencias'); ?>
   <?!= include('html/views/panorama-vehiculos'); ?>
   <?!= include('html/views/vehiculos'); ?>
@@ -101,7 +97,8 @@
   <?!= include('html/views/lineas/lineas-accesorios'); ?>
 
   <?!= include('html/js/api'); ?>
-  <!-- Antes de app.html a propósito: su render() llama Notificaciones.iniciar()
+  <!-- Notificaciones: UNA campana para todo el sistema, por módulo (Líneas y Vehículos). Se inserta sola en
+       .topbar-right, antes del usuario. Antes de app.html a propósito: su render() llama Notificaciones.iniciar()
        en la misma pasada síncrona del render() de arranque (línea final del
        archivo, si ya había sesión guardada) -- si este include fuera después,
        como el resto de componentes/ (ver más abajo), Notificaciones todavía no
@@ -109,7 +106,7 @@
        defined". Solo define la función (no toca nada de app.html al cargar);
        lo que si necesita de app.html (callServer, state, escaparHtml...) lo usa
        adentro de funciones que no se llaman hasta más tarde, vía iniciar(). -->
-  <?!= include('html/js/componentes/notificaciones'); ?>
+  <?!= include('html/notificaciones'); ?>
   <?!= include('html/js/app'); ?>
   <?!= include('html/js/app-arqueos'); ?>
   <?!= include('html/js/app-cajachica'); ?>
@@ -141,9 +138,6 @@
   <?!= include('html/js/lineas'); ?>
   <!-- Módulo temporal de correcciones (se quita cuando Líneas termine) -->
   <?!= include('html/js/lineas-correcciones'); ?>
-
-  <!-- Notificaciones (rama emmanuel): campana en la barra superior + vista; se inserta sola en .topbar-right -->
-  <?!= include('html/notificaciones'); ?>
 
   <!-- Atrás / Adelante del navegador y gesto de dos dedos del touchpad (rama emmanuel) -->
   <?!= include('html/historial-navegador'); ?>
