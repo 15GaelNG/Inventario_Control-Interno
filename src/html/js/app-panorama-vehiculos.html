@@ -31,6 +31,14 @@
     'FUERA DE SERVICIO': 'Fuera de servicio', 'NUCO SIN INFORMACION': 'Nuco sin información', 'BAJA VEHICULAR': 'Baja vehicular',
   };
 
+  // Etiquetas de valor directo sobre cada gráfica (chartjs-plugin-datalabels,
+  // cargado en Index.html) -- se registra una sola vez, no por cada visita a
+  // Panorama (Chart.register con el mismo plugin repetido tira warning).
+  if (!window.__pvDataLabelsRegistrado) {
+    Chart.register(ChartDataLabels);
+    window.__pvDataLabelsRegistrado = true;
+  }
+
   async function initPanoramaVehiculos() {
     const cuerpo = document.getElementById('view-container');
     let todos = [];
@@ -151,6 +159,12 @@
           plugins: {
             legend: { position: 'right', labels: { color: colorTexto(), boxWidth: 13, padding: 14, font: { size: 12 } } },
             tooltip: { callbacks: { label: (ctx) => ` ${ctx.label}: ${ctx.parsed} (${filas.length ? Math.round(ctx.parsed / filas.length * 100) : 0}%)` } },
+            // Número en blanco dentro de cada rebanada; se oculta en las de 0
+            // para no dejar un "0" flotando donde no hay nada que mostrar.
+            datalabels: {
+              color: '#fff', font: { weight: 'bold', size: 12 },
+              formatter: (valor) => (valor > 0 ? valor : ''),
+            },
           },
         },
       });
@@ -166,7 +180,19 @@
         },
         options: {
           responsive: true, maintainAspectRatio: false, indexAxis: 'y',
-          plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => ` ${ctx.parsed.x} vehículo(s)` } } },
+          layout: { padding: { right: 24 } }, // deja hueco para el número al final de la barra más larga
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: (ctx) => ` ${ctx.parsed.x} vehículo(s)` } },
+            // Número justo después de la punta de cada barra, no encima (las
+            // barras llevan el color primario, oscuro, donde un número blanco
+            // o del color del texto normal no siempre contrasta bien).
+            datalabels: {
+              color: colorTexto(), anchor: 'end', align: 'end', offset: 4,
+              font: { size: 11, weight: '600' }, clip: false,
+              formatter: (valor) => (valor > 0 ? valor : ''),
+            },
+          },
           scales: {
             x: { beginAtZero: true, ticks: { color: colorTexto(), precision: 0 }, grid: { color: colorBorde() } },
             y: { ticks: { color: colorTexto(), font: { size: 11.5 } }, grid: { display: false } },
