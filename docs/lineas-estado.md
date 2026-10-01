@@ -8,7 +8,7 @@ qué está hecho, cómo probarlo y qué sigue.
 
 **Dónde quedamos (cierre del 30-sep, noche):**
 
-- **Rama `emmanuel`:** en GitHub hasta `10dc7eb` (29-sep). En local hay 17 commits más (`644ba14` … `d8a80a1`).
+- **Rama `emmanuel`:** en GitHub hasta `10dc7eb` (29-sep). En local hay 27 commits más (`644ba14` … `13e2987`).
   Se suben a GitHub **al terminar la ronda**, como pidió el usuario. DEV está al día con `emmanuel`.
 - **Pruebas:** `npm test` da 58 aprobadas y 0 fallidas. Las de Ayrton se corren aparte (`node tests/ids.test.js` y
   `node tests/entidades.test.js`) y dan TODO OK.
@@ -17,10 +17,14 @@ qué está hecho, cómo probarlo y qué sigue.
   - §0v: pestañas de módulos retirados, migradas y borradas;
   - §0w: "Mandar a resguardo" por NUCO y bandeja "Resguardos y cancelaciones", probada de punta a punta con los
     NUCO 0101 y 0556.
-  - §0x: PARA VENTA y PARA DESECHO con la misma lógica que Mandar a resguardo (en DEV, sin commit; probado en /dev con el
+  - §0x: PARA VENTA y PARA DESECHO con la misma lógica que Mandar a resguardo (`2a4ab57`; probado en /dev con el
     NUCO 0002).
   - §0y: selección como en Google Drive (barra, ⋮, clic derecho, Detalles que sigue a la selección) y "Mandar a
-    cancelación" de líneas sin resguardo (en DEV, probado en /dev).
+    cancelación" de líneas sin resguardo (en DEV, probado en /dev). Ajustes del mismo día: contador simple, clic
+    fuera quita la selección, sin columna de Acciones, Documentos/Historial de una fila, ficha con solo Nueva
+    inspección y Nueva responsiva a la vista (lo demás en ⋮, también en la línea), "Ver carpeta en Drive" sola en ⋮
+    y con el mismo nombre en la tabla Documentos, y la barra que entra a los 100 ms (con doble clic no se asoma).
+  - §0z: Líneas lee `ID ANTERIOR` tras la segunda corrida de IDs de Ayrton.
 - **Lo que sigue, en orden:** pendiente 0 de `migracion/ESTADO_TELEFONIA.md`, en la carpeta de documentación.
   1. Conversión de estatus viejos: ya no hay confirmaciones del usuario; lo que requiere decisión va al módulo de
      correcciones de Líneas (el usuario solo migra).
@@ -31,7 +35,9 @@ qué está hecho, cómo probarlo y qué sigue.
   5. Pendientes de la bandeja: histórico de la hoja de Bren, ENTREGADO al reasignar y probar "Vendido".
   6. **Roles y correos al final** (correo de Pau en `LINEAS_APROBADORES_RESGUARDO`).
 - **Por probar a mano** (el navegador integrado no puede): subir fotos a una inspección de NUCOS, el gesto de dos
-  dedos, Atrás entre módulos y la velocidad real de "Última responsiva / inspección".
+  dedos, Atrás entre módulos y la velocidad real de "Última responsiva / inspección". De §0y: tocar y mantener
+  presionado en celular, "Ver última inspección / responsiva" desde el ⋮ (abre otra pestaña) y el ⋮ de la ficha con
+  un rol sin permiso de operar (solo Documentos, Drive e Historial).
 - **Avisar a Jorge y Ayrton al unir con master** los cambios en archivos compartidos:
   - DataTable: opciones `minimo` y `modoSeleccion`, y el `className` en `render`;
   - `app.html`: `HistorialApp.alNavegar` en `navegarA` y `marcarTemaActual`;
@@ -47,6 +53,8 @@ qué está hecho, cómo probarlo y qué sigue.
     encima de la barra de herramientas, `alAbrirFila`, `alTocarFila`, `alCambiarSeleccion`, acciones con
     `enBarra/maximo/grupo/visible/activo`, "Exportar selección a Excel" y la API `clicSeleccion`, `asegurarSeleccionada`,
     `abrirMenu` y `refrescarSeleccion`. Sin `seleccionDrive` la tabla se comporta igual que antes.
+    Después: `accionesDeTabla: false`, `conservarSeleccion(el)`, `tituloGrupo`, `seleccionUnica`, el clic fuera que
+    quita la selección y la animación `dt-barra-entra` (la barra aparece a los 100 ms).
   - §0z: Líneas lee `ID ANTERIOR` (corrida de IDs del 30-sep). Su catálogo y `MIGRACION_REFERENCIAS` ya no
     describen la BD de pruebas tal como quedó: ver §0z antes de correr `lineas2Escribir` sobre ella.
 
