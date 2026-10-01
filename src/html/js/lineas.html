@@ -3726,14 +3726,303 @@
       return { techo: techo, marcas: marcas };
     }
 
+    // Grupos de estatus del Panorama (estatus del 30-sep; los valores viejos caen donde los manda la conversión)
+    const GRUPO_LINEA = {
+      'USO': 'uso', 'USO TEMPORAL': 'uso', 'RENOVADA': 'uso', 'EN ENVIO': 'uso', 'ESPERA DE RESPONSIVA': 'uso',
+      'DISPONIBLE': 'disponible', 'RESGUARDO': 'disponible',
+      'EN PROCESO DE CANCELACION': 'cancelacion',
+      'CANCELADA': 'cancelada', 'CANCELADO': 'cancelada',
+      'SIN LINEA': 'sin', 'SIN ESTATUS': 'sin', '': 'sin',
+    }; // el resto (SUSPENDIDA, ESPERA DE EQUIPO…) = 'revisar'
+    const COMPOSICION_LINEAS = [
+      { clave: 'uso', nombre: 'En uso', color: 'var(--lnp-s1)', estatus: 'USO' },
+      { clave: 'disponible', nombre: 'Disponibles', color: 'var(--lnp-s2)', estatus: 'DISPONIBLE' },
+      { clave: 'cancelacion', nombre: 'En cancelación', color: 'var(--lnp-s3)', estatus: 'EN PROCESO DE CANCELACION' },
+      { clave: 'revisar', nombre: 'Por revisar', color: 'var(--lnp-s4)', estatus: '' },
+    ];
+    const GRUPO_EQUIPO = {
+      'USO': 'uso', 'EN ENVIO': 'uso', 'ESPERA DE RESPONSIVA': 'uso',
+      'RESGUARDO': 'guardado', 'PARA VENTA': 'guardado', 'VENTA': 'guardado', 'POSIBLE VENTA': 'guardado', 'POSIBLE VENTA-DAÑO': 'guardado',
+      'PARA DESECHO': 'guardado', 'DESECHO': 'guardado',
+      'VENDIDO': 'baja', 'DONADO': 'baja', 'DESECHADO': 'baja', 'EXTRAVIO-ROBO': 'baja', 'EXTRAVIADO': 'baja', 'ROBADO': 'baja', 'ROBO': 'baja',
+    }; // el resto (FUERA DE INVENTARIO, CANCELADO, N/A…) = 'revisar'
+    const CUENTAS = [
+      { clave: 'TELCEL FRO', nombre: 'Telcel · FRO' }, { clave: 'TELCEL GPH', nombre: 'Telcel · GPH' }, { clave: 'AT&T', nombre: 'AT&T' },
+      { clave: 'TELCEL', nombre: 'Telcel · sin razón social' }, { clave: '', nombre: 'Sin compañía' },
+    ];
+    const dinero = (n) => '$' + Math.round(n || 0).toLocaleString('es-MX');
+    const dineroCorto = (n) => (Math.abs(n) >= 1e6 ? '$' + (n / 1e6).toLocaleString('es-MX', { maximumFractionDigits: 2 }) + ' M'
+      : Math.abs(n) >= 1e4 ? '$' + (n / 1e3).toLocaleString('es-MX', { maximumFractionDigits: 1 }) + ' mil' : dinero(n));
+
     function initPanorama() {
       const n = ++montaje;
       const raiz = document.getElementById('ln-panorama');
       const vigente = () => n === montaje && document.body.contains(raiz);
-      const est = { conjunto: 'equipos', rango: 12, forma: 'grafica', seleccion: { equipos: null, lineas: null }, datos: null };
+      const est = {
+        conjunto: 'equipos', rango: 12, forma: 'grafica', seleccion: { equipos: null, lineas: null }, datos: null,
+        k: 0, medida: 'lineas', rangoTendencia: 12, deptosTodos: false, resumenes: null, series: {},
+      };
       let tabla = null;
 
       const pct = (v, total) => (total ? (Math.round((v / total) * 1000) / 10).toLocaleString('es-MX') + '%' : '—');
+      const esHoy = () => est.k === est.datos.meses.length - 1;
+      const dosDigitos = (v) => String(v).padStart(2, '0');
+      const ymd = (d) => d.getFullYear() + '-' + dosDigitos(d.getMonth() + 1) + '-' + dosDigitos(d.getDate());
+      /** Fecha de corte del mes k ('yyyy-mm-dd'): hoy, o el último día del mes. */
+      function corte(k) {
+        if (k === est.datos.meses.length - 1) return ymd(new Date());
+        const ym = est.datos.meses[k];
+        return ymd(new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0));
+      }
+      const sumarDias = (txt, dias) => ymd(new Date(Number(txt.slice(0, 4)), Number(txt.slice(5, 7)) - 1, Number(txt.slice(8, 10)) + dias));
+
+      /** Todo lo de la portada para el mes k, calculado con los registros (estatus de cada uno al cierre de ese mes). */
+      function calcularResumen(k) {
+        const R = est.datos.registros;
+        const dic = R.dic;
+        const r = {
+          activas: 0, planes: 0, basicos: 0, renta: 0, grupos: { uso: 0, disponible: 0, cancelacion: 0, revisar: 0 },
+          porCuenta: {}, porDepto: {}, vig: { vencido: 0, pronto: 0, vigente: 0, sinFecha: 0 },
+          equipos: { total: 0, uso: 0, guardado: 0, baja: 0, revisar: 0 },
+        };
+        const hoy = corte(k);
+        const en30 = sumarDias(hoy, 30);
+        R.lineas.forEach((l) => {
+          const s = l.s[k];
+          if (s < 0) return;
+          const g = GRUPO_LINEA[dic[s]] || 'revisar';
+          if (g === 'cancelada' || g === 'sin') return;
+          r.activas++;
+          r.grupos[g]++;
+          const dep = R.deps[l.d];
+          const d = r.porDepto[dep] = r.porDepto[dep] || { lineas: 0, renta: 0 };
+          d.lineas++;
+          if (l.b) { r.basicos++; return; } // los SIM básicos no tienen adendum y su costo real sale de la factura
+          r.planes++;
+          r.renta += l.p || 0;
+          d.renta += l.p || 0;
+          const c = r.porCuenta[l.c] = r.porCuenta[l.c] || { lineas: 0, renta: 0, vencidas: 0 };
+          c.lineas++;
+          c.renta += l.p || 0;
+          if (!l.f) r.vig.sinFecha++;
+          else if (l.f < hoy) { r.vig.vencido++; c.vencidas++; }
+          else if (l.f <= en30) r.vig.pronto++;
+          else r.vig.vigente++;
+        });
+        R.equipos.forEach((e) => {
+          const s = e.s[k];
+          if (s < 0) return;
+          r.equipos.total++;
+          r.equipos[GRUPO_EQUIPO[dic[s]] || 'revisar']++;
+        });
+        return r;
+      }
+      const resumen = (k) => {
+        if (!est.resumenes) est.resumenes = {};
+        return est.resumenes[k] || (est.resumenes[k] = calcularResumen(k));
+      };
+
+      // ---------------- Filtro de mes ----------------
+
+      function pintarSelectorMes() {
+        const meses = est.datos.meses;
+        const sel = $('#lnp-mes', raiz);
+        sel.innerHTML = meses.map((ym, k) => k).reverse().map((k) =>
+          '<option value="' + k + '"' + (k === est.k ? ' selected' : '') + '>' + esc(k === meses.length - 1 ? 'Hoy' : mesLargo(meses[k])) + '</option>').join('');
+        sel.disabled = false;
+        $('#lnp-filtro-nota', raiz).textContent = esHoy() ? '' : 'Estás viendo el cierre de ' + mesLargo(meses[est.k]) + '. El departamento, la cuenta y el costo de cada línea son los de hoy.';
+      }
+
+      function elegirMes(k) {
+        if (!est.datos || k === est.k) return;
+        est.k = Math.max(0, Math.min(est.datos.meses.length - 1, k));
+        pintarTodo();
+      }
+
+      // ---------------- Portada ----------------
+
+      function pintarPortada() {
+        const r = resumen(est.k);
+        const previo = est.k > 0 ? resumen(est.k - 1) : null;
+        $('#lnp-activas', raiz).textContent = miles(r.activas);
+        $('#lnp-activas-sub', raiz).innerHTML = '<strong>' + miles(r.planes) + '</strong> con plan · <strong>' + miles(r.basicos) + '</strong> SIM básicos';
+        const delta = $('#lnp-delta', raiz);
+        if (previo) {
+          const dif = r.activas - previo.activas;
+          delta.innerHTML = (dif ? ico(dif > 0 ? 'trending-up' : 'trending-down') + ' ' + (dif > 0 ? '+' : '−') + miles(Math.abs(dif)) : 'Sin cambio') +
+            '<span> vs cierre de ' + esc(mesLargo(est.datos.meses[est.k - 1])) + '</span>';
+        } else delta.innerHTML = '';
+
+        // Composición: una barra apilada (parte del todo) + leyenda con número y porcentaje, que es la que se lee
+        const grupos = COMPOSICION_LINEAS.filter((g) => r.grupos[g.clave] || g.clave !== 'revisar');
+        $('#lnp-composicion', raiz).innerHTML =
+          '<div class="lnp-pila" role="img" aria-label="' + esc(grupos.map((g) => g.nombre + ' ' + r.grupos[g.clave]).join(', ')) + '">' +
+            grupos.filter((g) => r.grupos[g.clave]).map((g) => '<span class="lnp-pila-seg" style="flex-grow:' + r.grupos[g.clave] + ';background:' + g.color + '" title="' +
+              esc(g.nombre + ': ' + miles(r.grupos[g.clave]) + ' (' + pct(r.grupos[g.clave], r.activas) + ')') + '"></span>').join('') +
+          '</div><div class="lnp-leyenda">' +
+            grupos.map((g) => '<button type="button" class="lnp-leyenda-item"' + (g.estatus && esHoy() ? ' data-lnp-ir="lineas" data-estatus="' + esc(g.estatus) + '" title="Ver en Líneas Telefónicas"' : ' disabled') + '>' +
+              '<span class="lnp-leyenda-marca" style="background:' + g.color + '"></span><span class="lnp-leyenda-nombre">' + esc(g.nombre) + '</span>' +
+              '<strong>' + miles(r.grupos[g.clave]) + '</strong><span class="lnp-leyenda-pct">' + pct(r.grupos[g.clave], r.activas) + '</span></button>').join('') +
+          '</div>' + (r.grupos.revisar ? '<p class="lnp-nota">"Por revisar": estatus que ya no existen (por ejemplo SUSPENDIDA). Líneas los corrige en Correcciones de Líneas.</p>' : '');
+
+        // Dinero por cuenta: lo que más pregunta dirección. Los SIM básicos van aparte, solo con su número.
+        $('#lnp-renta', raiz).textContent = dinero(r.renta);
+        $('#lnp-renta-sub', raiz).textContent = miles(r.planes) + ' planes activos · con el costo de plan del inventario (el del adendum)';
+        const filas = CUENTAS.filter((c) => r.porCuenta[c.clave]).map((c) => {
+          const x = r.porCuenta[c.clave];
+          return '<tr><th scope="row">' + esc(c.nombre) + '</th><td>' + miles(x.lineas) + '</td><td>' + dinero(x.renta) + '</td>' +
+            '<td>' + (x.vencidas ? '<span class="lnp-vencidas">' + miles(x.vencidas) + '</span>' : '<span class="ln-tenue">0</span>') + '</td></tr>';
+        });
+        $('#lnp-cuentas', raiz).innerHTML = '<table class="lnp-tabla-cuentas"><thead><tr><th scope="col">Cuenta</th><th scope="col">Líneas</th><th scope="col">Renta</th>' +
+          '<th scope="col" title="Planes activos con el adendum vencido">Vencidas</th></tr></thead><tbody>' + filas.join('') +
+          '<tr class="lnp-fila-basicos"><th scope="row">SIM básicos</th><td>' + miles(r.basicos) + '</td><td colspan="2" class="ln-tenue">Sin adendum; su costo sale de la factura</td></tr>' +
+          '</tbody></table>';
+
+        // Vigencia de los adendums de los planes activos
+        const v = r.vig;
+        const tile = (icono, valor, etiqueta, clase, titulo) => ({ icono: icono, valor: miles(valor), etiqueta: etiqueta, clase: clase, filtros: false, titulo: titulo });
+        tilesKpi($('#lnp-vigencia', raiz), [
+          tile('circle-alert', v.vencido, 'Con el adendum vencido · ' + pct(v.vencido, r.planes), 'stat-tile-warn'),
+          tile('clock', v.pronto, 'Vencen en los siguientes 30 días'),
+          tile('circle-check', v.vigente, 'Vigentes', 'stat-tile-ok'),
+          tile('circle-help', v.sinFecha, 'Sin fecha de fin de adendum'),
+        ], () => null);
+
+        // Departamentos: líneas activas y renta de sus planes
+        const deps = Object.keys(r.porDepto).map((d) => [d, r.porDepto[d]]).sort((a, b) => b[1].lineas - a[1].lineas || a[0].localeCompare(b[0]));
+        const visibles = est.deptosTodos ? deps : deps.slice(0, 10);
+        const max = deps.length ? deps[0][1].lineas : 1;
+        $('#lnp-deptos-total', raiz).textContent = miles(deps.length) + ' departamentos';
+        $('#lnp-deptos', raiz).innerHTML = (visibles.length ? '<div class="lnp-depto lnp-depto-cabeza"><span>Departamento</span><span></span><span>Líneas</span><span>Renta</span></div>' : '') +
+          (visibles.map(([d, x]) =>
+            '<div class="lnp-depto"><span class="lnp-barra-nombre" title="' + esc(d) + '">' + esc(d) + '</span>' +
+              '<span class="lnp-barra-pista"><span class="lnp-barra-valor" style="width:' + Math.max(1.5, (x.lineas / max) * 100) + '%"></span></span>' +
+              '<span class="lnp-barra-num">' + miles(x.lineas) + '</span><span class="lnp-barra-pct">' + esc(dineroCorto(x.renta)) + '</span></div>').join('') ||
+          '<p class="ln-tenue">Sin líneas activas.</p>');
+        const mas = $('#lnp-deptos-mas', raiz);
+        mas.hidden = deps.length <= 10;
+        mas.textContent = est.deptosTodos ? 'Ver solo los 10 primeros' : 'Ver los ' + miles(deps.length);
+
+        // Equipos
+        const e = r.equipos;
+        tilesKpi($('#lnp-kpis-equipos', raiz), [
+          tile('smartphone', e.total, 'Equipos registrados'),
+          tile('circle-check', e.uso, 'En uso · ' + pct(e.uso, e.total), 'stat-tile-ok'),
+          tile('archive', e.guardado, 'Guardados', '', 'Resguardo, para venta, posible venta-daño o para desecho'),
+          tile('package-x', e.baja, 'Ya no están', '', 'Vendidos, donados, extraviados o robados y desechados'),
+          tile('circle-help', e.revisar, 'Por revisar', e.revisar ? 'stat-tile-warn' : '', 'Fuera de inventario, cancelados y otros estatus que ya no existen: se corrigen en Correcciones de Líneas'),
+        ], () => null);
+      }
+
+      // ---------------- Tendencia ----------------
+
+      /** Serie de la tendencia: líneas activas o renta de los planes al cierre de cada mes (se calcula una vez). */
+      function serieTendencia() {
+        if (!est.series[est.medida]) est.series[est.medida] = est.datos.meses.map((_, k) => (est.medida === 'renta' ? resumen(k).renta : resumen(k).activas));
+        return est.series[est.medida];
+      }
+
+      /** Una sola serie con su área, el mes elegido marcado y clic para elegir otro mes. */
+      function pintarTendencia() {
+        const cont = $('#lnp-tendencia', raiz);
+        const todos = est.datos.meses;
+        const desde = est.rangoTendencia ? Math.max(0, todos.length - est.rangoTendencia) : 0;
+        const meses = todos.slice(desde);
+        const valores = serieTendencia().slice(desde);
+        const esRenta = est.medida === 'renta';
+        $('#lnp-tendencia-titulo', raiz).innerHTML = ico('chart-line') + ' ' + (esRenta ? 'Renta mensual de los planes' : 'Líneas activas') + ' al cierre de cada mes';
+        const fmt = esRenta ? dineroCorto : miles;
+        const ancho = Math.max(280, cont.clientWidth || 520);
+        const angosto = ancho < 480;
+        const m = { arriba: 24, derecha: 18, abajo: 30, izquierda: esRenta ? 70 : 46 };
+        const alto = 250;
+        const w = ancho - m.izquierda - m.derecha;
+        const h = alto - m.arriba - m.abajo;
+        const eje = ejeRedondo(Math.max(1, ...valores));
+        const x = (k) => m.izquierda + (meses.length === 1 ? w / 2 : (k * w) / (meses.length - 1));
+        const y = (v) => m.arriba + h - (v / eje.techo) * h;
+        const cadaCuanto = Math.max(1, Math.ceil(meses.length / (angosto ? 4 : 7)));
+        const sel = est.k - desde;
+        let svg = '<svg class="lnp-svg" viewBox="0 0 ' + ancho + ' ' + alto + '" width="' + ancho + '" height="' + alto + '" role="img" tabindex="0" aria-label="' +
+          esc((esRenta ? 'Renta mensual' : 'Líneas activas') + ' al cierre de cada mes. Flechas para recorrer y Enter para ver ese mes.') + '">';
+        eje.marcas.forEach((v) => {
+          svg += '<line class="lnp-rejilla" x1="' + m.izquierda + '" x2="' + (m.izquierda + w) + '" y1="' + y(v) + '" y2="' + y(v) + '"></line>' +
+            '<text class="lnp-eje" x="' + (m.izquierda - 8) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + esc(fmt(v)) + '</text>';
+        });
+        meses.forEach((ym, k) => {
+          const ultimo = meses.length - 1;
+          if (k !== ultimo && (k % cadaCuanto || ultimo - k < Math.max(2, cadaCuanto))) return;
+          svg += '<text class="lnp-eje" x="' + x(k) + '" y="' + (alto - 8) + '" text-anchor="middle">' + esc(k === ultimo ? 'Hoy' : mesCorto(ym)) + '</text>';
+        });
+        const puntos = valores.map((v, k) => x(k).toFixed(1) + ' ' + y(v).toFixed(1));
+        svg += '<path class="lnp-area" d="M' + puntos.join(' L') + ' L' + x(valores.length - 1).toFixed(1) + ' ' + y(0) + ' L' + x(0).toFixed(1) + ' ' + y(0) + ' Z"></path>';
+        svg += '<path class="lnp-linea" d="M' + puntos.join(' L') + '" style="stroke:var(--lnp-s1)"></path>';
+        if (sel >= 0 && sel < valores.length) {
+          svg += '<line class="lnp-marca-mes" x1="' + x(sel) + '" x2="' + x(sel) + '" y1="' + m.arriba + '" y2="' + (m.arriba + h) + '"></line>' +
+            '<circle class="lnp-punto" cx="' + x(sel) + '" cy="' + y(valores[sel]) + '" r="5" style="fill:var(--lnp-s1)"></circle>' +
+            '<text class="lnp-etiqueta" x="' + Math.min(Math.max(x(sel), m.izquierda + 34), m.izquierda + w - 34) + '" y="' + Math.max(14, y(valores[sel]) - 12) + '" text-anchor="middle">' +
+              '<tspan class="lnp-etiqueta-valor">' + esc(fmt(valores[sel])) + '</tspan></text>';
+        }
+        svg += '<line class="lnp-cruz" y1="' + m.arriba + '" y2="' + (m.arriba + h) + '" hidden></line>';
+        svg += '<rect class="lnp-captura lnp-captura-clic" x="' + m.izquierda + '" y="' + m.arriba + '" width="' + w + '" height="' + h + '"></rect></svg>';
+        cont.innerHTML = svg + '<div class="lnp-tooltip" hidden></div>';
+
+        const lienzo = cont.querySelector('svg');
+        const cruz = cont.querySelector('.lnp-cruz');
+        const tip = cont.querySelector('.lnp-tooltip');
+        let actual = -1;
+        const mostrar = (k) => {
+          actual = k;
+          cruz.setAttribute('x1', x(k)); cruz.setAttribute('x2', x(k)); cruz.removeAttribute('hidden');
+          tip.innerHTML = '<div class="lnp-tooltip-mes">' + esc(k === meses.length - 1 ? 'Hoy' : 'Cierre de ' + mesLargo(meses[k])) + '</div>' +
+            '<div class="lnp-tooltip-fila"><span class="lnp-tooltip-clave" style="background:var(--lnp-s1)"></span><strong>' + esc(esRenta ? dinero(valores[k]) : miles(valores[k])) + '</strong>' +
+            '<span>' + (esRenta ? 'de renta' : 'líneas activas') + '</span></div><div class="lnp-tooltip-pie">Clic para ver ese mes</div>';
+          tip.hidden = false;
+          const escala = lienzo.getBoundingClientRect().width / ancho;
+          const px = x(k) * escala;
+          tip.style.left = Math.min(Math.max(0, px + 12), cont.clientWidth - tip.offsetWidth) + 'px';
+          if (px + 12 + tip.offsetWidth > cont.clientWidth) tip.style.left = Math.max(0, px - tip.offsetWidth - 12) + 'px';
+          tip.style.top = '6px';
+        };
+        const ocultar = () => { actual = -1; cruz.setAttribute('hidden', ''); tip.hidden = true; };
+        const cercano = (ev) => {
+          const r = lienzo.getBoundingClientRect();
+          const px = ((ev.clientX - r.left) / r.width) * ancho;
+          return Math.max(0, Math.min(meses.length - 1, Math.round(((px - m.izquierda) / (w || 1)) * (meses.length - 1))));
+        };
+        lienzo.addEventListener('pointermove', (ev) => mostrar(cercano(ev)));
+        lienzo.addEventListener('pointerleave', ocultar);
+        lienzo.addEventListener('click', (ev) => elegirMes(desde + cercano(ev)));
+        lienzo.addEventListener('focus', () => mostrar(Math.max(0, sel)));
+        lienzo.addEventListener('blur', ocultar);
+        lienzo.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Enter' && actual >= 0) { ev.preventDefault(); elegirMes(desde + actual); return; }
+          if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
+          ev.preventDefault();
+          mostrar(Math.max(0, Math.min(meses.length - 1, (actual < 0 ? meses.length - 1 : actual) + (ev.key === 'ArrowLeft' ? -1 : 1))));
+        });
+      }
+
+      // ---------------- Equipos y líneas por estatus (al cierre del mes elegido) ----------------
+
+      /** Una barra por estatus (un solo color: se compara cantidad). Clic = ver esos registros (solo con "Hoy"). */
+      function pintarBarras(conjunto) {
+        const b = est.datos[conjunto];
+        const filas = Object.keys(b.historico).map((s) => [s, (b.historico[s] || [])[est.k] || 0]).filter((f) => f[1])
+          .sort((a, c) => c[1] - a[1] || a[0].localeCompare(c[0]));
+        const total = filas.reduce((t, f) => t + f[1], 0);
+        const max = filas.length ? filas[0][1] : 1;
+        const clic = esHoy();
+        $('#lnp-total-' + conjunto, raiz).textContent = miles(total) + ' en total';
+        $('#lnp-barras-' + conjunto, raiz).innerHTML = filas.length ? filas.map(([s, v]) =>
+          '<button type="button" class="lnp-barra"' + (clic ? ' data-lnp-ir="' + conjunto + '" data-estatus="' + esc(s) + '" title="Ver ' + esc(s) + ' en Líneas Telefónicas"' : ' disabled') + '>' +
+            '<span class="lnp-barra-nombre">' + esc(s) + '</span>' +
+            '<span class="lnp-barra-pista"><span class="lnp-barra-valor" style="width:' + Math.max(1.5, (v / max) * 100) + '%"></span></span>' +
+            '<span class="lnp-barra-num">' + miles(v) + '</span><span class="lnp-barra-pct">' + pct(v, total) + '</span></button>').join('')
+          : '<p class="ln-tenue">Sin registros.</p>';
+      }
+
+      // ---------------- Detalle por estatus, mes a mes ----------------
 
       /** Estatus del conjunto en orden fijo (más registros hoy primero); los 7 primeros tienen color, el resto va a OTROS. */
       function seriesDe(conjunto) {
@@ -3751,37 +4040,6 @@
           });
         }
         return series;
-      }
-
-      function tile(icono, valor, etiqueta, clase, destino) {
-        return '<div class="stat-tile' + (destino ? ' stat-tile-clickable' : '') + (clase ? ' ' + clase : '') + '"' +
-          (destino ? ' role="button" tabindex="0" data-lnp-ir="' + esc(destino[0]) + '" data-estatus="' + esc(destino[1] || '') + '" title="Ver en Líneas Telefónicas"' : '') + '>' +
-          '<div class="stat-icon">' + ico(icono) + '</div><div><div class="stat-value">' + valor + '</div><div class="stat-label">' + esc(etiqueta) + '</div></div></div>';
-      }
-
-      function pintarKpis() {
-        const d = est.datos;
-        const a = (c, s) => d[c].actual[s] || 0;
-        $('#lnp-kpis', raiz).innerHTML =
-          tile('smartphone', miles(d.equipos.total), 'Equipos', '', ['equipos', '']) +
-          tile('circle-check', miles(a('equipos', 'USO')), 'Equipos en uso · ' + pct(a('equipos', 'USO'), d.equipos.total), 'stat-tile-ok', ['equipos', 'USO']) +
-          tile('archive', miles(a('equipos', 'RESGUARDO')), 'Equipos en resguardo · ' + pct(a('equipos', 'RESGUARDO'), d.equipos.total), '', ['equipos', 'RESGUARDO']) +
-          tile('card-sim', miles(d.lineas.total), 'Líneas', '', ['lineas', '']) +
-          tile('phone', miles(a('lineas', 'USO')), 'Líneas en uso · ' + pct(a('lineas', 'USO'), d.lineas.total), 'stat-tile-ok', ['lineas', 'USO']);
-      }
-
-      /** Hoy: una barra por estatus (un solo color: se compara cantidad, no identidad). Clic = ver esos registros. */
-      function pintarBarras(conjunto) {
-        const b = est.datos[conjunto];
-        const filas = Object.keys(b.actual).map((s) => [s, b.actual[s]]).sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]));
-        const max = filas.length ? filas[0][1] : 1;
-        $('#lnp-total-' + conjunto, raiz).textContent = miles(b.total) + ' en total';
-        $('#lnp-barras-' + conjunto, raiz).innerHTML = filas.length ? filas.map(([s, v]) =>
-          '<button type="button" class="lnp-barra" data-lnp-ir="' + conjunto + '" data-estatus="' + esc(s) + '" title="Ver ' + esc(s) + ' en Líneas Telefónicas">' +
-            '<span class="lnp-barra-nombre">' + esc(s) + '</span>' +
-            '<span class="lnp-barra-pista"><span class="lnp-barra-valor" style="width:' + Math.max(1.5, (v / max) * 100) + '%"></span></span>' +
-            '<span class="lnp-barra-num">' + miles(v) + '</span><span class="lnp-barra-pct">' + pct(v, b.total) + '</span></button>').join('')
-          : '<p class="ln-tenue">Sin registros.</p>';
       }
 
       function mesesVisibles() {
@@ -3925,8 +4183,10 @@
           : 'La bitácora no tiene cambios de estatus: solo se muestra el estatus de hoy.';
       }
 
-      function pintar() {
-        pintarKpis();
+      function pintarTodo() {
+        pintarSelectorMes();
+        pintarPortada();
+        pintarTendencia();
         pintarBarras('equipos');
         pintarBarras('lineas');
         pintarEvolucion();
@@ -3937,28 +4197,37 @@
       async function cargar(forzar) {
         const boton = $('#lnp-actualizar', raiz);
         boton.disabled = true;
+        raiz.classList.add('lnp-cargando');
         try {
           const r = await llamar('apiLineasPanorama', !!forzar);
           if (!vigente()) return;
           est.datos = r;
-          pintar();
+          est.k = r.meses.length - 1;
+          est.resumenes = null;
+          est.series = {};
+          pintarTodo();
         } catch (e) {
-          if (vigente()) $('#lnp-kpis', raiz).innerHTML = '<p class="error-msg">No se pudo cargar el panorama: ' + esc(mensajeError(e)) + '</p>';
+          if (vigente()) $('#lnp-activas', raiz).innerHTML = '<span class="error-msg">No se pudo cargar el panorama: ' + esc(mensajeError(e)) + '</span>';
         } finally {
           boton.disabled = false;
+          raiz.classList.remove('lnp-cargando');
         }
       }
 
-      const segmentado = (id, alElegir) => $(id, raiz).addEventListener('click', (ev) => {
+      const segmentado = (id, alElegir, repintar) => $(id, raiz).addEventListener('click', (ev) => {
         const b = ev.target.closest('[data-valor]');
         if (!b || !est.datos) return;
         $(id, raiz).querySelectorAll('[data-valor]').forEach((x) => { x.classList.toggle('activo', x === b); x.setAttribute('aria-pressed', String(x === b)); });
         alElegir(b.dataset.valor);
-        pintarEvolucion();
+        repintar();
       });
-      segmentado('#lnp-conjunto', (v) => { est.conjunto = v; });
-      segmentado('#lnp-rango', (v) => { est.rango = Number(v); });
-      segmentado('#lnp-forma', (v) => { est.forma = v; });
+      segmentado('#lnp-medida', (v) => { est.medida = v; }, pintarTendencia);
+      segmentado('#lnp-rango-tendencia', (v) => { est.rangoTendencia = Number(v); }, pintarTendencia);
+      segmentado('#lnp-conjunto', (v) => { est.conjunto = v; }, pintarEvolucion);
+      segmentado('#lnp-rango', (v) => { est.rango = Number(v); }, pintarEvolucion);
+      segmentado('#lnp-forma', (v) => { est.forma = v; }, pintarEvolucion);
+      $('#lnp-mes', raiz).addEventListener('change', (ev) => elegirMes(Number(ev.target.value)));
+      $('#lnp-deptos-mas', raiz).addEventListener('click', () => { est.deptosTodos = !est.deptosTodos; pintarPortada(); refreshIcons(); });
       $('#lnp-chips', raiz).addEventListener('click', (ev) => {
         const b = ev.target.closest('[data-serie]');
         if (!b) return;
@@ -3969,7 +4238,7 @@
       });
       const ir = (ev) => {
         const b = ev.target.closest('[data-lnp-ir]');
-        if (b) irConEstatus(b.dataset.lnpIr, b.dataset.estatus);
+        if (b && !b.disabled) irConEstatus(b.dataset.lnpIr, b.dataset.estatus);
       };
       raiz.addEventListener('click', ir);
       raiz.addEventListener('keydown', (ev) => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches('.stat-tile[data-lnp-ir]')) { ev.preventDefault(); ir(ev); } });
@@ -3978,7 +4247,11 @@
       const alRedimensionar = () => {
         if (!vigente()) { window.removeEventListener('resize', alRedimensionar); return; }
         clearTimeout(espera);
-        espera = setTimeout(() => { if (est.datos && est.forma === 'grafica') pintarGrafica(seriesDe(est.conjunto)); }, 150);
+        espera = setTimeout(() => {
+          if (!est.datos) return;
+          pintarTendencia();
+          if (est.forma === 'grafica') pintarGrafica(seriesDe(est.conjunto));
+        }, 150);
       };
       window.addEventListener('resize', alRedimensionar);
       cargar(false);

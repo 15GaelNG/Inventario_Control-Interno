@@ -1051,6 +1051,28 @@ test('Panorama: estatus al cierre de cada mes reconstruido hacia atrás con la b
   assert.deepEqual(h.USO, [2, 1, 2]);
   assert.deepEqual(h.RESGUARDO, [0, 1, 0]);
   assert.deepEqual(h.VENDIDO, [0, 0, 1]);
+
+  // Panorama nuevo (30-sep): el estatus de cada registro por mes, para calcular la portada del mes que se elija
+  const R = P._registros({
+    lineas: regs.map((r, i) => Object.assign({}, r, { cuenta: ['AT&T', 'TELCEL GPH', ''][i], basico: i === 2, depto: i ? 'POST VENTA' : 'DISPONIBLE', costo: 299, fin: '2027-01-31' })),
+    equipos: [Object.assign({}, regs[0], { depto: 'DISPONIBLE' })],
+  }, eventos, meses);
+  const estados = (fila) => fila.s.map((k) => (k < 0 ? null : R.dic[k]));
+  assert.deepEqual(estados(R.lineas[0]), ['USO', 'RESGUARDO', 'VENDIDO']);
+  assert.deepEqual(estados(R.lineas[1]), [null, null, 'USO']); // todavía no existía
+  assert.deepEqual([R.lineas[2].b, R.lineas[2].c, R.deps[R.lineas[1].d]], [1, '', 'POST VENTA']);
+  assert.deepEqual(estados(R.equipos[0]), ['USO', 'RESGUARDO', 'VENDIDO']);
+  // Cuenta: AT&T factura todo a FRO; Telcel se separa por razón social
+  assert.equal(P._cuentaDe('AT&T', 'GPH SERVICIOS CONDOMINALES'), 'AT&T');
+  assert.equal(P._cuentaDe('TELCEL', 'GPH SERVICIOS CONDOMINALES'), 'TELCEL GPH');
+  assert.equal(P._cuentaDe('Telcel', 'FRACCIONADORA LA ROMITA SA DE CV'), 'TELCEL FRO');
+  assert.equal(P._cuentaDe('', ''), '');
+  // Portada: líneas activas = no canceladas ni sin línea; RESGUARDO cuenta como disponible (mapeo M6); SIM básicos aparte
+  const lineas = read('src/html/js/lineas.html');
+  assert.match(lineas, /'DISPONIBLE': 'disponible', 'RESGUARDO': 'disponible',/);
+  assert.match(lineas, /if \(g === 'cancelada' \|\| g === 'sin'\) return;/);
+  assert.match(lineas, /if \(l\.b\) \{ r\.basicos\+\+; return; \} \/\/ los SIM básicos no tienen adendum/);
+  assert.match(read('src/html/views/lineas/lineas-panorama.html'), /<select id="lnp-mes" disabled>/);
   // Menú: Panorama primero; Reactivación se retiró con su pestaña (30-sep)
   const app = read('src/html/js/app.html');
   assert.match(app, /\{ vista: 'panorama-lineas', etiqueta: 'Panorama', icono: 'layout-dashboard' \},\s*\{ vista: 'lineas-telefonicas'/);

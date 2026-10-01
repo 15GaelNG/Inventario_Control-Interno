@@ -14,7 +14,7 @@
  * ID APPSHEET.
  */
 const LineasPanorama = (function () {
-  const CLAVE_CACHE = 'ln_panorama_v1';
+  const CLAVE_CACHE = 'ln_panorama_v2'; // v2 (30-sep): también el estatus de cada registro por mes (Panorama nuevo)
   const SEG_CACHE = 30 * 60;
   const MAX_MESES = 36;
 
@@ -51,28 +51,68 @@ const LineasPanorama = (function () {
     return c;
   }
 
+  /** Cierre de cada mes en ms; el último es hoy y cuenta todo (un cambio o una alta con fecha futura no lo mueve). */
+  function cierresDe(meses) {
+    return meses.map((ym, k) => (k === meses.length - 1 ? Infinity : finDeMes(ym)));
+  }
+
+  /** Estatus de un registro al cierre de cada mes (null = todavía no estaba dado de alta). */
+  function estadosPorMes(r, eventos, cierres) {
+    const evs = [];
+    r.ids.forEach((id) => { (eventos[id] || []).forEach((e) => evs.push(e)); });
+    evs.sort((a, b) => b.t - a.t);
+    const salida = cierres.map(() => null);
+    let estado = r.actual;
+    let i = 0;
+    for (let k = cierres.length - 1; k >= 0; k--) {
+      while (i < evs.length && evs[i].t > cierres[k]) { estado = evs[i].antes; i++; }
+      if (!(r.alta && r.alta > cierres[k])) salida[k] = estado;
+    }
+    return salida;
+  }
+
   /**
    * regs: [{ ids: [id, idAppSheet], actual, alta (ms|null) }] · eventos: { id: [{ t, antes }] } · meses: ['yyyy-MM']
    * · ahora (ms). Regresa { estatus: [conteo por mes] }. El último mes cierra "ahora" (coincide con hoy).
    */
   function historico(regs, eventos, meses, ahora) {
     const serie = {};
-    // El último punto es hoy: cuenta todo (un cambio o una alta con fecha futura, error de captura, no lo mueve)
-    const cierres = meses.map((ym, k) => (k === meses.length - 1 ? Infinity : finDeMes(ym)));
+    const cierres = cierresDe(meses);
     regs.forEach((r) => {
-      const evs = [];
-      r.ids.forEach((id) => { (eventos[id] || []).forEach((e) => evs.push(e)); });
-      evs.sort((a, b) => b.t - a.t);
-      let estado = r.actual;
-      let i = 0;
-      for (let k = meses.length - 1; k >= 0; k--) {
-        while (i < evs.length && evs[i].t > cierres[k]) { estado = evs[i].antes; i++; }
-        if (r.alta && r.alta > cierres[k]) continue;
+      estadosPorMes(r, eventos, cierres).forEach((estado, k) => {
+        if (estado === null) return;
         if (!serie[estado]) serie[estado] = meses.map(() => 0);
         serie[estado][k]++;
-      }
+      });
     });
     return serie;
+  }
+
+  /** Compañía y razón social → TELCEL FRO | TELCEL GPH | AT&T | '' (todas las cuentas de AT&T facturan a FRO). */
+  function cuentaDe(compania, razonSocial) {
+    const c = txt(compania).toUpperCase();
+    const r = txt(razonSocial).toUpperCase();
+    if (/AT&T|ATT/.test(c)) return 'AT&T';
+    if (/TELCEL/.test(c)) return /GPH|CONDOMINALES/.test(r) ? 'TELCEL GPH' : (/ROMITA|FRO/.test(r) ? 'TELCEL FRO' : 'TELCEL');
+    return '';
+  }
+
+  /**
+   * Un renglón compacto por registro, con su estatus al cierre de cada mes (índices a `dic`), para que el Panorama
+   * calcule todo para el mes que se elija. Líneas: cuenta, SIM básico, departamento, costo de plan y fin del adendum.
+   * El departamento, la cuenta y el costo son los de HOY (la bitácora no los reconstruye).
+   */
+  function registros(regs, eventos, meses) {
+    const cierres = cierresDe(meses);
+    const dic = [];
+    const deps = [];
+    const indice = (lista, v) => { let i = lista.indexOf(v); if (i < 0) { lista.push(v); i = lista.length - 1; } return i; };
+    const codigos = (r) => estadosPorMes(r, eventos, cierres).map((e) => (e === null ? -1 : indice(dic, e)));
+    return {
+      dic: dic, deps: deps,
+      lineas: regs.lineas.map((r) => ({ c: r.cuenta, b: r.basico ? 1 : 0, d: indice(deps, r.depto), p: r.costo, f: r.fin, s: codigos(r) })),
+      equipos: regs.equipos.map((r) => ({ d: indice(deps, r.depto), s: codigos(r) })),
+    };
   }
 
   function calcular() {
@@ -85,8 +125,17 @@ const LineasPanorama = (function () {
       // FECHA REGISTRO válida: después del 2000 y no en el futuro (hay capturas con 1969 y 2027)
       const altaMs = alta instanceof Date && !isNaN(alta.getTime()) && alta.getFullYear() >= 2000 && alta.getTime() <= ahora ? alta.getTime() : null;
       const ids = [txt(r.id)].concat(LineasDatos.idsDeFila(f)).filter((k, i, a) => k && a.indexOf(k) === i);
-      if (r.equipo) regs.equipos.push({ ids: ids, actual: estatus(r.equipo.estatus), alta: altaMs });
-      if (r.linea) regs.lineas.push({ ids: ids, actual: estatus(r.linea.estatus), alta: altaMs });
+      const depto = txt(LineasUtil.col(f, 'DEPARTAMENTO')).toUpperCase() || 'SIN DEPARTAMENTO';
+      if (r.equipo) regs.equipos.push({ ids: ids, actual: estatus(r.equipo.estatus), alta: altaMs, depto: depto });
+      if (r.linea) {
+        const fin = r.linea.finPlan instanceof Date && !isNaN(r.linea.finPlan.getTime()) && r.linea.finPlan.getFullYear() >= 2000
+          ? Utilities.formatDate(r.linea.finPlan, zona(), 'yyyy-MM-dd') : '';
+        regs.lineas.push({
+          ids: ids, actual: estatus(r.linea.estatus), alta: altaMs, depto: depto, fin: fin,
+          cuenta: cuentaDe(r.linea.compania, r.linea.razonSocial), basico: /B[AÁ]SIC[OA]/.test(r.tipo || ''),
+          costo: Number(r.linea.costoPlan) || 0,
+        });
+      }
     });
 
     const eventos = { equipos: {}, lineas: {} };
@@ -112,6 +161,7 @@ const LineasPanorama = (function () {
     return {
       generadoEn: new Date(ahora), desde: primera, cambiosDeEstatus: total, meses: meses,
       equipos: bloque('equipos'), lineas: bloque('lineas'),
+      registros: registros(regs, eventos, meses),
     };
   }
 
@@ -126,5 +176,5 @@ const LineasPanorama = (function () {
     return r;
   }
 
-  return { panorama, _historico: historico, _mesesEntre: mesesEntre };
+  return { panorama, _historico: historico, _mesesEntre: mesesEntre, _registros: registros, _cuentaDe: cuentaDe };
 })();

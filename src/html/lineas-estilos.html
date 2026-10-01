@@ -790,6 +790,80 @@
     .lnp-controles .ln-segmentado button { flex: 1 1 auto; }
   }
 
+  /* ---- Panorama nuevo (30-sep): portada que responde de un vistazo ---- */
+  .lnp-seccion { display: flex; align-items: center; gap: 8px; }
+  .lnp-filtros {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 16px;
+  }
+  .lnp-filtros label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--color-text-muted); }
+  .lnp-filtros select { width: auto; min-width: 170px; padding: 7px 10px; font-weight: 600; }
+  .lnp-filtro-nota { font-size: 12px; color: var(--color-text-muted); }
+  .ln-panorama.lnp-cargando .lnp-portada, .ln-panorama.lnp-cargando .lnp-dos { opacity: .55; transition: opacity .2s; }
+
+  .lnp-portada { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; margin-bottom: 22px; }
+  .lnp-heroe, .lnp-dinero { padding: 20px 22px; display: flex; flex-direction: column; gap: 6px; }
+  .lnp-etiqueta-grande { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--color-text-muted); }
+  .lnp-heroe-fila { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; }
+  .lnp-heroe-num { font-size: 56px; line-height: 1.05; font-weight: 700; color: var(--color-text); letter-spacing: -0.02em; }
+  .lnp-heroe-delta { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 700; color: var(--color-text); }
+  .lnp-heroe-delta span { font-weight: 500; color: var(--color-text-muted); }
+  .lnp-heroe-delta .ico { width: 16px; height: 16px; }
+  .lnp-heroe-sub { font-size: 13px; color: var(--color-text-muted); }
+  .lnp-heroe-sub strong { color: var(--color-text); }
+  .lnp-composicion { margin-top: 12px; }
+  /* Barra apilada: la separación de 2 px es el fondo de la tarjeta, no un borde */
+  .lnp-pila { display: flex; gap: 2px; height: 14px; border-radius: 4px; overflow: hidden; background: var(--color-surface); }
+  .lnp-pila-seg { flex-basis: 0; min-width: 3px; }
+  .lnp-leyenda { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 2px 14px; margin-top: 10px; }
+  .lnp-leyenda-item {
+    display: grid; grid-template-columns: 12px 1fr auto auto; align-items: center; gap: 8px; padding: 5px 6px; margin: 0 -6px;
+    background: transparent; border: none; border-radius: 8px; text-align: left; font-size: 12.5px; color: var(--color-text); cursor: pointer;
+  }
+  .lnp-leyenda-item:hover:not(:disabled), .lnp-leyenda-item:focus-visible { background: var(--color-bg); }
+  .ln-panorama .lnp-leyenda-item:disabled { cursor: default; opacity: 1; color: var(--color-text); }
+  .lnp-leyenda-marca { width: 12px; height: 12px; border-radius: 3px; }
+  .lnp-leyenda-nombre { color: var(--color-text-muted); font-weight: 600; }
+  .lnp-leyenda-item strong { font-variant-numeric: tabular-nums; }
+  .lnp-leyenda-pct { min-width: 44px; text-align: right; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+  .lnp-aviso { display: flex; gap: 7px; align-items: flex-start; margin: auto 0 0; padding-top: 10px; font-size: 12px; color: var(--color-text-muted); }
+  .lnp-aviso .ico { flex: 0 0 auto; width: 15px; height: 15px; margin-top: 1px; }
+
+  .lnp-dinero-num { font-size: 38px; line-height: 1.1; font-weight: 700; color: var(--color-text); letter-spacing: -0.01em; }
+  .lnp-cuentas { margin-top: 10px; overflow-x: auto; }
+  .lnp-tabla-cuentas { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .lnp-tabla-cuentas th, .lnp-tabla-cuentas td { padding: 8px 6px; text-align: right; border-bottom: 1px solid var(--color-border); font-variant-numeric: tabular-nums; }
+  .lnp-tabla-cuentas th[scope="row"], .lnp-tabla-cuentas thead th:first-child { text-align: left; font-weight: 600; }
+  .lnp-tabla-cuentas thead th { font-size: 11.5px; font-weight: 600; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: .03em; }
+  .lnp-tabla-cuentas td { font-weight: 600; color: var(--color-text); }
+  .lnp-tabla-cuentas tr:last-child th, .lnp-tabla-cuentas tr:last-child td { border-bottom: none; }
+  .lnp-fila-basicos th, .lnp-fila-basicos td { padding-top: 10px; }
+  .lnp-fila-basicos td.ln-tenue { text-align: left; font-weight: 500; font-size: 12px; }
+  .lnp-vencidas { display: inline-flex; align-items: center; gap: 4px; color: var(--color-danger); }
+
+  .lnp-vigencia { margin-bottom: 22px; }
+  .lnp-dos { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; margin-bottom: 22px; }
+  .lnp-area { fill: var(--lnp-s1); opacity: .10; }
+  .lnp-marca-mes { stroke: var(--color-text-muted); stroke-width: 1; opacity: .55; }
+  .lnp-captura-clic { cursor: pointer; }
+  .lnp-tooltip-pie { margin-top: 4px; font-size: 11px; color: var(--color-text-muted); }
+  .lnp-deptos { display: flex; flex-direction: column; }
+  .lnp-depto { display: grid; grid-template-columns: minmax(110px, 40%) 1fr 48px 72px; align-items: center; gap: 10px; padding: 5px 0; font-size: 12.5px; color: var(--color-text); font-weight: 500; }
+  .lnp-depto-cabeza { font-size: 11px; font-weight: 600; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: .03em; padding-bottom: 6px; }
+  .lnp-depto-cabeza span:nth-child(3), .lnp-depto-cabeza span:nth-child(4) { text-align: right; }
+  .lnp-ver-todos { align-self: flex-start; margin-top: 8px; font-size: 12.5px; }
+  .ln-panorama .lnp-barra:disabled { cursor: default; opacity: 1; }
+  .lnp-barra:disabled:hover { background: transparent; }
+  @media (max-width: 900px) {
+    .lnp-portada, .lnp-dos { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 600px) {
+    .lnp-heroe-num { font-size: 44px; }
+    .lnp-dinero-num { font-size: 30px; }
+    .lnp-heroe, .lnp-dinero { padding: 16px; }
+    .lnp-depto { grid-template-columns: minmax(80px, 38%) 1fr 40px 62px; gap: 8px; }
+    .lnp-filtros select { flex: 1 1 auto; }
+  }
+
   /* ============ Calificación en vivo (encabezado de la inspección) ============ */
   .ln-captura-cabecera { gap: 14px; }
   .ln-calif-vivo {

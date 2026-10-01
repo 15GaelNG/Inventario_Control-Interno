@@ -3,18 +3,75 @@
     <div class="page-header">
       <div>
         <h2><i data-lucide="layout-dashboard" class="ico"></i> Panorama de Líneas</h2>
-        <p class="page-subtitle">Equipos y líneas por estatus: cómo están hoy y cómo han cambiado mes a mes.</p>
+        <p class="page-subtitle">Cuántas líneas y equipos hay, cuánto cuestan y cómo han cambiado mes a mes.</p>
       </div>
       <div class="page-header-actions">
         <button type="button" class="secondary" id="lnp-actualizar"><i data-lucide="refresh-cw" class="ico"></i> Actualizar</button>
       </div>
     </div>
 
-    <div class="stat-row" id="lnp-kpis">
-      <div class="stat-tile"><div class="stat-icon"><i data-lucide="loader-circle" class="ico"></i></div><div><div class="stat-value">…</div><div class="stat-label">Cargando</div></div></div>
+    <!-- Un solo filtro arriba: todo lo de abajo se calcula al cierre del mes elegido -->
+    <div class="lnp-filtros">
+      <label for="lnp-mes"><i data-lucide="calendar-days" class="ico"></i> Ver al cierre de</label>
+      <select id="lnp-mes" disabled><option>Cargando…</option></select>
+      <span class="lnp-filtro-nota" id="lnp-filtro-nota"></span>
     </div>
 
-    <h3 class="lnp-seccion">Hoy</h3>
+    <div class="lnp-portada">
+      <div class="card lnp-heroe">
+        <div class="lnp-etiqueta-grande"><i data-lucide="card-sim" class="ico"></i> Líneas activas</div>
+        <div class="lnp-heroe-fila">
+          <div class="lnp-heroe-num" id="lnp-activas">…</div>
+          <div class="lnp-heroe-delta" id="lnp-delta"></div>
+        </div>
+        <div class="lnp-heroe-sub" id="lnp-activas-sub"></div>
+        <div class="lnp-composicion" id="lnp-composicion" aria-label="Cómo están las líneas activas"></div>
+        <p class="lnp-aviso"><i data-lucide="info" class="ico"></i> Es lo que dice el inventario del sistema. Puede no coincidir con lo que factura el proveedor hasta que Líneas termine sus correcciones.</p>
+      </div>
+
+      <div class="card lnp-dinero">
+        <div class="lnp-etiqueta-grande"><i data-lucide="banknote" class="ico"></i> Renta mensual de los planes</div>
+        <div class="lnp-dinero-num" id="lnp-renta">…</div>
+        <div class="lnp-heroe-sub" id="lnp-renta-sub"></div>
+        <div class="lnp-cuentas" id="lnp-cuentas"></div>
+      </div>
+    </div>
+
+    <h3 class="lnp-seccion"><i data-lucide="calendar-clock" class="ico"></i> Adendums de los planes activos</h3>
+    <div class="stat-row lnp-vigencia" id="lnp-vigencia"></div>
+
+    <div class="lnp-dos">
+      <div class="card lnp-tarjeta">
+        <div class="lnp-cabeza">
+          <h4 id="lnp-tendencia-titulo"><i data-lucide="chart-line" class="ico"></i> Líneas activas al cierre de cada mes</h4>
+        </div>
+        <div class="lnp-controles">
+          <div class="ln-segmentado" id="lnp-medida" role="group" aria-label="Qué medir">
+            <button type="button" class="secondary activo" data-valor="lineas" aria-pressed="true">Líneas</button>
+            <button type="button" class="secondary" data-valor="renta" aria-pressed="false">Renta</button>
+          </div>
+          <div class="ln-segmentado" id="lnp-rango-tendencia" role="group" aria-label="Periodo">
+            <button type="button" class="secondary activo" data-valor="12" aria-pressed="true">12 meses</button>
+            <button type="button" class="secondary" data-valor="0" aria-pressed="false">Todo</button>
+          </div>
+        </div>
+        <div class="lnp-grafica" id="lnp-tendencia"></div>
+        <p class="lnp-nota">Clic en un mes de la gráfica para ver todo el Panorama al cierre de ese mes.</p>
+      </div>
+
+      <div class="card lnp-tarjeta">
+        <div class="lnp-cabeza">
+          <h4><i data-lucide="building-2" class="ico"></i> Líneas activas por departamento</h4>
+          <span class="lnp-total" id="lnp-deptos-total"></span>
+        </div>
+        <div class="lnp-deptos" id="lnp-deptos"></div>
+        <button type="button" class="secondary lnp-ver-todos" id="lnp-deptos-mas" hidden></button>
+      </div>
+    </div>
+
+    <h3 class="lnp-seccion"><i data-lucide="smartphone" class="ico"></i> Equipos</h3>
+    <div class="stat-row" id="lnp-kpis-equipos"></div>
+
     <div class="lnp-hoy">
       <div class="card lnp-tarjeta">
         <div class="lnp-cabeza"><h4><i data-lucide="smartphone" class="ico"></i> Equipos por estatus</h4><span class="lnp-total" id="lnp-total-equipos"></span></div>
@@ -26,7 +83,7 @@
       </div>
     </div>
 
-    <h3 class="lnp-seccion">Mes a mes</h3>
+    <h3 class="lnp-seccion"><i data-lucide="chart-spline" class="ico"></i> Detalle por estatus, mes a mes</h3>
     <div class="card lnp-tarjeta lnp-evolucion">
       <div class="lnp-controles">
         <div class="ln-segmentado" id="lnp-conjunto" role="group" aria-label="Qué contar">

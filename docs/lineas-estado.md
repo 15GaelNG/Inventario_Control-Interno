@@ -24,6 +24,7 @@ qué está hecho, cómo probarlo y qué sigue.
     fuera quita la selección, sin columna de Acciones, Documentos/Historial de una fila, ficha con solo Nueva
     inspección y Nueva responsiva a la vista (lo demás en ⋮, también en la línea), "Ver carpeta en Drive" sola en ⋮
     y con el mismo nombre en la tabla Documentos, y la barra que entra a los 100 ms (con doble clic no se asoma).
+  - §0ab: Panorama nuevo: líneas activas, renta por cuenta, adendums y departamentos, al cierre del mes que se elija.
   - §0aa: módulo TEMPORAL "Correcciones de Líneas" (casos de la conciliación para Líneas); se elimina cuando terminen.
   - §0z: Líneas lee `ID ANTERIOR` tras la segunda corrida de IDs de Ayrton.
 - **Lo que sigue, en orden:** pendiente 0 de `migracion/ESTADO_TELEFONIA.md`, en la carpeta de documentación.
@@ -59,6 +60,41 @@ qué está hecho, cómo probarlo y qué sigue.
   - §0z: Líneas lee `ID ANTERIOR` (corrida de IDs del 30-sep). Su catálogo y `MIGRACION_REFERENCIAS` ya no
     describen la BD de pruebas tal como quedó: ver §0z antes de correr `lineas2Escribir` sobre ella.
 
+
+## 0ab. Panorama nuevo: lo que pregunta dirección, de un vistazo (2026-09-30, noche)
+
+Pedido del usuario: "visualmente bonito, con un buen diseño, pero al mismo tiempo que funcione; en el primer vistazo que
+vean lo que necesitan, por ejemplo cuántas líneas están activas". Sale de la junta del 30-sep: Marisela quiere saber
+cuántas líneas hay, cuánto se paga y por departamento; "muestra la información vigente a julio"; el conteo general en una
+vista aparte; no revolver planes con SIM básicos ni compañías.
+
+- **Filtro único arriba:** "Ver al cierre de" (Hoy o cualquier mes). Todo lo de abajo se recalcula para ese mes; también
+  se elige con clic en la gráfica de tendencia (o flechas + Enter).
+- **Portada:**
+  - **Líneas activas** (número grande): todas menos CANCELADA y sin línea. Planes contra SIM básicos, diferencia contra
+    el mes anterior y composición en una barra apilada con leyenda numerada: en uso, disponibles (incluye RESGUARDO,
+    mapeo M6), en cancelación y por revisar (SUSPENDIDA y otros viejos). La leyenda abre Líneas Telefónicas filtrada (solo
+    con "Hoy").
+  - **Renta mensual de los planes** (COSTO PLAN del inventario, el del adendum) y tabla por cuenta: Telcel FRO, Telcel
+    GPH (por razón social), AT&T (todo factura a FRO), con líneas, renta y planes vencidos. SIM básicos aparte, sin
+    sumar costo (el del inventario es el plan viejo; el real sale de la factura).
+  - Aviso: es lo que dice el inventario; puede no coincidir con el proveedor hasta que Líneas termine las correcciones.
+- **Adendums de los planes activos:** vencidos, vencen en 30 días, vigentes y sin fecha (al corte del mes elegido).
+- **Tendencia** (líneas activas o renta, 12 meses o todo; una serie con área al 10 %, mes elegido marcado) y **líneas
+  por departamento** (10 primeros o todos, con su renta).
+- **Equipos:** registrados, en uso, guardados, ya no están, por revisar; y las barras por estatus de equipos y líneas al
+  cierre del mes (clic solo con "Hoy").
+- Se conserva abajo el **detalle por estatus mes a mes** (gráfica de varias series o tabla exportable).
+- **Servidor:** `LineasPanorama` devuelve además `registros` (caché `ln_panorama_v2`): por línea su cuenta, si es SIM
+  básico, departamento, costo, fin del adendum y su estatus al cierre de cada mes (índices a `dic`); por equipo su
+  estatus por mes. El departamento, la cuenta y el costo son los de hoy (la bitácora no los reconstruye; la interfaz
+  lo dice al ver un mes pasado).
+- Colores: la paleta de 4 de la composición (s1–s4) pasó el validador de la guía en claro (#ffffff) y oscuro
+  (#142732); en claro s3 y s4 tienen poco contraste, por eso la leyenda lleva siempre número y porcentaje.
+- **Probado en /dev (30-sep):** hoy 989 activas (890 en uso, 78 disponibles, 12 en cancelación, 9 por revisar),
+  $276,679 de renta (FRO 154, GPH 283, AT&T 551), 307 planes con el adendum vencido; al elegir feb 2026: 984 (+5
+  contra enero). Modo oscuro y celular (375 px) revisados. La BD de pruebas no trae EQUIPO + SIM BÁSICO (copia de
+  hace dos semanas), por eso sale 0 SIM básicos.
 
 ## 0aa. Módulo temporal "Correcciones de Líneas" (2026-09-30, noche)
 
