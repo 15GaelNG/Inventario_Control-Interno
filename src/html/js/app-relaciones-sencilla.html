@@ -167,6 +167,20 @@
       const quien = e.dueno || e.clave || '';
       switch (g.tipo) {
         case 'DIFERENCIA':
+          // Capital Humano no copia datos: liga a cada responsable con su persona. El nombre ya
+          // está bien; lo que falta es guardar la liga (o actualizarla, si cambió el responsable).
+          if (g.c.llaveRegistro) {
+            const sinLigar = g.entradas.filter((x) => vacio(x.tenia)).length;
+            return {
+              titulo: sinLigar === g.entradas.length
+                ? cuantos(c, k) + verbo(k, ' todavía no tiene', ' todavía no tienen') + ' ligada su persona'
+                : cuantos(c, k) + verbo(k, ' tiene', ' tienen') + ' su persona por ligar o por actualizar',
+              ejemplo: 'Por ejemplo ' + quien + ': su responsable es ' + e.quedo + ' en ' + d.nombre +
+                (vacio(e.tenia) ? ', pero esa liga aún no está guardada.' : ', pero tenía ligada a ' + e.tenia + '.'),
+              explicacion: 'Ya se encontró a cada persona en ' + d.nombre + ' por su nombre o su correo. «Actualizar» guarda esa ' +
+                'liga en la columna ' + dato(e.columna) + ' (la crea si no existe). El nombre que está escrito no se toca.',
+            };
+          }
           return {
             titulo: cuantos(c, k) + verbo(k, ' tiene', ' tienen') + ' datos distintos a ' + d.nombre,
             ejemplo: 'Por ejemplo ' + quien + ': en ' + c.nombre + ', ' + dato(e.columna) + ' ' + dice(e.tenia) +
