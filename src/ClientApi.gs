@@ -285,6 +285,9 @@ function apiSubirArchivoArqueo(token, nombreArchivo, mimeType, base64Data) {
 function apiSubirFirmaArqueo(token, nombreArchivo, mimeType, base64Data) {
   return ArqueosService.subirFirma(token, nombreArchivo, mimeType, base64Data);
 }
+function apiSubirEvidenciaArqueo(token, nombreArchivo, mimeType, base64Data) {
+  return ArqueosService.subirEvidencia(token, nombreArchivo, mimeType, base64Data);
+}
 
 // --- Listas de referencia ---
 function apiListarDepartamentos(token) {

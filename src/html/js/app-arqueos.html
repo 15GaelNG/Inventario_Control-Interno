@@ -463,9 +463,14 @@
       const input = document.getElementById(prefijo + '-' + slugCampo(campo.clave));
       if (!input || !input.files || !input.files.length) continue;
       if (campo.multiple) {
+        // Evidencias: a su propia carpeta (apiSubirEvidenciaArqueo, no apiSubirArchivoArqueo).
+        // _FILE_ID no es columna real -- viaja para que el servidor renombre el PDF a
+        // "<ID ARQUEO>_EVIDENCIA_<fecha>" una vez que sabe el ID real (ArqueosService
+        // crear/actualizar lo descartan antes de guardar).
         const base64 = await combinarImagenesEnPdf(Array.from(input.files));
-        const subido = await callServer('apiSubirArchivoArqueo', state.token, 'evidencias.pdf', 'application/pdf', base64);
+        const subido = await callServer('apiSubirEvidenciaArqueo', state.token, 'evidencias.pdf', 'application/pdf', base64);
         resultado[campo.clave] = subido.url;
+        resultado[campo.clave + '_FILE_ID'] = subido.id;
         continue;
       }
       const file = input.files[0];
