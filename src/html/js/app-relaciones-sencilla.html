@@ -266,10 +266,11 @@
       mapa.duenos.filter((d) => d.etiqueta.familia === familia).forEach((d) => d.copias.forEach((c) => c.columnas.forEach((x) => {
         const nombre = x.calculada ? dato(x.destino) : dato(x.origen);
         const k = d.hoja + '|' + nombre;
-        const o = datos[k] = datos[k] || { nombre: nombre, decide: d.etiqueta.nombre, alDia: [], delDia: [], notas: [] };
+        const o = datos[k] = datos[k] || { nombre: nombre, decide: d.etiqueta.nombre, alDia: [], delDia: [], notas: [], ayuda: [] };
         (c.tipo === 'bitacora' ? o.delDia : o.alDia).push(c.etiqueta.nombre);
         if (!x.calculada && dato(x.destino) !== dato(x.origen)) o.notas.push('En ' + c.etiqueta.nombre + ' se llama «' + dato(x.destino) + '».');
-        if (c.nota && o.notas.indexOf(c.nota) === -1) o.notas.push(c.nota);
+        // La regla larga (cómo se calcula) no va en la tabla: va detrás del "?" de su renglón
+        if (c.nota && o.ayuda.indexOf(c.nota) === -1) o.ayuda.push(c.nota);
       })));
       const q = String(filtro || '').trim().toLowerCase();
       const filas = Object.keys(datos).map((k) => datos[k])
@@ -278,12 +279,14 @@
         .sort((a, b) => a.decide.localeCompare(b.decide, 'es') || a.nombre.localeCompare(b.nombre, 'es'));
       const lista = (xs) => (xs.length ? esc(xs.join(', ')) : '<span class="rel-s-nada">—</span>');
       cont.innerHTML = filas.length ? `<table class="rel-s-tabla">
-        <thead><tr><th>Dato</th><th>Lo decide</th><th>Se mantiene al día en</th><th>Guarda el del día en</th></tr></thead>
+        <thead><tr><th>Dato</th><th>Lo decide</th><th>Se mantiene al día en</th><th>Guarda el del día en</th><th></th></tr></thead>
         <tbody>${filas.map((o) => `<tr>
           <td data-etiqueta="Dato"><strong>${esc(o.nombre)}</strong>${o.notas.map((n) => `<div class="rel-s-sutil">${esc(n)}</div>`).join('')}</td>
           <td data-etiqueta="Lo decide">${esc(o.decide)}</td>
           <td data-etiqueta="Se mantiene al día en">${lista(o.alDia)}</td>
           <td data-etiqueta="Guarda el del día en">${lista(o.delDia)}</td>
+          <td class="rel-s-ayuda-td">${o.ayuda.length ? `<button type="button" class="rel-s-ayuda" title="${esc(o.ayuda.join(' '))}"
+            data-s-ayuda="${esc(o.ayuda.join(' '))}" aria-label="Cómo funciona ${esc(o.nombre)}">${Iconos.svg('circle-help')}</button>` : ''}</td>
         </tr>`).join('')}</tbody></table>`
         : '<p class="empty-state">Ningún dato coincide con la búsqueda.</p>';
     }

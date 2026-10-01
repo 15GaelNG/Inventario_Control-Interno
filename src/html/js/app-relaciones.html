@@ -355,6 +355,10 @@
     document.getElementById('rel-s-volver').addEventListener('click', volver);
     document.getElementById('rel-tecnico-toggle').addEventListener('change', (ev) => mostrarTecnica(ev.target.checked));
     document.getElementById('rel-sencilla').addEventListener('click', (ev) => {
+      // El "?" de un dato: en escritorio basta pasar el mouse (title); en celular no hay
+      // mouse, así que al tocarlo se muestra el texto
+      const ayuda = ev.target.closest('[data-s-ayuda]');
+      if (ayuda) return Notificar.info(ayuda.dataset.sAyuda, { duracion: 9000 });
       const ver = ev.target.closest('[data-s-ver]');
       if (ver && clasificado) return abrirDetalle(clasificado.avisos[Number(ver.dataset.sVer)]);
       const act = ev.target.closest('[data-s-actualizar]');

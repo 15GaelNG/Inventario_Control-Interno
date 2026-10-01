@@ -68,13 +68,17 @@
   .rel-s-tabla tr:last-child td { border-bottom: none; }
   .rel-s-sutil { color: var(--color-text-muted); font-size: 12px; margin-top: 3px; max-width: 420px; }
   .rel-s-nada { color: var(--color-border); }
+  .rel-s-ayuda-td { width: 36px; text-align: center; }
+  .rel-s-ayuda { background: transparent; border: none; padding: 2px; color: var(--color-text-muted); cursor: help; display: inline-flex; }
+  .rel-s-ayuda:hover { color: var(--color-primary); background: transparent; }
   /* En celular la tabla se apila: un dato por tarjeta, cada valor con su etiqueta */
   @media (max-width: 720px) {
     .rel-s-tabla thead { display: none; }
     .rel-s-tabla, .rel-s-tabla tbody, .rel-s-tabla tr, .rel-s-tabla td { display: block; width: 100%; }
     .rel-s-tabla tr { border: 1px solid var(--color-border); border-radius: 10px; margin-bottom: 8px; padding: 4px 0; }
     .rel-s-tabla td { border: none; padding: 4px 12px; }
-    .rel-s-tabla td:not(:first-child)::before { content: attr(data-etiqueta) ': '; color: var(--color-text-muted); font-size: 12px; }
+    .rel-s-tabla td:not(:first-child):not(.rel-s-ayuda-td)::before { content: attr(data-etiqueta) ': '; color: var(--color-text-muted); font-size: 12px; }
+    .rel-s-tabla td.rel-s-ayuda-td { width: auto; text-align: left; }
   }
   .rel-s-volver { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 13px; margin-bottom: 10px; }
   .rel-s-detalle-cabeza { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; margin-bottom: 12px; }
