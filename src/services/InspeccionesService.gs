@@ -818,6 +818,10 @@ const InspeccionesService = (function () {
   // HONDA 150XR es igual a ITALIKA DM250 pieza por pieza (mismo Inventarios de 2
   // piezas, sin "Kit de herramientas") -- confirmado contra su propio PDF crudo.
   REAGRUPAR_SECCIONES['HONDA 150XR'] = REAGRUPAR_SECCIONES['ITALIKA DM250'];
+  // MOTOCARRO (genérico, sin marca) es igual a MOTOCARRO KINGWAY pieza por pieza
+  // (mismo Neumáticos con "Tapones" en vez de "Rines") -- confirmado contra su
+  // propio PDF crudo.
+  REAGRUPAR_SECCIONES['MOTOCARRO'] = REAGRUPAR_SECCIONES['MOTOCARRO KINGWAY'];
   /** Sin espacios ni mayúsculas/minúsculas: una palabra que se corta a la mitad de
    *  línea en el documento a veces pierde el espacio al leerse como texto plano
    *  (pasó con "ASIENTOS TRASEROS 2" -> "ASIENTOS TRASEROS2" al leer el PDF de la
