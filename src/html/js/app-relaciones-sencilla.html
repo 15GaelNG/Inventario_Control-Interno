@@ -227,7 +227,10 @@
     }
 
     /** Cuántos avisos hay que atender, para la pestaña ("Avisos (3)"). */
-    const pendientes = (clas) => clas.pendientes;
+    /** Cuántos avisos hay que atender en una familia: la cifra de su pestaña en Salud. */
+    const pendientesDe = (clas, familia) =>
+      clas.avisos.filter((g) => g.accion !== 'bien' && g.familia === familia).length +
+      (clas.errores || []).filter((e) => e.familia === familia).length;
 
     function tarjeta(g, i, puedeEditar) {
       const t = textos(g);
@@ -250,39 +253,38 @@
         <span>${esc(textos(g).titulo)}.</span> <button type="button" class="dt-link" data-s-ver="${i}">Ver</button></p>`;
     }
 
-    /** La pestaña Avisos: tres secciones según lo que hay que hacer, con subtítulo de familia si hay varias. */
-    function pintarAvisos(cont, clas, puedeEditar) {
-      const familias = Array.from(new Set(clas.avisos.map((g) => g.familia).concat(clas.alDia.map((a) => a.familia))));
-      const variasFamilias = familias.length > 1;
-      const cabeza = clas.pendientes
-        ? `<h3 class="rel-s-h3">${Iconos.svg('triangle-alert')} ${num(clas.pendientes)} ${clas.pendientes === 1 ? 'aviso' : 'avisos'} por atender</h3>`
-        : `<h3 class="rel-s-h3 ok">${Iconos.svg('circle-check')} Todo coincide: no hay nada que atender</h3>`;
+    /**
+     * Los avisos de UNA familia (una pestaña de Salud): tres secciones según lo que hay que
+     * hacer. Los índices de "Ver" (data-s-ver) son los de clas.avisos completo, para que
+     * quien escucha el clic no tenga que saber qué familia se está viendo.
+     */
+    function pintarAvisos(cont, clas, puedeEditar, familia) {
+      const deLaFamilia = (x) => x.familia === familia;
+      const pendientes = pendientesDe(clas, familia);
+      const errores = (clas.errores || []).filter(deLaFamilia);
+      const cabeza = pendientes
+        ? `<h3 class="rel-s-h3">${Iconos.svg('triangle-alert')} ${num(pendientes)} ${pendientes === 1 ? 'aviso' : 'avisos'} por atender en ${esc(familia)}</h3>`
+        : `<h3 class="rel-s-h3 ok">${Iconos.svg('circle-check')} ${esc(familia)}: todo coincide, no hay nada que atender</h3>`;
       const secciones = SECCIONES.map((sec) => {
-        const items = clas.avisos.map((g, i) => ({ g: g, i: i })).filter((x) => x.g.accion === sec.clave);
-        const alDia = sec.clave === 'bien' ? clas.alDia : [];
+        const items = clas.avisos.map((g, i) => ({ g: g, i: i })).filter((x) => x.g.accion === sec.clave && deLaFamilia(x.g));
+        const alDia = sec.clave === 'bien' ? clas.alDia.filter(deLaFamilia).map((a) => a.nombre) : [];
         if (!items.length && !alDia.length) return '';
-        const porFamilia = familias.map((f) => {
-          const suyos = items.filter((x) => x.g.familia === f);
-          const suyosAlDia = alDia.filter((a) => a.familia === f).map((a) => a.nombre);
-          if (!suyos.length && !suyosAlDia.length) return '';
-          const cuerpo = sec.clave === 'bien'
-            ? suyos.map((x) => lineaBien(x.g, x.i)).join('') +
-              (suyosAlDia.length ? `<p class="rel-s-bien">${Iconos.svg('circle-check')} <span>Al día: ${esc(suyosAlDia.join(', '))}.</span></p>` : '')
-            : `<div class="rel-s-pends">${suyos.map((x) => tarjeta(x.g, x.i, puedeEditar)).join('')}</div>`;
-          return (variasFamilias ? `<div class="rel-s-familia">${esc(f)}</div>` : '') + cuerpo;
-        }).join('');
+        const cuerpo = sec.clave === 'bien'
+          ? items.map((x) => lineaBien(x.g, x.i)).join('') +
+            (alDia.length ? `<p class="rel-s-bien">${Iconos.svg('circle-check')} <span>Al día: ${esc(alDia.join(', '))}.</span></p>` : '')
+          : `<div class="rel-s-pends">${items.map((x) => tarjeta(x.g, x.i, puedeEditar)).join('')}</div>`;
         return `<section class="rel-s-seccion-avisos ${sec.clave}">
           <h4>${Iconos.svg(sec.icono)} ${esc(sec.titulo)}</h4>
           <p class="rel-s-sec-texto">${esc(sec.texto)}</p>
-          ${porFamilia}
+          ${cuerpo}
         </section>`;
       }).join('');
-      const errores = (clas.errores || []).length ? `<section class="rel-s-seccion-avisos mano">
+      const fallas = errores.length ? `<section class="rel-s-seccion-avisos mano">
           <h4>${Iconos.svg('circle-x')} No se pudieron revisar</h4>
           <p class="rel-s-sec-texto">Falta configurar algo en el sistema; avísale a quien lo administra.</p>
-          ${clas.errores.map((e) => `<p class="rel-s-bien"><span><strong>${esc(e.familia)} · ${esc(e.nombre)}</strong>: ${esc(e.motivo)}</span></p>`).join('')}
+          ${errores.map((e) => `<p class="rel-s-bien"><span><strong>${esc(e.nombre)}</strong>: ${esc(e.motivo)}</span></p>`).join('')}
         </section>` : '';
-      cont.innerHTML = cabeza + errores + secciones;
+      cont.innerHTML = cabeza + fallas + secciones;
     }
 
     /** Las familias, en el orden del mapa (la que tiene más conexiones primero). */
@@ -356,6 +358,6 @@
       }));
     }
 
-    return { clasificar, textos, pendientes, pintarAvisos, familias, pintarFamilia, columnasDetalle, filasDetalle, dato };
+    return { clasificar, textos, pendientesDe, pintarAvisos, familias, pintarFamilia, columnasDetalle, filasDetalle, dato };
   })();
 </script>

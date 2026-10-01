@@ -581,6 +581,7 @@
       if (vista === 'hologramas') { montarVista('tpl-hologramas', initHologramas); return; }
       if (vista === 'inspeccion-vehicular') { montarVista('tpl-inspecciones', initInspecciones); return; }
       if (vista === 'relaciones') { montarVista('tpl-relaciones', initRelaciones); return; }
+      if (vista === 'salud') { montarVista('tpl-salud', initSalud); return; }
       // --- Líneas (rama emmanuel): el módulo vive en html/js/lineas.html (namespace Lineas) ---
       if (vista === 'lineas-telefonicas') { montarVista('tpl-lineas-telefonicas', Lineas.initTelefonicas); return; }
       if (vista === 'gestion-activos') { montarVista('tpl-lineas-gestion-activos', Lineas.initGestionActivos); return; }
@@ -666,6 +667,7 @@
       id: 'administracion', icono: 'settings', etiqueta: 'Administración',
       items: [
         { vista: 'relaciones', etiqueta: 'Datos conectados', icono: 'git-compare-arrows', requiere: 'relaciones' },
+        { vista: 'salud', etiqueta: 'Salud', icono: 'heart-pulse', requiere: 'salud' },
       ],
     },
   ];

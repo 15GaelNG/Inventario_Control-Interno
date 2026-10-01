@@ -579,20 +579,27 @@ function apiRegistrarInspeccion(token, datos, imagenes) {
   return InspeccionesService.registrar(token, datos, imagenes);
 }
 
-// --- Relaciones entre hojas (Administración) ---
-// Quién es dueño de qué columna, cuánto se han desviado las copias, y el botón que las
-// pone al día. El motor es Relaciones.gs; aquí solo van permisos y la forma de la respuesta.
-// JSON.stringify porque las celdas pueden traer Date, y google.script.run no las pasa
-// dentro de un objeto.
+// --- Datos conectados y Salud (Administración) ---
+// Dos pantallas sobre el mismo motor (Relaciones.gs): Datos conectados enseña el mapa (quién
+// decide cada dato); Salud revisa si las copias coinciden y las pone al día. Permisos
+// separados: 'relaciones' para el mapa, 'salud' para revisar y actualizar. Aquí solo van
+// permisos y la forma de la respuesta. JSON.stringify porque las celdas pueden traer Date,
+// y google.script.run no las pasa dentro de un objeto.
 function apiRelacionesMapa(token) {
   Permisos.puedeLeer(token, 'relaciones');
   return JSON.stringify(Relaciones.describir());
 }
 
-/** Solo lee: no corrige ni escribe LOG_RELACIONES. */
-function apiRelacionesRevisar(token) {
-  Permisos.puedeLeer(token, 'relaciones');
-  return JSON.stringify(relacionesRespuesta_(Relaciones.revisar({ detalle: true, log: false })));
+/**
+ * Salud: el mapa y la revisión en una sola llamada (la pantalla necesita los dos). Solo lee:
+ * no corrige ni escribe LOG_RELACIONES.
+ */
+function apiSaludRevisar(token) {
+  Permisos.puedeLeer(token, 'salud');
+  return JSON.stringify({
+    mapa: Relaciones.describir(),
+    reporte: relacionesRespuesta_(Relaciones.revisar({ detalle: true, log: false })),
+  });
 }
 
 /**
@@ -600,8 +607,8 @@ function apiRelacionesRevisar(token) {
  * error sea claro en vez de un "0 corregidas" que parece éxito. Esta sí escribe la bitácora
  * LOG_RELACIONES: es el rastro de qué celda cambió, de qué valor a cuál, y quién lo pidió.
  */
-function apiRelacionesSincronizar(token, hoja, filas) {
-  const sesion = Permisos.puedeEditar(token, 'relaciones');
+function apiSaludSincronizar(token, hoja, filas) {
+  const sesion = Permisos.puedeEditar(token, 'salud');
   const copia = Relaciones.describir().duenos
     .reduce((todas, d) => todas.concat(d.copias), [])
     .find((c) => c.nombre === hoja);

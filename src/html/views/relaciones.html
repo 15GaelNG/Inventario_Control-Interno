@@ -87,86 +87,32 @@
   .rel-s-detalle-cabeza button { display: inline-flex; align-items: center; gap: 6px; }
 </style>
 
+<!--
+  Administración > Datos conectados: el MAPA de qué módulo decide cada dato y a dónde se
+  copia, una pestaña por familia. Solo lee el mapa (instantáneo); los avisos —que sí leen
+  todas las hojas— viven en Administración > Salud (views/salud.html).
+  Los estilos de arriba (.rel-*) los comparten las dos pantallas.
+-->
 <template id="tpl-relaciones">
   <div class="page-header-compacto">
     <div>
       <h2><i data-lucide="git-compare-arrows" class="ico"></i> Datos conectados</h2>
-      <p class="page-subtitle">Algunos datos se capturan en un módulo y se usan en otros. Aquí ves si siguen coincidiendo, y los pones al día.</p>
+      <p class="page-subtitle">Algunos datos se capturan en un módulo y se usan en otros. Aquí ves qué módulo decide cada dato y a dónde se copia. Si coinciden o no, lo revisa Salud.</p>
     </div>
     <label class="rel-switch"><input type="checkbox" id="rel-tecnico-toggle" /> Ver detalle técnico</label>
   </div>
 
-  <!-- Vista sencilla: la que se ve al entrar -->
+  <!-- Vista sencilla: una pestaña por familia (las agrega initRelaciones al cargar el mapa) -->
   <div id="rel-sencilla" class="rel-s">
-    <div id="rel-s-inicio">
-      <div id="rel-s-tabs">
-        <div class="tabs-lista" id="rel-s-tabs-lista">
-          <button type="button" class="tab-btn" data-tab="avisos"><i data-lucide="bell" class="ico"></i> Avisos <span class="rel-s-badge" id="rel-s-badge" hidden></span></button>
-          <!-- una pestaña por familia: initRelaciones las agrega al cargar el mapa -->
-        </div>
-        <div class="card card-compacta" data-panel="avisos">
-          <div class="rel-s-cabeza">
-            <span class="rel-s-cuando" id="rel-s-cuando">Revisando los datos… tarda unos segundos</span>
-            <button type="button" class="secondary" id="rel-s-revisar"><i data-lucide="refresh-cw" class="ico"></i> Revisar de nuevo</button>
-          </div>
-          <div id="rel-s-pendientes"></div>
-        </div>
-      </div>
-    </div>
-    <div id="rel-s-detalle" hidden>
-      <button type="button" class="secondary rel-s-volver" id="rel-s-volver"><i data-lucide="arrow-left" class="ico"></i> Volver</button>
-      <div class="card card-compacta">
-        <div class="rel-s-detalle-cabeza">
-          <div><h3 id="rel-s-detalle-titulo"></h3><p id="rel-s-detalle-texto"></p></div>
-          <div id="rel-s-detalle-accion"></div>
-        </div>
-        <div id="rel-s-tabla"></div>
-      </div>
+    <div id="rel-s-tabs">
+      <div class="tabs-lista" id="rel-s-tabs-lista"></div>
     </div>
   </div>
 
-  <!-- Vista técnica: la de siempre, para quien mantiene el sistema -->
+  <!-- Vista técnica: la matriz columna del dueño × hoja copia -->
   <div id="rel-tecnica" hidden>
-    <div class="kpi-chips" style="margin-bottom:10px">
-      <button type="button" class="kpi-chip kpi-warn" id="rel-kpi-dif" title="Ver las diferencias que se pueden sincronizar">
-        <span class="kpi-chip-label">Por sincronizar</span>
-        <strong class="kpi-chip-value" id="rel-stat-dif">–</strong>
-      </button>
-      <button type="button" class="kpi-chip" id="rel-kpi-hist" title="Ver las diferencias de bitácoras (no se tocan)">
-        <span class="kpi-chip-label">Históricas</span>
-        <strong class="kpi-chip-value" id="rel-stat-hist">–</strong>
-      </button>
-      <button type="button" class="kpi-chip" id="rel-kpi-huer" title="Ver los registros sin dueño">
-        <span class="kpi-chip-label">Huérfanas</span>
-        <strong class="kpi-chip-value" id="rel-stat-huer">–</strong>
-      </button>
-    </div>
-
-  <div id="rel-tabs">
-    <div class="tabs-lista">
-      <button type="button" class="tab-btn" data-tab="estado"><i data-lucide="activity" class="ico"></i> Estado</button>
-      <button type="button" class="tab-btn" data-tab="diferencias"><i data-lucide="list" class="ico"></i> Diferencias</button>
-      <button type="button" class="tab-btn" data-tab="mapa"><i data-lucide="network" class="ico"></i> Mapa</button>
-    </div>
-
-    <!-- Pestaña 1: una tarjeta por hoja copia, agrupadas por su dueña -->
-    <div class="card card-compacta" data-panel="estado">
-      <div class="rel-barra">
-        <button type="button" id="rel-revisar"><i data-lucide="refresh-cw" class="ico"></i> Revisar ahora</button>
-        <span class="rel-cuando" id="rel-cuando">Revisando…</span>
-      </div>
-      <div id="rel-estado"></div>
-    </div>
-
-    <!-- Pestaña 2: celda por celda -->
-    <div class="card card-compacta" data-panel="diferencias">
-      <div id="rel-tabla"></div>
-    </div>
-
-    <!-- Pestaña 3: el MAPA de Relaciones.gs, como matriz columna × hoja -->
-    <div class="card card-compacta" data-panel="mapa">
+    <div class="card card-compacta">
       <div id="rel-mapa"><p class="empty-state">Cargando…</p></div>
     </div>
-  </div>
   </div>
 </template>

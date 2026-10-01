@@ -2,178 +2,34 @@
   /**
    * app-relaciones.html — Administración > Datos conectados.
    *
-   * Dos vistas sobre los mismos datos: la SENCILLA (app-relaciones-sencilla.html), que es la
-   * que se ve al entrar y habla en frases, y la TÉCNICA (este archivo), detrás del interruptor
-   * "Ver detalle técnico", que habla como el código. Aquí vive todo lo que habla con el
-   * servidor; las dos vistas solo pintan.
+   * El MAPA de src/services/Relaciones.gs: qué módulo decide cada dato y a dónde se copia.
+   * Solo lee el mapa, así que carga al instante. Si los datos coinciden o no —que sí lee
+   * todas las hojas— lo revisa Administración > Salud (app-salud.html).
    *
-   * Pinta lo que ya sabe src/services/Relaciones.gs: quién es dueña de cada columna (el
-   * MAPA), cuánto se han desviado las copias (revisar, en modo solo lectura) y un botón por
-   * hoja CACHÉ para ponerla al día. Las bitácoras se muestran pero nunca se sincronizan:
-   * guardan el dato del día del evento, y pisarlas borraría esa evidencia.
-   *
-   * Todo lo que decide qué se corrige vive en el servidor; aquí solo se muestra y se pide
-   * confirmación. Usa los componentes compartidos (DataTable, Tabs, Confirmar, Notificar,
-   * Iconos) y los helpers de app.html (state, callServer, escaparHtml, puedeEditarModulo).
+   * Dos vistas: la SENCILLA, una pestaña por familia con una tabla en frases
+   * (RelSencilla.pintarFamilia), y la TÉCNICA, detrás de "Ver detalle técnico": la matriz
+   * columna del dueño × hoja copia, con cómo se une cada una y los valores que nunca se copian.
    */
-
-  // Cómo se lee cada tipo de entrada de revisar(), en palabras de quien usa la pantalla
-  const REL_TIPOS = {
-    DIFERENCIA: 'Por sincronizar',
-    DIFERENCIA_HISTORICA: 'Histórica (no se toca)',
-    HUERFANO: 'Sin dueño',
-    OMITIDO_CENTINELA: 'Dueño con relleno',
-    OMITIDO_VACIO: 'Dueño vacío',
-    CLAVE_DUPLICADA_EN_ORIGEN: 'Llave repetida en el dueño',
-  };
-
   async function initRelaciones() {
-    const puedeEditar = puedeEditarModulo('relaciones');
-    let reporte = [];     // [{ nombre, tipo, revisadas, diferencias, …, entradas }]
     let mapa = null;
-    let clasificado = null;   // los avisos de la vista sencilla (RelSencilla.clasificar)
-    let tablaDetalle = null;  // la tabla del detalle sencillo; se arma al abrir uno
 
-    /** La hoja copia y su dueña, por el nombre de la copia */
-    function relDe(nombre) {
-      let hallada = null;
-      (mapa ? mapa.duenos : []).forEach((d) => d.copias.forEach((c) => { if (c.nombre === nombre) hallada = { d: d, c: c }; }));
-      return hallada;
-    }
-
-    // ----- Vista técnica / sencilla -----
     const CLAVE_VISTA = 'relaciones-vista-tecnica';
     function mostrarTecnica(si) {
       document.getElementById('rel-tecnica').hidden = !si;
       document.getElementById('rel-sencilla').hidden = si;
       document.getElementById('rel-tecnico-toggle').checked = si;
       try { localStorage.setItem(CLAVE_VISTA, si ? '1' : '0'); } catch (e) { /* sin almacenamiento: no se recuerda */ }
-      if (si) requestAnimationFrame(tabla.ajustarAlto);
-    }
-
-    const tabs = Tabs.iniciar(document.getElementById('rel-tabs'), {
-      inicial: 'estado',
-      alCambiar: (nombre) => { if (nombre === 'diferencias') requestAnimationFrame(tabla.ajustarAlto); },
-    });
-
-    const tabla = DataTable.crear(document.getElementById('rel-tabla'), {
-      idCampo: '_id',
-      idTabla: 'relaciones-diferencias',
-      columnas: [
-        { campo: 'TIPO', titulo: 'Tipo', tipo: 'lista', fijada: true },
-        { campo: 'HOJA', titulo: 'Hoja', tipo: 'lista' },
-        { campo: 'DUENO', titulo: 'Dueño', tipo: 'texto' },
-        { campo: 'FILA', titulo: 'Fila', tipo: 'numero', ancho: 70 },
-        { campo: 'COLUMNA', titulo: 'Columna', tipo: 'lista' },
-        { campo: 'TIENE', titulo: 'La copia tiene', tipo: 'texto' },
-        { campo: 'DEBERIA', titulo: 'El dueño dice', tipo: 'texto' },
-      ],
-      etiquetaFila: (f) => f.HOJA + ' fila ' + f.FILA,
-      textoVacio: 'Sin diferencias',
-      ordenInicial: { campo: 'HOJA', dir: 'asc' },
-      exportar: { nombreArchivo: 'Relaciones - diferencias' },
-      detalle: false,
-      ayuda: 'Cada renglón es una celda de una hoja copia que no coincide con su hoja dueña. ' +
-        '"Por sincronizar" se corrige con el botón de su hoja; las históricas son de bitácoras ' +
-        'y se quedan como están; "Dueño con relleno" y "Dueño vacío" se arreglan en la hoja dueña.',
-    });
-
-    // ----- Estado: una tarjeta por hoja copia -----
-    function cifra(etiqueta, valor, alerta) {
-      return `<span>${escaparHtml(etiqueta)}</span><strong class="${alerta && valor ? 'rel-alerta' : ''}">${Number(valor || 0).toLocaleString('es-MX')}</strong>`;
-    }
-
-    function tarjeta(r) {
-      const cache = r.tipo !== 'bitacora';
-      const omitidas = (r.centinelasOmitidos || 0) + (r.vaciosOmitidos || 0) + (r.clavesDuplicadasOmitidas || 0);
-      const nota = cache
-        ? 'Caché: describe el estado de hoy, se pone al día con el dueño.'
-        : 'Bitácora: guarda el dato del día del evento. Las diferencias se reportan, nunca se corrigen.';
-      let botonSync = '';
-      if (cache && !r.diferencias) botonSync = `<span class="rel-al-dia">${Iconos.svg('circle-check')} Al día</span>`;
-      else if (cache && puedeEditar) botonSync = `<button type="button" data-sync="${escaparHtml(r.nombre)}">${Iconos.svg('refresh-cw')} Sincronizar</button>`;
-      return `<div class="rel-tarjeta">
-        <div class="rel-tarjeta-titulo">${escaparHtml(r.nombre)}
-          <span class="rel-tipo ${cache ? 'cache' : 'bitacora'}">${cache ? 'Caché' : 'Bitácora'}</span></div>
-        <div class="rel-cifras">
-          ${cifra('Revisadas', r.revisadas)}
-          ${cache ? cifra('Por sincronizar', r.diferencias, true) : cifra('Históricas', r.diferenciasHistoricas)}
-          ${cifra('Sin dueño', r.huerfanos, true)}
-          ${r.sinDuenoEsperado ? cifra('Sin dueño, normal', r.sinDuenoEsperado) : ''}
-          ${cifra('Omitidas', omitidas)}
-          ${cifra('Unidas por ID', r.emparejadasPorId)}
-          ${cifra('Unidas por llave', r.emparejadasPorClave)}
-        </div>
-        <p class="rel-nota">${escaparHtml(r.error ? 'NO SE PUDO REVISAR: ' + r.error : nota)}</p>
-        <div class="rel-tarjeta-acciones">
-          <button type="button" class="secondary" data-ver="${escaparHtml(r.nombre)}" ${r.entradas.length ? '' : 'disabled'}>${Iconos.svg('list')} Ver detalle</button>
-          ${botonSync}
-        </div>
-      </div>`;
-    }
-
-    function pintarEstado() {
-      const cont = document.getElementById('rel-estado');
-      if (!mapa) return;
-      const porNombre = {};
-      reporte.forEach((r) => { porNombre[r.nombre] = r; });
-      cont.innerHTML = mapa.duenos.map((d) => {
-        const filas = d.copias.map((c) => porNombre[c.nombre]).filter(Boolean);
-        if (!filas.length) return '';
-        return `<div class="rel-grupo">
-          <h3>${Iconos.svg('database')} ${escaparHtml(d.hoja)} <span class="rel-sub">es la dueña de ${filas.length} hoja${filas.length === 1 ? '' : 's'}</span></h3>
-          <div class="rel-tarjetas">${filas.map(tarjeta).join('')}</div>
-        </div>`;
-      }).join('') || '<p class="empty-state">Sin hojas que revisar.</p>';
-    }
-
-    function pintarKpis() {
-      const suma = (campo, filtro) => reporte.filter(filtro || (() => true)).reduce((s, r) => s + (r[campo] || 0), 0);
-      document.getElementById('rel-stat-dif').textContent = suma('diferencias', (r) => r.tipo !== 'bitacora').toLocaleString('es-MX');
-      document.getElementById('rel-stat-hist').textContent = suma('diferenciasHistoricas').toLocaleString('es-MX');
-      document.getElementById('rel-stat-huer').textContent = suma('huerfanos').toLocaleString('es-MX');
-    }
-
-    function pintarTabla() {
-      const filas = [];
-      reporte.forEach((r) => r.entradas.forEach((e, i) => filas.push({
-        _id: r.nombre + '#' + i, TIPO: REL_TIPOS[e.tipo] || e.tipo, HOJA: r.nombre, DUENO: e.dueno || e.clave || '',
-        FILA: e.fila, COLUMNA: e.columna, TIENE: e.tenia == null ? '' : String(e.tenia),
-        DEBERIA: e.quedo == null ? '' : String(e.quedo),
-      })));
-      tabla.setDatos(filas);
-    }
-
-    function aplicar(nuevo) {
-      reporte = nuevo;
-      pintarKpis();
-      pintarEstado();
-      pintarTabla();
-      pintarSencilla();
-      const truncadas = reporte.filter((r) => r.entradas.length >= 3000).map((r) => r.nombre);
-      const hora = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
-      document.getElementById('rel-cuando').textContent = 'Revisado a las ' + hora +
-        (truncadas.length ? ' · el detalle de ' + truncadas.join(', ') + ' muestra solo las primeras 3,000' : '');
-      document.getElementById('rel-s-cuando').textContent = 'Revisado hoy a las ' + hora;
-    }
-
-    // ----- Vista sencilla -----
-    function pintarSencilla() {
-      clasificado = RelSencilla.clasificar(mapa, reporte);
-      RelSencilla.pintarAvisos(document.getElementById('rel-s-pendientes'), clasificado, puedeEditar);
-      const badge = document.getElementById('rel-s-badge');
-      badge.hidden = !clasificado.pendientes;
-      badge.textContent = clasificado.pendientes;
     }
 
     /**
-     * Una pestaña por familia, armada del mapa (no de una lista fija): cuando Líneas entre
-     * al MAPA, su pestaña aparece sola. Cada una con su buscador.
+     * Una pestaña por familia, armada del mapa (no de una lista fija): cuando una familia
+     * nueva entra al MAPA, su pestaña aparece sola. Cada una con su buscador.
      */
     function armarFamilias() {
       const lista = document.getElementById('rel-s-tabs-lista');
       const tabsCont = document.getElementById('rel-s-tabs');
-      RelSencilla.familias(mapa).forEach((familia, i) => {
+      const familias = RelSencilla.familias(mapa);
+      familias.forEach((familia, i) => {
         const id = 'familia-' + i;
         lista.insertAdjacentHTML('beforeend',
           `<button type="button" class="tab-btn" data-tab="${id}">${Iconos.svg('network')} ${escaparHtml(familia)}</button>`);
@@ -187,120 +43,10 @@
         pintar('');
         tabsCont.querySelector('[data-familia-buscar="' + i + '"]').addEventListener('input', (ev) => pintar(ev.target.value));
       });
-      Tabs.iniciar(tabsCont, { inicial: 'avisos' });
+      Tabs.iniciar(tabsCont, { inicial: 'familia-0' });
     }
 
-    function abrirDetalle(g) {
-      const t = RelSencilla.textos(g);
-      const actualizar = g.accion === 'boton' && puedeEditar;
-      document.getElementById('rel-s-detalle-titulo').textContent = t.titulo;
-      document.getElementById('rel-s-detalle-texto').textContent = t.explicacion;
-      document.getElementById('rel-s-detalle-accion').innerHTML = actualizar
-        ? `<button type="button" data-s-actualizar="${escaparHtml(g.c.nombre)}">${Iconos.svg('refresh-cw')} Actualizar todos</button>` : '';
-      if (tablaDetalle) tablaDetalle.destruir();
-      tablaDetalle = DataTable.crear(document.getElementById('rel-s-tabla'), {
-        idCampo: '_id',
-        idTabla: 'relaciones-sencilla-' + g.tipo,
-        columnas: RelSencilla.columnasDetalle(g),
-        datos: [],
-        detalle: false,
-        textoVacio: 'Nada que mostrar',
-        exportar: { nombreArchivo: 'Datos conectados - ' + g.c.etiqueta.nombre },
-        // Para los casos dudosos (un sensor que quizá nunca se registró): actualizar solo
-        // los que uno ya revisó. Se elige por renglón; el renglón entero se pone al día.
-        seleccionable: actualizar,
-        accionesSeleccion: actualizar ? [{
-          icono: 'refresh-cw', texto: 'Actualizar seleccionados',
-          alHacer: (filas) => sincronizar(g.c.nombre, Array.from(new Set(filas.map((f) => f.RENGLON)))),
-        }] : [],
-        etiquetaFila: (f) => f.REGISTRO + ' · ' + f.DATO,
-      });
-      tablaDetalle.setDatos(RelSencilla.filasDetalle(g));
-      document.getElementById('rel-s-inicio').hidden = true;
-      document.getElementById('rel-s-detalle').hidden = false;
-      requestAnimationFrame(tablaDetalle.ajustarAlto);
-      window.scrollTo(0, 0);
-    }
-
-    function volver() {
-      document.getElementById('rel-s-detalle').hidden = true;
-      document.getElementById('rel-s-inicio').hidden = false;
-    }
-
-
-    async function revisar() {
-      const boton = document.getElementById('rel-revisar');
-      const botonS = document.getElementById('rel-s-revisar');
-      boton.disabled = true;
-      botonS.disabled = true;
-      document.getElementById('rel-cuando').textContent = 'Revisando… (lee todas las hojas, tarda unos segundos)';
-      document.getElementById('rel-s-cuando').textContent = 'Revisando los datos… tarda unos segundos';
-      tabla.setCargando(true);
-      try {
-        aplicar(JSON.parse(await callServer('apiRelacionesRevisar', state.token)));
-      } catch (err) {
-        document.getElementById('rel-cuando').textContent = 'No se pudo revisar';
-        document.getElementById('rel-s-cuando').textContent = 'No se pudo revisar: ' + err.message;
-        tabla.setError(err.message);
-        Notificar.error(err.message);
-      } finally {
-        boton.disabled = false;
-        botonS.disabled = false;
-      }
-    }
-
-    function verHoja(nombre, tipos) {
-      tabla.limpiarFiltros();
-      if (nombre) tabla.setFiltro('HOJA', { valores: [nombre] });
-      if (tipos) tabla.setFiltro('TIPO', { valores: tipos.map((t) => REL_TIPOS[t] || t) });
-      tabs.mostrar('diferencias');
-    }
-
-    /**
-     * Pone al día una hoja copia con lo que dice su dueña. Con `filas` (renglones de la
-     * hoja copia), solo esos: "Actualizar seleccionados".
-     */
-    async function sincronizar(nombre, filas) {
-      const r = reporte.find((x) => x.nombre === nombre);
-      const rel = relDe(nombre);
-      if (!r || !r.diferencias || !rel) return;
-      // En palabras de quien lo usa, igual en las dos vistas: qué registros, cuántos datos y
-      // de qué tipo, para que se confirme sabiendo.
-      const soloFilas = Array.isArray(filas) && filas.length ? filas : null;
-      const cambios = r.entradas.filter((e) => e.tipo === 'DIFERENCIA' && (!soloFilas || soloFilas.indexOf(e.fila) !== -1));
-      if (!cambios.length) return Notificar.info('Lo que seleccionaste ya está al día.');
-      const registros = new Set(cambios.map((e) => e.fila)).size;
-      const c = rel.c.etiqueta;
-      const porDato = {};
-      cambios.forEach((e) => { const k = RelSencilla.dato(e.columna); porDato[k] = (porDato[k] || 0) + 1; });
-      const ok = await Confirmar.pedir({
-        titulo: 'Actualizar ' + c.nombre,
-        mensaje: 'Se van a poner al día ' + registros.toLocaleString('es-MX') + ' ' + (registros === 1 ? c.uno : c.varios) +
-          (soloFilas ? (registros === 1 ? ' seleccionado' : ' seleccionados') : '') +
-          ' (' + cambios.length.toLocaleString('es-MX') + (cambios.length === 1 ? ' dato' : ' datos') + ') con lo que dice ' +
-          rel.d.etiqueta.nombre + '. Cada cambio queda anotado, con lo que tenía antes.',
-        detalle: Object.keys(porDato).sort().map((k) => k + ': ' + porDato[k] + (porDato[k] === 1 ? ' cambio' : ' cambios')),
-        textoConfirmar: 'Actualizar',
-        palabraClave: cambios.length >= 50 ? 'ACTUALIZAR' : undefined,
-      });
-      if (!ok) return;
-      document.querySelectorAll('[data-sync="' + CSS.escape(nombre) + '"], [data-s-actualizar="' + CSS.escape(nombre) + '"]')
-        .forEach((b) => { b.disabled = true; b.textContent = 'Actualizando…'; });
-      try {
-        await callServer('apiRelacionesSincronizar', state.token, nombre, soloFilas);
-        // La cifra sale de lo que se pidió: el reporte del servidor cuenta todo lo distinto,
-        // también lo que no se seleccionó. La revisión de abajo dice cómo quedó de verdad.
-        const n = cambios.length;
-        Notificar.exito(c.nombre + ': ' + n.toLocaleString('es-MX') + (n === 1 ? ' dato actualizado' : ' datos actualizados'));
-      } catch (err) {
-        Notificar.error(err.message);
-      }
-      // Se vuelve a revisar todo: lo que importa es cómo quedó, no lo que se pidió
-      volver();
-      await revisar();
-    }
-
-    // ----- Mapa: columna del dueño × hoja copia -----
+    // ----- Técnica: columna del dueño × hoja copia -----
     /** Cómo se une cada copia con su dueña, en palabras. */
     function uneDescripcion(c) {
       if (!c.llaveForanea) return 'une por ' + escaparHtml(c.clave);
@@ -330,7 +76,7 @@
         const notas = d.copias.filter((c) => c.nota)
           .map((c) => `<p class="rel-nota" style="margin-top:6px"><strong>${escaparHtml(c.nombre)}:</strong> ${escaparHtml(c.nota)}</p>`).join('');
         return `<div class="rel-grupo">
-          <h3>${Iconos.svg('database')} ${escaparHtml(d.hoja)} <span class="rel-sub">llave de negocio: ${escaparHtml(d.llaveDeNegocio)}</span></h3>
+          <h3>${Iconos.svg('database')} ${escaparHtml(d.hoja)} <span class="rel-sub">${escaparHtml(d.etiqueta.familia)} · llave de negocio: ${escaparHtml(d.llaveDeNegocio)}</span></h3>
           <div class="rel-matriz-scroll"><table class="rel-matriz">
             <thead><tr><th>Columna en ${escaparHtml(d.hoja)}</th>${encabezado}</tr></thead>
             <tbody>${cuerpo || '<tr><td colspan="99" class="rel-vacia">Ninguna copia trae columnas de esta hoja</td></tr>'}</tbody>
@@ -350,31 +96,18 @@
     }
 
     // ----- Eventos -----
-    document.getElementById('rel-revisar').addEventListener('click', revisar);
-    document.getElementById('rel-s-revisar').addEventListener('click', revisar);
-    document.getElementById('rel-s-volver').addEventListener('click', volver);
     document.getElementById('rel-tecnico-toggle').addEventListener('change', (ev) => mostrarTecnica(ev.target.checked));
     document.getElementById('rel-sencilla').addEventListener('click', (ev) => {
       // El "?" de un dato: en escritorio basta pasar el mouse (title); en celular no hay
       // mouse, así que al tocarlo se muestra el texto
       const ayuda = ev.target.closest('[data-s-ayuda]');
-      if (ayuda) return Notificar.info(ayuda.dataset.sAyuda, { duracion: 9000 });
-      const ver = ev.target.closest('[data-s-ver]');
-      if (ver && clasificado) return abrirDetalle(clasificado.avisos[Number(ver.dataset.sVer)]);
-      const act = ev.target.closest('[data-s-actualizar]');
-      if (act) sincronizar(act.dataset.sActualizar);
+      if (ayuda) Notificar.info(ayuda.dataset.sAyuda, { duracion: 9000 });
     });
-    document.getElementById('rel-estado').addEventListener('click', (ev) => {
-      const ver = ev.target.closest('[data-ver]');
-      if (ver) return verHoja(ver.dataset.ver);
-      const sync = ev.target.closest('[data-sync]');
-      if (sync) sincronizar(sync.dataset.sync);
-    });
-    document.getElementById('rel-kpi-dif').addEventListener('click', () => verHoja(null, ['DIFERENCIA']));
-    document.getElementById('rel-kpi-hist').addEventListener('click', () => verHoja(null, ['DIFERENCIA_HISTORICA']));
-    document.getElementById('rel-kpi-huer').addEventListener('click', () => verHoja(null, ['HUERFANO']));
 
-    // ----- Arranque: el mapa es instantáneo; la revisión lee todas las hojas -----
+    // ----- Arranque -----
+    let tecnica = false;
+    try { tecnica = localStorage.getItem(CLAVE_VISTA) === '1'; } catch (e) { /* sin almacenamiento: vista sencilla */ }
+    mostrarTecnica(tecnica);
     try {
       mapa = JSON.parse(await callServer('apiRelacionesMapa', state.token));
       // La dueña con más copias primero: VEHICULOS es el centro, y es lo que se viene a ver
@@ -383,13 +116,8 @@
       armarFamilias();
     } catch (err) {
       document.getElementById('rel-mapa').innerHTML = '<p class="empty-state">' + escaparHtml(err.message) + '</p>';
-      document.getElementById('rel-s-cuando').textContent = 'No se pudo cargar: ' + err.message;
+      document.getElementById('rel-s-tabs-lista').insertAdjacentHTML('afterend', '<p class="empty-state">' + escaparHtml(err.message) + '</p>');
       Notificar.error(err.message);
-      return;
     }
-    let tecnica = false;
-    try { tecnica = localStorage.getItem(CLAVE_VISTA) === '1'; } catch (e) { /* sin almacenamiento: vista sencilla */ }
-    mostrarTecnica(tecnica);
-    await revisar();
   }
 </script>

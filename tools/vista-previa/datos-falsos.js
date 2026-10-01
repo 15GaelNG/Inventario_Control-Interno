@@ -10,7 +10,7 @@
     ['servicios-vehiculares', 'Servicios Vehiculares', 'car', [
       ['vehiculos', 'Vehículos'], ['verificaciones', 'Verificaciones'], ['inspeccion-vehicular', 'Inspección Vehicular'],
       ['instalacion-sensores', 'Instalación de Sensores'], ['hologramas', 'Hologramas']]],
-    ['administracion', 'Administración', 'settings', [['relaciones', 'Datos conectados']]],
+    ['administracion', 'Administración', 'settings', [['relaciones', 'Datos conectados'], ['salud', 'Salud']]],
   ];
   const grupos = MODULOS.map(([id, etiqueta, icono, mods]) => ({ id, etiqueta, icono, modulos: mods.map(([i, e]) => ({ id: i, etiqueta: e })) }));
   const permisos = {};
@@ -70,7 +70,7 @@
 
   const respuestas = {
     apiRelacionesMapa: JSON.stringify(REL_MAPA),
-    apiRelacionesRevisar: JSON.stringify(REL_REVISION),
+    apiSaludRevisar: JSON.stringify({ mapa: REL_MAPA, reporte: REL_REVISION }),
     apiMisPermisos: { correo: 'prueba@ciudadmaderas.com', permisos, grupos },
     apiListarVehiculosBasico: [{ FOLIO: 'AUT0024', PLACA: 'GGY886F', MARCA: 'CHEVROLET', LINEA_VEHICULO: 'BEAT' },
       { FOLIO: 'AUT0100', PLACA: 'ABC123A', MARCA: 'MITSUBISHI', LINEA_VEHICULO: 'L200' }],
@@ -168,6 +168,11 @@
     if (pestana) { (await hasta(`.tab-btn[data-tab="${pestana}"]`)).click(); await esperar(600); }
   }
   /** La pantalla Datos conectados recuerda la vista; cada escena dice cuál quiere. */
+  async function vistaSalud(tecnica) {
+    const t = await hasta('#salud-tecnico-toggle');
+    if (t.checked !== tecnica) { t.checked = tecnica; evento(t, 'change'); }
+    await esperar(300);
+  }
   async function vistaRelaciones(tecnica) {
     const t = await hasta('#rel-tecnico-toggle');
     if (t.checked !== tecnica) { t.checked = tecnica; evento(t, 'change'); }
@@ -190,19 +195,13 @@
   };
 
   const ESCENAS = {
-    'relaciones': async () => { await abrir('relaciones'); await vistaRelaciones(false); await hasta('.rel-s-pend'); await esperar(300); },
-    'relaciones-detalle': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('[data-s-ver]')).click(); await esperar(700); },
-    'relaciones-familia': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('.tab-btn[data-tab="familia-0"]')).click(); await esperar(400); },
-    'relaciones-familia-lineas': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('.tab-btn[data-tab="familia-1"]')).click(); await esperar(400); },
-    'relaciones-detalle-seleccion': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('[data-s-ver]')).click(); await esperar(700); const cajas = document.querySelectorAll('#rel-s-tabla tbody input[type="checkbox"]'); if (cajas[0]) cajas[0].click(); await esperar(400); },
-    'relaciones-avisos-abajo': async () => { await abrir('relaciones'); await vistaRelaciones(false); await hasta('.rel-s-pend'); document.querySelector('.rel-s-seccion-avisos.bien').scrollIntoView(); await esperar(300); },
-    'relaciones-actualizar': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('[data-s-actualizar]')).click(); await esperar(500); },
-    'relaciones-tecnica': async () => { await abrir('relaciones'); await vistaRelaciones(true); await hasta('.rel-tarjeta'); await esperar(300); },
-    'relaciones-diferencias': async () => { await abrir('relaciones'); await vistaRelaciones(true); await hasta('.rel-tarjeta'); (await hasta('#rel-kpi-dif')).click(); await esperar(600); },
-    'relaciones-mapa': async () => { await abrir('relaciones'); await vistaRelaciones(true); (await hasta('.tab-btn[data-tab="mapa"]')).click(); await esperar(400); await esperar(600); },
-    'relaciones-mapa-sensores': async () => { await abrir('relaciones'); await vistaRelaciones(true); (await hasta('.tab-btn[data-tab="mapa"]')).click(); await esperar(400); await esperar(600); [...document.querySelectorAll('#rel-mapa .rel-grupo h3')].find((h) => /INSTALACION/.test(h.textContent)).scrollIntoView(); await esperar(300); },
-    'relaciones-sensores': async () => { await abrir('relaciones'); await vistaRelaciones(true); await hasta('.rel-tarjeta'); [...document.querySelectorAll('#rel-estado .rel-grupo h3')].find((h) => /INSTALACION/.test(h.textContent)).scrollIntoView(); await esperar(300); },
-    'relaciones-sincronizar': async () => { await abrir('relaciones'); await vistaRelaciones(true); await hasta('.rel-tarjeta'); (await hasta('[data-sync="INSTALACION DE SENSORES"]')).click(); await esperar(500); },
+    'relaciones': async () => { await abrir('relaciones'); await vistaRelaciones(false); await hasta('.rel-s-tabla'); await esperar(300); },
+    'relaciones-lineas': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('.tab-btn[data-tab="familia-1"]')).click(); await esperar(400); },
+    'relaciones-mapa': async () => { await abrir('relaciones'); await vistaRelaciones(true); await hasta('.rel-matriz'); await esperar(300); },
+    'salud': async () => { await abrir('salud'); await vistaSalud(false); await hasta('.rel-s-pend'); await esperar(300); },
+    'salud-lineas': async () => { await abrir('salud'); await vistaSalud(false); (await hasta('#salud-tabs .tab-btn[data-tab="familia-1"]')).click(); await esperar(400); },
+    'salud-detalle-seleccion': async () => { await abrir('salud'); await vistaSalud(false); (await hasta('[data-s-ver]')).click(); await esperar(700); const cajas = document.querySelectorAll('#salud-tabla tbody input[type="checkbox"]'); if (cajas[0]) cajas[0].click(); await esperar(400); },
+    'salud-tecnica': async () => { await abrir('salud'); await vistaSalud(true); await hasta('.rel-tarjeta'); await esperar(300); },
     'inspecciones-detalle': async () => { await abrir('inspeccion-vehicular'); await esperar(400); (await hasta('.dt-btn-ver')).click(); await esperar(900); },
     'sensores-detalle': async () => { await abrir('instalacion-sensores'); await esperar(400); (await hasta('.dt-btn-ver')).click(); await esperar(900); },
     'hologramas-detalle': async () => { await abrir('hologramas'); await esperar(400); (await hasta('.dt-btn-ver')).click(); await esperar(900); },

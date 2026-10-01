@@ -68,6 +68,7 @@ const Modulos = (function () {
       modulos: [
         { id: 'usuarios', etiqueta: 'Usuarios y permisos' },
         { id: 'relaciones', etiqueta: 'Datos conectados', listo: true },
+        { id: 'salud', etiqueta: 'Salud', listo: true },
       ],
     },
   ];
