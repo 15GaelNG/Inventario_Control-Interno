@@ -742,5 +742,66 @@ console.log('\ndeOtraHoja() y describir() con el sentido inverso');
     'describir dice por dónde se une y que las dos son calculadas');
 }
 
+// ------------------------------------------- avisos sin ruido (01/10/2026)
+
+console.log('\nUna bitácora no avisa de rellenos ni vacíos del dueño: todo lo distinto es histórico');
+{
+  const hs = armar();
+  const R = cargar(hs);
+  // CTA0002 trae 'BAJA VEHICULAR' en DEPARTAMENTO, PLACA y RESPONSABLE; su inspección no
+  const r = R.revisar({ detalle: true, log: false, hojas: ['INSPECCION VEHICULAR'] });
+  const e = r['INSPECCION VEHICULAR'].entradas;
+  ok(!e.some((x) => x.tipo === 'OMITIDO_CENTINELA' || x.tipo === 'OMITIDO_VACIO'), 'ni OMITIDO_CENTINELA ni OMITIDO_VACIO');
+  ok(r['INSPECCION VEHICULAR'].centinelasOmitidos === 0 && r['INSPECCION VEHICULAR'].diferenciasHistoricas > 0,
+    'lo cuenta como histórico');
+}
+
+console.log('\nHologramas sin vehículo: el VIN válido es un vehículo personal; el mal escrito es problema');
+{
+  const hs = armar();
+  const enc = hs['HOLOGRAMAS'].enc;
+  const holo = (serie) => { const o = {}; enc.forEach((c) => { o[c] = ''; }); o['SERIE VEHICULO'] = serie; o['CALCOMANIA EOX'] = 'X'; return o; };
+  hs['HOLOGRAMAS'] = hoja('HOLOGRAMAS', enc, [
+    holo('3G1SF21X58S113728'),   // VIN válido sin dueño: personal
+    holo('_VR3EC9HP2MJ503983'),  // guion bajo de más
+    holo('IN4AL3AP6FN318778'),   // una I donde va un 1
+    holo('123456789'),
+  ]);
+  const R = cargar(hs);
+  const r = R.revisar({ detalle: true, log: false, hojas: ['HOLOGRAMAS'] });
+  const h = r['HOLOGRAMAS'];
+  ok(h.sinDuenoEsperado === 1 && h.entradas.some((x) => x.tipo === 'SIN_DUENO_ESPERADO' && x.clave === '3G1SF21X58S113728'),
+    'el VIN válido cuenta como esperado, no como huérfano');
+  ok(h.huerfanos === 3 && h.entradas.filter((x) => x.tipo === 'HUERFANO').every((x) => x.malEscrita),
+    'los otros tres son huérfanos marcados como mal escritos');
+  ok(R.describir().duenos.find((d) => d.hoja === 'VEHICULOS').copias.find((c) => c.nombre === 'HOLOGRAMAS').huerfanaEsperada === 'vehículos personales',
+    'describir dice por qué una huérfana puede ser normal');
+}
+
+console.log('\nrevisar({filas, quien}): actualizar solo los seleccionados, y quién lo hizo');
+{
+  const hs = armarInverso([
+    { v: 0, serie: 'S1', estatus: 'BAJA' },
+    { v: 1, serie: 'S2', estatus: 'BAJA' },
+  ]);
+  const R = cargar(hs);
+  const filaDe = (folio) => hs['VEHICULOS'].datos.findIndex((d) => d[hs['VEHICULOS'].enc.indexOf('FOLIO')] === folio) + 2;
+  const r = R.revisar({ corregir: true, hojas: ['VEHICULOS'], filas: [filaDe('CTA0001')], quien: 'AYRTON' });
+  ok(enVehiculo(hs, 'CTA0001', 'SERIE SENSOR') === '', 'el seleccionado se actualizó');
+  ok(enVehiculo(hs, 'CTA0002', 'SERIE SENSOR') === 'S2', 'el no seleccionado se quedó como estaba');
+  ok(r['VEHICULOS'].diferencias >= 2, 'el reporte sigue contando las dos');
+  const log = hs['LOG_RELACIONES'].datos.filter((f) => f[1] === 'DIFERENCIA');
+  ok(log.length > 0 && log.every((f) => f[7] === 'AYRTON'), 'el log dice quién');
+  ok(log.every((f) => f[3] !== 'SER2' && f[3] !== hs['VEHICULOS'].datos[1][0]), 'y solo anota lo que sí se tocó');
+}
+
+console.log('\ndescribir() trae la familia de cada hoja');
+{
+  const d = cargar(armar()).describir().duenos;
+  ok(d.find((x) => x.hoja === 'VEHICULOS').etiqueta.familia === 'Vehículos', 'VEHICULOS es de Vehículos');
+  ok(d.find((x) => x.hoja === 'INSTALACION DE SENSORES').etiqueta.familia === 'Vehículos', 'Sensores también');
+  ok(d.find((x) => x.hoja === 'CAJAS CHICAS').etiqueta.familia === 'Caja Chica', 'y Caja Chica es la suya');
+}
+
 console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');
 process.exit(fallas ? 1 : 0);

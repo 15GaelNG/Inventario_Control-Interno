@@ -31,43 +31,51 @@
   .rel-leyenda { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--color-text-muted); margin: 10px 0 0; }
   .rel-centinelas code { background: var(--color-bg); padding: 1px 6px; border-radius: 6px; margin-right: 4px; font-size: 12px; }
 
-  /* ---- Vista sencilla (para todos): pendientes en frases, y los datos uno por uno ---- */
+  /* ---- Vista sencilla (para todos): pestaña Avisos + una por familia ---- */
   .rel-switch { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--color-text-muted); cursor: pointer; user-select: none; white-space: nowrap; }
   .rel-switch input { width: auto; margin: 0; }
-  .rel-s { max-width: 920px; }
-  .rel-s-cabeza { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .rel-s { max-width: 1040px; }
+  .rel-s-badge { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; font-size: 11.5px; background: var(--color-danger); color: #fff; }
+  .rel-s-cabeza { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
   .rel-s-cabeza button { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; font-size: 13px; }
   .rel-s-cuando { font-size: 12.5px; color: var(--color-text-muted); }
-  .rel-s-h3 { margin: 0; font-size: 17px; display: flex; align-items: center; gap: 8px; }
-  .rel-s-h3.aviso { color: var(--color-text); }
-  .rel-s-h3.aviso .ico, .rel-s-h3.aviso svg { color: var(--color-danger); }
+  .rel-s-h3 { margin: 4px 0 6px; font-size: 17px; display: flex; align-items: center; gap: 8px; }
+  .rel-s-h3 svg { color: var(--color-danger); }
   .rel-s-h3.ok svg { color: var(--color-success); }
-  .rel-s-pends { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
-  .rel-s-pend { display: flex; gap: 12px; border: 1px solid var(--color-border); border-left: 4px solid var(--color-border); border-radius: 10px; padding: 12px 14px; background: var(--color-surface); }
-  .rel-s-pend.aviso { border-left-color: var(--color-accent); }
-  .rel-s-pend.problema { border-left-color: var(--color-danger); }
-  .rel-s-pend.info { border-left-color: var(--color-primary); }
-  .rel-s-pend-icono { flex: none; width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; background: var(--color-bg); color: var(--color-text-muted); }
-  .rel-s-pend-titulo { font-weight: 600; font-size: 14.5px; }
+  .rel-s-seccion-avisos { margin-top: 18px; }
+  .rel-s-seccion-avisos h4 { margin: 0; font-size: 14.5px; display: flex; align-items: center; gap: 7px; }
+  .rel-s-seccion-avisos.boton h4 svg { color: var(--color-accent); }
+  .rel-s-seccion-avisos.mano h4 svg { color: var(--color-danger); }
+  .rel-s-seccion-avisos.bien h4 svg { color: var(--color-success); }
+  .rel-s-sec-texto { margin: 2px 0 10px; font-size: 12.5px; color: var(--color-text-muted); }
+  .rel-s-familia { font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--color-text-muted); margin: 10px 0 6px; }
+  .rel-s-pends { display: flex; flex-direction: column; gap: 8px; }
+  .rel-s-pend { border: 1px solid var(--color-border); border-left: 4px solid var(--color-border); border-radius: 10px; padding: 11px 14px; background: var(--color-surface); }
+  .rel-s-pend.boton { border-left-color: var(--color-accent); }
+  .rel-s-pend.mano { border-left-color: var(--color-danger); }
+  .rel-s-pend-titulo { font-weight: 600; font-size: 14px; }
   .rel-s-pend-ejemplo { font-size: 13px; color: var(--color-text-muted); margin-top: 3px; }
-  .rel-s-pend-acciones { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .rel-s-pend-acciones { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 9px; }
   .rel-s-pend-acciones button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 13px; }
-  .rel-s-aldia { display: flex; align-items: center; gap: 6px; color: var(--color-success); font-size: 13.5px; font-weight: 600; margin: 8px 0; }
-  .rel-s-normal { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--color-text-muted); font-size: 13px; margin: 6px 0; }
-  .rel-s-seccion { margin-top: 26px; }
-  .rel-s-seccion h3 { margin: 0 0 4px; font-size: 16px; }
-  .rel-s-seccion > p { margin: 0 0 10px; font-size: 13px; color: var(--color-text-muted); }
+  .rel-s-bien { display: flex; align-items: flex-start; gap: 7px; font-size: 13px; color: var(--color-text-muted); margin: 5px 0; }
+  .rel-s-bien svg { flex: none; margin-top: 2px; color: var(--color-success); }
+  .rel-s-bien .dt-link { padding: 0 2px; }
+  .rel-s-intro { margin: 0 0 10px; font-size: 13px; color: var(--color-text-muted); }
   .rel-s-buscar { max-width: 320px; margin-bottom: 10px; }
-  .rel-s-dato { border: 1px solid var(--color-border); border-radius: 10px; margin-bottom: 6px; background: var(--color-surface); }
-  .rel-s-dato summary { cursor: pointer; padding: 10px 14px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; list-style: none; }
-  .rel-s-dato summary::-webkit-details-marker { display: none; }
-  .rel-s-dato summary::before { content: '▸'; color: var(--color-text-muted); }
-  .rel-s-dato[open] summary::before { content: '▾'; }
-  .rel-s-dato summary span { font-size: 13px; color: var(--color-text-muted); }
-  .rel-s-dato ul { margin: 0; padding: 0 14px 12px 34px; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
-  .rel-s-dato li { display: flex; gap: 6px; align-items: flex-start; }
-  .rel-s-dato li svg { flex: none; margin-top: 2px; color: var(--color-text-muted); }
-  .rel-s-sutil { color: var(--color-text-muted); }
+  .rel-s-tabla { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .rel-s-tabla th { text-align: left; font-size: 12px; color: var(--color-text-muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--color-border); }
+  .rel-s-tabla td { padding: 9px 10px; border-bottom: 1px solid var(--color-border); vertical-align: top; }
+  .rel-s-tabla tr:last-child td { border-bottom: none; }
+  .rel-s-sutil { color: var(--color-text-muted); font-size: 12px; margin-top: 3px; max-width: 420px; }
+  .rel-s-nada { color: var(--color-border); }
+  /* En celular la tabla se apila: un dato por tarjeta, cada valor con su etiqueta */
+  @media (max-width: 720px) {
+    .rel-s-tabla thead { display: none; }
+    .rel-s-tabla, .rel-s-tabla tbody, .rel-s-tabla tr, .rel-s-tabla td { display: block; width: 100%; }
+    .rel-s-tabla tr { border: 1px solid var(--color-border); border-radius: 10px; margin-bottom: 8px; padding: 4px 0; }
+    .rel-s-tabla td { border: none; padding: 4px 12px; }
+    .rel-s-tabla td:not(:first-child)::before { content: attr(data-etiqueta) ': '; color: var(--color-text-muted); font-size: 12px; }
+  }
   .rel-s-volver { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 13px; margin-bottom: 10px; }
   .rel-s-detalle-cabeza { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; margin-bottom: 12px; }
   .rel-s-detalle-cabeza h3 { margin: 0 0 4px; font-size: 17px; }
@@ -87,18 +95,18 @@
   <!-- Vista sencilla: la que se ve al entrar -->
   <div id="rel-sencilla" class="rel-s">
     <div id="rel-s-inicio">
-      <div class="card card-compacta">
-        <div class="rel-s-cabeza">
-          <span class="rel-s-cuando" id="rel-s-cuando">Revisando los datos… tarda unos segundos</span>
-          <button type="button" class="secondary" id="rel-s-revisar"><i data-lucide="refresh-cw" class="ico"></i> Revisar de nuevo</button>
+      <div id="rel-s-tabs">
+        <div class="tabs-lista" id="rel-s-tabs-lista">
+          <button type="button" class="tab-btn" data-tab="avisos"><i data-lucide="bell" class="ico"></i> Avisos <span class="rel-s-badge" id="rel-s-badge" hidden></span></button>
+          <!-- una pestaña por familia: initRelaciones las agrega al cargar el mapa -->
         </div>
-        <div id="rel-s-pendientes"></div>
-      </div>
-      <div class="rel-s-seccion">
-        <h3>Cómo se conectan los datos</h3>
-        <p>Cada dato lo decide un solo módulo. Desde ahí se copia a los demás, que lo mantienen al día o guardan cómo estaba ese día.</p>
-        <input type="search" class="rel-s-buscar" id="rel-s-buscar" placeholder="Buscar un dato (ej. departamento)" />
-        <div id="rel-s-datos"><p class="empty-state">Cargando…</p></div>
+        <div class="card card-compacta" data-panel="avisos">
+          <div class="rel-s-cabeza">
+            <span class="rel-s-cuando" id="rel-s-cuando">Revisando los datos… tarda unos segundos</span>
+            <button type="button" class="secondary" id="rel-s-revisar"><i data-lucide="refresh-cw" class="ico"></i> Revisar de nuevo</button>
+          </div>
+          <div id="rel-s-pendientes"></div>
+        </div>
       </div>
     </div>
     <div id="rel-s-detalle" hidden>

@@ -197,6 +197,12 @@ const MAPA = {
           nombre: 'HOLOGRAMAS',
           llaveForanea: 'ID VEHICULO',
           firma: ['CALCOMANIA EOX', 'ESTATUS EOX'],
+          // Un holograma puede ser de un vehículo PERSONAL, que por diseño no está en
+          // VEHICULOS: esa huérfana es normal y no se avisa como problema. Se distingue de un
+          // error de captura por la forma de la serie: un VIN válido (17, sin I/O/Q) sin
+          // dueño es personal; '_VR3EC9…', 'IN4AL3…' o '123456789' están mal escritos.
+          // Medido el 01/10/2026 en el libro del equipo: 88 personales y 23 mal escritas.
+          huerfanaEsperada: { motivo: 'vehículos personales', forma: /^[A-HJ-NPR-Z0-9]{17}$/ },
           tipo: 'cache',   // la tarjeta de combustible describe al vehículo de HOY
           claveOrigen: 'SERIE VEHICULO',
           clave: 'SERIE VEHICULO',
@@ -437,18 +443,22 @@ const MAPA = {
    * el límite de 6 minutos de Apps Script). `entradas` = [{tipo, hoja, clave, columna,
    * tenia, quedo}, …].
    */
-  function escribirLog_(ssId, entradas) {
+  function escribirLog_(ssId, entradas, quien) {
     if (!entradas.length) return;
     try {
       const ss = SpreadsheetApp.openById(ssId);
       let log = ss.getSheetByName('LOG_RELACIONES');
       if (!log) {
         log = ss.insertSheet('LOG_RELACIONES');
-        log.appendRow(['FECHA', 'TIPO', 'HOJA', 'CLAVE', 'COLUMNA', 'TENIA', 'QUEDO']);
+        log.appendRow(['FECHA', 'TIPO', 'HOJA', 'CLAVE', 'COLUMNA', 'TENIA', 'QUEDO', 'QUIEN']);
+      } else if (!limpiar_(log.getRange(1, 8, 1, 1).getValues()[0][0])) {
+        // La pestaña se creó antes de que existiera QUIEN (01/10/2026)
+        log.getRange(1, 8).setValue('QUIEN');
       }
       const ahora = new Date();
-      const filas = entradas.map((e) => [ahora, e.tipo, e.hoja, e.clave, e.columna, e.tenia, e.quedo]);
-      log.getRange(log.getLastRow() + 1, 1, filas.length, 7).setValues(filas);
+      // QUIEN va vacío en la corrida nocturna y en lo que se corre desde el editor
+      const filas = entradas.map((e) => [ahora, e.tipo, e.hoja, e.clave, e.columna, e.tenia, e.quedo, quien || '']);
+      log.getRange(log.getLastRow() + 1, 1, filas.length, 8).setValues(filas);
     } catch (err) {
       console.error('Relaciones: no se pudo escribir en LOG_RELACIONES (' + entradas.length + ' entradas): ' + err.message);
     }
@@ -709,6 +719,8 @@ const MAPA = {
    *   log       default true → escribe LOG_RELACIONES. La pantalla lo apaga al solo revisar,
    *             para que mirar no llene la bitácora; al corregir siempre se escribe.
    *   detalle   true → regresa también la lista de entradas (hasta DETALLE_MAX)
+   *   filas     opcional, renglones de la hoja copia: al corregir, solo esos se tocan
+   *   quien     opcional, quién pidió la corrección; va a la columna QUIEN de LOG_RELACIONES
    * @return {Object} resumen por hoja: { 'NOMBRE': { revisadas, diferencias, huerfanos, … } }
    *   y, con detalle, la propiedad no enumerable `entradas` del objeto de cada hoja.
    */
@@ -717,14 +729,18 @@ const MAPA = {
     const corregir = !!o.corregir;
     const conLog = corregir || o.log !== false;
     const soloHojas = Array.isArray(o.hojas) && o.hojas.length ? o.hojas.map(normalizar_) : null;
-    if (!corregir) return revisarSinCandado_(corregir, conLog, soloHojas, !!o.detalle);
+    // Solo estos renglones de la hoja copia se corrigen ("Actualizar seleccionados"); el
+    // reporte sigue contando todo, para que la pantalla vea lo que falta.
+    const soloFilas = Array.isArray(o.filas) && o.filas.length ? o.filas.map(Number) : null;
+    const quien = limpiar_(o.quien);
+    if (!corregir) return revisarSinCandado_(corregir, conLog, soloHojas, !!o.detalle, soloFilas, quien);
 
     // Al corregir se escribe sobre las mismas filas que propagar(): mismo candado, para
     // que un vehículo editado a la mitad del barrido no quede pisado con su valor viejo.
     const lock = LockService.getScriptLock();
     lock.waitLock(20000);
     try {
-      return revisarSinCandado_(corregir, conLog, soloHojas, !!o.detalle);
+      return revisarSinCandado_(corregir, conLog, soloHojas, !!o.detalle, soloFilas, quien);
     } finally {
       lock.releaseLock();
     }
@@ -733,7 +749,7 @@ const MAPA = {
   /** Cuántas entradas regresa revisar({detalle}) por hoja: lo que una tabla aguanta sin trabarse. */
   const DETALLE_MAX = 3000;
 
-  function revisarSinCandado_(corregir, conLog, soloHojas, conDetalle) {
+  function revisarSinCandado_(corregir, conLog, soloHojas, conDetalle, soloFilas, quien) {
     const resultado = {};
 
     Object.keys(MAPA).forEach((origenNombre) => {
@@ -771,7 +787,7 @@ const MAPA = {
         const tieneFk = !!(copia.llaveForanea && filasCopia.length &&
           Object.prototype.hasOwnProperty.call(filasCopia[0], copia.llaveForanea));
         let revisadas = 0, diferencias = 0, huerfanos = 0, duplicadosOmitidos = 0;
-        let centinelasOmitidos = 0, historicas = 0, vaciosOmitidos = 0, porFk = 0, porClave = 0;
+        let centinelasOmitidos = 0, historicas = 0, vaciosOmitidos = 0, porFk = 0, porClave = 0, sinDuenoEsperado = 0;
         const correcciones = {}; // columna destino → { valorNuevo: [numFila, …] }
         const entradas = [];
         const anotar = (e) => {
@@ -785,7 +801,10 @@ const MAPA = {
           const fk = tieneFk ? normalizar_(filaCopia[copia.llaveForanea]) : '';
           if (!claveValor && !fk) return;
           revisadas++;
-          const base = { hoja: hoja.getName(), fila: fila, clave: claveValor || fk };
+          // dueno: con qué nombre la gente reconoce el registro. Mientras no se encuentre al
+          // dueño, el de la propia fila si lo trae (el folio de un vehículo); así un aviso de
+          // llave repetida dice «AUT0025» y no «VEH-0000…».
+          const base = { hoja: hoja.getName(), fila: fila, clave: claveValor || fk, dueno: limpiar_(filaCopia[origenDef.llaveDeNegocio]) };
 
           const campoDueno = campoEnDueno_(copia);
           // Por la llave de negocio, sin adivinar entre dos dueños con la misma. Si `soloSinFk`,
@@ -822,6 +841,19 @@ const MAPA = {
           }
           // Sin dueño: en casi todas las copias es una huérfana y se reporta. En las que
           // declaran `sinDueno` (un vehículo sin sensor) es normal y se compara contra eso.
+          // Una huérfana esperada (el holograma de un vehículo personal) no es un problema. Solo
+          // aplica cuando NO trae FK: una FK que no apunta a nada siempre es un error.
+          const esperada = copia.huerfanaEsperada;
+          if (!filaOrigen && !copia.sinDueno && !fk && esperada) {
+            if (esperada.forma.test(claveValor)) {
+              sinDuenoEsperado++;
+              anotar(Object.assign({ tipo: 'SIN_DUENO_ESPERADO', columna: copia.clave, tenia: '', quedo: '' }, base));
+              return;
+            }
+            huerfanos++;
+            anotar(Object.assign({ tipo: 'HUERFANO', malEscrita: true, columna: copia.clave, tenia: '', quedo: '' }, base));
+            return;
+          }
           if (!filaOrigen && !copia.sinDueno) {
             huerfanos++;
             anotar(Object.assign(fk
@@ -844,6 +876,17 @@ const MAPA = {
             // serie de un sensor en BAJA SE VACÍA (decisión del 01/10/2026).
             const vacioEsRespuesta = !filaOrigen || !!(copia.calcular && copia.calcular[colDestino]);
 
+            // En una bitácora la diferencia se REPORTA pero no se toca — con un tipo
+            // propio para poder filtrarla en LOG_RELACIONES y no confundirla con deriva
+            // que sí hay que arreglar. Va PRIMERO: como una bitácora nunca se corrige, no
+            // tiene caso avisar que su dueño trae un relleno o un vacío (antes salía
+            // "Inspección conserva «» y no se tocó", que no le dice nada a nadie).
+            if (esBitacora_(copia)) {
+              historicas++;
+              anotar(Object.assign(e, { tipo: 'DIFERENCIA_HISTORICA', quedo: debiaSer }));
+              return;
+            }
+
             // El dueño está vacío y la copia no: no se borra a ciegas (ver vaciariaDatoBueno_).
             if (!vacioEsRespuesta && vaciariaDatoBueno_(tenia, debiaSer)) {
               vaciosOmitidos++;
@@ -860,18 +903,9 @@ const MAPA = {
               return;
             }
 
-            // En una bitácora la diferencia se REPORTA pero no se toca — con un tipo
-            // propio para poder filtrarla en LOG_RELACIONES y no confundirla con deriva
-            // que sí hay que arreglar.
-            if (esBitacora_(copia)) {
-              historicas++;
-              anotar(Object.assign(e, { tipo: 'DIFERENCIA_HISTORICA', quedo: debiaSer }));
-              return;
-            }
-
             diferencias++;
             anotar(Object.assign(e, { tipo: 'DIFERENCIA', quedo: debiaSer }));
-            if (corregir) {
+            if (corregir && (!soloFilas || soloFilas.indexOf(fila) !== -1)) {
               correcciones[colDestino] = correcciones[colDestino] || {};
               const valorNuevo = debiaSer === undefined || debiaSer === null ? '' : debiaSer;
               (correcciones[colDestino][valorNuevo] = correcciones[colDestino][valorNuevo] || []).push(fila);
@@ -897,6 +931,7 @@ const MAPA = {
           centinelasOmitidos: centinelasOmitidos,
           vaciosOmitidos: vaciosOmitidos,
           diferenciasHistoricas: historicas,
+          sinDuenoEsperado: sinDuenoEsperado,
           emparejadasPorId: porFk,
           emparejadasPorClave: porClave,
           // una bitácora nunca se corrige, aunque se haya pedido corregir
@@ -906,7 +941,11 @@ const MAPA = {
         if (conDetalle) Object.defineProperty(resultado[copia.nombre], 'entradas', { value: entradas });
       });
 
-      if (conLog) escribirLog_(ssId, entradasLog);
+      // Al corregir solo unos renglones, el log anota solo los que sí se tocaron
+      const aLog = corregir && soloFilas
+        ? entradasLog.filter((e) => e.tipo !== 'DIFERENCIA' || soloFilas.indexOf(e.fila) !== -1)
+        : entradasLog;
+      if (conLog) escribirLog_(ssId, aLog, corregir ? quien : '');
     });
 
     return resultado;
@@ -918,27 +957,29 @@ const MAPA = {
    */
   /**
    * Cómo se llama cada hoja para quien NO programa: el nombre del módulo en el menú, y cómo
-   * se dice uno y varios de sus registros. La pantalla "Datos conectados" arma sus frases
+   * se dice uno y varios de sus registros, y a qué familia pertenece (una pestaña por familia). La pantalla "Datos conectados" arma sus frases
    * con esto ("63 vehículos tienen datos distintos a Instalación de Sensores"). Vive junto
    * al MAPA para que una hoja nueva en el MAPA no se quede sin nombre legible; si falta,
    * describir() regresa el nombre de la pestaña tal cual.
    */
   const ETIQUETAS = {
-    'VEHICULOS': { modulo: 'Vehículos', uno: 'vehículo', varios: 'vehículos' },
-    'INSTALACION DE SENSORES': { modulo: 'Instalación de Sensores', uno: 'sensor', varios: 'sensores' },
-    'VERIFICACIONES': { modulo: 'Verificaciones', uno: 'verificación', varios: 'verificaciones' },
-    'HOLOGRAMAS': { modulo: 'Hologramas', uno: 'holograma', varios: 'hologramas' },
-    'INSPECCION VEHICULAR': { modulo: 'Inspección Vehicular', uno: 'inspección', varios: 'inspecciones' },
-    'INCIDENCIAS': { modulo: 'Incidencias', uno: 'incidencia', varios: 'incidencias' },
-    'CAJAS CHICAS': { modulo: 'Caja Chica', uno: 'caja chica', varios: 'cajas chicas' },
-    'ARQUEOS': { modulo: 'Arqueos', uno: 'arqueo', varios: 'arqueos' },
-    'INCREMENTOS': { modulo: 'Cambios de Monto', uno: 'cambio de monto', varios: 'cambios de monto' },
+    'VEHICULOS': { modulo: 'Vehículos', uno: 'vehículo', varios: 'vehículos', familia: 'Vehículos' },
+    'INSTALACION DE SENSORES': { modulo: 'Instalación de Sensores', uno: 'sensor', varios: 'sensores', familia: 'Vehículos' },
+    'VERIFICACIONES': { modulo: 'Verificaciones', uno: 'verificación', varios: 'verificaciones', familia: 'Vehículos' },
+    'HOLOGRAMAS': { modulo: 'Hologramas', uno: 'holograma', varios: 'hologramas', familia: 'Vehículos' },
+    'INSPECCION VEHICULAR': { modulo: 'Inspección Vehicular', uno: 'inspección', varios: 'inspecciones', familia: 'Vehículos' },
+    'INCIDENCIAS': { modulo: 'Incidencias', uno: 'incidencia', varios: 'incidencias', familia: 'Vehículos' },
+    'CAJAS CHICAS': { modulo: 'Caja Chica', uno: 'caja chica', varios: 'cajas chicas', familia: 'Caja Chica' },
+    'ARQUEOS': { modulo: 'Arqueos', uno: 'arqueo', varios: 'arqueos', familia: 'Caja Chica' },
+    'INCREMENTOS': { modulo: 'Cambios de Monto', uno: 'cambio de monto', varios: 'cambios de monto', familia: 'Caja Chica' },
   };
   // La clave es 'modulo' y no 'nombre' a propósito: tests/llave-nueva.test.js reconoce las
   // copias del MAPA por cómo se escribe su nombre en el código, y estas no son copias.
   const etiqueta_ = (hoja) => {
     const e = ETIQUETAS[hoja];
-    return e ? { nombre: e.modulo, uno: e.uno, varios: e.varios } : { nombre: hoja, uno: 'registro', varios: 'registros' };
+    return e
+      ? { nombre: e.modulo, uno: e.uno, varios: e.varios, familia: e.familia }
+      : { nombre: hoja, uno: 'registro', varios: 'registros', familia: 'Otros' };
   };
 
   function describir() {
@@ -962,6 +1003,7 @@ const MAPA = {
             campoEnDueno: campoEnDueno_(c),
             sinDueno: c.sinDueno || null,
             nota: c.nota || '',
+            huerfanaEsperada: c.huerfanaEsperada ? c.huerfanaEsperada.motivo : '',
           })),
         };
       }),

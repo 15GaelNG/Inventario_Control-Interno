@@ -598,10 +598,10 @@ function apiRelacionesRevisar(token) {
 /**
  * Corrige UNA hoja caché. Una bitácora se rechaza aquí y no solo en el motor, para que el
  * error sea claro en vez de un "0 corregidas" que parece éxito. Esta sí escribe la bitácora
- * LOG_RELACIONES: es el rastro de qué celda cambió, de qué valor a cuál.
+ * LOG_RELACIONES: es el rastro de qué celda cambió, de qué valor a cuál, y quién lo pidió.
  */
-function apiRelacionesSincronizar(token, hoja) {
-  Permisos.puedeEditar(token, 'relaciones');
+function apiRelacionesSincronizar(token, hoja, filas) {
+  const sesion = Permisos.puedeEditar(token, 'relaciones');
   const copia = Relaciones.describir().duenos
     .reduce((todas, d) => todas.concat(d.copias), [])
     .find((c) => c.nombre === hoja);
@@ -609,7 +609,12 @@ function apiRelacionesSincronizar(token, hoja) {
   if (copia.tipo === 'bitacora') {
     throw new Error('"' + hoja + '" es una bitácora: guarda el dato del día del evento y no se sincroniza.');
   }
-  return JSON.stringify(relacionesRespuesta_(Relaciones.revisar({ corregir: true, detalle: true, hojas: [hoja] })));
+  // filas: los renglones elegidos en "Actualizar seleccionados"; sin ellas, toda la hoja.
+  return JSON.stringify(relacionesRespuesta_(Relaciones.revisar({
+    corregir: true, detalle: true, hojas: [hoja],
+    filas: Array.isArray(filas) ? filas : null,
+    quien: sesion.nombre || sesion.correo || '',
+  })));
 }
 
 function relacionesRespuesta_(resultado) {

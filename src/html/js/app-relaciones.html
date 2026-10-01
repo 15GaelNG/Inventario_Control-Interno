@@ -31,7 +31,7 @@
     const puedeEditar = puedeEditarModulo('relaciones');
     let reporte = [];     // [{ nombre, tipo, revisadas, diferencias, …, entradas }]
     let mapa = null;
-    let clasificado = null;   // los pendientes de la vista sencilla (RelSencilla.clasificar)
+    let clasificado = null;   // los avisos de la vista sencilla (RelSencilla.clasificar)
     let tablaDetalle = null;  // la tabla del detalle sencillo; se arma al abrir uno
 
     /** La hoja copia y su dueña, por el nombre de la copia */
@@ -99,6 +99,7 @@
           ${cifra('Revisadas', r.revisadas)}
           ${cache ? cifra('Por sincronizar', r.diferencias, true) : cifra('Históricas', r.diferenciasHistoricas)}
           ${cifra('Sin dueño', r.huerfanos, true)}
+          ${r.sinDuenoEsperado ? cifra('Sin dueño, normal', r.sinDuenoEsperado) : ''}
           ${cifra('Omitidas', omitidas)}
           ${cifra('Unidas por ID', r.emparejadasPorId)}
           ${cifra('Unidas por llave', r.emparejadasPorClave)}
@@ -159,15 +160,42 @@
     // ----- Vista sencilla -----
     function pintarSencilla() {
       clasificado = RelSencilla.clasificar(mapa, reporte);
-      RelSencilla.pintarPendientes(document.getElementById('rel-s-pendientes'), clasificado, puedeEditar);
+      RelSencilla.pintarAvisos(document.getElementById('rel-s-pendientes'), clasificado, puedeEditar);
+      const badge = document.getElementById('rel-s-badge');
+      badge.hidden = !clasificado.pendientes;
+      badge.textContent = clasificado.pendientes;
+    }
+
+    /**
+     * Una pestaña por familia, armada del mapa (no de una lista fija): cuando Líneas entre
+     * al MAPA, su pestaña aparece sola. Cada una con su buscador.
+     */
+    function armarFamilias() {
+      const lista = document.getElementById('rel-s-tabs-lista');
+      const tabsCont = document.getElementById('rel-s-tabs');
+      RelSencilla.familias(mapa).forEach((familia, i) => {
+        const id = 'familia-' + i;
+        lista.insertAdjacentHTML('beforeend',
+          `<button type="button" class="tab-btn" data-tab="${id}">${Iconos.svg('network')} ${escaparHtml(familia)}</button>`);
+        tabsCont.insertAdjacentHTML('beforeend', `<div class="card card-compacta" data-panel="${id}">
+          <p class="rel-s-intro">Cada dato de ${escaparHtml(familia)} lo decide un solo módulo. Desde ahí se copia a los demás:
+            unos lo mantienen al día y otros guardan cómo estaba el día que se registró.</p>
+          <input type="search" class="rel-s-buscar" data-familia-buscar="${i}" placeholder="Buscar un dato (ej. departamento)" />
+          <div data-familia-datos="${i}"></div>
+        </div>`);
+        const pintar = (filtro) => RelSencilla.pintarFamilia(tabsCont.querySelector('[data-familia-datos="' + i + '"]'), mapa, familia, filtro);
+        pintar('');
+        tabsCont.querySelector('[data-familia-buscar="' + i + '"]').addEventListener('input', (ev) => pintar(ev.target.value));
+      });
+      Tabs.iniciar(tabsCont, { inicial: 'avisos' });
     }
 
     function abrirDetalle(g) {
-      const t = RelSencilla.textos(g, puedeEditar);
+      const t = RelSencilla.textos(g);
+      const actualizar = g.accion === 'boton' && puedeEditar;
       document.getElementById('rel-s-detalle-titulo').textContent = t.titulo;
-      document.getElementById('rel-s-detalle-texto').textContent = t.explicacion ||
-        (g.c.etiqueta.nombre + ' guarda cómo estaba cada ' + g.d.etiqueta.uno + ' el día que se registró. No hay nada que hacer.');
-      document.getElementById('rel-s-detalle-accion').innerHTML = t.actualizar
+      document.getElementById('rel-s-detalle-texto').textContent = t.explicacion;
+      document.getElementById('rel-s-detalle-accion').innerHTML = actualizar
         ? `<button type="button" data-s-actualizar="${escaparHtml(g.c.nombre)}">${Iconos.svg('refresh-cw')} Actualizar todos</button>` : '';
       if (tablaDetalle) tablaDetalle.destruir();
       tablaDetalle = DataTable.crear(document.getElementById('rel-s-tabla'), {
@@ -178,6 +206,14 @@
         detalle: false,
         textoVacio: 'Nada que mostrar',
         exportar: { nombreArchivo: 'Datos conectados - ' + g.c.etiqueta.nombre },
+        // Para los casos dudosos (un sensor que quizá nunca se registró): actualizar solo
+        // los que uno ya revisó. Se elige por renglón; el renglón entero se pone al día.
+        seleccionable: actualizar,
+        accionesSeleccion: actualizar ? [{
+          icono: 'refresh-cw', texto: 'Actualizar seleccionados',
+          alHacer: (filas) => sincronizar(g.c.nombre, Array.from(new Set(filas.map((f) => f.RENGLON)))),
+        }] : [],
+        etiquetaFila: (f) => f.REGISTRO + ' · ' + f.DATO,
       });
       tablaDetalle.setDatos(RelSencilla.filasDetalle(g));
       document.getElementById('rel-s-inicio').hidden = true;
@@ -220,13 +256,19 @@
       tabs.mostrar('diferencias');
     }
 
-    async function sincronizar(nombre) {
+    /**
+     * Pone al día una hoja copia con lo que dice su dueña. Con `filas` (renglones de la
+     * hoja copia), solo esos: "Actualizar seleccionados".
+     */
+    async function sincronizar(nombre, filas) {
       const r = reporte.find((x) => x.nombre === nombre);
       const rel = relDe(nombre);
       if (!r || !r.diferencias || !rel) return;
       // En palabras de quien lo usa, igual en las dos vistas: qué registros, cuántos datos y
       // de qué tipo, para que se confirme sabiendo.
-      const cambios = r.entradas.filter((e) => e.tipo === 'DIFERENCIA');
+      const soloFilas = Array.isArray(filas) && filas.length ? filas : null;
+      const cambios = r.entradas.filter((e) => e.tipo === 'DIFERENCIA' && (!soloFilas || soloFilas.indexOf(e.fila) !== -1));
+      if (!cambios.length) return Notificar.info('Lo que seleccionaste ya está al día.');
       const registros = new Set(cambios.map((e) => e.fila)).size;
       const c = rel.c.etiqueta;
       const porDato = {};
@@ -234,18 +276,21 @@
       const ok = await Confirmar.pedir({
         titulo: 'Actualizar ' + c.nombre,
         mensaje: 'Se van a poner al día ' + registros.toLocaleString('es-MX') + ' ' + (registros === 1 ? c.uno : c.varios) +
-          ' (' + r.diferencias.toLocaleString('es-MX') + (r.diferencias === 1 ? ' dato' : ' datos') + ') con lo que dice ' +
+          (soloFilas ? (registros === 1 ? ' seleccionado' : ' seleccionados') : '') +
+          ' (' + cambios.length.toLocaleString('es-MX') + (cambios.length === 1 ? ' dato' : ' datos') + ') con lo que dice ' +
           rel.d.etiqueta.nombre + '. Cada cambio queda anotado, con lo que tenía antes.',
         detalle: Object.keys(porDato).sort().map((k) => k + ': ' + porDato[k] + (porDato[k] === 1 ? ' cambio' : ' cambios')),
         textoConfirmar: 'Actualizar',
-        palabraClave: r.diferencias >= 50 ? 'ACTUALIZAR' : undefined,
+        palabraClave: cambios.length >= 50 ? 'ACTUALIZAR' : undefined,
       });
       if (!ok) return;
       document.querySelectorAll('[data-sync="' + CSS.escape(nombre) + '"], [data-s-actualizar="' + CSS.escape(nombre) + '"]')
         .forEach((b) => { b.disabled = true; b.textContent = 'Actualizando…'; });
       try {
-        const hecho = JSON.parse(await callServer('apiRelacionesSincronizar', state.token, nombre))[0];
-        const n = hecho ? hecho.diferencias : 0;
+        await callServer('apiRelacionesSincronizar', state.token, nombre, soloFilas);
+        // La cifra sale de lo que se pidió: el reporte del servidor cuenta todo lo distinto,
+        // también lo que no se seleccionó. La revisión de abajo dice cómo quedó de verdad.
+        const n = cambios.length;
         Notificar.exito(c.nombre + ': ' + n.toLocaleString('es-MX') + (n === 1 ? ' dato actualizado' : ' datos actualizados'));
       } catch (err) {
         Notificar.error(err.message);
@@ -309,14 +354,9 @@
     document.getElementById('rel-s-revisar').addEventListener('click', revisar);
     document.getElementById('rel-s-volver').addEventListener('click', volver);
     document.getElementById('rel-tecnico-toggle').addEventListener('change', (ev) => mostrarTecnica(ev.target.checked));
-    document.getElementById('rel-s-buscar').addEventListener('input', (ev) => {
-      if (mapa) RelSencilla.pintarDatos(document.getElementById('rel-s-datos'), mapa, ev.target.value);
-    });
     document.getElementById('rel-sencilla').addEventListener('click', (ev) => {
       const ver = ev.target.closest('[data-s-ver]');
-      if (ver && clasificado) return abrirDetalle(clasificado.pendientes[Number(ver.dataset.sVer)]);
-      const normal = ev.target.closest('[data-s-normal]');
-      if (normal && clasificado) return abrirDetalle(clasificado.normales.find((g) => g.c.nombre === normal.dataset.sNormal));
+      if (ver && clasificado) return abrirDetalle(clasificado.avisos[Number(ver.dataset.sVer)]);
       const act = ev.target.closest('[data-s-actualizar]');
       if (act) sincronizar(act.dataset.sActualizar);
     });
@@ -336,7 +376,7 @@
       // La dueña con más copias primero: VEHICULOS es el centro, y es lo que se viene a ver
       mapa.duenos.sort((a, b) => b.copias.length - a.copias.length);
       pintarMapa();
-      RelSencilla.pintarDatos(document.getElementById('rel-s-datos'), mapa, '');
+      armarFamilias();
     } catch (err) {
       document.getElementById('rel-mapa').innerHTML = '<p class="empty-state">' + escaparHtml(err.message) + '</p>';
       document.getElementById('rel-s-cuando').textContent = 'No se pudo cargar: ' + err.message;
