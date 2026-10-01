@@ -128,7 +128,12 @@ archivo que lo respalda, y de ser posible a la línea.
   tabla, como la lista agrupada del AppSheet:
   - muestra Todos · Equipo · Equipo + SIM…, cada uno con el ícono y el color de la columna Tipo y su conteo;
   - un clic deja solo ese tipo (`setFiltro('tipoHoja')`); otro clic o Todos quita el filtro; sigue al filtro de la columna;
-  - se colapsa a una franja de 40 px con solo los íconos, que siguen filtrando;
+  - **las mismas opciones en Equipos y en Líneas:** todas las del AppSheet (Equipo, Equipo + SIM, Equipo + SIM básico, Línea,
+    Línea básica, Banda ancha, Módem; Cámara solo si hay), aunque tengan 0;
+  - conteo: registros de la hoja, sin contar dos veces un equipo con línea (Todos = 1,615 en DEV, como el AppSheet);
+  - un tipo que no está en la pestaña actual (Línea estando en Equipos) lleva a la otra pestaña con el filtro;
+  - se colapsa a una franja de 40 px con solo los íconos, que siguen filtrando. El botón para ocultarla está abajo y es
+    discreto: un ícono tenue, y el texto "Ocultar"/"Mostrar" aparece al pasar el mouse;
   - la preferencia queda en `localStorage` (`lineas.tiposColapsado`); en celular empieza colapsada.
 - **Menú del ⋮ y del clic derecho, como el de Google Drive (`a9c188f`):**
   - crece desde la esquina del clic: `scale(.92, .6)` → 1 en 180 ms con curva que frena;

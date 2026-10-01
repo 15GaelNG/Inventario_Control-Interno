@@ -1916,10 +1916,14 @@
       }
 
       // ---- Filtro rápido por tipo: columna a la izquierda, como la lista agrupada del AppSheet (usuario, 1-oct) ----
-      // Todos · Equipo 603 · Equipo + SIM 967…, con el ícono y el color de la columna Tipo. Clic = solo ese tipo; otra
-      // vez (o Todos) = todos. Sigue al filtro de la columna Tipo. Se colapsa a una franja con solo los íconos (sigue
-      // filtrando); la preferencia queda en este navegador y en celular empieza colapsada.
+      // Las MISMAS opciones en Equipos y en Líneas (todas las del AppSheet, aunque hoy tengan 0) con el ícono y el color de
+      // la columna Tipo y cuántos registros hay (como el AppSheet: registros de la hoja, sin contar dos veces un equipo con
+      // línea). Clic = solo ese tipo; si en esta pestaña no hay de ese tipo (una LINEA suelta en Equipos), lleva a la
+      // otra pestaña con el filtro. Otra vez (o Todos) = todos. Se colapsa a una franja de íconos (sigue filtrando) con
+      // el botón discreto de abajo; la preferencia queda en este navegador y en celular empieza colapsada.
       const ORDEN_TIPOS = ['EQUIPO', 'EQUIPO + SIM', 'EQUIPO + SIM BASICO', 'LINEA', 'LINEA BASICA', 'BANDA ANCHA', 'MODEM', 'CAMARA'];
+      const TIPOS_APPSHEET = ORDEN_TIPOS.filter((t) => t !== 'CAMARA'); // la lista del AppSheet; CAMARA solo si hay
+      const PESTANA_TIPO = { 'LINEA': 'lineas', 'LINEA BASICA': 'lineas' }; // sin registros: a dónde lleva (el resto, Equipos)
       const NOMBRE_TIPO = { 'EQUIPO': 'Equipo', 'EQUIPO + SIM': 'Equipo + SIM', 'EQUIPO + SIM BASICO': 'Equipo + SIM básico', 'LINEA': 'Línea',
         'LINEA BASICA': 'Línea básica', 'BANDA ANCHA': 'Banda ancha', 'MODEM': 'Módem', 'CAMARA': 'Cámara' };
       const CLAVE_TIPOS = 'lineas.tiposColapsado';
@@ -1932,33 +1936,52 @@
         raiz.querySelectorAll('[data-tipos-colapsar]').forEach((b) => {
           b.setAttribute('aria-expanded', String(!tiposColapsado));
           b.title = tiposColapsado ? 'Mostrar los tipos' : 'Ocultar los tipos';
-          b.innerHTML = ico(tiposColapsado ? 'panel-left-open' : 'panel-left-close');
+          b.innerHTML = ico(tiposColapsado ? 'chevrons-right' : 'chevrons-left') + '<span class="ln-tipos-colapsar-texto">' + (tiposColapsado ? 'Mostrar' : 'Ocultar') + '</span>';
         });
         // La tabla ganó o perdió ancho: que recalcule columnas fijas y alto
         Object.keys(tablas).forEach((m) => { if (tablas[m] && m === memoria.modulo) tablas[m].ajustarAlto(); });
       }
+      /** { tipo: { total (registros únicos), equipos, lineas } } de todo el inventario. */
+      function conteoTipos() {
+        const c = {};
+        const vistos = {};
+        ['equipos', 'lineas'].forEach((m) => memoria.indice[m].forEach((r) => {
+          const t = r.tipoHoja || '';
+          const x = c[t] = c[t] || { total: 0, equipos: 0, lineas: 0 };
+          x[m]++;
+          if (!vistos[r.id]) { vistos[r.id] = true; x.total++; }
+        }));
+        return c;
+      }
+      /** Pestaña donde se filtra un tipo: la actual si tiene de ese tipo; si no, la que sí tiene. */
+      function pestanaDeTipo(t, actual) {
+        const x = conteoTipos()[t];
+        if (x && x[actual]) return actual;
+        if (x) return x.equipos ? 'equipos' : 'lineas';
+        return PESTANA_TIPO[t] || 'equipos';
+      }
       function pintarTipos(modulo) {
         const cont = $('#ln-tipos-' + modulo, raiz);
         if (!cont || !memoria.indice) return;
-        const conteo = {};
-        memoria.indice[modulo].forEach((r) => { const t = r.tipoHoja || ''; conteo[t] = (conteo[t] || 0) + 1; });
-        const tipos = Object.keys(conteo).sort((a, b) => {
+        const conteo = conteoTipos();
+        const tipos = TIPOS_APPSHEET.concat(Object.keys(conteo).filter((t) => TIPOS_APPSHEET.indexOf(t) < 0)).sort((a, b) => {
           const ia = ORDEN_TIPOS.indexOf(a);
           const ib = ORDEN_TIPOS.indexOf(b);
-          return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || conteo[b] - conteo[a] || a.localeCompare(b);
+          return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
         });
+        const total = Object.keys(conteo).reduce((s, t) => s + conteo[t].total, 0);
         const regla = (t) => ((REGLAS_FORMATO.LINEAS || {}).TIPO || {})[t] || null;
         const fila = (valor, icono, color, nombre, n) =>
-          '<button type="button" class="ln-tipo" data-tipo="' + esc(valor) + '" aria-pressed="false" title="' + esc(nombre + ' · ' + miles(n)) + '">' +
+          '<button type="button" class="ln-tipo' + (n ? '' : ' ln-tipo-vacio') + '" data-tipo="' + esc(valor) + '" aria-pressed="false" title="' + esc(nombre + ' · ' + miles(n)) + '">' +
             '<span class="ln-tipo-ico"' + (color ? ' style="color:' + esc(color) + '"' : '') + '>' + ico(icono) + '</span>' +
             '<span class="ln-tipo-nombre">' + esc(nombre) + '</span><span class="ln-tipo-num">' + miles(n) + '</span></button>';
-        cont.innerHTML = '<div class="ln-tipos-cab"><span class="ln-tipos-titulo">Tipo</span>' +
-          '<button type="button" class="ln-tipos-colapsar" data-tipos-colapsar aria-controls="' + cont.id + '"></button></div>' +
-          fila('*', 'layers', '', 'Todos', memoria.indice[modulo].length) +
+        cont.innerHTML = '<div class="ln-tipos-titulo">Tipo</div>' +
+          fila('*', 'layers', '', 'Todos', total) +
           tipos.map((t) => {
             const r = regla(t);
-            return fila(t, (r && r.icono) || 'circle', r ? colorAppSheet(r.color) : '', t ? (NOMBRE_TIPO[t] || t) : 'Sin tipo', conteo[t]);
-          }).join('');
+            return fila(t, (r && r.icono) || 'circle', r ? colorAppSheet(r.color) : '', t ? (NOMBRE_TIPO[t] || t) : 'Sin tipo', conteo[t] ? conteo[t].total : 0);
+          }).join('') +
+          '<button type="button" class="ln-tipos-colapsar" data-tipos-colapsar aria-controls="' + cont.id + '"></button>';
         aplicarColapsoTipos();
         marcarTipos(modulo);
       }
@@ -1984,9 +2007,16 @@
           const b = ev.target.closest('.ln-tipo');
           if (!b) return;
           const t = b.dataset.tipo;
-          const quitar = t === '*' || b.classList.contains('activo');
-          crearTabla(modulo).setFiltro('tipoHoja', quitar ? null : { valores: [t] });
-          marcarTipos(modulo);
+          if (t === '*' || b.classList.contains('activo')) {
+            crearTabla(modulo).setFiltro('tipoHoja', null);
+            marcarTipos(modulo);
+            return;
+          }
+          // Un tipo que vive en la otra pestaña (LINEA estando en Equipos): se va allá con el filtro
+          const destino = pestanaDeTipo(t, modulo);
+          if (destino !== modulo) mostrarModulo(destino);
+          crearTabla(destino).setFiltro('tipoHoja', { valores: [t] });
+          marcarTipos(destino);
         });
       });
 
