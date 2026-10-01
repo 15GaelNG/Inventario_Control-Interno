@@ -1124,7 +1124,6 @@
           document.body.appendChild(ancla);
         }
         abrirPopover(ancla, html, (pop) => {
-          pop.classList.add('dt-menu');
           pop.setAttribute('role', 'menu');
           pop.addEventListener('click', (ev) => {
             const b = ev.target.closest('[data-menu-accion]');
@@ -1134,7 +1133,7 @@
           });
           const primero = pop.querySelector('button');
           if (primero) primero.focus();
-        });
+        }, 'dt-menu');
         if (ancla !== posicion) ancla.remove();
       }
       /** Repinta solo lo que cambia con la selección (sin reescribir las filas: así el doble clic sigue llegando) */
@@ -1310,10 +1309,12 @@
       }
 
       /** Abre un menú bajo (o sobre) el ancla, sin salirse de la ventana */
-      function abrirPopover(ancla, html, alMontar) {
+      function abrirPopover(ancla, html, alMontar, clase) {
         cerrarPopover();
         popover = document.createElement('div');
-        popover.className = 'dt-popover';
+        // La clase va antes de montar: si se agrega después, los botones nacen con el estilo normal (azul relleno) y la
+        // transición se ve como un parpadeo; además el ancho medido para colocarlo sería el del popover genérico
+        popover.className = 'dt-popover' + (clase ? ' ' + clase : '');
         popover.innerHTML = html;
         document.body.appendChild(popover);
         const r = ancla.getBoundingClientRect();
