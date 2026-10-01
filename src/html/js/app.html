@@ -838,6 +838,17 @@
         const el = document.getElementById(id);
         if (el) el.textContent = (valor === null || valor === undefined) ? '—' : valor;
       };
+      // Llena el anillo de la tarjeta según valor/total (ej. vehículos activos de
+      // todos los vehículos). Sin total (ticketsRecientes: ventana de 30 días, no
+      // es una parte de un todo) el anillo queda lleno, solo como acento de color.
+      const anillo = (id, valor, total) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const pct = (typeof valor === 'number' && typeof total === 'number' && total > 0)
+          ? Math.max(0, Math.min(100, Math.round((valor / total) * 100)))
+          : 100;
+        el.style.setProperty('--stat-pct', pct);
+      };
 
       set('dash-kpi-vehiculos-activos', r.vehiculos && r.vehiculos.activos);
       set('dash-kpi-vehiculos-baja', r.vehiculos && r.vehiculos.baja);
@@ -850,6 +861,18 @@
       set('dash-alerta-verif-vencidas', r.alertas.verificaciones && r.alertas.verificaciones.vencidas);
       set('dash-alerta-verif-por-vencer', r.alertas.verificaciones && r.alertas.verificaciones.porVencer);
       set('dash-alerta-insp-atrasadas', r.alertas.inspecciones && r.alertas.inspecciones.atrasadas);
+
+      anillo('dash-ring-vehiculos-activos', r.vehiculos && r.vehiculos.activos, r.vehiculos && r.vehiculos.total);
+      anillo('dash-ring-vehiculos-baja', r.vehiculos && r.vehiculos.baja, r.vehiculos && r.vehiculos.total);
+      anillo('dash-ring-incidencias-abiertas', r.ticketsIncidencias && r.ticketsIncidencias.incidenciasAbiertas, r.ticketsIncidencias && r.ticketsIncidencias.incidenciasTotal);
+      anillo('dash-ring-tickets-recientes', null, null);
+      anillo('dash-ring-cch-vigentes', r.cajasChicas && r.cajasChicas.vigentes, r.cajasChicas && r.cajasChicas.total);
+      anillo('dash-ring-cch-proceso', r.cajasChicas && r.cajasChicas.enProcesoCierre, r.cajasChicas && r.cajasChicas.total);
+      anillo('dash-ring-equipos-activos', r.telefonia && r.telefonia.equiposActivos, r.telefonia && r.telefonia.equiposTotal);
+      anillo('dash-ring-lineas-activas', r.telefonia && r.telefonia.lineasActivas, r.telefonia && r.telefonia.lineasTotal);
+      anillo('dash-ring-verif-vencidas', r.alertas.verificaciones && r.alertas.verificaciones.vencidas, r.alertas.verificaciones && r.alertas.verificaciones.total);
+      anillo('dash-ring-verif-por-vencer', r.alertas.verificaciones && r.alertas.verificaciones.porVencer, r.alertas.verificaciones && r.alertas.verificaciones.total);
+      anillo('dash-ring-insp-atrasadas', r.alertas.inspecciones && r.alertas.inspecciones.atrasadas, r.alertas.inspecciones && r.alertas.inspecciones.total);
 
       contActividad.innerHTML = (r.actividad || []).length
         ? '<div class="historial-timeline">' + r.actividad.map((e) => `
