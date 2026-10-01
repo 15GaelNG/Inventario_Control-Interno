@@ -805,6 +805,6 @@ const ArqueosService = (function () {
 
   return {
     AUDIT_ITEMS, listarResumen, completo, buscarPorId, listarPorIdCch, previsualizarIdArqueo,
-    crear, actualizar, eliminar, subirArchivo,
+    crear, actualizar, eliminar, subirArchivo, subirFirma, subirEvidencia,
   };
 })();
