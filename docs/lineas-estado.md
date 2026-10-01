@@ -6,6 +6,11 @@ Documento de continuidad del módulo **Líneas** (equipos y líneas telefónicas
 El plan de la mudanza está en [lineas-plan.md](lineas-plan.md); aquí se registra
 qué está hecho, cómo probarlo y qué sigue.
 
+**1-oct (§0ad):**
+- menú del clic derecho sin parpadeo;
+- Panorama rápido;
+- evidencia de las correcciones en Drive. **Falta:** que ADMIN suba la carpeta "EVIDENCIAS PARA SUBIR" en el módulo.
+
 **Dónde quedamos (cierre final del 30-sep, noche):**
 
 - **Rama `emmanuel`:** en GitHub hasta `10dc7eb` (29-sep). En local hay **31 commits más** (`644ba14` … `0bc9b46`).
@@ -56,6 +61,62 @@ qué está hecho, cómo probarlo y qué sigue.
   - §0z: Líneas lee `ID ANTERIOR` (corrida de IDs del 30-sep). Su catálogo y `MIGRACION_REFERENCIAS` ya no
     describen la BD de pruebas tal como quedó: ver §0z antes de correr `lineas2Escribir` sobre ella.
 
+
+## 0ad. Menú sin parpadeo, Panorama rápido y evidencia en Drive (2026-10-01)
+
+**Menú del clic derecho (`7adbabb`).** Al abrirse se veía un destello azul. La causa: la clase `dt-menu` se agregaba
+después de montar el popover. Los botones nacían con el estilo normal (azul relleno) y su transición a transparente se
+veía como parpadeo. Ahora `abrirPopover(ancla, html, alMontar, clase)` pone la clase antes de montar, y con eso también
+se mide bien el ancho del menú.
+
+**Panorama rápido (`65280f7`).** En frío pasó de unos 8.7 s a 1.6 s; al volver a entrar se pinta al instante. La
+respuesta trae `ms` con el tiempo de cada paso:
+
+| Paso | Antes | Después |
+|---|---|---|
+| Leer la bitácora de cambios | 5.0 s | 0.23 s |
+| Convertir LINEAS | 2.0 s | 0.09 s |
+| Leer LINEAS | 1.4 s | 1.2 s |
+| Calcular | 0.3 s | 0.1 s |
+
+- **Bitácora:** `eventosDeEstatus_` lee solo las 4 columnas que usa (CAMPO, FECHA ACTUALIZACION, ID_LINEA, ANTES).
+  Guarda lo leído 6 h en caché (`ln_panorama_eventos_v1`) junto con la última fila, y la siguiente vez lee solo los
+  renglones nuevos; "Actualizar" también es incremental. Vuelve a leerla completa si la pestaña tiene menos filas, si
+  sus columnas cambiaron de lugar o si venció la caché.
+- **`LineasUtil.col`:** guarda los encabezados ya normalizados. Antes, cada columna que no estaba con su nombre exacto
+  normalizaba otra vez todos los encabezados de la fila. Esto acelera todo lo que lee la hoja, no solo el Panorama.
+- **Fin del adendum:** `Utilities.formatDate` cuesta ~1 ms por llamada; ahora se llama una vez por fecha distinta.
+- **Respuesta (`ln_panorama_v3`):**
+  - Los registros van en columnas, sin repetir el nombre de cada campo en ~2,600 renglones.
+  - El estatus por mes va en corridas: un número si nunca cambió, o `[código, meses, …]`.
+  - Cuenta y fin de adendum van como índices a una lista.
+  - La interfaz lo desempaca con `expandirRegistros`.
+- **Interfaz:** guarda la última respuesta en memoria y en `localStorage` (`lineas.panorama.v3`: solo conteos,
+  departamentos y costos). Al entrar pinta esa copia y la actualiza por detrás; mientras, gira el ícono de Actualizar.
+
+**Evidencia de las correcciones en Drive (`15eaa59`).** Pedido del usuario: que cada caso tenga un enlace directo al
+archivo que lo respalda, y de ser posible a la línea.
+
+- **Script local:** `evidencias.py` (en la carpeta del reporte, `_script/`) arma
+  `04_Conciliacion_inventario/EVIDENCIAS PARA SUBIR`:
+  - los originales citados en FUENTE: facturas y estados de cuenta, barrido, adendums, ventas y la hoja de Bren;
+  - un recorte JPG por línea, con el encabezado de la página (cuenta, factura, periodo) y la franja de cada página
+    donde aparece el número, resaltada. Drive no abre un PDF en una página: por eso el recorte;
+  - `evidencias.json`, que dice qué archivo va con cada LLAVE.
+- **Corrida del 1-oct:** 143 de 565 casos tienen archivo, con 15 originales y 118 recortes (23 MB). Los otros casos
+  vienen de la bitácora o del inventario y siguen con "Abrir NUCO". Los documentos de venta están escaneados: solo
+  llevan el enlace al original.
+- **Subida (solo ADMIN):** en Correcciones de Líneas, botón "Subir evidencias" o arrastrando el contenido de la carpeta
+  sobre la página. Se suben de 3 en 3 y `evidencias.json` va al final.
+- **En Drive:** todo queda en la carpeta `Correcciones_Evidencias`, dentro de la carpeta de la app, y hereda sus
+  permisos. Los Excel se convierten a Google Sheets. Lo que ya está con el mismo nombre no se vuelve a subir;
+  `evidencias.json` sí se reemplaza.
+- **En cada caso:** la columna "Ver evidencia" lleva a:
+  - "Ver la línea marcada" (el recorte), o "Ver el renglón N" (Google Sheets con `#gid=…&range=A{n}:{col}{n}`);
+  - el documento completo, con las páginas donde aparece la línea.
+- **Nota para ADMIN:** cuántos archivos hay, cuáles faltan y el enlace a la carpeta.
+- **Caché:** `ln_corr_evidencias_v1`, 6 h; se borra al subir.
+- **Al eliminar el módulo,** borrar también la carpeta `Correcciones_Evidencias`.
 
 ## 0ac. Centro de notificaciones (2026-09-30, noche)
 
