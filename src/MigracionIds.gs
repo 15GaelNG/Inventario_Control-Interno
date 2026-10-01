@@ -645,7 +645,28 @@ function asignarIds(opciones) {
 
 // ---------------------------------------------------------------- paso 3
 
-/** El mapa "valor viejo → ID nuevo" de una hoja padre */
+/**
+ * El mapa "valor viejo → ID nuevo" de una hoja padre.
+ *
+ * Cuando se une por el ID viejo (no por llave de negocio), el mapa junta TODAS las
+ * generaciones de ID que el padre conserva, no solo "ID ANTERIOR". El libro del equipo se
+ * migró dos veces con código distinto, y LINEAS TELEFONICAS quedó con tres:
+ *
+ *   ID            LIN-… del 30/09, el vigente
+ *   ID ANTERIOR   LIN-… del 29/09
+ *   ID APPSHEET   873bb085 / DV1SD13 / DG001, el de AppSheet
+ *
+ * y sus hijas citan casi todas al de AppSheet (medido el 01/10/2026: 1,428 de 1,437 en
+ * INSPECCIONES LINEAS, 33,526 de 33,664 en CAMBIOS), unas pocas al del 29/09 (las que la
+ * app capturó entre corridas) y NINGUNA al vigente. Con solo "ID ANTERIOR" el pipeline
+ * reportaba casi todo como huérfano.
+ *
+ * El vigente también entra, apuntándose a sí mismo: así una referencia ya reescrita se
+ * reconoce como hecha, y una con forma de ID pero de otra generación no se confunde con ella.
+ *
+ * Un valor que aparezca en dos renglones distintos no se adivina: se saca del mapa y queda
+ * como huérfano, que es lo que se reporta.
+ */
 function migMapaDelPadre_(ss, nombrePadre, porLlaveNegocio) {
   const sheet = ss.getSheetByName(nombrePadre);
   if (!sheet) throw new Error('No existe la hoja padre "' + nombrePadre + '"');
@@ -653,19 +674,38 @@ function migMapaDelPadre_(ss, nombrePadre, porLlaveNegocio) {
   const filas = migFilas_(sheet);
   const posId = migColumna_(enc, Entidades.COLUMNA_ID);
   if (!posId) throw new Error('"' + nombrePadre + '" todavía no tiene columna ID: corre asignarIds primero');
-  // Por omisión se une por el ID viejo; algunas hojas se unen por su llave de negocio
-  const posOrigen = porLlaveNegocio
-    ? migColumna_(enc, porLlaveNegocio)
-    : migColumna_(enc, Entidades.COLUMNA_ID_ANTERIOR);
-  if (!posOrigen) throw new Error('"' + nombrePadre + '" no tiene la columna "' + (porLlaveNegocio || Entidades.COLUMNA_ID_ANTERIOR) + '"');
-
   const ids = migLeerColumna_(sheet, posId, filas);
-  const origen = migLeerColumna_(sheet, posOrigen, filas);
-  const mapa = {};
-  for (let i = 0; i < filas; i++) {
-    const k = migClave_(origen[i]);
-    if (k) mapa[k] = ids[i];
+
+  // Por omisión se une por el ID viejo; algunas hojas se unen por su llave de negocio
+  if (porLlaveNegocio) {
+    const pos = migColumna_(enc, porLlaveNegocio);
+    if (!pos) throw new Error('"' + nombrePadre + '" no tiene la columna "' + porLlaveNegocio + '"');
+    const origen = migLeerColumna_(sheet, pos, filas);
+    const mapa = {};
+    for (let i = 0; i < filas; i++) {
+      const k = migClave_(origen[i]);
+      if (k) mapa[k] = ids[i];
+    }
+    return mapa;
   }
+
+  const generaciones = [Entidades.COLUMNA_ID_ANTERIOR, Entidades.COLUMNA_ID_ANTERIOR_LEGADO]
+    .map((n) => migColumna_(enc, n))
+    .filter(Boolean);
+  if (!generaciones.length) throw new Error('"' + nombrePadre + '" no tiene la columna "' + Entidades.COLUMNA_ID_ANTERIOR + '"');
+
+  const mapa = {};
+  const ambiguos = {};
+  const poner = (valor, id) => {
+    const k = migClave_(valor);
+    if (!k || !id || ambiguos[k]) return;
+    if (mapa[k] && mapa[k] !== id) { delete mapa[k]; ambiguos[k] = true; return; }
+    mapa[k] = id;
+  };
+  ids.forEach((id) => poner(id, id));
+  generaciones.forEach((pos) => {
+    migLeerColumna_(sheet, pos, filas).forEach((v, i) => poner(v, ids[i]));
+  });
   return mapa;
 }
 
@@ -741,7 +781,12 @@ function reescribirReferencias(opciones) {
       const puesto = yaEnDestino[i];
       // Ya tiene la forma nueva: viene de una corrida anterior. Se deja y no cuenta como
       // huérfana — es lo que hace que volver a correr esto sea inofensivo.
-      if (puesto && Ids.tieneForma(puesto)) { salida.push([puesto]); yaEstaban++; return; }
+      //
+      // Sobre la misma columna, la forma no basta: un LIN-… del 29/09 tiene forma de ID y ya
+      // no es el vigente. Ahí solo cuenta como hecho si el padre lo tiene como su ID de hoy.
+      const hecho = puesto && Ids.tieneForma(puesto) &&
+        (!enSitio || migBuscar_(mapa, puesto) === migLimpio_(puesto));
+      if (hecho) { salida.push([puesto]); yaEstaban++; return; }
       if (!v) { salida.push(['']); vacias++; return; }
       const nuevo = migBuscar_(mapa, v);
       if (nuevo) { salida.push([nuevo]); cambiadas++; }
