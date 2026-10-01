@@ -143,12 +143,31 @@ function replDestino_() {
   return ss;
 }
 
-/** Las columnas que la migración agrega; perderlas al replanchar es el objetivo. */
-function replEsArtefacto_(col) {
+/**
+ * Las columnas que los pipelines agregan o renombran en `hoja`; perderlas al replanchar es
+ * el objetivo. Salen de los mismos catálogos que usan los pipelines, para que una columna
+ * nueva de un pipeline no se vuelva una falsa alarma aquí:
+ *
+ *   ID, ID ANTERIOR (y su nombre viejo)  el pipeline de IDs, en todas las hojas
+ *   Entidades.REFERENCIAS                las llaves foráneas (ID VEHICULO, ID CAJA CHICA…)
+ *                                        y las ligas de Capital Humano (ID PERSONA)
+ *   ENCABEZADOS_DEDUCIDOS                el nombre que se le pone a una columna sin
+ *                                        encabezado (CAMBIOS LINEAS TELEFONICAS.NUCO)
+ *   MIGRACION_NOMBRES                    el nombre nuevo de una columna renombrada
+ *                                        (VEHICULOS.OFICINA / DESARROLLO)
+ *
+ * El 01/10/2026 solo conocía las tres primeras, y un replanchado reportó 10 columnas "que
+ * se perderían" que eran todas de la migración. Una alarma que grita en cada corrida
+ * enseña a ponerle el permiso sin leerla, y entonces ya no protege la vez que importa.
+ */
+function replEsArtefacto_(hoja, col) {
   const c = String(col || '').trim().toUpperCase();
-  return c === String(Entidades.COLUMNA_ID).toUpperCase() ||
-         c === String(Entidades.COLUMNA_ID_ANTERIOR).toUpperCase() ||
-         c === String(Entidades.COLUMNA_ID_ANTERIOR_LEGADO).toUpperCase();
+  const de = (lista, campo) => lista.filter((x) => x.hoja === hoja).map((x) => x[campo]);
+  return [Entidades.COLUMNA_ID, Entidades.COLUMNA_ID_ANTERIOR, Entidades.COLUMNA_ID_ANTERIOR_LEGADO]
+    .concat(de(Entidades.REFERENCIAS, 'columna'))
+    .concat(de(ENCABEZADOS_DEDUCIDOS, 'nombre'))
+    .concat(de(MIGRACION_NOMBRES, 'a'))
+    .some((x) => String(x).trim().toUpperCase() === c);
 }
 
 /** Deja la hoja con exactamente `filas` × `cols` de rejilla, sin dejarla más chica que 1×1. */
@@ -252,7 +271,7 @@ function replancharDesdeProduccion(opciones) {
     encDestino.forEach((c) => {
       const t = String(c).trim();
       if (!t || enOrigen[t.toUpperCase()]) return;
-      (replEsArtefacto_(t) ? artefactos : perdidas).push(t);
+      (replEsArtefacto_(nombre, t) ? artefactos : perdidas).push(t);
     });
     perdidas.forEach((c) => perdidasTotales.push(nombre + '.' + c));
 

@@ -111,8 +111,18 @@ function escenario() {
   return { prod, lab };
 }
 
+/** Un arreglo `const NOMBRE = [...]` de MigracionIds.gs, el de verdad (sin cargar todo el archivo). */
+function catalogoDeMigracionIds(nombre) {
+  const fuente = fs.readFileSync(path.join(__dirname, '..', 'src', 'MigracionIds.gs'), 'utf8').replace(/\r\n/g, '\n');
+  const desde = fuente.indexOf('const ' + nombre + ' = [');
+  const bloque = fuente.slice(fuente.indexOf('[', desde), fuente.indexOf('\n];', desde) + 2);
+  return vm.runInNewContext('(' + bloque + ')');
+}
+
 function cargar() {
   const ctx = vm.createContext({
+    ENCABEZADOS_DEDUCIDOS: catalogoDeMigracionIds('ENCABEZADOS_DEDUCIDOS'),
+    MIGRACION_NOMBRES: catalogoDeMigracionIds('MIGRACION_NOMBRES'),
     console,
     Logger: { log: () => {} },
     Session: { getActiveUser: () => ({ getEmail: () => 'ayrton@x.com' }) },
@@ -174,12 +184,20 @@ console.log('\n3. Qué cuenta como columna de la migración');
 {
   escenario();
   const api = cargar();
-  ok(api.replEsArtefacto_('ID'), 'ID sí');
-  ok(api.replEsArtefacto_('ID ANTERIOR'), 'ID ANTERIOR sí');
-  ok(api.replEsArtefacto_('id anterior'), 'sin importar mayúsculas ni espacios');
-  ok(api.replEsArtefacto_('ID APPSHEET'), 'el nombre viejo también, para poder limpiarlo');
-  ok(!api.replEsArtefacto_('COLOR'), 'COLOR no: eso lo capturó alguien');
-  ok(!api.replEsArtefacto_('ID_VEHICULO'), 'ni la llave vieja de producción');
+  ok(api.replEsArtefacto_('VEHICULOS', 'ID'), 'ID sí');
+  ok(api.replEsArtefacto_('VEHICULOS', 'ID ANTERIOR'), 'ID ANTERIOR sí');
+  ok(api.replEsArtefacto_('VEHICULOS', 'id anterior'), 'sin importar mayúsculas ni espacios');
+  ok(api.replEsArtefacto_('TICKETS', 'ID APPSHEET'), 'el nombre viejo también, para poder limpiarlo');
+  ok(!api.replEsArtefacto_('VEHICULOS', 'COLOR'), 'COLOR no: eso lo capturó alguien');
+  ok(!api.replEsArtefacto_('VEHICULOS', 'ID_VEHICULO'), 'ni la llave vieja de producción');
+  // Lo que agregan los otros pasos (falsas alarmas del 01/10/2026)
+  ok(api.replEsArtefacto_('HOLOGRAMAS', 'ID VEHICULO'), 'la llave foránea que escribe referencias');
+  ok(api.replEsArtefacto_('ARQUEOS', 'ID CAJA CHICA'), 'también la de Caja Chica');
+  ok(api.replEsArtefacto_('CAMBIOS LINEAS TELEFONICAS', 'NUCO'), 'el encabezado deducido');
+  ok(api.replEsArtefacto_('VEHICULOS', 'OFICINA / DESARROLLO'), 'el nombre nuevo de una columna renombrada');
+  ok(api.replEsArtefacto_('VEHICULOS', 'ID PERSONA'), 'la liga de Capital Humano');
+  ok(!api.replEsArtefacto_('VEHICULOS', 'NUCO'), 'pero solo en SU hoja: NUCO en VEHICULOS no es de la migración');
+  ok(!api.replEsArtefacto_('TICKETS', 'ID VEHICULO'), 'ni una llave foránea que esa hoja no tiene');
 }
 
 console.log('\n4. El ensayo no escribe, y avisa qué se perdería');
