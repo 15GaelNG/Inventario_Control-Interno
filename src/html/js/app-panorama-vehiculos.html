@@ -13,14 +13,17 @@
 
   // Mismos 6 valores reales de ESTATUS que CAMPOS_VEHICULO — colores fijos (no
   // reasignados por orden) para que cada estatus se vea siempre del mismo color
-  // sin importar cómo cambien los filtros.
+  // sin importar cómo cambien los filtros. Paleta de marca (navy + dorado,
+  // ver --color-primary/--color-accent en styles.html) en vez de semáforo
+  // verde/ámbar/rojo, alternando azul/dorado para que las rebanadas vecinas
+  // de la dona se distingan bien entre sí.
   const PV_COLOR_ESTATUS = {
-    'UTILITARIO': '#1e7d4f',
-    'NO UTILITARIO': '#2f7bb0',
-    'PRESTAMO': '#B4A169',
-    'FUERA DE SERVICIO': '#c47b3d',
-    'NUCO SIN INFORMACION': '#5c6b72',
-    'BAJA VEHICULAR': '#8a6d3a',
+    'UTILITARIO': '#06263A',
+    'NO UTILITARIO': '#B4A169',
+    'PRESTAMO': '#2f7bb0',
+    'FUERA DE SERVICIO': '#8a6d3a',
+    'NUCO SIN INFORMACION': '#6fa8cc',
+    'BAJA VEHICULAR': '#5c4a26',
   };
   const PV_ORDEN_ESTATUS = ['UTILITARIO', 'NO UTILITARIO', 'PRESTAMO', 'FUERA DE SERVICIO', 'NUCO SIN INFORMACION', 'BAJA VEHICULAR'];
   // Mismas etiquetas legibles que ya usa el stat-row de Vehículos (badgeEstatus/
