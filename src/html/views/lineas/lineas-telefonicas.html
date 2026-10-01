@@ -31,10 +31,10 @@
       </div>
 
       <div class="tab-panel" data-tab-panel="equipos">
-        <div class="card card-compacta"><div id="ln-tabla-equipos"></div><div class="ln-tarjetas" id="ln-tarjetas-equipos" hidden></div></div>
+        <div class="card card-compacta"><div class="ln-con-tipos"><nav class="ln-tipos" id="ln-tipos-equipos" aria-label="Filtrar por tipo"></nav><div class="ln-con-tipos-tabla"><div id="ln-tabla-equipos"></div><div class="ln-tarjetas" id="ln-tarjetas-equipos" hidden></div></div></div></div>
       </div>
       <div class="tab-panel" data-tab-panel="lineas" hidden>
-        <div class="card card-compacta"><div id="ln-tabla-lineas"></div><div class="ln-tarjetas" id="ln-tarjetas-lineas" hidden></div></div>
+        <div class="card card-compacta"><div class="ln-con-tipos"><nav class="ln-tipos" id="ln-tipos-lineas" aria-label="Filtrar por tipo"></nav><div class="ln-con-tipos-tabla"><div id="ln-tabla-lineas"></div><div class="ln-tarjetas" id="ln-tarjetas-lineas" hidden></div></div></div></div>
       </div>
       <p class="ln-conteo" id="ln-conteo"></p>
     </section>
@@ -53,6 +53,12 @@
             <h3 class="ln-titulo" style="margin:3px 0 0" id="ln-captura-titulo"></h3>
             <p class="modal-subtitle" id="ln-captura-subtitulo"></p>
             </div>
+          </div>
+          <!-- Calificación de la inspección en vivo (se actualiza al llenar el checklist) -->
+          <div class="ln-calif-vivo" id="ln-calif-vivo" role="status" aria-live="polite" hidden>
+            <div class="ln-calif-vivo-valor"><span class="ln-calif-vivo-etiqueta">Calificación</span><strong id="ln-calif-vivo-numero">—</strong></div>
+            <div class="ln-calif-vivo-pista"><span id="ln-calif-vivo-barra"></span></div>
+            <div class="ln-calif-vivo-pie" id="ln-calif-vivo-pie">0 de 0 puntos calificados</div>
           </div>
           <button type="button" class="modal-close" data-cerrar-modal aria-label="Cerrar"><span data-ln-icon="x"></span></button>
         </div>

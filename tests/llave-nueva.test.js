@@ -39,10 +39,9 @@ const VIEJOS = ['ID_VEHICULO', 'ID_SENSOR', 'ID_HOLOGRAMA', 'ID_VERIFICACION',
  */
 const DE_NEGOCIO = ['ID INSPECCION', 'ID ARQUEO', 'ID CCH', 'No EMPLEADO'];
 
-// Accesorios queda pendiente a propósito: su ID_Accesorio es llave propia en
-// ACCESORIOS CELULARES y FORÁNEA en MOVIMIENTOS_ACCESORIOS, así que su cambio depende de
-// que corra el pipeline 3 (Líneas), que está en pausa.
-const PENDIENTES = ['AccesoriosService.gs'];
+// AccesoriosService.gs se retiró el 1-oct (quedó un solo inventario, el de Líneas:
+// LineasAccesorios.gs, que ya usa ID / ID ACCESORIO y cae a ID_Accesorio ↔ ID ANTERIOR).
+const PENDIENTES = [];
 
 console.log('1. Ningún servicio busca renglones por el nombre viejo');
 {
@@ -149,11 +148,9 @@ console.log('\n5. Los ids nuevos nacen con Ids.nuevo, no con getUuid');
 
 console.log('\n6. Lo que queda pendiente está declarado, no olvidado');
 {
-  const acc = lee('services', 'AccesoriosService.gs');
-  ok(/ID_Accesorio/.test(acc),
-     'AccesoriosService sigue con ID_Accesorio, a propósito');
-  console.log('     (su ID_Accesorio es llave propia en ACCESORIOS CELULARES y FORÁNEA en');
-  console.log('      MOVIMIENTOS_ACCESORIOS, así que su cambio va con el pipeline 3, en pausa)');
+  const acc = lee('services', 'lineas/LineasAccesorios.gs');
+  ok(/'ID ACCESORIO'/.test(acc) && /'ID ANTERIOR'/.test(acc),
+     'el inventario de accesorios (Líneas) cita al artículo por ID ACCESORIO y cae a la llave vieja');
 }
 
 console.log('\n7. NINGUNA mención al nombre viejo, aunque no sea una búsqueda');

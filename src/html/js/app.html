@@ -158,14 +158,26 @@
       document.documentElement.removeAttribute('data-theme');
     }
     try { localStorage.setItem('tema', tema); } catch (e) { /* no-op */ }
-    document.querySelectorAll('.theme-btn').forEach((btn) => {
-      btn.classList.toggle('active', btn.dataset.tema === tema);
-    });
+    marcarTemaActual();
     // Si el slideshow del fondo del login está activo, refresca las
     // imágenes ya pintadas a la variante del tema nuevo — si no, se
     // quedarían con la del tema anterior hasta el siguiente cambio de slide.
     if (typeof actualizarHeroLoginTema === 'function') actualizarHeroLoginTema();
   }
+
+  /**
+   * Marca el botón del tema actual (rama emmanuel). Antes solo se marcaba al mostrar el login: si se entraba con la
+   * sesión guardada (recargar la página), ningún botón aparecía como activo.
+   */
+  function marcarTemaActual() {
+    const tema = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+    document.querySelectorAll('.theme-btn').forEach((btn) => {
+      const activo = btn.dataset.tema === tema;
+      btn.classList.toggle('active', activo);
+      btn.setAttribute('aria-pressed', String(activo));
+    });
+  }
+  marcarTemaActual();
 
   /**
    * Slideshow del fondo del login: varias fotos de marca (no una sola fija)
@@ -422,6 +434,7 @@
       return;
     }
     document.getElementById('user-name').textContent = state.sesion.nombre + ' · ' + state.sesion.rol;
+    marcarTemaActual(); // entrar con la sesión guardada no pasa por el login, que era quien marcaba el botón
     // Aditivo (rama `ayrton`): permisos finos por módulo para Verificaciones/Sensores/
     // Hologramas/Inspección Vehicular. No bloquea la navegación ni afecta el menú
     // (NAV_GRUPOS sigue siempre visible) — si falla, esos módulos simplemente quedan
@@ -532,11 +545,12 @@
     refreshIcons();
     requestAnimationFrame(() => overlay.classList.add('show'));
 
+    // La vista se monta casi de inmediato (antes se esperaban 2.5 s fijos): el aviso solo suaviza el cambio
     setTimeout(() => {
       montarVistaReal();
       overlay.classList.remove('show');
       setTimeout(() => overlay.remove(), 300);
-    }, 2500);
+    }, 180);
   }
 
   // Folio pendiente de abrir en la ficha de Vehículos: lo usan los botones "Ver
@@ -560,13 +574,14 @@
   }
 
   function navegarA(vista, etiqueta) {
+    // Rama emmanuel: cada cambio de módulo es un paso de Atrás/Adelante (html/historial-navegador.html)
+    if (typeof HistorialApp !== 'undefined') HistorialApp.alNavegar(vista, etiqueta);
     document.querySelectorAll('.nav-item, .nav-subitem').forEach((el) => {
       el.classList.toggle('active', el.dataset.view === vista);
     });
 
     transicionVista(vista, etiqueta, () => {
       if (vista === 'dashboard') { montarVista('tpl-dashboard', initDashboard); return; }
-      if (vista === 'accesorios') { montarVista('tpl-accesorios', initAccesorios); return; }
       if (vista === 'panorama-vehiculos') { montarVista('tpl-panorama-vehiculos', initPanoramaVehiculos); return; }
       if (vista === 'incidencias') { montarVista('tpl-incidencias', initIncidencias); return; }
       if (vista === 'vehiculos') { montarVista('tpl-vehiculos', initVehiculos); return; }
@@ -585,14 +600,16 @@
       if (vista === 'relaciones') { montarVista('tpl-relaciones', initRelaciones); return; }
       if (vista === 'salud') { montarVista('tpl-salud', initSalud); return; }
       // --- Líneas (rama emmanuel): el módulo vive en html/js/lineas.html (namespace Lineas) ---
+      if (vista === 'panorama-lineas') { montarVista('tpl-lineas-panorama', Lineas.initPanorama); return; }
       if (vista === 'lineas-telefonicas') { montarVista('tpl-lineas-telefonicas', Lineas.initTelefonicas); return; }
       if (vista === 'gestion-activos') { montarVista('tpl-lineas-gestion-activos', Lineas.initGestionActivos); return; }
       if (vista === 'accesorios-lineas') { montarVista('tpl-lineas-accesorios', Lineas.initAccesoriosLineas); return; }
-      if (vista === 'reactivacion-lineas') { montarVista('tpl-lineas-operativa', Lineas.initReactivacion); return; }
-      if (vista === 'reasignaciones-lineas') { montarVista('tpl-lineas-bitacora', Lineas.initReasignaciones); return; }
-      if (vista === 'solicitud-lineas') { montarVista('tpl-lineas-operativa', Lineas.initSolicitud); return; }
+      if (vista === 'resguardos-lineas') { montarVista('tpl-lineas-resguardos', Lineas.initResguardos); return; }
+      // Módulo TEMPORAL (30-sep): se quita cuando Líneas termine sus correcciones (ver LineasCorrecciones.gs)
+      if (vista === 'correcciones-lineas') { montarVista('tpl-lineas-correcciones', LineasCorrecciones.init); return; }
       if (vista === 'cambios-lineas') { montarVista('tpl-lineas-bitacora', Lineas.initCambios); return; }
-      if (vista === 'bitacora-desechos') { montarVista('tpl-lineas-bitacora', Lineas.initDesechos); return; }
+      // Campana de la barra superior → "Ver todas" (html/notificaciones.html, rama emmanuel)
+      if (vista === 'notificaciones') { montarVista('tpl-notificaciones', Notificaciones.initVista); return; }
       mostrarProximamente(etiqueta || vista);
     });
   }
@@ -611,8 +628,7 @@
 
   /**
    * Estructura del sidebar por área. La mayoría de estos sub-módulos todavía
-   * no están construidos (ver mostrarProximamente); "accesorios" es el único
-   * que ya apunta a un módulo real y funcional.
+   * no están construidos (ver mostrarProximamente).
    */
   const NAV_GRUPOS = [
     {
@@ -630,20 +646,20 @@
       ],
     },
     {
-      // Módulos de Telefonía de la rama emmanuel (ver html/js/lineas.html), más
-      // "accesorios" (jorge) — un inventario general que ya vivía en este grupo,
-      // distinto de "accesorios-lineas" (celulares/equipos de Líneas).
+      // Módulos de Telefonía de la rama emmanuel (ver html/js/lineas.html). El inventario de accesorios es el de
+      // Líneas (accesorios-lineas); el general de jorge ("accesorios") se retiró el 1-oct: quedaba uno solo.
       id: 'lineas', icono: 'smartphone', etiqueta: 'Líneas',
       items: [
         // Íconos equivalentes a los del menú del AppSheet (Font Awesome → Lucide)
+        { vista: 'panorama-lineas', etiqueta: 'Panorama', icono: 'layout-dashboard' },
         { vista: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas', icono: 'smartphone' },
-        { vista: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios (Líneas)', icono: 'boxes' },
-        { vista: 'accesorios', etiqueta: 'Inventario de Accesorios', icono: 'backpack' },
-        { vista: 'reactivacion-lineas', etiqueta: 'Reactivación de Líneas', icono: 'check-check' },
-        { vista: 'reasignaciones-lineas', etiqueta: 'Control de Reasignaciones - Líneas', icono: 'recycle' },
-        { vista: 'solicitud-lineas', etiqueta: 'Solicitud de Líneas', icono: 'target' },
-        { vista: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas', icono: 'eye' },
-        { vista: 'bitacora-desechos', etiqueta: 'Bitácora de Desechos', icono: 'trash-2' },
+        { vista: 'resguardos-lineas', etiqueta: 'Resguardos y cancelaciones', icono: 'package-check' },
+        { vista: 'correcciones-lineas', etiqueta: 'Correcciones de Líneas', icono: 'clipboard-check' }, // temporal (30-sep)
+        { vista: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios', icono: 'boxes' },
+        // Control de Cambios queda fuera del menú (30-sep) pero su vista sigue en navegarA: su pestaña es la bitácora
+        // del Historial y del Panorama. Reactivación, Solicitud, Reasignaciones y Desechos se retiraron con sus
+        // pestañas (30-sep); sus renglones están en APP_MOVIMIENTOS y se ven en el Historial de la ficha.
+        // { vista: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas', icono: 'eye' },
       ],
     },
     {
@@ -876,8 +892,6 @@
       set('dash-kpi-tickets-recientes', r.ticketsIncidencias && r.ticketsIncidencias.ticketsRecientes);
       set('dash-kpi-cch-vigentes', r.cajasChicas && r.cajasChicas.vigentes);
       set('dash-kpi-cch-proceso', r.cajasChicas && r.cajasChicas.enProcesoCierre);
-      set('dash-kpi-equipos-activos', r.telefonia && r.telefonia.equiposActivos);
-      set('dash-kpi-lineas-activas', r.telefonia && r.telefonia.lineasActivas);
       set('dash-alerta-verif-vencidas', r.alertas.verificaciones && r.alertas.verificaciones.vencidas);
       set('dash-alerta-verif-por-vencer', r.alertas.verificaciones && r.alertas.verificaciones.porVencer);
       set('dash-alerta-insp-atrasadas', r.alertas.inspecciones && r.alertas.inspecciones.atrasadas);
@@ -888,8 +902,6 @@
       anillo('dash-ring-tickets-recientes', null, null);
       anillo('dash-ring-cch-vigentes', r.cajasChicas && r.cajasChicas.vigentes, r.cajasChicas && r.cajasChicas.total);
       anillo('dash-ring-cch-proceso', r.cajasChicas && r.cajasChicas.enProcesoCierre, r.cajasChicas && r.cajasChicas.total);
-      anillo('dash-ring-equipos-activos', r.telefonia && r.telefonia.equiposActivos, r.telefonia && r.telefonia.equiposTotal);
-      anillo('dash-ring-lineas-activas', r.telefonia && r.telefonia.lineasActivas, r.telefonia && r.telefonia.lineasTotal);
       anillo('dash-ring-verif-vencidas', r.alertas.verificaciones && r.alertas.verificaciones.vencidas, r.alertas.verificaciones && r.alertas.verificaciones.total);
       anillo('dash-ring-verif-por-vencer', r.alertas.verificaciones && r.alertas.verificaciones.porVencer, r.alertas.verificaciones && r.alertas.verificaciones.total);
       anillo('dash-ring-insp-atrasadas', r.alertas.inspecciones && r.alertas.inspecciones.atrasadas, r.alertas.inspecciones && r.alertas.inspecciones.total);
@@ -912,198 +924,6 @@
         contActividad.innerHTML = '<p class="empty-state">No se pudo cargar la actividad reciente.</p>';
       }
     }
-  }
-
-  // ---------- Accesorios ----------
-  async function initAccesorios() {
-    wireTabsSimple(document.getElementById('view-container'));
-    const puedeEditar = puedeEditarModulo('accesorios');
-    if (!puedeEditar) document.querySelector('#acc-tabs .tab-btn[data-tab="registrar"]').remove();
-    const selectArticulo = document.getElementById('mov-articulo');
-    const modalEditar = document.getElementById('modal-editar-articulo');
-    let todosLosArticulos = [];
-
-    /** Historial de entradas/salidas de un artículo, en el panel de detalle. */
-    async function historialArticulo(articulo, contenedor) {
-      contenedor.innerHTML = '<div class="loading-inline"><span class="spinner"></span> Cargando…</div>';
-      try {
-        const movs = await callServer('apiHistorialMovimientos', state.token, articulo.ID);
-        if (!document.body.contains(contenedor)) return; // el panel se cerró mientras cargaba
-        contenedor.innerHTML = (movs || []).length
-          ? '<div class="historial-timeline">' + movs.map((m) => `
-              <div class="historial-item">
-                <div class="historial-icon ${m.TIPO === 'SALIDA' ? 'historial-icon-accent' : ''}">
-                  <i data-lucide="${m.TIPO === 'ENTRADA' ? 'arrow-down' : 'arrow-up'}" class="ico"></i>
-                </div>
-                <div class="historial-main">
-                  <div class="historial-campo">${m.TIPO === 'ENTRADA' ? 'Entrada' : 'Salida'} de ${escaparHtml(String(m.CANTIDAD))}</div>
-                  ${m.COMENTARIOS ? `<div class="historial-valores">${escaparHtml(m.COMENTARIOS)}</div>` : ''}
-                </div>
-                <div class="historial-meta">
-                  <div>${escaparHtml(m.USUARIO || '—')}</div>
-                  <div>${formatearFecha(m.FECHA)}</div>
-                </div>
-              </div>
-            `).join('') + '</div>'
-          : '<p class="empty-state">Sin movimientos registrados para este artículo.</p>';
-        refreshIcons();
-      } catch (err) {
-        contenedor.innerHTML = '<p class="error-msg">No se pudo cargar: ' + escaparHtml(err.message) + '</p>';
-      }
-    }
-
-    const tabla = DataTable.crear(document.getElementById('acc-tabla'), {
-      idCampo: 'ID',
-      idTabla: 'accesorios',
-      textoVacio: 'Todavía no hay artículos registrados',
-      alCambiarFiltros: () => actualizarKpis(tabla.getFiltradas()),
-      exportar: {
-        nombreArchivo: 'Accesorios',
-        titulo: 'Descarga la base completa: todas las filas y columnas de las hojas de artículos y movimientos, sin importar filtros ni búsqueda',
-        descargar: async () => {
-          const base = JSON.parse(await callServer('apiAccesoriosCompleto', state.token));
-          return ExportarExcel.descargarLibroCrudo({
-            nombreArchivo: 'Accesorios',
-            hojas: [{ nombre: 'Artículos', filas: base.articulos }, { nombre: 'Movimientos', filas: base.movimientos }],
-          });
-        },
-      },
-      etiquetaFila: (a) => a.NOMBRE,
-      detalle: {
-        titulo: (a) => a.NOMBRE || '',
-        contenidoExtra: (a, contenedor) => historialArticulo(a, contenedor),
-      },
-      columnas: [
-        { campo: 'CATEGORIA', titulo: 'Categoría', tipo: 'lista', fijada: true },
-        { campo: 'NOMBRE', titulo: 'Artículo', tipo: 'texto' },
-        { campo: 'MARCA', titulo: 'Marca', tipo: 'lista' },
-        { campo: 'STOCK', titulo: 'Stock', tipo: 'numero', agregado: 'suma',
-          render: (v, a) => `<span style="font-weight:700; color:${Number(a.STOCK) <= Number(a.STOCK_MINIMO || 0) ? 'var(--color-danger)' : 'var(--color-success)'}">${escaparHtml(String(v))}</span>` },
-      ],
-      accionesFila: puedeEditar ? [{
-        icono: 'pencil', titulo: 'Editar', alHacer: (a) => abrirEditarArticulo(a),
-      }] : [],
-      motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
-    });
-
-    function actualizarKpis(filas) {
-      document.getElementById('acc-stat-total').textContent = filas.length;
-      document.getElementById('acc-stat-bajo').textContent =
-        filas.filter((a) => Number(a.STOCK) <= Number(a.STOCK_MINIMO || 0)).length;
-    }
-
-    async function cargar() {
-      tabla.setCargando(true);
-      try {
-        todosLosArticulos = (await callServerListaCacheada('apiListarArticulosConStock', state.token)) || [];
-      } catch (err) {
-        tabla.setError('No se pudo cargar el catálogo: ' + err.message);
-        return;
-      }
-
-      selectArticulo.innerHTML = todosLosArticulos.map((a) => `<option value="${a.ID}">${escaparHtml(a.NOMBRE)}</option>`).join('');
-
-      actualizarKpis(todosLosArticulos);
-      tabla.setDatos(todosLosArticulos);
-    }
-
-    function abrirEditarArticulo(articulo) {
-      document.getElementById('editar-articulo-titulo').textContent = 'Editar artículo';
-      document.getElementById('editar-articulo-id').value = articulo.ID;
-      document.getElementById('editar-articulo-label').textContent = articulo.NOMBRE || '';
-      document.getElementById('editar-articulo-categoria').value = articulo.CATEGORIA || '';
-      document.getElementById('editar-articulo-nombre').value = articulo.NOMBRE || '';
-      document.getElementById('editar-articulo-marca').value = articulo.MARCA || '';
-      document.getElementById('editar-articulo-error').hidden = true;
-      modalEditar.hidden = false;
-    }
-    function abrirNuevoArticulo() {
-      document.getElementById('editar-articulo-titulo').textContent = 'Nuevo artículo';
-      document.getElementById('editar-articulo-id').value = '';
-      document.getElementById('editar-articulo-label').textContent = '';
-      document.getElementById('form-editar-articulo').reset();
-      document.getElementById('editar-articulo-error').hidden = true;
-      modalEditar.hidden = false;
-    }
-    function cerrarEditarArticulo() {
-      modalEditar.hidden = true;
-      document.getElementById('form-editar-articulo').reset();
-      document.getElementById('editar-articulo-error').hidden = true;
-    }
-    document.getElementById('btn-cancelar-editar-articulo').addEventListener('click', cerrarEditarArticulo);
-    modalEditar.addEventListener('click', (ev) => { if (ev.target === modalEditar) cerrarEditarArticulo(); });
-
-    if (puedeEditar) {
-      const wrap = document.getElementById('acc-nuevo-wrap');
-      wrap.hidden = false;
-      document.getElementById('btn-nuevo-articulo').addEventListener('click', abrirNuevoArticulo);
-    }
-
-    document.getElementById('form-editar-articulo').addEventListener('submit', async (ev) => {
-      ev.preventDefault();
-      const errorBox = document.getElementById('editar-articulo-error');
-      errorBox.hidden = true;
-      const id = document.getElementById('editar-articulo-id').value;
-      const datos = {
-        CATEGORIA: document.getElementById('editar-articulo-categoria').value.trim(),
-        NOMBRE: document.getElementById('editar-articulo-nombre').value.trim(),
-        MARCA: document.getElementById('editar-articulo-marca').value.trim(),
-      };
-      const btn = ev.target.querySelector('button[type="submit"]');
-      const textoOriginal = btn.innerHTML;
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner"></span> ' + (id ? 'Guardando…' : 'Registrando…');
-      toastCargando(id ? 'Guardando cambios…' : 'Registrando…');
-      try {
-        if (id) await callServer('apiActualizarArticulo', state.token, id, datos);
-        else await callServer('apiCrearArticulo', state.token, datos);
-        cerrarEditarArticulo();
-        invalidarCacheLista('apiListarArticulosConStock', state.token);
-        await cargar();
-        toastExito(id ? 'Actualizado exitosamente' : 'Registrado exitosamente');
-      } catch (err) {
-        errorBox.textContent = err.message;
-        errorBox.hidden = false;
-        toastError('No se pudo guardar: ' + err.message);
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = textoOriginal;
-      }
-    });
-
-    document.getElementById('form-movimiento').addEventListener('submit', async (ev) => {
-      ev.preventDefault();
-      const errorBox = document.getElementById('mov-error');
-      errorBox.hidden = true;
-      const btn = ev.target.querySelector('button[type="submit"]');
-      const textoOriginal = btn.innerHTML;
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner"></span> Registrando…';
-      toastCargando('Registrando movimiento…');
-      try {
-        await callServer(
-          'apiRegistrarMovimiento',
-          state.token,
-          selectArticulo.value,
-          document.getElementById('mov-tipo').value,
-          Number(document.getElementById('mov-cantidad').value),
-          ''
-        );
-        document.getElementById('mov-cantidad').value = '';
-        invalidarCacheLista('apiListarArticulosConStock', state.token);
-        await cargar();
-        toastExito('Registrado exitosamente');
-      } catch (err) {
-        errorBox.textContent = err.message;
-        errorBox.hidden = false;
-        toastError('No se pudo registrar: ' + err.message);
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = textoOriginal;
-      }
-    });
-
-    await cargar();
   }
 
   // ---------- Incidencias ----------

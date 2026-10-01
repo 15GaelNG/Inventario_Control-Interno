@@ -7,6 +7,10 @@ node_modules/
 !.clasp.lab.json.example
 *.log
 .DS_Store
+
+# Módulo temporal de correcciones: la semilla trae datos del inventario (tools/correcciones-semilla.cjs)
+src/services/lineas/LineasCorreccionesSemilla.gs
+
 # Archivo temporal que crea Excel mientras tienes un libro abierto
 ~$*
 

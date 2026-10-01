@@ -126,6 +126,12 @@ const Entidades = (function () {
     // para que sus altas nazcan con el formato correcto.
     'APP_EVIDENCIAS': { prefijo: 'EVI', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
     'APP_MOVIMIENTOS': { prefijo: 'MOV', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
+    // Avisos de Líneas (adendum por vencer): los crea LineasNotificaciones
+    'APP_NOTIFICACIONES': { prefijo: 'NTF', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
+    // Bandeja de resguardos y cancelaciones (Líneas, 30-sep): la crea LineasResguardos
+    'APP_RESGUARDOS': { prefijo: 'RSG', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
+    // Módulo TEMPORAL "Correcciones de Líneas" (30-sep): se borra cuando Líneas termine (ver LineasCorrecciones.gs)
+    'APP_CORRECCIONES': { prefijo: 'COR', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
   };
 
   /**

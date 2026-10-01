@@ -20,10 +20,7 @@ const LineasExportar = (function () {
     return {
       INVENTARIO: [TAB.LINEAS],
       CAMBIOS: [TAB.CAMBIOS],
-      REASIGNACIONES: [TAB.REASIG],
-      DESECHOS: [TAB.DESECHO],
-      REACTIVACION: [TAB.REACTIVACION],
-      SOLICITUD: [TAB.SOLICITUD],
+      // REASIGNACIONES, DESECHOS, REACTIVACION y SOLICITUD se retiraron con sus pestañas (30-sep)
       ACCESORIOS: ['ACCESORIOS CELULARES', 'MOVIMIENTOS_ACCESORIOS'],
     };
   };

@@ -1,0 +1,630 @@
+<style>
+  /* ============ Notificaciones: UNA campana para todo el sistema, organizada por módulo ============
+     Campana en la barra superior + vista "Notificaciones". Se inserta sola en .topbar-right. Módulos (1-oct):
+     Líneas (avisos guardados, con leído/no leído) y Vehículos (pendientes de NotificacionesService de jorge:
+     verificaciones, seguro e inspecciones; se calculan en vivo y se quitan solos al atenderse).
+     Un módulo nuevo necesita su entrada en MODULOS, sus tipos en TIPOS/GRUPOS y su fuente en FUENTES. */
+  :root {
+    --ntf-pronto: #b54708; --ntf-pronto-bg: #fef0c7;
+    --ntf-vencida: #b42318; --ntf-vencida-bg: #fee4e2;
+    --ntf-info: var(--color-primary); --ntf-info-bg: var(--color-primary-soft);
+  }
+  :root[data-theme="dark"] {
+    --ntf-pronto: #fdb022; --ntf-pronto-bg: #4e2d0a;
+    --ntf-vencida: #f97066; --ntf-vencida-bg: #55160c;
+    --ntf-info: #9fc6e4; --ntf-info-bg: #163041;
+  }
+
+  .ntf-campana-caja { position: relative; }
+  .ntf-campana {
+    position: relative; background: transparent; border: 1px solid var(--color-border); color: var(--color-text-muted);
+    width: 34px; height: 34px; border-radius: 999px; padding: 0; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .ntf-campana:hover, .ntf-campana[aria-expanded="true"] { background: var(--color-bg); color: var(--color-text); }
+  .ntf-contador {
+    position: absolute; top: -5px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+    background: var(--ntf-vencida); color: #fff; font-size: 10.5px; font-weight: 700; line-height: 18px; text-align: center;
+    border: 2px solid var(--color-surface);
+  }
+  .ntf-contador[hidden] { display: none; }
+
+  /* Fijo y acomodado por JS debajo de la campana (colocarPanel): con position absolute quedaba bajo el menú lateral */
+  .ntf-panel {
+    position: fixed; top: 60px; left: 12px; z-index: 950; width: 390px; max-width: calc(100vw - 24px);
+    background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius);
+    box-shadow: 0 12px 32px rgba(6, 20, 30, .18); overflow: hidden;
+  }
+  .ntf-panel[hidden] { display: none; }
+  .ntf-panel-cabeza {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 12px 14px; border-bottom: 1px solid var(--color-border);
+  }
+  .ntf-panel-cabeza strong { font-size: 14px; color: var(--color-text); }
+  .ntf-enlace {
+    background: transparent; border: none; padding: 4px 6px; color: var(--color-primary); font-size: 12.5px; font-weight: 600;
+    cursor: pointer; border-radius: 6px;
+  }
+  :root[data-theme="dark"] .ntf-enlace { color: var(--color-accent); }
+  .ntf-enlace:hover { background: var(--color-bg); }
+  .ntf-enlace[disabled] { opacity: .45; cursor: default; background: transparent; }
+  .ntf-panel-lista { max-height: 420px; overflow-y: auto; }
+  .ntf-panel-pie { border-top: 1px solid var(--color-border); padding: 8px; text-align: center; }
+
+  .ntf-item {
+    display: flex; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--color-border); cursor: pointer;
+    text-align: left; width: 100%; background: transparent; border-left: 3px solid transparent;
+  }
+  .ntf-item:last-child { border-bottom: none; }
+  .ntf-item:hover { background: var(--color-bg); }
+  .ntf-item.no-leida { border-left-color: var(--color-accent); background: var(--color-primary-soft); }
+  .ntf-item.no-leida:hover { filter: brightness(.98); }
+  .ntf-item-icono {
+    flex-shrink: 0; width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+    background: var(--ntf-pronto-bg); color: var(--ntf-pronto);
+  }
+  .ntf-item-icono.vencida { background: var(--ntf-vencida-bg); color: var(--ntf-vencida); }
+  .ntf-item-icono.info { background: var(--ntf-info-bg); color: var(--ntf-info); }
+  .ntf-item-cuerpo { min-width: 0; flex: 1; }
+  .ntf-item-titulo { font-size: 13.5px; font-weight: 600; color: var(--color-text); margin: 0 0 2px; }
+  .ntf-item-mensaje { font-size: 12.5px; color: var(--color-text-muted); margin: 0 0 6px; line-height: 1.4; }
+  .ntf-item-pie { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 11.5px; color: var(--color-text-muted); }
+  .ntf-chip { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+    background: var(--ntf-pronto-bg); color: var(--ntf-pronto); }
+  .ntf-chip.vencida { background: var(--ntf-vencida-bg); color: var(--ntf-vencida); }
+  .ntf-chip.info { background: var(--ntf-info-bg); color: var(--ntf-info); }
+  .ntf-vacio { padding: 28px 16px; text-align: center; color: var(--color-text-muted); font-size: 13px; }
+  .ntf-vacio .ico { width: 28px; height: 28px; margin-bottom: 6px; opacity: .7; }
+
+  /* Vista completa */
+  .ntf-vista .ntf-lista { padding: 0; overflow: hidden; }
+  .ntf-vista .ntf-item { padding: 14px 18px; cursor: default; }
+  .ntf-acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .ntf-acciones button { padding: 6px 12px; font-size: 12.5px; }
+  .ntf-controles { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+  .ntf-controles .tabs-simple { margin-bottom: 0; }
+  .ntf-filtro-tipo { font-size: 12.5px; color: var(--color-text-muted); }
+  .ntf-filtro-tipo button { margin-left: 4px; }
+  .ntf-modulos { margin-bottom: 12px; }
+  .ntf-modulo-titulo {
+    display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; padding: 10px 14px; border: none; border-radius: 0; text-align: left;
+    background: var(--color-bg); border-bottom: 1px solid var(--color-border); color: var(--color-text);
+    font-size: 12.5px; font-weight: 700; cursor: pointer;
+  }
+  .ntf-modulo-titulo span { font-weight: 500; color: var(--color-text-muted); }
+  /* button:hover global pinta de azul oscuro: aquí el hover es suave, como el de los avisos */
+  .ntf-modulo-titulo:hover, .ntf-modulo-titulo:focus-visible { background: var(--color-primary-soft); color: var(--color-text); }
+  .ntf-modulo-titulo:hover span { color: var(--color-text-muted); }
+  .ntf-vista .ntf-modulo-titulo { font-size: 13.5px; padding: 12px 18px; cursor: default; }
+  .ntf-vista .ntf-modulo-titulo:hover { background: var(--color-bg); }
+  .ntf-seccion {
+    padding: 10px 18px 8px; font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--color-text-muted); background: var(--color-bg); border-bottom: 1px solid var(--color-border);
+  }
+  .ntf-mas {
+    display: block; width: 100%; padding: 9px 18px; text-align: left; font-size: 12.5px; font-weight: 600;
+    background: transparent; border: none; border-bottom: 1px solid var(--color-border); color: var(--color-primary); cursor: pointer;
+  }
+  :root[data-theme="dark"] .ntf-mas { color: var(--color-accent); }
+  .ntf-mas:hover { background: var(--color-bg); }
+
+  @media (max-width: 600px) {
+    .ntf-panel { left: 12px !important; right: 12px; width: auto; max-width: none; }
+    .ntf-vista .ntf-item { padding: 12px 14px; }
+    .ntf-seccion, .ntf-mas { padding-left: 14px; padding-right: 14px; }
+  }
+</style>
+
+<template id="tpl-notificaciones">
+  <div class="ntf-vista" id="ntf-vista">
+    <div class="page-header">
+      <div>
+        <h2><i data-lucide="bell" class="ico"></i> Notificaciones</h2>
+        <p class="page-subtitle">Por módulo. Líneas: adendums por vencer, resguardos, cancelaciones y líneas que se siguen pagando.
+          Vehículos: verificaciones y seguros vencidos o por vencer e inspecciones atrasadas (se quitan solos al atenderse).</p>
+      </div>
+      <div class="page-header-actions">
+        <button type="button" class="secondary" id="ntf-marcar-todas"><i data-lucide="check-check" class="ico"></i> Marcar todas como leídas</button>
+      </div>
+    </div>
+
+    <div class="tabs-simple ntf-modulos" id="ntf-modulo" role="tablist" aria-label="Módulo"></div>
+    <!-- Una tarjeta por tipo: clic = ver solo ese tipo -->
+    <div class="stat-row" id="ntf-kpis">
+      <div class="stat-tile"><div class="stat-icon"><i data-lucide="loader-circle" class="ico"></i></div><div><div class="stat-value">…</div><div class="stat-label">Cargando</div></div></div>
+    </div>
+
+    <div class="ntf-controles">
+      <div class="tabs-simple" id="ntf-filtro" role="tablist" aria-label="Qué notificaciones ver">
+        <button type="button" class="tab-btn active" data-filtro="no-leidas" role="tab"><i data-lucide="bell-dot" class="ico"></i> Por atender <span id="ntf-num-no-leidas"></span></button>
+        <button type="button" class="tab-btn" data-filtro="todas" role="tab"><i data-lucide="inbox" class="ico"></i> Todas <span id="ntf-num-todas"></span></button>
+      </div>
+      <div class="ntf-filtro-tipo" id="ntf-filtro-tipo" hidden></div>
+    </div>
+
+    <div class="card ntf-lista" id="ntf-lista"><div class="ntf-vacio">Cargando…</div></div>
+  </div>
+</template>
+
+<script>
+  /**
+   * Notificaciones: campana de la barra superior (contador de no leídas y las más recientes) y la vista completa.
+   * Datos: apiLineasNotificaciones(token, limite) y apiLineasMarcarNotificaciones(token, ids|null).
+   * Cada tipo (TIPOS) dice su ícono y a dónde lleva: la ficha de la línea, la bandeja de resguardos o Líneas
+   * Telefónicas filtrada. Abrir un aviso lo marca como leído.
+   */
+  const Notificaciones = (function () {
+    const REVISAR_CADA_MS = 10 * 60 * 1000;
+    const EN_CAMPANA = 8;
+    const EN_CAMPANA_POR_MODULO = 4; // en la campana, lo más reciente de cada módulo
+    const AGRUPAR_DESDE = 3; // más de 3 avisos del mismo tipo en un mismo bloque de fechas se juntan en "Ver N más"
+    const BANDEJA = { vista: 'resguardos-lineas', etiqueta: 'Resguardos y cancelaciones' };
+
+    const MODULOS = [
+      { clave: 'lineas', etiqueta: 'Líneas', icono: 'smartphone' },
+      { clave: 'vehiculos', etiqueta: 'Vehículos', icono: 'car' },
+    ];
+    const VEHICULOS = 'vehiculos';
+    const esVehiculo = (n) => n.modulo === VEHICULOS;
+
+    /** grupo: para filtrar; color: pronto (ámbar) | vencida (rojo) | info (azul); destino: a dónde lleva. */
+    const TIPOS = {
+      // Vehículos (NotificacionesService.gs): sin leído/no leído, el color sale de la severidad
+      // Sin etiqueta de días: el mensaje de NotificacionesService ya dice cuántos ("vencida hace 427 día(s)")
+      VEH_VERIFICACION: { grupo: 'verificacion', icono: 'clipboard-check', accion: 'Ver vehículo' },
+      VEH_SEGURO: { grupo: 'seguro', icono: 'shield', accion: 'Ver vehículo' },
+      VEH_INSPECCION: { grupo: 'inspeccion', icono: 'clipboard-list', accion: 'Ver vehículo' },
+      ADENDUM: { grupo: 'adendum', icono: 'calendar-clock', accion: 'Ver línea' },
+      RESGUARDO: { grupo: 'resguardo', icono: 'package-check', color: 'info', accion: 'Abrir la bandeja', destino: BANDEJA },
+      SIN_RECIBIR: { grupo: 'resguardo', icono: 'package-search', color: 'pronto', accion: 'Abrir la bandeja', destino: BANDEJA, chip: 'Seguimiento semanal' },
+      CANCELACION: { grupo: 'cancelacion', icono: 'phone-off', color: 'info', accion: 'Abrir la bandeja', destino: BANDEJA },
+      CANCELACION_PENDIENTE: { grupo: 'cancelacion', icono: 'phone-missed', color: 'pronto', accion: 'Abrir la bandeja', destino: BANDEJA, chip: 'Seguimiento semanal' },
+      DISPONIBLE_VENCIDA: { grupo: 'pagos', icono: 'banknote', color: 'vencida', accion: 'Ver líneas disponibles', estatus: ['lineas', ['DISPONIBLE', 'RESGUARDO']], chip: 'Se siguen pagando' }, // RESGUARDO: valor viejo de disponible
+    };
+    const GRUPOS = [
+      { clave: 'adendum', modulo: 'lineas', etiqueta: 'Adendums', icono: 'calendar-clock' },
+      { clave: 'resguardo', modulo: 'lineas', etiqueta: 'Resguardos', icono: 'package-check' },
+      { clave: 'cancelacion', modulo: 'lineas', etiqueta: 'Cancelaciones', icono: 'phone-off' },
+      { clave: 'pagos', modulo: 'lineas', etiqueta: 'Líneas que se pagan', icono: 'banknote' },
+      { clave: 'verificacion', modulo: VEHICULOS, etiqueta: 'Verificaciones', icono: 'clipboard-check' },
+      { clave: 'seguro', modulo: VEHICULOS, etiqueta: 'Seguros', icono: 'shield' },
+      { clave: 'inspeccion', modulo: VEHICULOS, etiqueta: 'Inspecciones atrasadas', icono: 'clipboard-list' },
+    ];
+    const ETIQUETA_VEH = { verificacion: 'Verificación', seguro: 'Seguro', inspeccion: 'Inspección' };
+
+    /** Pendiente de Vehículos ({ tipo, folio, nucco, dias, severidad, texto }) con la forma de un aviso. */
+    function deVehiculo(v) {
+      const tipo = String(v.tipo || '').toLowerCase();
+      return {
+        id: 'veh-' + tipo + '-' + v.folio, modulo: VEHICULOS, tipo: 'VEH_' + tipo.toUpperCase(), folio: v.folio,
+        titulo: (ETIQUETA_VEH[tipo] || tipo) + ' · Nucco ' + (v.nucco || v.folio) + (v.nucco && v.folio ? ' (' + v.folio + ')' : ''),
+        mensaje: v.texto || '', dias: v.dias, severidad: v.severidad, fecha: null, leida: false,
+      };
+    }
+
+    /**
+     * De dónde sale cada módulo. Cada uno regresa { items, noLeidas }; si uno falla (sin permiso, por ejemplo) los
+     * demás siguen. Los de Vehículos no se marcan como leídos: cuentan mientras estén pendientes.
+     */
+    const FUENTES = {
+      lineas: (limite) => callServer('apiLineasNotificaciones', state.token, limite || 0)
+        .then((r) => ({ items: (r.items || []).map((n) => Object.assign(n, { modulo: 'lineas' })), noLeidas: r.noLeidas || 0 })),
+      vehiculos: () => callServer('apiNotificacionesPendientes', state.token)
+        .then((t) => { const items = JSON.parse(t || '[]').map(deVehiculo); return { items: items, noLeidas: items.length }; }),
+    };
+    const OTRO = { grupo: 'otros', icono: 'bell', color: 'info' };
+    /** Los avisos de "líneas para cancelar" anteriores al 30-sep se guardaron como RESGUARDO. */
+    const tipoDe = (n) => (n.tipo === 'RESGUARDO' && /cancelar/i.test(n.titulo) ? TIPOS.CANCELACION : TIPOS[n.tipo] || OTRO);
+
+    let moduloInicial = null; // la vista abre filtrada por este módulo (clic en su sección de la campana)
+    let ultima = null;      // última respuesta del servidor (la campana pide 8; la vista, todas)
+    let datosVista = null;  // lo que muestra la vista completa (todas)
+    let pedidoEn = 0;
+    let temporizador = null;
+    let panel = null;
+    let contador = null;
+    let boton = null;
+
+    const esc = (v) => (typeof escaparHtml === 'function' ? escaparHtml(v) : String(v == null ? '' : v));
+    const icono = (nombre) => '<i data-lucide="' + nombre + '" class="ico"></i>';
+    const pintarIconos = () => { if (typeof refreshIcons === 'function') refreshIcons(); };
+
+    function textoDias(dias) {
+      if (dias === null || dias === undefined) return '';
+      if (dias > 1) return 'Vence en ' + dias + ' días';
+      if (dias === 1) return 'Vence mañana';
+      if (dias === 0) return 'Vence hoy';
+      if (dias === -1) return 'Venció ayer';
+      return 'Venció hace ' + (-dias) + ' días';
+    }
+
+    function fechaCorta(v) {
+      if (!v) return '';
+      const d = new Date(v);
+      if (isNaN(d)) return '';
+      return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' +
+        d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    /** Color del ícono: el adendum depende de si ya venció; los demás, de su tipo. */
+    function colorDe(n) {
+      if (esVehiculo(n)) return n.severidad === 'porVencer' ? 'pronto' : 'vencida';
+      const t = tipoDe(n);
+      if (t === TIPOS.ADENDUM) return typeof n.dias === 'number' && n.dias < 0 ? 'vencida' : 'pronto';
+      return t.color || 'info';
+    }
+
+    const tieneDestino = (n) => !!(n.refId || n.folio || tipoDe(n).destino || tipoDe(n).estatus);
+
+    function htmlItem(n, conAcciones) {
+      const t = tipoDe(n);
+      const color = colorDe(n);
+      const icon = t === TIPOS.ADENDUM && color === 'vencida' ? 'calendar-x' : t.icono;
+      const conDias = esVehiculo(n) ? t.chipDias : true;
+      const chip = conDias && typeof n.dias === 'number' ? '<span class="ntf-chip' + (n.dias < 0 ? ' vencida' : '') + '">' + textoDias(n.dias) + '</span>'
+        : (t.chip ? '<span class="ntf-chip ' + color + '">' + esc(t.chip) + '</span>' : '');
+      return '<div class="ntf-item' + (n.leida ? '' : ' no-leida') + '" data-ntf-id="' + esc(n.id) + '"' +
+        (conAcciones ? '' : ' role="button" tabindex="0"') + '>' +
+        '<div class="ntf-item-icono ' + color + '">' + icono(icon) + '</div>' +
+        '<div class="ntf-item-cuerpo">' +
+          '<p class="ntf-item-titulo">' + esc(n.titulo) + '</p>' +
+          '<p class="ntf-item-mensaje">' + esc(n.mensaje) + '</p>' +
+          '<div class="ntf-item-pie">' + chip + '<span>' + esc(fechaCorta(n.fecha)) + '</span></div>' +
+          (conAcciones ? '<div class="ntf-acciones">' +
+            (tieneDestino(n) ? '<button type="button" data-ntf-ver>' + icono('circle-chevron-right') + ' ' + esc(t.accion || 'Ver') + '</button>' : '') +
+            (n.leida || esVehiculo(n) ? '' : '<button type="button" class="secondary" data-ntf-leer>' + icono('check') + ' Marcar como leída</button>') +
+          '</div>' : '') +
+        '</div>' +
+      '</div>';
+    }
+
+    const vacio = (texto) => '<div class="ntf-vacio">' + icono('bell-off') + '<div>' + esc(texto) + '</div></div>';
+
+    /** El aviso (de la vista o de la campana) por su id. */
+    function buscar(id) {
+      const en = (r) => (r ? r.items.filter((n) => n.id === id)[0] : null);
+      return en(datosVista) || en(ultima);
+    }
+
+    // ---------------- Campana ----------------
+
+    function pintarContador(noLeidas) {
+      if (!contador) return;
+      contador.hidden = !noLeidas;
+      contador.textContent = noLeidas > 99 ? '99+' : String(noLeidas || '');
+      boton.setAttribute('aria-label', noLeidas ? 'Notificaciones: ' + noLeidas + ' por atender' : 'Notificaciones');
+      boton.title = boton.getAttribute('aria-label');
+    }
+
+    /** Panel de la campana: una sección por módulo con lo más reciente; su título abre la vista de ese módulo. */
+    function pintarPanel() {
+      if (!panel) return;
+      const lista = panel.querySelector('.ntf-panel-lista');
+      const r = ultima;
+      panel.querySelector('[data-ntf-todas-leidas]').disabled = !(r && r.porModulo.lineas);
+      if (!r) { lista.innerHTML = '<div class="ntf-vacio">Cargando…</div>'; return; }
+      const html = MODULOS.map((m) => {
+        const del = r.items.filter((n) => n.modulo === m.clave);
+        if (!del.length) return '';
+        const cuenta = m.clave === VEHICULOS ? del.length + ' pendientes' : (r.porModulo[m.clave] || 0) + ' sin leer';
+        return '<button type="button" class="ntf-modulo-titulo" data-ntf-modulo="' + m.clave + '" title="Ver todas las de ' + esc(m.etiqueta) + '">' +
+          icono(m.icono) + ' ' + esc(m.etiqueta) + ' <span>· ' + cuenta + '</span></button>' +
+          del.slice(0, EN_CAMPANA_POR_MODULO).map((n) => htmlItem(n, false)).join('');
+      }).join('');
+      lista.innerHTML = html || vacio('No hay notificaciones.');
+      pintarIconos();
+    }
+
+    /** Pide todos los módulos a la vez. noLeidas (el número de la campana) = no leídas de Líneas + pendientes de Vehículos. */
+    async function actualizar(limite) {
+      if (typeof state === 'undefined' || !state.token) return null;
+      pedidoEn = Date.now();
+      const claves = Object.keys(FUENTES);
+      const res = await Promise.all(claves.map((k) => FUENTES[k](limite).catch((e) => {
+        console.warn('Notificaciones (' + k + '): ' + (e && e.message));
+        return null;
+      })));
+      if (res.every((x) => !x)) return null;
+      const r = { items: [], noLeidas: 0, porModulo: {} };
+      claves.forEach((k, i) => {
+        const x = res[i] || { items: [], noLeidas: 0 };
+        r.items = r.items.concat(x.items);
+        r.porModulo[k] = x.noLeidas;
+        r.noLeidas += x.noLeidas;
+      });
+      ultima = r;
+      pintarContador(r.noLeidas);
+      pintarPanel();
+      return r;
+    }
+
+    /** Debajo de la campana, alineado a su borde izquierdo y sin salirse de la ventana. */
+    function colocarPanel() {
+      const r = boton.getBoundingClientRect();
+      const ancho = Math.min(390, window.innerWidth - 24);
+      panel.style.top = Math.round(r.bottom + 8) + 'px';
+      panel.style.left = Math.round(Math.max(12, Math.min(r.left, window.innerWidth - ancho - 12))) + 'px';
+    }
+
+    function abrirPanel(si) {
+      if (!panel) return;
+      if (si) colocarPanel();
+      panel.hidden = !si;
+      boton.setAttribute('aria-expanded', String(si));
+      if (si) { pintarPanel(); actualizar(EN_CAMPANA); }
+    }
+
+    /** Marca en una respuesta (campana o vista) sin volver a pedirla; noLeidas cuenta también las que no trae. */
+    function aplicarLeidas(r, ids) {
+      if (!r) return;
+      r.items.forEach((n) => {
+        if (n.leida || esVehiculo(n) || (ids && ids.indexOf(n.id) < 0)) return;
+        n.leida = true;
+      });
+      const antes = r.porModulo.lineas || 0;
+      r.porModulo.lineas = ids ? Math.max(0, antes - ids.length) : 0;
+      r.noLeidas = Math.max(0, r.noLeidas - (antes - r.porModulo.lineas));
+    }
+
+    /** Solo los avisos de Líneas se marcan como leídos (los de Vehículos se quitan solos al atenderse). */
+    async function marcar(ids) {
+      if (ids) ids = ids.filter((id) => { const n = buscar(id); return n && !esVehiculo(n) && !n.leida; });
+      if (ids && !ids.length) return;
+      await callServer('apiLineasMarcarNotificaciones', state.token, ids || null);
+      aplicarLeidas(ultima, ids);
+      if (datosVista && datosVista !== ultima) aplicarLeidas(datosVista, ids);
+      if (ultima) { pintarContador(ultima.noLeidas); pintarPanel(); }
+    }
+
+    /** Abre a donde lleva el aviso (ficha de la línea o del vehículo, bandeja o Líneas Telefónicas filtrada). */
+    function abrir(id) {
+      const n = buscar(id);
+      abrirPanel(false);
+      if (!n) return;
+      if (esVehiculo(n)) {
+        if (n.folio && typeof verFichaVehiculoDesdeOtroModulo === 'function') verFichaVehiculoDesdeOtroModulo(n.folio);
+        return;
+      }
+      if (!n.leida) marcar([n.id]).catch(() => {});
+      const t = tipoDe(n);
+      if (n.refId && typeof Lineas !== 'undefined' && Lineas.irARegistro) { Lineas.irARegistro(n.refId); return; }
+      if (t.destino) { navegarA(t.destino.vista, t.destino.etiqueta); return; }
+      if (t.estatus && typeof Lineas !== 'undefined' && Lineas.irConEstatus) Lineas.irConEstatus(t.estatus[0], t.estatus[1]);
+    }
+
+    /** La vista completa, ya filtrada por un módulo (desde el título de su sección en la campana). */
+    function verModulo(modulo) {
+      abrirPanel(false);
+      moduloInicial = modulo || null;
+      navegarA('notificaciones', 'Notificaciones');
+    }
+
+    function montarCampana() {
+      const barra = document.querySelector('.topbar-right');
+      if (!barra || document.querySelector('.ntf-campana')) return;
+      const caja = document.createElement('div');
+      caja.className = 'ntf-campana-caja';
+      caja.innerHTML =
+        '<button type="button" class="ntf-campana" aria-haspopup="true" aria-expanded="false" aria-label="Notificaciones" title="Notificaciones">' +
+          icono('bell') + '<span class="ntf-contador" hidden></span></button>' +
+        '<div class="ntf-panel" hidden role="dialog" aria-label="Notificaciones">' +
+          '<div class="ntf-panel-cabeza"><strong>Notificaciones</strong>' +
+            '<button type="button" class="ntf-enlace" data-ntf-todas-leidas>Marcar todas como leídas</button></div>' +
+          '<div class="ntf-panel-lista"></div>' +
+          '<div class="ntf-panel-pie"><button type="button" class="ntf-enlace" data-ntf-ver-todas>Ver todas</button></div>' +
+        '</div>';
+      // Donde estaba la campanita de jorge: antes del usuario (o al principio si no hay)
+      barra.insertBefore(caja, barra.querySelector(':scope > .topbar-user-menu') || barra.firstChild);
+      boton = caja.querySelector('.ntf-campana');
+      contador = caja.querySelector('.ntf-contador');
+      panel = caja.querySelector('.ntf-panel');
+
+      boton.addEventListener('click', (ev) => { ev.stopPropagation(); abrirPanel(panel.hidden); });
+      panel.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        if (ev.target.closest('[data-ntf-todas-leidas]')) { marcar(null).catch((e) => Notificar.error(e.message)); return; }
+        if (ev.target.closest('[data-ntf-ver-todas]')) { verModulo(null); return; }
+        const mod = ev.target.closest('[data-ntf-modulo]');
+        if (mod) { verModulo(mod.dataset.ntfModulo); return; }
+        const item = ev.target.closest('.ntf-item');
+        if (item) abrir(item.dataset.ntfId);
+      });
+      panel.addEventListener('keydown', (ev) => {
+        const item = ev.target.closest('.ntf-item');
+        if (item && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); abrir(item.dataset.ntfId); }
+      });
+      document.addEventListener('click', () => { if (!panel.hidden) abrirPanel(false); });
+      window.addEventListener('resize', () => { if (!panel.hidden) colocarPanel(); });
+      document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && !panel.hidden) { abrirPanel(false); boton.focus(); } });
+      pintarIconos();
+    }
+
+    /** Revisa al entrar al sistema, cada 10 min y al volver a la pestaña (si pasaron más de 2 min). */
+    function vigilarSesion() {
+      const shell = document.getElementById('app-shell');
+      if (!shell) return;
+      const alCambiar = () => {
+        clearInterval(temporizador);
+        temporizador = null;
+        if (shell.hidden) { ultima = null; pintarContador(0); if (panel) abrirPanel(false); return; }
+        actualizar(EN_CAMPANA);
+        temporizador = setInterval(() => actualizar(EN_CAMPANA), REVISAR_CADA_MS);
+      };
+      new MutationObserver(alCambiar).observe(shell, { attributes: true, attributeFilter: ['hidden'] });
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && !shell.hidden && Date.now() - pedidoEn > 2 * 60 * 1000) actualizar(EN_CAMPANA);
+      });
+      alCambiar();
+    }
+
+    // ---------------- Vista completa ----------------
+
+    /** Bloque de fechas de un aviso: Hoy, Ayer, Esta semana (7 días) o Antes. */
+    function bloqueDe(fecha) {
+      const d = fecha ? new Date(fecha) : null;
+      if (!d || isNaN(d)) return 'Antes';
+      const hoy = new Date();
+      const inicio = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+      const dias = Math.round((inicio(hoy) - inicio(d)) / 864e5);
+      return dias <= 0 ? 'Hoy' : dias === 1 ? 'Ayer' : dias < 7 ? 'Esta semana' : 'Antes';
+    }
+
+    function initVista() {
+      const raiz = document.getElementById('ntf-vista');
+      let filtro = 'no-leidas';
+      let grupo = null;          // tipo elegido en las tarjetas (null = todos)
+      let modulo = moduloInicial; // módulo elegido arriba (null = todos)
+      moduloInicial = null;
+      const abiertos = {};       // "bloque|tipo" que el usuario desplegó con "Ver N más"
+      datosVista = null;
+      const delModulo = (n) => !modulo || n.modulo === modulo;
+
+      /** Selector de módulo: Todos · Líneas · Vehículos, con cuántas hay en el filtro actual. */
+      function pintarModulos(items) {
+        const cuenta = (m) => items.filter((n) => (!m || n.modulo === m) && (filtro === 'todas' || !n.leida)).length;
+        const boton = (clave, ico, etiqueta) => '<button type="button" class="tab-btn' + ((modulo || '') === clave ? ' active' : '') +
+          '" role="tab" data-ntf-mod="' + clave + '">' + icono(ico) + ' ' + esc(etiqueta) + ' (' + cuenta(clave || null) + ')</button>';
+        raiz.querySelector('#ntf-modulo').innerHTML = boton('', 'layers', 'Todos') + MODULOS.map((m) => boton(m.clave, m.icono, m.etiqueta)).join('');
+      }
+
+      /** Líneas: por bloques de fecha; dentro de cada bloque, más de AGRUPAR_DESDE avisos del mismo tipo se juntan. */
+      function porFechas(ver) {
+        return ['Hoy', 'Ayer', 'Esta semana', 'Antes'].map((b) => seccionAgrupada(b, ver.filter((n) => bloqueDe(n.fecha) === b))).join('');
+      }
+
+      /** Vehículos (sin fecha: son pendientes de hoy): por tipo, lo más urgente primero. */
+      function porTipo(ver) {
+        return GRUPOS.filter((g) => g.modulo === VEHICULOS)
+          .map((g) => seccionAgrupada(g.etiqueta, ver.filter((n) => tipoDe(n).grupo === g.clave))).join('');
+      }
+
+      function seccionAgrupada(titulo, del) {
+        if (!del.length) return '';
+        const vistos = {};
+        let cuerpo = '';
+        del.forEach((n) => {
+          const t = n.tipo || 'OTRO';
+          vistos[t] = (vistos[t] || 0) + 1;
+          const k = titulo + '|' + t;
+          if (vistos[t] <= AGRUPAR_DESDE || abiertos[k]) { cuerpo += htmlItem(n, true); return; }
+          if (vistos[t] === AGRUPAR_DESDE + 1) {
+            const resto = del.filter((x) => (x.tipo || 'OTRO') === t).length - AGRUPAR_DESDE;
+            cuerpo += '<button type="button" class="ntf-mas" data-ntf-abrir="' + esc(k) + '">' + icono('chevrons-down') + ' Ver ' + resto + ' más de "' +
+              esc(String(n.titulo).split('·')[0].trim()) + '"</button>';
+          }
+        });
+        return '<div class="ntf-seccion">' + esc(titulo) + ' · ' + del.length + '</div>' + cuerpo;
+      }
+
+      function pintarKpis(todos) {
+        const items = todos.filter(delModulo);
+        const contar = (g, soloNoLeidas) => items.filter((n) => tipoDe(n).grupo === g && (!soloNoLeidas || !n.leida)).length;
+        const noLeidas = items.filter((n) => !n.leida).length;
+        const tile = (clave, ico, valor, etiqueta, clase) => '<div class="stat-tile stat-tile-clickable' + (clase ? ' ' + clase : '') +
+          (grupo === clave ? ' stat-tile-activo' : '') + '" role="button" tabindex="0" data-ntf-grupo="' + clave + '" title="Ver solo estos avisos">' +
+          '<div class="stat-icon">' + icono(ico) + '</div><div><div class="stat-value">' + valor + '</div><div class="stat-label">' + esc(etiqueta) + '</div></div></div>';
+        raiz.querySelector('#ntf-kpis').innerHTML =
+          tile('', 'bell-dot', noLeidas, 'Por atender', noLeidas ? 'stat-tile-warn' : 'stat-tile-ok') +
+          GRUPOS.filter((g) => !modulo || g.modulo === modulo).map((g) => {
+            const sin = contar(g.clave, true);
+            return tile(g.clave, g.icono, contar(g.clave, false), g.etiqueta + (sin && g.modulo !== VEHICULOS ? ' · ' + sin + ' sin leer' : ''));
+          }).join('');
+      }
+
+      function pintar() {
+        if (!document.body.contains(raiz) || !datosVista) return;
+        const items = datosVista.items;
+        pintarKpis(items);
+        pintarModulos(items);
+        const delGrupo = items.filter((n) => delModulo(n) && (!grupo || tipoDe(n).grupo === grupo));
+        const noLeidas = delGrupo.filter((n) => !n.leida);
+        raiz.querySelector('#ntf-num-no-leidas').textContent = '(' + noLeidas.length + ')';
+        raiz.querySelector('#ntf-num-todas').textContent = '(' + delGrupo.length + ')';
+        raiz.querySelectorAll('#ntf-filtro .tab-btn').forEach((b) => {
+          const activo = b.dataset.filtro === filtro;
+          b.classList.toggle('active', activo);
+          b.setAttribute('aria-selected', String(activo));
+        });
+        const etiquetaGrupo = (GRUPOS.filter((g) => g.clave === grupo)[0] || {}).etiqueta;
+        const ft = raiz.querySelector('#ntf-filtro-tipo');
+        ft.hidden = !grupo;
+        ft.innerHTML = grupo ? 'Solo: <strong>' + esc(etiquetaGrupo) + '</strong> <button type="button" class="ntf-enlace" data-ntf-quitar-grupo>Ver todos los tipos</button>' : '';
+        raiz.querySelector('#ntf-marcar-todas').disabled = !items.some((n) => !n.leida && !esVehiculo(n));
+        raiz.querySelector('#ntf-marcar-todas').hidden = modulo === VEHICULOS; // los de Vehículos no se marcan
+
+        const ver = filtro === 'no-leidas' ? noLeidas : delGrupo;
+        if (!ver.length) {
+          raiz.querySelector('#ntf-lista').innerHTML = vacio(filtro === 'no-leidas' ? 'Estás al día: no tienes nada por atender' + (grupo ? ' de este tipo.' : '.') : 'Todavía no hay notificaciones.');
+          pintarIconos();
+          return;
+        }
+        const render = (lista) => (lista.length && esVehiculo(lista[0]) ? porTipo(lista) : porFechas(lista));
+        const html = modulo || grupo ? render(ver) : MODULOS.map((m) => {
+          const del = ver.filter((n) => n.modulo === m.clave);
+          return del.length ? '<div class="ntf-modulo-titulo">' + icono(m.icono) + ' ' + esc(m.etiqueta) + ' <span>· ' + del.length + '</span></div>' + render(del) : '';
+        }).join('');
+        raiz.querySelector('#ntf-lista').innerHTML = html;
+        pintarIconos();
+      }
+
+      async function cargar() {
+        const r = await actualizar(0);
+        if (!r) {
+          raiz.querySelector('#ntf-lista').innerHTML = '<div class="ntf-vacio">No se pudieron cargar las notificaciones.</div>';
+          return;
+        }
+        datosVista = r;
+        if (filtro === 'no-leidas' && !r.noLeidas && r.items.length) filtro = 'todas';
+        pintar();
+      }
+
+      raiz.querySelector('#ntf-modulo').addEventListener('click', (ev) => {
+        const b = ev.target.closest('[data-ntf-mod]');
+        if (!b) return;
+        modulo = b.dataset.ntfMod || null;
+        grupo = null;
+        pintar();
+      });
+      raiz.querySelector('#ntf-filtro').addEventListener('click', (ev) => {
+        const b = ev.target.closest('.tab-btn');
+        if (!b) return;
+        filtro = b.dataset.filtro;
+        pintar();
+      });
+      const elegirGrupo = (el) => {
+        const g = el.dataset.ntfGrupo || null;
+        grupo = grupo === g ? null : g;
+        pintar();
+      };
+      raiz.querySelector('#ntf-kpis').addEventListener('click', (ev) => {
+        const t = ev.target.closest('[data-ntf-grupo]');
+        if (t) elegirGrupo(t);
+      });
+      raiz.querySelector('#ntf-kpis').addEventListener('keydown', (ev) => {
+        const t = ev.target.closest('[data-ntf-grupo]');
+        if (t && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); elegirGrupo(t); }
+      });
+      raiz.querySelector('#ntf-filtro-tipo').addEventListener('click', (ev) => {
+        if (ev.target.closest('[data-ntf-quitar-grupo]')) { grupo = null; pintar(); }
+      });
+      raiz.querySelector('#ntf-marcar-todas').addEventListener('click', () => {
+        marcar(null).then(pintar).catch((e) => Notificar.error(e.message));
+      });
+      raiz.querySelector('#ntf-lista').addEventListener('click', (ev) => {
+        const mas = ev.target.closest('[data-ntf-abrir]');
+        if (mas) { abiertos[mas.dataset.ntfAbrir] = true; pintar(); return; }
+        const item = ev.target.closest('.ntf-item');
+        if (!item) return;
+        if (ev.target.closest('[data-ntf-ver]')) { abrir(item.dataset.ntfId); return; }
+        if (ev.target.closest('[data-ntf-leer]')) marcar([item.dataset.ntfId]).then(pintar).catch((e) => Notificar.error(e.message));
+      });
+      cargar();
+    }
+
+    montarCampana();
+    vigilarSesion();
+
+    // app.html llama iniciar() al entrar (lo pedía la campanita de jorge): aquí la sesión ya la vigila vigilarSesion
+    return { iniciar: () => {}, initVista: initVista, actualizar: actualizar, TIPOS: TIPOS, MODULOS: MODULOS };
+  })();
+</script>

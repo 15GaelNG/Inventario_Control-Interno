@@ -243,7 +243,7 @@ const CapitalHumano = (function () {
       columnaNombre: 'RESPONSABLE VEHICULO', columnaNumero: 'NO EMPLEADO', etiqueta: 'FOLIO' },
     { nombre: 'CAJAS CHICAS (persona)', hoja: 'CAJAS CHICAS', libro: () => Config.SPREADSHEET_IDS.VEHICULOS(),
       columnaNombre: 'RESPONSABLE DE CAJA CHICA', columnaCorreo: 'CORREO ELECTRONICO DE RESPONSABLE', etiqueta: 'ID CCH' },
-    // El módulo de Líneas (Emmanuel) no recalcula ID PERSONA al guardar: lo mantiene Salud.
+    // Líneas también lo recalcula al guardar (LineasRepo.conPersona_, 01/10/2026); Salud pone al día lo de antes.
     { nombre: 'LINEAS TELEFONICAS (persona)', hoja: 'LINEAS TELEFONICAS', libro: () => Config.SPREADSHEET_IDS.TELEFONIA(),
       columnaNombre: 'RESPONSABLE', columnaNumero: 'NO EMPLEADO', columnaCorreo: 'EMAIL USUARIO', etiqueta: 'NUCO' },
   ];

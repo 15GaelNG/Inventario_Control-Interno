@@ -163,13 +163,16 @@ const LineasArchivos = (function () {
    * archivos: [{ carpetaId, ruta: "INSPECCIONES/2026/…/INSP 12 08/FOTOS", tipo, archivos: [{ id, nombre, mime,
    * miniatura, enlace, video }] }]. Una consulta a Drive por nivel (todas las carpetas del nivel a la vez).
    */
-  function archivosNuco(nuco) {
+  function archivosNuco(nuco, soloTipo) {
     const n4 = nuco ? LineasUtil.nuco4(nuco) : null;
     const raiz = n4 && carpetasNucos()[n4];
     if (!raiz) return { carpetaId: null, grupos: [] };
     const rutas = {};
     rutas[raiz] = '';
     const grupos = {};
+    // `soloTipo` ('INSPECCION' | 'RESPONSIVA'): del primer nivel solo se baja a INSPECCIONES o CARTA RESPONSIVA.
+    // "Última inspección / responsiva" no necesita recorrer todo el NUCO (era lo que la hacía tardar).
+    const ramaPermitida = soloTipo === 'INSPECCION' ? /^INSPECCIONES$/i : (soloTipo === 'RESPONSIVA' ? /^CARTA RESPONSIVA$/i : null);
     let nivel = [raiz];
     for (let profundidad = 0; nivel.length && profundidad < 8; profundidad++) {
       const siguiente = [];
@@ -187,10 +190,12 @@ const LineasArchivos = (function () {
             if (padre === undefined) return;
             const ruta = (rutas[padre] ? rutas[padre] + '/' : '') + f.name;
             if (f.mimeType === 'application/vnd.google-apps.folder') {
+              if (ramaPermitida && padre === raiz && !ramaPermitida.test(f.name.trim())) return;
               rutas[f.id] = ruta;
               siguiente.push(f.id);
               return;
             }
+            if (ramaPermitida && padre === raiz) return; // archivos sueltos del NUCO: no son de esa rama
             if (!grupos[padre]) {
               const tipo = /(^|\/)(INSPECCIONES)(\/|$)/i.test(rutas[padre]) ? 'INSPECCION' : (/(^|\/)CARTA RESPONSIVA(\/|$)/i.test(rutas[padre]) ? 'RESPONSIVA' : 'OTRO');
               grupos[padre] = { carpetaId: padre, ruta: rutas[padre], tipo: tipo, archivos: [] };

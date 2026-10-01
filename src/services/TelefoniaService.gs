@@ -40,6 +40,7 @@ const TelefoniaService = (function () {
       puedeOperar: rolesOperan_().indexOf(sesion.rol) >= 0,
       puedeVerSecretos: puedeVerSecretos_(sesion),
       esAdmin: sesion.rol === Config.ROLES.ADMIN,
+      puedeAprobarResguardos: LineasResguardos.puedeAprobar(usuarioResguardo_(sesion)),
     };
   }
 
@@ -93,13 +94,25 @@ const TelefoniaService = (function () {
   }
 
   /** Carpeta del NUCO del registro en NUCOS (caché 10 min por NUCO), sin firmas ni patrones si no es ADMIN. */
-  function carpetaNucoDe_(id, sesion) {
+  /**
+   * `soloTipo`: solo la rama INSPECCIONES o CARTA RESPONSIVA (para "Última …"). Si ya está en caché el NUCO completo
+   * se usa ese; si no, se recorre solo esa rama (mucho más rápido) y se guarda aparte.
+   */
+  function carpetaNucoDe_(id, sesion, soloTipo) {
     const f = LineasRepo.leerRegistroPorId(id);
     if (!f) throw new Error('No existe el registro ' + id);
     const nuco = LineasUtil.nuco4(LineasUtil.col(f, 'NUCO'));
     if (!nuco) return { nuco: null, carpetaId: null, grupos: [] };
     const clave = 'nucos_archivos_v2_' + nuco;
     let r = LineasDatos.cacheLeer(clave);
+    if (!r && soloTipo) {
+      const claveRama = clave + '_' + soloTipo;
+      r = LineasDatos.cacheLeer(claveRama);
+      if (!r) {
+        r = LineasUtil.paraCliente(LineasArchivos.archivosNuco(nuco, soloTipo));
+        LineasDatos.cacheGuardar(claveRama, r, 600);
+      }
+    }
     if (!r) {
       r = LineasUtil.paraCliente(LineasArchivos.archivosNuco(nuco));
       LineasDatos.cacheGuardar(clave, r, 600);
@@ -121,7 +134,7 @@ const TelefoniaService = (function () {
     const sesion = Auth.validarSesion(token);
     if (tipo !== 'INSPECCION' && tipo !== 'RESPONSIVA') throw new Error('Tipo de documento inválido.');
     const nombreTipo = tipo === 'INSPECCION' ? 'inspección' : 'responsiva';
-    const r = carpetaNucoDe_(id, sesion);
+    const r = carpetaNucoDe_(id, sesion, tipo);
     if (!r.nuco) throw new Error('Este registro no tiene NUCO: no tiene carpeta en NUCOS.');
     if (!r.carpetaId) throw new Error('No hay carpeta del NUCO ' + r.nuco + ' en NUCOS.');
     const grupos = r.grupos.filter((g) => g.tipo === tipo); // ya vienen de la más reciente a la más antigua
@@ -265,10 +278,26 @@ const TelefoniaService = (function () {
     };
   }
 
+  /** Carpeta de fotos que el sistema le agregó a una inspección de NUCOS ("drive_<carpeta>"), o null. */
+  function carpetaFotosExtra_(id) {
+    const TAB_EV = LineasRepo.TAB.APP_EVID;
+    if (!LineasDatos.existeTabla(TAB_EV)) return null;
+    const filas = LineasDatos.buscarFilas(TAB_EV, 'ID_REGISTRO', id);
+    if (!filas.length) return null;
+    const f = LineasDatos.leerFilas([{ tabla: TAB_EV, filas: filas.slice(0, 1) }])[0][0];
+    return String(f['FOTOS_CARPETA_ID'] || '').trim() || null;
+  }
+
   /** Historial de un registro (bitácora, reasignaciones, desechos y operaciones del sistema). */
   function historial(token, id) {
     const sesion = Auth.validarSesion(token);
     return LineasUtil.paraCliente(LineasRepo.historialDeRegistro(id, puedeVerSecretos_(sesion)));
+  }
+
+  /** Números que ha tenido el NUCO del registro (vista 'equipo') o NUCOs por los que pasó su número (vista 'linea'). */
+  function asignaciones(token, id, vista) {
+    Auth.validarSesion(token);
+    return LineasUtil.paraCliente(LineasRepo.asignacionesDeRegistro(id, vista));
   }
 
   /** Archivos de una carpeta de Drive (fotos/PDF) con miniaturas. */
@@ -317,9 +346,11 @@ const TelefoniaService = (function () {
 
     const fotos = [];
     const pdfs = insp.drive && insp.drive.pdfs ? insp.drive.pdfs.slice() : [];
-    if (insp.drive) {
+    // Fotos agregadas en el sistema a una inspección de NUCOS: viven en una carpeta de la app (APP_EVIDENCIAS)
+    const carpetaExtra = /^drive_/.test(String(id)) ? carpetaFotosExtra_(id) : null;
+    if (insp.drive || carpetaExtra) {
       const vistos = {};
-      [insp.drive.fotosCarpetaId, insp.drive.carpetaId].filter(Boolean).forEach((c) => {
+      [insp.drive && insp.drive.fotosCarpetaId, insp.drive && insp.drive.carpetaId, carpetaExtra].filter(Boolean).forEach((c) => {
         archivosCarpeta_(c, 200).forEach((f) => {
           if (vistos[f.id]) return;
           vistos[f.id] = true;
@@ -379,34 +410,6 @@ const TelefoniaService = (function () {
     return Utilities.base64Encode(Utilities.gzip(Utilities.newBlob(json, 'application/json')).getBytes());
   }
 
-  /** Reactivación, Solicitud y Post Venta, conservando las tablas del AppSheet. */
-  function vistaOperativa(token, tipo, opciones) {
-    const sesion = Auth.validarSesion(token);
-    return LineasUtil.paraCliente(LineasRepo.vistaOperativa(tipo, opciones || {}, puedeVerSecretos_(sesion)));
-  }
-
-  /** Formulario de alta de Reactivación / Solicitud tal como el del AppSheet. */
-  function formularioOperativa(token, tipo) {
-    const sesion = Auth.requiereRol(token, rolesOperan_());
-    return LineasUtil.paraCliente(LineasOperativas.formulario(tipo, usuarioOperacion_(sesion)));
-  }
-
-  /** Formulario de edición de un registro de Reactivación, Solicitud o Desecho (acción EDIT del AppSheet). */
-  function formularioEdicionOperativa(token, tipo, fila, llave) {
-    const sesion = Auth.requiereRol(token, rolesOperan_());
-    return LineasUtil.paraCliente(LineasOperativas.formularioEdicion(tipo, fila, llave, usuarioOperacion_(sesion)));
-  }
-
-  function editarVistaOperativa(token, tipo, fila, llave, datos) {
-    const sesion = Auth.requiereRol(token, rolesOperan_());
-    return LineasUtil.paraCliente(LineasOperativas.editar(tipo, fila, llave, datos || {}, usuarioOperacion_(sesion)));
-  }
-
-  function crearVistaOperativa(token, tipo, datos) {
-    const sesion = Auth.requiereRol(token, rolesOperan_());
-    return LineasOperativas.crear(tipo, datos || {}, usuarioOperacion_(sesion));
-  }
-
   /** Formulario de alta (id vacío) o edición de LINEAS TELEFONICAS, como el del AppSheet. */
   function formularioRegistro(token, id) {
     const sesion = Auth.requiereRol(token, rolesOperan_());
@@ -433,7 +436,10 @@ const TelefoniaService = (function () {
   function fotosInspeccion(token, id, accion) {
     const sesion = Auth.requiereRol(token, rolesOperan_());
     if (accion !== 'preparar' && accion !== 'actualizar') throw new Error('Acción inválida.');
-    return LineasUtil.paraCliente(LineasCaptura.fotosInspeccion(id, accion, sesion.correo));
+    // Inspección de la carpeta NUCOS: se valida que la carpeta sea de NUCOS y se pasa armada (las fotos van a la app)
+    const externa = /^drive_/.test(String(id)) ? inspeccionNucos_(String(id).slice(6)) : null;
+    if (/^drive_/.test(String(id)) && !externa) throw new Error('No existe la inspección ' + id);
+    return LineasUtil.paraCliente(LineasCaptura.fotosInspeccion(id, accion, sesion.correo, externa));
   }
 
   /** Vacía las cachés del módulo (después de editar la hoja a mano). Solo ADMIN. */
@@ -499,10 +505,87 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente(LineasCaptura.generarPdf(tipo, id, !!forzar, usuarioOperacion_(sesion), firmas || null));
   }
 
+  /** Panorama de Líneas: equipos y líneas por estatus, hoy y al cierre de cada mes. */
+  function panorama(token, forzar) {
+    Auth.validarSesion(token);
+    return LineasPanorama.panorama(!!forzar);
+  }
+
+  /** Acciones masivas de equipos (resguardo, reasignar, cancelar): formulario y aplicación. */
+  function formularioMasivo(token, accion) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    return LineasUtil.paraCliente(LineasRegistros.formularioMasivo(accion, usuarioOperacion_(sesion)));
+  }
+
+  function accionMasiva(token, accion, ids, datos) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    return LineasUtil.paraCliente(LineasRegistros.accionMasiva(accion, ids, datos || {}, usuarioOperacion_(sesion)));
+  }
+
+  /** Notificaciones de la campana. Cada quien marca las suyas; las de resguardos solo las ve quien aprueba. */
+  function notificaciones(token, limite) {
+    const sesion = Auth.validarSesion(token);
+    const esAprobador = LineasResguardos.puedeAprobar(usuarioResguardo_(sesion));
+    return LineasUtil.paraCliente(LineasNotificaciones.bandeja(sesion.correo, Number(limite) || 0, { esAprobador: esAprobador }));
+  }
+
+  // ---- Resguardo y bandeja de Pau (reunión con Líneas, 30-sep) ----
+
+  function usuarioResguardo_(sesion) {
+    return Object.assign(usuarioOperacion_(sesion), { esAdmin: sesion.rol === Config.ROLES.ADMIN });
+  }
+
+  /** Formulario de "Mandar a resguardo": datos de cada equipo y la propuesta de su línea. */
+  function formularioResguardo(token, ids) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    return LineasUtil.paraCliente(LineasResguardos.formulario(ids, usuarioResguardo_(sesion)));
+  }
+
+  function mandarResguardo(token, ids, datos) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    return LineasUtil.paraCliente(LineasResguardos.mandar(ids, datos || {}, usuarioResguardo_(sesion)));
+  }
+
+  /** "Mandar a cancelación": una o varias líneas a la bandeja de cancelaciones sin mandar el equipo a resguardo. */
+  function mandarCancelacion(token, ids, datos) {
+    const sesion = Auth.requiereRol(token, rolesOperan_());
+    return LineasUtil.paraCliente(LineasResguardos.mandarCancelacion(ids, datos || {}, usuarioResguardo_(sesion)));
+  }
+
+  /** Bandeja de resguardos y cancelaciones: la ve todo el módulo; los pasos solo quien aprueba. */
+  function bandejaResguardos(token) {
+    const sesion = Auth.validarSesion(token);
+    return JSON.stringify(LineasUtil.paraCliente(LineasResguardos.bandeja(usuarioResguardo_(sesion))));
+  }
+
+  /** accion: RECIBIR | ENTREGAR | VENDIDO | CARTA_FIRMADA | CARTA_ENVIADA | CANCELADA. */
+  function accionBandejaResguardo(token, accion, ids, datos) {
+    const sesion = Auth.validarSesion(token);
+    const u = usuarioResguardo_(sesion);
+    const d = datos || {};
+    const R = LineasResguardos;
+    const hacer = {
+      RECIBIR: () => R.recibir(ids, u),
+      ENTREGAR: () => R.entregar(ids, d, u),
+      VENDIDO: () => R.vendido(ids, d, u),
+      CARTA_FIRMADA: () => R.faseCancelacion(ids, R.FASE.FIRMADA, d, u),
+      CARTA_ENVIADA: () => R.faseCancelacion(ids, R.FASE.ENVIADA, d, u),
+      CANCELADA: () => R.confirmarCancelacion(ids, d, u),
+    }[String(accion || '').toUpperCase()];
+    if (!hacer) throw new Error('Acción desconocida: ' + accion);
+    return LineasUtil.paraCliente(hacer());
+  }
+
+  function marcarNotificaciones(token, ids) {
+    const sesion = Auth.validarSesion(token);
+    return LineasNotificaciones.marcarLeidas(sesion.correo, Array.isArray(ids) ? ids : null);
+  }
+
   return {
-    permisos, indice, equipo, linea, evidencias, historial, inspeccion, catalogos, colaboradores, bitacora, vistaOperativa, formularioOperativa, crearVistaOperativa, formularioRegistro, recargarDatos,
+    permisos, indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, catalogos, colaboradores, bitacora, formularioRegistro, recargarDatos,
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf, crearRegistro, editarRegistro,
     cambiarEstatus, fotosInspeccion, exportarBase, archivo, ultimoDocumentoNuco,
-    formularioEdicionOperativa, editarVistaOperativa,
+    notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva, panorama,
+    formularioResguardo, mandarResguardo, mandarCancelacion, bandejaResguardos, accionBandejaResguardo,
   };
 })();

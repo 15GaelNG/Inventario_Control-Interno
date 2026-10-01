@@ -47,18 +47,30 @@ const LineasRepo = (function () {
   /** Catálogos del AppSheet (enums de LINEAS TELEFONICAS). */
   const CATALOGO = {
     tipos: ['EQUIPO', 'EQUIPO + SIM', 'EQUIPO + SIM BASICO', 'LINEA', 'LINEA BASICA', 'BANDA ANCHA', 'MODEM', 'CAMARA'],
-    estatusEquipo: ['USO', 'RESGUARDO', 'ESPERA DE EQUIPO', 'ESPERA DE RESPONSIVA', 'EN ENVIO', 'CANCELADO', 'EXTRAVIADO', 'VENDIDO', 'DONADO', 'VENTA', 'POSIBLE VENTA', 'DESECHO', 'DESECHADO', 'BLOQUEADO', 'ROBO'],
-    estatusLinea: ['USO', 'SUSPENDIDA', 'RESGUARDO', 'ESPERA DE EQUIPO', 'ESPERA DE RESPONSIVA', 'EN ENVIO', 'RENOVADA', 'SIN LINEA', 'EN PROCESO DE CANCELACION', 'CANCELADA'],
+    // Estatus acordados con Líneas el 30-sep (ya no son los del AppSheet). Los equipos no se cancelan: solo las líneas.
+    // Sin acentos, como pide el AppSheet ("MAYÚSCULAS Y SIN ACENTOS"). Los valores viejos que sigan en la hoja se
+    // muestran "(no está en la lista)" y Líneas los corrige; la conversión propuesta está en
+    // migracion/CONVERSION_ESTATUS_LINEAS.md de la carpeta de documentación.
+    estatusEquipo: ['USO', 'RESGUARDO', 'DONADO', 'PARA VENTA', 'VENDIDO', 'POSIBLE VENTA-DAÑO', 'EXTRAVIO-ROBO', 'PARA DESECHO', 'DESECHADO'],
+    // Un registro sin línea deja ESTATUS LINEA en blanco (antes "SIN LINEA").
+    estatusLinea: ['USO', 'DISPONIBLE', 'EN PROCESO DE CANCELACION', 'CANCELADA'],
     companias: ['TELCEL', 'AT&T', 'BAIT'],
     accesorios: ['CAJA', 'CARGADOR', 'CABLE', 'CUBO', 'FUNDA', 'MICA', 'SD', 'NINGUNO'],
   };
+  /** Valores viejos que hoy significan "sin estatus": el formulario los muestra en blanco. */
+  const ESTATUS_EN_BLANCO = { 'ESTATUS LINEA': ['SIN LINEA'], 'ESTATUS EQUIPO': ['N/A'] };
+  /**
+   * Departamento de lo que no está asignado a nadie (resguardo o libre), pedido de Líneas el 30-sep. Se agrega a la
+   * lista; CONTROL INTERNO sigue para lo que usa su propio personal.
+   */
+  const DEPARTAMENTO_DISPONIBLE = 'DISPONIBLE';
 
   /** Columnas que describen la línea dentro de una fila. */
   const COLS_LINEA = ['NUMERO TELEFONO', 'NUMERO SIM', 'COMPAÑIA', 'COSTO PLAN', 'INICIO PLAN', 'FIN PLAN', 'ESTATUS LINEA', 'PIN WHATSAPP', 'FECHA CAMBIO TEMPORAL', 'EMAIL USUARIO'];
   /** Valores con los que el área de líneas deja una fila de equipo al quitarle la línea. */
   const VALORES_SIN_LINEA = {
     'NUMERO TELEFONO': 'NO APLICA', 'NUMERO SIM': 'NO APLICA', 'PIN WHATSAPP': 'NO APLICA', 'COMPAÑIA': '',
-    'COSTO PLAN': 0, 'INICIO PLAN': '', 'FIN PLAN': '', 'ESTATUS LINEA': 'SIN LINEA', 'FECHA CAMBIO TEMPORAL': '', 'EMAIL USUARIO': '',
+    'COSTO PLAN': 0, 'INICIO PLAN': '', 'FIN PLAN': '', 'ESTATUS LINEA': '', 'FECHA CAMBIO TEMPORAL': '', 'EMAIL USUARIO': '',
   };
   const COLS_RESPONSABLE = {
     noEmpleado: 'NO EMPLEADO', nombre: 'RESPONSABLE', puesto: 'PUESTO', departamento: 'DEPARTAMENTO', area: 'AREA',
@@ -135,9 +147,9 @@ const LineasRepo = (function () {
       usuariosAdicionales: usuariosAdicionales_(f),
     };
     const legado = {
-      id: id, fila: f._fila, folio: folioRegistro(tipo, col(f, 'NUCO')), tipo: tipo || null,
+      id: id, idAnterior: txt(col(f, LineasDatos.COL_ID_APPSHEET)), fila: f._fila, folio: folioRegistro(tipo, col(f, 'NUCO')), tipo: tipo || null,
       nuco: txt(col(f, 'NUCO')) === null ? null : LineasUtil.nucoVisible(col(f, 'NUCO')),
-      estatusGeneral: estatusGeneralRegistro(id, tipo, txt(col(f, 'ESTATUS EQUIPO')), txt(col(f, 'ESTATUS LINEA'))),
+      estatusGeneral: estatusGeneralRegistro(idParaDG_(f), tipo, txt(col(f, 'ESTATUS EQUIPO')), txt(col(f, 'ESTATUS LINEA'))),
       comentarios: txt(col(f, 'COMENTARIOS')),
       responsivaRuta: txt(col(f, 'RESPONSIVA')), formatoInspeccionRuta: txt(col(f, 'FORMATO INSPECCION')),
       fechaInspeccion: fecha(col(f, 'FECHA INSPECCION')), fechaRegistro: fecha(col(f, 'FECHA REGISTRO')),
@@ -201,6 +213,14 @@ const LineasRepo = (function () {
   function folioRegistro(tipo, nuco) {
     const prefijo = { 'EQUIPO + SIM': 'EQS', 'LINEA': 'LIN', 'MODEM': 'MOD', 'CAMARA': 'CAM', 'BANDA ANCHA': 'BAN', 'EQUIPO': 'EQP' }[tipo] || '';
     return prefijo + ('0000' + (nuco === null || nuco === undefined ? '' : String(nuco))).slice(-4);
+  }
+
+  /**
+   * ID con el que la fórmula reconoce al personal de DG (DG001, DG002…). Tras la migración de IDs ese valor quedó en
+   * ID APPSHEET y el ID es LIN-…
+   */
+  function idParaDG_(f) {
+    return txt(col(f, LineasDatos.COL_ID_APPSHEET)) || txt(f['ID']);
   }
 
   /** Fórmula ESTATUS GENERAL del AppSheet. */
@@ -311,8 +331,47 @@ const LineasRepo = (function () {
     return cambios;
   }
 
+  // ---------------- IDs de antes y después de la migración ----------------
+
+  const CLAVE_IDS = 'ids_lineas_v2'; // v2: también ID ANTERIOR (corrida de IDs del 30-sep)
+
+  /**
+   * { viejo: {ID anterior → ID}, nuevo: {ID → [IDs anteriores]} } de LINEAS TELEFONICAS (claves en minúsculas).
+   * Cada corrida de IDs deja el ID de antes en una columna: ID APPSHEET (el del AppSheet) e ID ANTERIOR (el LIN-… del
+   * 29-sep, desde la corrida del 30-sep). Las pestañas que citan al registro (inspecciones, responsivas, bitácoras,
+   * APP_*) pueden seguir con cualquiera de ellos hasta que se reescriban.
+   */
+  function equivalenciasIds_() {
+    const enCache = LineasDatos.cacheLeer(CLAVE_IDS);
+    if (enCache && enCache.viejo) return enCache;
+    const m = { viejo: {}, nuevo: {} };
+    LineasDatos.leerTabla(TAB.LINEAS).forEach((f) => {
+      const ids = LineasDatos.idsDeFila(f);
+      if (ids.length < 2) return;
+      ids.slice(1).forEach((k) => { m.viejo[k.toLowerCase()] = ids[0]; });
+      m.nuevo[ids[0].toLowerCase()] = ids.slice(1);
+    });
+    LineasDatos.cacheGuardar(CLAVE_IDS, m, 6 * 3600); // los registros nuevos no traen ID viejo: no hay que invalidarla
+    return m;
+  }
+
+  /** ID vigente de un registro citado con su ID actual o con uno anterior. */
+  function idActual(id) {
+    const t = txt(id);
+    if (!t) return t;
+    return equivalenciasIds_().viejo[String(t).toLowerCase()] || String(t);
+  }
+
+  /** Todos los IDs con los que las demás pestañas pueden citar al registro: [ID, ID ANTERIOR, ID APPSHEET]. */
+  function idsDeRegistro(id) {
+    const actual = idActual(id);
+    if (!actual) return [];
+    const viejos = equivalenciasIds_().nuevo[actual.toLowerCase()];
+    return [actual].concat(Array.isArray(viejos) ? viejos : (viejos ? [viejos] : []));
+  }
+
   function leerRegistroPorId(id) {
-    const filas = LineasDatos.buscarFilas(TAB.LINEAS, 'ID', id);
+    const filas = LineasDatos.buscarFilasPorId(TAB.LINEAS, id);
     if (!filas.length) return null;
     if (filas.length > 1) throw new Error('El ID ' + id + ' está repetido en LINEAS TELEFONICAS (filas ' + filas.join(', ') + ').');
     return LineasDatos.leerFilas([{ tabla: TAB.LINEAS, filas: filas }])[0][0];
@@ -365,30 +424,26 @@ const LineasRepo = (function () {
     const tipoNuevo = (txt(col(nuevo, 'TIPO')) || '').toUpperCase();
     if (LineasDatos.colIndice(t, 'FOLIO') >= 0) escribir['FOLIO'] = folioRegistro(tipoNuevo, col(nuevo, 'NUCO'));
     if (LineasDatos.colIndice(t, 'ESTATUS GENERAL') >= 0) {
-      escribir['ESTATUS GENERAL'] = estatusGeneralRegistro(f['ID'], tipoNuevo, txt(col(nuevo, 'ESTATUS EQUIPO')), txt(col(nuevo, 'ESTATUS LINEA')));
+      escribir['ESTATUS GENERAL'] = estatusGeneralRegistro(idParaDG_(f), tipoNuevo, txt(col(nuevo, 'ESTATUS EQUIPO')), txt(col(nuevo, 'ESTATUS LINEA')));
     }
+    conPersona_(t, escribir, nuevo);
     LineasDatos.actualizarFila(TAB.LINEAS, f._fila, escribir);
 
     const bitacora = efectivos.filter((e) => CAMPOS_BITACORA.indexOf(LineasDatos.normCol(e.campo)) >= 0).map((e) => ({
       // NUCO e IMEI ya actualizados, como [NUCO] / [IMEI] en las acciones del bot
-      'ID_CAMBIO': LineasDatos.nuevoIdCorto(), 'ID_LINEA': f['ID'], 'NUCO': LineasUtil.nucoVisible(col(nuevo, 'NUCO')) || '', 'IMEI': col(nuevo, 'IMEI'), 'TABLA': TAB.LINEAS,
+      'ID': idCambio_(), 'ID_LINEA': f['ID'], 'NUCO': LineasUtil.nucoVisible(col(nuevo, 'NUCO')) || '', 'IMEI': col(nuevo, 'IMEI'), 'TABLA': TAB.LINEAS,
       'CAMPO': e.campo, 'ANTES': textoBitacora_(e.antes), 'DESPUES': textoBitacora_(e.despues),
       'ACTUALIZADO POR': usuario.nombre, 'FECHA ACTUALIZACION': ahora,
     }));
+    // Mismo valor en ID y en ID_CAMBIO: la hoja tiene una u otra según esté o no migrada
+    bitacora.forEach((b) => { b['ID_CAMBIO'] = b['ID']; });
     LineasDatos.agregarFilas(TAB.CAMBIOS, bitacora);
 
-    let idReasignacion = null;
-    if (efectivos.some((e) => LineasDatos.normCol(e.campo) === 'RESPONSABLE')) {
-      idReasignacion = LineasDatos.nuevoIdCorto();
-      LineasDatos.agregarFilas(TAB.REASIG, [{
-        'ID Historial': idReasignacion, 'ID Linea': f['ID'], 'Fecha de Reasignacion': ahora, 'NUCO': LineasUtil.nucoVisible(col(nuevo, 'NUCO')) || '',
-        'No Empleado Saliente': col(f, 'NO EMPLEADO'), 'Responsable Saliente': col(f, 'RESPONSABLE'), 'Departamento Saliente': col(f, 'DEPARTAMENTO'),
-        'No Empleado Entrante': col(nuevo, 'NO EMPLEADO'), 'Responsable Entrante': col(nuevo, 'RESPONSABLE'), 'Departamento Entrante': col(nuevo, 'DEPARTAMENTO'),
-        'QUIEN REGISTRO': usuario.nombre,
-      }]);
-    }
+    // HISTORIAL_REASIGNACIONES ya no se escribe (módulo retirado el 30-sep): el cambio de responsable queda en la
+    // bitácora CAMBIOS y en el movimiento de APP_MOVIMIENTOS de la operación.
+    const idReasignacion = null;
     return {
-      idsCambios: bitacora.map((b) => b['ID_CAMBIO']),
+      idsCambios: bitacora.map((b) => b['ID']),
       idReasignacion: idReasignacion,
       campos: efectivos.map((e) => ({ campo: e.campo, antes: textoBitacora_(e.antes), despues: textoBitacora_(e.despues) })),
     };
@@ -400,13 +455,43 @@ const LineasRepo = (function () {
     const tipo = (datos['TIPO'] || '').toUpperCase();
     if (LineasDatos.colIndice(t, 'FOLIO') >= 0) datos['FOLIO'] = folioRegistro(tipo, datos['NUCO']);
     if (LineasDatos.colIndice(t, 'ESTATUS GENERAL') >= 0) datos['ESTATUS GENERAL'] = estatusGeneralRegistro(datos['ID'], tipo, txt(datos['ESTATUS EQUIPO']), txt(datos['ESTATUS LINEA']));
+    conPersona_(t, datos, datos);
     return LineasDatos.agregarFilas(TAB.LINEAS, [datos])[0];
+  }
+
+  const personas_ = {}; // por ejecución: un resguardo o reasignación masiva calcula una sola vez por persona
+
+  /**
+   * ID PERSONA (catálogo de Ayrton, Capital Humano): no se captura, se calcula del responsable como en Vehículos y
+   * Caja Chica (CapitalHumano.idPara). Solo si en `escribir` cambia alguna columna de la persona (RESPONSABLE,
+   * NO EMPLEADO, EMAIL USUARIO) y la hoja ya tiene la columna. null = todavía no hay PERSONAS: no se toca.
+   */
+  function conPersona_(t, escribir, registro) {
+    if (typeof CapitalHumano === 'undefined' || LineasDatos.colIndice(t, CapitalHumano.COLUMNA) < 0) return;
+    Object.keys(escribir).forEach((c) => { if (LineasDatos.normCol(c) === CapitalHumano.COLUMNA) delete escribir[c]; });
+    const columnas = CapitalHumano.columnasDePersona(TAB.LINEAS);
+    const norm = columnas.map(LineasDatos.normCol);
+    if (!Object.keys(escribir).some((c) => norm.indexOf(LineasDatos.normCol(c)) >= 0)) return;
+    const persona = {};
+    columnas.forEach((c) => { persona[c] = txt(col(registro, c)) || ''; });
+    const clave = JSON.stringify(persona);
+    try {
+      if (!(clave in personas_)) personas_[clave] = CapitalHumano.idPara(TAB.LINEAS, persona);
+      if (personas_[clave] !== null) escribir[CapitalHumano.COLUMNA] = personas_[clave];
+    } catch (err) {
+      console.error('CapitalHumano: no se pudo calcular la persona de la línea: ' + err.message);
+    }
+  }
+
+  /** ID de una fila de la bitácora CAMBIOS (CLI-…). */
+  function idCambio_() {
+    return LineasDatos.nuevoId(TAB.CAMBIOS);
   }
 
   /** Registro de la operación en APP_MOVIMIENTOS (motivo, ticket y resumen antes/después). */
   function registrarMovimiento(tipo, datos, usuario, ahora, extra) {
     asegurarPestanaApp(TAB.APP_MOV);
-    const id = Ids.nuevo(Entidades.prefijo(TAB.APP_MOV));
+    const id = LineasDatos.nuevoId(TAB.APP_MOV);
     LineasDatos.agregarFilas(TAB.APP_MOV, [{
       'ID': id, 'FECHA': ahora, 'TIPO': tipo, 'REFS': ',' + (extra.refs || []).filter(Boolean).join(',') + ',',
       'NUCO': LineasUtil.nucoVisible(extra.nuco) || '', 'NUMERO': extra.numero || '', 'NUCO_DESTINO': LineasUtil.nucoVisible(extra.nucoDestino) || '',
@@ -447,7 +532,8 @@ const LineasRepo = (function () {
     });
     const ticket = txt(col(f, 'TICKET'));
     return {
-      _id: txt(f['ID']), origen: ev && ev.origen === 'SISTEMA' ? 'SISTEMA' : 'APPSHEET', registroId: txt(col(f, 'ID LINEA')),
+      _id: txt(f['ID']), _idsAnteriores: LineasDatos.idsDeFila(f).slice(1), origen: ev && ev.origen === 'SISTEMA' ? 'SISTEMA' : 'APPSHEET',
+      registroId: idActual(col(f, 'ID LINEA')),
       nuco: nuco4(col(f, 'NUCO')), fecha: fecha(col(f, 'FECHA DE REGISTRO')), tipoRegistro: txt(col(f, 'TIPO')),
       snapshot: {
         responsable: txt(col(f, 'RESPONSABLE')), departamento: txt(col(f, 'DEPARTAMENTO')), area: txt(col(f, 'AREA')),
@@ -470,7 +556,7 @@ const LineasRepo = (function () {
   /** Inspección histórica que solo existe como carpeta en Drive. */
   function inspeccionDesdeEvidencia(ev) {
     return {
-      _id: 'drive_' + ev.carpetaId, origen: 'DRIVE', registroId: ev.idLinea, nuco: ev.nuco, fecha: ev.fecha,
+      _id: 'drive_' + ev.carpetaId, origen: 'DRIVE', registroId: idActual(ev.idLinea), nuco: ev.nuco, fecha: ev.fecha,
       checklist: {}, calificacion: null, drive: driveDeEvidencia_(ev),
     };
   }
@@ -484,7 +570,8 @@ const LineasRepo = (function () {
       if (dia && mes && anio) fch = new Date(anio, mes - 1, dia, 12);
     }
     return {
-      _id: txt(f['ID']), origen: ev && ev.origen === 'SISTEMA' ? 'SISTEMA' : 'APPSHEET', registroId: txt(col(f, 'ID LINEA')),
+      _id: txt(f['ID']), _idsAnteriores: LineasDatos.idsDeFila(f).slice(1), origen: ev && ev.origen === 'SISTEMA' ? 'SISTEMA' : 'APPSHEET',
+      registroId: idActual(col(f, 'ID LINEA')),
       nuco: nuco4(col(f, 'NUCO')), fecha: fch,
       responsable: { nombre: txt(col(f, 'RESPONSABLE')) },
       responsableCI: txt(col(f, 'NOMBRE CI')), drive: driveDeEvidencia_(ev),
@@ -498,23 +585,25 @@ const LineasRepo = (function () {
    * las del AppSheet/sistema (por ID LINEA) + las históricas solo en Drive (por NUCO).
    */
   function evidenciasDeRegistro(id) {
+    const ids = idsDeRegistro(id);
     const hayApp = LineasDatos.existeTabla(TAB.APP_EVID);
     const peticiones = [
-      { tabla: TAB.INSP, filas: LineasDatos.buscarFilas(TAB.INSP, 'ID LINEA', id) },
-      { tabla: TAB.RESP, filas: LineasDatos.buscarFilas(TAB.RESP, 'ID LINEA', id) },
+      { tabla: TAB.INSP, filas: LineasDatos.buscarFilasVarios(TAB.INSP, 'ID LINEA', ids) },
+      { tabla: TAB.RESP, filas: LineasDatos.buscarFilasVarios(TAB.RESP, 'ID LINEA', ids) },
     ];
     // Las carpetas históricas (solo Drive) quedan con ID_LINEA del equipo de su NUCO al sincronizar.
-    if (hayApp) peticiones.push({ tabla: TAB.APP_EVID, filas: LineasDatos.buscarFilas(TAB.APP_EVID, 'ID_LINEA', id) });
+    if (hayApp) peticiones.push({ tabla: TAB.APP_EVID, filas: LineasDatos.buscarFilasVarios(TAB.APP_EVID, 'ID_LINEA', ids) });
     const r = LineasDatos.leerFilas(peticiones);
     const evidencias = hayApp ? r[2].map(evidenciaDesdeFila) : [];
     const evPorRegistro = {};
     evidencias.forEach((e) => { if (e.idRegistro) evPorRegistro[e.idRegistro] = e; });
+    const evDe = (f) => LineasDatos.idsDeFila(f).map((k) => evPorRegistro[k]).filter(Boolean)[0];
 
-    const inspecciones = r[0].map((f) => inspeccionDesdeFila(f, evPorRegistro[txt(f['ID'])]));
-    const responsivas = r[1].map((f) => responsivaDesdeFila(f, evPorRegistro[txt(f['ID'])]));
+    const inspecciones = r[0].map((f) => inspeccionDesdeFila(f, evDe(f)));
+    const responsivas = r[1].map((f) => responsivaDesdeFila(f, evDe(f)));
     evidencias.forEach((e) => {
       if (e.origen !== 'DRIVE') return;
-      if (e.idLinea && e.idLinea !== id) return;
+      if (e.idLinea && idActual(e.idLinea) !== ids[0]) return;
       if (e.tipo === 'INSPECCION') inspecciones.push(inspeccionDesdeEvidencia(e));
       else responsivas.push({ _id: 'drive_' + e.carpetaId, origen: 'DRIVE', nuco: e.nuco, fecha: e.fecha, drive: driveDeEvidencia_(e) });
     });
@@ -529,10 +618,10 @@ const LineasRepo = (function () {
       if (!filas.length) return null;
       return inspeccionDesdeEvidencia(evidenciaDesdeFila(LineasDatos.leerFilas([{ tabla: TAB.APP_EVID, filas: filas.slice(0, 1) }])[0][0]));
     }
-    const filas = LineasDatos.buscarFilas(TAB.INSP, 'ID', id);
+    const filas = LineasDatos.buscarFilasPorId(TAB.INSP, id);
     if (!filas.length) return null;
     const f = LineasDatos.leerFilas([{ tabla: TAB.INSP, filas: filas.slice(0, 1) }])[0][0];
-    const filasEv = LineasDatos.existeTabla(TAB.APP_EVID) ? LineasDatos.buscarFilas(TAB.APP_EVID, 'ID_REGISTRO', id) : [];
+    const filasEv = LineasDatos.existeTabla(TAB.APP_EVID) ? LineasDatos.buscarFilasVarios(TAB.APP_EVID, 'ID_REGISTRO', LineasDatos.idsDeFila(f)) : [];
     const ev = filasEv.length ? evidenciaDesdeFila(LineasDatos.leerFilas([{ tabla: TAB.APP_EVID, filas: filasEv.slice(0, 1) }])[0][0]) : null;
     return inspeccionDesdeFila(f, ev);
   }
@@ -551,12 +640,41 @@ const LineasRepo = (function () {
     ALTA: 'Alta de registro', INSPECCION: 'Inspección', RESPONSIVA: 'Responsiva', DESECHO: 'Desecho', REASIGNACION: 'Reasignación',
     CAMBIO_ESTATUS_EQUIPO: 'Cambio de estatus', CAMBIO_ESTATUS_LINEA: 'Cambio de estatus',
     ASIGNAR_LINEA: 'Cambio de línea', RETIRAR_LINEA: 'Cambio de línea', CAMBIO_EQUIPO: 'Cambio de equipo',
+    // Resguardos y cancelaciones (30-sep)
+    RESGUARDO: 'Resguardo', CANCELACION_LINEA: 'Cancelación de línea', VENTA: 'Venta',
   };
   const sinAcentos_ = (v) => String(v === null || v === undefined ? '' : v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
   function movimientoDeCampo(campo) {
     const c = sinAcentos_(campo);
     const regla = MOVIMIENTO_POR_CAMPO.find((r) => r[0].test(c));
     return regla ? regla[1] : 'Otros cambios';
+  }
+
+  /** Pestañas de módulos retirados cuyos renglones se migraron a APP_MOVIMIENTOS (TIPO HISTORICO), 30-sep. */
+  const HOJAS_MIGRADAS = [TAB.REASIG, TAB.DESECHO, TAB.REACTIVACION];
+  const ISO_FECHA_ = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
+
+  /**
+   * Separa los movimientos migrados de los demás. Cada uno trae en DETALLE_JSON { hojaAnterior, fila } el renglón
+   * original completo; las fechas vuelven a ser Date. Regresa { filas: { hoja: [...] }, ids: { 'hoja|ID': true }, resto }.
+   */
+  function separarMigrados_(filasMov) {
+    const salida = { filas: {}, ids: {}, resto: [] };
+    (filasMov || []).forEach((f) => {
+      let detalle = null;
+      if (txt(f['TIPO']) === 'HISTORICO') {
+        try { detalle = JSON.parse(f['DETALLE_JSON'] || '{}'); } catch (e) { detalle = null; }
+      }
+      if (!detalle || HOJAS_MIGRADAS.indexOf(detalle.hojaAnterior) < 0 || !detalle.fila) { salida.resto.push(f); return; }
+      const fila = {};
+      Object.keys(detalle.fila).forEach((c) => {
+        const v = detalle.fila[c];
+        fila[c] = typeof v === 'string' && ISO_FECHA_.test(v) ? new Date(v) : v;
+      });
+      (salida.filas[detalle.hojaAnterior] = salida.filas[detalle.hojaAnterior] || []).push(fila);
+      salida.ids[detalle.hojaAnterior + '|' + txt(fila['ID'])] = true;
+    });
+    return salida;
   }
 
   /**
@@ -566,19 +684,28 @@ const LineasRepo = (function () {
    * Lo que el sistema nuevo registró en APP_MOVIMIENTOS oculta sus propias filas de las pestañas del AppSheet.
    */
   function historialDeRegistro(id, puedeVerSecretos) {
+    const ids = idsDeRegistro(id);
+    id = ids[0] || id;
     const hayMov = LineasDatos.existeTabla(TAB.APP_MOV);
-    const hayReact = LineasDatos.existeTabla(TAB.REACTIVACION);
+    // Las pestañas de los módulos retirados (30-sep) ya no existen en la BD de pruebas: sus renglones viven en
+    // APP_MOVIMIENTOS (TIPO HISTORICO). Si todavía existen (p. ej. producción), también se leen.
+    const siExiste = (tabla, columna) => (LineasDatos.existeTabla(tabla) ? LineasDatos.buscarFilasVarios(tabla, columna, ids) : []);
     const peticiones = [
-      { tabla: TAB.CAMBIOS, filas: LineasDatos.buscarFilas(TAB.CAMBIOS, 'ID_LINEA', id).slice(-1500) }, // las más recientes
-      { tabla: TAB.REASIG, filas: LineasDatos.buscarFilas(TAB.REASIG, 'ID Linea', id) },
-      { tabla: TAB.DESECHO, filas: LineasDatos.buscarFilas(TAB.DESECHO, 'ID_EQUIPO', id) },
-      { tabla: TAB.APP_MOV, filas: hayMov ? LineasDatos.buscarFilas(TAB.APP_MOV, 'REFS', ',' + id + ',', true) : [] },
-      { tabla: TAB.REACTIVACION, filas: hayReact ? LineasDatos.buscarFilas(TAB.REACTIVACION, 'IMEI', id) : [] },
+      { tabla: TAB.CAMBIOS, filas: LineasDatos.buscarFilasVarios(TAB.CAMBIOS, 'ID_LINEA', ids).slice(-1500) }, // las más recientes
+      { tabla: TAB.REASIG, filas: siExiste(TAB.REASIG, 'ID Linea') },
+      { tabla: TAB.DESECHO, filas: siExiste(TAB.DESECHO, 'ID_EQUIPO') },
+      { tabla: TAB.APP_MOV, filas: hayMov ? LineasDatos.buscarFilasVarios(TAB.APP_MOV, 'REFS', ids.map((k) => ',' + k + ','), true) : [] },
+      { tabla: TAB.REACTIVACION, filas: siExiste(TAB.REACTIVACION, 'IMEI') },
     ].filter((p) => p.filas.length);
+    // Una fila está oculta si el sistema nuevo la registró con cualquiera de sus IDs (el de hoy o el de antes)
+    const oculta = (mapa, f, ...columnas) => columnas.concat(['ID'], LineasDatos.COLS_ID_ANTERIOR).some((c) => mapa[txt(f[c])]);
     const leidas = peticiones.length ? LineasDatos.leerFilas(peticiones) : [];
     const r = {};
     peticiones.forEach((p, i) => { r[p.tabla] = leidas[i]; });
-    const de = (tabla) => r[tabla] || [];
+    // Renglones migrados de las pestañas retiradas: se leen como si vinieran de su pestaña (sin repetir)
+    const migrados = separarMigrados_(r[TAB.APP_MOV] || []);
+    r[TAB.APP_MOV] = migrados.resto;
+    const de = (tabla) => (r[tabla] || []).filter((f) => !migrados.ids[tabla + '|' + txt(f['ID'])]).concat(migrados.filas[tabla] || []);
     const ocultar = (campo, v) => (!puedeVerSecretos && /PIN|PATRON|CONTRASE/i.test(campo || '') && v ? '••••' : v);
     const json = (v) => { try { return JSON.parse(v || '{}'); } catch (e) { return {}; } };
     const texto = (v) => (v === null || v === undefined ? '' : (v instanceof Date ? Utilities.formatDate(v, LineasDatos.ZONA_APP, 'dd/MM/yyyy') : String(v)));
@@ -651,7 +778,7 @@ const LineasRepo = (function () {
     const diaDe = (d) => (d ? Utilities.formatDate(d, LineasDatos.ZONA_APP, 'yyyy-MM-dd') : '');
     const reasignadoEl = {};
     de(TAB.REASIG).forEach((f) => {
-      if (ocultasReasig[txt(f['ID Historial'])]) return;
+      if (oculta(ocultasReasig, f, 'ID Historial')) return;
       const cuando = fecha(col(f, 'Fecha de Reasignacion'));
       const entrante = txt(col(f, 'Responsable Entrante'));
       reasignadoEl[diaDe(cuando) + '|' + sinAcentos_(entrante)] = true;
@@ -668,7 +795,7 @@ const LineasRepo = (function () {
     // 3) Bitácora CAMBIOS LINEAS TELEFONICAS (una fila por campo). El cambio de RESPONSABLE que ya
     //    aparece como reasignación ese mismo día no se repite.
     de(TAB.CAMBIOS).forEach((f) => {
-      if (ocultosCambios[txt(f['ID_CAMBIO'])]) return;
+      if (oculta(ocultosCambios, f, 'ID_CAMBIO')) return;
       const campo = txt(col(f, 'CAMPO'));
       const cuando = fecha(col(f, 'FECHA ACTUALIZACION'));
       const despues = txt(col(f, 'DESPUES'));
@@ -681,7 +808,7 @@ const LineasRepo = (function () {
 
     // 4) BITACORA DE DESECHO
     de(TAB.DESECHO).forEach((f) => {
-      if (ocultosDesechos[txt(f['ID_DESECHO'])]) return;
+      if (oculta(ocultosDesechos, f, 'ID_DESECHO')) return;
       agregar({
         fecha: fecha(col(f, 'FECHA DE DESECHO')) || fecha(col(f, 'FECHA DE REGISTRO')), origen: 'AppSheet', movimiento: 'Desecho',
         detalle: unir([txt(col(f, 'FOLIO DESECHO')) ? 'Folio ' + txt(col(f, 'FOLIO DESECHO')) : null, txt(col(f, 'MOTIVO')),
@@ -705,7 +832,7 @@ const LineasRepo = (function () {
     const origenEv = (o) => (o === 'DRIVE' ? 'Drive' : (o === 'SISTEMA' ? 'Nuevo sistema' : 'AppSheet'));
     const ev = evidenciasDeRegistro(id);
     ev.inspecciones.forEach((i) => {
-      if (inspeccionesSistema[i._id]) return;
+      if ([i._id].concat(i._idsAnteriores).some((k) => inspeccionesSistema[k])) return;
       const cal = i.calificacion;
       agregar({
         fecha: i.fecha, origen: origenEv(i.origen), movimiento: 'Inspección', refTipo: 'inspeccion', refId: i._id, pdfId: i.pdf ? i.pdf.id : null,
@@ -714,7 +841,7 @@ const LineasRepo = (function () {
       });
     });
     ev.responsivas.forEach((x) => {
-      if (responsivasSistema[x._id]) return;
+      if ([x._id].concat(x._idsAnteriores).some((k) => responsivasSistema[k])) return;
       agregar({
         fecha: x.fecha, origen: origenEv(x.origen), movimiento: 'Responsiva', refTipo: 'responsiva', refId: x._id, pdfId: x.pdf ? x.pdf.id : null,
         detalle: x.responsable && x.responsable.nombre ? 'Responsable: ' + x.responsable.nombre : '', usuario: x.responsableCI,
@@ -725,6 +852,172 @@ const LineasRepo = (function () {
     return { eventos: eventos, total: eventos.length };
   }
 
+  // ---------------- Asignaciones número ↔ NUCO ----------------
+
+  /** NUCO a 4 dígitos, o null si está vacío o es "NO APLICA". */
+  function nucoDe_(v) {
+    const t = txt(v);
+    return t === null || t instanceof Date ? null : LineasUtil.nucoVisible(t);
+  }
+
+  /** Cambios que caen en la misma edición (el bot escribe un campo tras otro con NOW()). */
+  const MS_MISMA_EDICION = 2 * 60 * 1000;
+  /** Tope de filas de LINEAS TELEFONICAS por consulta (una línea o un NUCO pasan por pocas filas). */
+  const MAX_FILAS_ASIGNACION = 25;
+
+  /**
+   * Periodos en los que un número estuvo en un NUCO. Se reconstruyen fila por fila de LINEAS TELEFONICAS con su
+   * estado actual y, hacia atrás, los cambios de NUMERO TELEFONO y NUCO de la bitácora CAMBIOS (el AppSheet y el
+   * sistema nuevo escriben ahí). El motivo sale de APP_MOVIMIENTOS (sistema nuevo) o de REACTIVACION DE LINEAS.
+   * vista 'equipo' → números que ha tenido el NUCO del registro; 'linea' → NUCOs en los que ha estado su número.
+   */
+  function asignacionesDeRegistro(id, vista) {
+    const porNuco = vista !== 'linea';
+    const actual = leerRegistroObligatorio(id, 'el registro');
+    const clave = porNuco ? nucoDe_(col(actual, 'NUCO')) : digitos(col(actual, 'NUMERO TELEFONO'));
+    const salida = { vista: porNuco ? 'equipo' : 'linea', clave: clave, periodos: [], incompleto: false };
+    if (!clave || !/\d/.test(clave)) return salida; // un NUCO sin número ("N/A"…) no identifica a un equipo
+
+    // 1) Dónde aparece la clave: filas actuales y cambios (el NUCO de la fila en cada cambio, o el campo cambiado)
+    const variantes = porNuco && /^\d+$/.test(clave) ? [clave, String(Number(clave))].filter((v, i, a) => a.indexOf(v) === i) : [clave];
+    const filasLineas = {};
+    const filasCambios = {};
+    variantes.forEach((v) => {
+      LineasDatos.buscarFilas(TAB.LINEAS, porNuco ? 'NUCO' : 'NUMERO TELEFONO', v).forEach((n) => { filasLineas[n] = true; });
+      (porNuco ? ['NUCO', 'ANTES', 'DESPUES'] : ['ANTES', 'DESPUES'])
+        .forEach((c) => LineasDatos.buscarFilas(TAB.CAMBIOS, c, v).forEach((n) => { filasCambios[n] = true; }));
+    });
+    const numeros = (o) => Object.keys(o).map(Number);
+    const primera = LineasDatos.leerFilas([{ tabla: TAB.LINEAS, filas: numeros(filasLineas) }, { tabla: TAB.CAMBIOS, filas: numeros(filasCambios) }]);
+    const campoAsignacion = (f) => {
+      const c = sinAcentos_(col(f, 'CAMPO'));
+      return c === 'NUMERO TELEFONO' ? 'numero' : (c === 'NUCO' ? 'nuco' : null);
+    };
+    const valorDe = (campo, v) => (campo === 'nuco' ? nucoDe_(v) : digitos(v));
+    const ids = {};
+    const filaActual = {};
+    primera[0].forEach((f) => { const k = txt(f['ID']); if (k) { ids[k] = true; filaActual[k] = f; } });
+    primera[1].forEach((f) => {
+      const k = idActual(f['ID_LINEA']);
+      if (!k) return;
+      const campo = campoAsignacion(f);
+      // La clave en el NUCO de la fila, o como antes/después de un cambio de número o NUCO (no de otro campo)
+      const enNucoFila = porNuco && nucoDe_(f['NUCO']) === clave;
+      const enCambio = campo === (porNuco ? 'nuco' : 'numero') && (valorDe(campo, col(f, 'ANTES')) === clave || valorDe(campo, col(f, 'DESPUES')) === clave);
+      if (enNucoFila || enCambio) ids[k] = true;
+    });
+    let listaIds = Object.keys(ids);
+    if (listaIds.length > MAX_FILAS_ASIGNACION) { listaIds = listaIds.slice(0, MAX_FILAS_ASIGNACION); salida.incompleto = true; }
+
+    // 2) Toda la bitácora de número y NUCO de esas filas, su fila actual si falta, y los motivos
+    const hayMov = LineasDatos.existeTabla(TAB.APP_MOV);
+    const hayReact = LineasDatos.existeTabla(TAB.REACTIVACION); // retirada el 30-sep: sus renglones están en APP_MOVIMIENTOS
+    const faltantes = listaIds.filter((k) => !filaActual[k]);
+    const todosLosIds = [].concat.apply([], listaIds.map(idsDeRegistro));
+    const segunda = LineasDatos.leerFilas([
+      { tabla: TAB.CAMBIOS, filas: LineasDatos.buscarFilasVarios(TAB.CAMBIOS, 'ID_LINEA', todosLosIds) },
+      { tabla: TAB.LINEAS, filas: [].concat.apply([], faltantes.map((k) => LineasDatos.buscarFilasPorId(TAB.LINEAS, k))) },
+      { tabla: TAB.APP_MOV, filas: hayMov ? LineasDatos.buscarFilasVarios(TAB.APP_MOV, 'REFS', todosLosIds.map((k) => ',' + k + ','), true) : [] },
+      { tabla: TAB.REACTIVACION, filas: hayReact ? LineasDatos.buscarFilasVarios(TAB.REACTIVACION, 'IMEI', todosLosIds) : [] },
+    ]);
+    segunda[1].forEach((f) => { const k = txt(f['ID']); if (k) filaActual[k] = f; });
+    const migradosAsig = separarMigrados_(segunda[2]);
+    const reactivacionesHoja = segunda[3].filter((f) => !migradosAsig.ids[TAB.REACTIVACION + '|' + txt(f['ID'])])
+      .concat(migradosAsig.filas[TAB.REACTIVACION] || []);
+    const motivoCambio = {};
+    migradosAsig.resto.forEach((f) => {
+      let detalle = {};
+      try { detalle = JSON.parse(f['DETALLE_JSON'] || '{}'); } catch (e) { /* sin detalle */ }
+      const motivo = [txt(f['MOTIVO']), txt(f['TICKET']) ? 'Ticket ' + txt(f['TICKET']) : null].filter(Boolean).join(' · ');
+      (detalle.idsCambios || []).forEach((x) => { motivoCambio[x] = motivo; });
+    });
+    const reactivaciones = reactivacionesHoja.map((f) => ({
+      id: idActual(col(f, 'IMEI')), numero: digitos(col(f, 'NUEVO NUMERO')),
+      motivo: ['Reactivación', txt(col(f, 'FOLIO')) ? 'folio ' + txt(col(f, 'FOLIO')) : null, txt(col(f, 'RETRO DE SOLICITUD')), txt(col(f, 'CORREO / TICKET'))].filter(Boolean).join(' · '),
+    })).filter((r) => r.id && r.numero);
+    const cambiosPorId = {};
+    segunda[0].forEach((f) => {
+      const campo = campoAsignacion(f);
+      const k = idActual(f['ID_LINEA']);
+      const cuando = fecha(col(f, 'FECHA ACTUALIZACION'));
+      if (!campo || !k || !cuando || !ids[k]) return;
+      const idCambio = ['ID', 'ID_CAMBIO'].concat(LineasDatos.COLS_ID_ANTERIOR).map((c) => txt(f[c])).filter((x) => x && x in motivoCambio)[0];
+      (cambiosPorId[k] = cambiosPorId[k] || []).push({
+        campo: campo, antes: valorDe(campo, col(f, 'ANTES')), despues: valorDe(campo, col(f, 'DESPUES')), fecha: cuando,
+        nucoFila: nucoDe_(f['NUCO']), usuario: txt(col(f, 'ACTUALIZADO POR')) || '',
+        nuevoSistema: idCambio in motivoCambio, motivo: motivoCambio[idCambio] || '',
+      });
+    });
+
+    // 3) Línea de tiempo de cada fila, del estado actual hacia atrás
+    const periodos = [];
+    listaIds.forEach((k) => {
+      const f = filaActual[k];
+      const cambios = (cambiosPorId[k] || []).sort((a, b) => a.fecha - b.fecha);
+      const ultimo = (campo) => cambios.filter((c) => c.campo === campo).pop();
+      // Si la fila ya no existe, su último estado sale de la bitácora
+      let estado = f ? { nuco: nucoDe_(col(f, 'NUCO')), numero: digitos(col(f, 'NUMERO TELEFONO')) } : {
+        nuco: ultimo('nuco') ? ultimo('nuco').despues : (cambios.length ? cambios[cambios.length - 1].nucoFila : null),
+        numero: ultimo('numero') ? ultimo('numero').despues : null,
+      };
+      const grupos = [];
+      cambios.forEach((c) => {
+        const g = grupos[grupos.length - 1];
+        if (g && c.fecha - g.fin <= MS_MISMA_EDICION) { g.cambios.push(c); g.fin = c.fecha; } else grupos.push({ fecha: c.fecha, fin: c.fecha, cambios: [c] });
+      });
+      const tramos = [];
+      let hasta = null;
+      for (let i = grupos.length - 1; i >= 0; i--) {
+        const g = grupos[i];
+        tramos.unshift({ nuco: estado.nuco, numero: estado.numero, desde: g.fecha, hasta: hasta, inicio: g });
+        estado = Object.assign({}, estado);
+        g.cambios.forEach((c) => { estado[c.campo] = c.antes; });
+        hasta = g.fecha;
+      }
+      // Primer tramo: desde el alta de la fila (FECHA REGISTRO = NOW() al crearla) si es anterior al primer cambio
+      const alta = f ? fecha(col(f, 'FECHA REGISTRO')) : null;
+      tramos.unshift({ nuco: estado.nuco, numero: estado.numero, desde: alta && (!hasta || alta <= hasta) ? alta : null, hasta: hasta, inicio: null, alta: true });
+      // Tramos seguidos con el mismo número y NUCO son uno solo (p. ej. cambió otro dato en la misma edición)
+      const unidos = [];
+      tramos.forEach((t) => {
+        const previo = unidos[unidos.length - 1];
+        if (previo && previo.nuco === t.nuco && previo.numero === t.numero) previo.hasta = t.hasta;
+        else unidos.push(Object.assign({}, t));
+      });
+      unidos.forEach((t) => {
+        if ((porNuco ? t.nuco : t.numero) !== clave) return;
+        const g = t.inicio;
+        const reactivacion = t.numero ? reactivaciones.filter((r) => r.id === k && r.numero === t.numero)[0] : null;
+        const conMotivo = g ? g.cambios.filter((c) => c.motivo)[0] : null;
+        periodos.push({
+          registroId: k, nuco: t.nuco, numero: t.numero, desde: t.desde, hasta: t.hasta,
+          vigente: !!f && t.hasta === null, registroExiste: !!f,
+          motivo: conMotivo ? conMotivo.motivo : (reactivacion ? reactivacion.motivo : (g ? '' : (t.desde ? 'Alta del registro' : ''))),
+          usuario: g ? g.cambios[0].usuario : '', origen: g ? (g.cambios.some((c) => c.nuevoSistema) ? 'Nuevo sistema' : 'AppSheet') : '',
+        });
+      });
+    });
+
+    // 4) A dónde lleva cada fila: el registro que hoy tiene ese número (vista equipo) o ese NUCO (vista línea)
+    const ix = indice();
+    const destino = {};
+    const tabla = porNuco ? ix.lineas : ix.equipos;
+    const iId = tabla.columnas.indexOf('id');
+    const iClave = tabla.columnas.indexOf(porNuco ? 'numero' : 'nuco');
+    tabla.filas.forEach((x) => {
+      const v = porNuco ? digitos(x[iClave]) : nucoDe_(x[iClave]);
+      if (v && !(v in destino)) destino[v] = x[iId];
+    });
+    periodos.forEach((p, n) => {
+      p.id = 'a' + (n + 1);
+      const otro = porNuco ? p.numero : p.nuco;
+      p.irId = otro ? destino[otro] || null : null;
+    });
+    periodos.sort((a, b) => (b.hasta === null) - (a.hasta === null) || (b.hasta || 0) - (a.hasta || 0) || (b.desde || 0) - (a.desde || 0));
+    salida.periodos = periodos;
+    return salida;
+  }
+
   // ---------------- Bitácoras (vistas de control) ----------------
 
   /** Máximo de filas por petición para las tablas del cliente. */
@@ -733,8 +1026,7 @@ const LineasRepo = (function () {
   /** Pestañas que se consultan como bitácora completa desde el menú. */
   const BITACORAS = {
     CAMBIOS: { tabla: TAB.CAMBIOS, ocultarSecretos: 'CAMPO' },
-    REASIGNACIONES: { tabla: TAB.REASIG },
-    DESECHOS: { tabla: TAB.DESECHO },
+    // REASIGNACIONES y DESECHOS se retiraron con sus pestañas (30-sep): sus renglones están en APP_MOVIMIENTOS
   };
 
   /**
@@ -785,80 +1077,6 @@ const LineasRepo = (function () {
     return { encabezados: encabezados, filas: salida, total: total, pagina: pagina, paginas: Math.max(1, Math.ceil(total / porPagina)) };
   }
 
-  // ---------------- Vistas operativas heredadas de AppSheet ----------------
-
-  // Encabezados tal como están en la hoja del AppSheet (incluida la errata "LINIEA SUSPENDIDA":
-  // así se llama la columna; AppSheet solo la muestra como "LINEA SUSPENDIDA").
-  const VISTAS_OPERATIVAS = {
-    REACTIVACION: {
-      tabla: TAB.REACTIVACION, grupo: 'ESTATUS',
-      encabezados: ['FOLIO', 'LINIEA SUSPENDIDA', 'COMPAÑIA', 'SIM', 'CORREO / TICKET', 'FECHA DE SUSPENSION',
-        'ESTATUS', 'ESTADO DEL EQUIPO', 'IMEI', 'RETRO DE SOLICITUD', 'FECHA DE REACTIVACION', 'NUEVO NUMERO',
-        'FECHA DE REGISTRO', 'QUIEN REGISTRO', 'COMENTARIOS'],
-    },
-    SOLICITUD: {
-      tabla: TAB.SOLICITUD, grupo: 'ESTATUS',
-      encabezados: ['FOLIO', 'FECHA DE SOLICITUD', 'TIPO DE PLAN', 'TICKET', 'NO EMPLEADO SOLICITANTE',
-        'NOMBRE SOLICITANTE', 'PUESTO SOLICITANTE', 'DEPARTAMENTO SOLICITANTE', 'SEDE',
-        'DEPARTAMENTO', 'TIPO', 'PUESTO', 'COLABORADOR', 'SOLICITANTE', 'FECHA DE ENTREGA', 'ASIGNACION',
-        'REASIGNACION', 'COMPAÑIA', 'EQUIPO', 'NUMERO ANTERIOR', 'NUMERO ACTUAL', 'IMEI', 'SIM', 'ESTATUS',
-        'FECHA DE REGISTRO', 'QUIEN REGISTRO', 'COMENTARIOS'],
-    },
-  };
-
-
-  /** Página buscable de Reactivación o Solicitud (tablas del AppSheet). */
-  function vistaOperativa(tipo, opciones, puedeVerSecretos) {
-    const cfg = VISTAS_OPERATIVAS[String(tipo || '').toUpperCase()];
-    if (!cfg) throw new Error('Vista operativa desconocida: ' + tipo);
-    if (!LineasDatos.existeTabla(cfg.tabla)) throw new Error('No existe la pestaña "' + cfg.tabla + '" en la base de telefonía.');
-
-    const o = opciones || {};
-    const pagina = Math.max(0, Number(o.pagina) || 0);
-    const porPagina = Math.min(MAX_FILAS_TABLA, Math.max(10, Number(o.porPagina) || 50));
-    const q = String(o.q || '').trim().toUpperCase();
-    const grupo = String(o.grupo || '').trim().toUpperCase();
-    const tabla = LineasDatos.tabla(cfg.tabla);
-    const encabezados = cfg.encabezados.map((h) => {
-      const objetivo = LineasDatos.normCol(h);
-      return tabla.encabezados.find((real) => LineasDatos.normCol(real) === objetivo);
-    }).filter(Boolean);
-
-    let filas = LineasDatos.leerTabla(cfg.tabla);
-
-    const grupos = {};
-    filas.forEach((f) => {
-      const valor = String(col(f, cfg.grupo) || 'SIN ESTATUS').trim().toUpperCase();
-      grupos[valor] = (grupos[valor] || 0) + 1;
-    });
-    const totalSinFiltro = filas.length;
-    filas = filas.filter((f) => {
-      if (grupo && String(col(f, cfg.grupo) || 'SIN ESTATUS').trim().toUpperCase() !== grupo) return false;
-      if (!q) return true;
-      return encabezados.some((h) => String(f[h] === null || f[h] === undefined ? '' : f[h]).toUpperCase().indexOf(q) >= 0);
-    });
-
-    if (String(tipo).toUpperCase() === 'REACTIVACION') {
-      const imeiPorId = {};
-      LineasDatos.leerTabla(TAB.LINEAS).forEach((l) => { imeiPorId[String(l['ID'])] = col(l, 'IMEI'); });
-      filas = filas.map((f) => (f['IMEI'] && imeiPorId[String(f['IMEI'])] !== undefined ? Object.assign({}, f, { 'IMEI': imeiPorId[String(f['IMEI'])], _ref: String(f['IMEI']) }) : f));
-    }
-    const total = filas.length;
-    const desde = pagina * porPagina;
-    const salida = filas.slice(desde, desde + porPagina).map((f) => {
-      const fila = { _fila: f._fila, _ref: f._ref || null, _id: f['ID'] === undefined || f['ID'] === null ? '' : String(f['ID']) };
-      encabezados.forEach((h) => {
-        const secreto = /^(PIN WHATSAPP|PIN EQUIPO|CONTRASEÑA MODEM)$/i.test(h);
-        fila[h] = secreto && !puedeVerSecretos && f[h] ? '••••' : f[h];
-      });
-      return fila;
-    });
-    return {
-      encabezados: encabezados, filas: salida, total: total, totalSinFiltro: totalSinFiltro,
-      pagina: pagina, paginas: Math.max(1, Math.ceil(total / porPagina)), campoGrupo: cfg.grupo,
-      grupos: Object.keys(grupos).sort().map((nombre) => ({ nombre: nombre, total: grupos[nombre] })),
-    };
-  }
 
   // ---------------- Catálogos y colaboradores ----------------
 
@@ -869,7 +1087,7 @@ const LineasRepo = (function () {
    * y el índice).
    */
   function catalogos() {
-    const enCache = LineasDatos.cacheLeer('catalogos_telefonia_v3');
+    const enCache = LineasDatos.cacheLeer('catalogos_telefonia_v4');
     if (enCache) return enCache;
     const unicos = (filas, columna) => {
       const m = {};
@@ -877,7 +1095,7 @@ const LineasRepo = (function () {
       return Object.keys(m).sort();
     };
     const listas = LineasDatos.existeTabla(TAB.LISTAS) ? LineasDatos.leerTabla(TAB.LISTAS) : [];
-    const desechos = LineasDatos.leerTabla(TAB.DESECHO);
+    const desechos = LineasDatos.existeTabla(TAB.DESECHO) ? LineasDatos.leerTabla(TAB.DESECHO) : []; // retirada el 30-sep
     const lineas = LineasDatos.leerTabla(TAB.LINEAS);
     const inspecciones = LineasDatos.leerTabla(TAB.INSP);
     const responsivas = LineasDatos.leerTabla(TAB.RESP);
@@ -887,7 +1105,7 @@ const LineasRepo = (function () {
     // Listas de LISTAS TELEFONOS con que el AppSheet valida (Valid_If = IN(..., SORT(SELECT(LISTAS TELEFONOS[...]))))
     const c = Object.assign({}, CATALOGO, {
       sedes: unicos(listas, 'SEDE'),
-      departamentos: unicos(listas, 'DEPARTAMENTO'),
+      departamentos: juntar([DEPARTAMENTO_DISPONIBLE], unicos(listas, 'DEPARTAMENTO')),
       areas: unicos(listas, 'AREA'),
       oficinas: unicos(listas, 'OFICINA / DESARROLLO'),
       modelos: unicos(listas, 'EQUIPO'),
@@ -904,7 +1122,7 @@ const LineasRepo = (function () {
       otrasApps: unicos(inspecciones, 'OTRA'),
       identificaciones: unicos(responsivas, 'IDENTIFICACION'),
     });
-    LineasDatos.cacheGuardar('catalogos_telefonia_v3', c, 21600);
+    LineasDatos.cacheGuardar('catalogos_telefonia_v4', c, 21600);
     return c;
   }
 
@@ -923,17 +1141,17 @@ const LineasRepo = (function () {
 
   /** Vacía las cachés del módulo (índices, catálogos y carpetas). */
   function borrarCaches() {
-    ['indice_telefonia_v2', 'indice_telefonia_v3', CLAVE_INDICE, 'indice_colaboradores', 'carpetas_nucos', 'carpetas_nucos_v2', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3'].forEach(LineasDatos.cacheBorrar);
+    ['indice_telefonia_v2', 'indice_telefonia_v3', CLAVE_INDICE, 'indice_colaboradores', 'carpetas_nucos', 'carpetas_nucos_v2', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3', 'catalogos_telefonia_v4', CLAVE_IDS].forEach(LineasDatos.cacheBorrar);
   }
 
   return {
     TAB, ENCABEZADOS_APP, TIPOS_CON_EQUIPO, TIPOS_CON_LINEA, TIPOS_LINEA_OPCIONAL, CATALOGO,
-    COLS_LINEA, VALORES_SIN_LINEA, COLS_RESPONSABLE, CAMPOS_BITACORA,
+    COLS_LINEA, VALORES_SIN_LINEA, ESTATUS_EN_BLANCO, DEPARTAMENTO_DISPONIBLE, COLS_RESPONSABLE, CAMPOS_BITACORA,
     tipoConLinea, tipoSinLinea, convertirRegistro, folioRegistro, estatusGeneralRegistro,
-    indice, refrescarIndice, leerRegistroPorId, leerRegistroObligatorio,
+    indice, refrescarIndice, leerRegistroPorId, leerRegistroObligatorio, idActual, idsDeRegistro,
     guardarCambiosRegistro, agregarRegistro, registrarMovimiento, asegurarPestanaApp,
     evidenciaDesdeFila, inspeccionDesdeFila, inspeccionDesdeEvidencia, responsivaDesdeFila,
-    evidenciasDeRegistro, leerInspeccion, historialDeRegistro, movimientoDeCampo, bitacora, vistaOperativa,
+    evidenciasDeRegistro, leerInspeccion, historialDeRegistro, asignacionesDeRegistro, movimientoDeCampo, bitacora,
     catalogos, indiceColaboradores, borrarCaches,
   };
 })();
