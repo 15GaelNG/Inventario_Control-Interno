@@ -1,47 +1,78 @@
 # Líneas — estado del módulo
 
-Rama `emmanuel` · Última actualización: 2026-09-30
+Rama `emmanuel` · Última actualización: 2026-10-01
 
 Documento de continuidad del módulo **Líneas** (equipos y líneas telefónicas).
 El plan de la mudanza está en [lineas-plan.md](lineas-plan.md); aquí se registra
 qué está hecho, cómo probarlo y qué sigue.
 
-**1-oct (§0ad):**
-- menú del clic derecho sin parpadeo;
-- Panorama rápido;
-- evidencia de las correcciones en Drive. **Falta:** que ADMIN suba la carpeta "EVIDENCIAS PARA SUBIR" en el módulo.
+**Dónde quedamos (cierre del 1-oct, tarde):**
 
-**Dónde quedamos (cierre final del 30-sep, noche):**
+- **GitHub:** `master` = `emmanuel` = `ae9adbb`. Master se unió dos veces en `emmanuel` (lo de Jorge y lo de Ayrton),
+  se probó en DEV y se subió con permiso del usuario. Detalle en §0ae. DEV está al día.
+- **Regla nueva del usuario:** el catálogo de IDs de Ayrton (`Entidades.gs`, `Relaciones.gs`, `CapitalHumano.gs`) es
+  la base; Líneas se adapta a él, no al revés.
+- **Pruebas:** contratos de Líneas 63/63; las de comportamiento de master pasan, salvo `inspecciones-captura.test.js`,
+  que también falla en master (de los compañeros).
+- **1-oct (§0ad):** menú del clic derecho sin parpadeo, Panorama rápido y evidencia de las correcciones en Drive
+  (**falta** que ADMIN suba la carpeta "EVIDENCIAS PARA SUBIR" en el módulo).
+- **Lo que sigue** está en `migracion/PENDIENTES_MAESTRO.md` (lista única): cambios del Panorama tras presentarlo,
+  fotos de inspección por QR (2.1), cambios de número entre adendums (6.1), inspección obligatoria al mandar a
+  resguardo (2.6), y en la sección 8: avisar a Jorge y Ayrton (8.4), columnas con otro nombre (8.5), probar
+  `ID PERSONA` (8.6) y permisos de accesorios (8.7).
+- **Por probar a mano** (el navegador integrado no puede): fotos en una inspección de NUCOS, gesto de dos dedos,
+  Atrás entre módulos, velocidad de "Última responsiva / inspección", y en celular tocar y mantener presionado.
 
-- **Rama `emmanuel`:** en GitHub hasta `10dc7eb` (29-sep). En local hay **31 commits más** (`644ba14` … `0bc9b46`).
-  Se suben a GitHub **al terminar la ronda**, como pidió el usuario. DEV está al día con `emmanuel`.
-- **Pruebas:** `npm test` da 60 aprobadas y 0 fallidas. Las de Ayrton (`node tests/ids.test.js` y
-  `node tests/entidades.test.js`) dan TODO OK.
-- **La lista única de pendientes** es `migracion/PENDIENTES_MAESTRO.md` (carpeta de documentación); las preguntas para
-  el área, por rondas, en `migracion/PREGUNTAS_PENDIENTES.md` (Líneas L1–L23; Pau P1–P10 aparte).
-- **Hecho el 30-sep** (después de la reunión con Líneas):
-  - §0u: estatus nuevos, DISPONIBLE y menú;
-  - §0v: pestañas de módulos retirados, migradas y borradas;
-  - §0w: "Mandar a resguardo" por NUCO y bandeja "Resguardos y cancelaciones" (probada con los NUCO 0101 y 0556);
-  - §0x: PARA VENTA y PARA DESECHO con la lógica de Mandar a resguardo;
-  - §0y: selección como en Google Drive y "Mandar a cancelación", con sus ajustes;
-  - §0z: Líneas lee `ID ANTERIOR` tras la segunda corrida de IDs de Ayrton (`13e2987`);
-  - §0aa: módulo TEMPORAL "Correcciones de Líneas" con 565 casos cargados (`df45755`); se elimina cuando terminen;
-  - §0ab: Panorama nuevo (`0de8943`). **Queda abierto:** el usuario lo va a presentar y pueden salir cambios;
-  - §0ac: centro de notificaciones con avisos de seguimiento (`0bc9b46`); días y tipos a confirmar con Líneas (L13).
-- **Lo que sigue** (detalle y orden en la lista maestra):
-  1. cambios del Panorama que salgan de la presentación;
-  2. fotos de la inspección por QR (permiso temporal, sin volver a iniciar sesión);
-  3. análisis de cambios de número entre adendums (misma SIM con otro número = cambio de número);
-  4. inspección obligatoria al mandar a resguardo (acordada en la junta, R6; no está hecha);
-  5. lo que dependa de las respuestas de Líneas (reasignar, responsiva que actualiza la ficha, columnas de inicio,
-     acciones masivas, renovación de adendum) y de Pau;
-  6. **al final:** roles y correos, subir a GitHub, unir con master y avisar a Jorge y Ayrton.
-- **Por probar a mano** (el navegador integrado no puede): subir fotos a una inspección de NUCOS, el gesto de dos
-  dedos, Atrás entre módulos y la velocidad real de "Última responsiva / inspección". De §0y: tocar y mantener
-  presionado en celular, "Ver última inspección / responsiva" desde el ⋮ (abre otra pestaña) y el ⋮ de la ficha con
-  un rol sin permiso de operar (solo Documentos, Drive e Historial).
-- **Avisar a Jorge y Ayrton al unir con master** los cambios en archivos compartidos:
+## 0ae. Unión con master y acuerdos del equipo (2026-10-01)
+
+**Qué pasó:** se unió master en `emmanuel` dos veces (`950f93c`, luego `04269fb` con lo nuevo de Ayrton), se
+probó en DEV y se subió: `master` = `emmanuel` = `ae9adbb`. Respaldo local de antes de unir:
+`respaldo-antes-merge-master-1oct` y `respaldo-antes-merge-master-1oct-b`.
+
+**Conflictos resueltos:**
+- `Entidades.gs`: la versión de Ayrton + las 3 pestañas `APP_` de Líneas (NOTIFICACIONES, RESGUARDOS, CORRECCIONES).
+- `datatable.html`: Excel completo de master + "Exportar selección" de Líneas; el menú de clic derecho de master no
+  se abre en tablas estilo Drive (`seleccionDrive`), que ya tienen el suyo.
+- `lineas.html`: entran los KPIs que se recalculan con los filtros (master); `tilesKpi` no recalcula mientras la tabla
+  no tiene datos (si no, salían en 0). Los cambios de master a vistas que Líneas retiró el 30-sep no entran;
+  `LineasOperativas.gs` sigue borrado.
+- Servicios de Líneas: `LineasDatos.nuevoId(hoja)` (= `Ids.nuevo(Entidades.prefijo(hoja))`).
+
+**Líneas adaptado al catálogo de Ayrton:**
+- Hijas de la línea (inspecciones, responsivas, cambios, evidencias): ya escribían el `ID` vigente (`LIN-…`) y leen
+  las tres generaciones (ID / ID ANTERIOR / ID APPSHEET). Ayrton las trata como bitácora: nada se sincroniza.
+- Accesorios (`LineasAccesorios.gs`): el artículo se identifica por `ID` (ACC-…); el movimiento lo cita en
+  `ID ACCESORIO`; los movimientos viejos (solo `ID_Accesorio`) se casan con el `ID ANTERIOR` del artículo, como en
+  `Relaciones`. Libro sin migrar: todo con las llaves del AppSheet. Prueba: `tests/lineas-accesorios.test.cjs`.
+- `ID PERSONA` (Capital Humano): al guardar o dar de alta una línea con cambio de RESPONSABLE / NO EMPLEADO /
+  EMAIL USUARIO se recalcula con `CapitalHumano.idPara` (`LineasRepo.conPersona_`), como Vehículos y Caja Chica.
+  **Sin probar en DEV** (pendiente 8.6).
+- Sin borrados fuera de `Relaciones.borrar`: se quitó `LineasDatos.eliminarFila` (no se usaba).
+
+**Acuerdos del usuario (1-oct):**
+1. Cambio de módulo en 180 ms (Jorge lo tenía en 2.5 s).
+2. **Una sola campana**, organizada por módulo (`html/notificaciones.html`, global `Notificaciones`):
+   - Líneas: avisos guardados, con leído / no leído.
+   - Vehículos: pendientes de `NotificacionesService` de Jorge (verificaciones, seguros, inspecciones atrasadas); se
+     calculan en vivo, no se marcan, se quitan solos al atenderse; clic = ficha del vehículo.
+   - Panel con una sección por módulo; vista "Notificaciones" con selector Todos / Líneas / Vehículos.
+   - Se retiró la campanita aparte de Jorge (`componentes/notificaciones.html` y su botón).
+   - Un módulo nuevo se agrega con su entrada en `MODULOS`, sus tipos en `TIPOS` / `GRUPOS` y su fuente en `FUENTES`.
+3. Inicio sin Líneas (Jorge lo puso de relleno; las cifras viven en el Panorama).
+4. y 5. **Un solo inventario de accesorios**, el de Líneas ("Inventario de Accesorios"). Se retiraron
+   `AccesoriosService.gs`, su vista, sus `api*` y su código en `app.html`.
+6. Inicio más rápido: cada lista (vehículos, incidencias, tickets, inspecciones) se lee una vez por carga.
+7. Se queda el scope nuevo `userinfo.email` de master.
+
+**Avisar a Jorge y Ayrton** (pendiente 8.4):
+- Jorge: se retiraron su campanita y su inventario de accesorios; Inicio sin Líneas; transición en 180 ms;
+  `datatable` (Excel + "Exportar selección", menú contextual omitido en `seleccionDrive`).
+- Ayrton: Líneas escribe `ID ACCESORIO` e `ID PERSONA`; se actualizó la nota de `CapitalHumano.LIGAS`;
+  `tests/permisos.test.js` y `tests/llave-nueva.test.js` apuntan al inventario de Líneas; `entidades.test.js` cuenta
+  27 hojas. Las 5 columnas "POR DECIDIR" de Líneas siguen pendientes (8.5).
+- Los dos: las ramas nuevas parten de este master.
+
+**Cambios de Líneas en archivos compartidos hechos antes de unir** (también para el aviso 8.4; lista del 30-sep):
   - DataTable: opciones `minimo` y `modoSeleccion`, y el `className` en `render`;
   - `app.html`: `HistorialApp.alNavegar` en `navegarA` y `marcarTemaActual`;
   - `Index.html`: `notificaciones`, `lineas-panorama` y `historial-navegador`;
@@ -60,7 +91,6 @@ qué está hecho, cómo probarlo y qué sigue.
     quita la selección y la animación `dt-barra-entra` (la barra aparece a los 100 ms).
   - §0z: Líneas lee `ID ANTERIOR` (corrida de IDs del 30-sep). Su catálogo y `MIGRACION_REFERENCIAS` ya no
     describen la BD de pruebas tal como quedó: ver §0z antes de correr `lineas2Escribir` sobre ella.
-
 
 ## 0ad. Menú sin parpadeo, Panorama rápido y evidencia en Drive (2026-10-01)
 
