@@ -318,7 +318,7 @@ function replancharDesdeProduccion(opciones) {
     } else if (listas.length >= hojas.length - sinOrigen - sinDestino) {
       lineas.push('');
       lineas.push('  LISTO. El destino quedó en estado PRE-migración.');
-      lineas.push('  Lo que sigue: migracion1Revisar en el proyecto que apunte al destino.');
+      lineas.push('  Lo que sigue: migracionEstadoSello, y luego ids1Ensayo (ver docs/guion-lab.md).');
       props.deleteProperty(REPL_PROP_AVANCE);
     }
   } else {
