@@ -109,6 +109,18 @@ const Entidades = (function () {
     // Renombrarlo a "ID ANTERIOR" sería borrarle el nombre a un dato de la empresa.
     'COLABORADORES': { prefijo: 'COL', llaveAnterior: 'No EMPLEADO', llaveEsDato: true, familia: 'otros' },
 
+    // --- Capital Humano (01/10/2026) ---
+    // La lista de Capital Humano, pegada TAL CUAL por Ayrton cada vez que CH manda una versión
+    // nueva (externa): la app solo la lee, y nunca le pone ID, porque el siguiente pegado lo
+    // borraría. Cada renglón es un EMPLEO, no una persona: el mismo número se repite al
+    // recontratar, CH reutiliza números de gente dada de baja, y una persona puede tener dos
+    // números a la vez (otra razón social, un ascenso). Reemplaza a COLABORADORES, que era
+    // una foto vieja (3,627, todos ACTIVO); esa se queda mientras Líneas la lea.
+    'COLABORADORES ACTUALIZADO': { prefijo: 'EMP', llaveAnterior: 'No EMPLEADO', llaveEsDato: true, externa: true, familia: 'capitalhumano' },
+    // Quién es quién: un renglón por empleo (número + nombre) con su ID PERSONA. La mantiene
+    // la app (CapitalHumano.identificar), nunca se pega; por eso aquí sí viven los IDs.
+    'PERSONAS': { prefijo: 'PER', llaveAnterior: 'No EMPLEADO', delSistemaNuevo: true, familia: 'capitalhumano' },
+
     // --- Pestañas del sistema nuevo: NO vienen de AppSheet, las crea el módulo de Líneas ---
     // No pasan por MigracionIds (no hay nada viejo que convertir), pero sí necesitan prefijo
     // para que sus altas nazcan con el formato correcto.
@@ -163,6 +175,8 @@ const Entidades = (function () {
     // Nació con el sistema nuevo: no hay IDs viejos que convertir, así que MigracionIds
     // no la toca. Sí tiene prefijo, para que sus altas nazcan bien.
     e.delSistemaNuevo = !!POR_HOJA[hoja].delSistemaNuevo;
+    // Se pega desde otro sistema: la app solo la lee y MigracionIds nunca le pone ID.
+    e.externa = !!POR_HOJA[hoja].externa;
     // ¿El ID nuevo pisa la columna vieja? Solo si esa columna ya se llama "ID".
     e.pisaLlaveAnterior = clave_(e.llaveAnterior) === clave_(COLUMNA_ID);
     POR_CLAVE[clave_(hoja)] = e;
@@ -190,7 +204,7 @@ const Entidades = (function () {
   const hojaDe = (pre) => (POR_PREFIJO[String(pre || '').toUpperCase()] || {}).hoja || null;
   const todas = () => Object.keys(POR_HOJA).map((h) => POR_CLAVE[clave_(h)]);
   /** Las que sí tienen algo viejo que convertir: las que venían de AppSheet */
-  const migrables = () => todas().filter((e) => !e.delSistemaNuevo);
+  const migrables = () => todas().filter((e) => !e.delSistemaNuevo && !e.externa);
 
   /**
    * Revisa que el catálogo esté sano. No se ejecuta solo: si tronara al cargar, tumbaría

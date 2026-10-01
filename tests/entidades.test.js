@@ -27,7 +27,8 @@ function truena(fn, texto) {
 console.log('1. El catálogo está sano');
 const revision = Entidades.revisarCatalogo();
 ok(revision.problemas.length === 0, 'sin problemas: ' + (revision.problemas.join(' | ') || 'ninguno'));
-ok(revision.hojas === 22, 'tiene las 22 hojas de registros, no ' + revision.hojas);
+// 22 + las dos de Capital Humano (01/10/2026): COLABORADORES ACTUALIZADO y PERSONAS
+ok(revision.hojas === 24, 'tiene las 24 hojas de registros, no ' + revision.hojas);
 ok(Entidades.migrables().length === 20,
    'de ellas 20 vienen de AppSheet y sí se migran, no ' + Entidades.migrables().length);
 
@@ -65,8 +66,13 @@ ok(pisan.indexOf('VEHICULOS') === -1,
 
 console.log('\n6b. Las pestañas del sistema nuevo no pasan por la migración');
 const nuevas = todas.filter((e) => e.delSistemaNuevo).map((e) => e.hoja).sort();
-ok(nuevas.join(',') === 'APP_EVIDENCIAS,APP_MOVIMIENTOS',
-   'son las dos APP_ de Líneas: ' + nuevas.join(', '));
+ok(nuevas.join(',') === 'APP_EVIDENCIAS,APP_MOVIMIENTOS,PERSONAS',
+   'son las dos APP_ de Líneas y PERSONAS: ' + nuevas.join(', '));
+
+console.log('\n6c. Una hoja externa (se pega desde otro sistema) nunca pasa por la migración');
+const externas = todas.filter((e) => e.externa).map((e) => e.hoja);
+ok(externas.join(',') === 'COLABORADORES ACTUALIZADO', 'la única es la lista de Capital Humano: ' + externas.join(', '));
+ok(!Entidades.migrables().some((e) => e.externa), 'y migrables() no la incluye: el siguiente pegado borraría su ID');
 ok(Entidades.migrables().every((e) => !e.delSistemaNuevo), 'y quedan fuera de migrables()');
 ok(Entidades.prefijo('APP_EVIDENCIAS') === 'EVI',
    'pero sí tienen prefijo, para que sus altas nazcan bien');
@@ -113,8 +119,8 @@ ok(cli.llaveAnterior === Entidades.COLUMNA_ID_ANTERIOR_LEGADO,
 
 console.log('\n7c. Las familias: migrar y homologar un módulo a la vez');
 const fams = Entidades.familias();
-ok(JSON.stringify(fams) === JSON.stringify(['cajachica', 'lineas', 'otros', 'vehiculos']),
-   'son las cuatro esperadas: ' + fams.join(', '));
+ok(JSON.stringify(fams) === JSON.stringify(['cajachica', 'capitalhumano', 'lineas', 'otros', 'vehiculos']),
+   'son las cinco esperadas: ' + fams.join(', '));
 const suma = fams.reduce((a, f) => a + Entidades.deFamilia(f).length, 0);
 ok(suma === Entidades.migrables().length,
    'cada migrable cae en exactamente una familia (' + suma + ' = ' + Entidades.migrables().length + ')');
