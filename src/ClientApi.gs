@@ -282,6 +282,9 @@ function apiEliminarArqueo(token, id) {
 function apiSubirArchivoArqueo(token, nombreArchivo, mimeType, base64Data) {
   return ArqueosService.subirArchivo(token, nombreArchivo, mimeType, base64Data);
 }
+function apiSubirFirmaArqueo(token, nombreArchivo, mimeType, base64Data) {
+  return ArqueosService.subirFirma(token, nombreArchivo, mimeType, base64Data);
+}
 
 // --- Listas de referencia ---
 function apiListarDepartamentos(token) {

@@ -534,10 +534,15 @@
     canvas.dataset.tieneTrazo = '0';
   }
 
-  /** Sube (si el usuario firmó) las firmas dibujadas y regresa {columna real: url}
-   * — mismo patrón que subirArchivosArqueo, pero exportando el canvas a PNG en
-   * vez de leer un <input type="file">. Sin trazo nuevo, no se manda nada
-   * (así crear()/actualizar() no le tocan la firma que ya tenía guardada). */
+  /** Sube (si el usuario firmó) las firmas dibujadas y regresa {columna real: url,
+   * columna + '_FILE_ID': id} — mismo patrón que subirArchivosArqueo, pero
+   * exportando el canvas a PNG en vez de leer un <input type="file">, y a su
+   * propia carpeta (apiSubirFirmaArqueo, no apiSubirArchivoArqueo). El
+   * '_FILE_ID' no es una columna real: viaja para que el servidor renombre la
+   * firma a "<ID ARQUEO>_<quién firma>_<fecha>" una vez que sabe el ID real
+   * (ArqueosService.crear/actualizar lo descartan antes de guardar). Sin
+   * trazo nuevo, no se manda nada (así crear()/actualizar() no le tocan la
+   * firma que ya tenía guardada). */
   async function subirFirmasArqueo(prefijo) {
     const resultado = {};
     const camposFirma = CAMPOS_ARQUEO.filter((c) => c.tipo === 'firma');
@@ -545,8 +550,9 @@
       const canvas = document.getElementById(prefijo + '-' + slugCampo(campo.clave));
       if (!canvas || canvas.dataset.tieneTrazo !== '1') continue;
       const base64 = canvas.toDataURL('image/png').split(',')[1];
-      const subido = await callServer('apiSubirArchivoArqueo', state.token, 'firma.png', 'image/png', base64);
+      const subido = await callServer('apiSubirFirmaArqueo', state.token, 'firma.png', 'image/png', base64);
       resultado[campo.clave] = subido.url;
+      resultado[campo.clave + '_FILE_ID'] = subido.id;
     }
     return resultado;
   }
