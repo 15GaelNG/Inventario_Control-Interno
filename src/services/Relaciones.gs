@@ -175,7 +175,7 @@ const MAPA = {
             'RAZON SOCIAL': 'RAZON SOCIAL',
             'DEPARTAMENTO': 'DEPARTAMENTO',
             'SEDE': 'SEDE',
-            'UBICACION': 'OFICINA / DESARROLLO',
+            'OFICINA / DESARROLLO': 'OFICINA / DESARROLLO',   // en VEHICULOS se llamaba UBICACION (limpieza #23)
             'RESPONSABLE VEHICULO': 'RESPONSABLE',
           },
         },
@@ -235,7 +235,7 @@ const MAPA = {
           columnas: {
             'DEPARTAMENTO': 'DEPARTAMENTO',
             'SEDE': 'SEDE',
-            'UBICACION': 'OFICINA / DESARROLLO',
+            'OFICINA / DESARROLLO': 'OFICINA / DESARROLLO',
             'RESPONSABLE VEHICULO': 'RESPONSABLE',
           },
         },

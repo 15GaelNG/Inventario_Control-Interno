@@ -51,6 +51,7 @@ function cargar(salidas) {
     asignarIds: espia('ids'),
     moverIdsAlInicio: espia('mover'),
     limpiarRespaldoRedundante: espia('respaldo'),
+    homologarNombres: espia('nombres'),
     reescribirReferencias: espia('referencias'),
     auditarIds: espia('auditar'),
   });
@@ -156,7 +157,7 @@ console.log('\n9. Los pipelines de homologación SÍ filtran por familia');
 {
   const { api, llamadas } = cargar();
   api.correrFamilia('vehiculos');
-  ok(pasos(llamadas) === 'referencias,auditar', 'dos pasos: ' + pasos(llamadas));
+  ok(pasos(llamadas) === 'nombres,referencias,auditar', 'tres pasos: ' + pasos(llamadas));
   ok(llamadas.every((l) => l.familia === 'vehiculos'),
      'los dos reciben la familia, así que homologar vehículos NO toca Líneas');
 }
@@ -186,7 +187,7 @@ console.log('\n12. El nombre de la familia se normaliza');
 {
   const { api, llamadas } = cargar();
   api.correrFamilia('  VEHICULOS  ');
-  ok(llamadas.length === 2 && llamadas[0].familia === 'vehiculos',
+  ok(llamadas.length === 3 && llamadas.every((l) => l.familia === 'vehiculos'),
      'con espacios y mayúsculas corre igual, y pasa la familia en minúsculas');
 }
 
@@ -231,7 +232,7 @@ console.log('\n15. Los atajos del editor apuntan a donde dicen');
   ok(llamadas.filter((l) => l.paso === 'ids')[0].escribir === true, 'ids2Escribir sí escribe');
   llamadas.length = 0;
   api.vehiculos1Ensayo();
-  ok(pasos(llamadas) === 'referencias,auditar' && llamadas[0].familia === 'vehiculos',
+  ok(pasos(llamadas) === 'nombres,referencias,auditar' && llamadas[0].familia === 'vehiculos',
      'vehiculos1Ensayo: homologación de vehículos');
   llamadas.length = 0;
   api.cajaChica1Ensayo();

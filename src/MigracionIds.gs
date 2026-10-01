@@ -178,6 +178,70 @@ const MIGRACION_SS_PRODUCCION = '1h5ibDsmVtrG27rwMaOvj-lm08QZUHzDv3woPmkfRQrk';
  * habría convertido los folios "CTA0100" en "VEH-…", tirando la llave de negocio y
  * rompiendo AppSheet de paso.
  */
+/**
+ * NOMBRES DE COLUMNA que se homologan: el mismo dato con dos nombres en dos hojas. Cada
+ * renglón es una decisión tomada caso por caso y documentada en limpiezas-planeadas.xlsx
+ * (pestaña "Nombres de columnas"); el número de limpieza va en `limpieza`.
+ *
+ * Renombrar un encabezado rompe a quien busque la columna por su nombre viejo: el código
+ * de la app (que cambia en el MISMO commit que agrega el renglón aquí) y AppSheet (que en
+ * producción ya estará apagado cuando corra el pipeline, ver migracionSs_). Por eso un
+ * renombre nunca se hace a mano en la hoja: se hace aquí, junto con el código.
+ */
+const MIGRACION_NOMBRES = [
+  // Es el mismo dato que INSTALACION DE SENSORES, INSPECCION VEHICULAR, las hojas de Líneas
+  // y los catálogos (LISTAS, DEPARTAMENTOS) llaman OFICINA / DESARROLLO; VEHICULOS era la
+  // única que le decía UBICACION, y sus opciones ya salían del catálogo OFICINA / DESARROLLO.
+  { hoja: 'VEHICULOS', de: 'UBICACION', a: 'OFICINA / DESARROLLO', limpieza: 23 },
+];
+
+/**
+ * Renombra los encabezados de MIGRACION_NOMBRES (solo los de la familia pedida). Idempotente:
+ * si ya se llama como debe, lo dice y no toca nada. Nunca crea una columna ni deja dos con
+ * el mismo nombre: si la vieja y la nueva existen a la vez, o no existe ninguna, es un
+ * PROBLEMA y escribiendo se detiene ahí.
+ */
+function homologarNombres(opciones) {
+  const cfg = Object.assign({ escribir: false, familia: null }, opciones || {});
+  const ssId = migracionSs_(cfg);
+  const ss = SpreadsheetApp.openById(ssId);
+  const lineas = [(cfg.escribir ? 'HOMOLOGANDO NOMBRES' : 'ENSAYO (no escribe nada)') + ' — ' + ssId, ''];
+  const problemas = [];
+  let porHacer = 0, hechas = 0, yaEstaban = 0;
+  MIGRACION_NOMBRES
+    .filter((n) => !cfg.familia || (Entidades.existe(n.hoja) &&
+      (Entidades.de(n.hoja).familia || 'otros') === String(cfg.familia).trim().toLowerCase()))
+    .forEach((n) => {
+      const nombre = n.hoja + ': "' + n.de + '" → "' + n.a + '" (limpieza #' + n.limpieza + ')';
+      const sheet = ss.getSheetByName(n.hoja);
+      if (!sheet) { problemas.push(n.hoja + ': no existe la hoja'); return; }
+      const enc = migEncabezados_(sheet);
+      const posDe = migColumna_(enc, n.de);
+      const posA = migColumna_(enc, n.a);
+      if (!posDe && posA) { yaEstaban++; lineas.push('  ' + nombre + ': YA HOMOLOGADA'); return; }
+      if (posDe && posA) { problemas.push(nombre + ': existen LAS DOS columnas; hay que decidir cuál se queda'); return; }
+      if (!posDe) { problemas.push(nombre + ': no existe ninguna de las dos'); return; }
+      if (cfg.escribir) {
+        sheet.getRange(1, posDe).setValue(n.a);
+        hechas++;
+        lineas.push('  ' + nombre + ': renombrada');
+      } else {
+        porHacer++;
+        lineas.push('  ' + nombre + ': se renombraría');
+      }
+    });
+  lineas.push('');
+  if (cfg.escribir) lineas.push(hechas + ' columnas renombradas, ' + yaEstaban + ' ya homologadas');
+  else lineas.push(porHacer + ' columnas por renombrar, ' + yaEstaban + ' ya homologadas');
+  if (problemas.length) {
+    lineas.push('', 'PROBLEMAS (' + problemas.length + '):');
+    problemas.forEach((p) => lineas.push('  - ' + p));
+  }
+  const texto = lineas.join('\n');
+  Logger.log(texto);
+  return texto;
+}
+
 const MIGRACION_REFERENCIAS = [
   { hoja: 'VERIFICACIONES', columna: 'FOLIO VEHICULO', padre: 'VEHICULOS', porLlaveNegocio: 'FOLIO', destino: 'ID VEHICULO', esperado: 1.00 },
   { hoja: 'REASIGNACIONES_VEHICULOS', columna: 'Folio Vehiculo', padre: 'VEHICULOS', porLlaveNegocio: 'FOLIO', destino: 'ID VEHICULO', esperado: 1.00 },

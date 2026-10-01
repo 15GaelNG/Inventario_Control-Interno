@@ -53,6 +53,9 @@ const PASOS_IDS = [
 /**
  * PIPELINES 2, 3 y 4 — la homologación de una familia. Corren DESPUÉS del pipeline 1.
  *
+ *   nombres      homologa los nombres de columna de esta familia (MIGRACION_NOMBRES): el
+ *                mismo dato con el mismo nombre en todas las hojas. Va primero porque los
+ *                pasos siguientes ya buscan las columnas por su nombre nuevo.
  *   referencias  reescribe lo que apuntaba al ID viejo del padre (MIGRACION_REFERENCIAS),
  *                solo las hojas de esta familia.
  *   auditar      solo lee, solo esta familia.
@@ -63,6 +66,7 @@ const PASOS_IDS = [
  * docs/relaciones.md y docs/lineas-homologacion.md.
  */
 const PASOS_HOMOLOGA = [
+  { nombre: 'nombres', marcaMala: 'PROBLEMAS (', corre: (o) => homologarNombres(o) },
   { nombre: 'referencias', corre: (o) => reescribirReferencias(o) },
   { nombre: 'auditar', soloLee: true, marcaMala: 'FALLAS (',
     corre: (o) => auditarIds(o) },

@@ -83,14 +83,14 @@ function hoja(nombre, encabezados, filasObj) {
 // tiene ID que dar, y truena a propósito.
 const COL_VEH = ['ID', 'FOLIO', 'SERIE VEHICULO', 'PLACA', 'MARCA', 'CLASE', 'LINEA VEHICULO',
   'MODELO', 'COLOR', 'CAPACIDAD COMBUSTIBLE (LTS)', 'RAZON SOCIAL', 'DEPARTAMENTO',
-  'SEDE', 'UBICACION', 'RESPONSABLE VEHICULO', 'SENSOR', 'SERIE SENSOR'];
+  'SEDE', 'OFICINA / DESARROLLO', 'RESPONSABLE VEHICULO', 'SENSOR', 'SERIE SENSOR'];
 
 // CTA0001 vive y es de CONSTRUCCION. CTA0002 está dado de baja: su DEPARTAMENTO ya no
 // dice un área, dice un estatus — y las copias sí guardan el área buena (POST VENTA).
 const base = {
   PLACA: 'AAA111', MARCA: 'NISSAN', CLASE: 'PICKUP', 'LINEA VEHICULO': 'NP300',
   MODELO: '2022', COLOR: 'BLANCO', 'CAPACIDAD COMBUSTIBLE (LTS)': 60,
-  'RAZON SOCIAL': 'CM', SEDE: 'QRO', UBICACION: 'OFICINA 1', 'RESPONSABLE VEHICULO': 'ANA', SENSOR: 'SI TIENE SENSOR',
+  'RAZON SOCIAL': 'CM', SEDE: 'QRO', 'OFICINA / DESARROLLO': 'OFICINA 1', 'RESPONSABLE VEHICULO': 'ANA', SENSOR: 'SI TIENE SENSOR',
 };
 // CTA0003 es uno de los 116 vehículos de baja a los que les toca quedar con el
 // DEPARTAMENTO vacío (la baja ya consta en ESTATUS), pero sus copias sí conservan el área.
@@ -111,7 +111,7 @@ const comoSensores = (v, depto) => ({
   FOLIO: v.FOLIO, 'SERIE VEHICULO': v['SERIE VEHICULO'], PLACA: v.PLACA, MARCA: v.MARCA,
   CLASE: v.CLASE, 'LINEA VEHICULO': v['LINEA VEHICULO'], MODELO: v.MODELO, COLOR: v.COLOR,
   'CAPACIDAD DE COMBUSTIBLE': v['CAPACIDAD COMBUSTIBLE (LTS)'], 'RAZON SOCIAL': v['RAZON SOCIAL'],
-  DEPARTAMENTO: depto, SEDE: v.SEDE, 'OFICINA / DESARROLLO': v.UBICACION,
+  DEPARTAMENTO: depto, SEDE: v.SEDE, 'OFICINA / DESARROLLO': v['OFICINA / DESARROLLO'],
   RESPONSABLE: v['RESPONSABLE VEHICULO'],
 });
 
@@ -640,7 +640,7 @@ console.log('\ndescribir() pinta el MAPA');
   const d = R.describir();
   const veh = d.duenos.find((x) => x.hoja === 'VEHICULOS');
   const sen = veh && veh.copias.find((c) => c.nombre === 'INSTALACION DE SENSORES');
-  ok(sen && sen.tipo === 'cache' && sen.columnas.some((c) => c.origen === 'UBICACION' && c.destino === 'OFICINA / DESARROLLO'),
+  ok(sen && sen.tipo === 'cache' && sen.columnas.some((c) => c.origen === 'CAPACIDAD COMBUSTIBLE (LTS)' && c.destino === 'CAPACIDAD DE COMBUSTIBLE'),
     'cada copia con su tipo y sus columnas origen → destino');
   ok(d.centinelas['*'].indexOf('BAJA VEHICULAR') !== -1, 'y los centinelas');
 }
