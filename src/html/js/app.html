@@ -2959,6 +2959,67 @@
       }
     }
 
+    // ---------- Menú contextual (clic derecho en la tabla) ----------
+    // Mismos 5 formularios de captura que ya usan los botones "Agregar" de la ficha
+    // (abrirAgregarVerificacion/Sensor/Holograma/Incidencia/Inspeccion), pero como
+    // acceso directo desde la tabla sin entrar primero a la ficha -- trae lo que
+    // haga falta (completo, y hologramas para Inspección) antes de abrir el formulario.
+    async function abrirCapturaRapidaVehiculo(vResumen, tipo) {
+      try {
+        const necesitaCompleto = tipo === 'holograma' || tipo === 'incidencia' || tipo === 'inspeccion';
+        const [completo, hologramasTexto] = await Promise.all([
+          necesitaCompleto ? callServer('apiBuscarVehiculoPorFolio', state.token, vResumen.FOLIO) : Promise.resolve(null),
+          tipo === 'inspeccion' ? callServer('apiHologramasPorFolio', state.token, vResumen.FOLIO).catch(() => '[]') : Promise.resolve('[]'),
+        ]);
+        if (tipo === 'verificacion') abrirAgregarVerificacion(vResumen);
+        else if (tipo === 'sensor') abrirAgregarSensor(vResumen);
+        else if (tipo === 'holograma') abrirAgregarHolograma(vResumen, completo);
+        else if (tipo === 'incidencia') abrirAgregarIncidencia(vResumen, completo);
+        else if (tipo === 'inspeccion') abrirAgregarInspeccion(vResumen, completo, JSON.parse(hologramasTexto || '[]'));
+      } catch (err) {
+        toastError('No se pudo preparar la captura: ' + err.message);
+      }
+    }
+
+    /** Acceso rápido: cambia solo ESTATUS, sin abrir el formulario completo de Editar
+     *  (reutiliza el mismo modal de captura de un solo campo). */
+    function cambiarEstatusRapidoVehiculo(v) {
+      const cuerpo = abrirCapturaVehiculo('toggle-right', 'ESTATUS', 'Cambiar estatus', 'Folio ' + v.FOLIO);
+      const form = Formulario.crear(cuerpo, {
+        ancho: 'uno', columnas: 1,
+        campos: [{ id: 'ESTATUS', etiqueta: 'Nuevo estatus', tipo: 'lista', requerido: true }],
+        textoGuardar: 'Guardar estatus', iconoGuardar: 'save',
+        alGuardar: async (valores) => {
+          await callServer('apiActualizarVehiculo', state.token, v.ID_VEHICULO, { ESTATUS: valores.ESTATUS });
+          invalidarCacheLista('apiListarVehiculosResumen', state.token);
+          invalidarCacheCatalogo('apiListarVehiculosBasico', state.token);
+        },
+        textoExito: () => 'Estatus actualizado',
+        alGuardado: () => { cerrarCapturaVehiculo(); cargar(); },
+      });
+      form.setOpciones('ESTATUS',
+        ['BAJA VEHICULAR', 'PRESTAMO', 'UTILITARIO', 'NO UTILITARIO', 'NUCO SIN INFORMACION', 'FUERA DE SERVICIO'], v.ESTATUS);
+    }
+
+    /** Eliminar directo desde el menú contextual -- mismo apiEliminarVehiculo y limpieza
+     *  de caché que el botón "Eliminar" masivo de la tabla, pero para una sola fila. */
+    async function eliminarVehiculoRapido(v) {
+      const ok = await Confirmar.pedir({
+        titulo: '¿Eliminar este vehículo?', mensaje: 'Esta acción no se puede deshacer.',
+        textoConfirmar: 'Eliminar', peligro: true,
+      });
+      if (!ok) return;
+      try {
+        await callServer('apiEliminarVehiculo', state.token, v.ID_VEHICULO);
+        invalidarCacheLista('apiListarVehiculosResumen', state.token);
+        invalidarCacheCatalogo('apiListarVehiculosBasico', state.token);
+        toastExito('Eliminado exitosamente');
+        await cargar();
+      } catch (err) {
+        toastError('No se pudo eliminar: ' + err.message);
+      }
+    }
+
     const tabla = DataTable.crear(document.getElementById('veh-tabla'), {
       idCampo: 'ID_VEHICULO',
       idTabla: 'vehiculos',
@@ -2996,6 +3057,18 @@
       accionesFila: [
         { icono: 'eye', titulo: 'Ver ficha', alHacer: (v) => abrirFichaVehiculo(v) },
       ].concat(puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (v) => abrirEditarVehiculo(v) }] : []),
+      menuContextual: [
+        { icono: 'eye', titulo: 'Ver ficha', alHacer: (v) => abrirFichaVehiculo(v) },
+      ].concat(puedeEditar ? [
+        { icono: 'toggle-right', titulo: 'Cambiar estatus', alHacer: (v) => cambiarEstatusRapidoVehiculo(v) },
+        { icono: 'pencil', titulo: 'Editar', alHacer: (v) => abrirEditarVehiculo(v) },
+        { grupo: 'Capturar', icono: 'clipboard-check', titulo: 'Nueva verificación', alHacer: (v) => abrirCapturaRapidaVehiculo(v, 'verificacion') },
+        { grupo: 'Capturar', icono: 'clipboard-list', titulo: 'Nueva inspección', alHacer: (v) => abrirCapturaRapidaVehiculo(v, 'inspeccion') },
+        { grupo: 'Capturar', icono: 'radio', titulo: 'Nuevo sensor', alHacer: (v) => abrirCapturaRapidaVehiculo(v, 'sensor') },
+        { grupo: 'Capturar', icono: 'credit-card', titulo: 'Nuevo holograma', alHacer: (v) => abrirCapturaRapidaVehiculo(v, 'holograma') },
+        { grupo: 'Capturar', icono: 'wrench', titulo: 'Nueva incidencia', alHacer: (v) => abrirCapturaRapidaVehiculo(v, 'incidencia') },
+        { icono: 'trash-2', titulo: 'Eliminar', peligro: true, alHacer: (v) => eliminarVehiculoRapido(v) },
+      ] : []),
       alEliminar: puedeEditar ? async (filas) => {
         await Promise.all(filas.map((f) => callServer('apiEliminarVehiculo', state.token, f.ID_VEHICULO)));
         invalidarCacheLista('apiListarVehiculosResumen', state.token);
