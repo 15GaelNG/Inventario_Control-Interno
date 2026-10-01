@@ -118,6 +118,18 @@ archivo que lo respalda, y de ser posible a la línea.
 - **Caché:** `ln_corr_evidencias_v1`, 6 h; se borra al subir.
 - **Al eliminar el módulo,** borrar también la carpeta `Correcciones_Evidencias`.
 
+**Después, el mismo 1-oct (`efe1ea7`):**
+- **Evidencias:** el usuario subió la carpeta directo en Drive. Por eso `evidencias_()` ahora:
+  - recorre las subcarpetas;
+  - convierte a Google Sheets los Excel que no lo estén (`files.copy` con `mimeType` de hoja);
+  - guarda la caché 30 min, y "Actualizar" la ignora (`apiLineasCorrecciones(token, forzar)`).
+  Quedaron 133 archivos y 143 casos con evidencia. La columna "Ver evidencia" va junto al número (`idTabla` `-v2`).
+- **Filtro por tipo en Líneas Telefónicas:** una fila arriba de cada tabla, como la lista agrupada del AppSheet:
+  - muestra TODO · EQUIPO · EQUIPO + SIM… con el mismo ícono y color que la columna Tipo y su conteo;
+  - clic deja solo ese tipo (`setFiltro('tipoHoja')`); otro clic o TODO quita el filtro;
+  - sigue al filtro de la columna.
+- **Menú del ⋮ y del clic derecho:** entra en 120 ms (opacidad y 4 px). Con movimiento reducido no se anima.
+
 ## 0ac. Centro de notificaciones (2026-09-30, noche)
 
 Pendiente 5.2 de la lista maestra. Los tipos nuevos y sus días son **propuesta del sistema**: se ajustan con la respuesta
