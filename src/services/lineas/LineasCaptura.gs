@@ -156,10 +156,18 @@ const LineasCaptura = (function () {
     return elementos;
   }
 
-  /** RESPONSIVAS LINEAS_Form (sin Show_If; TIPO CONTRASEÑA está oculta en el AppSheet). */
+  /**
+   * RESPONSIVAS LINEAS_Form (sin Show_If; TIPO CONTRASEÑA está oculta en el AppSheet).
+   * Mejora (pedido del área, 29-sep): los datos del responsable y del equipo vienen de la línea, como en el AppSheet,
+   * pero se pueden corregir antes de firmar, igual que en la inspección (listas y autollenado del colaborador). Lo
+   * corregido queda en la responsiva y su PDF; LINEAS TELEFONICAS no cambia (la responsiva no tiene el bot de la
+   * inspección). Solo ID, ID LINEA, NUCO, FECHA RESPONSIVA y NOMBRE CI siguen fijos.
+   */
   function formularioResponsiva_(fila, catalogos, usuario, id, ahora) {
     const v = (c) => valorLinea_(fila, c);
     const ro = (columna, etiqueta, valor) => campo_(columna, etiqueta, 'texto', { valor: valor, soloLectura: true });
+    const ed = (columna, etiqueta, control, valor, extra) => campo_(columna, etiqueta, control, Object.assign({ valor: valor }, extra || {}));
+    const autoResponsable = { 'No EMPLEADO': 'noEmpleado', 'PUESTO': 'puesto', 'DEPARTAMENTO': 'departamento' };
     const dia = Utilities.formatDate(ahora, ZONA, 'd');
     const mes = MESES[Number(Utilities.formatDate(ahora, ZONA, 'M')) - 1];
     const anio = Utilities.formatDate(ahora, ZONA, 'yyyy');
@@ -167,29 +175,35 @@ const LineasCaptura = (function () {
       ro('ID', 'ID', id),
       ro('ID LINEA', 'ID LINEA', v('IMEI') || v('ID')),
       ro('NUCO', 'NUCO', LineasUtil.nucoVisible(v('NUCO')) || ''),
-      ro('No EMPLEADO', 'NÚMERO DE EMPLEADO', v('NO EMPLEADO')),
+      ed('No EMPLEADO', 'NÚMERO DE EMPLEADO', 'listaAbierta', v('NO EMPLEADO'), { sugerencias: 'NO_EMPLEADO', autollenar: { 'RESPONSABLE': 'nombre', 'PUESTO': 'puesto', 'DEPARTAMENTO': 'departamento' } }),
       // Mejora: DIA / MES / AÑO eran texto libre en AppSheet; ahora se eligen de una lista
       campo_('DIA', 'DIA', 'lista', { valor: dia, requerido: 'SIEMPRE', opciones: Array.from({ length: 31 }, (_, i) => String(i + 1)) }),
       campo_('MES', 'MES', 'lista', { valor: mes, requerido: 'SIEMPRE', literal: true, opciones: MESES }),
       campo_('AÑO', 'AÑO', 'lista', { valor: anio, requerido: 'SIEMPRE', opciones: [Number(anio) - 1, Number(anio), Number(anio) + 1].map(String) }),
-      ro('RESPONSABLE', 'RESPONSABLE', v('RESPONSABLE')),
+      ed('RESPONSABLE', 'RESPONSABLE', 'listaAbierta', v('RESPONSABLE'), { requerido: 'SIEMPRE', sugerencias: 'PERSONAS', autollenar: autoResponsable }),
       campo_('IDENTIFICACION', 'IDENTIFICACION', 'listaAbierta', { valor: '', requerido: 'SIEMPRE', opciones: catalogos.identificaciones || [] }),
-      ro('RAZON SOCIAL', 'RAZON SOCIAL', v('RAZON SOCIAL')),
+      ed('RAZON SOCIAL', 'RAZON SOCIAL', 'listaAbierta', v('RAZON SOCIAL'), { opciones: catalogos.razonesSociales || [] }),
       ro('FECHA RESPONSIVA', 'FECHA DE REGISTRO DE RESPONSIVA', ''),
-      ro('SEDE', 'SEDE', v('SEDE')),
-      ro('OFICINA / DESARROLLO', 'OFICINA O DESARROLLO', v('OFICINA / DESARROLLO')),
-      ro('AREA', 'AREA', v('AREA')),
-      ro('PUESTO', 'PUESTO', v('PUESTO')),
-      ro('DIRECTOR', 'DIRECTOR', v('DIRECTOR')),
-      ro('CORREO', 'CORREO ELECTRÓNICO', v('CUENTA GOOGLE')),
-      ro('No TELEFONO', 'NÚMERO DE TELÉFONO', v('NUMERO TELEFONO')),
-      ro('COMPAÑIA', 'COMPAÑIA', v('COMPAÑIA')),
-      ro('DEPARTAMENTO', 'DEPARTAMENTO', v('DEPARTAMENTO')),
-      ro('MODELO', 'MODELO', v('EQUIPO')),
-      ro('SIM', 'SIM', v('NUMERO SIM')),
-      ro('IMEI', 'IMEI', v('IMEI')),
+      // Listas abiertas (no cerradas como en la inspección): antes eran de solo lectura y un valor viejo fuera de la
+      // lista no debe impedir firmar la responsiva
+      ed('SEDE', 'SEDE', 'listaAbierta', v('SEDE'), { opciones: catalogos.sedes || [] }),
+      ed('OFICINA / DESARROLLO', 'OFICINA O DESARROLLO', 'listaAbierta', v('OFICINA / DESARROLLO'), { opciones: catalogos.oficinas || [] }),
+      ed('AREA', 'AREA', 'listaAbierta', v('AREA'), { opciones: catalogos.areas || [] }),
+      ed('PUESTO', 'PUESTO', 'listaAbierta', v('PUESTO'), { opciones: catalogos.puestos || [], sugerencias: 'PUESTOS' }),
+      ed('DIRECTOR', 'DIRECTOR', 'listaAbierta', v('DIRECTOR'), { opciones: catalogos.directores || [], sugerencias: 'PERSONAS' }),
+      ed('CORREO', 'CORREO ELECTRÓNICO', 'texto', v('CUENTA GOOGLE'), { literal: true }),
+      ed('No TELEFONO', 'NÚMERO DE TELÉFONO', 'texto', v('NUMERO TELEFONO')),
+      ed('COMPAÑIA', 'COMPAÑIA', 'listaAbierta', v('COMPAÑIA'), { opciones: catalogos.companias || [] }),
+      ed('DEPARTAMENTO', 'DEPARTAMENTO', 'listaAbierta', v('DEPARTAMENTO'), { opciones: catalogos.departamentos || [], sugerencias: 'DEPARTAMENTOS' }),
+      ed('MODELO', 'MODELO', 'listaAbierta', v('EQUIPO'), { opciones: catalogos.modelos || [] }),
+      ed('SIM', 'SIM', 'texto', v('NUMERO SIM')),
+      ed('IMEI', 'IMEI', 'texto', v('IMEI')),
       campo_('COLOR', 'COLOR', 'listaAbierta', { valor: v('COLOR'), requerido: 'SIEMPRE', opciones: catalogos.colores || [] }),
-      ro('ACCESORIOS', 'ACCESORIOS', v('ACCESORIOS')),
+      // Pastillas con la lista del AppSheet más lo que ya traiga la línea (para no perder un accesorio fuera de la lista)
+      ed('ACCESORIOS', 'ACCESORIOS', 'multi', v('ACCESORIOS'), {
+        opciones: LineasRepo.CATALOGO.accesorios.concat(String(v('ACCESORIOS') || '').split(',').map((x) => x.trim().toUpperCase())
+          .filter((x) => x && LineasRepo.CATALOGO.accesorios.indexOf(x) < 0)),
+      }),
       campo_('PIN WHATSAPP', 'PIN WHATSAPP', 'texto', { valor: v('PIN WHATSAPP'), literal: true, secreto: true }),
       campo_('PIN EQUIPO', 'PIN EQUIPO', 'texto', { valor: v('PIN EQUIPO'), literal: true, secreto: true }),
       campo_('CONTRASEÑA', 'PATRÓN', 'patron', { valor: v('PATRON'), secreto: true }),
@@ -214,7 +228,7 @@ const LineasCaptura = (function () {
     const obj = objetivoCaptura_(ref);
     const ahora = new Date();
     return {
-      equipo: obj.equipo, linea: obj.linea, idPropuesto: Ids.nuevo(Entidades.prefijo(LineasRepo.TAB.INSP)),
+      equipo: obj.equipo, linea: obj.linea, idPropuesto: LineasDatos.nuevoId(LineasRepo.TAB.INSP),
       formulario: null, inspector: usuario.nombre, condiciones: LineasChecklist.CONDICIONES,
       _armar: (id) => ocultarSecretos_(formularioInspeccion_(obj.fila, LineasRepo.catalogos(), usuario, id, ahora), puedeVerSecretos),
     };
@@ -224,7 +238,7 @@ const LineasCaptura = (function () {
     const obj = objetivoCaptura_(ref);
     const ahora = new Date();
     return {
-      equipo: obj.equipo, linea: obj.linea, idPropuesto: Ids.nuevo(Entidades.prefijo(LineasRepo.TAB.RESP)), nombreCI: usuario.nombre,
+      equipo: obj.equipo, linea: obj.linea, idPropuesto: LineasDatos.nuevoId(LineasRepo.TAB.RESP), nombreCI: usuario.nombre,
       _armar: (id) => ocultarSecretos_(formularioResponsiva_(obj.fila, LineasRepo.catalogos(), usuario, id, ahora), puedeVerSecretos),
     };
   }
@@ -289,7 +303,7 @@ const LineasCaptura = (function () {
   function guardarInspeccion(datos, usuario, puedeVerSecretos) {
     const ref = { equipoId: datos.equipoId || null, lineaId: datos.equipoId ? null : datos.lineaId };
     if (!datos.firmaInspectorBase64) throw new Error('FIRMA INSPECTOR es obligatorio');
-    const id = /^[\w-]{6,40}$/.test(String(datos.id || '')) ? String(datos.id) : Ids.nuevo(Entidades.prefijo(LineasRepo.TAB.INSP));
+    const id = /^[\w-]{6,40}$/.test(String(datos.id || '')) ? String(datos.id) : LineasDatos.nuevoId(LineasRepo.TAB.INSP);
     // Las fotos son opcionales: la carpeta existe solo si se subió alguna
     if (datos.carpetaId) LineasEvidencias.validarArchivosEnCarpeta((datos.fotos || []).map((f) => f.id), [datos.carpetaId, datos.fotosCarpetaId].filter(Boolean));
 
@@ -351,7 +365,7 @@ const LineasCaptura = (function () {
   function guardarResponsiva(datos, usuario, puedeVerSecretos) {
     const ref = { equipoId: datos.equipoId || null, lineaId: datos.equipoId ? null : datos.lineaId };
     if (!datos.firmaCiBase64) throw new Error('FIRMA RESPONSABLE DE CONTROL INTERNO es obligatorio');
-    const id = /^[\w-]{6,40}$/.test(String(datos.id || '')) ? String(datos.id) : Ids.nuevo(Entidades.prefijo(LineasRepo.TAB.RESP));
+    const id = /^[\w-]{6,40}$/.test(String(datos.id || '')) ? String(datos.id) : LineasDatos.nuevoId(LineasRepo.TAB.RESP);
 
     const res = LineasDatos.conCandado(() => {
       const ahora = new Date();
@@ -398,13 +412,14 @@ const LineasCaptura = (function () {
   // ======================================================================
 
   function leerFilaPorId_(tabla, id) {
-    const filas = LineasDatos.buscarFilas(tabla, 'ID', id);
+    const filas = LineasDatos.buscarFilasPorId(tabla, id);
     if (!filas.length) return null;
     return LineasDatos.leerFilas([{ tabla: tabla, filas: filas.slice(0, 1) }])[0][0];
   }
 
-  function evidenciaSistema_(id) {
-    const filasEv = LineasDatos.existeTabla(LineasRepo.TAB.APP_EVID) ? LineasDatos.buscarFilas(LineasRepo.TAB.APP_EVID, 'ID_REGISTRO', id) : [];
+  /** ids = los de la fila (el suyo y el del AppSheet): la evidencia pudo ligarse con cualquiera. */
+  function evidenciaSistema_(ids) {
+    const filasEv = LineasDatos.existeTabla(LineasRepo.TAB.APP_EVID) ? LineasDatos.buscarFilasVarios(LineasRepo.TAB.APP_EVID, 'ID_REGISTRO', ids) : [];
     if (!filasEv.length) return null;
     const ev = LineasRepo.evidenciaDesdeFila(LineasDatos.leerFilas([{ tabla: LineasRepo.TAB.APP_EVID, filas: filasEv.slice(0, 1) }])[0][0]);
     return ev && ev.origen === 'SISTEMA' ? ev : null;
@@ -419,11 +434,11 @@ const LineasCaptura = (function () {
   }
 
   /** Escribe la ruta del PDF en la fila (columna File del AppSheet, igual que su acción GUARDAR) y en APP_EVIDENCIAS. */
-  function ligarPdf_(tabla, columnaPdf, id, pdf, ruta) {
-    const filas = LineasDatos.buscarFilas(tabla, 'ID', id);
+  function ligarPdf_(tabla, columnaPdf, ids, pdf, ruta) {
+    const filas = LineasDatos.buscarFilasPorId(tabla, ids[0]);
     if (filas.length) { const o = {}; o[columnaPdf] = ruta; LineasDatos.actualizarFila(tabla, filas[0], o); }
     if (LineasDatos.existeTabla(LineasRepo.TAB.APP_EVID)) {
-      const filasEv = LineasDatos.buscarFilas(LineasRepo.TAB.APP_EVID, 'ID_REGISTRO', id);
+      const filasEv = LineasDatos.buscarFilasVarios(LineasRepo.TAB.APP_EVID, 'ID_REGISTRO', ids);
       if (filasEv.length) LineasDatos.actualizarFila(LineasRepo.TAB.APP_EVID, filasEv[0], { 'PDFS_JSON': JSON.stringify([{ id: pdf.id, nombre: pdf.nombre }]), 'ACTUALIZADO_EN': new Date() });
     }
   }
@@ -435,7 +450,8 @@ const LineasCaptura = (function () {
     const tabla = esInspeccion ? LineasRepo.TAB.INSP : LineasRepo.TAB.RESP;
     const fila = leerFilaPorId_(tabla, id);
     if (!fila) throw new Error('No existe ' + (esInspeccion ? 'la inspección ' : 'la responsiva ') + id);
-    const ev = evidenciaSistema_(id);
+    const ids = LineasDatos.idsDeFila(fila);
+    const ev = evidenciaSistema_(ids);
     if (!ev) throw new Error('Solo se generan PDF de registros capturados en el sistema.');
     if (!forzar && ev.pdfs && ev.pdfs.length) return ev.pdfs[0];
 
@@ -458,7 +474,7 @@ const LineasCaptura = (function () {
       const pdf = LineasPdf.generarPdfDesdePlantilla(
         esInspeccion ? LineasPdf.PLANTILLAS.INSPECCION_CELULAR : LineasPdf.PLANTILLAS.RESPONSIVA_CELULAR,
         registroPlantilla_(fila), imagenes, carpeta, nombre);
-      LineasDatos.conCandado(() => ligarPdf_(tabla, destino.columna, id, pdf, destino.carpeta + '/' + nombre));
+      LineasDatos.conCandado(() => ligarPdf_(tabla, destino.columna, ids, pdf, destino.carpeta + '/' + nombre));
       return pdf;
     } catch (e) {
       console.error('generarPdf ' + tipo + ' (' + id + '): ' + e.message);
@@ -472,13 +488,18 @@ const LineasCaptura = (function () {
    * carpeta de la app (p. ej. del AppSheet), crea INSPECCIONES LINEAS_Images/FOTOS <ID> y la registra en
    * APP_EVIDENCIAS. 'actualizar' → recuenta las fotos y regresa { fotos }.
    */
-  function fotosInspeccion(id, accion, correo) {
-    if (/^drive_/.test(id)) throw new Error('Las inspecciones de la carpeta NUCOS son de solo consulta: no se les agregan fotos.');
-    const insp = LineasRepo.leerInspeccion(id);
+  /**
+   * Agregar fotos a una inspección ya registrada. `externa` = la inspección de la carpeta NUCOS ("drive_<carpeta>",
+   * la arma TelefoniaService): NUCOS es de producción y solo se lee, así que sus fotos nuevas van a una carpeta de la
+   * app y se ligan en APP_EVIDENCIAS (ORIGEN NUCOS_FOTOS, ID_REGISTRO = "drive_<carpeta>"). No es ORIGEN DRIVE para
+   * no aparecer como otra inspección en Documentos.
+   */
+  function fotosInspeccion(id, accion, correo, externa) {
+    const insp = externa || (/^drive_/.test(id) ? null : LineasRepo.leerInspeccion(id));
     if (!insp) throw new Error('No existe la inspección ' + id);
     const TAB_EV = LineasRepo.TAB.APP_EVID;
     LineasRepo.asegurarPestanaApp(TAB_EV);
-    const filas = LineasDatos.buscarFilas(TAB_EV, 'ID_REGISTRO', id);
+    const filas = LineasDatos.buscarFilasVarios(TAB_EV, 'ID_REGISTRO', [id].concat(insp._idsAnteriores || []));
     const fila = filas.length ? LineasDatos.leerFilas([{ tabla: TAB_EV, filas: filas.slice(0, 1) }])[0][0] : null;
     let carpetaId = fila ? String(fila['CARPETA_ID'] || '') : '';
     let fotosId = fila ? String(fila['FOTOS_CARPETA_ID'] || '') : '';
@@ -495,7 +516,7 @@ const LineasCaptura = (function () {
           carpetaId ? {} : { 'CARPETA_ID': c.carpetaId, 'RUTA': c.ruta }));
       } else {
         LineasDatos.agregarFilas(TAB_EV, [{
-          'TIPO': 'INSPECCION', 'ORIGEN': insp.origen === 'SISTEMA' ? 'SISTEMA' : 'APPSHEET', 'ID_REGISTRO': id,
+          'TIPO': 'INSPECCION', 'ORIGEN': externa ? 'NUCOS_FOTOS' : (insp.origen === 'SISTEMA' ? 'SISTEMA' : 'APPSHEET'), 'ID_REGISTRO': id,
           'ID_LINEA': insp.registroId || '', 'NUCO': insp.nuco || '', 'FECHA': insp.fecha ? new Date(insp.fecha) : new Date(),
           'CARPETA_ID': c.carpetaId, 'RUTA': c.ruta, 'FOTOS_CARPETA_ID': c.fotosCarpetaId, 'FOTOS': '0', 'PDFS_JSON': '[]',
           'COINCIDENCIA_EXACTA': 'TRUE', 'ALERTAS_JSON': '[]', 'ID_ANTERIOR': '', 'ACTUALIZADO_EN': new Date(),

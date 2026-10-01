@@ -464,6 +464,7 @@
               { t: 'Diferencia', r: (a) => (a.DIFERENCIA === '' || a.DIFERENCIA === null || a.DIFERENCIA === undefined) ? '—' : formatearMoneda(a.DIFERENCIA) },
               { t: 'Calificación', r: (a) => (a.CALIFICACION === '' || a.CALIFICACION === null || a.CALIFICACION === undefined) ? '—' : escaparHtml(a.CALIFICACION + '%') },
               { t: 'Archivo', r: (a) => a.FORMATO_ARQUEO ? '<a href="' + escaparHtml(a.FORMATO_ARQUEO) + '" target="_blank" rel="noopener">📎 Ver PDF</a>' : '<span class="empty-state" style="margin:0">Sin archivo</span>' },
+              { t: 'Evidencia', r: (a) => a.EVIDENCIAS ? '<a href="' + escaparHtml(a.EVIDENCIAS) + '" target="_blank" rel="noopener">📎 Ver evidencia</a>' : '<span class="empty-state" style="margin:0">Sin evidencia</span>' },
               { t: '', r: (a) => accionesFichaRegistro('arqueo', a.ID, { editar: puedeEditarModulo('arqueos'), eliminar: puedeEditarModulo('arqueos') }) },
             ], arqueos, 'Sin arqueos registrados para esta caja chica.',
             puedeEditarModulo('arqueos') ? { tipo: 'arqueo', texto: 'Agregar' } : null),
@@ -521,25 +522,6 @@
       }
     }
 
-    /** Eliminar directo desde el menú contextual -- mismo apiEliminarCajaChica y
-     *  limpieza de caché que el botón "Eliminar" masivo de la tabla, pero para una
-     *  sola fila (mismo patrón que Vehículos, ver eliminarVehiculoRapido en app.html). */
-    async function eliminarCajaChicaRapida(c) {
-      const ok = await Confirmar.pedir({
-        titulo: '¿Eliminar esta caja chica?', mensaje: 'Esta acción no se puede deshacer.',
-        textoConfirmar: 'Eliminar', peligro: true,
-      });
-      if (!ok) return;
-      try {
-        await callServer('apiEliminarCajaChica', state.token, c['ID CCH']);
-        invalidarCacheLista('apiListarCajasChicasResumen', state.token);
-        toastExito('Eliminado exitosamente');
-        await cargar();
-      } catch (err) {
-        toastError('No se pudo eliminar: ' + err.message);
-      }
-    }
-
     const tabla = DataTable.crear(document.getElementById('cch-tabla'), {
       idCampo: 'ID CCH',
       idTabla: 'cajas-chicas',
@@ -555,6 +537,12 @@
       // se abre con doble clic en la fila o el ícono de "ojo" (ver más abajo).
       detalle: false,
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
+      // Selección estilo Google Drive/Apple (rama emmanuel, ver componentes/datatable.html):
+      // clic = selecciona la fila, doble clic/tocar = abre la ficha (alAbrirFila/alTocarFila).
+      modoSeleccion: true,
+      seleccionDrive: true,
+      alAbrirFila: (c) => abrirFichaCajaChica(c),
+      alTocarFila: (c) => abrirFichaCajaChica(c),
       columnas: [
         { campo: 'ID CCH', titulo: 'ID CCH', tipo: 'texto', fijada: true },
         { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', render: (v) => badgeEstatusCaja(v) },
@@ -586,14 +574,14 @@
       ],
       accionesFila: [{ icono: 'eye', titulo: 'Ver ficha', alHacer: (c) => abrirFichaCajaChica(c) }]
         .concat(puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (c) => abrirEditarCajaChica(c) }] : []),
-      menuContextual: [
-        { icono: 'eye', titulo: 'Ver ficha', alHacer: (c) => abrirFichaCajaChica(c) },
-      ].concat(puedeEditar ? [
-        { icono: 'pencil', titulo: 'Editar', alHacer: (c) => abrirEditarCajaChica(c) },
-        { grupo: 'Capturar', icono: 'clipboard-check', titulo: 'Nuevo arqueo', alHacer: (c) => abrirAgregarArqueo(c) },
-        { grupo: 'Capturar', icono: 'trending-up', titulo: 'Nuevo incremento', alHacer: (c) => abrirAgregarCambioMonto(c) },
-        { icono: 'trash-2', titulo: 'Eliminar', peligro: true, alHacer: (c) => eliminarCajaChicaRapida(c) },
-      ] : []),
+      // Antes vivían en menuContextual (antes de seleccionDrive, ver arriba) --
+      // ahora el ⋮/clic derecho sale solo de accionesFila + accionesSeleccion.
+      // "Eliminar" NO se repite aquí: ya la agrega cfg.alEliminar, con el chequeo
+      // de integridad (apiQueImpideBorrar) que la vieja eliminarCajaChicaRapida no tenía.
+      accionesSeleccion: puedeEditar ? [
+        { icono: 'clipboard-check', texto: 'Nuevo arqueo', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirAgregarArqueo(filas[0]) },
+        { icono: 'trending-up', texto: 'Nuevo incremento', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirAgregarCambioMonto(filas[0]) },
+      ] : [],
       alEliminar: puedeEditar ? async (filas) => {
         // Primero se pregunta por todas: si alguna tiene arqueos o cambios, no se borra ninguna
         const imp = await callServer('apiQueImpideBorrar', state.token, 'CAJAS CHICAS', filas.map((f) => f['ID CCH']));
@@ -602,15 +590,6 @@
         invalidarCacheLista('apiListarCajasChicasResumen', state.token);
       } : null,
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
-    });
-
-    // Doble clic en la fila = abrir la ficha (DataTable no trae clic de fila propio
-    // cuando detalle:false) — mismo patrón que Vehículos.
-    document.getElementById('cch-tabla').addEventListener('dblclick', (ev) => {
-      const tr = ev.target.closest('tbody tr[data-id]');
-      if (!tr || ev.target.closest('button, input, a')) return;
-      const c = todasLasCajas.find((x) => String(x['ID CCH']) === tr.dataset.id);
-      if (c) abrirFichaCajaChica(c);
     });
 
     const KPI_FILTRO_CCH = { 'cch-stat-vigentes': 'VIGENTE', 'cch-stat-proceso-cierre': 'EN PROCESO DE CIERRE', 'cch-stat-cerradas': 'CERRADA' };
@@ -836,6 +815,13 @@
       columnasCompletas: { idHoja: 'ID', cargar: async () => JSON.parse(await callServer('apiCambiosMontoCCHCompleto', state.token)) },
       etiquetaFila: (c) => c.RESPONSABLE || c.ID_CCH,
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
+      // Selección estilo Google Drive/Apple (rama emmanuel, ver componentes/datatable.html):
+      // clic = selecciona, doble clic/tocar = abre el panel de detalle (tabla.abrirDetalle
+      // se resuelve en el momento del clic, para entonces `tabla` ya está asignada).
+      modoSeleccion: true,
+      seleccionDrive: true,
+      alAbrirFila: (c) => tabla.abrirDetalle(String(c.ID)),
+      alTocarFila: (c) => tabla.abrirDetalle(String(c.ID)),
       columnas: [
         { campo: 'ID_CCH', titulo: 'ID CCH', tipo: 'texto', fijada: true },
         { campo: 'RESPONSABLE', titulo: 'Responsable', tipo: 'texto' },
@@ -968,6 +954,11 @@
       etiquetaFila: (c) => [c.FOLIO, c.CAMPO].filter(Boolean).join(' · '),
       detalle: false, // bitácora de solo lectura, sin panel de detalle ni edición
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
+      // Selección estilo Google Drive/Apple (rama emmanuel, ver componentes/datatable.html):
+      // sin alAbrirFila/alTocarFila -- no hay ficha que abrir (bitácora de solo lectura),
+      // el clic solo selecciona para Copiar/Exportar selección o "Ver vehículo".
+      modoSeleccion: true,
+      seleccionDrive: true,
       columnas: [
         { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', fijada: true },
         { campo: 'CAMPO', titulo: 'Campo', tipo: 'texto' },

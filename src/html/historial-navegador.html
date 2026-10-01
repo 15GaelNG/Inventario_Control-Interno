@@ -1,0 +1,92 @@
+<script>
+  /**
+   * HistorialApp (rama emmanuel): conecta la navegación del sistema con Atrás / Adelante del navegador, que es lo que
+   * disparan el gesto de dos dedos del touchpad en Chrome, los botones del mouse y Alt+←/→.
+   *
+   * Cada paso se guarda con google.script.history (el historial de la página de Apps Script):
+   *   { vista, etiqueta, sub }   vista = módulo del menú (navegarA) · sub = estado interno de la vista (p. ej. la pila de
+   *                              la ficha de Líneas Telefónicas: NUCO › Línea › Inspección)
+   * Al ir Atrás/Adelante: si cambia el módulo se vuelve a él (sin guardar otro paso) y la vista restaura su `sub`.
+   *
+   * Uso desde una vista:
+   *   HistorialApp.registrar('lineas-telefonicas', (sub) => …restaurar…)   // al montar la vista
+   *   HistorialApp.paso({ pila: [...] })                                    // al navegar dentro de la vista
+   * Fuera de Apps Script (sin google.script.history) no hace nada.
+   */
+  const HistorialApp = (function () {
+    const api = () => (typeof google !== 'undefined' && google.script && google.script.history) ? google.script.history : null;
+    let actual = null;          // { vista, etiqueta, sub }
+    let restaurando = false;    // mientras se aplica un Atrás/Adelante no se guardan pasos nuevos
+    let primero = true;         // el primer paso reemplaza (no deja un "atrás" vacío)
+    const restauradores = {};   // vista → fn(sub)
+    let pendiente = null;       // sub a restaurar cuando termine de montar su vista
+
+    function guardar(estado) {
+      const h = api();
+      if (!h || restaurando) return;
+      if (actual && JSON.stringify(actual) === JSON.stringify(estado)) return;
+      actual = estado;
+      try {
+        if (primero) { h.replace(estado); primero = false; } else h.push(estado);
+      } catch (e) { console.warn('HistorialApp: ' + (e && e.message)); }
+    }
+
+    /** navegarA avisa aquí cada cambio de módulo. */
+    function alNavegar(vista, etiqueta) {
+      if (restaurando) return;
+      guardar({ vista: vista, etiqueta: etiqueta || '', sub: null });
+    }
+
+    /** Paso dentro de la vista actual (la ficha que se abrió, la pestaña, etc.). */
+    function paso(sub) {
+      if (!actual) return;
+      guardar({ vista: actual.vista, etiqueta: actual.etiqueta, sub: sub || null });
+    }
+
+    /** Actualiza el paso actual sin crear otro (p. ej. la pestaña de la ficha: no debe llenar el historial). */
+    function actualizar(sub) {
+      const h = api();
+      if (!h || restaurando || !actual) return;
+      actual = { vista: actual.vista, etiqueta: actual.etiqueta, sub: sub || null };
+      try { h.replace(actual); } catch (e) { console.warn('HistorialApp: ' + (e && e.message)); }
+    }
+
+    /** La vista dice cómo restaurar su estado; si hay uno pendiente (se llegó con Atrás/Adelante), se aplica ya. */
+    function registrar(vista, restaurar) {
+      restauradores[vista] = restaurar;
+      if (pendiente && pendiente.vista === vista) {
+        const p = pendiente;
+        pendiente = null;
+        return p.sub;
+      }
+      return null;
+    }
+
+    const restaurandoAhora = () => restaurando;
+
+    function alCambiar(ev) {
+      const estado = ev && ev.state;
+      if (!estado || !estado.vista) return;
+      restaurando = true;
+      try {
+        const mismaVista = actual && actual.vista === estado.vista;
+        actual = estado;
+        if (mismaVista && restauradores[estado.vista]) {
+          restauradores[estado.vista](estado.sub || null);
+        } else if (typeof navegarA === 'function') {
+          pendiente = { vista: estado.vista, sub: estado.sub || null };
+          navegarA(estado.vista, estado.etiqueta);
+        }
+      } finally {
+        // navegarA monta la vista con un pequeño retraso: se deja pasar antes de volver a guardar pasos
+        setTimeout(() => { restaurando = false; }, 400);
+      }
+    }
+
+    if (api()) {
+      try { api().setChangeHandler(alCambiar); } catch (e) { console.warn('HistorialApp: ' + (e && e.message)); }
+    }
+
+    return { alNavegar: alNavegar, paso: paso, actualizar: actualizar, registrar: registrar, restaurandoAhora: restaurandoAhora };
+  })();
+</script>

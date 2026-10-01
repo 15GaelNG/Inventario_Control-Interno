@@ -1,72 +1,71 @@
 <script>
   /**
-   * app-panorama-vehiculos.html — "Panorama" dentro de Control Vehicular: KPIs y
-   * gráficas (Chart.js, cargado en Index.html) del catálogo de vehículos, con
-   * filtros que se aplican a todo en vivo. En su propio archivo por el mismo
-   * motivo que Arqueos/Caja Chica/Verificaciones (ver comentario en
-   * app-arqueos.html) — nada de esto vive en app.html.
+   * app-panorama-cajachica.html — "Panorama" dentro de Arqueos: KPIs y
+   * gráficas (Chart.js, cargado en Index.html) del catálogo de cajas chicas,
+   * con filtros que se aplican a todo en vivo. Mismo patrón que
+   * app-panorama-vehiculos.html — en su propio archivo, nada de esto vive en
+   * app.html ni en app-cajachica.html.
    *
-   * Todo corre sobre apiListarVehiculosResumen (el mismo catálogo que ya usa la
-   * tabla de Vehículos, cacheado) — sin pedir nada nuevo al servidor: los
-   * filtros solo reducen el arreglo en memoria y se vuelve a pintar.
+   * Todo corre sobre apiListarCajasChicasResumen (el mismo catálogo que ya
+   * usa la tabla de Caja Chica, cacheado) — sin pedir nada nuevo al
+   * servidor: los filtros solo reducen el arreglo en memoria y se vuelve a
+   * pintar. A diferencia de Vehículos, aquí el resultado NO viene como
+   * JSON.stringify (ver CajasChicasService.listarResumen), así que no hace
+   * falta JSON.parse.
    */
 
-  // Mismos 6 valores reales de ESTATUS que CAMPOS_VEHICULO — colores fijos (no
-  // reasignados por orden) para que cada estatus se vea siempre del mismo color
-  // sin importar cómo cambien los filtros. Paleta de marca (navy + dorado,
-  // ver --color-primary/--color-accent en styles.html) en vez de semáforo
-  // verde/ámbar/rojo, alternando azul/dorado para que las rebanadas vecinas
-  // de la dona se distingan bien entre sí.
-  const PV_COLOR_ESTATUS = {
-    'UTILITARIO': '#06263A',
-    'NO UTILITARIO': '#B4A169',
-    'PRESTAMO': '#2f7bb0',
-    'FUERA DE SERVICIO': '#8a6d3a',
-    'NUCO SIN INFORMACION': '#6fa8cc',
-    'BAJA VEHICULAR': '#5c4a26',
+  // Mismos 3 valores reales de ESTATUS que CAMPOS_CAJACHICA — colores fijos
+  // para que cada estatus se vea siempre del mismo color sin importar cómo
+  // cambien los filtros. Paleta de marca (navy + dorado/café, ver
+  // --color-primary/--color-accent en styles.html) en vez de semáforo
+  // verde/ámbar/gris, igual que Panorama Vehicular.
+  const PCC_COLOR_ESTATUS = {
+    'VIGENTE': '#06263A',
+    'EN PROCESO DE CIERRE': '#B4A169',
+    'CERRADA': '#8a6d3a',
   };
-  const PV_ORDEN_ESTATUS = ['UTILITARIO', 'NO UTILITARIO', 'PRESTAMO', 'FUERA DE SERVICIO', 'NUCO SIN INFORMACION', 'BAJA VEHICULAR'];
-  // Mismas etiquetas legibles que ya usa el stat-row de Vehículos (badgeEstatus/
-  // vehiculos.html) -- tituloDesdeClave no sirve aquí: pondría "No Utilitario"
-  // (mayúscula por palabra) en vez de "No utilitario", y sin acentos.
-  const PV_ETIQUETA_ESTATUS = {
-    'UTILITARIO': 'Utilitario', 'NO UTILITARIO': 'No utilitario', 'PRESTAMO': 'Préstamo',
-    'FUERA DE SERVICIO': 'Fuera de servicio', 'NUCO SIN INFORMACION': 'Nuco sin información', 'BAJA VEHICULAR': 'Baja vehicular',
-  };
+  const PCC_ORDEN_ESTATUS = ['VIGENTE', 'EN PROCESO DE CIERRE', 'CERRADA'];
+  // Mismos iconos y mismas etiquetas en sentence-case que ya usa el stat-row
+  // de Caja Chica (ver views/cajachica.html) — tituloDesdeClave no sirve
+  // aquí: pondría "En Proceso De Cierre" (mayúscula por palabra).
+  const PCC_ICONO_ESTATUS = { 'VIGENTE': 'circle-check', 'EN PROCESO DE CIERRE': 'clock', 'CERRADA': 'ban' };
+  const PCC_ETIQUETA_ESTATUS = { 'VIGENTE': 'Vigentes', 'EN PROCESO DE CIERRE': 'En proceso de cierre', 'CERRADA': 'Cerradas' };
 
   // Etiquetas de valor directo sobre cada gráfica (chartjs-plugin-datalabels,
   // cargado en Index.html) -- se registra una sola vez, no por cada visita a
-  // Panorama (Chart.register con el mismo plugin repetido tira warning).
-  if (!window.__pvDataLabelsRegistrado) {
+  // Panorama (Chart.register con el mismo plugin repetido tira warning). Bandera
+  // propia y distinta a la de Panorama Vehicular por si una vista monta antes
+  // que la otra alguna vez exista sin la otra cargada.
+  if (!window.__pccDataLabelsRegistrado) {
     Chart.register(ChartDataLabels);
-    window.__pvDataLabelsRegistrado = true;
+    window.__pccDataLabelsRegistrado = true;
   }
 
-  async function initPanoramaVehiculos() {
+  function formatoMonedaPCC(valor) {
+    return '$' + (Number(valor) || 0).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  }
+
+  async function initPanoramaCajaChica() {
     const cuerpo = document.getElementById('view-container');
     let todos = [];
     const graficas = {}; // id → instancia de Chart, para destruir antes de repintar
 
     try {
-      // apiListarVehiculosResumen manda JSON.stringify (arreglo grande con Date,
-      // google.script.run lo pierde a veces si no) -- hay que parsearlo, mismo
-      // patrón que ya usa initVehiculos().
-      const texto = await callServerListaCacheada('apiListarVehiculosResumen', state.token);
-      todos = texto ? JSON.parse(texto) : [];
+      todos = (await callServerListaCacheada('apiListarCajasChicasResumen', state.token)) || [];
     } catch (err) {
-      if (!document.getElementById('pv-filtros')) return; // se navegó a otra vista mientras cargaba
-      cuerpo.innerHTML = '<p class="error-msg">No se pudo cargar el catálogo de vehículos: ' + escaparHtml(err.message) + '</p>';
+      if (!document.getElementById('pcc-filtros')) return; // se navegó a otra vista mientras cargaba
+      cuerpo.innerHTML = '<p class="error-msg">No se pudo cargar el catálogo de cajas chicas: ' + escaparHtml(err.message) + '</p>';
       return;
     }
-    if (!document.getElementById('pv-filtros')) return; // se navegó a otra vista mientras cargaba
+    if (!document.getElementById('pcc-filtros')) return; // se navegó a otra vista mientras cargaba
 
     // ---------- Filtros ----------
     const FILTROS = [
-      { id: 'pv-f-estatus', campo: 'ESTATUS' },
-      { id: 'pv-f-departamento', campo: 'DEPARTAMENTO' },
-      { id: 'pv-f-sede', campo: 'SEDE' },
-      { id: 'pv-f-marca', campo: 'MARCA' },
-      { id: 'pv-f-clase', campo: 'CLASE' },
+      { id: 'pcc-f-estatus', campo: 'ESTATUS' },
+      { id: 'pcc-f-departamento', campo: 'DEPARTAMENTO' },
+      { id: 'pcc-f-sede', campo: 'SEDE' },
+      { id: 'pcc-f-empresa', campo: 'EMPRESA ORIGEN' },
+      { id: 'pcc-f-administrada', campo: 'ADMINISTRADA POR' },
     ];
 
     function llenarOpcionesFiltro(campo, id) {
@@ -87,7 +86,7 @@
     }
 
     FILTROS.forEach((f) => document.getElementById(f.id).addEventListener('change', () => pintarTodo()));
-    document.getElementById('pv-limpiar-filtros').addEventListener('click', () => {
+    document.getElementById('pcc-limpiar-filtros').addEventListener('click', () => {
       FILTROS.forEach((f) => { document.getElementById(f.id).value = ''; });
       pintarTodo();
     });
@@ -105,28 +104,24 @@
     }
 
     // ---------- KPIs ----------
-    const ICONO_ESTATUS = {
-      'UTILITARIO': 'circle-check', 'NO UTILITARIO': 'circle-minus', 'PRESTAMO': 'repeat',
-      'FUERA DE SERVICIO': 'wrench', 'NUCO SIN INFORMACION': 'help-circle', 'BAJA VEHICULAR': 'ban',
-    };
     function pintarKpis(filas) {
       const porEstatus = {};
-      PV_ORDEN_ESTATUS.forEach((e) => { porEstatus[e] = 0; });
-      filas.forEach((v) => {
-        const e = String(v.ESTATUS || '').toUpperCase();
+      PCC_ORDEN_ESTATUS.forEach((e) => { porEstatus[e] = 0; });
+      filas.forEach((c) => {
+        const e = String(c.ESTATUS || '').toUpperCase();
         if (porEstatus[e] !== undefined) porEstatus[e]++;
       });
-      const activos = filas.length - porEstatus['BAJA VEHICULAR'];
+      const montoTotal = filas.reduce((acc, c) => acc + (Number(c['MONTO ACTUAL']) || 0), 0);
 
       const tiles = [
-        { id: 'total', etiqueta: 'Total de vehículos', valor: filas.length, icono: 'car', clase: '' },
-        { id: 'activos', etiqueta: 'Activos', valor: activos, icono: 'circle-check', clase: 'stat-tile-ok' },
-      ].concat(PV_ORDEN_ESTATUS.map((e) => ({
-        id: e, etiqueta: PV_ETIQUETA_ESTATUS[e], valor: porEstatus[e], icono: ICONO_ESTATUS[e],
-        clase: e === 'BAJA VEHICULAR' ? 'stat-tile-warn' : '',
+        { id: 'total', etiqueta: 'Total de cajas chicas', valor: filas.length, icono: 'wallet', clase: '' },
+        { id: 'monto', etiqueta: 'Monto total', valor: formatoMonedaPCC(montoTotal), icono: 'coins', clase: 'stat-tile-ok' },
+      ].concat(PCC_ORDEN_ESTATUS.map((e) => ({
+        id: e, etiqueta: PCC_ETIQUETA_ESTATUS[e], valor: porEstatus[e], icono: PCC_ICONO_ESTATUS[e],
+        clase: e === 'CERRADA' ? 'stat-tile-warn' : '',
       })));
 
-      document.getElementById('pv-kpis').innerHTML = tiles.map((t) => `
+      document.getElementById('pcc-kpis').innerHTML = tiles.map((t) => `
         <div class="stat-tile ${t.clase}">
           <div class="stat-icon"><i data-lucide="${t.icono}" class="ico"></i></div>
           <div><div class="stat-value">${t.valor}</div><div class="stat-label">${escaparHtml(t.etiqueta)}</div></div>
@@ -148,6 +143,15 @@
       });
       return Object.keys(conteo).map((k) => [k, conteo[k]]).sort((a, b) => b[1] - a[1]);
     }
+    /** Suma `campoMonto` agrupado por `campo`, de mayor a menor. */
+    function sumarPor(filas, campo, campoMonto) {
+      const suma = {};
+      filas.forEach((f) => {
+        const v = f[campo] || 'Sin dato';
+        suma[v] = (suma[v] || 0) + (Number(f[campoMonto]) || 0);
+      });
+      return Object.keys(suma).map((k) => [k, suma[k]]).sort((a, b) => b[1] - a[1]);
+    }
     /** Para barras: se queda con los primeros `n`, el resto se junta en "Otros". */
     function limitarConOtros(pares, n) {
       if (pares.length <= n) return pares;
@@ -165,30 +169,28 @@
     function mutar(colorHex) { return colorHex + '40'; } // +25% de opacidad (hex de 8 dígitos, soportado por todos los navegadores modernos)
 
     function graficaDona(filas) {
-      const filtroActivo = document.getElementById('pv-f-estatus').value;
-      const valores = PV_ORDEN_ESTATUS.map((e) => filas.filter((v) => String(v.ESTATUS || '').toUpperCase() === e).length);
-      const colores = PV_ORDEN_ESTATUS.map((e) => {
-        const base = PV_COLOR_ESTATUS[e];
+      const filtroActivo = document.getElementById('pcc-f-estatus').value;
+      const valores = PCC_ORDEN_ESTATUS.map((e) => filas.filter((v) => String(v.ESTATUS || '').toUpperCase() === e).length);
+      const colores = PCC_ORDEN_ESTATUS.map((e) => {
+        const base = PCC_COLOR_ESTATUS[e];
         return (!filtroActivo || filtroActivo === e) ? base : mutar(base);
       });
-      crearOActualizarGrafica('pv-chart-estatus', {
+      crearOActualizarGrafica('pcc-chart-estatus', {
         type: 'doughnut',
         data: {
-          labels: PV_ORDEN_ESTATUS.map((e) => PV_ETIQUETA_ESTATUS[e]),
+          labels: PCC_ORDEN_ESTATUS.map((e) => PCC_ETIQUETA_ESTATUS[e]),
           datasets: [{ data: valores, backgroundColor: colores, borderWidth: 2, borderColor: getComputedStyle(document.documentElement).getPropertyValue('--color-surface').trim() }],
         },
         options: {
           responsive: true, maintainAspectRatio: false, cutout: '62%',
           onClick: (evt, elementos) => {
             if (!elementos.length) return;
-            activarFiltroDesdeGrafica('pv-f-estatus', PV_ORDEN_ESTATUS[elementos[0].index]);
+            activarFiltroDesdeGrafica('pcc-f-estatus', PCC_ORDEN_ESTATUS[elementos[0].index]);
           },
           onHover: (evt, elementos) => { evt.native.target.style.cursor = elementos.length ? 'pointer' : 'default'; },
           plugins: {
             legend: { position: 'right', labels: { color: colorTexto(), boxWidth: 13, padding: 14, font: { size: 12 } } },
             tooltip: { callbacks: { label: (ctx) => ` ${ctx.label}: ${ctx.parsed} (${filas.length ? Math.round(ctx.parsed / filas.length * 100) : 0}%)` } },
-            // Número en blanco dentro de cada rebanada; se oculta en las de 0
-            // para no dejar un "0" flotando donde no hay nada que mostrar.
             datalabels: {
               color: '#fff', font: { weight: 'bold', size: 12 },
               formatter: (valor) => (valor > 0 ? valor : ''),
@@ -211,7 +213,7 @@
         },
         options: {
           responsive: true, maintainAspectRatio: false, indexAxis: 'y',
-          layout: { padding: { right: 24 } }, // deja hueco para el número al final de la barra más larga
+          layout: { padding: { right: 24 } },
           onClick: (evt, elementos) => {
             if (!elementos.length || !filtroId) return;
             activarFiltroDesdeGrafica(filtroId, pares[elementos[0].index][0]);
@@ -219,10 +221,7 @@
           onHover: (evt, elementos) => { evt.native.target.style.cursor = (elementos.length && filtroId) ? 'pointer' : 'default'; },
           plugins: {
             legend: { display: false },
-            tooltip: { callbacks: { label: (ctx) => ` ${ctx.parsed.x} vehículo(s)` } },
-            // Número justo después de la punta de cada barra, no encima (las
-            // barras llevan el color primario, oscuro, donde un número blanco
-            // o del color del texto normal no siempre contrasta bien).
+            tooltip: { callbacks: { label: (ctx) => ` ${ctx.parsed.x} caja(s)` } },
             datalabels: {
               color: colorTexto(), anchor: 'end', align: 'end', offset: 4,
               font: { size: 11, weight: '600' }, clip: false,
@@ -237,17 +236,53 @@
       });
     }
 
+    function graficaBarrasMonto(id, filas, campo, n, filtroId) {
+      const pares = limitarConOtros(sumarPor(filas, campo, 'MONTO ACTUAL'), n);
+      const filtroActivo = filtroId ? document.getElementById(filtroId).value : '';
+      const colorBase = colorPrimario();
+      const colores = pares.map((p) => (!filtroActivo || filtroActivo === p[0]) ? colorBase : mutar(colorBase));
+      crearOActualizarGrafica(id, {
+        type: 'bar',
+        data: {
+          labels: pares.map((p) => p[0]),
+          datasets: [{ data: pares.map((p) => p[1]), backgroundColor: colores, borderRadius: 6, maxBarThickness: 34 }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+          layout: { padding: { right: 48 } }, // más hueco que las de conteo: las etiquetas de dinero son más largas
+          onClick: (evt, elementos) => {
+            if (!elementos.length || !filtroId) return;
+            activarFiltroDesdeGrafica(filtroId, pares[elementos[0].index][0]);
+          },
+          onHover: (evt, elementos) => { evt.native.target.style.cursor = (elementos.length && filtroId) ? 'pointer' : 'default'; },
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: (ctx) => ` ${formatoMonedaPCC(ctx.parsed.x)}` } },
+            datalabels: {
+              color: colorTexto(), anchor: 'end', align: 'end', offset: 4,
+              font: { size: 11, weight: '600' }, clip: false,
+              formatter: (valor) => (valor > 0 ? formatoMonedaPCC(valor) : ''),
+            },
+          },
+          scales: {
+            x: { beginAtZero: true, ticks: { color: colorTexto(), callback: (v) => formatoMonedaPCC(v) }, grid: { color: colorBorde() } },
+            y: { ticks: { color: colorTexto(), font: { size: 11.5 } }, grid: { display: false } },
+          },
+        },
+      });
+    }
+
     function pintarTodo() {
       const filas = filasFiltradas();
-      document.getElementById('pv-sin-datos').hidden = filas.length > 0;
-      document.getElementById('pv-graficas').hidden = filas.length === 0;
+      document.getElementById('pcc-sin-datos').hidden = filas.length > 0;
+      document.getElementById('pcc-graficas').hidden = filas.length === 0;
       pintarKpis(filas);
       if (!filas.length) return;
       graficaDona(filas);
-      graficaBarras('pv-chart-departamento', filas, 'DEPARTAMENTO', 8, 'pv-f-departamento');
-      graficaBarras('pv-chart-sede', filas, 'SEDE', 8, 'pv-f-sede');
-      graficaBarras('pv-chart-marca', filas, 'MARCA', 8, 'pv-f-marca');
-      graficaBarras('pv-chart-clase', filas, 'CLASE', 8, 'pv-f-clase');
+      graficaBarrasMonto('pcc-chart-monto-departamento', filas, 'DEPARTAMENTO', 8, 'pcc-f-departamento');
+      graficaBarras('pcc-chart-sede', filas, 'SEDE', 8, 'pcc-f-sede');
+      graficaBarras('pcc-chart-empresa', filas, 'EMPRESA ORIGEN', 8, 'pcc-f-empresa');
+      graficaBarras('pcc-chart-administrada', filas, 'ADMINISTRADA POR', 8, 'pcc-f-administrada');
     }
 
     pintarTodo();

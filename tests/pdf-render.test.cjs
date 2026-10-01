@@ -21,12 +21,12 @@ test('el PDF sustituye etiquetas repetidas, expresiones y tablas sin búsquedas 
   const cuerpo = grupo(grupo(a, grupo(b)));
   const copia = { getId: () => 'tmp', getAs: () => { assert.ok(cerrado); return { setName: () => ({}) }; }, setTrashed: () => { limpiado = true; } };
   const contexto = vm.createContext({
-    DriveApp: { getFileById: () => ({ makeCopy: () => copia }) },
+    DriveApp: { getFileById: () => ({ makeCopy: () => copia }), Access: { DOMAIN: 'DOMAIN' }, Permission: { VIEW: 'VIEW' } },
     DocumentApp: { ElementType: { TEXT: 'TEXT' }, openById: () => ({ getBody: () => cuerpo, getHeader: () => grupo(cabecera), getFooter: () => null, saveAndClose: () => { cerrado = true; } }) },
   });
   const fuente = fs.readFileSync(path.join(__dirname, '../src/services/lineas/LineasPdf.gs'), 'utf8');
   vm.runInContext(fuente + '\nthis.pdf = LineasPdf;', contexto);
-  const carpeta = { createFile: () => ({ getId: () => 'pdf', getName: () => 'documento.pdf', getUrl: () => 'url' }) };
+  const carpeta = { createFile: () => ({ getId: () => 'pdf', getName: () => 'documento.pdf', getUrl: () => 'url', setSharing: () => {} }) };
   const resultado = contexto.pdf.generarPdfDesdePlantilla('plantilla', { NOMBRE: 'Ana', ESTADO: 'SI' }, {}, carpeta, 'documento.pdf');
   assert.equal(a.valor, 'Ana / Ana / ');
   assert.equal(b.valor, 'ANA · OK');

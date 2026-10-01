@@ -122,6 +122,13 @@
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
       etiquetaFila: (h) => [h.PLACA, h.CALCOMANIA].filter(Boolean).join(' · '),
       detalle: { titulo: (h) => 'Holograma ' + (h.PLACA || h.CALCOMANIA || '') },
+      // Selección estilo Google Drive/Apple (rama emmanuel, ver componentes/datatable.html):
+      // clic = selecciona, doble clic/tocar = abre el panel de detalle (tabla.abrirDetalle
+      // se resuelve en el momento del clic, para entonces `tabla` ya está asignada).
+      modoSeleccion: true,
+      seleccionDrive: true,
+      alAbrirFila: (h) => tabla.abrirDetalle(String(h.ID)),
+      alTocarFila: (h) => tabla.abrirDetalle(String(h.ID)),
       columnas: [
         { campo: 'PLACA', titulo: 'Placa', tipo: 'texto', fijada: true },
         { campo: 'CATALOGO', titulo: 'Catálogo', tipo: 'lista', enDetalle: false,

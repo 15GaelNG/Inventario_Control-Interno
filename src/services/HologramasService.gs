@@ -329,6 +329,27 @@ const HologramasService = (function () {
     });
   }
 
+  /** Renombra en Drive el archivo recién subido a "<ID>_SOLICITUD_<fecha>.ext" (conserva la
+   *  extensión que ya trae) y regresa la ruta (relativa, AppSheet) ya actualizada con ese
+   *  nombre -- urlSolicitud() busca el archivo por ese nombre exacto dentro de la carpeta, así
+   *  que la ruta guardada en la hoja debe coincidir con el nombre real. Si falla, regresa la
+   *  ruta original sin tocar nada (no bloquea el alta: el archivo ya quedó guardado y accesible
+   *  con el nombre que le puso guardarArchivoAppSheet_). */
+  function renombrarSolicitud_(fileId, id, rutaOriginal) {
+    if (!fileId || !id) return rutaOriginal;
+    try {
+      const archivo = DriveApp.getFileById(fileId);
+      const extension = (archivo.getName().match(/\.[^.]+$/) || [''])[0];
+      const fecha = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      const nuevoNombre = id + '_SOLICITUD_' + fecha + extension;
+      archivo.setName(nuevoNombre);
+      return rutaOriginal.split('/')[0] + '/' + nuevoNombre;
+    } catch (e) {
+      console.warn('No se pudo renombrar la solicitud del holograma (' + fileId + '): ' + e.message);
+      return rutaOriginal;
+    }
+  }
+
   function registrar(token, datos, archivo) {
     Permisos.puedeEditar(token, 'hologramas');
     if (!archivo || !archivo.base64) throw new Error('Adjunta la solicitud (PDF o imagen)');
@@ -354,13 +375,14 @@ const HologramasService = (function () {
 
     const id = Ids.nuevo(Entidades.prefijo('HOLOGRAMAS'));
     const guardado = guardarSolicitud_(id, archivo);
+    const rutaSolicitud = renombrarSolicitud_(guardado.fileId, id, guardado.ruta);
     const ahora = new Date();
     try {
       SheetUtils.insert(ssId(), hoja_().getName(), Object.assign(fila, {
         'ID': id,
         // En esta hoja NO ECONOMICO trae la placa (ver comentario del encabezado)
         'NO ECONOMICO': fila['PLACA'],
-        [COL_SOLICITUD]: guardado.ruta,
+        [COL_SOLICITUD]: rutaSolicitud,
         'FECHA DE REGISTRO': ahora,
         'FECHA ULTIMA MODIFICACION': ahora,
       }));

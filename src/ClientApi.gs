@@ -39,26 +39,6 @@ function apiLogout(token) {
   return Auth.logout(token);
 }
 
-// --- Accesorios ---
-function apiListarArticulosConStock(token) {
-  return AccesoriosService.listarArticulosConStock(token);
-}
-function apiAccesoriosCompleto(token) {
-  return JSON.stringify(AccesoriosService.completo(token));
-}
-function apiCrearArticulo(token, articulo) {
-  return AccesoriosService.crearArticulo(token, articulo);
-}
-function apiActualizarArticulo(token, id, cambios) {
-  return AccesoriosService.actualizarArticulo(token, id, cambios);
-}
-function apiRegistrarMovimiento(token, idArticulo, tipo, cantidad, comentarios) {
-  return AccesoriosService.registrarMovimiento(token, idArticulo, tipo, cantidad, comentarios);
-}
-function apiHistorialMovimientos(token, idArticulo) {
-  return AccesoriosService.historialMovimientos(token, idArticulo);
-}
-
 // --- Vehículos ---
 function apiListarVehiculosBasico(token) {
   return VehiculosService.listarBasico(token);
@@ -351,6 +331,9 @@ function apiLineasEvidencias(token, id) {
 function apiLineasHistorial(token, id) {
   return TelefoniaService.historial(token, id);
 }
+function apiLineasAsignaciones(token, id, vista) {
+  return TelefoniaService.asignaciones(token, id, vista);
+}
 function apiLineasInspeccion(token, id) {
   return TelefoniaService.inspeccion(token, id);
 }
@@ -363,16 +346,10 @@ function apiLineasColaboradores(token) {
 function apiLineasBitacora(token, tipo, opciones) {
   return TelefoniaService.bitacora(token, tipo, opciones);
 }
-function apiLineasVistaOperativa(token, tipo, opciones) {
-  return TelefoniaService.vistaOperativa(token, tipo, opciones);
-}
 // Tabla completa para DataTable (hasta 5000 filas). Viaja como texto JSON:
 // google.script.run pierde respuestas grandes de forma intermitente (ver rama jorge, 9196f11).
 function apiLineasBitacoraTabla(token, tipo, opciones) {
   return JSON.stringify(TelefoniaService.bitacora(token, tipo, Object.assign({}, opciones, { pagina: 0, porPagina: 5000 })));
-}
-function apiLineasVistaOperativaTabla(token, tipo, opciones) {
-  return JSON.stringify(TelefoniaService.vistaOperativa(token, tipo, Object.assign({}, opciones, { pagina: 0, porPagina: 5000 })));
 }
 function apiLineasUltimoDocumentoNuco(token, id, tipo) {
   return TelefoniaService.ultimoDocumentoNuco(token, id, tipo);
@@ -382,18 +359,6 @@ function apiLineasArchivo(token, ruta) {
 }
 function apiLineasExportarBase(token, modulo, comprimir) {
   return TelefoniaService.exportarBase(token, modulo, comprimir);
-}
-function apiLineasFormularioOperativa(token, tipo) {
-  return TelefoniaService.formularioOperativa(token, tipo);
-}
-function apiLineasFormularioEdicionOperativa(token, tipo, fila, llave) {
-  return TelefoniaService.formularioEdicionOperativa(token, tipo, fila, llave);
-}
-function apiLineasEditarVistaOperativa(token, tipo, fila, llave, datos) {
-  return TelefoniaService.editarVistaOperativa(token, tipo, fila, llave, datos);
-}
-function apiLineasCrearVistaOperativa(token, tipo, datos) {
-  return TelefoniaService.crearVistaOperativa(token, tipo, datos);
 }
 function apiLineasRecargarDatos(token) {
   return TelefoniaService.recargarDatos(token);
@@ -448,6 +413,37 @@ function apiLineasAccesoriosAgregarArticulo(token, datos) {
 }
 function apiLineasAccesoriosRegistrarMovimiento(token, datos) {
   return LineasAccesorios.registrarMovimiento(token, datos);
+}
+function apiLineasPanorama(token, forzar) {
+  return TelefoniaService.panorama(token, forzar);
+}
+function apiLineasFormularioMasivo(token, accion) {
+  return TelefoniaService.formularioMasivo(token, accion);
+}
+function apiLineasAccionMasiva(token, accion, ids, datos) {
+  return TelefoniaService.accionMasiva(token, accion, ids, datos);
+}
+function apiLineasFormularioResguardo(token, ids) {
+  return TelefoniaService.formularioResguardo(token, ids);
+}
+function apiLineasMandarResguardo(token, ids, datos) {
+  return TelefoniaService.mandarResguardo(token, ids, datos);
+}
+// Bandeja de resguardos: viaja como texto JSON (como las demás tablas grandes)
+function apiLineasMandarCancelacion(token, ids, datos) {
+  return TelefoniaService.mandarCancelacion(token, ids, datos);
+}
+function apiLineasBandejaResguardos(token) {
+  return TelefoniaService.bandejaResguardos(token);
+}
+function apiLineasAccionBandejaResguardo(token, accion, ids, datos) {
+  return TelefoniaService.accionBandejaResguardo(token, accion, ids, datos);
+}
+function apiLineasNotificaciones(token, limite) {
+  return TelefoniaService.notificaciones(token, limite);
+}
+function apiLineasMarcarNotificaciones(token, ids) {
+  return TelefoniaService.marcarNotificaciones(token, ids);
 }
 
 // --- Incidencias ---

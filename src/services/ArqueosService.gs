@@ -313,10 +313,10 @@ const ArqueosService = (function () {
 
   const COLUMNAS_RESUMEN = [
     'ID ARQUEO', 'ID CCH', 'RESPONSABLE', 'TIPO DE ARQUEO', 'FECHA INICIO',
-    'TOTAL GENERAL', 'DIFERENCIA', 'CALIFICACION_AUDITORIA_FINAL', 'ESTADO PDF', 'FORMATO ARQUEO',
+    'TOTAL GENERAL', 'DIFERENCIA', 'CALIFICACION_AUDITORIA_FINAL', 'ESTADO PDF', 'FORMATO ARQUEO', 'EVIDENCIAS',
   ];
 
-  /** Catálogo ligero para la tabla (9 columnas, no las 79 completas). */
+  /** Catálogo ligero para la tabla (10 columnas, no las 79 completas). */
   function listarResumen(token) {
     Permisos.puedeLeer(token, 'arqueos');
     const sheet = hoja_();
@@ -336,6 +336,7 @@ const ArqueosService = (function () {
         CALIFICACION: datos['CALIFICACION_AUDITORIA_FINAL'][i] || '',
         ESTADO_PDF: datos['ESTADO PDF'][i] || '',
         FORMATO_ARQUEO: datos['FORMATO ARQUEO'][i] || '',
+        EVIDENCIAS: datos['EVIDENCIAS'][i] || '',
       });
     }
     return resultado.sort((a, b) => new Date(b.FECHA_INICIO) - new Date(a.FECHA_INICIO));

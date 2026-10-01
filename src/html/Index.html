@@ -49,10 +49,7 @@
               <button type="button" class="theme-btn" data-tema="dark" title="Modo oscuro"><i data-lucide="moon" class="ico"></i></button>
             </div>
             <div class="topbar-date" id="topbar-date"></div>
-            <button type="button" class="topbar-notif-btn" id="btn-notificaciones" title="Notificaciones">
-              <i data-lucide="bell" class="ico"></i>
-              <span class="topbar-notif-badge" id="notif-badge" hidden>0</span>
-            </button>
+            <!-- Aquí se inserta sola la campana de Notificaciones (html/notificaciones.html) -->
             <div class="topbar-user-menu">
               <div class="topbar-user" id="user-name"></div>
               <button type="button" id="btn-logout" class="topbar-logout-btn" title="Cerrar sesión">
@@ -73,7 +70,6 @@
   <?!= include('html/views/login'); ?>
   <?!= include('html/views/loading'); ?>
   <?!= include('html/views/dashboard'); ?>
-  <?!= include('html/views/accesorios'); ?>
   <?!= include('html/views/incidencias'); ?>
   <?!= include('html/views/panorama-vehiculos'); ?>
   <?!= include('html/views/vehiculos'); ?>
@@ -82,6 +78,7 @@
   <?!= include('html/views/uber'); ?>
   <?!= include('html/views/tickets'); ?>
   <?!= include('html/views/cajachica'); ?>
+  <?!= include('html/views/panorama-cajachica'); ?>
   <?!= include('html/views/cambios-monto-cch'); ?>
   <?!= include('html/views/arqueos'); ?>
   <?!= include('html/views/verificaciones'); ?>
@@ -92,14 +89,17 @@
   <?!= include('html/views/salud'); ?>
 
   <!-- Líneas (rama emmanuel) -->
+  <?!= include('html/views/lineas/lineas-panorama'); ?>
   <?!= include('html/views/lineas/lineas-telefonicas'); ?>
+  <?!= include('html/views/lineas/lineas-resguardos'); ?>
+  <?!= include('html/views/lineas/lineas-correcciones'); ?>
   <?!= include('html/views/lineas/lineas-bitacora'); ?>
   <?!= include('html/views/lineas/lineas-gestion-activos'); ?>
   <?!= include('html/views/lineas/lineas-accesorios'); ?>
-  <?!= include('html/views/lineas/lineas-operativa'); ?>
 
   <?!= include('html/js/api'); ?>
-  <!-- Antes de app.html a propósito: su render() llama Notificaciones.iniciar()
+  <!-- Notificaciones: UNA campana para todo el sistema, por módulo (Líneas y Vehículos). Se inserta sola en
+       .topbar-right, antes del usuario. Antes de app.html a propósito: su render() llama Notificaciones.iniciar()
        en la misma pasada síncrona del render() de arranque (línea final del
        archivo, si ya había sesión guardada) -- si este include fuera después,
        como el resto de componentes/ (ver más abajo), Notificaciones todavía no
@@ -107,12 +107,13 @@
        defined". Solo define la función (no toca nada de app.html al cargar);
        lo que si necesita de app.html (callServer, state, escaparHtml...) lo usa
        adentro de funciones que no se llaman hasta más tarde, vía iniciar(). -->
-  <?!= include('html/js/componentes/notificaciones'); ?>
+  <?!= include('html/notificaciones'); ?>
   <?!= include('html/js/app'); ?>
   <?!= include('html/js/app-arqueos'); ?>
   <?!= include('html/js/app-cajachica'); ?>
   <?!= include('html/js/app-reasignaciones'); ?>
   <?!= include('html/js/app-panorama-vehiculos'); ?>
+  <?!= include('html/js/app-panorama-cajachica'); ?>
 
   <!-- Librería de componentes (rama `ayrton`): usados por los módulos nuevos de abajo -->
   <?!= include('html/js/componentes/iconos'); ?>
@@ -137,6 +138,11 @@
   <!-- Módulo de Líneas (rama emmanuel): usa los helpers de app y la librería de componentes -->
   <?!= include('html/lineas-estilos'); ?>
   <?!= include('html/js/lineas'); ?>
+  <!-- Módulo temporal de correcciones (se quita cuando Líneas termine) -->
+  <?!= include('html/js/lineas-correcciones'); ?>
+
+  <!-- Atrás / Adelante del navegador y gesto de dos dedos del touchpad (rama emmanuel) -->
+  <?!= include('html/historial-navegador'); ?>
 
   <!-- Menú en celular y tableta vertical (rama emmanuel): archivo aparte para no tocar el shell -->
   <?!= include('html/shell-movil'); ?>

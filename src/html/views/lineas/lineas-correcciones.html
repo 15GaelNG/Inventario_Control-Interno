@@ -1,0 +1,35 @@
+<!-- Módulo TEMPORAL "Correcciones de Líneas" (30-sep): se elimina cuando Líneas termine. Ver services/lineas/LineasCorrecciones.gs -->
+<template id="tpl-lineas-correcciones">
+  <section id="ln-correcciones" class="ln-modulo">
+    <div class="page-header">
+      <div>
+        <h2><i data-lucide="clipboard-check" class="ico"></i> Correcciones de Líneas</h2>
+        <p class="page-subtitle">Casos del inventario que necesitan el criterio de Líneas o una revisión física. Ábrelos, corrígelos y márcalos; este módulo se quita cuando terminen.</p>
+      </div>
+      <div class="page-header-actions">
+        <button type="button" class="secondary" id="lnc-actualizar"><i data-lucide="refresh-cw" class="ico"></i> Actualizar</button>
+        <button type="button" class="secondary" id="lnc-subir" hidden title="Sube los archivos de la carpeta EVIDENCIAS PARA SUBIR (también se pueden arrastrar sobre la página)"><i data-lucide="paperclip" class="ico"></i> Subir evidencias</button>
+        <input type="file" id="lnc-archivos" multiple accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.json" hidden>
+        <button type="button" id="lnc-cargar" hidden><i data-lucide="upload" class="ico"></i> Cargar casos</button>
+      </div>
+    </div>
+
+    <div class="ln-nota" id="lnc-origen" hidden></div>
+    <div class="ln-nota" id="lnc-evidencias" hidden></div>
+
+    <div class="ln-segmentado lnc-pestanas" role="tablist" aria-label="Qué ver">
+      <button type="button" class="secondary activo" data-lnc-vista="CORREGIR" role="tab" aria-selected="true"><i data-lucide="list-checks" class="ico"></i> Por corregir</button>
+      <button type="button" class="secondary" data-lnc-vista="AUTOMATICO" role="tab" aria-selected="false"><i data-lucide="wand-sparkles" class="ico"></i> Se aplica al migrar</button>
+    </div>
+
+    <div class="stat-row" id="lnc-kpis">
+      <div class="stat-tile"><div class="stat-icon"><i data-lucide="loader-circle" class="ico"></i></div><div><div class="stat-value">…</div><div class="stat-label">Cargando</div></div></div>
+    </div>
+    <div class="stat-row" id="lnc-categorias"></div>
+
+    <div class="ln-nota" id="lnc-solo-lectura" hidden><i data-lucide="eye" class="ico"></i> Aquí ves el avance. Marcar los casos lo hace Líneas.</div>
+    <div class="ln-nota" id="lnc-nota-auto" hidden><i data-lucide="info" class="ico"></i> Esto no lo tiene que hacer nadie: lo dice el proveedor, un documento de venta firmado o una regla acordada en la reunión del 30-sep, y se aplica solo al migrar. Está aquí para que sepan qué cambia y por qué.</div>
+
+    <div class="card card-compacta"><div id="lnc-tabla"></div></div>
+  </section>
+</template>

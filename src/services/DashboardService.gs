@@ -11,6 +11,14 @@
 const DashboardService = (function () {
   const DIA_MS = 24 * 60 * 60 * 1000;
 
+  // Cada lista se lee UNA vez por carga del Inicio: varias secciones usan la misma (vehículos, incidencias,
+  // tickets, inspecciones) y antes se leía dos veces cada una. Se reinicia en cada resumen().
+  let listas_ = {};
+  function lista_(clave, fn) {
+    if (!(clave in listas_)) listas_[clave] = fn();
+    return listas_[clave];
+  }
+
   function seccion_(fn) {
     try {
       return fn();
@@ -28,16 +36,16 @@ const DashboardService = (function () {
   // ---------------- KPIs ----------------
 
   function kpiVehiculos_(token) {
-    const filas = VehiculosService.listarResumen(token);
+    const filas = lista_('vehiculos', () => VehiculosService.listarResumen(token));
     const baja = filas.filter((v) => String(v.ESTATUS || '').toUpperCase() === 'BAJA VEHICULAR').length;
     return { activos: filas.length - baja, baja: baja, total: filas.length };
   }
 
   function kpiTicketsIncidencias_(token) {
-    const incidencias = IncidenciasService.listar(token);
+    const incidencias = lista_('incidencias', () => IncidenciasService.listar(token));
     const abiertas = incidencias.filter((i) => i.ESTADO === 'ABIERTA').length;
 
-    const tickets = TicketsService.listarResumen(token);
+    const tickets = lista_('tickets', () => TicketsService.listarResumen(token));
     const hace30 = new Date(Date.now() - 30 * DIA_MS);
     const recientes = tickets.filter((t) => {
       const f = new Date(t['FECHA DE REGISTRO']);
@@ -60,19 +68,7 @@ const DashboardService = (function () {
     };
   }
 
-  function kpiTelefonia_(token) {
-    const ix = TelefoniaService.indice(token);
-    const equipos = ix.equipos.filas;
-    const lineas = ix.lineas.filas;
-    const idxEstatusEquipo = ix.equipos.columnas.indexOf('estatus');
-    const idxEstatusLinea = ix.lineas.columnas.indexOf('estatus');
-    const equiposActivos = equipos.filter((f) => String(f[idxEstatusEquipo] || '').toUpperCase() !== 'DESECHADO').length;
-    const lineasActivas = lineas.filter((f) => String(f[idxEstatusLinea] || '').toUpperCase() !== 'SIN LINEA').length;
-    return {
-      equiposActivos: equiposActivos, equiposTotal: equipos.length,
-      lineasActivas: lineasActivas, lineasTotal: lineas.length,
-    };
-  }
+  // Líneas no va en Inicio (1-oct, acordado con Jorge): sus cifras viven en el Panorama de Líneas.
 
   // ---------------- Alertas ----------------
 
@@ -108,11 +104,11 @@ const DashboardService = (function () {
    */
   function alertaInspecciones_(token) {
     const UMBRAL_DIAS = 90;
-    const activos = VehiculosService.listarResumen(token)
+    const activos = lista_('vehiculos', () => VehiculosService.listarResumen(token))
       .filter((v) => String(v.ESTATUS || '').toUpperCase() !== 'BAJA VEHICULAR');
 
     const ultimaPorFolio = {};
-    InspeccionesService.listar(token).forEach((i) => {
+    lista_('inspecciones', () => InspeccionesService.listar(token)).forEach((i) => {
       const actual = ultimaPorFolio[i.FOLIO];
       if (!actual || (i.FECHA || '') > actual) ultimaPorFolio[i.FOLIO] = i.FECHA || '';
     });
@@ -133,12 +129,12 @@ const DashboardService = (function () {
     const eventos = [];
 
     seccion_(() => {
-      IncidenciasService.listar(token).slice(0, 8).forEach((i) => {
+      lista_('incidencias', () => IncidenciasService.listar(token)).slice(0, 8).forEach((i) => {
         eventos.push({ tipo: 'Incidencia', icono: 'wrench', texto: 'Folio ' + (i.FOLIO || '—'), fecha: i.FECHA_REGISTRO });
       });
     });
     seccion_(() => {
-      TicketsService.listarResumen(token)
+      lista_('tickets', () => TicketsService.listarResumen(token)).slice()
         .sort((a, b) => new Date(b['FECHA DE REGISTRO']) - new Date(a['FECHA DE REGISTRO']))
         .slice(0, 8)
         .forEach((t) => {
@@ -155,7 +151,7 @@ const DashboardService = (function () {
       });
     });
     seccion_(() => {
-      InspeccionesService.listar(token).slice(0, 8).forEach((i) => {
+      lista_('inspecciones', () => InspeccionesService.listar(token)).slice(0, 8).forEach((i) => {
         eventos.push({ tipo: 'Inspección', icono: 'clipboard-check', texto: 'Folio ' + (i.FOLIO || '—'), fecha: i.FECHA });
       });
     });
@@ -170,11 +166,11 @@ const DashboardService = (function () {
 
   function resumen(token) {
     Auth.validarSesion(token);
+    listas_ = {};
     return {
       vehiculos: seccion_(() => kpiVehiculos_(token)),
       ticketsIncidencias: seccion_(() => kpiTicketsIncidencias_(token)),
       cajasChicas: seccion_(() => kpiCajasChicas_(token)),
-      telefonia: seccion_(() => kpiTelefonia_(token)),
       alertas: {
         verificaciones: seccion_(() => alertaVerificaciones_(token)),
         inspecciones: seccion_(() => alertaInspecciones_(token)),

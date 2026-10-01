@@ -1,0 +1,63 @@
+<template id="tpl-panorama-cajachica">
+  <div class="page-header">
+    <div>
+      <h2><i data-lucide="bar-chart-3" class="ico"></i> Panorama</h2>
+      <p class="page-subtitle">KPIs y gráficas del catálogo de cajas chicas — los filtros se aplican a todo en vivo</p>
+    </div>
+  </div>
+
+  <div class="card pv-filtros" id="pcc-filtros">
+    <div class="pv-filtros-grid">
+      <div class="field">
+        <label for="pcc-f-estatus">Estatus</label>
+        <select id="pcc-f-estatus"><option value="">Todos</option></select>
+      </div>
+      <div class="field">
+        <label for="pcc-f-departamento">Departamento</label>
+        <select id="pcc-f-departamento"><option value="">Todos</option></select>
+      </div>
+      <div class="field">
+        <label for="pcc-f-sede">Sede</label>
+        <select id="pcc-f-sede"><option value="">Todas</option></select>
+      </div>
+      <div class="field">
+        <label for="pcc-f-empresa">Empresa origen</label>
+        <select id="pcc-f-empresa"><option value="">Todas</option></select>
+      </div>
+      <div class="field">
+        <label for="pcc-f-administrada">Administrada por</label>
+        <select id="pcc-f-administrada"><option value="">Todas</option></select>
+      </div>
+      <button type="button" class="secondary" id="pcc-limpiar-filtros"><i data-lucide="x" class="ico"></i> Limpiar filtros</button>
+    </div>
+  </div>
+
+  <div class="stat-row" id="pcc-kpis"></div>
+
+  <div id="pcc-sin-datos" class="card" hidden>
+    <p class="empty-state">Ninguna caja chica coincide con estos filtros.</p>
+  </div>
+
+  <div class="pv-grid-graficas" id="pcc-graficas">
+    <div class="card pv-card-grafica pv-card-grafica-grande">
+      <h3><i data-lucide="pie-chart" class="ico ln-icon"></i> Por estatus</h3>
+      <div class="pv-lienzo-wrap"><canvas id="pcc-chart-estatus"></canvas></div>
+    </div>
+    <div class="card pv-card-grafica">
+      <h3><i data-lucide="coins" class="ico ln-icon"></i> Monto por departamento</h3>
+      <div class="pv-lienzo-wrap"><canvas id="pcc-chart-monto-departamento"></canvas></div>
+    </div>
+    <div class="card pv-card-grafica">
+      <h3><i data-lucide="map-pin" class="ico ln-icon"></i> Por sede</h3>
+      <div class="pv-lienzo-wrap"><canvas id="pcc-chart-sede"></canvas></div>
+    </div>
+    <div class="card pv-card-grafica">
+      <h3><i data-lucide="building-2" class="ico ln-icon"></i> Por empresa origen</h3>
+      <div class="pv-lienzo-wrap"><canvas id="pcc-chart-empresa"></canvas></div>
+    </div>
+    <div class="card pv-card-grafica">
+      <h3><i data-lucide="user-cog" class="ico ln-icon"></i> Por administrada por</h3>
+      <div class="pv-lienzo-wrap"><canvas id="pcc-chart-administrada"></canvas></div>
+    </div>
+  </div>
+</template>

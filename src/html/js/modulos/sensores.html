@@ -89,7 +89,7 @@
       textoVacio: 'Todavía no hay instalaciones registradas',
       ayuda: 'Los datos del vehículo (placa, marca, serie…) se copian del folio y no se editan aquí: ' +
         'se corrigen en el módulo de Vehículos. "En vivo" viene de Geotab y se actualiza cada minuto. ' +
-        'El botón de actividad en cada fila muestra viajes, combustible y ralentí de los últimos 30 días ' +
+        'Al seleccionar una fila, el botón de actividad muestra viajes, combustible y ralentí de los últimos 30 días ' +
         '(solo consulta). El rendimiento y el consumo en ralentí de la tabla se capturan a mano.',
       exportar: {
         nombreArchivo: 'Instalacion de sensores',
@@ -102,6 +102,13 @@
         titulo: (s) => 'Sensor ' + (s.SERIE_SENSOR || '') + ' · ' + (s.FOLIO || ''),
         contenidoExtra: (s, contenedor) => pintarExtraDetalle(s, contenedor),
       },
+      // Selección estilo Google Drive/Apple (rama emmanuel, ver componentes/datatable.html):
+      // clic = selecciona, doble clic/tocar = abre el panel de detalle (tabla.abrirDetalle
+      // se resuelve en el momento del clic, para entonces `tabla` ya está asignada).
+      modoSeleccion: true,
+      seleccionDrive: true,
+      alAbrirFila: (s) => tabla.abrirDetalle(String(s.ID)),
+      alTocarFila: (s) => tabla.abrirDetalle(String(s.ID)),
       columnas: [
         { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', fijada: true },
         { campo: 'SERIE_SENSOR', titulo: 'Serie sensor', tipo: 'texto' },
