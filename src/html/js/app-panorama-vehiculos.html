@@ -92,6 +92,18 @@
       pintarTodo();
     });
 
+    // Las gráficas también funcionan como filtro: clic en una rebanada/barra
+    // activa ese valor en el <select> del mismo campo (y un segundo clic lo
+    // quita) -- como ya cambia el <select>, el resto (KPIs, dona, demás
+    // barras) se repinta con pintarTodo() igual que si se hubiera elegido
+    // desde el filtro de arriba.
+    function activarFiltroDesdeGrafica(idSelect, valor) {
+      if (valor === 'Otros' || valor === 'Sin dato') return; // categorías agregadas, no son una opción real del filtro
+      const select = document.getElementById(idSelect);
+      select.value = (select.value === valor) ? '' : valor;
+      pintarTodo();
+    }
+
     // ---------- KPIs ----------
     const ICONO_ESTATUS = {
       'UTILITARIO': 'circle-check', 'NO UTILITARIO': 'circle-minus', 'PRESTAMO': 'repeat',
@@ -149,16 +161,29 @@
       graficas[id] = new Chart(document.getElementById(id), config);
     }
 
+    /** Versión atenuada de un color hex de 6 dígitos (para lo no-seleccionado cuando hay un filtro activo). */
+    function mutar(colorHex) { return colorHex + '40'; } // +25% de opacidad (hex de 8 dígitos, soportado por todos los navegadores modernos)
+
     function graficaDona(filas) {
+      const filtroActivo = document.getElementById('pv-f-estatus').value;
       const valores = PV_ORDEN_ESTATUS.map((e) => filas.filter((v) => String(v.ESTATUS || '').toUpperCase() === e).length);
+      const colores = PV_ORDEN_ESTATUS.map((e) => {
+        const base = PV_COLOR_ESTATUS[e];
+        return (!filtroActivo || filtroActivo === e) ? base : mutar(base);
+      });
       crearOActualizarGrafica('pv-chart-estatus', {
         type: 'doughnut',
         data: {
           labels: PV_ORDEN_ESTATUS.map((e) => PV_ETIQUETA_ESTATUS[e]),
-          datasets: [{ data: valores, backgroundColor: PV_ORDEN_ESTATUS.map((e) => PV_COLOR_ESTATUS[e]), borderWidth: 2, borderColor: getComputedStyle(document.documentElement).getPropertyValue('--color-surface').trim() }],
+          datasets: [{ data: valores, backgroundColor: colores, borderWidth: 2, borderColor: getComputedStyle(document.documentElement).getPropertyValue('--color-surface').trim() }],
         },
         options: {
           responsive: true, maintainAspectRatio: false, cutout: '62%',
+          onClick: (evt, elementos) => {
+            if (!elementos.length) return;
+            activarFiltroDesdeGrafica('pv-f-estatus', PV_ORDEN_ESTATUS[elementos[0].index]);
+          },
+          onHover: (evt, elementos) => { evt.native.target.style.cursor = elementos.length ? 'pointer' : 'default'; },
           plugins: {
             legend: { position: 'right', labels: { color: colorTexto(), boxWidth: 13, padding: 14, font: { size: 12 } } },
             tooltip: { callbacks: { label: (ctx) => ` ${ctx.label}: ${ctx.parsed} (${filas.length ? Math.round(ctx.parsed / filas.length * 100) : 0}%)` } },
@@ -173,17 +198,25 @@
       });
     }
 
-    function graficaBarras(id, filas, campo, n) {
+    function graficaBarras(id, filas, campo, n, filtroId) {
       const pares = limitarConOtros(contarPor(filas, campo), n);
+      const filtroActivo = filtroId ? document.getElementById(filtroId).value : '';
+      const colorBase = colorPrimario();
+      const colores = pares.map((p) => (!filtroActivo || filtroActivo === p[0]) ? colorBase : mutar(colorBase));
       crearOActualizarGrafica(id, {
         type: 'bar',
         data: {
           labels: pares.map((p) => p[0]),
-          datasets: [{ data: pares.map((p) => p[1]), backgroundColor: colorPrimario(), borderRadius: 6, maxBarThickness: 34 }],
+          datasets: [{ data: pares.map((p) => p[1]), backgroundColor: colores, borderRadius: 6, maxBarThickness: 34 }],
         },
         options: {
           responsive: true, maintainAspectRatio: false, indexAxis: 'y',
           layout: { padding: { right: 24 } }, // deja hueco para el número al final de la barra más larga
+          onClick: (evt, elementos) => {
+            if (!elementos.length || !filtroId) return;
+            activarFiltroDesdeGrafica(filtroId, pares[elementos[0].index][0]);
+          },
+          onHover: (evt, elementos) => { evt.native.target.style.cursor = (elementos.length && filtroId) ? 'pointer' : 'default'; },
           plugins: {
             legend: { display: false },
             tooltip: { callbacks: { label: (ctx) => ` ${ctx.parsed.x} vehículo(s)` } },
@@ -211,10 +244,10 @@
       pintarKpis(filas);
       if (!filas.length) return;
       graficaDona(filas);
-      graficaBarras('pv-chart-departamento', filas, 'DEPARTAMENTO', 8);
-      graficaBarras('pv-chart-sede', filas, 'SEDE', 8);
-      graficaBarras('pv-chart-marca', filas, 'MARCA', 8);
-      graficaBarras('pv-chart-clase', filas, 'CLASE', 8);
+      graficaBarras('pv-chart-departamento', filas, 'DEPARTAMENTO', 8, 'pv-f-departamento');
+      graficaBarras('pv-chart-sede', filas, 'SEDE', 8, 'pv-f-sede');
+      graficaBarras('pv-chart-marca', filas, 'MARCA', 8, 'pv-f-marca');
+      graficaBarras('pv-chart-clase', filas, 'CLASE', 8, 'pv-f-clase');
     }
 
     pintarTodo();
