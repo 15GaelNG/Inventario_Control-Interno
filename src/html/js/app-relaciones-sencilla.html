@@ -1,0 +1,384 @@
+<script>
+  /**
+   * app-relaciones-sencilla.html — la vista "para todos" de Administración > Datos conectados.
+   *
+   * La vista técnica (app-relaciones.html) habla como el código: caché, bitácora, huérfana,
+   * llave foránea. Esta habla como quien usa los módulos. Tiene dos partes:
+   *
+   *   - AVISOS: lo que hay que revisar, agrupado por lo que hay que HACER (se arregla con un
+   *     botón / hay que corregirlo a mano / está bien así), cada uno con un ejemplo real.
+   *   - UNA PESTAÑA POR FAMILIA: cómo se conectan sus datos, en una tabla — quién decide cada
+   *     dato, dónde se mantiene al día y dónde se guarda el del día. Por familia porque el
+   *     mismo dato (Departamento) lo decide un módulo distinto en cada una.
+   *
+   * No decide nada: recibe lo que ya calculó el servidor (Relaciones.describir y revisar) y
+   * lo convierte en frases. Las acciones (actualizar, volver a revisar) las pone
+   * initRelaciones, que es quien habla con el servidor.
+   *
+   * Una regla que vale en todo el archivo: un aviso cuenta REGISTROS (vehículos, sensores…),
+   * nunca celdas, y la misma cifra aparece en el título y en "Ver los N". Y los ejemplos dicen
+   * lo que la gente reconoce (folio, serie), nunca "el renglón 6".
+   */
+  const RelSencilla = (function () {
+    // Cómo se llama cada columna para quien no programa. Lo que no esté aquí se muestra con
+    // la primera letra en mayúscula ("DEPARTAMENTO" → "Departamento").
+    const DATOS = {
+      'SERIE SENSOR': 'Serie del sensor',
+      'SENSOR': '¿Tiene sensor?',
+      'ESTATUS SENSOR': 'Estatus del sensor',
+      'RESPONSABLE VEHICULO': 'Responsable',
+      'LINEA VEHICULO': 'Línea',
+      'CAPACIDAD COMBUSTIBLE (LTS)': 'Capacidad del tanque',
+      'CAPACIDAD DE COMBUSTIBLE': 'Capacidad del tanque',
+      'CAPACIDAD DEL TANQUE': 'Capacidad del tanque',
+      'OFICINA / DESARROLLO': 'Oficina / desarrollo',
+      'RAZON SOCIAL': 'Razón social',
+      'RESPONSABLE DE CAJA CHICA': 'Responsable de la caja',
+      'PUESTO DE RESPONSABLE': 'Puesto del responsable',
+      'EMPRESA ORIGEN': 'Empresa',
+      'METODO DE REEMBOLSO': 'Método de reembolso',
+      'METODO REEMBOLSO': 'Método de reembolso',
+      'MONTO ACTUAL': 'Monto de la caja',
+      'MONTO CAJA': 'Monto de la caja',
+      'AREA / DEPARTAMENTO': 'Área / departamento',
+      'ID VEHICULO': 'Vehículo al que pertenece',
+      'ID CAJA CHICA': 'Caja a la que pertenece',
+      'ID': 'Vehículo',
+      'SERIE VEHICULO': 'Serie del vehículo',
+      'NO SERIE': 'Serie del vehículo',
+      // Líneas
+      'NUCO': 'NUCO',
+      'IMEI': 'IMEI',
+      'NUMERO TELEFONO': 'Número de teléfono',
+      'No TELEFONO': 'Número de teléfono',
+      'NUMERO SIM': 'SIM',
+      'SIM': 'SIM',
+      'EQUIPO': 'Modelo del equipo',
+      'TIPO': 'Tipo de línea',
+      'COMPAÑIA': 'Compañía',
+      'CUENTA GOOGLE': 'Cuenta de Google',
+      'CORREO': 'Correo',
+      'NO EMPLEADO': 'Número de empleado',
+      'No EMPLEADO': 'Número de empleado',
+      'AREA': 'Área',
+      'ID LINEA': 'Línea a la que pertenece',
+      'ID_LINEA': 'Línea a la que pertenece',
+      'ID ACCESORIO': 'Artículo al que pertenece',
+      'ID_Accesorio': 'Artículo',
+      // Capital Humano
+      'ID PERSONA': 'Persona del responsable',
+      'NOMBRE COMPLETO': 'Nombre',
+      'FOLIO VEHICULO': 'Folio',
+      'ID CCH': 'Número de caja',
+    };
+
+    // Qué hay que HACER con cada tipo de entrada de revisar(). Es lo que ordena la pantalla.
+    //   boton  se arregla con «Actualizar»
+    //   mano   alguien tiene que corregir un dato en su módulo
+    //   bien   es normal; se dice para que no parezca que falta revisarlo
+    const ACCION = {
+      DIFERENCIA: 'boton',
+      HUERFANO: 'mano',
+      CLAVE_DUPLICADA_EN_ORIGEN: 'mano',
+      OMITIDO_CENTINELA: 'mano',
+      OMITIDO_VACIO: 'mano',
+      SIN_DUENO_ESPERADO: 'bien',
+      DIFERENCIA_HISTORICA: 'bien',
+    };
+    const SECCIONES = [
+      { clave: 'boton', titulo: 'Se arreglan con un botón', icono: 'refresh-cw',
+        texto: 'Un módulo tiene un dato distinto al módulo que lo decide. «Actualizar» lo copia, y queda anotado quién y cuándo.' },
+      { clave: 'mano', titulo: 'Hay que corregirlos a mano', icono: 'pencil',
+        texto: 'No se pueden arreglar solos: hay que corregir el dato en su módulo. Después, «Revisar de nuevo».' },
+      { clave: 'bien', titulo: 'Todo bien', icono: 'circle-check',
+        texto: 'Se ven distintos, pero así debe ser.' },
+    ];
+
+    const esc = (v) => escaparHtml(v == null ? '' : String(v));
+    const num = (x) => Number(x || 0).toLocaleString('es-MX');
+    const dato = (col) => {
+      if (DATOS[col]) return DATOS[col];
+      const t = String(col || '').toLowerCase();
+      return t.charAt(0).toUpperCase() + t.slice(1);
+    };
+    const vacio = (v) => v === '' || v == null;
+    const comillas = (v) => (vacio(v) ? 'vacío' : '«' + v + '»');
+    const dice = (v) => (vacio(v) ? 'está vacío' : 'dice «' + v + '»');
+    const deberia = (v) => (vacio(v) ? 'debería estar vacío' : 'debería decir «' + v + '»');
+    const cuantos = (et, k) => num(k) + ' ' + (k === 1 ? et.uno : et.varios);
+    // El verbo concuerda con cuántos son: '1 holograma tiene', '3 vehículos tienen'
+    const verbo = (k, uno, varios) => (k === 1 ? uno : varios);
+
+    /**
+     * Agrupa lo que regresó revisar() en avisos. Un aviso = una hoja copia + un tipo de
+     * problema. Cuenta registros distintos: de la copia (por renglón) o, cuando el problema
+     * está en el dueño (relleno, vacío), del dueño (por su folio).
+     */
+    function clasificar(mapa, reporte) {
+      const rel = {};
+      mapa.duenos.forEach((d) => d.copias.forEach((c) => { rel[c.nombre] = { d: d, c: c }; }));
+      const avisos = [];
+      const alDia = [];
+      const errores = [];
+      reporte.forEach((r) => {
+        const rc = rel[r.nombre];
+        if (!rc) return;
+        // No se pudo leer (un libro sin configurar, una pestaña que falta): se dice, y no
+        // se presenta como "al día"
+        if (r.error) { errores.push({ nombre: rc.c.etiqueta.nombre, familia: rc.d.etiqueta.familia, motivo: r.error }); return; }
+        const grupos = {};
+        r.entradas.forEach((e) => {
+          const k = e.tipo + (e.malEscrita ? '|mal' : '');
+          (grupos[k] = grupos[k] || []).push(e);
+        });
+        let pendiente = false;
+        // 'Al día' es solo lo que no trae NADA: una bitácora con diferencias del día ya se
+        // menciona en 'Todo bien', y decir también que está al día confunde.
+        const sinNada = !r.entradas.length;
+        Object.keys(grupos).forEach((k) => {
+          const es = grupos[k];
+          const tipo = es[0].tipo;
+          const accion = ACCION[tipo] || 'mano';
+          const enElDueno = tipo === 'OMITIDO_CENTINELA' || tipo === 'OMITIDO_VACIO';
+          avisos.push({
+            // De lo normal llega solo una muestra: la cifra que se dice es la total de la hoja
+            total: tipo === 'DIFERENCIA_HISTORICA' ? r.diferenciasHistoricas
+              : tipo === 'SIN_DUENO_ESPERADO' ? r.sinDuenoEsperado : null,
+            tipo: tipo, malEscrita: !!es[0].malEscrita, accion: accion,
+            d: rc.d, c: rc.c, familia: rc.d.etiqueta.familia, entradas: es,
+            registros: new Set(es.map((e) => (enElDueno ? e.dueno || e.clave : e.fila))).size,
+            enElDueno: enElDueno,
+          });
+          if (accion !== 'bien') pendiente = true;
+        });
+        if (!pendiente && sinNada) alDia.push({ nombre: rc.c.etiqueta.nombre, familia: rc.d.etiqueta.familia });
+      });
+      const orden = { DIFERENCIA: 0, HUERFANO: 1, CLAVE_DUPLICADA_EN_ORIGEN: 2, OMITIDO_CENTINELA: 3, OMITIDO_VACIO: 4, SIN_DUENO_ESPERADO: 5, DIFERENCIA_HISTORICA: 6 };
+      avisos.sort((a, b) => (orden[a.tipo] - orden[b.tipo]) || (b.registros - a.registros));
+      return { avisos: avisos, alDia: alDia, errores: errores, pendientes: avisos.filter((a) => a.accion !== 'bien').length + errores.length };
+    }
+
+    /** Las frases de un aviso: título, un ejemplo real y qué significa. */
+    function textos(g) {
+      const d = g.d.etiqueta;
+      const c = g.c.etiqueta;
+      const e = g.entradas[0];
+      const k = g.registros;
+      const quien = e.dueno || e.clave || '';
+      switch (g.tipo) {
+        case 'DIFERENCIA':
+          // Capital Humano no copia datos: liga a cada responsable con su persona. El nombre ya
+          // está bien; lo que falta es guardar la liga (o actualizarla, si cambió el responsable).
+          if (g.c.llaveRegistro) {
+            const sinLigar = g.entradas.filter((x) => vacio(x.tenia)).length;
+            return {
+              titulo: sinLigar === g.entradas.length
+                ? cuantos(c, k) + verbo(k, ' todavía no tiene', ' todavía no tienen') + ' ligada su persona'
+                : cuantos(c, k) + verbo(k, ' tiene', ' tienen') + ' su persona por ligar o por actualizar',
+              ejemplo: 'Por ejemplo ' + quien + ': su responsable es ' + e.quedo + ' en ' + d.nombre +
+                (vacio(e.tenia) ? ', pero esa liga aún no está guardada.' : ', pero tenía ligada a ' + e.tenia + '.'),
+              explicacion: 'Ya se encontró a cada persona en ' + d.nombre + ' por su nombre o su correo. «Actualizar» guarda esa ' +
+                'liga en la columna ' + dato(e.columna) + ' (la crea si no existe). El nombre que está escrito no se toca.',
+            };
+          }
+          return {
+            titulo: cuantos(c, k) + verbo(k, ' tiene', ' tienen') + ' datos distintos a ' + d.nombre,
+            ejemplo: 'Por ejemplo ' + quien + ': en ' + c.nombre + ', ' + dato(e.columna) + ' ' + dice(e.tenia) +
+              ', y según ' + d.nombre + ' ' + deberia(e.quedo) + '.',
+            explicacion: 'Estos datos los decide ' + d.nombre + '. «Actualizar» copia lo que dice ' + d.nombre +
+              ' a ' + c.nombre + '. Puedes actualizar todos, o seleccionar solo algunos en la tabla.',
+          };
+        case 'HUERFANO':
+          if (g.malEscrita) {
+            return {
+              titulo: cuantos(c, k) + ' con «' + dato(e.columna) + '» mal escrito',
+              ejemplo: 'Por ejemplo ' + comillas(e.clave) + '. Así no se encuentra su ' + d.uno + ' en ' + d.nombre + '.',
+              explicacion: 'Suele ser un guion o espacio de más, o una letra donde va un número (una I por un 1, una O ' +
+                'por un 0). Hay que corregirlo a mano en ' + c.nombre + '.',
+            };
+          }
+          return {
+            titulo: cuantos(c, k) + verbo(k, ' no encontró', ' no encontraron') + ' su ' + d.uno,
+            ejemplo: e.motivo
+              ? 'Por ejemplo ' + comillas(e.tenia || e.clave) + ': ' + e.motivo + '.'
+              : 'Por ejemplo ' + comillas(e.tenia || e.clave) + ', que no existe en ' + d.nombre + '.',
+            explicacion: 'Puede ser un ' + d.uno + ' que se borró, o un dato mal capturado. No se puede adivinar cuál ' +
+              'era: hay que corregirlo a mano en ' + c.nombre + '.',
+          };
+        case 'CLAVE_DUPLICADA_EN_ORIGEN':
+          return {
+            titulo: cuantos(c, k) + verbo(k, ' tiene', ' tienen') + ' más de ' + (d.uno === 'persona' ? 'una ' : 'un ') + d.uno + ' posible',
+            ejemplo: e.motivo
+              ? 'Por ejemplo ' + comillas(e.tenia || e.clave) + ': ' + e.motivo + '.'
+              : 'Por ejemplo ' + (e.dueno || comillas(e.clave)) + ': su ' + d.uno + ' aparece más de una vez en ' + d.nombre + '.',
+            explicacion: 'No se adivina cuál es el bueno. Deja uno solo en ' + d.nombre + ' y vuelve a revisar.',
+          };
+        case 'OMITIDO_CENTINELA':
+          return {
+            titulo: cuantos(d, k) + verbo(k, ' tiene', ' tienen') + ' una palabra en lugar del dato',
+            ejemplo: 'Por ejemplo ' + quien + ': en ' + d.nombre + ', ' + dato(e.columna) + ' dice «' + e.quedo + '». En ' +
+              c.nombre + ' ' + dice(e.tenia) + ', y no se tocó.',
+            explicacion: 'Palabras como «BAJA VEHICULAR» o «SIN PLACA» no son un dato: si se copiaran, borrarían el dato ' +
+              'bueno de ' + c.nombre + '. Se arregla en ' + d.nombre + '.',
+          };
+        case 'OMITIDO_VACIO':
+          return {
+            titulo: verbo(k, 'A ', 'A ') + cuantos(d, k) + verbo(k, ' le falta', ' les falta') + ' un dato que ' + c.nombre + ' sí tiene',
+            ejemplo: 'Por ejemplo ' + quien + ': ' + dato(e.columna) + ' está vacío en ' + d.nombre + ', pero en ' +
+              c.nombre + ' dice «' + e.tenia + '».',
+            explicacion: 'No se borró de ' + c.nombre + '. Conviene capturarlo en ' + d.nombre + '.',
+          };
+        case 'SIN_DUENO_ESPERADO':
+          return {
+            titulo: cuantos(c, g.total || k) + verbo(g.total || k, ' es', ' son') + ' de ' + (g.c.huerfanaEsperada || 'otro registro') +
+              ', que no ' + verbo(g.total || k, 'está', 'están') + ' en ' + d.nombre + ', y así debe ser',
+            ejemplo: '',
+            explicacion: 'Su serie tiene la forma correcta; simplemente no es un ' + d.uno + ' de ' + d.nombre + '.',
+          };
+        case 'DIFERENCIA_HISTORICA':
+          return {
+            titulo: c.nombre + ' guarda cómo estaba cada ' + d.uno + ' el día que se registró (' + num(g.total || g.entradas.length) +
+              ((g.total || g.entradas.length) === 1 ? ' dato distinto' : ' datos distintos') + ' a hoy), y así debe ser',
+            ejemplo: '',
+            explicacion: 'Es un registro de ese día: si se actualizara, se perdería cómo estaba. Nunca se toca.',
+          };
+        default:
+          return { titulo: g.tipo, ejemplo: '', explicacion: '' };
+      }
+    }
+
+    /** Cuántos avisos hay que atender, para la pestaña ("Avisos (3)"). */
+    /** Cuántos avisos hay que atender en una familia: la cifra de su pestaña en Salud. */
+    const pendientesDe = (clas, familia) =>
+      clas.avisos.filter((g) => g.accion !== 'bien' && g.familia === familia).length +
+      (clas.errores || []).filter((e) => e.familia === familia).length;
+
+    function tarjeta(g, i, puedeEditar) {
+      const t = textos(g);
+      const actualizar = g.accion === 'boton' && puedeEditar;
+      const ver = g.registros > 1 ? 'Ver los ' + num(g.registros) : 'Ver cuál es';
+      return `<div class="rel-s-pend ${g.accion}">
+        <div class="rel-s-pend-cuerpo">
+          <div class="rel-s-pend-titulo">${esc(t.titulo)}</div>
+          ${t.ejemplo ? `<div class="rel-s-pend-ejemplo">${esc(t.ejemplo)}</div>` : ''}
+          <div class="rel-s-pend-acciones">
+            <button type="button" class="secondary" data-s-ver="${i}">${Iconos.svg('list')} ${esc(ver)}</button>
+            ${actualizar ? `<button type="button" data-s-actualizar="${esc(g.c.nombre)}">${Iconos.svg('refresh-cw')} Actualizar</button>` : ''}
+          </div>
+        </div>
+      </div>`;
+    }
+
+    function lineaBien(g, i) {
+      return `<p class="rel-s-bien">${Iconos.svg(g.tipo === 'DIFERENCIA_HISTORICA' ? 'history' : 'user')}
+        <span>${esc(textos(g).titulo)}.</span> <button type="button" class="dt-link" data-s-ver="${i}">Ver</button></p>`;
+    }
+
+    /**
+     * Los avisos de UNA familia (una pestaña de Salud): tres secciones según lo que hay que
+     * hacer. Los índices de "Ver" (data-s-ver) son los de clas.avisos completo, para que
+     * quien escucha el clic no tenga que saber qué familia se está viendo.
+     */
+    function pintarAvisos(cont, clas, puedeEditar, familia) {
+      const deLaFamilia = (x) => x.familia === familia;
+      const pendientes = pendientesDe(clas, familia);
+      const errores = (clas.errores || []).filter(deLaFamilia);
+      const cabeza = pendientes
+        ? `<h3 class="rel-s-h3">${Iconos.svg('triangle-alert')} ${num(pendientes)} ${pendientes === 1 ? 'aviso' : 'avisos'} por atender en ${esc(familia)}</h3>`
+        : `<h3 class="rel-s-h3 ok">${Iconos.svg('circle-check')} ${esc(familia)}: todo coincide, no hay nada que atender</h3>`;
+      const secciones = SECCIONES.map((sec) => {
+        const items = clas.avisos.map((g, i) => ({ g: g, i: i })).filter((x) => x.g.accion === sec.clave && deLaFamilia(x.g));
+        const alDia = sec.clave === 'bien' ? clas.alDia.filter(deLaFamilia).map((a) => a.nombre) : [];
+        if (!items.length && !alDia.length) return '';
+        const cuerpo = sec.clave === 'bien'
+          ? items.map((x) => lineaBien(x.g, x.i)).join('') +
+            (alDia.length ? `<p class="rel-s-bien">${Iconos.svg('circle-check')} <span>Al día: ${esc(alDia.join(', '))}.</span></p>` : '')
+          : `<div class="rel-s-pends">${items.map((x) => tarjeta(x.g, x.i, puedeEditar)).join('')}</div>`;
+        return `<section class="rel-s-seccion-avisos ${sec.clave}">
+          <h4>${Iconos.svg(sec.icono)} ${esc(sec.titulo)}</h4>
+          <p class="rel-s-sec-texto">${esc(sec.texto)}</p>
+          ${cuerpo}
+        </section>`;
+      }).join('');
+      const fallas = errores.length ? `<section class="rel-s-seccion-avisos mano">
+          <h4>${Iconos.svg('circle-x')} No se pudieron revisar</h4>
+          <p class="rel-s-sec-texto">Falta configurar algo en el sistema; avísale a quien lo administra.</p>
+          ${errores.map((e) => `<p class="rel-s-bien"><span><strong>${esc(e.nombre)}</strong>: ${esc(e.motivo)}</span></p>`).join('')}
+        </section>` : '';
+      cont.innerHTML = cabeza + fallas + secciones;
+    }
+
+    /** Las familias, en el orden del mapa (la que tiene más conexiones primero). */
+    function familias(mapa) {
+      return Array.from(new Set(mapa.duenos.map((d) => d.etiqueta.familia)));
+    }
+
+    /** Pestaña de una familia: una tabla con quién decide cada dato y a dónde llega. */
+    function pintarFamilia(cont, mapa, familia, filtro) {
+      const datos = {};
+      mapa.duenos.filter((d) => d.etiqueta.familia === familia).forEach((d) => d.copias.forEach((c) => c.columnas.forEach((x) => {
+        const nombre = x.calculada ? dato(x.destino) : dato(x.origen);
+        const k = d.hoja + '|' + nombre;
+        const o = datos[k] = datos[k] || { nombre: nombre, decide: d.etiqueta.nombre, alDia: [], delDia: [], notas: [], ayuda: [] };
+        (c.tipo === 'bitacora' ? o.delDia : o.alDia).push(c.etiqueta.nombre);
+        if (!x.calculada && dato(x.destino) !== dato(x.origen)) o.notas.push('En ' + c.etiqueta.nombre + ' se llama «' + dato(x.destino) + '».');
+        // La regla larga (cómo se calcula) no va en la tabla: va detrás del "?" de su renglón
+        const aplica = !c.notaColumnas || c.notaColumnas.indexOf(x.origen) !== -1;
+        if (c.nota && aplica && o.ayuda.indexOf(c.nota) === -1) o.ayuda.push(c.nota);
+      })));
+      const q = String(filtro || '').trim().toLowerCase();
+      const filas = Object.keys(datos).map((k) => datos[k])
+        .filter((o) => !q || (o.nombre + ' ' + o.decide + ' ' + o.alDia.join(' ') + ' ' + o.delDia.join(' ')).toLowerCase().indexOf(q) !== -1)
+        // Primero lo que decide cada módulo, y dentro, por nombre del dato
+        .sort((a, b) => a.decide.localeCompare(b.decide, 'es') || a.nombre.localeCompare(b.nombre, 'es'));
+      const lista = (xs) => (xs.length ? esc(xs.join(', ')) : '<span class="rel-s-nada">—</span>');
+      cont.innerHTML = filas.length ? `<table class="rel-s-tabla">
+        <thead><tr><th>Dato</th><th>Lo decide</th><th>Se mantiene al día en</th><th>Guarda el del día en</th><th></th></tr></thead>
+        <tbody>${filas.map((o) => `<tr>
+          <td data-etiqueta="Dato"><strong>${esc(o.nombre)}</strong>${o.notas.map((n) => `<div class="rel-s-sutil">${esc(n)}</div>`).join('')}</td>
+          <td data-etiqueta="Lo decide">${esc(o.decide)}</td>
+          <td data-etiqueta="Se mantiene al día en">${lista(o.alDia)}</td>
+          <td data-etiqueta="Guarda el del día en">${lista(o.delDia)}</td>
+          <td class="rel-s-ayuda-td">${o.ayuda.length ? `<button type="button" class="rel-s-ayuda" title="${esc(o.ayuda.join(' '))}"
+            data-s-ayuda="${esc(o.ayuda.join(' '))}" aria-label="Cómo funciona ${esc(o.nombre)}">${Iconos.svg('circle-help')}</button>` : ''}</td>
+        </tr>`).join('')}</tbody></table>`
+        : '<p class="empty-state">Ningún dato coincide con la búsqueda.</p>';
+    }
+
+    /** Las columnas de la tabla del detalle, con encabezados que dicen de qué módulo es cada valor. */
+    function columnasDetalle(g) {
+      const d = g.d.etiqueta.nombre;
+      const c = g.c.etiqueta.nombre;
+      if (g.tipo === 'HUERFANO' || g.tipo === 'CLAVE_DUPLICADA_EN_ORIGEN' || g.tipo === 'SIN_DUENO_ESPERADO') {
+        return [
+          { campo: 'REGISTRO', titulo: 'Busca', tipo: 'texto', fijada: true },
+          { campo: 'DATO', titulo: 'Dato', tipo: 'lista' },
+          { campo: 'RENGLON', titulo: 'Renglón en ' + c, tipo: 'numero', ancho: 120 },
+        ];
+      }
+      return [
+        // El encabezado es la llave que se muestra (Folio, Número de caja), no el nombre de la
+        // hoja dueña: en Sensores → Vehículos la dueña es el sensor, pero lo que se ve es el folio.
+        { campo: 'REGISTRO', titulo: dato(g.c.llaveRegistro || g.d.llaveDeNegocio), tipo: 'texto', fijada: true },
+        { campo: 'DATO', titulo: 'Dato', tipo: 'lista' },
+        { campo: 'AHORA', titulo: 'En ' + c, tipo: 'texto' },
+        { campo: 'CORRECTO', titulo: 'En ' + d, tipo: 'texto' },
+        { campo: 'RENGLON', titulo: 'Renglón en ' + c, tipo: 'numero', ancho: 120 },
+      ];
+    }
+
+    function filasDetalle(g) {
+      return g.entradas.map((e, i) => ({
+        _id: i,
+        REGISTRO: g.tipo === 'HUERFANO' || g.tipo === 'SIN_DUENO_ESPERADO' || g.tipo === 'CLAVE_DUPLICADA_EN_ORIGEN'
+          ? (e.tenia || e.clave) : (e.dueno || e.clave || ''),
+        DATO: dato(e.columna),
+        AHORA: vacio(e.tenia) ? '(vacío)' : String(e.tenia),
+        CORRECTO: vacio(e.quedo) ? '(vacío)' : String(e.quedo),
+        RENGLON: e.fila,
+      }));
+    }
+
+    return { clasificar, textos, pendientesDe, pintarAvisos, familias, pintarFamilia, columnasDetalle, filasDetalle, dato };
+  })();
+</script>

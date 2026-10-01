@@ -1,0 +1,123 @@
+<script>
+  /**
+   * app-relaciones.html — Administración > Datos conectados.
+   *
+   * El MAPA de src/services/Relaciones.gs: qué módulo decide cada dato y a dónde se copia.
+   * Solo lee el mapa, así que carga al instante. Si los datos coinciden o no —que sí lee
+   * todas las hojas— lo revisa Administración > Salud (app-salud.html).
+   *
+   * Dos vistas: la SENCILLA, una pestaña por familia con una tabla en frases
+   * (RelSencilla.pintarFamilia), y la TÉCNICA, detrás de "Ver detalle técnico": la matriz
+   * columna del dueño × hoja copia, con cómo se une cada una y los valores que nunca se copian.
+   */
+  async function initRelaciones() {
+    let mapa = null;
+
+    const CLAVE_VISTA = 'relaciones-vista-tecnica';
+    function mostrarTecnica(si) {
+      document.getElementById('rel-tecnica').hidden = !si;
+      document.getElementById('rel-sencilla').hidden = si;
+      document.getElementById('rel-tecnico-toggle').checked = si;
+      try { localStorage.setItem(CLAVE_VISTA, si ? '1' : '0'); } catch (e) { /* sin almacenamiento: no se recuerda */ }
+    }
+
+    /**
+     * Una pestaña por familia, armada del mapa (no de una lista fija): cuando una familia
+     * nueva entra al MAPA, su pestaña aparece sola. Cada una con su buscador.
+     */
+    function armarFamilias() {
+      const lista = document.getElementById('rel-s-tabs-lista');
+      const tabsCont = document.getElementById('rel-s-tabs');
+      const familias = RelSencilla.familias(mapa);
+      familias.forEach((familia, i) => {
+        const id = 'familia-' + i;
+        lista.insertAdjacentHTML('beforeend',
+          `<button type="button" class="tab-btn" data-tab="${id}">${Iconos.svg('network')} ${escaparHtml(familia)}</button>`);
+        tabsCont.insertAdjacentHTML('beforeend', `<div class="card card-compacta" data-panel="${id}">
+          <p class="rel-s-intro">Cada dato de ${escaparHtml(familia)} lo decide un solo módulo. Desde ahí se copia a los demás:
+            unos lo mantienen al día y otros guardan cómo estaba el día que se registró.</p>
+          <input type="search" class="rel-s-buscar" data-familia-buscar="${i}" placeholder="Buscar un dato (ej. departamento)" />
+          <div data-familia-datos="${i}"></div>
+        </div>`);
+        const pintar = (filtro) => RelSencilla.pintarFamilia(tabsCont.querySelector('[data-familia-datos="' + i + '"]'), mapa, familia, filtro);
+        pintar('');
+        tabsCont.querySelector('[data-familia-buscar="' + i + '"]').addEventListener('input', (ev) => pintar(ev.target.value));
+      });
+      Tabs.iniciar(tabsCont, { inicial: 'familia-0' });
+    }
+
+    // ----- Técnica: columna del dueño × hoja copia -----
+    /** Cómo se une cada copia con su dueña, en palabras. */
+    function uneDescripcion(c) {
+      if (!c.llaveForanea) return 'une por ' + escaparHtml(c.clave);
+      const id = c.campoEnDueno && c.campoEnDueno !== 'ID'
+        ? escaparHtml(c.campoEnDueno) + ' del dueño = ' + escaparHtml(c.llaveForanea) + ' de esta hoja'
+        : escaparHtml(c.llaveForanea);
+      return 'une por ' + id + ', o ' + escaparHtml(c.clave) + ' si no lo tiene';
+    }
+
+    function pintarMapa() {
+      const cont = document.getElementById('rel-mapa');
+      cont.innerHTML = mapa.duenos.map((d) => {
+        const columnas = [];
+        d.copias.forEach((c) => c.columnas.forEach((x) => { if (columnas.indexOf(x.origen) === -1) columnas.push(x.origen); }));
+        const encabezado = d.copias.map((c) => `<th>${escaparHtml(c.nombre)}
+          <span class="rel-tipo ${c.tipo === 'bitacora' ? 'bitacora' : 'cache'}">${c.tipo === 'bitacora' ? 'Bitácora' : 'Caché'}</span>
+          <span class="rel-llave">${uneDescripcion(c)}</span></th>`).join('');
+        const cuerpo = columnas.map((col) => `<tr><th>${escaparHtml(col)}</th>${d.copias.map((c) => {
+          const x = c.columnas.find((y) => y.origen === col);
+          if (!x) return '<td class="rel-vacia">·</td>';
+          const calc = x.calculada ? ' <span class="rel-calc" title="No se copia tal cual: se calcula (ver la nota abajo)">calculada</span>' : '';
+          return x.destino === col && !x.calculada
+            ? `<td class="rel-igual">${Iconos.svg('check')}</td>`
+            : `<td class="rel-renombrada" title="En ${escaparHtml(c.nombre)} se llama así">${escaparHtml(x.destino)}${calc}</td>`;
+        }).join('')}</tr>`).join('');
+        const sinColumnas = d.copias.filter((c) => !c.columnas.length).map((c) => c.nombre);
+        const notas = d.copias.filter((c) => c.nota)
+          .map((c) => `<p class="rel-nota" style="margin-top:6px"><strong>${escaparHtml(c.nombre)}:</strong> ${escaparHtml(c.nota)}</p>`).join('');
+        return `<div class="rel-grupo">
+          <h3>${Iconos.svg('database')} ${escaparHtml(d.hoja)} <span class="rel-sub">${escaparHtml(d.etiqueta.familia)} · llave de negocio: ${escaparHtml(d.llaveDeNegocio)}</span></h3>
+          <div class="rel-matriz-scroll"><table class="rel-matriz">
+            <thead><tr><th>Columna en ${escaparHtml(d.hoja)}</th>${encabezado}</tr></thead>
+            <tbody>${cuerpo || '<tr><td colspan="99" class="rel-vacia">Ninguna copia trae columnas de esta hoja</td></tr>'}</tbody>
+          </table></div>
+          ${notas}
+          ${sinColumnas.length ? `<p class="rel-nota" style="margin-top:6px">${escaparHtml(sinColumnas.join(', '))} no copia${sinColumnas.length === 1 ? '' : 'n'} columnas: está${sinColumnas.length === 1 ? '' : 'n'} en el mapa para vigilar sus registros sin dueño.</p>` : ''}
+        </div>`;
+      }).join('') + `
+        <p class="rel-leyenda"><span>${Iconos.svg('check')} se copia con el mismo nombre</span>
+          <span class="rel-renombrada">NOMBRE</span><span>se copia con otro nombre</span><span>· no se copia</span></p>
+        <div class="rel-grupo rel-centinelas" style="margin-top:14px">
+          <h3>${Iconos.svg('shield-alert')} Valores que nunca se copian</h3>
+          <p class="rel-nota">Son estatus o relleno escritos en la hoja dueña, no datos. Copiarlos pisaría el dato bueno de la copia.</p>
+          ${Object.keys(mapa.centinelas).map((col) => `<p class="rel-nota" style="margin-top:6px"><strong>${col === '*' ? 'En cualquier columna' : 'En ' + escaparHtml(col)}:</strong>
+            ${mapa.centinelas[col].map((v) => '<code>' + escaparHtml(v) + '</code>').join('')}</p>`).join('')}
+        </div>`;
+    }
+
+    // ----- Eventos -----
+    document.getElementById('rel-tecnico-toggle').addEventListener('change', (ev) => mostrarTecnica(ev.target.checked));
+    document.getElementById('rel-sencilla').addEventListener('click', (ev) => {
+      // El "?" de un dato: en escritorio basta pasar el mouse (title); en celular no hay
+      // mouse, así que al tocarlo se muestra el texto
+      const ayuda = ev.target.closest('[data-s-ayuda]');
+      if (ayuda) Notificar.info(ayuda.dataset.sAyuda, { duracion: 9000 });
+    });
+
+    // ----- Arranque -----
+    let tecnica = false;
+    try { tecnica = localStorage.getItem(CLAVE_VISTA) === '1'; } catch (e) { /* sin almacenamiento: vista sencilla */ }
+    mostrarTecnica(tecnica);
+    try {
+      mapa = JSON.parse(await callServer('apiRelacionesMapa', state.token));
+      // La dueña con más copias primero: VEHICULOS es el centro, y es lo que se viene a ver
+      mapa.duenos.sort((a, b) => b.copias.length - a.copias.length);
+      pintarMapa();
+      armarFamilias();
+    } catch (err) {
+      document.getElementById('rel-mapa').innerHTML = '<p class="empty-state">' + escaparHtml(err.message) + '</p>';
+      document.getElementById('rel-s-tabs-lista').insertAdjacentHTML('afterend', '<p class="empty-state">' + escaparHtml(err.message) + '</p>');
+      Notificar.error(err.message);
+    }
+  }
+</script>

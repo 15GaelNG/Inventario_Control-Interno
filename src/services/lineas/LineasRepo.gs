@@ -426,6 +426,7 @@ const LineasRepo = (function () {
     if (LineasDatos.colIndice(t, 'ESTATUS GENERAL') >= 0) {
       escribir['ESTATUS GENERAL'] = estatusGeneralRegistro(idParaDG_(f), tipoNuevo, txt(col(nuevo, 'ESTATUS EQUIPO')), txt(col(nuevo, 'ESTATUS LINEA')));
     }
+    conPersona_(t, escribir, nuevo);
     LineasDatos.actualizarFila(TAB.LINEAS, f._fila, escribir);
 
     const bitacora = efectivos.filter((e) => CAMPOS_BITACORA.indexOf(LineasDatos.normCol(e.campo)) >= 0).map((e) => ({
@@ -454,7 +455,32 @@ const LineasRepo = (function () {
     const tipo = (datos['TIPO'] || '').toUpperCase();
     if (LineasDatos.colIndice(t, 'FOLIO') >= 0) datos['FOLIO'] = folioRegistro(tipo, datos['NUCO']);
     if (LineasDatos.colIndice(t, 'ESTATUS GENERAL') >= 0) datos['ESTATUS GENERAL'] = estatusGeneralRegistro(datos['ID'], tipo, txt(datos['ESTATUS EQUIPO']), txt(datos['ESTATUS LINEA']));
+    conPersona_(t, datos, datos);
     return LineasDatos.agregarFilas(TAB.LINEAS, [datos])[0];
+  }
+
+  const personas_ = {}; // por ejecución: un resguardo o reasignación masiva calcula una sola vez por persona
+
+  /**
+   * ID PERSONA (catálogo de Ayrton, Capital Humano): no se captura, se calcula del responsable como en Vehículos y
+   * Caja Chica (CapitalHumano.idPara). Solo si en `escribir` cambia alguna columna de la persona (RESPONSABLE,
+   * NO EMPLEADO, EMAIL USUARIO) y la hoja ya tiene la columna. null = todavía no hay PERSONAS: no se toca.
+   */
+  function conPersona_(t, escribir, registro) {
+    if (typeof CapitalHumano === 'undefined' || LineasDatos.colIndice(t, CapitalHumano.COLUMNA) < 0) return;
+    Object.keys(escribir).forEach((c) => { if (LineasDatos.normCol(c) === CapitalHumano.COLUMNA) delete escribir[c]; });
+    const columnas = CapitalHumano.columnasDePersona(TAB.LINEAS);
+    const norm = columnas.map(LineasDatos.normCol);
+    if (!Object.keys(escribir).some((c) => norm.indexOf(LineasDatos.normCol(c)) >= 0)) return;
+    const persona = {};
+    columnas.forEach((c) => { persona[c] = txt(col(registro, c)) || ''; });
+    const clave = JSON.stringify(persona);
+    try {
+      if (!(clave in personas_)) personas_[clave] = CapitalHumano.idPara(TAB.LINEAS, persona);
+      if (personas_[clave] !== null) escribir[CapitalHumano.COLUMNA] = personas_[clave];
+    } catch (err) {
+      console.error('CapitalHumano: no se pudo calcular la persona de la línea: ' + err.message);
+    }
   }
 
   /** ID de una fila de la bitácora CAMBIOS (CLI-…). */

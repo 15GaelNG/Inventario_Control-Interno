@@ -51,6 +51,7 @@ function cargar(salidas) {
     asignarIds: espia('ids'),
     moverIdsAlInicio: espia('mover'),
     limpiarRespaldoRedundante: espia('respaldo'),
+    homologarNombres: espia('nombres'),
     reescribirReferencias: espia('referencias'),
     auditarIds: espia('auditar'),
   });
@@ -59,7 +60,13 @@ function cargar(salidas) {
   vm.runInContext(lee('MigracionFamilia.gs') +
     '\nthis.api = { correrIdsTodo, correrFamilia, pipelinesEstado,' +
     ' ids1Ensayo, ids2Escribir, vehiculos1Ensayo, vehiculos2Escribir,' +
-    ' lineas1Ensayo, cajaChica1Ensayo, PASOS_IDS, PASOS_HOMOLOGA };', ctx);
+    ' lineas1Ensayo, cajaChica1Ensayo, capitalHumano1Ensayo, capitalHumano2Escribir,' +
+    ' PASOS_IDS, PASOS_HOMOLOGA, PASOS_CAPITAL_HUMANO };', ctx);
+  // Estos pasos viven en el mismo archivo: se espían DESPUÉS de cargarlo, porque su
+  // declaración pisaría al espía. Los pasos los buscan por nombre al correr, así que lo ven.
+  ctx.sincronizarCopias = espia('sincronizar');
+  ctx.identificarPersonas = espia('personas');
+  ctx.ligarPersonas = espia('ligar');
   return { api: ctx.api, llamadas, logueado };
 }
 
@@ -156,7 +163,7 @@ console.log('\n9. Los pipelines de homologación SÍ filtran por familia');
 {
   const { api, llamadas } = cargar();
   api.correrFamilia('vehiculos');
-  ok(pasos(llamadas) === 'referencias,auditar', 'dos pasos: ' + pasos(llamadas));
+  ok(pasos(llamadas) === 'nombres,referencias,sincronizar,auditar', 'cuatro pasos: ' + pasos(llamadas));
   ok(llamadas.every((l) => l.familia === 'vehiculos'),
      'los dos reciben la familia, así que homologar vehículos NO toca Líneas');
 }
@@ -186,7 +193,7 @@ console.log('\n12. El nombre de la familia se normaliza');
 {
   const { api, llamadas } = cargar();
   api.correrFamilia('  VEHICULOS  ');
-  ok(llamadas.length === 2 && llamadas[0].familia === 'vehiculos',
+  ok(llamadas.length === 4 && llamadas.every((l) => l.familia === 'vehiculos'),
      'con espacios y mayúsculas corre igual, y pasa la familia en minúsculas');
 }
 
@@ -231,11 +238,149 @@ console.log('\n15. Los atajos del editor apuntan a donde dicen');
   ok(llamadas.filter((l) => l.paso === 'ids')[0].escribir === true, 'ids2Escribir sí escribe');
   llamadas.length = 0;
   api.vehiculos1Ensayo();
-  ok(pasos(llamadas) === 'referencias,auditar' && llamadas[0].familia === 'vehiculos',
+  ok(pasos(llamadas) === 'nombres,referencias,sincronizar,auditar' && llamadas[0].familia === 'vehiculos',
      'vehiculos1Ensayo: homologación de vehículos');
   llamadas.length = 0;
   api.cajaChica1Ensayo();
   ok(llamadas[0].familia === 'cajachica', 'cajaChica1Ensayo: familia cajachica');
+}
+
+// ============================================ PIPELINE 5: Capital Humano
+
+console.log('\n20. PIPELINE 5 (Capital Humano): personas y ligar, en ese orden');
+{
+  const { api, llamadas } = cargar();
+  api.capitalHumano1Ensayo();
+  ok(pasos(llamadas) === 'personas,ligar', 'dos pasos: ' + pasos(llamadas));
+  ok(llamadas.every((l) => l.escribir === false && l.familia === 'capitalhumano'), 'el ensayo no escribe');
+  llamadas.length = 0;
+  api.capitalHumano2Escribir();
+  ok(llamadas.every((l) => l.escribir === true), 'capitalHumano2Escribir sí escribe');
+}
+
+console.log('\n21. Primer ensayo: ligar lee la PERSONAS que todavía no existe');
+{
+  const { api } = cargar({ ligar: new Error('Todavía no existe PERSONAS: corre capitalHumano2Escribir primero.') });
+  const rep = api.capitalHumano1Ensayo();
+  ok(rep.indexOf('NO SE PUDO ENSAYAR') !== -1, 'es "no ensayable", no una falla: personas escribe antes');
+  ok(rep.indexOf('no ensayables todavía: ligar') !== -1, 'y el resumen lo dice');
+}
+
+console.log('\n22. Escribiendo, un problema en personas detiene antes de ligar');
+{
+  const { api, llamadas } = cargar({ personas: 'PROBLEMAS (1):\n  - algo' });
+  api.capitalHumano2Escribir();
+  ok(pasos(llamadas) === 'personas', 'ligar no corrió');
+}
+
+console.log('\n23. pipelinesEstado: Capital Humano va al final, con sus pasos');
+{
+  const { api } = cargar();
+  const rep = api.pipelinesEstado();
+  ok(/6\. CAPITALHUMANO/.test(rep) && rep.indexOf('capitalHumano1Ensayo') !== -1, 'es el pipeline 6 en la lista (5 familias + ids)');
+  ok(rep.indexOf('pasos: personas → ligar') !== -1, 'con sus dos pasos');
+  ok(rep.indexOf('COLABORADORES ACTUALIZADO') !== -1 && rep.indexOf('PERSONAS') !== -1, 'y sus dos hojas, aunque no sean migrables');
+}
+
+// ================================= los pasos de verdad, con sus dependencias simuladas
+
+/** Carga MigracionFamilia con Relaciones y CapitalHumano de mentira, para probar los pasos. */
+function cargarPasos(cfg) {
+  const c = Object.assign({ libro: 'SS_LAB', configurado: 'SS_LAB', reporte: {}, ligas: {} }, cfg || {});
+  const llamadas = { revisar: [], ligar: [], identificar: [] };
+  const ctx = vm.createContext({
+    console,
+    Logger: { log: () => {} },
+    Config: { SPREADSHEET_IDS: { VEHICULOS: () => c.configurado } },
+    migracionSs_: () => c.libro,
+    Relaciones: {
+      describir: () => ({ duenos: [
+        { copias: [{ nombre: 'INSTALACION DE SENSORES', tipo: 'cache' }, { nombre: 'HOLOGRAMAS', tipo: 'cache' },
+          { nombre: 'INSPECCION VEHICULAR', tipo: 'bitacora' }] },
+        { copias: [{ nombre: 'INSPECCIONES LINEAS', tipo: 'bitacora' }] },
+        { copias: [{ nombre: 'VEHICULOS', tipo: 'cache' }] },
+      ] }),
+      revisar: (o) => { llamadas.revisar.push(o); return c.reporte; },
+    },
+    CapitalHumano: {
+      identificar: (o) => { llamadas.identificar.push(o); return 'reporte de identificar'; },
+      revisarLigas: (o) => { llamadas.ligar.push(o); return c.ligas; },
+    },
+  });
+  const lee = (...p) => fs.readFileSync(path.join(__dirname, '..', 'src', ...p), 'utf8');
+  vm.runInContext(lee('config', 'Entidades.gs'), ctx);
+  vm.runInContext(lee('MigracionFamilia.gs') + '\nthis.api = { sincronizarCopias, identificarPersonas, ligarPersonas };', ctx);
+  return { api: ctx.api, llamadas };
+}
+const cifras = (o) => Object.assign({ diferencias: 0, huerfanos: 0, centinelasOmitidos: 0, vaciosOmitidos: 0,
+  clavesDuplicadasOmitidas: 0, sinDuenoEsperado: 0 }, o);
+
+console.log('\n24. sincronizar: solo las copias caché de la familia, y el ensayo no escribe ni anota');
+{
+  const { api, llamadas } = cargarPasos({ reporte: {
+    'INSTALACION DE SENSORES': cifras({ diferencias: 3 }), HOLOGRAMAS: cifras({ diferencias: 1, huerfanos: 2 }), VEHICULOS: cifras({ diferencias: 63 }),
+  } });
+  const rep = api.sincronizarCopias({ familia: 'vehiculos' });
+  const o = llamadas.revisar[0];
+  ok(o.hojas.join() === 'INSTALACION DE SENSORES,HOLOGRAMAS,VEHICULOS', 'las tres cachés de Vehículos, sin la bitácora: ' + o.hojas.join());
+  ok(o.corregir === false && o.log === false, 'ensayando: ni corrige ni anota en el log');
+  ok(/67 celdas por sincronizar en 3 hojas/.test(rep), 'el total sale al inicio, para el resumen');
+}
+
+console.log('\n25. sincronizar escribiendo: corrige, anota y dice quién');
+{
+  const { api, llamadas } = cargarPasos({ reporte: { VEHICULOS: cifras({ diferencias: 5 }) } });
+  api.sincronizarCopias({ familia: 'vehiculos', escribir: true });
+  const o = llamadas.revisar[0];
+  ok(o.corregir === true && o.log === true && o.quien === 'pipeline', 'corrige, anota en LOG_RELACIONES y QUIEN = pipeline');
+}
+
+console.log('\n26. sincronizar en una familia de solo bitácoras: nada que hacer');
+{
+  const { api, llamadas } = cargarPasos();
+  const rep = api.sincronizarCopias({ familia: 'lineas' });
+  ok(llamadas.revisar.length === 0, 'ni siquiera revisa');
+  ok(/Nada que sincronizar/.test(rep), 'y lo dice');
+}
+
+console.log('\n27. Una hoja que no se pudo revisar es un PROBLEMA');
+{
+  const { api } = cargarPasos({ reporte: { VEHICULOS: cifras({ error: 'no existe la pestaña' }) } });
+  const rep = api.sincronizarCopias({ familia: 'vehiculos', escribir: true });
+  ok(/PROBLEMAS \(1\)/.test(rep) && /no existe la pestaña/.test(rep), 'PROBLEMAS: escribiendo, detiene el pipeline');
+}
+
+console.log('\n28. Si el pipeline apunta a otro libro, los pasos de sincronización se niegan');
+{
+  const { api, llamadas } = cargarPasos({ libro: 'OTRO_LIBRO', configurado: 'SS_LAB' });
+  const truenaCon = (fn) => { try { fn(); return false; } catch (e) { return /solo trabaja sobre el libro configurado/.test(e.message); } };
+  ok(truenaCon(() => api.sincronizarCopias({ familia: 'vehiculos', escribir: true })), 'sincronizar se niega');
+  ok(truenaCon(() => api.ligarPersonas({ escribir: true })), 'ligar se niega');
+  ok(truenaCon(() => api.identificarPersonas({ escribir: true })), 'personas se niega');
+  ok(llamadas.revisar.length === 0 && llamadas.ligar.length === 0 && llamadas.identificar.length === 0, 'y nadie llegó a escribir');
+}
+
+console.log('\n29. ligar: lo que no se liga es dato a corregir a mano, no un problema del pipeline');
+{
+  const { api, llamadas } = cargarPasos({ ligas: {
+    'VEHICULOS (persona)': cifras({ diferencias: 382, sinDuenoEsperado: 139, huerfanos: 130, clavesDuplicadasOmitidas: 2 }),
+    'CAJAS CHICAS (persona)': cifras({ diferencias: 282, huerfanos: 3 }),
+  } });
+  const rep = api.ligarPersonas({ escribir: true });
+  ok(llamadas.ligar[0].escribir === true && llamadas.ligar[0].quien === 'pipeline', 'escribe, con QUIEN = pipeline');
+  ok(/664 responsables ligados a su persona/.test(rep), 'el total sale al inicio');
+  ok(/132 a corregir a mano/.test(rep), 'homónimos y no encontrados cuentan como "a mano"');
+  ok(rep.indexOf('PROBLEMAS') === -1, 'y no detienen el pipeline');
+  const conError = cargarPasos({ ligas: { 'VEHICULOS (persona)': cifras({ error: 'no existe la pestaña VEHICULOS' }) } });
+  ok(/PROBLEMAS \(1\)/.test(conError.api.ligarPersonas({ escribir: true })), 'una hoja que no se pudo revisar sí es PROBLEMA');
+}
+
+console.log('\n30. personas: pasa el modo tal cual');
+{
+  const { api, llamadas } = cargarPasos();
+  api.identificarPersonas({});
+  api.identificarPersonas({ escribir: true });
+  ok(llamadas.identificar[0].escribir === false && llamadas.identificar[1].escribir === true, 'ensayo y escritura');
 }
 
 console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');

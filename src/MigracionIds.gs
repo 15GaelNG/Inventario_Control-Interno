@@ -178,6 +178,70 @@ const MIGRACION_SS_PRODUCCION = '1h5ibDsmVtrG27rwMaOvj-lm08QZUHzDv3woPmkfRQrk';
  * habría convertido los folios "CTA0100" en "VEH-…", tirando la llave de negocio y
  * rompiendo AppSheet de paso.
  */
+/**
+ * NOMBRES DE COLUMNA que se homologan: el mismo dato con dos nombres en dos hojas. Cada
+ * renglón es una decisión tomada caso por caso y documentada en limpiezas-planeadas.xlsx
+ * (pestaña "Nombres de columnas"); el número de limpieza va en `limpieza`.
+ *
+ * Renombrar un encabezado rompe a quien busque la columna por su nombre viejo: el código
+ * de la app (que cambia en el MISMO commit que agrega el renglón aquí) y AppSheet (que en
+ * producción ya estará apagado cuando corra el pipeline, ver migracionSs_). Por eso un
+ * renombre nunca se hace a mano en la hoja: se hace aquí, junto con el código.
+ */
+const MIGRACION_NOMBRES = [
+  // Es el mismo dato que INSTALACION DE SENSORES, INSPECCION VEHICULAR, las hojas de Líneas
+  // y los catálogos (LISTAS, DEPARTAMENTOS) llaman OFICINA / DESARROLLO; VEHICULOS era la
+  // única que le decía UBICACION, y sus opciones ya salían del catálogo OFICINA / DESARROLLO.
+  { hoja: 'VEHICULOS', de: 'UBICACION', a: 'OFICINA / DESARROLLO', limpieza: 23 },
+];
+
+/**
+ * Renombra los encabezados de MIGRACION_NOMBRES (solo los de la familia pedida). Idempotente:
+ * si ya se llama como debe, lo dice y no toca nada. Nunca crea una columna ni deja dos con
+ * el mismo nombre: si la vieja y la nueva existen a la vez, o no existe ninguna, es un
+ * PROBLEMA y escribiendo se detiene ahí.
+ */
+function homologarNombres(opciones) {
+  const cfg = Object.assign({ escribir: false, familia: null }, opciones || {});
+  const ssId = migracionSs_(cfg);
+  const ss = SpreadsheetApp.openById(ssId);
+  const lineas = [(cfg.escribir ? 'HOMOLOGANDO NOMBRES' : 'ENSAYO (no escribe nada)') + ' — ' + ssId, ''];
+  const problemas = [];
+  let porHacer = 0, hechas = 0, yaEstaban = 0;
+  MIGRACION_NOMBRES
+    .filter((n) => !cfg.familia || (Entidades.existe(n.hoja) &&
+      (Entidades.de(n.hoja).familia || 'otros') === String(cfg.familia).trim().toLowerCase()))
+    .forEach((n) => {
+      const nombre = n.hoja + ': "' + n.de + '" → "' + n.a + '" (limpieza #' + n.limpieza + ')';
+      const sheet = ss.getSheetByName(n.hoja);
+      if (!sheet) { problemas.push(n.hoja + ': no existe la hoja'); return; }
+      const enc = migEncabezados_(sheet);
+      const posDe = migColumna_(enc, n.de);
+      const posA = migColumna_(enc, n.a);
+      if (!posDe && posA) { yaEstaban++; lineas.push('  ' + nombre + ': YA HOMOLOGADA'); return; }
+      if (posDe && posA) { problemas.push(nombre + ': existen LAS DOS columnas; hay que decidir cuál se queda'); return; }
+      if (!posDe) { problemas.push(nombre + ': no existe ninguna de las dos'); return; }
+      if (cfg.escribir) {
+        sheet.getRange(1, posDe).setValue(n.a);
+        hechas++;
+        lineas.push('  ' + nombre + ': renombrada');
+      } else {
+        porHacer++;
+        lineas.push('  ' + nombre + ': se renombraría');
+      }
+    });
+  lineas.push('');
+  if (cfg.escribir) lineas.push(hechas + ' columnas renombradas, ' + yaEstaban + ' ya homologadas');
+  else lineas.push(porHacer + ' columnas por renombrar, ' + yaEstaban + ' ya homologadas');
+  if (problemas.length) {
+    lineas.push('', 'PROBLEMAS (' + problemas.length + '):');
+    problemas.forEach((p) => lineas.push('  - ' + p));
+  }
+  const texto = lineas.join('\n');
+  Logger.log(texto);
+  return texto;
+}
+
 const MIGRACION_REFERENCIAS = [
   { hoja: 'VERIFICACIONES', columna: 'FOLIO VEHICULO', padre: 'VEHICULOS', porLlaveNegocio: 'FOLIO', destino: 'ID VEHICULO', esperado: 1.00 },
   { hoja: 'REASIGNACIONES_VEHICULOS', columna: 'Folio Vehiculo', padre: 'VEHICULOS', porLlaveNegocio: 'FOLIO', destino: 'ID VEHICULO', esperado: 1.00 },
@@ -384,7 +448,26 @@ function revisarAntesDeMigrar(opciones) {
       detalles.push(llenos.length + ' con ID');
       if (enBlanco) detalles.push(enBlanco + ' en blanco (se saltan)');
       if (sinIdConDatos) {
-        problemas.push(h.hoja + ': ' + sinIdConDatos + ' renglones CON DATOS pero sin ID');
+        // Un renglón con datos y sin llave vieja NO es un problema si la hoja ya está
+        // migrada: significa que nació DESPUÉS, por la app o por AppSheet, y nunca tuvo un
+        // id de AppSheet que respaldar. Su 'ID ANTERIOR' se queda vacío, que es lo
+        // correcto — la reversa tampoco le inventa uno (ver migracion-pipeline.test.js).
+        //
+        // Es problema solo si además les falta el ID NUEVO: ahí sí hay renglones sueltos.
+        const posNueva = migColumna_(enc, Entidades.COLUMNA_ID);
+        let sinNinguno = sinIdConDatos;
+        if (posNueva) {
+          const nuevos = migLeerColumna_(sheet, posNueva, filas);
+          sinNinguno = valores.filter((v, i) =>
+            !v && !vacias[i] && !Ids.tieneForma(migLimpio_(nuevos[i]))).length;
+        }
+        if (sinNinguno) {
+          problemas.push(h.hoja + ': ' + sinNinguno + ' renglones CON DATOS y sin ningún id ' +
+            '(ni el viejo ni el nuevo)');
+        } else {
+          detalles.push(sinIdConDatos + ' nacidos después de migrar (ya traen el ID nuevo, ' +
+            'su "' + Entidades.COLUMNA_ID_ANTERIOR + '" se queda vacío)');
+        }
       }
       if (repetidos) problemas.push(h.hoja + ': ' + repetidos + ' IDs repetidos en "' + h.llaveAnterior + '"');
     }
@@ -412,8 +495,11 @@ function revisarAntesDeMigrar(opciones) {
       // Igual que la de arriba: si el paso "renombrar" le va a poner un nombre deducido
       // del contenido, no es un problema. Si no se filtrara, el paso 1 marcaria PROBLEMAS
       // y detendria la corrida que escribe por una columna que se arregla sola.
-      const deducido = ENCABEZADOS_DEDUCIDOS.filter(
-        (d) => migClave_(d.hoja) === migClave_(h.hoja) && d.columna === (i + 1))[0];
+      const deducido = ENCABEZADOS_DEDUCIDOS.filter((d) => {
+        if (migClave_(d.hoja) !== migClave_(h.hoja)) return false;
+        const donde = migDeducidoDonde_(enc, d);
+        return donde.columna === (i + 1);
+      })[0];
       if (deducido) {
         detalles.push('su columna ' + (i + 1) + ' no tiene encabezado, y el paso ' +
           '"renombrar" le va a poner "' + deducido.nombre + '" (deducido del contenido)');
@@ -623,7 +709,28 @@ function asignarIds(opciones) {
 
 // ---------------------------------------------------------------- paso 3
 
-/** El mapa "valor viejo → ID nuevo" de una hoja padre */
+/**
+ * El mapa "valor viejo → ID nuevo" de una hoja padre.
+ *
+ * Cuando se une por el ID viejo (no por llave de negocio), el mapa junta TODAS las
+ * generaciones de ID que el padre conserva, no solo "ID ANTERIOR". El libro del equipo se
+ * migró dos veces con código distinto, y LINEAS TELEFONICAS quedó con tres:
+ *
+ *   ID            LIN-… del 30/09, el vigente
+ *   ID ANTERIOR   LIN-… del 29/09
+ *   ID APPSHEET   873bb085 / DV1SD13 / DG001, el de AppSheet
+ *
+ * y sus hijas citan casi todas al de AppSheet (medido el 01/10/2026: 1,428 de 1,437 en
+ * INSPECCIONES LINEAS, 33,526 de 33,664 en CAMBIOS), unas pocas al del 29/09 (las que la
+ * app capturó entre corridas) y NINGUNA al vigente. Con solo "ID ANTERIOR" el pipeline
+ * reportaba casi todo como huérfano.
+ *
+ * El vigente también entra, apuntándose a sí mismo: así una referencia ya reescrita se
+ * reconoce como hecha, y una con forma de ID pero de otra generación no se confunde con ella.
+ *
+ * Un valor que aparezca en dos renglones distintos no se adivina: se saca del mapa y queda
+ * como huérfano, que es lo que se reporta.
+ */
 function migMapaDelPadre_(ss, nombrePadre, porLlaveNegocio) {
   const sheet = ss.getSheetByName(nombrePadre);
   if (!sheet) throw new Error('No existe la hoja padre "' + nombrePadre + '"');
@@ -631,19 +738,43 @@ function migMapaDelPadre_(ss, nombrePadre, porLlaveNegocio) {
   const filas = migFilas_(sheet);
   const posId = migColumna_(enc, Entidades.COLUMNA_ID);
   if (!posId) throw new Error('"' + nombrePadre + '" todavía no tiene columna ID: corre asignarIds primero');
-  // Por omisión se une por el ID viejo; algunas hojas se unen por su llave de negocio
-  const posOrigen = porLlaveNegocio
-    ? migColumna_(enc, porLlaveNegocio)
-    : migColumna_(enc, Entidades.COLUMNA_ID_ANTERIOR);
-  if (!posOrigen) throw new Error('"' + nombrePadre + '" no tiene la columna "' + (porLlaveNegocio || Entidades.COLUMNA_ID_ANTERIOR) + '"');
-
   const ids = migLeerColumna_(sheet, posId, filas);
-  const origen = migLeerColumna_(sheet, posOrigen, filas);
-  const mapa = {};
-  for (let i = 0; i < filas; i++) {
-    const k = migClave_(origen[i]);
-    if (k) mapa[k] = ids[i];
+
+  // Por omisión se une por el ID viejo; algunas hojas se unen por su llave de negocio
+  if (porLlaveNegocio) {
+    // Si la "llave de negocio" es en realidad la llave vieja del padre, el paso `renombrar`
+    // ya la llamó "ID ANTERIOR" (ACCESORIOS CELULARES.ID_Accesorio, 01/10/2026). Se busca
+    // con migColumnaAnterior_, que aguanta los dos nombres.
+    const def = Entidades.existe(nombrePadre) ? Entidades.de(nombrePadre) : null;
+    const esLaAnterior = def && def.llaveAnterior && migClave_(def.llaveAnterior) === migClave_(porLlaveNegocio);
+    const pos = migColumna_(enc, porLlaveNegocio) || (esLaAnterior ? migColumnaAnterior_(enc, def) : 0);
+    if (!pos) throw new Error('"' + nombrePadre + '" no tiene la columna "' + porLlaveNegocio + '"');
+    const origen = migLeerColumna_(sheet, pos, filas);
+    const mapa = {};
+    for (let i = 0; i < filas; i++) {
+      const k = migClave_(origen[i]);
+      if (k) mapa[k] = ids[i];
+    }
+    return mapa;
   }
+
+  const generaciones = [Entidades.COLUMNA_ID_ANTERIOR, Entidades.COLUMNA_ID_ANTERIOR_LEGADO]
+    .map((n) => migColumna_(enc, n))
+    .filter(Boolean);
+  if (!generaciones.length) throw new Error('"' + nombrePadre + '" no tiene la columna "' + Entidades.COLUMNA_ID_ANTERIOR + '"');
+
+  const mapa = {};
+  const ambiguos = {};
+  const poner = (valor, id) => {
+    const k = migClave_(valor);
+    if (!k || !id || ambiguos[k]) return;
+    if (mapa[k] && mapa[k] !== id) { delete mapa[k]; ambiguos[k] = true; return; }
+    mapa[k] = id;
+  };
+  ids.forEach((id) => poner(id, id));
+  generaciones.forEach((pos) => {
+    migLeerColumna_(sheet, pos, filas).forEach((v, i) => poner(v, ids[i]));
+  });
   return mapa;
 }
 
@@ -719,7 +850,12 @@ function reescribirReferencias(opciones) {
       const puesto = yaEnDestino[i];
       // Ya tiene la forma nueva: viene de una corrida anterior. Se deja y no cuenta como
       // huérfana — es lo que hace que volver a correr esto sea inofensivo.
-      if (puesto && Ids.tieneForma(puesto)) { salida.push([puesto]); yaEstaban++; return; }
+      //
+      // Sobre la misma columna, la forma no basta: un LIN-… del 29/09 tiene forma de ID y ya
+      // no es el vigente. Ahí solo cuenta como hecho si el padre lo tiene como su ID de hoy.
+      const hecho = puesto && Ids.tieneForma(puesto) &&
+        (!enSitio || migBuscar_(mapa, puesto) === migLimpio_(puesto));
+      if (hecho) { salida.push([puesto]); yaEstaban++; return; }
       if (!v) { salida.push(['']); vacias++; return; }
       const nuevo = migBuscar_(mapa, v);
       if (nuevo) { salida.push([nuevo]); cambiadas++; }
@@ -766,7 +902,9 @@ function reescribirReferencias(opciones) {
     lineas.push('  IDs, así que regenerarlos o deshacerlos los dejaría huérfanos. Las');
     lineas.push('  funciones que lo harían se van a negar. Ver migracionEstadoSello.');
   }
-  if (!cfg.escribir) lineas.push('', 'Para escribir de verdad, corre: migracion3ReferenciasEscribir');
+  // Dentro de un pipeline de familia el pie del pipeline ya dice qué correr (lineas2Escribir…);
+  // este nombre solo aplica cuando se corre suelto.
+  if (!cfg.escribir && !cfg.familia) lineas.push('', 'Para escribir de verdad, corre: migracion3ReferenciasEscribir');
   const texto = lineas.join('\n');
   Logger.log(texto);
   return texto;
@@ -848,8 +986,27 @@ function moverIdsAlInicio(opciones) {
 const ENCABEZADOS_DEDUCIDOS = [
   {
     hoja: 'CAMBIOS LINEAS TELEFONICAS',
-    columna: 3,
     nombre: 'NUCO',
+    // Se ubica por sus VECINOS, no por un número de columna. Antes decía `columna: 3`, y
+    // esa es una coordenada de ANTES de migrar: en cuanto el paso 3 inserta la columna
+    // 'ID' al inicio, esta se corre a la 4. Medido en los tres libros el 30/09/2026:
+    //
+    //   PRODUCCIÓN  col1 (vacío)  col2 ID_LINEA     col3 (vacío, el NUCO)  col4 IMEI
+    //   LABORATORIO col1 ID       col2 ID ANTERIOR  col3 ID_LINEA          col4 NUCO
+    //   DEV equipo  col1 ID       col2 ID APPSHEET  col3 ID_LINEA          col4 (vacío)
+    //
+    // Los vecinos son lo único que no se mueve. En el libro del equipo el número fijo
+    // apuntaba a ID_LINEA, y el guardián se negó a escribirle encima — hizo bien.
+    entre: ['ID_LINEA', 'IMEI'],
+    // Y antes de escribir el nombre se VUELVE A MEDIR la evidencia: sus valores tienen que
+    // ser NUCOs de verdad, de los que están en LINEAS TELEFONICAS. Ubicar por vecinos dice
+    // DÓNDE está la columna; esto dice que además es la que creemos. Si alguien mete otra
+    // columna entre ID_LINEA e IMEI, los vecinos solos la nombrarían NUCO por error.
+    //
+    // Medido el 30/09/2026 en los tres libros: 99.74% en producción, 99.74% en el
+    // laboratorio y 99.67% en el del equipo. La columna IMEI, de control, da 0.00%. No hay
+    // zona gris, así que el mínimo de 0.90 no es un número peleado.
+    comprueba: { hoja: 'LINEAS TELEFONICAS', columna: 'NUCO', minimo: 0.90 },
     evidencia: 'De 35,428 filas con línea padre, 35,425 traen exactamente el NUCO de esa ' +
       'línea (99.99%). Las 3 que no son dedazos: 110000 donde va 10001 (un cero de más), ' +
       '1483 donde va 1484, y 1297 donde va 1080. Idéntico en producción y en el ' +
@@ -865,6 +1022,62 @@ const ENCABEZADOS_DEDUCIDOS = [
  * hoja cambió de forma y la deducción dejó de valer, así que lo reporta como problema en
  * vez de escribir encima.
  */
+/**
+ * Dónde está la columna de una deducción, buscándola ENTRE sus dos vecinos.
+ * Devuelve {columna} o {error}. No escribe nada.
+ */
+function migDeducidoDonde_(encabezados, d) {
+  const izq = migColumna_(encabezados, d.entre[0]);
+  const der = migColumna_(encabezados, d.entre[1]);
+  if (!izq || !der) {
+    return { error: 'no encuentro sus vecinos "' + d.entre[0] + '" y "' + d.entre[1] +
+      '" para ubicar "' + d.nombre + '"' };
+  }
+  if (der - izq !== 2) {
+    return { error: 'entre "' + d.entre[0] + '" (columna ' + izq + ') y "' + d.entre[1] +
+      '" (columna ' + der + ') hay ' + Math.max(0, der - izq - 1) + ' columnas, y se ' +
+      'esperaba exactamente 1 para poner "' + d.nombre + '". La hoja cambió de forma: ' +
+      'revisa la deducción antes de seguir (ver ENCABEZADOS_DEDUCIDOS).' };
+  }
+  return { columna: izq + 1 };
+}
+
+/**
+ * Vuelve a medir la evidencia de una deducción: qué tanto de la columna existe de verdad en
+ * la columna del catálogo con la que se justificó. Devuelve {tasa, valores} o {error}.
+ *
+ * No depende de llaves foráneas ni de qué versión migró el libro: compara CONTRA UN
+ * CONJUNTO de valores válidos, y eso se ve igual antes y después de migrar.
+ */
+function migDeducidoComprueba_(ss, sheet, columna, d) {
+  const catalogo = ss.getSheetByName(d.comprueba.hoja);
+  if (!catalogo) {
+    return { error: 'no existe "' + d.comprueba.hoja + '", no puedo comprobar la deducción' };
+  }
+  const posCat = migColumna_(migEncabezados_(catalogo), d.comprueba.columna);
+  if (!posCat) {
+    return { error: '"' + d.comprueba.hoja + '" no tiene columna "' + d.comprueba.columna +
+      '", no puedo comprobar la deducción' };
+  }
+  const filasCat = migFilas_(catalogo);
+  if (!filasCat) return { error: '"' + d.comprueba.hoja + '" está vacía' };
+
+  const validos = {};
+  migLeerColumna_(catalogo, posCat, filasCat).forEach((v) => {
+    const x = migLimpio_(v);
+    if (x) validos[x.toUpperCase()] = true;
+  });
+
+  const filas = migFilas_(sheet);
+  if (!filas) return { error: 'la hoja está vacía' };
+  const conDato = migLeerColumna_(sheet, columna, filas)
+    .map((v) => migLimpio_(v)).filter(Boolean);
+  if (!conDato.length) return { error: 'esa columna no tiene ni un valor' };
+
+  const dentro = conDato.filter((v) => validos[v.toUpperCase()]).length;
+  return { tasa: dentro / conDato.length, valores: conDato.length, dentro: dentro };
+}
+
 function ponerEncabezadosDeducidos_(ss, cfg, lineas, problemas) {
   let puestos = 0;
   ENCABEZADOS_DEDUCIDOS.forEach((d) => {
@@ -873,21 +1086,52 @@ function ponerEncabezadosDeducidos_(ss, cfg, lineas, problemas) {
     const sheet = ss.getSheetByName(d.hoja);
     if (!sheet) return;
     const enc = migEncabezados_(sheet);
-    const actual = migLimpio_(enc[d.columna - 1]);
+
+    const donde = migDeducidoDonde_(enc, d);
+    if (donde.error) { problemas.push(d.hoja + ': ' + donde.error); return; }
+
+    const actual = migLimpio_(enc[donde.columna - 1]);
     if (actual && migClave_(actual) === migClave_(d.nombre)) {
-      lineas.push('  ' + d.hoja + ': la columna ' + d.columna + ' ya se llama "' +
+      lineas.push('  ' + d.hoja + ': la columna ' + donde.columna + ' ya se llama "' +
         d.nombre + '"');
       return;
     }
     if (actual) {
-      problemas.push(d.hoja + ': la columna ' + d.columna + ' se llama "' + actual +
+      problemas.push(d.hoja + ': la columna ' + donde.columna + ' se llama "' + actual +
         '" y se esperaba vacía para ponerle "' + d.nombre + '". La hoja cambió de forma: ' +
         'revisa la deducción antes de seguir (ver ENCABEZADOS_DEDUCIDOS).');
       return;
     }
-    lineas.push('  ' + d.hoja + ': columna ' + d.columna + '  "(sin encabezado)"  ->  "' +
-      d.nombre + '"   (deducido del contenido)');
-    if (cfg.escribir) sheet.getRange(1, d.columna).setValue(d.nombre);
+    // La evidencia, otra vez, aquí y ahora. Ubicar por vecinos dice DÓNDE; esto dice que
+    // es la columna que creemos. Sin este paso, una columna nueva metida entre los dos
+    // vecinos se llamaría NUCO sin que nadie se enterara.
+    if (d.comprueba) {
+      const c = migDeducidoComprueba_(ss, sheet, donde.columna, d);
+      if (c.error) {
+        problemas.push(d.hoja + ': ' + c.error + ' para la columna ' + donde.columna +
+          ' ("' + d.nombre + '")');
+        return;
+      }
+      if (c.tasa < d.comprueba.minimo) {
+        problemas.push(d.hoja + ': la columna ' + donde.columna + ' NO parece "' + d.nombre +
+          '": solo ' + Math.round(c.tasa * 1000) / 10 + '% de sus ' + c.valores +
+          ' valores están en ' + d.comprueba.hoja + '.' + d.comprueba.columna +
+          ', y se esperaba al menos ' + Math.round(d.comprueba.minimo * 100) + '%. ' +
+          'La hoja cambió de forma: revisa la deducción (ver ENCABEZADOS_DEDUCIDOS).');
+        return;
+      }
+      lineas.push('  ' + d.hoja + ': columna ' + donde.columna + '  "(sin encabezado)"  ->  "' +
+        d.nombre + '"   (' + Math.round(c.tasa * 1000) / 10 + '% de sus ' + c.valores +
+        ' valores son ' + d.comprueba.hoja + '.' + d.comprueba.columna + ')');
+      if (cfg.escribir) sheet.getRange(1, donde.columna).setValue(d.nombre);
+      puestos++;
+      return;
+    }
+
+    lineas.push('  ' + d.hoja + ': columna ' + donde.columna + '  "(sin encabezado)"  ->  "' +
+      d.nombre + '"   (deducido del contenido, ubicada entre "' + d.entre[0] + '" y "' +
+      d.entre[1] + '")');
+    if (cfg.escribir) sheet.getRange(1, donde.columna).setValue(d.nombre);
     puestos++;
   });
   return puestos;
@@ -1127,8 +1371,20 @@ function auditarIds(opciones) {
     const vistos = {};
     let repetidos = 0;
     ids.forEach((v) => { if (v) { if (vistos[v]) repetidos++; else vistos[v] = true; } });
+    // Se compara SOLO la parte del tiempo del id (los 8 caracteres despues del prefijo),
+    // no el id completo. Antes se comparaba entero, y como los ultimos 6 caracteres son
+    // AZAR, dos renglones nacidos en el mismo milisegundo salian "fuera de orden" segun
+    // cual azar resulto menor. Eso reportaba 7 fallas falsas en CAMBIOS LINEAS TELEFONICAS
+    // del libro del equipo: los 7 pares tenian el MISMO tiempo (66AQBBDG y compania) y
+    // solo diferian en el azar. Un lote de altas hecho en el mismo segundo es lo normal,
+    // no un sintoma.
+    const tiempoDe = (v) => String(v).split('-')[1].slice(0, 8);
     let desordenados = 0;
-    for (let i = 1; i < ids.length; i++) if (ids[i] && ids[i - 1] && ids[i] < ids[i - 1]) desordenados++;
+    for (let i = 1; i < ids.length; i++) {
+      if (!ids[i] || !ids[i - 1]) continue;
+      if (!Ids.tieneForma(ids[i]) || !Ids.tieneForma(ids[i - 1])) continue;
+      if (tiempoDe(ids[i]) < tiempoDe(ids[i - 1])) desordenados++;
+    }
 
     if (vacios) fallas.push(h.hoja + ': ' + vacios + ' renglones CON DATOS y sin ID');
     if (malos) fallas.push(h.hoja + ': ' + malos + ' IDs con forma inválida');

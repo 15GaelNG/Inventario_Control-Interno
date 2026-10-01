@@ -1,0 +1,327 @@
+<script>
+  /**
+   * app-salud.html — Administración > Salud.
+   *
+   * Si los datos que se copian entre módulos siguen coincidiendo (Relaciones.revisar), y el
+   * botón que los pone al día. Una pestaña por familia, cada una con sus avisos en tres
+   * secciones según lo que hay que hacer (RelSencilla.pintarAvisos). Lo técnico —el estado
+   * de cada hoja con sus cifras, y las diferencias celda por celda— va detrás de "Ver
+   * detalle técnico".
+   *
+   * El mapa de qué decide cada dato vive en Datos conectados (app-relaciones.html); aquí se
+   * pide junto con la revisión, en una sola llamada (apiSaludRevisar).
+   *
+   * Todo lo que decide qué se corrige vive en el servidor; aquí solo se muestra y se pide
+   * confirmación. Las bitácoras se muestran pero nunca se sincronizan.
+   */
+
+  // Cómo se lee cada tipo de entrada de revisar() en la tabla técnica
+  const REL_TIPOS = {
+    DIFERENCIA: 'Por sincronizar',
+    DIFERENCIA_HISTORICA: 'Histórica (no se toca)',
+    HUERFANO: 'Sin dueño',
+    SIN_DUENO_ESPERADO: 'Sin dueño, normal',
+    OMITIDO_CENTINELA: 'Dueño con relleno',
+    OMITIDO_VACIO: 'Dueño vacío',
+    CLAVE_DUPLICADA_EN_ORIGEN: 'Llave repetida en el dueño',
+  };
+
+  async function initSalud() {
+    const puedeEditar = puedeEditarModulo('salud');
+    let reporte = [];         // [{ nombre, tipo, revisadas, diferencias, …, entradas }]
+    let mapa = null;
+    let clasificado = null;   // los avisos (RelSencilla.clasificar)
+    let tablaDetalle = null;  // la tabla del detalle; se arma al abrir uno
+    let pestanas = null;      // las de familia; se arman en la primera revisión (necesitan el mapa)
+    let familias = [];
+
+    /** La hoja copia y su dueña, por el nombre de la copia */
+    function relDe(nombre) {
+      let hallada = null;
+      (mapa ? mapa.duenos : []).forEach((d) => d.copias.forEach((c) => { if (c.nombre === nombre) hallada = { d: d, c: c }; }));
+      return hallada;
+    }
+
+    // ----- Vista técnica / sencilla -----
+    const CLAVE_VISTA = 'salud-vista-tecnica';
+    function mostrarTecnica(si) {
+      document.getElementById('salud-tecnica').hidden = !si;
+      document.getElementById('salud-sencilla').hidden = si;
+      document.getElementById('salud-tecnico-toggle').checked = si;
+      try { localStorage.setItem(CLAVE_VISTA, si ? '1' : '0'); } catch (e) { /* sin almacenamiento: no se recuerda */ }
+      if (si) requestAnimationFrame(tabla.ajustarAlto);
+    }
+
+    const tabsTecnica = Tabs.iniciar(document.getElementById('rel-tabs'), {
+      inicial: 'estado',
+      alCambiar: (nombre) => { if (nombre === 'diferencias') requestAnimationFrame(tabla.ajustarAlto); },
+    });
+
+    const tabla = DataTable.crear(document.getElementById('rel-tabla'), {
+      idCampo: '_id',
+      idTabla: 'relaciones-diferencias',
+      columnas: [
+        { campo: 'TIPO', titulo: 'Tipo', tipo: 'lista', fijada: true },
+        { campo: 'HOJA', titulo: 'Hoja', tipo: 'lista' },
+        { campo: 'DUENO', titulo: 'Dueño', tipo: 'texto' },
+        { campo: 'FILA', titulo: 'Fila', tipo: 'numero', ancho: 70 },
+        { campo: 'COLUMNA', titulo: 'Columna', tipo: 'lista' },
+        { campo: 'TIENE', titulo: 'La copia tiene', tipo: 'texto' },
+        { campo: 'DEBERIA', titulo: 'El dueño dice', tipo: 'texto' },
+      ],
+      etiquetaFila: (f) => f.HOJA + ' fila ' + f.FILA,
+      textoVacio: 'Sin diferencias',
+      ordenInicial: { campo: 'HOJA', dir: 'asc' },
+      exportar: { nombreArchivo: 'Salud - diferencias' },
+      detalle: false,
+      ayuda: 'Cada renglón es una celda de una hoja copia que no coincide con su hoja dueña. ' +
+        '"Por sincronizar" se corrige con el botón de su hoja; las históricas son de bitácoras ' +
+        'y se quedan como están; "Dueño con relleno" y "Dueño vacío" se arreglan en la hoja dueña. ' +
+        'De lo normal (históricas, sin dueño normal) llega solo una muestra.',
+    });
+
+    // ----- Técnica: una tarjeta por hoja copia -----
+    function cifra(etiqueta, valor, alerta) {
+      return `<span>${escaparHtml(etiqueta)}</span><strong class="${alerta && valor ? 'rel-alerta' : ''}">${Number(valor || 0).toLocaleString('es-MX')}</strong>`;
+    }
+
+    function tarjeta(r) {
+      const cache = r.tipo !== 'bitacora';
+      const omitidas = (r.centinelasOmitidos || 0) + (r.vaciosOmitidos || 0) + (r.clavesDuplicadasOmitidas || 0);
+      const nota = cache
+        ? 'Caché: describe el estado de hoy, se pone al día con el dueño.'
+        : 'Bitácora: guarda el dato del día del evento. Las diferencias se reportan, nunca se corrigen.';
+      let botonSync = '';
+      if (cache && !r.diferencias && !r.error) botonSync = `<span class="rel-al-dia">${Iconos.svg('circle-check')} Al día</span>`;
+      else if (cache && r.diferencias && puedeEditar) botonSync = `<button type="button" data-sync="${escaparHtml(r.nombre)}">${Iconos.svg('refresh-cw')} Sincronizar</button>`;
+      return `<div class="rel-tarjeta">
+        <div class="rel-tarjeta-titulo">${escaparHtml(r.nombre)}
+          <span class="rel-tipo ${cache ? 'cache' : 'bitacora'}">${cache ? 'Caché' : 'Bitácora'}</span></div>
+        <div class="rel-cifras">
+          ${cifra('Revisadas', r.revisadas)}
+          ${cache ? cifra('Por sincronizar', r.diferencias, true) : cifra('Históricas', r.diferenciasHistoricas)}
+          ${cifra('Sin dueño', r.huerfanos, true)}
+          ${r.sinDuenoEsperado ? cifra('Sin dueño, normal', r.sinDuenoEsperado) : ''}
+          ${cifra('Omitidas', omitidas)}
+          ${cifra('Unidas por ID', r.emparejadasPorId)}
+          ${cifra('Unidas por llave', r.emparejadasPorClave)}
+        </div>
+        <p class="rel-nota">${escaparHtml(r.error ? 'NO SE PUDO REVISAR: ' + r.error : nota)}</p>
+        <div class="rel-tarjeta-acciones">
+          <button type="button" class="secondary" data-ver="${escaparHtml(r.nombre)}" ${r.entradas.length ? '' : 'disabled'}>${Iconos.svg('list')} Ver detalle</button>
+          ${botonSync}
+        </div>
+      </div>`;
+    }
+
+    function pintarEstado() {
+      const porNombre = {};
+      reporte.forEach((r) => { porNombre[r.nombre] = r; });
+      document.getElementById('rel-estado').innerHTML = mapa.duenos.map((d) => {
+        const filas = d.copias.map((c) => porNombre[c.nombre]).filter(Boolean);
+        if (!filas.length) return '';
+        return `<div class="rel-grupo">
+          <h3>${Iconos.svg('database')} ${escaparHtml(d.hoja)} <span class="rel-sub">${escaparHtml(d.etiqueta.familia)} · es la dueña de ${filas.length} hoja${filas.length === 1 ? '' : 's'}</span></h3>
+          <div class="rel-tarjetas">${filas.map(tarjeta).join('')}</div>
+        </div>`;
+      }).join('') || '<p class="empty-state">Sin hojas que revisar.</p>';
+    }
+
+    function pintarKpis() {
+      const suma = (campo, filtro) => reporte.filter(filtro || (() => true)).reduce((s, r) => s + (r[campo] || 0), 0);
+      document.getElementById('rel-stat-dif').textContent = suma('diferencias', (r) => r.tipo !== 'bitacora').toLocaleString('es-MX');
+      document.getElementById('rel-stat-hist').textContent = suma('diferenciasHistoricas').toLocaleString('es-MX');
+      document.getElementById('rel-stat-huer').textContent = suma('huerfanos').toLocaleString('es-MX');
+    }
+
+    function pintarTabla() {
+      const filas = [];
+      reporte.forEach((r) => r.entradas.forEach((e, i) => filas.push({
+        _id: r.nombre + '#' + i, TIPO: REL_TIPOS[e.tipo] || e.tipo, HOJA: r.nombre, DUENO: e.dueno || e.clave || '',
+        FILA: e.fila, COLUMNA: e.columna, TIENE: e.tenia == null ? '' : String(e.tenia),
+        DEBERIA: e.quedo == null ? '' : String(e.quedo),
+      })));
+      tabla.setDatos(filas);
+    }
+
+    function verHoja(nombre, tipos) {
+      tabla.limpiarFiltros();
+      if (nombre) tabla.setFiltro('HOJA', { valores: [nombre] });
+      if (tipos) tabla.setFiltro('TIPO', { valores: tipos.map((t) => REL_TIPOS[t] || t) });
+      tabsTecnica.mostrar('diferencias');
+    }
+
+    // ----- Sencilla: una pestaña por familia -----
+    /**
+     * Se arman una vez, con el mapa de la primera revisión. Abre en la primera familia que
+     * tenga algo que atender: es a lo que se viene.
+     */
+    function armarPestanas() {
+      const lista = document.getElementById('salud-tabs-lista');
+      const cont = document.getElementById('salud-tabs');
+      familias = RelSencilla.familias(mapa);
+      familias.forEach((familia, i) => {
+        lista.insertAdjacentHTML('beforeend', `<button type="button" class="tab-btn" data-tab="familia-${i}">
+          ${Iconos.svg('network')} ${escaparHtml(familia)} <span class="rel-s-badge" data-salud-badge="${i}" hidden></span></button>`);
+        cont.insertAdjacentHTML('beforeend', `<div class="card card-compacta" data-panel="familia-${i}">
+          <div data-salud-avisos="${i}"></div>
+        </div>`);
+      });
+      const conPendientes = familias.findIndex((f) => RelSencilla.pendientesDe(clasificado, f) > 0);
+      pestanas = Tabs.iniciar(cont, { inicial: 'familia-' + Math.max(0, conPendientes) });
+    }
+
+    function pintarSencilla() {
+      clasificado = RelSencilla.clasificar(mapa, reporte);
+      if (!pestanas) armarPestanas();
+      familias.forEach((familia, i) => {
+        RelSencilla.pintarAvisos(document.querySelector('[data-salud-avisos="' + i + '"]'), clasificado, puedeEditar, familia);
+        const n = RelSencilla.pendientesDe(clasificado, familia);
+        const badge = document.querySelector('[data-salud-badge="' + i + '"]');
+        badge.hidden = !n;
+        badge.textContent = n;
+      });
+    }
+
+    function abrirDetalle(g) {
+      const t = RelSencilla.textos(g);
+      const actualizar = g.accion === 'boton' && puedeEditar;
+      document.getElementById('salud-detalle-titulo').textContent = t.titulo;
+      document.getElementById('salud-detalle-texto').textContent = t.explicacion;
+      document.getElementById('salud-detalle-accion').innerHTML = actualizar
+        ? `<button type="button" data-s-actualizar="${escaparHtml(g.c.nombre)}">${Iconos.svg('refresh-cw')} Actualizar todos</button>` : '';
+      if (tablaDetalle) tablaDetalle.destruir();
+      tablaDetalle = DataTable.crear(document.getElementById('salud-tabla'), {
+        idCampo: '_id',
+        idTabla: 'salud-detalle-' + g.tipo,
+        columnas: RelSencilla.columnasDetalle(g),
+        datos: [],
+        detalle: false,
+        textoVacio: 'Nada que mostrar',
+        exportar: { nombreArchivo: 'Salud - ' + g.c.etiqueta.nombre },
+        // Para los casos dudosos (un sensor que quizá nunca se registró): actualizar solo
+        // los que uno ya revisó. Se elige por renglón; el renglón entero se pone al día.
+        seleccionable: actualizar,
+        accionesSeleccion: actualizar ? [{
+          icono: 'refresh-cw', texto: 'Actualizar seleccionados',
+          alHacer: (filas) => sincronizar(g.c.nombre, Array.from(new Set(filas.map((f) => f.RENGLON)))),
+        }] : [],
+        etiquetaFila: (f) => f.REGISTRO + ' · ' + f.DATO,
+      });
+      tablaDetalle.setDatos(RelSencilla.filasDetalle(g));
+      document.getElementById('salud-inicio').hidden = true;
+      document.getElementById('salud-detalle').hidden = false;
+      requestAnimationFrame(tablaDetalle.ajustarAlto);
+      window.scrollTo(0, 0);
+    }
+
+    function volver() {
+      document.getElementById('salud-detalle').hidden = true;
+      document.getElementById('salud-inicio').hidden = false;
+    }
+
+    // ----- Servidor -----
+    function aplicar(respuesta) {
+      mapa = respuesta.mapa;
+      // La dueña con más copias primero: VEHICULOS es el centro, y es lo que se viene a ver
+      mapa.duenos.sort((a, b) => b.copias.length - a.copias.length);
+      reporte = respuesta.reporte;
+      pintarKpis();
+      pintarEstado();
+      pintarTabla();
+      pintarSencilla();
+      const hora = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+      document.getElementById('rel-cuando').textContent = 'Revisado a las ' + hora;
+      document.getElementById('salud-cuando').textContent = 'Revisado hoy a las ' + hora;
+    }
+
+    async function revisar() {
+      const botones = [document.getElementById('rel-revisar'), document.getElementById('salud-revisar')];
+      botones.forEach((b) => { b.disabled = true; });
+      document.getElementById('rel-cuando').textContent = 'Revisando… (lee todas las hojas, tarda unos segundos)';
+      document.getElementById('salud-cuando').textContent = 'Revisando los datos… tarda unos segundos';
+      tabla.setCargando(true);
+      try {
+        aplicar(JSON.parse(await callServer('apiSaludRevisar', state.token)));
+      } catch (err) {
+        document.getElementById('rel-cuando').textContent = 'No se pudo revisar';
+        document.getElementById('salud-cuando').textContent = 'No se pudo revisar: ' + err.message;
+        tabla.setError(err.message);
+        Notificar.error(err.message);
+      } finally {
+        botones.forEach((b) => { b.disabled = false; });
+      }
+    }
+
+    /**
+     * Pone al día una hoja copia con lo que dice su dueña. Con `filas` (renglones de la
+     * hoja copia), solo esos: "Actualizar seleccionados".
+     */
+    async function sincronizar(nombre, filas) {
+      const r = reporte.find((x) => x.nombre === nombre);
+      const rel = relDe(nombre);
+      if (!r || !r.diferencias || !rel) return;
+      // En palabras de quien lo usa, igual en las dos vistas: qué registros, cuántos datos y
+      // de qué tipo, para que se confirme sabiendo.
+      const soloFilas = Array.isArray(filas) && filas.length ? filas : null;
+      const cambios = r.entradas.filter((e) => e.tipo === 'DIFERENCIA' && (!soloFilas || soloFilas.indexOf(e.fila) !== -1));
+      if (!cambios.length) return Notificar.info('Lo que seleccionaste ya está al día.');
+      const registros = new Set(cambios.map((e) => e.fila)).size;
+      const c = rel.c.etiqueta;
+      const porDato = {};
+      cambios.forEach((e) => { const k = RelSencilla.dato(e.columna); porDato[k] = (porDato[k] || 0) + 1; });
+      const ok = await Confirmar.pedir({
+        titulo: 'Actualizar ' + c.nombre,
+        mensaje: 'Se van a poner al día ' + registros.toLocaleString('es-MX') + ' ' + (registros === 1 ? c.uno : c.varios) +
+          (soloFilas ? (registros === 1 ? ' seleccionado' : ' seleccionados') : '') +
+          ' (' + cambios.length.toLocaleString('es-MX') + (cambios.length === 1 ? ' dato' : ' datos') + ') con lo que dice ' +
+          rel.d.etiqueta.nombre + '. Cada cambio queda anotado, con lo que tenía antes.',
+        detalle: Object.keys(porDato).sort().map((k) => k + ': ' + porDato[k] + (porDato[k] === 1 ? ' cambio' : ' cambios')),
+        textoConfirmar: 'Actualizar',
+        palabraClave: cambios.length >= 50 ? 'ACTUALIZAR' : undefined,
+      });
+      if (!ok) return;
+      document.querySelectorAll('[data-sync="' + CSS.escape(nombre) + '"], [data-s-actualizar="' + CSS.escape(nombre) + '"]')
+        .forEach((b) => { b.disabled = true; b.textContent = 'Actualizando…'; });
+      try {
+        await callServer('apiSaludSincronizar', state.token, nombre, soloFilas);
+        // La cifra sale de lo que se pidió: el reporte del servidor cuenta todo lo distinto,
+        // también lo que no se seleccionó. La revisión de abajo dice cómo quedó de verdad.
+        const n = cambios.length;
+        Notificar.exito(c.nombre + ': ' + n.toLocaleString('es-MX') + (n === 1 ? ' dato actualizado' : ' datos actualizados'));
+      } catch (err) {
+        Notificar.error(err.message);
+      }
+      // Se vuelve a revisar todo: lo que importa es cómo quedó, no lo que se pidió
+      volver();
+      await revisar();
+    }
+
+    // ----- Eventos -----
+    document.getElementById('rel-revisar').addEventListener('click', revisar);
+    document.getElementById('salud-revisar').addEventListener('click', revisar);
+    document.getElementById('salud-volver').addEventListener('click', volver);
+    document.getElementById('salud-tecnico-toggle').addEventListener('change', (ev) => mostrarTecnica(ev.target.checked));
+    document.getElementById('salud-sencilla').addEventListener('click', (ev) => {
+      const ver = ev.target.closest('[data-s-ver]');
+      if (ver && clasificado) return abrirDetalle(clasificado.avisos[Number(ver.dataset.sVer)]);
+      const act = ev.target.closest('[data-s-actualizar]');
+      if (act) sincronizar(act.dataset.sActualizar);
+    });
+    document.getElementById('rel-estado').addEventListener('click', (ev) => {
+      const ver = ev.target.closest('[data-ver]');
+      if (ver) return verHoja(ver.dataset.ver);
+      const sync = ev.target.closest('[data-sync]');
+      if (sync) sincronizar(sync.dataset.sync);
+    });
+    document.getElementById('rel-kpi-dif').addEventListener('click', () => verHoja(null, ['DIFERENCIA']));
+    document.getElementById('rel-kpi-hist').addEventListener('click', () => verHoja(null, ['DIFERENCIA_HISTORICA']));
+    document.getElementById('rel-kpi-huer').addEventListener('click', () => verHoja(null, ['HUERFANO']));
+
+    // ----- Arranque -----
+    let tecnica = false;
+    try { tecnica = localStorage.getItem(CLAVE_VISTA) === '1'; } catch (e) { /* sin almacenamiento: vista sencilla */ }
+    mostrarTecnica(tecnica);
+    await revisar();
+  }
+</script>

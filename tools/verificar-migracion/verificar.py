@@ -35,16 +35,28 @@ LIBROS = {
     "produccion": "1h5ibDsmVtrG27rwMaOvj-lm08QZUHzDv3woPmkfRQrk",
 }
 
-# Las 24 hojas migrables, igual que Entidades.migrables()
-HOJAS = [
+# Las hojas migrables que ESPERAMOS. La lista se queda escrita aquí a mano, y no se lee
+# de Entidades.gs, a propósito: si este verificador usara el mismo catálogo que el
+# pipeline, los dos se equivocarían igual y dejaría de ser una red externa.
+#
+# Las cuatro últimas ya no existen en el libro del equipo (Líneas las eliminó el
+# 30/09/2026) pero SÍ en producción, así que se quedan en la lista: cuáles están y cuáles
+# no es justamente uno de los datos de la foto, y se compara entre antes y después.
+HOJAS_ESPERADAS = [
     "VEHICULOS", "CAMBIOS VEHICULOS", "REASIGNACIONES_VEHICULOS",
-    "HISTORIAL_REASIGNACIONES", "VERIFICACIONES", "INSPECCION VEHICULAR",
+    "VERIFICACIONES", "INSPECCION VEHICULAR",
     "INSTALACION DE SENSORES", "HOLOGRAMAS", "INCIDENCIAS", "LINEAS TELEFONICAS",
-    "INSPECCIONES LINEAS", "RESPONSIVAS LINEAS", "REACTIVACION DE LINEAS",
-    "SOLICITUD DE LINEAS", "CAMBIOS LINEAS TELEFONICAS", "BITACORA DE DESECHO",
+    "INSPECCIONES LINEAS", "RESPONSIVAS LINEAS",
+    "CAMBIOS LINEAS TELEFONICAS",
     "ACCESORIOS CELULARES", "MOVIMIENTOS_ACCESORIOS", "ARQUEOS", "CAJAS CHICAS",
     "INCREMENTOS", "UBER", "TICKETS", "COLABORADORES",
+    # Eliminadas en el libro del equipo, presentes en producción:
+    "HISTORIAL_REASIGNACIONES", "REACTIVACION DE LINEAS",
+    "SOLICITUD DE LINEAS", "BITACORA DE DESECHO",
 ]
+
+# Compatibilidad: el nombre viejo, por si alguien lo importa.
+HOJAS = HOJAS_ESPERADAS
 
 # Las 4 que conservan el nombre de su llave: no son ids de AppSheet, son datos de la
 # empresa. Ver llaveEsDato en src/config/Entidades.gs.
@@ -77,11 +89,27 @@ def api_de():
 
 def tomar_foto(libro):
     api = api_de()
+
+    # Se le pregunta al LIBRO qué pestañas tiene, en vez de dar por hecho las esperadas.
+    # Sin esto, batchGet truena entero con "Unable to parse range" en cuanto falta una, y
+    # la foto no se puede tomar — que es lo que pasaba con el libro del equipo, al que
+    # Líneas le eliminó cuatro.
+    meta = api.get(spreadsheetId=libro, includeGridData=False).execute()
+    presentes = set(h["properties"]["title"] for h in meta["sheets"])
+    hojas = [h for h in HOJAS_ESPERADAS if h in presentes]
+    ausentes = [h for h in HOJAS_ESPERADAS if h not in presentes]
+    if ausentes:
+        print("Aviso: %d de las %d hojas esperadas no están en este libro:"
+              % (len(ausentes), len(HOJAS_ESPERADAS)))
+        for h in ausentes:
+            print("   - %s" % h)
+        print("   (queda anotado en la foto; comparar avisa si eso cambia)\n")
+
     got = api.values().batchGet(
         spreadsheetId=libro,
-        ranges=["'%s'!1:1" % h.replace("'", "''") for h in HOJAS]).execute()["valueRanges"]
+        ranges=["'%s'!1:1" % h.replace("'", "''") for h in hojas]).execute()["valueRanges"]
     foto = {}
-    for h, vr in zip(HOJAS, got):
+    for h, vr in zip(hojas, got):
         v = vr.get("values", [[]])
         enc = [str(c).strip() for c in (v[0] if v else [])]
         arriba = [norm(c) for c in enc]
@@ -127,7 +155,7 @@ def imprimir_foto(foto):
     print("%-28s %6s %5s %4s %7s %8s %9s %8s" % (
         "HOJA", "filas", "cols", "ID", "ID ANT", "c/dato", "fmt nuevo", "unicos"))
     print("-" * 88)
-    for h in HOJAS:
+    for h in [x for x in HOJAS_ESPERADAS if x in foto]:
         d = foto[h]
         print("%-28s %6d %5d %4s %7s %8s %9s %8s" % (
             h, d["filas"], d["columnas"],
@@ -135,7 +163,8 @@ def imprimir_foto(foto):
             d.get("ids_con_dato", "-"), d.get("ids_forma_nueva", "-"),
             d.get("ids_unicos", "-")))
     print("-" * 88)
-    print("%-28s %6d filas" % ("TOTAL", sum(foto[h]["filas"] for h in HOJAS)))
+    print("%-28s %6d filas  en %d hojas" % (
+        "TOTAL", sum(d["filas"] for d in foto.values()), len(foto)))
 
 
 def comparar(antes, despues):
@@ -148,10 +177,22 @@ def comparar(antes, despues):
     print("%-28s %-16s %-16s %s" % ("HOJA", "filas", "columnas", "veredicto"))
     print("-" * 88)
 
-    for h in HOJAS:
+    for h in HOJAS_ESPERADAS:
         a, d = antes.get(h), despues.get(h)
-        if not a or not d:
-            problemas.append("%s: falta en una de las dos fotos" % h)
+
+        # Una hoja que no está en NINGUNA de las dos fotos simplemente no existe en este
+        # libro, y eso no es un problema: el libro del equipo tiene 20 de las 24 esperadas.
+        # Lo que sí es problema es que estuviera antes y ya no: eso significa que la
+        # corrida se llevó una pestaña, y es de las cosas que este verificador existe para
+        # no dejar pasar.
+        if not a and not d:
+            avisos.append("%s: no existe en este libro (ni antes ni después)" % h)
+            continue
+        if a and not d:
+            problemas.append("%s: ESTABA antes de la corrida y ya NO está" % h)
+            continue
+        if d and not a:
+            avisos.append("%s: apareció durante la corrida, no estaba en la foto de antes" % h)
             continue
         veredicto = []
 

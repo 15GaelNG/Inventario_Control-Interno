@@ -26,3 +26,6 @@ screenshots/
 /*.png
 /*.jpg
 /*.pdf
+
+# Caché de Python de los scripts de tools/
+__pycache__/

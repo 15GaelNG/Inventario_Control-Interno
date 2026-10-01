@@ -529,10 +529,6 @@ const LineasDatos = (function () {
     return filas.map((_, i) => inicio + i);
   }
 
-  function eliminarFila(nombre, fila) {
-    tablaFresca(nombre).hoja.deleteRow(fila);
-  }
-
   /** Ejecuta fn con el candado del script (las escrituras no se cruzan entre usuarios). */
   function conCandado(fn) {
     const candado = LockService.getScriptLock();
@@ -597,6 +593,6 @@ const LineasDatos = (function () {
     cacheGuardar, cacheLeer, cacheBorrar,
     tabla, tablaFresca, existeTabla, colIndice, deHoraHoja, aHoraHoja,
     leerTabla, ultimaFila, buscarFilas, buscarFilasVarios, buscarFilasPorId, idsDeFila, buscarEnTabla, leerFilas, leerRango,
-    actualizarFila, agregarFilas, eliminarFila, conCandado, nuevoId, nuevoIdCorto, asegurarPestana, COLS_ID_ANTERIOR, COL_ID_APPSHEET,
+    actualizarFila, agregarFilas, conCandado, nuevoId, nuevoIdCorto, asegurarPestana, COLS_ID_ANTERIOR, COL_ID_APPSHEET,
   };
 })();

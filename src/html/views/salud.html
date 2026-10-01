@@ -1,0 +1,73 @@
+<!--
+  Administración > Salud: si los datos que se copian entre módulos siguen coincidiendo.
+  Una pestaña por familia con sus avisos, en tres secciones según lo que hay que hacer
+  (se arreglan con un botón / a mano / todo bien). Usa los estilos .rel-* de
+  views/relaciones.html y las frases de js/app-relaciones-sencilla.html (RelSencilla).
+-->
+<template id="tpl-salud">
+  <div class="page-header-compacto">
+    <div>
+      <h2><i data-lucide="heart-pulse" class="ico"></i> Salud</h2>
+      <p class="page-subtitle">Revisa si los datos que se copian entre módulos siguen coincidiendo, y los pone al día.</p>
+    </div>
+    <label class="rel-switch"><input type="checkbox" id="salud-tecnico-toggle" /> Ver detalle técnico</label>
+  </div>
+
+  <!-- Vista sencilla -->
+  <div id="salud-sencilla" class="rel-s">
+    <div id="salud-inicio">
+      <div class="rel-s-cabeza">
+        <span class="rel-s-cuando" id="salud-cuando">Revisando los datos… tarda unos segundos</span>
+        <button type="button" class="secondary" id="salud-revisar"><i data-lucide="refresh-cw" class="ico"></i> Revisar de nuevo</button>
+      </div>
+      <div id="salud-tabs">
+        <!-- una pestaña por familia: initSalud las agrega al cargar -->
+        <div class="tabs-lista" id="salud-tabs-lista"></div>
+      </div>
+    </div>
+    <div id="salud-detalle" hidden>
+      <button type="button" class="secondary rel-s-volver" id="salud-volver"><i data-lucide="arrow-left" class="ico"></i> Volver</button>
+      <div class="card card-compacta">
+        <div class="rel-s-detalle-cabeza">
+          <div><h3 id="salud-detalle-titulo"></h3><p id="salud-detalle-texto"></p></div>
+          <div id="salud-detalle-accion"></div>
+        </div>
+        <div id="salud-tabla"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Vista técnica: estado por hoja y diferencias celda por celda -->
+  <div id="salud-tecnica" hidden>
+    <div class="kpi-chips" style="margin-bottom:10px">
+      <button type="button" class="kpi-chip kpi-warn" id="rel-kpi-dif" title="Ver las diferencias que se pueden sincronizar">
+        <span class="kpi-chip-label">Por sincronizar</span>
+        <strong class="kpi-chip-value" id="rel-stat-dif">–</strong>
+      </button>
+      <button type="button" class="kpi-chip" id="rel-kpi-hist" title="Ver las diferencias de bitácoras (no se tocan)">
+        <span class="kpi-chip-label">Históricas</span>
+        <strong class="kpi-chip-value" id="rel-stat-hist">–</strong>
+      </button>
+      <button type="button" class="kpi-chip" id="rel-kpi-huer" title="Ver los registros sin dueño">
+        <span class="kpi-chip-label">Huérfanas</span>
+        <strong class="kpi-chip-value" id="rel-stat-huer">–</strong>
+      </button>
+    </div>
+    <div id="rel-tabs">
+      <div class="tabs-lista">
+        <button type="button" class="tab-btn" data-tab="estado"><i data-lucide="activity" class="ico"></i> Estado</button>
+        <button type="button" class="tab-btn" data-tab="diferencias"><i data-lucide="list" class="ico"></i> Diferencias</button>
+      </div>
+      <div class="card card-compacta" data-panel="estado">
+        <div class="rel-barra">
+          <button type="button" id="rel-revisar"><i data-lucide="refresh-cw" class="ico"></i> Revisar ahora</button>
+          <span class="rel-cuando" id="rel-cuando">Revisando…</span>
+        </div>
+        <div id="rel-estado"></div>
+      </div>
+      <div class="card card-compacta" data-panel="diferencias">
+        <div id="rel-tabla"></div>
+      </div>
+    </div>
+  </div>
+</template>

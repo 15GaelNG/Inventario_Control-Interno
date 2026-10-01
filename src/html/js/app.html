@@ -441,6 +441,7 @@
     // en modo solo-lectura (puedeEditarModulo devuelve false con permisos vacíos).
     callServer('apiMisPermisos', state.token).then((info) => {
       state.permisos = (info && info.permisos) || {};
+      renderNavGrupos();   // aparecen los items que piden permiso (ver NAV_GRUPOS)
     }).catch(() => { /* no-op: ver comentario arriba */ });
     Notificaciones.iniciar();
     navegarA('dashboard');
@@ -596,6 +597,8 @@
       if (vista === 'instalacion-sensores') { montarVista('tpl-sensores', initSensores); return; }
       if (vista === 'hologramas') { montarVista('tpl-hologramas', initHologramas); return; }
       if (vista === 'inspeccion-vehicular') { montarVista('tpl-inspecciones', initInspecciones); return; }
+      if (vista === 'relaciones') { montarVista('tpl-relaciones', initRelaciones); return; }
+      if (vista === 'salud') { montarVista('tpl-salud', initSalud); return; }
       // --- Líneas (rama emmanuel): el módulo vive en html/js/lineas.html (namespace Lineas) ---
       if (vista === 'panorama-lineas') { montarVista('tpl-lineas-panorama', Lineas.initPanorama); return; }
       if (vista === 'lineas-telefonicas') { montarVista('tpl-lineas-telefonicas', Lineas.initTelefonicas); return; }
@@ -679,6 +682,15 @@
     },
     // Activos por colaborador de todas las áreas (rama emmanuel)
     { id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de Activos' },
+    {
+      // Solo aparece a quien tenga el permiso (`requiere`): son pantallas que escriben en
+      // varias hojas a la vez, y un enlace que siempre da "no tienes acceso" solo estorba.
+      id: 'administracion', icono: 'settings', etiqueta: 'Administración',
+      items: [
+        { vista: 'relaciones', etiqueta: 'Datos conectados', icono: 'git-compare-arrows', requiere: 'relaciones' },
+        { vista: 'salud', etiqueta: 'Salud', icono: 'heart-pulse', requiere: 'salud' },
+      ],
+    },
   ];
 
   // Los grupos ya no son acordeón (se abren/cierran) — se quedan siempre
@@ -687,7 +699,12 @@
     const contenedor = document.getElementById('nav-groups');
     // Una entrada con `vista` y sin `items` es un acceso directo suelto
     // (sin desplegable), como Gestión de Activos (rama emmanuel).
-    contenedor.innerHTML = NAV_GRUPOS.map((grupo) => (grupo.vista ? `
+    // Un item con `requiere` solo se pinta si hay permiso de ese módulo; un grupo que se
+    // queda sin items no se pinta. Por eso esto se vuelve a llamar al llegar los permisos.
+    const visibles = NAV_GRUPOS
+      .map((g) => (g.items ? Object.assign({}, g, { items: g.items.filter((it) => !it.requiere || permisoDe(it.requiere)) }) : g))
+      .filter((g) => !g.items || g.items.length);
+    contenedor.innerHTML = visibles.map((grupo) => (grupo.vista ? `
       <div class="nav-item" data-view="${grupo.vista}" data-etiqueta="${grupo.etiqueta}" data-tooltip="${grupo.etiqueta}">
         <span class="nav-icon"><i data-lucide="${grupo.icono}" class="ico"></i></span><span class="nav-label">${grupo.etiqueta}</span>
       </div>` : `
@@ -1562,11 +1579,14 @@
 
     { grupo: 'Accesorios y sensor', clave: 'ACCESORIOS', etiqueta: 'Accesorios', tipo: 'text' },
     { grupo: 'Accesorios y sensor', clave: 'ADITAMENTOS', etiqueta: 'Aditamentos', tipo: 'text' },
+    // SENSOR y SERIE SENSOR los manda Instalación de Sensores (Relaciones.gs): se ven aquí
+    // pero se cambian allá. El servidor tampoco las acepta desde este formulario.
     {
-      grupo: 'Accesorios y sensor', clave: 'SENSOR', etiqueta: 'Sensor', tipo: 'select',
-      opciones: ['SI TIENE SENSOR', 'NO TIENE SENSOR', 'SENSOR TI', 'CANCELADO', 'NO COMPATIBLE', 'NO APLICA AUTO DG', 'EN PROCESO DE INSTALACION'],
+      grupo: 'Accesorios y sensor', clave: 'SENSOR', etiqueta: 'Sensor', tipo: 'text',
+      soloLectura: true, placeholder: 'Lo pone Instalación de Sensores',
     },
-    { grupo: 'Accesorios y sensor', clave: 'SERIE SENSOR', etiqueta: 'Serie del sensor', tipo: 'text' },
+    { grupo: 'Accesorios y sensor', clave: 'SERIE SENSOR', etiqueta: 'Serie del sensor', tipo: 'text',
+      soloLectura: true, placeholder: 'La pone Instalación de Sensores' },
     { grupo: 'Accesorios y sensor', clave: 'ACTIVADOR', etiqueta: 'Activador', tipo: 'text' },
     { grupo: 'Accesorios y sensor', clave: '$ Costo del Sensor', etiqueta: 'Costo del sensor', tipo: 'number', moneda: true },
     {
@@ -1575,7 +1595,9 @@
     },
 
     { grupo: 'Ubicación y registro', clave: 'SEDE', etiqueta: 'Sede', tipo: 'select', catalogo: true },
-    { grupo: 'Ubicación y registro', clave: 'UBICACION', etiqueta: 'Ubicación', tipo: 'select', catalogo: true },
+    // La columna se llamaba UBICACION; se homologó al nombre que usa el resto de la base
+    // (limpieza #23). La etiqueta para la gente sigue siendo "Ubicación".
+    { grupo: 'Ubicación y registro', clave: 'OFICINA / DESARROLLO', etiqueta: 'Ubicación', tipo: 'select', catalogo: true },
     { grupo: 'Ubicación y registro', clave: 'RAZON SOCIAL', etiqueta: 'Razón social', tipo: 'select', catalogo: true },
     { grupo: 'Ubicación y registro', clave: 'FECHA COMPRA', etiqueta: 'Fecha de compra', tipo: 'date' },
     {
@@ -1676,7 +1698,7 @@
   let mapaUbicacionesPorSede = {};
   function llenarUbicacionesSegunSede(prefijo) {
     const sedeEl = document.getElementById(prefijo + '-sede');
-    const ubicacionDatalist = document.getElementById(prefijo + '-ubicacion-lista');
+    const ubicacionDatalist = document.getElementById(prefijo + '-' + slugCampo('OFICINA / DESARROLLO') + '-lista');
     if (!sedeEl || !ubicacionDatalist) return;
     const opciones = mapaUbicacionesPorSede[sedeEl.value] || [];
     ubicacionDatalist.innerHTML = opciones.map((v) => `<option value="${v}"></option>`).join('');
@@ -1707,7 +1729,7 @@
       // guardado directo abajo también funcionaría sin esto — es solo para
       // que las sugerencias del datalist ya vengan correctas desde que se
       // abre el formulario).
-      if (campo.clave === 'UBICACION') llenarUbicacionesSegunSede(prefijo);
+      if (campo.clave === 'OFICINA / DESARROLLO') llenarUbicacionesSegunSede(prefijo);
       el.value = campo.tipo === 'date' ? fechaParaInput(valor) : valor;
     });
   }
@@ -3091,6 +3113,9 @@
         { icono: 'trash-2', titulo: 'Eliminar', peligro: true, alHacer: (v) => eliminarVehiculoRapido(v) },
       ] : []),
       alEliminar: puedeEditar ? async (filas) => {
+        // Primero se pregunta por todos: si alguno tiene historial, no se borra ninguno
+        const imp = await callServer('apiQueImpideBorrar', state.token, 'VEHICULOS', filas.map((f) => f.ID_VEHICULO));
+        if (imp.mensaje) throw new Error(imp.mensaje);
         await Promise.all(filas.map((f) => callServer('apiEliminarVehiculo', state.token, f.ID_VEHICULO)));
         invalidarCacheLista('apiListarVehiculosResumen', state.token);
         invalidarCacheCatalogo('apiListarVehiculosBasico', state.token);

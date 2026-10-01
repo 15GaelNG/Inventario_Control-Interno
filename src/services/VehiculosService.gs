@@ -334,6 +334,12 @@ const VehiculosService = (function () {
     lock.waitLock(30000);
     try {
       const fila = Object.assign({}, datos);
+      // Las columnas que manda otra hoja (SERIE SENSOR y SENSOR, que manda Instalación de
+      // Sensores) no se capturan aquí: un vehículo nuevo nace "sin sensor".
+      const ajenas = Relaciones.deOtraHoja(SHEET_VEHICULOS);
+      ajenas.columnas.forEach((c) => { delete fila[c]; });
+      Object.assign(fila, ajenas.sinDueno);
+      conPersona_(fila, fila);
       fila.FOLIO = generarFolio_(datos.CLASE);
       fila.NUCCO = generarNucco_();
       fila[ID_COLUMN] = Ids.nuevo(Entidades.prefijo(SHEET_VEHICULOS));
@@ -342,6 +348,25 @@ const VehiculosService = (function () {
       return { ID: fila[ID_COLUMN], FOLIO: fila.FOLIO };
     } finally {
       lock.releaseLock();
+    }
+  }
+
+  /**
+   * ID PERSONA no se captura: se calcula del responsable (CapitalHumano, decisión del
+   * 01/10/2026). Si cambió el responsable (o su número), se recalcula y va en el mismo
+   * renglón. Si todavía no hay PERSONAS, no se toca; Salud lo pone al día después.
+   *
+   * @param {Object} datos     lo que se va a escribir (aquí se agrega ID PERSONA)
+   * @param {Object} registro  el registro completo como va a quedar
+   */
+  function conPersona_(datos, registro) {
+    delete datos[CapitalHumano.COLUMNA];
+    if (!CapitalHumano.columnasDePersona(SHEET_VEHICULOS).some((c) => datos[c] !== undefined)) return;
+    try {
+      const id = CapitalHumano.idPara(SHEET_VEHICULOS, registro);
+      if (id !== null) datos[CapitalHumano.COLUMNA] = id;
+    } catch (err) {
+      console.error('CapitalHumano: no se pudo calcular la persona del vehículo: ' + err.message);
     }
   }
 
@@ -364,8 +389,12 @@ const VehiculosService = (function () {
     delete datos.FOLIO; // no se edita, se fija solo al crear
     delete datos.NUCCO; // ídem
     delete datos['FECHA REGISTRO SISTEMA CI']; // ídem
+    // Las que manda otra hoja: editarlas aquí se perdería en la siguiente sincronización.
+    // Se cambian desde su dueña (SERIE SENSOR y SENSOR: el módulo de Sensores).
+    Relaciones.deOtraHoja(SHEET_VEHICULOS).columnas.forEach((c) => { delete datos[c]; });
 
     const encontrado = SheetUtils.findById(ssId(), SHEET_VEHICULOS, id, ID_COLUMN);
+    if (encontrado) conPersona_(datos, Object.assign({}, encontrado.data, datos));
     const actualizado = SheetUtils.update(ssId(), SHEET_VEHICULOS, id, datos, ID_COLUMN);
 
     if (encontrado) {
@@ -387,8 +416,10 @@ const VehiculosService = (function () {
    * vez de borrar — esto es un borrado real, para altas hechas por error. */
   function eliminar(token, id) {
     Permisos.puedeEditar(token, 'vehiculos');
-    const ok = SheetUtils.remove(ssId(), SHEET_VEHICULOS, id, ID_COLUMN);
-    if (!ok) throw new Error('No se encontró el vehículo con ID=' + id);
+    // Relaciones.borrar y no SheetUtils.remove: se niega si el vehículo tiene historial
+    // (inspecciones, incidencias, hologramas…), para no dejar a nadie apuntando a la nada.
+    const { eliminadas } = Relaciones.borrar(SHEET_VEHICULOS, [id]);
+    if (!eliminadas) throw new Error('No se encontró el vehículo con ID=' + id);
     return { ID: id };
   }
 

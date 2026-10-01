@@ -109,6 +109,18 @@ const Entidades = (function () {
     // Renombrarlo a "ID ANTERIOR" sería borrarle el nombre a un dato de la empresa.
     'COLABORADORES': { prefijo: 'COL', llaveAnterior: 'No EMPLEADO', llaveEsDato: true, familia: 'otros' },
 
+    // --- Capital Humano (01/10/2026) ---
+    // La lista de Capital Humano, pegada TAL CUAL por Ayrton cada vez que CH manda una versión
+    // nueva (externa): la app solo la lee, y nunca le pone ID, porque el siguiente pegado lo
+    // borraría. Cada renglón es un EMPLEO, no una persona: el mismo número se repite al
+    // recontratar, CH reutiliza números de gente dada de baja, y una persona puede tener dos
+    // números a la vez (otra razón social, un ascenso). Reemplaza a COLABORADORES, que era
+    // una foto vieja (3,627, todos ACTIVO); esa se queda mientras Líneas la lea.
+    'COLABORADORES ACTUALIZADO': { prefijo: 'EMP', llaveAnterior: 'No EMPLEADO', llaveEsDato: true, externa: true, familia: 'capitalhumano' },
+    // Quién es quién: un renglón por empleo (número + nombre) con su ID PERSONA. La mantiene
+    // la app (CapitalHumano.identificar), nunca se pega; por eso aquí sí viven los IDs.
+    'PERSONAS': { prefijo: 'PER', llaveAnterior: 'No EMPLEADO', delSistemaNuevo: true, familia: 'capitalhumano' },
+
     // --- Pestañas del sistema nuevo: NO vienen de AppSheet, las crea el módulo de Líneas ---
     // No pasan por MigracionIds (no hay nada viejo que convertir), pero sí necesitan prefijo
     // para que sus altas nazcan con el formato correcto.
@@ -121,6 +133,51 @@ const Entidades = (function () {
     // Módulo TEMPORAL "Correcciones de Líneas" (30-sep): se borra cuando Líneas termine (ver LineasCorrecciones.gs)
     'APP_CORRECCIONES': { prefijo: 'COR', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
   };
+
+  /**
+   * LLAVES FORÁNEAS: qué hoja apunta a qué otra, y por qué columna. Es la lista que usa
+   * Relaciones.borrar para negarse a borrar un registro del que todavía depende algo
+   * (ON DELETE RESTRICT; decidido con Ayrton el 01/10/2026). No hay CASCADE a propósito:
+   * todas las hijas son historia —inspecciones firmadas, arqueos, reasignaciones— y
+   * borrarlas no tiene vuelta. Para sacar de circulación algo con historia se da de BAJA.
+   *
+   *   columna  la llave foránea de verdad (el ID del padre)
+   *   llave    respaldo para renglones que todavía no tienen esa columna llena (los que
+   *            el pipeline de IDs no pudo emparejar o que entraron por AppSheet): la
+   *            columna de la hija que guarda la llave de negocio, y cuál es en el padre.
+   *            Sin esto, un vehículo cuyas inspecciones viejas solo traen FOLIO se podría
+   *            borrar dejándolas huérfanas.
+   *   libro    solo cuando la hija vive en otro libro que el padre (clave de
+   *            Config.SPREADSHEET_IDS)
+   *
+   * Debe decir lo mismo que MIGRACION_REFERENCIAS (MigracionIds.gs), que es la que llenó
+   * esas columnas; tests/integridad-borrar.test.js compara las dos. Aquí vive la versión
+   * permanente porque la de la migración es de un solo uso.
+   */
+  const REFERENCIAS = [
+    { hoja: 'VERIFICACIONES', columna: 'ID VEHICULO', padre: 'VEHICULOS', llave: { columna: 'FOLIO VEHICULO', enPadre: 'FOLIO' } },
+    { hoja: 'REASIGNACIONES_VEHICULOS', columna: 'ID VEHICULO', padre: 'VEHICULOS', llave: { columna: 'Folio Vehiculo', enPadre: 'FOLIO' } },
+    { hoja: 'INSTALACION DE SENSORES', columna: 'ID VEHICULO', padre: 'VEHICULOS', llave: { columna: 'FOLIO', enPadre: 'FOLIO' } },
+    { hoja: 'INSPECCION VEHICULAR', columna: 'ID VEHICULO', padre: 'VEHICULOS', llave: { columna: 'FOLIO', enPadre: 'FOLIO' } },
+    { hoja: 'HOLOGRAMAS', columna: 'ID VEHICULO', padre: 'VEHICULOS', llave: { columna: 'SERIE VEHICULO', enPadre: 'SERIE VEHICULO' } },
+    { hoja: 'CAMBIOS VEHICULOS', columna: 'ID VEHICULO', padre: 'VEHICULOS', llave: { columna: 'FOLIO', enPadre: 'FOLIO' } },
+    { hoja: 'INCIDENCIAS', columna: 'ID VEHICULO', padre: 'VEHICULOS', llave: { columna: 'FOLIO', enPadre: 'FOLIO' } },
+    { hoja: 'INSPECCIONES LINEAS', columna: 'ID LINEA', padre: 'LINEAS TELEFONICAS' },
+    { hoja: 'RESPONSIVAS LINEAS', columna: 'ID LINEA', padre: 'LINEAS TELEFONICAS' },
+    { hoja: 'CAMBIOS LINEAS TELEFONICAS', columna: 'ID_LINEA', padre: 'LINEAS TELEFONICAS' },
+    { hoja: 'APP_EVIDENCIAS', columna: 'ID_LINEA', padre: 'LINEAS TELEFONICAS' },
+    { hoja: 'MOVIMIENTOS_ACCESORIOS', columna: 'ID ACCESORIO', padre: 'ACCESORIOS CELULARES', llave: { columna: 'ID_Accesorio', enPadre: 'ID ANTERIOR' } },
+    { hoja: 'ARQUEOS', columna: 'ID CAJA CHICA', padre: 'CAJAS CHICAS', llave: { columna: 'ID CCH', enPadre: 'ID CCH' } },
+    { hoja: 'INCREMENTOS', columna: 'ID CAJA CHICA', padre: 'CAJAS CHICAS', llave: { columna: 'ID CCH', enPadre: 'ID CCH' } },
+    // Las ligas de Capital Humano (CapitalHumano.LIGAS). PERSONAS no se borra desde la app,
+    // pero si algún día se hace, aquí ya está quién depende de ella.
+    { hoja: 'VEHICULOS', columna: 'ID PERSONA', padre: 'PERSONAS' },
+    { hoja: 'CAJAS CHICAS', columna: 'ID PERSONA', padre: 'PERSONAS' },
+    { hoja: 'LINEAS TELEFONICAS', columna: 'ID PERSONA', padre: 'PERSONAS', libro: 'TELEFONIA' },
+  ];
+
+  /** Las hojas que apuntan a `padre`, en el orden del catálogo. */
+  const referenciasA = (padre) => REFERENCIAS.filter((r) => r.padre === padre);
 
   /** Cómo se llama la columna de la llave nueva, en todas las hojas */
   const COLUMNA_ID = 'ID';
@@ -169,6 +226,8 @@ const Entidades = (function () {
     // Nació con el sistema nuevo: no hay IDs viejos que convertir, así que MigracionIds
     // no la toca. Sí tiene prefijo, para que sus altas nazcan bien.
     e.delSistemaNuevo = !!POR_HOJA[hoja].delSistemaNuevo;
+    // Se pega desde otro sistema: la app solo la lee y MigracionIds nunca le pone ID.
+    e.externa = !!POR_HOJA[hoja].externa;
     // ¿El ID nuevo pisa la columna vieja? Solo si esa columna ya se llama "ID".
     e.pisaLlaveAnterior = clave_(e.llaveAnterior) === clave_(COLUMNA_ID);
     POR_CLAVE[clave_(hoja)] = e;
@@ -196,7 +255,7 @@ const Entidades = (function () {
   const hojaDe = (pre) => (POR_PREFIJO[String(pre || '').toUpperCase()] || {}).hoja || null;
   const todas = () => Object.keys(POR_HOJA).map((h) => POR_CLAVE[clave_(h)]);
   /** Las que sí tienen algo viejo que convertir: las que venían de AppSheet */
-  const migrables = () => todas().filter((e) => !e.delSistemaNuevo);
+  const migrables = () => todas().filter((e) => !e.delSistemaNuevo && !e.externa);
 
   /**
    * Revisa que el catálogo esté sano. No se ejecuta solo: si tronara al cargar, tumbaría
@@ -240,7 +299,7 @@ const Entidades = (function () {
 
   return {
     de, existe, prefijo, hojaDe, todas, migrables, revisarCatalogo,
-    familias, deFamilia,
+    familias, deFamilia, referenciasA, REFERENCIAS,
     COLUMNA_ID, COLUMNA_ID_ANTERIOR, COLUMNA_ID_ANTERIOR_LEGADO,
   };
 })();

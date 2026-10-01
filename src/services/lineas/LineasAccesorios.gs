@@ -9,12 +9,17 @@
  *   ACCESORIOS CELULARES:    ID_Accesorio | Categoria | Nombre del Articulo | Marca
  *   MOVIMIENTOS_ACCESORIOS:  ID_Movimiento | ID_Accesorio | Tipo_movimiento | Cantidad | Fecha | Usuario | Comentarios
  *   (Tipo_movimiento usa "Entrada" / "Salida")
+ *
+ * Llaves según el catálogo de IDs de Ayrton (Entidades.gs, REFERENCIAS): tras la migración el artículo se identifica
+ * por ID (ACC-…) y su llave vieja ID_Accesorio quedó como ID ANTERIOR; el movimiento (ID MAC-…) cita al artículo en
+ * ID ACCESORIO. Los movimientos que el pipeline no emparejó solo traen ID_Accesorio (la llave vieja): se casan con el
+ * ID ANTERIOR del artículo, la misma regla que usa Relaciones. En un libro sin migrar todo sigue con las llaves viejas.
  */
 
 const LineasAccesorios = (function () {
   const TAB_ART = 'ACCESORIOS CELULARES';
   const TAB_MOV = 'MOVIMIENTOS_ACCESORIOS';
-  const CLAVE_CACHE = 'accesorios_indice_v3'; // v3: llaves tras la migración de IDs (1-oct)
+  const CLAVE_CACHE = 'accesorios_indice_v4'; // v4: llaves del catálogo de IDs (1-oct)
   // Columna virtual "Aviso Reabastecimiento" del AppSheet: umbral por categoría
   const UMBRAL_REABASTO = { Cargadores: 10, Micas: 182, Fundas: 182 };
   // Enum Categoria del AppSheet (Dropdown, sin otros valores), en su orden
@@ -24,16 +29,14 @@ const LineasAccesorios = (function () {
     return [Config.ROLES.ADMIN, Config.ROLES.OPERADOR];
   }
 
-  /**
-   * Llave de un renglón tras la migración de IDs de Ayrton (30-sep): la llave vieja (ID_Accesorio / ID_Movimiento)
-   * pasa a llamarse ID ANTERIOR y se agrega ID (ACC-… / MAC-…). Los movimientos siguen apuntando con ID_Accesorio al
-   * valor viejo, así que primero va la llave vieja (con su nombre de antes o el nuevo) y al final el ID nuevo.
-   */
-  const llave_ = (f, vieja) => LineasUtil.txt(f[vieja]) || LineasUtil.txt(f['ID ANTERIOR']) || LineasUtil.txt(f['ID']);
+  const txt_ = (v) => LineasUtil.txt(v) || '';
+  /** La llave vieja de un renglón: ID ANTERIOR si ya se migró, o la columna original si no. */
+  const anterior_ = (f, vieja) => txt_(f['ID ANTERIOR']) || txt_(f[vieja]);
 
   function articuloDesdeFila_(f) {
+    const anterior = anterior_(f, 'ID_Accesorio');
     return {
-      id: llave_(f, 'ID_Accesorio'),
+      id: txt_(f['ID']) || anterior, anterior: anterior,
       categoria: LineasUtil.txt(f['Categoria']) || '',
       nombre: LineasUtil.txt(f['Nombre del Articulo']) || '',
       marca: LineasUtil.txt(f['Marca']) || '',
@@ -42,7 +45,7 @@ const LineasAccesorios = (function () {
 
   function movimientoDesdeFila_(f) {
     return {
-      id: llave_(f, 'ID_Movimiento'), accesorioId: LineasUtil.txt(f['ID_Accesorio']),
+      id: txt_(f['ID']) || anterior_(f, 'ID_Movimiento'), accesorioId: txt_(f['ID ACCESORIO']), llaveVieja: txt_(f['ID_Accesorio']),
       tipo: (LineasUtil.txt(f['Tipo_movimiento']) || '').toUpperCase(),
       cantidad: LineasUtil.numero(f['Cantidad']) || 0, fecha: LineasUtil.fecha(f['Fecha']),
       usuario: LineasUtil.txt(f['Usuario']) || '', comentarios: LineasUtil.txt(f['Comentarios']) || '',
@@ -51,7 +54,10 @@ const LineasAccesorios = (function () {
 
   function indiceSinCache_() {
     const articulos = LineasDatos.leerTabla(TAB_ART).map(articuloDesdeFila_).filter((a) => a.id);
+    const porAnterior = {};
+    articulos.forEach((a) => { porAnterior[a.id] = a.id; if (a.anterior) porAnterior[a.anterior] = a.id; });
     const movimientos = LineasDatos.leerTabla(TAB_MOV).map(movimientoDesdeFila_).filter((m) => m.id);
+    movimientos.forEach((m) => { if (!m.accesorioId) m.accesorioId = porAnterior[m.llaveVieja] || ''; });
     const stock = {};
     // Stock = SUM(Cantidad de "Entrada") − SUM(Cantidad de "Salida"); otros tipos no cuentan
     movimientos.forEach((m) => {
@@ -81,7 +87,14 @@ const LineasAccesorios = (function () {
   /** Movimientos de un artículo, del más reciente al más antiguo. */
   function movimientosDeArticulo(token, id) {
     Auth.validarSesion(token);
-    const filas = LineasDatos.buscarFilas(TAB_MOV, 'ID_Accesorio', id);
+    const articulo = LineasDatos.leerTabla(TAB_ART).map(articuloDesdeFila_).filter((a) => a.id === id)[0];
+    if (!articulo) return LineasUtil.paraCliente([]);
+    const t = LineasDatos.tabla(TAB_MOV);
+    const filas = [];
+    if (LineasDatos.colIndice(t, 'ID ACCESORIO') >= 0) filas.push(...LineasDatos.buscarFilas(TAB_MOV, 'ID ACCESORIO', articulo.id));
+    [articulo.anterior, articulo.id].filter((v, i, a) => v && a.indexOf(v) === i).forEach((v) => {
+      LineasDatos.buscarFilas(TAB_MOV, 'ID_Accesorio', v).forEach((f) => { if (filas.indexOf(f) < 0) filas.push(f); });
+    });
     const movs = LineasDatos.leerFilas([{ tabla: TAB_MOV, filas: filas }])[0]
       .map(movimientoDesdeFila_).sort((a, b) => (b.fecha || 0) - (a.fecha || 0));
     return LineasUtil.paraCliente(movs);
@@ -95,15 +108,14 @@ const LineasAccesorios = (function () {
     const clave = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
     const existe = LineasDatos.leerTabla(TAB_ART).some((f) => String(f['Categoria']) === String(datos.categoria) && clave(f['Nombre del Articulo']) === clave(datos.nombre));
     if (existe) throw new Error('Ese artículo ya existe en ' + datos.categoria + ': registra una entrada en su fila.');
-    // Sin columna ID_Accesorio (ya migrada) la llave del artículo es su ID nuevo: es la que guardan sus movimientos
-    const conLlaveVieja = LineasDatos.colIndice(LineasDatos.tabla(TAB_ART), 'ID_Accesorio') >= 0;
-    const id = conLlaveVieja ? LineasDatos.nuevoIdCorto() : LineasDatos.nuevoId(TAB_ART);
-    LineasDatos.agregarFilas(TAB_ART, [{
-      [conLlaveVieja ? 'ID_Accesorio' : 'ID']: id, 'Categoria': String(datos.categoria),
-      'Nombre del Articulo': String(datos.nombre).trim(), 'Marca': LineasUtil.txt(datos.marca) || '',
-    }]);
+    const fila = {
+      'Categoria': String(datos.categoria), 'Nombre del Articulo': String(datos.nombre).trim(), 'Marca': LineasUtil.txt(datos.marca) || '',
+    };
+    // Libro migrado: su ID (ACC-…) nace en agregarFilas. Sin migrar: la llave del AppSheet, como antes
+    if (LineasDatos.colIndice(LineasDatos.tabla(TAB_ART), 'ID') < 0) fila['ID_Accesorio'] = LineasDatos.nuevoIdCorto();
+    LineasDatos.agregarFilas(TAB_ART, [fila]);
     LineasDatos.cacheBorrar(CLAVE_CACHE);
-    return { id: id };
+    return { id: fila['ID'] || fila['ID_Accesorio'] };
   }
 
   /** Entrada o salida de stock, bajo candado (no deja stock negativo en una salida). */
@@ -121,14 +133,20 @@ const LineasAccesorios = (function () {
       if (tipo === 'SALIDA') {
         if (cantidad > actual.stock) throw new Error('No hay suficiente stock (' + actual.stock + ' disponible).');
       }
-      const id = LineasDatos.nuevoIdCorto();
-      LineasDatos.agregarFilas(TAB_MOV, [{
-        'ID_Movimiento': id, 'ID_Accesorio': datos.accesorioId, 'Tipo_movimiento': tipo === 'ENTRADA' ? 'Entrada' : 'Salida',
+      // ID ACCESORIO = el ID del artículo (la llave foránea del catálogo); ID_Accesorio = su llave vieja, solo si la
+      // tiene (la que entiende el AppSheet). Con columna ID el movimiento nace con su MAC-… en agregarFilas.
+      const tMov = LineasDatos.tabla(TAB_MOV);
+      const conIdAccesorio = LineasDatos.colIndice(tMov, 'ID ACCESORIO') >= 0;
+      const fila = {
+        // Sin la columna ID ACCESORIO (pipeline 3 de Ayrton pendiente) la única referencia es ID_Accesorio
+        'ID ACCESORIO': actual.id, 'ID_Accesorio': actual.anterior || (conIdAccesorio ? '' : actual.id), 'Tipo_movimiento': tipo === 'ENTRADA' ? 'Entrada' : 'Salida',
         'Cantidad': cantidad, 'Fecha': new Date(), 'Usuario': sesion.nombre || sesion.correo,
         'Comentarios': LineasUtil.txt(datos.comentarios) || '',
-      }]);
+      };
+      if (LineasDatos.colIndice(tMov, 'ID') < 0) fila['ID_Movimiento'] = LineasDatos.nuevoIdCorto();
+      LineasDatos.agregarFilas(TAB_MOV, [fila]);
       LineasDatos.cacheBorrar(CLAVE_CACHE);
-      return { id: id };
+      return { id: fila['ID'] || fila['ID_Movimiento'] };
     });
   }
 

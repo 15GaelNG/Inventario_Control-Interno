@@ -83,27 +83,27 @@ function hoja(nombre, encabezados, filasObj) {
 // tiene ID que dar, y truena a propósito.
 const COL_VEH = ['ID', 'FOLIO', 'SERIE VEHICULO', 'PLACA', 'MARCA', 'CLASE', 'LINEA VEHICULO',
   'MODELO', 'COLOR', 'CAPACIDAD COMBUSTIBLE (LTS)', 'RAZON SOCIAL', 'DEPARTAMENTO',
-  'SEDE', 'UBICACION', 'RESPONSABLE VEHICULO'];
+  'SEDE', 'OFICINA / DESARROLLO', 'RESPONSABLE VEHICULO', 'SENSOR', 'SERIE SENSOR'];
 
 // CTA0001 vive y es de CONSTRUCCION. CTA0002 está dado de baja: su DEPARTAMENTO ya no
 // dice un área, dice un estatus — y las copias sí guardan el área buena (POST VENTA).
 const base = {
   PLACA: 'AAA111', MARCA: 'NISSAN', CLASE: 'PICKUP', 'LINEA VEHICULO': 'NP300',
   MODELO: '2022', COLOR: 'BLANCO', 'CAPACIDAD COMBUSTIBLE (LTS)': 60,
-  'RAZON SOCIAL': 'CM', SEDE: 'QRO', UBICACION: 'OFICINA 1', 'RESPONSABLE VEHICULO': 'ANA',
+  'RAZON SOCIAL': 'CM', SEDE: 'QRO', 'OFICINA / DESARROLLO': 'OFICINA 1', 'RESPONSABLE VEHICULO': 'ANA', SENSOR: 'SI TIENE SENSOR',
 };
 // CTA0003 es uno de los 116 vehículos de baja a los que les toca quedar con el
 // DEPARTAMENTO vacío (la baja ya consta en ESTATUS), pero sus copias sí conservan el área.
 const vehiculos = [
-  Object.assign({ ID: 'VEH-00000000AAAAAA', FOLIO: 'CTA0001', 'SERIE VEHICULO': 'SER1', DEPARTAMENTO: 'CONSTRUCCION' }, base),
+  Object.assign({ ID: 'VEH-00000000AAAAAA', FOLIO: 'CTA0001', 'SERIE VEHICULO': 'SER1', 'SERIE SENSOR': 'S1', DEPARTAMENTO: 'CONSTRUCCION' }, base),
   // CTA0002 está de baja, y quien la dio de baja escribió la palabra en TRES columnas:
   // DEPARTAMENTO, PLACA y RESPONSABLE. Así está en producción, medido el 30/09/2026.
   Object.assign({}, base, {
     ID: 'VEH-00000000BBBBBB',
-    FOLIO: 'CTA0002', 'SERIE VEHICULO': 'SER2', DEPARTAMENTO: 'BAJA VEHICULAR',
+    FOLIO: 'CTA0002', 'SERIE VEHICULO': 'SER2', 'SERIE SENSOR': 'S2', DEPARTAMENTO: 'BAJA VEHICULAR',
     PLACA: 'BAJA VEHICULAR', 'RESPONSABLE VEHICULO': 'BAJA VEHICULAR',
   }),
-  Object.assign({ ID: 'VEH-00000000CCCCCC', FOLIO: 'CTA0003', 'SERIE VEHICULO': 'SER3', DEPARTAMENTO: '' }, base),
+  Object.assign({ ID: 'VEH-00000000CCCCCC', FOLIO: 'CTA0003', 'SERIE VEHICULO': 'SER3', 'SERIE SENSOR': 'S3', DEPARTAMENTO: '' }, base),
 ];
 
 /** Lo que una copia de Sensores tendría si estuviera al día, con SUS nombres de columna. */
@@ -111,7 +111,7 @@ const comoSensores = (v, depto) => ({
   FOLIO: v.FOLIO, 'SERIE VEHICULO': v['SERIE VEHICULO'], PLACA: v.PLACA, MARCA: v.MARCA,
   CLASE: v.CLASE, 'LINEA VEHICULO': v['LINEA VEHICULO'], MODELO: v.MODELO, COLOR: v.COLOR,
   'CAPACIDAD DE COMBUSTIBLE': v['CAPACIDAD COMBUSTIBLE (LTS)'], 'RAZON SOCIAL': v['RAZON SOCIAL'],
-  DEPARTAMENTO: depto, SEDE: v.SEDE, 'OFICINA / DESARROLLO': v.UBICACION,
+  DEPARTAMENTO: depto, SEDE: v.SEDE, 'OFICINA / DESARROLLO': v['OFICINA / DESARROLLO'],
   RESPONSABLE: v['RESPONSABLE VEHICULO'],
 });
 
@@ -126,13 +126,13 @@ function armar() {
       .concat(Object.keys(comoSensores(vehiculos[0], ''))),
     [
       // al día en todo MENOS el departamento: se quedó con el viejo
-      Object.assign({ ID_SENSOR: 'SEN-1', 'SERIE SENSOR': 'S1' }, comoSensores(vehiculos[0], 'POST VENTA')),
+      Object.assign({ ID_SENSOR: 'SEN-1', 'SERIE SENSOR': 'S1', 'ESTATUS SENSOR': 'ACTIVO' }, comoSensores(vehiculos[0], 'POST VENTA')),
       // el dueño dice BAJA VEHICULAR en tres columnas; esta copia guarda los datos de verdad
-      Object.assign({ ID_SENSOR: 'SEN-2', 'SERIE SENSOR': 'S2' },
+      Object.assign({ ID_SENSOR: 'SEN-2', 'SERIE SENSOR': 'S2', 'ESTATUS SENSOR': 'ACTIVO' },
         comoSensores(vehiculos[1], 'POST VENTA'),
         { PLACA: 'AAA222', RESPONSABLE: 'LUISA ORTEGA' }),
       // el dueño quedó VACÍO; esta copia es la única que conserva el área
-      Object.assign({ ID_SENSOR: 'SEN-3', 'SERIE SENSOR': 'S3' }, comoSensores(vehiculos[2], 'POST VENTA')),
+      Object.assign({ ID_SENSOR: 'SEN-3', 'SERIE SENSOR': 'S3', 'ESTATUS SENSOR': 'ACTIVO' }, comoSensores(vehiculos[2], 'POST VENTA')),
     ]);
 
   hs['VERIFICACIONES'] = hoja('VERIFICACIONES',
@@ -332,8 +332,9 @@ console.log('\n5. revisar({corregir:true}) corrige el caché y congela la bitác
   ok(r['INSPECCION VEHICULAR'].diferenciasHistoricas === 1,
     'la deriva histórica se cuenta aparte (1), no como diferencia');
   ok(r['INSPECCION VEHICULAR'].diferencias === 0, 'diferencias=0 en la bitácora');
-  ok(logDe(hs, 'DIFERENCIA_HISTORICA', 'DEPARTAMENTO').length === 1,
-    'quedó en LOG_RELACIONES con su tipo propio, para poder filtrarla');
+  // Lo normal ya no va al log (01/10/2026): una bitácora de Líneas trae miles de estas
+  ok(!hs['LOG_RELACIONES'] || logDe(hs, 'DIFERENCIA_HISTORICA', 'DEPARTAMENTO').length === 0,
+    'lo histórico NO se escribe en LOG_RELACIONES: es normal, y llenaría el log');
 }
 
 console.log('\n6. revisar({corregir:true}) no pisa nada con un centinela');
@@ -587,11 +588,245 @@ console.log('\n16. Pero revisar() sí las REPORTA, que es para lo que están en 
   const r = R.revisar({ corregir: true });   // incluso pidiendo corregir
   ok(hs['ARQUEOS'].valor('ARQ-00000000AAAAAA', 'ID', 'MONTO CAJA') === 8000,
      'ni con corregir:true se toca una bitácora');
-  const hist = logDe(hs, 'DIFERENCIA_HISTORICA', 'MONTO CAJA');
-  ok(hist.length === 1, 'queda en el log como DIFERENCIA_HISTORICA');
+  const hist = hs['LOG_RELACIONES'] ? logDe(hs, 'DIFERENCIA_HISTORICA', 'MONTO CAJA') : [];
+  ok(hist.length === 0, 'y no se anota en el log: es lo normal en una bitácora');
   ok(!!r['ARQUEOS'], 'y ARQUEOS aparece en el reporte: antes Caja Chica no se vigilaba');
   ok(!!r['INCREMENTOS'],
      'INCREMENTOS también, aunque no copie columnas: sirve para ver sus huérfanas');
+}
+
+console.log('\nrevisar() empareja igual que propagar(): por la FK primero');
+{
+  const hs = armar();
+  const enc = hs['INSTALACION DE SENSORES'].enc.concat(['ID VEHICULO']);
+  const fila = (extra) => Object.assign({ ID_SENSOR: 'SEN-X', 'SERIE SENSOR': 'SX' }, comoSensores(vehiculos[0], 'POST VENTA'), extra);
+  hs['INSTALACION DE SENSORES'] = hoja('INSTALACION DE SENSORES', enc, [
+    // FK de CTA0001 pero la serie de CTA0003: manda la FK
+    fila({ 'ID VEHICULO': vehiculos[0].ID, 'SERIE VEHICULO': 'SER3', SEDE: 'VIEJA' }),
+    // FK puesta y serie vacía: el caso CON0618
+    fila({ 'ID VEHICULO': vehiculos[0].ID, 'SERIE VEHICULO': '', SEDE: 'VIEJA' }),
+    // FK que no apunta a nada, aunque su serie sí exista: huérfana, no se toca
+    fila({ 'ID VEHICULO': 'VEH-00000000ZZZZZZ', 'SERIE VEHICULO': 'SER1', SEDE: 'VIEJA' }),
+  ]);
+  const R = cargar(hs);
+  const r = R.revisar({ corregir: true, hojas: ['INSTALACION DE SENSORES'] });
+  const s = hs['INSTALACION DE SENSORES'];
+  const col = (n) => s.enc.indexOf(n);
+  ok(s.datos[0][col('DEPARTAMENTO')] === 'CONSTRUCCION', 'FK y serie en desacuerdo: recibe los datos del dueño de la FK');
+  ok(s.datos[1][col('SEDE')] === 'QRO', 'serie vacía con FK: se empareja y se corrige');
+  ok(s.datos[2][col('SEDE')] === 'VIEJA', 'FK rota: no se corrige con el dueño de la serie');
+  ok(r['INSTALACION DE SENSORES'].huerfanos === 1 && r['INSTALACION DE SENSORES'].emparejadasPorId === 2,
+    'el resumen dice 2 por ID y 1 huérfana');
+  ok(!r['HOLOGRAMAS'], 'con hojas: [...] solo revisa esas');
+}
+
+console.log('\nrevisar({detalle, log:false}) — lo que usa la pantalla');
+{
+  const hs = armar();
+  const R = cargar(hs);
+  const antes = hs['LOG_RELACIONES'] ? hs['LOG_RELACIONES'].datos.length : 0;
+  const r = R.revisar({ detalle: true, log: false });
+  const e = r['INSTALACION DE SENSORES'].entradas;
+  ok(Array.isArray(e) && e.some((x) => x.tipo === 'DIFERENCIA' && x.columna === 'DEPARTAMENTO' && x.dueno === 'CTA0001'),
+    'trae cada diferencia con su columna y el folio del dueño');
+  ok(e.every((x) => x.fila >= 2), 'y la fila de la hoja');
+  ok(Object.keys(r['INSTALACION DE SENSORES']).indexOf('entradas') === -1, 'entradas no ensucia los reportes del editor');
+  ok((hs['LOG_RELACIONES'] ? hs['LOG_RELACIONES'].datos.length : 0) === antes, 'solo mirar no escribe en LOG_RELACIONES');
+  ok(hs['INSTALACION DE SENSORES'].valor('CTA0001', 'FOLIO', 'DEPARTAMENTO') === 'POST VENTA', 'ni corrige');
+}
+
+console.log('\ndescribir() pinta el MAPA');
+{
+  const R = cargar(armar());
+  const d = R.describir();
+  const veh = d.duenos.find((x) => x.hoja === 'VEHICULOS');
+  const sen = veh && veh.copias.find((c) => c.nombre === 'INSTALACION DE SENSORES');
+  ok(sen && sen.tipo === 'cache' && sen.columnas.some((c) => c.origen === 'CAPACIDAD COMBUSTIBLE (LTS)' && c.destino === 'CAPACIDAD DE COMBUSTIBLE'),
+    'cada copia con su tipo y sus columnas origen → destino');
+  ok(d.centinelas['*'].indexOf('BAJA VEHICULAR') !== -1, 'y los centinelas');
+}
+
+// ------------------------------------------------ Sensores → VEHICULOS (al revés)
+
+/** Escenario del sentido inverso: la hoja de sensores manda en SERIE SENSOR y SENSOR. */
+function armarInverso(sensores, extraVehiculos) {
+  const hs = armar();
+  hs['INSTALACION DE SENSORES'] = hoja('INSTALACION DE SENSORES',
+    hs['INSTALACION DE SENSORES'].enc.concat(['ID VEHICULO']),
+    sensores.map((s) => Object.assign({}, comoSensores(vehiculos[s.v], 'CONSTRUCCION'),
+      { ID_SENSOR: 'SEN-' + s.serie, 'SERIE SENSOR': s.serie, 'ESTATUS SENSOR': s.estatus },
+      s.sinFk ? {} : { 'ID VEHICULO': vehiculos[s.v].ID })));
+  (extraVehiculos || []).forEach((cambio) => {
+    const v = hs['VEHICULOS'];
+    const fila = v.datos.find((d) => d[v.enc.indexOf('FOLIO')] === cambio.FOLIO);
+    Object.keys(cambio).forEach((k) => { fila[v.enc.indexOf(k)] = cambio[k]; });
+  });
+  return hs;
+}
+const enVehiculo = (hs, folio, col) => hs['VEHICULOS'].valor(folio, 'FOLIO', col);
+
+console.log('\nSensores → VEHICULOS: revisar({corregir}) aplica las dos reglas del 01/10/2026');
+{
+  const hs = armarInverso([
+    { v: 0, serie: 'S1', estatus: 'ACTIVO' },
+    { v: 1, serie: 'S2', estatus: 'BAJA' },        // VEHICULOS sigue diciendo S2 y SI TIENE
+  ], [{ FOLIO: 'CTA0003', SENSOR: 'CANCELADO' }]);  // CTA0003 no tiene sensor
+  const R = cargar(hs);
+  const r = R.revisar({ corregir: true, hojas: ['VEHICULOS'] });
+  ok(enVehiculo(hs, 'CTA0001', 'SERIE SENSOR') === 'S1' && enVehiculo(hs, 'CTA0001', 'SENSOR') === 'SI TIENE SENSOR',
+    'sensor ACTIVO: la serie y SI TIENE se quedan');
+  ok(enVehiculo(hs, 'CTA0002', 'SERIE SENSOR') === '', 'sensor en BAJA: la serie SE VACÍA (no la frena la regla de no vaciar)');
+  ok(enVehiculo(hs, 'CTA0002', 'SENSOR') === 'NO TIENE SENSOR', 'y SENSOR pasa a NO TIENE');
+  ok(enVehiculo(hs, 'CTA0003', 'SENSOR') === 'NO TIENE SENSOR' && enVehiculo(hs, 'CTA0003', 'SERIE SENSOR') === '',
+    'sin renglón de sensor: CANCELADO pasa a NO TIENE y la serie se vacía');
+  ok(r['VEHICULOS'].huerfanos === 0, 'un vehículo sin sensor NO es huérfano');
+}
+
+console.log('\nSensores → VEHICULOS: dos sensores del mismo vehículo no se adivinan');
+{
+  const hs = armarInverso([
+    { v: 0, serie: 'S1', estatus: 'ACTIVO' },
+    { v: 0, serie: 'S9', estatus: 'BAJA' },
+  ]);
+  const R = cargar(hs);
+  const r = R.revisar({ corregir: true, hojas: ['VEHICULOS'] });
+  ok(r['VEHICULOS'].clavesDuplicadasOmitidas === 1, 'se reporta como llave repetida');
+  ok(enVehiculo(hs, 'CTA0001', 'SERIE SENSOR') === 'S1', 'y el vehículo no se toca');
+}
+
+console.log('\nSensores → VEHICULOS: un sensor capturado por AppSheet (sin ID VEHICULO) se une por la serie del vehículo');
+{
+  const hs = armarInverso([{ v: 0, serie: 'S1', estatus: 'ACTIVO', sinFk: true }]);
+  const R = cargar(hs);
+  const r = R.revisar({ corregir: true, hojas: ['VEHICULOS'] });
+  ok(enVehiculo(hs, 'CTA0001', 'SENSOR') === 'SI TIENE SENSOR', 'no lo toma por "sin sensor"');
+  ok(r['VEHICULOS'].emparejadasPorClave === 1, 'y lo cuenta como unido por la llave');
+}
+
+console.log('\nSensores → VEHICULOS: propagar() y soltar()');
+{
+  const hs = armarInverso([{ v: 0, serie: 'S1', estatus: 'ACTIVO' }]);
+  const R = cargar(hs);
+  const sensor = hs['INSTALACION DE SENSORES'];
+  const fila = {};
+  sensor.enc.forEach((c, i) => { fila[c] = sensor.datos[0][i]; });
+
+  R.propagar('INSTALACION DE SENSORES', Object.assign({}, fila, { 'ESTATUS SENSOR': 'BAJA' }), { 'ESTATUS SENSOR': 'BAJA' });
+  ok(enVehiculo(hs, 'CTA0001', 'SERIE SENSOR') === '' && enVehiculo(hs, 'CTA0001', 'SENSOR') === 'NO TIENE SENSOR',
+    'dar de baja: se recalculan LAS DOS columnas, aunque solo cambió el estatus');
+  ok(enVehiculo(hs, 'CTA0002', 'SENSOR') === 'SI TIENE SENSOR', 'los demás vehículos no se tocan');
+
+  R.propagar('INSTALACION DE SENSORES', Object.assign({}, fila, { 'SERIE SENSOR': 'S7' }), { 'SERIE SENSOR': 'S7', 'ESTATUS SENSOR': 'ACTIVO' });
+  ok(enVehiculo(hs, 'CTA0001', 'SERIE SENSOR') === 'S7' && enVehiculo(hs, 'CTA0001', 'SENSOR') === 'SI TIENE SENSOR',
+    'reactivar con otra serie: vuelve SI TIENE y la serie nueva');
+
+  R.propagar('INSTALACION DE SENSORES', fila, { COMENTARIOS: 'x' });
+  ok(enVehiculo(hs, 'CTA0001', 'SERIE SENSOR') === 'S7', 'un cambio que no toca sus columnas no escribe nada');
+
+  R.soltar('INSTALACION DE SENSORES', fila);
+  ok(enVehiculo(hs, 'CTA0001', 'SERIE SENSOR') === '' && enVehiculo(hs, 'CTA0001', 'SENSOR') === 'NO TIENE SENSOR',
+    'soltar (sensor borrado o movido): el vehículo vuelve a "sin sensor"');
+  R.soltar('VEHICULOS', vehiculos[0]);
+  ok(hs['INSTALACION DE SENSORES'].datos.length === 1, 'soltar no toca copias sin "sinDueno" (las de VEHICULOS)');
+}
+
+console.log('\ndeOtraHoja() y describir() con el sentido inverso');
+{
+  const R = cargar(armar());
+  const ajenas = R.deOtraHoja('VEHICULOS');
+  ok(ajenas.columnas.join() === 'SERIE SENSOR,SENSOR', 'VEHICULOS no manda en SERIE SENSOR ni SENSOR');
+  ok(ajenas.sinDueno.SENSOR === 'NO TIENE SENSOR' && ajenas.sinDueno['SERIE SENSOR'] === '', 'y su valor sin dueño');
+  ok(R.deOtraHoja('HOLOGRAMAS').columnas.length > 0 && R.deOtraHoja('INSPECCION VEHICULAR').columnas.length === 0,
+    'una bitácora no cuenta: sus columnas se capturan al dar de alta y no las pisa nadie');
+  const sen = R.describir().duenos.find((d) => d.hoja === 'INSTALACION DE SENSORES');
+  ok(sen && sen.copias[0].campoEnDueno === 'ID VEHICULO' && sen.copias[0].columnas.every((c) => c.calculada),
+    'describir dice por dónde se une y que las dos son calculadas');
+}
+
+// ------------------------------------------- avisos sin ruido (01/10/2026)
+
+console.log('\nUna bitácora no avisa de rellenos ni vacíos del dueño: todo lo distinto es histórico');
+{
+  const hs = armar();
+  const R = cargar(hs);
+  // CTA0002 trae 'BAJA VEHICULAR' en DEPARTAMENTO, PLACA y RESPONSABLE; su inspección no
+  const r = R.revisar({ detalle: true, log: false, hojas: ['INSPECCION VEHICULAR'] });
+  const e = r['INSPECCION VEHICULAR'].entradas;
+  ok(!e.some((x) => x.tipo === 'OMITIDO_CENTINELA' || x.tipo === 'OMITIDO_VACIO'), 'ni OMITIDO_CENTINELA ni OMITIDO_VACIO');
+  ok(r['INSPECCION VEHICULAR'].centinelasOmitidos === 0 && r['INSPECCION VEHICULAR'].diferenciasHistoricas > 0,
+    'lo cuenta como histórico');
+}
+
+console.log('\nHologramas sin vehículo: el VIN válido es un vehículo personal; el mal escrito es problema');
+{
+  const hs = armar();
+  const enc = hs['HOLOGRAMAS'].enc;
+  const holo = (serie) => { const o = {}; enc.forEach((c) => { o[c] = ''; }); o['SERIE VEHICULO'] = serie; o['CALCOMANIA EOX'] = 'X'; return o; };
+  hs['HOLOGRAMAS'] = hoja('HOLOGRAMAS', enc, [
+    holo('3G1SF21X58S113728'),   // VIN válido sin dueño: personal
+    holo('_VR3EC9HP2MJ503983'),  // guion bajo de más
+    holo('IN4AL3AP6FN318778'),   // una I donde va un 1
+    holo('123456789'),
+  ]);
+  const R = cargar(hs);
+  const r = R.revisar({ detalle: true, log: false, hojas: ['HOLOGRAMAS'] });
+  const h = r['HOLOGRAMAS'];
+  ok(h.sinDuenoEsperado === 1 && h.entradas.some((x) => x.tipo === 'SIN_DUENO_ESPERADO' && x.clave === '3G1SF21X58S113728'),
+    'el VIN válido cuenta como esperado, no como huérfano');
+  ok(h.huerfanos === 3 && h.entradas.filter((x) => x.tipo === 'HUERFANO').every((x) => x.malEscrita),
+    'los otros tres son huérfanos marcados como mal escritos');
+  ok(R.describir().duenos.find((d) => d.hoja === 'VEHICULOS').copias.find((c) => c.nombre === 'HOLOGRAMAS').huerfanaEsperada === 'vehículos personales',
+    'describir dice por qué una huérfana puede ser normal');
+}
+
+console.log('\nrevisar({filas, quien}): actualizar solo los seleccionados, y quién lo hizo');
+{
+  const hs = armarInverso([
+    { v: 0, serie: 'S1', estatus: 'BAJA' },
+    { v: 1, serie: 'S2', estatus: 'BAJA' },
+  ]);
+  const R = cargar(hs);
+  const filaDe = (folio) => hs['VEHICULOS'].datos.findIndex((d) => d[hs['VEHICULOS'].enc.indexOf('FOLIO')] === folio) + 2;
+  const r = R.revisar({ corregir: true, hojas: ['VEHICULOS'], filas: [filaDe('CTA0001')], quien: 'AYRTON' });
+  ok(enVehiculo(hs, 'CTA0001', 'SERIE SENSOR') === '', 'el seleccionado se actualizó');
+  ok(enVehiculo(hs, 'CTA0002', 'SERIE SENSOR') === 'S2', 'el no seleccionado se quedó como estaba');
+  ok(r['VEHICULOS'].diferencias >= 2, 'el reporte sigue contando las dos');
+  const log = hs['LOG_RELACIONES'].datos.filter((f) => f[1] === 'DIFERENCIA');
+  ok(log.length > 0 && log.every((f) => f[7] === 'AYRTON'), 'el log dice quién');
+  ok(log.every((f) => f[3] !== 'SER2' && f[3] !== hs['VEHICULOS'].datos[1][0]), 'y solo anota lo que sí se tocó');
+}
+
+console.log('\ndescribir() trae la familia de cada hoja');
+{
+  const d = cargar(armar()).describir().duenos;
+  ok(d.find((x) => x.hoja === 'VEHICULOS').etiqueta.familia === 'Vehículos', 'VEHICULOS es de Vehículos');
+  ok(d.find((x) => x.hoja === 'INSTALACION DE SENSORES').etiqueta.familia === 'Vehículos', 'Sensores también');
+  ok(d.find((x) => x.hoja === 'CAJAS CHICAS').etiqueta.familia === 'Caja Chica', 'y Caja Chica es la suya');
+}
+
+console.log('\nLíneas en el mapa: bitácoras, sin secretos, con su familia');
+{
+  const d = cargar(armar()).describir().duenos;
+  const lin = d.find((x) => x.hoja === 'LINEAS TELEFONICAS');
+  ok(lin && lin.etiqueta.familia === 'Líneas', 'LINEAS TELEFONICAS es de la familia Líneas');
+  ok(lin && lin.copias.every((c) => c.tipo === 'bitacora'), 'sus tres hijas son bitácora: nada se sincroniza');
+  const cols = lin ? lin.copias.reduce((t, c) => t.concat(c.columnas.map((x) => x.origen)), []) : [];
+  ok(['PIN WHATSAPP', 'PIN EQUIPO', 'PATRON', 'CONTRASEÑA MODEM'].every((x) => cols.indexOf(x) === -1),
+    'los secretos de Líneas no entran al mapa (aparecerían en la pantalla)');
+  ok(cols.indexOf('COLOR') === -1 && cols.indexOf('ACCESORIOS') === -1, 'ni COLOR ni ACCESORIOS: se llaman igual pero no son el mismo dato');
+  const acc = d.find((x) => x.hoja === 'ACCESORIOS CELULARES');
+  ok(acc && acc.etiqueta.familia === 'Líneas' && acc.copias[0].nombre === 'MOVIMIENTOS_ACCESORIOS', 'y los accesorios también');
+}
+
+console.log('\nUn libro sin configurar no tumba la revisión de las demás familias');
+{
+  const hs = armar();
+  const R = cargar(hs);   // la Config de la prueba no trae TELEFONIA, como un proyecto sin Líneas
+  const r = R.revisar({ detalle: true, log: false });
+  ok(r['INSPECCIONES LINEAS'] && !!r['INSPECCIONES LINEAS'].error, 'la copia de Líneas dice por qué no se revisó');
+  ok(Array.isArray(r['INSPECCIONES LINEAS'].entradas), 'y trae su lista vacía, como las demás');
+  ok(r['INSTALACION DE SENSORES'] && !r['INSTALACION DE SENSORES'].error && r['INSTALACION DE SENSORES'].revisadas > 0,
+    'Vehículos se revisó igual');
 }
 
 console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');

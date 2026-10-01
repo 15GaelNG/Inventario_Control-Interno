@@ -297,7 +297,7 @@ const InspeccionesService = (function () {
     'RESPONSABLE': 'RESPONSABLE VEHICULO',
     'DEPARTAMENTO': 'DEPARTAMENTO',
     'SEDE': 'SEDE',
-    'OFICINA / DESARROLLO': 'UBICACION',
+    'OFICINA / DESARROLLO': 'OFICINA / DESARROLLO',   // en VEHICULOS se llamaba UBICACION (limpieza #23)
     'VEHICULO': 'LINEA VEHICULO',
     'NO SERIE': 'SERIE VEHICULO',
     'MODELO / AÑO': 'MODELO',
