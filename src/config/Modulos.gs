@@ -29,6 +29,8 @@ const Modulos = (function () {
       id: 'lineas', etiqueta: 'Líneas', icono: 'smartphone',
       // Rama emmanuel: los módulos de Telefonía (ver html/js/lineas.html). "Detalles Líneas
       // Telefónicas" quedó como la vista de tarjetas de Líneas Telefónicas y Post Venta se retiró.
+      // "accesorios-lineas" es distinto de "accesorios" (Inventario de Accesorios general,
+      // que ya vivía en este mismo grupo) — no chocan, son catálogos separados.
       modulos: [
         { id: 'panorama-lineas', etiqueta: 'Panorama de Líneas', listo: true },
         { id: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas', listo: true },
@@ -36,6 +38,7 @@ const Modulos = (function () {
         // TEMPORAL (30-sep): Líneas corrige los casos de la conciliación y después se elimina (LineasCorrecciones.gs)
         { id: 'correcciones-lineas', etiqueta: 'Correcciones de Líneas', listo: true },
         { id: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios (Líneas)', listo: true },
+        { id: 'accesorios', etiqueta: 'Inventario de Accesorios', listo: true },
         // Control de Cambios queda fuera del menú (30-sep). Reactivación, Solicitud, Reasignaciones y Desechos se
         // retiraron con sus pestañas (30-sep, reunión con Líneas).
         { id: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas', listo: true },

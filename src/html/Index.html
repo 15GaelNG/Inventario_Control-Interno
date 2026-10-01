@@ -4,6 +4,9 @@
   <base target="_top">
   <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/logo.png">
   <script src="https://unpkg.com/lucide@0.513.0/dist/umd/lucide.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <?!= include('html/styles'); ?>
 </head>
 <body>
@@ -46,6 +49,10 @@
               <button type="button" class="theme-btn" data-tema="dark" title="Modo oscuro"><i data-lucide="moon" class="ico"></i></button>
             </div>
             <div class="topbar-date" id="topbar-date"></div>
+            <button type="button" class="topbar-notif-btn" id="btn-notificaciones" title="Notificaciones">
+              <i data-lucide="bell" class="ico"></i>
+              <span class="topbar-notif-badge" id="notif-badge" hidden>0</span>
+            </button>
             <div class="topbar-user-menu">
               <div class="topbar-user" id="user-name"></div>
               <button type="button" id="btn-logout" class="topbar-logout-btn" title="Cerrar sesión">
@@ -66,6 +73,22 @@
   <?!= include('html/views/login'); ?>
   <?!= include('html/views/loading'); ?>
   <?!= include('html/views/dashboard'); ?>
+  <?!= include('html/views/accesorios'); ?>
+  <?!= include('html/views/incidencias'); ?>
+  <?!= include('html/views/panorama-vehiculos'); ?>
+  <?!= include('html/views/vehiculos'); ?>
+  <?!= include('html/views/cambios-vehiculos'); ?>
+  <?!= include('html/views/reasignaciones-vehiculares'); ?>
+  <?!= include('html/views/uber'); ?>
+  <?!= include('html/views/tickets'); ?>
+  <?!= include('html/views/cajachica'); ?>
+  <?!= include('html/views/cambios-monto-cch'); ?>
+  <?!= include('html/views/arqueos'); ?>
+  <?!= include('html/views/verificaciones'); ?>
+  <?!= include('html/views/sensores'); ?>
+  <?!= include('html/views/hologramas'); ?>
+  <?!= include('html/views/inspecciones'); ?>
+
   <!-- Líneas (rama emmanuel) -->
   <?!= include('html/views/lineas/lineas-panorama'); ?>
   <?!= include('html/views/lineas/lineas-telefonicas'); ?>
@@ -76,9 +99,22 @@
   <?!= include('html/views/lineas/lineas-accesorios'); ?>
 
   <?!= include('html/js/api'); ?>
+  <!-- Antes de app.html a propósito: su render() llama Notificaciones.iniciar()
+       en la misma pasada síncrona del render() de arranque (línea final del
+       archivo, si ya había sesión guardada) -- si este include fuera después,
+       como el resto de componentes/ (ver más abajo), Notificaciones todavía no
+       existiría en ese primer render() y tronaría con "Notificaciones is not
+       defined". Solo define la función (no toca nada de app.html al cargar);
+       lo que si necesita de app.html (callServer, state, escaparHtml...) lo usa
+       adentro de funciones que no se llaman hasta más tarde, vía iniciar(). -->
+  <?!= include('html/js/componentes/notificaciones'); ?>
   <?!= include('html/js/app'); ?>
+  <?!= include('html/js/app-arqueos'); ?>
+  <?!= include('html/js/app-cajachica'); ?>
+  <?!= include('html/js/app-reasignaciones'); ?>
+  <?!= include('html/js/app-panorama-vehiculos'); ?>
 
-  <!-- Librería de componentes (rama `ayrton`) -->
+  <!-- Librería de componentes (rama `ayrton`): usados por los módulos nuevos de abajo -->
   <?!= include('html/js/componentes/iconos'); ?>
   <?!= include('html/js/componentes/notificar'); ?>
   <?!= include('html/js/componentes/confirmar'); ?>
@@ -90,7 +126,12 @@
   <?!= include('html/js/componentes/lienzo'); ?>
   <?!= include('html/js/componentes/exportar-excel'); ?>
 
-  <!-- Módulo de Líneas: usa los helpers de app y la librería de componentes -->
+  <?!= include('html/js/app-verificaciones'); ?>
+  <?!= include('html/js/modulos/sensores'); ?>
+  <?!= include('html/js/modulos/hologramas'); ?>
+  <?!= include('html/js/modulos/inspecciones'); ?>
+
+  <!-- Módulo de Líneas (rama emmanuel): usa los helpers de app y la librería de componentes -->
   <?!= include('html/lineas-estilos'); ?>
   <?!= include('html/js/lineas'); ?>
   <!-- Módulo temporal de correcciones (se quita cuando Líneas termine) -->

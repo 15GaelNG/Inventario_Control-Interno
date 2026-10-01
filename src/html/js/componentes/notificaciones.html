@@ -1,0 +1,155 @@
+<style>
+  /* ============ Notificaciones — campanita de la barra superior ============ */
+  .topbar-notif-btn {
+    position: relative; display: inline-flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border-radius: 50%; border: none; background: none;
+    color: var(--color-text); cursor: pointer;
+  }
+  .topbar-notif-btn:hover, .topbar-notif-btn:focus-visible { background: var(--color-primary-soft); }
+  .topbar-notif-badge {
+    position: absolute; top: 2px; right: 2px; min-width: 16px; height: 16px; padding: 0 3px;
+    border-radius: 999px; background: var(--color-danger); color: #fff;
+    font-size: 10px; font-weight: 700; line-height: 16px; text-align: center;
+  }
+
+  .notif-panel {
+    position: fixed; z-index: 600; width: 340px; max-height: min(480px, calc(100vh - 16px));
+    overflow-y: auto; background: var(--color-surface); border: 1px solid var(--color-border);
+    border-radius: 12px; box-shadow: var(--shadow-lg);
+  }
+  .notif-panel-header {
+    position: sticky; top: 0; background: var(--color-surface); padding: 12px 14px;
+    font-size: 13px; font-weight: 700; border-bottom: 1px solid var(--color-border);
+  }
+  .notif-vacio { padding: 20px 14px; text-align: center; color: var(--color-text-muted); font-size: 13px; }
+  .notif-lista { display: flex; flex-direction: column; padding: 6px; }
+  .notif-item {
+    display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left;
+    padding: 9px 10px; border-radius: 8px; border: none; background: none; cursor: pointer;
+  }
+  .notif-item:hover, .notif-item:focus-visible { background: var(--color-primary-soft); }
+  .notif-item-icono {
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    width: 30px; height: 30px; border-radius: 50%; margin-top: 1px;
+    background: var(--color-accent-soft); color: var(--color-danger);
+  }
+  .notif-item.notif-vencida .notif-item-icono, .notif-item.notif-atrasada .notif-item-icono {
+    background: var(--color-accent-soft); color: var(--color-danger);
+  }
+  .notif-item.notif-porVencer .notif-item-icono { background: var(--color-primary-soft); color: var(--color-primary); }
+  .notif-item-icono .ico { width: 15px; height: 15px; }
+  .notif-item-cuerpo { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .notif-item-titulo { font-size: 12.5px; font-weight: 600; color: var(--color-text); }
+  .notif-item-texto { font-size: 12px; color: var(--color-text-muted); }
+</style>
+
+<script>
+  /**
+   * Notificaciones — campanita de la barra superior: Verificaciones y Seguro
+   * vencidos o por vencer, e Inspecciones atrasadas (NotificacionesService.gs en
+   * el servidor). Todo se recalcula en vivo cada vez que se abre el desplegable
+   * (sin guardar "leído"/"descartado" en ningún lado); el badge del ícono se
+   * actualiza al entrar a la app y cada vez que se vuelve a abrir.
+   *
+   * Comparte el scope global de app.html (callServer, state, escaparHtml,
+   * refreshIcons, verFichaVehiculoDesdeOtroModulo) — mismo patrón que los demás
+   * componentes de html/js/componentes/.
+   */
+  const Notificaciones = (function () {
+    let panel = null;
+    let items = [];
+    let iniciado = false;
+
+    const ICONO_TIPO = { verificacion: 'clipboard-check', inspeccion: 'clipboard-list', seguro: 'shield' };
+    const ETIQUETA_TIPO = { verificacion: 'Verificación', inspeccion: 'Inspección', seguro: 'Seguro' };
+
+    const esc = (v) => escaparHtml(v == null ? '' : v);
+
+    function cerrarPanel() {
+      if (panel) { panel.remove(); panel = null; }
+    }
+
+    function pintarBadge() {
+      const badge = document.getElementById('notif-badge');
+      if (!badge) return;
+      badge.hidden = items.length === 0;
+      badge.textContent = items.length > 99 ? '99+' : String(items.length);
+    }
+
+    async function cargar() {
+      const texto = await callServer('apiNotificacionesPendientes', state.token);
+      items = JSON.parse(texto || '[]');
+      pintarBadge();
+      return items;
+    }
+
+    function cuerpoPanel() {
+      if (!items.length) return '<p class="notif-vacio">No hay pendientes por ahora.</p>';
+      return '<div class="notif-lista">' + items.map((it) => `
+        <button type="button" class="notif-item notif-${esc(it.severidad)}" data-folio="${esc(it.folio)}">
+          <span class="notif-item-icono"><i data-lucide="${esc(ICONO_TIPO[it.tipo] || 'bell')}" class="ico"></i></span>
+          <span class="notif-item-cuerpo">
+            <span class="notif-item-titulo">${esc(ETIQUETA_TIPO[it.tipo] || it.tipo)} · Nucco ${esc(it.nucco || it.folio)}</span>
+            <span class="notif-item-texto">${esc(it.texto)}</span>
+          </span>
+        </button>`).join('') + '</div>';
+    }
+
+    function posicionar(ancla) {
+      if (!panel) return;
+      const r = ancla.getBoundingClientRect();
+      const ancho = panel.offsetWidth;
+      panel.style.left = Math.max(8, Math.min(r.right - ancho, window.innerWidth - ancho - 8)) + 'px';
+      panel.style.top = (r.bottom + 8) + 'px';
+    }
+
+    async function abrirPanel(ancla) {
+      cerrarPanel();
+      panel = document.createElement('div');
+      panel.className = 'notif-panel';
+      panel.innerHTML = '<div class="notif-panel-header">Notificaciones</div><p class="notif-vacio"><span class="spinner"></span> Cargando…</p>';
+      document.body.appendChild(panel);
+      posicionar(ancla);
+      try {
+        await cargar();
+      } catch (err) {
+        if (!panel) return; // se cerró mientras cargaba
+        panel.innerHTML = '<div class="notif-panel-header">Notificaciones</div><p class="error-msg">No se pudo cargar: ' + esc(err.message) + '</p>';
+        return;
+      }
+      if (!panel) return; // se cerró mientras cargaba
+      panel.innerHTML = '<div class="notif-panel-header">Notificaciones' + (items.length ? ' (' + items.length + ')' : '') + '</div>' + cuerpoPanel();
+      posicionar(ancla);
+      refreshIcons();
+    }
+
+    function iniciar() {
+      if (iniciado) return; // evita doble wiring si render() corre más de una vez logueado
+      const btn = document.getElementById('btn-notificaciones');
+      if (!btn) return;
+      iniciado = true;
+
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        if (panel) { cerrarPanel(); return; }
+        abrirPanel(btn);
+      });
+      document.addEventListener('mousedown', (ev) => {
+        if (panel && !panel.contains(ev.target) && !btn.contains(ev.target)) cerrarPanel();
+      });
+      document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') cerrarPanel(); });
+      document.body.addEventListener('click', (ev) => {
+        if (!panel) return;
+        const item = ev.target.closest('.notif-item');
+        if (!item || !panel.contains(item)) return;
+        const folio = item.dataset.folio;
+        cerrarPanel();
+        verFichaVehiculoDesdeOtroModulo(folio);
+      });
+
+      cargar().catch(() => { /* badge inicial: silencioso si falla, se reintenta al abrir */ });
+    }
+
+    return { iniciar };
+  })();
+</script>

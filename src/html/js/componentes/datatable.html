@@ -231,6 +231,29 @@
   .dt-popover .dt-pop-col button { flex: 1; }
   .dt-pop-presets { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
   .dt-pop-presets button { padding: 3px 8px; font-size: 11.5px; border-radius: 999px; }
+
+  /* ---- Menú contextual (clic derecho en una fila) ----
+     Mismo overlay que .dt-popover (position:fixed, se cierra con clic fuera o Escape
+     vía alClicFuera/alTecla) pero posicionado en el punto del clic, con una lista de
+     acciones en vez de controles de filtro/orden. Ver cfg.menuContextual. */
+  .dt-menu-contextual { width: 230px; padding: 6px; }
+  .dt-menu-grupo-titulo {
+    font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--color-text-muted); padding: 10px 10px 4px;
+  }
+  .dt-menu-contextual > .dt-menu-grupo-titulo:first-child { padding-top: 4px; }
+  /* .dt-popover button ya trae justify-content:center (para los botones de filtro/
+     orden) con más especificidad que un .dt-menu-item solo -- aquí se le gana
+     calificando también con .dt-popover, para que el ícono+texto quede a la izquierda. */
+  .dt-popover.dt-menu-contextual .dt-menu-item {
+    display: flex; align-items: center; justify-content: flex-start; gap: 10px; width: 100%; text-align: left;
+    padding: 8px 10px; border-radius: 7px; border: none; background: none;
+    font-size: 13px; color: var(--color-text); cursor: pointer;
+  }
+  .dt-menu-item:hover, .dt-menu-item:focus-visible { background: var(--color-primary-soft); }
+  .dt-menu-item.dt-peligro { color: var(--color-danger); }
+  .dt-menu-item.dt-peligro:hover { background: #F3ECD6; }
+  :root[data-theme="dark"] .dt-menu-item.dt-peligro:hover { background: rgba(255,138,128,.15); color: #ff8a80; }
   .dt-lista-valores { max-height: 200px; overflow-y: auto; border: 1px solid var(--color-border); border-radius: 8px; padding: 4px; }
   .dt-lista-valores label {
     display: flex; align-items: center; gap: 8px; margin: 0; padding: 4px 6px; border-radius: 6px;
@@ -242,7 +265,9 @@
   .dt-lista-valores .dt-solo { visibility: hidden; background: transparent; border: none; color: var(--color-primary); padding: 0 4px; font-size: 11px; text-decoration: underline; }
   .dt-lista-valores label:hover .dt-solo, .dt-lista-valores .dt-solo:focus-visible { visibility: visible; }
 
-  .dt-columnas { display: flex; flex-direction: column; gap: 2px; }
+  .dt-columnas { display: flex; flex-direction: column; gap: 2px; max-height: 240px; overflow-y: auto; }
+  .dt-columnas-acciones { display: flex; gap: 6px; margin-bottom: 6px; }
+  .dt-columnas-acciones button { flex: 1; padding: 5px 8px; font-size: 12px; }
   .dt-columna-item { display: flex; align-items: center; gap: 4px; padding: 2px; border-radius: 6px; }
   .dt-columna-item:hover { background: var(--color-bg); }
   .dt-columna-item label { flex: 1; display: flex; align-items: center; gap: 8px; margin: 0; color: var(--color-text); font-weight: 400; cursor: pointer; font-size: 12.5px; }
@@ -308,6 +333,9 @@
    *         opciones: ['ACTIVO', 'BAJA'] },     // si se omite, usa los valores existentes
    *       { campo: 'FOTO', titulo: 'Foto', filtrable: false, ordenable: false,
    *         render: (valor, fila) => '<button …>' },  // HTML propio (el módulo escapa lo que use)
+   *       { campo: 'CLASE', titulo: 'Clase', tipo: 'lista',
+   *         render: (v) => tagConIcono(v),        // cómo se ve en la celda
+   *         renderFiltro: (v) => tagConIcono(v) },  // cómo se ve en el popover de filtro (checklist) — opcional, si se omite usa el texto plano
    *       { campo: 'DIAS', titulo: 'Días', tipo: 'numero',
    *         valor: (fila) => calcularDias(fila) },    // columna calculada
    *     ],
@@ -337,14 +365,22 @@
    *     motivoSinEliminar: 'Solo administradores pueden eliminar',
    *     accionesFila: [ … ],                    // botones extra por fila (ver EXTENDER)
    *     accionesSeleccion: [ … ],               // botones extra con registros seleccionados
+   *     menuContextual: [ … ],                  // clic derecho en una fila (ver EXTENDER)
    *     detalle: { titulo: (fila) => '…', contenidoExtra: (fila, contenedor) => {},   // false lo desactiva
    *               extraPrimero: true },   // lo del módulo arriba de los campos (cuando es lo que se viene a ver)
    *     etiquetaFila: (fila) => fila.FOLIO,     // cómo nombrar una fila en confirmaciones y avisos
    *     tamanoPagina: 25,  densidad: 'normal',  ordenInicial: { campo: 'FECHA', dir: 'desc' },
    *     textoVacio: 'Sin registros',  ayuda: 'Texto de ayuda…',
-   *     exportar: { nombreArchivo: 'Verificaciones' },   // botón verde; false lo oculta
-   *               // descargar: async () => n  → el módulo arma su propio Excel (p. ej. la base completa);
-   *               // titulo: 'Texto del botón al pasar el cursor'
+   *     exportar: { nombreArchivo: 'Verificaciones' },   // botón verde; false lo oculta. Exporta TODAS las
+   *                    // columnas exportables (no solo las visibles en pantalla), sin preguntar nada.
+   *                    // exportar.descargar: async () => nFilas  → en vez de exportar las filas ya
+   *                    //   cargadas en el navegador, el módulo trae los datos (p. ej. la base completa del
+   *                    //   servidor). exportar.titulo: tooltip del botón.
+   *     columnasCompletas: { idHoja: 'ID_VEHICULO', cargar: async () => [{ 'ID_VEHICULO': 1, … }] },
+   *                    // opcional: al abrir "Vista" trae sola TODA la hoja (todas las columnas crudas, no
+   *                    // solo el resumen) y agrega las que falten como columnas nuevas (ocultas, se activan
+   *                    // ahí mismo o con "Mostrar todas"), casando cada fila por idHoja (el encabezado
+   *                    // crudo que hace de id). Se pide una sola vez por carga de la tabla.
    *     alCambiarFiltros: (filtros) => {},      // p. ej. para marcar chips de KPI
    *     umbralPalabraClave: 10,                 // eliminar pide escribir "ELIMINAR" desde N filas
    *   });
@@ -358,7 +394,6 @@
    *
    * Métodos:
    *   setDatos(datos) · setCargando(true) · setError('msg') · getDatos() · getSeleccion()
-   *   getFiltradas()  → filas con filtros, búsqueda y orden aplicados (todas las páginas)
    *   limpiarSeleccion() · copiarSeleccion() · textoSeleccion()
    *   setFiltro(campo, { valores: [...] } | { op, v1, v2 } | null) · limpiarFiltros()
    *   moverColumna(campo, antesDeCampo) · fijarColumna(campo, true) · ocultarColumna(campo)
@@ -371,6 +406,14 @@
    *                      visible: (fila) => !!fila.FOLIO, peligro: false }]
    *   Acción masiva (aparece en la barra al seleccionar):
    *     accionesSeleccion: [{ icono: 'mail', texto: 'Enviar aviso', alHacer: async (filas) => … }]
+   *   Menú contextual (clic derecho en una fila; omitirlo deja el menú nativo del navegador):
+   *     menuContextual: [{ icono: 'eye', titulo: 'Ver ficha', alHacer: (fila) => … },
+   *                      { icono: 'pencil', titulo: 'Editar', alHacer: (fila) => … },
+   *                      { grupo: 'Inspección', icono: 'clipboard-check', titulo: 'Nueva inspección',
+   *                        alHacer: (fila) => …, visible: (fila) => …, peligro: false }]
+   *                      // `grupo` agrupa visualmente con un encabezado — items consecutivos con el
+   *                      // mismo `grupo` comparten encabezado; sin `grupo`, van sueltos arriba.
+   *                      // `icono` es cualquier nombre de lucide.dev/icons (ver Iconos.svg).
    *     (si alHacer regresa una promesa, el botón muestra "Procesando…" mientras tanto)
    *     minimo: 2 → el botón aparece solo con 2 o más seleccionados (por omisión, con 1)
    *   Tipo de columna nuevo (disponible para todas las tablas):
@@ -616,6 +659,7 @@
       const cfg = Object.assign({
         tamanoPagina: 25, seleccionable: true, textoVacio: 'Sin registros', exportar: true,
         detalle: {}, umbralPalabraClave: 10, densidad: 'normal', accionesFila: [], accionesSeleccion: [],
+        menuContextual: [],
       }, config);
       if (cfg.exportar === true) cfg.exportar = { nombreArchivo: 'Datos' };
       const columnas = cfg.columnas.map((c) => Object.assign(
@@ -670,6 +714,7 @@
         busqueda: '',
         filtros: {},                 // campo -> { op, v1, v2 } | { valores: [..] }
         pagina: 1,
+        columnasExtra: { cargando: false, cargadas: false },  // ver cfg.columnasCompletas
         seleccion: new Set(),
         ancla: null,                 // última casilla marcada (para Shift+clic)
         modoSeleccion: false,        // con cfg.modoSeleccion: casillas visibles y clic en la fila = marcar
@@ -737,6 +782,11 @@
       function columnasVisibles() {
         const ordenadas = st.ordenColumnas.map(colPorCampo).filter((c) => c && !st.ocultas.has(c.campo));
         return ordenadas.filter((c) => st.fijadas.has(c.campo)).concat(ordenadas.filter((c) => !st.fijadas.has(c.campo)));
+      }
+
+      /** Todas las exportables, sin importar si el usuario las ocultó en "Vista" (el Excel siempre sale completo) */
+      function columnasExportables() {
+        return columnas.filter((c) => c.exportable);
       }
 
       // =====================================================================
@@ -825,7 +875,7 @@
             ${cfg.seleccionable && cfg.modoSeleccion && !cfg.seleccionDrive ? `<button type="button" class="secondary dt-btn-modo-seleccion" aria-pressed="false" title="Mostrar casillas para elegir varios registros (clic, arrastrar o Shift+clic)">${ic('list-checks')} <span>Seleccionar</span></button>` : ''}
             <span class="dt-seleccion-info" hidden></span>
             ${cfg.seleccionDrive ? '' : accionesSeleccion.map((a, i) => `<button type="button" class="${a.peligro ? 'danger' : 'secondary'} ${a.clase || ''}" data-accion-sel="${i}" ${a.titulo ? `title="${esc(a.titulo)}"` : ''} hidden>${ic(a.icono)} ${esc(a.texto)}</button>`).join('')}
-            ${cfg.exportar ? `<button type="button" class="btn-excel dt-btn-excel" title="${esc(cfg.exportar.titulo || 'Descarga lo que ves: columnas visibles, filtros, búsqueda y orden (todas las páginas)')}">${ic('exportar')} Exportar a Excel</button>` : ''}
+            ${cfg.exportar ? `<button type="button" class="btn-excel dt-btn-excel" title="${esc(cfg.exportar.titulo || 'Descarga la tabla completa (todas las columnas, todas las páginas); respeta los filtros y la búsqueda activos')}">${ic('exportar')} Exportar a Excel</button>` : ''}
           </div>
           ${cfg.seleccionDrive ? '<div class="dt-barra-sel" role="toolbar" aria-label="Acciones de la selección" hidden></div>' : ''}
           <div class="dt-filtros-activos" hidden></div>
@@ -853,7 +903,7 @@
       const buscador = $('.dt-buscar');
       let popover = null;
       let panel = null;
-      let ultimaFirmaFiltros = '{}';
+      let ultimaFirmaFiltros = '{}|';
       let ultimaFirmaVista = '';
 
       const celdaCheck = (contenido) => (cfg.seleccionable ? `<td class="dt-col-check dt-fija">${contenido || ''}</td>` : '');
@@ -1230,10 +1280,14 @@
       }
 
       function avisarCambioDeFiltros() {
-        const firma = JSON.stringify(st.filtros);
-        if (!cfg.alCambiarFiltros || firma === ultimaFirmaFiltros) return;
+        if (!cfg.alCambiarFiltros) return;
+        // La firma incluye la búsqueda: si no, escribir en el buscador filtra la tabla
+        // pero nunca avisa (los KPIs que dependen de esto se quedan con el número viejo).
+        const filtros = JSON.stringify(st.filtros);
+        const firma = filtros + '|' + st.busqueda.trim();
+        if (firma === ultimaFirmaFiltros) return;
         ultimaFirmaFiltros = firma;
-        cfg.alCambiarFiltros(JSON.parse(firma));
+        cfg.alCambiarFiltros(JSON.parse(filtros));
       }
 
       // ---------- cambios de estado + repintado ----------
@@ -1288,6 +1342,13 @@
       }
       function setDensidad(densidad) {
         if (DENSIDADES[densidad]) cambiarVista(() => { st.densidad = densidad; });
+      }
+      /** Muestra/oculta TODAS las columnas de golpe (siempre queda al menos la primera visible). */
+      function mostrarTodasLasColumnas() {
+        cambiarVista(() => st.ordenColumnas.forEach((campo) => st.ocultas.delete(campo)));
+      }
+      function ocultarTodasLasColumnas() {
+        cambiarVista(() => st.ordenColumnas.slice(1).forEach((campo) => { st.ocultas.add(campo); st.fijadas.delete(campo); }));
       }
       /** Orden desde el encabezado: clic = solo esta columna (asc → desc → nada); Shift+clic = agrega a las demás */
       function alternarOrden(col, multiple) {
@@ -1395,7 +1456,7 @@
           </div>
           <div class="dt-lista-valores">${valores.map((v) => `
             <label data-texto="${esc(normalizar(v))}"><input type="checkbox" value="${esc(v)}" ${marcados.has(v) ? 'checked' : ''} />
-              <span>${v === '' ? '<em>(vacío)</em>' : esc(v)}</span>
+              <span>${v === '' ? '<em>(vacío)</em>' : (col.renderFiltro ? col.renderFiltro(v) : esc(v))}</span>
               <button type="button" class="dt-solo" data-solo="${esc(v)}" title="Filtrar solo por este valor">solo</button>
               <span class="dt-conteo">${conteo.get(v)}</span></label>`).join('')}
           </div>${abajo}`, (pop) => {
@@ -1459,11 +1520,74 @@
         });
       }
 
+      /** "NO ECONOMICO" → "No economico" (siglas cortas de 3 letras o menos se quedan igual: NUCO, IMEI…) */
+      function tituloDesdeEncabezado_(h) {
+        const t = String(h || '').trim();
+        return t.length <= 3 && !/\s/.test(t) ? t : t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+      }
+      const normCampo_ = (s) => String(s || '').replace(/_/g, ' ').trim().toUpperCase().replace(/\s+/g, ' ');
+
+      /**
+       * cfg.columnasCompletas = { idHoja, cargar }: trae TODAS las columnas de la hoja del servidor
+       * (cargar() → [{ encabezado: valor, … }]) y agrega las que no estaban ya como columnas nuevas
+       * (ocultas, exportables). Se llama una sola vez, automático al abrir "Vista" (ver abrirVista).
+       */
+      async function cargarColumnasCompletas(boton) {
+        if (!cfg.columnasCompletas || st.columnasExtra.cargando || st.columnasExtra.cargadas) return;
+        st.columnasExtra.cargando = true;
+        try {
+          await conBotonOcupado(boton, 'Cargando…', async () => {
+            const raw = await cfg.columnasCompletas.cargar();
+            const yaExisten = new Set(columnas.map((c) => normCampo_(c.campo)));
+            const encabezados = raw.length ? Object.keys(raw[0]) : [];
+            const nuevas = encabezados.filter((h) => h && !yaExisten.has(normCampo_(h))).map((h) => {
+              const muestra = raw.slice(0, 60).map((r) => r[h]).filter((v) => v !== '' && v !== null && v !== undefined);
+              const esFecha = muestra.length > 0 && muestra.every((v) => /^\d{4}-\d{2}-\d{2}/.test(String(v)));
+              const esNumero = !esFecha && muestra.length > 0 && muestra.every((v) => typeof v === 'number' || (String(v).trim() !== '' && !isNaN(Number(String(v).replace(/[$,\s]/g, '')))));
+              return {
+                campo: h, titulo: tituloDesdeEncabezado_(h), tipo: esFecha ? 'fecha' : (esNumero ? 'numero' : 'texto'),
+                editable: false, filtrable: true, ordenable: true, visible: false, exportable: true, enDetalle: true,
+              };
+            });
+            columnas.push(...nuevas);
+            st.ordenColumnas = st.ordenColumnas.concat(nuevas.map((c) => c.campo));
+            nuevas.forEach((c) => st.ocultas.add(c.campo));
+
+            // Ids vacíos NO se indexan: varias filas sin id (ej. renglones viejos sin ID_CAMBIO en
+            // Cambios Vehículos) terminarían compartiendo por error los datos extra de la última.
+            const porId = {};
+            raw.forEach((r) => {
+              const idVal = String(r[cfg.columnasCompletas.idHoja] == null ? '' : r[cfg.columnasCompletas.idHoja]);
+              if (idVal) porId[idVal] = r;
+            });
+            st.datos.forEach((fila) => {
+              const id = idDe(fila);
+              const r = id && porId[id];
+              if (r) nuevas.forEach((c) => { fila[c.campo] = r[c.campo]; });
+            });
+
+            st.columnasExtra.cargadas = true;
+            Notificar.exito(nuevas.length ? `${nuevas.length} columna(s) más disponibles: actívalas en "Vista"` : 'La tabla ya tenía todas las columnas de la base de datos');
+          });
+        } catch (err) {
+          Notificar.error('No se pudieron traer todas las columnas: ' + err.message);
+        } finally {
+          st.columnasExtra.cargando = false;
+        }
+      }
+
       /** Menú "Vista": columnas visibles, fijar, reordenar, densidad y restablecer */
       function abrirVista(ancla) {
         const pintar = (pop) => {
           const orden = st.ordenColumnas.map(colPorCampo);
-          pop.innerHTML = `<h4>Columnas</h4><div class="dt-columnas">${orden.map((c, i) => {
+          const todasVisibles = orden.every((c) => !st.ocultas.has(c.campo));
+          const soloUnaVisible = orden.filter((c) => !st.ocultas.has(c.campo)).length <= 1;
+          pop.innerHTML = `<h4>Columnas</h4>
+            <div class="dt-columnas-acciones">
+              <button type="button" class="secondary dt-marcar-todas" ${todasVisibles ? 'disabled' : ''}>Mostrar todas</button>
+              <button type="button" class="secondary dt-desmarcar-todas" ${soloUnaVisible ? 'disabled' : ''}>Ocultar todas</button>
+            </div>
+            <div class="dt-columnas">${orden.map((c, i) => {
             const campo = esc(c.campo);
             const fijada = st.fijadas.has(c.campo);
             return `<div class="dt-columna-item">
@@ -1481,6 +1605,7 @@
               </label>
               <button type="button" class="secondary dt-restablecer">${ic('restablecer')} Restablecer vista</button>
               ${cfg.idTabla ? '<span class="page-subtitle" style="font-size:11px">Tu vista se guarda en este navegador.</span>' : ''}
+              ${st.columnasExtra.cargando ? '<span class="page-subtitle" style="font-size:11px">Cargando todas las columnas de la base de datos…</span>' : ''}
             </div>`;
 
           // Cada cambio repinta la tabla y también este menú (queda abierto)
@@ -1493,9 +1618,19 @@
           alClic('[data-subir]', (b) => moverColumna(b.dataset.subir, st.ordenColumnas[st.ordenColumnas.indexOf(b.dataset.subir) - 1]));
           alClic('[data-bajar]', (b) => moverColumna(b.dataset.bajar, st.ordenColumnas[st.ordenColumnas.indexOf(b.dataset.bajar) + 2] || null));
           alClic('.dt-restablecer', () => { restablecerVista(); Notificar.info('Vista restablecida'); });
+          alClic('.dt-marcar-todas', () => mostrarTodasLasColumnas());
+          alClic('.dt-desmarcar-todas', () => ocultarTodasLasColumnas());
           pop.querySelector('.dt-densidad').addEventListener('change', (ev) => setDensidad(ev.target.value));
         };
         abrirPopover(ancla, '', pintar);
+        // Trae TODAS las columnas de la base de datos la primera vez que se abre "Vista"
+        // (antes había que pedirlo con un botón aparte); el menú ya está abierto mientras carga.
+        if (cfg.columnasCompletas && !st.columnasExtra.cargadas && !st.columnasExtra.cargando) {
+          const miPopover = popover;
+          const promesa = cargarColumnasCompletas();
+          pintar(miPopover);   // ya cargando = true (se puso antes del primer await): refleja "Cargando…"
+          promesa.then(() => { if (popover === miPopover) pintar(miPopover); });
+        }
       }
 
       // =====================================================================
@@ -1711,25 +1846,27 @@
         return texto;
       }
 
+      /** cfg.exportar.descargar: el módulo trae la base completa del servidor en vez de las filas cargadas. */
+      async function exportarConDescarga(boton) {
+        await conBotonOcupado(boton, 'Exportando…', async () => {
+          try {
+            const n = await cfg.exportar.descargar();
+            if (n !== undefined) Notificar.exito(`${n} ${plural(n, 'registro')} ${plural(n, 'exportado')}`);
+          } catch (err) {
+            Notificar.error('No se pudo exportar: ' + (err && err.message ? err.message : err));
+          }
+        });
+        render();
+      }
+
       async function exportarExcel(boton) {
-        if (cfg.exportar.descargar) {
-          await conBotonOcupado(boton, 'Exportando…', async () => {
-            try {
-              const n = await cfg.exportar.descargar();
-              if (n !== undefined) Notificar.exito(`${n} ${plural(n, 'registro')} ${plural(n, 'exportado')}`);
-            } catch (err) {
-              Notificar.error('No se pudo exportar: ' + (err && err.message ? err.message : err));
-            }
-          });
-          render();
-          return;
-        }
+        if (typeof cfg.exportar.descargar === 'function') return exportarConDescarga(boton);
         await exportarFilas(filasFiltradas(), boton);
       }
 
-      /** Excel de las filas dadas con las columnas visibles (el botón de la barra o "Exportar selección") */
+      /** Excel de las filas dadas con todas las columnas exportables (el botón de la barra o "Exportar selección") */
       async function exportarFilas(filas, boton) {
-        const cols = columnasVisibles().filter((c) => c.exportable);
+        const cols = columnasExportables();
         if (!filas.length) { Notificar.error('No hay registros para exportar con los filtros actuales'); return; }
         await conBotonOcupado(boton, 'Exportando…', async () => {
           try {
@@ -2289,9 +2426,49 @@
         const lapiz = ev.target.closest('.dt-btn-editar-celda');
         if (lapiz) { iniciarEdicion(lapiz.closest('td')); return; }
 
-        // En pantallas táctiles (sin doble clic ni hover), tocar la fila abre el detalle
+        // Clic en cualquier parte de la fila (no solo el ícono de "Ver detalle")
+        // abre el detalle — en pantallas táctiles siempre fue así (sin doble clic
+        // ni hover); en escritorio antes solo abría con ese ícono exacto.
         const interactivo = ev.target.closest('button, a, input, select, label, .dt-editor');
-        if (esTactil() && conDetalle && !st.editando && !interactivo) abrirPanel(tr.dataset.id);
+        if (conDetalle && !st.editando && !interactivo) abrirPanel(tr.dataset.id);
+      });
+
+      /** Menú contextual (clic derecho en una fila) -- mismo overlay que los popover de
+       *  columna (position:fixed, se cierra solo con clic fuera o Escape, ver alClicFuera/
+       *  alTecla más abajo, que ya vigilan la variable `popover`), pero posicionado en el
+       *  punto del clic en vez de bajo un ancla, y con acciones en vez de filtro/orden. */
+      function abrirMenuContextual(fila, x, y) {
+        const items = cfg.menuContextual.filter((it) => !it.visible || it.visible(fila));
+        if (!items.length) return;
+        cerrarPopover();
+        popover = document.createElement('div');
+        popover.className = 'dt-popover dt-menu-contextual';
+        let grupoAnterior;
+        popover.innerHTML = items.map((it, i) => {
+          const encabezado = it.grupo && it.grupo !== grupoAnterior
+            ? `<div class="dt-menu-grupo-titulo">${esc(it.grupo)}</div>` : '';
+          grupoAnterior = it.grupo;
+          return encabezado + `<button type="button" class="dt-menu-item ${it.peligro ? 'dt-peligro' : ''}" data-menu-item="${i}">` +
+            `${ic(it.icono)} ${esc(it.titulo)}</button>`;
+        }).join('');
+        document.body.appendChild(popover);
+        const ancho = popover.offsetWidth;
+        const alto = popover.offsetHeight;
+        popover.style.left = Math.max(8, Math.min(x, window.innerWidth - ancho - 8)) + 'px';
+        popover.style.top = Math.max(8, Math.min(y, window.innerHeight - alto - 8)) + 'px';
+        popover.querySelectorAll('[data-menu-item]').forEach((btn) => {
+          btn.addEventListener('click', () => { cerrarPopover(); items[Number(btn.dataset.menuItem)].alHacer(fila); });
+        });
+      }
+      tbody.addEventListener('contextmenu', (ev) => {
+        // sin configurar: menú nativo normal, como antes. En modo Drive (rama emmanuel) el clic derecho ya abre su propio menú.
+        if (!cfg.menuContextual.length || cfg.seleccionDrive) return;
+        const tr = ev.target.closest('tr[data-id]');
+        if (!tr) return;
+        const fila = filaPorId(tr.dataset.id);
+        if (!fila) return;
+        ev.preventDefault();
+        abrirMenuContextual(fila, ev.clientX, ev.clientY);
       });
 
       // Doble clic (atajo para quien ya lo conoce) y F2 con foco en el lápiz, como en Excel
@@ -2428,6 +2605,7 @@
         },
         setError(mensaje) { st.error = mensaje || null; st.cargando = false; st.refrescando = false; render(); },
         getDatos: () => st.datos.slice(),
+        // Filas con filtros, búsqueda y orden aplicados (todas las páginas) — usado por Líneas.
         getFiltradas: () => (st.cargando || st.error ? [] : filasFiltradas()),
         getSeleccion: () => st.datos.filter((f) => st.seleccion.has(idDe(f))),
         setModoSeleccion, enModoSeleccion: () => st.modoSeleccion,

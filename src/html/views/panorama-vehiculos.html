@@ -1,0 +1,63 @@
+<template id="tpl-panorama-vehiculos">
+  <div class="page-header">
+    <div>
+      <h2><i data-lucide="bar-chart-3" class="ico"></i> Panorama Vehicular</h2>
+      <p class="page-subtitle">KPIs y gráficas del catálogo de vehículos — los filtros se aplican a todo en vivo</p>
+    </div>
+  </div>
+
+  <div class="card pv-filtros" id="pv-filtros">
+    <div class="pv-filtros-grid">
+      <div class="field">
+        <label for="pv-f-estatus">Estatus</label>
+        <select id="pv-f-estatus"><option value="">Todos</option></select>
+      </div>
+      <div class="field">
+        <label for="pv-f-departamento">Departamento</label>
+        <select id="pv-f-departamento"><option value="">Todos</option></select>
+      </div>
+      <div class="field">
+        <label for="pv-f-sede">Sede</label>
+        <select id="pv-f-sede"><option value="">Todas</option></select>
+      </div>
+      <div class="field">
+        <label for="pv-f-marca">Marca</label>
+        <select id="pv-f-marca"><option value="">Todas</option></select>
+      </div>
+      <div class="field">
+        <label for="pv-f-clase">Clase</label>
+        <select id="pv-f-clase"><option value="">Todas</option></select>
+      </div>
+      <button type="button" class="secondary" id="pv-limpiar-filtros"><i data-lucide="x" class="ico"></i> Limpiar filtros</button>
+    </div>
+  </div>
+
+  <div class="stat-row" id="pv-kpis"></div>
+
+  <div id="pv-sin-datos" class="card" hidden>
+    <p class="empty-state">Ningún vehículo coincide con estos filtros.</p>
+  </div>
+
+  <div class="pv-grid-graficas" id="pv-graficas">
+    <div class="card pv-card-grafica pv-card-grafica-grande">
+      <h3><i data-lucide="pie-chart" class="ico ln-icon"></i> Por estatus</h3>
+      <div class="pv-lienzo-wrap"><canvas id="pv-chart-estatus"></canvas></div>
+    </div>
+    <div class="card pv-card-grafica">
+      <h3><i data-lucide="building-2" class="ico ln-icon"></i> Por departamento</h3>
+      <div class="pv-lienzo-wrap"><canvas id="pv-chart-departamento"></canvas></div>
+    </div>
+    <div class="card pv-card-grafica">
+      <h3><i data-lucide="map-pin" class="ico ln-icon"></i> Por sede</h3>
+      <div class="pv-lienzo-wrap"><canvas id="pv-chart-sede"></canvas></div>
+    </div>
+    <div class="card pv-card-grafica">
+      <h3><i data-lucide="car" class="ico ln-icon"></i> Por marca</h3>
+      <div class="pv-lienzo-wrap"><canvas id="pv-chart-marca"></canvas></div>
+    </div>
+    <div class="card pv-card-grafica">
+      <h3><i data-lucide="truck" class="ico ln-icon"></i> Por clase</h3>
+      <div class="pv-lienzo-wrap"><canvas id="pv-chart-clase"></canvas></div>
+    </div>
+  </div>
+</template>

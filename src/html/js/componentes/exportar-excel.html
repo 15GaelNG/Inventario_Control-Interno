@@ -24,6 +24,12 @@
    *
    * Varias hojas en un archivo (acepta además el tipo 'fechaHora': "yyyy-MM-ddTHH:mm:ss" → dd/mm/yyyy hh:mm):
    *   await ExportarExcel.descargarLibro({ nombreArchivo: 'Accesorios', hojas: [{ nombre, columnas, filas }, …] });
+   *
+   * Arreglo de objetos crudos (una fila por objeto, llaves = encabezado): adivina el tipo de cada
+   * columna solo, como si se descargara la hoja completa de la base de datos:
+   *   await ExportarExcel.descargarCrudo({ nombreArchivo: 'Vehículos', filas: [{ FOLIO: 'A1', … }] });
+   * Igual pero con varias hojas (una por tabla):
+   *   await ExportarExcel.descargarLibroCrudo({ nombreArchivo: 'Accesorios', hojas: [{ nombre, filas }, …] });
    */
   const ExportarExcel = (function () {
     // "\/\/" (no "//") — Apps Script bug, ver CLAUDE.md
@@ -137,6 +143,45 @@
       guardar(XLSX, libro, opciones.nombreArchivo);
     }
 
-    return { descargar, descargarLibro };
+    /** 'texto' | 'numero' | 'fecha' a partir de una muestra de valores crudos de una columna. */
+    function tipoDeColumna_(valores) {
+      const muestra = valores.filter((v) => v !== '' && v !== null && v !== undefined).slice(0, 60);
+      if (!muestra.length) return 'texto';
+      if (muestra.every((v) => v instanceof Date || (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)))) return 'fecha';
+      if (muestra.every((v) => typeof v === 'number' || (String(v).trim() !== '' && !isNaN(Number(String(v).replace(/[$,\s]/g, '')))))) return 'numero';
+      return 'texto';
+    }
+
+    /** { columnas, filas } (formato de armarHoja) a partir de un arreglo de objetos crudos. */
+    function crudoAHoja_(filas) {
+      const encabezados = filas.length ? Object.keys(filas[0]) : [];
+      return {
+        columnas: encabezados.map((h) => ({ titulo: h, tipo: tipoDeColumna_(filas.map((f) => f[h])) })),
+        filas: filas.map((f) => encabezados.map((h) => f[h])),
+      };
+    }
+
+    /**
+     * Descarga un arreglo de objetos "crudos" (una fila por objeto, llaves = encabezado de la
+     * columna) tal cual, con los mismos encabezados y sin transformar nada — como si se
+     * descargara la hoja de la base de datos completa. El tipo de cada columna (texto/número/
+     * fecha) se adivina solo con una muestra de sus valores.
+     *   await ExportarExcel.descargarCrudo({ nombreArchivo: 'Vehículos', filas: [{ FOLIO: 'A1', … }] });
+     */
+    async function descargarCrudo({ nombreArchivo, nombreHoja, filas }) {
+      await descargar(Object.assign({ nombreArchivo, nombreHoja }, crudoAHoja_(filas)));
+      return filas.length;
+    }
+
+    /** Igual que descargarCrudo pero varias hojas: { nombreArchivo, hojas: [{ nombre, filas }] }. */
+    async function descargarLibroCrudo({ nombreArchivo, hojas }) {
+      await descargarLibro({
+        nombreArchivo,
+        hojas: hojas.map((h) => Object.assign({ nombre: h.nombre }, crudoAHoja_(h.filas))),
+      });
+      return hojas.reduce((n, h) => n + h.filas.length, 0);
+    }
+
+    return { descargar, descargarLibro, descargarCrudo, descargarLibroCrudo };
   })();
 </script>

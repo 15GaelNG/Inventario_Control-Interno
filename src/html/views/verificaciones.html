@@ -1,0 +1,80 @@
+<template id="tpl-verificaciones">
+  <div class="page-header-compacto">
+    <div>
+      <h2><i data-lucide="clipboard-check" class="ico"></i> Verificaciones</h2>
+      <p class="page-subtitle">Verificación vehicular — comprobante y fecha de la próxima</p>
+    </div>
+    <!-- KPIs: clic = filtrar la tabla -->
+    <div class="kpi-chips">
+      <button type="button" class="kpi-chip" id="ver-kpi-total" title="Ver todos los registros">
+        <span class="kpi-chip-label">Registros</span>
+        <strong class="kpi-chip-value" id="ver-stat-total">0</strong>
+      </button>
+      <button type="button" class="kpi-chip kpi-warn" id="ver-kpi-por-vencer" title="Filtrar: vehículos que vencen en 30 días o menos">
+        <span class="kpi-chip-label">Por vencer</span>
+        <strong class="kpi-chip-value" id="ver-stat-por-vencer">0</strong>
+      </button>
+      <button type="button" class="kpi-chip kpi-danger" id="ver-kpi-vencidas" title="Filtrar: vehículos con verificación vencida">
+        <span class="kpi-chip-label">Vencidos</span>
+        <strong class="kpi-chip-value" id="ver-stat-vencidas">0</strong>
+      </button>
+    </div>
+  </div>
+
+  <div id="ver-tabs">
+    <div class="tabs-lista">
+      <button type="button" class="tab-btn" data-tab="registros"><i data-lucide="table" class="ico"></i> Verificaciones</button>
+      <button type="button" class="tab-btn" data-tab="nuevo"><i data-lucide="plus" class="ico"></i> Nueva verificación</button>
+      <button type="button" class="tab-btn" data-tab="historial"><i data-lucide="history" class="ico"></i> Historial</button>
+    </div>
+
+    <!-- Pestaña 1: tabla de registros -->
+    <div class="card card-compacta" data-panel="registros">
+      <div id="ver-tabla"></div>
+    </div>
+
+    <!-- Pestaña 2: nuevo registro -->
+    <div class="card form-card" data-panel="nuevo">
+      <div class="form-card-header">
+        <div class="form-card-icon"><i data-lucide="car" class="ico"></i></div>
+        <div>
+          <h3>Registrar verificación</h3>
+          <p>Folio, fechas y foto del comprobante</p>
+        </div>
+      </div>
+      <!-- El formulario lo arma el componente Formulario (ver initVerificaciones en app.js) -->
+      <div id="ver-form"></div>
+    </div>
+
+    <!-- Pestaña 3: historial por tarjetas -->
+    <div class="card card-compacta" data-panel="historial">
+      <div style="display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap;">
+        <h3 style="margin:0">Historial</h3>
+        <input type="search" id="ver-buscar" placeholder="Buscar por folio o placa" style="max-width:260px;" />
+      </div>
+      <div id="ver-lista" class="incidencia-list" style="margin-top:12px"></div>
+      <p class="empty-state" id="ver-vacio">Cargando…</p>
+    </div>
+  </div>
+
+  <!-- Modal: editar verificación (folio, fecha de verificación, próxima verificación) -->
+  <div class="modal-backdrop" id="modal-editar-verificacion" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h3 style="margin:0">Editar verificación</h3>
+          <p class="modal-subtitle" id="editar-verificacion-label"></p>
+        </div>
+        <button type="button" class="modal-close" id="btn-cancelar-editar-verificacion"><i data-lucide="x" class="ico"></i></button>
+      </div>
+      <form id="form-editar-verificacion">
+        <input type="hidden" id="editar-verificacion-id" />
+        <div class="field"><label>Folio del vehículo</label><input type="text" id="editar-verificacion-folio" /></div>
+        <div class="field"><label>Fecha de verificación</label><input type="date" id="editar-verificacion-fecha-verificacion" /></div>
+        <div class="field"><label>Próxima verificación</label><input type="date" id="editar-verificacion-fecha-proxima" /></div>
+        <div class="error-msg" id="editar-verificacion-error" hidden></div>
+        <button type="submit" style="width:100%; margin-top:10px"><i data-lucide="save" class="ico"></i> Guardar cambios</button>
+      </form>
+    </div>
+  </div>
+</template>

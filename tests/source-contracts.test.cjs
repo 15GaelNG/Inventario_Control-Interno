@@ -48,12 +48,15 @@ test('el login acepta hash y conserva compatibilidad con la hoja histórica', ()
 
 test('Telefonía muestra sus módulos en orden y Gestión de Activos queda fuera del grupo', () => {
   const app = read('src/html/js/app.html');
-  const lineas = app.slice(app.indexOf("id: 'lineas'"), app.indexOf("id: 'gestion-activos'"));
-  assert.equal((lineas.match(/Inventario de Accesorios/g) || []).length, 1);
+  // Solo el bloque del grupo Líneas (con master hay más grupos después)
+  const inicioLineas = app.indexOf("id: 'lineas'");
+  const lineas = app.slice(inicioLineas, app.indexOf('\n    },', inicioLineas));
+  // El de Líneas y el general de los compañeros (master), que también vive en este grupo
+  assert.equal((lineas.match(/Inventario de Accesorios/g) || []).length, 2);
   // Panorama primero (29-sep). Fuera del menú (líneas comentadas) pero sus vistas se siguen montando: Reactivación
   // (29-sep) y Reasignaciones, Solicitud, Control de Cambios y Bitácora de Desechos (reunión con Líneas, 30-sep)
   // Correcciones de Líneas: módulo temporal (30-sep), después de Resguardos; se quita cuando Líneas termine
-  const orden = ['panorama-lineas', 'lineas-telefonicas', 'resguardos-lineas', 'correcciones-lineas', 'accesorios-lineas'];
+  const orden = ['panorama-lineas', 'lineas-telefonicas', 'resguardos-lineas', 'correcciones-lineas', 'accesorios-lineas', 'accesorios'];
   const ocultos = ['cambios-lineas'];
   const retirados = ['reactivacion-lineas', 'reasignaciones-lineas', 'solicitud-lineas', 'bitacora-desechos'];
   const sinComentarios = lineas.split(/\r?\n/).filter((l) => !/^\s*\/\//.test(l)).join('\n');
@@ -310,17 +313,15 @@ test('los movimientos rechazan artículos inexistentes', () => {
   assert.match(accesorios, /if \(!actual\) throw new Error\('El artículo seleccionado ya no existe/);
 });
 
-test('el shell es el de la rama jorge con solo el grupo de Líneas', () => {
+test('el shell es el de master y Líneas es uno de sus grupos', () => {
   const index = read('src/html/Index.html');
   const app = read('src/html/js/app.html');
   assert.match(index, /include\('html\/js\/componentes\/datatable'\)/);
   assert.ok(index.indexOf("include('html/js/componentes/datatable')") < index.indexOf("include('html/js/lineas')"),
     'lineas.html debe cargarse después de la librería de componentes');
   const grupos = /const NAV_GRUPOS = \[([\s\S]*?)\n  \];/.exec(app)[1];
-  assert.deepEqual([...grupos.matchAll(/^      id: '([^']+)'/gm)].map((m) => m[1]), ['lineas']);
-  for (const ajeno of ['initVehiculos', 'initIncidencias', 'initUber', 'initTickets', 'initAccesorios(']) {
-    assert.ok(!app.includes(ajeno), 'app.html no debe traer el módulo ' + ajeno);
-  }
+  // Desde la unión con master (1-oct) el menú trae los módulos de todos; Líneas es un grupo más
+  assert.ok([...grupos.matchAll(/^      id: '([^']+)'/gm)].map((m) => m[1]).includes('lineas'));
 });
 
 test('el JS de los .html no tiene "//" dentro de strings (Apps Script lo corta como comentario)', () => {
@@ -413,7 +414,9 @@ test('los campos de texto libre del AppSheet ahora tienen lista desplegable', ()
 test('todos los módulos tienen KPIs con línea lateral y la tarjeta se llama Detalles', () => {
   const lineas = read('src/html/js/lineas.html');
   const estilos = read('src/html/lineas-estilos.html');
-  assert.match(estilos, /\.ln-modulo \.stat-tile::before \{/);
+  // La franja de color la da el .stat-tile global (styles.html); Líneas ya no trae la suya (jorge, 25-sep)
+  assert.doesNotMatch(estilos, /\.ln-modulo \.stat-tile::before \{/);
+  assert.match(read('src/html/styles.html'), /\.stat-tile-ok \{ border-left-color: var\(--color-success\); \}/);
   assert.match(read('src/html/views/lineas/lineas-gestion-activos.html'), /id="lnga-kpis"/);
   assert.match(lineas, /etiqueta: 'Sin activos'/);
   assert.match(lineas, /etiqueta: 'Sin stock'/);
@@ -506,9 +509,9 @@ test('Exportar a Excel descarga la base completa del módulo, no solo lo que se 
   assert.doesNotMatch(lineas, /exportar: \{ nombreArchivo: (cfg\.|'Inventario)/);
   assert.match(lineas, /DecompressionStream\('gzip'\)/);
   const dt = read('src/html/js/componentes/datatable.html');
-  assert.match(dt, /if \(cfg\.exportar\.descargar\) \{/);
+  assert.match(dt, /if \(typeof cfg\.exportar\.descargar === 'function'\) return exportarConDescarga\(boton\);/);
   const xl = read('src/html/js/componentes/exportar-excel.html');
-  assert.match(xl, /return \{ descargar, descargarLibro \};/);
+  assert.match(xl, /return \{ descargar, descargarLibro[,\s\w]*\};/);
   assert.match(read('src/ClientApi.gs'), /function apiLineasExportarBase\(token, modulo, comprimir\)/);
 
   // Servidor: todas las filas y columnas, tipos para Excel y secretos ocultos si no es ADMIN
@@ -571,7 +574,7 @@ test('Drive: todo en la carpeta de la app AppSheet con sus rutas; NUCOS de produ
     getFoldersByName: (n) => { const c = (sub || {})[n]; return { hasNext: () => !!c, next: () => c }; },
     getFilesByName: (n) => { const f = (archivos || {})[n]; return { hasNext: () => !!f, next: () => f }; },
     createFolder: (n) => { const c = carpeta('NUEVA-' + n); (sub || {})[n] = c; return c; },
-    createFile: (blob) => { creados.push({ carpeta: id, nombre: blob.nombre, mime: blob.mime }); return { getId: () => 'F' + creados.length }; },
+    createFile: (blob) => { creados.push({ carpeta: id, nombre: blob.nombre, mime: blob.mime }); return { getId: () => 'F' + creados.length, setSharing: () => {} }; },
   });
   const archivo = { getId: () => 'ARCH1', getName: () => 'a1.EVIDENCIA.1.jpg', getUrl: () => 'https://drive.google.com/file/d/ARCH1/view' };
   const raiz = carpeta('RAIZ', { 'BITACORA DE DESECHO_Files_': carpeta('DES', {}, { 'a1.EVIDENCIA.1.jpg': archivo }) });
@@ -583,7 +586,7 @@ test('Drive: todo en la carpeta de la app AppSheet con sus rutas; NUCOS de produ
       base64EncodeWebSafe: (b) => String(b), computeDigest: (a, t) => t, DigestAlgorithm: {}, Charset: {},
       base64Decode: () => [1, 2, 3], newBlob: (bytes, mime, nombre) => ({ mime, nombre }), formatDate: () => '101530',
     },
-    DriveApp: { getFolderById: () => raiz },
+    DriveApp: { getFolderById: () => raiz, Access: { DOMAIN: 'DOMAIN' }, Permission: { VIEW: 'VIEW' } },
   };
   const LA = new Function(...Object.keys(globales), read('src/services/lineas/LineasArchivos.gs') + '\nreturn LineasArchivos;')(...Object.values(globales));
   assert.equal(LA.resolver('BITACORA DE DESECHO_Files_/a1.EVIDENCIA.1.jpg', false).id, 'ARCH1');
@@ -628,7 +631,7 @@ test('Drive: todo en la carpeta de la app AppSheet con sus rutas; NUCOS de produ
   assert.doesNotMatch(servicio, /pdfRuta|totalRotaciones|LineasArchivos\.imagen\(insp/);
   // Documentos: indicadores que filtran por tipo y una tabla con acciones por fila
   assert.match(lineas, /contarEnPestana\('documentos', filas\.length\);/);
-  assert.match(lineas, /etiqueta: 'Inspecciones', titulo: 'Mostrar solo inspecciones', filtros: \{ documento: \{ valores: \['Inspección'\] \} \}/);
+  assert.match(lineas, /etiqueta: 'Inspecciones', titulo: 'Mostrar solo inspecciones',\s+filtros: \{ documento: \{ valores: \['Inspección'\] \} \}/);
   assert.match(lineas, /\{ icono: 'file-plus', titulo: 'Generar PDF', visible: \(d\) => !!d\.pdfPendiente,/);
   // Sin Excel; doble clic abre la inspección (o el PDF de la responsiva)
   assert.match(lineas, /idTabla: 'lineas-documentos-v1',\s+exportar: false,/);

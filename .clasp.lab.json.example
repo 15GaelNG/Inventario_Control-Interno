@@ -1,0 +1,5 @@
+{
+  "scriptId": "PEGA_AQUI_EL_ID_DE_TU_PROYECTO_DE_LABORATORIO",
+  "rootDir": "./src",
+  "parentId": "PEGA_AQUI_EL_ID_DEL_SPREADSHEET_DEL_LABORATORIO"
+}

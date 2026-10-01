@@ -232,3 +232,63 @@ function retirarHojasLineas_borrar() {
   console.log(JSON.stringify(salida, null, 2));
   return salida;
 }
+
+/**
+ * Comparte (DOMAIN, VIEW) todos los archivos que ya existían en la carpeta de
+ * la app (LINEAS_DRIVE_APPSHEET) antes de que subirArchivo()/
+ * guardarComoAppSheet()/generar() empezaran a compartirlos solos —
+ * recorre TODAS las subcarpetas ("<TABLA>_Files_", "<TABLA>_Images", …).
+ * Solo el DUEÑO de un archivo puede cambiarle el compartir, y "Ejecutar"
+ * desde el editor corre con la cuenta que tengas ahí abierta (no
+ * necesariamente la que desplegó la app) — por eso también se expone como
+ * apiCompartirArchivosLineasExistentes (ClientApi.gs), para correrla desde
+ * la consola del navegador con la app abierta:
+ *   google.script.run
+ *     .withSuccessHandler(r => console.log(r))
+ *     .withFailureHandler(e => console.error('FALLÓ:', e.message))
+ *     .apiCompartirArchivosLineasExistentes(state.token)
+ */
+function compartirArchivosLineasExistentes(token) {
+  if (token) Permisos.puedeEditar(token, 'usuarios');
+  const raizId = LineasArchivos.carpetaAppSheetId();
+  if (!raizId) {
+    const msg = 'Falta configurar LINEAS_DRIVE_APPSHEET (corre configurarLineasDev()).';
+    Logger.log(msg);
+    return msg;
+  }
+
+  const LIMITE = 4000; // tope de seguridad para no pasarse del tiempo de ejecución
+  let revisados = 0, compartidos = 0, yaEstaban = 0, fallaron = 0, primerError = null;
+
+  function recorrer(carpeta) {
+    if (revisados >= LIMITE) return;
+    const archivos = carpeta.getFiles();
+    while (archivos.hasNext() && revisados < LIMITE) {
+      const archivo = archivos.next();
+      revisados++;
+      try {
+        const acceso = archivo.getSharingAccess();
+        if (acceso === DriveApp.Access.DOMAIN || acceso === DriveApp.Access.ANYONE || acceso === DriveApp.Access.ANYONE_WITH_LINK) {
+          yaEstaban++;
+        } else {
+          archivo.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
+          compartidos++;
+        }
+      } catch (err) {
+        fallaron++;
+        if (!primerError) primerError = archivo.getName() + ': ' + err.message;
+      }
+    }
+    const subcarpetas = carpeta.getFolders();
+    while (subcarpetas.hasNext() && revisados < LIMITE) recorrer(subcarpetas.next());
+  }
+
+  recorrer(DriveApp.getFolderById(raizId));
+
+  const mensaje = 'Carpeta de Líneas: ' + revisados + ' archivo(s) revisado(s)' +
+    (revisados >= LIMITE ? ' (tope alcanzado, corre de nuevo si hace falta)' : '') +
+    ' — ' + compartidos + ' recién compartido(s), ' + yaEstaban + ' ya estaban, ' + fallaron + ' fallaron.' +
+    (primerError ? '\n  Primer error: ' + primerError : '');
+  Logger.log(mensaje);
+  return mensaje;
+}

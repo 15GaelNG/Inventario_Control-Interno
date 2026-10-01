@@ -421,7 +421,7 @@
           const r = await llamar('apiLineasExportarBase', modulo, comprimir);
           const base = JSON.parse(comprimir ? await descomprimir(r) : r);
           await ExportarExcel.descargarLibro({ nombreArchivo: nombreArchivo, hojas: base.hojas });
-          return base.hojas[0].filas.length;
+          return base.hojas.reduce((n, h) => n + h.filas.length, 0);
         },
       };
     }
@@ -473,9 +473,12 @@
 
     /**
      * KPIs (stat-tile de la rama jorge) que filtran la tabla con un clic, como en Vehículos o Uber.
-     * defs: [{ icono, etiqueta, valor, clase, titulo, filtros }]. `filtros: { campo: filtro }` usa el
-     * formato de DataTable.setFiltro; sin `filtros` el tile es "Total" (quita los de los KPIs);
+     * defs: [{ icono, etiqueta, valor, clase, titulo, filtros, calcular }]. `filtros: { campo: filtro }`
+     * usa el formato de DataTable.setFiltro; sin `filtros` el tile es "Total" (quita los de los KPIs);
      * `filtros: false` lo deja solo informativo. Otro clic sobre el activo quita su filtro.
+     * `calcular: (filasFiltradas) => valor` (opcional): si se da, el valor del tile se recalcula con lo
+     * que queda bajo los filtros activos de la tabla cada vez que cambian (si no se da, se queda fijo
+     * en `valor`, útil para KPIs que no son un conteo, como "Última inspección").
      * Regresa marcar(filtros) para llamarlo desde `alCambiarFiltros`.
      */
     function tilesKpi(contenedor, defs, obtenerTabla) {
@@ -492,7 +495,16 @@
       const igual = (a, b) => JSON.stringify(a || null) === JSON.stringify(b || null);
       const activo = (d, filtros) => d.filtros !== false && campos.every((c) => igual(filtros[c], (d.filtros || {})[c]));
       function marcar(filtros) {
-        tiles.forEach((t) => t.classList.toggle('stat-tile-activo', activo(defs[Number(t.dataset.kpi)], filtros || {})));
+        const tabla = obtenerTabla();
+        const filas = tabla ? tabla.getFiltradas() : null;
+        tiles.forEach((t) => {
+          const d = defs[Number(t.dataset.kpi)];
+          t.classList.toggle('stat-tile-activo', activo(d, filtros || {}));
+          if (d.calcular && filas) {
+            const valorEl = t.querySelector('.stat-value');
+            if (valorEl) valorEl.textContent = d.calcular(filas);
+          }
+        });
       }
       function clic(t) {
         const d = defs[Number(t.dataset.kpi)];
@@ -1619,23 +1631,30 @@
         const ix = memoria.indice;
         const eq = ix.equipos;
         const li = ix.lineas;
+        // filasDe: lo que hay bajo los filtros activos de esa tabla (o el índice completo si
+        // esa tabla todavía no se ha creado — no puede haber filtro sin tabla).
+        const filasDe = (modulo) => (tablas[modulo] ? tablas[modulo].getFiltradas() : (modulo === 'equipos' ? eq : li));
         const defs = [
-          { icono: 'smartphone', valor: miles(eq.length), etiqueta: 'Equipos', modulo: 'equipos', filtros: {} },
-          { icono: 'circle-check', valor: miles(eq.filter((e) => e.estatus === 'USO').length), etiqueta: 'Equipos en uso', clase: 'stat-tile-ok', modulo: 'equipos', filtros: { estatus: { valores: ['USO'] } } },
-          { icono: 'unplug', valor: miles(eq.filter((e) => !e.lineaId).length), etiqueta: 'Equipos sin línea', modulo: 'equipos', filtros: { numero: { op: 'vacio' } } },
-          { icono: 'card-sim', valor: miles(li.length), etiqueta: 'Líneas', modulo: 'lineas', filtros: {} },
-          { icono: 'unlink', valor: miles(li.filter((l) => l.suelta).length), etiqueta: 'Líneas sueltas', clase: 'stat-tile-warn', modulo: 'lineas', filtros: { suelta: { valores: ['Sí'] } } },
+          { icono: 'smartphone', calcular: (f) => f.length, etiqueta: 'Equipos', modulo: 'equipos', filtros: {} },
+          { icono: 'circle-check', calcular: (f) => f.filter((e) => e.estatus === 'USO').length, etiqueta: 'Equipos en uso', clase: 'stat-tile-ok', modulo: 'equipos', filtros: { estatus: { valores: ['USO'] } } },
+          { icono: 'unplug', calcular: (f) => f.filter((e) => !e.lineaId).length, etiqueta: 'Equipos sin línea', modulo: 'equipos', filtros: { numero: { op: 'vacio' } } },
+          { icono: 'card-sim', calcular: (f) => f.length, etiqueta: 'Líneas', modulo: 'lineas', filtros: {} },
+          { icono: 'unlink', calcular: (f) => f.filter((l) => l.suelta).length, etiqueta: 'Líneas sueltas', clase: 'stat-tile-warn', modulo: 'lineas', filtros: { suelta: { valores: ['Sí'] } } },
         ];
         const cont = $('#ln-indicadores', raiz);
         cont.innerHTML = defs.map((d, i) => '<div class="stat-tile stat-tile-clickable ' + (d.clase || '') + '" data-kpi="' + i + '" role="button" tabindex="0">' +
-          '<div class="stat-icon">' + ico(d.icono) + '</div><div><div class="stat-value">' + d.valor + '</div><div class="stat-label">' + esc(d.etiqueta) + '</div></div></div>').join('');
+          '<div class="stat-icon">' + ico(d.icono) + '</div><div><div class="stat-value">' + miles(d.calcular(filasDe(d.modulo))) + '</div><div class="stat-label">' + esc(d.etiqueta) + '</div></div></div>').join('');
         const campos = { equipos: ['estatus', 'numero'], lineas: ['suelta'] };
         const igual = (x, y) => JSON.stringify(x || null) === JSON.stringify(y || null);
+        // Los valores reflejan lo que hay bajo los filtros activos de cada tabla, no siempre
+        // el índice completo — igual que el resto de los módulos (jorge).
         marcarKpi = () => {
           cont.querySelectorAll('[data-kpi]').forEach((t) => {
             const d = defs[Number(t.dataset.kpi)];
             const f = filtrosActuales[d.modulo] || {};
             t.classList.toggle('stat-tile-activo', memoria.modulo === d.modulo && campos[d.modulo].every((c) => igual(f[c], d.filtros[c])));
+            const valorEl = t.querySelector('.stat-value');
+            if (valorEl) valorEl.textContent = miles(d.calcular(filasDe(d.modulo)));
           });
         };
         const clic = (t) => {
@@ -2416,9 +2435,11 @@
           (filas.length ? '<div class="ln-docs-tabla"></div>' : '<p class="empty-state">Este registro no tiene inspecciones ni responsivas.</p>') + '</div>';
         const conFecha = (d) => (d ? fecha(d.fecha) || 'Sin fecha' : 'Ninguna');
         const marcar = tilesKpi($('.ln-docs-kpis', cont), [
-          { icono: 'clipboard-check', valor: miles(inspecciones.length), etiqueta: 'Inspecciones', titulo: 'Mostrar solo inspecciones', filtros: { documento: { valores: ['Inspección'] } } },
+          { icono: 'clipboard-check', valor: miles(inspecciones.length), etiqueta: 'Inspecciones', titulo: 'Mostrar solo inspecciones',
+            filtros: { documento: { valores: ['Inspección'] } }, calcular: (f) => miles(f.filter((d) => d.documento === 'Inspección').length) },
           { icono: 'calendar-check', valor: conFecha(ultimaInsp), etiqueta: 'Última inspección', filtros: false },
-          { icono: 'signature', valor: miles(responsivas.length), etiqueta: 'Responsivas', titulo: 'Mostrar solo responsivas', filtros: { documento: { valores: ['Responsiva'] } } },
+          { icono: 'signature', valor: miles(responsivas.length), etiqueta: 'Responsivas', titulo: 'Mostrar solo responsivas',
+            filtros: { documento: { valores: ['Responsiva'] } }, calcular: (f) => miles(f.filter((d) => d.documento === 'Responsiva').length) },
           { icono: 'calendar-check', valor: conFecha(ultimaResp), etiqueta: 'Última responsiva', filtros: false },
         ], () => tablaDocumentos);
         if (!filas.length) return;
@@ -3639,7 +3660,7 @@
           ],
           ayuda: 'Todos los movimientos del registro: reasignaciones, cambios de cada campo, inspecciones, responsivas, reactivaciones y desechos, ' +
             'del AppSheet y del sistema nuevo. "Movimiento" filtra por tipo; la flecha de cada columna filtra por campo, usuario, origen o rango de fechas. ' +
-            '"' + TITULO_ASIGNACIONES[vistaHistorial] + '" cambia la tabla por los periodos de cada número y NUCO. "Exportar a Excel" descarga lo filtrado.',
+            '"' + TITULO_ASIGNACIONES[vistaHistorial] + '" cambia la tabla por los periodos de cada número y NUCO. "Exportar a Excel" descarga todo (respeta los filtros activos).',
           alCambiarFiltros: (f) => {
             if (select.value === MOV_ASIGNACIONES) return;
             const valores = f && f.movimiento && f.movimiento.valores;
@@ -4499,43 +4520,50 @@
         });
         visibles = paso;
         pintarCuadros();
+        pintarKpis();
       }
 
       $('#lnga-q', raiz).addEventListener('input', (ev) => {
         clearTimeout(temporizador);
         temporizador = setTimeout(aplicarFiltros, 150);
       });
-      // KPIs: clic = filtro "Con / Sin activos" (el mismo del selector); otro clic lo quita
+      // KPIs: clic = filtro "Con / Sin activos" (el mismo del selector); otro clic lo quita.
+      // Los valores reflejan `filtrados` (lo que hay bajo el texto/selector actuales), no
+      // siempre todos los colaboradores — igual que en el resto de los módulos.
+      function valoresKpi(lista) {
+        const con = lista.filter((c) => c.totalActivos).length;
+        return {
+          TODOS: lista.length, CON: con, SIN: lista.length - con,
+          asignados: lista.reduce((t, c) => t + c.totalActivos, 0),
+        };
+      }
       function pintarKpis() {
-        const con = colaboradores.filter((c) => c.totalActivos).length;
-        const activosAsignados = colaboradores.reduce((t, c) => t + c.totalActivos, 0);
-        const defs = [
-          { icono: 'users', valor: colaboradores.length, etiqueta: 'Colaboradores', filtro: 'TODOS' },
-          { icono: 'user-check', valor: con, etiqueta: 'Con activos', clase: 'stat-tile-ok', filtro: 'CON' },
-          { icono: 'user-x', valor: colaboradores.length - con, etiqueta: 'Sin activos', clase: 'stat-tile-warn', filtro: 'SIN' },
-          { icono: 'smartphone', valor: activosAsignados, etiqueta: 'Equipos y líneas asignados' },
+        const v = valoresKpi(filtrados);
+        const kpiDefs = [
+          { icono: 'users', valor: v.TODOS, etiqueta: 'Colaboradores', filtro: 'TODOS' },
+          { icono: 'user-check', valor: v.CON, etiqueta: 'Con activos', clase: 'stat-tile-ok', filtro: 'CON' },
+          { icono: 'user-x', valor: v.SIN, etiqueta: 'Sin activos', clase: 'stat-tile-warn', filtro: 'SIN' },
+          { icono: 'smartphone', valor: v.asignados, etiqueta: 'Equipos y líneas asignados' },
         ];
         const cont = $('#lnga-kpis', raiz);
-        cont.innerHTML = defs.map((d, i) => '<div class="stat-tile ' + (d.clase || '') + (d.filtro ? ' stat-tile-clickable' : '') + '" data-kpi="' + i + '"' +
+        cont.innerHTML = kpiDefs.map((d, i) => '<div class="stat-tile ' + (d.clase || '') + (d.filtro ? ' stat-tile-clickable' : '') + '" data-kpi="' + i + '"' +
           (d.filtro ? ' role="button" tabindex="0"' : '') + '><div class="stat-icon">' + ico(d.icono) + '</div><div><div class="stat-value">' + miles(d.valor) + '</div>' +
           '<div class="stat-label">' + esc(d.etiqueta) + '</div></div></div>').join('');
         const marcar = () => cont.querySelectorAll('[data-kpi]').forEach((t) => {
-          const d = defs[Number(t.dataset.kpi)];
+          const d = kpiDefs[Number(t.dataset.kpi)];
           t.classList.toggle('stat-tile-activo', !!d.filtro && d.filtro !== 'TODOS' && $('#lnga-filtro-activos', raiz).value === d.filtro);
         });
         cont.querySelectorAll('[data-kpi]').forEach((t) => {
-          const d = defs[Number(t.dataset.kpi)];
+          const d = kpiDefs[Number(t.dataset.kpi)];
           if (!d.filtro) return;
           const clic = () => {
             const select = $('#lnga-filtro-activos', raiz);
             select.value = select.value === d.filtro ? 'TODOS' : d.filtro;
             aplicarFiltros();
-            marcar();
           };
           t.addEventListener('click', clic);
           t.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); clic(); } });
         });
-        $('#lnga-filtro-activos', raiz).addEventListener('change', marcar);
         marcar();
       }
 
@@ -4558,7 +4586,6 @@
         indice.equipos.forEach((a) => { const k = normal(a.responsable); if (k) conteo[k] = (conteo[k] || 0) + 1; });
         indice.lineas.filter((a) => a.suelta).forEach((a) => { const k = normal(a.responsable); if (k) conteo[k] = (conteo[k] || 0) + 1; });
         colaboradores = filasComoObjetos(r).map((c, i) => Object.assign(c, { _i: i, totalActivos: conteo[normal(c.nombre)] || 0 }));
-        pintarKpis();
         aplicarFiltros();
       }).catch((e) => {
         if (!vigente()) return;
@@ -4592,13 +4619,14 @@
         if (!indiceAcc) return;
         const filas = indiceAcc.filas;
         marcarKpi = tilesKpi($('#lac-indicadores', raiz), [
-          { icono: 'package', valor: miles(filas.length), etiqueta: 'Artículos' },
+          { icono: 'package', valor: miles(filas.length), etiqueta: 'Artículos', calcular: (f) => miles(f.length) },
           { icono: 'triangle-alert', valor: miles(filas.filter((a) => a.reabasto).length), etiqueta: 'Por reabastecer',
             titulo: 'Aviso del AppSheet: Cargadores ≤ 10, Micas ≤ 182, Fundas ≤ 182',
-            clase: 'stat-tile-warn', filtros: { reabasto: { valores: ['Sí'] } } },
+            clase: 'stat-tile-warn', filtros: { reabasto: { valores: ['Sí'] } }, calcular: (f) => miles(f.filter((a) => a.reabasto).length) },
           { icono: 'package-x', valor: miles(filas.filter((a) => (Number(a.stock) || 0) <= 0).length), etiqueta: 'Sin stock',
-            clase: 'stat-tile-warn', filtros: { stock: { op: '<=', v1: 0 } } },
-          { icono: 'circle-check', valor: miles(filas.reduce((t, a) => t + (Number(a.stock) || 0), 0)), etiqueta: 'Piezas en stock', clase: 'stat-tile-ok', filtros: false },
+            clase: 'stat-tile-warn', filtros: { stock: { op: '<=', v1: 0 } }, calcular: (f) => miles(f.filter((a) => (Number(a.stock) || 0) <= 0).length) },
+          { icono: 'circle-check', valor: miles(filas.reduce((t, a) => t + (Number(a.stock) || 0), 0)), etiqueta: 'Piezas en stock', clase: 'stat-tile-ok', filtros: false,
+            calcular: (f) => miles(f.reduce((t, a) => t + (Number(a.stock) || 0), 0)) },
         ], () => tabla);
         marcarKpi(filtrosAcc);
       }
@@ -4984,10 +5012,12 @@
         subtitulo: 'Bitácora de campos modificados en LINEAS TELEFONICAS (AppSheet y nuevo sistema)',
         idRegistro: 'ID_LINEA', fecha: 'FECHA ACTUALIZACION',
         kpis: (filas) => {
-          const deCampo = (lista) => filas.filter((f) => lista.indexOf(String(f['CAMPO'] || '').trim()) >= 0).length;
+          const deCampo = (lista, arr) => arr.filter((f) => lista.indexOf(String(f['CAMPO'] || '').trim()) >= 0).length;
           return [
-            { icono: 'toggle-right', valor: miles(deCampo(['ESTATUS LINEA', 'ESTATUS EQUIPO'])), etiqueta: 'Cambios de estatus', filtros: { CAMPO: { valores: ['ESTATUS LINEA', 'ESTATUS EQUIPO'] } } },
-            { icono: 'recycle', valor: miles(deCampo(['RESPONSABLE'])), etiqueta: 'Cambios de responsable', filtros: { CAMPO: { valores: ['RESPONSABLE'] } } },
+            { icono: 'toggle-right', valor: miles(deCampo(['ESTATUS LINEA', 'ESTATUS EQUIPO'], filas)), etiqueta: 'Cambios de estatus',
+              filtros: { CAMPO: { valores: ['ESTATUS LINEA', 'ESTATUS EQUIPO'] } }, calcular: (f) => miles(deCampo(['ESTATUS LINEA', 'ESTATUS EQUIPO'], f)) },
+            { icono: 'recycle', valor: miles(deCampo(['RESPONSABLE'], filas)), etiqueta: 'Cambios de responsable',
+              filtros: { CAMPO: { valores: ['RESPONSABLE'] } }, calcular: (f) => miles(deCampo(['RESPONSABLE'], f)) },
           ];
         },
         // Vista CONTROL DE CAMBIOS - LINEAS del AppSheet
@@ -5042,10 +5072,14 @@
 
       function pintarKpis(r) {
         const hFecha = tabla && tabla.hFecha;
+        // "Registros en la hoja" no recalcula con calcular: r.total es el total REAL de la hoja
+        // (la tabla solo carga un lote), no el de las filas cargadas — dejarlo fijo evita mentir.
         const defs = [{ icono: cfg.icono, valor: miles(r.total), etiqueta: busqueda ? 'Coinciden con "' + busqueda + '"' : 'Registros en la hoja' }];
         if (hFecha) {
-          defs.push({ icono: 'calendar-days', valor: miles(contarDesde(r.filas, hFecha, 29)), etiqueta: 'Últimos 30 días', filtros: { [hFecha]: { op: 'entre', v1: diaClave(29), v2: diaClave(0) } } });
-          defs.push({ icono: 'clock', valor: miles(contarDesde(r.filas, hFecha, 0)), etiqueta: 'Hoy', clase: 'stat-tile-ok', filtros: { [hFecha]: { op: 'igual', v1: diaClave(0) } } });
+          defs.push({ icono: 'calendar-days', valor: miles(contarDesde(r.filas, hFecha, 29)), etiqueta: 'Últimos 30 días',
+            filtros: { [hFecha]: { op: 'entre', v1: diaClave(29), v2: diaClave(0) } }, calcular: (f) => miles(contarDesde(f, hFecha, 29)) });
+          defs.push({ icono: 'clock', valor: miles(contarDesde(r.filas, hFecha, 0)), etiqueta: 'Hoy', clase: 'stat-tile-ok',
+            filtros: { [hFecha]: { op: 'igual', v1: diaClave(0) } }, calcular: (f) => miles(contarDesde(f, hFecha, 0)) });
         }
         (cfg.kpis ? cfg.kpis(r.filas, r.encabezados, hFecha) : []).forEach((d) => defs.push(d));
         marcarKpi = tilesKpi($('#ln-bit-kpis', raiz), defs, () => tabla);

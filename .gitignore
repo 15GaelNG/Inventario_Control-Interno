@@ -4,8 +4,25 @@ node_modules/
 .clasp.json
 .clasp.*.json
 !.clasp.json.example
+!.clasp.lab.json.example
 *.log
 .DS_Store
 
 # Módulo temporal de correcciones: la semilla trae datos del inventario (tools/correcciones-semilla.cjs)
 src/services/lineas/LineasCorreccionesSemilla.gs
+
+# Archivo temporal que crea Excel mientras tienes un libro abierto
+~$*
+
+# Formatos y PDFs reales de consulta (traen datos de personas): nunca al repo
+basura/
+
+# Capturas y página armada de la vista previa local (se regeneran con npm run captura)
+tools/vista-previa/salida/
+screenshots/
+
+# Capturas de pantalla y PDFs que dejamos sueltos en la raíz para revisar algo
+# (los PDFs traen nombres y placas reales). Las imágenes del sistema viven en assets/.
+/*.png
+/*.jpg
+/*.pdf

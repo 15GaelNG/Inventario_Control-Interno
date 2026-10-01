@@ -27,9 +27,9 @@ function truena(fn, texto) {
 console.log('1. El catálogo está sano');
 const revision = Entidades.revisarCatalogo();
 ok(revision.problemas.length === 0, 'sin problemas: ' + (revision.problemas.join(' | ') || 'ninguno'));
-ok(revision.hojas === 29, 'tiene las 29 hojas de registros (con APP_RESGUARDOS y APP_CORRECCIONES de Líneas), no ' + revision.hojas);
-ok(Entidades.migrables().length === 24,
-   'de ellas 24 vienen de AppSheet y sí se migran, no ' + Entidades.migrables().length);
+ok(revision.hojas === 25, 'tiene las 25 hojas de registros (con las 5 APP_ de Líneas), no ' + revision.hojas);
+ok(Entidades.migrables().length === 20,
+   'de ellas 20 vienen de AppSheet y sí se migran, no ' + Entidades.migrables().length);
 
 console.log('\n2. Los prefijos son únicos y bien formados');
 const todas = Entidades.todas();
@@ -57,7 +57,7 @@ ok(Entidades.hojaDe('XXX') === null, 'un prefijo inventado da null');
 
 console.log('\n6. Cuáles hojas necesitan respaldar su llave vieja');
 const pisan = Entidades.migrables().filter((e) => e.pisaLlaveAnterior).map((e) => e.hoja);
-ok(pisan.length === 8, 'son 8 las hojas migrables cuya columna ya se llama ID, no ' + pisan.length);
+ok(pisan.length === 6, 'son 6 las hojas migrables cuya columna ya se llama ID, no ' + pisan.length);
 ok(pisan.indexOf('LINEAS TELEFONICAS') !== -1 && pisan.indexOf('UBER') !== -1,
    'entre ellas Líneas y Uber');
 ok(pisan.indexOf('VEHICULOS') === -1,
@@ -71,12 +71,26 @@ ok(Entidades.migrables().every((e) => !e.delSistemaNuevo), 'y quedan fuera de mi
 ok(Entidades.prefijo('APP_EVIDENCIAS') === 'EVI',
    'pero sí tienen prefijo, para que sus altas nazcan bien');
 
-console.log('\n6c. La hoja que se me había escapado');
-ok(Entidades.existe('HISTORIAL_REASIGNACIONES'),
-   'HISTORIAL_REASIGNACIONES está en el catálogo (1,470 filas en producción)');
-ok(Entidades.prefijo('HISTORIAL_REASIGNACIONES') === 'HIS', 'con prefijo HIS');
-ok(Entidades.de('HISTORIAL_REASIGNACIONES').llaveAnterior === 'ID Historial',
-   'y su llave anterior es "ID Historial", no "ID"');
+console.log('\n6c. Las cuatro hojas que Líneas eliminó ya NO están en el catálogo');
+// Antes esta prueba aseguraba lo contrario: que HISTORIAL_REASIGNACIONES SÍ estuviera,
+// porque se me había escapado del catálogo. El 30/09/2026 el área tuvo junta y Emmanuel
+// eliminó cuatro pestañas, así que ahora lo que hay que asegurar es su ausencia —
+// mientras estuvieran, revisarAntesDeMigrar detenía cualquier corrida que escribiera.
+const ELIMINADAS = ['HISTORIAL_REASIGNACIONES', 'REACTIVACION DE LINEAS',
+  'SOLICITUD DE LINEAS', 'BITACORA DE DESECHO'];
+const quedan = ELIMINADAS.filter((h) => Entidades.existe(h));
+ok(quedan.length === 0,
+   quedan.length ? 'siguen en el catálogo: ' + quedan.join(', ')
+   : 'las 4 salieron de Entidades');
+
+// Y que el catálogo no quede a medias: una hoja fuera de Entidades pero con su
+// referencia viva haría que reescribirReferencias buscara una hoja que no existe.
+const fuente = fs.readFileSync(
+  path.join(__dirname, '..', 'src', 'MigracionIds.gs'), 'utf8');
+const conRef = ELIMINADAS.filter((h) => new RegExp("hoja: '" + h + "'").test(fuente));
+ok(conRef.length === 0,
+   conRef.length ? 'siguen en MIGRACION_REFERENCIAS: ' + conRef.join(', ')
+   : 'y también de MIGRACION_REFERENCIAS, así que el catálogo no quedó a medias');
 
 console.log('\n7. Todas dicen dónde estaba su llave anterior, POR NOMBRE');
 ok(todas.every((e) => e.llaveAnterior || e.columnaAnterior),
@@ -85,16 +99,48 @@ ok(todas.every((e) => e.llaveAnterior), 'y todas por nombre: ya ninguna depende 
 ok(Entidades.de('CAMBIOS LINEAS TELEFONICAS').llaveAnterior === 'ID APPSHEET',
    'a la que no tenía encabezado se le puso "ID APPSHEET", que es justo lo que guarda');
 
-console.log('\n7b. El caso donde la llave anterior ES la columna de respaldo');
+console.log('\n7b. Ninguna llave anterior se llama igual que la columna de respaldo');
+// Antes del 30/09/2026 el respaldo se llamaba "ID APPSHEET" y CAMBIOS LINEAS TELEFONICAS
+// tenía una columna REAL con ese nombre: un mismo nombre para dos papeles, que obligaba a
+// limpiarRespaldoRedundante a cuidar de no borrar el original comparándolo consigo mismo.
+// Al renombrar el respaldo a "ID ANTERIOR", la ambigüedad desapareció. Esto lo vigila.
+const choques = todas.filter((e) => e.llaveAnterior === Entidades.COLUMNA_ID_ANTERIOR);
+ok(choques.length === 0,
+   'cero colisiones: ' + (choques.length ? choques.map((e) => e.hoja).join(', ') : 'ninguna hoja usa ese nombre'));
 const cli = Entidades.de('CAMBIOS LINEAS TELEFONICAS');
-ok(cli.llaveAnterior === Entidades.COLUMNA_ID_ANTERIOR,
-   'en esa hoja coinciden, y limpiarRespaldoRedundante tiene que NO borrarla');
-ok(todas.filter((e) => e.llaveAnterior === Entidades.COLUMNA_ID_ANTERIOR).length === 1,
-   'es la única así: si aparece otra, hay que revisar esa salvaguarda');
+ok(cli.llaveAnterior === Entidades.COLUMNA_ID_ANTERIOR_LEGADO,
+   'la que chocaba usa el nombre VIEJO del respaldo, que ya no se escribe: ' + cli.llaveAnterior);
+
+console.log('\n7c. Las familias: migrar y homologar un módulo a la vez');
+const fams = Entidades.familias();
+ok(JSON.stringify(fams) === JSON.stringify(['cajachica', 'lineas', 'otros', 'vehiculos']),
+   'son las cuatro esperadas: ' + fams.join(', '));
+const suma = fams.reduce((a, f) => a + Entidades.deFamilia(f).length, 0);
+ok(suma === Entidades.migrables().length,
+   'cada migrable cae en exactamente una familia (' + suma + ' = ' + Entidades.migrables().length + ')');
+ok(Entidades.deFamilia().length === Entidades.migrables().length,
+   'deFamilia() sin filtro es lo mismo que migrables(): se puede pasar el filtro sin condicionales');
+ok(Entidades.deFamilia('vehiculos').length === 8, 'la familia de vehículos son 8 hojas');
+ok(Entidades.deFamilia(' VEHICULOS ').length === 8,
+   'y el nombre se normaliza: con espacios y en mayúsculas da lo mismo');
+ok(Entidades.deFamilia('no-existe').length === 0, 'una familia inventada da vacío, no todo');
+ok(Entidades.deFamilia('vehiculos').every((e) => e.familia === 'vehiculos'),
+   'y todas traen su familia puesta en el objeto, no solo en el catálogo');
+// La trampa que valía la pena recordar: había DOS hojas de reasignaciones, y la que se
+// llamaba HISTORIAL_REASIGNACIONES era de LÍNEAS, no de vehículos — su columna era
+// "ID Linea", no un folio. Ya se eliminó; la que queda es la de vehículos.
+ok(Entidades.de('REASIGNACIONES_VEHICULOS').familia === 'vehiculos',
+   'la de vehículos es REASIGNACIONES_VEHICULOS, que sí trae Folio Vehiculo');
+ok(Entidades.de('TICKETS').familia === 'otros',
+   'TICKETS no es de vehículos: su PLACA puede decir VARIAS o traer dos placas');
 
 console.log('\n8. Los nombres de columna son los mismos para todos');
 ok(Entidades.COLUMNA_ID === 'ID', 'la llave propia se llama ID');
-ok(Entidades.COLUMNA_ID_ANTERIOR === 'ID APPSHEET', 'el respaldo se llama ID APPSHEET');
+ok(Entidades.COLUMNA_ID_ANTERIOR === 'ID ANTERIOR', 'el respaldo se llama ID ANTERIOR');
+ok(Entidades.COLUMNA_ID_ANTERIOR_LEGADO === 'ID APPSHEET',
+   'y queda registrado el nombre viejo, solo para poder avisar si aparece en un libro');
+ok(Entidades.COLUMNA_ID_ANTERIOR !== Entidades.COLUMNA_ID_ANTERIOR_LEGADO,
+   'que son distintos es justo el punto del cambio');
 
 console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');
 process.exit(fallas ? 1 : 0);
