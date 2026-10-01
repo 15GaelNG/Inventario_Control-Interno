@@ -10,7 +10,7 @@ qué está hecho, cómo probarlo y qué sigue.
 
 - **Rama `emmanuel`:** en GitHub hasta `10dc7eb` (29-sep). En local hay 27 commits más (`644ba14` … `13e2987`).
   Se suben a GitHub **al terminar la ronda**, como pidió el usuario. DEV está al día con `emmanuel`.
-- **Pruebas:** `npm test` da 59 aprobadas y 0 fallidas. Las de Ayrton se corren aparte (`node tests/ids.test.js` y
+- **Pruebas:** `npm test` da 60 aprobadas y 0 fallidas. Las de Ayrton se corren aparte (`node tests/ids.test.js` y
   `node tests/entidades.test.js`) y dan TODO OK.
 - **Reunión con Líneas (30-sep): ya ocurrió.** Lo hecho después:
   - §0u: estatus nuevos, DISPONIBLE y menú;
@@ -24,6 +24,7 @@ qué está hecho, cómo probarlo y qué sigue.
     fuera quita la selección, sin columna de Acciones, Documentos/Historial de una fila, ficha con solo Nueva
     inspección y Nueva responsiva a la vista (lo demás en ⋮, también en la línea), "Ver carpeta en Drive" sola en ⋮
     y con el mismo nombre en la tabla Documentos, y la barra que entra a los 100 ms (con doble clic no se asoma).
+  - §0ac: centro de notificaciones: avisos de seguimiento, ícono y destino por tipo, filtro por tipo y agrupado.
   - §0ab: Panorama nuevo: líneas activas, renta por cuenta, adendums y departamentos, al cierre del mes que se elija.
   - §0aa: módulo TEMPORAL "Correcciones de Líneas" (casos de la conciliación para Líneas); se elimina cuando terminen.
   - §0z: Líneas lee `ID ANTERIOR` tras la segunda corrida de IDs de Ayrton.
@@ -60,6 +61,35 @@ qué está hecho, cómo probarlo y qué sigue.
   - §0z: Líneas lee `ID ANTERIOR` (corrida de IDs del 30-sep). Su catálogo y `MIGRACION_REFERENCIAS` ya no
     describen la BD de pruebas tal como quedó: ver §0z antes de correr `lineas2Escribir` sobre ella.
 
+
+## 0ac. Centro de notificaciones (2026-09-30, noche)
+
+Pendiente 5.2 de la lista maestra. Los tipos nuevos y sus días son **propuesta del sistema**: se ajustan con la respuesta
+de Líneas (pregunta L13) en una sola constante, `LineasNotificaciones.SEGUIMIENTO`.
+
+- **Avisos de seguimiento** (se revisan junto con los de adendum, al consultar la campana; caché `ln_notif_revision_v2`):
+  - `SIN_RECIBIR`: equipos mandados a resguardo hace 3 días o más que Pau no ha recibido (solo quien aprueba).
+  - `CANCELACION_PENDIENTE`: carta enviada hace 15 días o más sin confirmación, o por firmar hace 7 días o más (solo
+    quien aprueba).
+  - `DISPONIBLE_VENCIDA`: líneas DISPONIBLE (o el valor viejo RESGUARDO) con el adendum vencido, que se siguen pagando
+    (todo el equipo).
+  - Cada uno es **un resumen por semana** (clave `TIPO|lunes|huella del grupo`): si el grupo cambia a media semana sale
+    otro con la lista nueva; si no hay nada, no se crea aviso. `seguimiento()` es pura y tiene prueba.
+- Los avisos de "líneas para cancelar" que crea `LineasResguardos` pasan de tipo RESGUARDO a **CANCELACION** (los
+  anteriores se reconocen por su título).
+- **Vista y campana** (`html/notificaciones.html`):
+  - cada tipo con su ícono, color y destino (`TIPOS`): adendum → ficha de la línea; resguardo y cancelación →
+    bandeja "Resguardos y cancelaciones"; disponibles vencidas → Líneas Telefónicas filtrada por DISPONIBLE y
+    RESGUARDO (`Lineas.irConEstatus` se exporta y acepta varios estatus);
+  - tarjetas por tipo (total y sin leer) que filtran la lista; pestañas No leídas / Todas;
+  - lista por bloques de fecha (Hoy, Ayer, Esta semana, Antes); más de 3 avisos del mismo tipo en un bloque se juntan
+    en "Ver N más";
+  - arreglado: `google.script.run` entrega `undefined` en vez de `null`, y salía una pastilla vacía en los avisos sin
+    fecha de vencimiento.
+- **Probado en /dev (30-sep):** se creó "Líneas disponibles con el adendum vencido · 55"; la campana y la vista
+  muestran los íconos por tipo; "Ver líneas disponibles" abre Líneas filtrada (78) y marca el aviso como leído.
+- Prueba nueva: `Notificaciones de seguimiento (30-sep)…` (60/60).
+- Falta: el correo (al final, con roles), y que Líneas confirme tipos y días (L13).
 
 ## 0ab. Panorama nuevo: lo que pregunta dirección, de un vistazo (2026-09-30, noche)
 

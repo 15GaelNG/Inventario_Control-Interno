@@ -281,7 +281,7 @@ const LineasResguardos = (function () {
         usuario.nombre + ' mandó ' + porRecibir.length + ' equipo(s) a resguardo' + (conCancelacion.length ? ', ' + conCancelacion.length + ' con la línea para cancelación' : '') +
         ': NUCO ' + porRecibir.slice(0, 10).map((h) => h.nuco).join(', ') + (porRecibir.length > 10 ? '…' : '') + '.');
     } else if (conCancelacion.length) {
-      avisar_('RESGUARDO', 'Líneas para cancelar · ' + conCancelacion.length,
+      avisar_('CANCELACION', 'Líneas para cancelar · ' + conCancelacion.length,
         usuario.nombre + ' mandó a cancelación la línea de ' + conCancelacion.length + ' equipo(s) que ya estaban en resguardo: NUCO ' +
         conCancelacion.slice(0, 10).map((h) => h.nuco).join(', ') + '.');
     }
@@ -355,7 +355,7 @@ const LineasResguardos = (function () {
     });
     if (hechos.length) {
       LineasRepo.indice(true);
-      avisar_('RESGUARDO', 'Líneas para cancelar · ' + hechos.length,
+      avisar_('CANCELACION', 'Líneas para cancelar · ' + hechos.length,
         usuario.nombre + ' mandó a cancelación ' + hechos.length + ' línea(s): ' +
         hechos.slice(0, 10).map((h) => h.numero).join(', ') + (hechos.length > 10 ? '…' : '') + '.');
     }

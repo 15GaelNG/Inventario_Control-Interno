@@ -1547,3 +1547,52 @@ test('Correcciones de Líneas (módulo temporal, 30-sep): cargas que conservan, 
   assert.match(read('src/config/Entidades.gs'), /'APP_CORRECCIONES': \{ prefijo: 'COR'/);
   assert.match(read('package.json'), /"correcciones:semilla": "node tools\/correcciones-semilla\.cjs"/);
 });
+
+test('Notificaciones de seguimiento (30-sep): equipos sin recibir, cancelaciones sin confirmar y líneas disponibles vencidas', () => {
+  const LineasUtil = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '; return LineasUtil;')({ normCol: (c) => String(c).toUpperCase().trim() }, {});
+  const Ntf = new Function('LineasUtil', 'LineasDatos', 'Utilities', read('src/services/lineas/LineasNotificaciones.gs') + '; return LineasNotificaciones;')(
+    LineasUtil, { ZONA_APP: 'America/Mexico_City' },
+    { formatDate: (d) => d.toISOString().slice(0, 10) });
+  const d = (s) => new Date(s + 'T12:00:00Z');
+  const firmar = (ids) => ids.slice().sort().join('+');
+  // El aviso es uno por semana: el lunes de la semana del 30-sep-2026 (miércoles) es el 28
+  assert.equal(Ntf._semana('2026-09-30'), '2026-09-28');
+  assert.equal(Ntf._semana('2026-09-28'), '2026-09-28');
+  const resguardos = [
+    { ID: 'RSG-1', NUCO: '0101', ESTADO: 'PENDIENTE DE RECEPCION', FECHA: d('2026-09-26') },   // 4 días: sí
+    { ID: 'RSG-2', NUCO: '0102', ESTADO: 'PENDIENTE DE RECEPCION', FECHA: d('2026-09-29') },   // 1 día: todavía no
+    { ID: 'RSG-3', NUCO: '0103', ESTADO: 'EN RESGUARDO', FECHA: d('2026-09-01') },             // ya recibido
+    { ID: 'RSG-4', NUMERO: '4421110000', CANCELACION: 'CARTA ENVIADA', FECHA: d('2026-08-20'), CARTA_ENVIADA_EN: d('2026-09-10') }, // 20 días: sí
+    { ID: 'RSG-5', NUMERO: '4421110001', CANCELACION: 'CARTA ENVIADA', FECHA: d('2026-09-20'), CARTA_ENVIADA_EN: d('2026-09-25') }, // 5 días: no
+    { ID: 'RSG-6', NUMERO: '4421110002', CANCELACION: 'POR FIRMAR', FECHA: d('2026-09-20') },  // 10 días por firmar: sí
+    { ID: 'RSG-7', NUMERO: '4421110003', CANCELACION: 'CANCELADA', FECHA: d('2026-08-01') },   // ya cancelada
+  ];
+  const linea = (id, estatus, fin, tipo) => ({ ID: id, TIPO: tipo || 'EQUIPO + SIM', 'ESTATUS LINEA': estatus, 'FIN PLAN': fin, 'NUMERO TELEFONO': '44200000' + id });
+  const lineas = [
+    linea('11', 'DISPONIBLE', d('2026-04-08')),                 // vencida y guardada: se sigue pagando
+    linea('12', 'RESGUARDO', d('2026-01-31')),                  // valor viejo de "disponible": también
+    linea('13', 'DISPONIBLE', d('2027-01-31')),                 // vigente: no
+    linea('14', 'USO', d('2026-01-31')),                        // en uso: no (la usa alguien)
+    linea('15', 'DISPONIBLE', d('2026-01-31'), 'EQUIPO + SIM BASICO'), // SIM básico: sin adendum
+  ];
+  const a = Ntf._seguimiento(lineas, resguardos, '2026-09-30', firmar);
+  const por = (t) => a.filter((x) => x.tipo === t)[0];
+  assert.deepEqual(a.map((x) => x.tipo), ['SIN_RECIBIR', 'CANCELACION_PENDIENTE', 'DISPONIBLE_VENCIDA']);
+  assert.equal(por('SIN_RECIBIR').clave, 'SIN_RECIBIR|2026-09-28|RSG-1');
+  assert.match(por('SIN_RECIBIR').mensaje, /NUCO 0101\.$/);
+  assert.equal(por('SIN_RECIBIR').para, Ntf.PARA_APROBADORES);
+  assert.equal(por('CANCELACION_PENDIENTE').clave, 'CANCELACION_PENDIENTE|2026-09-28|RSG-4+RSG-6');
+  assert.match(por('CANCELACION_PENDIENTE').mensaje, /1 con la carta enviada hace 15 días o más.*1 por firmar desde hace 7 días o más: 4421110000 y 4421110002\./);
+  assert.equal(por('DISPONIBLE_VENCIDA').clave, 'DISPONIBLE_VENCIDA|2026-09-28|11+12');
+  assert.equal(por('DISPONIBLE_VENCIDA').para, ''); // lo ve todo el equipo de Líneas
+  assert.match(por('DISPONIBLE_VENCIDA').titulo, /· 2$/);
+  // Sin nada que avisar: ningún aviso vacío
+  assert.deepEqual(Ntf._seguimiento([], [], '2026-09-30', firmar), []);
+  // Las líneas para cancelar ya tienen su tipo; la vista sabe a dónde lleva cada uno
+  assert.equal((read('src/services/lineas/LineasResguardos.gs').match(/avisar_\('CANCELACION', 'Líneas para cancelar · '/g) || []).length, 2);
+  const vista = read('src/html/notificaciones.html');
+  assert.match(vista, /DISPONIBLE_VENCIDA: \{ grupo: 'pagos', icono: 'banknote', color: 'vencida', accion: 'Ver líneas disponibles', estatus: \['lineas', \['DISPONIBLE', 'RESGUARDO'\]\]/);
+  assert.match(read('src/html/js/lineas.html'), /valores: Array\.isArray\(f\.estatus\) \? f\.estatus : \[f\.estatus\]/);
+  assert.match(vista, /const AGRUPAR_DESDE = 3;/);
+  assert.match(read('src/html/js/lineas.html'), /irConEstatus: irConEstatus, \/\/ desde Notificaciones/);
+});

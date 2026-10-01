@@ -1607,7 +1607,7 @@
         if (memoria.filtrarAlEntrar) {
           const f = memoria.filtrarAlEntrar;
           memoria.filtrarAlEntrar = null;
-          crearTabla(f.modulo).setFiltro('estatus', { valores: [f.estatus] });
+          crearTabla(f.modulo).setFiltro('estatus', { valores: Array.isArray(f.estatus) ? f.estatus : [f.estatus] });
         }
       }).catch((e) => {
         if (!vigente()) return;
@@ -4972,6 +4972,7 @@
       initCambios: () => initBitacora('CAMBIOS'),
       precargar: precargar,
       irARegistro: irARegistro, // desde Notificaciones: "Ver línea"
+      irConEstatus: irConEstatus, // desde Notificaciones: "Ver líneas disponibles"
       initPanorama: initPanorama,
       initResguardos: initResguardos,
       // Apoyos para módulos en su propio archivo (p. ej. el temporal de correcciones, html/js/lineas-correcciones.html)

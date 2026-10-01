@@ -1,6 +1,9 @@
 /**
  * LineasNotificaciones.gs
- * Avisos del sistema (campana de la barra superior y vista Notificaciones). Hoy: adendum por vencer.
+ * Avisos del sistema (campana de la barra superior y vista Notificaciones).
+ *   ADENDUM                adendum por vencer (uno por línea y fecha).
+ *   RESGUARDO / CANCELACION equipos mandados a resguardo y líneas mandadas a cancelación (los crea LineasResguardos).
+ *   SIN_RECIBIR, CANCELACION_PENDIENTE, DISPONIBLE_VENCIDA  avisos de seguimiento (30-sep, ver SEGUIMIENTO).
  *
  * Regla (pedido del área, 29-sep-2026): una semana antes de que venza el adendum (FIN PLAN) de una línea
  * activa se crea UNA notificación para esa línea y esa fecha. Las líneas que ya estaban vencidas cuando se
@@ -23,7 +26,7 @@ const LineasNotificaciones = (function () {
   const PARA_APROBADORES = 'APROBADORES_RESGUARDO';
   const DIAS_AVISO = 7;
   const PROP_DESDE = 'LINEAS_NOTIF_ADENDUM_DESDE';
-  const CLAVE_REVISION = 'ln_notif_revision_v1';
+  const CLAVE_REVISION = 'ln_notif_revision_v2'; // v2 (30-sep): también los avisos de seguimiento
   const SEG_REVISION = 30 * 60;
   /** Estatus en los que la línea ya no corre (no tiene caso avisar su adendum). */
   const ESTATUS_SIN_LINEA = ['CANCELADA', 'SIN LINEA', 'EN PROCESO DE CANCELACION'];
@@ -32,6 +35,19 @@ const LineasNotificaciones = (function () {
    * adendum ya vencido y no tienen fin de plazo, aunque la fila conserve la fecha del plan anterior.
    */
   const TIPOS_SIN_ADENDUM = ['EQUIPO', 'EQUIPO + SIM BASICO', 'LINEA BASICA'];
+
+  /**
+   * Avisos de seguimiento (30-sep-2026; propuesta del sistema: los días y a quién se ajustan con la respuesta de Líneas,
+   * pregunta L13 de migracion/PREGUNTAS_PENDIENTES.md). Cada uno es UN resumen por semana; si el grupo cambia a media
+   * semana (entra o sale un equipo o una línea) sale otro, con la lista nueva.
+   */
+  const SEGUIMIENTO = {
+    SIN_RECIBIR: { dias: 3, para: PARA_APROBADORES },              // mandados a resguardo y Pau no los ha recibido
+    CANCELACION_PENDIENTE: { dias: 15, diasPorFirmar: 7, para: PARA_APROBADORES }, // carta enviada sin confirmar / sin firmar
+    DISPONIBLE_VENCIDA: { para: '' },                                // línea guardada con el adendum vencido: se sigue pagando
+  };
+  const TAB_RESGUARDOS = 'APP_RESGUARDOS';
+  const LISTA_MAX = 8;
 
   const txt = (v) => (v === null || v === undefined ? '' : String(v).trim());
   const zona = () => LineasDatos.ZONA_APP;
@@ -90,6 +106,76 @@ const LineasNotificaciones = (function () {
 
   function fechaCorta_(ymd) { return ymd.slice(8, 10) + '/' + ymd.slice(5, 7) + '/' + ymd.slice(0, 4); }
 
+  /** Lunes de la semana de `hoy` (yyyy-MM-dd): los avisos de seguimiento son uno por semana. */
+  function semana_(hoy) {
+    const d = new Date(Date.UTC(Number(hoy.slice(0, 4)), Number(hoy.slice(5, 7)) - 1, Number(hoy.slice(8, 10))));
+    d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+    return d.toISOString().slice(0, 10);
+  }
+
+  /** Huella corta de un grupo (ids ordenados): si el grupo cambia, la clave cambia y sale otro aviso. */
+  function firma_(ids) {
+    const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, ids.slice().sort().join('|'));
+    return bytes.slice(0, 5).map((b) => ('0' + (b & 0xff).toString(16)).slice(-2)).join('');
+  }
+
+  /** "a, b, c y 4 más". */
+  function lista_(valores) {
+    const v = valores.filter(Boolean);
+    if (v.length <= LISTA_MAX) return v.length > 1 ? v.slice(0, -1).join(', ') + ' y ' + v[v.length - 1] : (v[0] || '');
+    return v.slice(0, LISTA_MAX).join(', ') + ' y ' + (v.length - LISTA_MAX) + ' más';
+  }
+
+  const diaDe_ = (v) => (v instanceof Date && !isNaN(v.getTime()) ? dia(v) : '');
+
+  /**
+   * Avisos de seguimiento que tocan hoy (pura, para poder probarla). lineas = filas de LINEAS TELEFONICAS; resguardos =
+   * filas de APP_RESGUARDOS; firmar(ids) = huella del grupo. Regresa [{ tipo, clave, titulo, mensaje, para }].
+   */
+  function seguimiento(lineas, resguardos, hoy, firmar) {
+    const salida = [];
+    const semana = semana_(hoy);
+    const agregar = (tipo, ids, titulo, mensaje) => {
+      if (!ids.length) return;
+      salida.push({ tipo: tipo, clave: tipo + '|' + semana + '|' + firmar(ids), titulo: titulo, mensaje: mensaje, para: SEGUIMIENTO[tipo].para });
+    };
+
+    const sinRecibir = resguardos.filter((r) => txt(r['ESTADO']) === 'PENDIENTE DE RECEPCION' && diaDe_(r['FECHA']) &&
+      diasEntre(diaDe_(r['FECHA']), hoy) >= SEGUIMIENTO.SIN_RECIBIR.dias);
+    agregar('SIN_RECIBIR', sinRecibir.map((r) => txt(r['ID'])),
+      'Equipos sin recibir · ' + sinRecibir.length,
+      sinRecibir.length + ' equipo(s) se mandaron a resguardo hace ' + SEGUIMIENTO.SIN_RECIBIR.dias + ' días o más y no se han recibido: NUCO ' +
+        lista_(sinRecibir.map((r) => txt(r['NUCO']))) + '.');
+
+    const c = SEGUIMIENTO.CANCELACION_PENDIENTE;
+    const atoradas = resguardos.filter((r) => {
+      const fase = txt(r['CANCELACION']);
+      if (fase === 'CARTA ENVIADA') return !!diaDe_(r['CARTA_ENVIADA_EN']) && diasEntre(diaDe_(r['CARTA_ENVIADA_EN']), hoy) >= c.dias;
+      if (fase === 'POR FIRMAR') return !!diaDe_(r['FECHA']) && diasEntre(diaDe_(r['FECHA']), hoy) >= c.diasPorFirmar;
+      return false;
+    });
+    const enviadas = atoradas.filter((r) => txt(r['CANCELACION']) === 'CARTA ENVIADA').length;
+    agregar('CANCELACION_PENDIENTE', atoradas.map((r) => txt(r['ID'])),
+      'Cancelaciones sin confirmar · ' + atoradas.length,
+      [enviadas ? enviadas + ' con la carta enviada hace ' + c.dias + ' días o más sin confirmación del proveedor' : '',
+        atoradas.length - enviadas ? (atoradas.length - enviadas) + ' por firmar desde hace ' + c.diasPorFirmar + ' días o más' : '']
+        .filter(Boolean).join('; ') + ': ' + lista_(atoradas.map((r) => txt(r['NUMERO']) || 'NUCO ' + txt(r['NUCO']))) + '.');
+
+    const vencidas = lineas.filter((f) => {
+      const estatus = txt(LineasUtil.col(f, 'ESTATUS LINEA')).toUpperCase();
+      if (estatus !== 'DISPONIBLE' && estatus !== 'RESGUARDO') return false; // RESGUARDO: valor viejo de "disponible"
+      if (TIPOS_SIN_ADENDUM.indexOf(txt(LineasUtil.col(f, 'TIPO')).toUpperCase()) >= 0) return false;
+      if ((LineasUtil.digitos(txt(LineasUtil.col(f, 'NUMERO TELEFONO'))) || '').length < 10) return false;
+      const vence = diaFinPlan(LineasUtil.col(f, 'FIN PLAN'));
+      return !!vence && vence < hoy;
+    });
+    agregar('DISPONIBLE_VENCIDA', vencidas.map((f) => txt(f['ID'])),
+      'Líneas disponibles con el adendum vencido · ' + vencidas.length,
+      vencidas.length + ' línea(s) guardadas tienen el adendum vencido y se siguen pagando: ' +
+        lista_(vencidas.map((f) => txt(LineasUtil.col(f, 'NUMERO TELEFONO')))) + '. Hay que reasignarlas o mandarlas a cancelar.');
+    return salida;
+  }
+
   function notificacionAdendum_(p, ahora) {
     const f = p.fila;
     const detalle = [
@@ -115,14 +201,24 @@ const LineasNotificaciones = (function () {
     const ahora = new Date();
     const hoy = dia(ahora);
     if (!forzar && cache.get(CLAVE_REVISION) === hoy) return 0;
-    const candidatas = pendientes(LineasDatos.leerTabla(LineasRepo.TAB.LINEAS), hoy, desde_(hoy));
+    const lineas = LineasDatos.leerTabla(LineasRepo.TAB.LINEAS);
+    const candidatas = pendientes(lineas, hoy, desde_(hoy));
+    let avisos = [];
+    try {
+      const resguardos = LineasDatos.existeTabla(TAB_RESGUARDOS) ? LineasDatos.leerTabla(TAB_RESGUARDOS) : [];
+      avisos = seguimiento(lineas, resguardos, hoy, firma_);
+    } catch (e) { console.warn('LineasNotificaciones.seguimiento: ' + e.message); }
     let creadas = 0;
-    if (candidatas.length) {
+    if (candidatas.length || avisos.length) {
       creadas = LineasDatos.conCandado(() => {
         if (!LineasDatos.existeTabla(TAB)) LineasDatos.asegurarPestana(TAB, ENCABEZADOS);
         const existentes = {};
         LineasDatos.leerTabla(TAB).forEach((n) => { existentes[txt(n['CLAVE'])] = true; });
-        const nuevas = candidatas.filter((p) => !existentes[p.clave]).map((p) => notificacionAdendum_(p, ahora));
+        const nuevas = candidatas.filter((p) => !existentes[p.clave]).map((p) => notificacionAdendum_(p, ahora))
+          .concat(avisos.filter((a) => !existentes[a.clave]).map((a) => ({
+            'ID': LineasDatos.nuevoId(TAB), 'FECHA': ahora, 'TIPO': a.tipo, 'CLAVE': a.clave, 'REF_ID': '', 'NUCO': '', 'NUMERO': '',
+            'TITULO': a.titulo, 'MENSAJE': a.mensaje, 'VENCE': '', 'LEIDA_POR': ',', 'CORREO_ENVIADO_EN': '', 'PARA': a.para,
+          })));
         LineasDatos.agregarFilas(TAB, nuevas);
         return nuevas.length;
       });
@@ -210,5 +306,6 @@ const LineasNotificaciones = (function () {
     });
   }
 
-  return { revisar, revisarPronto, bandeja, marcarLeidas, crear, PARA_APROBADORES, _pendientes: pendientes, _diaFinPlan: diaFinPlan, DIAS_AVISO };
+  return { revisar, revisarPronto, bandeja, marcarLeidas, crear, PARA_APROBADORES, SEGUIMIENTO, _pendientes: pendientes, _diaFinPlan: diaFinPlan,
+    _seguimiento: seguimiento, _semana: semana_, DIAS_AVISO };
 })();
