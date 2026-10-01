@@ -84,7 +84,7 @@ histórico**, solo en el respaldo completo):
 > `Hoja 53` traía **207 filas con datos** pese a su nombre de descarte. Si alguien la
 > busca, está en el respaldo completo.
 
-**12 se mudaron con `pipelinePRODMudarHistoricasEscribir`**, que copia, comprueba la
+**12 se mudaron con `pipelinePRODMudarHistoricasEscribir`** (función ya retirada del código; está en el historial de git), que copia, comprueba la
 integridad y solo entonces borra. La bitácora `LOG_MIGRACION` las registra con resultado OK
 y ninguna fallida:
 
@@ -197,8 +197,6 @@ spreadsheet en su primera línea, así que siempre se puede verificar contra cu�
 | Función | Escribe | Dónde |
 |---|---|---|
 | `pipelinePRODRespaldar` | crea copia | producción |
-| `pipelinePRODMudarHistoricasEnsayo` | no | producción |
-| `pipelinePRODMudarHistoricasEscribir` | **sí, borra pestañas** | producción |
 | `pipelineRevisarFirmas` | no | según propiedades |
 | `pipelineLimpiarFilasVaciasEnsayo` | no | según propiedades |
 | `pipelineLimpiarFilasVaciasEscribir` | **sí, borra filas de grid** | según propiedades |

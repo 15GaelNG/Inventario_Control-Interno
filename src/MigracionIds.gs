@@ -3,14 +3,8 @@
  * Le pone a cada renglón que ya existe su ID nuevo. Se corre A MANO desde el editor,
  * nunca desde el cliente. La lógica completa está en docs/ids-asignacion.md.
  *
- * Los cuatro pasos, EN ESTE ORDEN:
- *   1. revisarAntesDeMigrar()    solo reporta: qué está roto y qué se va a tocar
- *   2. asignarIds()              llena la columna ID de cada hoja
- *   3. reescribirReferencias()   cambia las columnas que apuntan a otra hoja
- *   4. (aparte) cambiar los servicios para unir por ID en vez de por FOLIO
- *
- * El 4 antes del 2 deja el sistema sin llaves. El 3 antes del 2, con referencias a IDs
- * que no existen.
+ * Desde el editor NO se corren estas funciones sueltas: las ordenan los pipelines de
+ * MigracionFamilia.gs (ids1Ensayo, vehiculos1Ensayo, …). Ver docs/guion-lab.md.
  *
  * TODAS las funciones que escriben empiezan en modo ensayo: no tocan nada y te dicen qué
  * harían. Para que escriban de verdad hay que pasarles `{ escribir: true }`.
@@ -20,66 +14,6 @@
  * campo. Se corre en producción hasta el apagado de AppSheet, poniendo la Script Property
  * MIGRACION_IDS_AUTORIZAR_PRODUCCION en el id del spreadsheet.
  */
-
-// ================================================================
-// LAS QUE SE CORREN DESDE EL EDITOR
-// El desplegable de funciones solo ejecuta funciones SIN argumentos, así que estas son
-// las que hay que seleccionar ahí. Van numeradas en el orden en que se usan.
-// Las de abajo (asignarIds, reescribirReferencias) reciben opciones y son para llamarlas
-// desde código o desde la consola.
-// ================================================================
-
-/** PASO 1 — Solo lee. Qué está roto y qué se va a tocar. */
-function migracion1Revisar() {
-  return revisarAntesDeMigrar();
-}
-
-/** PASO 2, ensayo — Solo dice qué IDs generaría. No escribe nada. */
-function migracion2AsignarEnsayo() {
-  return asignarIds();
-}
-
-/** PASO 2, de verdad — ESCRIBE la columna ID y guarda el valor viejo en ID ANTERIOR.
- *  Se puede volver a correr: las hojas ya migradas se saltan solas. */
-function migracion2AsignarEscribir() {
-  return asignarIds({ escribir: true });
-}
-
-/** PASO 3, ensayo — Solo dice qué referencias cambiaría y cuántas quedarían huérfanas. */
-function migracion3ReferenciasEnsayo() {
-  return reescribirReferencias();
-}
-
-/** PASO 3, de verdad — ESCRIBE las columnas que apuntan a otra hoja. */
-function migracion3ReferenciasEscribir() {
-  return reescribirReferencias({ escribir: true });
-}
-
-/** Comprobación final — Solo lee. Se puede correr cuando sea. */
-function migracion4Auditar() {
-  return auditarIds();
-}
-
-/** Mueve la columna ID al inicio de cada hoja, ensayo — Solo lee. */
-function migracionMoverIdsAlInicioEnsayo() {
-  return moverIdsAlInicio();
-}
-
-/** Mueve la columna ID al inicio de cada hoja, de verdad — MUEVE columnas. */
-function migracionMoverIdsAlInicioEscribir() {
-  return moverIdsAlInicio({ escribir: true });
-}
-
-/** Quita las columnas ID ANTERIOR que sobran, ensayo — Solo lee. */
-function migracionLimpiarRespaldoEnsayo() {
-  return limpiarRespaldoRedundante();
-}
-
-/** Quita las columnas ID ANTERIOR que sobran, de verdad — BORRA columnas.
- *  Solo borra donde el valor sigue existiendo íntegro en su columna original. */
-function migracionLimpiarRespaldoEscribir() {
-  return limpiarRespaldoRedundante({ escribir: true });
-}
 
 /**
  * EL SELLO.
@@ -512,12 +446,7 @@ function revisarAntesDeMigrar(opciones) {
 
   lineas.push('', problemas.length ? 'PROBLEMAS (' + problemas.length + '):' : 'Sin problemas.');
   problemas.forEach((p) => lineas.push('  - ' + p));
-  lineas.push('', 'Si todo se ve bien, lo que sigue es el ENSAYO, que tampoco escribe:',
-    '    migracion2AsignarEnsayo',
-    'y hasta que su salida cuadre:',
-    '    migracion2AsignarEscribir',
-    '',
-    'Si truena por tiempo, vuelve a correr lo mismo: sigue donde se quedó.');
+  lineas.push('', 'Si truena por tiempo, vuelve a correr lo mismo: sigue donde se quedó.');
   const texto = lineas.join('\n');
   Logger.log(texto);
   return texto;
@@ -698,9 +627,7 @@ function asignarIds(opciones) {
       '  ' + pendientes.join(', '),
       'Vuelve a correr lo mismo: las ya migradas se saltan solas y sigue donde se quedó.');
   } else if (!cfg.escribir) {
-    lineas.push('Para escribir de verdad, corre: migracion2AsignarEscribir');
-  } else {
-    lineas.push('Ahora: migracion4Auditar, y después migracion3ReferenciasEnsayo');
+    lineas.push('Para escribir de verdad, corre: ids2Escribir');
   }
   const texto = lineas.join('\n');
   Logger.log(texto);
@@ -904,7 +831,7 @@ function reescribirReferencias(opciones) {
   }
   // Dentro de un pipeline de familia el pie del pipeline ya dice qué correr (lineas2Escribir…);
   // este nombre solo aplica cuando se corre suelto.
-  if (!cfg.escribir && !cfg.familia) lineas.push('', 'Para escribir de verdad, corre: migracion3ReferenciasEscribir');
+  if (!cfg.escribir && !cfg.familia) lineas.push('', 'Para escribir de verdad, corre el …2Escribir de la familia');
   const texto = lineas.join('\n');
   Logger.log(texto);
   return texto;
@@ -964,7 +891,7 @@ function moverIdsAlInicio(opciones) {
   });
 
   lineas.push('', movidas + ' hojas por mover.');
-  if (!cfg.escribir && movidas) lineas.push('Para moverlas, corre: migracionMoverIdsAlInicioEscribir');
+  if (!cfg.escribir && movidas) lineas.push('Para moverlas, corre: ids2Escribir');
   const texto = lineas.join('\n');
   Logger.log(texto);
   return texto;
@@ -1322,7 +1249,7 @@ function limpiarRespaldoRedundante(opciones) {
   });
 
   lineas.push('', quitadas + ' hojas con respaldo de más.');
-  if (!cfg.escribir && quitadas) lineas.push('Para borrarlas, corre: migracionLimpiarRespaldoEscribir');
+  if (!cfg.escribir && quitadas) lineas.push('Para borrarlas, corre: ids2Escribir');
   const texto = lineas.join('\n');
   Logger.log(texto);
   return texto;
