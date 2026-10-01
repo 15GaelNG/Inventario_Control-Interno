@@ -262,6 +262,17 @@ function correrPasos_(p) {
       // no escribió nada, así que "todavía no tiene columna ID" es la respuesta correcta,
       // no una caída. Se anota y se sigue: en un ensayo no hay nada en riesgo y sí
       // información que juntar. Si la hoja YA venía migrada, el paso sí corre.
+      //
+      // Pero esa disculpa solo vale si ANTES hay un paso que escriba. Si no lo hay, nada de
+      // lo que lee depende del ensayo, y el error es un error: así se escondió el 01/10/2026
+      // que `referencias` de Líneas buscaba "ID_Accesorio" cuando ya se llamaba "ID ANTERIOR".
+      const antesEscribe = p.pasos.slice(0, i).some((x) => !x.soloLee);
+      if (!antesEscribe) {
+        partes.push(encabezado, '  TRONÓ: ' + err.message,
+          '  (no hay paso anterior que escriba, así que esto NO es por ser ensayo)', '');
+        detenido = paso.nombre;
+        continue;
+      }
       noEnsayables.push(paso.nombre);
       partes.push(encabezado,
         '  NO SE PUDO ENSAYAR: ' + err.message,
@@ -293,7 +304,7 @@ function correrPasos_(p) {
   }
   if (detenido) {
     pie.push('');
-    pie.push('  SE DETUVO en "' + detenido + '".' +
+    pie.push('  ' + (p.escribir ? 'SE DETUVO' : 'FALLÓ') + ' en "' + detenido + '".' +
       (p.escribir ? ' No se corrieron los pasos siguientes, a propósito.' : ''));
     pie.push('  Revisa ese paso arriba, arregla lo que diga, y vuelve a correr.');
   } else if (corte) {

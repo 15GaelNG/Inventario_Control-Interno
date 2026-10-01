@@ -139,5 +139,41 @@ console.log('una segunda corrida sobre el resultado no cambia nada');
   ok(/INSPECCIONES LINEAS\.ID LINEA -> LINEAS TELEFONICAS: YA MIGRADA \(2 referencias\)/.test(r), 'reporta YA MIGRADA');
 }
 
-console.log(fallas ? '\n' + fallas + ' FALLAS' : '\nTodo bien');
+console.log('llave de negocio que ya se renombró a ID ANTERIOR (ACCESORIOS CELULARES)');
+{
+  const hojas = {
+    'ACCESORIOS CELULARES': hojaFalsa(['ID', 'ID ANTERIOR', 'Categoria'], [
+      ['ACC-000000006DW81Z', '15bbb05e', 'Micas'],
+      ['ACC-000000015HF3SV', 'eab5ca2b', 'Fundas'],
+    ]),
+    'MOVIMIENTOS_ACCESORIOS': hojaFalsa(['ID', 'ID ANTERIOR', 'ID_Accesorio', 'ID ACCESORIO'], [
+      ['MAC-1', 'x', '15bbb05e', ''],
+      ['MAC-2', 'x', 'eab5ca2b', ''],
+      ['MAC-3', 'x', 'borrado1', ''],
+    ]),
+  };
+  const api = cargar(hojas, {});
+  const r = api.reescribirReferencias({ familia: 'lineas', escribir: true });
+  ok(/MOVIMIENTOS_ACCESORIOS\.ID_Accesorio -> ACCESORIOS CELULARES: 2 cambiadas, 1 huérfanas/.test(r),
+    'encuentra ID_Accesorio aunque ya se llame ID ANTERIOR');
+  const col = hojas['MOVIMIENTOS_ACCESORIOS'].escrito['ID ACCESORIO'];
+  ok(col && col[0] === 'ACC-000000006DW81Z' && col[2] === '', 'el ID nuevo va en ID ACCESORIO, la huérfana vacía');
+  ok(!hojas['MOVIMIENTOS_ACCESORIOS'].escrito['ID_Accesorio'], 'ID_Accesorio del hijo no se toca');
+}
+
+console.log('el motor: un error sin paso anterior que escriba NO se disculpa en ensayo');
+{
+  const ctx = vm.createContext({ console, Logger: { log: () => {} } });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'MigracionFamilia.gs'), 'utf8') +
+    '\nthis.correrPasos_ = correrPasos_;', ctx);
+  const correr = (pasos) => ctx.correrPasos_({ titulo: 'T', hojas: [], escribir: false, opcionesPaso: {}, pasos });
+  const truena = () => { throw new Error('no tiene la columna "X"'); };
+  const primero = correr([{ nombre: 'referencias', corre: truena }, { nombre: 'auditar', soloLee: true, corre: () => 'ok' }]);
+  ok(/TRONÓ: no tiene la columna/.test(primero) && /FALLÓ en "referencias"/.test(primero), 'como primer paso, es una falla');
+  ok(primero.indexOf('No es un error') === -1 && primero.indexOf('corre la versión que escribe') === -1, 'y no invita a escribir');
+  const despues = correr([{ nombre: 'ids', corre: () => 'ok' }, { nombre: 'mover', corre: truena }]);
+  ok(/NO SE PUDO ENSAYAR/.test(despues), 'después de un paso que escribe, sigue siendo no ensayable');
+}
+
+console.log(fallas ?'\n' + fallas + ' FALLAS' : '\nTodo bien');
 process.exit(fallas ? 1 : 0);

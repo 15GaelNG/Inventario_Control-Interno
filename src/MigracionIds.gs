@@ -678,7 +678,12 @@ function migMapaDelPadre_(ss, nombrePadre, porLlaveNegocio) {
 
   // Por omisión se une por el ID viejo; algunas hojas se unen por su llave de negocio
   if (porLlaveNegocio) {
-    const pos = migColumna_(enc, porLlaveNegocio);
+    // Si la "llave de negocio" es en realidad la llave vieja del padre, el paso `renombrar`
+    // ya la llamó "ID ANTERIOR" (ACCESORIOS CELULARES.ID_Accesorio, 01/10/2026). Se busca
+    // con migColumnaAnterior_, que aguanta los dos nombres.
+    const def = Entidades.existe(nombrePadre) ? Entidades.de(nombrePadre) : null;
+    const esLaAnterior = def && def.llaveAnterior && migClave_(def.llaveAnterior) === migClave_(porLlaveNegocio);
+    const pos = migColumna_(enc, porLlaveNegocio) || (esLaAnterior ? migColumnaAnterior_(enc, def) : 0);
     if (!pos) throw new Error('"' + nombrePadre + '" no tiene la columna "' + porLlaveNegocio + '"');
     const origen = migLeerColumna_(sheet, pos, filas);
     const mapa = {};
