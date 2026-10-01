@@ -838,7 +838,9 @@ function reescribirReferencias(opciones) {
     lineas.push('  IDs, así que regenerarlos o deshacerlos los dejaría huérfanos. Las');
     lineas.push('  funciones que lo harían se van a negar. Ver migracionEstadoSello.');
   }
-  if (!cfg.escribir) lineas.push('', 'Para escribir de verdad, corre: migracion3ReferenciasEscribir');
+  // Dentro de un pipeline de familia el pie del pipeline ya dice qué correr (lineas2Escribir…);
+  // este nombre solo aplica cuando se corre suelto.
+  if (!cfg.escribir && !cfg.familia) lineas.push('', 'Para escribir de verdad, corre: migracion3ReferenciasEscribir');
   const texto = lineas.join('\n');
   Logger.log(texto);
   return texto;

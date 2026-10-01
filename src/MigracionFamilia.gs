@@ -214,7 +214,9 @@ function resumirPaso_(texto) {
     enLista = false;
     // los totales de cada paso: empiezan con un numero, o lo dicen sin sangria
     if (/^\d/.test(t) || /^(Sin problemas|Todo cuadra)/.test(t) ||
-        /(columnas (renombradas|por renombrar)|hojas (procesadas|por mover|con respaldo))/.test(t)) {
+        /(columnas (renombradas|por renombrar)|hojas (procesadas|por mover|con respaldo))/.test(t) ||
+        // las de referencias: una por columna hija, y si quedaron huérfanas
+        / -> .+: (\d+ cambiadas|YA MIGRADA)/.test(t) || /^HUÉRFANAS/.test(t)) {
       utiles.push('  ' + t);
     }
   });
