@@ -104,7 +104,7 @@
           ${cifra('Unidas por ID', r.emparejadasPorId)}
           ${cifra('Unidas por llave', r.emparejadasPorClave)}
         </div>
-        <p class="rel-nota">${escaparHtml(nota)}</p>
+        <p class="rel-nota">${escaparHtml(r.error ? 'NO SE PUDO REVISAR: ' + r.error : nota)}</p>
         <div class="rel-tarjeta-acciones">
           <button type="button" class="secondary" data-ver="${escaparHtml(r.nombre)}" ${r.entradas.length ? '' : 'disabled'}>${Iconos.svg('list')} Ver detalle</button>
           ${botonSync}

@@ -332,8 +332,9 @@ console.log('\n5. revisar({corregir:true}) corrige el caché y congela la bitác
   ok(r['INSPECCION VEHICULAR'].diferenciasHistoricas === 1,
     'la deriva histórica se cuenta aparte (1), no como diferencia');
   ok(r['INSPECCION VEHICULAR'].diferencias === 0, 'diferencias=0 en la bitácora');
-  ok(logDe(hs, 'DIFERENCIA_HISTORICA', 'DEPARTAMENTO').length === 1,
-    'quedó en LOG_RELACIONES con su tipo propio, para poder filtrarla');
+  // Lo normal ya no va al log (01/10/2026): una bitácora de Líneas trae miles de estas
+  ok(!hs['LOG_RELACIONES'] || logDe(hs, 'DIFERENCIA_HISTORICA', 'DEPARTAMENTO').length === 0,
+    'lo histórico NO se escribe en LOG_RELACIONES: es normal, y llenaría el log');
 }
 
 console.log('\n6. revisar({corregir:true}) no pisa nada con un centinela');
@@ -587,8 +588,8 @@ console.log('\n16. Pero revisar() sí las REPORTA, que es para lo que están en 
   const r = R.revisar({ corregir: true });   // incluso pidiendo corregir
   ok(hs['ARQUEOS'].valor('ARQ-00000000AAAAAA', 'ID', 'MONTO CAJA') === 8000,
      'ni con corregir:true se toca una bitácora');
-  const hist = logDe(hs, 'DIFERENCIA_HISTORICA', 'MONTO CAJA');
-  ok(hist.length === 1, 'queda en el log como DIFERENCIA_HISTORICA');
+  const hist = hs['LOG_RELACIONES'] ? logDe(hs, 'DIFERENCIA_HISTORICA', 'MONTO CAJA') : [];
+  ok(hist.length === 0, 'y no se anota en el log: es lo normal en una bitácora');
   ok(!!r['ARQUEOS'], 'y ARQUEOS aparece en el reporte: antes Caja Chica no se vigilaba');
   ok(!!r['INCREMENTOS'],
      'INCREMENTOS también, aunque no copie columnas: sirve para ver sus huérfanas');
@@ -801,6 +802,31 @@ console.log('\ndescribir() trae la familia de cada hoja');
   ok(d.find((x) => x.hoja === 'VEHICULOS').etiqueta.familia === 'Vehículos', 'VEHICULOS es de Vehículos');
   ok(d.find((x) => x.hoja === 'INSTALACION DE SENSORES').etiqueta.familia === 'Vehículos', 'Sensores también');
   ok(d.find((x) => x.hoja === 'CAJAS CHICAS').etiqueta.familia === 'Caja Chica', 'y Caja Chica es la suya');
+}
+
+console.log('\nLíneas en el mapa: bitácoras, sin secretos, con su familia');
+{
+  const d = cargar(armar()).describir().duenos;
+  const lin = d.find((x) => x.hoja === 'LINEAS TELEFONICAS');
+  ok(lin && lin.etiqueta.familia === 'Líneas', 'LINEAS TELEFONICAS es de la familia Líneas');
+  ok(lin && lin.copias.every((c) => c.tipo === 'bitacora'), 'sus tres hijas son bitácora: nada se sincroniza');
+  const cols = lin ? lin.copias.reduce((t, c) => t.concat(c.columnas.map((x) => x.origen)), []) : [];
+  ok(['PIN WHATSAPP', 'PIN EQUIPO', 'PATRON', 'CONTRASEÑA MODEM'].every((x) => cols.indexOf(x) === -1),
+    'los secretos de Líneas no entran al mapa (aparecerían en la pantalla)');
+  ok(cols.indexOf('COLOR') === -1 && cols.indexOf('ACCESORIOS') === -1, 'ni COLOR ni ACCESORIOS: se llaman igual pero no son el mismo dato');
+  const acc = d.find((x) => x.hoja === 'ACCESORIOS CELULARES');
+  ok(acc && acc.etiqueta.familia === 'Líneas' && acc.copias[0].nombre === 'MOVIMIENTOS_ACCESORIOS', 'y los accesorios también');
+}
+
+console.log('\nUn libro sin configurar no tumba la revisión de las demás familias');
+{
+  const hs = armar();
+  const R = cargar(hs);   // la Config de la prueba no trae TELEFONIA, como un proyecto sin Líneas
+  const r = R.revisar({ detalle: true, log: false });
+  ok(r['INSPECCIONES LINEAS'] && !!r['INSPECCIONES LINEAS'].error, 'la copia de Líneas dice por qué no se revisó');
+  ok(Array.isArray(r['INSPECCIONES LINEAS'].entradas), 'y trae su lista vacía, como las demás');
+  ok(r['INSTALACION DE SENSORES'] && !r['INSTALACION DE SENSORES'].error && r['INSTALACION DE SENSORES'].revisadas > 0,
+    'Vehículos se revisó igual');
 }
 
 console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');

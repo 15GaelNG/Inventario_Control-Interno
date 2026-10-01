@@ -260,6 +260,127 @@ const MAPA = {
       ],
     },
 
+    // ------------------------------------------------------------------ LÍNEAS
+    //
+    // Las tres hijas de LINEAS TELEFONICAS son BITÁCORA: la inspección y la responsiva están
+    // fechadas y firmadas, y CAMBIOS LINEAS TELEFONICAS es el log. Medido el 01/10/2026 en
+    // el libro del equipo, uniendo por ID LINEA: NUCO e IMEI coinciden al 99%, pero
+    // RESPONSABLE, PUESTO o JEFE DIRECTO solo entre 40 y 65% — no es deriva, es que cada
+    // documento dice quién tenía la línea ESE día. Por eso nada de esto se sincroniza.
+    //
+    // El flujo de Líneas va al revés que en Vehículos para los datos de la persona: al
+    // guardar una inspección, el bot "ACTUALIZAR DESDE INSPECCION" (LineasCaptura,
+    // COPIA_INSPECCION_A_LINEA) copia de la inspección A la línea. La línea queda con lo de
+    // la última inspección; las inspecciones conservan lo de su día. Lo hace el módulo de
+    // Emmanuel al capturar, no Relaciones.
+    //
+    // FUERA DEL MAPA, a propósito:
+    //   - PIN WHATSAPP, PIN EQUIPO, PATRON y CONTRASEÑA MODEM: son secretos que en Líneas
+    //     solo ve ADMIN. En el mapa aparecerían en la tabla "Ver" de Datos conectados.
+    //   - COLOR (0% de coincidencia) y ACCESORIOS (3%): se llaman igual que en la línea,
+    //     pero no son el mismo dato.
+    //
+    // Varias columnas son el mismo dato con otro nombre (No TELEFONO = NUMERO TELEFONO,
+    // SIM = NUMERO SIM, CORREO = CUENTA GOOGLE, MODELO = EQUIPO): candidatas a homologar,
+    // ver la pestaña "Nombres de columnas" de limpiezas-planeadas.xlsx.
+    'LINEAS TELEFONICAS': {
+      spreadsheet: () => Config.SPREADSHEET_IDS.TELEFONIA(),
+      hoja: 'LINEAS TELEFONICAS',
+      // NUCO: único en las 1,615 líneas y casi nunca cambia (docs/lineas-homologacion.md)
+      llaveDeNegocio: 'NUCO',
+      copias: [
+        {
+          nombre: 'INSPECCIONES LINEAS',
+          llaveForanea: 'ID LINEA',
+          firma: ['ID LINEA', 'CUBO', 'CABLE'],
+          tipo: 'bitacora',
+          claveOrigen: 'NUCO',
+          clave: 'NUCO',
+          columnas: {
+            'NUMERO TELEFONO': 'No TELEFONO',
+            'NUMERO SIM': 'SIM',
+            'EQUIPO': 'MODELO',
+            'IMEI': 'IMEI',
+            'TIPO': 'TIPO',
+            'COMPAÑIA': 'COMPAÑIA',
+            'RAZON SOCIAL': 'RAZON SOCIAL',
+            'RESPONSABLE': 'RESPONSABLE',
+            'PUESTO': 'PUESTO',
+            'DEPARTAMENTO': 'DEPARTAMENTO',
+            'AREA': 'AREA',
+            'SEDE': 'SEDE',
+            'OFICINA / DESARROLLO': 'OFICINA / DESARROLLO',
+            'JEFE DIRECTO': 'JEFE DIRECTO',
+            'CUENTA GOOGLE': 'CORREO',
+          },
+          nota: 'Al guardar una inspección, la línea toma de ella el responsable, su puesto, área, sede y jefe. ' +
+            'La línea queda con lo de la última inspección, y cada inspección conserva lo de su día.',
+          // A qué columnas aplica la nota: las que copia el bot (COPIA_INSPECCION_A_LINEA, sin
+          // los secretos, que no están en el mapa). Sin esto saldría también en IMEI o Compañía.
+          notaColumnas: ['RESPONSABLE', 'DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO', 'PUESTO', 'JEFE DIRECTO', 'CUENTA GOOGLE'],
+        },
+        {
+          nombre: 'RESPONSIVAS LINEAS',
+          llaveForanea: 'ID LINEA',
+          firma: ['ID LINEA', 'FIRMA RESPONSABLE', 'FORMATO RESPONSIVA'],
+          tipo: 'bitacora',
+          claveOrigen: 'NUCO',
+          clave: 'NUCO',
+          columnas: {
+            'NUMERO TELEFONO': 'No TELEFONO',
+            'NUMERO SIM': 'SIM',
+            'EQUIPO': 'MODELO',
+            'IMEI': 'IMEI',
+            'COMPAÑIA': 'COMPAÑIA',
+            'RAZON SOCIAL': 'RAZON SOCIAL',
+            'NO EMPLEADO': 'No EMPLEADO',
+            'RESPONSABLE': 'RESPONSABLE',
+            'PUESTO': 'PUESTO',
+            'DEPARTAMENTO': 'DEPARTAMENTO',
+            'AREA': 'AREA',
+            'SEDE': 'SEDE',
+            'OFICINA / DESARROLLO': 'OFICINA / DESARROLLO',
+            'DIRECTOR': 'DIRECTOR',
+            'CUENTA GOOGLE': 'CORREO',
+          },
+        },
+        {
+          nombre: 'CAMBIOS LINEAS TELEFONICAS',
+          llaveForanea: 'ID_LINEA',
+          firma: ['ID_LINEA', 'CAMPO', 'ANTES', 'DESPUES'],
+          tipo: 'bitacora',
+          claveOrigen: 'NUCO',
+          clave: 'NUCO',
+          columnas: {
+            'NUCO': 'NUCO',
+            'IMEI': 'IMEI',
+          },
+        },
+      ],
+    },
+
+    // Los accesorios de Líneas: MOVIMIENTOS_ACCESORIOS no copia ningún dato del artículo
+    // (sus columnas son del movimiento). Está aquí, como INCREMENTOS en Caja Chica, para
+    // que se vigilen sus movimientos sin artículo: 3 medidos el 01/10/2026.
+    'ACCESORIOS CELULARES': {
+      spreadsheet: () => Config.SPREADSHEET_IDS.TELEFONIA(),
+      hoja: 'ACCESORIOS CELULARES',
+      llaveDeNegocio: 'Nombre del Articulo',
+      copias: [
+        {
+          nombre: 'MOVIMIENTOS_ACCESORIOS',
+          llaveForanea: 'ID ACCESORIO',
+          firma: ['ID_Accesorio', 'Tipo_movimiento', 'Cantidad'],
+          tipo: 'bitacora',
+          // La llave vieja del artículo se renombró a ID ANTERIOR en el pipeline de IDs; la
+          // del movimiento conserva su nombre original.
+          claveOrigen: 'ID ANTERIOR',
+          clave: 'ID_Accesorio',
+          columnas: {},
+        },
+      ],
+    },
+
     // ----------------------------------------------------- SENSORES → VEHICULOS
     //
     // AL REVÉS que las demás: aquí la dueña es la hoja de sensores y la copia es VEHICULOS.
@@ -443,7 +564,11 @@ const MAPA = {
    * el límite de 6 minutos de Apps Script). `entradas` = [{tipo, hoja, clave, columna,
    * tenia, quedo}, …].
    */
-  function escribirLog_(ssId, entradas, quien) {
+  function escribirLog_(ssId, entradasTodas, quien) {
+    // Lo NORMAL no va al log: una bitácora de Líneas trae miles de diferencias del día, y
+    // anotarlas en cada revisión llenaba LOG_RELACIONES de renglones que no piden nada.
+    // El log queda para lo que se corrigió o hay que corregir.
+    const entradas = entradasTodas.filter((e) => !esNormal_(e.tipo));
     if (!entradas.length) return;
     try {
       const ss = SpreadsheetApp.openById(ssId);
@@ -748,6 +873,25 @@ const MAPA = {
 
   /** Cuántas entradas regresa revisar({detalle}) por hoja: lo que una tabla aguanta sin trabarse. */
   const DETALLE_MAX = 3000;
+  /**
+   * De lo NORMAL (diferencias de bitácora, huérfanas esperadas) basta una muestra: una
+   * inspección de Líneas puede traer miles, y mandarlas todas solo para decir "esto está
+   * bien" hacía lenta la pantalla. La cifra total va en el resumen de cada hoja.
+   */
+  const DETALLE_MAX_NORMAL = 300;
+  const esNormal_ = (tipo) => tipo === 'DIFERENCIA_HISTORICA' || tipo === 'SIN_DUENO_ESPERADO';
+
+  /** El resultado de una copia que no se pudo revisar: en ceros, con el motivo en `error`. */
+  function sinRevisar_(copia, motivo, conDetalle) {
+    const r = {
+      tipo: copia.tipo || 'cache', error: motivo,
+      revisadas: 0, diferencias: 0, huerfanos: 0, clavesDuplicadasOmitidas: 0, centinelasOmitidos: 0,
+      vaciosOmitidos: 0, diferenciasHistoricas: 0, sinDuenoEsperado: 0, emparejadasPorId: 0,
+      emparejadasPorClave: 0, corregido: false,
+    };
+    if (conDetalle) Object.defineProperty(r, 'entradas', { value: [] });
+    return r;
+  }
 
   function revisarSinCandado_(corregir, conLog, soloHojas, conDetalle, soloFilas, quien) {
     const resultado = {};
@@ -756,8 +900,16 @@ const MAPA = {
       const origenDef = MAPA[origenNombre];
       const copias = origenDef.copias.filter((c) => !soloHojas || soloHojas.indexOf(normalizar_(c.nombre)) !== -1);
       if (!copias.length) return;
-      const ssId = origenDef.spreadsheet();
-      const filasOrigen = SheetUtils.getAll(ssId, origenDef.hoja);
+      // Un libro que no está configurado (SS_ID_TELEFONIA en un proyecto sin Líneas) o una
+      // hoja que falta NO tumba la revisión de las demás familias: se reporta y se sigue.
+      let ssId, filasOrigen;
+      try {
+        ssId = origenDef.spreadsheet();
+        filasOrigen = SheetUtils.getAll(ssId, origenDef.hoja);
+      } catch (err) {
+        copias.forEach((c) => { resultado[c.nombre] = sinRevisar_(c, origenDef.hoja + ': ' + err.message, conDetalle); });
+        return;
+      }
 
       // Un índice por cada columna-clave de origen distinta que use alguna copia
       // (FOLIO, SERIE VEHICULO…), más el ID para las FK — y de paso, los valores
@@ -781,8 +933,14 @@ const MAPA = {
       const entradasLog = [];
 
       copias.forEach((copia) => {
-        const hoja = hojaCopia_(copia, ssId);
-        const filasCopia = SheetUtils.getAll(ssId, hoja.getName());
+        let hoja, filasCopia;
+        try {
+          hoja = hojaCopia_(copia, ssId);
+          filasCopia = SheetUtils.getAll(ssId, hoja.getName());
+        } catch (err) {
+          resultado[copia.nombre] = sinRevisar_(copia, err.message, conDetalle);
+          return;
+        }
         const columnasOrigen = Object.keys(copia.columnas);
         const tieneFk = !!(copia.llaveForanea && filasCopia.length &&
           Object.prototype.hasOwnProperty.call(filasCopia[0], copia.llaveForanea));
@@ -790,9 +948,12 @@ const MAPA = {
         let centinelasOmitidos = 0, historicas = 0, vaciosOmitidos = 0, porFk = 0, porClave = 0, sinDuenoEsperado = 0;
         const correcciones = {}; // columna destino → { valorNuevo: [numFila, …] }
         const entradas = [];
+        let normalesEnDetalle = 0;
         const anotar = (e) => {
           entradasLog.push(e);
-          if (conDetalle && entradas.length < DETALLE_MAX) entradas.push(e);
+          if (!conDetalle || entradas.length >= DETALLE_MAX) return;
+          if (esNormal_(e.tipo) && normalesEnDetalle++ >= DETALLE_MAX_NORMAL) return;
+          entradas.push(e);
         };
 
         filasCopia.forEach((filaCopia, i) => {
@@ -972,6 +1133,12 @@ const MAPA = {
     'CAJAS CHICAS': { modulo: 'Caja Chica', uno: 'caja chica', varios: 'cajas chicas', familia: 'Caja Chica' },
     'ARQUEOS': { modulo: 'Arqueos', uno: 'arqueo', varios: 'arqueos', familia: 'Caja Chica' },
     'INCREMENTOS': { modulo: 'Cambios de Monto', uno: 'cambio de monto', varios: 'cambios de monto', familia: 'Caja Chica' },
+    'LINEAS TELEFONICAS': { modulo: 'Líneas Telefónicas', uno: 'línea', varios: 'líneas', familia: 'Líneas' },
+    'INSPECCIONES LINEAS': { modulo: 'Inspecciones de Líneas', uno: 'inspección', varios: 'inspecciones', familia: 'Líneas' },
+    'RESPONSIVAS LINEAS': { modulo: 'Responsivas de Líneas', uno: 'responsiva', varios: 'responsivas', familia: 'Líneas' },
+    'CAMBIOS LINEAS TELEFONICAS': { modulo: 'Control de Cambios - Líneas', uno: 'cambio', varios: 'cambios', familia: 'Líneas' },
+    'ACCESORIOS CELULARES': { modulo: 'Inventario de Accesorios (Líneas)', uno: 'artículo', varios: 'artículos', familia: 'Líneas' },
+    'MOVIMIENTOS_ACCESORIOS': { modulo: 'Movimientos de Accesorios', uno: 'movimiento', varios: 'movimientos', familia: 'Líneas' },
   };
   // La clave es 'modulo' y no 'nombre' a propósito: tests/llave-nueva.test.js reconoce las
   // copias del MAPA por cómo se escribe su nombre en el código, y estas no son copias.
@@ -1003,6 +1170,7 @@ const MAPA = {
             campoEnDueno: campoEnDueno_(c),
             sinDueno: c.sinDueno || null,
             nota: c.nota || '',
+            notaColumnas: c.notaColumnas || null,
             huerfanaEsperada: c.huerfanaEsperada ? c.huerfanaEsperada.motivo : '',
           })),
         };

@@ -46,6 +46,25 @@
       'ID': 'Vehículo',
       'SERIE VEHICULO': 'Serie del vehículo',
       'NO SERIE': 'Serie del vehículo',
+      // Líneas
+      'NUCO': 'NUCO',
+      'IMEI': 'IMEI',
+      'NUMERO TELEFONO': 'Número de teléfono',
+      'No TELEFONO': 'Número de teléfono',
+      'NUMERO SIM': 'SIM',
+      'SIM': 'SIM',
+      'EQUIPO': 'Modelo del equipo',
+      'TIPO': 'Tipo de línea',
+      'COMPAÑIA': 'Compañía',
+      'CUENTA GOOGLE': 'Cuenta de Google',
+      'CORREO': 'Correo',
+      'NO EMPLEADO': 'Número de empleado',
+      'No EMPLEADO': 'Número de empleado',
+      'AREA': 'Área',
+      'ID LINEA': 'Línea a la que pertenece',
+      'ID_LINEA': 'Línea a la que pertenece',
+      'ID ACCESORIO': 'Artículo al que pertenece',
+      'ID_Accesorio': 'Artículo',
       'FOLIO VEHICULO': 'Folio',
       'ID CCH': 'Número de caja',
     };
@@ -97,9 +116,13 @@
       mapa.duenos.forEach((d) => d.copias.forEach((c) => { rel[c.nombre] = { d: d, c: c }; }));
       const avisos = [];
       const alDia = [];
+      const errores = [];
       reporte.forEach((r) => {
         const rc = rel[r.nombre];
         if (!rc) return;
+        // No se pudo leer (un libro sin configurar, una pestaña que falta): se dice, y no
+        // se presenta como "al día"
+        if (r.error) { errores.push({ nombre: rc.c.etiqueta.nombre, familia: rc.d.etiqueta.familia, motivo: r.error }); return; }
         const grupos = {};
         r.entradas.forEach((e) => {
           const k = e.tipo + (e.malEscrita ? '|mal' : '');
@@ -115,6 +138,9 @@
           const accion = ACCION[tipo] || 'mano';
           const enElDueno = tipo === 'OMITIDO_CENTINELA' || tipo === 'OMITIDO_VACIO';
           avisos.push({
+            // De lo normal llega solo una muestra: la cifra que se dice es la total de la hoja
+            total: tipo === 'DIFERENCIA_HISTORICA' ? r.diferenciasHistoricas
+              : tipo === 'SIN_DUENO_ESPERADO' ? r.sinDuenoEsperado : null,
             tipo: tipo, malEscrita: !!es[0].malEscrita, accion: accion,
             d: rc.d, c: rc.c, familia: rc.d.etiqueta.familia, entradas: es,
             registros: new Set(es.map((e) => (enElDueno ? e.dueno || e.clave : e.fila))).size,
@@ -126,7 +152,7 @@
       });
       const orden = { DIFERENCIA: 0, HUERFANO: 1, CLAVE_DUPLICADA_EN_ORIGEN: 2, OMITIDO_CENTINELA: 3, OMITIDO_VACIO: 4, SIN_DUENO_ESPERADO: 5, DIFERENCIA_HISTORICA: 6 };
       avisos.sort((a, b) => (orden[a.tipo] - orden[b.tipo]) || (b.registros - a.registros));
-      return { avisos: avisos, alDia: alDia, pendientes: avisos.filter((a) => a.accion !== 'bien').length };
+      return { avisos: avisos, alDia: alDia, errores: errores, pendientes: avisos.filter((a) => a.accion !== 'bien').length + errores.length };
     }
 
     /** Las frases de un aviso: título, un ejemplo real y qué significa. */
@@ -183,15 +209,15 @@
           };
         case 'SIN_DUENO_ESPERADO':
           return {
-            titulo: cuantos(c, k) + verbo(k, ' es', ' son') + ' de ' + (g.c.huerfanaEsperada || 'otro registro') +
-              ', que no ' + verbo(k, 'está', 'están') + ' en ' + d.nombre + ', y así debe ser',
+            titulo: cuantos(c, g.total || k) + verbo(g.total || k, ' es', ' son') + ' de ' + (g.c.huerfanaEsperada || 'otro registro') +
+              ', que no ' + verbo(g.total || k, 'está', 'están') + ' en ' + d.nombre + ', y así debe ser',
             ejemplo: '',
             explicacion: 'Su serie tiene la forma correcta; simplemente no es un ' + d.uno + ' de ' + d.nombre + '.',
           };
         case 'DIFERENCIA_HISTORICA':
           return {
-            titulo: c.nombre + ' guarda cómo estaba cada ' + d.uno + ' el día que se registró (' + num(g.entradas.length) +
-              (g.entradas.length === 1 ? ' dato distinto' : ' datos distintos') + ' a hoy), y así debe ser',
+            titulo: c.nombre + ' guarda cómo estaba cada ' + d.uno + ' el día que se registró (' + num(g.total || g.entradas.length) +
+              ((g.total || g.entradas.length) === 1 ? ' dato distinto' : ' datos distintos') + ' a hoy), y así debe ser',
             ejemplo: '',
             explicacion: 'Es un registro de ese día: si se actualizara, se perdería cómo estaba. Nunca se toca.',
           };
@@ -251,7 +277,12 @@
           ${porFamilia}
         </section>`;
       }).join('');
-      cont.innerHTML = cabeza + secciones;
+      const errores = (clas.errores || []).length ? `<section class="rel-s-seccion-avisos mano">
+          <h4>${Iconos.svg('circle-x')} No se pudieron revisar</h4>
+          <p class="rel-s-sec-texto">Falta configurar algo en el sistema; avísale a quien lo administra.</p>
+          ${clas.errores.map((e) => `<p class="rel-s-bien"><span><strong>${esc(e.familia)} · ${esc(e.nombre)}</strong>: ${esc(e.motivo)}</span></p>`).join('')}
+        </section>` : '';
+      cont.innerHTML = cabeza + errores + secciones;
     }
 
     /** Las familias, en el orden del mapa (la que tiene más conexiones primero). */
@@ -269,7 +300,8 @@
         (c.tipo === 'bitacora' ? o.delDia : o.alDia).push(c.etiqueta.nombre);
         if (!x.calculada && dato(x.destino) !== dato(x.origen)) o.notas.push('En ' + c.etiqueta.nombre + ' se llama «' + dato(x.destino) + '».');
         // La regla larga (cómo se calcula) no va en la tabla: va detrás del "?" de su renglón
-        if (c.nota && o.ayuda.indexOf(c.nota) === -1) o.ayuda.push(c.nota);
+        const aplica = !c.notaColumnas || c.notaColumnas.indexOf(x.origen) !== -1;
+        if (c.nota && aplica && o.ayuda.indexOf(c.nota) === -1) o.ayuda.push(c.nota);
       })));
       const q = String(filtro || '').trim().toLowerCase();
       const filas = Object.keys(datos).map((k) => datos[k])
