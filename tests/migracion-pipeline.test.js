@@ -52,6 +52,24 @@ function hojaFalsa(encabezados, filas) {
     insertColumnsAfter: () => {},
     setFrozenRows: () => {},
     appendRow: () => {},
+    setName: (n) => { api.nombre = n; },
+    deleteRows: (desde, cuantas) => { datos.splice(desde - 2, cuantas); },
+    getMaxRows: () => datos.length + 1,
+    /** copyTo simulado: mete una copia en el destino, como lo hace Apps Script */
+    copyTo: (dest) => {
+      const copia = hojaFalsa(enc.slice(), datos.map((f) => f.slice()));
+      copia.nombre = 'Copia de ' + api.nombre;
+      // El destino que expone SpreadsheetApp.create guarda por api.nombre, así que la
+      // copia se registra y setName la reubica.
+      const reg = () => {
+        Object.keys(destino.hojas).forEach((k) => { if (destino.hojas[k] === copia) delete destino.hojas[k]; });
+        destino.hojas[copia.nombre] = copia;
+      };
+      reg();
+      const setNameOriginal = copia.setName;
+      copia.setName = (n) => { setNameOriginal(n); reg(); };
+      return copia;
+    },
     deleteColumn: (pos) => {
       enc.splice(pos - 1, 1);
       datos.forEach((f) => f.splice(pos - 1, 1));
@@ -68,6 +86,14 @@ function hojaFalsa(encabezados, filas) {
 
 const hojas = {};
 const props = {};
+let destino = null;
+/** El libro original: las mismas hojas, más copiar y borrar pestañas */
+const libro = {
+  getSheetByName: (n) => hojas[n] || null,
+  insertSheet: (n) => { hojas[n] = hojaFalsa(['FECHA'], []); hojas[n].nombre = n; return hojas[n]; },
+  getSheets: () => Object.keys(hojas).map((k) => hojas[k]),
+  deleteSheet: (s) => { delete hojas[s.nombre]; },
+};
 const contexto = vm.createContext({
   console,
   Logger: { log: () => {} },
@@ -85,10 +111,20 @@ const contexto = vm.createContext({
   CacheService: { getScriptCache: () => ({ get: () => null, put: () => {} }) },
   SpreadsheetApp: {
     flush: () => {},
-    openById: () => ({
-      getSheetByName: (n) => hojas[n] || null,
-      insertSheet: (n) => { hojas[n] = hojaFalsa(['FECHA'], []); hojas[n].nombre = n; return hojas[n]; },
-    }),
+    openById: () => libro,
+    create: (nombre) => {
+      destino = { nombre: nombre, hojas: {} };
+      destino.hojas['Hoja 1'] = hojaFalsa(['x'], []);
+      destino.hojas['Hoja 1'].nombre = 'Hoja 1';
+      return {
+        getName: () => nombre,
+        getUrl: () => 'url-destino',
+        getId: () => 'ID_DESTINO',
+        getSheets: () => Object.keys(destino.hojas).map((k) => destino.hojas[k]),
+        getSheetByName: (n) => destino.hojas[n] || null,
+        deleteSheet: (s) => { delete destino.hojas[s.nombre]; },
+      };
+    },
   },
   Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'SS_PRUEBA' } },
 });
@@ -96,6 +132,10 @@ vm.runInContext(
   lee('utils', 'Ids.gs') + '\n' + lee('config', 'Entidades.gs') + '\n' +
   lee('MigracionIds.gs') + '\n' + lee('MigracionPipeline.gs') +
   '\nthis.migracionRevertir = migracionRevertir; this.migracionEstado = migracionEstado;' +
+  '\nthis.mudarPestanasHistoricas = mudarPestanasHistoricas;' +
+  '\nthis.asignarIds = asignarIds; this.migracionEstadoSello = migracionEstadoSello;' +
+  '\nthis.migracionSellar_ = migracionSellar_; this.migracionSellado_ = migracionSellado_;' +
+  '\nthis.MIGRACION_PROP_SELLO = MIGRACION_PROP_SELLO;' +
   '\nthis.Ids = Ids; this.Entidades = Entidades;',
   contexto
 );
@@ -110,7 +150,7 @@ function escenario() {
   // LINEAS TELEFONICAS: su columna se llamaba ID -> se pisó, tiene respaldo.
   // La fila 3 nació DESPUÉS de migrar: su respaldo está vacío.
   hojas['LINEAS TELEFONICAS'] = hojaFalsa(
-    ['ID', 'FOLIO', 'ID APPSHEET'],
+    ['ID', 'FOLIO', 'ID ANTERIOR'],
     [['LIN-00000000AAAAAA', 'EQP0001', 'viejo1'],
      ['LIN-00000001BBBBBB', 'EQP0002', 'viejo2'],
      ['LIN-00000002CCCCCC', 'EQP0003', '']]);
@@ -145,8 +185,8 @@ escenario();
 migracionRevertir({ escribir: true });
 const lin = hojas['LINEAS TELEFONICAS'];
 ok(lin.col('ID')[0] === 'viejo1' && lin.col('ID')[1] === 'viejo2',
-   'ID volvió a "viejo1" y "viejo2", tomados de ID APPSHEET');
-ok(!lin.tiene('ID APPSHEET'), 'y el respaldo se borró: ya cumplió');
+   'ID volvió a "viejo1" y "viejo2", tomados de ID ANTERIOR');
+ok(!lin.tiene('ID ANTERIOR'), 'y el respaldo se borró: ya cumplió');
 
 console.log('\n3. Una fila creada DESPUÉS de migrar no inventa un valor viejo');
 ok(lin.col('ID')[2] === '', 'su ID queda vacío, porque nunca tuvo uno viejo');
@@ -157,7 +197,7 @@ escenario();
 migracionRevertir({ escribir: true });
 const insp = hojas['INSPECCIONES LINEAS'];
 ok(insp.col('ID LINEA')[0] === 'viejo1',
-   'ID LINEA volvió a "viejo1": se resolvió por el ID del padre y su ID APPSHEET');
+   'ID LINEA volvió a "viejo1": se resolvió por el ID del padre y su ID ANTERIOR');
 ok(insp.col('ID LINEA')[1] === 'LIN-00000002CCCCCC',
    'la que apunta a una fila nueva se deja intacta, no se borra');
 
@@ -191,6 +231,131 @@ ok(JSON.stringify({ v: hojas['VEHICULOS'].enc, c: hojas['CAMBIOS LINEAS TELEFONI
 
 console.log('\n9. Queda rastro en LOG_MIGRACION');
 ok(!!hojas['LOG_MIGRACION'], 'se creó la hoja de bitácora sola');
+
+// ---------------------------------------------------------------- la mudanza
+const { mudarPestanasHistoricas } = contexto;
+const truenaCon = (fn, patron) => {
+  try { fn(); return false; } catch (e) { return patron.test(e.message); }
+};
+
+/** Dos históricas con datos, y una del sistema que NO se debe tocar */
+function escenarioMudanza() {
+  Object.keys(hojas).forEach((k) => delete hojas[k]);
+  destino = null;
+  hojas['Cambios Imei'] = hojaFalsa(['IMEI', 'FECHA'], [['111', 'a'], ['222', 'b']]);
+  hojas['DASHBOARDS'] = hojaFalsa(['X'], [['1'], ['2'], ['3']]);
+  hojas['VEHICULOS'] = hojaFalsa(['ID', 'FOLIO'], [['VEH-1', 'MOT0001']]);
+  Object.keys(hojas).forEach((k) => { hojas[k].nombre = k; });
+  props['MIGRACION_RESPALDO_ID'] = 'RESP1';
+}
+
+console.log('\n10. Sin respaldo previo no borra nada');
+escenarioMudanza();
+delete props['MIGRACION_RESPALDO_ID'];
+ok(truenaCon(() => mudarPestanasHistoricas({ escribir: true }), /respaldo/i),
+   'se niega: borrar pestañas no se deshace');
+props['MIGRACION_RESPALDO_ID'] = 'RESP1';
+
+console.log('\n11. El ensayo no mueve ni borra');
+escenarioMudanza();
+mudarPestanasHistoricas();
+ok(!!hojas['Cambios Imei'] && !!hojas['DASHBOARDS'], 'las dos siguen en el original');
+ok(destino === null, 'ni se creó el spreadsheet destino');
+
+console.log('\n12. Copia, COMPRUEBA, y entonces borra');
+escenarioMudanza();
+mudarPestanasHistoricas({ escribir: true });
+ok(!hojas['Cambios Imei'] && !hojas['DASHBOARDS'], 'se fueron del original');
+ok(!!destino && !!destino.hojas['Cambios Imei'], 'llegaron al destino con su nombre original');
+ok(destino.hojas['Cambios Imei'].datos.length === 2, 'con sus 2 renglones');
+ok(destino.hojas['DASHBOARDS'].datos.length === 3, 'y DASHBOARDS con sus 3');
+
+console.log('\n13. Una hoja del sistema NUNCA se muda');
+escenarioMudanza();
+mudarPestanasHistoricas({ escribir: true });
+ok(!!hojas['VEHICULOS'], 'VEHICULOS se queda: no está en la lista cerrada');
+
+console.log('\n14. Si la copia no coincide, el original NO se borra');
+escenarioMudanza();
+const copiarBien = hojas['Cambios Imei'].copyTo;
+hojas['Cambios Imei'].copyTo = (d) => { const c = copiarBien(d); c.datos.pop(); return c; };
+mudarPestanasHistoricas({ escribir: true });
+ok(!!hojas['Cambios Imei'], 'la de copia incompleta se queda en el original');
+ok(!hojas['DASHBOARDS'], 'y las demás sí se mudan: una falla no detiene al resto');
+
+console.log('\n15. Las amarradas por fórmula van juntas o ninguna');
+Object.keys(hojas).forEach((k) => delete hojas[k]);
+destino = null;
+hojas['Hoja 55'] = hojaFalsa(['X'], [['1']]);
+hojas['Hoja 55'].nombre = 'Hoja 55';
+ok(truenaCon(() => mudarPestanasHistoricas({ escribir: true }), /amarradas|juntas/i),
+   'con solo una de las dos presentes, se niega');
+
+// ---------------------------------------------------------------------------- el sello
+//
+// Lo que protege esto: que después de cablear las referencias, nadie pueda regenerar ni
+// deshacer los IDs. No es paranoia — son dos funciones de un clic en el editor de Apps
+// Script, y cualquiera de las dos deja TODOS los `ID VEHICULO` / `ID LINEA` apuntando a
+// IDs que ya no existen, sin error, sin aviso y sin forma de reconstruirlos.
+const LIBRO = 'SS_PRUEBA'; // el que devuelve Config.SPREADSHEET_IDS.VEHICULOS en las pruebas
+const desellar = () => { delete props[contexto.MIGRACION_PROP_SELLO]; };
+
+console.log('\n16. Sin sello, nada estorba');
+escenario();
+desellar();
+ok(!contexto.migracionSellado_(LIBRO), 'el libro arranca sin sello');
+ok(!truenaCon(() => migracionRevertir({ escribir: true }), /SELLADO/),
+   'deshacer corre, porque todavía no hay referencias colgando de los IDs');
+
+console.log('\n17. El sello es por libro, no global');
+desellar();
+ok(contexto.migracionSellar_(LIBRO) === true, 'sellar el libro devuelve true la primera vez');
+ok(contexto.migracionSellar_(LIBRO) === false, 'y false la segunda: no se sella dos veces');
+ok(contexto.migracionSellado_(LIBRO), 'el libro quedó sellado');
+ok(!contexto.migracionSellado_('OTRO_LIBRO'),
+   'y OTRO_LIBRO no: sellar el laboratorio no sella producción');
+ok(contexto.migracionSellar_('OTRO_LIBRO') && contexto.migracionSellado_(LIBRO),
+   'sellar un segundo libro no borra el sello del primero');
+
+console.log('\n18. Con sello, deshacer se niega');
+escenario();
+desellar();
+contexto.migracionSellar_(LIBRO);
+const antesDelSello = JSON.stringify(hojas['LINEAS TELEFONICAS'].datos);
+ok(truenaCon(() => migracionRevertir({ escribir: true }), /SELLADO/),
+   'migracionRevertir({escribir:true}) truena diciendo que el libro está sellado');
+ok(JSON.stringify(hojas['LINEAS TELEFONICAS'].datos) === antesDelSello,
+   'y no alcanzó a tocar una sola celda');
+console.log('     (la guarda de producción NO alcanzaba: el libro nuevo tiene otro id)');
+
+console.log('\n19. Con sello, regenerar los IDs se niega');
+escenario();
+desellar();
+contexto.migracionSellar_(LIBRO);
+ok(truenaCon(() => contexto.asignarIds({ escribir: true, rehacer: true }), /SELLADO/),
+   'asignarIds({rehacer:true, escribir:true}) truena');
+
+console.log('\n20. El sello solo frena lo que destruye');
+escenario();
+desellar();
+contexto.migracionSellar_(LIBRO);
+ok(!truenaCon(() => contexto.asignarIds({ rehacer: true }), /SELLADO/),
+   'el ENSAYO de rehacer sí corre: no escribe nada, y sirve para ver qué pasaría');
+ok(!truenaCon(() => migracionRevertir(), /SELLADO/),
+   'el ensayo de deshacer también');
+ok(!truenaCon(() => contexto.asignarIds({ escribir: true }), /SELLADO/),
+   'y asignarIds SIN rehacer corre aunque esté sellado: solo llena los huecos, no pisa');
+console.log('     (ese último es el que se vuelve a correr cuando la corrida se corta por tiempo)');
+
+console.log('\n21. Y se puede consultar sin cambiar nada');
+desellar();
+const sinSellos = contexto.migracionEstadoSello();
+ok(/Ning[uú]n libro/.test(sinSellos), 'con la lista vacía lo dice claro');
+contexto.migracionSellar_(LIBRO);
+const conSello = contexto.migracionEstadoSello();
+ok(conSello.indexOf(LIBRO) !== -1 && /Sellado: S/.test(conSello),
+   'y con sello nombra el libro y avisa que el apuntado está sellado');
+desellar();
 
 console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');
 process.exit(fallas ? 1 : 0);

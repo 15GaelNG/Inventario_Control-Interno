@@ -93,14 +93,25 @@ truena(() => Ids.aBase32_(Math.pow(32, 9), 8), 'un número que no cabe en 8 sím
 console.log('\n9. Suficientes combinaciones para una carga masiva');
 contexto.Date.now = () => reloj();   // congelado: todos en el mismo milisegundo
 const lote = {};
+// Mil, no veinte mil, y la diferencia importa. La parte al azar son 6 símbolos base32 =
+// 2^30 combinaciones, así que dentro de UN milisegundo la probabilidad de choque crece con
+// el cuadrado: con 1,000 es 0.047%, pero con 20,000 sube a 18.6%. Una versión anterior de
+// esta prueba pedía 20,000 sin un solo repetido y pasaba por suerte, fallando una de cada
+// cinco corridas. Lo que el diseño promete es lo de abajo.
+const CUANTOS = 1000;
 let repetidos = 0;
-for (let i = 0; i < 20000; i++) {
+for (let i = 0; i < CUANTOS; i++) {
   const x = Ids.nuevo('CLI');
   if (lote[x]) repetidos++;
   lote[x] = true;
 }
 contexto.Date.now = reloj;
-ok(repetidos === 0, '20,000 IDs en el MISMO milisegundo, sin uno repetido');
+// Se tolera uno: con 0.047% de probabilidad, exigir cero volvería a hacer la prueba
+// intermitente sin que nada esté mal.
+ok(repetidos <= 1, CUANTOS.toLocaleString() + ' IDs en el MISMO milisegundo: ' +
+  repetidos + ' repetidos (se tolera 1, la teoría dice 0.047% de probabilidad)');
+console.log('     Nota: en un milisegundo, 20,000 IDs SÍ chocarían el 18.6% de las veces.');
+console.log('     Por eso el tiempo va en el ID: reparte la carga entre milisegundos.');
 
 console.log('\n10. El tiempo alcanza hasta 2054');
 const tope = Ids.deBase32_('ZZZZZZZZ');

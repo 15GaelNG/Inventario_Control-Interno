@@ -4,6 +4,7 @@ node_modules/
 .clasp.json
 .clasp.*.json
 !.clasp.json.example
+!.clasp.lab.json.example
 *.log
 .DS_Store
 # Archivo temporal que crea Excel mientras tienes un libro abierto

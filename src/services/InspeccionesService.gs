@@ -356,7 +356,17 @@ const InspeccionesService = (function () {
     const ahora = new Date();
 
     // ---- la fila ----
-    const fila = { [COL_ID]: id, 'TIPO': estructura.tipo, 'FECHA': ahora };
+    // 'ID VEHICULO' es la llave foránea. DEL_VEHICULO se queda como está: copia 11 columnas
+    // al crear, mientras el MAPA de Relaciones solo vigila 4 para deriva (es bitácora, así
+    // que reporta y no corrige). Son dos listas con propósitos distintos, no una duplicada.
+    const idVehiculo = vehiculo.data['ID'];
+    if (!idVehiculo) {
+      throw new Error('El vehículo con folio ' + folio + ' no tiene ID. Corre el pipeline ' +
+        'de IDs sobre este libro antes de registrar inspecciones.');
+    }
+    const fila = {
+      [COL_ID]: id, 'TIPO': estructura.tipo, 'FECHA': ahora, 'ID VEHICULO': idVehiculo,
+    };
     Object.keys(DEL_VEHICULO).forEach((destino) => {
       const valor = vehiculo.data[DEL_VEHICULO[destino]];
       fila[destino] = valor === undefined || valor === null ? '' : valor;

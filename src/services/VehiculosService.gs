@@ -19,7 +19,10 @@ const VehiculosService = (function () {
   const SHEET_VEHICULOS = 'VEHICULOS';
   // La columna ID real de esta hoja es ID_VEHICULO, no "ID" (a diferencia de
   // las hojas nuevas) — hay que pasarla explícitamente a SheetUtils.update/remove.
-  const ID_COLUMN = 'ID_VEHICULO';
+  // La llave de renglon es la NUEVA. La columna 'ID_VEHICULO' pasa a llamarse
+  // "ID ANTERIOR" en el paso 2 del pipeline de IDs y queda solo como rastro: sus valores
+  // (REFWF1, REFWF2...) eran un prefijo mas un contador de AppSheet, no un dato.
+  const ID_COLUMN = 'ID';
   // Campos tipo archivo (ver buscarPorFolio): en datos migrados de AppSheet
   // guardan una ruta relativa, no una URL — hay que resolverlos antes de
   // mandarlos al cliente.
@@ -56,8 +59,14 @@ const VehiculosService = (function () {
    * solo para quedarse con unas cuantas, lee únicamente esas columnas — de
    * ~26,500 celdas a ~5,800.
    */
+  // 'ID' va aquí para que el catálogo que consumen los formularios pueda identificar un
+  // vehículo sin depender del folio. Hoy los formularios siguen MANDANDO el folio y el
+  // servidor resuelve el ID: el control de búsqueda de vehículo no es un <select> con
+  // valor oculto, es una caja de texto donde lo que se manda es lo que se ve (ver
+  // Combobox, que mete `valor` en el input). Mandar el ID exigiría agregarle un campo
+  // oculto al componente Formulario, y eso está pendiente a propósito.
   const COLUMNAS_BASICO = [
-    'FOLIO', 'DEPARTAMENTO', 'MARCA', 'LINEA VEHICULO', 'MODELO', 'ESTATUS',
+    'ID', 'FOLIO', 'DEPARTAMENTO', 'MARCA', 'LINEA VEHICULO', 'MODELO', 'ESTATUS',
     'RESPONSABLE VEHICULO', 'NO EMPLEADO', 'SERIE VEHICULO', 'NUCCO',
   ];
 
@@ -71,6 +80,7 @@ const VehiculosService = (function () {
       if (!datos['FOLIO'][i]) continue;
       if (String(datos['ESTATUS'][i] || '').toUpperCase() === 'BAJA VEHICULAR') continue;
       resultado.push({
+        ID: datos['ID'][i],
         FOLIO: datos['FOLIO'][i],
         DEPARTAMENTO: datos['DEPARTAMENTO'][i] || '',
         MARCA: datos['MARCA'][i] || '',
@@ -85,8 +95,12 @@ const VehiculosService = (function () {
     return resultado.sort((a, b) => String(a.FOLIO).localeCompare(String(b.FOLIO)));
   }
 
+  // Ojo: la propiedad de salida sigue llamandose ID_VEHICULO porque es el contrato con
+  // el frontend (app.html usa idCampo: 'ID_VEHICULO'), pero el VALOR sale de la columna
+  // 'ID'. Antes leia 'ID_VEHICULO', que la migracion renombro a ID ANTERIOR: la lista
+  // cargaba pero con el id en undefined, y editar/eliminar desde ahi no servian.
   const COLUMNAS_RESUMEN = [
-    'ID_VEHICULO', 'FOLIO', 'NUCCO', 'DEPARTAMENTO', 'NO ECONOMICO', 'MARCA', 'CLASE',
+    'ID', 'FOLIO', 'NUCCO', 'DEPARTAMENTO', 'NO ECONOMICO', 'MARCA', 'CLASE',
     'LINEA VEHICULO', 'MODELO', 'COLOR', 'PLACA', 'SEDE', 'ESTATUS', 'FECHA REGISTRO SISTEMA CI',
   ];
 
@@ -104,7 +118,7 @@ const VehiculosService = (function () {
     for (let i = 0; i < filas; i++) {
       if (!datos['FOLIO'][i]) continue;
       resultado.push({
-        ID_VEHICULO: datos['ID_VEHICULO'][i],
+        ID_VEHICULO: datos['ID'][i],
         FOLIO: datos['FOLIO'][i],
         NUCCO: datos['NUCCO'][i] || '',
         DEPARTAMENTO: datos['DEPARTAMENTO'][i] || '',
@@ -302,7 +316,7 @@ const VehiculosService = (function () {
       const fila = Object.assign({}, datos);
       fila.FOLIO = generarFolio_(datos.CLASE);
       fila.NUCCO = generarNucco_();
-      fila[ID_COLUMN] = Utilities.getUuid().slice(0, 8);
+      fila[ID_COLUMN] = Ids.nuevo(Entidades.prefijo(SHEET_VEHICULOS));
       fila['FECHA REGISTRO SISTEMA CI'] = new Date();
       SheetUtils.insert(ssId(), SHEET_VEHICULOS, fila);
       return { ID: fila[ID_COLUMN], FOLIO: fila.FOLIO };
@@ -317,8 +331,15 @@ const VehiculosService = (function () {
    * cambió qué y cuándo, sin que nadie tenga que anotarlo a mano. También
    * propaga los campos copiados (placa, marca, línea…) a Instalación de
    * Sensores, Verificaciones y Hologramas (ver Relaciones.gs / docs/relaciones.md). */
-  function actualizar(token, id, cambios) {
+  /**
+   * @param opciones.candadoTomado  true si el llamador YA tiene el candado del script.
+   *   waitLock() no es reentrante, asi que propagar() se colgaria 20 s y moriria en el
+   *   catch de abajo, perdiendo la propagacion sin que nadie se enterara. Lo usa
+   *   ReasignacionesVehicularesService.crear().
+   */
+  function actualizar(token, id, cambios, opciones) {
     const sesion = Permisos.puedeEditar(token, 'vehiculos');
+    const cfg = opciones || {};
     const datos = Object.assign({}, cambios);
     delete datos.FOLIO; // no se edita, se fija solo al crear
     delete datos.NUCCO; // ídem
@@ -333,7 +354,8 @@ const VehiculosService = (function () {
     // El vehículo YA se guardó bien en este punto — si propagar falla, no se revierte
     // nada: solo se avisa en los logs y revisar() lo corrige en la corrida nocturna.
     try {
-      Relaciones.propagar('VEHICULOS', actualizado, datos);
+      if (cfg.candadoTomado) Relaciones.propagarSinCandado('VEHICULOS', actualizado, datos);
+      else Relaciones.propagar('VEHICULOS', actualizado, datos);
     } catch (err) {
       console.error('Relaciones.propagar falló para el vehículo ' + id + ': ' + err.message);
     }

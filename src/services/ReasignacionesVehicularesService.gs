@@ -33,7 +33,8 @@ const ReasignacionesVehicularesService = (function () {
   // Nombre real ya confirmado ("REASIGNACIONES_VEHICULOS") — directo por
   // nombre, no por firma de columnas (ver mismo comentario en ArqueosService).
   const NOMBRE_HOJA = 'REASIGNACIONES_VEHICULOS';
-  const ID_COLUMN = 'ID Reasignacion Vehicular';
+  // La llave de renglon es la NUEVA (ver la nota en VehiculosService).
+  const ID_COLUMN = 'ID';
 
   function ssId() {
     return Config.SPREADSHEET_IDS.VEHICULOS();
@@ -105,9 +106,24 @@ const ReasignacionesVehicularesService = (function () {
       const vehiculo = VehiculosService.buscarPorFolio(token, folio);
       if (!vehiculo) throw new Error('No se encontró el vehículo con Folio=' + folio);
 
+      // buscarPorFolio indexa por el encabezado CRUDO de la hoja, y la migración renombró
+      // 'ID_VEHICULO' a 'ID ANTERIOR': aquí antes se leía vehiculo.ID_VEHICULO, que hoy es
+      // undefined. El update de abajo tronaba con "ID=undefined" DESPUÉS de insertar esta
+      // fila, así que quedaba la reasignación escrita y el vehículo sin actualizar. Se
+      // valida antes de escribir nada.
+      const idVehiculo = vehiculo['ID'];
+      if (!idVehiculo) {
+        throw new Error('El vehículo con Folio=' + folio + ' no tiene ID. Corre el ' +
+          'pipeline de IDs sobre este libro antes de registrar reasignaciones.');
+      }
+
       const fila = {};
-      fila[ID_COLUMN] = Utilities.getUuid().slice(0, 8);
-      fila['Folio Vehiculo'] = folio;
+      fila[ID_COLUMN] = Ids.nuevo(Entidades.prefijo('REASIGNACIONES_VEHICULOS'));
+      // La llave foránea de verdad. El folio se guarda también, para que la hoja se lea,
+      // pero sale del vehículo encontrado y no de lo que mandó el navegador: así no puede
+      // quedar una fila cuyo ID VEHICULO no corresponda a su folio.
+      fila['ID VEHICULO'] = idVehiculo;
+      fila['Folio Vehiculo'] = vehiculo['FOLIO'] || folio;
       fila['Fecha de Reasignacion'] = datos['Fecha de Reasignacion'] ? new Date(datos['Fecha de Reasignacion']) : new Date();
       fila['VIN'] = vehiculo['SERIE VEHICULO'] || '';
       fila['NUCO'] = vehiculo['NUCCO'] || '';
@@ -121,11 +137,13 @@ const ReasignacionesVehicularesService = (function () {
 
       SheetUtils.insert(ssId(), hoja_().getName(), fila);
 
-      VehiculosService.actualizar(token, vehiculo.ID_VEHICULO, {
+      // candadoTomado: este hilo ya tiene el candado del script (arriba), y waitLock no es
+      // reentrante — sin avisarlo, la propagación esperaba 20 s y moría en silencio.
+      VehiculosService.actualizar(token, idVehiculo, {
         'RESPONSABLE VEHICULO': fila['Responsable Entrante'],
         'NO EMPLEADO': fila['No Empleado Entrante'],
         'DEPARTAMENTO': fila['Departamento Entrante'] || vehiculo['DEPARTAMENTO'],
-      });
+      }, { candadoTomado: true });
 
       return { ID: fila[ID_COLUMN] };
     } finally {

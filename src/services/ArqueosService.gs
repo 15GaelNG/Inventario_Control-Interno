@@ -384,6 +384,15 @@ const ArqueosService = (function () {
 
       const sheet = hoja_();
       const fila = Object.assign({}, datos);
+      // La llave foránea de verdad. 'ID CCH' se queda porque es dato de negocio (el
+      // consecutivo 1,2,3 que usa la gente) y porque AppSheet lo usa, pero el vínculo es
+      // el ID: 'caja' ya venía completa y su ID se estaba tirando.
+      const idCaja = caja['ID'];
+      if (!idCaja) {
+        throw new Error('La caja chica con ID CCH=' + idCch + ' no tiene ID. Corre el ' +
+          'pipeline de IDs sobre este libro antes de registrar arqueos.');
+      }
+      fila['ID CAJA CHICA'] = idCaja;
       fila['ID CCH'] = idCch;
       fila['ID ARQUEO'] = generarIdArqueo_(sheet, idCch);
 

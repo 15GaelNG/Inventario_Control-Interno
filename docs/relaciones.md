@@ -1,8 +1,19 @@
 # Relaciones entre hojas (datos copiados)
 
-> **Estado:** diseño aprobado, **pendiente de implementar**. Se construirá al final,
-> cuando los módulos principales ya existan. Mientras tanto, sigue las
-> [reglas para desarrollar mientras tanto](#reglas-para-desarrollar-mientras-tanto).
+> **Estado (29/09/2026): construido y conectado, con una red de seguridad apagada.**
+>
+> | Pieza | Estado |
+> |---|---|
+> | `MAPA`, `propagar`, `datosParaNuevo`, `revisar`, `cambiarClave` | hechas, en `src/services/Relaciones.gs` |
+> | `propagar` conectado a editar un vehículo | sí, `src/services/VehiculosService.gs:313` |
+> | Columnas copiadas no editables en los módulos que copian | sí (ver [reglas](#reglas-para-desarrollar-mientras-tanto)) |
+> | `datosDeVehiculo_` temporales reemplazadas por `datosParaNuevo` | **no**, siguen las de cada Service |
+> | `revisar({corregir:true})` corrido alguna vez | **no** |
+> | Activador nocturno que lo corra solo | **no existe** — hay que crearlo a mano en el editor |
+>
+> **Que funciona no es teoría.** Medido en producción el 29/09/2026, solo lectura:
+> `INSTALACION DE SENSORES` —el módulo que sí pasa por `propagar`— tiene **0 desacuerdos
+> de `DEPARTAMENTO` en 208 filas** contra el catálogo.
 >
 > **Léase junto con [ids.md](ids.md).** Casi todo lo de aquí existe porque las hojas se
 > unen por `FOLIO`, que es un dato que cambia. Con el modelo de IDs puesto, propagar deja
@@ -31,6 +42,209 @@ original. Los módulos no copian datos por su cuenta: le piden a `Relaciones`.
 - `VEHICULOS` es dueña de PLACA, SERIE, MARCA, LÍNEA, etc.
 - En cualquier otra hoja esas columnas son **copias**: en la app **no se editan**
   (se muestran como solo lectura).
+
+### Principio: la llave es la SERIE (el VIN), no el folio
+
+El folio es un número interno que se puede reasignar. La serie es la identidad física de la
+unidad: no cambia mientras el vehículo exista. Por eso el `MAPA` empareja por
+`SERIE VEHICULO` en las tres hojas que tienen la columna.
+
+| Hoja copia | Se empareja por | Columna en la copia |
+|---|---|---|
+| `INSTALACION DE SENSORES` | `SERIE VEHICULO` | `SERIE VEHICULO` |
+| `HOLOGRAMAS` | `SERIE VEHICULO` | `SERIE VEHICULO` |
+| `INSPECCION VEHICULAR` | `SERIE VEHICULO` | `NO SERIE` |
+| `VERIFICACIONES` | `FOLIO` | `FOLIO VEHICULO` |
+| `INCIDENCIAS` | `FOLIO` | `FOLIO` |
+
+**El cambio no movió ni una fila.** Medido en producción el 30/09/2026 antes de hacerlo:
+las dos llaves dan el **mismo** vehículo en las 207 filas de Sensores y las 298 de
+Inspección que emparejan. **0 filas cambiarían de vehículo.** Sin esa comprobación el
+cambio habría sido a ciegas: una llave nueva que apunte a otro renglón propaga datos
+ajenos.
+
+#### La placa NO se usa de llave
+
+Parece la llave natural y es la peor de las tres:
+
+| Llave | Con dato real | Únicas | Relleno | Choques sin filtrar |
+|---|---|---|---|---|
+| `FOLIO` | 648 | 648 | 0 | 0 |
+| `SERIE VEHICULO` | 637 | 637 | 11 | 10 |
+| `PLACA` | **421** | 421 | **227** | **224** |
+
+De las 648 celdas de `PLACA`, **227 no son una placa sino texto**: `SIN PLACA` ×101,
+`BAJA VEHICULAR` ×84, `BAJA DE PLACA` ×42 (y ni una celda vacía — el relleno ocupa el lugar
+del hueco). Tomada tal cual, 224 filas caerían sobre la llave de otra: 101 vehículos
+distintos se fundirían en uno solo. `SIN PLACA` y `BAJA DE PLACA` están en `CENTINELAS`
+bajo la llave `'PLACA'` para que tampoco se propaguen.
+
+#### Las dos que se quedan con el folio, y por qué
+
+- **`VERIFICACIONES` no tiene columna de serie.** Emparejar por placa acertaría 333 de sus
+  426 filas (78%) contra 426 (100%) por folio. Moverla requiere **agregarle la columna**, y
+  agregar columnas rompe AppSheet hasta que alguien regenere el esquema (ver
+  [ids.md](ids.md)).
+- **`INCIDENCIAS` no tiene ni serie ni placa.** El folio es su única llave posible.
+
+#### Lo que el cambio de llave arrastró
+
+`FOLIO` dejó de ser llave en Sensores, así que pasó a ser **un atributo copiado más** —
+está en `columnas` y la corrida nocturna lo mantiene al día. Y `cambiarClave()` tuvo que
+aprender a propagarlo: antes solo reescribía la llave en las copias que emparejan por ella,
+así que cambiar un folio habría dejado esa columna con el valor viejo hasta la noche.
+
+`datosParaNuevo()` **cambió de contrato**: ahora recibe la serie, no el folio, para las tres
+hojas que emparejan por serie. Hoy nadie la llama en producción (`SensoresService` y
+`HologramasService` siguen con sus funciones temporales), así que no rompe nada — pero hay
+que tenerlo presente al reemplazarlas.
+
+> **A dónde va esto:** la llave definitiva es `ID_VEHICULO` (ver [ids.md](ids.md)). La serie
+> es el paso intermedio correcto mientras las copias no tengan la columna del ID nuevo.
+
+### Principio: una copia es un caché o es una bitácora, y se tratan al revés
+
+Esto es lo que más fácil se hace mal, y hacerlo mal **borra datos buenos**. Cada entrada
+del `MAPA` declara su `tipo`:
+
+| `tipo` | Qué guarda la copia | Si el dueño cambia | Ejemplos |
+|---|---|---|---|
+| `cache` | el estado de **HOY** | la copia está vieja → **se pisa** | `INSTALACION DE SENSORES`, `HOLOGRAMAS`, `VERIFICACIONES` |
+| `bitacora` | el estado del **día de un evento fechado** | la copia está **correcta** → solo se reporta | `INSPECCION VEHICULAR`, `INCIDENCIAS` |
+
+Una instalación de sensor describe al vehículo tal como es ahora: si el vehículo pasa de
+CONSTRUCCIÓN a POST VENTA, la instalación quedó vieja y hay que corregirla. Una inspección
+del año pasado dice *a qué área se le revisó ese carro ese día*: si el vehículo cambió de
+área después, la inspección **no** quedó vieja — y sobrescribirla borraría la evidencia de
+a quién se le había entregado la unidad. Es la misma columna, `DEPARTAMENTO`, y la regla
+es opuesta.
+
+`propagar()` salta las bitácoras. `revisar()` las lee y reporta la diferencia con el tipo
+`DIFERENCIA_HISTORICA` en `LOG_RELACIONES`, pero **nunca la corrige, ni con
+`corregir:true`**. Están en el `MAPA` a propósito: para que quede escrito que se decidió
+congelarlas, y no parezca que se olvidaron.
+
+Dos consecuencias que parecen contradicciones y no lo son:
+
+- **`datosParaNuevo()` sí copia a una bitácora.** Al dar de alta la inspección, el valor de
+  hoy *es* el del día del evento. Congelarlo es justo lo que se quiere.
+- **`cambiarClave()` sí toca a una bitácora.** Lo que cambia ahí es la **clave**, no un
+  atributo: si el `FOLIO` de una inspección vieja no sigue al vehículo, la inspección se
+  vuelve huérfana y se pierde de qué unidad era. La bitácora congela el atributo, no el
+  vínculo.
+
+### Principio: un centinela no se propaga
+
+Cuando se da de baja una unidad, alguien escribe la palabra **dentro de las columnas de
+datos**, no solo en `ESTATUS`. Esos cuatro valores son estatus o relleno, y viven en la
+constante `CENTINELAS` de `Relaciones.gs`:
+
+`BAJA VEHICULAR` · `FUERA DE SERVICIO` · `NUCO SIN INFORMACION` · `SIN ESPECIFICAR`
+
+y dos que solo aplican a `PLACA`, porque `SIN PLACA` en un campo de comentarios sí sería un
+dato legítimo: `SIN PLACA` · `BAJA DE PLACA`
+
+**Aplican a cualquier columna, no solo a `DEPARTAMENTO`**, y eso no es precaución teórica.
+Medido en producción el 30/09/2026 (solo lectura): **1,265 celdas en 14 columnas**, de las
+cuales **1,267 están fuera de lugar** — las otras 141 son la columna `ESTATUS`, donde sí
+pertenecen. **La mitad de la flota tiene al menos una.**
+
+| Columna | Celdas | Qué trae |
+|---|---|---|
+| `SEDE` | 309 | `SIN ESPECIFICAR` 173, `BAJA VEHICULAR` 120, `NUCO SIN INFORMACION` 16 |
+| `UBICACION` | 309 | igual que `SEDE` |
+| `DEPARTAMENTO` | 139 | `BAJA VEHICULAR` 123, `NUCO SIN INFORMACION` 14, `SIN ESPECIFICAR` 2 |
+| `RESPONSABLE VEHICULO` | 125 | `BAJA VEHICULAR` 106, `NUCO SIN INFORMACION` 14, `FUERA DE SERVICIO` 5 |
+| `PLACA` | 227 | `SIN PLACA` 101, `BAJA VEHICULAR` 84, `BAJA DE PLACA` 42 |
+| `COLOR` | 69 | `SIN ESPECIFICAR` 56, `NUCO SIN INFORMACION` 13 |
+| `RAZON SOCIAL`, `MARCA`, `MODELO`, `TIPO DE COMBUSTIBLE`, `CLASE`, `LINEA VEHICULO`, `SERIE VEHICULO` | 11–15 cada una | casi todo `NUCO SIN INFORMACION` |
+| *(`ESTATUS`)* | *141* | *ahí sí pertenecen* |
+
+Un centinela **nunca se propaga ni se corrige**: escribirlo no arregla nada, *pisa* el dato
+bueno que la copia sí tiene. Se registra como `OMITIDO_CENTINELA` y se cuenta aparte,
+porque **lo que hay que arreglar es `VEHICULOS`, no la copia**.
+
+> **Una versión anterior de `CENTINELAS` solo cubría `DEPARTAMENTO`**, y con eso una corrida
+> de `revisar({corregir:true})` habría escrito `BAJA VEHICULAR` encima de **8 placas y 12
+> responsables de verdad** en `HOLOGRAMAS`, además de los 9 departamentos. El bug salió al
+> armar `inconsistencias-vehiculos.xlsx`, no al leer el código: la lista se había escrito
+> mirando una sola columna.
+
+> **El catálogo `DEPARTAMENTOS` no se usa para decidir esto, y no debe usarse.** Está
+> desactualizado: no tiene `OOAM TECNICO` (18 filas) ni `OOAM ADMINISTRATIVO` (7), que son
+> áreas **reales** (confirmado con Ayrton el 30/09/2026). Validar contra él rechazaría datos
+> buenos. Por eso `CENTINELAS` es una lista fija y corta.
+
+#### Pendiente: limpiar el `DEPARTAMENTO` de los vehículos de baja
+
+Los centinelas son una curita. La causa está en `VEHICULOS`, y se puede arreglar — medido
+en producción, solo lectura:
+
+- **Las 123 filas con `DEPARTAMENTO = 'BAJA VEHICULAR'` tienen las 123 también
+  `ESTATUS = 'BAJA VEHICULAR'`.** Cero excepciones. La baja **no** depende de
+  `DEPARTAMENTO`: consta en `ESTATUS`, que es la columna que el código lee
+  (`VehiculosService.gs:72`). Limpiar `DEPARTAMENTO` no pierde la baja.
+- Y ya hay **6 vehículos de baja que conservan su área** en `DEPARTAMENTO`: el patrón
+  correcto existe en los datos.
+- De las 123, **8 tienen su área recuperable** desde las copias (`HOLOGRAMAS`,
+  `INSPECCION VEHICULAR`), y las fuentes coinciden en las 8 — sin un solo conflicto. A las
+  otras **115 les toca quedar vacías**: vacío dice la verdad, que no consta el área.
+  (Un primer cálculo dio 7 y 116 porque validaba las áreas contra el catálogo
+  `DEPARTAMENTOS`; al dejar de hacerlo, `CTA0034` se recupera con `OOAM TECNICO`.)
+- `NUCO SIN INFORMACION` (14 filas) y `SIN ESPECIFICAR` (2) son también valores del
+  desplegable de `ESTATUS` (`app.html:1392`) y pintan igual, pero **eso no se ha cruzado
+  contra `ESTATUS` todavía**: hay que medirlo antes de tocarlas.
+
+**La app nueva no puede volver a contaminar esa columna:** `DEPARTAMENTO` es un desplegable
+del catálogo (`app.html:1399`, `tipo: 'select', catalogo: true`). La contaminación entró por
+AppSheet o editando el Excel a mano. O sea que `CENTINELAS` sirve de red mientras AppSheet
+viva, y cuando se apague se puede borrar.
+
+**Orden obligatorio:** primero la regla del vacío
+([arriba](#principio-el-barrido-nocturno-no-vacía-lo-que-sí-tiene-dato)) —ya está—, y
+**después** la limpieza. Al revés, la siguiente corrida nocturna propagaría los 115 vacíos y
+borraría el área de las copias.
+
+**Y `DEPARTAMENTO` es solo la punta:** son 1,124 celdas fuera de lugar en 13 columnas. El
+inventario completo, celda por celda, está en `inconsistencias-vehiculos.xlsx`, hojas
+*Relleno en VEHICULOS* y *Relleno detalle*.
+
+**Lo que no se puede verificar desde aquí:** si AppSheet tiene esa columna como obligatoria,
+o alguna vista que agrupe por ella. Con 115 celdas vacías nuevas eso se notaría allá. Se
+revisa en su editor antes de escribir.
+
+### Pieza 1b — Cómo se ve cada caso en `LOG_RELACIONES`
+
+Cinco tipos, y solo uno se corrige:
+
+| `TIPO` | Qué pasó | ¿Se corrige? |
+|---|---|---|
+| `DIFERENCIA` | la copia quedó vieja | **sí** |
+| `DIFERENCIA_HISTORICA` | bitácora fechada: el valor del día del evento | no, a propósito |
+| `OMITIDO_CENTINELA` | `VEHICULOS` traía un estatus en vez de un dato | no: arregla `VEHICULOS` |
+| `OMITIDO_VACIO` | `VEHICULOS` no tiene el dato y la copia sí | no: arregla `VEHICULOS` |
+| `HUERFANO` | la copia apunta a un folio/serie que ya no existe | no: no hay con qué |
+| `CLAVE_DUPLICADA_EN_ORIGEN` | dos filas del dueño con la misma clave | no: no se sabe cuál manda |
+
+### Principio: el barrido nocturno no vacía lo que sí tiene dato
+
+`propagar()` y `revisar()` tratan distinto un valor vacío en el dueño, y la diferencia
+es quién lo pidió:
+
+| | Dueño vacío, copia con dato | Por qué |
+|---|---|---|
+| `propagar()` | **vacía la copia** | el usuario acaba de borrar el campo a propósito |
+| `revisar()` | **no la toca**, loguea `OMITIDO_VACIO` | nadie pidió nada: es un barrido a ciegas |
+
+En un barrido, un dueño vacío casi siempre es un dato que falta en `VEHICULOS`, no la
+instrucción de borrarlo en tres módulos. Y la asimetría del error importa: borrar a ciegas
+es silencioso y no hay de dónde recuperarlo; dejar el valor viejo se reporta cada noche
+hasta que alguien lo vea.
+
+Esto no es hipotético. Ver [limpieza pendiente del catálogo](#pendiente-limpiar-el-departamento-de-los-vehículos-de-baja):
+a 115 vehículos de baja les toca quedar con `DEPARTAMENTO` vacío, y sin esta regla la
+primera corrida nocturna después de esa limpieza vaciaría también el área que `HOLOGRAMAS`
+e `INSTALACION DE SENSORES` sí conservan.
 
 ### Pieza 1 — El mapa (lo único que se edita a mano)
 
@@ -167,13 +381,71 @@ por todo el código:
 
 ---
 
+## El reporte de inconsistencias
+
+`inconsistencias-vehiculos.xlsx`, en la raíz del repo. Es una **foto** de producción
+(30/09/2026), no un tablero: para actualizarlo hay que volver a correr el reporte.
+
+| Hoja | Qué trae |
+|---|---|
+| *Resumen* | una fila por hoja copia, con el conteo de cada tipo |
+| *Detalle* | una fila por inconsistencia: hoja, fila, clave, columna, lo que dice cada lado y el tipo |
+| *Leyenda* | qué significa cada tipo y qué haría la corrida nocturna con él |
+| *Relleno en VEHICULOS* | las 14 columnas del catálogo que guardan estatus en vez de datos |
+| *Relleno detalle* | esas 1,408 celdas una por una, con su referencia |
+| *Calidad de las llaves* | por qué la llave es la serie y no el folio ni la placa, con los números |
+
+Los mapeos de columnas salen del código (`Relaciones.MAPA` y
+`InspeccionesService.DEL_VEHICULO`), no de la intuición. Lo que midió el 30/09/2026:
+
+| Hoja | Se une por | Filas | Iguales | `DIFERENCIA` | `VEH_RELLENO` | `COPIA_VACIA` | `HUERFANO` |
+|---|---|---|---|---|---|---|---|
+| `INSTALACION DE SENSORES` | `SERIE VEHICULO` | 208 | 2,473 | 18 | 0 | 200 | 1 |
+| `HOLOGRAMAS` | `SERIE VEHICULO` | 256 | 833 | 142 | 33 | 0 | 111 |
+| `VERIFICACIONES` | `FOLIO VEHICULO` | 426 | 409 | 7 | 5 | 5 | 0 |
+| `INSPECCION VEHICULAR` | `NO SERIE` | 302 | 2,749 | 184 | 18 | 29 | 0 |
+| `INCIDENCIAS` | `FOLIO` | 1 | 2 | 0 | 0 | 0 | 0 |
+| **Total** | | | **6,466** | **351** | **56** | **234** | **112** |
+
+Tres cosas que salieron de ahí y valen más que los totales:
+
+1. **Las 200 `COPIA_VACIA` de Sensores son casi todas una sola columna**:
+   `CAPACIDAD DE COMBUSTIBLE` (157) y `COLOR` (43). No es deriva, es que nunca se llenaron.
+2. **Los 111 huérfanos de Hologramas NO son 111 vehículos personales.** Aquí decía que sí;
+   medidos sobre el laboratorio el 30/09/2026, ya con `ID VEHICULO` escrito, se parten en
+   tres cosas distintas:
+
+   | Qué son | Cuántos | Qué significa |
+   |---|---|---|
+   | **Serie con un `_` de más al inicio** | **13** | Recuperables con certeza: sin el guión bajo, la serie SÍ existe en `VEHICULOS`. Ej. `_VR3EC9HP2MJ503983` |
+   | No tienen forma de VIN (longitud ≠ 17) | 7 | Basura o dedazo: `1`, `123456789`, `UYC383A` (parece placa), `1GNM616030` (10), `L15A77804197` (12), `3MDDJBTVXKM31054` (16, le falta un carácter) |
+   | VIN válido de 17 sin padre | 91 | **Estos sí** son los vehículos personales, que por diseño se capturan a mano |
+
+   Así que la tasa recuperable real es **157/255 (62%)**, no 144/255 (56%): 13 de esas
+   "huérfanas" son un carácter de más, no un vehículo ajeno. Y ni los 91 están del todo
+   limpios — entre ellos hay un `GOLX960529MGTMPC0`, que tiene forma de CURP truncado.
+
+   El pipeline hizo lo correcto con todas: las dejó intactas en vez de inventarles un padre.
+   Corregirlas es limpieza de datos, y está en el Excel.
+3. **`INSPECCION VEHICULAR` acumula 184 `DIFERENCIA`**, sobre todo `RESPONSABLE` (85) y
+   `OFICINA / DESARROLLO` (69). Es una bitácora, y Ayrton lo confirmó el 30/09/2026: *"el
+   responsable que se captura ahí es el del momento en el que se realizó la inspección"*.
+   **Eso no se corrige**, y ese número es justamente la medida de cuánto se habría
+   reescrito si se tratara como caché.
+4. **Los dos centinelas de `PLACA` movieron 11 casos** de `DIFERENCIA` a
+   `VEHICULOS_RELLENO`: son 11 placas buenas en las copias que la corrida nocturna habría
+   pisado con `SIN PLACA` o `BAJA DE PLACA`. Salieron de medir si la placa servía de llave,
+   no de revisar el código.
+
 ## Inventario de copias (mantener al día)
 
 | Hoja que copia | Clave | Columnas copiadas | Desde | Cómo se copia hoy | Pendiente |
 |---|---|---|---|---|---|
 | `VERIFICACIONES` | `FOLIO VEHICULO` | `PLACA` | `VEHICULOS` | `VerificacionesService`: al registrar y al cambiar el folio (copia en 2 lugares) | Unificar en `datosDeVehiculo_` (regla 1) |
-| `INCIDENCIAS` | `FOLIO` | `DEPARTAMENTO`, `MODELO` | `VEHICULOS` | **Los manda el formulario** (autocompletado en el navegador) y son editables | Copiarlos en el servidor; quitar edición (regla 2) |
-| `INSTALACION DE SENSORES` | `FOLIO` | 13 columnas: `SERIE VEHICULO`, `PLACA`, `MARCA`, `CLASE`, `LINEA VEHICULO`, `MODELO`, `COLOR`, `CAPACIDAD DE COMBUSTIBLE`, `RAZON SOCIAL`, `DEPARTAMENTO`, `SEDE`, `OFICINA / DESARROLLO` (← `UBICACION`), `RESPONSABLE` (← `RESPONSABLE VEHICULO`) | `VEHICULOS` | `SensoresService.datosDeVehiculo_` (función temporal, regla 1); no son editables en el módulo | Reemplazar por `Relaciones.datosParaNuevo` |
+| `INCIDENCIAS` | `FOLIO` | `DEPARTAMENTO`, `MODELO` | `VEHICULOS` | **Los manda el formulario** (autocompletado en el navegador) y son editables. En el `MAPA` como **`bitacora`**: se reportan, no se corrigen | Copiarlos en el servidor; quitar edición (regla 2) |
+| `INSPECCION VEHICULAR` | `NO SERIE` | `FOLIO`, `DEPARTAMENTO`, `SEDE`, `OFICINA / DESARROLLO`, `RESPONSABLE` | `VEHICULOS` | En el `MAPA` como **`bitacora`**: se reportan, no se corrigen | Nada: congelada a propósito |
+| `TICKETS` | — | (ninguna) | — | **No está en el `MAPA` y no debe estar.** Su `DEPARTAMENTO` es el de quien **levantó** el ticket (va pegado a `SOLICITANTE`), no el del vehículo: 320 de sus filas no coinciden con `VEHICULOS`, y eso es correcto | Nada |
+| `INSTALACION DE SENSORES` | `SERIE VEHICULO` | 13 columnas (incluido `FOLIO`, que dejó de ser llave): `SERIE VEHICULO`, `PLACA`, `MARCA`, `CLASE`, `LINEA VEHICULO`, `MODELO`, `COLOR`, `CAPACIDAD DE COMBUSTIBLE`, `RAZON SOCIAL`, `DEPARTAMENTO`, `SEDE`, `OFICINA / DESARROLLO` (← `UBICACION`), `RESPONSABLE` (← `RESPONSABLE VEHICULO`) | `VEHICULOS` | `SensoresService.datosDeVehiculo_` (función temporal, regla 1); no son editables en el módulo | Reemplazar por `Relaciones.datosParaNuevo` |
 
 > **`INSTALACION DE SENSORES` — lo que NO es copia:** `TIPO DE COMBUSTIBLE` es propio
 > (en `VEHICULOS` es el tipo: GASOLINA/DIESEL; aquí el producto: MAGNA/PREMIUM/DIESEL —
@@ -211,10 +483,31 @@ por todo el código:
 desde Vehículos **no** actualiza las copias. Afecta solo a la base de pruebas mientras se
 desarrolla; `revisar({ corregir: false })` medirá las diferencias cuando se implemente.
 
-## Orden de implementación (cuando toque)
+## Orden de implementación
 
-1. `Relaciones.gs` con el mapa, `propagar` y `datosParaNuevo`, con pruebas.
-2. Conectar a `VehiculosService.actualizar`.
-3. Reemplazar las funciones temporales `datosDeVehiculo_` de cada módulo.
-4. `revisar` en modo solo reporte → revisar el log → activar corrección y el activador nocturno.
-5. `cambiarClave` para ADMIN.
+1. ~~`Relaciones.gs` con el mapa, `propagar` y `datosParaNuevo`, con pruebas.~~ **Hecho**
+   (pruebas en `tests/relaciones.test.js`).
+2. ~~Conectar a `VehiculosService.actualizar`.~~ **Hecho**, `VehiculosService.gs:313`.
+3. Reemplazar las funciones temporales `datosDeVehiculo_` de cada módulo. **Pendiente** —
+   `SensoresService` y `HologramasService` siguen con las suyas. Son correctas, solo
+   duplican la lógica del `MAPA`.
+4. `revisar` en modo solo reporte → revisar el log → activar corrección y el activador
+   nocturno. **Pendiente, y es el paso que falta para cerrar el tema.** En orden:
+   1. `revisarRelacionesSoloReporte()` en el libro de **pruebas**, y leer `LOG_RELACIONES`:
+      los `DIFERENCIA` son los que se van a corregir; los `DIFERENCIA_HISTORICA` y
+      `OMITIDO_CENTINELA` no se tocan, y sirven para revisar que la clasificación del
+      `MAPA` quedó bien.
+   2. `revisarRelacionesYCorregir()` en pruebas, y verificar que las bitácoras siguen
+      intactas.
+   3. Lo mismo en producción.
+   4. Crear el activador a mano: **Activadores > Agregar activador**, función
+      `revisarRelacionesYCorregir`, por tiempo, diario, ~2 a.m. No se crea por código a
+      propósito: `src/appsscript.json` no pide el permiso `script.scriptapp`, y pedirlo
+      obliga a todos los usuarios a volver a autorizar la app.
+5. `cambiarClave` para ADMIN. **Pendiente** (no tiene botón; se usa desde el editor).
+
+> **Por qué el activador nocturno no es opcional.** Mientras AppSheet siga vivo, escribe en
+> las mismas hojas y **ningún Apps Script puede verlo**: `onEdit` no se dispara para
+> escrituras hechas por la API ni por otro script. Lo mismo para quien edite el spreadsheet
+> a mano. `propagar()` solo cubre lo que pasa por la app nueva; para todo lo demás, la
+> corrida nocturna de `revisar()` es la única red que hay.

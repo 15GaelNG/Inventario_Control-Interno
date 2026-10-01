@@ -41,7 +41,7 @@ const IncidenciasService = (function () {
   function desdeOriginal_(row) {
     const trabajoHecho = !!(row['DESCRIPCION TRABAJO REALIZADO'] || row['INSPECCION SALIDA']);
     return {
-      ID: row['ID_INCIDENCIA'],
+      ID: row['ID'],
       FOLIO: row['FOLIO'] || '',
       DEPARTAMENTO: row['DEPARTAMENTO'] || '',
       MODELO: row['MODELO'] || '',
@@ -77,7 +77,7 @@ const IncidenciasService = (function () {
   /** Registro completo (todas las columnas) por ID -- "Ver completo" desde la ficha de Vehículos. */
   function buscarPorId(token, id) {
     Permisos.puedeLeer(token, 'incidencias');
-    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, 'ID_INCIDENCIA');
+    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, 'ID');
     if (!encontrado) return null;
     const limpio = {};
     Object.keys(encontrado.data).forEach((k) => {
@@ -94,17 +94,33 @@ const IncidenciasService = (function () {
   }
 
   /** Abre una nueva incidencia (ingreso del vehículo al taller) */
+  /**
+   * A diferencia del resto de la familia, esta función NO exige que el vehículo exista en
+   * el catálogo, y es a propósito: su formulario es un <datalist>, que deja escribir
+   * cualquier texto, y hasta hoy crear() ni consultaba VEHICULOS. Volverla estricta
+   * bloquearía capturas que hoy funcionan. Así que se intenta resolver al vehículo para
+   * ponerle la llave foránea, y si no se puede, se guarda como siempre: con lo que mandó el
+   * cliente y con 'ID VEHICULO' vacío. Un vínculo que falta se puede reparar después; una
+   * incidencia que no se pudo capturar, no.
+   */
   function crear(token, datos) {
     Permisos.puedeEditar(token, 'incidencias');
-    if (!datos.FOLIO) throw new Error('El folio del vehículo es obligatorio');
+    if (!datos.FOLIO) throw new Error('Selecciona el vehículo');
 
-    const id = Utilities.getUuid().slice(0, 8);
+    let delVehiculo = null;
+    try {
+      delVehiculo = Relaciones.datosParaNuevo('INCIDENCIAS', datos.FOLIO);
+    } catch (err) {
+      console.error('Incidencia sin vínculo al catálogo: ' + err.message);
+    }
+
+    const id = Ids.nuevo(Entidades.prefijo('INCIDENCIAS'));
     const ahora = new Date();
-    SheetUtils.insert(ssId(), hoja_().getName(), {
-      'ID_INCIDENCIA': id,
-      'FOLIO': datos.FOLIO,
-      'DEPARTAMENTO': datos.DEPARTAMENTO || '',
-      'MODELO': datos.MODELO || '',
+    SheetUtils.insert(ssId(), hoja_().getName(), Object.assign({}, delVehiculo ? delVehiculo.datos : {}, {
+      'ID': id,
+      'FOLIO': delVehiculo ? delVehiculo.datos['FOLIO'] : datos.FOLIO,
+      'DEPARTAMENTO': (delVehiculo ? delVehiculo.datos['DEPARTAMENTO'] : datos.DEPARTAMENTO) || '',
+      'MODELO': (delVehiculo ? delVehiculo.datos['MODELO'] : datos.MODELO) || '',
       'AÑO': datos.ANIO || '',
       // Fecha de registro: siempre "hoy", ignora cualquier valor del cliente.
       'FECHA REGISTRO': ahora,
@@ -115,7 +131,7 @@ const IncidenciasService = (function () {
       'INSPECCION INGRESO': datos.INSPECCION_INGRESO || '',
       'PERIODO VERIFICACION': datos.PERIODO_VERIFICACION || '',
       'SEGURO AUTO': datos.SEGURO_AUTO || '',
-    });
+    }));
     return { ID: id };
   }
 
@@ -129,7 +145,7 @@ const IncidenciasService = (function () {
       'FECHA TRABAJO REALIZADO': datos.FECHA_TRABAJO ? new Date(datos.FECHA_TRABAJO) : new Date(),
       'INSPECCION SALIDA': datos.INSPECCION_SALIDA || '',
       'NOMBRE MECANICO': datos.MECANICO || '',
-    }, 'ID_INCIDENCIA');
+    }, 'ID');
     return { ID: id };
   }
 
@@ -159,14 +175,14 @@ const IncidenciasService = (function () {
     // Regresa el registro ya con el cambio aplicado (no solo el ID): así el
     // cliente puede refrescar esa fila sola (ej. DataTable.alEditar) sin
     // tener que recargar todo el historial.
-    const actualizado = SheetUtils.update(ssId(), hoja_().getName(), id, cambios, 'ID_INCIDENCIA');
+    const actualizado = SheetUtils.update(ssId(), hoja_().getName(), id, cambios, 'ID');
     return desdeOriginal_(actualizado);
   }
 
   /** Elimina por completo una incidencia (borrado físico de la fila) — solo ADMIN */
   function eliminar(token, id) {
     Permisos.puedeEditar(token, 'incidencias');
-    const ok = SheetUtils.remove(ssId(), hoja_().getName(), id, 'ID_INCIDENCIA');
+    const ok = SheetUtils.remove(ssId(), hoja_().getName(), id, 'ID');
     if (!ok) throw new Error('No se encontró la incidencia con ID=' + id);
     return { ID: id };
   }

@@ -29,7 +29,11 @@
 const HologramasService = (function () {
   const TABLA = 'HOLOGRAMAS';
   const COL_SOLICITUD = 'SOLICITUD';
-  const COLUMNAS_CLAVE = ['ID_HOLOGRAMA', 'CALCOMANIA EOX', 'ESTATUS EOX'];
+  // Huella para ubicar la pestaña, NO llave de renglon. Sin 'ID_HOLOGRAMA' a proposito:
+  // despues de la migracion TODAS las hojas tienen 'ID', asi que meterlo aqui haria la
+  // huella menos especifica, no mas. Verificado el 30/09/2026 en los tres libros: estas
+  // dos columnas identifican una sola pestaña.
+  const COLUMNAS_CLAVE = ['CALCOMANIA EOX', 'ESTATUS EOX'];
 
   const PROVEEDORES = ['EOX', 'EDENRED', 'N/A'];
   const ESTATUS_EOX = ['HABILITADO', 'DESHABILITADO'];
@@ -120,7 +124,7 @@ const HologramasService = (function () {
   }
 
   function desdeOriginal_(row) {
-    const fila = { ID: row['ID_HOLOGRAMA'] };
+    const fila = { ID: row['ID'] };
     Object.keys(CAMPOS).forEach((campo) => {
       const valor = row[CAMPOS[campo]];
       fila[campo] = valor === undefined || valor === null ? '' : valor;
@@ -188,7 +192,7 @@ const HologramasService = (function () {
     Permisos.puedeLeer(token, 'hologramas');
     const catalogo = catalogoPorSerie_();
     return SheetUtils.getAll(ssId(), hoja_().getName())
-      .filter((r) => r['ID_HOLOGRAMA'])
+      .filter((r) => r['ID'])
       .map((r) => conCatalogo_(desdeOriginal_(r), catalogo[enMayusculas_(r['SERIE VEHICULO'])]))
       .sort((a, b) => (b.FECHA_REGISTRO || '').localeCompare(a.FECHA_REGISTRO || ''));
   }
@@ -202,7 +206,7 @@ const HologramasService = (function () {
   /** Registro completo (todas las columnas) por ID -- "Ver completo" desde la ficha de Vehículos. */
   function buscarPorId(token, id) {
     Permisos.puedeLeer(token, 'hologramas');
-    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, 'ID_HOLOGRAMA');
+    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, 'ID');
     if (!encontrado) return null;
     const limpio = {};
     Object.keys(encontrado.data).forEach((k) => {
@@ -231,7 +235,7 @@ const HologramasService = (function () {
     let campos = 0;
 
     ids.forEach((id) => {
-      const actual = SheetUtils.findById(ssId(), nombreHoja, id, 'ID_HOLOGRAMA');
+      const actual = SheetUtils.findById(ssId(), nombreHoja, id, 'ID');
       if (!actual) return;
       const vehiculo = catalogo[enMayusculas_(actual.data['SERIE VEHICULO'])];
       if (!vehiculo) return;                       // sin vehículo en el catálogo no hay qué copiar
@@ -247,7 +251,7 @@ const HologramasService = (function () {
       campos += Object.keys(cambios).length;
       if (cambios['PLACA'] !== undefined) cambios['NO ECONOMICO'] = cambios['PLACA'];
       cambios['FECHA ULTIMA MODIFICACION'] = new Date();
-      actualizadas.push(conCatalogo_(desdeOriginal_(SheetUtils.update(ssId(), nombreHoja, id, cambios, 'ID_HOLOGRAMA')), vehiculo));
+      actualizadas.push(conCatalogo_(desdeOriginal_(SheetUtils.update(ssId(), nombreHoja, id, cambios, 'ID')), vehiculo));
     });
 
     return { filas: actualizadas, campos: campos };
@@ -301,7 +305,7 @@ const HologramasService = (function () {
     const calcomania = enMayusculas_(datos.CALCOMANIA);
     const serie = enMayusculas_(datos.SERIE_VEHICULO);
     filas.forEach((r) => {
-      if (r['ID_HOLOGRAMA'] === idActual) return;
+      if (r['ID'] === idActual) return;
       if (calcomania && enMayusculas_(r['CALCOMANIA EOX']) === calcomania) {
         throw new Error('La calcomanía ' + calcomania + ' ya está registrada en otro holograma');
       }
@@ -338,18 +342,22 @@ const HologramasService = (function () {
     // Si la unidad está en el catálogo, sus datos ganan sobre lo que haya mandado el cliente
     const vehiculo = catalogoPorSerie_()[enMayusculas_(datos.SERIE_VEHICULO)];
     if (vehiculo) {
+      // La llave foránea. Se queda VACÍA cuando la unidad no está en el catálogo, y eso no
+      // es una falla: 91 de los 255 hologramas son de vehículos PERSONALES, que por diseño
+      // no están ahí. Antes esta columna solo la llenaba el paso por lotes de la migración.
+      fila['ID VEHICULO'] = vehiculo['ID'] || '';
       Object.keys(DEL_CATALOGO).forEach((campo) => {
         const valor = vehiculo[DEL_CATALOGO[campo]];
         fila[CAMPOS[campo]] = valor === undefined || valor === null ? '' : valor;
       });
     }
 
-    const id = Utilities.getUuid().slice(0, 8);
+    const id = Ids.nuevo(Entidades.prefijo('HOLOGRAMAS'));
     const guardado = guardarSolicitud_(id, archivo);
     const ahora = new Date();
     try {
       SheetUtils.insert(ssId(), hoja_().getName(), Object.assign(fila, {
-        'ID_HOLOGRAMA': id,
+        'ID': id,
         // En esta hoja NO ECONOMICO trae la placa (ver comentario del encabezado)
         'NO ECONOMICO': fila['PLACA'],
         [COL_SOLICITUD]: guardado.ruta,
@@ -368,7 +376,7 @@ const HologramasService = (function () {
     Permisos.puedeEditar(token, 'hologramas');
     if (!CAMPOS[campo]) throw new Error('El campo "' + campo + '" no se puede editar aquí');
     const nombreHoja = hoja_().getName();
-    const actual = SheetUtils.findById(ssId(), nombreHoja, id, 'ID_HOLOGRAMA');
+    const actual = SheetUtils.findById(ssId(), nombreHoja, id, 'ID');
     if (!actual) throw new Error('No se encontró el holograma ' + id);
 
     // Lo que manda el catálogo no se corrige aquí: se corrige en Vehículos y se sincroniza
@@ -386,14 +394,14 @@ const HologramasService = (function () {
     }
     const cambios = { [CAMPOS[campo]]: limpio, 'FECHA ULTIMA MODIFICACION': new Date() };
     if (campo === 'PLACA') cambios['NO ECONOMICO'] = limpio;   // se mantienen iguales
-    return desdeOriginal_(SheetUtils.update(ssId(), nombreHoja, id, cambios, 'ID_HOLOGRAMA'));
+    return desdeOriginal_(SheetUtils.update(ssId(), nombreHoja, id, cambios, 'ID'));
   }
 
   /** Borra hologramas — solo ADMIN. Las solicitudes NO se borran de Drive. */
   function eliminar(token, ids) {
     Permisos.puedeEditar(token, 'hologramas');
     if (!Array.isArray(ids) || !ids.length) throw new Error('No se indicaron registros a eliminar');
-    return { eliminadas: SheetUtils.removeMany(ssId(), hoja_().getName(), ids, 'ID_HOLOGRAMA') };
+    return { eliminadas: SheetUtils.removeMany(ssId(), hoja_().getName(), ids, 'ID') };
   }
 
   function urlSolicitud(token, ruta) {

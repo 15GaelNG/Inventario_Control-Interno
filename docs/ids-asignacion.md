@@ -69,6 +69,161 @@ uno solo.
 
 ---
 
+## El ensayo sobre datos reales: replanchar desde produccion
+
+`src/MigracionReplanche.gs`, funciones `replanche1Ensayo` y `replanche2Escribir`.
+
+Ensayar la migracion sobre un libro que **ya esta migrado** prueba la idempotencia, no la
+primera corrida, que es lo que de verdad va a pasar en produccion. Para que el ensayo valga,
+el libro de pruebas tiene que empezar como empieza produccion: sin columna `ID`, sin
+respaldo, con los ids viejos de AppSheet en su lugar.
+
+Eso hace el replanchado: copia las 24 hojas migrables de produccion (**solo lectura**)
+encima del libro de experimentos **"Inventario Reemplazable"**
+(`1-RA6lmh-rZ-OKfsZSLl2Qd9lLyuDZ3dx3fP0M7qL-5o`), que es un clon de la base de pruebas hecho
+aparte para no estorbarle a nadie.
+
+### Es el unico archivo que escribe en un libro ajeno, y por eso lleva tres guardas
+
+| Guarda | Que impide |
+|---|---|
+| El destino esta **fijo** en `REPL_DESTINO` | que apuntar el proyecto a otro libro arrastre el replanchado |
+| Lista negra `REPL_PROHIBIDOS` | escribir en **produccion** o en el **libro de pruebas compartido del equipo**, aunque alguien edite la constante |
+| Comprobacion del **nombre** del libro, no solo del id | escribir en un libro desconocido si ese id cambiara de dueno |
+
+No pide respaldo del destino, al contrario que el resto del pipeline: ese libro es
+desechable a proposito y el original de todo lo que se copia sigue en produccion. Si deja
+constancia en `LOG_MIGRACION`, del lado del destino.
+
+### Lo que se pierde, y la diferencia que importa
+
+Replanchar borra las columnas que el destino tiene y produccion no. Se separan en dos:
+
+- **Artefactos de la migracion** (`ID`, `ID ANTERIOR`, `ID APPSHEET`): perderlos **es el
+  objetivo**. Se van sin preguntar.
+- **Cualquier otra** — por ejemplo `COLOR` y `NOMBRE RESPONSABLES 2` en
+  `LINEAS TELEFONICAS`, que alguien capturo a mano: el ensayo las **nombra una por una**, y
+  escribir se **niega** hasta que se ponga la Script Property
+  `REPLANCHE_ACEPTO_PERDER_COLUMNAS` con el id del destino.
+
+### Se corta por tiempo y continua
+
+Son ~861,000 celdas, y `CAMBIOS LINEAS TELEFONICAS` sola son 355,430. Se copia por bloques
+de 4,000 filas, se anota en `REPLANCHE_HOJAS_LISTAS` que hoja ya quedo, y se auto-detiene a
+los 4.5 minutos. Volver a correr `replanche2Escribir` continua donde se quedo; al terminar
+borra el avance. `replancheEstado` dice en que va y `replancheReiniciarAvance` lo olvida.
+
+### El laboratorio tiene su propio proyecto de Apps Script
+
+| | |
+|---|---|
+| Libro | **Inventario Reemplazable** — `1-RA6lmh-rZ-OKfsZSLl2Qd9lLyuDZ3dx3fP0M7qL-5o` |
+| Proyecto | **Inventario LAB - Ayrton** — `1ie0-yjGLvSLwv3oHgwg_GSrsGgcJjj2mumjfM_sjcbNmP3_-JlqgrFWv`, anclado a ese libro |
+| Config local | `.clasp.lab.json` (como todo `.clasp.*.json`, **no se commitea**: ver `.gitignore`) |
+| Para subir | `npm run push:lab` |
+
+Existe por una razon concreta. El proyecto de pruebas de Ayrton esta anclado al libro
+**compartido** del equipo, asi que cambiarle `SS_ID_VEHICULOS` para apuntarlo al laboratorio
+se lo cambiaria tambien a Jorge y a Emmanuel mientras estuviera cambiado. Con un proyecto
+aparte, el laboratorio queda aislado de verdad.
+
+El `.clasp.json` de la raiz sigue apuntando al proyecto de dev y no se toca. Son dos
+configuraciones que conviven: `npm run push` va a dev, `npm run push:lab` al laboratorio.
+Si alguien clona el repo y quiere su propio laboratorio, copia
+`.clasp.lab.json.example` y le pega el id de su proyecto.
+
+### Los cuatro pipelines
+
+`src/MigracionFamilia.gs`. `pipelinesEstado` los enseña sin tocar nada.
+
+| # | Pipeline | Hojas | Atajos |
+|---|---|---|---|
+| 1 | **IDS**, todas las hojas | 24 | `ids1Ensayo` / `ids2Escribir` |
+| 2 | Homologar **VEHICULOS** | 8 | `vehiculos1Ensayo` / `vehiculos2Escribir` |
+| 3 | Homologar **LINEAS** | 10 | `lineas1Ensayo` / `lineas2Escribir` |
+| 4 | Homologar **CAJA CHICA** | 3 | `cajaChica1Ensayo` / `cajaChica2Escribir` |
+
+**El 1 va primero, siempre.** Los otros tres reescriben referencias que apuntan al ID del
+padre, y para eso el padre ya tiene que tenerlo.
+
+**Por que esta separacion:** asignar los IDs es *una sola decision* -que formato, que
+prefijo, donde queda la llave vieja- y se toma una vez para todo el libro. La homologacion
+es distinta en cada familia: Vehiculos es casi mecanico y Lineas tiene un problema de
+modelado (ver [lineas-homologacion.md](lineas-homologacion.md)). Asi cada familia se revisa
+y se aprueba por separado, sin volver a tocar los IDs.
+
+#### Pipeline 1: los seis pasos de los IDs
+
+| # | Paso | |
+|---|---|---|
+| 1 | `revisar` | **solo lee**. Si hay problemas y la corrida escribe, se detiene aqui |
+| 2 | `renombrar` | la llave vieja de cada hoja pasa a llamarse igual en todas: **`ID ANTERIOR`** |
+| 3 | `ids` | llena la columna `ID` |
+| 4 | `mover` | la pone al inicio |
+| 5 | `respaldo` | quita las `ID ANTERIOR` que sobren |
+| 6 | `auditar` | **solo lee**. Dice si todo cuadro |
+
+**`renombrar` va ANTES de `ids`, y es la pieza clave.** Si la columna se llamaba `ID` -las
+ocho hojas de Lineas-, al renombrarse la hoja queda **sin** `ID` y el paso 3 crea uno limpio.
+Eso mata el baile de crear respaldo, pisar y luego limpiar, y con el desaparece el concepto
+"ID APPSHEET": la columna original **se vuelve** el respaldo al renombrarse. Tambien mata el
+caso especial de `CAMBIOS LINEAS TELEFONICAS`, cuya columna no tenia encabezado.
+
+Por eso el paso 5 casi nunca tiene nada que hacer. Se deja como red para los libros que se
+migraron con la version vieja del codigo.
+
+`migColumnaAnterior_` resuelve la llave vieja aguantando los **dos** nombres -primero
+`ID ANTERIOR`, luego el del catalogo, y hasta el final la posicion-. Sin eso, correr el
+pipeline dos veces lo rompia.
+
+> **CUIDADO con el paso 2 en el libro bueno.** Cambia nombres de columna que la app usa para
+> buscar renglones (`SheetUtils.findById(..., 'ID_HOLOGRAMA')`) y para identificar hojas
+> (`COLUMNAS_CLAVE`, las `firma` de `Relaciones.MAPA`): 11 busquedas y 8 firmas, medidas.
+> Correrlo sin actualizar esos nombres deja modulos sin encontrar su hoja. En el laboratorio
+> no importa.
+
+#### Pipelines 2, 3 y 4: la homologacion
+
+Dos pasos hoy: `referencias` (filtrado a las hojas de esa familia) y `auditar`.
+
+**Pendiente:** aqui entran las limpiezas propias de cada familia, ya medidas pero no
+automatizadas — los centinelas de `VEHICULOS` (1,124 celdas en 13 columnas), las 15 columnas
+vacias de `LINEAS TELEFONICAS`, su encabezado `#REF!`. Estan en
+[relaciones.md](relaciones.md) y [lineas-homologacion.md](lineas-homologacion.md).
+
+#### Dos reglas que las pruebas vigilan
+
+- **Un paso de solo lectura NUNCA recibe `escribir: true`**, ni cuando la corrida escribe.
+- **En ensayo no se detiene** aunque un paso reporte problemas o no se pueda ensayar: se
+  corren todos para ver el panorama. Escribiendo si se detiene, y no toca nada mas.
+
+Ninguno guarda avance, a proposito: todos los pasos son idempotentes, asi que si se corta
+por tiempo se vuelve a correr lo mismo.
+
+### El orden del ensayo completo
+
+1. En el proyecto del laboratorio, Script Property `SS_ID_VEHICULOS` =
+   `1-RA6lmh-rZ-OKfsZSLl2Qd9lLyuDZ3dx3fP0M7qL-5o`. Es la unica que pide el pipeline: las
+   carpetas de Drive solo las necesitan los modulos de la app, y `Config.required` es
+   perezoso, asi que no las va a pedir.
+2. `replanche1Ensayo` — leer el reporte, sobre todo las columnas que se perderian.
+3. `replanche2Escribir` — las veces que haga falta hasta que diga LISTO.
+4. `ids1Ensayo` y, si cuadra, `ids2Escribir`.
+5. `vehiculos1Ensayo` / `vehiculos2Escribir`, y despues Lineas y Caja Chica.
+
+### Que el laboratorio se separe de produccion es normal
+
+Verificado el 30/09/2026 despues del primer replanchado: **24 de 24 hojas con las mismas
+columnas que produccion**, incluida `CAMBIOS LINEAS TELEFONICAS` con sus 35,543 filas. Las
+unicas dos diferencias fueron `INSPECCIONES LINEAS` y `RESPONSIVAS LINEAS`, una fila abajo
+cada una — y son registros que produccion recibio **despues** de la copia: el de
+Inspecciones Lineas trae fecha 30/09/2026 09:46, posterior a la corrida.
+
+Con 46 personas trabajando eso pasa siempre: el laboratorio es una **foto**, no un espejo.
+Si la foto se queda vieja, se vuelve a replanchar. Y conviene tenerlo presente al comparar
+conteos: una diferencia de una o dos filas en las hojas de Lineas no es un error de copia.
+
+
 ## 2. El ID de los registros que ya existen
 
 ### 2.1 La decisión: se usa el orden de los renglones, no las columnas de fecha

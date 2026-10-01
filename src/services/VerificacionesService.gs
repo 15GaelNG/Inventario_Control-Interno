@@ -18,7 +18,8 @@
 const VerificacionesService = (function () {
   const TABLA = 'VERIFICACIONES';
   const COL_COMPROBANTE = 'COMPROBANTE VERIFICACION';
-  const COLUMNAS = ['ID_VERIFICACION', 'FOLIO VEHICULO', COL_COMPROBANTE];
+  // Huella de la pestaña, no llave de renglon (ver la nota en HologramasService).
+  const COLUMNAS = ['FOLIO VEHICULO', COL_COMPROBANTE];
 
   function ssId() {
     return Config.SPREADSHEET_IDS.VEHICULOS();
@@ -55,7 +56,7 @@ const VerificacionesService = (function () {
 
   function desdeOriginal_(row) {
     return {
-      ID: row['ID_VERIFICACION'],
+      ID: row['ID'],
       FOLIO: row['FOLIO VEHICULO'] || '',
       PLACA: row['PLACA'] || '',
       FECHA_REGISTRO: fechaISO_(row['FECHA REGISTRO']),
@@ -69,7 +70,7 @@ const VerificacionesService = (function () {
   function listar(token) {
     Permisos.puedeLeer(token, 'verificaciones');
     return SheetUtils.getAll(ssId(), hoja_().getName())
-      .filter((r) => r['ID_VERIFICACION'])
+      .filter((r) => r['ID'])
       .map(desdeOriginal_)
       .sort((a, b) => (b.FECHA_REGISTRO || '').localeCompare(a.FECHA_REGISTRO || ''));
   }
@@ -83,7 +84,7 @@ const VerificacionesService = (function () {
   /** Registro completo (todas las columnas) por ID -- "Ver completo" desde la ficha de Vehículos. */
   function buscarPorId(token, id) {
     Permisos.puedeLeer(token, 'verificaciones');
-    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, 'ID_VERIFICACION');
+    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, 'ID');
     if (!encontrado) return null;
     const limpio = {};
     Object.keys(encontrado.data).forEach((k) => {
@@ -106,10 +107,12 @@ const VerificacionesService = (function () {
   function registrar(token, datos, archivo) {
     const sesion = Permisos.puedeEditar(token, 'verificaciones');
 
+    // Trae el ID del vehículo o su folio, según qué tan migrado esté el formulario.
     const folio = String(datos.FOLIO || '').trim();
-    if (!folio) throw new Error('El folio del vehículo es obligatorio');
-    const vehiculo = SheetUtils.findById(ssId(), 'VEHICULOS', folio, 'FOLIO');
-    if (!vehiculo) throw new Error('No existe un vehículo con folio ' + folio);
+    if (!folio) throw new Error('Selecciona el vehículo');
+    // Resuelve al vehículo y devuelve ya puestas 'ID VEHICULO', 'FOLIO VEHICULO' y 'PLACA'.
+    // Truena si no existe, igual que antes.
+    const delVehiculo = Relaciones.datosParaNuevo('VERIFICACIONES', folio);
 
     const fechaVerificacion = fechaDesdeInput_(datos.FECHA_VERIFICACION, 'fecha de verificación');
     const fechaProxima = fechaDesdeInput_(datos.FECHA_PROXIMA, 'fecha de próxima verificación');
@@ -118,7 +121,7 @@ const VerificacionesService = (function () {
     }
     if (!archivo || !archivo.base64) throw new Error('Adjunta el comprobante de verificación');
 
-    const id = Utilities.getUuid().slice(0, 8);
+    const id = Ids.nuevo(Entidades.prefijo('VERIFICACIONES'));
     const imagen = DriveUtils.guardarImagenAppSheet({
       carpetaId: Config.DRIVE_FOLDERS.VERIFICACIONES(),
       tabla: TABLA,
@@ -128,16 +131,14 @@ const VerificacionesService = (function () {
     });
 
     try {
-      SheetUtils.insert(ssId(), hoja_().getName(), {
-        'ID_VERIFICACION': id,
-        'FOLIO VEHICULO': folio,
-        'PLACA': vehiculo.data['PLACA'] || '',
+      SheetUtils.insert(ssId(), hoja_().getName(), Object.assign({}, delVehiculo.datos, {
+        'ID': id,
         'FECHA REGISTRO': new Date(),
         'FECHA VERIFICACION': fechaVerificacion,
         [COL_COMPROBANTE]: imagen.ruta,
         'FECHA PROXIMA VERIFICACION': fechaProxima,
         'REGISTRADO POR': sesion.nombre,
-      });
+      }));
     } catch (err) {
       DriveUtils.eliminar(imagen.fileId); // no dejar imágenes huérfanas
       throw err;
@@ -155,7 +156,7 @@ const VerificacionesService = (function () {
   function actualizarCampo(token, id, campo, valor) {
     Permisos.puedeEditar(token, 'verificaciones');
     const nombreHoja = hoja_().getName();
-    const actual = SheetUtils.findById(ssId(), nombreHoja, id, 'ID_VERIFICACION');
+    const actual = SheetUtils.findById(ssId(), nombreHoja, id, 'ID');
     if (!actual) throw new Error('No se encontró la verificación ' + id);
 
     const cambios = {};
@@ -178,7 +179,7 @@ const VerificacionesService = (function () {
       throw new Error('El campo "' + campo + '" no se puede editar');
     }
 
-    return desdeOriginal_(SheetUtils.update(ssId(), nombreHoja, id, cambios, 'ID_VERIFICACION'));
+    return desdeOriginal_(SheetUtils.update(ssId(), nombreHoja, id, cambios, 'ID'));
   }
 
   /**
@@ -188,7 +189,7 @@ const VerificacionesService = (function () {
   function eliminar(token, ids) {
     Permisos.puedeEditar(token, 'verificaciones');
     if (!Array.isArray(ids) || !ids.length) throw new Error('No se indicaron registros a eliminar');
-    const borradas = SheetUtils.removeMany(ssId(), hoja_().getName(), ids, 'ID_VERIFICACION');
+    const borradas = SheetUtils.removeMany(ssId(), hoja_().getName(), ids, 'ID');
     return { eliminadas: borradas };
   }
 

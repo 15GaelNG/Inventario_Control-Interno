@@ -1,11 +1,20 @@
 # Modelo de IDs (la llave que sincroniza todo)
 
-> **Estado:** diseño propuesto, **nada implementado**. Medido contra el spreadsheet de
-> producción `ControlVehicular` (solo lectura) el 29/09/2026.
+> **Estado al 29/09/2026:**
+> - **Generación: hecha.** Todo registro nuevo nace con el formato de aquí, en los dos
+>   únicos lugares donde nace un ID. Ver [ids-asignacion.md](ids-asignacion.md), sección 8.
+> - **Copia de pruebas: migrada.** Las 24 hojas del catálogo tienen su columna `ID` llena
+>   al 100%, ~55,000 renglones.
+> - **Producción: sin migrar**, a propósito. Se hace al apagar AppSheet; ver "Cuándo se hace".
+> - **El paso 3 (reescribir referencias) no se ha corrido en ningún lado.** Medimos que el
+>   `FOLIO` cambió 0 veces en 9,214 correcciones, así que el problema que venía a resolver
+>   no se presenta hoy. La herramienta está lista y corregida para cuando haga falta.
+>
+> Lo medido viene del spreadsheet de producción `ControlVehicular`, solo lectura.
+> La bitácora de lo que se ejecutó está en [limpieza-spreadsheet.md](limpieza-spreadsheet.md).
 >
 > Va de la mano con [relaciones.md](relaciones.md): ese documento explica *cómo* se
-> copian los datos entre hojas; este define *con qué llave* se unen. Cuando este modelo
-> esté puesto, buena parte de `Relaciones.gs` deja de hacer falta — ver "Qué resuelve".
+> copian los datos entre hojas; este define *con qué llave* se unen.
 
 ## La idea en una frase
 
