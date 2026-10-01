@@ -76,6 +76,9 @@ function apiListarVehiculosResumen(token) {
 function apiDiagnosticoIdVehiculo(token) {
   return VehiculosService.diagnosticoIds(token);
 }
+function apiNotificacionesPendientes(token) {
+  return JSON.stringify(NotificacionesService.listar(token));
+}
 function apiVehiculosCompleto(token) {
   return JSON.stringify(VehiculosService.completo(token));
 }

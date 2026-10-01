@@ -159,6 +159,24 @@ const VehiculosService = (function () {
     return { totalFilas: filas, totalConIdVacio: vacios.length, ejemplos: vacios.slice(0, 20) };
   }
 
+  /** Lectura ligera (solo 4 columnas, no las 41 de completo()) para la campanita de
+   *  notificaciones -- NotificacionesService.itemsSeguro_ vigila FECHA VENCIMIENTO
+   *  SEGURO de cada vehículo activo. */
+  function vencimientosSeguro(token) {
+    Permisos.puedeLeer(token, 'vehiculos');
+    const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
+    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, ['FOLIO', 'NUCCO', 'ESTATUS', 'FECHA VENCIMIENTO SEGURO']);
+    const resultado = [];
+    for (let i = 0; i < filas; i++) {
+      if (!datos['FOLIO'][i]) continue;
+      resultado.push({
+        FOLIO: datos['FOLIO'][i], NUCCO: datos['NUCCO'][i] || '', ESTATUS: datos['ESTATUS'][i] || '',
+        'FECHA VENCIMIENTO SEGURO': datos['FECHA VENCIMIENTO SEGURO'][i] || '',
+      });
+    }
+    return resultado;
+  }
+
   /** Todas las columnas de TODOS los vehículos (para "Vista": mostrar/exportar cualquier columna). */
   function completo(token) {
     Permisos.puedeLeer(token, 'vehiculos');
@@ -431,5 +449,5 @@ const VehiculosService = (function () {
     return { url: archivo.getUrl(), id: archivo.getId(), nombre: nombreArchivo };
   }
 
-  return { listar, listarBasico, listarResumen, completo, buscarPorFolio, previsualizarFolio, previsualizarNucco, crear, actualizar, eliminar, subirArchivo, diagnosticoIds };
+  return { listar, listarBasico, listarResumen, completo, buscarPorFolio, previsualizarFolio, previsualizarNucco, crear, actualizar, eliminar, subirArchivo, diagnosticoIds, vencimientosSeguro };
 })();

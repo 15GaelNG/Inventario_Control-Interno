@@ -429,6 +429,7 @@
     callServer('apiMisPermisos', state.token).then((info) => {
       state.permisos = (info && info.permisos) || {};
     }).catch(() => { /* no-op: ver comentario arriba */ });
+    Notificaciones.iniciar();
     navegarA('dashboard');
   }
 
