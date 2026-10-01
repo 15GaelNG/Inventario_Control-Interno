@@ -73,6 +73,9 @@ function apiBuscarVehiculoPorFolio(token, folio) {
 function apiListarVehiculosResumen(token) {
   return JSON.stringify(VehiculosService.listarResumen(token));
 }
+function apiDiagnosticoIdVehiculo(token) {
+  return VehiculosService.diagnosticoIds(token);
+}
 function apiVehiculosCompleto(token) {
   return JSON.stringify(VehiculosService.completo(token));
 }

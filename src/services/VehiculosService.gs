@@ -123,6 +123,26 @@ const VehiculosService = (function () {
     return resultado.sort((a, b) => String(a.FOLIO).localeCompare(String(b.FOLIO)));
   }
 
+  /**
+   * Diagnóstico de solo lectura: cuántas filas de VEHICULOS tienen ID_VEHICULO
+   * vacío (típico de datos migrados de AppSheet que nunca pasaron por crear(),
+   * la única función que genera ese UUID) -- si hay más de una, todas esas
+   * filas colisionan en el mismo "id" de fila en la tabla del navegador y
+   * hacer doble clic en cualquiera de ellas abre siempre la ficha de la
+   * ÚLTIMA fila con ID vacío, sin importar en cuál se haya hecho clic.
+   */
+  function diagnosticoIds(token) {
+    Permisos.puedeLeer(token, 'vehiculos');
+    const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
+    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, ['ID_VEHICULO', 'FOLIO', 'NUCCO']);
+    const vacios = [];
+    for (let i = 0; i < filas; i++) {
+      if (!datos['FOLIO'][i]) continue;
+      if (!datos['ID_VEHICULO'][i]) vacios.push({ FOLIO: datos['FOLIO'][i], NUCCO: datos['NUCCO'][i] || '' });
+    }
+    return { totalFilas: filas, totalConIdVacio: vacios.length, ejemplos: vacios.slice(0, 20) };
+  }
+
   /** Todas las columnas de TODOS los vehículos (para "Vista": mostrar/exportar cualquier columna). */
   function completo(token) {
     Permisos.puedeLeer(token, 'vehiculos');
@@ -387,5 +407,5 @@ const VehiculosService = (function () {
     return { url: archivo.getUrl(), id: archivo.getId(), nombre: nombreArchivo };
   }
 
-  return { listar, listarBasico, listarResumen, completo, buscarPorFolio, previsualizarFolio, previsualizarNucco, crear, actualizar, eliminar, subirArchivo };
+  return { listar, listarBasico, listarResumen, completo, buscarPorFolio, previsualizarFolio, previsualizarNucco, crear, actualizar, eliminar, subirArchivo, diagnosticoIds };
 })();
