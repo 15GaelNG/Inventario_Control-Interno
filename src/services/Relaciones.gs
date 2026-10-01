@@ -575,24 +575,60 @@ const MAPA = {
   /**
    * Compara TODAS las copias contra su dueño y reporta (o corrige) diferencias.
    * Pensada para correr sola de noche (Activadores > Agregar activador, function
-   * "revisarRelaciones" en SetupInicial.gs) — la primera vez, con corregir:false.
+   * "revisarRelaciones" en SetupInicial.gs) — la primera vez, con corregir:false. También
+   * la usa la pantalla de Administración > Relaciones.
    *
-   * @param {{corregir: boolean}} opciones  corregir=false (default) → solo reporta
-   * @return {Object} resumen por hoja: { 'NOMBRE': { revisadas, diferencias, huerfanos } }
+   * CADA FILA SE EMPAREJA IGUAL QUE EN propagar(): por su llave foránea si la tiene, y por
+   * la llave de negocio solo si no. Antes emparejaba SOLO por la llave de negocio, y con
+   * corregir:true eso era peligroso: una fila con la FK de un vehículo y la serie de otro
+   * (o con la serie vacía, el caso CON0618) recibía los datos del vehículo equivocado, o se
+   * reportaba huérfana teniendo dueño. Una FK que no apunta a nada es huérfana: su llave de
+   * negocio no manda, igual que en propagar().
+   *
+   * @param {Object} opciones
+   *   corregir  false (default) → solo reporta. true → pisa las diferencias de las CACHÉS
+   *   hojas     opcional, nombres de copia a revisar (default: todas)
+   *   log       default true → escribe LOG_RELACIONES. La pantalla lo apaga al solo revisar,
+   *             para que mirar no llene la bitácora; al corregir siempre se escribe.
+   *   detalle   true → regresa también la lista de entradas (hasta DETALLE_MAX)
+   * @return {Object} resumen por hoja: { 'NOMBRE': { revisadas, diferencias, huerfanos, … } }
+   *   y, con detalle, la propiedad no enumerable `entradas` del objeto de cada hoja.
    */
   function revisar(opciones) {
-    const corregir = !!(opciones && opciones.corregir);
+    const o = opciones || {};
+    const corregir = !!o.corregir;
+    const conLog = corregir || o.log !== false;
+    const soloHojas = Array.isArray(o.hojas) && o.hojas.length ? o.hojas.map(normalizar_) : null;
+    if (!corregir) return revisarSinCandado_(corregir, conLog, soloHojas, !!o.detalle);
+
+    // Al corregir se escribe sobre las mismas filas que propagar(): mismo candado, para
+    // que un vehículo editado a la mitad del barrido no quede pisado con su valor viejo.
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try {
+      return revisarSinCandado_(corregir, conLog, soloHojas, !!o.detalle);
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  /** Cuántas entradas regresa revisar({detalle}) por hoja: lo que una tabla aguanta sin trabarse. */
+  const DETALLE_MAX = 3000;
+
+  function revisarSinCandado_(corregir, conLog, soloHojas, conDetalle) {
     const resultado = {};
 
     Object.keys(MAPA).forEach((origenNombre) => {
       const origenDef = MAPA[origenNombre];
+      const copias = origenDef.copias.filter((c) => !soloHojas || soloHojas.indexOf(normalizar_(c.nombre)) !== -1);
+      if (!copias.length) return;
       const ssId = origenDef.spreadsheet();
       const filasOrigen = SheetUtils.getAll(ssId, origenDef.hoja);
 
       // Un índice por cada columna-clave de origen distinta que use alguna copia
-      // (FOLIO, SERIE VEHICULO…) — y de paso, los valores duplicados en la hoja dueña,
-      // que no se corrigen porque no se sabe cuál de los dos es el bueno.
-      const clavesOrigen = Array.from(new Set(origenDef.copias.map((c) => c.claveOrigen)));
+      // (FOLIO, SERIE VEHICULO…), más el ID para las FK — y de paso, los valores
+      // duplicados en la hoja dueña, que no se corrigen porque no se sabe cuál es el bueno.
+      const clavesOrigen = Array.from(new Set(copias.map((c) => c.claveOrigen).concat(['ID'])));
       const indice = {};
       const duplicados = {};
       clavesOrigen.forEach((clave) => {
@@ -610,41 +646,66 @@ const MAPA = {
       // final (una llamada a setValues, no una por diferencia — ver escribirLog_).
       const entradasLog = [];
 
-      origenDef.copias.forEach((copia) => {
+      copias.forEach((copia) => {
         const hoja = hojaCopia_(copia, ssId);
         const filasCopia = SheetUtils.getAll(ssId, hoja.getName());
         const columnasOrigen = Object.keys(copia.columnas);
+        const tieneFk = !!(copia.llaveForanea && filasCopia.length &&
+          Object.prototype.hasOwnProperty.call(filasCopia[0], copia.llaveForanea));
         let revisadas = 0, diferencias = 0, huerfanos = 0, duplicadosOmitidos = 0;
-        let centinelasOmitidos = 0, historicas = 0, vaciosOmitidos = 0;
+        let centinelasOmitidos = 0, historicas = 0, vaciosOmitidos = 0, porFk = 0, porClave = 0;
         const correcciones = {}; // columna destino → { valorNuevo: [numFila, …] }
+        const entradas = [];
+        const anotar = (e) => {
+          entradasLog.push(e);
+          if (conDetalle && entradas.length < DETALLE_MAX) entradas.push(e);
+        };
 
         filasCopia.forEach((filaCopia, i) => {
+          const fila = i + 2;
           const claveValor = normalizar_(filaCopia[copia.clave]);
-          if (!claveValor) return;
+          const fk = tieneFk ? normalizar_(filaCopia[copia.llaveForanea]) : '';
+          if (!claveValor && !fk) return;
           revisadas++;
+          const base = { hoja: hoja.getName(), fila: fila, clave: claveValor || fk };
 
-          if (duplicados[copia.claveOrigen][claveValor]) {
-            duplicadosOmitidos++;
-            entradasLog.push({ tipo: 'CLAVE_DUPLICADA_EN_ORIGEN', hoja: hoja.getName(), clave: claveValor, columna: copia.clave, tenia: '', quedo: '' });
-            return;
+          let filaOrigen;
+          if (fk) {
+            filaOrigen = indice.ID[fk];
+            if (!filaOrigen) {
+              huerfanos++;
+              anotar(Object.assign({ tipo: 'HUERFANO', columna: copia.llaveForanea, tenia: fk, quedo: '' }, base));
+              return;
+            }
+            porFk++;
+          } else {
+            if (duplicados[copia.claveOrigen][claveValor]) {
+              duplicadosOmitidos++;
+              anotar(Object.assign({ tipo: 'CLAVE_DUPLICADA_EN_ORIGEN', columna: copia.clave, tenia: '', quedo: '' }, base));
+              return;
+            }
+            filaOrigen = indice[copia.claveOrigen][claveValor];
+            if (!filaOrigen) {
+              huerfanos++;
+              anotar(Object.assign({ tipo: 'HUERFANO', columna: copia.clave, tenia: '', quedo: '' }, base));
+              return;
+            }
+            porClave++;
           }
-          const filaOrigen = indice[copia.claveOrigen][claveValor];
-          if (!filaOrigen) {
-            huerfanos++;
-            entradasLog.push({ tipo: 'HUERFANO', hoja: hoja.getName(), clave: claveValor, columna: copia.clave, tenia: '', quedo: '' });
-            return;
-          }
+          // Con qué nombre la gente reconoce al dueño (el folio), aunque se haya emparejado por ID
+          base.dueno = limpiar_(filaOrigen[origenDef.llaveDeNegocio]) || limpiar_(filaOrigen.ID);
 
           columnasOrigen.forEach((colOrigen) => {
             const colDestino = copia.columnas[colOrigen];
             const tenia = filaCopia[colDestino];
             const debiaSer = filaOrigen[colOrigen];
             if (mismoValor_(tenia, debiaSer)) return;
+            const e = Object.assign({ columna: colDestino, tenia: tenia }, base);
 
             // El dueño está vacío y la copia no: no se borra a ciegas (ver vaciariaDatoBueno_).
             if (vaciariaDatoBueno_(tenia, debiaSer)) {
               vaciosOmitidos++;
-              entradasLog.push({ tipo: 'OMITIDO_VACIO', hoja: hoja.getName(), clave: claveValor, columna: colDestino, tenia: tenia, quedo: '' });
+              anotar(Object.assign(e, { tipo: 'OMITIDO_VACIO', quedo: '' }));
               return;
             }
 
@@ -653,7 +714,7 @@ const MAPA = {
             // catálogo, no la copia. Se loguea para que se vea y se arregle allá.
             if (esCentinela_(colOrigen, debiaSer)) {
               centinelasOmitidos++;
-              entradasLog.push({ tipo: 'OMITIDO_CENTINELA', hoja: hoja.getName(), clave: claveValor, columna: colDestino, tenia: tenia, quedo: debiaSer });
+              anotar(Object.assign(e, { tipo: 'OMITIDO_CENTINELA', quedo: debiaSer }));
               return;
             }
 
@@ -662,16 +723,16 @@ const MAPA = {
             // que sí hay que arreglar.
             if (esBitacora_(copia)) {
               historicas++;
-              entradasLog.push({ tipo: 'DIFERENCIA_HISTORICA', hoja: hoja.getName(), clave: claveValor, columna: colDestino, tenia: tenia, quedo: debiaSer });
+              anotar(Object.assign(e, { tipo: 'DIFERENCIA_HISTORICA', quedo: debiaSer }));
               return;
             }
 
             diferencias++;
-            entradasLog.push({ tipo: 'DIFERENCIA', hoja: hoja.getName(), clave: claveValor, columna: colDestino, tenia: tenia, quedo: debiaSer });
+            anotar(Object.assign(e, { tipo: 'DIFERENCIA', quedo: debiaSer }));
             if (corregir) {
               correcciones[colDestino] = correcciones[colDestino] || {};
               const valorNuevo = debiaSer === undefined || debiaSer === null ? '' : debiaSer;
-              (correcciones[colDestino][valorNuevo] = correcciones[colDestino][valorNuevo] || []).push(i + 2);
+              (correcciones[colDestino][valorNuevo] = correcciones[colDestino][valorNuevo] || []).push(fila);
             }
           });
         });
@@ -681,7 +742,7 @@ const MAPA = {
           Object.keys(correcciones).forEach((colDestino) => {
             const col = columna1_(hoja, colDestino, encabezados);
             Object.keys(correcciones[colDestino]).forEach((valorNuevo) => {
-              const a1 = correcciones[colDestino][valorNuevo].map((fila) => hoja.getRange(fila, col).getA1Notation());
+              const a1 = correcciones[colDestino][valorNuevo].map((f) => hoja.getRange(f, col).getA1Notation());
               hoja.getRangeList(a1).setValue(valorNuevo);
             });
           });
@@ -694,15 +755,44 @@ const MAPA = {
           centinelasOmitidos: centinelasOmitidos,
           vaciosOmitidos: vaciosOmitidos,
           diferenciasHistoricas: historicas,
+          emparejadasPorId: porFk,
+          emparejadasPorClave: porClave,
           // una bitácora nunca se corrige, aunque se haya pedido corregir
           corregido: corregir && !esBitacora_(copia),
         };
+        // No enumerable: así los reportes del editor, que recorren el objeto, no la imprimen
+        if (conDetalle) Object.defineProperty(resultado[copia.nombre], 'entradas', { value: entradas });
       });
 
-      escribirLog_(ssId, entradasLog);
+      if (conLog) escribirLog_(ssId, entradasLog);
     });
 
     return resultado;
+  }
+
+  /**
+   * El MAPA en forma de datos, para pintarlo en pantalla: quién es dueño de qué columna y
+   * a dónde se copia. Se arma del MAPA mismo, así que no se puede desactualizar.
+   */
+  function describir() {
+    return {
+      duenos: Object.keys(MAPA).map((nombre) => {
+        const d = MAPA[nombre];
+        return {
+          hoja: d.hoja,
+          llaveDeNegocio: d.llaveDeNegocio,
+          copias: d.copias.map((c) => ({
+            nombre: c.nombre,
+            tipo: c.tipo || 'cache',
+            llaveForanea: c.llaveForanea || '',
+            claveOrigen: c.claveOrigen,
+            clave: c.clave,
+            columnas: Object.keys(c.columnas).map((k) => ({ origen: k, destino: c.columnas[k] })),
+          })),
+        };
+      }),
+      centinelas: JSON.parse(JSON.stringify(CENTINELAS)),
+    };
   }
 
   /**
@@ -791,7 +881,7 @@ const MAPA = {
   }
 
   return {
-    propagar, datosParaNuevo, revisar, cambiarClave,
+    propagar, datosParaNuevo, revisar, cambiarClave, describir,
     // Solo para quien ya tiene el candado tomado. Ver su comentario.
     propagarSinCandado: propagarSinCandado_,
   };

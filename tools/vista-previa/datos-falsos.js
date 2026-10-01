@@ -10,6 +10,7 @@
     ['servicios-vehiculares', 'Servicios Vehiculares', 'car', [
       ['vehiculos', 'Vehículos'], ['verificaciones', 'Verificaciones'], ['inspeccion-vehicular', 'Inspección Vehicular'],
       ['instalacion-sensores', 'Instalación de Sensores'], ['hologramas', 'Hologramas']]],
+    ['administracion', 'Administración', 'settings', [['relaciones', 'Relaciones entre hojas']]],
   ];
   const grupos = MODULOS.map(([id, etiqueta, icono, mods]) => ({ id, etiqueta, icono, modulos: mods.map(([i, e]) => ({ id: i, etiqueta: e })) }));
   const permisos = {};
@@ -26,7 +27,33 @@
   // Un dibujo simple para los diagramas (SVG → dataURL no sirve: el servidor manda base64 de PNG)
   const DIBUJO = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
 
+
+  // ---------- Relaciones entre hojas ----------
+  // El mapa es la salida real de Relaciones.describir(); la revisión es de mentira.
+  const REL_MAPA = {"duenos":[{"hoja":"CAJAS CHICAS","llaveDeNegocio":"ID CCH","copias":[{"nombre":"ARQUEOS","tipo":"bitacora","llaveForanea":"ID CAJA CHICA","claveOrigen":"ID CCH","clave":"ID CCH","columnas":[{"origen":"RESPONSABLE DE CAJA CHICA","destino":"RESPONSABLE"},{"origen":"PUESTO DE RESPONSABLE","destino":"PUESTO"},{"origen":"DEPARTAMENTO","destino":"AREA / DEPARTAMENTO"},{"origen":"EMPRESA ORIGEN","destino":"RAZON SOCIAL"},{"origen":"METODO DE REEMBOLSO","destino":"METODO REEMBOLSO"},{"origen":"MONTO ACTUAL","destino":"MONTO CAJA"}]},{"nombre":"INCREMENTOS","tipo":"bitacora","llaveForanea":"ID CAJA CHICA","claveOrigen":"ID CCH","clave":"ID CCH","columnas":[]}]},{"hoja":"VEHICULOS","llaveDeNegocio":"FOLIO","copias":[{"nombre":"INSTALACION DE SENSORES","tipo":"cache","llaveForanea":"ID VEHICULO","claveOrigen":"SERIE VEHICULO","clave":"SERIE VEHICULO","columnas":[{"origen":"FOLIO","destino":"FOLIO"},{"origen":"PLACA","destino":"PLACA"},{"origen":"MARCA","destino":"MARCA"},{"origen":"CLASE","destino":"CLASE"},{"origen":"LINEA VEHICULO","destino":"LINEA VEHICULO"},{"origen":"MODELO","destino":"MODELO"},{"origen":"COLOR","destino":"COLOR"},{"origen":"CAPACIDAD COMBUSTIBLE (LTS)","destino":"CAPACIDAD DE COMBUSTIBLE"},{"origen":"RAZON SOCIAL","destino":"RAZON SOCIAL"},{"origen":"DEPARTAMENTO","destino":"DEPARTAMENTO"},{"origen":"SEDE","destino":"SEDE"},{"origen":"UBICACION","destino":"OFICINA / DESARROLLO"},{"origen":"RESPONSABLE VEHICULO","destino":"RESPONSABLE"}]},{"nombre":"VERIFICACIONES","tipo":"cache","llaveForanea":"ID VEHICULO","claveOrigen":"FOLIO","clave":"FOLIO VEHICULO","columnas":[{"origen":"PLACA","destino":"PLACA"}]},{"nombre":"HOLOGRAMAS","tipo":"cache","llaveForanea":"ID VEHICULO","claveOrigen":"SERIE VEHICULO","clave":"SERIE VEHICULO","columnas":[{"origen":"PLACA","destino":"PLACA"},{"origen":"MARCA","destino":"MARCA"},{"origen":"LINEA VEHICULO","destino":"LINEA VEHICULO"},{"origen":"MODELO","destino":"MODELO"},{"origen":"RESPONSABLE VEHICULO","destino":"RESPONSABLE"},{"origen":"DEPARTAMENTO","destino":"DEPARTAMENTO"},{"origen":"CAPACIDAD COMBUSTIBLE (LTS)","destino":"CAPACIDAD DEL TANQUE"}]},{"nombre":"INSPECCION VEHICULAR","tipo":"bitacora","llaveForanea":"ID VEHICULO","claveOrigen":"SERIE VEHICULO","clave":"NO SERIE","columnas":[{"origen":"DEPARTAMENTO","destino":"DEPARTAMENTO"},{"origen":"SEDE","destino":"SEDE"},{"origen":"UBICACION","destino":"OFICINA / DESARROLLO"},{"origen":"RESPONSABLE VEHICULO","destino":"RESPONSABLE"}]},{"nombre":"INCIDENCIAS","tipo":"bitacora","llaveForanea":"ID VEHICULO","claveOrigen":"FOLIO","clave":"FOLIO","columnas":[{"origen":"DEPARTAMENTO","destino":"DEPARTAMENTO"},{"origen":"MODELO","destino":"MODELO"}]}]}],"centinelas":{"*":["BAJA VEHICULAR","FUERA DE SERVICIO","NUCO SIN INFORMACION","SIN ESPECIFICAR"],"PLACA":["SIN PLACA","BAJA DE PLACA"]}};
+  const relE = (tipo, fila, dueno, columna, tenia, quedo) => ({ tipo, hoja: '', fila, clave: dueno, dueno, columna, tenia, quedo });
+  const relHoja = (nombre, tipo, cifras, entradas) => Object.assign({ nombre, tipo, revisadas: 0, diferencias: 0, huerfanos: 0,
+    clavesDuplicadasOmitidas: 0, centinelasOmitidos: 0, vaciosOmitidos: 0, diferenciasHistoricas: 0,
+    emparejadasPorId: 0, emparejadasPorClave: 0, corregido: false, entradas: entradas || [] }, cifras);
+  const REL_REVISION = [
+    relHoja('ARQUEOS', 'bitacora', { revisadas: 145, diferenciasHistoricas: 5, emparejadasPorId: 145 },
+      [relE('DIFERENCIA_HISTORICA', 12, '7', 'MONTO CAJA', 3000, 5000), relE('DIFERENCIA_HISTORICA', 40, '12', 'PUESTO', 'AUXILIAR', 'COORDINADOR')]),
+    relHoja('INCREMENTOS', 'bitacora', { revisadas: 9, emparejadasPorId: 9 }),
+    relHoja('INSTALACION DE SENSORES', 'cache', { revisadas: 207, diferencias: 3, huerfanos: 2, centinelasOmitidos: 4, emparejadasPorId: 205 },
+      [relE('DIFERENCIA', 15, 'AUT0024', 'DEPARTAMENTO', 'POST VENTA', 'TI'), relE('DIFERENCIA', 15, 'AUT0024', 'RESPONSABLE', 'ANA LOPEZ', 'JUAN MANUEL FULGENCIO HERNANDEZ'),
+       relE('DIFERENCIA', 88, 'CTA0100', 'SEDE', 'CDMX', 'QUERETARO'), relE('HUERFANO', 130, 'VEH-0000004XK2M1QZ', 'ID VEHICULO', 'VEH-0000004XK2M1QZ', ''),
+       relE('OMITIDO_CENTINELA', 140, 'CON0618', 'DEPARTAMENTO', 'CONSTRUCCION', 'BAJA VEHICULAR')]),
+    relHoja('VERIFICACIONES', 'cache', { revisadas: 426, emparejadasPorId: 426 }),
+    relHoja('HOLOGRAMAS', 'cache', { revisadas: 144, diferencias: 1, vaciosOmitidos: 3, emparejadasPorId: 144 },
+      [relE('DIFERENCIA', 31, 'EQS1001', 'PLACA', 'UKR913H', 'ULP697K'), relE('OMITIDO_VACIO', 60, 'CTA0003', 'DEPARTAMENTO', 'VENTAS', '')]),
+    relHoja('INSPECCION VEHICULAR', 'bitacora', { revisadas: 298, diferenciasHistoricas: 41, emparejadasPorId: 296, huerfanos: 2 },
+      [relE('DIFERENCIA_HISTORICA', 22, 'AUT0024', 'DEPARTAMENTO', 'VENTAS', 'TI')]),
+    relHoja('INCIDENCIAS', 'bitacora', { revisadas: 1, emparejadasPorId: 1 }),
+  ];
+
   const respuestas = {
+    apiRelacionesMapa: JSON.stringify(REL_MAPA),
+    apiRelacionesRevisar: JSON.stringify(REL_REVISION),
     apiMisPermisos: { correo: 'prueba@ciudadmaderas.com', permisos, grupos },
     apiListarVehiculosBasico: [{ FOLIO: 'AUT0024', PLACA: 'GGY886F', MARCA: 'CHEVROLET', LINEA_VEHICULO: 'BEAT' },
       { FOLIO: 'AUT0100', PLACA: 'ABC123A', MARCA: 'MITSUBISHI', LINEA_VEHICULO: 'L200' }],
@@ -140,6 +167,10 @@
   };
 
   const ESCENAS = {
+    'relaciones': async () => { await abrir('relaciones'); await hasta('.rel-tarjeta'); await esperar(400); },
+    'relaciones-diferencias': async () => { await abrir('relaciones'); await hasta('.rel-tarjeta'); (await hasta('#rel-kpi-dif')).click(); await esperar(600); },
+    'relaciones-mapa': async () => { await abrir('relaciones', 'mapa'); await esperar(600); },
+    'relaciones-sincronizar': async () => { await abrir('relaciones'); await hasta('.rel-tarjeta'); (await hasta('[data-sync="INSTALACION DE SENSORES"]')).click(); await esperar(500); },
     'inspecciones-detalle': async () => { await abrir('inspeccion-vehicular'); await esperar(400); (await hasta('.dt-btn-ver')).click(); await esperar(900); },
     'sensores-detalle': async () => { await abrir('instalacion-sensores'); await esperar(400); (await hasta('.dt-btn-ver')).click(); await esperar(900); },
     'hologramas-detalle': async () => { await abrir('hologramas'); await esperar(400); (await hasta('.dt-btn-ver')).click(); await esperar(900); },

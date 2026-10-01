@@ -1,0 +1,244 @@
+<script>
+  /**
+   * app-relaciones.html — Administración > Relaciones entre hojas.
+   *
+   * Pinta lo que ya sabe src/services/Relaciones.gs: quién es dueña de cada columna (el
+   * MAPA), cuánto se han desviado las copias (revisar, en modo solo lectura) y un botón por
+   * hoja CACHÉ para ponerla al día. Las bitácoras se muestran pero nunca se sincronizan:
+   * guardan el dato del día del evento, y pisarlas borraría esa evidencia.
+   *
+   * Todo lo que decide qué se corrige vive en el servidor; aquí solo se muestra y se pide
+   * confirmación. Usa los componentes compartidos (DataTable, Tabs, Confirmar, Notificar,
+   * Iconos) y los helpers de app.html (state, callServer, escaparHtml, puedeEditarModulo).
+   */
+
+  // Cómo se lee cada tipo de entrada de revisar(), en palabras de quien usa la pantalla
+  const REL_TIPOS = {
+    DIFERENCIA: 'Por sincronizar',
+    DIFERENCIA_HISTORICA: 'Histórica (no se toca)',
+    HUERFANO: 'Sin dueño',
+    OMITIDO_CENTINELA: 'Dueño con relleno',
+    OMITIDO_VACIO: 'Dueño vacío',
+    CLAVE_DUPLICADA_EN_ORIGEN: 'Llave repetida en el dueño',
+  };
+
+  async function initRelaciones() {
+    const puedeEditar = puedeEditarModulo('relaciones');
+    let reporte = [];     // [{ nombre, tipo, revisadas, diferencias, …, entradas }]
+    let mapa = null;
+
+    const tabs = Tabs.iniciar(document.getElementById('rel-tabs'), {
+      inicial: 'estado',
+      alCambiar: (nombre) => { if (nombre === 'diferencias') requestAnimationFrame(tabla.ajustarAlto); },
+    });
+
+    const tabla = DataTable.crear(document.getElementById('rel-tabla'), {
+      idCampo: '_id',
+      idTabla: 'relaciones-diferencias',
+      columnas: [
+        { campo: 'TIPO', titulo: 'Tipo', tipo: 'lista', fijada: true },
+        { campo: 'HOJA', titulo: 'Hoja', tipo: 'lista' },
+        { campo: 'DUENO', titulo: 'Dueño', tipo: 'texto' },
+        { campo: 'FILA', titulo: 'Fila', tipo: 'numero', ancho: 70 },
+        { campo: 'COLUMNA', titulo: 'Columna', tipo: 'lista' },
+        { campo: 'TIENE', titulo: 'La copia tiene', tipo: 'texto' },
+        { campo: 'DEBERIA', titulo: 'El dueño dice', tipo: 'texto' },
+      ],
+      etiquetaFila: (f) => f.HOJA + ' fila ' + f.FILA,
+      textoVacio: 'Sin diferencias',
+      ordenInicial: { campo: 'HOJA', dir: 'asc' },
+      exportar: { nombreArchivo: 'Relaciones - diferencias' },
+      detalle: false,
+      ayuda: 'Cada renglón es una celda de una hoja copia que no coincide con su hoja dueña. ' +
+        '"Por sincronizar" se corrige con el botón de su hoja; las históricas son de bitácoras ' +
+        'y se quedan como están; "Dueño con relleno" y "Dueño vacío" se arreglan en la hoja dueña.',
+    });
+
+    // ----- Estado: una tarjeta por hoja copia -----
+    function cifra(etiqueta, valor, alerta) {
+      return `<span>${escaparHtml(etiqueta)}</span><strong class="${alerta && valor ? 'rel-alerta' : ''}">${Number(valor || 0).toLocaleString('es-MX')}</strong>`;
+    }
+
+    function tarjeta(r) {
+      const cache = r.tipo !== 'bitacora';
+      const omitidas = (r.centinelasOmitidos || 0) + (r.vaciosOmitidos || 0) + (r.clavesDuplicadasOmitidas || 0);
+      const nota = cache
+        ? 'Caché: describe el estado de hoy, se pone al día con el dueño.'
+        : 'Bitácora: guarda el dato del día del evento. Las diferencias se reportan, nunca se corrigen.';
+      let botonSync = '';
+      if (cache && !r.diferencias) botonSync = `<span class="rel-al-dia">${Iconos.svg('circle-check')} Al día</span>`;
+      else if (cache && puedeEditar) botonSync = `<button type="button" data-sync="${escaparHtml(r.nombre)}">${Iconos.svg('refresh-cw')} Sincronizar</button>`;
+      return `<div class="rel-tarjeta">
+        <div class="rel-tarjeta-titulo">${escaparHtml(r.nombre)}
+          <span class="rel-tipo ${cache ? 'cache' : 'bitacora'}">${cache ? 'Caché' : 'Bitácora'}</span></div>
+        <div class="rel-cifras">
+          ${cifra('Revisadas', r.revisadas)}
+          ${cache ? cifra('Por sincronizar', r.diferencias, true) : cifra('Históricas', r.diferenciasHistoricas)}
+          ${cifra('Sin dueño', r.huerfanos, true)}
+          ${cifra('Omitidas', omitidas)}
+          ${cifra('Unidas por ID', r.emparejadasPorId)}
+          ${cifra('Unidas por llave', r.emparejadasPorClave)}
+        </div>
+        <p class="rel-nota">${escaparHtml(nota)}</p>
+        <div class="rel-tarjeta-acciones">
+          <button type="button" class="secondary" data-ver="${escaparHtml(r.nombre)}" ${r.entradas.length ? '' : 'disabled'}>${Iconos.svg('list')} Ver detalle</button>
+          ${botonSync}
+        </div>
+      </div>`;
+    }
+
+    function pintarEstado() {
+      const cont = document.getElementById('rel-estado');
+      if (!mapa) return;
+      const porNombre = {};
+      reporte.forEach((r) => { porNombre[r.nombre] = r; });
+      cont.innerHTML = mapa.duenos.map((d) => {
+        const filas = d.copias.map((c) => porNombre[c.nombre]).filter(Boolean);
+        if (!filas.length) return '';
+        return `<div class="rel-grupo">
+          <h3>${Iconos.svg('database')} ${escaparHtml(d.hoja)} <span class="rel-sub">es la dueña de ${filas.length} hoja${filas.length === 1 ? '' : 's'}</span></h3>
+          <div class="rel-tarjetas">${filas.map(tarjeta).join('')}</div>
+        </div>`;
+      }).join('') || '<p class="empty-state">Sin hojas que revisar.</p>';
+    }
+
+    function pintarKpis() {
+      const suma = (campo, filtro) => reporte.filter(filtro || (() => true)).reduce((s, r) => s + (r[campo] || 0), 0);
+      document.getElementById('rel-stat-dif').textContent = suma('diferencias', (r) => r.tipo !== 'bitacora').toLocaleString('es-MX');
+      document.getElementById('rel-stat-hist').textContent = suma('diferenciasHistoricas').toLocaleString('es-MX');
+      document.getElementById('rel-stat-huer').textContent = suma('huerfanos').toLocaleString('es-MX');
+    }
+
+    function pintarTabla() {
+      const filas = [];
+      reporte.forEach((r) => r.entradas.forEach((e, i) => filas.push({
+        _id: r.nombre + '#' + i, TIPO: REL_TIPOS[e.tipo] || e.tipo, HOJA: r.nombre, DUENO: e.dueno || e.clave || '',
+        FILA: e.fila, COLUMNA: e.columna, TIENE: e.tenia == null ? '' : String(e.tenia),
+        DEBERIA: e.quedo == null ? '' : String(e.quedo),
+      })));
+      tabla.setDatos(filas);
+    }
+
+    function aplicar(nuevo) {
+      reporte = nuevo;
+      pintarKpis();
+      pintarEstado();
+      pintarTabla();
+      const truncadas = reporte.filter((r) => r.entradas.length >= 3000).map((r) => r.nombre);
+      document.getElementById('rel-cuando').textContent = 'Revisado a las ' +
+        new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) +
+        (truncadas.length ? ' · el detalle de ' + truncadas.join(', ') + ' muestra solo las primeras 3,000' : '');
+    }
+
+    async function revisar() {
+      const boton = document.getElementById('rel-revisar');
+      boton.disabled = true;
+      document.getElementById('rel-cuando').textContent = 'Revisando… (lee todas las hojas, tarda unos segundos)';
+      tabla.setCargando(true);
+      try {
+        aplicar(JSON.parse(await callServer('apiRelacionesRevisar', state.token)));
+      } catch (err) {
+        document.getElementById('rel-cuando').textContent = 'No se pudo revisar';
+        tabla.setError(err.message);
+        Notificar.error(err.message);
+      } finally {
+        boton.disabled = false;
+      }
+    }
+
+    function verHoja(nombre, tipos) {
+      tabla.limpiarFiltros();
+      if (nombre) tabla.setFiltro('HOJA', { valores: [nombre] });
+      if (tipos) tabla.setFiltro('TIPO', { valores: tipos.map((t) => REL_TIPOS[t] || t) });
+      tabs.mostrar('diferencias');
+    }
+
+    async function sincronizar(nombre) {
+      const r = reporte.find((x) => x.nombre === nombre);
+      if (!r || !r.diferencias) return;
+      // Qué columnas se van a tocar y cuántas celdas, para que se confirme sabiendo
+      const porColumna = {};
+      r.entradas.filter((e) => e.tipo === 'DIFERENCIA').forEach((e) => { porColumna[e.columna] = (porColumna[e.columna] || 0) + 1; });
+      const ok = await Confirmar.pedir({
+        titulo: 'Sincronizar ' + nombre,
+        mensaje: 'Se van a reemplazar ' + r.diferencias.toLocaleString('es-MX') + ' celdas con el valor de su hoja dueña. ' +
+          'Cada cambio queda anotado en la pestaña LOG_RELACIONES.',
+        detalle: Object.keys(porColumna).sort().map((c) => c + ': ' + porColumna[c] + ' celda' + (porColumna[c] === 1 ? '' : 's')),
+        textoConfirmar: 'Sincronizar',
+        palabraClave: r.diferencias >= 50 ? 'SINCRONIZAR' : undefined,
+      });
+      if (!ok) return;
+      const boton = document.querySelector('[data-sync="' + CSS.escape(nombre) + '"]');
+      if (boton) { boton.disabled = true; boton.textContent = 'Sincronizando…'; }
+      try {
+        const hecho = JSON.parse(await callServer('apiRelacionesSincronizar', state.token, nombre))[0];
+        Notificar.exito(nombre + ': ' + (hecho ? hecho.diferencias : 0).toLocaleString('es-MX') + ' celdas al día');
+      } catch (err) {
+        Notificar.error(err.message);
+      }
+      // Se vuelve a revisar todo: lo que importa es cómo quedó, no lo que se pidió
+      await revisar();
+    }
+
+    // ----- Mapa: columna del dueño × hoja copia -----
+    function pintarMapa() {
+      const cont = document.getElementById('rel-mapa');
+      cont.innerHTML = mapa.duenos.map((d) => {
+        const columnas = [];
+        d.copias.forEach((c) => c.columnas.forEach((x) => { if (columnas.indexOf(x.origen) === -1) columnas.push(x.origen); }));
+        const encabezado = d.copias.map((c) => `<th>${escaparHtml(c.nombre)}
+          <span class="rel-tipo ${c.tipo === 'bitacora' ? 'bitacora' : 'cache'}">${c.tipo === 'bitacora' ? 'Bitácora' : 'Caché'}</span>
+          <span class="rel-llave">une por ${escaparHtml(c.llaveForanea || c.clave)}${c.llaveForanea ? ', o ' + escaparHtml(c.clave) + ' si no lo tiene' : ''}</span></th>`).join('');
+        const cuerpo = columnas.map((col) => `<tr><th>${escaparHtml(col)}</th>${d.copias.map((c) => {
+          const x = c.columnas.find((y) => y.origen === col);
+          if (!x) return '<td class="rel-vacia">·</td>';
+          return x.destino === col
+            ? `<td class="rel-igual">${Iconos.svg('check')}</td>`
+            : `<td class="rel-renombrada" title="En ${escaparHtml(c.nombre)} se llama así">${escaparHtml(x.destino)}</td>`;
+        }).join('')}</tr>`).join('');
+        const sinColumnas = d.copias.filter((c) => !c.columnas.length).map((c) => c.nombre);
+        return `<div class="rel-grupo">
+          <h3>${Iconos.svg('database')} ${escaparHtml(d.hoja)} <span class="rel-sub">llave de negocio: ${escaparHtml(d.llaveDeNegocio)}</span></h3>
+          <div class="rel-matriz-scroll"><table class="rel-matriz">
+            <thead><tr><th>Columna en ${escaparHtml(d.hoja)}</th>${encabezado}</tr></thead>
+            <tbody>${cuerpo || '<tr><td colspan="99" class="rel-vacia">Ninguna copia trae columnas de esta hoja</td></tr>'}</tbody>
+          </table></div>
+          ${sinColumnas.length ? `<p class="rel-nota" style="margin-top:6px">${escaparHtml(sinColumnas.join(', '))} no copia${sinColumnas.length === 1 ? '' : 'n'} columnas: está${sinColumnas.length === 1 ? '' : 'n'} en el mapa para vigilar sus registros sin dueño.</p>` : ''}
+        </div>`;
+      }).join('') + `
+        <p class="rel-leyenda"><span>${Iconos.svg('check')} se copia con el mismo nombre</span>
+          <span class="rel-renombrada">NOMBRE</span><span>se copia con otro nombre</span><span>· no se copia</span></p>
+        <div class="rel-grupo rel-centinelas" style="margin-top:14px">
+          <h3>${Iconos.svg('shield-alert')} Valores que nunca se copian</h3>
+          <p class="rel-nota">Son estatus o relleno escritos en la hoja dueña, no datos. Copiarlos pisaría el dato bueno de la copia.</p>
+          ${Object.keys(mapa.centinelas).map((col) => `<p class="rel-nota" style="margin-top:6px"><strong>${col === '*' ? 'En cualquier columna' : 'En ' + escaparHtml(col)}:</strong>
+            ${mapa.centinelas[col].map((v) => '<code>' + escaparHtml(v) + '</code>').join('')}</p>`).join('')}
+        </div>`;
+    }
+
+    // ----- Eventos -----
+    document.getElementById('rel-revisar').addEventListener('click', revisar);
+    document.getElementById('rel-estado').addEventListener('click', (ev) => {
+      const ver = ev.target.closest('[data-ver]');
+      if (ver) return verHoja(ver.dataset.ver);
+      const sync = ev.target.closest('[data-sync]');
+      if (sync) sincronizar(sync.dataset.sync);
+    });
+    document.getElementById('rel-kpi-dif').addEventListener('click', () => verHoja(null, ['DIFERENCIA']));
+    document.getElementById('rel-kpi-hist').addEventListener('click', () => verHoja(null, ['DIFERENCIA_HISTORICA']));
+    document.getElementById('rel-kpi-huer').addEventListener('click', () => verHoja(null, ['HUERFANO']));
+
+    // ----- Arranque: el mapa es instantáneo; la revisión lee todas las hojas -----
+    try {
+      mapa = JSON.parse(await callServer('apiRelacionesMapa', state.token));
+      // La dueña con más copias primero: VEHICULOS es el centro, y es lo que se viene a ver
+      mapa.duenos.sort((a, b) => b.copias.length - a.copias.length);
+      pintarMapa();
+    } catch (err) {
+      document.getElementById('rel-mapa').innerHTML = '<p class="empty-state">' + escaparHtml(err.message) + '</p>';
+      Notificar.error(err.message);
+      return;
+    }
+    await revisar();
+  }
+</script>

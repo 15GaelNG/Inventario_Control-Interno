@@ -594,5 +594,56 @@ console.log('\n16. Pero revisar() sí las REPORTA, que es para lo que están en 
      'INCREMENTOS también, aunque no copie columnas: sirve para ver sus huérfanas');
 }
 
+console.log('\nrevisar() empareja igual que propagar(): por la FK primero');
+{
+  const hs = armar();
+  const enc = hs['INSTALACION DE SENSORES'].enc.concat(['ID VEHICULO']);
+  const fila = (extra) => Object.assign({ ID_SENSOR: 'SEN-X', 'SERIE SENSOR': 'SX' }, comoSensores(vehiculos[0], 'POST VENTA'), extra);
+  hs['INSTALACION DE SENSORES'] = hoja('INSTALACION DE SENSORES', enc, [
+    // FK de CTA0001 pero la serie de CTA0003: manda la FK
+    fila({ 'ID VEHICULO': vehiculos[0].ID, 'SERIE VEHICULO': 'SER3', SEDE: 'VIEJA' }),
+    // FK puesta y serie vacía: el caso CON0618
+    fila({ 'ID VEHICULO': vehiculos[0].ID, 'SERIE VEHICULO': '', SEDE: 'VIEJA' }),
+    // FK que no apunta a nada, aunque su serie sí exista: huérfana, no se toca
+    fila({ 'ID VEHICULO': 'VEH-00000000ZZZZZZ', 'SERIE VEHICULO': 'SER1', SEDE: 'VIEJA' }),
+  ]);
+  const R = cargar(hs);
+  const r = R.revisar({ corregir: true, hojas: ['INSTALACION DE SENSORES'] });
+  const s = hs['INSTALACION DE SENSORES'];
+  const col = (n) => s.enc.indexOf(n);
+  ok(s.datos[0][col('DEPARTAMENTO')] === 'CONSTRUCCION', 'FK y serie en desacuerdo: recibe los datos del dueño de la FK');
+  ok(s.datos[1][col('SEDE')] === 'QRO', 'serie vacía con FK: se empareja y se corrige');
+  ok(s.datos[2][col('SEDE')] === 'VIEJA', 'FK rota: no se corrige con el dueño de la serie');
+  ok(r['INSTALACION DE SENSORES'].huerfanos === 1 && r['INSTALACION DE SENSORES'].emparejadasPorId === 2,
+    'el resumen dice 2 por ID y 1 huérfana');
+  ok(!r['HOLOGRAMAS'], 'con hojas: [...] solo revisa esas');
+}
+
+console.log('\nrevisar({detalle, log:false}) — lo que usa la pantalla');
+{
+  const hs = armar();
+  const R = cargar(hs);
+  const antes = hs['LOG_RELACIONES'] ? hs['LOG_RELACIONES'].datos.length : 0;
+  const r = R.revisar({ detalle: true, log: false });
+  const e = r['INSTALACION DE SENSORES'].entradas;
+  ok(Array.isArray(e) && e.some((x) => x.tipo === 'DIFERENCIA' && x.columna === 'DEPARTAMENTO' && x.dueno === 'CTA0001'),
+    'trae cada diferencia con su columna y el folio del dueño');
+  ok(e.every((x) => x.fila >= 2), 'y la fila de la hoja');
+  ok(Object.keys(r['INSTALACION DE SENSORES']).indexOf('entradas') === -1, 'entradas no ensucia los reportes del editor');
+  ok((hs['LOG_RELACIONES'] ? hs['LOG_RELACIONES'].datos.length : 0) === antes, 'solo mirar no escribe en LOG_RELACIONES');
+  ok(hs['INSTALACION DE SENSORES'].valor('CTA0001', 'FOLIO', 'DEPARTAMENTO') === 'POST VENTA', 'ni corrige');
+}
+
+console.log('\ndescribir() pinta el MAPA');
+{
+  const R = cargar(armar());
+  const d = R.describir();
+  const veh = d.duenos.find((x) => x.hoja === 'VEHICULOS');
+  const sen = veh && veh.copias.find((c) => c.nombre === 'INSTALACION DE SENSORES');
+  ok(sen && sen.tipo === 'cache' && sen.columnas.some((c) => c.origen === 'UBICACION' && c.destino === 'OFICINA / DESARROLLO'),
+    'cada copia con su tipo y sus columnas origen → destino');
+  ok(d.centinelas['*'].indexOf('BAJA VEHICULAR') !== -1, 'y los centinelas');
+}
+
 console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');
 process.exit(fallas ? 1 : 0);

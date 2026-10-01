@@ -67,6 +67,7 @@ const Modulos = (function () {
       id: 'administracion', etiqueta: 'Administración', icono: 'settings',
       modulos: [
         { id: 'usuarios', etiqueta: 'Usuarios y permisos' },
+        { id: 'relaciones', etiqueta: 'Relaciones entre hojas', listo: true },
       ],
     },
   ];

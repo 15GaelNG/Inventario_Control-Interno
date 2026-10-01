@@ -578,3 +578,41 @@ function apiOlvidarTipoInspeccion(token, tipo) {
 function apiRegistrarInspeccion(token, datos, imagenes) {
   return InspeccionesService.registrar(token, datos, imagenes);
 }
+
+// --- Relaciones entre hojas (Administración) ---
+// Quién es dueño de qué columna, cuánto se han desviado las copias, y el botón que las
+// pone al día. El motor es Relaciones.gs; aquí solo van permisos y la forma de la respuesta.
+// JSON.stringify porque las celdas pueden traer Date, y google.script.run no las pasa
+// dentro de un objeto.
+function apiRelacionesMapa(token) {
+  Permisos.puedeLeer(token, 'relaciones');
+  return JSON.stringify(Relaciones.describir());
+}
+
+/** Solo lee: no corrige ni escribe LOG_RELACIONES. */
+function apiRelacionesRevisar(token) {
+  Permisos.puedeLeer(token, 'relaciones');
+  return JSON.stringify(relacionesRespuesta_(Relaciones.revisar({ detalle: true, log: false })));
+}
+
+/**
+ * Corrige UNA hoja caché. Una bitácora se rechaza aquí y no solo en el motor, para que el
+ * error sea claro en vez de un "0 corregidas" que parece éxito. Esta sí escribe la bitácora
+ * LOG_RELACIONES: es el rastro de qué celda cambió, de qué valor a cuál.
+ */
+function apiRelacionesSincronizar(token, hoja) {
+  Permisos.puedeEditar(token, 'relaciones');
+  const copia = Relaciones.describir().duenos
+    .reduce((todas, d) => todas.concat(d.copias), [])
+    .find((c) => c.nombre === hoja);
+  if (!copia) throw new Error('"' + hoja + '" no está en el mapa de relaciones.');
+  if (copia.tipo === 'bitacora') {
+    throw new Error('"' + hoja + '" es una bitácora: guarda el dato del día del evento y no se sincroniza.');
+  }
+  return JSON.stringify(relacionesRespuesta_(Relaciones.revisar({ corregir: true, detalle: true, hojas: [hoja] })));
+}
+
+function relacionesRespuesta_(resultado) {
+  return Object.keys(resultado).map((nombre) => Object.assign(
+    { nombre: nombre }, resultado[nombre], { entradas: resultado[nombre].entradas || [] }));
+}

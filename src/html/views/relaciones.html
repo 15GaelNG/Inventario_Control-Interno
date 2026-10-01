@@ -1,0 +1,82 @@
+<style>
+  /* ============ Relaciones entre hojas (Administración) — todo con prefijo .rel ============ */
+  .rel-barra { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  .rel-barra .rel-cuando { font-size: 12.5px; color: var(--color-text-muted); }
+  .rel-grupo { margin-bottom: 18px; }
+  .rel-grupo h3 { margin: 0 0 8px; font-size: 15px; display: flex; align-items: center; gap: 6px; }
+  .rel-grupo .rel-sub { font-size: 12.5px; color: var(--color-text-muted); font-weight: normal; }
+  .rel-tarjetas { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+  .rel-tarjeta { border: 1px solid var(--color-border); border-radius: 10px; padding: 12px; background: var(--color-surface); display: flex; flex-direction: column; gap: 8px; }
+  .rel-tarjeta-titulo { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: 600; font-size: 13.5px; }
+  .rel-cifras { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 12.5px; }
+  .rel-cifras span { color: var(--color-text-muted); }
+  .rel-cifras strong.rel-alerta { color: var(--color-danger); }
+  .rel-tarjeta-acciones { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; }
+  .rel-tarjeta-acciones button { padding: 6px 10px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 5px; }
+  .rel-al-dia { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--color-success); font-weight: 600; padding: 6px 4px; }
+  .rel-nota { font-size: 12px; color: var(--color-text-muted); margin: 0; }
+  .rel-tipo { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 600; white-space: nowrap; }
+  .rel-tipo.cache { background: var(--color-primary-soft); color: var(--color-primary); }
+  .rel-tipo.bitacora { background: var(--color-bg); color: var(--color-text-muted); border: 1px solid var(--color-border); }
+  .rel-matriz-scroll { overflow: auto; border: 1px solid var(--color-border); border-radius: 10px; }
+  .rel-matriz { font-size: 12.5px; border-collapse: collapse; min-width: 100%; }
+  .rel-matriz th, .rel-matriz td { padding: 7px 10px; border-bottom: 1px solid var(--color-border); text-align: left; white-space: nowrap; }
+  .rel-matriz thead th { background: var(--color-surface); position: sticky; top: 0; vertical-align: bottom; }
+  .rel-matriz thead th .rel-llave { display: block; font-weight: normal; font-size: 11px; color: var(--color-text-muted); margin-top: 2px; }
+  .rel-matriz tbody th { font-weight: 600; position: sticky; left: 0; background: var(--color-surface); }
+  .rel-matriz td.rel-vacia { color: var(--color-border); text-align: center; }
+  .rel-matriz td.rel-igual { color: var(--color-text); }
+  .rel-matriz td.rel-renombrada, .rel-leyenda .rel-renombrada { color: var(--color-primary); }
+  .rel-leyenda { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--color-text-muted); margin: 10px 0 0; }
+  .rel-centinelas code { background: var(--color-bg); padding: 1px 6px; border-radius: 6px; margin-right: 4px; font-size: 12px; }
+</style>
+
+<template id="tpl-relaciones">
+  <div class="page-header-compacto">
+    <div>
+      <h2><i data-lucide="git-compare-arrows" class="ico"></i> Relaciones entre hojas</h2>
+      <p class="page-subtitle">Qué hoja es dueña de cada dato, a dónde se copia, y si las copias siguen al día</p>
+    </div>
+    <div class="kpi-chips">
+      <button type="button" class="kpi-chip kpi-warn" id="rel-kpi-dif" title="Ver las diferencias que se pueden sincronizar">
+        <span class="kpi-chip-label">Por sincronizar</span>
+        <strong class="kpi-chip-value" id="rel-stat-dif">–</strong>
+      </button>
+      <button type="button" class="kpi-chip" id="rel-kpi-hist" title="Ver las diferencias de bitácoras (no se tocan)">
+        <span class="kpi-chip-label">Históricas</span>
+        <strong class="kpi-chip-value" id="rel-stat-hist">–</strong>
+      </button>
+      <button type="button" class="kpi-chip" id="rel-kpi-huer" title="Ver los registros sin dueño">
+        <span class="kpi-chip-label">Huérfanas</span>
+        <strong class="kpi-chip-value" id="rel-stat-huer">–</strong>
+      </button>
+    </div>
+  </div>
+
+  <div id="rel-tabs">
+    <div class="tabs-lista">
+      <button type="button" class="tab-btn" data-tab="estado"><i data-lucide="activity" class="ico"></i> Estado</button>
+      <button type="button" class="tab-btn" data-tab="diferencias"><i data-lucide="list" class="ico"></i> Diferencias</button>
+      <button type="button" class="tab-btn" data-tab="mapa"><i data-lucide="network" class="ico"></i> Mapa</button>
+    </div>
+
+    <!-- Pestaña 1: una tarjeta por hoja copia, agrupadas por su dueña -->
+    <div class="card card-compacta" data-panel="estado">
+      <div class="rel-barra">
+        <button type="button" id="rel-revisar"><i data-lucide="refresh-cw" class="ico"></i> Revisar ahora</button>
+        <span class="rel-cuando" id="rel-cuando">Revisando…</span>
+      </div>
+      <div id="rel-estado"></div>
+    </div>
+
+    <!-- Pestaña 2: celda por celda -->
+    <div class="card card-compacta" data-panel="diferencias">
+      <div id="rel-tabla"></div>
+    </div>
+
+    <!-- Pestaña 3: el MAPA de Relaciones.gs, como matriz columna × hoja -->
+    <div class="card card-compacta" data-panel="mapa">
+      <div id="rel-mapa"><p class="empty-state">Cargando…</p></div>
+    </div>
+  </div>
+</template>
