@@ -138,21 +138,23 @@ const VehiculosService = (function () {
   }
 
   /**
-   * Diagnóstico de solo lectura: cuántas filas de VEHICULOS tienen ID_VEHICULO
-   * vacío (típico de datos migrados de AppSheet que nunca pasaron por crear(),
-   * la única función que genera ese UUID) -- si hay más de una, todas esas
-   * filas colisionan en el mismo "id" de fila en la tabla del navegador y
-   * hacer doble clic en cualquiera de ellas abre siempre la ficha de la
-   * ÚLTIMA fila con ID vacío, sin importar en cuál se haya hecho clic.
+   * Diagnóstico de solo lectura: cuántas filas de VEHICULOS tienen la columna
+   * ID (ID_COLUMN) vacía -- si hay más de una, todas esas filas colisionan en
+   * el mismo "id" de fila en la tabla del navegador y hacer doble clic en
+   * cualquiera de ellas abre siempre la ficha de la ÚLTIMA fila con ID vacío,
+   * sin importar en cuál se haya hecho clic. Antes de la migración de IDs
+   * (ver MigracionIds.gs) esto leía la columna vieja ID_VEHICULO, que daba
+   * 653 de 653 vacías -- la migración ya corrió y renombró esa columna vieja
+   * a "ID ANTERIOR", así que ahora se revisa la columna nueva de verdad.
    */
   function diagnosticoIds(token) {
     Permisos.puedeLeer(token, 'vehiculos');
     const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
-    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, ['ID_VEHICULO', 'FOLIO', 'NUCCO']);
+    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, [ID_COLUMN, 'FOLIO', 'NUCCO']);
     const vacios = [];
     for (let i = 0; i < filas; i++) {
       if (!datos['FOLIO'][i]) continue;
-      if (!datos['ID_VEHICULO'][i]) vacios.push({ FOLIO: datos['FOLIO'][i], NUCCO: datos['NUCCO'][i] || '' });
+      if (!datos[ID_COLUMN][i]) vacios.push({ FOLIO: datos['FOLIO'][i], NUCCO: datos['NUCCO'][i] || '' });
     }
     return { totalFilas: filas, totalConIdVacio: vacios.length, ejemplos: vacios.slice(0, 20) };
   }
