@@ -1,6 +1,11 @@
 <script>
   /**
-   * app-relaciones.html — Administración > Relaciones entre hojas.
+   * app-relaciones.html — Administración > Datos conectados.
+   *
+   * Dos vistas sobre los mismos datos: la SENCILLA (app-relaciones-sencilla.html), que es la
+   * que se ve al entrar y habla en frases, y la TÉCNICA (este archivo), detrás del interruptor
+   * "Ver detalle técnico", que habla como el código. Aquí vive todo lo que habla con el
+   * servidor; las dos vistas solo pintan.
    *
    * Pinta lo que ya sabe src/services/Relaciones.gs: quién es dueña de cada columna (el
    * MAPA), cuánto se han desviado las copias (revisar, en modo solo lectura) y un botón por
@@ -26,6 +31,25 @@
     const puedeEditar = puedeEditarModulo('relaciones');
     let reporte = [];     // [{ nombre, tipo, revisadas, diferencias, …, entradas }]
     let mapa = null;
+    let clasificado = null;   // los pendientes de la vista sencilla (RelSencilla.clasificar)
+    let tablaDetalle = null;  // la tabla del detalle sencillo; se arma al abrir uno
+
+    /** La hoja copia y su dueña, por el nombre de la copia */
+    function relDe(nombre) {
+      let hallada = null;
+      (mapa ? mapa.duenos : []).forEach((d) => d.copias.forEach((c) => { if (c.nombre === nombre) hallada = { d: d, c: c }; }));
+      return hallada;
+    }
+
+    // ----- Vista técnica / sencilla -----
+    const CLAVE_VISTA = 'relaciones-vista-tecnica';
+    function mostrarTecnica(si) {
+      document.getElementById('rel-tecnica').hidden = !si;
+      document.getElementById('rel-sencilla').hidden = si;
+      document.getElementById('rel-tecnico-toggle').checked = si;
+      try { localStorage.setItem(CLAVE_VISTA, si ? '1' : '0'); } catch (e) { /* sin almacenamiento: no se recuerda */ }
+      if (si) requestAnimationFrame(tabla.ajustarAlto);
+    }
 
     const tabs = Tabs.iniciar(document.getElementById('rel-tabs'), {
       inicial: 'estado',
@@ -124,25 +148,68 @@
       pintarKpis();
       pintarEstado();
       pintarTabla();
+      pintarSencilla();
       const truncadas = reporte.filter((r) => r.entradas.length >= 3000).map((r) => r.nombre);
-      document.getElementById('rel-cuando').textContent = 'Revisado a las ' +
-        new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) +
+      const hora = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+      document.getElementById('rel-cuando').textContent = 'Revisado a las ' + hora +
         (truncadas.length ? ' · el detalle de ' + truncadas.join(', ') + ' muestra solo las primeras 3,000' : '');
+      document.getElementById('rel-s-cuando').textContent = 'Revisado hoy a las ' + hora;
     }
+
+    // ----- Vista sencilla -----
+    function pintarSencilla() {
+      clasificado = RelSencilla.clasificar(mapa, reporte);
+      RelSencilla.pintarPendientes(document.getElementById('rel-s-pendientes'), clasificado, puedeEditar);
+    }
+
+    function abrirDetalle(g) {
+      const t = RelSencilla.textos(g, puedeEditar);
+      document.getElementById('rel-s-detalle-titulo').textContent = t.titulo;
+      document.getElementById('rel-s-detalle-texto').textContent = t.explicacion ||
+        (g.c.etiqueta.nombre + ' guarda cómo estaba cada ' + g.d.etiqueta.uno + ' el día que se registró. No hay nada que hacer.');
+      document.getElementById('rel-s-detalle-accion').innerHTML = t.actualizar
+        ? `<button type="button" data-s-actualizar="${escaparHtml(g.c.nombre)}">${Iconos.svg('refresh-cw')} Actualizar todos</button>` : '';
+      if (tablaDetalle) tablaDetalle.destruir();
+      tablaDetalle = DataTable.crear(document.getElementById('rel-s-tabla'), {
+        idCampo: '_id',
+        idTabla: 'relaciones-sencilla-' + g.tipo,
+        columnas: RelSencilla.columnasDetalle(g),
+        datos: [],
+        detalle: false,
+        textoVacio: 'Nada que mostrar',
+        exportar: { nombreArchivo: 'Datos conectados - ' + g.c.etiqueta.nombre },
+      });
+      tablaDetalle.setDatos(RelSencilla.filasDetalle(g));
+      document.getElementById('rel-s-inicio').hidden = true;
+      document.getElementById('rel-s-detalle').hidden = false;
+      requestAnimationFrame(tablaDetalle.ajustarAlto);
+      window.scrollTo(0, 0);
+    }
+
+    function volver() {
+      document.getElementById('rel-s-detalle').hidden = true;
+      document.getElementById('rel-s-inicio').hidden = false;
+    }
+
 
     async function revisar() {
       const boton = document.getElementById('rel-revisar');
+      const botonS = document.getElementById('rel-s-revisar');
       boton.disabled = true;
+      botonS.disabled = true;
       document.getElementById('rel-cuando').textContent = 'Revisando… (lee todas las hojas, tarda unos segundos)';
+      document.getElementById('rel-s-cuando').textContent = 'Revisando los datos… tarda unos segundos';
       tabla.setCargando(true);
       try {
         aplicar(JSON.parse(await callServer('apiRelacionesRevisar', state.token)));
       } catch (err) {
         document.getElementById('rel-cuando').textContent = 'No se pudo revisar';
+        document.getElementById('rel-s-cuando').textContent = 'No se pudo revisar: ' + err.message;
         tabla.setError(err.message);
         Notificar.error(err.message);
       } finally {
         boton.disabled = false;
+        botonS.disabled = false;
       }
     }
 
@@ -155,28 +222,36 @@
 
     async function sincronizar(nombre) {
       const r = reporte.find((x) => x.nombre === nombre);
-      if (!r || !r.diferencias) return;
-      // Qué columnas se van a tocar y cuántas celdas, para que se confirme sabiendo
-      const porColumna = {};
-      r.entradas.filter((e) => e.tipo === 'DIFERENCIA').forEach((e) => { porColumna[e.columna] = (porColumna[e.columna] || 0) + 1; });
+      const rel = relDe(nombre);
+      if (!r || !r.diferencias || !rel) return;
+      // En palabras de quien lo usa, igual en las dos vistas: qué registros, cuántos datos y
+      // de qué tipo, para que se confirme sabiendo.
+      const cambios = r.entradas.filter((e) => e.tipo === 'DIFERENCIA');
+      const registros = new Set(cambios.map((e) => e.fila)).size;
+      const c = rel.c.etiqueta;
+      const porDato = {};
+      cambios.forEach((e) => { const k = RelSencilla.dato(e.columna); porDato[k] = (porDato[k] || 0) + 1; });
       const ok = await Confirmar.pedir({
-        titulo: 'Sincronizar ' + nombre,
-        mensaje: 'Se van a reemplazar ' + r.diferencias.toLocaleString('es-MX') + ' celdas con el valor de su hoja dueña. ' +
-          'Cada cambio queda anotado en la pestaña LOG_RELACIONES.',
-        detalle: Object.keys(porColumna).sort().map((c) => c + ': ' + porColumna[c] + ' celda' + (porColumna[c] === 1 ? '' : 's')),
-        textoConfirmar: 'Sincronizar',
-        palabraClave: r.diferencias >= 50 ? 'SINCRONIZAR' : undefined,
+        titulo: 'Actualizar ' + c.nombre,
+        mensaje: 'Se van a poner al día ' + registros.toLocaleString('es-MX') + ' ' + (registros === 1 ? c.uno : c.varios) +
+          ' (' + r.diferencias.toLocaleString('es-MX') + (r.diferencias === 1 ? ' dato' : ' datos') + ') con lo que dice ' +
+          rel.d.etiqueta.nombre + '. Cada cambio queda anotado, con lo que tenía antes.',
+        detalle: Object.keys(porDato).sort().map((k) => k + ': ' + porDato[k] + (porDato[k] === 1 ? ' cambio' : ' cambios')),
+        textoConfirmar: 'Actualizar',
+        palabraClave: r.diferencias >= 50 ? 'ACTUALIZAR' : undefined,
       });
       if (!ok) return;
-      const boton = document.querySelector('[data-sync="' + CSS.escape(nombre) + '"]');
-      if (boton) { boton.disabled = true; boton.textContent = 'Sincronizando…'; }
+      document.querySelectorAll('[data-sync="' + CSS.escape(nombre) + '"], [data-s-actualizar="' + CSS.escape(nombre) + '"]')
+        .forEach((b) => { b.disabled = true; b.textContent = 'Actualizando…'; });
       try {
         const hecho = JSON.parse(await callServer('apiRelacionesSincronizar', state.token, nombre))[0];
-        Notificar.exito(nombre + ': ' + (hecho ? hecho.diferencias : 0).toLocaleString('es-MX') + ' celdas al día');
+        const n = hecho ? hecho.diferencias : 0;
+        Notificar.exito(c.nombre + ': ' + n.toLocaleString('es-MX') + (n === 1 ? ' dato actualizado' : ' datos actualizados'));
       } catch (err) {
         Notificar.error(err.message);
       }
       // Se vuelve a revisar todo: lo que importa es cómo quedó, no lo que se pidió
+      volver();
       await revisar();
     }
 
@@ -231,6 +306,20 @@
 
     // ----- Eventos -----
     document.getElementById('rel-revisar').addEventListener('click', revisar);
+    document.getElementById('rel-s-revisar').addEventListener('click', revisar);
+    document.getElementById('rel-s-volver').addEventListener('click', volver);
+    document.getElementById('rel-tecnico-toggle').addEventListener('change', (ev) => mostrarTecnica(ev.target.checked));
+    document.getElementById('rel-s-buscar').addEventListener('input', (ev) => {
+      if (mapa) RelSencilla.pintarDatos(document.getElementById('rel-s-datos'), mapa, ev.target.value);
+    });
+    document.getElementById('rel-sencilla').addEventListener('click', (ev) => {
+      const ver = ev.target.closest('[data-s-ver]');
+      if (ver && clasificado) return abrirDetalle(clasificado.pendientes[Number(ver.dataset.sVer)]);
+      const normal = ev.target.closest('[data-s-normal]');
+      if (normal && clasificado) return abrirDetalle(clasificado.normales.find((g) => g.c.nombre === normal.dataset.sNormal));
+      const act = ev.target.closest('[data-s-actualizar]');
+      if (act) sincronizar(act.dataset.sActualizar);
+    });
     document.getElementById('rel-estado').addEventListener('click', (ev) => {
       const ver = ev.target.closest('[data-ver]');
       if (ver) return verHoja(ver.dataset.ver);
@@ -247,11 +336,16 @@
       // La dueña con más copias primero: VEHICULOS es el centro, y es lo que se viene a ver
       mapa.duenos.sort((a, b) => b.copias.length - a.copias.length);
       pintarMapa();
+      RelSencilla.pintarDatos(document.getElementById('rel-s-datos'), mapa, '');
     } catch (err) {
       document.getElementById('rel-mapa').innerHTML = '<p class="empty-state">' + escaparHtml(err.message) + '</p>';
+      document.getElementById('rel-s-cuando').textContent = 'No se pudo cargar: ' + err.message;
       Notificar.error(err.message);
       return;
     }
+    let tecnica = false;
+    try { tecnica = localStorage.getItem(CLAVE_VISTA) === '1'; } catch (e) { /* sin almacenamiento: vista sencilla */ }
+    mostrarTecnica(tecnica);
     await revisar();
   }
 </script>

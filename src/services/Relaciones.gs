@@ -294,9 +294,10 @@ const MAPA = {
           },
           // Un vehículo sin renglón de sensor no es huérfano: simplemente no tiene sensor.
           sinDueno: { 'SERIE SENSOR': '', 'SENSOR': 'NO TIENE SENSOR' },
-          nota: 'SERIE SENSOR es la del sensor ACTIVO, y queda vacía si está en BAJA o si el vehículo no tiene ' +
-            'sensor. SENSOR es SI TIENE SENSOR o NO TIENE SENSOR según lo mismo. Se actualiza al registrar, ' +
-            'editar, mover o borrar un sensor; en el módulo de Vehículos no se editan.',
+          // Se muestra tal cual en la pantalla Datos conectados: va en palabras de quien la usa.
+          nota: 'Si el vehículo tiene un sensor activo, aquí aparece su serie y dice SI TIENE SENSOR. Si el ' +
+            'sensor se dio de baja, o el vehículo nunca tuvo uno, la serie queda vacía y dice NO TIENE SENSOR. ' +
+            'Cambia solo al registrar, editar, mover o borrar un sensor; desde Vehículos no se puede editar.',
         },
       ],
     },
@@ -915,15 +916,42 @@ const MAPA = {
    * El MAPA en forma de datos, para pintarlo en pantalla: quién es dueño de qué columna y
    * a dónde se copia. Se arma del MAPA mismo, así que no se puede desactualizar.
    */
+  /**
+   * Cómo se llama cada hoja para quien NO programa: el nombre del módulo en el menú, y cómo
+   * se dice uno y varios de sus registros. La pantalla "Datos conectados" arma sus frases
+   * con esto ("63 vehículos tienen datos distintos a Instalación de Sensores"). Vive junto
+   * al MAPA para que una hoja nueva en el MAPA no se quede sin nombre legible; si falta,
+   * describir() regresa el nombre de la pestaña tal cual.
+   */
+  const ETIQUETAS = {
+    'VEHICULOS': { modulo: 'Vehículos', uno: 'vehículo', varios: 'vehículos' },
+    'INSTALACION DE SENSORES': { modulo: 'Instalación de Sensores', uno: 'sensor', varios: 'sensores' },
+    'VERIFICACIONES': { modulo: 'Verificaciones', uno: 'verificación', varios: 'verificaciones' },
+    'HOLOGRAMAS': { modulo: 'Hologramas', uno: 'holograma', varios: 'hologramas' },
+    'INSPECCION VEHICULAR': { modulo: 'Inspección Vehicular', uno: 'inspección', varios: 'inspecciones' },
+    'INCIDENCIAS': { modulo: 'Incidencias', uno: 'incidencia', varios: 'incidencias' },
+    'CAJAS CHICAS': { modulo: 'Caja Chica', uno: 'caja chica', varios: 'cajas chicas' },
+    'ARQUEOS': { modulo: 'Arqueos', uno: 'arqueo', varios: 'arqueos' },
+    'INCREMENTOS': { modulo: 'Cambios de Monto', uno: 'cambio de monto', varios: 'cambios de monto' },
+  };
+  // La clave es 'modulo' y no 'nombre' a propósito: tests/llave-nueva.test.js reconoce las
+  // copias del MAPA por cómo se escribe su nombre en el código, y estas no son copias.
+  const etiqueta_ = (hoja) => {
+    const e = ETIQUETAS[hoja];
+    return e ? { nombre: e.modulo, uno: e.uno, varios: e.varios } : { nombre: hoja, uno: 'registro', varios: 'registros' };
+  };
+
   function describir() {
     return {
       duenos: Object.keys(MAPA).map((nombre) => {
         const d = MAPA[nombre];
         return {
           hoja: d.hoja,
+          etiqueta: etiqueta_(d.hoja),
           llaveDeNegocio: d.llaveDeNegocio,
           copias: d.copias.map((c) => ({
             nombre: c.nombre,
+            etiqueta: etiqueta_(c.nombre),
             tipo: c.tipo || 'cache',
             llaveForanea: c.llaveForanea || '',
             claveOrigen: c.claveOrigen,

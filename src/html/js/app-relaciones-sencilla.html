@@ -1,0 +1,227 @@
+<script>
+  /**
+   * app-relaciones-sencilla.html — la vista "para todos" de Administración > Datos conectados.
+   *
+   * La vista técnica (app-relaciones.html) habla como el código: caché, bitácora, huérfana,
+   * llave foránea. Esta habla como quien usa los módulos: "63 vehículos tienen datos distintos
+   * a Instalación de Sensores", con un ejemplo y qué hacer. Arriba, lo que hay que revisar;
+   * abajo, cómo se conectan los datos, dato por dato.
+   *
+   * No decide nada: recibe lo que ya calculó el servidor (Relaciones.describir y revisar) y
+   * lo convierte en frases. Las acciones (actualizar, volver a revisar) las pone
+   * initRelaciones, que es quien habla con el servidor.
+   */
+  const RelSencilla = (function () {
+    // Cómo se llama cada columna para quien no programa. Lo que no esté aquí se muestra con
+    // la primera letra en mayúscula ("DEPARTAMENTO" → "Departamento").
+    const DATOS = {
+      'SERIE SENSOR': 'Serie del sensor',
+      'SENSOR': '¿Tiene sensor?',
+      'ESTATUS SENSOR': 'Estatus del sensor',
+      'RESPONSABLE VEHICULO': 'Responsable',
+      'LINEA VEHICULO': 'Línea',
+      'CAPACIDAD COMBUSTIBLE (LTS)': 'Capacidad del tanque',
+      'CAPACIDAD DE COMBUSTIBLE': 'Capacidad del tanque',
+      'CAPACIDAD DEL TANQUE': 'Capacidad del tanque',
+      'UBICACION': 'Ubicación',
+      'OFICINA / DESARROLLO': 'Oficina / desarrollo',
+      'RAZON SOCIAL': 'Razón social',
+      'RESPONSABLE DE CAJA CHICA': 'Responsable de la caja',
+      'PUESTO DE RESPONSABLE': 'Puesto del responsable',
+      'EMPRESA ORIGEN': 'Empresa',
+      'METODO DE REEMBOLSO': 'Método de reembolso',
+      'METODO REEMBOLSO': 'Método de reembolso',
+      'MONTO ACTUAL': 'Monto de la caja',
+      'MONTO CAJA': 'Monto de la caja',
+      'AREA / DEPARTAMENTO': 'Área / departamento',
+      'ID VEHICULO': 'Vehículo al que pertenece',
+      'ID CAJA CHICA': 'Caja a la que pertenece',
+      'SERIE VEHICULO': 'Serie del vehículo',
+      'NO SERIE': 'Serie del vehículo',
+      'FOLIO VEHICULO': 'Folio',
+    };
+    // En qué orden se muestran los pendientes: primero lo que se arregla con un botón
+    const ORDEN = ['DIFERENCIA', 'HUERFANO', 'CLAVE_DUPLICADA_EN_ORIGEN', 'OMITIDO_CENTINELA', 'OMITIDO_VACIO', 'DIFERENCIA_HISTORICA'];
+
+    const esc = (v) => escaparHtml(v == null ? '' : String(v));
+    const num = (x) => Number(x || 0).toLocaleString('es-MX');
+    const dato = (col) => {
+      if (DATOS[col]) return DATOS[col];
+      const t = String(col || '').toLowerCase();
+      return t.charAt(0).toUpperCase() + t.slice(1);
+    };
+    const vacio = (v) => v === '' || v == null;
+    const dice = (v) => (vacio(v) ? 'está vacío' : 'dice «' + v + '»');
+    const deberia = (v) => (vacio(v) ? 'debería estar vacío' : 'debería decir «' + v + '»');
+    const deCuantos = (et, k) => num(k) + ' ' + (k === 1 ? et.uno : et.varios);
+    // El verbo concuerda con cuántos son: '1 holograma tiene', '3 vehículos tienen'
+    const verbo = (k, uno, varios) => (k === 1 ? uno : varios);
+
+    /**
+     * Los pendientes, en el orden en que conviene atenderlos, más lo que está bien.
+     * Cada pendiente es un grupo: una hoja copia y un tipo de problema.
+     */
+    function clasificar(mapa, reporte) {
+      const rel = {};
+      mapa.duenos.forEach((d) => d.copias.forEach((c) => { rel[c.nombre] = { d: d, c: c }; }));
+      const pendientes = [];
+      const normales = [];
+      const alDia = [];
+      reporte.forEach((r) => {
+        if (!rel[r.nombre]) return;
+        const grupos = {};
+        r.entradas.forEach((e) => { (grupos[e.tipo] = grupos[e.tipo] || []).push(e); });
+        let algo = false;
+        ORDEN.forEach((tipo) => {
+          const es = grupos[tipo];
+          if (!es || !es.length) return;
+          const g = { tipo: tipo, d: rel[r.nombre].d, c: rel[r.nombre].c, entradas: es,
+            registros: new Set(es.map((e) => e.fila)).size };
+          if (tipo === 'DIFERENCIA_HISTORICA') normales.push(g);
+          else { pendientes.push(g); algo = true; }
+        });
+        if (!algo) alDia.push(rel[r.nombre].c.etiqueta.nombre);
+      });
+      pendientes.sort((a, b) => ORDEN.indexOf(a.tipo) - ORDEN.indexOf(b.tipo) || b.registros - a.registros);
+      return { pendientes: pendientes, normales: normales, alDia: alDia };
+    }
+
+    /** Las frases de un pendiente: título, un ejemplo real, qué significa y si tiene botón. */
+    function textos(g, puedeEditar) {
+      const d = g.d.etiqueta;
+      const c = g.c.etiqueta;
+      const e = g.entradas[0];
+      const quien = e.dueno || e.clave || ('el renglón ' + e.fila);
+      switch (g.tipo) {
+        case 'DIFERENCIA':
+          return {
+            icono: 'refresh-cw', clase: 'aviso',
+            titulo: deCuantos(c, g.registros) + verbo(g.registros, ' tiene', ' tienen') + ' datos distintos a ' + d.nombre,
+            ejemplo: 'Por ejemplo ' + quien + ': en ' + c.nombre + ', ' + dato(e.columna) + ' ' + dice(e.tenia) +
+              ', y según ' + d.nombre + ' ' + deberia(e.quedo) + '.',
+            explicacion: 'Estos datos los decide ' + d.nombre + '. «Actualizar» copia lo que dice ' + d.nombre +
+              ' a ' + c.nombre + ', y cada cambio queda anotado.',
+            actualizar: puedeEditar && g.c.tipo !== 'bitacora',
+          };
+        case 'HUERFANO':
+          return {
+            icono: 'unlink', clase: 'problema',
+            titulo: deCuantos(c, g.registros) + verbo(g.registros, ' no encontró', ' no encontraron') + ' su ' + d.uno,
+            ejemplo: 'Por ejemplo, el renglón ' + e.fila + ' de ' + c.nombre + ' apunta a «' + (e.tenia || e.clave) +
+              '», que no existe en ' + d.nombre + '.',
+            explicacion: 'Puede ser un ' + d.uno + ' que se borró, o un dato mal escrito. No se puede adivinar cuál ' +
+              'era: hay que corregirlo a mano en ' + c.nombre + '.',
+          };
+        case 'CLAVE_DUPLICADA_EN_ORIGEN':
+          return {
+            icono: 'copy', clase: 'problema',
+            titulo: deCuantos(c, g.registros) + verbo(g.registros, ' tiene', ' tienen') + ' más de un ' + d.uno + ' posible',
+            ejemplo: 'Por ejemplo, «' + e.clave + '» aparece más de una vez en ' + d.nombre + '.',
+            explicacion: 'No se adivina cuál es el bueno. Deja uno solo en ' + d.nombre + ' y vuelve a revisar.',
+          };
+        case 'OMITIDO_CENTINELA':
+          return {
+            icono: 'type', clase: 'info',
+            titulo: num(g.entradas.length) + (g.entradas.length === 1 ? ' vez ' : ' veces ') + d.nombre +
+              ' tiene una palabra en lugar del dato',
+            ejemplo: 'Por ejemplo ' + quien + ': en ' + d.nombre + ', ' + dato(e.columna) + ' dice «' + e.quedo + '». ' +
+              c.nombre + ' conserva «' + e.tenia + '» y no se tocó.',
+            explicacion: 'Palabras como «BAJA VEHICULAR» no son un departamento ni una placa: copiarlas borraría el ' +
+              'dato bueno. Se arregla en ' + d.nombre + '.',
+          };
+        case 'OMITIDO_VACIO':
+          return {
+            icono: 'circle-dashed', clase: 'info',
+            titulo: num(g.entradas.length) + (g.entradas.length === 1 ? ' vez ' : ' veces ') + 'a ' + d.nombre +
+              ' le falta un dato que ' + c.nombre + ' sí tiene',
+            ejemplo: 'Por ejemplo ' + quien + ': ' + dato(e.columna) + ' está vacío en ' + d.nombre + ', pero en ' +
+              c.nombre + ' ' + dice(e.tenia) + '.',
+            explicacion: 'No se borró de ' + c.nombre + '. Conviene capturarlo en ' + d.nombre + '.',
+          };
+        default:
+          return { icono: 'info', clase: 'info', titulo: g.tipo, ejemplo: '', explicacion: '' };
+      }
+    }
+
+    function pintarPendientes(cont, clas, puedeEditar) {
+      const p = clas.pendientes;
+      const titulo = p.length
+        ? `<h3 class="rel-s-h3 aviso">${Iconos.svg('triangle-alert')} ${num(p.length)} ${p.length === 1 ? 'cosa' : 'cosas'} por revisar</h3>`
+        : `<h3 class="rel-s-h3 ok">${Iconos.svg('circle-check')} Todo coincide</h3>`;
+      const lista = p.map((g, i) => {
+        const t = textos(g, puedeEditar);
+        return `<div class="rel-s-pend ${t.clase}">
+          <div class="rel-s-pend-icono">${Iconos.svg(t.icono)}</div>
+          <div class="rel-s-pend-cuerpo">
+            <div class="rel-s-pend-titulo">${esc(t.titulo)}</div>
+            <div class="rel-s-pend-ejemplo">${esc(t.ejemplo)}</div>
+            <div class="rel-s-pend-acciones">
+              <button type="button" class="secondary" data-s-ver="${i}">${Iconos.svg('list')} Ver ${g.registros > 1 ? 'los ' + num(g.registros) : 'cuál es'}</button>
+              ${t.actualizar ? `<button type="button" data-s-actualizar="${esc(g.c.nombre)}">${Iconos.svg('refresh-cw')} Actualizar</button>` : ''}
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+      const alDia = clas.alDia.length
+        ? `<p class="rel-s-aldia">${Iconos.svg('circle-check')} Al día: ${esc(clas.alDia.join(', '))}</p>` : '';
+      const normales = clas.normales.map((g) => `<p class="rel-s-normal">${Iconos.svg('history')}
+        ${esc(g.c.etiqueta.nombre)} guarda cómo estaba cada ${esc(g.d.etiqueta.uno)} el día que se registró: ${num(g.entradas.length)}
+        ${g.entradas.length === 1 ? 'dato es distinto' : 'datos son distintos'} a lo de hoy, y así debe ser.
+        <button type="button" class="dt-link" data-s-normal="${esc(g.c.nombre)}">Ver</button></p>`).join('');
+      cont.innerHTML = titulo + (lista ? `<div class="rel-s-pends">${lista}</div>` : '') + alDia + normales;
+    }
+
+    /** "Cómo se conectan los datos": una entrada por dato, con quién lo decide y a dónde llega. */
+    function pintarDatos(cont, mapa, filtro) {
+      const datos = {};
+      mapa.duenos.forEach((d) => d.copias.forEach((c) => c.columnas.forEach((x) => {
+        const nombre = x.calculada ? dato(x.destino) : dato(x.origen);
+        const k = d.hoja + '|' + nombre;
+        const o = datos[k] = datos[k] || { nombre: nombre, decide: d.etiqueta.nombre, alDia: [], delDia: [], notas: [], nombres: [] };
+        (c.tipo === 'bitacora' ? o.delDia : o.alDia).push(c.etiqueta.nombre);
+        if (!x.calculada && dato(x.destino) !== dato(x.origen)) o.nombres.push('En ' + c.etiqueta.nombre + ' se llama «' + dato(x.destino) + '».');
+        if (c.nota && o.notas.indexOf(c.nota) === -1) o.notas.push(c.nota);
+      })));
+      const q = String(filtro || '').trim().toLowerCase();
+      const lista = Object.keys(datos).map((k) => datos[k])
+        .filter((o) => !q || (o.nombre + ' ' + o.decide + ' ' + o.alDia.join(' ') + ' ' + o.delDia.join(' ')).toLowerCase().indexOf(q) !== -1)
+        .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es') || a.decide.localeCompare(b.decide, 'es'));
+      cont.innerHTML = lista.map((o) => `<details class="rel-s-dato">
+        <summary><strong>${esc(o.nombre)}</strong><span>lo decide ${esc(o.decide)}</span></summary>
+        <ul>
+          ${o.alDia.length ? `<li>${Iconos.svg('refresh-cw')} <span>Se mantiene al día en <strong>${esc(o.alDia.join(', '))}</strong></span></li>` : ''}
+          ${o.delDia.length ? `<li>${Iconos.svg('history')} <span>Guarda el del día y ya no cambia en <strong>${esc(o.delDia.join(', '))}</strong></span></li>` : ''}
+          ${o.nombres.map((t) => `<li class="rel-s-sutil">${esc(t)}</li>`).join('')}
+          ${o.notas.map((t) => `<li class="rel-s-sutil">${esc(t)}</li>`).join('')}
+        </ul>
+      </details>`).join('') || '<p class="empty-state">Ningún dato coincide con la búsqueda.</p>';
+    }
+
+    /** Las columnas de la tabla del detalle, con encabezados que dicen de qué hoja es cada valor. */
+    function columnasDetalle(g) {
+      const d = g.d.etiqueta.nombre;
+      const c = g.c.etiqueta.nombre;
+      const cols = [
+        { campo: 'REGISTRO', titulo: g.tipo === 'HUERFANO' ? 'Apunta a' : 'Registro', tipo: 'texto', fijada: true },
+        { campo: 'DATO', titulo: 'Dato', tipo: 'lista' },
+        { campo: 'AHORA', titulo: 'En ' + c, tipo: 'texto' },
+      ];
+      if (g.tipo !== 'HUERFANO' && g.tipo !== 'CLAVE_DUPLICADA_EN_ORIGEN') cols.push({ campo: 'CORRECTO', titulo: 'En ' + d, tipo: 'texto' });
+      cols.push({ campo: 'RENGLON', titulo: 'Renglón en ' + c, tipo: 'numero', ancho: 110 });
+      return cols;
+    }
+
+    function filasDetalle(g) {
+      return g.entradas.map((e, i) => ({
+        _id: i,
+        REGISTRO: g.tipo === 'HUERFANO' ? (e.tenia || e.clave) : (e.dueno || e.clave || ''),
+        DATO: dato(e.columna),
+        AHORA: vacio(e.tenia) ? '(vacío)' : String(e.tenia),
+        CORRECTO: vacio(e.quedo) ? '(vacío)' : String(e.quedo),
+        RENGLON: e.fila,
+      }));
+    }
+
+    return { clasificar, textos, pintarPendientes, pintarDatos, columnasDetalle, filasDetalle, dato };
+  })();
+</script>
