@@ -799,20 +799,34 @@
   .lnp-filtros select { width: auto; min-width: 170px; padding: 7px 10px; font-weight: 600; }
   .lnp-filtro-nota { font-size: 12px; color: var(--color-text-muted); }
   .ln-panorama.lnp-cargando .lnp-portada, .ln-panorama.lnp-cargando .lnp-dos { opacity: .55; transition: opacity .2s; }
-  /* Filtro rápido por tipo en Líneas Telefónicas (como la lista agrupada del AppSheet) */
-  .ln-tipos { display: flex; align-items: center; gap: 4px; padding: 2px 2px 10px; overflow-x: auto; scrollbar-width: thin; }
+  /* Filtro rápido por tipo en Líneas Telefónicas: columna a la izquierda (como el AppSheet), colapsable a íconos */
+  .ln-con-tipos { display: flex; align-items: flex-start; gap: 12px; }
+  .ln-con-tipos-tabla { flex: 1; min-width: 0; }
+  .ln-tipos { flex: 0 0 176px; width: 176px; display: flex; flex-direction: column; gap: 2px; padding-right: 10px;
+    border-right: 1px solid var(--color-border); overflow: hidden; transition: flex-basis .18s cubic-bezier(.2, 0, 0, 1), width .18s cubic-bezier(.2, 0, 0, 1); }
   .ln-tipos:empty { display: none; }
-  .ln-tipo { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; padding: 5px 10px 5px 6px; border-radius: 999px;
-    border: 1px solid transparent; background: transparent; color: var(--color-text); font-size: 12.5px; font-weight: 500;
-    cursor: pointer; transition: background-color .15s, border-color .15s; }
+  .ln-tipos-cab { display: flex; align-items: center; justify-content: space-between; min-height: 30px; padding: 0 2px 4px 8px; }
+  .ln-tipos-titulo { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--color-text-muted); white-space: nowrap; }
+  .ln-tipos-colapsar { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0;
+    border: none; border-radius: 8px; background: transparent; color: var(--color-text-muted); cursor: pointer; flex-shrink: 0; }
+  .ln-tipos-colapsar:hover { background: var(--color-bg); color: var(--color-text); }
+  .ln-tipos-colapsar .ico { width: 17px; height: 17px; }
+  .ln-tipo { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 32px; padding: 5px 8px; border: none; border-radius: 8px;
+    background: transparent; color: var(--color-text); font-size: 13px; font-weight: 500; text-align: left; cursor: pointer;
+    transition: background-color .15s; }
   .ln-tipo:hover { background: var(--color-bg); }
-  .ln-tipo.activo { background: var(--color-bg); border-color: var(--color-border); }
-  .ln-tipo:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
-  .ln-tipo .ln-regla-chip { pointer-events: none; }
-  .ln-tipo-todo { padding: 3px 8px; font-weight: 700; letter-spacing: .02em; }
-  .ln-tipo-num { min-width: 22px; padding: 1px 6px; border-radius: 6px; background: var(--color-bg); color: var(--color-text-muted);
-    font-size: 11.5px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; }
-  .ln-tipo.activo .ln-tipo-num { background: var(--color-surface); }
+  .ln-tipo.activo { background: var(--color-primary-soft); font-weight: 600; }
+  .ln-tipo:focus-visible, .ln-tipos-colapsar:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+  .ln-tipo-ico { display: inline-flex; flex-shrink: 0; color: var(--color-text-muted); }
+  .ln-tipo-ico .ico { width: 16px; height: 16px; }
+  .ln-tipo-nombre { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ln-tipo-num { flex-shrink: 0; color: var(--color-text-muted); font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
+  /* Colapsada: solo los íconos (siguen filtrando; el nombre y el conteo van en el title) */
+  .ln-con-tipos.colapsado .ln-tipos { flex-basis: 40px; width: 40px; padding-right: 6px; }
+  .ln-con-tipos.colapsado .ln-tipos-titulo, .ln-con-tipos.colapsado .ln-tipo-nombre, .ln-con-tipos.colapsado .ln-tipo-num { display: none; }
+  .ln-con-tipos.colapsado .ln-tipos-cab { padding: 0 0 4px; justify-content: center; }
+  .ln-con-tipos.colapsado .ln-tipo { justify-content: center; padding: 5px 0; }
+  @media (prefers-reduced-motion: reduce) { .ln-tipos { transition: none; } }
 
   /* Correcciones de Líneas: botones a la evidencia en Drive (módulo temporal) */
   .lnc-evid { display: flex; flex-direction: column; gap: 4px; min-width: 210px; }

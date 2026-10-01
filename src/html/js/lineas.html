@@ -1915,10 +1915,28 @@
         if (marcarKpi) marcarKpi();
       }
 
-      // ---- Filtro rápido por tipo, como la lista agrupada del AppSheet (TODO · EQUIPO 639 · EQUIPO + SIM 859…) ----
-      // Mismo ícono y color que la columna Tipo; clic = solo ese tipo, otra vez (o TODO) = todos. Sigue al filtro de la
-      // columna Tipo de la tabla (si se eligen varios ahí, se marcan esos).
+      // ---- Filtro rápido por tipo: columna a la izquierda, como la lista agrupada del AppSheet (usuario, 1-oct) ----
+      // Todos · Equipo 603 · Equipo + SIM 967…, con el ícono y el color de la columna Tipo. Clic = solo ese tipo; otra
+      // vez (o Todos) = todos. Sigue al filtro de la columna Tipo. Se colapsa a una franja con solo los íconos (sigue
+      // filtrando); la preferencia queda en este navegador y en celular empieza colapsada.
       const ORDEN_TIPOS = ['EQUIPO', 'EQUIPO + SIM', 'EQUIPO + SIM BASICO', 'LINEA', 'LINEA BASICA', 'BANDA ANCHA', 'MODEM', 'CAMARA'];
+      const NOMBRE_TIPO = { 'EQUIPO': 'Equipo', 'EQUIPO + SIM': 'Equipo + SIM', 'EQUIPO + SIM BASICO': 'Equipo + SIM básico', 'LINEA': 'Línea',
+        'LINEA BASICA': 'Línea básica', 'BANDA ANCHA': 'Banda ancha', 'MODEM': 'Módem', 'CAMARA': 'Cámara' };
+      const CLAVE_TIPOS = 'lineas.tiposColapsado';
+      let tiposColapsado = (() => {
+        try { const v = localStorage.getItem(CLAVE_TIPOS); if (v === '1' || v === '0') return v === '1'; } catch (e) { /* sin almacenamiento */ }
+        return !!(window.matchMedia && window.matchMedia('(max-width: 700px)').matches);
+      })();
+      function aplicarColapsoTipos() {
+        raiz.querySelectorAll('.ln-con-tipos').forEach((c) => c.classList.toggle('colapsado', tiposColapsado));
+        raiz.querySelectorAll('[data-tipos-colapsar]').forEach((b) => {
+          b.setAttribute('aria-expanded', String(!tiposColapsado));
+          b.title = tiposColapsado ? 'Mostrar los tipos' : 'Ocultar los tipos';
+          b.innerHTML = ico(tiposColapsado ? 'panel-left-open' : 'panel-left-close');
+        });
+        // La tabla ganó o perdió ancho: que recalcule columnas fijas y alto
+        Object.keys(tablas).forEach((m) => { if (tablas[m] && m === memoria.modulo) tablas[m].ajustarAlto(); });
+      }
       function pintarTipos(modulo) {
         const cont = $('#ln-tipos-' + modulo, raiz);
         if (!cont || !memoria.indice) return;
@@ -1929,10 +1947,19 @@
           const ib = ORDEN_TIPOS.indexOf(b);
           return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || conteo[b] - conteo[a] || a.localeCompare(b);
         });
-        const boton = (valor, contenido, n) => '<button type="button" class="ln-tipo" data-tipo="' + esc(valor) + '" aria-pressed="false">' + contenido +
-          (n !== null ? '<span class="ln-tipo-num">' + miles(n) + '</span>' : '') + '</button>';
-        cont.innerHTML = boton('*', '<span class="ln-tipo-todo">TODO</span>', memoria.indice[modulo].length) +
-          tipos.map((t) => boton(t, t ? (formatoAppSheet('LINEAS', 'TIPO', t) || esc(t)) : '<span class="ln-tenue">Sin tipo</span>', conteo[t])).join('');
+        const regla = (t) => ((REGLAS_FORMATO.LINEAS || {}).TIPO || {})[t] || null;
+        const fila = (valor, icono, color, nombre, n) =>
+          '<button type="button" class="ln-tipo" data-tipo="' + esc(valor) + '" aria-pressed="false" title="' + esc(nombre + ' · ' + miles(n)) + '">' +
+            '<span class="ln-tipo-ico"' + (color ? ' style="color:' + esc(color) + '"' : '') + '>' + ico(icono) + '</span>' +
+            '<span class="ln-tipo-nombre">' + esc(nombre) + '</span><span class="ln-tipo-num">' + miles(n) + '</span></button>';
+        cont.innerHTML = '<div class="ln-tipos-cab"><span class="ln-tipos-titulo">Tipo</span>' +
+          '<button type="button" class="ln-tipos-colapsar" data-tipos-colapsar aria-controls="' + cont.id + '"></button></div>' +
+          fila('*', 'layers', '', 'Todos', memoria.indice[modulo].length) +
+          tipos.map((t) => {
+            const r = regla(t);
+            return fila(t, (r && r.icono) || 'circle', r ? colorAppSheet(r.color) : '', t ? (NOMBRE_TIPO[t] || t) : 'Sin tipo', conteo[t]);
+          }).join('');
+        aplicarColapsoTipos();
         marcarTipos(modulo);
       }
       function marcarTipos(modulo) {
@@ -1948,6 +1975,12 @@
       }
       ['equipos', 'lineas'].forEach((modulo) => {
         $('#ln-tipos-' + modulo, raiz).addEventListener('click', (ev) => {
+          if (ev.target.closest('[data-tipos-colapsar]')) {
+            tiposColapsado = !tiposColapsado;
+            try { localStorage.setItem(CLAVE_TIPOS, tiposColapsado ? '1' : '0'); } catch (e) { /* solo esta vez */ }
+            aplicarColapsoTipos();
+            return;
+          }
           const b = ev.target.closest('.ln-tipo');
           if (!b) return;
           const t = b.dataset.tipo;

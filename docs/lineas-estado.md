@@ -124,11 +124,17 @@ archivo que lo respalda, y de ser posible a la línea.
   - convierte a Google Sheets los Excel que no lo estén (`files.copy` con `mimeType` de hoja);
   - guarda la caché 30 min, y "Actualizar" la ignora (`apiLineasCorrecciones(token, forzar)`).
   Quedaron 133 archivos y 143 casos con evidencia. La columna "Ver evidencia" va junto al número (`idTabla` `-v2`).
-- **Filtro por tipo en Líneas Telefónicas:** una fila arriba de cada tabla, como la lista agrupada del AppSheet:
-  - muestra TODO · EQUIPO · EQUIPO + SIM… con el mismo ícono y color que la columna Tipo y su conteo;
-  - clic deja solo ese tipo (`setFiltro('tipoHoja')`); otro clic o TODO quita el filtro;
-  - sigue al filtro de la columna.
-- **Menú del ⋮ y del clic derecho:** entra en 120 ms (opacidad y 4 px). Con movimiento reducido no se anima.
+- **Filtro por tipo en Líneas Telefónicas** (versión final, opción C que eligió el usuario): una columna a la izquierda de la
+  tabla, como la lista agrupada del AppSheet:
+  - muestra Todos · Equipo · Equipo + SIM…, cada uno con el ícono y el color de la columna Tipo y su conteo;
+  - un clic deja solo ese tipo (`setFiltro('tipoHoja')`); otro clic o Todos quita el filtro; sigue al filtro de la columna;
+  - se colapsa a una franja de 40 px con solo los íconos, que siguen filtrando;
+  - la preferencia queda en `localStorage` (`lineas.tiposColapsado`); en celular empieza colapsada.
+- **Menú del ⋮ y del clic derecho, como el de Google Drive (`a9c188f`):**
+  - crece desde la esquina del clic: `scale(.92, .6)` → 1 en 180 ms con curva que frena;
+  - el contenido aparece un instante después;
+  - el origen sigue a hacia dónde se abrió;
+  - con movimiento reducido no se anima.
 
 ## 0ac. Centro de notificaciones (2026-09-30, noche)
 
