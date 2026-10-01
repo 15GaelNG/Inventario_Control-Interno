@@ -79,9 +79,16 @@
       ordenInicial: { campo: 'FECHA_REGISTRO', dir: 'desc' },
       textoVacio: 'Todavía no hay verificaciones registradas',
       ayuda: 'Fechas: pasa el mouse y usa el lápiz (o doble clic). Enter guarda, Esc cancela; Ctrl+Z deshace. ' +
-        'El folio se cambia desde "Ver detalle" (el ojo en Acciones). La flecha de cada columna: filtrar, ordenar, fijar u ocultar. ' +
-        'Para eliminar: el bote de basura de la fila, o marca varias casillas. Shift+clic en casillas selecciona un rango.',
+        'El folio se cambia desde "Ver detalle" (doble clic en la fila, o su ⋮). La flecha de cada columna: filtrar, ordenar, fijar u ocultar. ' +
+        'Para eliminar: selecciona una o varias filas (clic, Ctrl/Cmd o Shift) y usa "Eliminar" de la barra o el ⋮.',
       alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
+      // Selección estilo Google Drive/Apple (rama emmanuel, ver componentes/datatable.html):
+      // clic = selecciona, doble clic/tocar = abre el panel de detalle (tabla.abrirDetalle
+      // se resuelve en el momento del clic, para entonces `tabla` ya está asignada).
+      modoSeleccion: true,
+      seleccionDrive: true,
+      alAbrirFila: (v) => tabla.abrirDetalle(String(v.ID)),
+      alTocarFila: (v) => tabla.abrirDetalle(String(v.ID)),
       exportar: {
         nombreArchivo: 'Verificaciones',
         titulo: 'Descarga la base completa: todas las filas y columnas de la hoja, sin importar filtros ni búsqueda',

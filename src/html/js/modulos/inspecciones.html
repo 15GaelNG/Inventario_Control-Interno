@@ -51,7 +51,7 @@
       ordenInicial: { campo: 'FECHA', dir: 'desc' },
       textoVacio: 'Todavía no hay inspecciones registradas',
       ayuda: 'Cada renglón es una inspección hecha a una unidad. El puntaje resume el estado: ' +
-        'verde arriba de 90%, ámbar entre 80 y 90, rojo abajo de 80. Abre el detalle (el ojo) ' +
+        'verde arriba de 90%, ámbar entre 80 y 90, rojo abajo de 80. Abre el detalle (doble clic en la fila, o su ⋮) ' +
         'para ver las piezas que salieron mal, los diagramas de daños y las firmas. ' +
         'El botón de PDF abre el formato tal como se firmó.',
       exportar: {
@@ -66,6 +66,13 @@
         contenidoExtra: (i, contenedor) => pintarDetalle(i, contenedor),
         extraPrimero: true,   // el resultado, lo que salió mal y las firmas: a lo que se viene
       },
+      // Selección estilo Google Drive/Apple (rama emmanuel, ver componentes/datatable.html):
+      // clic = selecciona, doble clic/tocar = abre el panel de detalle (tabla.abrirDetalle
+      // se resuelve en el momento del clic, para entonces `tabla` ya está asignada).
+      modoSeleccion: true,
+      seleccionDrive: true,
+      alAbrirFila: (i) => tabla.abrirDetalle(String(i.ID)),
+      alTocarFila: (i) => tabla.abrirDetalle(String(i.ID)),
       columnas: [
         { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', fijada: true },
         { campo: 'FECHA', titulo: 'Fecha', tipo: 'fecha' },

@@ -1759,6 +1759,13 @@
         titulo: (inc) => 'Folio: ' + (inc.FOLIO || ''),
         contenidoExtra: (inc, contenedor) => mostrarVehiculoEnPanel(inc, contenedor),
       },
+      // Selección estilo Google Drive/Apple (rama emmanuel, ver componentes/datatable.html):
+      // clic = selecciona, doble clic/tocar = abre el panel de detalle (tabla.abrirDetalle
+      // se resuelve en el momento del clic, para entonces `tabla` ya está asignada).
+      modoSeleccion: true,
+      seleccionDrive: true,
+      alAbrirFila: (inc) => tabla.abrirDetalle(String(inc.ID)),
+      alTocarFila: (inc) => tabla.abrirDetalle(String(inc.ID)),
       columnas: [
         { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', fijada: true },
         { campo: 'DEPARTAMENTO', titulo: 'Departamento', tipo: 'lista' },
@@ -3492,6 +3499,13 @@
       columnasCompletas: { idHoja: 'ID', cargar: async () => JSON.parse(await callServer('apiTicketsCompleto', state.token)) },
       etiquetaFila: (t) => t['TICKET'],
       detalle: { titulo: (t) => 'Ticket: ' + (t['TICKET'] || '') },
+      // Selección estilo Google Drive/Apple (rama emmanuel, ver componentes/datatable.html):
+      // clic = selecciona, doble clic/tocar = abre el panel de detalle (tabla.abrirDetalle
+      // se resuelve en el momento del clic, para entonces `tabla` ya está asignada).
+      modoSeleccion: true,
+      seleccionDrive: true,
+      alAbrirFila: (t) => tabla.abrirDetalle(String(t.ID)),
+      alTocarFila: (t) => tabla.abrirDetalle(String(t.ID)),
       columnas: [
         { campo: 'TICKET', titulo: 'Ticket', tipo: 'texto', fijada: true },
         { campo: 'FECHA', titulo: 'Fecha', tipo: 'fecha' },
