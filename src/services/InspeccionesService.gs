@@ -741,6 +741,24 @@ const InspeccionesService = (function () {
       { titulo: 'Niveles', peso: 10, piezas: ['ACEITE MOTOR', 'LIQUIDO FRENOS'] },
       { titulo: 'Batería', peso: 5, piezas: ['TERMINALES CON SARRO', 'DERRAME LIQUIDO / MAL OLOR', 'BATERIA INFLADA'] },
     ],
+    // MOTOCARRO KINGWAY: casi idéntico a MOTOCARRO MUEVETEC (mismo bug de
+    // Carburador/Clutch/Cardan pegados a Niveles), salvo que su Neumáticos trae
+    // "Tapones" en vez de "Rines" -- no se puede alias directo. Confirmado contra
+    // su propio PDF crudo.
+    'MOTOCARRO KINGWAY': [
+      { titulo: 'Documentación', peso: 5, piezas: ['GAFETTE', 'TARJETA CIRCULACION', 'LICENCIA', 'POLIZA SEGURO', 'VERIFICACION', 'KARDEX'] },
+      { titulo: 'Cristalería', peso: 10, piezas: ['FAROS DELANTEROS', 'CALAVERAS TRASERAS', 'DIRECCIONALES', 'RETROVISOR IZQUIERDO', 'RETROVISOR DERECHO'] },
+      { titulo: 'Latonería y pintura', peso: 5, piezas: ['SALPICADERA DELANTERA', 'CARCASA MANUBRIO Y FARO', 'MANUBRIO', 'TAPA LATERAL DERECHA', 'TAPA LATERAL IZQUIERDA', 'POSAPIE DERECHO', 'POSAPIE IZQUIERDO', 'SALPICADERA DERECHA', 'SALPICADERA IZQUIERDA', 'BATEA / BETLINER', 'TAPA DE BATEA', 'DEFENSA TRASERA', 'CHASIS'] },
+      { titulo: 'Inventarios', peso: 10, piezas: ['GATO HIDRAULICO', 'CRUCETA', 'REFACCION'] },
+      { titulo: 'Cerraduras', peso: 5, piezas: ['SWITCH', 'CERRADURA TAPON TANQUE GASOLINA'] },
+      { titulo: 'Limpieza', peso: 5, piezas: ['ASIENTO', 'EXTERIOR DE UNIDAD'] },
+      { titulo: 'Neumáticos', peso: 15, piezas: ['TAPONES', 'TUERCAS/BIRLOS'] },
+      { titulo: 'Interiores', peso: 5, piezas: ['ASIENTO DE CONDUCTOR'] },
+      { titulo: 'Sistemas interiores', peso: 10, piezas: ['MANDOS / BOTONERA VIDRIOS Y SEGUROS', 'CLUSTER / TABLERO', 'LUCES ALTAS', 'LUCES BAJAS', 'CUARTOS', 'DIRECCIONALES IZQUIERDAS', 'NIEBLEROS / OTROS', 'STOP', 'CLAXON', 'PUÑO ACELERADOR', 'DIRECCIONALES DERECHAS', 'INTERMITENTES'] },
+      { titulo: 'Sistema mecánico', peso: 15, piezas: ['FRENOS DELANTEROS', 'FRENOS TRASEROS', 'FRENO DE MANO', 'AMORTIGUADORES DELANTEROS', 'AMORTIGUADOR TRASERO', 'SOPORTES DE MOTOR', 'CARBURADOR', 'CLUTCH', 'CARDAN'] },
+      { titulo: 'Niveles', peso: 10, piezas: ['ACEITE MOTOR', 'LIQUIDO FRENOS'] },
+      { titulo: 'Batería', peso: 5, piezas: ['TERMINALES CON SARRO', 'DERRAME LIQUIDO / MAL OLOR', 'BATERIA INFLADA'] },
+    ],
     // ITALIKA DM250: mismo bug que MOTOCARRO MUEVETEC -- "Carburador", "Clutch" y
     // "Transmisión/cadena" (con N/A) aparecen en el texto plano justo después de
     // "Niveles 10%" (que solo trae Aceite de motor/Liquido de frenos, sin N/A),
