@@ -1,0 +1,247 @@
+<script>
+  /**
+   * app-panorama-cajachica.html — "Panorama" dentro de Arqueos: KPIs y
+   * gráficas (Chart.js, cargado en Index.html) del catálogo de cajas chicas,
+   * con filtros que se aplican a todo en vivo. Mismo patrón que
+   * app-panorama-vehiculos.html — en su propio archivo, nada de esto vive en
+   * app.html ni en app-cajachica.html.
+   *
+   * Todo corre sobre apiListarCajasChicasResumen (el mismo catálogo que ya
+   * usa la tabla de Caja Chica, cacheado) — sin pedir nada nuevo al
+   * servidor: los filtros solo reducen el arreglo en memoria y se vuelve a
+   * pintar. A diferencia de Vehículos, aquí el resultado NO viene como
+   * JSON.stringify (ver CajasChicasService.listarResumen), así que no hace
+   * falta JSON.parse.
+   */
+
+  // Mismos 3 valores reales de ESTATUS que CAMPOS_CAJACHICA — colores fijos
+  // para que cada estatus se vea siempre del mismo color sin importar cómo
+  // cambien los filtros.
+  const PCC_COLOR_ESTATUS = {
+    'VIGENTE': '#1e7d4f',
+    'EN PROCESO DE CIERRE': '#c47b3d',
+    'CERRADA': '#5c6b72',
+  };
+  const PCC_ORDEN_ESTATUS = ['VIGENTE', 'EN PROCESO DE CIERRE', 'CERRADA'];
+  // Mismos iconos y mismas etiquetas en sentence-case que ya usa el stat-row
+  // de Caja Chica (ver views/cajachica.html) — tituloDesdeClave no sirve
+  // aquí: pondría "En Proceso De Cierre" (mayúscula por palabra).
+  const PCC_ICONO_ESTATUS = { 'VIGENTE': 'circle-check', 'EN PROCESO DE CIERRE': 'clock', 'CERRADA': 'ban' };
+  const PCC_ETIQUETA_ESTATUS = { 'VIGENTE': 'Vigentes', 'EN PROCESO DE CIERRE': 'En proceso de cierre', 'CERRADA': 'Cerradas' };
+
+  // Etiquetas de valor directo sobre cada gráfica (chartjs-plugin-datalabels,
+  // cargado en Index.html) -- se registra una sola vez, no por cada visita a
+  // Panorama (Chart.register con el mismo plugin repetido tira warning). Bandera
+  // propia y distinta a la de Panorama Vehicular por si una vista monta antes
+  // que la otra alguna vez exista sin la otra cargada.
+  if (!window.__pccDataLabelsRegistrado) {
+    Chart.register(ChartDataLabels);
+    window.__pccDataLabelsRegistrado = true;
+  }
+
+  function formatoMonedaPCC(valor) {
+    return '$' + (Number(valor) || 0).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  }
+
+  async function initPanoramaCajaChica() {
+    const cuerpo = document.getElementById('view-container');
+    let todos = [];
+    const graficas = {}; // id → instancia de Chart, para destruir antes de repintar
+
+    try {
+      todos = (await callServerListaCacheada('apiListarCajasChicasResumen', state.token)) || [];
+    } catch (err) {
+      if (!document.getElementById('pcc-filtros')) return; // se navegó a otra vista mientras cargaba
+      cuerpo.innerHTML = '<p class="error-msg">No se pudo cargar el catálogo de cajas chicas: ' + escaparHtml(err.message) + '</p>';
+      return;
+    }
+    if (!document.getElementById('pcc-filtros')) return; // se navegó a otra vista mientras cargaba
+
+    // ---------- Filtros ----------
+    const FILTROS = [
+      { id: 'pcc-f-estatus', campo: 'ESTATUS' },
+      { id: 'pcc-f-departamento', campo: 'DEPARTAMENTO' },
+      { id: 'pcc-f-sede', campo: 'SEDE' },
+      { id: 'pcc-f-empresa', campo: 'EMPRESA ORIGEN' },
+      { id: 'pcc-f-administrada', campo: 'ADMINISTRADA POR' },
+    ];
+
+    function llenarOpcionesFiltro(campo, id) {
+      const select = document.getElementById(id);
+      const valorActual = select.value;
+      const valores = Array.from(new Set(todos.map((v) => v[campo]).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+      select.innerHTML = '<option value="">' + select.options[0].textContent + '</option>' +
+        valores.map((v) => `<option value="${escaparHtml(v)}">${escaparHtml(v)}</option>`).join('');
+      if (valores.indexOf(valorActual) !== -1) select.value = valorActual;
+    }
+    FILTROS.forEach((f) => llenarOpcionesFiltro(f.campo, f.id));
+
+    function filasFiltradas() {
+      return todos.filter((v) => FILTROS.every((f) => {
+        const elegido = document.getElementById(f.id).value;
+        return !elegido || v[f.campo] === elegido;
+      }));
+    }
+
+    FILTROS.forEach((f) => document.getElementById(f.id).addEventListener('change', () => pintarTodo()));
+    document.getElementById('pcc-limpiar-filtros').addEventListener('click', () => {
+      FILTROS.forEach((f) => { document.getElementById(f.id).value = ''; });
+      pintarTodo();
+    });
+
+    // ---------- KPIs ----------
+    function pintarKpis(filas) {
+      const porEstatus = {};
+      PCC_ORDEN_ESTATUS.forEach((e) => { porEstatus[e] = 0; });
+      filas.forEach((c) => {
+        const e = String(c.ESTATUS || '').toUpperCase();
+        if (porEstatus[e] !== undefined) porEstatus[e]++;
+      });
+      const montoTotal = filas.reduce((acc, c) => acc + (Number(c['MONTO ACTUAL']) || 0), 0);
+
+      const tiles = [
+        { id: 'total', etiqueta: 'Total de cajas chicas', valor: filas.length, icono: 'wallet', clase: '' },
+        { id: 'monto', etiqueta: 'Monto total', valor: formatoMonedaPCC(montoTotal), icono: 'coins', clase: 'stat-tile-ok' },
+      ].concat(PCC_ORDEN_ESTATUS.map((e) => ({
+        id: e, etiqueta: PCC_ETIQUETA_ESTATUS[e], valor: porEstatus[e], icono: PCC_ICONO_ESTATUS[e],
+        clase: e === 'CERRADA' ? 'stat-tile-warn' : '',
+      })));
+
+      document.getElementById('pcc-kpis').innerHTML = tiles.map((t) => `
+        <div class="stat-tile ${t.clase}">
+          <div class="stat-icon"><i data-lucide="${t.icono}" class="ico"></i></div>
+          <div><div class="stat-value">${t.valor}</div><div class="stat-label">${escaparHtml(t.etiqueta)}</div></div>
+        </div>`).join('');
+      refreshIcons();
+    }
+
+    // ---------- Gráficas ----------
+    function colorTexto() { return getComputedStyle(document.documentElement).getPropertyValue('--color-text-muted').trim(); }
+    function colorBorde() { return getComputedStyle(document.documentElement).getPropertyValue('--color-border').trim(); }
+    function colorPrimario() { return getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim(); }
+
+    /** Cuenta ocurrencias de `campo` entre las filas, de mayor a menor. */
+    function contarPor(filas, campo) {
+      const conteo = {};
+      filas.forEach((f) => {
+        const v = f[campo] || 'Sin dato';
+        conteo[v] = (conteo[v] || 0) + 1;
+      });
+      return Object.keys(conteo).map((k) => [k, conteo[k]]).sort((a, b) => b[1] - a[1]);
+    }
+    /** Suma `campoMonto` agrupado por `campo`, de mayor a menor. */
+    function sumarPor(filas, campo, campoMonto) {
+      const suma = {};
+      filas.forEach((f) => {
+        const v = f[campo] || 'Sin dato';
+        suma[v] = (suma[v] || 0) + (Number(f[campoMonto]) || 0);
+      });
+      return Object.keys(suma).map((k) => [k, suma[k]]).sort((a, b) => b[1] - a[1]);
+    }
+    /** Para barras: se queda con los primeros `n`, el resto se junta en "Otros". */
+    function limitarConOtros(pares, n) {
+      if (pares.length <= n) return pares;
+      const top = pares.slice(0, n);
+      const restoSuma = pares.slice(n).reduce((acc, p) => acc + p[1], 0);
+      return top.concat([['Otros', restoSuma]]);
+    }
+
+    function crearOActualizarGrafica(id, config) {
+      if (graficas[id]) graficas[id].destroy();
+      graficas[id] = new Chart(document.getElementById(id), config);
+    }
+
+    function graficaDona(filas) {
+      const valores = PCC_ORDEN_ESTATUS.map((e) => filas.filter((v) => String(v.ESTATUS || '').toUpperCase() === e).length);
+      crearOActualizarGrafica('pcc-chart-estatus', {
+        type: 'doughnut',
+        data: {
+          labels: PCC_ORDEN_ESTATUS.map((e) => PCC_ETIQUETA_ESTATUS[e]),
+          datasets: [{ data: valores, backgroundColor: PCC_ORDEN_ESTATUS.map((e) => PCC_COLOR_ESTATUS[e]), borderWidth: 2, borderColor: getComputedStyle(document.documentElement).getPropertyValue('--color-surface').trim() }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, cutout: '62%',
+          plugins: {
+            legend: { position: 'right', labels: { color: colorTexto(), boxWidth: 13, padding: 14, font: { size: 12 } } },
+            tooltip: { callbacks: { label: (ctx) => ` ${ctx.label}: ${ctx.parsed} (${filas.length ? Math.round(ctx.parsed / filas.length * 100) : 0}%)` } },
+            datalabels: {
+              color: '#fff', font: { weight: 'bold', size: 12 },
+              formatter: (valor) => (valor > 0 ? valor : ''),
+            },
+          },
+        },
+      });
+    }
+
+    function graficaBarras(id, filas, campo, n) {
+      const pares = limitarConOtros(contarPor(filas, campo), n);
+      crearOActualizarGrafica(id, {
+        type: 'bar',
+        data: {
+          labels: pares.map((p) => p[0]),
+          datasets: [{ data: pares.map((p) => p[1]), backgroundColor: colorPrimario(), borderRadius: 6, maxBarThickness: 34 }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+          layout: { padding: { right: 24 } },
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: (ctx) => ` ${ctx.parsed.x} caja(s)` } },
+            datalabels: {
+              color: colorTexto(), anchor: 'end', align: 'end', offset: 4,
+              font: { size: 11, weight: '600' }, clip: false,
+              formatter: (valor) => (valor > 0 ? valor : ''),
+            },
+          },
+          scales: {
+            x: { beginAtZero: true, ticks: { color: colorTexto(), precision: 0 }, grid: { color: colorBorde() } },
+            y: { ticks: { color: colorTexto(), font: { size: 11.5 } }, grid: { display: false } },
+          },
+        },
+      });
+    }
+
+    function graficaBarrasMonto(id, filas, campo, n) {
+      const pares = limitarConOtros(sumarPor(filas, campo, 'MONTO ACTUAL'), n);
+      crearOActualizarGrafica(id, {
+        type: 'bar',
+        data: {
+          labels: pares.map((p) => p[0]),
+          datasets: [{ data: pares.map((p) => p[1]), backgroundColor: colorPrimario(), borderRadius: 6, maxBarThickness: 34 }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+          layout: { padding: { right: 48 } }, // más hueco que las de conteo: las etiquetas de dinero son más largas
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: (ctx) => ` ${formatoMonedaPCC(ctx.parsed.x)}` } },
+            datalabels: {
+              color: colorTexto(), anchor: 'end', align: 'end', offset: 4,
+              font: { size: 11, weight: '600' }, clip: false,
+              formatter: (valor) => (valor > 0 ? formatoMonedaPCC(valor) : ''),
+            },
+          },
+          scales: {
+            x: { beginAtZero: true, ticks: { color: colorTexto(), callback: (v) => formatoMonedaPCC(v) }, grid: { color: colorBorde() } },
+            y: { ticks: { color: colorTexto(), font: { size: 11.5 } }, grid: { display: false } },
+          },
+        },
+      });
+    }
+
+    function pintarTodo() {
+      const filas = filasFiltradas();
+      document.getElementById('pcc-sin-datos').hidden = filas.length > 0;
+      document.getElementById('pcc-graficas').hidden = filas.length === 0;
+      pintarKpis(filas);
+      if (!filas.length) return;
+      graficaDona(filas);
+      graficaBarrasMonto('pcc-chart-monto-departamento', filas, 'DEPARTAMENTO', 8);
+      graficaBarras('pcc-chart-sede', filas, 'SEDE', 8);
+      graficaBarras('pcc-chart-empresa', filas, 'EMPRESA ORIGEN', 8);
+      graficaBarras('pcc-chart-administrada', filas, 'ADMINISTRADA POR', 8);
+    }
+
+    pintarTodo();
+  }
+</script>

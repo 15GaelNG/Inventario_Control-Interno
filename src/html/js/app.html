@@ -575,6 +575,7 @@
       if (vista === 'uber') { montarVista('tpl-uber', initUber); return; }
       if (vista === 'tickets') { montarVista('tpl-tickets', initTickets); return; }
       if (vista === 'caja-chica') { montarVista('tpl-cajachica', initCajaChica); return; }
+      if (vista === 'panorama-cajachica') { montarVista('tpl-panorama-cajachica', initPanoramaCajaChica); return; }
       if (vista === 'cambios-monto-cch') { montarVista('tpl-cambios-monto-cch', initCambiosMontoCCH); return; }
       if (vista === 'arqueos') { montarVista('tpl-arqueos', initArqueos); return; }
       if (vista === 'verificaciones') { montarVista('tpl-verificaciones', initVerificaciones); return; }
@@ -649,6 +650,7 @@
       id: 'arqueos', icono: 'wallet', etiqueta: 'Arqueos',
       items: [
         { vista: 'arqueos', etiqueta: 'Arqueos', icono: 'wallet' },
+        { vista: 'panorama-cajachica', etiqueta: 'Panorama Caja Chica', icono: 'bar-chart-3' },
         { vista: 'caja-chica', etiqueta: 'Caja Chica', icono: 'piggy-bank' },
         { vista: 'cambios-monto-cch', etiqueta: 'Cambios de Monto', icono: 'repeat' },
       ],
