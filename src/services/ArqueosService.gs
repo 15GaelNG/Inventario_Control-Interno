@@ -480,9 +480,9 @@ const ArqueosService = (function () {
     return { ID: id };
   }
 
-  // Carpeta de Drive donde se guarda FIRMA EXTERNA y el Formato arqueo que se
-  // genera solo (actualizarPdfArqueo_) -- Evidencias y las 3 firmas van cada
-  // una en su propia carpeta aparte, ver CARPETA_EVIDENCIAS_ID/CARPETA_FIRMAS_ID.
+  // Carpeta de Drive donde se guarda FIRMA EXTERNA -- Evidencias, las 3 firmas y
+  // el Formato arqueo (generado solo) van cada uno en su propia carpeta aparte,
+  // ver CARPETA_EVIDENCIAS_ID/CARPETA_FIRMAS_ID/CARPETA_FORMATO_RAIZ_ID.
   const CARPETA_ARCHIVOS_ID = '1UMHf-zKY6sRz-0Zkt_CxnNCPdrJMHF5o';
   // Carpeta de Drive solo para firmas (FIRMA RESPONSABLE/ESPECIALISTA/ASISTENTE),
   // separada de CARPETA_ARCHIVOS_ID a petición de Jorge (2026-10-01).
@@ -490,7 +490,19 @@ const ArqueosService = (function () {
   // Carpeta de Drive solo para Evidencias (el PDF combinado de fotos), aparte
   // de CARPETA_ARCHIVOS_ID -- a petición de Jorge (2026-10-01).
   const CARPETA_EVIDENCIAS_ID = '1IFjsxPDPPppRDY-Jq6ciJzNIkxd7AMWw';
+  // Carpeta raíz donde se guarda el PDF de Formato arqueo generado solo, organizada
+  // por año (ARQUEOS/2026/, ARQUEOS/2027/...) -- carpetaDelAnioActual_ busca o crea
+  // la subcarpeta del año en curso cada vez, para no tener que tocar nada cada enero.
+  const CARPETA_FORMATO_RAIZ_ID = '1u4nZ84rxkMvJDjZNUFHFnNiNqDo0Yqwo';
   const TAMANO_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+
+  /** Subcarpeta del año en curso dentro de `raizId` (la crea si no existe todavía). */
+  function carpetaDelAnioActual_(raizId) {
+    const anio = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy');
+    const raiz = DriveApp.getFolderById(raizId);
+    const existentes = raiz.getFoldersByName(anio);
+    return existentes.hasNext() ? existentes.next() : raiz.createFolder(anio);
+  }
   // Las 3 columnas de firma -- crear()/actualizar() las usan para renombrar cada
   // imagen a "<ID ARQUEO>_<quién firma>_<fecha>" una vez que saben el ID real.
   const COLUMNAS_FIRMA = ['FIRMA RESPONSABLE', 'FIRMA ESPECIALISTA', 'FIRMA ASISTENTE'];
@@ -639,10 +651,10 @@ const ArqueosService = (function () {
     }
     let carpeta;
     try {
-      carpeta = DriveApp.getFolderById(CARPETA_ARCHIVOS_ID);
+      carpeta = carpetaDelAnioActual_(CARPETA_FORMATO_RAIZ_ID);
     } catch (e) {
-      throw new Error('No se pudo abrir la carpeta de archivos de Arqueos en Drive (ID ' + CARPETA_ARCHIVOS_ID +
-        '). La cuenta con la que corre la app ahora mismo (' + cuenta() + ') no tiene acceso a esa carpeta.');
+      throw new Error('No se pudo abrir o crear la carpeta del año actual para los PDFs de Arqueo en Drive (raíz ' +
+        CARPETA_FORMATO_RAIZ_ID + '). La cuenta con la que corre la app ahora mismo (' + cuenta() + ') no tiene acceso a esa carpeta.');
     }
     let copia;
     try {
@@ -744,10 +756,12 @@ const ArqueosService = (function () {
     }
     let pdfFile;
     try {
-      pdfFile = carpeta.createFile(pdfBlob).setName(copia.getName() + '.pdf');
+      const fecha = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      const nombrePdf = (fila['ID ARQUEO'] || copia.getName()) + '_ARQUEO_' + fecha + '.pdf';
+      pdfFile = carpeta.createFile(pdfBlob).setName(nombrePdf);
     } catch (e) {
-      throw new Error('Se generó el PDF pero no se pudo guardar en la carpeta de Arqueos en Drive (ID ' +
-        CARPETA_ARCHIVOS_ID + '). La cuenta ' + cuenta() + ' necesita permiso de editor ahí. Error original: ' + e.message);
+      throw new Error('Se generó el PDF pero no se pudo guardar en la carpeta de Arqueos en Drive (raíz ' +
+        CARPETA_FORMATO_RAIZ_ID + '). La cuenta ' + cuenta() + ' necesita permiso de editor ahí. Error original: ' + e.message);
     }
     // Mejor esfuerzo, no bloquea el registro (mismo patrón que subirArchivo(), arriba):
     // la carpeta de Arqueos ya tiene acceso general configurado, así que casi siempre el
