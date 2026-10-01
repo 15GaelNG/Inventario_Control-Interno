@@ -208,6 +208,14 @@ function apiActualizarCajaChica(token, id, cambios) {
 function apiEliminarCajaChica(token, id) {
   return CajasChicasService.eliminar(token, id);
 }
+// Antes de eliminar varios, la pantalla pregunta qué lo impide: si algo, no borra ninguno.
+// El permiso es el mismo que para eliminar, porque solo tiene sentido para quien puede.
+const MODULO_AL_BORRAR_ = { 'VEHICULOS': 'vehiculos', 'CAJAS CHICAS': 'caja-chica' };
+function apiQueImpideBorrar(token, hoja, ids) {
+  if (!MODULO_AL_BORRAR_[hoja]) throw new Error('"' + hoja + '" no se puede eliminar desde la app');
+  Permisos.puedeEditar(token, MODULO_AL_BORRAR_[hoja]);
+  return Relaciones.queImpideBorrar(hoja, ids);
+}
 function apiArqueosPorIdCch(token, idCch) {
   return JSON.stringify(ArqueosService.listarPorIdCch(token, idCch));
 }

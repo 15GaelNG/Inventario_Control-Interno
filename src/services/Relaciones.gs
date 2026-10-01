@@ -1140,6 +1140,11 @@ const MAPA = {
     'ACCESORIOS CELULARES': { modulo: 'Inventario de Accesorios (Líneas)', uno: 'artículo', varios: 'artículos', familia: 'Líneas' },
     'MOVIMIENTOS_ACCESORIOS': { modulo: 'Movimientos de Accesorios', uno: 'movimiento', varios: 'movimientos', familia: 'Líneas' },
     'PERSONAS': { modulo: 'Capital Humano', uno: 'persona', varios: 'personas', familia: 'Capital Humano' },
+    // No son copias del MAPA, pero sí hijas en Entidades.REFERENCIAS: sin nombre aquí, el
+    // aviso de "no se puede eliminar" diría "3 registros" en vez de "3 reasignaciones".
+    'REASIGNACIONES_VEHICULOS': { modulo: 'Reasignaciones Vehiculares', uno: 'reasignación', varios: 'reasignaciones', familia: 'Vehículos' },
+    'CAMBIOS VEHICULOS': { modulo: 'Cambios de Vehículos', uno: 'cambio', varios: 'cambios', familia: 'Vehículos' },
+    'APP_EVIDENCIAS': { modulo: 'Evidencias de Líneas', uno: 'evidencia', varios: 'evidencias', familia: 'Líneas' },
   };
   // La clave es 'modulo' y no 'nombre' a propósito: tests/llave-nueva.test.js reconoce las
   // copias del MAPA por cómo se escribe su nombre en el código, y estas no son copias.
@@ -1265,8 +1270,187 @@ const MAPA = {
     return { impacto: impacto, aplicado: true };
   }
 
+  // ========================================================== INTEGRIDAD AL BORRAR
+  //
+  // ON DELETE RESTRICT (decidido con Ayrton el 01/10/2026): un registro del que todavía
+  // depende algo NO se borra, y el mensaje dice qué lo impide y cómo darlo de baja. Sin
+  // CASCADE porque todas las hijas son historia; ver Entidades.REFERENCIAS, que es la
+  // lista de quién apunta a quién.
+  //
+  // El caso al revés —borrar una HIJA que es dueña de un dato del padre, como la
+  // instalación de un sensor— no pasa por aquí: lo resuelve soltar() regresando el padre a
+  // sus valores sinDueno ("NO TIENE SENSOR").
+
+  /**
+   * Las hojas que se pueden borrar desde la app. Solo dos: Líneas, Accesorios y PERSONAS
+   * no tienen botón de eliminar. Si algún módulo con hijas gana uno, entra aquí y su
+   * servicio llama a borrar() en vez de SheetUtils.remove.
+   */
+  const BORRABLES = {
+    'VEHICULOS': {
+      libro: () => Config.SPREADSHEET_IDS.VEHICULOS(),
+      columnaId: 'ID',
+      comoRetirar: 'Para sacarlo de circulación, cambia su ESTATUS a una baja (por ejemplo BAJA VEHICULAR).',
+    },
+    'CAJAS CHICAS': {
+      libro: () => Config.SPREADSHEET_IDS.VEHICULOS(),
+      columnaId: 'ID CCH',   // la pantalla identifica la caja por su número, no por el ID nuevo
+      comoRetirar: 'Para sacarla de circulación, cambia su ESTATUS a CERRADA.',
+    },
+  };
+  const LISTADOS_MAX = 5;   // en el mensaje; si se eligieron 40 vehículos, no se listan los 40
+
+  function borrable_(padre) {
+    const b = BORRABLES[padre];
+    if (!b) throw new Error('Relaciones: "' + padre + '" no se puede eliminar desde la app');
+    return b;
+  }
+
+  /** Los renglones del padre cuya `columnaId` está en `ids`: [{fila, registro}] */
+  function buscarPadres_(hoja, columnaId, ids) {
+    const lastRow = hoja.getLastRow();
+    if (lastRow < 2) return [];
+    const encabezados = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0];
+    const col = SheetUtils.indiceDeColumnas(encabezados, [columnaId])[columnaId];
+    if (col === -1) throw new Error('La hoja "' + hoja.getName() + '" no tiene columna "' + columnaId + '"');
+    const buscados = new Set((ids || []).map(normalizar_).filter(Boolean));
+    const encontrados = [];
+    hoja.getRange(2, 1, lastRow - 1, encabezados.length).getValues().forEach((valores, i) => {
+      if (!buscados.has(normalizar_(valores[col]))) return;
+      const registro = {};
+      encabezados.forEach((h, k) => { registro[limpiar_(h).replace(/\s+/g, ' ').trim()] = valores[k]; });
+      encontrados.push({ fila: i + 2, registro: registro });
+    });
+    return encontrados;
+  }
+
+  /**
+   * Cuántos renglones de cada hija apuntan a cada padre. Cada hija se lee una sola vez,
+   * aunque se pregunte por 40 padres. Un renglón cuenta si su llave foránea es el ID del
+   * padre, o —solo si la llave foránea está vacía— si su llave de negocio es la del padre.
+   *
+   * Falla cerrado: si una hija existe pero no tiene ni la llave foránea ni la de negocio,
+   * truena en vez de suponer que no depende nada.
+   *
+   * @return {Object[]} un objeto {hoja: cuantos} por padre, en el mismo orden
+   */
+  function contarHijos_(padre, ssId, padres) {
+    const cuentas = padres.map(() => ({}));
+    const porId = {};
+    padres.forEach((p, i) => {
+      const id = normalizar_(p.registro[Entidades.COLUMNA_ID]);
+      if (id) porId[id] = i;
+    });
+
+    Entidades.referenciasA(padre).forEach((ref) => {
+      const libro = ref.libro ? Config.SPREADSHEET_IDS[ref.libro]() : ssId;
+      const hoja = SpreadsheetApp.openById(libro).getSheetByName(ref.hoja);
+      if (!hoja) return;   // la hija no existe en este libro: nada puede apuntar desde ahí
+
+      const columnas = [ref.columna].concat(ref.llave ? [ref.llave.columna] : []);
+      const leido = SheetUtils.leerColumnas(hoja, columnas);
+      if (!leido.filas) return;
+      const fks = leido.datos[ref.columna];
+      const llaves = ref.llave ? leido.datos[ref.llave.columna] : [];
+      if (!fks.length && !llaves.length) {
+        throw new Error('No se puede confirmar que nada dependa de este registro: la hoja ' +
+          ref.hoja + ' no tiene la columna ' + ref.columna + '. Corre el pipeline de IDs en este libro.');
+      }
+
+      const porLlave = {};
+      if (ref.llave) {
+        padres.forEach((p, i) => {
+          const v = normalizar_(p.registro[ref.llave.enPadre]);
+          if (v) porLlave[v] = i;
+        });
+      }
+      for (let k = 0; k < leido.filas; k++) {
+        const fk = normalizar_(fks[k]);
+        const i = fk ? porId[fk] : porLlave[normalizar_(llaves[k])];
+        if (i !== undefined) cuentas[i][ref.hoja] = (cuentas[i][ref.hoja] || 0) + 1;
+      }
+    });
+    return cuentas;
+  }
+
+  /** "12 inspecciones, 1 incidencia y 3 hologramas" */
+  function listarHijos_(cuenta) {
+    const partes = Object.keys(cuenta).map((h) => {
+      const e = etiqueta_(h);
+      return cuenta[h] + ' ' + (cuenta[h] === 1 ? e.uno : e.varios);
+    });
+    return partes.length > 1 ? partes.slice(0, -1).join(', ') + ' y ' + partes[partes.length - 1] : partes[0];
+  }
+
+  /** Qué impide borrar, ya en palabras. `mensaje` vacío = se puede borrar todo. */
+  function impedimentos_(padre, ssId, padres) {
+    const b = borrable_(padre);
+    const e = etiqueta_(padre);
+    const llave = MAPA[padre] ? MAPA[padre].llaveDeNegocio : b.columnaId;
+    const cuentas = contarHijos_(padre, ssId, padres);
+    const bloqueados = [];
+    padres.forEach((p, i) => {
+      if (!Object.keys(cuentas[i]).length) return;
+      const clave = limpiar_(p.registro[llave]) || limpiar_(p.registro[b.columnaId]);
+      bloqueados.push({ clave: clave, hijos: cuentas[i], texto: e.uno + ' ' + clave + ' tiene ' + listarHijos_(cuentas[i]) });
+    });
+    if (!bloqueados.length) return { bloqueados: [], mensaje: '' };
+
+    const lista = bloqueados.slice(0, LISTADOS_MAX).map((x) => x.texto);
+    if (bloqueados.length > LISTADOS_MAX) lista.push('y ' + (bloqueados.length - LISTADOS_MAX) + ' ' + e.varios + ' más');
+    const mensaje = 'No se puede eliminar porque tiene historial que se perdería: ' + lista.join('; ') + '. ' +
+      (padres.length > 1 ? 'No se eliminó ninguno. ' : '') + b.comoRetirar;
+    return { bloqueados: bloqueados, mensaje: mensaje };
+  }
+
+  /**
+   * Para preguntar ANTES de borrar varios: la pantalla lo llama con toda la selección y,
+   * si algo lo impide, no borra ninguno. Sin esto, al borrar 5 en paralelo y negarse 1,
+   * los otros 4 sí se borraban y la tabla no se enteraba. borrar() vuelve a revisar
+   * de todos modos: esto es para la pantalla, la garantía está allá.
+   *
+   * @return {{bloqueados: Object[], mensaje: string}}
+   */
+  function queImpideBorrar(padre, ids) {
+    const ssId = borrable_(padre).libro();
+    const hoja = SpreadsheetApp.openById(ssId).getSheetByName(padre);
+    return impedimentos_(padre, ssId, buscarPadres_(hoja, borrable_(padre).columnaId, ids));
+  }
+
+  /**
+   * Borra los registros de `padre` cuyo `columnaId` esté en `ids`, solo si de NINGUNO
+   * depende algo (todos o ninguno). Revisa y borra con el candado tomado, para que nadie
+   * borre ni mueva renglones entre la revisión y el borrado.
+   *
+   * Lo que no cierra: una hija que se dé de alta en el mismo segundo, porque las altas no
+   * toman el candado. Si pasa, la hija queda huérfana y Salud la reporta.
+   *
+   * @return {{eliminadas: number}} 0 si ninguno de los ids existía
+   * @throws si alguno tiene hijas, con el mensaje para la persona
+   */
+  function borrar(padre, ids) {
+    const b = borrable_(padre);
+    const ssId = b.libro();
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try {
+      const hoja = SpreadsheetApp.openById(ssId).getSheetByName(padre);
+      if (!hoja) throw new Error('No existe la hoja "' + padre + '"');
+      const padres = buscarPadres_(hoja, b.columnaId, ids);
+      if (!padres.length) return { eliminadas: 0 };
+      const imp = impedimentos_(padre, ssId, padres);
+      if (imp.mensaje) throw new Error(imp.mensaje);
+      // De abajo hacia arriba: borrar una fila recorre las de abajo
+      padres.map((p) => p.fila).sort((x, y) => y - x).forEach((fila) => hoja.deleteRow(fila));
+      return { eliminadas: padres.length };
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
   return {
     propagar, soltar, datosParaNuevo, revisar, cambiarClave, describir, deOtraHoja,
+    borrar, queImpideBorrar,
     // Para quien escribe junto a Relaciones (CapitalHumano): el mismo log y los mismos nombres
     anotar: escribirLog_, etiqueta: etiqueta_,
     // Solo para quien ya tiene el candado tomado. Ver su comentario.

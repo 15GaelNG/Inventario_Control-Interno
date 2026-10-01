@@ -373,8 +373,10 @@ const VehiculosService = (function () {
    * vez de borrar — esto es un borrado real, para altas hechas por error. */
   function eliminar(token, id) {
     Permisos.puedeEditar(token, 'vehiculos');
-    const ok = SheetUtils.remove(ssId(), SHEET_VEHICULOS, id, ID_COLUMN);
-    if (!ok) throw new Error('No se encontró el vehículo con ID=' + id);
+    // Relaciones.borrar y no SheetUtils.remove: se niega si el vehículo tiene historial
+    // (inspecciones, incidencias, hologramas…), para no dejar a nadie apuntando a la nada.
+    const { eliminadas } = Relaciones.borrar(SHEET_VEHICULOS, [id]);
+    if (!eliminadas) throw new Error('No se encontró el vehículo con ID=' + id);
     return { ID: id };
   }
 

@@ -2996,6 +2996,9 @@
         { icono: 'eye', titulo: 'Ver ficha', alHacer: (v) => abrirFichaVehiculo(v) },
       ].concat(puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (v) => abrirEditarVehiculo(v) }] : []),
       alEliminar: puedeEditar ? async (filas) => {
+        // Primero se pregunta por todos: si alguno tiene historial, no se borra ninguno
+        const imp = await callServer('apiQueImpideBorrar', state.token, 'VEHICULOS', filas.map((f) => f.ID_VEHICULO));
+        if (imp.mensaje) throw new Error(imp.mensaje);
         await Promise.all(filas.map((f) => callServer('apiEliminarVehiculo', state.token, f.ID_VEHICULO)));
         invalidarCacheLista('apiListarVehiculosResumen', state.token);
         invalidarCacheCatalogo('apiListarVehiculosBasico', state.token);

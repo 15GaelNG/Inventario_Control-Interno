@@ -178,8 +178,10 @@ const CajasChicasService = (function () {
 
   function eliminar(token, id) {
     Permisos.puedeEditar(token, 'caja-chica');
-    const ok = SheetUtils.remove(ssId(), hoja_().getName(), id, ID_COLUMN);
-    if (!ok) throw new Error('No se encontró la caja chica con ID CCH=' + id);
+    // Relaciones.borrar y no SheetUtils.remove: se niega si la caja tiene arqueos o
+    // cambios de monto, para no dejarlos apuntando a la nada.
+    const { eliminadas } = Relaciones.borrar('CAJAS CHICAS', [id]);
+    if (!eliminadas) throw new Error('No se encontró la caja chica con ID CCH=' + id);
     return { ID: id };
   }
 
