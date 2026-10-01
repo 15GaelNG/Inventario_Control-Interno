@@ -132,9 +132,9 @@ archivo que lo respalda, y de ser posible a la línea.
     Línea básica, Banda ancha, Módem; Cámara solo si hay), aunque tengan 0;
   - conteo: registros de la hoja, sin contar dos veces un equipo con línea (Todos = 1,615 en DEV, como el AppSheet);
   - un tipo que no está en la pestaña actual (Línea estando en Equipos) lleva a la otra pestaña con el filtro;
-  - se colapsa a una franja de 40 px con solo los íconos, que siguen filtrando. El botón para ocultarla está abajo y es
-    discreto: un ícono tenue, y el texto "Ocultar"/"Mostrar" aparece al pasar el mouse;
-  - la preferencia queda en `localStorage` (`lineas.tiposColapsado`); en celular empieza colapsada.
+  - es una franja de íconos (44 px) que se despliega con el mouse o el teclado POR ENCIMA de la tabla, como el menú
+    lateral de Gmail, y se recoge al salir. Sin botón y sin mover la tabla, solo CSS: retraso de 120 ms al entrar y de
+    300 ms al salir. Los íconos siguen filtrando aunque esté recogida (el nombre y el conteo van en el title).
 - **Menú del ⋮ y del clic derecho, como el de Google Drive (`a9c188f`):**
   - crece desde la esquina del clic: `scale(.92, .6)` → 1 en 180 ms con curva que frena;
   - el contenido aparece un instante después;

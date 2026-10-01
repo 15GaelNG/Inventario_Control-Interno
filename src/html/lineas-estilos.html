@@ -799,41 +799,39 @@
   .lnp-filtros select { width: auto; min-width: 170px; padding: 7px 10px; font-weight: 600; }
   .lnp-filtro-nota { font-size: 12px; color: var(--color-text-muted); }
   .ln-panorama.lnp-cargando .lnp-portada, .ln-panorama.lnp-cargando .lnp-dos { opacity: .55; transition: opacity .2s; }
-  /* Filtro rápido por tipo en Líneas Telefónicas: columna a la izquierda (como el AppSheet), colapsable a íconos */
-  .ln-con-tipos { display: flex; align-items: flex-start; gap: 12px; }
+  /* Filtro rápido por tipo en Líneas Telefónicas: franja de íconos a la izquierda que se despliega con el mouse (o el
+     teclado) POR ENCIMA de la tabla, como el menú lateral de Gmail; la tabla no se mueve. Retraso corto al entrar (que no
+     se abra solo por cruzarla) y un poco más al salir (que no se cierre al rozar el borde). */
+  .ln-con-tipos { display: flex; align-items: stretch; gap: 10px; }
   .ln-con-tipos-tabla { flex: 1; min-width: 0; }
-  .ln-tipos { flex: 0 0 200px; width: 200px; display: flex; flex-direction: column; gap: 2px; padding-right: 10px;
-    border-right: 1px solid var(--color-border); overflow: hidden; transition: flex-basis .18s cubic-bezier(.2, 0, 0, 1), width .18s cubic-bezier(.2, 0, 0, 1); }
+  .ln-tipos { flex: 0 0 44px; position: relative; z-index: 6; }
   .ln-tipos:empty { display: none; }
-  .ln-tipos-titulo { padding: 6px 8px 6px; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
-    color: var(--color-text-muted); white-space: nowrap; }
-  /* Ocultar/mostrar: abajo y discreto (solo el ícono tenue; el texto aparece al pasar el mouse) */
-  .ln-tipos-colapsar { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; margin-top: 8px; height: 26px;
-    padding: 0 8px; border: none; border-radius: 7px; background: transparent; color: var(--color-text-muted); opacity: .6;
-    font-size: 11.5px; cursor: pointer; transition: opacity .15s, background-color .15s; }
-  .ln-tipos-colapsar:hover, .ln-tipos-colapsar:focus-visible { opacity: 1; background: var(--color-bg); }
-  .ln-tipos-colapsar .ico { width: 15px; height: 15px; flex-shrink: 0; }
-  .ln-tipos-colapsar-texto { opacity: 0; transition: opacity .15s; white-space: nowrap; }
-  .ln-tipos-colapsar:hover .ln-tipos-colapsar-texto, .ln-tipos-colapsar:focus-visible .ln-tipos-colapsar-texto { opacity: 1; }
-  .ln-tipo-vacio .ln-tipo-nombre, .ln-tipo-vacio .ln-tipo-num { color: var(--color-text-muted); }
-  .ln-tipo { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 32px; padding: 5px 8px; border: none; border-radius: 8px;
-    background: transparent; color: var(--color-text); font-size: 13px; font-weight: 500; text-align: left; cursor: pointer;
-    transition: background-color .15s; }
+  .ln-tipos-panel { position: absolute; top: 0; left: 0; width: 44px; display: flex; flex-direction: column; gap: 2px;
+    padding: 0 4px 6px; overflow: hidden; background: var(--color-surface); border-right: 1px solid var(--color-border);
+    border-radius: 0 12px 12px 0; transition: width .2s cubic-bezier(.2, 0, 0, 1) .3s, box-shadow .2s ease .3s, border-color .2s ease .3s; }
+  .ln-tipos:hover .ln-tipos-panel, .ln-tipos:focus-within .ln-tipos-panel {
+    width: 214px; border-color: transparent; box-shadow: var(--shadow-lg); transition-delay: .12s; }
+  .ln-tipos-titulo { height: 28px; display: flex; align-items: center; padding: 0 8px 0 10px; font-size: 11px; font-weight: 600;
+    letter-spacing: .05em; text-transform: uppercase; color: var(--color-text-muted); white-space: nowrap; }
+  .ln-tipo { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 200px; min-height: 32px; padding: 5px 10px 5px 10px;
+    border: none; border-radius: 8px; background: transparent; color: var(--color-text); font-size: 13px; font-weight: 500;
+    text-align: left; cursor: pointer; transition: background-color .15s; }
   .ln-tipo:hover { background: var(--color-bg); }
   .ln-tipo.activo { background: var(--color-primary-soft); font-weight: 600; }
-  .ln-tipo:focus-visible, .ln-tipos-colapsar:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+  .ln-tipo:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
   .ln-tipo-ico { display: inline-flex; flex-shrink: 0; color: var(--color-text-muted); }
   .ln-tipo-ico .ico { width: 16px; height: 16px; }
   .ln-tipo-nombre { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ln-tipo-num { flex-shrink: 0; color: var(--color-text-muted); font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
-  /* Colapsada: solo los íconos (siguen filtrando; el nombre y el conteo van en el title) */
-  .ln-con-tipos.colapsado .ln-tipos { flex-basis: 40px; width: 40px; padding-right: 6px; }
-  .ln-con-tipos.colapsado .ln-tipos-titulo, .ln-con-tipos.colapsado .ln-tipo-nombre, .ln-con-tipos.colapsado .ln-tipo-num,
-  .ln-con-tipos.colapsado .ln-tipos-colapsar-texto { display: none; }
-  .ln-con-tipos.colapsado .ln-tipos-colapsar { align-self: center; padding: 0 6px; }
-  .ln-con-tipos.colapsado .ln-tipos { padding-top: 30px; }
-  .ln-con-tipos.colapsado .ln-tipo { justify-content: center; padding: 5px 0; }
-  @media (prefers-reduced-motion: reduce) { .ln-tipos { transition: none; } }
+  .ln-tipo-vacio .ln-tipo-nombre, .ln-tipo-vacio .ln-tipo-num { color: var(--color-text-muted); }
+  /* Recogida: solo los íconos (los textos se desvanecen; el nombre y el conteo siguen en el title) */
+  .ln-tipos-titulo, .ln-tipo-nombre, .ln-tipo-num { opacity: 0; transition: opacity .12s ease .3s; }
+  .ln-tipos:hover .ln-tipos-titulo, .ln-tipos:hover .ln-tipo-nombre, .ln-tipos:hover .ln-tipo-num,
+  .ln-tipos:focus-within .ln-tipos-titulo, .ln-tipos:focus-within .ln-tipo-nombre, .ln-tipos:focus-within .ln-tipo-num {
+    opacity: 1; transition-delay: .2s; }
+  @media (prefers-reduced-motion: reduce) {
+    .ln-tipos-panel, .ln-tipos-titulo, .ln-tipo-nombre, .ln-tipo-num { transition-duration: 0s; }
+  }
 
   /* Correcciones de Líneas: botones a la evidencia en Drive (módulo temporal) */
   .lnc-evid { display: flex; flex-direction: column; gap: 4px; min-width: 210px; }

@@ -1919,28 +1919,13 @@
       // Las MISMAS opciones en Equipos y en Líneas (todas las del AppSheet, aunque hoy tengan 0) con el ícono y el color de
       // la columna Tipo y cuántos registros hay (como el AppSheet: registros de la hoja, sin contar dos veces un equipo con
       // línea). Clic = solo ese tipo; si en esta pestaña no hay de ese tipo (una LINEA suelta en Equipos), lleva a la
-      // otra pestaña con el filtro. Otra vez (o Todos) = todos. Se colapsa a una franja de íconos (sigue filtrando) con
-      // el botón discreto de abajo; la preferencia queda en este navegador y en celular empieza colapsada.
+      // otra pestaña con el filtro. Otra vez (o Todos) = todos. Es una franja de íconos que se despliega con el mouse
+      // (o el teclado) por encima de la tabla, como el menú lateral de Gmail: sin botón y sin mover la tabla (solo CSS).
       const ORDEN_TIPOS = ['EQUIPO', 'EQUIPO + SIM', 'EQUIPO + SIM BASICO', 'LINEA', 'LINEA BASICA', 'BANDA ANCHA', 'MODEM', 'CAMARA'];
       const TIPOS_APPSHEET = ORDEN_TIPOS.filter((t) => t !== 'CAMARA'); // la lista del AppSheet; CAMARA solo si hay
       const PESTANA_TIPO = { 'LINEA': 'lineas', 'LINEA BASICA': 'lineas' }; // sin registros: a dónde lleva (el resto, Equipos)
       const NOMBRE_TIPO = { 'EQUIPO': 'Equipo', 'EQUIPO + SIM': 'Equipo + SIM', 'EQUIPO + SIM BASICO': 'Equipo + SIM básico', 'LINEA': 'Línea',
         'LINEA BASICA': 'Línea básica', 'BANDA ANCHA': 'Banda ancha', 'MODEM': 'Módem', 'CAMARA': 'Cámara' };
-      const CLAVE_TIPOS = 'lineas.tiposColapsado';
-      let tiposColapsado = (() => {
-        try { const v = localStorage.getItem(CLAVE_TIPOS); if (v === '1' || v === '0') return v === '1'; } catch (e) { /* sin almacenamiento */ }
-        return !!(window.matchMedia && window.matchMedia('(max-width: 700px)').matches);
-      })();
-      function aplicarColapsoTipos() {
-        raiz.querySelectorAll('.ln-con-tipos').forEach((c) => c.classList.toggle('colapsado', tiposColapsado));
-        raiz.querySelectorAll('[data-tipos-colapsar]').forEach((b) => {
-          b.setAttribute('aria-expanded', String(!tiposColapsado));
-          b.title = tiposColapsado ? 'Mostrar los tipos' : 'Ocultar los tipos';
-          b.innerHTML = ico(tiposColapsado ? 'chevrons-right' : 'chevrons-left') + '<span class="ln-tipos-colapsar-texto">' + (tiposColapsado ? 'Mostrar' : 'Ocultar') + '</span>';
-        });
-        // La tabla ganó o perdió ancho: que recalcule columnas fijas y alto
-        Object.keys(tablas).forEach((m) => { if (tablas[m] && m === memoria.modulo) tablas[m].ajustarAlto(); });
-      }
       /** { tipo: { total (registros únicos), equipos, lineas } } de todo el inventario. */
       function conteoTipos() {
         const c = {};
@@ -1975,14 +1960,12 @@
           '<button type="button" class="ln-tipo' + (n ? '' : ' ln-tipo-vacio') + '" data-tipo="' + esc(valor) + '" aria-pressed="false" title="' + esc(nombre + ' · ' + miles(n)) + '">' +
             '<span class="ln-tipo-ico"' + (color ? ' style="color:' + esc(color) + '"' : '') + '>' + ico(icono) + '</span>' +
             '<span class="ln-tipo-nombre">' + esc(nombre) + '</span><span class="ln-tipo-num">' + miles(n) + '</span></button>';
-        cont.innerHTML = '<div class="ln-tipos-titulo">Tipo</div>' +
+        cont.innerHTML = '<div class="ln-tipos-panel"><div class="ln-tipos-titulo">Tipo</div>' +
           fila('*', 'layers', '', 'Todos', total) +
           tipos.map((t) => {
             const r = regla(t);
             return fila(t, (r && r.icono) || 'circle', r ? colorAppSheet(r.color) : '', t ? (NOMBRE_TIPO[t] || t) : 'Sin tipo', conteo[t] ? conteo[t].total : 0);
-          }).join('') +
-          '<button type="button" class="ln-tipos-colapsar" data-tipos-colapsar aria-controls="' + cont.id + '"></button>';
-        aplicarColapsoTipos();
+          }).join('') + '</div>';
         marcarTipos(modulo);
       }
       function marcarTipos(modulo) {
@@ -1998,12 +1981,6 @@
       }
       ['equipos', 'lineas'].forEach((modulo) => {
         $('#ln-tipos-' + modulo, raiz).addEventListener('click', (ev) => {
-          if (ev.target.closest('[data-tipos-colapsar]')) {
-            tiposColapsado = !tiposColapsado;
-            try { localStorage.setItem(CLAVE_TIPOS, tiposColapsado ? '1' : '0'); } catch (e) { /* solo esta vez */ }
-            aplicarColapsoTipos();
-            return;
-          }
           const b = ev.target.closest('.ln-tipo');
           if (!b) return;
           const t = b.dataset.tipo;
