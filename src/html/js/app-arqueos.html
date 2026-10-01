@@ -982,6 +982,7 @@
         [
           { icono: 'wallet', titulo: 'Ver caja chica', alHacer: (a) => verFichaCajaChicaDesdeOtroModulo(a.ID_CCH) },
           { icono: 'documento', titulo: 'Ver PDF', visible: (a) => !!a.FORMATO_ARQUEO, alHacer: (a) => window.open(a.FORMATO_ARQUEO, '_blank', 'noopener') },
+          { icono: 'imagen', titulo: 'Ver evidencia', visible: (a) => !!a.EVIDENCIAS, alHacer: (a) => window.open(a.EVIDENCIAS, '_blank', 'noopener') },
         ],
         puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (a) => abrirEditarArqueo(a.ID) }] : []
       ),
@@ -1165,6 +1166,11 @@
     document.getElementById('btn-calendario-arqueos').addEventListener('click', () => {
       // "\/\/" (no "//") — ver comentario en app.html, botón de reporte de Vehículos.
       window.open('https:\/\/script.google.com/a/macros/ciudadmaderas.com/s/AKfycbwAgUrG2tEiZSxMtNO7hvXlyjfurJnuXIVXUDwyJF99Eci6UbvRtJqmpoCfXGGCdWad1A/exec', '_blank', 'noopener');
+    });
+
+    document.getElementById('btn-conceptos-arqueos').addEventListener('click', () => {
+      // "\/\/" (no "//") — ver comentario en app.html, botón de reporte de Vehículos.
+      window.open('https:\/\/script.google.com/a/macros/ciudadmaderas.com/s/AKfycbyRs_dwP_6pQhM3_67Gdj-PXQzsB3WHqQTnvX1qJqSgR3k-6VE53a8-ig6cI__hKz1L/exec', '_blank', 'noopener');
     });
 
     await cargar();
