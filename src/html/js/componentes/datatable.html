@@ -174,6 +174,29 @@
   .dt-popover .dt-pop-col button { flex: 1; }
   .dt-pop-presets { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
   .dt-pop-presets button { padding: 3px 8px; font-size: 11.5px; border-radius: 999px; }
+
+  /* ---- Menú contextual (clic derecho en una fila) ----
+     Mismo overlay que .dt-popover (position:fixed, se cierra con clic fuera o Escape
+     vía alClicFuera/alTecla) pero posicionado en el punto del clic, con una lista de
+     acciones en vez de controles de filtro/orden. Ver cfg.menuContextual. */
+  .dt-menu-contextual { width: 230px; padding: 6px; }
+  .dt-menu-grupo-titulo {
+    font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--color-text-muted); padding: 10px 10px 4px;
+  }
+  .dt-menu-contextual > .dt-menu-grupo-titulo:first-child { padding-top: 4px; }
+  /* .dt-popover button ya trae justify-content:center (para los botones de filtro/
+     orden) con más especificidad que un .dt-menu-item solo -- aquí se le gana
+     calificando también con .dt-popover, para que el ícono+texto quede a la izquierda. */
+  .dt-popover.dt-menu-contextual .dt-menu-item {
+    display: flex; align-items: center; justify-content: flex-start; gap: 10px; width: 100%; text-align: left;
+    padding: 8px 10px; border-radius: 7px; border: none; background: none;
+    font-size: 13px; color: var(--color-text); cursor: pointer;
+  }
+  .dt-menu-item:hover, .dt-menu-item:focus-visible { background: var(--color-primary-soft); }
+  .dt-menu-item.dt-peligro { color: var(--color-danger); }
+  .dt-menu-item.dt-peligro:hover { background: #F3ECD6; }
+  :root[data-theme="dark"] .dt-menu-item.dt-peligro:hover { background: rgba(255,138,128,.15); color: #ff8a80; }
   .dt-lista-valores { max-height: 200px; overflow-y: auto; border: 1px solid var(--color-border); border-radius: 8px; padding: 4px; }
   .dt-lista-valores label {
     display: flex; align-items: center; gap: 8px; margin: 0; padding: 4px 6px; border-radius: 6px;
@@ -265,6 +288,7 @@
    *     motivoSinEliminar: 'Solo administradores pueden eliminar',
    *     accionesFila: [ … ],                    // botones extra por fila (ver EXTENDER)
    *     accionesSeleccion: [ … ],               // botones extra con registros seleccionados
+   *     menuContextual: [ … ],                  // clic derecho en una fila (ver EXTENDER)
    *     detalle: { titulo: (fila) => '…', contenidoExtra: (fila, contenedor) => {},   // false lo desactiva
    *               extraPrimero: true },   // lo del módulo arriba de los campos (cuando es lo que se viene a ver)
    *     etiquetaFila: (fila) => fila.FOLIO,     // cómo nombrar una fila en confirmaciones y avisos
@@ -305,6 +329,14 @@
    *                      visible: (fila) => !!fila.FOLIO, peligro: false }]
    *   Acción masiva (aparece en la barra al seleccionar):
    *     accionesSeleccion: [{ icono: 'mail', texto: 'Enviar aviso', alHacer: async (filas) => … }]
+   *   Menú contextual (clic derecho en una fila; omitirlo deja el menú nativo del navegador):
+   *     menuContextual: [{ icono: 'eye', titulo: 'Ver ficha', alHacer: (fila) => … },
+   *                      { icono: 'pencil', titulo: 'Editar', alHacer: (fila) => … },
+   *                      { grupo: 'Inspección', icono: 'clipboard-check', titulo: 'Nueva inspección',
+   *                        alHacer: (fila) => …, visible: (fila) => …, peligro: false }]
+   *                      // `grupo` agrupa visualmente con un encabezado — items consecutivos con el
+   *                      // mismo `grupo` comparten encabezado; sin `grupo`, van sueltos arriba.
+   *                      // `icono` es cualquier nombre de lucide.dev/icons (ver Iconos.svg).
    *     (si alHacer regresa una promesa, el botón muestra "Procesando…" mientras tanto)
    *   Tipo de columna nuevo (disponible para todas las tablas):
    *     DataTable.registrarTipo('moneda', { hereda: 'numero',
@@ -549,6 +581,7 @@
       const cfg = Object.assign({
         tamanoPagina: 25, seleccionable: true, textoVacio: 'Sin registros', exportar: true,
         detalle: {}, umbralPalabraClave: 10, densidad: 'normal', accionesFila: [], accionesSeleccion: [],
+        menuContextual: [],
       }, config);
       if (cfg.exportar === true) cfg.exportar = { nombreArchivo: 'Datos' };
       const columnas = cfg.columnas.map((c) => Object.assign(
@@ -1923,6 +1956,43 @@
         // ni hover); en escritorio antes solo abría con ese ícono exacto.
         const interactivo = ev.target.closest('button, a, input, select, label, .dt-editor');
         if (conDetalle && !st.editando && !interactivo) abrirPanel(tr.dataset.id);
+      });
+
+      /** Menú contextual (clic derecho en una fila) -- mismo overlay que los popover de
+       *  columna (position:fixed, se cierra solo con clic fuera o Escape, ver alClicFuera/
+       *  alTecla más abajo, que ya vigilan la variable `popover`), pero posicionado en el
+       *  punto del clic en vez de bajo un ancla, y con acciones en vez de filtro/orden. */
+      function abrirMenuContextual(fila, x, y) {
+        const items = cfg.menuContextual.filter((it) => !it.visible || it.visible(fila));
+        if (!items.length) return;
+        cerrarPopover();
+        popover = document.createElement('div');
+        popover.className = 'dt-popover dt-menu-contextual';
+        let grupoAnterior;
+        popover.innerHTML = items.map((it, i) => {
+          const encabezado = it.grupo && it.grupo !== grupoAnterior
+            ? `<div class="dt-menu-grupo-titulo">${esc(it.grupo)}</div>` : '';
+          grupoAnterior = it.grupo;
+          return encabezado + `<button type="button" class="dt-menu-item ${it.peligro ? 'dt-peligro' : ''}" data-menu-item="${i}">` +
+            `${ic(it.icono)} ${esc(it.titulo)}</button>`;
+        }).join('');
+        document.body.appendChild(popover);
+        const ancho = popover.offsetWidth;
+        const alto = popover.offsetHeight;
+        popover.style.left = Math.max(8, Math.min(x, window.innerWidth - ancho - 8)) + 'px';
+        popover.style.top = Math.max(8, Math.min(y, window.innerHeight - alto - 8)) + 'px';
+        popover.querySelectorAll('[data-menu-item]').forEach((btn) => {
+          btn.addEventListener('click', () => { cerrarPopover(); items[Number(btn.dataset.menuItem)].alHacer(fila); });
+        });
+      }
+      tbody.addEventListener('contextmenu', (ev) => {
+        if (!cfg.menuContextual.length) return; // sin configurar: menú nativo normal, como antes
+        const tr = ev.target.closest('tr[data-id]');
+        if (!tr) return;
+        const fila = filaPorId(tr.dataset.id);
+        if (!fila) return;
+        ev.preventDefault();
+        abrirMenuContextual(fila, ev.clientX, ev.clientY);
       });
 
       // Doble clic (atajo para quien ya lo conoce) y F2 con foco en el lápiz, como en Excel

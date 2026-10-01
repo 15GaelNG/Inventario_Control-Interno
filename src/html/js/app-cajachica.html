@@ -521,6 +521,25 @@
       }
     }
 
+    /** Eliminar directo desde el menú contextual -- mismo apiEliminarCajaChica y
+     *  limpieza de caché que el botón "Eliminar" masivo de la tabla, pero para una
+     *  sola fila (mismo patrón que Vehículos, ver eliminarVehiculoRapido en app.html). */
+    async function eliminarCajaChicaRapida(c) {
+      const ok = await Confirmar.pedir({
+        titulo: '¿Eliminar esta caja chica?', mensaje: 'Esta acción no se puede deshacer.',
+        textoConfirmar: 'Eliminar', peligro: true,
+      });
+      if (!ok) return;
+      try {
+        await callServer('apiEliminarCajaChica', state.token, c['ID CCH']);
+        invalidarCacheLista('apiListarCajasChicasResumen', state.token);
+        toastExito('Eliminado exitosamente');
+        await cargar();
+      } catch (err) {
+        toastError('No se pudo eliminar: ' + err.message);
+      }
+    }
+
     const tabla = DataTable.crear(document.getElementById('cch-tabla'), {
       idCampo: 'ID CCH',
       idTabla: 'cajas-chicas',
@@ -567,6 +586,14 @@
       ],
       accionesFila: [{ icono: 'eye', titulo: 'Ver ficha', alHacer: (c) => abrirFichaCajaChica(c) }]
         .concat(puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (c) => abrirEditarCajaChica(c) }] : []),
+      menuContextual: [
+        { icono: 'eye', titulo: 'Ver ficha', alHacer: (c) => abrirFichaCajaChica(c) },
+      ].concat(puedeEditar ? [
+        { icono: 'pencil', titulo: 'Editar', alHacer: (c) => abrirEditarCajaChica(c) },
+        { grupo: 'Capturar', icono: 'clipboard-check', titulo: 'Nuevo arqueo', alHacer: (c) => abrirAgregarArqueo(c) },
+        { grupo: 'Capturar', icono: 'trending-up', titulo: 'Nuevo incremento', alHacer: (c) => abrirAgregarCambioMonto(c) },
+        { icono: 'trash-2', titulo: 'Eliminar', peligro: true, alHacer: (c) => eliminarCajaChicaRapida(c) },
+      ] : []),
       alEliminar: puedeEditar ? async (filas) => {
         // Primero se pregunta por todas: si alguna tiene arqueos o cambios, no se borra ninguna
         const imp = await callServer('apiQueImpideBorrar', state.token, 'CAJAS CHICAS', filas.map((f) => f['ID CCH']));

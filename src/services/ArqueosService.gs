@@ -376,6 +376,8 @@ const ArqueosService = (function () {
     if (!idCch) throw new Error('Selecciona la caja chica.');
 
     let filaParaPdf;
+    const archivosFirmaId = {};
+    let archivoEvidenciaId = null;
     const lock = LockService.getScriptLock();
     lock.waitLock(30000);
     try {
@@ -384,6 +386,13 @@ const ArqueosService = (function () {
 
       const sheet = hoja_();
       const fila = Object.assign({}, datos);
+      // _FILE_ID no son columnas reales, solo viajan para poder renombrar la
+      // firma/evidencia una vez que se sabe el ID ARQUEO real (ver renombrarArchivo_).
+      COLUMNAS_FIRMA.forEach((col) => {
+        const clave = col + '_FILE_ID';
+        if (fila[clave]) { archivosFirmaId[col] = fila[clave]; delete fila[clave]; }
+      });
+      if (fila['EVIDENCIAS_FILE_ID']) { archivoEvidenciaId = fila['EVIDENCIAS_FILE_ID']; delete fila['EVIDENCIAS_FILE_ID']; }
       // La llave foránea de verdad. 'ID CCH' se queda porque es dato de negocio (el
       // consecutivo 1,2,3 que usa la gente) y porque AppSheet lo usa, pero el vínculo es
       // el ID: 'caja' ya venía completa y su ID se estaba tirando.
@@ -416,6 +425,8 @@ const ArqueosService = (function () {
     } finally {
       lock.releaseLock();
     }
+    COLUMNAS_FIRMA.forEach((col) => renombrarFirma_(archivosFirmaId[col], filaParaPdf['ID ARQUEO'], col));
+    renombrarArchivo_(archivoEvidenciaId, filaParaPdf['ID ARQUEO'], 'EVIDENCIA');
     // El PDF se genera FUERA del candado (tarda unos segundos — copiar la
     // plantilla, llenarla, exportar) para no alargarle la espera a otra
     // alta de arqueo que esté esperando el mismo candado.
@@ -433,6 +444,15 @@ const ArqueosService = (function () {
     if (!registro) throw new Error('No se encontró el arqueo con ID ARQUEO=' + id);
 
     const datos = Object.assign({}, cambios);
+    // _FILE_ID no son columnas reales, solo viajan para poder renombrar la
+    // firma/evidencia (el ID ARQUEO aquí ya se conoce, es `id`).
+    const archivosFirmaId = {};
+    COLUMNAS_FIRMA.forEach((col) => {
+      const clave = col + '_FILE_ID';
+      if (datos[clave]) { archivosFirmaId[col] = datos[clave]; delete datos[clave]; }
+    });
+    const archivoEvidenciaId = datos['EVIDENCIAS_FILE_ID'];
+    delete datos['EVIDENCIAS_FILE_ID'];
     [
       'ID CCH', 'ID ARQUEO', 'RESPONSABLE', 'PUESTO', 'AREA / DEPARTAMENTO', 'RAZON SOCIAL',
       'METODO REEMBOLSO', 'MONTO CAJA', 'QUIEN REGISTRO',
@@ -444,6 +464,8 @@ const ArqueosService = (function () {
     Object.assign(datos, calcularCampos_(combinado, registro.data['MONTO CAJA']));
 
     SheetUtils.update(ssId(), hoja_().getName(), id, datos, ID_COLUMN);
+    COLUMNAS_FIRMA.forEach((col) => renombrarFirma_(archivosFirmaId[col], id, col));
+    renombrarArchivo_(archivoEvidenciaId, id, 'EVIDENCIA');
 
     // Fila final (para el PDF) = lo que ya estaba + los cambios de esta
     // edición, con los totales recién recalculados encima.
@@ -458,13 +480,34 @@ const ArqueosService = (function () {
     return { ID: id };
   }
 
-  // Carpeta de Drive donde se guardan los archivos de Arqueos (firmas,
-  // evidencias, formato arqueo) — una sola carpeta para los 6 campos.
+  // Carpeta de Drive donde se guarda FIRMA EXTERNA -- Evidencias, las 3 firmas y
+  // el Formato arqueo (generado solo) van cada uno en su propia carpeta aparte,
+  // ver CARPETA_EVIDENCIAS_ID/CARPETA_FIRMAS_ID/CARPETA_FORMATO_RAIZ_ID.
   const CARPETA_ARCHIVOS_ID = '1UMHf-zKY6sRz-0Zkt_CxnNCPdrJMHF5o';
+  // Carpeta de Drive solo para firmas (FIRMA RESPONSABLE/ESPECIALISTA/ASISTENTE),
+  // separada de CARPETA_ARCHIVOS_ID a petición de Jorge (2026-10-01).
+  const CARPETA_FIRMAS_ID = '1rIN0RMwLOGZXiDc_YXZ7KroqKXYlZgLL';
+  // Carpeta de Drive solo para Evidencias (el PDF combinado de fotos), aparte
+  // de CARPETA_ARCHIVOS_ID -- a petición de Jorge (2026-10-01).
+  const CARPETA_EVIDENCIAS_ID = '1IFjsxPDPPppRDY-Jq6ciJzNIkxd7AMWw';
+  // Carpeta raíz donde se guarda el PDF de Formato arqueo generado solo, organizada
+  // por año (ARQUEOS/2026/, ARQUEOS/2027/...) -- carpetaDelAnioActual_ busca o crea
+  // la subcarpeta del año en curso cada vez, para no tener que tocar nada cada enero.
+  const CARPETA_FORMATO_RAIZ_ID = '1u4nZ84rxkMvJDjZNUFHFnNiNqDo0Yqwo';
   const TAMANO_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
-  function subirArchivo(token, nombreArchivo, mimeType, base64Data) {
-    Permisos.puedeEditar(token, 'arqueos');
+  /** Subcarpeta del año en curso dentro de `raizId` (la crea si no existe todavía). */
+  function carpetaDelAnioActual_(raizId) {
+    const anio = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy');
+    const raiz = DriveApp.getFolderById(raizId);
+    const existentes = raiz.getFoldersByName(anio);
+    return existentes.hasNext() ? existentes.next() : raiz.createFolder(anio);
+  }
+  // Las 3 columnas de firma -- crear()/actualizar() las usan para renombrar cada
+  // imagen a "<ID ARQUEO>_<quién firma>_<fecha>" una vez que saben el ID real.
+  const COLUMNAS_FIRMA = ['FIRMA RESPONSABLE', 'FIRMA ESPECIALISTA', 'FIRMA ASISTENTE'];
+
+  function subirArchivoEn_(carpetaId, etiquetaCarpeta, nombreArchivo, mimeType, base64Data) {
     if (!base64Data) throw new Error('No se recibió ningún archivo.');
 
     const bytes = Utilities.base64Decode(base64Data);
@@ -476,27 +519,64 @@ const ArqueosService = (function () {
     const cuenta = () => Session.getEffectiveUser().getEmail();
     let carpeta, archivo;
     try {
-      carpeta = DriveApp.getFolderById(CARPETA_ARCHIVOS_ID);
+      carpeta = DriveApp.getFolderById(carpetaId);
     } catch (e) {
-      throw new Error('No se pudo abrir la carpeta de archivos de Arqueos en Drive. La cuenta con la que ' +
+      throw new Error('No se pudo abrir la carpeta de ' + etiquetaCarpeta + ' de Arqueos en Drive. La cuenta con la que ' +
         'corre la app ahora mismo (' + cuenta() + ') no tiene acceso a esa carpeta.');
     }
     try {
       archivo = carpeta.createFile(blob);
     } catch (e) {
-      throw new Error('Se pudo abrir la carpeta de archivos de Arqueos, pero no crear el archivo ahí. La cuenta ' +
+      throw new Error('Se pudo abrir la carpeta de ' + etiquetaCarpeta + ' de Arqueos, pero no crear el archivo ahí. La cuenta ' +
         cuenta() + ' necesita permiso de editor (no solo lector) en esa carpeta. Error original: ' + e.message);
     }
-    // Mejor esfuerzo, no bloquea el registro: la carpeta de archivos ya
-    // tiene acceso general configurado, así que casi siempre hereda el
-    // compartir sola. Si una política de Workspace bloquea el compartir
-    // explícito, no vale la pena tronar todo el registro por eso.
+    // Mejor esfuerzo, no bloquea el registro: la carpeta ya tiene acceso
+    // general configurado, así que casi siempre hereda el compartir sola.
+    // Si una política de Workspace bloquea el compartir explícito, no vale
+    // la pena tronar todo el registro por eso.
     if (!DriveUtils.compartirLoMasAmplioPosible(archivo)) {
       console.warn('No se pudo compartir explícitamente el archivo de Arqueos (cuenta ' + cuenta() +
         '); se deja como quedó por default de la carpeta. Archivo: ' + archivo.getUrl());
     }
 
     return { url: archivo.getUrl(), id: archivo.getId(), nombre: nombreArchivo };
+  }
+
+  /** Evidencias y Formato arqueo. */
+  function subirArchivo(token, nombreArchivo, mimeType, base64Data) {
+    Permisos.puedeEditar(token, 'arqueos');
+    return subirArchivoEn_(CARPETA_ARCHIVOS_ID, 'archivos', nombreArchivo, mimeType, base64Data);
+  }
+
+  /** Las 3 firmas (RESPONSABLE/ESPECIALISTA/ASISTENTE) -- carpeta aparte. */
+  function subirFirma(token, nombreArchivo, mimeType, base64Data) {
+    Permisos.puedeEditar(token, 'arqueos');
+    return subirArchivoEn_(CARPETA_FIRMAS_ID, 'firmas', nombreArchivo, mimeType, base64Data);
+  }
+
+  /** Evidencias (el PDF combinado de fotos) -- carpeta aparte. */
+  function subirEvidencia(token, nombreArchivo, mimeType, base64Data) {
+    Permisos.puedeEditar(token, 'arqueos');
+    return subirArchivoEn_(CARPETA_EVIDENCIAS_ID, 'evidencias', nombreArchivo, mimeType, base64Data);
+  }
+
+  /** Renombra en Drive un archivo recién subido a "<ID ARQUEO>_<etiqueta>_<fecha>.ext"
+   *  (conserva la extensión que ya traía). No bloquea el alta/edición si falla -- el
+   *  archivo ya quedó guardado y accesible, solo se queda con el nombre que traía. */
+  function renombrarArchivo_(fileId, idArqueo, etiqueta) {
+    if (!fileId || !idArqueo) return;
+    try {
+      const archivo = DriveApp.getFileById(fileId);
+      const extension = (archivo.getName().match(/\.[^.]+$/) || [''])[0];
+      const fecha = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      archivo.setName(idArqueo + '_' + etiqueta + '_' + fecha + extension);
+    } catch (e) {
+      console.warn('No se pudo renombrar el archivo de Arqueo (' + fileId + '): ' + e.message);
+    }
+  }
+  /** "Quién firma" sale del nombre de columna (FIRMA RESPONSABLE -> RESPONSABLE, etc.). */
+  function renombrarFirma_(fileId, idArqueo, columna) {
+    renombrarArchivo_(fileId, idArqueo, String(columna || '').replace(/^FIRMA\s+/i, '') || 'FIRMA');
   }
 
   // ---------- Generación automática del PDF (plantilla F-CI03-009) ----------
@@ -571,10 +651,10 @@ const ArqueosService = (function () {
     }
     let carpeta;
     try {
-      carpeta = DriveApp.getFolderById(CARPETA_ARCHIVOS_ID);
+      carpeta = carpetaDelAnioActual_(CARPETA_FORMATO_RAIZ_ID);
     } catch (e) {
-      throw new Error('No se pudo abrir la carpeta de archivos de Arqueos en Drive (ID ' + CARPETA_ARCHIVOS_ID +
-        '). La cuenta con la que corre la app ahora mismo (' + cuenta() + ') no tiene acceso a esa carpeta.');
+      throw new Error('No se pudo abrir o crear la carpeta del año actual para los PDFs de Arqueo en Drive (raíz ' +
+        CARPETA_FORMATO_RAIZ_ID + '). La cuenta con la que corre la app ahora mismo (' + cuenta() + ') no tiene acceso a esa carpeta.');
     }
     let copia;
     try {
@@ -676,10 +756,12 @@ const ArqueosService = (function () {
     }
     let pdfFile;
     try {
-      pdfFile = carpeta.createFile(pdfBlob).setName(copia.getName() + '.pdf');
+      const fecha = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      const nombrePdf = (fila['ID ARQUEO'] || copia.getName()) + '_ARQUEO_' + fecha + '.pdf';
+      pdfFile = carpeta.createFile(pdfBlob).setName(nombrePdf);
     } catch (e) {
-      throw new Error('Se generó el PDF pero no se pudo guardar en la carpeta de Arqueos en Drive (ID ' +
-        CARPETA_ARCHIVOS_ID + '). La cuenta ' + cuenta() + ' necesita permiso de editor ahí. Error original: ' + e.message);
+      throw new Error('Se generó el PDF pero no se pudo guardar en la carpeta de Arqueos en Drive (raíz ' +
+        CARPETA_FORMATO_RAIZ_ID + '). La cuenta ' + cuenta() + ' necesita permiso de editor ahí. Error original: ' + e.message);
     }
     // Mejor esfuerzo, no bloquea el registro (mismo patrón que subirArchivo(), arriba):
     // la carpeta de Arqueos ya tiene acceso general configurado, así que casi siempre el
@@ -723,6 +805,6 @@ const ArqueosService = (function () {
 
   return {
     AUDIT_ITEMS, listarResumen, completo, buscarPorId, listarPorIdCch, previsualizarIdArqueo,
-    crear, actualizar, eliminar, subirArchivo,
+    crear, actualizar, eliminar, subirArchivo, subirFirma, subirEvidencia,
   };
 })();

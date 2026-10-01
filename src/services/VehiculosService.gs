@@ -137,6 +137,46 @@ const VehiculosService = (function () {
     return resultado.sort((a, b) => String(a.FOLIO).localeCompare(String(b.FOLIO)));
   }
 
+  /**
+   * Diagnóstico de solo lectura: cuántas filas de VEHICULOS tienen la columna
+   * ID (ID_COLUMN) vacía -- si hay más de una, todas esas filas colisionan en
+   * el mismo "id" de fila en la tabla del navegador y hacer doble clic en
+   * cualquiera de ellas abre siempre la ficha de la ÚLTIMA fila con ID vacío,
+   * sin importar en cuál se haya hecho clic. Antes de la migración de IDs
+   * (ver MigracionIds.gs) esto leía la columna vieja ID_VEHICULO, que daba
+   * 653 de 653 vacías -- la migración ya corrió y renombró esa columna vieja
+   * a "ID ANTERIOR", así que ahora se revisa la columna nueva de verdad.
+   */
+  function diagnosticoIds(token) {
+    Permisos.puedeLeer(token, 'vehiculos');
+    const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
+    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, [ID_COLUMN, 'FOLIO', 'NUCCO']);
+    const vacios = [];
+    for (let i = 0; i < filas; i++) {
+      if (!datos['FOLIO'][i]) continue;
+      if (!datos[ID_COLUMN][i]) vacios.push({ FOLIO: datos['FOLIO'][i], NUCCO: datos['NUCCO'][i] || '' });
+    }
+    return { totalFilas: filas, totalConIdVacio: vacios.length, ejemplos: vacios.slice(0, 20) };
+  }
+
+  /** Lectura ligera (solo 4 columnas, no las 41 de completo()) para la campanita de
+   *  notificaciones -- NotificacionesService.itemsSeguro_ vigila FECHA VENCIMIENTO
+   *  SEGURO de cada vehículo activo. */
+  function vencimientosSeguro(token) {
+    Permisos.puedeLeer(token, 'vehiculos');
+    const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
+    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, ['FOLIO', 'NUCCO', 'ESTATUS', 'FECHA VENCIMIENTO SEGURO']);
+    const resultado = [];
+    for (let i = 0; i < filas; i++) {
+      if (!datos['FOLIO'][i]) continue;
+      resultado.push({
+        FOLIO: datos['FOLIO'][i], NUCCO: datos['NUCCO'][i] || '', ESTATUS: datos['ESTATUS'][i] || '',
+        'FECHA VENCIMIENTO SEGURO': datos['FECHA VENCIMIENTO SEGURO'][i] || '',
+      });
+    }
+    return resultado;
+  }
+
   /** Todas las columnas de TODOS los vehículos (para "Vista": mostrar/exportar cualquier columna). */
   function completo(token) {
     Permisos.puedeLeer(token, 'vehiculos');
@@ -208,12 +248,15 @@ const VehiculosService = (function () {
   // Prefijo de folio según Clase — folio = PREFIJO + consecutivo de 4 dígitos,
   // el siguiente disponible para ESE prefijo (no se reutilizan aunque se
   // borre a la mitad un vehículo). Clases sin prefijo propio (CUATRIMOTO,
-  // NUCO SIN INFORMACION, MOTOCARRO, etc.) caen en el prefijo genérico "FOL".
+  // NUCO SIN INFORMACION, etc.) caen en el prefijo genérico "FOL". MOTOCARRO
+  // comparte el prefijo MOT con MOTOCICLETA (confirmado con Jorge 2026-09-30:
+  // los folios de motocarro ya existentes usan MOT).
   const PREFIJOS_CLASE = {
     AUTOMOVIL: 'AUT',
     CAMION: 'CON',
     CAMIONETA: 'CTA',
     MOTOCICLETA: 'MOT',
+    MOTOCARRO: 'MOT',
     REMOLQUE: 'REM',
     'MAQUINARIA MENOR': 'MAQ',
   };
@@ -437,5 +480,5 @@ const VehiculosService = (function () {
     return { url: archivo.getUrl(), id: archivo.getId(), nombre: nombreArchivo };
   }
 
-  return { listar, listarBasico, listarResumen, completo, buscarPorFolio, previsualizarFolio, previsualizarNucco, crear, actualizar, eliminar, subirArchivo };
+  return { listar, listarBasico, listarResumen, completo, buscarPorFolio, previsualizarFolio, previsualizarNucco, crear, actualizar, eliminar, subirArchivo, diagnosticoIds, vencimientosSeguro };
 })();

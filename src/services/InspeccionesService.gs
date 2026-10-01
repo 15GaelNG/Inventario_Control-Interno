@@ -605,7 +605,233 @@ const InspeccionesService = (function () {
       { titulo: 'Niveles', peso: 10, piezas: ['ACEITE MOTOR', 'REFRIGERANTE', 'LIQUIDO FRENOS', 'LIQUIDO DE DIRECCION', 'LIQUIDO LIMPIAPARABRISAS'] },
       { titulo: 'Batería', peso: 5, piezas: ['TERMINALES CON SARRO', 'DERRAME LIQUIDO / MAL OLOR', 'BATERIA INFLADA'] },
     ],
+    'AUTOS': [
+      { titulo: 'Documentación', peso: 5, piezas: ['GAFETTE', 'TARJETA CIRCULACION', 'LICENCIA', 'POLIZA SEGURO', 'VERIFICACION', 'KARDEX'] },
+      { titulo: 'Cristalería', peso: 10, piezas: ['PARABRISAS', 'MEDALLON', 'CRISTALES PUERTAS', 'RETROVISOR IZQUIERDO', 'RETROVISOR DERECHO', 'FAROS DELANTEROS', 'CALAVERAS TRASERAS'] },
+      // Sin Batea/Cabina/Redilas (eso es de pickup) -- en su lugar, Maletero.
+      { titulo: 'Latonería y pintura', peso: 5, piezas: ['COFRE', 'FASCIA / PARRILLA / DEFENSA DELANTERA', 'FASCIA / DEFENSA TRASERA', 'GUARDAFANGO / SALPICADERA FRONTAL IZQUIERDA', 'GUARDAFANGO / SALPICADERA FRONTAL DERECHA', 'GUARDAFANGO / SALPICADERA POSTERIOR IZQUIERDA', 'GUARDAFANGO / SALPICADERA POSTERIOR DERECHA', 'PUERTA PILOTO', 'PUERTA COPILOTO', 'PUERTA TRASERA IZQUIERDA', 'PUERTA TRASERA DERECHA', 'MALETERO'] },
+      { titulo: 'Neumáticos', peso: 15, piezas: ['RINES', 'TAPONES', 'TUERCAS / BIRLOS', 'ALINEACION', 'BALANCEO'] },
+      { titulo: 'Inventarios', peso: 10, piezas: ['LLANTA DE REFACCION', 'GATO MECANICO', 'GATO HIDRAULICO', 'CRUCETA', 'MANERAL', 'EXTINTOR', 'CABLE PASACORRIENTE', 'TRIANGULOS DE SEÑALIZACION', 'TAPETES', 'CUBREASIENTOS', 'CUBREVOLANTE', 'BEDLINER', 'CUBREBATEA', 'PARASOL'] },
+      { titulo: 'Cerraduras', peso: 5, piezas: ['CERRADURA PUERTA PILOTO', 'CERRADURA PUERTA COPILOTO', 'CERRADURA PUERTA TRASERA DERECHA', 'CERRADURA PUERTA TRASERA IZQUIERDA', 'CERRADURA TAPA BATEA/MALETERO'] },
+      { titulo: 'Limpieza', peso: 5, piezas: ['ASIENTOS DELANTEROS', 'ASIENTOS TRASEROS2', 'CIELO Y ALFOMBRA', 'EXTERIOR DE UNIDAD', 'OTROS'] },
+      { titulo: 'Interiores', peso: 5, piezas: ['ASIENTO DE CONDUCTOR', 'ASIENTO DE COPILOTO', 'ASIENTOS TRASEROS', 'ALFOMBRA', 'CIELO', 'TABLERO', 'CONSOLA CENTRAL', 'GUANTERA', 'MANIJAS INTERNAS', 'TAPA PUERTA PILOTO', 'TAPA PUERTA COPILOTO', 'TAPA PUERTA TRASERA DERECHA', 'TAPA PUERTA TRASERA IZQUIERDA'] },
+      // A diferencia de RAM 700, aquí sí trae "Limpiaparabrisas trasero" (16 piezas).
+      { titulo: 'Sistemas interiores', peso: 10, piezas: ['MANDOS / BOTONERA VIDRIOS Y SEGUROS', 'CLUSTER / TABLERO', 'LUCES ALTAS', 'LUCES BAJAS', 'CUARTOS', 'DIRECCIONALES IZQUIERDAS', 'DIRECCIONALES DERECHAS', 'INTERMITENTES', 'NIEBLEROS / OTROS', 'STOP', 'LIMPIAPARABRISAS DELANTERO', 'LIMPIAPARABRISAS TRASERO', 'SISTEMA MULTIMEDIA', 'CLAXON', 'AC / PERILLAS', 'LUCES INTERIORES'] },
+      { titulo: 'Sistema mecánico', peso: 15, piezas: ['FRENOS DELANTEROS', 'FRENOS TRASEROS', 'FRENO DE MANO', 'SUSPENSION', 'AMORTIGUADORES', 'SOPORTES DE MOTOR', 'BANDAS', 'CLUTCH', 'TRANSMISION / CADENA'] },
+      { titulo: 'Niveles', peso: 10, piezas: ['ACEITE MOTOR', 'REFRIGERANTE', 'LIQUIDO FRENOS', 'LIQUIDO DE DIRECCION', 'LIQUIDO LIMPIAPARABRISAS'] },
+      { titulo: 'Batería', peso: 5, piezas: ['TERMINALES CON SARRO', 'DERRAME LIQUIDO / MAL OLOR', 'BATERIA INFLADA'] },
+    ],
+    // RAM 4000 es de 2 puertas (sin puerta/asiento/tapa trasera) -- distinto a RAM 700
+    // en Latonería, Cerraduras, Limpieza e Interiores; el resto de las secciones son
+    // iguales. Confirmado contra el PDF crudo de su propia plantilla.
+    'RAM 4000': [
+      { titulo: 'Documentación', peso: 5, piezas: ['GAFETTE', 'TARJETA CIRCULACION', 'LICENCIA', 'POLIZA SEGURO', 'VERIFICACION', 'KARDEX'] },
+      { titulo: 'Cristalería', peso: 10, piezas: ['PARABRISAS', 'MEDALLON', 'CRISTALES PUERTAS', 'RETROVISOR IZQUIERDO', 'RETROVISOR DERECHO', 'FAROS DELANTEROS', 'CALAVERAS TRASERAS'] },
+      { titulo: 'Latonería y pintura', peso: 5, piezas: ['COFRE', 'FASCIA / PARRILLA / DEFENSA DELANTERA', 'FASCIA / DEFENSA TRASERA', 'GUARDAFANGO / SALPICADERA FRONTAL IZQUIERDA', 'GUARDAFANGO / SALPICADERA FRONTAL DERECHA', 'GUARDAFANGO / SALPICADERA POSTERIOR IZQUIERDA', 'GUARDAFANGO / SALPICADERA POSTERIOR DERECHA', 'PUERTA PILOTO', 'PUERTA COPILOTO', 'BATEA / BETLINER', 'CABINA', 'REDILAS'] },
+      { titulo: 'Neumáticos', peso: 15, piezas: ['RINES', 'TAPONES', 'TUERCAS / BIRLOS', 'ALINEACION', 'BALANCEO'] },
+      { titulo: 'Inventarios', peso: 10, piezas: ['LLANTA DE REFACCION', 'GATO MECANICO', 'GATO HIDRAULICO', 'CRUCETA', 'MANERAL', 'EXTINTOR', 'CABLE PASACORRIENTE', 'TRIANGULOS DE SEÑALIZACION', 'TAPETES', 'CUBREASIENTOS', 'CUBREVOLANTE', 'BEDLINER', 'CUBREBATEA', 'PARASOL'] },
+      { titulo: 'Cerraduras', peso: 5, piezas: ['CERRADURA PUERTA PILOTO', 'CERRADURA PUERTA COPILOTO', 'CERRADURA TAPA BATEA/MALETERO'] },
+      { titulo: 'Limpieza', peso: 5, piezas: ['ASIENTOS DELANTEROS', 'CIELO Y ALFOMBRA', 'EXTERIOR DE UNIDAD', 'OTROS'] },
+      { titulo: 'Interiores', peso: 5, piezas: ['ASIENTO DE CONDUCTOR', 'ASIENTO DE COPILOTO', 'ALFOMBRA', 'CIELO', 'TABLERO', 'CONSOLA CENTRAL', 'GUANTERA', 'MANIJAS INTERNAS', 'TAPA PUERTA PILOTO', 'TAPA PUERTA COPILOTO'] },
+      { titulo: 'Sistemas interiores', peso: 10, piezas: ['MANDOS / BOTONERA VIDRIOS Y SEGUROS', 'CLUSTER / TABLERO', 'LUCES ALTAS', 'LUCES BAJAS', 'CUARTOS', 'DIRECCIONALES IZQUIERDAS', 'DIRECCIONALES DERECHAS', 'INTERMITENTES', 'NIEBLEROS / OTROS', 'STOP', 'LIMPIAPARABRISAS DELANTERO', 'SISTEMA MULTIMEDIA', 'CLAXON', 'AC / PERILLAS', 'LUCES INTERIORES'] },
+      { titulo: 'Sistema mecánico', peso: 15, piezas: ['FRENOS DELANTEROS', 'FRENOS TRASEROS', 'FRENO DE MANO', 'SUSPENSION', 'AMORTIGUADORES', 'SOPORTES DE MOTOR', 'BANDAS', 'CLUTCH', 'TRANSMISION / CADENA'] },
+      { titulo: 'Niveles', peso: 10, piezas: ['ACEITE MOTOR', 'REFRIGERANTE', 'LIQUIDO FRENOS', 'LIQUIDO DE DIRECCION', 'LIQUIDO LIMPIAPARABRISAS'] },
+      { titulo: 'Batería', peso: 5, piezas: ['TERMINALES CON SARRO', 'DERRAME LIQUIDO / MAL OLOR', 'BATERIA INFLADA'] },
+    ],
+    // SAVEIRO es de 2 puertas como RAM 4000 (sin puerta/asiento/tapa trasera), pero
+    // SIN Redilas en Latonería (11 piezas en vez de 12) y con una pieza extra en
+    // Sistemas interiores ("Botones volante") que ningún otro tipo tiene -- sin
+    // Limpiaparabrisas trasero (16 piezas). Confirmado contra su propio PDF crudo.
+    'SAVEIRO': [
+      { titulo: 'Documentación', peso: 5, piezas: ['GAFETTE', 'TARJETA CIRCULACION', 'LICENCIA', 'POLIZA SEGURO', 'VERIFICACION', 'KARDEX'] },
+      { titulo: 'Cristalería', peso: 10, piezas: ['PARABRISAS', 'MEDALLON', 'CRISTALES PUERTAS', 'RETROVISOR IZQUIERDO', 'RETROVISOR DERECHO', 'FAROS DELANTEROS', 'CALAVERAS TRASERAS'] },
+      { titulo: 'Latonería y pintura', peso: 5, piezas: ['COFRE', 'FASCIA / PARRILLA / DEFENSA DELANTERA', 'FASCIA / DEFENSA TRASERA', 'GUARDAFANGO / SALPICADERA FRONTAL IZQUIERDA', 'GUARDAFANGO / SALPICADERA FRONTAL DERECHA', 'GUARDAFANGO / SALPICADERA POSTERIOR IZQUIERDA', 'GUARDAFANGO / SALPICADERA POSTERIOR DERECHA', 'PUERTA PILOTO', 'PUERTA COPILOTO', 'BATEA / BETLINER', 'CABINA'] },
+      { titulo: 'Neumáticos', peso: 15, piezas: ['RINES', 'TAPONES', 'TUERCAS / BIRLOS', 'ALINEACION', 'BALANCEO'] },
+      { titulo: 'Inventarios', peso: 10, piezas: ['LLANTA DE REFACCION', 'GATO MECANICO', 'GATO HIDRAULICO', 'CRUCETA', 'MANERAL', 'EXTINTOR', 'CABLE PASACORRIENTE', 'TRIANGULOS DE SEÑALIZACION', 'TAPETES', 'CUBREASIENTOS', 'CUBREVOLANTE', 'BEDLINER', 'CUBREBATEA', 'PARASOL'] },
+      { titulo: 'Cerraduras', peso: 5, piezas: ['CERRADURA PUERTA PILOTO', 'CERRADURA PUERTA COPILOTO', 'CERRADURA TAPA BATEA/MALETERO'] },
+      { titulo: 'Limpieza', peso: 5, piezas: ['ASIENTOS DELANTEROS', 'CIELO Y ALFOMBRA', 'EXTERIOR DE UNIDAD', 'OTROS'] },
+      { titulo: 'Interiores', peso: 5, piezas: ['ASIENTO DE CONDUCTOR', 'ASIENTO DE COPILOTO', 'ALFOMBRA', 'CIELO', 'TABLERO', 'CONSOLA CENTRAL', 'GUANTERA', 'MANIJAS INTERNAS', 'TAPA PUERTA PILOTO', 'TAPA PUERTA COPILOTO'] },
+      { titulo: 'Sistemas interiores', peso: 10, piezas: ['MANDOS / BOTONERA VIDRIOS Y SEGUROS', 'CLUSTER / TABLERO', 'LUCES ALTAS', 'LUCES BAJAS', 'CUARTOS', 'DIRECCIONALES IZQUIERDAS', 'DIRECCIONALES DERECHAS', 'INTERMITENTES', 'NIEBLEROS / OTROS', 'STOP', 'LIMPIAPARABRISAS DELANTERO', 'BOTONES VOLANTE', 'SISTEMA MULTIMEDIA', 'CLAXON', 'AC / PERILLAS', 'LUCES INTERIORES'] },
+      { titulo: 'Sistema mecánico', peso: 15, piezas: ['FRENOS DELANTEROS', 'FRENOS TRASEROS', 'FRENO DE MANO', 'SUSPENSION', 'AMORTIGUADORES', 'SOPORTES DE MOTOR', 'BANDAS', 'CLUTCH', 'TRANSMISION / CADENA'] },
+      { titulo: 'Niveles', peso: 10, piezas: ['ACEITE MOTOR', 'REFRIGERANTE', 'LIQUIDO FRENOS', 'LIQUIDO DE DIRECCION', 'LIQUIDO LIMPIAPARABRISAS'] },
+      { titulo: 'Batería', peso: 5, piezas: ['TERMINALES CON SARRO', 'DERRAME LIQUIDO / MAL OLOR', 'BATERIA INFLADA'] },
+    ],
+    // PIPA no coincide con ningún tipo anterior: Latonería con puerta trasera +
+    // Maletero (como AUTOS), pero Cerraduras trae "Cerradura tanque de combustible"
+    // en vez de tapa batea/maletero, Interiores trae "Asientos traseros" sin tapas
+    // de puerta trasera, y Sistemas interiores es igual al de SAVEIRO (con "Botones
+    // volante", sin Limpiaparabrisas trasero). Confirmado contra su propio PDF crudo.
+    'PIPA': [
+      { titulo: 'Documentación', peso: 5, piezas: ['GAFETTE', 'TARJETA CIRCULACION', 'LICENCIA', 'POLIZA SEGURO', 'VERIFICACION', 'KARDEX'] },
+      { titulo: 'Cristalería', peso: 10, piezas: ['PARABRISAS', 'MEDALLON', 'CRISTALES PUERTAS', 'RETROVISOR IZQUIERDO', 'RETROVISOR DERECHO', 'FAROS DELANTEROS', 'CALAVERAS TRASERAS'] },
+      { titulo: 'Latonería y pintura', peso: 5, piezas: ['COFRE', 'FASCIA / PARRILLA / DEFENSA DELANTERA', 'FASCIA / DEFENSA TRASERA', 'GUARDAFANGO / SALPICADERA FRONTAL IZQUIERDA', 'GUARDAFANGO / SALPICADERA FRONTAL DERECHA', 'GUARDAFANGO / SALPICADERA POSTERIOR IZQUIERDA', 'GUARDAFANGO / SALPICADERA POSTERIOR DERECHA', 'PUERTA PILOTO', 'PUERTA COPILOTO', 'PUERTA TRASERA IZQUIERDA', 'PUERTA TRASERA DERECHA', 'MALETERO'] },
+      { titulo: 'Neumáticos', peso: 15, piezas: ['RINES', 'TAPONES', 'TUERCAS / BIRLOS', 'ALINEACION', 'BALANCEO'] },
+      { titulo: 'Inventarios', peso: 10, piezas: ['LLANTA DE REFACCION', 'GATO MECANICO', 'GATO HIDRAULICO', 'CRUCETA', 'MANERAL', 'EXTINTOR', 'CABLE PASACORRIENTE', 'TRIANGULOS DE SEÑALIZACION', 'TAPETES', 'CUBREASIENTOS', 'CUBREVOLANTE', 'BEDLINER', 'CUBREBATEA', 'PARASOL'] },
+      { titulo: 'Cerraduras', peso: 5, piezas: ['CERRADURA PUERTA PILOTO', 'CERRADURA PUERTA COPILOTO', 'CERRADURA TANQUE COMBUSTIBLE'] },
+      { titulo: 'Limpieza', peso: 5, piezas: ['ASIENTOS DELANTEROS', 'CIELO Y ALFOMBRA', 'EXTERIOR DE UNIDAD', 'OTROS'] },
+      { titulo: 'Interiores', peso: 5, piezas: ['ASIENTO DE CONDUCTOR', 'ASIENTO DE COPILOTO', 'ASIENTOS TRASEROS', 'ALFOMBRA', 'CIELO', 'TABLERO', 'CONSOLA CENTRAL', 'GUANTERA', 'MANIJAS INTERNAS', 'TAPA PUERTA PILOTO', 'TAPA PUERTA COPILOTO'] },
+      { titulo: 'Sistemas interiores', peso: 10, piezas: ['MANDOS / BOTONERA VIDRIOS Y SEGUROS', 'CLUSTER / TABLERO', 'LUCES ALTAS', 'LUCES BAJAS', 'CUARTOS', 'DIRECCIONALES IZQUIERDAS', 'DIRECCIONALES DERECHAS', 'INTERMITENTES', 'NIEBLEROS / OTROS', 'STOP', 'LIMPIAPARABRISAS DELANTERO', 'BOTONES VOLANTE', 'SISTEMA MULTIMEDIA', 'CLAXON', 'AC / PERILLAS', 'LUCES INTERIORES'] },
+      { titulo: 'Sistema mecánico', peso: 15, piezas: ['FRENOS DELANTEROS', 'FRENOS TRASEROS', 'FRENO DE MANO', 'SUSPENSION', 'AMORTIGUADORES', 'SOPORTES DE MOTOR', 'BANDAS', 'CLUTCH', 'TRANSMISION / CADENA'] },
+      { titulo: 'Niveles', peso: 10, piezas: ['ACEITE MOTOR', 'REFRIGERANTE', 'LIQUIDO FRENOS', 'LIQUIDO DE DIRECCION', 'LIQUIDO LIMPIAPARABRISAS'] },
+      { titulo: 'Batería', peso: 5, piezas: ['TERMINALES CON SARRO', 'DERRAME LIQUIDO / MAL OLOR', 'BATERIA INFLADA'] },
+    ],
+    // L200 es una pickup de 4 puertas: Latonería/Cerraduras/Limpieza/Interiores
+    // iguales a RAM 700 (con Redilas, 14 piezas en Latonería), pero su Sistemas
+    // interiores trae "Botones volante" (como SAVEIRO/PIPA) en vez del listado de
+    // RAM 700, y sin Limpiaparabrisas trasero. Confirmado contra su propio PDF crudo.
+    'L200': [
+      { titulo: 'Documentación', peso: 5, piezas: ['GAFETTE', 'TARJETA CIRCULACION', 'LICENCIA', 'POLIZA SEGURO', 'VERIFICACION', 'KARDEX'] },
+      { titulo: 'Cristalería', peso: 10, piezas: ['PARABRISAS', 'MEDALLON', 'CRISTALES PUERTAS', 'RETROVISOR IZQUIERDO', 'RETROVISOR DERECHO', 'FAROS DELANTEROS', 'CALAVERAS TRASERAS'] },
+      { titulo: 'Latonería y pintura', peso: 5, piezas: ['COFRE', 'FASCIA / PARRILLA / DEFENSA DELANTERA', 'FASCIA / DEFENSA TRASERA', 'GUARDAFANGO / SALPICADERA FRONTAL IZQUIERDA', 'GUARDAFANGO / SALPICADERA FRONTAL DERECHA', 'GUARDAFANGO / SALPICADERA POSTERIOR IZQUIERDA', 'GUARDAFANGO / SALPICADERA POSTERIOR DERECHA', 'PUERTA PILOTO', 'PUERTA COPILOTO', 'PUERTA TRASERA IZQUIERDA', 'PUERTA TRASERA DERECHA', 'BATEA / BETLINER', 'CABINA', 'REDILAS'] },
+      { titulo: 'Neumáticos', peso: 15, piezas: ['RINES', 'TAPONES', 'TUERCAS / BIRLOS', 'ALINEACION', 'BALANCEO'] },
+      { titulo: 'Inventarios', peso: 10, piezas: ['LLANTA DE REFACCION', 'GATO MECANICO', 'GATO HIDRAULICO', 'CRUCETA', 'MANERAL', 'EXTINTOR', 'CABLE PASACORRIENTE', 'TRIANGULOS DE SEÑALIZACION', 'TAPETES', 'CUBREASIENTOS', 'CUBREVOLANTE', 'BEDLINER', 'CUBREBATEA', 'PARASOL'] },
+      { titulo: 'Cerraduras', peso: 5, piezas: ['CERRADURA PUERTA PILOTO', 'CERRADURA PUERTA COPILOTO', 'CERRADURA PUERTA TRASERA DERECHA', 'CERRADURA PUERTA TRASERA IZQUIERDA', 'CERRADURA TAPA BATEA/MALETERO'] },
+      { titulo: 'Limpieza', peso: 5, piezas: ['ASIENTOS DELANTEROS', 'ASIENTOS TRASEROS2', 'CIELO Y ALFOMBRA', 'EXTERIOR DE UNIDAD', 'OTROS'] },
+      { titulo: 'Interiores', peso: 5, piezas: ['ASIENTO DE CONDUCTOR', 'ASIENTO DE COPILOTO', 'ASIENTOS TRASEROS', 'ALFOMBRA', 'CIELO', 'TABLERO', 'CONSOLA CENTRAL', 'GUANTERA', 'MANIJAS INTERNAS', 'TAPA PUERTA PILOTO', 'TAPA PUERTA COPILOTO', 'TAPA PUERTA TRASERA DERECHA', 'TAPA PUERTA TRASERA IZQUIERDA'] },
+      { titulo: 'Sistemas interiores', peso: 10, piezas: ['MANDOS / BOTONERA VIDRIOS Y SEGUROS', 'CLUSTER / TABLERO', 'LUCES ALTAS', 'LUCES BAJAS', 'CUARTOS', 'DIRECCIONALES IZQUIERDAS', 'DIRECCIONALES DERECHAS', 'INTERMITENTES', 'NIEBLEROS / OTROS', 'STOP', 'LIMPIAPARABRISAS DELANTERO', 'BOTONES VOLANTE', 'SISTEMA MULTIMEDIA', 'CLAXON', 'AC / PERILLAS', 'LUCES INTERIORES'] },
+      { titulo: 'Sistema mecánico', peso: 15, piezas: ['FRENOS DELANTEROS', 'FRENOS TRASEROS', 'FRENO DE MANO', 'SUSPENSION', 'AMORTIGUADORES', 'SOPORTES DE MOTOR', 'BANDAS', 'CLUTCH', 'TRANSMISION / CADENA'] },
+      { titulo: 'Niveles', peso: 10, piezas: ['ACEITE MOTOR', 'REFRIGERANTE', 'LIQUIDO FRENOS', 'LIQUIDO DE DIRECCION', 'LIQUIDO LIMPIAPARABRISAS'] },
+      { titulo: 'Batería', peso: 5, piezas: ['TERMINALES CON SARRO', 'DERRAME LIQUIDO / MAL OLOR', 'BATERIA INFLADA'] },
+    ],
+    // URVAN es una van con una sola puerta corrediza trasera (derecha, sin
+    // izquierda) -- Latonería/Cerraduras/Interiores no coinciden con ningún tipo
+    // anterior por esa asimetría, pero su Limpieza y Sistemas interiores sí son
+    // iguales a AUTOS (con Limpiaparabrisas trasero, sin Botones volante).
+    // Confirmado contra su propio PDF crudo.
+    'URVAN': [
+      { titulo: 'Documentación', peso: 5, piezas: ['GAFETTE', 'TARJETA CIRCULACION', 'LICENCIA', 'POLIZA SEGURO', 'VERIFICACION', 'KARDEX'] },
+      { titulo: 'Cristalería', peso: 10, piezas: ['PARABRISAS', 'MEDALLON', 'CRISTALES PUERTAS', 'RETROVISOR IZQUIERDO', 'RETROVISOR DERECHO', 'FAROS DELANTEROS', 'CALAVERAS TRASERAS'] },
+      { titulo: 'Latonería y pintura', peso: 5, piezas: ['COFRE', 'FASCIA / PARRILLA / DEFENSA DELANTERA', 'FASCIA / DEFENSA TRASERA', 'GUARDAFANGO / SALPICADERA FRONTAL IZQUIERDA', 'GUARDAFANGO / SALPICADERA FRONTAL DERECHA', 'GUARDAFANGO / SALPICADERA POSTERIOR IZQUIERDA', 'GUARDAFANGO / SALPICADERA POSTERIOR DERECHA', 'PUERTA PILOTO', 'PUERTA COPILOTO', 'PUERTA TRASERA DERECHA', 'MALETERO'] },
+      { titulo: 'Neumáticos', peso: 15, piezas: ['RINES', 'TAPONES', 'TUERCAS / BIRLOS', 'ALINEACION', 'BALANCEO'] },
+      { titulo: 'Inventarios', peso: 10, piezas: ['LLANTA DE REFACCION', 'GATO MECANICO', 'GATO HIDRAULICO', 'CRUCETA', 'MANERAL', 'EXTINTOR', 'CABLE PASACORRIENTE', 'TRIANGULOS DE SEÑALIZACION', 'TAPETES', 'CUBREASIENTOS', 'CUBREVOLANTE', 'BEDLINER', 'CUBREBATEA', 'PARASOL'] },
+      { titulo: 'Cerraduras', peso: 5, piezas: ['CERRADURA PUERTA PILOTO', 'CERRADURA PUERTA COPILOTO', 'CERRADURA PUERTA TRASERA DERECHA', 'CERRADURA TAPA BATEA/MALETERO'] },
+      { titulo: 'Limpieza', peso: 5, piezas: ['ASIENTOS DELANTEROS', 'ASIENTOS TRASEROS2', 'CIELO Y ALFOMBRA', 'EXTERIOR DE UNIDAD', 'OTROS'] },
+      { titulo: 'Interiores', peso: 5, piezas: ['ASIENTO DE CONDUCTOR', 'ASIENTO DE COPILOTO', 'ASIENTOS TRASEROS', 'ALFOMBRA', 'CIELO', 'TABLERO', 'CONSOLA CENTRAL', 'GUANTERA', 'MANIJAS INTERNAS', 'TAPA PUERTA PILOTO', 'TAPA PUERTA COPILOTO', 'TAPA PUERTA TRASERA DERECHA'] },
+      { titulo: 'Sistemas interiores', peso: 10, piezas: ['MANDOS / BOTONERA VIDRIOS Y SEGUROS', 'CLUSTER / TABLERO', 'LUCES ALTAS', 'LUCES BAJAS', 'CUARTOS', 'DIRECCIONALES IZQUIERDAS', 'DIRECCIONALES DERECHAS', 'INTERMITENTES', 'NIEBLEROS / OTROS', 'STOP', 'LIMPIAPARABRISAS DELANTERO', 'LIMPIAPARABRISAS TRASERO', 'SISTEMA MULTIMEDIA', 'CLAXON', 'AC / PERILLAS', 'LUCES INTERIORES'] },
+      { titulo: 'Sistema mecánico', peso: 15, piezas: ['FRENOS DELANTEROS', 'FRENOS TRASEROS', 'FRENO DE MANO', 'SUSPENSION', 'AMORTIGUADORES', 'SOPORTES DE MOTOR', 'BANDAS', 'CLUTCH', 'TRANSMISION / CADENA'] },
+      { titulo: 'Niveles', peso: 10, piezas: ['ACEITE MOTOR', 'REFRIGERANTE', 'LIQUIDO FRENOS', 'LIQUIDO DE DIRECCION', 'LIQUIDO LIMPIAPARABRISAS'] },
+      { titulo: 'Batería', peso: 5, piezas: ['TERMINALES CON SARRO', 'DERRAME LIQUIDO / MAL OLOR', 'BATERIA INFLADA'] },
+    ],
+    // NP300 ESTACA es una pickup de 2 puertas con Redilas: su Latonería (12 piezas)/
+    // Cerraduras/Limpieza/Interiores son iguales a RAM 4000, pero su Sistemas
+    // interiores trae "Botones volante" (como SAVEIRO) en vez del listado de RAM
+    // 4000. Confirmado contra su propio PDF crudo.
+    'NP300 ESTACA': [
+      { titulo: 'Documentación', peso: 5, piezas: ['GAFETTE', 'TARJETA CIRCULACION', 'LICENCIA', 'POLIZA SEGURO', 'VERIFICACION', 'KARDEX'] },
+      { titulo: 'Cristalería', peso: 10, piezas: ['PARABRISAS', 'MEDALLON', 'CRISTALES PUERTAS', 'RETROVISOR IZQUIERDO', 'RETROVISOR DERECHO', 'FAROS DELANTEROS', 'CALAVERAS TRASERAS'] },
+      { titulo: 'Latonería y pintura', peso: 5, piezas: ['COFRE', 'FASCIA / PARRILLA / DEFENSA DELANTERA', 'FASCIA / DEFENSA TRASERA', 'GUARDAFANGO / SALPICADERA FRONTAL IZQUIERDA', 'GUARDAFANGO / SALPICADERA FRONTAL DERECHA', 'GUARDAFANGO / SALPICADERA POSTERIOR IZQUIERDA', 'GUARDAFANGO / SALPICADERA POSTERIOR DERECHA', 'PUERTA PILOTO', 'PUERTA COPILOTO', 'BATEA / BETLINER', 'CABINA', 'REDILAS'] },
+      { titulo: 'Neumáticos', peso: 15, piezas: ['RINES', 'TAPONES', 'TUERCAS / BIRLOS', 'ALINEACION', 'BALANCEO'] },
+      { titulo: 'Inventarios', peso: 10, piezas: ['LLANTA DE REFACCION', 'GATO MECANICO', 'GATO HIDRAULICO', 'CRUCETA', 'MANERAL', 'EXTINTOR', 'CABLE PASACORRIENTE', 'TRIANGULOS DE SEÑALIZACION', 'TAPETES', 'CUBREASIENTOS', 'CUBREVOLANTE', 'BEDLINER', 'CUBREBATEA', 'PARASOL'] },
+      { titulo: 'Cerraduras', peso: 5, piezas: ['CERRADURA PUERTA PILOTO', 'CERRADURA PUERTA COPILOTO', 'CERRADURA TAPA BATEA/MALETERO'] },
+      { titulo: 'Limpieza', peso: 5, piezas: ['ASIENTOS DELANTEROS', 'CIELO Y ALFOMBRA', 'EXTERIOR DE UNIDAD', 'OTROS'] },
+      { titulo: 'Interiores', peso: 5, piezas: ['ASIENTO DE CONDUCTOR', 'ASIENTO DE COPILOTO', 'ALFOMBRA', 'CIELO', 'TABLERO', 'CONSOLA CENTRAL', 'GUANTERA', 'MANIJAS INTERNAS', 'TAPA PUERTA PILOTO', 'TAPA PUERTA COPILOTO'] },
+      { titulo: 'Sistemas interiores', peso: 10, piezas: ['MANDOS / BOTONERA VIDRIOS Y SEGUROS', 'CLUSTER / TABLERO', 'LUCES ALTAS', 'LUCES BAJAS', 'CUARTOS', 'DIRECCIONALES IZQUIERDAS', 'DIRECCIONALES DERECHAS', 'INTERMITENTES', 'NIEBLEROS / OTROS', 'STOP', 'LIMPIAPARABRISAS DELANTERO', 'BOTONES VOLANTE', 'SISTEMA MULTIMEDIA', 'CLAXON', 'AC / PERILLAS', 'LUCES INTERIORES'] },
+      { titulo: 'Sistema mecánico', peso: 15, piezas: ['FRENOS DELANTEROS', 'FRENOS TRASEROS', 'FRENO DE MANO', 'SUSPENSION', 'AMORTIGUADORES', 'SOPORTES DE MOTOR', 'BANDAS', 'CLUTCH', 'TRANSMISION / CADENA'] },
+      { titulo: 'Niveles', peso: 10, piezas: ['ACEITE MOTOR', 'REFRIGERANTE', 'LIQUIDO FRENOS', 'LIQUIDO DE DIRECCION', 'LIQUIDO LIMPIAPARABRISAS'] },
+      { titulo: 'Batería', peso: 5, piezas: ['TERMINALES CON SARRO', 'DERRAME LIQUIDO / MAL OLOR', 'BATERIA INFLADA'] },
+    ],
+    // MOTOCARRO MUEVETEC: estructura totalmente distinta a los formatos de auto/
+    // pickup, pero tiene el mismo bug de fondo -- "Carburador", "Clutch" y "Cardan"
+    // (con opción N/A) aparecen en el texto plano justo después del encabezado
+    // "Niveles 10%" (que solo trae Aceite de motor/Liquido de frenos, sin N/A),
+    // pero son piezas mecánicas de "Sistema mecánico" (igual que Bandas/Clutch/
+    // Transmisión en los formatos de auto) -- se reagrupan ahí. Confirmado con
+    // Jorge (2026-09-30) y contra su propio PDF crudo.
+    'MOTOCARRO MUEVETEC': [
+      { titulo: 'Documentación', peso: 5, piezas: ['GAFETTE', 'TARJETA CIRCULACION', 'LICENCIA', 'POLIZA SEGURO', 'VERIFICACION', 'KARDEX'] },
+      { titulo: 'Cristalería', peso: 10, piezas: ['FAROS DELANTEROS', 'CALAVERAS TRASERAS', 'DIRECCIONALES', 'RETROVISOR IZQUIERDO', 'RETROVISOR DERECHO'] },
+      { titulo: 'Latonería y pintura', peso: 5, piezas: ['SALPICADERA DELANTERA', 'CARCASA MANUBRIO Y FARO', 'MANUBRIO', 'TAPA LATERAL DERECHA', 'TAPA LATERAL IZQUIERDA', 'POSAPIE DERECHO', 'POSAPIE IZQUIERDO', 'SALPICADERA DERECHA', 'SALPICADERA IZQUIERDA', 'BATEA / BETLINER', 'TAPA DE BATEA', 'DEFENSA TRASERA', 'CHASIS'] },
+      { titulo: 'Inventarios', peso: 10, piezas: ['GATO HIDRAULICO', 'CRUCETA', 'REFACCION'] },
+      { titulo: 'Cerraduras', peso: 5, piezas: ['SWITCH', 'CERRADURA TAPON TANQUE GASOLINA'] },
+      { titulo: 'Limpieza', peso: 5, piezas: ['ASIENTO', 'EXTERIOR DE UNIDAD'] },
+      { titulo: 'Neumáticos', peso: 15, piezas: ['RINES', 'TUERCAS/BIRLOS'] },
+      { titulo: 'Interiores', peso: 5, piezas: ['ASIENTO DE CONDUCTOR'] },
+      { titulo: 'Sistemas interiores', peso: 10, piezas: ['MANDOS / BOTONERA VIDRIOS Y SEGUROS', 'CLUSTER / TABLERO', 'LUCES ALTAS', 'LUCES BAJAS', 'CUARTOS', 'DIRECCIONALES IZQUIERDAS', 'NIEBLEROS / OTROS', 'STOP', 'CLAXON', 'PUÑO ACELERADOR', 'DIRECCIONALES DERECHAS', 'INTERMITENTES'] },
+      { titulo: 'Sistema mecánico', peso: 15, piezas: ['FRENOS DELANTEROS', 'FRENOS TRASEROS', 'FRENO DE MANO', 'AMORTIGUADORES DELANTEROS', 'AMORTIGUADOR TRASERO', 'SOPORTES DE MOTOR', 'CARBURADOR', 'CLUTCH', 'CARDAN'] },
+      { titulo: 'Niveles', peso: 10, piezas: ['ACEITE MOTOR', 'LIQUIDO FRENOS'] },
+      { titulo: 'Batería', peso: 5, piezas: ['TERMINALES CON SARRO', 'DERRAME LIQUIDO / MAL OLOR', 'BATERIA INFLADA'] },
+    ],
+    // MOTOCARRO KINGWAY: casi idéntico a MOTOCARRO MUEVETEC (mismo bug de
+    // Carburador/Clutch/Cardan pegados a Niveles), salvo que su Neumáticos trae
+    // "Tapones" en vez de "Rines" -- no se puede alias directo. Confirmado contra
+    // su propio PDF crudo.
+    'MOTOCARRO KINGWAY': [
+      { titulo: 'Documentación', peso: 5, piezas: ['GAFETTE', 'TARJETA CIRCULACION', 'LICENCIA', 'POLIZA SEGURO', 'VERIFICACION', 'KARDEX'] },
+      { titulo: 'Cristalería', peso: 10, piezas: ['FAROS DELANTEROS', 'CALAVERAS TRASERAS', 'DIRECCIONALES', 'RETROVISOR IZQUIERDO', 'RETROVISOR DERECHO'] },
+      { titulo: 'Latonería y pintura', peso: 5, piezas: ['SALPICADERA DELANTERA', 'CARCASA MANUBRIO Y FARO', 'MANUBRIO', 'TAPA LATERAL DERECHA', 'TAPA LATERAL IZQUIERDA', 'POSAPIE DERECHO', 'POSAPIE IZQUIERDO', 'SALPICADERA DERECHA', 'SALPICADERA IZQUIERDA', 'BATEA / BETLINER', 'TAPA DE BATEA', 'DEFENSA TRASERA', 'CHASIS'] },
+      { titulo: 'Inventarios', peso: 10, piezas: ['GATO HIDRAULICO', 'CRUCETA', 'REFACCION'] },
+      { titulo: 'Cerraduras', peso: 5, piezas: ['SWITCH', 'CERRADURA TAPON TANQUE GASOLINA'] },
+      { titulo: 'Limpieza', peso: 5, piezas: ['ASIENTO', 'EXTERIOR DE UNIDAD'] },
+      { titulo: 'Neumáticos', peso: 15, piezas: ['TAPONES', 'TUERCAS/BIRLOS'] },
+      { titulo: 'Interiores', peso: 5, piezas: ['ASIENTO DE CONDUCTOR'] },
+      { titulo: 'Sistemas interiores', peso: 10, piezas: ['MANDOS / BOTONERA VIDRIOS Y SEGUROS', 'CLUSTER / TABLERO', 'LUCES ALTAS', 'LUCES BAJAS', 'CUARTOS', 'DIRECCIONALES IZQUIERDAS', 'NIEBLEROS / OTROS', 'STOP', 'CLAXON', 'PUÑO ACELERADOR', 'DIRECCIONALES DERECHAS', 'INTERMITENTES'] },
+      { titulo: 'Sistema mecánico', peso: 15, piezas: ['FRENOS DELANTEROS', 'FRENOS TRASEROS', 'FRENO DE MANO', 'AMORTIGUADORES DELANTEROS', 'AMORTIGUADOR TRASERO', 'SOPORTES DE MOTOR', 'CARBURADOR', 'CLUTCH', 'CARDAN'] },
+      { titulo: 'Niveles', peso: 10, piezas: ['ACEITE MOTOR', 'LIQUIDO FRENOS'] },
+      { titulo: 'Batería', peso: 5, piezas: ['TERMINALES CON SARRO', 'DERRAME LIQUIDO / MAL OLOR', 'BATERIA INFLADA'] },
+    ],
+    // ITALIKA DM250: mismo bug que MOTOCARRO MUEVETEC -- "Carburador", "Clutch" y
+    // "Transmisión/cadena" (con N/A) aparecen en el texto plano justo después de
+    // "Niveles 10%" (que solo trae Aceite de motor/Liquido de frenos, sin N/A),
+    // pero son piezas mecánicas de "Sistema mecánico". Se reagrupan ahí. El campo
+    // de "Posapies" usa el nombre interno [PASAPIES] (typo de la plantilla, no mío).
+    // Confirmado contra su propio PDF crudo.
+    'ITALIKA DM250': [
+      { titulo: 'Documentación', peso: 5, piezas: ['GAFETTE', 'TARJETA CIRCULACION', 'LICENCIA', 'POLIZA SEGURO', 'VERIFICACION', 'KARDEX'] },
+      { titulo: 'Cristalería', peso: 10, piezas: ['FAROS DELANTEROS', 'CALAVERAS TRASERAS', 'DIRECCIONALES', 'RETROVISOR IZQUIERDO', 'RETROVISOR DERECHO'] },
+      { titulo: 'Latonería y pintura', peso: 5, piezas: ['SALPICADERA DELANTERA', 'PROTECTORES / EMBELLECEDORES DE BARRAS', 'SALPICADERA TRASERA / GUARDAFANGO', 'PROTECTOR / CARCASA FARO', 'PROTECTOR / EMBELLECEDOR LADO DERECHO', 'PROTECTOR / EMBELLECEDOR LADO IZQUIERDO', 'SLIDER PROTECTOR DERECHO', 'SLIDER PROTECTOR IZQUIERDO', 'TAPA DERECHA', 'TAPA IZQUIERDA', 'ESCAPE', 'PASAPIES', 'MANUBRIO'] },
+      { titulo: 'Neumáticos', peso: 15, piezas: ['RINES', 'TUERCAS / BIRLOS'] },
+      { titulo: 'Inventarios', peso: 10, piezas: ['LLAVE CRUZ', 'DADO'] },
+      { titulo: 'Cerraduras', peso: 5, piezas: ['SWITCH', 'CERRADURA TAPON TANQUE GASOLINA'] },
+      { titulo: 'Limpieza', peso: 5, piezas: ['ASIENTO', 'EXTERIOR DE UNIDAD'] },
+      { titulo: 'Interiores', peso: 5, piezas: ['ASIENTO DE CONDUCTOR', 'ASIENTO DE COPILOTO'] },
+      { titulo: 'Sistemas interiores', peso: 10, piezas: ['MANDOS / BOTONERA VIDRIOS Y SEGUROS', 'CLUSTER / TABLERO', 'LUCES ALTAS', 'LUCES BAJAS', 'CUARTOS', 'DIRECCIONALES IZQUIERDAS', 'DIRECCIONALES DERECHAS', 'INTERMITENTES', 'NIEBLEROS / OTROS', 'STOP', 'CLAXON', 'PUÑO ACELERADOR'] },
+      { titulo: 'Sistema mecánico', peso: 15, piezas: ['FRENOS DELANTEROS', 'FRENOS TRASEROS', 'AMORTIGUADORES DELANTEROS', 'AMORTIGUADOR TRASERO', 'SOPORTES DE MOTOR', 'CARBURADOR', 'CLUTCH', 'TRANSMISION / CADENA'] },
+      { titulo: 'Niveles', peso: 10, piezas: ['ACEITE MOTOR', 'LIQUIDO FRENOS'] },
+      { titulo: 'Batería', peso: 5, piezas: ['TERMINALES CON SARRO', 'DERRAME LIQUIDO / MAL OLOR', 'BATERIA INFLADA'] },
+    ],
+    // ITALIKA AT125: idéntico a ITALIKA DM250 pieza por pieza (mismo bug de
+    // Carburador/Clutch/Transmisión pegados a Niveles), salvo que su Inventarios
+    // trae una pieza extra ("Kit de herramientas") -- no se puede alias directo.
+    // Confirmado contra su propio PDF crudo.
+    'ITALIKA AT125': [
+      { titulo: 'Documentación', peso: 5, piezas: ['GAFETTE', 'TARJETA CIRCULACION', 'LICENCIA', 'POLIZA SEGURO', 'VERIFICACION', 'KARDEX'] },
+      { titulo: 'Cristalería', peso: 10, piezas: ['FAROS DELANTEROS', 'CALAVERAS TRASERAS', 'DIRECCIONALES', 'RETROVISOR IZQUIERDO', 'RETROVISOR DERECHO'] },
+      { titulo: 'Latonería y pintura', peso: 5, piezas: ['SALPICADERA DELANTERA', 'PROTECTORES / EMBELLECEDORES DE BARRAS', 'SALPICADERA TRASERA / GUARDAFANGO', 'PROTECTOR / CARCASA FARO', 'PROTECTOR / EMBELLECEDOR LADO DERECHO', 'PROTECTOR / EMBELLECEDOR LADO IZQUIERDO', 'SLIDER PROTECTOR DERECHO', 'SLIDER PROTECTOR IZQUIERDO', 'TAPA DERECHA', 'TAPA IZQUIERDA', 'ESCAPE', 'PASAPIES', 'MANUBRIO'] },
+      { titulo: 'Neumáticos', peso: 15, piezas: ['RINES', 'TUERCAS / BIRLOS'] },
+      { titulo: 'Inventarios', peso: 10, piezas: ['LLAVE CRUZ', 'DADO', 'KIT HERRAMIENTAS'] },
+      { titulo: 'Cerraduras', peso: 5, piezas: ['SWITCH', 'CERRADURA TAPON TANQUE GASOLINA'] },
+      { titulo: 'Limpieza', peso: 5, piezas: ['ASIENTO', 'EXTERIOR DE UNIDAD'] },
+      { titulo: 'Interiores', peso: 5, piezas: ['ASIENTO DE CONDUCTOR', 'ASIENTO DE COPILOTO'] },
+      { titulo: 'Sistemas interiores', peso: 10, piezas: ['MANDOS / BOTONERA VIDRIOS Y SEGUROS', 'CLUSTER / TABLERO', 'LUCES ALTAS', 'LUCES BAJAS', 'CUARTOS', 'DIRECCIONALES IZQUIERDAS', 'DIRECCIONALES DERECHAS', 'INTERMITENTES', 'NIEBLEROS / OTROS', 'STOP', 'CLAXON', 'PUÑO ACELERADOR'] },
+      { titulo: 'Sistema mecánico', peso: 15, piezas: ['FRENOS DELANTEROS', 'FRENOS TRASEROS', 'AMORTIGUADORES DELANTEROS', 'AMORTIGUADOR TRASERO', 'SOPORTES DE MOTOR', 'CARBURADOR', 'CLUTCH', 'TRANSMISION / CADENA'] },
+      { titulo: 'Niveles', peso: 10, piezas: ['ACEITE MOTOR', 'LIQUIDO FRENOS'] },
+      { titulo: 'Batería', peso: 5, piezas: ['TERMINALES CON SARRO', 'DERRAME LIQUIDO / MAL OLOR', 'BATERIA INFLADA'] },
+    ],
   };
+  // KWID usa el mismo formato que AUTOS, pieza por pieza (confirmado contra el PDF
+  // crudo de ambas plantillas: mismo Maletero, mismo Limpiaparabrisas trasero, todo
+  // igual) -- se le apunta a la misma tabla en vez de repetirla.
+  REAGRUPAR_SECCIONES['KWID'] = REAGRUPAR_SECCIONES['AUTOS'];
+  // RIFTER también es igual a AUTOS pieza por pieza (confirmado contra su PDF crudo:
+  // Latonería con puertas traseras + Maletero, Cerraduras con tapa batea/maletero,
+  // Limpieza con Asientos traseros2, Interiores con tapa de puerta trasera, y
+  // Sistemas interiores con Limpiaparabrisas trasero -- las 16 piezas) -- mismo alias.
+  REAGRUPAR_SECCIONES['RIFTER'] = REAGRUPAR_SECCIONES['AUTOS'];
+  // XPANDER también es igual a AUTOS pieza por pieza (mismo patrón: Latonería con
+  // puertas traseras + Maletero, Sistemas interiores con Limpiaparabrisas trasero y
+  // sin Botones volante) -- confirmado contra su propio PDF crudo.
+  REAGRUPAR_SECCIONES['XPANDER'] = REAGRUPAR_SECCIONES['AUTOS'];
+  // NP300 CABINA REDILAS es igual a L200 pieza por pieza (misma Latonería con
+  // Redilas, mismas Cerraduras/Limpieza/Interiores de 4 puertas, y el mismo
+  // Sistemas interiores con "Botones volante") -- confirmado contra su PDF crudo.
+  REAGRUPAR_SECCIONES['NP300 CABINA REDILAS'] = REAGRUPAR_SECCIONES['L200'];
+  // HONDA 150XR es igual a ITALIKA DM250 pieza por pieza (mismo Inventarios de 2
+  // piezas, sin "Kit de herramientas") -- confirmado contra su propio PDF crudo.
+  REAGRUPAR_SECCIONES['HONDA 150XR'] = REAGRUPAR_SECCIONES['ITALIKA DM250'];
+  // MOTOCARRO (genérico, sin marca) es igual a MOTOCARRO KINGWAY pieza por pieza
+  // (mismo Neumáticos con "Tapones" en vez de "Rines") -- confirmado contra su
+  // propio PDF crudo.
+  REAGRUPAR_SECCIONES['MOTOCARRO'] = REAGRUPAR_SECCIONES['MOTOCARRO KINGWAY'];
   /** Sin espacios ni mayúsculas/minúsculas: una palabra que se corta a la mitad de
    *  línea en el documento a veces pierde el espacio al leerse como texto plano
    *  (pasó con "ASIENTOS TRASEROS 2" -> "ASIENTOS TRASEROS2" al leer el PDF de la

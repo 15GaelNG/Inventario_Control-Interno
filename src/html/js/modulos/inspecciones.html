@@ -447,16 +447,15 @@
     // ----- catálogos -----
     // Prefijo del folio (VehiculosService.PREFIJOS_CLASE) → lista exacta de "tipo" que
     // debe mostrar, confirmada a mano con Jorge (no viene de ninguna hoja ni catálogo).
-    // Los 3 "motocarro" (KINGWAY/MUEVETEC/genérico) no están en ningún prefijo — Jorge
-    // los quiere fuera de MOT. Sus folios reales caen en el prefijo genérico "FOL", que
-    // no filtra (no se puede distinguir Motocarro/Cuatrimoto/Nuco sin información solo
-    // con el folio) — igual que cualquier prefijo no reconocido: se muestran todos los
-    // tipos, como antes.
+    // Los 3 "motocarro" (MOTOCARRO KINGWAY/MOTOCARRO MUEVETEC/MOTOCARRO genérico)
+    // también caen en el prefijo MOT (confirmado con Jorge 2026-09-30) -- antes se
+    // creía que sus folios usaban el prefijo genérico "FOL" y por eso se dejaban
+    // fuera, pero sí usan MOT igual que las motos.
     const TIPOS_POR_PREFIJO_FOLIO = {
       AUT: ['KWID', 'AUTOS'],
       CTA: ['NP300 ESTACA', 'RIFTER', 'URVAN', 'SAVEIRO', 'NP300 CABINA REDILAS', 'RAM 700', 'XPANDER', 'L200'],
       CON: ['PIPA', 'RAM 4000'],
-      MOT: ['ITALIKA DM250', 'HONDA 150XR', 'ITALIKA AT125'],
+      MOT: ['ITALIKA DM250', 'HONDA 150XR', 'ITALIKA AT125', 'MOTOCARRO', 'MOTOCARRO KINGWAY', 'MOTOCARRO MUEVETEC'],
     };
     /** "AUT0640" → ['KWID', 'AUTOS']; folios sin prefijo reconocido (ej. FOL0650) → null (no filtra). */
     function tiposDelFolio(folio) {

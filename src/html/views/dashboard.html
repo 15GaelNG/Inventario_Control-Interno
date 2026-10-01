@@ -5,35 +5,35 @@
     <h3 class="dash-section-title">Resumen</h3>
     <div class="stat-row" id="dash-kpis">
       <div class="stat-tile stat-tile-clickable nav-module" data-view="vehiculos" style="cursor:pointer">
-        <div class="stat-icon"><i data-lucide="truck" class="ico"></i></div>
+        <div class="stat-ring" id="dash-ring-vehiculos-activos" style="--stat-color:var(--color-success)"><div class="stat-ring-hole"><i data-lucide="truck" class="ico"></i></div></div>
         <div><div class="stat-value" id="dash-kpi-vehiculos-activos">—</div><div class="stat-label">Vehículos activos</div></div>
       </div>
       <div class="stat-tile stat-tile-clickable nav-module" data-view="vehiculos" style="cursor:pointer">
-        <div class="stat-icon"><i data-lucide="ban" class="ico"></i></div>
+        <div class="stat-ring" id="dash-ring-vehiculos-baja" style="--stat-color:var(--color-danger)"><div class="stat-ring-hole"><i data-lucide="ban" class="ico"></i></div></div>
         <div><div class="stat-value" id="dash-kpi-vehiculos-baja">—</div><div class="stat-label">Vehículos de baja</div></div>
       </div>
       <div class="stat-tile stat-tile-clickable nav-module" data-view="incidencias" style="cursor:pointer">
-        <div class="stat-icon"><i data-lucide="wrench" class="ico"></i></div>
+        <div class="stat-ring" id="dash-ring-incidencias-abiertas" style="--stat-color:var(--color-danger)"><div class="stat-ring-hole"><i data-lucide="wrench" class="ico"></i></div></div>
         <div><div class="stat-value" id="dash-kpi-incidencias-abiertas">—</div><div class="stat-label">Incidencias abiertas</div></div>
       </div>
       <div class="stat-tile stat-tile-clickable nav-module" data-view="tickets" style="cursor:pointer">
-        <div class="stat-icon"><i data-lucide="ticket" class="ico"></i></div>
+        <div class="stat-ring" id="dash-ring-tickets-recientes" style="--stat-color:var(--color-primary)"><div class="stat-ring-hole"><i data-lucide="ticket" class="ico"></i></div></div>
         <div><div class="stat-value" id="dash-kpi-tickets-recientes">—</div><div class="stat-label">Tickets (últimos 30 días)</div></div>
       </div>
       <div class="stat-tile stat-tile-clickable nav-module" data-view="caja-chica" style="cursor:pointer">
-        <div class="stat-icon"><i data-lucide="circle-check" class="ico"></i></div>
+        <div class="stat-ring" id="dash-ring-cch-vigentes" style="--stat-color:var(--color-success)"><div class="stat-ring-hole"><i data-lucide="circle-check" class="ico"></i></div></div>
         <div><div class="stat-value" id="dash-kpi-cch-vigentes">—</div><div class="stat-label">Cajas chicas vigentes</div></div>
       </div>
       <div class="stat-tile stat-tile-clickable nav-module" data-view="caja-chica" style="cursor:pointer">
-        <div class="stat-icon"><i data-lucide="clock" class="ico"></i></div>
+        <div class="stat-ring" id="dash-ring-cch-proceso" style="--stat-color:var(--color-accent)"><div class="stat-ring-hole"><i data-lucide="clock" class="ico"></i></div></div>
         <div><div class="stat-value" id="dash-kpi-cch-proceso">—</div><div class="stat-label">Cajas chicas en cierre</div></div>
       </div>
       <div class="stat-tile stat-tile-clickable nav-module" data-view="lineas-telefonicas" style="cursor:pointer">
-        <div class="stat-icon"><i data-lucide="smartphone" class="ico"></i></div>
+        <div class="stat-ring" id="dash-ring-equipos-activos" style="--stat-color:var(--color-primary)"><div class="stat-ring-hole"><i data-lucide="smartphone" class="ico"></i></div></div>
         <div><div class="stat-value" id="dash-kpi-equipos-activos">—</div><div class="stat-label">Equipos telefónicos activos</div></div>
       </div>
       <div class="stat-tile stat-tile-clickable nav-module" data-view="lineas-telefonicas" style="cursor:pointer">
-        <div class="stat-icon"><i data-lucide="phone" class="ico"></i></div>
+        <div class="stat-ring" id="dash-ring-lineas-activas" style="--stat-color:var(--color-primary)"><div class="stat-ring-hole"><i data-lucide="phone" class="ico"></i></div></div>
         <div><div class="stat-value" id="dash-kpi-lineas-activas">—</div><div class="stat-label">Líneas telefónicas activas</div></div>
       </div>
     </div>
@@ -43,15 +43,15 @@
     <h3 class="dash-section-title">Pendientes que necesitan atención</h3>
     <div class="stat-row" id="dash-alertas">
       <div class="stat-tile stat-tile-warn stat-tile-clickable nav-module" data-view="verificaciones" style="cursor:pointer">
-        <div class="stat-icon"><i data-lucide="triangle-alert" class="ico"></i></div>
+        <div class="stat-ring" id="dash-ring-verif-vencidas" style="--stat-color:var(--color-danger)"><div class="stat-ring-hole"><i data-lucide="triangle-alert" class="ico"></i></div></div>
         <div><div class="stat-value" id="dash-alerta-verif-vencidas">—</div><div class="stat-label">Verificaciones vencidas</div></div>
       </div>
       <div class="stat-tile stat-tile-warn stat-tile-clickable nav-module" data-view="verificaciones" style="cursor:pointer">
-        <div class="stat-icon"><i data-lucide="hourglass" class="ico"></i></div>
+        <div class="stat-ring" id="dash-ring-verif-por-vencer" style="--stat-color:var(--color-accent)"><div class="stat-ring-hole"><i data-lucide="hourglass" class="ico"></i></div></div>
         <div><div class="stat-value" id="dash-alerta-verif-por-vencer">—</div><div class="stat-label">Verificaciones por vencer</div></div>
       </div>
       <div class="stat-tile stat-tile-warn stat-tile-clickable nav-module" data-view="inspeccion-vehicular" style="cursor:pointer">
-        <div class="stat-icon"><i data-lucide="clipboard-x" class="ico"></i></div>
+        <div class="stat-ring" id="dash-ring-insp-atrasadas" style="--stat-color:var(--color-danger)"><div class="stat-ring-hole"><i data-lucide="clipboard-x" class="ico"></i></div></div>
         <div><div class="stat-value" id="dash-alerta-insp-atrasadas">—</div><div class="stat-label">Inspecciones atrasadas</div></div>
       </div>
     </div>

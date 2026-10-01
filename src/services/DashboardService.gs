@@ -30,7 +30,7 @@ const DashboardService = (function () {
   function kpiVehiculos_(token) {
     const filas = VehiculosService.listarResumen(token);
     const baja = filas.filter((v) => String(v.ESTATUS || '').toUpperCase() === 'BAJA VEHICULAR').length;
-    return { activos: filas.length - baja, baja: baja };
+    return { activos: filas.length - baja, baja: baja, total: filas.length };
   }
 
   function kpiTicketsIncidencias_(token) {
@@ -44,7 +44,9 @@ const DashboardService = (function () {
       return !isNaN(f.getTime()) && f >= hace30;
     }).length;
 
-    return { incidenciasAbiertas: abiertas, ticketsRecientes: recientes };
+    // ticketsRecientes es una ventana de 30 días, no una parte de un todo --
+    // no lleva "total" (el cliente lo deja como anillo lleno, decorativo).
+    return { incidenciasAbiertas: abiertas, incidenciasTotal: incidencias.length, ticketsRecientes: recientes };
   }
 
   function kpiCajasChicas_(token) {
@@ -54,6 +56,7 @@ const DashboardService = (function () {
       vigentes: contar('VIGENTE'),
       enProcesoCierre: contar('EN PROCESO DE CIERRE'),
       cerradas: contar('CERRADA'),
+      total: filas.length,
     };
   }
 
@@ -65,7 +68,10 @@ const DashboardService = (function () {
     const idxEstatusLinea = ix.lineas.columnas.indexOf('estatus');
     const equiposActivos = equipos.filter((f) => String(f[idxEstatusEquipo] || '').toUpperCase() !== 'DESECHADO').length;
     const lineasActivas = lineas.filter((f) => String(f[idxEstatusLinea] || '').toUpperCase() !== 'SIN LINEA').length;
-    return { equiposActivos: equiposActivos, lineasActivas: lineasActivas };
+    return {
+      equiposActivos: equiposActivos, equiposTotal: equipos.length,
+      lineasActivas: lineasActivas, lineasTotal: lineas.length,
+    };
   }
 
   // ---------------- Alertas ----------------
@@ -91,7 +97,7 @@ const DashboardService = (function () {
       if (dias < 0) vencidas++;
       else if (dias <= 30) porVencer++;
     });
-    return { vencidas: vencidas, porVencer: porVencer };
+    return { vencidas: vencidas, porVencer: porVencer, total: Object.keys(ultimaPorFolio).length };
   }
 
   /**
@@ -118,7 +124,7 @@ const DashboardService = (function () {
       const f = new Date(ultima);
       return isNaN(f.getTime()) || f < limite;
     });
-    return { atrasadas: atrasados.length };
+    return { atrasadas: atrasados.length, total: activos.length };
   }
 
   // ---------------- Actividad reciente ----------------

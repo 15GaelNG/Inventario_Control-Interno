@@ -73,6 +73,12 @@ function apiBuscarVehiculoPorFolio(token, folio) {
 function apiListarVehiculosResumen(token) {
   return JSON.stringify(VehiculosService.listarResumen(token));
 }
+function apiDiagnosticoIdVehiculo(token) {
+  return VehiculosService.diagnosticoIds(token);
+}
+function apiNotificacionesPendientes(token) {
+  return JSON.stringify(NotificacionesService.listar(token));
+}
 function apiVehiculosCompleto(token) {
   return JSON.stringify(VehiculosService.completo(token));
 }
@@ -283,6 +289,12 @@ function apiEliminarArqueo(token, id) {
 }
 function apiSubirArchivoArqueo(token, nombreArchivo, mimeType, base64Data) {
   return ArqueosService.subirArchivo(token, nombreArchivo, mimeType, base64Data);
+}
+function apiSubirFirmaArqueo(token, nombreArchivo, mimeType, base64Data) {
+  return ArqueosService.subirFirma(token, nombreArchivo, mimeType, base64Data);
+}
+function apiSubirEvidenciaArqueo(token, nombreArchivo, mimeType, base64Data) {
+  return ArqueosService.subirEvidencia(token, nombreArchivo, mimeType, base64Data);
 }
 
 // --- Listas de referencia ---

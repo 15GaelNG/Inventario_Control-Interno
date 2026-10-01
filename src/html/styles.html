@@ -435,6 +435,26 @@
   .stat-tile-ok .stat-icon { background: #DCF1E6; color: var(--color-success); }
   :root[data-theme="dark"] .stat-tile-ok .stat-icon { background: #123024; }
 
+  /* Anillo de progreso de las tarjetas de Inicio (dash-kpis/dash-alertas) --
+     solo ahí, no toca .stat-icon (compartido con Vehículos/Incidencias/Panorama).
+     --stat-pct (0-100) y --stat-color los pone cargarResumenInicio() en línea,
+     una vez que llega el número real; antes de eso el anillo queda vacío y gris. */
+  .stat-ring {
+    --stat-pct: 0;
+    --stat-color: var(--color-primary);
+    width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0;
+    background: conic-gradient(var(--stat-color) calc(var(--stat-pct) * 1%), var(--color-border) 0);
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.5s ease;
+  }
+  .stat-ring-hole {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: var(--color-surface);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--stat-color);
+  }
+  .stat-ring-hole .ico { width: 17px; height: 17px; }
+
   /* KPI clickeable: filtra la tabla del mismo módulo con solo darle clic
      (ver wireKpiFiltro en app.html). */
   .stat-tile-clickable { cursor: pointer; transition: border-color .15s, box-shadow .15s, background-color .15s; }

@@ -139,7 +139,10 @@
       mostrarSiCampo: 'CUENTA CON FIRMA ASISTENTE', mostrarSiValor: 'SI',
     },
     { grupo: 'Firmas y evidencia', clave: 'FIRMA EXTERNA', etiqueta: 'Firma externa', tipo: 'file' },
-    { grupo: 'Firmas y evidencia', clave: 'EVIDENCIAS', etiqueta: 'Evidencias', tipo: 'file' },
+    // multiple: deja elegir varias fotos a la vez -- subirArchivosArqueo las junta
+    // en un solo PDF (una por página) antes de subirlas, porque en la hoja esta
+    // columna sigue guardando un único archivo, como el resto de los 'file'.
+    { grupo: 'Firmas y evidencia', clave: 'EVIDENCIAS', etiqueta: 'Evidencias', tipo: 'file', multiple: true },
     // El PDF ya no se sube a mano: se genera solo al Registrar/Editar (ver
     // ArqueosService.generarPdfArqueo_) a partir de la plantilla F-CI03-009.
     { grupo: 'Firmas y evidencia', clave: 'ESTADO PDF', etiqueta: 'Estado del PDF', tipo: 'text', soloLectura: true, placeholder: 'Se genera solo al guardar' },
@@ -164,10 +167,17 @@
         if (campo.tipo === 'file') {
           // soloLectura (ej. Formato de arqueo): ya no se sube a mano, se
           // genera solo — no tiene caso pintar el <input type="file">.
-          const inputArchivo = campo.soloLectura ? '' : `<input type="file" id="${id}" accept=".pdf,.png,.jpg,.jpeg" />`;
+          // multiple (Evidencias): solo imágenes, varias a la vez -- se
+          // combinan en un solo PDF al guardar (ver subirArchivosArqueo).
+          const inputArchivo = campo.soloLectura ? '' : campo.multiple
+            ? `<input type="file" id="${id}" accept="image/*" multiple />`
+            : `<input type="file" id="${id}" accept=".pdf,.png,.jpg,.jpeg" />`;
+          const ayuda = campo.multiple
+            ? '<span class="form-ayuda">Puedes elegir varias fotos a la vez — se juntan solas en un PDF, una por página.</span>' : '';
           return `<div class="field"${mostrarSi}>
             <label>${campo.etiqueta}</label>
             ${inputArchivo}
+            ${ayuda}
             <div class="file-actual" id="${id}-actual"></div>
           </div>`;
         }
@@ -384,13 +394,86 @@
   }
 
   /** Sube (si el usuario eligió) los archivos de Arqueo y regresa {columna real: url}. */
+
+  /** Dibuja la foto en un canvas, la achica si hace falta (nunca la agranda,
+   *  Math.min(..., 1)) y la regresa como JPEG comprimido. Las fotos de
+   *  cámara sin tocar (varios MB cada una, 3000-4000px) hacían que el PDF
+   *  combinado de Evidencias pasara el límite de tamaño que google.script.run
+   *  deja mandar en una sola llamada -- la subida tronaba con un
+   *  "NetworkError... HTTP 400" genérico, sin mensaje claro, en vez de
+   *  llegar siquiera al límite de 10 MB que ya revisa el servidor
+   *  (ArqueosService.subirArchivo). Bajar cada foto a 1600px de lado más
+   *  largo y comprimirla la deja perfectamente legible y mucho más ligera. */
+  function comprimirImagenArqueo_(file) {
+    const LADO_MAX = 1600;
+    const CALIDAD = 0.75;
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const escala = Math.min(1, LADO_MAX / Math.max(img.naturalWidth, img.naturalHeight));
+        const ancho = Math.round(img.naturalWidth * escala);
+        const alto = Math.round(img.naturalHeight * escala);
+        const canvas = document.createElement('canvas');
+        canvas.width = ancho;
+        canvas.height = alto;
+        const ctx = canvas.getContext('2d');
+        // Fondo blanco antes de dibujar: una foto PNG con transparencia se
+        // vería negra al exportar a JPEG (sin canal alfa) si no se rellena.
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, ancho, alto);
+        ctx.drawImage(img, 0, 0, ancho, alto);
+        URL.revokeObjectURL(url);
+        resolve({ dataUrl: canvas.toDataURL('image/jpeg', CALIDAD), ancho, alto });
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No se pudo leer una de las imágenes')); };
+      img.src = url;
+    });
+  }
+  /** Junta varias fotos en un solo PDF (una por página, centrada y ajustada a
+   *  la hoja carta con margen de 0.5") -- lo usa el campo "Evidencias" de
+   *  Arqueos, que acepta varias imágenes pero en la hoja de cálculo sigue
+   *  siendo un único archivo. jsPDF corre entero en el navegador (cargado en
+   *  Index.html); no hace falta mandar las fotos sueltas al servidor.
+   *  Regresa el base64 crudo (sin el prefijo "data:...;base64,"), listo para
+   *  apiSubirArchivoArqueo, igual que leerArchivoBase64. */
+  async function combinarImagenesEnPdf(files) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+    const margen = 36;
+    for (let i = 0; i < files.length; i++) {
+      const { dataUrl, ancho, alto } = await comprimirImagenArqueo_(files[i]);
+      if (i > 0) doc.addPage();
+      const anchoDisponible = doc.internal.pageSize.getWidth() - margen * 2;
+      const altoDisponible = doc.internal.pageSize.getHeight() - margen * 2;
+      const escala = Math.min(anchoDisponible / ancho, altoDisponible / alto, 1);
+      const anchoFinal = ancho * escala;
+      const altoFinal = alto * escala;
+      const x = margen + (anchoDisponible - anchoFinal) / 2;
+      const y = margen + (altoDisponible - altoFinal) / 2;
+      doc.addImage(dataUrl, 'JPEG', x, y, anchoFinal, altoFinal);
+    }
+    return doc.output('datauristring').split(',')[1] || '';
+  }
+
   async function subirArchivosArqueo(prefijo) {
     const resultado = {};
     const camposArchivo = CAMPOS_ARQUEO.filter((c) => c.tipo === 'file');
     for (const campo of camposArchivo) {
       const input = document.getElementById(prefijo + '-' + slugCampo(campo.clave));
-      const file = input && input.files && input.files[0];
-      if (!file) continue;
+      if (!input || !input.files || !input.files.length) continue;
+      if (campo.multiple) {
+        // Evidencias: a su propia carpeta (apiSubirEvidenciaArqueo, no apiSubirArchivoArqueo).
+        // _FILE_ID no es columna real -- viaja para que el servidor renombre el PDF a
+        // "<ID ARQUEO>_EVIDENCIA_<fecha>" una vez que sabe el ID real (ArqueosService
+        // crear/actualizar lo descartan antes de guardar).
+        const base64 = await combinarImagenesEnPdf(Array.from(input.files));
+        const subido = await callServer('apiSubirEvidenciaArqueo', state.token, 'evidencias.pdf', 'application/pdf', base64);
+        resultado[campo.clave] = subido.url;
+        resultado[campo.clave + '_FILE_ID'] = subido.id;
+        continue;
+      }
+      const file = input.files[0];
       const base64 = await leerArchivoBase64(file);
       const subido = await callServer('apiSubirArchivoArqueo', state.token, file.name, file.type, base64);
       resultado[campo.clave] = subido.url;
@@ -456,10 +539,15 @@
     canvas.dataset.tieneTrazo = '0';
   }
 
-  /** Sube (si el usuario firmó) las firmas dibujadas y regresa {columna real: url}
-   * — mismo patrón que subirArchivosArqueo, pero exportando el canvas a PNG en
-   * vez de leer un <input type="file">. Sin trazo nuevo, no se manda nada
-   * (así crear()/actualizar() no le tocan la firma que ya tenía guardada). */
+  /** Sube (si el usuario firmó) las firmas dibujadas y regresa {columna real: url,
+   * columna + '_FILE_ID': id} — mismo patrón que subirArchivosArqueo, pero
+   * exportando el canvas a PNG en vez de leer un <input type="file">, y a su
+   * propia carpeta (apiSubirFirmaArqueo, no apiSubirArchivoArqueo). El
+   * '_FILE_ID' no es una columna real: viaja para que el servidor renombre la
+   * firma a "<ID ARQUEO>_<quién firma>_<fecha>" una vez que sabe el ID real
+   * (ArqueosService.crear/actualizar lo descartan antes de guardar). Sin
+   * trazo nuevo, no se manda nada (así crear()/actualizar() no le tocan la
+   * firma que ya tenía guardada). */
   async function subirFirmasArqueo(prefijo) {
     const resultado = {};
     const camposFirma = CAMPOS_ARQUEO.filter((c) => c.tipo === 'firma');
@@ -467,8 +555,9 @@
       const canvas = document.getElementById(prefijo + '-' + slugCampo(campo.clave));
       if (!canvas || canvas.dataset.tieneTrazo !== '1') continue;
       const base64 = canvas.toDataURL('image/png').split(',')[1];
-      const subido = await callServer('apiSubirArchivoArqueo', state.token, 'firma.png', 'image/png', base64);
+      const subido = await callServer('apiSubirFirmaArqueo', state.token, 'firma.png', 'image/png', base64);
       resultado[campo.clave] = subido.url;
+      resultado[campo.clave + '_FILE_ID'] = subido.id;
     }
     return resultado;
   }
