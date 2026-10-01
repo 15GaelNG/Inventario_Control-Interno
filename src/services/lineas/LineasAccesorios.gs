@@ -14,7 +14,7 @@
 const LineasAccesorios = (function () {
   const TAB_ART = 'ACCESORIOS CELULARES';
   const TAB_MOV = 'MOVIMIENTOS_ACCESORIOS';
-  const CLAVE_CACHE = 'accesorios_indice_v2';
+  const CLAVE_CACHE = 'accesorios_indice_v3'; // v3: llaves tras la migración de IDs (1-oct)
   // Columna virtual "Aviso Reabastecimiento" del AppSheet: umbral por categoría
   const UMBRAL_REABASTO = { Cargadores: 10, Micas: 182, Fundas: 182 };
   // Enum Categoria del AppSheet (Dropdown, sin otros valores), en su orden
@@ -24,9 +24,16 @@ const LineasAccesorios = (function () {
     return [Config.ROLES.ADMIN, Config.ROLES.OPERADOR];
   }
 
+  /**
+   * Llave de un renglón tras la migración de IDs de Ayrton (30-sep): la llave vieja (ID_Accesorio / ID_Movimiento)
+   * pasa a llamarse ID ANTERIOR y se agrega ID (ACC-… / MAC-…). Los movimientos siguen apuntando con ID_Accesorio al
+   * valor viejo, así que primero va la llave vieja (con su nombre de antes o el nuevo) y al final el ID nuevo.
+   */
+  const llave_ = (f, vieja) => LineasUtil.txt(f[vieja]) || LineasUtil.txt(f['ID ANTERIOR']) || LineasUtil.txt(f['ID']);
+
   function articuloDesdeFila_(f) {
     return {
-      id: LineasUtil.txt(f['ID_Accesorio']),
+      id: llave_(f, 'ID_Accesorio'),
       categoria: LineasUtil.txt(f['Categoria']) || '',
       nombre: LineasUtil.txt(f['Nombre del Articulo']) || '',
       marca: LineasUtil.txt(f['Marca']) || '',
@@ -35,7 +42,7 @@ const LineasAccesorios = (function () {
 
   function movimientoDesdeFila_(f) {
     return {
-      id: LineasUtil.txt(f['ID_Movimiento']), accesorioId: LineasUtil.txt(f['ID_Accesorio']),
+      id: llave_(f, 'ID_Movimiento'), accesorioId: LineasUtil.txt(f['ID_Accesorio']),
       tipo: (LineasUtil.txt(f['Tipo_movimiento']) || '').toUpperCase(),
       cantidad: LineasUtil.numero(f['Cantidad']) || 0, fecha: LineasUtil.fecha(f['Fecha']),
       usuario: LineasUtil.txt(f['Usuario']) || '', comentarios: LineasUtil.txt(f['Comentarios']) || '',
@@ -88,9 +95,11 @@ const LineasAccesorios = (function () {
     const clave = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
     const existe = LineasDatos.leerTabla(TAB_ART).some((f) => String(f['Categoria']) === String(datos.categoria) && clave(f['Nombre del Articulo']) === clave(datos.nombre));
     if (existe) throw new Error('Ese artículo ya existe en ' + datos.categoria + ': registra una entrada en su fila.');
-    const id = LineasDatos.nuevoIdCorto();
+    // Sin columna ID_Accesorio (ya migrada) la llave del artículo es su ID nuevo: es la que guardan sus movimientos
+    const conLlaveVieja = LineasDatos.colIndice(LineasDatos.tabla(TAB_ART), 'ID_Accesorio') >= 0;
+    const id = conLlaveVieja ? LineasDatos.nuevoIdCorto() : LineasDatos.nuevoId(TAB_ART);
     LineasDatos.agregarFilas(TAB_ART, [{
-      'ID_Accesorio': id, 'Categoria': String(datos.categoria),
+      [conLlaveVieja ? 'ID_Accesorio' : 'ID']: id, 'Categoria': String(datos.categoria),
       'Nombre del Articulo': String(datos.nombre).trim(), 'Marca': LineasUtil.txt(datos.marca) || '',
     }]);
     LineasDatos.cacheBorrar(CLAVE_CACHE);

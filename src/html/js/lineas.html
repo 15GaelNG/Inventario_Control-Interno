@@ -496,7 +496,8 @@
       const activo = (d, filtros) => d.filtros !== false && campos.every((c) => igual(filtros[c], (d.filtros || {})[c]));
       function marcar(filtros) {
         const tabla = obtenerTabla();
-        const filas = tabla ? tabla.getFiltradas() : null;
+        // Sin datos todavía (los tiles se pintan antes de setDatos) se queda `valor`: si no, todo saldría en 0
+        const filas = tabla && tabla.getDatos().length ? tabla.getFiltradas() : null;
         tiles.forEach((t) => {
           const d = defs[Number(t.dataset.kpi)];
           t.classList.toggle('stat-tile-activo', activo(d, filtros || {}));
