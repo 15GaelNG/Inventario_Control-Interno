@@ -960,6 +960,13 @@
         titulo: (a) => 'ID Arqueo: ' + (a.ID || ''),
         contenidoExtra: (a, contenedor) => mostrarDetalleArqueoEnPanel(a, contenedor),
       },
+      // Selección estilo Google Drive/Apple (rama emmanuel, ver componentes/datatable.html):
+      // clic = selecciona, doble clic/tocar = abre el panel de detalle (tabla.abrirDetalle
+      // se resuelve en el momento del clic, para entonces `tabla` ya está asignada).
+      modoSeleccion: true,
+      seleccionDrive: true,
+      alAbrirFila: (a) => tabla.abrirDetalle(String(a.ID)),
+      alTocarFila: (a) => tabla.abrirDetalle(String(a.ID)),
       columnas: [
         { campo: 'ID', titulo: 'ID Arqueo', tipo: 'texto', fijada: true, enDetalle: false },
         { campo: 'ID_CCH', titulo: 'ID CCH', tipo: 'texto', enDetalle: false },
