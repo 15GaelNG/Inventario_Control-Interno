@@ -147,7 +147,7 @@ const LineasRepo = (function () {
       usuariosAdicionales: usuariosAdicionales_(f),
     };
     const legado = {
-      id: id, idAnterior: txt(col(f, LineasDatos.COL_ID_ANTERIOR)), fila: f._fila, folio: folioRegistro(tipo, col(f, 'NUCO')), tipo: tipo || null,
+      id: id, idAnterior: txt(col(f, LineasDatos.COL_ID_APPSHEET)), fila: f._fila, folio: folioRegistro(tipo, col(f, 'NUCO')), tipo: tipo || null,
       nuco: txt(col(f, 'NUCO')) === null ? null : LineasUtil.nucoVisible(col(f, 'NUCO')),
       estatusGeneral: estatusGeneralRegistro(idParaDG_(f), tipo, txt(col(f, 'ESTATUS EQUIPO')), txt(col(f, 'ESTATUS LINEA'))),
       comentarios: txt(col(f, 'COMENTARIOS')),
@@ -220,7 +220,7 @@ const LineasRepo = (function () {
    * ID APPSHEET y el ID es LIN-…
    */
   function idParaDG_(f) {
-    return txt(col(f, LineasDatos.COL_ID_ANTERIOR)) || txt(f['ID']);
+    return txt(col(f, LineasDatos.COL_ID_APPSHEET)) || txt(f['ID']);
   }
 
   /** Fórmula ESTATUS GENERAL del AppSheet. */
@@ -333,12 +333,13 @@ const LineasRepo = (function () {
 
   // ---------------- IDs de antes y después de la migración ----------------
 
-  const CLAVE_IDS = 'ids_lineas_v1';
+  const CLAVE_IDS = 'ids_lineas_v2'; // v2: también ID ANTERIOR (corrida de IDs del 30-sep)
 
   /**
-   * { viejo: {idAppSheet → ID}, nuevo: {ID → idAppSheet} } de LINEAS TELEFONICAS (claves en minúsculas).
-   * La migración de IDs (29-sep) puso LIN-… en ID y dejó el anterior en ID APPSHEET, pero las pestañas que citan
-   * al registro (inspecciones, responsivas, bitácoras) pueden seguir con el anterior hasta que se reescriban.
+   * { viejo: {ID anterior → ID}, nuevo: {ID → [IDs anteriores]} } de LINEAS TELEFONICAS (claves en minúsculas).
+   * Cada corrida de IDs deja el ID de antes en una columna: ID APPSHEET (el del AppSheet) e ID ANTERIOR (el LIN-… del
+   * 29-sep, desde la corrida del 30-sep). Las pestañas que citan al registro (inspecciones, responsivas, bitácoras,
+   * APP_*) pueden seguir con cualquiera de ellos hasta que se reescriban.
    */
   function equivalenciasIds_() {
     const enCache = LineasDatos.cacheLeer(CLAVE_IDS);
@@ -347,26 +348,26 @@ const LineasRepo = (function () {
     LineasDatos.leerTabla(TAB.LINEAS).forEach((f) => {
       const ids = LineasDatos.idsDeFila(f);
       if (ids.length < 2) return;
-      m.viejo[ids[1].toLowerCase()] = ids[0];
-      m.nuevo[ids[0].toLowerCase()] = ids[1];
+      ids.slice(1).forEach((k) => { m.viejo[k.toLowerCase()] = ids[0]; });
+      m.nuevo[ids[0].toLowerCase()] = ids.slice(1);
     });
     LineasDatos.cacheGuardar(CLAVE_IDS, m, 6 * 3600); // los registros nuevos no traen ID viejo: no hay que invalidarla
     return m;
   }
 
-  /** ID vigente de un registro citado con su ID nuevo o con el del AppSheet. */
+  /** ID vigente de un registro citado con su ID actual o con uno anterior. */
   function idActual(id) {
     const t = txt(id);
     if (!t) return t;
     return equivalenciasIds_().viejo[String(t).toLowerCase()] || String(t);
   }
 
-  /** Todos los IDs con los que las demás pestañas pueden citar al registro: [ID, ID del AppSheet]. */
+  /** Todos los IDs con los que las demás pestañas pueden citar al registro: [ID, ID ANTERIOR, ID APPSHEET]. */
   function idsDeRegistro(id) {
     const actual = idActual(id);
     if (!actual) return [];
-    const viejo = equivalenciasIds_().nuevo[actual.toLowerCase()];
-    return viejo ? [actual, viejo] : [actual];
+    const viejos = equivalenciasIds_().nuevo[actual.toLowerCase()];
+    return [actual].concat(Array.isArray(viejos) ? viejos : (viejos ? [viejos] : []));
   }
 
   function leerRegistroPorId(id) {
@@ -505,7 +506,7 @@ const LineasRepo = (function () {
     });
     const ticket = txt(col(f, 'TICKET'));
     return {
-      _id: txt(f['ID']), _idAnterior: txt(col(f, LineasDatos.COL_ID_ANTERIOR)), origen: ev && ev.origen === 'SISTEMA' ? 'SISTEMA' : 'APPSHEET',
+      _id: txt(f['ID']), _idsAnteriores: LineasDatos.idsDeFila(f).slice(1), origen: ev && ev.origen === 'SISTEMA' ? 'SISTEMA' : 'APPSHEET',
       registroId: idActual(col(f, 'ID LINEA')),
       nuco: nuco4(col(f, 'NUCO')), fecha: fecha(col(f, 'FECHA DE REGISTRO')), tipoRegistro: txt(col(f, 'TIPO')),
       snapshot: {
@@ -543,7 +544,7 @@ const LineasRepo = (function () {
       if (dia && mes && anio) fch = new Date(anio, mes - 1, dia, 12);
     }
     return {
-      _id: txt(f['ID']), _idAnterior: txt(col(f, LineasDatos.COL_ID_ANTERIOR)), origen: ev && ev.origen === 'SISTEMA' ? 'SISTEMA' : 'APPSHEET',
+      _id: txt(f['ID']), _idsAnteriores: LineasDatos.idsDeFila(f).slice(1), origen: ev && ev.origen === 'SISTEMA' ? 'SISTEMA' : 'APPSHEET',
       registroId: idActual(col(f, 'ID LINEA')),
       nuco: nuco4(col(f, 'NUCO')), fecha: fch,
       responsable: { nombre: txt(col(f, 'RESPONSABLE')) },
@@ -671,7 +672,7 @@ const LineasRepo = (function () {
       { tabla: TAB.REACTIVACION, filas: siExiste(TAB.REACTIVACION, 'IMEI') },
     ].filter((p) => p.filas.length);
     // Una fila está oculta si el sistema nuevo la registró con cualquiera de sus IDs (el de hoy o el de antes)
-    const oculta = (mapa, f, ...columnas) => columnas.concat(['ID', LineasDatos.COL_ID_ANTERIOR]).some((c) => mapa[txt(f[c])]);
+    const oculta = (mapa, f, ...columnas) => columnas.concat(['ID'], LineasDatos.COLS_ID_ANTERIOR).some((c) => mapa[txt(f[c])]);
     const leidas = peticiones.length ? LineasDatos.leerFilas(peticiones) : [];
     const r = {};
     peticiones.forEach((p, i) => { r[p.tabla] = leidas[i]; });
@@ -805,7 +806,7 @@ const LineasRepo = (function () {
     const origenEv = (o) => (o === 'DRIVE' ? 'Drive' : (o === 'SISTEMA' ? 'Nuevo sistema' : 'AppSheet'));
     const ev = evidenciasDeRegistro(id);
     ev.inspecciones.forEach((i) => {
-      if (inspeccionesSistema[i._id] || inspeccionesSistema[i._idAnterior]) return;
+      if ([i._id].concat(i._idsAnteriores).some((k) => inspeccionesSistema[k])) return;
       const cal = i.calificacion;
       agregar({
         fecha: i.fecha, origen: origenEv(i.origen), movimiento: 'Inspección', refTipo: 'inspeccion', refId: i._id, pdfId: i.pdf ? i.pdf.id : null,
@@ -814,7 +815,7 @@ const LineasRepo = (function () {
       });
     });
     ev.responsivas.forEach((x) => {
-      if (responsivasSistema[x._id] || responsivasSistema[x._idAnterior]) return;
+      if ([x._id].concat(x._idsAnteriores).some((k) => responsivasSistema[k])) return;
       agregar({
         fecha: x.fecha, origen: origenEv(x.origen), movimiento: 'Responsiva', refTipo: 'responsiva', refId: x._id, pdfId: x.pdf ? x.pdf.id : null,
         detalle: x.responsable && x.responsable.nombre ? 'Responsable: ' + x.responsable.nombre : '', usuario: x.responsableCI,
@@ -914,7 +915,7 @@ const LineasRepo = (function () {
       const k = idActual(f['ID_LINEA']);
       const cuando = fecha(col(f, 'FECHA ACTUALIZACION'));
       if (!campo || !k || !cuando || !ids[k]) return;
-      const idCambio = ['ID', 'ID_CAMBIO', LineasDatos.COL_ID_ANTERIOR].map((c) => txt(f[c])).filter((x) => x && x in motivoCambio)[0];
+      const idCambio = ['ID', 'ID_CAMBIO'].concat(LineasDatos.COLS_ID_ANTERIOR).map((c) => txt(f[c])).filter((x) => x && x in motivoCambio)[0];
       (cambiosPorId[k] = cambiosPorId[k] || []).push({
         campo: campo, antes: valorDe(campo, col(f, 'ANTES')), despues: valorDe(campo, col(f, 'DESPUES')), fecha: cuando,
         nucoFila: nucoDe_(f['NUCO']), usuario: txt(col(f, 'ACTUALIZADO POR')) || '',

@@ -788,12 +788,12 @@ function datosDePrueba_(hojas) {
   Object.keys(hojas).forEach((h) => hojas[h].forEach((f, i) => { f._fila = i + 2; }));
   const buscarFilas = (h, c, v, parcial) => (hojas[h] || []).filter((f) => (parcial ? String(f[c] || '').includes(v) : String(f[c]).toLowerCase() === String(v).toLowerCase())).map((f) => f._fila);
   return {
-    COL_ID_ANTERIOR: 'ID APPSHEET',
+    COLS_ID_ANTERIOR: ['ID ANTERIOR', 'ID APPSHEET'], COL_ID_APPSHEET: 'ID APPSHEET',
     existeTabla: () => true,
     buscarFilas: buscarFilas,
     buscarFilasVarios: (h, c, valores, parcial) => [...new Set([].concat(...valores.map((v) => buscarFilas(h, c, v, parcial))))].sort((a, b) => a - b),
-    buscarFilasPorId: (h, id) => { const f = buscarFilas(h, 'ID', id); return f.length ? f : buscarFilas(h, 'ID APPSHEET', id); },
-    idsDeFila: (f) => [...new Set([f.ID, f['ID APPSHEET']].filter(Boolean).map(String))],
+    buscarFilasPorId: (h, id) => { for (const c of ['ID', 'ID ANTERIOR', 'ID APPSHEET']) { const f = buscarFilas(h, c, id); if (f.length) return f; } return []; },
+    idsDeFila: (f) => [...new Set([f.ID, f['ID ANTERIOR'], f['ID APPSHEET']].filter(Boolean).map(String))],
     leerTabla: (h) => hojas[h] || [],
     leerFilas: (pets) => pets.map((p) => p.filas.map((n) => hojas[p.tabla][n - 2])),
     cacheLeer: () => null, cacheGuardar: () => {},
@@ -1185,6 +1185,50 @@ test('IDs estandarizados (LIN-…): la ficha encuentra lo que las demás pestañ
   assert.match(repo, /bitacora\.forEach\(\(b\) => \{ b\['ID_CAMBIO'\] = b\['ID'\]; \}\);/);
   assert.doesNotMatch(read('src/services/lineas/LineasRegistros.gs') + read('src/services/lineas/LineasCaptura.gs') + read('src/services/lineas/LineasNotificaciones.gs'), /\['ID'\]: LineasDatos\.nuevoIdCorto\(\)|'ID': LineasDatos\.nuevoIdCorto\(\)|const id = LineasDatos\.nuevoIdCorto\(\)/);
   assert.match(read('src/config/Entidades.gs'), /'APP_NOTIFICACIONES': \{ prefijo: 'NTF'/);
+});
+
+test('Segunda corrida de IDs (30-sep): ID nuevo, el LIN- de ayer en ID ANTERIOR y el del AppSheet en ID APPSHEET', () => {
+  const normCol = (h) => String(h || '').toUpperCase().replace(/\s+/g, ' ').trim();
+  const Util = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '\nreturn LineasUtil;')({ normCol: normCol }, {});
+  const d = (s) => new Date(s + 'T12:00:00');
+  // Como quedó la hoja de pruebas el 30-sep en la noche: los hijos citan con el ID del AppSheet o con el de ayer
+  const hojas = {
+    'LINEAS TELEFONICAS': [
+      { ID: 'LIN-000000006SRC6J', 'ID ANTERIOR': 'LIN-000000WRXDPR1F', 'ID APPSHEET': 'a1b2c3d4', NUCO: '0234', TIPO: 'EQUIPO + SIM', 'FECHA REGISTRO': d('2025-01-01') },
+      // Alta del sistema nuevo del 29-sep: nunca tuvo ID del AppSheet
+      { ID: 'LIN-00000001EPD2BY', 'ID ANTERIOR': 'LIN-00000123K4H0WE', 'ID APPSHEET': '', NUCO: '0439', TIPO: 'EQUIPO' },
+      { ID: 'LIN-00000002ZZZZZZ', 'ID ANTERIOR': 'LIN-00000002YYYYYY', 'ID APPSHEET': 'DG001', NUCO: '0900', TIPO: 'EQUIPO + SIM', 'ESTATUS LINEA': 'USO' },
+    ],
+    'CAMBIOS LINEAS TELEFONICAS': [],
+    HISTORIAL_REASIGNACIONES: [], 'BITACORA DE DESECHO': [], 'REACTIVACION DE LINEAS': [],
+    'INSPECCIONES LINEAS': [
+      { ID: 'ILI-000000008P2V9H', 'ID ANTERIOR': 'ILI-00000000T0DCX2', 'ID APPSHEET': '97eb2ad7', 'ID LINEA': 'a1b2c3d4', NUCO: '0234', 'FECHA DE REGISTRO': d('2025-06-01') },
+      // Capturada en el sistema el 30-sep en la mañana: cita a la línea con el LIN- de ayer
+      { ID: 'ILI-00000001DMY45Y', 'ID ANTERIOR': 'ILI-66A6A2KYHQ9TKB', 'ID APPSHEET': '', 'ID LINEA': 'LIN-000000WRXDPR1F', NUCO: '0234', 'FECHA DE REGISTRO': d('2026-09-30') },
+    ],
+    'RESPONSIVAS LINEAS': [],
+    APP_EVIDENCIAS: [{ ID: 'EVI-66A6HZFFKCYZ89', TIPO: 'INSPECCION', ORIGEN: 'SISTEMA', ID_REGISTRO: 'ILI-66A6A2KYHQ9TKB', ID_LINEA: 'LIN-000000WRXDPR1F', PDFS_JSON: '[{"id":"pdf2"}]' }],
+    APP_MOVIMIENTOS: [{ ID: 'm1', TIPO: 'ALTA', REFS: ',LIN-00000123K4H0WE,', MOTIVO: 'Alta de registro', DETALLE_JSON: '{}' }],
+  };
+  const LineasDatos = datosDePrueba_(hojas);
+  const Repo = new Function('LineasUtil', 'LineasDatos', 'LineasChecklist', 'Utilities', read('src/services/lineas/LineasRepo.gs') + '\nreturn LineasRepo;')(
+    Util, LineasDatos, { puntos: () => [] }, { formatDate: (f) => f.toISOString().slice(0, 10) });
+
+  // Cualquiera de los tres IDs lleva al vigente, y el vigente a los tres
+  assert.equal(Repo.idActual('a1b2c3d4'), 'LIN-000000006SRC6J');
+  assert.equal(Repo.idActual('LIN-000000WRXDPR1F'), 'LIN-000000006SRC6J');
+  assert.deepEqual(Repo.idsDeRegistro('LIN-000000006SRC6J'), ['LIN-000000006SRC6J', 'LIN-000000WRXDPR1F', 'a1b2c3d4']);
+  assert.deepEqual(Repo.idsDeRegistro('LIN-00000123K4H0WE'), ['LIN-00000001EPD2BY', 'LIN-00000123K4H0WE']);
+  assert.equal(Repo.leerRegistroPorId('LIN-000000WRXDPR1F').NUCO, '0234');
+
+  // Las dos inspecciones aparecen: la del AppSheet y la del sistema (con su PDF, citado con el ILI- de ayer)
+  const insp = Repo.evidenciasDeRegistro('LIN-000000006SRC6J').inspecciones;
+  assert.equal(insp.length, 2);
+  assert.ok(insp.every((i) => i.registroId === 'LIN-000000006SRC6J'));
+  // El alta del 29-sep sigue en el historial aunque su REFS tenga el LIN- de ayer
+  assert.ok(Repo.historialDeRegistro('LIN-00000001EPD2BY', true).eventos.length >= 1);
+  // DG se sigue reconociendo por el ID del AppSheet, no por ID ANTERIOR
+  assert.equal(Repo.convertirRegistro(hojas['LINEAS TELEFONICAS'][2]).equipo.legado.estatusGeneral, 'PERSONAL DG');
 });
 
 test('Selección como en los equipos Apple: cuadro con el mouse, Shift+clic, Ctrl/Cmd+A y un Esc para salir', () => {

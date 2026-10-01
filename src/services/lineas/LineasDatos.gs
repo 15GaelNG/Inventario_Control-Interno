@@ -33,8 +33,14 @@ const LineasDatos = (function () {
     'CAMBIOS LINEAS TELEFONICAS': [{ vecina: 'ID_LINEA', lado: -1, nombre: 'ID_CAMBIO' }, { vecina: 'ID_LINEA', lado: 1, nombre: 'NUCO' }],
   };
 
-  /** Columna donde la migración de IDs dejó el ID que tenía el registro en el AppSheet. */
-  const COL_ID_ANTERIOR = 'ID APPSHEET';
+  /**
+   * Columnas con IDs anteriores del registro, de la más reciente a la más vieja:
+   *   ID ANTERIOR  el ID que tenía antes de la última corrida de IDs (30-sep: el LIN-/ILI-/RLI-… del 29-sep)
+   *   ID APPSHEET  el ID que tenía en el AppSheet
+   * Las demás pestañas pueden citar al registro con cualquiera de los tres hasta que se reescriban sus referencias.
+   */
+  const COL_ID_APPSHEET = 'ID APPSHEET';
+  const COLS_ID_ANTERIOR = ['ID ANTERIOR', COL_ID_APPSHEET];
 
   // Estado por ejecución (cada llamada de google.script.run empieza de cero).
   const bd = { id: null, libro: null, tablas: {}, zona: null, apiSheets: undefined };
@@ -258,19 +264,25 @@ const LineasDatos = (function () {
   }
 
   /**
-   * Filas de un registro por su ID. Si no aparece, se busca como ID del AppSheet (columna ID APPSHEET): así siguen
-   * sirviendo las referencias, enlaces y PDFs que traen el ID de antes de la migración.
+   * Filas de un registro por su ID. Si no aparece, se busca en las columnas de IDs anteriores (ID ANTERIOR,
+   * ID APPSHEET): así siguen sirviendo las referencias, enlaces y PDFs que traen un ID de antes de la migración.
    */
   function buscarFilasPorId(nombre, id) {
     const filas = buscarFilas(nombre, 'ID', id);
     if (filas.length || !id) return filas;
-    return colIndice(tabla(nombre), COL_ID_ANTERIOR) >= 0 ? buscarFilas(nombre, COL_ID_ANTERIOR, id) : [];
+    const t = tabla(nombre);
+    for (let i = 0; i < COLS_ID_ANTERIOR.length; i++) {
+      if (colIndice(t, COLS_ID_ANTERIOR[i]) < 0) continue;
+      const anteriores = buscarFilas(nombre, COLS_ID_ANTERIOR[i], id);
+      if (anteriores.length) return anteriores;
+    }
+    return [];
   }
 
-  /** IDs con los que se puede citar una fila: el suyo y, si lo tiene, el que traía del AppSheet. */
+  /** IDs con los que se puede citar una fila: el suyo primero y luego los anteriores que tenga (ID ANTERIOR, ID APPSHEET). */
   function idsDeFila(f) {
     const ids = [];
-    [f && f['ID'], f && f[COL_ID_ANTERIOR]].forEach((v) => {
+    [f && f['ID']].concat(COLS_ID_ANTERIOR.map((c) => f && f[c])).forEach((v) => {
       const t = v === null || v === undefined ? '' : String(v).trim();
       if (t && ids.indexOf(t) < 0) ids.push(t);
     });
@@ -585,6 +597,6 @@ const LineasDatos = (function () {
     cacheGuardar, cacheLeer, cacheBorrar,
     tabla, tablaFresca, existeTabla, colIndice, deHoraHoja, aHoraHoja,
     leerTabla, ultimaFila, buscarFilas, buscarFilasVarios, buscarFilasPorId, idsDeFila, buscarEnTabla, leerFilas, leerRango,
-    actualizarFila, agregarFilas, eliminarFila, conCandado, nuevoId, nuevoIdCorto, asegurarPestana, COL_ID_ANTERIOR,
+    actualizarFila, agregarFilas, eliminarFila, conCandado, nuevoId, nuevoIdCorto, asegurarPestana, COLS_ID_ANTERIOR, COL_ID_APPSHEET,
   };
 })();

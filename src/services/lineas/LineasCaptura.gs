@@ -499,7 +499,7 @@ const LineasCaptura = (function () {
     if (!insp) throw new Error('No existe la inspección ' + id);
     const TAB_EV = LineasRepo.TAB.APP_EVID;
     LineasRepo.asegurarPestanaApp(TAB_EV);
-    const filas = LineasDatos.buscarFilasVarios(TAB_EV, 'ID_REGISTRO', [id].concat(insp._idAnterior ? [insp._idAnterior] : []));
+    const filas = LineasDatos.buscarFilasVarios(TAB_EV, 'ID_REGISTRO', [id].concat(insp._idsAnteriores || []));
     const fila = filas.length ? LineasDatos.leerFilas([{ tabla: TAB_EV, filas: filas.slice(0, 1) }])[0][0] : null;
     let carpetaId = fila ? String(fila['CARPETA_ID'] || '') : '';
     let fotosId = fila ? String(fila['FOTOS_CARPETA_ID'] || '') : '';

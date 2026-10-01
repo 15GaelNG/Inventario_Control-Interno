@@ -10,7 +10,7 @@ qué está hecho, cómo probarlo y qué sigue.
 
 - **Rama `emmanuel`:** en GitHub hasta `10dc7eb` (29-sep). En local hay 17 commits más (`644ba14` … `d8a80a1`).
   Se suben a GitHub **al terminar la ronda**, como pidió el usuario. DEV está al día con `emmanuel`.
-- **Pruebas:** `npm test` da 57 aprobadas y 0 fallidas. Las de Ayrton se corren aparte (`node tests/ids.test.js` y
+- **Pruebas:** `npm test` da 58 aprobadas y 0 fallidas. Las de Ayrton se corren aparte (`node tests/ids.test.js` y
   `node tests/entidades.test.js`) y dan TODO OK.
 - **Reunión con Líneas (30-sep): ya ocurrió.** Lo hecho después:
   - §0u: estatus nuevos, DISPONIBLE y menú;
@@ -47,6 +47,36 @@ qué está hecho, cómo probarlo y qué sigue.
     encima de la barra de herramientas, `alAbrirFila`, `alTocarFila`, `alCambiarSeleccion`, acciones con
     `enBarra/maximo/grupo/visible/activo`, "Exportar selección a Excel" y la API `clicSeleccion`, `asegurarSeleccionada`,
     `abrirMenu` y `refrescarSeleccion`. Sin `seleccionDrive` la tabla se comporta igual que antes.
+  - §0z: Líneas lee `ID ANTERIOR` (corrida de IDs del 30-sep). Su catálogo y `MIGRACION_REFERENCIAS` ya no
+    describen la BD de pruebas tal como quedó: ver §0z antes de correr `lineas2Escribir` sobre ella.
+
+
+## 0z. Reconexión tras la segunda corrida de IDs de Ayrton (2026-09-30, noche)
+
+Ayrton corrió `pipelineIds` (ESCRIBIR, 6/6 pasos OK, LOG_MIGRACION) sobre la BD de pruebas el 30-sep a las ~17:57.
+Mientras corría, la app cargaba 0 equipos. Resultado en las pestañas de Líneas:
+
+| Columna | Qué tiene |
+|---|---|
+| `ID` | un ID nuevo (`LIN-000000006SRC6J`, `ILI-…`, `RLI-…`, `CLI-…`) |
+| `ID ANTERIOR` | el ID del 29-sep (`LIN-000000WRXDPR1F`); la columna `ID` se renombró |
+| `ID APPSHEET` | el ID del AppSheet (`873bb085`, `DG001`); quedó como última columna |
+
+Las hijas (`ID LINEA` de inspecciones y responsivas, `ID_LINEA` de CAMBIOS, `REFS`/`ID_REGISTRO` de APP_*) **no se
+reescribieron**: citan con el ID del AppSheet o, si las creó el sistema el 29/30-sep, con el del 29-sep. Lo segundo
+dejaba fuera de la ficha la inspección del 30-sep del NUCO 0234 y el alta del 0439.
+
+Cambio (en DEV, probado en /dev con 0234: 10 documentos y 130 movimientos; y 0439):
+- `LineasDatos.COLS_ID_ANTERIOR = ['ID ANTERIOR', 'ID APPSHEET']`, y `COL_ID_APPSHEET` para lo que necesita
+  específicamente el ID del AppSheet (personal de DG, `legado.idAnterior`).
+- `idsDeFila` devuelve `[ID, ID ANTERIOR, ID APPSHEET]` sin vacíos; `buscarFilasPorId` busca en las tres.
+- `LineasRepo.equivalenciasIds_` mapea cualquier ID anterior al vigente (caché `ids_lineas_v2`); `idsDeRegistro`
+  devuelve los tres. Inspecciones y responsivas traen `_idsAnteriores` (antes `_idAnterior`).
+- Panorama usa `idsDeFila`. Prueba nueva: "Segunda corrida de IDs (30-sep)".
+
+Funciona igual si después se reescriben las referencias (pipeline 3 de Ayrton), porque se busca con cualquiera de los
+tres. **Avisar a Ayrton:** en esta hoja `ID ANTERIOR` es el ID del 29-sep, no el del AppSheet, así que reescribir
+`ID LINEA` emparejando contra `ID ANTERIOR` no encontraría casi nada (las hijas traen el del AppSheet).
 
 
 ## 0y. Selección como en Google Drive y "Mandar a cancelación" (2026-09-30)

@@ -84,7 +84,7 @@ const LineasPanorama = (function () {
       const alta = LineasUtil.col(f, 'FECHA REGISTRO');
       // FECHA REGISTRO válida: después del 2000 y no en el futuro (hay capturas con 1969 y 2027)
       const altaMs = alta instanceof Date && !isNaN(alta.getTime()) && alta.getFullYear() >= 2000 && alta.getTime() <= ahora ? alta.getTime() : null;
-      const ids = [txt(r.id), txt(LineasUtil.col(f, 'ID APPSHEET'))].filter(Boolean);
+      const ids = [txt(r.id)].concat(LineasDatos.idsDeFila(f)).filter((k, i, a) => k && a.indexOf(k) === i);
       if (r.equipo) regs.equipos.push({ ids: ids, actual: estatus(r.equipo.estatus), alta: altaMs });
       if (r.linea) regs.lineas.push({ ids: ids, actual: estatus(r.linea.estatus), alta: altaMs });
     });
