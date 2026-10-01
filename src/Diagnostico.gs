@@ -177,3 +177,81 @@ function diagnosticoEntorno() {
   Logger.log(texto);
   return texto;
 }
+
+/**
+ * Qué permisos le calcula la app a un correo, y de dónde los saca. Para cuando alguien "no
+ * ve" un módulo: dice de qué libro lee USUARIOS, qué ROL y ACTIVO encontró, qué había en la
+ * caché (5 minutos) y qué sale al recalcular. Borra esa caché de paso, así que después de
+ * correrlo basta con recargar la app.
+ *
+ * Sin argumento usa el correo de quien lo corre en el editor.
+ */
+function diagnosticoPermisos(correo) {
+  const quien = String(correo || Session.getActiveUser().getEmail() || '').trim();
+  const lineas = ['PERMISOS DE ' + (quien || '(no pude saber tu correo: pásalo como argumento)'), ''];
+  const ssId = Config.SPREADSHEET_IDS.USUARIOS();
+  lineas.push('  Libro de USUARIOS: ' + ssId);
+
+  const hoja = SheetUtils.getSheetByColumns(ssId, ['CORREO', 'ROL']);
+  const fila = SheetUtils.getAll(ssId, hoja.getName())
+    .find((u) => String(u['CORREO']).trim().toUpperCase() === quien.toUpperCase());
+  lineas.push('  Pestaña: ' + hoja.getName());
+  lineas.push(fila
+    ? '  Encontrado: ROL=' + fila['ROL'] + '  ACTIVO=' + fila['ACTIVO'] + '  PERFILES=' + (fila['PERFILES'] || '(vacío)')
+    : '  NO ESTÁ ese correo en la pestaña: por eso no ve nada.');
+
+  const enCache = CacheService.getScriptCache().get('permisos_' + quien.toUpperCase());
+  lineas.push('', '  En caché: ' + (enCache ? Object.keys(JSON.parse(enCache)).join(', ') : '(nada)'));
+  Permisos.olvidar(quien);
+  const ahora = Permisos.deCorreo(quien);
+  lineas.push('  Recalculado: ' + (Object.keys(ahora).join(', ') || '(ninguno)'));
+  lineas.push('', '  relaciones: ' + (ahora.relaciones || 'SIN PERMISO'));
+  lineas.push('', '  La caché ya se borró: recarga la app.');
+
+  const texto = lineas.join('\n');
+  Logger.log(texto);
+  return texto;
+}
+
+/**
+ * Revisa el JS TAL COMO LO SIRVE Apps Script, no como está en el repo. HtmlService le borra
+ * a los .html lo que sigue a "//" (ver CLAUDE.md), y eso puede romper un <script> que en el
+ * repo está bien; el síntoma es una pantalla o un menú que simplemente no aparece. Aquí se
+ * pide el contenido con include() —lo mismo que recibe el navegador— y se compila cada
+ * <script> con new Function. Si truena, dice cuál y enseña el renglón.
+ */
+function diagnosticoHtml() {
+  const archivos = ['html/js/api', 'html/js/app', 'html/js/app-arqueos', 'html/js/app-cajachica',
+    'html/js/app-reasignaciones', 'html/js/app-panorama-vehiculos', 'html/js/app-verificaciones',
+    'html/js/app-relaciones', 'html/js/modulos/sensores', 'html/js/modulos/hologramas',
+    'html/js/modulos/inspecciones', 'html/js/lineas'];
+  const lineas = ['EL JS COMO LO RECIBE EL NAVEGADOR', ''];
+  archivos.forEach((nombre) => {
+    let contenido;
+    try { contenido = include(nombre); } catch (e) { lineas.push('  ' + nombre + ': no se pudo leer (' + e.message + ')'); return; }
+    const scripts = [];
+    contenido.replace(/<script>([\s\S]*?)<\/script>/g, (_, js) => { scripts.push(js); return ''; });
+    const fallas = [];
+    scripts.forEach((js, i) => {
+      try { new Function(js); } catch (e) {
+        // El renglón exacto no lo da new Function; se busca partiendo el script a la mitad
+        let lo = 0, hi = js.split('\n').length;
+        const renglones = js.split('\n');
+        while (hi - lo > 1) {
+          const mitad = Math.floor((lo + hi) / 2);
+          try { new Function(renglones.slice(0, mitad).join('\n') + '\n}}}}}}}}}}'); lo = mitad; } catch (e2) {
+            if (/Unexpected token '}'|Unexpected end/.test(e2.message)) lo = mitad; else hi = mitad;
+          }
+        }
+        fallas.push('script ' + (i + 1) + ': ' + e.message + '\n      cerca del renglón ' + hi + ': ' +
+          String(renglones[hi - 1] || '').trim().slice(0, 140));
+      }
+    });
+    lineas.push('  ' + nombre + ': ' + (fallas.length ? 'ROTO\n    ' + fallas.join('\n    ') : 'ok (' + scripts.length + ' script)'));
+  });
+  const app = include('html/js/app');
+  lineas.push('', '  ¿app trae el grupo Administración? ' + (app.indexOf("requiere: 'relaciones'") !== -1 ? 'sí' : 'NO'));
+  const texto = lineas.join('\n');
+  Logger.log(texto);
+  return texto;
+}
