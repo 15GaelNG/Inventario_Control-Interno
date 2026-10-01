@@ -185,8 +185,11 @@
     color: var(--color-text-muted); padding: 10px 10px 4px;
   }
   .dt-menu-contextual > .dt-menu-grupo-titulo:first-child { padding-top: 4px; }
-  .dt-menu-item {
-    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  /* .dt-popover button ya trae justify-content:center (para los botones de filtro/
+     orden) con más especificidad que un .dt-menu-item solo -- aquí se le gana
+     calificando también con .dt-popover, para que el ícono+texto quede a la izquierda. */
+  .dt-popover.dt-menu-contextual .dt-menu-item {
+    display: flex; align-items: center; justify-content: flex-start; gap: 10px; width: 100%; text-align: left;
     padding: 8px 10px; border-radius: 7px; border: none; background: none;
     font-size: 13px; color: var(--color-text); cursor: pointer;
   }
