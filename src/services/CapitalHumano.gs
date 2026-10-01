@@ -32,7 +32,7 @@
  *   - La fecha de nacimiento se usa SOLO para la regla 2: no se copia a PERSONAS ni se
  *     muestra en ningún lado.
  *
- * Desde el editor: capitalHumano1Ensayo (no escribe) y capitalHumano2Escribir.
+ * Desde el editor: capitalHumano1Ensayo / capitalHumano2Escribir (pipeline 5, MigracionFamilia.gs).
  */
 const CapitalHumano = (function () {
   const HOJA_CH = 'COLABORADORES ACTUALIZADO';
@@ -62,6 +62,20 @@ const CapitalHumano = (function () {
    */
   function identificar(opciones) {
     const cfg = Object.assign({ escribir: false }, opciones || {});
+    if (!cfg.escribir) return identificarSinCandado_(cfg);
+    // Escribiendo, TODO va bajo el candado —leer lo ya identificado, calcular lo nuevo y
+    // escribirlo—: si dos corridas leyeran PERSONAS a la vez, las dos agregarían los mismos
+    // empleos con IDs distintos.
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+      return identificarSinCandado_(cfg);
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  function identificarSinCandado_(cfg) {
     const ssId = migracionSs_(cfg);
     const ss = SpreadsheetApp.openById(ssId);
     const lineas = [(cfg.escribir ? 'IDENTIFICANDO PERSONAS' : 'ENSAYO (no escribe nada)') + ' — ' + ssId, ''];
@@ -177,12 +191,13 @@ const CapitalHumano = (function () {
     const ambiguos = Object.keys(nombresPorNumero).filter((n) => Object.keys(nombresPorNumero[n]).length > 1);
     const personas = new Set(Object.keys(datos).map((k) => existentes[k] || raiz(k))).size;
 
-    lineas.push('  Empleos en la lista de CH: ' + ch.filas.length);
-    lineas.push('  Personas: ' + personas + ' (' + personasNuevas + ' nuevas)');
-    lineas.push('  Empleos por identificar: ' + nuevos.length + ' · ya identificados: ' + Object.keys(existentes).length);
-    lineas.push('  Números usados por más de una persona (ambiguos): ' + ambiguos.length +
+    // Las cifras primero, como en los demás pasos del pipeline: así las recoge su resumen
+    lineas.push('  ' + ch.filas.length + ' empleos en la lista de Capital Humano');
+    lineas.push('  ' + personas + ' personas (' + personasNuevas + ' nuevas)');
+    lineas.push('  ' + nuevos.length + ' empleos por identificar · ' + Object.keys(existentes).length + ' ya identificados');
+    lineas.push('  ' + ambiguos.length + ' números usados por más de una persona (ambiguos)' +
       (ambiguos.length ? ' — ' + ambiguos.slice(0, 10).join(', ') + (ambiguos.length > 10 ? '…' : '') : ''));
-    if (conflictos) lineas.push('  Conflictos: ' + conflictos);
+    if (conflictos) lineas.push('  ' + conflictos + ' conflictos: personas con ID distinto que ahora parecen una (ver AVISOS)');
     if (avisos.length) {
       lineas.push('', 'AVISOS (' + avisos.length + '):');
       avisos.slice(0, 40).forEach((a) => lineas.push('  - ' + a));
@@ -190,23 +205,17 @@ const CapitalHumano = (function () {
     }
 
     if (cfg.escribir && nuevos.length) {
-      const lock = LockService.getScriptLock();
-      lock.waitLock(30000);
-      try {
-        let hoja = ss.getSheetByName(HOJA_PERSONAS);
-        if (!hoja) {
-          hoja = ss.insertSheet(HOJA_PERSONAS);
-          hoja.getRange(1, 1, 1, ENCABEZADOS.length).setValues([ENCABEZADOS]).setFontWeight('bold');
-          // Texto: que Sheets no convierta un número de empleado en número
-          hoja.getRange(2, 1, Math.max(1, hoja.getMaxRows() - 1), 4).setNumberFormat('@');
-        }
-        const desde = hoja.getLastRow() + 1;
-        if (hoja.getMaxRows() < desde + nuevos.length - 1) hoja.insertRowsAfter(hoja.getMaxRows(), desde + nuevos.length - 1 - hoja.getMaxRows());
-        hoja.getRange(desde, 1, nuevos.length, ENCABEZADOS.length).setValues(nuevos);
-        lineas.push('', '  Escritos ' + nuevos.length + ' empleos en ' + HOJA_PERSONAS + '.');
-      } finally {
-        lock.releaseLock();
+      let hoja = ss.getSheetByName(HOJA_PERSONAS);
+      if (!hoja) {
+        hoja = ss.insertSheet(HOJA_PERSONAS);
+        hoja.getRange(1, 1, 1, ENCABEZADOS.length).setValues([ENCABEZADOS]).setFontWeight('bold');
+        // Texto: que Sheets no convierta un número de empleado en número
+        hoja.getRange(2, 1, Math.max(1, hoja.getMaxRows() - 1), 4).setNumberFormat('@');
       }
+      const desde = hoja.getLastRow() + 1;
+      if (hoja.getMaxRows() < desde + nuevos.length - 1) hoja.insertRowsAfter(hoja.getMaxRows(), desde + nuevos.length - 1 - hoja.getMaxRows());
+      hoja.getRange(desde, 1, nuevos.length, ENCABEZADOS.length).setValues(nuevos);
+      lineas.push('', '  ' + nuevos.length + ' empleos escritos en ' + HOJA_PERSONAS);
     } else if (!cfg.escribir) {
       lineas.push('', 'Si cuadra, corre capitalHumano2Escribir.');
     }
@@ -426,12 +435,5 @@ const CapitalHumano = (function () {
   };
 })();
 
-/** Ensayo: cuántas personas salen de la lista de CH y qué se agregaría a PERSONAS. No escribe. */
-function capitalHumano1Ensayo() {
-  return CapitalHumano.identificar();
-}
-
-/** Agrega a PERSONAS los empleos que todavía no tienen ID. Nunca cambia uno que ya lo tiene. */
-function capitalHumano2Escribir() {
-  return CapitalHumano.identificar({ escribir: true });
-}
+// capitalHumano1Ensayo / capitalHumano2Escribir viven en MigracionFamilia.gs (pipeline 5):
+// corren `personas` (identificar) y `ligar` (revisarLigas), igual que los demás pipelines.

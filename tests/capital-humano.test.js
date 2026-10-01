@@ -110,8 +110,8 @@ console.log('1. El ensayo cuenta y no escribe');
   const r = cargar(hojas).identificar();
   ok(!hojas['PERSONAS'], 'no crea PERSONAS');
   // CIB00223(1) + Francisco(1) + Vanessa(1) + Juan(1) + 2 José + Ana(1) + Luis(1) + 2 María = 10
-  ok(/Personas: 10 \(10 nuevas\)/.test(r), 'salen 10 personas de 12 renglones: ' + (r.match(/Personas: .*/) || [''])[0]);
-  ok(/ambiguos\): 1 — HA00059/.test(r), 'HA00059 queda marcado como ambiguo');
+  ok(/ 10 personas \(10 nuevas\)/.test(r), 'salen 10 personas de 12 renglones: ' + (r.match(/\d+ personas .*/) || [''])[0]);
+  ok(/ 1 números usados por más de una persona \(ambiguos\) — HA00059/.test(r), 'HA00059 queda marcado como ambiguo');
   ok(/IPQ00309 \(LUIS SOTO\) dice que su número anterior es AC00001, pero en la hoja AC00001 es de JOSE LOPEZ/.test(r),
     'avisa del número anterior que ya es de otra persona');
 }
@@ -144,7 +144,7 @@ console.log('\n3. Un ID dado nunca cambia; correr otra vez no agrega nada');
   const antes = JSON.stringify(personas(hojas));
   const r = CH.identificar({ escribir: true });
   ok(JSON.stringify(personas(hojas)) === antes, 'PERSONAS quedó igual');
-  ok(/Empleos por identificar: 0/.test(r), 'y el reporte dice que no hay nada por identificar');
+  ok(/ 0 empleos por identificar/.test(r), 'y el reporte dice que no hay nada por identificar');
 }
 
 console.log('\n4. Un pegado nuevo: el empleo nuevo de alguien conocido toma su ID');
@@ -188,7 +188,7 @@ console.log('\n5b. Un renglón nuevo que liga a dos personas con ID distinto: co
   hojas['COLABORADORES ACTUALIZADO'].datos.push(['AC00005', 'JOSE LOPEZ', 'AC00001', '06/06/1999', 'Activo', '']);
   const r = CH.identificar({ escribir: true });
   const p = personas(hojas);
-  ok(/Conflictos: 1/.test(r) && /ya tienen IDs distintos/.test(r), 'lo reporta como conflicto');
+  ok(/ 1 conflictos/.test(r) && /ya tienen IDs distintos/.test(r), 'lo reporta como conflicto');
   ok(!p['AC00005|JOSE LOPEZ'], 'el renglón que los ligaría no se escribe');
   ok(p['AC00001|JOSE LOPEZ'].id === p0['AC00001|JOSE LOPEZ'].id && p['AC00002|JOSE LOPEZ'].id === p0['AC00002|JOSE LOPEZ'].id,
     'y nadie cambió de ID');
