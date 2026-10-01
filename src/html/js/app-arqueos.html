@@ -394,20 +394,40 @@
   }
 
   /** Sube (si el usuario eligió) los archivos de Arqueo y regresa {columna real: url}. */
-  function leerArchivoDataUrlArqueo_(file) {
+
+  /** Dibuja la foto en un canvas, la achica si hace falta (nunca la agranda,
+   *  Math.min(..., 1)) y la regresa como JPEG comprimido. Las fotos de
+   *  cámara sin tocar (varios MB cada una, 3000-4000px) hacían que el PDF
+   *  combinado de Evidencias pasara el límite de tamaño que google.script.run
+   *  deja mandar en una sola llamada -- la subida tronaba con un
+   *  "NetworkError... HTTP 400" genérico, sin mensaje claro, en vez de
+   *  llegar siquiera al límite de 10 MB que ya revisa el servidor
+   *  (ArqueosService.subirArchivo). Bajar cada foto a 1600px de lado más
+   *  largo y comprimirla la deja perfectamente legible y mucho más ligera. */
+  function comprimirImagenArqueo_(file) {
+    const LADO_MAX = 1600;
+    const CALIDAD = 0.75;
     return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => reject(new Error('No se pudo leer el archivo ' + file.name));
-      reader.readAsDataURL(file);
-    });
-  }
-  function dimensionesImagenArqueo_(dataUrl) {
-    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
       const img = new Image();
-      img.onload = () => resolve({ ancho: img.naturalWidth, alto: img.naturalHeight });
-      img.onerror = () => reject(new Error('No se pudo leer una de las imágenes'));
-      img.src = dataUrl;
+      img.onload = () => {
+        const escala = Math.min(1, LADO_MAX / Math.max(img.naturalWidth, img.naturalHeight));
+        const ancho = Math.round(img.naturalWidth * escala);
+        const alto = Math.round(img.naturalHeight * escala);
+        const canvas = document.createElement('canvas');
+        canvas.width = ancho;
+        canvas.height = alto;
+        const ctx = canvas.getContext('2d');
+        // Fondo blanco antes de dibujar: una foto PNG con transparencia se
+        // vería negra al exportar a JPEG (sin canal alfa) si no se rellena.
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, ancho, alto);
+        ctx.drawImage(img, 0, 0, ancho, alto);
+        URL.revokeObjectURL(url);
+        resolve({ dataUrl: canvas.toDataURL('image/jpeg', CALIDAD), ancho, alto });
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No se pudo leer una de las imágenes')); };
+      img.src = url;
     });
   }
   /** Junta varias fotos en un solo PDF (una por página, centrada y ajustada a
@@ -422,20 +442,16 @@
     const doc = new jsPDF({ unit: 'pt', format: 'letter' });
     const margen = 36;
     for (let i = 0; i < files.length; i++) {
-      const dataUrl = await leerArchivoDataUrlArqueo_(files[i]);
-      const { ancho, alto } = await dimensionesImagenArqueo_(dataUrl);
+      const { dataUrl, ancho, alto } = await comprimirImagenArqueo_(files[i]);
       if (i > 0) doc.addPage();
       const anchoDisponible = doc.internal.pageSize.getWidth() - margen * 2;
       const altoDisponible = doc.internal.pageSize.getHeight() - margen * 2;
-      // Math.min(..., 1): nunca agranda una foto más allá de su tamaño real,
-      // solo la achica si no cabe.
       const escala = Math.min(anchoDisponible / ancho, altoDisponible / alto, 1);
       const anchoFinal = ancho * escala;
       const altoFinal = alto * escala;
       const x = margen + (anchoDisponible - anchoFinal) / 2;
       const y = margen + (altoDisponible - altoFinal) / 2;
-      const formato = files[i].type === 'image/png' ? 'PNG' : 'JPEG';
-      doc.addImage(dataUrl, formato, x, y, anchoFinal, altoFinal);
+      doc.addImage(dataUrl, 'JPEG', x, y, anchoFinal, altoFinal);
     }
     return doc.output('datauristring').split(',')[1] || '';
   }
