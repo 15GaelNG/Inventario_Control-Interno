@@ -44,11 +44,11 @@
           { campo: 'CATEGORIA', titulo: 'Categoría', tipo: 'lista' },
           { campo: 'NUCO', titulo: 'NUCO', tipo: 'texto', render: (v) => mono(v, true) },
           { campo: 'NUMERO', titulo: 'Número', tipo: 'texto', render: (v) => mono(v) },
+          { campo: 'ARCHIVOS', titulo: 'Ver evidencia', tipo: 'lista', valor: (f) => ((f.ARCHIVOS || []).length ? 'Con archivo' : 'Sin archivo'),
+            render: (v, f) => evidencia(f.ARCHIVOS), valorExportar: (f) => (f.ARCHIVOS || []).map((a) => a.etiqueta).join(' · ') },
           { campo: 'CAMPO', titulo: 'Campo', tipo: 'lista' },
           { campo: 'INVENTARIO', titulo: 'Dice el inventario', tipo: 'texto' },
           { campo: 'EVIDENCIA', titulo: 'Dice la evidencia', tipo: 'texto' },
-          { campo: 'ARCHIVOS', titulo: 'Ver evidencia', tipo: 'lista', valor: (f) => ((f.ARCHIVOS || []).length ? 'Con archivo' : 'Sin archivo'),
-            render: (v, f) => evidencia(f.ARCHIVOS), valorExportar: (f) => (f.ARCHIVOS || []).map((a) => a.etiqueta).join(' · ') },
           { campo: 'QUE_PASA', titulo: 'Qué pasa', tipo: 'texto' },
           { campo: 'SUGERENCIA', titulo: 'Qué se sugiere', tipo: 'texto' },
           { campo: 'COMENTARIO', titulo: 'Comentario', tipo: 'texto' },
@@ -150,7 +150,7 @@
         $('#lnc-tabla', raiz).innerHTML = '';
         tabla = C.tablaLineas($('#lnc-tabla', raiz), {
           idCampo: 'ID',
-          idTabla: 'lineas-correcciones-' + vista.toLowerCase() + '-v1',
+          idTabla: 'lineas-correcciones-' + vista.toLowerCase() + '-v2',
           columnas: COLUMNAS[vista],
           ordenInicial: vista === 'CORREGIR' ? { campo: 'PRIORIDAD', dir: 'asc' } : { campo: 'NUCO', dir: 'asc' },
           textoVacio: datos && datos.cargado ? 'No hay casos' : 'Todavía no se han cargado los casos',
@@ -273,9 +273,10 @@
         }
       }
 
-      function cargar() {
+      /** forzar: vuelve a revisar la carpeta de evidencias en Drive (botón Actualizar). */
+      function cargar(forzar) {
         if (tabla) tabla.setCargando(true);
-        C.llamar('apiLineasCorrecciones').then((texto) => {
+        C.llamar('apiLineasCorrecciones', forzar === true).then((texto) => {
           if (!vigente()) return;
           datos = JSON.parse(texto);
           pintarOrigen();
@@ -299,7 +300,7 @@
         });
         if (datos) { crearTabla(); pintarKpis(); }
       });
-      $('#lnc-actualizar', raiz).addEventListener('click', cargar);
+      $('#lnc-actualizar', raiz).addEventListener('click', () => cargar(true));
       $('#lnc-cargar', raiz).addEventListener('click', cargarCasos);
       $('#lnc-subir', raiz).addEventListener('click', () => $('#lnc-archivos', raiz).click());
       $('#lnc-archivos', raiz).addEventListener('change', (ev) => { subirEvidencias(ev.target.files); ev.target.value = ''; });

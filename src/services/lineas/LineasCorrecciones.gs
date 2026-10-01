@@ -95,9 +95,9 @@ const LineasCorrecciones = (function () {
   }
 
   /** Todo lo que pinta el módulo: casos, aplicados solos, permisos y la semilla disponible para cargar. */
-  function estado(usuario) {
+  function estado(usuario, forzar) {
     const resolver = resolvedor_();
-    const ev = evidencias_();
+    const ev = evidencias_(forzar);
     const filas = filas_().map((r) => aCliente_(r, resolver));
     filas.forEach((f) => { f.ARCHIVOS = enlacesDe(ev.casos[f.LLAVE] || [], ev.archivos); });
     const corregir = filas.filter((f) => f.TIPO === TIPO.CORREGIR);
@@ -125,37 +125,75 @@ const LineasCorrecciones = (function () {
   const carpetaEvidencias_ = () => LineasArchivos.carpetaDeApp(CARPETA_EVIDENCIAS);
 
   /**
-   * Lo que hay en la carpeta: { casos: {LLAVE: [entradas de evidencias.json]}, archivos: {nombre: {id, hoja, gids}},
-   * esperados: [nombres], carpetaUrl }. Caché 6 h (se borra al subir).
+   * Lo que hay en la carpeta (y sus subcarpetas: si se arrastra la carpeta completa en Drive queda una adentro):
+   * { casos: {LLAVE: [entradas de evidencias.json]}, archivos: {nombre: {id, hoja, gids}}, esperados, carpetaUrl }.
+   * Un Excel subido directo en Drive (sin pasar por el sistema) se convierte aquí a Google Sheets, una vez, para poder
+   * ligar al renglón. Caché 30 min; se borra al subir y con `forzar` ("Actualizar").
    */
-  function evidencias_() {
-    const enCache = LineasDatos.cacheLeer(CLAVE_EVIDENCIAS);
-    if (enCache) return enCache;
-    const vacio = { casos: {}, archivos: {}, esperados: [], carpetaUrl: '' };
-    let carpeta;
-    try { carpeta = carpetaEvidencias_(); } catch (e) { console.warn('Evidencias: ' + e.message); return vacio; }
-    const r = Object.assign({}, vacio, { carpetaUrl: carpeta.getUrl() });
-    const it = carpeta.getFiles();
-    while (it.hasNext()) {
-      const f = it.next();
-      const nombre = f.getName();
-      if (nombre === MANIFIESTO) {
-        try {
-          const m = JSON.parse(f.getBlob().getDataAsString('UTF-8'));
-          r.casos = m.casos || {};
-          r.esperados = (m.originales || []).concat(m.recortes || []);
-        } catch (e) { console.warn('Evidencias: evidencias.json no se pudo leer (' + e.message + ')'); }
-        continue;
-      }
-      const o = { id: f.getId(), hoja: f.getMimeType() === MIME_HOJA };
-      if (o.hoja) {
-        o.gids = {};
-        try { SpreadsheetApp.openById(o.id).getSheets().forEach((h) => { o.gids[h.getName()] = h.getSheetId(); }); } catch (e) { /* sin hojas: liga al archivo */ }
-      }
-      r.archivos[nombre] = o;
+  function evidencias_(forzar) {
+    if (!forzar) {
+      const enCache = LineasDatos.cacheLeer(CLAVE_EVIDENCIAS);
+      if (enCache) return enCache;
     }
-    LineasDatos.cacheGuardar(CLAVE_EVIDENCIAS, r, 6 * 3600);
+    const vacio = { casos: {}, archivos: {}, esperados: [], carpetaUrl: '' };
+    let raiz;
+    try { raiz = carpetaEvidencias_(); } catch (e) { console.warn('Evidencias: ' + e.message); return vacio; }
+    const r = Object.assign({}, vacio, { carpetaUrl: raiz.getUrl() });
+    const excels = [];
+    const recorrer = (carpeta, nivel) => {
+      const it = carpeta.getFiles();
+      while (it.hasNext()) {
+        const f = it.next();
+        const nombre = f.getName();
+        if (nombre === MANIFIESTO) {
+          try {
+            const m = JSON.parse(f.getBlob().getDataAsString('UTF-8'));
+            r.casos = m.casos || {};
+            r.esperados = (m.originales || []).concat(m.recortes || []);
+          } catch (e) { console.warn('Evidencias: evidencias.json no se pudo leer (' + e.message + ')'); }
+          continue;
+        }
+        const hoja = f.getMimeType() === MIME_HOJA;
+        if (!hoja && /\.xlsx?$/i.test(nombre)) { excels.push({ archivo: f, carpeta: carpeta }); continue; }
+        if (r.archivos[nombre] && r.archivos[nombre].hoja && !hoja) continue; // la hoja de Google gana al original
+        r.archivos[nombre] = { id: f.getId(), hoja: hoja };
+      }
+      if (nivel < 3) {
+        const sub = carpeta.getFolders();
+        while (sub.hasNext()) recorrer(sub.next(), nivel + 1);
+      }
+    };
+    recorrer(raiz, 0);
+    // Excel sin su hoja de Google: se convierte (copia junto al original) y, si no se puede, se liga al archivo
+    excels.forEach((x) => {
+      const nombre = x.archivo.getName();
+      if (r.archivos[nombre] && r.archivos[nombre].hoja) return;
+      try {
+        r.archivos[nombre] = { id: copiarComoHoja_(x.archivo.getId(), nombre, x.carpeta.getId()), hoja: true };
+      } catch (e) {
+        console.warn('Evidencias: ' + e.message);
+        r.archivos[nombre] = { id: x.archivo.getId(), hoja: false };
+      }
+    });
+    Object.keys(r.archivos).forEach((nombre) => {
+      const o = r.archivos[nombre];
+      if (!o.hoja) return;
+      o.gids = {};
+      try { SpreadsheetApp.openById(o.id).getSheets().forEach((h) => { o.gids[h.getName()] = h.getSheetId(); }); } catch (e) { /* sin hojas: liga al archivo */ }
+    });
+    LineasDatos.cacheGuardar(CLAVE_EVIDENCIAS, r, 30 * 60);
     return r;
+  }
+
+  /** Copia de un Excel de Drive como Google Sheets en la misma carpeta (mismo nombre). Regresa el id. */
+  function copiarComoHoja_(id, nombre, carpetaId) {
+    const resp = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + id + '/copy?supportsAllDrives=true', {
+      method: 'post', contentType: 'application/json',
+      payload: JSON.stringify({ name: nombre, mimeType: MIME_HOJA, parents: [carpetaId] }),
+      headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true,
+    });
+    if (resp.getResponseCode() !== 200) throw new Error('No se pudo convertir ' + nombre + ' (' + resp.getResponseCode() + '): ' + resp.getContentText().slice(0, 200));
+    return JSON.parse(resp.getContentText()).id;
   }
 
   /** Para el panel de ADMIN: qué falta subir de lo que pide evidencias.json. */
@@ -421,9 +459,9 @@ function usuarioCorrecciones_(sesion) {
 }
 
 /** Casos y lo aplicado solo. Viaja como texto JSON (como las demás tablas grandes). */
-function apiLineasCorrecciones(token) {
+function apiLineasCorrecciones(token, forzar) {
   const sesion = Auth.validarSesion(token);
-  return JSON.stringify(LineasUtil.paraCliente(LineasCorrecciones.estado(usuarioCorrecciones_(sesion))));
+  return JSON.stringify(LineasUtil.paraCliente(LineasCorrecciones.estado(usuarioCorrecciones_(sesion), !!forzar)));
 }
 
 function apiLineasCorreccionesCargar(token) {

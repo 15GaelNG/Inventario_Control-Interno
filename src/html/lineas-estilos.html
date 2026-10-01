@@ -799,6 +799,21 @@
   .lnp-filtros select { width: auto; min-width: 170px; padding: 7px 10px; font-weight: 600; }
   .lnp-filtro-nota { font-size: 12px; color: var(--color-text-muted); }
   .ln-panorama.lnp-cargando .lnp-portada, .ln-panorama.lnp-cargando .lnp-dos { opacity: .55; transition: opacity .2s; }
+  /* Filtro rápido por tipo en Líneas Telefónicas (como la lista agrupada del AppSheet) */
+  .ln-tipos { display: flex; align-items: center; gap: 4px; padding: 2px 2px 10px; overflow-x: auto; scrollbar-width: thin; }
+  .ln-tipos:empty { display: none; }
+  .ln-tipo { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; padding: 5px 10px 5px 6px; border-radius: 999px;
+    border: 1px solid transparent; background: transparent; color: var(--color-text); font-size: 12.5px; font-weight: 500;
+    cursor: pointer; transition: background-color .15s, border-color .15s; }
+  .ln-tipo:hover { background: var(--color-bg); }
+  .ln-tipo.activo { background: var(--color-bg); border-color: var(--color-border); }
+  .ln-tipo:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+  .ln-tipo .ln-regla-chip { pointer-events: none; }
+  .ln-tipo-todo { padding: 3px 8px; font-weight: 700; letter-spacing: .02em; }
+  .ln-tipo-num { min-width: 22px; padding: 1px 6px; border-radius: 6px; background: var(--color-bg); color: var(--color-text-muted);
+    font-size: 11.5px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; }
+  .ln-tipo.activo .ln-tipo-num { background: var(--color-surface); }
+
   /* Correcciones de Líneas: botones a la evidencia en Drive (módulo temporal) */
   .lnc-evid { display: flex; flex-direction: column; gap: 4px; min-width: 210px; }
   .lnc-evid-item { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
