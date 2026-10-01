@@ -4701,6 +4701,11 @@
       irARegistro: irARegistro, // desde Notificaciones: "Ver línea"
       initPanorama: initPanorama,
       initResguardos: initResguardos,
+      // Apoyos para módulos en su propio archivo (p. ej. el temporal de correcciones, html/js/lineas-correcciones.html)
+      comun: {
+        $: $, esc: esc, guion: guion, miles: miles, ico: ico, chip: chip, fechaTabla: fechaTabla, tablaLineas: tablaLineas,
+        tilesKpi: tilesKpi, aviso: aviso, icono: icono, mensajeError: mensajeError, llamar: llamar, pedirDatos: pedirDatos,
+      },
     };
   })();
 </script>

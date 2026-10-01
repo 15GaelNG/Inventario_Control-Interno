@@ -69,6 +69,8 @@ const Entidades = (function () {
     'APP_NOTIFICACIONES': { prefijo: 'NTF', llaveAnterior: 'ID', delSistemaNuevo: true },
     // Bandeja de resguardos y cancelaciones (Líneas, 30-sep): la crea LineasResguardos
     'APP_RESGUARDOS': { prefijo: 'RSG', llaveAnterior: 'ID', delSistemaNuevo: true },
+    // Módulo TEMPORAL "Correcciones de Líneas" (30-sep): se borra cuando Líneas termine (ver LineasCorrecciones.gs)
+    'APP_CORRECCIONES': { prefijo: 'COR', llaveAnterior: 'ID', delSistemaNuevo: true },
   };
 
   /** Cómo se llama la columna de la llave nueva, en todas las hojas */

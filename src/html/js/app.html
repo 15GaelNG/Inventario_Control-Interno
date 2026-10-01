@@ -568,6 +568,8 @@
       if (vista === 'gestion-activos') { montarVista('tpl-lineas-gestion-activos', Lineas.initGestionActivos); return; }
       if (vista === 'accesorios-lineas') { montarVista('tpl-lineas-accesorios', Lineas.initAccesoriosLineas); return; }
       if (vista === 'resguardos-lineas') { montarVista('tpl-lineas-resguardos', Lineas.initResguardos); return; }
+      // Módulo TEMPORAL (30-sep): se quita cuando Líneas termine sus correcciones (ver LineasCorrecciones.gs)
+      if (vista === 'correcciones-lineas') { montarVista('tpl-lineas-correcciones', LineasCorrecciones.init); return; }
       if (vista === 'cambios-lineas') { montarVista('tpl-lineas-bitacora', Lineas.initCambios); return; }
       // Campana de la barra superior → "Ver todas" (html/notificaciones.html, rama emmanuel)
       if (vista === 'notificaciones') { montarVista('tpl-notificaciones', Notificaciones.initVista); return; }
@@ -601,6 +603,7 @@
         { vista: 'panorama-lineas', etiqueta: 'Panorama', icono: 'layout-dashboard' },
         { vista: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas', icono: 'smartphone' },
         { vista: 'resguardos-lineas', etiqueta: 'Resguardos y cancelaciones', icono: 'package-check' },
+        { vista: 'correcciones-lineas', etiqueta: 'Correcciones de Líneas', icono: 'clipboard-check' }, // temporal (30-sep)
         { vista: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios', icono: 'boxes' },
         // Control de Cambios queda fuera del menú (30-sep) pero su vista sigue en navegarA: su pestaña es la bitácora
         // del Historial y del Panorama. Reactivación, Solicitud, Reasignaciones y Desechos se retiraron con sus

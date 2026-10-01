@@ -9,7 +9,8 @@
     "push": "clasp push",
     "watch": "clasp push --watch",
     "open": "clasp open",
-    "deploy": "clasp deploy"
+    "deploy": "clasp deploy",
+    "correcciones:semilla": "node tools/correcciones-semilla.cjs"
   },
   "devDependencies": {
     "@google/clasp": "^3.0.0"

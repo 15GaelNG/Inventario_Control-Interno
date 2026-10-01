@@ -52,7 +52,8 @@ test('Telefonía muestra sus módulos en orden y Gestión de Activos queda fuera
   assert.equal((lineas.match(/Inventario de Accesorios/g) || []).length, 1);
   // Panorama primero (29-sep). Fuera del menú (líneas comentadas) pero sus vistas se siguen montando: Reactivación
   // (29-sep) y Reasignaciones, Solicitud, Control de Cambios y Bitácora de Desechos (reunión con Líneas, 30-sep)
-  const orden = ['panorama-lineas', 'lineas-telefonicas', 'resguardos-lineas', 'accesorios-lineas'];
+  // Correcciones de Líneas: módulo temporal (30-sep), después de Resguardos; se quita cuando Líneas termine
+  const orden = ['panorama-lineas', 'lineas-telefonicas', 'resguardos-lineas', 'correcciones-lineas', 'accesorios-lineas'];
   const ocultos = ['cambios-lineas'];
   const retirados = ['reactivacion-lineas', 'reasignaciones-lineas', 'solicitud-lineas', 'bitacora-desechos'];
   const sinComentarios = lineas.split(/\r?\n/).filter((l) => !/^\s*\/\//.test(l)).join('\n');
@@ -1482,4 +1483,45 @@ test('Ajustes a la selección estilo Drive: contador simple, clic fuera, sin Cop
   assert.match(dt, /const teclas = cfg\.seleccionUnica \? \{\} : teclasOriginales;/);
   assert.match(dt, /if \(cfg\.seleccionUnica\) return;   \/\/ sin selección de varias, no hay cuadro/);
   assert.equal((lineas.match(/seleccionUnica: true,/g) || []).length, 2);
+});
+
+test('Correcciones de Líneas (módulo temporal, 30-sep): cargas que conservan, reabren y verifican', () => {
+  const Cor = new Function(read('src/services/lineas/LineasCorrecciones.gs') + '\nreturn LineasCorrecciones;')();
+  let n = 0;
+  const nuevoId = () => 'COR-' + (++n);
+  const caso = (llave, extra) => Object.assign({ llave: llave, clave: 'B1', categoria: 'Fuera de inventario', prioridad: 2, nuco: '3', idAppsheet: 'a1', numero: '', tipo: 'EQUIPO', campo: 'ESTATUS EQUIPO', inventario: 'FUERA DE INVENTARIO', evidencia: '', quePasa: 'q', sugerencia: 's', fuente: 'f' }, extra);
+  const auto = { nuco: '1', idAppsheet: 'x', tipo: 'EQUIPO', campo: 'ESTATUS LINEA', antes: 'SIN LINEA', despues: '', regla: 'M1', queHace: 'SIN LINEA en blanco', quien: 'SISTEMA (mapeo)', evidencia: 'Inventario' };
+  const d1 = new Date(2026, 8, 30, 21);
+
+  // Primera carga: todo nace PENDIENTE y lo aplicado solo como AL MIGRAR
+  const c1 = Cor.combinar([], { carga: '2026-09-30T20:00:00', fechaInventario: '2026-09-28', casos: [caso('B1|3|E'), caso('B4|9|E'), caso('B13|5|P')], automaticos: [auto] }, d1, nuevoId);
+  assert.deepEqual(c1.resumen, { nuevos: 3, siguen: 0, reabiertos: 0, verificados: 0, quitados: 0, automaticos: 1 });
+  assert.deepEqual(c1.filas.map((f) => f.ESTADO), ['PENDIENTE', 'PENDIENTE', 'PENDIENTE', 'AL MIGRAR']);
+
+  // Líneas atiende: B1 corregido, B13 no aplica
+  const hoja = c1.filas.map((f) => Object.assign({}, f));
+  Object.assign(hoja[0], { ESTADO: 'CORREGIDO', ATENDIDO_EN: new Date(2026, 9, 2, 10) });
+  Object.assign(hoja[2], { ESTADO: 'NO APLICA', COMENTARIO: 'No se limpian', ATENDIDO_EN: new Date(2026, 9, 2, 10) });
+
+  // Misma foto del inventario, cambió una regla (B4 ya no sale): lo no tocado se quita; lo atendido se conserva
+  const c2 = Cor.combinar(hoja, { carga: '2026-10-01T09:00:00', fechaInventario: '2026-09-28', casos: [caso('B1|3|E'), caso('B13|5|P')], automaticos: [] }, d1, nuevoId);
+  assert.deepEqual(c2.resumen, { nuevos: 0, siguen: 2, reabiertos: 0, verificados: 0, quitados: 1, automaticos: 0 });
+  assert.equal(c2.filas.find((f) => f.LLAVE === 'B1|3|E').ESTADO, 'CORREGIDO');
+
+  // Inventario POSTERIOR a cuando se marcó: lo corregido que sigue apareciendo se reabre; lo que ya no aparece se verifica
+  const c3 = Cor.combinar(hoja, { carga: '2026-10-10T09:00:00', fechaInventario: '2026-10-09', casos: [caso('B1|3|E')], automaticos: [auto] }, d1, nuevoId);
+  const por = (k) => c3.filas.find((f) => f.LLAVE === k);
+  assert.equal(por('B1|3|E').ESTADO, 'PENDIENTE');
+  assert.match(por('B1|3|E').COMENTARIO, /Reabierto: sigue en la conciliación con el inventario del 2026-10-09/);
+  assert.equal(por('B4|9|E').ESTADO, 'VERIFICADO');
+  assert.equal(por('B13|5|P').ESTADO, 'NO APLICA');   // "no aplica" no se toca
+  assert.equal(c3.filas.filter((f) => f.TIPO === 'AUTOMATICO').length, 1);   // lo aplicado solo se reemplaza
+
+  // Aislado para poder borrarlo: API en su archivo, semilla fuera de git, una línea en cada lugar compartido
+  assert.match(read('.gitignore'), /src\/services\/lineas\/LineasCorreccionesSemilla\.gs/);
+  assert.match(read('src/services/lineas/LineasCorrecciones.gs'), /function apiLineasCorreccionesMarcar\(token, accion, ids, comentario\)/);
+  assert.doesNotMatch(read('src/ClientApi.gs'), /Correcciones/);
+  assert.match(read('src/html/js/app.html'), /if \(vista === 'correcciones-lineas'\) \{ montarVista\('tpl-lineas-correcciones', LineasCorrecciones\.init\); return; \}/);
+  assert.match(read('src/config/Entidades.gs'), /'APP_CORRECCIONES': \{ prefijo: 'COR'/);
+  assert.match(read('package.json'), /"correcciones:semilla": "node tools\/correcciones-semilla\.cjs"/);
 });

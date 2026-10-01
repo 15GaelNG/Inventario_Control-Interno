@@ -6,3 +6,6 @@ node_modules/
 !.clasp.json.example
 *.log
 .DS_Store
+
+# Módulo temporal de correcciones: la semilla trae datos del inventario (tools/correcciones-semilla.cjs)
+src/services/lineas/LineasCorreccionesSemilla.gs

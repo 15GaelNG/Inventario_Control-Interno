@@ -1,0 +1,235 @@
+<script>
+  /**
+   * Módulo TEMPORAL "Correcciones de Líneas" (30-sep-2026). Vive aparte para poder quitarlo completo cuando Líneas
+   * termine (ver la cabecera de services/lineas/LineasCorrecciones.gs). Usa los apoyos de Lineas.comun.
+   *
+   *   LineasCorrecciones.init()   vista 'correcciones-lineas' (tpl-lineas-correcciones)
+   */
+  const LineasCorrecciones = (function () {
+    'use strict';
+
+    const COLOR_ESTADO = { 'PENDIENTE': 'ambar', 'CORREGIDO': 'verde', 'VERIFICADO': 'verde', 'NO APLICA': '', 'AL MIGRAR': 'azul' };
+    const PRIORIDAD = { 1: '1 · Alta', 2: '2 · Media', 3: '3 · Baja' };
+    let montaje = 0;
+
+    function init() {
+      const C = Lineas.comun;
+      const { $, esc, guion, miles, ico, chip, fechaTabla, aviso, icono, mensajeError } = C;
+      const n = ++montaje;
+      const raiz = document.getElementById('ln-correcciones');
+      const vigente = () => n === montaje && document.body.contains(raiz);
+      let vista = 'CORREGIR';
+      let datos = null;
+      let tabla = null;
+      let filtros = {};
+      let marcas = [];
+      refreshIcons();
+
+      const estadoChip = (v) => chip(v, COLOR_ESTADO[v] || '');
+      const mono = (v, fuerte) => (v ? '<span class="ln-mono' + (fuerte ? ' ln-fuerte' : '') + '">' + esc(v) + '</span>' : guion(v));
+      const fechaDeIso = (s) => (s ? String(s).slice(8, 10) + '/' + String(s).slice(5, 7) + '/' + String(s).slice(0, 4) : '');
+
+      const COLUMNAS = {
+        CORREGIR: [
+          { campo: 'PRIORIDAD', titulo: 'Prioridad', tipo: 'lista', fijada: true, render: (v) => esc(PRIORIDAD[v] || v) },
+          { campo: 'ESTADO', titulo: 'Estado', tipo: 'lista', render: estadoChip },
+          { campo: 'CATEGORIA', titulo: 'Categoría', tipo: 'lista' },
+          { campo: 'NUCO', titulo: 'NUCO', tipo: 'texto', render: (v) => mono(v, true) },
+          { campo: 'NUMERO', titulo: 'Número', tipo: 'texto', render: (v) => mono(v) },
+          { campo: 'CAMPO', titulo: 'Campo', tipo: 'lista' },
+          { campo: 'INVENTARIO', titulo: 'Dice el inventario', tipo: 'texto' },
+          { campo: 'EVIDENCIA', titulo: 'Dice la evidencia', tipo: 'texto' },
+          { campo: 'QUE_PASA', titulo: 'Qué pasa', tipo: 'texto' },
+          { campo: 'SUGERENCIA', titulo: 'Qué se sugiere', tipo: 'texto' },
+          { campo: 'COMENTARIO', titulo: 'Comentario', tipo: 'texto' },
+          { campo: 'ATENDIO_NOMBRE', titulo: 'Atendió', tipo: 'lista' },
+          { campo: 'ATENDIDO_EN', titulo: 'Atendido', tipo: 'lnFechaHora' },
+          { campo: 'FUENTE', titulo: 'Fuente', tipo: 'texto', visible: false },
+          { campo: 'CLAVE', titulo: 'Clave', tipo: 'lista', visible: false },
+          { campo: 'TIPO_REGISTRO', titulo: 'Tipo', tipo: 'lista', visible: false },
+        ],
+        AUTOMATICO: [
+          { campo: 'NUCO', titulo: 'NUCO', tipo: 'texto', fijada: true, render: (v) => mono(v, true) },
+          { campo: 'CAMPO', titulo: 'Campo', tipo: 'lista' },
+          { campo: 'ANTES', titulo: 'Antes', tipo: 'texto' },
+          { campo: 'DESPUES', titulo: 'Después', tipo: 'texto', render: (v) => (v ? esc(v) : '<span class="ln-tenue">(en blanco)</span>') },
+          { campo: 'QUE_HACE', titulo: 'Por qué', tipo: 'lista' },
+          { campo: 'QUIEN_RESUELVE', titulo: 'Con qué', tipo: 'lista', render: (v) => esc(/evidencia/i.test(v) ? 'Evidencia' : (/mapeo/i.test(v) ? 'Regla acordada' : v)) },
+          { campo: 'EVIDENCIA', titulo: 'Evidencia', tipo: 'texto' },
+          { campo: 'REGLA', titulo: 'Regla', tipo: 'lista', visible: false },
+          { campo: 'TIPO_REGISTRO', titulo: 'Tipo', tipo: 'lista', visible: false },
+        ],
+      };
+
+      /** Marca casos: CORREGIDO, NO_APLICA (pide por qué) o REABRIR. */
+      async function marcar(accion, filas) {
+        let comentario = '';
+        const detalle = filas.slice(0, 20).map((f) => (f.NUCO ? 'NUCO ' + f.NUCO : f.NUMERO) + ' · ' + f.CATEGORIA);
+        if (accion === 'NO_APLICA') {
+          const r = await C.pedirDatos('No aplica', miles(filas.length) + ' caso(s). Escribe por qué no aplica; queda en el comentario.',
+            [{ clave: 'comentario', etiqueta: 'Por qué no aplica', requerido: true }], 'Marcar no aplica');
+          if (!r) return;
+          comentario = r.comentario;
+        } else {
+          const ok = await Confirmar.pedir({
+            titulo: accion === 'CORREGIDO' ? '¿Marcar ' + miles(filas.length) + ' caso(s) como corregidos?' : '¿Reabrir ' + miles(filas.length) + ' caso(s)?',
+            mensaje: accion === 'CORREGIDO' ? 'Queda tu nombre y la fecha. Si en la siguiente conciliación siguen apareciendo, se reabren solos.' : 'Vuelven a PENDIENTE.',
+            textoConfirmar: accion === 'CORREGIDO' ? 'Marcar corregidos' : 'Reabrir', detalle: detalle,
+          });
+          if (!ok) return;
+        }
+        try {
+          const r = await C.llamar('apiLineasCorreccionesMarcar', accion, filas.map((f) => f.ID), comentario);
+          const om = r.omitidos || [];
+          aviso(icono('circle-check') + ' ' + miles((r.hechos || []).length) + ' caso(s) en ' + r.estado + (om.length ? ' · ' + om.length + ' sin cambio (' + om.slice(0, 3).map((x) => x.motivo).join(' · ') + ')' : '') + '.', 7000);
+          if (tabla) tabla.limpiarSeleccion();
+          cargar();
+        } catch (e) {
+          aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 10000);
+        }
+      }
+
+      const ACCIONES = [
+        { icono: 'circle-check', texto: 'Corregido', titulo: 'Ya se corrigió en el inventario', minimo: 1, alHacer: (filas) => marcar('CORREGIDO', filas) },
+        { icono: 'ban', texto: 'No aplica', titulo: 'El caso no aplica (hay que escribir por qué)', minimo: 1, alHacer: (filas) => marcar('NO_APLICA', filas) },
+        { icono: 'rotate-ccw', texto: 'Reabrir', titulo: 'Regresa los casos a PENDIENTE', minimo: 1, alHacer: (filas) => marcar('REABRIR', filas) },
+      ];
+
+      const filasVista = () => (datos ? (vista === 'CORREGIR' ? datos.corregir : datos.automaticos) : []);
+
+      function pintarKpis() {
+        const filas = filasVista();
+        const cuenta = (campo, valor) => filas.filter((f) => f[campo] === valor).length;
+        let defs;
+        let cats = [];
+        if (vista === 'CORREGIR') {
+          defs = [
+            { icono: 'list-checks', valor: miles(filas.length), etiqueta: 'Casos para Líneas' },
+            { icono: 'clock', valor: miles(cuenta('ESTADO', 'PENDIENTE')), etiqueta: 'Pendientes', clase: 'stat-tile-warn', filtros: { ESTADO: { valores: ['PENDIENTE'] } } },
+            { icono: 'circle-check', valor: miles(cuenta('ESTADO', 'CORREGIDO') + cuenta('ESTADO', 'VERIFICADO')), etiqueta: 'Corregidos', clase: 'stat-tile-ok', filtros: { ESTADO: { valores: ['CORREGIDO', 'VERIFICADO'] } } },
+            { icono: 'ban', valor: miles(cuenta('ESTADO', 'NO APLICA')), etiqueta: 'No aplica', filtros: { ESTADO: { valores: ['NO APLICA'] } } },
+          ];
+          const porCat = {};
+          filas.forEach((f) => {
+            const k = f.CATEGORIA || 'Sin categoría';
+            porCat[k] = porCat[k] || { total: 0, pendientes: 0 };
+            porCat[k].total++;
+            if (f.ESTADO === 'PENDIENTE') porCat[k].pendientes++;
+          });
+          cats = Object.keys(porCat).sort((a, b) => porCat[b].total - porCat[a].total).map((k) => ({
+            icono: porCat[k].pendientes ? 'circle-dashed' : 'circle-check', valor: miles(porCat[k].pendientes),
+            etiqueta: k + ' · pendientes de ' + miles(porCat[k].total), clase: porCat[k].pendientes ? '' : 'stat-tile-ok', titulo: 'Pendientes de ' + k, filtros: { CATEGORIA: { valores: [k] } },
+          }));
+        } else {
+          defs = [
+            { icono: 'wand-sparkles', valor: miles(filas.length), etiqueta: 'Cambios al migrar' },
+            { icono: 'file-check', valor: miles(filas.filter((f) => /evidencia/i.test(f.QUIEN_RESUELVE)).length), etiqueta: 'Por evidencia', filtros: { QUIEN_RESUELVE: { valores: ['SISTEMA (evidencia)'] } } },
+            { icono: 'scale', valor: miles(filas.filter((f) => /mapeo/i.test(f.QUIEN_RESUELVE)).length), etiqueta: 'Por regla acordada', filtros: { QUIEN_RESUELVE: { valores: ['SISTEMA (mapeo)'] } } },
+            { icono: 'smartphone', valor: miles(new Set(filas.map((f) => f.NUCO)).size), etiqueta: 'NUCOs que cambian', filtros: false },
+          ];
+        }
+        marcas = [C.tilesKpi($('#lnc-kpis', raiz), defs, () => tabla)];
+        $('#lnc-categorias', raiz).innerHTML = '';
+        $('#lnc-categorias', raiz).style.display = cats.length ? '' : 'none'; // .stat-row le gana a [hidden]
+        if (cats.length) marcas.push(C.tilesKpi($('#lnc-categorias', raiz), cats, () => tabla));
+        marcas.forEach((m) => m(filtros));
+      }
+
+      function crearTabla() {
+        const puede = !!(datos && datos.puedeOperar) && vista === 'CORREGIR';
+        $('#lnc-tabla', raiz).innerHTML = '';
+        tabla = C.tablaLineas($('#lnc-tabla', raiz), {
+          idCampo: 'ID',
+          idTabla: 'lineas-correcciones-' + vista.toLowerCase() + '-v1',
+          columnas: COLUMNAS[vista],
+          ordenInicial: vista === 'CORREGIR' ? { campo: 'PRIORIDAD', dir: 'asc' } : { campo: 'NUCO', dir: 'asc' },
+          textoVacio: datos && datos.cargado ? 'No hay casos' : 'Todavía no se han cargado los casos',
+          exportar: { nombreArchivo: vista === 'CORREGIR' ? 'Correcciones de Lineas' : 'Cambios al migrar' },
+          etiquetaFila: (f) => (f.NUCO ? 'NUCO ' + f.NUCO : f.NUMERO) + ' · ' + (f.CATEGORIA || f.CAMPO),
+          detalle: { titulo: (f) => (f.NUCO ? 'NUCO ' + f.NUCO : 'Número ' + f.NUMERO) + ' · ' + (f.CATEGORIA || f.CAMPO) },
+          accionesFila: [{ icono: 'circle-chevron-right', titulo: 'Abrir el NUCO para corregirlo', visible: (f) => !!f.REGISTRO_ID, alHacer: (f) => Lineas.irARegistro(f.REGISTRO_ID) }],
+          accionesSeleccion: puede ? ACCIONES : [],
+          ayuda: vista === 'CORREGIR'
+            ? (puede ? 'La flecha abre el NUCO para corregirlo. Después selecciona uno o varios casos y márcalos como corregidos o "no aplica".'
+              : 'Aquí ves el avance de las correcciones. La flecha abre el NUCO.')
+            : 'Cambios que se aplican solos al migrar (proveedor, documento de venta o regla acordada). Solo consulta.',
+          alCambiarFiltros: (f) => { filtros = f || {}; marcas.forEach((m) => m(filtros)); },
+        });
+        tabla.setDatos(filasVista());
+        $('#lnc-solo-lectura', raiz).hidden = vista !== 'CORREGIR' || !!(datos && datos.puedeOperar);
+        $('#lnc-nota-auto', raiz).hidden = vista !== 'AUTOMATICO';
+      }
+
+      function pintarOrigen() {
+        const s = datos.semilla;
+        const c = datos.cargado;
+        const partes = [];
+        if (c) partes.push(icono('database') + ' Casos de la conciliación del ' + esc(fechaTabla(c.carga)) + ' (inventario al ' + esc(fechaTabla(c.fechaInventario).slice(0, 10)) + ').');
+        else partes.push(icono('info') + ' Todavía no se cargan los casos.');
+        const hayNueva = s && (!c || String(s.carga) > String(c.carga).slice(0, 19));
+        if (datos.puedeCargar && hayNueva) partes.push(' Hay una conciliación ' + (c ? 'más nueva' : '') + ' lista para cargar: ' + esc(fechaTabla(s.carga)) + ', ' + miles(s.casos) + ' casos y ' + miles(s.automaticos) + ' cambios al migrar.');
+        const o = $('#lnc-origen', raiz);
+        o.innerHTML = partes.join('');
+        o.hidden = false;
+        const b = $('#lnc-cargar', raiz);
+        b.hidden = !(datos.puedeCargar && s);
+      }
+
+      async function cargarCasos() {
+        const s = datos && datos.semilla;
+        if (!s) return;
+        const ok = await Confirmar.pedir({
+          titulo: '¿Cargar los casos de la conciliación del ' + fechaTabla(s.carga) + '?',
+          mensaje: miles(s.casos) + ' casos para Líneas y ' + miles(s.automaticos) + ' cambios al migrar (inventario al ' + fechaDeIso(s.fechaInventario) + '). ' +
+            'Lo que ya estaba conserva su estado; lo corregido que siga apareciendo con un inventario más nuevo se reabre, y lo que ya no aparece se da por verificado.',
+          textoConfirmar: 'Cargar casos',
+        });
+        if (!ok) return;
+        const b = $('#lnc-cargar', raiz);
+        b.disabled = true;
+        try {
+          const r = await C.llamar('apiLineasCorreccionesCargar');
+          aviso(icono('circle-check') + ' Cargados: ' + miles(r.nuevos) + ' nuevos, ' + miles(r.siguen) + ' siguen, ' + miles(r.reabiertos) + ' reabiertos, ' +
+            miles(r.verificados) + ' verificados' + (r.quitados ? ', ' + miles(r.quitados) + ' quitados' : '') + ' y ' + miles(r.automaticos) + ' cambios al migrar.', 10000);
+          cargar();
+        } catch (e) {
+          aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 12000);
+        } finally {
+          b.disabled = false;
+        }
+      }
+
+      function cargar() {
+        if (tabla) tabla.setCargando(true);
+        C.llamar('apiLineasCorrecciones').then((texto) => {
+          if (!vigente()) return;
+          datos = JSON.parse(texto);
+          pintarOrigen();
+          crearTabla();
+          pintarKpis();
+        }).catch((e) => {
+          if (!vigente()) return;
+          if (!tabla) tabla = C.tablaLineas($('#lnc-tabla', raiz), { idCampo: 'ID', columnas: [{ campo: 'ID', titulo: 'ID' }], detalle: false, exportar: false });
+          tabla.setError('No se pudieron cargar las correcciones: ' + mensajeError(e));
+        });
+      }
+
+      raiz.querySelector('.lnc-pestanas').addEventListener('click', (ev) => {
+        const b = ev.target.closest('[data-lnc-vista]');
+        if (!b || b.dataset.lncVista === vista) return;
+        vista = b.dataset.lncVista;
+        filtros = {};
+        raiz.querySelectorAll('[data-lnc-vista]').forEach((x) => {
+          x.classList.toggle('activo', x === b);
+          x.setAttribute('aria-selected', String(x === b));
+        });
+        if (datos) { crearTabla(); pintarKpis(); }
+      });
+      $('#lnc-actualizar', raiz).addEventListener('click', cargar);
+      $('#lnc-cargar', raiz).addEventListener('click', cargarCasos);
+      cargar();
+    }
+
+    return { init: init };
+  })();
+</script>

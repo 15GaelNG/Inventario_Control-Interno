@@ -10,7 +10,7 @@ qué está hecho, cómo probarlo y qué sigue.
 
 - **Rama `emmanuel`:** en GitHub hasta `10dc7eb` (29-sep). En local hay 27 commits más (`644ba14` … `13e2987`).
   Se suben a GitHub **al terminar la ronda**, como pidió el usuario. DEV está al día con `emmanuel`.
-- **Pruebas:** `npm test` da 58 aprobadas y 0 fallidas. Las de Ayrton se corren aparte (`node tests/ids.test.js` y
+- **Pruebas:** `npm test` da 59 aprobadas y 0 fallidas. Las de Ayrton se corren aparte (`node tests/ids.test.js` y
   `node tests/entidades.test.js`) y dan TODO OK.
 - **Reunión con Líneas (30-sep): ya ocurrió.** Lo hecho después:
   - §0u: estatus nuevos, DISPONIBLE y menú;
@@ -24,6 +24,7 @@ qué está hecho, cómo probarlo y qué sigue.
     fuera quita la selección, sin columna de Acciones, Documentos/Historial de una fila, ficha con solo Nueva
     inspección y Nueva responsiva a la vista (lo demás en ⋮, también en la línea), "Ver carpeta en Drive" sola en ⋮
     y con el mismo nombre en la tabla Documentos, y la barra que entra a los 100 ms (con doble clic no se asoma).
+  - §0aa: módulo TEMPORAL "Correcciones de Líneas" (casos de la conciliación para Líneas); se elimina cuando terminen.
   - §0z: Líneas lee `ID ANTERIOR` tras la segunda corrida de IDs de Ayrton.
 - **Lo que sigue, en orden:** pendiente 0 de `migracion/ESTADO_TELEFONIA.md`, en la carpeta de documentación.
   1. Conversión de estatus viejos: ya no hay confirmaciones del usuario; lo que requiere decisión va al módulo de
@@ -58,6 +59,37 @@ qué está hecho, cómo probarlo y qué sigue.
   - §0z: Líneas lee `ID ANTERIOR` (corrida de IDs del 30-sep). Su catálogo y `MIGRACION_REFERENCIAS` ya no
     describen la BD de pruebas tal como quedó: ver §0z antes de correr `lineas2Escribir` sobre ella.
 
+
+## 0aa. Módulo temporal "Correcciones de Líneas" (2026-09-30, noche)
+
+Fase 3 del plan de correcciones (`migracion/PLAN_CORRECCIONES_SIN_LINEAS.md`). Decisión del usuario: **módulo aparte y
+temporal**; sirve para que Líneas corrija, termine y después se elimina. Por eso todo vive aislado.
+
+- **Casos:** los de QUIEN RESUELVE = LINEAS de la conciliación (565 al 30-sep: 258 fuera de inventario, 148 datos de
+  persona en resguardo, 120 faltan en inventario, 15 líneas guardadas y vencidas, 14 datos por revisar, 6 equipos
+  cancelados, 2 líneas que el proveedor no tiene, 1 en uso con problema, 1 suspendida). La hoja de Bren es solo
+  referencia (C1–C7 no entran). Pestaña de solo consulta "Se aplica al migrar": los 1,584 cambios SISTEMA.
+- **De dónde salen:** `conversion_estatus.py` (carpeta del reporte) → `CORRECCIONES - para cargar.json` →
+  `npm run correcciones:semilla -- "<ruta>"` → `src/services/lineas/LineasCorreccionesSemilla.gs` (**en .gitignore**:
+  trae datos del inventario; clasp sí lo sube) → `npm run push` → botón **Cargar casos** (solo ADMIN).
+- **Volver a cargar:** conserva estados; lo CORREGIDO que sigue apareciendo con un inventario posterior a cuando se
+  marcó se reabre; lo que ya no aparece pasa a VERIFICADO (o se quita si es el mismo inventario y nadie lo tocó);
+  "No aplica" no se toca; lo aplicado solo se reemplaza. `LineasCorrecciones.combinar` es pura y tiene prueba.
+- **Acciones** (ADMIN y OPERADOR, con selección): Corregido, No aplica (comentario obligatorio) y Reabrir; queda quién
+  y cuándo en el renglón (no en APP_MOVIMIENTOS, para que al borrar el módulo no quede rastro en el historial). La
+  flecha / "Abrir el NUCO para corregirlo" abre la ficha (resuelve ID del AppSheet o NUCO al ID vigente).
+- **KPIs:** casos, pendientes, corregidos (incluye verificados), no aplica y una tarjeta por categoría que filtra.
+- **Probado en /dev (30-sep):** carga de 565 casos + 1,584 cambios en `APP_CORRECCIONES` (BD de pruebas); marcar
+  corregido y reabrir el NUCO 1007; pestaña "Se aplica al migrar"; abrir la ficha del 1007. Ojo: los casos salen de la
+  exportación de producción del 28-sep y la BD de pruebas es otra foto (el 1007 ahí está en USO).
+- **Para eliminarlo:** borrar `LineasCorrecciones.gs`, `LineasCorreccionesSemilla.gs`,
+  `html/views/lineas/lineas-correcciones.html`, `html/js/lineas-correcciones.html`, sus dos `include` en `Index.html`,
+  su línea en `navegarA` y en `NAV_GRUPOS` (`app.html`), su entrada en `Modulos.gs` y en `Entidades.gs`
+  (`APP_CORRECCIONES`; ajustar `tests/entidades.test.js` a 28 hojas y 4 APP_), el script `correcciones:semilla`,
+  `tools/correcciones-semilla.cjs`, su prueba en `source-contracts` y la pestaña `APP_CORRECCIONES` de la hoja.
+  `Lineas.comun` (lineas.html) puede quedarse.
+- **Avisar a Jorge y Ayrton al unir:** `Entidades.gs` con `APP_CORRECCIONES` (29 hojas, 5 APP_), `Modulos.gs`
+  `correcciones-lineas`, `Lineas.comun` y que la semilla no está en git.
 
 ## 0z. Reconexión tras la segunda corrida de IDs de Ayrton (2026-09-30, noche)
 
