@@ -65,6 +65,9 @@
       'ID_LINEA': 'Línea a la que pertenece',
       'ID ACCESORIO': 'Artículo al que pertenece',
       'ID_Accesorio': 'Artículo',
+      // Capital Humano
+      'ID PERSONA': 'Persona del responsable',
+      'NOMBRE COMPLETO': 'Nombre',
       'FOLIO VEHICULO': 'Folio',
       'ID CCH': 'Número de caja',
     };
@@ -182,14 +185,18 @@
           }
           return {
             titulo: cuantos(c, k) + verbo(k, ' no encontró', ' no encontraron') + ' su ' + d.uno,
-            ejemplo: 'Por ejemplo ' + comillas(e.tenia || e.clave) + ', que no existe en ' + d.nombre + '.',
+            ejemplo: e.motivo
+              ? 'Por ejemplo ' + comillas(e.tenia || e.clave) + ': ' + e.motivo + '.'
+              : 'Por ejemplo ' + comillas(e.tenia || e.clave) + ', que no existe en ' + d.nombre + '.',
             explicacion: 'Puede ser un ' + d.uno + ' que se borró, o un dato mal capturado. No se puede adivinar cuál ' +
               'era: hay que corregirlo a mano en ' + c.nombre + '.',
           };
         case 'CLAVE_DUPLICADA_EN_ORIGEN':
           return {
-            titulo: cuantos(c, k) + verbo(k, ' tiene', ' tienen') + ' más de un ' + d.uno + ' posible',
-            ejemplo: 'Por ejemplo ' + (e.dueno || comillas(e.clave)) + ': su ' + d.uno + ' aparece más de una vez en ' + d.nombre + '.',
+            titulo: cuantos(c, k) + verbo(k, ' tiene', ' tienen') + ' más de ' + (d.uno === 'persona' ? 'una ' : 'un ') + d.uno + ' posible',
+            ejemplo: e.motivo
+              ? 'Por ejemplo ' + comillas(e.tenia || e.clave) + ': ' + e.motivo + '.'
+              : 'Por ejemplo ' + (e.dueno || comillas(e.clave)) + ': su ' + d.uno + ' aparece más de una vez en ' + d.nombre + '.',
             explicacion: 'No se adivina cuál es el bueno. Deja uno solo en ' + d.nombre + ' y vuelve a revisar.',
           };
         case 'OMITIDO_CENTINELA':
@@ -338,7 +345,7 @@
       return [
         // El encabezado es la llave que se muestra (Folio, Número de caja), no el nombre de la
         // hoja dueña: en Sensores → Vehículos la dueña es el sensor, pero lo que se ve es el folio.
-        { campo: 'REGISTRO', titulo: dato(g.d.llaveDeNegocio), tipo: 'texto', fijada: true },
+        { campo: 'REGISTRO', titulo: dato(g.c.llaveRegistro || g.d.llaveDeNegocio), tipo: 'texto', fijada: true },
         { campo: 'DATO', titulo: 'Dato', tipo: 'lista' },
         { campo: 'AHORA', titulo: 'En ' + c, tipo: 'texto' },
         { campo: 'CORRECTO', titulo: 'En ' + d, tipo: 'texto' },

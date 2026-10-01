@@ -1139,6 +1139,7 @@ const MAPA = {
     'CAMBIOS LINEAS TELEFONICAS': { modulo: 'Control de Cambios - Líneas', uno: 'cambio', varios: 'cambios', familia: 'Líneas' },
     'ACCESORIOS CELULARES': { modulo: 'Inventario de Accesorios (Líneas)', uno: 'artículo', varios: 'artículos', familia: 'Líneas' },
     'MOVIMIENTOS_ACCESORIOS': { modulo: 'Movimientos de Accesorios', uno: 'movimiento', varios: 'movimientos', familia: 'Líneas' },
+    'PERSONAS': { modulo: 'Capital Humano', uno: 'persona', varios: 'personas', familia: 'Capital Humano' },
   };
   // La clave es 'modulo' y no 'nombre' a propósito: tests/llave-nueva.test.js reconoce las
   // copias del MAPA por cómo se escribe su nombre en el código, y estas no son copias.
@@ -1266,6 +1267,8 @@ const MAPA = {
 
   return {
     propagar, soltar, datosParaNuevo, revisar, cambiarClave, describir, deOtraHoja,
+    // Para quien escribe junto a Relaciones (CapitalHumano): el mismo log y los mismos nombres
+    anotar: escribirLog_, etiqueta: etiqueta_,
     // Solo para quien ya tiene el candado tomado. Ver su comentario.
     propagarSinCandado: propagarSinCandado_,
   };

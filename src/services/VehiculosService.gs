@@ -296,6 +296,7 @@ const VehiculosService = (function () {
       const ajenas = Relaciones.deOtraHoja(SHEET_VEHICULOS);
       ajenas.columnas.forEach((c) => { delete fila[c]; });
       Object.assign(fila, ajenas.sinDueno);
+      conPersona_(fila, fila);
       fila.FOLIO = generarFolio_(datos.CLASE);
       fila.NUCCO = generarNucco_();
       fila[ID_COLUMN] = Ids.nuevo(Entidades.prefijo(SHEET_VEHICULOS));
@@ -304,6 +305,25 @@ const VehiculosService = (function () {
       return { ID: fila[ID_COLUMN], FOLIO: fila.FOLIO };
     } finally {
       lock.releaseLock();
+    }
+  }
+
+  /**
+   * ID PERSONA no se captura: se calcula del responsable (CapitalHumano, decisión del
+   * 01/10/2026). Si cambió el responsable (o su número), se recalcula y va en el mismo
+   * renglón. Si todavía no hay PERSONAS, no se toca; Salud lo pone al día después.
+   *
+   * @param {Object} datos     lo que se va a escribir (aquí se agrega ID PERSONA)
+   * @param {Object} registro  el registro completo como va a quedar
+   */
+  function conPersona_(datos, registro) {
+    delete datos[CapitalHumano.COLUMNA];
+    if (!CapitalHumano.columnasDePersona(SHEET_VEHICULOS).some((c) => datos[c] !== undefined)) return;
+    try {
+      const id = CapitalHumano.idPara(SHEET_VEHICULOS, registro);
+      if (id !== null) datos[CapitalHumano.COLUMNA] = id;
+    } catch (err) {
+      console.error('CapitalHumano: no se pudo calcular la persona del vehículo: ' + err.message);
     }
   }
 
@@ -331,6 +351,7 @@ const VehiculosService = (function () {
     Relaciones.deOtraHoja(SHEET_VEHICULOS).columnas.forEach((c) => { delete datos[c]; });
 
     const encontrado = SheetUtils.findById(ssId(), SHEET_VEHICULOS, id, ID_COLUMN);
+    if (encontrado) conPersona_(datos, Object.assign({}, encontrado.data, datos));
     const actualizado = SheetUtils.update(ssId(), SHEET_VEHICULOS, id, datos, ID_COLUMN);
 
     if (encontrado) {

@@ -587,7 +587,41 @@ function apiRegistrarInspeccion(token, datos, imagenes) {
 // y google.script.run no las pasa dentro de un objeto.
 function apiRelacionesMapa(token) {
   Permisos.puedeLeer(token, 'relaciones');
-  return JSON.stringify(Relaciones.describir());
+  return JSON.stringify(mapaCompleto_());
+}
+
+/**
+ * El MAPA de Relaciones más Capital Humano. Capital Humano no está en el MAPA porque su
+ * "copia" no es copiar columnas: es calcular el ID PERSONA de cada responsable
+ * (CapitalHumano.revisarLigas). Aquí se presenta como una dueña más, para que las dos
+ * pantallas la pinten igual que a las demás.
+ */
+function mapaCompleto_() {
+  const mapa = Relaciones.describir();
+  mapa.duenos.push({
+    hoja: CapitalHumano.HOJA_PERSONAS,
+    etiqueta: Relaciones.etiqueta(CapitalHumano.HOJA_PERSONAS),
+    llaveDeNegocio: 'NOMBRE COMPLETO',
+    copias: CapitalHumano.describirLigas().map((l) => ({
+      nombre: l.nombre,
+      etiqueta: Relaciones.etiqueta(l.hoja),
+      tipo: 'cache',
+      llaveForanea: l.columna,
+      campoEnDueno: l.columna,
+      claveOrigen: 'NOMBRE COMPLETO',
+      clave: l.desde.join(' / '),
+      columnas: [{ origen: l.columna, destino: l.columna, calculada: true }],
+      // Con qué se reconoce el renglón en la pantalla: el folio del vehículo, el número de caja…
+      llaveRegistro: l.etiqueta,
+      sinDueno: null,
+      notaColumnas: null,
+      huerfanaEsperada: 'un responsable que no es persona (BAJA VEHICULAR, DONACIÓN, un código de desarrollo…)',
+      nota: 'Se calcula del responsable que está escrito (' + l.desde.join(', ') + '): primero por correo, luego por ' +
+        'nombre, y el número de empleado solo desempata a dos personas que se llaman igual. Nunca cambia el nombre ' +
+        'que alguien escribió; si el responsable cambia, su persona se actualiza.',
+    })),
+  });
+  return mapa;
 }
 
 /**
@@ -596,9 +630,18 @@ function apiRelacionesMapa(token) {
  */
 function apiSaludRevisar(token) {
   Permisos.puedeLeer(token, 'salud');
+  let personas;
+  try {
+    personas = relacionesRespuesta_(CapitalHumano.revisarLigas({ detalle: true }));
+  } catch (err) {
+    // Sin PERSONAS todavía (o sin la lista de CH): se dice en Salud, no se tumba la pantalla
+    personas = CapitalHumano.describirLigas().map((l) => ({
+      nombre: l.nombre, tipo: 'cache', error: err.message, entradas: [], revisadas: 0, diferencias: 0, huerfanos: 0,
+    }));
+  }
   return JSON.stringify({
-    mapa: Relaciones.describir(),
-    reporte: relacionesRespuesta_(Relaciones.revisar({ detalle: true, log: false })),
+    mapa: mapaCompleto_(),
+    reporte: relacionesRespuesta_(Relaciones.revisar({ detalle: true, log: false })).concat(personas),
   });
 }
 
@@ -609,6 +652,14 @@ function apiSaludRevisar(token) {
  */
 function apiSaludSincronizar(token, hoja, filas) {
   const sesion = Permisos.puedeEditar(token, 'salud');
+  // Capital Humano: "actualizar" es recalcular el ID PERSONA de cada responsable
+  if (CapitalHumano.describirLigas().some((l) => l.nombre === hoja)) {
+    return JSON.stringify(relacionesRespuesta_(CapitalHumano.revisarLigas({
+      escribir: true, detalle: true, hojas: [hoja],
+      filas: Array.isArray(filas) ? filas : null,
+      quien: sesion.nombre || sesion.correo || '',
+    })));
+  }
   const copia = Relaciones.describir().duenos
     .reduce((todas, d) => todas.concat(d.copias), [])
     .find((c) => c.nombre === hoja);
