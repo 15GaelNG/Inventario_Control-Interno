@@ -291,6 +291,11 @@ const VehiculosService = (function () {
     lock.waitLock(30000);
     try {
       const fila = Object.assign({}, datos);
+      // Las columnas que manda otra hoja (SERIE SENSOR y SENSOR, que manda Instalación de
+      // Sensores) no se capturan aquí: un vehículo nuevo nace "sin sensor".
+      const ajenas = Relaciones.deOtraHoja(SHEET_VEHICULOS);
+      ajenas.columnas.forEach((c) => { delete fila[c]; });
+      Object.assign(fila, ajenas.sinDueno);
       fila.FOLIO = generarFolio_(datos.CLASE);
       fila.NUCCO = generarNucco_();
       fila[ID_COLUMN] = Ids.nuevo(Entidades.prefijo(SHEET_VEHICULOS));
@@ -321,6 +326,9 @@ const VehiculosService = (function () {
     delete datos.FOLIO; // no se edita, se fija solo al crear
     delete datos.NUCCO; // ídem
     delete datos['FECHA REGISTRO SISTEMA CI']; // ídem
+    // Las que manda otra hoja: editarlas aquí se perdería en la siguiente sincronización.
+    // Se cambian desde su dueña (SERIE SENSOR y SENSOR: el módulo de Sensores).
+    Relaciones.deOtraHoja(SHEET_VEHICULOS).columnas.forEach((c) => { delete datos[c]; });
 
     const encontrado = SheetUtils.findById(ssId(), SHEET_VEHICULOS, id, ID_COLUMN);
     const actualizado = SheetUtils.update(ssId(), SHEET_VEHICULOS, id, datos, ID_COLUMN);

@@ -188,6 +188,25 @@ const SensoresService = (function () {
   }
 
   /**
+   * VEHICULOS.SERIE SENSOR y VEHICULOS.SENSOR los manda ESTA hoja (ver la entrada
+   * 'INSTALACION DE SENSORES' en Relaciones.MAPA): al revés que el resto de las columnas,
+   * que manda VEHICULOS. Mismo trato que en VehiculosService.actualizar: el sensor YA se
+   * guardó, así que si esto falla no se revierte nada — se avisa en el log, y la pantalla
+   * Administración > Relaciones lo muestra como "por sincronizar".
+   *
+   * @param {Object} fila     el renglón del sensor (ya actualizado; o como estaba, al soltar)
+   * @param {Object} cambios  lo que cambió; null = el sensor dejó ese vehículo (soltar)
+   */
+  function alVehiculo_(fila, cambios) {
+    try {
+      if (cambios) Relaciones.propagar(TABLA, fila, cambios);
+      else Relaciones.soltar(TABLA, fila);
+    } catch (err) {
+      console.error('Relaciones: no se pudo actualizar el vehículo del sensor ' + (fila && fila['ID']) + ': ' + err.message);
+    }
+  }
+
+  /**
    * @param {Object} datos  { FOLIO, SERIE_SENSOR, COMBUSTIBLE, FECHA_INSTALACION, ESTATUS,
    *                          RENDIMIENTO?, RALENTI?, COMENTARIOS? }
    * @param {{base64: string, mimeType: string}} archivo  responsiva en PDF
@@ -231,8 +250,9 @@ const SensoresService = (function () {
       etiqueta: 'la responsiva',
     });
 
+    let nueva;
     try {
-      SheetUtils.insert(ssId(), hoja_().getName(), Object.assign({}, columnas, {
+      nueva = SheetUtils.insert(ssId(), hoja_().getName(), Object.assign({}, columnas, {
         'ID': id,
         'SERIE SENSOR': serieSensor,
         [COL_RESPONSIVA]: guardado.ruta,
@@ -248,6 +268,7 @@ const SensoresService = (function () {
       DriveUtils.eliminar(guardado.fileId);   // no dejar PDFs huérfanos
       throw err;
     }
+    alVehiculo_(nueva, nueva);
     return { ID: id };
   }
 
@@ -294,14 +315,32 @@ const SensoresService = (function () {
       throw new Error('El campo "' + campo + '" no se puede editar aquí');
     }
 
-    return desdeOriginal_(SheetUtils.update(ssId(), nombreHoja, id, cambios, 'ID'));
+    const actualizado = SheetUtils.update(ssId(), nombreHoja, id, cambios, 'ID');
+    if (campo === 'FOLIO') {
+      // Se mudó de vehículo: el de antes se queda sin sensor y el nuevo lo recibe. Se
+      // compara por ID VEHICULO, no por folio: es lo que de verdad dice a qué unidad va.
+      const antes = actual.data['ID VEHICULO'] || actual.data['FOLIO'];
+      const despues = actualizado['ID VEHICULO'] || actualizado['FOLIO'];
+      if (String(antes) !== String(despues)) {
+        alVehiculo_(actual.data, null);
+        alVehiculo_(actualizado, { 'ESTATUS SENSOR': actualizado['ESTATUS SENSOR'] });
+      }
+    } else {
+      // propagar solo escribe si cambió una de sus columnas (SERIE SENSOR, ESTATUS SENSOR)
+      alVehiculo_(actualizado, cambios);
+    }
+    return desdeOriginal_(actualizado);
   }
 
   /** Borra instalaciones — solo ADMIN. Las responsivas NO se borran de Drive (quedan de respaldo). */
   function eliminar(token, ids) {
     Permisos.puedeEditar(token, 'instalacion-sensores');
     if (!Array.isArray(ids) || !ids.length) throw new Error('No se indicaron registros a eliminar');
-    return { eliminadas: SheetUtils.removeMany(ssId(), hoja_().getName(), ids, 'ID') };
+    const nombreHoja = hoja_().getName();
+    const borrar = ids.map((id) => SheetUtils.findById(ssId(), nombreHoja, id, 'ID')).filter(Boolean);
+    const eliminadas = SheetUtils.removeMany(ssId(), nombreHoja, ids, 'ID');
+    borrar.forEach((f) => alVehiculo_(f.data, null));
+    return { eliminadas: eliminadas };
   }
 
   function urlResponsiva(token, ruta) {

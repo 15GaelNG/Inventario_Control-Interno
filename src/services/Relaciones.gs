@@ -253,6 +253,53 @@ const MAPA = {
         // correcto. Compararla contra VEHICULOS sería comparar dos cosas distintas.
       ],
     },
+
+    // ----------------------------------------------------- SENSORES → VEHICULOS
+    //
+    // AL REVÉS que las demás: aquí la dueña es la hoja de sensores y la copia es VEHICULOS.
+    // VEHICULOS manda en DEPARTAMENTO, PLACA, etc. (arriba), pero SERIE SENSOR y SENSOR las
+    // decide la instalación: es donde se registra, con responsiva, qué sensor tiene cada
+    // unidad. Antes nadie escribía de vuelta, y por eso 22 vehículos de producción seguían
+    // mostrando la serie de un sensor ya dado de baja (medido el 01/10/2026).
+    //
+    // Sigue siendo una caché simple, no un resumen: en producción cada vehículo tiene a lo
+    // más UN renglón de sensor (208 de 208), así que no hay que escoger entre varios. Si
+    // algún día hay dos, revisar() lo reporta como llave repetida y no toca el vehículo.
+    // Decisiones de Ayrton (01/10/2026): al dar de baja se vacía la serie, y SENSOR solo
+    // vale SI TIENE SENSOR / NO TIENE SENSOR. Ver limpiezas-planeadas.xlsx, #19-#21.
+    'INSTALACION DE SENSORES': {
+      spreadsheet: () => Config.SPREADSHEET_IDS.VEHICULOS(),
+      hoja: 'INSTALACION DE SENSORES',
+      // El folio del vehículo, que el renglón del sensor también trae: es lo que la gente
+      // reconoce en los reportes, más que la serie del sensor.
+      llaveDeNegocio: 'FOLIO',
+      copias: [
+        {
+          // El vínculo va al revés que en las demás: no es la copia la que guarda el ID del
+          // dueño, es el dueño (el sensor) el que guarda el ID de la copia (el vehículo).
+          nombre: 'VEHICULOS',
+          llaveForanea: 'ID',
+          campoEnDueno: 'ID VEHICULO',
+          // Verificado el 01/10/2026 en producción y en el libro del equipo: solo VEHICULOS
+          // tiene las tres. Sensores tiene FOLIO y SERIE SENSOR, pero no SENSOR.
+          firma: ['FOLIO', 'SENSOR', 'SERIE SENSOR'],
+          tipo: 'cache',
+          claveOrigen: 'SERIE VEHICULO',
+          clave: 'SERIE VEHICULO',
+          columnas: { 'SERIE SENSOR': 'SERIE SENSOR', 'ESTATUS SENSOR': 'SENSOR' },
+          // Lo único que no es copia tal cual: las dos dependen del estatus del sensor.
+          calcular: {
+            'SERIE SENSOR': (s) => (sensorActivo_(s) ? s['SERIE SENSOR'] : ''),
+            'SENSOR': (s) => (sensorActivo_(s) ? 'SI TIENE SENSOR' : 'NO TIENE SENSOR'),
+          },
+          // Un vehículo sin renglón de sensor no es huérfano: simplemente no tiene sensor.
+          sinDueno: { 'SERIE SENSOR': '', 'SENSOR': 'NO TIENE SENSOR' },
+          nota: 'SERIE SENSOR es la del sensor ACTIVO, y queda vacía si está en BAJA o si el vehículo no tiene ' +
+            'sensor. SENSOR es SI TIENE SENSOR o NO TIENE SENSOR según lo mismo. Se actualiza al registrar, ' +
+            'editar, mover o borrar un sensor; en el módulo de Vehículos no se editan.',
+        },
+      ],
+    },
   };
 
   /**
@@ -285,6 +332,42 @@ const MAPA = {
   };
 
   const esBitacora_ = (copia) => copia.tipo === 'bitacora';
+
+  /**
+   * En qué columna del DUEÑO está el valor que la copia guarda en su llave foránea. Casi
+   * siempre es su ID; en Sensores → VEHICULOS es el ID del vehículo que trae el sensor.
+   */
+  const campoEnDueno_ = (copia) => copia.campoEnDueno || 'ID';
+
+  function sensorActivo_(s) {
+    return String(s['ESTATUS SENSOR'] == null ? '' : s['ESTATUS SENSOR']).trim().toUpperCase() === 'ACTIVO';
+  }
+
+  /** Lo que le toca a la copia en la columna que viene de `colOrigen`. Sin dueño: `sinDueno`. */
+  function valorPara_(copia, colOrigen, filaOrigen) {
+    const destino = copia.columnas[colOrigen];
+    if (!filaOrigen) return copia.sinDueno[destino];
+    if (copia.calcular && copia.calcular[destino]) return copia.calcular[destino](filaOrigen);
+    return filaOrigen[colOrigen];
+  }
+
+  /**
+   * Las columnas de `nombreHoja` que manda OTRA hoja (por caché), y su valor cuando no hay
+   * dueño. Las usa el servicio de esa hoja para no aceptar ediciones a mano que la siguiente
+   * sincronización pisaría — y para que un registro nuevo nazca con su valor de "sin dueño".
+   *
+   * @return {{columnas: string[], sinDueno: Object}}
+   */
+  function deOtraHoja(nombreHoja) {
+    const columnas = [];
+    const sinDueno = {};
+    Object.keys(MAPA).forEach((o) => MAPA[o].copias.forEach((c) => {
+      if (c.nombre !== nombreHoja || esBitacora_(c)) return;
+      Object.keys(c.columnas).forEach((k) => columnas.push(c.columnas[k]));
+      Object.assign(sinDueno, c.sinDueno || {});
+    }));
+    return { columnas: columnas, sinDueno: sinDueno };
+  }
 
   const limpiar_ = (v) => String(v == null ? '' : v);
   const normalizar_ = (v) => limpiar_(v).trim().toUpperCase();
@@ -403,9 +486,10 @@ const MAPA = {
    * 20 segundos y moria en el catch, en silencio. Quien la llame DEBE tener el candado
    * tomado; si no, usa propagar().
    */
-  function propagarSinCandado_(origen, filaOrigen, cambios) {
+  function propagarSinCandado_(origen, filaOrigen, cambios, opciones) {
     const definicion = MAPA[origen];
-    if (!definicion || !cambios || !filaOrigen) return {};
+    const soltar = !!(opciones && opciones.soltar);
+    if (!definicion || !filaOrigen || (!cambios && !soltar)) return {};
     const ssId = definicion.spreadsheet();
     const resumen = {};
     const errores = [];
@@ -416,16 +500,31 @@ const MAPA = {
         // reescribiría el pasado. Ver el comentario de cada una en el MAPA.
         if (esBitacora_(copia)) return;
 
-        const columnasTocadas = Object.keys(cambios)
-          .filter((c) => copia.columnas[c] !== undefined)
-          // Un centinela ('BAJA VEHICULAR' y compañía) no es un dato: no se pisa con él
-          // lo que la copia sí tiene bueno.
-          .filter((c) => !esCentinela_(c, cambios[c]));
-        if (!columnasTocadas.length) return; // costo cero: esta copia no copia nada de lo que cambió
+        // Qué se escribe, como [columna en la copia, valor]:
+        //   - soltar: el dueño dejó de serlo (se borró, o se fue a otro registro). Su copia
+        //     vuelve a los valores de "sin dueño". Solo para copias que los declaran.
+        //   - columnas calculadas: si cambió CUALQUIERA de sus columnas origen se recalculan
+        //     todas, porque una depende de otra (la serie depende del estatus).
+        //   - lo normal: solo las columnas que cambiaron, con su valor tal cual.
+        let escribir;
+        if (soltar) {
+          if (!copia.sinDueno) return;
+          escribir = Object.keys(copia.sinDueno).map((c) => [c, copia.sinDueno[c]]);
+        } else {
+          const columnasTocadas = Object.keys(cambios)
+            .filter((c) => copia.columnas[c] !== undefined)
+            // Un centinela ('BAJA VEHICULAR' y compañía) no es un dato: no se pisa con él
+            // lo que la copia sí tiene bueno.
+            .filter((c) => !esCentinela_(c, cambios[c]));
+          if (!columnasTocadas.length) return; // costo cero: esta copia no copia nada de lo que cambió
+          escribir = copia.calcular
+            ? Object.keys(copia.columnas).map((o) => [copia.columnas[o], valorPara_(copia, o, filaOrigen)])
+            : columnasTocadas.map((o) => [copia.columnas[o], cambios[o]]);
+        }
 
         // El vínculo de verdad es el ID. La llave de negocio queda como respaldo para las
         // filas que todavía no tienen FK — ver abajo por qué eso no es opcional.
-        const idDueno = filaOrigen['ID'];
+        const idDueno = filaOrigen[campoEnDueno_(copia)];
         const valorClave = filaOrigen[copia.claveOrigen];
         if (!idDueno && !valorClave) return;
 
@@ -468,10 +567,10 @@ const MAPA = {
 
           // Aquí sí se escribe un valor vacío si el usuario borró el campo: fue explícito.
           // El barrido nocturno de revisar() es el que no lo hace (ver vaciariaDatoBueno_).
-          columnasTocadas.forEach((campoOrigen) => {
-            const col = columna1_(hoja, copia.columnas[campoOrigen], encabezados);
+          escribir.forEach(([columna, valor]) => {
+            const col = columna1_(hoja, columna, encabezados);
             const a1 = filas.map((fila) => hoja.getRange(fila, col).getA1Notation());
-            hoja.getRangeList(a1).setValue(cambios[campoOrigen] === undefined ? '' : cambios[campoOrigen]);
+            hoja.getRangeList(a1).setValue(valor === undefined || valor === null ? '' : valor);
           });
           resumen[copia.nombre] = filas.length;
           if (porClave) {
@@ -492,6 +591,24 @@ const MAPA = {
       throw new Error('No se pudo propagar a: ' + errores.join(' · '));
     }
     return resumen;
+  }
+
+  /**
+   * El registro dueño DEJÓ de serlo: se borró, o se movió a otro registro (un sensor que
+   * cambia de vehículo). Su copia vuelve a los valores de `sinDueno` — sin esto, VEHICULOS
+   * seguiría diciendo que tiene el sensor que ya se fue. Solo toca copias que declaran
+   * `sinDueno`; en las demás, quedarse sin dueño es una huérfana y se reporta, no se borra.
+   *
+   * @param {Object} filaOrigen  el registro como estaba ANTES (para encontrar su copia)
+   */
+  function soltar(origen, filaOrigen) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try {
+      return propagarSinCandado_(origen, filaOrigen, null, { soltar: true });
+    } finally {
+      lock.releaseLock();
+    }
   }
 
   /**
@@ -628,7 +745,7 @@ const MAPA = {
       // Un índice por cada columna-clave de origen distinta que use alguna copia
       // (FOLIO, SERIE VEHICULO…), más el ID para las FK — y de paso, los valores
       // duplicados en la hoja dueña, que no se corrigen porque no se sabe cuál es el bueno.
-      const clavesOrigen = Array.from(new Set(copias.map((c) => c.claveOrigen).concat(['ID'])));
+      const clavesOrigen = Array.from(new Set(copias.map((c) => c.claveOrigen).concat(copias.map(campoEnDueno_))));
       const indice = {};
       const duplicados = {};
       clavesOrigen.forEach((clave) => {
@@ -669,41 +786,65 @@ const MAPA = {
           revisadas++;
           const base = { hoja: hoja.getName(), fila: fila, clave: claveValor || fk };
 
-          let filaOrigen;
+          const campoDueno = campoEnDueno_(copia);
+          // Por la llave de negocio, sin adivinar entre dos dueños con la misma. Si `soloSinFk`,
+          // solo vale un dueño que NO trae el vínculo: uno que sí lo trae es de otro registro.
+          const porLaClave = (soloSinFk) => {
+            if (!claveValor) return null;
+            if (duplicados[copia.claveOrigen][claveValor]) return 'DUPLICADA';
+            const f = indice[copia.claveOrigen][claveValor];
+            return f && (!soloSinFk || !normalizar_(f[campoDueno])) ? f : null;
+          };
+          const duplicada = (columna) => {
+            duplicadosOmitidos++;
+            anotar(Object.assign({ tipo: 'CLAVE_DUPLICADA_EN_ORIGEN', columna: columna, tenia: '', quedo: '' }, base));
+          };
+
+          let filaOrigen = null;
           if (fk) {
-            filaOrigen = indice.ID[fk];
-            if (!filaOrigen) {
-              huerfanos++;
-              anotar(Object.assign({ tipo: 'HUERFANO', columna: copia.llaveForanea, tenia: fk, quedo: '' }, base));
-              return;
+            if (duplicados[campoDueno][fk]) return duplicada(copia.llaveForanea);
+            filaOrigen = indice[campoDueno][fk] || null;
+            if (filaOrigen) porFk++;
+            else if (copia.sinDueno) {
+              // Un dueño capturado por AppSheet no trae el vínculo: se busca por la llave de
+              // negocio, pero solo entre los dueños que tampoco lo traen. Solo en las copias
+              // con `sinDueno`: en las demás, una FK que no apunta a nada es huérfana y su
+              // llave de negocio no manda (igual que en propagar).
+              const f = porLaClave(true);
+              if (f === 'DUPLICADA') return duplicada(copia.clave);
+              if (f) { filaOrigen = f; porClave++; }
             }
-            porFk++;
           } else {
-            if (duplicados[copia.claveOrigen][claveValor]) {
-              duplicadosOmitidos++;
-              anotar(Object.assign({ tipo: 'CLAVE_DUPLICADA_EN_ORIGEN', columna: copia.clave, tenia: '', quedo: '' }, base));
-              return;
-            }
-            filaOrigen = indice[copia.claveOrigen][claveValor];
-            if (!filaOrigen) {
-              huerfanos++;
-              anotar(Object.assign({ tipo: 'HUERFANO', columna: copia.clave, tenia: '', quedo: '' }, base));
-              return;
-            }
-            porClave++;
+            const f = porLaClave(false);
+            if (f === 'DUPLICADA') return duplicada(copia.clave);
+            if (f) { filaOrigen = f; porClave++; }
+          }
+          // Sin dueño: en casi todas las copias es una huérfana y se reporta. En las que
+          // declaran `sinDueno` (un vehículo sin sensor) es normal y se compara contra eso.
+          if (!filaOrigen && !copia.sinDueno) {
+            huerfanos++;
+            anotar(Object.assign(fk
+              ? { tipo: 'HUERFANO', columna: copia.llaveForanea, tenia: fk, quedo: '' }
+              : { tipo: 'HUERFANO', columna: copia.clave, tenia: '', quedo: '' }, base));
+            return;
           }
           // Con qué nombre la gente reconoce al dueño (el folio), aunque se haya emparejado por ID
-          base.dueno = limpiar_(filaOrigen[origenDef.llaveDeNegocio]) || limpiar_(filaOrigen.ID);
+          base.dueno = filaOrigen
+            ? limpiar_(filaOrigen[origenDef.llaveDeNegocio]) || limpiar_(filaOrigen.ID)
+            : limpiar_(filaCopia[origenDef.llaveDeNegocio]) || base.clave;
 
           columnasOrigen.forEach((colOrigen) => {
             const colDestino = copia.columnas[colOrigen];
             const tenia = filaCopia[colDestino];
-            const debiaSer = filaOrigen[colOrigen];
+            const debiaSer = valorPara_(copia, colOrigen, filaOrigen);
             if (mismoValor_(tenia, debiaSer)) return;
             const e = Object.assign({ columna: colDestino, tenia: tenia }, base);
+            // Un vacío calculado o de "sin dueño" es la respuesta, no un dato que falta: la
+            // serie de un sensor en BAJA SE VACÍA (decisión del 01/10/2026).
+            const vacioEsRespuesta = !filaOrigen || !!(copia.calcular && copia.calcular[colDestino]);
 
             // El dueño está vacío y la copia no: no se borra a ciegas (ver vaciariaDatoBueno_).
-            if (vaciariaDatoBueno_(tenia, debiaSer)) {
+            if (!vacioEsRespuesta && vaciariaDatoBueno_(tenia, debiaSer)) {
               vaciosOmitidos++;
               anotar(Object.assign(e, { tipo: 'OMITIDO_VACIO', quedo: '' }));
               return;
@@ -787,7 +928,12 @@ const MAPA = {
             llaveForanea: c.llaveForanea || '',
             claveOrigen: c.claveOrigen,
             clave: c.clave,
-            columnas: Object.keys(c.columnas).map((k) => ({ origen: k, destino: c.columnas[k] })),
+            columnas: Object.keys(c.columnas).map((k) => ({
+              origen: k, destino: c.columnas[k], calculada: !!(c.calcular && c.calcular[c.columnas[k]]),
+            })),
+            campoEnDueno: campoEnDueno_(c),
+            sinDueno: c.sinDueno || null,
+            nota: c.nota || '',
           })),
         };
       }),
@@ -881,7 +1027,7 @@ const MAPA = {
   }
 
   return {
-    propagar, datosParaNuevo, revisar, cambiarClave, describir,
+    propagar, soltar, datosParaNuevo, revisar, cambiarClave, describir, deOtraHoja,
     // Solo para quien ya tiene el candado tomado. Ver su comentario.
     propagarSinCandado: propagarSinCandado_,
   };

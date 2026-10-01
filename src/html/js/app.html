@@ -1533,11 +1533,14 @@
 
     { grupo: 'Accesorios y sensor', clave: 'ACCESORIOS', etiqueta: 'Accesorios', tipo: 'text' },
     { grupo: 'Accesorios y sensor', clave: 'ADITAMENTOS', etiqueta: 'Aditamentos', tipo: 'text' },
+    // SENSOR y SERIE SENSOR los manda Instalación de Sensores (Relaciones.gs): se ven aquí
+    // pero se cambian allá. El servidor tampoco las acepta desde este formulario.
     {
-      grupo: 'Accesorios y sensor', clave: 'SENSOR', etiqueta: 'Sensor', tipo: 'select',
-      opciones: ['SI TIENE SENSOR', 'NO TIENE SENSOR', 'SENSOR TI', 'CANCELADO', 'NO COMPATIBLE', 'NO APLICA AUTO DG', 'EN PROCESO DE INSTALACION'],
+      grupo: 'Accesorios y sensor', clave: 'SENSOR', etiqueta: 'Sensor', tipo: 'text',
+      soloLectura: true, placeholder: 'Lo pone Instalación de Sensores',
     },
-    { grupo: 'Accesorios y sensor', clave: 'SERIE SENSOR', etiqueta: 'Serie del sensor', tipo: 'text' },
+    { grupo: 'Accesorios y sensor', clave: 'SERIE SENSOR', etiqueta: 'Serie del sensor', tipo: 'text',
+      soloLectura: true, placeholder: 'La pone Instalación de Sensores' },
     { grupo: 'Accesorios y sensor', clave: 'ACTIVADOR', etiqueta: 'Activador', tipo: 'text' },
     { grupo: 'Accesorios y sensor', clave: '$ Costo del Sensor', etiqueta: 'Costo del sensor', tipo: 'number', moneda: true },
     {

@@ -181,6 +181,15 @@
     }
 
     // ----- Mapa: columna del dueño × hoja copia -----
+    /** Cómo se une cada copia con su dueña, en palabras. */
+    function uneDescripcion(c) {
+      if (!c.llaveForanea) return 'une por ' + escaparHtml(c.clave);
+      const id = c.campoEnDueno && c.campoEnDueno !== 'ID'
+        ? escaparHtml(c.campoEnDueno) + ' del dueño = ' + escaparHtml(c.llaveForanea) + ' de esta hoja'
+        : escaparHtml(c.llaveForanea);
+      return 'une por ' + id + ', o ' + escaparHtml(c.clave) + ' si no lo tiene';
+    }
+
     function pintarMapa() {
       const cont = document.getElementById('rel-mapa');
       cont.innerHTML = mapa.duenos.map((d) => {
@@ -188,21 +197,25 @@
         d.copias.forEach((c) => c.columnas.forEach((x) => { if (columnas.indexOf(x.origen) === -1) columnas.push(x.origen); }));
         const encabezado = d.copias.map((c) => `<th>${escaparHtml(c.nombre)}
           <span class="rel-tipo ${c.tipo === 'bitacora' ? 'bitacora' : 'cache'}">${c.tipo === 'bitacora' ? 'Bitácora' : 'Caché'}</span>
-          <span class="rel-llave">une por ${escaparHtml(c.llaveForanea || c.clave)}${c.llaveForanea ? ', o ' + escaparHtml(c.clave) + ' si no lo tiene' : ''}</span></th>`).join('');
+          <span class="rel-llave">${uneDescripcion(c)}</span></th>`).join('');
         const cuerpo = columnas.map((col) => `<tr><th>${escaparHtml(col)}</th>${d.copias.map((c) => {
           const x = c.columnas.find((y) => y.origen === col);
           if (!x) return '<td class="rel-vacia">·</td>';
-          return x.destino === col
+          const calc = x.calculada ? ' <span class="rel-calc" title="No se copia tal cual: se calcula (ver la nota abajo)">calculada</span>' : '';
+          return x.destino === col && !x.calculada
             ? `<td class="rel-igual">${Iconos.svg('check')}</td>`
-            : `<td class="rel-renombrada" title="En ${escaparHtml(c.nombre)} se llama así">${escaparHtml(x.destino)}</td>`;
+            : `<td class="rel-renombrada" title="En ${escaparHtml(c.nombre)} se llama así">${escaparHtml(x.destino)}${calc}</td>`;
         }).join('')}</tr>`).join('');
         const sinColumnas = d.copias.filter((c) => !c.columnas.length).map((c) => c.nombre);
+        const notas = d.copias.filter((c) => c.nota)
+          .map((c) => `<p class="rel-nota" style="margin-top:6px"><strong>${escaparHtml(c.nombre)}:</strong> ${escaparHtml(c.nota)}</p>`).join('');
         return `<div class="rel-grupo">
           <h3>${Iconos.svg('database')} ${escaparHtml(d.hoja)} <span class="rel-sub">llave de negocio: ${escaparHtml(d.llaveDeNegocio)}</span></h3>
           <div class="rel-matriz-scroll"><table class="rel-matriz">
             <thead><tr><th>Columna en ${escaparHtml(d.hoja)}</th>${encabezado}</tr></thead>
             <tbody>${cuerpo || '<tr><td colspan="99" class="rel-vacia">Ninguna copia trae columnas de esta hoja</td></tr>'}</tbody>
           </table></div>
+          ${notas}
           ${sinColumnas.length ? `<p class="rel-nota" style="margin-top:6px">${escaparHtml(sinColumnas.join(', '))} no copia${sinColumnas.length === 1 ? '' : 'n'} columnas: está${sinColumnas.length === 1 ? '' : 'n'} en el mapa para vigilar sus registros sin dueño.</p>` : ''}
         </div>`;
       }).join('') + `
