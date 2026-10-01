@@ -18,10 +18,16 @@
  *   regla), se quita si nadie lo había tocado;
  * - lo aplicado solo (AUTOMATICO) se reemplaza completo.
  *
+ * Evidencias (1-oct): `evidencias.py` (misma carpeta de scripts) arma "EVIDENCIAS PARA SUBIR" con los archivos que
+ * cita cada caso (facturas, estados de cuenta, barridos, adendums, ventas), un recorte por línea con el renglón marcado
+ * y evidencias.json (qué archivo va con qué LLAVE). ADMIN los arrastra en "Subir evidencias": se guardan en la carpeta
+ * "Correcciones_Evidencias" de la app en Drive (los Excel como Google Sheets, para ligar al renglón) y cada caso muestra
+ * sus enlaces. Drive no abre un PDF en una página: por eso el recorte.
+ *
  * Para eliminarlo: borrar este archivo, LineasCorreccionesSemilla.gs, html/views/lineas/lineas-correcciones.html,
  * html/js/lineas-correcciones.html, sus dos include de Index.html, su línea en navegarA y en NAV_GRUPOS (app.html), su
- * entrada en Modulos.gs y en Entidades.gs (APP_CORRECCIONES), el script `correcciones:semilla` y la pestaña
- * APP_CORRECCIONES de la hoja. `Lineas.comun` (lineas.html) puede quedarse.
+ * entrada en Modulos.gs y en Entidades.gs (APP_CORRECCIONES), el script `correcciones:semilla`, la pestaña
+ * APP_CORRECCIONES de la hoja y la carpeta Correcciones_Evidencias de Drive. `Lineas.comun` (lineas.html) puede quedarse.
  */
 const LineasCorrecciones = (function () {
   const TAB = 'APP_CORRECCIONES';
@@ -91,7 +97,9 @@ const LineasCorrecciones = (function () {
   /** Todo lo que pinta el módulo: casos, aplicados solos, permisos y la semilla disponible para cargar. */
   function estado(usuario) {
     const resolver = resolvedor_();
+    const ev = evidencias_();
     const filas = filas_().map((r) => aCliente_(r, resolver));
+    filas.forEach((f) => { f.ARCHIVOS = enlacesDe(ev.casos[f.LLAVE] || [], ev.archivos); });
     const corregir = filas.filter((f) => f.TIPO === TIPO.CORREGIR);
     const ultima = corregir.concat(filas).reduce((m, f) => (f.CARGA > m.carga ? { carga: f.CARGA, fechaInventario: f.FECHA_INVENTARIO } : m), { carga: '', fechaInventario: '' });
     return {
@@ -102,7 +110,139 @@ const LineasCorrecciones = (function () {
       corregir: corregir,
       automaticos: filas.filter((f) => f.TIPO === TIPO.AUTOMATICO),
       estados: ESTADO,
+      evidencias: usuario.esAdmin ? resumenEvidencias_(ev) : null,
     };
+  }
+
+  // ---------------- Evidencias (archivos en Drive) ----------------
+
+  const CARPETA_EVIDENCIAS = 'Correcciones_Evidencias';
+  const MANIFIESTO = 'evidencias.json';
+  const CLAVE_EVIDENCIAS = 'ln_corr_evidencias_v1';
+  const MIME_HOJA = 'application/vnd.google-apps.spreadsheet';
+  const SUBIBLES = /\.(pdf|jpe?g|png|xlsx|xls|json)$/i;
+
+  const carpetaEvidencias_ = () => LineasArchivos.carpetaDeApp(CARPETA_EVIDENCIAS);
+
+  /**
+   * Lo que hay en la carpeta: { casos: {LLAVE: [entradas de evidencias.json]}, archivos: {nombre: {id, hoja, gids}},
+   * esperados: [nombres], carpetaUrl }. Caché 6 h (se borra al subir).
+   */
+  function evidencias_() {
+    const enCache = LineasDatos.cacheLeer(CLAVE_EVIDENCIAS);
+    if (enCache) return enCache;
+    const vacio = { casos: {}, archivos: {}, esperados: [], carpetaUrl: '' };
+    let carpeta;
+    try { carpeta = carpetaEvidencias_(); } catch (e) { console.warn('Evidencias: ' + e.message); return vacio; }
+    const r = Object.assign({}, vacio, { carpetaUrl: carpeta.getUrl() });
+    const it = carpeta.getFiles();
+    while (it.hasNext()) {
+      const f = it.next();
+      const nombre = f.getName();
+      if (nombre === MANIFIESTO) {
+        try {
+          const m = JSON.parse(f.getBlob().getDataAsString('UTF-8'));
+          r.casos = m.casos || {};
+          r.esperados = (m.originales || []).concat(m.recortes || []);
+        } catch (e) { console.warn('Evidencias: evidencias.json no se pudo leer (' + e.message + ')'); }
+        continue;
+      }
+      const o = { id: f.getId(), hoja: f.getMimeType() === MIME_HOJA };
+      if (o.hoja) {
+        o.gids = {};
+        try { SpreadsheetApp.openById(o.id).getSheets().forEach((h) => { o.gids[h.getName()] = h.getSheetId(); }); } catch (e) { /* sin hojas: liga al archivo */ }
+      }
+      r.archivos[nombre] = o;
+    }
+    LineasDatos.cacheGuardar(CLAVE_EVIDENCIAS, r, 6 * 3600);
+    return r;
+  }
+
+  /** Para el panel de ADMIN: qué falta subir de lo que pide evidencias.json. */
+  function resumenEvidencias_(ev) {
+    const subidos = Object.keys(ev.archivos);
+    return {
+      carpetaUrl: ev.carpetaUrl, subidos: subidos, manifiesto: Object.keys(ev.casos).length > 0,
+      faltan: ev.esperados.filter((n) => subidos.indexOf(n) < 0), casos: Object.keys(ev.casos).length,
+    };
+  }
+
+  /** Letra de columna (1 → A, 27 → AA). */
+  function letra_(n) {
+    let s = '';
+    for (let k = Math.max(1, n); k > 0; k = Math.floor((k - 1) / 26)) s = String.fromCharCode(65 + ((k - 1) % 26)) + s;
+    return s;
+  }
+
+  /**
+   * Entradas de evidencias.json de un caso → enlaces para la interfaz. Pura (se prueba sin Drive).
+   * entrada: { etiqueta, archivo, recorte?, paginas?, hoja?, fila?, columnas? } · archivos: { nombre: { id, hoja, gids } }
+   * Regresa [{ etiqueta, linea: { url, texto } | null, original: { url, texto } }]; lo que no se ha subido no aparece.
+   */
+  function enlacesDe(entradas, archivos) {
+    const ver = (id) => 'https://drive.google.com/file/d/' + id + '/view';
+    const salida = [];
+    (entradas || []).forEach((e) => {
+      const a = archivos[e.archivo];
+      if (!a) return;
+      const r = { etiqueta: e.etiqueta || e.archivo, linea: null, original: null };
+      if (a.hoja) {
+        const base = 'https://docs.google.com/spreadsheets/d/' + a.id + '/edit';
+        const gid = e.hoja && a.gids && a.gids[e.hoja] !== undefined ? a.gids[e.hoja] : null;
+        r.original = { url: base + (gid !== null ? '#gid=' + gid : ''), texto: 'Abrir la hoja completa' };
+        if (gid !== null && e.fila) {
+          r.linea = { url: base + '#gid=' + gid + '&range=A' + e.fila + ':' + letra_(e.columnas || 1) + e.fila, texto: 'Ver el renglón ' + e.fila };
+        }
+      } else {
+        const pags = (e.paginas || []).length ? ' (págs. ' + e.paginas.join(', ') + ')' : '';
+        r.original = { url: ver(a.id), texto: 'Abrir el documento completo' + pags };
+        const rec = e.recorte && archivos[e.recorte];
+        if (rec) r.linea = { url: ver(rec.id), texto: 'Ver la línea marcada' };
+      }
+      salida.push(r);
+    });
+    return salida;
+  }
+
+  /**
+   * ADMIN: guarda un archivo de "EVIDENCIAS PARA SUBIR". Lo que ya está con el mismo nombre no se vuelve a subir (salvo
+   * evidencias.json, que se reemplaza). Los Excel se convierten a Google Sheets (para ligar al renglón).
+   */
+  function subirEvidencia(usuario, nombre, mime, base64) {
+    if (!usuario.esAdmin) throw new Error('Solo ADMIN puede subir evidencias.');
+    const n = txt(nombre);
+    if (!n || /[\\/]/.test(n) || !SUBIBLES.test(n)) throw new Error('Archivo no permitido: ' + n + ' (solo PDF, JPG, PNG, Excel y evidencias.json).');
+    const bytes = Utilities.base64Decode(base64);
+    if (bytes.length > 30 * 1024 * 1024) throw new Error(n + ' supera 30 MB.');
+    const carpeta = carpetaEvidencias_();
+    const existentes = carpeta.getFilesByName(n);
+    if (n === MANIFIESTO) {
+      if (existentes.hasNext()) existentes.next().setContent(Utilities.newBlob(bytes).getDataAsString('UTF-8'));
+      else carpeta.createFile(Utilities.newBlob(bytes, 'application/json', n));
+    } else if (existentes.hasNext()) {
+      return { nombre: n, yaEstaba: true };
+    } else if (/\.xlsx?$/i.test(n)) {
+      convertirAHoja_(carpeta.getId(), n, bytes);
+    } else {
+      carpeta.createFile(Utilities.newBlob(bytes, mime || 'application/octet-stream', n));
+    }
+    LineasDatos.cacheBorrar(CLAVE_EVIDENCIAS);
+    return { nombre: n, yaEstaba: false };
+  }
+
+  /** Sube un Excel convirtiéndolo a Google Sheets (API de Drive; el nombre se queda con su extensión). */
+  function convertirAHoja_(carpetaId, nombre, bytes) {
+    const limite = 'lnc' + Utilities.getUuid().replace(/-/g, '');
+    const meta = JSON.stringify({ name: nombre, mimeType: MIME_HOJA, parents: [carpetaId] });
+    const tipo = /\.xls$/i.test(nombre) ? 'application/vnd.ms-excel' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    const cuerpo = Utilities.newBlob('--' + limite + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + meta +
+      '\r\n--' + limite + '\r\nContent-Type: ' + tipo + '\r\n\r\n').getBytes()
+      .concat(bytes, Utilities.newBlob('\r\n--' + limite + '--').getBytes());
+    const resp = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', {
+      method: 'post', contentType: 'multipart/related; boundary=' + limite, payload: cuerpo,
+      headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true,
+    });
+    if (resp.getResponseCode() !== 200) throw new Error('No se pudo convertir ' + nombre + ' a Google Sheets (' + resp.getResponseCode() + '): ' + resp.getContentText().slice(0, 200));
   }
 
   // ---------------- Carga ----------------
@@ -267,7 +407,7 @@ const LineasCorrecciones = (function () {
     }
   }
 
-  return { TAB, ENCABEZADOS, TIPO, ESTADO, estado, cargar, marcar, combinar };
+  return { TAB, ENCABEZADOS, TIPO, ESTADO, estado, cargar, marcar, combinar, subirEvidencia, enlacesDe };
 })();
 
 // ---------------- API (aquí y no en ClientApi.gs: el módulo se borra con sus archivos) ----------------
@@ -294,4 +434,10 @@ function apiLineasCorreccionesCargar(token) {
 function apiLineasCorreccionesMarcar(token, accion, ids, comentario) {
   const sesion = Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
   return LineasUtil.paraCliente(LineasCorrecciones.marcar(accion, ids, comentario, usuarioCorrecciones_(sesion)));
+}
+
+/** ADMIN: un archivo de "EVIDENCIAS PARA SUBIR" (base64). */
+function apiLineasCorreccionesSubirEvidencia(token, nombre, mime, base64) {
+  const sesion = Auth.requiereRol(token, [Config.ROLES.ADMIN]);
+  return LineasCorrecciones.subirEvidencia(usuarioCorrecciones_(sesion), nombre, mime, base64);
 }

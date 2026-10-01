@@ -799,6 +799,19 @@
   .lnp-filtros select { width: auto; min-width: 170px; padding: 7px 10px; font-weight: 600; }
   .lnp-filtro-nota { font-size: 12px; color: var(--color-text-muted); }
   .ln-panorama.lnp-cargando .lnp-portada, .ln-panorama.lnp-cargando .lnp-dos { opacity: .55; transition: opacity .2s; }
+  /* Correcciones de Líneas: botones a la evidencia en Drive (módulo temporal) */
+  .lnc-evid { display: flex; flex-direction: column; gap: 4px; min-width: 210px; }
+  .lnc-evid-item { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+  .lnc-evid a { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; text-decoration: none; white-space: nowrap; }
+  .lnc-evid a .ico { width: 14px; height: 14px; flex-shrink: 0; }
+  .lnc-evid-linea { padding: 3px 9px; border-radius: 999px; font-weight: 600; color: var(--color-primary);
+    background: var(--color-primary-soft); }
+  .lnc-evid-linea:hover { background: var(--color-primary); color: #fff; }
+  .lnc-evid-doc { color: var(--color-text-muted); max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+  .lnc-evid-doc:hover { color: var(--color-text); text-decoration: underline; }
+  #ln-correcciones.lnc-soltar { outline: 2px dashed var(--color-primary); outline-offset: 6px; border-radius: 12px; }
+  .ln-girando { animation: lnGirar 1s linear infinite; }
+
   /* Con la copia anterior a la vista: solo gira el ícono de Actualizar mientras llega la nueva */
   .ln-panorama.lnp-refrescando #lnp-actualizar .ico { animation: lnGirar 1s linear infinite; }
   @media (prefers-reduced-motion: reduce) { .ln-panorama.lnp-refrescando #lnp-actualizar .ico { animation: none; } }

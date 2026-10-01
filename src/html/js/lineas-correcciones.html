@@ -28,6 +28,14 @@
       const estadoChip = (v) => chip(v, COLOR_ESTADO[v] || '');
       const mono = (v, fuerte) => (v ? '<span class="ln-mono' + (fuerte ? ' ln-fuerte' : '') + '">' + esc(v) + '</span>' : guion(v));
       const fechaDeIso = (s) => (s ? String(s).slice(8, 10) + '/' + String(s).slice(5, 7) + '/' + String(s).slice(0, 4) : '');
+      // Evidencia en Drive (evidencias.py → "Subir evidencias"): un botón a la línea marcada (recorte del PDF o renglón
+      // de la hoja) y otro al documento completo
+      const enlace = (u, clase, contenido, titulo) => '<a class="' + clase + '" href="' + esc(u) + '" target="_blank" rel="noopener"' + (titulo ? ' title="' + esc(titulo) + '"' : '') + '>' + contenido + '</a>';
+      const evidencia = (lista) => (lista && lista.length ? '<div class="lnc-evid">' + lista.map((a) =>
+        '<span class="lnc-evid-item">' +
+          (a.linea ? enlace(a.linea.url, 'lnc-evid-linea', ico('scan-search') + ' ' + esc(a.linea.texto), a.etiqueta) : '') +
+          enlace(a.original.url, 'lnc-evid-doc', ico('file-text') + ' ' + esc(a.etiqueta), a.original.texto) +
+        '</span>').join('') + '</div>' : guion(''));
 
       const COLUMNAS = {
         CORREGIR: [
@@ -39,6 +47,8 @@
           { campo: 'CAMPO', titulo: 'Campo', tipo: 'lista' },
           { campo: 'INVENTARIO', titulo: 'Dice el inventario', tipo: 'texto' },
           { campo: 'EVIDENCIA', titulo: 'Dice la evidencia', tipo: 'texto' },
+          { campo: 'ARCHIVOS', titulo: 'Ver evidencia', tipo: 'lista', valor: (f) => ((f.ARCHIVOS || []).length ? 'Con archivo' : 'Sin archivo'),
+            render: (v, f) => evidencia(f.ARCHIVOS), valorExportar: (f) => (f.ARCHIVOS || []).map((a) => a.etiqueta).join(' · ') },
           { campo: 'QUE_PASA', titulo: 'Qué pasa', tipo: 'texto' },
           { campo: 'SUGERENCIA', titulo: 'Qué se sugiere', tipo: 'texto' },
           { campo: 'COMENTARIO', titulo: 'Comentario', tipo: 'texto' },
@@ -173,6 +183,70 @@
         o.hidden = false;
         const b = $('#lnc-cargar', raiz);
         b.hidden = !(datos.puedeCargar && s);
+        pintarEvidencias();
+      }
+
+      // ---------------- Evidencias (ADMIN) ----------------
+
+      function pintarEvidencias() {
+        const ev = datos.evidencias;
+        $('#lnc-subir', raiz).hidden = !ev;
+        const nota = $('#lnc-evidencias', raiz);
+        if (!ev) { nota.hidden = true; return; }
+        const conArchivo = datos.corregir.filter((f) => (f.ARCHIVOS || []).length).length;
+        nota.innerHTML = icono('paperclip') + ' Evidencias en Drive: ' + miles(ev.subidos.length) + ' archivos' +
+          (ev.manifiesto ? ' · ' + miles(conArchivo) + ' casos con su archivo' : ' · falta subir evidencias.json') +
+          (ev.faltan.length ? ' · <b>faltan ' + miles(ev.faltan.length) + '</b> (' + esc(ev.faltan.slice(0, 3).join(', ')) + (ev.faltan.length > 3 ? '…' : '') + ')' : '') +
+          (ev.carpetaUrl ? ' · <a href="' + esc(ev.carpetaUrl) + '" target="_blank" rel="noopener">abrir la carpeta</a>' : '') +
+          '. Para subir, arrastra aquí el contenido de "EVIDENCIAS PARA SUBIR" (lo que ya está no se vuelve a subir).';
+        nota.hidden = false;
+      }
+
+      const leerBase64 = (archivo) => new Promise((ok, mal) => {
+        const r = new FileReader();
+        r.onload = () => ok(String(r.result).split(',')[1] || '');
+        r.onerror = () => mal(r.error || new Error('No se pudo leer ' + archivo.name));
+        r.readAsDataURL(archivo);
+      });
+
+      let subiendo = false;
+      /** Sube los archivos de a 3; evidencias.json al final (para que al leerlo ya estén los demás). */
+      async function subirEvidencias(archivos) {
+        const ev = datos && datos.evidencias;
+        if (!ev || subiendo) return;
+        const validos = Array.from(archivos).filter((f) => /\.(pdf|jpe?g|png|xlsx|xls|json)$/i.test(f.name));
+        const nuevos = validos.filter((f) => f.name === 'evidencias.json' || ev.subidos.indexOf(f.name) < 0);
+        if (!nuevos.length) { aviso(icono('info') + ' Esos archivos ya están en Drive.', 6000); return; }
+        const manifiesto = nuevos.filter((f) => f.name === 'evidencias.json');
+        const resto = nuevos.filter((f) => f.name !== 'evidencias.json');
+        subiendo = true;
+        const boton = $('#lnc-subir', raiz);
+        boton.disabled = true;
+        const nota = $('#lnc-evidencias', raiz);
+        let hechos = 0;
+        const errores = [];
+        const total = nuevos.length;
+        const progreso = () => { nota.innerHTML = icono('loader-circle', 'ln-girando') + ' Subiendo evidencias: ' + miles(hechos) + ' de ' + miles(total) + '…' + (errores.length ? ' (' + errores.length + ' con error)' : ''); nota.hidden = false; refreshIcons(); };
+        const una = async (f) => {
+          try {
+            await C.llamar('apiLineasCorreccionesSubirEvidencia', f.name, f.type || '', await leerBase64(f));
+          } catch (e) {
+            errores.push(f.name + ': ' + mensajeError(e));
+          }
+          hechos++;
+          if (vigente()) progreso();
+        };
+        progreso();
+        const cola = resto.slice();
+        await Promise.all([0, 1, 2].map(async () => { while (cola.length) await una(cola.shift()); }));
+        for (const f of manifiesto) await una(f);
+        subiendo = false;
+        boton.disabled = false;
+        if (!vigente()) return;
+        aviso(icono(errores.length ? 'triangle-alert' : 'circle-check', errores.length ? 'ln-alerta' : '') + ' Evidencias: ' + miles(hechos - errores.length) + ' subidas' +
+          (validos.length > nuevos.length ? ', ' + miles(validos.length - nuevos.length) + ' ya estaban' : '') +
+          (errores.length ? '. Con error: ' + esc(errores.slice(0, 3).join(' · ')) : '') + '.', errores.length ? 15000 : 8000);
+        cargar();
       }
 
       async function cargarCasos() {
@@ -227,6 +301,21 @@
       });
       $('#lnc-actualizar', raiz).addEventListener('click', cargar);
       $('#lnc-cargar', raiz).addEventListener('click', cargarCasos);
+      $('#lnc-subir', raiz).addEventListener('click', () => $('#lnc-archivos', raiz).click());
+      $('#lnc-archivos', raiz).addEventListener('change', (ev) => { subirEvidencias(ev.target.files); ev.target.value = ''; });
+      // Arrastrar los archivos sobre la página (solo ADMIN, con el botón a la vista)
+      raiz.addEventListener('dragover', (ev) => {
+        if ($('#lnc-subir', raiz).hidden || !ev.dataTransfer || Array.from(ev.dataTransfer.types || []).indexOf('Files') < 0) return;
+        ev.preventDefault();
+        raiz.classList.add('lnc-soltar');
+      });
+      raiz.addEventListener('dragleave', (ev) => { if (!raiz.contains(ev.relatedTarget)) raiz.classList.remove('lnc-soltar'); });
+      raiz.addEventListener('drop', (ev) => {
+        raiz.classList.remove('lnc-soltar');
+        if ($('#lnc-subir', raiz).hidden || !ev.dataTransfer || !ev.dataTransfer.files.length) return;
+        ev.preventDefault();
+        subirEvidencias(ev.dataTransfer.files);
+      });
       cargar();
     }
 

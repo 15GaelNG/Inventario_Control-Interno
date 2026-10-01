@@ -8,11 +8,14 @@
       </div>
       <div class="page-header-actions">
         <button type="button" class="secondary" id="lnc-actualizar"><i data-lucide="refresh-cw" class="ico"></i> Actualizar</button>
+        <button type="button" class="secondary" id="lnc-subir" hidden title="Sube los archivos de la carpeta EVIDENCIAS PARA SUBIR (también se pueden arrastrar sobre la página)"><i data-lucide="paperclip" class="ico"></i> Subir evidencias</button>
+        <input type="file" id="lnc-archivos" multiple accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.json" hidden>
         <button type="button" id="lnc-cargar" hidden><i data-lucide="upload" class="ico"></i> Cargar casos</button>
       </div>
     </div>
 
     <div class="ln-nota" id="lnc-origen" hidden></div>
+    <div class="ln-nota" id="lnc-evidencias" hidden></div>
 
     <div class="ln-segmentado lnc-pestanas" role="tablist" aria-label="Qué ver">
       <button type="button" class="secondary activo" data-lnc-vista="CORREGIR" role="tab" aria-selected="true"><i data-lucide="list-checks" class="ico"></i> Por corregir</button>

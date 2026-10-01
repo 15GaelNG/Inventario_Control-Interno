@@ -1522,6 +1522,39 @@ test('Ajustes a la selección estilo Drive: contador simple, clic fuera, sin Cop
   assert.equal((lineas.match(/seleccionUnica: true,/g) || []).length, 2);
 });
 
+test('Correcciones de Líneas: evidencia en Drive con enlace directo a la línea (1-oct)', () => {
+  const Cor = new Function(read('src/services/lineas/LineasCorrecciones.gs') + '\nreturn LineasCorrecciones;')();
+  const archivos = {
+    'FACTURA.pdf': { id: 'pdf1', hoja: false },
+    'R 4461446462 - FACTURA.jpg': { id: 'rec1', hoja: false },
+    'BARRIDO.xls': { id: 'hoja1', hoja: true, gids: { Sheet0: 0, 'CANCELACIÓN DE LÍNEAS': 77 } },
+  };
+  const e = Cor.enlacesDe([
+    { etiqueta: 'Factura AT&T cta 643495915', archivo: 'FACTURA.pdf', recorte: 'R 4461446462 - FACTURA.jpg', paginas: [2, 4] },
+    { etiqueta: 'Barrido AT&T', archivo: 'BARRIDO.xls', hoja: 'Sheet0', fila: 234, columnas: 12 },
+    { etiqueta: 'Hoja de Bren', archivo: 'BARRIDO.xls', hoja: 'CANCELACIÓN DE LÍNEAS', fila: 177, columnas: 28 },
+    { etiqueta: 'Venta', archivo: 'NO-SUBIDO.pdf' }, // lo que no está en Drive no aparece
+  ], archivos);
+  assert.equal(e.length, 3);
+  // PDF: el recorte con la línea marcada (Drive no abre un PDF en una página) y el documento con sus páginas
+  assert.deepEqual(e[0].linea, { url: 'https://drive.google.com/file/d/rec1/view', texto: 'Ver la línea marcada' });
+  assert.equal(e[0].original.texto, 'Abrir el documento completo (págs. 2, 4)');
+  // Hoja de Google (el Excel convertido): directo al renglón
+  assert.equal(e[1].linea.url, 'https://docs.google.com/spreadsheets/d/hoja1/edit#gid=0&range=A234:L234');
+  assert.equal(e[1].linea.texto, 'Ver el renglón 234');
+  assert.equal(e[2].linea.url, 'https://docs.google.com/spreadsheets/d/hoja1/edit#gid=77&range=A177:AB177');
+  // Sin recorte subido: solo el documento
+  assert.equal(Cor.enlacesDe([{ etiqueta: 'X', archivo: 'FACTURA.pdf', recorte: 'falta.jpg' }], archivos)[0].linea, null);
+  // Subir: solo ADMIN y solo los tipos de la carpeta de evidencias
+  assert.throws(() => Cor.subirEvidencia({ esAdmin: false }, 'a.pdf', 'application/pdf', ''), /Solo ADMIN/);
+  assert.throws(() => Cor.subirEvidencia({ esAdmin: true }, 'script.gs', 'text/plain', ''), /no permitido/);
+  assert.throws(() => Cor.subirEvidencia({ esAdmin: true }, '../a.pdf', 'application/pdf', ''), /no permitido/);
+  const cli = read('src/html/js/lineas-correcciones.html');
+  assert.match(cli, /C\.llamar\('apiLineasCorreccionesSubirEvidencia', f\.name, f\.type \|\| '', await leerBase64\(f\)\)/);
+  assert.match(cli, /for \(const f of manifiesto\) await una\(f\);/); // evidencias.json al final
+  assert.match(read('src/services/lineas/LineasCorrecciones.gs'), /function apiLineasCorreccionesSubirEvidencia\(token, nombre, mime, base64\) \{\n  const sesion = Auth\.requiereRol\(token, \[Config\.ROLES\.ADMIN\]\);/);
+});
+
 test('Correcciones de Líneas (módulo temporal, 30-sep): cargas que conservan, reabren y verifican', () => {
   const Cor = new Function(read('src/services/lineas/LineasCorrecciones.gs') + '\nreturn LineasCorrecciones;')();
   let n = 0;
