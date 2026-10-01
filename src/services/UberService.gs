@@ -74,14 +74,33 @@ const UberService = (function () {
     return limpio;
   }
 
+  /** Renombra en Drive el archivo recién subido a "<ID>_SOLICITUD_<fecha>.ext" (conserva la
+   *  extensión que ya traía, puesta por subirArchivo a partir del nombre/tipo original del
+   *  cliente). No bloquea el alta/edición si falla -- el archivo ya quedó guardado y accesible
+   *  con el nombre que traía, solo no se le pudo poner el nombre bonito. */
+  function renombrarSolicitud_(fileId, id) {
+    if (!fileId || !id) return;
+    try {
+      const archivo = DriveApp.getFileById(fileId);
+      const extension = (archivo.getName().match(/\.[^.]+$/) || [''])[0];
+      const fecha = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      archivo.setName(id + '_SOLICITUD_' + fecha + extension);
+    } catch (e) {
+      console.warn('No se pudo renombrar el archivo de Solicitud (' + fileId + '): ' + e.message);
+    }
+  }
+
   /** Da de alta a un usuario. FECHA DE ALTA siempre es "hoy" (no la manda el cliente). */
   function crear(token, datos) {
     Permisos.puedeEditar(token, 'uber');
     if (!datos['NOMBRE COMPLETO']) throw new Error('El nombre completo es obligatorio');
     const fila = Object.assign({}, datos);
+    const archivoSolicitudId = fila.SOLICITUD_FILE_ID;
+    delete fila.SOLICITUD_FILE_ID; // no es una columna real, solo viaja para poder renombrar
     // El ID lo pone SheetUtils.insert con el formato del sistema (ver docs/ids-asignacion.md)
     fila['FECHA DE ALTA'] = new Date();
     SheetUtils.insert(ssId(), hoja_().getName(), fila);
+    renombrarSolicitud_(archivoSolicitudId, fila[ID_COLUMN]);
     return { ID: fila[ID_COLUMN] };
   }
 
@@ -89,7 +108,10 @@ const UberService = (function () {
     Permisos.puedeEditar(token, 'uber');
     const datos = Object.assign({}, cambios);
     delete datos['FECHA DE ALTA']; // no se edita, se fija solo al crear
+    const archivoSolicitudId = datos.SOLICITUD_FILE_ID;
+    delete datos.SOLICITUD_FILE_ID; // no es una columna real, solo viaja para poder renombrar
     SheetUtils.update(ssId(), hoja_().getName(), id, datos, ID_COLUMN);
+    renombrarSolicitud_(archivoSolicitudId, id);
     return { ID: id };
   }
 

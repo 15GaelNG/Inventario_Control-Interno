@@ -3404,7 +3404,10 @@
       if (!file) return {};
       const base64 = await leerArchivoBase64(file);
       const subido = await callServer('apiSubirArchivoUber', state.token, file.name, file.type, base64);
-      return { SOLICITUD: subido.url };
+      // SOLICITUD_FILE_ID no es una columna real (UberService.crear/actualizar la quita antes
+      // de guardar) -- solo viaja para que el servidor pueda renombrar el archivo a
+      // "<ID>_SOLICITUD_<fecha>" una vez que sabe el ID real del usuario.
+      return { SOLICITUD: subido.url, SOLICITUD_FILE_ID: subido.id };
     }
 
     const tabla = DataTable.crear(document.getElementById('uber-tabla'), {
