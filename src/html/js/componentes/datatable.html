@@ -114,11 +114,15 @@
   .dt tbody tr:hover .dt-btn-mas, .dt tbody tr.dt-fila-seleccionada .dt-btn-mas, .dt .dt-btn-mas:focus-visible { opacity: 1; }
   .dt .dt-btn-mas:hover { background: var(--color-primary-soft); color: var(--color-text); }
   @media (hover: none) { .dt .dt-btn-mas { opacity: .7; } }
+  /* Entrada como el menú de Google Drive: crece desde la esquina del clic (más a lo alto que a lo ancho), con curva que
+     frena al final, y el contenido aparece un instante después. El origen lo pone abrirPopover según hacia dónde se
+     abrió (arriba/abajo, recorrido a la izquierda). */
   .dt-popover.dt-menu { width: auto; min-width: 230px; max-width: 320px; padding: 4px; transform-origin: top left;
-    animation: dt-menu-entra 120ms cubic-bezier(.2, .8, .2, 1); }
-  /* Entrada sutil del menú (⋮ y clic derecho): aparece y se acomoda unos píxeles, sin rebote */
-  @keyframes dt-menu-entra { from { opacity: 0; transform: translateY(-4px) scale(.98); } to { opacity: 1; transform: none; } }
-  @media (prefers-reduced-motion: reduce) { .dt-popover.dt-menu { animation: none; } }
+    animation: dt-menu-crece 180ms cubic-bezier(.2, 0, 0, 1), dt-menu-aparece 90ms linear; }
+  .dt-popover.dt-menu > * { animation: dt-menu-aparece 120ms linear 50ms both; }
+  @keyframes dt-menu-crece { from { transform: scale(.92, .6); } to { transform: none; } }
+  @keyframes dt-menu-aparece { from { opacity: 0; } to { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .dt-popover.dt-menu, .dt-popover.dt-menu > * { animation: none; } }
   .dt-popover.dt-menu button { display: flex; width: 100%; justify-content: flex-start; gap: 10px; background: transparent;
     border: none; padding: 8px 10px; border-radius: 8px; font-size: 13px; color: var(--color-text); text-align: left; }
   .dt-popover.dt-menu button:hover, .dt-popover.dt-menu button:focus-visible { background: var(--color-bg); }
@@ -1324,8 +1328,12 @@
         const r = ancla.getBoundingClientRect();
         const ancho = popover.offsetWidth;
         const alto = popover.offsetHeight;
-        popover.style.left = Math.max(8, Math.min(r.left, window.innerWidth - ancho - 8)) + 'px';
-        popover.style.top = (r.bottom + alto + 8 > window.innerHeight ? Math.max(8, r.top - alto - 6) : r.bottom + 6) + 'px';
+        const izquierda = Math.max(8, Math.min(r.left, window.innerWidth - ancho - 8));
+        const arriba = r.bottom + alto + 8 > window.innerHeight;
+        popover.style.left = izquierda + 'px';
+        popover.style.top = (arriba ? Math.max(8, r.top - alto - 6) : r.bottom + 6) + 'px';
+        // La animación crece desde la esquina más cercana al clic (como Drive)
+        popover.style.transformOrigin = (izquierda + 1 < r.left ? 'right' : 'left') + ' ' + (arriba ? 'bottom' : 'top');
         if (alMontar) alMontar(popover);
       }
 
