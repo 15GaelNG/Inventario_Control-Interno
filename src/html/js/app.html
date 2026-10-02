@@ -1348,8 +1348,8 @@
       // la lista (alguien que CH todavía no cargó), se deja escribir libre y se capturan a mano.
       grupo: 'Identificación', clave: 'RESPONSABLE VEHICULO', etiqueta: 'Responsable del vehículo', tipo: 'select', catalogo: true,
     },
-    { grupo: 'Identificación', clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select', catalogo: true },
-    { grupo: 'Identificación', clave: 'NO EMPLEADO', etiqueta: 'No. de empleado', tipo: 'text' },
+    { grupo: 'Identificación', clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select', catalogo: true, autoCondicional: true },
+    { grupo: 'Identificación', clave: 'NO EMPLEADO', etiqueta: 'No. de empleado', tipo: 'text', autoCondicional: true },
     { grupo: 'Identificación', clave: 'SERIE VEHICULO', etiqueta: 'Serie del vehículo', tipo: 'text' },
     {
       grupo: 'Identificación', clave: 'NUCCO', etiqueta: 'Nucco', tipo: 'text',
@@ -1436,9 +1436,16 @@
       const campos = porGrupo[grupo].map((campo) => {
         const id = prefijo + '-' + slugCampo(campo.clave);
         const req = campo.requerido ? ' required' : '';
+        // "auto": campos.soloLectura (el servidor/otro módulo decide el valor, p. ej. Folio)
+        // llevan la etiqueta fija; campo.autoCondicional (p. ej. Departamento/No. de empleado,
+        // que se sugieren al elegir Responsable pero se pueden corregir) la llevan oculta hasta
+        // que el JS que los autollena la muestra (ver wireResponsableVehiculo) — mismo patrón
+        // que ya usan Incidencias (tag-departamento/tag-modelo) y Cambios de Monto CCH.
+        const etiqueta = campo.etiqueta + (campo.soloLectura ? ' <span class="auto-tag">auto</span>'
+          : campo.autoCondicional ? ` <span class="auto-tag" id="${id}-auto-tag" hidden>auto</span>` : '');
         if (campo.tipo === 'file') {
           return `<div class="field">
-            <label>${campo.etiqueta}</label>
+            <label>${etiqueta}</label>
             <input type="file" id="${id}" accept=".pdf,.png,.jpg,.jpeg" />
             <div class="file-actual" id="${id}-actual"></div>
           </div>`;
@@ -1454,13 +1461,13 @@
           // PLACA") no dependen de un catálogo del servidor — se precargan
           // aquí mismo, directo en el HTML.
           const sugerencias = (campo.opciones || []).map((o) => `<option value="${o}"></option>`).join('');
-          return `<div class="field"><label>${campo.etiqueta}</label><input type="text" id="${id}" list="${id}-lista" autocomplete="off"${req} placeholder="Escribe o elige…" /><datalist id="${id}-lista">${sugerencias}</datalist></div>`;
+          return `<div class="field"><label>${etiqueta}</label><input type="text" id="${id}" list="${id}-lista" autocomplete="off"${req} placeholder="Escribe o elige…" /><datalist id="${id}-lista">${sugerencias}</datalist></div>`;
         }
         if (campo.tipo === 'select') {
           // Con "opciones" definidas de antemano (lista fija, ej. Clase) se
           // pintan aquí mismo — son opciones cerradas a propósito.
           const opciones = (campo.opciones || []).map((o) => `<option value="${o}">${o}</option>`).join('');
-          return `<div class="field"><label>${campo.etiqueta}</label><select id="${id}"${req}><option value="">Selecciona…</option>${opciones}</select></div>`;
+          return `<div class="field"><label>${etiqueta}</label><select id="${id}"${req}><option value="">Selecciona…</option>${opciones}</select></div>`;
         }
         // soloLectura: el servidor decide el valor (ej. Folio, autogenerado
         // a partir de la Clase) — el campo se muestra pero no se puede editar.
@@ -1473,9 +1480,9 @@
         // moneda: solo un "$" fijo a la izquierda, puro visual — el input
         // sigue siendo un número normal por dentro.
         if (campo.moneda) {
-          return `<div class="field"><label>${campo.etiqueta}</label><div class="input-moneda-wrap">${input}</div></div>`;
+          return `<div class="field"><label>${etiqueta}</label><div class="input-moneda-wrap">${input}</div></div>`;
         }
-        return `<div class="field"><label>${campo.etiqueta}</label>${input}</div>`;
+        return `<div class="field"><label>${etiqueta}</label>${input}</div>`;
       }).join('');
       return `<div class="info-section-title">${grupo}</div>${campos}`;
     }).join('');
@@ -2078,11 +2085,13 @@
       input.dataset.wireado = '1';
       input.addEventListener('input', () => {
         const colaborador = porNombre[input.value.trim().toUpperCase()];
-        if (!colaborador) return;
         const depto = document.getElementById(prefijo + '-departamento');
         const noEmpleado = document.getElementById(prefijo + '-no-empleado');
-        if (depto && colaborador.DEPARTAMENTO) depto.value = colaborador.DEPARTAMENTO;
-        if (noEmpleado && colaborador.NO_EMPLEADO) noEmpleado.value = colaborador.NO_EMPLEADO;
+        const tagDepto = document.getElementById(prefijo + '-departamento-auto-tag');
+        const tagNoEmpleado = document.getElementById(prefijo + '-no-empleado-auto-tag');
+        if (!colaborador) { if (tagDepto) tagDepto.hidden = true; if (tagNoEmpleado) tagNoEmpleado.hidden = true; return; }
+        if (depto && colaborador.DEPARTAMENTO) { depto.value = colaborador.DEPARTAMENTO; if (tagDepto) tagDepto.hidden = false; }
+        if (noEmpleado && colaborador.NO_EMPLEADO) { noEmpleado.value = colaborador.NO_EMPLEADO; if (tagNoEmpleado) tagNoEmpleado.hidden = false; }
       });
     }
 

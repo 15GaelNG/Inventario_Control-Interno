@@ -63,9 +63,11 @@
       lista.forEach((c) => { if (!porNombre[c.NOMBRE.toUpperCase()]) porNombre[c.NOMBRE.toUpperCase()] = c; });
       document.getElementById('rv-responsable-entrante').addEventListener('input', (ev) => {
         const colaborador = porNombre[ev.target.value.trim().toUpperCase()];
-        if (!colaborador) return;
-        if (colaborador.DEPARTAMENTO) document.getElementById('rv-departamento-entrante').value = colaborador.DEPARTAMENTO;
-        if (colaborador.NO_EMPLEADO) document.getElementById('rv-no-empleado-entrante').value = colaborador.NO_EMPLEADO;
+        const tagDepto = document.getElementById('rv-tag-departamento-entrante');
+        const tagNoEmpleado = document.getElementById('rv-tag-no-empleado-entrante');
+        if (!colaborador) { tagDepto.hidden = true; tagNoEmpleado.hidden = true; return; }
+        if (colaborador.DEPARTAMENTO) { document.getElementById('rv-departamento-entrante').value = colaborador.DEPARTAMENTO; tagDepto.hidden = false; }
+        if (colaborador.NO_EMPLEADO) { document.getElementById('rv-no-empleado-entrante').value = colaborador.NO_EMPLEADO; tagNoEmpleado.hidden = false; }
       });
     }).catch((err) => {
       console.error('No se pudo cargar el catálogo de colaboradores:', err);
