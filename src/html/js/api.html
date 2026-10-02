@@ -51,15 +51,19 @@
    * Igual que callServerCacheado, pero para las listas PRINCIPALES de cada
    * tabla (apiListarXResumen) — a diferencia de los catálogos, estas sí
    * cambian con el uso normal, así que el caché vence solo a los
-   * TTL_LISTAS_MS (15s). Sirve para que entrar-salir-entrar al mismo módulo
+   * TTL_LISTAS_MS. Sirve para que entrar-salir-entrar al mismo módulo
    * (o pasar de un módulo a otro y regresar) se sienta instantáneo en vez de
    * volver a pagar el costo de abrir el spreadsheet compartido cada vez.
    * Además, cada crear/editar/eliminar invalida a mano (invalidarCacheLista)
    * la lista de SU PROPIO módulo justo después de guardar — así el cargar()
    * que corre a continuación siempre trae el dato recién guardado, sin
-   * esperar el TTL.
+   * esperar el TTL. Por eso subir este número no arriesga ver datos viejos
+   * tras tu propia edición: solo alarga cuánto dura "instantáneo" el volver
+   * a entrar sin haber editado nada. 2 min (antes 15s) — bajado a pedido
+   * (2-oct): la espera al entrar/salir de un módulo se sentía larga en casi
+   * todos (Líneas no usa este caché, tiene el suyo propio, así que no cambia).
    */
-  const TTL_LISTAS_MS = 15000;
+  const TTL_LISTAS_MS = 120000;
   const cacheListas = {};
   function callServerListaCacheada(fnName, ...args) {
     const clave = fnName + JSON.stringify(args);
