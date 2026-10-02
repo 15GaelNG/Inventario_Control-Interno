@@ -428,14 +428,11 @@
       Formulario.crear(document.getElementById('sen-form'), {
         buscar: {
           campo: 'FOLIO',
-          etiqueta: 'Folio o nucco del vehículo',
-          ayuda: 'Al escribirlo (folio o nucco) se muestran los datos de la unidad para confirmar',
-          // El combobox filtra por valor Y por etiqueta (ver componentes/combobox.html), así
-          // que meter el nucco en la etiqueta alcanza para poder buscar por cualquiera de los
-          // dos -- el valor que de verdad se usa (y lo que recibe cargar) sigue siendo el folio.
+          etiqueta: 'Folio del vehículo',
+          ayuda: 'Al escribirlo se muestran los datos de la unidad para confirmar',
           opciones: async () => ((await callServerCacheado('apiListarVehiculosBasico', state.token)) || []).map((v) => ({
             valor: v.FOLIO,
-            etiqueta: [v.NUCO, v.PLACA, v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' · '),
+            etiqueta: [v.PLACA, v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' · '),
           })),
           cargar: (folio) => callServer('apiDatosVehiculoParaSensor', state.token, folio),
           ficha: (d) => {
@@ -518,8 +515,43 @@
           tabs.mostrar('registros');
           invalidarCacheLista('apiListarSensores', state.token);
           await cargar();
+          // sen-nucco vive fuera del form que resetea el componente solo -- se limpia aparte.
+          const campoNucco = document.getElementById('sen-nucco');
+          if (campoNucco) campoNucco.value = '';
         },
       });
+
+      // Nucco: campo independiente del Folio que arma el componente de arriba (sen-nucco,
+      // fuera de sen-form -- ver views/sensores.html). Escribir en cualquiera de los dos
+      // resuelve el vehículo (con el mismo catálogo que ya trae buscar.opciones, cacheado,
+      // así que no pide nada de más) y pone el valor correspondiente en el otro; el campo
+      // Folio es el que de verdad dispara la búsqueda real (su propio 'input' ya está
+      // cableado por el componente), por eso aquí se simula con dispatchEvent.
+      const campoFolioBuscar = document.getElementById('f-FOLIO');
+      const campoNucco = document.getElementById('sen-nucco');
+      if (campoFolioBuscar && campoNucco) {
+        const vehiculosPorFolioONucco = {};
+        callServerCacheado('apiListarVehiculosBasico', state.token).then((vehiculos) => {
+          const opcionesNucco = [];
+          (vehiculos || []).forEach((v) => {
+            vehiculosPorFolioONucco[v.FOLIO] = v;
+            if (v.NUCO) { vehiculosPorFolioONucco[v.NUCO] = v; opcionesNucco.push(`<option value="${v.NUCO}"></option>`); }
+          });
+          const datalist = document.getElementById('sen-nucco-lista');
+          if (datalist) datalist.innerHTML = opcionesNucco.join('');
+        }).catch(() => {});
+        campoFolioBuscar.addEventListener('input', (ev) => {
+          const vehiculo = vehiculosPorFolioONucco[ev.target.value];
+          if (vehiculo) campoNucco.value = vehiculo.NUCO || '';
+        });
+        campoNucco.addEventListener('input', (ev) => {
+          const vehiculo = vehiculosPorFolioONucco[ev.target.value];
+          if (vehiculo) {
+            campoFolioBuscar.value = vehiculo.FOLIO;
+            campoFolioBuscar.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        });
+      }
     }
 
     await cargar();

@@ -46,6 +46,16 @@
         </div>
       </div>
 
+      <!-- Nucco: forma alterna de encontrar el vehículo, independiente del campo Folio que
+           arma el componente Formulario más abajo -- escribir en cualquiera de los dos
+           resuelve el vehículo y pone el valor correspondiente en el otro (ver
+           js/modulos/sensores.html). -->
+      <div class="field" style="max-width:360px; margin-bottom:14px">
+        <label for="sen-nucco">Nucco</label>
+        <input type="text" id="sen-nucco" list="sen-nucco-lista" autocomplete="off" placeholder="Otra forma de buscar el vehículo…" />
+        <datalist id="sen-nucco-lista"></datalist>
+      </div>
+
       <!-- El formulario lo arma el componente Formulario (ver js/modulos/sensores) -->
       <div id="sen-form"></div>
     </div>

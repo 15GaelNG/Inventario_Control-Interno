@@ -42,6 +42,16 @@
           <p>Folio, fechas y foto del comprobante</p>
         </div>
       </div>
+      <!-- Nucco: forma alterna de encontrar el vehículo, independiente del campo Folio que
+           arma el componente Formulario más abajo -- escribir en cualquiera de los dos
+           resuelve el vehículo y pone el valor correspondiente en el otro (ver
+           js/app-verificaciones.html). -->
+      <div class="field" style="max-width:360px; margin-bottom:14px">
+        <label for="ver-nucco">Nucco</label>
+        <input type="text" id="ver-nucco" list="ver-nucco-lista" autocomplete="off" placeholder="Otra forma de buscar el vehículo…" />
+        <datalist id="ver-nucco-lista"></datalist>
+      </div>
+
       <!-- El formulario lo arma el componente Formulario (ver initVerificaciones en app.js) -->
       <div id="ver-form"></div>
     </div>

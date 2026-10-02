@@ -1601,10 +1601,10 @@
     // muy lento.
     // vehiculosPorFolio: una entrada por FOLIO y otra por NUCO (apiListarVehiculosBasico
     // lo manda como "NUCO", sin doble C -- ver VehiculosService.listarBasico), las dos
-    // apuntando al mismo vehículo, así buscar por cualquiera de los dos funciona igual.
-    // Pero el campo SIEMPRE termina con el folio puesto (ver resolverVehiculoDelFolio_):
-    // es lo que de verdad guarda la incidencia, nuco es nomás otra forma de encontrar
-    // el vehículo.
+    // apuntando al mismo vehículo -- así se puede resolver el vehículo con cualquiera de
+    // los dos. Folio y Nucco son campos INDEPENDIENTES (uno no se mete dentro del otro):
+    // escribir en uno resuelve el vehículo y pone el valor correspondiente en el otro (ver
+    // wireFolioYNucco_ más abajo). Lo que de verdad se guarda es FOLIO.
     const vehiculosPorFolio = {};
     const promesaVehiculos = callServerCacheado('apiListarVehiculosBasico', state.token)
       .then((vehiculos) => {
@@ -1612,17 +1612,19 @@
         // DOM (montarVista hace container.innerHTML = '') — escribir aquí
         // tronaría con "Cannot set properties of null".
         if (!document.body.contains(modal)) return;
-        const datalist = document.getElementById('lista-folios-vehiculo');
-        datalist.innerHTML = vehiculos.map((v) => {
+        const opcionesFolio = [];
+        const opcionesNucco = [];
+        vehiculos.forEach((v) => {
           vehiculosPorFolio[v.FOLIO] = v;
           const etiqueta = [v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ');
-          let html = `<option value="${v.FOLIO}">${etiqueta}</option>`;
+          opcionesFolio.push(`<option value="${v.FOLIO}">${etiqueta}</option>`);
           if (v.NUCO) {
             vehiculosPorFolio[v.NUCO] = v;
-            html += `<option value="${v.NUCO}">Nucco · ${etiqueta}</option>`;
+            opcionesNucco.push(`<option value="${v.NUCO}">${etiqueta}</option>`);
           }
-          return html;
-        }).join('');
+        });
+        document.getElementById('lista-folios-vehiculo').innerHTML = opcionesFolio.join('');
+        document.getElementById('lista-nucco-vehiculo').innerHTML = opcionesNucco.join('');
       })
       .catch((err) => {
         // Antes esto se ignoraba en silencio — ahora se ve para poder diagnosticar.
@@ -1633,16 +1635,27 @@
         errorBox.hidden = false;
       });
 
-    /** Si `valor` es un nucco (no el folio del vehículo que encontró), deja el folio puesto
-     *  en el campo -- lo que se guarda siempre es el folio, nucco es nomás otra entrada. */
-    function resolverVehiculoDelFolio_(input, valor) {
-      const vehiculo = vehiculosPorFolio[valor];
-      if (vehiculo && vehiculo.FOLIO !== valor) input.value = vehiculo.FOLIO;
-      return vehiculo;
+    /** Liga un par de campos Folio/Nucco INDEPENDIENTES: escribir en cualquiera de los dos
+     *  resuelve el vehículo en vehiculosPorFolio y pone el valor correspondiente en el otro
+     *  -- no se tocan entre sí si no hay coincidencia (para no borrar lo que ya traían
+     *  mientras se sigue escribiendo). `alResolver(vehiculo|null)` hace lo demás (autollenar
+     *  Departamento/Modelo/Año, mostrar el tag "auto", etc.) */
+    function wireFolioYNucco_(idFolio, idNucco, alResolver) {
+      const campoFolio = document.getElementById(idFolio);
+      const campoNucco = document.getElementById(idNucco);
+      campoFolio.addEventListener('input', (ev) => {
+        const vehiculo = vehiculosPorFolio[ev.target.value];
+        if (vehiculo) campoNucco.value = vehiculo.NUCO || '';
+        alResolver(vehiculo);
+      });
+      campoNucco.addEventListener('input', (ev) => {
+        const vehiculo = vehiculosPorFolio[ev.target.value];
+        if (vehiculo) campoFolio.value = vehiculo.FOLIO;
+        alResolver(vehiculo);
+      });
     }
 
-    document.getElementById('inc-folio').addEventListener('input', (ev) => {
-      const vehiculo = resolverVehiculoDelFolio_(ev.target, ev.target.value);
+    wireFolioYNucco_('inc-folio', 'inc-nucco', (vehiculo) => {
       const campoDepto = document.getElementById('inc-departamento');
       const campoModelo = document.getElementById('inc-modelo');
       if (vehiculo) {
@@ -1651,9 +1664,11 @@
         document.getElementById('inc-anio').value = vehiculo.MODELO || '';
         document.getElementById('tag-departamento').hidden = false;
         document.getElementById('tag-modelo').hidden = false;
+        document.getElementById('tag-nucco').hidden = false;
       } else {
         document.getElementById('tag-departamento').hidden = true;
         document.getElementById('tag-modelo').hidden = true;
+        document.getElementById('tag-nucco').hidden = true;
       }
     });
 
@@ -1669,9 +1684,8 @@
       document.getElementById('cerrar-error').hidden = true;
     }
 
-    // Mismo autollenado, pero para el folio dentro del modal de Editar.
-    document.getElementById('editar-folio').addEventListener('input', (ev) => {
-      const vehiculo = resolverVehiculoDelFolio_(ev.target, ev.target.value);
+    // Mismo autollenado, pero para el folio/nucco dentro del modal de Editar.
+    wireFolioYNucco_('editar-folio', 'editar-nucco', (vehiculo) => {
       if (vehiculo) {
         document.getElementById('editar-departamento').value = vehiculo.DEPARTAMENTO;
         document.getElementById('editar-modelo').value = [vehiculo.MARCA, vehiculo.LINEA_VEHICULO].filter(Boolean).join(' ');
@@ -1686,6 +1700,7 @@
       document.getElementById('editar-id').value = inc.ID;
       document.getElementById('editar-folio-label').textContent = 'Folio: ' + inc.FOLIO;
       document.getElementById('editar-folio').value = inc.FOLIO || '';
+      document.getElementById('editar-nucco').value = (vehiculosPorFolio[inc.FOLIO] || {}).NUCO || '';
       document.getElementById('editar-departamento').value = inc.DEPARTAMENTO || '';
       document.getElementById('editar-modelo').value = inc.MODELO || '';
       document.getElementById('editar-anio').value = inc.ANIO || '';
