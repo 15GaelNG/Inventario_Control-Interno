@@ -591,6 +591,27 @@
   .badge-estado.baja { background: #F3ECD6; color: var(--color-danger); }
   .badge-estado.pendiente { background: var(--color-primary-soft); color: var(--color-primary); }
 
+  /* ========== "Sistemas" (accesos directos a otros sistemas, por módulo) ========== */
+  .sistemas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+  .sistema-card {
+    display: flex; align-items: center; gap: 14px; padding: 18px;
+    border-radius: var(--radius); background: var(--color-surface); border: 1px solid var(--color-border);
+    box-shadow: var(--shadow); text-decoration: none; color: inherit;
+    transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+  }
+  .sistema-card:hover, .sistema-card:focus-visible { transform: translateY(-3px); box-shadow: var(--shadow-lg); border-color: var(--color-accent); }
+  .sistema-card-icono {
+    width: 52px; height: 52px; border-radius: 14px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .sistema-card-icono .ico { width: 24px; height: 24px; }
+  .sistema-card-texto { min-width: 0; }
+  .sistema-card-texto h3 { margin: 0 0 4px; font-size: 14.5px; line-height: 1.3; color: var(--color-text); }
+  .sistema-card-abrir { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 600; color: var(--color-primary); }
+  :root[data-theme="dark"] .sistema-card-abrir { color: var(--color-accent); }
+  .sistema-card-abrir .ico { width: 13px; height: 13px; }
+  .sistema-card:hover .sistema-card-abrir { text-decoration: underline; }
+
   /* ========== Historial en línea de tiempo (ej. Cambios/Reasignaciones
      enlazados en el detalle de Vehículos) — tarjetas compactas en vez de
      tabla plana, con un antes → después bien resaltado. ========== */
