@@ -429,9 +429,43 @@ const CapitalHumano = (function () {
       desde: [l.columnaCorreo, l.columnaNombre, l.columnaNumero].filter(Boolean) }));
   }
 
+  /**
+   * Colaboradores para autocompletar "Responsable" en otros módulos (ej. Vehículos: al
+   * elegir el nombre, se sugieren Departamento y No. de empleado). Son los renglones de
+   * COLABORADORES ACTUALIZADO tal cual, sin pasar por identificar()/PERSONAS -- no hace
+   * falta resolver quién es quién para esto, solo sugerir. Por eso un mismo nombre puede
+   * salir más de una vez (otro departamento tras un cambio de área, o un número
+   * reutilizado con otro departamento): se desduplica solo nombre+departamento exacto, no
+   * por persona. Si el responsable que se captura no aparece aquí (alguien nuevo que CH
+   * todavía no cargó), el campo se queda como texto libre -- no bloquea nada.
+   */
+  function listarColaboradores(token) {
+    Auth.validarSesion(token);
+    const ss = SpreadsheetApp.openById(Config.SPREADSHEET_IDS.VEHICULOS());
+    const hoja = ss.getSheetByName(HOJA_CH);
+    if (!hoja) return [];
+    const { filas } = leer_(hoja);
+    const vistos = new Set();
+    const resultado = [];
+    filas.forEach((f) => {
+      const nombre = String(f['NOMBRE COMPLETO'] || '').trim();
+      if (!nombre) return;
+      const departamento = String(f['DEPARTAMENTO'] || '').trim();
+      const clave = nombre.toUpperCase() + '|' + departamento.toUpperCase();
+      if (vistos.has(clave)) return;
+      vistos.add(clave);
+      resultado.push({
+        NOMBRE: nombre,
+        NO_EMPLEADO: String(f['No EMPLEADO'] || '').trim(),
+        DEPARTAMENTO: departamento,
+      });
+    });
+    return resultado.sort((a, b) => a.NOMBRE.localeCompare(b.NOMBRE));
+  }
+
   return {
     identificar, revisarLigas, idPara, columnasDePersona, describirLigas, personaDe, nombreComparable,
-    HOJA_CH, HOJA_PERSONAS, claveEmpleo, COLUMNA,
+    listarColaboradores, HOJA_CH, HOJA_PERSONAS, claveEmpleo, COLUMNA,
   };
 })();
 

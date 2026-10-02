@@ -1342,7 +1342,13 @@
       soloLectura: true, placeholder: 'Se genera solo, según la Clase',
     },
     { grupo: 'Identificación', clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select', catalogo: true },
-    { grupo: 'Identificación', clave: 'RESPONSABLE VEHICULO', etiqueta: 'Responsable del vehículo', tipo: 'text' },
+    {
+      // catalogo: true — sugerencias de Capital Humano (apiListarColaboradores). Al elegir
+      // uno (o escribir un nombre que coincide exacto) se autollenan Departamento y No. de
+      // empleado (ver wireResponsableVehiculo) -- si no está en la lista (alguien que CH
+      // todavía no cargó), se deja escribir libre y esos dos se capturan a mano.
+      grupo: 'Identificación', clave: 'RESPONSABLE VEHICULO', etiqueta: 'Responsable del vehículo', tipo: 'select', catalogo: true,
+    },
     { grupo: 'Identificación', clave: 'NO EMPLEADO', etiqueta: 'No. de empleado', tipo: 'text' },
     { grupo: 'Identificación', clave: 'SERIE VEHICULO', etiqueta: 'Serie del vehículo', tipo: 'text' },
     {
@@ -2030,12 +2036,13 @@
     // lista de vehículos, cuando ninguno depende del otro.
     async function cargarCatalogosVehiculo() {
       try {
-        const [marcas, departamentos, sedes, razones, mapaUbicaciones] = await Promise.all([
+        const [marcas, departamentos, sedes, razones, mapaUbicaciones, colaboradores] = await Promise.all([
           callServerCacheado('apiListarMarcas', state.token),
           callServerCacheado('apiListarDepartamentos', state.token),
           callServerCacheado('apiListarSedesVehiculo', state.token),
           callServerCacheado('apiListarRazonesSociales', state.token),
           callServerCacheado('apiListarUbicacionesPorSede', state.token),
+          callServerCacheado('apiListarColaboradores', state.token),
         ]);
         ['veh-marca', 'editar-vehiculo-marca'].forEach((id) => llenarSelect(id, marcas));
         ['veh-departamento', 'editar-vehiculo-departamento'].forEach((id) => llenarSelect(id, departamentos));
@@ -2047,9 +2054,36 @@
         // Ubicación por si acaso.
         llenarUbicacionesSegunSede('veh');
         llenarUbicacionesSegunSede('editar-vehiculo');
+        const nombresColaboradores = Array.from(new Set((colaboradores || []).map((c) => c.NOMBRE)));
+        ['veh-responsable-vehiculo', 'editar-vehiculo-responsable-vehiculo'].forEach((id) => llenarSelect(id, nombresColaboradores));
+        wireResponsableVehiculo('veh', colaboradores || []);
+        wireResponsableVehiculo('editar-vehiculo', colaboradores || []);
       } catch (err) {
-        console.error('No se pudieron cargar los catálogos de Marca/Departamento/Sede/Razón social/Ubicación:', err);
+        console.error('No se pudieron cargar los catálogos de Marca/Departamento/Sede/Razón social/Ubicación/Colaboradores:', err);
       }
+    }
+
+    /** Al elegir (o escribir exacto) un nombre de Capital Humano en "Responsable del
+     *  vehículo", sugiere su Departamento y No. de empleado -- no bloquea los campos
+     *  (el usuario los puede corregir): si hay más de un colaborador con ese nombre
+     *  exacto (recontratación, nombre repetido), se usa el primero que haya en la
+     *  lista. Si el nombre no coincide con nadie, no hace nada -- se deja capturar
+     *  a mano, como ya era antes de tener este catálogo. */
+    function wireResponsableVehiculo(prefijo, colaboradores) {
+      const porNombre = {};
+      colaboradores.forEach((c) => { if (!porNombre[c.NOMBRE.toUpperCase()]) porNombre[c.NOMBRE.toUpperCase()] = c; });
+      const idResponsable = prefijo + '-responsable-vehiculo';
+      const input = document.getElementById(idResponsable);
+      if (!input || input.dataset.wireado) return; // una sola vez por campo, aunque se recarguen catálogos
+      input.dataset.wireado = '1';
+      input.addEventListener('input', () => {
+        const colaborador = porNombre[input.value.trim().toUpperCase()];
+        if (!colaborador) return;
+        const depto = document.getElementById(prefijo + '-departamento');
+        const noEmpleado = document.getElementById(prefijo + '-no-empleado');
+        if (depto && colaborador.DEPARTAMENTO) depto.value = colaborador.DEPARTAMENTO;
+        if (noEmpleado && colaborador.NO_EMPLEADO) noEmpleado.value = colaborador.NO_EMPLEADO;
+      });
     }
 
     // Folio: se ve en su campo (deshabilitado, no se puede escribir) desde que
