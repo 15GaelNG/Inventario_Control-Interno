@@ -3,6 +3,13 @@
     uv run --no-project --with google-auth-oauthlib --with google-api-python-client \
         python tools/migracion/migrar.py lab [--replanchar] [--escribir]
     ... migrar.py --libro <id o URL> [--replanchar] [--escribir] [--confirmo "Nombre del libro"]
+    ... migrar.py --copiar-produccion ["Nombre de la copia"] [--escribir]
+
+--copiar-produccion duplica producción en Drive (con formatos, validaciones y fórmulas) y migra
+esa copia: el libro que sale es el que se le da a la app cambiando SS_ID_VEHICULOS. Producción
+solo se lee. Sin --escribir no copia nada: simula sobre producción en memoria. A la copia se le
+agregan las pestañas que producción no tiene y la migración necesita (PESTANAS_DE_LAB: la lista
+de Capital Humano), copiadas de LAB y verificadas celda por celda.
 
 `lab` es el libro de experimentos. Con --libro va a CUALQUIER libro que tu cuenta pueda
 editar, salvo la lista negra (producción; ver conexion.py). Para escribir en un libro que no
@@ -33,9 +40,9 @@ from pathlib import Path
 
 import catalogo as cat
 from bitacora import anotar
-from comparar import comparar_libros
+from comparar import comparar_hoja, comparar_libros
 from conexion import abrir as abrir_api
-from conexion import api, exigir_escribible, id_de
+from conexion import api, copiar_produccion, exigir_escribible, id_de
 from ids import Ids
 from libro import LibroApi, LibroMemoria
 from motor import correr_pipeline
@@ -45,8 +52,54 @@ from replanche import replanchar
 CORRIDAS = Path(__file__).resolve().parent / "corridas"
 HOJAS = [h["hoja"] for h in cat.todas()]
 
+# Pestañas que producción NO tiene y que la migración necesita: se traen de LAB a la copia.
+# COLABORADORES ACTUALIZADO es la lista de Capital Humano que se pega a mano; sin ella
+# migracionFinalApps se detiene en el paso "personas" y la app no sugiere responsables.
+PESTANAS_DE_LAB = ["COLABORADORES ACTUALIZADO"]
+
+
+def traer_de_lab(s, destino, escribir):
+    """Copia (copyTo, la hoja completa) las PESTANAS_DE_LAB al destino y las verifica celda por celda."""
+    lab = cat.REPLANCHE["destino"]
+    props_lab = {x["properties"]["title"]: x["properties"] for x in
+                 s.get(spreadsheetId=lab, fields="sheets.properties(sheetId,title)").execute()["sheets"]}
+    en_destino = {x["properties"]["title"] for x in
+                  s.get(spreadsheetId=destino, fields="sheets.properties.title").execute()["sheets"]}
+    lineas = ["PESTAÑAS QUE NO VIENEN DE PRODUCCIÓN (se copian de LAB)", ""]
+    ok = True
+    for n in PESTANAS_DE_LAB:
+        if n not in props_lab:
+            lineas.append("  · %s: LAB no la tiene. migracionFinalApps se detendrá en Capital Humano: "
+                          "pégala a mano en la copia antes de correrlo." % n)
+            continue
+        if n in en_destino:
+            lineas.append("  · %s: el destino ya la tiene, no se toca" % n)
+            continue
+        de_lab = LibroApi(s, lab, [n]).hoja(n)
+        filas = max(de_lab.ultima_fila() - 1, 0)
+        if not escribir:
+            lineas.append("  · %s: se copiaría de LAB (%d filas)" % (n, filas))
+            continue
+        r = s.sheets().copyTo(spreadsheetId=lab, sheetId=props_lab[n]["sheetId"],
+                              body={"destinationSpreadsheetId": destino}).execute()
+        s.batchUpdate(spreadsheetId=destino, body={"requests": [{"updateSheetProperties": {
+            "properties": {"sheetId": r["sheetId"], "title": n}, "fields": "title"}}]}).execute()
+        difs = comparar_hoja(de_lab, LibroApi(s, destino, [n]).hoja(n))
+        if difs:
+            ok = False
+            lineas.append("  · %s: FALLÓ LA VERIFICACIÓN: %s" % (n, "; ".join(difs)))
+        else:
+            lineas.append("  · %s: copiada de LAB y verificada celda por celda (%d filas)" % (n, filas))
+    return "\n".join(lineas), ok
+
 
 def main():
+    # La consola de Windows usa cp1252 si la salida va a un archivo o a otro programa, y no
+    # sabe escribir "═" ni "━": la corrida terminaba bien y tronaba al imprimir el cierre
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
     p = argparse.ArgumentParser(description="La migración de IDs y referencias, en un comando.")
     p.add_argument("lab", nargs="?", choices=["lab"], help="el libro de experimentos")
     p.add_argument("--libro", help="cualquier otro libro: su id o su URL (producción está en la lista negra)")
@@ -54,19 +107,36 @@ def main():
     p.add_argument("--replanchar", action="store_true", help="copiar producción encima del libro primero")
     p.add_argument("--escribir", action="store_true", help="sin esto es una simulación en memoria")
     p.add_argument("--acepto-perder-columnas", action="store_true")
+    p.add_argument("--autorizado-por-el-equipo", action="store_true",
+                   help="permite replanchar el libro compartido del equipo (borra lo que tengan en esas hojas)")
+    p.add_argument("--copiar-produccion", nargs="?", const="", metavar="NOMBRE", dest="copiar",
+                   help="duplicar producción en Drive y migrar la copia (nombre opcional)")
     a = p.parse_args()
-    if bool(a.lab) == bool(a.libro):
-        p.error("di a qué libro: 'lab' o --libro <id o URL> (uno de los dos)")
-    destino = id_de(a.libro or "lab")
-    a.libro = destino
+    copiar = a.copiar is not None
+    if [bool(a.lab), bool(a.libro), copiar].count(True) != 1:
+        p.error("di a qué libro: 'lab', --libro <id o URL> o --copiar-produccion (solo uno)")
+    if copiar and a.replanchar:
+        p.error("--copiar-produccion ya parte de producción: --replanchar sobra")
 
     arranque = time.time()
     s = api()
-    nombre = s.get(spreadsheetId=destino, fields="properties.title").execute()["properties"]["title"]
+    if copiar and a.escribir:
+        nombre = a.copiar or "%s — migrado %s" % (
+            s.get(spreadsheetId=cat.PRODUCCION, fields="properties.title").execute()["properties"]["title"],
+            datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
+        print("Copiando producción en Drive como «%s»…" % nombre, flush=True)
+        destino = copiar_produccion(nombre)
+        print("Copia: https://docs.google.com/spreadsheets/d/%s" % destino, flush=True)
+    else:
+        # Sin --escribir, --copiar-produccion simula sobre producción (solo lectura).
+        destino = cat.PRODUCCION if copiar else id_de(a.libro or "lab")
+        nombre = s.get(spreadsheetId=destino, fields="properties.title").execute()["properties"]["title"]
+    a.libro = destino
     print("Libro destino: %s  (%s)" % (nombre, destino), flush=True)
     if a.escribir:
         exigir_escribible(destino)
-        if destino != cat.REPLANCHE["destino"]:
+        # La copia la acabamos de crear: no hay nada que confirmar.
+        if destino != cat.REPLANCHE["destino"] and not copiar:
             dicho = a.confirmo if a.confirmo is not None else input(
                 "Vas a ESCRIBIR en «%s». Escribe su nombre tal cual para seguir: " % nombre)
             if dicho.strip() != nombre:
@@ -77,11 +147,18 @@ def main():
     def avisar(t):
         print(t, flush=True)
 
+    # ------------------------------------------------------------- lo que producción no trae
+    if copiar:
+        avisar("PESTAÑAS DE LAB")
+        texto, ok = traer_de_lab(s, destino if a.escribir else cat.PRODUCCION, a.escribir)
+        reporte.append(texto)
+        avisar(texto)
+
     # ------------------------------------------------------------- replanchado
     if a.replanchar:
         avisar("REPLANCHADO")
         texto, ok = replanchar(s, escribir=a.escribir, acepto_perder=a.acepto_perder_columnas, avisar=avisar,
-                               nueva_api=api, destino=destino)
+                               nueva_api=api, destino=destino, autorizado_equipo=a.autorizado_por_el_equipo)
         reporte.append(texto)
 
     # ------------------------------------------------------------- el libro
@@ -144,12 +221,15 @@ def main():
         if a.escribir:
             cierre += ["Falta lo de Apps Script: migracionFinalApps (sincroniza copias y liga Capital Humano),",
                        "en el editor de un proyecto cuyo SS_ID_VEHICULOS y SS_ID_TELEFONIA sean " + destino + "."]
+            if copiar:
+                cierre += ["La copia migrada: https://docs.google.com/spreadsheets/d/" + destino]
     else:
         cierre = ["", "═" * 60, "SE DETUVO (%.1f min). Lee el último pipeline del reporte." % minutos]
     reporte.append("\n".join(cierre))
 
     CORRIDAS.mkdir(exist_ok=True)
-    etiqueta_libro = "lab" if destino == cat.REPLANCHE["destino"] else destino[:10]
+    etiqueta_libro = ("copia-prod" if copiar else
+                      "lab" if destino == cat.REPLANCHE["destino"] else destino[:10])
     ruta = CORRIDAS / ("%s_%s_%s.txt" % (datetime.datetime.now().strftime("%Y-%m-%d_%H%M"), etiqueta_libro,
                                           "escribir" if a.escribir else "simulacion"))
     ruta.write_text("\n\n".join(reporte), encoding="utf-8")

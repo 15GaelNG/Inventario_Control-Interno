@@ -1,0 +1,348 @@
+INCIDENCIAS 
+
+AND(
+  IN(USEREMAIL(), USUARIOS[CORREO]),
+  OR(
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "ADMIN",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "SUPER",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "ANALISIS DE DATOS",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "SERVICIOS VEHICULARES"
+  )
+)
+
+
+VEHICULOS
+
+AND(
+  IN(USEREMAIL(), USUARIOS[CORREO]),
+  OR(
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "ADMIN",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "SUPER",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "ANALISIS DE DATOS",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "CI",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "SERVICIOS VEHICULARES",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "CONTROL VEHICULAR",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "AUDITORIAS",
+    USEREMAIL() = "auxiliar6datos.ci@ciudadmaderas.com"
+  )
+)
+
+SERVICIOS
+
+AND(
+  IN(USEREMAIL(), USUARIOS[CORREO]),
+  OR(
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "ADMIN",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "SUPER",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "ANALISIS DE DATOS",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "SERVICIOS VEHICULARES"
+  )
+)
+
+
+ARQUEOS
+
+AND(
+  USEREMAIL() <> "ejecutivogestionyadquisicionvehicular.ci@ciudadmaderas.com",
+  IN(USEREMAIL(), USUARIOS[CORREO]),
+  OR(
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "ADMIN",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "SUPER",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "CI",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "ANALISIS DE DATOS"
+  )
+)
+
+CAJA CHICA
+
+AND(
+  USEREMAIL() <> "ejecutivogestionyadquisicionvehicular.ci@ciudadmaderas.com",
+  IN(USEREMAIL(), USUARIOS[CORREO]),
+  OR(
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "ADMIN",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "SUPER",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "CI",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "ANALISIS DE DATOS"
+  )
+)
+
+CAMBIOS VEHICULOS
+
+AND(
+  IN(USEREMAIL(), USUARIOS[CORREO]),
+  OR(
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "ADMIN",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "SUPER",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "ANALISIS DE DATOS",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "SERVICIOS VEHICULARES",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "CI"
+  )
+)
+
+CONTROL DE REASIGNACIONES DE LINEAS
+
+AND(
+  IN(USEREMAIL(), USUARIOS[CORREO]),
+  OR(
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "ADMIN",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "SUPER",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "ANALISIS DE DATOS",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "LINEAS"
+  )
+)
+
+DASHBOARDS
+
+IN(
+  USEREMAIL(), 
+  LIST(
+    "especialista2datos.ci@ciudadmaderas.com", 
+    "gtedatosyprocesos.ci@ciudadmaderas.com",
+    "procesos.ci@ciudadmaderas.com"
+  )
+)
+
+DETALLES LINEAS TELEFONICAS
+
+IN(
+  USEREMAIL(), 
+  LIST(
+    "especialista2datos.ci@ciudadmaderas.com", 
+    "auxiliar4datos.ci@ciudadmaderas.com",
+    "gtedatosyprocesos.ci@ciudadmaderas.com",
+    "especialistaservicios.ci@ciudadmaderas.com",
+    "paulina.bustamante@ciudadmaderas.com",
+    "maricela.rico@ciudadmaderas.com",
+    "asistente.ci@ciudadmaderas.com",
+    "asistentesubdi.ci@ciudadmaderas.com",
+    "tecnicoverificacion.ci@ciudadmaderas.com",
+    "ejecutivotelefonia.ci@ciudadmaderas.com",
+    "procesos.ci@ciudadmaderas.com",
+    "auxiliar3procesos.ci@ciudadmaderas.com"
+  )
+)
+
+GESTION DE ACIVOS
+
+IN(
+  USEREMAIL(), 
+  LIST(
+    "especialista2datos.ci@ciudadmaderas.com", 
+    "auxiliar4datos.ci@ciudadmaderas.com",
+    "gtedatosyprocesos.ci@ciudadmaderas.com",
+    "especialistaservicios.ci@ciudadmaderas.com",
+    "ecajachica.ci@ciudadmaderas.com",
+    "paulina.bustamante@ciudadmaderas.com",
+    "maricela.rico@ciudadmaderas.com",
+    "asistente.ci@ciudadmaderas.com",
+    "asistentesubdi.ci@ciudadmaderas.com",
+    "gerenteserv.ci@ciudadmaderas.com",
+    "tecnicoverificacion.ci@ciudadmaderas.com",
+    "especialista.ci@ciudadmaderas.com",
+    "gestor.vehicular@ciudadmaderas.com",
+    "analista5procesos.ci@ciudadmaderas.com",
+    "ejecutivotelefonia.ci@ciudadmaderas.com",
+    "auxiliar3procesos.ci@ciudadmaderas.com"
+  )
+)
+
+INSPECCIONES VEHICULARES
+
+IN(
+  USEREMAIL(), 
+  LIST(
+    "especialista2datos.ci@ciudadmaderas.com",
+    "auxiliar4datos.ci@ciudadmaderas.com",
+    "auxiliar5datos.ci@ciudadmaderas.com",
+    "gerenteserv.ci@ciudadmaderas.com",
+    "especialistainspecciones.ci@ciudadmaderas.com",
+    "especialista.ci@ciudadmaderas.com",
+    "ejecutivo4sv.ci@ciudadmaderas.com",
+    "auxgestionyadquisicionvehicular.ci@ciudadmaderas.com"
+  )
+)
+
+INVENTARIO DE ACCESORIOS
+
+AND(
+  IN(USEREMAIL(), USUARIOS[CORREO]),
+  OR(
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "ADMIN",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "SUPER",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "ANALISIS DE DATOS",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "LINEAS"
+  )
+)
+
+REACTIVACION DE LINEAS
+
+AND(
+  IN(USEREMAIL(), USUARIOS[CORREO]),
+  OR(
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "ADMIN",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "SUPER",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "ANALISIS DE DATOS",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "LINEAS"
+  )
+)
+
+REASIGNACIONES VEHICULARES
+
+AND(
+  IN(USEREMAIL(), USUARIOS[CORREO]),
+  OR(
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "ADMIN",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "SUPER",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "ANALISIS DE DATOS",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "CI",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "SERVICIOS VEHICULARES",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "CONTROL VEHICULAR",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "AUDITORIAS"
+  )
+)
+
+SOLICITUD DE LINEAS
+
+AND(
+  IN(USEREMAIL(), USUARIOS[CORREO]),
+  OR(
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "ADMIN",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "SUPER",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "ANALISIS DE DATOS",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "LINEAS"
+  )
+)
+
+LINEAS TELEFONICAS
+
+AND(
+  IN(USEREMAIL(), USUARIOS[CORREO]),
+  OR(
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "ADMIN",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "SUPER",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "ANALISIS DE DATOS",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "LINEAS",
+    USEREMAIL() = "coordauditoriaycalidad.ci@ciudadmaderas.com",
+    USEREMAIL() = "ejecutivoinspeccionescelulares.ci@ciudadmaderas.com"
+  )
+)
+
+CONTROL DE CAMBIOS - LINEAS
+
+AND(
+  IN(USEREMAIL(), USUARIOS[CORREO]),
+  OR(
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "ADMIN",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "SUPER",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "ANALISIS DE DATOS",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "LINEAS"
+  )
+)
+
+BITACORA DE DESECHOS
+
+AND(
+  IN(USEREMAIL(), USUARIOS[CORREO]),
+  OR(
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "ADMIN",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "SUPER",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "ANALISIS DE DATOS",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "LINEAS"
+  )
+)
+
+LINEAS POST VENTA
+
+AND(
+  IN(USEREMAIL(), USUARIOS[CORREO]),
+  OR(
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "ADMIN",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "SUPER",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "ANALISIS DE DATOS",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "POST VENTA"
+  )
+) 
+
+HOLOGRAMAS
+
+AND(
+  IN(USEREMAIL(), USUARIOS[CORREO]),
+  OR(
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "ADMIN",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "SUPER",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "ANALISIS DE DATOS",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "CI"
+  )
+)
+
+TICKETS
+
+AND(
+  IN(USEREMAIL(), USUARIOS[CORREO]),
+  OR(
+    USEREMAIL() = "ejecutivogestionyadquisicionvehicular.ci@ciudadmaderas.com",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "ADMIN",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "SUPER",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "ANALISIS DE DATOS",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "CI"
+  )
+)
+
+INSTALACION DE SENSORES
+
+AND(
+  IN(USEREMAIL(), USUARIOS[CORREO]),
+  OR(
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "ADMIN",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "SUPER",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "ANALISIS DE DATOS",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "CI",
+    USEREMAIL() = "auxiliar6datos.ci@ciudadmaderas.com"
+  )
+)
+
+UBER
+
+AND(
+  IN(USEREMAIL(), USUARIOS[CORREO]),
+  OR(
+    USEREMAIL() = "ejecutivogestionyadquisicionvehicular.ci@ciudadmaderas.com",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "ADMIN",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "SUPER",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "ANALISIS DE DATOS",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "CI"
+  )
+)
+
+USUARIOS 
+
+AND(
+  IN(USEREMAIL(), USUARIOS[CORREO]),
+  LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "ADMIN"
+)
+
+VERIFICACIONES
+
+AND(
+  IN(USEREMAIL(), USUARIOS[CORREO]),
+  OR(
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "ADMIN",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "SUPER",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "ANALISIS DE DATOS",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "CI",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "SERVICIOS VEHICULARES",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "CONTROL VEHICULAR"
+  )
+)
+
+CONFIGURACIONES
+
+AND(
+  IN(USEREMAIL(), USUARIOS[CORREO]),
+  OR(
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "ADMIN",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "ROL") = "SUPER",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "ANALISIS DE DATOS",
+    LOOKUP(USEREMAIL(), "USUARIOS", "CORREO", "AREA") = "SERVICIOS VEHICULARES"
+  )
+)

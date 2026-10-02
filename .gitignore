@@ -36,3 +36,6 @@ tools/migracion/.tokens/
 # Fotos de libros reales y reportes de corridas de la migracion (traen datos personales)
 tools/migracion/fotos/
 tools/migracion/corridas/
+
+# Llaves privadas de cuentas de servicio de Google (lector-*.json): secretos, nunca al repo
+/lector-*.json

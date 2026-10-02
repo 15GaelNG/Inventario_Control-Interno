@@ -44,10 +44,13 @@ def _es_artefacto(hoja, col):
     return any(str(x).strip().upper() == c for x in lista)
 
 
-def _guardas(api, dest):
+def _guardas(api, dest, autorizado_equipo=False):
     if dest == R["origen"]:
         raise SystemExit("El destino es el MISMO libro que el origen. Esto no se corre.")
-    if dest in R["prohibidos"]:
+    # El libro del equipo se puede replanchar SOLO con la autorización explícita en el comando
+    # (--autorizado-por-el-equipo): borra lo que Jorge y Emmanuel tengan en esas hojas.
+    # Producción no tiene bandera: es el origen y está en la lista negra de conexion.py.
+    if dest in R["prohibidos"] and not (autorizado_equipo and dest != cat.PRODUCCION):
         raise SystemExit("El destino es %s. Este procedimiento BORRA las hojas del "
                          "destino, así que ahí no se corre nunca." % R["prohibidos"][dest])
     # El nombre se comprueba aquí solo para LAB. Un libro dado con --libro lo confirma la
@@ -69,13 +72,14 @@ def _props(api, ss_id):
     return {s["properties"]["title"]: s for s in m["sheets"]}
 
 
-def replanchar(api, escribir=False, acepto_perder=False, avisar=print, nueva_api=None, destino=None):
+def replanchar(api, escribir=False, acepto_perder=False, avisar=print, nueva_api=None, destino=None,
+               autorizado_equipo=False):
     """
     destino    id del libro que se sobrescribe; por omisión LAB (catalogo.REPLANCHE['destino'])
     nueva_api  función que crea un cliente nuevo, para leer origen y destino a la vez
     """
     dest = destino or R["destino"]
-    _guardas(api, dest)
+    _guardas(api, dest, autorizado_equipo)
     hojas = sorted(h["hoja"] for h in cat.migrables())
     with ThreadPoolExecutor(2) as hilos:   # origen y destino se leen a la vez
         f_o = hilos.submit(LibroApi, nueva_api() if nueva_api else api, R["origen"], hojas)

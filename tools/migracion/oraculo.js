@@ -44,6 +44,7 @@ function correr(def, pasos, opciones) {
 
   const ctx = vm.createContext({
     console,
+    soloEditor_: () => {},   // el candado de Code.gs: el oráculo siempre es "el editor"
     Logger: { log: () => {} },
     Config: { SPREADSHEET_IDS: { VEHICULOS: () => def.id } },
     SpreadsheetApp: {

@@ -1,0 +1,180 @@
+ACCESORIOS CELULARES
+IF(
+  IN(USEREMAIL(), {
+    "especialista2datos.ci@ciudadmaderas.com",
+    "gtedatosyprocesos.ci@ciudadmaderas.com",
+    "ejecutivotelefonia.ci@ciudadmaderas.com",
+    "auxiliartelefonia1.ci@ciudadmaderas.com",
+    "paulina.bustamante@ciudadmaderas.com",
+    "maricela.rico@ciudadmaderas.com",
+    "asistentesubdi.ci@ciudadmaderas.com",
+    "especialistaservicios.ci@ciudadmaderas.com",
+    "auxiliar3procesos.ci@ciudadmaderas.com",
+    "auxiliar4datos.ci@ciudadmaderas.com"
+  }),
+  "ALL_CHANGES",
+  "READ_ONLY"
+)
+
+ARQUEOS
+PERMITE UPDATES, ADDS, DELETES
+
+BITACORAS DE DESECHO
+PERMITE UPDATES, ADDS, DELETES
+
+CAJAS CHICAS
+PERMITE UPDATES, ADDS, DELETES
+
+CAMBIOS DE LINEAS TELEFONICAS
+PERMITE UPDATES, ADDS, DELETES
+
+CAMBIOS VEHICULOS
+PERMITE ADDS
+
+COLABORADORES
+IF(
+  IN(USEREMAIL(), {
+    "especialista2datos.ci@ciudadmaderas.com",
+    "auxiliar4datos.ci@ciudadmaderas.com"
+  }),
+  "ALL_CHANGES",
+  "READ_ONLY"
+)
+
+CONFIGURACIONES
+PERMITE UPDATES, ADDS, DELETES
+
+DASHBOARDS
+PERMITE UPDATES, ADDS, DELETES
+
+DEPARTAMENTOS
+PERMITE UPDATES, ADDS, DELETES
+
+HISTORIAL REASIGNACIONES
+PERMITE ADDS
+
+HOLOGRAMAS
+PERMITE UPDATES, ADDS, DELETES
+
+INCIDENCIAS
+PERMITE UPDATES, ADDS, DELETES
+
+INCREMENTOS
+PERMITE UPDATES, ADDS, DELETES
+
+INSPECCION VEHICULAR
+IF(
+  IN(USEREMAIL(), {
+    "especialista2datos.ci@ciudadmaderas.com",
+    "gerenteserv.ci@ciudadmaderas.com",
+    "especialistainspecciones.ci@ciudadmaderas.com",
+    "tecnicoverificacion.ci@ciudadmaderas.com"
+    "especialista.ci@ciudadmaderas.com",
+    "ejecutivo4sv.ci@ciudadmaderas.com",
+    "auxgestionyadquisicionvehicular.ci@ciudadmaderas.com"
+  }),
+  "ALL_CHANGES",
+  "READ_ONLY"
+)
+
+INSPECCIONES LINEAS
+IF(
+  IN(USEREMAIL(), {
+    "especialista2datos.ci@ciudadmaderas.com",
+    "gerenteserv.ci@ciudadmaderas.com",
+    "especialistainspecciones.ci@ciudadmaderas.com",
+    "tecnicoverificacion.ci@ciudadmaderas.com"
+    "especialista.ci@ciudadmaderas.com",
+    "ejecutivo4sv.ci@ciudadmaderas.com",
+    "auxgestionyadquisicionvehicular.ci@ciudadmaderas.com"
+  }),
+  "ALL_CHANGES",
+  "READ_ONLY"
+)
+
+INSTALACION DE SENSORES
+PERMITE UPDATES, ADDS, DELETES
+
+LINEAS TELEFONICAS
+IF(
+  IN(USEREMAIL(), {
+    "especialista2datos.ci@ciudadmaderas.com",
+    "gtedatosyprocesos.ci@ciudadmaderas.com",
+    "ejecutivotelefonia.ci@ciudadmaderas.com",
+    "auxiliartelefonia1.ci@ciudadmaderas.com",
+    "paulina.bustamante@ciudadmaderas.com",
+    "maricela.rico@ciudadmaderas.com",
+    "asistentesubdi.ci@ciudadmaderas.com",
+    "especialistaservicios.ci@ciudadmaderas.com",
+    "auxiliar3procesos.ci@ciudadmaderas.com",
+    "auxiliar4datos.ci@ciudadmaderas.com",
+    "ejecutivoinspeccionescelulares.ci@ciudadmaderas.com",
+    "auxiliar7datos.ci@ciudadmaderas.com",
+    "procesos.ci@ciudadmaderas.com",
+    "gerenteserv.ci@ciudadmaderas.com"
+  }),
+  "ALL_CHANGES",
+  "READ_ONLY"
+)
+
+LISTAS TELEFONOS
+PERMITE READ-ONLY
+
+LISTAS VEHICULOS
+PERMITE READ-ONLY
+
+MODELOS INSPECCION
+PERMITE UPDATES, ADDS, DELETES
+
+MOVIMIENTOS ACCESORIOS
+PERMITE UPDATES, ADDS, DELETES
+
+REACTIVACION DE LINEAS
+PERMITE UPDATES, ADDS, DELETES
+
+REASIGNACIONES VEHICULARES
+PERMITE ADDS
+
+RESPONSIVAS LINEAS
+PERMITE UPDATES, ADDS, DELETES
+
+SERVICIOS
+PERMITE UPDATES, ADDS, DELETES
+
+SOLICITUD DE LINEAS
+PERMITE UPDATES, ADDS, DELETES
+
+TICKETS
+PERMITE UPDATES, ADDS, DELETES
+
+UBER
+PERMITE UPDATES, ADDS, DELETES
+
+USUARIOS
+PERMITE UPDATES, ADDS, DELETES
+
+VEHICULOS
+PERMITE UPDATES, ADDS, DELETES
+
+VERIFICACIONES
+IF(
+  IN(USEREMAIL(), {
+    "especialista2datos.ci@ciudadmaderas.com",
+    "gerenteserv.ci@ciudadmaderas.com",
+    "especialista.ci@ciudadmaderas.com",
+    "paulina.bustamante@ciudadmaderas.com",
+    "maricela.rico@ciudadmaderas.com",
+    "asistente.ci@ciudadmaderas.com",
+    "asistentesubdi.ci@ciudadmaderas.com",
+    "auxiliar4datos.ci@ciudadmaderas.com",
+    "ejecutivogestionyadquisicionvehicular.ci@ciudadmaderas.com",
+    "gestor.vehicular@ciudadmaderas.com"
+  }),
+  "ALL_CHANGES",
+  "READ_ONLY"
+)
+
+
+
+
+

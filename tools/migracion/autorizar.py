@@ -23,6 +23,10 @@ RAIZ = Path(__file__).resolve().parents[2]
 CLIENTE = RAIZ / "generic-tool.json"
 TOKENS = Path(__file__).resolve().parent / ".tokens"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+# Drive, para que migrar.py --copiar-produccion pueda duplicar producción. `drive.file` no
+# alcanza: solo deja tocar archivos que creó la app, y producción no lo es.
+DRIVE = "https://www.googleapis.com/auth/drive"
+SCOPES_NUEVOS = SCOPES + [DRIVE]
 
 LIBROS = {
     "lab": "1-RA6lmh-rZ-OKfsZSLl2Qd9lLyuDZ3dx3fP0M7qL-5o",
@@ -34,13 +38,14 @@ def main():
     destino = sys.argv[1] if len(sys.argv) > 1 else ""
     if destino not in LIBROS:
         sys.exit("Uso: autorizar.py lab|prod")
-    flujo = InstalledAppFlow.from_client_secrets_file(str(CLIENTE), SCOPES)
+    flujo = InstalledAppFlow.from_client_secrets_file(str(CLIENTE), SCOPES_NUEVOS)
     cred = flujo.run_local_server(port=0, prompt="consent", access_type="offline")
     if not cred.refresh_token:
         sys.exit("Google no entrego refresh_token. Revoca el acceso de la app y repite.")
     TOKENS.mkdir(exist_ok=True)
     ruta = TOKENS / (destino + ".json")
-    ruta.write_text(json.dumps({"refresh_token": cred.refresh_token}), encoding="utf-8")
+    ruta.write_text(json.dumps({"refresh_token": cred.refresh_token, "scopes": SCOPES_NUEVOS}),
+                    encoding="utf-8")
     print("Token guardado en", ruta)
 
     meta = build("sheets", "v4", credentials=cred).spreadsheets().get(
@@ -52,8 +57,15 @@ def credenciales(destino):
     """Para el resto de la herramienta: credenciales de escritura del destino."""
     datos = json.loads((TOKENS / (destino + ".json")).read_text(encoding="utf-8"))
     c = json.loads(CLIENTE.read_text(encoding="utf-8"))["installed"]
+    # Un token de antes de Drive no trae "scopes": sigue sirviendo para las hojas.
     return Credentials(None, refresh_token=datos["refresh_token"], token_uri=c["token_uri"],
-                       client_id=c["client_id"], client_secret=c["client_secret"], scopes=SCOPES)
+                       client_id=c["client_id"], client_secret=c["client_secret"],
+                       scopes=datos.get("scopes", SCOPES))
+
+
+def tiene_drive(destino):
+    datos = json.loads((TOKENS / (destino + ".json")).read_text(encoding="utf-8"))
+    return DRIVE in datos.get("scopes", [])
 
 
 if __name__ == "__main__":

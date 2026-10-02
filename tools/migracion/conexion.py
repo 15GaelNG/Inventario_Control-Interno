@@ -10,7 +10,7 @@ import re
 from googleapiclient.discovery import build
 
 import catalogo as cat
-from autorizar import credenciales
+from autorizar import credenciales, tiene_drive
 from libro import LibroApi
 
 ALIAS = {"lab": cat.REPLANCHE["destino"], "prod": cat.PRODUCCION}   # prod: solo para LEER
@@ -22,6 +22,22 @@ PROHIBIDOS_ESCRITURA = {cat.PRODUCCION: "PRODUCCIÓN (ControlVehicular)"}
 
 def api():
     return build("sheets", "v4", credentials=credenciales("lab"), cache_discovery=False).spreadsheets()
+
+
+def copiar_produccion(nombre):
+    """Duplica producción en Drive (Archivo → Crear una copia) y devuelve el id de la copia.
+
+    La copia trae formatos, validaciones, fórmulas y anchos de columna: el pipeline solo toca
+    lo que migra. Queda en la misma carpeta que producción. Solo LEE producción.
+    """
+    if not tiene_drive("lab"):
+        raise SystemExit("El token no tiene permiso de Drive. Corre una vez:\n"
+                         "  uv run --no-project --with google-auth-oauthlib --with google-api-python-client "
+                         "python tools/migracion/autorizar.py lab")
+    drive = build("drive", "v3", credentials=credenciales("lab"), cache_discovery=False)
+    copia = drive.files().copy(fileId=cat.PRODUCCION, body={"name": nombre},
+                               supportsAllDrives=True, fields="id").execute()
+    return copia["id"]
 
 
 def id_de(texto):
