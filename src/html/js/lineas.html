@@ -4457,6 +4457,20 @@
           '<p class="ln-tenue">Esta información aún no está disponible en esta vista.</p></div>';
       }
 
+      /** Vehículos del colaborador (apiListarVehiculosBasico, el mismo catálogo cacheado que
+       *  ya usan Vehículos/Incidencias/Reasignaciones/etc. para autocompletar por folio) --
+       *  mismo patrón que tarjetaLineas, pero clic va a la ficha de Vehículos (data-ir-vehiculo,
+       *  no data-ir: ese es de Líneas/irARegistro). */
+      function tarjetaVehiculos(nombre, lista) {
+        const fila = (v) => '<tr class="ln-fila-clic" data-ir-vehiculo="' + esc(v.FOLIO) + '"><td><button type="button" class="ln-btn-icono" data-ir-vehiculo="' + esc(v.FOLIO) + '">' +
+          icono('car') + ' ' + esc(v.FOLIO) + ' ' + icono('chevron-right') + '</button></td><td>' +
+          esc([v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ')) + '</td><td>' + guion(v.MODELO) + '</td><td>' + guion(v.NUCO) + '</td></tr>';
+        return '<div class="card ln-card"><h3>' + icono('car') + ' Vehículos (' + lista.length + ')</h3>' +
+          (lista.length
+            ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Folio</th><th>Marca / Línea</th><th>Año</th><th>Nucco</th></tr></thead><tbody>' + lista.map(fila).join('') + '</tbody></table></div>'
+            : '<p class="empty-state">Sin vehículos asignados a ' + esc(nombre) + '.</p>') + '</div>';
+      }
+
       /** Asignaciones del colaborador en el panel lateral (como el detalle de los demás módulos): la lista no se mueve. */
       function mostrarColaborador(c, tarjeta) {
         raiz.querySelectorAll('.ln-cuadro-colaborador.seleccionado').forEach((el) => el.classList.remove('seleccionado'));
@@ -4464,16 +4478,25 @@
         const panel = abrirPanelLateral(c.nombre || 'Colaborador', [c.puesto, c.departamento].filter(Boolean).join(' · ') || 'Activos asignados');
         panel.alCerrar = () => { if (tarjeta) tarjeta.classList.remove('seleccionado'); };
         panel.cuerpo.innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Consultando asignaciones…</p>';
-        // Ir a una línea o equipo: se cierra el panel y se abre su ficha
+        // Ir a una línea/equipo (Líneas, data-ir) o a un vehículo (Control Vehicular,
+        // data-ir-vehiculo): se cierra el panel y se abre su ficha en el módulo que toque.
         panel.cuerpo.addEventListener('click', (ev) => {
-          const f = ev.target.closest('[data-ir]');
-          if (!f) return;
-          panel.cerrar();
-          irARegistro(f.dataset.ir);
+          const fLinea = ev.target.closest('[data-ir]');
+          if (fLinea) { panel.cerrar(); irARegistro(fLinea.dataset.ir); return; }
+          const fVehiculo = ev.target.closest('[data-ir-vehiculo]');
+          if (fVehiculo) { panel.cerrar(); verFichaVehiculoDesdeOtroModulo(fVehiculo.dataset.irVehiculo); return; }
         });
-        cargarIndice().then((indice) => {
+        // callServerCacheado vive en api.html (mismo scope global que todo el cliente) -- es
+        // el mismo catálogo de Vehículos que ya está cacheado para el resto de la app, así
+        // que esto normalmente no pide nada nuevo al servidor.
+        Promise.all([
+          cargarIndice(),
+          callServerCacheado('apiListarVehiculosBasico', state.token).catch(() => []),
+        ]).then(([indice, vehiculos]) => {
           if (!vigente() || panelAbierto !== panel) return;
           const datos = filasPorResponsable(indice, c.nombre);
+          const texto = normal(c.nombre);
+          const misVehiculos = (vehiculos || []).filter((v) => normal(v.RESPONSABLE_VEHICULO) === texto);
           const pie = [c.noEmpleado ? 'Empleado ' + c.noEmpleado : '', c.area, c.sede, c.oficina].filter(Boolean).map(esc).join(' · ');
           panel.cuerpo.innerHTML =
             '<div class="ln-panel-resumen"><div class="ln-chips">' +
@@ -4481,7 +4504,8 @@
               (c.departamento ? chip(c.departamento, 'azul') : '') +
             '</div>' + (pie ? '<p class="ln-pie ln-tenue">' + pie + '</p>' : '') + '</div>' +
             tarjetaLineas(c.nombre, datos) +
-            tarjetaPendiente('Vehículos', 'car') + tarjetaPendiente('Hologramas / combustible', 'fuel') +
+            tarjetaVehiculos(c.nombre, misVehiculos) +
+            tarjetaPendiente('Hologramas / combustible', 'fuel') +
             tarjetaPendiente('Uber', 'car-front') + tarjetaPendiente('Cajas chicas', 'wallet');
           pintarIconos(panel.cuerpo);
         }).catch((e) => {
