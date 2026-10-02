@@ -1,8 +1,10 @@
 <style>
   /* ============ Notificaciones: UNA campana para todo el sistema, organizada por módulo ============
-     Campana en la barra superior + vista "Notificaciones". Se inserta sola en .topbar-right. Módulos (1-oct):
-     Líneas (avisos guardados, con leído/no leído) y Vehículos (pendientes de NotificacionesService de jorge:
-     verificaciones, seguro e inspecciones; se calculan en vivo y se quitan solos al atenderse).
+     Campana en la barra superior + vista "Notificaciones". Se inserta sola en .topbar-right. Módulos (1-oct,
+     ampliado 2-oct): Líneas (avisos guardados en el servidor, con leído/no leído ahí) y Vehículos (pendientes de
+     NotificacionesService de jorge: verificaciones, seguro e inspecciones; se recalculan en vivo y se quitan
+     solas al atenderse, pero también se pueden marcar como leídas a mano -- esas se guardan solo en el
+     navegador, ver LeidasVehiculo más abajo, porque no hay un renglón de verdad que marcar en una hoja).
      Un módulo nuevo necesita su entrada en MODULOS, sus tipos en TIPOS/GRUPOS y su fuente en FUENTES. */
   :root {
     --ntf-pronto: #b54708; --ntf-pronto-bg: #fef0c7;
@@ -121,7 +123,7 @@
       <div>
         <h2><i data-lucide="bell" class="ico"></i> Notificaciones</h2>
         <p class="page-subtitle">Por módulo. Líneas: adendums por vencer, resguardos, cancelaciones y líneas que se siguen pagando.
-          Vehículos: verificaciones y seguros vencidos o por vencer e inspecciones atrasadas (se quitan solos al atenderse).</p>
+          Vehículos: verificaciones y seguros vencidos o por vencer e inspecciones atrasadas (se quitan solas al atenderse, o márcalas como leídas una por una o todas de jalón).</p>
       </div>
       <div class="page-header-actions">
         <button type="button" class="secondary" id="ntf-marcar-todas"><i data-lucide="check-check" class="ico"></i> Marcar todas como leídas</button>
@@ -149,10 +151,33 @@
 <script>
   /**
    * Notificaciones: campana de la barra superior (contador de no leídas y las más recientes) y la vista completa.
-   * Datos: apiLineasNotificaciones(token, limite) y apiLineasMarcarNotificaciones(token, ids|null).
+   * Datos: apiLineasNotificaciones(token, limite)/apiLineasMarcarNotificaciones(token, ids|null) para Líneas,
+   * apiNotificacionesPendientes(token) para Vehículos (su "leída" vive en LeidasVehiculo, solo local).
    * Cada tipo (TIPOS) dice su ícono y a dónde lleva: la ficha de la línea, la bandeja de resguardos o Líneas
    * Telefónicas filtrada. Abrir un aviso lo marca como leído.
    */
+  /** "Leída" de Vehículos es solo del navegador (localStorage): esos avisos se recalculan
+   *  en vivo cada vez (no hay un renglón que marcar en una hoja, como sí tiene Líneas), así
+   *  que "leída" aquí es nomás "lo oculté de mi campana" -- en otro navegador/dispositivo
+   *  vuelve a aparecer. Se guarda solo el id (p. ej. "veh-verificacion-AUT0017"): mientras
+   *  la alerta siga viva con el mismo folio+tipo sigue oculta aunque cambien los días; si se
+   *  atiende y mucho después vuelve a estar por vencer, reaparece como nueva -- aceptable
+   *  para un dismiss de conveniencia, no es un registro que tenga que ser perfecto. */
+  const LeidasVehiculo = (function () {
+    const CLAVE = 'ntf-veh-leidas';
+    function leer() {
+      try { return new Set(JSON.parse(localStorage.getItem(CLAVE) || '[]')); } catch (e) { return new Set(); }
+    }
+    function tiene(id) { return leer().has(id); }
+    function marcar(ids) {
+      if (!ids || !ids.length) return;
+      const set = leer();
+      ids.forEach((id) => set.add(id));
+      try { localStorage.setItem(CLAVE, JSON.stringify(Array.from(set))); } catch (e) { /* no-op */ }
+    }
+    return { tiene, marcar };
+  })();
+
   const Notificaciones = (function () {
     const REVISAR_CADA_MS = 10 * 60 * 1000;
     const EN_CAMPANA = 8;
@@ -169,8 +194,12 @@
 
     /** grupo: para filtrar; color: pronto (ámbar) | vencida (rojo) | info (azul); destino: a dónde lleva. */
     const TIPOS = {
-      // Vehículos (NotificacionesService.gs): sin leído/no leído, el color sale de la severidad
-      // Sin etiqueta de días: el mensaje de NotificacionesService ya dice cuántos ("vencida hace 427 día(s)")
+      // Vehículos (NotificacionesService.gs): el color sale de la severidad, no del tipo.
+      // "Leída" se resuelve contra LeidasVehiculo (ver arriba, solo local) en deVehiculo():
+      // mientras siga marcada ahí, sigue entrando como leída aunque NotificacionesService
+      // la vuelva a traer con los días ya cambiados (el id es folio+tipo, no cambia).
+      // Sin etiqueta de días: el mensaje de NotificacionesService ya dice cuántos
+      // ("vencida hace 427 día(s)")
       VEH_VERIFICACION: { grupo: 'verificacion', icono: 'clipboard-check', accion: 'Ver vehículo' },
       VEH_SEGURO: { grupo: 'seguro', icono: 'shield', accion: 'Ver vehículo' },
       VEH_INSPECCION: { grupo: 'inspeccion', icono: 'clipboard-list', accion: 'Ver vehículo' },
@@ -195,22 +224,24 @@
     /** Pendiente de Vehículos ({ tipo, folio, nucco, dias, severidad, texto }) con la forma de un aviso. */
     function deVehiculo(v) {
       const tipo = String(v.tipo || '').toLowerCase();
+      const id = 'veh-' + tipo + '-' + v.folio;
       return {
-        id: 'veh-' + tipo + '-' + v.folio, modulo: VEHICULOS, tipo: 'VEH_' + tipo.toUpperCase(), folio: v.folio,
+        id: id, modulo: VEHICULOS, tipo: 'VEH_' + tipo.toUpperCase(), folio: v.folio,
         titulo: (ETIQUETA_VEH[tipo] || tipo) + ' · Nucco ' + (v.nucco || v.folio) + (v.nucco && v.folio ? ' (' + v.folio + ')' : ''),
-        mensaje: v.texto || '', dias: v.dias, severidad: v.severidad, fecha: null, leida: false,
+        mensaje: v.texto || '', dias: v.dias, severidad: v.severidad, fecha: null, leida: LeidasVehiculo.tiene(id),
       };
     }
 
     /**
      * De dónde sale cada módulo. Cada uno regresa { items, noLeidas }; si uno falla (sin permiso, por ejemplo) los
-     * demás siguen. Los de Vehículos no se marcan como leídos: cuentan mientras estén pendientes.
+     * demás siguen. Los de Vehículos se siguen recalculando en vivo cada vez (si ya no aplican, se quitan solos),
+     * pero ahora también se pueden marcar como leídos a mano (ver LeidasVehiculo arriba).
      */
     const FUENTES = {
       lineas: (limite) => callServer('apiLineasNotificaciones', state.token, limite || 0)
         .then((r) => ({ items: (r.items || []).map((n) => Object.assign(n, { modulo: 'lineas' })), noLeidas: r.noLeidas || 0 })),
       vehiculos: () => callServer('apiNotificacionesPendientes', state.token)
-        .then((t) => { const items = JSON.parse(t || '[]').map(deVehiculo); return { items: items, noLeidas: items.length }; }),
+        .then((t) => { const items = JSON.parse(t || '[]').map(deVehiculo); return { items: items, noLeidas: items.filter((n) => !n.leida).length }; }),
     };
     const OTRO = { grupo: 'otros', icono: 'bell', color: 'info' };
     /** Los avisos de "líneas para cancelar" anteriores al 30-sep se guardaron como RESGUARDO. */
@@ -272,7 +303,7 @@
           '<div class="ntf-item-pie">' + chip + '<span>' + esc(fechaCorta(n.fecha)) + '</span></div>' +
           (conAcciones ? '<div class="ntf-acciones">' +
             (tieneDestino(n) ? '<button type="button" data-ntf-ver>' + icono('circle-chevron-right') + ' ' + esc(t.accion || 'Ver') + '</button>' : '') +
-            (n.leida || esVehiculo(n) ? '' : '<button type="button" class="secondary" data-ntf-leer>' + icono('check') + ' Marcar como leída</button>') +
+            (n.leida ? '' : '<button type="button" class="secondary" data-ntf-leer>' + icono('check') + ' Marcar como leída</button>') +
           '</div>' : '') +
         '</div>' +
       '</div>';
@@ -301,7 +332,7 @@
       if (!panel) return;
       const lista = panel.querySelector('.ntf-panel-lista');
       const r = ultima;
-      panel.querySelector('[data-ntf-todas-leidas]').disabled = !(r && r.porModulo.lineas);
+      panel.querySelector('[data-ntf-todas-leidas]').disabled = !(r && (r.porModulo.lineas || r.porModulo.vehiculos));
       if (!r) { lista.innerHTML = '<div class="ntf-vacio">Cargando…</div>'; return; }
       const html = MODULOS.map((m) => {
         const del = r.items.filter((n) => n.modulo === m.clave);
@@ -354,25 +385,36 @@
       if (si) { pintarPanel(); actualizar(EN_CAMPANA); }
     }
 
-    /** Marca en una respuesta (campana o vista) sin volver a pedirla; noLeidas cuenta también las que no trae. */
+    /** Marca en una respuesta (campana o vista) sin volver a pedirla; noLeidas cuenta también las que no trae.
+     *  ids=null marca TODAS las que traiga r (de los dos módulos); con ids, solo esas. */
     function aplicarLeidas(r, ids) {
       if (!r) return;
+      let marcadasLineas = 0, marcadasVeh = 0;
       r.items.forEach((n) => {
-        if (n.leida || esVehiculo(n) || (ids && ids.indexOf(n.id) < 0)) return;
+        if (n.leida || (ids && ids.indexOf(n.id) < 0)) return;
         n.leida = true;
+        if (esVehiculo(n)) marcadasVeh++; else marcadasLineas++;
       });
-      const antes = r.porModulo.lineas || 0;
-      r.porModulo.lineas = ids ? Math.max(0, antes - ids.length) : 0;
-      r.noLeidas = Math.max(0, r.noLeidas - (antes - r.porModulo.lineas));
+      r.porModulo.lineas = Math.max(0, (r.porModulo.lineas || 0) - marcadasLineas);
+      r.porModulo.vehiculos = Math.max(0, (r.porModulo.vehiculos || 0) - marcadasVeh);
+      r.noLeidas = Math.max(0, r.noLeidas - marcadasLineas - marcadasVeh);
     }
 
-    /** Solo los avisos de Líneas se marcan como leídos (los de Vehículos se quitan solos al atenderse). */
+    /** Líneas se marca en el servidor (apiLineasMarcarNotificaciones), como siempre. Vehículos
+     *  se guarda solo en el navegador (LeidasVehiculo) -- no hay nada que avisarle al servidor,
+     *  la alerta se vuelve a calcular en vivo cada vez que se pide. */
     async function marcar(ids) {
-      if (ids) ids = ids.filter((id) => { const n = buscar(id); return n && !esVehiculo(n) && !n.leida; });
-      if (ids && !ids.length) return;
-      await callServer('apiLineasMarcarNotificaciones', state.token, ids || null);
-      aplicarLeidas(ultima, ids);
-      if (datosVista && datosVista !== ultima) aplicarLeidas(datosVista, ids);
+      const candidatos = ids
+        ? ids.map((id) => buscar(id)).filter((n) => n && !n.leida)
+        : (ultima ? ultima.items : []).concat(datosVista && datosVista !== ultima ? datosVista.items : []).filter((n) => !n.leida);
+      const idsVeh = candidatos.filter(esVehiculo).map((n) => n.id);
+      if (idsVeh.length) LeidasVehiculo.marcar(idsVeh);
+      const idsLineas = ids ? candidatos.filter((n) => !esVehiculo(n)).map((n) => n.id) : null;
+      if (!ids || idsLineas.length) {
+        await callServer('apiLineasMarcarNotificaciones', state.token, idsLineas);
+      }
+      aplicarLeidas(ultima, ids || null);
+      if (datosVista && datosVista !== ultima) aplicarLeidas(datosVista, ids || null);
       if (ultima) { pintarContador(ultima.noLeidas); pintarPanel(); }
     }
 
@@ -527,7 +569,7 @@
           tile('', 'bell-dot', noLeidas, 'Por atender', noLeidas ? 'stat-tile-warn' : 'stat-tile-ok') +
           GRUPOS.filter((g) => !modulo || g.modulo === modulo).map((g) => {
             const sin = contar(g.clave, true);
-            return tile(g.clave, g.icono, contar(g.clave, false), g.etiqueta + (sin && g.modulo !== VEHICULOS ? ' · ' + sin + ' sin leer' : ''));
+            return tile(g.clave, g.icono, contar(g.clave, false), g.etiqueta + (sin ? ' · ' + sin + ' sin leer' : ''));
           }).join('');
       }
 
@@ -549,8 +591,7 @@
         const ft = raiz.querySelector('#ntf-filtro-tipo');
         ft.hidden = !grupo;
         ft.innerHTML = grupo ? 'Solo: <strong>' + esc(etiquetaGrupo) + '</strong> <button type="button" class="ntf-enlace" data-ntf-quitar-grupo>Ver todos los tipos</button>' : '';
-        raiz.querySelector('#ntf-marcar-todas').disabled = !items.some((n) => !n.leida && !esVehiculo(n));
-        raiz.querySelector('#ntf-marcar-todas').hidden = modulo === VEHICULOS; // los de Vehículos no se marcan
+        raiz.querySelector('#ntf-marcar-todas').disabled = !items.some((n) => !n.leida);
 
         const ver = filtro === 'no-leidas' ? noLeidas : delGrupo;
         if (!ver.length) {
