@@ -3,7 +3,8 @@
 Las reglas que se conservan:
   - un paso de solo lectura nunca escribe (y si lo intentara, truena);
   - escribiendo, la primera marca mala (PROBLEMAS / FALLAS) o el primer error DETIENE todo;
-  - cada paso que escribe en Google relee el libro antes de calcular, así ve el estado real.
+  - cada paso ve lo que dejó el anterior: corren todos sobre el MISMO modelo del libro, que
+    refleja cada escritura en cuanto se manda.
 
 Lo que cambia por estar fuera de Apps Script:
   - no hay freno de tiempo;
@@ -19,8 +20,8 @@ from pasos import PASOS, SOLO_LEEN
 def correr_pipeline(titulo, pasos, familia, escribir, abrir, ids, avisar=print):
     """
     pasos   [(nombre, marca_mala | None)]
-    abrir   función sin argumentos que da el libro sobre el que corre cada paso (en la
-            simulación es siempre la misma copia en memoria; escribiendo, una lectura fresca)
+    abrir   función sin argumentos que da el libro sobre el que corre cada paso: siempre el
+            mismo modelo (en memoria en la simulación; leído de Google una vez, escribiendo)
     escribir  True = los cambios se mandan a Google; False = simulación en memoria
     Devuelve (texto, detenido_en | None).
     """

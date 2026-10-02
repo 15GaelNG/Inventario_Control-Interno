@@ -27,6 +27,7 @@ from pathlib import Path
 
 import catalogo as cat
 from bitacora import anotar
+from comparar import comparar_libros
 from conexion import abrir as abrir_api
 from conexion import api
 from ids import Ids
@@ -58,13 +59,19 @@ def main():
     # ------------------------------------------------------------- replanchado
     if a.replanchar:
         avisar("REPLANCHADO")
-        texto, ok = replanchar(s, escribir=a.escribir, acepto_perder=a.acepto_perder_columnas, avisar=avisar)
+        texto, ok = replanchar(s, escribir=a.escribir, acepto_perder=a.acepto_perder_columnas, avisar=avisar,
+                               nueva_api=api)
         reporte.append(texto)
 
     # ------------------------------------------------------------- el libro
     if a.escribir:
+        # UNA lectura. Los pasos corren sobre este modelo, que refleja cada escritura en cuanto
+        # se manda a Google; releer antes de cada paso costaba ~4 s x 15 pasos. A cambio, al
+        # final se relee TODO y se compara con el modelo (abajo): si Google no quedó igual, falla.
+        modelo = abrir_api(a.libro, HOJAS, puede_escribir=True) if ok else None
+
         def abrir():
-            return abrir_api(a.libro, HOJAS, puede_escribir=True)
+            return modelo
     else:
         # Simulación: una sola lectura a memoria. Con --replanchar se simula sobre PRODUCCIÓN,
         # que es como quedaría LAB después de replanchar.
@@ -92,6 +99,20 @@ def main():
                    "DETENIDO EN " + detenido if detenido else "OK",
                    "%d pasos, %s" % (len(pasos), "familia " + familia if familia else "todas las hojas"))
         ok = not detenido
+
+    # ------------------------------------------------------------- verificación
+    if a.escribir and modelo is not None:
+        avisar("VERIFICACIÓN: releyendo el libro y comparándolo, celda por celda, con lo escrito…")
+        real = abrir_api(a.libro, list(modelo.hojas))
+        difs = comparar_libros(modelo, real, list(modelo.hojas))
+        if difs:
+            ok = False
+            reporte.append("\n".join(["", "FALLÓ LA VERIFICACIÓN: Google no quedó como lo calculó la migración:"] +
+                                     ["  - %s: %s" % (n, "; ".join(d)) for n, d in difs.items()]))
+        else:
+            reporte.append("\nVerificado: las %d hojas en Google son idénticas, celda por celda, a lo calculado."
+                           % len(modelo.hojas))
+        avisar(reporte[-1].strip())
 
     # ------------------------------------------------------------- cierre
     minutos = (time.time() - arranque) / 60

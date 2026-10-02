@@ -30,7 +30,7 @@ uv run ... python tools/migracion/migrar.py lab --replanchar --escribir
    LAB. Tarda segundos. Si el reporte cuadra, sigue.
 3. **`--escribir`**: replancha (y lo verifica celda por celda contra producción), corre los
    6 pasos de IDs y homologa vehiculos, lineas y cajachica. Se detiene en el primer
-   `PROBLEMAS` o `FALLAS`. Unos 3 minutos. Repetirlo es seguro: una segunda corrida no
+   `PROBLEMAS` o `FALLAS`. Unos 2.5 minutos con replanchado (casi todo es Google copiando hojas) y 25 s sin él; al final relee el libro y lo compara celda por celda con lo calculado. Repetirlo es seguro: una segunda corrida no
    escribe nada.
 4. **En el editor de Apps Script del proyecto LAB: `migracionFinalApps`** — un clic:
    sincroniza las copias (vehiculos, lineas, cajachica) y corre Capital Humano.

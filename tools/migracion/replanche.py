@@ -14,10 +14,18 @@ Cómo copia, hoja por hoja (todo del lado de Google):
   - se compara celda por celda la hoja contra la temporal, y solo entonces se borra la
     temporal. La hoja destino conserva su gid.
 
+Los copyTo van UNO POR UNO a propósito. En paralelo (02/10/2026) Google los formó en fila de
+todos modos —escriben en el mismo libro destino— y los clientes se cansaron de esperar: 20
+timeouts, con las 20 copias hechas del lado de Google como "Copia de …". Lo que sí va en
+paralelo son las dos lecturas del principio.
+
 POR QUÉ LO DEL FILTRO Y LA COMPARACIÓN: el replanchado de Apps Script del 02/10/2026 copió
 VEHICULOS y CAJAS CHICAS con el filtro activo de producción. Solo pasaron las filas visibles
 (60 de 648 y 98 de 285), repetidas en mosaico, y aun así dijo LISTO. Ver comparar.py.
 """
+import time
+from concurrent.futures import ThreadPoolExecutor
+
 import catalogo as cat
 from bitacora import anotar
 from comparar import comparar_hoja
@@ -58,11 +66,16 @@ def _props(api, ss_id):
     return {s["properties"]["title"]: s for s in m["sheets"]}
 
 
-def replanchar(api, escribir=False, acepto_perder=False, avisar=print):
+def replanchar(api, escribir=False, acepto_perder=False, avisar=print, nueva_api=None):
+    """`nueva_api`: función que crea un cliente nuevo, uno por hilo. Sin ella, todo va en serie."""
     _guardas(api)
     hojas = sorted(h["hoja"] for h in cat.migrables())
-    origen = LibroApi(api, R["origen"], hojas)
-    destino = LibroApi(api, R["destino"], hojas, puede_escribir=escribir)
+    with ThreadPoolExecutor(2) as hilos:   # origen y destino se leen a la vez
+        f_o = hilos.submit(LibroApi, nueva_api() if nueva_api else api, R["origen"], hojas)
+        f_d = hilos.submit(LibroApi, nueva_api() if nueva_api else api, R["destino"], hojas,
+                           puede_escribir=escribir) if nueva_api else None
+        origen = f_o.result()
+        destino = f_d.result() if f_d else LibroApi(api, R["destino"], hojas, puede_escribir=escribir)
     lineas = [("REPLANCHANDO DE VERDAD" if escribir else "ENSAYO (no escribe nada)"), "",
               "  origen:  %s  (%s)  — solo lectura" % (origen.nombre, R["origen"]),
               "  destino: %s  (%s)  — se sobrescribe" % (destino.nombre, R["destino"]), ""]
@@ -110,16 +123,24 @@ def replanchar(api, escribir=False, acepto_perder=False, avisar=print):
     # ----------------------------------------------------------- de verdad
     avisar("  copiando %d hojas de producción a pestañas temporales…" % len(a_copiar))
     props_d = _props(api, R["destino"])
-    viejas = [s["properties"]["sheetId"] for t, s in props_d.items() if t.startswith(R["temporal"])]
+    # Temporales de una corrida que murió a la mitad: renombradas ("__replanche X") o todavía
+    # con el nombre que les pone copyTo ("Copia de X"), solo si X es una hoja que se replancha.
+    sobrantes = {R["temporal"] + n for n in hojas} | {"Copia de " + n for n in hojas}
+    viejas = [s["properties"]["sheetId"] for t, s in props_d.items() if t in sobrantes]
     if viejas:   # temporales de una corrida que murió a la mitad
         api.batchUpdate(spreadsheetId=R["destino"], body={"requests": [
             {"deleteSheet": {"sheetId": i}} for i in viejas]}).execute()
     props_o = _props(api, R["origen"])
+    def copiar(n, cliente):
+        r = cliente.sheets().copyTo(spreadsheetId=R["origen"], sheetId=props_o[n]["properties"]["sheetId"],
+                                    body={"destinationSpreadsheetId": R["destino"]}).execute()
+        return n, r["sheetId"]
+
     temporales = {}
     for n in a_copiar:
-        r = api.sheets().copyTo(spreadsheetId=R["origen"], sheetId=props_o[n]["properties"]["sheetId"],
-                                body={"destinationSpreadsheetId": R["destino"]}).execute()
-        temporales[n] = r["sheetId"]
+        t = time.time()
+        temporales[n] = copiar(n, api)[1]
+        avisar("    %-28s %.1f s" % (n, time.time() - t))
 
     props_d = _props(api, R["destino"])
     por_id = {s["properties"]["sheetId"]: s for s in props_d.values()}
