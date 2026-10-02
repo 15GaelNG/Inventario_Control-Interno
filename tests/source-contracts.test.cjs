@@ -57,7 +57,8 @@ test('Telefonía muestra sus módulos en orden y Gestión de Activos queda fuera
   // Panorama primero (29-sep). Fuera del menú (líneas comentadas) pero sus vistas se siguen montando: Reactivación
   // (29-sep) y Reasignaciones, Solicitud, Control de Cambios y Bitácora de Desechos (reunión con Líneas, 30-sep)
   // Correcciones de Líneas: módulo temporal (30-sep), después de Resguardos; se quita cuando Líneas termine
-  const orden = ['panorama-lineas', 'lineas-telefonicas', 'resguardos-lineas', 'correcciones-lineas', 'accesorios-lineas'];
+  // sistemas-lineas: accesos a sistemas externos (jorge, 2-oct), al final del grupo
+  const orden = ['panorama-lineas', 'lineas-telefonicas', 'resguardos-lineas', 'correcciones-lineas', 'accesorios-lineas', 'sistemas-lineas'];
   const ocultos = ['cambios-lineas'];
   const retirados = ['reactivacion-lineas', 'reasignaciones-lineas', 'solicitud-lineas', 'bitacora-desechos'];
   const sinComentarios = lineas.split(/\r?\n/).filter((l) => !/^\s*\/\//.test(l)).join('\n');
@@ -70,7 +71,7 @@ test('Telefonía muestra sus módulos en orden y Gestión de Activos queda fuera
     assert.doesNotMatch(read('src/config/Modulos.gs'), new RegExp(`id: '${v}'`), v);
   });
   // Acceso directo debajo del desplegable de Líneas
-  assert.match(app, /\{ id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de Activos' \}/);
+  assert.match(app, /\{ id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de Activos', requiere: 'gestion-activos' \}/);
   assert.match(app, /grupo\.vista \? `/);
   orden.concat('gestion-activos', ocultos)
     .forEach((route) => assert.match(app, new RegExp(`vista === '${route}'`), `falta montar ${route}`));
@@ -660,6 +661,7 @@ test('Documentos: inspecciones y responsivas de la hoja y de la carpeta del NUCO
   };
   const globales = {
     Auth: { validarSesion: () => ({ rol: 'OPERADOR' }) },
+    Permisos: { EDICION: 'EDICION', puedeLeerAlguno: () => ({ rol: 'OPERADOR', permisos: {} }), puedeLeer: () => ({ rol: 'OPERADOR', permisos: {} }), puedeEditar: () => ({ rol: 'OPERADOR', permisos: {} }) },
     Config: { ROLES: { ADMIN: 'ADMIN', OPERADOR: 'OPERADOR' } },
     LineasRepo: { leerRegistroPorId: () => ({ NUCO: 5 }), evidenciasDeRegistro: () => hoja },
     LineasUtil: { nuco4: (v) => ('0000' + v).slice(-4), col: (f, c) => f[c], paraCliente: (o) => JSON.parse(JSON.stringify(o)) },
@@ -758,6 +760,7 @@ test('"Última responsiva" / "Última inspección" abren la más reciente de la 
   const rol = { rol: 'ADMIN' };
   const globales = {
     Auth: { validarSesion: () => rol },
+    Permisos: { EDICION: 'EDICION', puedeLeerAlguno: () => Object.assign({ permisos: {} }, rol), puedeLeer: () => Object.assign({ permisos: {} }, rol), puedeEditar: () => Object.assign({ permisos: {} }, rol) },
     Config: { ROLES: { ADMIN: 'ADMIN', OPERADOR: 'OPERADOR' } },
     LineasRepo: { leerRegistroPorId: (id) => (id === 'sin' ? { NUCO: '' } : { NUCO: 234 }) },
     LineasUtil: {
@@ -1094,7 +1097,7 @@ test('Panorama: estatus al cierre de cada mes reconstruido hacia atrás con la b
   assert.match(read('src/html/views/lineas/lineas-panorama.html'), /<select id="lnp-mes" disabled>/);
   // Menú: Panorama primero; Reactivación se retiró con su pestaña (30-sep)
   const app = read('src/html/js/app.html');
-  assert.match(app, /\{ vista: 'panorama-lineas', etiqueta: 'Panorama', icono: 'layout-dashboard' \},\s*\{ vista: 'lineas-telefonicas'/);
+  assert.match(app, /\{ vista: 'panorama-lineas', etiqueta: 'Panorama', icono: 'layout-dashboard', requiere: 'panorama-lineas' \},\s*\{ vista: 'lineas-telefonicas'/);
   assert.doesNotMatch(app, /'reactivacion-lineas'/);
   assert.match(app, /montarVista\('tpl-lineas-panorama', Lineas\.initPanorama\)/);
   assert.match(read('src/html/Index.html'), /include\('html\/views\/lineas\/lineas-panorama'\)/);

@@ -747,13 +747,8 @@ Sobre la copia del paso 0, no sobre producción:
 ```
 pipeline0Respaldar                  → da el id de la copia
 pipelineEstado                      → "sin migrar, sigue el paso 1"
-migracion1Revisar
-migracion2AsignarEscribir
-migracion4Auditar                   → tiene que decir "todo cuadra"
-migracion3ReferenciasEscribir
-migracionLimpiarRespaldoEscribir
-migracionMoverIdsAlInicioEscribir
-pipelineRevertirEscribir
+ids1Ensayo / ids2Escribir           → revisar, renombrar, ids, mover, respaldo y auditar
+pipelineRevertirEscribir            → antes de cualquier …2Escribir de familia (después ya está sellado)
 pipelineEstado                      → tiene que volver a decir "sin migrar"
 ```
 

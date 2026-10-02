@@ -4659,10 +4659,11 @@
           ayuda: 'Selecciona un artículo: en la barra (o con clic derecho) "Ver detalle" muestra el artículo y sus movimientos, y ' +
             '"Registrar entrada" / "Registrar salida" sus movimientos.',
           alCambiarFiltros: (f) => { filtrosAcc = f || {}; if (marcarKpi) marcarKpi(filtrosAcc); },
-          accionesFila: [
+          // Solo con EDICION en el inventario (en AppSheet, la tabla la editaba una lista de correos)
+          accionesFila: puedeEditarModulo('accesorios-lineas') ? [
             { icono: 'arrow-down-to-line', titulo: 'Registrar entrada', alHacer: (a) => abrirModalMovimiento(a.id, 'ENTRADA') },
             { icono: 'arrow-up-from-line', titulo: 'Registrar salida', alHacer: (a) => abrirModalMovimiento(a.id, 'SALIDA') },
-          ],
+          ] : [],
           columnas: [
             // Orden de la vista INVENTARIO DE ACCESORIOS del AppSheet (agrupada por Categoria)
             { campo: 'reabasto', titulo: 'Aviso Reabastecimiento', tipo: 'lista', valor: (a) => (a.reabasto ? 'Sí' : 'No'),
@@ -4742,6 +4743,7 @@
         else boton.innerHTML = boton.dataset.texto;
       }
 
+      $('#lac-nuevo', raiz).hidden = !puedeEditarModulo('accesorios-lineas');
       $('#lac-nuevo', raiz).addEventListener('click', abrirModalNuevo);
       raiz.querySelectorAll('[data-cerrar-modal-nuevo]').forEach((b) => b.addEventListener('click', cerrarModalNuevo));
       raiz.querySelectorAll('[data-cerrar-modal-mov]').forEach((b) => b.addEventListener('click', cerrarModalMov));

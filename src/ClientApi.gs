@@ -566,6 +566,13 @@ function apiRevisarCatalogoPermisos(token) {
   Permisos.puedeEditar(token, 'usuarios');
   return Permisos.revisarCatalogo();
 }
+// Administración > Usuarios y permisos (solo ADMIN): lo que pinta la pantalla, y guardar sus cambios
+function apiPermisosPanel(token) {
+  return Permisos.panel(token);
+}
+function apiPermisosGuardar(token, cambios) {
+  return Permisos.guardar(token, cambios);
+}
 
 // --- Inspección vehicular (rama `ayrton`) ---
 function apiListarInspecciones(token) {

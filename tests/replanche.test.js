@@ -48,7 +48,18 @@ function hojaFalsa(enc, filas) {
     deleteRows: (desde, n) => { api._maxFilas -= n; },
     insertColumnsAfter: (desde, n) => { api._maxCols += n; },
     deleteColumns: (desde, n) => { api._maxCols -= n; },
+    getName: () => api._nombre,
+    setName: (n) => { api._libro._renombrar(api, n); },
+    getParent: () => api._libro._api,
+    getFilter: () => null,
+    showRows: () => {},
     getRange: (f, c, nf, nc) => ({
+      // copyValuesToRange simulado: solo valores, a otra hoja del MISMO libro
+      copyValuesToRange: (destino, c1, c2, f1, f2) => {
+        if (destino._libro !== api._libro) throw new Error('copyValuesToRange entre libros distintos');
+        const vals = api.getRange(f, c, nf, nc).getValues();
+        destino.getRange(f1, c1, f2 - f1 + 1, c2 - c1 + 1).setValues(vals);
+      },
       getValues: () => {
         const out = [];
         for (let i = 0; i < (nf || 1); i++) {
@@ -66,6 +77,12 @@ function hojaFalsa(enc, filas) {
         });
       },
     }),
+    // copyTo simulado: la hoja entera llega como pestaña nueva al libro destino
+    copyTo: (libro) => {
+      const copia = hojaFalsa(api._enc, api._datos);
+      libro._agregar(copia);
+      return copia;
+    },
     // helpers de la prueba
     col(nombre) {
       const i = api._enc.findIndex((c) => String(c).trim().toUpperCase() === nombre.toUpperCase());
@@ -111,8 +128,18 @@ function escenario() {
   return { prod, lab };
 }
 
+/** Un arreglo `const NOMBRE = [...]` de MigracionIds.gs, el de verdad (sin cargar todo el archivo). */
+function catalogoDeMigracionIds(nombre) {
+  const fuente = fs.readFileSync(path.join(__dirname, '..', 'src', 'MigracionIds.gs'), 'utf8').replace(/\r\n/g, '\n');
+  const desde = fuente.indexOf('const ' + nombre + ' = [');
+  const bloque = fuente.slice(fuente.indexOf('[', desde), fuente.indexOf('\n];', desde) + 2);
+  return vm.runInNewContext('(' + bloque + ')');
+}
+
 function cargar() {
   const ctx = vm.createContext({
+    ENCABEZADOS_DEDUCIDOS: catalogoDeMigracionIds('ENCABEZADOS_DEDUCIDOS'),
+    MIGRACION_NOMBRES: catalogoDeMigracionIds('MIGRACION_NOMBRES'),
     console,
     Logger: { log: () => {} },
     Session: { getActiveUser: () => ({ getEmail: () => 'ayrton@x.com' }) },
@@ -124,10 +151,23 @@ function cargar() {
       openById: (id) => {
         const l = libros[id];
         if (!l) throw new Error('libro desconocido ' + id);
-        return {
-          getName: () => (id === ID_LAB ? nombreLab : l.nombre),
-          getSheetByName: (n) => l.hojas[n] || null,
-        };
+        if (!l._api) {
+          const enlazar = (h, n) => { h._nombre = n; h._libro = l; };
+          Object.keys(l.hojas).forEach((n) => enlazar(l.hojas[n], n));
+          l._agregar = (h) => { let n = 'Copia de X'; while (l.hojas[n]) n += '+'; l.hojas[n] = h; enlazar(h, n); };
+          l._renombrar = (h, n) => {
+            if (l.hojas[n]) throw new Error('ya existe una hoja llamada ' + n);
+            delete l.hojas[h._nombre]; l.hojas[n] = h; h._nombre = n;
+          };
+          l._api = {
+            getName: () => (id === ID_LAB ? nombreLab : l.nombre),
+            getSheetByName: (n) => l.hojas[n] || null,
+            getSheets: () => Object.keys(l.hojas).map((n) => l.hojas[n]),
+            deleteSheet: (h) => { delete l.hojas[h._nombre]; },
+            _agregar: (h) => l._agregar(h),
+          };
+        }
+        return l._api;
       },
     },
     PropertiesService: {
@@ -174,12 +214,20 @@ console.log('\n3. Qué cuenta como columna de la migración');
 {
   escenario();
   const api = cargar();
-  ok(api.replEsArtefacto_('ID'), 'ID sí');
-  ok(api.replEsArtefacto_('ID ANTERIOR'), 'ID ANTERIOR sí');
-  ok(api.replEsArtefacto_('id anterior'), 'sin importar mayúsculas ni espacios');
-  ok(api.replEsArtefacto_('ID APPSHEET'), 'el nombre viejo también, para poder limpiarlo');
-  ok(!api.replEsArtefacto_('COLOR'), 'COLOR no: eso lo capturó alguien');
-  ok(!api.replEsArtefacto_('ID_VEHICULO'), 'ni la llave vieja de producción');
+  ok(api.replEsArtefacto_('VEHICULOS', 'ID'), 'ID sí');
+  ok(api.replEsArtefacto_('VEHICULOS', 'ID ANTERIOR'), 'ID ANTERIOR sí');
+  ok(api.replEsArtefacto_('VEHICULOS', 'id anterior'), 'sin importar mayúsculas ni espacios');
+  ok(api.replEsArtefacto_('TICKETS', 'ID APPSHEET'), 'el nombre viejo también, para poder limpiarlo');
+  ok(!api.replEsArtefacto_('VEHICULOS', 'COLOR'), 'COLOR no: eso lo capturó alguien');
+  ok(!api.replEsArtefacto_('VEHICULOS', 'ID_VEHICULO'), 'ni la llave vieja de producción');
+  // Lo que agregan los otros pasos (falsas alarmas del 01/10/2026)
+  ok(api.replEsArtefacto_('HOLOGRAMAS', 'ID VEHICULO'), 'la llave foránea que escribe referencias');
+  ok(api.replEsArtefacto_('ARQUEOS', 'ID CAJA CHICA'), 'también la de Caja Chica');
+  ok(api.replEsArtefacto_('CAMBIOS LINEAS TELEFONICAS', 'NUCO'), 'el encabezado deducido');
+  ok(api.replEsArtefacto_('VEHICULOS', 'OFICINA / DESARROLLO'), 'el nombre nuevo de una columna renombrada');
+  ok(api.replEsArtefacto_('VEHICULOS', 'ID PERSONA'), 'la liga de Capital Humano');
+  ok(!api.replEsArtefacto_('VEHICULOS', 'NUCO'), 'pero solo en SU hoja: NUCO en VEHICULOS no es de la migración');
+  ok(!api.replEsArtefacto_('TICKETS', 'ID VEHICULO'), 'ni una llave foránea que esa hoja no tiene');
 }
 
 console.log('\n4. El ensayo no escribe, y avisa qué se perdería');
@@ -239,6 +287,21 @@ console.log('\n7. Nunca escribe en producción');
   ok(prod['VEHICULOS']._limpiada === 0 && prod['LINEAS TELEFONICAS']._limpiada === 0,
     'ninguna hoja de producción se limpió');
   ok(prod['VEHICULOS'].col('FOLIO')[0] === 'CTA0001', 'y sus datos están intactos');
+}
+
+console.log('\n8. La copia la hace Google: no deja pestañas temporales, y limpia las de una corrida muerta');
+{
+  const { lab } = escenario();
+  const api = cargar();
+  props['REPLANCHE_ACEPTO_PERDER_COLUMNAS'] = ID_LAB;
+  // una temporal que dejó una corrida que se murió a la mitad
+  lab['__replanche VEHICULOS'] = hojaFalsa(['BASURA'], [['x']]);
+  const hojaVehiculos = lab['VEHICULOS'];
+  api.replancharDesdeProduccion({ escribir: true });
+  const temporales = Object.keys(lab).filter((n) => n.indexOf('__replanche') === 0 || n.indexOf('Copia de') === 0);
+  ok(temporales.length === 0, 'no quedó ninguna pestaña temporal (había: ' + temporales.join(', ') + ')');
+  ok(lab['VEHICULOS'] === hojaVehiculos, 'VEHICULOS es la MISMA hoja de antes (conserva su gid), no una nueva');
+  ok(Object.keys(lab).sort().join() === 'LINEAS TELEFONICAS,TICKETS,VEHICULOS', 'el libro tiene exactamente sus hojas');
 }
 
 console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');

@@ -263,6 +263,34 @@ function correrFamilia(familia, opciones) {
   });
 }
 
+/**
+ * LO QUE QUEDA EN APPS SCRIPT después de la migración de Python (tools/migracion/migrar.py):
+ * la capa de consistencia de la app, que vive aquí porque es la misma que usa la app todos
+ * los días. Un clic en el editor, al terminar migrar.py. ESCRIBE.
+ *
+ *   sincronizar  vehiculos, lineas y cajachica: las copias tipo caché con su dueña
+ *   personas     PERSONAS a partir de la lista de Capital Humano
+ *   ligar        el ID PERSONA de cada responsable
+ *
+ * Se detiene en el primer paso con PROBLEMAS, como cualquier pipeline. Mover `sincronizar` al
+ * final no cambia nada: solo copia atributos, y empareja por la llave foránea que las
+ * referencias (Python) ya escribieron.
+ */
+function migracionFinalApps() {
+  const sincroniza = (f) => ({ nombre: 'sincronizar ' + f, marcaMala: 'PROBLEMAS (',
+    corre: (o) => sincronizarCopias(Object.assign({}, o, { familia: f })) });
+  const familias = ['vehiculos', 'lineas', 'cajachica'];
+  return correrPasos_({
+    titulo: 'LO QUE QUEDA EN APPS SCRIPT: SINCRONIZAR Y CAPITAL HUMANO',
+    pasos: familias.map(sincroniza).concat(PASOS_CAPITAL_HUMANO),
+    opcionesPaso: {},
+    hojas: familias.concat(['capitalhumano']).reduce((t, f) => t.concat(hojasDeFamilia_(f)), []),
+    escribir: true,
+    etiquetaBitacora: 'migracionFinalApps',
+    siguiente: 'La migración terminó. Revisa Administración > Salud.',
+  });
+}
+
 // ====================================================== pasos de sincronización
 
 /**

@@ -132,7 +132,6 @@ vm.runInContext(
   lee('utils', 'Ids.gs') + '\n' + lee('config', 'Entidades.gs') + '\n' +
   lee('MigracionIds.gs') + '\n' + lee('MigracionPipeline.gs') +
   '\nthis.migracionRevertir = migracionRevertir; this.migracionEstado = migracionEstado;' +
-  '\nthis.mudarPestanasHistoricas = mudarPestanasHistoricas;' +
   '\nthis.asignarIds = asignarIds; this.migracionEstadoSello = migracionEstadoSello;' +
   '\nthis.migracionSellar_ = migracionSellar_; this.migracionSellado_ = migracionSellado_;' +
   '\nthis.MIGRACION_PROP_SELLO = MIGRACION_PROP_SELLO;' +
@@ -232,64 +231,9 @@ ok(JSON.stringify({ v: hojas['VEHICULOS'].enc, c: hojas['CAMBIOS LINEAS TELEFONI
 console.log('\n9. Queda rastro en LOG_MIGRACION');
 ok(!!hojas['LOG_MIGRACION'], 'se creó la hoja de bitácora sola');
 
-// ---------------------------------------------------------------- la mudanza
-const { mudarPestanasHistoricas } = contexto;
 const truenaCon = (fn, patron) => {
   try { fn(); return false; } catch (e) { return patron.test(e.message); }
 };
-
-/** Dos históricas con datos, y una del sistema que NO se debe tocar */
-function escenarioMudanza() {
-  Object.keys(hojas).forEach((k) => delete hojas[k]);
-  destino = null;
-  hojas['Cambios Imei'] = hojaFalsa(['IMEI', 'FECHA'], [['111', 'a'], ['222', 'b']]);
-  hojas['DASHBOARDS'] = hojaFalsa(['X'], [['1'], ['2'], ['3']]);
-  hojas['VEHICULOS'] = hojaFalsa(['ID', 'FOLIO'], [['VEH-1', 'MOT0001']]);
-  Object.keys(hojas).forEach((k) => { hojas[k].nombre = k; });
-  props['MIGRACION_RESPALDO_ID'] = 'RESP1';
-}
-
-console.log('\n10. Sin respaldo previo no borra nada');
-escenarioMudanza();
-delete props['MIGRACION_RESPALDO_ID'];
-ok(truenaCon(() => mudarPestanasHistoricas({ escribir: true }), /respaldo/i),
-   'se niega: borrar pestañas no se deshace');
-props['MIGRACION_RESPALDO_ID'] = 'RESP1';
-
-console.log('\n11. El ensayo no mueve ni borra');
-escenarioMudanza();
-mudarPestanasHistoricas();
-ok(!!hojas['Cambios Imei'] && !!hojas['DASHBOARDS'], 'las dos siguen en el original');
-ok(destino === null, 'ni se creó el spreadsheet destino');
-
-console.log('\n12. Copia, COMPRUEBA, y entonces borra');
-escenarioMudanza();
-mudarPestanasHistoricas({ escribir: true });
-ok(!hojas['Cambios Imei'] && !hojas['DASHBOARDS'], 'se fueron del original');
-ok(!!destino && !!destino.hojas['Cambios Imei'], 'llegaron al destino con su nombre original');
-ok(destino.hojas['Cambios Imei'].datos.length === 2, 'con sus 2 renglones');
-ok(destino.hojas['DASHBOARDS'].datos.length === 3, 'y DASHBOARDS con sus 3');
-
-console.log('\n13. Una hoja del sistema NUNCA se muda');
-escenarioMudanza();
-mudarPestanasHistoricas({ escribir: true });
-ok(!!hojas['VEHICULOS'], 'VEHICULOS se queda: no está en la lista cerrada');
-
-console.log('\n14. Si la copia no coincide, el original NO se borra');
-escenarioMudanza();
-const copiarBien = hojas['Cambios Imei'].copyTo;
-hojas['Cambios Imei'].copyTo = (d) => { const c = copiarBien(d); c.datos.pop(); return c; };
-mudarPestanasHistoricas({ escribir: true });
-ok(!!hojas['Cambios Imei'], 'la de copia incompleta se queda en el original');
-ok(!hojas['DASHBOARDS'], 'y las demás sí se mudan: una falla no detiene al resto');
-
-console.log('\n15. Las amarradas por fórmula van juntas o ninguna');
-Object.keys(hojas).forEach((k) => delete hojas[k]);
-destino = null;
-hojas['Hoja 55'] = hojaFalsa(['X'], [['1']]);
-hojas['Hoja 55'].nombre = 'Hoja 55';
-ok(truenaCon(() => mudarPestanasHistoricas({ escribir: true }), /amarradas|juntas/i),
-   'con solo una de las dos presentes, se niega');
 
 // ---------------------------------------------------------------------------- el sello
 //

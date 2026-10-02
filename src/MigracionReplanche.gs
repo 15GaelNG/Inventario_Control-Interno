@@ -45,8 +45,8 @@ const REPL_PROHIBIDOS = {
   '1fC77Uu1ePVUySNvhgWXMHqWpLhGhBMTZZMEblU2nUhI': 'el libro de pruebas COMPARTIDO del equipo',
 };
 
-/** Cuántas filas se mueven por viaje. CAMBIOS LINEAS TELEFONICAS son 35,543 × 10. */
-const REPL_FILAS_POR_BLOQUE = 4000;
+/** Nombre de la pestaña temporal donde llega cada copia (ver replCopiarHoja_). */
+const REPL_TEMPORAL = '__replanche ';
 /** Dónde se anota en qué hoja se quedó, para poder continuar. */
 const REPL_PROP_AVANCE = 'REPLANCHE_HOJAS_LISTAS';
 /** Permiso explícito para perder columnas que NO son de la migración. */
@@ -143,12 +143,31 @@ function replDestino_() {
   return ss;
 }
 
-/** Las columnas que la migración agrega; perderlas al replanchar es el objetivo. */
-function replEsArtefacto_(col) {
+/**
+ * Las columnas que los pipelines agregan o renombran en `hoja`; perderlas al replanchar es
+ * el objetivo. Salen de los mismos catálogos que usan los pipelines, para que una columna
+ * nueva de un pipeline no se vuelva una falsa alarma aquí:
+ *
+ *   ID, ID ANTERIOR (y su nombre viejo)  el pipeline de IDs, en todas las hojas
+ *   Entidades.REFERENCIAS                las llaves foráneas (ID VEHICULO, ID CAJA CHICA…)
+ *                                        y las ligas de Capital Humano (ID PERSONA)
+ *   ENCABEZADOS_DEDUCIDOS                el nombre que se le pone a una columna sin
+ *                                        encabezado (CAMBIOS LINEAS TELEFONICAS.NUCO)
+ *   MIGRACION_NOMBRES                    el nombre nuevo de una columna renombrada
+ *                                        (VEHICULOS.OFICINA / DESARROLLO)
+ *
+ * El 01/10/2026 solo conocía las tres primeras, y un replanchado reportó 10 columnas "que
+ * se perderían" que eran todas de la migración. Una alarma que grita en cada corrida
+ * enseña a ponerle el permiso sin leerla, y entonces ya no protege la vez que importa.
+ */
+function replEsArtefacto_(hoja, col) {
   const c = String(col || '').trim().toUpperCase();
-  return c === String(Entidades.COLUMNA_ID).toUpperCase() ||
-         c === String(Entidades.COLUMNA_ID_ANTERIOR).toUpperCase() ||
-         c === String(Entidades.COLUMNA_ID_ANTERIOR_LEGADO).toUpperCase();
+  const de = (lista, campo) => lista.filter((x) => x.hoja === hoja).map((x) => x[campo]);
+  return [Entidades.COLUMNA_ID, Entidades.COLUMNA_ID_ANTERIOR, Entidades.COLUMNA_ID_ANTERIOR_LEGADO]
+    .concat(de(Entidades.REFERENCIAS, 'columna'))
+    .concat(de(ENCABEZADOS_DEDUCIDOS, 'nombre'))
+    .concat(de(MIGRACION_NOMBRES, 'a'))
+    .some((x) => String(x).trim().toUpperCase() === c);
 }
 
 /** Deja la hoja con exactamente `filas` × `cols` de rejilla, sin dejarla más chica que 1×1. */
@@ -163,9 +182,24 @@ function replAjustarGrid_(hoja, filas, cols) {
   else if (c > cObj) hoja.deleteColumns(cObj + 1, c - cObj);
 }
 
+/** Borra las copias temporales que haya dejado una corrida que murió a la mitad. */
+function replLimpiarTemporales_(libro) {
+  libro.getSheets()
+    .filter((h) => h.getName().indexOf(REPL_TEMPORAL) === 0)
+    .forEach((h) => libro.deleteSheet(h));
+}
+
 /**
- * Copia una hoja de producción encima de la del destino, por bloques.
+ * Copia una hoja de producción encima de la del destino.
  * Devuelve { filas, columnas } de lo que quedó escrito.
+ *
+ * La copia la hace Google, no este script: `copyTo` manda la hoja entera al libro destino
+ * como pestaña temporal, y `copyValuesToRange` pasa solo los VALORES a la hoja de siempre.
+ * La hoja destino conserva su gid, así que nada que la cite se rompe. Antes eran bloques de
+ * 4,000 filas con getValues/setValues: unos 3 minutos para 850k celdas.
+ *
+ * Que la temporal recalcule sus fórmulas en el destino no cambia nada: producción tiene 2
+ * fórmulas en las 20 hojas, las dos dentro de su propia pestaña (medido el 01/10/2026).
  */
 function replCopiarHoja_(hojaOrigen, hojaDestino) {
   const filas = hojaOrigen.getLastRow();
@@ -177,11 +211,22 @@ function replCopiarHoja_(hojaOrigen, hojaDestino) {
   replAjustarGrid_(hojaDestino, maxFilas, maxCols);
   if (!filas || !cols) return { filas: 0, columnas: 0 };
 
-  for (let desde = 1; desde <= filas; desde += REPL_FILAS_POR_BLOQUE) {
-    const cuantas = Math.min(REPL_FILAS_POR_BLOQUE, filas - desde + 1);
-    const valores = hojaOrigen.getRange(desde, 1, cuantas, cols).getValues();
-    hojaDestino.getRange(desde, 1, cuantas, cols).setValues(valores);
+  const libro = hojaDestino.getParent();
+  const temporal = hojaOrigen.copyTo(libro);
+  try {
+    temporal.setName(REPL_TEMPORAL + hojaDestino.getName());
+    // Sin filtro y sin filas ocultas ANTES de copiar: copyValuesToRange solo pasa lo VISIBLE,
+    // y repite en mosaico lo que pasó hasta llenar el rango. Así quedaron VEHICULOS (60 de
+    // 648, diez veces cada uno) y CAJAS CHICAS (98 de 285) el 02/10/2026, con un LISTO.
+    // El replanchado bueno es el de Python (tools/migracion/replanche.py), que además
+    // compara celda por celda al terminar.
+    const filtro = temporal.getFilter();
+    if (filtro) filtro.remove();
+    temporal.showRows(1, temporal.getMaxRows());
+    temporal.getRange(1, 1, filas, cols).copyValuesToRange(hojaDestino, 1, cols, 1, filas);
     SpreadsheetApp.flush();
+  } finally {
+    libro.deleteSheet(temporal);
   }
   // El encabezado congelado y en negritas, como en producción
   hojaDestino.setFrozenRows(hojaOrigen.getFrozenRows());
@@ -214,6 +259,8 @@ function replancharDesdeProduccion(opciones) {
     lineas.push('  Continuando: ya estaban listas ' + listas.length + ' hojas de ' + hojas.length + '.');
     lineas.push('');
   }
+
+  if (cfg.escribir) replLimpiarTemporales_(destino);
 
   const perdidasTotales = [];
   let hechas = 0, celdas = 0, sinOrigen = 0, sinDestino = 0, corte = '';
@@ -252,7 +299,7 @@ function replancharDesdeProduccion(opciones) {
     encDestino.forEach((c) => {
       const t = String(c).trim();
       if (!t || enOrigen[t.toUpperCase()]) return;
-      (replEsArtefacto_(t) ? artefactos : perdidas).push(t);
+      (replEsArtefacto_(nombre, t) ? artefactos : perdidas).push(t);
     });
     perdidas.forEach((c) => perdidasTotales.push(nombre + '.' + c));
 
@@ -299,7 +346,7 @@ function replancharDesdeProduccion(opciones) {
     } else if (listas.length >= hojas.length - sinOrigen - sinDestino) {
       lineas.push('');
       lineas.push('  LISTO. El destino quedó en estado PRE-migración.');
-      lineas.push('  Lo que sigue: migracion1Revisar en el proyecto que apunte al destino.');
+      lineas.push('  Lo que sigue: migracionEstadoSello, y luego ids1Ensayo (ver docs/guion-lab.md).');
       props.deleteProperty(REPL_PROP_AVANCE);
     }
   } else {

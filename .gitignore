@@ -29,3 +29,10 @@ screenshots/
 
 # Caché de Python de los scripts de tools/
 __pycache__/
+
+# Cliente OAuth y tokens de la herramienta de migracion (secretos)
+generic-tool.json
+tools/migracion/.tokens/
+# Fotos de libros reales y reportes de corridas de la migracion (traen datos personales)
+tools/migracion/fotos/
+tools/migracion/corridas/

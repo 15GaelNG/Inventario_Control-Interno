@@ -14,17 +14,17 @@
  * inerte (nada se une por ella: medimos que el FOLIO cambió 0 veces en 9,214 correcciones).
  * Adelantarlo pagaría una ventana de caída para 46 personas sin ganar nada.
  *
- * El orden, con las funciones sin argumentos que se seleccionan en el desplegable:
+ * Lo que queda aquí para correr desde el editor (los pasos en sí son los pipelines de
+ * MigracionFamilia.gs; ver docs/guion-lab.md):
  *
- *   pipeline0Respaldar        copia fechada del spreadsheet completo
- *   pipelineEstado            "¿dónde estoy?" — solo lee, se puede correr cuando sea
- *   migracion1Revisar         (MigracionIds) qué está roto
- *   migracion2AsignarEscribir (MigracionIds) llena la columna ID
- *   migracion4Auditar         (MigracionIds) comprueba
- *   migracion3ReferenciasEscribir
- *   migracionLimpiarRespaldoEscribir
- *   migracionMoverIdsAlInicioEscribir
+ *   pipeline0Respaldar / pipelinePRODRespaldar   copia fechada del spreadsheet completo
+ *   pipelineEstado                               "¿dónde estoy?" — solo lee
+ *   pipelineRevisarFirmas                        qué pestañas compiten por un servicio
+ *   pipelineLimpiarFilasVacias{Ensayo,Escribir}  recorta grid vacío (pendiente en prod)
  *   pipelineRevertirEnsayo / pipelineRevertirEscribir   deshace todo
+ *
+ * La mudanza de las pestañas históricas (29/09/2026) ya se hizo y su código se retiró;
+ * está en el historial de git y en docs/limpieza-spreadsheet.md.
  */
 
 // ================================================================
@@ -59,39 +59,14 @@ function pipelineLimpiarFilasVaciasEscribir() {
   return limpiarFilasVacias({ escribir: true });
 }
 
-// ---- Las tres que apuntan a PRODUCCIÓN a propósito ----
-// Las de abajo (sin PROD en el nombre) usan lo que digan las propiedades del script, que en
-// un proyecto DEV apuntan a la COPIA DE PRUEBAS. Estas tres van al ControlVehicular real,
+// ---- La que apunta a PRODUCCIÓN a propósito ----
+// Las demás usan lo que digan las propiedades del script, que en un proyecto DEV apuntan
+// a la COPIA DE PRUEBAS. Esta va al ControlVehicular real,
 // sin depender de cómo esté configurado el proyecto desde donde se corren.
 
 /** PROD — Copia de respaldo del ControlVehicular real. Lo primero. */
 function pipelinePRODRespaldar() {
   return migracionRespaldar({ spreadsheetId: MIGRACION_SS_PRODUCCION });
-}
-
-/** PROD, ensayo — Qué pestañas mudaría del ControlVehicular real. No toca nada. */
-function pipelinePRODMudarHistoricasEnsayo() {
-  return mudarPestanasHistoricas({ spreadsheetId: MIGRACION_SS_PRODUCCION });
-}
-
-/** PROD, de verdad — Muda las 19 y las BORRA del ControlVehicular real.
- *  Pide la Script Property MIGRACION_IDS_AUTORIZAR_PRODUCCION y un respaldo previo. */
-function pipelinePRODMudarHistoricasEscribir() {
-  return mudarPestanasHistoricas({ spreadsheetId: MIGRACION_SS_PRODUCCION, escribir: true });
-}
-
-/** Mudar las 19 pestañas históricas, ensayo — Solo dice qué haría.
- *  Usa el spreadsheet que digan las propiedades: en DEV, la copia de pruebas. */
-function pipelineMudarHistoricasEnsayo() {
-  return mudarPestanasHistoricas();
-}
-
-/**
- * Mudar las 19 pestañas históricas, DE VERDAD — copia a un spreadsheet nuevo, verifica que
- * quedaron íntegras, y solo entonces las borra del original. Pide respaldo previo.
- */
-function pipelineMudarHistoricasEscribir() {
-  return mudarPestanasHistoricas({ escribir: true });
 }
 
 /** Deshacer, ensayo — Solo dice qué haría. */
@@ -121,12 +96,12 @@ const PIPE_PROP_APPSHEET_APAGADO = 'MIGRACION_APPSHEET_APAGADO';
  */
 const MIGRACION_PASOS = [
   { n: 0, nombre: 'Respaldar', correr: 'pipeline0Respaldar', hecho: 'hayRespaldo' },
-  { n: 1, nombre: 'Revisar qué está roto', correr: 'migracion1Revisar', hecho: 'siempre' },
-  { n: 2, nombre: 'Llenar la columna ID', correr: 'migracion2AsignarEscribir', hecho: 'idsPuestos' },
-  { n: 3, nombre: 'Auditar', correr: 'migracion4Auditar', hecho: 'auditoriaLimpia' },
-  { n: 4, nombre: 'Reescribir referencias', correr: 'migracion3ReferenciasEscribir', hecho: 'referenciasHechas' },
-  { n: 5, nombre: 'Quitar respaldos de más', correr: 'migracionLimpiarRespaldoEscribir', hecho: 'respaldosLimpios' },
-  { n: 6, nombre: 'Mover ID al inicio', correr: 'migracionMoverIdsAlInicioEscribir', hecho: 'idsAlInicio' },
+  { n: 1, nombre: 'Revisar qué está roto', correr: 'ids1Ensayo', hecho: 'siempre' },
+  { n: 2, nombre: 'Llenar la columna ID', correr: 'ids1Ensayo / ids2Escribir', hecho: 'idsPuestos' },
+  { n: 3, nombre: 'Auditar', correr: 'ids1Ensayo / ids2Escribir', hecho: 'auditoriaLimpia' },
+  { n: 4, nombre: 'Reescribir referencias', correr: 'vehiculos2Escribir, lineas2Escribir, cajaChica2Escribir', hecho: 'referenciasHechas' },
+  { n: 5, nombre: 'Quitar respaldos de más', correr: 'ids1Ensayo / ids2Escribir', hecho: 'respaldosLimpios' },
+  { n: 6, nombre: 'Mover ID al inicio', correr: 'ids1Ensayo / ids2Escribir', hecho: 'idsAlInicio' },
 ];
 
 // ---------------------------------------------------------------- bitácora
@@ -238,191 +213,6 @@ function pipeRespaldo_() {
   const id = pipeProps_().getProperty(PIPE_PROP_RESPALDO);
   if (!id) return null;
   return { id: id, fecha: pipeProps_().getProperty(PIPE_PROP_RESPALDO_FECHA) || '' };
-}
-
-// ---------------------------------------------------------------- mudar históricas
-
-/**
- * Las ÚNICAS pestañas que mudarPestanasHistoricas tiene permitido tocar.
- *
- * Está escrita a mano y cerrada a propósito: la función se niega a mover cualquier cosa que
- * no esté aquí. Así un typo, un nombre parecido o una lista que crezca sola no pueden
- * llevarse una hoja viva.
- *
- * Son las 19 que el barrido de src/ no encontró nombradas en ningún archivo, aprobadas por
- * el superior de Ayrton el 29/09/2026. Ver pestanas-sin-uso.xlsx para el detalle de cada
- * una, y docs/ids-asignacion.md para por qué "sin nombre en el código" no es lo mismo que
- * "sin uso".
- */
-const PIPE_HISTORICAS = [
-  // Compiten por la hoja con un servicio (getSheetByColumns desempata por más filas):
-  // quitarlas vuelve la elección determinista, así que son las que MÁS conviene mover.
-  'Copia de INSTALACION DE SENSORES',
-  'HOLOGRAMAS (24/04/25)',
-  // Amarradas entre sí por 64 fórmulas: se van juntas o ninguna.
-  'Copia de LINEAS TELEFONICAS 1',
-  'Hoja 55',
-  // Respaldos fechados de Líneas
-  'LINEAS 05/12/2025',
-  'LINEAS 15/10/25',
-  'LINEAS TELEFONICAS (08/07/2025)',
-  'LINEAS TELEFONICAS 05/06/25',
-  'LINEAS TELEFONICAS 21/04/25',
-  'RESPALDO 2 LINEAS TELEFONICAS',
-  'Respaldo de LINEAS TELEFONICAS',
-  'Copia de LINEAS TELEFONICAS',
-  // Otros respaldos
-  'Copia de HOLOGRAMAS',
-  'Cambios Imei',
-  // Nadie supo qué son. Van al respaldo, no a la basura.
-  'DASHBOARDS',
-  'CONFIGURACIONES',
-  'SERVICIOS',
-  'COLABORADORES 2',
-  'Hoja 53',
-];
-
-/** Las dos que se van juntas o ninguna: una cita a la otra por fórmula */
-const PIPE_HISTORICAS_LIGADAS = [['Copia de LINEAS TELEFONICAS 1', 'Hoja 55']];
-
-/** Huella de una pestaña, para poder comprobar que la copia quedó igual */
-function pipeHuella_(sheet) {
-  const filas = sheet.getLastRow();
-  const cols = sheet.getLastColumn();
-  if (!filas || !cols) return { filas: 0, cols: 0, primera: '', ultima: '', celdas: 0 };
-  const enc = sheet.getRange(1, 1, 1, cols).getValues()[0].join('|');
-  const ultima = sheet.getRange(filas, 1, 1, cols).getValues()[0].join('|');
-  let conDatos = 0;
-  const todo = sheet.getRange(1, 1, filas, cols).getValues();
-  todo.forEach((f) => { if (f.some((c) => String(c == null ? '' : c).trim())) conDatos++; });
-  return { filas: filas, cols: cols, primera: enc, ultima: ultima, celdas: conDatos };
-}
-
-const pipeHuellaIgual_ = (a, b) =>
-  a.filas === b.filas && a.cols === b.cols && a.celdas === b.celdas &&
-  a.primera === b.primera && a.ultima === b.ultima;
-
-/**
- * Copia las pestañas históricas a un spreadsheet nuevo y las borra del original.
- *
- * EL ORDEN ES LO QUE LO HACE SEGURO, y no se puede invertir:
- *   1. copiar al destino
- *   2. COMPROBAR que la copia quedó íntegra (mismas filas, columnas, encabezado, última
- *      fila y número de renglones con datos)
- *   3. hasta entonces, borrar del original
- *
- * Si la comprobación falla en una pestaña, esa NO se borra y se reporta. Las demás siguen.
- *
- * Exige respaldo completo previo (pipeline0Respaldar). No exige que AppSheet esté apagado
- * —borrar una pestaña que AppSheet no usa no le afecta— pero si alguna de estas SÍ fuera
- * una tabla suya, la app se rompe y el respaldo del paso 0 es la única vuelta atrás. Por
- * eso el respaldo es obligatorio aquí y no negociable.
- */
-function mudarPestanasHistoricas(opciones) {
-  const cfg = Object.assign({ escribir: false, appsheetPuedeSeguirVivo: true }, opciones || {});
-  const ssId = migracionSs_(cfg);
-  const ss = SpreadsheetApp.openById(ssId);
-  const lineas = [(cfg.escribir ? 'MUDANDO PESTAÑAS HISTÓRICAS' : 'ENSAYO (no mueve ni borra nada)') +
-    ' — ' + ssId, ''];
-
-  // Sin respaldo completo no se borra nada, ni en pruebas: esto sí quita pestañas enteras.
-  const resp = pipeRespaldo_();
-  if (cfg.escribir && !resp) {
-    throw new Error('No hay respaldo. Corre pipeline0Respaldar primero: borrar pestañas no ' +
-      'se deshace, y si alguna fuera una tabla viva de AppSheet, esa copia es la única vuelta atrás.');
-  }
-  lineas.push(resp ? '  respaldo previo: ' + resp.id + '  (del ' + resp.fecha + ')' : '  (ensayo, sin respaldo)');
-
-  // Qué existe de la lista, y qué se pide que no está
-  const presentes = [];
-  PIPE_HISTORICAS.forEach((n) => {
-    const s = ss.getSheetByName(n);
-    if (s) presentes.push(s); else lineas.push('  "' + n + '": ya no existe, se salta');
-  });
-  if (!presentes.length) {
-    lineas.push('', 'No hay nada que mudar.');
-    const t = lineas.join('\n'); Logger.log(t); return t;
-  }
-
-  // Las ligadas por fórmula: o van las dos, o ninguna
-  const nombres = presentes.map((s) => s.getName());
-  for (let i = 0; i < PIPE_HISTORICAS_LIGADAS.length; i++) {
-    const par = PIPE_HISTORICAS_LIGADAS[i];
-    const cuantas = par.filter((n) => nombres.indexOf(n) !== -1).length;
-    if (cuantas === 1) {
-      throw new Error('"' + par[0] + '" y "' + par[1] + '" están amarradas por 64 fórmulas: ' +
-        'se mudan juntas o ninguna. Ahora mismo solo una está en la lista o solo una existe.');
-    }
-  }
-
-  // Ni una de las hojas que el sistema usa puede colarse
-  const delSistema = Entidades.todas().map((e) => migClave_(e.hoja));
-  nombres.forEach((n) => {
-    if (delSistema.indexOf(migClave_(n)) !== -1) {
-      throw new Error('"' + n + '" está en el catálogo de Entidades: el sistema la usa. No se muda.');
-    }
-  });
-
-  lineas.push('', '  ' + presentes.length + ' pestañas a mudar');
-  if (!cfg.escribir) {
-    presentes.forEach((s) => {
-      const h = pipeHuella_(s);
-      lineas.push('     ' + s.getName() + ': ' + h.celdas + ' renglones con datos, ' + h.cols + ' columnas');
-    });
-    lineas.push('', 'Para mudarlas de verdad: pipelineMudarHistoricasEscribir',
-      '(exige haber corrido pipeline0Respaldar antes)');
-    const t = lineas.join('\n'); Logger.log(t); return t;
-  }
-
-  // ---- 1. destino
-  const sello = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HHmm');
-  const destino = SpreadsheetApp.create('ControlVehicular - histórico ' + sello);
-  const hojaSobrante = destino.getSheets()[0];
-  lineas.push('', '  destino: ' + destino.getName(), '  url: ' + destino.getUrl(), '');
-
-  const movidas = [], falladas = [];
-  presentes.forEach((sheet) => {
-    const nombre = sheet.getName();
-    try {
-      const antes = pipeHuella_(sheet);
-      // ---- 2. copiar y renombrar (copyTo la deja como "Copia de <nombre>")
-      const copia = sheet.copyTo(destino);
-      copia.setName(nombre);
-      SpreadsheetApp.flush();
-      // ---- 3. COMPROBAR antes de borrar
-      const despues = pipeHuella_(destino.getSheetByName(nombre));
-      if (!pipeHuellaIgual_(antes, despues)) {
-        falladas.push(nombre + ' (la copia NO coincide: ' + antes.celdas + ' vs ' +
-          despues.celdas + ' renglones con datos)');
-        lineas.push('     ' + nombre + ': COPIA DISTINTA, NO se borra del original');
-        return;
-      }
-      // ---- 4. hasta aquí, borrar
-      ss.deleteSheet(sheet);
-      SpreadsheetApp.flush();
-      movidas.push(nombre);
-      lineas.push('     ' + nombre + ': copiada (' + antes.celdas + ' renglones) y borrada del original');
-    } catch (err) {
-      falladas.push(nombre + ' (' + err.message + ')');
-      lineas.push('     ' + nombre + ': FALLÓ, NO se borró — ' + err.message);
-    }
-  });
-
-  try { if (destino.getSheets().length > 1) destino.deleteSheet(hojaSobrante); } catch (e) { /* no-op */ }
-
-  lineas.push('', movidas.length + ' mudadas, ' + falladas.length + ' sin mudar.');
-  if (falladas.length) {
-    lineas.push('', 'SIN MUDAR (siguen en el original):');
-    falladas.forEach((f) => lineas.push('  - ' + f));
-  }
-  lineas.push('', 'El histórico quedó en: ' + destino.getUrl(),
-    'Ábrelo y confirma que se ven completas ANTES de dar por cerrado esto.',
-    'Si algo se rompe en AppSheet, la vuelta atrás es el respaldo ' + (resp ? resp.id : ''));
-  const texto = lineas.join('\n');
-  pipeLog_(ssId, 'Mudar históricas', 'ESCRITURA', falladas.length ? 'PARCIAL' : 'OK',
-    movidas.length + ' mudadas a ' + destino.getId() + (falladas.length ? '; fallaron ' + falladas.join(', ') : ''));
-  Logger.log(texto);
-  return texto;
 }
 
 // ---------------------------------------------------------------- firmas de columnas
