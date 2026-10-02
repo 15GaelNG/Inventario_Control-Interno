@@ -442,11 +442,12 @@ const VehiculosService = (function () {
   // TODO: reasignarResponsable, registrarVerificacion, registrarServicio,
   //       guardarInspeccion (usa PdfService.generarReporteDanios)
 
-  // Carpeta de Drive donde se guardan los archivos adjuntos (responsiva,
-  // documento de baja, póliza de seguro, archivo de tenencia) -- "VEHICULOS_Files_".
-  // No se cambia la seguridad del archivo — hereda los permisos que ya tenga esa
-  // carpeta compartida.
+  // Carpeta de Drive donde se guardan los archivos adjuntos (responsiva, documento de
+  // baja, póliza de seguro, archivo de tenencia): PDF a "VEHICULOS_Files_", imagen
+  // (foto del mismo documento, en vez de escaneo) a "VEHICULOS_Images". No se cambia la
+  // seguridad del archivo — hereda los permisos que ya tenga esa carpeta compartida.
   const CARPETA_ADJUNTOS_ID = '1BrGhaC18GtXDCw7k9kZlMdK-Pp15lupz';
+  const CARPETA_ADJUNTOS_IMAGENES_ID = '11NfoCfZyGUvlLJ3PPKUTg5kwN8nYaZLP';
   const TAMANO_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
   // Etiqueta corta para el nombre de archivo en Drive, por columna (ver renombrarArchivo_).
   const ETIQUETA_ARCHIVO = {
@@ -493,9 +494,10 @@ const VehiculosService = (function () {
     // falló (abrir la carpeta / crear el archivo / compartirlo) — aquí sí, para no tener
     // que adivinar cada vez que pase.
     const cuenta = () => Session.getEffectiveUser().getEmail();
+    const esImagen = /^image\//.test(mimeType || '');
     let carpeta, archivo;
     try {
-      carpeta = DriveApp.getFolderById(CARPETA_ADJUNTOS_ID);
+      carpeta = DriveApp.getFolderById(esImagen ? CARPETA_ADJUNTOS_IMAGENES_ID : CARPETA_ADJUNTOS_ID);
     } catch (e) {
       throw new Error('No se pudo abrir la carpeta de adjuntos de Vehículos en Drive. La cuenta con la que ' +
         'corre la app ahora mismo (' + cuenta() + ') no tiene acceso a esa carpeta.');
