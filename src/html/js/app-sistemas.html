@@ -1,10 +1,11 @@
 <script>
   /**
-   * app-sistemas.html — "Sistemas": accesos directos a otros sistemas externos
-   * relacionados con cada módulo (Control Vehicular, Líneas, Arqueos — pedido 2-oct).
-   * Una sola vista/plantilla (tpl-sistemas) reutilizada por los tres, parametrizada
-   * por el id del grupo en NAV_GRUPOS (ver dispatch en navegarA, app.html). En su
-   * propio archivo por el mismo motivo que Arqueos/Caja Chica (ver app-arqueos.html).
+   * app-sistemas.html — Tarjetas con accesos directos a sistemas/formularios externos.
+   * Dos usos del mismo componente (tpl-sistemas/initSistemas, parametrizado por una clave
+   * de SISTEMAS_POR_MODULO, ver dispatch en navegarA, app.html):
+   *   - "Sistemas" dentro de Control Vehicular/Líneas/Arqueos (pedido 2-oct).
+   *   - "Encuestas/Solicitudes", módulo general en el menú (pedido 2-oct).
+   * En su propio archivo por el mismo motivo que Arqueos/Caja Chica (ver app-arqueos.html).
    */
 
   // "\/\/" (no "//") en cada URL -- ver comentario del bug de Apps Script en CLAUDE.md:
@@ -24,6 +25,13 @@
       { nombre: 'Encarta CPP', icono: 'keyboard', url: 'https:\/\/script.google.com/macros/s/AKfycbxff11xiWDXARs3qQ7f0Wcc4ltt_1VTG4bvwg4IXROxrGWoWlDDJ1PrC3KdrfsK0EJXvA/exec' },
       { nombre: 'Catálogo Dinámico de Conceptos', icono: 'list-tree', url: 'https:\/\/script.google.com/a/macros/ciudadmaderas.com/s/AKfycbyRs_dwP_6pQhM3_67Gdj-PXQzsB3WHqQTnvX1qJqSgR3k-6VE53a8-ig6cI__hKz1L/exec' },
       { nombre: 'Análisis Global de CCH', icono: 'bar-chart-3', url: 'https:\/\/script.google.com/a/macros/ciudadmaderas.com/s/AKfycbw4GVN_hyOv2YFldPsL_7WGDQSNXhq19whQt19l8KFruUKxaSTGgPnn-1MNvB9xqCg/exec' },
+    ],
+    // Módulo general "Encuestas/Solicitudes" (no va dentro de otro módulo, es su propia
+    // entrada del menú) -- el orden importa, es el que se dio.
+    'encuestas-solicitudes': [
+      { nombre: 'Encuesta de Satisfacción - SV', icono: 'star', url: 'https:\/\/script.google.com/a/macros/ciudadmaderas.com/s/AKfycbwArSNyTd_CBGr58W1PzxaWwIGiwiWy-7JmhYPArRDnJkFKI8Gf142wb2JCGHKC94nB/exec' },
+      { nombre: 'Solicitud Línea / Equipo', icono: 'smartphone', url: 'https:\/\/script.google.com/a/macros/ciudadmaderas.com/s/AKfycbwy0F6cyi4EnQAEzJg0qXQfznpve1Le2oUGE2rfTEf8xgPWqcgdtqxALKqggtZcoShT1Q/exec' },
+      { nombre: 'Encuesta de Satisfacción - Help Desk', icono: 'headset', url: 'https:\/\/script.google.com/a/macros/ciudadmaderas.com/s/AKfycbx-W4V5m65UyOhEXjnJuklDXS5VMaajjIyKCEi9zfCN3zWlGT_LlOekY3HI-eCE3T8w8A/exec' },
     ],
   };
 

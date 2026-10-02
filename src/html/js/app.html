@@ -602,6 +602,7 @@
       if (vista === 'sistemas-vehiculos') { montarVista('tpl-sistemas', () => initSistemas('servicios-vehiculares')); return; }
       if (vista === 'sistemas-lineas') { montarVista('tpl-sistemas', () => initSistemas('lineas')); return; }
       if (vista === 'sistemas-arqueos') { montarVista('tpl-sistemas', () => initSistemas('arqueos')); return; }
+      if (vista === 'encuestas-solicitudes') { montarVista('tpl-sistemas', () => initSistemas('encuestas-solicitudes')); return; }
       // --- Líneas (rama emmanuel): el módulo vive en html/js/lineas.html (namespace Lineas) ---
       if (vista === 'panorama-lineas') { montarVista('tpl-lineas-panorama', Lineas.initPanorama); return; }
       if (vista === 'lineas-telefonicas') { montarVista('tpl-lineas-telefonicas', Lineas.initTelefonicas); return; }
@@ -686,6 +687,9 @@
     },
     // Activos por colaborador de todas las áreas (rama emmanuel)
     { id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de Activos' },
+    // Encuestas y solicitudes externas (2-oct) -- mismo patrón que "Sistemas" (tpl-sistemas/
+    // initSistemas en app-sistemas.html), un solo destino sin submenú porque ya muestra las 3.
+    { id: 'encuestas-solicitudes', vista: 'encuestas-solicitudes', icono: 'clipboard-list', etiqueta: 'Encuestas/Solicitudes' },
     {
       // Solo aparece a quien tenga el permiso (`requiere`): son pantallas que escriben en
       // varias hojas a la vez, y un enlace que siempre da "no tienes acceso" solo estorba.
