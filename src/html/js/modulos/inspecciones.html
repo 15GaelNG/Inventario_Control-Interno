@@ -1,3 +1,14 @@
+<style>
+  /* .chk-tabla no tenía CSS propio: el genérico "input, select, textarea { width: 100% }"
+     (styles.html) estira el radio de cada opción (BUENO/REGULAR/MALO/...) a lo ancho de su
+     celda, y como la celda queda más ancha que el radio, se veía pegado muy a la derecha en
+     vez de centrado con el resto de la fila. width:auto regresa el radio a su tamaño normal;
+     text-align:center lo centra en la celda. La primera columna (el nombre de la pieza) se
+     deja a la izquierda, como el resto de las tablas de la app. */
+  .chk-tabla th, .chk-tabla td { text-align: center; }
+  .chk-tabla th:first-child, .chk-tabla td:first-child { text-align: left; }
+  .chk-tabla td input[type="radio"] { width: auto; }
+</style>
 <script>
   /**
    * inspecciones.js — Inspección vehicular: consulta y captura por pasos.
@@ -695,13 +706,18 @@
         const llantas = p.llantas && estructura.llantas.length ? `
           <div class="chk-seccion">
             <div class="chk-seccion-titulo"><h4>Profundidad de las llantas</h4><span class="chk-peso">en mm</span></div>
-            <div class="form-campos" style="--form-columnas:2; padding:12px">
-              ${estructura.llantas.map((l) => `
-                <div class="field">
-                  <label for="ins-${escaparHtml(l.campo)}">${escaparHtml(l.etiqueta)}</label>
-                  <input type="number" id="ins-${escaparHtml(l.campo)}" data-llanta="${escaparHtml(l.campo)}"
-                    step="0.1" min="0" max="30" inputmode="decimal" />
-                </div>`).join('')}
+            <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start; padding:12px">
+              <img src="https:\/\/raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/semaforo-desgaste-llantas.png"
+                alt="Semáforo de desgaste vertical: seguro arriba de 4 mm, precaución entre 1.6 y 4 mm, peligro debajo de 1.6 mm"
+                style="width:130px; flex-shrink:0; border-radius:8px; border:1px solid var(--color-border)" />
+              <div class="form-campos" style="--form-columnas:2; flex:1; min-width:220px">
+                ${estructura.llantas.map((l) => `
+                  <div class="field">
+                    <label for="ins-${escaparHtml(l.campo)}">${escaparHtml(l.etiqueta)}</label>
+                    <input type="number" id="ins-${escaparHtml(l.campo)}" data-llanta="${escaparHtml(l.campo)}"
+                      step="0.1" min="0" max="30" inputmode="decimal" />
+                  </div>`).join('')}
+              </div>
             </div>
           </div>` : '';
         const voltaje = p.voltaje ? `
