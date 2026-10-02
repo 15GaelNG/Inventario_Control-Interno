@@ -599,6 +599,9 @@
       if (vista === 'inspeccion-vehicular') { montarVista('tpl-inspecciones', initInspecciones); return; }
       if (vista === 'relaciones') { montarVista('tpl-relaciones', initRelaciones); return; }
       if (vista === 'salud') { montarVista('tpl-salud', initSalud); return; }
+      if (vista === 'sistemas-vehiculos') { montarVista('tpl-sistemas', () => initSistemas('servicios-vehiculares')); return; }
+      if (vista === 'sistemas-lineas') { montarVista('tpl-sistemas', () => initSistemas('lineas')); return; }
+      if (vista === 'sistemas-arqueos') { montarVista('tpl-sistemas', () => initSistemas('arqueos')); return; }
       // --- Líneas (rama emmanuel): el módulo vive en html/js/lineas.html (namespace Lineas) ---
       if (vista === 'panorama-lineas') { montarVista('tpl-lineas-panorama', Lineas.initPanorama); return; }
       if (vista === 'lineas-telefonicas') { montarVista('tpl-lineas-telefonicas', Lineas.initTelefonicas); return; }
@@ -643,6 +646,7 @@
         { vista: 'inspeccion-vehicular', etiqueta: 'Inspección Vehicular', icono: 'clipboard-list' },
         { vista: 'instalacion-sensores', etiqueta: 'Instalación de Sensores', icono: 'radio' },
         { vista: 'hologramas', etiqueta: 'Hologramas', icono: 'sparkles' },
+        { vista: 'sistemas-vehiculos', etiqueta: 'Sistemas', icono: 'external-link' },
       ],
     },
     {
@@ -660,6 +664,7 @@
         // del Historial y del Panorama. Reactivación, Solicitud, Reasignaciones y Desechos se retiraron con sus
         // pestañas (30-sep); sus renglones están en APP_MOVIMIENTOS y se ven en el Historial de la ficha.
         // { vista: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas', icono: 'eye' },
+        { vista: 'sistemas-lineas', etiqueta: 'Sistemas', icono: 'external-link' },
       ],
     },
     {
@@ -669,6 +674,7 @@
         { vista: 'arqueos', etiqueta: 'Arqueos', icono: 'wallet' },
         { vista: 'caja-chica', etiqueta: 'Caja Chica', icono: 'piggy-bank' },
         { vista: 'cambios-monto-cch', etiqueta: 'Cambios de Monto', icono: 'repeat' },
+        { vista: 'sistemas-arqueos', etiqueta: 'Sistemas', icono: 'external-link' },
       ],
     },
     {

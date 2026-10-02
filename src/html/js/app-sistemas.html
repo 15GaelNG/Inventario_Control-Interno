@@ -1,0 +1,50 @@
+<script>
+  /**
+   * app-sistemas.html — "Sistemas": accesos directos a otros sistemas externos
+   * relacionados con cada módulo (Control Vehicular, Líneas, Arqueos — pedido 2-oct).
+   * Una sola vista/plantilla (tpl-sistemas) reutilizada por los tres, parametrizada
+   * por el id del grupo en NAV_GRUPOS (ver dispatch en navegarA, app.html). En su
+   * propio archivo por el mismo motivo que Arqueos/Caja Chica (ver app-arqueos.html).
+   */
+
+  // "\/\/" (no "//") en cada URL -- ver comentario del bug de Apps Script en CLAUDE.md:
+  // dentro de un <script> de un .html, Apps Script borra todo lo que sigue a un "//"
+  // literal, incluso dentro de un string.
+  const SISTEMAS_POR_MODULO = {
+    'servicios-vehiculares': [
+      { nombre: 'SIVET', url: 'https:\/\/script.google.com/macros/s/AKfycbzuLVF3kmIdSD5W8pcNOAgqu8kudpgCa1iJ8Ph2pz2r3zvenavReQR2ftc_e4lc5qWWwA/exec' },
+      { nombre: 'Generador de Justificación - SV', url: 'https:\/\/script.google.com/macros/s/AKfycbzjR0Flc1HrTE00khpCjm0Qtzd67zmenYmWPn41ttSTeFECXCd3KMZYyfnl8GXhUKnljg/exec' },
+      { nombre: 'CI Taller y Refacciones', url: 'https:\/\/www.appsheet.com/start/43c87e09-2325-4c35-82ca-5496e41fd4f6' },
+      { nombre: 'Encarta CPP', url: 'https:\/\/script.google.com/macros/s/AKfycbxff11xiWDXARs3qQ7f0Wcc4ltt_1VTG4bvwg4IXROxrGWoWlDDJ1PrC3KdrfsK0EJXvA/exec' },
+    ],
+    // Sin sistemas todavía -- la vista queda lista (muestra "sin registrar") para
+    // cuando se manden los de Líneas.
+    'lineas': [],
+    'arqueos': [
+      { nombre: 'Encarta CPP', url: 'https:\/\/script.google.com/macros/s/AKfycbxff11xiWDXARs3qQ7f0Wcc4ltt_1VTG4bvwg4IXROxrGWoWlDDJ1PrC3KdrfsK0EJXvA/exec' },
+      { nombre: 'Catálogo Dinámico de Conceptos', url: 'https:\/\/script.google.com/a/macros/ciudadmaderas.com/s/AKfycbyRs_dwP_6pQhM3_67Gdj-PXQzsB3WHqQTnvX1qJqSgR3k-6VE53a8-ig6cI__hKz1L/exec' },
+      { nombre: 'Análisis Global de CCH', url: 'https:\/\/script.google.com/a/macros/ciudadmaderas.com/s/AKfycbw4GVN_hyOv2YFldPsL_7WGDQSNXhq19whQt19l8KFruUKxaSTGgPnn-1MNvB9xqCg/exec' },
+    ],
+  };
+
+  function initSistemas(idGrupo) {
+    const grupo = NAV_GRUPOS.find((g) => g.id === idGrupo);
+    document.getElementById('sistemas-subtitulo').textContent =
+      'Accesos directos a otros sistemas' + (grupo ? ' de ' + grupo.etiqueta : '') + ' — se abren en una pestaña nueva';
+    const sistemas = SISTEMAS_POR_MODULO[idGrupo] || [];
+    const lista = document.getElementById('sistemas-lista');
+    if (!sistemas.length) {
+      lista.innerHTML = '<p class="empty-state">Todavía no hay sistemas registrados para este módulo.</p>';
+      return;
+    }
+    lista.innerHTML = sistemas.map((s) => `
+      <div class="card" style="display:flex; flex-direction:column; gap:12px; padding:18px;">
+        <h3 style="margin:0; font-size:15px;">${escaparHtml(s.nombre)}</h3>
+        <a href="${escaparHtml(s.url)}" target="_blank" rel="noopener" class="externo"
+          style="align-self:flex-start; display:inline-flex; align-items:center; gap:6px;">
+          <i data-lucide="external-link" class="ico"></i> Abrir
+        </a>
+      </div>`).join('');
+    refreshIcons();
+  }
+</script>
