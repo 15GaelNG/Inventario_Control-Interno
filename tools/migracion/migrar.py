@@ -1,0 +1,119 @@
+"""LA MIGRACIÓN EN UN COMANDO. Reemplaza al botón migracionTodoLab de Apps Script.
+
+    uv run --no-project --with google-auth-oauthlib --with google-api-python-client \
+        python tools/migracion/migrar.py lab [--replanchar] [--escribir]
+
+Sin --escribir es una SIMULACIÓN: lee el libro y corre todo en memoria (si va con
+--replanchar, sobre los datos de producción, como quedaría LAB tras replanchar). No toca nada.
+Con --escribir:
+    1. (--replanchar) copia producción encima de LAB y lo verifica celda por celda;
+    2. pipeline de IDs: revisar → renombrar → ids → mover → respaldo → auditar;
+    3. homologación de vehiculos, lineas y cajachica: nombres → referencias → auditar.
+Se detiene en el primer paso que reporte PROBLEMAS o FALLAS.
+
+Lo que NO hace, a propósito, porque es la capa de consistencia de la app y vive en Apps
+Script: sincronizar copias y Capital Humano. Al terminar dice qué correr allá.
+
+El reporte completo de cada corrida queda en tools/migracion/corridas/ (git lo ignora: trae
+datos reales). En LOG_MIGRACION queda una fila por pipeline, con PASO `py:…`.
+
+Producción todavía NO: se habilita el día del apagado de AppSheet, con sus propias guardas.
+"""
+import argparse
+import datetime
+import sys
+import time
+from pathlib import Path
+
+import catalogo as cat
+from bitacora import anotar
+from conexion import abrir as abrir_api
+from conexion import api
+from ids import Ids
+from libro import LibroApi, LibroMemoria
+from motor import correr_pipeline
+from pasos import FAMILIAS_HOMOLOGA, PIPELINE_FAMILIA, PIPELINE_IDS
+from replanche import replanchar
+
+CORRIDAS = Path(__file__).resolve().parent / "corridas"
+HOJAS = [h["hoja"] for h in cat.todas()]
+
+
+def main():
+    p = argparse.ArgumentParser(description="La migración de IDs y referencias, en un comando.")
+    p.add_argument("libro", choices=["lab"], help="hoy solo LAB; producción se habilita el día del apagado")
+    p.add_argument("--replanchar", action="store_true", help="copiar producción encima de LAB primero")
+    p.add_argument("--escribir", action="store_true", help="sin esto es una simulación en memoria")
+    p.add_argument("--acepto-perder-columnas", action="store_true")
+    a = p.parse_args()
+
+    arranque = time.time()
+    s = api()
+    reporte = []
+    ok = True
+
+    def avisar(t):
+        print(t, flush=True)
+
+    # ------------------------------------------------------------- replanchado
+    if a.replanchar:
+        avisar("REPLANCHADO")
+        texto, ok = replanchar(s, escribir=a.escribir, acepto_perder=a.acepto_perder_columnas, avisar=avisar)
+        reporte.append(texto)
+
+    # ------------------------------------------------------------- el libro
+    if a.escribir:
+        def abrir():
+            return abrir_api(a.libro, HOJAS, puede_escribir=True)
+    else:
+        # Simulación: una sola lectura a memoria. Con --replanchar se simula sobre PRODUCCIÓN,
+        # que es como quedaría LAB después de replanchar.
+        fuente = cat.REPLANCHE["origen"] if a.replanchar else None
+        base = LibroApi(s, fuente, HOJAS) if fuente else abrir_api(a.libro, HOJAS)
+        memoria = LibroMemoria(base.a_json())
+        memoria.id = cat.REPLANCHE["destino"]
+
+        def abrir():
+            return memoria
+
+    # ------------------------------------------------------------- pipelines
+    generador = Ids()
+    pipelines = [("PIPELINE 1 — IDS DE TODAS LAS HOJAS", "pipelineIds", PIPELINE_IDS, None)]
+    pipelines += [('HOMOLOGACIÓN DE LA FAMILIA "%s"' % f.upper(), "homologarFamilia:" + f, PIPELINE_FAMILIA, f)
+                  for f in FAMILIAS_HOMOLOGA]
+    for titulo, etiqueta, pasos, familia in pipelines:
+        if not ok:
+            break
+        avisar(titulo)
+        texto, detenido = correr_pipeline(titulo, pasos, familia, a.escribir, abrir, generador, avisar)
+        reporte.append(texto)
+        if a.escribir:
+            anotar(s, cat.REPLANCHE["destino"], etiqueta, "ESCRIBIR",
+                   "DETENIDO EN " + detenido if detenido else "OK",
+                   "%d pasos, %s" % (len(pasos), "familia " + familia if familia else "todas las hojas"))
+        ok = not detenido
+
+    # ------------------------------------------------------------- cierre
+    minutos = (time.time() - arranque) / 60
+    if ok:
+        cierre = ["", "═" * 60,
+                  "LISTO en %.1f minutos." % minutos if a.escribir else
+                  "SIMULACIÓN COMPLETA en %.1f minutos: si el reporte cuadra, corre con --escribir." % minutos]
+        if a.escribir:
+            cierre += ["Falta lo de Apps Script: en el editor del proyecto LAB corre migracionFinalApps",
+                       "(sincroniza copias y liga Capital Humano)."]
+    else:
+        cierre = ["", "═" * 60, "SE DETUVO (%.1f min). Lee el último pipeline del reporte." % minutos]
+    reporte.append("\n".join(cierre))
+
+    CORRIDAS.mkdir(exist_ok=True)
+    ruta = CORRIDAS / ("%s_%s_%s.txt" % (datetime.datetime.now().strftime("%Y-%m-%d_%H%M"), a.libro,
+                                          "escribir" if a.escribir else "simulacion"))
+    ruta.write_text("\n\n".join(reporte), encoding="utf-8")
+    avisar("\n".join(cierre))
+    avisar("Reporte completo: " + str(ruta))
+    sys.exit(0 if ok else 1)
+
+
+if __name__ == "__main__":
+    main()

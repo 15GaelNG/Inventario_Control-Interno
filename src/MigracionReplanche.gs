@@ -215,6 +215,14 @@ function replCopiarHoja_(hojaOrigen, hojaDestino) {
   const temporal = hojaOrigen.copyTo(libro);
   try {
     temporal.setName(REPL_TEMPORAL + hojaDestino.getName());
+    // Sin filtro y sin filas ocultas ANTES de copiar: copyValuesToRange solo pasa lo VISIBLE,
+    // y repite en mosaico lo que pasó hasta llenar el rango. Así quedaron VEHICULOS (60 de
+    // 648, diez veces cada uno) y CAJAS CHICAS (98 de 285) el 02/10/2026, con un LISTO.
+    // El replanchado bueno es el de Python (tools/migracion/replanche.py), que además
+    // compara celda por celda al terminar.
+    const filtro = temporal.getFilter();
+    if (filtro) filtro.remove();
+    temporal.showRows(1, temporal.getMaxRows());
     temporal.getRange(1, 1, filas, cols).copyValuesToRange(hojaDestino, 1, cols, 1, filas);
     SpreadsheetApp.flush();
   } finally {

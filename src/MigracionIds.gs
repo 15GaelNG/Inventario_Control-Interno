@@ -40,8 +40,19 @@ const MIGRACION_PROP_SELLO = 'MIGRACION_IDS_SELLADOS';
 /** ¿Este libro ya tiene referencias escritas contra sus IDs? */
 function migracionSellado_(ssId) {
   const v = PropertiesService.getScriptProperties().getProperty(MIGRACION_PROP_SELLO) || '';
-  return v.split(',').some((x) => x.trim() === ssId);
+  if (v.split(',').some((x) => x.trim() === ssId)) return true;
+  // La migración de Python (tools/migracion) no puede escribir Script Properties: sella el
+  // LIBRO, con un metadato. Se leen los dos lugares, para que la reversa respete los dos.
+  try {
+    return SpreadsheetApp.openById(ssId).createDeveloperMetadataFinder()
+      .withKey(MIGRACION_META_SELLO).find().length > 0;
+  } catch (e) {
+    return false;
+  }
 }
+
+/** El sello que pone la migración de Python, como metadato del libro (tools/migracion/libro.py). */
+const MIGRACION_META_SELLO = 'MIGRACION_IDS_SELLADO';
 
 /** Deja constancia de que este libro ya tiene referencias colgando de sus IDs. */
 function migracionSellar_(ssId) {

@@ -51,6 +51,8 @@ function hojaFalsa(enc, filas) {
     getName: () => api._nombre,
     setName: (n) => { api._libro._renombrar(api, n); },
     getParent: () => api._libro._api,
+    getFilter: () => null,
+    showRows: () => {},
     getRange: (f, c, nf, nc) => ({
       // copyValuesToRange simulado: solo valores, a otra hoja del MISMO libro
       copyValuesToRange: (destino, c1, c2, f1, f2) => {

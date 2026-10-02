@@ -11,23 +11,49 @@ decir** cada salida está en [ensayo-final.md](ensayo-final.md) y
   bien corres `…2Escribir`.
 - Marca cada casilla al terminar.
 
-## La forma corta: un solo botón
+## La forma de hoy: Python + un clic (desde el 02/10/2026)
 
-1. **A mano, antes:** borrar `TELEFONO` y `NÚMERO DE CUENTA` de `COLABORADORES ACTUALIZADO`
-   (LAB y libro del equipo). Si `replanche1Ensayo` no se ha corrido desde el último cambio
-   de columnas en producción, córrelo: un `SE PIERDE` detendría el botón en la etapa 1.
-2. **`migracionTodoLab`** — replancha LAB desde producción, quita el sello de LAB y corre
-   los 5 pipelines **escribiendo**. Sigue sola: cada etapa programa la siguiente con un
-   activador, y repite la que se corte por tiempo. Tarda del orden de 15 minutos.
-   La primera vez Google pide autorizar un permiso nuevo (activadores): es una sola vez.
-3. **Para ver en qué va:** `migracionTodoEstado`, o la hoja `LOG_MIGRACION` (una fila
-   `TODO n/7 …` por etapa). Al terminar o detenerse llega un correo.
-4. **Si se detuvo:** el correo y `migracionTodoEstado` dicen en qué etapa y qué dijo.
-   Se arregla y se vuelve a correr `migracionTodoLab` (empieza de cero, replanchando).
-   Para pararla a mano: `migracionTodoCancelar`.
+La migración (replanchado, IDs, nombres, referencias) corre en **Python, desde la terminal**,
+con la API de Sheets: sin límite de 6 minutos, sin activadores, y con el reporte completo
+guardado. Apps Script se queda solo con la capa de consistencia de la app. Todo el código
+está en `tools/migracion/` (cada archivo explica lo suyo).
 
-Lo de abajo es la forma larga, paso por paso: para revisar una etapa con su ensayo, o
-cuando el botón se detuvo y hay que ver de cerca.
+```
+uv run --no-project --with google-auth-oauthlib --with google-api-python-client \
+    python tools/migracion/migrar.py lab --replanchar            # simulación: no toca nada
+uv run ... python tools/migracion/migrar.py lab --replanchar --escribir
+```
+
+1. **A mano, antes:** borrar `TELEFONO` y `NÚMERO DE CUENTA` de `COLABORADORES ACTUALIZADO`.
+   En el proyecto LAB, `SS_ID_VEHICULOS` y `SS_ID_TELEFONIA` deben ser los dos el libro de LAB.
+2. **Simulación** (sin `--escribir`): lee producción y corre TODO en memoria, como quedaría
+   LAB. Tarda segundos. Si el reporte cuadra, sigue.
+3. **`--escribir`**: replancha (y lo verifica celda por celda contra producción), corre los
+   6 pasos de IDs y homologa vehiculos, lineas y cajachica. Se detiene en el primer
+   `PROBLEMAS` o `FALLAS`. Unos 3 minutos. Repetirlo es seguro: una segunda corrida no
+   escribe nada.
+4. **En el editor de Apps Script del proyecto LAB: `migracionFinalApps`** — un clic:
+   sincroniza las copias (vehiculos, lineas, cajachica) y corre Capital Humano.
+5. El reporte completo queda en `tools/migracion/corridas/` (git lo ignora: trae datos
+   reales). En `LOG_MIGRACION`, una fila `py:…` por pipeline.
+
+**Primera vez en una máquina:** el token de usuario. `generic-tool.json` (el cliente OAuth,
+fuera de git) en la raíz, y `uv run ... python tools/migracion/autorizar.py lab`.
+
+**No uses el replanchado de Apps Script ni `migracionTodoLab`.** El 02/10/2026 copiaron
+VEHICULOS y CAJAS CHICAS con el filtro activo de producción (60 de 648 y 98 de 285 filas,
+repetidas en mosaico) y dijeron LISTO. Ya se corrigió, pero el bueno es el de Python, que
+compara cada celda al terminar.
+
+**Cómo sabemos que el port hace lo mismo que Apps Script:** `npm run test:migracion-py`
+corre los pasos de Apps Script (el oráculo, `tools/migracion/oraculo.js`) y los de Python
+sobre los mismos libros y exige celdas y reportes idénticos. Con `FOTO=ruta` lo hace sobre
+una foto real (`tools/migracion/foto.py`). Si cambias la lógica de un paso en el `.gs`,
+cámbiala igual en Python o esa prueba truena; si cambias `Entidades.gs`, corre
+`npm run catalogo`.
+
+Lo de abajo es la forma vieja, paso por paso en Apps Script. Queda como referencia mientras
+se retira.
 
 ## Si una función "se muere" por tiempo
 

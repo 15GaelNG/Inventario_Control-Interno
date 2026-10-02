@@ -1,0 +1,611 @@
+{
+  "_aviso": "GENERADO por tools/migracion/exportar-catalogo.js desde src/. No se edita a mano.",
+  "columnas": {
+    "id": "ID",
+    "idAnterior": "ID ANTERIOR",
+    "idAnteriorLegado": "ID APPSHEET"
+  },
+  "hojas": [
+    {
+      "hoja": "VEHICULOS",
+      "prefijo": "VEH",
+      "llaveAnterior": "ID_VEHICULO",
+      "columnaAnterior": 0,
+      "familia": "vehiculos",
+      "llaveEsDato": false,
+      "delSistemaNuevo": false,
+      "externa": false,
+      "pisaLlaveAnterior": false,
+      "migrable": true
+    },
+    {
+      "hoja": "CAMBIOS VEHICULOS",
+      "prefijo": "CVE",
+      "llaveAnterior": "ID_CAMBIO",
+      "columnaAnterior": 0,
+      "familia": "vehiculos",
+      "llaveEsDato": false,
+      "delSistemaNuevo": false,
+      "externa": false,
+      "pisaLlaveAnterior": false,
+      "migrable": true
+    },
+    {
+      "hoja": "REASIGNACIONES_VEHICULOS",
+      "prefijo": "RVE",
+      "llaveAnterior": "ID Reasignacion Vehicular",
+      "columnaAnterior": 0,
+      "familia": "vehiculos",
+      "llaveEsDato": false,
+      "delSistemaNuevo": false,
+      "externa": false,
+      "pisaLlaveAnterior": false,
+      "migrable": true
+    },
+    {
+      "hoja": "VERIFICACIONES",
+      "prefijo": "VER",
+      "llaveAnterior": "ID_VERIFICACION",
+      "columnaAnterior": 0,
+      "familia": "vehiculos",
+      "llaveEsDato": false,
+      "delSistemaNuevo": false,
+      "externa": false,
+      "pisaLlaveAnterior": false,
+      "migrable": true
+    },
+    {
+      "hoja": "INSPECCION VEHICULAR",
+      "prefijo": "INS",
+      "llaveAnterior": "ID INSPECCION",
+      "columnaAnterior": 0,
+      "familia": "vehiculos",
+      "llaveEsDato": true,
+      "delSistemaNuevo": false,
+      "externa": false,
+      "pisaLlaveAnterior": false,
+      "migrable": true
+    },
+    {
+      "hoja": "INSTALACION DE SENSORES",
+      "prefijo": "SEN",
+      "llaveAnterior": "ID_SENSOR",
+      "columnaAnterior": 0,
+      "familia": "vehiculos",
+      "llaveEsDato": false,
+      "delSistemaNuevo": false,
+      "externa": false,
+      "pisaLlaveAnterior": false,
+      "migrable": true
+    },
+    {
+      "hoja": "HOLOGRAMAS",
+      "prefijo": "HOL",
+      "llaveAnterior": "ID_HOLOGRAMA",
+      "columnaAnterior": 0,
+      "familia": "vehiculos",
+      "llaveEsDato": false,
+      "delSistemaNuevo": false,
+      "externa": false,
+      "pisaLlaveAnterior": false,
+      "migrable": true
+    },
+    {
+      "hoja": "INCIDENCIAS",
+      "prefijo": "INC",
+      "llaveAnterior": "ID_INCIDENCIA",
+      "columnaAnterior": 0,
+      "familia": "vehiculos",
+      "llaveEsDato": false,
+      "delSistemaNuevo": false,
+      "externa": false,
+      "pisaLlaveAnterior": false,
+      "migrable": true
+    },
+    {
+      "hoja": "LINEAS TELEFONICAS",
+      "prefijo": "LIN",
+      "llaveAnterior": "ID",
+      "columnaAnterior": 0,
+      "familia": "lineas",
+      "llaveEsDato": false,
+      "delSistemaNuevo": false,
+      "externa": false,
+      "pisaLlaveAnterior": true,
+      "migrable": true
+    },
+    {
+      "hoja": "INSPECCIONES LINEAS",
+      "prefijo": "ILI",
+      "llaveAnterior": "ID",
+      "columnaAnterior": 0,
+      "familia": "lineas",
+      "llaveEsDato": false,
+      "delSistemaNuevo": false,
+      "externa": false,
+      "pisaLlaveAnterior": true,
+      "migrable": true
+    },
+    {
+      "hoja": "RESPONSIVAS LINEAS",
+      "prefijo": "RLI",
+      "llaveAnterior": "ID",
+      "columnaAnterior": 0,
+      "familia": "lineas",
+      "llaveEsDato": false,
+      "delSistemaNuevo": false,
+      "externa": false,
+      "pisaLlaveAnterior": true,
+      "migrable": true
+    },
+    {
+      "hoja": "CAMBIOS LINEAS TELEFONICAS",
+      "prefijo": "CLI",
+      "llaveAnterior": "ID APPSHEET",
+      "columnaAnterior": 1,
+      "familia": "lineas",
+      "llaveEsDato": false,
+      "delSistemaNuevo": false,
+      "externa": false,
+      "pisaLlaveAnterior": false,
+      "migrable": true
+    },
+    {
+      "hoja": "ACCESORIOS CELULARES",
+      "prefijo": "ACC",
+      "llaveAnterior": "ID_Accesorio",
+      "columnaAnterior": 0,
+      "familia": "lineas",
+      "llaveEsDato": false,
+      "delSistemaNuevo": false,
+      "externa": false,
+      "pisaLlaveAnterior": false,
+      "migrable": true
+    },
+    {
+      "hoja": "MOVIMIENTOS_ACCESORIOS",
+      "prefijo": "MAC",
+      "llaveAnterior": "ID_Movimiento",
+      "columnaAnterior": 0,
+      "familia": "lineas",
+      "llaveEsDato": false,
+      "delSistemaNuevo": false,
+      "externa": false,
+      "pisaLlaveAnterior": false,
+      "migrable": true
+    },
+    {
+      "hoja": "ARQUEOS",
+      "prefijo": "ARQ",
+      "llaveAnterior": "ID ARQUEO",
+      "columnaAnterior": 0,
+      "familia": "cajachica",
+      "llaveEsDato": true,
+      "delSistemaNuevo": false,
+      "externa": false,
+      "pisaLlaveAnterior": false,
+      "migrable": true
+    },
+    {
+      "hoja": "CAJAS CHICAS",
+      "prefijo": "CCH",
+      "llaveAnterior": "ID CCH",
+      "columnaAnterior": 0,
+      "familia": "cajachica",
+      "llaveEsDato": true,
+      "delSistemaNuevo": false,
+      "externa": false,
+      "pisaLlaveAnterior": false,
+      "migrable": true
+    },
+    {
+      "hoja": "INCREMENTOS",
+      "prefijo": "MON",
+      "llaveAnterior": "ID",
+      "columnaAnterior": 0,
+      "familia": "cajachica",
+      "llaveEsDato": false,
+      "delSistemaNuevo": false,
+      "externa": false,
+      "pisaLlaveAnterior": true,
+      "migrable": true
+    },
+    {
+      "hoja": "UBER",
+      "prefijo": "UBE",
+      "llaveAnterior": "ID",
+      "columnaAnterior": 0,
+      "familia": "otros",
+      "llaveEsDato": false,
+      "delSistemaNuevo": false,
+      "externa": false,
+      "pisaLlaveAnterior": true,
+      "migrable": true
+    },
+    {
+      "hoja": "TICKETS",
+      "prefijo": "TCK",
+      "llaveAnterior": "ID",
+      "columnaAnterior": 0,
+      "familia": "otros",
+      "llaveEsDato": false,
+      "delSistemaNuevo": false,
+      "externa": false,
+      "pisaLlaveAnterior": true,
+      "migrable": true
+    },
+    {
+      "hoja": "COLABORADORES",
+      "prefijo": "COL",
+      "llaveAnterior": "No EMPLEADO",
+      "columnaAnterior": 0,
+      "familia": "otros",
+      "llaveEsDato": true,
+      "delSistemaNuevo": false,
+      "externa": false,
+      "pisaLlaveAnterior": false,
+      "migrable": true
+    },
+    {
+      "hoja": "COLABORADORES ACTUALIZADO",
+      "prefijo": "EMP",
+      "llaveAnterior": "No EMPLEADO",
+      "columnaAnterior": 0,
+      "familia": "capitalhumano",
+      "llaveEsDato": true,
+      "delSistemaNuevo": false,
+      "externa": true,
+      "pisaLlaveAnterior": false,
+      "migrable": false
+    },
+    {
+      "hoja": "PERSONAS",
+      "prefijo": "PER",
+      "llaveAnterior": "No EMPLEADO",
+      "columnaAnterior": 0,
+      "familia": "capitalhumano",
+      "llaveEsDato": false,
+      "delSistemaNuevo": true,
+      "externa": false,
+      "pisaLlaveAnterior": false,
+      "migrable": false
+    },
+    {
+      "hoja": "APP_EVIDENCIAS",
+      "prefijo": "EVI",
+      "llaveAnterior": "ID",
+      "columnaAnterior": 0,
+      "familia": "lineas",
+      "llaveEsDato": false,
+      "delSistemaNuevo": true,
+      "externa": false,
+      "pisaLlaveAnterior": true,
+      "migrable": false
+    },
+    {
+      "hoja": "APP_MOVIMIENTOS",
+      "prefijo": "MOV",
+      "llaveAnterior": "ID",
+      "columnaAnterior": 0,
+      "familia": "lineas",
+      "llaveEsDato": false,
+      "delSistemaNuevo": true,
+      "externa": false,
+      "pisaLlaveAnterior": true,
+      "migrable": false
+    },
+    {
+      "hoja": "APP_NOTIFICACIONES",
+      "prefijo": "NTF",
+      "llaveAnterior": "ID",
+      "columnaAnterior": 0,
+      "familia": "lineas",
+      "llaveEsDato": false,
+      "delSistemaNuevo": true,
+      "externa": false,
+      "pisaLlaveAnterior": true,
+      "migrable": false
+    },
+    {
+      "hoja": "APP_RESGUARDOS",
+      "prefijo": "RSG",
+      "llaveAnterior": "ID",
+      "columnaAnterior": 0,
+      "familia": "lineas",
+      "llaveEsDato": false,
+      "delSistemaNuevo": true,
+      "externa": false,
+      "pisaLlaveAnterior": true,
+      "migrable": false
+    },
+    {
+      "hoja": "APP_CORRECCIONES",
+      "prefijo": "COR",
+      "llaveAnterior": "ID",
+      "columnaAnterior": 0,
+      "familia": "lineas",
+      "llaveEsDato": false,
+      "delSistemaNuevo": true,
+      "externa": false,
+      "pisaLlaveAnterior": true,
+      "migrable": false
+    }
+  ],
+  "familias": [
+    "cajachica",
+    "capitalhumano",
+    "lineas",
+    "otros",
+    "vehiculos"
+  ],
+  "referenciasEntidades": [
+    {
+      "hoja": "VERIFICACIONES",
+      "columna": "ID VEHICULO",
+      "padre": "VEHICULOS",
+      "llave": {
+        "columna": "FOLIO VEHICULO",
+        "enPadre": "FOLIO"
+      }
+    },
+    {
+      "hoja": "REASIGNACIONES_VEHICULOS",
+      "columna": "ID VEHICULO",
+      "padre": "VEHICULOS",
+      "llave": {
+        "columna": "Folio Vehiculo",
+        "enPadre": "FOLIO"
+      }
+    },
+    {
+      "hoja": "INSTALACION DE SENSORES",
+      "columna": "ID VEHICULO",
+      "padre": "VEHICULOS",
+      "llave": {
+        "columna": "FOLIO",
+        "enPadre": "FOLIO"
+      }
+    },
+    {
+      "hoja": "INSPECCION VEHICULAR",
+      "columna": "ID VEHICULO",
+      "padre": "VEHICULOS",
+      "llave": {
+        "columna": "FOLIO",
+        "enPadre": "FOLIO"
+      }
+    },
+    {
+      "hoja": "HOLOGRAMAS",
+      "columna": "ID VEHICULO",
+      "padre": "VEHICULOS",
+      "llave": {
+        "columna": "SERIE VEHICULO",
+        "enPadre": "SERIE VEHICULO"
+      }
+    },
+    {
+      "hoja": "CAMBIOS VEHICULOS",
+      "columna": "ID VEHICULO",
+      "padre": "VEHICULOS",
+      "llave": {
+        "columna": "FOLIO",
+        "enPadre": "FOLIO"
+      }
+    },
+    {
+      "hoja": "INCIDENCIAS",
+      "columna": "ID VEHICULO",
+      "padre": "VEHICULOS",
+      "llave": {
+        "columna": "FOLIO",
+        "enPadre": "FOLIO"
+      }
+    },
+    {
+      "hoja": "INSPECCIONES LINEAS",
+      "columna": "ID LINEA",
+      "padre": "LINEAS TELEFONICAS"
+    },
+    {
+      "hoja": "RESPONSIVAS LINEAS",
+      "columna": "ID LINEA",
+      "padre": "LINEAS TELEFONICAS"
+    },
+    {
+      "hoja": "CAMBIOS LINEAS TELEFONICAS",
+      "columna": "ID_LINEA",
+      "padre": "LINEAS TELEFONICAS"
+    },
+    {
+      "hoja": "APP_EVIDENCIAS",
+      "columna": "ID_LINEA",
+      "padre": "LINEAS TELEFONICAS"
+    },
+    {
+      "hoja": "MOVIMIENTOS_ACCESORIOS",
+      "columna": "ID ACCESORIO",
+      "padre": "ACCESORIOS CELULARES",
+      "llave": {
+        "columna": "ID_Accesorio",
+        "enPadre": "ID ANTERIOR"
+      }
+    },
+    {
+      "hoja": "ARQUEOS",
+      "columna": "ID CAJA CHICA",
+      "padre": "CAJAS CHICAS",
+      "llave": {
+        "columna": "ID CCH",
+        "enPadre": "ID CCH"
+      }
+    },
+    {
+      "hoja": "INCREMENTOS",
+      "columna": "ID CAJA CHICA",
+      "padre": "CAJAS CHICAS",
+      "llave": {
+        "columna": "ID CCH",
+        "enPadre": "ID CCH"
+      }
+    },
+    {
+      "hoja": "VEHICULOS",
+      "columna": "ID PERSONA",
+      "padre": "PERSONAS"
+    },
+    {
+      "hoja": "CAJAS CHICAS",
+      "columna": "ID PERSONA",
+      "padre": "PERSONAS"
+    },
+    {
+      "hoja": "LINEAS TELEFONICAS",
+      "columna": "ID PERSONA",
+      "padre": "PERSONAS",
+      "libro": "TELEFONIA"
+    }
+  ],
+  "referenciasMigracion": [
+    {
+      "hoja": "VERIFICACIONES",
+      "columna": "FOLIO VEHICULO",
+      "padre": "VEHICULOS",
+      "porLlaveNegocio": "FOLIO",
+      "destino": "ID VEHICULO",
+      "esperado": 1
+    },
+    {
+      "hoja": "REASIGNACIONES_VEHICULOS",
+      "columna": "Folio Vehiculo",
+      "padre": "VEHICULOS",
+      "porLlaveNegocio": "FOLIO",
+      "destino": "ID VEHICULO",
+      "esperado": 1
+    },
+    {
+      "hoja": "INSTALACION DE SENSORES",
+      "columna": "FOLIO",
+      "padre": "VEHICULOS",
+      "porLlaveNegocio": "FOLIO",
+      "destino": "ID VEHICULO",
+      "esperado": 0.99
+    },
+    {
+      "hoja": "INSPECCION VEHICULAR",
+      "columna": "FOLIO",
+      "padre": "VEHICULOS",
+      "porLlaveNegocio": "FOLIO",
+      "destino": "ID VEHICULO",
+      "esperado": 0.996
+    },
+    {
+      "hoja": "HOLOGRAMAS",
+      "columna": "SERIE VEHICULO",
+      "padre": "VEHICULOS",
+      "porLlaveNegocio": "SERIE VEHICULO",
+      "destino": "ID VEHICULO",
+      "opcional": true
+    },
+    {
+      "hoja": "CAMBIOS VEHICULOS",
+      "columna": "FOLIO",
+      "padre": "VEHICULOS",
+      "porLlaveNegocio": "FOLIO",
+      "destino": "ID VEHICULO",
+      "esperado": 0.79
+    },
+    {
+      "hoja": "INCIDENCIAS",
+      "columna": "FOLIO",
+      "padre": "VEHICULOS",
+      "porLlaveNegocio": "FOLIO",
+      "destino": "ID VEHICULO",
+      "esperado": 1
+    },
+    {
+      "hoja": "INSPECCIONES LINEAS",
+      "columna": "ID LINEA",
+      "padre": "LINEAS TELEFONICAS",
+      "esperado": 0.999
+    },
+    {
+      "hoja": "RESPONSIVAS LINEAS",
+      "columna": "ID LINEA",
+      "padre": "LINEAS TELEFONICAS",
+      "esperado": 0.998
+    },
+    {
+      "hoja": "CAMBIOS LINEAS TELEFONICAS",
+      "columna": "ID_LINEA",
+      "padre": "LINEAS TELEFONICAS",
+      "esperado": 0.981
+    },
+    {
+      "hoja": "APP_EVIDENCIAS",
+      "columna": "ID_LINEA",
+      "padre": "LINEAS TELEFONICAS",
+      "esperado": 1
+    },
+    {
+      "hoja": "MOVIMIENTOS_ACCESORIOS",
+      "columna": "ID_Accesorio",
+      "padre": "ACCESORIOS CELULARES",
+      "porLlaveNegocio": "ID_Accesorio",
+      "destino": "ID ACCESORIO",
+      "esperado": 0.95
+    },
+    {
+      "hoja": "ARQUEOS",
+      "columna": "ID CCH",
+      "padre": "CAJAS CHICAS",
+      "porLlaveNegocio": "ID CCH",
+      "destino": "ID CAJA CHICA",
+      "esperado": 1
+    },
+    {
+      "hoja": "INCREMENTOS",
+      "columna": "ID CCH",
+      "padre": "CAJAS CHICAS",
+      "porLlaveNegocio": "ID CCH",
+      "destino": "ID CAJA CHICA",
+      "esperado": 1
+    }
+  ],
+  "nombres": [
+    {
+      "hoja": "VEHICULOS",
+      "de": "UBICACION",
+      "a": "OFICINA / DESARROLLO",
+      "limpieza": 23
+    }
+  ],
+  "encabezadosDeducidos": [
+    {
+      "hoja": "CAMBIOS LINEAS TELEFONICAS",
+      "nombre": "NUCO",
+      "entre": [
+        "ID_LINEA",
+        "IMEI"
+      ],
+      "comprueba": {
+        "hoja": "LINEAS TELEFONICAS",
+        "columna": "NUCO",
+        "minimo": 0.9
+      },
+      "evidencia": "De 35,428 filas con línea padre, 35,425 traen exactamente el NUCO de esa línea (99.99%). Las 3 que no son dedazos: 110000 donde va 10001 (un cero de más), 1483 donde va 1484, y 1297 donde va 1080. Idéntico en producción y en el laboratorio, así que no es cosa de la copia. Medido el 30/09/2026."
+    }
+  ],
+  "produccion": "1h5ibDsmVtrG27rwMaOvj-lm08QZUHzDv3woPmkfRQrk",
+  "selloMetadato": "MIGRACION_IDS_SELLADO",
+  "replanche": {
+    "destino": "1-RA6lmh-rZ-OKfsZSLl2Qd9lLyuDZ3dx3fP0M7qL-5o",
+    "destinoNombre": "Inventario Reemplazable",
+    "origen": "1h5ibDsmVtrG27rwMaOvj-lm08QZUHzDv3woPmkfRQrk",
+    "prohibidos": {
+      "1h5ibDsmVtrG27rwMaOvj-lm08QZUHzDv3woPmkfRQrk": "el libro de PRODUCCIÓN",
+      "1fC77Uu1ePVUySNvhgWXMHqWpLhGhBMTZZMEblU2nUhI": "el libro de pruebas COMPARTIDO del equipo"
+    },
+    "temporal": "__replanche "
+  }
+}
