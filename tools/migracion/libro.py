@@ -279,6 +279,8 @@ class LibroApi(_LibroBase):
             self._sellar_pendiente = False
         if not self.ops:
             return 0
+        if self.id == cat.PRODUCCION:   # la lista negra, otra vez, en el último punto antes de Google
+            raise RuntimeError("Se iba a escribir en PRODUCCIÓN; no se mandó nada (ver conexion.py).")
         if not self.puede_escribir:
             raise RuntimeError("Este libro se abrió de solo lectura y un paso quiso escribir: "
                                "no se mandó nada.")

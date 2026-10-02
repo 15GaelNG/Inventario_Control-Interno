@@ -24,6 +24,13 @@ uv run --no-project --with google-auth-oauthlib --with google-api-python-client 
 uv run ... python tools/migracion/migrar.py lab --replanchar --escribir
 ```
 
+**A otro libro:** `migrar.py --libro <id o URL> …` en vez de `lab`. Va a cualquier libro que tu
+cuenta pueda editar; para escribir pide su nombre tal cual (o `--confirmo "Nombre"`). Con
+`--replanchar` crea las hojas que le falten, así que un libro en blanco queda migrado de una
+vez. **Producción está en la lista negra** (`tools/migracion/conexion.py`) y el libro del
+equipo no se puede replanchar. `migracionFinalApps` corre desde un proyecto de Apps Script
+apuntado a ese libro.
+
 1. **A mano, antes:** borrar `TELEFONO` y `NÚMERO DE CUENTA` de `COLABORADORES ACTUALIZADO`.
    En el proyecto LAB, `SS_ID_VEHICULOS` y `SS_ID_TELEFONIA` deben ser los dos el libro de LAB.
 2. **Simulación** (sin `--escribir`): lee producción y corre TODO en memoria, como quedaría

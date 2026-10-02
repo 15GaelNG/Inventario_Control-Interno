@@ -9,6 +9,8 @@ import datetime
 import getpass
 import subprocess
 
+import catalogo as cat
+
 HOJA = "LOG_MIGRACION"
 ENCABEZADOS = ["FECHA", "PASO", "SPREADSHEET", "MODO", "RESULTADO", "RESUMEN", "QUIEN"]
 _EPOCA_SHEETS = datetime.datetime(1899, 12, 30)
@@ -27,6 +29,8 @@ def _serial(momento):
 
 
 def anotar(api, ss_id, paso, modo, resultado, resumen):
+    if ss_id == cat.PRODUCCION:   # ni la bitácora se escribe en producción
+        return
     try:
         meta = api.get(spreadsheetId=ss_id, fields="sheets.properties(sheetId,title)").execute()
         hoja = next((s["properties"]["sheetId"] for s in meta["sheets"] if s["properties"]["title"] == HOJA), None)
