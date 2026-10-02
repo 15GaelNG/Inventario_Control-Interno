@@ -1,0 +1,147 @@
+<!--
+  Administración > Usuarios y permisos (solo ADMIN). Mismo patrón que Vehículos y Líneas:
+  KPIs + tabla (Personas | Áreas) y, con doble clic, la ficha con sus pestañas. Los
+  permisos se cambian con "Editar permisos" (ventana). Lógica: js/app-permisos.html.
+  Casi todo el estilo es el de las fichas (ln-*, stat-*, info-*, modal-*); aquí solo va
+  lo propio de los permisos.
+-->
+<style>
+  .usr-avatar {
+    display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%;
+    background: var(--color-accent-soft); color: var(--color-text); font-weight: 700; font-size: 15px;
+  }
+
+  /* Un renglón de permiso: ícono · módulo (y de dónde viene) · nivel */
+  .usr-permiso { display: flex; align-items: center; gap: 12px; padding: 9px 0; }
+  .usr-permiso + .usr-permiso { border-top: 1px solid var(--color-border); }
+  .usr-permiso-ico { flex: none; width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; background: var(--color-bg); color: var(--color-text-muted); }
+  .usr-permiso-ico .ico { width: 16px; height: 16px; }
+  .usr-permiso-nombre { flex: 1; min-width: 0; font-weight: 600; font-size: 13.5px; }
+  .usr-permiso-origen { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 3px; font-weight: 400; font-size: 11.5px; color: var(--color-text-muted); }
+  .usr-permiso.excepcion .usr-permiso-ico { background: var(--color-accent); color: var(--color-primary); }
+
+  .usr-nivel { flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+  .usr-nivel .ico { width: 13px; height: 13px; }
+  /* Nivel: Editar verde, Ver azul de la empresa, Sin acceso rojo (el sistema no tiene un rojo
+     propio: --color-danger es bronce, por eso va aquí) */
+  .usr-nivel.EDICION { background: var(--color-success); color: #fff; }
+  .usr-nivel.LECTURA { background: var(--color-primary); color: #fff; }
+  .usr-nivel.NINGUNO { background: #b42318; color: #fff; }
+
+  /* De dónde viene el permiso: por su área (azul de la empresa) o excepción (dorado) */
+  .usr-origen { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px 1px 6px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .usr-origen .ico { width: 12px; height: 12px; }
+  .usr-origen.area { background: var(--color-primary-soft); color: var(--color-primary); }
+  .usr-origen.excepcion { background: var(--color-accent); color: var(--color-primary); }
+  .usr-origen.rol { background: var(--color-bg); color: var(--color-text-muted); border: 1px solid var(--color-border); }
+
+  .usr-aviso { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; margin-bottom: 14px; border-radius: 10px; background: var(--color-note-bg); font-size: 13px; }
+  .usr-aviso .ico { flex: none; width: 16px; height: 16px; margin-top: 1px; color: var(--color-primary); }
+
+  .usr-plegado summary { cursor: pointer; color: var(--color-text-muted); font-size: 13px; font-weight: 600; padding: 2px 0; }
+  .usr-plegado summary:hover { color: var(--color-text); }
+  .usr-plegado[open] summary { margin-bottom: 6px; }
+
+  .usr-enlace { background: none; border: none; padding: 0; color: var(--color-primary); font: inherit; cursor: pointer; text-align: left; }
+  .usr-enlace:hover { text-decoration: underline; }
+  .usr-chip-enlace { cursor: pointer; border: none; font: inherit; }
+  .usr-chip-enlace:hover { text-decoration: underline; }
+
+  /* Ventana "Editar permisos": una lista limpia, el color solo dice de dónde viene cada permiso */
+  .usr-modal-regla { margin: -8px 0 10px; font-size: 12.5px; color: var(--color-text-muted); line-height: 1.45; }
+  .usr-modal-leyenda { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; font-size: 12px; color: var(--color-text-muted); }
+  .usr-editar-grupo {
+    display: flex; align-items: center; gap: 6px; margin: 16px 0 2px; padding: 0 2px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted);
+  }
+  .usr-editar-grupo:first-child { margin-top: 0; }
+  .usr-editar-grupo .ico { width: 13px; height: 13px; }
+  .usr-editar-lista { border: 1px solid var(--color-border); border-radius: 10px; overflow: hidden; }
+  .usr-editar-fila { display: flex; align-items: center; gap: 10px; padding: 7px 10px 7px 12px; margin: 0; cursor: default; }
+  .usr-editar-fila + .usr-editar-fila { border-top: 1px solid var(--color-border); }
+  .usr-editar-fila:hover { background: var(--color-bg); }
+  .usr-editar-fila > .ico { flex: none; width: 15px; height: 15px; color: var(--color-text-muted); }
+  .usr-editar-nombre { flex: 1; min-width: 0; font-size: 13.5px; display: flex; align-items: center; gap: 6px; }
+  .usr-editar-nombre::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: transparent; flex: none; }
+  .usr-editar-fila.cambiada .usr-editar-nombre::after { background: var(--color-accent); }
+  .usr-editar-fila.cambiada .usr-editar-nombre { font-weight: 600; }
+  .usr-editar-fila select { width: 172px; flex: none; margin: 0; padding: 5px 8px; font-size: 12.5px; font-weight: 600; border-radius: 8px; }
+  .usr-editar-fila select.area { background: var(--color-primary-soft); color: var(--color-primary); border-color: transparent; }
+  .usr-editar-fila select.excepcion { background: var(--color-accent-soft); color: var(--color-text); border-color: var(--color-accent); }
+  .usr-modal-pie { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--color-border); }
+  .usr-modal-pie p { margin: 0 auto 0 0; font-size: 12.5px; color: var(--color-text-muted); }
+  .usr-modal-pie button:disabled { opacity: .5; cursor: not-allowed; }
+  @media (max-width: 560px) { .usr-editar-fila select { width: 140px; } }
+</style>
+
+<template id="tpl-usuarios">
+  <section id="usr-listado">
+    <div class="page-header">
+      <div>
+        <h2><i data-lucide="shield-check" class="ico"></i> Usuarios y permisos</h2>
+        <p class="page-subtitle">Quién entra a la app y a qué módulos. Abre una persona o un área para ver y cambiar sus permisos.</p>
+      </div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-tile" id="usr-kpi-total">
+        <div class="stat-icon"><i data-lucide="users" class="ico"></i></div>
+        <div><div class="stat-value">0</div><div class="stat-label">Personas</div></div>
+      </div>
+      <div class="stat-tile stat-tile-ok" id="usr-kpi-activas">
+        <div class="stat-icon"><i data-lucide="circle-check" class="ico"></i></div>
+        <div><div class="stat-value">0</div><div class="stat-label">Activas</div></div>
+      </div>
+      <div class="stat-tile stat-tile-warn" id="usr-kpi-inactivas">
+        <div class="stat-icon"><i data-lucide="user-x" class="ico"></i></div>
+        <div><div class="stat-value">0</div><div class="stat-label">Inactivas</div></div>
+      </div>
+      <div class="stat-tile" id="usr-kpi-rol">
+        <div class="stat-icon"><i data-lucide="shield-check" class="ico"></i></div>
+        <div><div class="stat-value">0</div><div class="stat-label">ADMIN / SUPER</div></div>
+      </div>
+      <div class="stat-tile" id="usr-kpi-excepciones">
+        <div class="stat-icon"><i data-lucide="sparkles" class="ico"></i></div>
+        <div><div class="stat-value">0</div><div class="stat-label">Con excepciones</div></div>
+      </div>
+      <div class="stat-tile stat-tile-warn" id="usr-kpi-sinacceso">
+        <div class="stat-icon"><i data-lucide="eye-off" class="ico"></i></div>
+        <div><div class="stat-value">0</div><div class="stat-label">Sin acceso</div></div>
+      </div>
+    </div>
+
+    <div class="tabs-simple" id="usr-tabs">
+      <button type="button" class="tab-btn active" data-tab="personas"><i data-lucide="user" class="ico"></i> Personas</button>
+      <button type="button" class="tab-btn" data-tab="areas"><i data-lucide="users" class="ico"></i> Áreas</button>
+    </div>
+    <div class="tab-panel" data-tab-panel="personas">
+      <div class="card card-compacta"><div id="usr-tabla-personas"></div></div>
+    </div>
+    <div class="tab-panel" data-tab-panel="areas" hidden>
+      <div class="card card-compacta"><div id="usr-tabla-areas"></div></div>
+    </div>
+  </section>
+
+  <!-- Ficha de una persona o de un área (doble clic o "Ver ficha"), como la de Vehículos -->
+  <section id="usr-detalle" hidden></section>
+
+  <div class="modal-backdrop" id="usr-modal" hidden>
+    <div class="modal-card modal-card-wide" role="dialog" aria-modal="true" aria-labelledby="usr-modal-titulo">
+      <div class="modal-header">
+        <div>
+          <h3 style="margin:0" id="usr-modal-titulo">Editar permisos</h3>
+          <p class="modal-subtitle" id="usr-modal-sub"></p>
+        </div>
+        <button type="button" class="modal-close" id="usr-modal-cerrar" aria-label="Cerrar"><i data-lucide="x" class="ico"></i></button>
+      </div>
+      <p class="usr-modal-regla" id="usr-modal-regla"></p>
+      <div class="usr-modal-leyenda" id="usr-modal-leyenda"></div>
+      <div class="modal-form-scroll" id="usr-modal-cuerpo"></div>
+      <div class="usr-modal-pie">
+        <p id="usr-modal-cuenta">Sin cambios</p>
+        <button type="button" class="secondary" id="usr-modal-cancelar">Cancelar</button>
+        <button type="button" id="usr-modal-guardar" disabled><i data-lucide="save" class="ico"></i> <span>Guardar</span></button>
+      </div>
+    </div>
+  </div>
+</template>

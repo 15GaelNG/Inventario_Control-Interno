@@ -66,7 +66,7 @@ const Modulos = (function () {
     {
       id: 'administracion', etiqueta: 'Administración', icono: 'settings',
       modulos: [
-        { id: 'usuarios', etiqueta: 'Usuarios y permisos' },
+        { id: 'usuarios', etiqueta: 'Usuarios y permisos', listo: true },
         { id: 'relaciones', etiqueta: 'Datos conectados', listo: true },
         { id: 'salud', etiqueta: 'Salud', listo: true },
       ],

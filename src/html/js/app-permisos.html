@@ -1,0 +1,475 @@
+<script>
+  /**
+   * app-permisos.html — Administración > Usuarios y permisos (solo ADMIN).
+   *
+   * Mismo patrón que Vehículos y Líneas: KPIs + tabla (Personas | Áreas); doble clic abre la
+   * ficha con pestañas (Permisos, Datos / Personas). Los permisos se cambian con el botón
+   * "Editar permisos", que abre una ventana con un selector por módulo y manda los cambios a
+   * apiPermisosGuardar (los escribe en la hoja PERMISOS y regresa todo de nuevo).
+   *
+   * La cuenta de qué tiene cada quien se repite aquí para pintar al instante; la que manda es
+   * la del servidor (Permisos.resolver_). Si cambian las reglas de allá, cambiar efectivo() también.
+   */
+
+  const PERM_TEXTO = { NINGUNO: 'Sin acceso', LECTURA: 'Ver', EDICION: 'Editar' };
+  const PERM_ICONO = { NINGUNO: 'eye-off', LECTURA: 'eye', EDICION: 'pencil' };
+  const PERM_ROLES_TOTALES = ['ADMIN', 'SUPER'];
+
+  async function initPermisosAdmin() {
+    const $ = (id) => document.getElementById(id);
+    let datos = null;
+    let originales = {};   // llave → permiso, como están en la hoja
+    let pila = [];         // fichas abiertas antes de la actual: "Volver" regresa a la anterior
+    let fichaActual = null;   // { tipo: 'persona' | 'area', id, pestana }
+
+    // ---------------------------------------------------------------- reglas
+    const normal = (t) => String(t == null ? '' : t).normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .toUpperCase().trim().replace(/\s+/g, ' ');
+    const llave = (quien, modulo) => normal(quien) + '|' + modulo;
+    const modulos = () => datos.grupos.reduce((t, g) => t.concat(g.modulos), []);
+    const regla = (quien, modulo) => originales[llave(quien, modulo)];
+    const deArea = (area, modulo) => (area ? regla(area, modulo) || 'NINGUNO' : 'NINGUNO');
+    const tieneTotal = (p) => PERM_ROLES_TOTALES.indexOf(p.rol) !== -1;
+    /** Lo que tiene por su rol o su regla propia o su área; VIEWER no edita. (Sin ver si está activo: eso se avisa aparte.) */
+    function efectivo(p, modulo) {
+      if (tieneTotal(p)) return 'EDICION';   // "usuarios" (lo único que SUPER no tiene) no está en esta lista
+      const propio = regla(p.correo, modulo);
+      const nivel = propio !== undefined ? propio : deArea(p.area, modulo);
+      return p.rol === 'VIEWER' && nivel === 'EDICION' ? 'LECTURA' : nivel;
+    }
+    const excepcionesDe = (p) => (tieneTotal(p) ? [] : modulos().filter((m) => regla(p.correo, m.id) !== undefined));
+    const conAcceso = (p) => modulos().filter((m) => efectivo(p, m.id) !== 'NINGUNO').length;
+    const persona = (correo) => datos.personas.find((p) => normal(p.correo) === normal(correo));
+    const area = (nombre) => datos.areas.find((a) => normal(a.nombre) === normal(nombre));
+    const delArea = (nombre) => datos.personas.filter((p) => normal(p.area) === normal(nombre));
+
+    function cargar(respuesta) {
+      datos = respuesta;
+      originales = {};
+      datos.reglas.forEach((r) => {
+        // NINGUNO de un área es lo mismo que no tener regla
+        if (r.permiso === 'NINGUNO' && r.quien.indexOf('@') === -1) return;
+        originales[llave(r.quien, r.modulo)] = r.permiso;
+      });
+    }
+
+    // ---------------------------------------------------------------- piezas de HTML
+    const ico = (nombre) => '<i data-lucide="' + nombre + '" class="ico"></i>';
+    const iniciales = (texto) => String(texto || '?').split(/[\s.@_-]+/).filter(Boolean).slice(0, 2)
+      .map((s) => s[0].toUpperCase()).join('');
+    const nivel = (v) => '<span class="usr-nivel ' + v + '">' + ico(PERM_ICONO[v]) + PERM_TEXTO[v] + '</span>';
+    const badgeRol = (rol) => (rol === 'USER' ? '' : '<span class="badge-estado pendiente">' + escaparHtml(rol) + '</span>');
+    const badgeActivo = (activo) => '<span class="badge-estado ' + (activo ? 'activo' : 'baja') + '">' + (activo ? 'Activo' : 'Inactivo') + '</span>';
+    const plural = (n, uno, varios) => n + ' ' + (n === 1 ? uno : varios);
+
+    /** El ícono de cada módulo es el mismo que tiene en el menú (NAV_GRUPOS, app.html) */
+    function iconoModulo(id) {
+      let icono = id === 'cambios-lineas' ? 'history' : 'square';
+      NAV_GRUPOS.forEach((g) => {
+        if (g.vista === id) icono = g.icono;
+        (g.items || []).forEach((it) => { if (it.vista === id) icono = it.icono; });
+      });
+      return icono;
+    }
+
+    function renglon(m, valor, origen, excepcion) {
+      return '<div class="usr-permiso' + (excepcion ? ' excepcion' : '') + '">' +
+        '<span class="usr-permiso-ico">' + ico(iconoModulo(m.id)) + '</span>' +
+        '<div class="usr-permiso-nombre">' + escaparHtml(m.etiqueta) + (origen ? '<div class="usr-permiso-origen">' + origen + '</div>' : '') + '</div>' +
+        nivel(valor) + '</div>';
+    }
+
+    /**
+     * Los módulos por grupo, una tarjeta por grupo. `mostrar(m)` decide qué renglón va arriba;
+     * el resto se junta al final en "Sin acceso a N módulos", plegado.
+     */
+    function listaDePermisos(mostrar, pintarRenglon) {
+      let html = '';
+      const ocultos = [];
+      datos.grupos.forEach((g) => {
+        const visibles = g.modulos.filter((m) => { const si = mostrar(m); if (!si) ocultos.push(m); return si; });
+        if (!visibles.length) return;
+        html += '<div class="card ln-card"><h3>' + ico(g.icono) + ' ' + escaparHtml(g.etiqueta) + '</h3>' +
+          visibles.map(pintarRenglon).join('') + '</div>';
+      });
+      if (!html) html = '<div class="card ln-card"><p class="empty-state">No tiene acceso a ningún módulo.</p></div>';
+      if (ocultos.length) {
+        html += '<div class="card ln-card"><details class="usr-plegado"><summary>Sin acceso a ' + plural(ocultos.length, 'módulo', 'módulos') + '</summary>' +
+          ocultos.map(pintarRenglon).join('') + '</details></div>';
+      }
+      return html;
+    }
+
+    function migas() {
+      const anterior = pila.length ? pila[pila.length - 1] : null;
+      const texto = anterior ? (anterior.tipo === 'area' ? anterior.id : ((persona(anterior.id) || {}).nombre || anterior.id)) : 'Usuarios y permisos';
+      return '<div class="ln-migas"><button type="button" class="secondary ln-btn-icono" data-usr-volver>' + ico('chevron-left') + ' Volver</button>' +
+        '<span>' + escaparHtml(texto) + '</span></div>';
+    }
+
+    // ---------------------------------------------------------------- ficha de persona
+    function fichaPersona(p) {
+      const total = tieneTotal(p);
+      let aviso = '';
+      if (!p.activo) aviso = ['user-x', 'Está inactivo en USUARIOS: no puede entrar a la app. Abajo está lo que tendría si se reactiva.'];
+      else if (total) aviso = ['shield-check', 'Su rol ' + p.rol + ' le da acceso total' + (p.rol === 'SUPER' ? ', menos Usuarios y permisos' : '') + '. Para quitárselo hay que cambiar su ROL en USUARIOS.'];
+      else if (p.rol === 'VIEWER') aviso = ['eye', 'Su rol VIEWER solo deja consultar: aunque tenga Editar, no podrá modificar nada.'];
+      else if (!p.area) aviso = ['info', 'No tiene área en USUARIOS: solo tiene las excepciones que se le den aquí.'];
+
+      const resumen = [['Correo', p.correo], ['Área', p.area], ['Coordinación', p.coordinacion], ['Sede', [p.oficina, p.sede].filter(Boolean).join(' · ')]]
+        .filter((d) => d[1]);
+      let html = migas() + '<div class="ln-detalle-header card">' +
+        '<div class="ln-detalle-icono"><span class="usr-avatar">' + escaparHtml(iniciales(p.nombre || p.correo)) + '</span></div>' +
+        '<div class="ln-detalle-titulo"><h2>' + escaparHtml(p.nombre || p.correo) + '</h2><div class="ln-chips">' +
+        badgeRol(p.rol) + badgeActivo(p.activo) +
+        (p.area ? '<button type="button" class="badge-estado pendiente usr-chip-enlace" data-usr-area="' + escaparHtml(p.area) + '" title="Ver el área">' + ico('users') + ' ' + escaparHtml(p.area) + '</button>' : '') +
+        '</div></div>' +
+        '<div class="ln-detalle-botones">' + (total ? '' : '<button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button>') + '</div>' +
+        '<dl class="ln-resumen-rapido">' + resumen.map((d) => '<div><dt>' + d[0] + '</dt><dd>' + escaparHtml(d[1]) + '</dd></div>').join('') + '</dl></div>';
+
+      const permisos = (aviso ? '<div class="usr-aviso">' + ico(aviso[0]) + '<div>' + aviso[1] + '</div></div>' : '') +
+        listaDePermisos(
+          (m) => efectivo(p, m.id) !== 'NINGUNO' || regla(p.correo, m.id) !== undefined,
+          (m) => {
+            const propio = total ? undefined : regla(p.correo, m.id);
+            let origen;
+            if (total) origen = '<span class="usr-origen rol">' + ico('shield-check') + ' Por su rol ' + escaparHtml(p.rol) + '</span>';
+            else if (propio !== undefined) {
+              origen = '<span class="usr-origen excepcion">' + ico('sparkles') + ' Excepción</span>' +
+                (p.area ? '<span>su área: ' + PERM_TEXTO[deArea(p.area, m.id)] + '</span>' : '');
+            } else if (deArea(p.area, m.id) !== 'NINGUNO') origen = '<span class="usr-origen area">' + ico('users') + ' Por su área</span>';
+            return renglon(m, efectivo(p, m.id), origen, propio !== undefined);
+          });
+
+      const datosHoja = '<div class="card ln-card"><h3>' + ico('id-card') + ' Datos en USUARIOS</h3><div class="info-grid">' +
+        [['Nombre', p.nombre], ['Correo', p.correo], ['No. de empleado', p.noEmpleado], ['Rol', p.rol], ['Estatus', p.activo ? 'Activo' : 'Inactivo'],
+          ['Área', p.area], ['Coordinación', p.coordinacion], ['Oficina', p.oficina], ['Sede', p.sede], ['Departamentos permitidos', p.dptosPermitidos]]
+          .map((d) => itemInfo(d[0], d[1] || '—')).join('') +
+        '</div><p class="ln-tenue" style="margin:10px 0 0; font-size:12px">Estos datos se cambian en la hoja USUARIOS.</p></div>';
+
+      return html + fichaEnPestanas([
+        { id: 'permisos', titulo: 'Permisos', icono: 'shield-check', contenido: permisos, num: conAcceso(p) },
+        { id: 'datos', titulo: 'Datos', icono: 'id-card', contenido: datosHoja },
+      ]);
+    }
+
+    // ---------------------------------------------------------------- ficha de área
+    function fichaArea(a) {
+      const gente = delArea(a.nombre);
+      const activas = gente.filter((p) => p.activo);
+      const cuenta = (v) => modulos().filter((m) => deArea(a.nombre, m.id) === v).length;
+      const resumen = [['Edita', plural(cuenta('EDICION'), 'módulo', 'módulos')], ['Solo ve', plural(cuenta('LECTURA'), 'módulo', 'módulos')],
+        ['Con excepciones', plural(activas.filter((p) => excepcionesDe(p).length).length, 'persona', 'personas')]];
+      let html = migas() + '<div class="ln-detalle-header card">' +
+        '<div class="ln-detalle-icono"><i data-lucide="users" class="ico ln-icon"></i></div>' +
+        '<div class="ln-detalle-titulo"><h2>' + escaparHtml(a.nombre) + '</h2><div class="ln-chips">' +
+        '<span class="badge-estado pendiente">Área</span><span class="badge-estado activo">' + plural(activas.length, 'persona activa', 'personas activas') + '</span></div></div>' +
+        '<div class="ln-detalle-botones"><button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button></div>' +
+        '<dl class="ln-resumen-rapido">' + resumen.map((d) => '<div><dt>' + d[0] + '</dt><dd>' + d[1] + '</dd></div>').join('') + '</dl></div>';
+
+      const permisos = '<div class="usr-aviso">' + ico('info') + '<div>Lo que tenga el área lo reciben todas sus personas, salvo quien tenga una excepción en ese módulo. ADMIN y SUPER tienen todo por su rol.</div></div>' +
+        listaDePermisos(
+          (m) => deArea(a.nombre, m.id) !== 'NINGUNO',
+          (m) => {
+            const conExc = activas.filter((p) => !tieneTotal(p) && regla(p.correo, m.id) !== undefined);
+            const origen = conExc.length
+              ? '<button type="button" class="usr-enlace" data-usr-persona="' + escaparHtml(conExc[0].correo) + '" title="' +
+                escaparHtml(conExc.map((p) => (p.nombre || p.correo) + ': ' + PERM_TEXTO[regla(p.correo, m.id)]).join('\n')) + '">' +
+                ico('sparkles') + ' ' + (conExc.length === 1 ? escaparHtml(conExc[0].nombre || conExc[0].correo) + ' tiene una excepción' : conExc.length + ' personas con excepción') + '</button>'
+              : '';
+            return renglon(m, deArea(a.nombre, m.id), origen, false);
+          });
+
+      const personas = '<div class="card ln-card"><h3>' + ico('users') + ' Personas del área</h3>' + (gente.length
+        ? tablaFicha([
+          { t: 'Nombre', r: (p) => '<button type="button" class="usr-enlace" data-usr-persona="' + escaparHtml(p.correo) + '">' + escaparHtml(p.nombre || p.correo) + '</button>' },
+          { t: 'Rol', r: (p) => escaparHtml(p.rol) },
+          { t: 'Estatus', r: (p) => badgeActivo(p.activo) },
+          { t: 'Excepciones', r: (p) => { const n = excepcionesDe(p).length; return n ? '<span class="usr-origen excepcion">' + ico('sparkles') + ' ' + n + '</span>' : '—'; } },
+        ], gente.slice().sort((x, y) => (y.activo - x.activo) || String(x.nombre).localeCompare(String(y.nombre))))
+        : '<p class="empty-state">Nadie tiene esta área.</p>') + '</div>';
+
+      return html + fichaEnPestanas([
+        { id: 'permisos', titulo: 'Permisos', icono: 'shield-check', contenido: permisos, num: cuenta('EDICION') + cuenta('LECTURA') },
+        { id: 'personas', titulo: 'Personas', icono: 'users', contenido: personas, num: gente.length },
+      ]);
+    }
+
+    // ---------------------------------------------------------------- abrir / cerrar fichas
+    function pintarFicha() {
+      const detalle = $('usr-detalle');
+      if (!fichaActual) {
+        detalle.hidden = true;
+        detalle.innerHTML = '';
+        $('usr-listado').hidden = false;
+        tablaActiva().ajustarAlto();
+        return;
+      }
+      const html = fichaActual.tipo === 'area' ? fichaArea(area(fichaActual.id) || { nombre: fichaActual.id, personas: 0 }) : fichaPersona(persona(fichaActual.id));
+      $('usr-listado').hidden = true;
+      detalle.hidden = false;
+      detalle.innerHTML = html;
+      if (fichaActual.pestana) mostrarPestanaFicha(detalle, fichaActual.pestana);
+      refreshIcons();
+      document.getElementById('view-container').scrollTop = 0;
+    }
+    function abrirFicha(tipo, id, desdeOtraFicha) {
+      if (tipo === 'persona' && !persona(id)) return;
+      if (desdeOtraFicha && fichaActual) pila.push(fichaActual);
+      else pila = [];
+      fichaActual = { tipo: tipo, id: id, pestana: 'permisos' };
+      pintarFicha();
+    }
+    function volver() {
+      fichaActual = pila.pop() || null;
+      pintarFicha();
+    }
+
+    // ---------------------------------------------------------------- ventana "Editar permisos"
+    let edicion = null;   // { tipo, id, iniciales: { modulo: valor } }
+
+    function abrirEditar(tipo, id) {
+      const p = tipo === 'persona' ? persona(id) : null;
+      if (p && tieneTotal(p)) return;
+      edicion = { tipo: tipo, id: id, iniciales: {} };
+      $('usr-modal-sub').textContent = p ? (p.nombre || p.correo) + (p.area ? ' · área ' + p.area : ' · sin área') : 'Área ' + id;
+      $('usr-modal-regla').textContent = p
+        ? 'Lo que dejes "Como su área" lo recibe de su área y cambia si cambia el área. Cualquier otra opción es una excepción solo para esta persona.'
+        : 'Aplica a todas las personas del área, salvo quien tenga una excepción en ese módulo.';
+      $('usr-modal-leyenda').innerHTML = p
+        ? '<span class="usr-origen area">' + ico('users') + ' Por su área</span><span class="usr-origen excepcion">' + ico('sparkles') + ' Excepción</span>'
+        : '<span class="usr-origen area">' + ico('users') + ' Permiso del área</span>';
+      $('usr-modal-cuerpo').innerHTML = datos.grupos.map((g) => '<div class="usr-editar-grupo">' + ico(g.icono) + escaparHtml(g.etiqueta) + '</div>' +
+        '<div class="usr-editar-lista">' + g.modulos.map((m) => {
+          let opciones;
+          let valor;
+          if (p) {
+            const delSuArea = p.area ? PERM_TEXTO[deArea(p.area, m.id)] + ' · por su área' : 'Sin acceso · sin área';
+            valor = regla(p.correo, m.id) || '';
+            opciones = [['', delSuArea], ['NINGUNO', 'Sin acceso'], ['LECTURA', 'Ver'], ['EDICION', 'Editar']];
+          } else {
+            valor = deArea(id, m.id);
+            opciones = [['NINGUNO', 'Sin acceso'], ['LECTURA', 'Ver'], ['EDICION', 'Editar']];
+          }
+          edicion.iniciales[m.id] = valor;
+          return '<label class="usr-editar-fila">' + ico(iconoModulo(m.id)) + '<span class="usr-editar-nombre">' + escaparHtml(m.etiqueta) + '</span>' +
+            '<select data-modulo="' + m.id + '" aria-label="' + escaparHtml(m.etiqueta) + '">' +
+            opciones.map((o) => '<option value="' + o[0] + '"' + (o[0] === valor ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
+            '</select></label>';
+        }).join('') + '</div>').join('');
+      contarCambios();
+      $('usr-modal').hidden = false;
+      refreshIcons();
+      const primero = $('usr-modal-cuerpo').querySelector('select');
+      if (primero) primero.focus();
+    }
+
+    function cambiosDeLaVentana() {
+      return Array.from($('usr-modal-cuerpo').querySelectorAll('select'))
+        .filter((s) => s.value !== edicion.iniciales[s.dataset.modulo])
+        .map((s) => (edicion.tipo === 'persona'
+          ? { quien: persona(edicion.id).correo, modulo: s.dataset.modulo, permiso: s.value || null }
+          : { quien: edicion.id, modulo: s.dataset.modulo, permiso: s.value === 'NINGUNO' ? null : s.value }));
+    }
+
+    function contarCambios() {
+      $('usr-modal-cuerpo').querySelectorAll('select').forEach((s) => {
+        s.closest('.usr-editar-fila').classList.toggle('cambiada', s.value !== edicion.iniciales[s.dataset.modulo]);
+        // El color dice de dónde viene: azul si es del área, dorado si es una excepción de la persona
+        const deLaPersona = edicion.tipo === 'persona';
+        s.classList.toggle('area', deLaPersona ? s.value === '' : s.value !== 'NINGUNO');
+        s.classList.toggle('excepcion', deLaPersona && s.value !== '');
+      });
+      const n = cambiosDeLaVentana().length;
+      $('usr-modal-guardar').disabled = !n;
+      $('usr-modal-cuenta').textContent = n ? plural(n, 'cambio sin guardar', 'cambios sin guardar') : 'Sin cambios';
+    }
+
+    function cerrarEditar() {
+      $('usr-modal').hidden = true;
+      edicion = null;
+    }
+
+    async function guardarEdicion() {
+      const cambios = cambiosDeLaVentana();
+      if (!cambios.length) return;
+      const boton = $('usr-modal-guardar');
+      boton.disabled = true;
+      toastCargando('Guardando permisos…');
+      try {
+        cargar(await callServer('apiPermisosGuardar', state.token, cambios));
+        cerrarEditar();
+        refrescarListado();
+        pintarFicha();
+        toastExito('Permisos guardados: ' + plural(cambios.length, 'cambio', 'cambios'));
+        // Si alguien se cambió a sí mismo, su menú se pone al día
+        callServer('apiMisPermisos', state.token).then((info) => { state.permisos = (info && info.permisos) || {}; renderNavGrupos(); }).catch(() => {});
+      } catch (err) {
+        toastError('No se guardaron: ' + err.message);
+        boton.disabled = false;
+      }
+    }
+
+    // ---------------------------------------------------------------- listado: tablas y KPIs
+    const filaPersona = (p) => ({
+      ID: p.correo, NOMBRE: p.nombre || p.correo, CORREO: p.correo, AREA: p.area || 'Sin área', ROL: p.rol,
+      ESTATUS: p.activo ? 'Activo' : 'Inactivo', MODULOS: conAcceso(p), EXCEPCIONES: excepcionesDe(p).length,
+      COORDINACION: p.coordinacion, OFICINA: p.oficina, SEDE: p.sede, NO_EMPLEADO: p.noEmpleado,
+    });
+    const filaArea = (a) => {
+      const activas = delArea(a.nombre).filter((p) => p.activo);
+      return {
+        ID: a.nombre, AREA: a.nombre, PERSONAS: activas.length,
+        EDITA: modulos().filter((m) => deArea(a.nombre, m.id) === 'EDICION').length,
+        VE: modulos().filter((m) => deArea(a.nombre, m.id) === 'LECTURA').length,
+        EXCEPCIONES: activas.filter((p) => excepcionesDe(p).length).length,
+      };
+    };
+    const conteo = (v, cero) => (v ? String(v) : (cero || '—'));
+
+    const tablaPersonas = DataTable.crear($('usr-tabla-personas'), {
+      idCampo: 'ID',
+      idTabla: 'usuarios-personas',
+      textoVacio: 'No hay personas en USUARIOS',
+      exportar: { nombreArchivo: 'Usuarios y permisos - personas' },
+      etiquetaFila: (f) => f.NOMBRE,
+      detalle: false,
+      modoSeleccion: true,
+      seleccionDrive: true,
+      alAbrirFila: (f) => abrirFicha('persona', f.ID),
+      alTocarFila: (f) => abrirFicha('persona', f.ID),
+      alCambiarFiltros: (filtros) => marcarKpis(filtros),
+      ordenInicial: { campo: 'NOMBRE', dir: 'asc' },
+      columnas: [
+        { campo: 'NOMBRE', titulo: 'Nombre', tipo: 'texto', fijada: true },
+        { campo: 'AREA', titulo: 'Área', tipo: 'lista' },
+        { campo: 'ROL', titulo: 'Rol', tipo: 'lista', render: (v) => badgeRol(v) || escaparHtml(v) },
+        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', render: (v) => badgeActivo(v === 'Activo') },
+        { campo: 'MODULOS', titulo: 'Módulos', tipo: 'numero', render: (v) => conteo(v, 'Ninguno') },
+        { campo: 'EXCEPCIONES', titulo: 'Excepciones', tipo: 'numero',
+          render: (v) => (v ? '<span class="usr-origen excepcion">' + ico('sparkles') + ' ' + v + '</span>' : '—') },
+        { campo: 'CORREO', titulo: 'Correo', tipo: 'texto', visible: false },
+        { campo: 'COORDINACION', titulo: 'Coordinación', tipo: 'lista', visible: false },
+        { campo: 'OFICINA', titulo: 'Oficina', tipo: 'lista', visible: false },
+        { campo: 'SEDE', titulo: 'Sede', tipo: 'lista', visible: false },
+        { campo: 'NO_EMPLEADO', titulo: 'No. de empleado', tipo: 'texto', visible: false },
+      ],
+      accionesFila: [
+        { icono: 'eye', titulo: 'Ver ficha', alHacer: (f) => abrirFicha('persona', f.ID) },
+        { icono: 'pencil', titulo: 'Editar permisos', visible: (f) => !tieneTotal(persona(f.ID)), alHacer: (f) => abrirEditar('persona', f.ID) },
+      ],
+    });
+
+    const tablaAreas = DataTable.crear($('usr-tabla-areas'), {
+      idCampo: 'ID',
+      idTabla: 'usuarios-areas',
+      textoVacio: 'Nadie tiene área en USUARIOS',
+      exportar: { nombreArchivo: 'Usuarios y permisos - areas' },
+      etiquetaFila: (f) => f.AREA,
+      detalle: false,
+      modoSeleccion: true,
+      seleccionDrive: true,
+      alAbrirFila: (f) => abrirFicha('area', f.ID),
+      alTocarFila: (f) => abrirFicha('area', f.ID),
+      ordenInicial: { campo: 'AREA', dir: 'asc' },
+      columnas: [
+        { campo: 'AREA', titulo: 'Área', tipo: 'texto', fijada: true },
+        { campo: 'PERSONAS', titulo: 'Personas activas', tipo: 'numero' },
+        { campo: 'EDITA', titulo: 'Edita', tipo: 'numero', render: (v) => (v ? plural(v, 'módulo', 'módulos') : '—') },
+        { campo: 'VE', titulo: 'Solo ve', tipo: 'numero', render: (v) => (v ? plural(v, 'módulo', 'módulos') : '—') },
+        { campo: 'EXCEPCIONES', titulo: 'Personas con excepciones', tipo: 'numero',
+          render: (v) => (v ? '<span class="usr-origen excepcion">' + ico('sparkles') + ' ' + v + '</span>' : '—') },
+      ],
+      accionesFila: [
+        { icono: 'eye', titulo: 'Ver ficha', alHacer: (f) => abrirFicha('area', f.ID) },
+        { icono: 'pencil', titulo: 'Editar permisos', alHacer: (f) => abrirEditar('area', f.ID) },
+      ],
+    });
+
+    const tablaActiva = () => ($('usr-tabs').querySelector('.tab-btn.active').dataset.tab === 'areas' ? tablaAreas : tablaPersonas);
+
+    /** Cada tarjeta filtra la tabla de personas; otro clic en la misma la quita */
+    const KPIS = {
+      'usr-kpi-total': { filtros: {}, cuenta: () => datos.personas.length },
+      'usr-kpi-activas': { filtros: { ESTATUS: { valores: ['Activo'] } }, cuenta: () => datos.personas.filter((p) => p.activo).length },
+      'usr-kpi-inactivas': { filtros: { ESTATUS: { valores: ['Inactivo'] } }, cuenta: () => datos.personas.filter((p) => !p.activo).length },
+      'usr-kpi-rol': { filtros: { ROL: { valores: ['ADMIN', 'SUPER'] } }, cuenta: () => datos.personas.filter(tieneTotal).length },
+      'usr-kpi-excepciones': { filtros: { ESTATUS: { valores: ['Activo'] }, EXCEPCIONES: { op: '>', v1: 0 } },
+        cuenta: () => datos.personas.filter((p) => p.activo && excepcionesDe(p).length).length },
+      'usr-kpi-sinacceso': { filtros: { ESTATUS: { valores: ['Activo'] }, MODULOS: { op: '=', v1: 0 } },
+        cuenta: () => datos.personas.filter((p) => p.activo && !conAcceso(p)).length },
+    };
+    // La tarjeta marcada sale de los filtros que tiene la tabla: si alguien los cambia a mano
+    // y ya no coinciden con ninguna, ninguna queda marcada
+    const firma = (filtros) => JSON.stringify(Object.keys(filtros || {}).sort().map((k) => [k, filtros[k]]));
+    let filtrosActuales = {};
+    const kpiDe = (filtros) => Object.keys(KPIS).find((id) => firma(KPIS[id].filtros) === firma(filtros)) || null;
+    Object.keys(KPIS).forEach((id) => {
+      const tile = $(id);
+      tile.classList.add('stat-tile-clickable');
+      tile.addEventListener('click', () => {
+        const nuevo = kpiDe(filtrosActuales) === id ? 'usr-kpi-total' : id;
+        $('usr-tabs').querySelector('[data-tab="personas"]').click();
+        tablaPersonas.limpiarFiltros();
+        Object.keys(KPIS[nuevo].filtros).forEach((campo) => tablaPersonas.setFiltro(campo, KPIS[nuevo].filtros[campo]));
+        marcarKpis(KPIS[nuevo].filtros);
+      });
+    });
+    function marcarKpis(filtros) {
+      if (filtros) filtrosActuales = filtros;
+      const activo = kpiDe(filtrosActuales);
+      Object.keys(KPIS).forEach((id) => $(id).classList.toggle('stat-tile-activo', id === activo));
+    }
+
+    function refrescarListado() {
+      tablaPersonas.setDatos(datos.personas.map(filaPersona));
+      tablaAreas.setDatos(datos.areas.map(filaArea));
+      Object.keys(KPIS).forEach((id) => { $(id).querySelector('.stat-value').textContent = KPIS[id].cuenta(); });
+      marcarKpis();
+    }
+
+    // ---------------------------------------------------------------- eventos
+    wireTabsSimple($('usr-listado'));
+    $('usr-tabs').querySelectorAll('.tab-btn').forEach((b) => b.addEventListener('click', () => requestAnimationFrame(() => tablaActiva().ajustarAlto())));
+
+    $('usr-detalle').addEventListener('click', (ev) => {
+      const el = ev.target.closest('button, [data-ficha-tab]');
+      if (!el) return;
+      if (el.dataset.fichaTab) { fichaActual.pestana = el.dataset.fichaTab; mostrarPestanaFicha($('usr-detalle'), el.dataset.fichaTab); return; }
+      if (el.hasAttribute('data-usr-volver')) { volver(); return; }
+      if (el.hasAttribute('data-usr-editar')) { abrirEditar(fichaActual.tipo, fichaActual.id); return; }
+      if (el.dataset.usrArea) { abrirFicha('area', el.dataset.usrArea, true); return; }
+      if (el.dataset.usrPersona) abrirFicha('persona', el.dataset.usrPersona, true);
+    });
+
+    $('usr-modal-cuerpo').addEventListener('change', (ev) => {
+      // Elegir para una persona lo mismo que ya le da su área no es una excepción: el selector
+      // regresa a "… · por su área" (si no, se guardaría una regla que no cambia nada)
+      const s = ev.target;
+      if (edicion && edicion.tipo === 'persona' && s.matches('select') && s.value) {
+        const p = persona(edicion.id);
+        if (p.area && s.value === deArea(p.area, s.dataset.modulo)) s.value = '';
+      }
+      contarCambios();
+    });
+    $('usr-modal-guardar').addEventListener('click', guardarEdicion);
+    $('usr-modal-cancelar').addEventListener('click', cerrarEditar);
+    $('usr-modal-cerrar').addEventListener('click', cerrarEditar);
+    $('usr-modal').addEventListener('click', (ev) => { if (ev.target.id === 'usr-modal') cerrarEditar(); });
+    $('usr-modal').addEventListener('keydown', (ev) => { if (ev.key === 'Escape') cerrarEditar(); });
+
+    // ---------------------------------------------------------------- carga
+    tablaPersonas.setCargando(true);
+    tablaAreas.setCargando(true);
+    try {
+      cargar(await callServer('apiPermisosPanel', state.token));
+    } catch (err) {
+      tablaPersonas.setError('No se pudieron cargar los permisos: ' + err.message);
+      tablaAreas.setError('No se pudieron cargar los permisos: ' + err.message);
+      return;
+    }
+    if (!document.body.contains($('usr-listado'))) return;   // se navegó a otra vista mientras cargaba
+    refrescarListado();
+    refreshIcons();
+  }
+</script>

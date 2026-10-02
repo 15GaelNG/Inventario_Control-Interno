@@ -25,9 +25,9 @@ const LineasAccesorios = (function () {
   // Enum Categoria del AppSheet (Dropdown, sin otros valores), en su orden
   const CATEGORIAS = ['Micas', 'Fundas', 'Cargadores'];
 
-  function rolesOperan_() {
-    return [Config.ROLES.ADMIN, Config.ROLES.OPERADOR];
-  }
+  // Leer: cualquier módulo de Líneas (las fichas de equipos también muestran accesorios). Modificar: este.
+  const leer_ = (token) => Permisos.puedeLeerAlguno(token, TelefoniaService.MODULOS_LINEAS);
+  const operar_ = (token) => Permisos.puedeEditar(token, 'accesorios-lineas');
 
   const txt_ = (v) => LineasUtil.txt(v) || '';
   /** La llave vieja de un renglón: ID ANTERIOR si ya se migró, o la columna original si no. */
@@ -76,7 +76,7 @@ const LineasAccesorios = (function () {
 
   /** Catálogo con stock calculado (entradas − salidas) y alerta de reabasto. Caché 15 min. */
   function indice(token) {
-    Auth.validarSesion(token);
+    leer_(token);
     const enCache = LineasDatos.cacheLeer(CLAVE_CACHE);
     if (enCache) return LineasUtil.paraCliente(enCache);
     const ix = indiceSinCache_();
@@ -86,7 +86,7 @@ const LineasAccesorios = (function () {
 
   /** Movimientos de un artículo, del más reciente al más antiguo. */
   function movimientosDeArticulo(token, id) {
-    Auth.validarSesion(token);
+    leer_(token);
     const articulo = LineasDatos.leerTabla(TAB_ART).map(articuloDesdeFila_).filter((a) => a.id === id)[0];
     if (!articulo) return LineasUtil.paraCliente([]);
     const t = LineasDatos.tabla(TAB_MOV);
@@ -102,7 +102,7 @@ const LineasAccesorios = (function () {
 
   /** Alta de un artículo nuevo en el catálogo. */
   function agregarArticulo(token, datos) {
-    Auth.requiereRol(token, rolesOperan_());
+    operar_(token);
     if (CATEGORIAS.indexOf(String(datos.categoria || '')) < 0) throw new Error('Categoria es obligatorio (Micas, Fundas o Cargadores).');
     if (!LineasUtil.txt(datos.nombre)) throw new Error('Nombre del Articulo es obligatorio.');
     const clave = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
@@ -120,7 +120,7 @@ const LineasAccesorios = (function () {
 
   /** Entrada o salida de stock, bajo candado (no deja stock negativo en una salida). */
   function registrarMovimiento(token, datos) {
-    const sesion = Auth.requiereRol(token, rolesOperan_());
+    const sesion = operar_(token);
     const tipo = String(datos.tipo || '').toUpperCase();
     if (tipo !== 'ENTRADA' && tipo !== 'SALIDA') throw new Error('Tipo de movimiento inválido.');
     const cantidad = Number(datos.cantidad);

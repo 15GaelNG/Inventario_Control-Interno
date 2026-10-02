@@ -454,13 +454,14 @@ function usuarioCorrecciones_(sesion) {
   return {
     correo: sesion.correo, nombre: sesion.nombre || sesion.correo,
     esAdmin: sesion.rol === Config.ROLES.ADMIN,
-    puedeOperar: [Config.ROLES.ADMIN, Config.ROLES.OPERADOR].indexOf(sesion.rol) >= 0,
+    // Las llamadas solo-ADMIN traen la sesión de Auth.requiereRol, sin permisos: ADMIN edita todo
+    puedeOperar: sesion.rol === Config.ROLES.ADMIN || (sesion.permisos || {})['correcciones-lineas'] === Permisos.EDICION,
   };
 }
 
 /** Casos y lo aplicado solo. Viaja como texto JSON (como las demás tablas grandes). */
 function apiLineasCorrecciones(token, forzar) {
-  const sesion = Auth.validarSesion(token);
+  const sesion = Permisos.puedeLeer(token, 'correcciones-lineas');
   return JSON.stringify(LineasUtil.paraCliente(LineasCorrecciones.estado(usuarioCorrecciones_(sesion), !!forzar)));
 }
 
@@ -470,7 +471,7 @@ function apiLineasCorreccionesCargar(token) {
 }
 
 function apiLineasCorreccionesMarcar(token, accion, ids, comentario) {
-  const sesion = Auth.requiereRol(token, [Config.ROLES.ADMIN, Config.ROLES.OPERADOR]);
+  const sesion = Permisos.puedeEditar(token, 'correcciones-lineas');
   return LineasUtil.paraCliente(LineasCorrecciones.marcar(accion, ids, comentario, usuarioCorrecciones_(sesion)));
 }
 

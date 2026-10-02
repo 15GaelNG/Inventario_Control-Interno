@@ -147,16 +147,23 @@ function diagnosticoEntorno() {
       lineas.push('  ' + conAnterior + ' tienen "' + Entidades.COLUMNA_ID_ANTERIOR + '"');
       if (faltantes) lineas.push('  ' + faltantes + ' hojas del catálogo NO existen en este libro');
       lineas.push('  sellado: ' + (migracionSellado_(ssId) ? 'SÍ, ya hay referencias colgando de los IDs' : 'no'));
-
-      // PERFILES no es obligatoria, pero su ausencia cambia cómo se dan los permisos, y
-      // eso confunde mucho cuando la app "no te deja entrar a nada".
-      const perfiles = ss.getSheetByName('PERFILES');
-      lineas.push('  hoja PERFILES: ' + (perfiles
-        ? 'existe (' + Math.max(0, perfiles.getLastRow() - 1) + ' renglones)'
-        : 'NO existe -> los permisos caen al ROL viejo (ADMIN/SUPER editan, el resto lee)'));
     } catch (e) {
       lineas.push('  no se pudo abrir: ' + e.message);
     }
+  }
+
+  // ---------------------------------------------------------------- permisos
+  // De dónde salen (hoja PERMISOS o la semilla del código) y si alguna regla no aplica a nadie:
+  // eso confunde mucho cuando la app "no te deja entrar a nada".
+  lineas.push('');
+  lineas.push('PERMISOS');
+  try {
+    const revision = Permisos.revisarCatalogo();
+    lineas.push('  ' + revision.mensaje.split('\n').join('\n  '));
+    if (revision.fuente === 'semilla') avisos.push('Sin hoja PERMISOS: se usa la semilla del código (correr permisosCrearHoja para poder editarlos).');
+    if (revision.problemas.length) avisos.push(revision.problemas.length + ' regla(s) de permisos no aplican a nadie (ver PERMISOS arriba).');
+  } catch (e) {
+    lineas.push('  no se pudieron revisar: ' + e.message);
   }
 
   // ---------------------------------------------------------------- el veredicto
@@ -192,20 +199,20 @@ function diagnosticoPermisos(correo) {
   const ssId = Config.SPREADSHEET_IDS.USUARIOS();
   lineas.push('  Libro de USUARIOS: ' + ssId);
 
-  const hoja = SheetUtils.getSheetByColumns(ssId, ['CORREO', 'ROL']);
-  const fila = SheetUtils.getAll(ssId, hoja.getName())
+  const fila = SheetUtils.getAll(ssId, 'USUARIOS')
     .find((u) => String(u['CORREO']).trim().toUpperCase() === quien.toUpperCase());
-  lineas.push('  Pestaña: ' + hoja.getName());
   lineas.push(fila
-    ? '  Encontrado: ROL=' + fila['ROL'] + '  ACTIVO=' + fila['ACTIVO'] + '  PERFILES=' + (fila['PERFILES'] || '(vacío)')
-    : '  NO ESTÁ ese correo en la pestaña: por eso no ve nada.');
+    ? '  Encontrado: ROL=' + fila['ROL'] + '  ACTIVO=' + fila['ACTIVO'] + '  AREA=' + (fila['AREA'] || '(vacío)')
+    : '  NO ESTÁ ese correo en la pestaña USUARIOS: por eso no ve nada.');
+  lineas.push('  Reglas: ' + Permisos.revisarCatalogo().mensaje.split('\n')[0]);
 
   const enCache = CacheService.getScriptCache().get('permisos_' + quien.toUpperCase());
   lineas.push('', '  En caché: ' + (enCache ? Object.keys(JSON.parse(enCache)).join(', ') : '(nada)'));
   Permisos.olvidar(quien);
   const ahora = Permisos.deCorreo(quien);
-  lineas.push('  Recalculado: ' + (Object.keys(ahora).join(', ') || '(ninguno)'));
-  lineas.push('', '  relaciones: ' + (ahora.relaciones || 'SIN PERMISO'));
+  lineas.push('  Recalculado:');
+  Object.keys(ahora).forEach((m) => lineas.push('    ' + m + ': ' + ahora[m]));
+  if (!Object.keys(ahora).length) lineas.push('    (ninguno)');
   lineas.push('', '  La caché ya se borró: recarga la app.');
 
   const texto = lineas.join('\n');

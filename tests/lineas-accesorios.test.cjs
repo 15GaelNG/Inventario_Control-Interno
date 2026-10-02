@@ -26,8 +26,10 @@ function cargar(hojas) {
   };
   const Auth = { validarSesion: () => ({}), requiereRol: () => ({ nombre: 'Prueba' }) };
   const Config = { ROLES: { ADMIN: 'ADMIN', OPERADOR: 'OPERADOR' } };
+  const Permisos = { puedeLeerAlguno: () => ({}), puedeEditar: () => ({ nombre: 'Prueba' }) };
+  const TelefoniaService = { MODULOS_LINEAS: ['accesorios-lineas'] };
   const fuente = fs.readFileSync(path.join(__dirname, '../src/services/lineas/LineasAccesorios.gs'), 'utf8');
-  const A = new Function('LineasDatos', 'LineasUtil', 'Auth', 'Config', fuente + '; return LineasAccesorios;')(LineasDatos, LineasUtil, Auth, Config);
+  const A = new Function('LineasDatos', 'LineasUtil', 'Auth', 'Config', 'Permisos', 'TelefoniaService', fuente + '; return LineasAccesorios;')(LineasDatos, LineasUtil, Auth, Config, Permisos, TelefoniaService);
   return { A, agregadas };
 }
 

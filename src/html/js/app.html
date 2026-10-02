@@ -357,11 +357,9 @@
   const state = {
     token: sessionStorage.getItem('token') || null,
     sesion: JSON.parse(sessionStorage.getItem('sesion') || 'null'),
-    // Permisos por módulo (rama `ayrton`: PermisosService/Modulos.gs), se leen del
-    // servidor en cada carga (ver render). Aditivo: el menú lateral (NAV_GRUPOS,
-    // renderNavGrupos) sigue siendo estático y siempre visible como hasta ahora —
-    // esto solo alimenta a los módulos nuevos que si consultan permiso fino
-    // (Verificaciones/Sensores/Hologramas/Inspección Vehicular).
+    // Permisos por módulo (PermisosService/Modulos.gs), se leen del servidor en cada carga
+    // (ver render). Deciden qué items del menú aparecen (NAV_GRUPOS, `requiere`), si se puede
+    // entrar a una vista (navegarA) y qué botones de edición enseña cada módulo.
     permisos: {},
   };
 
@@ -435,14 +433,14 @@
     }
     document.getElementById('user-name').textContent = state.sesion.nombre + ' · ' + state.sesion.rol;
     marcarTemaActual(); // entrar con la sesión guardada no pasa por el login, que era quien marcaba el botón
-    // Aditivo (rama `ayrton`): permisos finos por módulo para Verificaciones/Sensores/
-    // Hologramas/Inspección Vehicular. No bloquea la navegación ni afecta el menú
-    // (NAV_GRUPOS sigue siempre visible) — si falla, esos módulos simplemente quedan
-    // en modo solo-lectura (puedeEditarModulo devuelve false con permisos vacíos).
+    // El menú se pinta hasta saber los permisos: sin ellos solo se ve el inicio. Si fallan,
+    // se queda así (mejor que enseñar módulos que el servidor va a rechazar).
+    state.permisos = {};
+    renderNavGrupos();
     callServer('apiMisPermisos', state.token).then((info) => {
       state.permisos = (info && info.permisos) || {};
-      renderNavGrupos();   // aparecen los items que piden permiso (ver NAV_GRUPOS)
-    }).catch(() => { /* no-op: ver comentario arriba */ });
+      renderNavGrupos();
+    }).catch((err) => toastError('No se pudieron cargar tus permisos: ' + ((err && err.message) || err)));
     Notificaciones.iniciar();
     navegarA('dashboard');
   }
@@ -581,6 +579,10 @@
     });
 
     transicionVista(vista, etiqueta, () => {
+      // El menú ya esconde lo que no se puede ver, pero a una vista también se llega por el
+      // historial del navegador o por los enlaces entre módulos ("Ver vehículo")
+      const modulo = moduloDeVista(vista);
+      if (modulo && !permisoDe(modulo)) { mostrarSinAcceso(etiqueta || vista); return; }
       if (vista === 'dashboard') { montarVista('tpl-dashboard', initDashboard); return; }
       if (vista === 'panorama-vehiculos') { montarVista('tpl-panorama-vehiculos', initPanoramaVehiculos); return; }
       if (vista === 'incidencias') { montarVista('tpl-incidencias', initIncidencias); return; }
@@ -599,6 +601,7 @@
       if (vista === 'inspeccion-vehicular') { montarVista('tpl-inspecciones', initInspecciones); return; }
       if (vista === 'relaciones') { montarVista('tpl-relaciones', initRelaciones); return; }
       if (vista === 'salud') { montarVista('tpl-salud', initSalud); return; }
+      if (vista === 'usuarios') { montarVista('tpl-usuarios', initPermisosAdmin); return; }
       // --- Líneas (rama emmanuel): el módulo vive en html/js/lineas.html (namespace Lineas) ---
       if (vista === 'panorama-lineas') { montarVista('tpl-lineas-panorama', Lineas.initPanorama); return; }
       if (vista === 'lineas-telefonicas') { montarVista('tpl-lineas-telefonicas', Lineas.initTelefonicas); return; }
@@ -614,6 +617,18 @@
     });
   }
 
+  /** Para una vista cuyo módulo no tiene permiso (ver navegarA) */
+  function mostrarSinAcceso(nombreModulo) {
+    document.getElementById('view-container').innerHTML =
+      '<div class="card" style="max-width:420px; margin:60px auto; text-align:center;">' +
+      '<div style="font-size:32px; margin-bottom:10px;"><i data-lucide="lock" class="ico"></i></div>' +
+      '<h2 style="margin-bottom:6px;">' + escaparHtml(nombreModulo) + '</h2>' +
+      '<p style="color:var(--color-text-muted); font-size:13px; margin:0;">' +
+      'No tienes acceso a este módulo. Pídeselo a quien administra los permisos.</p>' +
+      '</div>';
+    refreshIcons();
+  }
+
   /** Placeholder para módulos que ya están en el menú pero aún no se han construido */
   function mostrarProximamente(nombreModulo) {
     document.getElementById('view-container').innerHTML =
@@ -627,22 +642,23 @@
   }
 
   /**
-   * Estructura del sidebar por área. La mayoría de estos sub-módulos todavía
-   * no están construidos (ver mostrarProximamente).
+   * Estructura del sidebar por área. `requiere` es el módulo (Modulos.gs) cuyo permiso
+   * hace falta para ver el item: los panoramas y Cambios de Monto no son módulos propios,
+   * cuelgan de su padre. Sin `requiere` no se pinta (y navegarA no deja entrar).
    */
   const NAV_GRUPOS = [
     {
       id: 'servicios-vehiculares', icono: 'car', etiqueta: 'Control Vehicular',
       items: [
-        { vista: 'panorama-vehiculos', etiqueta: 'Panorama', icono: 'bar-chart-3' },
-        { vista: 'incidencias', etiqueta: 'Incidencias', icono: 'wrench' },
-        { vista: 'vehiculos', etiqueta: 'Vehículos', icono: 'car' },
-        { vista: 'cambios-vehiculos', etiqueta: 'Cambios Vehículos', icono: 'history' },
-        { vista: 'reasignaciones-vehiculares', etiqueta: 'Reasignaciones Vehiculares', icono: 'arrow-left-right' },
-        { vista: 'verificaciones', etiqueta: 'Verificaciones', icono: 'badge-check' },
-        { vista: 'inspeccion-vehicular', etiqueta: 'Inspección Vehicular', icono: 'clipboard-list' },
-        { vista: 'instalacion-sensores', etiqueta: 'Instalación de Sensores', icono: 'radio' },
-        { vista: 'hologramas', etiqueta: 'Hologramas', icono: 'sparkles' },
+        { vista: 'panorama-vehiculos', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'vehiculos' },
+        { vista: 'incidencias', etiqueta: 'Incidencias', icono: 'wrench', requiere: 'incidencias' },
+        { vista: 'vehiculos', etiqueta: 'Vehículos', icono: 'car', requiere: 'vehiculos' },
+        { vista: 'cambios-vehiculos', etiqueta: 'Cambios Vehículos', icono: 'history', requiere: 'cambios-vehiculos' },
+        { vista: 'reasignaciones-vehiculares', etiqueta: 'Reasignaciones Vehiculares', icono: 'arrow-left-right', requiere: 'reasignaciones-vehiculares' },
+        { vista: 'verificaciones', etiqueta: 'Verificaciones', icono: 'badge-check', requiere: 'verificaciones' },
+        { vista: 'inspeccion-vehicular', etiqueta: 'Inspección Vehicular', icono: 'clipboard-list', requiere: 'inspeccion-vehicular' },
+        { vista: 'instalacion-sensores', etiqueta: 'Instalación de Sensores', icono: 'radio', requiere: 'instalacion-sensores' },
+        { vista: 'hologramas', etiqueta: 'Hologramas', icono: 'sparkles', requiere: 'hologramas' },
       ],
     },
     {
@@ -651,11 +667,11 @@
       id: 'lineas', icono: 'smartphone', etiqueta: 'Líneas',
       items: [
         // Íconos equivalentes a los del menú del AppSheet (Font Awesome → Lucide)
-        { vista: 'panorama-lineas', etiqueta: 'Panorama', icono: 'layout-dashboard' },
-        { vista: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas', icono: 'smartphone' },
-        { vista: 'resguardos-lineas', etiqueta: 'Resguardos y cancelaciones', icono: 'package-check' },
-        { vista: 'correcciones-lineas', etiqueta: 'Correcciones de Líneas', icono: 'clipboard-check' }, // temporal (30-sep)
-        { vista: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios', icono: 'boxes' },
+        { vista: 'panorama-lineas', etiqueta: 'Panorama', icono: 'layout-dashboard', requiere: 'panorama-lineas' },
+        { vista: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas', icono: 'smartphone', requiere: 'lineas-telefonicas' },
+        { vista: 'resguardos-lineas', etiqueta: 'Resguardos y cancelaciones', icono: 'package-check', requiere: 'resguardos-lineas' },
+        { vista: 'correcciones-lineas', etiqueta: 'Correcciones de Líneas', icono: 'clipboard-check', requiere: 'correcciones-lineas' }, // temporal (30-sep)
+        { vista: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios', icono: 'boxes', requiere: 'accesorios-lineas' },
         // Control de Cambios queda fuera del menú (30-sep) pero su vista sigue en navegarA: su pestaña es la bitácora
         // del Historial y del Panorama. Reactivación, Solicitud, Reasignaciones y Desechos se retiraron con sus
         // pestañas (30-sep); sus renglones están en APP_MOVIMIENTOS y se ven en el Historial de la ficha.
@@ -665,31 +681,45 @@
     {
       id: 'arqueos', icono: 'wallet', etiqueta: 'Arqueos',
       items: [
-        { vista: 'arqueos', etiqueta: 'Arqueos', icono: 'wallet' },
-        { vista: 'panorama-cajachica', etiqueta: 'Panorama', icono: 'bar-chart-3' },
-        { vista: 'caja-chica', etiqueta: 'Caja Chica', icono: 'piggy-bank' },
-        { vista: 'cambios-monto-cch', etiqueta: 'Cambios de Monto', icono: 'repeat' },
+        { vista: 'arqueos', etiqueta: 'Arqueos', icono: 'wallet', requiere: 'arqueos' },
+        { vista: 'panorama-cajachica', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'caja-chica' },
+        { vista: 'caja-chica', etiqueta: 'Caja Chica', icono: 'piggy-bank', requiere: 'caja-chica' },
+        { vista: 'cambios-monto-cch', etiqueta: 'Cambios de Monto', icono: 'repeat', requiere: 'caja-chica' },
       ],
     },
     {
       id: 'uber', icono: 'car-taxi-front', etiqueta: 'Uber',
       items: [
-        { vista: 'uber', etiqueta: 'Uber', icono: 'car-taxi-front' },
-        { vista: 'tickets', etiqueta: 'Tickets', icono: 'ticket' },
+        { vista: 'uber', etiqueta: 'Uber', icono: 'car-taxi-front', requiere: 'uber' },
+        { vista: 'tickets', etiqueta: 'Tickets', icono: 'ticket', requiere: 'tickets' },
       ],
     },
     // Activos por colaborador de todas las áreas (rama emmanuel)
-    { id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de Activos' },
+    { id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de Activos', requiere: 'gestion-activos' },
     {
-      // Solo aparece a quien tenga el permiso (`requiere`): son pantallas que escriben en
-      // varias hojas a la vez, y un enlace que siempre da "no tienes acceso" solo estorba.
       id: 'administracion', icono: 'settings', etiqueta: 'Administración',
       items: [
+        { vista: 'usuarios', etiqueta: 'Usuarios y permisos', icono: 'shield-check', requiere: 'usuarios' },
         { vista: 'relaciones', etiqueta: 'Datos conectados', icono: 'git-compare-arrows', requiere: 'relaciones' },
         { vista: 'salud', etiqueta: 'Salud', icono: 'heart-pulse', requiere: 'salud' },
       ],
     },
   ];
+
+  /**
+   * Módulo cuyo permiso pide una vista (el `requiere` de su item en NAV_GRUPOS), o null si
+   * cualquiera con sesión puede entrar (el inicio, las notificaciones). Control de Cambios
+   * de Líneas ya no está en el menú, pero se abre desde el Panorama de Líneas.
+   */
+  function moduloDeVista(vista) {
+    if (vista === 'cambios-lineas') return 'cambios-lineas';
+    let modulo = null;
+    NAV_GRUPOS.forEach((g) => {
+      if (g.vista === vista) modulo = g.requiere;
+      (g.items || []).forEach((it) => { if (it.vista === vista) modulo = it.requiere; });
+    });
+    return modulo;
+  }
 
   // Los grupos ya no son acordeón (se abren/cierran) — se quedan siempre
   // abiertos, el encabezado es nomás la etiqueta de la sección.
@@ -697,11 +727,11 @@
     const contenedor = document.getElementById('nav-groups');
     // Una entrada con `vista` y sin `items` es un acceso directo suelto
     // (sin desplegable), como Gestión de Activos (rama emmanuel).
-    // Un item con `requiere` solo se pinta si hay permiso de ese módulo; un grupo que se
+    // Un item solo se pinta si hay permiso de su módulo (`requiere`); un grupo que se
     // queda sin items no se pinta. Por eso esto se vuelve a llamar al llegar los permisos.
     const visibles = NAV_GRUPOS
-      .map((g) => (g.items ? Object.assign({}, g, { items: g.items.filter((it) => !it.requiere || permisoDe(it.requiere)) }) : g))
-      .filter((g) => !g.items || g.items.length);
+      .map((g) => (g.items ? Object.assign({}, g, { items: g.items.filter((it) => permisoDe(it.requiere)) }) : g))
+      .filter((g) => (g.items ? g.items.length : permisoDe(g.requiere)));
     contenedor.innerHTML = visibles.map((grupo) => (grupo.vista ? `
       <div class="nav-item" data-view="${grupo.vista}" data-etiqueta="${grupo.etiqueta}" data-tooltip="${grupo.etiqueta}">
         <span class="nav-icon"><i data-lucide="${grupo.icono}" class="ico"></i></span><span class="nav-label">${grupo.etiqueta}</span>
