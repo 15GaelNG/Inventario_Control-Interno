@@ -52,16 +52,48 @@
       const fondo = oro ? 'var(--color-accent-soft)' : 'var(--color-primary-soft)';
       const color = oro ? 'var(--color-accent-hover)' : 'var(--color-primary)';
       return `
-      <a href="${escaparHtml(s.url)}" target="_blank" rel="noopener" class="sistema-card">
-        <div class="sistema-card-icono" style="background:${fondo}; color:${color}">
-          <i data-lucide="${escaparHtml(s.icono || 'external-link')}" class="ico"></i>
-        </div>
-        <div class="sistema-card-texto">
-          <h3>${escaparHtml(s.nombre)}</h3>
-          <span class="sistema-card-abrir">Abrir <i data-lucide="arrow-up-right" class="ico"></i></span>
-        </div>
-      </a>`;
+      <div class="sistema-card-wrap">
+        <a href="${escaparHtml(s.url)}" target="_blank" rel="noopener" class="sistema-card">
+          <div class="sistema-card-icono" style="background:${fondo}; color:${color}">
+            <i data-lucide="${escaparHtml(s.icono || 'external-link')}" class="ico"></i>
+          </div>
+          <div class="sistema-card-texto">
+            <h3>${escaparHtml(s.nombre)}</h3>
+            <span class="sistema-card-abrir">Abrir <i data-lucide="arrow-up-right" class="ico"></i></span>
+          </div>
+        </a>
+        <button type="button" class="sistema-card-copiar" data-url="${escaparHtml(s.url)}"
+          title="Copiar enlace" aria-label="Copiar enlace de ${escaparHtml(s.nombre)}">
+          <i data-lucide="copy" class="ico"></i>
+        </button>
+      </div>`;
     }).join('');
     refreshIcons();
+    lista.querySelectorAll('.sistema-card-copiar').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const ok = await copiarEnlace_(btn.dataset.url);
+        if (ok) Notificar.exito('Enlace copiado');
+        else Notificar.error('El navegador no permitió copiar el enlace');
+      });
+    });
+  }
+
+  /** Mismo patrón que DataTable.copiarSeleccion (componentes/datatable.html): la API
+   *  moderna primero, y si el marco de Apps Script la bloquea, el truco clásico del
+   *  textarea oculto + execCommand('copy'). */
+  async function copiarEnlace_(texto) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(texto); return true; }
+    } catch (e) { /* cae al método clásico */ }
+    const area = document.createElement('textarea');
+    area.value = texto;
+    area.setAttribute('readonly', '');
+    area.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+    document.body.appendChild(area);
+    area.select();
+    let copiado = false;
+    try { copiado = document.execCommand('copy'); } catch (e) { copiado = false; }
+    area.remove();
+    return copiado;
   }
 </script>
