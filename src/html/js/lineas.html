@@ -4621,7 +4621,7 @@
           { icono: 'users', valor: v.TODOS, etiqueta: 'Colaboradores', filtro: 'TODOS' },
           { icono: 'user-check', valor: v.CON, etiqueta: 'Con activos', clase: 'stat-tile-ok', filtro: 'CON' },
           { icono: 'user-x', valor: v.SIN, etiqueta: 'Sin activos', clase: 'stat-tile-warn', filtro: 'SIN' },
-          { icono: 'smartphone', valor: v.asignados, etiqueta: 'Equipos y líneas asignados' },
+          { icono: 'package', valor: v.asignados, etiqueta: 'Activos asignados' },
         ];
         const cont = $('#lnga-kpis', raiz);
         cont.innerHTML = kpiDefs.map((d, i) => '<div class="stat-tile ' + (d.clase || '') + (d.filtro ? ' stat-tile-clickable' : '') + '" data-kpi="' + i + '"' +
@@ -4658,11 +4658,26 @@
         if (f) irARegistro(f.dataset.ir);
       });
 
-      Promise.all([cargarColaboradores(), cargarIndice()]).then(([r, indice]) => {
+      // El conteo de "activos" debe reflejar TODO lo que puede traer un colaborador en el panel
+      // lateral (mostrarColaborador), no solo equipos/líneas de Líneas -- si no, alguien con
+      // solo un vehículo, holograma, Uber o caja chica aparecía como "Sin activos".
+      Promise.all([
+        cargarColaboradores(),
+        cargarIndice(),
+        callServerCacheado('apiListarVehiculosBasico', state.token).catch(() => []),
+        callServerCacheado('apiListarHologramas', state.token).catch(() => []),
+        callServerCacheado('apiListarUberResumen', state.token).catch(() => []),
+        callServerCacheado('apiListarCajasChicasResumen', state.token).catch(() => []),
+      ]).then(([r, indice, vehiculos, hologramas, uber, cajasChicas]) => {
         if (!vigente()) return;
         const conteo = {};
+        const suma = (lista, campo) => (lista || []).forEach((a) => { const k = normal(a[campo]); if (k) conteo[k] = (conteo[k] || 0) + 1; });
         indice.equipos.forEach((a) => { const k = normal(a.responsable); if (k) conteo[k] = (conteo[k] || 0) + 1; });
         indice.lineas.filter((a) => a.suelta).forEach((a) => { const k = normal(a.responsable); if (k) conteo[k] = (conteo[k] || 0) + 1; });
+        suma(vehiculos, 'RESPONSABLE_VEHICULO');
+        suma(hologramas, 'RESPONSABLE');
+        suma(uber, 'NOMBRE_COMPLETO');
+        suma(cajasChicas, 'RESPONSABLE');
         colaboradores = filasComoObjetos(r).map((c, i) => Object.assign(c, { _i: i, totalActivos: conteo[normal(c.nombre)] || 0 }));
         aplicarFiltros();
       }).catch((e) => {
