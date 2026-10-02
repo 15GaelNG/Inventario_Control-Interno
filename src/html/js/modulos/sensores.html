@@ -532,13 +532,17 @@
       if (campoFolioBuscar && campoNucco) {
         const vehiculosPorFolioONucco = {};
         callServerCacheado('apiListarVehiculosBasico', state.token).then((vehiculos) => {
-          const opcionesNucco = [];
+          const conNucco = [];
           (vehiculos || []).forEach((v) => {
             vehiculosPorFolioONucco[v.FOLIO] = v;
-            if (v.NUCO) { vehiculosPorFolioONucco[v.NUCO] = v; opcionesNucco.push(`<option value="${v.NUCO}"></option>`); }
+            if (v.NUCO) { vehiculosPorFolioONucco[v.NUCO] = v; conNucco.push(v); }
           });
           const datalist = document.getElementById('sen-nucco-lista');
-          if (datalist) datalist.innerHTML = opcionesNucco.join('');
+          // En orden (1, 2, 3…), no en el orden del catálogo (que va por folio, no por nucco).
+          if (datalist) {
+            datalist.innerHTML = conNucco.sort((a, b) => Number(a.NUCO) - Number(b.NUCO))
+              .map((v) => `<option value="${v.NUCO}"></option>`).join('');
+          }
         }).catch(() => {});
         campoFolioBuscar.addEventListener('input', (ev) => {
           const vehiculo = vehiculosPorFolioONucco[ev.target.value];

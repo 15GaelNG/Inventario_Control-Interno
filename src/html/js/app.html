@@ -1613,18 +1613,19 @@
         // tronaría con "Cannot set properties of null".
         if (!document.body.contains(modal)) return;
         const opcionesFolio = [];
-        const opcionesNucco = [];
+        const conNucco = [];
         vehiculos.forEach((v) => {
           vehiculosPorFolio[v.FOLIO] = v;
           const etiqueta = [v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ');
           opcionesFolio.push(`<option value="${v.FOLIO}">${etiqueta}</option>`);
-          if (v.NUCO) {
-            vehiculosPorFolio[v.NUCO] = v;
-            opcionesNucco.push(`<option value="${v.NUCO}">${etiqueta}</option>`);
-          }
+          if (v.NUCO) { vehiculosPorFolio[v.NUCO] = v; conNucco.push(v); }
         });
         document.getElementById('lista-folios-vehiculo').innerHTML = opcionesFolio.join('');
-        document.getElementById('lista-nucco-vehiculo').innerHTML = opcionesNucco.join('');
+        // En orden (1, 2, 3…), no en el orden del catálogo (que va por folio, no por nucco).
+        document.getElementById('lista-nucco-vehiculo').innerHTML = conNucco
+          .sort((a, b) => Number(a.NUCO) - Number(b.NUCO))
+          .map((v) => `<option value="${v.NUCO}">${[v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ')}</option>`)
+          .join('');
       })
       .catch((err) => {
         // Antes esto se ignoraba en silencio — ahora se ve para poder diagnosticar.

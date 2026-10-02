@@ -37,14 +37,18 @@
     // dos resuelve el vehículo y pone el valor correspondiente en el otro.
     callServerCacheado('apiListarVehiculosBasico', state.token).then((vehiculos) => {
       const opcionesFolio = [];
-      const opcionesNucco = [];
+      const conNucco = [];
       (vehiculos || []).forEach((v) => {
         vehiculosPorFolio[v.FOLIO] = v;
         opcionesFolio.push(`<option value="${v.FOLIO}"></option>`);
-        if (v.NUCO) { vehiculosPorFolio[v.NUCO] = v; opcionesNucco.push(`<option value="${v.NUCO}"></option>`); }
+        if (v.NUCO) { vehiculosPorFolio[v.NUCO] = v; conNucco.push(v); }
       });
       document.getElementById('rv-folio-lista').innerHTML = opcionesFolio.join('');
-      document.getElementById('rv-nucco-lista').innerHTML = opcionesNucco.join('');
+      // En orden (1, 2, 3…), no en el orden del catálogo (que va por folio, no por nucco).
+      document.getElementById('rv-nucco-lista').innerHTML = conNucco
+        .sort((a, b) => Number(a.NUCO) - Number(b.NUCO))
+        .map((v) => `<option value="${v.NUCO}"></option>`)
+        .join('');
     }).catch((err) => {
       console.error('No se pudo cargar el catálogo de vehículos:', err);
       const errorBox = document.getElementById('rv-error');
