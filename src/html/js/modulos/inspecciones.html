@@ -863,11 +863,24 @@
       return salida;
     }
 
+    /** Calificación del voltaje de la batería, mismo semáforo que la imagen junto al campo
+     *  (<11.6V peligro, 11.6-12.8V revisión, >12.8V óptimo) -- ver calificacionVoltaje_ en
+     *  InspeccionesService.gs, misma regla de los dos lados. null = no se capturó voltaje. */
+    function puntoDeVoltaje_() {
+      const campo = document.getElementById('ins-voltaje');
+      const v = campo && campo.value !== '' ? Number(campo.value) : NaN;
+      if (isNaN(v)) return null;
+      if (v < 11.6) return 0;
+      if (v > 12.8) return 1;
+      return 0.5;
+    }
+
     /** Puntaje y avance, con la misma regla del servidor (ahí se vuelve a calcular) */
     function calcular() {
       const dadas = respuestas();
       let total = 0;
       let respondidas = 0;
+      const puntoVoltaje = puntoDeVoltaje_();
       const porSeccion = estructura.secciones.map((s) => {
         let puntos = 0;
         let evaluadas = 0;
@@ -882,6 +895,14 @@
           evaluadas++;
           if (punto < 1) problemas.push({ pieza: c.campo, valor: valor });
         });
+        // El voltaje de la batería cuenta como una pieza más de la sección "Batería" (junto
+        // a sarro/derrame/batería inflada), sin su propia fila en la tabla -- no se le da un
+        // peso propio, se promedia con esas (decisión 2-oct).
+        if (s.titulo === 'Batería' && puntoVoltaje !== null) {
+          puntos += puntoVoltaje;
+          evaluadas++;
+          if (puntoVoltaje < 1) problemas.push({ pieza: 'Voltaje de la batería', valor: puntoVoltaje === 0 ? 'PELIGRO' : 'REVISIÓN' });
+        }
         const aporte = evaluadas ? (s.peso / 100) * (puntos / evaluadas) : 0;
         total += aporte;
         respondidas += contestadas;
