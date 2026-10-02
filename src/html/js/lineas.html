@@ -4452,23 +4452,66 @@
             : '<p class="empty-state">Sin líneas ni equipos asignados a ' + esc(nombre) + '.</p>') + '</div>';
       }
 
-      function tarjetaPendiente(titulo, ico) {
-        return '<div class="card ln-card"><h3>' + icono(ico) + ' ' + esc(titulo) + '</h3>' +
-          '<p class="ln-tenue">Esta información aún no está disponible en esta vista.</p></div>';
-      }
-
       /** Vehículos del colaborador (apiListarVehiculosBasico, el mismo catálogo cacheado que
        *  ya usan Vehículos/Incidencias/Reasignaciones/etc. para autocompletar por folio) --
        *  mismo patrón que tarjetaLineas, pero clic va a la ficha de Vehículos (data-ir-vehiculo,
-       *  no data-ir: ese es de Líneas/irARegistro). */
+       *  no data-ir: ese es de Líneas/irARegistro). El identificador principal que se muestra
+       *  es el NUCO (igual que en el resto de la app desde este ciclo), pero la navegación
+       *  sigue usando el FOLIO real: verFichaVehiculoDesdeOtroModulo necesita folio, no nuco. */
       function tarjetaVehiculos(nombre, lista) {
         const fila = (v) => '<tr class="ln-fila-clic" data-ir-vehiculo="' + esc(v.FOLIO) + '"><td><button type="button" class="ln-btn-icono" data-ir-vehiculo="' + esc(v.FOLIO) + '">' +
-          icono('car') + ' ' + esc(v.FOLIO) + ' ' + icono('chevron-right') + '</button></td><td>' +
-          esc([v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ')) + '</td><td>' + guion(v.MODELO) + '</td><td>' + guion(v.NUCO) + '</td></tr>';
+          icono('car') + ' NUCO ' + guion(v.NUCO) + ' ' + icono('chevron-right') + '</button></td><td class="ln-mono">' + guion(v.FOLIO) + '</td><td>' +
+          esc([v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ')) + '</td><td>' + guion(v.MODELO) + '</td></tr>';
         return '<div class="card ln-card"><h3>' + icono('car') + ' Vehículos (' + lista.length + ')</h3>' +
           (lista.length
-            ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Folio</th><th>Marca / Línea</th><th>Año</th><th>Nucco</th></tr></thead><tbody>' + lista.map(fila).join('') + '</tbody></table></div>'
+            ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Nucco</th><th>Folio</th><th>Marca / Línea</th><th>Año</th></tr></thead><tbody>' + lista.map(fila).join('') + '</tbody></table></div>'
             : '<p class="empty-state">Sin vehículos asignados a ' + esc(nombre) + '.</p>') + '</div>';
+      }
+
+      /** Hologramas / combustible del colaborador (apiListarHologramas, catálogo cacheado).
+       *  Cuando el holograma ya está ligado a un vehículo del catálogo trae FOLIO -- en ese
+       *  caso la fila es clicable e igual navega a la ficha de Vehículos; si no, es informativa. */
+      function tarjetaHologramas(nombre, lista) {
+        const claseEox = (e) => (String(e).toUpperCase() === 'HABILITADO' ? 'verde' : 'rojo');
+        const fila = (h) => {
+          const folio = h.FOLIO || '';
+          const etiqueta = icono('sticker') + ' ' + guion(h.PLACA) + (folio ? ' ' + icono('chevron-right') : '');
+          const celda = folio
+            ? '<button type="button" class="ln-btn-icono" data-ir-vehiculo="' + esc(folio) + '">' + etiqueta + '</button>'
+            : etiqueta;
+          return '<tr' + (folio ? ' class="ln-fila-clic" data-ir-vehiculo="' + esc(folio) + '"' : '') + '><td>' + celda + '</td><td>' + guion(h.CALCOMANIA) + '</td><td>' +
+            esc([h.MARCA, h.LINEA].filter(Boolean).join(' ')) + '</td><td>' + chip(h.ESTATUS_EOX || 'Sin estatus', claseEox(h.ESTATUS_EOX)) + '</td></tr>';
+        };
+        return '<div class="card ln-card"><h3>' + icono('fuel') + ' Hologramas / combustible (' + lista.length + ')</h3>' +
+          (lista.length
+            ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Placa</th><th>Calcomanía</th><th>Marca / Línea</th><th>Estatus EOX</th></tr></thead><tbody>' + lista.map(fila).join('') + '</tbody></table></div>'
+            : '<p class="empty-state">Sin hologramas asignados a ' + esc(nombre) + '.</p>') + '</div>';
+      }
+
+      /** Uber del colaborador (apiListarUberResumen). No tiene ficha propia en otro módulo
+       *  (su detalle vive solo en el panel lateral de la tabla de Uber), así que es informativa. */
+      function tarjetaUber(nombre, lista) {
+        const fila = (u) => '<tr><td>' + guion(u.ROL) + '</td><td>' + chip(u.ESTATUS || 'Sin estatus', String(u.ESTATUS).toUpperCase() === 'ACTIVO' ? 'verde' : 'neutro') + '</td><td>' + guion(u.RAZON_SOCIAL) + '</td></tr>';
+        return '<div class="card ln-card"><h3>' + icono('car-front') + ' Uber (' + lista.length + ')</h3>' +
+          (lista.length
+            ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Rol</th><th>Estatus</th><th>Razón social</th></tr></thead><tbody>' + lista.map(fila).join('') + '</tbody></table></div>'
+            : '<p class="empty-state">Sin registro de Uber para ' + esc(nombre) + '.</p>') + '</div>';
+      }
+
+      /** Cajas chicas del colaborador (apiListarCajasChicasResumen) -- clic va a la ficha de
+       *  Caja Chica (data-ir-cch → verFichaCajaChicaDesdeOtroModulo, igual patrón que Vehículos). */
+      function tarjetaCajasChicas(nombre, lista) {
+        const claseCch = (e) => {
+          const u = String(e).toUpperCase();
+          return u === 'VIGENTE' ? 'verde' : u === 'CERRADA' ? 'rojo' : u === 'EN PROCESO DE CIERRE' ? 'ambar' : 'neutro';
+        };
+        const fila = (c) => '<tr class="ln-fila-clic" data-ir-cch="' + esc(c.ID_CCH) + '"><td><button type="button" class="ln-btn-icono" data-ir-cch="' + esc(c.ID_CCH) + '">' +
+          icono('wallet') + ' ' + esc(c.ID_CCH) + ' ' + icono('chevron-right') + '</button></td><td>' + guion(c.DEPARTAMENTO) + '</td><td>' + guion(c.SEDE) + '</td><td>' +
+          chip(c.ESTATUS || 'Sin estatus', claseCch(c.ESTATUS)) + '</td></tr>';
+        return '<div class="card ln-card"><h3>' + icono('wallet') + ' Cajas chicas (' + lista.length + ')</h3>' +
+          (lista.length
+            ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>ID CCH</th><th>Departamento</th><th>Sede</th><th>Estatus</th></tr></thead><tbody>' + lista.map(fila).join('') + '</tbody></table></div>'
+            : '<p class="empty-state">Sin cajas chicas asignadas a ' + esc(nombre) + '.</p>') + '</div>';
       }
 
       /** Asignaciones del colaborador en el panel lateral (como el detalle de los demás módulos): la lista no se mueve. */
@@ -4478,25 +4521,34 @@
         const panel = abrirPanelLateral(c.nombre || 'Colaborador', [c.puesto, c.departamento].filter(Boolean).join(' · ') || 'Activos asignados');
         panel.alCerrar = () => { if (tarjeta) tarjeta.classList.remove('seleccionado'); };
         panel.cuerpo.innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Consultando asignaciones…</p>';
-        // Ir a una línea/equipo (Líneas, data-ir) o a un vehículo (Control Vehicular,
-        // data-ir-vehiculo): se cierra el panel y se abre su ficha en el módulo que toque.
+        // Ir a una línea/equipo (Líneas, data-ir), a un vehículo/holograma (Control Vehicular,
+        // data-ir-vehiculo) o a una caja chica (data-ir-cch): se cierra el panel y se abre su
+        // ficha en el módulo que toque.
         panel.cuerpo.addEventListener('click', (ev) => {
           const fLinea = ev.target.closest('[data-ir]');
           if (fLinea) { panel.cerrar(); irARegistro(fLinea.dataset.ir); return; }
           const fVehiculo = ev.target.closest('[data-ir-vehiculo]');
           if (fVehiculo) { panel.cerrar(); verFichaVehiculoDesdeOtroModulo(fVehiculo.dataset.irVehiculo); return; }
+          const fCch = ev.target.closest('[data-ir-cch]');
+          if (fCch) { panel.cerrar(); verFichaCajaChicaDesdeOtroModulo(fCch.dataset.irCch); return; }
         });
-        // callServerCacheado vive en api.html (mismo scope global que todo el cliente) -- es
-        // el mismo catálogo de Vehículos que ya está cacheado para el resto de la app, así
-        // que esto normalmente no pide nada nuevo al servidor.
+        // callServerCacheado vive en api.html (mismo scope global que todo el cliente) -- son
+        // los mismos catálogos ya cacheados para el resto de la app, así que esto normalmente
+        // no pide nada nuevo al servidor.
         Promise.all([
           cargarIndice(),
           callServerCacheado('apiListarVehiculosBasico', state.token).catch(() => []),
-        ]).then(([indice, vehiculos]) => {
+          callServerCacheado('apiListarHologramas', state.token).catch(() => []),
+          callServerCacheado('apiListarUberResumen', state.token).catch(() => []),
+          callServerCacheado('apiListarCajasChicasResumen', state.token).catch(() => []),
+        ]).then(([indice, vehiculos, hologramas, uber, cajasChicas]) => {
           if (!vigente() || panelAbierto !== panel) return;
           const datos = filasPorResponsable(indice, c.nombre);
           const texto = normal(c.nombre);
           const misVehiculos = (vehiculos || []).filter((v) => normal(v.RESPONSABLE_VEHICULO) === texto);
+          const misHologramas = (hologramas || []).filter((h) => normal(h.RESPONSABLE) === texto);
+          const miUber = (uber || []).filter((u) => normal(u.NOMBRE_COMPLETO) === texto);
+          const misCch = (cajasChicas || []).filter((cch) => normal(cch.RESPONSABLE) === texto);
           const pie = [c.noEmpleado ? 'Empleado ' + c.noEmpleado : '', c.area, c.sede, c.oficina].filter(Boolean).map(esc).join(' · ');
           panel.cuerpo.innerHTML =
             '<div class="ln-panel-resumen"><div class="ln-chips">' +
@@ -4505,8 +4557,9 @@
             '</div>' + (pie ? '<p class="ln-pie ln-tenue">' + pie + '</p>' : '') + '</div>' +
             tarjetaLineas(c.nombre, datos) +
             tarjetaVehiculos(c.nombre, misVehiculos) +
-            tarjetaPendiente('Hologramas / combustible', 'fuel') +
-            tarjetaPendiente('Uber', 'car-front') + tarjetaPendiente('Cajas chicas', 'wallet');
+            tarjetaHologramas(c.nombre, misHologramas) +
+            tarjetaUber(c.nombre, miUber) +
+            tarjetaCajasChicas(c.nombre, misCch);
           pintarIconos(panel.cuerpo);
         }).catch((e) => {
           if (panelAbierto === panel) panel.cuerpo.innerHTML = '<p class="error-msg">No se pudieron consultar las asignaciones: ' + mensajeError(e) + '</p>';
