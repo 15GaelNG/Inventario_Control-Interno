@@ -1562,6 +1562,9 @@
       const base64 = await leerArchivoBase64(file);
       const subido = await callServer('apiSubirArchivoVehiculo', state.token, file.name, file.type, base64);
       resultado[campo.clave] = subido.url;
+      // No es una columna real: solo viaja para que el servidor pueda renombrar el
+      // archivo a "<ID>_<ETIQUETA>_<fecha>" una vez que sabe el ID real del vehículo.
+      resultado[campo.clave + '_FILE_ID'] = subido.id;
     }
     return resultado;
   }
