@@ -50,6 +50,27 @@
       console.error('No se pudo cargar el catálogo de departamentos:', err);
     });
 
+    // Colaboradores (Capital Humano, mismo catálogo y mismo criterio que Vehículos — ver
+    // CAMPOS_VEHICULO/wireResponsableVehiculo en app.html): sugerencias para "Responsable"
+    // del entrante y, al elegir uno (o escribir un nombre que coincide exacto), se autollenan
+    // "No. de empleado" y "Departamento" -- si no está en la lista (alguien que CH todavía no
+    // cargó), se deja escribir libre y esos dos se capturan a mano, como ya era antes.
+    callServerCacheado('apiListarColaboradores', state.token).then((colaboradores) => {
+      const lista = colaboradores || [];
+      document.getElementById('rv-responsable-entrante-lista').innerHTML =
+        Array.from(new Set(lista.map((c) => c.NOMBRE))).map((n) => `<option value="${n}"></option>`).join('');
+      const porNombre = {};
+      lista.forEach((c) => { if (!porNombre[c.NOMBRE.toUpperCase()]) porNombre[c.NOMBRE.toUpperCase()] = c; });
+      document.getElementById('rv-responsable-entrante').addEventListener('input', (ev) => {
+        const colaborador = porNombre[ev.target.value.trim().toUpperCase()];
+        if (!colaborador) return;
+        if (colaborador.DEPARTAMENTO) document.getElementById('rv-departamento-entrante').value = colaborador.DEPARTAMENTO;
+        if (colaborador.NO_EMPLEADO) document.getElementById('rv-no-empleado-entrante').value = colaborador.NO_EMPLEADO;
+      });
+    }).catch((err) => {
+      console.error('No se pudo cargar el catálogo de colaboradores:', err);
+    });
+
     document.getElementById('rv-folio').addEventListener('input', (ev) => {
       const vehiculo = vehiculosPorFolio[ev.target.value];
       document.getElementById('rv-vin').value = vehiculo ? vehiculo.VIN : '';

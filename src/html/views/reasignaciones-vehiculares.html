@@ -47,7 +47,11 @@
 
         <div class="info-section-title">Responsable entrante (nuevo)</div>
         <div class="field"><label>No. de empleado</label><input type="text" id="rv-no-empleado-entrante" /></div>
-        <div class="field"><label>Responsable</label><input type="text" id="rv-responsable-entrante" required /></div>
+        <div class="field">
+          <label>Responsable</label>
+          <input type="text" id="rv-responsable-entrante" list="rv-responsable-entrante-lista" autocomplete="off" required />
+          <datalist id="rv-responsable-entrante-lista"></datalist>
+        </div>
         <div class="field">
           <label>Departamento</label>
           <input type="text" id="rv-departamento-entrante" list="rv-departamento-entrante-lista" autocomplete="off" placeholder="Escribe o elige…" />
