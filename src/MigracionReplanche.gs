@@ -45,8 +45,8 @@ const REPL_PROHIBIDOS = {
   '1fC77Uu1ePVUySNvhgWXMHqWpLhGhBMTZZMEblU2nUhI': 'el libro de pruebas COMPARTIDO del equipo',
 };
 
-/** Cuántas filas se mueven por viaje. CAMBIOS LINEAS TELEFONICAS son 35,543 × 10. */
-const REPL_FILAS_POR_BLOQUE = 4000;
+/** Nombre de la pestaña temporal donde llega cada copia (ver replCopiarHoja_). */
+const REPL_TEMPORAL = '__replanche ';
 /** Dónde se anota en qué hoja se quedó, para poder continuar. */
 const REPL_PROP_AVANCE = 'REPLANCHE_HOJAS_LISTAS';
 /** Permiso explícito para perder columnas que NO son de la migración. */
@@ -182,9 +182,24 @@ function replAjustarGrid_(hoja, filas, cols) {
   else if (c > cObj) hoja.deleteColumns(cObj + 1, c - cObj);
 }
 
+/** Borra las copias temporales que haya dejado una corrida que murió a la mitad. */
+function replLimpiarTemporales_(libro) {
+  libro.getSheets()
+    .filter((h) => h.getName().indexOf(REPL_TEMPORAL) === 0)
+    .forEach((h) => libro.deleteSheet(h));
+}
+
 /**
- * Copia una hoja de producción encima de la del destino, por bloques.
+ * Copia una hoja de producción encima de la del destino.
  * Devuelve { filas, columnas } de lo que quedó escrito.
+ *
+ * La copia la hace Google, no este script: `copyTo` manda la hoja entera al libro destino
+ * como pestaña temporal, y `copyValuesToRange` pasa solo los VALORES a la hoja de siempre.
+ * La hoja destino conserva su gid, así que nada que la cite se rompe. Antes eran bloques de
+ * 4,000 filas con getValues/setValues: unos 3 minutos para 850k celdas.
+ *
+ * Que la temporal recalcule sus fórmulas en el destino no cambia nada: producción tiene 2
+ * fórmulas en las 20 hojas, las dos dentro de su propia pestaña (medido el 01/10/2026).
  */
 function replCopiarHoja_(hojaOrigen, hojaDestino) {
   const filas = hojaOrigen.getLastRow();
@@ -196,11 +211,14 @@ function replCopiarHoja_(hojaOrigen, hojaDestino) {
   replAjustarGrid_(hojaDestino, maxFilas, maxCols);
   if (!filas || !cols) return { filas: 0, columnas: 0 };
 
-  for (let desde = 1; desde <= filas; desde += REPL_FILAS_POR_BLOQUE) {
-    const cuantas = Math.min(REPL_FILAS_POR_BLOQUE, filas - desde + 1);
-    const valores = hojaOrigen.getRange(desde, 1, cuantas, cols).getValues();
-    hojaDestino.getRange(desde, 1, cuantas, cols).setValues(valores);
+  const libro = hojaDestino.getParent();
+  const temporal = hojaOrigen.copyTo(libro);
+  try {
+    temporal.setName(REPL_TEMPORAL + hojaDestino.getName());
+    temporal.getRange(1, 1, filas, cols).copyValuesToRange(hojaDestino, 1, cols, 1, filas);
     SpreadsheetApp.flush();
+  } finally {
+    libro.deleteSheet(temporal);
   }
   // El encabezado congelado y en negritas, como en producción
   hojaDestino.setFrozenRows(hojaOrigen.getFrozenRows());
@@ -233,6 +251,8 @@ function replancharDesdeProduccion(opciones) {
     lineas.push('  Continuando: ya estaban listas ' + listas.length + ' hojas de ' + hojas.length + '.');
     lineas.push('');
   }
+
+  if (cfg.escribir) replLimpiarTemporales_(destino);
 
   const perdidasTotales = [];
   let hechas = 0, celdas = 0, sinOrigen = 0, sinDestino = 0, corte = '';

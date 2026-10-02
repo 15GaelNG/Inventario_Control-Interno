@@ -11,6 +11,24 @@ decir** cada salida está en [ensayo-final.md](ensayo-final.md) y
   bien corres `…2Escribir`.
 - Marca cada casilla al terminar.
 
+## La forma corta: un solo botón
+
+1. **A mano, antes:** borrar `TELEFONO` y `NÚMERO DE CUENTA` de `COLABORADORES ACTUALIZADO`
+   (LAB y libro del equipo). Si `replanche1Ensayo` no se ha corrido desde el último cambio
+   de columnas en producción, córrelo: un `SE PIERDE` detendría el botón en la etapa 1.
+2. **`migracionTodoLab`** — replancha LAB desde producción, quita el sello de LAB y corre
+   los 5 pipelines **escribiendo**. Sigue sola: cada etapa programa la siguiente con un
+   activador, y repite la que se corte por tiempo. Tarda del orden de 15 minutos.
+   La primera vez Google pide autorizar un permiso nuevo (activadores): es una sola vez.
+3. **Para ver en qué va:** `migracionTodoEstado`, o la hoja `LOG_MIGRACION` (una fila
+   `TODO n/7 …` por etapa). Al terminar o detenerse llega un correo.
+4. **Si se detuvo:** el correo y `migracionTodoEstado` dicen en qué etapa y qué dijo.
+   Se arregla y se vuelve a correr `migracionTodoLab` (empieza de cero, replanchando).
+   Para pararla a mano: `migracionTodoCancelar`.
+
+Lo de abajo es la forma larga, paso por paso: para revisar una etapa con su ensayo, o
+cuando el botón se detuvo y hay que ver de cerca.
+
 ## Si una función "se muere" por tiempo
 
 Apps Script mata cualquier ejecución a los **6 minutos**. Ninguna función de este guion
