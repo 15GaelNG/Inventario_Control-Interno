@@ -349,7 +349,15 @@ const InspeccionesService = (function () {
 
     const estructura = estructuraDeTipo(token, p.TIPO);
     const checklist = p.checklist || {};
-    const puntaje = calcularPuntaje_(estructura.secciones, checklist);
+    // El voltaje de la batería cuenta en el puntaje como una pieza más de la sección
+    // "Batería" -- seccionesParaPuntaje/checklistParaPuntaje son copias SOLO para esta
+    // cuenta: estructura.secciones y checklist siguen intactos para la fila y el PDF (ahí
+    // "VOLTAJE BATERIA" no es una columna real).
+    const calificacionVoltaje = calificacionVoltaje_(p.VOLTAJE);
+    const seccionesParaPuntaje = calificacionVoltaje === null ? estructura.secciones : estructura.secciones.map((s) =>
+      s.titulo === 'Batería' ? Object.assign({}, s, { campos: s.campos.concat([{ campo: 'VOLTAJE BATERIA', opciones: ['BUENO', 'REGULAR', 'MALO'] }]) }) : s);
+    const checklistParaPuntaje = calificacionVoltaje === null ? checklist : Object.assign({}, checklist, { 'VOLTAJE BATERIA': calificacionVoltaje });
+    const puntaje = calcularPuntaje_(seccionesParaPuntaje, checklistParaPuntaje);
     if (!puntaje.evaluadas) throw new Error('Responde al menos una pieza del checklist antes de guardar');
 
     const id = nuevoId_(vehiculo.data['NUCCO']);
@@ -471,6 +479,23 @@ const InspeccionesService = (function () {
           '. Súbelos a esa ruta para que aparezcan en las siguientes inspecciones.'
         : '',
     };
+  }
+
+  /**
+   * Calificación del voltaje de la batería, según el semáforo del formulario de captura
+   * (mismo umbral que la imagen junto al campo Voltaje): <11.6V peligro, 11.6-12.8V
+   * revisión, >12.8V óptimo. Se expresa en las mismas categorías BUENO/REGULAR/MALO que
+   * ya entiende valorDeRespuesta_, para que cuente como una pieza más (decisión 2-oct:
+   * entra dentro de la sección "Batería" ya existente, junto a sarro/derrame/batería
+   * inflada -- no se le da un peso propio).
+   * @return {string|null} null si no se capturó voltaje (no cuenta, ni a favor ni en contra)
+   */
+  function calificacionVoltaje_(voltaje) {
+    const v = Number(voltaje);
+    if (voltaje === undefined || voltaje === null || voltaje === '' || isNaN(v)) return null;
+    if (v < 11.6) return 'MALO';
+    if (v > 12.8) return 'BUENO';
+    return 'REGULAR';
   }
 
   // ---------- puntaje ----------

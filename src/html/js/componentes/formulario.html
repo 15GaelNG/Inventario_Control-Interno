@@ -509,6 +509,21 @@
           if (si && ayuda.dataset.original === undefined) ayuda.dataset.original = ayuda.textContent;
           ayuda.textContent = si ? motivo : (ayuda.dataset.original || '');
         }
+        // "auto": mismo <span class="auto-tag"> que ya usan Vehículos/Incidencias/
+        // Reasignaciones/Cambios de Monto CCH -- se crea la primera vez que el campo se
+        // vuelve de solo lectura (el label nace sin ella) y luego solo se muestra/oculta.
+        const label = caja && caja.querySelector('label');
+        if (label) {
+          let tag = label.querySelector('.auto-tag');
+          if (!tag && si) {
+            tag = document.createElement('span');
+            tag.className = 'auto-tag';
+            tag.textContent = 'auto';
+            label.appendChild(document.createTextNode(' '));
+            label.appendChild(tag);
+          }
+          if (tag) tag.hidden = !si;
+        }
       }
 
       // ---------- errores ----------

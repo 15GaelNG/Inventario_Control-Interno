@@ -211,6 +211,26 @@ const SensoresService = (function () {
    *                          RENDIMIENTO?, RALENTI?, COMENTARIOS? }
    * @param {{base64: string, mimeType: string}} archivo  responsiva en PDF
    */
+  /** Renombra en Drive el archivo recién subido a "<ID>_RESPONSIVA_SENSOR_<fecha>.ext" (conserva
+   *  la extensión que ya trae) y regresa la ruta (relativa, AppSheet) ya actualizada con ese
+   *  nombre -- urlResponsiva() busca el archivo por ese nombre exacto dentro de la carpeta, así
+   *  que la ruta guardada en la hoja debe coincidir con el nombre real. Si falla, regresa la
+   *  ruta original sin tocar nada (no bloquea el alta). */
+  function renombrarResponsiva_(fileId, id, rutaOriginal) {
+    if (!fileId || !id) return rutaOriginal;
+    try {
+      const archivo = DriveApp.getFileById(fileId);
+      const extension = (archivo.getName().match(/\.[^.]+$/) || [''])[0];
+      const fecha = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      const nuevoNombre = id + '_RESPONSIVA_SENSOR_' + fecha + extension;
+      archivo.setName(nuevoNombre);
+      return rutaOriginal.split('/')[0] + '/' + nuevoNombre;
+    } catch (e) {
+      console.warn('No se pudo renombrar la responsiva del sensor (' + fileId + '): ' + e.message);
+      return rutaOriginal;
+    }
+  }
+
   function registrar(token, datos, archivo) {
     Permisos.puedeEditar(token, 'instalacion-sensores');
 
@@ -249,13 +269,14 @@ const SensoresService = (function () {
       permitidos: ['application/pdf'],
       etiqueta: 'la responsiva',
     });
+    const rutaResponsiva = renombrarResponsiva_(guardado.fileId, id, guardado.ruta);
 
     let nueva;
     try {
       nueva = SheetUtils.insert(ssId(), hoja_().getName(), Object.assign({}, columnas, {
         'ID': id,
         'SERIE SENSOR': serieSensor,
-        [COL_RESPONSIVA]: guardado.ruta,
+        [COL_RESPONSIVA]: rutaResponsiva,
         'TIPO DE COMBUSTIBLE': combustible,
         'ESTATUS SENSOR': estatus,
         'FECHA INSTALACION': fechaInstalacion,

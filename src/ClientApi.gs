@@ -281,6 +281,9 @@ function apiSubirEvidenciaArqueo(token, nombreArchivo, mimeType, base64Data) {
 function apiListarDepartamentos(token) {
   return ListasService.listarDepartamentos(token);
 }
+function apiListarColaboradores(token) {
+  return CapitalHumano.listarColaboradores(token);
+}
 function apiListarSolicitantesTickets(token) {
   return TicketsService.listarSolicitantes(token);
 }

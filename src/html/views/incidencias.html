@@ -37,8 +37,13 @@
       </div>
       <form id="form-incidencia" class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 14px;">
         <div class="field">
+          <label>Nucco <span class="auto-tag" id="tag-nucco" hidden>auto</span></label>
+          <input type="text" id="inc-nucco" list="lista-nucco-vehiculo" placeholder="Otra forma de buscar el vehículo…" autocomplete="off" />
+          <datalist id="lista-nucco-vehiculo"></datalist>
+        </div>
+        <div class="field">
           <label>Folio del vehículo</label>
-          <input type="text" id="inc-folio" list="lista-folios-vehiculo" required placeholder="Escribe o elige el folio" autocomplete="off" />
+          <input type="text" id="inc-folio" list="lista-folios-vehiculo" required placeholder="Escribe o elige…" autocomplete="off" />
           <datalist id="lista-folios-vehiculo"></datalist>
         </div>
         <div class="field"><label>Departamento <span class="auto-tag" id="tag-departamento" hidden>auto</span></label><input type="text" id="inc-departamento" /></div>
@@ -113,6 +118,7 @@
       <form id="form-editar-incidencia">
         <input type="hidden" id="editar-id" />
         <div class="modal-form-scroll grid" style="grid-template-columns: repeat(2, 1fr); gap: 0 14px;">
+          <div class="field"><label>Nucco</label><input type="text" id="editar-nucco" list="lista-nucco-vehiculo" placeholder="Otra forma de buscar el vehículo…" /></div>
           <div class="field"><label>Folio del vehículo</label><input type="text" id="editar-folio" list="lista-folios-vehiculo" /></div>
           <div class="field"><label>Departamento</label><input type="text" id="editar-departamento" /></div>
           <div class="field"><label>Modelo</label><input type="text" id="editar-modelo" /></div>

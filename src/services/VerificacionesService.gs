@@ -104,6 +104,26 @@ const VerificacionesService = (function () {
    * @param {{FOLIO: string, FECHA_VERIFICACION: string, FECHA_PROXIMA: string}} datos  fechas "yyyy-MM-dd"
    * @param {{base64: string, mimeType: string}} archivo  comprobante
    */
+  /** Renombra en Drive el archivo recién subido a "<ID>_VERIFICACION_<fecha>.ext" (conserva la
+   *  extensión que ya trae) y regresa la ruta (relativa, AppSheet) ya actualizada con ese
+   *  nombre -- urlComprobante()/previsualizarComprobante() buscan el archivo por ese nombre
+   *  exacto dentro de la carpeta, así que la ruta guardada en la hoja debe coincidir con el
+   *  nombre real. Si falla, regresa la ruta original sin tocar nada (no bloquea el alta). */
+  function renombrarComprobante_(fileId, id, rutaOriginal) {
+    if (!fileId || !id) return rutaOriginal;
+    try {
+      const archivo = DriveApp.getFileById(fileId);
+      const extension = (archivo.getName().match(/\.[^.]+$/) || [''])[0];
+      const fecha = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      const nuevoNombre = id + '_VERIFICACION_' + fecha + extension;
+      archivo.setName(nuevoNombre);
+      return rutaOriginal.split('/')[0] + '/' + nuevoNombre;
+    } catch (e) {
+      console.warn('No se pudo renombrar el comprobante de verificación (' + fileId + '): ' + e.message);
+      return rutaOriginal;
+    }
+  }
+
   function registrar(token, datos, archivo) {
     const sesion = Permisos.puedeEditar(token, 'verificaciones');
 
@@ -129,13 +149,14 @@ const VerificacionesService = (function () {
       columna: COL_COMPROBANTE,
       archivo: archivo,
     });
+    const rutaComprobante = renombrarComprobante_(imagen.fileId, id, imagen.ruta);
 
     try {
       SheetUtils.insert(ssId(), hoja_().getName(), Object.assign({}, delVehiculo.datos, {
         'ID': id,
         'FECHA REGISTRO': new Date(),
         'FECHA VERIFICACION': fechaVerificacion,
-        [COL_COMPROBANTE]: imagen.ruta,
+        [COL_COMPROBANTE]: rutaComprobante,
         'FECHA PROXIMA VERIFICACION': fechaProxima,
         'REGISTRADO POR': sesion.nombre,
       }));

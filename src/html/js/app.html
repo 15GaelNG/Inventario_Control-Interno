@@ -602,6 +602,10 @@
       if (vista === 'relaciones') { montarVista('tpl-relaciones', initRelaciones); return; }
       if (vista === 'salud') { montarVista('tpl-salud', initSalud); return; }
       if (vista === 'usuarios') { montarVista('tpl-usuarios', initPermisosAdmin); return; }
+      if (vista === 'sistemas-vehiculos') { montarVista('tpl-sistemas', () => initSistemas('servicios-vehiculares')); return; }
+      if (vista === 'sistemas-lineas') { montarVista('tpl-sistemas', () => initSistemas('lineas')); return; }
+      if (vista === 'sistemas-arqueos') { montarVista('tpl-sistemas', () => initSistemas('arqueos')); return; }
+      if (vista === 'encuestas-solicitudes') { montarVista('tpl-sistemas', () => initSistemas('encuestas-solicitudes')); return; }
       // --- Líneas (rama emmanuel): el módulo vive en html/js/lineas.html (namespace Lineas) ---
       if (vista === 'panorama-lineas') { montarVista('tpl-lineas-panorama', Lineas.initPanorama); return; }
       if (vista === 'lineas-telefonicas') { montarVista('tpl-lineas-telefonicas', Lineas.initTelefonicas); return; }
@@ -644,7 +648,8 @@
   /**
    * Estructura del sidebar por área. `requiere` es el módulo (Modulos.gs) cuyo permiso
    * hace falta para ver el item: los panoramas y Cambios de Monto no son módulos propios,
-   * cuelgan de su padre. Sin `requiere` no se pinta (y navegarA no deja entrar).
+   * cuelgan de su padre. `libre: true` = no pide permiso (Sistemas y Encuestas: solo enlaces
+   * a sistemas externos). Sin ninguno de los dos, el item no se pinta.
    */
   const NAV_GRUPOS = [
     {
@@ -659,6 +664,7 @@
         { vista: 'inspeccion-vehicular', etiqueta: 'Inspección Vehicular', icono: 'clipboard-list', requiere: 'inspeccion-vehicular' },
         { vista: 'instalacion-sensores', etiqueta: 'Instalación de Sensores', icono: 'radio', requiere: 'instalacion-sensores' },
         { vista: 'hologramas', etiqueta: 'Hologramas', icono: 'sparkles', requiere: 'hologramas' },
+        { vista: 'sistemas-vehiculos', etiqueta: 'Sistemas', icono: 'external-link', libre: true },
       ],
     },
     {
@@ -676,15 +682,17 @@
         // del Historial y del Panorama. Reactivación, Solicitud, Reasignaciones y Desechos se retiraron con sus
         // pestañas (30-sep); sus renglones están en APP_MOVIMIENTOS y se ven en el Historial de la ficha.
         // { vista: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas', icono: 'eye' },
+        { vista: 'sistemas-lineas', etiqueta: 'Sistemas', icono: 'external-link', libre: true },
       ],
     },
     {
       id: 'arqueos', icono: 'wallet', etiqueta: 'Arqueos',
       items: [
-        { vista: 'arqueos', etiqueta: 'Arqueos', icono: 'wallet', requiere: 'arqueos' },
         { vista: 'panorama-cajachica', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'caja-chica' },
+        { vista: 'arqueos', etiqueta: 'Arqueos', icono: 'wallet', requiere: 'arqueos' },
         { vista: 'caja-chica', etiqueta: 'Caja Chica', icono: 'piggy-bank', requiere: 'caja-chica' },
         { vista: 'cambios-monto-cch', etiqueta: 'Cambios de Monto', icono: 'repeat', requiere: 'caja-chica' },
+        { vista: 'sistemas-arqueos', etiqueta: 'Sistemas', icono: 'external-link', libre: true },
       ],
     },
     {
@@ -696,6 +704,9 @@
     },
     // Activos por colaborador de todas las áreas (rama emmanuel)
     { id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de Activos', requiere: 'gestion-activos' },
+    // Encuestas y solicitudes externas (2-oct) -- mismo patrón que "Sistemas" (tpl-sistemas/
+    // initSistemas en app-sistemas.html), un solo destino sin submenú porque ya muestra las 3.
+    { id: 'encuestas-solicitudes', vista: 'encuestas-solicitudes', icono: 'clipboard-list', etiqueta: 'Encuestas/Solicitudes', libre: true },
     {
       id: 'administracion', icono: 'settings', etiqueta: 'Administración',
       items: [
@@ -727,11 +738,13 @@
     const contenedor = document.getElementById('nav-groups');
     // Una entrada con `vista` y sin `items` es un acceso directo suelto
     // (sin desplegable), como Gestión de Activos (rama emmanuel).
-    // Un item solo se pinta si hay permiso de su módulo (`requiere`); un grupo que se
-    // queda sin items no se pinta. Por eso esto se vuelve a llamar al llegar los permisos.
+    // Un item solo se pinta si hay permiso de su módulo (`requiere`). Los `libre` (accesos a
+    // sistemas externos, sin datos de la app) no piden permiso, pero no bastan para que se vea
+    // su grupo: un grupo sin ningún módulo con permiso no se pinta. Por eso esto se vuelve a
+    // llamar al llegar los permisos.
     const visibles = NAV_GRUPOS
-      .map((g) => (g.items ? Object.assign({}, g, { items: g.items.filter((it) => permisoDe(it.requiere)) }) : g))
-      .filter((g) => (g.items ? g.items.length : permisoDe(g.requiere)));
+      .map((g) => (g.items ? Object.assign({}, g, { items: g.items.filter((it) => it.libre || permisoDe(it.requiere)) }) : g))
+      .filter((g) => (g.items ? g.items.some((it) => !it.libre) : g.libre || permisoDe(g.requiere)));
     contenedor.innerHTML = visibles.map((grupo) => (grupo.vista ? `
       <div class="nav-item" data-view="${grupo.vista}" data-etiqueta="${grupo.etiqueta}" data-tooltip="${grupo.etiqueta}">
         <span class="nav-icon"><i data-lucide="${grupo.icono}" class="ico"></i></span><span class="nav-label">${grupo.etiqueta}</span>
@@ -1371,9 +1384,15 @@
       grupo: 'Identificación', clave: 'FOLIO', etiqueta: 'Folio', tipo: 'text',
       soloLectura: true, placeholder: 'Se genera solo, según la Clase',
     },
-    { grupo: 'Identificación', clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select', catalogo: true },
-    { grupo: 'Identificación', clave: 'RESPONSABLE VEHICULO', etiqueta: 'Responsable del vehículo', tipo: 'text' },
-    { grupo: 'Identificación', clave: 'NO EMPLEADO', etiqueta: 'No. de empleado', tipo: 'text' },
+    {
+      // catalogo: true — sugerencias de Capital Humano (apiListarColaboradores). Va antes que
+      // Departamento/No. de empleado a propósito: al elegir uno (o escribir un nombre que
+      // coincide exacto) se autollenan esos dos (ver wireResponsableVehiculo) -- si no está en
+      // la lista (alguien que CH todavía no cargó), se deja escribir libre y se capturan a mano.
+      grupo: 'Identificación', clave: 'RESPONSABLE VEHICULO', etiqueta: 'Responsable del vehículo', tipo: 'select', catalogo: true,
+    },
+    { grupo: 'Identificación', clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select', catalogo: true, autoCondicional: true },
+    { grupo: 'Identificación', clave: 'NO EMPLEADO', etiqueta: 'No. de empleado', tipo: 'text', autoCondicional: true },
     { grupo: 'Identificación', clave: 'SERIE VEHICULO', etiqueta: 'Serie del vehículo', tipo: 'text' },
     {
       grupo: 'Identificación', clave: 'NUCCO', etiqueta: 'Nucco', tipo: 'text',
@@ -1460,9 +1479,16 @@
       const campos = porGrupo[grupo].map((campo) => {
         const id = prefijo + '-' + slugCampo(campo.clave);
         const req = campo.requerido ? ' required' : '';
+        // "auto": campos.soloLectura (el servidor/otro módulo decide el valor, p. ej. Folio)
+        // llevan la etiqueta fija; campo.autoCondicional (p. ej. Departamento/No. de empleado,
+        // que se sugieren al elegir Responsable pero se pueden corregir) la llevan oculta hasta
+        // que el JS que los autollena la muestra (ver wireResponsableVehiculo) — mismo patrón
+        // que ya usan Incidencias (tag-departamento/tag-modelo) y Cambios de Monto CCH.
+        const etiqueta = campo.etiqueta + (campo.soloLectura ? ' <span class="auto-tag">auto</span>'
+          : campo.autoCondicional ? ` <span class="auto-tag" id="${id}-auto-tag" hidden>auto</span>` : '');
         if (campo.tipo === 'file') {
           return `<div class="field">
-            <label>${campo.etiqueta}</label>
+            <label>${etiqueta}</label>
             <input type="file" id="${id}" accept=".pdf,.png,.jpg,.jpeg" />
             <div class="file-actual" id="${id}-actual"></div>
           </div>`;
@@ -1478,13 +1504,13 @@
           // PLACA") no dependen de un catálogo del servidor — se precargan
           // aquí mismo, directo en el HTML.
           const sugerencias = (campo.opciones || []).map((o) => `<option value="${o}"></option>`).join('');
-          return `<div class="field"><label>${campo.etiqueta}</label><input type="text" id="${id}" list="${id}-lista" autocomplete="off"${req} placeholder="Escribe o elige…" /><datalist id="${id}-lista">${sugerencias}</datalist></div>`;
+          return `<div class="field"><label>${etiqueta}</label><input type="text" id="${id}" list="${id}-lista" autocomplete="off"${req} placeholder="Escribe o elige…" /><datalist id="${id}-lista">${sugerencias}</datalist></div>`;
         }
         if (campo.tipo === 'select') {
           // Con "opciones" definidas de antemano (lista fija, ej. Clase) se
           // pintan aquí mismo — son opciones cerradas a propósito.
           const opciones = (campo.opciones || []).map((o) => `<option value="${o}">${o}</option>`).join('');
-          return `<div class="field"><label>${campo.etiqueta}</label><select id="${id}"${req}><option value="">Selecciona…</option>${opciones}</select></div>`;
+          return `<div class="field"><label>${etiqueta}</label><select id="${id}"${req}><option value="">Selecciona…</option>${opciones}</select></div>`;
         }
         // soloLectura: el servidor decide el valor (ej. Folio, autogenerado
         // a partir de la Clase) — el campo se muestra pero no se puede editar.
@@ -1497,9 +1523,9 @@
         // moneda: solo un "$" fijo a la izquierda, puro visual — el input
         // sigue siendo un número normal por dentro.
         if (campo.moneda) {
-          return `<div class="field"><label>${campo.etiqueta}</label><div class="input-moneda-wrap">${input}</div></div>`;
+          return `<div class="field"><label>${etiqueta}</label><div class="input-moneda-wrap">${input}</div></div>`;
         }
-        return `<div class="field"><label>${campo.etiqueta}</label>${input}</div>`;
+        return `<div class="field"><label>${etiqueta}</label>${input}</div>`;
       }).join('');
       return `<div class="info-section-title">${grupo}</div>${campos}`;
     }).join('');
@@ -1592,6 +1618,9 @@
       const base64 = await leerArchivoBase64(file);
       const subido = await callServer('apiSubirArchivoVehiculo', state.token, file.name, file.type, base64);
       resultado[campo.clave] = subido.url;
+      // No es una columna real: solo viaja para que el servidor pueda renombrar el
+      // archivo a "<ID>_<ETIQUETA>_<fecha>" una vez que sabe el ID real del vehículo.
+      resultado[campo.clave + '_FILE_ID'] = subido.id;
     }
     return resultado;
   }
@@ -1613,6 +1642,12 @@
     // carga del historial (cargar(), al final de esta función) en vez de una
     // petición tras otra — cada una puede tardar un rato y sumadas se sentía
     // muy lento.
+    // vehiculosPorFolio: una entrada por FOLIO y otra por NUCO (apiListarVehiculosBasico
+    // lo manda como "NUCO", sin doble C -- ver VehiculosService.listarBasico), las dos
+    // apuntando al mismo vehículo -- así se puede resolver el vehículo con cualquiera de
+    // los dos. Folio y Nucco son campos INDEPENDIENTES (uno no se mete dentro del otro):
+    // escribir en uno resuelve el vehículo y pone el valor correspondiente en el otro (ver
+    // wireFolioYNucco_ más abajo). Lo que de verdad se guarda es FOLIO.
     const vehiculosPorFolio = {};
     const promesaVehiculos = callServerCacheado('apiListarVehiculosBasico', state.token)
       .then((vehiculos) => {
@@ -1620,12 +1655,20 @@
         // DOM (montarVista hace container.innerHTML = '') — escribir aquí
         // tronaría con "Cannot set properties of null".
         if (!document.body.contains(modal)) return;
-        const datalist = document.getElementById('lista-folios-vehiculo');
-        datalist.innerHTML = vehiculos.map((v) => {
+        const opcionesFolio = [];
+        const conNucco = [];
+        vehiculos.forEach((v) => {
           vehiculosPorFolio[v.FOLIO] = v;
           const etiqueta = [v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ');
-          return `<option value="${v.FOLIO}">${etiqueta}</option>`;
-        }).join('');
+          opcionesFolio.push(`<option value="${v.FOLIO}">${etiqueta}</option>`);
+          if (v.NUCO) { vehiculosPorFolio[v.NUCO] = v; conNucco.push(v); }
+        });
+        document.getElementById('lista-folios-vehiculo').innerHTML = opcionesFolio.join('');
+        // En orden (1, 2, 3…), no en el orden del catálogo (que va por folio, no por nucco).
+        document.getElementById('lista-nucco-vehiculo').innerHTML = conNucco
+          .sort((a, b) => Number(a.NUCO) - Number(b.NUCO))
+          .map((v) => `<option value="${v.NUCO}">${[v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ')}</option>`)
+          .join('');
       })
       .catch((err) => {
         // Antes esto se ignoraba en silencio — ahora se ve para poder diagnosticar.
@@ -1636,8 +1679,27 @@
         errorBox.hidden = false;
       });
 
-    document.getElementById('inc-folio').addEventListener('input', (ev) => {
-      const vehiculo = vehiculosPorFolio[ev.target.value];
+    /** Liga un par de campos Folio/Nucco INDEPENDIENTES: escribir en cualquiera de los dos
+     *  resuelve el vehículo en vehiculosPorFolio y pone el valor correspondiente en el otro
+     *  -- no se tocan entre sí si no hay coincidencia (para no borrar lo que ya traían
+     *  mientras se sigue escribiendo). `alResolver(vehiculo|null)` hace lo demás (autollenar
+     *  Departamento/Modelo/Año, mostrar el tag "auto", etc.) */
+    function wireFolioYNucco_(idFolio, idNucco, alResolver) {
+      const campoFolio = document.getElementById(idFolio);
+      const campoNucco = document.getElementById(idNucco);
+      campoFolio.addEventListener('input', (ev) => {
+        const vehiculo = vehiculosPorFolio[ev.target.value];
+        if (vehiculo) campoNucco.value = vehiculo.NUCO || '';
+        alResolver(vehiculo);
+      });
+      campoNucco.addEventListener('input', (ev) => {
+        const vehiculo = vehiculosPorFolio[ev.target.value];
+        if (vehiculo) campoFolio.value = vehiculo.FOLIO;
+        alResolver(vehiculo);
+      });
+    }
+
+    wireFolioYNucco_('inc-folio', 'inc-nucco', (vehiculo) => {
       const campoDepto = document.getElementById('inc-departamento');
       const campoModelo = document.getElementById('inc-modelo');
       if (vehiculo) {
@@ -1646,9 +1708,11 @@
         document.getElementById('inc-anio').value = vehiculo.MODELO || '';
         document.getElementById('tag-departamento').hidden = false;
         document.getElementById('tag-modelo').hidden = false;
+        document.getElementById('tag-nucco').hidden = false;
       } else {
         document.getElementById('tag-departamento').hidden = true;
         document.getElementById('tag-modelo').hidden = true;
+        document.getElementById('tag-nucco').hidden = true;
       }
     });
 
@@ -1664,9 +1728,8 @@
       document.getElementById('cerrar-error').hidden = true;
     }
 
-    // Mismo autollenado, pero para el folio dentro del modal de Editar.
-    document.getElementById('editar-folio').addEventListener('input', (ev) => {
-      const vehiculo = vehiculosPorFolio[ev.target.value];
+    // Mismo autollenado, pero para el folio/nucco dentro del modal de Editar.
+    wireFolioYNucco_('editar-folio', 'editar-nucco', (vehiculo) => {
       if (vehiculo) {
         document.getElementById('editar-departamento').value = vehiculo.DEPARTAMENTO;
         document.getElementById('editar-modelo').value = [vehiculo.MARCA, vehiculo.LINEA_VEHICULO].filter(Boolean).join(' ');
@@ -1681,6 +1744,7 @@
       document.getElementById('editar-id').value = inc.ID;
       document.getElementById('editar-folio-label').textContent = 'Folio: ' + inc.FOLIO;
       document.getElementById('editar-folio').value = inc.FOLIO || '';
+      document.getElementById('editar-nucco').value = (vehiculosPorFolio[inc.FOLIO] || {}).NUCO || '';
       document.getElementById('editar-departamento').value = inc.DEPARTAMENTO || '';
       document.getElementById('editar-modelo').value = inc.MODELO || '';
       document.getElementById('editar-anio').value = inc.ANIO || '';
@@ -2057,12 +2121,13 @@
     // lista de vehículos, cuando ninguno depende del otro.
     async function cargarCatalogosVehiculo() {
       try {
-        const [marcas, departamentos, sedes, razones, mapaUbicaciones] = await Promise.all([
+        const [marcas, departamentos, sedes, razones, mapaUbicaciones, colaboradores] = await Promise.all([
           callServerCacheado('apiListarMarcas', state.token),
           callServerCacheado('apiListarDepartamentos', state.token),
           callServerCacheado('apiListarSedesVehiculo', state.token),
           callServerCacheado('apiListarRazonesSociales', state.token),
           callServerCacheado('apiListarUbicacionesPorSede', state.token),
+          callServerCacheado('apiListarColaboradores', state.token),
         ]);
         ['veh-marca', 'editar-vehiculo-marca'].forEach((id) => llenarSelect(id, marcas));
         ['veh-departamento', 'editar-vehiculo-departamento'].forEach((id) => llenarSelect(id, departamentos));
@@ -2074,9 +2139,38 @@
         // Ubicación por si acaso.
         llenarUbicacionesSegunSede('veh');
         llenarUbicacionesSegunSede('editar-vehiculo');
+        const nombresColaboradores = Array.from(new Set((colaboradores || []).map((c) => c.NOMBRE)));
+        ['veh-responsable-vehiculo', 'editar-vehiculo-responsable-vehiculo'].forEach((id) => llenarSelect(id, nombresColaboradores));
+        wireResponsableVehiculo('veh', colaboradores || []);
+        wireResponsableVehiculo('editar-vehiculo', colaboradores || []);
       } catch (err) {
-        console.error('No se pudieron cargar los catálogos de Marca/Departamento/Sede/Razón social/Ubicación:', err);
+        console.error('No se pudieron cargar los catálogos de Marca/Departamento/Sede/Razón social/Ubicación/Colaboradores:', err);
       }
+    }
+
+    /** Al elegir (o escribir exacto) un nombre de Capital Humano en "Responsable del
+     *  vehículo", sugiere su Departamento y No. de empleado -- no bloquea los campos
+     *  (el usuario los puede corregir): si hay más de un colaborador con ese nombre
+     *  exacto (recontratación, nombre repetido), se usa el primero que haya en la
+     *  lista. Si el nombre no coincide con nadie, no hace nada -- se deja capturar
+     *  a mano, como ya era antes de tener este catálogo. */
+    function wireResponsableVehiculo(prefijo, colaboradores) {
+      const porNombre = {};
+      colaboradores.forEach((c) => { if (!porNombre[c.NOMBRE.toUpperCase()]) porNombre[c.NOMBRE.toUpperCase()] = c; });
+      const idResponsable = prefijo + '-responsable-vehiculo';
+      const input = document.getElementById(idResponsable);
+      if (!input || input.dataset.wireado) return; // una sola vez por campo, aunque se recarguen catálogos
+      input.dataset.wireado = '1';
+      input.addEventListener('input', () => {
+        const colaborador = porNombre[input.value.trim().toUpperCase()];
+        const depto = document.getElementById(prefijo + '-departamento');
+        const noEmpleado = document.getElementById(prefijo + '-no-empleado');
+        const tagDepto = document.getElementById(prefijo + '-departamento-auto-tag');
+        const tagNoEmpleado = document.getElementById(prefijo + '-no-empleado-auto-tag');
+        if (!colaborador) { if (tagDepto) tagDepto.hidden = true; if (tagNoEmpleado) tagNoEmpleado.hidden = true; return; }
+        if (depto && colaborador.DEPARTAMENTO) { depto.value = colaborador.DEPARTAMENTO; if (tagDepto) tagDepto.hidden = false; }
+        if (noEmpleado && colaborador.NO_EMPLEADO) { noEmpleado.value = colaborador.NO_EMPLEADO; if (tagNoEmpleado) tagNoEmpleado.hidden = false; }
+      });
     }
 
     // Folio: se ve en su campo (deshabilitado, no se puede escribir) desde que

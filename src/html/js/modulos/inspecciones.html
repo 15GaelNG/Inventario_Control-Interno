@@ -1,3 +1,14 @@
+<style>
+  /* .chk-tabla no tenía CSS propio: el genérico "input, select, textarea { width: 100% }"
+     (styles.html) estira el radio de cada opción (BUENO/REGULAR/MALO/...) a lo ancho de su
+     celda, y como la celda queda más ancha que el radio, se veía pegado muy a la derecha en
+     vez de centrado con el resto de la fila. width:auto regresa el radio a su tamaño normal;
+     text-align:center lo centra en la celda. La primera columna (el nombre de la pieza) se
+     deja a la izquierda, como el resto de las tablas de la app. */
+  .chk-tabla th, .chk-tabla td { text-align: center; }
+  .chk-tabla th:first-child, .chk-tabla td:first-child { text-align: left; }
+  .chk-tabla td input[type="radio"] { width: auto; }
+</style>
 <script>
   /**
    * inspecciones.js — Inspección vehicular: consulta y captura por pasos.
@@ -695,16 +706,26 @@
         const llantas = p.llantas && estructura.llantas.length ? `
           <div class="chk-seccion">
             <div class="chk-seccion-titulo"><h4>Profundidad de las llantas</h4><span class="chk-peso">en mm</span></div>
-            <div class="form-campos" style="--form-columnas:2; padding:12px">
-              ${estructura.llantas.map((l) => `
-                <div class="field">
-                  <label for="ins-${escaparHtml(l.campo)}">${escaparHtml(l.etiqueta)}</label>
-                  <input type="number" id="ins-${escaparHtml(l.campo)}" data-llanta="${escaparHtml(l.campo)}"
-                    step="0.1" min="0" max="30" inputmode="decimal" />
-                </div>`).join('')}
+            <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start; padding:12px">
+              <img src="https:\/\/raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/semaforo-desgaste-llantas.png"
+                alt="Semáforo de desgaste vertical: seguro arriba de 4 mm, precaución entre 1.6 y 4 mm, peligro debajo de 1.6 mm"
+                style="width:130px; flex-shrink:0; border-radius:8px; border:1px solid var(--color-border)" />
+              <div class="form-campos" style="--form-columnas:2; flex:1; min-width:220px">
+                ${estructura.llantas.map((l) => `
+                  <div class="field">
+                    <label for="ins-${escaparHtml(l.campo)}">${escaparHtml(l.etiqueta)}</label>
+                    <input type="number" id="ins-${escaparHtml(l.campo)}" data-llanta="${escaparHtml(l.campo)}"
+                      step="0.1" min="0" max="30" inputmode="decimal" />
+                  </div>`).join('')}
+              </div>
             </div>
           </div>` : '';
         const voltaje = p.voltaje ? `
+          <div style="padding:0 12px">
+            <img src="https:\/\/raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/semaforo-voltaje-bateria.png"
+              alt="Semáforo de voltaje de batería: peligro menos de 11.6V, revisión entre 11.6V y 12.8V, estado óptimo más de 12.8V"
+              style="max-width:420px; width:100%; display:block; border-radius:8px; border:1px solid var(--color-border); margin-bottom:12px" />
+          </div>
           <div class="form-campos" style="--form-columnas:2">
             <div class="field"><label for="ins-voltaje">Voltaje de la batería</label>
               <input type="number" id="ins-voltaje" step="0.01" min="0" max="20" inputmode="decimal" />
@@ -842,11 +863,24 @@
       return salida;
     }
 
+    /** Calificación del voltaje de la batería, mismo semáforo que la imagen junto al campo
+     *  (<11.6V peligro, 11.6-12.8V revisión, >12.8V óptimo) -- ver calificacionVoltaje_ en
+     *  InspeccionesService.gs, misma regla de los dos lados. null = no se capturó voltaje. */
+    function puntoDeVoltaje_() {
+      const campo = document.getElementById('ins-voltaje');
+      const v = campo && campo.value !== '' ? Number(campo.value) : NaN;
+      if (isNaN(v)) return null;
+      if (v < 11.6) return 0;
+      if (v > 12.8) return 1;
+      return 0.5;
+    }
+
     /** Puntaje y avance, con la misma regla del servidor (ahí se vuelve a calcular) */
     function calcular() {
       const dadas = respuestas();
       let total = 0;
       let respondidas = 0;
+      const puntoVoltaje = puntoDeVoltaje_();
       const porSeccion = estructura.secciones.map((s) => {
         let puntos = 0;
         let evaluadas = 0;
@@ -861,6 +895,14 @@
           evaluadas++;
           if (punto < 1) problemas.push({ pieza: c.campo, valor: valor });
         });
+        // El voltaje de la batería cuenta como una pieza más de la sección "Batería" (junto
+        // a sarro/derrame/batería inflada), sin su propia fila en la tabla -- no se le da un
+        // peso propio, se promedia con esas (decisión 2-oct).
+        if (s.titulo === 'Batería' && puntoVoltaje !== null) {
+          puntos += puntoVoltaje;
+          evaluadas++;
+          if (puntoVoltaje < 1) problemas.push({ pieza: 'Voltaje de la batería', valor: puntoVoltaje === 0 ? 'PELIGRO' : 'REVISIÓN' });
+        }
         const aporte = evaluadas ? (s.peso / 100) * (puntos / evaluadas) : 0;
         total += aporte;
         respondidas += contestadas;

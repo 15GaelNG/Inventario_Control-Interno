@@ -334,6 +334,13 @@ const VehiculosService = (function () {
     lock.waitLock(30000);
     try {
       const fila = Object.assign({}, datos);
+      // Los "<COLUMNA>_FILE_ID" no son columnas reales: solo viajan para poder renombrar
+      // en Drive el archivo ya subido una vez que se sabe el ID real del vehículo.
+      const archivosIds = {};
+      CAMPOS_ARCHIVO.forEach((campo) => {
+        const clave = campo + '_FILE_ID';
+        if (fila[clave]) { archivosIds[campo] = fila[clave]; delete fila[clave]; }
+      });
       // Las columnas que manda otra hoja (SERIE SENSOR y SENSOR, que manda Instalación de
       // Sensores) no se capturan aquí: un vehículo nuevo nace "sin sensor".
       const ajenas = Relaciones.deOtraHoja(SHEET_VEHICULOS);
@@ -345,6 +352,7 @@ const VehiculosService = (function () {
       fila[ID_COLUMN] = Ids.nuevo(Entidades.prefijo(SHEET_VEHICULOS));
       fila['FECHA REGISTRO SISTEMA CI'] = new Date();
       SheetUtils.insert(ssId(), SHEET_VEHICULOS, fila);
+      Object.keys(archivosIds).forEach((campo) => renombrarArchivo_(archivosIds[campo], fila[ID_COLUMN], campo));
       return { ID: fila[ID_COLUMN], FOLIO: fila.FOLIO };
     } finally {
       lock.releaseLock();
@@ -386,6 +394,13 @@ const VehiculosService = (function () {
     const sesion = Permisos.puedeEditar(token, 'vehiculos');
     const cfg = opciones || {};
     const datos = Object.assign({}, cambios);
+    // Los "<COLUMNA>_FILE_ID" no son columnas reales: solo viajan para poder renombrar
+    // en Drive el archivo recién subido (ver subirArchivo/renombrarArchivo_).
+    const archivosIds = {};
+    CAMPOS_ARCHIVO.forEach((campo) => {
+      const clave = campo + '_FILE_ID';
+      if (datos[clave]) { archivosIds[campo] = datos[clave]; delete datos[clave]; }
+    });
     delete datos.FOLIO; // no se edita, se fija solo al crear
     delete datos.NUCCO; // ídem
     delete datos['FECHA REGISTRO SISTEMA CI']; // ídem
@@ -396,6 +411,7 @@ const VehiculosService = (function () {
     const encontrado = SheetUtils.findById(ssId(), SHEET_VEHICULOS, id, ID_COLUMN);
     if (encontrado) conPersona_(datos, Object.assign({}, encontrado.data, datos));
     const actualizado = SheetUtils.update(ssId(), SHEET_VEHICULOS, id, datos, ID_COLUMN);
+    Object.keys(archivosIds).forEach((campo) => renombrarArchivo_(archivosIds[campo], id, campo));
 
     if (encontrado) {
       CambiosVehiculosService.registrarCambios(encontrado.data.FOLIO, encontrado.data, datos, sesion.nombre);
@@ -426,11 +442,37 @@ const VehiculosService = (function () {
   // TODO: reasignarResponsable, registrarVerificacion, registrarServicio,
   //       guardarInspeccion (usa PdfService.generarReporteDanios)
 
-  // Carpeta de Drive donde se guardan los archivos adjuntos (responsiva,
-  // documento de baja, archivo de tenencia). No se cambia la seguridad del
-  // archivo — hereda los permisos que ya tenga esa carpeta compartida.
-  const CARPETA_ADJUNTOS_ID = '1gmu5Gs6thEwOv7tcwe0KWQaWTRhFr4-l';
+  // Carpeta de Drive donde se guardan los archivos adjuntos (responsiva, documento de
+  // baja, póliza de seguro, archivo de tenencia): PDF a "VEHICULOS_Files_", imagen
+  // (foto del mismo documento, en vez de escaneo) a "VEHICULOS_Images". No se cambia la
+  // seguridad del archivo — hereda los permisos que ya tenga esa carpeta compartida.
+  const CARPETA_ADJUNTOS_ID = '1BrGhaC18GtXDCw7k9kZlMdK-Pp15lupz';
+  const CARPETA_ADJUNTOS_IMAGENES_ID = '11NfoCfZyGUvlLJ3PPKUTg5kwN8nYaZLP';
   const TAMANO_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+  // Etiqueta corta para el nombre de archivo en Drive, por columna (ver renombrarArchivo_).
+  const ETIQUETA_ARCHIVO = {
+    'RESPONSIVA': 'RESPONSIVA',
+    'DOCUMENTO BAJA': 'DOCUMENTO_BAJA',
+    'POLIZA SEGURO': 'POLIZA_SEGURO',
+    'ARCHIVO TENENCIA': 'TENENCIA',
+  };
+
+  /** Renombra en Drive el archivo recién subido a "<ID>_<ETIQUETA>_<fecha>.ext" (conserva la
+   *  extensión que ya trae, puesta por subirArchivo a partir del nombre/tipo original del
+   *  cliente). No bloquea el alta/edición si falla -- el archivo ya quedó guardado y accesible
+   *  con el nombre que traía, solo no se le pudo poner el nombre bonito. */
+  function renombrarArchivo_(fileId, id, columna) {
+    if (!fileId || !id) return;
+    try {
+      const archivo = DriveApp.getFileById(fileId);
+      const extension = (archivo.getName().match(/\.[^.]+$/) || [''])[0];
+      const fecha = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      const etiqueta = ETIQUETA_ARCHIVO[columna] || columna.replace(/\s+/g, '_');
+      archivo.setName(id + '_' + etiqueta + '_' + fecha + extension);
+    } catch (e) {
+      console.warn('No se pudo renombrar el archivo de Vehículos (' + columna + ', ' + fileId + '): ' + e.message);
+    }
+  }
 
   /**
    * Sube un archivo (PDF/imagen) codificado en base64 a la carpeta de Drive
@@ -452,9 +494,10 @@ const VehiculosService = (function () {
     // falló (abrir la carpeta / crear el archivo / compartirlo) — aquí sí, para no tener
     // que adivinar cada vez que pase.
     const cuenta = () => Session.getEffectiveUser().getEmail();
+    const esImagen = /^image\//.test(mimeType || '');
     let carpeta, archivo;
     try {
-      carpeta = DriveApp.getFolderById(CARPETA_ADJUNTOS_ID);
+      carpeta = DriveApp.getFolderById(esImagen ? CARPETA_ADJUNTOS_IMAGENES_ID : CARPETA_ADJUNTOS_ID);
     } catch (e) {
       throw new Error('No se pudo abrir la carpeta de adjuntos de Vehículos en Drive. La cuenta con la que ' +
         'corre la app ahora mismo (' + cuenta() + ') no tiene acceso a esa carpeta.');

@@ -68,15 +68,29 @@
       { id: 'pcc-f-administrada', campo: 'ADMINISTRADA POR' },
     ];
 
+    /** Opciones de un filtro según los VALORES QUE YA DEJAN los demás filtros activos (no
+     *  cuenta su propio valor elegido, si no se haría desaparecer a sí mismo): elegir
+     *  Departamento=X dentro del selector de Sede ya solo muestra las sedes que de verdad
+     *  existen con ese departamento, en vez de todas las del catálogo completo. Si el valor
+     *  que ya tenía elegido deja de ser posible con la nueva combinación, el <select> lo
+     *  suelta solo (su <option> ya no está en la lista). */
     function llenarOpcionesFiltro(campo, id) {
       const select = document.getElementById(id);
       const valorActual = select.value;
-      const valores = Array.from(new Set(todos.map((v) => v[campo]).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+      const filasBase = todos.filter((v) => FILTROS.every((f) => {
+        if (f.id === id) return true;
+        const elegido = document.getElementById(f.id).value;
+        return !elegido || v[f.campo] === elegido;
+      }));
+      const valores = Array.from(new Set(filasBase.map((v) => v[campo]).filter(Boolean))).sort((a, b) => a.localeCompare(b));
       select.innerHTML = '<option value="">' + select.options[0].textContent + '</option>' +
         valores.map((v) => `<option value="${escaparHtml(v)}">${escaparHtml(v)}</option>`).join('');
       if (valores.indexOf(valorActual) !== -1) select.value = valorActual;
     }
-    FILTROS.forEach((f) => llenarOpcionesFiltro(f.campo, f.id));
+    function llenarTodosLosFiltros() {
+      FILTROS.forEach((f) => llenarOpcionesFiltro(f.campo, f.id));
+    }
+    llenarTodosLosFiltros();
 
     function filasFiltradas() {
       return todos.filter((v) => FILTROS.every((f) => {
@@ -85,9 +99,10 @@
       }));
     }
 
-    FILTROS.forEach((f) => document.getElementById(f.id).addEventListener('change', () => pintarTodo()));
+    FILTROS.forEach((f) => document.getElementById(f.id).addEventListener('change', () => { llenarTodosLosFiltros(); pintarTodo(); }));
     document.getElementById('pcc-limpiar-filtros').addEventListener('click', () => {
       FILTROS.forEach((f) => { document.getElementById(f.id).value = ''; });
+      llenarTodosLosFiltros();
       pintarTodo();
     });
 
@@ -100,6 +115,7 @@
       if (valor === 'Otros' || valor === 'Sin dato') return; // categorías agregadas, no son una opción real del filtro
       const select = document.getElementById(idSelect);
       select.value = (select.value === valor) ? '' : valor;
+      llenarTodosLosFiltros();
       pintarTodo();
     }
 

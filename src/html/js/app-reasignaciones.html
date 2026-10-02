@@ -29,12 +29,26 @@
 
     document.getElementById('rv-fecha').value = hoyISO();
 
-    // Catálogo de vehículos (para el datalist de Folio y para autollenar VIN
+    // Catálogo de vehículos (para los datalist de Folio/Nucco y para autollenar VIN
     // + responsable/departamento salientes sin ida y vuelta al servidor).
+    // vehiculosPorFolio trae una entrada por FOLIO y otra por NUCO (apiListarVehiculosBasico
+    // lo manda como "NUCO", sin doble C), las dos al mismo vehículo. Folio y Nucco son
+    // campos INDEPENDIENTES (wireFolioYNucco_ más abajo): escribir en cualquiera de los
+    // dos resuelve el vehículo y pone el valor correspondiente en el otro.
     callServerCacheado('apiListarVehiculosBasico', state.token).then((vehiculos) => {
-      (vehiculos || []).forEach((v) => { vehiculosPorFolio[v.FOLIO] = v; });
-      document.getElementById('rv-folio-lista').innerHTML =
-        (vehiculos || []).map((v) => `<option value="${v.FOLIO}"></option>`).join('');
+      const opcionesFolio = [];
+      const conNucco = [];
+      (vehiculos || []).forEach((v) => {
+        vehiculosPorFolio[v.FOLIO] = v;
+        opcionesFolio.push(`<option value="${v.FOLIO}"></option>`);
+        if (v.NUCO) { vehiculosPorFolio[v.NUCO] = v; conNucco.push(v); }
+      });
+      document.getElementById('rv-folio-lista').innerHTML = opcionesFolio.join('');
+      // En orden (1, 2, 3…), no en el orden del catálogo (que va por folio, no por nucco).
+      document.getElementById('rv-nucco-lista').innerHTML = conNucco
+        .sort((a, b) => Number(a.NUCO) - Number(b.NUCO))
+        .map((v) => `<option value="${v.NUCO}"></option>`)
+        .join('');
     }).catch((err) => {
       console.error('No se pudo cargar el catálogo de vehículos:', err);
       const errorBox = document.getElementById('rv-error');
@@ -50,8 +64,49 @@
       console.error('No se pudo cargar el catálogo de departamentos:', err);
     });
 
-    document.getElementById('rv-folio').addEventListener('input', (ev) => {
-      const vehiculo = vehiculosPorFolio[ev.target.value];
+    // Colaboradores (Capital Humano, mismo catálogo y mismo criterio que Vehículos — ver
+    // CAMPOS_VEHICULO/wireResponsableVehiculo en app.html): sugerencias para "Responsable"
+    // del entrante y, al elegir uno (o escribir un nombre que coincide exacto), se autollenan
+    // "No. de empleado" y "Departamento" -- si no está en la lista (alguien que CH todavía no
+    // cargó), se deja escribir libre y esos dos se capturan a mano, como ya era antes.
+    callServerCacheado('apiListarColaboradores', state.token).then((colaboradores) => {
+      const lista = colaboradores || [];
+      document.getElementById('rv-responsable-entrante-lista').innerHTML =
+        Array.from(new Set(lista.map((c) => c.NOMBRE))).map((n) => `<option value="${n}"></option>`).join('');
+      const porNombre = {};
+      lista.forEach((c) => { if (!porNombre[c.NOMBRE.toUpperCase()]) porNombre[c.NOMBRE.toUpperCase()] = c; });
+      document.getElementById('rv-responsable-entrante').addEventListener('input', (ev) => {
+        const colaborador = porNombre[ev.target.value.trim().toUpperCase()];
+        const tagDepto = document.getElementById('rv-tag-departamento-entrante');
+        const tagNoEmpleado = document.getElementById('rv-tag-no-empleado-entrante');
+        if (!colaborador) { tagDepto.hidden = true; tagNoEmpleado.hidden = true; return; }
+        if (colaborador.DEPARTAMENTO) { document.getElementById('rv-departamento-entrante').value = colaborador.DEPARTAMENTO; tagDepto.hidden = false; }
+        if (colaborador.NO_EMPLEADO) { document.getElementById('rv-no-empleado-entrante').value = colaborador.NO_EMPLEADO; tagNoEmpleado.hidden = false; }
+      });
+    }).catch((err) => {
+      console.error('No se pudo cargar el catálogo de colaboradores:', err);
+    });
+
+    /** Liga un par de campos Folio/Nucco INDEPENDIENTES: escribir en cualquiera de los dos
+     *  resuelve el vehículo en vehiculosPorFolio y pone el valor correspondiente en el otro
+     *  -- no se tocan entre sí si no hay coincidencia (para no borrar lo que ya traían
+     *  mientras se sigue escribiendo). `alResolver(vehiculo|null)` hace lo demás. */
+    function wireFolioYNucco_(idFolio, idNucco, alResolver) {
+      const campoFolio = document.getElementById(idFolio);
+      const campoNucco = document.getElementById(idNucco);
+      campoFolio.addEventListener('input', (ev) => {
+        const vehiculo = vehiculosPorFolio[ev.target.value];
+        if (vehiculo) campoNucco.value = vehiculo.NUCO || '';
+        alResolver(vehiculo);
+      });
+      campoNucco.addEventListener('input', (ev) => {
+        const vehiculo = vehiculosPorFolio[ev.target.value];
+        if (vehiculo) campoFolio.value = vehiculo.FOLIO;
+        alResolver(vehiculo);
+      });
+    }
+
+    wireFolioYNucco_('rv-folio', 'rv-nucco', (vehiculo) => {
       document.getElementById('rv-vin').value = vehiculo ? vehiculo.VIN : '';
       document.getElementById('rv-no-empleado-saliente').value = vehiculo ? vehiculo.NO_EMPLEADO : '';
       document.getElementById('rv-responsable-saliente').value = vehiculo ? vehiculo.RESPONSABLE_VEHICULO : '';
