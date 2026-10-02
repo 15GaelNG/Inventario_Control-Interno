@@ -31,10 +31,17 @@
 
     // Catálogo de vehículos (para el datalist de Folio y para autollenar VIN
     // + responsable/departamento salientes sin ida y vuelta al servidor).
+    // vehiculosPorFolio trae una entrada por FOLIO y otra por NUCO (apiListarVehiculosBasico
+    // lo manda como "NUCO", sin doble C), las dos al mismo vehículo -- así también se puede
+    // buscar por nucco; el campo siempre termina con el folio puesto (resolverVehiculoDelFolio_
+    // más abajo).
     callServerCacheado('apiListarVehiculosBasico', state.token).then((vehiculos) => {
-      (vehiculos || []).forEach((v) => { vehiculosPorFolio[v.FOLIO] = v; });
-      document.getElementById('rv-folio-lista').innerHTML =
-        (vehiculos || []).map((v) => `<option value="${v.FOLIO}"></option>`).join('');
+      document.getElementById('rv-folio-lista').innerHTML = (vehiculos || []).map((v) => {
+        vehiculosPorFolio[v.FOLIO] = v;
+        let html = `<option value="${v.FOLIO}"></option>`;
+        if (v.NUCO) { vehiculosPorFolio[v.NUCO] = v; html += `<option value="${v.NUCO}">Nucco</option>`; }
+        return html;
+      }).join('');
     }).catch((err) => {
       console.error('No se pudo cargar el catálogo de vehículos:', err);
       const errorBox = document.getElementById('rv-error');
@@ -73,8 +80,16 @@
       console.error('No se pudo cargar el catálogo de colaboradores:', err);
     });
 
+    /** Si `valor` es un nucco (no el folio del vehículo que encontró), deja el folio puesto
+     *  en el campo -- lo que se guarda siempre es el folio, nucco es nomás otra entrada. */
+    function resolverVehiculoDelFolio_(input, valor) {
+      const vehiculo = vehiculosPorFolio[valor];
+      if (vehiculo && vehiculo.FOLIO !== valor) input.value = vehiculo.FOLIO;
+      return vehiculo;
+    }
+
     document.getElementById('rv-folio').addEventListener('input', (ev) => {
-      const vehiculo = vehiculosPorFolio[ev.target.value];
+      const vehiculo = resolverVehiculoDelFolio_(ev.target, ev.target.value);
       document.getElementById('rv-vin').value = vehiculo ? vehiculo.VIN : '';
       document.getElementById('rv-no-empleado-saliente').value = vehiculo ? vehiculo.NO_EMPLEADO : '';
       document.getElementById('rv-responsable-saliente').value = vehiculo ? vehiculo.RESPONSABLE_VEHICULO : '';

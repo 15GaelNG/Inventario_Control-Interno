@@ -313,11 +313,14 @@
         panel: true,
         buscar: {
           campo: 'FOLIO',
-          etiqueta: 'Folio del vehículo',
-          ayuda: 'Al escribirlo se muestran los datos de la unidad para confirmar',
+          etiqueta: 'Folio o nucco del vehículo',
+          ayuda: 'Al escribirlo (folio o nucco) se muestran los datos de la unidad para confirmar',
+          // El combobox filtra por valor Y por etiqueta (ver componentes/combobox.html), así
+          // que meter el nucco en la etiqueta alcanza para poder buscar por cualquiera de los
+          // dos -- el valor que de verdad se usa (y lo que recibe cargar) sigue siendo el folio.
           opciones: async () => ((await callServerCacheado('apiListarVehiculosBasico', state.token)) || []).map((v) => ({
             valor: v.FOLIO,
-            etiqueta: [v.PLACA, v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' · '),
+            etiqueta: [v.NUCO, v.PLACA, v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' · '),
           })),
           cargar: (folio) => callServer('apiBuscarVehiculoPorFolio', state.token, folio),
           ficha: (v) => ({
