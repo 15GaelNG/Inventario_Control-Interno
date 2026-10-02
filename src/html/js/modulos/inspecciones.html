@@ -877,12 +877,28 @@
       return 0.5;
     }
 
+    /** Calificación de UNA llanta, mismo semáforo que la imagen junto a "Profundidad de las
+     *  llantas" (<=1.6mm peligro, 1.6-4mm precaución, >4mm seguro) -- ver calificacionLlanta_
+     *  en InspeccionesService.gs, misma regla de los dos lados. */
+    function puntoDeLlanta_(mm) {
+      const v = Number(mm);
+      if (mm === undefined || mm === null || mm === '' || isNaN(v)) return null;
+      if (v <= 1.6) return 0;
+      if (v > 4) return 1;
+      return 0.5;
+    }
+
     /** Puntaje y avance, con la misma regla del servidor (ahí se vuelve a calcular) */
     function calcular() {
       const dadas = respuestas();
       let total = 0;
       let respondidas = 0;
       const puntoVoltaje = puntoDeVoltaje_();
+      // { 'LLANTA DD': 7.2, ... } -- mismo query que usa el guardado real (ver data-llanta).
+      const mmPorLlanta = {};
+      cajaPasos.querySelectorAll('[data-llanta]').forEach((el) => {
+        if (el.value !== '') mmPorLlanta[el.dataset.llanta] = el.value;
+      });
       const porSeccion = estructura.secciones.map((s) => {
         let puntos = 0;
         let evaluadas = 0;
@@ -898,12 +914,23 @@
           if (punto < 1) problemas.push({ pieza: c.campo, valor: valor });
         });
         // El voltaje de la batería cuenta como una pieza más de la sección "Batería" (junto
-        // a sarro/derrame/batería inflada), sin su propia fila en la tabla -- no se le da un
-        // peso propio, se promedia con esas (decisión 2-oct).
+        // a sarro/derrame/batería inflada), y cada llanta medida como una pieza más de
+        // "Neumáticos" (junto a rines/tapones/tuercas-birlos/alineación/balanceo) -- ninguna
+        // de las dos tiene su propia fila en la tabla ni peso propio, se promedian con esas
+        // (decisión 2-oct).
         if (s.titulo === 'Batería' && puntoVoltaje !== null) {
           puntos += puntoVoltaje;
           evaluadas++;
           if (puntoVoltaje < 1) problemas.push({ pieza: 'Voltaje de la batería', valor: puntoVoltaje === 0 ? 'PELIGRO' : 'REVISIÓN' });
+        }
+        if (s.titulo === 'Neumáticos') {
+          estructura.llantas.forEach((l) => {
+            const puntoLlanta = puntoDeLlanta_(mmPorLlanta[l.campo]);
+            if (puntoLlanta === null) return;
+            puntos += puntoLlanta;
+            evaluadas++;
+            if (puntoLlanta < 1) problemas.push({ pieza: l.etiqueta, valor: puntoLlanta === 0 ? 'PELIGRO' : 'PRECAUCIÓN' });
+          });
         }
         const aporte = evaluadas ? (s.peso / 100) * (puntos / evaluadas) : 0;
         total += aporte;
