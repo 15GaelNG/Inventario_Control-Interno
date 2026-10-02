@@ -21,7 +21,7 @@ const PdfService = (function () {
   const ANCHO_IMAGEN_PUNTOS = 200;   // tope de una imagen fuera de tabla y sin caja propia
 
   function carpetaReportes_() {
-    const id = PropertiesService.getScriptProperties().getProperty(CARPETA_REPORTES_ID_PROP);
+    const id = leerConfig_(CARPETA_REPORTES_ID_PROP);   // config/Entornos.gs o Script Properties
     if (!id) {
       throw new Error(
         'Falta configurar "' + CARPETA_REPORTES_ID_PROP + '" en Script Properties ' +

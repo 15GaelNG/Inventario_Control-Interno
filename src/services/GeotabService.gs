@@ -34,13 +34,13 @@ const Geotab = (function () {
   const cache = () => CacheService.getScriptCache();
   const props = () => PropertiesService.getScriptProperties();
 
+  // Usuario, base y servidor pueden ir en config/Entornos.gs; la contraseña, solo en Script Properties
   function config_() {
-    const p = props();
     const cfg = {
-      usuario: p.getProperty('GEOTAB_USUARIO'),
-      password: p.getProperty('GEOTAB_PASSWORD'),
-      baseDatos: p.getProperty('GEOTAB_BASE_DATOS'),
-      servidor: p.getProperty('GEOTAB_SERVIDOR') || 'my.geotab.com',
+      usuario: leerConfig_('GEOTAB_USUARIO'),
+      password: leerConfig_('GEOTAB_PASSWORD'),
+      baseDatos: leerConfig_('GEOTAB_BASE_DATOS'),
+      servidor: leerConfig_('GEOTAB_SERVIDOR') || 'my.geotab.com',
     };
     if (!cfg.usuario || !cfg.password || !cfg.baseDatos) {
       throw new Error(
@@ -53,8 +53,7 @@ const Geotab = (function () {
 
   /** ¿Se puede usar Geotab? (sin lanzar error: la app funciona igual sin él) */
   function configurado() {
-    const p = props();
-    return !!(p.getProperty('GEOTAB_USUARIO') && p.getProperty('GEOTAB_PASSWORD') && p.getProperty('GEOTAB_BASE_DATOS'));
+    return !!(leerConfig_('GEOTAB_USUARIO') && leerConfig_('GEOTAB_PASSWORD') && leerConfig_('GEOTAB_BASE_DATOS'));
   }
 
   // ---------- transporte ----------

@@ -583,6 +583,7 @@ test('Drive: todo en la carpeta de la app AppSheet con sus rutas; NUCOS de produ
   const memoria = {};
   const globales = {
     PropertiesService: { getScriptProperties: () => ({ getProperty: () => null }) },
+    leerConfig_: () => null,   // config/Entornos.gs: sin configuración, se usan las carpetas que trae el código
     CacheService: { getScriptCache: () => ({ get: (k) => memoria[k] || null, put: (k, v) => { memoria[k] = v; } }) },
     Utilities: {
       base64EncodeWebSafe: (b) => String(b), computeDigest: (a, t) => t, DigestAlgorithm: {}, Charset: {},
@@ -1387,9 +1388,10 @@ test('Mandar a resguardo (30-sep): N/A automáticos, línea según el adendum, a
   const src = read('src/services/lineas/LineasResguardos.gs');
   const Util = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '\nreturn LineasUtil;')({ normCol: (c) => String(c).toUpperCase().trim() }, {});
   const Notif = { _diaFinPlan: (v) => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(v || '')); return m ? m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2) : ''; } };
-  const R = new Function('LineasUtil', 'LineasNotificaciones', 'LineasDatos', 'LineasRepo', 'LineasRegistros', 'PropertiesService', 'Utilities',
+  // leerConfig_ (config/Entornos.gs) da los aprobadores de resguardos
+  const R = new Function('LineasUtil', 'LineasNotificaciones', 'LineasDatos', 'LineasRepo', 'LineasRegistros', 'leerConfig_', 'Utilities',
     src + '\nreturn LineasResguardos;')(Util, Notif, { ZONA_APP: 'America/Mexico_City' }, {}, {},
-    { getScriptProperties: () => ({ getProperty: () => 'pau@ciudadmaderas.com, suplente@ciudadmaderas.com' }) }, {});
+    () => 'pau@ciudadmaderas.com, suplente@ciudadmaderas.com', {});
 
   // Datos de la persona a N/A; PIN y cuenta solo si tenían algo (NO APLICA se respeta); el patrón se borra
   const fila = { RESPONSABLE: 'ANA', PUESTO: 'GERENTE', 'JEFE DIRECTO': 'LUIS', DIRECTOR: 'EVA', 'PIN WHATSAPP': '123456', 'PIN EQUIPO': 'NO APLICA',

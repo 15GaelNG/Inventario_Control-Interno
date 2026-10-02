@@ -24,18 +24,34 @@ def api():
     return build("sheets", "v4", credentials=credenciales("lab"), cache_discovery=False).spreadsheets()
 
 
-def copiar_produccion(nombre):
+def id_carpeta(texto):
+    """Id de una carpeta de Drive a partir de su id o su URL (…/folders/<id>)."""
+    t = (texto or "").strip()
+    m = re.search(r"/folders/([A-Za-z0-9_-]+)", t)
+    if m:
+        return m.group(1)
+    if re.fullmatch(r"[A-Za-z0-9_-]{15,}", t):
+        return t
+    raise SystemExit("No entiendo '%s' como carpeta de Drive: pasa su id o su URL." % texto)
+
+
+def copiar_produccion(nombre, carpeta=None):
     """Duplica producción en Drive (Archivo → Crear una copia) y devuelve el id de la copia.
 
     La copia trae formatos, validaciones, fórmulas y anchos de columna: el pipeline solo toca
-    lo que migra. Queda en la misma carpeta que producción. Solo LEE producción.
+    lo que migra. Solo LEE producción.
+
+    Dónde queda: en `carpeta` (id o URL) o, si no se dice, en Mi unidad de la cuenta del token.
+    NO en la carpeta de producción: es de otra cuenta y ahí no se pueden agregar archivos
+    (Drive respondía 403 insufficientFilePermissions aunque el archivo sí se pudiera copiar).
     """
     if not tiene_drive("lab"):
         raise SystemExit("El token no tiene permiso de Drive. Corre una vez:\n"
                          "  uv run --no-project --with google-auth-oauthlib --with google-api-python-client "
                          "python tools/migracion/autorizar.py lab")
     drive = build("drive", "v3", credentials=credenciales("lab"), cache_discovery=False)
-    copia = drive.files().copy(fileId=cat.PRODUCCION, body={"name": nombre},
+    destino = id_carpeta(carpeta) if carpeta else "root"
+    copia = drive.files().copy(fileId=cat.PRODUCCION, body={"name": nombre, "parents": [destino]},
                                supportsAllDrives=True, fields="id").execute()
     return copia["id"]
 

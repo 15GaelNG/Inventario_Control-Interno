@@ -23,7 +23,7 @@ const LineasArchivos = (function () {
   const TIPOS_PERMITIDOS = /^(image\/(jpeg|png|webp|heic|heif)|application\/pdf)$/;
   const EXTENSION = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/heic': 'heic', 'image/heif': 'heif', 'application/pdf': 'pdf' };
 
-  const prop_ = (clave) => PropertiesService.getScriptProperties().getProperty(clave);
+  const prop_ = (clave) => leerConfig_(clave);   // config/Entornos.gs o Script Properties
   function carpetaAppSheetId() { return prop_('LINEAS_DRIVE_APPSHEET') || APPSHEET_POR_OMISION; }
   function carpetaNucosId() { return prop_('LINEAS_DRIVE_NUCOS') || NUCOS_POR_OMISION; }
 

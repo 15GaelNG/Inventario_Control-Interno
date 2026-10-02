@@ -33,28 +33,22 @@
  */
 
 const Config = (function () {
-  const props = PropertiesService.getScriptProperties();
-  // ssId() se llama en CADA función de CADA Service (a veces varias veces
-  // por ejecución) — cachear las propiedades ya leídas evita ir a Properties
-  // Service una y otra vez por el mismo valor dentro de una sola ejecución.
-  const _propsCache = {};
-
+  // Los valores salen de config/Entornos.gs (el bloque de este proyecto) o, si ahí no están,
+  // de Script Properties. leerConfig_ los cachea por ejecución: ssId() se llama muchas veces.
   function required(key) {
-    if (!(key in _propsCache)) {
-      _propsCache[key] = props.getProperty(key);
-    }
-    const value = _propsCache[key];
+    const value = leerConfig_(key);
     if (!value) {
       throw new Error(
-        'Falta configurar "' + key + '" en Script Properties ' +
-        '(Editor de Apps Script > Configuración del proyecto > Propiedades del script).'
+        'Falta configurar "' + key + '": ponlo en src/config/Entornos.gs (bloque de este proyecto) ' +
+        'o en Configuración del proyecto > Propiedades del script.'
       );
     }
     return value;
   }
 
   return {
-    ENTORNO: props.getProperty('ENTORNO') || 'DEV',
+    // Getter: se lee al usarse, no al cargar el archivo (Entornos.gs podría cargarse después)
+    get ENTORNO() { return leerConfig_('ENTORNO') || 'DEV'; },
 
     SPREADSHEET_IDS: {
       USUARIOS: () => required('SS_ID_USUARIOS'),
@@ -69,7 +63,7 @@ const Config = (function () {
     // las toca — quedan sin efecto hasta que se configuren las Script Properties.
     DRIVE_FOLDERS: {
       VERIFICACIONES: () => required('DRIVE_FOLDER_ID_VERIFICACIONES'),
-      VERIFICACIONES_LECTURA: () => props.getProperty('DRIVE_FOLDER_ID_VERIFICACIONES_LECTURA') || '',
+      VERIFICACIONES_LECTURA: () => leerConfig_('DRIVE_FOLDER_ID_VERIFICACIONES_LECTURA') || '',
       // Carpeta raíz de la app: las rutas largas de AppSheet ("CARPETA/SUBCARPETA/archivo")
       // se resuelven a partir de aquí (ver DriveUtils.archivoDeRutaProfunda)
       RAIZ: () => required('DRIVE_FOLDER_ID_RAIZ'),
@@ -77,7 +71,7 @@ const Config = (function () {
       // Puede ser la raíz de la app o la carpeta MODELOS INSPECCION misma: si la ruta empieza
       // con el nombre de la carpeta, ese tramo se salta. En DEV apunta a la de producción,
       // porque la copia de pruebas no tiene todos los dibujos. Sin la propiedad, se usa RAIZ.
-      MODELOS: () => props.getProperty('DRIVE_FOLDER_ID_MODELOS') || required('DRIVE_FOLDER_ID_RAIZ'),
+      MODELOS: () => leerConfig_('DRIVE_FOLDER_ID_MODELOS') || required('DRIVE_FOLDER_ID_RAIZ'),
       SENSORES: () => required('DRIVE_FOLDER_ID_SENSORES'),
       HOLOGRAMAS_ARCHIVOS: () => required('DRIVE_FOLDER_ID_HOLOGRAMAS_ARCHIVOS'),
       HOLOGRAMAS_IMAGENES: () => required('DRIVE_FOLDER_ID_HOLOGRAMAS_IMAGENES'),

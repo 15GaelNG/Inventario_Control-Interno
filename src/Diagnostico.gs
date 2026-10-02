@@ -49,7 +49,6 @@ const DIAG_SIN_USO = [
 
 function diagnosticoEntorno() {
   soloEditor_();
-  const props = PropertiesService.getScriptProperties();
   const lineas = ['DÓNDE ESTÁ PARADO ESTE PROYECTO', ''];
   const alertas = [];
   const avisos = [];
@@ -59,7 +58,8 @@ function diagnosticoEntorno() {
   const usados = {};
   ['SS_ID_USUARIOS', 'SS_ID_VEHICULOS', 'SS_ID_TELEFONIA', 'SS_ID_ACCESORIOS',
     'SS_ID_CAJACHICA'].forEach((k) => {
-    const id = (props.getProperty(k) || '').trim();
+    const id = (leerConfig_(k) || '').trim();
+    const deDonde = origenConfig_(k) === 'archivo' ? ' [Entornos.gs]' : ' [Script Properties]';
     if (!id) {
       lineas.push('  ' + k + ': SIN CONFIGURAR');
       return;
@@ -74,7 +74,7 @@ function diagnosticoEntorno() {
     }
     usados[id] = (usados[id] || []).concat(k);
     lineas.push('  ' + k + ': ' + etiqueta + (nombreReal ? '  "' + nombreReal + '"' : '') +
-      '\n      ' + id);
+      '\n      ' + id + deDonde);
     // Producción es alerta. El libro del equipo es solo un aviso: muchas veces es
     // exactamente donde se quiere trabajar, y gritarlo como falla enseña a ignorar el
     // reporte. Lo que sí hay que saber es que se escribe en el libro de los compañeros.
@@ -107,26 +107,25 @@ function diagnosticoEntorno() {
 
   // ---------------------------------------------------------------- qué le falta
   lineas.push('');
-  lineas.push('PROPIEDADES');
-  const faltan = DIAG_OBLIGATORIAS.filter((o) => !(props.getProperty(o.clave) || '').trim());
+  lineas.push('PROPIEDADES (de src/config/Entornos.gs o de Script Properties)');
+  const faltan = DIAG_OBLIGATORIAS.filter((o) => !(leerConfig_(o.clave) || '').trim());
   if (!faltan.length) {
     lineas.push('  Las ' + DIAG_OBLIGATORIAS.length + ' que se usan están puestas.');
   } else {
     lineas.push('  FALTAN ' + faltan.length + ' de ' + DIAG_OBLIGATORIAS.length + ', y esto rompen:');
     faltan.forEach((o) => lineas.push('    - ' + o.clave + '  ->  ' + o.rompe));
-    alertas.push('Faltan ' + faltan.length + ' propiedades. Se ponen en Configuración del ' +
-      'proyecto > Propiedades del script. El pipeline de migración NO las necesita: ese lee ' +
-      'todo de SS_ID_VEHICULOS.');
+    alertas.push('Faltan ' + faltan.length + ' propiedades. Se ponen en src/config/Entornos.gs, en el bloque ' +
+      'de este proyecto (' + ScriptApp.getScriptId() + '), y se suben con clasp push.');
   }
   DIAG_SIN_USO.forEach((o) => {
-    if ((props.getProperty(o.clave) || '').trim()) return;
+    if ((leerConfig_(o.clave) || '').trim()) return;
     lineas.push('  ' + o.clave + ': sin configurar, y NO hace falta — ' + o.nota);
   });
 
   // ---------------------------------------------------------------- estado de la migración
   lineas.push('');
   lineas.push('EL LIBRO DE VEHÍCULOS');
-  const ssId = (props.getProperty('SS_ID_VEHICULOS') || '').trim();
+  const ssId = (leerConfig_('SS_ID_VEHICULOS') || '').trim();
   if (!ssId) {
     lineas.push('  sin configurar, no hay nada que revisar');
   } else {

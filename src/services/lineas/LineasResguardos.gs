@@ -63,7 +63,7 @@ const LineasResguardos = (function () {
   // ---------------- Permisos ----------------
 
   function aprobadores_() {
-    return String(PropertiesService.getScriptProperties().getProperty(PROP_APROBADORES) || '')
+    return String(leerConfig_(PROP_APROBADORES) || '')
       .split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
   }
 

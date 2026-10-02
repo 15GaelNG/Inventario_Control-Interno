@@ -3,7 +3,7 @@
     uv run --no-project --with google-auth-oauthlib --with google-api-python-client \
         python tools/migracion/migrar.py lab [--replanchar] [--escribir]
     ... migrar.py --libro <id o URL> [--replanchar] [--escribir] [--confirmo "Nombre del libro"]
-    ... migrar.py --copiar-produccion ["Nombre de la copia"] [--escribir]
+    ... migrar.py --copiar-produccion ["Nombre de la copia"] [--carpeta <id o URL>] [--escribir]
 
 --copiar-produccion duplica producción en Drive (con formatos, validaciones y fórmulas) y migra
 esa copia: el libro que sale es el que se le da a la app cambiando SS_ID_VEHICULOS. Producción
@@ -111,6 +111,8 @@ def main():
                    help="permite replanchar el libro compartido del equipo (borra lo que tengan en esas hojas)")
     p.add_argument("--copiar-produccion", nargs="?", const="", metavar="NOMBRE", dest="copiar",
                    help="duplicar producción en Drive y migrar la copia (nombre opcional)")
+    p.add_argument("--carpeta", help="con --copiar-produccion: carpeta de Drive (id o URL) donde dejar la copia; "
+                   "sin esto queda en Mi unidad")
     a = p.parse_args()
     copiar = a.copiar is not None
     if [bool(a.lab), bool(a.libro), copiar].count(True) != 1:
@@ -125,7 +127,7 @@ def main():
             s.get(spreadsheetId=cat.PRODUCCION, fields="properties.title").execute()["properties"]["title"],
             datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
         print("Copiando producción en Drive como «%s»…" % nombre, flush=True)
-        destino = copiar_produccion(nombre)
+        destino = copiar_produccion(nombre, a.carpeta)
         print("Copia: https://docs.google.com/spreadsheets/d/%s" % destino, flush=True)
     else:
         # Sin --escribir, --copiar-produccion simula sobre producción (solo lectura).
