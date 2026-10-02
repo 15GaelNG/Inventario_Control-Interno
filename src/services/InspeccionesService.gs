@@ -354,9 +354,25 @@ const InspeccionesService = (function () {
     // cuenta: estructura.secciones y checklist siguen intactos para la fila y el PDF (ahí
     // "VOLTAJE BATERIA" no es una columna real).
     const calificacionVoltaje = calificacionVoltaje_(p.VOLTAJE);
-    const seccionesParaPuntaje = calificacionVoltaje === null ? estructura.secciones : estructura.secciones.map((s) =>
-      s.titulo === 'Batería' ? Object.assign({}, s, { campos: s.campos.concat([{ campo: 'VOLTAJE BATERIA', opciones: ['BUENO', 'REGULAR', 'MALO'] }]) }) : s);
-    const checklistParaPuntaje = calificacionVoltaje === null ? checklist : Object.assign({}, checklist, { 'VOLTAJE BATERIA': calificacionVoltaje });
+    const calificacionesLlantas = {};
+    estructura.llantas.forEach((l) => {
+      const cal = calificacionLlanta_(p.llantas && p.llantas[l.campo]);
+      if (cal !== null) calificacionesLlantas[l.campo] = cal;
+    });
+    const hayLlantas = Object.keys(calificacionesLlantas).length > 0;
+    const seccionesParaPuntaje = estructura.secciones.map((s) => {
+      if (s.titulo === 'Batería' && calificacionVoltaje !== null) {
+        return Object.assign({}, s, { campos: s.campos.concat([{ campo: 'VOLTAJE BATERIA', opciones: ['BUENO', 'REGULAR', 'MALO'] }]) });
+      }
+      if (s.titulo === 'Neumáticos' && hayLlantas) {
+        return Object.assign({}, s, { campos: s.campos.concat(Object.keys(calificacionesLlantas)
+          .map((campo) => ({ campo: campo, opciones: ['BUENO', 'REGULAR', 'MALO'] }))) });
+      }
+      return s;
+    });
+    const checklistParaPuntaje = Object.assign({}, checklist,
+      calificacionVoltaje !== null ? { 'VOLTAJE BATERIA': calificacionVoltaje } : {},
+      calificacionesLlantas);
     const puntaje = calcularPuntaje_(seccionesParaPuntaje, checklistParaPuntaje);
     if (!puntaje.evaluadas) throw new Error('Responde al menos una pieza del checklist antes de guardar');
 
@@ -495,6 +511,22 @@ const InspeccionesService = (function () {
     if (voltaje === undefined || voltaje === null || voltaje === '' || isNaN(v)) return null;
     if (v < 11.6) return 'MALO';
     if (v > 12.8) return 'BUENO';
+    return 'REGULAR';
+  }
+
+  /**
+   * Calificación de UNA llanta, según el semáforo del formulario de captura (mismo umbral
+   * que la imagen junto a "Profundidad de las llantas"): <=1.6mm peligro, 1.6-4mm
+   * precaución, >4mm seguro. Mismo criterio que calificacionVoltaje_: entra dentro de la
+   * sección "Neumáticos" ya existente, junto a rines/tapones/tuercas-birlos/alineación/
+   * balanceo -- cada llanta medida cuenta como una pieza más, sin peso propio.
+   * @return {string|null} null si no se capturó esa llanta (no cuenta, ni a favor ni en contra)
+   */
+  function calificacionLlanta_(mm) {
+    const v = Number(mm);
+    if (mm === undefined || mm === null || mm === '' || isNaN(v)) return null;
+    if (v <= 1.6) return 'MALO';
+    if (v > 4) return 'BUENO';
     return 'REGULAR';
   }
 
