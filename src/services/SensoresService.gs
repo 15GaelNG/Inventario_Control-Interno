@@ -129,10 +129,13 @@ const SensoresService = (function () {
 
   function listar(token) {
     Permisos.puedeLeer(token, 'instalacion-sensores');
-    return SheetUtils.getAll(ssId(), hoja_().getName())
-      .filter((r) => r['ID'])
-      .map(desdeOriginal_)
-      .sort((a, b) => (b.FECHA_INSTALACION || '').localeCompare(a.FECHA_INSTALACION || ''));
+    // Guardado mientras la hoja no cambie (CacheHojas): el permiso se revisa antes, siempre
+    return CacheHojas.recordar('sens_lista', [[ssId(), 'INSTALACION DE SENSORES']], () => {
+      return SheetUtils.getAll(ssId(), hoja_().getName())
+        .filter((r) => r['ID'])
+        .map(desdeOriginal_)
+        .sort((a, b) => (b.FECHA_INSTALACION || '').localeCompare(a.FECHA_INSTALACION || ''));
+    });
   }
 
   /** Sensores de un solo vehículo (ficha de Vehículos). */

@@ -391,6 +391,8 @@
       refrescarTabla();
       pintarStats(tabla.getFiltradas());
     }
+    // Pinta al instante con lo guardado; si del servidor llega algo distinto, se vuelve a pintar (api.html)
+    escucharLista('apiListarSensores', cargar, document.getElementById('view-container').firstElementChild);
 
     /** Estado en vivo: la tabla ya se ve aunque Geotab tarde o no esté configurado */
     async function cargarEstadoEnVivo() {
@@ -541,7 +543,7 @@
           // En orden (1, 2, 3…), no en el orden del catálogo (que va por folio, no por nucco).
           if (datalist) {
             datalist.innerHTML = conNucco.sort((a, b) => Number(a.NUCO) - Number(b.NUCO))
-              .map((v) => `<option value="${v.NUCO}"></option>`).join('');
+              .map((v) => `<option value="${escaparHtml(v.NUCO)}"></option>`).join('');
           }
         }).catch(() => {});
         campoFolioBuscar.addEventListener('input', (ev) => {

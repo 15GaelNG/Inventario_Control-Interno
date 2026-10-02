@@ -301,7 +301,7 @@ const LineasNotificaciones = (function () {
         leidas[i][0] = (actual.slice(-1) === ',' ? actual : actual + ',') + marca.slice(1);
         marcadas++;
       });
-      if (marcadas) rango.setValues(leidas);
+      if (marcadas) { rango.setValues(leidas); CacheHojas.tocarHoja(rango.getSheet()); }
       return { marcadas: marcadas };
     });
   }

@@ -832,7 +832,7 @@
       auditItems = items || [];
       (cajas || []).forEach((c) => { cajasPorId[c.ID_CCH] = c; });
       const opcionesCaja = '<option value="">Selecciona…</option>' +
-        (cajas || []).map((c) => `<option value="${c.ID_CCH}">${c.ID_CCH} — ${c.RESPONSABLE || 'Sin responsable'}</option>`).join('');
+        (cajas || []).map((c) => `<option value="${escaparHtml(c.ID_CCH)}">${escaparHtml(c.ID_CCH)} — ${escaparHtml(c.RESPONSABLE || 'Sin responsable')}</option>`).join('');
       document.getElementById('arq-id-cch').innerHTML = opcionesCaja;
 
       ['arq', 'editar-arqueo'].forEach((prefijo) => {
@@ -1036,6 +1036,8 @@
       actualizarKpis(todosLosArqueos);
       tabla.setDatos(todosLosArqueos);
     }
+    // Pinta al instante con lo guardado; si del servidor llega algo distinto, se vuelve a pintar (api.html)
+    escucharLista('apiListarArqueosResumen', cargar, document.getElementById('view-container').firstElementChild);
 
     async function abrirEditarArqueo(id) {
       const resumen = arqueosPorId[id];

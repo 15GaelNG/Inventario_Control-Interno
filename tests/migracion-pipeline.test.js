@@ -95,6 +95,7 @@ const libro = {
   deleteSheet: (s) => { delete hojas[s.nombre]; },
 };
 const contexto = vm.createContext({
+    soloEditor_: () => {},   // el candado de Code.gs: aquí siempre es "el editor"
   console,
   Logger: { log: () => {} },
   Session: { getScriptTimeZone: () => 'America/Mexico_City', getActiveUser: () => ({ getEmail: () => 'prueba@x.com' }) },

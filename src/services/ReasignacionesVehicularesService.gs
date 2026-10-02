@@ -59,28 +59,31 @@ const ReasignacionesVehicularesService = (function () {
   /** Historial completo (ya son solo 12 columnas, no hace falta un "resumen" más ligero). */
   function listarResumen(token) {
     Permisos.puedeLeer(token, 'reasignaciones-vehiculares');
-    const sheet = hoja_();
-    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
+    // Guardado mientras la hoja no cambie (CacheHojas): el permiso se revisa antes, siempre
+    return CacheHojas.recordar('rveh_resumen', [[ssId(), NOMBRE_HOJA]], () => {
+      const sheet = hoja_();
+      const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
 
-    const resultado = [];
-    for (let i = 0; i < filas; i++) {
-      if (!datos[ID_COLUMN][i]) continue;
-      resultado.push({
-        ID: datos[ID_COLUMN][i],
-        FOLIO_VEHICULO: datos['Folio Vehiculo'][i] || '',
-        FECHA: fechaISO_(datos['Fecha de Reasignacion'][i]),
-        VIN: datos['VIN'][i] || '',
-        NUCO: datos['NUCO'][i] || '',
-        NO_EMPLEADO_SALIENTE: datos['No Empleado Saliente'][i] || '',
-        RESPONSABLE_SALIENTE: datos['Responsable Saliente'][i] || '',
-        DEPARTAMENTO_SALIENTE: datos['Departamento Saliente'][i] || '',
-        NO_EMPLEADO_ENTRANTE: datos['No Empleado Entrante'][i] || '',
-        RESPONSABLE_ENTRANTE: datos['Responsable Entrante'][i] || '',
-        DEPARTAMENTO_ENTRANTE: datos['Departamento Entrante'][i] || '',
-        QUIEN_REGISTRO: datos['QUIEN REGISTRO'][i] || '',
-      });
-    }
-    return resultado.sort((a, b) => new Date(b.FECHA) - new Date(a.FECHA));
+      const resultado = [];
+      for (let i = 0; i < filas; i++) {
+        if (!datos[ID_COLUMN][i]) continue;
+        resultado.push({
+          ID: datos[ID_COLUMN][i],
+          FOLIO_VEHICULO: datos['Folio Vehiculo'][i] || '',
+          FECHA: fechaISO_(datos['Fecha de Reasignacion'][i]),
+          VIN: datos['VIN'][i] || '',
+          NUCO: datos['NUCO'][i] || '',
+          NO_EMPLEADO_SALIENTE: datos['No Empleado Saliente'][i] || '',
+          RESPONSABLE_SALIENTE: datos['Responsable Saliente'][i] || '',
+          DEPARTAMENTO_SALIENTE: datos['Departamento Saliente'][i] || '',
+          NO_EMPLEADO_ENTRANTE: datos['No Empleado Entrante'][i] || '',
+          RESPONSABLE_ENTRANTE: datos['Responsable Entrante'][i] || '',
+          DEPARTAMENTO_ENTRANTE: datos['Departamento Entrante'][i] || '',
+          QUIEN_REGISTRO: datos['QUIEN REGISTRO'][i] || '',
+        });
+      }
+      return resultado.sort((a, b) => new Date(b.FECHA) - new Date(a.FECHA));
+    });
   }
 
   /** Todas las columnas de la hoja (para "Vista": mostrar/exportar cualquier columna). */

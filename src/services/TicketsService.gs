@@ -39,19 +39,22 @@ const TicketsService = (function () {
   /** Catálogo con las 10 columnas reales (nombres tal cual la hoja). */
   function listarResumen(token) {
     Permisos.puedeLeer(token, 'tickets');
-    const sheet = hoja_();
-    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
+    // Guardado mientras la hoja no cambie (CacheHojas): el permiso se revisa antes, siempre
+    return CacheHojas.recordar('tick_resumen', [[ssId(), NOMBRE_HOJA]], () => {
+      const sheet = hoja_();
+      const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
 
-    const resultado = [];
-    for (let i = 0; i < filas; i++) {
-      if (!datos['ID'][i]) continue;
-      const fila = {};
-      COLUMNAS_RESUMEN.forEach((clave) => { fila[clave] = datos[clave][i] || ''; });
-      fila['FECHA'] = fechaISO_(datos['FECHA'][i]);
-      fila['FECHA DE REGISTRO'] = fechaISO_(datos['FECHA DE REGISTRO'][i]);
-      resultado.push(fila);
-    }
-    return resultado.sort((a, b) => new Date(b['FECHA']) - new Date(a['FECHA']));
+      const resultado = [];
+      for (let i = 0; i < filas; i++) {
+        if (!datos['ID'][i]) continue;
+        const fila = {};
+        COLUMNAS_RESUMEN.forEach((clave) => { fila[clave] = datos[clave][i] || ''; });
+        fila['FECHA'] = fechaISO_(datos['FECHA'][i]);
+        fila['FECHA DE REGISTRO'] = fechaISO_(datos['FECHA DE REGISTRO'][i]);
+        resultado.push(fila);
+      }
+      return resultado.sort((a, b) => new Date(b['FECHA']) - new Date(a['FECHA']));
+    });
   }
 
   /** Todas las columnas de TODOS los tickets (para "Vista": mostrar/exportar cualquier columna). */

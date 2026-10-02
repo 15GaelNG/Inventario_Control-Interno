@@ -113,41 +113,49 @@ const FAM_LIMITE_MS = 4.5 * 60 * 1000;
 
 /** PIPELINE 1, ensayo — los IDs de las 24 hojas. No escribe nada. Empieza por aquí. */
 function ids1Ensayo() {
+  soloEditor_();
   return correrIdsTodo();
 }
 
 /** PIPELINE 1, de verdad — ESCRIBE los IDs de las 24 hojas. */
 function ids2Escribir() {
+  soloEditor_();
   return correrIdsTodo({ escribir: true });
 }
 
 /** PIPELINE 2, ensayo — homologa VEHÍCULOS (8 hojas). Requiere el pipeline 1 ya corrido. */
 function vehiculos1Ensayo() {
+  soloEditor_();
   return correrFamilia('vehiculos');
 }
 
 /** PIPELINE 2, de verdad. */
 function vehiculos2Escribir() {
+  soloEditor_();
   return correrFamilia('vehiculos', { escribir: true });
 }
 
 /** PIPELINE 3, ensayo — LÍNEAS (10 hojas). Lee docs/lineas-homologacion.md primero. */
 function lineas1Ensayo() {
+  soloEditor_();
   return correrFamilia('lineas');
 }
 
 /** PIPELINE 3, de verdad. */
 function lineas2Escribir() {
+  soloEditor_();
   return correrFamilia('lineas', { escribir: true });
 }
 
 /** PIPELINE 4, ensayo — CAJA CHICA (3 hojas). */
 function cajaChica1Ensayo() {
+  soloEditor_();
   return correrFamilia('cajachica');
 }
 
 /** PIPELINE 4, de verdad. */
 function cajaChica2Escribir() {
+  soloEditor_();
   return correrFamilia('cajachica', { escribir: true });
 }
 
@@ -156,16 +164,19 @@ function cajaChica2Escribir() {
  * Requiere los pipelines 2 a 4 ya corridos y la lista de CH pegada. No escribe nada.
  */
 function capitalHumano1Ensayo() {
+  soloEditor_();
   return correrFamilia('capitalhumano');
 }
 
 /** PIPELINE 5, de verdad. Repetirlo cada vez que se pegue una versión nueva de la lista de CH. */
 function capitalHumano2Escribir() {
+  soloEditor_();
   return correrFamilia('capitalhumano', { escribir: true });
 }
 
 /** Los cinco pipelines, qué hojas toca cada uno y en qué libro. Solo lee. */
 function pipelinesEstado() {
+  soloEditor_();
   const lineas = [
     'LOS CINCO PIPELINES — el libro apuntado es ' + Config.SPREADSHEET_IDS.VEHICULOS(),
     '',
@@ -206,6 +217,7 @@ function pipelinesEstado() {
  * @return {string} el reporte de los seis pasos
  */
 function correrIdsTodo(opciones) {
+  soloEditor_();
   const cfg = Object.assign({ escribir: false }, opciones || {});
   const hojas = Entidades.migrables();
   return correrPasos_({
@@ -238,6 +250,7 @@ function hojasDeFamilia_(familia) {
  * @return {string} el reporte
  */
 function correrFamilia(familia, opciones) {
+  soloEditor_();
   const cfg = Object.assign({ escribir: false }, opciones || {});
   const f = String(familia || '').trim().toLowerCase();
   const conocidas = Entidades.familias();
@@ -277,6 +290,7 @@ function correrFamilia(familia, opciones) {
  * referencias (Python) ya escribieron.
  */
 function migracionFinalApps() {
+  soloEditor_();
   const sincroniza = (f) => ({ nombre: 'sincronizar ' + f, marcaMala: 'PROBLEMAS (',
     corre: (o) => sincronizarCopias(Object.assign({}, o, { familia: f })) });
   const familias = ['vehiculos', 'lineas', 'cajachica'];
@@ -323,6 +337,7 @@ function copiasCacheDe_(familia) {
  * Una hoja que no se pudo revisar es un PROBLEMA: escribiendo, detiene el pipeline.
  */
 function sincronizarCopias(opciones) {
+  soloEditor_();
   const cfg = Object.assign({ escribir: false, familia: null }, opciones || {});
   const ssId = libroConfigurado_(cfg);
   const lineas = [(cfg.escribir ? 'SINCRONIZANDO' : 'ENSAYO (no escribe nada)') + ' — ' + ssId, ''];
@@ -355,6 +370,7 @@ function sincronizarCopias(opciones) {
 
 /** Paso `personas`: arma PERSONAS a partir de la lista de Capital Humano. */
 function identificarPersonas(opciones) {
+  soloEditor_();
   const cfg = Object.assign({ escribir: false }, opciones || {});
   libroConfigurado_(cfg);
   return CapitalHumano.identificar({ escribir: cfg.escribir });
@@ -366,6 +382,7 @@ function identificarPersonas(opciones) {
  * Salud—; una hoja que no se pudo revisar sí lo es.
  */
 function ligarPersonas(opciones) {
+  soloEditor_();
   const cfg = Object.assign({ escribir: false }, opciones || {});
   const ssId = libroConfigurado_(cfg);
   const lineas = [(cfg.escribir ? 'LIGANDO RESPONSABLES' : 'ENSAYO (no escribe nada)') + ' — ' + ssId, ''];

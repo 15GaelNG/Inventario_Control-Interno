@@ -637,6 +637,8 @@
       actualizarKpisCch(todasLasCajas);
       tabla.setDatos(todasLasCajas);
     }
+    // Pinta al instante con lo guardado; si del servidor llega algo distinto, se vuelve a pintar (api.html)
+    escucharLista('apiListarCajasChicasResumen', cargar, document.getElementById('view-container').firstElementChild);
 
     async function abrirEditarCajaChica(resumen) {
       if (!resumen) return;
@@ -770,7 +772,7 @@
           const cajas = await callServerListaCacheada('apiListarCajasChicasResumen', state.token);
           (cajas || []).forEach((c) => { cajasPorId[c.ID_CCH] = c; });
           selectCaja.innerHTML = '<option value="">Selecciona…</option>' +
-            (cajas || []).map((c) => `<option value="${c.ID_CCH}">${c.ID_CCH} — ${c.RESPONSABLE || 'Sin responsable'}</option>`).join('');
+            (cajas || []).map((c) => `<option value="${escaparHtml(c.ID_CCH)}">${escaparHtml(c.ID_CCH)} — ${escaparHtml(c.RESPONSABLE || 'Sin responsable')}</option>`).join('');
         } catch (err) {
           console.error('No se pudo cargar el catálogo de cajas chicas:', err);
           const errorBox = document.getElementById('cm-error');
@@ -892,6 +894,8 @@
       actualizarKpisCm(todosLosCambios);
       tabla.setDatos(todosLosCambios);
     }
+    // Pinta al instante con lo guardado; si del servidor llega algo distinto, se vuelve a pintar (api.html)
+    escucharLista('apiListarCambiosMontoCCH', cargar, document.getElementById('view-container').firstElementChild);
 
     document.getElementById('form-cambio-monto').addEventListener('submit', async (ev) => {
       ev.preventDefault();
@@ -920,7 +924,7 @@
         cajasPorId = {};
         (cajas || []).forEach((c) => { cajasPorId[c.ID_CCH] = c; });
         selectCaja.innerHTML = '<option value="">Selecciona…</option>' +
-          (cajas || []).map((c) => `<option value="${c.ID_CCH}">${c.ID_CCH} — ${c.RESPONSABLE || 'Sin responsable'}</option>`).join('');
+          (cajas || []).map((c) => `<option value="${escaparHtml(c.ID_CCH)}">${escaparHtml(c.ID_CCH)} — ${escaparHtml(c.RESPONSABLE || 'Sin responsable')}</option>`).join('');
         await cargar();
         toastExito('Registrado exitosamente');
       } catch (err) {
@@ -1018,6 +1022,8 @@
       actualizarKpisCv(todosLosCambios);
       tabla.setDatos(todosLosCambios);
     }
+    // Pinta al instante con lo guardado; si del servidor llega algo distinto, se vuelve a pintar (api.html)
+    escucharLista('apiListarCambiosVehiculos', cargar, document.getElementById('view-container').firstElementChild);
 
     await cargar();
   }

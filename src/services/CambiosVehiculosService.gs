@@ -97,27 +97,30 @@ const CambiosVehiculosService = (function () {
   /** Historial — los MAXIMO_CAMBIOS más recientes, solo lectura. */
   function listarResumen(token) {
     Permisos.puedeLeer(token, 'cambios-vehiculos');
-    const sheet = hoja_();
-    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_FIRMA);
+    // Guardado mientras la hoja no cambie (CacheHojas): el permiso se revisa antes, siempre
+    return CacheHojas.recordar('cveh_resumen', [[ssId(), NOMBRE_HOJA]], () => {
+      const sheet = hoja_();
+      const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_FIRMA);
 
-    const resultado = [];
-    for (let i = filas - 1; i >= 0 && resultado.length < MAXIMO_CAMBIOS; i--) {
-      // Los renglones viejos (de antes de este módulo) nunca tuvieron
-      // ID_CAMBIO asignado — solo se genera para los nuevos de aquí en
-      // adelante. FOLIO sí debería estar siempre lleno, es el indicador
-      // confiable de que el renglón es real.
-      if (!datos.FOLIO[i]) continue;
-      resultado.push({
-        ID: datos.ID[i] || '',
-        FOLIO: datos.FOLIO[i] || '',
-        CAMPO: datos.CAMPO[i] || '',
-        ANTES: datos.ANTES[i] || '',
-        DESPUES: datos.DESPUES[i] || '',
-        ACTUALIZADO_POR: datos['ACTUALIZADO POR'][i] || '',
-        FECHA: fechaISO_(datos['FECHA ACTUALIZACION'][i]),
-      });
-    }
-    return resultado;
+      const resultado = [];
+      for (let i = filas - 1; i >= 0 && resultado.length < MAXIMO_CAMBIOS; i--) {
+        // Los renglones viejos (de antes de este módulo) nunca tuvieron
+        // ID_CAMBIO asignado — solo se genera para los nuevos de aquí en
+        // adelante. FOLIO sí debería estar siempre lleno, es el indicador
+        // confiable de que el renglón es real.
+        if (!datos.FOLIO[i]) continue;
+        resultado.push({
+          ID: datos.ID[i] || '',
+          FOLIO: datos.FOLIO[i] || '',
+          CAMPO: datos.CAMPO[i] || '',
+          ANTES: datos.ANTES[i] || '',
+          DESPUES: datos.DESPUES[i] || '',
+          ACTUALIZADO_POR: datos['ACTUALIZADO POR'][i] || '',
+          FECHA: fechaISO_(datos['FECHA ACTUALIZACION'][i]),
+        });
+      }
+      return resultado;
+    });
   }
 
   /**

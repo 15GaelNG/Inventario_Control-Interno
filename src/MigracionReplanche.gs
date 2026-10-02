@@ -59,6 +59,7 @@ const REPL_LIMITE_MS = 4.5 * 60 * 1000;
 
 /** Replancha desde producción, ENSAYO — solo lee y reporta. Empieza por aquí. */
 function replanche1Ensayo() {
+  soloEditor_();
   return replancharDesdeProduccion();
 }
 
@@ -67,11 +68,13 @@ function replanche1Ensayo() {
  * Si se corta por tiempo, se vuelve a correr y continúa donde se quedó.
  */
 function replanche2Escribir() {
+  soloEditor_();
   return replancharDesdeProduccion({ escribir: true });
 }
 
 /** En qué va el replanchado y qué llaves están puestas. Solo lee. */
 function replancheEstado() {
+  soloEditor_();
   const props = PropertiesService.getScriptProperties();
   const listas = replListas_(props);
   const lineas = [
@@ -95,6 +98,7 @@ function replancheEstado() {
 
 /** Olvida el avance para que el próximo replanchado empiece desde la primera hoja. */
 function replancheReiniciarAvance() {
+  soloEditor_();
   PropertiesService.getScriptProperties().deleteProperty(REPL_PROP_AVANCE);
   const msg = 'Avance borrado. El próximo replanchado empieza desde la primera hoja.';
   Logger.log(msg);
@@ -240,6 +244,7 @@ function replCopiarHoja_(hojaOrigen, hojaDestino) {
  * @return {string} el reporte, también en Logger y en LOG_MIGRACION
  */
 function replancharDesdeProduccion(opciones) {
+  soloEditor_();
   const cfg = Object.assign({ escribir: false }, opciones || {});
   const props = PropertiesService.getScriptProperties();
   const destino = replDestino_();                      // aquí viven las guardas

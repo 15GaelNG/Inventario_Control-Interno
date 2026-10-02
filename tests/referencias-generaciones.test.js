@@ -50,6 +50,7 @@ function hojaFalsa(enc, filas) {
 
 function cargar(hojas, props) {
   const ctx = vm.createContext({
+    soloEditor_: () => {},   // el candado de Code.gs: aquí siempre es "el editor"
     console,
     Logger: { log: () => {} },
     SpreadsheetApp: { flush: () => {}, openById: () => ({ getSheetByName: (n) => hojas[n] || null }) },

@@ -63,9 +63,12 @@ const IncidenciasService = (function () {
 
   function listar(token) {
     Permisos.puedeLeer(token, 'incidencias');
-    return SheetUtils.getAll(ssId(), hoja_().getName())
-      .map(desdeOriginal_)
-      .sort((a, b) => new Date(b.FECHA_REGISTRO) - new Date(a.FECHA_REGISTRO));
+    // Guardado mientras la hoja no cambie (CacheHojas): el permiso se revisa antes, siempre
+    return CacheHojas.recordar('inc_lista', [[ssId(), NOMBRE_HOJA]], () => {
+      return SheetUtils.getAll(ssId(), hoja_().getName())
+        .map(desdeOriginal_)
+        .sort((a, b) => new Date(b.FECHA_REGISTRO) - new Date(a.FECHA_REGISTRO));
+    });
   }
 
   /** Incidencias de un solo vehículo (ficha de Vehículos). */

@@ -272,6 +272,8 @@
       pintarStats(verificaciones);
       pintarHistorial();
     }
+    // Pinta al instante con lo guardado; si del servidor llega algo distinto, se vuelve a pintar (api.html)
+    escucharLista('apiListarVerificaciones', cargar, document.getElementById('view-container').firstElementChild);
 
     // Solo lectura: sin pestaña de captura (se quita el botón; Tabs deja oculto su panel,
     // y el servidor rechaza el registro de todos modos)
@@ -389,7 +391,7 @@
           // En orden (1, 2, 3…), no en el orden del catálogo (que va por folio, no por nucco).
           if (datalist) {
             datalist.innerHTML = conNucco.sort((a, b) => Number(a.NUCO) - Number(b.NUCO))
-              .map((v) => `<option value="${v.NUCO}"></option>`).join('');
+              .map((v) => `<option value="${escaparHtml(v.NUCO)}"></option>`).join('');
           }
         }).catch(() => {});
         campoFolioBuscar.addEventListener('input', (ev) => {

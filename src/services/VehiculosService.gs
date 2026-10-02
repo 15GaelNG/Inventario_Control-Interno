@@ -72,27 +72,30 @@ const VehiculosService = (function () {
 
   function listarBasico(token) {
     Permisos.puedeLeer(token, 'vehiculos');
-    const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
-    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_BASICO);
+    // Guardado mientras la hoja no cambie (CacheHojas): el permiso se revisa antes, siempre
+    return CacheHojas.recordar('veh_basico', [[ssId(), SHEET_VEHICULOS]], () => {
+      const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
+      const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_BASICO);
 
-    const resultado = [];
-    for (let i = 0; i < filas; i++) {
-      if (!datos['FOLIO'][i]) continue;
-      if (String(datos['ESTATUS'][i] || '').toUpperCase() === 'BAJA VEHICULAR') continue;
-      resultado.push({
-        ID: datos['ID'][i],
-        FOLIO: datos['FOLIO'][i],
-        DEPARTAMENTO: datos['DEPARTAMENTO'][i] || '',
-        MARCA: datos['MARCA'][i] || '',
-        LINEA_VEHICULO: datos['LINEA VEHICULO'][i] || '',
-        MODELO: datos['MODELO'][i] || '',
-        RESPONSABLE_VEHICULO: datos['RESPONSABLE VEHICULO'][i] || '',
-        NO_EMPLEADO: datos['NO EMPLEADO'][i] || '',
-        VIN: datos['SERIE VEHICULO'][i] || '',
-        NUCO: datos['NUCCO'][i] || '',
-      });
-    }
-    return resultado.sort((a, b) => String(a.FOLIO).localeCompare(String(b.FOLIO)));
+      const resultado = [];
+      for (let i = 0; i < filas; i++) {
+        if (!datos['FOLIO'][i]) continue;
+        if (String(datos['ESTATUS'][i] || '').toUpperCase() === 'BAJA VEHICULAR') continue;
+        resultado.push({
+          ID: datos['ID'][i],
+          FOLIO: datos['FOLIO'][i],
+          DEPARTAMENTO: datos['DEPARTAMENTO'][i] || '',
+          MARCA: datos['MARCA'][i] || '',
+          LINEA_VEHICULO: datos['LINEA VEHICULO'][i] || '',
+          MODELO: datos['MODELO'][i] || '',
+          RESPONSABLE_VEHICULO: datos['RESPONSABLE VEHICULO'][i] || '',
+          NO_EMPLEADO: datos['NO EMPLEADO'][i] || '',
+          VIN: datos['SERIE VEHICULO'][i] || '',
+          NUCO: datos['NUCCO'][i] || '',
+        });
+      }
+      return resultado.sort((a, b) => String(a.FOLIO).localeCompare(String(b.FOLIO)));
+    });
   }
 
   // Ojo: la propiedad de salida sigue llamandose ID_VEHICULO porque es el contrato con
@@ -111,30 +114,33 @@ const VehiculosService = (function () {
    */
   function listarResumen(token) {
     Permisos.puedeLeer(token, 'vehiculos');
-    const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
-    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
+    // Guardado mientras la hoja no cambie (CacheHojas): el permiso se revisa antes, siempre
+    return CacheHojas.recordar('veh_resumen', [[ssId(), SHEET_VEHICULOS]], () => {
+      const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
+      const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
 
-    const resultado = [];
-    for (let i = 0; i < filas; i++) {
-      if (!datos['FOLIO'][i]) continue;
-      resultado.push({
-        ID_VEHICULO: datos['ID'][i],
-        FOLIO: datos['FOLIO'][i],
-        NUCCO: datos['NUCCO'][i] || '',
-        DEPARTAMENTO: datos['DEPARTAMENTO'][i] || '',
-        NO_ECONOMICO: datos['NO ECONOMICO'][i] || '',
-        MARCA: datos['MARCA'][i] || '',
-        CLASE: datos['CLASE'][i] || '',
-        LINEA_VEHICULO: datos['LINEA VEHICULO'][i] || '',
-        MODELO: datos['MODELO'][i] || '',
-        COLOR: datos['COLOR'][i] || '',
-        PLACA: datos['PLACA'][i] || '',
-        SEDE: datos['SEDE'][i] || '',
-        ESTATUS: datos['ESTATUS'][i] || '',
-        FECHA_REGISTRO: datos['FECHA REGISTRO SISTEMA CI'][i] || '',
-      });
-    }
-    return resultado.sort((a, b) => String(a.FOLIO).localeCompare(String(b.FOLIO)));
+      const resultado = [];
+      for (let i = 0; i < filas; i++) {
+        if (!datos['FOLIO'][i]) continue;
+        resultado.push({
+          ID_VEHICULO: datos['ID'][i],
+          FOLIO: datos['FOLIO'][i],
+          NUCCO: datos['NUCCO'][i] || '',
+          DEPARTAMENTO: datos['DEPARTAMENTO'][i] || '',
+          NO_ECONOMICO: datos['NO ECONOMICO'][i] || '',
+          MARCA: datos['MARCA'][i] || '',
+          CLASE: datos['CLASE'][i] || '',
+          LINEA_VEHICULO: datos['LINEA VEHICULO'][i] || '',
+          MODELO: datos['MODELO'][i] || '',
+          COLOR: datos['COLOR'][i] || '',
+          PLACA: datos['PLACA'][i] || '',
+          SEDE: datos['SEDE'][i] || '',
+          ESTATUS: datos['ESTATUS'][i] || '',
+          FECHA_REGISTRO: datos['FECHA REGISTRO SISTEMA CI'][i] || '',
+        });
+      }
+      return resultado.sort((a, b) => String(a.FOLIO).localeCompare(String(b.FOLIO)));
+    });
   }
 
   /**

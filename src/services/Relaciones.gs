@@ -708,6 +708,7 @@ const MAPA = {
             const a1 = filas.map((fila) => hoja.getRange(fila, col).getA1Notation());
             hoja.getRangeList(a1).setValue(valor === undefined || valor === null ? '' : valor);
           });
+          CacheHojas.tocarHoja(hoja);
           resumen[copia.nombre] = filas.length;
           if (porClave) {
             // Vale la pena saberlo: son filas sin FK, y las que la app crea ya nacen con
@@ -1083,6 +1084,7 @@ const MAPA = {
               hoja.getRangeList(a1).setValue(valorNuevo);
             });
           });
+          CacheHojas.tocarHoja(hoja);
         }
 
         resultado[copia.nombre] = {
@@ -1261,6 +1263,7 @@ const MAPA = {
         if (filas.length) {
           const a1 = filas.map((fila) => hoja.getRange(fila, colClave).getA1Notation());
           hoja.getRangeList(a1).setValue(claveNueva);
+          CacheHojas.tocarHoja(hoja);
         }
       });
     } finally {
@@ -1442,6 +1445,7 @@ const MAPA = {
       if (imp.mensaje) throw new Error(imp.mensaje);
       // De abajo hacia arriba: borrar una fila recorre las de abajo
       padres.map((p) => p.fila).sort((x, y) => y - x).forEach((fila) => hoja.deleteRow(fila));
+      CacheHojas.tocarHoja(hoja);
       return { eliminadas: padres.length };
     } finally {
       lock.releaseLock();

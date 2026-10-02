@@ -45,17 +45,20 @@ const UberService = (function () {
   /** Catálogo con las 15 columnas reales (nombres tal cual la hoja). */
   function listarResumen(token) {
     Permisos.puedeLeer(token, 'uber');
-    const sheet = hoja_();
-    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
+    // Guardado mientras la hoja no cambie (CacheHojas): el permiso se revisa antes, siempre
+    return CacheHojas.recordar('uber_resumen', [[ssId(), NOMBRE_HOJA]], () => {
+      const sheet = hoja_();
+      const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
 
-    const resultado = [];
-    for (let i = 0; i < filas; i++) {
-      if (!datos['ID'][i]) continue;
-      const fila = { NOMBRE_COMPLETO: datos['NOMBRE COMPLETO'][i] || '', RAZON_SOCIAL: datos['RAZON SOCIAL'][i] || '', ESTATUS: datos['ESTAUS USUARIO'][i] || '' };
-      COLUMNAS_RESUMEN.forEach((clave) => { fila[clave] = limpiarValor_(datos[clave][i]); });
-      resultado.push(fila);
-    }
-    return resultado.sort((a, b) => String(a.NOMBRE_COMPLETO).localeCompare(String(b.NOMBRE_COMPLETO)));
+      const resultado = [];
+      for (let i = 0; i < filas; i++) {
+        if (!datos['ID'][i]) continue;
+        const fila = { NOMBRE_COMPLETO: datos['NOMBRE COMPLETO'][i] || '', RAZON_SOCIAL: datos['RAZON SOCIAL'][i] || '', ESTATUS: datos['ESTAUS USUARIO'][i] || '' };
+        COLUMNAS_RESUMEN.forEach((clave) => { fila[clave] = limpiarValor_(datos[clave][i]); });
+        resultado.push(fila);
+      }
+      return resultado.sort((a, b) => String(a.NOMBRE_COMPLETO).localeCompare(String(b.NOMBRE_COMPLETO)));
+    });
   }
 
   /** Todas las columnas de TODOS los usuarios (para "Vista": mostrar/exportar cualquier columna). */

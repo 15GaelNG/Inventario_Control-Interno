@@ -42,6 +42,7 @@ function cargar(salidas) {
   };
   const logueado = [];
   const ctx = vm.createContext({
+    soloEditor_: () => {},   // el candado de Code.gs: aquí siempre es "el editor"
     console,
     Logger: { log: () => {} },
     Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'SS_LAB' } },
@@ -289,6 +290,7 @@ function cargarPasos(cfg) {
   const c = Object.assign({ libro: 'SS_LAB', configurado: 'SS_LAB', reporte: {}, ligas: {} }, cfg || {});
   const llamadas = { revisar: [], ligar: [], identificar: [] };
   const ctx = vm.createContext({
+    soloEditor_: () => {},   // el candado de Code.gs: aquí siempre es "el editor"
     console,
     Logger: { log: () => {} },
     Config: { SPREADSHEET_IDS: { VEHICULOS: () => c.configurado } },

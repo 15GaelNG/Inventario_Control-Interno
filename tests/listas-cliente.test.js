@@ -1,0 +1,122 @@
+/**
+ * Pruebas de las listas del cliente que pintan al instante (src/html/js/api.html):
+ * callServerListaCacheada devuelve la copia guardada y actualiza por detrás, avisa con
+ * "lista-actualizada" solo si cambió, invalidarCacheLista fuerza lo fresco y al cerrar
+ * sesión no queda nada guardado. google.script.run es de mentira. Correr: npm test
+ */
+const fs = require('fs');
+const path = require('path');
+const { JSDOM } = require('jsdom');
+
+const api = fs.readFileSync(path.join(__dirname, '..', 'src', 'html', 'js', 'api.html'), 'utf8');
+const js = /<script[^>]*>([\s\S]*?)<\/script>/.exec(api)[1];
+
+let fallas = 0;
+const ok = (cond, texto) => { console.log((cond ? '  ✔ ' : '  ✘ ') + texto); if (!cond) fallas++; };
+const espera = (ms) => new Promise((r) => setTimeout(r, ms || 10));
+
+function navegador(localStorageInicial) {
+  const dom = new JSDOM('<!doctype html><body><div id="vista"></div></body>', { runScripts: 'outside-only', url: 'https://x.test/' });
+  const w = dom.window;
+  Object.keys(localStorageInicial || {}).forEach((k) => w.localStorage.setItem(k, localStorageInicial[k]));
+  const servidor = { respuestas: {}, llamadas: [] };
+  // google.script.run de mentira: responde lo que diga servidor.respuestas[fn], un poco después
+  w.google = { script: { run: new Proxy({}, {
+    get(_, prop) {
+      if (prop === 'withSuccessHandler') {
+        return (ok) => ({ withFailureHandler: () => new Proxy({}, { get: (__, fn) => (...args) => {
+          servidor.llamadas.push(fn);
+          setTimeout(() => ok(JSON.parse(JSON.stringify(servidor.respuestas[fn]))), 5);
+        } }) });
+      }
+      return undefined;
+    },
+  }) } };
+  w.eval(js + '\nwindow.callServerListaCacheada = callServerListaCacheada; window.invalidarCacheLista = invalidarCacheLista;' +
+    'window.escucharLista = escucharLista; window.limpiarListasGuardadas = limpiarListasGuardadas; window.precargarLista = precargarLista;' +
+    'window.verTiempos = verTiempos;');
+  w.eval('var state = { sesion: { correo: "ana@x.com" } };');
+  return { w, servidor };
+}
+
+(async () => {
+  console.log('1. Sin copia: espera al servidor y la guarda');
+  let { w, servidor } = navegador();
+  servidor.respuestas.apiListarX = [{ ID: 1 }];
+  let r = await w.callServerListaCacheada('apiListarX', 'token-1');
+  ok(r.length === 1 && servidor.llamadas.length === 1, 'la primera vez pide al servidor');
+  ok(w.localStorage.getItem('lista:ana@x.com:apiListarX[]') === '[{"ID":1}]', 'y la guarda en el navegador (sin el token en la llave)');
+  r = await w.callServerListaCacheada('apiListarX', 'token-1');
+  ok(servidor.llamadas.length === 1, 'pedida hace un momento: no vuelve a ir al servidor');
+
+  console.log('2. Con copia de una visita anterior (la página se recargó)');
+  ({ w, servidor } = navegador({ 'lista:ana@x.com:apiListarX[]': '[{"ID":1}]' }));
+  servidor.respuestas.apiListarX = [{ ID: 1 }, { ID: 2 }];
+  const avisos = [];
+  w.addEventListener('lista-actualizada', (ev) => avisos.push(ev.detail.fn));
+  const t0 = Date.now();
+  r = await w.callServerListaCacheada('apiListarX', 'token-NUEVO');
+  ok(r.length === 1 && Date.now() - t0 < 5, 'pinta AL INSTANTE con la copia, aunque el token sea otro');
+  await espera(20);
+  ok(servidor.llamadas.length === 1, 'y por detrás pide lo fresco');
+  ok(avisos.join() === 'apiListarX', 'como llegó distinto, avisa con "lista-actualizada"');
+  r = await w.callServerListaCacheada('apiListarX', 'token-NUEVO');
+  ok(r.length === 2, 'la siguiente vez ya da lo fresco');
+
+  console.log('3. Si lo fresco llega igual, no avisa');
+  ({ w, servidor } = navegador({ 'lista:ana@x.com:apiListarX[]': '[{"ID":1}]' }));
+  servidor.respuestas.apiListarX = [{ ID: 1 }];
+  let avisosIgual = 0;
+  w.addEventListener('lista-actualizada', () => avisosIgual++);
+  await w.callServerListaCacheada('apiListarX', 't');
+  await espera(20);
+  ok(servidor.llamadas.length === 1 && avisosIgual === 0, 'pidió, comparó y no molestó a nadie');
+
+  console.log('4. escucharLista');
+  ({ w, servidor } = navegador({ 'lista:ana@x.com:apiListarX[]': '[]' }));
+  servidor.respuestas.apiListarX = [{ ID: 9 }];
+  let repintados = 0;
+  const vista = w.document.getElementById('vista');
+  w.escucharLista('apiListarX', () => repintados++, vista);
+  w.escucharLista('apiListarOtra', () => { repintados += 100; }, vista);
+  await w.callServerListaCacheada('apiListarX', 't');
+  await espera(20);
+  ok(repintados === 1, 'el módulo de esa lista se vuelve a pintar (y no el de otra lista)');
+  vista.remove();
+  w.invalidarCacheLista('apiListarX', 't');
+  w.localStorage.setItem('lista:ana@x.com:apiListarX[]', '[]');
+  await w.callServerListaCacheada('apiListarX', 't');
+  await espera(20);
+  ok(repintados === 1, 'si ya se salió del módulo (su vista no está), no lo repinta');
+
+  console.log('5. invalidarCacheLista: después de guardar, lo fresco');
+  ({ w, servidor } = navegador({ 'lista:ana@x.com:apiListarX[]': '[{"ID":1}]' }));
+  servidor.respuestas.apiListarX = [{ ID: 1, EDITADO: true }];
+  w.invalidarCacheLista('apiListarX', 't');
+  ok(w.localStorage.getItem('lista:ana@x.com:apiListarX[]') === null, 'borra la copia guardada');
+  r = await w.callServerListaCacheada('apiListarX', 't');
+  ok(r[0].EDITADO === true, 'y el cargar() que sigue espera el dato recién guardado');
+
+  console.log('6. Cerrar sesión y precarga');
+  ({ w, servidor } = navegador({ 'lista:ana@x.com:apiListarX[]': '[1]', 'lista:ana@x.com:apiListarY[]': '[2]', 'lineas.modoVista': 'tabla' }));
+  w.limpiarListasGuardadas();
+  ok(w.localStorage.getItem('lista:ana@x.com:apiListarX[]') === null && w.localStorage.getItem('lista:ana@x.com:apiListarY[]') === null,
+    'al cerrar sesión se borran todas las listas guardadas');
+  ok(w.localStorage.getItem('lineas.modoVista') === 'tabla', 'y no toca otras preferencias del navegador');
+  servidor.respuestas.apiListarZ = [3];
+  await w.precargarLista('apiListarZ', 't');
+  ok(w.localStorage.getItem('lista:ana@x.com:apiListarZ[]') === '[3]', 'precargarLista la deja lista sin pintar nada');
+  ok(w.verTiempos().some((t) => t.funcion === 'apiListarZ'), 'verTiempos() registra cuánto tardó cada llamada');
+
+  console.log('7. Sin localStorage (navegación privada, bloqueado)');
+  ({ w, servidor } = navegador());
+  Object.defineProperty(w, 'localStorage', { get() { throw new Error('bloqueado'); } });
+  servidor.respuestas.apiListarX = [{ ID: 1 }];
+  r = await w.callServerListaCacheada('apiListarX', 't');
+  ok(r.length === 1, 'funciona igual, solo con memoria');
+  w.limpiarListasGuardadas();
+  ok(true, 'y cerrar sesión no truena');
+
+  console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
+  process.exit(fallas ? 1 : 0);
+})().catch((e) => { console.log('✘ ERROR', e.stack); process.exit(1); });

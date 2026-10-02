@@ -215,6 +215,8 @@ function cargar(hs) {
     return o;
   });
   const ctx = vm.createContext({
+    // Caché del servidor (src/utils/CacheHojas.gs): aquí no guarda nada
+    CacheHojas: { tocar() {}, tocarHoja() {}, recordar: (clave, hojas, armar) => armar() },
     console,
     LockService: { getScriptLock: () => ({ waitLock: () => true, releaseLock: () => {} }) },
     SpreadsheetApp: {

@@ -77,6 +77,7 @@ function migracionExigirSinSello_(ssId, que) {
 
 /** Qué libros están sellados y qué significa. Solo lee. */
 function migracionEstadoSello() {
+  soloEditor_();
   const v = PropertiesService.getScriptProperties().getProperty(MIGRACION_PROP_SELLO) || '';
   const libros = v.split(',').map((x) => x.trim()).filter(Boolean);
   const actual = Config.SPREADSHEET_IDS.VEHICULOS();
@@ -147,6 +148,7 @@ const MIGRACION_NOMBRES = [
  * PROBLEMA y escribiendo se detiene ahí.
  */
 function homologarNombres(opciones) {
+  soloEditor_();
   const cfg = Object.assign({ escribir: false, familia: null }, opciones || {});
   const ssId = migracionSs_(cfg);
   const ss = SpreadsheetApp.openById(ssId);
@@ -359,6 +361,7 @@ function migLeerColumna_(sheet, columna, filas) {
  * Corre esto primero y lee la salida completa antes de seguir.
  */
 function revisarAntesDeMigrar(opciones) {
+  soloEditor_();
   const cfg = Object.assign({ familia: null }, opciones || {});
   const ssId = migracionSs_(cfg);
   const ss = SpreadsheetApp.openById(ssId);
@@ -500,6 +503,7 @@ function migYaMigrada_(sheet, prefijo, filas, vacias) {
  * viejo se sigue respetando, porque se lee de ID ANTERIOR).
  */
 function asignarIds(opciones) {
+  soloEditor_();
   const cfg = Object.assign({ escribir: false, hojas: null, rehacer: false, familia: null }, opciones || {});
   const ssId = migracionSs_(cfg);
   // Regenerar con rehacer:true es lo único de este paso que destruye: pisa IDs que ya
@@ -740,6 +744,7 @@ function migBuscar_(mapa, valor) {
  * sí se pisó) o en una COLUMNA NUEVA (cuando guarda una llave de negocio, que no se toca).
  */
 function reescribirReferencias(opciones) {
+  soloEditor_();
   const cfg = Object.assign({ escribir: false, familia: null }, opciones || {});
   const ssId = migracionSs_(cfg);
   const ss = SpreadsheetApp.openById(ssId);
@@ -865,6 +870,7 @@ function reescribirReferencias(opciones) {
  * mismo porque AppSheet no la lee, pero allá esto va junto con el apagado.
  */
 function moverIdsAlInicio(opciones) {
+  soloEditor_();
   const cfg = Object.assign({ escribir: false, familia: null }, opciones || {});
   const ssId = migracionSs_(cfg);
   const ss = SpreadsheetApp.openById(ssId);
@@ -1101,6 +1107,7 @@ function ponerEncabezadosDeducidos_(ss, cfg, lineas, problemas) {
  * no importa; ver docs/ids-asignacion.md antes de hacerlo en el libro bueno.
  */
 function renombrarLlaveAnterior(opciones) {
+  soloEditor_();
   const cfg = Object.assign({ escribir: false, familia: null }, opciones || {});
   const ssId = migracionSs_(cfg);
   const ss = SpreadsheetApp.openById(ssId);
@@ -1198,6 +1205,7 @@ function renombrarLlaveAnterior(opciones) {
  * existiendo igualito en la columna original. Si difiere en uno solo, no toca esa hoja.
  */
 function limpiarRespaldoRedundante(opciones) {
+  soloEditor_();
   const cfg = Object.assign({ escribir: false, familia: null }, opciones || {});
   const ssId = migracionSs_(cfg);
   const ss = SpreadsheetApp.openById(ssId);
@@ -1270,6 +1278,7 @@ function limpiarRespaldoRedundante(opciones) {
 
 /** Comprueba lo de docs/ids-asignacion.md, sección 7. No escribe nada. */
 function auditarIds(opciones) {
+  soloEditor_();
   const cfg = Object.assign({ familia: null }, opciones || {});
   const ssId = migracionSs_(cfg);
   const ss = SpreadsheetApp.openById(ssId);

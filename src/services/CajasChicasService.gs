@@ -67,24 +67,27 @@ const CajasChicasService = (function () {
   /** Catálogo con las 27 columnas capturables (nombres tal cual la hoja, + alias). */
   function listarResumen(token) {
     Permisos.puedeLeer(token, 'caja-chica');
-    const sheet = hoja_();
-    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
+    // Guardado mientras la hoja no cambie (CacheHojas): el permiso se revisa antes, siempre
+    return CacheHojas.recordar('cch_resumen', [[ssId(), NOMBRE_HOJA]], () => {
+      const sheet = hoja_();
+      const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
 
-    const resultado = [];
-    for (let i = 0; i < filas; i++) {
-      if (!datos['ID CCH'][i]) continue;
-      const fila = {
-        ID_CCH: datos['ID CCH'][i],
-        RESPONSABLE: datos['RESPONSABLE DE CAJA CHICA'][i] || '',
-        PUESTO: datos['PUESTO DE RESPONSABLE'][i] || '',
-        EMPRESA_ORIGEN: datos['EMPRESA ORIGEN'][i] || '',
-        MONTO_ACTUAL: datos['MONTO ACTUAL'][i] || '',
-        METODO_REEMBOLSO: datos['METODO DE REEMBOLSO'][i] || '',
-      };
-      COLUMNAS_RESUMEN.forEach((clave) => { fila[clave] = limpiarValor_(datos[clave][i]) || ''; });
-      resultado.push(fila);
-    }
-    return resultado.sort((a, b) => Number(a.ID_CCH) - Number(b.ID_CCH));
+      const resultado = [];
+      for (let i = 0; i < filas; i++) {
+        if (!datos['ID CCH'][i]) continue;
+        const fila = {
+          ID_CCH: datos['ID CCH'][i],
+          RESPONSABLE: datos['RESPONSABLE DE CAJA CHICA'][i] || '',
+          PUESTO: datos['PUESTO DE RESPONSABLE'][i] || '',
+          EMPRESA_ORIGEN: datos['EMPRESA ORIGEN'][i] || '',
+          MONTO_ACTUAL: datos['MONTO ACTUAL'][i] || '',
+          METODO_REEMBOLSO: datos['METODO DE REEMBOLSO'][i] || '',
+        };
+        COLUMNAS_RESUMEN.forEach((clave) => { fila[clave] = limpiarValor_(datos[clave][i]) || ''; });
+        resultado.push(fila);
+      }
+      return resultado.sort((a, b) => Number(a.ID_CCH) - Number(b.ID_CCH));
+    });
   }
 
   /** Todas las columnas de TODAS las cajas chicas (para "Vista": mostrar/exportar cualquier columna). */

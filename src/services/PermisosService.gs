@@ -336,6 +336,7 @@ const Permisos = (function () {
  * (config/PermisosSemilla.gs). Correr desde el editor: no hace nada si ya existe.
  */
 function permisosCrearHoja() {
+  soloEditor_();
   const mensaje = Permisos.crearHoja();
   Logger.log(mensaje);
   return mensaje;

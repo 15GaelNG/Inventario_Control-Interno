@@ -1275,10 +1275,73 @@
       });
     }
 
+    /**
+     * El índice también se guarda en el navegador (como las listas de api.html, se borra al
+     * cerrar sesión): al recargar la página se pinta con esa copia AL INSTANTE y por detrás se
+     * pide el fresco; si llegó distinto, "lista-actualizada" hace que Líneas Telefónicas se
+     * vuelva a pintar. Las recargas forzadas (después de una operación) esperan lo fresco.
+     */
+    const LLAVE_INDICE = () => llaveGuardada_('apiLineasIndice[]');
     function cargarIndice(forzar) {
       if (!forzar && memoria.indice && Date.now() - memoria.cargadoEn < VIGENCIA_INDICE_MS) return Promise.resolve(memoria.indice);
       if (!forzar && memoria.indicePendiente) return memoria.indicePendiente;
+      if (!forzar && !memoria.indice) {
+        let texto = null;
+        try { texto = localStorage.getItem(LLAVE_INDICE()); } catch (e) { texto = null; }
+        if (texto) {
+          try {
+            procesarIndice_(JSON.parse(texto));
+            memoria.indiceTexto = texto;
+            pedirIndice_(true).catch(() => { /* se queda la copia */ });
+            return Promise.resolve(memoria.indice);
+          } catch (e) { /* copia dañada: se pide normal */ }
+        }
+      }
+      return pedirIndice_(false);
+    }
+
+    function pedirIndice_(avisarSiCambia) {
       memoria.indicePendiente = llamar('apiLineasIndice').then((r) => {
+        // Lo que se guarda en el navegador va SIN los PIN (a un ADMIN el servidor se los manda):
+        // en una computadora compartida no deben quedar escritos. Los reales solo viven en memoria.
+        const guardable = sinSecretos_(r);
+        const texto = JSON.stringify(guardable);
+        // Si trae PIN reales (ADMIN), también hay que repintar: lo pintado desde la copia los tenía ocultos
+        const cambio = texto !== memoria.indiceTexto || guardable !== r;
+        memoria.indiceTexto = texto;
+        try {
+          if (texto.length <= MAX_GUARDAR) localStorage.setItem(LLAVE_INDICE(), texto);
+          else localStorage.removeItem(LLAVE_INDICE());
+        } catch (e) { /* no cupo: solo memoria */ }
+        procesarIndice_(r);
+        if (cambio && avisarSiCambia) window.dispatchEvent(new CustomEvent('lista-actualizada', { detail: { fn: 'apiLineasIndice' } }));
+        return memoria.indice;
+      });
+      memoria.indicePendiente.then(() => { memoria.indicePendiente = null; }, () => { memoria.indicePendiente = null; });
+      return memoria.indicePendiente;
+    }
+
+    /** Copia del índice con las columnas secretas (PIN WHATSAPP, PIN EQUIPO) en "••••", como las ve quien no es ADMIN */
+    function sinSecretos_(r) {
+      const vista = r && r.vista;
+      if (!vista || !(vista.secretas || []).length) return r;
+      const posiciones = vista.secretas.map((c) => vista.columnas.indexOf(c) + 1).filter((i) => i > 0);
+      const conPinReal = (fila) => posiciones.some((i) => fila[i] && fila[i] !== '••••');
+      if (!vista.filas.some(conPinReal)) return r;   // ya venía sin PIN (quien no es ADMIN): la misma
+      return Object.assign({}, r, {
+        vista: Object.assign({}, vista, {
+          filas: vista.filas.map((fila) => {
+            if (!conPinReal(fila)) return fila;
+            const copia = fila.slice();
+            posiciones.forEach((i) => { if (copia[i]) copia[i] = '••••'; });
+            return copia;
+          }),
+        }),
+      });
+    }
+
+    function procesarIndice_(r) {
+      {
         const porNuco = (a, b) => {
           const na = Number(a.nuco || a.nucoEquipo);
           const nb = Number(b.nuco || b.nucoEquipo);
@@ -1303,9 +1366,7 @@
         };
         memoria.cargadoEn = Date.now();
         return memoria.indice;
-      });
-      memoria.indicePendiente.then(() => { memoria.indicePendiente = null; }, () => { memoria.indicePendiente = null; });
-      return memoria.indicePendiente;
+      }
     }
 
     function cargarPermisos() {
@@ -1606,6 +1667,8 @@
       aplicarModoVista();
       // Atrás / Adelante del navegador (gesto de dos dedos): la ficha que se veía en ese paso
       const subInicial = typeof HistorialApp !== 'undefined' ? HistorialApp.registrar('lineas-telefonicas', (sub) => { if (vigente()) restaurarPaso(sub); }) : null;
+      // Se pintó con el índice guardado en el navegador y llegó uno distinto: pintar de nuevo
+      escucharLista('apiLineasIndice', () => { if (vigente()) { pintarIndicadores(); pintarListado(); } }, raiz);
       Promise.all([cargarPermisos(), cargarIndice()]).then(([permisos]) => {
         if (!vigente()) return;
         $('#ln-recargar', raiz).hidden = !permisos.esAdmin;

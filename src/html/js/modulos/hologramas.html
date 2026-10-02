@@ -352,6 +352,8 @@
       tabla.setDatos(conEstado(hologramas));
       pintarStats(tabla.getFiltradas());
     }
+    // Pinta al instante con lo guardado; si del servidor llega algo distinto, se vuelve a pintar (api.html)
+    escucharLista('apiListarHologramas', cargar, document.getElementById('view-container').firstElementChild);
 
     // ----- Alta -----
     if (!puedeEditar) {

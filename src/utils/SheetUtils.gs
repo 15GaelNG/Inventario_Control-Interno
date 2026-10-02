@@ -124,6 +124,11 @@ const SheetUtils = (function () {
    * escribir, para nombrar los archivos de Drive con la convención de AppSheet
    * ("<TABLA>_Images/<id>.<COLUMNA>.<hora>.png"). Esos lo piden con Ids.nuevo() y lo pasan.
    */
+  /** Cualquier escritura invalida lo que CacheHojas tenga guardado de esa hoja */
+  function tocar_(spreadsheetId, sheetName) {
+    if (typeof CacheHojas !== 'undefined') CacheHojas.tocar(spreadsheetId, sheetName);
+  }
+
   function insert(spreadsheetId, sheetName, obj) {
     const sheet = getSheet(spreadsheetId, sheetName);
     const headers = getHeaders_(sheet);
@@ -134,6 +139,7 @@ const SheetUtils = (function () {
     }
     const row = objectToRow_(headers, obj);
     sheet.appendRow(row);
+    tocar_(spreadsheetId, sheetName);
     return obj;
   }
 
@@ -147,6 +153,7 @@ const SheetUtils = (function () {
     const merged = Object.assign({}, found.data, changes);
     const row = objectToRow_(headers, merged);
     sheet.getRange(found.rowIndex, 1, 1, headers.length).setValues([row]);
+    tocar_(spreadsheetId, sheetName);
     return merged;
   }
 
@@ -155,6 +162,7 @@ const SheetUtils = (function () {
     const found = findById(spreadsheetId, sheetName, id, idColumn);
     if (!found) return false;
     getSheet(spreadsheetId, sheetName).deleteRow(found.rowIndex);
+    tocar_(spreadsheetId, sheetName);
     return true;
   }
 
@@ -188,6 +196,7 @@ const SheetUtils = (function () {
         sheet.deleteRows(inicio, cantidad);
         i -= cantidad;
       }
+      if (filas.length) tocar_(spreadsheetId, sheetName);
       return filas.length;
     } finally {
       lock.releaseLock();

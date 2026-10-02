@@ -260,6 +260,8 @@
       tabla.setDatos(inspecciones);
       pintarStats(tabla.getFiltradas());
     }
+    // Pinta al instante con lo guardado; si del servidor llega algo distinto, se vuelve a pintar (api.html)
+    escucharLista('apiListarInspecciones', cargar, document.getElementById('view-container').firstElementChild);
 
     // La captura (y sus catálogos) se prepara hasta que hace falta: al abrir la pestaña,
     // o en cuanto termina de cargar la tabla. Así no compite con la lista por el servidor.

@@ -25,6 +25,7 @@
 const ORIGINAL_PRUEBAS_SPREADSHEET_ID = '1fC77Uu1ePVUySNvhgWXMHqWpLhGhBMTZZMEblU2nUhI';
 
 function configurarAmbienteInicial() {
+  soloEditor_();
   const props = PropertiesService.getScriptProperties();
   const adminCorreo = props.getProperty('ADMIN_CORREO_INICIAL');
   const adminPassword = props.getProperty('ADMIN_PASSWORD_INICIAL');
@@ -137,6 +138,7 @@ function configurarAmbienteInicial() {
  * y revisar el resultado en el panel de "Ejecuciones" / valor de retorno.
  */
 function inspeccionarIncidencias() {
+  soloEditor_();
   const ss = SpreadsheetApp.openById(ORIGINAL_PRUEBAS_SPREADSHEET_ID);
   const hoja = ss.getSheets().find((sheet) => {
     if (sheet.getLastColumn() === 0) return false;
@@ -174,6 +176,7 @@ function inspeccionarIncidencias() {
  * autollenado de Incidencias a partir del folio del vehículo.
  */
 function inspeccionarVehiculos() {
+  soloEditor_();
   const ss = SpreadsheetApp.openById(ORIGINAL_PRUEBAS_SPREADSHEET_ID);
   const hoja = ss.getSheets().find((sheet) => {
     if (sheet.getLastColumn() === 0) return false;
@@ -214,6 +217,7 @@ function inspeccionarVehiculos() {
  * Ejecutar UNA vez desde el editor (dropdown de funciones > apuntarABdOriginal > Ejecutar).
  */
 function apuntarABdOriginal() {
+  soloEditor_();
   PropertiesService.getScriptProperties().setProperties({
     SS_ID_USUARIOS: ORIGINAL_PRUEBAS_SPREADSHEET_ID,
     SS_ID_ACCESORIOS: ORIGINAL_PRUEBAS_SPREADSHEET_ID,
@@ -237,6 +241,7 @@ const SCRIPT_ID_COMPARTIDO = '1NbOczw_H8UJ7adxRP4h_jl9VlfyvxM3mANYsaz12U5uo8Gj0B
  * Se niega a correr en el proyecto compartido.
  */
 function configurarEntornoDev() {
+  soloEditor_();
   if (ScriptApp.getScriptId() === SCRIPT_ID_COMPARTIDO) {
     throw new Error('Esta función es para proyectos DEV personales, no para el proyecto compartido.');
   }
@@ -266,6 +271,7 @@ function configurarEntornoDev() {
  * cambia nada — se puede correr las veces que haga falta.
  */
 function probarGeotab() {
+  soloEditor_();
   const info = Geotab.probar();
   const mensaje = 'Geotab responde: ' + info.equipos + ' equipos en ' + info.servidor + '.';
   Logger.log(mensaje);
@@ -278,6 +284,7 @@ function probarGeotab() {
  * Correr desde el editor; el resultado sale en Ver > Registros. No cambia nada.
  */
 function verPermisos() {
+  soloEditor_();
   const mensaje = Permisos.revisarCatalogo().mensaje;
   Logger.log(mensaje);
   return mensaje;
@@ -319,6 +326,7 @@ function lineaRelaciones_(hoja, r, verbo) {
  * primera vez). No cambia nada — se puede correr las veces que haga falta.
  */
 function revisarRelacionesSoloReporte() {
+  soloEditor_();
   const resultado = Relaciones.revisar({ corregir: false });
   const lineas = ['Relaciones.revisar({corregir: false}) —', ''];
   Object.keys(resultado).forEach((hoja) => {
@@ -341,6 +349,7 @@ function revisarRelacionesSoloReporte() {
  * "Ejecutar"; el resultado sale en Ver > Registros (Ctrl+Enter).
  */
 function diagnosticoCambiosVehiculos() {
+  soloEditor_();
   const ssId = Config.SPREADSHEET_IDS.VEHICULOS();
   const NOMBRE_HOJA = 'CAMBIOS VEHICULOS';
   const ESPERADAS = ['ID_CAMBIO', 'FOLIO', 'TABLA', 'CAMPO', 'ANTES', 'DESPUES', 'ACTUALIZADO POR', 'FECHA ACTUALIZACION'];
@@ -411,6 +420,7 @@ function diagnosticoCambiosVehiculos() {
  * encontrar. Esto lo confirma.
  */
 function diagnosticoRutaFormatoInspeccion() {
+  soloEditor_();
   function terminar(mensaje) {
     Logger.log(mensaje);
     return mensaje;
@@ -474,6 +484,7 @@ function diagnosticoRutaFormatoInspeccion() {
  * probar la resolución de rutas con un caso que sí debería funcionar.
  */
 function diagnosticoBuscarVehiculoConArchivos() {
+  soloEditor_();
   function terminar(mensaje) {
     Logger.log(mensaje);
     return mensaje;
@@ -543,7 +554,9 @@ function compartirArchivosExistentes(token) {
   //     .withSuccessHandler(r => console.log(r))
   //     .withFailureHandler(e => console.error('FALLÓ:', e.message))
   //     .apiCompartirArchivosExistentes(state.token)
+  // Con token (desde la app): solo ADMIN. Sin token: solo desde el editor (soloEditor_, Code.gs)
   if (token) Permisos.puedeEditar(token, 'usuarios');
+  else soloEditor_();
   const CARPETAS = [
     { id: '1lNo-vHXVT8R2ZMgj2FK2awfIcW17JdY8', nombre: 'Uber (solicitudes)' },
     { id: '1gmu5Gs6thEwOv7tcwe0KWQaWTRhFr4-l', nombre: 'Vehículos (adjuntos)' },
@@ -595,6 +608,7 @@ function compartirArchivosExistentes(token) {
  * el campo se queda vacío para siempre sin ningún error visible.
  */
 function diagnosticoArchivosVehiculos() {
+  soloEditor_();
   const ssId = Config.SPREADSHEET_IDS.VEHICULOS();
   const NOMBRE_HOJA = 'VEHICULOS';
   const ESPERADOS = ['RESPONSIVA', 'DOCUMENTO BAJA', 'POLIZA SEGURO', 'ARCHIVO TENENCIA'];
@@ -641,6 +655,7 @@ function diagnosticoArchivosVehiculos() {
  * variable RUTA de abajo por el valor real que sale en la vista.
  */
 function diagnosticoRutaArchivoVehiculo() {
+  soloEditor_();
   const RUTA = 'VEHICULOS_Files_/AUT0024.ARCHIVO TENENCIA.181951.pdf';
   const lineas = ['Ruta a resolver: "' + RUTA + '"', ''];
 
@@ -722,6 +737,7 @@ function diagnosticoRutaArchivoVehiculo() {
  * nunca vio (edición directa en el Excel, o desde AppSheet).
  */
 function revisarRelacionesYCorregir() {
+  soloEditor_();
   const resultado = Relaciones.revisar({ corregir: true });
   const lineas = ['Relaciones.revisar({corregir: true}) —', ''];
   Object.keys(resultado).forEach((hoja) => {

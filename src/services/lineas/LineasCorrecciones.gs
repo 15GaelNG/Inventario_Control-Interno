@@ -376,6 +376,7 @@ const LineasCorrecciones = (function () {
       const faltan = matriz.length + 1 - hoja.getMaxRows();
       if (faltan > 0) hoja.insertRowsAfter(hoja.getMaxRows(), faltan);
       if (matriz.length) hoja.getRange(2, 1, matriz.length, encabezados.length).setValues(matriz);
+      CacheHojas.tocarHoja(hoja);
       if (antes > matriz.length) hoja.getRange(matriz.length + 2, 1, antes - matriz.length, encabezados.length).clearContent();
     });
     LineasDatos.cacheBorrar('enc_' + TAB);

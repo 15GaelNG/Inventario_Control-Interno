@@ -160,10 +160,13 @@ const InspeccionesService = (function () {
 
   function listar(token) {
     Permisos.puedeLeer(token, MODULO);
-    return leerColumnas_(COLUMNAS_LISTA)
-      .filter((r) => limpiar_(r[COL_ID]))
-      .map(desdeOriginal_)
-      .sort((a, b) => (b.FECHA || '').localeCompare(a.FECHA || ''));
+    // Guardado mientras la hoja no cambie (CacheHojas): el permiso se revisa antes, siempre
+    return CacheHojas.recordar('insp_lista', [[ssId(), 'INSPECCION VEHICULAR']], () => {
+      return leerColumnas_(COLUMNAS_LISTA)
+        .filter((r) => limpiar_(r[COL_ID]))
+        .map(desdeOriginal_)
+        .sort((a, b) => (b.FECHA || '').localeCompare(a.FECHA || ''));
+    });
   }
 
   /** Inspecciones de un solo vehículo (ficha de Vehículos). */

@@ -244,9 +244,14 @@
           let opciones;
           let valor;
           if (p) {
-            const delSuArea = p.area ? PERM_TEXTO[deArea(p.area, m.id)] + ' · por su área' : 'Sin acceso · sin área';
-            valor = regla(p.correo, m.id) || '';
-            opciones = [['', delSuArea], ['NINGUNO', 'Sin acceso'], ['LECTURA', 'Ver'], ['EDICION', 'Editar']];
+            // Tres opciones, y la que ya le da su área lo dice ("Editar · por su área"): elegirla
+            // es heredar (valor ''), cualquier otra es una excepción solo para esta persona
+            const heredado = deArea(p.area, m.id);
+            const propio = regla(p.correo, m.id);
+            valor = propio === undefined || propio === heredado ? '' : propio;
+            opciones = ['NINGUNO', 'LECTURA', 'EDICION'].map((nivel) => (nivel === heredado
+              ? ['', PERM_TEXTO[nivel] + (p.area ? ' · por su área' : ' · sin área')]
+              : [nivel, PERM_TEXTO[nivel]]));
           } else {
             valor = deArea(id, m.id);
             opciones = [['NINGUNO', 'Sin acceso'], ['LECTURA', 'Ver'], ['EDICION', 'Editar']];

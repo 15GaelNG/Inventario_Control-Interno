@@ -3,11 +3,36 @@
    * api.js — envuelve google.script.run en promesas para poder usar async/await
    * en el resto del código del cliente.
    */
+  /**
+   * Cuánto tarda cada llamada al servidor (las últimas 300). En la consola del navegador,
+   * verTiempos() las resume por función: para saber qué es lo lento antes de optimizar.
+   */
+  const tiemposServidor = [];
+  function verTiempos() {
+    const porFuncion = {};
+    tiemposServidor.forEach((t) => {
+      const f = porFuncion[t.fn] || (porFuncion[t.fn] = { llamadas: 0, total: 0, max: 0, errores: 0 });
+      f.llamadas++; f.total += t.ms; f.max = Math.max(f.max, t.ms); if (!t.ok) f.errores++;
+    });
+    const tabla = Object.keys(porFuncion).map((fn) => ({
+      funcion: fn, llamadas: porFuncion[fn].llamadas, promedio_ms: Math.round(porFuncion[fn].total / porFuncion[fn].llamadas),
+      max_ms: porFuncion[fn].max, errores: porFuncion[fn].errores,
+    })).sort((a, b) => b.promedio_ms * b.llamadas - a.promedio_ms * a.llamadas);
+    console.table(tabla);
+    return tabla;
+  }
+  function anotarTiempo_(fn, inicio, ok) {
+    tiemposServidor.push({ fn: fn, ms: Math.round(performance.now() - inicio), ok: ok });
+    if (tiemposServidor.length > 300) tiemposServidor.shift();
+  }
+
   function callServer(fnName, ...args) {
+    const inicio = performance.now();
     return new Promise((resolve, reject) => {
       google.script.run
-        .withSuccessHandler(resolve)
+        .withSuccessHandler((r) => { anotarTiempo_(fnName, inicio, true); resolve(r); })
         .withFailureHandler((err) => {
+          anotarTiempo_(fnName, inicio, false);
           const mensaje = err.message || String(err);
           // Sesión expirada (Auth.validarSesion, server-side): sin importar
           // desde qué pantalla/módulo venga la llamada, se maneja aquí una
@@ -48,43 +73,110 @@
   }
 
   /**
-   * Igual que callServerCacheado, pero para las listas PRINCIPALES de cada
-   * tabla (apiListarXResumen) — a diferencia de los catálogos, estas sí
-   * cambian con el uso normal, así que el caché vence solo a los
-   * TTL_LISTAS_MS. Sirve para que entrar-salir-entrar al mismo módulo
-   * (o pasar de un módulo a otro y regresar) se sienta instantáneo en vez de
-   * volver a pagar el costo de abrir el spreadsheet compartido cada vez.
-   * Además, cada crear/editar/eliminar invalida a mano (invalidarCacheLista)
-   * la lista de SU PROPIO módulo justo después de guardar — así el cargar()
-   * que corre a continuación siempre trae el dato recién guardado, sin
-   * esperar el TTL. Por eso subir este número no arriesga ver datos viejos
-   * tras tu propia edición: solo alarga cuánto dura "instantáneo" el volver
-   * a entrar sin haber editado nada. 2 min (antes 15s) — bajado a pedido
-   * (2-oct): la espera al entrar/salir de un módulo se sentía larga en casi
-   * todos (Líneas no usa este caché, tiene el suyo propio, así que no cambia).
+   * Las listas PRINCIPALES de cada tabla (apiListarXResumen), con la idea de
+   * "pinta con lo que ya tienes y actualiza por detrás" (stale-while-revalidate):
+   *
+   *   - Si ya hay una copia (en memoria, o en localStorage de una visita anterior,
+   *     aunque se haya recargado la página), se devuelve AL INSTANTE.
+   *   - Al mismo tiempo se pide lo fresco (salvo que se haya pedido hace menos de
+   *     REPEDIR_MS). Si llega distinto, se guarda y se avisa con el evento
+   *     "lista-actualizada": el módulo que la esté mostrando se vuelve a pintar
+   *     (escucharLista). Si llega igual, no pasa nada.
+   *   - Sin copia, se espera al servidor, como antes.
+   *
+   * Después de crear/editar/eliminar, invalidarCacheLista borra la copia: el
+   * cargar() que sigue espera el dato recién guardado, nunca el viejo.
+   *
+   * La copia en localStorage es por persona (correo) y se borra al cerrar sesión
+   * (limpiarListasGuardadas). La llave no incluye el token: cambia en cada sesión.
    */
-  const TTL_LISTAS_MS = 120000;
-  const cacheListas = {};
-  function callServerListaCacheada(fnName, ...args) {
-    const clave = fnName + JSON.stringify(args);
-    const entrada = cacheListas[clave];
-    if (entrada && (Date.now() - entrada.ts) < TTL_LISTAS_MS) {
-      return entrada.promesa;
-    }
-    const promesa = callServer(fnName, ...args).catch((err) => {
-      delete cacheListas[clave]; // si falla, la próxima vez se reintenta en vez de quedar cacheado el error
+  const REPEDIR_MS = 15000;
+  const MAX_GUARDAR = 1500000;   // caracteres; lo más grande se queda solo en memoria
+  const PREFIJO_LISTAS = 'lista:';
+  const cacheListas = {};        // llave → { valor, texto, ts, promesa }
+
+  const correoSesion_ = () => {
+    try { return (state && state.sesion && state.sesion.correo) || ''; } catch (e) { return ''; }
+  };
+  const llaveLista_ = (fnName, args) => fnName + JSON.stringify(args.slice(1));   // args[0] es el token
+  const llaveGuardada_ = (llave) => PREFIJO_LISTAS + correoSesion_() + ':' + llave;
+
+  function entradaLista_(llave) {
+    if (cacheListas[llave]) return cacheListas[llave];
+    const entrada = { valor: undefined, texto: null, ts: 0, promesa: null };
+    try {
+      const texto = localStorage.getItem(llaveGuardada_(llave));
+      if (texto !== null) { entrada.valor = JSON.parse(texto); entrada.texto = texto; }
+    } catch (e) { /* sin almacenamiento (privado, lleno, bloqueado): solo memoria */ }
+    return (cacheListas[llave] = entrada);
+  }
+
+  function pedirLista_(fnName, args, llave) {
+    const entrada = entradaLista_(llave);
+    if (entrada.promesa) return entrada.promesa;
+    const teniaCopia = entrada.texto !== null;
+    entrada.promesa = callServer(fnName, ...args).then((valor) => {
+      const texto = JSON.stringify(valor === undefined ? null : valor);
+      const cambio = texto !== entrada.texto;
+      Object.assign(entrada, { valor: valor, texto: texto, ts: Date.now(), promesa: null });
+      try {
+        if (texto.length <= MAX_GUARDAR) localStorage.setItem(llaveGuardada_(llave), texto);
+        else localStorage.removeItem(llaveGuardada_(llave));
+      } catch (e) { /* no cupo: se queda en memoria */ }
+      if (cambio && teniaCopia) {
+        window.dispatchEvent(new CustomEvent('lista-actualizada', { detail: { fn: fnName } }));
+      }
+      return valor;
+    }, (err) => {
+      entrada.promesa = null;   // si falla, la próxima vez se reintenta
       throw err;
     });
-    cacheListas[clave] = { ts: Date.now(), promesa };
-    return promesa;
+    return entrada.promesa;
+  }
+
+  function callServerListaCacheada(fnName, ...args) {
+    const llave = llaveLista_(fnName, args);
+    const entrada = entradaLista_(llave);
+    if (entrada.texto === null) return pedirLista_(fnName, args, llave);
+    if (!entrada.promesa && Date.now() - entrada.ts > REPEDIR_MS) {
+      pedirLista_(fnName, args, llave).catch(() => { /* por detrás: si falla, se queda la copia */ });
+    }
+    return Promise.resolve(entrada.valor);
+  }
+
+  /**
+   * Vuelve a llamar a `recargar` cuando la lista `fnName` llegue distinta de lo que se
+   * pintó. Deja de escuchar sola en cuanto `elemento` ya no está en la página (se
+   * navegó a otro módulo).
+   */
+  function escucharLista(fnName, recargar, elemento) {
+    const alActualizar = (ev) => {
+      if (!elemento || !document.body.contains(elemento)) { window.removeEventListener('lista-actualizada', alActualizar); return; }
+      if (ev.detail && ev.detail.fn === fnName) recargar();
+    };
+    window.addEventListener('lista-actualizada', alActualizar);
+  }
+
+  /** Pide por detrás, sin pintar nada, para que el módulo abra al instante (precarga al entrar) */
+  function precargarLista(fnName, ...args) {
+    return pedirLista_(fnName, args, llaveLista_(fnName, args)).catch(() => null);
   }
 
   /** Borra una entrada de callServerListaCacheada — se llama justo después de
    * crear/editar/eliminar un registro EN ESE MISMO módulo, para que el
-   * siguiente cargar() (que corre de inmediato) traiga el dato fresco en vez
-   * de esperar a que venzan los 15s. */
+   * siguiente cargar() (que corre de inmediato) espere el dato fresco. */
   function invalidarCacheLista(fnName, ...args) {
-    delete cacheListas[fnName + JSON.stringify(args)];
+    const llave = llaveLista_(fnName, args);
+    delete cacheListas[llave];
+    try { localStorage.removeItem(llaveGuardada_(llave)); } catch (e) { /* no-op */ }
+  }
+
+  /** Al cerrar sesión: que en una computadora compartida no quede nada guardado */
+  function limpiarListasGuardadas() {
+    Object.keys(cacheListas).forEach((k) => { delete cacheListas[k]; });
+    try {
+      Object.keys(localStorage).filter((k) => k.indexOf(PREFIJO_LISTAS) === 0).forEach((k) => localStorage.removeItem(k));
+    } catch (e) { /* no-op */ }
   }
 
   /** Igual, pero para callServerCacheado (catálogos de sesión completa) —

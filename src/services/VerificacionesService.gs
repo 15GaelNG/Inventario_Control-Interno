@@ -69,10 +69,13 @@ const VerificacionesService = (function () {
 
   function listar(token) {
     Permisos.puedeLeer(token, 'verificaciones');
-    return SheetUtils.getAll(ssId(), hoja_().getName())
-      .filter((r) => r['ID'])
-      .map(desdeOriginal_)
-      .sort((a, b) => (b.FECHA_REGISTRO || '').localeCompare(a.FECHA_REGISTRO || ''));
+    // Guardado mientras la hoja no cambie (CacheHojas): el permiso se revisa antes, siempre
+    return CacheHojas.recordar('verif_lista', [[ssId(), 'VERIFICACIONES']], () => {
+      return SheetUtils.getAll(ssId(), hoja_().getName())
+        .filter((r) => r['ID'])
+        .map(desdeOriginal_)
+        .sort((a, b) => (b.FECHA_REGISTRO || '').localeCompare(a.FECHA_REGISTRO || ''));
+    });
   }
 
   /** Verificaciones de un solo vehículo (ficha de Vehículos). */

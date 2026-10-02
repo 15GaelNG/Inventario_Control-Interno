@@ -215,6 +215,7 @@ const CapitalHumano = (function () {
       const desde = hoja.getLastRow() + 1;
       if (hoja.getMaxRows() < desde + nuevos.length - 1) hoja.insertRowsAfter(hoja.getMaxRows(), desde + nuevos.length - 1 - hoja.getMaxRows());
       hoja.getRange(desde, 1, nuevos.length, ENCABEZADOS.length).setValues(nuevos);
+      CacheHojas.tocarHoja(hoja);
       lineas.push('', '  ' + nuevos.length + ' empleos escritos en ' + HOJA_PERSONAS);
     } else if (!cfg.escribir) {
       lineas.push('', 'Si cuadra, corre capitalHumano2Escribir.');
@@ -396,6 +397,7 @@ const CapitalHumano = (function () {
           hoja.getRange(1, col).setValue(COLUMNA);
         }
         hoja.getRange(2, col, nuevos.length, 1).setValues(nuevos);
+        CacheHojas.tocarHoja(hoja);
         r.corregido = true;
         Relaciones.anotar(l.libro(), entradas.filter((e) => e.tipo === 'DIFERENCIA' && (!soloFilas || soloFilas.indexOf(e.fila) !== -1)), cfg.quien);
       }

@@ -190,11 +190,14 @@ const HologramasService = (function () {
 
   function listar(token) {
     Permisos.puedeLeer(token, 'hologramas');
-    const catalogo = catalogoPorSerie_();
-    return SheetUtils.getAll(ssId(), hoja_().getName())
-      .filter((r) => r['ID'])
-      .map((r) => conCatalogo_(desdeOriginal_(r), catalogo[enMayusculas_(r['SERIE VEHICULO'])]))
-      .sort((a, b) => (b.FECHA_REGISTRO || '').localeCompare(a.FECHA_REGISTRO || ''));
+    // Guardado mientras la hoja no cambie (CacheHojas): el permiso se revisa antes, siempre
+    return CacheHojas.recordar('holo_lista', [[ssId(), 'HOLOGRAMAS'], [ssId(), 'VEHICULOS']], () => {
+      const catalogo = catalogoPorSerie_();
+      return SheetUtils.getAll(ssId(), hoja_().getName())
+        .filter((r) => r['ID'])
+        .map((r) => conCatalogo_(desdeOriginal_(r), catalogo[enMayusculas_(r['SERIE VEHICULO'])]))
+        .sort((a, b) => (b.FECHA_REGISTRO || '').localeCompare(a.FECHA_REGISTRO || ''));
+    });
   }
 
   /** Hologramas de un solo vehículo (ficha de Vehículos). */

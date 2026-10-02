@@ -82,6 +82,8 @@ function libro(cambios) {
 function cargar(hojas) {
   const candado = { tomado: 0, soltado: 0 };
   const ctx = vm.createContext({
+    // Caché del servidor (src/utils/CacheHojas.gs): aquí no guarda nada
+    CacheHojas: { tocar() {}, tocarHoja() {}, recordar: (clave, hojas, armar) => armar() },
     console,
     Logger: { log: () => {} },
     Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'SS', TELEFONIA: () => 'SS_TEL' } },

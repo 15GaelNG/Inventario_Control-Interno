@@ -66,45 +66,29 @@ const LineasDatos = (function () {
     return 'ln_' + clave + '_' + id().slice(0, 10);
   }
 
+  // Guardar/leer/borrar viven en CacheHojas (src/utils/CacheHojas.gs); aquí solo se les pone
+  // el prefijo de Líneas. recordar() es la forma preferida: se invalida sola al escribir en las
+  // pestañas de las que depende (actualizarFila/agregarFilas tocan su pestaña).
   function cacheGuardar(clave, obj, segundos) {
-    try {
-      const k = claveCache_(clave);
-      const texto = Utilities.base64Encode(Utilities.gzip(Utilities.newBlob(JSON.stringify(obj), 'application/json')).getBytes());
-      const trozos = {};
-      const n = Math.ceil(texto.length / 90000);
-      for (let i = 0; i < n; i++) trozos[k + '_' + i] = texto.slice(i * 90000, (i + 1) * 90000);
-      trozos[k + '_n'] = String(n);
-      CacheService.getScriptCache().putAll(trozos, segundos || 1800);
-      return true;
-    } catch (e) {
-      return false; // Si no cabe, simplemente se vuelve a leer de la hoja.
-    }
+    return CacheHojas.guardar(claveCache_(clave), obj, segundos || 1800);
   }
 
   function cacheLeer(clave) {
-    const k = claveCache_(clave);
-    const cache = CacheService.getScriptCache();
-    const n = Number(cache.get(k + '_n'));
-    if (!n) return null;
-    const claves = [];
-    for (let i = 0; i < n; i++) claves.push(k + '_' + i);
-    const valores = cache.getAll(claves);
-    if (Object.keys(valores).length !== n) return null;
-    try {
-      const bytes = Utilities.base64Decode(claves.map((c) => valores[c]).join(''));
-      return JSON.parse(Utilities.ungzip(Utilities.newBlob(bytes, 'application/x-gzip')).getDataAsString());
-    } catch (e) {
-      return null;
-    }
+    return CacheHojas.leer(claveCache_(clave));
   }
 
   function cacheBorrar(clave) {
-    const k = claveCache_(clave);
-    const cache = CacheService.getScriptCache();
-    const n = Number(cache.get(k + '_n')) || 0;
-    const claves = [k + '_n'];
-    for (let i = 0; i < n; i++) claves.push(k + '_' + i);
-    cache.removeAll(claves);
+    CacheHojas.borrar(claveCache_(clave));
+  }
+
+  /** Lo que devuelve armar(), guardado mientras no cambie ninguna de las pestañas `nombres` */
+  function recordar(clave, nombres, armar, segundos) {
+    return CacheHojas.recordar(claveCache_(clave), nombres.map((n) => [id(), n]), armar, segundos);
+  }
+
+  /** Para cuando se edita la hoja a mano (recargarDatos): todo lo de esas pestañas se vuelve a leer */
+  function tocar(nombres) {
+    nombres.forEach((n) => CacheHojas.tocar(id(), n));
   }
 
   // ---------------- Pestañas y encabezados ----------------
@@ -491,6 +475,7 @@ const LineasDatos = (function () {
         SpreadsheetApp.flush(); // que no queden escrituras de SpreadsheetApp pendientes antes de escribir por la API
         if (crudos.length) sheetsApi('/values:batchUpdate', { valueInputOption: 'RAW', data: crudos });
         if (fechas.length) sheetsApi('/values:batchUpdate', { valueInputOption: 'USER_ENTERED', data: fechas });
+        CacheHojas.tocar(id(), nombre);
         return;
       } catch (e) {
         // Solo se reintenta sin API si no se escribió nada (la API no está habilitada).
@@ -502,6 +487,7 @@ const LineasDatos = (function () {
       const i = colIndice(t, c);
       if (i >= 0) t.hoja.getRange(fila, i + 1).setValue(valorCelda_(cambios[c], nombre));
     });
+    CacheHojas.tocar(id(), nombre);
   }
 
   /**
@@ -526,6 +512,7 @@ const LineasDatos = (function () {
     const faltanFilas = inicio + filas.length - 1 - t.hoja.getMaxRows();
     if (faltanFilas > 0) t.hoja.insertRowsAfter(t.hoja.getMaxRows(), faltanFilas); // heredan el formato de la fila anterior
     t.hoja.getRange(inicio, 1, filas.length, t.encabezados.length).setValues(filas);
+    CacheHojas.tocar(id(), nombre);
     return filas.map((_, i) => inicio + i);
   }
 
@@ -590,7 +577,7 @@ const LineasDatos = (function () {
   return {
     ZONA_APP,
     id, libro, zona, normCol, esColumnaFecha, letraColumna, sheetsApi,
-    cacheGuardar, cacheLeer, cacheBorrar,
+    cacheGuardar, cacheLeer, cacheBorrar, recordar, tocar,
     tabla, tablaFresca, existeTabla, colIndice, deHoraHoja, aHoraHoja,
     leerTabla, ultimaFila, buscarFilas, buscarFilasVarios, buscarFilasPorId, idsDeFila, buscarEnTabla, leerFilas, leerRango,
     actualizarFila, agregarFilas, conCandado, nuevoId, nuevoIdCorto, asegurarPestana, COLS_ID_ANTERIOR, COL_ID_APPSHEET,

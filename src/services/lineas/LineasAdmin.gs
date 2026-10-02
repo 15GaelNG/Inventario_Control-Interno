@@ -36,6 +36,7 @@ function diferenciasHojaLineas_(destinoId) {
  * módulos. Se niega a correr en el proyecto compartido.
  */
 function configurarLineasDev() {
+  soloEditor_();
   if (typeof SCRIPT_ID_COMPARTIDO !== 'undefined' && ScriptApp.getScriptId() === SCRIPT_ID_COMPARTIDO) {
     throw new Error('Esta función es para proyectos DEV personales, no para el proyecto compartido.');
   }
@@ -74,6 +75,7 @@ function configurarLineasDev() {
 
 /** Vacía las cachés de Líneas (índices, catálogos y carpetas). */
 function recargarDatosLineas() {
+  soloEditor_();
   LineasRepo.borrarCaches();
   Logger.log('Cachés de Líneas vaciadas.');
 }
@@ -147,6 +149,7 @@ function estadoHojasRetiradas_() {
 }
 
 function retirarHojasLineas_revisar() {
+  soloEditor_();
   const e = estadoHojasRetiradas_();
   console.log(JSON.stringify(e, null, 2));
   return e;
@@ -178,6 +181,7 @@ function respaldarHojasRetiradas_(libro) {
 
 /** Respalda y migra a APP_MOVIMIENTOS lo que falte. No borra nada. Se puede correr varias veces. */
 function retirarHojasLineas_migrar() {
+  soloEditor_();
   const libro = exigirBdPruebas_();
   const respaldo = respaldarHojasRetiradas_(libro);
   const T = LineasRepo.TAB;
@@ -215,6 +219,7 @@ function retirarHojasLineas_migrar() {
  * CAMBIOS LINEAS TELEFONICAS nunca se borra (no está en la lista).
  */
 function retirarHojasLineas_borrar() {
+  soloEditor_();
   const libro = exigirBdPruebas_();
   const estado = estadoHojasRetiradas_();
   if (!estado.respaldo) throw new Error('Primero corre retirarHojasLineas_migrar (hace el respaldo).');
@@ -249,7 +254,9 @@ function retirarHojasLineas_borrar() {
  *     .apiCompartirArchivosLineasExistentes(state.token)
  */
 function compartirArchivosLineasExistentes(token) {
+  // Con token (desde la app): solo ADMIN. Sin token: solo desde el editor (soloEditor_, Code.gs)
   if (token) Permisos.puedeEditar(token, 'usuarios');
+  else soloEditor_();
   const raizId = LineasArchivos.carpetaAppSheetId();
   if (!raizId) {
     const msg = 'Falta configurar LINEAS_DRIVE_APPSHEET (corre configurarLineasDev()).';

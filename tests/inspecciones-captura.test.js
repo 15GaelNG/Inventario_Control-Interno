@@ -76,10 +76,12 @@ window.callServer = (fn, token, ...args) => {
   }
   if (fn === 'apiRegistrarInspeccion') { registrado = args[0]; imagenesMandadas = args[1]; }
   const respuestas = {
-    apiListarVehiculosBasico: [{ FOLIO: 'AUT0100', PLACA: 'ABC-123', MARCA: 'MITSUBISHI', LINEA_VEHICULO: 'L200' }],
+    apiListarVehiculosBasico: [{ FOLIO: 'CTA0100', PLACA: 'ABC-123', MARCA: 'MITSUBISHI', LINEA_VEHICULO: 'L200' }],
     apiTiposInspeccion: [{ tipo: 'AUTOS', listo: true }, { tipo: 'L200', listo: true }, { tipo: 'VIEJO', listo: false }],
-    apiBuscarVehiculoPorFolio: args[0] === 'AUT0100'
-      ? { FOLIO: 'AUT0100', PLACA: 'ABC-123', MARCA: 'MITSUBISHI', 'LINEA VEHICULO': 'L200', MODELO: 2022 }
+    // El buscador de Folio/Nucco (jorge, 2-oct) carga la lista de vehículos activos
+    apiListarVehiculosBasico: [{ ID: 'VEH-1', FOLIO: 'CTA0100', NUCO: '0100', PLACA: 'ABC-123', MARCA: 'MITSUBISHI', LINEA_VEHICULO: 'L200', MODELO: 2022 }],
+    apiBuscarVehiculoPorFolio: args[0] === 'CTA0100'
+      ? { FOLIO: 'CTA0100', PLACA: 'ABC-123', MARCA: 'MITSUBISHI', 'LINEA VEHICULO': 'L200', MODELO: 2022 }
       : null,
     apiEstructuraInspeccion: ESTRUCTURA,
     apiRegistrarInspeccion: { puntaje: 90, pdf: '' },
@@ -131,7 +133,11 @@ const PASOS = 'Vehículo|Exterior|Neumáticos|Interior|Mecánica|Daños|Cierre|F
 (async () => {
   let tabMostrada = null;
   let recargas = 0;
-  window.prepararCaptura({ mostrar: (t) => { tabMostrada = t; } }, async () => { recargas++; });
+  // Firma actual: (contenedor, { tabs, recargar }) — la usan Inspección Vehicular y la ficha de Vehículos
+  window.prepararCaptura(doc.getElementById('ins-form'), {
+    tabs: { mostrar: (t) => { tabMostrada = t; } },
+    recargar: async () => { recargas++; },
+  });
   await esperar(5);
 
   console.log('1. Al abrir: solo el paso de la unidad');
@@ -153,7 +159,7 @@ const PASOS = 'Vehículo|Exterior|Neumáticos|Interior|Mecánica|Daños|Cierre|F
     'un folio que no existe tampoco pasa');
 
   console.log('3. Al elegir el vehículo');
-  $('#ins-folio').value = 'AUT0100';
+  $('#ins-folio').value = 'CTA0100';
   evento($('#ins-folio'), 'blur');
   await esperar(10);
   ok(/ABC-123/.test($('#ins-ficha').textContent), 'la ficha del panel muestra la unidad');
@@ -263,7 +269,7 @@ const PASOS = 'Vehículo|Exterior|Neumáticos|Interior|Mecánica|Daños|Cierre|F
 
   $('#ins-guardar').click();
   await esperar(30);
-  ok(registrado && registrado.FOLIO === 'AUT0100' && registrado.TIPO === 'L200', 'manda folio y tipo');
+  ok(registrado && registrado.FOLIO === 'CTA0100' && registrado.TIPO === 'L200', 'manda folio y tipo');
   ok(registrado && registrado.checklist.POLIZA === 'MALO' && registrado.checklist.SULFATADA === 'NO', 'manda las respuestas');
   ok(registrado && registrado.VOLTAJE === '12.6' && registrado.CONDUCTOR === 'JUAN PEREZ', 'manda los datos de los otros pasos');
   ok(imagenesMandadas && imagenesMandadas['INS FRONTAL'] && imagenesMandadas['INS FRONTAL'].base64 === 'TRAZO',
@@ -278,7 +284,7 @@ const PASOS = 'Vehículo|Exterior|Neumáticos|Interior|Mecánica|Daños|Cierre|F
     'queda lista para la siguiente unidad');
 
   console.log('11. El dibujo en blanco se descarga una sola vez');
-  $('#ins-folio').value = 'AUT0100';
+  $('#ins-folio').value = 'CTA0100';
   evento($('#ins-folio'), 'blur');
   await esperar(20);
   ok(llamadas.filter((l) => l === 'apiPrevisualizarImagenInspeccion').length === pedidasAntes + 1,

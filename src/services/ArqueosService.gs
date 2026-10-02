@@ -319,27 +319,30 @@ const ArqueosService = (function () {
   /** Catálogo ligero para la tabla (10 columnas, no las 79 completas). */
   function listarResumen(token) {
     Permisos.puedeLeer(token, 'arqueos');
-    const sheet = hoja_();
-    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
+    // Guardado mientras la hoja no cambie (CacheHojas): el permiso se revisa antes, siempre
+    return CacheHojas.recordar('arq_resumen', [[ssId(), NOMBRE_HOJA]], () => {
+      const sheet = hoja_();
+      const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
 
-    const resultado = [];
-    for (let i = 0; i < filas; i++) {
-      if (!datos['ID ARQUEO'][i]) continue;
-      resultado.push({
-        ID: datos['ID ARQUEO'][i],
-        ID_CCH: datos['ID CCH'][i] || '',
-        RESPONSABLE: datos['RESPONSABLE'][i] || '',
-        TIPO_ARQUEO: datos['TIPO DE ARQUEO'][i] || '',
-        FECHA_INICIO: fechaISO_(datos['FECHA INICIO'][i]),
-        TOTAL_GENERAL: datos['TOTAL GENERAL'][i] || '',
-        DIFERENCIA: datos['DIFERENCIA'][i] || '',
-        CALIFICACION: datos['CALIFICACION_AUDITORIA_FINAL'][i] || '',
-        ESTADO_PDF: datos['ESTADO PDF'][i] || '',
-        FORMATO_ARQUEO: datos['FORMATO ARQUEO'][i] || '',
-        EVIDENCIAS: datos['EVIDENCIAS'][i] || '',
-      });
-    }
-    return resultado.sort((a, b) => new Date(b.FECHA_INICIO) - new Date(a.FECHA_INICIO));
+      const resultado = [];
+      for (let i = 0; i < filas; i++) {
+        if (!datos['ID ARQUEO'][i]) continue;
+        resultado.push({
+          ID: datos['ID ARQUEO'][i],
+          ID_CCH: datos['ID CCH'][i] || '',
+          RESPONSABLE: datos['RESPONSABLE'][i] || '',
+          TIPO_ARQUEO: datos['TIPO DE ARQUEO'][i] || '',
+          FECHA_INICIO: fechaISO_(datos['FECHA INICIO'][i]),
+          TOTAL_GENERAL: datos['TOTAL GENERAL'][i] || '',
+          DIFERENCIA: datos['DIFERENCIA'][i] || '',
+          CALIFICACION: datos['CALIFICACION_AUDITORIA_FINAL'][i] || '',
+          ESTADO_PDF: datos['ESTADO PDF'][i] || '',
+          FORMATO_ARQUEO: datos['FORMATO ARQUEO'][i] || '',
+          EVIDENCIAS: datos['EVIDENCIAS'][i] || '',
+        });
+      }
+      return resultado.sort((a, b) => new Date(b.FECHA_INICIO) - new Date(a.FECHA_INICIO));
+    });
   }
 
   /** Todas las columnas de TODOS los arqueos (para "Vista": mostrar/exportar cualquier columna). */

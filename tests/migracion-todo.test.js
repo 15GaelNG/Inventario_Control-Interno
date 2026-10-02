@@ -57,6 +57,7 @@ function cargar() {
     static now() { return reloj; }
   }
   const ctx = vm.createContext({
+    soloEditor_: () => {},   // el candado de Code.gs: aquí siempre es "el editor"
     console,
     Date: RelojFalso,
     JSON,
@@ -244,7 +245,7 @@ console.log('\n13. No se olvida una familia nueva');
   const enEtapas = api.TODO_ETAPAS.map((e) => e.nombre);
   const faltan = ctx.E.familias().filter((f) => f !== 'otros' && enEtapas.indexOf(f) === -1);
   ok(faltan.length === 0, 'cada familia del catálogo (salvo "otros") tiene su etapa' + (faltan.length ? ': faltan ' + faltan : ''));
-  ok(typeof vm.runInContext('typeof ' + api.TODO_CONTINUAR, vm.createContext({})) === 'string' &&
+  ok(typeof vm.runInContext('typeof ' + api.TODO_CONTINUAR, vm.createContext({ soloEditor_: () => {} })) === 'string' &&
     lee('MigracionTodo.gs').indexOf('function ' + api.TODO_CONTINUAR + '()') !== -1,
   'el activador llama a una función pública que existe');
 }

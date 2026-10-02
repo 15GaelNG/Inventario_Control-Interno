@@ -1559,7 +1559,7 @@ test('Correcciones de Líneas: evidencia en Drive con enlace directo a la línea
   const cli = read('src/html/js/lineas-correcciones.html');
   assert.match(cli, /C\.llamar\('apiLineasCorreccionesSubirEvidencia', f\.name, f\.type \|\| '', await leerBase64\(f\)\)/);
   assert.match(cli, /for \(const f of manifiesto\) await una\(f\);/); // evidencias.json al final
-  assert.match(read('src/services/lineas/LineasCorrecciones.gs'), /function apiLineasCorreccionesSubirEvidencia\(token, nombre, mime, base64\) \{\n  const sesion = Auth\.requiereRol\(token, \[Config\.ROLES\.ADMIN\]\);/);
+  assert.match(read('src/services/lineas/LineasCorrecciones.gs'), /function apiLineasCorreccionesSubirEvidencia\(token, nombre, mime, base64\) \{\r?\n  const sesion = Auth\.requiereRol\(token, \[Config\.ROLES\.ADMIN\]\);/);
 });
 
 test('Correcciones de Líneas (módulo temporal, 30-sep): cargas que conservan, reabren y verifican', () => {

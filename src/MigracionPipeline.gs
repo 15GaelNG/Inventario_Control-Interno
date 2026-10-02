@@ -33,11 +33,13 @@
 
 /** PASO 0 — Copia de respaldo del spreadsheet completo. Lo primero, siempre. */
 function pipeline0Respaldar() {
+  soloEditor_();
   return migracionRespaldar();
 }
 
 /** ¿Dónde estoy? Solo lee. Dice qué pasos están hechos y cuál sigue. */
 function pipelineEstado() {
+  soloEditor_();
   return migracionEstado();
 }
 
@@ -46,16 +48,19 @@ function pipelineEstado() {
  * una pestaña: es la que avisa si un módulo está a punto de escribir en la equivocada.
  */
 function pipelineRevisarFirmas() {
+  soloEditor_();
   return revisarFirmasDeHojas();
 }
 
 /** Recortar filas vacías, ensayo — Solo dice cuántas quitaría. */
 function pipelineLimpiarFilasVaciasEnsayo() {
+  soloEditor_();
   return limpiarFilasVacias();
 }
 
 /** Recortar filas vacías, de verdad — quita GRID vacío, ningún dato. */
 function pipelineLimpiarFilasVaciasEscribir() {
+  soloEditor_();
   return limpiarFilasVacias({ escribir: true });
 }
 
@@ -66,16 +71,19 @@ function pipelineLimpiarFilasVaciasEscribir() {
 
 /** PROD — Copia de respaldo del ControlVehicular real. Lo primero. */
 function pipelinePRODRespaldar() {
+  soloEditor_();
   return migracionRespaldar({ spreadsheetId: MIGRACION_SS_PRODUCCION });
 }
 
 /** Deshacer, ensayo — Solo dice qué haría. */
 function pipelineRevertirEnsayo() {
+  soloEditor_();
   return migracionRevertir();
 }
 
 /** Deshacer, de verdad — restaura columnas y borra las que agregamos. */
 function pipelineRevertirEscribir() {
+  soloEditor_();
   return migracionRevertir({ escribir: true });
 }
 
@@ -173,6 +181,7 @@ function pipeCorrer_(ssId, paso, escribir, fn) {
  * completo se puede ensayar ahí sin tocar el original.
  */
 function migracionRespaldar(opciones) {
+  soloEditor_();
   const cfg = opciones || {};
   const ssId = cfg.spreadsheetId || Config.SPREADSHEET_IDS.VEHICULOS();
   // Se copia con Spreadsheet.copy() y NO con DriveApp.makeCopy: el primero solo necesita
@@ -240,6 +249,7 @@ const PIPE_FIRMAS = [
 
 /** Cuántas pestañas coinciden con cada firma, y por cuánto va ganando la que gana. */
 function revisarFirmasDeHojas(opciones) {
+  soloEditor_();
   const cfg = opciones || {};
   const ssId = cfg.spreadsheetId || Config.SPREADSHEET_IDS.VEHICULOS();
   const ss = SpreadsheetApp.openById(ssId);
@@ -323,6 +333,7 @@ const PIPE_COLCHON_FILAS = 200;
  * seguro", solo nunca las menciona, y eso es inferencia por ausencia.
  */
 function limpiarFilasVacias(opciones) {
+  soloEditor_();
   // appsheetPuedeSeguirVivo: esto no cambia el esquema, así que no exige el apagado.
   // Sigue pidiendo autorización de producción y respaldo.
   const cfg = Object.assign(
@@ -420,6 +431,7 @@ function pipeMedir_(ss) {
 
 /** Solo lee. "¿Dónde estoy y qué sigue?" */
 function migracionEstado(opciones) {
+  soloEditor_();
   const cfg = opciones || {};
   const ssId = cfg.spreadsheetId || Config.SPREADSHEET_IDS.VEHICULOS();
   const ss = SpreadsheetApp.openById(ssId);
@@ -475,6 +487,7 @@ function migracionEstado(opciones) {
  *     viejo— pero significa que esto NO es una máquina del tiempo. Para eso está la copia.
  */
 function migracionRevertir(opciones) {
+  soloEditor_();
   const cfg = Object.assign({ escribir: false }, opciones || {});
   const ssId = cfg.spreadsheetId || Config.SPREADSHEET_IDS.VEHICULOS();
   // Deshacer restaura los IDs viejos. Si ya hay referencias apuntando a los nuevos, eso

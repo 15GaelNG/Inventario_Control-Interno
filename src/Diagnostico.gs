@@ -48,6 +48,7 @@ const DIAG_SIN_USO = [
 ];
 
 function diagnosticoEntorno() {
+  soloEditor_();
   const props = PropertiesService.getScriptProperties();
   const lineas = ['DÓNDE ESTÁ PARADO ESTE PROYECTO', ''];
   const alertas = [];
@@ -194,6 +195,7 @@ function diagnosticoEntorno() {
  * Sin argumento usa el correo de quien lo corre en el editor.
  */
 function diagnosticoPermisos(correo) {
+  soloEditor_();
   const quien = String(correo || Session.getActiveUser().getEmail() || '').trim();
   const lineas = ['PERMISOS DE ' + (quien || '(no pude saber tu correo: pásalo como argumento)'), ''];
   const ssId = Config.SPREADSHEET_IDS.USUARIOS();
@@ -228,6 +230,7 @@ function diagnosticoPermisos(correo) {
  * <script> con new Function. Si truena, dice cuál y enseña el renglón.
  */
 function diagnosticoHtml() {
+  soloEditor_();
   const archivos = ['html/js/api', 'html/js/app', 'html/js/app-arqueos', 'html/js/app-cajachica',
     'html/js/app-reasignaciones', 'html/js/app-panorama-vehiculos', 'html/js/app-verificaciones',
     'html/js/app-relaciones', 'html/js/modulos/sensores', 'html/js/modulos/hologramas',

@@ -138,6 +138,7 @@ function catalogoDeMigracionIds(nombre) {
 
 function cargar() {
   const ctx = vm.createContext({
+    soloEditor_: () => {},   // el candado de Code.gs: aquí siempre es "el editor"
     ENCABEZADOS_DEDUCIDOS: catalogoDeMigracionIds('ENCABEZADOS_DEDUCIDOS'),
     MIGRACION_NOMBRES: catalogoDeMigracionIds('MIGRACION_NOMBRES'),
     console,

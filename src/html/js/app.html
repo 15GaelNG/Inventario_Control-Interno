@@ -390,11 +390,38 @@
 
   function cerrarSesion() {
     if (state.token) apiLogoutSafe();
+    limpiarListasGuardadas();   // en una computadora compartida no se queda nada (api.html)
     state.token = null;
     state.sesion = null;
     sessionStorage.clear();
     render();
   }
+  /**
+   * Al entrar, por detrás y de dos en dos: las listas de los módulos que la persona puede
+   * ver. Así el primer módulo que abra ya pinta al instante (y la caché del servidor queda
+   * caliente para todos). Si algo falla, no pasa nada: el módulo la pide al abrir.
+   */
+  const LISTAS_POR_MODULO = {
+    vehiculos: ['apiListarVehiculosResumen'], incidencias: ['apiListarIncidencias'],
+    'cambios-vehiculos': ['apiListarCambiosVehiculos'], 'reasignaciones-vehiculares': ['apiListarReasignacionesVehiculares'],
+    verificaciones: ['apiListarVerificaciones'], 'inspeccion-vehicular': ['apiListarInspecciones'],
+    'instalacion-sensores': ['apiListarSensores'], hologramas: ['apiListarHologramas'],
+    uber: ['apiListarUberResumen'], tickets: ['apiListarTicketsResumen'],
+    'caja-chica': ['apiListarCajasChicasResumen', 'apiListarCambiosMontoCCH'], arqueos: ['apiListarArqueosResumen'],
+  };
+  function precargarListas() {
+    const pendientes = Object.keys(LISTAS_POR_MODULO)
+      .filter((m) => permisoDe(m))
+      .reduce((t, m) => t.concat(LISTAS_POR_MODULO[m]), [])
+      .filter((fn, i, todas) => todas.indexOf(fn) === i);
+    const siguiente = () => {
+      const fn = pendientes.shift();
+      if (fn && state.token) precargarLista(fn, state.token).then(siguiente);
+    };
+    // Primero lo que la persona abre (el inicio); luego, de dos en dos
+    setTimeout(() => { siguiente(); siguiente(); }, 1500);
+  }
+
   async function apiLogoutSafe() {
     try { await callServer('apiLogout', state.token); } catch (e) { /* no-op */ }
   }
@@ -440,6 +467,7 @@
     callServer('apiMisPermisos', state.token).then((info) => {
       state.permisos = (info && info.permisos) || {};
       renderNavGrupos();
+      precargarListas();
     }).catch((err) => toastError('No se pudieron cargar tus permisos: ' + ((err && err.message) || err)));
     Notificaciones.iniciar();
     navegarA('dashboard');
@@ -1660,14 +1688,14 @@
         vehiculos.forEach((v) => {
           vehiculosPorFolio[v.FOLIO] = v;
           const etiqueta = [v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ');
-          opcionesFolio.push(`<option value="${v.FOLIO}">${etiqueta}</option>`);
+          opcionesFolio.push(`<option value="${escaparHtml(v.FOLIO)}">${escaparHtml(etiqueta)}</option>`);
           if (v.NUCO) { vehiculosPorFolio[v.NUCO] = v; conNucco.push(v); }
         });
         document.getElementById('lista-folios-vehiculo').innerHTML = opcionesFolio.join('');
         // En orden (1, 2, 3…), no en el orden del catálogo (que va por folio, no por nucco).
         document.getElementById('lista-nucco-vehiculo').innerHTML = conNucco
           .sort((a, b) => Number(a.NUCO) - Number(b.NUCO))
-          .map((v) => `<option value="${v.NUCO}">${[v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ')}</option>`)
+          .map((v) => `<option value="${escaparHtml(v.NUCO)}">${escaparHtml([v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' '))}</option>`)
           .join('');
       })
       .catch((err) => {
@@ -1938,6 +1966,8 @@
       actualizarKpis(todasLasIncidencias);
       tabla.setDatos(todasLasIncidencias);
     }
+    // Pinta al instante con lo guardado; si del servidor llega algo distinto, se vuelve a pintar (api.html)
+    escucharLista('apiListarIncidencias', cargar, document.getElementById('view-container').firstElementChild);
 
     document.getElementById('form-incidencia').addEventListener('submit', async (ev) => {
       ev.preventDefault();
@@ -2791,15 +2821,15 @@
               <div class="historial-item">
                 <div class="historial-icon"><i data-lucide="pencil" class="ico"></i></div>
                 <div class="historial-main">
-                  <div class="historial-campo">${c.CAMPO || '—'}</div>
+                  <div class="historial-campo">${escaparHtml(c.CAMPO || '—')}</div>
                   <div class="historial-valores">
-                    <span class="chip-valor chip-antes">${c.ANTES || '(vacío)'}</span>
+                    <span class="chip-valor chip-antes">${escaparHtml(c.ANTES || '(vacío)')}</span>
                     <i data-lucide="arrow-right" class="ico historial-flecha"></i>
-                    <span class="chip-valor chip-despues">${c.DESPUES || '(vacío)'}</span>
+                    <span class="chip-valor chip-despues">${escaparHtml(c.DESPUES || '(vacío)')}</span>
                   </div>
                 </div>
                 <div class="historial-meta">
-                  <div>${c.ACTUALIZADO_POR || '—'}</div>
+                  <div>${escaparHtml(c.ACTUALIZADO_POR || '—')}</div>
                   <div>${formatearFecha(c.FECHA)}</div>
                 </div>
               </div>
@@ -2810,14 +2840,14 @@
                 <div class="historial-icon historial-icon-accent"><i data-lucide="arrow-left-right" class="ico"></i></div>
                 <div class="historial-main">
                   <div class="historial-valores">
-                    <span class="chip-valor chip-antes">${r.RESPONSABLE_SALIENTE || '—'}</span>
+                    <span class="chip-valor chip-antes">${escaparHtml(r.RESPONSABLE_SALIENTE || '—')}</span>
                     <i data-lucide="arrow-right" class="ico historial-flecha"></i>
-                    <span class="chip-valor chip-despues">${r.RESPONSABLE_ENTRANTE || '—'}</span>
+                    <span class="chip-valor chip-despues">${escaparHtml(r.RESPONSABLE_ENTRANTE || '—')}</span>
                   </div>
-                  <div class="historial-departamento">${r.DEPARTAMENTO_ENTRANTE || '—'}</div>
+                  <div class="historial-departamento">${escaparHtml(r.DEPARTAMENTO_ENTRANTE || '—')}</div>
                 </div>
                 <div class="historial-meta">
-                  <div>${r.QUIEN_REGISTRO || '—'}</div>
+                  <div>${escaparHtml(r.QUIEN_REGISTRO || '—')}</div>
                   <div>${formatearFecha(r.FECHA)}</div>
                 </div>
               </div>
@@ -3154,6 +3184,8 @@
       actualizarKpis(todosLosVehiculos);
       tabla.setDatos(todosLosVehiculos);
     }
+    // Pinta al instante con lo guardado; si del servidor llega algo distinto, se vuelve a pintar (api.html)
+    escucharLista('apiListarVehiculosResumen', cargar, document.getElementById('view-container').firstElementChild);
 
     async function abrirEditarVehiculo(vResumen) {
       if (!vResumen) return;
@@ -3473,6 +3505,8 @@
       actualizarKpis(todosLosUsuarios);
       tabla.setDatos(todosLosUsuarios);
     }
+    // Pinta al instante con lo guardado; si del servidor llega algo distinto, se vuelve a pintar (api.html)
+    escucharLista('apiListarUberResumen', cargar, document.getElementById('view-container').firstElementChild);
 
     async function abrirEditarUber(id) {
       const resumen = usuariosPorId[id];
@@ -3708,6 +3742,8 @@
       actualizarKpis(todosLosTickets);
       tabla.setDatos(todosLosTickets);
     }
+    // Pinta al instante con lo guardado; si del servidor llega algo distinto, se vuelve a pintar (api.html)
+    escucharLista('apiListarTicketsResumen', cargar, document.getElementById('view-container').firstElementChild);
 
     document.getElementById('form-ticket').addEventListener('submit', async (ev) => {
       ev.preventDefault();

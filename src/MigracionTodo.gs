@@ -66,6 +66,7 @@ const TODO_ETAPAS = [
 
 /** EL BOTÓN: replancha LAB desde producción y corre los 5 pipelines, solo. */
 function migracionTodoLab() {
+  soloEditor_();
   todoExigirLab_();
   const previo = todoLeer_();
   if (previo && previo.estado === 'corriendo') {
@@ -85,12 +86,14 @@ function migracionTodoLab() {
 
 /** Lo llaman los activadores. Correrlo a mano también es seguro: sigue donde iba. */
 function migracionTodoContinuar() {
+  soloEditor_();
   todoBorrarActivadores_();
   return todoAvanzar_();
 }
 
 /** En qué va la corrida. Solo lee. */
 function migracionTodoEstado() {
+  soloEditor_();
   const st = todoLeer_();
   const lineas = ['MIGRACIÓN COMPLETA EN LAB — estado', ''];
   if (!st) {
@@ -119,6 +122,7 @@ function migracionTodoEstado() {
 
 /** Detiene la corrida: borra los activadores. Lo que ya se escribió se queda. */
 function migracionTodoCancelar() {
+  soloEditor_();
   todoBorrarActivadores_();
   const st = todoLeer_();
   if (st && st.estado === 'corriendo') {

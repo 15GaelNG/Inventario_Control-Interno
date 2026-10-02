@@ -50,6 +50,8 @@ function cargar(hojas, anotados) {
     insertSheet: (n) => { hojas[n] = hojaFalsa([], []); hojas[n].datos.length = 0; return hojas[n]; },
   };
   const ctx = vm.createContext({
+    // Caché del servidor (src/utils/CacheHojas.gs): aquí no guarda nada
+    CacheHojas: { tocar() {}, tocarHoja() {}, recordar: (clave, hojas, armar) => armar() },
     console,
     Logger: { log: () => {} },
     SpreadsheetApp: { openById: () => ss },
