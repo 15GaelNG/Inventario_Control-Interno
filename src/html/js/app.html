@@ -1341,14 +1341,14 @@
       grupo: 'Identificación', clave: 'FOLIO', etiqueta: 'Folio', tipo: 'text',
       soloLectura: true, placeholder: 'Se genera solo, según la Clase',
     },
-    { grupo: 'Identificación', clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select', catalogo: true },
     {
-      // catalogo: true — sugerencias de Capital Humano (apiListarColaboradores). Al elegir
-      // uno (o escribir un nombre que coincide exacto) se autollenan Departamento y No. de
-      // empleado (ver wireResponsableVehiculo) -- si no está en la lista (alguien que CH
-      // todavía no cargó), se deja escribir libre y esos dos se capturan a mano.
+      // catalogo: true — sugerencias de Capital Humano (apiListarColaboradores). Va antes que
+      // Departamento/No. de empleado a propósito: al elegir uno (o escribir un nombre que
+      // coincide exacto) se autollenan esos dos (ver wireResponsableVehiculo) -- si no está en
+      // la lista (alguien que CH todavía no cargó), se deja escribir libre y se capturan a mano.
       grupo: 'Identificación', clave: 'RESPONSABLE VEHICULO', etiqueta: 'Responsable del vehículo', tipo: 'select', catalogo: true,
     },
+    { grupo: 'Identificación', clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select', catalogo: true },
     { grupo: 'Identificación', clave: 'NO EMPLEADO', etiqueta: 'No. de empleado', tipo: 'text' },
     { grupo: 'Identificación', clave: 'SERIE VEHICULO', etiqueta: 'Serie del vehículo', tipo: 'text' },
     {
