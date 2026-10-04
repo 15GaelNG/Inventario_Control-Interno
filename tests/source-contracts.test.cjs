@@ -1691,3 +1691,30 @@ test('los formularios por columnas usan un solo motor (CamposHoja)', () => {
   assert.ok(index.indexOf("componentes/campos-hoja'") > 0 && index.indexOf("componentes/campos-hoja'") < index.indexOf("include('html/js/app')"),
     'campos-hoja se incluye antes de app.html (slugCampo delega en él)');
 });
+
+test('los formularios que antes iban escritos a mano también se declaran en CamposHoja', () => {
+  // Uber, Tickets, Incidencias, Reasignaciones y Cambios de Monto tenían sus campos escritos
+  // a mano en la vista (dos veces cuando había Editar) y su propio recolectar/poblar.
+  // Ahora la vista solo deja el contenedor y el módulo declara la lista.
+  const casos = [
+    ['uber', 'src/html/js/app.html', 'CAMPOS_UBER', ['form-uber', 'form-editar-uber']],
+    ['tickets', 'src/html/js/app.html', 'CAMPOS_TICKET', ['form-ticket', 'form-editar-ticket']],
+    ['incidencias', 'src/html/js/app.html', 'CAMPOS_INCIDENCIA', ['form-incidencia', 'form-editar-incidencia', 'form-cerrar-incidencia']],
+    ['reasignaciones-vehiculares', 'src/html/js/app-reasignaciones.html', 'CAMPOS_REASIGNACION', ['form-reasignacion-vehicular']],
+    ['cambios-monto-cch', 'src/html/js/app-cajachica.html', 'CAMPOS_CAMBIO_MONTO', ['form-cambio-monto']],
+  ];
+  casos.forEach(([vista, modulo, lista, formularios]) => {
+    const html = read('src/html/views/' + vista + '.html');
+    formularios.forEach((id) => {
+      const desde = html.indexOf('<form id="' + id + '"');
+      assert.ok(desde > 0, vista + ': existe ' + id);
+      const form = html.slice(desde, html.indexOf('</form>', desde));
+      assert.doesNotMatch(form, /class="field"/, vista + ': ' + id + ' no trae campos escritos a mano');
+      assert.match(form, new RegExp('id="campos-' + id + '"'), vista + ': ' + id + ' tiene su contenedor');
+    });
+    const src = read(modulo);
+    assert.match(src, new RegExp('CamposHoja\\.html\\(' + lista + '\\b'), modulo + ': pinta ' + lista + ' con CamposHoja');
+    assert.match(src, new RegExp('CamposHoja\\.recolectar\\(' + lista + '\\b'), modulo + ': lee ' + lista + ' con CamposHoja');
+  });
+  assert.doesNotMatch(read('src/html/js/app.html'), /function (recolectar|poblar)(Uber|Ticket)\(/, 'sin recolectar/poblar propios de Uber y Tickets');
+});

@@ -111,5 +111,31 @@ ok($('#x-clase').options.length === 3 && $('#x-clase').options[0].value === '', 
 CamposHoja.llenarOpciones('no-existe', ['A']);
 ok(true, 'un id que no existe no truena');
 
+console.log('6. Formularios cortos (Uber, Tickets, Incidencias, Reasignaciones, Cambios de Monto)');
+const CORTOS = [
+  { clave: 'NUCCO', etiqueta: 'Nucco', tipo: 'select', catalogo: true, noSeGuarda: true, placeholder: 'Otra forma…' },
+  { clave: 'FOLIO', etiqueta: 'Folio', tipo: 'select', catalogo: true, requeridoAlCrear: true },
+  { clave: 'FECHA_REGISTRO', etiqueta: 'Registro', tipo: 'text', soloLectura: true, soloAlta: true },
+  { clave: 'ANTERIOR', etiqueta: 'Anterior', tipo: 'text', soloLectura: true, textoAuto: 'Monto actual' },
+  { clave: 'MOTIVO', etiqueta: 'Motivo', tipo: 'text', renglonCompleto: true },
+  { grupo: 'Entrante', clave: 'RESPONSABLE', etiqueta: 'Responsable', tipo: 'text' },
+];
+$('#f').innerHTML = CamposHoja.html(CORTOS, { prefijo: 'c' });
+ok(doc.querySelectorAll('.info-section-title').length === 1 && $('.info-section-title').textContent === 'Entrante',
+  'sin grupo no hay título; con grupo sí');
+ok($('#c-nucco').placeholder === 'Otra forma…' && $('#c-folio').placeholder === 'Escribe o elige…', 'un catálogo respeta su placeholder (o "Escribe o elige…")');
+ok($('#c-folio').required, 'requeridoAlCrear: obligatorio al dar de alta');
+ok(!!$('#c-fecha-registro'), 'soloAlta aparece al dar de alta');
+ok($('#c-anterior').getAttribute('data-auto') === 'Monto actual' && $('#c-fecha-registro').getAttribute('data-auto') === '',
+  'textoAuto va en la etiqueta "auto"');
+ok($('#c-motivo').closest('.field').style.gridColumn === '1 / -1', 'renglonCompleto ocupa todo el ancho');
+$('#c-nucco').value = '12';
+$('#c-folio').value = 'AUT1';
+ok(JSON.stringify(Object.keys(CamposHoja.recolectar(CORTOS, 'c'))) === '["FOLIO","MOTIVO","RESPONSABLE"]',
+  'recolectar deja fuera noSeGuarda (Nucco) y soloLectura');
+$('#f').innerHTML = CamposHoja.html(CORTOS, { prefijo: 'c', esEdicion: true });
+ok(!$('#c-fecha-registro') && !!$('#c-anterior'), 'soloAlta no aparece al editar');
+ok(!$('#c-folio').required, 'requeridoAlCrear: al editar se puede dejar vacío');
+
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
 process.exit(fallas ? 1 : 0);

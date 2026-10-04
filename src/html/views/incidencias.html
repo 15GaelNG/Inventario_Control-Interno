@@ -36,29 +36,8 @@
         </div>
       </div>
       <form id="form-incidencia" class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 14px;">
-        <div class="field">
-          <label>Nucco</label>
-          <input type="text" id="inc-nucco" list="lista-nucco-vehiculo" placeholder="Otra forma de buscar el vehículo…" autocomplete="off" />
-          <datalist id="lista-nucco-vehiculo"></datalist>
-        </div>
-        <div class="field">
-          <label>Folio del vehículo</label>
-          <input type="text" id="inc-folio" list="lista-folios-vehiculo" required placeholder="Escribe o elige…" autocomplete="off" />
-          <datalist id="lista-folios-vehiculo"></datalist>
-        </div>
-        <div class="field"><label>Departamento</label><input type="text" id="inc-departamento" /></div>
-        <div class="field"><label>Modelo</label><input type="text" id="inc-modelo" /></div>
-        <div class="field"><label>Año</label><input type="number" id="inc-anio" /></div>
-        <div class="field"><label>Fecha de registro</label><input type="text" id="inc-fecha-registro" disabled data-auto /></div>
-        <div class="field"><label>Fecha de inspección</label><input type="date" id="inc-fecha-inspeccion" /></div>
-        <div class="field"><label>Kilometraje</label><input type="number" id="inc-kilometraje" /></div>
-        <div class="field"><label>Ticket</label><input type="text" id="inc-ticket" /></div>
-        <div class="field"><label>Periodo de verificación</label><input type="text" id="inc-periodo-verificacion" placeholder="Ej. 2do semestre 2026" /></div>
-        <div class="field"><label>Seguro de auto</label><input type="text" id="inc-seguro-auto" placeholder="Ej. Póliza vigente" /></div>
-        <div class="field" style="grid-column: 1 / -1;">
-          <label>Inspección de ingreso (motivo)</label>
-          <input type="text" id="inc-motivo" placeholder="Ej. Cambio de batería" />
-        </div>
+        <!-- Los campos los pinta CamposHoja (CAMPOS_INCIDENCIA en app.html) -->
+        <div id="campos-form-incidencia" style="display: contents"></div>
         <div style="grid-column: 1 / -1;"><button type="submit"><i data-lucide="car" class="ico"></i> Registrar ingreso</button></div>
       </form>
       <div class="error-msg" id="inc-error" hidden></div>
@@ -83,22 +62,7 @@
       </div>
       <form id="form-cerrar-incidencia">
         <input type="hidden" id="cerrar-id" />
-        <div class="field">
-          <label>Trabajo realizado</label>
-          <input type="text" id="cerrar-trabajo" required placeholder="Ej. Cambio de batería" />
-        </div>
-        <div class="field">
-          <label>Fecha del trabajo realizado</label>
-          <input type="date" id="cerrar-fecha-trabajo" />
-        </div>
-        <div class="field">
-          <label>Resultado de inspección de salida</label>
-          <input type="text" id="cerrar-salida" placeholder="Ej. Reemplazo realizado" />
-        </div>
-        <div class="field">
-          <label>Mecánico</label>
-          <input type="text" id="cerrar-mecanico" placeholder="Nombre del mecánico" />
-        </div>
+        <div id="campos-form-cerrar-incidencia"></div>
         <div class="error-msg" id="cerrar-error" hidden></div>
         <button type="submit" style="width:100%"><i data-lucide="circle-check" class="ico"></i> Guardar y cerrar</button>
       </form>
@@ -117,23 +81,7 @@
       </div>
       <form id="form-editar-incidencia">
         <input type="hidden" id="editar-id" />
-        <div class="modal-form-scroll grid" style="grid-template-columns: repeat(2, 1fr); gap: 0 14px;">
-          <div class="field"><label>Nucco</label><input type="text" id="editar-nucco" list="lista-nucco-vehiculo" placeholder="Otra forma de buscar el vehículo…" /></div>
-          <div class="field"><label>Folio del vehículo</label><input type="text" id="editar-folio" list="lista-folios-vehiculo" /></div>
-          <div class="field"><label>Departamento</label><input type="text" id="editar-departamento" /></div>
-          <div class="field"><label>Modelo</label><input type="text" id="editar-modelo" /></div>
-          <div class="field"><label>Año</label><input type="number" id="editar-anio" /></div>
-          <div class="field"><label>Fecha de inspección</label><input type="date" id="editar-fecha-inspeccion" /></div>
-          <div class="field"><label>Kilometraje</label><input type="number" id="editar-kilometraje" /></div>
-          <div class="field"><label>Ticket</label><input type="text" id="editar-ticket" /></div>
-          <div class="field"><label>Periodo de verificación</label><input type="text" id="editar-periodo-verificacion" /></div>
-          <div class="field"><label>Seguro de auto</label><input type="text" id="editar-seguro-auto" /></div>
-          <div class="field" style="grid-column: 1 / -1;"><label>Inspección de ingreso (motivo)</label><input type="text" id="editar-motivo" /></div>
-          <div class="field" style="grid-column: 1 / -1;"><label>Descripción de trabajo realizado</label><input type="text" id="editar-trabajo" /></div>
-          <div class="field"><label>Fecha del trabajo realizado</label><input type="date" id="editar-fecha-trabajo" /></div>
-          <div class="field"><label>Mecánico</label><input type="text" id="editar-mecanico" /></div>
-          <div class="field" style="grid-column: 1 / -1;"><label>Inspección de salida</label><input type="text" id="editar-salida" /></div>
-        </div>
+        <div id="campos-form-editar-incidencia" class="modal-form-scroll grid" style="grid-template-columns: repeat(2, 1fr); gap: 0 14px;"></div>
         <div class="error-msg" id="editar-error" hidden></div>
         <button type="submit" style="width:100%; margin-top:10px"><i data-lucide="save" class="ico"></i> Guardar cambios</button>
       </form>

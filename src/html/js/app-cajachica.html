@@ -693,8 +693,24 @@
     let cajasPorId = {};
     let todosLosCambios = [];
 
+    // Las opciones de Caja chica se llenan con el catálogo (llenarSelectCajas); Cantidad
+    // anterior es el monto actual de la caja elegida. Lo que se manda: ID CCH y CANTIDAD
+    // ACTUALIZADA (el servidor calcula el tipo y la cantidad del cambio).
+    const CAMPOS_CAMBIO_MONTO = [
+      { clave: 'ID CCH', etiqueta: 'Caja chica', tipo: 'select' },
+      { clave: 'CANTIDAD ANTERIOR', etiqueta: 'Cantidad anterior', tipo: 'text', soloLectura: true,
+        textoAuto: 'Monto actual de la caja chica', placeholder: 'Elige una caja chica' },
+      { clave: 'CANTIDAD ACTUALIZADA', etiqueta: 'Cantidad actualizada', tipo: 'number', moneda: true, requerido: true },
+    ];
+    document.getElementById('campos-form-cambio-monto').innerHTML = CamposHoja.html(CAMPOS_CAMBIO_MONTO, { prefijo: 'cm' });
     const selectCaja = document.getElementById('cm-id-cch');
-    const campoAnterior = document.getElementById('cm-cantidad-anterior');   // data-auto en la vista
+    const campoAnterior = document.getElementById('cm-cantidad-anterior');
+    function llenarSelectCajas(cajas) {
+      cajasPorId = {};
+      (cajas || []).forEach((c) => { cajasPorId[c.ID_CCH] = c; });
+      selectCaja.innerHTML = '<option value="">Selecciona…</option>' +
+        (cajas || []).map((c) => `<option value="${escaparHtml(c.ID_CCH)}">${escaparHtml(c.ID_CCH)} — ${escaparHtml(c.RESPONSABLE || 'Sin responsable')}</option>`).join('');
+    }
 
     // cargar() necesita cajasPorId ya lleno (para poner Responsable en cada
     // renglón), así que no se puede simplemente "correr en paralelo y ya" —
@@ -708,10 +724,7 @@
       if (promesaCatalogoCajas) return promesaCatalogoCajas;
       promesaCatalogoCajas = (async () => {
         try {
-          const cajas = await callServerListaCacheada('apiListarCajasChicasResumen', state.token);
-          (cajas || []).forEach((c) => { cajasPorId[c.ID_CCH] = c; });
-          selectCaja.innerHTML = '<option value="">Selecciona…</option>' +
-            (cajas || []).map((c) => `<option value="${escaparHtml(c.ID_CCH)}">${escaparHtml(c.ID_CCH)} — ${escaparHtml(c.RESPONSABLE || 'Sin responsable')}</option>`).join('');
+          llenarSelectCajas(await callServerListaCacheada('apiListarCajasChicasResumen', state.token));
         } catch (err) {
           console.error('No se pudo cargar el catálogo de cajas chicas:', err);
           const errorBox = document.getElementById('cm-error');
@@ -840,10 +853,7 @@
       btn.innerHTML = '<span class="spinner"></span> Guardando…';
       toastCargando('Registrando…');
       try {
-        await callServer('apiCrearCambioMontoCCH', state.token, {
-          'ID CCH': selectCaja.value,
-          'CANTIDAD ACTUALIZADA': document.getElementById('cm-cantidad-actualizada').value,
-        });
+        await callServer('apiCrearCambioMontoCCH', state.token, CamposHoja.recolectar(CAMPOS_CAMBIO_MONTO, 'cm'));
         ev.target.reset();
         // Refresca también el catálogo de cajas chicas en memoria: el monto
         // actual de la que se acaba de cambiar ya no es el mismo. Se invalida
@@ -852,11 +862,7 @@
         // venzan los 15s solos.
         invalidarCacheLista('apiListarCajasChicasResumen', state.token);
         invalidarCacheLista('apiListarCambiosMontoCCH', state.token);
-        const cajas = await callServer('apiListarCajasChicasResumen', state.token);
-        cajasPorId = {};
-        (cajas || []).forEach((c) => { cajasPorId[c.ID_CCH] = c; });
-        selectCaja.innerHTML = '<option value="">Selecciona…</option>' +
-          (cajas || []).map((c) => `<option value="${escaparHtml(c.ID_CCH)}">${escaparHtml(c.ID_CCH)} — ${escaparHtml(c.RESPONSABLE || 'Sin responsable')}</option>`).join('');
+        llenarSelectCajas(await callServer('apiListarCajasChicasResumen', state.token));
         await cargar();
         toastExito('Registrado exitosamente');
       } catch (err) {

@@ -28,49 +28,8 @@
         </div>
       </div>
       <form id="form-ticket" class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 14px;">
-        <div class="field"><label>Ticket</label><input type="text" id="ticket-ticket" placeholder="Ej. 4021" /></div>
-        <div class="field"><label>Fecha de registro</label><input type="text" id="ticket-fecha-registro" disabled data-auto /></div>
-        <div class="field"><label>Fecha</label><input type="date" id="ticket-fecha" /></div>
-        <div class="field">
-          <label>Departamento</label>
-          <input type="text" id="ticket-departamento" list="ticket-departamento-lista" autocomplete="off" placeholder="Escribe o elige…" />
-          <datalist id="ticket-departamento-lista"></datalist>
-        </div>
-        <div class="field">
-          <label>Solicitante</label>
-          <input type="text" id="ticket-solicitante" list="lista-solicitantes" autocomplete="off" placeholder="Escribe o elige un nombre" />
-        </div>
-        <div class="field">
-          <label>Tipo de atención</label>
-          <select id="ticket-tipo-atencion" required>
-            <option value="">Selecciona…</option>
-            <option value="ACTUALIZACION DE INFORMACION UBER">ACTUALIZACION DE INFORMACION UBER</option>
-            <option value="ALTA DE HOLOGRAMA EOX">ALTA DE HOLOGRAMA EOX</option>
-            <option value="ALTA DE USUARIO UBER">ALTA DE USUARIO UBER</option>
-            <option value="BAJA DE USUARIO UBER">BAJA DE USUARIO UBER</option>
-            <option value="CONSULTA DE INFORMACION UBER">CONSULTA DE INFORMACION UBER</option>
-            <option value="INCREMENTO DE COMBUSTIBLE EOX INDETERMINADO">INCREMENTO DE COMBUSTIBLE EOX INDETERMINADO</option>
-            <option value="INCREMENTO DE COMBUSTIBLE EOX PERMANENTE">INCREMENTO DE COMBUSTIBLE EOX PERMANENTE</option>
-            <option value="INCREMENTO DE COMBUSTIBLE EOX TEMPORAL">INCREMENTO DE COMBUSTIBLE EOX TEMPORAL</option>
-            <option value="INFORMACION GENERAL - EOX">INFORMACION GENERAL - EOX</option>
-            <option value="NIP EOX">NIP EOX</option>
-            <option value="REEMBOLSO DE COMBUSTIBLE EOX">REEMBOLSO DE COMBUSTIBLE EOX</option>
-            <option value="REEMPLAZO DE HOLOGRAMA EOX">REEMPLAZO DE HOLOGRAMA EOX</option>
-            <option value="REPORTE DE CONSUMO DE COMBUSTIBLE EOX">REPORTE DE CONSUMO DE COMBUSTIBLE EOX</option>
-          </select>
-        </div>
-        <div class="field"><label>Placa</label><input type="text" id="ticket-placa" /></div>
-        <div class="field">
-          <label>Quién atendió</label>
-          <select id="ticket-quien-atendio">
-            <option value="">Selecciona…</option>
-            <option value="ABIGAIL LEDESMA CORONA">ABIGAIL LEDESMA CORONA</option>
-            <option value="DAVID MOISES MALDONADO HERNANDEZ">DAVID MOISES MALDONADO HERNANDEZ</option>
-            <option value="GIOVANNI JAVIER ORDUÑA DE LA PEÑA">GIOVANNI JAVIER ORDUÑA DE LA PEÑA</option>
-            <option value="JORGE LUIS AVECILLA RIVERA">JORGE LUIS AVECILLA RIVERA</option>
-          </select>
-        </div>
-        <div class="field" style="grid-column: 1 / -1;"><label>Comentario</label><input type="text" id="ticket-comentario" /></div>
+        <!-- Los campos los pinta CamposHoja (CAMPOS_TICKET en app.html) -->
+        <div id="campos-form-ticket" style="display: contents"></div>
         <div style="grid-column: 1 / -1;"><button type="submit" id="btn-guardar-ticket"><i data-lucide="ticket" class="ico"></i> Registrar ticket</button></div>
       </form>
       <div class="error-msg" id="ticket-error" hidden></div>
@@ -82,9 +41,6 @@
       <div id="tickets-tabla"></div>
     </div>
   </div>
-
-  <!-- Compartido con Registrar -->
-  <datalist id="lista-solicitantes"></datalist>
 
   <!-- Modal: editar ticket -->
   <div class="modal-backdrop" id="modal-editar-ticket" hidden>
@@ -98,48 +54,7 @@
       </div>
       <form id="form-editar-ticket">
         <input type="hidden" id="editar-ticket-id" />
-        <div class="field"><label>Ticket</label><input type="text" id="editar-ticket-ticket" /></div>
-        <div class="field"><label>Fecha</label><input type="date" id="editar-ticket-fecha" /></div>
-        <div class="field">
-          <label>Departamento</label>
-          <input type="text" id="editar-ticket-departamento" list="editar-ticket-departamento-lista" autocomplete="off" placeholder="Escribe o elige…" />
-          <datalist id="editar-ticket-departamento-lista"></datalist>
-        </div>
-        <div class="field">
-          <label>Solicitante</label>
-          <input type="text" id="editar-ticket-solicitante" list="lista-solicitantes" autocomplete="off" />
-        </div>
-        <div class="field">
-          <label>Tipo de atención</label>
-          <select id="editar-ticket-tipo-atencion" required>
-            <option value="">Selecciona…</option>
-            <option value="ACTUALIZACION DE INFORMACION UBER">ACTUALIZACION DE INFORMACION UBER</option>
-            <option value="ALTA DE HOLOGRAMA EOX">ALTA DE HOLOGRAMA EOX</option>
-            <option value="ALTA DE USUARIO UBER">ALTA DE USUARIO UBER</option>
-            <option value="BAJA DE USUARIO UBER">BAJA DE USUARIO UBER</option>
-            <option value="CONSULTA DE INFORMACION UBER">CONSULTA DE INFORMACION UBER</option>
-            <option value="INCREMENTO DE COMBUSTIBLE EOX INDETERMINADO">INCREMENTO DE COMBUSTIBLE EOX INDETERMINADO</option>
-            <option value="INCREMENTO DE COMBUSTIBLE EOX PERMANENTE">INCREMENTO DE COMBUSTIBLE EOX PERMANENTE</option>
-            <option value="INCREMENTO DE COMBUSTIBLE EOX TEMPORAL">INCREMENTO DE COMBUSTIBLE EOX TEMPORAL</option>
-            <option value="INFORMACION GENERAL - EOX">INFORMACION GENERAL - EOX</option>
-            <option value="NIP EOX">NIP EOX</option>
-            <option value="REEMBOLSO DE COMBUSTIBLE EOX">REEMBOLSO DE COMBUSTIBLE EOX</option>
-            <option value="REEMPLAZO DE HOLOGRAMA EOX">REEMPLAZO DE HOLOGRAMA EOX</option>
-            <option value="REPORTE DE CONSUMO DE COMBUSTIBLE EOX">REPORTE DE CONSUMO DE COMBUSTIBLE EOX</option>
-          </select>
-        </div>
-        <div class="field"><label>Placa</label><input type="text" id="editar-ticket-placa" /></div>
-        <div class="field">
-          <label>Quién atendió</label>
-          <select id="editar-ticket-quien-atendio">
-            <option value="">Selecciona…</option>
-            <option value="ABIGAIL LEDESMA CORONA">ABIGAIL LEDESMA CORONA</option>
-            <option value="DAVID MOISES MALDONADO HERNANDEZ">DAVID MOISES MALDONADO HERNANDEZ</option>
-            <option value="GIOVANNI JAVIER ORDUÑA DE LA PEÑA">GIOVANNI JAVIER ORDUÑA DE LA PEÑA</option>
-            <option value="JORGE LUIS AVECILLA RIVERA">JORGE LUIS AVECILLA RIVERA</option>
-          </select>
-        </div>
-        <div class="field"><label>Comentario</label><input type="text" id="editar-ticket-comentario" /></div>
+        <div id="campos-form-editar-ticket"></div>
         <div class="error-msg" id="editar-ticket-error" hidden></div>
         <button type="submit" id="btn-guardar-editar-ticket" style="width:100%"><i data-lucide="save" class="ico"></i> Guardar cambios</button>
       </form>

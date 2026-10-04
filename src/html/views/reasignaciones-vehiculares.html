@@ -32,37 +32,8 @@
         </div>
       </div>
       <form id="form-reasignacion-vehicular" class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 14px;">
-        <div class="field">
-          <label>Nucco</label>
-          <input type="text" id="rv-nucco" list="rv-nucco-lista" autocomplete="off" placeholder="Otra forma de buscar el vehículo…" />
-          <datalist id="rv-nucco-lista"></datalist>
-        </div>
-        <div class="field">
-          <label>Folio del vehículo</label>
-          <input type="text" id="rv-folio" list="rv-folio-lista" autocomplete="off" placeholder="Escribe o elige…" required />
-          <datalist id="rv-folio-lista"></datalist>
-        </div>
-        <div class="field"><label>Fecha de reasignación</label><input type="date" id="rv-fecha" /></div>
-        <div class="field"><label>VIN</label><input type="text" id="rv-vin" disabled data-auto placeholder="Elige un vehículo" /></div>
-
-        <div class="info-section-title">Responsable saliente (actual)</div>
-        <div class="field"><label>No. de empleado</label><input type="text" id="rv-no-empleado-saliente" disabled data-auto /></div>
-        <div class="field"><label>Responsable</label><input type="text" id="rv-responsable-saliente" disabled data-auto /></div>
-        <div class="field"><label>Departamento</label><input type="text" id="rv-departamento-saliente" disabled data-auto /></div>
-
-        <div class="info-section-title">Responsable entrante (nuevo)</div>
-        <div class="field">
-          <label>Responsable</label>
-          <input type="text" id="rv-responsable-entrante" list="rv-responsable-entrante-lista" autocomplete="off" required />
-          <datalist id="rv-responsable-entrante-lista"></datalist>
-        </div>
-        <div class="field"><label>No. de empleado</label><input type="text" id="rv-no-empleado-entrante" /></div>
-        <div class="field">
-          <label>Departamento</label>
-          <input type="text" id="rv-departamento-entrante" list="rv-departamento-entrante-lista" autocomplete="off" placeholder="Escribe o elige…" />
-          <datalist id="rv-departamento-entrante-lista"></datalist>
-        </div>
-
+        <!-- Los campos los pinta CamposHoja (CAMPOS_REASIGNACION en app-reasignaciones.html) -->
+        <div id="campos-form-reasignacion-vehicular" style="display: contents"></div>
         <div style="grid-column: 1 / -1;"><button type="submit" id="btn-guardar-reasignacion-vehicular"><i data-lucide="arrow-left-right" class="ico"></i> Registrar reasignación</button></div>
       </form>
       <div class="error-msg" id="rv-error" hidden></div>

@@ -45,9 +45,11 @@ validación, pasos y panel), `DataTable`, `Combobox`, `Confirmar`, `Notificar`,
 uno documenta su uso al inicio del archivo y tiene su prueba en `tests/`.
 
 - **Formularios declarados por columnas de una hoja → `CamposHoja`.** Vehículos
-  (`CAMPOS_VEHICULO`), Caja Chica (`CAMPOS_CAJACHICA`) y Arqueos (`CAMPOS_ARQUEO`)
-  son una lista de `{ grupo, clave, etiqueta, tipo, … }`, y `CamposHoja.html /
-  recolectar / poblar / llenarOpciones` hace el resto. Un tipo de campo o una
+  (`CAMPOS_VEHICULO`), Caja Chica (`CAMPOS_CAJACHICA`), Arqueos (`CAMPOS_ARQUEO`),
+  Uber, Tickets, Incidencias, Reasignaciones y Cambios de Monto son una lista de
+  `{ grupo, clave, etiqueta, tipo, … }`, y `CamposHoja.html / recolectar / poblar /
+  llenarOpciones` hace el resto. La vista solo deja el contenedor
+  (`<div id="campos-form-…">`); no escribas los campos a mano en la vista. Un tipo de campo o una
   opción nueva (p. ej. `soloEdicion`, `mostrarSiCampo`) se agrega una vez en
   `componentes/campos-hoja.html` y sirve para todos. Lo propio de cada módulo
   (bloquear Capturista, formatear moneda) va en los ganchos `antes` / `despues` /

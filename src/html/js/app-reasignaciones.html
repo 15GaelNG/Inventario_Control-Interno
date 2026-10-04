@@ -27,7 +27,25 @@
     let vehiculosPorFolio = {};
     let todasLasReasignaciones = [];
 
-    document.getElementById('rv-fecha').value = hoyISO();
+    // VIN y los datos del saliente los decide el vehículo (soloLectura, no se mandan: el
+    // servidor los toma del vehículo). Nucco solo sirve para buscarlo (FolioNucco, abajo).
+    const SALIENTE = 'Responsable saliente (actual)';
+    const ENTRANTE = 'Responsable entrante (nuevo)';
+    const CAMPOS_REASIGNACION = [
+      { clave: 'Nucco', etiqueta: 'Nucco', tipo: 'select', catalogo: true, noSeGuarda: true, placeholder: 'Otra forma de buscar el vehículo…' },
+      { clave: 'Folio Vehiculo', etiqueta: 'Folio del vehículo', tipo: 'select', catalogo: true, requerido: true },
+      { clave: 'Fecha de Reasignacion', etiqueta: 'Fecha de reasignación', tipo: 'date' },
+      { clave: 'VIN', etiqueta: 'VIN', tipo: 'text', soloLectura: true, placeholder: 'Elige un vehículo' },
+      { grupo: SALIENTE, clave: 'No Empleado Saliente', etiqueta: 'No. de empleado', tipo: 'text', soloLectura: true },
+      { grupo: SALIENTE, clave: 'Responsable Saliente', etiqueta: 'Responsable', tipo: 'text', soloLectura: true },
+      { grupo: SALIENTE, clave: 'Departamento Saliente', etiqueta: 'Departamento', tipo: 'text', soloLectura: true },
+      { grupo: ENTRANTE, clave: 'Responsable Entrante', etiqueta: 'Responsable', tipo: 'select', catalogo: true, requerido: true },
+      { grupo: ENTRANTE, clave: 'No Empleado Entrante', etiqueta: 'No. de empleado', tipo: 'text' },
+      { grupo: ENTRANTE, clave: 'Departamento Entrante', etiqueta: 'Departamento', tipo: 'select', catalogo: true },
+    ];
+    document.getElementById('campos-form-reasignacion-vehicular').innerHTML = CamposHoja.html(CAMPOS_REASIGNACION, { prefijo: 'rv' });
+
+    document.getElementById('rv-fecha-de-reasignacion').value = hoyISO();
 
     // Catálogo de vehículos (para los datalist de Folio/Nucco y para autollenar VIN
     // + responsable/departamento salientes sin ida y vuelta al servidor).
@@ -37,8 +55,7 @@
     // dos resuelve el vehículo y pone el valor correspondiente en el otro.
     callServerCacheado('apiListarVehiculosBasico', state.token).then((vehiculos) => {
       FolioNucco.indexar(vehiculos, vehiculosPorFolio);
-      document.getElementById('rv-folio-lista').innerHTML =
-        (vehiculos || []).map((v) => `<option value="${escaparHtml(v.FOLIO)}"></option>`).join('');
+      CamposHoja.llenarOpciones('rv-folio-vehiculo', (vehiculos || []).map((v) => escaparHtml(v.FOLIO)));
       document.getElementById('rv-nucco-lista').innerHTML = FolioNucco.opcionesNucco(vehiculos);
     }).catch((err) => {
       console.error('No se pudo cargar el catálogo de vehículos:', err);
@@ -49,8 +66,7 @@
 
     // Departamento (catálogo real, mismo que usan Vehículos/Uber/Tickets).
     callServerCacheado('apiListarDepartamentos', state.token).then((departamentos) => {
-      document.getElementById('rv-departamento-entrante-lista').innerHTML =
-        (departamentos || []).map((d) => `<option value="${d}"></option>`).join('');
+      CamposHoja.llenarOpciones('rv-departamento-entrante', departamentos);
     }).catch((err) => {
       console.error('No se pudo cargar el catálogo de departamentos:', err);
     });
@@ -62,8 +78,7 @@
     // cargó), se deja escribir libre y esos dos se capturan a mano, como ya era antes.
     callServerCacheado('apiListarColaboradores', state.token).then((colaboradores) => {
       const lista = colaboradores || [];
-      document.getElementById('rv-responsable-entrante-lista').innerHTML =
-        Array.from(new Set(lista.map((c) => c.NOMBRE))).map((n) => `<option value="${n}"></option>`).join('');
+      CamposHoja.llenarOpciones('rv-responsable-entrante', Array.from(new Set(lista.map((c) => c.NOMBRE))));
       const porNombre = {};
       lista.forEach((c) => { if (!porNombre[c.NOMBRE.toUpperCase()]) porNombre[c.NOMBRE.toUpperCase()] = c; });
       document.getElementById('rv-responsable-entrante').addEventListener('input', (ev) => {
@@ -79,7 +94,7 @@
     });
 
     // VIN y los datos del saliente: data-auto en la vista (los decide el vehículo)
-    FolioNucco.ligar('rv-folio', 'rv-nucco', {
+    FolioNucco.ligar('rv-folio-vehiculo', 'rv-nucco', {
       buscar: (texto) => vehiculosPorFolio[texto],
       alResolver: (vehiculo) => {
         document.getElementById('rv-vin').value = vehiculo ? vehiculo.VIN : '';
@@ -185,19 +200,9 @@
       btn.innerHTML = '<span class="spinner"></span> Guardando…';
       toastCargando('Registrando…');
       try {
-        await callServer('apiCrearReasignacionVehicular', state.token, {
-          'Folio Vehiculo': document.getElementById('rv-folio').value.trim(),
-          'Fecha de Reasignacion': document.getElementById('rv-fecha').value,
-          'No Empleado Entrante': document.getElementById('rv-no-empleado-entrante').value.trim(),
-          'Responsable Entrante': document.getElementById('rv-responsable-entrante').value.trim(),
-          'Departamento Entrante': document.getElementById('rv-departamento-entrante').value.trim(),
-        });
-        ev.target.reset();
-        document.getElementById('rv-fecha').value = hoyISO();
-        document.getElementById('rv-vin').value = '';
-        document.getElementById('rv-no-empleado-saliente').value = '';
-        document.getElementById('rv-responsable-saliente').value = '';
-        document.getElementById('rv-departamento-saliente').value = '';
+        await callServer('apiCrearReasignacionVehicular', state.token, CamposHoja.recolectar(CAMPOS_REASIGNACION, 'rv'));
+        ev.target.reset();   // también vacía VIN y los datos del saliente
+        document.getElementById('rv-fecha-de-reasignacion').value = hoyISO();
         // El vehículo reasignado ya trae otro responsable — refresca el
         // catálogo en memoria (y el caché compartido, que también usan
         // Sensores/Hologramas/Inspecciones/Verificaciones) para que una
@@ -205,9 +210,10 @@
         // datos salientes obsoletos.
         invalidarCacheCatalogo('apiListarVehiculosBasico', state.token);
         invalidarCacheLista('apiListarReasignacionesVehiculares', state.token);
+        // indexar (y no solo por FOLIO): si no, después de la primera reasignación ya no se
+        // podía buscar el vehículo por Nucco
         callServerCacheado('apiListarVehiculosBasico', state.token).then((vehiculos) => {
-          vehiculosPorFolio = {};
-          (vehiculos || []).forEach((v) => { vehiculosPorFolio[v.FOLIO] = v; });
+          vehiculosPorFolio = FolioNucco.indexar(vehiculos);
         }).catch(() => {});
         await cargar();
         toastExito('Registrado exitosamente');

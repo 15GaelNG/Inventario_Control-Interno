@@ -1573,6 +1573,33 @@
     const modal = document.getElementById('modal-cerrar');
     const modalEditar = document.getElementById('modal-editar');
 
+    // Registrar = los del ingreso; Editar = todos; Cerrar = los del cierre (soloEdicion).
+    // Nucco solo sirve para buscar el vehículo (FolioNucco, más abajo): lo que se guarda es FOLIO.
+    const CAMPOS_INCIDENCIA = [
+      { clave: 'NUCCO', etiqueta: 'Nucco', tipo: 'select', catalogo: true, noSeGuarda: true, placeholder: 'Otra forma de buscar el vehículo…' },
+      { clave: 'FOLIO', etiqueta: 'Folio del vehículo', tipo: 'select', catalogo: true, requeridoAlCrear: true },
+      { clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'text' },
+      { clave: 'MODELO', etiqueta: 'Modelo', tipo: 'text' },
+      { clave: 'ANIO', etiqueta: 'Año', tipo: 'number' },
+      { clave: 'FECHA_REGISTRO', etiqueta: 'Fecha de registro', tipo: 'text', soloLectura: true, soloAlta: true },
+      { clave: 'FECHA_INSPECCION', etiqueta: 'Fecha de inspección', tipo: 'date' },
+      { clave: 'KILOMETRAJE', etiqueta: 'Kilometraje', tipo: 'number' },
+      { clave: 'TICKET', etiqueta: 'Ticket', tipo: 'text' },
+      { clave: 'PERIODO_VERIFICACION', etiqueta: 'Periodo de verificación', tipo: 'text', placeholder: 'Ej. 2do semestre 2026' },
+      { clave: 'SEGURO_AUTO', etiqueta: 'Seguro de auto', tipo: 'text', placeholder: 'Ej. Póliza vigente' },
+      { clave: 'INSPECCION_INGRESO', etiqueta: 'Inspección de ingreso (motivo)', tipo: 'text', renglonCompleto: true, placeholder: 'Ej. Cambio de batería' },
+      { clave: 'DESCRIPCION_TRABAJO', etiqueta: 'Trabajo realizado', tipo: 'text', soloEdicion: true, renglonCompleto: true, placeholder: 'Ej. Cambio de batería' },
+      { clave: 'FECHA_TRABAJO', etiqueta: 'Fecha del trabajo realizado', tipo: 'date', soloEdicion: true },
+      { clave: 'MECANICO', etiqueta: 'Mecánico', tipo: 'text', soloEdicion: true, placeholder: 'Nombre del mecánico' },
+      { clave: 'INSPECCION_SALIDA', etiqueta: 'Inspección de salida', tipo: 'text', soloEdicion: true, renglonCompleto: true, placeholder: 'Ej. Reemplazo realizado' },
+    ];
+    // Al cerrar, el trabajo realizado es obligatorio (al editar no: puede seguir abierta)
+    const CAMPOS_CIERRE_INCIDENCIA = CAMPOS_INCIDENCIA.filter((c) => c.soloEdicion)
+      .map((c) => (c.clave === 'DESCRIPCION_TRABAJO' ? Object.assign({}, c, { requerido: true }) : c));
+    document.getElementById('campos-form-incidencia').innerHTML = CamposHoja.html(CAMPOS_INCIDENCIA, { prefijo: 'inc' });
+    document.getElementById('campos-form-editar-incidencia').innerHTML = CamposHoja.html(CAMPOS_INCIDENCIA, { prefijo: 'editar', esEdicion: true });
+    document.getElementById('campos-form-cerrar-incidencia').innerHTML = CamposHoja.html(CAMPOS_CIERRE_INCIDENCIA, { prefijo: 'cerrar', esEdicion: true });
+
     // Fecha de registro: siempre hoy, no editable (el servidor la fuerza igual).
     fijarFechaRegistroHoy();
     document.getElementById('inc-fecha-inspeccion').value = hoyISO();
@@ -1596,10 +1623,14 @@
         // tronaría con "Cannot set properties of null".
         if (!document.body.contains(modal)) return;
         FolioNucco.indexar(vehiculos, vehiculosPorFolio);
-        document.getElementById('lista-folios-vehiculo').innerHTML = vehiculos
+        const opcionesFolio = vehiculos
           .map((v) => `<option value="${escaparHtml(v.FOLIO)}">${escaparHtml([v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' '))}</option>`)
           .join('');
-        document.getElementById('lista-nucco-vehiculo').innerHTML = FolioNucco.opcionesNucco(vehiculos, true);
+        const opcionesNucco = FolioNucco.opcionesNucco(vehiculos, true);
+        ['inc', 'editar'].forEach((prefijo) => {
+          document.getElementById(prefijo + '-folio-lista').innerHTML = opcionesFolio;
+          document.getElementById(prefijo + '-nucco-lista').innerHTML = opcionesNucco;
+        });
       })
       .catch((err) => {
         // Antes esto se ignoraba en silencio — ahora se ve para poder diagnosticar.
@@ -1648,23 +1679,10 @@
       if (!inc) return;
       document.getElementById('editar-id').value = inc.ID;
       document.getElementById('editar-folio-label').textContent = 'Folio: ' + inc.FOLIO;
-      document.getElementById('editar-folio').value = inc.FOLIO || '';
+      CamposHoja.poblar(CAMPOS_INCIDENCIA, 'editar', inc);
       document.getElementById('editar-nucco').value = (vehiculosPorFolio[inc.FOLIO] || {}).NUCO || '';
-      document.getElementById('editar-departamento').value = inc.DEPARTAMENTO || '';
-      document.getElementById('editar-modelo').value = inc.MODELO || '';
-      document.getElementById('editar-anio').value = inc.ANIO || '';
       // Lo que se abre es lo guardado, no una sugerencia: sin "auto" de la edición anterior
       ['folio', 'nucco', 'departamento', 'modelo', 'anio'].forEach((c) => CampoAuto.quitar('editar-' + c));
-      document.getElementById('editar-fecha-inspeccion').value = fechaParaInput(inc.FECHA_INSPECCION);
-      document.getElementById('editar-kilometraje').value = inc.KILOMETRAJE || '';
-      document.getElementById('editar-ticket').value = inc.TICKET || '';
-      document.getElementById('editar-periodo-verificacion').value = inc.PERIODO_VERIFICACION || '';
-      document.getElementById('editar-seguro-auto').value = inc.SEGURO_AUTO || '';
-      document.getElementById('editar-motivo').value = inc.INSPECCION_INGRESO || '';
-      document.getElementById('editar-trabajo').value = inc.DESCRIPCION_TRABAJO || '';
-      document.getElementById('editar-fecha-trabajo').value = fechaParaInput(inc.FECHA_TRABAJO);
-      document.getElementById('editar-mecanico').value = inc.MECANICO || '';
-      document.getElementById('editar-salida').value = inc.INSPECCION_SALIDA || '';
       document.getElementById('editar-error').hidden = true;
       modalEditar.hidden = false;
     }
@@ -1686,22 +1704,8 @@
       btn.innerHTML = '<span class="spinner"></span> Guardando…';
       toastCargando('Guardando cambios…');
       try {
-        await callServer('apiActualizarIncidencia', state.token, document.getElementById('editar-id').value, {
-          FOLIO: document.getElementById('editar-folio').value.trim(),
-          DEPARTAMENTO: document.getElementById('editar-departamento').value.trim(),
-          MODELO: document.getElementById('editar-modelo').value.trim(),
-          ANIO: document.getElementById('editar-anio').value,
-          FECHA_INSPECCION: document.getElementById('editar-fecha-inspeccion').value,
-          KILOMETRAJE: document.getElementById('editar-kilometraje').value,
-          TICKET: document.getElementById('editar-ticket').value.trim(),
-          PERIODO_VERIFICACION: document.getElementById('editar-periodo-verificacion').value.trim(),
-          SEGURO_AUTO: document.getElementById('editar-seguro-auto').value.trim(),
-          INSPECCION_INGRESO: document.getElementById('editar-motivo').value.trim(),
-          DESCRIPCION_TRABAJO: document.getElementById('editar-trabajo').value.trim(),
-          FECHA_TRABAJO: document.getElementById('editar-fecha-trabajo').value,
-          MECANICO: document.getElementById('editar-mecanico').value.trim(),
-          INSPECCION_SALIDA: document.getElementById('editar-salida').value.trim(),
-        });
+        await callServer('apiActualizarIncidencia', state.token, document.getElementById('editar-id').value,
+          CamposHoja.recolectar(CAMPOS_INCIDENCIA, 'editar'));
         cerrarModalEditar();
         invalidarCacheLista('apiListarIncidencias', state.token);
         await cargar();
@@ -1858,18 +1862,7 @@
       btn.innerHTML = '<span class="spinner"></span> Registrando…';
       toastCargando('Registrando…');
       try {
-        await callServer('apiCrearIncidencia', state.token, {
-          FOLIO: document.getElementById('inc-folio').value.trim(),
-          DEPARTAMENTO: document.getElementById('inc-departamento').value.trim(),
-          MODELO: document.getElementById('inc-modelo').value.trim(),
-          ANIO: document.getElementById('inc-anio').value,
-          FECHA_INSPECCION: document.getElementById('inc-fecha-inspeccion').value,
-          KILOMETRAJE: document.getElementById('inc-kilometraje').value,
-          TICKET: document.getElementById('inc-ticket').value.trim(),
-          PERIODO_VERIFICACION: document.getElementById('inc-periodo-verificacion').value.trim(),
-          SEGURO_AUTO: document.getElementById('inc-seguro-auto').value.trim(),
-          INSPECCION_INGRESO: document.getElementById('inc-motivo').value.trim(),
-        });
+        await callServer('apiCrearIncidencia', state.token, CamposHoja.recolectar(CAMPOS_INCIDENCIA, 'inc'));
         ev.target.reset();
         fijarFechaRegistroHoy();
         document.getElementById('inc-fecha-inspeccion').value = hoyISO();
@@ -1899,12 +1892,8 @@
       btn.innerHTML = '<span class="spinner"></span> Guardando…';
       toastCargando('Guardando cambios…');
       try {
-        await callServer('apiCerrarIncidencia', state.token, document.getElementById('cerrar-id').value, {
-          DESCRIPCION_TRABAJO: document.getElementById('cerrar-trabajo').value.trim(),
-          FECHA_TRABAJO: document.getElementById('cerrar-fecha-trabajo').value,
-          INSPECCION_SALIDA: document.getElementById('cerrar-salida').value.trim(),
-          MECANICO: document.getElementById('cerrar-mecanico').value.trim(),
-        });
+        await callServer('apiCerrarIncidencia', state.token, document.getElementById('cerrar-id').value,
+          CamposHoja.recolectar(CAMPOS_CIERRE_INCIDENCIA, 'cerrar'));
         cerrarModal();
         invalidarCacheLista('apiListarIncidencias', state.token);
         await cargar();
@@ -3172,7 +3161,29 @@
     let usuariosPorId = {};
     let todosLosUsuarios = [];
 
-    // FECHA DE ALTA no se edita: siempre es el día en que se da de alta.
+    // Razón social / Sede / Oficina-Desarrollo / Departamento: catálogos reales (hoja "LISTAS
+    // VEHICULOS"), se llenan en cargarCatalogosUber; se puede escribir una opción nueva.
+    // SOLICITUD es archivo (se sube aparte, subirArchivoUber). FECHA DE ALTA no se edita:
+    // la fija el servidor solo al crear (siempre "hoy").
+    const CAMPOS_UBER = [
+      { clave: 'NOMBRE COMPLETO', etiqueta: 'Nombre completo', tipo: 'text', requerido: true },
+      { clave: 'RAZON SOCIAL', etiqueta: 'Razón social', tipo: 'select', catalogo: true },
+      { clave: 'ESTAUS USUARIO', etiqueta: 'Estatus', tipo: 'select', opciones: ['ACTIVO', 'BAJA', 'PENDIENTE'] },
+      { clave: 'ROL', etiqueta: 'Rol', tipo: 'select', opciones: ['ADMINISTRADOR', 'BENEFICIARIO', 'EMPLEADO'] },
+      { clave: 'FECHA DE ALTA', etiqueta: 'Fecha de alta', tipo: 'text', soloLectura: true },
+      { clave: 'CORREO ELECTRONICO', etiqueta: 'Correo electrónico', tipo: 'email' },
+      { clave: 'NUMERO TELEFONO', etiqueta: 'Teléfono', tipo: 'text' },
+      { clave: 'SEDE', etiqueta: 'Sede', tipo: 'select', catalogo: true },
+      { clave: 'OFICINA/DESARROLLO', etiqueta: 'Oficina / Desarrollo', tipo: 'select', catalogo: true },
+      { clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select', catalogo: true },
+      { clave: 'PUESTO', etiqueta: 'Puesto', tipo: 'text' },
+      { clave: 'DIAS AUTORIZADOS', etiqueta: 'Días autorizados', tipo: 'text', placeholder: 'Ej. Lunes a viernes' },
+      { clave: 'HORARIO AUTORIZADO', etiqueta: 'Horario autorizado', tipo: 'text', placeholder: 'Ej. 07:00 - 19:00' },
+      { clave: 'SOLICITUD', etiqueta: 'Solicitud', tipo: 'file' },
+    ];
+    document.getElementById('campos-form-uber').innerHTML = CamposHoja.html(CAMPOS_UBER, { prefijo: 'uber' });
+    document.getElementById('campos-form-editar-uber').innerHTML = CamposHoja.html(CAMPOS_UBER, { prefijo: 'editar-uber', esEdicion: true });
+
     document.getElementById('uber-fecha-de-alta').value = new Date().toLocaleDateString('es-MX');
 
     function badgeEstatusUber(estatus) {
@@ -3192,10 +3203,7 @@
       return rol ? `<span class="tag ${clase}">${rol}</span>` : '—';
     }
 
-    // Razón social / Sede / Oficina-Desarrollo / Departamento: catálogos
-    // reales (hoja "LISTAS VEHICULOS"), mismas opciones en Registrar y
-    // Editar. Son <input list="..."> — se puede escribir una opción nueva.
-    function llenarSelect(id, valores) { CamposHoja.llenarOpciones(id, valores); }
+    const llenarSelect = CamposHoja.llenarOpciones;
     // En su propia función para correr en paralelo con cargar() más abajo.
     async function cargarCatalogosUber() {
       try {
@@ -3214,43 +3222,8 @@
       }
     }
 
-    // SOLICITUD es archivo — se maneja aparte (subirArchivoUber), no aquí:
-    // subir un archivo es asíncrono, no se puede leer de golpe como el resto.
-    // FECHA DE ALTA tampoco entra aquí: no se edita, la fija el servidor solo
-    // al crear (siempre "hoy") — se muestra como texto deshabilitado.
-    const CAMPOS_UBER = [
-      'RAZON SOCIAL', 'NOMBRE COMPLETO', 'ESTAUS USUARIO', 'ROL',
-      'CORREO ELECTRONICO', 'NUMERO TELEFONO', 'SEDE', 'OFICINA/DESARROLLO',
-      'DEPARTAMENTO', 'PUESTO', 'DIAS AUTORIZADOS', 'HORARIO AUTORIZADO',
-    ];
-    function idUber(prefijo, clave) { return prefijo + '-' + slugCampo(clave); }
-    function recolectarUber(prefijo) {
-      const datos = {};
-      CAMPOS_UBER.forEach((clave) => {
-        const el = document.getElementById(idUber(prefijo, clave));
-        if (el) datos[clave] = el.value.trim();
-      });
-      return datos;
-    }
-    function poblarUber(prefijo, datos) {
-      CAMPOS_UBER.forEach((clave) => {
-        const el = document.getElementById(idUber(prefijo, clave));
-        if (!el) return;
-        const valor = (datos && datos[clave]) || '';
-        el.value = el.type === 'date' ? fechaParaInput(valor) : valor;
-      });
-      const info = document.getElementById(idUber(prefijo, 'SOLICITUD') + '-actual');
-      if (info) {
-        const valor = (datos && datos['SOLICITUD']) || '';
-        info.innerHTML = valor
-          ? `<a href="${valor}" target="_blank" rel="noopener">📎 Ver archivo actual</a>`
-          : '<span class="empty-state" style="margin:0">Sin archivo</span>';
-      }
-      const campoFechaAlta = document.getElementById(idUber(prefijo, 'FECHA DE ALTA'));
-      if (campoFechaAlta) campoFechaAlta.value = formatearFecha(datos && datos['FECHA DE ALTA']);
-    }
     async function subirArchivoUber(prefijo) {
-      const input = document.getElementById(idUber(prefijo, 'SOLICITUD'));
+      const input = document.getElementById(prefijo + '-solicitud');
       const file = input && input.files && input.files[0];
       if (!file) return {};
       const base64 = await leerArchivoBase64(file);
@@ -3374,7 +3347,11 @@
       modalEditar.hidden = false;
       try {
         const completo = await callServer('apiBuscarUberPorId', state.token, id);
-        if (completo) poblarUber('editar-uber', completo);
+        if (completo) {
+          CamposHoja.poblar(CAMPOS_UBER, 'editar-uber', completo, {
+            mostrar: (campo, valor) => (campo.clave === 'FECHA DE ALTA' ? formatearFecha(valor) : undefined),
+          });
+        }
       } catch (err) {
         const errorBox = document.getElementById('editar-uber-error');
         errorBox.textContent = 'No se pudo cargar el registro: ' + err.message;
@@ -3400,7 +3377,7 @@
       toastCargando('Guardando cambios…');
       try {
         const archivo = await subirArchivoUber('editar-uber');
-        const datos = Object.assign(recolectarUber('editar-uber'), archivo);
+        const datos = Object.assign(CamposHoja.recolectar(CAMPOS_UBER, 'editar-uber'), archivo);
         await callServer('apiActualizarUber', state.token, document.getElementById('editar-uber-id').value, datos);
         cerrarEditarUber();
         invalidarCacheLista('apiListarUberResumen', state.token);
@@ -3427,7 +3404,7 @@
       toastCargando('Registrando…');
       try {
         const archivo = await subirArchivoUber('uber');
-        const datos = Object.assign(recolectarUber('uber'), archivo);
+        const datos = Object.assign(CamposHoja.recolectar(CAMPOS_UBER, 'uber'), archivo);
         await callServer('apiCrearUber', state.token, datos);
         ev.target.reset();
         document.getElementById('uber-fecha-de-alta').value = new Date().toLocaleDateString('es-MX');
@@ -3456,7 +3433,30 @@
     const modalEditar = document.getElementById('modal-editar-ticket');
     let todosLosTickets = [];
 
-    document.getElementById('ticket-fecha-registro').value = new Date().toLocaleDateString('es-MX');
+    // Departamento y Solicitante: se puede escribir uno que todavía no está en la lista
+    // (se llenan en cargarCatalogosTickets). FECHA DE REGISTRO la pone el servidor al crear.
+    const CAMPOS_TICKET = [
+      { clave: 'TICKET', etiqueta: 'Ticket', tipo: 'text', placeholder: 'Ej. 4021' },
+      { clave: 'FECHA DE REGISTRO', etiqueta: 'Fecha de registro', tipo: 'text', soloLectura: true, soloAlta: true },
+      { clave: 'FECHA', etiqueta: 'Fecha', tipo: 'date' },
+      { clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select', catalogo: true },
+      { clave: 'SOLICITANTE', etiqueta: 'Solicitante', tipo: 'select', catalogo: true, placeholder: 'Escribe o elige un nombre' },
+      { clave: 'TIPO ATENCION', etiqueta: 'Tipo de atención', tipo: 'select', requerido: true, opciones: [
+        'ACTUALIZACION DE INFORMACION UBER', 'ALTA DE HOLOGRAMA EOX', 'ALTA DE USUARIO UBER', 'BAJA DE USUARIO UBER',
+        'CONSULTA DE INFORMACION UBER', 'INCREMENTO DE COMBUSTIBLE EOX INDETERMINADO', 'INCREMENTO DE COMBUSTIBLE EOX PERMANENTE',
+        'INCREMENTO DE COMBUSTIBLE EOX TEMPORAL', 'INFORMACION GENERAL - EOX', 'NIP EOX', 'REEMBOLSO DE COMBUSTIBLE EOX',
+        'REEMPLAZO DE HOLOGRAMA EOX', 'REPORTE DE CONSUMO DE COMBUSTIBLE EOX',
+      ] },
+      { clave: 'PLACA', etiqueta: 'Placa', tipo: 'text' },
+      { clave: 'QUIEN ATENDIO', etiqueta: 'Quién atendió', tipo: 'select', opciones: [
+        'ABIGAIL LEDESMA CORONA', 'DAVID MOISES MALDONADO HERNANDEZ', 'GIOVANNI JAVIER ORDUÑA DE LA PEÑA', 'JORGE LUIS AVECILLA RIVERA',
+      ] },
+      { clave: 'COMENTARIO', etiqueta: 'Comentario', tipo: 'text', renglonCompleto: true },
+    ];
+    document.getElementById('campos-form-ticket').innerHTML = CamposHoja.html(CAMPOS_TICKET, { prefijo: 'ticket' });
+    document.getElementById('campos-form-editar-ticket').innerHTML = CamposHoja.html(CAMPOS_TICKET, { prefijo: 'editar-ticket', esEdicion: true });
+
+    document.getElementById('ticket-fecha-de-registro').value = new Date().toLocaleDateString('es-MX');
     document.getElementById('ticket-fecha').value = hoyISO();
 
     // Departamentos (hoja "LISTAS VEHICULOS") y Solicitantes (sugerencias =
@@ -3469,35 +3469,13 @@
           callServerCacheado('apiListarDepartamentos', state.token),
           callServerCacheado('apiListarSolicitantesTickets', state.token),
         ]);
-        // Departamento ahora es <input list="..."> igual que Solicitante
-        // (se puede escribir uno nuevo que todavía no esté en la lista).
-        const opcionesDepto = (departamentos || []).map((d) => `<option value="${d}"></option>`).join('');
-        document.getElementById('ticket-departamento-lista').innerHTML = opcionesDepto;
-        document.getElementById('editar-ticket-departamento-lista').innerHTML = opcionesDepto;
-        document.getElementById('lista-solicitantes').innerHTML =
-          (solicitantes || []).map((s) => `<option value="${s}"></option>`).join('');
+        ['ticket', 'editar-ticket'].forEach((prefijo) => {
+          CamposHoja.llenarOpciones(prefijo + '-departamento', departamentos);
+          CamposHoja.llenarOpciones(prefijo + '-solicitante', solicitantes);
+        });
       } catch (err) {
         console.error('No se pudieron cargar los catálogos de Departamento/Solicitante:', err);
       }
-    }
-
-    const CAMPOS_TICKET = ['TICKET', 'FECHA', 'DEPARTAMENTO', 'SOLICITANTE', 'TIPO ATENCION', 'PLACA', 'QUIEN ATENDIO', 'COMENTARIO'];
-    function idTicket(prefijo, clave) { return prefijo + '-' + slugCampo(clave); }
-    function recolectarTicket(prefijo) {
-      const datos = {};
-      CAMPOS_TICKET.forEach((clave) => {
-        const el = document.getElementById(idTicket(prefijo, clave));
-        if (el) datos[clave] = el.value.trim();
-      });
-      return datos;
-    }
-    function poblarTicket(prefijo, datos) {
-      CAMPOS_TICKET.forEach((clave) => {
-        const el = document.getElementById(idTicket(prefijo, clave));
-        if (!el) return;
-        const valor = (datos && datos[clave]) || '';
-        el.value = el.type === 'date' ? fechaParaInput(valor) : valor;
-      });
     }
 
     const tabla = DataTable.crear(document.getElementById('tickets-tabla'), {
@@ -3548,7 +3526,7 @@
       document.getElementById('editar-ticket-id').value = t.ID;
       document.getElementById('editar-ticket-label').textContent = 'Ticket: ' + (t['TICKET'] || t.ID);
       document.getElementById('editar-ticket-error').hidden = true;
-      poblarTicket('editar-ticket', t);
+      CamposHoja.poblar(CAMPOS_TICKET, 'editar-ticket', t);
       modalEditar.hidden = false;
     }
     function cerrarEditarTicket() {
@@ -3569,7 +3547,7 @@
       btn.innerHTML = '<span class="spinner"></span> Guardando…';
       toastCargando('Guardando cambios…');
       try {
-        await callServer('apiActualizarTicket', state.token, document.getElementById('editar-ticket-id').value, recolectarTicket('editar-ticket'));
+        await callServer('apiActualizarTicket', state.token, document.getElementById('editar-ticket-id').value, CamposHoja.recolectar(CAMPOS_TICKET, 'editar-ticket'));
         cerrarEditarTicket();
         invalidarCacheLista('apiListarTicketsResumen', state.token);
         await cargar();
@@ -3612,9 +3590,9 @@
       btn.innerHTML = '<span class="spinner"></span> Registrando…';
       toastCargando('Registrando…');
       try {
-        await callServer('apiCrearTicket', state.token, recolectarTicket('ticket'));
+        await callServer('apiCrearTicket', state.token, CamposHoja.recolectar(CAMPOS_TICKET, 'ticket'));
         ev.target.reset();
-        document.getElementById('ticket-fecha-registro').value = new Date().toLocaleDateString('es-MX');
+        document.getElementById('ticket-fecha-de-registro').value = new Date().toLocaleDateString('es-MX');
         document.getElementById('ticket-fecha').value = hoyISO();
         invalidarCacheLista('apiListarTicketsResumen', state.token);
         await cargar();

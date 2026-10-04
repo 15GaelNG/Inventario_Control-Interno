@@ -5,7 +5,9 @@
    * Por qué existe: Vehículos (CAMPOS_VEHICULO), Caja Chica (CAMPOS_CAJACHICA) y Arqueos
    * (CAMPOS_ARQUEO) traían cada uno su copia casi idéntica de lo mismo: pintar los campos
    * agrupados por sección, leerlos para guardar y llenarlos al editar. Una sola copia: un
-   * tipo de campo nuevo, o un arreglo, sirve para los tres (y para el siguiente módulo).
+   * tipo de campo nuevo, o un arreglo, sirve para todos. También lo usan los formularios
+   * cortos que antes iban escritos a mano en la vista: Uber, Tickets, Incidencias,
+   * Reasignaciones y Cambios de Monto.
    *
    * ─── USO ──────────────────────────────────────────────────────────────────────────
    *   const CAMPOS = [
@@ -30,10 +32,18 @@
    *   firma: recuadro para firmar con mouse o dedo (el módulo lo conecta).
    *
    * ─── OPCIONES DE CADA CAMPO ───────────────────────────────────────────────────────
+   *   grupo          título de la sección; sin grupo, el campo va sin título (formularios
+   *                  cortos de una sola sección, como Uber o Tickets)
    *   soloLectura    lo decide el sistema: se muestra bloqueado con "auto" (CampoAuto) y
-   *                  no se manda al guardar
+   *                  no se manda al guardar. textoAuto: lo que dice la etiqueta al pasar
+   *                  el mouse (p. ej. "Monto actual de la caja chica")
    *   placeholder · requerido · moneda ("$" fijo a la izquierda) · opciones
+   *   requeridoAlCrear  obligatorio solo al dar de alta (al editar se puede dejar vacío)
+   *   renglonCompleto   ocupa todo el ancho del formulario (textos largos)
+   *   noSeGuarda     no es una columna: solo ayuda a capturar (p. ej. Nucco, que sirve
+   *                  para buscar el vehículo); no se manda al guardar
    *   soloEdicion    no aparece al dar de alta (p. ej. Fecha de cierre)
+   *   soloAlta       no aparece al editar (p. ej. Fecha de registro, que es la de hoy)
    *   bloqueadoAlCrear + valorPorDefecto   al dar de alta queda fijo en ese valor
    *   mostrarSiCampo + mostrarSiValor      aparece solo si otro campo tiene ese valor
    *
@@ -50,9 +60,10 @@
 
     function campoHtml(campo, prefijo, esEdicion) {
       const id = idDe(prefijo, campo.clave);
-      const req = campo.requerido ? ' required' : '';
-      const mostrarSi = campo.mostrarSiCampo
-        ? ` data-mostrar-si-campo="${campo.mostrarSiCampo}" data-mostrar-si-valor="${campo.mostrarSiValor}"` : '';
+      const req = campo.requerido || (campo.requeridoAlCrear && !esEdicion) ? ' required' : '';
+      // mostrarSi: los atributos extra del <div class="field"> (ancho y cuándo se ve)
+      const mostrarSi = (campo.renglonCompleto ? ' style="grid-column: 1 / -1;"' : '') + (campo.mostrarSiCampo
+        ? ` data-mostrar-si-campo="${campo.mostrarSiCampo}" data-mostrar-si-valor="${campo.mostrarSiValor}"` : '');
       if (campo.tipo === 'file') {
         // soloLectura (p. ej. un PDF que se genera solo): no tiene caso el <input type="file">
         const inputArchivo = campo.soloLectura ? '' : campo.multiple
@@ -84,13 +95,14 @@
       if (campo.tipo === 'select' && campo.catalogo) {
         // Las "opciones" fijas de un catálogo (p. ej. Placa: SIN PLACA) van ya en el datalist
         const sugerencias = (campo.opciones || []).map((o) => `<option value="${o}"></option>`).join('');
-        return `<div class="field"${mostrarSi}><label>${campo.etiqueta}</label><input type="text" id="${id}" list="${id}-lista" autocomplete="off"${req} placeholder="Escribe o elige…" /><datalist id="${id}-lista">${sugerencias}</datalist></div>`;
+        return `<div class="field"${mostrarSi}><label>${campo.etiqueta}</label><input type="text" id="${id}" list="${id}-lista" autocomplete="off"${req} placeholder="${campo.placeholder || 'Escribe o elige…'}" /><datalist id="${id}-lista">${sugerencias}</datalist></div>`;
       }
       if (campo.tipo === 'select') {
         const opciones = (campo.opciones || []).map((o) => `<option value="${o}">${o}</option>`).join('');
         return `<div class="field"${mostrarSi}><label>${campo.etiqueta}</label><select id="${id}"${req}><option value="">Selecciona…</option>${opciones}</select></div>`;
       }
-      const disabled = campo.soloLectura ? ' disabled data-auto' : '';
+      const disabled = !campo.soloLectura ? ''
+        : ' disabled data-auto' + (campo.textoAuto ? `="${campo.textoAuto}"` : '');
       const placeholder = campo.placeholder ? ` placeholder="${campo.placeholder}"` : '';
       // step="any": sin esto un number solo acepta enteros, y los montos llevan decimales
       const step = campo.tipo === 'number' ? ' step="any"' : '';
@@ -112,21 +124,22 @@
       const porGrupo = {};
       campos.forEach((campo) => {
         if (campo.soloEdicion && !op.esEdicion) return;
+        if (campo.soloAlta && op.esEdicion) return;
         if (op.soloGrupos && op.soloGrupos.indexOf(campo.grupo) === -1) return;
         if (!porGrupo[campo.grupo]) { porGrupo[campo.grupo] = []; grupos.push(campo.grupo); }
         porGrupo[campo.grupo].push(campo);
       });
       return grupos.map((grupo) =>
-        `<div class="info-section-title">${grupo}</div>` +
+        (grupo ? `<div class="info-section-title">${grupo}</div>` : '') +
         porGrupo[grupo].map((campo) => campoHtml(campo, op.prefijo, op.esEdicion)).join('')).join('');
     }
 
-    /** { columna: valor } de lo que se captura a mano. Sin soloLectura, file ni firma:
-     *  los archivos y firmas se suben aparte (es asíncrono). */
+    /** { columna: valor } de lo que se captura a mano. Sin soloLectura, noSeGuarda, file ni
+     *  firma: los archivos y firmas se suben aparte (es asíncrono). */
     function recolectar(campos, prefijo) {
       const datos = {};
       campos.forEach((campo) => {
-        if (campo.tipo === 'file' || campo.tipo === 'firma' || campo.soloLectura) return;
+        if (campo.tipo === 'file' || campo.tipo === 'firma' || campo.soloLectura || campo.noSeGuarda) return;
         const el = document.getElementById(idDe(prefijo, campo.clave));
         if (el) datos[campo.clave] = el.value.trim();
       });
