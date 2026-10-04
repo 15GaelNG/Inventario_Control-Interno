@@ -22,12 +22,12 @@ const ENTORNOS = {
   '1NbOczw_H8UJ7adxRP4h_jl9VlfyvxM3mANYsaz12U5uo8Gj0BmfIYN3k': {
     ENTORNO: 'PROD',
 
-    // El libro migrado (migrar.py --copiar-produccion, 2-oct-2026)
-    SS_ID_USUARIOS: '1OsW5n8tQkBqIqLHigTCIFcmuA8hFWpP-lDY5tuoaQgA',
-    SS_ID_VEHICULOS: '1OsW5n8tQkBqIqLHigTCIFcmuA8hFWpP-lDY5tuoaQgA',
-    SS_ID_TELEFONIA: '1OsW5n8tQkBqIqLHigTCIFcmuA8hFWpP-lDY5tuoaQgA',
-    SS_ID_ACCESORIOS: '1OsW5n8tQkBqIqLHigTCIFcmuA8hFWpP-lDY5tuoaQgA',
-    SS_ID_CAJACHICA: '1OsW5n8tQkBqIqLHigTCIFcmuA8hFWpP-lDY5tuoaQgA',
+    // El libro migrado (migrar.py --copiar-produccion, 4-oct-2026, corrida final)
+    SS_ID_USUARIOS: '17YrtuMYjGGg5LZm1BxMNrEZyCxTMI2DiUHSVUIldUlc',
+    SS_ID_VEHICULOS: '17YrtuMYjGGg5LZm1BxMNrEZyCxTMI2DiUHSVUIldUlc',
+    SS_ID_TELEFONIA: '17YrtuMYjGGg5LZm1BxMNrEZyCxTMI2DiUHSVUIldUlc',
+    SS_ID_ACCESORIOS: '17YrtuMYjGGg5LZm1BxMNrEZyCxTMI2DiUHSVUIldUlc',
+    SS_ID_CAJACHICA: '17YrtuMYjGGg5LZm1BxMNrEZyCxTMI2DiUHSVUIldUlc',
 
     // Carpetas de Drive (ver qué es cada una en Config.gs)
     DRIVE_FOLDER_ID_RAIZ: '1FsC5mloJNhi_TR7pBX1KMEjUZfN_M9OM',
