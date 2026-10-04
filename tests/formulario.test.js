@@ -16,7 +16,7 @@ const dom = new JSDOM('<!doctype html><body><div id="f"></div></body>', { url: '
 const { window } = dom;
 window.CSS = { escape: (s) => String(s).replace(/["\\]/g, '\\$&') };
 window.URL.createObjectURL = () => 'blob:prueba';
-window.eval(['iconos.html', 'notificar.html', 'combobox.html', 'formulario.html'].map(scriptDe).join('\n') +
+window.eval(['iconos.html', 'notificar.html', 'combobox.html', 'campo-auto.html', 'formulario.html'].map(scriptDe).join('\n') +
   '\nwindow.Formulario = Formulario; window.Notificar = Notificar; window.Combobox = Combobox;');
 
 const doc = window.document;
@@ -401,8 +401,16 @@ const errorDe = (campo) => {
     'setSoloLectura bloquea con readonly, no con disabled (los lectores de pantalla sí leen los readonly)');
   ok(q('[data-campo="B"] input').getAttribute('aria-readonly') === 'true', 'y lo anuncia como solo lectura');
   ok(formPanel.getValores().B === 'G9ABC', 'un campo de solo lectura SÍ se sigue enviando al guardar');
+  const tagB = () => q('[data-campo="B"] label .auto-tag');
+  ok(tagB() && !tagB().hidden, 'el de solo lectura dice "auto" (CampoAuto)');
   formPanel.setSoloLectura('B', false);
   ok(!q('[data-campo="B"] input').readOnly, 'y se puede volver a liberar');
+  ok(tagB().hidden, 'liberado, ya no dice "auto"');
+  formPanel.sugerir('B', 'G9SUG');
+  ok(formPanel.getValores().B === 'G9SUG' && !tagB().hidden, 'sugerir() pone el valor con "auto"');
+  q('[data-campo="B"] input').value = 'G9MIO';
+  evento(q('[data-campo="B"] input'), 'input');
+  ok(tagB().hidden, 'y la etiqueta se va cuando la persona escribe otro valor');
   formPanel.limpiar();
   ok(q('.form-panel-capturado').hidden && q('.form-ficha').hidden, 'al limpiar, el panel vuelve a quedar vacío');
   cajaPanel.remove();

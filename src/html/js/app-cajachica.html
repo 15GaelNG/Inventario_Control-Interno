@@ -97,7 +97,7 @@
     return grupos.map((grupo) => {
       const campos = porGrupo[grupo].map((campo) => {
         const id = prefijo + '-' + slugCampo(campo.clave);
-        const disabled = campo.soloLectura ? ' disabled' : '';
+        const disabled = campo.soloLectura ? ' disabled data-auto' : '';   // data-auto: etiqueta "auto" (CampoAuto)
         const placeholder = campo.placeholder ? ` placeholder="${campo.placeholder}"` : '';
         // step="any": sin esto, type="number" solo acepta enteros por
         // default (step="1" implícito) — los montos necesitan decimales.
@@ -106,7 +106,7 @@
         // alta, editable a sus 3 opciones después) — en Registrar se ven
         // fijos y deshabilitados; en Editar sí son un select normal.
         if (campo.tipo === 'select' && campo.bloqueadoAlCrear && !esEdicion) {
-          return `<div class="field"><label>${campo.etiqueta}</label><input type="text" id="${id}" value="${campo.valorPorDefecto}" disabled /></div>`;
+          return `<div class="field"><label>${campo.etiqueta}</label><input type="text" id="${id}" value="${campo.valorPorDefecto}" disabled data-auto /></div>`;
         }
         if (campo.tipo === 'select' && campo.catalogo) {
           // catalogo: true — caja de texto con sugerencias (datalist), se
@@ -754,8 +754,7 @@
     let todosLosCambios = [];
 
     const selectCaja = document.getElementById('cm-id-cch');
-    const campoAnterior = document.getElementById('cm-cantidad-anterior');
-    const tagAnterior = document.getElementById('cm-tag-anterior');
+    const campoAnterior = document.getElementById('cm-cantidad-anterior');   // data-auto en la vista
 
     // cargar() necesita cajasPorId ya lleno (para poner Responsable en cada
     // renglón), así que no se puede simplemente "correr en paralelo y ya" —
@@ -786,13 +785,7 @@
 
     selectCaja.addEventListener('change', () => {
       const caja = cajasPorId[selectCaja.value];
-      if (caja) {
-        campoAnterior.value = formatearMoneda(caja.MONTO_ACTUAL || 0);
-        tagAnterior.hidden = false;
-      } else {
-        campoAnterior.value = '';
-        tagAnterior.hidden = true;
-      }
+      campoAnterior.value = caja ? formatearMoneda(caja.MONTO_ACTUAL || 0) : '';
     });
 
     function etiquetaTipo(tipo) {
@@ -912,7 +905,6 @@
           'CANTIDAD ACTUALIZADA': document.getElementById('cm-cantidad-actualizada').value,
         });
         ev.target.reset();
-        tagAnterior.hidden = true;
         // Refresca también el catálogo de cajas chicas en memoria: el monto
         // actual de la que se acaba de cambiar ya no es el mismo. Se invalida
         // el caché de ambas listas (esta y la de Caja Chica, que también

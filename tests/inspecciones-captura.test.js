@@ -92,7 +92,7 @@ window.callServer = (fn, token, ...args) => {
 // interesa la caché, solo que la llamada llegue al mismo servidor falso.
 window.callServerCacheado = (fn, ...args) => window.callServer(fn, 't', ...args);
 let confirmar = true;
-window.eval(['componentes/iconos.html', 'componentes/notificar.html', 'componentes/combobox.html',
+window.eval(['componentes/iconos.html', 'componentes/notificar.html', 'componentes/combobox.html', 'componentes/campo-auto.html',
   'componentes/lienzo.html', 'componentes/firma.html'].map(scriptDe).join('\n') + `
   var state = { token: 't', sesion: { nombre: 'AYRTON SEPULVEDA' } };
   var Confirmar = { pedir: () => Promise.resolve(window.__confirmar()) };
@@ -164,6 +164,8 @@ const PASOS = 'Vehículo|Exterior|Neumáticos|Interior|Mecánica|Daños|Cierre|F
   await esperar(10);
   ok(/ABC-123/.test($('#ins-ficha').textContent), 'la ficha del panel muestra la unidad');
   ok($('#ins-tipo').value === 'L200', 'sugiere el tipo por la línea del vehículo');
+  const tagTipo = $('#ins-tipo').closest('.field').querySelector('label .auto-tag');
+  ok(tagTipo && !tagTipo.hidden, 'y lo marca "auto" (se puede cambiar)');
   ok(chips().join('|') === PASOS, 'arma los pasos del tipo: ' + chips().join(' → '));
   ok(!$('#ins-panel-avance').hidden && $$('#ins-avance-lista li').length === 12, 'el panel lista las 12 secciones');
 

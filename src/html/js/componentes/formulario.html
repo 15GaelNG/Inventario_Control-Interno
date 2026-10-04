@@ -249,7 +249,7 @@
    *     pasos: [{ titulo: 'Unidad', campos: ['TIPO'] },
    *             { titulo: 'Datos', campos: ['PLACA'], visibleSi: (v) => v.TIPO === 'PERSONAL' }],
    *
-   * Métodos: getValores() · getArchivos() · setValor(id, v) · setOpciones(id, [..]) ·
+   * Métodos: getValores() · getArchivos() · setValor(id, v) · sugerir(id, v) · setOpciones(id, [..]) ·
    *          setSoloLectura(id, si, motivo) · setError(id, msg) · limpiar() · enfocar() ·
    *          elemento(id) · irAPaso(i)
    *
@@ -487,6 +487,12 @@
         if (el) el.value = valor == null ? '' : valor;
       }
 
+      /** Valor que pone el sistema pero se puede corregir: lleva "auto" hasta que lo cambien */
+      function sugerir(id, valor) {
+        const el = elemento(id);
+        if (el) CampoAuto.llenar(el, valor);
+      }
+
       function setOpciones(id, opciones, seleccionado) {
         const el = elemento(id);
         if (el && el.tagName === 'SELECT') el.innerHTML = opcionesHtml(opciones, seleccionado);
@@ -509,21 +515,9 @@
           if (si && ayuda.dataset.original === undefined) ayuda.dataset.original = ayuda.textContent;
           ayuda.textContent = si ? motivo : (ayuda.dataset.original || '');
         }
-        // "auto": mismo <span class="auto-tag"> que ya usan Vehículos/Incidencias/
-        // Reasignaciones/Cambios de Monto CCH -- se crea la primera vez que el campo se
-        // vuelve de solo lectura (el label nace sin ella) y luego solo se muestra/oculta.
-        const label = caja && caja.querySelector('label');
-        if (label) {
-          let tag = label.querySelector('.auto-tag');
-          if (!tag && si) {
-            tag = document.createElement('span');
-            tag.className = 'auto-tag';
-            tag.textContent = 'auto';
-            label.appendChild(document.createTextNode(' '));
-            label.appendChild(tag);
-          }
-          if (tag) tag.hidden = !si;
-        }
+        // La etiqueta "auto" la pone el componente CampoAuto, igual que en todo el sistema
+        if (si) CampoAuto.fijo(el, motivo);
+        else CampoAuto.quitar(el);
       }
 
       // ---------- errores ----------
@@ -959,6 +953,7 @@
         getArchivos: () => Object.assign({}, archivos),
         getDatosFicha: () => datosFicha,
         setValor,
+        sugerir,
         setOpciones,
         setSoloLectura,
         setError,

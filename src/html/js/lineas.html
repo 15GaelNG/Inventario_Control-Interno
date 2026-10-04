@@ -610,7 +610,7 @@
     function htmlElementoFormulario(e) {
       if (e.tipo === 'titulo') return '<h4 class="ln-af-titulo">' + (e.icono ? icono(e.icono) + ' ' : '') + esc(e.texto) + '</h4>';
       const id = 'af-' + e.columna.replace(/[^A-Za-z0-9]+/g, '-');
-      const attrs = ' id="' + id + '" data-columna="' + esc(e.columna) + '"' + (e.virtual ? ' data-virtual' : '') + (e.deriva ? ' data-deriva-de="' + esc(e.deriva.de) + '" data-deriva-dato="' + esc(e.deriva.dato) + '"' : '') + (e.literal || e.secreto ? ' data-respetar-texto' : '') + (e.soloLectura ? ' readonly tabindex="-1"' : '');
+      const attrs = ' id="' + id + '" data-columna="' + esc(e.columna) + '"' + (e.virtual ? ' data-virtual' : '') + (e.deriva ? ' data-deriva-de="' + esc(e.deriva.de) + '" data-deriva-dato="' + esc(e.deriva.dato) + '"' : '') + (e.literal || e.secreto ? ' data-respetar-texto' : '') + (e.soloLectura ? ' readonly tabindex="-1"' : '') + (e.soloLectura || e.deriva ? ' data-auto' : '');
       const valor = e.valor === null || e.valor === undefined ? '' : String(e.valor);
       let control;
       if (e.control === 'escala') {
@@ -657,7 +657,7 @@
         control = '<div class="ln-firma ln-firma-' + rol + '"><div class="ln-firma-cabecera">' + icono(rol === 'ci' ? 'shield-check' : 'user') + ' ' +
           (rol === 'ci' ? 'Firma de Control Interno' : 'Firma del responsable') + '</div><div class="ln-firma-lienzo" id="' + id + '-firma"></div></div>';
       } else if (e.control === 'calculado') {
-        control = '<div class="ln-af-calculado' + (e.formula ? '' : ' ln-af-calculado-texto') + '" id="' + id + '"' + (e.formula ? ' data-formula="' + esc(e.formula) + '"' : '') + '>' + (valor ? esc(valor) : '—') + '</div>';
+        control = '<div data-auto class="ln-af-calculado' + (e.formula ? '' : ' ln-af-calculado-texto') + '" id="' + id + '"' + (e.formula ? ' data-formula="' + esc(e.formula) + '"' : '') + '>' + (valor ? esc(valor) : '—') + '</div>';
       } else {
         control = '<input type="text"' + attrs + ' value="' + esc(valor) + '" autocomplete="off"' + (e.valorOculto ? ' placeholder="•••• (se conserva el valor registrado)"' : '') + ' />';
       }
@@ -1050,7 +1050,7 @@
                 const destino = cuerpo.querySelector('[data-columna="' + CSS.escape(columna) + '"]');
                 const valor = opcion.datos[e.autollenar[columna]];
                 if (!destino || destino.disabled || destino.readOnly || !valor) return;
-                destino.value = valor;
+                CampoAuto.llenar(destino, valor);   // "auto" hasta que lo cambien
                 // solo "change": "input" abriría la lista del otro campo
                 destino.dispatchEvent(new Event('change', { bubbles: true }));
               });

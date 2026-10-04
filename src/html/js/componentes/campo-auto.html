@@ -1,0 +1,119 @@
+<script>
+  /**
+   * CampoAuto — la etiqueta "auto" de los campos que llena el sistema, en un solo lugar.
+   *
+   * Por qué existe: cada motor de formularios (Formulario, CAMPOS_VEHICULO, CAMPOS_ARQUEO,
+   * CAMPOS_CAJACHICA, el de Líneas y las vistas escritas a mano) ponía la etiqueta por su
+   * cuenta, o se le olvidaba: medio sistema llenaba campos solo sin decirlo. Aquí se declara
+   * QUÉ campo es automático y el componente resuelve CÓMO se ve.
+   *
+   * ─── DOS CLASES DE CAMPO ──────────────────────────────────────────────────────────
+   *   Fijo: el sistema decide el valor y la persona no lo toca (Folio autogenerado, totales,
+   *   lo que viene de la caja chica). Se declara en el HTML con el atributo `data-auto`:
+   *
+   *       <input id="x" disabled data-auto />
+   *       <input id="x" disabled data-auto="Viene de la caja chica" />   ← el texto es el tooltip
+   *
+   *   No hace falta llamar nada: al cargar y cada vez que se agrega HTML a la página, el
+   *   componente busca los `[data-auto]` y les pone la etiqueta. Sirve para cualquier motor
+   *   que pinte con innerHTML.
+   *
+   *   Sugerido: el sistema lo llena pero se puede corregir (Departamento al elegir al
+   *   responsable, el Nucco al escribir el Folio). Se llena con:
+   *
+   *       CampoAuto.llenar(input, valor)
+   *
+   *   La etiqueta aparece y se va sola en cuanto la persona escribe otro valor: nunca dice
+   *   "auto" sobre algo que capturó alguien. Un valor vacío la quita.
+   *
+   * ¿Por qué no "todo campo deshabilitado es auto"? Porque hay campos que se bloquean por otra
+   * razón: por lo que se eligió (Auditoría, Capturista), por permisos o mientras se guarda.
+   *
+   * Métodos: fijo(el, motivo?) · llenar(el, valor) · quitar(el) · escanear(raiz)
+   * El elemento puede ser el control o su id. La etiqueta va en el <label> del `.field` que
+   * lo contiene.
+   */
+  const CampoAuto = (function () {
+    const TITULO_FIJO = 'Lo llena el sistema';
+    const TITULO_SUGERIDO = 'Se llenó solo: puedes cambiarlo';
+
+    const elementoDe = (el) => (typeof el === 'string' ? document.getElementById(el) : el);
+
+    function etiquetaDe(el, crear) {
+      const caja = el.closest('.field');
+      const label = caja && caja.querySelector('label');
+      if (!label) return null;
+      let tag = label.querySelector('.auto-tag');
+      if (!tag && crear) {
+        tag = document.createElement('span');
+        tag.className = 'auto-tag';
+        tag.textContent = 'auto';
+        label.appendChild(document.createTextNode(' '));
+        label.appendChild(tag);
+      }
+      return tag;
+    }
+
+    function mostrar(el, si, titulo) {
+      const tag = etiquetaDe(el, si);
+      if (!tag) return;
+      tag.hidden = !si;
+      if (titulo) tag.title = titulo;
+    }
+
+    function fijo(el, motivo) {
+      el = elementoDe(el);
+      if (el) mostrar(el, true, motivo || TITULO_FIJO);
+    }
+
+    function quitar(el) {
+      el = elementoDe(el);
+      if (!el) return;
+      delete el.dataset.autoValor;
+      mostrar(el, false);
+    }
+
+    function llenar(el, valor) {
+      el = elementoDe(el);
+      if (!el) return;
+      el.value = valor === null || valor === undefined ? '' : String(valor);
+      if (!el.value) { quitar(el); return; }
+      el.dataset.autoValor = el.value;
+      mostrar(el, true, TITULO_SUGERIDO);
+      if (el.dataset.autoEscucha) return;
+      el.dataset.autoEscucha = '1';
+      // Un evento con el MISMO valor (p. ej. un dispatchEvent para disparar una búsqueda)
+      // no la quita: solo la quita un valor distinto al que puso el sistema.
+      const alCambiar = () => {
+        if (el.dataset.autoValor !== undefined && el.value !== el.dataset.autoValor) quitar(el);
+      };
+      el.addEventListener('input', alCambiar);
+      el.addEventListener('change', alCambiar);
+    }
+
+    function escanear(raiz) {
+      if (!raiz || !raiz.querySelectorAll) return;
+      const lista = Array.from(raiz.querySelectorAll('[data-auto]'));
+      if (raiz.matches && raiz.matches('[data-auto]')) lista.unshift(raiz);
+      lista.forEach((el) => fijo(el, el.dataset.auto || undefined));
+    }
+
+    // Un formulario que se resetea ya no trae lo que se llenó solo
+    document.addEventListener('reset', (ev) => {
+      if (!ev.target || !ev.target.querySelectorAll) return;
+      ev.target.querySelectorAll('[data-auto-valor]').forEach(quitar);
+    }, true);
+
+    function arrancar() {
+      escanear(document.body);
+      if (typeof MutationObserver === 'undefined') return;
+      new MutationObserver((cambios) => {
+        cambios.forEach((c) => c.addedNodes.forEach((n) => { if (n.nodeType === 1) escanear(n); }));
+      }).observe(document.body, { childList: true, subtree: true });
+    }
+    if (document.body) arrancar();
+    else document.addEventListener('DOMContentLoaded', arrancar);
+
+    return { fijo, llenar, quitar, escanear };
+  })();
+</script>

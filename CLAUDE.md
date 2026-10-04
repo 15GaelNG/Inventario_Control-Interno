@@ -36,6 +36,28 @@ dividir es seguro mientras el orden de `<?!= include(...) ?>` en
 `src/html/Index.html` mantenga los archivos "base" (api, app) antes de los
 que dependen de sus helpers.
 
+## Componentes (`src/html/js/componentes/`)
+
+Lo que se repite entre módulos va en un componente, no en otra copia. Antes de
+escribirlo a mano en un módulo, revisa si ya existe: `Formulario` (captura con
+validación, pasos y panel), `DataTable`, `Combobox`, `Confirmar`, `Notificar`,
+`Firma`, `Lienzo`, `ExportarExcel`, `CampoAuto` y `FolioNucco`. Cada uno documenta
+su uso al inicio del archivo y tiene su prueba en `tests/`.
+
+- **Campos que llena el sistema → etiqueta "auto", siempre con `CampoAuto`.** Si
+  el valor lo decide el sistema y no se edita, pon `data-auto` en el control (sirve
+  en cualquier HTML, aunque se agregue después con innerHTML). Si se llena solo
+  pero se puede corregir, usa `CampoAuto.llenar(el, valor)` (o
+  `form.sugerir(id, valor)` en `Formulario`): la etiqueta se quita sola cuando la
+  persona escribe otro valor. No escribas `<span class="auto-tag">` a mano, y no
+  marques "auto" un campo que se bloquea por otra razón (permisos, lo que se
+  eligió, guardando).
+- **Elegir un vehículo por Folio o Nucco → `FolioNucco.ligar`.**
+- `tests/source-contracts.test.cjs` falla si alguien vuelve a escribir la
+  etiqueta "auto" a mano o hace otra copia del par Folio/Nucco.
+- Un componente nuevo se incluye en `src/html/Index.html` antes de los módulos y
+  componentes que lo usan (`campo-auto` va antes que `formulario`).
+
 ## Flujo de trabajo
 
 - Rama de trabajo: `jorge`. Nunca hacer push a `master` sin que se pida

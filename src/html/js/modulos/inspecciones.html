@@ -518,7 +518,7 @@
     // listos, para que el filtro por prefijo y la ficha del vehículo salgan bien.
     if (opciones.folioFijo) {
       catalogos.then(() => {
-        campoFolio.value = opciones.folioFijo;
+        CampoAuto.llenar(campoFolio, opciones.folioFijo);
         buscarVehiculo();
       });
     }
@@ -563,7 +563,7 @@
           await catalogos;
           const sugerido = Array.from(campoTipo.options)
             .find((o) => o.value && !o.disabled && o.value.toUpperCase() === String(v['LINEA VEHICULO'] || '').toUpperCase());
-          if (sugerido && !campoTipo.value) { campoTipo.value = sugerido.value; cargarChecklist(); }
+          if (sugerido && !campoTipo.value) { CampoAuto.llenar(campoTipo, sugerido.value); cargarChecklist(); }
         } catch (err) {
           if (pedido === folio) error('FOLIO', err.message);
         } finally {
@@ -656,12 +656,13 @@
         prepararFirmas();
         // Conductor/Holograma del paso "Cierre": si la ficha de Vehículos ya sabe quién es
         // el responsable o qué holograma tiene la unidad, se sugieren (el campo se puede
-        // seguir editando; no viene con soloLectura porque puede no ser el conductor real).
+        // seguir editando; no viene con soloLectura porque puede no ser el conductor real),
+        // con la etiqueta "auto" hasta que lo cambien.
         if (opciones.conductorSugerido && $('#ins-conductor') && !$('#ins-conductor').value) {
-          $('#ins-conductor').value = opciones.conductorSugerido;
+          CampoAuto.llenar($('#ins-conductor'), opciones.conductorSugerido);
         }
         if (opciones.hologramaSugerido && $('#ins-holograma') && !$('#ins-holograma').value) {
-          $('#ins-holograma').value = opciones.hologramaSugerido;
+          CampoAuto.llenar($('#ins-holograma'), opciones.hologramaSugerido);
         }
       }
       $('#ins-panel-avance').hidden = !estructura;
@@ -1190,8 +1191,8 @@
           await opciones.alGuardado(res);
         } else {
           // Se deja listo para la siguiente unidad
-          campoFolio.value = '';
-          campoTipo.value = '';
+          CampoAuto.llenar(campoFolio, '');
+          CampoAuto.llenar(campoTipo, '');
           tipoAnterior = '';
           pedido = '';
           vehiculo = null;

@@ -1,0 +1,79 @@
+<script>
+  /**
+   * FolioNucco — el par de campos Folio / Nucco para elegir un vehículo.
+   * Requiere CampoAuto.
+   *
+   * Por qué existe: Incidencias, Reasignaciones, Sensores y Verificaciones traían cada uno
+   * su copia de lo mismo (resolver el vehículo con cualquiera de los dos y poner el otro).
+   * Una sola copia: si cambia cómo se busca un vehículo, cambia aquí.
+   *
+   * Los dos campos son INDEPENDIENTES (uno no va dentro del otro): escribir en cualquiera
+   * resuelve el vehículo y pone el valor que le corresponde al otro, con la etiqueta "auto".
+   * Si no hay coincidencia no se borra nada (se sigue escribiendo). Lo que se guarda es FOLIO.
+   *
+   * ─── USO ──────────────────────────────────────────────────────────────────────────
+   *   const porClave = FolioNucco.indexar(vehiculos);        // { AUT0100: v, '12': v, … }
+   *   datalistNucco.innerHTML = FolioNucco.opcionesNucco(vehiculos);
+   *   FolioNucco.ligar('inc-folio', 'inc-nucco', {
+   *     buscar: (texto) => porClave[texto],     // vehículo o nada
+   *     alResolver: (vehiculo) => {},          // opcional: autollenar lo demás (null = no hay)
+   *     dispararFolio: true,                   // opcional: al resolver por Nucco, lanzar 'input'
+   *   });                                      // en el Folio (para que su buscador corra)
+   *
+   * Los vehículos son los de apiListarVehiculosBasico: FOLIO, NUCO (sin doble C), MARCA…
+   */
+  const FolioNucco = (function () {
+    const elementoDe = (el) => (typeof el === 'string' ? document.getElementById(el) : el);
+    const esc = (s) => String(s === null || s === undefined ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    /** Una entrada por FOLIO y otra por NUCO, las dos al mismo vehículo. */
+    function indexar(vehiculos, destino) {
+      const porClave = destino || {};
+      (vehiculos || []).forEach((v) => {
+        porClave[v.FOLIO] = v;
+        if (v.NUCO) porClave[v.NUCO] = v;
+      });
+      return porClave;
+    }
+
+    /** <option> del datalist de Nucco, en orden (1, 2, 3…) y no en el del catálogo. */
+    function opcionesNucco(vehiculos, conEtiqueta) {
+      return (vehiculos || []).filter((v) => v.NUCO)
+        .sort((a, b) => Number(a.NUCO) - Number(b.NUCO))
+        .map((v) => `<option value="${esc(v.NUCO)}">` +
+          (conEtiqueta ? esc([v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ')) : '') + '</option>')
+        .join('');
+    }
+
+    function ligar(folio, nucco, opciones) {
+      folio = elementoDe(folio);
+      nucco = elementoDe(nucco);
+      if (!folio || !nucco) return;
+      const o = opciones || {};
+      let propagando = false;   // el 'input' que lanzamos nosotros en el Folio no vuelve a llenar el Nucco
+      folio.addEventListener('input', () => {
+        if (propagando) return;
+        const v = o.buscar(folio.value.trim());
+        if (v) CampoAuto.llenar(nucco, v.NUCO || '');
+        else CampoAuto.quitar(nucco);
+        if (o.alResolver) o.alResolver(v || null);
+      });
+      nucco.addEventListener('input', () => {
+        const v = o.buscar(nucco.value.trim());
+        if (v) {
+          CampoAuto.llenar(folio, v.FOLIO);
+          if (o.dispararFolio) {
+            propagando = true;
+            try { folio.dispatchEvent(new Event('input', { bubbles: true })); } finally { propagando = false; }
+          }
+        } else {
+          CampoAuto.quitar(folio);
+        }
+        if (o.alResolver) o.alResolver(v || null);
+      });
+    }
+
+    return { indexar, opcionesNucco, ligar };
+  })();
+</script>

@@ -178,7 +178,7 @@
             <label>${campo.etiqueta}</label>
             ${inputArchivo}
             ${ayuda}
-            <div class="file-actual" id="${id}-actual"></div>
+            <div class="file-actual" id="${id}-actual"${campo.soloLectura ? ' data-auto="Se genera solo al guardar"' : ''}></div>
           </div>`;
         }
         if (campo.tipo === 'firma') {
@@ -200,7 +200,7 @@
           const opciones = (campo.opciones || []).map((o) => `<option value="${o}">${o}</option>`).join('');
           return `<div class="field"${mostrarSi}><label>${campo.etiqueta}</label><select id="${id}"><option value="">Selecciona…</option>${opciones}</select></div>`;
         }
-        const disabled = campo.soloLectura ? ' disabled' : '';
+        const disabled = campo.soloLectura ? ' disabled data-auto' : '';   // data-auto: etiqueta "auto" (CampoAuto)
         const placeholder = campo.placeholder ? ` placeholder="${campo.placeholder}"` : '';
         // step="any": sin esto, type="number" solo acepta enteros por
         // default (step="1" implícito) — los montos necesitan decimales.

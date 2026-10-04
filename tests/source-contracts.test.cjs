@@ -1653,3 +1653,22 @@ test('Notificaciones de seguimiento (30-sep): equipos sin recibir, cancelaciones
   assert.match(vista, /const AGRUPAR_DESDE = 3;/);
   assert.match(read('src/html/js/lineas.html'), /irConEstatus: irConEstatus, \/\/ desde Notificaciones/);
 });
+
+test('la etiqueta "auto" y el par Folio/Nucco solo viven en sus componentes', () => {
+  // Cada motor de formularios ponía (o se le olvidaba poner) su propia etiqueta "auto": la
+  // regla es declararlo (data-auto, CampoAuto.llenar, Formulario.sugerir/setSoloLectura)
+  // y que componentes/campo-auto.html la pinte. Lo mismo con el par Folio/Nucco.
+  const html = filesBelow(path.join(root, 'src', 'html')).filter((f) => f.endsWith('.html'));
+  const fuera = (patron, permitidos) => html
+    .filter((f) => !permitidos.some((p) => f.endsWith(p)))
+    .filter((f) => patron.test(fs.readFileSync(f, 'utf8')))
+    .map((f) => path.relative(root, f));
+  assert.deepEqual(fuera(/auto-tag/, ['styles.html', path.join('componentes', 'campo-auto.html')]), [],
+    'usa data-auto o CampoAuto en vez de escribir <span class="auto-tag">');
+  assert.deepEqual(fuera(/function wireFolioYNucco_|vehiculosPorFolioONucco/, []), [],
+    'usa FolioNucco.ligar en vez de otra copia del par Folio/Nucco');
+  const index = read('src/html/Index.html');
+  const pos = (n) => index.indexOf("componentes/" + n + "'");
+  assert.ok(pos('campo-auto') > 0 && pos('campo-auto') < pos('folio-nucco') && pos('folio-nucco') < pos('formulario'),
+    'campo-auto y folio-nucco se incluyen antes de formulario (que los usa)');
+});

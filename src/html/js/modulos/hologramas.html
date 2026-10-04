@@ -224,11 +224,14 @@
       document.getElementById('editar-holograma-capacidad').value = h.CAPACIDAD || '';
       // Los datos del vehículo (los del bloque de abajo) no se pueden editar si está en
       // catálogo — se deshabilitan aquí para que no dé falsa esperanza de que se guardarán.
-      const soloSiFueraDelCatalogo = ['placa', 'marca', 'linea', 'modelo', 'responsable', 'departamento', 'serie-vehiculo', 'capacidad'];
+      // Con "auto", igual que en el alta: vienen del catálogo y se corrigen allá.
+      const soloSiFueraDelCatalogo = ['placa', 'marca', 'linea', 'modelo', 'responsable', 'departamento', 'serie-vehiculo', 'capacidad', 'razon-social'];
       soloSiFueraDelCatalogo.forEach((id) => {
-        document.getElementById('editar-holograma-' + id).disabled = !!h.EN_CATALOGO;
+        const el = document.getElementById('editar-holograma-' + id);
+        el.disabled = !!h.EN_CATALOGO;
+        if (h.EN_CATALOGO) CampoAuto.fijo(el, 'Viene del catálogo de Vehículos: se corrige allá');
+        else CampoAuto.quitar(el);
       });
-      document.getElementById('editar-holograma-razon-social').disabled = !!h.EN_CATALOGO;
       document.getElementById('editar-holograma-error').hidden = true;
       modalEditar.hidden = false;
     }

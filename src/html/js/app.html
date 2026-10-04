@@ -1507,13 +1507,11 @@
       const campos = porGrupo[grupo].map((campo) => {
         const id = prefijo + '-' + slugCampo(campo.clave);
         const req = campo.requerido ? ' required' : '';
-        // "auto": campos.soloLectura (el servidor/otro módulo decide el valor, p. ej. Folio)
-        // llevan la etiqueta fija; campo.autoCondicional (p. ej. Departamento/No. de empleado,
-        // que se sugieren al elegir Responsable pero se pueden corregir) la llevan oculta hasta
-        // que el JS que los autollena la muestra (ver wireResponsableVehiculo) — mismo patrón
-        // que ya usan Incidencias (tag-departamento/tag-modelo) y Cambios de Monto CCH.
-        const etiqueta = campo.etiqueta + (campo.soloLectura ? ' <span class="auto-tag">auto</span>'
-          : campo.autoCondicional ? ` <span class="auto-tag" id="${id}-auto-tag" hidden>auto</span>` : '');
+        // "auto" (componente CampoAuto): soloLectura (el servidor/otro módulo decide el valor,
+        // p. ej. Folio) lleva data-auto; autoCondicional (Departamento/No. de empleado, que se
+        // sugieren al elegir Responsable pero se pueden corregir) se llena con
+        // CampoAuto.llenar en wireResponsableVehiculo.
+        const etiqueta = campo.etiqueta;
         if (campo.tipo === 'file') {
           return `<div class="field">
             <label>${etiqueta}</label>
@@ -1542,7 +1540,7 @@
         }
         // soloLectura: el servidor decide el valor (ej. Folio, autogenerado
         // a partir de la Clase) — el campo se muestra pero no se puede editar.
-        const disabled = campo.soloLectura ? ' disabled' : '';
+        const disabled = campo.soloLectura ? ' disabled data-auto' : '';
         const placeholder = campo.placeholder ? ` placeholder="${campo.placeholder}"` : '';
         // step="any": sin esto, type="number" solo acepta enteros por
         // default (step="1" implícito) — los montos necesitan decimales.
@@ -1675,7 +1673,7 @@
     // apuntando al mismo vehículo -- así se puede resolver el vehículo con cualquiera de
     // los dos. Folio y Nucco son campos INDEPENDIENTES (uno no se mete dentro del otro):
     // escribir en uno resuelve el vehículo y pone el valor correspondiente en el otro (ver
-    // wireFolioYNucco_ más abajo). Lo que de verdad se guarda es FOLIO.
+    // componente FolioNucco). Lo que de verdad se guarda es FOLIO.
     const vehiculosPorFolio = {};
     const promesaVehiculos = callServerCacheado('apiListarVehiculosBasico', state.token)
       .then((vehiculos) => {
@@ -1683,20 +1681,11 @@
         // DOM (montarVista hace container.innerHTML = '') — escribir aquí
         // tronaría con "Cannot set properties of null".
         if (!document.body.contains(modal)) return;
-        const opcionesFolio = [];
-        const conNucco = [];
-        vehiculos.forEach((v) => {
-          vehiculosPorFolio[v.FOLIO] = v;
-          const etiqueta = [v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ');
-          opcionesFolio.push(`<option value="${escaparHtml(v.FOLIO)}">${escaparHtml(etiqueta)}</option>`);
-          if (v.NUCO) { vehiculosPorFolio[v.NUCO] = v; conNucco.push(v); }
-        });
-        document.getElementById('lista-folios-vehiculo').innerHTML = opcionesFolio.join('');
-        // En orden (1, 2, 3…), no en el orden del catálogo (que va por folio, no por nucco).
-        document.getElementById('lista-nucco-vehiculo').innerHTML = conNucco
-          .sort((a, b) => Number(a.NUCO) - Number(b.NUCO))
-          .map((v) => `<option value="${escaparHtml(v.NUCO)}">${escaparHtml([v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' '))}</option>`)
+        FolioNucco.indexar(vehiculos, vehiculosPorFolio);
+        document.getElementById('lista-folios-vehiculo').innerHTML = vehiculos
+          .map((v) => `<option value="${escaparHtml(v.FOLIO)}">${escaparHtml([v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' '))}</option>`)
           .join('');
+        document.getElementById('lista-nucco-vehiculo').innerHTML = FolioNucco.opcionesNucco(vehiculos, true);
       })
       .catch((err) => {
         // Antes esto se ignoraba en silencio — ahora se ve para poder diagnosticar.
@@ -1707,42 +1696,22 @@
         errorBox.hidden = false;
       });
 
-    /** Liga un par de campos Folio/Nucco INDEPENDIENTES: escribir en cualquiera de los dos
-     *  resuelve el vehículo en vehiculosPorFolio y pone el valor correspondiente en el otro
-     *  -- no se tocan entre sí si no hay coincidencia (para no borrar lo que ya traían
-     *  mientras se sigue escribiendo). `alResolver(vehiculo|null)` hace lo demás (autollenar
-     *  Departamento/Modelo/Año, mostrar el tag "auto", etc.) */
-    function wireFolioYNucco_(idFolio, idNucco, alResolver) {
-      const campoFolio = document.getElementById(idFolio);
-      const campoNucco = document.getElementById(idNucco);
-      campoFolio.addEventListener('input', (ev) => {
-        const vehiculo = vehiculosPorFolio[ev.target.value];
-        if (vehiculo) campoNucco.value = vehiculo.NUCO || '';
-        alResolver(vehiculo);
-      });
-      campoNucco.addEventListener('input', (ev) => {
-        const vehiculo = vehiculosPorFolio[ev.target.value];
-        if (vehiculo) campoFolio.value = vehiculo.FOLIO;
-        alResolver(vehiculo);
+    /** Al resolver el vehículo (por Folio o Nucco, componente FolioNucco) se sugieren
+     *  Departamento/Modelo/Año con la etiqueta "auto"; se pueden corregir. Sin vehículo no
+     *  se borra lo escrito, solo deja de decir "auto". */
+    function autollenarIncidencia_(prefijo, vehiculo) {
+      ['departamento', 'modelo', 'anio'].forEach((c) => {
+        const el = document.getElementById(prefijo + '-' + c);
+        if (!vehiculo) { CampoAuto.quitar(el); return; }
+        CampoAuto.llenar(el, {
+          departamento: vehiculo.DEPARTAMENTO,
+          modelo: [vehiculo.MARCA, vehiculo.LINEA_VEHICULO].filter(Boolean).join(' '),
+          anio: vehiculo.MODELO,
+        }[c]);
       });
     }
-
-    wireFolioYNucco_('inc-folio', 'inc-nucco', (vehiculo) => {
-      const campoDepto = document.getElementById('inc-departamento');
-      const campoModelo = document.getElementById('inc-modelo');
-      if (vehiculo) {
-        campoDepto.value = vehiculo.DEPARTAMENTO;
-        campoModelo.value = [vehiculo.MARCA, vehiculo.LINEA_VEHICULO].filter(Boolean).join(' ');
-        document.getElementById('inc-anio').value = vehiculo.MODELO || '';
-        document.getElementById('tag-departamento').hidden = false;
-        document.getElementById('tag-modelo').hidden = false;
-        document.getElementById('tag-nucco').hidden = false;
-      } else {
-        document.getElementById('tag-departamento').hidden = true;
-        document.getElementById('tag-modelo').hidden = true;
-        document.getElementById('tag-nucco').hidden = true;
-      }
-    });
+    const buscarVehiculoInc_ = (texto) => vehiculosPorFolio[texto];
+    FolioNucco.ligar('inc-folio', 'inc-nucco', { buscar: buscarVehiculoInc_, alResolver: (v) => autollenarIncidencia_('inc', v) });
 
     function abrirModalCierre(id, folio) {
       document.getElementById('cerrar-id').value = id;
@@ -1757,13 +1726,7 @@
     }
 
     // Mismo autollenado, pero para el folio/nucco dentro del modal de Editar.
-    wireFolioYNucco_('editar-folio', 'editar-nucco', (vehiculo) => {
-      if (vehiculo) {
-        document.getElementById('editar-departamento').value = vehiculo.DEPARTAMENTO;
-        document.getElementById('editar-modelo').value = [vehiculo.MARCA, vehiculo.LINEA_VEHICULO].filter(Boolean).join(' ');
-        document.getElementById('editar-anio').value = vehiculo.MODELO || '';
-      }
-    });
+    FolioNucco.ligar('editar-folio', 'editar-nucco', { buscar: buscarVehiculoInc_, alResolver: (v) => autollenarIncidencia_('editar', v) });
 
     /** Abre el modal general de edición con lo que ya trae la fila (el resumen
      *  ya incluye todos los campos, no hace falta pedir el registro completo). */
@@ -1776,6 +1739,8 @@
       document.getElementById('editar-departamento').value = inc.DEPARTAMENTO || '';
       document.getElementById('editar-modelo').value = inc.MODELO || '';
       document.getElementById('editar-anio').value = inc.ANIO || '';
+      // Lo que se abre es lo guardado, no una sugerencia: sin "auto" de la edición anterior
+      ['folio', 'nucco', 'departamento', 'modelo', 'anio'].forEach((c) => CampoAuto.quitar('editar-' + c));
       document.getElementById('editar-fecha-inspeccion').value = fechaParaInput(inc.FECHA_INSPECCION);
       document.getElementById('editar-kilometraje').value = inc.KILOMETRAJE || '';
       document.getElementById('editar-ticket').value = inc.TICKET || '';
@@ -2195,11 +2160,9 @@
         const colaborador = porNombre[input.value.trim().toUpperCase()];
         const depto = document.getElementById(prefijo + '-departamento');
         const noEmpleado = document.getElementById(prefijo + '-no-empleado');
-        const tagDepto = document.getElementById(prefijo + '-departamento-auto-tag');
-        const tagNoEmpleado = document.getElementById(prefijo + '-no-empleado-auto-tag');
-        if (!colaborador) { if (tagDepto) tagDepto.hidden = true; if (tagNoEmpleado) tagNoEmpleado.hidden = true; return; }
-        if (depto && colaborador.DEPARTAMENTO) { depto.value = colaborador.DEPARTAMENTO; if (tagDepto) tagDepto.hidden = false; }
-        if (noEmpleado && colaborador.NO_EMPLEADO) { noEmpleado.value = colaborador.NO_EMPLEADO; if (tagNoEmpleado) tagNoEmpleado.hidden = false; }
+        if (!colaborador) { if (depto) CampoAuto.quitar(depto); if (noEmpleado) CampoAuto.quitar(noEmpleado); return; }
+        if (depto && colaborador.DEPARTAMENTO) CampoAuto.llenar(depto, colaborador.DEPARTAMENTO);
+        if (noEmpleado && colaborador.NO_EMPLEADO) CampoAuto.llenar(noEmpleado, colaborador.NO_EMPLEADO);
       });
     }
 
