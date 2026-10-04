@@ -41,8 +41,17 @@ que dependen de sus helpers.
 Lo que se repite entre módulos va en un componente, no en otra copia. Antes de
 escribirlo a mano en un módulo, revisa si ya existe: `Formulario` (captura con
 validación, pasos y panel), `DataTable`, `Combobox`, `Confirmar`, `Notificar`,
-`Firma`, `Lienzo`, `ExportarExcel`, `CampoAuto` y `FolioNucco`. Cada uno documenta
-su uso al inicio del archivo y tiene su prueba en `tests/`.
+`Firma`, `Lienzo`, `ExportarExcel`, `CampoAuto`, `FolioNucco` y `CamposHoja`. Cada
+uno documenta su uso al inicio del archivo y tiene su prueba en `tests/`.
+
+- **Formularios declarados por columnas de una hoja → `CamposHoja`.** Vehículos
+  (`CAMPOS_VEHICULO`), Caja Chica (`CAMPOS_CAJACHICA`) y Arqueos (`CAMPOS_ARQUEO`)
+  son una lista de `{ grupo, clave, etiqueta, tipo, … }`, y `CamposHoja.html /
+  recolectar / poblar / llenarOpciones` hace el resto. Un tipo de campo o una
+  opción nueva (p. ej. `soloEdicion`, `mostrarSiCampo`) se agrega una vez en
+  `componentes/campos-hoja.html` y sirve para todos. Lo propio de cada módulo
+  (bloquear Capturista, formatear moneda) va en los ganchos `antes` / `despues` /
+  `mostrar` de `poblar`, no en otra copia del motor.
 
 - **Campos que llena el sistema → etiqueta "auto", siempre con `CampoAuto`.** Si
   el valor lo decide el sistema y no se edita, pon `data-auto` en el control (sirve

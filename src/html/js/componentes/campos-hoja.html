@@ -1,0 +1,209 @@
+<script>
+  /**
+   * CamposHoja — formularios declarados como lista de columnas de una hoja.
+   *
+   * Por qué existe: Vehículos (CAMPOS_VEHICULO), Caja Chica (CAMPOS_CAJACHICA) y Arqueos
+   * (CAMPOS_ARQUEO) traían cada uno su copia casi idéntica de lo mismo: pintar los campos
+   * agrupados por sección, leerlos para guardar y llenarlos al editar. Una sola copia: un
+   * tipo de campo nuevo, o un arreglo, sirve para los tres (y para el siguiente módulo).
+   *
+   * ─── USO ──────────────────────────────────────────────────────────────────────────
+   *   const CAMPOS = [
+   *     { grupo: 'Vehículo', clave: 'MARCA', etiqueta: 'Marca', tipo: 'select', catalogo: true },
+   *     { grupo: 'Vehículo', clave: 'MODELO', etiqueta: 'Año', tipo: 'number' },
+   *     …
+   *   ];
+   *   contenedor.innerHTML = CamposHoja.html(CAMPOS, { prefijo: 'veh', esEdicion: false });
+   *   const datos = CamposHoja.recolectar(CAMPOS, 'veh');          // { MARCA: 'NISSAN', … }
+   *   CamposHoja.poblar(CAMPOS, 'editar-vehiculo', registro, { … });   // ver poblar()
+   *
+   * `clave` es el nombre EXACTO de la columna en la hoja: es la llave con la que se manda al
+   * servidor. El id de cada control es `prefijo + '-' + CamposHoja.slug(clave)`.
+   *
+   * ─── TIPOS ────────────────────────────────────────────────────────────────────────
+   *   text · number (acepta decimales) · date · email · select · file · firma
+   *   select + catalogo: caja de texto con sugerencias (datalist): se puede escribir una
+   *     opción que todavía no está. Se llena con llenarOpciones(id, valores).
+   *   select + opciones: lista cerrada. Al editar, un valor guardado que ya no está en la
+   *     lista se agrega como opción extra, para que no se borre en silencio al guardar.
+   *   file: input de archivo + "Ver archivo actual" (multiple: varias imágenes a la vez).
+   *   firma: recuadro para firmar con mouse o dedo (el módulo lo conecta).
+   *
+   * ─── OPCIONES DE CADA CAMPO ───────────────────────────────────────────────────────
+   *   soloLectura    lo decide el sistema: se muestra bloqueado con "auto" (CampoAuto) y
+   *                  no se manda al guardar
+   *   placeholder · requerido · moneda ("$" fijo a la izquierda) · opciones
+   *   soloEdicion    no aparece al dar de alta (p. ej. Fecha de cierre)
+   *   bloqueadoAlCrear + valorPorDefecto   al dar de alta queda fijo en ese valor
+   *   mostrarSiCampo + mostrarSiValor      aparece solo si otro campo tiene ese valor
+   *
+   * Métodos: html · recolectar · poblar · llenarOpciones · actualizarVisibles · slug
+   */
+  const CamposHoja = (function () {
+    /** 'TIPO DE COMBUSTIBLE' → 'tipo-de-combustible' (sin acentos ni símbolos) */
+    function slug(clave) {
+      return clave.toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    }
+    const idDe = (prefijo, clave) => prefijo + '-' + slug(clave);
+
+    function campoHtml(campo, prefijo, esEdicion) {
+      const id = idDe(prefijo, campo.clave);
+      const req = campo.requerido ? ' required' : '';
+      const mostrarSi = campo.mostrarSiCampo
+        ? ` data-mostrar-si-campo="${campo.mostrarSiCampo}" data-mostrar-si-valor="${campo.mostrarSiValor}"` : '';
+      if (campo.tipo === 'file') {
+        // soloLectura (p. ej. un PDF que se genera solo): no tiene caso el <input type="file">
+        const inputArchivo = campo.soloLectura ? '' : campo.multiple
+          ? `<input type="file" id="${id}" accept="image/*" multiple />`
+          : `<input type="file" id="${id}" accept=".pdf,.png,.jpg,.jpeg" />`;
+        const ayuda = campo.multiple
+          ? '<span class="form-ayuda">Puedes elegir varias fotos a la vez — se juntan solas en un PDF, una por página.</span>' : '';
+        return `<div class="field"${mostrarSi}>
+            <label>${campo.etiqueta}</label>
+            ${inputArchivo}
+            ${ayuda}
+            <div class="file-actual" id="${id}-actual"${campo.soloLectura ? ' data-auto="Se genera solo al guardar"' : ''}></div>
+          </div>`;
+      }
+      if (campo.tipo === 'firma') {
+        // grid-column 1 / -1: ocupa el renglón completo (en una columna queda apachurrado)
+        return `<div class="field" style="grid-column: 1 / -1;"${mostrarSi}>
+            <label>${campo.etiqueta}</label>
+            <div class="firma-pad-wrap">
+              <canvas id="${id}" class="firma-pad" width="500" height="170" data-tiene-trazo="0"></canvas>
+              <button type="button" class="secondary firma-pad-limpiar" data-target="${id}"><i data-lucide="eraser" class="ico"></i> Limpiar firma</button>
+            </div>
+            <div class="file-actual" id="${id}-actual"></div>
+          </div>`;
+      }
+      if (campo.tipo === 'select' && campo.bloqueadoAlCrear && !esEdicion) {
+        return `<div class="field"${mostrarSi}><label>${campo.etiqueta}</label><input type="text" id="${id}" value="${campo.valorPorDefecto}" disabled data-auto /></div>`;
+      }
+      if (campo.tipo === 'select' && campo.catalogo) {
+        // Las "opciones" fijas de un catálogo (p. ej. Placa: SIN PLACA) van ya en el datalist
+        const sugerencias = (campo.opciones || []).map((o) => `<option value="${o}"></option>`).join('');
+        return `<div class="field"${mostrarSi}><label>${campo.etiqueta}</label><input type="text" id="${id}" list="${id}-lista" autocomplete="off"${req} placeholder="Escribe o elige…" /><datalist id="${id}-lista">${sugerencias}</datalist></div>`;
+      }
+      if (campo.tipo === 'select') {
+        const opciones = (campo.opciones || []).map((o) => `<option value="${o}">${o}</option>`).join('');
+        return `<div class="field"${mostrarSi}><label>${campo.etiqueta}</label><select id="${id}"${req}><option value="">Selecciona…</option>${opciones}</select></div>`;
+      }
+      const disabled = campo.soloLectura ? ' disabled data-auto' : '';
+      const placeholder = campo.placeholder ? ` placeholder="${campo.placeholder}"` : '';
+      // step="any": sin esto un number solo acepta enteros, y los montos llevan decimales
+      const step = campo.tipo === 'number' ? ' step="any"' : '';
+      const input = `<input type="${campo.tipo}" id="${id}"${step}${req}${disabled}${placeholder} />`;
+      if (campo.moneda) {
+        return `<div class="field"${mostrarSi}><label>${campo.etiqueta}</label><div class="input-moneda-wrap">${input}</div></div>`;
+      }
+      return `<div class="field"${mostrarSi}><label>${campo.etiqueta}</label>${input}</div>`;
+    }
+
+    /**
+     * Los <div class="field"> agrupados por sección.
+     * o.prefijo · o.esEdicion (muestra los soloEdicion y libera los bloqueadoAlCrear) ·
+     * o.soloGrupos (solo esos grupos, p. ej. los de un paso)
+     */
+    function html(campos, o) {
+      const op = o || {};
+      const grupos = [];
+      const porGrupo = {};
+      campos.forEach((campo) => {
+        if (campo.soloEdicion && !op.esEdicion) return;
+        if (op.soloGrupos && op.soloGrupos.indexOf(campo.grupo) === -1) return;
+        if (!porGrupo[campo.grupo]) { porGrupo[campo.grupo] = []; grupos.push(campo.grupo); }
+        porGrupo[campo.grupo].push(campo);
+      });
+      return grupos.map((grupo) =>
+        `<div class="info-section-title">${grupo}</div>` +
+        porGrupo[grupo].map((campo) => campoHtml(campo, op.prefijo, op.esEdicion)).join('')).join('');
+    }
+
+    /** { columna: valor } de lo que se captura a mano. Sin soloLectura, file ni firma:
+     *  los archivos y firmas se suben aparte (es asíncrono). */
+    function recolectar(campos, prefijo) {
+      const datos = {};
+      campos.forEach((campo) => {
+        if (campo.tipo === 'file' || campo.tipo === 'firma' || campo.soloLectura) return;
+        const el = document.getElementById(idDe(prefijo, campo.clave));
+        if (el) datos[campo.clave] = el.value.trim();
+      });
+      return datos;
+    }
+
+    /**
+     * Llena el formulario con un registro { columna: valor }.
+     *   o.antes   { COLUMNA: (prefijo) => {} }   antes de poner esa columna
+     *   o.despues { COLUMNA: (prefijo) => {} }   después (p. ej. bloquear los que dependen de ella:
+     *             como van en orden, los de abajo ya ven el valor recién cargado)
+     *   o.mostrar (campo, valor, el) => texto    cómo se muestra (p. ej. moneda); undefined = tal cual
+     *   o.limpiarFirma (canvas) => {}            el recuadro de firma arranca limpio
+     * Un file no se puede rellenar (el navegador no lo deja): se muestra "Ver archivo actual".
+     */
+    function poblar(campos, prefijo, datos, o) {
+      const op = o || {};
+      campos.forEach((campo) => {
+        const id = idDe(prefijo, campo.clave);
+        const valor = (datos && datos[campo.clave]) || '';
+        if (campo.tipo === 'file' || campo.tipo === 'firma') {
+          const info = document.getElementById(id + '-actual');
+          if (info) {
+            info.innerHTML = campo.tipo === 'firma'
+              ? (valor ? `<img src="${valor}" alt="Firma guardada" style="max-width:220px;border:1px solid var(--color-border);border-radius:8px;background:#fff" />`
+                : '<span class="empty-state" style="margin:0">Sin firma</span>')
+              : (valor ? `<a href="${valor}" target="_blank" rel="noopener">📎 Ver archivo actual</a>`
+                : '<span class="empty-state" style="margin:0">Sin archivo</span>');
+          }
+          const canvas = campo.tipo === 'firma' && document.getElementById(id);
+          if (canvas && op.limpiarFirma) op.limpiarFirma(canvas);
+          return;
+        }
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (op.antes && op.antes[campo.clave]) op.antes[campo.clave](prefijo);
+        // Un <select> no puede mostrar un valor que no está entre sus opciones: lo deja en
+        // blanco, y como Guardar manda todo el formulario, ese blanco borraba el dato real.
+        if (el.tagName === 'SELECT' && valor !== '' && !Array.from(el.options).some((x) => x.value === valor)) {
+          const extra = document.createElement('option');
+          extra.value = valor;
+          extra.textContent = valor + ' (guardado, ya no está en la lista)';
+          el.appendChild(extra);
+        }
+        const mostrado = op.mostrar ? op.mostrar(campo, valor, el) : undefined;
+        el.value = mostrado !== undefined ? mostrado
+          : (campo.tipo === 'date' && typeof fechaParaInput === 'function' ? fechaParaInput(valor) : valor);
+        if (op.despues && op.despues[campo.clave]) op.despues[campo.clave](prefijo);
+      });
+      actualizarVisibles(campos, prefijo);
+    }
+
+    /** Muestra u oculta los campos con mostrarSiCampo/mostrarSiValor según el valor actual. */
+    function actualizarVisibles(campos, prefijo) {
+      campos.filter((c) => c.mostrarSiCampo).forEach((campo) => {
+        const delQueDepende = document.getElementById(idDe(prefijo, campo.mostrarSiCampo));
+        const propio = document.getElementById(idDe(prefijo, campo.clave));
+        const caja = propio && propio.closest('.field');
+        if (!delQueDepende || !caja) return;
+        caja.hidden = delQueDepende.value !== campo.mostrarSiValor;
+      });
+    }
+
+    /** Opciones de un catálogo: en un select reemplaza sus <option>; en una caja con
+     *  sugerencias (catalogo: true) llena su datalist. */
+    function llenarOpciones(id, valores) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (el.tagName === 'INPUT') {
+        const datalist = document.getElementById(el.getAttribute('list'));
+        if (datalist) datalist.innerHTML = (valores || []).map((v) => `<option value="${v}"></option>`).join('');
+        return;
+      }
+      el.innerHTML = '<option value="">Selecciona…</option>' +
+        (valores || []).map((v) => `<option value="${v}">${v}</option>`).join('');
+    }
+
+    return { html, recolectar, poblar, llenarOpciones, actualizarVisibles, slug };
+  })();
+</script>

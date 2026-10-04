@@ -1672,3 +1672,22 @@ test('la etiqueta "auto" y el par Folio/Nucco solo viven en sus componentes', ()
   assert.ok(pos('campo-auto') > 0 && pos('campo-auto') < pos('folio-nucco') && pos('folio-nucco') < pos('formulario'),
     'campo-auto y folio-nucco se incluyen antes de formulario (que los usa)');
 });
+
+test('los formularios por columnas usan un solo motor (CamposHoja)', () => {
+  // Vehículos, Caja Chica y Arqueos traían cada uno su copia de pintar/leer/llenar campos
+  // (y tres copias de llenarSelect). Ahora delegan en componentes/campos-hoja.html.
+  // (Las fichas de solo lectura, seccionesFicha*, son otra cosa: muestran, no capturan.)
+  const modulos = { 'src/html/js/app.html': 'VEHICULO', 'src/html/js/app-cajachica.html': 'CAJACHICA', 'src/html/js/app-arqueos.html': 'ARQUEO' };
+  Object.keys(modulos).forEach((m) => {
+    const src = read(m);
+    const lista = 'CAMPOS_' + modulos[m];
+    ['html', 'recolectar', 'poblar'].forEach((metodo) => {
+      assert.match(src, new RegExp('CamposHoja\\.' + metodo + '\\(' + lista + '\\b'), m + ': ' + metodo + ' delega en CamposHoja');
+    });
+    assert.doesNotMatch(src, /function llenarSelect\(id, valores\) \{\s*\n/, m + ': llenarSelect delega en CamposHoja.llenarOpciones');
+    assert.doesNotMatch(src, /\.normalize\('NFD'\)\.replace/, m + ': slugCampo delega en CamposHoja.slug');
+  });
+  const index = read('src/html/Index.html');
+  assert.ok(index.indexOf("componentes/campos-hoja'") > 0 && index.indexOf("componentes/campos-hoja'") < index.indexOf("include('html/js/app')"),
+    'campos-hoja se incluye antes de app.html (slugCampo delega en él)');
+});

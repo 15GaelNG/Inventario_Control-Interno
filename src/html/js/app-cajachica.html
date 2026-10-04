@@ -83,60 +83,15 @@
     { grupo: 'Notas', clave: 'OBSERVACIONES', etiqueta: 'Observaciones', tipo: 'text' },
   ];
 
-  /** Genera los <div class="field"> agrupados por sección para un formulario de caja chica. */
+  /** Los campos del formulario de caja chica (componente CamposHoja). En Registrar, Fecha
+   *  de cierre (soloEdicion) no aparece y Estatus (bloqueadoAlCrear) queda fijo en VIGENTE. */
   function renderCamposCajaChica(prefijo, esEdicion) {
-    const grupos = [];
-    const porGrupo = {};
-    CAMPOS_CAJACHICA.forEach((campo) => {
-      // soloEdicion: campos que no aplican al dar de alta (ej. Fecha de
-      // cierre — no tiene sentido cerrarla antes de que exista).
-      if (campo.soloEdicion && !esEdicion) return;
-      if (!porGrupo[campo.grupo]) { porGrupo[campo.grupo] = []; grupos.push(campo.grupo); }
-      porGrupo[campo.grupo].push(campo);
-    });
-    return grupos.map((grupo) => {
-      const campos = porGrupo[grupo].map((campo) => {
-        const id = prefijo + '-' + slugCampo(campo.clave);
-        const disabled = campo.soloLectura ? ' disabled data-auto' : '';   // data-auto: etiqueta "auto" (CampoAuto)
-        const placeholder = campo.placeholder ? ` placeholder="${campo.placeholder}"` : '';
-        // step="any": sin esto, type="number" solo acepta enteros por
-        // default (step="1" implícito) — los montos necesitan decimales.
-        const step = campo.tipo === 'number' ? ' step="any"' : '';
-        // Campos "bloqueados al crear" (ej. Estatus: solo VIGENTE al dar de
-        // alta, editable a sus 3 opciones después) — en Registrar se ven
-        // fijos y deshabilitados; en Editar sí son un select normal.
-        if (campo.tipo === 'select' && campo.bloqueadoAlCrear && !esEdicion) {
-          return `<div class="field"><label>${campo.etiqueta}</label><input type="text" id="${id}" value="${campo.valorPorDefecto}" disabled data-auto /></div>`;
-        }
-        if (campo.tipo === 'select' && campo.catalogo) {
-          // catalogo: true — caja de texto con sugerencias (datalist), se
-          // puede escribir una opción nueva que todavía no esté ahí.
-          return `<div class="field"><label>${campo.etiqueta}</label><input type="text" id="${id}" list="${id}-lista" autocomplete="off" placeholder="Escribe o elige…" /><datalist id="${id}-lista"></datalist></div>`;
-        }
-        if (campo.tipo === 'select') {
-          const opciones = (campo.opciones || []).map((o) => `<option value="${o}">${o}</option>`).join('');
-          return `<div class="field"><label>${campo.etiqueta}</label><select id="${id}"><option value="">Selecciona…</option>${opciones}</select></div>`;
-        }
-        const input = `<input type="${campo.tipo}" id="${id}"${step}${disabled}${placeholder} />`;
-        // moneda: solo un "$" fijo a la izquierda, puro visual.
-        if (campo.moneda) {
-          return `<div class="field"><label>${campo.etiqueta}</label><div class="input-moneda-wrap">${input}</div></div>`;
-        }
-        return `<div class="field"><label>${campo.etiqueta}</label>${input}</div>`;
-      }).join('');
-      return `<div class="info-section-title">${grupo}</div>${campos}`;
-    }).join('');
+    return CamposHoja.html(CAMPOS_CAJACHICA, { prefijo, esEdicion });
   }
 
-  /** Lee los valores actuales del formulario, devuelve un objeto {columna real: valor}. */
+  /** {columna real: valor} de lo que se captura. */
   function recolectarDatosCajaChica(prefijo) {
-    const datos = {};
-    CAMPOS_CAJACHICA.forEach((campo) => {
-      if (campo.soloLectura) return;
-      const el = document.getElementById(prefijo + '-' + slugCampo(campo.clave));
-      if (el) datos[campo.clave] = el.value.trim();
-    });
-    return datos;
+    return CamposHoja.recolectar(CAMPOS_CAJACHICA, prefijo);
   }
 
   /**
@@ -163,15 +118,10 @@
 
   /** Llena el formulario con un objeto {columna real: valor} (ej. de buscarPorId). */
   function poblarFormularioCajaChica(prefijo, datos) {
-    CAMPOS_CAJACHICA.forEach((campo) => {
-      const el = document.getElementById(prefijo + '-' + slugCampo(campo.clave));
-      if (!el) return;
-      const valor = (datos && datos[campo.clave]) || '';
-      el.value = campo.tipo === 'date' ? fechaParaInput(valor) : valor;
-      // ADMINISTRADA POR va antes que los 4 campos de capturista en
-      // CAMPOS_CAJACHICA, así que para cuando este forEach llegue a esos
-      // campos el bloqueo/desbloqueo ya refleja el valor recién cargado.
-      if (campo.clave === 'ADMINISTRADA POR') actualizarBloqueoCapturista(prefijo, false);
+    // ADMINISTRADA POR va antes que los 4 campos de capturista en CAMPOS_CAJACHICA: el
+    // bloqueo/desbloqueo ya refleja el valor recién cargado cuando se llega a ellos.
+    CamposHoja.poblar(CAMPOS_CAJACHICA, prefijo, datos, {
+      despues: { 'ADMINISTRADA POR': (p) => actualizarBloqueoCapturista(p, false) },
     });
   }
 
@@ -201,17 +151,7 @@
     // "DEPARTAMENTOS" (distinta de "LISTAS VEHICULOS" — es la que usan
     // Vehículos/Uber/Tickets), mismas opciones en Registrar y Editar. Son
     // <input list="..."> — se puede escribir una opción nueva.
-    function llenarSelect(id, valores) {
-      const el = document.getElementById(id);
-      if (!el) return;
-      if (el.tagName === 'INPUT') {
-        const datalist = document.getElementById(el.getAttribute('list'));
-        if (datalist) datalist.innerHTML = (valores || []).map((v) => `<option value="${v}"></option>`).join('');
-        return;
-      }
-      el.innerHTML = '<option value="">Selecciona…</option>' +
-        (valores || []).map((v) => `<option value="${v}">${v}</option>`).join('');
-    }
+    function llenarSelect(id, valores) { CamposHoja.llenarOpciones(id, valores); }
     // En su propia función para correr en paralelo con cargar() más abajo.
     async function cargarCatalogosCajaChica() {
       try {

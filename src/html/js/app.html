@@ -1486,88 +1486,23 @@
     { grupo: 'Ubicación y registro', clave: 'RESPONSABLE CI', etiqueta: 'Responsable (Control Interno)', tipo: 'text' },
   ];
 
+  /** El id de un campo de formulario a partir de su columna: 'veh-' + slugCampo('TIPO DE
+   *  COMBUSTIBLE') → 'veh-tipo-de-combustible'. Vive en el componente CamposHoja. */
   function slugCampo(clave) {
-    return clave.toLowerCase()
-      .normalize('NFD').replace(/[̀-ͯ]/g, '')
-      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    return CamposHoja.slug(clave);
   }
 
-  /** Genera los <div class="field"> agrupados por sección para un formulario de vehículo.
-   * esEdicion=true en Editar habilita los campos marcados "soloEdicion" (ej.
-   * Documento de baja: no tiene sentido pedirlo al DAR DE ALTA un vehículo). */
+  /** Los campos del formulario de vehículo (componente CamposHoja). esEdicion=true en
+   * Editar muestra los "soloEdicion" (ej. Documento de baja: no tiene sentido pedirlo al
+   * DAR DE ALTA). Departamento/No. de empleado (autoCondicional) se sugieren al elegir
+   * Responsable, con "auto" (ver wireResponsableVehiculo). */
   function renderCamposVehiculo(prefijo, esEdicion) {
-    const grupos = [];
-    const porGrupo = {};
-    CAMPOS_VEHICULO.forEach((campo) => {
-      if (campo.soloEdicion && !esEdicion) return;
-      if (!porGrupo[campo.grupo]) { porGrupo[campo.grupo] = []; grupos.push(campo.grupo); }
-      porGrupo[campo.grupo].push(campo);
-    });
-    return grupos.map((grupo) => {
-      const campos = porGrupo[grupo].map((campo) => {
-        const id = prefijo + '-' + slugCampo(campo.clave);
-        const req = campo.requerido ? ' required' : '';
-        // "auto" (componente CampoAuto): soloLectura (el servidor/otro módulo decide el valor,
-        // p. ej. Folio) lleva data-auto; autoCondicional (Departamento/No. de empleado, que se
-        // sugieren al elegir Responsable pero se pueden corregir) se llena con
-        // CampoAuto.llenar en wireResponsableVehiculo.
-        const etiqueta = campo.etiqueta;
-        if (campo.tipo === 'file') {
-          return `<div class="field">
-            <label>${etiqueta}</label>
-            <input type="file" id="${id}" accept=".pdf,.png,.jpg,.jpeg" />
-            <div class="file-actual" id="${id}-actual"></div>
-          </div>`;
-        }
-        if (campo.tipo === 'select' && campo.catalogo) {
-          // catalogo: true (ej. Marca, Departamento, Sede, Razón social) —
-          // caja de texto con sugerencias (datalist) en vez de lista
-          // cerrada: se puede elegir una ya existente O escribir una nueva
-          // que todavía no esté en el catálogo. llenarSelect() (por JS, al
-          // cargar) detecta que es un <input> y llena el <datalist> en vez
-          // de las <option> de un <select>.
-          // Campos con "opciones" fijas (ej. Placa: "SIN PLACA"/"BAJA DE
-          // PLACA") no dependen de un catálogo del servidor — se precargan
-          // aquí mismo, directo en el HTML.
-          const sugerencias = (campo.opciones || []).map((o) => `<option value="${o}"></option>`).join('');
-          return `<div class="field"><label>${etiqueta}</label><input type="text" id="${id}" list="${id}-lista" autocomplete="off"${req} placeholder="Escribe o elige…" /><datalist id="${id}-lista">${sugerencias}</datalist></div>`;
-        }
-        if (campo.tipo === 'select') {
-          // Con "opciones" definidas de antemano (lista fija, ej. Clase) se
-          // pintan aquí mismo — son opciones cerradas a propósito.
-          const opciones = (campo.opciones || []).map((o) => `<option value="${o}">${o}</option>`).join('');
-          return `<div class="field"><label>${etiqueta}</label><select id="${id}"${req}><option value="">Selecciona…</option>${opciones}</select></div>`;
-        }
-        // soloLectura: el servidor decide el valor (ej. Folio, autogenerado
-        // a partir de la Clase) — el campo se muestra pero no se puede editar.
-        const disabled = campo.soloLectura ? ' disabled data-auto' : '';
-        const placeholder = campo.placeholder ? ` placeholder="${campo.placeholder}"` : '';
-        // step="any": sin esto, type="number" solo acepta enteros por
-        // default (step="1" implícito) — los montos necesitan decimales.
-        const step = campo.tipo === 'number' ? ' step="any"' : '';
-        const input = `<input type="${campo.tipo}" id="${id}"${step}${req}${disabled}${placeholder} />`;
-        // moneda: solo un "$" fijo a la izquierda, puro visual — el input
-        // sigue siendo un número normal por dentro.
-        if (campo.moneda) {
-          return `<div class="field"><label>${etiqueta}</label><div class="input-moneda-wrap">${input}</div></div>`;
-        }
-        return `<div class="field"><label>${etiqueta}</label>${input}</div>`;
-      }).join('');
-      return `<div class="info-section-title">${grupo}</div>${campos}`;
-    }).join('');
+    return CamposHoja.html(CAMPOS_VEHICULO, { prefijo, esEdicion });
   }
 
-  /** Lee los valores actuales del formulario, devuelve un objeto {columna real: valor}.
-   * Los campos "file" NO se leen aquí — se manejan aparte (subirArchivosVehiculo),
-   * porque subir un archivo es asíncrono y no se puede leer de golpe como el resto. */
+  /** {columna real: valor}. Los "file" se suben aparte (subirArchivosVehiculo). */
   function recolectarDatosVehiculo(prefijo) {
-    const datos = {};
-    CAMPOS_VEHICULO.forEach((campo) => {
-      if (campo.tipo === 'file' || campo.soloLectura) return;
-      const el = document.getElementById(prefijo + '-' + slugCampo(campo.clave));
-      if (el) datos[campo.clave] = el.value.trim();
-    });
-    return datos;
+    return CamposHoja.recolectar(CAMPOS_VEHICULO, prefijo);
   }
 
   // Sede + Ubicación son un par dependiente: Sede se llena desde la
@@ -1589,32 +1524,11 @@
   }
 
   /** Llena el formulario con un objeto {columna real: valor} (ej. de buscarPorFolio).
-   * Para "file" no se puede rellenar el <input> (los navegadores no lo permiten por
-   * seguridad) — en vez de eso, muestra un link al archivo ya subido, si existe. */
+   * Ubicación depende de la Sede: SEDE va antes en CAMPOS_VEHICULO, así que al llegar a
+   * Ubicación la Sede ya tiene su valor y se repueblan las sugerencias para ESA sede. */
   function poblarFormularioVehiculo(prefijo, datos) {
-    CAMPOS_VEHICULO.forEach((campo) => {
-      const id = prefijo + '-' + slugCampo(campo.clave);
-      const valor = (datos && datos[campo.clave]) || '';
-      if (campo.tipo === 'file') {
-        const info = document.getElementById(id + '-actual');
-        if (info) {
-          info.innerHTML = valor
-            ? `<a href="${valor}" target="_blank" rel="noopener">📎 Ver archivo actual</a>`
-            : '<span class="empty-state" style="margin:0">Sin archivo</span>';
-        }
-        return;
-      }
-      const el = document.getElementById(id);
-      if (!el) return;
-      // Ubicación depende de la Sede — SEDE va antes que UBICACION en
-      // CAMPOS_VEHICULO, así que para cuando llegamos aquí el campo de Sede
-      // ya quedó con su valor puesto; hay que repoblar las sugerencias de
-      // Ubicación para ESA sede (aunque, al ser <input>, poner el valor
-      // guardado directo abajo también funcionaría sin esto — es solo para
-      // que las sugerencias del datalist ya vengan correctas desde que se
-      // abre el formulario).
-      if (campo.clave === 'OFICINA / DESARROLLO') llenarUbicacionesSegunSede(prefijo);
-      el.value = campo.tipo === 'date' ? fechaParaInput(valor) : valor;
+    CamposHoja.poblar(CAMPOS_VEHICULO, prefijo, datos, {
+      antes: { 'OFICINA / DESARROLLO': llenarUbicacionesSegunSede },
     });
   }
 
@@ -2086,17 +2000,7 @@
     // "LISTAS VEHICULOS"), mismas opciones en Registrar y Editar. Estos ya
     // son <input list="..."> (campo.catalogo: true) — se puede escribir una
     // opción nueva que todavía no esté en la lista.
-    function llenarSelect(id, valores) {
-      const el = document.getElementById(id);
-      if (!el) return;
-      if (el.tagName === 'INPUT') {
-        const datalist = document.getElementById(el.getAttribute('list'));
-        if (datalist) datalist.innerHTML = (valores || []).map((v) => `<option value="${v}"></option>`).join('');
-        return;
-      }
-      el.innerHTML = '<option value="">Selecciona…</option>' +
-        (valores || []).map((v) => `<option value="${v}">${v}</option>`).join('');
-    }
+    function llenarSelect(id, valores) { CamposHoja.llenarOpciones(id, valores); }
 
     // El filtrado de Ubicación según Sede (mapaUbicacionesPorSede,
     // llenarUbicacionesSegunSede) vive a nivel de módulo, junto a
@@ -3291,17 +3195,7 @@
     // Razón social / Sede / Oficina-Desarrollo / Departamento: catálogos
     // reales (hoja "LISTAS VEHICULOS"), mismas opciones en Registrar y
     // Editar. Son <input list="..."> — se puede escribir una opción nueva.
-    function llenarSelect(id, valores) {
-      const el = document.getElementById(id);
-      if (!el) return;
-      if (el.tagName === 'INPUT') {
-        const datalist = document.getElementById(el.getAttribute('list'));
-        if (datalist) datalist.innerHTML = (valores || []).map((v) => `<option value="${v}"></option>`).join('');
-        return;
-      }
-      el.innerHTML = '<option value="">Selecciona…</option>' +
-        (valores || []).map((v) => `<option value="${v}">${v}</option>`).join('');
-    }
+    function llenarSelect(id, valores) { CamposHoja.llenarOpciones(id, valores); }
     // En su propia función para correr en paralelo con cargar() más abajo.
     async function cargarCatalogosUber() {
       try {

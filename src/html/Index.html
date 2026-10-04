@@ -110,6 +110,9 @@
        lo que si necesita de app.html (callServer, state, escaparHtml...) lo usa
        adentro de funciones que no se llaman hasta más tarde, vía iniciar(). -->
   <?!= include('html/notificaciones'); ?>
+  <!-- CamposHoja: el motor de los formularios declarados por columnas (Vehículos, Caja Chica,
+       Arqueos). Antes de app.html porque slugCampo, que usan todos los módulos, vive ahí. -->
+  <?!= include('html/js/componentes/campos-hoja'); ?>
   <?!= include('html/js/app'); ?>
   <?!= include('html/js/app-arqueos'); ?>
   <?!= include('html/js/app-cajachica'); ?>
