@@ -1718,3 +1718,45 @@ test('los formularios que antes iban escritos a mano también se declaran en Cam
   });
   assert.doesNotMatch(read('src/html/js/app.html'), /function (recolectar|poblar)(Uber|Ticket)\(/, 'sin recolectar/poblar propios de Uber y Tickets');
 });
+
+test('responsivo: solo los cortes del sistema (640 / 1024) y matchMedia solo en Pantalla', () => {
+  // Los dos cortes viven en componentes/pantalla.html (ver su encabezado). Cada archivo usaba
+  // el suyo (520, 600, 700, 760, 900…) y la misma pantalla era celular para un módulo y
+  // escritorio para otro. Un @media de ancho solo puede usar estos; hover/pointer/prefers-* sí.
+  const PERMITIDOS = new Set(['(max-width: 640px)', '(max-width: 1024px)', '(min-width: 641px)', '(min-width: 1025px)']);
+  // Lo que falta migrar (plan de diseño responsivo, oct-2026). Esta lista SOLO SE ACHICA: un
+  // archivo nuevo no puede entrar, y al migrar uno hay que bajar su número aquí (si no, falla).
+  const PENDIENTES = {
+    'src/html/js/componentes/datatable.html': { cortes: 0, matchMedia: 1 },
+    'src/html/js/componentes/formulario.html': { cortes: 3, matchMedia: 0 },
+    'src/html/js/lineas.html': { cortes: 0, matchMedia: 2 },
+    'src/html/lineas-estilos.html': { cortes: 17, matchMedia: 0 },
+    'src/html/notificaciones.html': { cortes: 1, matchMedia: 0 },
+    'src/html/shell-movil.html': { cortes: 2, matchMedia: 1 },
+    'src/html/styles.html': { cortes: 3, matchMedia: 0 },
+    'src/html/views/relaciones.html': { cortes: 1, matchMedia: 0 },
+    'src/html/views/usuarios.html': { cortes: 1, matchMedia: 0 },
+  };
+  const encontrado = {};
+  filesBelow(path.join(root, 'src')).filter((f) => f.endsWith('.html')).forEach((file) => {
+    const rel = path.relative(root, file).replace(/\\/g, '/');
+    const src = fs.readFileSync(file, 'utf8');
+    let cortes = 0;
+    for (const m of src.matchAll(/@media([^{]*)\{/g)) {
+      for (const w of m[1].matchAll(/\((?:max|min)-width:\s*[^)]*\)/g)) {
+        if (!PERMITIDOS.has(w[0].replace(/\s+/g, ' '))) cortes++;
+      }
+    }
+    const matchMedia = rel.endsWith('componentes/pantalla.html') ? 0 : (src.match(/matchMedia\s*\(/g) || []).length;
+    if (cortes || matchMedia) encontrado[rel] = { cortes, matchMedia };
+  });
+  assert.deepEqual(encontrado, PENDIENTES,
+    'Un @media de ancho usa (max-width: 640px) o (max-width: 1024px), y "¿es celular?" se pregunta con Pantalla.* ' +
+    '(componentes/pantalla.html). Si migraste un archivo, baja su número en PENDIENTES (o quítalo).');
+  // Pantalla se carga antes que todo lo que la usa
+  const index = read('src/html/Index.html');
+  const pos = (nombre) => index.indexOf("include('html/" + nombre + "')");
+  assert.ok(pos('js/componentes/pantalla') > 0, 'Index.html incluye Pantalla');
+  ['notificaciones', 'js/app', 'js/lineas', 'shell-movil'].forEach((n) =>
+    assert.ok(pos('js/componentes/pantalla') < pos(n), 'Pantalla va antes de ' + n));
+});

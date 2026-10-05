@@ -1,0 +1,66 @@
+<script>
+  /**
+   * Pantalla — los tamaños de pantalla del sistema, en un solo lugar.
+   *
+   * Por qué existe: cada módulo decidía "esto es celular" con su propio número (520, 600, 700,
+   * 760, 900…) y la misma pantalla era celular para uno y escritorio para otro. Aquí viven los
+   * dos cortes del sistema, y el CSS usa exactamente los mismos:
+   *
+   *   celular     ancho ≤ 640px      @media (max-width: 640px)
+   *   tableta     641px – 1024px     @media (max-width: 1024px)   (abarca también al celular)
+   *   escritorio  ancho > 1024px     sin @media: es el estilo base
+   *   táctil      dedo, sin mouse    @media (pointer: coarse)     (no depende del ancho: una
+   *                                                                tableta horizontal es táctil)
+   *
+   * tests/source-contracts.test.cjs falla si un @media usa otro ancho o si alguien llama
+   * matchMedia fuera de este archivo: la decisión "¿es celular?" se toma aquí.
+   *
+   * Métodos:
+   *   Pantalla.esCelular()    ancho ≤ 640
+   *   Pantalla.esTableta()    641 – 1024
+   *   Pantalla.esAngosta()    ≤ 1024 (celular o tableta: menú como panel, una o dos columnas)
+   *   Pantalla.esTactil()     se usa con el dedo
+   *   Pantalla.estado()       { celular, tableta, angosta, tactil }
+   *   Pantalla.alCambiar(fn)  llama fn(estado()) cuando cambia cualquiera de los cuatro (girar
+   *                           el teléfono, achicar la ventana). Devuelve la función para dejar
+   *                           de escuchar.
+   *   Pantalla.CONSULTAS      las consultas tal cual, por si un caso raro necesita la suya
+   */
+  const Pantalla = (function () {
+    const CONSULTAS = Object.freeze({
+      celular: '(max-width: 640px)',
+      angosta: '(max-width: 1024px)',
+      tactil: '(pointer: coarse)',
+    });
+
+    const listas = {};
+    function consulta(nombre) {
+      if (!listas[nombre]) {
+        listas[nombre] = typeof window.matchMedia === 'function' ? window.matchMedia(CONSULTAS[nombre]) : null;
+      }
+      return listas[nombre];
+    }
+    const cumple = (nombre) => { const c = consulta(nombre); return !!(c && c.matches); };
+
+    const esCelular = () => cumple('celular');
+    const esAngosta = () => cumple('angosta');
+    const esTableta = () => esAngosta() && !esCelular();
+    const esTactil = () => cumple('tactil');
+    const estado = () => ({ celular: esCelular(), tableta: esTableta(), angosta: esAngosta(), tactil: esTactil() });
+
+    function alCambiar(fn) {
+      const avisar = () => fn(estado());
+      const quitar = Object.keys(CONSULTAS).map((nombre) => {
+        const c = consulta(nombre);
+        if (!c) return () => {};
+        // Safari < 14 solo tiene addListener
+        if (c.addEventListener) { c.addEventListener('change', avisar); return () => c.removeEventListener('change', avisar); }
+        c.addListener(avisar);
+        return () => c.removeListener(avisar);
+      });
+      return () => quitar.forEach((f) => f());
+    }
+
+    return { esCelular, esTableta, esAngosta, esTactil, estado, alCambiar, CONSULTAS };
+  })();
+</script>
