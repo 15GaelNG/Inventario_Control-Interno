@@ -142,6 +142,9 @@ const Entidades = (function () {
     'FACTURAS': { prefijo: 'FAC', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
     // El historial único (paso 3): un renglón por acción
     'MOVIMIENTOS': { prefijo: 'MVT', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
+    // Copia de los tickets del helpdesk de TI que se han visto desde la app (05/10/2026): la
+    // crea y la mantiene HelpdeskService; un renglón por ticket del helpdesk
+    'APP_HELPDESK': { prefijo: 'HDK', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'otros' },
   };
 
   /**

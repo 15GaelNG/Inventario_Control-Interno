@@ -32,7 +32,8 @@ function entorno(responder) {
   const llamadas = [];
   const sesiones = { 'tok-ana': { correo: 'Ana@Ejemplo.com', nombre: 'ANA' }, 'tok-luis': { correo: 'luis@ejemplo.com', nombre: 'LUIS' } };
   Object.assign(e.contexto, {
-    Permisos: { puedeLeer: (t, m) => { if (m !== 'helpdesk') throw new Error('módulo equivocado ' + m); if (!sesiones[t]) throw new Error('Sin permiso'); return sesiones[t]; } },
+    // Todos los que tienen sesión pueden usar Help Desk: no se pide permiso de un módulo
+    Auth: { validarSesion: (t) => { if (!sesiones[t]) throw new Error('Sesión expirada'); return sesiones[t]; } },
     UrlFetchApp: {
       fetch: (url, op) => {
         llamadas.push({ url, op });
@@ -179,7 +180,7 @@ console.log('\n3. No saturar al helpdesk');
   const { e, H, llamadas } = entorno(normal);
   const tokens = [];
   for (let i = 0; i < 4; i++) tokens.push('tok-' + i);
-  Object.assign(e.contexto.Permisos, { puedeLeer: (t) => ({ correo: t.replace('tok-', 'p') + '@ejemplo.com' }) });
+  Object.assign(e.contexto.Auth, { validarSesion: (t) => ({ correo: t.replace('tok-', 'p') + '@ejemplo.com' }) });
   tokens.forEach((t) => { e.avanzar(10); H.conectar(t, jwt(t.replace('tok-', 'p') + '@ejemplo.com', 24)); });
   let intentos = 0;
   for (let i = 0; i < 12; i++) {

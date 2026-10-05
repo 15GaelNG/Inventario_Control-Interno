@@ -401,6 +401,18 @@
       "externa": false,
       "pisaLlaveAnterior": true,
       "migrable": false
+    },
+    {
+      "hoja": "APP_HELPDESK",
+      "prefijo": "HDK",
+      "llaveAnterior": "ID",
+      "columnaAnterior": 0,
+      "familia": "otros",
+      "llaveEsDato": false,
+      "delSistemaNuevo": true,
+      "externa": false,
+      "pisaLlaveAnterior": true,
+      "migrable": false
     }
   ],
   "familias": [

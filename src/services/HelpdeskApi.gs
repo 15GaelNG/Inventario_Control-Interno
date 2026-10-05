@@ -17,6 +17,9 @@
  *   Su página además llama POST /tickets/markMessageAsSeen al abrir un ticket: ESCRIBE (lo marca
  *   como leído). Aquí NO se llama nunca: ver desde Control Interno no cambia nada allá.
  *
+ * Acceso: todos los que tienen sesión en la app (decisión del 05/10/2026); cada quien ve solo lo
+ * que SU token ve en el helpdesk. Lo que llega fresco se copia a APP_HELPDESK (HelpdeskService).
+ *
  * Seguridad
  *   - El token se guarda en Script Properties con llave por correo (la app corre como quien la
  *     desplegó: getUserProperties sería la misma para todos). Nunca regresa al navegador ni va a
@@ -36,7 +39,6 @@
  */
 
 const HelpdeskApi = (function () {
-  const MODULO = 'helpdesk';
   // En un .gs la URL va normal (el bug del "//" es solo de los .html, ver CLAUDE.md)
   const BASE_POR_OMISION = 'https://helpdesk-backend.gphsis.com';
   const PREFIJO_TOKEN = 'HELPDESK_TOKEN:';
@@ -194,6 +196,7 @@ const HelpdeskApi = (function () {
       PRIORIDAD: texto(t.namePriority),
       COLOR_PRIORIDAD: /^#[0-9a-f]{3,8}$/i.test(String(t.colorPriority || '')) ? t.colorPriority : '',
       FORMULARIO: texto(t.nameForm),
+      GRUPO: texto(t.nameBranch),
       SOLICITANTE: texto(t.nameUser),
       CORREO_SOLICITANTE: texto(t.email).toLowerCase(),
       AREA_SOLICITANTE: texto(t.nameAreaUser || t.nameArea),
@@ -245,6 +248,15 @@ const HelpdeskApi = (function () {
     };
   }
 
+  /** Lo que llegó fresco del helpdesk, a la copia en APP_HELPDESK. Si falla, la pantalla sigue. */
+  function copiar_(tickets, correo) {
+    try {
+      if (typeof HelpdeskService !== 'undefined') HelpdeskService.sincronizar_(tickets, correo);
+    } catch (e) {
+      console.error('Help Desk: no se pudo guardar la copia de los tickets: ' + e.message);
+    }
+  }
+
   /** Filtros de la lista que manda la pantalla → solo números, y pocos */
   function filtrosValidos_(f) {
     const ids = (v) => (Array.isArray(v) ? v : []).map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 20);
@@ -256,7 +268,7 @@ const HelpdeskApi = (function () {
 
   /** Valida el token con el helpdesk (una llamada) y lo guarda a nombre de quien tiene la sesión */
   function conectar(token, tokenHelpdesk) {
-    const sesion = Permisos.puedeLeer(token, MODULO);
+    const sesion = Auth.validarSesion(token);
     const correo = correoDe_(sesion);
     if (!correo) throw new Error('No se pudo saber quién eres. Vuelve a iniciar sesión.');
     const limpio = String(tokenHelpdesk || '').trim();
@@ -272,14 +284,14 @@ const HelpdeskApi = (function () {
   }
 
   function desconectar(token) {
-    const sesion = Permisos.puedeLeer(token, MODULO);
+    const sesion = Auth.validarSesion(token);
     olvidarToken_(correoDe_(sesion));
     return { conectado: false };
   }
 
   /** ¿Hay un token vivo? Sin llamar al helpdesk: se lee del propio token */
   function estado(token) {
-    const sesion = Permisos.puedeLeer(token, MODULO);
+    const sesion = Auth.validarSesion(token);
     const correo = correoDe_(sesion);
     const guardado = tokenDe_(correo);
     const c = guardado ? contenido_(guardado) : null;
@@ -292,7 +304,7 @@ const HelpdeskApi = (function () {
 
   /** El correo y el token guardado de quien tiene la sesión (truena si no se ha conectado) */
   function conectado_(token) {
-    const correo = correoDe_(Permisos.puedeLeer(token, MODULO));
+    const correo = correoDe_(Auth.validarSesion(token));
     const guardado = tokenDe_(correo);
     if (!guardado) throw new Error('Conecta tu cuenta del helpdesk primero.');
     return { correo: correo, token: guardado };
@@ -326,6 +338,7 @@ const HelpdeskApi = (function () {
       consultado: new Date(ahora_()).toISOString(),
     };
     aCache_(llave, resultado, CACHE_SEG);
+    copiar_(resultado.tickets, yo.correo);
     return resultado;
   }
 
@@ -373,6 +386,7 @@ const HelpdeskApi = (function () {
       MENSAJES: c.conversation.map(normalizarMensaje_),
     });
     aCache_(llave, resultado, CACHE_SEG);
+    copiar_([resultado], yo.correo);   // la ficha; la conversación no se copia
     return resultado;
   }
 

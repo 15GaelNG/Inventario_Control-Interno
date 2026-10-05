@@ -175,6 +175,37 @@ function apiEliminarTicket(token, id) {
   return TicketsService.eliminar(token, id);
 }
 
+// --- Help Desk (helpdesk de TI) ---
+// Todos los que tienen sesión; cada quien ve lo que SU token ve allá. Lo que habla con el
+// helpdesk es HelpdeskApi (con sus límites); la copia y el registro en Tickets, HelpdeskService.
+function apiHelpdeskEstado(token) {
+  return HelpdeskApi.estado(token);
+}
+function apiHelpdeskConectar(token, tokenHelpdesk) {
+  return HelpdeskApi.conectar(token, tokenHelpdesk);
+}
+function apiHelpdeskDesconectar(token) {
+  return HelpdeskApi.desconectar(token);
+}
+function apiHelpdeskFiltros(token) {
+  return HelpdeskApi.filtros(token);
+}
+function apiHelpdeskTickets(token, filtros, forzar) {
+  return JSON.stringify(HelpdeskApi.listarTickets(token, filtros, forzar));
+}
+function apiHelpdeskDetalle(token, idTicket) {
+  return JSON.stringify(HelpdeskApi.detalle(token, idTicket));
+}
+function apiHelpdeskRegistrados(token, idsTicket) {
+  return HelpdeskService.registrados(token, idsTicket);
+}
+function apiHelpdeskRegistrarEnTickets(token, idTicket, datos) {
+  return HelpdeskService.registrarEnTickets(token, idTicket, datos);
+}
+function apiHelpdeskGuardados(token) {
+  return JSON.stringify(HelpdeskService.listarGuardados(token));
+}
+
 // --- Cajas Chicas ---
 function apiListarCajasChicasResumen(token) {
   return CajasChicasService.listarResumen(token);

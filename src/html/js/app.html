@@ -709,6 +709,8 @@
     // Encuestas y solicitudes externas (2-oct) -- mismo patrón que "Sistemas" (tpl-sistemas/
     // initSistemas en app-sistemas.html), un solo destino sin submenú porque ya muestra las 3.
     { id: 'encuestas-solicitudes', vista: 'encuestas-solicitudes', icono: 'clipboard-list', etiqueta: 'Encuestas/Solicitudes', libre: true, plantilla: 'tpl-sistemas', init: () => initSistemas('encuestas-solicitudes') },
+    // Los tickets del helpdesk de TI (05/10/2026): todos lo ven; cada quien, lo que su cuenta ve allá
+    { id: 'helpdesk', vista: 'helpdesk', icono: 'headset', etiqueta: 'Help Desk', libre: true, plantilla: 'tpl-helpdesk', init: () => initHelpdesk() },
     {
       id: 'administracion', icono: 'settings', etiqueta: 'Administración',
       items: [
@@ -3444,6 +3446,35 @@
   }
 
   // ---------- Tickets (bitácora general de atención) ----------
+  // Los campos de un ticket: el módulo Tickets y "Registrar en Tickets" de Help Desk
+  // (app-helpdesk.html) usan esta misma lista. Departamento y Solicitante: se puede escribir uno
+  // que todavía no está en la lista (se llenan en cargarCatalogosTickets). FECHA DE REGISTRO la
+  // pone el servidor al crear.
+  const CAMPOS_TICKET = [
+    { clave: 'TICKET', etiqueta: 'Ticket', tipo: 'text', placeholder: 'Ej. 4021' },
+    { clave: 'FECHA DE REGISTRO', etiqueta: 'Fecha de registro', tipo: 'text', soloLectura: true, soloAlta: true },
+    { clave: 'FECHA', etiqueta: 'Fecha', tipo: 'date' },
+    { clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select', catalogo: true },
+    { clave: 'SOLICITANTE', etiqueta: 'Solicitante', tipo: 'select', catalogo: true, placeholder: 'Escribe o elige un nombre' },
+    // Los de tarjeta de combustible van para EOX y para EDENRED (EDENRED agregado el 05/10/2026)
+    { clave: 'TIPO ATENCION', etiqueta: 'Tipo de atención', tipo: 'select', requerido: true, opciones: [
+      'ACTUALIZACION DE INFORMACION UBER', 'ALTA DE HOLOGRAMA EDENRED', 'ALTA DE HOLOGRAMA EOX', 'ALTA DE USUARIO UBER',
+      'BAJA DE USUARIO UBER', 'CONSULTA DE INFORMACION UBER',
+      'INCREMENTO DE COMBUSTIBLE EDENRED INDETERMINADO', 'INCREMENTO DE COMBUSTIBLE EDENRED PERMANENTE',
+      'INCREMENTO DE COMBUSTIBLE EDENRED TEMPORAL', 'INCREMENTO DE COMBUSTIBLE EOX INDETERMINADO',
+      'INCREMENTO DE COMBUSTIBLE EOX PERMANENTE', 'INCREMENTO DE COMBUSTIBLE EOX TEMPORAL',
+      'INFORMACION GENERAL - EDENRED', 'INFORMACION GENERAL - EOX', 'NIP EDENRED', 'NIP EOX',
+      'REEMBOLSO DE COMBUSTIBLE EDENRED', 'REEMBOLSO DE COMBUSTIBLE EOX',
+      'REEMPLAZO DE HOLOGRAMA EDENRED', 'REEMPLAZO DE HOLOGRAMA EOX',
+      'REPORTE DE CONSUMO DE COMBUSTIBLE EDENRED', 'REPORTE DE CONSUMO DE COMBUSTIBLE EOX',
+    ] },
+    { clave: 'PLACA', etiqueta: 'Placa', tipo: 'text' },
+    { clave: 'QUIEN ATENDIO', etiqueta: 'Quién atendió', tipo: 'select', opciones: [
+      'ABIGAIL LEDESMA CORONA', 'DAVID MOISES MALDONADO HERNANDEZ', 'GIOVANNI JAVIER ORDUÑA DE LA PEÑA', 'JORGE LUIS AVECILLA RIVERA',
+    ] },
+    { clave: 'COMENTARIO', etiqueta: 'Comentario', tipo: 'text', renglonCompleto: true },
+  ];
+
   async function initTickets() {
     wireTabsSimple(document.getElementById('view-container'));
     // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
@@ -3452,32 +3483,6 @@
     const modalEditar = document.getElementById('modal-editar-ticket');
     let todosLosTickets = [];
 
-    // Departamento y Solicitante: se puede escribir uno que todavía no está en la lista
-    // (se llenan en cargarCatalogosTickets). FECHA DE REGISTRO la pone el servidor al crear.
-    const CAMPOS_TICKET = [
-      { clave: 'TICKET', etiqueta: 'Ticket', tipo: 'text', placeholder: 'Ej. 4021' },
-      { clave: 'FECHA DE REGISTRO', etiqueta: 'Fecha de registro', tipo: 'text', soloLectura: true, soloAlta: true },
-      { clave: 'FECHA', etiqueta: 'Fecha', tipo: 'date' },
-      { clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select', catalogo: true },
-      { clave: 'SOLICITANTE', etiqueta: 'Solicitante', tipo: 'select', catalogo: true, placeholder: 'Escribe o elige un nombre' },
-      // Los de tarjeta de combustible van para EOX y para EDENRED (EDENRED agregado el 05/10/2026)
-      { clave: 'TIPO ATENCION', etiqueta: 'Tipo de atención', tipo: 'select', requerido: true, opciones: [
-        'ACTUALIZACION DE INFORMACION UBER', 'ALTA DE HOLOGRAMA EDENRED', 'ALTA DE HOLOGRAMA EOX', 'ALTA DE USUARIO UBER',
-        'BAJA DE USUARIO UBER', 'CONSULTA DE INFORMACION UBER',
-        'INCREMENTO DE COMBUSTIBLE EDENRED INDETERMINADO', 'INCREMENTO DE COMBUSTIBLE EDENRED PERMANENTE',
-        'INCREMENTO DE COMBUSTIBLE EDENRED TEMPORAL', 'INCREMENTO DE COMBUSTIBLE EOX INDETERMINADO',
-        'INCREMENTO DE COMBUSTIBLE EOX PERMANENTE', 'INCREMENTO DE COMBUSTIBLE EOX TEMPORAL',
-        'INFORMACION GENERAL - EDENRED', 'INFORMACION GENERAL - EOX', 'NIP EDENRED', 'NIP EOX',
-        'REEMBOLSO DE COMBUSTIBLE EDENRED', 'REEMBOLSO DE COMBUSTIBLE EOX',
-        'REEMPLAZO DE HOLOGRAMA EDENRED', 'REEMPLAZO DE HOLOGRAMA EOX',
-        'REPORTE DE CONSUMO DE COMBUSTIBLE EDENRED', 'REPORTE DE CONSUMO DE COMBUSTIBLE EOX',
-      ] },
-      { clave: 'PLACA', etiqueta: 'Placa', tipo: 'text' },
-      { clave: 'QUIEN ATENDIO', etiqueta: 'Quién atendió', tipo: 'select', opciones: [
-        'ABIGAIL LEDESMA CORONA', 'DAVID MOISES MALDONADO HERNANDEZ', 'GIOVANNI JAVIER ORDUÑA DE LA PEÑA', 'JORGE LUIS AVECILLA RIVERA',
-      ] },
-      { clave: 'COMENTARIO', etiqueta: 'Comentario', tipo: 'text', renglonCompleto: true },
-    ];
     document.getElementById('campos-form-ticket').innerHTML = CamposHoja.html(CAMPOS_TICKET, { prefijo: 'ticket' });
     document.getElementById('campos-form-editar-ticket').innerHTML = CamposHoja.html(CAMPOS_TICKET, { prefijo: 'editar-ticket', esEdicion: true });
 

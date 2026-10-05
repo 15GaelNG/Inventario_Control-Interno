@@ -248,6 +248,43 @@
       DEPARTAMENTO: 'TI', SERIE_VEHICULO: 'MA6CA6CD4KT046623', CAPACIDAD: 35, RAZON_SOCIAL: 'CIUDAD MADERAS',
       estatusVehiculoCatalogo: 'UTILITARIO', tipoCombustibleVehiculo: 'MAGNA',
     },
+    // Help Desk (tickets inventados, con la forma de los reales)
+    apiHelpdeskEstado: { conectado: true, nombre: 'Persona de Prueba', rol: 'Agente Sr.', vence: new Date(Date.now() + 20 * 3600e3).toISOString() },
+    apiHelpdeskFiltros: {
+      estatus: [{ id: 1, nombre: 'Abierto', color: '#4caf50' }, { id: 2, nombre: 'Pendiente', color: '#2196f3' }, { id: 3, nombre: 'Resuelto', color: '#4caf50' },
+        { id: 4, nombre: 'Cerrado', color: '#f44336' }, { id: 7, nombre: 'Abierto sin asignación', color: '#4caf50' }, { id: 8, nombre: 'Reabierto', color: '#4caf50' }],
+      prioridades: [{ id: 1, nombre: 'Baja', color: '#A0D76A' }, { id: 2, nombre: 'Media', color: '#4DA1FF' }, { id: 3, nombre: 'Alta', color: '#FFD012' }, { id: 4, nombre: 'Urgente', color: '#FF5959' }],
+      formularios: [{ id: 148, nombre: 'Incidencia | Solicitud - Sensores' }, { id: 137, nombre: 'Solicitud - Alta de Conceptos CXP' }],
+      grupos: [{ id: 226, nombre: 'Sensores' }, { id: 9, nombre: 'Análisis de Datos' }],
+    },
+    apiHelpdeskTickets: JSON.stringify({
+      total: 41,
+      tickets: filas(12, (i) => ({
+        ID: 103700 - i * 7, TITULO: ['RIFTER UNU794H | Alertas en tablero', 'Alta de nueva oficina CHMGTO', 'Solicitud nuevo sensor', 'Desactivar alarma del GPS'][i % 4],
+        DESCRIPCION: 'Texto de prueba', ESTATUS: ['Abierto', 'Pendiente', 'Cerrado', 'Resuelto'][i % 4], ID_ESTATUS: [1, 2, 4, 3][i % 4],
+        PRIORIDAD: ['Baja', 'Media', 'Alta', 'Urgente'][i % 4], FORMULARIO: i % 2 ? 'Solicitud - Alta de Conceptos CXP' : 'Incidencia | Solicitud - Sensores',
+        GRUPO: i % 2 ? 'Análisis de Datos' : 'Sensores', SOLICITANTE: ['ISAMAR JUAREZ', 'MARILY AVILA', 'DAVID MALDONADO', 'JAVIER ORDUÑA'][i % 4],
+        CORREO_SOLICITANTE: 'persona@ejemplo.com', AREA_SOLICITANTE: 'SUMINISTROS', DEPARTAMENTO_SOLICITANTE: 'COMPRAS', AGENTE: 'Agente de Prueba',
+        AREA_DESTINO: i % 2 ? 'ANÁLISIS DE DATOS' : 'SENSORES', DEPARTAMENTO_DESTINO: 'CONTROL INTERNO',
+        FECHA_CREACION: hace(i * 2).slice(0, 10), FECHA_CIERRE: i % 4 === 2 ? hace(i) : '', ULTIMA_RESPUESTA: 'Respuesta hace ' + (i + 1) + ' horas.',
+        SIN_LEER: i % 3, ABIERTO: i % 4 !== 2,
+      })),
+      consultado: new Date().toISOString(),
+    }),
+    apiHelpdeskDetalle: JSON.stringify({
+      ID: 103700, TITULO: 'RIFTER UNU794H | Alertas en tablero', ESTATUS: 'Abierto', PRIORIDAD: 'Baja', FORMULARIO: 'Incidencia | Solicitud - Sensores',
+      GRUPO: 'Sensores', SOLICITANTE: 'ISAMAR JUAREZ', CORREO_SOLICITANTE: 'persona@ejemplo.com', AREA_SOLICITANTE: 'SUMINISTROS',
+      DEPARTAMENTO_SOLICITANTE: 'COMPRAS', AGENTE: 'Agente de Prueba', AREA_DESTINO: 'SENSORES', FECHA_CREACION: hace(2).slice(0, 10), FECHA_CIERRE: '',
+      DURACION_DIAS: 2, SIN_LEER: 1, ABIERTO: true,
+      DESCRIPCION: 'Buen día equipo\n\nLa unidad muestra alertas en el tablero desde la entrega. ¿Nos ayudan a revisarla?',
+      MENSAJES: [
+        { ID: 1, AUTOR: 'ISAMAR JUAREZ', FECHA: hace(2), TEXTO: 'Buen día equipo\nAdjunto fotos del tablero.', PRIVADO: false, ADJUNTOS: ['tablero.jpg'] },
+        { ID: 2, AUTOR: 'Agente de Prueba', FECHA: hace(1), TEXTO: 'Hola, lo revisamos en el taller esta semana (ver https://ejemplo.com/guia).', PRIVADO: false, ADJUNTOS: [] },
+        { ID: 3, AUTOR: 'Agente de Prueba', FECHA: hace(1), TEXTO: 'Nota interna: pedir cita con el proveedor.', PRIVADO: true, ADJUNTOS: [] },
+      ],
+    }),
+    apiHelpdeskRegistrados: {},
+    apiHelpdeskGuardados: JSON.stringify([]),
   };
 
   // ---------- google.script.run de mentira ----------
@@ -332,6 +369,9 @@
     'salud-tecnica': async () => { await abrir('salud'); await vistaSalud(true); await hasta('.rel-tarjeta'); await esperar(300); },
     'salud-capital': async () => { await abrir('salud'); await vistaSalud(false); const b = [...document.querySelectorAll('#salud-tabs .tab-btn')].find((x) => /Capital/.test(x.textContent)); b.click(); await esperar(500); },
     'relaciones-capital': async () => { await abrir('relaciones'); await vistaRelaciones(false); const b = [...document.querySelectorAll('#rel-s-tabs .tab-btn')].find((x) => /Capital/.test(x.textContent)); b.click(); await esperar(400); },
+    'helpdesk-conectar': async () => { respuestas.apiHelpdeskEstado = { conectado: false }; await abrir('helpdesk'); await hasta('#hd-conectar:not([hidden])'); await esperar(300); },
+    'helpdesk-lista': async () => { await abrir('helpdesk'); await hasta('#hd-tabla tbody tr[data-id]'); await esperar(300); },
+    'helpdesk-detalle': async () => { await abrir('helpdesk'); await abrirPrimeraFila(); await hasta('.hd-mensaje'); (await hasta('#hd-btn-registrar:not([hidden])')).click(); await esperar(500); },
     'inspecciones-detalle': async () => { await abrir('inspeccion-vehicular'); await abrirPrimeraFila(); },
     'sensores-detalle': async () => { await abrir('instalacion-sensores'); await abrirPrimeraFila(); },
     'hologramas-detalle': async () => { await abrir('hologramas'); await abrirPrimeraFila(); },

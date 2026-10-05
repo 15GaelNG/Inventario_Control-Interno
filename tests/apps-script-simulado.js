@@ -66,8 +66,12 @@ function crearEntorno(opciones) {
             return this;
           },
           setValue(v) { return this.setValues([[v]]); },
+          // Formato: no cambia los datos, solo se acepta
+          setFontWeight() { return this; },
+          setNumberFormat() { return this; },
         };
       },
+      setFrozenRows: () => hoja,
       getDataRange() { return this.getRange(1, 1, ultimaFila(), ancho()); },
       appendRow(r) { datos.splice(ultimaFila(), 0, r.slice()); return hoja; },
       deleteRow(f) { datos.splice(f - 1, 1); },
@@ -82,6 +86,12 @@ function crearEntorno(opciones) {
     const libro = { getId: () => id, getName: () => 'Libro ' + id, _hojas: [] };
     libro.getSheets = () => libro._hojas.slice();
     libro.getSheetByName = (n) => libro._hojas.find((h) => h.getName() === n) || null;
+    libro.insertSheet = (n) => {
+      if (libro.getSheetByName(n)) throw new Error('Ya existe la hoja ' + n);
+      const h = crearHoja(libro, n, []);
+      libro._hojas.push(h);
+      return h;
+    };
     Object.keys(cfg.libros[id]).forEach((nombre) => libro._hojas.push(crearHoja(libro, nombre, cfg.libros[id][nombre])));
     libros[id] = libro;
   });
