@@ -9,38 +9,38 @@
  * siguiente consulta lo pone al día). La conversación NO se copia: solo la ficha del ticket.
  *
  * La hoja la crea este archivo la primera vez que hace falta (no hay que correr nada a mano), y
- * si un día se agrega una columna a COLUMNAS, se agrega sola al final de la hoja.
+ * si un día se agrega una columna a ENCABEZADOS, se agrega sola al final de la hoja.
  */
 
 const HelpdeskService = (function () {
   const HOJA = 'APP_HELPDESK';
   const COL_HD = 'ID TICKET HD';
   const COL_CI = 'ID TICKET CI';
-  const COLUMNAS = [
+  const ENCABEZADOS = [
     'ID', COL_HD, 'TITULO', 'DESCRIPCION', 'ESTATUS', 'PRIORIDAD', 'FORMULARIO', 'GRUPO', 'SOLICITANTE',
     'CORREO SOLICITANTE', 'AREA SOLICITANTE', 'DEPARTAMENTO SOLICITANTE', 'AGENTE', 'AREA DESTINO',
     'FECHA CREACION', 'FECHA CIERRE', COL_CI, 'VISTO PRIMERO', 'ACTUALIZADO', 'ACTUALIZADO POR',
   ];
   // Las que vienen del helpdesk: si alguna cambia, el renglón se actualiza
-  const DEL_HELPDESK = COLUMNAS.slice(1, 16);
+  const DEL_HELPDESK = ENCABEZADOS.slice(1, 16);
   const MAX_DESCRIPCION = 5000;   // una celda aguanta 50,000; esto es una ficha, no un archivo
 
   const libro_ = () => Config.SPREADSHEET_IDS.VEHICULOS();
 
-  /** La hoja (o null si todavía no existe y no se pide crearla), con todas las COLUMNAS */
+  /** La hoja (o null si todavía no existe y no se pide crearla), con todas las ENCABEZADOS */
   function hoja_(crear) {
     const ss = SpreadsheetApp.openById(libro_());
     let hoja = ss.getSheetByName(HOJA);
     if (!hoja) {
       if (!crear) return null;
       hoja = ss.insertSheet(HOJA);
-      hoja.getRange(1, 1, 1, COLUMNAS.length).setValues([COLUMNAS]).setFontWeight('bold');
+      hoja.getRange(1, 1, 1, ENCABEZADOS.length).setValues([ENCABEZADOS]).setFontWeight('bold');
       hoja.setFrozenRows(1);
       return hoja;
     }
     const enc = hoja.getRange(1, 1, 1, Math.max(1, hoja.getLastColumn())).getValues()[0].map((h) => String(h).trim());
-    const indices = SheetUtils.indiceDeColumnas(enc, COLUMNAS);
-    const faltan = COLUMNAS.filter((c) => indices[c] === -1);
+    const indices = SheetUtils.indiceDeColumnas(enc, ENCABEZADOS);
+    const faltan = ENCABEZADOS.filter((c) => indices[c] === -1);
     if (faltan.length && crear) {
       const desde = enc.filter(Boolean).length + 1;
       hoja.getRange(1, desde, 1, faltan.length).setValues([faltan]).setFontWeight('bold');
@@ -86,7 +86,7 @@ const HelpdeskService = (function () {
     try {
       const hoja = hoja_(true);
       const enc = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0].map((h) => String(h).trim());
-      const pos = SheetUtils.indiceDeColumnas(enc, COLUMNAS);
+      const pos = SheetUtils.indiceDeColumnas(enc, ENCABEZADOS);
       const ultima = hoja.getLastRow();
       const filas = ultima > 1 ? hoja.getRange(2, 1, ultima - 1, enc.length).getValues() : [];
       const renglonDe = {};
@@ -190,5 +190,5 @@ const HelpdeskService = (function () {
     return r;
   }
 
-  return { sincronizar_, listarGuardados, registrarEnTickets, registrados, COLUMNAS };
+  return { sincronizar_, listarGuardados, registrarEnTickets, registrados, ENCABEZADOS };
 })();
