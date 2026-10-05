@@ -132,14 +132,23 @@
       let foto = null;          // { base64, mimeType } si se subió una imagen en vez de trazar
 
       // ---------- tamaño ----------
+      let altoActual = 0;
+      /**
+       * Redimensionar el canvas lo borra: el trazo se respalda y se repinta. Al girar el
+       * teléfono el ancho cambia (390 → 844 px): la firma se repinta en su proporción, nunca
+       * estirada; si la TINTA ya no cabe (de horizontal a vertical) se reduce parejo lo justo
+       * para que quepa completa. Los límites del trazo se escalan igual, así exportar() sigue
+       * recortando bien.
+       */
       function dimensionar() {
         const ancho = lienzo.clientWidth;
         const alto = lienzo.clientHeight;
         if (!ancho || !ctx) return;   // oculto: se dimensiona al mostrarse
         const dpr = window.devicePixelRatio || 1;
+        const anterior = { ancho: anchoActual, alto: altoActual };
         anchoActual = ancho;
-        // Redimensionar el canvas lo borra: se conserva y se repinta el trazo
-        const respaldo = hayTrazo ? lienzo.toDataURL('image/png') : null;
+        altoActual = alto;
+        const respaldo = hayTrazo && anterior.ancho ? lienzo.toDataURL('image/png') : null;
         lienzo.width = Math.round(ancho * dpr);
         lienzo.height = Math.round(alto * dpr);
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -150,8 +159,15 @@
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         if (respaldo) {
+          const MARGEN = 6;   // px libres a la derecha y abajo de la tinta
+          const escala = limites
+            ? Math.min(1, (ancho - MARGEN) / (limites.maxX + perfil.max), (alto - MARGEN) / (limites.maxY + perfil.max))
+            : 1;
+          if (limites && escala !== 1) {
+            limites = { minX: limites.minX * escala, maxX: limites.maxX * escala, minY: limites.minY * escala, maxY: limites.maxY * escala };
+          }
           const img = new Image();
-          img.onload = () => ctx.drawImage(img, 0, 0, ancho, alto);
+          img.onload = () => ctx.drawImage(img, 0, 0, anterior.ancho * escala, (anterior.alto || alto) * escala);
           img.src = respaldo;
         }
       }
@@ -397,8 +413,15 @@
           lector.readAsDataURL(elegido);
         });
       }
-      window.addEventListener('resize', ajustar);
-      window.addEventListener('orientationchange', dimensionar);
+      // Cualquier cambio de ancho del recuadro (girar el teléfono, abrir el menú, mostrarse el
+      // paso donde estaba oculto). Sin ResizeObserver (navegadores viejos), el resize de la ventana.
+      let observador = null;
+      if (typeof ResizeObserver !== 'undefined') {
+        observador = new ResizeObserver(() => ajustar());
+        observador.observe(lienzo);
+      } else {
+        window.addEventListener('resize', ajustar);
+      }
       dimensionar();
 
       return {
@@ -409,8 +432,7 @@
         ajustar,
         exportar,
         destruir() {
-          window.removeEventListener('resize', ajustar);
-          window.removeEventListener('orientationchange', dimensionar);
+          if (observador) observador.disconnect(); else window.removeEventListener('resize', ajustar);
           contenedor.innerHTML = '';
         },
       };
