@@ -314,6 +314,73 @@
   .dt-campo-valor input, .dt-campo-valor select { padding: 6px 8px; font-size: 13px; }
   .dt-panel-extra:empty { display: none; }
   .dt-panel-extra { margin-top: 14px; }
+
+  /* ---- Tabla / Tarjetas (ver "MODO TARJETAS" en la documentación de abajo) ----
+     El botón solo existe hasta 1024px: en escritorio siempre es tabla. */
+  .dt-modo { display: none; }
+  @media (max-width: 1024px) {
+    .dt-modo { display: inline-flex; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+  }
+  .dt-toolbar .dt-modo button { background: transparent; border: 0; border-radius: 0; color: var(--color-text-muted); padding: 8px 11px; }
+  .dt-toolbar .dt-modo button + button { border-left: 1px solid var(--color-border); }
+  .dt-toolbar .dt-modo button[aria-pressed="true"] { background: var(--color-primary); color: #fff; }
+
+  /* Las tarjetas son las mismas filas <tr data-id> acomodadas como bloques: los !important ganan a
+     lo que la tabla pone en línea (ancho de columna, posición de las fijas) y a sus reglas sticky. */
+  .dt.dt-tarjetas .dt-scroll { max-height: none; overflow: visible; border: 0; border-radius: 0; min-height: 0; }
+  .dt.dt-tarjetas table, .dt.dt-tarjetas tbody { display: block; width: 100%; }
+  .dt.dt-tarjetas thead, .dt.dt-tarjetas tfoot { display: none; }
+  .dt.dt-drive.dt-tarjetas .dt-scroll table { margin-bottom: 0; }
+  .dt.dt-tarjetas tbody tr {
+    display: block; position: relative; margin-bottom: 8px; padding: 12px 46px 12px 14px;
+    background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px;
+  }
+  .dt.dt-tarjetas tbody tr[data-id] { cursor: pointer; }
+  .dt.dt-tarjetas tbody tr:hover td, .dt.dt-tarjetas tbody tr.dt-fila-seleccionada td { background: transparent; }
+  .dt.dt-tarjetas tbody tr[data-id]:hover { background: var(--color-bg); }
+  .dt.dt-tarjetas tbody tr.dt-fila-seleccionada { background: var(--color-primary-soft); border-color: var(--color-primary); }
+  .dt.dt-tarjetas tbody td {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    position: relative !important; left: auto !important; box-shadow: none !important;
+    width: auto !important; min-width: 0 !important; max-width: none !important;
+    padding: 3px 0; border: 0; white-space: normal; overflow: visible; text-align: right; overflow-wrap: anywhere;
+  }
+  .dt.dt-tarjetas tbody td[data-titulo]::before {
+    content: attr(data-titulo); flex-shrink: 0; max-width: 45%; text-align: left;
+    color: var(--color-text-muted); font-size: 12px; font-weight: 500;
+  }
+  .dt.dt-tarjetas tbody td.dt-tarjeta-titulo { justify-content: flex-start; text-align: left; font-size: 14px; font-weight: 700; padding-bottom: 6px; }
+  .dt.dt-tarjetas tbody td.dt-tarjeta-titulo::before { content: none; }
+  /* Casilla arriba a la izquierda (cuando se ve) y ⋮ arriba a la derecha, siempre visible (sin hover en el dedo) */
+  .dt.dt-tarjetas tbody td.dt-col-check { position: absolute !important; top: 11px; left: 10px; padding: 0; }
+  .dt.dt-tarjetas.dt-con-casillas:not(.dt-con-modo-seleccion) tbody tr[data-id],
+  .dt.dt-tarjetas.dt-modo-seleccion tbody tr[data-id] { padding-left: 42px; }
+  .dt.dt-tarjetas tbody td.dt-col-mas { position: absolute !important; top: 4px; right: 4px; padding: 0; background: transparent; }
+  .dt.dt-tarjetas .dt-btn-mas { opacity: 1; padding: 10px; }
+  .dt.dt-tarjetas tbody td.dt-col-acciones {
+    justify-content: flex-end; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--color-border); background: transparent;
+  }
+  .dt.dt-tarjetas tbody td.dt-vacio { display: block; text-align: center; }
+  .dt.dt-tarjetas tbody tr:not([data-id]) { padding-right: 14px; }
+  .dt.dt-tarjetas tbody td.dt-editable { padding-right: 30px; }
+
+  /* ---- Celular: barra y pie que caben en 390px ---- */
+  .dt-pagina { white-space: nowrap; }
+  @media (max-width: 640px) {
+    .dt-toolbar .dt-buscar { flex: 1 1 100%; max-width: none; }
+    .dt-ayuda, .dt-atajos { display: none; }
+    .dt-pie { justify-content: center; }
+    .dt-resumen { flex: 1 1 100%; text-align: center; }
+    /* Menús (filtro, Vista, ⋮): hoja abajo a lo ancho en vez de flotar junto al botón */
+    .dt-popover, .dt-popover.dt-menu, .dt-menu-contextual {
+      left: 8px !important; right: 8px; top: auto !important; bottom: 8px;
+      width: auto !important; max-width: none !important; max-height: 70vh; max-height: 70dvh; transform-origin: bottom center;
+    }
+  }
+  /* Con el dedo no hay atajos de teclado */
+  @media (pointer: coarse) {
+    .dt-atajos { display: none; }
+  }
 </style>
 
 <script>
@@ -383,7 +450,19 @@
    *                    // crudo que hace de id). Se pide una sola vez por carga de la tabla.
    *     alCambiarFiltros: (filtros) => {},      // p. ej. para marcar chips de KPI
    *     umbralPalabraClave: 10,                 // eliminar pide escribir "ELIMINAR" desde N filas
+   *     tarjeta: { campos: ['FOLIO', 'PLACA', 'RESPONSABLE'] },   // opcional: qué muestra cada tarjeta (ver abajo)
+   *     tarjetas: false,                        // opcional: sin modo tarjetas (el módulo trae su propia vista)
    *   });
+   *
+   * ─── MODO TARJETAS (celular y tableta) ────────────────────────────────────────────
+   *   Hasta 1024px (Pantalla.esAngosta) la barra trae el botón Tabla / Tarjetas. Sin elección,
+   *   el celular ve tarjetas y la tableta, tabla; lo que elija la persona se recuerda con su
+   *   "Vista" (y "Restablecer vista" lo regresa a automático). En escritorio siempre es tabla.
+   *   Cada tarjeta muestra cfg.tarjeta.campos o, si no, las primeras 5 columnas de la vista de la
+   *   persona; la primera hace de título y las demás llevan el nombre de su columna.
+   *   Las tarjetas SON las mismas filas <tr data-id> con otro acomodo (clase .dt-tarjetas): tocar,
+   *   doble clic, mantener presionado, ⋮, clic derecho, selección y edición funcionan igual, sin
+   *   que el módulo haga nada. Un módulo no necesita CSS de celular para su tabla.
    *
    * Opciones de columna:
    *   editable: true     → en la celda (lápiz, doble clic, F2) y en el panel
@@ -397,7 +476,8 @@
    *   limpiarSeleccion() · copiarSeleccion() · textoSeleccion()
    *   setFiltro(campo, { valores: [...] } | { op, v1, v2 } | null) · limpiarFiltros()
    *   moverColumna(campo, antesDeCampo) · fijarColumna(campo, true) · ocultarColumna(campo)
-   *   setDensidad('compacta') · restablecerVista() · getVista() · abrirDetalle(id)
+   *   setDensidad('compacta') · setModo('tarjetas' | 'tabla' | null) · getModo()
+   *   restablecerVista() · getVista() · abrirDetalle(id)
    *   ajustarAlto() · destruir()
    *
    * ─── EXTENDER ─────────────────────────────────────────────────────────────────────
@@ -441,6 +521,8 @@
     const SIN_VALOR = ['vacio', 'no_vacio'];           // operadores que no piden valor
     const TAMANOS_PAGINA = [10, 25, 50, 100];
     const DENSIDADES = { compacta: 'Compacta', normal: 'Normal', comoda: 'Cómoda' };
+    const MODOS = { tabla: 'Tabla', tarjetas: 'Tarjetas' };
+    const CAMPOS_TARJETA = 5;                          // columnas que muestra una tarjeta si el módulo no dice cuáles
     const FILAS_SKELETON = 8;
     const ANCHO_MINIMO = 60;
     const MAX_HISTORIAL = 20;
@@ -676,7 +758,9 @@
         Array.from(new Set(st.datos.map((f) => valorDe(col, f)).filter((v) => !vacio(v)).map(String))).sort();
       const puedeEditarCelda = (col) => col.editable === true && !!cfg.alEditar;
       const puedeEditarPanel = (col) => !!col.editable && !!cfg.alEditar;
-      const esTactil = () => !!(window.matchMedia && window.matchMedia('(hover: none)').matches);
+      // Pantalla se declara con const (no queda en window): se revisa con typeof, igual que Iconos.
+      // Sin Pantalla (pruebas, otra página) la tabla se comporta como en escritorio.
+      const pantalla = typeof Pantalla !== 'undefined' ? Pantalla : null;
       const conDetalle = cfg.detalle !== false;
       const aArreglo = (o) => (!o ? [] : Array.isArray(o) ? o.map((x) => Object.assign({}, x)) : [Object.assign({}, o)]);
 
@@ -723,6 +807,7 @@
         historial: [],               // ediciones para Ctrl+Z
         // Vista (se recuerda por usuario si hay idTabla): ver aplicarVista()
         ocultas: new Set(), ordenColumnas: [], anchos: {}, fijadas: new Set(), orden: [], tamanoPagina: 25, densidad: 'normal',
+        modo: null,                  // 'tabla' | 'tarjetas' que eligió la persona; null = automático (ver modoEfectivo)
       };
 
       /** Vista por defecto (lo que "Restablecer vista" recupera) */
@@ -734,6 +819,7 @@
         orden: aArreglo(cfg.ordenInicial),
         tamanoPagina: cfg.tamanoPagina,
         densidad: cfg.densidad,
+        modo: null,
       });
 
       /** Aplica una vista guardada ignorando columnas que ya no existen */
@@ -749,14 +835,26 @@
         st.orden = aArreglo(v.orden).filter((o) => existe(o.campo));
         st.tamanoPagina = TAMANOS_PAGINA.includes(Number(v.tamanoPagina)) ? Number(v.tamanoPagina) : 25;
         st.densidad = DENSIDADES[v.densidad] ? v.densidad : 'normal';
+        st.modo = MODOS[v.modo] ? v.modo : null;
       }
 
       function vistaActual() {
         return {
           ocultas: Array.from(st.ocultas), ordenColumnas: st.ordenColumnas.slice(), anchos: Object.assign({}, st.anchos),
           fijadas: Array.from(st.fijadas), orden: st.orden.map((o) => Object.assign({}, o)),
-          tamanoPagina: st.tamanoPagina, densidad: st.densidad,
+          tamanoPagina: st.tamanoPagina, densidad: st.densidad, modo: st.modo,
         };
+      }
+
+      /**
+       * Tabla o tarjetas (ver "MODO TARJETAS" arriba). En escritorio siempre tabla. En tableta y
+       * celular manda lo que eligió la persona; si no ha elegido, tarjetas en celular (una tabla de
+       * 10 columnas no cabe) y tabla en tableta.
+       */
+      const conTarjetas = cfg.tarjetas !== false;
+      function modoEfectivo() {
+        if (!conTarjetas || !pantalla || !pantalla.esAngosta()) return 'tabla';
+        return st.modo || (pantalla.esCelular() ? 'tarjetas' : 'tabla');
       }
 
       // localStorage puede no estar disponible (incógnito, vista previa): la vista solo no se recuerda
@@ -782,6 +880,16 @@
       function columnasVisibles() {
         const ordenadas = st.ordenColumnas.map(colPorCampo).filter((c) => c && !st.ocultas.has(c.campo));
         return ordenadas.filter((c) => st.fijadas.has(c.campo)).concat(ordenadas.filter((c) => !st.fijadas.has(c.campo)));
+      }
+
+      /**
+       * Columnas de una tarjeta: las que diga el módulo (cfg.tarjeta.campos) o, si no, las primeras
+       * CAMPOS_TARJETA de la vista de la persona (respeta lo que ocultó y el orden que eligió en "Vista").
+       * La primera hace de título.
+       */
+      function columnasTarjeta(visibles) {
+        const pedidas = cfg.tarjeta && cfg.tarjeta.campos ? cfg.tarjeta.campos.map(colPorCampo).filter(Boolean) : [];
+        return pedidas.length ? pedidas : visibles.slice(0, CAMPOS_TARJETA);
       }
 
       /** Todas las exportables, sin importar si el usuario las ocultó en "Vista" (el Excel siempre sale completo) */
@@ -870,6 +978,8 @@
           <div class="dt-toolbar">
             <input type="search" class="dt-buscar" placeholder="Buscar en la tabla…" aria-label="Buscar en la tabla" />
             <button type="button" class="secondary dt-btn-columnas" title="Columnas, orden, ancho y densidad">${ic('vista')} Vista</button>
+            ${conTarjetas ? `<div class="dt-modo" role="group" aria-label="Ver como">${Object.keys(MODOS).map((modo) =>
+              botonIcono('dt-btn-modo', modo, 'Ver como ' + MODOS[modo].toLowerCase(), `data-modo="${modo}" aria-pressed="false"`)).join('')}</div>` : ''}
             ${cfg.ayuda ? `<span class="dt-ayuda" title="${esc(cfg.ayuda)}">${ic('ayuda')} Ayuda</span>` : ''}
             <span class="dt-espacio"></span>
             ${cfg.seleccionable && cfg.modoSeleccion && !cfg.seleccionDrive ? `<button type="button" class="secondary dt-btn-modo-seleccion" aria-pressed="false" title="Mostrar casillas para elegir varios registros (clic, arrastrar o Shift+clic)">${ic('list-checks')} <span>Seleccionar</span></button>` : ''}
@@ -905,6 +1015,7 @@
       let panel = null;
       let ultimaFirmaFiltros = '{}|';
       let ultimaFirmaVista = '';
+      let ultimoModo = null;         // ¿el último render fue en tarjetas? (para repintar solo si cambia al girar)
 
       const celdaCheck = (contenido) => (cfg.seleccionable ? `<td class="dt-col-check dt-fija">${contenido || ''}</td>` : '');
       const celdaAcciones = (contenido) => (hayAccionesFila ? `<td class="dt-col-acciones">${contenido || ''}</td>` : '');
@@ -959,8 +1070,10 @@
         const inicio = (st.pagina - 1) * st.tamanoPagina;
         const pagina = filas.slice(inicio, inicio + st.tamanoPagina);
         const idsPagina = pagina.map(idDe);
+        const tarjetas = modoEfectivo() === 'tarjetas';
         return {
-          visibles, filas, pagina, idsPagina, inicio, totalPaginas,
+          visibles, filas, pagina, idsPagina, inicio, totalPaginas, tarjetas,
+          celdas: tarjetas ? columnasTarjeta(visibles) : visibles,   // lo que se pinta en cada fila del cuerpo
           selPagina: idsPagina.filter((id) => st.seleccion.has(id)).length,
           busquedaActiva: st.busqueda.trim() !== '',
           nColumnas: visibles.length + nColumnasSistema(),
@@ -971,7 +1084,10 @@
         const m = calcularModelo();
         raiz.className = 'dt dt-densidad-' + st.densidad +
           // modoSeleccion (rama emmanuel): className se reescribe en cada render, así que el modo va aquí
-          (cfg.modoSeleccion ? ' dt-con-modo-seleccion' : '') + (st.modoSeleccion ? ' dt-modo-seleccion' : '') + (cfg.seleccionDrive ? ' dt-drive' : '');
+          (cfg.modoSeleccion ? ' dt-con-modo-seleccion' : '') + (st.modoSeleccion ? ' dt-modo-seleccion' : '') + (cfg.seleccionDrive ? ' dt-drive' : '') +
+          (m.tarjetas ? ' dt-tarjetas' : '') + (cfg.seleccionable ? ' dt-con-casillas' : '');
+        contenedor.querySelectorAll('.dt-btn-modo').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.modo === (m.tarjetas ? 'tarjetas' : 'tabla'))));
+        ultimoModo = m.tarjetas;
         pintarEncabezado(m);
         pintarCuerpo(m);
         pintarTotales(m);
@@ -1016,7 +1132,8 @@
         }
       }
 
-      function htmlCelda(col, fila, busquedaActiva) {
+      /** data-titulo: el nombre de la columna, que en tarjetas se ve como etiqueta del dato (CSS ::before) */
+      function htmlCelda(col, fila, busquedaActiva, extra) {
         const editable = puedeEditarCelda(col);
         const texto = textoVisible(col, fila);
         const contenido = col.render ? col.render(valorDe(col, fila), fila) : (busquedaActiva ? resaltar(texto) : esc(texto));
@@ -1024,7 +1141,8 @@
         const lapiz = editable
           ? botonIcono('dt-btn-editar-celda', 'editar', `Editar ${col.titulo} de ${etiquetaDe(fila)}`)
           : '';
-        return `<td data-campo="${esc(col.campo)}" class="${clasesColumna(col, editable ? 'dt-editable' : '')}"${titulo}${estiloAncho(col.campo)}>${contenido}${lapiz}</td>`;
+        const clases = clasesColumna(col, [editable ? 'dt-editable' : '', extra || ''].filter(Boolean).join(' '));
+        return `<td data-campo="${esc(col.campo)}" data-titulo="${esc(col.titulo)}" class="${clases}"${titulo}${estiloAncho(col.campo)}>${contenido}${lapiz}</td>`;
       }
 
       function htmlAccionesFila(fila) {
@@ -1036,7 +1154,7 @@
         )).join('') + '</div>';
       }
 
-      function pintarCuerpo({ visibles, pagina, nColumnas, busquedaActiva }) {
+      function pintarCuerpo({ celdas, tarjetas, pagina, nColumnas, busquedaActiva }) {
         if (st.cargando) {
           const celdas = Array.from({ length: nColumnas }, (_, i) => {
             const sistema = (cfg.seleccionable && i === 0) || (hayAccionesFila && i === nColumnas - 1);
@@ -1059,7 +1177,7 @@
           const sel = st.seleccion.has(id);
           return `<tr data-id="${esc(id)}" class="${sel ? 'dt-fila-seleccionada' : ''}">` +
             celdaCheck(`<input type="checkbox" class="dt-check" ${sel ? 'checked' : ''} aria-label="Seleccionar ${esc(etiquetaDe(fila))}" />`) +
-            visibles.map((col) => htmlCelda(col, fila, busquedaActiva)).join('') +
+            celdas.map((col, i) => htmlCelda(col, fila, busquedaActiva, tarjetas && i === 0 ? 'dt-tarjeta-titulo' : '')).join('') +
             celdaAcciones(htmlAccionesFila(fila)) +
             celdaMas(botonIcono('dt-btn-mas', 'ellipsis-vertical', `Más opciones de ${etiquetaDe(fila)}`)) +
             '</tr>';
@@ -1250,7 +1368,7 @@
       /** Posición "left" de las columnas fijas, según el ancho real de las anteriores */
       function aplicarFijadas() {
         const encabezado = thead.rows[0];
-        if (!encabezado) return;
+        if (!encabezado || raiz.classList.contains('dt-tarjetas')) return;   // en tarjetas no hay columnas fijas
         const filasTabla = [encabezado].concat(Array.from(tbody.rows), Array.from(tfoot.rows));
         let izquierda = 0;
         let ultima = -1;
@@ -1273,6 +1391,8 @@
       /** Alto del área con scroll = lo que queda de ventana debajo de la tabla (menos el pie) */
       function ajustarAlto() {
         const scroll = $('.dt-scroll');
+        // En tarjetas desplaza la página, no una caja dentro de ella (dos scrolls anidados en un celular estorban)
+        if (scroll && raiz.classList.contains('dt-tarjetas')) { scroll.style.maxHeight = ''; return; }
         if (!scroll || scroll.offsetParent === null) return;   // pestaña oculta: se ajusta al mostrarse
         const pie = $('.dt-pie');
         const disponible = window.innerHeight - scroll.getBoundingClientRect().top - (pie ? pie.offsetHeight : 0) - 36;
@@ -1339,6 +1459,11 @@
       }
       function mostrarColumna(campo) {
         cambiarVista(() => st.ocultas.delete(campo));
+      }
+      /** 'tabla' | 'tarjetas' (lo elige la persona y se recuerda) · null = automático según la pantalla */
+      function setModo(modo) {
+        if (modo !== null && !MODOS[modo]) return;
+        cambiarVista(() => { st.modo = modo; });
       }
       function setDensidad(densidad) {
         if (DENSIDADES[densidad]) cambiarVista(() => { st.densidad = densidad; });
@@ -2026,6 +2151,18 @@
       $('.dt-ultima').addEventListener('click', irAPagina(() => Infinity));   // render() lo limita a la última
       if (cfg.exportar) $('.dt-btn-excel').addEventListener('click', (ev) => exportarExcel(ev.currentTarget));
 
+      // ---- Tabla / Tarjetas: la elección se recuerda con la vista; sin elección, sigue a la pantalla ----
+      if (conTarjetas) {
+        $('.dt-modo').addEventListener('click', (ev) => {
+          const b = ev.target.closest('[data-modo]');
+          if (b) setModo(b.dataset.modo);
+        });
+      }
+      // Girar el teléfono o cambiar el tamaño de la ventana puede cambiar el modo automático
+      const dejarDeEscucharPantalla = conTarjetas && pantalla
+        ? pantalla.alCambiar(() => { if (!desmontado() && (modoEfectivo() === 'tarjetas') !== ultimoModo) render(); })
+        : () => {};
+
       if (cfg.modoSeleccion && $('.dt-btn-modo-seleccion')) {
         $('.dt-btn-modo-seleccion').addEventListener('click', () => setModoSeleccion(!st.modoSeleccion));
       }
@@ -2573,6 +2710,7 @@
       function limpiarGlobales() {
         cerrarPopover();
         cerrarPanel();
+        dejarDeEscucharPantalla();
         document.removeEventListener('mousedown', alClicFuera);
         document.removeEventListener('pointerdown', alPresionarFuera);
         document.removeEventListener('keydown', alTecla);
@@ -2624,6 +2762,8 @@
         ocultarColumna,
         mostrarColumna,
         setDensidad,
+        setModo,
+        getModo: modoEfectivo,
         restablecerVista,
         getVista: vistaActual,
         abrirDetalle: abrirPanel,

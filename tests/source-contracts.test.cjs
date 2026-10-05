@@ -1731,7 +1731,6 @@ test('responsivo: solo los cortes del sistema (640 / 1024) y matchMedia solo en 
   // Lo que falta migrar (plan de diseño responsivo, oct-2026). Esta lista SOLO SE ACHICA: un
   // archivo nuevo no puede entrar, y al migrar uno hay que bajar su número aquí (si no, falla).
   const PENDIENTES = {
-    'src/html/js/componentes/datatable.html': { cortes: 0, matchMedia: 1 },
     'src/html/js/lineas.html': { cortes: 0, matchMedia: 2 },
     'src/html/lineas-estilos.html': { cortes: 17, matchMedia: 0 },
     'src/html/views/relaciones.html': { cortes: 1, matchMedia: 0 },

@@ -304,6 +304,9 @@
       // al usar las tarjetas, la captura o el ⋮ de la ficha; cualquier otro clic fuera de la tabla la quita
       return DataTable.crear(contenedor, Object.assign({
         tamanoPagina: 50, seleccionable: true, modoSeleccion: true, seleccionDrive: true, accionesDeTabla: false,
+        // Líneas trae su propia vista de tarjetas (#ln-modo-vista): hasta unificarla (plan responsivo, fase 4)
+        // no se suma el botón Tabla / Tarjetas del DataTable
+        tarjetas: false,
         conservarSeleccion: (el) => !!el.closest('#ln-listado .ln-cuadro, #ln-modal-captura, .ln-menu-flotante'),
       }, config));
     }

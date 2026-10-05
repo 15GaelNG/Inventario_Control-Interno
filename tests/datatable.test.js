@@ -417,6 +417,91 @@ const cambiar = (el, checked) => { el.checked = checked; el.dispatchEvent(new wi
     ok(window.Iconos.svg('editar').includes('✏️'), 'sin Lucide: emoji de respaldo');
   }
 
+  console.log('24. Modo tarjetas (celular y tableta)');
+  // Sin Pantalla (todas las tablas de arriba) todo es tabla, como en escritorio
+  ok(!$('.dt.dt-tarjetas'), 'sin el componente Pantalla, la tabla nunca pasa a tarjetas');
+  // Pantalla simulada: tamaño controlable y avisos como el real
+  const pant = { celular: true, angosta: true, oyentes: new Set() };
+  window.Pantalla = {
+    esCelular: () => pant.celular, esAngosta: () => pant.angosta, esTableta: () => pant.angosta && !pant.celular, esTactil: () => true,
+    alCambiar: (fn) => { pant.oyentes.add(fn); return () => pant.oyentes.delete(fn); },
+  };
+  const girar = (cambios) => { Object.assign(pant, cambios); pant.oyentes.forEach((fn) => fn({})); };
+  const caja = doc.createElement('div');
+  doc.body.appendChild(caja);
+  let tocada = null;
+  const COLS7 = ['A', 'B', 'C', 'D', 'E', 'F', 'G'].map((c) => ({ campo: c, titulo: 'Col ' + c }));
+  const filas7 = Array.from({ length: 4 }, (_, i) => ({ ID: 'r' + i, A: 'Folio ' + i, B: 'b' + i, C: 'c' + i, D: 'd' + i, E: 'e' + i, F: 'f' + i, G: 'g' + i }));
+  const crearT = (extra) => window.DataTable.crear(caja, Object.assign({
+    idCampo: 'ID', idTabla: 'prueba-tarjetas', columnas: COLS7, datos: filas7, exportar: false,
+    modoSeleccion: true, seleccionDrive: true, alTocarFila: (f) => { tocada = f.ID; },
+  }, extra));
+  window.localStorage.removeItem('dt-vista:prueba-tarjetas');
+  let tt = crearT();
+  const tarjetasVisibles = () => !!caja.querySelector('.dt.dt-tarjetas');
+  const celdasDe = (tr) => Array.from(tr.querySelectorAll('td[data-campo]'));
+  ok(tarjetasVisibles() && tt.getModo() === 'tarjetas', 'en celular, sin elección, se ve en tarjetas');
+  const tr0 = caja.querySelector('tbody tr[data-id="r0"]');
+  ok(celdasDe(tr0).length === 5, 'cada tarjeta muestra las primeras 5 columnas de la vista (no las 7)');
+  ok(tr0.querySelector('td.dt-tarjeta-titulo').dataset.campo === 'A', 'la primera columna es el título de la tarjeta');
+  ok(celdasDe(tr0).every((td) => td.dataset.titulo === 'Col ' + td.dataset.campo), 'cada dato lleva el nombre de su columna (data-titulo)');
+  ok(!!tr0.querySelector('td.dt-col-mas .dt-btn-mas'), 'la tarjeta conserva el ⋮ de la fila');
+  // Mismas filas: los gestos de la tabla funcionan sin código aparte
+  const toqueEn = (el) => {
+    const pd = new window.Event('pointerdown', { bubbles: true });
+    Object.defineProperty(pd, 'pointerType', { value: 'touch' });
+    el.dispatchEvent(pd);
+    click(el);
+  };
+  toqueEn(tr0.querySelector('td[data-campo="B"]'));
+  ok(tocada === 'r0', 'tocar una tarjeta hace lo mismo que tocar la fila (alTocarFila)');
+  click(caja.querySelector('.dt-btn-modo[data-modo="tabla"]'));
+  ok(!tarjetasVisibles() && celdasDe(caja.querySelector('tbody tr[data-id]')).length === 7, 'el botón "Tabla" regresa a la tabla con todas las columnas');
+  ok(caja.querySelector('.dt-btn-modo[data-modo="tabla"]').getAttribute('aria-pressed') === 'true', 'el botón marca el modo actual (aria-pressed)');
+  ok(JSON.parse(window.localStorage.getItem('dt-vista:prueba-tarjetas')).modo === 'tabla', 'la elección se guarda con la vista de la persona');
+  tt.destruir();
+  tt = crearT();
+  ok(!tarjetasVisibles(), 'al volver a entrar, se respeta lo que eligió (tabla en celular)');
+  ok(pant.oyentes.size === 1, 'destruir() deja de escuchar a Pantalla (no se acumulan oyentes)');
+  tt.restablecerVista();
+  ok(tarjetasVisibles(), '"Restablecer vista" regresa al modo automático (tarjetas en celular)');
+  girar({ celular: false });
+  ok(!tarjetasVisibles() && tt.getModo() === 'tabla', 'al girar a tableta, el automático cambia solo a tabla');
+  tt.setModo('tarjetas');
+  girar({ celular: false, angosta: false });
+  ok(!tarjetasVisibles() && !!caja.querySelector('tbody tr[data-id] td[data-campo="G"]'), 'en escritorio siempre es tabla, aunque haya elegido tarjetas');
+  girar({ celular: true, angosta: true });
+  ok(tarjetasVisibles(), 'y de regreso en celular vuelve a lo que eligió');
+  tt.destruir();
+  window.localStorage.removeItem('dt-vista:prueba-tarjetas');
+  tt = crearT({ tarjeta: { campos: ['C', 'A', 'NO-EXISTE'] } });
+  ok(celdasDe(caja.querySelector('tbody tr[data-id]')).map((td) => td.dataset.campo).join() === 'C,A', 'cfg.tarjeta.campos decide qué muestra (y en qué orden); ignora columnas que no existen');
+  tt.destruir();
+  tt = crearT({ tarjetas: false });
+  ok(!tarjetasVisibles() && !caja.querySelector('.dt-modo'), 'tarjetas: false = sin botón y siempre tabla (módulos con su propia vista)');
+  tt.destruir();
+  ok(pant.oyentes.size === 0, 'ninguna tabla destruida sigue escuchando');
+  // Cascada: en tarjetas, la celda editable y fijada deja de ser sticky (si no, se queda pegada a la izquierda)
+  const enTarjeta = (clases) => {
+    const c = doc.createElement('div');
+    c.className = 'dt dt-tarjetas';
+    c.innerHTML = `<table><tbody><tr data-id="x"><td class="${clases}" style="left: 40px">x</td></tr></tbody></table>`;
+    doc.body.appendChild(c);
+    const estilo = window.getComputedStyle(c.querySelector('td'));
+    const r = { posicion: estilo.position, izquierda: estilo.left };
+    c.remove();
+    return r;
+  };
+  ok(enTarjeta('dt-editable dt-fija').posicion === 'relative', 'en tarjetas, editable + fijada ya no es sticky');
+  ok(enTarjeta('dt-col-mas').posicion === 'absolute', 'el ⋮ va en la esquina de la tarjeta');
+  // (jsdom no aplica !important sobre un estilo en línea; en Chrome left queda en auto. Lo que importa: en
+  // tarjetas la tabla ni siquiera calcula posiciones de columnas fijas)
+  tt = crearT({ columnas: COLS7.map((c, i) => Object.assign({}, c, { fijada: i < 2 })) });
+  ok(Array.from(caja.querySelectorAll('tbody td')).every((td) => !td.style.left), 'en tarjetas no se calculan posiciones de columnas fijas');
+  tt.destruir();
+  delete window.Pantalla;
+  caja.remove();
+
   console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
   process.exit(fallas ? 1 : 0);
 })().catch((e) => { console.error('ERROR:', e); process.exit(1); });
