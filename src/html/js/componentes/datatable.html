@@ -352,7 +352,7 @@
   .dt.dt-tarjetas tbody td.dt-tarjeta-titulo { justify-content: flex-start; text-align: left; font-size: 14px; font-weight: 700; padding-bottom: 6px; }
   .dt.dt-tarjetas tbody td.dt-tarjeta-titulo::before { content: none; }
   /* Casilla arriba a la izquierda (cuando se ve) y ⋮ arriba a la derecha, siempre visible (sin hover en el dedo) */
-  .dt.dt-tarjetas tbody td.dt-col-check { position: absolute !important; top: 11px; left: 10px; padding: 0; }
+  .dt.dt-tarjetas tbody td.dt-col-check { position: absolute !important; top: 11px; left: 10px !important; padding: 0; }
   .dt.dt-tarjetas.dt-con-casillas:not(.dt-con-modo-seleccion) tbody tr[data-id],
   .dt.dt-tarjetas.dt-modo-seleccion tbody tr[data-id] { padding-left: 42px; }
   .dt.dt-tarjetas tbody td.dt-col-mas { position: absolute !important; top: 4px; right: 4px; padding: 0; background: transparent; }
@@ -361,6 +361,8 @@
     justify-content: flex-end; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--color-border); background: transparent;
   }
   .dt.dt-tarjetas tbody td.dt-vacio { display: block; text-align: center; }
+  /* Un dato vacío en una tarjeta es solo ruido (en la tabla sí hace falta la celda para alinear) */
+  .dt.dt-tarjetas tbody td[data-campo]:empty { display: none; }
   .dt.dt-tarjetas tbody tr:not([data-id]) { padding-right: 14px; }
   .dt.dt-tarjetas tbody td.dt-editable { padding-right: 30px; }
 
@@ -450,7 +452,7 @@
    *                    // crudo que hace de id). Se pide una sola vez por carga de la tabla.
    *     alCambiarFiltros: (filtros) => {},      // p. ej. para marcar chips de KPI
    *     umbralPalabraClave: 10,                 // eliminar pide escribir "ELIMINAR" desde N filas
-   *     tarjeta: { campos: ['FOLIO', 'PLACA', 'RESPONSABLE'] },   // opcional: qué muestra cada tarjeta (ver abajo)
+   *     tarjeta: { campos: ['FOLIO', 'PLACA'], titulo: (fila) => … },   // opcional: qué muestra cada tarjeta (ver abajo)
    *     tarjetas: false,                        // opcional: sin modo tarjetas (el módulo trae su propia vista)
    *   });
    *
@@ -458,8 +460,10 @@
    *   Hasta 1024px (Pantalla.esAngosta) la barra trae el botón Tabla / Tarjetas. Sin elección,
    *   el celular ve tarjetas y la tableta, tabla; lo que elija la persona se recuerda con su
    *   "Vista" (y "Restablecer vista" lo regresa a automático). En escritorio siempre es tabla.
-   *   Cada tarjeta muestra cfg.tarjeta.campos o, si no, las primeras 5 columnas de la vista de la
-   *   persona; la primera hace de título y las demás llevan el nombre de su columna.
+   *   Título de la tarjeta: cfg.tarjeta.titulo(fila), o si no cfg.etiquetaFila (cómo el módulo ya
+   *   nombra una fila en avisos y confirmaciones), o si no la primera columna. Debajo, cfg.tarjeta.campos
+   *   o las primeras 5 columnas de la vista de la persona, cada dato con el nombre de su columna; los
+   *   datos vacíos y el que ya es el título no se repiten.
    *   Las tarjetas SON las mismas filas <tr data-id> con otro acomodo (clase .dt-tarjetas): tocar,
    *   doble clic, mantener presionado, ⋮, clic derecho, selección y edición funcionan igual, sin
    *   que el módulo haga nada. Un módulo no necesita CSS de celular para su tabla.
@@ -1154,6 +1158,21 @@
         )).join('') + '</div>';
       }
 
+      /**
+       * Las celdas de una tarjeta. Título: cfg.tarjeta.titulo(fila) o, si no, cómo nombra el módulo
+       * a la fila (cfg.etiquetaFila: el responsable en Caja Chica, el ticket en Tickets…); ese dato ya
+       * no se repite abajo. Sin ninguno de los dos, la primera columna hace de título.
+       */
+      const tituloTarjeta = (cfg.tarjeta && cfg.tarjeta.titulo) || cfg.etiquetaFila || null;
+      function htmlTarjeta(fila, celdas, busquedaActiva) {
+        if (!tituloTarjeta) {
+          return celdas.map((col, i) => htmlCelda(col, fila, busquedaActiva, i === 0 ? 'dt-tarjeta-titulo' : '')).join('');
+        }
+        const titulo = vacio(tituloTarjeta(fila)) ? '' : String(tituloTarjeta(fila));
+        return `<td class="dt-tarjeta-titulo">${busquedaActiva ? resaltar(titulo) : esc(titulo)}</td>` +
+          celdas.filter((col) => textoVisible(col, fila) !== titulo).map((col) => htmlCelda(col, fila, busquedaActiva)).join('');
+      }
+
       function pintarCuerpo({ celdas, tarjetas, pagina, nColumnas, busquedaActiva }) {
         if (st.cargando) {
           const celdas = Array.from({ length: nColumnas }, (_, i) => {
@@ -1177,7 +1196,7 @@
           const sel = st.seleccion.has(id);
           return `<tr data-id="${esc(id)}" class="${sel ? 'dt-fila-seleccionada' : ''}">` +
             celdaCheck(`<input type="checkbox" class="dt-check" ${sel ? 'checked' : ''} aria-label="Seleccionar ${esc(etiquetaDe(fila))}" />`) +
-            celdas.map((col, i) => htmlCelda(col, fila, busquedaActiva, tarjetas && i === 0 ? 'dt-tarjeta-titulo' : '')).join('') +
+            (tarjetas ? htmlTarjeta(fila, celdas, busquedaActiva) : celdas.map((col) => htmlCelda(col, fila, busquedaActiva)).join('')) +
             celdaAcciones(htmlAccionesFila(fila)) +
             celdaMas(botonIcono('dt-btn-mas', 'ellipsis-vertical', `Más opciones de ${etiquetaDe(fila)}`)) +
             '</tr>';

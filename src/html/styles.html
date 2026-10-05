@@ -1006,6 +1006,17 @@
   :root[data-theme="dark"] .calif-badge-barra { background: rgba(255,255,255,.12); }
   .calif-badge-barra-fill { height: 100%; border-radius: 999px; background: var(--color-primary); transition: width .2s ease; }
   .calif-badge-nota { font-size: 11px; color: var(--color-text-muted); white-space: nowrap; }
+  /* Celular: junto al título lo dejaba en una columna de 90px; baja a su propio renglón, a lo
+     ancho (en una ventana, debajo del título y de la X). Las cabeceras la traen con margin en línea. */
+  @media (max-width: 640px) {
+    .form-card-header, .modal-header { flex-wrap: wrap; }
+    /* El título se queda en el renglón del ícono (o de la X) y toma lo que sobra */
+    .form-card-header > :not(.form-card-icon):not(.calif-badge),
+    .modal-header > :not(.modal-close):not(.calif-badge) { flex: 1 1 0; min-width: 0; }
+    .form-card-header > .calif-badge, .modal-header > .calif-badge {
+      order: 3; flex: 1 1 100%; min-width: 0; margin-left: 0 !important; margin-right: 0 !important; align-items: stretch;
+    }
+  }
 
   /* ========== Login ========== */
   #login-screen {

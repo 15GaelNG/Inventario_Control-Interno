@@ -477,6 +477,14 @@ const cambiar = (el, checked) => { el.checked = checked; el.dispatchEvent(new wi
   tt = crearT({ tarjeta: { campos: ['C', 'A', 'NO-EXISTE'] } });
   ok(celdasDe(caja.querySelector('tbody tr[data-id]')).map((td) => td.dataset.campo).join() === 'C,A', 'cfg.tarjeta.campos decide qué muestra (y en qué orden); ignora columnas que no existen');
   tt.destruir();
+  // Título = cómo el módulo nombra la fila (etiquetaFila), sin repetir ese dato abajo
+  tt = crearT({ etiquetaFila: (f) => f.C, datos: filas7.map((f, i) => Object.assign({}, f, { D: i === 0 ? '' : f.D })) });
+  const conEtiqueta = caja.querySelector('tbody tr[data-id="r0"]');
+  ok(conEtiqueta.querySelector('td.dt-tarjeta-titulo').textContent === 'c0' && !conEtiqueta.querySelector('td.dt-tarjeta-titulo').dataset.campo,
+    'con etiquetaFila, el título de la tarjeta es esa etiqueta');
+  ok(celdasDe(conEtiqueta).map((td) => td.dataset.campo).join() === 'A,B,D,E', 'y la columna que ya es el título no se repite como dato');
+  ok(conEtiqueta.querySelector('td[data-campo="D"]').matches(':empty'), 'un dato vacío queda como celda vacía (el CSS de tarjetas la oculta)');
+  tt.destruir();
   tt = crearT({ tarjetas: false });
   ok(!tarjetasVisibles() && !caja.querySelector('.dt-modo'), 'tarjetas: false = sin botón y siempre tabla (módulos con su propia vista)');
   tt.destruir();
