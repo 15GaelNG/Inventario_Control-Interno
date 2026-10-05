@@ -522,6 +522,28 @@
     box-shadow: 0 0 0 3px var(--color-primary-soft);
   }
 
+  /* Celular: los KPIs (.stat-row y .kpi-chips, de cualquier módulo) pasan a una franja que se
+     desliza de lado. En rejilla, 9 tarjetas eran 5 filas y empujaban la tabla fuera de la
+     pantalla. Cada tarjeta mide ~55% del ancho (cabe una palabra como "Verificaciones"), así
+     siempre se asoma la siguiente y se nota que hay más. El clic para filtrar sigue igual. */
+  @media (max-width: 640px) {
+    .stat-row, .kpi-chips {
+      display: flex; gap: 10px; overflow-x: auto; overscroll-behavior-x: contain;
+      scroll-snap-type: x proximity; scrollbar-width: none; padding-bottom: 2px; margin-bottom: 14px;
+    }
+    .stat-row::-webkit-scrollbar, .kpi-chips::-webkit-scrollbar { display: none; }
+    .stat-row > *, .kpi-chips > * { flex: 0 0 calc((100% - 10px) / 1.8); min-width: 0; scroll-snap-align: start; }
+    .stat-tile { padding: 12px; gap: 10px; }
+    .stat-tile > div:last-child { min-width: 0; overflow-wrap: break-word; }
+    .stat-ring { width: 40px; height: 40px; }
+    .stat-ring-hole { width: 30px; height: 30px; }
+    .stat-tile-clickable.stat-tile-activo { padding: 11px; }
+    .stat-icon { width: 34px; height: 34px; }
+    .stat-value, .kpi-chip-value { font-size: 19px; }
+    .kpi-chip { padding: 11px 14px; }
+    .kpi-chip.activo { padding: 10px 13px; }
+  }
+
   /* ========== Panorama Vehicular (KPIs + gráficas + filtros) ========== */
   .pv-filtros { margin-bottom: 20px; }
   .pv-filtros-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; align-items: end; }
