@@ -163,9 +163,26 @@
     apiIncidenciasPorFolio: JSON.stringify(LISTAS.apiListarIncidencias.slice(0, 2)),
   };
 
+  // ---------- Usuarios y permisos (app-permisos.html: cargar(respuesta)) ----------
+  const AREAS = ['TI', 'CONTROL INTERNO', 'POST VENTA'];
+  const PERMISOS_PANEL = {
+    grupos,
+    areas: AREAS.map((nombre) => ({ nombre })),
+    personas: PERSONAS.concat(['ROBERTO SÁNCHEZ', 'LUCÍA HERNÁNDEZ']).map((nombre, i) => ({
+      correo: 'persona' + i + '@ciudadmaderas.com', nombre, area: de(AREAS, i), rol: de(['USER', 'USER', 'VIEWER', 'ADMIN'], i),
+      activo: i !== 4, coordinacion: 'OPERACIONES', oficina: 'CORPORATIVO', sede: de(SEDES, i), noEmpleado: 'CI0' + (100 + i),
+    })),
+    reglas: [
+      { quien: 'TI', modulo: 'vehiculos', permiso: 'EDICION' }, { quien: 'TI', modulo: 'verificaciones', permiso: 'LECTURA' },
+      { quien: 'CONTROL INTERNO', modulo: 'arqueos', permiso: 'EDICION' }, { quien: 'CONTROL INTERNO', modulo: 'caja-chica', permiso: 'EDICION' },
+      { quien: 'persona1@ciudadmaderas.com', modulo: 'hologramas', permiso: 'EDICION' },
+    ],
+  };
+
   const respuestas = {
     ...LISTAS,
     ...FICHAS,
+    apiPermisosPanel: PERMISOS_PANEL,
     apiRelacionesMapa: JSON.stringify(REL_MAPA),
     apiSaludRevisar: JSON.stringify({ mapa: REL_MAPA, reporte: REL_REVISION }),
     apiMisPermisos: { correo: 'prueba@ciudadmaderas.com', permisos, grupos },
@@ -340,6 +357,8 @@
     'arqueos': () => abrir('arqueos'),
     'arqueos-detalle': async () => { await abrir('arqueos'); await abrirPrimeraFila(); },
     'sistemas': () => abrir('sistemas-vehiculos'),
+    'usuarios': async () => { await abrir('usuarios'); await hasta('.dt tbody tr[data-id]'); },
+    'usuarios-ficha': async () => { await abrir('usuarios'); await abrirPrimeraFila(); },
     // ---- Formularios de alta (rejilla de campos .form-rejilla y componente Formulario) ----
     'vehiculos-registrar': () => abrir('vehiculos', 'registrar'),
     'incidencias-registrar': () => abrir('incidencias', 'registrar'),
