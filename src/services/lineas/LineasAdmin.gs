@@ -90,7 +90,11 @@ function recargarDatosLineas() {
 //   la ficha y "Números que ha tenido" los leen de ahí (LineasRepo.separarMigrados_).
 //   SOLICITUD DE LINEAS no la usa nada: solo queda en el respaldo.
 // CAMBIOS LINEAS TELEFONICAS NO se toca: es la bitácora de todo el Historial y del Panorama.
-// Antes de migrar se copia todo a un libro de respaldo en Drive (y su .xlsx). En producción no corre.
+// Antes de migrar se copia todo a un libro de respaldo en Drive (y su .xlsx).
+//
+// Producción (usuario, 4-oct noche: "borra las anteriores hojas de Líneas, ya tenemos copia de seguridad"): corre solo
+// con LINEAS TELEFONICAS ya retirada (LineasRetiro.gs), y entonces también la borra a ella: el sistema ya no la lee y
+// lo que tenía está en las hojas nuevas. CAMBIOS LINEAS TELEFONICAS sigue sin tocarse hasta la parte 9.
 //
 // Se ejecuta desde el editor, en este orden: retirarHojasLineas_revisar → retirarHojasLineas_migrar →
 // (revisar el Historial en /dev) → retirarHojasLineas_borrar.
@@ -103,16 +107,25 @@ const HOJAS_RETIRADAS_ = {
   'REACTIVACION DE LINEAS': { ref: 'IMEI', fecha: ['FECHA DE REGISTRO', 'FECHA DE REACTIVACION', 'FECHA DE SUSPENSION'], nuco: null, numero: 'LINIEA SUSPENDIDA', migrar: true,
     resumen: (f) => 'Reactivación (AppSheet)' + (txtAdmin_(f['FOLIO']) ? ' folio ' + txtAdmin_(f['FOLIO']) : '') + (txtAdmin_(f['NUEVO NUMERO']) ? ', nuevo número ' + txtAdmin_(f['NUEVO NUMERO']) : '') },
   'SOLICITUD DE LINEAS': { migrar: false },
+  // Solo se borra con la hoja retirada (paso 4): sus datos ya están en EQUIPOS / LINEAS / ASIGNACIONES / MOVIMIENTOS
+  'LINEAS TELEFONICAS': { migrar: false, soloRetirada: true },
 };
 const PROP_RESPALDO_RETIRADAS_ = 'LINEAS_RESPALDO_HOJAS_RETIRADAS';
 
 function txtAdmin_(v) { return v === null || v === undefined ? '' : String(v).trim(); }
 
-/** Solo en la BD de pruebas: nunca en producción. */
+/** La BD de pruebas o un libro con LINEAS TELEFONICAS ya retirada (producción, 4-oct). */
 function exigirBdPruebas_() {
   const id = Config.SPREADSHEET_IDS.TELEFONIA();
-  if (id !== LINEAS_DEV_SPREADSHEET_ID) throw new Error('Solo se retiran pestañas en la BD de pruebas (' + LINEAS_DEV_SPREADSHEET_ID + '); esta hoja es ' + id + '.');
+  if (id !== LINEAS_DEV_SPREADSHEET_ID && !LineasLectura.retirada()) {
+    throw new Error('Solo se retiran pestañas en la BD de pruebas o con LINEAS TELEFONICAS ya retirada (reestructuraRetiroAplicar); esta hoja es ' + id + '.');
+  }
   return SpreadsheetApp.openById(id);
+}
+
+/** ¿Esta pestaña se borra en este libro? (LINEAS TELEFONICAS solo si ya se retiró) */
+function seBorraRetirada_(nombre) {
+  return !HOJAS_RETIRADAS_[nombre].soloRetirada || !!LineasLectura.retirada();
 }
 
 /** Llave de un renglón de una hoja retirada (su ID; si no tiene, su número de fila). */
@@ -136,9 +149,9 @@ function llavesMigradas_() {
 function estadoHojasRetiradas_() {
   const libro = exigirBdPruebas_();
   const migradas = llavesMigradas_();
-  const hojas = Object.keys(HOJAS_RETIRADAS_).map((nombre) => {
+  const hojas = Object.keys(HOJAS_RETIRADAS_).filter(seBorraRetirada_).map((nombre) => {
     const existe = !!libro.getSheetByName(nombre);
-    const filas = existe ? LineasDatos.leerTabla(nombre) : [];
+    const filas = existe ? LineasDatos.leerTabla(nombre, true) : [];
     const yaMigrados = filas.filter((f) => migradas[llaveRetirada_(nombre, f)]).length;
     return {
       hoja: nombre, existe: existe, renglones: filas.length, migrar: HOJAS_RETIRADAS_[nombre].migrar, yaMigrados: yaMigrados,
@@ -162,7 +175,7 @@ function respaldarHojasRetiradas_(libro) {
   if (previo) return JSON.parse(previo);
   const hoy = Utilities.formatDate(new Date(), LineasDatos.ZONA_APP, 'yyyy-MM-dd HH:mm');
   const respaldo = SpreadsheetApp.create('RESPALDO Líneas · pestañas retiradas · ' + hoy);
-  Object.keys(HOJAS_RETIRADAS_).forEach((nombre) => {
+  Object.keys(HOJAS_RETIRADAS_).filter(seBorraRetirada_).forEach((nombre) => {
     const hoja = libro.getSheetByName(nombre);
     if (hoja) hoja.copyTo(respaldo).setName(nombre);
   });
@@ -226,13 +239,14 @@ function retirarHojasLineas_borrar() {
   const incompletas = estado.hojas.filter((h) => h.existe && !h.completa);
   if (incompletas.length) throw new Error('Faltan renglones por migrar: ' + incompletas.map((h) => h.hoja + ' ' + h.yaMigrados + '/' + h.renglones).join(', '));
   const borradas = [];
-  Object.keys(HOJAS_RETIRADAS_).forEach((nombre) => {
+  Object.keys(HOJAS_RETIRADAS_).filter(seBorraRetirada_).forEach((nombre) => {
     const hoja = libro.getSheetByName(nombre);
     if (hoja) { libro.deleteSheet(hoja); borradas.push(nombre); }
     // Los encabezados en caché harían creer a existeTabla que la pestaña sigue ahí (se limpia aunque ya no exista)
     LineasDatos.cacheBorrar('enc_' + nombre);
   });
   LineasRepo.borrarCaches();
+  if (typeof LineasLectura !== 'undefined') LineasLectura.limpiarCaches();
   const salida = { borradas: borradas, respaldo: JSON.parse(estado.respaldo) };
   console.log(JSON.stringify(salida, null, 2));
   return salida;
@@ -298,4 +312,24 @@ function compartirArchivosLineasExistentes(token) {
     (primerError ? '\n  Primer error: ' + primerError : '');
   Logger.log(mensaje);
   return mensaje;
+}
+
+
+// ---------------- Pestañas de Líneas en rojo (usuario, 4-oct noche) ----------------
+// Para que en el libro compartido se vea de un vistazo qué pestañas son de Líneas. Solo cambia el color de la pestaña.
+
+const PESTANAS_LINEAS_ = ['LINEAS', 'EQUIPOS', 'ASIGNACIONES', 'ADENDUMS', 'FACTURAS', 'CUENTAS', 'CATALOGOS', 'MOVIMIENTOS',
+  'CAMBIOS LINEAS TELEFONICAS', 'INSPECCIONES LINEAS', 'RESPONSIVAS LINEAS', 'ACCESORIOS CELULARES', 'MOVIMIENTOS_ACCESORIOS',
+  'LISTAS TELEFONOS', 'APP_MOVIMIENTOS', 'APP_EVIDENCIAS', 'APP_RESGUARDOS', 'APP_NOTIFICACIONES', 'APP_CORRECCIONES'];
+
+function lineasPintarPestanas() {
+  soloEditor_();
+  const libro = SpreadsheetApp.openById(Config.SPREADSHEET_IDS.TELEFONIA());
+  const pintadas = [];
+  PESTANAS_LINEAS_.forEach((nombre) => {
+    const hoja = libro.getSheetByName(nombre);
+    if (hoja) { hoja.setTabColor('#cc0000'); pintadas.push(nombre); }
+  });
+  console.log('En rojo (' + pintadas.length + '): ' + pintadas.join(', '));
+  return pintadas;
 }

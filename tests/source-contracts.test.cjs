@@ -109,7 +109,10 @@ test('Reactivación, Solicitud, Reasignaciones y Desechos se retiraron con sus p
   // Retiro de pestañas: solo en la BD de pruebas, con respaldo, y CAMBIOS no está en la lista
   const admin = read('src/services/lineas/LineasAdmin.gs');
   ['retirarHojasLineas_revisar', 'retirarHojasLineas_migrar', 'retirarHojasLineas_borrar'].forEach((f) => assert.match(admin, new RegExp('function ' + f + '\\(\\)')));
-  assert.match(admin, /if \(id !== LINEAS_DEV_SPREADSHEET_ID\) throw new Error/);
+  // En producción solo con LINEAS TELEFONICAS ya retirada (4-oct); ella solo se borra así, y CAMBIOS nunca
+  assert.match(admin, /if \(id !== LINEAS_DEV_SPREADSHEET_ID && !LineasLectura\.retirada\(\)\) \{\s*throw new Error/);
+  assert.match(admin, /'LINEAS TELEFONICAS': \{ migrar: false, soloRetirada: true \}/);
+  assert.match(admin, /return !HOJAS_RETIRADAS_\[nombre\]\.soloRetirada \|\| !!LineasLectura\.retirada\(\);/);
   assert.match(admin, /if \(!estado\.respaldo\) throw new Error/);
   assert.match(admin, /LineasDatos\.cacheBorrar\('enc_' \+ nombre\);/); // si no, existeTabla la sigue viendo
   const lista = admin.slice(admin.indexOf('const HOJAS_RETIRADAS_ = {'), admin.indexOf('const PROP_RESPALDO_RETIRADAS_'));
