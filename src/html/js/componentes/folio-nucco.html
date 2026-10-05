@@ -7,6 +7,10 @@
    * su copia de lo mismo (resolver el vehículo con cualquiera de los dos y poner el otro).
    * Una sola copia: si cambia cómo se busca un vehículo, cambia aquí.
    *
+   * Regla del sistema: todo formulario que pide un vehículo ofrece el Nucco (es lo que más se
+   * usa), primero, y el Folio al lado. Con Formulario basta buscar.nucco (ver formulario.html);
+   * un formulario escrito a mano usa ligar() + opcionesLista() con un Combobox.
+   *
    * Los dos campos son INDEPENDIENTES (uno no va dentro del otro): escribir en cualquiera
    * resuelve el vehículo y pone el valor que le corresponde al otro, con la etiqueta "auto".
    * Si no hay coincidencia no se borra nada (se sigue escribiendo). Lo que se guarda es FOLIO.
@@ -19,6 +23,12 @@
    *     alResolver: (vehiculo) => {},          // opcional: autollenar lo demás (null = no hay)
    *     dispararFolio: true,                   // opcional: al resolver por Nucco, lanzar 'input'
    *   });                                      // en el Folio (para que su buscador corra)
+   *   Combobox.crear(campoNucco, { opciones: FolioNucco.opcionesLista(vehiculos) });
+   *                                            // [{ valor: '24', etiqueta: 'AUT0024 · GGY886F · CHEVROLET' }]
+   *
+   *   Todo junto, para un formulario escrito a mano (listas en los dos campos, índice y ligado):
+   *   const par = FolioNucco.montar('editar-folio', 'editar-nucco', () => callServerCacheado('apiListarVehiculosBasico', token));
+   *   par.sincronizar();                       // al abrir un registro: el Nucco de su folio
    *
    * Los vehículos son los de apiListarVehiculosBasico: FOLIO, NUCO (sin doble C), MARCA…
    */
@@ -44,6 +54,13 @@
         .map((v) => `<option value="${esc(v.NUCO)}">` +
           (conEtiqueta ? esc([v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ')) : '') + '</option>')
         .join('');
+    }
+
+    /** Opciones del Combobox del Nucco, en orden numérico, con folio y placa para reconocer la unidad. */
+    function opcionesLista(vehiculos) {
+      return (vehiculos || []).filter((v) => v.NUCO)
+        .sort((a, b) => Number(a.NUCO) - Number(b.NUCO))
+        .map((v) => ({ valor: String(v.NUCO), etiqueta: [v.FOLIO, v.PLACA, v.MARCA].filter(Boolean).join(' · ') }));
     }
 
     function ligar(folio, nucco, opciones) {
@@ -74,6 +91,38 @@
       });
     }
 
-    return { indexar, opcionesNucco, ligar };
+    /**
+     * Listas (Combobox) en los dos campos, índice y ligado, con los vehículos que traiga
+     * cargarVehiculos(). opciones: alResolver, dispararFolio (como en ligar).
+     * Regresa { listo, sincronizar }: sincronizar() pone (o quita) el Nucco del folio que ya
+     * tiene el campo, p. ej. al abrir un registro para editarlo.
+     */
+    function montar(folio, nucco, cargarVehiculos, opciones) {
+      folio = elementoDe(folio);
+      nucco = elementoDe(nucco);
+      // Sin los campos (p. ej. la vista no los pinta para solo lectura) no hay nada que montar
+      if (!folio || !nucco) return { listo: Promise.resolve([]), sincronizar: () => Promise.resolve() };
+      const o = opciones || {};
+      const porClave = {};
+      // Si el catálogo no carga, los dos campos siguen funcionando como texto libre (sin lista)
+      const listo = Promise.resolve().then(cargarVehiculos).then((vehiculos) => {
+        indexar(vehiculos, porClave);
+        Combobox.crear(nucco, { opciones: opcionesLista(vehiculos) });
+        Combobox.crear(folio, {
+          opciones: (vehiculos || []).map((v) => ({ valor: v.FOLIO, etiqueta: [v.PLACA, v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' · ') })),
+        });
+        return vehiculos;
+      }).catch(() => []);
+      ligar(folio, nucco, { buscar: (texto) => porClave[texto], alResolver: o.alResolver, dispararFolio: o.dispararFolio });
+      return {
+        listo,
+        sincronizar: () => listo.then(() => {
+          const v = porClave[folio.value.trim()];
+          CampoAuto.llenar(nucco, v && v.NUCO ? v.NUCO : '');
+        }),
+      };
+    }
+
+    return { indexar, opcionesNucco, opcionesLista, ligar, montar };
   })();
 </script>

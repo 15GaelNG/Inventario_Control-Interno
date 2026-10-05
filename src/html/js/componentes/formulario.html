@@ -220,7 +220,12 @@
    *         pie: 'Datos del catálogo de Vehículos',           // nota al pie de la ficha
    *       }),
    *       alCargar: (datos, form) => form.setOpciones('COMBUSTIBLE', datos.combustibles),
+   *       nucco: { vehiculos: async () => [{ FOLIO, NUCO, PLACA, MARCA }] },   // vehículos: ver abajo
    *     },
+   *   buscar.nucco (todo formulario que busca un vehículo): pone el campo Nucco ANTES del
+   *   folio, con su lista, ligados con FolioNucco: escribir cualquiera llena el otro con
+   *   "auto" y la búsqueda corre igual (lo que se guarda y se busca sigue siendo el folio).
+   *   El Nucco no va en los valores ni en el resumen; se oculta junto con el folio (visibleSi).
    *     campos: [
    *       { id: 'SERIE', etiqueta: 'Serie del sensor', requerido: true, ayuda: '…', mayusculas: true,
    *         seccion: 'Datos del sensor' },              // inicia un grupo con este título
@@ -402,14 +407,23 @@
       // Con panel lateral, la ficha se va a la derecha y se queda a la vista mientras se captura
       const conPanel = !!cfg.panel;
       const htmlFicha = '<div class="form-ficha" hidden></div>';
-      const htmlBuscar = buscar ? `<div class="field" data-campo="${esc(buscar.campo)}" style="max-width:360px">
+      // buscar.nucco: Nucco | Folio en un renglón (en celular, uno abajo del otro)
+      const htmlNucco = buscar && buscar.nucco ? `<div class="field form-nucco" data-nucco-de="${esc(buscar.campo)}">
+          <label for="f-${esc(buscar.campo)}-nucco">Nucco</label>
+          <input type="text" id="f-${esc(buscar.campo)}-nucco" autocomplete="off" inputmode="numeric" placeholder="Escribe o elige el Nucco" />
+          <span class="form-ayuda">O busca la unidad por su folio</span>
+        </div>` : '';
+      const htmlCampoBuscar = buscar ? `<div class="field" data-campo="${esc(buscar.campo)}" ${htmlNucco ? '' : 'style="max-width:360px"'}>
           <label for="f-${esc(buscar.campo)}">${esc(buscar.etiqueta)}</label>
           <input type="text" id="f-${esc(buscar.campo)}" ${buscar.requerido === false ? '' : 'required'} autocomplete="off"
             ${buscar.ayuda ? `aria-describedby="f-${esc(buscar.campo)}-ayuda"` : ''} />
           ${buscar.ayuda ? `<span class="form-ayuda" id="f-${esc(buscar.campo)}-ayuda">${esc(buscar.ayuda)}</span>` : ''}
           <span class="form-error-campo" hidden></span>
-        </div>
-        ${conPanel ? '' : htmlFicha}` : '';
+        </div>` : '';
+      const htmlBuscar = buscar
+        ? (htmlNucco ? `<div class="form-rejilla form-vehiculo" data-columnas="2">${htmlNucco}${htmlCampoBuscar}</div>` : htmlCampoBuscar) +
+          (conPanel ? '' : htmlFicha)
+        : '';
 
       /** Un bloque por paso (solo se ve el actual) o todo junto si no hay pasos */
       function htmlCuerpo() {
@@ -609,6 +623,8 @@
           const caja = campoDe(buscar.campo);
           const seVe = visible(buscar);
           if (caja) caja.hidden = !seVe;
+          const cajaNucco = contenedor.querySelector('[data-nucco-de]');
+          if (cajaNucco) cajaNucco.hidden = !seVe;
           const ficha = contenedor.querySelector('.form-ficha');
           if (ficha && !seVe) ficha.hidden = true;
         }
@@ -769,6 +785,31 @@
           Promise.resolve(buscar.opciones()).then((items) => cbx.setOpciones(items || [])).catch((err) => {
             errorGeneral.textContent = err.message;
             errorGeneral.hidden = false;
+          });
+        }
+
+        // Nucco ligado al folio (FolioNucco): resolverlo pone el folio con "auto" y corre la
+        // misma búsqueda (con su espera). No se simula un 'input' en el folio: abriría su lista
+        // encima de la del Nucco.
+        const campoNucco = contenedor.querySelector('[data-nucco-de] input');
+        if (buscar.nucco && campoNucco) {
+          const porClave = {};
+          const cbxNucco = Combobox.crear(campoNucco, { opciones: [] });
+          Promise.resolve(buscar.nucco.vehiculos()).then((vehiculos) => {
+            FolioNucco.indexar(vehiculos, porClave);
+            cbxNucco.setOpciones(FolioNucco.opcionesLista(vehiculos));
+          }).catch((err) => {
+            errorGeneral.textContent = err.message;
+            errorGeneral.hidden = false;
+          });
+          FolioNucco.ligar(campoBuscar, campoNucco, {
+            buscar: (texto) => porClave[texto],
+            // Al escribir el folio también llega aquí: es la misma espera, así que se busca una sola vez
+            alResolver: (v) => {
+              if (!v) return;
+              clearTimeout(espera);
+              espera = setTimeout(consultar, 350);
+            },
           });
         }
       }

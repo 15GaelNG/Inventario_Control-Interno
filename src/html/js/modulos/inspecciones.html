@@ -391,6 +391,11 @@
             <h3 class="form-paso-titulo" tabindex="-1">Vehículo</h3>
             <p class="form-paso-desc">Qué unidad se revisa y con qué formato</p>
             <div class="form-campos" style="--form-columnas:2">
+              <div class="field" data-campo="NUCCO">
+                <label for="ins-nucco">Nucco</label>
+                <input type="text" id="ins-nucco" autocomplete="off" inputmode="numeric" placeholder="Escribe o elige el Nucco" />
+                <span class="form-ayuda">O busca la unidad por su folio</span>
+              </div>
               <div class="field" data-campo="FOLIO">
                 <label for="ins-folio">Folio del vehículo</label>
                 <input type="text" id="ins-folio" required autocomplete="off" />
@@ -497,8 +502,19 @@
       if (anterior && visibles.some((t) => t.tipo === anterior)) campoTipo.value = anterior;
     }
 
+    // Nucco y Folio ligados (FolioNucco): escribir o elegir cualquiera llena el otro con "auto"
+    // y trae el vehículo. Lo que se guarda y se busca sigue siendo el folio.
+    const campoNucco = $('#ins-nucco');
+    const vehiculoPorClave = {};
+    FolioNucco.ligar(campoFolio, campoNucco, {
+      buscar: (texto) => vehiculoPorClave[texto],
+      alResolver: (v) => { if (v) buscarVehiculo(); },
+    });
+
     const catalogos = Promise.all([
       callServerCacheado('apiListarVehiculosBasico', state.token).then((vehiculos) => {
+        FolioNucco.indexar(vehiculos, vehiculoPorClave);
+        Combobox.crear(campoNucco, { opciones: FolioNucco.opcionesLista(vehiculos) });
         Combobox.crear(campoFolio, {
           opciones: (vehiculos || []).map((v) => ({
             valor: v.FOLIO,
@@ -519,6 +535,8 @@
     if (opciones.folioFijo) {
       catalogos.then(() => {
         CampoAuto.llenar(campoFolio, opciones.folioFijo);
+        const v = vehiculoPorClave[opciones.folioFijo];
+        if (v && v.NUCO) CampoAuto.llenar(campoNucco, v.NUCO);
         buscarVehiculo();
       });
     }

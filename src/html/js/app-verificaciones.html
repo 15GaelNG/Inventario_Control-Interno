@@ -162,10 +162,13 @@
     }
 
     /** Ventana de edición general (los 3 campos de golpe, en vez de celda por celda). */
+    const parEditar = FolioNucco.montar('editar-verificacion-folio', 'editar-verificacion-nucco',
+      () => callServerCacheado('apiListarVehiculosBasico', state.token));
     function abrirEditarVerificacion(v) {
       document.getElementById('editar-verificacion-id').value = v.ID;
       document.getElementById('editar-verificacion-label').textContent = 'Folio: ' + (v.FOLIO || '');
       document.getElementById('editar-verificacion-folio').value = v.FOLIO || '';
+      parEditar.sincronizar();
       document.getElementById('editar-verificacion-fecha-verificacion').value = fechaParaInput(v.FECHA_VERIFICACION);
       document.getElementById('editar-verificacion-fecha-proxima').value = fechaParaInput(v.FECHA_PROXIMA);
       document.getElementById('editar-verificacion-error').hidden = true;
@@ -322,6 +325,7 @@
             etiqueta: [v.PLACA, v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' · '),
           })),
           cargar: (folio) => callServer('apiBuscarVehiculoPorFolio', state.token, folio),
+          nucco: { vehiculos: () => callServerCacheado('apiListarVehiculosBasico', state.token) },
           ficha: (v) => ({
             titulo: v['PLACA'] || 'Sin placa',
             subtitulo: [v['MARCA'], v['LINEA VEHICULO'], v['MODELO']].filter(Boolean).join(' · '),
@@ -365,27 +369,8 @@
           tabs.mostrar('registros');
           invalidarCacheLista('apiListarVerificaciones', state.token);
           await cargar();
-          // ver-nucco vive fuera del form que resetea el componente solo -- se limpia aparte.
-          const campoNucco = document.getElementById('ver-nucco');
-          if (campoNucco) CampoAuto.llenar(campoNucco, '');
         },
       });
-
-      // Nucco: campo independiente del Folio que arma el componente de arriba (ver-nucco,
-      // fuera de ver-form -- ver views/verificaciones.html), ligados con FolioNucco (mismo
-      // catálogo que ya trae buscar.opciones, cacheado, así que no pide nada de más). El
-      // Folio es el que de verdad dispara la búsqueda real, por eso dispararFolio.
-      const campoFolioBuscar = document.getElementById('f-FOLIO');
-      const campoNucco = document.getElementById('ver-nucco');
-      if (campoFolioBuscar && campoNucco) {
-        const porClave = {};
-        callServerCacheado('apiListarVehiculosBasico', state.token).then((vehiculos) => {
-          FolioNucco.indexar(vehiculos, porClave);
-          const datalist = document.getElementById('ver-nucco-lista');
-          if (datalist) datalist.innerHTML = FolioNucco.opcionesNucco(vehiculos);
-        }).catch(() => {});
-        FolioNucco.ligar(campoFolioBuscar, campoNucco, { buscar: (texto) => porClave[texto], dispararFolio: true });
-      }
     }
 
     await cargar();

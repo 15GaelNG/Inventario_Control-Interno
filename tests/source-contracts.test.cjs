@@ -1790,6 +1790,19 @@ test('la etiqueta "auto" y el par Folio/Nucco solo viven en sus componentes', ()
     'usa data-auto o CampoAuto en vez de escribir <span class="auto-tag">');
   assert.deepEqual(fuera(/function wireFolioYNucco_|vehiculosPorFolioONucco/, []), [],
     'usa FolioNucco.ligar en vez de otra copia del par Folio/Nucco');
+  // El Nucco es lo que más se usa (oct-2026): donde se pide un vehículo por folio, también por Nucco.
+  // Formulario: buscar.nucco. Escrito a mano: FolioNucco.ligar / FolioNucco.montar con su campo Nucco.
+  const piden = html.filter((f) => /Folio del veh[ií]culo/.test(fs.readFileSync(f, 'utf8')));
+  assert.deepEqual(piden.filter((f) => !/nucco/i.test(fs.readFileSync(f, 'utf8'))).map((f) => path.relative(root, f)), [],
+    'este formulario pide el folio del vehículo pero no ofrece el Nucco');
+  html.forEach((f) => {
+    const src = fs.readFileSync(f, 'utf8');
+    for (const m of src.matchAll(/buscar: \{\s*campo: 'FOLIO'[\s\S]*?\n {8}\},/g)) {
+      assert.match(m[0], /nucco: \{ vehiculos:/, path.relative(root, f) + ': el Formulario busca por folio sin buscar.nucco');
+    }
+  });
+  // Ya no hay campos Nucco escritos a mano fuera del formulario (los reemplazó buscar.nucco)
+  assert.doesNotMatch(read('src/html/views/verificaciones.html') + read('src/html/views/sensores.html'), /id="(ver|sen)-nucco"/);
   const index = read('src/html/Index.html');
   const pos = (n) => index.indexOf("componentes/" + n + "'");
   assert.ok(pos('campo-auto') > 0 && pos('campo-auto') < pos('folio-nucco') && pos('folio-nucco') < pos('formulario'),

@@ -42,21 +42,12 @@
         <div class="form-card-icon"><i data-lucide="satellite-dish" class="ico"></i></div>
         <div>
           <h3>Registrar instalación</h3>
-          <p>Escribe el folio: los datos del vehículo se llenan solos</p>
+          <p>Escribe el Nucco o el folio: los datos del vehículo se llenan solos</p>
         </div>
       </div>
 
-      <!-- Nucco: forma alterna de encontrar el vehículo, independiente del campo Folio que
-           arma el componente Formulario más abajo -- escribir en cualquiera de los dos
-           resuelve el vehículo y pone el valor correspondiente en el otro (ver
-           js/modulos/sensores.html). -->
-      <div class="field" style="max-width:360px; margin-bottom:14px">
-        <label for="sen-nucco">Nucco</label>
-        <input type="text" id="sen-nucco" list="sen-nucco-lista" autocomplete="off" placeholder="Otra forma de buscar el vehículo…" />
-        <datalist id="sen-nucco-lista"></datalist>
-      </div>
-
-      <!-- El formulario lo arma el componente Formulario (ver js/modulos/sensores) -->
+      <!-- El formulario lo arma el componente Formulario (ver js/modulos/sensores); el Nucco va
+           dentro, junto al folio (buscar.nucco) -->
       <div id="sen-form"></div>
     </div>
   </div>
@@ -73,7 +64,8 @@
       </div>
       <form id="form-editar-sensor">
         <input type="hidden" id="editar-sensor-id" />
-        <div class="field"><label>Folio del vehículo</label><input type="text" id="editar-sensor-folio" /><span class="form-ayuda">Cambiarlo vuelve a copiar los datos del vehículo</span></div>
+        <div class="field"><label for="editar-sensor-nucco">Nucco</label><input type="text" id="editar-sensor-nucco" autocomplete="off" inputmode="numeric" placeholder="Escribe o elige el Nucco" /></div>
+        <div class="field"><label for="editar-sensor-folio">Folio del vehículo</label><input type="text" id="editar-sensor-folio" autocomplete="off" /><span class="form-ayuda">Cambiarlo vuelve a copiar los datos del vehículo</span></div>
         <div class="field"><label>Serie del sensor</label><input type="text" id="editar-sensor-serie" /></div>
         <div class="field"><label>Combustible</label><input type="text" id="editar-sensor-combustible" /></div>
         <div class="field">
