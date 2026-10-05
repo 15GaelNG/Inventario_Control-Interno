@@ -77,7 +77,7 @@
           .map((c) => `<p class="rel-nota" style="margin-top:6px"><strong>${escaparHtml(c.nombre)}:</strong> ${escaparHtml(c.nota)}</p>`).join('');
         return `<div class="rel-grupo">
           <h3>${Iconos.svg('database')} ${escaparHtml(d.hoja)} <span class="rel-sub">${escaparHtml(d.etiqueta.familia)} · llave de negocio: ${escaparHtml(d.llaveDeNegocio)}</span></h3>
-          <div class="rel-matriz-scroll"><table class="rel-matriz">
+          <div class="rel-matriz-scroll" data-scroll-x><table class="rel-matriz">
             <thead><tr><th>Columna en ${escaparHtml(d.hoja)}</th>${encabezado}</tr></thead>
             <tbody>${cuerpo || '<tr><td colspan="99" class="rel-vacia">Ninguna copia trae columnas de esta hoja</td></tr>'}</tbody>
           </table></div>

@@ -510,10 +510,14 @@ test('experiencia de uso: menú en celular, ficha en pestañas y formularios por
   const movil = read('src/html/shell-movil.html');
   const lineas = read('src/html/js/lineas.html');
   const estilos = read('src/html/lineas-estilos.html');
-  // Menú en celular: archivo aparte, incluido al final
+  // Menú en celular y tableta: archivo aparte, incluido al final, con los cortes del sistema (Pantalla)
   assert.match(index, /include\('html\/shell-movil'\)/);
-  assert.match(movil, /@media \(max-width: 900px\)/);
+  assert.match(movil, /@media \(max-width: 1024px\)/);
+  assert.match(movil, /Pantalla\.alCambiar\(/);
   assert.match(movil, /shell-menu-abierto/);
+  // Panel cerrado = fuera del foco del teclado; el tema baja al panel en celular
+  assert.match(movil, /sidebar\.inert = Pantalla\.esAngosta\(\) && !abierto\(\)/);
+  assert.match(movil, /className = 'shell-tema-panel'/);
   // Ficha: resumen rápido + pestañas; Documentos con indicadores y tabla, como Historial
   assert.match(lineas, /function fichaEnPestanas\(general, detalles, conDocumentos\)/);
   assert.match(lineas, /class="ln-resumen-rapido"/);
@@ -1836,6 +1840,49 @@ test('los formularios que antes iban escritos a mano también se declaran en Cam
     assert.match(src, new RegExp('CamposHoja\\.recolectar\\(' + lista + '\\b'), modulo + ': lee ' + lista + ' con CamposHoja');
   });
   assert.doesNotMatch(read('src/html/js/app.html'), /function (recolectar|poblar)(Uber|Ticket)\(/, 'sin recolectar/poblar propios de Uber y Tickets');
+});
+
+test('responsivo: solo los cortes del sistema (640 / 1024) y matchMedia solo en Pantalla', () => {
+  // Los dos cortes viven en componentes/pantalla.html (ver su encabezado). Cada archivo usaba
+  // el suyo (520, 600, 700, 760, 900…) y la misma pantalla era celular para un módulo y
+  // escritorio para otro. Un @media de ancho solo puede usar estos; hover/pointer/prefers-* sí.
+  const PERMITIDOS = new Set(['(max-width: 640px)', '(max-width: 1024px)', '(min-width: 641px)', '(min-width: 1025px)']);
+  // Lo que falta migrar (plan de diseño responsivo, oct-2026). Esta lista SOLO SE ACHICA: un
+  // archivo nuevo no puede entrar, y al migrar uno hay que bajar su número aquí (si no, falla).
+  const PENDIENTES = {
+    'src/html/js/lineas.html': { cortes: 0, matchMedia: 2 },
+    'src/html/lineas-estilos.html': { cortes: 17, matchMedia: 0 },
+    'src/html/views/relaciones.html': { cortes: 1, matchMedia: 0 },
+    'src/html/views/usuarios.html': { cortes: 1, matchMedia: 0 },
+  };
+  const encontrado = {};
+  filesBelow(path.join(root, 'src')).filter((f) => f.endsWith('.html')).forEach((file) => {
+    const rel = path.relative(root, file).replace(/\\/g, '/');
+    const src = fs.readFileSync(file, 'utf8');
+    let cortes = 0;
+    for (const m of src.matchAll(/@media([^{]*)\{/g)) {
+      for (const w of m[1].matchAll(/\((?:max|min)-width:\s*[^)]*\)/g)) {
+        if (!PERMITIDOS.has(w[0].replace(/\s+/g, ' '))) cortes++;
+      }
+    }
+    const matchMedia = rel.endsWith('componentes/pantalla.html') ? 0 : (src.match(/matchMedia\s*\(/g) || []).length;
+    if (cortes || matchMedia) encontrado[rel] = { cortes, matchMedia };
+  });
+  assert.deepEqual(encontrado, PENDIENTES,
+    'Un @media de ancho usa (max-width: 640px) o (max-width: 1024px), y "¿es celular?" se pregunta con Pantalla.* ' +
+    '(componentes/pantalla.html). Si migraste un archivo, baja su número en PENDIENTES (o quítalo).');
+  // Rejillas de campos: .form-rejilla + data-columnas (se acomodan solas en tableta y celular),
+  // nunca columnas fijas en línea, que en celular dejaban 3 campos de 100px y cortaban el último
+  const enLinea = filesBelow(path.join(root, 'src/html/views')).filter((f) => f.endsWith('.html'))
+    .filter((f) => /style="[^"]*grid-template-columns/.test(fs.readFileSync(f, 'utf8')))
+    .map((f) => path.relative(root, f).replace(/\\/g, '/'));
+  assert.deepEqual(enLinea, [], 'Usa class="form-rejilla" data-columnas="N" (styles.html) en vez de grid-template-columns en línea');
+  // Pantalla se carga antes que todo lo que la usa
+  const index = read('src/html/Index.html');
+  const pos = (nombre) => index.indexOf("include('html/" + nombre + "')");
+  assert.ok(pos('js/componentes/pantalla') > 0, 'Index.html incluye Pantalla');
+  ['notificaciones', 'js/app', 'js/lineas', 'shell-movil'].forEach((n) =>
+    assert.ok(pos('js/componentes/pantalla') < pos(n), 'Pantalla va antes de ' + n));
 });
 
 test('Mandar a resguardo: formulario intermedio informativo y la persona solo queda en blanco ahí (usuario, 4-oct)', () => {

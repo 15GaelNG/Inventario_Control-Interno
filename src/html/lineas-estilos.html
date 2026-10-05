@@ -221,12 +221,7 @@
   }
 
   @media (max-width: 520px) {
-    .modal-backdrop { padding: 0; align-items: stretch; }
-    .modal-card, .modal-card-wide {
-      width: 100%; max-width: none; min-height: 100%; max-height: 100vh;
-      border-radius: 0; padding: 16px;
-    }
-    .modal-form-scroll { max-height: calc(100vh - 140px); }
+    /* Las ventanas en celular ya las resuelve styles.html para todo el sistema (sección Modal) */
     .ln-captura-acciones { display: grid; grid-template-columns: 1fr; }
     #ln-avisos { left: 12px; right: 12px; bottom: 12px; max-width: none; }
     .ln-cuadros-grid { grid-template-columns: 1fr; }
@@ -977,7 +972,7 @@
   .ln-segmento .ln-pastilla.activa.ln-pastilla-media { background: var(--ln-ambar-tx); }
   :root[data-theme="dark"] .ln-segmento .ln-pastilla.activa { color: #0d1b22; }
   .ln-af-campo.form-campo-error .ln-pastillas.ln-segmento { outline: 2px solid color-mix(in srgb, var(--color-danger) 55%, transparent); outline-offset: 2px; border-radius: 10px; }
-  @media (max-width: 900px) { .ln-checklist-lista { grid-template-columns: 1fr; } }
+  @media (max-width: 1024px) { .ln-checklist-lista { grid-template-columns: 1fr; } }
   /* ================= Patrón con orden y dirección; pantalla de espera (usuario, 4-oct) ================= */
   button.ln-patron-punto { color: #fff; font-size: 13px; font-weight: 700; line-height: 1; }
   button.ln-patron-punto.activa { width: 38px; height: 38px; min-height: 38px; border-width: 5px; }

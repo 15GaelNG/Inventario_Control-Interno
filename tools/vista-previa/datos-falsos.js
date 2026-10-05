@@ -6,11 +6,15 @@
   const tema = /tema=oscuro/.test(location.hash) ? 'dark' : 'light';
   try { localStorage.setItem('tema', tema); } catch (e) { /* no-op */ }
 
+  // Los mismos grupos que src/config/Modulos.gs (sin Líneas: sus escenas llegan con la Fase 4 del plan responsivo)
   const MODULOS = [
     ['servicios-vehiculares', 'Servicios Vehiculares', 'car', [
-      ['vehiculos', 'Vehículos'], ['verificaciones', 'Verificaciones'], ['inspeccion-vehicular', 'Inspección Vehicular'],
-      ['instalacion-sensores', 'Instalación de Sensores'], ['hologramas', 'Hologramas']]],
-    ['administracion', 'Administración', 'settings', [['relaciones', 'Datos conectados'], ['salud', 'Salud']]],
+      ['incidencias', 'Incidencias'], ['vehiculos', 'Vehículos'], ['cambios-vehiculos', 'Cambios Vehículos'],
+      ['reasignaciones-vehiculares', 'Reasignaciones Vehiculares'], ['verificaciones', 'Verificaciones'],
+      ['inspeccion-vehicular', 'Inspección Vehicular'], ['instalacion-sensores', 'Instalación de Sensores'], ['hologramas', 'Hologramas']]],
+    ['arqueos', 'Arqueos', 'wallet', [['arqueos', 'Arqueos'], ['caja-chica', 'Caja Chica']]],
+    ['uber', 'Uber', 'car-taxi-front', [['uber', 'Uber'], ['tickets', 'Tickets']]],
+    ['administracion', 'Administración', 'settings', [['usuarios', 'Usuarios y permisos'], ['relaciones', 'Datos conectados'], ['salud', 'Salud']]],
   ];
   const grupos = MODULOS.map(([id, etiqueta, icono, mods]) => ({ id, etiqueta, icono, modulos: mods.map(([i, e]) => ({ id: i, etiqueta: e })) }));
   const permisos = {};
@@ -80,7 +84,105 @@
        relE('CLAVE_DUPLICADA_EN_ORIGEN', 25, 'AUT0025', 'ID', '', '')]),
   ];
 
+  // ---------- Listas de los módulos (suficientes filas para ver la tabla y las tarjetas llenas) ----------
+  const filas = (n, f) => Array.from({ length: n }, (_, i) => f(i));
+  const de = (lista, i) => lista[i % lista.length];
+  const PERSONAS = ['JUAN MANUEL FULGENCIO HERNANDEZ', 'ANA ISABEL CHI BUENFIL', 'JORGE LUIS AVECILLA', 'MOISÉS MALDONADO RUIZ', 'MARÍA FERNANDA LÓPEZ'];
+  const DEPTOS = ['TI', 'POST VENTA', 'CONSTRUCCIÓN', 'COMERCIAL', 'ADMINISTRACIÓN'];
+  const SEDES = ['QUERETARO', 'LEON', 'SAN LUIS POTOSI', 'MERIDA'];
+  const VEHICULOS = filas(14, (i) => ({
+    ID_VEHICULO: 'VEH-' + (i + 1), FOLIO: 'AUT' + String(24 + i).padStart(4, '0'), NUCCO: String(24 + i),
+    DEPARTAMENTO: de(DEPTOS, i), CLASE: de(['AUTOMOVIL', 'CAMIONETA', 'CAMION', 'MOTOCARRO'], i),
+    MARCA: de(['CHEVROLET', 'NISSAN', 'MITSUBISHI', 'RAM', 'HONDA'], i), LINEA_VEHICULO: de(['BEAT', 'NP300', 'L200', '700', '150XR'], i),
+    MODELO: 2017 + (i % 8), PLACA: 'GG' + String.fromCharCode(65 + i) + (880 + i) + 'F', ESTATUS: de(['UTILITARIO', 'UTILITARIO', 'PERSONAL', 'BAJA VEHICULAR'], i),
+    NO_ECONOMICO: 'E-' + (100 + i), COLOR: de(['BLANCO', 'GRIS', 'ROJO'], i), SEDE: de(SEDES, i), FECHA_REGISTRO: hace(30 * i + 3),
+  }));
+  const LISTAS = {
+    apiListarVehiculosResumen: JSON.stringify(VEHICULOS),
+    apiListarIncidencias: filas(9, (i) => ({
+      ID: 'INC-' + (i + 1), FECHA_REGISTRO: hace(4 * i + 1), FOLIO: VEHICULOS[i].FOLIO, DEPARTAMENTO: de(DEPTOS, i),
+      ESTADO: de(['ABIERTA', 'EN TALLER', 'CERRADA'], i), MODELO: VEHICULOS[i].MODELO, ANIO: VEHICULOS[i].MODELO, KILOMETRAJE: 48000 + i * 3100,
+      TICKET: 'TK-' + (900 + i), DESCRIPCION_TRABAJO: de(['Cambio de balatas delanteras', 'Afinación mayor y cambio de aceite', 'Revisión de suspensión'], i),
+      MECANICO: de(['TALLER LÓPEZ', 'AGENCIA NISSAN'], i), SEGURO_AUTO: 'VIGENTE',
+    })),
+    apiListarCambiosVehiculos: JSON.stringify(filas(10, (i) => ({
+      ID: 'CV-' + (i + 1), FECHA: hace(2 * i + 1), FOLIO: VEHICULOS[i].FOLIO, CAMPO: de(['RESPONSABLE VEHICULO', 'DEPARTAMENTO', 'ESTATUS', 'PLACA'], i),
+      ANTES: de(PERSONAS, i), DESPUES: de(PERSONAS, i + 1), ACTUALIZADO_POR: 'prueba@ciudadmaderas.com',
+    }))),
+    apiListarReasignacionesVehiculares: filas(8, (i) => ({
+      ID: 'RV-' + (i + 1), FECHA: hace(6 * i + 2), FOLIO_VEHICULO: VEHICULOS[i].FOLIO, NUCO: VEHICULOS[i].NUCCO,
+      RESPONSABLE_SALIENTE: de(PERSONAS, i), DEPARTAMENTO_SALIENTE: de(DEPTOS, i),
+      RESPONSABLE_ENTRANTE: de(PERSONAS, i + 2), DEPARTAMENTO_ENTRANTE: de(DEPTOS, i + 1), QUIEN_REGISTRO: 'AYRTON SEPULVEDA',
+    })),
+    apiListarUberResumen: filas(9, (i) => ({
+      ID: 'UB-' + (i + 1), NOMBRE_COMPLETO: de(PERSONAS, i), RAZON_SOCIAL: 'CIUDAD MADERAS', ROL: de(['USUARIO', 'ADMINISTRADOR'], i),
+      DEPARTAMENTO: de(DEPTOS, i), PUESTO: de(['COORDINADOR', 'AUXILIAR', 'GERENTE'], i), ESTATUS: de(['ACTIVO', 'ACTIVO', 'BAJA'], i),
+      'CORREO ELECTRONICO': 'persona' + i + '@ciudadmaderas.com', 'NUMERO TELEFONO': '442 555 01' + String(i).padStart(2, '0'), SEDE: de(SEDES, i),
+    })),
+    apiListarTicketsResumen: filas(9, (i) => ({
+      ID: 'TK-' + (i + 1), TICKET: 'TK-' + (900 + i), FECHA: hace(3 * i + 1), DEPARTAMENTO: de(DEPTOS, i), SOLICITANTE: de(PERSONAS, i),
+      'TIPO ATENCION': de(['VIAJE PROGRAMADO', 'URGENTE'], i), 'QUIEN ATENDIO': 'AYRTON SEPULVEDA',
+    })),
+    apiListarCajasChicasResumen: filas(10, (i) => ({
+      ID: String(i + 1), 'ID CCH': String(i + 1), ESTATUS: de(['VIGENTE', 'VIGENTE', 'EN PROCESO DE CIERRE', 'CERRADA'], i),
+      RESPONSABLE: de(PERSONAS, i), 'RESPONSABLE DE CAJA CHICA': de(PERSONAS, i), DEPARTAMENTO: de(DEPTOS, i), OFICINA: de(['CORPORATIVO', 'DESARROLLO NORTE'], i),
+      SEDE: de(SEDES, i), 'MONTO ACTUAL': 3000 + 1000 * (i % 4), 'EMPRESA ORIGEN': 'CIUDAD MADERAS', 'FECHA DE APERTURA': hace(60 * i + 10),
+    })),
+    apiListarCambiosMontoCCH: filas(6, (i) => ({
+      ID: 'CM-' + (i + 1), FECHA: hace(9 * i + 1), ID_CCH: String(i + 1), RESPONSABLE: de(PERSONAS, i), TIPO: de(['INCREMENTO', 'DECREMENTO'], i),
+      CANTIDAD: 500 * (i + 1), CANTIDAD_ANTERIOR: 3000, CANTIDAD_ACTUALIZADA: 3000 + 500 * (i + 1), QUIEN_REALIZO: 'AYRTON SEPULVEDA',
+    })),
+    apiListarArqueosResumen: filas(10, (i) => ({
+      ID: 'ARQ-' + (145 - i), ID_CCH: String(i + 1), RESPONSABLE: de(PERSONAS, i), TIPO_ARQUEO: de(['ORDINARIO', 'SORPRESA'], i),
+      FECHA_INICIO: hace(7 * i + 1), TOTAL_GENERAL: 2900 + i * 37, DIFERENCIA: de([0, 0, -120, 35], i), CALIFICACION: de([100, 95, 80], i),
+      ESTADO_PDF: de(['LISTO', 'PENDIENTE'], i),
+    })),
+    apiResumenInicio: JSON.stringify({
+      vehiculos: { activos: 512, baja: 41, total: 653 },
+      ticketsIncidencias: { incidenciasAbiertas: 7, incidenciasTotal: 63, ticketsRecientes: 18 },
+      cajasChicas: { vigentes: 214, enProcesoCierre: 9, total: 285 },
+      alertas: { verificaciones: { vencidas: 12, porVencer: 30, total: 426 }, inspecciones: { atrasadas: 22, total: 302 } },
+      actividad: filas(6, (i) => ({ icono: de(['car', 'wallet', 'ticket'], i), tipo: de(['Vehículo actualizado', 'Arqueo registrado', 'Ticket nuevo'], i), texto: VEHICULOS[i].FOLIO + ' · ' + de(PERSONAS, i), fecha: hace(i * 0.3) })),
+    }),
+  };
+
+  // ---------- Fichas (Vehículo, Caja Chica): lo que piden al abrir un registro ----------
+  const CAJA = Object.assign({}, LISTAS.apiListarCajasChicasResumen[0], {
+    'PUESTO DE RESPONSABLE': 'COORDINADOR', 'JEFE INMEDIATO DEL REPSONSABLE': PERSONAS[3], 'ADMINISTRADA POR': 'CONTROL INTERNO',
+    'CAPTURISTA DE CAJA CHICA': PERSONAS[1], 'METODO DE REEMBOLSO': 'TRANSFERENCIA', 'CORREO ELECTRONICO DE RESPONSABLE': 'persona0@ciudadmaderas.com',
+    'TELEFONO DE RESPONSABLE': '442 555 0100', OBSERVACIONES: 'Sin observaciones',
+  });
+  const FICHAS = {
+    apiBuscarCajaChicaPorId: CAJA,
+    apiArqueosPorIdCch: JSON.stringify(LISTAS.apiListarArqueosResumen.slice(0, 3)),
+    apiCambiosMontoPorIdCch: JSON.stringify(LISTAS.apiListarCambiosMontoCCH.slice(0, 2)),
+    // Cada una regresa JSON.stringify (ver abrirFichaVehiculo en app.html)
+    apiListarCambiosVehiculosPorFolio: JSON.stringify(JSON.parse(LISTAS.apiListarCambiosVehiculos).slice(0, 3)),
+    apiListarReasignacionesVehicularesPorFolio: LISTAS.apiListarReasignacionesVehiculares.slice(0, 2),
+    apiVerificacionesPorFolio: '[]', apiInspeccionesPorFolio: '[]', apiSensoresPorFolio: '[]', apiHologramasPorFolio: '[]',
+    apiIncidenciasPorFolio: JSON.stringify(LISTAS.apiListarIncidencias.slice(0, 2)),
+  };
+
+  // ---------- Usuarios y permisos (app-permisos.html: cargar(respuesta)) ----------
+  const AREAS = ['TI', 'CONTROL INTERNO', 'POST VENTA'];
+  const PERMISOS_PANEL = {
+    grupos,
+    areas: AREAS.map((nombre) => ({ nombre })),
+    personas: PERSONAS.concat(['ROBERTO SÁNCHEZ', 'LUCÍA HERNÁNDEZ']).map((nombre, i) => ({
+      correo: 'persona' + i + '@ciudadmaderas.com', nombre, area: de(AREAS, i), rol: de(['USER', 'USER', 'VIEWER', 'ADMIN'], i),
+      activo: i !== 4, coordinacion: 'OPERACIONES', oficina: 'CORPORATIVO', sede: de(SEDES, i), noEmpleado: 'CI0' + (100 + i),
+    })),
+    reglas: [
+      { quien: 'TI', modulo: 'vehiculos', permiso: 'EDICION' }, { quien: 'TI', modulo: 'verificaciones', permiso: 'LECTURA' },
+      { quien: 'CONTROL INTERNO', modulo: 'arqueos', permiso: 'EDICION' }, { quien: 'CONTROL INTERNO', modulo: 'caja-chica', permiso: 'EDICION' },
+      { quien: 'persona1@ciudadmaderas.com', modulo: 'hologramas', permiso: 'EDICION' },
+    ],
+  };
+
   const respuestas = {
+    ...LISTAS,
+    ...FICHAS,
+    apiPermisosPanel: PERMISOS_PANEL,
     apiRelacionesMapa: JSON.stringify(REL_MAPA),
     apiSaludRevisar: JSON.stringify({ mapa: REL_MAPA, reporte: REL_REVISION }),
     apiMisPermisos: { correo: 'prueba@ciudadmaderas.com', permisos, grupos },
@@ -92,7 +194,8 @@
       { ID: '2026_25_291', FOLIO: 'AUT0025', TIPO: 'HONDA 150XR', FECHA: hace(3), PLACAS: 'GGR658F', PUNTAJE: 84.5, RESPONSABLE: 'JORGE LUIS AVECILLA', INSPECTOR: 'AYRTON SEPULVEDA', PDF: '' },
       { ID: '2026_30_290', FOLIO: 'AUT0030', TIPO: 'L200', FECHA: hace(40), PLACAS: 'UNK093H', PUNTAJE: 71, RESPONSABLE: 'MOISÉS MALDONADO', INSPECTOR: 'J. ENRIQUE MORA', PDF: 'x.pdf' },
     ],
-    apiTiposInspeccion: [{ tipo: 'BEAT', listo: true }, { tipo: 'L200', listo: true }, { tipo: 'PIPA', listo: true }],
+    // Un folio AUT… solo ofrece KWID y AUTOS (TIPOS_POR_PREFIJO_FOLIO en modulos/inspecciones.html)
+    apiTiposInspeccion: [{ tipo: 'AUTOS', listo: true }, { tipo: 'KWID', listo: true }, { tipo: 'L200', listo: true }, { tipo: 'PIPA', listo: true }],
     apiEstructuraInspeccion: {
       tipo: 'BEAT', carpeta: 'INSPECCIONES BEAT',
       secciones: [
@@ -198,6 +301,19 @@
     evento(campo, 'blur');
     await esperar(800);
   }
+  /** Nueva inspección con vehículo y tipo elegidos: sin tipo de unidad el paso 1 no deja avanzar */
+  async function iniciarInspeccion() {
+    await abrir('inspeccion-vehicular', 'nueva');
+    await elegirVehiculo('#ins-folio');
+    const tipo = await hasta('#ins-tipo option[value="AUTOS"]').then(() => $('#ins-tipo'));
+    if (!tipo.value) { tipo.value = 'AUTOS'; evento(tipo, 'change'); await esperar(800); }
+  }
+  /** Abre la primera fila de la tabla (las tablas estilo Drive ya no traen botón "Ver": doble clic) */
+  async function abrirPrimeraFila() {
+    const fila = await hasta('.dt tbody tr[data-id]');
+    fila.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    await esperar(900);
+  }
   const firmar = (canvas) => {
     const r = canvas.getBoundingClientRect();
     const p = (tipo, x, y) => canvas.dispatchEvent(new PointerEvent(tipo, { clientX: r.left + x, clientY: r.top + y, bubbles: true, pointerId: 1, pointerType: 'mouse' }));
@@ -216,11 +332,58 @@
     'salud-tecnica': async () => { await abrir('salud'); await vistaSalud(true); await hasta('.rel-tarjeta'); await esperar(300); },
     'salud-capital': async () => { await abrir('salud'); await vistaSalud(false); const b = [...document.querySelectorAll('#salud-tabs .tab-btn')].find((x) => /Capital/.test(x.textContent)); b.click(); await esperar(500); },
     'relaciones-capital': async () => { await abrir('relaciones'); await vistaRelaciones(false); const b = [...document.querySelectorAll('#rel-s-tabs .tab-btn')].find((x) => /Capital/.test(x.textContent)); b.click(); await esperar(400); },
-    'inspecciones-detalle': async () => { await abrir('inspeccion-vehicular'); await esperar(400); (await hasta('.dt-btn-ver')).click(); await esperar(900); },
-    'sensores-detalle': async () => { await abrir('instalacion-sensores'); await esperar(400); (await hasta('.dt-btn-ver')).click(); await esperar(900); },
-    'hologramas-detalle': async () => { await abrir('hologramas'); await esperar(400); (await hasta('.dt-btn-ver')).click(); await esperar(900); },
-    'verificaciones-detalle': async () => { await abrir('verificaciones'); await esperar(400); (await hasta('.dt-btn-ver')).click(); await esperar(900); },
-    'menu-abierto': async () => { await abrir('inspeccion-vehicular'); $('#topbar-menu-btn').click(); await esperar(400); },
+    'inspecciones-detalle': async () => { await abrir('inspeccion-vehicular'); await abrirPrimeraFila(); },
+    'sensores-detalle': async () => { await abrir('instalacion-sensores'); await abrirPrimeraFila(); },
+    'hologramas-detalle': async () => { await abrir('hologramas'); await abrirPrimeraFila(); },
+    'verificaciones-detalle': async () => { await abrir('verificaciones'); await abrirPrimeraFila(); },
+    // El botón de menú solo se ve en pantalla angosta (shell-movil.html): capturar con --ancho=390 o --matriz
+    'menu-abierto': async () => { await abrir('inspeccion-vehicular'); (await hasta('.shell-menu-btn')).click(); await esperar(400); },
+    // ---- Módulos de la base (Inicio, Vehículos, Caja Chica, Uber, Administración) ----
+    'inicio': async () => { await abrir('dashboard'); await hasta('#dash-actividad .historial-item'); await esperar(300); },
+    'vehiculos': () => abrir('vehiculos'),
+    'vehiculos-ficha': async () => { await abrir('vehiculos'); await abrirPrimeraFila(); },
+    'panorama-vehiculos': async () => { await abrir('panorama-vehiculos'); await esperar(700); },
+    'incidencias': () => abrir('incidencias'),
+    'incidencias-detalle': async () => { await abrir('incidencias'); await abrirPrimeraFila(); },
+    'cambios-vehiculos': () => abrir('cambios-vehiculos'),
+    'reasignaciones': () => abrir('reasignaciones-vehiculares'),
+    'uber': () => abrir('uber'),
+    'uber-detalle': async () => { await abrir('uber'); await abrirPrimeraFila(); },
+    'tickets': () => abrir('tickets'),
+    'caja-chica': () => abrir('caja-chica'),
+    'caja-chica-ficha': async () => { await abrir('caja-chica'); await abrirPrimeraFila(); },
+    'panorama-cajachica': async () => { await abrir('panorama-cajachica'); await esperar(700); },
+    'cambios-monto': () => abrir('cambios-monto-cch'),
+    'arqueos': () => abrir('arqueos'),
+    'arqueos-detalle': async () => { await abrir('arqueos'); await abrirPrimeraFila(); },
+    'sistemas': () => abrir('sistemas-vehiculos'),
+    'usuarios': async () => { await abrir('usuarios'); await hasta('.dt tbody tr[data-id]'); },
+    'usuarios-ficha': async () => { await abrir('usuarios'); await abrirPrimeraFila(); },
+    // ---- Formularios de alta (rejilla de campos .form-rejilla y componente Formulario) ----
+    'vehiculos-registrar': () => abrir('vehiculos', 'registrar'),
+    'incidencias-registrar': () => abrir('incidencias', 'registrar'),
+    'uber-registrar': () => abrir('uber', 'registrar'),
+    'caja-chica-registrar': () => abrir('caja-chica', 'registrar'),
+    'arqueos-registrar': () => abrir('arqueos', 'registrar'),
+    // ---- Ventanas (styles.html, sección Modal): chica = hoja abajo en celular; ancha = pantalla completa ----
+    'modal-confirmar': async () => {
+      await abrir('vehiculos');
+      Confirmar.pedir({ titulo: '¿Eliminar 3 vehículos?', mensaje: 'Esta acción no se puede deshacer.', detalle: ['AUT0024', 'AUT0025', 'AUT0026'], textoConfirmar: 'Eliminar', peligro: true, palabraClave: 'ELIMINAR' });
+      await esperar(400);
+    },
+    // Los dos avisos del sistema: el de la app (arriba) y el de Notificar (abajo)
+    'avisos': async () => {
+      await abrir('vehiculos');
+      toastExito('Actualizado exitosamente');
+      Notificar.info('Se copiaron 3 registros: pégalos en Excel');
+      await esperar(500);
+    },
+    'modal-editar-vehiculo': async () => {
+      await abrir('vehiculos');
+      // Se abre igual que el ⋮ → Editar, pero sin depender del menú de la fila
+      (await hasta('#modal-editar-vehiculo')).hidden = false;
+      await esperar(400);
+    },
     'verificaciones': () => abrir('verificaciones'),
     'verificaciones-form': async () => { await abrir('verificaciones', 'nuevo'); await elegirVehiculo('[data-panel="nuevo"] input[type="text"]'); },
     'sensores': () => abrir('instalacion-sensores'),
@@ -230,18 +393,19 @@
     'inspecciones': () => abrir('inspeccion-vehicular'),
     'inspecciones-form': async () => { await abrir('inspeccion-vehicular', 'nueva'); await elegirVehiculo('#ins-folio'); },
     'inspecciones-checklist': async () => {
-      await abrir('inspeccion-vehicular', 'nueva'); await elegirVehiculo('#ins-folio');
+      await iniciarInspeccion();
       $('#ins-siguiente').click(); await esperar(500);
     },
     'inspecciones-danos': async () => {
-      await abrir('inspeccion-vehicular', 'nueva'); await elegirVehiculo('#ins-folio');
+      await iniciarInspeccion();
       for (let i = 0; i < 5; i++) { $('#ins-siguiente').click(); await esperar(300); }
     },
     'inspecciones-firmas': async () => {
-      await abrir('inspeccion-vehicular', 'nueva'); await elegirVehiculo('#ins-folio');
-      for (let i = 0; i < 7; i++) { $('#ins-siguiente').click(); await esperar(300); }
+      await iniciarInspeccion();
+      // Avanza hasta el paso de firmas (cuántos pasos hay depende del tipo de unidad)
+      for (let i = 0; i < 12 && !$('[data-firma="FIRMA INSPECTOR"] canvas'); i++) { $('#ins-siguiente').click(); await esperar(300); }
       await esperar(300);
-      firmar($('[data-firma="FIRMA INSPECTOR"] canvas'));
+      firmar(await hasta('[data-firma="FIRMA INSPECTOR"] canvas'));
       const f = $('.ins-firmas'); if (f) f.scrollIntoView({ block: 'end' });
     },
   };

@@ -39,7 +39,7 @@
           <p>Da de alta a alguien autorizado para usar Uber</p>
         </div>
       </div>
-      <form id="form-uber" class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 0 14px;">
+      <form id="form-uber" class="form-rejilla" data-columnas="3">
         <!-- Los campos los pinta CamposHoja (CAMPOS_UBER en app.html); display: contents
              para que cada campo siga siendo una celda de la cuadrícula del formulario -->
         <div id="campos-form-uber" style="display: contents"></div>
@@ -67,7 +67,7 @@
       </div>
       <form id="form-editar-uber">
         <input type="hidden" id="editar-uber-id" />
-        <div id="campos-form-editar-uber" class="modal-form-scroll grid" style="grid-template-columns: repeat(2, 1fr); gap: 0 14px;"></div>
+        <div id="campos-form-editar-uber" class="modal-form-scroll form-rejilla" data-columnas="2"></div>
         <div class="error-msg" id="editar-uber-error" hidden></div>
         <button type="submit" id="btn-guardar-editar-uber" style="width:100%; margin-top:10px"><i data-lucide="save" class="ico"></i> Guardar cambios</button>
       </form>

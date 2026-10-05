@@ -100,6 +100,9 @@
   <?!= include('html/views/lineas/lineas-accesorios'); ?>
 
   <?!= include('html/js/api'); ?>
+  <!-- Pantalla: los cortes celular / tableta / táctil del sistema. Antes que todo lo que pregunta
+       "¿es celular?" (notificaciones, app, shell-movil, Líneas). -->
+  <?!= include('html/js/componentes/pantalla'); ?>
   <!-- Notificaciones: UNA campana para todo el sistema, por módulo (Líneas y Vehículos). Se inserta sola en
        .topbar-right, antes del usuario. Antes de app.html a propósito: su render() llama Notificaciones.iniciar()
        en la misma pasada síncrona del render() de arranque (línea final del

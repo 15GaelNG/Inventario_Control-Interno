@@ -24,6 +24,14 @@
   /* Lo tecleado sin elegirlo se descarta: el campo parpadea para que se note */
   .cbx-descartado { animation: cbx-descartado 0.9s ease; }
   @keyframes cbx-descartado { 0%, 60% { box-shadow: 0 0 0 2px var(--color-danger, #d64545); } 100% { box-shadow: none; } }
+  /* Con el teclado del celular abierto queda poca pantalla: la lista no pasa de un tercio de
+     lo que se ve, y cada opción mide lo de un dedo */
+  @media (max-width: 640px) {
+    .cbx-lista { max-height: min(260px, 35vh); max-height: min(260px, 35dvh); }
+  }
+  @media (pointer: coarse) {
+    .cbx-opcion { padding: 11px 10px; font-size: 14px; }
+  }
 </style>
 
 <script>

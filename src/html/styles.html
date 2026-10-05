@@ -65,6 +65,8 @@
     color: var(--color-text);
     font-family: 'Poppins', 'Segoe UI', system-ui, -apple-system, sans-serif;
     font-size: 14px;
+    /* Que el celular no agrande el texto por su cuenta al girarlo */
+    -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
   }
 
   /* Enlaces (ej. "Ver archivo" de PDFs/imágenes adjuntos): sin esto usan el azul
@@ -74,12 +76,15 @@
 
   /* #app ocupa exactamente el alto de la pantalla y no se desplaza — el
      sidebar y la topbar quedan fijos; solo el contenido de #view-container
-     hace scroll internamente (ver más abajo). */
-  #app { display: flex; height: 100vh; overflow: hidden; }
+     hace scroll internamente (ver más abajo).
+     100dvh después de 100vh: en el celular 100vh mide como si no existiera la barra del
+     navegador y el pie queda tapado; dvh es el alto que de verdad se ve (en escritorio son
+     iguales, y un navegador viejo que no entiende dvh se queda con vh). */
+  #app { display: flex; height: 100vh; height: 100dvh; overflow: hidden; }
 
   /* Sidebar — fondo navy fijo de marca (no cambia con el tema claro/oscuro) */
   #sidebar {
-    width: 280px; height: 100vh; background: var(--color-sidebar-bg);
+    width: 280px; height: 100vh; height: 100dvh; background: var(--color-sidebar-bg);
     border-right: 1px solid var(--color-sidebar-border);
     padding: 18px 14px; display: flex; flex-direction: column; gap: 4px;
     flex-shrink: 0; overflow-y: auto; overflow-x: hidden; transition: width .28s ease;
@@ -237,7 +242,7 @@
 
   /* #main es columna: la topbar no encoge (queda fija), #view-container
      se lleva el espacio restante y hace scroll por su cuenta. */
-  #main { flex: 1; display: flex; flex-direction: column; height: 100vh; overflow: hidden; min-width: 0; position: relative; }
+  #main { flex: 1; display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; min-width: 0; position: relative; }
 
   .topbar {
     display: flex; align-items: center; justify-content: space-between;
@@ -290,6 +295,11 @@
     background: var(--color-surface); border: 1px solid var(--color-border);
     border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px;
   }
+  /* Celular: el mismo relleno que las ventanas (16px). Lo que se extiende de orilla a orilla de
+     la tarjeta (la barra de botones de un formulario) cuenta con ese número. */
+  @media (max-width: 640px) {
+    .card { padding: 16px; }
+  }
 
   /* Barra de pestañas simple (ej. "Catálogo" / "Registrar" arriba de cada
      módulo) — un panel visible a la vez, en vez de formulario + tabla
@@ -297,6 +307,11 @@
   .tabs-simple {
     display: flex; gap: 4px; border-bottom: 1px solid var(--color-border);
     margin-bottom: 18px; overflow-x: auto;
+  }
+  /* Celular: las pestañas que no caben se deslizan de lado, sin barra de desplazamiento a la vista */
+  @media (max-width: 640px) {
+    .tabs-simple { scrollbar-width: none; margin-bottom: 14px; }
+    .tabs-simple::-webkit-scrollbar { display: none; }
   }
   .tab-btn {
     background: transparent; color: var(--color-text-muted); border: none;
@@ -316,7 +331,7 @@
   .dash-section { margin-bottom: 24px; }
   .dash-section-title { margin: 0 0 12px; font-size: 15px; }
   .dash-grid-2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 24px; align-items: start; }
-  @media (max-width: 900px) {
+  @media (max-width: 1024px) {
     .dash-grid-2 { grid-template-columns: 1fr; }
   }
 
@@ -378,6 +393,23 @@
   }
   .field { margin-bottom: 14px; }
 
+  /* Rejilla de campos de un formulario (CamposHoja o escrito a mano):
+       <div class="form-rejilla" data-columnas="3"> …<div class="field">…</div>… </div>
+     data-columnas = columnas en escritorio (2 o 3; sin él, 2). En tableta caben como mucho 2 y
+     en celular 1: el formulario se acomoda solo, sin CSS del módulo. No escribas
+     grid-template-columns en línea (source-contracts lo revisa). Lo que debe ocupar el renglón
+     completo lleva grid-column: 1 / -1 (en CamposHoja: renglonCompleto; los títulos de sección
+     .info-section-title ya lo traen). minmax(0, 1fr): un control ancho no puede estirar su
+     columna y empujar a la de al lado fuera de la caja. */
+  .form-rejilla { display: grid; gap: 0 14px; grid-template-columns: repeat(var(--form-rejilla-columnas, 2), minmax(0, 1fr)); }
+  .form-rejilla[data-columnas="3"] { --form-rejilla-columnas: 3; }
+  @media (max-width: 1024px) {
+    .form-rejilla[data-columnas="3"] { --form-rejilla-columnas: 2; }
+  }
+  @media (max-width: 640px) {
+    .form-rejilla, .form-rejilla[data-columnas] { --form-rejilla-columnas: 1; }
+  }
+
   button {
     background: var(--color-primary); color: #fff; border: none;
     cursor: pointer; font-weight: 600;
@@ -402,6 +434,17 @@
   .badge.low { background: #F3ECD6; color: var(--color-danger); }
 
   [hidden] { display: none !important; }
+
+  /* ========== Pantallas táctiles (celular y tableta) ==========
+     Sin mouse: controles del tamaño del dedo, y 16px en los campos (con menos, el iPhone
+     acerca la página al tocar un campo y ya no la regresa). Va por (pointer: coarse) y no por
+     ancho: una tableta horizontal mide como escritorio pero se usa con el dedo. Los cortes
+     de ancho están en componentes/pantalla.html. */
+  @media (pointer: coarse) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea { font-size: 16px !important; }
+    .nav-item, .nav-subitem, .nav-group-header, .tab-btn,
+    .page-header-actions button, .form-acciones button { min-height: 44px; }
+  }
 
   /* ========== Encabezado de página + stat tiles ========== */
   .page-header {
@@ -504,6 +547,28 @@
   .stat-tile-clickable.stat-tile-activo {
     border-color: var(--color-primary); border-width: 2px; padding: 15px;
     box-shadow: 0 0 0 3px var(--color-primary-soft);
+  }
+
+  /* Celular: los KPIs (.stat-row y .kpi-chips, de cualquier módulo) pasan a una franja que se
+     desliza de lado. En rejilla, 9 tarjetas eran 5 filas y empujaban la tabla fuera de la
+     pantalla. Cada tarjeta mide ~55% del ancho (cabe una palabra como "Verificaciones"), así
+     siempre se asoma la siguiente y se nota que hay más. El clic para filtrar sigue igual. */
+  @media (max-width: 640px) {
+    .stat-row, .kpi-chips {
+      display: flex; gap: 10px; overflow-x: auto; overscroll-behavior-x: contain;
+      scroll-snap-type: x proximity; scrollbar-width: none; padding-bottom: 2px; margin-bottom: 14px;
+    }
+    .stat-row::-webkit-scrollbar, .kpi-chips::-webkit-scrollbar { display: none; }
+    .stat-row > *, .kpi-chips > * { flex: 0 0 calc((100% - 10px) / 1.8); min-width: 0; scroll-snap-align: start; }
+    .stat-tile { padding: 12px; gap: 10px; }
+    .stat-tile > div:last-child { min-width: 0; overflow-wrap: break-word; }
+    .stat-ring { width: 40px; height: 40px; }
+    .stat-ring-hole { width: 30px; height: 30px; }
+    .stat-tile-clickable.stat-tile-activo { padding: 11px; }
+    .stat-icon { width: 34px; height: 34px; }
+    .stat-value, .kpi-chip-value { font-size: 19px; }
+    .kpi-chip { padding: 11px 14px; }
+    .kpi-chip.activo { padding: 10px 13px; }
   }
 
   /* ========== Panorama Vehicular (KPIs + gráficas + filtros) ========== */
@@ -780,6 +845,10 @@
     padding-bottom: 6px; border-bottom: 1px solid var(--color-border);
   }
   .info-section-title:first-child { margin-top: 0; }
+  /* Ficha de datos (dos columnas) en celular: una, para que los valores largos no se corten */
+  @media (max-width: 640px) {
+    .info-grid { grid-template-columns: minmax(0, 1fr); }
+  }
 
   /* Ver/Editar/Eliminar por fila en las tablas de solo lectura de una ficha
      (pestañas de Verificaciones/Inspecciones/Sensor/Hologramas/Incidencias dentro
@@ -848,6 +917,11 @@
   .toast-error { border-left-color: var(--color-danger); }
   .toast-error .toast-icon { color: var(--color-danger); }
   .toast-cargando { border-left-color: var(--color-accent); }
+  /* Celular: el aviso va a lo ancho (con su ancho mínimo de 260px más el margen se salía de la pantalla) */
+  @media (max-width: 640px) {
+    #toast-container { top: 10px; left: 10px; right: 10px; }
+    .toast { min-width: 0; max-width: none; }
+  }
   .loading-inline {
     grid-column: 1 / -1; display: flex; align-items: center; gap: 10px;
     color: var(--color-text-muted); font-size: 13px; padding: 14px 4px;
@@ -886,6 +960,33 @@
   }
   .modal-close:hover { background: var(--color-bg); }
 
+  /* Ventanas en celular — dos formas, según el tamaño que la ventana pide en escritorio:
+     · .modal-card (chica: confirmar, avisos, una sola pregunta): hoja que sube desde abajo, a lo
+       ancho, con su propio scroll si no cabe.
+     · .modal-card-wide (captura o consulta de un registro): pantalla completa. El encabezado se
+       queda arriba y solo desplaza el cuerpo (.modal-form-scroll); lo que va después (los botones
+       de guardar) queda siempre a la vista abajo. Si el cuerpo no está directo en la ventana o en
+       su <form>, desplaza la ventana entera: nunca queda contenido sin poder verse.
+     Un módulo no necesita nada propio para esto: basta con usar estas clases. */
+  @media (max-width: 640px) {
+    .modal-backdrop { padding: 0; align-items: flex-end; }
+    .modal-card {
+      max-width: none; max-height: 92vh; max-height: 92dvh; overflow-y: auto;
+      border-radius: 16px 16px 0 0; padding: 20px 16px 16px;
+    }
+    .modal-card-wide {
+      height: 100vh; height: 100dvh; max-height: none; border-radius: 0;
+      display: flex; flex-direction: column;
+    }
+    .modal-card-wide > .modal-header { flex: 0 0 auto; }
+    .modal-card-wide > form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+    .modal-card-wide > .modal-form-scroll, .modal-card-wide > form > .modal-form-scroll {
+      flex: 1 1 auto; min-height: 0; max-height: none; overflow-y: auto;
+    }
+    .modal-close { width: 40px; height: 40px; flex-shrink: 0; }
+    .modal-close .ico { width: 18px; height: 18px; }
+  }
+
   /* Insignia "Calificación" con barra de progreso — cabecera de los
      formularios que generan una calificación en vivo (Arqueo: 17
      reactivos de auditoría). Muestra cuántos puntos ya se calificaron,
@@ -905,10 +1006,21 @@
   :root[data-theme="dark"] .calif-badge-barra { background: rgba(255,255,255,.12); }
   .calif-badge-barra-fill { height: 100%; border-radius: 999px; background: var(--color-primary); transition: width .2s ease; }
   .calif-badge-nota { font-size: 11px; color: var(--color-text-muted); white-space: nowrap; }
+  /* Celular: junto al título lo dejaba en una columna de 90px; baja a su propio renglón, a lo
+     ancho (en una ventana, debajo del título y de la X). Las cabeceras la traen con margin en línea. */
+  @media (max-width: 640px) {
+    .form-card-header, .modal-header { flex-wrap: wrap; }
+    /* El título se queda en el renglón del ícono (o de la X) y toma lo que sobra */
+    .form-card-header > :not(.form-card-icon):not(.calif-badge),
+    .modal-header > :not(.modal-close):not(.calif-badge) { flex: 1 1 0; min-width: 0; }
+    .form-card-header > .calif-badge, .modal-header > .calif-badge {
+      order: 3; flex: 1 1 100%; min-width: 0; margin-left: 0 !important; margin-right: 0 !important; align-items: stretch;
+    }
+  }
 
   /* ========== Login ========== */
   #login-screen {
-    min-height: 100vh; width: 100%; position: relative; background: var(--color-bg);
+    min-height: 100vh; min-height: 100dvh; width: 100%; position: relative; background: var(--color-bg);
     display: flex; flex-direction: column;
   }
 
@@ -1078,14 +1190,14 @@
     text-align: center; font-size: 11.5px; color: var(--color-text-muted); margin-top: 18px;
   }
 
-  @media (max-width: 900px) {
+  @media (max-width: 1024px) {
     .login-grid { grid-template-columns: 1fr; }
     .login-hero { min-height: 340px; }
     .login-hero-content { padding: 32px 24px; }
     .login-hero-title { font-size: 24px; }
     .login-features { grid-template-columns: repeat(2, 1fr); }
   }
-  @media (max-width: 420px) {
+  @media (max-width: 640px) {
     .login-form-card { padding: 28px 20px; }
   }
 

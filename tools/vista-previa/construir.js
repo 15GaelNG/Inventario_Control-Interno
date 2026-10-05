@@ -24,11 +24,24 @@ function resolver(archivo) {
     .replace(/<\?[\s\S]*?\?>/g, '');   // cualquier otro scriptlet de Apps Script
 }
 
+/**
+ * La etiqueta viewport no está en Index.html: la agrega el servidor (Router.gs, addMetaTag).
+ * Sin ella el celular simulado dibuja la página a 980px y la achica, y la vista previa no
+ * muestra cómo se ve de verdad. Se toma de Router.gs para que nunca se desfasen.
+ */
+function viewportDelServidor() {
+  const router = fs.readFileSync(path.join(RAIZ, 'Router.gs'), 'utf8');
+  const m = /addMetaTag\('viewport',\s*'([^']+)'\)/.exec(router);
+  if (!m) throw new Error('No encontré addMetaTag(\'viewport\', …) en Router.gs');
+  return m[1];
+}
+
 function construir() {
   let pagina = resolver('html/Index');
   const falsos = fs.readFileSync(path.join(__dirname, 'datos-falsos.js'), 'utf8');
   // El servidor falso va ANTES que todo: api.html usa google.script.run al cargar
-  pagina = pagina.replace(/<head>/i, '<head>\n<script>\n' + falsos + '\n</script>');
+  pagina = pagina.replace(/<head>/i, '<head>\n<meta name="viewport" content="' + viewportDelServidor() + '">' +
+    '\n<script>\n' + falsos + '\n</script>');
   fs.mkdirSync(SALIDA, { recursive: true });
   fs.writeFileSync(path.join(SALIDA, 'index.html'), pagina);
   return path.join(SALIDA, 'index.html');

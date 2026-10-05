@@ -69,6 +69,26 @@ uno documenta su uso al inicio del archivo y tiene su prueba en `tests/`.
 - Un componente nuevo se incluye en `src/html/Index.html` antes de los módulos y
   componentes que lo usan (`campo-auto` va antes que `formulario`).
 
+## Responsivo (celular y tableta)
+
+- **Dos cortes, nada más:** celular `@media (max-width: 640px)` y tableta
+  `@media (max-width: 1024px)`; "con el dedo" es `(pointer: coarse)`. En JS se pregunta con
+  `Pantalla.esCelular() / esAngosta() / esTactil() / alCambiar(fn)`
+  (`componentes/pantalla.html`), nunca con `matchMedia` directo. `source-contracts` falla con
+  otro ancho o con `matchMedia` fuera de Pantalla (Líneas todavía está en su lista de pendientes).
+- **Lo responsivo vive en el componente**, no en el módulo: una ventana chica (`.modal-card`)
+  sube como hoja en celular y una ancha (`.modal-card-wide`) ocupa la pantalla; los KPIs
+  (`.stat-row`, `.kpi-chips`) se deslizan; Formulario pega sus botones abajo; DataTable trae
+  Tabla / Tarjetas (título = `etiquetaFila`; `cfg.tarjeta` para cambiarlo). Un módulo nuevo que
+  use estas piezas ya es responsivo sin CSS propio.
+- **Rejilla de campos:** `class="form-rejilla" data-columnas="3"` (3 en escritorio, 2 en
+  tableta, 1 en celular). Nunca `grid-template-columns` en línea en una vista.
+- **Deslizar de lado** solo lo que está hecho para eso (tabla, KPIs, pestañas); una caja nueva
+  que deba hacerlo lleva `data-scroll-x`.
+- **Revisar:** `node tools/vista-previa/capturar.js todas --matriz --revisar` toma cada escena
+  en 390 / 768 / 1024 táctiles y falla si algo se sale de lo ancho. Las capturas quedan en
+  `tools/vista-previa/salida/`.
+
 ## Flujo de trabajo
 
 - Rama de trabajo: `jorge`. Nunca hacer push a `master` sin que se pida

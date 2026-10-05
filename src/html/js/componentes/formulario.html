@@ -24,13 +24,13 @@
   .form-uno .field, .form-medio .field, .form-ancho .field { margin-bottom: 16px; }
   .form-campos label { display: block; margin-bottom: 4px; }
   .form-completo { grid-column: 1 / -1; }
-  @media (max-width: 620px) { .form-campos { --form-columnas: 1; } }
+  @media (max-width: 640px) { .form-campos { --form-columnas: 1; } }
 
   /* Dos paneles: captura a la izquierda, contexto a la derecha.
      Estirar los campos a todo lo ancho se lee peor; el espacio sobrante se aprovecha
      mejor con la información que el usuario necesita TENER A LA VISTA mientras captura
-     (la ficha de la unidad y lo que ya lleva capturado). El panel es un extra: por
-     debajo de 1000px se va arriba del formulario y todo queda en una columna. */
+     (la ficha de la unidad y lo que ya lleva capturado). El panel es un extra: en tableta
+     y celular (≤1024px) se va arriba del formulario y todo queda en una columna. */
   /* El panel crece un poco en pantallas grandes, pero nunca se lleva el protagonismo.
      align-items: stretch hace que la columna del panel mida lo mismo que la de captura,
      y la ficha crece para llenarla: una tarjeta chaparra junto a un formulario alto se ve
@@ -53,7 +53,7 @@
   .form-panel-seccion { margin-bottom: 14px; }
   .form-panel-vacio { font-size: 12.5px; color: var(--color-text-muted); }
   .form-resumen-panel { display: grid; gap: 8px; }
-  @media (max-width: 1000px) {
+  @media (max-width: 1024px) {
     .form-doble { grid-template-columns: 1fr; }
     .form-panel { order: -1; margin-bottom: 8px; }
     .form-panel .form-ficha { flex: 0 0 auto; }   /* apilado no hay alto que llenar */
@@ -129,9 +129,12 @@
   .form-paso-chip.activo .form-paso-num { background: var(--color-accent); color: #fff; }
   /* Celular: los pasos que no son el actual muestran solo su número (o la palomita), así
      caben en un renglón; con 8 pasos con nombre eran 4 renglones antes del primer campo.
-     El nombre sigue ahí (font-size 0), así que un lector de pantalla lo lee igual. */
-  @media (max-width: 600px) {
-    .form-pasos { flex-wrap: nowrap; }
+     El nombre sigue ahí (font-size 0), así que un lector de pantalla lo lee igual. Si aun así
+     no caben (pantallas de 320px), la fila se desliza de lado en vez de cortar el último. */
+  @media (max-width: 640px) {
+    .form-pasos { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+    .form-pasos::-webkit-scrollbar { display: none; }
+    .form-pasos > * { flex-shrink: 0; }
     .form-paso-chip:not(.activo) { font-size: 0; gap: 0; padding: 4px; }
     .form-paso-chip .form-paso-num { font-size: 11px; flex-shrink: 0; }
     .form-paso-chip.activo { white-space: nowrap; }
@@ -171,6 +174,24 @@
   .form-acciones button { display: inline-flex; align-items: center; gap: 7px; }
   .form-nota { font-size: 11.5px; color: var(--color-text-muted); margin: 0 0 14px; }
   .form-nota::before { content: "*"; color: var(--color-danger); font-weight: 700; margin-right: 3px; }
+
+  /* Celular: los botones (Anterior / Siguiente / Guardar) se quedan pegados abajo de la pantalla
+     mientras se captura, en vez de quedar al final de un formulario largo. Sticky funciona igual
+     dentro de la vista o dentro de una ventana a pantalla completa (la caja que desplaza).
+     Tapa también los 16px de cada lado (el relleno de .card y .modal-card en celular) con
+     sombras sólidas en vez de márgenes negativos: una sombra no agranda nada, así que dentro de
+     una caja con su propio scroll (Arqueos) no la hace deslizarse de lado. */
+  @media (max-width: 640px) {
+    .form-acciones {
+      position: sticky; bottom: 0; z-index: 2; margin-top: 8px; padding: 10px 0;
+      background: var(--color-surface);
+      box-shadow: -16px 0 0 var(--color-surface), 16px 0 0 var(--color-surface),
+        0 -1px 0 var(--color-border), -16px -1px 0 var(--color-border), 16px -1px 0 var(--color-border);
+    }
+    .form-acciones-pasos { flex-wrap: wrap; }
+    .form-acciones-pasos > button { flex: 1 1 0; min-width: 0; justify-content: center; }
+    .form-acciones-pasos .form-cuenta { flex: 1 1 100%; order: -1; margin: 0; text-align: center; }
+  }
 </style>
 
 <script>
