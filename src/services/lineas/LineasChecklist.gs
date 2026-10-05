@@ -31,9 +31,15 @@ const LineasChecklist = (function () {
     MODEM_Y_BANDA: (t) => t.indexOf('MODEM') >= 0 && t.indexOf('BANDA ANCHA') >= 0,
   };
 
+  /**
+   * Los tipos básicos (EQUIPO + SIM BASICO, LINEA BASICA; 4-oct) no existían en el AppSheet: para sus reglas valen
+   * como EQUIPO + SIM y LINEA. Sin esto la inspección del NUCO 0726 solo mostraba unos cuantos puntos.
+   */
+  const tipoBase = (tipo) => String(tipo || '').trim().toUpperCase().replace(/ BASIC[OA]$/, '');
+
   function cumple(codigo, tipo) {
     const f = CONDICIONES[codigo];
-    return !!f && f(String(tipo || '').trim().toUpperCase());
+    return !!f && f(tipoBase(tipo));
   }
 
   // Orden y títulos del formulario del AppSheet (TITULO_* son encabezados de página).
@@ -144,5 +150,5 @@ const LineasChecklist = (function () {
     return (n > 1 ? n : n * 100).toFixed(2) + '%';
   }
 
-  return { ESCALAS, CONDICIONES: Object.keys(CONDICIONES), cumple, puntos, secciones, seccionesVisibles, calificacion, calificacionTexto };
+  return { ESCALAS, CONDICIONES: Object.keys(CONDICIONES), tipoBase, cumple, puntos, secciones, seccionesVisibles, calificacion, calificacionTexto };
 })();

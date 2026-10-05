@@ -642,7 +642,8 @@
       if (cond === undefined || cond === null || cond === '' || cond === 'SIEMPRE') return true;
       if (cond === 'NUNCA') return false;
       const t = String((valores && valores.TIPO !== undefined ? valores.TIPO : tipo) || '').trim().toUpperCase();
-      if (typeof cond === 'string') return !!CONDICIONES_APPSHEET[cond] && CONDICIONES_APPSHEET[cond](t);
+      // Los tipos básicos no existían en el AppSheet: para sus reglas valen como EQUIPO + SIM y LINEA (LineasChecklist.tipoBase)
+      if (typeof cond === 'string') return !!CONDICIONES_APPSHEET[cond] && CONDICIONES_APPSHEET[cond](t.replace(/ BASIC[OA]$/, ''));
       if (cond.y) return cond.y.every((c) => cumpleCondicion(c, tipo, valores, ctx));
       if (cond.tipoLleno) return !!t;
       if (cond.tipoEn) return cond.tipoEn.indexOf(t) >= 0;
