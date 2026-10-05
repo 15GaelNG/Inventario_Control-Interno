@@ -16,6 +16,12 @@ const LineasPdf = (function () {
     RESPONSIVA_CELULAR: '1EfSbZaQwl6c3ylQ1Z60gxjOeIXAqZ7g1_IN-qfw-pMc',
   };
 
+  // Página del PDF como la tarea MakeDoc del AppSheet (puntos). "Task for GENERAR PDF": carta, márgenes personalizados
+  // en 0; con los márgenes del documento la responsiva salía en 3 hojas en vez de 2.
+  const PAGINAS = {
+    [PLANTILLAS.RESPONSIVA_CELULAR]: { ancho: 612, alto: 792, margen: 0 },
+  };
+
   // ---------------- Evaluador de expresiones AppSheet (subconjunto) ----------------
 
   function evaluarExpresion_(texto, registro) {
@@ -195,6 +201,11 @@ const LineasPdf = (function () {
     const copia = DriveApp.getFileById(plantillaId).makeCopy('TMP ' + nombrePdf, carpeta);
     try {
       const doc = DocumentApp.openById(copia.getId());
+      const pagina = PAGINAS[plantillaId];
+      if (pagina) {
+        doc.getBody().setPageWidth(pagina.ancho).setPageHeight(pagina.alto)
+          .setMarginTop(pagina.margen).setMarginBottom(pagina.margen).setMarginLeft(pagina.margen).setMarginRight(pagina.margen);
+      }
       const secciones = [doc.getBody(), doc.getHeader(), doc.getFooter()].filter(Boolean);
       secciones.forEach((seccion) => {
         procesarBloquesIf_(seccion, registro, avisos);
@@ -328,12 +339,25 @@ const LineasPdf = (function () {
       } catch (e) {
         avisos.push(e.message);
       }
-      if (valor === '') {
-        m.elemento.deleteText(m.inicio, m.fin);
-      } else {
-        m.elemento.deleteText(m.inicio, m.fin);
+      // El valor lleva el formato de la etiqueta (fondo azul, negritas…): insertado solo, tomaba el del carácter vecino
+      const formato = formatoDe_(m.elemento, m.inicio);
+      m.elemento.deleteText(m.inicio, m.fin);
+      if (valor !== '') {
         m.elemento.insertText(m.inicio, valor);
+        if (formato) m.elemento.setAttributes(m.inicio, m.inicio + valor.length - 1, formato);
       }
+    }
+  }
+
+  /** Formato del texto en `offset` sin los atributos vacíos (un null en setAttributes no debe borrar nada). */
+  function formatoDe_(elemento, offset) {
+    try {
+      const todos = elemento.getAttributes(offset);
+      const formato = {};
+      Object.keys(todos).forEach((k) => { if (todos[k] !== null && todos[k] !== undefined) formato[k] = todos[k]; });
+      return Object.keys(formato).length ? formato : null;
+    } catch (e) {
+      return null;
     }
   }
 
