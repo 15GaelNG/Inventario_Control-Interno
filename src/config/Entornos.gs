@@ -66,6 +66,11 @@ const ENTORNOS = {
     // NUCOS de producción. Las carpetas de los demás módulos siguen en las Script Properties del DEV.
     LINEAS_DRIVE_APPSHEET: '1tq-jCsFgdsdMAsQqm1WTHdynQkAN05r5',
     LINEAS_DRIVE_NUCOS: '1tq-jCsFgdsdMAsQqm1WTHdynQkAN05r5',
+
+    // Líneas lee las hojas nuevas (LINEAS, EQUIPOS, ASIGNACIONES…) y LINEAS TELEFONICAS ya no existe en la copia, igual
+    // que en producción (allá son Script Properties: LineasLectura)
+    LINEAS_LECTURA: 'ESTRUCTURA',
+    LINEAS_HOJA_VIEJA_RETIRADA: '2026-10-04T00:00:00.000Z',
   },
 };
 
