@@ -432,14 +432,19 @@ const CapitalHumano = (function () {
   }
 
   /**
-   * Colaboradores para autocompletar "Responsable" en otros módulos (ej. Vehículos: al
-   * elegir el nombre, se sugieren Departamento y No. de empleado). Son los renglones de
-   * COLABORADORES ACTUALIZADO tal cual, sin pasar por identificar()/PERSONAS -- no hace
-   * falta resolver quién es quién para esto, solo sugerir. Por eso un mismo nombre puede
-   * salir más de una vez (otro departamento tras un cambio de área, o un número
-   * reutilizado con otro departamento): se desduplica solo nombre+departamento exacto, no
-   * por persona. Si el responsable que se captura no aparece aquí (alguien nuevo que CH
-   * todavía no cargó), el campo se queda como texto libre -- no bloquea nada.
+   * Colaboradores para autocompletar "Responsable"/"Nombre completo" en otros módulos (ej.
+   * Vehículos y Uber: al elegir el nombre, se sugieren Departamento, Puesto, Sede, Oficina-
+   * Desarrollo, Correo y No. de empleado). Son los renglones de COLABORADORES ACTUALIZADO tal
+   * cual, sin pasar por identificar()/PERSONAS -- no hace falta resolver quién es quién para
+   * esto, solo sugerir. Por eso un mismo nombre puede salir más de una vez (otro departamento
+   * tras un cambio de área, o un número reutilizado con otro departamento): se desduplica solo
+   * nombre+departamento exacto, no por persona. Si el responsable que se captura no aparece
+   * aquí (alguien nuevo que CH todavía no cargó), el campo se queda como texto libre -- no
+   * bloquea nada.
+   *
+   * A propósito NO trae Razón social (es del contrato -- vehículo/línea/caja chica -- no de la
+   * persona, y puede variar entre uno y otro) ni Teléfono (SENSIBLES lo excluye de lo que se
+   * pega del CH al libro de la app, por privacidad): esos dos se quedan siempre a mano.
    */
   function listarColaboradores(token) {
     Auth.validarSesion(token);
@@ -460,6 +465,10 @@ const CapitalHumano = (function () {
         NOMBRE: nombre,
         NO_EMPLEADO: String(f['No EMPLEADO'] || '').trim(),
         DEPARTAMENTO: departamento,
+        PUESTO: String(f['PUESTO'] || '').trim(),
+        SEDE: String(f['SEDE'] || '').trim(),
+        OFICINA: String(f['OFICINA/DESARROLLO'] || '').trim(),
+        CORREO: String(f['CORREO EMPRESARIAL'] || '').trim(),
       });
     });
     return resultado.sort((a, b) => a.NOMBRE.localeCompare(b.NOMBRE));
