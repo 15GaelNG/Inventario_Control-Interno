@@ -432,10 +432,14 @@ test('experiencia de uso: menú en celular, ficha en pestañas y formularios por
   const movil = read('src/html/shell-movil.html');
   const lineas = read('src/html/js/lineas.html');
   const estilos = read('src/html/lineas-estilos.html');
-  // Menú en celular: archivo aparte, incluido al final
+  // Menú en celular y tableta: archivo aparte, incluido al final, con los cortes del sistema (Pantalla)
   assert.match(index, /include\('html\/shell-movil'\)/);
-  assert.match(movil, /@media \(max-width: 900px\)/);
+  assert.match(movil, /@media \(max-width: 1024px\)/);
+  assert.match(movil, /Pantalla\.alCambiar\(/);
   assert.match(movil, /shell-menu-abierto/);
+  // Panel cerrado = fuera del foco del teclado; el tema baja al panel en celular
+  assert.match(movil, /sidebar\.inert = Pantalla\.esAngosta\(\) && !abierto\(\)/);
+  assert.match(movil, /className = 'shell-tema-panel'/);
   // Ficha: resumen rápido + pestañas; Documentos con indicadores y tabla, como Historial
   assert.match(lineas, /function fichaEnPestanas\(general, detalles, conDocumentos\)/);
   assert.match(lineas, /class="ln-resumen-rapido"/);
@@ -1731,9 +1735,6 @@ test('responsivo: solo los cortes del sistema (640 / 1024) y matchMedia solo en 
     'src/html/js/componentes/formulario.html': { cortes: 3, matchMedia: 0 },
     'src/html/js/lineas.html': { cortes: 0, matchMedia: 2 },
     'src/html/lineas-estilos.html': { cortes: 17, matchMedia: 0 },
-    'src/html/notificaciones.html': { cortes: 1, matchMedia: 0 },
-    'src/html/shell-movil.html': { cortes: 2, matchMedia: 1 },
-    'src/html/styles.html': { cortes: 3, matchMedia: 0 },
     'src/html/views/relaciones.html': { cortes: 1, matchMedia: 0 },
     'src/html/views/usuarios.html': { cortes: 1, matchMedia: 0 },
   };
