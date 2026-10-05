@@ -188,8 +188,9 @@ const LineasPdf = (function () {
    *   registro: { 'COLUMNA APPSHEET': valor, ... }
    *   imagenes: { 'FIRMA RESPONSABLE': Blob, ... }  (etiquetas que se sustituyen por imagen)
    * Devuelve { id, nombre, url, avisos[] }.
+   * `sinCompartir`: no abrir el PDF al dominio (en NUCOS cada archivo toma los permisos de su carpeta).
    */
-  function generarPdfDesdePlantilla(plantillaId, registro, imagenes, carpeta, nombrePdf) {
+  function generarPdfDesdePlantilla(plantillaId, registro, imagenes, carpeta, nombrePdf, sinCompartir) {
     const avisos = [];
     const copia = DriveApp.getFileById(plantillaId).makeCopy('TMP ' + nombrePdf, carpeta);
     try {
@@ -203,7 +204,7 @@ const LineasPdf = (function () {
       const pdf = carpeta.createFile(copia.getAs('application/pdf').setName(nombrePdf));
       // Sin esto, el PDF solo lo puede ver la cuenta que despliega la app
       // (quien lo creó) — nadie más puede abrir el link, aunque sea válido.
-      pdf.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
+      if (!sinCompartir) pdf.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
       return { id: pdf.getId(), nombre: pdf.getName(), url: pdf.getUrl(), avisos: avisos };
     } finally {
       copia.setTrashed(true); // la copia temporal es nuestra; la plantilla original no se toca

@@ -239,10 +239,14 @@ const TelefoniaService = (function () {
       console.warn('evidencias NUCOS ' + id + ': ' + e.message); // sin acceso a NUCOS: solo lo de la hoja
     }
     const listas = { INSPECCION: ev.inspecciones, RESPONSIVA: ev.responsivas };
+    // Las capturadas en el sistema ya tienen su carpeta en NUCOS (la de "INSP DD MM" o su FOTOS): no se repiten
     const conCarpeta = {};
-    ev.inspecciones.concat(ev.responsivas).forEach((d) => { if (d.drive && d.drive.carpetaId) conCarpeta[d.drive.carpetaId] = true; });
+    ev.inspecciones.concat(ev.responsivas).forEach((d) => {
+      if (d.drive && d.drive.carpetaId) conCarpeta[d.drive.carpetaId] = true;
+      if (d.drive && d.drive.fotosCarpetaId) conCarpeta[d.drive.fotosCarpetaId] = true;
+    });
     nucos.forEach((n) => {
-      if (conCarpeta[n.doc.drive.carpetaId]) return;
+      if (conCarpeta[n.doc.drive.carpetaId] || (n.doc.drive.fotosCarpetaId && conCarpeta[n.doc.drive.fotosCarpetaId])) return;
       const lista = listas[n.tipo];
       const mismoDia = lista.filter((d) => !(d.drive && d.drive.carpetaId) && d.fecha && dia_(d.fecha) === dia_(n.doc.fecha))[0];
       if (mismoDia) mismoDia.drive = n.doc.drive;
@@ -447,7 +451,7 @@ const TelefoniaService = (function () {
   function fotosInspeccion(token, id, accion) {
     const sesion = operar_(token);
     if (accion !== 'preparar' && accion !== 'actualizar') throw new Error('Acción inválida.');
-    // Inspección de la carpeta NUCOS: se valida que la carpeta sea de NUCOS y se pasa armada (las fotos van a la app)
+    // Inspección de la carpeta NUCOS: se valida que la carpeta sea de NUCOS y se pasa armada (las fotos van a su FOTOS)
     const externa = /^drive_/.test(String(id)) ? inspeccionNucos_(String(id).slice(6)) : null;
     if (/^drive_/.test(String(id)) && !externa) throw new Error('No existe la inspección ' + id);
     return LineasUtil.paraCliente(LineasCaptura.fotosInspeccion(id, accion, sesion.correo, externa));
@@ -478,12 +482,12 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente(LineasCaptura.contextoResponsiva(ref, usuarioOperacion_(sesion), puedeVerSecretos_(sesion)));
   }
 
-  /** Crea la carpeta de evidencia en Drive (NUCOS) para una inspección o responsiva nueva. */
+  /** Crea la carpeta de evidencia en Drive (NUCOS, si el registro tiene NUCO) para una inspección nueva. */
   function prepararEvidencia(token, tipo, ref, idRegistro) {
     const sesion = operar_(token);
     if (tipo !== 'INSPECCION' && tipo !== 'RESPONSIVA') throw new Error('Tipo de evidencia inválido.');
-    LineasCaptura.objetivo(ref); // valida que el equipo o la línea existan
-    return LineasUtil.paraCliente(LineasEvidencias.prepararCarpetaEvidencia(tipo, idRegistro, sesion.correo));
+    const obj = LineasCaptura.objetivo(ref); // valida que el equipo o la línea existan
+    return LineasUtil.paraCliente(LineasEvidencias.prepararCarpetaEvidencia(tipo, idRegistro, sesion.correo, obj.reg.nuco, new Date()));
   }
 
   /** Sube una foto (base64) a la carpeta de fotos ya preparada. Las firmas llegan al guardar. */

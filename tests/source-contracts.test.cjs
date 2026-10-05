@@ -641,7 +641,7 @@ test('Gestión de Activos abre al colaborador en el panel lateral, no al final d
   assert.doesNotMatch(read('src/html/views/lineas/lineas-gestion-activos.html'), /lnga-resultado/);
 });
 
-test('Drive: todo en la carpeta de la app AppSheet con sus rutas; NUCOS de producción solo se lee', () => {
+test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUCO se guardan en NUCOS', () => {
   // Servidor: resuelve "TABLA_Files_/archivo" caminando desde la carpeta de la app y guarda con el nombre del AppSheet
   const creados = [];
   const carpeta = (id, sub, archivos) => ({
@@ -677,19 +677,28 @@ test('Drive: todo en la carpeta de la app AppSheet con sus rutas; NUCOS de produ
   // Las dos carpetas: la de la app (pruebas "PruebasCONTROLVEHICYTELEF-172665033") y NUCOS de producción
   assert.equal(LA.carpetaAppSheetId(), '1FsC5mloJNhi_TR7pBX1KMEjUZfN_M9OM');
   assert.equal(LA.carpetaNucosId(), '12SRBi1nZlIzfNx0d2y1fAtzOydA2QrT-');
-  assert.equal(typeof LA.escribeEnProduccion, 'undefined');   // nunca se escribe en NUCOS
+  assert.equal(typeof LA.escribeEnProduccion, 'undefined');
 
   // Rutas del AppSheet al guardar: PDF (acciones GUARDAR de sus bots), desechos y archivos de LINEAS
   const captura = read('src/services/lineas/LineasCaptura.gs');
   assert.match(captura, /carpeta: 'INSPECCIONES_Files_', nombre: \(id\) => 'INSPECCION - ' \+ id \+ '\.pdf', columna: 'FORMATO INSPECCIONES LINEAS'/);
   assert.match(captura, /carpeta: 'Files', nombre: \(id\) => 'RESPONSIVA' \+ id \+ '\.pdf', columna: 'FORMATO RESPONSIVA'/);
-  assert.match(captura, /ligarPdf_\(tabla, destino\.columna, ids, pdf, destino\.carpeta \+ '\/' \+ nombre\)/);
-  // Fotos de inspección en la carpeta de la app; cancelar solo borra la carpeta que creó el mismo usuario
+  // Con NUCO, el PDF va a NUCOS ("INSP DD MM" / "RESP DD MM") y la hoja guarda su enlace de Drive; sin NUCO, la ruta del AppSheet
+  assert.match(captura, /const ruta = d\.enNucos \? 'https:\/\/drive\.google\.com\/file\/d\/' \+ pdf\.id \+ '\/view' : destino\.carpeta \+ '\/' \+ nombre;/);
+  assert.match(captura, /ligarPdf_\(tabla, destino\.columna, ids, pdf, ruta\)/);
+  const arch = read('src/services/lineas/LineasArchivos.gs');
+  assert.match(arch, /ramas = \['INSPECCIONES', anio, CUATRIMESTRES_\[Math\.floor\(\(mes - 1\) \/ 4\)\], MESES_\[mes - 1\]\];/);
+  assert.match(arch, /carpetaUnica_\(ramas\.reduce\(\(c, nombre\) => subcarpeta_\(c, nombre\), raizNuco\), 'INSP ' \+ ddmm\);/);
+  assert.match(arch, /ramas = \['CARTA RESPONSIVA', anio\];/);
+  assert.match(arch, /nombrePdf: \(tipo === 'INSPECCION' \? 'INSP ' : 'RESP '\) \+ n4 \+ ' ' \+ ddmm \+ '\.pdf'/);
+  // Solo se escribe en la carpeta de la app o en NUCOS
+  assert.match(arch, /if \(!carpetaId \|\| !\(estaDentroDe\(carpetaId, carpetaAppSheetId\(\)\) \|\| enNucos\(carpetaId\)\)\)/);
+  // Fotos de inspección: en NUCOS si hay NUCO, si no en la carpeta de la app; cancelar solo borra la carpeta que creó el mismo usuario
   const ev = read('src/services/lineas/LineasEvidencias.gs');
   assert.match(ev, /const CARPETA_FOTOS = 'INSPECCIONES LINEAS_Images';/);
+  assert.match(ev, /c = LineasArchivos\.carpetaEvidenciaNuco\('INSPECCION', nuco, fecha \|\| new Date\(\)\);/);
   assert.match(ev, /carpetaUnica_\(LineasArchivos\.carpetaDeApp\(CARPETA_FOTOS\), 'FOTOS ' \+ id\)/);
   assert.match(ev, /if \(!carpetaId \|\| !cache\.get\(claveBorrador_\(correo, carpetaId\)\)\) return \{ ok: false \};/);
-  assert.match(read('src/services/lineas/LineasArchivos.gs'), /if \(!carpetaId \|\| !estaDentroDe\(carpetaId, carpetaAppSheetId\(\)\)\)/);
   assert.match(read('src/services/lineas/LineasUtil.gs'), /try \{ return LineasArchivos\.carpetasNucos\(\); \}/);
   assert.match(read('src/ClientApi.gs'), /function apiLineasArchivo\(token, ruta\)/);
 

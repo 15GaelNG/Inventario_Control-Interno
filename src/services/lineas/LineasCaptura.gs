@@ -14,9 +14,11 @@
  *   - Responsiva  → fila en RESPONSIVAS LINEAS; bot MAYUSCULAS (IDENTIFICACION, OBSERVACIONES).
  *                   Del registro solo toca el COLOR del equipo (decisión del usuario, 3-oct).
  *   - Ambos       → PDF con las plantillas del AppSheet, después de guardar (generarPdf).
- * PDF en la carpeta de la app AppSheet, con sus mismas rutas (LineasArchivos):
- *   INSPECCIONES_Files_/INSPECCION - <ID>.pdf   (acción GUARDAR del bot PDF de inspecciones)
- *   Files/RESPONSIVA<ID>.pdf                    (acción GUARDAR del bot PDF RESPONSIVA)
+ * PDF en NUCOS (desde el corte a producción, 2-oct-2026), igual que los que sube el área a mano:
+ *   <NUCO>/INSPECCIONES/<AÑO>/<N> CUATRIMESTRE/<MES>/INSP DD MM/INSP <NUCO> DD MM.pdf   (junto a su FOTOS)
+ *   <NUCO>/CARTA RESPONSIVA/<AÑO>/RESP DD MM/RESP <NUCO> DD MM.pdf
+ * La columna File de la hoja guarda el enlace de Drive del PDF. Un registro sin NUCO sigue con las rutas del
+ * AppSheet en la carpeta de la app: INSPECCIONES_Files_/INSPECCION - <ID>.pdf y Files/RESPONSIVA<ID>.pdf.
  * Las firmas NO se guardan como archivos (acuerdo del 18-sep): viajan en memoria para el PDF y las columnas
  * FIRMA quedan vacías. En AppSheet eran imágenes en <TABLA>_Images.
  * Del sistema nuevo se conservan: fotos opcionales de la inspección (INSPECCIONES LINEAS_Images/FOTOS <ID>),
@@ -552,6 +554,36 @@ const LineasCaptura = (function () {
     }
   }
 
+  /**
+   * Carpeta y nombre del PDF:
+   *   - la carpeta de NUCOS que ya tiene la captura (la de sus fotos: "INSP DD MM");
+   *   - si no tiene y el registro tiene NUCO, una nueva en NUCOS del día de la captura (se liga en APP_EVIDENCIAS);
+   *   - sin NUCO, la carpeta de la app con el nombre del AppSheet.
+   */
+  function destinoPdf_(tipo, fila, ev, id) {
+    const nuco = LineasUtil.nuco4(LineasUtil.col(fila, 'NUCO'));
+    const prefijo = tipo === 'INSPECCION' ? 'INSP ' : 'RESP ';
+    if (ev.carpetaId && LineasArchivos.enNucos(ev.carpetaId)) {
+      const carpeta = DriveApp.getFolderById(ev.carpetaId);
+      const m = carpeta.getName().match(/^(?:INSP|RESP)\s+(\d{1,2})\s+(\d{1,2})/i);
+      const ddmm = m ? m[1] + ' ' + m[2] : Utilities.formatDate(ev.fecha || new Date(), ZONA, 'dd MM');
+      return { carpeta: carpeta, nombre: prefijo + (nuco || 'SIN NUCO') + ' ' + ddmm + '.pdf', enNucos: true, nuco: nuco };
+    }
+    if (nuco) {
+      const fr = tipo === 'INSPECCION' ? LineasUtil.col(fila, 'FECHA DE REGISTRO') : null;
+      const fecha = fr instanceof Date && !isNaN(fr) ? fr : (ev.fecha || new Date());
+      const c = LineasArchivos.carpetaEvidenciaNuco(tipo, nuco, fecha);
+      if (ev._fila) {
+        LineasDatos.conCandado(() => LineasDatos.actualizarFila(LineasRepo.TAB.APP_EVID, ev._fila,
+          Object.assign({ 'CARPETA_ID': c.carpetaId, 'RUTA': c.ruta, 'ACTUALIZADO_EN': new Date() },
+            c.fotosCarpetaId && !ev.fotosCarpetaId ? { 'FOTOS_CARPETA_ID': c.fotosCarpetaId } : {})));
+      }
+      return { carpeta: DriveApp.getFolderById(c.carpetaId), nombre: c.nombrePdf, enNucos: true, nuco: nuco };
+    }
+    const destino = PDF[tipo];
+    return { carpeta: LineasArchivos.carpetaDeApp(destino.carpeta), nombre: destino.nombre(id), enNucos: false, nuco: null };
+  }
+
   /** Genera (o regenera con forzar=true) el PDF de una inspección o responsiva capturada en el sistema. */
   function generarPdf(tipo, id, forzar, usuario, firmasNuevas) {
     const esInspeccion = tipo === 'INSPECCION';
@@ -572,18 +604,25 @@ const LineasCaptura = (function () {
       throw new Error('La firma temporal ya no está disponible. Captura ' + (esInspeccion ? 'una inspección nueva.' : 'una responsiva nueva.'));
     }
     const destino = PDF[tipo];
-    const nombre = destino.nombre(id);
-    const carpeta = LineasArchivos.carpetaDeApp(destino.carpeta);
-    // Regenerar: el PDF anterior de este registro (mismo nombre) se reemplaza
-    if (forzar) { const viejos = carpeta.getFilesByName(nombre); while (viejos.hasNext()) viejos.next().setTrashed(true); }
+    const d = destinoPdf_(tipo, fila, ev, id);
+    const carpeta = d.carpeta;
+    const nombre = d.nombre;
+    // Regenerar: el PDF anterior de este registro (el ligado y los del mismo nombre) se reemplaza
+    if (forzar) {
+      (ev.pdfs || []).forEach((p) => { try { DriveApp.getFileById(p.id).setTrashed(true); } catch (e) { /* ya no existe */ } });
+      const viejos = carpeta.getFilesByName(nombre);
+      while (viejos.hasNext()) viejos.next().setTrashed(true);
+    }
     const imagenes = esInspeccion
       ? { 'FIRMA RESPONSABLE': imagen('responsable', 'FIRMA RESPONSABLE', 'firma-responsable.png'), 'FIRMA INSPECTOR': imagen('inspector', 'FIRMA INSPECTOR', 'firma-inspector.png'), 'PATRON': imagen('patron', 'PATRON', 'patron.png') }
       : { 'FIRMA RESPONSABLE': imagen('responsable', 'FIRMA RESPONSABLE', 'firma-responsable.png'), 'FIRMA CI': imagen('ci', 'FIRMA CI', 'firma-ci.png'), 'CONTRASEÑA': imagen('patron', 'CONTRASEÑA', 'patron.png') };
     try {
       const pdf = LineasPdf.generarPdfDesdePlantilla(
         esInspeccion ? LineasPdf.PLANTILLAS.INSPECCION_CELULAR : LineasPdf.PLANTILLAS.RESPONSIVA_CELULAR,
-        registroPlantilla_(fila), imagenes, carpeta, nombre);
-      LineasDatos.conCandado(() => ligarPdf_(tabla, destino.columna, ids, pdf, destino.carpeta + '/' + nombre));
+        registroPlantilla_(fila), imagenes, carpeta, nombre, d.enNucos);
+      const ruta = d.enNucos ? 'https://drive.google.com/file/d/' + pdf.id + '/view' : destino.carpeta + '/' + nombre;
+      LineasDatos.conCandado(() => ligarPdf_(tabla, destino.columna, ids, pdf, ruta));
+      if (d.enNucos) LineasArchivos.olvidarNuco(d.nuco);
       return pdf;
     } catch (e) {
       console.error('generarPdf ' + tipo + ' (' + id + '): ' + e.message);
@@ -599,9 +638,9 @@ const LineasCaptura = (function () {
    */
   /**
    * Agregar fotos a una inspección ya registrada. `externa` = la inspección de la carpeta NUCOS ("drive_<carpeta>",
-   * la arma TelefoniaService): NUCOS es de producción y solo se lee, así que sus fotos nuevas van a una carpeta de la
-   * app y se ligan en APP_EVIDENCIAS (ORIGEN NUCOS_FOTOS, ID_REGISTRO = "drive_<carpeta>"). No es ORIGEN DRIVE para
-   * no aparecer como otra inspección en Documentos.
+   * la arma TelefoniaService): sus fotos nuevas van a su carpeta FOTOS en NUCOS y se ligan en APP_EVIDENCIAS (ORIGEN
+   * NUCOS_FOTOS, ID_REGISTRO = "drive_<carpeta>") para el recuento. No es ORIGEN DRIVE para no aparecer como otra
+   * inspección en Documentos. Una de la hoja sin carpeta crea la suya en NUCOS (del día de la inspección).
    */
   function fotosInspeccion(id, accion, correo, externa) {
     const insp = externa || (/^drive_/.test(id) ? null : LineasRepo.leerInspeccion(id));
@@ -614,12 +653,35 @@ const LineasCaptura = (function () {
     let fotosId = fila ? String(fila['FOTOS_CARPETA_ID'] || '') : '';
 
     if (accion === 'preparar') {
-      // Ya tiene carpeta de fotos en la carpeta de la app: se reutiliza
-      if (fotosId && LineasArchivos.estaDentroDe(fotosId, LineasArchivos.carpetaAppSheetId())) {
+      // Ya tiene carpeta de fotos (en NUCOS o en la carpeta de la app): se reutiliza
+      if (fotosId && (LineasArchivos.enNucos(fotosId) || LineasArchivos.estaDentroDe(fotosId, LineasArchivos.carpetaAppSheetId()))) {
         LineasEvidencias.autorizarSubida(correo, [fotosId]);
         return { fotosCarpetaId: fotosId };
       }
-      const c = LineasEvidencias.crearCarpetaFotos(id, correo);
+      // Inspección con carpeta en NUCOS: sus fotos van a su FOTOS (se crea si no tiene)
+      const nucosDrive = externa ? externa.drive : (carpetaId && LineasArchivos.enNucos(carpetaId) ? { carpetaId: carpetaId } : null);
+      if (nucosDrive && nucosDrive.carpetaId) {
+        let fotosNucos = nucosDrive.fotosCarpetaId;
+        if (!fotosNucos) {
+          const carpetaInsp = DriveApp.getFolderById(nucosDrive.carpetaId);
+          const it = carpetaInsp.getFoldersByName('FOTOS');
+          fotosNucos = (it.hasNext() ? it.next() : carpetaInsp.createFolder('FOTOS')).getId();
+        }
+        LineasEvidencias.autorizarSubida(correo, [fotosNucos]);
+        if (fila) {
+          LineasDatos.actualizarFila(TAB_EV, fila._fila, Object.assign({ 'FOTOS_CARPETA_ID': fotosNucos, 'ACTUALIZADO_EN': new Date() },
+            carpetaId ? {} : { 'CARPETA_ID': nucosDrive.carpetaId }));
+        } else {
+          LineasDatos.agregarFilas(TAB_EV, [{
+            'TIPO': 'INSPECCION', 'ORIGEN': externa ? 'NUCOS_FOTOS' : (insp.origen === 'SISTEMA' ? 'SISTEMA' : 'APPSHEET'), 'ID_REGISTRO': id,
+            'ID_LINEA': insp.registroId || '', 'NUCO': insp.nuco || '', 'FECHA': insp.fecha ? new Date(insp.fecha) : new Date(),
+            'CARPETA_ID': nucosDrive.carpetaId, 'RUTA': '', 'FOTOS_CARPETA_ID': fotosNucos, 'FOTOS': '0', 'PDFS_JSON': '[]',
+            'COINCIDENCIA_EXACTA': 'TRUE', 'ALERTAS_JSON': '[]', 'ID_ANTERIOR': '', 'ACTUALIZADO_EN': new Date(),
+          }]);
+        }
+        return { fotosCarpetaId: fotosNucos };
+      }
+      const c = LineasEvidencias.crearCarpetaFotos(id, correo, insp.nuco, insp.fecha ? new Date(insp.fecha) : new Date());
       if (fila) {
         LineasDatos.actualizarFila(TAB_EV, fila._fila, Object.assign({ 'FOTOS_CARPETA_ID': c.fotosCarpetaId, 'ACTUALIZADO_EN': new Date() },
           carpetaId ? {} : { 'CARPETA_ID': c.carpetaId, 'RUTA': c.ruta }));
