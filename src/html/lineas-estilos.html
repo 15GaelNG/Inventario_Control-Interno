@@ -982,6 +982,8 @@
   .ln-espera { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 6px; padding: 24px; text-align: center; background: color-mix(in srgb, var(--color-surface) 94%, transparent); backdrop-filter: blur(2px); outline: none; }
   .ln-espera[hidden] { display: none; }
+  /* Regenerar, Generar PDF pendiente y Subir PDF firmado abren la ventana sin cuerpo: la espera necesita su alto */
+  .ln-captura-modal:has(> .ln-espera:not([hidden])) { min-height: 340px; }
   .ln-espera-circulo { width: 72px; height: 72px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
     background: var(--color-accent-soft); margin-bottom: 10px; }
   .ln-espera-circulo .ln-spinner { width: 34px; height: 34px; border-width: 3px; }

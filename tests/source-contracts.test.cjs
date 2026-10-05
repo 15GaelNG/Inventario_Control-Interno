@@ -960,7 +960,7 @@ test('Historial: números que ha tenido un NUCO y NUCOs por los que pasó un nú
   assert.doesNotMatch(cliente, /el motivo solo existe si se capturó/);
   // Filtro Movimiento agrupado y en orden fijo, con las asignaciones arriba
   assert.match(cliente, /<optgroup label="Historial de asignaciones">/);
-  assert.match(cliente, /\['Documentos', \['Inspección', 'Responsiva', 'PDF firmado'\]\]/);
+  assert.match(cliente, /\['Documentos', \['Inspección', 'Responsiva', 'PDF firmado', 'PDF regenerado'\]\]/);
 });
 
 test('INICIO / FIN PLAN solo se capturan en el alta de la línea; después no se pueden cambiar (29-sep; usuario 4-oct)', () => {

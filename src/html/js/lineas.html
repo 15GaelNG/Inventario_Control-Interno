@@ -722,10 +722,7 @@
           : (valor && !esPuntosPatron(valor) ? 'Hay un patrón capturado en AppSheet (imagen). Si no trazas uno nuevo, se conserva.' : '');
         control = (nota ? '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' ' + esc(nota) + '</div>' : '') + htmlPatron(id + '-patron', false);
       } else if (e.control === 'firma') {
-        // Componente Firma del sistema; marco dorado para el responsable y azul para Control Interno
-        const rol = ROL_FIRMA[e.columna] || 'ci';
-        control = '<div class="ln-firma ln-firma-' + rol + '"><div class="ln-firma-cabecera">' + icono(rol === 'ci' ? 'shield-check' : 'user') + ' ' +
-          (rol === 'ci' ? 'Firma de Control Interno' : 'Firma del responsable') + '</div><div class="ln-firma-lienzo" id="' + id + '-firma"></div></div>';
+        control = htmlFirma(ROL_FIRMA[e.columna] || 'ci', id + '-firma');
       } else if (e.control === 'calculado') {
         control = '<div' + (autoDe(e) ? ' data-auto' : '') + ' class="ln-af-calculado' + (e.fijo ? ' ln-af-fijo' : (e.formula ? '' : ' ln-af-calculado-texto')) + '" id="' + id + '"' + (e.formula ? ' data-formula="' + esc(e.formula) + '"' : '') + '>' + (valor ? esc(valor) : '—') + '</div>';
       } else {
@@ -817,6 +814,12 @@
         }
       }
       if (campoPatron) campoPatron.classList.toggle('ln-oculto', t !== 'PATRÓN');
+    }
+
+    /** Caja de firma: marco dorado para el responsable y azul para Control Interno; el lienzo lo pone crearFirma. */
+    function htmlFirma(rol, idLienzo) {
+      return '<div class="ln-firma ln-firma-' + rol + '"><div class="ln-firma-cabecera">' + icono(rol === 'ci' ? 'shield-check' : 'user') + ' ' +
+        (rol === 'ci' ? 'Firma de Control Interno' : 'Firma del responsable') + '</div><div class="ln-firma-lienzo" id="' + idLienzo + '"></div></div>';
     }
 
     /** Firma con el componente del sistema; misma interfaz que antes (estaVacia, limpiar, base64 → promesa). */
@@ -2646,6 +2649,48 @@
       }
 
       /**
+       * Regenerar PDF (usuario, 5-oct): la responsiva se vuelve a hacer con la plantilla y lo que ya está guardado, sin
+       * llenar el formulario; queda como versión nueva del mismo PDF (LineasCaptura.generarPdf con forzar).
+       */
+      function regenerarPdf(d) {
+        captura = { guardada: true, firmas: {}, carpetaId: d.carpetaId || '' };
+        mostrarModalCaptura();
+        $('#ln-captura-icono', raiz).innerHTML = icono('signature');
+        $('#ln-captura-tipo', raiz).textContent = 'Responsiva de entrega';
+        $('#ln-captura-titulo', raiz).textContent = 'Regenerar PDF';
+        $('#ln-captura-subtitulo', raiz).textContent = [fecha(d.fecha), d.responsable].filter(Boolean).join(' · ');
+        $('#ln-captura-cuerpo', raiz).innerHTML = '';
+        refrescarDespuesDeCaptura(pila[pila.length - 1].id, d.tipoPdf, d.id, true);
+      }
+
+      /**
+       * Las firmas de la captura ya no están (el servidor las guarda 6 h; no se guardan como archivos, acuerdo del
+       * 18-sep): se vuelven a firmar aquí y se genera el PDF. Control Interno es obligatoria; el patrón lo dibuja el servidor.
+       */
+      function pedirFirmasPdf(sesion, tipo, nombres, continuar) {
+        const esInspeccion = tipo === 'INSPECCION';
+        const fondo = esInspeccion ? '#ddebf7' : '#ffffff';
+        ocultarEspera();
+        $('#ln-captura-cuerpo', raiz).innerHTML =
+          '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' Las firmas de la captura ya no están disponibles.</div>' +
+          '<div class="ln-firmas">' + htmlFirma('responsable', 'pdf-firma-responsable') + htmlFirma('ci', 'pdf-firma-ci') + '</div>' +
+          '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div>' +
+          '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
+          '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + ' Generar PDF</button></div>';
+        const responsable = crearFirma(document.getElementById('pdf-firma-responsable'), nombres.responsable);
+        const ci = crearFirma(document.getElementById('pdf-firma-ci'), esInspeccion ? nombres.inspector : nombres.ci);
+        $('#cap-guardar', raiz).addEventListener('click', () => {
+          if (ci.estaVacia()) { mostrarErrorCaptura('Falta la firma de Control Interno.'); return; }
+          $('#cap-error', raiz).hidden = true;
+          mostrarEspera('Generando tu PDF');
+          Promise.all([responsable.estaVacia() ? null : responsable.base64(fondo), ci.base64(fondo)]).then(([r, c]) => {
+            sesion.pdfFirmas = esInspeccion ? { inspector: c, responsable: r, patron: null } : { ci: c, responsable: r, patron: null };
+            continuar();
+          });
+        });
+      }
+
+      /**
        * PDF firmado (usuario, 5-oct): la inspección o la responsiva se guardó sin la firma del responsable; ya firmada se
        * sube aquí y reemplaza su PDF (el mismo archivo de Drive, LineasCaptura.subirPdfFirmado). Solo PDF.
        */
@@ -2751,6 +2796,8 @@
               alHacer: (d) => window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(d.carpetaId), '_blank', 'noopener') },
             { icono: 'file-plus', titulo: 'Generar PDF', visible: (d) => !!d.pdfPendiente, alHacer: (d) => generarPdfPendiente(d.tipoPdf, d.id, d.carpetaId) },
             { icono: 'file-up', titulo: 'Subir PDF firmado', visible: (d) => operar && !!d.pdfId, alHacer: (d) => subirPdfFirmado(id, d) },
+            { icono: 'refresh-ccw', titulo: 'Regenerar PDF', visible: (d) => operar && d.tipoPdf === 'RESPONSIVA' && d.origen === 'SISTEMA' && !!d.pdfId,
+              alHacer: (d) => regenerarPdf(d) },
           ],
           ayuda: 'Inspecciones y responsivas del registro. Doble clic en una fila abre la inspección, o el PDF de la responsiva. ' +
             'Los indicadores de arriba filtran por tipo; la flecha de cada columna filtra u ordena. ' +
@@ -3681,7 +3728,8 @@
         errorBox.focus({ preventScroll: true });
       }
 
-      function refrescarDespuesDeCaptura(idAbierto, tipo, nuevoId) {
+      /** `regenerar`: el PDF ya existe y se vuelve a hacer (Regenerar PDF). */
+      function refrescarDespuesDeCaptura(idAbierto, tipo, nuevoId, regenerar) {
         const sesionCaptura = captura;
         sesionCaptura.guardada = true;
         memoria.cargadoEn = 0;
@@ -3692,9 +3740,10 @@
           modal.setAttribute('aria-busy', 'true');
           modal.querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = true; });
           mostrarEspera('Generando tu PDF'); // sigue la misma pantalla de espera desde el clic en Guardar
-          return llamar('apiLineasGenerarPdf', tipo, nuevoId, false, sesionCaptura.pdfFirmas || null).then((pdf) => {
+          return llamar('apiLineasGenerarPdf', tipo, nuevoId, !!regenerar, sesionCaptura.pdfFirmas || null).then((pdf) => {
             if (!vigente() || captura !== sesionCaptura) return;
             sesionCaptura.guardando = false;
+            if (pdf && pdf.faltanFirmas) { pedirFirmasPdf(sesionCaptura, tipo, pdf.nombres || {}, generar); return; }
             mostrarEspera('Tu PDF está listo', { tono: 'listo', icono: 'circle-check', texto: '',
               acciones: enlaceDrive(pdf.id, 'Ver PDF', true) + '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
             cargarEvidencias(idAbierto);
@@ -3880,7 +3929,7 @@
         'Inspección': 'clipboard-check', 'Responsiva': 'signature', 'Reactivación': 'refresh-cw', 'Desecho': 'trash-2',
         // Acciones con nombre (etapa 3, paso 2)
         'Entrega': 'hand-helping', 'Cierre': 'flag', 'Nota': 'message-square', 'Resguardo': 'archive', 'Cancelación de línea': 'phone-off', 'Venta': 'badge-dollar-sign',
-        'Edición': 'file-pen-line', 'Comentario anterior': 'message-square-text', 'PDF firmado': 'file-up',
+        'Edición': 'file-pen-line', 'Comentario anterior': 'message-square-text', 'PDF firmado': 'file-up', 'PDF regenerado': 'refresh-ccw',
       };
       const COLOR_ORIGEN = { 'Nuevo sistema': 'verde', AppSheet: 'azul', Drive: 'neutro', 'Migración': 'neutro' };
 
@@ -3966,7 +4015,7 @@
       const GRUPOS_MOVIMIENTO = [
         ['Responsable y ubicación', ['Entrega', 'Reasignación', 'Cambio de área o ubicación']],
         ['Equipo y línea', ['Edición', 'Cambio de equipo', 'Cambio de línea', 'Cambio de plan', 'Cambio de estatus', 'Cambio de accesos']],
-        ['Documentos', ['Inspección', 'Responsiva', 'PDF firmado']],
+        ['Documentos', ['Inspección', 'Responsiva', 'PDF firmado', 'PDF regenerado']],
         ['Resguardo, cancelación y bajas', ['Resguardo', 'Cancelación de línea', 'Venta', 'Cierre']],
         ['Notas', ['Nota', 'Comentario anterior']],
         ['Alta, reactivación y desecho', ['Alta de registro', 'Reactivación', 'Desecho']],

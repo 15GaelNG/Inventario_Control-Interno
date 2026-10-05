@@ -75,5 +75,5 @@ test('la pantalla: «Subir PDF firmado» en Documentos, solo con permiso de oper
   assert.match(fn, /llamar\('apiLineasSubirPdfFirmado', registroId, d\.tipoPdf, d\.id, d\.pdfId, base64\)/);
   assert.match(fn, /cargarEvidencias\(registroId\);\r?\n\s+cargarHistorial\(registroId\);/);
   assert.match(cliente, /'PDF firmado': 'file-up'/);
-  assert.match(cliente, /\['Documentos', \['Inspección', 'Responsiva', 'PDF firmado'\]\]/);
+  assert.match(cliente, /\['Documentos', \['Inspección', 'Responsiva', 'PDF firmado', 'PDF regenerado'\]\]/);
 });
