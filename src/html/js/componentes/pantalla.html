@@ -15,6 +15,11 @@
    * tests/source-contracts.test.cjs falla si un @media usa otro ancho o si alguien llama
    * matchMedia fuera de este archivo: la decisión "¿es celular?" se toma aquí.
    *
+   * Deslizar de lado: en celular nada debe deslizarse de lado salvo lo que está hecho para eso
+   * (la tabla, la franja de KPIs, las pestañas). Una caja nueva que deba deslizarse de lado a
+   * propósito lleva el atributo data-scroll-x; la vista previa (capturar.js --revisar) marca
+   * como error cualquier otra que lo haga.
+   *
    * Métodos:
    *   Pantalla.esCelular()    ancho ≤ 640
    *   Pantalla.esTableta()    641 – 1024

@@ -52,10 +52,16 @@ const pantallas = opcion('matriz', false) ? MATRIZ : [(() => {
 
 /**
  * Corre dentro de la página: ¿algo hace que la vista se deslice de lado?
- * Un elemento dentro de algo con su propio scroll horizontal (una tabla en .dt-scroll) no
- * cuenta: eso es a propósito. De cada grupo que se sale solo se reporta el de más afuera.
+ * Dos casos:
+ *  1. Algo se sale de lo ancho de la pantalla (la página entera se mueve de lado).
+ *  2. Una caja que no está pensada para deslizarse de lado (un formulario, el cuerpo de una
+ *     ventana) trae contenido más ancho que ella: se corta o se desliza dentro de la caja.
+ * Lo que SÍ se desliza de lado a propósito no cuenta: la tabla (.dt-scroll, .table-scroll), las
+ * franjas de KPIs, las pestañas, o cualquier caja marcada con data-scroll-x.
+ * De cada grupo que se sale solo se reporta el de más afuera.
  */
 function medirDesborde() {
+  const INTENCIONAL = '.dt-scroll, .table-scroll, .stat-row, .kpi-chips, .tabs-simple, .form-pasos, [data-scroll-x]';
   const vw = document.documentElement.clientWidth;
   const vc = document.getElementById('view-container');
   const esquema = new Set([document.documentElement, document.body, document.getElementById('app'), document.getElementById('main'), vc]);
@@ -63,6 +69,13 @@ function medirDesborde() {
   const describir = (el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') +
     (typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\s+/).slice(0, 3).join('.') : '');
   const fuera = [];
+  // 2. Cajas que se deslizan de lado sin querer (fuera del menú lateral, que recorta a propósito)
+  for (const caja of document.querySelectorAll('#view-container *, body > .modal-backdrop *')) {
+    if (caja.scrollWidth <= caja.clientWidth + 1 || !/(auto|scroll)/.test(getComputedStyle(caja).overflowX)) continue;
+    if (!caja.getClientRects().length || caja.matches(INTENCIONAL) || caja.closest('[data-scroll-x]')) continue;
+    if (fuera.some((f) => f.el.contains(caja))) continue;
+    fuera.push({ el: caja, texto: describir(caja) + ' (se desliza de lado: ' + caja.scrollWidth + 'px en ' + caja.clientWidth + 'px)' });
+  }
   for (const el of document.querySelectorAll('#app-shell *, body > .modal-backdrop *, body > .modal-backdrop')) {
     const r = el.getBoundingClientRect();
     if (!r.width || !r.height || r.right <= vw + 1) continue;

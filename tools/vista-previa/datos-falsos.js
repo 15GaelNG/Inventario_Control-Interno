@@ -340,6 +340,18 @@
     'arqueos': () => abrir('arqueos'),
     'arqueos-detalle': async () => { await abrir('arqueos'); await abrirPrimeraFila(); },
     'sistemas': () => abrir('sistemas-vehiculos'),
+    // ---- Ventanas (styles.html, sección Modal): chica = hoja abajo en celular; ancha = pantalla completa ----
+    'modal-confirmar': async () => {
+      await abrir('vehiculos');
+      Confirmar.pedir({ titulo: '¿Eliminar 3 vehículos?', mensaje: 'Esta acción no se puede deshacer.', detalle: ['AUT0024', 'AUT0025', 'AUT0026'], textoConfirmar: 'Eliminar', peligro: true, palabraClave: 'ELIMINAR' });
+      await esperar(400);
+    },
+    'modal-editar-vehiculo': async () => {
+      await abrir('vehiculos');
+      // Se abre igual que el ⋮ → Editar, pero sin depender del menú de la fila
+      (await hasta('#modal-editar-vehiculo')).hidden = false;
+      await esperar(400);
+    },
     'verificaciones': () => abrir('verificaciones'),
     'verificaciones-form': async () => { await abrir('verificaciones', 'nuevo'); await elegirVehiculo('[data-panel="nuevo"] input[type="text"]'); },
     'sensores': () => abrir('instalacion-sensores'),

@@ -924,6 +924,33 @@
   }
   .modal-close:hover { background: var(--color-bg); }
 
+  /* Ventanas en celular — dos formas, según el tamaño que la ventana pide en escritorio:
+     · .modal-card (chica: confirmar, avisos, una sola pregunta): hoja que sube desde abajo, a lo
+       ancho, con su propio scroll si no cabe.
+     · .modal-card-wide (captura o consulta de un registro): pantalla completa. El encabezado se
+       queda arriba y solo desplaza el cuerpo (.modal-form-scroll); lo que va después (los botones
+       de guardar) queda siempre a la vista abajo. Si el cuerpo no está directo en la ventana o en
+       su <form>, desplaza la ventana entera: nunca queda contenido sin poder verse.
+     Un módulo no necesita nada propio para esto: basta con usar estas clases. */
+  @media (max-width: 640px) {
+    .modal-backdrop { padding: 0; align-items: flex-end; }
+    .modal-card {
+      max-width: none; max-height: 92vh; max-height: 92dvh; overflow-y: auto;
+      border-radius: 16px 16px 0 0; padding: 20px 16px 16px;
+    }
+    .modal-card-wide {
+      height: 100vh; height: 100dvh; max-height: none; border-radius: 0;
+      display: flex; flex-direction: column;
+    }
+    .modal-card-wide > .modal-header { flex: 0 0 auto; }
+    .modal-card-wide > form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+    .modal-card-wide > .modal-form-scroll, .modal-card-wide > form > .modal-form-scroll {
+      flex: 1 1 auto; min-height: 0; max-height: none; overflow-y: auto;
+    }
+    .modal-close { width: 40px; height: 40px; flex-shrink: 0; }
+    .modal-close .ico { width: 18px; height: 18px; }
+  }
+
   /* Insignia "Calificación" con barra de progreso — cabecera de los
      formularios que generan una calificación en vivo (Arqueo: 17
      reactivos de auditoría). Muestra cuántos puntos ya se calificaron,
