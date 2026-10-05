@@ -667,10 +667,15 @@
 
     const esPuntosPatron = (v) => /^[1-9](-[1-9])*$/.test(String(v || ''));
 
+    // "AUTO" solo en lo que el formulario llena solo (fórmula o copia de otro campo; lo que llega al elegir a la persona lo
+    // marca CampoAuto.llenar). Lo que solo se muestra (datos del equipo en Mandar a resguardo, NUCO fijo, fecha de alta) no:
+    // el usuario lo marcó como error en producción (4-oct).
+    const autoDe = (e) => !!(e.formula || e.deriva || e.auto);
+
     function htmlElementoFormulario(e) {
       if (e.tipo === 'titulo') return '<h4 class="ln-af-titulo">' + (e.icono ? icono(e.icono) + ' ' : '') + esc(e.texto) + '</h4>';
       const id = 'af-' + e.columna.replace(/[^A-Za-z0-9]+/g, '-');
-      const attrs = ' id="' + id + '" data-columna="' + esc(e.columna) + '"' + (e.virtual ? ' data-virtual' : '') + (e.deriva ? ' data-deriva-de="' + esc(e.deriva.de) + '" data-deriva-dato="' + esc(e.deriva.dato) + '"' : '') + (e.literal || e.secreto ? ' data-respetar-texto' : '') + (e.soloLectura ? ' readonly tabindex="-1"' : '') + (e.soloLectura || e.deriva ? ' data-auto' : '');
+      const attrs = ' id="' + id + '" data-columna="' + esc(e.columna) + '"' + (e.virtual ? ' data-virtual' : '') + (e.deriva ? ' data-deriva-de="' + esc(e.deriva.de) + '" data-deriva-dato="' + esc(e.deriva.dato) + '"' : '') + (e.literal || e.secreto ? ' data-respetar-texto' : '') + (e.soloLectura ? ' readonly tabindex="-1"' : '') + (autoDe(e) ? ' data-auto' : '');
       const valor = e.valor === null || e.valor === undefined ? '' : String(e.valor);
       let control;
       if (e.control === 'escala') {
@@ -718,7 +723,7 @@
         control = '<div class="ln-firma ln-firma-' + rol + '"><div class="ln-firma-cabecera">' + icono(rol === 'ci' ? 'shield-check' : 'user') + ' ' +
           (rol === 'ci' ? 'Firma de Control Interno' : 'Firma del responsable') + '</div><div class="ln-firma-lienzo" id="' + id + '-firma"></div></div>';
       } else if (e.control === 'calculado') {
-        control = '<div data-auto class="ln-af-calculado' + (e.fijo ? ' ln-af-fijo' : (e.formula ? '' : ' ln-af-calculado-texto')) + '" id="' + id + '"' + (e.formula ? ' data-formula="' + esc(e.formula) + '"' : '') + '>' + (valor ? esc(valor) : '—') + '</div>';
+        control = '<div' + (autoDe(e) ? ' data-auto' : '') + ' class="ln-af-calculado' + (e.fijo ? ' ln-af-fijo' : (e.formula ? '' : ' ln-af-calculado-texto')) + '" id="' + id + '"' + (e.formula ? ' data-formula="' + esc(e.formula) + '"' : '') + '>' + (valor ? esc(valor) : '—') + '</div>';
       } else {
         control = '<input type="text"' + attrs + ' value="' + esc(valor) + '" autocomplete="off"' + (e.valorOculto ? ' placeholder="•••• (se conserva el valor registrado)"' : '') + ' />';
       }

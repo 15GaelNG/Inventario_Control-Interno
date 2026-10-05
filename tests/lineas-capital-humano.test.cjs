@@ -67,3 +67,10 @@ test('Capital Humano en producción: Líneas lee COLABORADORES ACTUALIZADO y no 
   // La carga a COLABORADORES se niega en un libro que tiene la pestaña de Ayrton
   assert.match(fuente, /if \(ss\.getSheetByName\(REESTRUCTURA_HOJA_CH\)\) \{\s*throw new Error/);
 });
+
+test('Etiqueta AUTO en Líneas: solo en lo que el formulario llena solo, no en lo que solo se muestra (usuario, 4-oct)', () => {
+  const cliente = fs.readFileSync(path.join(__dirname, '../src/html/js/lineas.html'), 'utf8');
+  assert.match(cliente, /const autoDe = \(e\) => !!\(e\.formula \|\| e\.deriva \|\| e\.auto\);/);
+  assert.doesNotMatch(cliente, /e\.soloLectura \|\| e\.deriva \? ' data-auto'/);
+  assert.doesNotMatch(cliente, /<div data-auto class="ln-af-calculado/);
+});
