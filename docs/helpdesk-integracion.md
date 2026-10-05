@@ -132,20 +132,41 @@ Si sí, se pueden ligar los dos: desde un ticket nuestro ver su estatus en el he
 - **Si el token dura poco**, pegarlo cada rato vuelve incómoda esta opción y conviene pasar
   a la extensión.
 
-## Lo que falta medir antes de escribir código
+## Lo medido (05/10/2026) y lo que falta
 
-Todo se mide desde el navegador de un usuario, con F12 → Network → Fetch/XHR, recargando
-`/app/formularios`. **Nunca se pega un token real en el repo, en un issue ni en un chat.**
+Todo se mide desde el navegador de un usuario, con F12 → Network → Fetch/XHR.
+**Nunca se pega un token real en el repo, en un issue ni en un chat.**
 
-- [ ] **Cómo se autentica:** ¿`Authorization: Bearer …` o cookie? Si es cookie `HttpOnly`,
-      el usuario no la puede copiar con facilidad y B se complica.
-- [ ] **Cuánto dura:** si es un JWT, ver el campo `exp` en jwt.io. Esto decide B o la
-      extensión.
-- [ ] **El endpoint de la lista de tickets:** URL, método, parámetros de filtro y
-      paginación.
-- [ ] **La forma de la respuesta:** un ejemplo con datos falsos, que servirá de fixture
-      para las pruebas.
-- [ ] **El endpoint del detalle** de un ticket.
-- [ ] **¿Qué ve cada usuario?** ¿Solo sus tickets, o los de su área? Nuestra app mostrará
-      exactamente lo mismo que el helpdesk le muestre a ese token.
+- [x] **Cómo se autentica:** encabezado `authorization: <token>` (el JWT solo, sin `Bearer`).
+      La página lo guarda en `localStorage`, llave `token`: se copia con un marcador (ver abajo).
+- [x] **Cuánto dura:** 24 h (`exp` − `iat` = 86 400 s). Se pega una vez al día: aceptable con
+      el marcador; si molesta, la extensión sigue de respaldo.
+- [x] **Backend:** `https://helpdesk-backend.gphsis.com` (Express en Google Cloud,
+      `access-control-allow-origin: *`). Aun así las llamadas van desde nuestro servidor.
+- [x] **Validar el token:** `POST /login/autoLogin` → `{ status: 1, message: 'Sesión activa',
+      data: { email, name, rol, idAreaAgent, … } }`.
+- [x] **La lista:** `POST /tickets/list` con `{ filters: { agents, branches, forms, areas,
+      department, customer, departmentCustomers, idTicket, status, priority: [], finishLoad:
+      false }, pagination: { rowsPerPage: 25 } }` → `{ cantTotalTickets, tickets: [...] }`.
+      Cada ticket trae título, notas, estatus y prioridad (con color), solicitante, agente,
+      formulario, áreas, `dateCreationDB` (yyyy-MM-dd), `dateClose` (ISO) y mensajes sin leer.
+      Forma de ejemplo (inventada): `tests/helpdesk.test.js`.
+- [ ] **La página siguiente:** cómo pide los siguientes 25 (el payload de la segunda llamada).
+- [ ] **El detalle** de un ticket (y sus respuestas/chat).
+- [ ] **Los catálogos** de estatus, prioridad y formularios (solo vimos 1 = Abierto, 4 = Cerrado).
+- [x] **¿Qué ve cada usuario?** Lo que su token ve en el helpdesk (p. ej. "tickets de mi
+      departamento" según sus permisos allá).
 - [ ] Si la columna `TICKET` de nuestra hoja `TICKETS` es el folio del helpdesk.
+
+## Lo que ya está (src/services/HelpdeskApi.gs)
+
+`conectar` (valida formato, que el correo del token sea el de la sesión, que no haya vencido, y
+una llamada a autoLogin), `desconectar`, `estado` (sin llamar al helpdesk) y `listarTickets`
+(primera página, en nuestro formato). Límites para no saturarlo: la lista se reutiliza 60 s, 2 s
+mínimo entre llamadas de una persona, 10 por minuto por persona y 30 entre toda la app, una
+página por llamada, cero reintentos, y ante 429/5xx toda la app se detiene lo que pida
+`Retry-After` (o 2 min). 401/403 borra el token. Pruebas: `tests/helpdesk.test.js`.
+
+**El marcador "Token helpdesk"** (Chrome → nuevo marcador, en la URL):
+`javascript:(()=>{const t=localStorage.getItem('token');if(!t){alert('Primero inicia sesión en el helpdesk');return;}navigator.clipboard.writeText(t).then(()=>alert('Token copiado: pégalo en Control Interno'),()=>prompt('Copia tu token:',t));})()`
+Solo lee el token del propio navegador y lo copia; no lo manda a ningún lado.

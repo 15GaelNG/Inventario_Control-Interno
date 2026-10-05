@@ -22,9 +22,9 @@ const AHORA = Date.UTC(2026, 9, 5, 18, 30, 0);  // 05/10/2026 12:30 hora local
 
 function crearEntorno(opciones) {
   const cfg = opciones || {};
-  const ahora = cfg.ahora || AHORA;
+  let ahora = cfg.ahora || AHORA;
 
-  /** Date del entorno: sin argumentos es la hora fija, para que dos corridas den lo mismo */
+  /** Date del entorno: sin argumentos es la hora fija (e.avanzar la mueve), para que dos corridas den lo mismo */
   class FechaFija extends Date {
     constructor(...args) { if (args.length) super(...args); else super(ahora); }
     static now() { return ahora; }
@@ -115,6 +115,7 @@ function crearEntorno(opciones) {
     ungzip: (b) => blob(zlib.gunzipSync(Buffer.from(b._bytes))),
     base64Encode: (bytes) => Buffer.from(bytes).toString('base64'),
     base64Decode: (texto) => Array.from(Buffer.from(texto, 'base64')),
+    base64DecodeWebSafe: (texto) => Array.from(Buffer.from(texto.replace(/-/g, '+').replace(/_/g, '/'), 'base64')),
     formatDate(d, zona, formato) {
       const l = enLocal(d);
       return formato
@@ -127,7 +128,16 @@ function crearEntorno(opciones) {
     },
   };
 
+  const propiedades = new Map();
   const globales = {
+    PropertiesService: {
+      getScriptProperties: () => ({
+        getProperty: (k) => (propiedades.has(k) ? propiedades.get(k) : null),
+        setProperty: (k, v) => { propiedades.set(k, String(v)); },
+        deleteProperty: (k) => { propiedades.delete(k); },
+        getKeys: () => Array.from(propiedades.keys()),
+      }),
+    },
     console: {
       log: () => {}, info: () => {},
       warn: (...a) => registro.consola.push('warn: ' + a.join(' ')),
@@ -159,8 +169,11 @@ function crearEntorno(opciones) {
   return {
     Date: FechaFija,
     fecha,
+    /** Mueve el reloj del entorno `ms` milisegundos */
+    avanzar: (ms) => { ahora += ms; },
     registro,
     libros,
+    propiedades,
     contexto,
     /** Carga archivos del repo (rutas desde la raíz) o código suelto { codigo, nombre } */
     cargar(...archivos) {
