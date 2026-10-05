@@ -293,9 +293,9 @@
     if (t.checked !== tecnica) { t.checked = tecnica; evento(t, 'change'); }
     await esperar(300);
   }
-  async function elegirVehiculo(selector) {
+  async function elegirVehiculo(selector, valor) {
     const campo = await hasta(selector);
-    campo.value = 'AUT0024';
+    campo.value = valor || 'AUT0024';
     evento(campo, 'input');
     evento(campo, 'change');
     evento(campo, 'blur');
@@ -385,9 +385,12 @@
       await esperar(400);
     },
     'verificaciones': () => abrir('verificaciones'),
-    'verificaciones-form': async () => { await abrir('verificaciones', 'nuevo'); await elegirVehiculo('[data-panel="nuevo"] input[type="text"]'); },
+    'verificaciones-form': async () => { await abrir('verificaciones', 'nuevo'); await elegirVehiculo('#ver-form #f-FOLIO'); },
+    // Por Nucco (buscar.nucco): escribir el Nucco llena el folio y trae la ficha
+    'verificaciones-nucco': async () => { await abrir('verificaciones', 'nuevo'); await elegirVehiculo('#ver-form [data-nucco-de] input', '24'); await esperar(500); },
+    'inspecciones-nucco': async () => { await abrir('inspeccion-vehicular', 'nueva'); await elegirVehiculo('#ins-nucco', '24'); },
     'sensores': () => abrir('instalacion-sensores'),
-    'sensores-form': async () => { await abrir('instalacion-sensores', 'nuevo'); await elegirVehiculo('#sen-form input[type="text"]'); },
+    'sensores-form': async () => { await abrir('instalacion-sensores', 'nuevo'); await elegirVehiculo('#sen-form #f-FOLIO'); },
     'hologramas': () => abrir('hologramas'),
     'hologramas-form': async () => { await abrir('hologramas', 'nuevo'); },
     'inspecciones': () => abrir('inspeccion-vehicular'),

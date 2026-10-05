@@ -227,10 +227,13 @@
     }
 
     /** Ventana de edición general (los campos capturables de golpe, en vez de celda por celda). */
+    const parEditar = FolioNucco.montar('editar-sensor-folio', 'editar-sensor-nucco',
+      () => callServerCacheado('apiListarVehiculosBasico', state.token));
     function abrirEditarSensor(s) {
       document.getElementById('editar-sensor-id').value = s.ID;
       document.getElementById('editar-sensor-label').textContent = [s.FOLIO, s.SERIE_SENSOR].filter(Boolean).join(' · ');
       document.getElementById('editar-sensor-folio').value = s.FOLIO || '';
+      parEditar.sincronizar();
       document.getElementById('editar-sensor-serie').value = s.SERIE_SENSOR || '';
       document.getElementById('editar-sensor-combustible').value = s.COMBUSTIBLE || '';
       document.getElementById('editar-sensor-estatus').value = s.ESTATUS || 'ACTIVO';
@@ -437,6 +440,7 @@
             etiqueta: [v.PLACA, v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' · '),
           })),
           cargar: (folio) => callServer('apiDatosVehiculoParaSensor', state.token, folio),
+          nucco: { vehiculos: () => callServerCacheado('apiListarVehiculosBasico', state.token) },
           ficha: (d) => {
             const c = d.copiados;
             const avisos = [];
@@ -520,23 +524,8 @@
           tabs.mostrar('registros');
           invalidarCacheLista('apiListarSensores', state.token);
           await cargar();
-          // sen-nucco vive fuera del form que resetea el componente solo -- se limpia aparte.
-          const campoNucco = document.getElementById('sen-nucco');
-          if (campoNucco) CampoAuto.llenar(campoNucco, '');
         },
       });
-
-      // Nucco: campo independiente del Folio que arma el componente de arriba (sen-nucco,
-      // fuera de sen-form -- ver views/sensores.html), ligados con FolioNucco (mismo
-      // catálogo que ya trae buscar.opciones, cacheado, así que no pide nada de más). El
-      // Folio es el que de verdad dispara la búsqueda real, por eso dispararFolio.
-      const porClave = {};
-      callServerCacheado('apiListarVehiculosBasico', state.token).then((vehiculos) => {
-        FolioNucco.indexar(vehiculos, porClave);
-        const datalist = document.getElementById('sen-nucco-lista');
-        if (datalist) datalist.innerHTML = FolioNucco.opcionesNucco(vehiculos);
-      }).catch(() => {});
-      FolioNucco.ligar('f-FOLIO', 'sen-nucco', { buscar: (texto) => porClave[texto], dispararFolio: true });
     }
 
     await cargar();

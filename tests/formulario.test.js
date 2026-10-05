@@ -16,7 +16,7 @@ const dom = new JSDOM('<!doctype html><body><div id="f"></div></body>', { url: '
 const { window } = dom;
 window.CSS = { escape: (s) => String(s).replace(/["\\]/g, '\\$&') };
 window.URL.createObjectURL = () => 'blob:prueba';
-window.eval(['iconos.html', 'notificar.html', 'combobox.html', 'campo-auto.html', 'formulario.html'].map(scriptDe).join('\n') +
+window.eval(['iconos.html', 'notificar.html', 'combobox.html', 'campo-auto.html', 'folio-nucco.html', 'formulario.html'].map(scriptDe).join('\n') +
   '\nwindow.Formulario = Formulario; window.Notificar = Notificar; window.Combobox = Combobox;');
 
 const doc = window.document;
@@ -430,6 +430,42 @@ const errorDe = (campo) => {
   ok(mismo('borderColor') && mismo('backgroundColor'), 'mismo borde y fondo');
   ok(estilo('textarea').resize === 'vertical', 'el textarea solo se puede estirar hacia abajo (no rompe el ancho)');
   cajaEstilos.remove();
+
+  console.log('14. buscar.nucco: el Nucco primero, ligado al folio');
+  const cajaNucco = doc.body.appendChild(doc.createElement('div'));
+  const pedidos = [];
+  const formNucco = window.Formulario.crear(cajaNucco, {
+    buscar: {
+      campo: 'FOLIO', etiqueta: 'Folio del vehículo', requerido: false,
+      visibleSi: (v) => v.TIPO !== 'PERSONAL',
+      cargar: async (folioPedido) => { pedidos.push(folioPedido); return { PLACA: 'GGY886F' }; },
+      ficha: (d) => ({ titulo: d.PLACA }),
+      nucco: { vehiculos: async () => [{ FOLIO: 'AUT0024', NUCO: '24', PLACA: 'GGY886F' }, { FOLIO: 'AUT0100', NUCO: '100' }] },
+    },
+    campos: [{ id: 'TIPO', etiqueta: 'Tipo', tipo: 'lista', opciones: ['FLOTA', 'PERSONAL'] }],
+    alGuardar: async () => {},
+  });
+  await esperar(10);
+  const qn = (s) => cajaNucco.querySelector(s);
+  const campoN = qn('[data-nucco-de] input');
+  const campoF = qn('#f-FOLIO');
+  ok(!!campoN && (campoN.compareDocumentPosition(campoF) & window.Node.DOCUMENT_POSITION_FOLLOWING), 'el campo Nucco va antes del folio');
+  campoN.value = '24';
+  evento(campoN, 'input');
+  ok(campoF.value === 'AUT0024', 'escribir el Nucco pone su folio');
+  ok(!qn('[data-campo="FOLIO"] .auto-tag').hidden, 'con la etiqueta "auto" en el folio');
+  await esperar(400);
+  ok(pedidos[pedidos.length - 1] === 'AUT0024', 'y la búsqueda del vehículo corre con ese folio (como si lo escribieran)');
+  ok(!('NUCCO' in formNucco.getValores()) && formNucco.getValores().FOLIO === 'AUT0024', 'lo que se guarda es el folio; el Nucco no va en los valores');
+  campoF.value = 'AUT0100';
+  evento(campoF, 'input');
+  ok(campoN.value === '100', 'y al revés: escribir el folio pone su Nucco');
+  formNucco.setValor('TIPO', 'PERSONAL');
+  evento(qn('[data-campo="TIPO"] select'), 'change');
+  ok(qn('[data-nucco-de]').hidden && qn('[data-campo="FOLIO"]').hidden, 'si la búsqueda no aplica (visibleSi), se ocultan los dos');
+  formNucco.limpiar();
+  ok(campoN.value === '' && campoF.value === '', 'limpiar el formulario limpia también el Nucco');
+  cajaNucco.remove();
 
   console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
   process.exit(fallas ? 1 : 0);

@@ -39,20 +39,12 @@
         <div class="form-card-icon"><i data-lucide="car" class="ico"></i></div>
         <div>
           <h3>Registrar verificación</h3>
-          <p>Folio, fechas y foto del comprobante</p>
+          <p>Nucco o folio, fechas y foto del comprobante</p>
         </div>
       </div>
-      <!-- Nucco: forma alterna de encontrar el vehículo, independiente del campo Folio que
-           arma el componente Formulario más abajo -- escribir en cualquiera de los dos
-           resuelve el vehículo y pone el valor correspondiente en el otro (ver
-           js/app-verificaciones.html). -->
-      <div class="field" style="max-width:360px; margin-bottom:14px">
-        <label for="ver-nucco">Nucco</label>
-        <input type="text" id="ver-nucco" list="ver-nucco-lista" autocomplete="off" placeholder="Otra forma de buscar el vehículo…" />
-        <datalist id="ver-nucco-lista"></datalist>
-      </div>
 
-      <!-- El formulario lo arma el componente Formulario (ver initVerificaciones en app.js) -->
+      <!-- El formulario lo arma el componente Formulario (ver initVerificaciones en app.js); el
+           Nucco va dentro, junto al folio (buscar.nucco) -->
       <div id="ver-form"></div>
     </div>
 
@@ -79,7 +71,8 @@
       </div>
       <form id="form-editar-verificacion">
         <input type="hidden" id="editar-verificacion-id" />
-        <div class="field"><label>Folio del vehículo</label><input type="text" id="editar-verificacion-folio" /></div>
+        <div class="field"><label for="editar-verificacion-nucco">Nucco</label><input type="text" id="editar-verificacion-nucco" autocomplete="off" inputmode="numeric" placeholder="Escribe o elige el Nucco" /></div>
+        <div class="field"><label for="editar-verificacion-folio">Folio del vehículo</label><input type="text" id="editar-verificacion-folio" autocomplete="off" /></div>
         <div class="field"><label>Fecha de verificación</label><input type="date" id="editar-verificacion-fecha-verificacion" /></div>
         <div class="field"><label>Próxima verificación</label><input type="date" id="editar-verificacion-fecha-proxima" /></div>
         <div class="error-msg" id="editar-verificacion-error" hidden></div>

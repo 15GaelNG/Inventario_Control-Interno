@@ -381,7 +381,7 @@
         pasos: [
           { titulo: 'Tipo de unidad', descripcion: '¿De quién es el vehículo al que se le va a poner el holograma?',
             campos: ['TIPO_UNIDAD'] },
-          { titulo: 'Vehículo', descripcion: 'De la flota: se busca por folio. Personal: se capturan sus datos',
+          { titulo: 'Vehículo', descripcion: 'De la flota: se busca por Nucco o folio. Personal: se capturan sus datos',
             campos: ['FOLIO'].concat(DEL_VEHICULO) },
           { titulo: 'Tarjeta', descripcion: 'Proveedor, calcomanía y lo autorizado',
             campos: ['PROVEEDOR', 'CALCOMANIA', 'ESTATUS_EOX', 'COMBUSTIBLE', 'AUTORIZADO_PESOS', 'AUTORIZADO_LITROS', 'SOLICITUD'] },
@@ -398,6 +398,7 @@
             etiqueta: [v.PLACA, v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' · '),
           })),
           cargar: (folio) => callServer('apiDatosVehiculoParaHolograma', state.token, folio),
+          nucco: { vehiculos: () => callServerCacheado('apiListarVehiculosBasico', state.token) },
           ficha: (d) => ({
             titulo: d.PLACA || 'Sin placa',
             subtitulo: [d.MARCA, d.LINEA, d.MODELO].filter(Boolean).join(' · '),

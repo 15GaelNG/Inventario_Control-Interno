@@ -25,7 +25,7 @@ const dom = new JSDOM(`<!doctype html><body>
   <div id="tarde"></div>
 </body>`, { url: 'https://prueba.local/', runScripts: 'outside-only', pretendToBeVisual: true });
 const { window } = dom;
-window.eval(['campo-auto.html', 'folio-nucco.html'].map(scriptDe).join('\n') +
+window.eval(['combobox.html', 'campo-auto.html', 'folio-nucco.html'].map(scriptDe).join('\n') +
   '\nwindow.CampoAuto = CampoAuto; window.FolioNucco = FolioNucco;');
 
 const doc = window.document;
@@ -101,6 +101,29 @@ const escribir = (id, valor) => { $('#' + id).value = valor; evento($('#' + id),
   escribir('folio', 'AUT01');
   ok($('#nucco').value === '3' && !visible('nucco'), 'sin coincidencia no se borra nada, solo deja de decir "auto"');
   ok(resueltos.pop() === null, 'y alResolver recibe null');
+
+  console.log('4. FolioNucco.opcionesLista y montar (formularios escritos a mano)');
+  const lista = FolioNucco.opcionesLista(vehiculos);
+  ok(lista.map((o) => o.valor).join() === '3,12', 'opcionesLista: solo con Nucco, en orden numérico');
+  ok(lista[1].etiqueta === 'AUT0100 · NISSAN', 'con folio, placa y marca para reconocer la unidad');
+  $('#tarde').innerHTML = '<div class="field"><label>Nucco</label><input id="ed-nucco" /></div>' +
+    '<div class="field"><label>Folio</label><input id="ed-folio" /></div>';
+  const par = FolioNucco.montar('ed-folio', 'ed-nucco', async () => vehiculos);
+  await par.listo;
+  ok(!!$('#ed-nucco').closest('.cbx') && !!$('#ed-folio').closest('.cbx'), 'montar pone lista (Combobox) en los dos campos');
+  $('#ed-folio').value = 'AUT0200';            // como al abrir un registro para editarlo
+  await par.sincronizar();
+  ok($('#ed-nucco').value === '3' && visible('ed-nucco'), 'sincronizar pone el Nucco del folio que ya tiene el campo, con "auto"');
+  $('#ed-folio').value = 'NO-EXISTE';
+  await par.sincronizar();
+  ok($('#ed-nucco').value === '' && !visible('ed-nucco'), 'y lo vacía si ese folio no tiene Nucco');
+  escribir('ed-nucco', '12');
+  ok($('#ed-folio').value === 'AUT0100', 'ligados: escribir el Nucco pone el folio');
+  const sinCampos = FolioNucco.montar('no-existe', 'tampoco', async () => vehiculos);
+  await sinCampos.sincronizar();
+  ok(true, 'sin los campos en la página no truena');
+  const sinCatalogo = FolioNucco.montar('ed-folio', 'ed-nucco', async () => { throw new Error('sin red'); });
+  ok(Array.isArray(await sinCatalogo.listo), 'si el catálogo no carga, no deja una promesa rechazada (sigue como texto libre)');
 
   console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
   process.exit(fallas ? 1 : 0);
