@@ -520,6 +520,21 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente(LineasCaptura.generarPdf(tipo, id, !!forzar, usuarioOperacion_(sesion), firmas || null));
   }
 
+  /**
+   * PDF firmado de una inspección o responsiva (usuario, 5-oct). Solo el PDF que Documentos le muestra a ese registro:
+   * nunca otro archivo de Drive.
+   */
+  function subirPdfFirmado(token, registroId, tipo, docId, pdfId, base64) {
+    const sesion = operar_(token);
+    if (tipo !== 'INSPECCION' && tipo !== 'RESPONSIVA') throw new Error('Tipo de documento inválido.');
+    const r = registro_(registroId);
+    if (!r) throw new Error('No existe el registro ' + registroId);
+    const docs = evidencias(token, registroId);
+    const doc = (tipo === 'INSPECCION' ? docs.inspecciones : docs.responsivas).filter((d) => d.id === docId && d.pdfId && d.pdfId === pdfId)[0];
+    if (!doc) throw new Error('El PDF no es de este registro.');
+    return LineasUtil.paraCliente(LineasCaptura.subirPdfFirmado(r, { tipo: tipo, id: docId, pdfId: pdfId }, base64, usuarioOperacion_(sesion)));
+  }
+
   /** Panorama de Líneas: equipos y líneas por estatus, hoy y al cierre de cada mes. */
   function panorama(token, forzar) {
     leer_(token);
@@ -599,7 +614,7 @@ const TelefoniaService = (function () {
 
   return {
     permisos, indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, catalogos, colaboradores, bitacora, formularioRegistro, recargarDatos,
-    contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf, crearRegistro, editarRegistro,
+    contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf, subirPdfFirmado, crearRegistro, editarRegistro,
     reasignar, fotosInspeccion, exportarBase, archivo, ultimoDocumentoNuco,
     notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva, panorama,
     formularioResguardo, mandarResguardo, mandarCancelacion, bandejaResguardos, accionBandejaResguardo,
