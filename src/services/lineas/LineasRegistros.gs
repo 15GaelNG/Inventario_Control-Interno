@@ -14,10 +14,12 @@
 const LineasRegistros = (function () {
   const ZONA = 'America/Mexico_City';
   const NO_APLICA = 'NO APLICA';
-  const BA_MODEM = ['BANDA ANCHA', 'MODEM'];
-  const BA_LINEA_MODEM = ['BANDA ANCHA', 'LINEA', 'MODEM'];
-  const ACCESORIOS = ['CAJA', 'CABLE', 'CUBO', 'FUNDA', 'MICA', 'SD', 'NINGUNO'];
-  const ACCESORIOS_VALIDOS = ['CAJA', 'CARGADOR', 'FUNDA', 'MICA', 'CABLE', 'CUBO', 'SD', 'NINGUNO'];
+  // "TARJETA SD" en lugar de "SD" (usuario, 4-oct); SD y CARGADOR de antes siguen siendo válidos (no se cambian)
+  const ACCESORIOS = ['CAJA', 'CABLE', 'CUBO', 'FUNDA', 'MICA', 'TARJETA SD', 'NINGUNO'];
+  const ACCESORIOS_VALIDOS = ['CAJA', 'CARGADOR', 'FUNDA', 'MICA', 'CABLE', 'CUBO', 'TARJETA SD', 'SD', 'NINGUNO'];
+  /** Ya no se asignan (usuario, 4-oct): los registros que los tienen se quedan así. */
+  const TIPOS_HISTORICOS = ['MODEM', 'BANDA ANCHA', 'CAMARA'];
+  const TIPOS_DE_LINEA = ['PLAN', 'SIM BASICO'];
   const MENSAJES = {
     MAYUS: 'ESCRIBIR EN MAYUSCULAS Y SIN ACENTOS',
     TELEFONO: 'ESTE VALOR DEBE SER UNICO',
@@ -51,8 +53,6 @@ const LineasRegistros = (function () {
   const campo_ = (columna, etiqueta, control, extra) => Object.assign({
     tipo: 'campo', columna: columna, etiqueta: etiqueta, control: control, requerido: 'NUNCA', mostrar: 'SIEMPRE', editable: 'SIEMPRE', soloLectura: false,
   }, extra || {});
-  const conTipo = { tipoLleno: true };
-  const siEditable = (extra) => Object.assign({ editable: conTipo }, extra || {});
 
   /** Coordinación del usuario en USUARIOS (AppSheet la usa en Valid_If de SEDE, EQUIPO…). Caché 1 h. */
   function coordinacion_(correo) {
@@ -78,106 +78,130 @@ const LineasRegistros = (function () {
 
   /**
    * `base`: valores actuales de la fila (edición) o valores iniciales (alta). `usuario` trae correo y nombre.
-   * Las listas de SEDE / OFICINA / DEPARTAMENTO / AREA admiten otros valores solo a la coordinación LINEAS.
+   * Las listas de SEDE / OFICINA / DEPARTAMENTO / AREA / JEFE / DIRECTOR traen los valores de Capital Humano.
    */
   function elementos_(base, catalogos, usuario, ctx) {
     const coord = coordinacion_(usuario.correo);
-    const listaLibre = coord === 'LINEAS';
     const excepcionEquipo = coord === 'AUDITORIAS Y CALIDAD' || String(usuario.correo || '').toLowerCase() === 'auxiliartelefonia1.ci@ciudadmaderas.com';
     const v = (c) => (base[c] === undefined || base[c] === null ? '' : base[c]);
     const enBlanco = (c) => (((LineasRepo.ESTATUS_EN_BLANCO || {})[c] || []).indexOf(String(v(c)).trim().toUpperCase()) >= 0 ? '' : v(c));
-    const lista = (columna, opciones) => campo_(columna, columna, listaLibre ? 'listaAbierta' : 'lista', siEditable({ valor: v(columna), opciones: opciones, valida: listaLibre ? null : 'LISTA' }));
-    // Mejora sobre AppSheet (texto libre): lista desplegable con COLABORADORES / valores ya capturados.
-    // `sugerencias` las completa el navegador; `autollenar` copia datos del colaborador elegido.
+    // Datos del responsable: lista con los valores de Capital Humano (COLABORADORES); lo que no esté se agrega
+    // eligiendo "Agregar 'x'" y se queda solo en este registro (PLAN_REESTRUCTURA_LINEAS.md §3.6)
+    const listaCH = (columna, etiqueta, opciones) => campo_(columna, etiqueta, 'listaAbierta', { valor: v(columna), opciones: opciones });
+    // Al elegir a la persona se llenan sus datos con lo que dice CH (el correo empresarial va a CUENTA GOOGLE)
+    const datosCH = { 'PUESTO': 'puesto', 'DEPARTAMENTO': 'departamento', 'AREA': 'area', 'SEDE': 'sede', 'OFICINA / DESARROLLO': 'oficina',
+      'DIRECTOR': 'director', 'CUENTA GOOGLE': 'correo' };
     const puestos = catalogos.puestos || [];
-    const responsableExtra = (n, previo, pregunta) => [
-      campo_(pregunta, '¿EXISTE OTRO COLABORADOR QUE USE EL EQUIPO?', 'escala', { valor: v(pregunta), opciones: ['SI', 'NO'], mostrar: previo ? { campo: previo, igual: 'SI' } : 'SIEMPRE' }),
-      campo_('NOMBRE ' + n + ' RESPONSABLE', 'NOMBRE ' + n + ' RESPONSABLE', 'listaAbierta', { valor: v('NOMBRE ' + n + ' RESPONSABLE'), mostrar: { campo: pregunta, igual: 'SI' },
-        sugerencias: 'PERSONAS', autollenar: { ['PUESTO ' + n + ' RESPONSABLE']: 'puesto' } }),
-      campo_('PUESTO ' + n + ' RESPONSABLE', 'PUESTO ' + n + ' RESPONSABLE', 'listaAbierta', { valor: v('PUESTO ' + n + ' RESPONSABLE'), mostrar: { campo: pregunta, igual: 'SI' },
-        opciones: puestos, sugerencias: 'PUESTOS' }),
+    const nuevo = !!(ctx && ctx.nuevo);
+    // Editar y Agregar (usuario, 4-oct): todo lo guardado se edita, en pestañas; FOLIO, NUCO y TIPO no. El registro es un
+    // EQUIPO (con o sin línea) o una LINEA sola: en el alta lo dice el botón (Agregar equipo / Agregar línea) y en la
+    // edición, lo que ya es. El TIPO se asigna solo con eso y con la línea (tipoAutomatico); MODEM, BANDA ANCHA y CAMARA
+    // se quedan como están (histórico), ya no se asignan.
+    const tipoActual = texto_(v('TIPO')).toUpperCase();
+    const parte = parteDe_(ctx, tipoActual);
+    const conEquipo = parte === 'EQUIPO';
+    const historico = TIPOS_HISTORICOS.indexOf(tipoActual) >= 0;
+    const tieneLinea = !nuevo && !!(LineasUtil.txt(v('NUMERO TELEFONO')) || LineasUtil.txt(v('NUMERO SIM')));
+    const fijo = (columna, etiqueta, valor, extra) => campo_(columna, etiqueta, 'calculado', Object.assign({ valor: valor, soloLectura: true, fijo: true }, extra || {}));
+    const ed = (columna, etiqueta, control, extra) => campo_(columna, etiqueta, control, Object.assign({ valor: v(columna) }, extra || {}));
+    const titulo = (texto, icono) => ({ tipo: 'titulo', texto: texto, icono: icono });
+    // Una línea sola no tiene NUCO (si trae uno viejo, para sus documentos, se muestra)
+    const identificacion = [
+      fijo('FOLIO', 'Folio', v('FOLIO'), { formula: 'FOLIO' }),
+      conEquipo && nuevo ? ed('NUCO', 'NUCO', 'numero', { valor: '', requerido: 'SIEMPRE', valida: 'NUCO' })
+        : (conEquipo || LineasUtil.nucoVisible(v('NUCO')) ? fijo('NUCO', 'NUCO', LineasUtil.nucoVisible(v('NUCO')) || '') : null),
+      fijo('TIPO', 'Tipo', historico ? tipoActual : (nuevo ? '' : tipoActual), historico ? {} : { formula: 'TIPO_' + parte }),
+    ].filter(Boolean);
+    const equipo = !conEquipo ? [] : [
+      titulo('EQUIPO', 'smartphone'),
+    ].concat(identificacion, [
+      ed('EQUIPO', 'Modelo', 'listaAbierta', { opciones: catalogos.modelos || [], valida: excepcionEquipo ? null : 'EQUIPO', requerido: 'SIEMPRE' }),
+      ed('IMEI', 'IMEI', 'texto'),
+      ed('COLOR', 'Color', 'listaAbierta', { opciones: catalogos.colores || [] }),
+      // Los estatus se cambian aquí (sin «Cambiar estatus», usuario 4-oct). RESGUARDO, PARA VENTA y PARA DESECHO siguen el
+      // flujo de resguardo y EN PROCESO DE CANCELACION el de cancelación (la pantalla los abre; el servidor no los acepta aquí)
+      ed('ESTATUS EQUIPO', 'Estatus del equipo', 'lista', { valor: enBlanco('ESTATUS EQUIPO'), opciones: LineasRepo.CATALOGO.estatusEquipo,
+        requerido: 'SIEMPRE', valida: 'LISTA', validaSiCambia: true }),
+    ], nuevo ? [] : [fijo('FECHA REGISTRO', 'Fecha de alta', v('FECHA REGISTRO'))]);
+    const responsable = [
+      titulo('RESPONSABLE', 'user'),
+      ed('NO EMPLEADO', 'No. de empleado', 'listaAbierta', { valida: 'MAYUS', sugerencias: 'NO_EMPLEADO', autollenar: Object.assign({ 'RESPONSABLE': 'nombre' }, datosCH) }),
+      ed('RESPONSABLE', 'Nombre', 'listaAbierta', { valida: 'MAYUS', sugerencias: 'PERSONAS', autollenar: Object.assign({ 'NO EMPLEADO': 'noEmpleado' }, datosCH) }),
+      ed('PUESTO', 'Puesto', 'listaAbierta', { valida: 'MAYUS', opciones: puestos, sugerencias: 'PUESTOS' }),
+      listaCH('DEPARTAMENTO', 'Departamento', catalogos.departamentos || []),
+      listaCH('AREA', 'Área', catalogos.areas || []),
+      listaCH('SEDE', 'Sede', catalogos.sedes || []),
+      listaCH('OFICINA / DESARROLLO', 'Oficina o desarrollo', catalogos.oficinas || []),
+      listaCH('DIRECTOR', 'Director', catalogos.directores || []),
+      ed('CUENTA GOOGLE', 'Correo', 'texto', { literal: true }),
+      ed('RESPONSABLE USA EL EQUIPO', '¿El responsable usa el equipo?', 'escala', { opciones: ['SI', 'NO'], mostrar: conEquipo ? 'SIEMPRE' : 'NUNCA' }),
+      // "Quien usa" solo se guarda si es otra persona (§3.7; el AppSheet copiaba aquí al responsable)
+      ed('NOMBRE QUIEN USA', 'Quien lo usa', 'listaAbierta', { mostrar: { campo: 'RESPONSABLE USA EL EQUIPO', igual: 'NO' },
+        sugerencias: 'PERSONAS', autollenar: { 'PUESTO QUIEN USA': 'puesto' }, reset: { cuando: { campo: 'RESPONSABLE USA EL EQUIPO', igual: 'SI' }, valor: '' } }),
+      ed('PUESTO QUIEN USA', 'Puesto de quien lo usa', 'listaAbierta', { mostrar: { campo: 'RESPONSABLE USA EL EQUIPO', igual: 'NO' }, opciones: puestos,
+        sugerencias: 'PUESTOS', reset: { cuando: { campo: 'RESPONSABLE USA EL EQUIPO', igual: 'SI' }, valor: '' } }),
     ];
-    const elementos = [
-      campo_('FOLIO', 'FOLIO', 'calculado', { formula: 'FOLIO', valor: v('FOLIO'), soloLectura: true }),
-      campo_('TIPO', 'TIPO', 'lista', { valor: v('TIPO'), opciones: LineasRepo.CATALOGO.tipos, requerido: 'SIEMPRE' }),
-      campo_('NUMERO TELEFONO', 'NUMERO TELEFONO', 'texto', {
-        valor: v('NUMERO TELEFONO'), requerido: 'SIEMPRE', valida: 'TELEFONO',
-        editable: { y: [conTipo, { tipoNoEn: ['EQUIPO'] }] }, reset: { cuando: { tipoEn: ['EQUIPO'] }, valor: NO_APLICA },
-      }),
-      // NUCO homologado a 4 dígitos ("0005"): se muestra y se guarda así (como texto)
-      campo_('NUCO', 'NUCO', 'numero', siEditable({ valor: LineasUtil.nucoVisible(v('NUCO')) || '', requerido: 'SIEMPRE', valida: 'NUCO' })),
-      campo_('EQUIPO', 'EQUIPO', 'listaAbierta', {
-        valor: v('EQUIPO'), opciones: catalogos.modelos || [], valida: excepcionEquipo ? null : 'EQUIPO',
-        editable: { y: [conTipo, { tipoNoEn: ['LINEA'] }] }, reset: { cuando: { tipoEn: ['LINEA'] }, valor: NO_APLICA },
-      }),
-      campo_('NO EMPLEADO', 'No EMPLEADO', 'listaAbierta', siEditable({ valor: v('NO EMPLEADO'), valida: 'MAYUS',
-        sugerencias: 'NO_EMPLEADO', autollenar: { 'RESPONSABLE': 'nombre', 'PUESTO': 'puesto' } })),
-      campo_('ESTATUS GENERAL', 'ESTATUS GENERAL', 'calculado', { formula: 'ESTATUS_GENERAL', valor: v('ESTATUS GENERAL'), soloLectura: true }),
-      campo_('RESPONSABLE', 'RESPONSABLE', 'listaAbierta', siEditable({ valor: v('RESPONSABLE'), valida: 'MAYUS',
-        sugerencias: 'PERSONAS', autollenar: { 'NO EMPLEADO': 'noEmpleado', 'PUESTO': 'puesto' } })),
-      campo_('PUESTO', 'PUESTO', 'listaAbierta', siEditable({ valor: v('PUESTO'), valida: 'MAYUS', opciones: puestos, sugerencias: 'PUESTOS' })),
-      campo_('RESPONSABLE USA EL EQUIPO', '¿EL RESPONSABLE SERÁ QUIEN USE EL EQUIPO?', 'escala', { valor: v('RESPONSABLE USA EL EQUIPO'), opciones: ['SI', 'NO'] }),
-      campo_('NOMBRE QUIEN USA', 'NOMBRE DEL COLABORADOR QUE USARÁ EL EQUIPO', 'listaAbierta', {
-        valor: v('NOMBRE QUIEN USA'), mostrar: { campo: 'RESPONSABLE USA EL EQUIPO', igual: 'NO' },
-        sugerencias: 'PERSONAS', autollenar: { 'PUESTO QUIEN USA': 'puesto' },
-        reset: { cuando: { campo: 'RESPONSABLE USA EL EQUIPO', igual: 'SI' }, copiar: 'RESPONSABLE' },
-      }),
-      campo_('PUESTO QUIEN USA', 'PUESTO DEL COLABORADOR QUE USARÁ EL EQUIPO', 'listaAbierta', {
-        valor: v('PUESTO QUIEN USA'), mostrar: { campo: 'RESPONSABLE USA EL EQUIPO', igual: 'NO' }, opciones: puestos, sugerencias: 'PUESTOS',
-        reset: { cuando: { campo: 'RESPONSABLE USA EL EQUIPO', igual: 'SI' }, copiar: 'PUESTO' },
-      }),
-    ]
-      .concat(responsableExtra('SEGUNDO', null, 'SEGUNDO RESPONSABLE'))
-      .concat(responsableExtra('TERCER', 'SEGUNDO RESPONSABLE', 'TERCER RESPONSABLE'))
-      .concat(responsableExtra('CUARTO', 'TERCER RESPONSABLE', 'CUARTO RESPONSABLE'))
-      .concat(responsableExtra('QUINTO', 'CUARTO RESPONSABLE', 'QUINTO RESPONSABLE'))
-      .concat([
-        campo_('IMEI', 'IMEI', 'texto', { valor: v('IMEI') }),
-        campo_('NUMERO SIM', 'NUMERO SIM', 'texto', {
-          valor: v('NUMERO SIM'), mostrar: { tipoNoEn: ['EQUIPO'] },
-          editable: { y: [conTipo, { tipoNoEn: ['EQUIPO'] }] }, reset: { cuando: { tipoEn: ['EQUIPO'] }, valor: NO_APLICA, soloCambioTipo: true },
-        }),
-        campo_('ACCESORIOS', 'ACCESORIOS', 'multi', siEditable({ valor: v('ACCESORIOS'), opciones: ACCESORIOS, valida: 'ACCESORIOS' })),
-        lista('SEDE', catalogos.sedes || []),
-        lista('OFICINA / DESARROLLO', catalogos.oficinas || []),
-        lista('DEPARTAMENTO', catalogos.departamentos || []),
-        lista('AREA', catalogos.areas || []),
-        campo_('JEFE DIRECTO', 'JEFE DIRECTO', 'listaAbierta', siEditable({ valor: v('JEFE DIRECTO'), valida: 'MAYUS', opciones: catalogos.jefes || [], sugerencias: 'PERSONAS' })),
-        campo_('DIRECTOR', 'DIRECTOR', 'listaAbierta', siEditable({ valor: v('DIRECTOR'), valida: 'MAYUS', opciones: catalogos.directores || [], sugerencias: 'PERSONAS' })),
-        campo_('RAZON SOCIAL', 'RAZON SOCIAL', 'lista', siEditable({ valor: v('RAZON SOCIAL'), opciones: catalogos.razonesSociales || [], valida: 'LISTA' })),
-        campo_('PIN WHATSAPP', 'PIN WHATSAPP', 'texto', {
-          valor: v('PIN WHATSAPP'), valida: 'PIN_WA', literal: true, secreto: true,
-          editable: { y: [conTipo, { tipoNoEn: BA_MODEM }] }, reset: { cuando: { tipoEn: BA_MODEM }, valor: NO_APLICA },
-        }),
-        campo_('PIN EQUIPO', 'PIN EQUIPO', 'texto', {
-          valor: v('PIN EQUIPO'), valida: 'PIN_EQ', literal: true, secreto: true,
-          editable: { y: [conTipo, { tipoNoEn: BA_LINEA_MODEM }] }, reset: { cuando: { tipoEn: BA_LINEA_MODEM }, valor: NO_APLICA },
-        }),
-        campo_('CUENTA GOOGLE', 'CUENTA GOOGLE', 'texto', {
-          valor: v('CUENTA GOOGLE'), valida: 'CUENTA', literal: true,
-          editable: { y: [conTipo, { tipoNoEn: BA_LINEA_MODEM }] }, reset: { cuando: { tipoEn: BA_LINEA_MODEM }, valor: NO_APLICA },
-        }),
-        campo_('COMPAÑIA', 'COMPAÑIA', 'listaAbierta', siEditable({ valor: v('COMPAÑIA'), opciones: ['TELCEL', 'AT&T', 'BAIT'], valida: 'MAYUS' })),
-        campo_('COSTO PLAN', 'COSTO PLAN', 'numero', { valor: v('COSTO PLAN'), editable: { tipoNoEn: ['EQUIPO'] } }),
-        campo_('FECHA REGISTRO', 'FECHA REGISTRO', 'calculado', { valor: v('FECHA REGISTRO'), soloLectura: true }),
-        // Fechas del adendum: solo se capturan en el alta. Después no se pueden cambiar (pedido del área, 29-sep):
-        // el formulario de edición no las muestra y el servidor ignora lo que llegue (Editable_If solo en el alta).
-        campo_('INICIO PLAN', 'INICIO PLAN', 'fecha', { valor: v('INICIO PLAN'), mostrar: { nuevo: true }, requerido: { nuevo: true }, editable: { nuevo: true } }),
-        campo_('FIN PLAN', 'FIN PLAN', 'fecha', { valor: v('FIN PLAN'), mostrar: { nuevo: true }, requerido: { nuevo: true }, editable: { nuevo: true } }),
-        // Listas del 30-sep. "SIN LINEA" y "N/A" viejos se muestran en blanco; cualquier otro valor viejo sale
-        // "(no está en la lista)" y hay que elegir uno nuevo para guardar. El servidor solo revisa la lista si cambió.
-        campo_('ESTATUS LINEA', 'ESTATUS LINEA', 'lista', siEditable({ valor: enBlanco('ESTATUS LINEA'), opciones: LineasRepo.CATALOGO.estatusLinea, valida: 'LISTA', validaSiCambia: true })),
-        campo_('ESTATUS EQUIPO', 'ESTATUS EQUIPO', 'lista', siEditable({ valor: enBlanco('ESTATUS EQUIPO'), opciones: LineasRepo.CATALOGO.estatusEquipo, valida: 'LISTA', validaSiCambia: true })),
-        // RESPONSIVA y FORMATO INSPECCION (archivos) no van: la responsiva y la inspección se consultan en NUCOS
-        campo_('FECHA INSPECCION', 'FECHA INSPECCION', 'fecha', { valor: v('FECHA INSPECCION') }),
-        campo_('COMENTARIOS', 'COMENTARIOS', 'texto', { valor: v('COMENTARIOS'), valida: 'COMENTARIOS' }),
-        // ---- Agregados por el sistema nuevo (no están en el formulario del AppSheet) ----
-        { tipo: 'titulo', texto: 'DATOS DEL SISTEMA NUEVO', icono: 'sparkles' },
-        campo_('COLOR', 'COLOR', 'listaAbierta', { valor: v('COLOR'), opciones: catalogos.colores || [], extra: true }),
-        campo_('CONTRASEÑA MODEM', 'CONTRASEÑA MODEM', 'texto', { valor: v('CONTRASEÑA MODEM'), mostrar: { tipoEn: ['MODEM', 'BANDA ANCHA'] }, literal: true, secreto: true, extra: true }),
-        campo_('PATRON', 'PATRÓN DEL EQUIPO', 'patron', { valor: v('PATRON'), mostrar: { tipoEn: ['EQUIPO + SIM', 'EQUIPO'] }, secreto: true, extra: true }),
-      ]);
+    // Línea: obligatoria en una línea sola; opcional en un equipo. A un equipo sin línea se le puede poner una: un número
+    // nuevo o una línea sola que ya existe (se elige de la lista y se llenan sus datos)
+    const lineaReq = conEquipo ? 'NUNCA' : 'SIEMPRE';
+    const enlazar = conEquipo && !nuevo && !tieneLinea;
+    const tiposLinea = TIPOS_DE_LINEA.concat(TIPOS_DE_LINEA.indexOf(texto_(v('TIPO DE LINEA')).toUpperCase()) < 0 && texto_(v('TIPO DE LINEA')) ? [texto_(v('TIPO DE LINEA')).toUpperCase()] : []);
+    const linea = [
+      titulo('LÍNEA', 'card-sim'),
+    ].concat(conEquipo ? [] : identificacion, [
+      enlazar
+        ? ed('NUMERO TELEFONO', 'Número', 'listaAbierta', { valida: 'TELEFONO', literal: true, sugerencias: 'NUMEROS',
+          autollenar: { 'NUMERO SIM': 'sim', 'COMPAÑIA': 'compania', 'RAZON SOCIAL': 'razonSocial' } })
+        : ed('NUMERO TELEFONO', 'Número', 'texto', { valida: 'TELEFONO', literal: true, requerido: lineaReq }),
+      ed('NUMERO SIM', 'SIM', 'texto', { literal: true }),
+      ed('TIPO DE LINEA', 'Tipo de línea', 'lista', { valor: v('TIPO DE LINEA') || (nuevo ? 'PLAN' : ''), opciones: tiposLinea }),
+      ed('COMPAÑIA', 'Compañía', 'listaAbierta', { opciones: ['TELCEL', 'AT&T', 'BAIT'], valida: 'MAYUS', requerido: lineaReq }),
+      // La razón social es de la línea (la del contrato), no del responsable (§3.3)
+      ed('RAZON SOCIAL', 'Razón social', 'lista', { opciones: catalogos.razonesSociales || [], valida: 'LISTA', validaSiCambia: true }),
+      ed('ESTATUS LINEA', 'Estatus de la línea', 'lista', { valor: enBlanco('ESTATUS LINEA'), opciones: LineasRepo.CATALOGO.estatusLinea,
+        requerido: lineaReq, valida: 'LISTA', validaSiCambia: true }),
+    ]);
+    // INICIO y FIN del adendum: solo al dar de alta la línea (pedido del área, 29-sep; confirmado por el usuario el 4-oct)
+    const fechas = nuevo || !tieneLinea ? 'SIEMPRE' : 'NUNCA';
+    const adendum = [
+      titulo('ADENDUM', 'file-text'),
+      ed('COSTO PLAN', 'Costo del plan', 'numero'),
+      ed('INICIO PLAN', 'Inicio', 'fecha', { editable: fechas, requerido: nuevo && !conEquipo ? 'SIEMPRE' : 'NUNCA' }),
+      ed('FIN PLAN', 'Fin', 'fecha', { editable: fechas, requerido: nuevo && !conEquipo ? 'SIEMPRE' : 'NUNCA' }),
+    ];
+    const accesos = [
+      titulo(conEquipo ? 'ACCESORIOS Y ACCESOS' : 'ACCESOS', 'key-round'),
+    ].concat(conEquipo ? [ed('ACCESORIOS', 'Accesorios', 'multi', { opciones: ACCESORIOS, valida: 'ACCESORIOS' })] : [], [
+      ed('PIN WHATSAPP', 'PIN de WhatsApp', 'texto', { valida: 'PIN_WA', literal: true, secreto: true }),
+    ], conEquipo ? [
+      ed('PIN EQUIPO', 'PIN EQUIPO', 'texto', { valida: 'PIN_EQ', literal: true, secreto: true }),
+      ed('PATRON', 'Patrón', 'patron', { secreto: true }),
+    ] : [], ['MODEM', 'BANDA ANCHA'].indexOf(tipoActual) >= 0 ? [
+      ed('CONTRASEÑA MODEM', 'Contraseña del módem', 'texto', { literal: true, secreto: true }),
+    ] : []);
+    const elementos = conEquipo ? equipo.concat(responsable, linea, adendum, accesos) : linea.concat(responsable, adendum, accesos);
     return elementos;
+  }
+
+  /** EQUIPO o LINEA: lo que dice el botón en el alta o lo que ya es el registro. */
+  function parteDe_(ctx, tipoActual) {
+    if (ctx && ctx.parte) return String(ctx.parte).toUpperCase() === 'LINEA' ? 'LINEA' : 'EQUIPO';
+    return LineasRepo.TIPOS_CON_EQUIPO[String(tipoActual || '').toUpperCase()] ? 'EQUIPO' : 'LINEA';
+  }
+
+  /**
+   * TIPO asignado solo (usuario, 4-oct): un equipo sin línea es EQUIPO; con línea, EQUIPO + SIM, o EQUIPO + SIM BASICO si
+   * la línea es básica; una línea sola, LINEA o LINEA BASICA. Una línea CANCELADA ya no cuenta. MODEM, BANDA ANCHA y
+   * CAMARA se quedan (histórico). La pantalla hace la misma cuenta (tipoAutomatico) para mostrarlo en vivo.
+   */
+  function tipoAutomatico_(parte, valores, tipoActual) {
+    const actual = String(tipoActual || '').toUpperCase();
+    if (TIPOS_HISTORICOS.indexOf(actual) >= 0) return actual;
+    const conLinea = !!(LineasUtil.txt(valores['NUMERO TELEFONO']) || LineasUtil.txt(valores['NUMERO SIM'])) &&
+      texto_(valores['ESTATUS LINEA']).toUpperCase() !== 'CANCELADA';
+    const basica = texto_(valores['TIPO DE LINEA']).toUpperCase() === 'SIM BASICO';
+    if (parte === 'EQUIPO') return !conLinea ? 'EQUIPO' : (basica ? 'EQUIPO + SIM BASICO' : 'EQUIPO + SIM');
+    return basica ? 'LINEA BASICA' : 'LINEA';
   }
 
   /** Valores de la fila como texto/fecha ISO local para el formulario. */
@@ -204,13 +228,15 @@ const LineasRegistros = (function () {
   }
 
   /** Formulario para el cliente: alta (id vacío) o edición. */
-  function formulario(id, usuario, puedeVerSecretos) {
+  function formulario(id, usuario, puedeVerSecretos, parte) {
     const fila = id ? LineasRepo.leerRegistroObligatorio(id, 'el registro') : null;
     const base = fila ? baseDeFila_(fila) : baseNueva_();
-    const ctx = { nuevo: !fila };
+    const ctx = { nuevo: !fila, parte: fila ? null : parte };
     // idDG: el ID con el que ESTATUS GENERAL reconoce al personal de DG (DG001…); tras migrar quedó en ID APPSHEET
     const idDG = fila ? LineasDatos.idsDeFila(fila).filter((k) => /^DG/i.test(k))[0] || null : null;
-    return { nuevo: ctx.nuevo, idDG: idDG, elementos: ocultarSecretos_(elementos_(base, LineasRepo.catalogos(), usuario, ctx), puedeVerSecretos) };
+    const tipo = texto_(base['TIPO']).toUpperCase();
+    return { nuevo: ctx.nuevo, idDG: idDG, parte: parteDe_(ctx, tipo), tipo: tipo, historico: TIPOS_HISTORICOS.indexOf(tipo) >= 0,
+      elementos: ocultarSecretos_(elementos_(base, LineasRepo.catalogos(), usuario, ctx), puedeVerSecretos) };
   }
 
   // ---------------- Valid_If ----------------
@@ -218,15 +244,15 @@ const LineasRegistros = (function () {
   const mayusSinAcentos_ = (v) => v === v.toUpperCase() && !/[ÁÉÍÓÚ]/.test(v);
 
   function valida_(codigo, valor, valores, e, ctx) {
-    const tipo = texto_(valores['TIPO']).toUpperCase();
     switch (codigo) {
       case 'MAYUS': return mayusSinAcentos_(valor);
       case 'NUCO': return /^\d+$/.test(valor) && !ctx.nucoRepetido(valor);
-      case 'TELEFONO': return tipo === 'EQUIPO' ? valor === NO_APLICA : (valor !== NO_APLICA && !ctx.telefonoRepetido(valor));
-      case 'EQUIPO': return tipo === 'LINEA' ? valor === NO_APLICA : valor !== NO_APLICA;
-      case 'PIN_WA': return BA_MODEM.indexOf(tipo) >= 0 ? valor === NO_APLICA : (valor !== NO_APLICA && valor.length <= 13);
-      case 'PIN_EQ': return BA_LINEA_MODEM.indexOf(tipo) >= 0 ? valor === NO_APLICA : (valor !== NO_APLICA && valor.length <= 6);
-      case 'CUENTA': return BA_LINEA_MODEM.indexOf(tipo) >= 0 ? valor === NO_APLICA : valor !== NO_APLICA;
+      // Sin TIPO que elegir (se asigna solo, 4-oct): lo vacío o "NO APLICA" ya no se pide por TIPO; se guarda en blanco
+      case 'TELEFONO': return valor === NO_APLICA || !ctx.telefonoRepetido(valor);
+      case 'EQUIPO': return valor !== NO_APLICA;
+      case 'PIN_WA': return valor === NO_APLICA || valor.length <= 13;
+      case 'PIN_EQ': return valor === NO_APLICA || valor.length <= 6;
+      case 'CUENTA': return true;
       case 'COMENTARIOS': return valor.length > 3;
       case 'ACCESORIOS': return valor.split(',').map((x) => x.trim().toUpperCase()).filter(Boolean).every((x) => ACCESORIOS_VALIDOS.indexOf(x) >= 0);
       case 'LISTA': return (e.opciones || []).map((o) => String(o).toUpperCase()).indexOf(valor.toUpperCase()) >= 0;
@@ -251,15 +277,6 @@ const LineasRegistros = (function () {
     const campoTipo = orden.filter((e) => e.columna === 'TIPO')[0];
     if (campoTipo) tomar(campoTipo); // las acciones masivas no traen TIPO
     const tipo = texto_(valores['TIPO']).toUpperCase();
-    if (ctx.nuevo) {
-      // Initial value del AppSheet para un alta
-      if (!Object.prototype.hasOwnProperty.call(enviados, 'NUMERO TELEFONO') || !texto_(enviados['NUMERO TELEFONO'])) valores['NUMERO TELEFONO'] = tipo === 'EQUIPO' ? NO_APLICA : '';
-      if (!texto_(enviados['NUMERO SIM'])) valores['NUMERO SIM'] = tipo === 'EQUIPO' ? NO_APLICA : '';
-      if (!texto_(enviados['EQUIPO'])) valores['EQUIPO'] = tipo === 'LINEA' ? NO_APLICA : '';
-      if (!texto_(enviados['PIN WHATSAPP'])) valores['PIN WHATSAPP'] = BA_MODEM.indexOf(tipo) >= 0 ? NO_APLICA : '';
-      if (!texto_(enviados['PIN EQUIPO'])) valores['PIN EQUIPO'] = BA_LINEA_MODEM.indexOf(tipo) >= 0 ? NO_APLICA : '';
-      if (!texto_(enviados['CUENTA GOOGLE'])) valores['CUENTA GOOGLE'] = BA_LINEA_MODEM.indexOf(tipo) >= 0 ? NO_APLICA : '';
-    }
     orden.forEach((e) => { if (e.columna !== 'TIPO') tomar(e); });
     // 2) Reset_If
     const tipoCambio = ctx.nuevo || texto_(base['TIPO']).toUpperCase() !== tipo;
@@ -288,8 +305,12 @@ const LineasRegistros = (function () {
 
   // ---------------- Guardar ----------------
 
-  /** COLOR es una columna real del sistema nuevo (en AppSheet es virtual): se crea si falta. */
+  /**
+   * COLOR es una columna real del sistema nuevo (en AppSheet es virtual): se crea si falta. Con las hojas nuevas
+   * (reestructura) LINEAS TELEFONICAS ya no se toca.
+   */
   function asegurarEsquema_() {
+    if (LineasLectura.activo()) return;
     const tabla = LineasDatos.tablaFresca(LineasRepo.TAB.LINEAS);
     if (LineasDatos.colIndice(tabla, 'COLOR') < 0) LineasDatos.asegurarPestana(LineasRepo.TAB.LINEAS, ['COLOR']);
   }
@@ -299,13 +320,17 @@ const LineasRegistros = (function () {
     return elementos.filter((e) => e.tipo === 'campo' && e.control !== 'calculado' && !e.soloLectura).map((e) => e.columna);
   }
 
-  function contextoValidacion_(id, nuevo) {
+  function contextoValidacion_(id, nuevo, permitirLineaSola) {
     const filas = LineasDatos.leerTabla(LineasRepo.TAB.LINEAS);
     const otros = filas.filter((f) => texto_(f['ID']) !== texto_(id));
+    const esLineaSola = (f) => !LineasRepo.TIPOS_CON_EQUIPO[texto_(LineasUtil.col(f, 'TIPO')).toUpperCase()];
     return {
       nuevo: nuevo,
       nucoRepetido: (nuco) => otros.some((f) => texto_(LineasUtil.col(f, 'NUCO')).replace(/^0+/, '') === String(nuco).replace(/^0+/, '')),
-      telefonoRepetido: (num) => otros.some((f) => texto_(LineasUtil.col(f, 'NUMERO TELEFONO')) === num),
+      // Una línea CANCELADA no aparta su número (en la hoja vieja se borraba al cancelar; en las nuevas lo conserva). Al
+      // ponerle línea a un equipo, una línea sola con ese número no cuenta: es la que se le pone
+      telefonoRepetido: (num) => otros.some((f) => texto_(LineasUtil.col(f, 'NUMERO TELEFONO')) === num &&
+        texto_(LineasUtil.col(f, 'ESTATUS LINEA')).toUpperCase() !== 'CANCELADA' && !(permitirLineaSola && esLineaSola(f))),
     };
   }
 
@@ -329,28 +354,50 @@ const LineasRegistros = (function () {
     return valores;
   }
 
+  /**
+   * Datos de la persona que solo «Mandar a resguardo» deja en blanco (usuario, 4-oct; LineasResguardos.CAMPOS_PERSONA).
+   * "NO APLICA" no cuenta como blanco: lo pone el TIPO (módem, banda ancha, línea).
+   */
+  const PERSONA_SOLO_RESGUARDO = ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'JEFE DIRECTO', 'DIRECTOR', 'PIN WHATSAPP', 'PIN EQUIPO', 'CUENTA GOOGLE'];
+  const enBlanco_ = (v) => ['', 'N/A', 'NA', 'N / A', '-'].indexOf(texto_(v).trim().toUpperCase()) >= 0;
+
+  /** Un solo COMENTARIO obligatorio en cada acción (plan §5.2): el del alta o el de la corrección. */
+  function comentarioObligatorio_(datos, que) {
+    const c = texto_(datos && (datos.comentario || datos.motivo));
+    if (c.length <= 3) throw new Error('Escribe el comentario: ' + que + ' (queda en el historial).');
+    return c;
+  }
+
   function crear(datos, usuario) {
     asegurarEsquema_();
+    const comentario = comentarioObligatorio_(datos, 'de dónde sale este registro');
     const enviados = (datos && datos.valores) || datos || {};
-    const ctx = contextoValidacion_(null, true);
+    // Agregar equipo o Agregar línea (usuario, 4-oct): el TIPO no se elige, se asigna solo
+    const parte = parteDe_({ parte: (datos && datos.parte) || 'EQUIPO' }, '');
+    const ctx = Object.assign(contextoValidacion_(null, true), { parte: parte });
     const elementos = elementos_(baseNueva_(), LineasRepo.catalogos(), usuario, ctx);
     const r = resolver_(elementos, baseNueva_(), enviados, ctx);
     if (r.errores.length) throw new Error(r.errores.slice(0, 8).join(' · '));
     const valores = homologarNuco_(aHoja_(elementos, r.valores));
-    const id = LineasDatos.nuevoId(LineasRepo.TAB.LINEAS);
+    valores.TIPO = tipoAutomatico_(parte, valores, '');
+    if (parte === 'LINEA' && !LineasUtil.txt(valores['NUMERO TELEFONO']) && !LineasUtil.txt(valores['NUMERO SIM'])) {
+      throw new Error('Escribe el número o la SIM de la línea.');
+    }
+    // Con las hojas nuevas, el ID del registro lo pone agregarRegistro (el del equipo o el de la línea)
+    const estructura = LineasLectura.activo();
     const ahora = new Date();
-    valores.ID = id;
+    valores.ID = estructura ? '' : LineasDatos.nuevoId(LineasRepo.TAB.LINEAS);
     valores['FECHA REGISTRO'] = ahora;
-    valores['ESTATUS GENERAL'] = LineasRepo.estatusGeneralRegistro(id, texto_(valores.TIPO).toUpperCase(), texto_(valores['ESTATUS EQUIPO']), texto_(valores['ESTATUS LINEA']));
+    if (!estructura) valores['ESTATUS GENERAL'] = LineasRepo.estatusGeneralRegistro(valores.ID, texto_(valores.TIPO).toUpperCase(), texto_(valores['ESTATUS EQUIPO']), texto_(valores['ESTATUS LINEA']));
     LineasDatos.conCandado(() => {
-      LineasRepo.agregarRegistro(valores);
+      const alta = LineasRepo.agregarRegistro(valores);
       // El bot CAMBIOS TELEFONIA es UPDATES_ONLY: un alta no deja filas en la bitácora del AppSheet
-      LineasRepo.registrarMovimiento('ALTA', { motivo: 'Alta de registro' }, usuario, ahora, {
-        refs: [id], nuco: valores.NUCO, numero: valores['NUMERO TELEFONO'], antes: {}, despues: valores, detalle: {},
+      LineasRepo.registrarMovimiento('ALTA', { motivo: comentario, ticket: texto_(datos && datos.ticket) }, usuario, ahora, {
+        refs: [valores.ID].concat((alta && alta.refs) || []), nuco: valores.NUCO, numero: valores['NUMERO TELEFONO'], antes: {}, despues: valores, detalle: {},
       });
     });
     LineasNotificaciones.revisarPronto(); // si el adendum ya vence esta semana, el aviso sale en la siguiente consulta
-    return { id: id, filas: LineasRepo.refrescarIndice([id]) };
+    return { id: valores.ID, filas: LineasRepo.refrescarIndice([valores.ID]) };
   }
 
   function editar(id, datos, usuario, puedeVerSecretos) {
@@ -359,7 +406,10 @@ const LineasRegistros = (function () {
     const resultado = LineasDatos.conCandado(() => {
       const fila = LineasRepo.leerRegistroObligatorio(id, 'el registro');
       const base = baseDeFila_(fila);
-      const ctx = contextoValidacion_(id, false);
+      const parte = parteDe_(null, base['TIPO']);
+      // A un equipo sin línea se le puede poner una línea sola que ya existe: su número no cuenta como repetido
+      const sinLinea = parte === 'EQUIPO' && !LineasUtil.txt(base['NUMERO TELEFONO']) && !LineasUtil.txt(base['NUMERO SIM']);
+      const ctx = Object.assign(contextoValidacion_(id, false, sinLinea), { parte: parte });
       const elementos = elementos_(base, LineasRepo.catalogos(), usuario, ctx)
         .map((e) => (e.secreto && !puedeVerSecretos ? Object.assign({}, e, { valorOculto: true }) : e));
       const r = resolver_(elementos, base, enviados, ctx);
@@ -372,17 +422,21 @@ const LineasRegistros = (function () {
         const despues = valores[c] instanceof Date ? Utilities.formatDate(valores[c], ZONA, 'yyyy-MM-dd') : texto_(valores[c]);
         if (texto_(antes) !== despues) cambios[c] = valores[c];
       });
-      // Cambiar el número o el NUCO pide el motivo: es el "por qué" del historial de asignaciones
-      const motivo = texto_(datos && datos.motivo);
-      const cambiaNuco = 'NUCO' in cambios && LineasUtil.nucoVisible(texto_(base['NUCO'])) !== LineasUtil.nucoVisible(texto_(valores['NUCO']));
-      if (('NUMERO TELEFONO' in cambios || cambiaNuco) && !motivo) {
-        throw new Error('Escribe el motivo del cambio de número o NUCO; queda en el historial.');
+      // Los datos de la persona solo quedan en blanco al mandar a resguardo (usuario, 4-oct): aquí no se vacían
+      const vacios = PERSONA_SOLO_RESGUARDO.filter((c) => !enBlanco_(base[c]) && c in cambios && enBlanco_(valores[c]));
+      if (vacios.length) throw new Error(vacios.join(', ') + ': no se deja en blanco al editar; solo «Mandar a resguardo» lo deja en blanco.');
+      // Editar es corregir un dato mal capturado: siempre con su comentario (qué se corrigió y por qué), §5.2
+      const motivo = comentarioObligatorio_(datos, 'qué se corrigió y por qué');
+      if ('ESTATUS EQUIPO' in cambios) exigirFormularioResguardo_(base.TIPO, base['ESTATUS EQUIPO'], valores['ESTATUS EQUIPO']);
+      if ('ESTATUS LINEA' in cambios && texto_(valores['ESTATUS LINEA']).toUpperCase() === 'EN PROCESO DE CANCELACION') {
+        throw new Error('Para mandar la línea a cancelación usa «Mandar a cancelación»: entra a la bandeja de cancelaciones.');
       }
-      if ('ESTATUS EQUIPO' in cambios) exigirFormularioResguardo_(valores.TIPO || base.TIPO, base['ESTATUS EQUIPO'], valores['ESTATUS EQUIPO']);
       const antes = LineasRepo.convertirRegistro(fila);
-      const guardado = LineasRepo.guardarCambiosRegistro(fila, cambios, usuario, new Date());
-      LineasRepo.registrarMovimiento('EDICION', { motivo: motivo || 'Edición del registro' }, usuario, new Date(), {
-        refs: [id], nuco: valores.NUCO, numero: valores['NUMERO TELEFONO'], antes: antes, despues: cambios,
+      // corregir: cambiar a la persona aquí es corregir el dato en la misma asignación (usuario, 4-oct); pasar el equipo a
+      // otra persona es Reasignar, con su responsiva
+      const guardado = LineasRepo.guardarCambiosRegistro(fila, cambios, usuario, new Date(), { corregir: true });
+      LineasRepo.registrarMovimiento('EDICION', { motivo: motivo, ticket: texto_(datos && datos.ticket) }, usuario, new Date(), {
+        refs: [id].concat(guardado.refs || []), nuco: valores.NUCO, numero: valores['NUMERO TELEFONO'], antes: antes, despues: cambios,
         detalle: { idsCambios: guardado.idsCambios, idsReasignacion: guardado.idReasignacion ? [guardado.idReasignacion] : [], cambios: guardado.campos },
       });
       return guardado;
@@ -391,8 +445,8 @@ const LineasRegistros = (function () {
   }
 
   /**
-   * RESGUARDO, PARA VENTA, POSIBLE VENTA-DAÑO y PARA DESECHO siguen la lógica de "Mandar a resguardo" (pedido del
-   * usuario, 30-sep): los datos de la persona pasan a N/A y se eligen departamento, sede, oficina y el estatus de la
+   * RESGUARDO, PARA VENTA y PARA DESECHO siguen la lógica de "Mandar a resguardo" (pedido del
+   * usuario, 30-sep): los datos de la persona quedan en blanco y se eligen departamento, sede, oficina y el estatus de la
    * línea. Por eso un equipo no llega a esos estatus por el cambio rápido ni por la edición directa: la ficha abre el
    * formulario de resguardo (LineasResguardos).
    */
@@ -400,57 +454,29 @@ const LineasRegistros = (function () {
     const nuevo = texto_(estatusNuevo).trim().toUpperCase();
     if (!LineasRepo.TIPOS_CON_EQUIPO[texto_(tipo).trim().toUpperCase()]) return;
     if (LineasResguardos.ESTATUS_EQUIPO_RESGUARDO.indexOf(nuevo) < 0 || nuevo === texto_(estatusAntes).trim().toUpperCase()) return;
-    throw new Error('Para pasar el equipo a ' + nuevo + ' usa «Cambiar estatus» en la ficha o «Mandar a resguardo»: ' +
-      'ese formulario pone en N/A los datos de la persona y pide departamento, sede y oficina.');
+    throw new Error('Para pasar el equipo a ' + nuevo + ' usa «Mandar a resguardo»: ' +
+      'ese formulario cierra la asignación de la persona y pide departamento, sede y oficina.');
   }
 
-  /**
-   * Cambio rápido de ESTATUS EQUIPO / ESTATUS LINEA desde la ficha (mejora: en AppSheet había que abrir todo el
-   * formulario). Solo acepta valores de las listas del AppSheet; deja la bitácora CAMBIOS (bot de 23 campos),
-   * recalcula ESTATUS GENERAL y registra el motivo en APP_MOVIMIENTOS.
-   */
-  function cambiarEstatus(id, datos, usuario) {
-    const d = datos || {};
-    const pedidos = {};
-    [['ESTATUS EQUIPO', d.estatusEquipo, LineasRepo.CATALOGO.estatusEquipo], ['ESTATUS LINEA', d.estatusLinea, LineasRepo.CATALOGO.estatusLinea]]
-      .forEach(([columna, valor, lista]) => {
-        if (valor === undefined || valor === null || valor === '') return;
-        const v = String(valor).trim().toUpperCase();
-        if (lista.indexOf(v) < 0) throw new Error(columna + ': el valor no está en la lista.');
-        pedidos[columna] = v;
-      });
-    if (!Object.keys(pedidos).length) throw new Error('Elige el nuevo estatus.');
-    const resultado = LineasDatos.conCandado(() => {
-      const fila = LineasRepo.leerRegistroObligatorio(id, 'el registro');
-      if (pedidos['ESTATUS EQUIPO']) exigirFormularioResguardo_(LineasUtil.col(fila, 'TIPO'), LineasUtil.col(fila, 'ESTATUS EQUIPO'), pedidos['ESTATUS EQUIPO']);
-      const guardado = LineasRepo.guardarCambiosRegistro(fila, pedidos, usuario, new Date());
-      if (!guardado.campos.length) throw new Error('El estatus ya tenía ese valor.');
-      const motivo = texto_(d.motivo).trim();
-      LineasRepo.registrarMovimiento('EDICION', { motivo: 'Cambio de estatus' + (motivo ? ': ' + motivo : '') }, usuario, new Date(), {
-        refs: [id], nuco: LineasUtil.col(fila, 'NUCO'), numero: LineasUtil.col(fila, 'NUMERO TELEFONO'), antes: {}, despues: pedidos,
-        detalle: { idsCambios: guardado.idsCambios, idsReasignacion: [], cambios: guardado.campos },
-      });
-      return guardado;
-    });
-    return { id: id, cambios: resultado.campos, filas: LineasRepo.refrescarIndice([id]) };
-  }
+  // «Cambiar estatus» se quitó (usuario, 4-oct): los estatus se cambian en Editar (ver editar y la pantalla)
 
   // ---------------- Acciones masivas de equipos (pedido del área, 29-sep) ----------------
   //
-  // Con dos o más equipos seleccionados en Líneas Telefónicas: reasignar.
-  // Solo cambian el EQUIPO: la línea (número, ESTATUS LINEA) queda igual hasta que el área diga qué le pasa a la
-  // línea en cada caso. Cada equipo deja su bitácora CAMBIOS (y HISTORIAL_REASIGNACIONES al reasignar) y su
-  // movimiento con el motivo, igual que una edición individual.
+  // Uno o varios equipos: reasignar. Cada equipo deja su movimiento REASIGNACION con el comentario. Sin acciones
+  // masivas en la pantalla por ahora (usuario, 4-oct): Reasignar abre la responsiva (LineasAcciones.reasignar).
 
   const MASIVAS = {
-    // "Mandar a resguardo" vive en LineasResguardos (datos por NUCO, N/A y bandeja de Pau), 30-sep
-    // Al reasignar, el equipo queda en RESGUARDO: el estatus no se elige (pedido del usuario, 29-sep)
-    REASIGNAR: { titulo: 'Reasignar equipos', estatusEquipo: 'RESGUARDO' },
+    // "Mandar a resguardo" vive en LineasResguardos (datos por NUCO, persona en blanco y bandeja de Pau), 30-sep
+    // Al reasignar, el equipo queda en USO: el estatus no se elige (decisión del usuario D5.1, 3-oct; el 29-sep era
+    // RESGUARDO). Si su línea estaba DISPONIBLE, también pasa a USO: se entrega con el equipo (plan §5.3)
+    REASIGNAR: { titulo: 'Reasignar equipos', texto: 'Reasignar', estatusEquipo: 'USO', lineaDisponibleAUso: true, movimiento: 'REASIGNACION' },
     // "Cancelar equipos" se quitó el 30-sep: los equipos no se cancelan, solo las líneas (reunión con Líneas)
   };
   const MASIVA_MINIMO = 1; // Reasignar también con un solo equipo (barra de selección tipo Drive, 30-sep)
   const MASIVA_MAXIMO = 150; // cada equipo son ~4 escrituras: que quepa en el límite de 6 min de Apps Script
   const COLS_REASIGNAR = ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'DEPARTAMENTO'];
+  /** Reasignar pide a la persona. */
+  const conResponsable_ = (clave) => clave === 'REASIGNAR';
 
   function masiva_(accion) {
     const cfg = MASIVAS[String(accion || '').toUpperCase()];
@@ -464,14 +490,16 @@ const LineasRegistros = (function () {
    */
   function elementosMasivos_(accion, catalogos, usuario) {
     const salida = [];
-    if (accion === 'REASIGNAR') {
+    if (conResponsable_(accion)) {
       const base = elementos_({}, catalogos, usuario, { nuevo: false });
-      const de = (c) => Object.assign({}, base.filter((e) => e.columna === c)[0], { editable: 'SIEMPRE', valor: '' });
+      const de = (c) => Object.assign({}, base.filter((e) => e.columna === c)[0], { etiqueta: c, editable: 'SIEMPRE', valor: '' });
       salida.push({ tipo: 'titulo', texto: 'NUEVO RESPONSABLE', icono: 'user-round-check' });
       COLS_REASIGNAR.forEach((c) => salida.push(Object.assign(de(c), c === 'RESPONSABLE' ? { requerido: 'SIEMPRE' } : {})));
     }
-    salida.push({ tipo: 'titulo', texto: 'MOTIVO', icono: 'message-square-text' });
-    salida.push(campo_('_MOTIVO', 'MOTIVO (queda en el historial de cada equipo)', 'area', { requerido: 'SIEMPRE', valida: 'COMENTARIOS' }));
+    // Un solo COMENTARIO obligatorio y el TICKET opcional en cada acción (plan §5.2 y D-I2)
+    salida.push({ tipo: 'titulo', texto: 'COMENTARIO', icono: 'message-square-text' });
+    salida.push(campo_('_MOTIVO', 'COMENTARIO (queda en el historial de cada uno)', 'area', { requerido: 'SIEMPRE', valida: 'COMENTARIOS' }));
+    salida.push(campo_('_TICKET', 'TICKET O ASUNTO DEL CORREO (opcional)', 'texto', { literal: true }));
     return salida;
   }
 
@@ -480,7 +508,7 @@ const LineasRegistros = (function () {
     const clave = String(accion).toUpperCase();
     return {
       accion: clave, titulo: cfg.titulo, minimo: MASIVA_MINIMO, maximo: MASIVA_MAXIMO, elementos: elementosMasivos_(clave, LineasRepo.catalogos(), usuario),
-      columnasResponsable: clave === 'REASIGNAR' ? COLS_REASIGNAR : [],
+      columnasResponsable: conResponsable_(clave) ? COLS_REASIGNAR : [],
     };
   }
 
@@ -515,21 +543,23 @@ const LineasRegistros = (function () {
     const cfg = masiva_(accion);
     const clave = String(accion).toUpperCase();
     const lista = (Array.isArray(ids) ? ids : []).map(texto_).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i);
-    if (lista.length < MASIVA_MINIMO) throw new Error('Selecciona al menos un equipo.');
+    if (lista.length < MASIVA_MINIMO) throw new Error('Selecciona al menos un' + (cfg.parte === 'linea' ? 'a línea.' : ' equipo.'));
     if (lista.length > MASIVA_MAXIMO) throw new Error('Son ' + lista.length + ' equipos; el máximo por operación es ' + MASIVA_MAXIMO + '. Divide la selección.');
 
     const elementos = elementosMasivos_(clave, LineasRepo.catalogos(), usuario);
     // Reasignar uno por uno: los datos del responsable vienen por equipo; aquí solo estatus y motivo (comunes)
-    const individual = clave === 'REASIGNAR' && datos && datos.modo === 'INDIVIDUAL';
+    const individual = conResponsable_(clave) && datos && datos.modo === 'INDIVIDUAL';
     const comunes = individual ? elementos.filter((e) => e.tipo !== 'campo' || COLS_REASIGNAR.indexOf(e.columna) < 0) : elementos;
     const r = resolver_(comunes, {}, (datos && datos.valores) || {}, { nuevo: false });
     if (r.errores.length) throw new Error(r.errores.slice(0, 6).join(' · '));
     const motivo = texto_(r.valores._MOTIVO);
+    const ticket = texto_(r.valores._TICKET);
     const porEquipo = individual ? reasignacionIndividual_(elementos, datos.porEquipo, lista) : null;
 
     const pedidos = {};
     if (cfg.estatusEquipo) pedidos['ESTATUS EQUIPO'] = cfg.estatusEquipo;
-    if (clave === 'REASIGNAR' && !individual) COLS_REASIGNAR.forEach((c) => { if (texto_(r.valores[c])) pedidos[c] = texto_(r.valores[c]); });
+    if (cfg.estatusLinea) pedidos['ESTATUS LINEA'] = cfg.estatusLinea;
+    if (conResponsable_(clave) && !individual) COLS_REASIGNAR.forEach((c) => { if (texto_(r.valores[c])) pedidos[c] = texto_(r.valores[c]); });
 
     const hechos = [];
     const omitidos = [];
@@ -541,19 +571,25 @@ const LineasRegistros = (function () {
         const nuco = f ? LineasUtil.nucoVisible(LineasUtil.col(f, 'NUCO')) || '' : '';
         if (!f) { omitidos.push({ id: id, nuco: nuco, motivo: 'Ya no existe en la hoja' }); return; }
         const tipo = texto_(LineasUtil.col(f, 'TIPO')).toUpperCase();
-        if (!LineasRepo.TIPOS_CON_EQUIPO[tipo]) { omitidos.push({ id: id, nuco: nuco, motivo: 'No es un equipo (TIPO ' + (tipo || 'vacío') + ')' }); return; }
-        if (porEquipo && !porEquipo[id]) { omitidos.push({ id: id, nuco: nuco, motivo: 'Sin cambios' }); return; }
-        const cambios = Object.assign({}, pedidos, porEquipo ? porEquipo[id] : {});
-        // Reset_If del AppSheet: si el responsable es quien usa el equipo, "quien usa" sigue al nuevo responsable
-        if (clave === 'REASIGNAR' && cambios.RESPONSABLE && texto_(LineasUtil.col(f, 'RESPONSABLE USA EL EQUIPO')).toUpperCase() === 'SI') {
-          cambios['NOMBRE QUIEN USA'] = cambios.RESPONSABLE;
-          if (cambios.PUESTO) cambios['PUESTO QUIEN USA'] = cambios.PUESTO;
+        const conEquipo = !!LineasRepo.TIPOS_CON_EQUIPO[tipo];
+        if (cfg.parte === 'linea' ? conEquipo : !conEquipo) {
+          omitidos.push({ id: id, nuco: nuco, numero: texto_(LineasUtil.col(f, 'NUMERO TELEFONO')),
+            motivo: cfg.parte === 'linea' ? 'Está en un equipo: se entrega con su equipo' : 'No es un equipo (TIPO ' + (tipo || 'vacío') + ')' });
+          return;
         }
+        if (porEquipo && !porEquipo[id]) { omitidos.push({ id: id, nuco: nuco, motivo: 'Sin cambios' }); return; }
+        const estatusAntes = texto_(LineasUtil.col(f, cfg.parte === 'linea' ? 'ESTATUS LINEA' : 'ESTATUS EQUIPO')).toUpperCase();
+        const cambios = Object.assign({}, pedidos, porEquipo ? porEquipo[id] : {});
+        if (cfg.lineaDisponibleAUso && texto_(LineasUtil.col(f, 'ESTATUS LINEA')).toUpperCase() === 'DISPONIBLE') cambios['ESTATUS LINEA'] = 'USO';
+        // Ya no se copia el responsable a "quien usa" (lo hacía el AppSheet): solo se guarda si es otra persona (§3.7)
         const ahora = new Date();
         const guardado = LineasRepo.guardarCambiosRegistro(f, cambios, usuario, ahora);
         if (!guardado.campos.length) { omitidos.push({ id: id, nuco: nuco, motivo: 'Ya tenía esos datos' }); return; }
-        LineasRepo.registrarMovimiento('EDICION', { motivo: 'Acción masiva · ' + cfg.titulo + (individual ? ' (uno por uno)' : '') + ': ' + motivo }, usuario, ahora, {
-          refs: [id], nuco: LineasUtil.col(f, 'NUCO'), numero: LineasUtil.col(f, 'NUMERO TELEFONO'), antes: {}, despues: cambios,
+        const nombreAntes = texto_(LineasUtil.col(f, 'RESPONSABLE'));
+        LineasRepo.registrarMovimiento(cfg.movimiento, { motivo: motivo, ticket: ticket }, usuario, ahora, {
+          refs: [id].concat(guardado.refs || []), nuco: LineasUtil.col(f, 'NUCO'), numero: LineasUtil.col(f, 'NUMERO TELEFONO'),
+          antes: { estatus: estatusAntes, responsable: { nombre: nombreAntes } },
+          despues: { estatus: cfg.estatusEquipo || cfg.estatusLinea, responsable: { nombre: cambios.RESPONSABLE || nombreAntes } },
           detalle: {
             masiva: clave, individual: !!individual, total: lista.length, idsCambios: guardado.idsCambios,
             idsReasignacion: guardado.idReasignacion ? [guardado.idReasignacion] : [], cambios: guardado.campos,
@@ -562,12 +598,13 @@ const LineasRegistros = (function () {
         hechos.push({ id: id, nuco: nuco, campos: guardado.campos });
       });
     });
-    if (hechos.length) LineasRepo.indice(true); // una sola lectura para el índice (no una por equipo)
-    return { accion: clave, titulo: cfg.titulo, hechos: hechos, omitidos: omitidos };
+    // Solo los registros tocados (y los que aparecen por el cambio): rearmar el índice completo tardaba ~4 s
+    const indice = hechos.length ? LineasRepo.refrescarIndice(hechos.map((h) => h.id)) : null;
+    return { accion: clave, titulo: cfg.titulo, hechos: hechos, omitidos: omitidos, indice: indice };
   }
 
   return {
-    formulario, crear, editar, cambiarEstatus, formularioMasivo, accionMasiva,
-    _elementos: elementos_, _resolver: resolver_, _cumple: cumple_, _elementosMasivos: elementosMasivos_,
+    formulario, crear, editar, formularioMasivo, accionMasiva,
+    _elementos: elementos_, _resolver: resolver_, _cumple: cumple_, _elementosMasivos: elementosMasivos_, _tipoAutomatico: tipoAutomatico_,
   };
 })();

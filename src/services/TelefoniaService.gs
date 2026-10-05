@@ -421,9 +421,10 @@ const TelefoniaService = (function () {
   }
 
   /** Formulario de alta (id vacío) o edición de LINEAS TELEFONICAS, como el del AppSheet. */
-  function formularioRegistro(token, id) {
+  /** parte (alta): EQUIPO o LINEA, según el botón (Agregar equipo / Agregar línea). */
+  function formularioRegistro(token, id, parte) {
     const sesion = operar_(token);
-    return LineasUtil.paraCliente(LineasRegistros.formulario(id || null, usuarioOperacion_(sesion), puedeVerSecretos_(sesion)));
+    return LineasUtil.paraCliente(LineasRegistros.formulario(id || null, usuarioOperacion_(sesion), puedeVerSecretos_(sesion), parte));
   }
 
   function crearRegistro(token, datos) {
@@ -436,10 +437,10 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente(LineasRegistros.editar(id, datos || {}, usuarioOperacion_(sesion), puedeVerSecretos_(sesion)));
   }
 
-  /** Cambio rápido de estatus del equipo o de la línea. */
-  function cambiarEstatus(token, id, datos) {
+  /** Reasignar: la responsiva es la acción (LineasAcciones.reasignar). */
+  function reasignar(token, responsiva) {
     const sesion = operar_(token);
-    return LineasUtil.paraCliente(LineasRegistros.cambiarEstatus(id, datos || {}, usuarioOperacion_(sesion)));
+    return LineasUtil.paraCliente(LineasAcciones.reasignar(responsiva || {}, usuarioOperacion_(sesion), puedeVerSecretos_(sesion)));
   }
 
   /** Fotos de una inspección ya guardada: 'preparar' (carpeta autorizada) o 'actualizar' (recuento). */
@@ -595,7 +596,7 @@ const TelefoniaService = (function () {
   return {
     permisos, indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, catalogos, colaboradores, bitacora, formularioRegistro, recargarDatos,
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf, crearRegistro, editarRegistro,
-    cambiarEstatus, fotosInspeccion, exportarBase, archivo, ultimoDocumentoNuco,
+    reasignar, fotosInspeccion, exportarBase, archivo, ultimoDocumentoNuco,
     notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva, panorama,
     formularioResguardo, mandarResguardo, mandarCancelacion, bandejaResguardos, accionBandejaResguardo,
     MODULOS_LINEAS,

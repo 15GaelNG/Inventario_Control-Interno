@@ -89,5 +89,60 @@ const LineasUtil = (function () {
     try { return LineasArchivos.carpetasNucos(); } catch (e) { console.warn('carpetasNucos: ' + e.message); return {}; }
   }
 
-  return { txt, digitos, nuco4, nucoVisible, fecha, numero, col, mesNumero, paraCliente, carpetasNucos };
+  /**
+   * Abreviaturas de Capital Humano que se muestran con su nombre completo (confirmadas por el usuario el 2-oct-2026;
+   * solo las 100 % seguras: OOAM, GPH, las oficinas en clave e ILLINIOS se quedan como vienen). En la hoja se guarda
+   * como lo escribe CH ("QRO"); el sistema lo muestra completo ("QUERETARO"). Va por columna: "ADMINISTRACION DE
+   * OFICINAS" también es un DEPARTAMENTO de CH y ese no se toca. Ver migracion/PLAN_REESTRUCTURA_LINEAS.md §3.5.
+   */
+  const ABREVIATURAS_CH = {
+    'SEDE': { 'QRO': 'QUERETARO', 'SLP': 'SAN LUIS POTOSI', 'EDO. MEXICO': 'ESTADO DE MEXICO' },
+    'AREA': { 'ADMON DE OFICINAS': 'ADMINISTRACION DE OFICINAS' },
+  };
+  /**
+   * En OFICINA / DESARROLLO la abreviatura va DENTRO del nombre ("CARRANZA SLP", "CALZADA DEL VALLE - MTY", "AGS"):
+   * se cambia como palabra suelta, separada por espacio, guion, diagonal, paréntesis o coma. Las claves que solo la
+   * contienen (CMSLP, CDMAGS.OC5, TX.MTY) no se tocan. Confirmadas por el usuario el 3-oct-2026.
+   */
+  const PALABRAS_CH = {
+    'OFICINA/DESARROLLO': { 'AGS': 'AGUASCALIENTES', 'MTY': 'MONTERREY', 'SLP': 'SAN LUIS POTOSI' },
+  };
+  const invertir_ = (m) => Object.keys(m).reduce((o, c) => {
+    o[c] = {};
+    Object.keys(m[c]).forEach((ab) => { o[c][m[c][ab]] = ab; });
+    return o;
+  }, {});
+  const NOMBRES_CH = invertir_(ABREVIATURAS_CH);
+  const PALABRAS_NOMBRE_CH = invertir_(PALABRAS_CH);
+  // "OFICINA / DESARROLLO" (inventario) y "OFICINA/DESARROLLO" (COLABORADORES) son la misma columna
+  const columnaCH_ = (columna) => String(columna || '').split('|').pop().toUpperCase().replace(/\s+/g, '');
+  const SEP_ = '[\\s\\-/(),]';
+  const escRegex_ = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  function cambiarPalabras_(valor, m) {
+    let s = valor;
+    Object.keys(m).sort((a, b) => b.length - a.length).forEach((de) => {
+      s = s.replace(new RegExp('(^|' + SEP_ + ')' + escRegex_(de) + '(?=$|' + SEP_ + ')', 'gi'), (_, antes) => antes + m[de]);
+    });
+    return s;
+  }
+
+  /** Valor de la hoja → como se muestra ("QRO" → "QUERETARO", "CARRANZA SLP" → "CARRANZA SAN LUIS POTOSI"). */
+  function mostrarCH(columna, valor) {
+    if (typeof valor !== 'string') return valor;
+    const c = columnaCH_(columna);
+    if (PALABRAS_CH[c]) return cambiarPalabras_(valor, PALABRAS_CH[c]);
+    const m = ABREVIATURAS_CH[c];
+    return m ? m[valor.trim().toUpperCase()] || valor : valor;
+  }
+
+  /** Valor capturado → como se guarda, igual que CH ("QUERETARO" → "QRO"). Lo demás pasa igual. */
+  function guardarCH(columna, valor) {
+    if (typeof valor !== 'string') return valor;
+    const c = columnaCH_(columna);
+    if (PALABRAS_NOMBRE_CH[c]) return cambiarPalabras_(valor, PALABRAS_NOMBRE_CH[c]);
+    const m = NOMBRES_CH[c];
+    return m ? m[valor.trim().toUpperCase()] || valor : valor;
+  }
+
+  return { txt, digitos, nuco4, nucoVisible, fecha, numero, col, mesNumero, paraCliente, carpetasNucos, ABREVIATURAS_CH, PALABRAS_CH, mostrarCH, guardarCH };
 })();

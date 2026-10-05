@@ -18,7 +18,10 @@ const LineasExportar = (function () {
   const modulos_ = () => {
     const TAB = LineasRepo.TAB;
     return {
-      INVENTARIO: [TAB.LINEAS],
+      // Reestructura, etapa 2: con el interruptor encendido el inventario son las hojas nuevas
+      INVENTARIO: typeof LineasLectura !== 'undefined' && LineasLectura.activo()
+        ? [LineasLectura.HOJAS.LINEAS, LineasLectura.HOJAS.EQUIPOS, LineasLectura.HOJAS.ASIGNACIONES, LineasLectura.HOJAS.ADENDUMS]
+        : [TAB.LINEAS],
       CAMBIOS: [TAB.CAMBIOS],
       // REASIGNACIONES, DESECHOS, REACTIVACION y SOLICITUD se retiraron con sus pestañas (30-sep)
       ACCESORIOS: ['ACCESORIOS CELULARES', 'MOVIMIENTOS_ACCESORIOS'],

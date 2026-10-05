@@ -10,7 +10,8 @@
         </div>
         <div class="page-header-actions">
           <button type="button" class="secondary" id="ln-recargar" hidden title="Vaciar caché y volver a leer la hoja"><i data-lucide="refresh-cw" class="ico"></i> Recargar datos</button>
-          <button type="button" id="ln-nuevo-registro"><i data-lucide="plus" class="ico"></i> Registrar NUCO</button>
+          <button type="button" id="ln-nuevo-equipo"><i data-lucide="smartphone" class="ico"></i> Agregar equipo</button>
+          <button type="button" id="ln-nueva-linea"><i data-lucide="card-sim" class="ico"></i> Agregar línea</button>
         </div>
       </div>
 
@@ -63,6 +64,14 @@
           <button type="button" class="modal-close" data-cerrar-modal aria-label="Cerrar"><span data-ln-icon="x"></span></button>
         </div>
         <div class="modal-form-scroll" id="ln-captura-cuerpo"><p class="empty-state">Cargando…</p></div>
+        <!-- Pantalla de espera: cubre la ventana desde el clic en Guardar hasta que termina -->
+        <div class="ln-espera" id="ln-captura-espera" role="status" aria-live="polite" tabindex="-1" hidden>
+          <span class="ln-espera-circulo" id="ln-espera-circulo"><span class="ln-spinner"></span></span>
+          <h3 id="ln-espera-titulo">Guardando</h3>
+          <p id="ln-espera-texto">No cierres esta ventana.</p>
+          <p class="ln-espera-detalle" id="ln-espera-detalle" hidden></p>
+          <div class="ln-pdf-acciones" id="ln-espera-acciones" hidden></div>
+        </div>
       </div>
     </div>
   </div>

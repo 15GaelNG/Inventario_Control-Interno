@@ -77,7 +77,9 @@ const Entidades = (function () {
     'INSTALACION DE SENSORES': { prefijo: 'SEN', llaveAnterior: 'ID_SENSOR', familia: 'vehiculos' },
     'HOLOGRAMAS': { prefijo: 'HOL', llaveAnterior: 'ID_HOLOGRAMA', familia: 'vehiculos' },
     'INCIDENCIAS': { prefijo: 'INC', llaveAnterior: 'ID_INCIDENCIA', familia: 'vehiculos' },
-    'LINEAS TELEFONICAS': { prefijo: 'LIN', llaveAnterior: 'ID', familia: 'lineas' },
+    // Retirada en la reestructura de Líneas (paso 4, 4-oct): queda oculta, ya no recibe altas y sus IDs LIN-… se quedan
+    // como están (las hojas nuevas los guardan en ID ANTERIOR). El prefijo LIN pasó a la hoja LINEAS.
+    'LINEAS TELEFONICAS': { prefijo: 'LTV', llaveAnterior: 'ID', familia: 'lineas' },
     'INSPECCIONES LINEAS': { prefijo: 'ILI', llaveAnterior: 'ID', familia: 'lineas' },
     'RESPONSIVAS LINEAS': { prefijo: 'RLI', llaveAnterior: 'ID', familia: 'lineas' },
     // Caso especial: su columna de ID no tenía encabezado y se le puso "ID APPSHEET"
@@ -132,6 +134,14 @@ const Entidades = (function () {
     'APP_RESGUARDOS': { prefijo: 'RSG', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
     // Módulo TEMPORAL "Correcciones de Líneas" (30-sep): se borra cuando Líneas termine (ver LineasCorrecciones.gs)
     'APP_CORRECCIONES': { prefijo: 'COR', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
+    // Reestructura de Líneas (plan de la reestructura, partes 4 y 5): cada hoja guarda una sola cosa
+    'LINEAS': { prefijo: 'LIN', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
+    'EQUIPOS': { prefijo: 'EQU', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
+    'ASIGNACIONES': { prefijo: 'ASG', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
+    'ADENDUMS': { prefijo: 'ADE', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
+    'FACTURAS': { prefijo: 'FAC', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
+    // El historial único (paso 3): un renglón por acción
+    'MOVIMIENTOS': { prefijo: 'MVT', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
   };
 
   /**

@@ -28,7 +28,7 @@ console.log('1. El catálogo está sano');
 const revision = Entidades.revisarCatalogo();
 ok(revision.problemas.length === 0, 'sin problemas: ' + (revision.problemas.join(' | ') || 'ninguno'));
 // 22 + las dos de Capital Humano (01/10/2026) + las 3 APP_ nuevas de Líneas
-ok(revision.hojas === 27, 'tiene las 27 hojas de registros, no ' + revision.hojas);
+ok(revision.hojas === 33, 'tiene las 33 hojas de registros (27 + las 6 de la reestructura de Líneas), no ' + revision.hojas);
 ok(Entidades.migrables().length === 20,
    'de ellas 20 vienen de AppSheet y sí se migran, no ' + Entidades.migrables().length);
 
@@ -53,7 +53,7 @@ ok(Entidades.de('HOJA QUE NO EXISTE') === null, 'de() devuelve null, para poder 
 
 console.log('\n5. Del prefijo de vuelta a la hoja');
 ok(Entidades.hojaDe('VEH') === 'VEHICULOS', 'VEH → VEHICULOS');
-ok(Entidades.hojaDe('lin') === 'LINEAS TELEFONICAS', 'no importan las minúsculas');
+ok(Entidades.hojaDe('lin') === 'LINEAS', 'no importan las minúsculas (LIN pasó a LINEAS al retirar LINEAS TELEFONICAS)');
 ok(Entidades.hojaDe('XXX') === null, 'un prefijo inventado da null');
 
 console.log('\n6. Cuáles hojas necesitan respaldar su llave vieja');
@@ -66,8 +66,8 @@ ok(pisan.indexOf('VEHICULOS') === -1,
 
 console.log('\n6b. Las pestañas del sistema nuevo no pasan por la migración');
 const nuevas = todas.filter((e) => e.delSistemaNuevo).map((e) => e.hoja).sort();
-ok(nuevas.join(',') === 'APP_CORRECCIONES,APP_EVIDENCIAS,APP_MOVIMIENTOS,APP_NOTIFICACIONES,APP_RESGUARDOS,PERSONAS',
-   'son las cinco APP_ de Líneas y PERSONAS: ' + nuevas.join(', '));
+ok(nuevas.join(',') === 'ADENDUMS,APP_CORRECCIONES,APP_EVIDENCIAS,APP_MOVIMIENTOS,APP_NOTIFICACIONES,APP_RESGUARDOS,ASIGNACIONES,EQUIPOS,FACTURAS,LINEAS,MOVIMIENTOS,PERSONAS',
+   'son las cinco APP_ de Líneas, las hojas de la reestructura y PERSONAS: ' + nuevas.join(', '));
 
 console.log('\n6c. Una hoja externa (se pega desde otro sistema) nunca pasa por la migración');
 const externas = todas.filter((e) => e.externa).map((e) => e.hoja);
