@@ -89,6 +89,20 @@ uno documenta su uso al inicio del archivo y tiene su prueba en `tests/`.
   en 390 / 768 / 1024 táctiles y falla si algo se sale de lo ancho. Las capturas quedan en
   `tools/vista-previa/salida/`.
 
+## Producción: dos links, los dos van a la versión actual
+
+Producción (`.clasp.prod.json`) sirve versiones fijas: un `npx clasp push -P .clasp.prod.json`
+no llega a nadie hasta redesplegar. Hay **dos** despliegues y **los dos** se mueven a la misma
+versión en cada subida a prod:
+
+1. `npx clasp -P .clasp.prod.json update-deployment AKfycbymScqpx_d9yLaYhpqTcFxuo9HfSK8Zb1qcBgzzkTKU5wCS5RRXBN0iClZeA3Fp5_I3 -d "…"`
+   (crea la versión nueva N).
+2. `npx clasp -P .clasp.prod.json update-deployment AKfycbx_53Gz2VfBXhFvLmjnoM2qVzJYmk9kuQD74mUCpOQzeYPaQ1COR8LB_l69sSQb5RJB -V N -d "…"`
+   — es el link que usa el equipo:
+   `https://script.google.com/a/macros/ciudadmaderas.com/s/AKfycbx_53Gz2VfBXhFvLmjnoM2qVzJYmk9kuQD74mUCpOQzeYPaQ1COR8LB_l69sSQb5RJB/exec`
+
+Revisa con `npx clasp -P .clasp.prod.json list-deployments` que ambos digan `@N`.
+
 ## Flujo de trabajo
 
 - Rama de trabajo: `jorge`. Nunca hacer push a `master` sin que se pida
