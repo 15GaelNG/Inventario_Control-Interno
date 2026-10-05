@@ -40,6 +40,8 @@ const LineasAcciones = (function () {
         if (nuevo && nuevo === antes.toUpperCase()) throw new Error(nombre + ' ya lo tiene ' + antes + ': elige a la persona nueva.');
         const cambios = { 'ESTATUS EQUIPO': 'USO' };
         PERSONA_DE_RESPONSIVA.forEach(([destino, origen]) => { cambios[destino] = txt(valores[origen]); });
+        // El director no viene en la responsiva: sale de Capital Humano de la persona elegida (usuario, 4-oct)
+        cambios['DIRECTOR'] = directorDeCH_(valores['No EMPLEADO'], valores['RESPONSABLE']);
         if (may(LineasUtil.col(f, 'ESTATUS LINEA')) === 'DISPONIBLE') cambios['ESTATUS LINEA'] = 'USO';
         const g = LineasRepo.guardarCambiosRegistro(f, cambios, usuario, ahora, { tolerante: true });
         LineasRepo.registrarMovimiento('REASIGNACION', { motivo: comentario, ticket: txt(valores['TICKET']) }, usuario, ahora, {
@@ -54,5 +56,15 @@ const LineasAcciones = (function () {
     return { id: r.id, registroId: r.registroId, pdfPendiente: true, filas: r.filas };
   }
 
-  return { reasignar, PERSONA_DE_RESPONSIVA };
+  /** DIRECTOR de la persona en Capital Humano (por número de empleado o, si no, por nombre); '' si no está. */
+  function directorDeCH_(noEmpleado, nombre) {
+    const ix = LineasRepo.indiceColaboradores();
+    const c = ix.columnas;
+    const iNum = c.indexOf('noEmpleado'), iNom = c.indexOf('nombre'), iDir = c.indexOf('director');
+    const num = may(noEmpleado), nom = may(nombre);
+    const fila = (num && ix.filas.filter((f) => may(f[iNum]) === num)[0]) || (nom && ix.filas.filter((f) => may(f[iNom]) === nom)[0]);
+    return fila ? txt(fila[iDir]) : '';
+  }
+
+  return { reasignar, PERSONA_DE_RESPONSIVA, directorDeCH_ };
 })();

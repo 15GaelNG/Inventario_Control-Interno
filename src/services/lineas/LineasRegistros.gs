@@ -90,7 +90,7 @@ const LineasRegistros = (function () {
     const listaCH = (columna, etiqueta, opciones) => campo_(columna, etiqueta, 'listaAbierta', { valor: v(columna), opciones: opciones });
     // Al elegir a la persona se llenan sus datos con lo que dice CH (el correo empresarial va a CUENTA GOOGLE)
     const datosCH = { 'PUESTO': 'puesto', 'DEPARTAMENTO': 'departamento', 'AREA': 'area', 'SEDE': 'sede', 'OFICINA / DESARROLLO': 'oficina',
-      'DIRECTOR': 'director', 'CUENTA GOOGLE': 'correo' };
+      'JEFE DIRECTO': 'jefe', 'DIRECTOR': 'director', 'CUENTA GOOGLE': 'correo' };
     const puestos = catalogos.puestos || [];
     const nuevo = !!(ctx && ctx.nuevo);
     // Editar y Agregar (usuario, 4-oct): todo lo guardado se edita, en pestañas; FOLIO, NUCO y TIPO no. El registro es un
@@ -132,6 +132,7 @@ const LineasRegistros = (function () {
       listaCH('AREA', 'Área', catalogos.areas || []),
       listaCH('SEDE', 'Sede', catalogos.sedes || []),
       listaCH('OFICINA / DESARROLLO', 'Oficina o desarrollo', catalogos.oficinas || []),
+      listaCH('JEFE DIRECTO', 'Jefe directo', catalogos.jefes || []),
       listaCH('DIRECTOR', 'Director', catalogos.directores || []),
       ed('CUENTA GOOGLE', 'Correo', 'texto', { literal: true }),
       ed('RESPONSABLE USA EL EQUIPO', '¿El responsable usa el equipo?', 'escala', { opciones: ['SI', 'NO'], mostrar: conEquipo ? 'SIEMPRE' : 'NUNCA' }),

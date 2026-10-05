@@ -50,7 +50,7 @@ const LineasLectura = (function () {
   // De la hoja vieja, solo de consulta, hasta la migración (ver la cabecera)
   const DE_LA_HOJA_VIEJA = ['COMENTARIOS', 'RESPONSIVA', 'FORMATO INSPECCION', 'FECHA INSPECCION'];
   const PERSONA_SIN_ASIGNACION = ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'NOMBRE QUIEN USA', 'PUESTO QUIEN USA', 'SEDE',
-    'OFICINA / DESARROLLO', 'DEPARTAMENTO', 'AREA', 'DIRECTOR', 'CUENTA GOOGLE', 'ID PERSONA'];
+    'OFICINA / DESARROLLO', 'DEPARTAMENTO', 'AREA', 'DIRECTOR', 'JEFE DIRECTO', 'CUENTA GOOGLE', 'ID PERSONA'];
 
   let activo_ = null;
   let filas_ = null;
@@ -172,7 +172,7 @@ const LineasLectura = (function () {
         'NOMBRE QUIEN USA': v(a, 'NOMBRE QUIEN USA'), 'PUESTO QUIEN USA': v(a, 'PUESTO QUIEN USA'), 'ESTATUS GENERAL': '',
         'EQUIPO': v(e, 'MODELO'), 'COLOR': v(e, 'COLOR'), 'IMEI': v(e, 'IMEI'), 'NUMERO SIM': v(l, 'NUMERO SIM'), 'ACCESORIOS': v(e, 'ACCESORIOS'),
         'SEDE': v(a, 'SEDE'), 'OFICINA / DESARROLLO': v(a, 'OFICINA / DESARROLLO'), 'DEPARTAMENTO': v(a, 'DEPARTAMENTO'),
-        'AREA': v(a, 'AREA'), 'JEFE DIRECTO': '', 'DIRECTOR': v(a, 'DIRECTOR'), 'RAZON SOCIAL': v(l, 'RAZON SOCIAL'),
+        'AREA': v(a, 'AREA'), 'JEFE DIRECTO': v(a, 'JEFE DIRECTO'), 'DIRECTOR': v(a, 'DIRECTOR'), 'RAZON SOCIAL': v(l, 'RAZON SOCIAL'),
         'PIN WHATSAPP': v(l, 'PIN WHATSAPP'), 'PIN EQUIPO': v(e, 'PIN EQUIPO'), 'CONTRASEÑA MODEM': v(e, 'CONTRASEÑA MODEM'),
         'PATRON': v(e, 'PATRON'), 'CUENTA GOOGLE': v(a, 'CUENTA GOOGLE'), 'COMPAÑIA': v(l, 'COMPAÑIA'),
         'COSTO PLAN': v(d, 'COSTO PLAN'), 'FECHA REGISTRO': v(e || l, 'FECHA DE ALTA'), 'INICIO PLAN': v(d, 'INICIO PLAN'),

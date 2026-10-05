@@ -46,7 +46,7 @@ const LineasEscritura = (function () {
     'RAZON SOCIAL': 'RAZON SOCIAL', 'PIN WHATSAPP': 'PIN WHATSAPP', 'ESTATUS LINEA': 'ESTATUS LINEA', 'TIPO DE LINEA': 'TIPO DE LINEA' };
   const A_ADENDUM = ['COSTO PLAN', 'INICIO PLAN', 'FIN PLAN'];
   /** De la persona (solo en una asignación con persona). */
-  const PERSONA = ['ID PERSONA', 'NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'AREA', 'DIRECTOR', 'CUENTA GOOGLE',
+  const PERSONA = ['ID PERSONA', 'NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'AREA', 'DIRECTOR', 'JEFE DIRECTO', 'CUENTA GOOGLE',
     'NOMBRE QUIEN USA', 'PUESTO QUIEN USA'];
   /** Dónde está (con persona o guardado). */
   const UBICACION = ['DEPARTAMENTO', 'SEDE', 'OFICINA / DESARROLLO'];
@@ -90,8 +90,22 @@ const LineasEscritura = (function () {
     return ESTRUCTURA_CLASE[parte][e] || null;
   }
 
+  /**
+   * JEFE DIRECTO en ASIGNACIONES (usuario, 4-oct: Reasignar lo perdía). Las hojas armadas antes no la tienen: se agrega el
+   * encabezado al final, una vez. Sin asegurarPestana, que además cambiaría el formato de las fechas.
+   */
+  function asegurarJefeDirecto_() {
+    if (typeof LineasDatos.tablaFresca !== 'function') return; // pruebas con hojas simuladas
+    const t = LineasDatos.tablaFresca(HOJA.ASIGNACIONES);
+    if (LineasDatos.colIndice(t, 'JEFE DIRECTO') >= 0) return;
+    t.hoja.getRange(1, t.encabezados.length + 1).setValue('JEFE DIRECTO').setFontWeight('bold');
+    LineasDatos.cacheBorrar('enc_' + HOJA.ASIGNACIONES);
+    LineasDatos.tablaFresca(HOJA.ASIGNACIONES);
+  }
+
   function hojas() {
     if (hojas_) return hojas_;
+    asegurarJefeDirecto_();
     hojas_ = {};
     Object.keys(HOJA).forEach((k) => {
       const filas = LineasDatos.leerTabla(HOJA[k]);
@@ -237,7 +251,7 @@ const LineasEscritura = (function () {
       }
       if (PERSONA.indexOf(c) >= 0 || UBICACION.indexOf(c) >= 0) { pP[c] = despues; return; }
       if (c === 'COMENTARIOS') campos.push({ campo: columna, antes: texto_(antes), despues: texto_(despues) });
-      // Lo demás ya no se guarda (JEFE DIRECTO, FECHA INSPECCION, responsables 2 a 5…)
+      // Lo demás ya no se guarda (FECHA INSPECCION, responsables 2 a 5…)
     });
 
     const nuevoEstatusLinea = (anotados.filter((x) => x.hoja === 'L' && x.columna === 'ESTATUS LINEA')[0] || {}).despues;

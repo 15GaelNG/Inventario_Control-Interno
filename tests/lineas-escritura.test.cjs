@@ -84,7 +84,9 @@ test('corregir sede o puesto edita la asignación vigente', () => {
   const r = t.guardar('EQU-1', { 'SEDE': 'MERIDA', 'JEFE DIRECTO': 'ALGUIEN' });
   assert.strictEqual(t.hojas.ASIGNACIONES.length, 3);
   assert.strictEqual(t.hojas.ASIGNACIONES[0]['SEDE'], 'MERIDA');
-  assert.deepStrictEqual(r.campos.map((c) => c.campo), ['SEDE']); // JEFE DIRECTO ya no se guarda (parte 3)
+  // JEFE DIRECTO vuelve a guardarse, en la asignación (usuario, 4-oct: Reasignar lo perdía)
+  assert.deepStrictEqual(r.campos.map((c) => c.campo).sort(), ['JEFE DIRECTO', 'SEDE']);
+  assert.strictEqual(t.hojas.ASIGNACIONES[0]['JEFE DIRECTO'], 'ALGUIEN');
 });
 
 test('llenar un responsable vacío no es reasignar', () => {
