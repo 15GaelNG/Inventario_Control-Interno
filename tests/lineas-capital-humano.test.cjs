@@ -59,3 +59,11 @@ test('Capital Humano: si falta una columna acordada no carga nada', () => {
   const { ss } = libro([enc, enc.map(() => 'X')]);
   assert.throws(() => reestructuraLeerHojaCH_(ss), /Faltan columnas en COLABORADORES ACTUALIZADO: JEFE DIRECTO/);
 });
+
+test('Capital Humano en producción: Líneas lee COLABORADORES ACTUALIZADO y no reescribe COLABORADORES', () => {
+  const repo = fs.readFileSync(path.join(__dirname, '../src/services/lineas/LineasRepo.gs'), 'utf8');
+  assert.match(repo, /typeof reestructuraLeerHojaCH_ === 'function' \? reestructuraLeerHojaCH_\(LineasDatos\.libro\(\)\) : null;/);
+  assert.match(repo, /\(ch \|\| LineasDatos\.leerTabla\(TAB\.COLAB\)\)\.filter/);
+  // La carga a COLABORADORES se niega en un libro que tiene la pestaña de Ayrton
+  assert.match(fuente, /if \(ss\.getSheetByName\(REESTRUCTURA_HOJA_CH\)\) \{\s*throw new Error/);
+});

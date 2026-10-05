@@ -95,7 +95,7 @@ const REESTRUCTURA_COLUMNAS_CH = ['ID', 'No EMPLEADO', 'NOMBRE COMPLETO', 'DEPAR
   'OFICINA/DESARROLLO', 'ESTATUS COLABORADOR', 'DIRECTOR', 'JEFE DIRECTO', 'CORREO EMPRESARIAL', 'FECHA DE INGRESO',
   'FECHA DE BAJA', 'N. EMPLEADO ANTERIOR'];
 
-/** Pestaña del mismo libro con la base completa de Capital Humano (producción, 4-oct: la de octubre). */
+/** Pestaña del mismo libro con la base completa de Capital Humano: la pega Ayrton y Líneas solo la lee (4-oct). */
 const REESTRUCTURA_HOJA_CH = 'COLABORADORES ACTUALIZADO';
 /** Columna de CH → columna de COLABORADORES (las mismas que migracion/capital_humano/preparar_ch.py). */
 const REESTRUCTURA_DE_CH = [['No EMPLEADO', 'No EMPLEADO'], ['NOMBRE COMPLETO', 'NOMBRE COMPLETO'], ['DEPARTAMENTO', 'DEPARTAMENTO'],
@@ -140,10 +140,10 @@ function reestructuraLeerHojaCH_(ss) {
 }
 
 /**
- * Carga en COLABORADORES la base de Capital Humano: activos y bajas, un renglón por ingreso, guardado como lo escribe
- * CH. En producción sale de la pestaña COLABORADORES ACTUALIZADO del mismo libro (usuario, 4-oct: la base de octubre);
- * si no está, de los archivos temporales del proyecto (tmp_ch_NN.html, gzip + base64) que arma
- * migracion/capital_humano/preparar_ch.py solo con las columnas acordadas (así se cargó en pruebas).
+ * Carga en COLABORADORES la base de Capital Humano (solo la base de pruebas): activos y bajas, un renglón por ingreso,
+ * guardado como lo escribe CH. Sale de los archivos temporales del proyecto (tmp_ch_NN.html, gzip + base64) que arma
+ * migracion/capital_humano/preparar_ch.py solo con las columnas acordadas. En producción no se usa: Líneas lee la
+ * pestaña COLABORADORES ACTUALIZADO directo.
  *
  * IDs: cada número de empleado conserva el ID COL- que ya tenía, en su renglón vigente (el activo, o el ingreso más
  * reciente); los demás renglones reciben uno nuevo. Lo que estaba en la hoja y no viene en CH se queda al final con
@@ -152,9 +152,12 @@ function reestructuraLeerHojaCH_(ss) {
 function reestructuraCargarCapitalHumano() {
   soloEditor_();
   const ss = SpreadsheetApp.openById(leerConfig_('SS_ID_TELEFONIA'));
-  // 1) La base de CH: la pestaña del libro o, si no está, los archivos temporales
-  const deHoja = reestructuraLeerHojaCH_(ss);
-  return reestructuraEscribirCH_(ss, deHoja || reestructuraLeerTmpCH_(), deHoja ? REESTRUCTURA_HOJA_CH : 'tmp_ch');
+  // Con la pestaña de Ayrton, Líneas la lee directo (LineasRepo.colaboradoresActivos_) y COLABORADORES no se toca
+  // (usuario, 4-oct: no romper lo que usan Ayrton y Jorge). Esta carga es solo para la base de pruebas.
+  if (ss.getSheetByName(REESTRUCTURA_HOJA_CH)) {
+    throw new Error('Este libro tiene ' + REESTRUCTURA_HOJA_CH + ': Líneas ya la lee directo y COLABORADORES no se reescribe.');
+  }
+  return reestructuraEscribirCH_(ss, reestructuraLeerTmpCH_(), 'tmp_ch');
 }
 
 function reestructuraLeerTmpCH_() {

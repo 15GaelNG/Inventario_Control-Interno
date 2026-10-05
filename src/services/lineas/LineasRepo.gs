@@ -1270,7 +1270,7 @@ const LineasRepo = (function () {
    * "Agregar 'x'" se queda en su registro y no entra a estas listas.
    */
   function catalogos() {
-    const enCache = LineasDatos.cacheLeer('catalogos_telefonia_v6');
+    const enCache = LineasDatos.cacheLeer('catalogos_telefonia_v7');
     if (enCache) return enCache;
     const unicos = (filas, columna) => {
       const m = {};
@@ -1306,21 +1306,26 @@ const LineasRepo = (function () {
       otrasApps: unicos(inspecciones, 'OTRA'),
       identificaciones: unicos(responsivas, 'IDENTIFICACION'),
     });
-    LineasDatos.cacheGuardar('catalogos_telefonia_v6', c, 21600);
+    LineasDatos.cacheGuardar('catalogos_telefonia_v7', c, 21600);
     return c;
   }
 
   /**
-   * Las personas ACTIVAS de la base de Capital Humano (COLABORADORES). La hoja guarda también las bajas, para el
-   * histórico, pero las listas de los formularios solo ofrecen a quien está activo.
+   * Las personas ACTIVAS de la base de Capital Humano. La base guarda también las bajas, para el histórico, pero las
+   * listas de los formularios solo ofrecen a quien está activo.
+   *
+   * Producción (usuario, 4-oct): la base es la pestaña COLABORADORES ACTUALIZADO, la que pega Ayrton y usan sus
+   * módulos. Líneas solo la lee, con las columnas acordadas (reestructuraLeerHojaCH_), y no toca ni esa ni
+   * COLABORADORES. Sin esa pestaña (la base de pruebas), sigue leyendo COLABORADORES.
    */
   function colaboradoresActivos_() {
-    return LineasDatos.leerTabla(TAB.COLAB).filter((f) => String(col(f, 'ESTATUS COLABORADOR') || '').trim().toUpperCase() === 'ACTIVO');
+    const ch = typeof reestructuraLeerHojaCH_ === 'function' ? reestructuraLeerHojaCH_(LineasDatos.libro()) : null;
+    return (ch || LineasDatos.leerTabla(TAB.COLAB)).filter((f) => String(col(f, 'ESTATUS COLABORADOR') || '').trim().toUpperCase() === 'ACTIVO');
   }
 
   /** Personas activas de CH para elegir al responsable: al elegir una se llenan sus datos (autollenar). */
   function indiceColaboradores() {
-    const enCache = LineasDatos.cacheLeer('indice_colaboradores_v3');
+    const enCache = LineasDatos.cacheLeer('indice_colaboradores_v4');
     if (enCache) return enCache;
     const filas = colaboradoresActivos_().map((f) => {
       const n = txt(col(f, 'No EMPLEADO'));
@@ -1332,14 +1337,14 @@ const LineasRepo = (function () {
       columnas: ['noEmpleado', 'nombre', 'puesto', 'departamento', 'area', 'sede', 'oficina', 'estatus', 'director', 'jefe', 'correo'],
       filas: filas, generadoEn: new Date(),
     });
-    LineasDatos.cacheGuardar('indice_colaboradores_v3', ix, 21600);
+    LineasDatos.cacheGuardar('indice_colaboradores_v4', ix, 21600);
     return ix;
   }
 
   /** Vacía las cachés del módulo (índices, catálogos y carpetas). */
   function borrarCaches() {
-    ['indice_telefonia_v2', 'indice_telefonia_v3', 'indice_telefonia_v4', CLAVE_INDICE, 'indice_colaboradores', 'indice_colaboradores_v2', 'indice_colaboradores_v3',
-      'carpetas_nucos', 'carpetas_nucos_v2', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3', 'catalogos_telefonia_v4', 'catalogos_telefonia_v5', 'catalogos_telefonia_v6',
+    ['indice_telefonia_v2', 'indice_telefonia_v3', 'indice_telefonia_v4', CLAVE_INDICE, 'indice_colaboradores', 'indice_colaboradores_v2', 'indice_colaboradores_v3', 'indice_colaboradores_v4',
+      'carpetas_nucos', 'carpetas_nucos_v2', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3', 'catalogos_telefonia_v4', 'catalogos_telefonia_v5', 'catalogos_telefonia_v6', 'catalogos_telefonia_v7',
       CLAVE_IDS].forEach(LineasDatos.cacheBorrar);
   }
 
