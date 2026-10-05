@@ -10,6 +10,10 @@
   .confirmar-clave label { font-size: 12.5px; color: var(--color-text); }
   .confirmar-acciones { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
   .confirmar-acciones button:disabled { opacity: .5; cursor: not-allowed; }
+  /* Celular (la ventana sube como hoja desde abajo): botones a lo ancho, al alcance del pulgar */
+  @media (max-width: 640px) {
+    .confirmar-acciones button { flex: 1 1 0; min-height: 44px; }
+  }
 </style>
 
 <script>

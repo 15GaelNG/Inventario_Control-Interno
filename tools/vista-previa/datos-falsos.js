@@ -352,6 +352,13 @@
       Confirmar.pedir({ titulo: '¿Eliminar 3 vehículos?', mensaje: 'Esta acción no se puede deshacer.', detalle: ['AUT0024', 'AUT0025', 'AUT0026'], textoConfirmar: 'Eliminar', peligro: true, palabraClave: 'ELIMINAR' });
       await esperar(400);
     },
+    // Los dos avisos del sistema: el de la app (arriba) y el de Notificar (abajo)
+    'avisos': async () => {
+      await abrir('vehiculos');
+      toastExito('Actualizado exitosamente');
+      Notificar.info('Se copiaron 3 registros: pégalos en Excel');
+      await esperar(500);
+    },
     'modal-editar-vehiculo': async () => {
       await abrir('vehiculos');
       // Se abre igual que el ⋮ → Editar, pero sin depender del menú de la fila

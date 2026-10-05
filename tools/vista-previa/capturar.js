@@ -61,7 +61,7 @@ const pantallas = opcion('matriz', false) ? MATRIZ : [(() => {
  * De cada grupo que se sale solo se reporta el de más afuera.
  */
 function medirDesborde() {
-  const INTENCIONAL = '.dt-scroll, .table-scroll, .stat-row, .kpi-chips, .tabs-simple, .form-pasos, [data-scroll-x]';
+  const INTENCIONAL = '.dt-scroll, .table-scroll, .stat-row, .kpi-chips, .tabs-simple, .tabs-lista, .form-pasos, [data-scroll-x]';
   const vw = document.documentElement.clientWidth;
   const vc = document.getElementById('view-container');
   const esquema = new Set([document.documentElement, document.body, document.getElementById('app'), document.getElementById('main'), vc]);

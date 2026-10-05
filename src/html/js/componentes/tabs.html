@@ -11,6 +11,13 @@
   .tabs-lista .tab-btn:hover { background: var(--color-bg); color: var(--color-text); }
   .tabs-lista .tab-btn.activa { color: var(--color-primary); border-bottom-color: var(--color-accent); }
   :root[data-theme="dark"] .tabs-lista .tab-btn.activa { color: var(--color-text); }
+  /* Celular: en un renglón que se desliza de lado (en varios renglones la pestaña activa
+     quedaba en medio y el subrayado ya no decía cuál era) */
+  @media (max-width: 640px) {
+    .tabs-lista { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+    .tabs-lista::-webkit-scrollbar { display: none; }
+    .tabs-lista .tab-btn { flex-shrink: 0; white-space: nowrap; }
+  }
 </style>
 
 <script>

@@ -308,6 +308,11 @@
     display: flex; gap: 4px; border-bottom: 1px solid var(--color-border);
     margin-bottom: 18px; overflow-x: auto;
   }
+  /* Celular: las pestañas que no caben se deslizan de lado, sin barra de desplazamiento a la vista */
+  @media (max-width: 640px) {
+    .tabs-simple { scrollbar-width: none; margin-bottom: 14px; }
+    .tabs-simple::-webkit-scrollbar { display: none; }
+  }
   .tab-btn {
     background: transparent; color: var(--color-text-muted); border: none;
     border-bottom: 2px solid transparent; border-radius: 0;
@@ -912,6 +917,11 @@
   .toast-error { border-left-color: var(--color-danger); }
   .toast-error .toast-icon { color: var(--color-danger); }
   .toast-cargando { border-left-color: var(--color-accent); }
+  /* Celular: el aviso va a lo ancho (con su ancho mínimo de 260px más el margen se salía de la pantalla) */
+  @media (max-width: 640px) {
+    #toast-container { top: 10px; left: 10px; right: 10px; }
+    .toast { min-width: 0; max-width: none; }
+  }
   .loading-inline {
     grid-column: 1 / -1; display: flex; align-items: center; gap: 10px;
     color: var(--color-text-muted); font-size: 13px; padding: 14px 4px;

@@ -18,6 +18,14 @@
   :root[data-theme="dark"] .cbx-opcion mark { background: #7a6420; }
   .cbx-vacio, .cbx-mas { padding: 8px 9px; font-size: 12px; color: var(--color-text-muted); }
   .cbx-mas { border-top: 1px solid var(--color-border); margin-top: 4px; }
+  /* Con el teclado del celular abierto queda poca pantalla: la lista no pasa de un tercio de
+     lo que se ve, y cada opción mide lo de un dedo */
+  @media (max-width: 640px) {
+    .cbx-lista { max-height: min(260px, 35vh); max-height: min(260px, 35dvh); }
+  }
+  @media (pointer: coarse) {
+    .cbx-opcion { padding: 11px 10px; font-size: 14px; }
+  }
 </style>
 
 <script>
