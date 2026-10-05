@@ -406,5 +406,11 @@ function pruebas4oct_(borrar) {
   return salida;
 }
 
-function lineasPruebas4oct_revisar() { return pruebas4oct_(false); }
-function lineasPruebas4oct_borrar() { return pruebas4oct_(true); }
+function lineasPruebas4oct_revisar() {
+  soloEditor_();
+  return pruebas4oct_(false);
+}
+function lineasPruebas4oct_borrar() {
+  soloEditor_();
+  return pruebas4oct_(true);
+}
