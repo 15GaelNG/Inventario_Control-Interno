@@ -2741,6 +2741,9 @@
           despues: (r) => aplicarCambiosIndice(r.filas).then(() => {
             Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].limpiarSeleccion(); });
             if (vigente()) { pintarIndicadores(); pintarListado(); }
+            // La ficha abierta se vuelve a pintar con la persona y los estatus nuevos (como Mandar a resguardo, 4-oct)
+            const actual = pila[pila.length - 1];
+            if (vigente() && actual && actual.id === fila.id) abrir(actual.tipo, actual.id, true);
           }),
         });
       }

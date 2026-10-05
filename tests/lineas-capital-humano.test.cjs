@@ -80,3 +80,9 @@ test('La ventana de captura se abre sin la marca de guardado de la anterior (fir
   assert.match(cliente, /function mostrarModalCaptura\(\) \{\s*const modal = \$\('#ln-modal-captura', raiz\);\s*modal\.removeAttribute\('aria-busy'\);/);
   assert.doesNotMatch(cliente, /\$\('#ln-modal-captura', raiz\)\.hidden = false;/);
 });
+
+test('Después de Reasignar se vuelve a pintar la ficha abierta (producción, 4-oct)', () => {
+  const cliente = fs.readFileSync(path.join(__dirname, '../src/html/js/lineas.html'), 'utf8');
+  const reasignar = cliente.slice(cliente.indexOf('function abrirReasignar(fila)'), cliente.indexOf('const inspeccionesDelDia = {};'));
+  assert.match(reasignar, /if \(vigente\(\) && actual && actual\.id === fila\.id\) abrir\(actual\.tipo, actual\.id, true\);/);
+});
