@@ -2829,26 +2829,72 @@
 
       /**
        * Reasignar (usuario, 4-oct): abre directo la responsiva, sin formulario intermedio. Equipo y línea van fijos; se
-       * elige a la persona nueva y su comentario es el de la acción. Al guardar se reasigna y se genera el PDF.
+       * elige a la persona nueva y su comentario es el de la acción.
+       * La inspección también es obligatoria (usuario, 5-oct), en este orden: 1) la responsiva se llena y se revisa (aún
+       * no se guarda), 2) la inspección se captura y se guarda, 3) se reasigna con las dos (el servidor exige la
+       * inspección) y se genera el PDF de la responsiva. Cerrar cualquiera sin guardar no reasigna; si la reasignación
+       * falla, la inspección del día ya no se vuelve a pedir.
        */
-      function abrirReasignar(fila) {
+      async function abrirReasignar(fila) {
         if (!fila) return;
-        abrirCaptura('RESPONSIVA', { equipoId: fila.id, modo: 'REASIGNAR' }, {
-          titulo: 'Reasignar', subtitulo: ['NUCO ' + (fila.nuco || '—'), fila.modelo, fila.responsable].filter(Boolean).join(' · '),
-          boton: 'Reasignar y generar PDF', pdfAqui: true,
-          guardar: (datos) => llamar('apiLineasReasignar', datos),
-          despues: (r) => aplicarCambiosIndice(r.filas).then(() => {
+        const nombre = 'NUCO ' + (fila.nuco || '—');
+        const subtitulo = [nombre, fila.modelo, fila.responsable].filter(Boolean).join(' · ');
+        const resp = await capturarEnFlujo('RESPONSIVA', { equipoId: fila.id, modo: 'REASIGNAR' }, {
+          titulo: 'Reasignar', subtitulo: subtitulo, boton: 'Seguir a la inspección', espera: 'Revisando la responsiva', sinPdf: true,
+          // Lo mismo que rechaza el servidor (LineasAcciones.reasignar), antes de pasar a la inspección
+          guardar: (datos) => {
+            const v = datos.valores || {};
+            if (String(v.OBSERVACIONES || '').trim().length <= 3) return Promise.reject(new Error('Escribe el comentario (queda en el historial).'));
+            const nuevo = String(v.RESPONSABLE || '').trim().toUpperCase();
+            if (nuevo && nuevo === String(fila.responsable || '').trim().toUpperCase()) {
+              return Promise.reject(new Error(nombre + ' ya lo tiene ' + fila.responsable + ': elige a la persona nueva.'));
+            }
+            return Promise.resolve({ datos: datos });
+          },
+        });
+        if (!resp) return;
+        let inspeccionId = inspeccionHecha(fila.id);
+        if (!inspeccionId) {
+          const r = await capturarEnFlujo('INSPECCION', { equipoId: fila.id }, { aviso: 'Inspección · ' + nombre, boton: 'Guardar inspección y reasignar' });
+          if (!r) return;
+          inspeccionesDelDia[fila.id] = { id: r.id, dia: hoyLocal() };
+          inspeccionId = r.id;
+        }
+        const d = resp.datos;
+        const sesion = captura = { guardada: true, guardando: true, firmas: {}, carpetaId: '',
+          pdfFirmas: { responsable: d.firmaResponsableBase64 || null, ci: d.firmaCiBase64, patron: d.patronBase64 || null } };
+        mostrarModalCaptura();
+        $('#ln-captura-icono', raiz).innerHTML = icono('user-round-pen');
+        $('#ln-captura-tipo', raiz).textContent = 'Responsiva de entrega';
+        $('#ln-captura-titulo', raiz).textContent = 'Reasignar';
+        $('#ln-captura-subtitulo', raiz).textContent = subtitulo;
+        $('#ln-captura-cuerpo', raiz).innerHTML = '';
+        const modal = $('#ln-modal-captura', raiz);
+        modal.setAttribute('aria-busy', 'true');
+        modal.querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = true; });
+        mostrarEspera('Reasignando');
+        llamar('apiLineasReasignar', Object.assign({}, d, { inspeccionId: inspeccionId })).then((r) => {
+          if (!vigente() || captura !== sesion) return;
+          refrescarDespuesDeCaptura(fila.id, 'RESPONSIVA', r.id);
+          aplicarCambiosIndice(r.filas).then(() => {
             Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].limpiarSeleccion(); });
             if (vigente()) { pintarIndicadores(); pintarListado(); }
             // La ficha abierta se vuelve a pintar con la persona y los estatus nuevos (como Mandar a resguardo, 4-oct)
             const actual = pila[pila.length - 1];
             if (vigente() && actual && actual.id === fila.id) abrir(actual.tipo, actual.id, true);
-          }),
+          }).catch(() => {});
+        }).catch((e) => {
+          if (!vigente() || captura !== sesion) return;
+          sesion.guardando = false;
+          modal.removeAttribute('aria-busy');
+          modal.querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = false; });
+          mostrarEspera('No se pudo reasignar', { tono: 'error', icono: 'triangle-alert', texto: 'La inspección sí quedó guardada.', detalle: mensajeError(e),
+            acciones: '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
         });
       }
 
       /**
-       * Inspección capturada dentro de una acción (mandar a resguardo). Si
+       * Inspección capturada dentro de una acción (mandar a resguardo, reasignar). Si
        * la acción no se completó, al reintentarla el mismo día no se vuelve a pedir: se guarda aquí por registro.
        */
       const inspeccionesDelDia = {};
@@ -3842,7 +3888,7 @@
         const patron = patronParaGuardar();
         const valores = leerFormularioAppSheet();
         const sesion = captura;
-        estadoGuardado(sesion.flujo && !sesion.flujo.pdfAqui ? 'Guardando la responsiva' : 'Generando tu PDF');
+        estadoGuardado(sesion.flujo && sesion.flujo.espera ? sesion.flujo.espera : (sesion.flujo && !sesion.flujo.pdfAqui ? 'Guardando la responsiva' : 'Generando tu PDF'));
         Promise.all([firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ffffff') : null, firmaCi.base64('#ffffff')]).then(([responsable, ci]) => {
           sesion.pdfFirmas = { responsable: responsable, ci: ci, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ffffff') : null };
           const datos = Object.assign({}, sesion.ref, {
@@ -3870,10 +3916,13 @@
         return new Promise((resolve) => abrirCaptura(tipo, ref, Object.assign({}, opciones, { resolver: resolve })));
       }
 
-      /** Documento guardado dentro de una acción: su PDF se genera aparte (si falla, queda «Generar PDF» en Documentos). */
+      /**
+       * Documento guardado dentro de una acción: su PDF se genera aparte (si falla, queda «Generar PDF» en Documentos).
+       * `sinPdf`: el documento solo se revisó y lo guarda la acción después (la responsiva de Reasignar).
+       */
       function terminarFlujo(sesion, tipo, r) {
         sesion.guardada = true;
-        llamar('apiLineasGenerarPdf', tipo, r.id, false, sesion.pdfFirmas || null)
+        if (!sesion.flujo.sinPdf) llamar('apiLineasGenerarPdf', tipo, r.id, false, sesion.pdfFirmas || null)
           .catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' El documento quedó guardado, pero su PDF no se generó: ' + mensajeError(e) + '. En Documentos está «Generar PDF».', 12000));
         const flujo = sesion.flujo;
         if (captura === sesion) cerrarCaptura(true);
