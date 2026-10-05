@@ -2641,6 +2641,52 @@
         refrescarDespuesDeCaptura(pila[pila.length - 1].id, tipo, idDoc);
       }
 
+      /**
+       * PDF firmado (usuario, 5-oct): la inspección o la responsiva se guardó sin la firma del responsable; ya firmada se
+       * sube aquí y reemplaza su PDF (el mismo archivo de Drive, LineasCaptura.subirPdfFirmado). Solo PDF.
+       */
+      function subirPdfFirmado(registroId, d) {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'application/pdf,.pdf';
+        input.addEventListener('change', () => {
+          const f = input.files && input.files[0];
+          if (!f) return;
+          if (f.type !== 'application/pdf' && !/\.pdf$/i.test(f.name)) { aviso(icono('triangle-alert', 'ln-alerta') + ' Solo se aceptan archivos PDF.', 6000); return; }
+          if (f.size > 15 * 1024 * 1024) { aviso(icono('triangle-alert', 'ln-alerta') + ' El archivo supera 15 MB.', 6000); return; }
+          const sesion = captura = { guardada: true, guardando: true, firmas: {}, carpetaId: '' };
+          mostrarModalCaptura();
+          $('#ln-captura-titulo', raiz).textContent = 'PDF firmado';
+          $('#ln-captura-subtitulo', raiz).textContent = [d.documento, fecha(d.fecha), d.responsable].filter(Boolean).join(' · ');
+          $('#ln-captura-cuerpo', raiz).innerHTML = '';
+          const modal = $('#ln-modal-captura', raiz);
+          modal.setAttribute('aria-busy', 'true');
+          modal.querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = true; });
+          mostrarEspera('Subiendo PDF firmado');
+          new Promise((resolve, reject) => {
+            const r = new FileReader();
+            r.onload = () => resolve(String(r.result).split(',')[1]);
+            r.onerror = () => reject(new Error('No se pudo leer ' + f.name));
+            r.readAsDataURL(f);
+          }).then((base64) => llamar('apiLineasSubirPdfFirmado', registroId, d.tipoPdf, d.id, d.pdfId, base64)).then((pdf) => {
+            if (!vigente() || captura !== sesion) return;
+            mostrarEspera('PDF firmado guardado', { tono: 'listo', icono: 'circle-check', texto: '',
+              acciones: enlaceDrive(pdf.id, 'Ver PDF', true) + '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
+            cargarEvidencias(registroId);
+            cargarHistorial(registroId);
+          }).catch((e) => {
+            if (!vigente() || captura !== sesion) return;
+            mostrarEspera('No se pudo subir el PDF', { tono: 'error', icono: 'file-warning', texto: '', detalle: mensajeError(e),
+              acciones: '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
+          }).finally(() => {
+            sesion.guardando = false;
+            modal.removeAttribute('aria-busy');
+            modal.querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = false; });
+          });
+        });
+        input.click();
+      }
+
       function soltarDocumentos() {
         if (tablaDocumentos) tablaDocumentos.destruir();
         tablaDocumentos = null;
@@ -2679,6 +2725,7 @@
         ], () => tablaDocumentos);
         if (!filas.length) return;
         soltarDocumentos();
+        const operar = !!(memoria.permisos && memoria.permisos.puedeOperar);
         const tabla = tablaDocumentos = tablaLineas($('.ln-docs-tabla', cont), {
           idCampo: '_clave',
           idTabla: 'lineas-documentos-v1',
@@ -2699,6 +2746,7 @@
             { icono: 'folder-open', titulo: 'Ver carpeta en Drive', visible: (d) => !!d.carpetaId,
               alHacer: (d) => window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(d.carpetaId), '_blank', 'noopener') },
             { icono: 'file-plus', titulo: 'Generar PDF', visible: (d) => !!d.pdfPendiente, alHacer: (d) => generarPdfPendiente(d.tipoPdf, d.id, d.carpetaId) },
+            { icono: 'file-up', titulo: 'Subir PDF firmado', visible: (d) => operar && !!d.pdfId, alHacer: (d) => subirPdfFirmado(id, d) },
           ],
           ayuda: 'Inspecciones y responsivas del registro. Doble clic en una fila abre la inspección, o el PDF de la responsiva. ' +
             'Los indicadores de arriba filtran por tipo; la flecha de cada columna filtra u ordena. ' +
@@ -3828,7 +3876,7 @@
         'Inspección': 'clipboard-check', 'Responsiva': 'signature', 'Reactivación': 'refresh-cw', 'Desecho': 'trash-2',
         // Acciones con nombre (etapa 3, paso 2)
         'Entrega': 'hand-helping', 'Cierre': 'flag', 'Nota': 'message-square', 'Resguardo': 'archive', 'Cancelación de línea': 'phone-off', 'Venta': 'badge-dollar-sign',
-        'Edición': 'file-pen-line', 'Comentario anterior': 'message-square-text',
+        'Edición': 'file-pen-line', 'Comentario anterior': 'message-square-text', 'PDF firmado': 'file-up',
       };
       const COLOR_ORIGEN = { 'Nuevo sistema': 'verde', AppSheet: 'azul', Drive: 'neutro', 'Migración': 'neutro' };
 
@@ -3914,7 +3962,7 @@
       const GRUPOS_MOVIMIENTO = [
         ['Responsable y ubicación', ['Entrega', 'Reasignación', 'Cambio de área o ubicación']],
         ['Equipo y línea', ['Edición', 'Cambio de equipo', 'Cambio de línea', 'Cambio de plan', 'Cambio de estatus', 'Cambio de accesos']],
-        ['Documentos', ['Inspección', 'Responsiva']],
+        ['Documentos', ['Inspección', 'Responsiva', 'PDF firmado']],
         ['Resguardo, cancelación y bajas', ['Resguardo', 'Cancelación de línea', 'Venta', 'Cierre']],
         ['Notas', ['Nota', 'Comentario anterior']],
         ['Alta, reactivación y desecho', ['Alta de registro', 'Reactivación', 'Desecho']],

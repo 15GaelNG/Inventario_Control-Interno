@@ -750,6 +750,8 @@ const LineasRepo = (function () {
     EDICION: 'Edición',
     // El COMENTARIOS que tenía la hoja vieja al retirarla (paso 4)
     COMENTARIO_ANTERIOR: 'Comentario anterior',
+    // PDF de la inspección o la responsiva, ya firmado (5-oct)
+    PDF_FIRMADO: 'PDF firmado',
   };
   const sinAcentos_ = (v) => String(v === null || v === undefined ? '' : v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
   function movimientoDeCampo(campo) {

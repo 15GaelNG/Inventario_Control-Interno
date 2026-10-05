@@ -390,6 +390,9 @@ function apiLineasGuardarResponsiva(token, datos) {
 function apiLineasGenerarPdf(token, tipo, id, forzar, firmas) {
   return TelefoniaService.generarPdf(token, tipo, id, forzar, firmas);
 }
+function apiLineasSubirPdfFirmado(token, registroId, tipo, docId, pdfId, base64) {
+  return TelefoniaService.subirPdfFirmado(token, registroId, tipo, docId, pdfId, base64);
+}
 function apiLineasFormularioRegistro(token, id, parte) {
   return TelefoniaService.formularioRegistro(token, id, parte);
 }

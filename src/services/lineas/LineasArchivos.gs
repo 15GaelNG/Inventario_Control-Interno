@@ -346,8 +346,33 @@ const LineasArchivos = (function () {
     }
   }
 
+  /**
+   * PDF firmado (usuario, 5-oct): versión nueva del MISMO archivo de Drive (mismo id y enlace, que ya están en la hoja y
+   * en APP_EVIDENCIAS). La versión que se reemplaza se marca para conservarse en el historial de versiones de Drive.
+   * Solo PDF de NUCOS o de la carpeta de la app.
+   */
+  function reemplazarPdf(archivoId, bytes) {
+    const archivo = DriveApp.getFileById(archivoId);
+    if (archivo.getMimeType() !== MimeType.PDF) throw new Error('El documento no es un PDF.');
+    const padres = archivo.getParents();
+    exigirEscribible(padres.hasNext() ? padres.next().getId() : null);
+    const opciones = (metodo, extra) => Object.assign({ method: metodo, headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true }, extra || {});
+    const base = 'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(archivoId);
+    const revisiones = UrlFetchApp.fetch(base + '/revisions?pageSize=1000&fields=' + encodeURIComponent('revisions(id)'), opciones('get'));
+    const ultima = revisiones.getResponseCode() === 200 ? (JSON.parse(revisiones.getContentText()).revisions || []).pop() : null;
+    if (ultima) {
+      const r = UrlFetchApp.fetch(base + '/revisions/' + encodeURIComponent(ultima.id), opciones('patch', { contentType: 'application/json', payload: JSON.stringify({ keepForever: true }) }));
+      if (r.getResponseCode() !== 200) console.warn('reemplazarPdf ' + archivoId + ': la versión anterior no se marcó (' + r.getResponseCode() + ').');
+    }
+    const resp = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files/' + encodeURIComponent(archivoId) +
+      '?uploadType=media&supportsAllDrives=true&fields=' + encodeURIComponent('id,name'), opciones('patch', { contentType: 'application/pdf', payload: bytes }));
+    if (resp.getResponseCode() !== 200) throw new Error('No se pudo guardar el PDF en Drive (' + resp.getResponseCode() + ').');
+    return JSON.parse(resp.getContentText());
+  }
+
   return {
     carpetaAppSheetId, carpetaNucosId, carpetaDeApp, idDeUrl, resolver, imagen, blob, guardarComoAppSheet,
     carpetasNucos, archivosNuco, estaDentroDe, exigirEscribible, enNucos, carpetaEvidenciaNuco, descartarCarpeta, olvidarNuco,
+    reemplazarPdf,
   };
 })();

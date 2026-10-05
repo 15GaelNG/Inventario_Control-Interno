@@ -702,8 +702,29 @@ const LineasCaptura = (function () {
     return { fotos: n };
   }
 
+  /**
+   * PDF firmado (usuario, 5-oct): la inspección o la responsiva se pudo guardar sin la firma del responsable (se le
+   * manda); al regresar firmada se sube aquí y reemplaza el PDF (LineasArchivos.reemplazarPdf: mismo archivo, la versión
+   * sin firma queda en el historial de versiones de Drive). Solo PDF. Queda en el historial del registro.
+   * `doc` = { tipo, id, pdfId } ya validado como documento de `registro` (TelefoniaService).
+   */
+  function subirPdfFirmado(registro, doc, base64, usuario) {
+    if (!base64) throw new Error('Elige el PDF firmado.');
+    const bytes = Utilities.base64Decode(String(base64));
+    if (bytes.length > 15 * 1024 * 1024) throw new Error('El archivo supera 15 MB.');
+    if (String.fromCharCode.apply(null, bytes.slice(0, 5)) !== '%PDF-') throw new Error('Solo se aceptan archivos PDF.');
+    const archivo = LineasArchivos.reemplazarPdf(doc.pdfId, bytes);
+    if (registro.nuco) LineasArchivos.olvidarNuco(registro.nuco);
+    LineasDatos.conCandado(() => LineasRepo.registrarMovimiento('PDF_FIRMADO', { motivo: '' }, usuario, new Date(), {
+      refs: [registro.id], nuco: registro.nuco,
+      detalle: Object.assign(doc.tipo === 'INSPECCION' ? { inspeccionId: doc.id } : { responsivaId: doc.id },
+        { cambios: [{ campo: 'PDF', antes: '', despues: archivo.name }] }),
+    }));
+    return { id: archivo.id, nombre: archivo.name };
+  }
+
   return {
-    objetivo: objetivoCaptura_, guardarInspeccion, guardarResponsiva, exigirInspeccion, generarPdf, fotosInspeccion,
+    objetivo: objetivoCaptura_, guardarInspeccion, guardarResponsiva, exigirInspeccion, generarPdf, fotosInspeccion, subirPdfFirmado,
     contextoInspeccion: (ref, usuario, puedeVerSecretos) => paraCliente_(contextoInspeccion(ref, usuario, puedeVerSecretos)),
     contextoResponsiva: (ref, usuario, puedeVerSecretos) => paraCliente_(contextoResponsiva(ref, usuario, puedeVerSecretos)),
     // Para pruebas: las definiciones de los formularios
