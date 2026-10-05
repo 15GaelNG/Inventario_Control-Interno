@@ -95,18 +95,69 @@ const REESTRUCTURA_COLUMNAS_CH = ['ID', 'No EMPLEADO', 'NOMBRE COMPLETO', 'DEPAR
   'OFICINA/DESARROLLO', 'ESTATUS COLABORADOR', 'DIRECTOR', 'JEFE DIRECTO', 'CORREO EMPRESARIAL', 'FECHA DE INGRESO',
   'FECHA DE BAJA', 'N. EMPLEADO ANTERIOR'];
 
+/** Pestaña del mismo libro con la base completa de Capital Humano (producción, 4-oct: la de octubre). */
+const REESTRUCTURA_HOJA_CH = 'COLABORADORES ACTUALIZADO';
+/** Columna de CH → columna de COLABORADORES (las mismas que migracion/capital_humano/preparar_ch.py). */
+const REESTRUCTURA_DE_CH = [['No EMPLEADO', 'No EMPLEADO'], ['NOMBRE COMPLETO', 'NOMBRE COMPLETO'], ['DEPARTAMENTO', 'DEPARTAMENTO'],
+  ['AREA', 'AREA'], ['PUESTO', 'PUESTO'], ['SEDE', 'SEDE'], ['OFICINA/DESARROLLO', 'OFICINA/DESARROLLO'],
+  ['STATUS', 'ESTATUS COLABORADOR'], ['DIRECTOR', 'DIRECTOR'], ['JEFE DIRECTO', 'JEFE DIRECTO'],
+  ['CORREO EMPRESARIAL', 'CORREO EMPRESARIAL'], ['FECHA DE INGRESO', 'FECHA DE INGRESO'], ['FECHA DE BAJA', 'FECHA DE BAJA'],
+  ['N. EMPLEADO ANTERIOR', 'N. EMPLEADO ANTERIOR']];
+
 /**
- * Carga en COLABORADORES la base de Capital Humano de septiembre: activos y bajas, un renglón por ingreso, guardado
- * como lo escribe CH. Los datos llegan en archivos temporales del proyecto (tmp_ch_NN.html, gzip + base64) que arma
- * migracion en la computadora solo con las columnas acordadas; se borran después de cargar.
+ * Lee la pestaña de CH solo con las columnas acordadas (cada una por separado: la cuenta, la CURP, etc. ni se leen) y
+ * la deja como la dejaba preparar_ch.py: texto en mayúsculas sin espacios de más, correo en minúsculas y fechas
+ * yyyy-MM-dd. null si la pestaña no está.
+ */
+function reestructuraLeerHojaCH_(ss) {
+  const hoja = ss.getSheetByName(REESTRUCTURA_HOJA_CH);
+  if (!hoja || hoja.getLastRow() < 2) return null;
+  const n = hoja.getLastRow() - 1;
+  const enc = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0].map((h) => String(h).replace(/\s+/g, ' ').trim());
+  const faltan = REESTRUCTURA_DE_CH.filter((p) => enc.indexOf(p[0]) < 0).map((p) => p[0]);
+  if (faltan.length) throw new Error('Faltan columnas en ' + REESTRUCTURA_HOJA_CH + ': ' + faltan.join(', '));
+  const texto = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+  const fecha = (v) => {
+    if (v instanceof Date && !isNaN(v.getTime())) return Utilities.formatDate(v, ss.getSpreadsheetTimeZone(), 'yyyy-MM-dd');
+    const t = texto(v);
+    let m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(t);
+    if (m) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+    m = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
+    return m ? m[0] : '';
+  };
+  const columnas = REESTRUCTURA_DE_CH.map((p) => hoja.getRange(2, enc.indexOf(p[0]) + 1, n, 1).getValues());
+  const salida = [];
+  for (let i = 0; i < n; i++) {
+    if (columnas.every((c) => texto(c[i][0]) === '')) continue;
+    const o = {};
+    REESTRUCTURA_DE_CH.forEach((p, k) => {
+      const v = columnas[k][i][0];
+      o[p[1]] = p[1].indexOf('FECHA') === 0 ? fecha(v) : (p[1] === 'CORREO EMPRESARIAL' ? texto(v).toLowerCase() : texto(v).toUpperCase());
+    });
+    salida.push(o);
+  }
+  return salida;
+}
+
+/**
+ * Carga en COLABORADORES la base de Capital Humano: activos y bajas, un renglón por ingreso, guardado como lo escribe
+ * CH. En producción sale de la pestaña COLABORADORES ACTUALIZADO del mismo libro (usuario, 4-oct: la base de octubre);
+ * si no está, de los archivos temporales del proyecto (tmp_ch_NN.html, gzip + base64) que arma
+ * migracion/capital_humano/preparar_ch.py solo con las columnas acordadas (así se cargó en pruebas).
  *
  * IDs: cada número de empleado conserva el ID COL- que ya tenía, en su renglón vigente (el activo, o el ingreso más
  * reciente); los demás renglones reciben uno nuevo. Lo que estaba en la hoja y no viene en CH se queda al final con
- * ESTATUS COLABORADOR = "NO ESTÁ EN CH" (no sale en las listas). La hoja anterior sigue igual en producción.
+ * ESTATUS COLABORADOR = "NO ESTÁ EN CH" (no sale en las listas).
  */
 function reestructuraCargarCapitalHumano() {
   soloEditor_();
-  // 1) Juntar los archivos temporales
+  const ss = SpreadsheetApp.openById(leerConfig_('SS_ID_TELEFONIA'));
+  // 1) La base de CH: la pestaña del libro o, si no está, los archivos temporales
+  const deHoja = reestructuraLeerHojaCH_(ss);
+  return reestructuraEscribirCH_(ss, deHoja || reestructuraLeerTmpCH_(), deHoja ? REESTRUCTURA_HOJA_CH : 'tmp_ch');
+}
+
+function reestructuraLeerTmpCH_() {
   let b64 = '';
   for (let i = 1; i < 100; i++) {
     const nombre = 'tmp_ch_' + (i < 10 ? '0' : '') + i;
@@ -118,16 +169,17 @@ function reestructuraCargarCapitalHumano() {
   const tsv = Utilities.ungzip(Utilities.newBlob(Utilities.base64Decode(b64), 'application/x-gzip')).getDataAsString('UTF-8');
   const lineas = tsv.split('\n');
   const enc = lineas[0].split('\t');
-  const ch = lineas.slice(1).filter(Boolean).map((l) => {
+  return lineas.slice(1).filter(Boolean).map((l) => {
     const v = l.split('\t');
     const o = {};
     enc.forEach((h, i) => { o[h] = v[i] || ''; });
     return o;
   });
+}
 
+function reestructuraEscribirCH_(ss, ch, fuente) {
   // 2) IDs que ya tenía la hoja. Desde esta carga, cada renglón es un ingreso: se reconoce por número de empleado +
   // fecha de ingreso, así el ID no cambia de un mes a otro. La foto vieja (sin FECHA DE INGRESO) se reconoce por número.
-  const ss = SpreadsheetApp.openById(leerConfig_('SS_ID_TELEFONIA'));
   const hoja = ss.getSheetByName('COLABORADORES');
   const viejos = hoja.getDataRange().getValues();
   const encViejo = viejos[0].map((h) => String(h).trim());
@@ -210,7 +262,7 @@ function reestructuraCargarCapitalHumano() {
   const cuenta = {};
   filas.forEach((f) => { const e = f[col('ESTATUS COLABORADOR') - 1]; cuenta[e] = (cuenta[e] || 0) + 1; });
   const salida = {
-    renglones: filas.length, porEstatus: cuenta, idsConservados: reusados, idsNuevos: filas.length - reusados - noEstan.length,
+    fuente: fuente, renglones: filas.length, porEstatus: cuenta, idsConservados: reusados, idsNuevos: filas.length - reusados - noEstan.length,
     estabanYNoVienenEnCH: noEstan.length, columnas: REESTRUCTURA_COLUMNAS_CH,
   };
   console.log(JSON.stringify(salida, null, 2));
