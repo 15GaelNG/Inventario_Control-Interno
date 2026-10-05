@@ -1732,7 +1732,6 @@ test('responsivo: solo los cortes del sistema (640 / 1024) y matchMedia solo en 
   // archivo nuevo no puede entrar, y al migrar uno hay que bajar su número aquí (si no, falla).
   const PENDIENTES = {
     'src/html/js/componentes/datatable.html': { cortes: 0, matchMedia: 1 },
-    'src/html/js/componentes/formulario.html': { cortes: 3, matchMedia: 0 },
     'src/html/js/lineas.html': { cortes: 0, matchMedia: 2 },
     'src/html/lineas-estilos.html': { cortes: 17, matchMedia: 0 },
     'src/html/views/relaciones.html': { cortes: 1, matchMedia: 0 },
@@ -1754,6 +1753,12 @@ test('responsivo: solo los cortes del sistema (640 / 1024) y matchMedia solo en 
   assert.deepEqual(encontrado, PENDIENTES,
     'Un @media de ancho usa (max-width: 640px) o (max-width: 1024px), y "¿es celular?" se pregunta con Pantalla.* ' +
     '(componentes/pantalla.html). Si migraste un archivo, baja su número en PENDIENTES (o quítalo).');
+  // Rejillas de campos: .form-rejilla + data-columnas (se acomodan solas en tableta y celular),
+  // nunca columnas fijas en línea, que en celular dejaban 3 campos de 100px y cortaban el último
+  const enLinea = filesBelow(path.join(root, 'src/html/views')).filter((f) => f.endsWith('.html'))
+    .filter((f) => /style="[^"]*grid-template-columns/.test(fs.readFileSync(f, 'utf8')))
+    .map((f) => path.relative(root, f).replace(/\\/g, '/'));
+  assert.deepEqual(enLinea, [], 'Usa class="form-rejilla" data-columnas="N" (styles.html) en vez de grid-template-columns en línea');
   // Pantalla se carga antes que todo lo que la usa
   const index = read('src/html/Index.html');
   const pos = (nombre) => index.indexOf("include('html/" + nombre + "')");

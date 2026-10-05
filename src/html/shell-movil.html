@@ -48,7 +48,10 @@
     .topbar-theme-toggle, .topbar-user { display: none; }
     .topbar-user-menu { padding-left: 8px; }
     .topbar-cm-logo { height: 26px; }
-    #view-container { padding: 0 12px 20px; }
+    /* Sin relleno abajo: lo que se pega abajo con sticky (los botones de un formulario) queda al
+       ras de la pantalla; el espacio final lo da el último bloque de la vista */
+    #view-container { padding: 0 12px; }
+    #view-container > :last-child { margin-bottom: 20px; }
 
     /* Cambio de tema dentro del panel, al pie (en la barra ya no cabe) */
     .shell-tema-panel {

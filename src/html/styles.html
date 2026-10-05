@@ -295,6 +295,11 @@
     background: var(--color-surface); border: 1px solid var(--color-border);
     border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px;
   }
+  /* Celular: el mismo relleno que las ventanas (16px). Lo que se extiende de orilla a orilla de
+     la tarjeta (la barra de botones de un formulario) cuenta con ese número. */
+  @media (max-width: 640px) {
+    .card { padding: 16px; }
+  }
 
   /* Barra de pestañas simple (ej. "Catálogo" / "Registrar" arriba de cada
      módulo) — un panel visible a la vez, en vez de formulario + tabla
@@ -382,6 +387,23 @@
     text-transform: uppercase; letter-spacing: .3px;
   }
   .field { margin-bottom: 14px; }
+
+  /* Rejilla de campos de un formulario (CamposHoja o escrito a mano):
+       <div class="form-rejilla" data-columnas="3"> …<div class="field">…</div>… </div>
+     data-columnas = columnas en escritorio (2 o 3; sin él, 2). En tableta caben como mucho 2 y
+     en celular 1: el formulario se acomoda solo, sin CSS del módulo. No escribas
+     grid-template-columns en línea (source-contracts lo revisa). Lo que debe ocupar el renglón
+     completo lleva grid-column: 1 / -1 (en CamposHoja: renglonCompleto; los títulos de sección
+     .info-section-title ya lo traen). minmax(0, 1fr): un control ancho no puede estirar su
+     columna y empujar a la de al lado fuera de la caja. */
+  .form-rejilla { display: grid; gap: 0 14px; grid-template-columns: repeat(var(--form-rejilla-columnas, 2), minmax(0, 1fr)); }
+  .form-rejilla[data-columnas="3"] { --form-rejilla-columnas: 3; }
+  @media (max-width: 1024px) {
+    .form-rejilla[data-columnas="3"] { --form-rejilla-columnas: 2; }
+  }
+  @media (max-width: 640px) {
+    .form-rejilla, .form-rejilla[data-columnas] { --form-rejilla-columnas: 1; }
+  }
 
   button {
     background: var(--color-primary); color: #fff; border: none;
@@ -818,6 +840,10 @@
     padding-bottom: 6px; border-bottom: 1px solid var(--color-border);
   }
   .info-section-title:first-child { margin-top: 0; }
+  /* Ficha de datos (dos columnas) en celular: una, para que los valores largos no se corten */
+  @media (max-width: 640px) {
+    .info-grid { grid-template-columns: minmax(0, 1fr); }
+  }
 
   /* Ver/Editar/Eliminar por fila en las tablas de solo lectura de una ficha
      (pestañas de Verificaciones/Inspecciones/Sensor/Hologramas/Incidencias dentro

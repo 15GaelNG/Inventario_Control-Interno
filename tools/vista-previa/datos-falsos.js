@@ -340,6 +340,12 @@
     'arqueos': () => abrir('arqueos'),
     'arqueos-detalle': async () => { await abrir('arqueos'); await abrirPrimeraFila(); },
     'sistemas': () => abrir('sistemas-vehiculos'),
+    // ---- Formularios de alta (rejilla de campos .form-rejilla y componente Formulario) ----
+    'vehiculos-registrar': () => abrir('vehiculos', 'registrar'),
+    'incidencias-registrar': () => abrir('incidencias', 'registrar'),
+    'uber-registrar': () => abrir('uber', 'registrar'),
+    'caja-chica-registrar': () => abrir('caja-chica', 'registrar'),
+    'arqueos-registrar': () => abrir('arqueos', 'registrar'),
     // ---- Ventanas (styles.html, sección Modal): chica = hoja abajo en celular; ancha = pantalla completa ----
     'modal-confirmar': async () => {
       await abrir('vehiculos');
