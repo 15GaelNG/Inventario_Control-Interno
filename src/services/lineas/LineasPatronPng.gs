@@ -2,7 +2,7 @@
  * LineasPatronPng.gs
  * Imagen del patrón de desbloqueo para el PDF, dibujada en el servidor. La dibuja el navegador al capturar
  * (activarPatron → base64 en lineas.html) y viaja con las firmas; al regenerar un PDF cuando ya no está, se dibuja aquí
- * con los puntos guardados ("1-5-9"), sin mandarlos al navegador (solo ADMIN los ve). Mismo dibujo: 300 × 300, trazo
+ * con los puntos guardados ("1-5-9"), sin mandarlos al navegador (solo los ven ADMIN y el área de Líneas). Mismo dibujo: 300 × 300, trazo
  * azul, flechas doradas hacia donde va cada tramo y cada punto con su orden (anillo dorado en el inicio).
  * Apps Script no convierte SVG a PNG: se pinta pixel por pixel y el PNG se arma a mano (paleta, sin compresión).
  */

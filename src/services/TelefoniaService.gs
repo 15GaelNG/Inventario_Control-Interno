@@ -28,9 +28,14 @@ const TelefoniaService = (function () {
   const operar_ = (token) => Permisos.puedeEditar(token, MODULO_OPERAR);
   const puedeOperar_ = (sesion) => sesion.permisos[MODULO_OPERAR] === Permisos.EDICION;
 
-  /** PIN, patrones y contraseñas de equipos: solo ADMIN. */
+  /**
+   * PIN, patrones y contraseñas de equipos: ADMIN y el área de Líneas (usuario, 5-oct: la columna AREA de USUARIOS
+   * = LINEAS; llega a la sesión como `departamento`).
+   */
+  const AREA_SECRETOS = 'LINEAS';
   function puedeVerSecretos_(sesion) {
-    return sesion.rol === Config.ROLES.ADMIN;
+    const area = String(sesion.departamento || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase();
+    return sesion.rol === Config.ROLES.ADMIN || area === AREA_SECRETOS;
   }
 
   function ocultarSecretos_(doc, campos, sesion) {

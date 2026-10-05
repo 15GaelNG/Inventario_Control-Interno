@@ -64,7 +64,7 @@ const LineasArchivos = (function () {
     if (enlace) {
       try { v = decodeURIComponent(enlace[1].replace(/\+/g, ' ')).trim(); } catch (e) { return null; }
     }
-    if (!puedeVerSecretos && RUTA_SECRETA.test(v)) throw new Error('Este archivo solo lo puede ver un administrador.');
+    if (!puedeVerSecretos && RUTA_SECRETA.test(v)) throw new Error('Este archivo solo lo ven administradores y el área de Líneas.');
     const id = idDeUrl(v);
     if (id) return { id: id, nombre: v, url: 'https://drive.google.com/file/d/' + id + '/view' };
     if (/^https?:/i.test(v)) return { id: null, nombre: v, url: v };

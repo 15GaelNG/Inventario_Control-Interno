@@ -718,7 +718,7 @@
       } else if (e.control === 'fechaHora') {
         control = '<input type="datetime-local"' + attrs + ' value="' + esc(valor) + '" />';
       } else if (e.control === 'patron') {
-        const nota = e.valorOculto ? 'Registrado (solo administradores lo ven). Si no trazas uno nuevo, se conserva.'
+        const nota = e.valorOculto ? 'Registrado (solo lo ven administradores y el área de Líneas). Si no trazas uno nuevo, se conserva.'
           : (valor && !esPuntosPatron(valor) ? 'Hay un patrón capturado en AppSheet (imagen). Si no trazas uno nuevo, se conserva.' : '');
         control = (nota ? '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' ' + esc(nota) + '</div>' : '') + htmlPatron(id + '-patron', false);
       } else if (e.control === 'firma') {
@@ -2454,7 +2454,7 @@
                 ['Línea', l ? '<a href="#" class="ln-enlace ln-mono" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + esc(l.numero || '(sin número)') + '</a>' + (l.compania ? ' · ' + esc(l.compania) : '') : '<span class="ln-tenue">Sin línea</span>', true],
                 ['Departamento', resp.departamento]]) +
             fichaEnPestanas(
-              (e._secretosVisibles ? '' : '<div class="ln-nota">' + icono('lock') + ' Los PIN, patrones y contraseñas están ocultos para tu rol.</div>') +
+              (e._secretosVisibles ? '' : '<div class="ln-nota">' + icono('lock') + ' Los PIN, patrones y contraseñas solo los ven administradores y el área de Líneas.</div>') +
             '<div class="ln-grid-2">' +
               tarjeta(icono('smartphone') + ' Equipo', campos([
                 ['Tipo', tipoRegistro(e.legado), true],

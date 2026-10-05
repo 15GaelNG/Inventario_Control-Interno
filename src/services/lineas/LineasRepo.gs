@@ -101,7 +101,7 @@ const LineasRepo = (function () {
     'DEPARTAMENTO', 'AREA', 'JEFE DIRECTO', 'DIRECTOR', 'FOLIO', 'RAZON SOCIAL', 'PIN WHATSAPP', 'PIN EQUIPO', 'CUENTA GOOGLE',
     'COMPAÑIA', 'COSTO PLAN', 'FECHA REGISTRO', 'INICIO PLAN', 'FIN PLAN', 'ESTATUS LINEA', 'FECHA CAMBIO TEMPORAL',
     'EMAIL USUARIO', 'ESTATUS EQUIPO', 'RESPONSIVA', 'COMENTARIOS', 'FECHA INSPECCION', 'FORMATO INSPECCION'];
-  /** Columnas de la vista con secretos (solo ADMIN las ve). */
+  /** Columnas de la vista con secretos (las ven ADMIN y el área de Líneas: TelefoniaService.puedeVerSecretos_). */
   const COLS_VISTA_SECRETAS = ['PIN WHATSAPP', 'PIN EQUIPO'];
 
   // Atajos (se resuelven al llamar, no al cargar el archivo).
