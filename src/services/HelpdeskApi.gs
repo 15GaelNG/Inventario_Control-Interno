@@ -9,7 +9,13 @@
  * 05/10/2026 desde el navegador:
  *   - backend https://helpdesk-backend.gphsis.com, encabezado `authorization: <token>` (sin Bearer)
  *   - POST /login/autoLogin  → { status: 1, message: 'Sesión activa', data: { email, name, rol… } }
- *   - POST /tickets/list     → { cantTotalTickets, tickets: [...] }, con { filters, pagination }
+ *   - POST /tickets/list     → { cantTotalTickets, tickets: [...] }, con { filters, pagination }.
+ *     No pagina: siempre los primeros 25 del filtro (estatus, grupo, formulario, prioridad).
+ *   - POST /tickets/getFilters { isTramite: 0 } → estatus, prioridades, formularios y grupos
+ *   - POST /tickets/getTicket { idTicket, isTramite: 0 } → { tickets: [uno] }
+ *   - POST /tickets/getConversationTickets { idTicket } → { conversation: [...] } (notes en HTML)
+ *   Su página además llama POST /tickets/markMessageAsSeen al abrir un ticket: ESCRIBE (lo marca
+ *   como leído). Aquí NO se llama nunca: ver desde Control Interno no cambia nada allá.
  *
  * Seguridad
  *   - El token se guarda en Script Properties con llave por correo (la app corre como quien la
@@ -41,6 +47,7 @@ const HelpdeskApi = (function () {
   const MAX_POR_MINUTO_TODOS = 30;
   const PAUSA_SEG = 120;
   const POR_PAGINA = 25;
+  const FILTROS_SEG = 3600;   // estatus, prioridades, formularios y grupos casi no cambian
 
   const base_ = () => (typeof leerConfig_ === 'function' && leerConfig_('HELPDESK_URL')) || BASE_POR_OMISION;
   const cache_ = () => CacheService.getScriptCache();
@@ -78,7 +85,18 @@ const HelpdeskApi = (function () {
   const tokenDe_ = (correo) => props_().getProperty(llaveToken_(correo));
   function olvidarToken_(correo) {
     props_().deleteProperty(llaveToken_(correo));
-    cache_().remove('hd_lista_' + correo);
+    cache_().removeAll(['hd_lista_' + correo, 'hd_filtros_' + correo]);
+  }
+
+  /** Lo guardado en la caché (o null), y guardar sin tronar si no cabe */
+  const deCache_ = (llave) => { const v = cache_().get(llave); return v ? JSON.parse(v) : null; };
+  const aCache_ = (llave, valor, seg) => { try { cache_().put(llave, JSON.stringify(valor), seg); } catch (e) { /* no cupo */ } };
+  /** Llave corta y estable para un objeto (los filtros de la lista) */
+  function huella_(obj) {
+    const t = JSON.stringify(obj);
+    let h = 5381;
+    for (let i = 0; i < t.length; i++) h = ((h * 33) ^ t.charCodeAt(i)) >>> 0;
+    return h.toString(36);
   }
 
   // ------------------------------------------------------------------ cuidar al helpdesk
@@ -86,10 +104,12 @@ const HelpdeskApi = (function () {
   const minuto_ = () => Math.floor(ahora_() / 60000);
 
   /**
-   * ¿Se puede llamar ahora? Truena con el motivo si no. Cuenta la llamada bajo candado para que
-   * dos personas a la vez no se brinquen el límite (si no se consigue el candado, no se llama).
+   * ¿Se pueden hacer `n` llamadas ahora (una operación: el detalle son 2)? Truena con el motivo si
+   * no. Las cuenta bajo candado para que dos personas a la vez no se brinquen el límite (si no se
+   * consigue el candado, no se llama). Los 2 s mínimos son entre operaciones, no entre sus llamadas.
    */
-  function pedirTurno_(correo) {
+  function pedirTurno_(correo, n) {
+    const cuantas = n || 1;
     const c = cache_();
     const pausa = Number(c.get('hd_pausa') || 0);
     if (pausa > ahora_()) {
@@ -105,9 +125,9 @@ const HelpdeskApi = (function () {
       const llaveTodos = 'hd_n_todos_' + k;
       const mias = Number(c.get(llaveMia) || 0);
       const todas = Number(c.get(llaveTodos) || 0);
-      if (mias >= MAX_POR_MINUTO) throw new Error('Ya consultaste el helpdesk ' + mias + ' veces en este minuto. Espera un momento.');
-      if (todas >= MAX_POR_MINUTO_TODOS) throw new Error('El helpdesk está recibiendo muchas consultas de la app. Intenta en un minuto.');
-      c.putAll({ [llaveMia]: String(mias + 1), [llaveTodos]: String(todas + 1), ['hd_ultima_' + correo]: String(ahora_()) }, 120);
+      if (mias + cuantas > MAX_POR_MINUTO) throw new Error('Ya consultaste el helpdesk ' + mias + ' veces en este minuto. Espera un momento.');
+      if (todas + cuantas > MAX_POR_MINUTO_TODOS) throw new Error('El helpdesk está recibiendo muchas consultas de la app. Intenta en un minuto.');
+      c.putAll({ [llaveMia]: String(mias + cuantas), [llaveTodos]: String(todas + cuantas), ['hd_ultima_' + correo]: String(ahora_()) }, 120);
     } finally {
       lock.releaseLock();
     }
@@ -123,9 +143,12 @@ const HelpdeskApi = (function () {
 
   // ------------------------------------------------------------------ transporte
 
-  /** Una llamada al helpdesk. Sin reintentos. El token nunca aparece en un error. */
-  function llamar_(correo, token, ruta, cuerpo) {
-    pedirTurno_(correo);
+  /**
+   * Una llamada al helpdesk. Sin reintentos. El token nunca aparece en un error.
+   * conTurno: la operación ya pidió turno para esta llamada (ver detalle).
+   */
+  function llamar_(correo, token, ruta, cuerpo, conTurno) {
+    if (!conTurno) pedirTurno_(correo);
     let respuesta;
     try {
       respuesta = UrlFetchApp.fetch(base_() + ruta, {
@@ -187,6 +210,48 @@ const HelpdeskApi = (function () {
     };
   }
 
+  /**
+   * HTML de un mensaje del helpdesk → texto plano. Los mensajes traen <p>, <strong>, <a>, <img>…
+   * de correos y del editor: pintarlos tal cual en nuestra app dejaría correr lo que alguien
+   * mande en un correo. Se conservan los párrafos y las ligas (como texto); las imágenes no.
+   */
+  function textoDeHtml_(html) {
+    const entidades = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+    return String(html == null ? '' : html)
+      .replace(/<(script|style)[\s\S]*?<\/\1>/gi, '')
+      .replace(/<a\s[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi,
+        (_, url, texto) => { const t = texto.replace(/<[^>]*>/g, '').trim(); return t && t !== url ? t + ' (' + url + ')' : url; })
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, '\n')
+      .replace(/<li[^>]*>/gi, '• ')
+      .replace(/<[^>]*>/g, '')
+      .replace(/&(#\d+|#x[0-9a-f]+|[a-z]+);/gi, (todo, e) => {
+        if (e[0] === '#') { const n = e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10); return isNaN(n) ? todo : String.fromCodePoint(n); }
+        return entidades[e.toLowerCase()] !== undefined ? entidades[e.toLowerCase()] : todo;
+      })
+      .replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  /** Un mensaje de la conversación → nuestro formato */
+  function normalizarMensaje_(m) {
+    const fecha = m.dateCreation ? new Date(m.dateCreation) : null;
+    return {
+      ID: m.idConversation,
+      AUTOR: String(m.nameAnswer || '').replace(/\s+/g, ' ').trim(),
+      FECHA: fecha && !isNaN(fecha.getTime()) ? fecha.toISOString() : '',
+      TEXTO: textoDeHtml_(m.notes),
+      PRIVADO: Number(m.isPrivate) === 1,
+      ADJUNTOS: String(m.attachNames || '').split(',').map((n) => n.trim()).filter(Boolean),
+    };
+  }
+
+  /** Filtros de la lista que manda la pantalla → solo números, y pocos */
+  function filtrosValidos_(f) {
+    const ids = (v) => (Array.isArray(v) ? v : []).map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 20);
+    const o = f || {};
+    return { estatus: ids(o.estatus), grupos: ids(o.grupos), formularios: ids(o.formularios), prioridades: ids(o.prioridades) };
+  }
+
   // ------------------------------------------------------------------ lo que usa la app
 
   /** Valida el token con el helpdesk (una llamada) y lo guarda a nombre de quien tiene la sesión */
@@ -225,25 +290,32 @@ const HelpdeskApi = (function () {
     return { conectado: true, nombre: String(c.name || ''), rol: String(c.rol || ''), vence: new Date(c.exp * 1000).toISOString() };
   }
 
-  /**
-   * La primera página de tickets que el helpdesk le muestra a esta persona (lo mismo que ve en
-   * su página), en nuestro formato. Se reutiliza CACHE_SEG segundos; `forzar` la pide de nuevo
-   * (igual respetando los límites).
-   */
-  function listarTickets(token, forzar) {
-    const sesion = Permisos.puedeLeer(token, MODULO);
-    const correo = correoDe_(sesion);
+  /** El correo y el token guardado de quien tiene la sesión (truena si no se ha conectado) */
+  function conectado_(token) {
+    const correo = correoDe_(Permisos.puedeLeer(token, MODULO));
     const guardado = tokenDe_(correo);
     if (!guardado) throw new Error('Conecta tu cuenta del helpdesk primero.');
-    const llave = 'hd_lista_' + correo;
-    if (!forzar) {
-      const enCache = cache_().get(llave);
-      if (enCache) return JSON.parse(enCache);
-    }
-    const r = llamar_(correo, guardado, '/tickets/list', {
+    return { correo: correo, token: guardado };
+  }
+
+  /**
+   * Los primeros 25 tickets que el helpdesk le muestra a esta persona con esos filtros (lo mismo
+   * que vería en su página), en nuestro formato. filtros = { estatus, grupos, formularios,
+   * prioridades }: listas de ids de filtros(). Se reutiliza CACHE_SEG segundos; `forzar` la pide
+   * de nuevo (igual respetando los límites).
+   */
+  function listarTickets(token, filtros, forzar) {
+    const yo = conectado_(token);
+    const f = filtrosValidos_(filtros);
+    const llave = 'hd_lista_' + yo.correo + '_' + huella_(f);
+    if (!forzar) { const guardada = deCache_(llave); if (guardada) return guardada; }
+    // La misma forma que manda su página al filtrar (medida el 05/10/2026)
+    const r = llamar_(yo.correo, yo.token, '/tickets/list', {
       filters: {
-        agents: [], branches: [], forms: [], areas: [], department: [], customer: [],
-        departmentCustomers: [], idTicket: [], status: [], priority: [], finishLoad: false,
+        idHeadquarter: [], idAgent: [], idArea: [], idBranch: f.grupos, idForm: f.formularios, toIdDepartment: [],
+        idPriority: f.prioridades, idStatus: f.estatus, dateCreation: null, dateCreationEnd: null, idUser: [], idCrea: [],
+        idTicket: [], headC: [], firstAnswer: null, nextAnswer: null, idProyecto: null, idCondominio: null, idLote: null,
+        myTickets: null, departamento: [], area: [], idDepartmentCustomer: [],
       },
       pagination: { rowsPerPage: POR_PAGINA },
     });
@@ -253,13 +325,61 @@ const HelpdeskApi = (function () {
       tickets: r.tickets.map(normalizar_),
       consultado: new Date(ahora_()).toISOString(),
     };
-    try { cache_().put(llave, JSON.stringify(resultado), CACHE_SEG); } catch (e) { /* si no cabe, la siguiente consulta respeta los límites */ }
+    aCache_(llave, resultado, CACHE_SEG);
+    return resultado;
+  }
+
+  /** Estatus, prioridades, formularios y grupos para los filtros de la pantalla (una llamada por hora) */
+  function filtros(token) {
+    const yo = conectado_(token);
+    const llave = 'hd_filtros_' + yo.correo;
+    const guardados = deCache_(llave);
+    if (guardados) return guardados;
+    const r = llamar_(yo.correo, yo.token, '/tickets/getFilters', { isTramite: 0 });
+    if (!r || !Array.isArray(r.status)) throw new Error('El helpdesk cambió la forma de sus filtros. Avisa a sistemas.');
+    const color = (c) => (/^#[0-9a-f]{3,8}$/i.test(String(c || '')) ? c : '');
+    const lista = (v, id, nombre, extra) => (Array.isArray(v) ? v : [])
+      .filter((x) => x && x[id] && x.status !== 0 && x.isDelete !== 1)
+      .map((x) => Object.assign({ id: x[id], nombre: String(x[nombre] || '').trim() }, extra ? extra(x) : {}));
+    const resultado = {
+      estatus: lista(r.status, 'idStatus', 'name', (x) => ({ color: color(x.color) })),
+      prioridades: lista(r.priority, 'idPriority', 'name', (x) => ({ color: color(x.color) })),
+      formularios: lista(r.forms, 'idForm', 'notes'),
+      grupos: lista(r.branches, 'idBranch', 'name'),
+    };
+    aCache_(llave, resultado, FILTROS_SEG);
+    return resultado;
+  }
+
+  /**
+   * Un ticket con su conversación (dos llamadas, cada una con su turno). Solo lee: NO se llama
+   * markMessageAsSeen, así que verlo aquí no lo marca como leído allá.
+   */
+  function detalle(token, idTicket) {
+    const yo = conectado_(token);
+    const id = Number(idTicket);
+    if (!Number.isInteger(id) || id <= 0) throw new Error('Ticket inválido.');
+    const llave = 'hd_ticket_' + yo.correo + '_' + id;
+    const guardado = deCache_(llave);
+    if (guardado) return guardado;
+    pedirTurno_(yo.correo, 2);
+    const r = llamar_(yo.correo, yo.token, '/tickets/getTicket', { idTicket: id, isTramite: 0 }, true);
+    const t = r && Array.isArray(r.tickets) ? r.tickets[0] : null;
+    if (!t) throw new Error('El helpdesk no regresó ese ticket (puede que no tengas acceso a él allá).');
+    const c = llamar_(yo.correo, yo.token, '/tickets/getConversationTickets', { idTicket: id }, true);
+    if (!c || !Array.isArray(c.conversation)) throw new Error('El helpdesk cambió la forma de la conversación. Avisa a sistemas.');
+    const resultado = Object.assign(normalizar_(t), {
+      DURACION_DIAS: t.intervalTime === null || t.intervalTime === undefined || t.intervalTime === '' ? '' : Number(t.intervalTime),
+      MENSAJES: c.conversation.map(normalizarMensaje_),
+    });
+    aCache_(llave, resultado, CACHE_SEG);
     return resultado;
   }
 
   return {
-    conectar, desconectar, estado, listarTickets,
+    conectar, desconectar, estado, listarTickets, filtros, detalle,
     // expuestas para las pruebas
-    normalizar_, contenido_, LIMITES: { CACHE_SEG, MIN_ENTRE_MS, MAX_POR_MINUTO, MAX_POR_MINUTO_TODOS, PAUSA_SEG, POR_PAGINA },
+    normalizar_, normalizarMensaje_, textoDeHtml_, contenido_,
+    LIMITES: { CACHE_SEG, MIN_ENTRE_MS, MAX_POR_MINUTO, MAX_POR_MINUTO_TODOS, PAUSA_SEG, POR_PAGINA, FILTROS_SEG },
   };
 })();

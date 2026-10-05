@@ -151,9 +151,20 @@ Todo se mide desde el navegador de un usuario, con F12 → Network → Fetch/XHR
       Cada ticket trae título, notas, estatus y prioridad (con color), solicitante, agente,
       formulario, áreas, `dateCreationDB` (yyyy-MM-dd), `dateClose` (ISO) y mensajes sin leer.
       Forma de ejemplo (inventada): `tests/helpdesk.test.js`.
-- [ ] **La página siguiente:** cómo pide los siguientes 25 (el payload de la segunda llamada).
-- [ ] **El detalle** de un ticket (y sus respuestas/chat).
-- [ ] **Los catálogos** de estatus, prioridad y formularios (solo vimos 1 = Abierto, 4 = Cerrado).
+- [x] **La página siguiente:** no hay. Su página siempre pide 25 y se navega filtrando (estatus,
+      grupo, formulario, prioridad), con la forma `{ idStatus, idBranch, idForm, idPriority, … }`.
+- [x] **El detalle:** `POST /tickets/getTicket { idTicket, isTramite: 0 }` y
+      `POST /tickets/getConversationTickets { idTicket }` (los mensajes vienen en HTML: se vuelven
+      texto en el servidor). Hay también `getTicketTimeline` (cambios de estatus) y
+      `chat/getCloudFile { path }` (adjuntos), que todavía no se usan.
+      **Ojo:** su página llama `POST /tickets/markMessageAsSeen` al abrir un ticket; ESCRIBE (lo
+      marca como leído). Nuestra app no lo llama nunca.
+- [x] **Los catálogos:** `POST /tickets/getFilters { isTramite: 0 }` trae estatus (1 Abierto,
+      2 Pendiente, 3 Resuelto, 4 Cerrado, 7 Abierto sin asignación, 8 Reabierto), prioridades
+      (Baja, Media, Alta, Urgente, con color), formularios y grupos de la persona.
+      Medido con un HAR (F12 → Network → "Save all as HAR (sanitized)"): es la forma más rápida
+      de capturar todo de una vez. El HAR trae el token en el cuerpo de autoLogin y datos reales:
+      se lee con un script que tapa los tokens, no se sube (`*.har` en .gitignore) y se borra.
 - [x] **¿Qué ve cada usuario?** Lo que su token ve en el helpdesk (p. ej. "tickets de mi
       departamento" según sus permisos allá).
 - [ ] Si la columna `TICKET` de nuestra hoja `TICKETS` es el folio del helpdesk.
@@ -161,8 +172,9 @@ Todo se mide desde el navegador de un usuario, con F12 → Network → Fetch/XHR
 ## Lo que ya está (src/services/HelpdeskApi.gs)
 
 `conectar` (valida formato, que el correo del token sea el de la sesión, que no haya vencido, y
-una llamada a autoLogin), `desconectar`, `estado` (sin llamar al helpdesk) y `listarTickets`
-(primera página, en nuestro formato). Límites para no saturarlo: la lista se reutiliza 60 s, 2 s
+una llamada a autoLogin), `desconectar`, `estado` (sin llamar al helpdesk), `listarTickets`
+(los 25 del filtro, en nuestro formato), `filtros` (una vez por hora) y `detalle` (ticket +
+conversación en texto plano, sin marcarlo como leído). Límites para no saturarlo: la lista se reutiliza 60 s, 2 s
 mínimo entre llamadas de una persona, 10 por minuto por persona y 30 entre toda la app, una
 página por llamada, cero reintentos, y ante 429/5xx toda la app se detiene lo que pida
 `Retry-After` (o 2 min). 401/403 borra el token. Pruebas: `tests/helpdesk.test.js`.
