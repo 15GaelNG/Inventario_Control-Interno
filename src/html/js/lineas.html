@@ -2636,7 +2636,7 @@
       /** PDF que el sistema no alcanzó a generar al guardar una inspección o responsiva. */
       function generarPdfPendiente(tipo, idDoc, carpetaId) {
         captura = { guardada: true, firmas: {}, carpetaId: carpetaId || '' };
-        $('#ln-modal-captura', raiz).hidden = false;
+        mostrarModalCaptura();
         $('#ln-captura-titulo', raiz).textContent = 'Generar PDF pendiente';
         refrescarDespuesDeCaptura(pila[pila.length - 1].id, tipo, idDoc);
       }
@@ -2790,7 +2790,7 @@
         const unidad = esLinea ? 'líneas' : 'equipos';
         const nombreDe = (r) => (esLinea ? 'Línea ' + (r.numero || '—') : 'NUCO ' + (r.nuco || '—'));
         const etiqueta = (r) => nombreDe(r) + ' · ' + (esLinea ? (r.compania || 'Sin compañía') : (r.modelo || 'Sin modelo')) + ' · ' + (r.responsable || 'Sin responsable') + ' · ' + (r.estatus || 'Sin estatus');
-        $('#ln-modal-captura', raiz).hidden = false;
+        mostrarModalCaptura();
         $('#ln-captura-icono', raiz).innerHTML = icono(accion.icono);
         $('#ln-captura-tipo', raiz).textContent = 'ACCIÓN MASIVA';
         $('#ln-captura-titulo', raiz).textContent = accion.texto;
@@ -2967,7 +2967,7 @@
         const estatusInicial = (opciones && opciones.estatus) || 'RESGUARDO';
         const permisos = await cargarPermisos().catch(() => null);
         if (!permisos || !permisos.puedeOperar) { aviso(icono('triangle-alert', 'ln-alerta') + ' Tu rol no permite modificar equipos.', 6000); return; }
-        $('#ln-modal-captura', raiz).hidden = false;
+        mostrarModalCaptura();
         $('#ln-captura-icono', raiz).innerHTML = icono('archive');
         $('#ln-captura-tipo', raiz).textContent = 'RESGUARDO';
         $('#ln-captura-titulo', raiz).textContent = estatusInicial === 'RESGUARDO' ? 'Mandar a resguardo' : 'Pasar a ' + estatusInicial;
@@ -3143,7 +3143,7 @@
        */
       function abrirEditor(id, parte) {
         const agregar = parte === 'LINEA' ? 'Agregar línea' : 'Agregar equipo';
-        $('#ln-modal-captura', raiz).hidden = false;
+        mostrarModalCaptura();
         $('#ln-captura-icono', raiz).innerHTML = icono(id ? 'pencil' : (parte === 'LINEA' ? 'card-sim' : 'smartphone'));
         $('#ln-captura-tipo', raiz).textContent = 'LINEAS TELEFONICAS';
         $('#ln-captura-titulo', raiz).textContent = id ? 'Editar información' : agregar;
@@ -3253,9 +3253,18 @@
 
       // ---- Captura: inspección y responsiva nuevas ----
 
+      /** La ventana de captura se reutiliza: se abre siempre sin la marca de guardado de la anterior (con ella el lienzo
+       *  de firma no recibe trazos; pasaba en Reasignar después de la inspección de Mandar a resguardo, 4-oct). */
+      function mostrarModalCaptura() {
+        const modal = $('#ln-modal-captura', raiz);
+        modal.removeAttribute('aria-busy');
+        modal.hidden = false;
+      }
+
       function cerrarCaptura(guardada) {
         if (captura && captura.guardando && !guardada) return;
         const borrador = captura;
+        $('#ln-modal-captura', raiz).removeAttribute('aria-busy');
         $('#ln-modal-captura', raiz).hidden = true;
         $('#ln-calif-vivo', raiz).hidden = true;
         ocultarEspera();
@@ -3768,7 +3777,7 @@
       }
 
       function abrirCaptura(tipo, ref, flujo) {
-        $('#ln-modal-captura', raiz).hidden = false;
+        mostrarModalCaptura();
         $('#ln-captura-icono', raiz).innerHTML = icono(tipo === 'INSPECCION' ? 'clipboard-check' : 'signature');
         $('#ln-captura-tipo', raiz).textContent = tipo === 'INSPECCION' ? 'Inspección de telefonía' : 'Responsiva de entrega';
         $('#ln-captura-titulo', raiz).textContent = tipo === 'INSPECCION' ? 'Nueva inspección' : 'Nueva responsiva';

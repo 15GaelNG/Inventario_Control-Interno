@@ -74,3 +74,9 @@ test('Etiqueta AUTO en Líneas: solo en lo que el formulario llena solo, no en l
   assert.doesNotMatch(cliente, /e\.soloLectura \|\| e\.deriva \? ' data-auto'/);
   assert.doesNotMatch(cliente, /<div data-auto class="ln-af-calculado/);
 });
+
+test('La ventana de captura se abre sin la marca de guardado de la anterior (firma en Reasignar, 4-oct)', () => {
+  const cliente = fs.readFileSync(path.join(__dirname, '../src/html/js/lineas.html'), 'utf8');
+  assert.match(cliente, /function mostrarModalCaptura\(\) \{\s*const modal = \$\('#ln-modal-captura', raiz\);\s*modal\.removeAttribute\('aria-busy'\);/);
+  assert.doesNotMatch(cliente, /\$\('#ln-modal-captura', raiz\)\.hidden = false;/);
+});
