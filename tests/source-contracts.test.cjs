@@ -80,10 +80,10 @@ test('Telefonía muestra sus módulos en orden y Gestión de Activos queda fuera
     assert.doesNotMatch(read('src/config/Modulos.gs'), new RegExp(`id: '${v}'`), v);
   });
   // Acceso directo debajo del desplegable de Líneas
-  assert.match(app, /\{ id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de Activos', requiere: 'gestion-activos' \}/);
+  assert.match(app, /\{ id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de Activos', requiere: 'gestion-activos'[^}]*\}/);
   assert.match(app, /grupo\.vista \? `/);
   orden.concat('gestion-activos', ocultos)
-    .forEach((route) => assert.match(app, new RegExp(`vista === '${route}'`), `falta montar ${route}`));
+    .forEach((route) => assert.match(app, new RegExp(`vista: '${route}'[^\\n]*plantilla: 'tpl-`), `falta montar ${route}`));
   // Retirados: Post Venta (ya no existe) y Detalles (ahora es la vista de tarjetas de Líneas Telefónicas)
   ['lineas-post-venta', 'detalles-lineas-telefonicas'].forEach((retirado) => {
     assert.doesNotMatch(app, new RegExp(retirado));
@@ -357,6 +357,44 @@ test('el shell es el de master y Líneas es uno de sus grupos', () => {
   const grupos = /const NAV_GRUPOS = \[([\s\S]*?)\n  \];/.exec(app)[1];
   // Desde la unión con master (1-oct) el menú trae los módulos de todos; Líneas es un grupo más
   assert.ok([...grupos.matchAll(/^      id: '([^']+)'/gm)].map((m) => m[1]).includes('lineas'));
+});
+
+test('cada vista es una sola entrada (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU) y todo lo que nombra existe', () => {
+  const app = read('src/html/js/app.html');
+  const index = read('src/html/Index.html');
+  const arreglo = (nombre) => new Function('return ' + new RegExp(`const ${nombre} = (\\[[\\s\\S]*?\\n  \\]);`).exec(app)[1])();
+  const entradas = [];
+  arreglo('NAV_GRUPOS').forEach((g) => (g.items || [g]).forEach((e) => entradas.push(e)));
+  const fuera = arreglo('VISTAS_FUERA_DEL_MENU');
+  entradas.push(...fuera);
+  const vistas = entradas.map((e) => e.vista).filter(Boolean);
+  assert.deepEqual(vistas.filter((v, i) => vistas.indexOf(v) !== i), [], 'vistas repetidas');
+
+  const plantillas = [...index.matchAll(/include\('(html\/[^']+)'\)/g)].map((m) => read('src/' + m[1] + '.html')).join('\n');
+  const js = filesBelow(path.join(root, 'src/html')).filter((f) => f.endsWith('.html')).map((f) => fs.readFileSync(f, 'utf8')).join('\n');
+  const modulos = [...read('src/config/Modulos.gs').matchAll(/\{ id: '([^']+)', etiqueta/g)].map((m) => m[1]);
+  const problemas = [];
+  entradas.filter((e) => e.vista).forEach((e) => {
+    const quien = e.vista + ': ';
+    if (!e.plantilla || !plantillas.includes(`<template id="${e.plantilla}"`)) problemas.push(quien + 'plantilla ' + e.plantilla + ' no está en un archivo incluido en Index.html');
+    const init = /=>\s*(?:(\w+)\.)?(\w+)\(/.exec(String(e.init || ''));
+    if (!init) problemas.push(quien + 'sin init');
+    else {
+      if (init[1] && !new RegExp(`(const|let|var) ${init[1]}\\b`).test(js)) problemas.push(quien + init[1] + ' no existe');
+      if (!new RegExp(`function ${init[2]}\\(|\\b${init[2]}: `).test(js)) problemas.push(quien + init[2] + ' no existe');
+    }
+    if (e.requiere && !modulos.includes(e.requiere)) problemas.push(quien + 'requiere ' + e.requiere + ', que no está en Modulos.gs');
+    if (!fuera.includes(e) && !e.requiere && !e.libre) problemas.push(quien + 'en el menú sin requiere ni libre');
+  });
+  // Y al revés: cada módulo de Modulos.gs tiene por dónde entrar
+  modulos.forEach((m) => { if (!entradas.some((e) => e.requiere === m)) problemas.push(m + ': módulo sin vista'); });
+  assert.deepEqual(problemas, []);
+
+  // navegarA busca la entrada; no vuelve la cadena de if por vista
+  const navegar = app.slice(app.indexOf('function navegarA('), app.indexOf('function mostrarSinAcceso('));
+  assert.match(navegar, /const destino = vistaDe\(vista\);/);
+  assert.doesNotMatch(navegar, /vista === '/);
+  assert.doesNotMatch(app, /function moduloDeVista\(/);
 });
 
 test('el JS de los .html no tiene "//" dentro de strings (Apps Script lo corta como comentario)', () => {
@@ -1018,7 +1056,7 @@ test('Notificaciones: adendum por vencer una semana antes, sin las ya vencidas n
   assert.match(read('src/ClientApi.gs'), /function apiLineasNotificaciones\(token, limite\)/);
   assert.match(read('src/services/lineas/LineasRegistros.gs'), /LineasNotificaciones\.revisarPronto\(\);/);
   assert.match(read('src/html/Index.html'), /include\('html\/notificaciones'\)/);
-  assert.match(read('src/html/js/app.html'), /montarVista\('tpl-notificaciones', Notificaciones\.initVista\)/);
+  assert.match(read('src/html/js/app.html'), /vista: 'notificaciones'[^\n]*plantilla: 'tpl-notificaciones', init: \(\) => Notificaciones\.initVista\(\)/);
   assert.match(read('src/html/js/lineas.html'), /irARegistro: irARegistro/);
 });
 
@@ -1206,9 +1244,9 @@ test('Panorama: estatus al cierre de cada mes reconstruido hacia atrás con la b
   assert.match(read('src/html/views/lineas/lineas-panorama.html'), /<select id="lnp-mes" disabled>/);
   // Menú: Panorama primero; Reactivación se retiró con su pestaña (30-sep)
   const app = read('src/html/js/app.html');
-  assert.match(app, /\{ vista: 'panorama-lineas', etiqueta: 'Panorama', icono: 'layout-dashboard', requiere: 'panorama-lineas' \},\s*\{ vista: 'lineas-telefonicas'/);
+  assert.match(app, /\{ vista: 'panorama-lineas', etiqueta: 'Panorama', icono: 'layout-dashboard', requiere: 'panorama-lineas'[^\n]*\},\s*\{ vista: 'lineas-telefonicas'/);
   assert.doesNotMatch(app, /'reactivacion-lineas'/);
-  assert.match(app, /montarVista\('tpl-lineas-panorama', Lineas\.initPanorama\)/);
+  assert.match(app, /plantilla: 'tpl-lineas-panorama', init: \(\) => Lineas\.initPanorama\(\)/);
   assert.match(read('src/html/Index.html'), /include\('html\/views\/lineas\/lineas-panorama'\)/);
   assert.match(read('src/ClientApi.gs'), /function apiLineasPanorama\(token, forzar\)/);
 });
@@ -1558,7 +1596,7 @@ test('Mandar a resguardo (30-sep): persona en blanco, línea según el adendum, 
   assert.match(cliente, /inspecciones = await inspeccionesEnFlujo\(deUnaPersona, 'al mandarlo a resguardo'\);/);
   assert.match(src, /LineasCaptura\.exigirInspeccion\(\(d\.inspecciones \|\| \{\}\)\[id\], LineasDatos\.idsDeFila\(f\),/);
   assert.match(cliente, /function initResguardos\(\)/);
-  assert.match(read('src/html/js/app.html'), /if \(vista === 'resguardos-lineas'\) \{ montarVista\('tpl-lineas-resguardos', Lineas\.initResguardos\); return; \}/);
+  assert.match(read('src/html/js/app.html'), /vista: 'resguardos-lineas'[^\n]*plantilla: 'tpl-lineas-resguardos', init: \(\) => Lineas\.initResguardos\(\)/);
   assert.match(read('src/config/Entidades.gs'), /'APP_RESGUARDOS': \{ prefijo: 'RSG'/);
   // En el historial se leen con nombre (no RESGUARDO / CANCELACION_LINEA)
   assert.match(read('src/services/lineas/LineasRepo.gs'), /RESGUARDO: 'Resguardo', CANCELACION_LINEA: 'Cancelación de línea', VENTA: 'Venta'/);
@@ -1723,7 +1761,7 @@ test('Correcciones de Líneas (módulo temporal, 30-sep): cargas que conservan, 
   assert.match(read('.gitignore'), /src\/services\/lineas\/LineasCorreccionesSemilla\.gs/);
   assert.match(read('src/services/lineas/LineasCorrecciones.gs'), /function apiLineasCorreccionesMarcar\(token, accion, ids, comentario\)/);
   assert.doesNotMatch(read('src/ClientApi.gs'), /Correcciones/);
-  assert.match(read('src/html/js/app.html'), /if \(vista === 'correcciones-lineas'\) \{ montarVista\('tpl-lineas-correcciones', LineasCorrecciones\.init\); return; \}/);
+  assert.match(read('src/html/js/app.html'), /vista: 'correcciones-lineas'[^\n]*plantilla: 'tpl-lineas-correcciones', init: \(\) => LineasCorrecciones\.init\(\)/);
   assert.match(read('src/config/Entidades.gs'), /'APP_CORRECCIONES': \{ prefijo: 'COR'/);
   assert.match(read('package.json'), /"correcciones:semilla": "node tools\/correcciones-semilla\.cjs"/);
 });

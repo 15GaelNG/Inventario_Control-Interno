@@ -62,14 +62,10 @@
     const badgeActivo = (activo) => '<span class="badge-estado ' + (activo ? 'activo' : 'baja') + '">' + (activo ? 'Activo' : 'Inactivo') + '</span>';
     const plural = (n, uno, varios) => n + ' ' + (n === 1 ? uno : varios);
 
-    /** El ícono de cada módulo es el mismo que tiene en el menú (NAV_GRUPOS, app.html) */
+    /** El ícono de cada módulo es el mismo que tiene su vista (NAV_GRUPOS, app.html) */
     function iconoModulo(id) {
-      let icono = id === 'cambios-lineas' ? 'history' : 'square';
-      NAV_GRUPOS.forEach((g) => {
-        if (g.vista === id) icono = g.icono;
-        (g.items || []).forEach((it) => { if (it.vista === id) icono = it.icono; });
-      });
-      return icono;
+      const vista = vistaDe(id);
+      return vista ? vista.icono : 'square';
     }
 
     function renglon(m, valor, origen, excepcion) {

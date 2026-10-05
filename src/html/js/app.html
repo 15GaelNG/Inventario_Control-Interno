@@ -545,9 +545,8 @@
 
   /** Ícono (nombre de Lucide) temático según a qué área pertenece la vista. */
   function iconoDeVista(vista) {
-    if (vista === 'dashboard') return 'home';
-    const grupo = NAV_GRUPOS.find((g) => g.vista === vista || (g.items || []).some((it) => it.vista === vista));
-    return grupo ? grupo.icono : 'file-text';
+    const destino = vistaDe(vista);
+    return destino ? destino.iconoArea : 'file-text';
   }
 
   /**
@@ -609,43 +608,11 @@
     transicionVista(vista, etiqueta, () => {
       // El menú ya esconde lo que no se puede ver, pero a una vista también se llega por el
       // historial del navegador o por los enlaces entre módulos ("Ver vehículo")
-      const modulo = moduloDeVista(vista);
-      if (modulo && !permisoDe(modulo)) { mostrarSinAcceso(etiqueta || vista); return; }
-      if (vista === 'dashboard') { montarVista('tpl-dashboard', initDashboard); return; }
-      if (vista === 'panorama-vehiculos') { montarVista('tpl-panorama-vehiculos', initPanoramaVehiculos); return; }
-      if (vista === 'incidencias') { montarVista('tpl-incidencias', initIncidencias); return; }
-      if (vista === 'vehiculos') { montarVista('tpl-vehiculos', initVehiculos); return; }
-      if (vista === 'cambios-vehiculos') { montarVista('tpl-cambios-vehiculos', initCambiosVehiculos); return; }
-      if (vista === 'reasignaciones-vehiculares') { montarVista('tpl-reasignaciones-vehiculares', initReasignacionesVehiculares); return; }
-      if (vista === 'uber') { montarVista('tpl-uber', initUber); return; }
-      if (vista === 'tickets') { montarVista('tpl-tickets', initTickets); return; }
-      if (vista === 'caja-chica') { montarVista('tpl-cajachica', initCajaChica); return; }
-      if (vista === 'panorama-cajachica') { montarVista('tpl-panorama-cajachica', initPanoramaCajaChica); return; }
-      if (vista === 'cambios-monto-cch') { montarVista('tpl-cambios-monto-cch', initCambiosMontoCCH); return; }
-      if (vista === 'arqueos') { montarVista('tpl-arqueos', initArqueos); return; }
-      if (vista === 'verificaciones') { montarVista('tpl-verificaciones', initVerificaciones); return; }
-      if (vista === 'instalacion-sensores') { montarVista('tpl-sensores', initSensores); return; }
-      if (vista === 'hologramas') { montarVista('tpl-hologramas', initHologramas); return; }
-      if (vista === 'inspeccion-vehicular') { montarVista('tpl-inspecciones', initInspecciones); return; }
-      if (vista === 'relaciones') { montarVista('tpl-relaciones', initRelaciones); return; }
-      if (vista === 'salud') { montarVista('tpl-salud', initSalud); return; }
-      if (vista === 'usuarios') { montarVista('tpl-usuarios', initPermisosAdmin); return; }
-      if (vista === 'sistemas-vehiculos') { montarVista('tpl-sistemas', () => initSistemas('servicios-vehiculares')); return; }
-      if (vista === 'sistemas-lineas') { montarVista('tpl-sistemas', () => initSistemas('lineas')); return; }
-      if (vista === 'sistemas-arqueos') { montarVista('tpl-sistemas', () => initSistemas('arqueos')); return; }
-      if (vista === 'encuestas-solicitudes') { montarVista('tpl-sistemas', () => initSistemas('encuestas-solicitudes')); return; }
-      // --- Líneas (rama emmanuel): el módulo vive en html/js/lineas.html (namespace Lineas) ---
-      if (vista === 'panorama-lineas') { montarVista('tpl-lineas-panorama', Lineas.initPanorama); return; }
-      if (vista === 'lineas-telefonicas') { montarVista('tpl-lineas-telefonicas', Lineas.initTelefonicas); return; }
-      if (vista === 'gestion-activos') { montarVista('tpl-lineas-gestion-activos', Lineas.initGestionActivos); return; }
-      if (vista === 'accesorios-lineas') { montarVista('tpl-lineas-accesorios', Lineas.initAccesoriosLineas); return; }
-      if (vista === 'resguardos-lineas') { montarVista('tpl-lineas-resguardos', Lineas.initResguardos); return; }
-      // Módulo TEMPORAL (30-sep): se quita cuando Líneas termine sus correcciones (ver LineasCorrecciones.gs)
-      if (vista === 'correcciones-lineas') { montarVista('tpl-lineas-correcciones', LineasCorrecciones.init); return; }
-      if (vista === 'cambios-lineas') { montarVista('tpl-lineas-bitacora', Lineas.initCambios); return; }
-      // Campana de la barra superior → "Ver todas" (html/notificaciones.html, rama emmanuel)
-      if (vista === 'notificaciones') { montarVista('tpl-notificaciones', Notificaciones.initVista); return; }
-      mostrarProximamente(etiqueta || vista);
+      // Adónde lleva cada vista está en NAV_GRUPOS / VISTAS_FUERA_DEL_MENU, no aquí
+      const destino = vistaDe(vista);
+      if (!destino) { mostrarProximamente(etiqueta || vista); return; }
+      if (destino.requiere && !permisoDe(destino.requiere)) { mostrarSinAcceso(etiqueta || destino.etiqueta); return; }
+      montarVista(destino.plantilla, destino.init);
     });
   }
 
@@ -674,25 +641,32 @@
   }
 
   /**
-   * Estructura del sidebar por área. `requiere` es el módulo (Modulos.gs) cuyo permiso
-   * hace falta para ver el item: los panoramas y Cambios de Monto no son módulos propios,
-   * cuelgan de su padre. `libre: true` = no pide permiso (Sistemas y Encuestas: solo enlaces
-   * a sistemas externos). Sin ninguno de los dos, el item no se pinta.
+   * Las vistas del sistema: el menú por área y adónde lleva cada entrada. Una vista nueva es UNA
+   * entrada aquí (más su módulo en Modulos.gs y sus include en Index.html): navegarA, el permiso,
+   * el ícono de la transición y el de Usuarios y permisos salen de esta lista (ver vistaDe).
+   *   plantilla  el <template> de html/views que se monta
+   *   init       lo que corre al montarla; va como función flecha porque casi todas viven en
+   *              archivos que cargan después de este (app-verificaciones, modulos/*, lineas)
+   *   requiere   el módulo (Modulos.gs) cuyo permiso hace falta para ver el item: los panoramas y
+   *              Cambios de Monto no son módulos propios, cuelgan de su padre. `libre: true` = no
+   *              pide permiso (Sistemas y Encuestas: solo enlaces a sistemas externos). Sin ninguno
+   *              de los dos, el item no se pinta.
+   * source-contracts revisa que cada plantilla, función y módulo exista.
    */
   const NAV_GRUPOS = [
     {
       id: 'servicios-vehiculares', icono: 'car', etiqueta: 'Control Vehicular',
       items: [
-        { vista: 'panorama-vehiculos', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'vehiculos' },
-        { vista: 'incidencias', etiqueta: 'Incidencias', icono: 'wrench', requiere: 'incidencias' },
-        { vista: 'vehiculos', etiqueta: 'Vehículos', icono: 'car', requiere: 'vehiculos' },
-        { vista: 'cambios-vehiculos', etiqueta: 'Cambios Vehículos', icono: 'history', requiere: 'cambios-vehiculos' },
-        { vista: 'reasignaciones-vehiculares', etiqueta: 'Reasignaciones Vehiculares', icono: 'arrow-left-right', requiere: 'reasignaciones-vehiculares' },
-        { vista: 'verificaciones', etiqueta: 'Verificaciones', icono: 'badge-check', requiere: 'verificaciones' },
-        { vista: 'inspeccion-vehicular', etiqueta: 'Inspección Vehicular', icono: 'clipboard-list', requiere: 'inspeccion-vehicular' },
-        { vista: 'instalacion-sensores', etiqueta: 'Instalación de Sensores', icono: 'radio', requiere: 'instalacion-sensores' },
-        { vista: 'hologramas', etiqueta: 'Hologramas', icono: 'sparkles', requiere: 'hologramas' },
-        { vista: 'sistemas-vehiculos', etiqueta: 'Sistemas', icono: 'external-link', libre: true },
+        { vista: 'panorama-vehiculos', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'vehiculos', plantilla: 'tpl-panorama-vehiculos', init: () => initPanoramaVehiculos() },
+        { vista: 'incidencias', etiqueta: 'Incidencias', icono: 'wrench', requiere: 'incidencias', plantilla: 'tpl-incidencias', init: () => initIncidencias() },
+        { vista: 'vehiculos', etiqueta: 'Vehículos', icono: 'car', requiere: 'vehiculos', plantilla: 'tpl-vehiculos', init: () => initVehiculos() },
+        { vista: 'cambios-vehiculos', etiqueta: 'Cambios Vehículos', icono: 'history', requiere: 'cambios-vehiculos', plantilla: 'tpl-cambios-vehiculos', init: () => initCambiosVehiculos() },
+        { vista: 'reasignaciones-vehiculares', etiqueta: 'Reasignaciones Vehiculares', icono: 'arrow-left-right', requiere: 'reasignaciones-vehiculares', plantilla: 'tpl-reasignaciones-vehiculares', init: () => initReasignacionesVehiculares() },
+        { vista: 'verificaciones', etiqueta: 'Verificaciones', icono: 'badge-check', requiere: 'verificaciones', plantilla: 'tpl-verificaciones', init: () => initVerificaciones() },
+        { vista: 'inspeccion-vehicular', etiqueta: 'Inspección Vehicular', icono: 'clipboard-list', requiere: 'inspeccion-vehicular', plantilla: 'tpl-inspecciones', init: () => initInspecciones() },
+        { vista: 'instalacion-sensores', etiqueta: 'Instalación de Sensores', icono: 'radio', requiere: 'instalacion-sensores', plantilla: 'tpl-sensores', init: () => initSensores() },
+        { vista: 'hologramas', etiqueta: 'Hologramas', icono: 'sparkles', requiere: 'hologramas', plantilla: 'tpl-hologramas', init: () => initHologramas() },
+        { vista: 'sistemas-vehiculos', etiqueta: 'Sistemas', icono: 'external-link', libre: true, plantilla: 'tpl-sistemas', init: () => initSistemas('servicios-vehiculares') },
       ],
     },
     {
@@ -701,63 +675,71 @@
       id: 'lineas', icono: 'smartphone', etiqueta: 'Líneas',
       items: [
         // Íconos equivalentes a los del menú del AppSheet (Font Awesome → Lucide)
-        { vista: 'panorama-lineas', etiqueta: 'Panorama', icono: 'layout-dashboard', requiere: 'panorama-lineas' },
-        { vista: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas', icono: 'smartphone', requiere: 'lineas-telefonicas' },
-        { vista: 'resguardos-lineas', etiqueta: 'Resguardos y cancelaciones', icono: 'package-check', requiere: 'resguardos-lineas' },
-        { vista: 'correcciones-lineas', etiqueta: 'Correcciones de Líneas', icono: 'clipboard-check', requiere: 'correcciones-lineas' }, // temporal (30-sep)
-        { vista: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios', icono: 'boxes', requiere: 'accesorios-lineas' },
-        // Control de Cambios queda fuera del menú (30-sep) pero su vista sigue en navegarA: su pestaña es la bitácora
-        // del Historial y del Panorama. Reactivación, Solicitud, Reasignaciones y Desechos se retiraron con sus
+        { vista: 'panorama-lineas', etiqueta: 'Panorama', icono: 'layout-dashboard', requiere: 'panorama-lineas', plantilla: 'tpl-lineas-panorama', init: () => Lineas.initPanorama() },
+        { vista: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas', icono: 'smartphone', requiere: 'lineas-telefonicas', plantilla: 'tpl-lineas-telefonicas', init: () => Lineas.initTelefonicas() },
+        { vista: 'resguardos-lineas', etiqueta: 'Resguardos y cancelaciones', icono: 'package-check', requiere: 'resguardos-lineas', plantilla: 'tpl-lineas-resguardos', init: () => Lineas.initResguardos() },
+        { vista: 'correcciones-lineas', etiqueta: 'Correcciones de Líneas', icono: 'clipboard-check', requiere: 'correcciones-lineas', plantilla: 'tpl-lineas-correcciones', init: () => LineasCorrecciones.init() }, // temporal (30-sep)
+        { vista: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios', icono: 'boxes', requiere: 'accesorios-lineas', plantilla: 'tpl-lineas-accesorios', init: () => Lineas.initAccesoriosLineas() },
+        // Control de Cambios queda fuera del menú (30-sep) pero su vista sigue en VISTAS_FUERA_DEL_MENU: su pestaña es la
+        // bitácora del Historial y del Panorama. Reactivación, Solicitud, Reasignaciones y Desechos se retiraron con sus
         // pestañas (30-sep); sus renglones están en APP_MOVIMIENTOS y se ven en el Historial de la ficha.
         // { vista: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas', icono: 'eye' },
-        { vista: 'sistemas-lineas', etiqueta: 'Sistemas', icono: 'external-link', libre: true },
+        { vista: 'sistemas-lineas', etiqueta: 'Sistemas', icono: 'external-link', libre: true, plantilla: 'tpl-sistemas', init: () => initSistemas('lineas') },
       ],
     },
     {
       id: 'arqueos', icono: 'wallet', etiqueta: 'Arqueos',
       items: [
-        { vista: 'panorama-cajachica', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'caja-chica' },
-        { vista: 'arqueos', etiqueta: 'Arqueos', icono: 'wallet', requiere: 'arqueos' },
-        { vista: 'caja-chica', etiqueta: 'Caja Chica', icono: 'piggy-bank', requiere: 'caja-chica' },
-        { vista: 'cambios-monto-cch', etiqueta: 'Cambios de Monto', icono: 'repeat', requiere: 'caja-chica' },
-        { vista: 'sistemas-arqueos', etiqueta: 'Sistemas', icono: 'external-link', libre: true },
+        { vista: 'panorama-cajachica', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'caja-chica', plantilla: 'tpl-panorama-cajachica', init: () => initPanoramaCajaChica() },
+        { vista: 'arqueos', etiqueta: 'Arqueos', icono: 'wallet', requiere: 'arqueos', plantilla: 'tpl-arqueos', init: () => initArqueos() },
+        { vista: 'caja-chica', etiqueta: 'Caja Chica', icono: 'piggy-bank', requiere: 'caja-chica', plantilla: 'tpl-cajachica', init: () => initCajaChica() },
+        { vista: 'cambios-monto-cch', etiqueta: 'Cambios de Monto', icono: 'repeat', requiere: 'caja-chica', plantilla: 'tpl-cambios-monto-cch', init: () => initCambiosMontoCCH() },
+        { vista: 'sistemas-arqueos', etiqueta: 'Sistemas', icono: 'external-link', libre: true, plantilla: 'tpl-sistemas', init: () => initSistemas('arqueos') },
       ],
     },
     {
       id: 'uber', icono: 'car-taxi-front', etiqueta: 'Uber',
       items: [
-        { vista: 'uber', etiqueta: 'Uber', icono: 'car-taxi-front', requiere: 'uber' },
-        { vista: 'tickets', etiqueta: 'Tickets', icono: 'ticket', requiere: 'tickets' },
+        { vista: 'uber', etiqueta: 'Uber', icono: 'car-taxi-front', requiere: 'uber', plantilla: 'tpl-uber', init: () => initUber() },
+        { vista: 'tickets', etiqueta: 'Tickets', icono: 'ticket', requiere: 'tickets', plantilla: 'tpl-tickets', init: () => initTickets() },
       ],
     },
     // Activos por colaborador de todas las áreas (rama emmanuel)
-    { id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de Activos', requiere: 'gestion-activos' },
+    { id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de Activos', requiere: 'gestion-activos', plantilla: 'tpl-lineas-gestion-activos', init: () => Lineas.initGestionActivos() },
     // Encuestas y solicitudes externas (2-oct) -- mismo patrón que "Sistemas" (tpl-sistemas/
     // initSistemas en app-sistemas.html), un solo destino sin submenú porque ya muestra las 3.
-    { id: 'encuestas-solicitudes', vista: 'encuestas-solicitudes', icono: 'clipboard-list', etiqueta: 'Encuestas/Solicitudes', libre: true },
+    { id: 'encuestas-solicitudes', vista: 'encuestas-solicitudes', icono: 'clipboard-list', etiqueta: 'Encuestas/Solicitudes', libre: true, plantilla: 'tpl-sistemas', init: () => initSistemas('encuestas-solicitudes') },
     {
       id: 'administracion', icono: 'settings', etiqueta: 'Administración',
       items: [
-        { vista: 'usuarios', etiqueta: 'Usuarios y permisos', icono: 'shield-check', requiere: 'usuarios' },
-        { vista: 'relaciones', etiqueta: 'Datos conectados', icono: 'git-compare-arrows', requiere: 'relaciones' },
-        { vista: 'salud', etiqueta: 'Salud', icono: 'heart-pulse', requiere: 'salud' },
+        { vista: 'usuarios', etiqueta: 'Usuarios y permisos', icono: 'shield-check', requiere: 'usuarios', plantilla: 'tpl-usuarios', init: () => initPermisosAdmin() },
+        { vista: 'relaciones', etiqueta: 'Datos conectados', icono: 'git-compare-arrows', requiere: 'relaciones', plantilla: 'tpl-relaciones', init: () => initRelaciones() },
+        { vista: 'salud', etiqueta: 'Salud', icono: 'heart-pulse', requiere: 'salud', plantilla: 'tpl-salud', init: () => initSalud() },
       ],
     },
   ];
 
+  /** Vistas a las que se llega sin pasar por el menú. Sin `requiere`, entra cualquiera con sesión. */
+  const VISTAS_FUERA_DEL_MENU = [
+    { vista: 'dashboard', etiqueta: 'Inicio', icono: 'home', plantilla: 'tpl-dashboard', init: () => initDashboard() },
+    // La campana de la barra superior → "Ver todas" (html/notificaciones.html, rama emmanuel)
+    { vista: 'notificaciones', etiqueta: 'Notificaciones', icono: 'bell', plantilla: 'tpl-notificaciones', init: () => Notificaciones.initVista() },
+    // Control de Cambios de Líneas: salió del menú (30-sep) pero se abre desde el Panorama de Líneas
+    { vista: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas', icono: 'history', requiere: 'cambios-lineas', plantilla: 'tpl-lineas-bitacora', init: () => Lineas.initCambios() },
+  ];
+
   /**
-   * Módulo cuyo permiso pide una vista (el `requiere` de su item en NAV_GRUPOS), o null si
-   * cualquiera con sesión puede entrar (el inicio, las notificaciones). Control de Cambios
-   * de Líneas ya no está en el menú, pero se abre desde el Panorama de Líneas.
+   * La entrada de una vista (de NAV_GRUPOS o de VISTAS_FUERA_DEL_MENU), con `iconoArea`: el ícono
+   * de su grupo del menú. null si no existe.
    */
-  function moduloDeVista(vista) {
-    if (vista === 'cambios-lineas') return 'cambios-lineas';
-    let modulo = null;
-    NAV_GRUPOS.forEach((g) => {
-      if (g.vista === vista) modulo = g.requiere;
-      (g.items || []).forEach((it) => { if (it.vista === vista) modulo = it.requiere; });
-    });
-    return modulo;
+  function vistaDe(vista) {
+    for (const g of NAV_GRUPOS) {
+      if (g.vista === vista) return Object.assign({ iconoArea: g.icono }, g);
+      const item = (g.items || []).find((it) => it.vista === vista);
+      if (item) return Object.assign({ iconoArea: g.icono }, item);
+    }
+    const suelta = VISTAS_FUERA_DEL_MENU.find((v) => v.vista === vista);
+    return suelta ? Object.assign({ iconoArea: suelta.icono }, suelta) : null;
   }
 
   // Los grupos ya no son acordeón (se abren/cierran) — se quedan siempre

@@ -36,6 +36,12 @@ dividir es seguro mientras el orden de `<?!= include(...) ?>` en
 `src/html/Index.html` mantenga los archivos "base" (api, app) antes de los
 que dependen de sus helpers.
 
+**Una vista nueva** es una entrada en `NAV_GRUPOS` de `app.html` (o en `VISTAS_FUERA_DEL_MENU`
+si no va en el menú), con `plantilla`, `init` y `requiere`. Además lleva su módulo en
+`config/Modulos.gs` y sus `include` en `Index.html`. `navegarA`, el permiso y los íconos salen
+de esa entrada: no se agrega otro `if (vista === …)`. `source-contracts` revisa que la
+plantilla, la función y el módulo existan.
+
 ## Componentes (`src/html/js/componentes/`)
 
 Lo que se repite entre módulos va en un componente, no en otra copia. Antes de
