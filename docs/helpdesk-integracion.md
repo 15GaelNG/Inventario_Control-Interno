@@ -179,6 +179,8 @@ mínimo entre llamadas de una persona, 10 por minuto por persona y 30 entre toda
 página por llamada, cero reintentos, y ante 429/5xx toda la app se detiene lo que pida
 `Retry-After` (o 2 min). 401/403 borra el token. Pruebas: `tests/helpdesk.test.js`.
 
-**El marcador "Token helpdesk"** (Chrome → nuevo marcador, en la URL):
-`javascript:(()=>{const t=localStorage.getItem('token');if(!t){alert('Primero inicia sesión en el helpdesk');return;}navigator.clipboard.writeText(t).then(()=>alert('Token copiado: pégalo en Control Interno'),()=>prompt('Copia tu token:',t));})()`
-Solo lee el token del propio navegador y lo copia; no lo manda a ningún lado.
+**El marcador "Token helpdesk"** (Chrome: clic derecho en la barra de favoritos → "Agregar
+página…", y en la URL):
+`javascript:void(prompt('Tu token del helpdesk: Ctrl+C y pégalo en Control Interno',localStorage.getItem('token')||'No hay sesión: primero inicia sesión en el helpdesk'))`
+Solo muestra el token del propio navegador ya seleccionado; no lo manda a ningún lado. No usa el
+portapapeles: desde un marcador, `navigator.clipboard` falla en Chrome sin avisar (05/10/2026).
