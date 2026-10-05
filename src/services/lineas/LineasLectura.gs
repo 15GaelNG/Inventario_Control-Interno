@@ -56,14 +56,17 @@ const LineasLectura = (function () {
   let filas_ = null;
   let porId_ = null;
 
+  /** El interruptor y la fecha de retiro: los de Entornos.gs para este proyecto (DEV, 5-oct) o la Script Property. */
+  const config_ = (clave) => (typeof leerConfig_ === 'function' ? leerConfig_(clave) : PropertiesService.getScriptProperties().getProperty(clave));
+
   function activo() {
-    if (activo_ === null) activo_ = PropertiesService.getScriptProperties().getProperty(PROPIEDAD) === VALOR_NUEVO;
+    if (activo_ === null) activo_ = config_(PROPIEDAD) === VALOR_NUEVO;
     return activo_;
   }
 
   /** Fecha (ISO) en que se retiró LINEAS TELEFONICAS, o null si todavía se lee (paso 4). */
   function retirada() {
-    const v = PropertiesService.getScriptProperties().getProperty(PROPIEDAD_RETIRADA);
+    const v = config_(PROPIEDAD_RETIRADA);
     return v && /^\d{4}-\d{2}-\d{2}T/.test(v) ? v : null;
   }
 
