@@ -86,3 +86,10 @@ test('Después de Reasignar se vuelve a pintar la ficha abierta (producción, 4-
   const reasignar = cliente.slice(cliente.indexOf('function abrirReasignar(fila)'), cliente.indexOf('const inspeccionesDelDia = {};'));
   assert.match(reasignar, /if \(vigente\(\) && actual && actual\.id === fila\.id\) abrir\(actual\.tipo, actual\.id, true\);/);
 });
+
+test('JEFE DIRECTO: al agregar el encabezado se olvida la tabla para que la escritura lo vea (4-oct)', () => {
+  const esc = fs.readFileSync(path.join(__dirname, '../src/services/lineas/LineasEscritura.gs'), 'utf8');
+  const f = esc.slice(esc.indexOf('function asegurarJefeDirecto_()'), esc.indexOf('function hojas()'));
+  assert.match(f, /setValue\('JEFE DIRECTO'\)/);
+  assert.match(f, /LineasDatos\.olvidarTabla\(HOJA\.ASIGNACIONES\);/);
+});

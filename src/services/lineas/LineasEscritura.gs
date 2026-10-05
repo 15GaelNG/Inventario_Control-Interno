@@ -99,8 +99,9 @@ const LineasEscritura = (function () {
     const t = LineasDatos.tablaFresca(HOJA.ASIGNACIONES);
     if (LineasDatos.colIndice(t, 'JEFE DIRECTO') >= 0) return;
     t.hoja.getRange(1, t.encabezados.length + 1).setValue('JEFE DIRECTO').setFontWeight('bold');
+    // Sin olvidar la tabla, la escritura seguiría con los encabezados de antes y descartaría JEFE DIRECTO
+    LineasDatos.olvidarTabla(HOJA.ASIGNACIONES);
     LineasDatos.cacheBorrar('enc_' + HOJA.ASIGNACIONES);
-    LineasDatos.tablaFresca(HOJA.ASIGNACIONES);
   }
 
   function hojas() {
