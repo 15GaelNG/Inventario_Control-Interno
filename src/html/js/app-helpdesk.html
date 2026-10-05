@@ -10,10 +10,9 @@
    */
 
   // El marcador que copia el token del helpdesk (lo guarda su página en localStorage, llave
-  // "token"). Sin "//" literal: ver el bug de Apps Script en CLAUDE.md. Solo un prompt con el
-  // token ya seleccionado: el portapapeles desde un marcador falla sin avisar en Chrome.
-  const HELPDESK_MARCADOR = "javascript:void(prompt('Tu token del helpdesk: Ctrl+C y pégalo en Control Interno'," +
-    "localStorage.getItem('token')||'No hay sesión: primero inicia sesión en el helpdesk'))";
+  // "token"). Sin "//" literal: ver el bug de Apps Script en CLAUDE.md.
+  const HELPDESK_MARCADOR = "javascript:(()=>{const t=localStorage.getItem('token');if(!t){alert('Primero inicia sesión en el helpdesk');return;}" +
+    "navigator.clipboard.writeText(t).then(()=>alert('Token copiado: pégalo en Control Interno'),()=>prompt('Copia tu token:',t));})()";
   const HELPDESK_PAGINA = 'https:\/\/helpdesk-maderas.gphsis.com/tickets';
   // Una placa en el título ("RIFTER UNU794H | Fundaciones"), para sugerirla al registrar
   const PLACA_EN_TEXTO = /\b[A-Z]{3}[0-9]{3,4}[A-Z]?\b/;
