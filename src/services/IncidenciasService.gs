@@ -3,40 +3,17 @@
  * Bitácora de taller mecánico por vehículo: registro de ingreso, trabajo
  * realizado y salida. Vive dentro del área "Servicios Vehiculares".
  *
- * Conectado al spreadsheet ORIGINAL de AppSheet (en vivo) — hoja real
- * "INCIDENCIAS". Columnas reales en español con espacios/acentos, mapeadas
- * aquí a nuestro esquema interno (mismo patrón que AccesoriosService.gs).
- *
- * Columnas reales: ID_INCIDENCIA | FOLIO | DEPARTAMENTO | MODELO | AÑO |
- *   FECHA REGISTRO | FECHA INSPECCION | KILOMETRAJE | TICKET |
- *   INSPECCION INGRESO | DESCRIPCION TRABAJO REALIZADO |
+ * Hoja real "INCIDENCIAS" del spreadsheet original de AppSheet. Columnas reales en español
+ * con espacios/acentos, mapeadas aquí a nuestro esquema interno:
+ *   ID | FOLIO | DEPARTAMENTO | MODELO | AÑO | FECHA REGISTRO | FECHA INSPECCION |
+ *   KILOMETRAJE | TICKET | INSPECCION INGRESO | DESCRIPCION TRABAJO REALIZADO |
  *   FECHA TRABAJO REALIZADO | INSPECCION SALIDA | NOMBRE MECANICO |
  *   PERIODO VERIFICACION | SEGURO AUTO
  */
 
 const IncidenciasService = (function () {
-  // Nombre real ya confirmado ("INCIDENCIAS") — directo por nombre, no por
-  // firma de columnas (ver mismo comentario en ArqueosService).
-  const NOMBRE_HOJA = 'INCIDENCIAS';
-
-  function ssId() {
-    return Config.SPREADSHEET_IDS.VEHICULOS();
-  }
-
-  function hoja_() {
-    return SheetUtils.getSheet(ssId(), NOMBRE_HOJA);
-  }
-
-  /**
-   * google.script.run puede fallar (entregando null al cliente en vez del
-   * arreglo real) cuando un ARREGLO de objetos trae valores Date crudos —
-   * por eso aquí siempre se convierten a texto ISO antes de regresar.
-   */
-  function fechaISO_(valor) {
-    if (!valor) return '';
-    const f = valor instanceof Date ? valor : new Date(valor);
-    return isNaN(f.getTime()) ? '' : f.toISOString();
-  }
+  // Lo del trabajo se captura al cerrar (cerrar), no al abrir
+  const DEL_TRABAJO = ['DESCRIPCION TRABAJO REALIZADO', 'FECHA TRABAJO REALIZADO', 'INSPECCION SALIDA', 'NOMBRE MECANICO'];
 
   function desdeOriginal_(row) {
     const trabajoHecho = !!(row['DESCRIPCION TRABAJO REALIZADO'] || row['INSPECCION SALIDA']);
@@ -46,13 +23,13 @@ const IncidenciasService = (function () {
       DEPARTAMENTO: row['DEPARTAMENTO'] || '',
       MODELO: row['MODELO'] || '',
       ANIO: row['AÑO'] || '',
-      FECHA_REGISTRO: fechaISO_(row['FECHA REGISTRO']),
-      FECHA_INSPECCION: fechaISO_(row['FECHA INSPECCION']),
+      FECHA_REGISTRO: HojaServicio.fechaISO(row['FECHA REGISTRO']),
+      FECHA_INSPECCION: HojaServicio.fechaISO(row['FECHA INSPECCION']),
       KILOMETRAJE: row['KILOMETRAJE'] || '',
       TICKET: row['TICKET'] || '',
       INSPECCION_INGRESO: row['INSPECCION INGRESO'] || '',
       DESCRIPCION_TRABAJO: row['DESCRIPCION TRABAJO REALIZADO'] || '',
-      FECHA_TRABAJO: fechaISO_(row['FECHA TRABAJO REALIZADO']),
+      FECHA_TRABAJO: HojaServicio.fechaISO(row['FECHA TRABAJO REALIZADO']),
       INSPECCION_SALIDA: row['INSPECCION SALIDA'] || '',
       MECANICO: row['NOMBRE MECANICO'] || '',
       PERIODO_VERIFICACION: row['PERIODO VERIFICACION'] || '',
@@ -61,132 +38,63 @@ const IncidenciasService = (function () {
     };
   }
 
-  function listar(token) {
-    Permisos.puedeLeer(token, 'incidencias');
-    // Guardado mientras la hoja no cambie (CacheHojas): el permiso se revisa antes, siempre
-    return CacheHojas.recordar('inc_lista', [[ssId(), NOMBRE_HOJA]], () => {
-      return SheetUtils.getAll(ssId(), hoja_().getName())
-        .map(desdeOriginal_)
-        .sort((a, b) => new Date(b.FECHA_REGISTRO) - new Date(a.FECHA_REGISTRO));
-    });
-  }
-
-  /** Incidencias de un solo vehículo (ficha de Vehículos). */
-  function listarPorFolio(token, folio) {
-    if (!folio) return [];
-    return listar(token).filter((i) => i.FOLIO === folio);
-  }
-
-  /** Registro completo (todas las columnas) por ID -- "Ver completo" desde la ficha de Vehículos. */
-  function buscarPorId(token, id) {
-    Permisos.puedeLeer(token, 'incidencias');
-    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, 'ID');
-    if (!encontrado) return null;
-    const limpio = {};
-    Object.keys(encontrado.data).forEach((k) => {
-      const v = encontrado.data[k];
-      limpio[k] = v instanceof Date ? v.toISOString() : v;
-    });
-    return limpio;
-  }
-
-  /** Todas las columnas de TODAS las incidencias (para exportar completo). */
-  function completo(token) {
-    Permisos.puedeLeer(token, 'incidencias');
-    return SheetUtils.getAll(ssId(), hoja_().getName());
-  }
-
-  /** Abre una nueva incidencia (ingreso del vehículo al taller) */
-  /**
-   * A diferencia del resto de la familia, esta función NO exige que el vehículo exista en
-   * el catálogo, y es a propósito: su formulario es un <datalist>, que deja escribir
-   * cualquier texto, y hasta hoy crear() ni consultaba VEHICULOS. Volverla estricta
-   * bloquearía capturas que hoy funcionan. Así que se intenta resolver al vehículo para
-   * ponerle la llave foránea, y si no se puede, se guarda como siempre: con lo que mandó el
-   * cliente y con 'ID VEHICULO' vacío. Un vínculo que falta se puede reparar después; una
-   * incidencia que no se pudo capturar, no.
-   */
-  function crear(token, datos) {
-    Permisos.puedeEditar(token, 'incidencias');
-    if (!datos.FOLIO) throw new Error('Selecciona el vehículo');
-
-    let delVehiculo = null;
-    try {
-      delVehiculo = Relaciones.datosParaNuevo('INCIDENCIAS', datos.FOLIO);
-    } catch (err) {
-      console.error('Incidencia sin vínculo al catálogo: ' + err.message);
-    }
-
-    const id = Ids.nuevo(Entidades.prefijo('INCIDENCIAS'));
-    const ahora = new Date();
-    SheetUtils.insert(ssId(), hoja_().getName(), Object.assign({}, delVehiculo ? delVehiculo.datos : {}, {
-      'ID': id,
-      'FOLIO': delVehiculo ? delVehiculo.datos['FOLIO'] : datos.FOLIO,
-      'DEPARTAMENTO': (delVehiculo ? delVehiculo.datos['DEPARTAMENTO'] : datos.DEPARTAMENTO) || '',
-      'MODELO': (delVehiculo ? delVehiculo.datos['MODELO'] : datos.MODELO) || '',
-      'AÑO': datos.ANIO || '',
-      // Fecha de registro: siempre "hoy", ignora cualquier valor del cliente.
-      'FECHA REGISTRO': ahora,
-      // Fecha de inspección: editable, no necesariamente igual a la de registro.
-      'FECHA INSPECCION': datos.FECHA_INSPECCION ? new Date(datos.FECHA_INSPECCION) : ahora,
-      'KILOMETRAJE': datos.KILOMETRAJE || '',
-      'TICKET': datos.TICKET || '',
-      'INSPECCION INGRESO': datos.INSPECCION_INGRESO || '',
-      'PERIODO VERIFICACION': datos.PERIODO_VERIFICACION || '',
-      'SEGURO AUTO': datos.SEGURO_AUTO || '',
-    }));
-    return { ID: id };
-  }
+  /** La hoja, para HojaServicio */
+  const INCIDENCIAS = {
+    modulo: 'incidencias',
+    nombre: 'la incidencia',
+    libro: () => Config.SPREADSHEET_IDS.VEHICULOS(),
+    hoja: 'INCIDENCIAS',
+    fila: desdeOriginal_,
+    orden: { campo: 'FECHA_REGISTRO', desc: true },
+    // Lo que manda el formulario → columna de la hoja (lo demás se ignora)
+    campos: {
+      FOLIO: 'FOLIO', DEPARTAMENTO: 'DEPARTAMENTO', MODELO: 'MODELO', ANIO: 'AÑO',
+      FECHA_INSPECCION: 'FECHA INSPECCION', KILOMETRAJE: 'KILOMETRAJE', TICKET: 'TICKET',
+      PERIODO_VERIFICACION: 'PERIODO VERIFICACION', SEGURO_AUTO: 'SEGURO AUTO',
+      INSPECCION_INGRESO: 'INSPECCION INGRESO', DESCRIPCION_TRABAJO: 'DESCRIPCION TRABAJO REALIZADO',
+      FECHA_TRABAJO: 'FECHA TRABAJO REALIZADO', INSPECCION_SALIDA: 'INSPECCION SALIDA', MECANICO: 'NOMBRE MECANICO',
+    },
+    fechas: ['FECHA INSPECCION', 'FECHA TRABAJO REALIZADO'],
+    obligatorios: { 'FOLIO': 'Selecciona el vehículo' },
+    /**
+     * A diferencia del resto de la familia, NO exige que el vehículo exista en el catálogo, y
+     * es a propósito: su formulario es un <datalist>, que deja escribir cualquier texto, y
+     * volverla estricta bloquearía capturas que hoy funcionan. Se intenta resolver al vehículo
+     * para ponerle la llave foránea; si no se puede, se guarda con lo que mandó el cliente y
+     * con 'ID VEHICULO' vacío. Un vínculo que falta se repara después; una incidencia que no se
+     * pudo capturar, no.
+     */
+    alCrear: (fila) => {
+      let delVehiculo = null;
+      try {
+        delVehiculo = Relaciones.datosParaNuevo('INCIDENCIAS', fila['FOLIO']);
+      } catch (err) {
+        console.error('Incidencia sin vínculo al catálogo: ' + err.message);
+      }
+      DEL_TRABAJO.forEach((c) => { delete fila[c]; });
+      const v = delVehiculo ? delVehiculo.datos : null;
+      const ahora = new Date();
+      return Object.assign({}, v || {}, {
+        'FOLIO': v ? v['FOLIO'] : fila['FOLIO'],
+        'DEPARTAMENTO': (v ? v['DEPARTAMENTO'] : fila['DEPARTAMENTO']) || '',
+        'MODELO': (v ? v['MODELO'] : fila['MODELO']) || '',
+        // Registro: siempre "hoy". Inspección: editable, no necesariamente igual a la de registro.
+        'FECHA REGISTRO': ahora,
+        'FECHA INSPECCION': fila['FECHA INSPECCION'] || ahora,
+      });
+    },
+  };
 
   /** Cierra una incidencia abierta (trabajo realizado + inspección de salida) */
   function cerrar(token, id, datos) {
     Permisos.puedeEditar(token, 'incidencias');
     if (!datos.DESCRIPCION_TRABAJO) throw new Error('Describe el trabajo realizado');
-
-    SheetUtils.update(ssId(), hoja_().getName(), id, {
+    SheetUtils.update(HojaServicio.libro(INCIDENCIAS), INCIDENCIAS.hoja, id, {
       'DESCRIPCION TRABAJO REALIZADO': datos.DESCRIPCION_TRABAJO,
-      'FECHA TRABAJO REALIZADO': datos.FECHA_TRABAJO ? new Date(datos.FECHA_TRABAJO) : new Date(),
+      'FECHA TRABAJO REALIZADO': HojaServicio.fechaDeEntrada(datos.FECHA_TRABAJO) || new Date(),
       'INSPECCION SALIDA': datos.INSPECCION_SALIDA || '',
       'NOMBRE MECANICO': datos.MECANICO || '',
     }, 'ID');
-    return { ID: id };
-  }
-
-  /** Corrige cualquier campo de una incidencia existente (abierta o cerrada) */
-  function actualizar(token, id, datos) {
-    Permisos.puedeEditar(token, 'incidencias');
-    const cambios = {};
-    if (datos.FOLIO !== undefined) cambios['FOLIO'] = datos.FOLIO;
-    if (datos.DEPARTAMENTO !== undefined) cambios['DEPARTAMENTO'] = datos.DEPARTAMENTO;
-    if (datos.MODELO !== undefined) cambios['MODELO'] = datos.MODELO;
-    if (datos.ANIO !== undefined) cambios['AÑO'] = datos.ANIO;
-    if (datos.FECHA_INSPECCION !== undefined) {
-      cambios['FECHA INSPECCION'] = datos.FECHA_INSPECCION ? new Date(datos.FECHA_INSPECCION) : '';
-    }
-    if (datos.KILOMETRAJE !== undefined) cambios['KILOMETRAJE'] = datos.KILOMETRAJE;
-    if (datos.TICKET !== undefined) cambios['TICKET'] = datos.TICKET;
-    if (datos.PERIODO_VERIFICACION !== undefined) cambios['PERIODO VERIFICACION'] = datos.PERIODO_VERIFICACION;
-    if (datos.SEGURO_AUTO !== undefined) cambios['SEGURO AUTO'] = datos.SEGURO_AUTO;
-    if (datos.INSPECCION_INGRESO !== undefined) cambios['INSPECCION INGRESO'] = datos.INSPECCION_INGRESO;
-    if (datos.DESCRIPCION_TRABAJO !== undefined) cambios['DESCRIPCION TRABAJO REALIZADO'] = datos.DESCRIPCION_TRABAJO;
-    if (datos.FECHA_TRABAJO !== undefined) {
-      cambios['FECHA TRABAJO REALIZADO'] = datos.FECHA_TRABAJO ? new Date(datos.FECHA_TRABAJO) : '';
-    }
-    if (datos.INSPECCION_SALIDA !== undefined) cambios['INSPECCION SALIDA'] = datos.INSPECCION_SALIDA;
-    if (datos.MECANICO !== undefined) cambios['NOMBRE MECANICO'] = datos.MECANICO;
-
-    // Regresa el registro ya con el cambio aplicado (no solo el ID): así el
-    // cliente puede refrescar esa fila sola (ej. DataTable.alEditar) sin
-    // tener que recargar todo el historial.
-    const actualizado = SheetUtils.update(ssId(), hoja_().getName(), id, cambios, 'ID');
-    return desdeOriginal_(actualizado);
-  }
-
-  /** Elimina por completo una incidencia (borrado físico de la fila) — solo ADMIN */
-  function eliminar(token, id) {
-    Permisos.puedeEditar(token, 'incidencias');
-    const ok = SheetUtils.remove(ssId(), hoja_().getName(), id, 'ID');
-    if (!ok) throw new Error('No se encontró la incidencia con ID=' + id);
     return { ID: id };
   }
 
@@ -198,11 +106,11 @@ const IncidenciasService = (function () {
   function diagnostico(token) {
     try {
       Permisos.puedeLeer(token, 'incidencias');
-      const hoja = hoja_();
-      const crudos = SheetUtils.getAll(ssId(), hoja.getName());
+      const hoja = HojaServicio.hoja(INCIDENCIAS);
+      const crudos = SheetUtils.getAll(HojaServicio.libro(INCIDENCIAS), hoja.getName());
       return {
         ok: true,
-        spreadsheetId: String(ssId()),
+        spreadsheetId: String(HojaServicio.libro(INCIDENCIAS)),
         nombreHoja: String(hoja.getName()),
         totalFilas: Number(Math.max(0, hoja.getLastRow() - 1)),
         totalColumnas: Number(hoja.getLastColumn()),
@@ -214,5 +122,20 @@ const IncidenciasService = (function () {
     }
   }
 
-  return { listar, listarPorFolio, buscarPorId, completo, crear, cerrar, actualizar, eliminar, diagnostico };
+  return {
+    listar: (token) => HojaServicio.listar(INCIDENCIAS, token),
+    /** Incidencias de un solo vehículo (ficha de Vehículos) */
+    listarPorFolio: (token, folio) => HojaServicio.listarPor(INCIDENCIAS, token, 'FOLIO', folio),
+    /** Registro completo (todas las columnas) por ID -- "Ver completo" desde la ficha de Vehículos */
+    buscarPorId: (token, id) => HojaServicio.buscarPorId(INCIDENCIAS, token, id),
+    /** Todas las columnas de TODAS las incidencias (para exportar completo) */
+    completo: (token) => HojaServicio.completo(INCIDENCIAS, token),
+    /** Abre una incidencia (ingreso del vehículo al taller) */
+    crear: (token, datos) => HojaServicio.crear(INCIDENCIAS, token, datos),
+    cerrar,
+    /** Corrige cualquier campo de una incidencia existente (abierta o cerrada) */
+    actualizar: (token, id, datos) => HojaServicio.actualizar(INCIDENCIAS, token, id, datos),
+    eliminar: (token, id) => HojaServicio.eliminar(INCIDENCIAS, token, id),
+    diagnostico,
+  };
 })();

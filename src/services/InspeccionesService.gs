@@ -96,16 +96,7 @@ const InspeccionesService = (function () {
   }
 
   const limpiar_ = (v) => String(v == null ? '' : v).trim();
-
-  /** Fechas de la hoja → texto ISO (igual que en los demás servicios) */
-  function fechaISO_(valor) {
-    if (!valor) return '';
-    if (valor instanceof Date) return isNaN(valor.getTime()) ? '' : valor.toISOString();
-    const m = String(valor).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
-    if (!m) return '';
-    const f = new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0));
-    return isNaN(f.getTime()) ? '' : f.toISOString();
-  }
+  const fechaISO_ = (valor) => HojaServicio.fechaISO(valor);
 
   /** "84.50%" o 0.845 → 84.5 (número, para poder ordenar y promediar en la tabla) */
   function porcentaje_(valor) {
@@ -158,46 +149,22 @@ const InspeccionesService = (function () {
     };
   }
 
-  function listar(token) {
-    Permisos.puedeLeer(token, MODULO);
-    // Guardado mientras la hoja no cambie (CacheHojas): el permiso se revisa antes, siempre
-    return CacheHojas.recordar('insp_lista', [[ssId(), 'INSPECCION VEHICULAR']], () => {
-      return leerColumnas_(COLUMNAS_LISTA)
-        .filter((r) => limpiar_(r[COL_ID]))
-        .map(desdeOriginal_)
-        .sort((a, b) => (b.FECHA || '').localeCompare(a.FECHA || ''));
-    });
-  }
-
-  /** Inspecciones de un solo vehículo (ficha de Vehículos). */
-  function listarPorFolio(token, folio) {
-    if (!folio) return [];
-    return listar(token).filter((i) => i.FOLIO === folio);
-  }
-
-  /** Registro completo -- TODAS las 195 columnas crudas -- por ID (para "Ver completo" desde
-   *  la ficha de Vehículos; distinto de detalle(), que ya viene agrupado/calculado). */
-  function buscarPorId(token, id) {
-    Permisos.puedeLeer(token, MODULO);
-    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, COL_ID);
-    if (!encontrado) return null;
-    const limpio = {};
-    Object.keys(encontrado.data).forEach((k) => {
-      const v = encontrado.data[k];
-      limpio[k] = v instanceof Date ? v.toISOString() : v;
-    });
-    return limpio;
-  }
-
   /**
-   * Todas las 195 columnas de TODAS las inspecciones (para exportar completo) — a
-   * diferencia de listar()/detalle(), que evitan leer la hoja entera por lo pesado
-   * que es (ver el comentario de COLUMNAS_LISTA); aquí sí se lee completa, a propósito.
+   * La hoja, para HojaServicio. La lista lee solo COLUMNAS_LISTA, no las 195: la hoja es pesada.
+   * completo() sí la lee entera, a propósito (exportar).
    */
-  function completo(token) {
-    Permisos.puedeLeer(token, MODULO);
-    return SheetUtils.getAll(ssId(), hoja_().getName());
-  }
+  const INSPECCIONES = {
+    modulo: MODULO,
+    nombre: 'la inspección',
+    libro: ssId,
+    hoja: TABLA,
+    huella: COLUMNAS_CLAVE,
+    id: COL_ID,
+    columnas: COLUMNAS_LISTA,
+    incluir: (r) => !!limpiar_(r[COL_ID]),
+    fila: desdeOriginal_,
+    orden: { campo: 'FECHA', desc: true },
+  };
 
   /**
    * Una inspección completa: cabecera, llantas, puntuaciones por sección y el checklist
@@ -994,7 +961,14 @@ const InspeccionesService = (function () {
   }
 
   return {
-    listar, listarPorFolio, buscarPorId, completo, detalle, registrar, urlFormato, previsualizarImagen,
+    listar: (token) => HojaServicio.listar(INSPECCIONES, token),
+    /** Inspecciones de un solo vehículo (ficha de Vehículos) */
+    listarPorFolio: (token, folio) => HojaServicio.listarPor(INSPECCIONES, token, 'FOLIO', folio),
+    /** Registro completo -- TODAS las 195 columnas crudas -- por ID (para "Ver completo" desde
+     *  la ficha de Vehículos; distinto de detalle(), que ya viene agrupado/calculado) */
+    buscarPorId: (token, id) => HojaServicio.buscarPorId(INSPECCIONES, token, id),
+    completo: (token) => HojaServicio.completo(INSPECCIONES, token),
+    detalle, registrar, urlFormato, previsualizarImagen,
     estructuraDeTipo, olvidarTipo, tipos,
     nombrePlantilla_, carpetaDe_,   // las usa configurarInspecciones
     calcularPuntaje_, valorDeRespuesta_,   // expuestas para las pruebas

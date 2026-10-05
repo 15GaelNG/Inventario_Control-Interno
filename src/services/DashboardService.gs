@@ -27,11 +27,7 @@ const DashboardService = (function () {
     }
   }
 
-  function fechaISO_(valor) {
-    if (!valor) return '';
-    const f = valor instanceof Date ? valor : new Date(valor);
-    return isNaN(f.getTime()) ? '' : f.toISOString();
-  }
+  const fechaISO_ = (valor) => HojaServicio.fechaISO(valor);
 
   // ---------------- KPIs ----------------
 

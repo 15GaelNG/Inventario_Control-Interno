@@ -76,6 +76,9 @@ console.log('\n2. Toda llave de renglón es "ID" o una columna de negocio declar
       // el último argumento es la columna llave; puede venir como literal o como variable
       const lit = m[1].match(/'([^']+)'\s*$/);
       if (!lit) continue;                       // variable (ID_COLUMN, COL_ID): se revisa abajo
+      // Buscar un VEHÍCULO por su FOLIO (lo que la persona escribe) no es la llave de renglón
+      // de la hoja propia: es la consulta al catálogo, como VehiculosService.buscarPorFolio
+      if (lit[1] === 'FOLIO' && /'VEHICULOS'/.test(m[1])) continue;
       if (PERMITIDAS.indexOf(lit[1]) === -1) raras.push(s.nombre + " -> '" + lit[1] + "'");
     }
   });
@@ -101,7 +104,8 @@ console.log('\n3. Las huellas de pestaña NO llevan ID');
   const huellas = [];
   servicios.concat([{ nombre: 'Relaciones.gs', texto: lee('services', 'Relaciones.gs') }])
     .forEach((s) => {
-      const re = /(?:COLUMNAS_CLAVE|COLUMNAS|firma)\s*[:=]\s*\[([^\]]*)\]/g;
+      // `huella:` es como la declaran las definiciones de HojaServicio
+      const re = /(?:COLUMNAS_CLAVE|COLUMNAS|firma|huella)\s*[:=]\s*\[([^\]]*)\]/g;
       let m;
       while ((m = re.exec(s.texto)) !== null) huellas.push({ archivo: s.nombre, cols: m[1] });
     });
@@ -195,7 +199,7 @@ console.log('\n7. NINGUNA mención al nombre viejo, aunque no sea una búsqueda'
   // Y que la propiedad de salida del frontend siga intacta: arreglar lo de arriba
   // cambiando ESTO habría roto la lista de vehículos de otra manera.
   const veh = lee('services', 'VehiculosService.gs');
-  ok(/ID_VEHICULO: datos\['ID'\]\[i\]/.test(veh),
+  ok(/ID_VEHICULO: (datos\['ID'\]\[i\]|r\['ID'\])/.test(veh),
      "VehiculosService entrega la propiedad ID_VEHICULO leyéndola de la columna 'ID'");
 }
 

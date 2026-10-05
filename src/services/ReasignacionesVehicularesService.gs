@@ -1,16 +1,11 @@
 /**
  * ReasignacionesVehicularesService.gs
  * Historial de cambio de responsable de un vehículo — referencia el Folio
- * del catálogo de Vehículos. Vive en el mismo spreadsheet original de
- * AppSheet que el resto de los módulos — la pestaña real se ubica por firma
- * de columnas, no por nombre fijo (ojo: la hoja de reasignaciones de
- * LÍNEAS TELEFÓNICAS usa casi los mismos nombres de columna — "VIN" y
- * "Folio Vehiculo" son las únicas que solo tiene esta, por eso van en la firma).
+ * del catálogo de Vehículos.
  *
- * Columnas reales (12): ID Reasignacion Vehicular | Folio Vehiculo | Fecha
- *   de Reasignacion | VIN | NUCO | No Empleado Saliente | Responsable
- *   Saliente | Departamento Saliente | No Empleado Entrante | Responsable
- *   Entrante | Departamento Entrante | QUIEN REGISTRO
+ * Columnas reales (12): ID | Folio Vehiculo | Fecha de Reasignacion | VIN | NUCO |
+ *   No Empleado Saliente | Responsable Saliente | Departamento Saliente |
+ *   No Empleado Entrante | Responsable Entrante | Departamento Entrante | QUIEN REGISTRO
  *
  * A propósito, es un registro de solo alta (no se edita): cambiar a mano
  * una reasignación ya guardada desincronizaría el historial del responsable
@@ -30,71 +25,37 @@
  */
 
 const ReasignacionesVehicularesService = (function () {
-  // Nombre real ya confirmado ("REASIGNACIONES_VEHICULOS") — directo por
-  // nombre, no por firma de columnas (ver mismo comentario en ArqueosService).
-  const NOMBRE_HOJA = 'REASIGNACIONES_VEHICULOS';
-  // La llave de renglon es la NUEVA (ver la nota en VehiculosService).
-  const ID_COLUMN = 'ID';
-
-  function ssId() {
-    return Config.SPREADSHEET_IDS.VEHICULOS();
-  }
-
-  function hoja_() {
-    return SheetUtils.getSheet(ssId(), NOMBRE_HOJA);
-  }
-
-  function fechaISO_(valor) {
-    if (!valor) return '';
-    const f = valor instanceof Date ? valor : new Date(valor);
-    return isNaN(f.getTime()) ? '' : f.toISOString();
-  }
-
-  const COLUMNAS_RESUMEN = [
-    ID_COLUMN, 'Folio Vehiculo', 'Fecha de Reasignacion', 'VIN', 'NUCO',
-    'No Empleado Saliente', 'Responsable Saliente', 'Departamento Saliente',
-    'No Empleado Entrante', 'Responsable Entrante', 'Departamento Entrante', 'QUIEN REGISTRO',
-  ];
-
-  /** Historial completo (ya son solo 12 columnas, no hace falta un "resumen" más ligero). */
-  function listarResumen(token) {
-    Permisos.puedeLeer(token, 'reasignaciones-vehiculares');
-    // Guardado mientras la hoja no cambie (CacheHojas): el permiso se revisa antes, siempre
-    return CacheHojas.recordar('rveh_resumen', [[ssId(), NOMBRE_HOJA]], () => {
-      const sheet = hoja_();
-      const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
-
-      const resultado = [];
-      for (let i = 0; i < filas; i++) {
-        if (!datos[ID_COLUMN][i]) continue;
-        resultado.push({
-          ID: datos[ID_COLUMN][i],
-          FOLIO_VEHICULO: datos['Folio Vehiculo'][i] || '',
-          FECHA: fechaISO_(datos['Fecha de Reasignacion'][i]),
-          VIN: datos['VIN'][i] || '',
-          NUCO: datos['NUCO'][i] || '',
-          NO_EMPLEADO_SALIENTE: datos['No Empleado Saliente'][i] || '',
-          RESPONSABLE_SALIENTE: datos['Responsable Saliente'][i] || '',
-          DEPARTAMENTO_SALIENTE: datos['Departamento Saliente'][i] || '',
-          NO_EMPLEADO_ENTRANTE: datos['No Empleado Entrante'][i] || '',
-          RESPONSABLE_ENTRANTE: datos['Responsable Entrante'][i] || '',
-          DEPARTAMENTO_ENTRANTE: datos['Departamento Entrante'][i] || '',
-          QUIEN_REGISTRO: datos['QUIEN REGISTRO'][i] || '',
-        });
-      }
-      return resultado.sort((a, b) => new Date(b.FECHA) - new Date(a.FECHA));
-    });
-  }
-
-  /** Todas las columnas de la hoja (para "Vista": mostrar/exportar cualquier columna). */
-  function completo(token) {
-    Permisos.puedeLeer(token, 'reasignaciones-vehiculares');
-    return SheetUtils.getAll(ssId(), NOMBRE_HOJA);
-  }
+  /** La hoja, para HojaServicio */
+  const REASIGNACIONES = {
+    modulo: 'reasignaciones-vehiculares',
+    libro: () => Config.SPREADSHEET_IDS.VEHICULOS(),
+    hoja: 'REASIGNACIONES_VEHICULOS',
+    columnas: [
+      'ID', 'Folio Vehiculo', 'Fecha de Reasignacion', 'VIN', 'NUCO',
+      'No Empleado Saliente', 'Responsable Saliente', 'Departamento Saliente',
+      'No Empleado Entrante', 'Responsable Entrante', 'Departamento Entrante', 'QUIEN REGISTRO',
+    ],
+    fila: (r) => ({
+      ID: r['ID'],
+      FOLIO_VEHICULO: r['Folio Vehiculo'] || '',
+      FECHA: HojaServicio.fechaISO(r['Fecha de Reasignacion']),
+      VIN: r['VIN'] || '',
+      NUCO: r['NUCO'] || '',
+      NO_EMPLEADO_SALIENTE: r['No Empleado Saliente'] || '',
+      RESPONSABLE_SALIENTE: r['Responsable Saliente'] || '',
+      DEPARTAMENTO_SALIENTE: r['Departamento Saliente'] || '',
+      NO_EMPLEADO_ENTRANTE: r['No Empleado Entrante'] || '',
+      RESPONSABLE_ENTRANTE: r['Responsable Entrante'] || '',
+      DEPARTAMENTO_ENTRANTE: r['Departamento Entrante'] || '',
+      QUIEN_REGISTRO: r['QUIEN REGISTRO'] || '',
+    }),
+    orden: { campo: 'FECHA', desc: true },
+  };
 
   /**
-   * Registra una reasignación de vehículo y, en la misma operación,
-   * actualiza el responsable/departamento ACTUAL de ese vehículo.
+   * Registra una reasignación de vehículo y, en la misma operación, actualiza el
+   * responsable/departamento ACTUAL de ese vehículo. Escrito a mano y no con
+   * HojaServicio.crear: son dos hojas que tienen que cambiar juntas, bajo el mismo candado.
    */
   function crear(token, datos) {
     const sesion = Permisos.puedeEditar(token, 'reasignaciones-vehiculares');
@@ -109,36 +70,32 @@ const ReasignacionesVehicularesService = (function () {
       const vehiculo = VehiculosService.buscarPorFolio(token, folio);
       if (!vehiculo) throw new Error('No se encontró el vehículo con Folio=' + folio);
 
-      // buscarPorFolio indexa por el encabezado CRUDO de la hoja, y la migración renombró
-      // 'ID_VEHICULO' a 'ID ANTERIOR': aquí antes se leía vehiculo.ID_VEHICULO, que hoy es
-      // undefined. El update de abajo tronaba con "ID=undefined" DESPUÉS de insertar esta
-      // fila, así que quedaba la reasignación escrita y el vehículo sin actualizar. Se
-      // valida antes de escribir nada.
+      // Se valida antes de escribir nada: si el vehículo no tuviera ID, el update de abajo
+      // tronaría DESPUÉS de insertar esta fila (reasignación escrita, vehículo sin actualizar).
       const idVehiculo = vehiculo['ID'];
       if (!idVehiculo) {
         throw new Error('El vehículo con Folio=' + folio + ' no tiene ID. Corre el ' +
           'pipeline de IDs sobre este libro antes de registrar reasignaciones.');
       }
 
-      const fila = {};
-      fila[ID_COLUMN] = Ids.nuevo(Entidades.prefijo('REASIGNACIONES_VEHICULOS'));
-      // La llave foránea de verdad. El folio se guarda también, para que la hoja se lea,
-      // pero sale del vehículo encontrado y no de lo que mandó el navegador: así no puede
-      // quedar una fila cuyo ID VEHICULO no corresponda a su folio.
-      fila['ID VEHICULO'] = idVehiculo;
-      fila['Folio Vehiculo'] = vehiculo['FOLIO'] || folio;
-      fila['Fecha de Reasignacion'] = datos['Fecha de Reasignacion'] ? new Date(datos['Fecha de Reasignacion']) : new Date();
-      fila['VIN'] = vehiculo['SERIE VEHICULO'] || '';
-      fila['NUCO'] = vehiculo['NUCCO'] || '';
-      fila['No Empleado Saliente'] = vehiculo['NO EMPLEADO'] || '';
-      fila['Responsable Saliente'] = vehiculo['RESPONSABLE VEHICULO'] || '';
-      fila['Departamento Saliente'] = vehiculo['DEPARTAMENTO'] || '';
-      fila['No Empleado Entrante'] = datos['No Empleado Entrante'] || '';
-      fila['Responsable Entrante'] = responsableEntrante;
-      fila['Departamento Entrante'] = datos['Departamento Entrante'] || '';
-      fila['QUIEN REGISTRO'] = sesion.nombre;
-
-      SheetUtils.insert(ssId(), hoja_().getName(), fila);
+      const fila = {
+        'ID': Ids.nuevo(Entidades.prefijo('REASIGNACIONES_VEHICULOS')),
+        // La llave foránea de verdad. El folio se guarda también, para que la hoja se lea,
+        // pero sale del vehículo encontrado y no de lo que mandó el navegador.
+        'ID VEHICULO': idVehiculo,
+        'Folio Vehiculo': vehiculo['FOLIO'] || folio,
+        'Fecha de Reasignacion': HojaServicio.fechaDeEntrada(datos['Fecha de Reasignacion']) || new Date(),
+        'VIN': vehiculo['SERIE VEHICULO'] || '',
+        'NUCO': vehiculo['NUCCO'] || '',
+        'No Empleado Saliente': vehiculo['NO EMPLEADO'] || '',
+        'Responsable Saliente': vehiculo['RESPONSABLE VEHICULO'] || '',
+        'Departamento Saliente': vehiculo['DEPARTAMENTO'] || '',
+        'No Empleado Entrante': datos['No Empleado Entrante'] || '',
+        'Responsable Entrante': responsableEntrante,
+        'Departamento Entrante': datos['Departamento Entrante'] || '',
+        'QUIEN REGISTRO': sesion.nombre,
+      };
+      SheetUtils.insert(HojaServicio.libro(REASIGNACIONES), REASIGNACIONES.hoja, fila);
 
       // candadoTomado: este hilo ya tiene el candado del script (arriba), y waitLock no es
       // reentrante — sin avisarlo, la propagación esperaba 20 s y moría en silencio.
@@ -148,50 +105,20 @@ const ReasignacionesVehicularesService = (function () {
         'DEPARTAMENTO': fila['Departamento Entrante'] || vehiculo['DEPARTAMENTO'],
       }, { candadoTomado: true });
 
-      return { ID: fila[ID_COLUMN] };
+      return { ID: fila['ID'] };
     } finally {
       lock.releaseLock();
     }
   }
 
-  function eliminar(token, id) {
-    Permisos.puedeEditar(token, 'reasignaciones-vehiculares');
-    const ok = SheetUtils.remove(ssId(), hoja_().getName(), id, ID_COLUMN);
-    if (!ok) throw new Error('No se encontró el registro con ID=' + id);
-    return { ID: id };
-  }
-
-  /** Historial de reasignaciones de UN vehículo (para enlazarlo desde el
-   * detalle de Vehículos) — mismo criterio que
-   * CambiosVehiculosService.listarPorFolio: recorre de abajo hacia arriba
-   * y filtra por folio, en vez de traer todo el historial completo. */
-  function listarPorFolio(token, folio) {
-    Permisos.puedeLeer(token, 'reasignaciones-vehiculares');
-    if (!folio) return [];
-    const sheet = hoja_();
-    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
-
-    const resultado = [];
-    for (let i = filas - 1; i >= 0; i--) {
-      if (!datos[ID_COLUMN][i]) continue;
-      if (String(datos['Folio Vehiculo'][i] || '') !== String(folio)) continue;
-      resultado.push({
-        ID: datos[ID_COLUMN][i],
-        FOLIO_VEHICULO: datos['Folio Vehiculo'][i] || '',
-        FECHA: fechaISO_(datos['Fecha de Reasignacion'][i]),
-        VIN: datos['VIN'][i] || '',
-        NUCO: datos['NUCO'][i] || '',
-        NO_EMPLEADO_SALIENTE: datos['No Empleado Saliente'][i] || '',
-        RESPONSABLE_SALIENTE: datos['Responsable Saliente'][i] || '',
-        DEPARTAMENTO_SALIENTE: datos['Departamento Saliente'][i] || '',
-        NO_EMPLEADO_ENTRANTE: datos['No Empleado Entrante'][i] || '',
-        RESPONSABLE_ENTRANTE: datos['Responsable Entrante'][i] || '',
-        DEPARTAMENTO_ENTRANTE: datos['Departamento Entrante'][i] || '',
-        QUIEN_REGISTRO: datos['QUIEN REGISTRO'][i] || '',
-      });
-    }
-    return resultado;
-  }
-
-  return { listarResumen, completo, crear, eliminar, listarPorFolio };
+  return {
+    /** Historial completo (ya son solo 12 columnas, no hace falta un "resumen" más ligero) */
+    listarResumen: (token) => HojaServicio.listar(REASIGNACIONES, token),
+    /** Todas las columnas de la hoja (para "Vista": mostrar/exportar cualquier columna) */
+    completo: (token) => HojaServicio.completo(REASIGNACIONES, token),
+    crear,
+    eliminar: (token, id) => HojaServicio.eliminar(REASIGNACIONES, token, id),
+    /** Historial de reasignaciones de UN vehículo (para enlazarlo desde el detalle de Vehículos) */
+    listarPorFolio: (token, folio) => HojaServicio.listarPor(REASIGNACIONES, token, 'FOLIO_VEHICULO', folio),
+  };
 })();

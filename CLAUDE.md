@@ -75,6 +75,28 @@ uno documenta su uso al inicio del archivo y tiene su prueba en `tests/`.
 - Un componente nuevo se incluye en `src/html/Index.html` antes de los módulos y
   componentes que lo usan (`campo-auto` va antes que `formulario`).
 
+## Servidor: un módulo de una hoja → `HojaServicio`
+
+`src/utils/HojaServicio.gs` hace lo que repetían todos los servicios: listar con caché,
+`listarPor` (la ficha de un vehículo, de una caja), `completo`, `buscarPorId`, `crear`,
+`actualizar` y `eliminar`, con el permiso del módulo revisado siempre. Un servicio nuevo
+declara su hoja en un objeto (`modulo`, `libro`, `hoja`, `columnas`, `fila`, `orden`, `fechas`,
+`obligatorios`, `noEditables`, `archivos`…) y lo propio va en sus ganchos (`alCrear`,
+`alActualizar`, `despues`, `despuesDeEliminar`). Ejemplo corto: `TicketsService.gs`; con
+ganchos: `ArqueosService.gs` y `VehiculosService.gs`. La guía completa está al inicio del archivo.
+
+- **Nada corre al cargar.** Apps Script no garantiza el orden de los archivos: la definición es
+  datos (el orden es `{ campo: 'FECHA', desc: true }`, no una llamada) y los métodos públicos
+  son `(token) => HojaServicio.listar(DEF, token)`. `tests/hoja-servicio.test.js` carga cada
+  servicio solo y falla si algo corre.
+- **Fechas:** lo que manda un `<input type="date">` se guarda con `fechas: [...]` o
+  `HojaServicio.fechaDeEntrada` (medianoche local); `new Date('yyyy-MM-dd')` cae el día anterior.
+- Escrito a mano solo lo que no es de una hoja: transacciones entre dos hojas bajo un mismo
+  candado (Cambios de Monto, Reasignaciones) o capturas con archivo y reverso (Verificaciones).
+- `source-contracts` falla si un servicio vuelve a escribir su `fechaISO_`, su renombrar archivo,
+  su subida a Drive, su `CacheHojas.recordar` o su `SheetUtils.remove`.
+- Para probar un servicio con hojas en memoria: `tests/apps-script-simulado.js`.
+
 ## Responsivo (celular y tableta)
 
 - **Dos cortes, nada más:** celular `@media (max-width: 640px)` y tableta

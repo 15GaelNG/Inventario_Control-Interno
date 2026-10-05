@@ -1309,6 +1309,9 @@ const MAPA = {
     return b;
   }
 
+  /** ¿Hay que borrar esta hoja por borrar() (otras apuntan a sus registros)? Lo usa HojaServicio. */
+  const protegeBorrado = (hoja) => Object.prototype.hasOwnProperty.call(BORRABLES, hoja);
+
   /** Los renglones del padre cuya `columnaId` está en `ids`: [{fila, registro}] */
   function buscarPadres_(hoja, columnaId, ids) {
     const lastRow = hoja.getLastRow();
@@ -1454,7 +1457,7 @@ const MAPA = {
 
   return {
     propagar, soltar, datosParaNuevo, revisar, cambiarClave, describir, deOtraHoja,
-    borrar, queImpideBorrar,
+    borrar, queImpideBorrar, protegeBorrado,
     // Para quien escribe junto a Relaciones (CapitalHumano): el mismo log y los mismos nombres
     anotar: escribirLog_, etiqueta: etiqueta_,
     // Solo para quien ya tiene el candado tomado. Ver su comentario.

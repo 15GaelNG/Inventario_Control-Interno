@@ -95,22 +95,12 @@ const HologramasService = (function () {
   function ssId() {
     return Config.SPREADSHEET_IDS.VEHICULOS();
   }
-  function hoja_() {
-    return SheetUtils.getSheetByColumns(ssId(), COLUMNAS_CLAVE);
-  }
+  /** Nombre real de la pestaña (se ubica por su huella de columnas) */
+  const nombreHoja_ = () => HojaServicio.nombreHoja(HOLOGRAMAS);
+  const fechaISO_ = (valor) => HojaServicio.fechaISO(valor);
 
   const limpiar_ = (v) => String(v == null ? '' : v).trim();
   const enMayusculas_ = (v) => limpiar_(v).toUpperCase();
-
-  /** Fechas de la hoja → texto ISO (igual que en los demás servicios) */
-  function fechaISO_(valor) {
-    if (!valor) return '';
-    if (valor instanceof Date) return isNaN(valor.getTime()) ? '' : valor.toISOString();
-    const m = String(valor).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
-    if (!m) return '';
-    const f = new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0));
-    return isNaN(f.getTime()) ? '' : f.toISOString();
-  }
 
   function numero_(valor, nombreCampo, obligatorio) {
     const texto = limpiar_(valor).replace(/[$,\s]/g, '');
@@ -188,42 +178,18 @@ const HologramasService = (function () {
     });
   }
 
-  function listar(token) {
-    Permisos.puedeLeer(token, 'hologramas');
-    // Guardado mientras la hoja no cambie (CacheHojas): el permiso se revisa antes, siempre
-    return CacheHojas.recordar('holo_lista', [[ssId(), 'HOLOGRAMAS'], [ssId(), 'VEHICULOS']], () => {
-      const catalogo = catalogoPorSerie_();
-      return SheetUtils.getAll(ssId(), hoja_().getName())
-        .filter((r) => r['ID'])
-        .map((r) => conCatalogo_(desdeOriginal_(r), catalogo[enMayusculas_(r['SERIE VEHICULO'])]))
-        .sort((a, b) => (b.FECHA_REGISTRO || '').localeCompare(a.FECHA_REGISTRO || ''));
-    });
-  }
-
-  /** Hologramas de un solo vehículo (ficha de Vehículos). */
-  function listarPorFolio(token, folio) {
-    if (!folio) return [];
-    return listar(token).filter((h) => h.FOLIO === folio);
-  }
-
-  /** Registro completo (todas las columnas) por ID -- "Ver completo" desde la ficha de Vehículos. */
-  function buscarPorId(token, id) {
-    Permisos.puedeLeer(token, 'hologramas');
-    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, 'ID');
-    if (!encontrado) return null;
-    const limpio = {};
-    Object.keys(encontrado.data).forEach((k) => {
-      const v = encontrado.data[k];
-      limpio[k] = v instanceof Date ? v.toISOString() : v;
-    });
-    return limpio;
-  }
-
-  /** Todas las columnas de TODOS los hologramas (para exportar completo). */
-  function completo(token) {
-    Permisos.puedeLeer(token, 'hologramas');
-    return SheetUtils.getAll(ssId(), hoja_().getName());
-  }
+  /** La hoja, para HojaServicio. Cada renglón se cruza con el catálogo: VEHICULOS manda. */
+  const HOLOGRAMAS = {
+    modulo: 'hologramas',
+    nombre: 'el holograma',
+    libro: ssId,
+    hoja: TABLA,
+    huella: COLUMNAS_CLAVE,
+    tambienLee: ['VEHICULOS'],
+    preparar: () => catalogoPorSerie_(),
+    fila: (r, catalogo) => conCatalogo_(desdeOriginal_(r), catalogo[enMayusculas_(r['SERIE VEHICULO'])]),
+    orden: { campo: 'FECHA_REGISTRO', desc: true },
+  };
 
   /**
    * Escribe en la hoja los datos del catálogo de los hologramas indicados, para que
@@ -232,7 +198,7 @@ const HologramasService = (function () {
   function sincronizar(token, ids) {
     Permisos.puedeEditar(token, 'hologramas');
     if (!Array.isArray(ids) || !ids.length) throw new Error('No se indicaron hologramas a actualizar');
-    const nombreHoja = hoja_().getName();
+    const nombreHoja = nombreHoja_();
     const catalogo = catalogoPorSerie_();
     const actualizadas = [];
     let campos = 0;
@@ -304,7 +270,7 @@ const HologramasService = (function () {
 
   /** La calcomanía y la serie no se pueden repetir entre hologramas */
   function revisarDuplicados_(datos, idActual) {
-    const filas = SheetUtils.getAll(ssId(), hoja_().getName());
+    const filas = SheetUtils.getAll(ssId(), nombreHoja_());
     const calcomania = enMayusculas_(datos.CALCOMANIA);
     const serie = enMayusculas_(datos.SERIE_VEHICULO);
     filas.forEach((r) => {
@@ -332,27 +298,6 @@ const HologramasService = (function () {
     });
   }
 
-  /** Renombra en Drive el archivo recién subido a "<ID>_SOLICITUD_<fecha>.ext" (conserva la
-   *  extensión que ya trae) y regresa la ruta (relativa, AppSheet) ya actualizada con ese
-   *  nombre -- urlSolicitud() busca el archivo por ese nombre exacto dentro de la carpeta, así
-   *  que la ruta guardada en la hoja debe coincidir con el nombre real. Si falla, regresa la
-   *  ruta original sin tocar nada (no bloquea el alta: el archivo ya quedó guardado y accesible
-   *  con el nombre que le puso guardarArchivoAppSheet_). */
-  function renombrarSolicitud_(fileId, id, rutaOriginal) {
-    if (!fileId || !id) return rutaOriginal;
-    try {
-      const archivo = DriveApp.getFileById(fileId);
-      const extension = (archivo.getName().match(/\.[^.]+$/) || [''])[0];
-      const fecha = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-      const nuevoNombre = id + '_SOLICITUD_' + fecha + extension;
-      archivo.setName(nuevoNombre);
-      return rutaOriginal.split('/')[0] + '/' + nuevoNombre;
-    } catch (e) {
-      console.warn('No se pudo renombrar la solicitud del holograma (' + fileId + '): ' + e.message);
-      return rutaOriginal;
-    }
-  }
-
   function registrar(token, datos, archivo) {
     Permisos.puedeEditar(token, 'hologramas');
     if (!archivo || !archivo.base64) throw new Error('Adjunta la solicitud (PDF o imagen)');
@@ -378,10 +323,11 @@ const HologramasService = (function () {
 
     const id = Ids.nuevo(Entidades.prefijo('HOLOGRAMAS'));
     const guardado = guardarSolicitud_(id, archivo);
-    const rutaSolicitud = renombrarSolicitud_(guardado.fileId, id, guardado.ruta);
+    // "<ID>_SOLICITUD_<fecha>.ext": urlSolicitud() busca el archivo por ese nombre exacto
+    const rutaSolicitud = HojaServicio.renombrarRuta(guardado.fileId, id, 'SOLICITUD', guardado.ruta);
     const ahora = new Date();
     try {
-      SheetUtils.insert(ssId(), hoja_().getName(), Object.assign(fila, {
+      SheetUtils.insert(ssId(), nombreHoja_(), Object.assign(fila, {
         'ID': id,
         // En esta hoja NO ECONOMICO trae la placa (ver comentario del encabezado)
         'NO ECONOMICO': fila['PLACA'],
@@ -400,7 +346,7 @@ const HologramasService = (function () {
   function actualizarCampo(token, id, campo, valor) {
     Permisos.puedeEditar(token, 'hologramas');
     if (!CAMPOS[campo]) throw new Error('El campo "' + campo + '" no se puede editar aquí');
-    const nombreHoja = hoja_().getName();
+    const nombreHoja = nombreHoja_();
     const actual = SheetUtils.findById(ssId(), nombreHoja, id, 'ID');
     if (!actual) throw new Error('No se encontró el holograma ' + id);
 
@@ -422,13 +368,6 @@ const HologramasService = (function () {
     return desdeOriginal_(SheetUtils.update(ssId(), nombreHoja, id, cambios, 'ID'));
   }
 
-  /** Borra hologramas — solo ADMIN. Las solicitudes NO se borran de Drive. */
-  function eliminar(token, ids) {
-    Permisos.puedeEditar(token, 'hologramas');
-    if (!Array.isArray(ids) || !ids.length) throw new Error('No se indicaron registros a eliminar');
-    return { eliminadas: SheetUtils.removeMany(ssId(), hoja_().getName(), ids, 'ID') };
-  }
-
   function urlSolicitud(token, ruta) {
     Permisos.puedeLeer(token, 'hologramas');
     const url = DriveUtils.urlDeRuta(ruta, [
@@ -439,5 +378,17 @@ const HologramasService = (function () {
     return url;
   }
 
-  return { listar, listarPorFolio, buscarPorId, completo, catalogos, datosDeVehiculo, registrar, actualizarCampo, sincronizar, eliminar, urlSolicitud };
+  return {
+    listar: (token) => HojaServicio.listar(HOLOGRAMAS, token),
+    /** Hologramas de un solo vehículo (ficha de Vehículos) */
+    listarPorFolio: (token, folio) => HojaServicio.listarPor(HOLOGRAMAS, token, 'FOLIO', folio),
+    /** Registro completo (todas las columnas) por ID -- "Ver completo" desde la ficha de Vehículos */
+    buscarPorId: (token, id) => HojaServicio.buscarPorId(HOLOGRAMAS, token, id),
+    /** Todas las columnas de TODOS los hologramas (para exportar completo) */
+    completo: (token) => HojaServicio.completo(HOLOGRAMAS, token),
+    catalogos, datosDeVehiculo, registrar, actualizarCampo, sincronizar,
+    /** Borra hologramas — solo ADMIN. Las solicitudes NO se borran de Drive. */
+    eliminar: (token, ids) => HojaServicio.eliminar(HOLOGRAMAS, token, ids),
+    urlSolicitud,
+  };
 })();

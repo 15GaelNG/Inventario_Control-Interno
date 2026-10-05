@@ -4,7 +4,7 @@
  * con su comprobante (imagen).
  *
  * Hoja real "VERIFICACIONES" (misma estructura que producción/AppSheet):
- *   ID_VERIFICACION | FOLIO VEHICULO | PLACA | FECHA REGISTRO |
+ *   ID | FOLIO VEHICULO | PLACA | FECHA REGISTRO |
  *   FECHA VERIFICACION | COMPROBANTE VERIFICACION |
  *   FECHA PROXIMA VERIFICACION | REGISTRADO POR
  *
@@ -18,115 +18,36 @@
 const VerificacionesService = (function () {
   const TABLA = 'VERIFICACIONES';
   const COL_COMPROBANTE = 'COMPROBANTE VERIFICACION';
-  // Huella de la pestaña, no llave de renglon (ver la nota en HologramasService).
-  const COLUMNAS = ['FOLIO VEHICULO', COL_COMPROBANTE];
-
-  function ssId() {
-    return Config.SPREADSHEET_IDS.VEHICULOS();
-  }
-
-  function hoja_() {
-    return SheetUtils.getSheetByColumns(ssId(), COLUMNAS);
-  }
-
-  /**
-   * Fechas de la hoja → texto ISO (google.script.run pierde arreglos con Date
-   * crudos, ver IncidenciasService). Acepta Date o texto "dd/mm/yyyy[ hh:mm[:ss]]",
-   * que es como AppSheet deja algunas celdas.
-   */
-  function fechaISO_(valor) {
-    if (!valor) return '';
-    if (valor instanceof Date) return isNaN(valor.getTime()) ? '' : valor.toISOString();
-    const m = String(valor).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
-    if (!m) return '';
-    const f = new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0));
-    return isNaN(f.getTime()) ? '' : f.toISOString();
-  }
-
-  /**
-   * "yyyy-MM-dd" (input type=date) → Date a medianoche en la zona del script.
-   * No usar new Date('yyyy-MM-dd'): lo interpreta en UTC y en México cae el día anterior.
-   */
-  function fechaDesdeInput_(texto, nombreCampo) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(texto || ''))) {
-      throw new Error('Falta o es inválida la ' + nombreCampo);
-    }
-    return Utilities.parseDate(texto, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-  }
 
   function desdeOriginal_(row) {
     return {
       ID: row['ID'],
       FOLIO: row['FOLIO VEHICULO'] || '',
       PLACA: row['PLACA'] || '',
-      FECHA_REGISTRO: fechaISO_(row['FECHA REGISTRO']),
-      FECHA_VERIFICACION: fechaISO_(row['FECHA VERIFICACION']),
-      FECHA_PROXIMA: fechaISO_(row['FECHA PROXIMA VERIFICACION']),
+      FECHA_REGISTRO: HojaServicio.fechaISO(row['FECHA REGISTRO']),
+      FECHA_VERIFICACION: HojaServicio.fechaISO(row['FECHA VERIFICACION']),
+      FECHA_PROXIMA: HojaServicio.fechaISO(row['FECHA PROXIMA VERIFICACION']),
       COMPROBANTE: row[COL_COMPROBANTE] || '',
       REGISTRADO_POR: row['REGISTRADO POR'] || '',
     };
   }
 
-  function listar(token) {
-    Permisos.puedeLeer(token, 'verificaciones');
-    // Guardado mientras la hoja no cambie (CacheHojas): el permiso se revisa antes, siempre
-    return CacheHojas.recordar('verif_lista', [[ssId(), 'VERIFICACIONES']], () => {
-      return SheetUtils.getAll(ssId(), hoja_().getName())
-        .filter((r) => r['ID'])
-        .map(desdeOriginal_)
-        .sort((a, b) => (b.FECHA_REGISTRO || '').localeCompare(a.FECHA_REGISTRO || ''));
-    });
-  }
-
-  /** Verificaciones de un solo vehículo (ficha de Vehículos). */
-  function listarPorFolio(token, folio) {
-    if (!folio) return [];
-    return listar(token).filter((v) => v.FOLIO === folio);
-  }
-
-  /** Registro completo (todas las columnas) por ID -- "Ver completo" desde la ficha de Vehículos. */
-  function buscarPorId(token, id) {
-    Permisos.puedeLeer(token, 'verificaciones');
-    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, 'ID');
-    if (!encontrado) return null;
-    const limpio = {};
-    Object.keys(encontrado.data).forEach((k) => {
-      const v = encontrado.data[k];
-      limpio[k] = v instanceof Date ? v.toISOString() : v;
-    });
-    return limpio;
-  }
-
-  /** Todas las columnas de TODAS las verificaciones (para exportar completo). */
-  function completo(token) {
-    Permisos.puedeLeer(token, 'verificaciones');
-    return SheetUtils.getAll(ssId(), hoja_().getName());
-  }
+  /** La hoja, para HojaServicio */
+  const VERIFICACIONES = {
+    modulo: 'verificaciones',
+    nombre: 'la verificación',
+    libro: () => Config.SPREADSHEET_IDS.VEHICULOS(),
+    hoja: TABLA,
+    // Huella de la pestaña, no llave de renglón (ver la nota en HologramasService)
+    huella: ['FOLIO VEHICULO', COL_COMPROBANTE],
+    fila: desdeOriginal_,
+    orden: { campo: 'FECHA_REGISTRO', desc: true },
+  };
 
   /**
    * @param {{FOLIO: string, FECHA_VERIFICACION: string, FECHA_PROXIMA: string}} datos  fechas "yyyy-MM-dd"
    * @param {{base64: string, mimeType: string}} archivo  comprobante
    */
-  /** Renombra en Drive el archivo recién subido a "<ID>_VERIFICACION_<fecha>.ext" (conserva la
-   *  extensión que ya trae) y regresa la ruta (relativa, AppSheet) ya actualizada con ese
-   *  nombre -- urlComprobante()/previsualizarComprobante() buscan el archivo por ese nombre
-   *  exacto dentro de la carpeta, así que la ruta guardada en la hoja debe coincidir con el
-   *  nombre real. Si falla, regresa la ruta original sin tocar nada (no bloquea el alta). */
-  function renombrarComprobante_(fileId, id, rutaOriginal) {
-    if (!fileId || !id) return rutaOriginal;
-    try {
-      const archivo = DriveApp.getFileById(fileId);
-      const extension = (archivo.getName().match(/\.[^.]+$/) || [''])[0];
-      const fecha = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-      const nuevoNombre = id + '_VERIFICACION_' + fecha + extension;
-      archivo.setName(nuevoNombre);
-      return rutaOriginal.split('/')[0] + '/' + nuevoNombre;
-    } catch (e) {
-      console.warn('No se pudo renombrar el comprobante de verificación (' + fileId + '): ' + e.message);
-      return rutaOriginal;
-    }
-  }
-
   function registrar(token, datos, archivo) {
     const sesion = Permisos.puedeEditar(token, 'verificaciones');
 
@@ -137,8 +58,8 @@ const VerificacionesService = (function () {
     // Truena si no existe, igual que antes.
     const delVehiculo = Relaciones.datosParaNuevo('VERIFICACIONES', folio);
 
-    const fechaVerificacion = fechaDesdeInput_(datos.FECHA_VERIFICACION, 'fecha de verificación');
-    const fechaProxima = fechaDesdeInput_(datos.FECHA_PROXIMA, 'fecha de próxima verificación');
+    const fechaVerificacion = HojaServicio.fechaObligatoria(datos.FECHA_VERIFICACION, 'fecha de verificación');
+    const fechaProxima = HojaServicio.fechaObligatoria(datos.FECHA_PROXIMA, 'fecha de próxima verificación');
     if (fechaProxima <= fechaVerificacion) {
       throw new Error('La próxima verificación debe ser posterior a la fecha de verificación');
     }
@@ -152,10 +73,11 @@ const VerificacionesService = (function () {
       columna: COL_COMPROBANTE,
       archivo: archivo,
     });
-    const rutaComprobante = renombrarComprobante_(imagen.fileId, id, imagen.ruta);
+    // "<ID>_VERIFICACION_<fecha>.ext": urlComprobante() busca el archivo por ese nombre exacto
+    const rutaComprobante = HojaServicio.renombrarRuta(imagen.fileId, id, 'VERIFICACION', imagen.ruta);
 
     try {
-      SheetUtils.insert(ssId(), hoja_().getName(), Object.assign({}, delVehiculo.datos, {
+      SheetUtils.insert(HojaServicio.libro(VERIFICACIONES), HojaServicio.nombreHoja(VERIFICACIONES), Object.assign({}, delVehiculo.datos, {
         'ID': id,
         'FECHA REGISTRO': new Date(),
         'FECHA VERIFICACION': fechaVerificacion,
@@ -179,20 +101,21 @@ const VerificacionesService = (function () {
    */
   function actualizarCampo(token, id, campo, valor) {
     Permisos.puedeEditar(token, 'verificaciones');
-    const nombreHoja = hoja_().getName();
-    const actual = SheetUtils.findById(ssId(), nombreHoja, id, 'ID');
+    const libro = HojaServicio.libro(VERIFICACIONES);
+    const nombreHoja = HojaServicio.nombreHoja(VERIFICACIONES);
+    const actual = SheetUtils.findById(libro, nombreHoja, id, 'ID');
     if (!actual) throw new Error('No se encontró la verificación ' + id);
 
     const cambios = {};
     if (campo === 'FOLIO') {
       const folio = String(valor || '').trim();
       if (!folio) throw new Error('El folio del vehículo es obligatorio');
-      const vehiculo = SheetUtils.findById(ssId(), 'VEHICULOS', folio, 'FOLIO');
+      const vehiculo = SheetUtils.findById(libro, 'VEHICULOS', folio, 'FOLIO');
       if (!vehiculo) throw new Error('No existe un vehículo con folio ' + folio);
       cambios['FOLIO VEHICULO'] = folio;
       cambios['PLACA'] = vehiculo.data['PLACA'] || '';
     } else if (campo === 'FECHA_VERIFICACION' || campo === 'FECHA_PROXIMA') {
-      const fecha = fechaDesdeInput_(valor, campo === 'FECHA_PROXIMA' ? 'fecha de próxima verificación' : 'fecha de verificación');
+      const fecha = HojaServicio.fechaObligatoria(valor, campo === 'FECHA_PROXIMA' ? 'fecha de próxima verificación' : 'fecha de verificación');
       const columna = campo === 'FECHA_PROXIMA' ? 'FECHA PROXIMA VERIFICACION' : 'FECHA VERIFICACION';
       const fila = desdeOriginal_(Object.assign({}, actual.data, { [columna]: fecha }));
       if (fila.FECHA_VERIFICACION && fila.FECHA_PROXIMA && fila.FECHA_PROXIMA <= fila.FECHA_VERIFICACION) {
@@ -203,27 +126,16 @@ const VerificacionesService = (function () {
       throw new Error('El campo "' + campo + '" no se puede editar');
     }
 
-    return desdeOriginal_(SheetUtils.update(ssId(), nombreHoja, id, cambios, 'ID'));
+    return desdeOriginal_(SheetUtils.update(libro, nombreHoja, id, cambios, 'ID'));
   }
 
-  /**
-   * Borra varias verificaciones — solo ADMIN. Los comprobantes NO se borran de Drive
-   * (quedan como respaldo; AppSheet tampoco los borra).
-   */
-  function eliminar(token, ids) {
-    Permisos.puedeEditar(token, 'verificaciones');
-    if (!Array.isArray(ids) || !ids.length) throw new Error('No se indicaron registros a eliminar');
-    const borradas = SheetUtils.removeMany(ssId(), hoja_().getName(), ids, 'ID');
-    return { eliminadas: borradas };
-  }
+  /** Carpetas donde puede estar un comprobante: la de escritura y la de lectura */
+  const carpetas_ = () => [Config.DRIVE_FOLDERS.VERIFICACIONES(), Config.DRIVE_FOLDERS.VERIFICACIONES_LECTURA()];
 
   /** URL de Drive del comprobante: busca en la carpeta de escritura y luego en la de lectura. */
   function urlComprobante(token, ruta) {
     Permisos.puedeLeer(token, 'verificaciones');
-    const url = DriveUtils.urlDeRuta(ruta, [
-      Config.DRIVE_FOLDERS.VERIFICACIONES(),
-      Config.DRIVE_FOLDERS.VERIFICACIONES_LECTURA(),
-    ]);
+    const url = DriveUtils.urlDeRuta(ruta, carpetas_());
     if (!url) throw new Error('No se encontró el archivo del comprobante en Drive');
     return url;
   }
@@ -231,13 +143,23 @@ const VerificacionesService = (function () {
   /** Imagen del comprobante para el panel de detalle ({url, mimeType, base64|null}). */
   function previsualizarComprobante(token, ruta) {
     Permisos.puedeLeer(token, 'verificaciones');
-    const vista = DriveUtils.previsualizarRuta(ruta, [
-      Config.DRIVE_FOLDERS.VERIFICACIONES(),
-      Config.DRIVE_FOLDERS.VERIFICACIONES_LECTURA(),
-    ]);
+    const vista = DriveUtils.previsualizarRuta(ruta, carpetas_());
     if (!vista) throw new Error('No se encontró el archivo del comprobante en Drive');
     return vista;
   }
 
-  return { listar, listarPorFolio, buscarPorId, completo, registrar, actualizarCampo, eliminar, urlComprobante, previsualizarComprobante };
+  return {
+    listar: (token) => HojaServicio.listar(VERIFICACIONES, token),
+    /** Verificaciones de un solo vehículo (ficha de Vehículos) */
+    listarPorFolio: (token, folio) => HojaServicio.listarPor(VERIFICACIONES, token, 'FOLIO', folio),
+    /** Registro completo (todas las columnas) por ID -- "Ver completo" desde la ficha de Vehículos */
+    buscarPorId: (token, id) => HojaServicio.buscarPorId(VERIFICACIONES, token, id),
+    /** Todas las columnas de TODAS las verificaciones (para exportar completo) */
+    completo: (token) => HojaServicio.completo(VERIFICACIONES, token),
+    registrar, actualizarCampo,
+    /** Borra varias — solo ADMIN. Los comprobantes NO se borran de Drive (quedan de respaldo,
+     * AppSheet tampoco los borra). */
+    eliminar: (token, ids) => HojaServicio.eliminar(VERIFICACIONES, token, ids),
+    urlComprobante, previsualizarComprobante,
+  };
 })();

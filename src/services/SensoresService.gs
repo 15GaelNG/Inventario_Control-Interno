@@ -46,25 +46,10 @@ const SensoresService = (function () {
     return Config.SPREADSHEET_IDS.VEHICULOS();
   }
 
-  function hoja_() {
-    return SheetUtils.getSheetByColumns(ssId(), COLUMNAS_CLAVE);
-  }
-
-  /** Igual que en VerificacionesService: fechas de la hoja → texto ISO para el cliente */
-  function fechaISO_(valor) {
-    if (!valor) return '';
-    if (valor instanceof Date) return isNaN(valor.getTime()) ? '' : valor.toISOString();
-    const m = String(valor).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
-    if (!m) return '';
-    const f = new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0));
-    return isNaN(f.getTime()) ? '' : f.toISOString();
-  }
-
-  /** "yyyy-MM-dd" → Date a medianoche local (new Date('yyyy-MM-dd') se iría al día anterior) */
-  function fechaDesdeInput_(texto, nombreCampo) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(texto || ''))) throw new Error('Falta o es inválida la ' + nombreCampo);
-    return Utilities.parseDate(texto, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-  }
+  /** Nombre real de la pestaña (se ubica por su huella de columnas) */
+  const nombreHoja_ = () => HojaServicio.nombreHoja(SENSORES);
+  const fechaISO_ = (valor) => HojaServicio.fechaISO(valor);
+  const fechaDesdeInput_ = (texto, nombreCampo) => HojaServicio.fechaObligatoria(texto, nombreCampo);
 
   function numeroOpcional_(valor, nombreCampo) {
     if (valor === '' || valor === null || valor === undefined) return '';
@@ -127,41 +112,18 @@ const SensoresService = (function () {
     return COMBUSTIBLES_POR_TIPO[enMayusculas_(tipoVehiculo)] || COMBUSTIBLES;
   }
 
-  function listar(token) {
-    Permisos.puedeLeer(token, 'instalacion-sensores');
-    // Guardado mientras la hoja no cambie (CacheHojas): el permiso se revisa antes, siempre
-    return CacheHojas.recordar('sens_lista', [[ssId(), 'INSTALACION DE SENSORES']], () => {
-      return SheetUtils.getAll(ssId(), hoja_().getName())
-        .filter((r) => r['ID'])
-        .map(desdeOriginal_)
-        .sort((a, b) => (b.FECHA_INSTALACION || '').localeCompare(a.FECHA_INSTALACION || ''));
-    });
-  }
-
-  /** Sensores de un solo vehículo (ficha de Vehículos). */
-  function listarPorFolio(token, folio) {
-    if (!folio) return [];
-    return listar(token).filter((s) => s.FOLIO === folio);
-  }
-
-  /** Registro completo (todas las columnas) por ID -- "Ver completo" desde la ficha de Vehículos. */
-  function buscarPorId(token, id) {
-    Permisos.puedeLeer(token, 'instalacion-sensores');
-    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, 'ID');
-    if (!encontrado) return null;
-    const limpio = {};
-    Object.keys(encontrado.data).forEach((k) => {
-      const v = encontrado.data[k];
-      limpio[k] = v instanceof Date ? v.toISOString() : v;
-    });
-    return limpio;
-  }
-
-  /** Todas las columnas de TODOS los sensores (para exportar completo). */
-  function completo(token) {
-    Permisos.puedeLeer(token, 'instalacion-sensores');
-    return SheetUtils.getAll(ssId(), hoja_().getName());
-  }
+  /** La hoja, para HojaServicio */
+  const SENSORES = {
+    modulo: 'instalacion-sensores',
+    nombre: 'la instalación',
+    libro: ssId,
+    hoja: TABLA,
+    huella: COLUMNAS_CLAVE,
+    fila: desdeOriginal_,
+    orden: { campo: 'FECHA_INSTALACION', desc: true },
+    // El sensor deja su vehículo (VEHICULOS.SERIE SENSOR / SENSOR, ver alVehiculo_)
+    despuesDeEliminar: (registros) => registros.forEach((r) => alVehiculo_(r, null)),
+  };
 
   /**
    * Datos que el formulario llena solos al escribir un folio: lo copiado del vehículo,
@@ -174,7 +136,7 @@ const SensoresService = (function () {
     if (!limpio) return null;
     const { columnas, vehiculo } = datosDeVehiculo_(limpio);
 
-    const yaInstalado = SheetUtils.getAll(ssId(), hoja_().getName())
+    const yaInstalado = SheetUtils.getAll(ssId(), nombreHoja_())
       .filter((r) => enMayusculas_(r['FOLIO']) === enMayusculas_(limpio) && enMayusculas_(r['ESTATUS SENSOR']) === 'ACTIVO')
       .map((r) => r['SERIE SENSOR']);
 
@@ -214,26 +176,6 @@ const SensoresService = (function () {
    *                          RENDIMIENTO?, RALENTI?, COMENTARIOS? }
    * @param {{base64: string, mimeType: string}} archivo  responsiva en PDF
    */
-  /** Renombra en Drive el archivo recién subido a "<ID>_RESPONSIVA_SENSOR_<fecha>.ext" (conserva
-   *  la extensión que ya trae) y regresa la ruta (relativa, AppSheet) ya actualizada con ese
-   *  nombre -- urlResponsiva() busca el archivo por ese nombre exacto dentro de la carpeta, así
-   *  que la ruta guardada en la hoja debe coincidir con el nombre real. Si falla, regresa la
-   *  ruta original sin tocar nada (no bloquea el alta). */
-  function renombrarResponsiva_(fileId, id, rutaOriginal) {
-    if (!fileId || !id) return rutaOriginal;
-    try {
-      const archivo = DriveApp.getFileById(fileId);
-      const extension = (archivo.getName().match(/\.[^.]+$/) || [''])[0];
-      const fecha = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-      const nuevoNombre = id + '_RESPONSIVA_SENSOR_' + fecha + extension;
-      archivo.setName(nuevoNombre);
-      return rutaOriginal.split('/')[0] + '/' + nuevoNombre;
-    } catch (e) {
-      console.warn('No se pudo renombrar la responsiva del sensor (' + fileId + '): ' + e.message);
-      return rutaOriginal;
-    }
-  }
-
   function registrar(token, datos, archivo) {
     Permisos.puedeEditar(token, 'instalacion-sensores');
 
@@ -256,7 +198,7 @@ const SensoresService = (function () {
     if (!archivo || !archivo.base64) throw new Error('Adjunta la responsiva del sensor en PDF');
 
     // La misma serie no puede estar activa en dos vehículos a la vez
-    const duplicado = SheetUtils.getAll(ssId(), hoja_().getName()).find((r) =>
+    const duplicado = SheetUtils.getAll(ssId(), nombreHoja_()).find((r) =>
       enMayusculas_(r['SERIE SENSOR']) === serieSensor && enMayusculas_(r['ESTATUS SENSOR']) === 'ACTIVO');
     if (duplicado && estatus === 'ACTIVO') {
       throw new Error('La serie ' + serieSensor + ' ya está instalada y activa en el folio ' + duplicado['FOLIO']);
@@ -272,11 +214,12 @@ const SensoresService = (function () {
       permitidos: ['application/pdf'],
       etiqueta: 'la responsiva',
     });
-    const rutaResponsiva = renombrarResponsiva_(guardado.fileId, id, guardado.ruta);
+    // "<ID>_RESPONSIVA_SENSOR_<fecha>.ext": urlResponsiva() busca el archivo por ese nombre exacto
+    const rutaResponsiva = HojaServicio.renombrarRuta(guardado.fileId, id, 'RESPONSIVA_SENSOR', guardado.ruta);
 
     let nueva;
     try {
-      nueva = SheetUtils.insert(ssId(), hoja_().getName(), Object.assign({}, columnas, {
+      nueva = SheetUtils.insert(ssId(), nombreHoja_(), Object.assign({}, columnas, {
         'ID': id,
         'SERIE SENSOR': serieSensor,
         [COL_RESPONSIVA]: rutaResponsiva,
@@ -302,7 +245,7 @@ const SensoresService = (function () {
    */
   function actualizarCampo(token, id, campo, valor) {
     Permisos.puedeEditar(token, 'instalacion-sensores');
-    const nombreHoja = hoja_().getName();
+    const nombreHoja = nombreHoja_();
     const actual = SheetUtils.findById(ssId(), nombreHoja, id, 'ID');
     if (!actual) throw new Error('No se encontró la instalación ' + id);
 
@@ -356,17 +299,6 @@ const SensoresService = (function () {
     return desdeOriginal_(actualizado);
   }
 
-  /** Borra instalaciones — solo ADMIN. Las responsivas NO se borran de Drive (quedan de respaldo). */
-  function eliminar(token, ids) {
-    Permisos.puedeEditar(token, 'instalacion-sensores');
-    if (!Array.isArray(ids) || !ids.length) throw new Error('No se indicaron registros a eliminar');
-    const nombreHoja = hoja_().getName();
-    const borrar = ids.map((id) => SheetUtils.findById(ssId(), nombreHoja, id, 'ID')).filter(Boolean);
-    const eliminadas = SheetUtils.removeMany(ssId(), nombreHoja, ids, 'ID');
-    borrar.forEach((f) => alVehiculo_(f.data, null));
-    return { eliminadas: eliminadas };
-  }
-
   function urlResponsiva(token, ruta) {
     Permisos.puedeLeer(token, 'instalacion-sensores');
     const url = DriveUtils.urlDeRuta(ruta, [Config.DRIVE_FOLDERS.SENSORES()]);
@@ -403,7 +335,7 @@ const SensoresService = (function () {
    */
   function resumenGeotab(token, id, dias) {
     Permisos.puedeLeer(token, 'instalacion-sensores');
-    const actual = SheetUtils.findById(ssId(), hoja_().getName(), id, 'ID');
+    const actual = SheetUtils.findById(ssId(), nombreHoja_(), id, 'ID');
     if (!actual) throw new Error('No se encontró la instalación ' + id);
     const serie = limpiar_(actual.data['SERIE SENSOR']);
     if (!serie) throw new Error('Esta instalación no tiene serie de sensor');
@@ -411,7 +343,17 @@ const SensoresService = (function () {
   }
 
   return {
-    listar, listarPorFolio, buscarPorId, completo, datosParaFormulario, registrar, actualizarCampo, eliminar, urlResponsiva,
+    listar: (token) => HojaServicio.listar(SENSORES, token),
+    /** Sensores de un solo vehículo (ficha de Vehículos) */
+    listarPorFolio: (token, folio) => HojaServicio.listarPor(SENSORES, token, 'FOLIO', folio),
+    /** Registro completo (todas las columnas) por ID -- "Ver completo" desde la ficha de Vehículos */
+    buscarPorId: (token, id) => HojaServicio.buscarPorId(SENSORES, token, id),
+    /** Todas las columnas de TODOS los sensores (para exportar completo) */
+    completo: (token) => HojaServicio.completo(SENSORES, token),
+    datosParaFormulario, registrar, actualizarCampo,
+    /** Borra instalaciones — solo ADMIN. Las responsivas NO se borran de Drive (quedan de respaldo). */
+    eliminar: (token, ids) => HojaServicio.eliminar(SENSORES, token, ids),
+    urlResponsiva,
     geotabDisponible, estadoEnVivo, resumenGeotab,
   };
 })();

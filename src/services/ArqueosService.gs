@@ -52,12 +52,6 @@ const ArqueosService = (function () {
     return SheetUtils.getSheet(ssId(), NOMBRE_HOJA);
   }
 
-  function fechaISO_(valor) {
-    if (!valor) return '';
-    const f = valor instanceof Date ? valor : new Date(valor);
-    return isNaN(f.getTime()) ? '' : f.toISOString();
-  }
-
   function num_(valor) {
     const n = Number(valor);
     return isNaN(n) ? 0 : n;
@@ -311,178 +305,85 @@ const ArqueosService = (function () {
     return generarIdArqueo_(hoja_(), idCch);
   }
 
-  const COLUMNAS_RESUMEN = [
-    'ID ARQUEO', 'ID CCH', 'RESPONSABLE', 'TIPO DE ARQUEO', 'FECHA INICIO',
-    'TOTAL GENERAL', 'DIFERENCIA', 'CALIFICACION_AUDITORIA_FINAL', 'ESTADO PDF', 'FORMATO ARQUEO', 'EVIDENCIAS',
-  ];
-
-  /** Catálogo ligero para la tabla (10 columnas, no las 79 completas). */
-  function listarResumen(token) {
-    Permisos.puedeLeer(token, 'arqueos');
-    // Guardado mientras la hoja no cambie (CacheHojas): el permiso se revisa antes, siempre
-    return CacheHojas.recordar('arq_resumen', [[ssId(), NOMBRE_HOJA]], () => {
-      const sheet = hoja_();
-      const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
-
-      const resultado = [];
-      for (let i = 0; i < filas; i++) {
-        if (!datos['ID ARQUEO'][i]) continue;
-        resultado.push({
-          ID: datos['ID ARQUEO'][i],
-          ID_CCH: datos['ID CCH'][i] || '',
-          RESPONSABLE: datos['RESPONSABLE'][i] || '',
-          TIPO_ARQUEO: datos['TIPO DE ARQUEO'][i] || '',
-          FECHA_INICIO: fechaISO_(datos['FECHA INICIO'][i]),
-          TOTAL_GENERAL: datos['TOTAL GENERAL'][i] || '',
-          DIFERENCIA: datos['DIFERENCIA'][i] || '',
-          CALIFICACION: datos['CALIFICACION_AUDITORIA_FINAL'][i] || '',
-          ESTADO_PDF: datos['ESTADO PDF'][i] || '',
-          FORMATO_ARQUEO: datos['FORMATO ARQUEO'][i] || '',
-          EVIDENCIAS: datos['EVIDENCIAS'][i] || '',
-        });
-      }
-      return resultado.sort((a, b) => new Date(b.FECHA_INICIO) - new Date(a.FECHA_INICIO));
-    });
-  }
-
-  /** Todas las columnas de TODOS los arqueos (para "Vista": mostrar/exportar cualquier columna). */
-  function completo(token) {
-    Permisos.puedeLeer(token, 'arqueos');
-    return SheetUtils.getAll(ssId(), NOMBRE_HOJA);
-  }
-
-  /** Arqueos de una sola caja chica (ficha de Caja Chica). */
-  function listarPorIdCch(token, idCch) {
-    if (!idCch) return [];
-    return listarResumen(token).filter((a) => a.ID_CCH === idCch);
-  }
-
-  /** Registro completo por ID ARQUEO (para el modal de detalle/editar). */
-  function buscarPorId(token, id) {
-    Permisos.puedeLeer(token, 'arqueos');
-    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, ID_COLUMN);
-    if (!encontrado) return null;
-    const limpio = {};
-    Object.keys(encontrado.data).forEach((k) => {
-      const v = encontrado.data[k];
-      limpio[k] = v instanceof Date ? v.toISOString() : v;
-    });
-    return limpio;
-  }
-
-  /** Da de alta un arqueo. Ver el bloque de comentarios de arriba del
-   * archivo: ID ARQUEO, los datos de la Caja Chica, Quién registró, las 3
-   * fechas y todos los totales/calificación se calculan aquí — no se
-   * confía en lo que mande el cliente para ninguno de esos. */
-  function crear(token, datos) {
-    const sesion = Permisos.puedeEditar(token, 'arqueos');
-    const idCch = datos['ID CCH'];
-    if (!idCch) throw new Error('Selecciona la caja chica.');
-
-    let filaParaPdf;
-    const archivosFirmaId = {};
-    let archivoEvidenciaId = null;
-    const lock = LockService.getScriptLock();
-    lock.waitLock(30000);
-    try {
-      const caja = CajasChicasService.buscarPorId(token, idCch);
+  /**
+   * La hoja, para HojaServicio. Ver el bloque de comentarios de arriba del archivo: ID ARQUEO,
+   * los datos de la Caja Chica, Quién registró, las 3 fechas y todos los totales/calificación
+   * se calculan aquí — no se confía en lo que mande el cliente para ninguno de esos.
+   */
+  const ARQUEOS = {
+    modulo: 'arqueos',
+    nombre: 'el arqueo',
+    libro: ssId,
+    hoja: NOMBRE_HOJA,
+    id: ID_COLUMN,
+    // Catálogo ligero para la tabla (11 columnas, no las 79 completas)
+    columnas: [
+      'ID ARQUEO', 'ID CCH', 'RESPONSABLE', 'TIPO DE ARQUEO', 'FECHA INICIO',
+      'TOTAL GENERAL', 'DIFERENCIA', 'CALIFICACION_AUDITORIA_FINAL', 'ESTADO PDF', 'FORMATO ARQUEO', 'EVIDENCIAS',
+    ],
+    fila: (r) => ({
+      ID: r['ID ARQUEO'],
+      ID_CCH: r['ID CCH'] || '',
+      RESPONSABLE: r['RESPONSABLE'] || '',
+      TIPO_ARQUEO: r['TIPO DE ARQUEO'] || '',
+      FECHA_INICIO: HojaServicio.fechaISO(r['FECHA INICIO']),
+      TOTAL_GENERAL: r['TOTAL GENERAL'] || '',
+      DIFERENCIA: r['DIFERENCIA'] || '',
+      CALIFICACION: r['CALIFICACION_AUDITORIA_FINAL'] || '',
+      ESTADO_PDF: r['ESTADO PDF'] || '',
+      FORMATO_ARQUEO: r['FORMATO ARQUEO'] || '',
+      EVIDENCIAS: r['EVIDENCIAS'] || '',
+    }),
+    orden: { campo: 'FECHA_INICIO', desc: true },
+    // Las 3 firmas ("<ID ARQUEO>_<quién firma>_<fecha>") y la evidencia, una vez que se sabe el ID
+    archivos: {
+      'FIRMA RESPONSABLE': 'RESPONSABLE', 'FIRMA ESPECIALISTA': 'ESPECIALISTA', 'FIRMA ASISTENTE': 'ASISTENTE',
+      'EVIDENCIAS': 'EVIDENCIA',
+    },
+    obligatorios: { 'ID CCH': 'Selecciona la caja chica.' },
+    // El ID ARQUEO es un consecutivo por caja y año: se calcula bajo candado
+    candadoAlCrear: true,
+    alCrear: (fila, ctx) => {
+      const idCch = fila['ID CCH'];
+      const caja = CajasChicasService.buscarPorId(ctx.token, idCch);
       if (!caja) throw new Error('No se encontró la caja chica con ID CCH=' + idCch);
-
-      const sheet = hoja_();
-      const fila = Object.assign({}, datos);
-      // _FILE_ID no son columnas reales, solo viajan para poder renombrar la
-      // firma/evidencia una vez que se sabe el ID ARQUEO real (ver renombrarArchivo_).
-      COLUMNAS_FIRMA.forEach((col) => {
-        const clave = col + '_FILE_ID';
-        if (fila[clave]) { archivosFirmaId[col] = fila[clave]; delete fila[clave]; }
-      });
-      if (fila['EVIDENCIAS_FILE_ID']) { archivoEvidenciaId = fila['EVIDENCIAS_FILE_ID']; delete fila['EVIDENCIAS_FILE_ID']; }
       // La llave foránea de verdad. 'ID CCH' se queda porque es dato de negocio (el
-      // consecutivo 1,2,3 que usa la gente) y porque AppSheet lo usa, pero el vínculo es
-      // el ID: 'caja' ya venía completa y su ID se estaba tirando.
+      // consecutivo 1,2,3 que usa la gente) y porque AppSheet lo usa, pero el vínculo es el ID.
       const idCaja = caja['ID'];
       if (!idCaja) {
         throw new Error('La caja chica con ID CCH=' + idCch + ' no tiene ID. Corre el ' +
           'pipeline de IDs sobre este libro antes de registrar arqueos.');
       }
-      fila['ID CAJA CHICA'] = idCaja;
-      fila['ID CCH'] = idCch;
-      fila['ID ARQUEO'] = generarIdArqueo_(sheet, idCch);
-
-      fila['RESPONSABLE'] = caja['RESPONSABLE DE CAJA CHICA'] || '';
-      fila['PUESTO'] = caja['PUESTO DE RESPONSABLE'] || '';
-      fila['AREA / DEPARTAMENTO'] = caja['DEPARTAMENTO'] || '';
-      fila['RAZON SOCIAL'] = caja['EMPRESA ORIGEN'] || '';
-      fila['METODO REEMBOLSO'] = caja['METODO DE REEMBOLSO'] || '';
-      fila['MONTO CAJA'] = caja['MONTO ACTUAL'] || 0;
-
-      fila['QUIEN REGISTRO'] = sesion.nombre;
       const ahora = new Date();
-      fila['FECHA DEL ULTIMO ARQUEO'] = ahora;
-      fila['FECHA INICIO'] = ahora;
-      fila['FECHA FIN'] = ahora;
-
-      Object.assign(fila, calcularCampos_(datos, fila['MONTO CAJA']));
-
-      SheetUtils.insert(ssId(), sheet.getName(), fila);
-      filaParaPdf = fila;
-    } finally {
-      lock.releaseLock();
-    }
-    COLUMNAS_FIRMA.forEach((col) => renombrarFirma_(archivosFirmaId[col], filaParaPdf['ID ARQUEO'], col));
-    renombrarArchivo_(archivoEvidenciaId, filaParaPdf['ID ARQUEO'], 'EVIDENCIA');
-    // El PDF se genera FUERA del candado (tarda unos segundos — copiar la
-    // plantilla, llenarla, exportar) para no alargarle la espera a otra
-    // alta de arqueo que esté esperando el mismo candado.
-    actualizarPdfArqueo_(filaParaPdf);
-    return { ID: filaParaPdf['ID ARQUEO'] };
-  }
-
-  /** Actualiza un arqueo. Igual que en crear(): los campos "formulados" no
-   * se dejan editar (se descartan de `cambios` si vinieran) y los totales/
-   * calificación se recalculan siempre, combinando lo ya guardado con lo
-   * nuevo. */
-  function actualizar(token, id, cambios) {
-    Permisos.puedeEditar(token, 'arqueos');
-    const registro = SheetUtils.findById(ssId(), hoja_().getName(), id, ID_COLUMN);
-    if (!registro) throw new Error('No se encontró el arqueo con ID ARQUEO=' + id);
-
-    const datos = Object.assign({}, cambios);
-    // _FILE_ID no son columnas reales, solo viajan para poder renombrar la
-    // firma/evidencia (el ID ARQUEO aquí ya se conoce, es `id`).
-    const archivosFirmaId = {};
-    COLUMNAS_FIRMA.forEach((col) => {
-      const clave = col + '_FILE_ID';
-      if (datos[clave]) { archivosFirmaId[col] = datos[clave]; delete datos[clave]; }
-    });
-    const archivoEvidenciaId = datos['EVIDENCIAS_FILE_ID'];
-    delete datos['EVIDENCIAS_FILE_ID'];
-    [
-      'ID CCH', 'ID ARQUEO', 'RESPONSABLE', 'PUESTO', 'AREA / DEPARTAMENTO', 'RAZON SOCIAL',
+      Object.assign(fila, {
+        'ID CAJA CHICA': idCaja,
+        'ID ARQUEO': generarIdArqueo_(ctx.hoja, idCch),
+        'RESPONSABLE': caja['RESPONSABLE DE CAJA CHICA'] || '',
+        'PUESTO': caja['PUESTO DE RESPONSABLE'] || '',
+        'AREA / DEPARTAMENTO': caja['DEPARTAMENTO'] || '',
+        'RAZON SOCIAL': caja['EMPRESA ORIGEN'] || '',
+        'METODO REEMBOLSO': caja['METODO DE REEMBOLSO'] || '',
+        'MONTO CAJA': caja['MONTO ACTUAL'] || 0,
+        'QUIEN REGISTRO': ctx.sesion.nombre,
+        'FECHA DEL ULTIMO ARQUEO': ahora,
+        'FECHA INICIO': ahora,
+        'FECHA FIN': ahora,
+      });
+      Object.assign(fila, calcularCampos_(ctx.datos, fila['MONTO CAJA']));
+    },
+    // Los "formulados" no se editan: se recalculan/regeneran, no los manda el cliente
+    noEditables: [
+      'ID CCH', 'RESPONSABLE', 'PUESTO', 'AREA / DEPARTAMENTO', 'RAZON SOCIAL',
       'METODO REEMBOLSO', 'MONTO CAJA', 'QUIEN REGISTRO',
       'FECHA DEL ULTIMO ARQUEO', 'FECHA INICIO', 'FECHA FIN',
-      'FORMATO ARQUEO', 'ESTADO PDF', // se recalculan/regeneran aquí abajo, no los manda el cliente
-    ].forEach((campo) => { delete datos[campo]; });
-
-    const combinado = Object.assign({}, registro.data, datos);
-    Object.assign(datos, calcularCampos_(combinado, registro.data['MONTO CAJA']));
-
-    SheetUtils.update(ssId(), hoja_().getName(), id, datos, ID_COLUMN);
-    COLUMNAS_FIRMA.forEach((col) => renombrarFirma_(archivosFirmaId[col], id, col));
-    renombrarArchivo_(archivoEvidenciaId, id, 'EVIDENCIA');
-
-    // Fila final (para el PDF) = lo que ya estaba + los cambios de esta
-    // edición, con los totales recién recalculados encima.
-    actualizarPdfArqueo_(Object.assign({}, combinado, datos));
-    return { ID: id };
-  }
-
-  function eliminar(token, id) {
-    Permisos.puedeEditar(token, 'arqueos');
-    const ok = SheetUtils.remove(ssId(), hoja_().getName(), id, ID_COLUMN);
-    if (!ok) throw new Error('No se encontró el arqueo con ID ARQUEO=' + id);
-    return { ID: id };
-  }
+      'FORMATO ARQUEO', 'ESTADO PDF',
+    ],
+    // Los totales y la calificación se recalculan siempre, con lo guardado + lo nuevo
+    alActualizar: (cambios, ctx) => calcularCampos_(Object.assign({}, ctx.actual, cambios), ctx.actual['MONTO CAJA']),
+    // El PDF se genera FUERA del candado (tarda unos segundos — copiar la plantilla, llenarla,
+    // exportar) para no alargarle la espera a otra alta de arqueo que espere el mismo candado
+    despues: (registro) => actualizarPdfArqueo_(registro),
+  };
 
   // Carpeta de Drive donde se guarda FIRMA EXTERNA -- Evidencias, las 3 firmas y
   // el Formato arqueo (generado solo) van cada uno en su propia carpeta aparte,
@@ -498,7 +399,6 @@ const ArqueosService = (function () {
   // por año (ARQUEOS/2026/, ARQUEOS/2027/...) -- carpetaDelAnioActual_ busca o crea
   // la subcarpeta del año en curso cada vez, para no tener que tocar nada cada enero.
   const CARPETA_FORMATO_RAIZ_ID = '1u4nZ84rxkMvJDjZNUFHFnNiNqDo0Yqwo';
-  const TAMANO_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
   /** Subcarpeta del año en curso dentro de `raizId` (la crea si no existe todavía). */
   function carpetaDelAnioActual_(raizId) {
@@ -507,80 +407,10 @@ const ArqueosService = (function () {
     const existentes = raiz.getFoldersByName(anio);
     return existentes.hasNext() ? existentes.next() : raiz.createFolder(anio);
   }
-  // Las 3 columnas de firma -- crear()/actualizar() las usan para renombrar cada
-  // imagen a "<ID ARQUEO>_<quién firma>_<fecha>" una vez que saben el ID real.
-  const COLUMNAS_FIRMA = ['FIRMA RESPONSABLE', 'FIRMA ESPECIALISTA', 'FIRMA ASISTENTE'];
-
-  function subirArchivoEn_(carpetaId, etiquetaCarpeta, nombreArchivo, mimeType, base64Data) {
-    if (!base64Data) throw new Error('No se recibió ningún archivo.');
-
-    const bytes = Utilities.base64Decode(base64Data);
-    if (bytes.length > TAMANO_MAX_BYTES) {
-      throw new Error('El archivo pesa más de 10 MB — súbelo más ligero.');
-    }
-
-    const blob = Utilities.newBlob(bytes, mimeType || 'application/octet-stream', nombreArchivo || 'archivo');
-    const cuenta = () => Session.getEffectiveUser().getEmail();
-    let carpeta, archivo;
-    try {
-      carpeta = DriveApp.getFolderById(carpetaId);
-    } catch (e) {
-      throw new Error('No se pudo abrir la carpeta de ' + etiquetaCarpeta + ' de Arqueos en Drive. La cuenta con la que ' +
-        'corre la app ahora mismo (' + cuenta() + ') no tiene acceso a esa carpeta.');
-    }
-    try {
-      archivo = carpeta.createFile(blob);
-    } catch (e) {
-      throw new Error('Se pudo abrir la carpeta de ' + etiquetaCarpeta + ' de Arqueos, pero no crear el archivo ahí. La cuenta ' +
-        cuenta() + ' necesita permiso de editor (no solo lector) en esa carpeta. Error original: ' + e.message);
-    }
-    // Mejor esfuerzo, no bloquea el registro: la carpeta ya tiene acceso
-    // general configurado, así que casi siempre hereda el compartir sola.
-    // Si una política de Workspace bloquea el compartir explícito, no vale
-    // la pena tronar todo el registro por eso.
-    if (!DriveUtils.compartirLoMasAmplioPosible(archivo)) {
-      console.warn('No se pudo compartir explícitamente el archivo de Arqueos (cuenta ' + cuenta() +
-        '); se deja como quedó por default de la carpeta. Archivo: ' + archivo.getUrl());
-    }
-
-    return { url: archivo.getUrl(), id: archivo.getId(), nombre: nombreArchivo };
-  }
-
-  /** Evidencias y Formato arqueo. */
-  function subirArchivo(token, nombreArchivo, mimeType, base64Data) {
+  /** Sube un archivo a una de las carpetas de Arqueos (`de` completa los mensajes de error) */
+  function subirEn_(token, carpetaId, de, nombreArchivo, mimeType, base64Data) {
     Permisos.puedeEditar(token, 'arqueos');
-    return subirArchivoEn_(CARPETA_ARCHIVOS_ID, 'archivos', nombreArchivo, mimeType, base64Data);
-  }
-
-  /** Las 3 firmas (RESPONSABLE/ESPECIALISTA/ASISTENTE) -- carpeta aparte. */
-  function subirFirma(token, nombreArchivo, mimeType, base64Data) {
-    Permisos.puedeEditar(token, 'arqueos');
-    return subirArchivoEn_(CARPETA_FIRMAS_ID, 'firmas', nombreArchivo, mimeType, base64Data);
-  }
-
-  /** Evidencias (el PDF combinado de fotos) -- carpeta aparte. */
-  function subirEvidencia(token, nombreArchivo, mimeType, base64Data) {
-    Permisos.puedeEditar(token, 'arqueos');
-    return subirArchivoEn_(CARPETA_EVIDENCIAS_ID, 'evidencias', nombreArchivo, mimeType, base64Data);
-  }
-
-  /** Renombra en Drive un archivo recién subido a "<ID ARQUEO>_<etiqueta>_<fecha>.ext"
-   *  (conserva la extensión que ya traía). No bloquea el alta/edición si falla -- el
-   *  archivo ya quedó guardado y accesible, solo se queda con el nombre que traía. */
-  function renombrarArchivo_(fileId, idArqueo, etiqueta) {
-    if (!fileId || !idArqueo) return;
-    try {
-      const archivo = DriveApp.getFileById(fileId);
-      const extension = (archivo.getName().match(/\.[^.]+$/) || [''])[0];
-      const fecha = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-      archivo.setName(idArqueo + '_' + etiqueta + '_' + fecha + extension);
-    } catch (e) {
-      console.warn('No se pudo renombrar el archivo de Arqueo (' + fileId + '): ' + e.message);
-    }
-  }
-  /** "Quién firma" sale del nombre de columna (FIRMA RESPONSABLE -> RESPONSABLE, etc.). */
-  function renombrarFirma_(fileId, idArqueo, columna) {
-    renombrarArchivo_(fileId, idArqueo, String(columna || '').replace(/^FIRMA\s+/i, '') || 'FIRMA');
+    return HojaServicio.subirArchivo(carpetaId, 'de ' + de + ' de Arqueos', nombreArchivo, mimeType, base64Data);
   }
 
   // ---------- Generación automática del PDF (plantilla F-CI03-009) ----------
@@ -808,7 +638,23 @@ const ArqueosService = (function () {
   }
 
   return {
-    AUDIT_ITEMS, listarResumen, completo, buscarPorId, listarPorIdCch, previsualizarIdArqueo,
-    crear, actualizar, eliminar, subirArchivo, subirFirma, subirEvidencia,
+    AUDIT_ITEMS,
+    listarResumen: (token) => HojaServicio.listar(ARQUEOS, token),
+    /** Todas las columnas de TODOS los arqueos (para "Vista": mostrar/exportar cualquier columna) */
+    completo: (token) => HojaServicio.completo(ARQUEOS, token),
+    /** Registro completo por ID ARQUEO (para el modal de detalle/editar) */
+    buscarPorId: (token, id) => HojaServicio.buscarPorId(ARQUEOS, token, id),
+    /** Arqueos de una sola caja chica (ficha de Caja Chica) */
+    listarPorIdCch: (token, idCch) => HojaServicio.listarPor(ARQUEOS, token, 'ID_CCH', idCch),
+    previsualizarIdArqueo,
+    crear: (token, datos) => HojaServicio.crear(ARQUEOS, token, datos),
+    actualizar: (token, id, cambios) => HojaServicio.actualizar(ARQUEOS, token, id, cambios),
+    eliminar: (token, id) => HojaServicio.eliminar(ARQUEOS, token, id),
+    /** Evidencias y Formato arqueo */
+    subirArchivo: (token, nombre, tipo, base64) => subirEn_(token, CARPETA_ARCHIVOS_ID, 'archivos', nombre, tipo, base64),
+    /** Las 3 firmas (RESPONSABLE/ESPECIALISTA/ASISTENTE) -- carpeta aparte */
+    subirFirma: (token, nombre, tipo, base64) => subirEn_(token, CARPETA_FIRMAS_ID, 'firmas', nombre, tipo, base64),
+    /** Evidencias (el PDF combinado de fotos) -- carpeta aparte */
+    subirEvidencia: (token, nombre, tipo, base64) => subirEn_(token, CARPETA_EVIDENCIAS_ID, 'evidencias', nombre, tipo, base64),
   };
 })();

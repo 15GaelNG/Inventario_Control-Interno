@@ -9,108 +9,32 @@
  */
 
 const TicketsService = (function () {
-  // Nombre real ya confirmado ("TICKETS" — ojo, no confundir con la
-  // pestaña de respaldo "TICKETS 24/04/25") — directo por nombre, no por
-  // firma de columnas (ver mismo comentario en ArqueosService).
-  const NOMBRE_HOJA = 'TICKETS';
-  const ID_COLUMN = 'ID';
+  // Las 10 columnas reales completas, con sus nombres tal cual la hoja (mismo shape que
+  // buscarPorId): el catálogo no es grande, así que el detalle no pide un segundo viaje.
+  const COLUMNAS_LISTA = ['ID', 'TICKET', 'QUIEN ATENDIO', 'FECHA DE REGISTRO', 'FECHA', 'DEPARTAMENTO', 'SOLICITANTE', 'TIPO ATENCION', 'PLACA', 'COMENTARIO'];
 
-  function ssId() {
-    return Config.SPREADSHEET_IDS.VEHICULOS();
-  }
-
-  function hoja_() {
-    return SheetUtils.getSheet(ssId(), NOMBRE_HOJA);
-  }
-
-  function fechaISO_(valor) {
-    if (!valor) return '';
-    const f = valor instanceof Date ? valor : new Date(valor);
-    return isNaN(f.getTime()) ? '' : f.toISOString();
-  }
-
-  // Las 10 columnas reales completas, con sus nombres tal cual la hoja
-  // (mismo shape que buscarPorId) — antes solo se traían 7 para la tabla y
-  // el detalle pedía las otras 3 aparte; el catálogo de Tickets no es tan
-  // grande como el de Vehículos, así que traerlas todas de una vez evita
-  // ese segundo viaje.
-  const COLUMNAS_RESUMEN = ['ID', 'TICKET', 'QUIEN ATENDIO', 'FECHA DE REGISTRO', 'FECHA', 'DEPARTAMENTO', 'SOLICITANTE', 'TIPO ATENCION', 'PLACA', 'COMENTARIO'];
-
-  /** Catálogo con las 10 columnas reales (nombres tal cual la hoja). */
-  function listarResumen(token) {
-    Permisos.puedeLeer(token, 'tickets');
-    // Guardado mientras la hoja no cambie (CacheHojas): el permiso se revisa antes, siempre
-    return CacheHojas.recordar('tick_resumen', [[ssId(), NOMBRE_HOJA]], () => {
-      const sheet = hoja_();
-      const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
-
-      const resultado = [];
-      for (let i = 0; i < filas; i++) {
-        if (!datos['ID'][i]) continue;
-        const fila = {};
-        COLUMNAS_RESUMEN.forEach((clave) => { fila[clave] = datos[clave][i] || ''; });
-        fila['FECHA'] = fechaISO_(datos['FECHA'][i]);
-        fila['FECHA DE REGISTRO'] = fechaISO_(datos['FECHA DE REGISTRO'][i]);
-        resultado.push(fila);
-      }
-      return resultado.sort((a, b) => new Date(b['FECHA']) - new Date(a['FECHA']));
-    });
-  }
-
-  /** Todas las columnas de TODOS los tickets (para "Vista": mostrar/exportar cualquier columna). */
-  function completo(token) {
-    Permisos.puedeLeer(token, 'tickets');
-    return SheetUtils.getAll(ssId(), NOMBRE_HOJA);
-  }
-
-  /** Registro completo por ID (para el modal de detalle/editar). */
-  function buscarPorId(token, id) {
-    Permisos.puedeLeer(token, 'tickets');
-    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, ID_COLUMN);
-    if (!encontrado) return null;
-    const limpio = {};
-    Object.keys(encontrado.data).forEach((k) => {
-      const valor = encontrado.data[k];
-      limpio[k] = valor instanceof Date ? valor.toISOString() : valor;
-    });
-    return limpio;
-  }
-
-  /** Abre un ticket. FECHA DE REGISTRO siempre es "hoy" (no la manda el cliente). */
-  function crear(token, datos) {
-    Permisos.puedeEditar(token, 'tickets');
-    if (!datos['TIPO ATENCION']) throw new Error('El tipo de atención es obligatorio');
-    const fila = Object.assign({}, datos);
-    // El ID lo pone SheetUtils.insert con el formato del sistema (ver docs/ids-asignacion.md)
-    fila['FECHA DE REGISTRO'] = new Date();
-    if (datos['FECHA']) fila['FECHA'] = new Date(datos['FECHA']);
-    SheetUtils.insert(ssId(), hoja_().getName(), fila);
-    return { ID: fila[ID_COLUMN] };
-  }
-
-  function actualizar(token, id, cambios) {
-    Permisos.puedeEditar(token, 'tickets');
-    const datos = Object.assign({}, cambios);
-    if (datos['FECHA']) datos['FECHA'] = new Date(datos['FECHA']);
-    delete datos['FECHA DE REGISTRO']; // no se edita, se fija solo al crear
-    // Regresa el registro ya con el cambio aplicado (no solo el ID): así el
-    // cliente puede refrescar esa fila sola (ej. DataTable.alEditar) sin
-    // tener que recargar todo el historial.
-    const actualizado = SheetUtils.update(ssId(), hoja_().getName(), id, datos, ID_COLUMN);
-    const limpio = {};
-    Object.keys(actualizado).forEach((k) => {
-      const v = actualizado[k];
-      limpio[k] = v instanceof Date ? v.toISOString() : v;
-    });
-    return limpio;
-  }
-
-  function eliminar(token, id) {
-    Permisos.puedeEditar(token, 'tickets');
-    const ok = SheetUtils.remove(ssId(), hoja_().getName(), id, ID_COLUMN);
-    if (!ok) throw new Error('No se encontró el ticket con ID=' + id);
-    return { ID: id };
-  }
+  /** La hoja, para HojaServicio */
+  const TICKETS = {
+    modulo: 'tickets',
+    nombre: 'el ticket',
+    libro: () => Config.SPREADSHEET_IDS.VEHICULOS(),
+    // Ojo: no confundir con la pestaña de respaldo "TICKETS 24/04/25"
+    hoja: 'TICKETS',
+    columnas: COLUMNAS_LISTA,
+    fila: (r) => {
+      const fila = {};
+      COLUMNAS_LISTA.forEach((c) => { fila[c] = r[c] || ''; });
+      fila['FECHA'] = HojaServicio.fechaISO(r['FECHA']);
+      fila['FECHA DE REGISTRO'] = HojaServicio.fechaISO(r['FECHA DE REGISTRO']);
+      return fila;
+    },
+    orden: { campo: 'FECHA', desc: true },
+    fechas: ['FECHA'],
+    obligatorios: { 'TIPO ATENCION': 'El tipo de atención es obligatorio' },
+    // FECHA DE REGISTRO siempre es "hoy": no la manda el cliente ni se edita
+    alCrear: () => ({ 'FECHA DE REGISTRO': new Date() }),
+    noEditables: ['FECHA DE REGISTRO'],
+  };
 
   /**
    * Valores sugeridos para SOLICITANTE — equivalente a la fórmula que ya
@@ -119,8 +43,7 @@ const TicketsService = (function () {
    */
   function listarSolicitantes(token) {
     Permisos.puedeLeer(token, 'tickets');
-    const sheet = hoja_();
-    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, ['SOLICITANTE']);
+    const { filas, datos } = SheetUtils.leerColumnas(HojaServicio.hoja(TICKETS), ['SOLICITANTE']);
     const valores = new Set();
     for (let i = 0; i < filas; i++) {
       const v = datos['SOLICITANTE'][i];
@@ -129,5 +52,15 @@ const TicketsService = (function () {
     return Array.from(valores).sort((a, b) => a.localeCompare(b));
   }
 
-  return { listarResumen, completo, buscarPorId, crear, actualizar, eliminar, listarSolicitantes };
+  return {
+    /** Catálogo con las 10 columnas reales (nombres tal cual la hoja) */
+    listarResumen: (token) => HojaServicio.listar(TICKETS, token),
+    /** Todas las columnas de TODOS los tickets (para "Vista": mostrar/exportar cualquier columna) */
+    completo: (token) => HojaServicio.completo(TICKETS, token),
+    buscarPorId: (token, id) => HojaServicio.buscarPorId(TICKETS, token, id),
+    crear: (token, datos) => HojaServicio.crear(TICKETS, token, datos),
+    actualizar: (token, id, cambios) => HojaServicio.actualizar(TICKETS, token, id, cambios),
+    eliminar: (token, id) => HojaServicio.eliminar(TICKETS, token, id),
+    listarSolicitantes,
+  };
 })();

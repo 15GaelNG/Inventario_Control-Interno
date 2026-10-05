@@ -359,6 +359,31 @@ test('el shell es el de master y Líneas es uno de sus grupos', () => {
   assert.ok([...grupos.matchAll(/^      id: '([^']+)'/gm)].map((m) => m[1]).includes('lineas'));
 });
 
+test('lo que repetían los servicios de una hoja vive en HojaServicio, no en otra copia', () => {
+  // Leer/escribir una hoja con su permiso, caché, fechas y archivos: src/utils/HojaServicio.gs.
+  // Líneas (services/lineas/) todavía tiene su propia capa (LineasDatos) y queda fuera.
+  const dir = path.join(root, 'src/services');
+  const servicios = fs.readdirSync(dir).filter((a) => a.endsWith('.gs'));
+  const PROHIBIDO = [
+    [/function fechaISO_\(/, 'su propio fechaISO_ (HojaServicio.fechaISO)'],
+    [/function fechaDesdeInput_\(/, 'su propio fechaDesdeInput_ (HojaServicio.fechaObligatoria)'],
+    [/function renombrar\w*_\(/, 'su propio renombrar*_ (HojaServicio.renombrarArchivo / renombrarRuta, o `archivos` en la definición)'],
+    [/function subirArchivoEn_\(|Utilities\.base64Decode\(base64Data\)/, 'su propia subida a Drive (HojaServicio.subirArchivo)'],
+    [/SheetUtils\.remove\(/, 'SheetUtils.remove a mano (HojaServicio.eliminar, que además respeta Relaciones)'],
+  ];
+  // ListasService guarda catálogos (no la lista de un módulo) con su propio tiempo de vida
+  const CON_CACHE_PROPIA = ['ListasService.gs'];
+  const problemas = [];
+  servicios.forEach((a) => {
+    const texto = read('src/services/' + a);
+    PROHIBIDO.forEach(([re, que]) => { if (re.test(texto)) problemas.push(a + ': ' + que); });
+    if (/CacheHojas\.recordar\(/.test(texto) && !CON_CACHE_PROPIA.includes(a)) problemas.push(a + ': CacheHojas.recordar a mano (HojaServicio.listar)');
+  });
+  assert.deepEqual(problemas, []);
+  // HojaServicio corre en el servidor: lo carga Apps Script solo, pero sus pruebas tienen que estar en npm test
+  assert.match(read('package.json'), /node tests\/hoja-servicio\.test\.js/);
+});
+
 test('cada vista es una sola entrada (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU) y todo lo que nombra existe', () => {
   const app = read('src/html/js/app.html');
   const index = read('src/html/Index.html');
