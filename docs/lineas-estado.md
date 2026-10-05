@@ -1,6 +1,6 @@
 # Líneas — estado del módulo
 
-Ramas `emmanuel` = `master` · Producción: versión 52 · Última actualización: 2026-10-05
+Ramas `emmanuel` = `master` · Producción: versión 54 · Última actualización: 2026-10-05 (noche)
 
 Qué es hoy el módulo **Líneas** (equipos celulares y líneas telefónicas), dónde vive cada cosa y cómo se trabaja.
 La bitácora anterior de este archivo (§0a…§0ae, hasta el 1-oct) sigue en el historial de git. El diseño de las hojas
@@ -12,9 +12,13 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 - **Líneas Telefónicas:** tabla de equipos y líneas (selección estilo Google Drive), ficha con General, Documentos e
   Historial; Editar en pestañas con Agregar equipo / Agregar línea; TIPO se calcula solo (EQUIPO, EQUIPO + SIM,
   EQUIPO + SIM BASICO, LINEA, LINEA BASICA, BANDA ANCHA, MODEM, CAMARA).
-- **Acciones con nombre:** nueva inspección, nueva responsiva, Reasignar (abre directo la responsiva; el equipo queda en
-  USO), Mandar a resguardo (pide la inspección de lo que viene de una persona), Mandar a cancelación, Subir PDF firmado.
-  Cada acción deja un renglón en el historial con su comentario.
+- **Acciones con nombre:** nueva inspección, nueva responsiva, Reasignar (responsiva y luego inspección, las dos
+  obligatorias; el servidor exige la inspección del día; el equipo queda en USO), Mandar a resguardo (pide la
+  inspección de lo que viene de una persona), Mandar a cancelación, Subir PDF firmado, Regenerar PDF (responsivas del
+  sistema: versión nueva del mismo archivo; pasadas 6 h pide solo las firmas). Cada acción deja un renglón en el
+  historial con su comentario.
+- **Secretos** (PIN, patrones, contraseñas, firmas): los ven ADMIN y el área `LINEAS` de USUARIOS
+  (`TelefoniaService.puedeVerSecretos_`).
 - **Resguardos y cancelaciones:** bandeja de Pau (recibir, entregar a Líneas, vendido, cancelación con carta).
 - **Panorama:** líneas y equipos por estatus, renta por cuenta y adendums, al cierre del mes elegido.
 - **Notificaciones:** campana con adendums por vencer y avisos de seguimiento.
@@ -40,7 +44,9 @@ de arriba (`LINEAS_LECTURA = ESTRUCTURA`, `LINEAS_HOJA_VIEJA_RETIRADA`).
 
 **Drive:** documentos y fotos en la carpeta de cada NUCO dentro de NUCOS (`LINEAS_DRIVE_NUCOS`); lo que no tiene NUCO, en
 la carpeta de la app (`LINEAS_DRIVE_APPSHEET`). **PDF:** plantillas de Google Docs del AppSheet (`LineasPdf.PLANTILLAS`);
-la responsiva se exporta en carta con márgenes en 0, como la tarea del AppSheet.
+la responsiva conserva los márgenes de su plantilla y su interlineado se ajusta para salir igual que la impresión del
+AppSheet (HTML con Chromium), en 2 hojas (`LineasPdf.COMO_APPSHEET`). El patrón se puede dibujar en el servidor
+(`LineasPatronPng.gs`).
 
 **Configuración:** bloque por scriptId en `src/config/Entornos.gs` (producción `1NbOczw…`, DEV de Emmanuel `1rpvvay…`).
 
