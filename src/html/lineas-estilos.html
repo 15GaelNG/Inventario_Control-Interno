@@ -457,6 +457,8 @@
   .ln-af-ancho .ln-firma-caja canvas { min-height: 150px; }
   .ln-af-extra { background: var(--color-bg); }
   .ln-af-calculado-texto { font-size: 13px; font-weight: 500; color: var(--color-text-muted); }
+  /* Datos fijos de Editar (folio, NUCO, tipo, fecha de alta), 4-oct: como los datos del registro en la inspección */
+  .ln-af-calculado.ln-af-fijo, :root[data-theme="dark"] .ln-af-calculado.ln-af-fijo { font-size: 14px; font-weight: 600; color: var(--color-text); padding: 6px 0; }
   #ln-op-campos.ln-op-campos { display: block; }
   .ln-af-bloqueado input, .ln-af-bloqueado select { background: var(--color-bg); color: var(--color-text-muted); }
   .ln-af-bloqueado .ln-pastilla { opacity: .5; }
@@ -522,6 +524,13 @@
   @media (max-width: 760px) { .ln-copiar-cuerpo { grid-template-columns: 1fr; } }
 
   /* Historial filtrable */
+  /* Historial, un renglón por acción (paso 3): el comentario y los cambios se ven completos */
+  #ln-historial-tabla .dt tbody td { vertical-align: top; max-width: none; }
+  #ln-historial-tabla .ln-cambios, #ln-historial-tabla .ln-texto-largo { display: block; white-space: normal; line-height: 1.45; }
+  #ln-historial-tabla .ln-cambios > div { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
+  #ln-historial-tabla .ln-cambios > div + div { margin-top: 3px; }
+  #ln-historial-tabla .ln-cambios > div > * { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .ln-cambio-campo { font-weight: 600; color: var(--color-text-muted); font-size: 11.5px; }
   .ln-historial-cabecera { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
   .ln-historial-cabecera h3 { margin: 0; }
   /* Barra de filtros del historial: Movimiento y, en asignaciones, la casilla para ocultar transiciones */
@@ -933,10 +942,60 @@
   .ln-vr-comentario { font-size: 13px; margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 
   /* Mandar a resguardo y bandeja de resguardos (30-sep) */
-  .ln-resg-cabecera { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 0 0 10px; font-size: 13px; color: var(--color-text-muted); }
-  .ln-resg-cabecera strong { display: inline-flex; align-items: center; gap: 6px; color: var(--color-text); font-size: 14px; }
-  .ln-resg-cabecera > span { display: inline-flex; align-items: center; gap: 4px; }
-  .ln-resg-todos { border-style: dashed; }
-  .ln-resg-todos .ln-btn-chico { margin-top: 4px; }
+  /* Estatus del formulario de resguardo: botones a todo lo ancho (4-oct) */
+  [data-resg-fila] .ln-af-grid > .ln-af-escala { grid-column: 1 / -1; }
+  /* Con el color del resto del sistema (el gris neutro es del checklist), usuario 4-oct */
+  [data-resg-fila] .ln-segmento .ln-pastilla.activa,
+  :root[data-theme="dark"] [data-resg-fila] .ln-segmento .ln-pastilla.activa { background: var(--color-primary); color: #fff; }
   .lnr-pestanas { margin: 4px 0 12px; }
+  /* ================= Inspección más clara (usuario, 3-oct) ================= */
+  /* Datos que vienen del registro: se leen como ficha, no como campos por llenar */
+  .ln-af-datos .ln-af-campo label { color: var(--color-text-muted); font-weight: 600; }
+  .ln-af-datos .ln-af-lectura input { font-size: 14px; }
+  /* Checklist: un punto por renglón, en dos columnas; la opción elegida se ve de un vistazo */
+  .ln-checklist-lista { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px; margin-bottom: 8px; }
+  .ln-checklist-lista .ln-af-escala { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 14px;
+    margin: 0; padding: 10px 0; border-bottom: 1px solid var(--color-border); }
+  .ln-checklist-lista .ln-af-escala > label { margin: 0; font-size: 13.5px; font-weight: 500; letter-spacing: 0; color: var(--color-text); flex: 1 1 140px; }
+  .ln-checklist-lista .ln-af-escala .ln-checklist-punto { padding: 0; border: 0; flex: 0 0 auto; }
+  .ln-checklist-lista .ln-af-escala .form-error-campo { flex-basis: 100%; margin-top: 0; }
+  .ln-pastillas.ln-segmento { display: grid; grid-auto-flow: column; grid-auto-columns: var(--ancho-opcion, 72px); gap: 0;
+    border: 1px solid var(--color-border); border-radius: 10px; overflow: hidden; background: var(--color-surface); }
+  .ln-segmento .ln-pastilla { border: 0; border-radius: 0; border-left: 1px solid var(--color-border); padding: 8px 4px; min-height: 36px;
+    background: transparent; color: var(--color-text-muted); font-size: 12.5px; font-weight: 600; text-align: center; transition: background .12s ease, color .12s ease; }
+  .ln-segmento .ln-pastilla:first-child { border-left: 0; }
+  .ln-segmento .ln-pastilla:hover { background: var(--ln-neutro-bg); color: var(--color-text); }
+  .ln-segmento .ln-pastilla:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+  .ln-segmento .ln-pastilla.activa { background: var(--ln-neutro-tx); color: #fff; }
+  .ln-segmento .ln-pastilla.activa.ln-pastilla-bien { background: var(--ln-verde-tx); }
+  .ln-segmento .ln-pastilla.activa.ln-pastilla-mal { background: var(--ln-rojo-tx); }
+  .ln-segmento .ln-pastilla.activa.ln-pastilla-media { background: var(--ln-ambar-tx); }
+  :root[data-theme="dark"] .ln-segmento .ln-pastilla.activa { color: #0d1b22; }
+  .ln-af-campo.form-campo-error .ln-pastillas.ln-segmento { outline: 2px solid color-mix(in srgb, var(--color-danger) 55%, transparent); outline-offset: 2px; border-radius: 10px; }
+  @media (max-width: 1024px) { .ln-checklist-lista { grid-template-columns: 1fr; } }
+  /* ================= Patrón con orden y dirección; pantalla de espera (usuario, 4-oct) ================= */
+  button.ln-patron-punto { color: #fff; font-size: 13px; font-weight: 700; line-height: 1; }
+  button.ln-patron-punto.activa { width: 38px; height: 38px; min-height: 38px; border-width: 5px; }
+  button.ln-patron-punto.inicio { box-shadow: 0 0 0 4px var(--color-accent); }
+  .ln-patron polygon.ln-patron-flecha { fill: var(--color-accent); stroke: var(--color-surface); stroke-width: 1.5; stroke-linejoin: round; }
+  .ln-captura-modal { position: relative; }
+  .ln-espera { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; padding: 24px; text-align: center; background: color-mix(in srgb, var(--color-surface) 94%, transparent); backdrop-filter: blur(2px); outline: none; }
+  .ln-espera[hidden] { display: none; }
+  .ln-espera-circulo { width: 72px; height: 72px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    background: var(--color-accent-soft); margin-bottom: 10px; }
+  .ln-espera-circulo .ln-spinner { width: 34px; height: 34px; border-width: 3px; }
+  .ln-espera h3 { margin: 0; font-size: 20px; }
+  .ln-espera p { margin: 0; color: var(--color-text-muted); font-size: 13.5px; }
+  /* Resultado en la misma pantalla de la espera: listo (verde) o error (alerta) */
+  .ln-espera-circulo .ln-icon { width: 34px; height: 34px; color: var(--color-accent-hover); }
+  .ln-espera-listo .ln-espera-circulo { background: var(--ln-verde-bg); }
+  .ln-espera-listo .ln-espera-circulo .ln-icon { color: var(--ln-verde-tx); }
+  .ln-espera-error .ln-espera-circulo { background: var(--ln-rojo-bg); }
+  .ln-espera-error .ln-espera-circulo .ln-icon { color: var(--ln-rojo-tx); }
+  .ln-espera p.ln-espera-detalle { max-width: 460px; font-size: 12.5px; overflow-wrap: anywhere; }
+  .ln-espera p[hidden], .ln-espera .ln-pdf-acciones[hidden] { display: none; }
+  .ln-espera .ln-pdf-acciones { margin-top: 14px; }
+  /* Observaciones: la sección ya dice el nombre */
+  .ln-af-sin-etiqueta .ln-af-campo > label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 </style>

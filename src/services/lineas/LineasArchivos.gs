@@ -6,8 +6,12 @@
  *   LINEAS_DRIVE_APPSHEET   carpeta de la app AppSheet (en DEV: "PruebasCONTROLVEHICYTELEF-172665033", la de la hoja
  *                           VEHICULOS). Ahí están "<TABLA>_Files_", "<TABLA>_Images", "INSPECCIONES_Files_" y "Files".
  *                           Se lee y se ESCRIBE aquí, con las mismas rutas que usa el AppSheet.
- *   LINEAS_DRIVE_NUCOS      carpeta NUCOS de producción (una carpeta por NUCO, que el área llena a mano).
- *                           SOLO LECTURA: la ficha la muestra en "Documentos"; el sistema nunca escribe ahí.
+ *   LINEAS_DRIVE_NUCOS      carpeta NUCOS de producción (una carpeta por NUCO). La ficha la muestra en "Documentos"
+ *                           y, desde el corte a producción (2-oct-2026), las inspecciones y responsivas nuevas
+ *                           guardan ahí su PDF y sus fotos, con la misma estructura que llena el área a mano:
+ *                             <NUCO>/INSPECCIONES/<AÑO>/<N> CUATRIMESTRE/<MES>/INSP DD MM/  (+ FOTOS)
+ *                             <NUCO>/CARTA RESPONSIVA/<AÑO>/RESP DD MM/
+ *                           Un registro sin NUCO sigue en la carpeta de la app.
  *
  * Una columna File/Image/Signature del AppSheet guarda "BITACORA DE DESECHO_Files_/xxxx.EVIDENCIA.123.jpg":
  * se resuelve caminando desde la carpeta de la app (nunca sale de ella).
@@ -128,7 +132,7 @@ const LineasArchivos = (function () {
     return carpeta + '/' + nombre;
   }
 
-  // ---------------- NUCOS (producción, solo lectura) ----------------
+  // ---------------- NUCOS (producción): lectura ----------------
 
   function driveApi_(parametros) {
     const url = 'https://www.googleapis.com/drive/v3/files?' + parametros.concat(['supportsAllDrives=true', 'includeItemsFromAllDrives=true']).join('&');
@@ -225,7 +229,95 @@ const LineasArchivos = (function () {
     return { carpetaId: raiz, grupos: lista };
   }
 
-  // ---------------- Escritura: solo dentro de la carpeta de la app ----------------
+  // ---------------- Escritura en NUCOS: carpeta de cada inspección / responsiva ----------------
+
+  const MESES_ = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+  const CUATRIMESTRES_ = ['1ER CUATRIMESTRE', '2DO CUATRIMESTRE', '3ER CUATRIMESTRE'];
+
+  /** Crea una carpeta con nombre único (agrega " (2)", " (3)"… si ya existe). */
+  function carpetaUnica_(padre, nombre) {
+    let candidato = nombre;
+    for (let n = 2; padre.getFoldersByName(candidato).hasNext(); n++) candidato = nombre + ' (' + n + ')';
+    return padre.createFolder(candidato);
+  }
+
+  /** Carpeta del NUCO dentro de NUCOS ("0599" o "599", la que ya exista); si no hay, la crea a 4 dígitos. */
+  function carpetaDelNuco_(nuco) {
+    const n4 = LineasUtil.nuco4(nuco);
+    if (!n4) throw new Error('El registro no tiene NUCO.');
+    const id = carpetasNucos()[n4];
+    if (id) {
+      try { const c = DriveApp.getFolderById(id); if (!c.isTrashed()) return c; } catch (e) { /* se borró: se vuelve a buscar */ }
+    }
+    LineasDatos.cacheBorrar('carpetas_nucos_v2');
+    const raiz = DriveApp.getFolderById(carpetaNucosId());
+    const otra = carpetasNucos()[n4];
+    return otra ? DriveApp.getFolderById(otra) : raiz.createFolder(n4);
+  }
+
+  /** Olvida lo que se tenía en caché del NUCO (Documentos, "Última inspección / responsiva"). */
+  function olvidarNuco(nuco) {
+    const n4 = LineasUtil.nuco4(nuco);
+    if (!n4) return;
+    ['', '_INSPECCION', '_RESPONSIVA'].forEach((s) => LineasDatos.cacheBorrar('nucos_archivos_v2_' + n4 + s));
+  }
+
+  /**
+   * Carpeta nueva en NUCOS para una inspección o responsiva del día `fecha`:
+   *   INSPECCION → <NUCO>/INSPECCIONES/<AÑO>/<N> CUATRIMESTRE/<MES>/INSP DD MM  y su FOTOS
+   *   RESPONSIVA → <NUCO>/CARTA RESPONSIVA/<AÑO>/RESP DD MM
+   * Si ya hay una del mismo día, la nueva es "INSP DD MM (2)". Regresa { carpetaId, fotosCarpetaId, ruta, nombrePdf }.
+   */
+  function carpetaEvidenciaNuco(tipo, nuco, fecha) {
+    const n4 = LineasUtil.nuco4(nuco);
+    const f = fecha instanceof Date && !isNaN(fecha) ? fecha : new Date();
+    const anio = Utilities.formatDate(f, ZONA, 'yyyy');
+    const mes = Number(Utilities.formatDate(f, ZONA, 'M'));
+    const ddmm = Utilities.formatDate(f, ZONA, 'dd MM');
+    const raizNuco = carpetaDelNuco_(n4);
+    let carpeta, fotos = null, ramas;
+    if (tipo === 'INSPECCION') {
+      ramas = ['INSPECCIONES', anio, CUATRIMESTRES_[Math.floor((mes - 1) / 4)], MESES_[mes - 1]];
+      carpeta = carpetaUnica_(ramas.reduce((c, nombre) => subcarpeta_(c, nombre), raizNuco), 'INSP ' + ddmm);
+      fotos = carpeta.createFolder('FOTOS');
+    } else if (tipo === 'RESPONSIVA') {
+      ramas = ['CARTA RESPONSIVA', anio];
+      carpeta = carpetaUnica_(ramas.reduce((c, nombre) => subcarpeta_(c, nombre), raizNuco), 'RESP ' + ddmm);
+    } else {
+      throw new Error('Tipo de evidencia inválido.');
+    }
+    olvidarNuco(n4);
+    return {
+      carpetaId: carpeta.getId(), fotosCarpetaId: fotos ? fotos.getId() : null,
+      ruta: [raizNuco.getName()].concat(ramas, [carpeta.getName()]).join('/'),
+      nombrePdf: (tipo === 'INSPECCION' ? 'INSP ' : 'RESP ') + n4 + ' ' + ddmm + '.pdf',
+    };
+  }
+
+  /**
+   * Manda a la papelera la carpeta de una captura cancelada y las carpetas de año / cuatrimestre / mes que quedaron
+   * vacías por ella (nunca la del NUCO, ni INSPECCIONES / CARTA RESPONSIVA).
+   */
+  function descartarCarpeta(carpetaId) {
+    const c = DriveApp.getFolderById(carpetaId);
+    const dentroDeNucos = estaDentroDe(carpetaId, carpetaNucosId());
+    const padres = c.getParents();
+    let padre = padres.hasNext() ? padres.next() : null;
+    c.setTrashed(true);
+    if (!dentroDeNucos) return;
+    for (let n = 0; padre && n < 3; n++) {
+      const nombre = padre.getName().trim();
+      if (!/^\d{4}$|CUATRIMESTRE$|^[A-Z]+$/.test(nombre) || /^(INSPECCIONES|FOTOS)$/i.test(nombre)) break;
+      if (padre.searchFiles('trashed = false').hasNext() || padre.searchFolders('trashed = false').hasNext()) break;
+      const arriba = padre.getParents();
+      const siguiente = arriba.hasNext() ? arriba.next() : null;
+      if (!siguiente || siguiente.getId() === carpetaNucosId()) break; // es la carpeta del NUCO
+      padre.setTrashed(true);
+      padre = siguiente;
+    }
+  }
+
+  // ---------------- Escritura: carpeta de la app o NUCOS ----------------
 
   /** ¿La carpeta está dentro de `raizId`? (sube hasta 12 niveles). */
   function estaDentroDe(carpetaId, raizId) {
@@ -242,15 +334,20 @@ const LineasArchivos = (function () {
     return false;
   }
 
-  /** Error si la carpeta no es de la app AppSheet (p. ej. NUCOS de producción, que es de solo lectura). */
+  /** ¿La carpeta está dentro de NUCOS? */
+  function enNucos(carpetaId) {
+    return !!carpetaId && estaDentroDe(carpetaId, carpetaNucosId());
+  }
+
+  /** Error si la carpeta no es de la app AppSheet ni de NUCOS. */
   function exigirEscribible(carpetaId) {
-    if (!carpetaId || !estaDentroDe(carpetaId, carpetaAppSheetId())) {
-      throw new Error('Esta carpeta es de solo consulta (NUCOS de producción); los archivos nuevos se guardan en la carpeta de la app.');
+    if (!carpetaId || !(estaDentroDe(carpetaId, carpetaAppSheetId()) || enNucos(carpetaId))) {
+      throw new Error('Los archivos solo se pueden guardar en la carpeta de la app o en NUCOS.');
     }
   }
 
   return {
     carpetaAppSheetId, carpetaNucosId, carpetaDeApp, idDeUrl, resolver, imagen, blob, guardarComoAppSheet,
-    carpetasNucos, archivosNuco, estaDentroDe, exigirEscribible,
+    carpetasNucos, archivosNuco, estaDentroDe, exigirEscribible, enNucos, carpetaEvidenciaNuco, descartarCarpeta, olvidarNuco,
   };
 })();

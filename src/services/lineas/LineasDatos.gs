@@ -44,6 +44,20 @@ const LineasDatos = (function () {
 
   // Estado por ejecución (cada llamada de google.script.run empieza de cero).
   const bd = { id: null, libro: null, tablas: {}, zona: null, apiSheets: undefined };
+
+  // Reestructura, etapa 2 (LineasLectura.gs): con el interruptor encendido, LINEAS TELEFONICAS se lee armada con las
+  // hojas nuevas y no se puede escribir. Apagado (lo normal), nada de esto cambia el comportamiento.
+  const virtual_ = (nombre) => typeof LineasLectura !== 'undefined' && LineasLectura.esVirtual(nombre);
+  function tablaVirtual_(nombre) {
+    if (bd.tablas[nombre] && bd.tablas[nombre].virtual) return bd.tablas[nombre];
+    const encabezados = LineasLectura.ENCABEZADOS.slice();
+    const indice = {};
+    encabezados.forEach((h, i) => { indice[normCol(h)] = i; });
+    const t = { nombre: nombre, encabezados: encabezados, indice: indice, virtual: true, fresca: true };
+    Object.defineProperty(t, 'hoja', { get: function () { return LineasLectura.bloquearEscritura(); } });
+    bd.tablas[nombre] = t;
+    return t;
+  }
   const desfasePorDia = {};
 
   function id() {
@@ -83,7 +97,23 @@ const LineasDatos = (function () {
 
   /** Lo que devuelve armar(), guardado mientras no cambie ninguna de las pestañas `nombres` */
   function recordar(clave, nombres, armar, segundos) {
-    return CacheHojas.recordar(claveCache_(clave), nombres.map((n) => [id(), n]), armar, segundos);
+    const t = Date.now();
+    let armo = false;
+    const r = CacheHojas.recordar(claveCache_(clave), nombres.map((n) => [id(), n]), () => { armo = true; return armar(); }, segundos);
+    tiempo('recordar ' + clave + (armo ? ' (se armó)' : ' (de la caché)'), t);
+    return r;
+  }
+
+  // ---------------- Medir (etapa 3, paso 2: rapidez al guardar) ----------------
+  // Con la Script Property LINEAS_MEDIR = 1, cada lectura, escritura y caché deja su tiempo en el registro de
+  // ejecuciones (console.log). Apagado no hace nada.
+  const INICIO_ = Date.now();
+  let midiendo_ = null;
+  function tiempo(que, desde) {
+    if (midiendo_ === null) {
+      try { midiendo_ = PropertiesService.getScriptProperties().getProperty('LINEAS_MEDIR') === '1'; } catch (e) { midiendo_ = false; }
+    }
+    if (midiendo_) console.log('[tiempo] ' + que + ': ' + (Date.now() - desde) + ' ms · a los ' + (Date.now() - INICIO_) + ' ms');
   }
 
   /** Para cuando se edita la hoja a mano (recargarDatos): todo lo de esas pestañas se vuelve a leer */
@@ -115,6 +145,7 @@ const LineasDatos = (function () {
    * Para lecturas los encabezados salen de caché; las escrituras usan tablaFresca().
    */
   function tabla(nombre) {
+    if (virtual_(nombre)) return tablaVirtual_(nombre);
     if (bd.tablas[nombre]) return bd.tablas[nombre];
     const enCache = cacheLeer('enc_' + nombre);
     return enCache ? armarTabla_(nombre, enCache, null) : tablaFresca(nombre);
@@ -122,6 +153,7 @@ const LineasDatos = (function () {
 
   /** Relee la fila de encabezados de la hoja (una vez por ejecución) y actualiza la caché. */
   function tablaFresca(nombre) {
+    if (virtual_(nombre)) return tablaVirtual_(nombre);
     if (bd.tablas[nombre] && bd.tablas[nombre].fresca) return bd.tablas[nombre];
     const hoja = libro().getSheetByName(nombre);
     if (!hoja) throw new Error('No existe la pestaña "' + nombre + '" en la base de datos de Líneas.');
@@ -165,6 +197,7 @@ const LineasDatos = (function () {
   }
 
   function existeTabla(nombre) {
+    if (virtual_(nombre)) return true;
     if (bd.tablas[nombre] || cacheLeer('enc_' + nombre)) return true;
     return !!libro().getSheetByName(nombre);
   }
@@ -179,7 +212,8 @@ const LineasDatos = (function () {
     t.encabezados.forEach((h, i) => {
       if (!h || h in o) return;
       const v = valores[i];
-      o[h] = v === undefined || v === null ? '' : (v instanceof Date ? deHoraHoja(v) : v);
+      // Las abreviaturas confirmadas de Capital Humano se muestran completas ("QRO" → "QUERETARO"); se guardan como CH
+      o[h] = v === undefined || v === null ? '' : (v instanceof Date ? deHoraHoja(v) : LineasUtil.mostrarCH(h, v));
     });
     return o;
   }
@@ -208,12 +242,15 @@ const LineasDatos = (function () {
 
   // ---------------- Lectura ----------------
 
-  /** Todas las filas no vacías de una pestaña. */
-  function leerTabla(nombre) {
-    const t = tabla(nombre);
+  /** Todas las filas no vacías de una pestaña. `real`: la hoja tal cual, aunque esté encendida la etapa 2. */
+  function leerTabla(nombre, real) {
+    if (!real && virtual_(nombre)) return LineasLectura.filas().map((f) => Object.assign({}, f));
+    const inicio = Date.now();
+    const t = real && virtual_(nombre) ? tablaReal_(nombre) : tabla(nombre);
     const ultima = t.hoja.getLastRow();
     if (ultima < 2 || !t.encabezados.length) return [];
     const valores = t.hoja.getRange(2, 1, ultima - 1, t.encabezados.length).getValues();
+    tiempo('leer ' + nombre + ' (' + valores.length + ' filas)', inicio);
     const filas = [];
     valores.forEach((v, i) => {
       if (v.every((x) => x === '' || x === null)) return;
@@ -222,14 +259,27 @@ const LineasDatos = (function () {
     return filas;
   }
 
+  /** La hoja de verdad aunque esté encendida la etapa 2 (para que LineasLectura lea lo que aún no se migra). */
+  function tablaReal_(nombre) {
+    const hoja = libro().getSheetByName(nombre);
+    if (!hoja) throw new Error('No existe la pestaña "' + nombre + '" en la base de datos de Líneas.');
+    const encabezados = hoja.getRange(1, 1, 1, Math.max(1, hoja.getLastColumn())).getValues()[0].map((h) => String(h).trim());
+    while (encabezados.length && !encabezados[encabezados.length - 1]) encabezados.pop();
+    const indice = {};
+    encabezados.forEach((h, i) => { const k = normCol(h); if (k && !(k in indice)) indice[k] = i; });
+    return { nombre: nombre, encabezados: encabezados, indice: indice, hoja: hoja };
+  }
+
   /** Última fila con datos de una pestaña. */
   function ultimaFila(nombre) {
+    if (virtual_(nombre)) return LineasLectura.filas().length + 1;
     return tabla(nombre).hoja.getLastRow();
   }
 
   /** Números de fila cuyo valor en `columna` es `valor` (celda completa, o contiene si `parcial`). */
   function buscarFilas(nombre, columna, valor, parcial) {
     if (valor === null || valor === undefined || String(valor) === '') return [];
+    if (virtual_(nombre)) return LineasLectura.buscar(columna, valor, parcial);
     const t = tabla(nombre);
     const c = colIndice(t, columna);
     if (c < 0) throw new Error('La pestaña "' + nombre + '" no tiene la columna "' + columna + '".');
@@ -276,6 +326,7 @@ const LineasDatos = (function () {
   /** Filas (sin repetir) que contienen `texto` en cualquier columna. */
   function buscarEnTabla(nombre, texto) {
     if (!texto) return [];
+    if (virtual_(nombre)) return LineasLectura.buscarEnTodo(texto);
     const t = tabla(nombre);
     const ultima = t.hoja.getLastRow();
     if (ultima < 2) return [];
@@ -291,6 +342,14 @@ const LineasDatos = (function () {
    * peticiones: [{ tabla, filas: [n, ...] }]  →  [[objetos de la 1a petición], [...], ...]
    */
   function leerFilas(peticiones) {
+    // Etapa 2: las peticiones de LINEAS TELEFONICAS salen de los renglones armados; las demás, de su hoja
+    if (peticiones.some((p) => virtual_(p.tabla))) {
+      const reales = leerFilas(peticiones.filter((p) => !virtual_(p.tabla)));
+      let i = 0;
+      return peticiones.map((p) => (virtual_(p.tabla)
+        ? p.filas.map((n) => Object.assign({}, LineasLectura.porNumero(n))).filter((f) => f.ID !== undefined)
+        : reales[i++]));
+    }
     const total = peticiones.reduce((s, p) => s + p.filas.length, 0);
     if (!total) return peticiones.map(() => []);
     // Una petición sin filas no abre su pestaña: puede no existir (p. ej. APP_MOVIMIENTOS en una hoja sin el sistema nuevo)
@@ -396,6 +455,7 @@ const LineasDatos = (function () {
 
   /** Bloque continuo de filas [desde, hasta] (fechas nativas). */
   function leerRango(nombre, desde, hasta) {
+    if (virtual_(nombre)) return LineasLectura.filas().slice(Math.max(0, desde - 2), Math.max(0, hasta - 1)).map((f) => Object.assign({}, f));
     const t = tabla(nombre);
     if (hasta < desde || desde < 2) return [];
     const valores = t.hoja.getRange(desde, 1, hasta - desde + 1, t.encabezados.length).getValues();
@@ -441,14 +501,16 @@ const LineasDatos = (function () {
   /**
    * Valor listo para una celda. Los textos solo de dígitos largos (SIM, IMEI, teléfono)
    * o con ceros a la izquierda se guardan como texto para que Sheets no los convierta en número.
-   * Las pestañas APP_ ya tienen formato de texto, así que no necesitan el apóstrofo.
+   * Las pestañas APP_ y las hojas nuevas de la reestructura (LineasEstructura les pone formato de texto) no necesitan
+   * el apóstrofo.
    */
   function valorCelda_(v, nombreTabla) {
     if (v === null || v === undefined) return '';
     if (v instanceof Date) return aHoraHoja(v);
-    if (typeof v === 'string' && /^\d+$/.test(v) && (v.length >= 11 || /^0\d/.test(v)) && !/^APP_/.test(nombreTabla || '')) return "'" + v;
+    if (typeof v === 'string' && /^\d+$/.test(v) && (v.length >= 11 || /^0\d/.test(v)) && !HOJAS_EN_TEXTO.test(nombreTabla || '')) return "'" + v;
     return v;
   }
+  const HOJAS_EN_TEXTO = /^(APP_.*|LINEAS|EQUIPOS|ASIGNACIONES|ADENDUMS|FACTURAS|CUENTAS|CATALOGOS)$/;
 
   /**
    * Cambia celdas de una fila: cambios = { 'COLUMNA': valor }. Columnas inexistentes se ignoran.
@@ -457,6 +519,12 @@ const LineasDatos = (function () {
    *  - fechas como texto ISO "yyyy-MM-dd HH:mm:ss" en hora de México (USER_ENTERED).
    */
   function actualizarFila(nombre, fila, cambios) {
+    if (virtual_(nombre)) LineasLectura.bloquearEscritura();
+    const inicio = Date.now();
+    try { return actualizarFila_(nombre, fila, cambios); } finally { tiempo('escribir ' + nombre + ' fila ' + fila, inicio); }
+  }
+
+  function actualizarFila_(nombre, fila, cambios) {
     const t = tablaFresca(nombre);
     const hojaA1 = "'" + nombre.replace(/'/g, "''") + "'!";
     const crudos = [];
@@ -464,12 +532,20 @@ const LineasDatos = (function () {
     Object.keys(cambios).forEach((col) => {
       const c = colIndice(t, col);
       if (c < 0) return;
-      const v = cambios[col];
+      const v = LineasUtil.guardarCH(col, cambios[col]); // "QUERETARO" se guarda como en CH: "QRO"
       const rango = hojaA1 + letraColumna(c + 1) + fila;
       if (v instanceof Date) fechas.push({ range: rango, values: [[Utilities.formatDate(v, ZONA_APP, 'yyyy-MM-dd HH:mm:ss')]] });
       else crudos.push({ range: rango, values: [[v === null || v === undefined ? '' : v]] });
     });
     if (!crudos.length && !fechas.length) return;
+    if (apiSheetsDisponible_() && lote_) {
+      // Dentro de conCandado: se juntan y se mandan en una sola llamada al final (vaciarLote_)
+      crudos.forEach((x) => { lote_.datos[x.range] = { x: x, fecha: false }; });
+      fechas.forEach((x) => { lote_.datos[x.range] = { x: x, fecha: true }; });
+      lote_.hojas[nombre] = true;
+      lote_.respaldo.push([nombre, fila, cambios]);
+      return;
+    }
     if (apiSheetsDisponible_()) {
       try {
         SpreadsheetApp.flush(); // que no queden escrituras de SpreadsheetApp pendientes antes de escribir por la API
@@ -485,7 +561,7 @@ const LineasDatos = (function () {
     // Respaldo sin API: celda por celda (textos de solo dígitos con apóstrofo para que sigan siendo texto).
     Object.keys(cambios).forEach((c) => {
       const i = colIndice(t, c);
-      if (i >= 0) t.hoja.getRange(fila, i + 1).setValue(valorCelda_(cambios[c], nombre));
+      if (i >= 0) t.hoja.getRange(fila, i + 1).setValue(valorCelda_(LineasUtil.guardarCH(c, cambios[c]), nombre));
     });
     CacheHojas.tocar(id(), nombre);
   }
@@ -497,6 +573,12 @@ const LineasDatos = (function () {
    */
   function agregarFilas(nombre, objetos) {
     if (!objetos || !objetos.length) return [];
+    if (virtual_(nombre)) LineasLectura.bloquearEscritura();
+    const inicio = Date.now();
+    try { return agregarFilas_(nombre, objetos); } finally { tiempo('agregar ' + objetos.length + ' a ' + nombre, inicio); }
+  }
+
+  function agregarFilas_(nombre, objetos) {
     const t = tablaFresca(nombre);
     const tieneId = colIndice(t, 'ID') >= 0;
     const filas = objetos.map((o) => {
@@ -504,7 +586,7 @@ const LineasDatos = (function () {
       const fila = t.encabezados.map(() => '');
       Object.keys(o).forEach((k) => {
         const c = colIndice(t, k);
-        if (c >= 0) fila[c] = valorCelda_(o[k], nombre);
+        if (c >= 0) fila[c] = valorCelda_(LineasUtil.guardarCH(k, o[k]), nombre);
       });
       return fila;
     });
@@ -516,15 +598,60 @@ const LineasDatos = (function () {
     return filas.map((_, i) => inicio + i);
   }
 
+  // Rapidez (etapa 3, paso 2): dentro de conCandado, las celdas que cambia actualizarFila se juntan y van en una sola
+  // llamada a la API de Sheets al final (cada llamada tardaba ~0.7 s; un cambio de equipo hacía cuatro o más). Las filas
+  // que se agregan siguen al momento. La hoja se marca como cambiada (CacheHojas.tocar) hasta que ya se escribió, para
+  // que nadie guarde en caché lo de antes con la versión nueva.
+  let lote_ = null;
+
+  function vaciarLote_() {
+    const l = lote_;
+    lote_ = null;
+    const datos = l ? Object.keys(l.datos).map((k) => l.datos[k]) : [];
+    if (!datos.length) return;
+    const inicio = Date.now();
+    try {
+      SpreadsheetApp.flush(); // las filas agregadas con SpreadsheetApp, antes que la API
+      const crudos = datos.filter((d) => !d.fecha).map((d) => d.x);
+      const fechas = datos.filter((d) => d.fecha).map((d) => d.x);
+      if (crudos.length) sheetsApi('/values:batchUpdate', { valueInputOption: 'RAW', data: crudos });
+      if (fechas.length) sheetsApi('/values:batchUpdate', { valueInputOption: 'USER_ENTERED', data: fechas });
+    } catch (e) {
+      if (!marcarApiSinHabilitar_(e)) throw e;
+      l.respaldo.forEach((r) => actualizarFila_(r[0], r[1], r[2])); // sin la API: celda por celda
+      return;
+    }
+    Object.keys(l.hojas).forEach((n) => CacheHojas.tocar(id(), n));
+    tiempo('escribir en lote ' + datos.length + ' celdas (' + Object.keys(l.hojas).join(', ') + ')', inicio);
+  }
+
   /** Ejecuta fn con el candado del script (las escrituras no se cruzan entre usuarios). */
   function conCandado(fn) {
+    const inicio = Date.now();
     const candado = LockService.getScriptLock();
     if (!candado.tryLock(30000)) throw new Error('El sistema está guardando otro cambio; intenta de nuevo en unos segundos.');
+    tiempo('candado (espera)', inicio);
+    const propio = !lote_;
+    if (propio) lote_ = { datos: {}, hojas: {}, respaldo: [] };
+    let fallo = null;
     try {
       return fn();
+    } catch (e) {
+      fallo = e;
+      throw e;
     } finally {
-      SpreadsheetApp.flush();
-      candado.releaseLock();
+      try {
+        // También si fn falló: lo que alcanzó a cambiar se escribe, igual que cuando cada celda iba al momento
+        if (propio) vaciarLote_();
+      } catch (e) {
+        if (!fallo) throw e;
+        console.warn('conCandado: no se pudo escribir el lote después de un error: ' + e.message);
+      } finally {
+        if (propio) lote_ = null;
+        SpreadsheetApp.flush();
+        candado.releaseLock();
+        tiempo('candado (todo lo de adentro)', inicio);
+      }
     }
   }
 
@@ -549,6 +676,7 @@ const LineasDatos = (function () {
    * Si ya existe, agrega al final los encabezados que falten. AppSheet ignora estas pestañas.
    */
   function asegurarPestana(nombre, encabezados) {
+    if (virtual_(nombre)) LineasLectura.bloquearEscritura();
     const lb = libro();
     let hoja = lb.getSheetByName(nombre);
     if (!hoja) {
@@ -577,9 +705,10 @@ const LineasDatos = (function () {
   return {
     ZONA_APP,
     id, libro, zona, normCol, esColumnaFecha, letraColumna, sheetsApi,
-    cacheGuardar, cacheLeer, cacheBorrar, recordar, tocar,
+    cacheGuardar, cacheLeer, cacheBorrar, recordar, tocar, tiempo,
     tabla, tablaFresca, existeTabla, colIndice, deHoraHoja, aHoraHoja,
     leerTabla, ultimaFila, buscarFilas, buscarFilasVarios, buscarFilasPorId, idsDeFila, buscarEnTabla, leerFilas, leerRango,
     actualizarFila, agregarFilas, conCandado, nuevoId, nuevoIdCorto, asegurarPestana, COLS_ID_ANTERIOR, COL_ID_APPSHEET,
+    olvidarTabla: (nombre) => { delete bd.tablas[nombre]; },
   };
 })();

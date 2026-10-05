@@ -3166,7 +3166,7 @@
     // SOLICITUD es archivo (se sube aparte, subirArchivoUber). FECHA DE ALTA no se edita:
     // la fija el servidor solo al crear (siempre "hoy").
     const CAMPOS_UBER = [
-      { clave: 'NOMBRE COMPLETO', etiqueta: 'Nombre completo', tipo: 'text', requerido: true },
+      { clave: 'NOMBRE COMPLETO', etiqueta: 'Nombre completo', tipo: 'select', catalogo: true, requerido: true },
       { clave: 'RAZON SOCIAL', etiqueta: 'Razón social', tipo: 'select', catalogo: true },
       { clave: 'ESTAUS USUARIO', etiqueta: 'Estatus', tipo: 'select', opciones: ['ACTIVO', 'BAJA', 'PENDIENTE'] },
       { clave: 'ROL', etiqueta: 'Rol', tipo: 'select', opciones: ['ADMINISTRADOR', 'BENEFICIARIO', 'EMPLEADO'] },
@@ -3205,20 +3205,57 @@
 
     const llenarSelect = CamposHoja.llenarOpciones;
     // En su propia función para correr en paralelo con cargar() más abajo.
+    /** Al elegir (o escribir exacto) un nombre de Capital Humano en "Nombre completo", sugiere
+     *  Departamento/Puesto/Sede/Oficina-Desarrollo/Correo -- no bloquea los campos, se pueden
+     *  corregir a mano. Si el nombre no coincide con nadie (alguien nuevo que CH no ha
+     *  cargado), no hace nada: se deja capturar todo a mano, como ya era antes. Mismo patrón
+     *  que wireResponsableVehiculo (arriba, para Vehículos).
+     *
+     *  Razón social y Teléfono NO se autollenan a propósito: razón social es del contrato
+     *  (puede variar entre línea/vehículo/caja chica de la misma persona), y el teléfono ni
+     *  siquiera llega a este sistema (CapitalHumano.gs lo excluye por privacidad). */
+    function wireColaboradorUber(prefijo, colaboradores) {
+      const porNombre = {};
+      colaboradores.forEach((c) => { if (!porNombre[c.NOMBRE.toUpperCase()]) porNombre[c.NOMBRE.toUpperCase()] = c; });
+      const idNombre = prefijo + '-nombre-completo';
+      const input = document.getElementById(idNombre);
+      if (!input || input.dataset.wireado) return; // una sola vez por campo, aunque se recarguen catálogos
+      input.dataset.wireado = '1';
+      input.addEventListener('input', () => {
+        const colaborador = porNombre[input.value.trim().toUpperCase()];
+        const depto = document.getElementById(prefijo + '-departamento');
+        const puesto = document.getElementById(prefijo + '-puesto');
+        const sede = document.getElementById(prefijo + '-sede');
+        const oficina = document.getElementById(prefijo + '-oficina-desarrollo');
+        const correo = document.getElementById(prefijo + '-correo-electronico');
+        if (!colaborador) { [depto, puesto, sede, oficina, correo].forEach((el) => el && CampoAuto.quitar(el)); return; }
+        if (depto && colaborador.DEPARTAMENTO) CampoAuto.llenar(depto, colaborador.DEPARTAMENTO);
+        if (puesto && colaborador.PUESTO) CampoAuto.llenar(puesto, colaborador.PUESTO);
+        if (sede && colaborador.SEDE) CampoAuto.llenar(sede, colaborador.SEDE);
+        if (oficina && colaborador.OFICINA) CampoAuto.llenar(oficina, colaborador.OFICINA);
+        if (correo && colaborador.CORREO) CampoAuto.llenar(correo, colaborador.CORREO);
+      });
+    }
+
     async function cargarCatalogosUber() {
       try {
-        const [razones, sedes, oficinas, deptos] = await Promise.all([
+        const [razones, sedes, oficinas, deptos, colaboradores] = await Promise.all([
           callServerCacheado('apiListarRazonesSociales', state.token),
           callServerCacheado('apiListarSedes', state.token),
           callServerCacheado('apiListarOficinasDesarrollo', state.token),
           callServerCacheado('apiListarDepartamentos', state.token),
+          callServerCacheado('apiListarColaboradores', state.token),
         ]);
         ['uber-razon-social', 'editar-uber-razon-social'].forEach((id) => llenarSelect(id, razones));
         ['uber-sede', 'editar-uber-sede'].forEach((id) => llenarSelect(id, sedes));
         ['uber-oficina-desarrollo', 'editar-uber-oficina-desarrollo'].forEach((id) => llenarSelect(id, oficinas));
         ['uber-departamento', 'editar-uber-departamento'].forEach((id) => llenarSelect(id, deptos));
+        const nombresColaboradores = Array.from(new Set((colaboradores || []).map((c) => c.NOMBRE)));
+        ['uber-nombre-completo', 'editar-uber-nombre-completo'].forEach((id) => llenarSelect(id, nombresColaboradores));
+        wireColaboradorUber('uber', colaboradores || []);
+        wireColaboradorUber('editar-uber', colaboradores || []);
       } catch (err) {
-        console.error('No se pudieron cargar los catálogos de Razón social/Sede/Oficina/Departamento:', err);
+        console.error('No se pudieron cargar los catálogos de Razón social/Sede/Oficina/Departamento/Colaboradores:', err);
       }
     }
 

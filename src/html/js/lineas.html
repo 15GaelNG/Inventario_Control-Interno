@@ -170,7 +170,7 @@
     const COLOR_ESTATUS = {
       'USO': 'verde', 'EN USO': 'verde', 'RENOVADA': 'verde',
       'RESGUARDO': 'azul', 'DISPONIBLE': 'azul', 'EN ENVIO': 'azul', 'ESPERA DE RESPONSIVA': 'azul', 'ESPERA DE EQUIPO': 'azul',
-      'PARA VENTA': 'ambar', 'POSIBLE VENTA-DAÑO': 'ambar', 'PARA DESECHO': 'ambar', 'EN PROCESO DE CANCELACION': 'ambar',
+      'PARA VENTA': 'ambar', 'PARA DESECHO': 'ambar', 'EN PROCESO DE CANCELACION': 'ambar',
       // Bandeja de resguardos y cancelaciones
       'PENDIENTE DE RECEPCION': 'ambar', 'EN RESGUARDO': 'azul', 'ENTREGADO A LINEAS': 'verde',
       'POR FIRMAR': 'ambar', 'CARTA FIRMADA': 'ambar', 'CARTA ENVIADA': 'azul',
@@ -179,9 +179,20 @@
       // Valores de antes del 30-sep que siguen en la hoja hasta que Líneas los corrija
       'EXTRAVIADO': 'rojo', 'ROBO': 'rojo', 'ROBADO': 'rojo', 'CANCELADO': 'rojo', 'DESECHO': 'rojo', 'BLOQUEADO': 'rojo', 'FUERA DE INVENTARIO': 'rojo',
     };
+    /** Qué significa cada estatus (reunión 30-sep); se ve al pasar el ratón (usuario, 4-oct). */
+    const SIGNIFICADO_ESTATUS = {
+      'USO': 'En operación, con una persona', 'RESGUARDO': 'Guardado en almacén; puede volver a usarse',
+      'PARA VENTA': 'Buen estado; se ofrece en venta',
+      'PARA DESECHO': 'Apartado para desecharse', 'VENDIDO': 'Ya se vendió', 'DONADO': 'Donado a fundación o personas',
+      'DESECHADO': 'Ya se desechó', 'EXTRAVIO-ROBO': 'Extraviado o robado',
+      'DISPONIBLE': 'Línea viva sin persona; lista para asignarse', 'EN PROCESO DE CANCELACION': 'Pasa a la bandeja de cancelaciones; se pide al proveedor',
+      'CANCELADA': 'Cancelada; confirmada con el proveedor',
+    };
+    const significado = (estatus) => SIGNIFICADO_ESTATUS[String(estatus || '').trim().toUpperCase()] || '';
     const chip = (estatus, clase) => {
       if (!estatus) return vacio;
-      return '<span class="ln-chip ' + (clase || COLOR_ESTATUS[String(estatus).toUpperCase()] || '') + '">' + esc(estatus) + '</span>';
+      const ayuda = significado(estatus);
+      return '<span class="ln-chip ' + (clase || COLOR_ESTATUS[String(estatus).toUpperCase()] || '') + '"' + (ayuda ? ' title="' + esc(ayuda) + '"' : '') + '>' + esc(estatus) + '</span>';
     };
     const TIPO_EQUIPO = { CELULAR: 'Celular', CELULAR_BASICO: 'Celular básico', MODEM: 'Módem', BANDA_ANCHA: 'Banda ancha', CAMARA: 'Cámara' };
 
@@ -546,16 +557,65 @@
     // El servidor manda los elementos en el orden del formulario del AppSheet (titulo | campo con
     // control, opciones, valor inicial y códigos de Show_If / Required_If); aquí se dibujan y se
     // leen. Se usan en inspecciones, responsivas y altas de Reactivación y Solicitud.
-    function grupoEscala(opciones, valorPrevio) {
-      const claseMala = { NO: 'ln-pastilla-mal', MALO: 'ln-pastilla-mal', REGULAR: 'ln-pastilla-media' };
-      return '<div class="ln-pastillas">' + opciones.map((v) =>
-        '<button type="button" class="ln-pastilla' + (v === valorPrevio ? ' activa' : '') + (claseMala[v] ? ' ' + claseMala[v] : '') + '" data-valor="' + esc(v) + '">' + esc(v) + '</button>').join('') + '</div>';
+    // Escalas del checklist: un control segmentado con opciones del mismo ancho (usuario, 3-oct). El valor que se
+    // guarda no cambia (SI, NO, N/A…); solo el texto en pantalla y el color según lo que significa.
+    const TEXTO_ESCALA = { SI: 'Sí', NO: 'No', 'N/A': 'N/A', BUENO: 'Bueno', REGULAR: 'Regular', MALO: 'Malo', INSTALADA: 'Instalada', 'NO INSTALADA': 'No instalada' };
+    const CLASE_ESCALA = { SI: 'ln-pastilla-bien', BUENO: 'ln-pastilla-bien', INSTALADA: 'ln-pastilla-bien', NO: 'ln-pastilla-mal', MALO: 'ln-pastilla-mal', REGULAR: 'ln-pastilla-media' };
+    function grupoEscala(opciones, valorPrevio, ayudas) {
+      const textos = opciones.map((v) => TEXTO_ESCALA[v] || v);
+      const ancho = Math.max(64, Math.max.apply(null, textos.map((t) => t.length)) * 8 + 28);
+      return '<div class="ln-pastillas ln-segmento" role="radiogroup" style="--ancho-opcion:' + ancho + 'px">' + opciones.map((v, i) =>
+        '<button type="button" role="radio" aria-checked="' + (v === valorPrevio) + '" class="ln-pastilla' + (v === valorPrevio ? ' activa' : '') + (CLASE_ESCALA[v] ? ' ' + CLASE_ESCALA[v] : '') +
+        '" data-valor="' + esc(v) + '"' + (ayudas && ayudas[v] ? ' title="' + esc(ayudas[v]) + '"' : '') + '>' + esc(textos[i]) + '</button>').join('') + '</div>';
+    }
+
+    /**
+     * Patrón: además de la forma, el orden y la dirección (usuario, 4-oct). Cada punto marcado lleva su número (1 = donde
+     * empieza) y cada tramo una flecha hacia donde va. Lo usan la inspección, la responsiva y Editar; la imagen del PDF
+     * se dibuja igual (activarPatron → base64).
+     */
+    const POSICIONES_PATRON = [[50, 50], [150, 50], [250, 50], [50, 150], [150, 150], [250, 150], [50, 250], [150, 250], [250, 250]];
+    /**
+     * Puntas de flecha de cada tramo: [[x1,y1, x2,y2, x3,y3], …] (triángulo apuntando hacia donde va). Van en los
+     * espacios libres entre puntos: un tramo como 1→3 pasa por el centro del punto 2, que taparía una flecha a la mitad.
+     */
+    function flechasPatron(puntos, tam) {
+      const t = tam || 13;
+      const mcd = (x, y) => (y ? mcd(y, x % y) : x);
+      const flechas = [];
+      for (let i = 1; i < puntos.length; i++) {
+        const a = POSICIONES_PATRON[puntos[i - 1] - 1];
+        const b = POSICIONES_PATRON[puntos[i] - 1];
+        const ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
+        const pasos = Math.max(1, mcd(Math.abs(b[0] - a[0]) / 100, Math.abs(b[1] - a[1]) / 100)); // puntos que cruza + 1
+        for (let k = 0; k < pasos; k++) {
+          const f = (2 * k + 1) / (2 * pasos);
+          const cx = a[0] + (b[0] - a[0]) * f + Math.cos(ang) * t * 0.3;
+          const cy = a[1] + (b[1] - a[1]) * f + Math.sin(ang) * t * 0.3;
+          const p = (d, r) => [cx + Math.cos(ang + d) * r, cy + Math.sin(ang + d) * r];
+          flechas.push([].concat(p(0, t * 0.6), p(Math.PI * 0.75, t), p(-Math.PI * 0.75, t)));
+        }
+      }
+      return flechas;
     }
 
     function htmlPatron(prefijo, oculto) {
       return '<div id="' + prefijo + '-bloque"' + (oculto ? ' hidden' : '') + '><div class="ln-patron" id="' + prefijo + '-lienzo"><svg id="' + prefijo + '-lineas" viewBox="0 0 300 300" aria-hidden="true"></svg>' +
         Array.from({ length: 9 }, (_, i) => '<button type="button" class="ln-patron-punto" data-punto="' + (i + 1) + '" aria-label="Punto ' + (i + 1) + '"></button>').join('') +
         '</div><div class="ln-patron-acciones"><span id="' + prefijo + '-texto">Sin patrón trazado</span><button type="button" class="secondary ln-btn-chico" id="' + prefijo + '-limpiar">Limpiar patrón</button></div></div>';
+    }
+
+    /**
+     * Varias opciones (accesorios): cada una se prende o apaga; NINGUNO apaga las demás y elegir otra apaga NINGUNO
+     * (usuario, 4-oct: solo dejaba elegir una).
+     */
+    function alternarMulti(boton) {
+      const todos = Array.from(boton.parentElement.querySelectorAll('.ln-pastilla-multi'));
+      const ninguno = (b) => String(b.dataset.valor || '').toUpperCase() === 'NINGUNO';
+      const prender = !boton.classList.contains('activa');
+      if (prender && ninguno(boton)) todos.forEach((b) => b.classList.remove('activa'));
+      if (prender && !ninguno(boton)) todos.filter(ninguno).forEach((b) => b.classList.remove('activa'));
+      boton.classList.toggle('activa', prender);
     }
 
     // ---- Formularios del AppSheet (INSPECCIONES LINEAS_Form / RESPONSIVAS LINEAS_Form) ----
@@ -610,14 +670,19 @@
 
     const esPuntosPatron = (v) => /^[1-9](-[1-9])*$/.test(String(v || ''));
 
+    // "AUTO" solo en lo que el formulario llena solo (fórmula o copia de otro campo; lo que llega al elegir a la persona lo
+    // marca CampoAuto.llenar). Lo que solo se muestra (datos del equipo en Mandar a resguardo, NUCO fijo, fecha de alta) no:
+    // el usuario lo marcó como error en producción (4-oct).
+    const autoDe = (e) => !!(e.formula || e.deriva || e.auto);
+
     function htmlElementoFormulario(e) {
       if (e.tipo === 'titulo') return '<h4 class="ln-af-titulo">' + (e.icono ? icono(e.icono) + ' ' : '') + esc(e.texto) + '</h4>';
       const id = 'af-' + e.columna.replace(/[^A-Za-z0-9]+/g, '-');
-      const attrs = ' id="' + id + '" data-columna="' + esc(e.columna) + '"' + (e.virtual ? ' data-virtual' : '') + (e.deriva ? ' data-deriva-de="' + esc(e.deriva.de) + '" data-deriva-dato="' + esc(e.deriva.dato) + '"' : '') + (e.literal || e.secreto ? ' data-respetar-texto' : '') + (e.soloLectura ? ' readonly tabindex="-1"' : '') + (e.soloLectura || e.deriva ? ' data-auto' : '');
+      const attrs = ' id="' + id + '" data-columna="' + esc(e.columna) + '"' + (e.virtual ? ' data-virtual' : '') + (e.deriva ? ' data-deriva-de="' + esc(e.deriva.de) + '" data-deriva-dato="' + esc(e.deriva.dato) + '"' : '') + (e.literal || e.secreto ? ' data-respetar-texto' : '') + (e.soloLectura ? ' readonly tabindex="-1"' : '') + (autoDe(e) ? ' data-auto' : '');
       const valor = e.valor === null || e.valor === undefined ? '' : String(e.valor);
       let control;
       if (e.control === 'escala') {
-        control = '<div class="ln-checklist-punto" data-columna="' + esc(e.columna) + '">' + grupoEscala(e.opciones || [], valor || null) + '</div>';
+        control = '<div class="ln-checklist-punto" data-columna="' + esc(e.columna) + '">' + grupoEscala(e.opciones || [], valor || null, e.ayudas) + '</div>';
       } else if (e.control === 'lista') {
         const opciones = (e.opciones || []).slice();
         const fuera = valor && opciones.map((o) => String(o).toUpperCase()).indexOf(valor.toUpperCase()) < 0;
@@ -630,8 +695,9 @@
       } else if (e.control === 'numero') {
         control = '<input type="text" inputmode="decimal"' + attrs + ' value="' + esc(valor) + '" autocomplete="off" />';
       } else if (e.control === 'multi') {
-        // EnumList del AppSheet: varias opciones; se guarda "A , B"
-        const elegidas = valor.split(',').map((x) => x.trim().toUpperCase()).filter(Boolean);
+        // EnumList del AppSheet: varias opciones; se guarda "A , B". "SD" de antes es "TARJETA SD" (usuario, 4-oct)
+        const conTarjeta = (e.opciones || []).indexOf('TARJETA SD') >= 0;
+        const elegidas = valor.split(',').map((x) => x.trim().toUpperCase()).filter(Boolean).map((x) => (x === 'SD' && conTarjeta ? 'TARJETA SD' : x));
         control = '<div class="ln-multi" data-columna="' + esc(e.columna) + '"><div class="ln-pastillas">' + (e.opciones || []).map((o) =>
           '<button type="button" class="ln-pastilla ln-pastilla-multi' + (elegidas.indexOf(String(o).toUpperCase()) >= 0 ? ' activa' : '') + '" data-valor="' + esc(o) + '">' + esc(o) + '</button>').join('') + '</div></div>';
       } else if (e.control === 'archivo') {
@@ -660,12 +726,12 @@
         control = '<div class="ln-firma ln-firma-' + rol + '"><div class="ln-firma-cabecera">' + icono(rol === 'ci' ? 'shield-check' : 'user') + ' ' +
           (rol === 'ci' ? 'Firma de Control Interno' : 'Firma del responsable') + '</div><div class="ln-firma-lienzo" id="' + id + '-firma"></div></div>';
       } else if (e.control === 'calculado') {
-        control = '<div data-auto class="ln-af-calculado' + (e.formula ? '' : ' ln-af-calculado-texto') + '" id="' + id + '"' + (e.formula ? ' data-formula="' + esc(e.formula) + '"' : '') + '>' + (valor ? esc(valor) : '—') + '</div>';
+        control = '<div' + (autoDe(e) ? ' data-auto' : '') + ' class="ln-af-calculado' + (e.fijo ? ' ln-af-fijo' : (e.formula ? '' : ' ln-af-calculado-texto')) + '" id="' + id + '"' + (e.formula ? ' data-formula="' + esc(e.formula) + '"' : '') + '>' + (valor ? esc(valor) : '—') + '</div>';
       } else {
         control = '<input type="text"' + attrs + ' value="' + esc(valor) + '" autocomplete="off"' + (e.valorOculto ? ' placeholder="•••• (se conserva el valor registrado)"' : '') + ' />';
       }
       const ancho = ['escala', 'area', 'patron', 'firma'].indexOf(e.control) >= 0 ? ' ln-af-ancho' : '';
-      return '<div class="field ln-af-campo' + ancho + (e.soloLectura ? ' ln-af-lectura' : '') + '" data-af-columna="' + esc(e.columna) + '" data-mostrar="' + condAtributo(e.mostrar) + '" data-requerido="' + condAtributo(e.requerido) + '" data-editable="' + condAtributo(e.editable) + '">' +
+      return '<div class="field ln-af-campo' + ancho + (e.control === 'escala' ? ' ln-af-escala' : '') + (e.soloLectura ? ' ln-af-lectura' : '') + '" data-af-columna="' + esc(e.columna) + '" data-mostrar="' + condAtributo(e.mostrar) + '" data-requerido="' + condAtributo(e.requerido) + '" data-editable="' + condAtributo(e.editable) + '">' +
         '<label for="' + id + '">' + esc(e.etiqueta) + '<span class="ln-af-req"' + (e.requerido === 'SIEMPRE' ? '' : ' hidden') + '> *</span></label>' + control + '</div>';
     }
 
@@ -687,6 +753,7 @@
         if (e.tipo !== 'titulo') secciones[secciones.length - 1].campos.push(e);
       });
       const html = (lista) => lista.map(htmlElementoFormulario).join('');
+      const mayus = (t) => String(t || '').trim().toUpperCase();
       return secciones.map((sec) => {
         let cuerpo;
         if (!acomodar) {
@@ -698,10 +765,13 @@
           const lectura = sec.campos.filter((e) => e.soloLectura && e.control !== 'calculado' && ocultos.indexOf(e) < 0);
           const firmas = sec.campos.filter((e) => e.control === 'firma');
           const anchos = sec.campos.filter((e) => e.control === 'area' || e.control === 'patron');
-          const resto = sec.campos.filter((e) => [ocultos, lectura, firmas, anchos].every((g) => g.indexOf(e) < 0));
+          const escalas = sec.campos.filter((e) => e.control === 'escala' && e.checklist); // renglones del checklist; las demás, a todo lo ancho
+          const resto = sec.campos.filter((e) => [ocultos, lectura, firmas, anchos, escalas].every((g) => g.indexOf(e) < 0));
           cuerpo = (lectura.length ? '<div class="ln-af-grid ln-af-datos">' + html(lectura) + '</div>' : '') +
+            (escalas.length ? '<div class="ln-checklist-lista">' + html(escalas) + '</div>' : '') +
             (resto.length ? '<div class="ln-af-grid">' + html(resto) + '</div>' : '') +
-            anchos.map((e) => '<div class="ln-af-completo">' + htmlElementoFormulario(e) + '</div>').join('') +
+            anchos.map((e) => '<div class="ln-af-completo' + (sec.campos.length === 1 && sec.titulo && mayus(e.etiqueta) === mayus(sec.titulo.texto) ? ' ln-af-sin-etiqueta' : '') + '">' +
+              htmlElementoFormulario(e) + '</div>').join('') +
             (firmas.length ? '<div class="ln-firmas">' + html(firmas) + '</div>' : '') +
             (ocultos.length ? '<div hidden>' + html(ocultos) + '</div>' : '');
         }
@@ -784,25 +854,32 @@
     // orden del AppSheet: cada paso empieza en la columna o el título (`titulo:…`) que indica `desde`.
     const PASOS_FORMULARIO = {
       INSPECCION: [
-        { titulo: 'Datos', icono: 'id-card', desde: 'titulo:FORMATO DE INSPECCIÓN CELULAR', descripcion: 'Vienen del registro. Confirma que coinciden con el equipo que tienes enfrente.' },
-        { titulo: 'Accesorios y sistema', icono: 'package-check', desde: 'titulo:DOCUMENTACIÓN / ACCESORIOS', descripcion: 'Marca lo que trae el equipo y cómo funciona.' },
-        { titulo: 'Estado físico', icono: 'smartphone', desde: 'titulo:ESTADO FÍSICO GENERAL', descripcion: 'Revisa pantalla, botones, cámara, puertos y desempeño.' },
-        { titulo: 'Accesos y apps', icono: 'key-round', desde: 'titulo:BLOQUEO Y CONTRASEÑAS', descripcion: 'Bloqueo del equipo y aplicaciones instaladas.' },
-        { titulo: 'Fotos', icono: 'camera', desde: 'extra:FOTOS', descripcion: 'Opcional: toma o agrega fotos del equipo.', siempre: true },
-        { titulo: 'Firmas', icono: 'signature', desde: 'titulo:CALIFICACIÓN, OBSERVACIONES Y FIRMAS', descripcion: 'Revisa la calificación, agrega observaciones y firma.' },
+        // Sin textos de ayuda en los pasos (usuario, 4-oct): el título y los campos bastan
+        { titulo: 'Datos', icono: 'id-card', desde: 'titulo:EQUIPO' },
+        { titulo: 'Accesorios y sistema', icono: 'package-check', desde: 'titulo:DOCUMENTACIÓN / ACCESORIOS' },
+        { titulo: 'Estado físico', icono: 'smartphone', desde: 'titulo:ESTADO FÍSICO GENERAL' },
+        { titulo: 'Accesos y apps', icono: 'key-round', desde: 'titulo:BLOQUEO Y CONTRASEÑAS' },
+        { titulo: 'Fotos', icono: 'camera', desde: 'extra:FOTOS', siempre: true },
+        { titulo: 'Firmas', icono: 'signature', desde: 'titulo:DATOS DE LA INSPECCIÓN' },
       ],
       RESPONSIVA: [
-        { titulo: 'Responsable', icono: 'user', desde: 'ID', descripcion: 'Fecha del documento e identificación de quien recibe.' },
-        { titulo: 'Equipo', icono: 'smartphone', desde: 'No TELEFONO', descripcion: 'Confirma el equipo que se entrega y sus accesos.' },
-        { titulo: 'Firmas', icono: 'signature', desde: 'OBSERVACIONES', descripcion: 'Observaciones y firmas de entrega.' },
+        { titulo: 'Datos', icono: 'id-card', desde: 'titulo:EQUIPO' },
+        { titulo: 'Accesorios y accesos', icono: 'key-round', desde: 'titulo:ACCESORIOS Y ACCESOS' },
+        { titulo: 'Firmas', icono: 'signature', desde: 'titulo:DATOS DE LA RESPONSIVA' },
       ],
-      REGISTRO: [
-        { titulo: 'Identificación', icono: 'tag', desde: 'FOLIO', descripcion: 'Elige primero el TIPO: los demás campos se habilitan según él, igual que en AppSheet.' },
-        { titulo: 'Responsable', icono: 'user', desde: 'NO EMPLEADO', descripcion: 'Quién tiene el equipo y quién lo usa.' },
-        { titulo: 'Equipo y ubicación', icono: 'map-pin', desde: 'IMEI' },
-        { titulo: 'Accesos y plan', icono: 'key-round', desde: 'PIN WHATSAPP' },
-        { titulo: 'Estatus', icono: 'toggle-right', desde: 'ESTATUS LINEA' },
-        { titulo: 'Sistema nuevo', icono: 'sparkles', desde: 'titulo:DATOS DEL SISTEMA NUEVO' },
+      // Editar y Agregar (usuario, 4-oct): una pestaña por parte de lo guardado
+      REGISTRO_EQUIPO: [
+        { titulo: 'Equipo', icono: 'smartphone', desde: 'titulo:EQUIPO' },
+        { titulo: 'Responsable', icono: 'user', desde: 'titulo:RESPONSABLE' },
+        { titulo: 'Línea', icono: 'card-sim', desde: 'titulo:LÍNEA' },
+        { titulo: 'Adendum', icono: 'file-text', desde: 'titulo:ADENDUM' },
+        { titulo: 'Accesorios y accesos', icono: 'key-round', desde: 'titulo:ACCESORIOS Y ACCESOS' },
+      ],
+      REGISTRO_LINEA: [
+        { titulo: 'Línea', icono: 'card-sim', desde: 'titulo:LÍNEA' },
+        { titulo: 'Responsable', icono: 'user', desde: 'titulo:RESPONSABLE' },
+        { titulo: 'Adendum', icono: 'file-text', desde: 'titulo:ADENDUM' },
+        { titulo: 'Accesos', icono: 'key-round', desde: 'titulo:ACCESOS' },
       ],
       SOLICITUD: [
         { titulo: 'Solicitud', icono: 'file-plus', desde: 'FOLIO' },
@@ -998,20 +1075,33 @@
         const campo = { NUMEROS: 'numero', IMEIS: 'imei', SIMS: 'sim' }[tipo];
         return cargarIndice().then((ix) => {
           const vistos = {};
-          return ix.equipos.concat(ix.lineas).reduce((ops, r) => {
+          // Números y SIM salen de las líneas y traen sus datos para llenar los demás campos al elegirlos (usuario, 4-oct)
+          const equipoDe = {};
+          ix.equipos.forEach((e) => { if (e.lineaId) equipoDe[e.lineaId] = e; });
+          const filas = tipo === 'IMEIS' ? ix.equipos.concat(ix.lineas) : ix.lineas;
+          return filas.reduce((ops, r) => {
             const v = r[campo];
             if (!v || vistos[v]) return ops;
             vistos[v] = true;
             const nuco = r.nuco || r.nucoEquipo;
-            ops.push({ valor: String(v), etiqueta: [nuco ? 'NUCO ' + nuco : '', r.responsable || ''].filter(Boolean).join(' · ') });
+            const op = { valor: String(v), etiqueta: [nuco ? 'NUCO ' + nuco : '', r.responsable || ''].filter(Boolean).join(' · ') };
+            if (tipo !== 'IMEIS') {
+              const eq = equipoDe[r.id] || {};
+              op.datos = { numero: r.numero ? String(r.numero) : '', sim: r.sim ? String(r.sim) : '', compania: r.compania || '',
+                razonSocial: r['RAZON SOCIAL'] || eq['RAZON SOCIAL'] || '' };
+            }
+            ops.push(op);
             return ops;
           }, []);
         });
       }
       return cargarColaboradores().then((r) => {
+        // Personas activas de Capital Humano con los datos que se llenan al elegirlas (autollenar)
         const gente = filasComoObjetos(r).map((c) => ({
           nombre: mayusSinAcentos(c.nombre), noEmpleado: c.noEmpleado ? String(c.noEmpleado).trim().toUpperCase() : '',
           puesto: mayusSinAcentos(c.puesto), departamento: mayusSinAcentos(c.departamento),
+          area: c.area || '', sede: c.sede || '', oficina: c.oficina || '', director: c.director || '', jefe: c.jefe || '',
+          correo: c.correo ? String(c.correo).trim().toLowerCase() : '',
           baja: c.estatus && String(c.estatus).toUpperCase() !== 'ACTIVO',
         })).filter((c) => c.nombre);
         const distintos = (campo) => gente.map((c) => c[campo]).filter((v, i, a) => v && a.indexOf(v) === i).sort();
@@ -1037,6 +1127,16 @@
      * `e.sugerencias` agrega opciones de COLABORADORES o del índice; `e.autollenar` ({ COLUMNA: dato })
      * copia datos de la persona elegida en otros campos editables del mismo formulario.
      */
+    /**
+     * Datos del responsable que salen de Capital Humano: se elige de la lista y, si no está, hay que seleccionar
+     * "Agregar 'x'" (lo que solo se teclea no se guarda). Lo agregado se queda en ese registro y no entra a la lista
+     * de nadie más (PLAN_REESTRUCTURA_LINEAS.md §3.6). En las acciones masivas la columna llega como "id|COLUMNA".
+     */
+    const COLUMNAS_CH = ['RESPONSABLE', 'NO EMPLEADO', 'PUESTO', 'DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO',
+      'DIRECTOR', 'JEFE DIRECTO', 'NOMBRE QUIEN USA', 'PUESTO QUIEN USA']
+      .concat(['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'].reduce((a, n) => a.concat(['NOMBRE ' + n + ' RESPONSABLE', 'PUESTO ' + n + ' RESPONSABLE']), []));
+    const esColumnaCH = (columna) => COLUMNAS_CH.indexOf(String(columna || '').split('|').pop().toUpperCase().replace(/\s+/g, ' ').trim()) >= 0;
+
     function activarCombosEn(cuerpo, elementos) {
       if (typeof Combobox === 'undefined') return;
       (elementos || []).forEach((e) => {
@@ -1046,6 +1146,8 @@
         input.dataset.comboListo = '1';
         const cbx = Combobox.crear(input, {
           opciones: e.control === 'referencia' ? (e.opciones || []).map((o) => ({ valor: o.etiqueta, etiqueta: '' })) : unirOpciones(e.opciones),
+          // Todas las listas (usuario, 4-oct): lo que no está se elige con "Agregar 'x'"; solo queda en ese registro
+          agregar: e.control === 'listaAbierta' && !e.soloLista,
           maximo: 50,
           alElegir: (opcion) => {
             if (e.autollenar && opcion && opcion.datos) {
@@ -1062,7 +1164,23 @@
           },
         });
         if (e.sugerencias) {
-          opcionesSugeridas(e.sugerencias).then((ops) => cbx.setOpciones(unirOpciones(ops, e.opciones))).catch(() => { /* quedan las del servidor */ });
+          opcionesSugeridas(e.sugerencias).then((ops) => {
+            // soloLista: solo las personas de la lista, con sus datos de Capital Humano para llenar lo demás
+            const permitidas = (e.opciones || []).map((o) => String(o).toUpperCase());
+            cbx.setOpciones(e.soloLista ? unirOpciones(ops.filter((o) => o && permitidas.indexOf(String(o.valor).toUpperCase()) >= 0), e.opciones) : unirOpciones(ops, e.opciones));
+            // llenarVacios (usuario, 4-oct): al abrir, si la persona está en Capital Humano, sus datos vacíos se llenan
+            // solos (antes había que volver a elegirla). Lo que ya trae el registro no se toca.
+            const actual = String(input.value || '').trim().toUpperCase();
+            const persona = e.llenarVacios && e.autollenar && actual && ops.filter((o) => o && o.datos && String(o.valor).toUpperCase() === actual)[0];
+            if (!persona) return;
+            Object.keys(e.autollenar).forEach((columna) => {
+              const destino = cuerpo.querySelector('[data-columna="' + CSS.escape(columna) + '"]');
+              const valor = persona.datos[e.autollenar[columna]];
+              if (!destino || destino.disabled || destino.readOnly || !valor || String(destino.value || '').trim()) return;
+              destino.value = valor;
+              destino.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+          }).catch(() => { /* quedan las del servidor */ });
         }
       });
     }
@@ -1085,11 +1203,10 @@
     const VALIDA_CLIENTE = {
       MAYUS: { f: (v) => v === v.toUpperCase() && !/[ÁÉÍÓÚ]/.test(v), msg: 'ESCRIBIR EN MAYUSCULAS Y SIN ACENTOS' },
       NUCO: { f: (v) => /^\d+$/.test(v), msg: 'ESTE CAMPO DEBE SER NUMEROS Y NO SE DEBE REPETIR' },
-      TELEFONO: { f: (v, t) => (t === 'EQUIPO' ? v === 'NO APLICA' : v !== 'NO APLICA'), msg: 'ESTE VALOR DEBE SER UNICO' },
-      EQUIPO: { f: (v, t) => (t === 'LINEA' ? v === 'NO APLICA' : v !== 'NO APLICA'), msg: 'DEBE ESCRIBIR EN MAYUSCULAS SIN ACENTOS Y EL NOMBRE DEBE ESTAR EN LA LISTA AUTORIZADA' },
-      PIN_WA: { f: (v, t) => (['BANDA ANCHA', 'MODEM'].indexOf(t) >= 0 ? v === 'NO APLICA' : v !== 'NO APLICA' && v.length <= 13), msg: 'INGRESE UN VALOR VALIDO, Y NO MAYOR A 13 CARACTERES' },
-      PIN_EQ: { f: (v, t) => (['BANDA ANCHA', 'LINEA', 'MODEM'].indexOf(t) >= 0 ? v === 'NO APLICA' : v !== 'NO APLICA' && v.length <= 6), msg: 'INGRESE UN VALOR VALIDO, Y NO MAYOR A 6 CARACTERES' },
-      CUENTA: { f: (v, t) => (['BANDA ANCHA', 'LINEA', 'MODEM'].indexOf(t) >= 0 ? v === 'NO APLICA' : v !== 'NO APLICA'), msg: 'INGRESE UN VALOR VALIDO' },
+      // Sin TIPO que elegir (4-oct): las mismas reglas que el servidor (LineasRegistros.valida_)
+      EQUIPO: { f: (v) => v !== 'NO APLICA', msg: 'ELIGE EL MODELO' },
+      PIN_WA: { f: (v) => v === 'NO APLICA' || v.length <= 13, msg: 'NO MAYOR A 13 CARACTERES' },
+      PIN_EQ: { f: (v) => v === 'NO APLICA' || v.length <= 6, msg: 'NO MAYOR A 6 CARACTERES' },
       COMENTARIOS: { f: (v) => v.length > 3, msg: 'ESCRIBE MÁS DE 3 CARACTERES' },
     };
 
@@ -1104,7 +1221,7 @@
         const v = valores[e.columna] || '';
         const error = (corto) => errores.push({ e: e, columna: e.columna, corto: corto, msg: e.etiqueta + ': ' + corto });
         if (!v) { if (cumpleCondicion(e.requerido, t, valores, ctx)) errores.push({ e: e, columna: e.columna, corto: 'Obligatorio', msg: e.etiqueta + ' es obligatorio' }); return; }
-        if (e.control === 'lista' && (e.opciones || []).map((o) => String(o).toUpperCase()).indexOf(v.toUpperCase()) < 0) { error(e.mensaje || 'VALOR NO ENCONTRADO EN LA LISTA'); return; }
+        if ((e.control === 'lista' || e.soloLista) && (e.opciones || []).map((o) => String(o).toUpperCase()).indexOf(v.toUpperCase()) < 0) { error(e.mensaje || 'VALOR NO ENCONTRADO EN LA LISTA'); return; }
         if (e.control === 'referencia' && v.charAt(0) === '¿') error('Elige un valor de la lista');
         const regla = e.valida && VALIDA_CLIENTE[e.valida];
         if (regla && !regla.f(v, t)) error(regla.msg);
@@ -1113,8 +1230,24 @@
     }
 
     /** FOLIO y ESTATUS GENERAL (AppFormula de LINEAS TELEFONICAS) para mostrarlos en vivo. */
+    /**
+     * TIPO asignado solo (usuario, 4-oct; la misma cuenta que LineasRegistros.tipoAutomatico_): equipo sin línea → EQUIPO;
+     * con línea → EQUIPO + SIM, o EQUIPO + SIM BASICO si es básica; línea sola → LINEA o LINEA BASICA. Una línea
+     * CANCELADA ya no cuenta. MODEM, BANDA ANCHA y CAMARA (histórico) se quedan como están.
+     */
+    function tipoAutomatico(v, ctx) {
+      if (ctx && ctx.historico) return ctx.tipoInicial || '';
+      const txt = (c) => String((v || {})[c] || '').trim().toUpperCase();
+      const vacio = (x) => !x || ['N/A', 'NA', 'NO APLICA', '-', 'SOLO LINEA', 'SIN EQUIPO'].indexOf(x) >= 0;
+      const conLinea = (!vacio(txt('NUMERO TELEFONO')) || !vacio(txt('NUMERO SIM'))) && txt('ESTATUS LINEA') !== 'CANCELADA';
+      const basica = txt('TIPO DE LINEA') === 'SIM BASICO';
+      if (ctx && ctx.parte === 'LINEA') return basica ? 'LINEA BASICA' : 'LINEA';
+      return !conLinea ? 'EQUIPO' : (basica ? 'EQUIPO + SIM BASICO' : 'EQUIPO + SIM');
+    }
+
     function formulaRegistro(nombre, v, id) {
       const tipo = String(v.TIPO || '').toUpperCase();
+      if (nombre === 'TIPO_EQUIPO' || nombre === 'TIPO_LINEA') return tipo;
       if (nombre === 'FOLIO') {
         const prefijo = { 'EQUIPO + SIM': 'EQS', 'LINEA': 'LIN', 'MODEM': 'MOD', 'CAMARA': 'CAM', 'BANDA ANCHA': 'BAN', 'EQUIPO': 'EQP' }[tipo] || '';
         return prefijo + ('0000' + (v.NUCO || '')).slice(-4);
@@ -1134,6 +1267,9 @@
      */
     function aplicarReglasEn(cuerpo, elementos, ctx) {
       let valores = leerFormularioEn(cuerpo, elementos);
+      // El TIPO ya no se elige (4-oct): se calcula con lo capturado. El NUCO fijo (edición) no es un campo: viene del contexto
+      if (ctx && ctx.parte) valores.TIPO = tipoAutomatico(valores, ctx);
+      if (ctx && ctx.nuco && valores.NUCO === undefined) valores.NUCO = ctx.nuco;
       const t = String(valores.TIPO || '').toUpperCase();
       const tipoCambio = ctx.nuevo || t !== String(ctx.tipoInicial || '').toUpperCase();
       (elementos || []).forEach((e) => {
@@ -1143,6 +1279,8 @@
         if (el) el.value = e.reset.copiar ? (valores[e.reset.copiar] || '') : e.reset.valor;
       });
       valores = leerFormularioEn(cuerpo, elementos);
+      if (ctx && ctx.parte) valores.TIPO = t;
+      if (ctx && ctx.nuco && valores.NUCO === undefined) valores.NUCO = ctx.nuco;
       cuerpo.querySelectorAll('.ln-af-campo').forEach((campo) => {
         const visible = cumpleCondicion(campo.dataset.mostrar, t, valores, ctx);
         campo.hidden = !visible;
@@ -1343,16 +1481,48 @@
       });
     }
 
+    const porNucoIndice_ = (a, b) => {
+      const na = Number(a.nuco || a.nucoEquipo);
+      const nb = Number(b.nuco || b.nucoEquipo);
+      if (isNaN(na) && isNaN(nb)) return 0;
+      if (isNaN(na)) return 1;
+      if (isNaN(nb)) return -1;
+      return na - nb;
+    };
+
+    /**
+     * Rapidez (etapa 3, paso 2): después de una acción el servidor regresa solo los registros que cambiaron
+     * (LineasRepo.refrescarIndice: { equipos, lineas, vista, quitar }). Se cambian en el índice que ya está en memoria en
+     * vez de volver a pedirlo completo. Si no vienen (o no hay índice en memoria), se pide completo, como antes.
+     */
+    function aplicarCambiosIndice(cambios) {
+      const ix = memoria.indice;
+      if (!ix || !memoria.vistaColumnas || !cambios || !Array.isArray(cambios.equipos) || !Array.isArray(cambios.lineas) || !Array.isArray(cambios.vista)) {
+        return cargarIndice(true);
+      }
+      const vista = {};
+      cambios.vista.forEach((f) => {
+        const o = {};
+        memoria.vistaColumnas.forEach((c, i) => { o[c] = f[i + 1]; });
+        vista[f[0]] = o;
+      });
+      const conVista = (x) => Object.assign(x, vista[x.id] || {});
+      const cambiar = (lista, columnas, nuevas, quitar) => {
+        const filas = filasComoObjetos({ columnas: columnas, filas: nuevas }).map(conVista);
+        const fuera = new Set((quitar || []).concat(filas.map((x) => x.id)));
+        return lista.filter((x) => !fuera.has(x.id)).concat(filas).sort(porNucoIndice_);
+      };
+      const quitar = cambios.quitar || {};
+      ix.equipos = cambiar(ix.equipos, ix.columnas.equipos, cambios.equipos, quitar.equipos);
+      ix.lineas = cambiar(ix.lineas, ix.columnas.lineas, cambios.lineas, quitar.lineas);
+      memoria.cargadoEn = Date.now();
+      return Promise.resolve(ix);
+    }
+
     function procesarIndice_(r) {
       {
-        const porNuco = (a, b) => {
-          const na = Number(a.nuco || a.nucoEquipo);
-          const nb = Number(b.nuco || b.nucoEquipo);
-          if (isNaN(na) && isNaN(nb)) return 0;
-          if (isNaN(na)) return 1;
-          if (isNaN(nb)) return -1;
-          return na - nb;
-        };
+        const porNuco = porNucoIndice_;
+        memoria.vistaColumnas = (r.vista && r.vista.columnas) || null;
         // Columnas de la vista de tabla del AppSheet (por ID del registro) dentro de cada fila del índice
         const vista = {};
         ((r.vista && r.vista.filas) || []).forEach((f) => {
@@ -1494,7 +1664,7 @@
       { clave: 'RESGUARDO', texto: 'Mandar a resguardo', icono: 'archive', minimo: 1, propia: true,
         ayuda: 'Manda los equipos seleccionados a resguardo: cada uno con su ubicación y el estatus de su línea' },
       { clave: 'REASIGNAR', texto: 'Reasignar', boton: 'Reasignar', icono: 'user-round-pen',
-        ayuda: 'Asigna los equipos seleccionados a otro responsable', efecto: 'Todos los equipos pasan al nuevo responsable y su ESTATUS DEL EQUIPO queda en RESGUARDO; lo que dejes vacío (No. empleado, puesto, departamento) queda como estaba en cada equipo.' },
+        ayuda: 'Asigna los equipos seleccionados a otro responsable', efecto: 'Todos los equipos pasan al nuevo responsable y quedan en USO (su línea también, si estaba DISPONIBLE); lo que dejes vacío (No. empleado, puesto, departamento) queda como estaba en cada equipo.' },
       // "Cancelar equipos" se quitó el 30-sep: los equipos no se cancelan, solo las líneas
     ];
 
@@ -1555,9 +1725,9 @@
       let asignaciones = null; // números del NUCO o NUCOs del número de la ficha abierta (null mientras carga)
       let tablaAsignaciones = null; // DataTable de esas asignaciones
       let ocultarSinAsignar = false; // oculta los periodos "Sin línea" / "Sin equipo" (suelen ser transiciones)
-      let fichaActual = null; // estatus de la ficha abierta (para "Cambiar estatus")
+      let fichaActual = null; // la ficha abierta (su carpeta de Drive, para el ⋮)
       // Estatus del equipo que van por el formulario de resguardo (LineasResguardos.ESTATUS_EQUIPO_RESGUARDO)
-      const ESTATUS_EQUIPO_RESGUARDO = ['RESGUARDO', 'PARA VENTA', 'POSIBLE VENTA-DAÑO', 'PARA DESECHO'];
+      const ESTATUS_EQUIPO_RESGUARDO = ['RESGUARDO', 'PARA VENTA', 'PARA DESECHO'];
       let marcarKpi = null;
       raiz.querySelectorAll('#ln-tabs .tab-btn').forEach((tab) => {
         tab.addEventListener('click', () => mostrarModulo(tab.dataset.tab));
@@ -1571,7 +1741,9 @@
           .catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 12000))
           .then(() => { b.disabled = false; });
       });
-      $('#ln-nuevo-registro', raiz).addEventListener('click', () => abrirEditor(null));
+      // Agregar equipo o línea (usuario, 4-oct): el TIPO ya no se elige, se asigna solo
+      $('#ln-nuevo-equipo', raiz).addEventListener('click', () => abrirEditor(null, 'EQUIPO'));
+      $('#ln-nueva-linea', raiz).addEventListener('click', () => abrirEditor(null, 'LINEA'));
       raiz.querySelectorAll('#ln-modo-vista [data-modo]').forEach((b) => b.addEventListener('click', () => {
         memoria.modoVista = b.dataset.modo;
         try { localStorage.setItem('lineas.modoVista', memoria.modoVista); } catch (e) { /* solo no se recuerda */ }
@@ -1617,10 +1789,13 @@
           abrirCaptura(btnCaptura.dataset.lnCaptura, ref);
           return;
         }
+        const multi = ev.target.closest('.ln-pastilla-multi');
+        if (multi) { alternarMulti(multi); actualizarProgresoChecklist(); return; }
         const pastilla = ev.target.closest('.ln-pastilla');
         if (pastilla) {
-          pastilla.parentElement.querySelectorAll('.ln-pastilla').forEach((b) => b.classList.remove('activa'));
+          pastilla.parentElement.querySelectorAll('.ln-pastilla').forEach((b) => { b.classList.remove('activa'); if (b.hasAttribute('aria-checked')) b.setAttribute('aria-checked', 'false'); });
           pastilla.classList.add('activa');
+          if (pastilla.hasAttribute('aria-checked')) pastilla.setAttribute('aria-checked', 'true');
           actualizarProgresoChecklist();
           return;
         }
@@ -1654,7 +1829,9 @@
         else if (ev.key === 'Escape' && ev.target.closest && ev.target.closest('#ln-listado .ln-cuadro') && tablas[memoria.modulo]) tablas[memoria.modulo].limpiarSeleccion();
       });
       $('#ln-modal-captura', raiz).addEventListener('click', (ev) => {
-        if (ev.target.id === 'ln-modal-captura' || ev.target.closest('[data-cerrar-modal]')) cerrarCaptura();
+        if (ev.target.closest('[data-espera-volver]')) { ocultarEspera(); return; }
+        // Un clic afuera no cierra la ventana (usuario, 4-oct): solo la X, Cancelar o Cerrar
+        if (ev.target.closest('[data-cerrar-modal]')) cerrarCaptura();
       });
 
       // ---- Carga inicial ----
@@ -1749,12 +1926,6 @@
       }).catch(() => { /* sin permisos: solo las acciones de consulta */ });
       const ACCION_REASIGNAR = ACCIONES_MASIVAS.filter((a) => a.clave === 'REASIGNAR')[0];
 
-      /** Lo que "Cambiar estatus" necesita de una fila del índice (lo mismo que arma la ficha). */
-      function fichaDeFila(tipo, r) {
-        return tipo === 'equipo'
-          ? { id: r.id, titulo: 'NUCO ' + (r.nuco || '—'), estatusEquipo: r.estatus || '', estatusLinea: r.numero ? (r.estatusLinea || '') : null }
-          : { id: r.id, titulo: 'Línea ' + (r.numero || '—'), estatusEquipo: null, estatusLinea: r.estatus || '' };
-      }
 
       /** Abre la ficha directo en una pestaña (p. ej. Historial desde el menú). */
       function abrirEnPestana(tipo, id, pestana) {
@@ -1766,26 +1937,26 @@
 
       /**
        * enBarra (por omisión) = a la vista en la barra azul; enBarra: false = dentro de ⋮. El clic derecho y el ⋮ de la
-       * fila muestran todas. `grupo` separa con una línea en el menú. Reparto acordado con el usuario el 30-sep.
+       * fila muestran todas. `grupo` separa con una línea en el menú. Reparto acordado con el usuario el 30-sep. Las
+       * acciones no dependen del estatus («¿Qué pasó?» se quitó el 4-oct, usuario) y los estatus se cambian en Editar
+       * (sin «Cambiar estatus», 4-oct).
+       * Sin acciones masivas por ahora (usuario, 3-oct): todas son de un registro a la vez (UNO) hasta pulir cada
+       * proceso; después se regresan las de varios.
        */
       function accionesSeleccionDe(modulo) {
         const tipo = TABLAS_INVENTARIO[modulo].detalle;
         const operar = () => puedeOperarTabla;
-        const conLinea = (filas) => puedeOperarTabla && filas.some((r) => !!r.numero);
+        const UNO = 1; // sin acciones masivas por ahora
         const detalles = { icono: 'info', texto: 'Detalles', titulo: 'Panel con lo fundamental; sigue a la fila que selecciones', maximo: 1, grupo: 'ver',
           activo: () => detallesAbiertos, alHacer: (f) => (detallesAbiertos && panelAbierto ? panelAbierto.cerrar() : mostrarDetalles(tipo, f[0])) };
-        const estatus = { icono: 'toggle-right', texto: 'Cambiar estatus', maximo: 1, grupo: 'ver', visible: operar,
-          alHacer: (f) => abrirCambioEstatus(fichaDeFila(tipo, f[0])) };
         const editar = { icono: 'pencil', texto: 'Editar información', maximo: 1, enBarra: false, grupo: 'abrir', visible: operar, alHacer: (f) => abrirEditor(f[0].id) };
         const historial = { icono: 'history', texto: 'Historial', maximo: 1, enBarra: false, grupo: 'linea', alHacer: (f) => abrirEnPestana(tipo, f[0].id, 'historial') };
         if (modulo === 'equipos') {
-          return [detalles, estatus,
-            { icono: 'archive', texto: 'Mandar a resguardo', titulo: 'Cada equipo con su ubicación y el estatus de su línea; sus datos de persona pasan a N/A', grupo: 'mover',
+          return [detalles,
+            { icono: 'archive', texto: 'Mandar a resguardo', titulo: 'El equipo con su ubicación y el estatus de su línea; se cierra la asignación de la persona', maximo: UNO, grupo: 'mover',
               visible: operar, alHacer: (f) => abrirResguardo(f) },
-            { icono: 'user-round-pen', texto: 'Reasignar', titulo: 'Asigna los equipos a otro responsable', grupo: 'mover', visible: operar,
-              alHacer: (f) => abrirMasiva(ACCION_REASIGNAR, f) },
-            { icono: 'phone-off', texto: 'Mandar líneas a cancelación', titulo: 'Sus líneas pasan a la bandeja de cancelaciones; los equipos no cambian', minimo: 2,
-              grupo: 'mover', visible: conLinea, alHacer: (f) => abrirCancelacion(f) },
+            { icono: 'user-round-pen', texto: 'Reasignar', titulo: 'Asigna el equipo a otro responsable', maximo: UNO, grupo: 'mover', visible: operar,
+              alHacer: (f) => abrirReasignar(f[0]) },
             editar,
             // Documentos separados por tipo, con su título, para no confundir "nueva" con "ver la última" (usuario, 30-sep)
             { icono: 'clipboard-check', texto: 'Nueva inspección', maximo: 1, enBarra: false, grupo: 'inspeccion', tituloGrupo: 'Inspección', visible: operar,
@@ -1796,12 +1967,12 @@
               alHacer: (f) => abrirCaptura('RESPONSIVA', { equipoId: f[0].id }) },
             { icono: 'file-text', texto: 'Ver última responsiva', maximo: 1, enBarra: false, grupo: 'responsiva', tituloGrupo: 'Responsiva', visible: (f) => tieneNuco(f[0]),
               alHacer: (f) => abrirUltimoDesdeMenu('RESPONSIVA', f[0].id) },
-            { icono: 'phone-off', texto: 'Mandar línea a cancelación', titulo: 'La línea pasa a la bandeja de cancelaciones; el equipo no cambia', maximo: 1, enBarra: false,
-              grupo: 'linea', visible: conLinea, alHacer: (f) => abrirCancelacion(f) },
+            // Lo de la línea (estatus, cancelación) se hace desde la línea (usuario, 4-oct)
+            { icono: 'card-sim', texto: 'Ir a la línea', maximo: 1, grupo: 'mover', visible: (f) => !!f[0].lineaId, alHacer: (f) => abrir('linea', f[0].lineaId) },
             historial];
         }
-        return [detalles, estatus,
-          { icono: 'phone-off', texto: 'Mandar a cancelación', titulo: 'Pasan a la bandeja de cancelaciones de quien las tramita; el equipo no cambia', grupo: 'mover',
+        return [detalles,
+          { icono: 'phone-off', texto: 'Mandar a cancelación', titulo: 'Pasa a la bandeja de cancelaciones de quien la tramita; el equipo no cambia', maximo: UNO, grupo: 'mover',
             visible: operar, alHacer: (f) => abrirCancelacion(f) },
           { icono: 'smartphone', texto: 'Ir al equipo', maximo: 1, grupo: 'mover', visible: (f) => !!f[0].equipoId, alHacer: (f) => abrir('equipo', f[0].equipoId) },
           editar, historial];
@@ -2197,7 +2368,7 @@
           ['Oficina / desarrollo', r.oficina],
           ['Jefe directo', r.jefeDirecto],
           ['Director', r.director],
-          ['Razón social', r.razonSocial],
+          // La razón social es de la línea (el contrato), no del responsable: se ve en la tarjeta de la línea
         ]) + adicionales);
       }
 
@@ -2269,7 +2440,7 @@
           const puedeOperar = memoria.permisos && memoria.permisos.puedeOperar;
           pila[pila.length - 1].etiqueta = 'NUCO ' + (e.nuco || '—');
           const resp = e.responsable || {};
-          fichaActual = { id: id, titulo: 'NUCO ' + (e.nuco || '—'), estatusEquipo: e.estatus || '', estatusLinea: l ? (l.estatus || '') : null, carpetaDriveId: e.carpetaDriveId || null };
+          fichaActual = { id: id, titulo: 'NUCO ' + (e.nuco || '—'), estatusEquipo: e.estatus || '', estatusLinea: null, carpetaDriveId: e.carpetaDriveId || null };
           if (e.nuco) precargarUltimosNucos(id);
           detalle.innerHTML = migas() +
             encabezado('smartphone', 'NUCO ' + esc(e.nuco || '—'),
@@ -2291,7 +2462,7 @@
               ])) +
               tarjeta(icono('card-sim') + ' Línea asignada', l ? campos([
                 ['Número', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + icono('phone') + ' ' + esc(l.numero || '(sin número)') + ' ' + icono('chevron-right') + '</a>', true],
-                ['Compañía', l.compania], ['Estatus', chip(l.estatus), true], ['SIM', l.sim], ['PIN WhatsApp', l.pinWhatsapp],
+                ['Compañía', l.compania], ['Razón social', l.razonSocial], ['Estatus', chip(l.estatus), true], ['SIM', l.sim], ['PIN WhatsApp', l.pinWhatsapp],
                 ['Costo plan', costo], ['Plan', [fecha(l.inicioPlan), fecha(l.finPlan)].filter(Boolean).join(' → ')],
               ]) : '<p class="empty-state">Este equipo no tiene línea asignada.</p>') +
               tarjetaResponsable(e.responsable) +
@@ -2368,7 +2539,6 @@
         const r = (tipo === 'equipo' ? ix.equipos : ix.lineas).filter((x) => x.id === id)[0] || { id: id };
         const operar = !!(memoria.permisos && memoria.permisos.puedeOperar);
         const comunes = [
-          { icono: 'toggle-right', texto: 'Cambiar estatus', alHacer: () => abrirCambioEstatus() },
           { icono: 'pencil', texto: 'Editar información', alHacer: () => abrirEditor(id) },
         ];
         // La carpeta de Drive va sola, separada de inspección y responsiva (usuario, 30-sep)
@@ -2382,13 +2552,14 @@
         if (documentos.length) documentos[0].titulo = 'Documentos';
         const items = tipo === 'equipo' ? (operar ? comunes.concat([
           { icono: 'archive', texto: 'Mandar a resguardo', separador: true, alHacer: () => abrirResguardo([r]) },
-          { icono: 'user-round-pen', texto: 'Reasignar', alHacer: () => abrirMasiva(ACCION_REASIGNAR, [r]) },
-          r.numero ? { icono: 'phone-off', texto: 'Mandar línea a cancelación', alHacer: () => abrirCancelacion([r]) } : null,
+          { icono: 'user-round-pen', texto: 'Reasignar', alHacer: () => abrirReasignar(r) },
         ]) : []).concat(drive, documentos, [
-          { icono: 'history', texto: 'Historial', separador: true, alHacer: () => mostrarPestanaFicha('historial') },
+          r.lineaId ? { icono: 'card-sim', texto: 'Ir a la línea', separador: true, alHacer: () => abrir('linea', r.lineaId) } : null,
+          { icono: 'history', texto: 'Historial', separador: !r.lineaId, alHacer: () => mostrarPestanaFicha('historial') },
         ]) : comunes.concat([
           r.numero ? { icono: 'phone-off', texto: 'Mandar a cancelación', separador: true, alHacer: () => abrirCancelacion([r]) } : null,
-          { icono: 'history', texto: 'Historial', separador: true, alHacer: () => mostrarPestanaFicha('historial') },
+          r.equipoId ? { icono: 'smartphone', texto: 'Ir al equipo', separador: true, alHacer: () => abrir('equipo', r.equipoId) } : null,
+          { icono: 'history', texto: 'Historial', separador: !r.equipoId, alHacer: () => mostrarPestanaFicha('historial') },
         ]);
         menuFlotante(boton, items.filter(Boolean));
       }
@@ -2468,7 +2639,7 @@
       /** PDF que el sistema no alcanzó a generar al guardar una inspección o responsiva. */
       function generarPdfPendiente(tipo, idDoc, carpetaId) {
         captura = { guardada: true, firmas: {}, carpetaId: carpetaId || '' };
-        $('#ln-modal-captura', raiz).hidden = false;
+        mostrarModalCaptura();
         $('#ln-captura-titulo', raiz).textContent = 'Generar PDF pendiente';
         refrescarDespuesDeCaptura(pila[pila.length - 1].id, tipo, idDoc);
       }
@@ -2561,82 +2732,75 @@
       }
 
       /**
-       * Cambio rápido de ESTATUS EQUIPO / ESTATUS LINEA (mejora: sin abrir todo el formulario). Usa las listas
-       * del AppSheet y deja la bitácora igual que una edición; el motivo queda en el historial.
+       * Reasignar (usuario, 4-oct): abre directo la responsiva, sin formulario intermedio. Equipo y línea van fijos; se
+       * elige a la persona nueva y su comentario es el de la acción. Al guardar se reasigna y se genera el PDF.
        */
-      function abrirCambioEstatus(desde) {
-        const f = desde && desde.id ? desde : fichaActual; // desde la tabla (barra o menú) o desde la ficha abierta
-        if (!f) return;
-        $('#ln-modal-captura', raiz).hidden = false;
-        $('#ln-captura-icono', raiz).innerHTML = icono('toggle-right');
-        $('#ln-captura-tipo', raiz).textContent = 'LINEAS TELEFONICAS';
-        $('#ln-captura-titulo', raiz).textContent = 'Cambiar estatus';
-        $('#ln-captura-subtitulo', raiz).textContent = f.titulo + ' · el cambio queda en la bitácora';
-        const cuerpo = $('#ln-captura-cuerpo', raiz);
-        cuerpo.innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando…</p>';
-        const sesion = captura = { tipo: 'ESTATUS', firmas: {} };
-        cargarCatalogos().then((cat) => {
-          if (captura !== sesion) return;
-          const lista = (clave, etiqueta, opciones, actual) => {
-            const fuera = actual && opciones.indexOf(actual) < 0;
-            return '<div class="field ln-af-campo"><label for="ln-estatus-' + clave + '">' + esc(etiqueta) + '</label><select id="ln-estatus-' + clave + '" data-estatus="' + clave + '">' +
-              (fuera ? '<option value="" selected>' + esc(actual) + ' (actual, no está en la lista)</option>' : '') +
-              opciones.map((o) => '<option value="' + esc(o) + '"' + (o === actual ? ' selected' : '') + '>' + esc(o) + (o === actual ? ' (actual)' : '') + '</option>').join('') + '</select></div>';
-          };
-          cuerpo.innerHTML = '<section class="ln-af-seccion"><div class="ln-af-grid ln-estatus-grid">' +
-            (f.estatusEquipo !== null ? lista('equipo', 'ESTATUS DEL EQUIPO', cat.estatusEquipo || [], f.estatusEquipo) : '') +
-            (f.estatusLinea !== null ? lista('linea', 'ESTATUS DE LA LÍNEA', cat.estatusLinea || [], f.estatusLinea) : '') +
-            '</div><div class="field ln-af-campo"><label for="ln-estatus-motivo">MOTIVO (opcional)</label>' +
-            '<textarea id="ln-estatus-motivo" rows="3" placeholder="Por qué cambia; queda en el historial"></textarea></div></section>' +
-            '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div><div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
-            '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + ' Guardar cambios</button></div>';
-          $('#cap-guardar', raiz).addEventListener('click', () => {
-            const elegido = (clave, actual) => {
-              const sel = cuerpo.querySelector('[data-estatus="' + clave + '"]');
-              return sel && sel.value && sel.value !== actual ? sel.value : '';
-            };
-            const datos = { estatusEquipo: elegido('equipo', f.estatusEquipo), estatusLinea: elegido('linea', f.estatusLinea), motivo: $('#ln-estatus-motivo', raiz).value };
-            if (!datos.estatusEquipo && !datos.estatusLinea) { mostrarErrorCaptura('Elige un estatus diferente al actual.'); return; }
-            // RESGUARDO, PARA VENTA, POSIBLE VENTA-DAÑO y PARA DESECHO: mismo formulario que Mandar a resguardo
-            if (ESTATUS_EQUIPO_RESGUARDO.indexOf(datos.estatusEquipo) >= 0) {
-              cerrarCaptura(true);
-              abrirResguardo([{ id: f.id }], { estatus: datos.estatusEquipo });
-              return;
-            }
-            // EN PROCESO DE CANCELACION va por la bandeja de cancelaciones (Mandar a cancelación), no directo
-            if (datos.estatusLinea === 'EN PROCESO DE CANCELACION') {
-              const ix = memoria.indice || { equipos: [], lineas: [] };
-              const r = ix.lineas.filter((x) => x.id === f.id)[0] || ix.equipos.filter((x) => x.id === f.id)[0];
-              cerrarCaptura(true);
-              if (r) abrirCancelacion([r]);
-              return;
-            }
-            estadoGuardado('Guardando estatus');
-            llamar('apiLineasCambiarEstatus', f.id, datos).then(() => cargarIndice(true)).then(() => {
-              cerrarCaptura(true);
-              aviso('Estatus actualizado.', 5000);
-              const actual = pila[pila.length - 1];
-              if (actual) abrir(actual.tipo, actual.id, true);
-            }).catch((e) => { mostrarErrorCaptura(mensajeError(e)); restaurarGuardado(); });
+      function abrirReasignar(fila) {
+        if (!fila) return;
+        abrirCaptura('RESPONSIVA', { equipoId: fila.id, modo: 'REASIGNAR' }, {
+          titulo: 'Reasignar', subtitulo: ['NUCO ' + (fila.nuco || '—'), fila.modelo, fila.responsable].filter(Boolean).join(' · '),
+          boton: 'Reasignar y generar PDF', pdfAqui: true,
+          guardar: (datos) => llamar('apiLineasReasignar', datos),
+          despues: (r) => aplicarCambiosIndice(r.filas).then(() => {
+            Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].limpiarSeleccion(); });
+            if (vigente()) { pintarIndicadores(); pintarListado(); }
+            // La ficha abierta se vuelve a pintar con la persona y los estatus nuevos (como Mandar a resguardo, 4-oct)
+            const actual = pila[pila.length - 1];
+            if (vigente() && actual && actual.id === fila.id) abrir(actual.tipo, actual.id, true);
+          }),
+        });
+      }
+
+      /**
+       * Inspección capturada dentro de una acción (mandar a resguardo). Si
+       * la acción no se completó, al reintentarla el mismo día no se vuelve a pedir: se guarda aquí por registro.
+       */
+      const inspeccionesDelDia = {};
+      const hoyLocal = () => new Date().toDateString();
+      const inspeccionHecha = (id) => (inspeccionesDelDia[id] && inspeccionesDelDia[id].dia === hoyLocal() ? inspeccionesDelDia[id].id : null);
+
+      /**
+       * Pide en orden la inspección de cada equipo que todavía no la tiene. Regresa { idRegistro: idInspeccion } o null
+       * si se cerró alguna sin guardar (la acción no sigue).
+       */
+      async function inspeccionesEnFlujo(equipos, para) {
+        const ids = {};
+        for (let i = 0; i < equipos.length; i++) {
+          const q = equipos[i];
+          const hecha = inspeccionHecha(q.id);
+          if (hecha) { ids[q.id] = hecha; continue; }
+          // enAccion = dentro de Mandar a resguardo: el comentario ya lo pidió la acción y el responsable es quien recibe
+          // (las personas de procesos, usuario 4-oct)
+          const r = await capturarEnFlujo('INSPECCION', { equipoId: q.id, enAccion: true }, {
+            aviso: 'Inspección · NUCO ' + (q.nuco || '—') + (equipos.length > 1 ? ' · ' + (i + 1) + ' de ' + equipos.length : ''),
+            boton: i + 1 < equipos.length ? 'Guardar inspección y seguir' : 'Guardar inspección y terminar',
           });
-        }).catch((e) => { cuerpo.innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>'; });
+          if (!r) return null;
+          inspeccionesDelDia[q.id] = { id: r.id, dia: hoyLocal() };
+          ids[q.id] = r.id;
+        }
+        return ids;
       }
 
       /**
        * Acción masiva sobre los equipos seleccionados (2 o más): el servidor arma el formulario
        * (apiLineasFormularioMasivo) y aplica el cambio equipo por equipo con su bitácora (apiLineasAccionMasiva).
-       * La línea de cada equipo no cambia.
+       * Reasignar deja el equipo en USO; su línea solo cambia si estaba DISPONIBLE (pasa a USO con él).
        */
       async function abrirMasiva(accion, filas) {
         const permisos = await cargarPermisos().catch(() => null);
         if (!permisos || !permisos.puedeOperar) { aviso(icono('triangle-alert', 'ln-alerta') + ' Tu rol no permite modificar equipos.', 6000); return; }
         const ids = filas.map((r) => r.id);
-        const etiqueta = (r) => 'NUCO ' + (r.nuco || '—') + ' · ' + (r.modelo || 'Sin modelo') + ' · ' + (r.responsable || 'Sin responsable') + ' · ' + (r.estatus || 'Sin estatus');
-        $('#ln-modal-captura', raiz).hidden = false;
+        // Entregar una línea suelta usa el mismo formulario: solo cambian los textos (línea en vez de equipo)
+        const esLinea = accion.parte === 'linea';
+        const unidad = esLinea ? 'líneas' : 'equipos';
+        const nombreDe = (r) => (esLinea ? 'Línea ' + (r.numero || '—') : 'NUCO ' + (r.nuco || '—'));
+        const etiqueta = (r) => nombreDe(r) + ' · ' + (esLinea ? (r.compania || 'Sin compañía') : (r.modelo || 'Sin modelo')) + ' · ' + (r.responsable || 'Sin responsable') + ' · ' + (r.estatus || 'Sin estatus');
+        mostrarModalCaptura();
         $('#ln-captura-icono', raiz).innerHTML = icono(accion.icono);
         $('#ln-captura-tipo', raiz).textContent = 'ACCIÓN MASIVA';
         $('#ln-captura-titulo', raiz).textContent = accion.texto;
-        $('#ln-captura-subtitulo', raiz).textContent = miles(filas.length) + ' equipos seleccionados · cada cambio queda en la bitácora de su equipo';
+        $('#ln-captura-subtitulo', raiz).textContent = miles(filas.length) + ' ' + unidad + ' seleccionados · cada cambio queda en su historial';
         const cuerpo = $('#ln-captura-cuerpo', raiz);
         cuerpo.innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando…</p>';
         const sesion = captura = { tipo: 'MASIVA', firmas: {} };
@@ -2671,18 +2835,18 @@
         }
         const htmlIndividual = !esReasignar ? '' : '<div class="ln-masiva-individual" hidden>' +
           '<p class="ln-tenue ln-masiva-ayuda">Cada equipo trae su responsable actual: cambia solo los que necesites. Los que dejes igual no se tocan.</p>' +
-          filas.map((r) => '<section class="ln-af-seccion ln-masiva-fila" data-masiva-fila="' + esc(r.id) + '"><h4 class="ln-af-titulo">' + icono('smartphone') + ' NUCO ' +
-            esc(r.nuco || '—') + ' · ' + esc(r.modelo || 'Sin modelo') + '</h4><div class="ln-af-grid">' + elementosFila[r.id].map(htmlElementoFormulario).join('') + '</div></section>').join('') +
+          filas.map((r) => '<section class="ln-af-seccion ln-masiva-fila" data-masiva-fila="' + esc(r.id) + '"><h4 class="ln-af-titulo">' + icono(esLinea ? 'card-sim' : 'smartphone') + ' ' +
+            esc(nombreDe(r)) + ' · ' + esc(esLinea ? (r.compania || 'Sin compañía') : (r.modelo || 'Sin modelo')) + '</h4><div class="ln-af-grid">' + elementosFila[r.id].map(htmlElementoFormulario).join('') + '</div></section>').join('') +
           '</div>';
         const htmlModo = !esReasignar ? '' : '<div class="ln-segmentado ln-masiva-modo" role="group" aria-label="Cómo reasignar">' +
           '<button type="button" class="secondary activo" data-modo="TODOS" aria-pressed="true">' + icono('users') + ' Mismo responsable para todos</button>' +
           '<button type="button" class="secondary" data-modo="INDIVIDUAL" aria-pressed="false">' + icono('list') + ' Uno por uno</button></div>';
 
         cuerpo.innerHTML =
-          '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' <span class="ln-masiva-efecto">' + esc(accion.efecto) + '</span> <strong>La línea de cada equipo no cambia.</strong></div>' +
+          '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' <span class="ln-masiva-efecto">' + esc(accion.efecto) + '</span></div>' +
           (excede ? '<div class="error-msg">Son ' + miles(filas.length) + ' equipos; el máximo por operación es ' + form.maximo + '. Quita algunos de la selección.</div>' : '') +
           htmlModo +
-          '<details class="ln-masiva-lista"><summary>' + icono('list') + ' Ver los ' + miles(filas.length) + ' equipos seleccionados</summary><ul>' +
+          '<details class="ln-masiva-lista"><summary>' + icono('list') + ' Ver los ' + miles(filas.length) + ' ' + unidad + ' seleccionados</summary><ul>' +
             filas.map((r) => '<li>' + esc(etiqueta(r)) + '</li>').join('') + '</ul></details>' +
           htmlIndividual +
           htmlFormularioAppSheet(elementos) +
@@ -2703,7 +2867,7 @@
             });
             $('.ln-masiva-individual', cuerpo).hidden = modo !== 'INDIVIDUAL';
             $('.ln-masiva-efecto', cuerpo).textContent = modo === 'INDIVIDUAL'
-              ? 'Cada equipo pasa al responsable que le pongas y su ESTATUS DEL EQUIPO queda en RESGUARDO; los que dejes igual no se modifican.' : accion.efecto;
+              ? 'Cada equipo pasa al responsable que le pongas y queda en USO (su línea también, si estaba DISPONIBLE); los que dejes igual no se modifican.' : accion.efecto;
             $('.ln-masiva-lista', cuerpo).hidden = modo === 'INDIVIDUAL';
             colsResp.forEach((c) => {
               const campo = cuerpo.querySelector('.ln-af-campo[data-af-columna="' + CSS.escape(c) + '"]');
@@ -2730,7 +2894,7 @@
         const nucoDeColumna = (columna) => {
           const partes = String(columna).split('|');
           const r = partes[0] === 'FILA' ? filas.filter((x) => x.id === partes[1])[0] : null;
-          return r ? 'NUCO ' + (r.nuco || '—') + ' · ' : '';
+          return r ? nombreDe(r) + ' · ' : '';
         };
 
         $('#cap-guardar', raiz).addEventListener('click', async () => {
@@ -2752,13 +2916,13 @@
               const campos = colsResp.filter((c) => nuevo(c) && nuevo(c) !== String(actual[c] || '').trim());
               if (!campos.length) return;
               campos.forEach((c) => { cambiadas[columnaFila(r.id, c)] = true; });
-              const v = { _ETIQUETA: 'NUCO ' + (r.nuco || '—'), RESPONSABLE: nuevo('RESPONSABLE') };
+              const v = { _ETIQUETA: nombreDe(r), RESPONSABLE: nuevo('RESPONSABLE') };
               campos.forEach((c) => { v[c] = nuevo(c); });
               datos.porEquipo[r.id] = v;
-              resumen.push('NUCO ' + (r.nuco || '—') + ': ' + (campos.indexOf('RESPONSABLE') >= 0 ? (actual.RESPONSABLE || 'Sin responsable') + ' → ' + v.RESPONSABLE
+              resumen.push(nombreDe(r) + ': ' + (campos.indexOf('RESPONSABLE') >= 0 ? (actual.RESPONSABLE || 'Sin responsable') + ' → ' + v.RESPONSABLE
                 : v.RESPONSABLE + ' (' + campos.map((c) => c.toLowerCase()).join(', ') + ')'));
             });
-            if (!resumen.length) { mostrarErrorCaptura('No cambiaste los datos de ningún equipo.'); return; }
+            if (!resumen.length) { mostrarErrorCaptura('No cambiaste los datos de ' + (esLinea ? 'ninguna línea.' : 'ningún equipo.')); return; }
             cuantos = resumen.length;
             detalle = resumen.slice(0, 12).concat(resumen.length > 12 ? ['… y ' + (resumen.length - 12) + ' más'] : []);
           }
@@ -2767,31 +2931,33 @@
           marcarErroresEn(cuerpo, errores.map((x) => ({ columna: x.columna, msg: x.corto })));
           if (errores.length) { mostrarErrorCaptura(errores.map((x) => nucoDeColumna(x.columna) + x.msg).slice(0, 4).join(' · ')); return; }
           const ok = await Confirmar.pedir({
-            titulo: '¿' + accion.boton + ' ' + miles(cuantos) + ' equipos?',
-            mensaje: (modo === 'INDIVIDUAL' ? 'Cada equipo pasa al responsable que le pusiste.' : accion.efecto) +
-              (modo !== 'INDIVIDUAL' && valores.RESPONSABLE ? ' Nuevo responsable: ' + valores.RESPONSABLE + '.' : '') + ' Cada equipo deja su bitácora.',
+            titulo: '¿' + accion.boton + ' ' + miles(cuantos) + ' ' + unidad + '?',
+            mensaje: (modo === 'INDIVIDUAL' ? 'Cada uno pasa al responsable que le pusiste.' : accion.efecto) +
+              (modo !== 'INDIVIDUAL' && valores.RESPONSABLE ? ' Nuevo responsable: ' + valores.RESPONSABLE + '.' : '') + ' Cada uno deja su historial.',
             detalle: detalle,
             textoConfirmar: accion.boton, peligro: !!accion.peligro,
             palabraClave: accion.peligro && filas.length >= 10 ? 'CANCELAR' : undefined,
           });
           if (!ok || captura !== sesion) return;
-          estadoGuardado('Aplicando a ' + miles(cuantos) + ' equipos');
+          estadoGuardado('Aplicando a ' + miles(cuantos) + ' ' + unidad);
           try {
             const r = await llamar('apiLineasAccionMasiva', accion.clave, ids, datos);
-            await cargarIndice(true);
+            await aplicarCambiosIndice(r.indice);
             cerrarCaptura(true);
-            if (tablas.equipos) tablas.equipos.limpiarSeleccion();
+            Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].limpiarSeleccion(); });
             if (vigente()) { pintarIndicadores(); pintarListado(); }
             const omitidos = r.omitidos || [];
-            aviso(icono('circle-check') + ' ' + accion.texto + ': ' + miles(r.hechos.length) + ' equipos actualizados' +
+            aviso(icono('circle-check') + ' ' + accion.texto + ': ' + miles(r.hechos.length) + ' ' + unidad + ' actualizados' +
               (omitidos.length ? ' · ' + omitidos.length + ' sin cambio' : '') + '.', 8000);
             if (omitidos.length) {
-              aviso(icono('triangle-alert', 'ln-alerta') + ' Sin cambio: ' + omitidos.slice(0, 6).map((o) => 'NUCO ' + (o.nuco || o.id) + ' (' + o.motivo + ')').join(' · ') +
+              aviso(icono('triangle-alert', 'ln-alerta') + ' Sin cambio: ' + omitidos.slice(0, 6).map((o) => (o.numero ? 'Línea ' + o.numero : 'NUCO ' + (o.nuco || o.id)) + ' (' + o.motivo + ')').join(' · ') +
                 (omitidos.length > 6 ? ' · …' : ''), 12000);
             }
+            // Desde la ficha: que muestre lo guardado (igual que Mandar a resguardo)
+            const actual = pila[pila.length - 1];
+            if (actual && ids.indexOf(actual.id) >= 0) abrir(actual.tipo, actual.id, true);
           } catch (e) {
-            mostrarErrorCaptura(mensajeError(e));
-            restaurarGuardado();
+            errorAlGuardar(e);
           }
         });
       }
@@ -2807,11 +2973,10 @@
         const estatusInicial = (opciones && opciones.estatus) || 'RESGUARDO';
         const permisos = await cargarPermisos().catch(() => null);
         if (!permisos || !permisos.puedeOperar) { aviso(icono('triangle-alert', 'ln-alerta') + ' Tu rol no permite modificar equipos.', 6000); return; }
-        $('#ln-modal-captura', raiz).hidden = false;
+        mostrarModalCaptura();
         $('#ln-captura-icono', raiz).innerHTML = icono('archive');
         $('#ln-captura-tipo', raiz).textContent = 'RESGUARDO';
         $('#ln-captura-titulo', raiz).textContent = estatusInicial === 'RESGUARDO' ? 'Mandar a resguardo' : 'Pasar a ' + estatusInicial;
-        $('#ln-captura-subtitulo', raiz).textContent = miles(filas.length) + (filas.length === 1 ? ' equipo' : ' equipos') + ' · cada uno con sus datos · el cambio queda en su bitácora';
         const cuerpo = $('#ln-captura-cuerpo', raiz);
         cuerpo.innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando…</p>';
         const sesion = captura = { tipo: 'RESGUARDO', firmas: {} };
@@ -2835,80 +3000,58 @@
           requerido: 'NUNCA', mostrar: 'SIEMPRE', editable: 'SIEMPRE', soloLectura: false }, extra || {});
         const ubicacion = ['DEPARTAMENTO', 'SEDE', 'OFICINA / DESARROLLO'];
         const accionTexto = estatusInicial === 'RESGUARDO' ? 'Mandar a resguardo' : 'Pasar a ' + estatusInicial;
-        const vigenciaTexto = (q) => (q.vigencia === 'vencido' ? 'Adendum vencido el ' + q.finPlan : (q.vigencia === 'vigente' ? 'Adendum vigente hasta ' + q.finPlan : 'Sin fecha de adendum'));
-
-        // Campos de cada equipo, con prefijo FILA|<id>| para que sean únicos
-        const elementosFila = {};
+        $('#ln-captura-subtitulo', raiz).textContent = equipos.length === 1
+          ? ['NUCO ' + (equipos[0].nuco || '—'), equipos[0].modelo].filter(Boolean).join(' · ')
+          : miles(equipos.length) + ' equipos';
+        // Formulario intermedio (usuario, 4-oct): equipo, línea y adendum informativos, como en la inspección; solo se
+        // captura el destino, el comentario y el ticket. Los datos de la persona no se muestran: quedan en blanco
+        const vigenciaTexto = (q) => (q.vigencia === 'vencido' ? 'VENCIDO' : (q.vigencia === 'vigente' ? 'VIGENTE' : 'SIN FECHA'));
+        const info = (q, columna, etiqueta, valor) => campo('INFO|' + q.id + '|' + columna, etiqueta, 'texto', { valor: valor || '—', soloLectura: true, editable: 'NUNCA' });
+        const titulo = (q, texto, icono) => ({ tipo: 'titulo', texto: (equipos.length > 1 ? 'NUCO ' + (q.nuco || '—') + ' · ' : '') + texto, icono: icono });
+        const ETIQUETA_UBICACION = { 'DEPARTAMENTO': 'Departamento', 'SEDE': 'Sede', 'OFICINA / DESARROLLO': 'Oficina o desarrollo' };
+        const elementosFila = {}; // lo que se captura de cada equipo (con prefijo FILA|<id>| para que sea único)
+        const vistaFila = {}; // lo que se dibuja: lo informativo y lo que se captura
         equipos.forEach((q) => {
           const actual = { DEPARTAMENTO: 'DISPONIBLE', SEDE: q.sede, 'OFICINA / DESARROLLO': q.oficina };
           const els = ubicacion.map((c) => {
             const b = base(c);
-            return Object.assign({}, b, { columna: columnaFila(q.id, c), valor: enLista(b, actual[c]) ? actual[c] || '' : '', requerido: 'SIEMPRE', autollenar: undefined });
+            return Object.assign({}, b, { columna: columnaFila(q.id, c), etiqueta: ETIQUETA_UBICACION[c], valor: enLista(b, actual[c]) ? actual[c] || '' : '', requerido: 'SIEMPRE', autollenar: undefined });
           });
-          els.push(campo(columnaFila(q.id, 'ESTATUS EQUIPO'), 'ESTATUS DEL EQUIPO', 'lista', { opciones: form.estatusEquipo, valor: estatusInicial, requerido: 'SIEMPRE' }));
+          // Estatus con botones y su significado al pasar el ratón. Con el adendum vencido la línea va a cancelación, sin
+          // elegir; vigente o sin fecha, se elige DISPONIBLE o cancelación (usuario, 4-oct; el servidor revisa lo mismo)
+          const estatus = [campo(columnaFila(q.id, 'ESTATUS EQUIPO'), 'Estatus del equipo', 'escala', { opciones: form.estatusEquipo, valor: estatusInicial, requerido: 'SIEMPRE', ayudas: SIGNIFICADO_ESTATUS })];
           if (q.tieneLinea) {
-            els.push(campo(columnaFila(q.id, 'ESTATUS LINEA'), 'ESTATUS DE LA LÍNEA', 'lista', { opciones: form.estatusLinea, valor: q.propuestaLinea, requerido: 'SIEMPRE' }));
+            const vencido = q.propuestaLinea === 'EN PROCESO DE CANCELACION';
+            estatus.push(campo(columnaFila(q.id, 'ESTATUS LINEA'), 'Estatus de la línea', 'escala', { opciones: vencido ? [q.propuestaLinea] : form.estatusLinea,
+              valor: q.propuestaLinea, requerido: 'SIEMPRE', ayudas: SIGNIFICADO_ESTATUS }));
           }
-          els.push(campo(columnaFila(q.id, 'COMENTARIO'), 'COMENTARIO (contexto del resguardo)', 'texto', { valor: '' }));
-          elementosFila[q.id] = els;
+          elementosFila[q.id] = els.concat(estatus);
+          vistaFila[q.id] = [titulo(q, 'EQUIPO', 'smartphone'),
+            info(q, 'NUCO', 'NUCO', q.nuco), info(q, 'TIPO', 'Tipo', q.tipo), info(q, 'MODELO', 'Modelo', q.modelo), info(q, 'IMEI', 'IMEI', q.imei),
+            info(q, 'COLOR', 'Color', q.color), info(q, 'ESTATUS EQUIPO', 'Estatus actual', q.estatusEquipo)]
+            .concat(q.tieneLinea ? [titulo(q, 'LÍNEA', 'card-sim'),
+              info(q, 'NUMERO', 'Número', q.numero), info(q, 'SIM', 'SIM', q.sim), info(q, 'COMPANIA', 'Compañía', q.compania),
+              info(q, 'RAZON SOCIAL', 'Razón social', q.razonSocial), info(q, 'ESTATUS LINEA', 'Estatus actual', q.estatusLinea),
+              titulo(q, 'ADENDUM', 'file-text'),
+              info(q, 'INICIO PLAN', 'Inicio', q.inicioPlan), info(q, 'FIN PLAN', 'Fin', q.finPlan), info(q, 'COSTO PLAN', 'Costo del plan', q.costoPlan),
+              info(q, 'VIGENCIA', 'Vigencia', vigenciaTexto(q))] : [])
+            .concat([titulo(q, 'DESTINO', 'archive')], els, [titulo(q, 'ESTATUS', 'toggle-right')], estatus);
         });
-        // Datos comunes para copiar a todos (opcional)
-        const comunes = ubicacion.map((c) => Object.assign({}, base(c), { columna: 'TODOS|' + c, valor: c === 'DEPARTAMENTO' ? 'DISPONIBLE' : '', requerido: 'NUNCA', autollenar: undefined }))
-          .concat([campo('TODOS|ESTATUS EQUIPO', 'ESTATUS DEL EQUIPO', 'lista', { opciones: form.estatusEquipo, valor: estatusInicial })]);
-        const motivoEl = campo('_MOTIVO', 'MOTIVO (queda en el historial de cada equipo)', 'area', { requerido: 'SIEMPRE', valor: '' });
-
-        const cabecera = (q) => '<div class="ln-resg-cabecera"><strong>' + icono('smartphone') + ' NUCO ' + esc(q.nuco || '—') + '</strong>' +
-          '<span>' + esc(q.modelo || 'Sin modelo') + '</span><span class="ln-mono">' + esc(q.imei || '') + '</span>' +
-          '<span>' + esc(q.responsable || 'Sin responsable') + '</span>' + chip(q.estatusEquipo) +
-          (q.tieneLinea ? '<span class="ln-mono">' + icono('phone') + ' ' + esc(q.numero) + (q.compania ? ' · ' + esc(q.compania) : '') + '</span>' +
-            chip(vigenciaTexto(q), q.vigencia === 'vencido' ? 'rojo' : (q.vigencia === 'vigente' ? 'verde' : 'ambar'))
-            : '<span class="ln-tenue">Sin línea</span>') + '</div>';
-
+        // Un solo COMENTARIO (plan §5.2) y el TICKET
+        const motivoEl = campo('_MOTIVO', 'Comentario', 'area', { requerido: 'SIEMPRE', valor: '' });
+        const ticketEl = campo('_TICKET', 'Ticket', 'texto', { valor: '', literal: true });
         cuerpo.innerHTML =
-          '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' Cada equipo queda con el estatus que elijas y sus datos de persona en N/A (' +
-            esc((form.camposNA || []).join(', ').toLowerCase()) + '); el patrón se borra. Su línea se propone <strong>DISPONIBLE</strong> si el adendum sigue vigente ' +
-            'o <strong>EN PROCESO DE CANCELACION</strong> si ya venció. Después, en <em>Resguardos y cancelaciones</em>, quien recibe confirma la recepción.</div>' +
           ((form.omitidos || []).length ? '<div class="ln-nota ln-alerta">' + icono('triangle-alert', 'ln-icon-sm') + ' No se incluyen: ' +
             esc(form.omitidos.map((o) => (o.nuco ? 'NUCO ' + o.nuco + ' ' : '') + '(' + o.motivo + ')').join(' · ')) + '</div>' : '') +
-          (equipos.length > 1 ? '<section class="ln-af-seccion ln-resg-todos"><h4 class="ln-af-titulo">' + icono('copy') + ' Mismos datos para todos (opcional)</h4><div class="ln-af-grid">' +
-            comunes.map(htmlElementoFormulario).join('') + '</div><button type="button" class="secondary ln-btn-chico" id="ln-resg-copiar">' + icono('copy') +
-            ' Copiar a los ' + miles(equipos.length) + ' equipos</button></section>' : '') +
-          equipos.map((q) => '<section class="ln-af-seccion ln-masiva-fila" data-resg-fila="' + esc(q.id) + '">' + cabecera(q) +
-            '<div class="ln-af-grid">' + elementosFila[q.id].map(htmlElementoFormulario).join('') + '</div></section>').join('') +
-          '<section class="ln-af-seccion"><div class="ln-af-grid">' + htmlElementoFormulario(motivoEl) + '</div></section>' +
+          equipos.map((q) => '<div data-resg-fila="' + esc(q.id) + '">' + htmlFormularioAppSheet(vistaFila[q.id], { acomodar: true }) + '</div>').join('') +
+          htmlFormularioAppSheet([{ tipo: 'titulo', texto: 'COMENTARIO', icono: 'message-square-text' }, motivoEl, ticketEl], { acomodar: true }) +
           '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div><div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
-          '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('archive') + ' ' + esc(accionTexto) + ' (' + miles(equipos.length) + ')</button></div>';
+          '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('archive') + ' ' + esc(accionTexto) + (equipos.length > 1 ? ' (' + miles(equipos.length) + ')' : '') + '</button></div>';
         pintarIconos(cuerpo);
-        if (equipos.length > 1) activarCombosEn($('.ln-resg-todos', cuerpo), comunes);
-        // Las listas de cada equipo se activan al entrar a su sección (con muchos equipos serían cientos)
-        cuerpo.addEventListener('focusin', (ev) => {
-          const sec = ev.target.closest && ev.target.closest('[data-resg-fila]');
-          if (!sec || sec.dataset.combos) return;
-          sec.dataset.combos = '1';
-          activarCombosEn(sec, elementosFila[sec.dataset.resgFila]);
-        });
-        const valorDe = (columna) => {
-          const el = cuerpo.querySelector('[data-columna="' + CSS.escape(columna) + '"]');
-          return el ? String(el.value || '').trim() : '';
-        };
-        const ponerValor = (columna, v) => {
-          const el = cuerpo.querySelector('[data-columna="' + CSS.escape(columna) + '"]');
-          if (el && v) { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }
-        };
-        const copiar = $('#ln-resg-copiar', cuerpo);
-        if (copiar) {
-          copiar.addEventListener('click', () => {
-            const vals = {};
-            ubicacion.concat('ESTATUS EQUIPO').forEach((c) => { vals[c] = valorDe('TODOS|' + c); });
-            if (!Object.keys(vals).some((c) => vals[c])) { mostrarErrorCaptura('Escribe arriba al menos un dato para copiar.'); return; }
-            equipos.forEach((q) => Object.keys(vals).forEach((c) => ponerValor(columnaFila(q.id, c), vals[c])));
-            aviso(icono('circle-check') + ' Datos copiados a los ' + miles(equipos.length) + ' equipos; puedes ajustar cada uno.', 5000);
-          });
-        }
-
+        activarCombosEn(cuerpo, equipos.reduce((lista, q) => lista.concat(elementosFila[q.id]), []));
         $('#cap-guardar', raiz).addEventListener('click', async () => {
           $('#cap-error', raiz).hidden = true;
-          const todos = equipos.reduce((lista, q) => lista.concat(elementosFila[q.id]), []).concat([motivoEl]);
+          const todos = equipos.reduce((lista, q) => lista.concat(elementosFila[q.id]), []).concat([motivoEl, ticketEl]);
           const errores = erroresFormularioEn(cuerpo, todos, '', { nuevo: false, tipoInicial: '' });
           marcarErroresEn(cuerpo, errores.map((x) => ({ columna: x.columna, msg: x.corto })));
           const nucoDe = (columna) => {
@@ -2919,28 +3062,33 @@
           if (errores.length) { mostrarErrorCaptura(errores.map((x) => nucoDe(x.columna) + x.msg).slice(0, 4).join(' · ')); return; }
           const valores = leerFormularioEn(cuerpo, todos);
           const porEquipo = {};
-          let cancelan = 0;
           equipos.forEach((q) => {
             const v = (c) => String(valores[columnaFila(q.id, c)] || '').trim();
             porEquipo[q.id] = { _ETIQUETA: 'NUCO ' + (q.nuco || '—'), DEPARTAMENTO: v('DEPARTAMENTO'), SEDE: v('SEDE'), 'OFICINA / DESARROLLO': v('OFICINA / DESARROLLO'),
-              'ESTATUS EQUIPO': v('ESTATUS EQUIPO'), 'ESTATUS LINEA': q.tieneLinea ? v('ESTATUS LINEA') : '', COMENTARIO: v('COMENTARIO') };
-            if (porEquipo[q.id]['ESTATUS LINEA'] === 'EN PROCESO DE CANCELACION') cancelan++;
+              'ESTATUS EQUIPO': v('ESTATUS EQUIPO'),
+              'ESTATUS LINEA': !q.tieneLinea ? '' : (q.propuestaLinea === 'EN PROCESO DE CANCELACION' ? q.propuestaLinea : v('ESTATUS LINEA')) };
           });
-          const ok = await Confirmar.pedir({
-            titulo: '¿' + accionTexto + ' ' + miles(equipos.length) + (equipos.length === 1 ? ' equipo?' : ' equipos?'),
-            mensaje: 'Sus datos de persona pasan a N/A y cada uno deja su bitácora.' + (cancelan ? ' ' + cancelan + ' línea(s) quedan EN PROCESO DE CANCELACION.' : '') +
-              ' Se avisa a quien recibe los resguardos.',
-            detalle: equipos.slice(0, 12).map((q) => 'NUCO ' + (q.nuco || '—') + ': ' + porEquipo[q.id]['ESTATUS EQUIPO'] +
-              (q.tieneLinea ? ' · línea ' + porEquipo[q.id]['ESTATUS LINEA'] : '') + ' · ' + porEquipo[q.id].SEDE)
-              .concat(equipos.length > 12 ? ['… y ' + (equipos.length - 12) + ' más'] : []),
-            textoConfirmar: accionTexto,
-          });
-          if (!ok || captura !== sesion) return;
-          estadoGuardado(estatusInicial === 'RESGUARDO' ? 'Mandando ' + miles(equipos.length) + ' a resguardo' : 'Pasando ' + miles(equipos.length) + ' a ' + estatusInicial);
-          try {
-            const r = await llamar('apiLineasMandarResguardo', equipos.map((q) => q.id), { motivo: valores._MOTIVO, porEquipo: porEquipo });
-            await cargarIndice(true);
+          if (captura !== sesion) return; // sin ventana de confirmación (usuario, 4-oct)
+          // La inspección es obligatoria al mandar a resguardo (pendiente 2.6) y se captura dentro de la acción (decisión
+          // del usuario, 3-oct): una por cada equipo que viene de una persona. Si se cierra una sin guardar, no se manda
+          // ninguno; las que ya se guardaron no se vuelven a pedir hoy
+          const deUnaPersona = equipos.filter((q) => String(q.estatusEquipo || '').toUpperCase() === 'USO');
+          let inspecciones = {};
+          let enModal = true;
+          if (deUnaPersona.length) {
             cerrarCaptura(true);
+            enModal = false;
+            inspecciones = await inspeccionesEnFlujo(deUnaPersona, 'al mandarlo a resguardo');
+            if (!inspecciones) {
+              aviso(icono('triangle-alert', 'ln-alerta') + ' Sin mandar a resguardo · falta la inspección', 8000);
+              return;
+            }
+            aviso((estatusInicial === 'RESGUARDO' ? 'Mandando ' + miles(equipos.length) + ' a resguardo' : 'Pasando ' + miles(equipos.length) + ' a ' + estatusInicial) + '…', 6000);
+          } else estadoGuardado(estatusInicial === 'RESGUARDO' ? 'Mandando ' + miles(equipos.length) + ' a resguardo' : 'Pasando ' + miles(equipos.length) + ' a ' + estatusInicial);
+          try {
+            const r = await llamar('apiLineasMandarResguardo', equipos.map((q) => q.id), { comentario: valores._MOTIVO, ticket: valores._TICKET, porEquipo: porEquipo, inspecciones: inspecciones });
+            await aplicarCambiosIndice(r.indice);
+            if (enModal && captura === sesion) cerrarCaptura(true);
             if (tablas.equipos) tablas.equipos.limpiarSeleccion();
             if (vigente()) { pintarIndicadores(); pintarListado(); }
             const omitidos = r.omitidos || [];
@@ -2953,8 +3101,8 @@
             const actual = pila[pila.length - 1];
             if (actual && equipos.some((q) => q.id === actual.id)) abrir(actual.tipo, actual.id, true);
           } catch (e) {
-            mostrarErrorCaptura(mensajeError(e));
-            restaurarGuardado();
+            if (!enModal) { aviso(icono('triangle-alert', 'ln-alerta') + ' No se mandó a resguardo: ' + mensajeError(e) + ' Las inspecciones quedaron guardadas: vuelve a mandarlo y no se piden otra vez.', 15000); return; }
+            errorAlGuardar(e);
           }
         });
       }
@@ -2968,15 +3116,18 @@
         if (!permisos || !permisos.puedeOperar) { aviso(icono('triangle-alert', 'ln-alerta') + ' Tu rol no permite modificar líneas.', 6000); return; }
         const conNumero = filas.filter((r) => r.numero);
         if (!conNumero.length) { aviso(icono('triangle-alert', 'ln-alerta') + ' Ninguno de los seleccionados tiene línea.', 6000); return; }
-        const lista = conNumero.slice(0, 6).map((r) => r.numero).join(', ') + (conNumero.length > 6 ? '…' : '');
-        const datos = await pedirDatos('Mandar a cancelación',
-          miles(conNumero.length) + ' línea(s): ' + lista + '. Quedan EN PROCESO DE CANCELACION y pasan a la bandeja de cancelaciones; el equipo no cambia.',
-          [{ clave: 'motivo', etiqueta: 'Motivo (queda en el historial)', requerido: true }, { clave: 'comentario', etiqueta: 'Comentario (opcional)' }],
-          'Mandar a cancelación');
-        if (!datos) return;
+        // Textos técnicos y espera desde el clic (usuario, 4-oct)
+        const lista = conNumero.slice(0, 6).map((r) => r.numero).join(' · ') + (conNumero.length > 6 ? ' …' : '');
+        const subtitulo = (conNumero.length > 1 ? miles(conNumero.length) + ' líneas · ' : '') + lista;
         try {
-          const r = await llamar('apiLineasMandarCancelacion', conNumero.map((x) => x.id), { motivo: datos.motivo, comentario: datos.comentario });
-          await cargarIndice(true);
+          const r = await pedirDatos('Mandar a cancelación', subtitulo,
+            [{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }, { clave: 'ticket', etiqueta: 'Ticket' }],
+            'Mandar a cancelación', {
+              espera: 'Mandando a cancelación',
+              alConfirmar: (datos) => llamar('apiLineasMandarCancelacion', conNumero.map((x) => x.id), { comentario: datos.comentario, ticket: datos.ticket }),
+            });
+          if (!r) return;
+          await aplicarCambiosIndice(r.indice);
           Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].limpiarSeleccion(); });
           if (vigente()) { pintarIndicadores(); pintarListado(); }
           const omitidos = r.omitidos || [];
@@ -2990,31 +3141,37 @@
       }
 
       // ---- Alta y edición directa del inventario ----
-      function abrirEditor(id) {
-        $('#ln-modal-captura', raiz).hidden = false;
-        $('#ln-captura-icono', raiz).innerHTML = icono(id ? 'pencil' : 'plus');
+      /**
+       * Editar información y Agregar equipo / Agregar línea (usuario, 4-oct): todo lo guardado en pestañas (equipo,
+       * responsable, línea, adendum, accesorios y accesos); FOLIO, NUCO y TIPO fijos y el TIPO se asigna solo. Los estatus
+       * se cambian aquí: RESGUARDO, PARA VENTA y PARA DESECHO abren Mandar a resguardo y EN PROCESO DE CANCELACION, Mandar
+       * a cancelación (al guardar). `parte` (alta): EQUIPO o LINEA.
+       */
+      function abrirEditor(id, parte) {
+        const agregar = parte === 'LINEA' ? 'Agregar línea' : 'Agregar equipo';
+        mostrarModalCaptura();
+        $('#ln-captura-icono', raiz).innerHTML = icono(id ? 'pencil' : (parte === 'LINEA' ? 'card-sim' : 'smartphone'));
         $('#ln-captura-tipo', raiz).textContent = 'LINEAS TELEFONICAS';
-        $('#ln-captura-titulo', raiz).textContent = id ? 'Editar información' : 'Registrar NUCO';
-        $('#ln-captura-subtitulo', raiz).textContent = 'Cargando formulario…';
+        $('#ln-captura-titulo', raiz).textContent = id ? 'Editar información' : agregar;
+        $('#ln-captura-subtitulo', raiz).textContent = '';
         $('#ln-captura-cuerpo', raiz).innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando…</p>';
-        captura = { tipo: 'REGISTRO', idObjetivo: id, firmas: {} };
-        llamar('apiLineasFormularioRegistro', id || '').then((form) => {
+        const sesionEditor = captura = { tipo: 'REGISTRO', idObjetivo: id, firmas: {} };
+        llamar('apiLineasFormularioRegistro', id || '', parte || '').then((form) => {
           if (!captura || captura.tipo !== 'REGISTRO') return;
           const cuerpo = $('#ln-captura-cuerpo', raiz);
           const elementos = form.elementos;
-          const tipoInicial = (elementos.filter((e) => e.columna === 'TIPO')[0] || {}).valor || '';
-          const ctx = { nuevo: form.nuevo, id: id, idDG: form.idDG || null, tipoInicial: tipoInicial };
-          captura.contexto = { formulario: elementos };
           const valorDe = (c) => ((elementos.filter((e) => e.columna === c)[0] || {}).valor) || '';
-          $('#ln-captura-subtitulo', raiz).textContent = id ? ['NUCO ' + (valorDe('NUCO') || '—'), valorDe('EQUIPO'), valorDe('RESPONSABLE')].filter(Boolean).join(' · ') + ' · cada cambio queda en la bitácora'
-            : 'Elige primero el TIPO: los campos se habilitan según él, igual que en AppSheet.';
-          // Alta: paso por paso. Edición: se salta a cualquier sección y se guarda desde cualquiera.
-          cuerpo.innerHTML = htmlPasosAppSheet(elementos, PASOS_FORMULARIO.REGISTRO) +
-            // Motivo: clases propias (no ln-af-campo ni sección de reglas): aplicarReglasEn no lo toca, lo muestra aplicar()
-            (id ? '<section class="ln-af-seccion ln-af-extra" id="cap-motivo-asignacion" hidden><div class="field"><label for="cap-motivo">MOTIVO DEL CAMBIO DE NÚMERO O NUCO</label>' +
-              '<textarea id="cap-motivo" rows="2" placeholder="Por qué cambia; queda en el historial (Números que ha tenido / Equipos en los que ha estado)"></textarea></div></section>' : '') +
+          const ctx = { nuevo: form.nuevo, id: id, idDG: form.idDG || null, tipoInicial: form.tipo || '', parte: form.parte, historico: !!form.historico,
+            nuco: form.nuevo ? '' : valorDe('NUCO') };
+          captura.contexto = { formulario: elementos };
+          $('#ln-captura-subtitulo', raiz).textContent = !id ? '' : (form.parte === 'LINEA'
+            ? [valorDe('NUMERO TELEFONO'), valorDe('RESPONSABLE')] : ['NUCO ' + (valorDe('NUCO') || '—'), valorDe('EQUIPO'), valorDe('RESPONSABLE')]).filter(Boolean).join(' · ');
+          // Alta: paso por paso. Edición: se salta a cualquier pestaña y se guarda desde cualquiera. Un solo COMENTARIO
+          // obligatorio y el TICKET opcional, como en todas las acciones
+          // El comentario y el ticket van en otra ventana, al aceptar los cambios (usuario, 4-oct)
+          cuerpo.innerHTML = htmlPasosAppSheet(elementos, form.parte === 'LINEA' ? PASOS_FORMULARIO.REGISTRO_LINEA : PASOS_FORMULARIO.REGISTRO_EQUIPO) +
             '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div>' +
-            htmlAccionesPasos('<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + (id ? ' Guardar cambios' : ' Registrar') + '</button>');
+            htmlAccionesPasos('<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + (id ? ' Guardar cambios' : ' ' + agregar) + '</button>');
           pintarIconos(cuerpo);
           activarCombosEn(cuerpo, elementos);
           const patron = elementos.filter((e) => e.control === 'patron')[0];
@@ -3022,25 +3179,12 @@
             captura.patronInicial = esPuntosPatron(patron.valor) ? patron.valor : null;
             captura.controlPatron = activarPatron('af-' + patron.columna.replace(/[^A-Za-z0-9]+/g, '-') + '-patron', captura.patronInicial ? captura.patronInicial.split('-') : []);
           }
-          // Motivo: solo aparece (y se pide) si cambia el número o el NUCO
-          const nucoIgual = (v) => { const t = String(v || '').trim(); return /^\d+$/.test(t) ? t.padStart(4, '0') : t.toUpperCase(); };
-          const numeroIgual = (v) => String(v || '').replace(/\D/g, '');
-          const cambiaAsignacion = () => {
-            if (!id) return false;
-            const v = leerFormularioEn(cuerpo, elementos);
-            return ('NUMERO TELEFONO' in v && numeroIgual(v['NUMERO TELEFONO']) !== numeroIgual(valorDe('NUMERO TELEFONO'))) ||
-              ('NUCO' in v && nucoIgual(v.NUCO) !== nucoIgual(valorDe('NUCO')));
-          };
-          const aplicar = () => {
-            aplicarReglasEn(cuerpo, elementos, ctx);
-            const motivo = $('#cap-motivo-asignacion', raiz);
-            if (motivo) motivo.hidden = !cambiaAsignacion();
-          };
+          const aplicar = () => aplicarReglasEn(cuerpo, elementos, ctx);
           cuerpo.addEventListener('input', aplicar);
           cuerpo.addEventListener('change', aplicar);
           cuerpo.addEventListener('click', (ev) => {
             const multi = ev.target.closest('.ln-pastilla-multi');
-            if (multi) { ev.stopPropagation(); multi.classList.toggle('activa'); aplicar(); return; }
+            if (multi) { ev.stopPropagation(); alternarMulti(multi); aplicar(); return; }
             if (ev.target.closest('.ln-pastilla')) setTimeout(aplicar, 0);
           }, true);
           aplicar();
@@ -3066,39 +3210,74 @@
               return;
             }
             const valores = leerFormularioEn(cuerpo, elementos);
-            const motivo = id ? $('#cap-motivo', raiz).value.trim() : '';
-            if (cambiaAsignacion() && !motivo) {
-              $('#cap-motivo-asignacion', raiz).hidden = false;
-              $('#cap-motivo', raiz).focus();
-              mostrarErrorCaptura('Escribe el motivo del cambio de número o NUCO; queda en el historial.', null);
-              return;
+            // Estatus que siguen su flujo (usuario, 4-oct): RESGUARDO, PARA VENTA y PARA DESECHO → Mandar a resguardo;
+            // EN PROCESO DE CANCELACION → Mandar a cancelación. Lo demás se guarda aquí; si solo cambió el estatus, se va
+            // directo al flujo (su formulario pide su comentario)
+            const inicial = {};
+            elementos.forEach((e) => { if (e.tipo === 'campo') inicial[e.columna] = String(e.valor === undefined || e.valor === null ? '' : e.valor); });
+            let flujo = null;
+            if (id && valores['ESTATUS EQUIPO'] !== inicial['ESTATUS EQUIPO'] && ESTATUS_EQUIPO_RESGUARDO.indexOf(valores['ESTATUS EQUIPO']) >= 0) {
+              flujo = { tipo: 'RESGUARDO', estatus: valores['ESTATUS EQUIPO'] };
+              valores['ESTATUS EQUIPO'] = inicial['ESTATUS EQUIPO'];
+            } else if (id && valores['ESTATUS LINEA'] !== inicial['ESTATUS LINEA'] && valores['ESTATUS LINEA'] === 'EN PROCESO DE CANCELACION') {
+              flujo = { tipo: 'CANCELACION' };
+              valores['ESTATUS LINEA'] = inicial['ESTATUS LINEA'];
             }
+            const seguirFlujo = () => {
+              if (!flujo) return;
+              const ix = memoria.indice || { equipos: [], lineas: [] };
+              const r = ix.equipos.filter((x) => x.id === id)[0] || ix.lineas.filter((x) => x.id === id)[0] || { id: id };
+              if (flujo.tipo === 'RESGUARDO') abrirResguardo([{ id: id }], { estatus: flujo.estatus }); else abrirCancelacion([r]);
+            };
+            const norma = (x) => String(x === undefined || x === null ? '' : x).replace(/\s+/g, '').toUpperCase();
+            const otros = Object.keys(valores).some((c) => c !== (patron && patron.columna) && norma(valores[c]) !== norma(inicial[c])) ||
+              (patron && patronParaGuardar() !== undefined);
+            if (flujo && !otros) { cerrarCaptura(true); seguirFlujo(); return; }
             if (patron) {
               const p = patronParaGuardar();
               if (p === undefined) delete valores[patron.columna]; else valores[patron.columna] = p;
             }
-            leerArchivosEn(cuerpo).then((archivos) => {
-              estadoGuardado(id ? 'Guardando cambios' : 'Creando registro');
-              const datos = { valores: valores, archivos: archivos, motivo: motivo };
-              return (id ? llamar('apiLineasEditarRegistro', id, datos) : llamar('apiLineasCrearRegistro', datos)).then((r) => cargarIndice(true).then(() => {
+            // Segunda ventana: un solo COMENTARIO obligatorio y el TICKET (plan §5.2), ya con los cambios aceptados
+            pedirDatos('Comentario', $('#ln-captura-subtitulo', raiz).textContent || (ctx.parte === 'LINEA' ? 'Agregar línea' : 'Agregar equipo'),
+              [{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }, { clave: 'ticket', etiqueta: 'Ticket' }],
+              id ? 'Guardar cambios' : (ctx.parte === 'LINEA' ? 'Agregar línea' : 'Agregar equipo')).then((nota) => {
+              if (!nota || captura !== sesionEditor) return null;
+              return leerArchivosEn(cuerpo).then((archivos) => {
+              estadoGuardado(id ? 'Guardando cambios' : 'Guardando');
+              const datos = { valores: valores, archivos: archivos, comentario: nota.comentario, ticket: nota.ticket, parte: ctx.parte };
+              return (id ? llamar('apiLineasEditarRegistro', id, datos) : llamar('apiLineasCrearRegistro', datos)).then((r) => aplicarCambiosIndice(r.filas).then(() => {
                 cerrarCaptura(true);
-                aviso(icono('circle-check') + ' ' + (id ? 'Información actualizada.' : 'Registro creado.'), 6000);
+                aviso(icono('circle-check') + ' ' + (id ? 'Información actualizada' : (ctx.parte === 'LINEA' ? 'Línea agregada' : 'Equipo agregado')), 6000);
+                if (flujo) { seguirFlujo(); return; }
                 abrirRegistro(id || r.id);
               }));
-            }).catch((e) => { mostrarErrorCaptura(mensajeError(e)); restaurarGuardado(); });
+              });
+            }).catch(errorAlGuardar);
           });
         }).catch((e) => { $('#ln-captura-cuerpo', raiz).innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>'; });
       }
 
       // ---- Captura: inspección y responsiva nuevas ----
 
+      /** La ventana de captura se reutiliza: se abre siempre sin la marca de guardado de la anterior (con ella el lienzo
+       *  de firma no recibe trazos; pasaba en Reasignar después de la inspección de Mandar a resguardo, 4-oct). */
+      function mostrarModalCaptura() {
+        const modal = $('#ln-modal-captura', raiz);
+        modal.removeAttribute('aria-busy');
+        modal.hidden = false;
+      }
+
       function cerrarCaptura(guardada) {
         if (captura && captura.guardando && !guardada) return;
         const borrador = captura;
+        $('#ln-modal-captura', raiz).removeAttribute('aria-busy');
         $('#ln-modal-captura', raiz).hidden = true;
         $('#ln-calif-vivo', raiz).hidden = true;
+        ocultarEspera();
         $('#ln-captura-cuerpo', raiz).innerHTML = '';
         captura = null;
+        // Documento dentro de una acción: si se cierra sin guardarlo, la acción no sigue
+        if (borrador && borrador.flujo && !borrador.guardada) borrador.flujo.resolver(null);
         if (!guardada && borrador && !borrador.guardada && borrador.carpetaId) {
           llamar('apiLineasCancelarEvidencia', borrador.carpetaId, borrador.fotosCarpetaId)
             .catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' No se pudo limpiar la carpeta cancelada: ' + mensajeError(e), 9000));
@@ -3276,11 +3455,19 @@
       function activarPatron(prefijo, inicial) {
         const bloque = $('#' + prefijo + '-bloque', raiz);
         if (!bloque) return { puntos: () => [], valor: () => '', base64: () => null };
-        const posiciones = [[50,50],[150,50],[250,50],[50,150],[150,150],[250,150],[50,250],[150,250],[250,250]];
+        const posiciones = POSICIONES_PATRON;
         const estado = { puntos: (inicial || []).map(Number).filter((n) => n >= 1 && n <= 9) };
         const pintar = () => {
-          bloque.querySelectorAll('.ln-patron-punto').forEach((p) => p.classList.toggle('activa', estado.puntos.indexOf(Number(p.dataset.punto)) >= 0));
-          $('#' + prefijo + '-lineas', raiz).innerHTML = estado.puntos.length > 1 ? '<polyline points="' + estado.puntos.map((n) => posiciones[n - 1].join(',')).join(' ') + '" />' : '';
+          bloque.querySelectorAll('.ln-patron-punto').forEach((p) => {
+            const orden = estado.puntos.indexOf(Number(p.dataset.punto));
+            p.classList.toggle('activa', orden >= 0);
+            p.classList.toggle('inicio', orden === 0);
+            p.textContent = orden >= 0 ? String(orden + 1) : '';
+          });
+          $('#' + prefijo + '-lineas', raiz).innerHTML = estado.puntos.length > 1
+            ? '<polyline points="' + estado.puntos.map((n) => posiciones[n - 1].join(',')).join(' ') + '" />' +
+              flechasPatron(estado.puntos, 20).map((f) => '<polygon class="ln-patron-flecha" points="' + f.map((n) => n.toFixed(1)).join(',') + '" />').join('')
+            : '';
           $('#' + prefijo + '-texto', raiz).textContent = estado.puntos.length ? 'Patrón: ' + estado.puntos.join(' → ') : 'Sin patrón trazado';
         };
         bloque.querySelectorAll('.ln-patron-punto').forEach((p) => p.addEventListener('click', () => {
@@ -3296,7 +3483,17 @@
             const c = document.createElement('canvas'); c.width = 300; c.height = 300;
             const x = c.getContext('2d'); x.fillStyle = fondoPdf || '#ffffff'; x.fillRect(0, 0, 300, 300); x.strokeStyle = '#0b5d7a'; x.lineWidth = 8; x.lineCap = 'round';
             x.beginPath(); estado.puntos.forEach((n, i) => { const p = posiciones[n - 1]; if (!i) x.moveTo(p[0], p[1]); else x.lineTo(p[0], p[1]); }); x.stroke();
-            estado.puntos.forEach((n) => { const p = posiciones[n - 1]; x.beginPath(); x.fillStyle = '#0b5d7a'; x.arc(p[0], p[1], 13, 0, Math.PI * 2); x.fill(); });
+            // Flechas hacia donde va cada tramo
+            x.fillStyle = '#c9a227';
+            flechasPatron(estado.puntos, 24).forEach((f) => { x.beginPath(); x.moveTo(f[0], f[1]); x.lineTo(f[2], f[3]); x.lineTo(f[4], f[5]); x.closePath(); x.fill(); });
+            // Puntos con su orden (1 = inicio, con anillo)
+            x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = 'bold 17px Arial';
+            estado.puntos.forEach((n, i) => {
+              const p = posiciones[n - 1];
+              x.beginPath(); x.fillStyle = '#0b5d7a'; x.arc(p[0], p[1], 16, 0, Math.PI * 2); x.fill();
+              if (!i) { x.beginPath(); x.strokeStyle = '#c9a227'; x.lineWidth = 5; x.arc(p[0], p[1], 20, 0, Math.PI * 2); x.stroke(); }
+              x.fillStyle = '#ffffff'; x.fillText(String(i + 1), p[0], p[1] + 1);
+            });
             return c.toDataURL('image/png').split(',')[1];
           },
         };
@@ -3358,6 +3555,47 @@
         return sesion.carpetaPromesa;
       }
 
+      /**
+       * Pantalla de espera (regla del usuario, 4-oct): en cuanto se da clic a guardar, una pantalla cubre la ventana y
+       * dice solo lo que está pasando ("Generando tu PDF"), para que no se dé clic en otra parte ni se recargue. Sin
+       * pasos internos: no le interesan a quien captura.
+       */
+      /**
+       * La misma pantalla sirve para el resultado (usuario, 4-oct): o = { tono: 'listo' | 'error', icono, texto,
+       * detalle (HTML ya escapado), acciones (HTML de botones) }. Sin `o`, es la espera con su círculo girando.
+       */
+      function mostrarEspera(titulo, o) {
+        const espera = $('#ln-captura-espera', raiz);
+        if (!espera) return;
+        o = o || {};
+        espera.className = 'ln-espera' + (o.tono ? ' ln-espera-' + o.tono : '');
+        espera.setAttribute('role', o.tono === 'error' ? 'alert' : 'status');
+        $('#ln-espera-circulo', raiz).innerHTML = o.icono ? icono(o.icono) : '<span class="ln-spinner"></span>';
+        $('#ln-espera-titulo', raiz).textContent = titulo;
+        $('#ln-espera-texto', raiz).textContent = o.texto !== undefined ? o.texto : 'No cierres esta ventana.';
+        $('#ln-espera-texto', raiz).hidden = !$('#ln-espera-texto', raiz).textContent;
+        $('#ln-espera-detalle', raiz).innerHTML = o.detalle || '';
+        $('#ln-espera-detalle', raiz).hidden = !o.detalle;
+        $('#ln-espera-acciones', raiz).innerHTML = o.acciones || '';
+        $('#ln-espera-acciones', raiz).hidden = !o.acciones;
+        pintarIconos(espera);
+        espera.hidden = false;
+        const boton = espera.querySelector('#ln-espera-acciones button, #ln-espera-acciones a');
+        (boton || espera).focus({ preventScroll: true });
+      }
+
+      /** Error al guardar: el mismo diseño de la espera; "Volver" regresa al formulario con lo capturado. */
+      function errorAlGuardar(e) {
+        mostrarErrorCaptura(mensajeError(e));
+        restaurarGuardado();
+        mostrarEspera('No se pudo guardar', { tono: 'error', icono: 'triangle-alert', texto: 'Lo que capturaste sigue aquí.',
+          detalle: mensajeError(e), acciones: '<button type="button" class="primary" data-espera-volver>Volver</button>' });
+      }
+      function ocultarEspera() {
+        const espera = $('#ln-captura-espera', raiz);
+        if (espera) espera.hidden = true;
+      }
+
       function estadoGuardado(texto) {
         if (!captura) return;
         captura.guardando = true;
@@ -3365,13 +3603,14 @@
         modal.querySelectorAll('button, input, select, textarea').forEach((el) => { el.disabled = true; });
         captura.textoGuardar = $('#cap-guardar', raiz).innerHTML;
         $('#cap-guardar', raiz).innerHTML = '<span class="ln-spinner"></span> ' + esc(texto);
-        $('#ln-captura-subtitulo', raiz).textContent = texto + '. Mantén esta ventana abierta.';
         modal.setAttribute('aria-busy', 'true');
+        mostrarEspera(texto);
       }
 
       function restaurarGuardado() {
         if (!captura) return;
         captura.guardando = false;
+        ocultarEspera();
         const modal = $('#ln-modal-captura', raiz);
         modal.removeAttribute('aria-busy');
         modal.querySelectorAll('button, input, select, textarea').forEach((el) => { el.disabled = false; });
@@ -3403,26 +3642,20 @@
           sesionCaptura.guardando = true;
           modal.setAttribute('aria-busy', 'true');
           modal.querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = true; });
-          $('#ln-captura-subtitulo', raiz).textContent = 'Registro guardado. Preparando el documento PDF.';
-          cuerpo.innerHTML = '<div class="ln-pdf-estado" role="status"><span class="ln-spinner"></span><h3>Generando tu PDF</h3>' +
-            '<p>Los datos ya están guardados. Las firmas permanecen temporalmente en esta sesión mientras se completa la plantilla y se crea el PDF.</p>' +
-            '<ol><li>Firmas cargadas</li><li>Registro guardado</li><li aria-current="step">Generación del PDF en curso</li></ol>' +
-            '<p class="ln-tenue">Este paso puede tardar unos segundos. El enlace aparecerá aquí al terminar.</p></div>';
-          cuerpo.scrollTop = 0;
+          mostrarEspera('Generando tu PDF'); // sigue la misma pantalla de espera desde el clic en Guardar
           return llamar('apiLineasGenerarPdf', tipo, nuevoId, false, sesionCaptura.pdfFirmas || null).then((pdf) => {
             if (!vigente() || captura !== sesionCaptura) return;
-            $('#ln-captura-subtitulo', raiz).textContent = 'Documento listo para consultar o descargar.';
-            cuerpo.innerHTML = '<div class="ln-pdf-estado" role="status">' + icono('circle-check') + '<h3>Tu PDF está listo</h3><p>' + esc(pdf.nombre || 'Documento generado') + '</p>' +
-              '<div class="ln-pdf-acciones">' + enlaceDrive(pdf.id, 'Ver PDF', true) + enlaceDrive(sesionCaptura.carpetaId, 'Ver carpeta en Drive') +
-              '<button type="button" class="secondary" data-cerrar-modal>Volver al equipo</button></div></div>';
+            sesionCaptura.guardando = false;
+            mostrarEspera('Tu PDF está listo', { tono: 'listo', icono: 'circle-check', texto: '',
+              acciones: enlaceDrive(pdf.id, 'Ver PDF', true) + '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
             cargarEvidencias(idAbierto);
             cargarHistorial(idAbierto);
           }).catch((e) => {
             if (!vigente() || captura !== sesionCaptura) return;
-            $('#ln-captura-subtitulo', raiz).textContent = 'Registro guardado; PDF pendiente.';
-            cuerpo.innerHTML = '<div class="ln-pdf-estado" role="alert">' + icono('file-warning') + '<h3>No se pudo completar el PDF</h3><p>' + mensajeError(e) + '</p>' +
-            '<p>Tus datos están guardados y las firmas permanecen en esta sesión para reintentar sin volver a llenar el formulario.</p>' +
-              '<button type="button" class="primary ln-btn-icono" id="cap-reintentar-pdf">' + icono('refresh-cw') + ' Reintentar PDF</button></div>';
+            sesionCaptura.guardando = false;
+            mostrarEspera('No se pudo generar el PDF', { tono: 'error', icono: 'file-warning', texto: 'Tus datos sí se guardaron.', detalle: mensajeError(e),
+              acciones: '<button type="button" class="primary ln-btn-icono" id="cap-reintentar-pdf">' + icono('refresh-cw') + ' Intentar de nuevo</button>' +
+                '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
             $('#cap-reintentar-pdf', raiz).addEventListener('click', generar);
             cargarEvidencias(idAbierto);
             cargarHistorial(idAbierto);
@@ -3452,7 +3685,7 @@
       function formularioInspeccion(ctx) {
         const pasos = PASOS_FORMULARIO.INSPECCION;
         const fotos = '<section class="ln-af-seccion ln-af-extra">' +
-          htmlSubirFotos('cap-fotos', 'Opcional. Se guardan en Drive junto con la inspección (INSPECCIONES LINEAS_Images / FOTOS y el ID de la inspección).') + '</section>';
+          htmlSubirFotos('cap-fotos') + '</section>';
         return htmlPasosAppSheet(ctx.formulario, pasos, { [pasos.findIndex((p) => p.desde === 'extra:FOTOS')]: fotos }, { acomodar: true }) +
           '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div>' + htmlAccionesPasos(BOTON_GUARDAR_PDF);
       }
@@ -3474,21 +3707,20 @@
         const patron = patronParaGuardar();
         const valores = leerFormularioAppSheet();
         const sesion = captura;
-        estadoGuardado('Guardando inspección');
+        estadoGuardado(sesion.flujo ? 'Guardando la inspección' : 'Generando tu PDF');
         // La carpeta de fotos solo existe si se subió alguna (ya quedó creada al subirla)
         Promise.all([firmaInspector.base64('#ddebf7'), firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ddebf7') : null, sesion.carpetaPromesa || null]).then(([inspector, responsable]) => {
           sesion.pdfFirmas = { inspector: inspector, responsable: responsable, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ddebf7') : null };
-          return llamar('apiLineasGuardarInspeccion', Object.assign({}, sesion.ref, {
+          const datos = Object.assign({}, sesion.ref, {
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron,
             carpetaId: sesion.carpetaId || null, fotosCarpetaId: sesion.fotosCarpetaId || null, ruta: sesion.ruta || '', fotos: sesion.fotos,
             firmaInspectorBase64: sesion.pdfFirmas.inspector, firmaResponsableBase64: sesion.pdfFirmas.responsable, patronBase64: sesion.pdfFirmas.patron,
-          }));
+          });
+          return sesion.flujo && sesion.flujo.guardar ? sesion.flujo.guardar(datos) : llamar('apiLineasGuardarInspeccion', datos);
         }).then((r) => {
-          refrescarDespuesDeCaptura(idAbierto, 'INSPECCION', r.id);
-        }).catch((e) => {
-          mostrarErrorCaptura(mensajeError(e));
-          restaurarGuardado();
-        });
+          if (sesion.flujo) terminarFlujo(sesion, 'INSPECCION', r);
+          else refrescarDespuesDeCaptura(idAbierto, 'INSPECCION', r.id);
+        }).catch(errorAlGuardar);
       }
 
       // -- Responsiva (RESPONSIVAS LINEAS_Form) --
@@ -3512,31 +3744,52 @@
         const patron = patronParaGuardar();
         const valores = leerFormularioAppSheet();
         const sesion = captura;
-        estadoGuardado('Guardando responsiva');
+        estadoGuardado(sesion.flujo && !sesion.flujo.pdfAqui ? 'Guardando la responsiva' : 'Generando tu PDF');
         Promise.all([firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ffffff') : null, firmaCi.base64('#ffffff')]).then(([responsable, ci]) => {
           sesion.pdfFirmas = { responsable: responsable, ci: ci, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ffffff') : null };
-          return llamar('apiLineasGuardarResponsiva', Object.assign({}, sesion.ref, {
+          const datos = Object.assign({}, sesion.ref, {
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron,
             firmaResponsableBase64: sesion.pdfFirmas.responsable, firmaCiBase64: sesion.pdfFirmas.ci, patronBase64: sesion.pdfFirmas.patron,
-          }));
+          });
+          return sesion.flujo && sesion.flujo.guardar ? sesion.flujo.guardar(datos) : llamar('apiLineasGuardarResponsiva', datos);
         }).then((r) => {
-          refrescarDespuesDeCaptura(idAbierto, 'RESPONSIVA', r.id);
-        }).catch((e) => {
-          mostrarErrorCaptura(mensajeError(e));
-          restaurarGuardado();
-        });
+          if (sesion.flujo && !sesion.flujo.pdfAqui) terminarFlujo(sesion, 'RESPONSIVA', r);
+          else {
+            refrescarDespuesDeCaptura(idAbierto, 'RESPONSIVA', r.id);
+            if (sesion.flujo && sesion.flujo.despues) Promise.resolve(sesion.flujo.despues(r)).catch(() => {});
+          }
+        }).catch(errorAlGuardar);
       }
 
       // -- Abrir el modal --
 
-      function abrirCaptura(tipo, ref) {
-        $('#ln-modal-captura', raiz).hidden = false;
+      /**
+       * Documento dentro de la acción (decisión del usuario, 3-oct): abre la inspección o la responsiva en el mismo modal,
+       * con un aviso arriba de para qué es. Regresa una promesa con lo que regresó el guardado ({ id, … }) o null si se
+       * cerró sin guardar. opciones = { aviso, boton, guardar(datos) → promesa (en lugar del guardado normal) }.
+       */
+      function capturarEnFlujo(tipo, ref, opciones) {
+        return new Promise((resolve) => abrirCaptura(tipo, ref, Object.assign({}, opciones, { resolver: resolve })));
+      }
+
+      /** Documento guardado dentro de una acción: su PDF se genera aparte (si falla, queda «Generar PDF» en Documentos). */
+      function terminarFlujo(sesion, tipo, r) {
+        sesion.guardada = true;
+        llamar('apiLineasGenerarPdf', tipo, r.id, false, sesion.pdfFirmas || null)
+          .catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' El documento quedó guardado, pero su PDF no se generó: ' + mensajeError(e) + '. En Documentos está «Generar PDF».', 12000));
+        const flujo = sesion.flujo;
+        if (captura === sesion) cerrarCaptura(true);
+        flujo.resolver(r);
+      }
+
+      function abrirCaptura(tipo, ref, flujo) {
+        mostrarModalCaptura();
         $('#ln-captura-icono', raiz).innerHTML = icono(tipo === 'INSPECCION' ? 'clipboard-check' : 'signature');
         $('#ln-captura-tipo', raiz).textContent = tipo === 'INSPECCION' ? 'Inspección de telefonía' : 'Responsiva de entrega';
         $('#ln-captura-titulo', raiz).textContent = tipo === 'INSPECCION' ? 'Nueva inspección' : 'Nueva responsiva';
         $('#ln-captura-subtitulo', raiz).textContent = 'Preparando datos y carpeta de evidencia…';
         $('#ln-captura-cuerpo', raiz).innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando…</p>';
-        captura = { tipo: tipo, ref: ref, idObjetivo: ref.equipoId || ref.lineaId, fotos: [], patronId: null, firmas: {} };
+        captura = { tipo: tipo, ref: ref, idObjetivo: ref.equipoId || ref.lineaId, fotos: [], patronId: null, firmas: {}, flujo: flujo || null };
         $('#ln-calif-vivo', raiz).hidden = true; // aparece cuando la inspección ya está en pantalla
 
         const pedirContexto = tipo === 'INSPECCION' ? llamar('apiLineasContextoInspeccion', ref) : llamar('apiLineasContextoResponsiva', ref);
@@ -3547,7 +3800,9 @@
           ctx.formulario = conSelectorBloqueo(ctx.formulario || []);
           captura.contexto = ctx;
           const valorDe = (c) => ((ctx.formulario || []).filter((e) => e.columna === c)[0] || {}).valor || '';
-          $('#ln-captura-subtitulo', raiz).textContent = ['NUCO ' + (valorDe('NUCO') || '—'), valorDe('MODELO'), valorDe('RESPONSABLE')].filter(Boolean).join(' · ');
+          $('#ln-captura-subtitulo', raiz).textContent = flujo && flujo.subtitulo ? flujo.subtitulo
+            : ['NUCO ' + (valorDe('NUCO') || '—'), valorDe('MODELO'), valorDe('RESPONSABLE')].filter(Boolean).join(' · ');
+          if (flujo && flujo.titulo) $('#ln-captura-titulo', raiz).textContent = flujo.titulo;
           if (tipo === 'INSPECCION') {
             $('#ln-captura-cuerpo', raiz).innerHTML = formularioInspeccion(ctx);
             pintarIconos($('#ln-captura-cuerpo', raiz));
@@ -3557,6 +3812,11 @@
             pintarIconos($('#ln-captura-cuerpo', raiz));
             iniciarFormularioResponsiva();
           }
+          if (flujo && flujo.aviso) {
+            $('#ln-captura-cuerpo', raiz).insertAdjacentHTML('afterbegin', '<div class="ln-nota ln-nota-flujo">' + icono('route', 'ln-icon-sm') + ' ' + esc(flujo.aviso) + '</div>');
+            pintarIconos($('#ln-captura-cuerpo', raiz));
+          }
+          if (flujo && flujo.boton) $('#cap-guardar', raiz).innerHTML = icono('circle-check') + ' ' + esc(flujo.boton);
         }).catch((e) => {
           if (!captura) return;
           $('#ln-captura-cuerpo', raiz).innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>';
@@ -3569,8 +3829,11 @@
         'Cambio de línea': 'card-sim', 'Cambio de plan': 'receipt-text', 'Cambio de equipo': 'smartphone',
         'Cambio de área o ubicación': 'map-pin', 'Cambio de accesos': 'key-round', 'Otros cambios': 'file-pen-line',
         'Inspección': 'clipboard-check', 'Responsiva': 'signature', 'Reactivación': 'refresh-cw', 'Desecho': 'trash-2',
+        // Acciones con nombre (etapa 3, paso 2)
+        'Entrega': 'hand-helping', 'Cierre': 'flag', 'Nota': 'message-square', 'Resguardo': 'archive', 'Cancelación de línea': 'phone-off', 'Venta': 'badge-dollar-sign',
+        'Edición': 'file-pen-line', 'Comentario anterior': 'message-square-text',
       };
-      const COLOR_ORIGEN = { 'Nuevo sistema': 'verde', AppSheet: 'azul', Drive: 'neutro' };
+      const COLOR_ORIGEN = { 'Nuevo sistema': 'verde', AppSheet: 'azul', Drive: 'neutro', 'Migración': 'neutro' };
 
       /** Botón visible dentro de una tabla que abre la ficha de una línea o un equipo (delegación data-ln-ir). */
       function botonIr(tipo, id, texto) {
@@ -3652,10 +3915,11 @@
 
       /** Grupos del filtro Movimiento, en orden fijo (lo que no esté aquí va a "Otros"). */
       const GRUPOS_MOVIMIENTO = [
-        ['Responsable y ubicación', ['Reasignación', 'Cambio de área o ubicación']],
-        ['Equipo y línea', ['Cambio de equipo', 'Cambio de línea', 'Cambio de plan', 'Cambio de estatus', 'Cambio de accesos']],
+        ['Responsable y ubicación', ['Entrega', 'Reasignación', 'Cambio de área o ubicación']],
+        ['Equipo y línea', ['Edición', 'Cambio de equipo', 'Cambio de línea', 'Cambio de plan', 'Cambio de estatus', 'Cambio de accesos']],
         ['Documentos', ['Inspección', 'Responsiva']],
-        ['Resguardo, cancelación y bajas', ['Resguardo', 'Cancelación de línea', 'Venta']],
+        ['Resguardo, cancelación y bajas', ['Resguardo', 'Cancelación de línea', 'Venta', 'Cierre']],
+        ['Notas', ['Nota', 'Comentario anterior']],
         ['Alta, reactivación y desecho', ['Alta de registro', 'Reactivación', 'Desecho']],
       ];
 
@@ -3696,6 +3960,10 @@
           const destino = v ? destinos.de(m.campo, v) : null;
           return destino ? botonIr(destino.tipo, destino.id, v) : (formatoAppSheet('CAMBIOS', columna, v) || vacio);
         };
+        // Un renglón por acción (paso 3, §5.5): cada cambio en su línea, CAMPO antes → después
+        const cambiosHtml = (v, m) => (m.cambios && m.cambios.length ? '<div class="ln-cambios">' + m.cambios.map((c) =>
+          '<div><span class="ln-cambio-campo">' + esc(c.campo) + '</span> ' + valorCambio('ANTES')(c.antes, c) + ' → ' + valorCambio('DESPUES')(c.despues, c) + '</div>').join('') + '</div>' : vacio);
+        const textoLargo = (v) => (v ? '<span class="ln-texto-largo">' + esc(v) + '</span>' : vacio);
         $('#ln-asig-ocultar-check', cont).addEventListener('change', (ev) => {
           ocultarSinAsignar = ev.target.checked;
           if (tablaAsignaciones && asignaciones) tablaAsignaciones.setDatos(periodosVisibles(asignaciones));
@@ -3720,14 +3988,12 @@
           textoVacio: 'Sin movimientos con esos filtros',
           exportar: { nombreArchivo: 'Historial ' + nombre, nombreHoja: 'Historial' },
           etiquetaFila: (m) => m.movimiento + ' · ' + fechaTabla(m.fecha),
-          detalle: { titulo: (m) => m.movimiento + (m.campo ? ' · ' + m.campo : '') },
+          detalle: { titulo: (m) => m.movimiento + ' · ' + fechaTabla(m.fecha) },
           accionesFila: [
             { icono: 'clipboard-check', titulo: 'Ver inspección', visible: (m) => m.refTipo === 'inspeccion' && !!m.refId, alHacer: (m) => abrir('inspeccion', m.refId) },
             { icono: 'file-text', titulo: 'Ver PDF', visible: (m) => !!m.pdfId, alHacer: (m) => window.open('https:\/\/drive.google.com/file/d/' + encodeURIComponent(m.pdfId) + '/view', '_blank', 'noopener') },
           ],
-          ayuda: 'Todos los movimientos del registro: reasignaciones, cambios de cada campo, inspecciones, responsivas, reactivaciones y desechos, ' +
-            'del AppSheet y del sistema nuevo. "Movimiento" filtra por tipo; la flecha de cada columna filtra por campo, usuario, origen o rango de fechas. ' +
-            '"' + TITULO_ASIGNACIONES[vistaHistorial] + '" cambia la tabla por los periodos de cada número y NUCO. "Exportar a Excel" descarga todo (respeta los filtros activos).',
+          ayuda: 'Un renglón por acción, del AppSheet y del sistema nuevo. Responsable y estatus: los de ese momento.',
           alCambiarFiltros: (f) => {
             if (select.value === MOV_ASIGNACIONES) return;
             const valores = f && f.movimiento && f.movimiento.valores;
@@ -3735,11 +4001,14 @@
           },
           columnas: [
             { campo: 'fecha', titulo: 'Fecha', tipo: 'lnFechaHora', fijada: true, ancho: 140 },
-            { campo: 'movimiento', titulo: 'Movimiento', tipo: 'lista', ancho: 220, render: (v) => '<span class="ln-movimiento">' + ico(ICONO_MOVIMIENTO[v] || 'dot') + ' ' + esc(v) + '</span>' },
-            { campo: 'campo', titulo: 'Campo', tipo: 'lista', ancho: 170 },
-            { campo: 'antes', titulo: 'Antes', tipo: 'texto', ancho: 200, render: valorCambio('ANTES') },
-            { campo: 'despues', titulo: 'Después', tipo: 'texto', ancho: 200, render: valorCambio('DESPUES') },
-            { campo: 'detalle', titulo: 'Detalle', tipo: 'texto', ancho: 260 },
+            { campo: 'movimiento', titulo: 'Movimiento', tipo: 'lista', ancho: 200, render: (v) => '<span class="ln-movimiento">' + ico(ICONO_MOVIMIENTO[v] || 'dot') + ' ' + esc(v) + '</span>' },
+            { campo: 'comentario', titulo: 'Comentario', tipo: 'texto', ancho: 260, render: textoLargo },
+            { campo: 'cambiosTexto', titulo: 'Cambios', tipo: 'texto', ancho: 340, render: cambiosHtml },
+            { campo: 'responsable', titulo: 'Responsable', tipo: 'lista', ancho: 200 },
+            { campo: 'estatusEquipo', titulo: 'Estatus equipo', tipo: 'lista', ancho: 140 },
+            { campo: 'estatusLinea', titulo: 'Estatus línea', tipo: 'lista', ancho: 150 },
+            { campo: 'ticket', titulo: 'Ticket', tipo: 'texto', ancho: 120 },
+            { campo: 'detalle', titulo: 'Detalle', tipo: 'texto', ancho: 200, render: textoLargo },
             { campo: 'usuario', titulo: 'Usuario', tipo: 'lista', ancho: 190 },
             { campo: 'origen', titulo: 'Origen', tipo: 'lista', ancho: 130, render: (v) => chip(v, COLOR_ORIGEN[v] || 'neutro') },
           ],
@@ -3914,7 +4183,7 @@
     ];
     const GRUPO_EQUIPO = {
       'USO': 'uso', 'EN ENVIO': 'uso', 'ESPERA DE RESPONSIVA': 'uso',
-      'RESGUARDO': 'guardado', 'PARA VENTA': 'guardado', 'VENTA': 'guardado', 'POSIBLE VENTA': 'guardado', 'POSIBLE VENTA-DAÑO': 'guardado',
+      'RESGUARDO': 'guardado', 'PARA VENTA': 'guardado', 'VENTA': 'guardado', 'POSIBLE VENTA': 'guardado',
       'PARA DESECHO': 'guardado', 'DESECHO': 'guardado',
       'VENDIDO': 'baja', 'DONADO': 'baja', 'DESECHADO': 'baja', 'EXTRAVIO-ROBO': 'baja', 'EXTRAVIADO': 'baja', 'ROBADO': 'baja', 'ROBO': 'baja',
     }; // el resto (FUERA DE INVENTARIO, CANCELADO, N/A…) = 'revisar'
@@ -4905,8 +5174,6 @@
       $('#lac-nuevo', raiz).addEventListener('click', abrirModalNuevo);
       raiz.querySelectorAll('[data-cerrar-modal-nuevo]').forEach((b) => b.addEventListener('click', cerrarModalNuevo));
       raiz.querySelectorAll('[data-cerrar-modal-mov]').forEach((b) => b.addEventListener('click', cerrarModalMov));
-      $('#lac-modal-nuevo', raiz).addEventListener('click', (ev) => { if (ev.target.id === 'lac-modal-nuevo') cerrarModalNuevo(); });
-      $('#lac-modal-mov', raiz).addEventListener('click', (ev) => { if (ev.target.id === 'lac-modal-mov') cerrarModalMov(); });
 
       $('#lac-guardar-nuevo', raiz).addEventListener('click', () => {
         if (guardandoAccesorio) return;
@@ -4944,30 +5211,54 @@
     /**
      * Ventana chica para pedir datos antes de un paso de la bandeja. campos: [{ clave, etiqueta, valor, requerido,
      * opciones }]. Regresa una promesa con { clave: valor } o null si se cancela.
+     * opciones.alConfirmar(valores) (promesa): la ventana se queda con la pantalla de espera (opciones.espera) desde el
+     * clic hasta que termina; si falla, muestra el error y "Volver" regresa a lo capturado. Regresa lo que regrese.
      */
-    function pedirDatos(titulo, mensaje, campos, textoConfirmar) {
+    function pedirDatos(titulo, mensaje, campos, textoConfirmar, opciones) {
+      const o = opciones || {};
       return new Promise((resolve) => {
         const fondo = document.createElement('div');
         fondo.className = 'modal-backdrop';
-        fondo.innerHTML = '<div class="modal-card" role="dialog" aria-modal="true" style="max-width:480px">' +
+        fondo.innerHTML = '<div class="modal-card" role="dialog" aria-modal="true" style="max-width:480px;position:relative">' +
           '<div class="modal-header"><div><h3 style="margin:0">' + esc(titulo) + '</h3>' + (mensaje ? '<p class="modal-subtitle">' + esc(mensaje) + '</p>' : '') + '</div>' +
           '<button type="button" class="modal-close" data-cerrar aria-label="Cerrar">' + ico('x') + '</button></div>' +
           campos.map((c, i) => '<div class="field"><label for="lnr-dato-' + i + '">' + esc(c.etiqueta) + (c.requerido ? ' *' : '') + '</label>' +
             (c.opciones ? '<select id="lnr-dato-' + i + '" data-clave="' + esc(c.clave) + '">' + c.opciones.map((o) => '<option' + (o === c.valor ? ' selected' : '') + '>' + esc(o) + '</option>').join('') + '</select>'
+              : c.area ? '<textarea id="lnr-dato-' + i + '" data-clave="' + esc(c.clave) + '" rows="4">' + esc(c.valor || '') + '</textarea>'
               : '<input type="text" id="lnr-dato-' + i + '" data-clave="' + esc(c.clave) + '" value="' + esc(c.valor || '') + '" autocomplete="off" data-respetar-texto />') + '</div>').join('') +
           '<div class="error-msg" data-error hidden></div>' +
-          '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar>Cancelar</button><button type="button" data-ok>' + esc(textoConfirmar || 'Aceptar') + '</button></div></div>';
+          '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar>Cancelar</button><button type="button" data-ok>' + esc(textoConfirmar || 'Aceptar') + '</button></div>' +
+          '<div class="ln-espera" data-espera hidden></div></div>';
         document.body.appendChild(fondo);
+        const espera = fondo.querySelector('[data-espera]');
+        let ocupado = false;
         const cerrar = (valor) => { fondo.remove(); document.removeEventListener('keydown', tecla, true); resolve(valor); };
-        const tecla = (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); cerrar(null); } };
+        const tecla = (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); if (!ocupado) cerrar(null); } };
         document.addEventListener('keydown', tecla, true);
-        fondo.addEventListener('click', (ev) => { if (ev.target === fondo || ev.target.closest('[data-cerrar]')) cerrar(null); });
-        fondo.querySelector('[data-ok]').addEventListener('click', () => {
+        fondo.addEventListener('click', (ev) => {
+          if (ev.target.closest('[data-espera-volver]')) { espera.hidden = true; ocupado = false; return; }
+          if (!ocupado && ev.target.closest('[data-cerrar]')) cerrar(null);
+        });
+        const pintarEspera = (tituloEspera, texto, error) => {
+          espera.className = 'ln-espera' + (error ? ' ln-espera-error' : '');
+          espera.innerHTML = '<span class="ln-espera-circulo">' + (error ? icono('triangle-alert') : '<span class="ln-spinner"></span>') + '</span>' +
+            '<h3>' + esc(tituloEspera) + '</h3><p>' + esc(texto) + '</p>' +
+            (error ? '<div class="ln-espera-acciones"><button type="button" class="primary" data-espera-volver>Volver</button></div>' : '');
+          espera.hidden = false;
+        };
+        fondo.querySelector('[data-ok]').addEventListener('click', async () => {
           const valores = {};
           fondo.querySelectorAll('[data-clave]').forEach((el) => { valores[el.dataset.clave] = String(el.value || '').trim(); });
-          const falta = campos.filter((c) => c.requerido && !valores[c.clave])[0];
+          const falta = campos.filter((c) => (c.requerido && !valores[c.clave]) || (c.minimo && valores[c.clave].length < c.minimo))[0];
           if (falta) { const e = fondo.querySelector('[data-error]'); e.textContent = falta.etiqueta + ' es obligatorio.'; e.hidden = false; return; }
-          cerrar(valores);
+          if (!o.alConfirmar) { cerrar(valores); return; }
+          ocupado = true;
+          pintarEspera(o.espera || 'Guardando', 'No cierres esta ventana.');
+          try {
+            cerrar(await o.alConfirmar(valores));
+          } catch (e) {
+            pintarEspera('No se pudo guardar', mensajeError(e), true);
+          }
         });
         pintarIconos(fondo);
         const primero = fondo.querySelector('[data-clave]');

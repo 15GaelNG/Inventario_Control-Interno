@@ -390,8 +390,8 @@ function apiLineasGuardarResponsiva(token, datos) {
 function apiLineasGenerarPdf(token, tipo, id, forzar, firmas) {
   return TelefoniaService.generarPdf(token, tipo, id, forzar, firmas);
 }
-function apiLineasFormularioRegistro(token, id) {
-  return TelefoniaService.formularioRegistro(token, id);
+function apiLineasFormularioRegistro(token, id, parte) {
+  return TelefoniaService.formularioRegistro(token, id, parte);
 }
 function apiLineasCrearRegistro(token, datos) {
   return TelefoniaService.crearRegistro(token, datos);
@@ -399,8 +399,8 @@ function apiLineasCrearRegistro(token, datos) {
 function apiLineasEditarRegistro(token, id, datos) {
   return TelefoniaService.editarRegistro(token, id, datos);
 }
-function apiLineasCambiarEstatus(token, id, datos) {
-  return TelefoniaService.cambiarEstatus(token, id, datos);
+function apiLineasReasignar(token, responsiva) {
+  return TelefoniaService.reasignar(token, responsiva);
 }
 function apiLineasFotosInspeccion(token, id, accion) {
   return TelefoniaService.fotosInspeccion(token, id, accion);

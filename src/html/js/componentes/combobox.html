@@ -18,6 +18,12 @@
   :root[data-theme="dark"] .cbx-opcion mark { background: #7a6420; }
   .cbx-vacio, .cbx-mas { padding: 8px 9px; font-size: 12px; color: var(--color-text-muted); }
   .cbx-mas { border-top: 1px solid var(--color-border); margin-top: 4px; }
+  /* "Agregar 'x'": la única forma de quedarse con un valor que no está en la lista */
+  .cbx-opcion.cbx-agregar { border-top: 1px dashed var(--color-border); margin-top: 4px; color: var(--color-primary); }
+  .cbx-opcion.cbx-agregar .cbx-valor { white-space: normal; }
+  /* Lo tecleado sin elegirlo se descarta: el campo parpadea para que se note */
+  .cbx-descartado { animation: cbx-descartado 0.9s ease; }
+  @keyframes cbx-descartado { 0%, 60% { box-shadow: 0 0 0 2px var(--color-danger, #d64545); } 100% { box-shadow: none; } }
   /* Con el teclado del celular abierto queda poca pantalla: la lista no pasa de un tercio de
      lo que se ve, y cada opción mide lo de un dedo */
   @media (max-width: 640px) {
@@ -41,11 +47,17 @@
    *     alElegir: (opcion) => {},        // opcional
    *     maximo: 50,                      // cuántas se listan a la vez
    *     textoVacio: 'Sin coincidencias',
+   *     agregar: false,                  // ver abajo
    *   });
    *   cbx.setOpciones([...])   cbx.destruir()
    *
    * Teclado: ↓/↑ mueve, Enter elige, Esc cierra. Escribir libre también vale:
    * el campo sigue siendo un input normal (hay folios que no están en la lista).
+   *
+   * Con `agregar: true` no vale escribir libre: si lo escrito no está en la lista, al final aparece
+   * "Agregar 'x'" y hay que seleccionarlo para quedarse con ese valor. Lo que solo se teclea y no se elige
+   * se descarta al salir del campo y regresa el último valor aceptado (el que traía o el último elegido).
+   * Escribir completo un valor que sí está en la lista cuenta como elegirlo. Vaciar el campo sí se permite.
    */
   const Combobox = (function () {
     function esc(v) {
@@ -69,11 +81,19 @@
     }
 
     function crear(input, config) {
-      const cfg = Object.assign({ maximo: 50, textoVacio: 'Sin coincidencias' }, config);
+      const cfg = Object.assign({ maximo: 50, textoVacio: 'Sin coincidencias', agregar: false }, config);
       let opciones = (cfg.opciones || []).map((o) => (typeof o === 'object' ? o : { valor: o, etiqueta: '' }));
       let lista = null;
       let activa = -1;
       let visibles = [];
+      // Modo `agregar`: el último valor aceptado y si la persona tecleó algo desde entonces
+      let aceptado = input.value.trim();
+      let tecleado = false;
+      /** La opción que es exactamente `texto` (sin contar mayúsculas ni acentos), o null */
+      const opcionIgual = (texto) => {
+        const t = normalizar(String(texto || '').trim());
+        return t ? opciones.filter((o) => normalizar(String(o.valor).trim()) === t)[0] || null : null;
+      };
 
       const envoltura = document.createElement('div');
       envoltura.className = 'cbx';
@@ -99,6 +119,9 @@
         const q = consulta();
         const todas = opciones.filter((o) => !q || normalizar(o.valor).includes(q) || normalizar(o.etiqueta).includes(q));
         visibles = todas.slice(0, cfg.maximo);
+        const ocultas = todas.length - visibles.length;
+        const texto = input.value.trim();
+        if (cfg.agregar && tecleado && texto && !opcionIgual(texto)) visibles = visibles.concat([{ valor: texto, etiqueta: '', agregar: true }]);
         if (!lista) {
           lista = document.createElement('div');
           lista.className = 'cbx-lista';
@@ -109,11 +132,15 @@
           input.setAttribute('aria-controls', idLista);
         }
         lista.innerHTML = visibles.length
-          ? visibles.map((o, i) => `<div class="cbx-opcion" role="option" id="${idLista}-${i}" data-i="${i}" aria-selected="false">
+          ? visibles.map((o, i) => (o.agregar
+            ? `<div class="cbx-opcion cbx-agregar" role="option" id="${idLista}-${i}" data-i="${i}" aria-selected="false">
+              <span class="cbx-valor">Agregar “${esc(o.valor)}”</span>
+            </div>`
+            : `<div class="cbx-opcion" role="option" id="${idLista}-${i}" data-i="${i}" aria-selected="false">
               <span class="cbx-valor">${resaltar(o.valor, q)}</span>
               <span class="cbx-etiqueta">${resaltar(o.etiqueta, q)}</span>
-            </div>`).join('') + (todas.length > visibles.length
-              ? `<div class="cbx-mas">y ${todas.length - visibles.length} más — sigue escribiendo para filtrar</div>` : '')
+            </div>`)).join('') + (ocultas > 0
+              ? `<div class="cbx-mas">y ${ocultas} más — sigue escribiendo para filtrar</div>` : '')
           : `<div class="cbx-vacio">${esc(cfg.textoVacio)}</div>`;
         marcarActiva(-1);
       }
@@ -144,21 +171,47 @@
 
       let eligiendo = false;
 
-      function elegir(i) {
-        const opcion = visibles[i];
-        if (!opcion) return;
-        input.value = opcion.valor;
-        // Avisar del cambio SIN que el propio aviso vuelva a abrir la lista
+      /** Pone `valor` en el campo y avisa del cambio SIN que el propio aviso vuelva a abrir la lista */
+      function fijar(valor) {
+        input.value = valor;
+        aceptado = String(valor).trim();
+        tecleado = false;
         eligiendo = true;
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
         eligiendo = false;
+      }
+
+      function elegir(i) {
+        const opcion = visibles[i];
+        if (!opcion) return;
+        fijar(opcion.valor);
         cerrar();
         if (cfg.alElegir) cfg.alElegir(opcion);
       }
 
-      const alEscribir = () => { if (!eligiendo) abrir(); };
+      /** Modo `agregar`, al salir del campo: lo tecleado vale solo si es una opción o se vació; si no, se descarta */
+      function revisarAlSalir() {
+        if (!cfg.agregar || !tecleado) return;
+        const texto = input.value.trim();
+        if (!texto) { aceptado = ''; tecleado = false; return; }
+        const igual = opcionIgual(texto);
+        if (igual) {
+          fijar(igual.valor);
+          if (cfg.alElegir) cfg.alElegir(igual);
+          return;
+        }
+        fijar(aceptado);
+        input.classList.remove('cbx-descartado');
+        void input.offsetWidth;   // reinicia la animación si se repite
+        input.classList.add('cbx-descartado');
+      }
+
+      const alEscribir = () => { if (!eligiendo) { tecleado = true; abrir(); } };
       const alEnfocar = () => abrir();
+      // Un valor puesto desde fuera (p. ej. el autollenado de otro campo) cuenta como aceptado
+      const alCambiar = () => { if (!eligiendo && !tecleado) aceptado = input.value.trim(); };
+      const alSalir = () => { cerrar(); revisarAlSalir(); };
       const alTeclear = (ev) => {
         if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
           ev.preventDefault();
@@ -186,6 +239,8 @@
       input.addEventListener('input', alEscribir);
       input.addEventListener('focus', alEnfocar);
       input.addEventListener('keydown', alTeclear);
+      input.addEventListener('change', alCambiar);
+      if (cfg.agregar) input.addEventListener('blur', alSalir);
       envoltura.addEventListener('mousedown', (ev) => { if (ev.target.closest('.cbx-opcion')) ev.preventDefault(); });
       envoltura.addEventListener('click', alClicLista);
       document.addEventListener('mousedown', alClicFuera);
@@ -195,6 +250,8 @@
         input.removeEventListener('input', alEscribir);
         input.removeEventListener('focus', alEnfocar);
         input.removeEventListener('keydown', alTeclear);
+        input.removeEventListener('change', alCambiar);
+        input.removeEventListener('blur', alSalir);
         document.removeEventListener('mousedown', alClicFuera);
       }
 
