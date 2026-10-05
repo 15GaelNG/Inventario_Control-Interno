@@ -333,3 +333,78 @@ function lineasPintarPestanas() {
   console.log('En rojo (' + pintadas.length + '): ' + pintadas.join(', '));
   return pintadas;
 }
+
+
+// ---------------- Borrar los registros de prueba en producción (usuario, 4-oct noche) ----------------
+// Pruebas del 4-oct: NUCO 9990 (MOTO G20) y las líneas 9990009990 y 9990009991, con todo lo que se les colgó:
+// asignaciones, adendums, movimientos, inspecciones, responsivas, evidencias, resguardos y avisos. La carpeta 9990 que
+// se creó en NUCOS va a la papelera (se recupera desde ahí). Primero se revisa (no escribe), luego se borra.
+
+const PRUEBAS_4OCT_ = { nuco: '9990', numeros: ['9990009990', '9990009991'] };
+// Pestaña → columnas donde puede aparecer el ID del equipo o de la línea de prueba
+const PRUEBAS_4OCT_HOJAS_ = {
+  'EQUIPOS': ['ID'], 'LINEAS': ['ID'], 'ASIGNACIONES': ['ID EQUIPO', 'ID LINEA'], 'ADENDUMS': ['ID LINEA'],
+  'MOVIMIENTOS': ['ID EQUIPO', 'ID LINEA'], 'INSPECCIONES LINEAS': ['ID LINEA'], 'RESPONSIVAS LINEAS': ['ID LINEA'],
+  'APP_EVIDENCIAS': ['ID_LINEA'], 'APP_RESGUARDOS': ['REGISTRO_ID'], 'APP_NOTIFICACIONES': ['REF_ID'],
+  'CAMBIOS LINEAS TELEFONICAS': ['ID_LINEA'], 'APP_MOVIMIENTOS': ['REFS'],
+};
+
+function pruebas4oct_(borrar) {
+  soloEditor_();
+  const libro = SpreadsheetApp.openById(Config.SPREADSHEET_IDS.TELEFONIA());
+  const leer = (nombre) => {
+    const h = libro.getSheetByName(nombre);
+    if (!h || h.getLastRow() < 2) return null;
+    const v = h.getDataRange().getValues();
+    return { hoja: h, enc: v[0].map((x) => String(x).trim()), filas: v.slice(1) };
+  };
+  const t = (x) => String(x == null ? '' : x).trim();
+  // 1) Los IDs de prueba
+  const ids = {};
+  const eq = leer('EQUIPOS');
+  eq.filas.forEach((r) => { if (t(r[eq.enc.indexOf('NUCO')]) === PRUEBAS_4OCT_.nuco) ids[t(r[eq.enc.indexOf('ID')])] = 'EQUIPO NUCO ' + PRUEBAS_4OCT_.nuco; });
+  const li = leer('LINEAS');
+  li.filas.forEach((r) => { const n = t(r[li.enc.indexOf('NUMERO TELEFONO')]); if (PRUEBAS_4OCT_.numeros.indexOf(n) >= 0) ids[t(r[li.enc.indexOf('ID')])] = 'LINEA ' + n; });
+  const lista = Object.keys(ids).filter(Boolean);
+  if (!lista.length) { console.log('No hay registros de prueba.'); return { ids: {}, filas: {} }; }
+  // 2) Renglones que los citan, por pestaña (de abajo hacia arriba para borrar)
+  const resumen = {};
+  Object.keys(PRUEBAS_4OCT_HOJAS_).forEach((nombre) => {
+    const tb = leer(nombre);
+    if (!tb) return;
+    const cols = PRUEBAS_4OCT_HOJAS_[nombre].map((c) => tb.enc.indexOf(c)).filter((i) => i >= 0);
+    const filas = [];
+    tb.filas.forEach((r, i) => {
+      const cita = cols.some((c) => {
+        const v = t(r[c]);
+        return nombre === 'APP_MOVIMIENTOS' ? lista.some((id) => v.indexOf(',' + id + ',') >= 0) : lista.indexOf(v) >= 0;
+      });
+      if (cita) filas.push(i + 2);
+    });
+    if (!filas.length) return;
+    resumen[nombre] = filas.length;
+    if (borrar) filas.slice().reverse().forEach((n) => tb.hoja.deleteRow(n));
+  });
+  // 3) La carpeta del NUCO en NUCOS (a la papelera)
+  let carpeta = null;
+  try {
+    const idCarpeta = LineasArchivos.carpetasNucos()[PRUEBAS_4OCT_.nuco];
+    if (idCarpeta) {
+      const c = DriveApp.getFolderById(idCarpeta);
+      carpeta = c.getName() + ' (' + idCarpeta + ')';
+      if (borrar) c.setTrashed(true);
+    }
+  } catch (e) { carpeta = 'no se pudo revisar: ' + e.message; }
+  if (borrar) {
+    LineasDatos.cacheBorrar('carpetas_nucos_v2');
+    LineasRepo.borrarCaches();
+    if (typeof LineasLectura !== 'undefined') LineasLectura.limpiarCaches();
+    LineasDatos.tocar(Object.keys(PRUEBAS_4OCT_HOJAS_));
+  }
+  const salida = { borrado: !!borrar, ids: ids, renglones: resumen, carpetaNucos: carpeta };
+  console.log(JSON.stringify(salida, null, 2));
+  return salida;
+}
+
+function lineasPruebas4oct_revisar() { return pruebas4oct_(false); }
+function lineasPruebas4oct_borrar() { return pruebas4oct_(true); }
