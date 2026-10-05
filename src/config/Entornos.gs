@@ -50,6 +50,23 @@ const ENTORNOS = {
     GEOTAB_BASE_DATOS: 'ciudad_maderas',
     GEOTAB_SERVIDOR: '',
   },
+
+  // ---------------------------------------------------------------- DEV de Emmanuel (rama emmanuel)
+  '1rpvvay1hBTFfm5paVyvy6-Thmx-CQ6uUWVef20Jr8VmHQxkCWZ7UmeOa': {
+    ENTORNO: 'DEV',
+
+    // Copia del libro de producción ("DEV EMMANUEL - Copia de produccion 2026-10-05")
+    SS_ID_USUARIOS: '1RgtHxKZgo6PFYY1e6ic9coqjBUaNhRlk2X8_Raz6HNQ',
+    SS_ID_VEHICULOS: '1RgtHxKZgo6PFYY1e6ic9coqjBUaNhRlk2X8_Raz6HNQ',
+    SS_ID_TELEFONIA: '1RgtHxKZgo6PFYY1e6ic9coqjBUaNhRlk2X8_Raz6HNQ',
+    SS_ID_ACCESORIOS: '1RgtHxKZgo6PFYY1e6ic9coqjBUaNhRlk2X8_Raz6HNQ',
+    SS_ID_CAJACHICA: '1RgtHxKZgo6PFYY1e6ic9coqjBUaNhRlk2X8_Raz6HNQ',
+
+    // Líneas: lo que escribe (inspecciones, responsivas, fotos, PDF firmados) va a una carpeta de pruebas, nunca a
+    // NUCOS de producción. Las carpetas de los demás módulos siguen en las Script Properties del DEV.
+    LINEAS_DRIVE_APPSHEET: '1tq-jCsFgdsdMAsQqm1WTHdynQkAN05r5',
+    LINEAS_DRIVE_NUCOS: '1tq-jCsFgdsdMAsQqm1WTHdynQkAN05r5',
+  },
 };
 
 /**
