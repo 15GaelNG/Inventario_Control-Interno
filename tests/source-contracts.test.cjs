@@ -709,9 +709,10 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
   assert.match(read('src/services/lineas/LineasUtil.gs'), /try \{ return LineasArchivos\.carpetasNucos\(\); \}/);
   assert.match(read('src/ClientApi.gs'), /function apiLineasArchivo\(token, ruta\)/);
 
-  // Cliente: General sin Patrón; Última responsiva / inspección de NUCOS solo en el ⋮ de la ficha (usuario, 30-sep)
+  // Cliente: Última responsiva / inspección de NUCOS solo en el ⋮ de la ficha (usuario, 30-sep). El patrón volvió a
+  // General el 5-oct, dibujado o con la imagen del AppSheet, no como archivo (lineas-patron-consulta.test.cjs)
   const lineas = read('src/html/js/lineas.html');
-  assert.doesNotMatch(lineas, /\['Patrón'/);
+  assert.doesNotMatch(lineas, /\['Patrón', botonArchivo/);
   assert.doesNotMatch(lineas, /\['Última responsiva', botonUltimoNucos/);
   assert.match(lineas, /texto: 'Ver última responsiva', alHacer: \(\) => abrirUltimoDesdeMenu\('RESPONSIVA', id\)/);
   // Sin la tarjeta "Registro en la hoja" (ID, folio, fila, estatus general, fechas, comentarios); Tipo en Equipo o Línea

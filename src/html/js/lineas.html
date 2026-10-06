@@ -67,13 +67,15 @@
     // Las columnas File/Image/Signature del AppSheet guardan "TABLA_Files_/archivo.ext" (relativo a su carpeta
     // raíz en Drive). Se muestran con su ícono, como en AppSheet, y al hacer clic el servidor busca el archivo
     // (apiLineasArchivo) y se abre. Los enlaces de Drive que guarda el sistema nuevo se abren directo.
-    // Algunas filas guardan el enlace del AppSheet (appsheet.com/template/gettablefileurl?…&fileName=TABLA_Files_/…):
-    // se toma la ruta de fileName y se abre desde Drive igual que las demás.
+    // Algunas filas guardan el enlace del AppSheet (appsheet.com/template/gettablefileurl?…&fileName=TABLA_Files_/…, o
+    // image/getimageurl en las imágenes): se toma la ruta de fileName y se abre desde Drive igual que las demás.
     const rutaDeEnlaceAppSheet = (v) => {
-      const m = /appsheet\.com[\/]template[\/]gettablefileurl/i.test(v) && String(v).match(/[?&]fileName=([^&#]+)/i);
+      const m = /appsheet\.com[\/](template[\/]gettablefileurl|image[\/]getimageurl)/i.test(v) && String(v).match(/[?&]fileName=([^&#]+)/i);
       if (!m) return null;
       try { return decodeURIComponent(m[1].replace(/\+/g, ' ')); } catch (e) { return null; }
     };
+    // Igual que LineasArchivos.rutaAppSheet: sin enlace del AppSheet ni la tabla delante ("TABLA::TABLA_Images/…")
+    const rutaAppSheetLimpia = (v) => (rutaDeEnlaceAppSheet(String(v || '').trim()) || String(v || '').trim()).replace(/^[^\/]*::/, '').trim();
     const esRutaArchivo = (v) => /^[^\/]+_(Files_|Images)\/[^\/].*\.\w{2,5}$/i.test(String(v || '').trim()) ||
       /^https?:\/\/(drive|docs)\.google\.com[\/]/i.test(String(v || '').trim()) || !!rutaDeEnlaceAppSheet(String(v || '').trim());
     function botonArchivo(ruta, texto) {
@@ -606,6 +608,54 @@
     }
 
     /**
+     * Patrón para consulta (pestaña General y capturas). PATRON guarda los puntos trazados en el sistema ("1-5-9") o, si
+     * viene del AppSheet, la ruta de su imagen ("INSPECCIONES LINEAS_Images/xxxx.PATRON.123456.png"): los puntos se
+     * dibujan como en la captura y la imagen se pide al servidor (cargarPatronesAppSheet). Al trazar uno nuevo la
+     * columna guarda los puntos y la imagen del AppSheet deja de mostrarse (usuario, 5-oct).
+     */
+    function rutaPatronAppSheet(valor) {
+      const v = rutaAppSheetLimpia(valor);
+      return /^[^\/]+_(Files_|Images)\/[^\/]+\.PATRON\.[^\/]*$/i.test(v) ? v : null;
+    }
+    function svgPatron(valor) {
+      const pts = String(valor).split('-').map(Number);
+      const pos = (n) => POSICIONES_PATRON[n - 1];
+      return '<svg class="ln-patron-vista" viewBox="0 0 300 300" role="img" aria-label="Patrón ' + esc(pts.join(' → ')) + '">' +
+        (pts.length > 1 ? '<polyline points="' + pts.map((n) => pos(n).join(',')).join(' ') + '" />' : '') +
+        flechasPatron(pts, 24).map((f) => '<polygon class="ln-patron-flecha" points="' + f.map((n) => n.toFixed(1)).join(',') + '" />').join('') +
+        POSICIONES_PATRON.map((p, i) => {
+          const orden = pts.indexOf(i + 1);
+          if (orden < 0) return '<circle class="ln-patron-libre" cx="' + p[0] + '" cy="' + p[1] + '" r="10" />';
+          return (orden === 0 ? '<circle class="ln-patron-inicio" cx="' + p[0] + '" cy="' + p[1] + '" r="21" />' : '') +
+            '<circle class="ln-patron-marcado" cx="' + p[0] + '" cy="' + p[1] + '" r="16" />' +
+            '<text x="' + p[0] + '" y="' + (p[1] + 1) + '">' + (orden + 1) + '</text>';
+        }).join('') + '</svg>';
+    }
+    function vistaPatron(valor) {
+      const v = String(valor === null || valor === undefined ? '' : valor).trim();
+      if (!v) return vacio;
+      if (esPuntosPatron(v)) return '<div class="ln-patron-consulta">' + svgPatron(v) + '<span class="ln-tenue">' + esc(v.split('-').join(' → ')) + '</span></div>';
+      const ruta = rutaPatronAppSheet(v);
+      if (!ruta) return esRutaArchivo(v) ? botonArchivo(v, 'Ver patrón') : esc(v); // "••••" (oculto para el rol)
+      return '<div class="ln-patron-consulta" data-ln-patron-appsheet="' + esc(ruta) + '"><span class="ln-tenue"><span class="ln-spinner"></span> Patrón de AppSheet…</span></div>';
+    }
+    const patronesAppSheet = {};   // ruta → promesa de la imagen (en memoria mientras dure la página)
+    function cargarPatronesAppSheet(contenedor) {
+      if (!contenedor) return;
+      contenedor.querySelectorAll('[data-ln-patron-appsheet]:not([data-cargado])').forEach((el) => {
+        el.dataset.cargado = '1';
+        const ruta = el.dataset.lnPatronAppsheet;
+        const promesa = patronesAppSheet[ruta] || (patronesAppSheet[ruta] = llamar('apiLineasPatronAppSheet', ruta));
+        promesa.then((r) => {
+          el.innerHTML = '<img class="ln-patron-vista" alt="Patrón capturado en AppSheet" src="' + esc(r.imagen) + '" /><span class="ln-tenue">Capturado en AppSheet</span>';
+        }).catch((e) => {
+          delete patronesAppSheet[ruta];
+          el.innerHTML = '<span class="ln-tenue">' + mensajeError(e) + '</span>' + botonArchivo(ruta, 'Abrir en Drive');
+        });
+      });
+    }
+
+    /**
      * Varias opciones (accesorios): cada una se prende o apaga; NINGUNO apaga las demás y elegir otra apaga NINGUNO
      * (usuario, 4-oct: solo dejaba elegir una).
      */
@@ -720,7 +770,9 @@
       } else if (e.control === 'patron') {
         const nota = e.valorOculto ? 'Registrado (solo lo ven administradores y el área de Líneas). Si no trazas uno nuevo, se conserva.'
           : (valor && !esPuntosPatron(valor) ? 'Hay un patrón capturado en AppSheet (imagen). Si no trazas uno nuevo, se conserva.' : '');
-        control = (nota ? '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' ' + esc(nota) + '</div>' : '') + htmlPatron(id + '-patron', false);
+        // El del AppSheet se ve junto a la nota hasta que se trace uno nuevo
+        const anterior = !e.valorOculto && valor && !esPuntosPatron(valor) && rutaPatronAppSheet(valor) ? vistaPatron(valor) : '';
+        control = (nota ? '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' ' + esc(nota) + '</div>' : '') + anterior + htmlPatron(id + '-patron', false);
       } else if (e.control === 'firma') {
         control = htmlFirma(ROL_FIRMA[e.columna] || 'ci', id + '-firma');
       } else if (e.control === 'calculado') {
@@ -2461,6 +2513,7 @@
                 ['Modelo', e.modelo], ['IMEI', e.imei], ['Color', e.color], ['Accesorios', (e.accesorios || []).join(', ')],
                 e.tipo !== 'MODEM' && e.tipo !== 'BANDA_ANCHA' && e.tipo !== 'CAMARA' ? ['Cuenta Google', e.cuentaGoogle] : null,
                 e.tipo === 'CELULAR' || e.tipo === 'CELULAR_BASICO' ? ['PIN equipo', e.pinEquipo] : null,
+                e.tipo === 'CELULAR' || e.patronRuta ? ['Patrón', vistaPatron(e.patronRuta), true] : null,   // Show_If del AppSheet: EQUIPO y EQUIPO + SIM
                 e.tipo === 'MODEM' || e.tipo === 'BANDA_ANCHA' ? ['Contraseña módem', e.contrasenaModem] : null,
                 e.simResidual ? ['SIM residual', chip(e.simResidual, 'ambar'), true] : null,
               ])) +
@@ -2471,6 +2524,7 @@
               ]) : '<p class="empty-state">Este equipo no tiene línea asignada.</p>') +
               tarjetaResponsable(e.responsable) +
             '</div>', tarjetaDetallesCopiar(r.detalles), true);
+          cargarPatronesAppSheet(detalle);
           cargarEvidencias(id);
           cargarHistorial(id, 'NUCO ' + (e.nuco || id), 'equipo');
         });
@@ -3597,6 +3651,7 @@
       function activarPatron(prefijo, inicial) {
         const bloque = $('#' + prefijo + '-bloque', raiz);
         if (!bloque) return { puntos: () => [], valor: () => '', base64: () => null };
+        cargarPatronesAppSheet(bloque.parentNode);
         const posiciones = POSICIONES_PATRON;
         const estado = { puntos: (inicial || []).map(Number).filter((n) => n >= 1 && n <= 9) };
         const pintar = () => {

@@ -53,17 +53,26 @@ const LineasArchivos = (function () {
   }
 
   /**
+   * Ruta del AppSheet tal como se busca en su carpeta. Además de "TABLA_Images/archivo.png" la hoja trae enlaces del
+   * AppSheet (template/gettablefileurl o image/getimageurl, con la ruta en fileName) y rutas con la tabla delante
+   * ("INSPECCIONES LINEAS::INSPECCIONES LINEAS_Images/…", lo que copiaba un bot de otra tabla). null si el enlace no se lee.
+   */
+  function rutaAppSheet(ruta) {
+    let v = String(ruta || '').trim();
+    const enlace = /appsheet\.com\/(template\/gettablefileurl|image\/getimageurl)/i.test(v) && v.match(/[?&]fileName=([^&#]+)/i);
+    if (enlace) {
+      try { v = decodeURIComponent(enlace[1].replace(/\+/g, ' ')).trim(); } catch (e) { return null; }
+    }
+    return /^https?:/i.test(v) ? v : v.replace(/^[^\/]*::/, '').trim();
+  }
+
+  /**
    * Archivo de una ruta del AppSheet (o de un enlace de Drive) → { id, nombre, url } o null si no existe.
    * `puedeVerSecretos` false → rechaza patrones, contraseñas y firmas.
    */
   function resolver(ruta, puedeVerSecretos) {
-    let v = String(ruta || '').trim();
+    const v = rutaAppSheet(ruta);
     if (!v) return null;
-    // Enlace del AppSheet (appsheet.com/template/gettablefileurl?…&fileName=TABLA_Files_/…): se usa su ruta
-    const enlace = /appsheet\.com\/template\/gettablefileurl/i.test(v) && v.match(/[?&]fileName=([^&#]+)/i);
-    if (enlace) {
-      try { v = decodeURIComponent(enlace[1].replace(/\+/g, ' ')).trim(); } catch (e) { return null; }
-    }
     if (!puedeVerSecretos && RUTA_SECRETA.test(v)) throw new Error('Este archivo solo lo ven administradores y el área de Líneas.');
     const id = idDeUrl(v);
     if (id) return { id: id, nombre: v, url: 'https://drive.google.com/file/d/' + id + '/view' };
@@ -371,7 +380,7 @@ const LineasArchivos = (function () {
   }
 
   return {
-    carpetaAppSheetId, carpetaNucosId, carpetaDeApp, idDeUrl, resolver, imagen, blob, guardarComoAppSheet,
+    carpetaAppSheetId, carpetaNucosId, carpetaDeApp, idDeUrl, rutaAppSheet, resolver, imagen, blob, guardarComoAppSheet,
     carpetasNucos, archivosNuco, estaDentroDe, exigirEscribible, enNucos, carpetaEvidenciaNuco, descartarCarpeta, olvidarNuco,
     reemplazarPdf,
   };

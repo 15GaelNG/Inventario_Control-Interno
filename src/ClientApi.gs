@@ -360,6 +360,9 @@ function apiLineasUltimoDocumentoNuco(token, id, tipo) {
 function apiLineasArchivo(token, ruta) {
   return TelefoniaService.archivo(token, ruta);
 }
+function apiLineasPatronAppSheet(token, ruta) {
+  return TelefoniaService.patronAppSheet(token, ruta);
+}
 function apiLineasExportarBase(token, modulo, comprimir) {
   return TelefoniaService.exportarBase(token, modulo, comprimir);
 }

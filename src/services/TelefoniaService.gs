@@ -399,6 +399,25 @@ const TelefoniaService = (function () {
     return f;
   }
 
+  /**
+   * Imagen del patrón capturado en AppSheet ("INSPECCIONES LINEAS_Images/xxxx.PATRON.123456.png") para verlo en la ficha
+   * y en las capturas. Se ve mientras EQUIPOS.PATRON guarde esa ruta: al trazar uno en el sistema la columna guarda los
+   * puntos ("1-5-9") y la imagen ya no se pide. Solo ADMIN y el área de Líneas.
+   */
+  function patronAppSheet(token, ruta) {
+    const sesion = leer_(token);
+    if (!puedeVerSecretos_(sesion)) throw new Error('El patrón solo lo ven administradores y el área de Líneas.');
+    if (!/\.PATRON\.[^\/]*$/i.test(LineasArchivos.rutaAppSheet(ruta) || '')) throw new Error('No es un patrón del AppSheet.');
+    const f = LineasArchivos.resolver(ruta, true);
+    if (!f || !f.id) throw new Error('No se encontró el patrón en la carpeta del AppSheet.');
+    const b = DriveApp.getFileById(f.id).getBlob();
+    const tipo = b.getContentType() || '';
+    if (!/^image\//.test(tipo)) throw new Error('El patrón del AppSheet no es una imagen.');
+    const bytes = b.getBytes();
+    if (bytes.length > 2 * 1024 * 1024) throw new Error('La imagen del patrón supera 2 MB.');
+    return { imagen: 'data:' + tipo + ';base64,' + Utilities.base64Encode(bytes) };
+  }
+
   /** Catálogos para formularios (enums + LISTAS TELEFONOS + lugares de desecho). */
   function catalogos(token) {
     leer_(token);
@@ -620,7 +639,7 @@ const TelefoniaService = (function () {
   return {
     permisos, indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, catalogos, colaboradores, bitacora, formularioRegistro, recargarDatos,
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf, subirPdfFirmado, crearRegistro, editarRegistro,
-    reasignar, fotosInspeccion, exportarBase, archivo, ultimoDocumentoNuco,
+    reasignar, fotosInspeccion, exportarBase, archivo, patronAppSheet, ultimoDocumentoNuco,
     notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva, panorama,
     formularioResguardo, mandarResguardo, mandarCancelacion, bandejaResguardos, accionBandejaResguardo,
     MODULOS_LINEAS,
