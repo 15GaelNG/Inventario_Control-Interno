@@ -120,3 +120,6 @@ su nombre dentro de ella (`LineasArchivos.resolver`); el DEV además los lee de 
 - Solo Líneas: no se tocan módulos ni hojas de los compañeros (Capital Humano se lee, no se escribe).
 - Íconos de Lucide, textos cortos y técnicos, espera visible desde el clic, sin confirmaciones de más.
 - En archivos `.html`, nunca `//` dentro de un string de JS (ver `CLAUDE.md`).
+- Todo se escribe en mayúsculas (regla de `app.html`) salvo los campos con `data-respetar-texto`: PIN de WhatsApp,
+  PIN o contraseña del equipo, contraseña del módem y correo (`literal` o `secreto` en el formulario). La excepción vive
+  en `app.html`: al unir `master`, conservarla (`tests/lineas-pin-minusculas.test.cjs` falla si se pierde).
