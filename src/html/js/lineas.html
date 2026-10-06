@@ -930,6 +930,18 @@
       });
     }
 
+    /**
+     * Firma guardada (usuario, 6-oct; LineasFirmas): quien captura y tiene una no firma; el servidor pone la suya en el PDF.
+     * La imagen no llega a la pantalla: aquí solo se avisa. «Firmar a mano» regresa al recuadro normal.
+     */
+    function firmaGuardadaEn(contenedor, nombre, alFirmarAMano) {
+      contenedor.innerHTML = '<div class="ln-firma-guardada">' + icono('badge-check') + '<div><b>Se usa tu firma guardada</b><span>' + esc(nombre || '') +
+        '</span></div><button type="button" class="secondary ln-btn-chico" data-firmar-a-mano>' + icono('pen-line') + ' Firmar a mano</button></div>';
+      pintarIconos(contenedor);
+      contenedor.querySelector('[data-firmar-a-mano]').addEventListener('click', () => { contenedor.innerHTML = ''; alFirmarAMano(); });
+      return { guardada: true, estaVacia: () => false, limpiar: () => {}, ajustar: () => {}, setNombre: () => {}, base64: () => Promise.resolve(null) };
+    }
+
     /** Firma con el componente del sistema; misma interfaz que antes (estaVacia, limpiar, base64 → promesa). */
     function crearFirma(contenedor, nombre) {
       if (!contenedor || typeof Firma === 'undefined') return null;
@@ -2970,6 +2982,7 @@
         });
         if (!resp) return;
         let inspeccionId = inspeccionHecha(fila.id);
+        let pdfInspeccion = null;
         if (!inspeccionId) {
           // Empieza con lo capturado en la responsiva y no cambia a la persona del inventario: eso lo hace la reasignación
           const r = await capturarEnFlujo('INSPECCION', { equipoId: fila.id, reasignar: true, desdeResponsiva: { valores: resp.datos.valores, patron: resp.datos.patron } },
@@ -2977,6 +2990,7 @@
           if (!r) return;
           inspeccionesDelDia[fila.id] = { id: r.id, dia: hoyLocal() };
           inspeccionId = r.id;
+          pdfInspeccion = r.pdfPromesa || null;
         }
         const d = resp.datos;
         const sesion = captura = { guardada: true, guardando: true, firmas: {}, carpetaId: '',
@@ -2993,7 +3007,7 @@
         mostrarEspera('Reasignando');
         llamar('apiLineasReasignar', Object.assign({}, d, { inspeccionId: inspeccionId })).then((r) => {
           if (!vigente() || captura !== sesion) return;
-          refrescarDespuesDeCaptura(fila.id, 'RESPONSIVA', r.id);
+          refrescarDespuesDeCaptura(fila.id, 'RESPONSIVA', r.id, false, pdfInspeccion ? { promesa: pdfInspeccion, texto: 'Ver PDF de la inspección' } : null);
           aplicarCambiosIndice(r.filas).then(() => {
             Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].limpiarSeleccion(); });
             if (vigente()) { pintarIndicadores(); pintarListado(); }
@@ -3629,7 +3643,16 @@
           const id = 'af-' + e.columna.replace(/[^A-Za-z0-9]+/g, '-');
           if (e.control === 'firma') {
             const origen = NOMBRE_DE_FIRMA[e.columna] && cuerpo.querySelector('[data-columna="' + CSS.escape(NOMBRE_DE_FIRMA[e.columna]) + '"]');
-            captura.firmas[e.columna] = crearFirma(document.getElementById(id + '-firma'), origen ? origen.value : '');
+            const lienzo = document.getElementById(id + '-firma');
+            const sesion = captura;
+            const aMano = () => {
+              sesion.firmas[e.columna] = crearFirma(lienzo, origen ? origen.value : '');
+              if (sesion.firmas[e.columna] && sesion.firmas[e.columna].ajustar) sesion.firmas[e.columna].ajustar();
+            };
+            // La de quien captura (inspector o Control Interno) puede ser su firma guardada
+            const propia = sesion.contexto.firmaGuardada && e.columna === (sesion.tipo === 'INSPECCION' ? 'FIRMA INSPECTOR' : 'FIRMA CI');
+            if (propia) sesion.firmas[e.columna] = firmaGuardadaEn(lienzo, origen ? origen.value : '', aMano);
+            else aMano();
           }
           if (e.control === 'patron') {
             captura.columnaPatron = e.columna;
@@ -3899,7 +3922,11 @@
       }
 
       /** `regenerar`: el PDF ya existe y se vuelve a hacer (Regenerar PDF). */
-      function refrescarDespuesDeCaptura(idAbierto, tipo, nuevoId, regenerar) {
+      /**
+       * `otroPdf` (Reasignar, usuario 6-oct): la promesa del PDF de la inspección que se generó antes. Al terminar se ofrecen
+       * los dos, cada uno con su nombre (antes salía un solo «Ver PDF» y no se sabía de cuál era).
+       */
+      function refrescarDespuesDeCaptura(idAbierto, tipo, nuevoId, regenerar, otroPdf) {
         const sesionCaptura = captura;
         sesionCaptura.guardada = true;
         memoria.cargadoEn = 0;
@@ -3910,12 +3937,15 @@
           modal.setAttribute('aria-busy', 'true');
           modal.querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = true; });
           mostrarEspera('Generando tu PDF'); // sigue la misma pantalla de espera desde el clic en Guardar
-          return llamar('apiLineasGenerarPdf', tipo, nuevoId, !!regenerar, sesionCaptura.pdfFirmas || null).then((pdf) => {
+          return llamar('apiLineasGenerarPdf', tipo, nuevoId, !!regenerar, sesionCaptura.pdfFirmas || null)
+            .then((pdf) => Promise.resolve(otroPdf ? otroPdf.promesa : null).catch(() => null).then((otro) => [pdf, otro])).then(([pdf, otro]) => {
             if (!vigente() || captura !== sesionCaptura) return;
             sesionCaptura.guardando = false;
             if (pdf && pdf.faltanFirmas) { pedirFirmasPdf(sesionCaptura, tipo, pdf.nombres || {}, generar); return; }
-            mostrarEspera('Tu PDF está listo', { tono: 'listo', icono: 'circle-check', texto: '',
-              acciones: enlaceDrive(pdf.id, 'Ver PDF', true) + '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
+            const conOtro = !!(otro && otro.id);
+            mostrarEspera(conOtro ? 'Tus PDF están listos' : 'Tu PDF está listo', { tono: 'listo', icono: 'circle-check', texto: '',
+              acciones: enlaceDrive(pdf.id, tipo === 'INSPECCION' ? 'Ver PDF de la inspección' : 'Ver PDF de la responsiva', true) +
+                (conOtro ? enlaceDrive(otro.id, otroPdf.texto, true) : '') + '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
             // La captura cambia lo que muestra General (responsable, color, patrón): la ficha de atrás se pinta de nuevo
             // (trae también Documentos e Historial); si se está viendo otra cosa, solo esas dos
             const arriba = pila[pila.length - 1];
@@ -3990,6 +4020,7 @@
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron,
             carpetaId: sesion.carpetaId || null, fotosCarpetaId: sesion.fotosCarpetaId || null, ruta: sesion.ruta || '', fotos: sesion.fotos,
             firmaInspectorBase64: sesion.pdfFirmas.inspector, firmaResponsableBase64: sesion.pdfFirmas.responsable, patronBase64: sesion.pdfFirmas.patron,
+            usarFirmaGuardada: !!firmaInspector.guardada,
           });
           return sesion.flujo && sesion.flujo.guardar ? sesion.flujo.guardar(datos) : llamar('apiLineasGuardarInspeccion', datos);
         }).then((r) => {
@@ -4025,6 +4056,7 @@
           const datos = Object.assign({}, sesion.ref, {
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron,
             firmaResponsableBase64: sesion.pdfFirmas.responsable, firmaCiBase64: sesion.pdfFirmas.ci, patronBase64: sesion.pdfFirmas.patron,
+            usarFirmaGuardada: !!firmaCi.guardada,
           });
           return sesion.flujo && sesion.flujo.guardar ? sesion.flujo.guardar(datos) : llamar('apiLineasGuardarResponsiva', datos);
         }).then((r) => {
@@ -4053,11 +4085,12 @@
        */
       function terminarFlujo(sesion, tipo, r) {
         sesion.guardada = true;
-        if (!sesion.flujo.sinPdf) llamar('apiLineasGenerarPdf', tipo, r.id, false, sesion.pdfFirmas || null)
-          .catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' El documento quedó guardado, pero su PDF no se generó: ' + mensajeError(e) + '. En Documentos está «Generar PDF».', 12000));
+        // La promesa del PDF viaja con el resultado (Reasignar lo ofrece al terminar); si falla, regresa null
+        const pdf = sesion.flujo.sinPdf ? null : llamar('apiLineasGenerarPdf', tipo, r.id, false, sesion.pdfFirmas || null)
+          .catch((e) => { aviso(icono('triangle-alert', 'ln-alerta') + ' El documento quedó guardado, pero su PDF no se generó: ' + mensajeError(e) + '. En Documentos está «Generar PDF».', 12000); return null; });
         const flujo = sesion.flujo;
         if (captura === sesion) cerrarCaptura(true);
-        flujo.resolver(r);
+        flujo.resolver(Object.assign({}, r, { pdfPromesa: pdf }));
       }
 
       function abrirCaptura(tipo, ref, flujo) {

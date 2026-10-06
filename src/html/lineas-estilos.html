@@ -668,6 +668,11 @@
   .ln-af-campo[data-af-columna="RESPONSABLES ADICIONALES"] { grid-column: 1 / -1; }
   .ln-af-titulo .ln-af-quitar { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; font-size: 12px; font-weight: 500; letter-spacing: 0; }
   .ln-af-agregar button { display: inline-flex; align-items: center; gap: 6px; }
+  /* Firma guardada de quien captura (6-oct): en lugar del lienzo, el aviso y «Firmar a mano» */
+  .ln-firma-guardada { display: flex; align-items: center; gap: 10px; height: 100%; min-height: 120px; padding: 14px; color: var(--color-primary); }
+  .ln-firma-guardada > .ln-icon { width: 26px; height: 26px; color: var(--color-success, #1e8e3e); flex: none; }
+  .ln-firma-guardada div { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+  .ln-firma-guardada span { font-size: 12px; color: var(--color-text-muted, #667); }
   .ln-af-completo .ln-af-campo { margin-bottom: 14px; }
   /* Firmas lado a lado, grandes, con marco de color según quién firma */
   .ln-firmas { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 6px; }

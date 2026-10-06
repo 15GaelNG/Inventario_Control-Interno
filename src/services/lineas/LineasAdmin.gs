@@ -515,3 +515,60 @@ function lineasQuitarQuienUsa() {
   soloEditor_();
   return quitarQuienUsa_(true);
 }
+
+
+// ---------------- Firmas guardadas de Líneas (usuario, 6-oct; LineasFirmas) ----------------
+// Quien corre la función crea en su Drive la carpeta «FIRMAS LINEAS (CARGAR)», sin compartir, con un PNG por persona
+// nombrado con su correo («ejecutivotelefonia.ci@ciudadmaderas.com.png»). _revisar dice qué se cargaría y qué se quitaría;
+// _cargar las guarda cifradas en este proyecto y quita las de quien ya no esté en la carpeta. Se corre en cada proyecto
+// (DEV y producción) y al final la carpeta se borra: la firma solo queda cifrada aquí.
+
+const CARPETA_FIRMAS_LINEAS = 'FIRMAS LINEAS (CARGAR)';
+
+function firmasGuardadas_(aplicar) {
+  const carpetas = DriveApp.getFoldersByName(CARPETA_FIRMAS_LINEAS);
+  if (!carpetas.hasNext()) throw new Error('No está la carpeta «' + CARPETA_FIRMAS_LINEAS + '» en tu Drive.');
+  const carpeta = carpetas.next();
+  if (carpetas.hasNext()) throw new Error('Hay más de una carpeta «' + CARPETA_FIRMAS_LINEAS + '»: deja solo una.');
+  const usuarios = {};
+  SheetUtils.getAll(Config.SPREADSHEET_IDS.USUARIOS(), 'USUARIOS').forEach((u) => {
+    usuarios[String(u.CORREO || '').trim().toLowerCase()] = { nombre: u.NOMBRE, area: u.AREA || u.COORDINACION || '' };
+  });
+  const salida = { proyecto: ScriptApp.getScriptId(), aplicado: !!aplicar, compartida: carpeta.getSharingAccess() !== DriveApp.Access.PRIVATE || carpeta.getEditors().length + carpeta.getViewers().length > 0,
+    cargar: [], quitar: [], errores: [] };
+  if (aplicar && salida.compartida) throw new Error('La carpeta está compartida: quítale el acceso a otros antes de cargar.');
+  const enCarpeta = {};
+  const archivos = carpeta.getFiles();
+  while (archivos.hasNext()) {
+    const f = archivos.next();
+    const m = /^([^\s\/]+@ciudadmaderas\.com)\.png$/i.exec(f.getName());
+    if (!m) { salida.errores.push(f.getName() + ': el nombre debe ser el correo + .png'); continue; }
+    const correo = m[1].toLowerCase();
+    const u = usuarios[correo];
+    if (!u) { salida.errores.push(f.getName() + ': ese correo no está en USUARIOS'); continue; }
+    const blob = f.getBlob();
+    if (blob.getContentType() !== 'image/png') { salida.errores.push(f.getName() + ': no es PNG'); continue; }
+    if (blob.getBytes().length > 60 * 1024) { salida.errores.push(f.getName() + ': pesa más de 60 KB'); continue; }
+    enCarpeta[correo] = true;
+    salida.cargar.push({ correo: correo, nombre: u.nombre, area: u.area, kb: Math.round(blob.getBytes().length / 102.4) / 10 });
+    if (aplicar) LineasFirmas.guardar(correo, blob.getBytes());
+  }
+  LineasFirmas.lista().forEach((g) => {
+    if (enCarpeta[g.correo]) return;
+    salida.quitar.push(g.correo);
+    if (aplicar) LineasFirmas.quitar(g.correo);
+  });
+  if (salida.compartida) salida.errores.push('La carpeta está compartida: quítale el acceso a otros antes de cargar.');
+  salida.guardadas = LineasFirmas.lista();
+  console.log(JSON.stringify(salida, null, 2));
+  return salida;
+}
+
+function lineasFirmasGuardadas_revisar() {
+  soloEditor_();
+  return firmasGuardadas_(false);
+}
+function lineasFirmasGuardadas_cargar() {
+  soloEditor_();
+  return firmasGuardadas_(true);
+}

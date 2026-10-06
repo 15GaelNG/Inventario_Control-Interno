@@ -41,13 +41,24 @@ const LineasCaptura = (function () {
 
   function firmasCache_(tipo, id, nuevas) {
     const clave = 'firmas_' + tipo + '_' + id;
-    const serializadas = nuevas ? JSON.stringify(nuevas) : null;
-    if (serializadas) {
-      try { CacheService.getScriptCache().put(clave, serializadas, 21600); } catch (e) { console.warn('No se pudieron conservar temporalmente las firmas: ' + e.message); }
-    }
-    const raw = serializadas || CacheService.getScriptCache().get(clave);
-    if (!raw) return null;
-    try { return JSON.parse(raw); } catch (e) { return null; }
+    const cache = CacheService.getScriptCache();
+    const leer = () => { const raw = cache.get(clave); try { return raw ? JSON.parse(raw) : null; } catch (e) { return null; } };
+    if (!nuevas) return leer();
+    // Las nuevas mandan; lo que no traen (la firma guardada, que la pantalla no tiene) se queda como estaba
+    const juntas = Object.assign({}, leer() || {});
+    Object.keys(nuevas).forEach((k) => { if (nuevas[k]) juntas[k] = nuevas[k]; });
+    try { cache.put(clave, JSON.stringify(juntas), 21600); } catch (e) { console.warn('No se pudieron conservar temporalmente las firmas: ' + e.message); }
+    return juntas;
+  }
+
+  /**
+   * Firma guardada de quien captura (LineasFirmas, usuario 6-oct): la pantalla solo pide usarla; la imagen la pone aquí
+   * el servidor, y solo la del correo de la sesión.
+   */
+  function firmaPropia_(usuario) {
+    const png = LineasFirmas.png(usuario && usuario.correo);
+    if (!png) throw new Error('No tienes firma guardada: firma en el recuadro.');
+    return png;
   }
 
   /** Registro objetivo a partir de { equipoId } o { lineaId } (línea suelta). */
@@ -337,7 +348,7 @@ const LineasCaptura = (function () {
     const ahora = new Date();
     return {
       equipo: obj.equipo, linea: obj.linea, idPropuesto: LineasDatos.nuevoId(LineasRepo.TAB.INSP),
-      formulario: null, inspector: usuario.nombre, condiciones: LineasChecklist.CONDICIONES,
+      formulario: null, inspector: usuario.nombre, condiciones: LineasChecklist.CONDICIONES, firmaGuardada: LineasFirmas.tiene(usuario.correo),
       _armar: (id) => ocultarSecretos_(formularioInspeccion_(obj.fila, LineasRepo.catalogos(), usuario, id, ahora, !!(ref && ref.enAccion),
         ref && ref.reasignar ? ref.desdeResponsiva : null), puedeVerSecretos),
     };
@@ -348,6 +359,7 @@ const LineasCaptura = (function () {
     const ahora = new Date();
     return {
       equipo: obj.equipo, linea: obj.linea, idPropuesto: LineasDatos.nuevoId(LineasRepo.TAB.RESP), nombreCI: usuario.nombre,
+      firmaGuardada: LineasFirmas.tiene(usuario.correo),
       _armar: (id) => ocultarSecretos_(formularioResponsiva_(obj.fila, LineasRepo.catalogos(), usuario, id, ahora, ref && ref.modo), puedeVerSecretos),
     };
   }
@@ -413,6 +425,7 @@ const LineasCaptura = (function () {
 
   function guardarInspeccion(datos, usuario, puedeVerSecretos) {
     const ref = { equipoId: datos.equipoId || null, lineaId: datos.equipoId ? null : datos.lineaId };
+    if (datos.usarFirmaGuardada) datos.firmaInspectorBase64 = firmaPropia_(usuario);
     if (!datos.firmaInspectorBase64) throw new Error('FIRMA INSPECTOR es obligatorio');
     const id = /^[\w-]{6,40}$/.test(String(datos.id || '')) ? String(datos.id) : LineasDatos.nuevoId(LineasRepo.TAB.INSP);
     // Las fotos son opcionales: la carpeta existe solo si se subió alguna
@@ -491,6 +504,7 @@ const LineasCaptura = (function () {
    */
   function guardarResponsiva(datos, usuario, puedeVerSecretos, accion) {
     const ref = accion ? accion.ref : { equipoId: datos.equipoId || null, lineaId: datos.equipoId ? null : datos.lineaId };
+    if (datos.usarFirmaGuardada) datos.firmaCiBase64 = firmaPropia_(usuario);
     if (!datos.firmaCiBase64) throw new Error('FIRMA RESPONSABLE DE CONTROL INTERNO es obligatorio');
     const id = /^[\w-]{6,40}$/.test(String(datos.id || '')) ? String(datos.id) : LineasDatos.nuevoId(LineasRepo.TAB.RESP);
 
@@ -673,8 +687,16 @@ const LineasCaptura = (function () {
     if (!ev) throw new Error('Solo se generan PDF de registros capturados en el sistema.');
     if (!forzar && ev.pdfs && ev.pdfs.length) return ev.pdfs[0];
 
-    const firmas = firmasCache_(tipo, id, firmasNuevas);
+    let firmas = firmasCache_(tipo, id, firmasNuevas);
     const col = (c) => LineasUtil.col(fila, c);
+    // Sin la firma de Control Interno en caché (p. ej. Regenerar pasadas 6 h): si quien regenera es quien hizo el documento
+    // y tiene firma guardada, se usa la suya
+    const rolCI = esInspeccion ? 'inspector' : 'ci';
+    const nombreCI = String(col(esInspeccion ? 'NOMBRE INSPECTOR' : 'NOMBRE CI') || '').trim().toUpperCase();
+    if ((!firmas || !firmas[rolCI]) && usuario && nombreCI && nombreCI === String(usuario.nombre || '').trim().toUpperCase()) {
+      const propia = LineasFirmas.png(usuario.correo);
+      if (propia) firmas = firmasCache_(tipo, id, { [rolCI]: propia });
+    }
     if (!firmas && !col(esInspeccion ? 'FIRMA INSPECTOR' : 'FIRMA CI')) {
       return { faltanFirmas: true, nombres: esInspeccion
         ? { inspector: col('NOMBRE INSPECTOR') || '', responsable: col('RESPONSABLE') || '' }

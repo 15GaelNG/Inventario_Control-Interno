@@ -115,7 +115,7 @@ test('paso de firmas en tres partes; el resultado y los errores usan la pantalla
   // Un clic afuera no cierra las ventanas (usuario, 4-oct)
   assert.doesNotMatch(pantalla, /ev\.target\.id === 'ln-modal-captura'|ev\.target === fondo|ev\.target\.id === 'lac-modal/);
   assert.match(pantalla, /e\.llenarVacios && e\.autollenar/);
-  assert.match(pantalla, /mostrarEspera\('Tu PDF está listo'/);
+  assert.match(pantalla, /mostrarEspera\(conOtro \? 'Tus PDF están listos' : 'Tu PDF está listo'/);
   assert.match(pantalla, /mostrarEspera\('No se pudo generar el PDF'/);
   const cuerpo = pantalla.slice(pantalla.indexOf('function errorAlGuardar'), pantalla.indexOf('function estadoGuardado'));
   assert.doesNotMatch(cuerpo.slice(cuerpo.indexOf('{')), /errorAlGuardar\(/);
@@ -237,6 +237,6 @@ test('Reasignar: la inspección es obligatoria (usuario, 5-oct): de ese equipo y
   assert.match(fn, /if \(!resp\) return;/);
   assert.match(fn, /if \(!r\) return;/);
   assert.match(fn, /let inspeccionId = inspeccionHecha\(fila\.id\);/);
-  assert.match(fn, /refrescarDespuesDeCaptura\(fila\.id, 'RESPONSIVA', r\.id\);/);
-  assert.match(cliente, /if \(!sesion\.flujo\.sinPdf\) llamar\('apiLineasGenerarPdf'/);
+  assert.match(fn, /refrescarDespuesDeCaptura\(fila\.id, 'RESPONSIVA', r\.id, false, pdfInspeccion/);
+  assert.match(cliente, /const pdf = sesion\.flujo\.sinPdf \? null : llamar\('apiLineasGenerarPdf'/);
 });
