@@ -68,16 +68,21 @@
         </div>
       </div>
       <form id="form-vehiculo">
-        <div id="campos-form-vehiculo" class="modal-form-scroll form-rejilla" data-columnas="3"></div>
-        <div style="margin-top:10px"><button type="submit" id="btn-guardar-vehiculo"><i data-lucide="car" class="ico"></i> Registrar vehículo</button></div>
+        <div id="campos-form-vehiculo" class="modal-form-scroll"></div>
+        <div class="error-msg" id="veh-error" hidden></div>
+        <div class="form-acciones form-acciones-pasos">
+          <button type="button" class="secondary" id="veh-paso-atras" hidden><i data-lucide="chevron-left" class="ico"></i> Atrás</button>
+          <button type="button" id="veh-paso-siguiente">Siguiente <i data-lucide="chevron-right" class="ico"></i></button>
+          <button type="submit" id="btn-guardar-vehiculo" hidden><i data-lucide="car" class="ico"></i> Registrar vehículo</button>
+          <span class="form-cuenta" id="veh-paso-cuenta"></span>
+        </div>
       </form>
-      <div class="error-msg" id="veh-error" hidden></div>
     </div>
   </div>
 
   <div class="tab-panel" data-tab-panel="lista">
     <div class="card card-compacta">
-      <div id="veh-tabla"></div>
+      <div class="con-filtro-tipo"><nav class="filtro-tipo" id="veh-clases" aria-label="Filtrar por clase"></nav><div class="con-filtro-tipo-tabla"><div id="veh-tabla"></div></div></div>
     </div>
   </div>
   </section>
@@ -140,9 +145,14 @@
       </div>
       <form id="form-editar-vehiculo">
         <input type="hidden" id="editar-vehiculo-id" />
-        <div id="campos-form-editar-vehiculo" class="modal-form-scroll form-rejilla" data-columnas="2"></div>
+        <div id="campos-form-editar-vehiculo" class="modal-form-scroll"></div>
         <div class="error-msg" id="editar-vehiculo-error" hidden></div>
-        <button type="submit" id="btn-guardar-editar-vehiculo" style="width:100%; margin-top:10px"><i data-lucide="save" class="ico"></i> Guardar cambios</button>
+        <div class="form-acciones form-acciones-pasos">
+          <button type="button" class="secondary" id="editar-vehiculo-paso-atras" hidden><i data-lucide="chevron-left" class="ico"></i> Atrás</button>
+          <button type="button" id="editar-vehiculo-paso-siguiente">Siguiente <i data-lucide="chevron-right" class="ico"></i></button>
+          <button type="submit" id="btn-guardar-editar-vehiculo" hidden><i data-lucide="save" class="ico"></i> Guardar cambios</button>
+          <span class="form-cuenta" id="editar-vehiculo-paso-cuenta"></span>
+        </div>
       </form>
     </div>
   </div>
