@@ -592,7 +592,7 @@ const ArqueosService = (function () {
     try {
       const fecha = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
       const nombrePdf = (fila['ID ARQUEO'] || copia.getName()) + '_ARQUEO_' + fecha + '.pdf';
-      pdfFile = carpeta.createFile(pdfBlob).setName(nombrePdf);
+      pdfFile = DriveUtils.marcarAutor(carpeta.createFile(pdfBlob).setName(nombrePdf));
     } catch (e) {
       throw new Error('Se generó el PDF pero no se pudo guardar en la carpeta de Arqueos en Drive (raíz ' +
         CARPETA_FORMATO_RAIZ_ID + '). La cuenta ' + cuenta() + ' necesita permiso de editor ahí. Error original: ' + e.message);

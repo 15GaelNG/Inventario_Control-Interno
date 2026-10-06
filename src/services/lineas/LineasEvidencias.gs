@@ -61,7 +61,7 @@ const LineasEvidencias = (function () {
     if (!/^(image\/(jpeg|png|webp|heic|heif)|application\/pdf)$/.test(mime)) throw new Error('Tipo de archivo no permitido: ' + mime);
     const bytes = Utilities.base64Decode(base64);
     if (bytes.length > 15 * 1024 * 1024) throw new Error('El archivo supera 15 MB.');
-    const archivo = DriveApp.getFolderById(carpetaId).createFile(Utilities.newBlob(bytes, mime, String(nombre).replace(/[\\/]/g, '_')));
+    const archivo = DriveUtils.marcarAutor(DriveApp.getFolderById(carpetaId).createFile(Utilities.newBlob(bytes, mime, String(nombre).replace(/[\\/]/g, '_'))));
     // Sin esto, el archivo solo lo puede ver la cuenta que despliega la app
     // (quien lo creó) — nadie más puede abrir el link, aunque sea válido.
     // En NUCOS no: ahí cada archivo toma los permisos de la carpeta, como los que sube el área.

@@ -740,6 +740,7 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
       base64Decode: () => [1, 2, 3], newBlob: (bytes, mime, nombre) => ({ mime, nombre }), formatDate: () => '101530',
     },
     DriveApp: { getFolderById: () => raiz, searchFiles: () => ({ hasNext: () => false }), Access: { DOMAIN: 'DOMAIN' }, Permission: { VIEW: 'VIEW' } },
+    DriveUtils: { marcarAutor: (a) => a },   // quién lo subió: aquí no importa
   };
   const LA = new Function(...Object.keys(globales), read('src/services/lineas/LineasArchivos.gs') + '\nreturn LineasArchivos;')(...Object.values(globales));
   assert.equal(LA.resolver('BITACORA DE DESECHO_Files_/a1.EVIDENCIA.1.jpg', false).id, 'ARCH1');
@@ -2168,4 +2169,17 @@ test('revisarEntorno revisa cada libro y carpeta que la app lee de Entornos.gs',
   assert.deepEqual(claves.filter((k) => !new RegExp('\\b' + k + '\\b').test(revisadas)), []);
   assert.match(read('src/Code.gs'), /revisar === 'entorno'/, 'doGet contesta la revisión que pide subir.js');
   assert.match(read('tools/subir/subir.js'), /entorno\.revisar\(/, 'subir.js revisa el entorno antes de desplegar');
+});
+
+test('cada archivo que la gente sube o genera dice quién lo subió (DriveUtils.marcarAutor)', () => {
+  // La app corre como quien la desplegó: sin la nota, Drive dice que todo es de esa cuenta.
+  // Fuera: herramientas del editor (respaldos, correcciones, configuración inicial).
+  const HERRAMIENTAS = ['LineasAdmin.gs', 'LineasCorrecciones.gs', 'SetupInicial.gs'];
+  const sinAutor = [];
+  filesBelow(path.join(root, 'src')).filter((f) => f.endsWith('.gs') && !HERRAMIENTAS.includes(path.basename(f))).forEach((f) => {
+    fs.readFileSync(f, 'utf8').split('\n').forEach((linea, i) => {
+      if (/\.createFile\(/.test(linea) && !/marcarAutor\(/.test(linea)) sinAutor.push(path.basename(f) + ':' + (i + 1));
+    });
+  });
+  assert.deepEqual(sinAutor, []);
 });

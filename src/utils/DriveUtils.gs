@@ -46,7 +46,7 @@ const DriveUtils = (function () {
     const nombre = p.idFila + '.' + p.columna + '.' + hora + '.' + EXTENSIONES[mimeType];
     let archivo;
     try {
-      archivo = DriveApp.getFolderById(p.carpetaId).createFile(Utilities.newBlob(bytes, mimeType, nombre));
+      archivo = marcarAutor(DriveApp.getFolderById(p.carpetaId).createFile(Utilities.newBlob(bytes, mimeType, nombre)));
     } catch (err) {
       // "Acceso denegado: DriveApp" casi siempre = la cuenta puede VER la carpeta pero no EDITARLA
       throw new Error(
@@ -219,8 +219,27 @@ const DriveUtils = (function () {
     }
   }
 
+  /**
+   * Deja en la descripción del archivo quién lo subió y cuándo. La app corre como quien la
+   * desplegó (USER_DEPLOYING), así que Drive pone a ESA cuenta como dueña de todo lo que se
+   * crea: sin esto no hay forma de saber quién capturó un archivo (6-oct: tres fotos de una
+   * inspección "a nombre" de quien desplegó, que no las había subido). En el mismo dominio,
+   * getActiveUser sí es quien usa la app. Nunca truena: un archivo sin nota sigue sirviendo.
+   */
+  function marcarAutor(archivo) {
+    try {
+      const quien = Session.getActiveUser().getEmail();
+      if (archivo && quien) {
+        archivo.setDescription('Subido por ' + quien + ' desde Control Interno, el ' +
+          Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm'));
+      }
+    } catch (e) { /* no-op */ }
+    return archivo;
+  }
+
   return {
     guardarArchivoAppSheet, guardarImagenAppSheet, archivoDeRuta, urlDeRuta, previsualizarRuta,
     archivoDeRutaProfunda, urlDeRutaProfunda, previsualizarRutaProfunda, eliminar, compartirLoMasAmplioPosible,
+    marcarAutor,
   };
 })();

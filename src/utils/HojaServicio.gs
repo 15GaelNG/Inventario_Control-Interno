@@ -450,7 +450,7 @@ const HojaServicio = (function () {
         'corre la app ahora mismo (' + cuenta() + ') no tiene acceso a esa carpeta.');
     }
     try {
-      archivo = carpeta.createFile(blob);
+      archivo = DriveUtils.marcarAutor(carpeta.createFile(blob));
     } catch (e) {
       throw new Error('Se pudo abrir la carpeta ' + deQue + ', pero no crear el archivo ahí. La cuenta ' +
         cuenta() + ' necesita permiso de editor (no solo lector) en esa carpeta. Error original: ' + e.message);

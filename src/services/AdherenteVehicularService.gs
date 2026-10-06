@@ -181,7 +181,7 @@ const AdherenteVehicularService = (function () {
               campo, adherente, vehiculo['PLACA'] || vehiculo['FOLIO'], PdfService.fechaParaNombre(ahora),
             ]) + '.png';
             const blob = Utilities.newBlob(Utilities.base64Decode(img.base64), img.mimeType || 'image/png', nombreImagen);
-            const archivo = DriveApp.getFolderById(CARPETA_IMAGENES).createFile(blob);
+            const archivo = DriveUtils.marcarAutor(DriveApp.getFolderById(CARPETA_IMAGENES).createFile(blob));
             DriveUtils.compartirLoMasAmplioPosible(archivo);
           } catch (e) {
             avisos.push('No se pudo respaldar ' + campo.toLowerCase() + ' en Drive: ' + e.message);
