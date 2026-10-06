@@ -404,27 +404,22 @@ const LineasArchivos = (function () {
    * la unidad de la cuenta de la app, sin los permisos de la carpeta («Necesitas acceso»).
    * `lista` = [{ pdfId, carpetaId, nombre, prefijo }]. Regresa, en el mismo orden, el PDF que sí está en la carpeta
    * ({ id, nombre }: el del mismo nombre o, si no hay, el más reciente que empiece con `prefijo`) o null si el ligado sigue
-   * ahí, si la carpeta no tiene otro o si Drive no respondió. Lo revisado se recuerda 10 min.
+   * ahí, si la carpeta no tiene otro o si Drive no respondió. Se pregunta cada vez (una sola petición para todos): si se
+   * recordara, quien abre la carpeta desde la ficha y cambia el PDF a mano seguiría viendo el viejo (prueba del 6-oct).
    */
   function pdfsFueraDeCarpeta(lista) {
-    const cache = CacheService.getScriptCache();
-    const clave = (x) => 'ln_pdf_carpeta_' + x.pdfId + '_' + x.carpetaId;
-    const vistos = cache.getAll(lista.map(clave));
     const salida = lista.map(() => null);
-    const revisar = lista.map((x, i) => i).filter((i) => !vistos[clave(lista[i])]);
-    if (!revisar.length) return salida;
+    if (!lista.length) return salida;
     const pedir = (url) => ({ url: url, headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
     const API = 'https://www.googleapis.com/drive/v3/files';
-    const recordar = {};
-    const estados = UrlFetchApp.fetchAll(revisar.map((i) => pedir(API + '/' + encodeURIComponent(lista[i].pdfId) +
+    const estados = UrlFetchApp.fetchAll(lista.map((x) => pedir(API + '/' + encodeURIComponent(x.pdfId) +
       '?supportsAllDrives=true&fields=' + encodeURIComponent('trashed,parents'))));
     const fuera = [];
-    revisar.forEach((i, k) => {
-      const codigo = estados[k].getResponseCode();
+    lista.forEach((x, i) => {
+      const codigo = estados[i].getResponseCode();
       if (codigo !== 200 && codigo !== 404) return; // cuota o red: no se decide nada
-      const f = codigo === 200 ? JSON.parse(estados[k].getContentText()) : null;
-      if (f && !f.trashed && (f.parents || []).indexOf(lista[i].carpetaId) >= 0) recordar[clave(lista[i])] = '1';
-      else fuera.push(i);
+      const f = codigo === 200 ? JSON.parse(estados[i].getContentText()) : null;
+      if (!f || f.trashed || (f.parents || []).indexOf(x.carpetaId) < 0) fuera.push(i);
     });
     if (fuera.length) {
       const contenidos = UrlFetchApp.fetchAll(fuera.map((i) => pedir(API + '?' + [
@@ -440,10 +435,8 @@ const LineasArchivos = (function () {
         const elegido = pdfs.filter((a) => mismo(a.name) === mismo(x.nombre))[0] ||
           pdfs.filter((a) => x.prefijo && mismo(a.name).indexOf(mismo(x.prefijo)) === 0)[0];
         if (elegido) salida[i] = { id: elegido.id, nombre: elegido.name };
-        else recordar[clave(x)] = '1'; // fuera de su carpeta y sin otro: se vuelve a revisar en 10 min
       });
     }
-    if (Object.keys(recordar).length) cache.putAll(recordar, 600);
     return salida;
   }
 

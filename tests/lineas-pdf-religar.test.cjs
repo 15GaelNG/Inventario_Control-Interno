@@ -12,15 +12,10 @@ const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 /** LineasArchivos con Drive simulado: `archivos` = { id: { parents, trashed } } (sin entrada = 404), `carpetas` = { id: [{ id, name }] }. */
 function archivosCon(archivos, carpetas, opciones) {
   const o = opciones || {};
-  const cache = Object.assign({}, o.cache);
   const pedidas = [];
   const respuesta = (codigo, cuerpo) => ({ getResponseCode: () => codigo, getContentText: () => JSON.stringify(cuerpo) });
   const ctx = vm.createContext({
     console,
-    CacheService: { getScriptCache: () => ({
-      getAll: (claves) => { const r = {}; claves.forEach((k) => { if (cache[k]) r[k] = cache[k]; }); return r; },
-      putAll: (valores) => Object.assign(cache, valores),
-    }) },
     ScriptApp: { getOAuthToken: () => 'tok' },
     UrlFetchApp: { fetchAll: (lista) => lista.map((p) => {
       pedidas.push(p.url);
@@ -36,28 +31,26 @@ function archivosCon(archivos, carpetas, opciones) {
     leerConfig_: () => null,
   });
   vm.runInContext(read('src/services/lineas/LineasArchivos.gs') + '\nthis.A = LineasArchivos;', ctx);
-  return { A: ctx.A, cache, pedidas };
+  return { A: ctx.A, pedidas };
 }
 
 const VIEJO = { pdfId: 'VIEJO', carpetaId: 'INSP0510', nombre: 'INSP 0726 05 10.pdf', prefijo: 'INSP' };
 
-test('el PDF que sigue en su carpeta no se cambia y se recuerda 10 min', () => {
-  const { A, cache, pedidas } = archivosCon({ VIEJO: { parents: ['INSP0510'], trashed: false } }, {});
+test('el PDF que sigue en su carpeta no se cambia; se pregunta cada vez, sin recordarlo (prueba del 6-oct)', () => {
+  const { A, pedidas } = archivosCon({ VIEJO: { parents: ['INSP0510'], trashed: false } }, {});
   assert.deepEqual(JSON.parse(JSON.stringify(A.pdfsFueraDeCarpeta([VIEJO]))), [null]);
-  assert.equal(cache['ln_pdf_carpeta_VIEJO_INSP0510'], '1');
   assert.equal(pedidas.length, 1, 'no lista la carpeta');
-  // Ya revisado: no vuelve a preguntar a Drive
   A.pdfsFueraDeCarpeta([VIEJO]);
-  assert.equal(pedidas.length, 1);
+  assert.equal(pedidas.length, 2);
+  assert.doesNotMatch(read('src/services/lineas/LineasArchivos.gs').slice(read('src/services/lineas/LineasArchivos.gs').indexOf('function pdfsFueraDeCarpeta(')), /CacheService/);
 });
 
 test('NUCO 0726: el ligado quedó fuera de la carpeta; se elige el del mismo nombre que sí está', () => {
-  const { A, cache } = archivosCon(
+  const { A } = archivosCon(
     { VIEJO: { parents: ['RAIZ_CUENTA_APP'], trashed: false } },
     { INSP0510: [{ id: 'OTRO', name: 'INSP 0726 01 10.pdf' }, { id: 'NUEVO', name: 'INSP 0726 05 10.pdf' }] });
   const r = JSON.parse(JSON.stringify(A.pdfsFueraDeCarpeta([VIEJO])));
   assert.deepEqual(r, [{ id: 'NUEVO', nombre: 'INSP 0726 05 10.pdf' }]);
-  assert.equal(cache['ln_pdf_carpeta_VIEJO_INSP0510'], undefined, 'el que se cambia no se recuerda: lleva otro id');
 });
 
 test('borrado, en la papelera o sin acceso: sin uno del mismo nombre, el más reciente del formato (no otros PDF)', () => {
@@ -70,13 +63,9 @@ test('borrado, en la papelera o sin acceso: sin uno del mismo nombre, el más re
   assert.deepEqual(JSON.parse(JSON.stringify(archivosCon({}, { RESP0510: [{ id: 'INE', name: 'INE 0726.pdf' }] }).A.pdfsFueraDeCarpeta([resp]))), [null]);
 });
 
-test('fuera de su carpeta y sin otro: no se cambia; si Drive falla, no se decide ni se recuerda', () => {
-  const sinOtro = archivosCon({}, { INSP0510: [] });
-  assert.deepEqual(JSON.parse(JSON.stringify(sinOtro.A.pdfsFueraDeCarpeta([VIEJO]))), [null]);
-  assert.equal(sinOtro.cache['ln_pdf_carpeta_VIEJO_INSP0510'], '1');
-  const falla = archivosCon({}, {}, { fallaDrive: true });
-  assert.deepEqual(JSON.parse(JSON.stringify(falla.A.pdfsFueraDeCarpeta([VIEJO]))), [null]);
-  assert.deepEqual(falla.cache, {});
+test('fuera de su carpeta y sin otro, o si Drive falla: no se cambia', () => {
+  assert.deepEqual(JSON.parse(JSON.stringify(archivosCon({}, { INSP0510: [] }).A.pdfsFueraDeCarpeta([VIEJO]))), [null]);
+  assert.deepEqual(JSON.parse(JSON.stringify(archivosCon({}, {}, { fallaDrive: true }).A.pdfsFueraDeCarpeta([VIEJO]))), [null]);
 });
 
 /** LineasRepo con hojas simuladas: solo lo que usa revisarPdfsLigados. */
