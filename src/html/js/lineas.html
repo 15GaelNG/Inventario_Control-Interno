@@ -930,6 +930,11 @@
      */
     function activarAdicionales(cuerpo, alQuitar) {
       const entrada = (prefijo, n) => cuerpo.querySelector('input[data-columna="' + CSS.escape(prefijo + n + ' RESPONSABLE') + '"]');
+      // El cuerpo del modal es el mismo para Editar, la inspección y la responsiva: se escucha una sola vez (si no, un clic
+      // agregaba o quitaba varios) y lo que se limpia al quitar es el del formulario abierto
+      cuerpo._alQuitarAdicional = alQuitar || null;
+      if (cuerpo._adicionalesActivos) return;
+      cuerpo._adicionalesActivos = true;
       cuerpo.addEventListener('click', (ev) => {
         const agregar = ev.target.closest('[data-agregar-adicional]');
         const quitar = ev.target.closest('[data-quitar-adicional]');
@@ -949,7 +954,7 @@
             });
           }
           k = Math.max(0, k - 1);
-          if (alQuitar) alQuitar(i);
+          if (cuerpo._alQuitarAdicional) cuerpo._alQuitarAdicional(i);
         }
         cuenta.value = String(k);
         cuenta.dispatchEvent(new Event('change', { bubbles: true }));

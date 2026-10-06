@@ -103,6 +103,9 @@ test('la pantalla: «Agregar responsable», «Quitar» (los de abajo suben) y la
   assert.match(lineas, /function activarAdicionales\(cuerpo, alQuitar\)/);
   assert.match(lineas, /const origen = j \+ 1 < ORDEN_ADICIONALES\.length \? entrada\(p, ORDEN_ADICIONALES\[j \+ 1\]\) : null;/);
   assert.match(lineas, /if \(cond\.cuantos\) \{/);
+  // El cuerpo del modal se reutiliza: se escucha una sola vez (un clic agregaba o quitaba varios, 6-oct)
+  assert.match(lineas, /if \(cuerpo\._adicionalesActivos\) return;/);
+  assert.match(lineas, /if \(cuerpo\._alQuitarAdicional\) cuerpo\._alQuitarAdicional\(i\);/);
   // En la captura y en Editar
   assert.equal((lineas.match(/activarAdicionales\(cuerpo(\)|, \(i\))/g) || []).length, 2);
   assert.match(read('src/html/lineas-estilos.html'), /\.ln-af-campo\[data-af-columna="RESPONSABLES ADICIONALES"\]/);
