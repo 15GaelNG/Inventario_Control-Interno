@@ -38,6 +38,13 @@
       return Math.round(n > 1 ? n : n * 100) + '%';
     };
     const miles = (n) => Number(n || 0).toLocaleString('es-MX');
+
+    /** Activos de otro módulo para Gestión de Activos: si la persona no tiene permiso en ese
+     *  módulo ni se pregunta (el servidor lo rechazaría y quedaría un error en los registros) —
+     *  regresa null, y la tarjeta y el conteo de ese módulo se omiten. */
+    const deOtroModulo = (modulo, api) => (permisoDe(modulo)
+      ? callServerCacheado(api, state.token).catch(() => [])
+      : Promise.resolve(null));
     /** Ícono de Lucide (lucide.dev/icons) como SVG en línea: icono('smartphone'). */
     function icono(nombre, clase) {
       const nombrePascal = String(nombre).replace(/(^|-)([a-z0-9])/g, (m, sep, c) => c.toUpperCase());
@@ -4921,10 +4928,10 @@
         // no pide nada nuevo al servidor.
         Promise.all([
           cargarIndice(),
-          callServerCacheado('apiListarVehiculosBasico', state.token).catch(() => []),
-          callServerCacheado('apiListarHologramas', state.token).catch(() => []),
-          callServerCacheado('apiListarUberResumen', state.token).catch(() => []),
-          callServerCacheado('apiListarCajasChicasResumen', state.token).catch(() => []),
+          deOtroModulo('vehiculos', 'apiListarVehiculosBasico'),
+          deOtroModulo('hologramas', 'apiListarHologramas'),
+          deOtroModulo('uber', 'apiListarUberResumen'),
+          deOtroModulo('caja-chica', 'apiListarCajasChicasResumen'),
         ]).then(([indice, vehiculos, hologramas, uber, cajasChicas]) => {
           if (!vigente() || panelAbierto !== panel) return;
           const datos = filasPorResponsable(indice, c.nombre);
@@ -4940,10 +4947,10 @@
               (c.departamento ? chip(c.departamento, 'azul') : '') +
             '</div>' + (pie ? '<p class="ln-pie ln-tenue">' + pie + '</p>' : '') + '</div>' +
             tarjetaLineas(c.nombre, datos) +
-            tarjetaVehiculos(c.nombre, misVehiculos) +
-            tarjetaHologramas(c.nombre, misHologramas) +
-            tarjetaUber(c.nombre, miUber) +
-            tarjetaCajasChicas(c.nombre, misCch);
+            (vehiculos ? tarjetaVehiculos(c.nombre, misVehiculos) : '') +
+            (hologramas ? tarjetaHologramas(c.nombre, misHologramas) : '') +
+            (uber ? tarjetaUber(c.nombre, miUber) : '') +
+            (cajasChicas ? tarjetaCajasChicas(c.nombre, misCch) : '');
           pintarIconos(panel.cuerpo);
         }).catch((e) => {
           if (panelAbierto === panel) panel.cuerpo.innerHTML = '<p class="error-msg">No se pudieron consultar las asignaciones: ' + mensajeError(e) + '</p>';
@@ -5048,10 +5055,10 @@
       Promise.all([
         cargarColaboradores(),
         cargarIndice(),
-        callServerCacheado('apiListarVehiculosBasico', state.token).catch(() => []),
-        callServerCacheado('apiListarHologramas', state.token).catch(() => []),
-        callServerCacheado('apiListarUberResumen', state.token).catch(() => []),
-        callServerCacheado('apiListarCajasChicasResumen', state.token).catch(() => []),
+        deOtroModulo('vehiculos', 'apiListarVehiculosBasico'),
+        deOtroModulo('hologramas', 'apiListarHologramas'),
+        deOtroModulo('uber', 'apiListarUberResumen'),
+        deOtroModulo('caja-chica', 'apiListarCajasChicasResumen'),
       ]).then(([r, indice, vehiculos, hologramas, uber, cajasChicas]) => {
         if (!vigente()) return;
         const conteo = {};
