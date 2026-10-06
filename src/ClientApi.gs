@@ -53,24 +53,32 @@ function apiBuscarVehiculoPorFolio(token, folio) {
   return VehiculosService.buscarPorFolio(token, folio);
 }
 /**
+ * Para las fichas que se piden en una llamada: parte(modulo, leer) regresa lo que lee, null si
+ * la persona no puede ver ese módulo (su pestaña no aparece) y [] si falla por otra cosa.
+ */
+function partesDeFicha_(token, deQue) {
+  const sesion = Auth.validarSesion(token);
+  const permisos = Permisos.deCorreo(sesion.correo);
+  return (modulo, leer) => {
+    if (!permisos[modulo]) return null;
+    try {
+      return leer();
+    } catch (e) {
+      if (Permisos.esFaltaDePermiso(e)) return null;
+      console.warn('Ficha ' + deQue + ', pestaña ' + modulo + ': ' + e.message);
+      return [];
+    }
+  };
+}
+
+/**
  * La ficha de un vehículo en UNA llamada: antes eran 11, y cada llamada cuesta ~1.5–2.5 s aunque
  * no haga nada (Apps Script no las corre todas a la vez). Cada pestaña es de su módulo: sin
  * permiso sale null y no aparece (lo mismo que deModulo en el cliente); si una que sí puede ver
  * falla por otra cosa, sale vacía y las demás siguen. Texto JSON, por la nota de abajo.
  */
 function apiFichaVehiculo(token, folio) {
-  const sesion = Auth.validarSesion(token);
-  const permisos = Permisos.deCorreo(sesion.correo);
-  const parte = (modulo, leer) => {
-    if (!permisos[modulo]) return null;
-    try {
-      return leer();
-    } catch (e) {
-      if (Permisos.esFaltaDePermiso(e)) return null;
-      console.warn('Ficha del vehículo ' + folio + ', pestaña ' + modulo + ': ' + e.message);
-      return [];
-    }
-  };
+  const parte = partesDeFicha_(token, 'del vehículo ' + folio);
   return JSON.stringify({
     completo: VehiculosService.buscarPorFolio(token, folio),
     cambios: parte('cambios-vehiculos', () => CambiosVehiculosService.listarPorFolio(token, folio)),
@@ -270,6 +278,19 @@ function apiQueImpideBorrar(token, hoja, ids) {
   if (!MODULO_AL_BORRAR_[hoja]) throw new Error('"' + hoja + '" no se puede eliminar desde la app');
   Permisos.puedeEditar(token, MODULO_AL_BORRAR_[hoja]);
   return Relaciones.queImpideBorrar(hoja, ids);
+}
+/**
+ * La ficha de una caja chica en UNA llamada (como apiFichaVehiculo): la caja, sus cambios de
+ * monto (del mismo módulo) y sus arqueos, que son de su módulo: sin permiso de Arqueos, null y
+ * su pestaña no aparece. Si los cambios o los arqueos fallan por otra cosa, salen vacíos.
+ */
+function apiFichaCajaChica(token, idCch) {
+  const parte = partesDeFicha_(token, 'de la caja ' + idCch);
+  return JSON.stringify({
+    completo: CajasChicasService.buscarPorId(token, idCch),
+    cambios: parte('caja-chica', () => CambiosMontoCCHService.listarPorIdCch(token, idCch)),
+    arqueos: parte('arqueos', () => ArqueosService.listarPorIdCch(token, idCch)),
+  });
 }
 function apiArqueosPorIdCch(token, idCch) {
   return JSON.stringify(ArqueosService.listarPorIdCch(token, idCch));

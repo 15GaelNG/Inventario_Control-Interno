@@ -203,6 +203,11 @@
     apiListarVehiculosBasico: [{ FOLIO: 'AUT0024', NUCO: '24', PLACA: 'GGY886F', MARCA: 'CHEVROLET', LINEA_VEHICULO: 'BEAT' },
       { FOLIO: 'AUT0100', NUCO: '100', PLACA: 'ABC123A', MARCA: 'MITSUBISHI', LINEA_VEHICULO: 'L200' }],
     apiBuscarVehiculoPorFolio: VEHICULO,
+    apiFichaCajaChica: () => JSON.stringify({
+      completo: FICHAS.apiBuscarCajaChicaPorId,
+      cambios: permisos['caja-chica'] ? JSON.parse(FICHAS.apiCambiosMontoPorIdCch) : null,
+      arqueos: permisos.arqueos ? JSON.parse(FICHAS.apiArqueosPorIdCch) : null,
+    }),
     // Como el servidor: cada pestaña con el permiso de su módulo (null sin él; quitarPermisos lo quita)
     apiFichaVehiculo: () => {
       const parte = (modulo, valor) => (permisos[modulo] ? (typeof valor === 'string' ? JSON.parse(valor) : valor) : null);

@@ -2112,33 +2112,29 @@ test('la sección de sensor de Vehículos: la pantalla y el servidor bloquean lo
   assert.deepEqual([...new Set(enPantalla)].sort(), servidor.slice().sort());
 });
 
-test('las fichas piden lo de otro módulo solo si la persona lo puede ver (deModulo o parte en el servidor)', () => {
-  // La de Vehículos va en UNA llamada: el servidor (apiFichaVehiculo) pide cada pestaña con
-  // parte('modulo', …), que la deja en null sin permiso. Ninguna lista de otro módulo va suelta.
-  const api = read('src/ClientApi.gs');
-  const ini = api.indexOf('function apiFichaVehiculo(');
-  const cuerpo = api.slice(ini, api.indexOf('\n}', ini));
-  const sueltasServidor = cuerpo.split(/\r?\n/).filter((l) => /Service\.listarPorFolio\(/.test(l) && !/parte\('[a-z-]+'/.test(l));
-  assert.deepEqual(sueltasServidor, [], 'apiFichaVehiculo: cada pestaña va con parte(modulo, …)');
-  const app = read('src/html/js/app.html');
-  const ficha = app.slice(app.indexOf('async function abrirFichaVehiculo('), app.indexOf('const estilo = CLASE_ESTILO', app.indexOf('async function abrirFichaVehiculo(')));
-  assert.match(ficha, /callServerListaCacheada\('apiFichaVehiculo'/, 'la ficha de Vehículos se pide en una sola llamada');
-  assert.doesNotMatch(ficha, /callServer\('api/, 'y nada más suelto');
-
-  // Las demás fichas: su archivo, su función y las llamadas que SÍ son de su propio módulo
+test('las fichas van en una llamada y piden lo de otro módulo solo si la persona lo puede ver', () => {
+  // Cada ficha: su función en el cliente y su función del servidor. El cliente pide UNA cosa
+  // (callServerListaCacheada) y nada suelto; el servidor arma cada pestaña con parte('modulo', …),
+  // que la deja en null sin permiso (su pestaña no aparece), y la anota en FICHAS_GUARDADAS para
+  // que un guardado borre su copia.
   const FICHAS = [
-    { archivo: 'src/html/js/app-cajachica.html', funcion: 'abrirFichaCajaChica', propias: ['apiBuscarCajaChicaPorId', 'apiCambiosMontoPorIdCch'] },
+    { archivo: 'src/html/js/app.html', funcion: 'abrirFichaVehiculo', servidor: 'apiFichaVehiculo' },
+    { archivo: 'src/html/js/app-cajachica.html', funcion: 'abrirFichaCajaChica', servidor: 'apiFichaCajaChica' },
   ];
+  const api = read('src/ClientApi.gs');
+  const guardadas = /const FICHAS_GUARDADAS = \[([^\]]*)\]/.exec(read('src/html/js/api.html'))[1];
   FICHAS.forEach((f) => {
+    const i = api.indexOf('function ' + f.servidor + '(');
+    assert.ok(i >= 0, f.servidor + ' existe');
+    const cuerpo = api.slice(i, api.indexOf('\n}', i));
+    const sueltas = cuerpo.split(/\r?\n/).filter((l) => /Service\.listarPor\w+\(/.test(l) && !/parte\('[a-z-]+'/.test(l));
+    assert.deepEqual(sueltas, [], f.servidor + ': cada pestaña va con parte(modulo, …)');
     const texto = read(f.archivo);
-    const ini = texto.indexOf('async function ' + f.funcion + '(');
-    assert.ok(ini >= 0, f.funcion + ' existe');
-    // Hasta el primer await Promise.all([...]) de la función: ahí se piden las pestañas
-    const fin = texto.indexOf(']);', texto.indexOf('Promise.all([', ini));
-    const sueltas = texto.slice(ini, fin).split(/\r?\n/)
-      .filter((l) => /callServer\('api\w+'/.test(l) && !/deModulo\(/.test(l))
-      .filter((l) => !f.propias.some((api) => l.includes("'" + api + "'")));
-    assert.deepEqual(sueltas, [], f.funcion + ': lo de otro módulo va con deModulo(modulo, …)');
+    const desde = texto.indexOf('async function ' + f.funcion + '(');
+    const funcion = texto.slice(desde, texto.indexOf('\n    }\n', desde) > 0 ? texto.indexOf('\n    }\n', desde) : texto.indexOf('\n    }\r\n', desde));
+    assert.match(funcion, new RegExp("callServerListaCacheada\\('" + f.servidor + "'"), f.funcion + ' pide ' + f.servidor);
+    assert.doesNotMatch(funcion, /callServer\('api/, f.funcion + ': nada más suelto');
+    assert.ok(guardadas.includes("'" + f.servidor + "'"), f.servidor + ' está en FICHAS_GUARDADAS (api.html)');
   });
 });
 
