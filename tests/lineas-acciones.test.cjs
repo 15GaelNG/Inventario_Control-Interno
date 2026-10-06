@@ -10,8 +10,10 @@ const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 test('sin «¿Qué pasó?» ni regla de estatus: regresa «Cambiar estatus» (usuario, 4-oct)', () => {
   const acciones = read('src/services/lineas/LineasAcciones.gs');
   assert.match(acciones, /return \{ reasignar, PERSONA_DE_RESPONSIVA, datoDeCH_ \};/);
-  // Reasignar: el director sale de la responsiva y el jefe directo de Capital Humano (usuario, 6-oct)
-  assert.match(acciones, /cambios\['JEFE DIRECTO'\] = datoDeCH_\(valores\['No EMPLEADO'\], valores\['RESPONSABLE'\], 'jefe'\);/);
+  // Reasignar: el director sale de la responsiva y el jefe directo de la inspección (si es de la misma persona) o de
+  // Capital Humano (usuario, 6-oct)
+  assert.match(acciones, /cambios\['JEFE DIRECTO'\] = deInspeccion \|\| datoDeCH_\(valores\['No EMPLEADO'\], valores\['RESPONSABLE'\], 'jefe'\);/);
+  assert.match(acciones, /may\(LineasCaptura\.datoDeInspeccion\(inspeccionId, 'RESPONSABLE'\)\) === nuevo \? LineasCaptura\.datoDeInspeccion\(inspeccionId, 'JEFE DIRECTO'\) : ''/);
   assert.doesNotMatch(acciones, /function (reglas|permite|hayCamino|cerrar|cambiar)\(/);
   assert.match(read('src/services/TelefoniaService.gs'), /function catalogos\(token\) \{\r?\n    leer_\(token\);\r?\n    return LineasRepo\.catalogos\(\);/);
   const api = read('src/ClientApi.gs');
@@ -205,6 +207,7 @@ test('Reasignar: la inspección es obligatoria (usuario, 5-oct): de ese equipo y
         if (!id) throw new Error(nombre + ': falta su inspección (se captura dentro de la acción).');
         return id;
       },
+      datoDeInspeccion: (id, c) => ({ RESPONSABLE: 'LUIS', 'JEFE DIRECTO': 'JEFA DE LA INSPECCION' })[c] || '',
       guardarResponsiva: (datos, usuario, secretos, accion) => {
         const hecho = accion.aplicar(new Date(), { COMENTARIO: 'CAMBIO DE PUESTO', RESPONSABLE: 'LUIS', 'No EMPLEADO': 'AC1' });
         return { id: 'RES-1', registroId: hecho.id, filas: [] };
@@ -219,6 +222,8 @@ test('Reasignar: la inspección es obligatoria (usuario, 5-oct): de ese equipo y
   assert.deepEqual(JSON.parse(JSON.stringify(exigidas[1])), ['INS-9', ['EQU-1'], 'NUCO 0012']);
   const mov = escritos.find((a) => a[0] === 'REASIGNACION');
   assert.equal(mov[4].detalle.inspeccionId, 'INS-9');
+  // El jefe directo que se corrigió en la inspección (de la misma persona) es el que queda
+  assert.equal(escritos.find((a) => a[1] && a[1]['ESTATUS EQUIPO'] === 'USO')[1]['JEFE DIRECTO'], 'JEFA DE LA INSPECCION');
 
   const cliente = read('src/html/js/lineas.html');
   const fn = cliente.slice(cliente.indexOf('async function abrirReasignar(fila)'), cliente.indexOf('const inspeccionesDelDia = {};'));

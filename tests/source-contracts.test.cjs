@@ -226,9 +226,10 @@ test('el alta y edición de LINEAS TELEFONICAS sigue LINEAS TELEFONICAS_Form del
   const titulos = (els) => els.filter((e) => e.tipo === 'titulo').map((e) => e.texto);
   const ctx = { nuevo: true, nucoRepetido: () => false, telefonoRepetido: () => false };
   const altaEquipo = Reg._elementos({}, {}, { correo: 'x@y.z' }, Object.assign({}, ctx, { parte: 'EQUIPO' }));
-  assert.deepEqual(titulos(altaEquipo), ['EQUIPO', 'RESPONSABLE', 'LÍNEA', 'ADENDUM', 'ACCESORIOS Y ACCESOS']);
+  // Responsables adicionales (6-oct): un bloque por cada uno y una sección sin título con «Agregar responsable»
+  assert.deepEqual(titulos(altaEquipo), ['EQUIPO', 'RESPONSABLE', 'RESPONSABLE 2', 'RESPONSABLE 3', 'RESPONSABLE 4', 'RESPONSABLE 5', '', 'LÍNEA', 'ADENDUM', 'ACCESORIOS Y ACCESOS']);
   const altaLinea = Reg._elementos({}, {}, { correo: 'x@y.z' }, Object.assign({}, ctx, { parte: 'LINEA' }));
-  assert.deepEqual(titulos(altaLinea), ['LÍNEA', 'RESPONSABLE', 'ADENDUM', 'ACCESOS']);
+  assert.deepEqual(titulos(altaLinea), ['LÍNEA', 'RESPONSABLE', 'RESPONSABLE 2', 'RESPONSABLE 3', 'RESPONSABLE 4', 'RESPONSABLE 5', '', 'ADENDUM', 'ACCESOS']);
   const campo = (els, c) => els.filter((e) => e.columna === c)[0];
   assert.ok(!campo(altaLinea, 'EQUIPO') && !campo(altaLinea, 'ACCESORIOS') && !campo(altaLinea, 'NUCO'));
   // En el alta de un equipo el NUCO se captura; el TIPO no se elige
@@ -438,8 +439,8 @@ test('los campos de texto libre del AppSheet ahora tienen lista desplegable', ()
   };
   ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'DIRECTOR', 'COLOR'].forEach((c) => assert.equal(control(reg, c), 'listaAbierta', 'LINEAS ' + c));
   // Responsables adicionales (6-oct): número de empleado y nombre, de Capital Humano
-  assert.match(reg, /campo\(num, 'No\. de empleado ' \+ \(i \+ 2\), 'listaAbierta'/);
-  assert.match(reg, /campo\(nom, 'Responsable ' \+ \(i \+ 2\), 'listaAbierta'/);
+  assert.match(reg, /campo\(num, 'No\. de empleado', 'listaAbierta'/);
+  assert.match(reg, /campo\(nom, 'Nombre', 'listaAbierta'/);
   assert.doesNotMatch(reg, /RESPONSABLE USA EL EQUIPO|'Quien lo usa'/);
   // Inspección (usuario, 3-oct): el equipo y la línea vienen del registro (fijos); en la responsiva siguen con lista
   const resp = cap.slice(cap.indexOf('function formularioResponsiva_'));
@@ -1520,10 +1521,11 @@ test('Mandar a resguardo (30-sep): persona en blanco, línea según el adendum, 
   // Datos de la persona en blanco (eran N/A; usuario, 4-oct); PIN y cuenta solo si tenían algo (NO APLICA se respeta);
   // el patrón se borra
   const fila = { RESPONSABLE: 'ANA', PUESTO: 'GERENTE', 'JEFE DIRECTO': 'LUIS', DIRECTOR: 'EVA', 'PIN WHATSAPP': '123456', 'PIN EQUIPO': 'NO APLICA',
-    'CUENTA GOOGLE': '', PATRON: '1-2-3', 'RESPONSABLE USA EL EQUIPO': 'SI', 'NOMBRE QUIEN USA': 'ANA' };
+    'CUENTA GOOGLE': '', PATRON: '1-2-3', 'NOMBRE SEGUNDO RESPONSABLE': 'LUIS' };
   const pedido = { DEPARTAMENTO: 'DISPONIBLE', SEDE: 'QUERETARO', 'OFICINA / DESARROLLO': 'JARDINES', 'ESTATUS EQUIPO': 'RESGUARDO', 'ESTATUS LINEA': 'DISPONIBLE', COMENTARIO: 'baja por renuncia' };
   const c = R._cambiosResguardo(fila, pedido, true);
-  ['RESPONSABLE', 'PUESTO', 'JEFE DIRECTO', 'DIRECTOR', 'PIN WHATSAPP', 'NOMBRE QUIEN USA', 'PUESTO QUIEN USA'].forEach((k) => assert.equal(c[k], '', k));
+  ['RESPONSABLE', 'PUESTO', 'JEFE DIRECTO', 'DIRECTOR', 'PIN WHATSAPP', 'NOMBRE SEGUNDO RESPONSABLE'].forEach((k) => assert.equal(c[k], '', k));
+  assert.ok(!('NOMBRE QUIEN USA' in c), '«quien lo usa» se quitó (6-oct)');
   assert.ok(!Object.keys(c).some((k) => c[k] === 'N/A'));
   assert.equal(R._cambiosResguardo(Object.assign({}, fila, { 'CUENTA GOOGLE': 'N/A' }), pedido, true)['CUENTA GOOGLE'], ''); // un N/A viejo también
   assert.ok(!('PIN EQUIPO' in c) && !('CUENTA GOOGLE' in c));
@@ -1949,7 +1951,7 @@ test('Mandar a resguardo: estatus con su significado, línea vencida a cancelaci
   assert.match(captura, /const persona = \(c, enResponsiva\) => \(enAccion \? '' : \(resp \? deResp\(enResponsiva \|\| c, ''\) : v\(c\)\)\);/);
   assert.match(captura, /enAccion \? \{ opciones: PERSONAS_PROCESOS, soloLista: true \} : \{\}/);
   assert.match(captura, /if \(\(e\.control === 'lista' \|\| e\.soloLista\) && e\.opciones/);
-  assert.match(captura, /if \(!datos\.enAccion && !datos\.reasignar\) COPIA_INSPECCION_A_LINEA\.forEach/);
+  assert.match(captura, /else if \(!datos\.enAccion\) COPIA_INSPECCION_A_LINEA/);
   assert.match(cliente, /cbx\.setOpciones\(e\.soloLista \? unirOpciones\(ops\.filter/);
 });
 

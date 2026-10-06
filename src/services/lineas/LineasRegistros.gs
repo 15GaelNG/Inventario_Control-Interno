@@ -48,29 +48,53 @@ const LineasRegistros = (function () {
     if (cond.nuevo) return !!ctx.nuevo;
     if (cond.campo) return texto_(valores[cond.campo]).toUpperCase() === String(cond.igual).toUpperCase();
     if (cond.lleno) return !!texto_(valores[cond.lleno]);
+    if (cond.cuantos) return cuantosCumple_(cond, valores[cond.cuantos]);
     return true;
+  }
+  /** { cuantos: COLUMNA, alMenos: n } o { cuantos: COLUMNA, menos: n }: compara el número que guarda COLUMNA. */
+  function cuantosCumple_(cond, valor) {
+    const k = Number(texto_(valor)) || 0;
+    return cond.alMenos !== undefined ? k >= cond.alMenos : k < cond.menos;
   }
 
   /**
-   * Más de un responsable (usuario, 6-oct): reemplaza «¿El responsable usa el equipo?» y «Quien lo usa». Con SI se piden
-   * hasta cuatro más (como el AppSheet: segundo…quinto), cada uno con su número de empleado y su nombre de Capital Humano;
-   * el siguiente aparece cuando el anterior tiene nombre. Con NO se borran. La pregunta no se guarda: se responde sola.
+   * Responsables adicionales (usuario, 6-oct): reemplazan «¿El responsable usa el equipo?» y «Quien lo usa». Hasta cuatro
+   * más (como el AppSheet: segundo…quinto), cada uno con su número de empleado y su nombre de Capital Humano, en su propio
+   * bloque («RESPONSABLE 2», con «Quitar») y un botón «Agregar responsable» al final. Cuántos hay lo lleva
+   * RESPONSABLES ADICIONALES (no se guarda): los bloques de más se borran al guardar.
+   * `fijo` (la inspección de Reasignar): solo los que trae la responsiva, sin cambiarlos, y sin agregar ni quitar.
    */
   const ORDEN_ADICIONALES = ['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'];
-  function camposAdicionales(campo, valorDe) {
-    const hay = ORDEN_ADICIONALES.some((n) => texto_(valorDe('NOMBRE ' + n + ' RESPONSABLE')));
-    const reset = { cuando: { campo: 'MAS DE UN RESPONSABLE', igual: 'NO' }, valor: '' };
-    return [campo('MAS DE UN RESPONSABLE', '¿Más de un responsable?', 'escala', { valor: hay ? 'SI' : 'NO', opciones: ['SI', 'NO'] })]
-      .concat(ORDEN_ADICIONALES.reduce((a, n, i) => {
-        const mostrar = i === 0 ? { campo: 'MAS DE UN RESPONSABLE', igual: 'SI' }
-          : { y: [{ campo: 'MAS DE UN RESPONSABLE', igual: 'SI' }, { lleno: 'NOMBRE ' + ORDEN_ADICIONALES[i - 1] + ' RESPONSABLE' }] };
-        const num = 'NO EMPLEADO ' + n + ' RESPONSABLE';
-        const nom = 'NOMBRE ' + n + ' RESPONSABLE';
-        return a.concat([
-          campo(num, 'No. de empleado ' + (i + 2), 'listaAbierta', { valor: valorDe(num), mostrar: mostrar, sugerencias: 'NO_EMPLEADO', autollenar: { [nom]: 'nombre' }, reset: reset }),
-          campo(nom, 'Responsable ' + (i + 2), 'listaAbierta', { valor: valorDe(nom), mostrar: mostrar, sugerencias: 'PERSONAS', autollenar: { [num]: 'noEmpleado' }, reset: reset }),
-        ]);
-      }, []));
+  const CUENTA_ADICIONALES = 'RESPONSABLES ADICIONALES';
+  function cuantosAdicionales(valorDe) {
+    let k = 0;
+    ORDEN_ADICIONALES.forEach((n, i) => { if (texto_(valorDe('NOMBRE ' + n + ' RESPONSABLE')) || texto_(valorDe('NO EMPLEADO ' + n + ' RESPONSABLE'))) k = i + 1; });
+    return k;
+  }
+  function camposAdicionales(campo, valorDe, fijo) {
+    const k = cuantosAdicionales(valorDe);
+    const titulo = (i) => ({ tipo: 'titulo', texto: 'RESPONSABLE ' + (i + 2), icono: 'user-plus', quitarAdicional: fijo ? null : i });
+    if (fijo) {
+      return ORDEN_ADICIONALES.slice(0, k).reduce((a, n, i) => a.concat([titulo(i),
+        campo('NO EMPLEADO ' + n + ' RESPONSABLE', 'No. de empleado', 'texto', { valor: valorDe('NO EMPLEADO ' + n + ' RESPONSABLE'), soloLectura: true }),
+        campo('NOMBRE ' + n + ' RESPONSABLE', 'Nombre', 'texto', { valor: valorDe('NOMBRE ' + n + ' RESPONSABLE'), soloLectura: true }),
+      ]), []);
+    }
+    return ORDEN_ADICIONALES.reduce((a, n, i) => {
+      const mostrar = { cuantos: CUENTA_ADICIONALES, alMenos: i + 1 };
+      const reset = { cuando: { cuantos: CUENTA_ADICIONALES, menos: i + 1 }, valor: '' };
+      const num = 'NO EMPLEADO ' + n + ' RESPONSABLE';
+      const nom = 'NOMBRE ' + n + ' RESPONSABLE';
+      return a.concat([
+        titulo(i),
+        campo(num, 'No. de empleado', 'listaAbierta', { valor: valorDe(num), mostrar: mostrar, sugerencias: 'NO_EMPLEADO', autollenar: { [nom]: 'nombre' }, reset: reset }),
+        campo(nom, 'Nombre', 'listaAbierta', { valor: valorDe(nom), mostrar: mostrar, sugerencias: 'PERSONAS', autollenar: { [num]: 'noEmpleado' }, reset: reset }),
+      ]);
+    }, []).concat([
+      // Sección sin título: el botón queda debajo del último responsable
+      { tipo: 'titulo', texto: '', sinTexto: true },
+      campo(CUENTA_ADICIONALES, 'Agregar responsable', 'adicionales', { valor: String(k), mostrar: { cuantos: CUENTA_ADICIONALES, menos: ORDEN_ADICIONALES.length } }),
+    ]);
   }
 
   const campo_ = (columna, etiqueta, control, extra) => Object.assign({
@@ -335,7 +359,7 @@ const LineasRegistros = (function () {
 
   /** Columnas que se escriben en la hoja (las del formulario, sin las calculadas). */
   function columnasEscribibles_(elementos) {
-    return elementos.filter((e) => e.tipo === 'campo' && e.control !== 'calculado' && !e.soloLectura).map((e) => e.columna);
+    return elementos.filter((e) => e.tipo === 'campo' && e.control !== 'calculado' && e.control !== 'adicionales' && !e.soloLectura).map((e) => e.columna);
   }
 
   function contextoValidacion_(id, nuevo, permitirLineaSola) {
@@ -623,7 +647,7 @@ const LineasRegistros = (function () {
   }
 
   return {
-    formulario, crear, editar, formularioMasivo, accionMasiva, camposAdicionales,
+    formulario, crear, editar, formularioMasivo, accionMasiva, camposAdicionales, cuantosAdicionales, CUENTA_ADICIONALES,
     _elementos: elementos_, _resolver: resolver_, _cumple: cumple_, _elementosMasivos: elementosMasivos_, _tipoAutomatico: tipoAutomatico_,
   };
 })();

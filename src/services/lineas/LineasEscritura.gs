@@ -48,8 +48,8 @@ const LineasEscritura = (function () {
   /** Hasta cuatro responsables más, con su número de empleado y su nombre (usuario, 6-oct; como el AppSheet). */
   const ADICIONALES = ['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'].reduce((a, n) => a.concat(['NO EMPLEADO ' + n + ' RESPONSABLE', 'NOMBRE ' + n + ' RESPONSABLE']), []);
   /** De la persona (solo en una asignación con persona). */
-  const PERSONA = ['ID PERSONA', 'NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'AREA', 'DIRECTOR', 'JEFE DIRECTO', 'CUENTA GOOGLE',
-    'NOMBRE QUIEN USA', 'PUESTO QUIEN USA'].concat(ADICIONALES);
+  // «Quien lo usa» ya no existe (usuario, 6-oct): solo el responsable y los adicionales
+  const PERSONA = ['ID PERSONA', 'NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'AREA', 'DIRECTOR', 'JEFE DIRECTO', 'CUENTA GOOGLE'].concat(ADICIONALES);
   /** Dónde está (con persona o guardado). */
   const UBICACION = ['DEPARTAMENTO', 'SEDE', 'OFICINA / DESARROLLO'];
   // Los "no aplica" se guardan en blanco, como en la migración (LineasEstructura)

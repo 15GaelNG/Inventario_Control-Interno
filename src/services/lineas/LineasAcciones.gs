@@ -45,9 +45,10 @@ const LineasAcciones = (function () {
         if (nuevo && nuevo === antes.toUpperCase()) throw new Error(nombre + ' ya lo tiene ' + antes + ': elige a la persona nueva.');
         const cambios = { 'ESTATUS EQUIPO': 'USO' };
         PERSONA_DE_RESPONSIVA.forEach(([destino, origen]) => { cambios[destino] = txt(valores[origen]); });
-        // El jefe directo no viene en la responsiva (lleva al director): sale de Capital Humano de la persona elegida
-        // (usuario, 6-oct; del 4 al 6-oct era al revés)
-        cambios['JEFE DIRECTO'] = datoDeCH_(valores['No EMPLEADO'], valores['RESPONSABLE'], 'jefe');
+        // El jefe directo no viene en la responsiva (lleva al director): el de la inspección, que se puede corregir ahí, o
+        // el de Capital Humano de la persona elegida (usuario, 6-oct; del 4 al 6-oct era al revés)
+        const deInspeccion = may(LineasCaptura.datoDeInspeccion(inspeccionId, 'RESPONSABLE')) === nuevo ? LineasCaptura.datoDeInspeccion(inspeccionId, 'JEFE DIRECTO') : '';
+        cambios['JEFE DIRECTO'] = deInspeccion || datoDeCH_(valores['No EMPLEADO'], valores['RESPONSABLE'], 'jefe');
         if (may(LineasUtil.col(f, 'ESTATUS LINEA')) === 'DISPONIBLE') cambios['ESTATUS LINEA'] = 'USO';
         const g = LineasRepo.guardarCambiosRegistro(f, cambios, usuario, ahora, { tolerante: true });
         LineasRepo.registrarMovimiento('REASIGNACION', { motivo: comentario, ticket: txt(valores['TICKET']) }, usuario, ahora, {

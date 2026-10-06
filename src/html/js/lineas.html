@@ -701,6 +701,10 @@
       if (cond.nuevo) return !!(ctx && ctx.nuevo);
       if (cond.campo) return String((valores || {})[cond.campo] || '').trim().toUpperCase() === String(cond.igual).toUpperCase();
       if (cond.lleno) return !!String((valores || {})[cond.lleno] || '').trim();
+      if (cond.cuantos) {
+        const k = Number(String((valores || {})[cond.cuantos] || '').trim()) || 0;
+        return cond.alMenos !== undefined ? k >= cond.alMenos : k < cond.menos;
+      }
       return true;
     }
     const condAtributo = (c) => esc(typeof c === 'object' && c !== null ? JSON.stringify(c) : (c || 'SIEMPRE'));
@@ -728,7 +732,18 @@
     const autoDe = (e) => !!(e.formula || e.deriva || e.auto);
 
     function htmlElementoFormulario(e) {
-      if (e.tipo === 'titulo') return '<h4 class="ln-af-titulo">' + (e.icono ? icono(e.icono) + ' ' : '') + esc(e.texto) + '</h4>';
+      if (e.tipo === 'titulo') {
+        if (e.sinTexto) return '';
+        const quitar = e.quitarAdicional !== null && e.quitarAdicional !== undefined
+          ? '<button type="button" class="secondary ln-af-quitar" data-quitar-adicional="' + Number(e.quitarAdicional) + '">' + icono('x') + ' Quitar</button>' : '';
+        return '<h4 class="ln-af-titulo">' + (e.icono ? icono(e.icono) + ' ' : '') + esc(e.texto) + quitar + '</h4>';
+      }
+      // «Agregar responsable»: guarda cuántos bloques de responsables adicionales se ven (RESPONSABLES ADICIONALES)
+      if (e.control === 'adicionales') {
+        return '<div class="field ln-af-campo ln-af-agregar" data-af-columna="' + esc(e.columna) + '" data-mostrar="' + condAtributo(e.mostrar) + '" data-requerido="NUNCA" data-editable="' + condAtributo(e.editable) + '">' +
+          '<span class="ln-af-req" hidden></span><input type="hidden" data-columna="' + esc(e.columna) + '" value="' + esc(e.valor === null || e.valor === undefined ? '0' : e.valor) + '" />' +
+          '<button type="button" class="secondary" data-agregar-adicional>' + icono('user-plus') + ' ' + esc(e.etiqueta) + '</button></div>';
+      }
       const id = 'af-' + e.columna.replace(/[^A-Za-z0-9]+/g, '-');
       const attrs = ' id="' + id + '" data-columna="' + esc(e.columna) + '"' + (e.virtual ? ' data-virtual' : '') + (e.deriva ? ' data-deriva-de="' + esc(e.deriva.de) + '" data-deriva-dato="' + esc(e.deriva.dato) + '"' : '') + (e.literal || e.secreto ? ' data-respetar-texto' : '') + (e.soloLectura ? ' readonly tabindex="-1"' : '') + (autoDe(e) ? ' data-auto' : '');
       const valor = e.valor === null || e.valor === undefined ? '' : String(e.valor);
@@ -768,6 +783,8 @@
         control = '<textarea' + attrs + ' rows="4">' + esc(valor) + '</textarea>';
       } else if (e.control === 'fechaHora') {
         control = '<input type="datetime-local"' + attrs + ' value="' + esc(valor) + '" />';
+      } else if (e.control === 'patron' && e.soloLectura) {
+        control = '<div class="ln-patron-fijo">' + (esPuntosPatron(valor) ? svgPatron(valor) : (valor ? esc(valor) : '—')) + '</div>';
       } else if (e.control === 'patron') {
         const nota = e.valorOculto ? 'Registrado (solo lo ven administradores y el área de Líneas). Si no trazas uno nuevo, se conserva.'
           : (valor && !esPuntosPatron(valor) ? 'Hay un patrón capturado en AppSheet (imagen). Si no trazas uno nuevo, se conserva.' : '');
@@ -817,7 +834,7 @@
           const nombresDeFirma = sec.campos.filter((e) => e.control === 'firma' && NOMBRE_DE_FIRMA[e.columna] && NOMBRE_DE_FIRMA[e.columna] !== 'RESPONSABLE')
             .map((e) => NOMBRE_DE_FIRMA[e.columna]);
           const ocultos = sec.campos.filter((e) => e.soloLectura && nombresDeFirma.indexOf(e.columna) >= 0);
-          const lectura = sec.campos.filter((e) => e.soloLectura && e.control !== 'calculado' && ocultos.indexOf(e) < 0);
+          const lectura = sec.campos.filter((e) => e.soloLectura && e.control !== 'calculado' && e.control !== 'patron' && ocultos.indexOf(e) < 0);
           const firmas = sec.campos.filter((e) => e.control === 'firma');
           const anchos = sec.campos.filter((e) => e.control === 'area' || e.control === 'patron');
           const escalas = sec.campos.filter((e) => e.control === 'escala' && e.checklist); // renglones del checklist; las demás, a todo lo ancho
@@ -845,16 +862,18 @@
       const inicial = v === 'PATRON' || v === 'PATRÓN' || esPuntosPatron(patron.valor) ? 'PATRÓN'
         : (/^\d+$/.test(v) ? 'PIN' : (/^(N\/A|NA|NO APLICA|NINGUNO|SIN BLOQUEO)$/.test(v) ? 'SIN BLOQUEO' : (v ? 'CONTRASEÑA' : '')));
       const selector = { tipo: 'campo', columna: '_BLOQUEO', etiqueta: 'TIPO DE BLOQUEO DEL EQUIPO', control: 'lista', opciones: OPCIONES_BLOQUEO, valor: inicial, mostrar: pin.mostrar, requerido: 'NUNCA', virtual: true };
+      // El PIN de la responsiva de Reasignar no se cambia en la inspección: el tipo de bloqueo tampoco
+      if (pin.soloLectura) Object.assign(selector, { control: 'texto', soloLectura: true });
       const i = elementos.indexOf(pin);
       return elementos.slice(0, i).concat([selector], elementos.slice(i));
     }
     /** Muestra el PIN, la contraseña o el patrón según el bloqueo elegido. `cambio`: el usuario acaba de elegirlo. */
     function aplicarBloqueo(cuerpo, cambio) {
-      const sel = cuerpo.querySelector('select[data-columna="_BLOQUEO"]');
+      const sel = cuerpo.querySelector('[data-columna="_BLOQUEO"]');
       if (!sel) return;
       const t = sel.value;
       const campoPin = cuerpo.querySelector('.ln-af-campo[data-af-columna="PIN EQUIPO"]');
-      const lienzo = cuerpo.querySelector('.ln-patron');
+      const lienzo = cuerpo.querySelector('.ln-patron, .ln-patron-fijo');
       const campoPatron = lienzo && lienzo.closest('.ln-af-campo');
       if (campoPin) {
         const input = campoPin.querySelector('input');
@@ -903,6 +922,50 @@
         imgs.forEach((i) => { g.drawImage(i, x, Math.round((alto - i.naturalHeight) / 2)); x += i.naturalWidth + espacio; });
         return c.toDataURL('image/png').split(',')[1];
       });
+    }
+
+    /**
+     * «Agregar responsable» y «Quitar» (usuario, 6-oct). RESPONSABLES ADICIONALES dice cuántos bloques se ven; al quitar uno,
+     * los de abajo suben un lugar. `alQuitar(i)`: lo demás que se limpia desde ese bloque (las firmas, en la captura).
+     */
+    function activarAdicionales(cuerpo, alQuitar) {
+      const entrada = (prefijo, n) => cuerpo.querySelector('input[data-columna="' + CSS.escape(prefijo + n + ' RESPONSABLE') + '"]');
+      cuerpo.addEventListener('click', (ev) => {
+        const agregar = ev.target.closest('[data-agregar-adicional]');
+        const quitar = ev.target.closest('[data-quitar-adicional]');
+        const cuenta = cuerpo.querySelector('input[data-columna="RESPONSABLES ADICIONALES"]');
+        if ((!agregar && !quitar) || !cuenta) return;
+        ev.preventDefault();
+        let k = Number(cuenta.value) || 0;
+        if (agregar) {
+          k = Math.min(ORDEN_ADICIONALES.length, k + 1);
+        } else {
+          const i = Number(quitar.dataset.quitarAdicional);
+          for (let j = i; j < ORDEN_ADICIONALES.length; j++) {
+            ['NO EMPLEADO ', 'NOMBRE '].forEach((p) => {
+              const destino = entrada(p, ORDEN_ADICIONALES[j]);
+              const origen = j + 1 < ORDEN_ADICIONALES.length ? entrada(p, ORDEN_ADICIONALES[j + 1]) : null;
+              if (destino) destino.value = origen ? origen.value : '';
+            });
+          }
+          k = Math.max(0, k - 1);
+          if (alQuitar) alQuitar(i);
+        }
+        cuenta.value = String(k);
+        cuenta.dispatchEvent(new Event('change', { bubbles: true }));
+        const nuevo = agregar && entrada('NO EMPLEADO ', ORDEN_ADICIONALES[k - 1]);
+        const bloque = nuevo && nuevo.closest('.ln-af-seccion');
+        if (bloque) bloque.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+    }
+
+    /** Firmas de los responsables que se ven (el principal y los adicionales), ya firmadas, juntas en una imagen. */
+    function firmasDeResponsables(cuerpo, firmas, fondo) {
+      const lista = FIRMAS_RESPONSABLES.filter((c) => {
+        const campo = cuerpo.querySelector('.ln-af-campo[data-af-columna="' + CSS.escape(c) + '"]');
+        return campo && !campo.hidden && firmas[c] && !firmas[c].estaVacia();
+      }).map((c) => firmas[c]);
+      return Promise.all(lista.map((f) => f.base64(fondo))).then((b64) => unirFirmas(b64, fondo));
     }
 
     /** Firma con el componente del sistema; misma interfaz que antes (estaVacia, limpiar, base64 → promesa). */
@@ -1220,8 +1283,8 @@
      * de nadie más (PLAN_REESTRUCTURA_LINEAS.md §3.6). En las acciones masivas la columna llega como "id|COLUMNA".
      */
     const COLUMNAS_CH = ['RESPONSABLE', 'NO EMPLEADO', 'PUESTO', 'DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO',
-      'DIRECTOR', 'JEFE DIRECTO', 'NOMBRE QUIEN USA', 'PUESTO QUIEN USA']
-      .concat(['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'].reduce((a, n) => a.concat(['NOMBRE ' + n + ' RESPONSABLE', 'PUESTO ' + n + ' RESPONSABLE', 'NO EMPLEADO ' + n + ' RESPONSABLE']), []));
+      'DIRECTOR', 'JEFE DIRECTO']
+      .concat(['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'].reduce((a, n) => a.concat(['NOMBRE ' + n + ' RESPONSABLE', 'NO EMPLEADO ' + n + ' RESPONSABLE']), []));
     const esColumnaCH = (columna) => COLUMNAS_CH.indexOf(String(columna || '').split('|').pop().toUpperCase().replace(/\s+/g, ' ').trim()) >= 0;
 
     function activarCombosEn(cuerpo, elementos) {
@@ -3409,6 +3472,7 @@
             htmlAccionesPasos('<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + (id ? ' Guardar cambios' : ' ' + agregar) + '</button>');
           pintarIconos(cuerpo);
           activarCombosEn(cuerpo, elementos);
+          activarAdicionales(cuerpo);
           const patron = elementos.filter((e) => e.control === 'patron')[0];
           if (patron) {
             captura.patronInicial = esPuntosPatron(patron.valor) ? patron.valor : null;
@@ -3605,13 +3669,15 @@
             const origen = NOMBRE_DE_FIRMA[e.columna] && cuerpo.querySelector('[data-columna="' + CSS.escape(NOMBRE_DE_FIRMA[e.columna]) + '"]');
             captura.firmas[e.columna] = crearFirma(document.getElementById(id + '-firma'), origen ? origen.value : '');
           }
-          if (e.control === 'patron') {
+          if (e.control === 'patron' && !e.soloLectura) {
             captura.columnaPatron = e.columna;
             captura.patronInicial = esPuntosPatron(e.valor) ? e.valor : null;
             captura.controlPatron = activarPatron(id + '-patron', captura.patronInicial ? captura.patronInicial.split('-') : []);
           }
         });
         activarCombosEn(cuerpo, captura.contexto.formulario);
+        // Al quitar un responsable adicional, su firma y las de abajo se vuelven a hacer (los nombres suben un lugar)
+        activarAdicionales(cuerpo, (i) => ORDEN_ADICIONALES.slice(i).forEach((n) => { const f = captura.firmas['FIRMA ' + n + ' RESPONSABLE']; if (f) f.limpiar(); }));
         cuerpo.addEventListener('change', (ev) => { if (ev.target.matches('[data-columna="_BLOQUEO"]')) aplicarBloqueo(cuerpo, true); });
         cuerpo.addEventListener('input', (ev) => { if (ev.target.matches('[data-columna]')) actualizarFormularioAppSheet(); });
         cuerpo.addEventListener('change', (ev) => { if (ev.target.matches('[data-columna]')) actualizarFormularioAppSheet(); });
@@ -3950,14 +4016,15 @@
         if (!validarFormularioAppSheet()) return;
         if (raiz.querySelector('.ln-foto-subiendo')) { mostrarErrorCaptura('Espera a que terminen de subir las imágenes.', '#cap-fotos-lista'); return; }
         const firmaInspector = captura.firmas['FIRMA INSPECTOR'];
-        const firmaResponsable = captura.firmas['FIRMA RESPONSABLE'];
+        const cuerpoCaptura = $('#ln-captura-cuerpo', raiz);
         const idAbierto = captura.idObjetivo;
         const patron = patronParaGuardar();
         const valores = leerFormularioAppSheet();
         const sesion = captura;
         estadoGuardado(sesion.flujo ? 'Guardando la inspección' : 'Generando tu PDF');
         // La carpeta de fotos solo existe si se subió alguna (ya quedó creada al subirla)
-        Promise.all([firmaInspector.base64('#ddebf7'), firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ddebf7') : null, sesion.carpetaPromesa || null]).then(([inspector, responsable]) => {
+        // El responsable y los adicionales firman; sus firmas van juntas en la línea del responsable, como en la responsiva
+        Promise.all([firmaInspector.base64('#ddebf7'), firmasDeResponsables(cuerpoCaptura, sesion.firmas, '#ddebf7'), sesion.carpetaPromesa || null]).then(([inspector, responsable]) => {
           sesion.pdfFirmas = { inspector: inspector, responsable: responsable, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ddebf7') : null };
           const datos = Object.assign({}, sesion.ref, {
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron,
@@ -3987,17 +4054,14 @@
         $('#cap-error', raiz).hidden = true;
         if (!validarFormularioAppSheet()) return;
         const firmaCi = captura.firmas['FIRMA CI'];
-        // El responsable y los adicionales que se ven (los de «más de un responsable»), cada uno con su firma
-        const firmasResponsables = FIRMAS_RESPONSABLES.filter((c) => {
-          const campo = raiz.querySelector('#ln-captura-cuerpo .ln-af-campo[data-af-columna="' + CSS.escape(c) + '"]');
-          return campo && !campo.hidden && captura.firmas[c] && !captura.firmas[c].estaVacia();
-        }).map((c) => captura.firmas[c]);
+        const cuerpoCaptura = $('#ln-captura-cuerpo', raiz);
         const idAbierto = captura.idObjetivo;
         const patron = patronParaGuardar();
         const valores = leerFormularioAppSheet();
         const sesion = captura;
         estadoGuardado(sesion.flujo && sesion.flujo.espera ? sesion.flujo.espera : (sesion.flujo && !sesion.flujo.pdfAqui ? 'Guardando la responsiva' : 'Generando tu PDF'));
-        Promise.all([Promise.all(firmasResponsables.map((f) => f.base64('#ffffff'))).then((lista) => unirFirmas(lista, '#ffffff')), firmaCi.base64('#ffffff')]).then(([responsable, ci]) => {
+        // El responsable y los adicionales que se ven, cada uno con su firma, juntas en una imagen
+        Promise.all([firmasDeResponsables(cuerpoCaptura, sesion.firmas, '#ffffff'), firmaCi.base64('#ffffff')]).then(([responsable, ci]) => {
           sesion.pdfFirmas = { responsable: responsable, ci: ci, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ffffff') : null };
           const datos = Object.assign({}, sesion.ref, {
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron,

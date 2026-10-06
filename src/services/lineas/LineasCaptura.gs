@@ -133,6 +133,11 @@ const LineasCaptura = (function () {
     // las personas de procesos; lo demás se llena con Capital Humano (usuario, 4-oct)
     const persona = (c, enResponsiva) => (enAccion ? '' : (resp ? deResp(enResponsiva || c, '') : v(c)));
     const jefeDeCH = () => (typeof LineasAcciones === 'undefined' ? '' : LineasAcciones.datoDeCH_(resp['No EMPLEADO'], resp['RESPONSABLE'], 'jefe'));
+    // Lo que ya se llenó en la responsiva no se cambia en la inspección (usuario, 6-oct): así las dos dicen lo mismo
+    const patronResp = resp && deResponsiva.patron !== undefined && deResponsiva.patron !== null ? String(deResponsiva.patron) : '';
+    const deRespLleno = (c) => (c === 'PATRON' ? !!patronResp.trim() : !!(resp && String(deResp(c, '')).trim()));
+    const bloquear = (e, enResponsiva) => (deRespLleno(enResponsiva || e.columna)
+      ? Object.assign({}, e, { control: e.control === 'patron' ? 'patron' : 'texto', soloLectura: true, requerido: 'NUNCA' }) : e);
     const tipo = v('TIPO').trim().toUpperCase();
     const esEquipo = tipo === 'EQUIPO';
     const req = { requerido: 'SIEMPRE' };
@@ -149,7 +154,7 @@ const LineasCaptura = (function () {
       campo_('TIPO', 'Tipo', 'texto', fijo({ valor: v('TIPO'), controlaTipo: true })),
       campo_('MODELO', 'Modelo', 'texto', fijo({ valor: v('EQUIPO'), mostrar: 'NO_LINEA' })),
       campo_('IMEI', 'IMEI', 'texto', fijo({ valor: v('IMEI'), mostrar: 'NO_LINEA' })),
-      campo_('COLOR', 'Color', 'listaAbierta', { valor: deResp('COLOR', v('COLOR')), opciones: catalogos.colores || [], mostrar: 'NO_LINEA', requerido: 'NO_LINEA' }),
+      bloquear(campo_('COLOR', 'Color', 'listaAbierta', { valor: deResp('COLOR', v('COLOR')), opciones: catalogos.colores || [], mostrar: 'NO_LINEA', requerido: 'NO_LINEA' })),
       titulo_('LÍNEA', 'card-sim'),
       campo_('No TELEFONO', 'Número', 'texto', fijo({ valor: v('NUMERO TELEFONO'), mostrar: 'NO_EQUIPO' })),
       campo_('SIM', 'SIM', 'texto', fijo({ valor: v('NUMERO SIM'), mostrar: 'NO_EQUIPO' })),
@@ -158,16 +163,21 @@ const LineasCaptura = (function () {
       campo_('RAZON SOCIAL', 'Razón social', 'texto', fijo({ valor: v('RAZON SOCIAL'), mostrar: 'NO_EQUIPO' })),
       titulo_('RESPONSABLE', 'user'),
       // llenarVacios: al abrir, lo que falte de la persona se llena con Capital Humano (usuario, 4-oct: el jefe directo no salía)
-      campo_('RESPONSABLE', 'Nombre', 'listaAbierta', Object.assign({ valor: persona('RESPONSABLE'), sugerencias: 'PERSONAS', autollenar: datosCH, llenarVacios: true },
-        enAccion ? { opciones: PERSONAS_PROCESOS, soloLista: true } : {}, req)),
-      campo_('PUESTO', 'Puesto', 'listaAbierta', Object.assign({ valor: persona('PUESTO'), opciones: catalogos.puestos || [], sugerencias: 'PUESTOS' }, req)),
-      campo_('DEPARTAMENTO', 'Departamento', 'listaAbierta', Object.assign({ valor: persona('DEPARTAMENTO'), opciones: catalogos.departamentos || [] }, req)),
-      campo_('AREA', 'Área', 'listaAbierta', Object.assign({ valor: persona('AREA'), opciones: catalogos.areas || [] }, req)),
-      campo_('SEDE', 'Sede', 'listaAbierta', Object.assign({ valor: persona('SEDE'), opciones: catalogos.sedes || [] }, req)),
-      campo_('OFICINA / DESARROLLO', 'Oficina o desarrollo', 'listaAbierta', Object.assign({ valor: persona('OFICINA / DESARROLLO'), opciones: catalogos.oficinas || [] }, req)),
+      bloquear(campo_('RESPONSABLE', 'Nombre', 'listaAbierta', Object.assign({ valor: persona('RESPONSABLE'), sugerencias: 'PERSONAS', autollenar: datosCH, llenarVacios: true },
+        enAccion ? { opciones: PERSONAS_PROCESOS, soloLista: true } : {}, req))),
+      bloquear(campo_('PUESTO', 'Puesto', 'listaAbierta', Object.assign({ valor: persona('PUESTO'), opciones: catalogos.puestos || [], sugerencias: 'PUESTOS' }, req))),
+      bloquear(campo_('DEPARTAMENTO', 'Departamento', 'listaAbierta', Object.assign({ valor: persona('DEPARTAMENTO'), opciones: catalogos.departamentos || [] }, req))),
+      bloquear(campo_('AREA', 'Área', 'listaAbierta', Object.assign({ valor: persona('AREA'), opciones: catalogos.areas || [] }, req))),
+      bloquear(campo_('SEDE', 'Sede', 'listaAbierta', Object.assign({ valor: persona('SEDE'), opciones: catalogos.sedes || [] }, req))),
+      bloquear(campo_('OFICINA / DESARROLLO', 'Oficina o desarrollo', 'listaAbierta', Object.assign({ valor: persona('OFICINA / DESARROLLO'), opciones: catalogos.oficinas || [] }, req))),
+      // La responsiva no lleva al jefe directo: se puede corregir aquí y Reasignar lo toma de esta inspección
       campo_('JEFE DIRECTO', 'Jefe directo', 'listaAbierta', Object.assign({ valor: resp ? jefeDeCH() : persona('JEFE DIRECTO'), opciones: catalogos.jefes || [] }, req)),
-      campo_('CORREO', 'Correo', 'texto', Object.assign({ valor: persona('CUENTA GOOGLE', 'CORREO'), literal: true }, req)),
-    ];
+      bloquear(campo_('CORREO', 'Correo', 'texto', Object.assign({ valor: persona('CUENTA GOOGLE', 'CORREO'), literal: true }, req)), 'CORREO'),
+    ].concat(
+      // Los responsables adicionales (usuario, 6-oct): los del registro, que se pueden quitar o agregar; en Reasignar, los de
+      // la responsiva, fijos. Al mandar a resguardo no hay (recibe procesos)
+      enAccion ? [] : LineasRegistros.camposAdicionales((columna, etiqueta, control, extra) => campo_(columna, etiqueta, control, extra),
+        (c) => (resp ? deResp(c, '') : v(c)), !!resp));
     const agregarSeccion = (nombre) => {
       const s = LineasChecklist.secciones().filter((x) => x.seccion === nombre)[0];
       elementos.push(titulo_(s.seccion));
@@ -181,11 +191,10 @@ const LineasCaptura = (function () {
       // Mejora sobre el AppSheet: se precarga la de la línea (en AppSheet no tiene valor inicial y el bot,
       // al copiarla, borraba la contraseña guardada si el campo se dejaba vacío)
       campo_('CONTRASEÑA MODEM', 'Contraseña del módem', 'texto', { valor: v('CONTRASEÑA MODEM'), mostrar: 'MODEM', literal: true, secreto: true }),
-      campo_('PIN WHATSAPP', 'PIN de WhatsApp', 'texto', { valor: deResp('PIN WHATSAPP', v('PIN WHATSAPP')), mostrar: 'VOZ', literal: true, secreto: true }),
-      campo_('PIN EQUIPO', 'PIN EQUIPO', 'texto', { valor: deResp('PIN EQUIPO', v('PIN EQUIPO')), mostrar: 'EQUIPOS', literal: true, secreto: true }),
+      bloquear(campo_('PIN WHATSAPP', 'PIN de WhatsApp', 'texto', { valor: deResp('PIN WHATSAPP', v('PIN WHATSAPP')), mostrar: 'VOZ', literal: true, secreto: true })),
+      bloquear(campo_('PIN EQUIPO', 'PIN EQUIPO', 'texto', { valor: deResp('PIN EQUIPO', v('PIN EQUIPO')), mostrar: 'EQUIPOS', literal: true, secreto: true })),
       // El patrón trazado en la responsiva (en ella se guarda en CONTRASEÑA)
-      campo_('PATRON', 'Patrón', 'patron', { valor: resp && deResponsiva.patron !== undefined && deResponsiva.patron !== null ? String(deResponsiva.patron) : v('PATRON'),
-        mostrar: 'EQUIPOS', secreto: true })
+      bloquear(campo_('PATRON', 'Patrón', 'patron', { valor: patronResp || v('PATRON'), mostrar: 'EQUIPOS', secreto: true }))
     );
     agregarSeccion('APPS INSTALADAS');
     elementos.push(
@@ -195,13 +204,16 @@ const LineasCaptura = (function () {
       titulo_('DATOS DE LA INSPECCIÓN', 'calendar-check'),
       campo_('CALIFICACION', 'Calificación', 'calculado', { valor: '', soloLectura: true }),
       campo_('FECHA DE REGISTRO', 'Fecha de la inspección', 'fechaHora', Object.assign({ valor: Utilities.formatDate(ahora, ZONA, "yyyy-MM-dd'T'HH:mm") }, req)),
-      campo_('TICKET', 'Ticket', 'texto', { valor: deResp('TICKET', '') }),
+      bloquear(campo_('TICKET', 'Ticket', 'texto', { valor: deResp('TICKET', '') })),
       // Un solo COMENTARIO (plan §5.2): se guarda en COMENTARIO (lo que imprime el PDF) y en el historial. Dentro de
       // una acción que ya pidió el suyo (mandar a resguardo, reasignar) no es obligatorio (usuario, 4-oct)
       titulo_('COMENTARIO', 'message-square-text'),
       campo_('COMENTARIO', 'Comentario', 'area', { valor: deResp('COMENTARIO', ''), requerido: enAccion || resp ? 'NUNCA' : 'SIEMPRE' }),
       titulo_('FIRMAS', 'signature'),
-      campo_('FIRMA RESPONSABLE', 'FIRMA RESPONSABLE', 'firma', { valor: '' }),
+      campo_('FIRMA RESPONSABLE', 'FIRMA RESPONSABLE', 'firma', { valor: '' }));
+    // Cada responsable adicional firma, como en la responsiva
+    if (!enAccion) Array.prototype.push.apply(elementos, firmasAdicionales_(resp ? (c) => deResp(c, '') : null));
+    elementos.push(
       campo_('NOMBRE INSPECTOR', 'NOMBRE INSPECTOR', 'texto', { valor: usuario.nombre || '', soloLectura: true }),
       campo_('FIRMA INSPECTOR', 'FIRMA INSPECTOR', 'firma', Object.assign({ valor: '' }, req))
     );
@@ -293,8 +305,7 @@ const LineasCaptura = (function () {
       campo_('COMENTARIO', 'Comentario', 'area', { valor: '', requerido: 'SIEMPRE' }),
       titulo_('FIRMAS', 'signature'),
       campo_('FIRMA RESPONSABLE', 'FIRMA RESPONSABLE', 'firma', { valor: '' }),
-    ], FIRMAS_ADICIONALES.map((c, i) => campo_(c, 'Firma del responsable ' + (i + 2), 'firma', { valor: '',
-      mostrar: { y: [{ campo: 'MAS DE UN RESPONSABLE', igual: 'SI' }, { lleno: 'NOMBRE ' + ORDEN_ADICIONALES[i] + ' RESPONSABLE' }] } })), [
+    ], firmasAdicionales_(null), [
       ro('NOMBRE CI', 'NOMBRE RESPONSABLE DE CONTROL INTERNO', usuario.nombre || ''),
       campo_('FIRMA CI', 'FIRMA RESPONSABLE DE CONTROL INTERNO', 'firma', { valor: '', requerido: 'SIEMPRE' }),
     ]);
@@ -307,6 +318,27 @@ const LineasCaptura = (function () {
   const ORDEN_ADICIONALES = ['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'];
   const ADICIONALES = ORDEN_ADICIONALES.reduce((a, n) => a.concat(['NO EMPLEADO ' + n + ' RESPONSABLE', 'NOMBRE ' + n + ' RESPONSABLE']), []);
   const FIRMAS_ADICIONALES = ORDEN_ADICIONALES.map((n) => 'FIRMA ' + n + ' RESPONSABLE');
+  /**
+   * La firma de cada responsable adicional, con su nombre. `fijos` (la inspección de Reasignar): solo los que trae la
+   * responsiva, siempre a la vista; si no, aparece con su bloque cuando tiene nombre.
+   */
+  function firmasAdicionales_(fijos) {
+    const cuenta = LineasRegistros.CUENTA_ADICIONALES;
+    const k = fijos ? LineasRegistros.cuantosAdicionales(fijos) : ORDEN_ADICIONALES.length;
+    return FIRMAS_ADICIONALES.slice(0, k).map((c, i) => campo_(c, 'Firma del responsable ' + (i + 2), 'firma', { valor: '',
+      mostrar: fijos ? 'SIEMPRE' : { y: [{ cuantos: cuenta, alMenos: i + 1 }, { lleno: 'NOMBRE ' + ORDEN_ADICIONALES[i] + ' RESPONSABLE' }] } }));
+  }
+  /**
+   * Los bloques que se quitaron se borran (la pantalla solo los oculta) y la cuenta no se guarda. Sin cuenta (la
+   * inspección de Reasignar) se quedan los de la responsiva.
+   */
+  function limpiarAdicionales_(valores) {
+    const cuenta = LineasRegistros.CUENTA_ADICIONALES;
+    if (!Object.prototype.hasOwnProperty.call(valores, cuenta)) return;
+    const k = Number(String(valores[cuenta] || '').trim()) || 0;
+    ORDEN_ADICIONALES.forEach((n, i) => { if (i >= k) { valores['NO EMPLEADO ' + n + ' RESPONSABLE'] = ''; valores['NOMBRE ' + n + ' RESPONSABLE'] = ''; } });
+    delete valores[cuenta];
+  }
 
   /** Oculta PIN/patrón/contraseñas a quien no es ADMIN (el PDF sí los lleva, como en el AppSheet). */
   function ocultarSecretos_(elementos, puedeVerSecretos) {
@@ -394,6 +426,8 @@ const LineasCaptura = (function () {
     ['CUENTA GOOGLE', 'CORREO'], ['PIN WHATSAPP', 'PIN WHATSAPP'], ['PIN EQUIPO', 'PIN EQUIPO'], ['PATRON', 'PATRON'],
     ['CONTRASEÑA MODEM', 'CONTRASEÑA MODEM'],
   ];
+  /** Lo que no es de la persona: en Reasignar es lo único que la inspección pasa al inventario. */
+  const ACCESOS_INSPECCION = ['PIN WHATSAPP', 'PIN EQUIPO', 'PATRON', 'CONTRASEÑA MODEM'];
 
   function guardarInspeccion(datos, usuario, puedeVerSecretos) {
     const ref = { equipoId: datos.equipoId || null, lineaId: datos.equipoId ? null : datos.lineaId };
@@ -412,8 +446,10 @@ const LineasCaptura = (function () {
       const r = validarFormulario_(elementos, datos.valores || {}, ocultos);
       if (r.errores.length) throw new Error(r.errores.slice(0, 6).join(' · ') + (r.errores.length > 6 ? '…' : ''));
       const valores = r.valores;
-      // PATRON: puntos trazados en el sistema ("1-2-3") o el valor que ya tenía la línea
-      if (datos.patron !== undefined && datos.patron !== null) valores['PATRON'] = String(datos.patron);
+      // PATRON: puntos trazados en el sistema ("1-2-3") o el valor que ya tenía la línea. El de la responsiva no se cambia
+      const patronFijo = elementos.some((e) => e.columna === 'PATRON' && e.soloLectura);
+      if (!patronFijo && datos.patron !== undefined && datos.patron !== null) valores['PATRON'] = String(datos.patron);
+      limpiarAdicionales_(valores);
       const fechaRegistro = valores['FECHA DE REGISTRO'] ? new Date(valores['FECHA DE REGISTRO']) : ahora;
       const calificacion = LineasChecklist.calificacion(valores);
 
@@ -422,6 +458,7 @@ const LineasCaptura = (function () {
         'ID': id, 'ID LINEA': obj.reg.id, 'NUCO': LineasUtil.nucoVisible(valores['NUCO']) || '', 'FECHA DE REGISTRO': isNaN(fechaRegistro) ? ahora : fechaRegistro,
         'CALIFICACION': calificacion, 'NOMBRE INSPECTOR': usuario.nombre, 'FIRMA RESPONSABLE': '', 'FIRMA INSPECTOR': '',
       });
+      if (ADICIONALES.some((c) => fila[c])) LineasDatos.asegurarColumnas(LineasRepo.TAB.INSP, ADICIONALES);
       LineasDatos.agregarFilas(LineasRepo.TAB.INSP, [fila]);
 
       // 2) Bot ACTUALIZAR DESDE INSPECCION: copia a la línea (la bitácora la deja guardarCambiosRegistro).
@@ -429,10 +466,12 @@ const LineasCaptura = (function () {
       const fr = fila['FECHA DE REGISTRO'];
       const copia = { 'FECHA INSPECCION': new Date(fr.getFullYear(), fr.getMonth(), fr.getDate()) };
       // En Mandar a resguardo (enAccion) el responsable de la inspección es quien recibe, no quien lo tenía: no se copia
-      // nada de la persona al inventario (el resguardo la deja en blanco); solo la fecha y el color. En Reasignar tampoco:
-      // la persona la pone la reasignación, que viene después (si la copiaba la inspección, Reasignar fallaba con «ya lo
-      // tiene», 6-oct)
-      if (!datos.enAccion && !datos.reasignar) COPIA_INSPECCION_A_LINEA.forEach(([destino, origen]) => { copia[destino] = valores[origen] === undefined ? '' : valores[origen]; });
+      // nada de la persona al inventario (el resguardo la deja en blanco); solo la fecha y el color. En Reasignar, solo los
+      // accesos: la persona (con los adicionales y el jefe directo de esta inspección) la pone la reasignación, que viene
+      // después (si la copiaba la inspección, Reasignar fallaba con «ya lo tiene», 6-oct)
+      const copiar = ([destino, origen]) => { copia[destino] = valores[origen] === undefined ? '' : valores[origen]; };
+      if (datos.reasignar) COPIA_INSPECCION_A_LINEA.filter(([d]) => ACCESOS_INSPECCION.indexOf(d) >= 0).forEach(copiar);
+      else if (!datos.enAccion) COPIA_INSPECCION_A_LINEA.concat(ADICIONALES.map((c) => [c, c])).forEach(copiar);
       // El color es del aparato (EQUIPOS): la inspección lo actualiza si trae uno (decisión del usuario, 3-oct)
       if (String(valores['COLOR'] || '').trim()) copia['COLOR'] = valores['COLOR'];
       // tolerante: lo que no tiene dónde guardarse en las hojas nuevas (p. ej. la persona de un equipo guardado) se ignora
@@ -492,8 +531,7 @@ const LineasCaptura = (function () {
       valores['DIA'] = Utilities.formatDate(fechaResp, ZONA, 'd');
       valores['MES'] = MESES[Number(Utilities.formatDate(fechaResp, ZONA, 'M')) - 1];
       valores['AÑO'] = Utilities.formatDate(fechaResp, ZONA, 'yyyy');
-      // Sin «más de un responsable» no se guarda ninguno (la pantalla solo los oculta)
-      if (String(valores['MAS DE UN RESPONSABLE'] || '').toUpperCase() !== 'SI') ADICIONALES.forEach((c) => { valores[c] = ''; });
+      limpiarAdicionales_(valores);
       // Bot MAYUSCULAS
       valores['IDENTIFICACION'] = String(valores['IDENTIFICACION'] || '').toUpperCase();
       valores['COMENTARIO'] = String(valores['COMENTARIO'] || '').toUpperCase();
@@ -553,6 +591,13 @@ const LineasCaptura = (function () {
     return id;
   }
 
+  /** Un dato de una inspección guardada ('' si no está). */
+  function datoDeInspeccion(id, columna) {
+    const fila = id ? leerFilaPorId_(LineasRepo.TAB.INSP, String(id)) : null;
+    const v = fila ? LineasUtil.col(fila, columna) : '';
+    return v === null || v === undefined ? '' : String(v).trim();
+  }
+
   // ======================================================================
   // PDF (después de guardar), con la fila tal como quedó en la hoja
   // ======================================================================
@@ -583,6 +628,9 @@ const LineasCaptura = (function () {
         .filter(Boolean).join(' / ');
     }
     if ('CALIFICACION' in registro) registro['CALIFICACION'] = LineasChecklist.calificacionTexto(registro['CALIFICACION']);
+    // Responsiva: la plantilla pone «<<[CONTRASEÑA]>><<[PIN EQUIPO]>>»; con patrón, solo su imagen, sin la palabra PATRON
+    // (usuario, 6-oct: como la inspección)
+    if ('CONTRASEÑA' in registro && String(registro['CONTRASEÑA'] || '').trim() && /^PATR[OÓ]N$/i.test(String(registro['PIN EQUIPO'] || '').trim())) registro['PIN EQUIPO'] = '';
     return registro;
   }
 
@@ -657,13 +705,15 @@ const LineasCaptura = (function () {
     const colPatron = esInspeccion ? 'PATRON' : 'CONTRASEÑA';
     const patron = firmas && firmas.patron ? blobBase64_(firmas.patron, 'patron.png')
       : LineasPatronPng.blob(col(colPatron), esInspeccion ? '#ddebf7' : '#ffffff') || archivo(colPatron);
+    // Con responsables adicionales, sus firmas van juntas en una imagen más ancha
+    const nombreFirmaResponsable = ORDEN_ADICIONALES.some((n) => col('NOMBRE ' + n + ' RESPONSABLE')) ? 'firmas-responsables.png' : 'firma-responsable.png';
     const destino = PDF[tipo];
     const d = destinoPdf_(tipo, fila, ev, id);
     const carpeta = d.carpeta;
     const nombre = d.nombre;
     const imagenes = esInspeccion
-      ? { 'FIRMA RESPONSABLE': imagen('responsable', 'FIRMA RESPONSABLE', 'firma-responsable.png'), 'FIRMA INSPECTOR': imagen('inspector', 'FIRMA INSPECTOR', 'firma-inspector.png'), 'PATRON': patron }
-      : { 'FIRMA RESPONSABLE': imagen('responsable', 'FIRMA RESPONSABLE', ORDEN_ADICIONALES.some((n) => col('NOMBRE ' + n + ' RESPONSABLE')) ? 'firmas-responsables.png' : 'firma-responsable.png'),
+      ? { 'FIRMA RESPONSABLE': imagen('responsable', 'FIRMA RESPONSABLE', nombreFirmaResponsable), 'FIRMA INSPECTOR': imagen('inspector', 'FIRMA INSPECTOR', 'firma-inspector.png'), 'PATRON': patron }
+      : { 'FIRMA RESPONSABLE': imagen('responsable', 'FIRMA RESPONSABLE', nombreFirmaResponsable),
         'FIRMA CI': imagen('ci', 'FIRMA CI', 'firma-ci.png'), 'CONTRASEÑA': patron };
     const anterior = forzar ? pdfVigente_(ev) : null;
     try {
@@ -828,7 +878,7 @@ const LineasCaptura = (function () {
   }
 
   return {
-    objetivo: objetivoCaptura_, guardarInspeccion, guardarResponsiva, exigirInspeccion, generarPdf, fotosInspeccion, subirPdfFirmado,
+    objetivo: objetivoCaptura_, guardarInspeccion, guardarResponsiva, exigirInspeccion, datoDeInspeccion, generarPdf, fotosInspeccion, subirPdfFirmado,
     contextoInspeccion: (ref, usuario, puedeVerSecretos) => paraCliente_(contextoInspeccion(ref, usuario, puedeVerSecretos)),
     contextoResponsiva: (ref, usuario, puedeVerSecretos) => paraCliente_(contextoResponsiva(ref, usuario, puedeVerSecretos)),
     // Para pruebas: las definiciones de los formularios

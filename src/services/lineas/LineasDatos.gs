@@ -704,6 +704,18 @@ const LineasDatos = (function () {
     return faltan;
   }
 
+  /** Borra de la pestaña las columnas con esos encabezados (de derecha a izquierda) y regresa las que borró. */
+  function quitarColumnas(nombre, columnas) {
+    if (virtual_(nombre)) LineasLectura.bloquearEscritura();
+    const t = tablaFresca(nombre);
+    const indices = columnas.map((c) => colIndice(t, c)).filter((i) => i >= 0).sort((a, b) => b - a);
+    const quitadas = indices.map((i) => t.encabezados[i]);
+    indices.forEach((i) => t.hoja.deleteColumn(i + 1));
+    delete bd.tablas[nombre];
+    cacheBorrar('enc_' + nombre);
+    return quitadas;
+  }
+
   /**
    * Crea (si no existe) una pestaña propia del nuevo sistema (prefijo APP_) con sus encabezados.
    * Si ya existe, agrega al final los encabezados que falten. AppSheet ignora estas pestañas.
@@ -741,7 +753,7 @@ const LineasDatos = (function () {
     cacheGuardar, cacheLeer, cacheBorrar, recordar, tocar, tiempo,
     tabla, tablaFresca, existeTabla, colIndice, deHoraHoja, aHoraHoja,
     leerTabla, ultimaFila, buscarFilas, buscarFilasVarios, buscarFilasPorId, idsDeFila, buscarEnTabla, leerFilas, leerRango,
-    actualizarFila, agregarFilas, conCandado, nuevoId, nuevoIdCorto, asegurarPestana, asegurarColumnas, COLS_ID_ANTERIOR, COL_ID_APPSHEET, COLUMNAS_RENOMBRADAS,
+    actualizarFila, agregarFilas, conCandado, nuevoId, nuevoIdCorto, asegurarPestana, asegurarColumnas, quitarColumnas, COLS_ID_ANTERIOR, COL_ID_APPSHEET, COLUMNAS_RENOMBRADAS,
     olvidarTabla: (nombre) => { delete bd.tablas[nombre]; },
   };
 })();

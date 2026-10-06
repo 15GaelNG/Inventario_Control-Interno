@@ -175,8 +175,8 @@ const LineasResguardos = (function () {
       if (actual && actual !== NO_APLICA) cambios[c] = '';
     });
     CAMPOS_BORRAR.forEach((c) => { if (txt(LineasUtil.col(f, c))) cambios[c] = ''; });
-    // Los responsables adicionales (y el «quien usa» de antes) siguen al responsable
-    ['NOMBRE QUIEN USA', 'PUESTO QUIEN USA'].concat(['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'].reduce((a, n) => a.concat(['NO EMPLEADO ' + n + ' RESPONSABLE', 'NOMBRE ' + n + ' RESPONSABLE']), []))
+    // Los responsables adicionales siguen al responsable
+    ['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'].reduce((a, n) => a.concat(['NO EMPLEADO ' + n + ' RESPONSABLE', 'NOMBRE ' + n + ' RESPONSABLE']), [])
       .forEach((c) => { cambios[c] = ''; });
     if (txt(pedido.COMENTARIO).length > 3) cambios['COMENTARIOS'] = txt(pedido.COMENTARIO).toUpperCase();
     return cambios;
