@@ -2915,7 +2915,9 @@
         if (!resp) return;
         let inspeccionId = inspeccionHecha(fila.id);
         if (!inspeccionId) {
-          const r = await capturarEnFlujo('INSPECCION', { equipoId: fila.id }, { aviso: 'Inspección · ' + nombre, boton: 'Guardar inspección y reasignar' });
+          // Empieza con lo capturado en la responsiva y no cambia a la persona del inventario: eso lo hace la reasignación
+          const r = await capturarEnFlujo('INSPECCION', { equipoId: fila.id, reasignar: true, desdeResponsiva: { valores: resp.datos.valores, patron: resp.datos.patron } },
+            { aviso: 'Inspección · ' + nombre, boton: 'Guardar inspección y reasignar' });
           if (!r) return;
           inspeccionesDelDia[fila.id] = { id: r.id, dia: hoyLocal() };
           inspeccionId = r.id;

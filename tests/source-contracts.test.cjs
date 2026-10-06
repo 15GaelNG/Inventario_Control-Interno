@@ -286,7 +286,7 @@ test('los formularios de inspección y responsiva siguen el orden y las etiqueta
   assert.match(captura, /ed\('DIRECTOR', 'Director', 'listaAbierta', persona\('DIRECTOR'\), \{ opciones: catalogos\.directores \|\| \[\] \}\)/);
   // Un solo COMENTARIO (plan §5.2): se guarda en COMENTARIO, la columna que imprime el PDF, y es obligatorio
   // Un solo comentario por acción (usuario, 4-oct): en la inspección no es obligatorio si la acción ya pidió el suyo (resguardo)
-  assert.match(captura, /campo_\('COMENTARIO', 'Comentario', 'area', \{ valor: '', requerido: enAccion \? 'NUNCA' : 'SIEMPRE' \}\)/);
+  assert.match(captura, /campo_\('COMENTARIO', 'Comentario', 'area', \{ valor: deResp\('COMENTARIO', ''\), requerido: enAccion \|\| resp \? 'NUNCA' : 'SIEMPRE' \}\)/);
   assert.match(captura, /campo_\('COMENTARIO', 'Comentario', 'area', \{ valor: '', requerido: 'SIEMPRE' \}\)/);
   assert.doesNotMatch(captura, /'OBSERVACIONES'/);
   assert.match(captura, /const acceso = \(c\) => \(reasignar \? '' : v\(c\)\);/);
@@ -1941,10 +1941,10 @@ test('Mandar a resguardo: estatus con su significado, línea vencida a cancelaci
   // Inspección dentro del resguardo: responsable en blanco, solo las personas de procesos, y no se copia la persona
   const captura = read('src/services/lineas/LineasCaptura.gs');
   assert.match(captura, /const PERSONAS_PROCESOS = \['DAFNE DONIS GARCIA', 'GAMALIEL JAIR MORA GONZALEZ', 'YOVANNI NAVA PERALTA'\];/);
-  assert.match(captura, /const persona = \(c\) => \(enAccion \? '' : v\(c\)\);/);
+  assert.match(captura, /const persona = \(c, enResponsiva\) => \(enAccion \? '' : \(resp \? deResp\(enResponsiva \|\| c, ''\) : v\(c\)\)\);/);
   assert.match(captura, /enAccion \? \{ opciones: PERSONAS_PROCESOS, soloLista: true \} : \{\}/);
   assert.match(captura, /if \(\(e\.control === 'lista' \|\| e\.soloLista\) && e\.opciones/);
-  assert.match(captura, /if \(!datos\.enAccion\) COPIA_INSPECCION_A_LINEA\.forEach/);
+  assert.match(captura, /if \(!datos\.enAccion && !datos\.reasignar\) COPIA_INSPECCION_A_LINEA\.forEach/);
   assert.match(cliente, /cbx\.setOpciones\(e\.soloLista \? unirOpciones\(ops\.filter/);
 });
 

@@ -74,7 +74,7 @@ test('inspección: el equipo y la línea vienen del registro y no se cambian; el
   ['NUCO', 'TIPO', 'MODELO', 'IMEI', 'No TELEFONO', 'SIM', 'COMPAÑIA', 'PLAN', 'RAZON SOCIAL'].forEach((c) => {
     assert.match(cuerpo, new RegExp("campo_\\('" + c + "', '[^']+', 'texto', fijo\\("), c + ' debe ser fijo');
   });
-  assert.match(cuerpo, /campo_\('COLOR', 'Color', 'listaAbierta', \{ valor: v\('COLOR'\)/);
+  assert.match(cuerpo, /campo_\('COLOR', 'Color', 'listaAbierta', \{ valor: deResp\('COLOR', v\('COLOR'\)\)/);
   assert.match(cuerpo, /campo_\('RESPONSABLE', 'Nombre', 'listaAbierta'/);
   const pantalla = leer('src/html/js/lineas.html');
   assert.doesNotMatch(pantalla, /Opcional\. Se guardan en Drive/);
@@ -224,7 +224,7 @@ test('Reasignar: la inspección es obligatoria (usuario, 5-oct): de ese equipo y
   const fn = cliente.slice(cliente.indexOf('async function abrirReasignar(fila)'), cliente.indexOf('const inspeccionesDelDia = {};'));
   // Orden (usuario, 5-oct): responsiva (se revisa, no se guarda) → inspección (se guarda) → reasignar con las dos
   const iResp = fn.indexOf("capturarEnFlujo('RESPONSIVA'");
-  const iInsp = fn.indexOf("capturarEnFlujo('INSPECCION', { equipoId: fila.id }");
+  const iInsp = fn.indexOf("capturarEnFlujo('INSPECCION', { equipoId: fila.id, reasignar: true, desdeResponsiva: { valores: resp.datos.valores, patron: resp.datos.patron } }");
   const iReasignar = fn.indexOf("llamar('apiLineasReasignar'");
   assert.ok(iResp > 0 && iResp < iInsp && iInsp < iReasignar, 'responsiva, inspección y luego reasignar');
   assert.match(fn, /sinPdf: true/);
