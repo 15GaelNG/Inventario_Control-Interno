@@ -1,7 +1,7 @@
 # Líneas — estado del módulo
 
-Rama `emmanuel` (adelante de `master` con la parte 6: COMENTARIO, plantillas «(SISTEMA)», página de la responsiva y
-patrón con 9 puntos en el PDF, Reasignar corregido, responsables adicionales y sin «quien lo usa»; solo en el DEV) · Producción: versión 56 · Última actualización: 2026-10-06
+Rama `emmanuel` = `master` (con la parte 6: COMENTARIO, plantillas «(SISTEMA)», página de la responsiva, patrón con 9
+puntos en el PDF, Reasignar corregido, responsables adicionales, sin «quien lo usa» y firma guardada) · Producción: versión 60 · Última actualización: 2026-10-06
 
 Qué es hoy el módulo **Líneas** (equipos celulares y líneas telefónicas), dónde vive cada cosa y cómo se trabaja.
 La bitácora anterior de este archivo (§0a…§0ae, hasta el 1-oct) sigue en el historial de git. El diseño de las hojas
