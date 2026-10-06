@@ -99,5 +99,16 @@ const Modulos = (function () {
 
   const existe = (texto) => resolver(texto) !== null;
 
-  return { GRUPOS, todos, ids, existe, etiqueta, resolver };
+  /**
+   * La familia de un módulo: los módulos de su mismo grupo del menú (Servicios Vehiculares,
+   * Arqueos y Caja Chica…). Sirve para los datos de referencia que toda la familia necesita
+   * para trabajar: el catálogo de vehículos para elegir la unidad en Sensores, la lista de
+   * cajas para Arqueos (Permisos.puedeLeerFamilia).
+   */
+  function familia(id) {
+    const grupo = GRUPOS.find((g) => g.modulos.some((m) => m.id === id));
+    return grupo ? grupo.modulos.map((m) => m.id) : [id];
+  }
+
+  return { GRUPOS, todos, ids, existe, etiqueta, resolver, familia };
 })();

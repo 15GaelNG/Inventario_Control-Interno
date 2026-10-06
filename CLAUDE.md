@@ -106,12 +106,31 @@ ganchos: `ArqueosService.gs` y `VehiculosService.gs`. La guía completa está al
 
 ## Permisos entre módulos (lo de un módulo dentro de otro)
 
-El permiso de un módulo decide si se ve su pantalla. Cuando una pantalla muestra o edita algo
-de **otro** módulo (la ficha de Vehículos trae Sensores, Verificaciones, Cambios…):
+El modelo, en capas (como Salesforce u Odoo: objeto → campo → registro):
 
-- **Una pestaña o sección de otro módulo** se pide con `deModulo('modulo', () => callServer(…))`
-  (ver `abrirFichaVehiculo` en `app.html`). Sin permiso no se pide y no aparece: ni truena la
-  ficha ni sale vacía como si no hubiera datos.
+1. **Sesión** (`Auth.validarSesion`): sin ella, nada.
+2. **Módulo** (`Permisos.puedeLeer` / `puedeEditar`, LECTURA / EDICION por área o correo): decide
+   si se ve la pantalla y si se lee la lista del módulo. Todo se revisa **en el servidor**; lo
+   que esconde la pantalla es solo comodidad (igual que el Editable_If de AppSheet no protegía nada).
+3. **Referencia por familia** (`Permisos.puedeLeerFamilia`, `referencia: true` en `HojaServicio`):
+   los catálogos que una familia necesita para trabajar los lee cualquiera de sus módulos. La
+   familia es el grupo del menú (`Modulos.familia`). Hoy: el básico de vehículos y la búsqueda por
+   folio (Sensores, Hologramas, Verificaciones… eligen la unidad) y la lista de cajas (Arqueos).
+4. **Campo** (`editaModulo` / `deOtroModulo`, abajo) y los campos secretos de Líneas (PIN,
+   contraseñas: solo ADMIN y el área de Líneas, se ocultan en el servidor).
+5. **Registro** (qué renglones ve cada quien, p. ej. solo los de su departamento): no se usa
+   todavía. Si hace falta, va en el servidor, como un filtro en la definición de la hoja.
+
+Cuando una pantalla muestra o edita algo de **otro** módulo (la ficha de Vehículos trae
+Sensores, Verificaciones, Cambios…):
+
+- **Una pestaña o sección de otro módulo** se pide con `deModulo('modulo', () => callServer(…), vacío)`
+  (definido junto a `permisoDe` en `app.html`; lo usan `abrirFichaVehiculo` y
+  `abrirFichaCajaChica`). Sin permiso no se pide y no aparece: ni truena la ficha ni sale vacía
+  como si no hubiera datos. `source-contracts` revisa que cada ficha lo use (lista `FICHAS`: una
+  ficha nueva se agrega ahí).
+- **Un catálogo que otro módulo de la familia necesita** (para elegir algo en su formulario) se
+  marca `referencia: true` en su definición, no se le da a la gente el permiso del módulo entero.
 - **Un campo que le pertenece a otro módulo** solo lo edita quien tiene EDICIÓN en ese módulo.
   Se declara **en los dos lados**:
   - en la pantalla, `editaModulo` en el campo de `CamposHoja` (sale bloqueado y no se manda);
@@ -124,9 +143,6 @@ de **otro** módulo (la ficha de Vehículos trae Sensores, Verificaciones, Cambi
   es solo para ese caso. Con otro caso, generalizar ese contrato a todos los `editaModulo` /
   `deOtroModulo`, o que la lista salga de un solo lugar; si no, un lado se puede quedar atrás
   sin que nada falle.
-- **Falta todavía:** Caja Chica ↔ Arqueos (Arqueos necesita la lista de cajas, que es de Caja
-  Chica) y el catálogo de vehículos para quien tiene Sensores, Hologramas, Verificaciones… sin
-  Vehículos (no puede elegir la unidad al capturar).
 
 ## Responsivo (celular y tableta)
 

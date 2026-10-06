@@ -43,6 +43,7 @@ function entorno() {
     Permisos: {
       puedeLeer: (t, m) => { log.permisos.push('leer:' + m); if (t === 'sin-permiso') throw new Error('Sin permiso'); return { nombre: 'ANA' }; },
       EDICION: 'EDICION',
+      puedeLeerFamilia: (t, m) => { log.permisos.push('familia:' + m); return { nombre: 'ANA' }; },
       // 'con-sensores': además tiene EDICION en sensores (para deOtroModulo)
       puedeEditar: (t, m) => {
         log.permisos.push('editar:' + m);
@@ -222,6 +223,19 @@ console.log('\n7. eliminar');
   const conGancho = Object.assign({}, COSAS, { despuesDeEliminar: (registros) => { antes = registros; } });
   H.eliminar(conGancho, 'tok', ['C-3']);
   ok(antes && antes.length === 1 && antes[0].NOMBRE === 'Gama', 'despuesDeEliminar recibe los renglones como estaban');
+}
+
+console.log('referencia: un catálogo que lee toda la familia del módulo');
+{
+  const { H, log } = entorno();
+  H.listar(Object.assign({}, COSAS, { referencia: true }), 'tok');
+  H.listarPor(Object.assign({}, COSAS, { referencia: true }), 'tok', 'NOMBRE', 'Beta');
+  H.buscarPorId(Object.assign({}, COSAS, { referencia: true }), 'tok', 'C-1');
+  ok(log.permisos.slice(-3).every((p) => p === 'familia:cosas'), 'listar, listarPor y buscarPorId piden el permiso de la familia');
+  H.completo(Object.assign({}, COSAS, { referencia: true }), 'tok');
+  ok(log.permisos[log.permisos.length - 1] === 'leer:cosas', 'exportar todo (completo) sigue pidiendo el del módulo');
+  H.listar(COSAS, 'tok');
+  ok(log.permisos[log.permisos.length - 1] === 'leer:cosas', 'una lista normal, el del módulo');
 }
 
 console.log('deOtroModulo: columnas que solo cambia quien edita otro módulo');

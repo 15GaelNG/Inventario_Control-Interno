@@ -366,10 +366,11 @@
       try {
         const [completo, arqueosTexto, cambiosTexto] = await Promise.all([
           callServer('apiBuscarCajaChicaPorId', state.token, id),
-          callServer('apiArqueosPorIdCch', state.token, id).catch(() => '[]'),
+          // Los arqueos son de su módulo: sin permiso de Arqueos, la pestaña no aparece
+          deModulo('arqueos', () => callServer('apiArqueosPorIdCch', state.token, id), '[]'),
           callServer('apiCambiosMontoPorIdCch', state.token, id).catch(() => '[]'),
         ]);
-        const arqueos = JSON.parse(arqueosTexto || '[]');
+        const arqueos = arqueosTexto === null ? null : JSON.parse(arqueosTexto || '[]');
         const cambios = JSON.parse(cambiosTexto || '[]');
         if (detalle.hidden || !document.body.contains(detalle)) return;
         if (!completo) {
@@ -394,7 +395,7 @@
         html += fichaEnPestanas([
           { id: 'general', titulo: 'General', icono: 'layout-grid', contenido: general },
           { id: 'detalles', titulo: 'Detalles', icono: 'clipboard-list', contenido: detalles },
-          {
+          arqueos && {
             id: 'arqueos', titulo: 'Arqueos', icono: 'clipboard-check', num: arqueos.length,
             contenido: pestanaFicha('clipboard-check', 'Arqueos', [
               { t: 'Fecha', r: (a) => formatearFecha(a.FECHA_INICIO) },
@@ -421,7 +422,7 @@
             ], cambios, 'Sin cambios de monto registrados para esta caja chica.',
             puedeEditar ? { tipo: 'cambio-monto', texto: 'Agregar' } : null),
           },
-        ]);
+        ].filter(Boolean));
 
         detalle.innerHTML = html;
         wireMigasCajaChica();
@@ -441,7 +442,7 @@
         // Ver completo/Editar/Eliminar por fila: el registro completo (para Editar
         // arqueo) ya está en memoria en el arreglo que se acaba de pedir -- se indexa
         // por ID una vez, sin volver a pedirlo.
-        const arqueosPorIdFicha = Object.fromEntries(arqueos.map((a) => [a.ID, a]));
+        const arqueosPorIdFicha = Object.fromEntries((arqueos || []).map((a) => [a.ID, a]));
         detalle.querySelectorAll('[data-ficha-ver]').forEach((btn) => {
           btn.addEventListener('click', () => verRegistroFichaCajaChica(btn.dataset.fichaVer, btn.dataset.id));
         });

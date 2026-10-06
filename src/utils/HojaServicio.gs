@@ -43,6 +43,9 @@
  *   preparar()   lo que fila() necesita una sola vez por lista (un índice de otra hoja…); si lee
  *                otra hoja, ponla en tambienLee
  *   incluir(r)   qué renglones cuentan; por omisión los que tienen id
+ *   referencia   true: es un catálogo que toda la familia del módulo necesita para trabajar (el
+ *                básico de vehículos, la lista de cajas): listar / listarPor / buscarPorId
+ *                los lee quien tenga cualquier módulo de la familia, no solo este
  *   orden        { campo, desc } (como texto; las fechas ya van en ISO), { campo, numero: true },
  *                o una función (a, b) => …
  *   ultimosPrimero  el orden de la hoja al revés (bitácoras que solo crecen)
@@ -195,8 +198,17 @@ const HojaServicio = (function () {
   // ------------------------------------------------------------------ leer
 
   /** La lista del módulo, guardada mientras la hoja (y las de tambienLee) no cambie */
+  /**
+   * Leer: con el permiso del módulo; una lista de referencia (def.referencia) con el de
+   * cualquier módulo de su familia (Permisos.puedeLeerFamilia). Exportar (completo) siempre
+   * pide el del módulo.
+   */
+  function leer_(def, token) {
+    return def.referencia ? Permisos.puedeLeerFamilia(token, def.modulo) : Permisos.puedeLeer(token, def.modulo);
+  }
+
   function listar(def, token) {
-    Permisos.puedeLeer(token, def.modulo);
+    leer_(def, token);
     return listaGuardada_(def);
   }
 
@@ -236,7 +248,7 @@ const HojaServicio = (function () {
    * vehículo, de una caja… Si la lista está cortada (maximo), se busca en toda la hoja.
    */
   function listarPor(def, token, campo, valor, opciones) {
-    Permisos.puedeLeer(token, def.modulo);
+    leer_(def, token);
     if (!valor) return [];
     const tope = (opciones && opciones.maximo) || 0;
     const coincide = (f) => String(f[campo] === undefined ? '' : f[campo]) === String(valor);
@@ -253,7 +265,7 @@ const HojaServicio = (function () {
 
   /** El renglón completo (todas las columnas, fechas en ISO), o null */
   function buscarPorId(def, token, id) {
-    Permisos.puedeLeer(token, def.modulo);
+    leer_(def, token);
     const encontrado = SheetUtils.findById(libro(def), nombreHoja(def), id, columnaId(def));
     return encontrado ? sinFechas(encontrado.data) : null;
   }

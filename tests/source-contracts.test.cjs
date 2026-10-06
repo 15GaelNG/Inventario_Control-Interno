@@ -2107,10 +2107,21 @@ test('la sección de sensor de Vehículos: la pantalla y el servidor bloquean lo
   assert.deepEqual([...new Set(enPantalla)].sort(), servidor.slice().sort());
 });
 
-test('la ficha de Vehículos pide cada módulo solo si la persona lo puede ver', () => {
-  const app = read('src/html/js/app.html');
-  const ini = app.indexOf('async function abrirFichaVehiculo(');
-  const bloque = app.slice(ini, app.indexOf('const lista = (texto)', ini));
-  const sueltas = bloque.split(/\r?\n/).filter((l) => /callServer\('api\w+PorFolio'/.test(l) && !/apiBuscarVehiculoPorFolio/.test(l) && !/deModulo\(/.test(l));
-  assert.deepEqual(sueltas, [], 'cada pestaña de otro módulo va con deModulo(modulo, …)');
+test('las fichas piden lo de otro módulo solo si la persona lo puede ver (deModulo)', () => {
+  // Cada ficha: su archivo, su función y las llamadas que SÍ son de su propio módulo
+  const FICHAS = [
+    { archivo: 'src/html/js/app.html', funcion: 'abrirFichaVehiculo', propias: ['apiBuscarVehiculoPorFolio'] },
+    { archivo: 'src/html/js/app-cajachica.html', funcion: 'abrirFichaCajaChica', propias: ['apiBuscarCajaChicaPorId', 'apiCambiosMontoPorIdCch'] },
+  ];
+  FICHAS.forEach((f) => {
+    const texto = read(f.archivo);
+    const ini = texto.indexOf('async function ' + f.funcion + '(');
+    assert.ok(ini >= 0, f.funcion + ' existe');
+    // Hasta el primer await Promise.all([...]) de la función: ahí se piden las pestañas
+    const fin = texto.indexOf(']);', texto.indexOf('Promise.all([', ini));
+    const sueltas = texto.slice(ini, fin).split(/\r?\n/)
+      .filter((l) => /callServer\('api\w+'/.test(l) && !/deModulo\(/.test(l))
+      .filter((l) => !f.propias.some((api) => l.includes("'" + api + "'")));
+    assert.deepEqual(sueltas, [], f.funcion + ': lo de otro módulo va con deModulo(modulo, …)');
+  });
 });

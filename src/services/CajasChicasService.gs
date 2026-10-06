@@ -76,6 +76,8 @@ const CajasChicasService = (function () {
   /** La hoja, para HojaServicio */
   const CAJAS_CHICAS = {
     modulo: 'caja-chica',
+    // Arqueos la necesita para elegir la caja: la lee toda la familia (Arqueos y Caja Chica)
+    referencia: true,
     nombre: 'la caja chica',
     libro: () => Config.SPREADSHEET_IDS.VEHICULOS(),
     hoja: 'CAJAS CHICAS',

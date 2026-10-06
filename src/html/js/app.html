@@ -366,6 +366,12 @@
   /** ¿Qué puede hacer esta persona en un módulo? 'LECTURA' | 'EDICION' | undefined */
   const permisoDe = (modulo) => (state.permisos || {})[modulo];
   const puedeEditarModulo = (modulo) => permisoDe(modulo) === 'EDICION';
+  /**
+   * Lo de OTRO módulo dentro de una pantalla (una pestaña de la ficha): solo se pide si la
+   * persona puede ver ese módulo; si no, da null y esa pestaña no se pinta. Si sí puede y
+   * falla por otra cosa, da `vacio` y las demás siguen. Ver CLAUDE.md, "Permisos entre módulos".
+   */
+  const deModulo = (modulo, fn, vacio) => (permisoDe(modulo) ? fn().catch(() => vacio) : Promise.resolve(null));
 
   /** Escapa HTML al insertar texto dinámico con innerHTML (evita XSS con datos de hojas) */
   function escaparHtml(valor) {
@@ -1934,6 +1940,8 @@
       pestanas.map((t, n) => '<div data-ficha-panel="' + t.id + '"' + (n ? ' hidden' : '') + '>' + t.contenido + '</div>').join('');
   }
   function mostrarPestanaFicha(contenedor, nombre) {
+    // Una pestaña sin permiso no existe (deModulo): se queda en la que ya está
+    if (!contenedor.querySelector('[data-ficha-tab="' + nombre + '"]')) return;
     contenedor.querySelectorAll('[data-ficha-tab]').forEach((b) => {
       const activa = b.dataset.fichaTab === nombre;
       b.classList.toggle('active', activa);
@@ -2379,10 +2387,7 @@
     }
 
     function mostrarPestanaFichaVehiculo(nombre) {
-      const detalle = document.getElementById('veh-detalle');
-      // Una pestaña sin permiso no existe: se queda en la que ya está (General)
-      if (!detalle.querySelector('[data-ficha-tab="' + nombre + '"]')) return;
-      mostrarPestanaFicha(detalle, nombre);
+      mostrarPestanaFicha(document.getElementById('veh-detalle'), nombre);
     }
 
     // ---------- Ver completo / Editar / Eliminar de un registro de las 5 pestañas,
@@ -2634,7 +2639,6 @@
         // ese módulo, igual que en el menú. Así una pestaña sin permiso no truena la ficha ni
         // sale vacía como si el vehículo no tuviera nada. Si una que sí puede ver falla por
         // otra cosa, esa sale vacía y las demás siguen.
-        const deModulo = (modulo, fn, vacio) => (permisoDe(modulo) ? fn().catch(() => vacio) : Promise.resolve(null));
         const [completo, cambiosTexto, reasignaciones, verifTexto, inspTexto, sensorTexto, holoTexto, incTexto] = await Promise.all([
           callServer('apiBuscarVehiculoPorFolio', state.token, vResumen.FOLIO),
           deModulo('cambios-vehiculos', () => callServer('apiListarCambiosVehiculosPorFolio', state.token, vResumen.FOLIO), '[]'),

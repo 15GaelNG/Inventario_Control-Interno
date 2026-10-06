@@ -103,7 +103,10 @@ const VehiculosService = (function () {
    * valor oculto, es una caja de texto donde lo que se manda es lo que se ve (ver
    * Combobox, que mete `valor` en el input).
    */
+  // El catálogo para elegir la unidad (FolioNucco) en Sensores, Hologramas, Verificaciones,
+  // Inspección, Reasignaciones e Incidencias: lo lee toda la familia, no solo Vehículos
   const BASICO = Object.assign({}, VEHICULOS, {
+    referencia: true,
     columnas: ['ID', 'FOLIO', 'DEPARTAMENTO', 'MARCA', 'LINEA VEHICULO', 'MODELO', 'ESTATUS',
       'RESPONSABLE VEHICULO', 'NO EMPLEADO', 'SERIE VEHICULO', 'NUCCO'],
     incluir: (r) => !!r['FOLIO'] && String(r['ESTATUS'] || '').toUpperCase() !== 'BAJA VEHICULAR',
@@ -197,7 +200,8 @@ const VehiculosService = (function () {
    * más la columna FOLIO para ubicar el renglón, y luego lee solo esa fila.
    */
   function buscarPorFolio(token, folio) {
-    Permisos.puedeLeer(token, 'vehiculos');
+    // Referencia: el detalle de una incidencia o una reasignación también necesita el vehículo
+    Permisos.puedeLeerFamilia(token, 'vehiculos');
     if (!folio) return null;
 
     const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);

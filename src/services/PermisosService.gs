@@ -196,6 +196,16 @@ const Permisos = (function () {
   const puedeLeer = (token, modulo) => exigir(token, modulo, LECTURA);
   const puedeEditar = (token, modulo) => exigir(token, modulo, EDICION);
 
+  /**
+   * Datos de REFERENCIA de un módulo (no su pantalla): los puede leer quien tenga cualquier
+   * módulo de su familia (Modulos.familia). P. ej. quien solo tiene Sensores necesita el
+   * catálogo de vehículos para elegir la unidad. La pantalla del módulo sigue pidiendo su
+   * propio permiso; esto es solo para las lecturas marcadas como referencia.
+   */
+  function puedeLeerFamilia(token, modulo) {
+    return puedeLeerAlguno(token, Modulos.familia(idModulo_(modulo)));
+  }
+
   /** Para datos que comparten varios módulos (el índice de Líneas): basta con ver uno */
   function puedeLeerAlguno(token, modulos) {
     const sesion = Auth.validarSesion(token);
@@ -362,7 +372,7 @@ const Permisos = (function () {
 
   return {
     LECTURA, EDICION, NINGUNO, MODULO_USUARIOS,
-    deCorreo, olvidar, exigir, puedeLeer, puedeEditar, puedeLeerAlguno, mios, revisarCatalogo, crearHoja,
+    deCorreo, olvidar, exigir, puedeLeer, puedeEditar, puedeLeerAlguno, puedeLeerFamilia, mios, revisarCatalogo, crearHoja,
     firmaDeLectura, esFaltaDePermiso,
     panel, guardar,
     resolver_, aplicarCambios_,   // expuestas para las pruebas
