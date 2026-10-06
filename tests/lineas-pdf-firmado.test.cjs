@@ -89,7 +89,7 @@ test('del AppSheet o de NUCOS sin PDF: el firmado se guarda en NUCOS; del sistem
   const escribibles = [];
   const carpeta = (id, nombre) => ({
     getId: () => id, getName: () => nombre,
-    createFile: (blob) => { creados.push({ carpeta: id, nombre: blob.nombre, mime: blob.mime }); return { getId: () => 'NUEVO', getName: () => blob.nombre, setSharing: () => {} }; },
+    createFile: (blob) => { creados.push({ carpeta: id, nombre: blob.nombre, mime: blob.mime }); return { getId: () => 'NUEVO', getName: () => blob.nombre, setSharing: () => { throw new Error('Acceso denegado: DriveApp'); } }; },
   });
   const carpetas = { INSP1: carpeta('INSP1', 'INSP 03 02'), NUEVA: carpeta('NUEVA', 'RESP 15 08') };
   const ctx = {

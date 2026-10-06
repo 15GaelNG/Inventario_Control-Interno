@@ -787,7 +787,8 @@ const LineasCaptura = (function () {
     }
     LineasArchivos.exigirEscribible(carpeta.getId());
     const f = carpeta.createFile(Utilities.newBlob(bytes, MimeType.PDF, nombre));
-    f.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
+    // Sin setSharing: en NUCOS el archivo toma los permisos de la carpeta (LineasEvidencias) y la cuenta de la app no es
+    // dueña de esa carpeta: setSharing lanzaba «Acceso denegado: DriveApp» con el PDF ya creado (6-oct).
     return { id: f.getId(), name: f.getName() };
   }
 
