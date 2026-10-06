@@ -102,14 +102,126 @@
    * el uso normal del sistema (ej. folios de vehículos, solicitantes de
    * tickets) — esos siguen pidiéndose fresco cada vez con callServer.
    */
+  /**
+   * Almacen: donde viven las copias del navegador (listas y catálogos). IndexedDB, que aguanta
+   * cientos de MB; si el navegador no lo deja (modo privado, bloqueado), localStorage (~5 MB
+   * para todo el sitio); si tampoco, nada (solo memoria). Todo async, todo por persona (la
+   * llave lleva el correo) y se borra al cerrar sesión. Si algo falla, regresa "no hay copia"
+   * y se pide al servidor como siempre: nunca truena por esto.
+   */
+  const Almacen = (function () {
+    const BD = 'control-interno';
+    const TABLA = 'copias';
+    const MAX_LOCAL = 1500000;   // en localStorage (5 MB para todo): lo más grande no se guarda
+    let abierta = null;          // Promise<IDBDatabase|null>
+
+    function abrir_() {
+      if (abierta) return abierta;
+      abierta = new Promise((resolve) => {
+        try {
+          if (!window.indexedDB) { resolve(null); return; }
+          const pet = indexedDB.open(BD, 1);
+          pet.onupgradeneeded = () => pet.result.createObjectStore(TABLA);
+          pet.onsuccess = () => resolve(pet.result);
+          pet.onerror = () => resolve(null);
+          pet.onblocked = () => resolve(null);
+        } catch (e) { resolve(null); }
+      }).then((bd) => {
+        // Con IndexedDB, las copias viejas de localStorage (antes vivían ahí) solo ocupan lugar
+        if (bd) borrarLocal_((k) => k.indexOf(PREFIJO_LISTAS) === 0 || k.indexOf(PREFIJO_CATALOGOS) === 0);
+        return bd;
+      });
+      return abierta;
+    }
+
+    /** Corre fn(tabla) en una transacción; regresa el .result de lo que fn regrese (o undefined si algo falla) */
+    function tx_(bd, modo, fn) {
+      return new Promise((resolve) => {
+        try {
+          const t = bd.transaction(TABLA, modo);
+          const pet = fn(t.objectStore(TABLA));
+          t.oncomplete = () => resolve(pet ? pet.result : undefined);
+          t.onerror = () => resolve(undefined);
+          t.onabort = () => resolve(undefined);
+        } catch (e) { resolve(undefined); }
+      });
+    }
+
+    function borrarLocal_(prueba) {
+      try { Object.keys(localStorage).filter(prueba).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* no-op */ }
+    }
+
+    async function leer(llave) {
+      const bd = await abrir_();
+      if (bd) {
+        const v = await tx_(bd, 'readonly', (t) => t.get(llave));
+        return typeof v === 'string' ? v : null;
+      }
+      try { return localStorage.getItem(llave); } catch (e) { return null; }
+    }
+
+    async function guardar(llave, texto) {
+      const bd = await abrir_();
+      if (bd) { await tx_(bd, 'readwrite', (t) => t.put(texto, llave)); return; }
+      try {
+        if (texto.length <= MAX_LOCAL) localStorage.setItem(llave, texto);
+        else localStorage.removeItem(llave);
+      } catch (e) { /* no cupo: se queda en memoria */ }
+    }
+
+    async function borrar(llave) {
+      const bd = await abrir_();
+      if (bd) await tx_(bd, 'readwrite', (t) => t.delete(llave));
+      try { localStorage.removeItem(llave); } catch (e) { /* no-op */ }
+    }
+
+    /** Todo lo que empiece con alguno de los prefijos (al cerrar sesión) */
+    async function borrarPrefijos(prefijos) {
+      const bd = await abrir_();
+      if (bd) {
+        await tx_(bd, 'readwrite', (t) => {
+          prefijos.forEach((p) => t.delete(IDBKeyRange.bound(p, p + '￿')));
+          return null;
+        });
+      }
+      borrarLocal_((k) => prefijos.some((p) => k.indexOf(p) === 0));
+    }
+
+    return { leer, guardar, borrar, borrarPrefijos };
+  })();
+
+  const PREFIJO_CATALOGOS = 'catalogo:';
+  // El token cambia en cada sesión: la llave de lo guardado no lo lleva
+  const sinToken_ = (args) => args.filter((a) => typeof state === 'undefined' || a !== state.token);
+  const llaveCatalogo_ = (fnName, args) => PREFIJO_CATALOGOS + correoSesion_() + ':' + fnName + JSON.stringify(sinToken_(args));
+
+  /**
+   * Catálogos: una vez por carga de página. Si hay copia de una visita anterior se usa AL
+   * INSTANTE y se pide lo fresco por detrás (la siguiente vez ya sale lo nuevo); sin copia,
+   * se espera al servidor como antes.
+   */
   const cacheCatalogos = {};
   function callServerCacheado(fnName, ...args) {
     const clave = fnName + JSON.stringify(args);
     if (!cacheCatalogos[clave]) {
-      cacheCatalogos[clave] = callServer(fnName, ...args).catch((err) => {
-        delete cacheCatalogos[clave]; // si falla, la próxima vez se reintenta en vez de quedar cacheado el error
+      const llave = llaveCatalogo_(fnName, args);
+      const esta = Almacen.leer(llave).then((texto) => {
+        const fresco = callServer(fnName, ...args).then((valor) => {
+          // Si mientras tanto se invalidó, esta respuesta ya no manda (ni se guarda)
+          if (cacheCatalogos[clave] !== esta) return valor;
+          Almacen.guardar(llave, JSON.stringify(valor === undefined ? null : valor));
+          cacheCatalogos[clave] = Promise.resolve(valor);
+          return valor;
+        });
+        if (texto === null) return fresco;
+        fresco.catch(() => { /* por detrás: si falla, se queda la copia */ });
+        try { return JSON.parse(texto); } catch (e) { return fresco; }
+      }).catch((err) => {
+        // si falla, la próxima vez se reintenta en vez de quedar guardado el error
+        if (cacheCatalogos[clave] === esta) delete cacheCatalogos[clave];
         throw err;
       });
+      cacheCatalogos[clave] = esta;
     }
     return cacheCatalogos[clave];
   }
@@ -133,9 +245,8 @@
    * (limpiarListasGuardadas). La llave no incluye el token: cambia en cada sesión.
    */
   const REPEDIR_MS = 15000;
-  const MAX_GUARDAR = 1500000;   // caracteres; lo más grande se queda solo en memoria
   const PREFIJO_LISTAS = 'lista:';
-  const cacheListas = {};        // llave → { valor, texto, ts, promesa }
+  const cacheListas = {};        // llave → { valor, texto, ts, promesa, carga }
 
   const correoSesion_ = () => {
     try { return (state && state.sesion && state.sesion.correo) || ''; } catch (e) { return ''; }
@@ -143,47 +254,49 @@
   const llaveLista_ = (fnName, args) => fnName + JSON.stringify(args.slice(1));   // args[0] es el token
   const llaveGuardada_ = (llave) => PREFIJO_LISTAS + correoSesion_() + ':' + llave;
 
+  /** La entrada en memoria de una lista; la primera vez trae su copia del Almacen (carga) */
   function entradaLista_(llave) {
     if (cacheListas[llave]) return cacheListas[llave];
-    const entrada = { valor: undefined, texto: null, ts: 0, promesa: null };
-    try {
-      const texto = localStorage.getItem(llaveGuardada_(llave));
-      if (texto !== null) { entrada.valor = JSON.parse(texto); entrada.texto = texto; }
-    } catch (e) { /* sin almacenamiento (privado, lleno, bloqueado): solo memoria */ }
+    const entrada = { valor: undefined, texto: null, ts: 0, promesa: null, carga: null };
+    entrada.carga = Almacen.leer(llaveGuardada_(llave)).then((texto) => {
+      // Si mientras tanto ya llegó lo del servidor, eso manda
+      if (texto === null || entrada.texto !== null) return;
+      try { entrada.valor = JSON.parse(texto); entrada.texto = texto; } catch (e) { /* copia dañada: se ignora */ }
+    });
     return (cacheListas[llave] = entrada);
   }
 
   function pedirLista_(fnName, args, llave) {
     const entrada = entradaLista_(llave);
     if (entrada.promesa) return entrada.promesa;
-    const teniaCopia = entrada.texto !== null;
-    entrada.promesa = callServer(fnName, ...args).then((valor) => {
-      const texto = JSON.stringify(valor === undefined ? null : valor);
-      const cambio = texto !== entrada.texto;
-      Object.assign(entrada, { valor: valor, texto: texto, ts: Date.now(), promesa: null });
-      try {
-        if (texto.length <= MAX_GUARDAR) localStorage.setItem(llaveGuardada_(llave), texto);
-        else localStorage.removeItem(llaveGuardada_(llave));
-      } catch (e) { /* no cupo: se queda en memoria */ }
-      if (cambio && teniaCopia) {
-        window.dispatchEvent(new CustomEvent('lista-actualizada', { detail: { fn: fnName } }));
-      }
-      return valor;
-    }, (err) => {
+    entrada.promesa = entrada.carga.then(() => {
+      const teniaCopia = entrada.texto !== null;
+      return callServer(fnName, ...args).then((valor) => {
+        const texto = JSON.stringify(valor === undefined ? null : valor);
+        const cambio = texto !== entrada.texto;
+        Object.assign(entrada, { valor: valor, texto: texto, ts: Date.now(), promesa: null });
+        Almacen.guardar(llaveGuardada_(llave), texto);
+        if (cambio && teniaCopia) {
+          window.dispatchEvent(new CustomEvent('lista-actualizada', { detail: { fn: fnName } }));
+        }
+        return valor;
+      });
+    }).catch((err) => {
       entrada.promesa = null;   // si falla, la próxima vez se reintenta
       throw err;
     });
     return entrada.promesa;
   }
 
-  function callServerListaCacheada(fnName, ...args) {
+  async function callServerListaCacheada(fnName, ...args) {
     const llave = llaveLista_(fnName, args);
     const entrada = entradaLista_(llave);
+    await entrada.carga;
     if (entrada.texto === null) return pedirLista_(fnName, args, llave);
     if (!entrada.promesa && Date.now() - entrada.ts > REPEDIR_MS) {
       pedirLista_(fnName, args, llave).catch(() => { /* por detrás: si falla, se queda la copia */ });
     }
-    return Promise.resolve(entrada.valor);
+    return entrada.valor;
   }
 
   /**
@@ -209,16 +322,25 @@
    * siguiente cargar() (que corre de inmediato) espere el dato fresco. */
   function invalidarCacheLista(fnName, ...args) {
     const llave = llaveLista_(fnName, args);
-    delete cacheListas[llave];
-    try { localStorage.removeItem(llaveGuardada_(llave)); } catch (e) { /* no-op */ }
+    // Una entrada vacía y ya "cargada": el cargar() que sigue no lee la copia vieja del Almacen
+    // aunque su borrado todavía no termine; espera al servidor
+    cacheListas[llave] = { valor: undefined, texto: null, ts: 0, promesa: null, carga: Promise.resolve() };
+    Almacen.borrar(llaveGuardada_(llave));
+  }
+
+  /** invalidarCacheLista de todas las variantes de una función (p. ej. con distinto límite) */
+  function invalidarListasDe(fnName) {
+    Object.keys(cacheListas).filter((k) => k.indexOf(fnName + '[') === 0).forEach((k) => {
+      cacheListas[k] = { valor: undefined, texto: null, ts: 0, promesa: null, carga: Promise.resolve() };
+      Almacen.borrar(llaveGuardada_(k));
+    });
   }
 
   /** Al cerrar sesión: que en una computadora compartida no quede nada guardado */
   function limpiarListasGuardadas() {
     Object.keys(cacheListas).forEach((k) => { delete cacheListas[k]; });
-    try {
-      Object.keys(localStorage).filter((k) => k.indexOf(PREFIJO_LISTAS) === 0).forEach((k) => localStorage.removeItem(k));
-    } catch (e) { /* no-op */ }
+    Object.keys(cacheCatalogos).forEach((k) => { delete cacheCatalogos[k]; });
+    return Almacen.borrarPrefijos([PREFIJO_LISTAS, PREFIJO_CATALOGOS]);
   }
 
   /** Igual, pero para callServerCacheado (catálogos de sesión completa) —
@@ -227,5 +349,6 @@
    * vehículo, y apiListarVehiculosBasico lo usan Sensores/Hologramas/etc.). */
   function invalidarCacheCatalogo(fnName, ...args) {
     delete cacheCatalogos[fnName + JSON.stringify(args)];
+    Almacen.borrar(llaveCatalogo_(fnName, args));
   }
 </script>

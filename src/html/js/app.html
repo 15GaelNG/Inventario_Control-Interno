@@ -932,6 +932,10 @@
       el.addEventListener('click', () => navegarA(el.dataset.view));
     });
     cargarResumenInicio();
+    // Se pinta al instante con los números de la visita anterior y, si los de ahora llegan
+    // distintos, se vuelve a pintar solo (callServerListaCacheada / escucharLista, api.html)
+    const contActividad = document.getElementById('dash-actividad');
+    if (contActividad) escucharLista('apiResumenInicio', cargarResumenInicio, contActividad);
   }
 
   /** Números del panel de Inicio (KPIs, alertas y actividad reciente) — un solo viaje al servidor. */
@@ -939,7 +943,7 @@
     const contActividad = document.getElementById('dash-actividad');
     if (!contActividad) return; // se navegó a otra vista antes de terminar de montar esta
     try {
-      const r = JSON.parse(await callServer('apiResumenInicio', state.token));
+      const r = JSON.parse(await callServerListaCacheada('apiResumenInicio', state.token));
       if (!document.body.contains(contActividad)) return; // se navegó a otra vista mientras cargaba
 
       const set = (id, valor) => {

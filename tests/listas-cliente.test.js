@@ -93,13 +93,14 @@ function navegador(localStorageInicial) {
   ({ w, servidor } = navegador({ 'lista:ana@x.com:apiListarX[]': '[{"ID":1}]' }));
   servidor.respuestas.apiListarX = [{ ID: 1, EDITADO: true }];
   w.invalidarCacheLista('apiListarX', 't');
+  await espera(5);
   ok(w.localStorage.getItem('lista:ana@x.com:apiListarX[]') === null, 'borra la copia guardada');
   r = await w.callServerListaCacheada('apiListarX', 't');
   ok(r[0].EDITADO === true, 'y el cargar() que sigue espera el dato recién guardado');
 
   console.log('6. Cerrar sesión y precarga');
   ({ w, servidor } = navegador({ 'lista:ana@x.com:apiListarX[]': '[1]', 'lista:ana@x.com:apiListarY[]': '[2]', 'lineas.modoVista': 'tabla' }));
-  w.limpiarListasGuardadas();
+  await w.limpiarListasGuardadas();
   ok(w.localStorage.getItem('lista:ana@x.com:apiListarX[]') === null && w.localStorage.getItem('lista:ana@x.com:apiListarY[]') === null,
     'al cerrar sesión se borran todas las listas guardadas');
   ok(w.localStorage.getItem('lineas.modoVista') === 'tabla', 'y no toca otras preferencias del navegador');
@@ -114,7 +115,7 @@ function navegador(localStorageInicial) {
   servidor.respuestas.apiListarX = [{ ID: 1 }];
   r = await w.callServerListaCacheada('apiListarX', 't');
   ok(r.length === 1, 'funciona igual, solo con memoria');
-  w.limpiarListasGuardadas();
+  await w.limpiarListasGuardadas();
   ok(true, 'y cerrar sesión no truena');
 
   console.log('8. adelantar(): pedir antes de que la pantalla lo necesite');

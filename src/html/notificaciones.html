@@ -237,10 +237,12 @@
      * demás siguen. Los de Vehículos se siguen recalculando en vivo cada vez (si ya no aplican, se quitan solos),
      * pero ahora también se pueden marcar como leídos a mano (ver LeidasVehiculo arriba).
      */
+    // Con la copia de la visita anterior al instante; si lo de ahora llega distinto, se repinta
+    // (el evento lista-actualizada, más abajo en vigilarSesion)
     const FUENTES = {
-      lineas: (limite) => callServer('apiLineasNotificaciones', state.token, limite || 0)
+      lineas: (limite) => callServerListaCacheada('apiLineasNotificaciones', state.token, limite || 0)
         .then((r) => ({ items: (r.items || []).map((n) => Object.assign(n, { modulo: 'lineas' })), noLeidas: r.noLeidas || 0 })),
-      vehiculos: () => callServer('apiNotificacionesPendientes', state.token)
+      vehiculos: () => callServerListaCacheada('apiNotificacionesPendientes', state.token)
         .then((t) => { const items = JSON.parse(t || '[]').map(deVehiculo); return { items: items, noLeidas: items.filter((n) => !n.leida).length }; }),
     };
     const OTRO = { grupo: 'otros', icono: 'bell', color: 'info' };
@@ -412,6 +414,7 @@
       const idsLineas = ids ? candidatos.filter((n) => !esVehiculo(n)).map((n) => n.id) : null;
       if (!ids || idsLineas.length) {
         await callServer('apiLineasMarcarNotificaciones', state.token, idsLineas);
+        invalidarListasDe('apiLineasNotificaciones');   // que la copia no las vuelva a enseñar sin leer
       }
       aplicarLeidas(ultima, ids || null);
       if (datosVista && datosVista !== ultima) aplicarLeidas(datosVista, ids || null);
@@ -495,6 +498,11 @@
       new MutationObserver(alCambiar).observe(shell, { attributes: true, attributeFilter: ['hidden'] });
       document.addEventListener('visibilitychange', () => {
         if (!document.hidden && !shell.hidden && Date.now() - pedidoEn > 2 * 60 * 1000) actualizar(EN_CAMPANA);
+      });
+      // Se pintó con la copia y lo fresco llegó distinto: se repinta (sin volver a pedir: ya está en memoria)
+      window.addEventListener('lista-actualizada', (ev) => {
+        const fn = ev.detail && ev.detail.fn;
+        if (!shell.hidden && (fn === 'apiLineasNotificaciones' || fn === 'apiNotificacionesPendientes')) actualizar(EN_CAMPANA);
       });
       alCambiar();
     }
