@@ -6,8 +6,10 @@
  *
  *   node tools/subir/revisar-entorno.js prod        (o dev, lab)
  *
- * Además avisa de los IDs de Drive escritos fijos en un servicio (const CARPETA_… = '…'): esos
- * no cambian por proyecto, así que un DEV escribe en la misma carpeta que producción.
+ * Además avisa si vuelve a aparecer un ID de carpeta escrito fijo en un servicio (const CARPETA_…
+ * = '…'): no cambia por proyecto, así que un DEV escribiría en la carpeta de producción. Las
+ * carpetas se buscan por nombre en la raíz (DriveUtils.carpetaEnRaiz). Las plantillas sí pueden
+ * ir fijas: solo se leen (se copian).
  */
 const fs = require('fs');
 const path = require('path');
@@ -24,7 +26,7 @@ function idsFijos() {
       const ruta = path.join(d, e.name);
       if (e.isDirectory()) return recorrer(ruta);
       if (!e.name.endsWith('.gs')) return;
-      for (const m of fs.readFileSync(ruta, 'utf8').matchAll(/const (\w*(?:CARPETA|PLANTILLA|FOLDER)\w*) = '([\w-]{25,})'/g)) {
+      for (const m of fs.readFileSync(ruta, 'utf8').matchAll(/const (\w*(?:CARPETA|FOLDER)\w*) = '([\w-]{25,})'/g)) {
         lista.push({ archivo: path.relative(RAIZ, ruta).split(path.sep).join('/'), constante: m[1], id: m[2] });
       }
     });

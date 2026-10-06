@@ -21,9 +21,10 @@ const UberService = (function () {
     'PUESTO', 'SOLICITUD', 'DIAS AUTORIZADOS', 'HORARIO AUTORIZADO',
   ];
 
-  // Carpeta de Drive para el archivo de "Solicitud" (distinta a la de Vehículos). No se cambia
-  // la seguridad del archivo: hereda los permisos que ya tenga esa carpeta compartida.
-  const CARPETA_SOLICITUDES_ID = '14TxSIYntjxGCEKN8yMDKJ4oGobmUT8At';
+  // Carpeta de Drive para el archivo de "Solicitud" (distinta a la de Vehículos): UBER_Files_ en
+  // la raíz de la app (DriveUtils.carpetaEnRaiz). No se cambia la seguridad del archivo: hereda
+  // los permisos que ya tenga esa carpeta compartida.
+  const CARPETA_SOLICITUDES = 'UBER_Files_';
 
   /** La hoja, para HojaServicio */
   const UBER = {
@@ -61,7 +62,7 @@ const UberService = (function () {
     /** Sube la solicitud (PDF/imagen) en base64 a su carpeta y regresa su URL */
     subirArchivo(token, nombreArchivo, mimeType, base64Data) {
       Permisos.puedeEditar(token, 'uber');
-      return HojaServicio.subirArchivo(CARPETA_SOLICITUDES_ID, 'de solicitudes de Uber', nombreArchivo, mimeType, base64Data);
+      return HojaServicio.subirArchivo(DriveUtils.carpetaEnRaiz(CARPETA_SOLICITUDES).getId(), 'de solicitudes de Uber', nombreArchivo, mimeType, base64Data);
     },
   };
 })();

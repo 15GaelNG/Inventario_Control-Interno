@@ -220,6 +220,50 @@ const DriveUtils = (function () {
   }
 
   /**
+   * La carpeta "nombre" dentro de la raíz de la app (DRIVE_FOLDER_ID_RAIZ de ESTE proyecto),
+   * real o por acceso directo — así las organiza AppSheet ("ARQUEOS_Images", "UBER_Files_").
+   * Sustituye a los IDs fijos en el código: con un ID fijo, todos los DEV escribían en las
+   * carpetas de producción, y una que apuntaba a la copia de pruebas (FIRMA EXTERNA de Arqueos)
+   * hacía que producción escribiera en pruebas (6-oct). Producción tiene todas en su raíz.
+   *
+   * Si no existe: en un DEV se crea (en su raíz de pruebas); en producción truena con el nombre,
+   * para que nadie escriba en una carpeta nueva que AppSheet no conoce. Guarda el ID 6 horas.
+   * @return {Folder}
+   */
+  function carpetaEnRaiz(nombre) {
+    const raizId = Config.DRIVE_FOLDERS.RAIZ();
+    const clave = 'carpeta_en_raiz_' + Utilities.base64EncodeWebSafe(raizId + '|' + nombre);
+    const cache = CacheService.getScriptCache();
+    const guardada = cache.get(clave);
+    if (guardada) {
+      try { return DriveApp.getFolderById(guardada); } catch (e) { /* ya no está: se busca otra vez */ }
+    }
+    const raiz = DriveApp.getFolderById(raizId);
+    let carpeta = subcarpetaOAcceso_(raiz, nombre);
+    if (!carpeta) {
+      if (String(leerConfig_('ENTORNO') || '').toUpperCase() === 'PROD') {
+        throw new Error('No existe la carpeta "' + nombre + '" dentro de la raíz de la app ("' + raiz.getName() + '"). ' +
+          'Créala ahí (o un acceso directo con ese nombre) y vuelve a intentarlo.');
+      }
+      carpeta = raiz.createFolder(nombre);
+    }
+    cache.put(clave, carpeta.getId(), 6 * 60 * 60);
+    return carpeta;
+  }
+
+  /** Para revisarEntorno: la carpeta o el acceso directo con ese nombre en `raiz`, o null (no crea nada) */
+  function carpetaEnRaizSiExiste(raiz, nombre) {
+    return subcarpetaOAcceso_(raiz, nombre);
+  }
+
+  /** La subcarpeta del año en curso dentro de `carpeta` (la crea si no existe todavía) */
+  function carpetaDelAnio(carpeta) {
+    const anio = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy');
+    const existentes = carpeta.getFoldersByName(anio);
+    return existentes.hasNext() ? existentes.next() : carpeta.createFolder(anio);
+  }
+
+  /**
    * Deja en la descripción del archivo quién lo subió y cuándo. La app corre como quien la
    * desplegó (USER_DEPLOYING), así que Drive pone a ESA cuenta como dueña de todo lo que se
    * crea: sin esto no hay forma de saber quién capturó un archivo (6-oct: tres fotos de una
@@ -240,6 +284,6 @@ const DriveUtils = (function () {
   return {
     guardarArchivoAppSheet, guardarImagenAppSheet, archivoDeRuta, urlDeRuta, previsualizarRuta,
     archivoDeRutaProfunda, urlDeRutaProfunda, previsualizarRutaProfunda, eliminar, compartirLoMasAmplioPosible,
-    marcarAutor,
+    marcarAutor, carpetaEnRaiz, carpetaEnRaizSiExiste, carpetaDelAnio,
   };
 })();

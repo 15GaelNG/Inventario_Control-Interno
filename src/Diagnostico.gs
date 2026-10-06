@@ -219,6 +219,15 @@ const REVISION_CARPETAS = {
   LINEAS_DRIVE_NUCOS: {},
   LINEAS_DRIVE_APPSHEET_LECTURA: {},
 };
+/**
+ * Las carpetas que los servicios buscan por NOMBRE dentro de la raíz (DriveUtils.carpetaEnRaiz).
+ * En producción tienen que existir (si no, la captura truena); en un DEV se crean solas al usarse.
+ * Un contrato revisa que cada nombre que usa un servicio esté aquí.
+ */
+const REVISION_EN_RAIZ = [
+  'ARQUEOS', 'ARQUEOS_Images', 'ARQUEOS_Files_', 'UBER_Files_', 'VEHICULOS_Files_', 'VEHICULOS_Images',
+  'RESPONSIVAS VEHICULARES_Images', 'RESPONSIVAS_VEHICULARES', 'ADHERENTES VEHICULAR',
+];
 /** Un nombre así, en la carpeta o en una de arriba, en producción es casi seguro un error */
 const REVISION_PRUEBAS = /prueba|copia de|\btest\b|\bdev\b|laboratorio/i;
 
@@ -320,6 +329,20 @@ function revisionEntorno_() {
         '(ni carpeta ni acceso directo): lo que se guarde no se va a volver a encontrar');
     }
   });
+
+  // ---- carpetas que se buscan por nombre en la raíz
+  if (raiz) {
+    REVISION_EN_RAIZ.forEach((nombre) => {
+      const x = { clave: 'raíz / ' + nombre, id: '' };
+      revisados.push(x);
+      const enRaiz = DriveUtils.carpetaEnRaizSiExiste(raiz, nombre);
+      if (enRaiz) { x.id = enRaiz.getId(); x.nombre = nombre; return; }
+      // anotar: en producción es error; en un DEV, aviso
+      anotar(x, esProd
+        ? 'no existe en la raíz: lo que se guarde ahí va a fallar (créala, o un acceso directo con ese nombre)'
+        : 'no existe todavía; se crea sola la primera vez que se use');
+    });
+  }
 
   // ---- hojas y calentador
   const hojasQueFaltan = Object.keys(abiertos).length

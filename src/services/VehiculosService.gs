@@ -357,10 +357,10 @@ const VehiculosService = (function () {
   }
 
   // Carpetas de Drive de los adjuntos (responsiva, documento de baja, póliza, tenencia): PDF a
-  // "VEHICULOS_Files_", imagen (foto del documento) a "VEHICULOS_Images". El archivo hereda
-  // los permisos que ya tenga la carpeta compartida.
-  const CARPETA_ADJUNTOS_ID = '1BrGhaC18GtXDCw7k9kZlMdK-Pp15lupz';
-  const CARPETA_ADJUNTOS_IMAGENES_ID = '11NfoCfZyGUvlLJ3PPKUTg5kwN8nYaZLP';
+  // "VEHICULOS_Files_", imagen (foto del documento) a "VEHICULOS_Images", las dos en la raíz de
+  // la app (DriveUtils.carpetaEnRaiz). El archivo hereda los permisos que ya tenga la carpeta.
+  const CARPETA_ADJUNTOS = 'VEHICULOS_Files_';
+  const CARPETA_ADJUNTOS_IMAGENES = 'VEHICULOS_Images';
 
   return {
     /** Catálogo completo, todas las columnas. Pesado (648 filas x 41 columnas) —
@@ -390,7 +390,7 @@ const VehiculosService = (function () {
      */
     subirArchivo(token, nombreArchivo, mimeType, base64Data) {
       Permisos.puedeEditar(token, 'vehiculos');
-      const carpeta = /^image\//.test(mimeType || '') ? CARPETA_ADJUNTOS_IMAGENES_ID : CARPETA_ADJUNTOS_ID;
+      const carpeta = DriveUtils.carpetaEnRaiz(/^image\//.test(mimeType || '') ? CARPETA_ADJUNTOS_IMAGENES : CARPETA_ADJUNTOS).getId();
       return HojaServicio.subirArchivo(carpeta, 'de adjuntos de Vehículos', nombreArchivo, mimeType, base64Data);
     },
     diagnosticoIds, vencimientosSeguro,

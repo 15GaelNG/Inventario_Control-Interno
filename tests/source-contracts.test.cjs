@@ -2200,3 +2200,25 @@ test('cada archivo que la gente sube o genera dice quién lo subió (DriveUtils.
   });
   assert.deepEqual(sinAutor, []);
 });
+
+test('las carpetas de los servicios se buscan por nombre en la raíz, no con un ID fijo', () => {
+  // Un ID fijo no cambia por proyecto: los DEV escribían en producción, y uno que apuntaba a la
+  // copia de pruebas hacía que producción escribiera en pruebas (FIRMA EXTERNA de Arqueos, 6-oct).
+  const servicios = filesBelow(path.join(root, 'src/services')).filter((f) => f.endsWith('.gs'));
+  const fijos = [];
+  const nombres = new Set();
+  servicios.forEach((f) => {
+    const texto = fs.readFileSync(f, 'utf8');
+    for (const m of texto.matchAll(/const (\w*(?:CARPETA|FOLDER)\w*) = '([\w-]{25,})'/g)) fijos.push(path.basename(f) + ' ' + m[1]);
+    for (const m of texto.matchAll(/carpetaEnRaiz\('([^']+)'\)/g)) nombres.add(m[1]);
+    // const CARPETA_X = 'NOMBRE' que luego se pasa a carpetaEnRaiz(CARPETA_X)
+    for (const m of texto.matchAll(/const (CARPETA_\w+) = '([^']+)'/g)) {
+      if (new RegExp('carpetaEnRaiz\\([^\\n]*\\b' + m[1] + '\\b').test(texto)) nombres.add(m[2]);
+    }
+  });
+  assert.deepEqual(fijos, [], 'carpetas con ID fijo (usa DriveUtils.carpetaEnRaiz)');
+  // Y revisarEntorno sabe de cada una: en producción tienen que existir antes de desplegar
+  const revisadas = /const REVISION_EN_RAIZ = \[([\s\S]*?)\];/.exec(read('src/Diagnostico.gs'))[1];
+  assert.deepEqual([...nombres].filter((n) => !revisadas.includes("'" + n + "'")), [], 'en REVISION_EN_RAIZ (Diagnostico.gs)');
+  assert.ok(nombres.size >= 9, 'encontró las carpetas que se usan (' + [...nombres].join(', ') + ')');
+});

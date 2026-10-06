@@ -33,8 +33,9 @@ const ResponsivaVehicularService = (function () {
 
   // Carpetas de Drive dedicadas a esta responsiva (decisión del usuario, 06-oct-2026) --
   // no la carpeta general de REPORTES que usan los demás módulos.
-  const CARPETA_IMAGENES = '12Zkdgdfiqv-jbVy-FPeGnNeucrCdIoPJ';   // RESPONSIVAS VEHICULARES_Images
-  const CARPETA_PDF = '1DXrViJKx1X4td2jEbzZgBRGZZSdnHNYD';        // RESPONSIVAS_VEHICULARES
+  // Por nombre dentro de la raíz de la app (DriveUtils.carpetaEnRaiz): cada proyecto usa las suyas
+  const CARPETA_IMAGENES = 'RESPONSIVAS VEHICULARES_Images';
+  const CARPETA_PDF = 'RESPONSIVAS_VEHICULARES';
 
   // Caja de las firmas en el PDF: la misma que usa InspeccionesService (150 × 60 pt).
   const FIRMA_PDF = { ancho: 150, alto: 60 };
@@ -199,7 +200,7 @@ const ResponsivaVehicularService = (function () {
               campo, responsable, vehiculo['PLACA'] || vehiculo['FOLIO'], PdfService.fechaParaNombre(ahora),
             ]) + '.png';
             const blob = Utilities.newBlob(Utilities.base64Decode(img.base64), img.mimeType || 'image/png', nombreImagen);
-            const archivo = DriveUtils.marcarAutor(DriveApp.getFolderById(CARPETA_IMAGENES).createFile(blob));
+            const archivo = DriveUtils.marcarAutor(DriveUtils.carpetaEnRaiz(CARPETA_IMAGENES).createFile(blob));
             DriveUtils.compartirLoMasAmplioPosible(archivo);
           } catch (e) {
             avisos.push('No se pudo respaldar ' + campo.toLowerCase() + ' en Drive: ' + e.message);
@@ -215,7 +216,7 @@ const ResponsivaVehicularService = (function () {
           plantillaId: PLANTILLA,
           datos: datosPdf,
           imagenes: imagenesPdf,
-          carpetaId: CARPETA_PDF,
+          carpetaId: DriveUtils.carpetaEnRaiz(CARPETA_PDF).getId(),
           nombre: PdfService.nombreArchivo([
             'RESPONSIVA VEHICULAR', responsable, vehiculo['PLACA'] || vehiculo['FOLIO'], PdfService.fechaParaNombre(ahora),
           ]),

@@ -385,32 +385,19 @@ const ArqueosService = (function () {
     despues: (registro) => actualizarPdfArqueo_(registro),
   };
 
-  // Carpeta de Drive donde se guarda FIRMA EXTERNA -- Evidencias, las 3 firmas y
-  // el Formato arqueo (generado solo) van cada uno en su propia carpeta aparte,
-  // ver CARPETA_EVIDENCIAS_ID/CARPETA_FIRMAS_ID/CARPETA_FORMATO_RAIZ_ID.
-  const CARPETA_ARCHIVOS_ID = '1UMHf-zKY6sRz-0Zkt_CxnNCPdrJMHF5o';
-  // Carpeta de Drive solo para firmas (FIRMA RESPONSABLE/ESPECIALISTA/ASISTENTE),
-  // separada de CARPETA_ARCHIVOS_ID a petición de Jorge (2026-10-01).
-  const CARPETA_FIRMAS_ID = '1rIN0RMwLOGZXiDc_YXZ7KroqKXYlZgLL';
-  // Carpeta de Drive solo para Evidencias (el PDF combinado de fotos), aparte
-  // de CARPETA_ARCHIVOS_ID -- a petición de Jorge (2026-10-01).
-  const CARPETA_EVIDENCIAS_ID = '1IFjsxPDPPppRDY-Jq6ciJzNIkxd7AMWw';
-  // Carpeta raíz donde se guarda el PDF de Formato arqueo generado solo, organizada
-  // por año (ARQUEOS/2026/, ARQUEOS/2027/...) -- carpetaDelAnioActual_ busca o crea
-  // la subcarpeta del año en curso cada vez, para no tener que tocar nada cada enero.
-  const CARPETA_FORMATO_RAIZ_ID = '1u4nZ84rxkMvJDjZNUFHFnNiNqDo0Yqwo';
+  // Las carpetas de Arqueos, por nombre dentro de la raíz de la app (DriveUtils.carpetaEnRaiz):
+  // cada proyecto usa las suyas. Antes eran IDs fijos, y la de FIRMA EXTERNA era la de la copia
+  // de pruebas: producción guardaba ahí (6-oct).
+  //   ARQUEOS/<año>    el Formato arqueo generado solo y FIRMA EXTERNA (la subcarpeta del año
+  //                    se crea sola, para no tocar nada cada enero)
+  //   ARQUEOS_Images   las 3 firmas (RESPONSABLE/ESPECIALISTA/ASISTENTE), aparte a petición de Jorge
+  //   ARQUEOS_Files_   Evidencias (el PDF combinado de fotos), aparte a petición de Jorge
+  const carpetaDelAnio_ = () => DriveUtils.carpetaDelAnio(DriveUtils.carpetaEnRaiz('ARQUEOS'));
 
-  /** Subcarpeta del año en curso dentro de `raizId` (la crea si no existe todavía). */
-  function carpetaDelAnioActual_(raizId) {
-    const anio = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy');
-    const raiz = DriveApp.getFolderById(raizId);
-    const existentes = raiz.getFoldersByName(anio);
-    return existentes.hasNext() ? existentes.next() : raiz.createFolder(anio);
-  }
   /** Sube un archivo a una de las carpetas de Arqueos (`de` completa los mensajes de error) */
-  function subirEn_(token, carpetaId, de, nombreArchivo, mimeType, base64Data) {
+  function subirEn_(token, carpeta, de, nombreArchivo, mimeType, base64Data) {
     Permisos.puedeEditar(token, 'arqueos');
-    return HojaServicio.subirArchivo(carpetaId, 'de ' + de + ' de Arqueos', nombreArchivo, mimeType, base64Data);
+    return HojaServicio.subirArchivo(carpeta().getId(), 'de ' + de + ' de Arqueos', nombreArchivo, mimeType, base64Data);
   }
 
   // ---------- Generación automática del PDF (plantilla F-CI03-009) ----------
@@ -485,10 +472,10 @@ const ArqueosService = (function () {
     }
     let carpeta;
     try {
-      carpeta = carpetaDelAnioActual_(CARPETA_FORMATO_RAIZ_ID);
+      carpeta = carpetaDelAnio_();
     } catch (e) {
-      throw new Error('No se pudo abrir o crear la carpeta del año actual para los PDFs de Arqueo en Drive (raíz ' +
-        CARPETA_FORMATO_RAIZ_ID + '). La cuenta con la que corre la app ahora mismo (' + cuenta() + ') no tiene acceso a esa carpeta.');
+      throw new Error('No se pudo abrir o crear la carpeta del año actual para los PDFs de Arqueo (ARQUEOS/<año> en la raíz ' +
+        'de la app): ' + e.message + ' La cuenta con la que corre la app ahora mismo es ' + cuenta() + '.');
     }
     let copia;
     try {
@@ -594,8 +581,8 @@ const ArqueosService = (function () {
       const nombrePdf = (fila['ID ARQUEO'] || copia.getName()) + '_ARQUEO_' + fecha + '.pdf';
       pdfFile = DriveUtils.marcarAutor(carpeta.createFile(pdfBlob).setName(nombrePdf));
     } catch (e) {
-      throw new Error('Se generó el PDF pero no se pudo guardar en la carpeta de Arqueos en Drive (raíz ' +
-        CARPETA_FORMATO_RAIZ_ID + '). La cuenta ' + cuenta() + ' necesita permiso de editor ahí. Error original: ' + e.message);
+      throw new Error('Se generó el PDF pero no se pudo guardar en la carpeta de Arqueos en Drive (' + carpeta.getName() +
+        '). La cuenta ' + cuenta() + ' necesita permiso de editor ahí. Error original: ' + e.message);
     }
     // Mejor esfuerzo, no bloquea el registro (mismo patrón que subirArchivo(), arriba):
     // la carpeta de Arqueos ya tiene acceso general configurado, así que casi siempre el
@@ -653,10 +640,10 @@ const ArqueosService = (function () {
     actualizar: (token, id, cambios) => HojaServicio.actualizar(ARQUEOS, token, id, cambios),
     eliminar: (token, id) => HojaServicio.eliminar(ARQUEOS, token, id),
     /** Evidencias y Formato arqueo */
-    subirArchivo: (token, nombre, tipo, base64) => subirEn_(token, CARPETA_ARCHIVOS_ID, 'archivos', nombre, tipo, base64),
+    subirArchivo: (token, nombre, tipo, base64) => subirEn_(token, carpetaDelAnio_, 'archivos', nombre, tipo, base64),
     /** Las 3 firmas (RESPONSABLE/ESPECIALISTA/ASISTENTE) -- carpeta aparte */
-    subirFirma: (token, nombre, tipo, base64) => subirEn_(token, CARPETA_FIRMAS_ID, 'firmas', nombre, tipo, base64),
+    subirFirma: (token, nombre, tipo, base64) => subirEn_(token, () => DriveUtils.carpetaEnRaiz('ARQUEOS_Images'), 'firmas', nombre, tipo, base64),
     /** Evidencias (el PDF combinado de fotos) -- carpeta aparte */
-    subirEvidencia: (token, nombre, tipo, base64) => subirEn_(token, CARPETA_EVIDENCIAS_ID, 'evidencias', nombre, tipo, base64),
+    subirEvidencia: (token, nombre, tipo, base64) => subirEn_(token, () => DriveUtils.carpetaEnRaiz('ARQUEOS_Files_'), 'evidencias', nombre, tipo, base64),
   };
 })();

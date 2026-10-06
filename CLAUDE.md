@@ -103,6 +103,11 @@ ganchos: `ArqueosService.gs` y `VehiculosService.gs`. La guía completa está al
 - `source-contracts` falla si un servicio vuelve a escribir su `fechaISO_`, su renombrar archivo,
   su subida a Drive, su `CacheHojas.recordar` o su `SheetUtils.remove`.
 - Para probar un servicio con hojas en memoria: `tests/apps-script-simulado.js`.
+- **Carpetas de Drive: por nombre, nunca con un ID fijo.** `DriveUtils.carpetaEnRaiz('ARQUEOS_Images')`
+  la busca en la raíz de ESE proyecto (en un DEV la crea; en prod truena si falta). Un ID fijo hacía
+  que los DEV escribieran en producción. Una carpeta nueva va también en `REVISION_EN_RAIZ`
+  (Diagnostico.gs); un contrato revisa las dos cosas. Las plantillas sí pueden ir fijas: solo se copian.
+- Cada `createFile` va dentro de `DriveUtils.marcarAutor(…)` (quién lo subió; contrato).
 
 ## Permisos entre módulos (lo de un módulo dentro de otro)
 

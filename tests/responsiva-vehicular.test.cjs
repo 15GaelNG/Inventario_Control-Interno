@@ -32,7 +32,15 @@ function crearContexto() {
         createFile: (blob) => { llamadas.imagenesSubidas.push({ carpetaId: id, nombre: blob.nombre }); return { id: 'file-' + llamadas.imagenesSubidas.length }; },
       }),
     },
-    DriveUtils: { compartirLoMasAmplioPosible: () => 'DOMAIN' },
+    DriveUtils: {
+      compartirLoMasAmplioPosible: () => 'DOMAIN',
+      marcarAutor: (archivo) => archivo,
+      // Las carpetas se buscan por nombre en la raíz de la app: aquí el nombre hace de ID
+      carpetaEnRaiz: (nombre) => ({
+        getId: () => nombre,
+        createFile: (blob) => { llamadas.imagenesSubidas.push({ carpeta: nombre, nombre: blob.nombre }); return { id: 'file-' + llamadas.imagenesSubidas.length }; },
+      }),
+    },
     SheetUtils: {
       getSheet: () => ({ getName: () => 'RESPONSIVA VEHICULAR' }),
       insert: (ssId, hoja, fila) => { llamadas.insert.push(fila); },
@@ -93,7 +101,7 @@ test('cada firma se respalda como imagen en la carpeta de imágenes, sin ligarla
   contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' },
     { 'FIRMA RESPONSABLE': { base64: 'abc', mimeType: 'image/png' }, 'FIRMA JEFE': { base64: 'def', mimeType: 'image/png' } });
   assert.equal(llamadas.imagenesSubidas.length, 2);
-  assert.ok(llamadas.imagenesSubidas.every((img) => img.carpetaId === '12Zkdgdfiqv-jbVy-FPeGnNeucrCdIoPJ'));
+  assert.ok(llamadas.imagenesSubidas.every((img) => img.carpeta === 'RESPONSIVAS VEHICULARES_Images'));
   // La fila insertada no gana columnas de URL de firma -- solo queda en Drive.
   assert.ok(!Object.keys(llamadas.insert[0]).some((k) => k.toUpperCase().indexOf('FIRMA') !== -1));
 });
