@@ -104,6 +104,30 @@ ganchos: `ArqueosService.gs` y `VehiculosService.gs`. La guía completa está al
   su subida a Drive, su `CacheHojas.recordar` o su `SheetUtils.remove`.
 - Para probar un servicio con hojas en memoria: `tests/apps-script-simulado.js`.
 
+## Permisos entre módulos (lo de un módulo dentro de otro)
+
+El permiso de un módulo decide si se ve su pantalla. Cuando una pantalla muestra o edita algo
+de **otro** módulo (la ficha de Vehículos trae Sensores, Verificaciones, Cambios…):
+
+- **Una pestaña o sección de otro módulo** se pide con `deModulo('modulo', () => callServer(…))`
+  (ver `abrirFichaVehiculo` en `app.html`). Sin permiso no se pide y no aparece: ni truena la
+  ficha ni sale vacía como si no hubiera datos.
+- **Un campo que le pertenece a otro módulo** solo lo edita quien tiene EDICIÓN en ese módulo.
+  Se declara **en los dos lados**:
+  - en la pantalla, `editaModulo` en el campo de `CamposHoja` (sale bloqueado y no se manda);
+  - en el servidor, `deOtroModulo: { modulo: ['COLUMNA', …] }` en la definición de `HojaServicio`
+    (se ignora al crear y al actualizar, por si llega desde la consola).
+  Ejemplo: la sección "Accesorios y sensor" de Vehículos es de `instalacion-sensores`
+  (`DE_SENSORES` en `CAMPOS_VEHICULO` y `deOtroModulo` en `VehiculosService.gs`).
+- **Pendiente, al agregar el segundo caso:** hoy la lista de campos vive en esos dos lugares y
+  el contrato que revisa que coincidan (`source-contracts`: "la sección de sensor de Vehículos")
+  es solo para ese caso. Con otro caso, generalizar ese contrato a todos los `editaModulo` /
+  `deOtroModulo`, o que la lista salga de un solo lugar; si no, un lado se puede quedar atrás
+  sin que nada falle.
+- **Falta todavía:** Caja Chica ↔ Arqueos (Arqueos necesita la lista de cajas, que es de Caja
+  Chica) y el catálogo de vehículos para quien tiene Sensores, Hologramas, Verificaciones… sin
+  Vehículos (no puede elegir la unidad al capturar).
+
 ## Responsivo (celular y tableta)
 
 - **Dos cortes, nada más:** celular `@media (max-width: 640px)` y tableta
