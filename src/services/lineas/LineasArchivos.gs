@@ -30,6 +30,14 @@ const LineasArchivos = (function () {
   const prop_ = (clave) => leerConfig_(clave);   // config/Entornos.gs o Script Properties
   function carpetaAppSheetId() { return prop_('LINEAS_DRIVE_APPSHEET') || APPSHEET_POR_OMISION; }
   function carpetaNucosId() { return prop_('LINEAS_DRIVE_NUCOS') || NUCOS_POR_OMISION; }
+  /**
+   * Dónde se buscan los archivos del AppSheet: la carpeta de la app y, si está configurada, otra solo para leer
+   * (el DEV escribe en una carpeta de pruebas, pero su libro es copia de producción y sus rutas son de la app real).
+   */
+  function carpetasLectura_() {
+    const lectura = prop_('LINEAS_DRIVE_APPSHEET_LECTURA');
+    return [carpetaAppSheetId()].concat(lectura && lectura !== carpetaAppSheetId() ? [lectura] : []);
+  }
 
   /** Id de Drive dentro de un enlace (file/d/<id>, open?id=<id>, uc?id=<id>). */
   function idDeUrl(v) {
@@ -53,41 +61,61 @@ const LineasArchivos = (function () {
   }
 
   /**
+   * Ruta del AppSheet tal como se busca en su carpeta. Además de "TABLA_Images/archivo.png" la hoja trae enlaces del
+   * AppSheet (template/gettablefileurl o image/getimageurl, con la ruta en fileName) y rutas con la tabla delante
+   * ("INSPECCIONES LINEAS::INSPECCIONES LINEAS_Images/…", lo que copiaba un bot de otra tabla). null si el enlace no se lee.
+   */
+  function rutaAppSheet(ruta) {
+    let v = String(ruta || '').trim();
+    const enlace = /appsheet\.com\/(template\/gettablefileurl|image\/getimageurl)/i.test(v) && v.match(/[?&]fileName=([^&#]+)/i);
+    if (enlace) {
+      try { v = decodeURIComponent(enlace[1].replace(/\+/g, ' ')).trim(); } catch (e) { return null; }
+    }
+    return /^https?:/i.test(v) ? v : v.replace(/^[^\/]*::/, '').trim();
+  }
+
+  /**
    * Archivo de una ruta del AppSheet (o de un enlace de Drive) → { id, nombre, url } o null si no existe.
    * `puedeVerSecretos` false → rechaza patrones, contraseñas y firmas.
    */
   function resolver(ruta, puedeVerSecretos) {
-    let v = String(ruta || '').trim();
+    const v = rutaAppSheet(ruta);
     if (!v) return null;
-    // Enlace del AppSheet (appsheet.com/template/gettablefileurl?…&fileName=TABLA_Files_/…): se usa su ruta
-    const enlace = /appsheet\.com\/template\/gettablefileurl/i.test(v) && v.match(/[?&]fileName=([^&#]+)/i);
-    if (enlace) {
-      try { v = decodeURIComponent(enlace[1].replace(/\+/g, ' ')).trim(); } catch (e) { return null; }
-    }
-    if (!puedeVerSecretos && RUTA_SECRETA.test(v)) throw new Error('Este archivo solo lo puede ver un administrador.');
+    if (!puedeVerSecretos && RUTA_SECRETA.test(v)) throw new Error('Este archivo solo lo ven administradores y el área de Líneas.');
     const id = idDeUrl(v);
     if (id) return { id: id, nombre: v, url: 'https://drive.google.com/file/d/' + id + '/view' };
     if (/^https?:/i.test(v)) return { id: null, nombre: v, url: v };
     const partes = v.split('/').map((p) => p.trim()).filter(Boolean);
     if (partes.length < 2 || partes.some((p) => p === '..' || p === '.')) return null;
 
+    const raices = carpetasLectura_();
     const cache = CacheService.getScriptCache();
-    const k = clave_(carpetaAppSheetId() + '|' + v);
+    const k = clave_(raices.join(',') + '|' + v);
     const guardado = cache.get(k);
     if (guardado) return guardado === '-' ? null : JSON.parse(guardado);
 
     const nombre = partes.pop();
-    let carpeta = DriveApp.getFolderById(carpetaAppSheetId());
+    const comoArchivo = (f) => ({ id: f.getId(), nombre: f.getName(), url: f.getUrl() });
     let encontrado = null;
-    for (let i = 0; i < partes.length && carpeta; i++) {
-      const it = carpeta.getFoldersByName(partes[i]);
-      carpeta = it.hasNext() ? it.next() : null;
+    // 1) La ruta tal cual, desde cada carpeta raíz
+    for (let r = 0; r < raices.length && !encontrado; r++) {
+      let carpeta = DriveApp.getFolderById(raices[r]);
+      for (let i = 0; i < partes.length && carpeta; i++) {
+        const it = carpeta.getFoldersByName(partes[i]);
+        carpeta = it.hasNext() ? it.next() : null;
+      }
+      const archivos = carpeta ? carpeta.getFilesByName(nombre) : null;
+      if (archivos && archivos.hasNext()) encontrado = comoArchivo(archivos.next());
     }
-    if (carpeta) {
-      const archivos = carpeta.getFilesByName(nombre);
-      if (archivos.hasNext()) {
-        const f = archivos.next();
-        encontrado = { id: f.getId(), nombre: f.getName(), url: f.getUrl() };
+    // 2) Si no está donde dice la ruta: el nombre exacto (único: llave + columna + hora) en cualquier subcarpeta de
+    //    esas raíces. Nunca un archivo de fuera de la app.
+    if (!encontrado) {
+      const it = DriveApp.searchFiles('title = "' + nombre.replace(/["\\]/g, '\\$&') + '" and trashed = false');
+      for (let n = 0; n < 10 && it.hasNext() && !encontrado; n++) {
+        const f = it.next();
+        const padres = f.getParents();
+        const padre = padres.hasNext() ? padres.next().getId() : null;
+        if (padre && raices.some((raiz) => estaDentroDe(padre, raiz))) encontrado = comoArchivo(f);
       }
     }
     // Lo que no existe también se recuerda un rato (evita recorrer Drive en cada clic)
@@ -371,7 +399,7 @@ const LineasArchivos = (function () {
   }
 
   return {
-    carpetaAppSheetId, carpetaNucosId, carpetaDeApp, idDeUrl, resolver, imagen, blob, guardarComoAppSheet,
+    carpetaAppSheetId, carpetaNucosId, carpetaDeApp, idDeUrl, rutaAppSheet, resolver, imagen, blob, guardarComoAppSheet,
     carpetasNucos, archivosNuco, estaDentroDe, exigirEscribible, enNucos, carpetaEvidenciaNuco, descartarCarpeta, olvidarNuco,
     reemplazarPdf,
   };

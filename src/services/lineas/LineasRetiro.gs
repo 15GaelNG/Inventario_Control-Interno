@@ -27,7 +27,7 @@ const RETIRO_ACCION_COMENTARIO = 'COMENTARIO_ANTERIOR';
 const RETIRO_RUTAS = ['RESPONSIVA', 'FORMATO INSPECCION', 'FECHA INSPECCION'];
 /** Lo que guarda una asignación de la persona y de dónde está (mismas columnas que la hoja vieja). */
 const RETIRO_PERSONA = ['ID PERSONA', 'NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO',
-  'DIRECTOR', 'CUENTA GOOGLE', 'NOMBRE QUIEN USA', 'PUESTO QUIEN USA'];
+  'DIRECTOR', 'CUENTA GOOGLE']; // «Quien lo usa» no pasa (usuario, 6-oct)
 /** Pestañas que citan al registro: [pestaña, columna, columna que repite el ID dentro de una clave "TIPO|ID|…"]. */
 const RETIRO_REFERENCIAS = [
   ['INSPECCIONES LINEAS', 'ID LINEA'],
@@ -163,7 +163,6 @@ function retiroHojaVieja_(aplicar) {
     RETIRO_PERSONA.forEach((n) => { p[n] = tal(v(vieja, f, n)); });
     // Sin el código de resguardo (decisión del usuario), igual que como se mostraba
     if (ESTRUCTURA_ES_CODIGO_RESGUARDO.test(norm(p['RESPONSABLE']))) p['RESPONSABLE'] = '';
-    if (ESTRUCTURA_ES_CODIGO_RESGUARDO.test(norm(p['NOMBRE QUIEN USA']))) { p['NOMBRE QUIEN USA'] = ''; p['PUESTO QUIEN USA'] = ''; }
     if (!RETIRO_PERSONA.some((n) => hay(p[n]))) return;
     nuevasAsignaciones.push(Object.assign(p, {
       'ID': Ids.nuevo('ASG'), 'TIPO': hay(p['RESPONSABLE']) ? 'PERSONA' : 'RESGUARDO',

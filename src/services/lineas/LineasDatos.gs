@@ -34,6 +34,17 @@ const LineasDatos = (function () {
   };
 
   /**
+   * Columnas renombradas (parte 6, pendiente 2.3; usuario, 6-oct): viejo → nuevo. El código usa solo el nombre nuevo;
+   * mientras la hoja siga con el viejo (hasta correr lineasRenombrarColumnasDocumentos, LineasAdmin), el viejo cuenta
+   * como el nuevo. Si la hoja ya tiene el nuevo, el viejo se deja como está. DIRECTOR de la responsiva no cambia: vuelve
+   * a ser el director (usuario, 6-oct).
+   */
+  const COLUMNAS_RENOMBRADAS = {
+    'INSPECCIONES LINEAS': { 'OBSERVACIONES': 'COMENTARIO' },
+    'RESPONSIVAS LINEAS': { 'OBSERVACIONES': 'COMENTARIO' },
+  };
+
+  /**
    * Columnas con IDs anteriores del registro, de la más reciente a la más vieja:
    *   ID ANTERIOR  el ID que tenía antes de la última corrida de IDs (30-sep: el LIN-/ILI-/RLI-… del 29-sep)
    *   ID APPSHEET  el ID que tenía en el AppSheet
@@ -159,7 +170,7 @@ const LineasDatos = (function () {
     if (!hoja) throw new Error('No existe la pestaña "' + nombre + '" en la base de datos de Líneas.');
     const encabezados = hoja.getRange(1, 1, 1, Math.max(1, hoja.getLastColumn())).getValues()[0]
       .map((h) => String(h).trim());
-    nombrarEnBlanco_(nombre, encabezados);
+    nombrarEncabezados_(nombre, encabezados);
     while (encabezados.length && !encabezados[encabezados.length - 1]) encabezados.pop();
     cacheGuardar('enc_' + nombre, encabezados, SEG_CACHE_ENCABEZADOS);
     const t = armarTabla_(nombre, encabezados, hoja);
@@ -167,16 +178,23 @@ const LineasDatos = (function () {
     return t;
   }
 
-  function nombrarEnBlanco_(nombre, encabezados) {
+  function nombrarEncabezados_(nombre, encabezados) {
     (ENCABEZADOS_EN_BLANCO[nombre] || []).forEach((r) => {
       const v = encabezados.findIndex((h) => normCol(h) === r.vecina);
       const i = v + r.lado;
       if (v >= 0 && i >= 0 && i < encabezados.length && !String(encabezados[i] || '').trim()) encabezados[i] = r.nombre;
     });
+    const renombradas = COLUMNAS_RENOMBRADAS[nombre] || {};
+    Object.keys(renombradas).forEach((viejo) => {
+      const nuevo = renombradas[viejo];
+      if (encabezados.some((h) => normCol(h) === nuevo)) return;
+      const i = encabezados.findIndex((h) => normCol(h) === viejo);
+      if (i >= 0) encabezados[i] = nuevo;
+    });
   }
 
   function armarTabla_(nombre, encabezados, hoja) {
-    nombrarEnBlanco_(nombre, encabezados); // también a los encabezados en caché, guardados antes de esta regla
+    nombrarEncabezados_(nombre, encabezados); // también a los encabezados en caché, guardados antes de esta regla
     const indice = {};
     encabezados.forEach((h, i) => {
       const k = normCol(h);
@@ -672,6 +690,33 @@ const LineasDatos = (function () {
   }
 
   /**
+   * Agrega al final de una hoja que ya existe los encabezados que le falten, sin tocar formatos (asegurarPestana cambia
+   * el de las fechas). La tabla se olvida para que la escritura vea las columnas nuevas. Regresa las agregadas.
+   */
+  function asegurarColumnas(nombre, columnas) {
+    if (virtual_(nombre)) LineasLectura.bloquearEscritura();
+    const t = tablaFresca(nombre);
+    const faltan = columnas.filter((c) => colIndice(t, c) < 0);
+    if (!faltan.length) return [];
+    t.hoja.getRange(1, t.encabezados.length + 1, 1, faltan.length).setValues([faltan]).setFontWeight('bold');
+    delete bd.tablas[nombre];
+    cacheBorrar('enc_' + nombre);
+    return faltan;
+  }
+
+  /** Borra de la pestaña las columnas con esos encabezados (de derecha a izquierda) y regresa las que borró. */
+  function quitarColumnas(nombre, columnas) {
+    if (virtual_(nombre)) LineasLectura.bloquearEscritura();
+    const t = tablaFresca(nombre);
+    const indices = columnas.map((c) => colIndice(t, c)).filter((i) => i >= 0).sort((a, b) => b - a);
+    const quitadas = indices.map((i) => t.encabezados[i]);
+    indices.forEach((i) => t.hoja.deleteColumn(i + 1));
+    delete bd.tablas[nombre];
+    cacheBorrar('enc_' + nombre);
+    return quitadas;
+  }
+
+  /**
    * Crea (si no existe) una pestaña propia del nuevo sistema (prefijo APP_) con sus encabezados.
    * Si ya existe, agrega al final los encabezados que falten. AppSheet ignora estas pestañas.
    */
@@ -708,7 +753,7 @@ const LineasDatos = (function () {
     cacheGuardar, cacheLeer, cacheBorrar, recordar, tocar, tiempo,
     tabla, tablaFresca, existeTabla, colIndice, deHoraHoja, aHoraHoja,
     leerTabla, ultimaFila, buscarFilas, buscarFilasVarios, buscarFilasPorId, idsDeFila, buscarEnTabla, leerFilas, leerRango,
-    actualizarFila, agregarFilas, conCandado, nuevoId, nuevoIdCorto, asegurarPestana, COLS_ID_ANTERIOR, COL_ID_APPSHEET,
+    actualizarFila, agregarFilas, conCandado, nuevoId, nuevoIdCorto, asegurarPestana, asegurarColumnas, quitarColumnas, COLS_ID_ANTERIOR, COL_ID_APPSHEET, COLUMNAS_RENOMBRADAS,
     olvidarTabla: (nombre) => { delete bd.tablas[nombre]; },
   };
 })();

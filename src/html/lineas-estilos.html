@@ -663,6 +663,16 @@
   .ln-af-grid.ln-af-datos { gap: 2px 14px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px dashed var(--color-border); }
   .ln-af-datos .ln-af-campo { margin-bottom: 6px; }
   .ln-af-completo { margin-top: 4px; }
+  /* «¿Más de un responsable?» en su propio renglón: cada responsable adicional queda con su número de empleado al lado */
+  /* Responsables adicionales (6-oct): cada uno en su bloque con «Quitar»; «Agregar responsable» debajo del último */
+  .ln-af-campo[data-af-columna="RESPONSABLES ADICIONALES"] { grid-column: 1 / -1; }
+  .ln-af-titulo .ln-af-quitar { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; font-size: 12px; font-weight: 500; letter-spacing: 0; }
+  .ln-af-agregar button { display: inline-flex; align-items: center; gap: 6px; }
+  /* Firma guardada de quien captura (6-oct): en lugar del lienzo, el aviso y «Firmar a mano» */
+  .ln-firma-guardada { display: flex; align-items: center; gap: 10px; height: 100%; min-height: 120px; padding: 14px; color: var(--color-primary); }
+  .ln-firma-guardada > .ln-icon { width: 26px; height: 26px; color: var(--color-success, #1e8e3e); flex: none; }
+  .ln-firma-guardada div { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+  .ln-firma-guardada span { font-size: 12px; color: var(--color-text-muted, #667); }
   .ln-af-completo .ln-af-campo { margin-bottom: 14px; }
   /* Firmas lado a lado, grandes, con marco de color según quién firma */
   .ln-firmas { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 6px; }
@@ -978,10 +988,22 @@
   button.ln-patron-punto.activa { width: 38px; height: 38px; min-height: 38px; border-width: 5px; }
   button.ln-patron-punto.inicio { box-shadow: 0 0 0 4px var(--color-accent); }
   .ln-patron polygon.ln-patron-flecha { fill: var(--color-accent); stroke: var(--color-surface); stroke-width: 1.5; stroke-linejoin: round; }
+  /* Patrón para consulta (General y capturas): el trazado en el sistema o la imagen del AppSheet (usuario, 5-oct) */
+  .ln-patron-consulta { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; font-size: 12px; }
+  .ln-af-campo .ln-patron-consulta { align-items: center; margin: 4px 0 10px; }
+  .ln-patron-vista { display: block; width: 150px; height: 150px; padding: 6px; border: 1px solid var(--color-border); border-radius: 10px; background: #fff; object-fit: contain; }
+  .ln-patron-vista polyline { fill: none; stroke: #0b5d7a; stroke-width: 8; stroke-linecap: round; stroke-linejoin: round; }
+  .ln-patron-vista polygon.ln-patron-flecha { fill: #c9a227; }
+  .ln-patron-vista .ln-patron-libre { fill: #b8c4ca; }
+  .ln-patron-vista .ln-patron-marcado { fill: #0b5d7a; }
+  .ln-patron-vista .ln-patron-inicio { fill: none; stroke: #c9a227; stroke-width: 5; }
+  .ln-patron-vista text { fill: #fff; font: bold 17px Arial, sans-serif; text-anchor: middle; dominant-baseline: middle; }
   .ln-captura-modal { position: relative; }
   .ln-espera { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 6px; padding: 24px; text-align: center; background: color-mix(in srgb, var(--color-surface) 94%, transparent); backdrop-filter: blur(2px); outline: none; }
   .ln-espera[hidden] { display: none; }
+  /* Regenerar, Generar PDF pendiente y Subir PDF firmado abren la ventana sin cuerpo: la espera necesita su alto */
+  .ln-captura-modal:has(> .ln-espera:not([hidden])) { min-height: 340px; }
   .ln-espera-circulo { width: 72px; height: 72px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
     background: var(--color-accent-soft); margin-bottom: 10px; }
   .ln-espera-circulo .ln-spinner { width: 34px; height: 34px; border-width: 3px; }

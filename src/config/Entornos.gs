@@ -31,12 +31,12 @@ const ENTORNOS = {
 
     // Carpetas de Drive (ver qué es cada una en Config.gs)
     DRIVE_FOLDER_ID_RAIZ: '1WPFFd4imLiui6zIpAa3OL62ZEu_a5BJn',
-    DRIVE_FOLDER_ID_REPORTES: '1WLrBWn3kP2va_B-rZxAf4jMVTNRBDLmV',
+    DRIVE_FOLDER_ID_REPORTES: '1EYmA9RNLiPcY4vzZ07j2CC_0CBnutwkp',
     DRIVE_FOLDER_ID_VERIFICACIONES: '1iGrxuqmUKKUV9UFIjEOSJ0TEibab3K7C',
     DRIVE_FOLDER_ID_SENSORES: '1EIMbBdhASdi9RIcO6oPb1FBd72g17-LR',
     DRIVE_FOLDER_ID_HOLOGRAMAS_IMAGENES: '1aygt9Qso02GSIyhJgSFa134wTvLUGpCK',
     DRIVE_FOLDER_ID_HOLOGRAMAS_ARCHIVOS: '1VRwPWOVOjZ1Obdm3zuC7bTnh7zHoS0h0',
-    DRIVE_FOLDER_ID_INSPECCIONES_IMAGENES: '1WPFFd4imLiui6zIpAa3OL62ZEu_a5BJn',
+    DRIVE_FOLDER_ID_INSPECCIONES_IMAGENES: '1X4je88ejXgBXpELZFYo2-pftsFjHZabL',
     DRIVE_FOLDER_ID_VERIFICACIONES_LECTURA: '',   // opcional
     DRIVE_FOLDER_ID_MODELOS: '1ddRghL8izS63UYWDHn9w_YFHPuRC8bTm',   // opcional: sin esto se usa RAIZ
 
@@ -66,6 +66,9 @@ const ENTORNOS = {
     // NUCOS de producción. Las carpetas de los demás módulos siguen en las Script Properties del DEV.
     LINEAS_DRIVE_APPSHEET: '1tq-jCsFgdsdMAsQqm1WTHdynQkAN05r5',
     LINEAS_DRIVE_NUCOS: '1tq-jCsFgdsdMAsQqm1WTHdynQkAN05r5',
+    // Solo lectura: las rutas del AppSheet de la copia del libro (patrones, firmas, PDF) están en la carpeta de la app
+    // de producción; se buscan ahí si no están en la de pruebas (LineasArchivos.resolver). Nunca se escribe en ella.
+    LINEAS_DRIVE_APPSHEET_LECTURA: '1WPFFd4imLiui6zIpAa3OL62ZEu_a5BJn',
 
     // Líneas lee las hojas nuevas (LINEAS, EQUIPOS, ASIGNACIONES…) y LINEAS TELEFONICAS ya no existe en la copia, igual
     // que en producción (allá son Script Properties: LineasLectura)

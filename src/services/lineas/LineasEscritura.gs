@@ -45,9 +45,11 @@ const LineasEscritura = (function () {
   const A_LINEA = { 'NUMERO TELEFONO': 'NUMERO TELEFONO', 'NUMERO SIM': 'NUMERO SIM', 'COMPAÑIA': 'COMPAÑIA',
     'RAZON SOCIAL': 'RAZON SOCIAL', 'PIN WHATSAPP': 'PIN WHATSAPP', 'ESTATUS LINEA': 'ESTATUS LINEA', 'TIPO DE LINEA': 'TIPO DE LINEA' };
   const A_ADENDUM = ['COSTO PLAN', 'INICIO PLAN', 'FIN PLAN'];
+  /** Hasta cuatro responsables más, con su número de empleado y su nombre (usuario, 6-oct; como el AppSheet). */
+  const ADICIONALES = ['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'].reduce((a, n) => a.concat(['NO EMPLEADO ' + n + ' RESPONSABLE', 'NOMBRE ' + n + ' RESPONSABLE']), []);
   /** De la persona (solo en una asignación con persona). */
-  const PERSONA = ['ID PERSONA', 'NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'AREA', 'DIRECTOR', 'JEFE DIRECTO', 'CUENTA GOOGLE',
-    'NOMBRE QUIEN USA', 'PUESTO QUIEN USA'];
+  // «Quien lo usa» ya no existe (usuario, 6-oct): solo el responsable y los adicionales
+  const PERSONA = ['ID PERSONA', 'NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'AREA', 'DIRECTOR', 'JEFE DIRECTO', 'CUENTA GOOGLE'].concat(ADICIONALES);
   /** Dónde está (con persona o guardado). */
   const UBICACION = ['DEPARTAMENTO', 'SEDE', 'OFICINA / DESARROLLO'];
   // Los "no aplica" se guardan en blanco, como en la migración (LineasEstructura)
@@ -91,17 +93,13 @@ const LineasEscritura = (function () {
   }
 
   /**
-   * JEFE DIRECTO en ASIGNACIONES (usuario, 4-oct: Reasignar lo perdía). Las hojas armadas antes no la tienen: se agrega el
-   * encabezado al final, una vez. Sin asegurarPestana, que además cambiaría el formato de las fechas.
+   * JEFE DIRECTO (usuario, 4-oct: Reasignar lo perdía) y los responsables adicionales (6-oct) en ASIGNACIONES. Las hojas
+   * armadas antes no los tienen: se agregan los encabezados al final, una vez, y la tabla se olvida para que la
+   * escritura los vea (LineasDatos.asegurarColumnas; sin asegurarPestana, que cambiaría el formato de las fechas).
    */
   function asegurarJefeDirecto_() {
-    if (typeof LineasDatos.tablaFresca !== 'function') return; // pruebas con hojas simuladas
-    const t = LineasDatos.tablaFresca(HOJA.ASIGNACIONES);
-    if (LineasDatos.colIndice(t, 'JEFE DIRECTO') >= 0) return;
-    t.hoja.getRange(1, t.encabezados.length + 1).setValue('JEFE DIRECTO').setFontWeight('bold');
-    // Sin olvidar la tabla, la escritura seguiría con los encabezados de antes y descartaría JEFE DIRECTO
-    LineasDatos.olvidarTabla(HOJA.ASIGNACIONES);
-    LineasDatos.cacheBorrar('enc_' + HOJA.ASIGNACIONES);
+    if (typeof LineasDatos.asegurarColumnas !== 'function') return; // pruebas con hojas simuladas
+    LineasDatos.asegurarColumnas(HOJA.ASIGNACIONES, ['JEFE DIRECTO'].concat(ADICIONALES));
   }
 
   function hojas() {
@@ -478,7 +476,7 @@ const LineasEscritura = (function () {
   }
 
   return {
-    guardar, agregar, hojasEnMemoria,
+    ADICIONALES, guardar, agregar, hojasEnMemoria,
     /** Registros que aparecieron en esta ejecución (para refrescar el índice sin recargar). */
     tocados: () => tocados_.slice(),
     _limpio: limpio_, _clase: clase_,
