@@ -3676,6 +3676,8 @@
       (el.tagName === 'INPUT' && ['text', 'email', 'tel', 'url'].includes(el.type));
     if (!esTexto) return;
     if (el.classList.contains('tabla-buscar-global') || el.classList.contains('th-popover-valor')) return;
+    // Campos que se guardan tal cual (PIN de WhatsApp, PIN o contraseña del equipo, correos): data-respetar-texto (Líneas)
+    if (el.closest('[data-respetar-texto]')) return;
     const inicio = el.selectionStart;
     const fin = el.selectionEnd;
     el.value = el.value.toUpperCase();
