@@ -16,13 +16,10 @@ test('la inspección de Reasignar se llena con la responsiva y el jefe directo s
   assert.match(form, /LineasAcciones\.datoDeCH_\(resp\['No EMPLEADO'\], resp\['RESPONSABLE'\], 'jefe'\)/);
   ['COLOR', 'PIN WHATSAPP', 'PIN EQUIPO', 'TICKET', 'COMENTARIO'].forEach((c) => assert.match(form, new RegExp("deResp\\('" + c + "'"), c));
   assert.match(form, /deResponsiva\.patron !== undefined && deResponsiva\.patron !== null \? String\(deResponsiva\.patron\)/);
-  // Lo que se llenó en la responsiva queda fijo (usuario, 6-oct); el jefe directo y el comentario no
-  ['COLOR', 'RESPONSABLE', 'PUESTO', 'DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO', 'PIN WHATSAPP', 'PIN EQUIPO', 'PATRON', 'TICKET']
-    .forEach((c) => assert.match(form, new RegExp("bloquear\\(campo_\\('" + c.replace('/', '\\/') + "'"), c));
-  assert.match(form, /bloquear\(campo_\('CORREO', [^\n]*'CORREO'\),/);
-  assert.doesNotMatch(form, /bloquear\(campo_\('(JEFE DIRECTO|COMENTARIO)'/);
-  // Un patrón fijo no se cambia al guardar
-  assert.match(captura, /if \(!patronFijo && datos\.patron !== undefined && datos\.patron !== null\) valores\['PATRON'\] = String\(datos\.patron\);/);
+  // Es una inspección normal: lo de la responsiva llega llenado y se puede cambiar (usuario, 6-oct en la tarde)
+  assert.doesNotMatch(form, /bloquear|soloLectura: true, requerido: 'NUNCA'/);
+  assert.match(form, /\(c\) => \(resp \? deResp\(c, ''\) : v\(c\)\)\)\);/, 'los adicionales de la responsiva, editables');
+  assert.match(captura, /if \(datos\.patron !== undefined && datos\.patron !== null\) valores\['PATRON'\] = String\(datos\.patron\);/);
   // Contexto y guardado arman el mismo formulario
   assert.match(captura, /ref && ref\.reasignar \? ref\.desdeResponsiva : null/);
   assert.match(captura, /datos\.reasignar \? datos\.desdeResponsiva : null/);

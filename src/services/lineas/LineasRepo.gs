@@ -666,6 +666,11 @@ const LineasRepo = (function () {
       const anio = Number(col(f, 'AÑO'));
       if (dia && mes && anio) fch = new Date(anio, mes - 1, dia, 12);
     }
+    // FECHA RESPONSIVA tiene formato de solo día (AppSheet) y al leer varias filas llega sin hora: la del sistema toma la
+    // hora en que se guardó (APP_EVIDENCIAS) si es del mismo día, para ordenarla con la inspección (usuario, 6-oct)
+    const dia = (d) => Utilities.formatDate(d, LineasDatos.ZONA_APP, 'yyyy-MM-dd');
+    if (fch && ev && ev.origen === 'SISTEMA' && ev.fecha instanceof Date && dia(fch) === dia(ev.fecha) &&
+      Utilities.formatDate(fch, LineasDatos.ZONA_APP, 'HH:mm:ss') === '00:00:00') fch = ev.fecha;
     return {
       _id: txt(f['ID']), _idsAnteriores: LineasDatos.idsDeFila(f).slice(1), origen: ev && ev.origen === 'SISTEMA' ? 'SISTEMA' : 'APPSHEET',
       registroId: idActual(col(f, 'ID LINEA')),

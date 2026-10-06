@@ -47,15 +47,6 @@ test('un bloque «RESPONSABLE N» por cada adicional, con «Quitar», y «Agrega
   assert.equal(R._cumple({ cuantos: 'RESPONSABLES ADICIONALES', menos: 1 }, {}, {}), true);
 });
 
-test('fijo (inspección de Reasignar): solo los de la responsiva, sin cambiarlos, sin agregar ni quitar', () => {
-  const R = registros();
-  const fijos = plano(R.camposAdicionales(campo, (c) => ({ 'NOMBRE SEGUNDO RESPONSABLE': 'LUIS', 'NO EMPLEADO SEGUNDO RESPONSABLE': 'AC2' })[c] || '', true));
-  assert.deepEqual(fijos.map((e) => e.texto || e.columna), ['RESPONSABLE 2', 'NO EMPLEADO SEGUNDO RESPONSABLE', 'NOMBRE SEGUNDO RESPONSABLE']);
-  assert.equal(fijos[0].quitarAdicional, null);
-  assert.ok(fijos.slice(1).every((e) => e.soloLectura && e.control === 'texto'));
-  assert.equal(fijos[2].valor, 'LUIS');
-  assert.deepEqual(plano(R.camposAdicionales(campo, () => '', true)), []);
-});
 
 test('Editar, la responsiva y la inspección piden los adicionales; Editar no guarda la cuenta', () => {
   const reg = read('src/services/lineas/LineasRegistros.gs');
@@ -66,10 +57,10 @@ test('Editar, la responsiva y la inspección piden los adicionales; Editar no gu
   assert.doesNotMatch(cap, /MAS DE UN RESPONSABLE/);
   // Responsiva e inspección (fuera de Mandar a resguardo; en Reasignar, fijos)
   assert.equal((cap.match(/LineasRegistros\.camposAdicionales\(/g) || []).length, 2);
-  assert.match(cap, /enAccion \? \[\] : LineasRegistros\.camposAdicionales\([\s\S]{0,160}, !!resp\)\);/);
-  // Cada adicional firma, en las dos
-  assert.match(cap, /\], firmasAdicionales_\(null\), \[/);
-  assert.match(cap, /if \(!enAccion\) Array\.prototype\.push\.apply\(elementos, firmasAdicionales_\(resp \? \(c\) => deResp\(c, ''\) : null\)\);/);
+  assert.match(cap, /enAccion \? \[\] : LineasRegistros\.camposAdicionales\(/);
+  // En el sistema solo firma el principal (usuario, 6-oct): los adicionales firman el PDF impreso
+  assert.doesNotMatch(cap, /FIRMAS_ADICIONALES|firmasAdicionales_|'Firma del responsable ' \+/);
+  assert.equal((cap.match(/campo_\('FIRMA RESPONSABLE', 'FIRMA RESPONSABLE', 'firma'/g) || []).length, 2);
   // Los bloques quitados se borran; las columnas se agregan cuando hace falta
   assert.match(cap, /function limpiarAdicionales_\(valores\)/);
   assert.equal((cap.match(/limpiarAdicionales_\(valores\);/g) || []).length, 2);
@@ -100,18 +91,17 @@ test('la pantalla: «Agregar responsable», «Quitar» (los de abajo suben) y la
   assert.match(lineas, /if \(e\.control === 'adicionales'\)/);
   assert.match(lineas, /data-agregar-adicional/);
   assert.match(lineas, /data-quitar-adicional="' \+ Number\(e\.quitarAdicional\) \+ '"/);
-  assert.match(lineas, /function activarAdicionales\(cuerpo, alQuitar\)/);
+  assert.match(lineas, /function activarAdicionales\(cuerpo\) \{/);
   assert.match(lineas, /const origen = j \+ 1 < ORDEN_ADICIONALES\.length \? entrada\(p, ORDEN_ADICIONALES\[j \+ 1\]\) : null;/);
   assert.match(lineas, /if \(cond\.cuantos\) \{/);
   // El cuerpo del modal se reutiliza: se escucha una sola vez (un clic agregaba o quitaba varios, 6-oct)
   assert.match(lineas, /if \(cuerpo\._adicionalesActivos\) return;/);
-  assert.match(lineas, /if \(cuerpo\._alQuitarAdicional\) cuerpo\._alQuitarAdicional\(i\);/);
   // En la captura y en Editar
-  assert.equal((lineas.match(/activarAdicionales\(cuerpo(\)|, \(i\))/g) || []).length, 2);
+  assert.equal((lineas.match(/activarAdicionales\(cuerpo\);/g) || []).length, 2);
   assert.match(read('src/html/lineas-estilos.html'), /\.ln-af-campo\[data-af-columna="RESPONSABLES ADICIONALES"\]/);
 });
 
-test('el PDF: nombres y números de empleado con « / », las firmas juntas (responsiva e inspección) y sin la palabra PATRON', () => {
+test('el PDF: nombres y números de empleado con « / », la firma del principal más chica y sin la palabra PATRON', () => {
   const cap = read('src/services/lineas/LineasCaptura.gs');
   const reg = cap.slice(cap.indexOf('function registroPlantilla_('), cap.indexOf('function ligarPdf_('));
   // registroPlantilla_ usa ORDEN_ADICIONALES del archivo
@@ -128,14 +118,14 @@ test('el PDF: nombres y números de empleado con « / », las firmas juntas (res
   assert.equal(conOrden({ CONTRASEÑA: '', 'PIN EQUIPO': 'PATRON' })['PIN EQUIPO'], 'PATRON');
   assert.equal(conOrden({ CONTRASEÑA: '', 'PIN EQUIPO': '1234' })['PIN EQUIPO'], '1234');
   assert.equal(conOrden({ PATRON: '1-5-9', 'PIN EQUIPO': 'PATRON' })['PIN EQUIPO'], 'PATRON', 'la inspección no cambia');
-  // La pantalla une las firmas visibles en una imagen, en las dos; el PDF la deja más ancha
+  // Solo firma el principal; con adicionales su firma va más chica para que los demás firmen el impreso (usuario, 6-oct)
   const lineas = read('src/html/js/lineas.html');
-  assert.match(lineas, /function unirFirmas\(lista, fondo\)/);
-  assert.match(lineas, /function firmasDeResponsables\(cuerpo, firmas, fondo\)/);
-  assert.match(lineas, /firmasDeResponsables\(cuerpoCaptura, sesion\.firmas, '#ddebf7'\)/);
-  assert.match(lineas, /firmasDeResponsables\(cuerpoCaptura, sesion\.firmas, '#ffffff'\)/);
-  assert.match(cap, /'firmas-responsables\.png' : 'firma-responsable\.png'/);
+  assert.doesNotMatch(lineas, /function unirFirmas|function firmasDeResponsables|FIRMAS_RESPONSABLES/);
+  assert.match(cap, /'firma-principal\.png' : 'firma-responsable\.png'/);
   assert.match(cap, /imagen\('responsable', 'FIRMA RESPONSABLE', nombreFirmaResponsable\), 'FIRMA INSPECTOR'/);
+  const pdf = read('src/services/lineas/LineasPdf.gs');
+  assert.match(pdf, /const chica = \/\^firma-principal\/\.test/);
+  assert.match(pdf, /Math\.min\(1, \(chica \? 90 : 160\) \/ ancho, \(chica \? 40 : 70\) \/ alto\)/);
 });
 
 test('«quien lo usa» se quitó por completo: ni se lee ni se escribe, y sus columnas se borran con lineasQuitarQuienUsa', () => {
@@ -156,10 +146,3 @@ test('«quien lo usa» se quitó por completo: ni se lee ni se escribe, y sus co
   assert.match(read('src/html/js/lineas.html'), /<div class="ln-subtitulo">Responsables adicionales<\/div>/);
 });
 
-test('inspección de Reasignar: lo de la responsiva fijo en pantalla (patrón sin trazo, bloqueo sin elegir)', () => {
-  const lineas = read('src/html/js/lineas.html');
-  assert.match(lineas, /\} else if \(e\.control === 'patron' && e\.soloLectura\) \{/);
-  assert.match(lineas, /if \(e\.control === 'patron' && !e\.soloLectura\) \{/);
-  assert.match(lineas, /if \(pin\.soloLectura\) Object\.assign\(selector, \{ control: 'texto', soloLectura: true \}\);/);
-  assert.match(lineas, /e\.soloLectura && e\.control !== 'calculado' && e\.control !== 'patron' && ocultos\.indexOf\(e\) < 0/);
-});

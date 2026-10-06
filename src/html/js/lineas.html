@@ -783,8 +783,6 @@
         control = '<textarea' + attrs + ' rows="4">' + esc(valor) + '</textarea>';
       } else if (e.control === 'fechaHora') {
         control = '<input type="datetime-local"' + attrs + ' value="' + esc(valor) + '" />';
-      } else if (e.control === 'patron' && e.soloLectura) {
-        control = '<div class="ln-patron-fijo">' + (esPuntosPatron(valor) ? svgPatron(valor) : (valor ? esc(valor) : '—')) + '</div>';
       } else if (e.control === 'patron') {
         const nota = e.valorOculto ? 'Registrado (solo lo ven administradores y el área de Líneas). Si no trazas uno nuevo, se conserva.'
           : (valor && !esPuntosPatron(valor) ? 'Hay un patrón capturado en AppSheet (imagen). Si no trazas uno nuevo, se conserva.' : '');
@@ -792,7 +790,7 @@
         const anterior = !e.valorOculto && valor && !esPuntosPatron(valor) && rutaPatronAppSheet(valor) ? vistaPatron(valor) : '';
         control = (nota ? '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' ' + esc(nota) + '</div>' : '') + anterior + htmlPatron(id + '-patron', false);
       } else if (e.control === 'firma') {
-        control = htmlFirma(ROL_FIRMA[e.columna] || 'ci', id + '-firma', /^FIRMA (SEGUNDO|TERCER|CUARTO|QUINTO) /.test(e.columna) ? e.etiqueta : null);
+        control = htmlFirma(ROL_FIRMA[e.columna] || 'ci', id + '-firma');
       } else if (e.control === 'calculado') {
         control = '<div' + (autoDe(e) ? ' data-auto' : '') + ' class="ln-af-calculado' + (e.fijo ? ' ln-af-fijo' : (e.formula ? '' : ' ln-af-calculado-texto')) + '" id="' + id + '"' + (e.formula ? ' data-formula="' + esc(e.formula) + '"' : '') + '>' + (valor ? esc(valor) : '—') + '</div>';
       } else {
@@ -806,10 +804,8 @@
     // Firmas: quién firma (su nombre va debajo de la línea) y de qué lado
     const NOMBRE_DE_FIRMA = { 'FIRMA INSPECTOR': 'NOMBRE INSPECTOR', 'FIRMA CI': 'NOMBRE CI', 'FIRMA RESPONSABLE': 'RESPONSABLE' };
     const ROL_FIRMA = { 'FIRMA INSPECTOR': 'ci', 'FIRMA CI': 'ci', 'FIRMA RESPONSABLE': 'responsable' };
-    // Responsables adicionales de la responsiva (6-oct): cada uno firma en su recuadro, con su nombre debajo
+    // Responsables adicionales (6-oct): en el sistema solo firma el principal; los demás, el PDF impreso
     const ORDEN_ADICIONALES = ['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'];
-    const FIRMAS_RESPONSABLES = ['FIRMA RESPONSABLE'].concat(ORDEN_ADICIONALES.map((n) => 'FIRMA ' + n + ' RESPONSABLE'));
-    ORDEN_ADICIONALES.forEach((n) => { NOMBRE_DE_FIRMA['FIRMA ' + n + ' RESPONSABLE'] = 'NOMBRE ' + n + ' RESPONSABLE'; ROL_FIRMA['FIRMA ' + n + ' RESPONSABLE'] = 'responsable'; });
 
     /**
      * Dibuja el formulario agrupando cada título del AppSheet con sus campos. Con `acomodar` (inspección y
@@ -834,7 +830,7 @@
           const nombresDeFirma = sec.campos.filter((e) => e.control === 'firma' && NOMBRE_DE_FIRMA[e.columna] && NOMBRE_DE_FIRMA[e.columna] !== 'RESPONSABLE')
             .map((e) => NOMBRE_DE_FIRMA[e.columna]);
           const ocultos = sec.campos.filter((e) => e.soloLectura && nombresDeFirma.indexOf(e.columna) >= 0);
-          const lectura = sec.campos.filter((e) => e.soloLectura && e.control !== 'calculado' && e.control !== 'patron' && ocultos.indexOf(e) < 0);
+          const lectura = sec.campos.filter((e) => e.soloLectura && e.control !== 'calculado' && ocultos.indexOf(e) < 0);
           const firmas = sec.campos.filter((e) => e.control === 'firma');
           const anchos = sec.campos.filter((e) => e.control === 'area' || e.control === 'patron');
           const escalas = sec.campos.filter((e) => e.control === 'escala' && e.checklist); // renglones del checklist; las demás, a todo lo ancho
@@ -862,18 +858,16 @@
       const inicial = v === 'PATRON' || v === 'PATRÓN' || esPuntosPatron(patron.valor) ? 'PATRÓN'
         : (/^\d+$/.test(v) ? 'PIN' : (/^(N\/A|NA|NO APLICA|NINGUNO|SIN BLOQUEO)$/.test(v) ? 'SIN BLOQUEO' : (v ? 'CONTRASEÑA' : '')));
       const selector = { tipo: 'campo', columna: '_BLOQUEO', etiqueta: 'TIPO DE BLOQUEO DEL EQUIPO', control: 'lista', opciones: OPCIONES_BLOQUEO, valor: inicial, mostrar: pin.mostrar, requerido: 'NUNCA', virtual: true };
-      // El PIN de la responsiva de Reasignar no se cambia en la inspección: el tipo de bloqueo tampoco
-      if (pin.soloLectura) Object.assign(selector, { control: 'texto', soloLectura: true });
       const i = elementos.indexOf(pin);
       return elementos.slice(0, i).concat([selector], elementos.slice(i));
     }
     /** Muestra el PIN, la contraseña o el patrón según el bloqueo elegido. `cambio`: el usuario acaba de elegirlo. */
     function aplicarBloqueo(cuerpo, cambio) {
-      const sel = cuerpo.querySelector('[data-columna="_BLOQUEO"]');
+      const sel = cuerpo.querySelector('select[data-columna="_BLOQUEO"]');
       if (!sel) return;
       const t = sel.value;
       const campoPin = cuerpo.querySelector('.ln-af-campo[data-af-columna="PIN EQUIPO"]');
-      const lienzo = cuerpo.querySelector('.ln-patron, .ln-patron-fijo');
+      const lienzo = cuerpo.querySelector('.ln-patron');
       const campoPatron = lienzo && lienzo.closest('.ln-af-campo');
       if (campoPin) {
         const input = campoPin.querySelector('input');
@@ -893,46 +887,19 @@
     }
 
     /** Caja de firma: marco dorado para el responsable y azul para Control Interno; el lienzo lo pone crearFirma. */
-    function htmlFirma(rol, idLienzo, titulo) {
+    function htmlFirma(rol, idLienzo) {
       return '<div class="ln-firma ln-firma-' + rol + '"><div class="ln-firma-cabecera">' + icono(rol === 'ci' ? 'shield-check' : 'user') + ' ' +
-        esc(titulo || (rol === 'ci' ? 'Firma de Control Interno' : 'Firma del responsable')) + '</div><div class="ln-firma-lienzo" id="' + idLienzo + '"></div></div>';
-    }
-
-    /**
-     * Las firmas de los responsables en una sola imagen, una junto a otra (6-oct): el PDF las pone en la línea de firma del
-     * responsable, como el AppSheet. Con una sola, esa misma.
-     */
-    function unirFirmas(lista, fondo) {
-      const b64 = lista.filter(Boolean);
-      if (b64.length < 2) return Promise.resolve(b64[0] || null);
-      return Promise.all(b64.map((b) => new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = () => reject(new Error('No se pudo leer una firma'));
-        img.src = 'data:image/png;base64,' + b;
-      }))).then((imgs) => {
-        const espacio = 40;
-        const alto = Math.max.apply(null, imgs.map((i) => i.naturalHeight));
-        const c = document.createElement('canvas');
-        c.width = imgs.reduce((s, i) => s + i.naturalWidth, 0) + espacio * (imgs.length - 1);
-        c.height = alto;
-        const g = c.getContext('2d');
-        g.fillStyle = fondo || '#ffffff'; g.fillRect(0, 0, c.width, c.height);
-        let x = 0;
-        imgs.forEach((i) => { g.drawImage(i, x, Math.round((alto - i.naturalHeight) / 2)); x += i.naturalWidth + espacio; });
-        return c.toDataURL('image/png').split(',')[1];
-      });
+        (rol === 'ci' ? 'Firma de Control Interno' : 'Firma del responsable') + '</div><div class="ln-firma-lienzo" id="' + idLienzo + '"></div></div>';
     }
 
     /**
      * «Agregar responsable» y «Quitar» (usuario, 6-oct). RESPONSABLES ADICIONALES dice cuántos bloques se ven; al quitar uno,
-     * los de abajo suben un lugar. `alQuitar(i)`: lo demás que se limpia desde ese bloque (las firmas, en la captura).
+     * los de abajo suben un lugar.
      */
-    function activarAdicionales(cuerpo, alQuitar) {
+    function activarAdicionales(cuerpo) {
       const entrada = (prefijo, n) => cuerpo.querySelector('input[data-columna="' + CSS.escape(prefijo + n + ' RESPONSABLE') + '"]');
       // El cuerpo del modal es el mismo para Editar, la inspección y la responsiva: se escucha una sola vez (si no, un clic
-      // agregaba o quitaba varios) y lo que se limpia al quitar es el del formulario abierto
-      cuerpo._alQuitarAdicional = alQuitar || null;
+      // agregaba o quitaba varios)
       if (cuerpo._adicionalesActivos) return;
       cuerpo._adicionalesActivos = true;
       cuerpo.addEventListener('click', (ev) => {
@@ -954,7 +921,6 @@
             });
           }
           k = Math.max(0, k - 1);
-          if (cuerpo._alQuitarAdicional) cuerpo._alQuitarAdicional(i);
         }
         cuenta.value = String(k);
         cuenta.dispatchEvent(new Event('change', { bubbles: true }));
@@ -962,15 +928,6 @@
         const bloque = nuevo && nuevo.closest('.ln-af-seccion');
         if (bloque) bloque.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       });
-    }
-
-    /** Firmas de los responsables que se ven (el principal y los adicionales), ya firmadas, juntas en una imagen. */
-    function firmasDeResponsables(cuerpo, firmas, fondo) {
-      const lista = FIRMAS_RESPONSABLES.filter((c) => {
-        const campo = cuerpo.querySelector('.ln-af-campo[data-af-columna="' + CSS.escape(c) + '"]');
-        return campo && !campo.hidden && firmas[c] && !firmas[c].estaVacia();
-      }).map((c) => firmas[c]);
-      return Promise.all(lista.map((f) => f.base64(fondo))).then((b64) => unirFirmas(b64, fondo));
     }
 
     /** Firma con el componente del sistema; misma interfaz que antes (estaVacia, limpiar, base64 → promesa). */
@@ -3674,15 +3631,14 @@
             const origen = NOMBRE_DE_FIRMA[e.columna] && cuerpo.querySelector('[data-columna="' + CSS.escape(NOMBRE_DE_FIRMA[e.columna]) + '"]');
             captura.firmas[e.columna] = crearFirma(document.getElementById(id + '-firma'), origen ? origen.value : '');
           }
-          if (e.control === 'patron' && !e.soloLectura) {
+          if (e.control === 'patron') {
             captura.columnaPatron = e.columna;
             captura.patronInicial = esPuntosPatron(e.valor) ? e.valor : null;
             captura.controlPatron = activarPatron(id + '-patron', captura.patronInicial ? captura.patronInicial.split('-') : []);
           }
         });
         activarCombosEn(cuerpo, captura.contexto.formulario);
-        // Al quitar un responsable adicional, su firma y las de abajo se vuelven a hacer (los nombres suben un lugar)
-        activarAdicionales(cuerpo, (i) => ORDEN_ADICIONALES.slice(i).forEach((n) => { const f = captura.firmas['FIRMA ' + n + ' RESPONSABLE']; if (f) f.limpiar(); }));
+        activarAdicionales(cuerpo);
         cuerpo.addEventListener('change', (ev) => { if (ev.target.matches('[data-columna="_BLOQUEO"]')) aplicarBloqueo(cuerpo, true); });
         cuerpo.addEventListener('input', (ev) => { if (ev.target.matches('[data-columna]')) actualizarFormularioAppSheet(); });
         cuerpo.addEventListener('change', (ev) => { if (ev.target.matches('[data-columna]')) actualizarFormularioAppSheet(); });
@@ -4021,15 +3977,14 @@
         if (!validarFormularioAppSheet()) return;
         if (raiz.querySelector('.ln-foto-subiendo')) { mostrarErrorCaptura('Espera a que terminen de subir las imágenes.', '#cap-fotos-lista'); return; }
         const firmaInspector = captura.firmas['FIRMA INSPECTOR'];
-        const cuerpoCaptura = $('#ln-captura-cuerpo', raiz);
+        const firmaResponsable = captura.firmas['FIRMA RESPONSABLE'];
         const idAbierto = captura.idObjetivo;
         const patron = patronParaGuardar();
         const valores = leerFormularioAppSheet();
         const sesion = captura;
         estadoGuardado(sesion.flujo ? 'Guardando la inspección' : 'Generando tu PDF');
         // La carpeta de fotos solo existe si se subió alguna (ya quedó creada al subirla)
-        // El responsable y los adicionales firman; sus firmas van juntas en la línea del responsable, como en la responsiva
-        Promise.all([firmaInspector.base64('#ddebf7'), firmasDeResponsables(cuerpoCaptura, sesion.firmas, '#ddebf7'), sesion.carpetaPromesa || null]).then(([inspector, responsable]) => {
+        Promise.all([firmaInspector.base64('#ddebf7'), firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ddebf7') : null, sesion.carpetaPromesa || null]).then(([inspector, responsable]) => {
           sesion.pdfFirmas = { inspector: inspector, responsable: responsable, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ddebf7') : null };
           const datos = Object.assign({}, sesion.ref, {
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron,
@@ -4059,14 +4014,13 @@
         $('#cap-error', raiz).hidden = true;
         if (!validarFormularioAppSheet()) return;
         const firmaCi = captura.firmas['FIRMA CI'];
-        const cuerpoCaptura = $('#ln-captura-cuerpo', raiz);
+        const firmaResponsable = captura.firmas['FIRMA RESPONSABLE'];
         const idAbierto = captura.idObjetivo;
         const patron = patronParaGuardar();
         const valores = leerFormularioAppSheet();
         const sesion = captura;
         estadoGuardado(sesion.flujo && sesion.flujo.espera ? sesion.flujo.espera : (sesion.flujo && !sesion.flujo.pdfAqui ? 'Guardando la responsiva' : 'Generando tu PDF'));
-        // El responsable y los adicionales que se ven, cada uno con su firma, juntas en una imagen
-        Promise.all([firmasDeResponsables(cuerpoCaptura, sesion.firmas, '#ffffff'), firmaCi.base64('#ffffff')]).then(([responsable, ci]) => {
+        Promise.all([firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ffffff') : null, firmaCi.base64('#ffffff')]).then(([responsable, ci]) => {
           sesion.pdfFirmas = { responsable: responsable, ci: ci, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ffffff') : null };
           const datos = Object.assign({}, sesion.ref, {
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron,

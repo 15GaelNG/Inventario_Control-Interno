@@ -46,3 +46,21 @@ test('las dos páginas: Ver PDF y Subir PDF firmado a la vista; lo demás en ⋮
   // La inspección dice «Comentario» (parte 6)
   assert.match(lineas, /' Comentario', '<p class="ln-lectura-notas">' \+ esc\(i\.observaciones \|\| 'Sin comentario registrado\.'\)/);
 });
+
+test('Documentos en orden: la responsiva del sistema toma la hora en que se guardó (su columna solo trae el día)', () => {
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  const fn = repo.slice(repo.indexOf('function responsivaDesdeFila('), repo.indexOf('return {', repo.indexOf('function responsivaDesdeFila(')));
+  const Utilities = { formatDate: (d, z, f) => (f === 'yyyy-MM-dd' ? d.toISOString().slice(0, 10) : d.toISOString().slice(11, 19)) };
+  const desde = new Function('Utilities', 'LineasDatos', 'LineasUtil', 'col', 'fecha',
+    fn.replace('function responsivaDesdeFila(f, ev) {', 'return function (f, ev) {') + 'return fch; };')(
+    Utilities, { ZONA_APP: 'UTC' }, {}, (f, c) => f[c], (v) => (v instanceof Date ? v : null));
+  const guardada = new Date('2026-10-06T12:37:00Z');
+  // Sin hora (leída de varias filas): la del guardado, si es del mismo día
+  assert.equal(desde({ 'FECHA RESPONSIVA': new Date('2026-10-06T00:00:00Z') }, { origen: 'SISTEMA', fecha: guardada }), guardada);
+  // Con hora, de otro día o del AppSheet: la de la hoja
+  const conHora = new Date('2026-10-06T10:54:00Z');
+  assert.equal(desde({ 'FECHA RESPONSIVA': conHora }, { origen: 'SISTEMA', fecha: guardada }), conHora);
+  const otroDia = new Date('2026-10-05T00:00:00Z');
+  assert.equal(desde({ 'FECHA RESPONSIVA': otroDia }, { origen: 'SISTEMA', fecha: guardada }), otroDia);
+  assert.equal(desde({ 'FECHA RESPONSIVA': otroDia }, null), otroDia);
+});

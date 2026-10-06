@@ -62,7 +62,6 @@ const LineasRegistros = (function () {
    * más (como el AppSheet: segundo…quinto), cada uno con su número de empleado y su nombre de Capital Humano, en su propio
    * bloque («RESPONSABLE 2», con «Quitar») y un botón «Agregar responsable» al final. Cuántos hay lo lleva
    * RESPONSABLES ADICIONALES (no se guarda): los bloques de más se borran al guardar.
-   * `fijo` (la inspección de Reasignar): solo los que trae la responsiva, sin cambiarlos, y sin agregar ni quitar.
    */
   const ORDEN_ADICIONALES = ['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'];
   const CUENTA_ADICIONALES = 'RESPONSABLES ADICIONALES';
@@ -71,15 +70,9 @@ const LineasRegistros = (function () {
     ORDEN_ADICIONALES.forEach((n, i) => { if (texto_(valorDe('NOMBRE ' + n + ' RESPONSABLE')) || texto_(valorDe('NO EMPLEADO ' + n + ' RESPONSABLE'))) k = i + 1; });
     return k;
   }
-  function camposAdicionales(campo, valorDe, fijo) {
+  function camposAdicionales(campo, valorDe) {
     const k = cuantosAdicionales(valorDe);
-    const titulo = (i) => ({ tipo: 'titulo', texto: 'RESPONSABLE ' + (i + 2), icono: 'user-plus', quitarAdicional: fijo ? null : i });
-    if (fijo) {
-      return ORDEN_ADICIONALES.slice(0, k).reduce((a, n, i) => a.concat([titulo(i),
-        campo('NO EMPLEADO ' + n + ' RESPONSABLE', 'No. de empleado', 'texto', { valor: valorDe('NO EMPLEADO ' + n + ' RESPONSABLE'), soloLectura: true }),
-        campo('NOMBRE ' + n + ' RESPONSABLE', 'Nombre', 'texto', { valor: valorDe('NOMBRE ' + n + ' RESPONSABLE'), soloLectura: true }),
-      ]), []);
-    }
+    const titulo = (i) => ({ tipo: 'titulo', texto: 'RESPONSABLE ' + (i + 2), icono: 'user-plus', quitarAdicional: i });
     return ORDEN_ADICIONALES.reduce((a, n, i) => {
       const mostrar = { cuantos: CUENTA_ADICIONALES, alMenos: i + 1 };
       const reset = { cuando: { cuantos: CUENTA_ADICIONALES, menos: i + 1 }, valor: '' };

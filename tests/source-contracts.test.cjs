@@ -580,8 +580,7 @@ test('inspección y responsiva: bloqueo en lista, firmas del sistema, acomodo, f
   assert.match(lineas, /function cargarCatalogos\(forzar\)/);
   // PDF: la firma recortada cabe en 160 × 70
   // Una firma cabe en 160 × 70; las de varios responsables juntas (responsiva, 6-oct), hasta 300 de ancho
-  assert.match(read('src/services/lineas/LineasPdf.gs'), /const anchoMax = \/\^firmas-\/\.test\(String\(blob\.getName \? blob\.getName\(\) : ''\)\) \? 300 : 160;/);
-  assert.match(read('src/services/lineas/LineasPdf.gs'), /Math\.min\(1, anchoMax \/ ancho, 70 \/ alto\)/);
+  assert.match(read('src/services/lineas/LineasPdf.gs'), /Math\.min\(1, \(chica \? 90 : 160\) \/ ancho, \(chica \? 40 : 70\) \/ alto\)/);
 });
 
 test('la sección de fotos de la inspección no se oculta con las condiciones del AppSheet', () => {
