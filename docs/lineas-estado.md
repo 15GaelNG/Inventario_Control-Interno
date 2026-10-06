@@ -1,7 +1,7 @@
 # Líneas — estado del módulo
 
 Rama `emmanuel` (adelante de `master` con la parte 6: COMENTARIO, plantillas «(SISTEMA)», página de la responsiva y
-patrón con 9 puntos en el PDF, Reasignar corregido y responsables adicionales; solo en el DEV) · Producción: versión 56 · Última actualización: 2026-10-06
+patrón con 9 puntos en el PDF, Reasignar corregido, responsables adicionales y sin «quien lo usa»; solo en el DEV) · Producción: versión 56 · Última actualización: 2026-10-06
 
 Qué es hoy el módulo **Líneas** (equipos celulares y líneas telefónicas), dónde vive cada cosa y cómo se trabaja.
 La bitácora anterior de este archivo (§0a…§0ae, hasta el 1-oct) sigue en el historial de git. El diseño de las hojas
@@ -15,8 +15,8 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   EQUIPO + SIM BASICO, LINEA, LINEA BASICA, BANDA ANCHA, MODEM, CAMARA).
 - **Acciones con nombre:** nueva inspección, nueva responsiva, Reasignar (responsiva y luego inspección, las dos
   obligatorias; el servidor exige la inspección del día; el equipo queda en USO; el director sale de la responsiva y
-  el jefe directo de Capital Humano; la inspección empieza con lo capturado en la responsiva y no cambia a la persona,
-  eso lo hace la reasignación), Mandar a resguardo (pide la
+  el jefe directo de la inspección o, si no, de Capital Humano; la inspección muestra fijo lo que se llenó en la
+  responsiva y solo pasa al inventario los accesos: la persona la pone la reasignación), Mandar a resguardo (pide la
   inspección de lo que viene de una persona), Mandar a cancelación, Subir PDF firmado (del sistema, del AppSheet o de
   NUCOS: versión nueva del PDF de NUCOS o, si no tiene, PDF nuevo en la carpeta de NUCOS de la captura o del día),
   Regenerar PDF (responsivas del sistema: versión nueva del mismo archivo; pasadas 6 h pide solo las firmas). Cada
@@ -26,11 +26,13 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   (`botonesDocumento` en lineas.html; `apiLineasInspeccion` / `apiLineasResponsiva`).
 - **Inspección y responsiva:** un solo «Comentario» (columna COMENTARIO, antes OBSERVACIONES). La inspección lleva al
   jefe directo y la responsiva al director, los dos de Capital Humano como en el AppSheet.
-- **Responsables adicionales:** «¿Más de un responsable?» en Editar y en la responsiva, con hasta cuatro más (segundo a
-  quinto: número de empleado y nombre de Capital Humano; columnas `NO EMPLEADO / NOMBRE SEGUNDO… QUINTO RESPONSABLE` al
-  final de ASIGNACIONES y RESPONSIVAS LINEAS). En la responsiva cada uno firma; el PDF los muestra como el AppSheet
-  (nombres con « / » y las firmas juntas). Reemplazan a «¿El responsable usa el equipo?» y «Quien lo usa»
-  (`lineasQuienUsaASegundo`, LineasAdmin).
+- **Responsables adicionales:** en Editar, la responsiva y la inspección, hasta cuatro más (segundo a quinto: número de
+  empleado y nombre de Capital Humano), cada uno en su bloque con «Quitar» y «Agregar responsable» debajo
+  (`LineasRegistros.camposAdicionales`, condición `{ cuantos }`). Columnas `NO EMPLEADO / NOMBRE SEGUNDO… QUINTO
+  RESPONSABLE` al final de ASIGNACIONES, RESPONSIVAS LINEAS e INSPECCIONES LINEAS. La inspección los pasa al inventario.
+  En los dos documentos cada uno firma; el PDF los muestra como el AppSheet (nombres con « / » y las firmas juntas).
+  «¿El responsable usa el equipo?» y «Quien lo usa» se quitaron por completo (sus columnas, con `lineasQuitarQuienUsa`,
+  LineasAdmin). En el PDF de la responsiva, con patrón solo sale su imagen.
 - **Secretos** (PIN, patrones, contraseñas, firmas): los ven ADMIN y el área `LINEAS` de USUARIOS
   (`TelefoniaService.puedeVerSecretos_`).
 - **Patrón:** EQUIPOS.PATRON guarda los puntos trazados en el sistema («1-5-9») o la ruta de la imagen del AppSheet.
@@ -49,7 +51,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 | Hoja | Qué guarda |
 |---|---|
 | LINEAS, EQUIPOS | Una fila por línea y por equipo (IDs de `Entidades.gs`) |
-| ASIGNACIONES | Quién tiene qué, con FECHA INICIO / FECHA FIN (persona o resguardo) |
+| ASIGNACIONES | Quién tiene qué, con FECHA INICIO / FECHA FIN (persona o resguardo), jefe directo y responsables adicionales |
 | ADENDUMS, CUENTAS | Plan, costo y fin de plan por línea; cuentas padre y razón social |
 | FACTURAS | Vacía: la llenará la carga mensual del proveedor |
 | CATALOGOS, LISTAS TELEFONOS | Listas de opciones |
