@@ -650,7 +650,7 @@
           el.innerHTML = '<img class="ln-patron-vista" alt="Patrón capturado en AppSheet" src="' + esc(r.imagen) + '" /><span class="ln-tenue">Capturado en AppSheet</span>';
         }).catch((e) => {
           delete patronesAppSheet[ruta];
-          el.innerHTML = '<span class="ln-tenue">' + mensajeError(e) + '</span>' + botonArchivo(ruta, 'Abrir en Drive');
+          el.innerHTML = '<span class="ln-tenue">' + icono('image-off', 'ln-icon-sm') + ' ' + mensajeError(e) + '</span>';
         });
       });
     }
@@ -2513,7 +2513,7 @@
                 ['Modelo', e.modelo], ['IMEI', e.imei], ['Color', e.color], ['Accesorios', (e.accesorios || []).join(', ')],
                 e.tipo !== 'MODEM' && e.tipo !== 'BANDA_ANCHA' && e.tipo !== 'CAMARA' ? ['Cuenta Google', e.cuentaGoogle] : null,
                 e.tipo === 'CELULAR' || e.tipo === 'CELULAR_BASICO' ? ['PIN equipo', e.pinEquipo] : null,
-                e.tipo === 'CELULAR' || e.patronRuta ? ['Patrón', vistaPatron(e.patronRuta), true] : null,   // Show_If del AppSheet: EQUIPO y EQUIPO + SIM
+                e.patronRuta ? ['Patrón', vistaPatron(e.patronRuta), true] : null,   // sin patrón (ni del AppSheet ni trazado) no se muestra
                 e.tipo === 'MODEM' || e.tipo === 'BANDA_ANCHA' ? ['Contraseña módem', e.contrasenaModem] : null,
                 e.simResidual ? ['SIM residual', chip(e.simResidual, 'ambar'), true] : null,
               ])) +
@@ -3847,8 +3847,14 @@
             if (pdf && pdf.faltanFirmas) { pedirFirmasPdf(sesionCaptura, tipo, pdf.nombres || {}, generar); return; }
             mostrarEspera('Tu PDF está listo', { tono: 'listo', icono: 'circle-check', texto: '',
               acciones: enlaceDrive(pdf.id, 'Ver PDF', true) + '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
-            cargarEvidencias(idAbierto);
-            cargarHistorial(idAbierto);
+            // La captura cambia lo que muestra General (responsable, color, patrón): la ficha de atrás se pinta de nuevo
+            // (trae también Documentos e Historial); si se está viendo otra cosa, solo esas dos
+            const arriba = pila[pila.length - 1];
+            if (arriba && arriba.id === idAbierto && (arriba.tipo === 'equipo' || arriba.tipo === 'linea')) abrir(arriba.tipo, arriba.id, true, true);
+            else {
+              cargarEvidencias(idAbierto);
+              cargarHistorial(idAbierto);
+            }
           }).catch((e) => {
             if (!vigente() || captura !== sesionCaptura) return;
             sesionCaptura.guardando = false;

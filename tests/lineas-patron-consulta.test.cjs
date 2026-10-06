@@ -94,3 +94,50 @@ test('servidor: la imagen del patrón solo la piden ADMIN y el área de Líneas,
   assert.throws(() => correr(true, 'Files/RESPONSIVA1.pdf'), /No es un patrón/);
   assert.match(read('src/ClientApi.gs'), /function apiLineasPatronAppSheet\(token, ruta\) \{\s+return TelefoniaService\.patronAppSheet\(token, ruta\);/);
 });
+
+test('servidor: el archivo del AppSheet se busca en la carpeta de la app, en la de solo lectura y por su nombre', () => {
+  const archivo = (id, nombre, padre) => ({ getId: () => id, getName: () => nombre, getUrl: () => 'u/' + id, getParents: () => iter(padre ? [padre] : []) });
+  const iter = (xs) => { let i = 0; return { hasNext: () => i < xs.length, next: () => xs[i++] }; };
+  const carpetas = {};
+  const carpeta = (id, padre, sub, archivos) => (carpetas[id] = {
+    getId: () => id, getParents: () => iter(padre ? [carpetas[padre]] : []),
+    getFoldersByName: (n) => iter((sub || {})[n] ? [carpetas[sub[n]]] : []),
+    getFilesByName: (n) => iter((archivos || {})[n] ? [archivos[n]] : []),
+  });
+  carpeta('PRUEBAS', null, {});
+  carpeta('PROD', null, { 'INSPECCIONES LINEAS_Images': 'IMGS', OTRA: 'OTRA' });
+  carpeta('IMGS', 'PROD', {}, { 'a.PATRON.1.png': archivo('P1', 'a.PATRON.1.png', null) });
+  carpeta('OTRA', 'PROD', {});
+  carpeta('AJENA', null, {});
+  const enOtra = archivo('P2', 'b.PATRON.2.png', carpetas.OTRA);
+  const ajeno = archivo('X', 'c.PATRON.3.png', carpetas.AJENA);
+  const busquedas = [];
+  const memoria = {};
+  const LA = new Function('PropertiesService', 'leerConfig_', 'CacheService', 'Utilities', 'DriveApp',
+    read('src/services/lineas/LineasArchivos.gs') + '\nreturn LineasArchivos;')(
+    {}, (k) => ({ LINEAS_DRIVE_APPSHEET: 'PRUEBAS', LINEAS_DRIVE_APPSHEET_LECTURA: 'PROD' })[k] || null,
+    { getScriptCache: () => ({ get: (k) => memoria[k] || null, put: (k, v) => { memoria[k] = v; } }) },
+    { base64EncodeWebSafe: (b) => String(b), computeDigest: (a, t) => t, DigestAlgorithm: {}, Charset: {} },
+    {
+      getFolderById: (id) => carpetas[id],
+      searchFiles: (q) => { busquedas.push(q); return iter([ajeno, enOtra].filter((f) => q.indexOf('"' + f.getName() + '"') >= 0)); },
+    });
+  assert.equal(LA.resolver('INSPECCIONES LINEAS_Images/a.PATRON.1.png', true).id, 'P1', 'en la carpeta de solo lectura');
+  assert.equal(busquedas.length, 0, 'encontrado por la ruta: no se busca por nombre');
+  assert.equal(LA.resolver('INSPECCIONES LINEAS_Images/b.PATRON.2.png', true).id, 'P2', 'en otra subcarpeta de la app');
+  assert.equal(LA.resolver('INSPECCIONES LINEAS_Images/c.PATRON.3.png', true), null, 'nunca fuera de la app');
+  assert.match(busquedas[0], /^title = "b\.PATRON\.2\.png" and trashed = false$/);
+});
+
+test('servidor: la responsiva pasa al equipo el patrón trazado', () => {
+  const captura = read('src/services/lineas/LineasCaptura.gs').replace(/\r/g, '');
+  const resp = captura.slice(captura.indexOf('  function guardarResponsiva('), captura.indexOf('    firmasCache_(\'RESPONSIVA\''));
+  assert.match(resp, /if \(datos\.patron !== undefined && datos\.patron !== null\) \{\n\s+copia\['PATRON'\] = String\(datos\.patron\);/);
+  assert.match(resp, /LineasRepo\.guardarCambiosRegistro\(obj\.fila, copia, usuario, ahora, \{ tolerante: true \}\)/);
+  assert.match(read('src/config/Entornos.gs'), /LINEAS_DRIVE_APPSHEET_LECTURA: '1WPFFd4imLiui6zIpAa3OL62ZEu_a5BJn'/);
+});
+
+test('cliente: sin patrón no hay campo, y al guardar una captura la ficha se pinta de nuevo', () => {
+  assert.match(cliente, /e\.patronRuta \? \['Patrón', vistaPatron\(e\.patronRuta\), true\] : null/);
+  assert.match(cliente, /if \(arriba && arriba\.id === idAbierto && \(arriba\.tipo === 'equipo' \|\| arriba\.tipo === 'linea'\)\) abrir\(arriba\.tipo, arriba\.id, true, true\);/);
+});

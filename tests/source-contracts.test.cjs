@@ -669,7 +669,7 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
       base64EncodeWebSafe: (b) => String(b), computeDigest: (a, t) => t, DigestAlgorithm: {}, Charset: {},
       base64Decode: () => [1, 2, 3], newBlob: (bytes, mime, nombre) => ({ mime, nombre }), formatDate: () => '101530',
     },
-    DriveApp: { getFolderById: () => raiz, Access: { DOMAIN: 'DOMAIN' }, Permission: { VIEW: 'VIEW' } },
+    DriveApp: { getFolderById: () => raiz, searchFiles: () => ({ hasNext: () => false }), Access: { DOMAIN: 'DOMAIN' }, Permission: { VIEW: 'VIEW' } },
   };
   const LA = new Function(...Object.keys(globales), read('src/services/lineas/LineasArchivos.gs') + '\nreturn LineasArchivos;')(...Object.values(globales));
   assert.equal(LA.resolver('BITACORA DE DESECHO_Files_/a1.EVIDENCIA.1.jpg', false).id, 'ARCH1');

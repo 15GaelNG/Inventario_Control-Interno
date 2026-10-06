@@ -20,9 +20,9 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 - **Secretos** (PIN, patrones, contraseñas, firmas): los ven ADMIN y el área `LINEAS` de USUARIOS
   (`TelefoniaService.puedeVerSecretos_`).
 - **Patrón:** EQUIPOS.PATRON guarda los puntos trazados en el sistema («1-5-9») o la ruta de la imagen del AppSheet.
-  General y las capturas lo muestran: los puntos dibujados, la imagen del AppSheet desde su carpeta
-  (`apiLineasPatronAppSheet`, solo con permiso de secretos). La inspección y Editar, al trazar uno nuevo, guardan los
-  puntos y la imagen deja de verse; el de la responsiva se queda en RESPONSIVAS LINEAS.
+  General lo muestra solo si hay uno: los puntos dibujados o la imagen del AppSheet (`apiLineasPatronAppSheet`, solo
+  con permiso de secretos); las capturas enseñan la imagen junto al lienzo. La inspección, la responsiva y Editar, al
+  trazar uno nuevo, lo guardan en el equipo y la imagen deja de verse; al guardar una captura la ficha se pinta de nuevo.
 - **Resguardos y cancelaciones:** bandeja de Pau (recibir, entregar a Líneas, vendido, cancelación con carta).
 - **Panorama:** líneas y equipos por estatus, renta por cuenta y adendums, al cierre del mes elegido.
 - **Notificaciones:** campana con adendums por vencer y avisos de seguimiento.
@@ -54,6 +54,9 @@ AppSheet (HTML con Chromium), en 2 hojas (`LineasPdf.COMO_APPSHEET`). El patrón
 (`LineasPatronPng.gs`).
 
 **Configuración:** bloque por scriptId en `src/config/Entornos.gs` (producción `1NbOczw…`, DEV de Emmanuel `1rpvvay…`).
+Los archivos del AppSheet (rutas `TABLA_Images/…`) se buscan en la carpeta de la app y, si no están en la ruta, por
+su nombre dentro de ella (`LineasArchivos.resolver`); el DEV además los lee de la carpeta de producción
+(`LINEAS_DRIVE_APPSHEET_LECTURA`, solo lectura).
 
 ## 3. Archivos
 

@@ -481,8 +481,15 @@ const LineasCaptura = (function () {
       });
       LineasDatos.agregarFilas(LineasRepo.TAB.RESP, [fila]);
       // El color es del aparato (EQUIPOS): la responsiva lo actualiza, igual que la inspección (decisión del usuario, 3-oct)
-      const g = String(valores['COLOR'] || '').trim()
-        ? LineasRepo.guardarCambiosRegistro(obj.fila, { 'COLOR': valores['COLOR'] }, usuario, ahora, { tolerante: true }) : null;
+      const copia = {};
+      if (String(valores['COLOR'] || '').trim()) copia['COLOR'] = valores['COLOR'];
+      // El patrón trazado (o borrado) en la responsiva también pasa al equipo, como el de la inspección (usuario, 5-oct);
+      // PIN EQUIPO solo si dice PATRON. Sin trazar, datos.patron no llega y el del equipo se queda igual
+      if (datos.patron !== undefined && datos.patron !== null) {
+        copia['PATRON'] = String(datos.patron);
+        if (String(valores['PIN EQUIPO'] || '').trim().toUpperCase() === 'PATRON') copia['PIN EQUIPO'] = 'PATRON';
+      }
+      const g = Object.keys(copia).length ? LineasRepo.guardarCambiosRegistro(obj.fila, copia, usuario, ahora, { tolerante: true }) : null;
 
       LineasRepo.asegurarPestanaApp(LineasRepo.TAB.APP_EVID);
       LineasDatos.agregarFilas(LineasRepo.TAB.APP_EVID, [{
