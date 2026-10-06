@@ -50,7 +50,11 @@ test('patrón: PNG válido de 300 × 300 con el dibujo del formulario (trazo, in
   assert.deepEqual(png.color(250, 236), [0x0b, 0x5d, 0x7a]);    // punto 9 (abajo a la derecha)
   assert.deepEqual(png.color(50, 30), [0xc9, 0xa2, 0x27]);      // anillo del inicio (punto 1)
   assert.deepEqual(png.color(50, 51), [0xff, 0xff, 0xff]);      // el "1" dentro del punto
-  assert.deepEqual(png.color(250, 50), [0xdd, 0xeb, 0xf7]);     // el punto 3 no se tocó
+  // Los 9 puntos como en pantalla (usuario, 6-oct): el 3 no se usa y sale gris y chico
+  assert.deepEqual(png.color(250, 50), [0xb8, 0xc4, 0xca]);
+  assert.deepEqual(png.color(250, 64), [0xdd, 0xeb, 0xf7]);
+  // Un tramo 1→3 pasa por el 2: el punto gris va encima del trazo
+  assert.deepEqual(leerPng(P.dibujar([1, 3], '#ffffff')).color(150, 50), [0xb8, 0xc4, 0xca]);
   const blob = P.blob('1-5-9', '#ffffff', 'patron.png');
   assert.equal(blob.mime, 'image/png');
   assert.ok(blob.bytes.every((x) => x >= -128 && x <= 127), 'bytes con signo para Utilities.newBlob');

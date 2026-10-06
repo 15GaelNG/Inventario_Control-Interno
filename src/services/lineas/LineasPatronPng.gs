@@ -3,17 +3,19 @@
  * Imagen del patrón de desbloqueo para el PDF, dibujada en el servidor. La dibuja el navegador al capturar
  * (activarPatron → base64 en lineas.html) y viaja con las firmas; al regenerar un PDF cuando ya no está, se dibuja aquí
  * con los puntos guardados ("1-5-9"), sin mandarlos al navegador (solo los ven ADMIN y el área de Líneas). Mismo dibujo: 300 × 300, trazo
- * azul, flechas doradas hacia donde va cada tramo y cada punto con su orden (anillo dorado en el inicio).
+ * azul, flechas doradas hacia donde va cada tramo, cada punto con su orden (anillo dorado en el inicio) y los 9 puntos:
+ * los que no se usan, grises y chicos, como en pantalla (svgPatron; usuario, 6-oct).
  * Apps Script no convierte SVG a PNG: se pinta pixel por pixel y el PNG se arma a mano (paleta, sin compresión).
  */
 
 const LineasPatronPng = (function () {
   const LADO = 300;
   const POSICIONES = [[50, 50], [150, 50], [250, 50], [50, 150], [150, 150], [250, 150], [50, 250], [150, 250], [250, 250]];
-  // Paleta: 0 = fondo de la celda del PDF, 1 = trazo y puntos, 2 = flechas y anillo, 3 = números
+  // Paleta: 0 = fondo de la celda del PDF, 1 = trazo y puntos, 2 = flechas y anillo, 3 = números, 4 = puntos sin usar
   const AZUL = [0x0b, 0x5d, 0x7a];
   const DORADO = [0xc9, 0xa2, 0x27];
   const BLANCO = [0xff, 0xff, 0xff];
+  const GRIS = [0xb8, 0xc4, 0xca];
   // Números en 5 × 7, a 3× (15 × 21 px dentro del punto de 32 px)
   const DIGITOS = {
     1: ['00100', '01100', '00100', '00100', '00100', '00100', '01110'],
@@ -152,13 +154,15 @@ const LineasPatronPng = (function () {
     const l = lienzo_();
     for (let i = 1; i < pts.length; i++) l.tramo(POSICIONES[pts[i - 1] - 1], POSICIONES[pts[i] - 1], 8, 1);
     flechas_(pts, 24).forEach((f) => l.triangulo(f, 2));
+    // Los que no se usan, encima del trazo (un tramo 1→3 pasa por el 2)
+    POSICIONES.forEach((p, i) => { if (pts.indexOf(i + 1) < 0) l.circulo(p, 10, 4); });
     pts.forEach((n, i) => {
       const p = POSICIONES[n - 1];
       l.circulo(p, 16, 1);
       if (!i) l.anillo(p, 20, 5, 2);
       l.digito([p[0], p[1] + 1], i + 1, 3);
     });
-    return png_(l.px, [rgb_(fondo), AZUL, DORADO, BLANCO]);
+    return png_(l.px, [rgb_(fondo), AZUL, DORADO, BLANCO, GRIS]);
   }
 
   /** Blob PNG para la plantilla a partir del valor guardado ("1-5-9"); null si no es un patrón. */
