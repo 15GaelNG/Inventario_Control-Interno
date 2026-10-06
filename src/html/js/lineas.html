@@ -634,7 +634,7 @@
     function vistaPatron(valor) {
       const v = String(valor === null || valor === undefined ? '' : valor).trim();
       if (!v) return vacio;
-      if (esPuntosPatron(v)) return '<div class="ln-patron-consulta">' + svgPatron(v) + '<span class="ln-tenue">' + esc(v.split('-').join(' → ')) + '</span></div>';
+      if (esPuntosPatron(v)) return '<div class="ln-patron-consulta">' + svgPatron(v) + '</div>';   // el dibujo ya marca inicio, orden y dirección
       const ruta = rutaPatronAppSheet(v);
       if (!ruta) return esRutaArchivo(v) ? botonArchivo(v, 'Ver patrón') : esc(v); // "••••" (oculto para el rol)
       return '<div class="ln-patron-consulta" data-ln-patron-appsheet="' + esc(ruta) + '"><span class="ln-tenue"><span class="ln-spinner"></span> Patrón de AppSheet…</span></div>';
@@ -2512,7 +2512,9 @@
                 ['Tipo', tipoRegistro(e.legado), true],
                 ['Modelo', e.modelo], ['IMEI', e.imei], ['Color', e.color], ['Accesorios', (e.accesorios || []).join(', ')],
                 e.tipo !== 'MODEM' && e.tipo !== 'BANDA_ANCHA' && e.tipo !== 'CAMARA' ? ['Cuenta Google', e.cuentaGoogle] : null,
-                e.tipo === 'CELULAR' || e.tipo === 'CELULAR_BASICO' ? ['PIN equipo', e.pinEquipo] : null,
+                // PIN EQUIPO = PATRON con patrón guardado: solo la fila «Patrón» (no se repite la palabra, usuario 5-oct)
+                (e.tipo === 'CELULAR' || e.tipo === 'CELULAR_BASICO') && !(e.patronRuta && /^PATR[OÓ]N$/i.test(String(e.pinEquipo || '').trim()))
+                  ? ['PIN equipo', e.pinEquipo] : null,
                 e.patronRuta ? ['Patrón', vistaPatron(e.patronRuta), true] : null,   // sin patrón (ni del AppSheet ni trazado) no se muestra
                 e.tipo === 'MODEM' || e.tipo === 'BANDA_ANCHA' ? ['Contraseña módem', e.contrasenaModem] : null,
                 e.simResidual ? ['SIM residual', chip(e.simResidual, 'ambar'), true] : null,
@@ -2771,7 +2773,7 @@
             r.onload = () => resolve(String(r.result).split(',')[1]);
             r.onerror = () => reject(new Error('No se pudo leer ' + f.name));
             r.readAsDataURL(f);
-          }).then((base64) => llamar('apiLineasSubirPdfFirmado', registroId, d.tipoPdf, d.id, d.pdfId, base64)).then((pdf) => {
+          }).then((base64) => llamar('apiLineasSubirPdfFirmado', registroId, d.tipoPdf, d.id, d.pdfId || '', base64)).then((pdf) => {
             if (!vigente() || captura !== sesion) return;
             mostrarEspera('PDF firmado guardado', { tono: 'listo', icono: 'circle-check', texto: '',
               acciones: enlaceDrive(pdf.id, 'Ver PDF', true) + '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
@@ -2849,7 +2851,8 @@
             { icono: 'folder-open', titulo: 'Ver carpeta en Drive', visible: (d) => !!d.carpetaId,
               alHacer: (d) => window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(d.carpetaId), '_blank', 'noopener') },
             { icono: 'file-plus', titulo: 'Generar PDF', visible: (d) => !!d.pdfPendiente, alHacer: (d) => generarPdfPendiente(d.tipoPdf, d.id, d.carpetaId) },
-            { icono: 'file-up', titulo: 'Subir PDF firmado', visible: (d) => operar && !!d.pdfId, alHacer: (d) => subirPdfFirmado(id, d) },
+            // Del sistema, con su PDF ya generado; del AppSheet y de NUCOS siempre (usuario, 5-oct)
+            { icono: 'file-up', titulo: 'Subir PDF firmado', visible: (d) => operar && (!!d.pdfId || d.origen !== 'SISTEMA'), alHacer: (d) => subirPdfFirmado(id, d) },
             { icono: 'refresh-ccw', titulo: 'Regenerar PDF', visible: (d) => operar && d.tipoPdf === 'RESPONSIVA' && d.origen === 'SISTEMA' && !!d.pdfId,
               alHacer: (d) => regenerarPdf(d) },
           ],

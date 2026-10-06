@@ -49,7 +49,8 @@ test('cliente: los puntos se dibujan, la imagen del AppSheet se pide y lo oculto
   assert.match(dibujo, /<polyline points="50,50 150,150 250,250" \/>/);
   assert.equal((dibujo.match(/class="ln-patron-marcado"/g) || []).length, 3);
   assert.equal((dibujo.match(/class="ln-patron-inicio"/g) || []).length, 1);
-  assert.match(dibujo, /1 → 5 → 9/);
+  assert.match(dibujo, /aria-label="Patrón 1 → 5 → 9"/);
+  assert.doesNotMatch(dibujo, /<\/svg><span/, 'sin el texto de los puntos debajo del dibujo');
   assert.match(vistaPatron(RUTA), new RegExp('data-ln-patron-appsheet="' + RUTA.replace(/\./g, '\\.') + '"'));
   assert.equal(vistaPatron('••••'), '••••');
   assert.equal(vistaPatron(''), '—');
@@ -140,4 +141,8 @@ test('servidor: la responsiva pasa al equipo el patrón trazado', () => {
 test('cliente: sin patrón no hay campo, y al guardar una captura la ficha se pinta de nuevo', () => {
   assert.match(cliente, /e\.patronRuta \? \['Patrón', vistaPatron\(e\.patronRuta\), true\] : null/);
   assert.match(cliente, /if \(arriba && arriba\.id === idAbierto && \(arriba\.tipo === 'equipo' \|\| arriba\.tipo === 'linea'\)\) abrir\(arriba\.tipo, arriba\.id, true, true\);/);
+});
+
+test('cliente: PIN EQUIPO = PATRON con patrón guardado no repite la palabra', () => {
+  assert.match(cliente, /!\(e\.patronRuta && \/\^PATR\[OÓ\]N\$\/i\.test\(String\(e\.pinEquipo \|\| ''\)\.trim\(\)\)\)\s+\? \['PIN equipo', e\.pinEquipo\] : null/);
 });

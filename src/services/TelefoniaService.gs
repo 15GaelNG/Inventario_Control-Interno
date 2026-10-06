@@ -545,8 +545,8 @@ const TelefoniaService = (function () {
   }
 
   /**
-   * PDF firmado de una inspección o responsiva (usuario, 5-oct). Solo el PDF que Documentos le muestra a ese registro:
-   * nunca otro archivo de Drive.
+   * PDF firmado de una inspección o responsiva (usuario, 5-oct), del sistema, del AppSheet o de la carpeta NUCOS. Solo
+   * documentos que Documentos le muestra a ese registro, y su PDF y su carpeta salen de ahí, no del cliente.
    */
   function subirPdfFirmado(token, registroId, tipo, docId, pdfId, base64) {
     const sesion = operar_(token);
@@ -554,9 +554,11 @@ const TelefoniaService = (function () {
     const r = registro_(registroId);
     if (!r) throw new Error('No existe el registro ' + registroId);
     const docs = evidencias(token, registroId);
-    const doc = (tipo === 'INSPECCION' ? docs.inspecciones : docs.responsivas).filter((d) => d.id === docId && d.pdfId && d.pdfId === pdfId)[0];
-    if (!doc) throw new Error('El PDF no es de este registro.');
-    return LineasUtil.paraCliente(LineasCaptura.subirPdfFirmado(r, { tipo: tipo, id: docId, pdfId: pdfId }, base64, usuarioOperacion_(sesion)));
+    const doc = (tipo === 'INSPECCION' ? docs.inspecciones : docs.responsivas).filter((d) => d.id === docId)[0];
+    if (!doc || (pdfId && doc.pdfId !== pdfId)) throw new Error('El PDF no es de este registro.');
+    return LineasUtil.paraCliente(LineasCaptura.subirPdfFirmado(r, {
+      tipo: tipo, id: docId, origen: doc.origen, fecha: doc.fecha, pdfId: doc.pdfId, carpetaId: doc.carpetaId,
+    }, base64, usuarioOperacion_(sesion)));
   }
 
   /** Panorama de Líneas: equipos y líneas por estatus, hoy y al cierre de cada mes. */

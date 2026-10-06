@@ -743,14 +743,18 @@ const LineasCaptura = (function () {
    * PDF firmado (usuario, 5-oct): la inspección o la responsiva se pudo guardar sin la firma del responsable (se le
    * manda); al regresar firmada se sube aquí y reemplaza el PDF (LineasArchivos.reemplazarPdf: mismo archivo, la versión
    * sin firma queda en el historial de versiones de Drive). Solo PDF. Queda en el historial del registro.
-   * `doc` = { tipo, id, pdfId } ya validado como documento de `registro` (TelefoniaService).
+   * También las del AppSheet y las de la carpeta NUCOS (usuario, 5-oct: se sigue trabajando con registros de antes):
+   * su PDF de NUCOS (Documentos le junta a la del AppSheet la carpeta de NUCOS del mismo día); si no tienen, se guarda
+   * como nuevo en NUCOS (pdfFirmadoNuevo_). Los documentos salen de NUCOS, no de la carpeta del AppSheet (28-sep).
+   * `doc` = { tipo, id, origen, fecha, pdfId, carpetaId } ya validado como documento de `registro` (TelefoniaService).
    */
   function subirPdfFirmado(registro, doc, base64, usuario) {
     if (!base64) throw new Error('Elige el PDF firmado.');
     const bytes = Utilities.base64Decode(String(base64));
     if (bytes.length > 15 * 1024 * 1024) throw new Error('El archivo supera 15 MB.');
     if (String.fromCharCode.apply(null, bytes.slice(0, 5)) !== '%PDF-') throw new Error('Solo se aceptan archivos PDF.');
-    const archivo = LineasArchivos.reemplazarPdf(doc.pdfId, bytes);
+    if (!doc.pdfId && doc.origen === 'SISTEMA') throw new Error('Primero genera el PDF.');
+    const archivo = doc.pdfId ? LineasArchivos.reemplazarPdf(doc.pdfId, bytes) : pdfFirmadoNuevo_(registro, doc, bytes);
     if (registro.nuco) LineasArchivos.olvidarNuco(registro.nuco);
     LineasDatos.conCandado(() => LineasRepo.registrarMovimiento('PDF_FIRMADO', { motivo: '' }, usuario, new Date(), {
       refs: [registro.id], nuco: registro.nuco,
@@ -758,6 +762,33 @@ const LineasCaptura = (function () {
         { cambios: [{ campo: 'PDF', antes: '', despues: archivo.name }] }),
     }));
     return { id: archivo.id, nombre: archivo.name };
+  }
+
+  /**
+   * PDF firmado de una captura de antes que no tiene PDF en NUCOS: va a su carpeta de NUCOS ("INSP DD MM" /
+   * "RESP DD MM") o, si no tiene, a una nueva del día de la captura en la carpeta del NUCO (como destinoPdf_), que
+   * Documentos junta con la del AppSheet del mismo día. Sin NUCO no hay carpeta en NUCOS.
+   */
+  function pdfFirmadoNuevo_(registro, doc, bytes) {
+    const tipo = doc.tipo;
+    const nuco = LineasUtil.nuco4(registro.nuco);
+    const fecha = doc.fecha && !isNaN(new Date(doc.fecha)) ? new Date(doc.fecha) : new Date();
+    let carpeta, nombre;
+    if (doc.carpetaId && LineasArchivos.enNucos(doc.carpetaId)) {
+      carpeta = DriveApp.getFolderById(doc.carpetaId);
+      const m = carpeta.getName().match(/^(?:INSP|RESP)\s+(\d{1,2})\s+(\d{1,2})/i);
+      nombre = (tipo === 'INSPECCION' ? 'INSP ' : 'RESP ') + (nuco || 'SIN NUCO') + ' ' + (m ? m[1] + ' ' + m[2] : Utilities.formatDate(fecha, ZONA, 'dd MM')) + '.pdf';
+    } else if (nuco) {
+      const c = LineasArchivos.carpetaEvidenciaNuco(tipo, nuco, fecha);
+      carpeta = DriveApp.getFolderById(c.carpetaId);
+      nombre = c.nombrePdf;
+    } else {
+      throw new Error('El registro no tiene NUCO: no hay carpeta en NUCOS para el PDF.');
+    }
+    LineasArchivos.exigirEscribible(carpeta.getId());
+    const f = carpeta.createFile(Utilities.newBlob(bytes, MimeType.PDF, nombre));
+    f.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
+    return { id: f.getId(), name: f.getName() };
   }
 
   return {
