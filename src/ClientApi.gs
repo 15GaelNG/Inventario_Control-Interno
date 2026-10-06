@@ -241,6 +241,39 @@ function apiEliminarReasignacionVehicular(token, id) {
   return ReasignacionesVehicularesService.eliminar(token, id);
 }
 
+// --- Responsiva Vehicular ---
+function apiListarResponsivasVehicularesPorFolio(token, folio) {
+  return JSON.stringify(ResponsivaVehicularService.listarPorFolio(token, folio));
+}
+function apiBuscarResponsivaVehicularPorId(token, id) {
+  // JSON.stringify — igual que las listas grandes: este registro tiene 47+ columnas y
+  // google.script.run pierde objetos grandes de forma intermitente si no viajan como texto.
+  return JSON.stringify(ResponsivaVehicularService.buscarPorId(token, id));
+}
+function apiCrearResponsivaVehicular(token, datos, imagenes) {
+  return ResponsivaVehicularService.crear(token, datos, imagenes);
+}
+function apiEliminarResponsivaVehicular(token, id) {
+  return ResponsivaVehicularService.eliminar(token, id);
+}
+
+// --- Adherente Vehicular ---
+function apiListarAdherentesVehicularesPorFolio(token, folio) {
+  return JSON.stringify(AdherenteVehicularService.listarPorFolio(token, folio));
+}
+function apiBuscarAdherenteVehicularPorId(token, id) {
+  return JSON.stringify(AdherenteVehicularService.buscarPorId(token, id));
+}
+function apiCrearAdherenteVehicular(token, datos, imagenes) {
+  return AdherenteVehicularService.crear(token, datos, imagenes);
+}
+function apiCambiarEstatusAdherenteVehicular(token, id, estatus) {
+  return AdherenteVehicularService.cambiarEstatus(token, id, estatus);
+}
+function apiEliminarAdherenteVehicular(token, id) {
+  return AdherenteVehicularService.eliminar(token, id);
+}
+
 // --- Arqueos ---
 function apiListarAuditItems(token) {
   Permisos.puedeLeer(token, 'arqueos');

@@ -433,8 +433,9 @@ const CapitalHumano = (function () {
 
   /**
    * Colaboradores para autocompletar "Responsable"/"Nombre completo" en otros módulos (ej.
-   * Vehículos y Uber: al elegir el nombre, se sugieren Departamento, Puesto, Sede, Oficina-
-   * Desarrollo, Correo y No. de empleado). Son los renglones de COLABORADORES ACTUALIZADO tal
+   * Vehículos y Uber: al elegir el nombre, se sugieren Departamento, Área, Puesto, Sede,
+   * Oficina-Desarrollo, Jefe directo, Correo y No. de empleado). Son los renglones de
+   * COLABORADORES ACTUALIZADO tal
    * cual, sin pasar por identificar()/PERSONAS -- no hace falta resolver quién es quién para
    * esto, solo sugerir. Por eso un mismo nombre puede salir más de una vez (otro departamento
    * tras un cambio de área, o un número reutilizado con otro departamento): se desduplica solo
@@ -465,9 +466,11 @@ const CapitalHumano = (function () {
         NOMBRE: nombre,
         NO_EMPLEADO: String(f['No EMPLEADO'] || '').trim(),
         DEPARTAMENTO: departamento,
+        AREA: String(f['AREA'] || '').trim(),
         PUESTO: String(f['PUESTO'] || '').trim(),
         SEDE: String(f['SEDE'] || '').trim(),
         OFICINA: String(f['OFICINA/DESARROLLO'] || '').trim(),
+        JEFE_DIRECTO: String(f['JEFE DIRECTO'] || '').trim(),
         CORREO: String(f['CORREO EMPRESARIAL'] || '').trim(),
       });
     });
