@@ -7,6 +7,12 @@
  * lugar (services/*.gs) y aquí solo se decide qué queda expuesto al cliente.
  */
 
+// --- Medir ---
+/** No hace nada: lo que tarda es el piso de cualquier llamada (medirPiso() en la consola) */
+function apiPing() {
+  return Date.now();
+}
+
 // --- Dashboard ---
 // JSON.stringify: incluye fechas (Date/ISO) mezcladas en varias secciones —
 // mismo motivo que apiListarVehiculosResumen (ver comentario más abajo).

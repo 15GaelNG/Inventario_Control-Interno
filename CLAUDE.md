@@ -131,6 +131,29 @@ versión en cada subida a prod:
 
 Revisa con `npx clasp -P .clasp.prod.json list-deployments` que ambos digan `@N`.
 
+`node tools/subir/subir.js prod --desplegar "…"` hace todo eso solo: comprime, sube, verifica y
+mueve los dos despliegues. También está el botón "Run workflow" de la GitHub Action
+(docs/subir-automatico.md).
+
+## Se sube comprimido: `npm run push`, no `clasp push`
+
+`npm run push` (y `push:lab`, `push:prod`) comprime el JS y el CSS de los `.html` antes de
+subir (tools/subir/construir.js), conserva lo que solo existe en Apps Script y verifica que
+quedó igual. `src/` sigue legible. Un `//` que no se pueda escapar deja ese bloque sin
+comprimir; `tests/construir.test.js` falla si eso pasa. Para revisar lo comprimido en la vista
+previa: `npm run construir` y luego `VISTA_PREVIA_SRC=.construido/revisar node tools/vista-previa/capturar.js …`.
+
+## Rapidez: cada llamada al servidor cuesta ~1–2.5 s aunque no haga nada
+
+Es el piso de Apps Script (`await medirPiso()` en la consola lo mide; `verTiempos()` resume
+cada llamada). Por eso:
+- **Lo que sale de varias listas** (el Inicio, la campanita) se guarda ya calculado con
+  `CacheHojas.calculo`, por firma de permisos (`Permisos.firmaDeLectura`).
+- **Lo que una pantalla va a necesitar de seguro** se pide antes con `adelantar` (api.html).
+- **Una lista nueva** de `HojaServicio` exporta `calentar` y va en `pasosCalentador_()` de
+  `Calentador.gs`. Es un activador que la rehace cada 10 min: se instala una vez por proyecto
+  con `instalarCalentador()` desde el editor. Un contrato revisa que cada paso exista.
+
 ## Flujo de trabajo
 
 - Rama de trabajo: `jorge`. Nunca hacer push a `master` sin que se pida

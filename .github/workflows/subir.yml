@@ -1,0 +1,74 @@
+# Sube a Apps Script sin correr comandos (tools/subir/subir.js: comprime, sube y verifica).
+#
+# - push a una rama de tools/subir/destinos.json ("ramas") → pruebas y, si pasan, a su DEV.
+# - Producción: solo a mano, con el botón "Run workflow" (pestaña Actions) sobre master. Sube y
+#   mueve los dos despliegues a la versión nueva (CLAUDE.md: "dos links").
+#
+# Necesita el secreto CLASPRC_JSON: el contenido de ~/.clasprc.json de alguien que pueda
+# editar esos proyectos (lo deja `npx clasp login`). Ver docs/subir-automatico.md.
+
+name: Subir a Apps Script
+
+on:
+  push:
+    branches: [ayrton]
+  workflow_dispatch:
+    inputs:
+      descripcion:
+        description: 'Qué cambia (va en la versión de producción)'
+        required: true
+
+# Dos pushes seguidos a la misma rama no se pisan: el segundo espera al primero
+concurrency:
+  group: subir-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  probar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  dev:
+    needs: probar
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Credenciales de clasp
+        run: printf '%s' "$CLASPRC_JSON" > ~/.clasprc.json
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+      - run: node tools/subir/subir.js rama
+
+  produccion:
+    needs: probar
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'master'
+    runs-on: ubuntu-latest
+    # Con un "environment" se puede pedir aprobación de alguien más en Settings → Environments
+    environment: produccion
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Credenciales de clasp
+        run: printf '%s' "$CLASPRC_JSON" > ~/.clasprc.json
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+      - run: node tools/subir/subir.js prod --desplegar "$DESCRIPCION ($(git rev-parse --short HEAD))"
+        env:
+          DESCRIPCION: ${{ inputs.descripcion }}

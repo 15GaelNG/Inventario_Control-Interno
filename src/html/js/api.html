@@ -21,6 +21,24 @@
     console.table(tabla);
     return tabla;
   }
+
+  /**
+   * El piso de una llamada al servidor: `veces` llamadas seguidas a apiPing, que no hace
+   * nada. Lo que tarda es puro viaje + arranque de Apps Script, lo mismo que paga cualquier
+   * otra llamada antes de hacer su trabajo. En la consola: await medirPiso()
+   */
+  async function medirPiso(veces) {
+    const ms = [];
+    for (let i = 0; i < (veces || 5); i++) {
+      const t = performance.now();
+      await pedir_('apiPing', []);
+      ms.push(Math.round(performance.now() - t));
+    }
+    const orden = ms.slice().sort((a, b) => a - b);
+    const r = { llamadas: ms, minimo_ms: orden[0], mediana_ms: orden[Math.floor(orden.length / 2)] };
+    console.log('Piso por llamada: mediana ' + r.mediana_ms + ' ms, mínimo ' + r.minimo_ms + ' ms', ms);
+    return r;
+  }
   function anotarTiempo_(fn, inicio, ok) {
     tiemposServidor.push({ fn: fn, ms: Math.round(performance.now() - inicio), ok: ok });
     if (tiemposServidor.length > 300) tiemposServidor.shift();
