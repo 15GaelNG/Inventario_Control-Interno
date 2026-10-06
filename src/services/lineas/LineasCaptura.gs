@@ -20,7 +20,8 @@
  * La columna File de la hoja guarda el enlace de Drive del PDF. Un registro sin NUCO sigue con las rutas del
  * AppSheet en la carpeta de la app: INSPECCIONES_Files_/INSPECCION - <ID>.pdf y Files/RESPONSIVA<ID>.pdf.
  * Las firmas NO se guardan como archivos (acuerdo del 18-sep): viajan en memoria para el PDF y las columnas
- * FIRMA quedan vacías. En AppSheet eran imágenes en <TABLA>_Images.
+ * FIRMA quedan vacías. En AppSheet eran imágenes en <TABLA>_Images. Regenerar el PDF (Documentos) usa las de la captura
+ * mientras siguen en caché (6 h); después se vuelven a firmar, sin capturar el formulario.
  * Del sistema nuevo se conservan: fotos opcionales de la inspección (INSPECCIONES LINEAS_Images/FOTOS <ID>),
  * APP_EVIDENCIAS y APP_MOVIMIENTOS (pestañas propias, no las lee AppSheet).
  */
@@ -480,8 +481,15 @@ const LineasCaptura = (function () {
       });
       LineasDatos.agregarFilas(LineasRepo.TAB.RESP, [fila]);
       // El color es del aparato (EQUIPOS): la responsiva lo actualiza, igual que la inspección (decisión del usuario, 3-oct)
-      const g = String(valores['COLOR'] || '').trim()
-        ? LineasRepo.guardarCambiosRegistro(obj.fila, { 'COLOR': valores['COLOR'] }, usuario, ahora, { tolerante: true }) : null;
+      const copia = {};
+      if (String(valores['COLOR'] || '').trim()) copia['COLOR'] = valores['COLOR'];
+      // El patrón trazado (o borrado) en la responsiva también pasa al equipo, como el de la inspección (usuario, 5-oct);
+      // PIN EQUIPO solo si dice PATRON. Sin trazar, datos.patron no llega y el del equipo se queda igual
+      if (datos.patron !== undefined && datos.patron !== null) {
+        copia['PATRON'] = String(datos.patron);
+        if (String(valores['PIN EQUIPO'] || '').trim().toUpperCase() === 'PATRON') copia['PIN EQUIPO'] = 'PATRON';
+      }
+      const g = Object.keys(copia).length ? LineasRepo.guardarCambiosRegistro(obj.fila, copia, usuario, ahora, { tolerante: true }) : null;
 
       LineasRepo.asegurarPestanaApp(LineasRepo.TAB.APP_EVID);
       LineasDatos.agregarFilas(LineasRepo.TAB.APP_EVID, [{
@@ -584,7 +592,13 @@ const LineasCaptura = (function () {
     return { carpeta: LineasArchivos.carpetaDeApp(destino.carpeta), nombre: destino.nombre(id), enNucos: false, nuco: null };
   }
 
-  /** Genera (o regenera con forzar=true) el PDF de una inspección o responsiva capturada en el sistema. */
+  /**
+   * Genera el PDF de una inspección o responsiva capturada en el sistema. `forzar` = Regenerar PDF (usuario, 5-oct): se
+   * vuelve a hacer con la plantilla y los datos de la hoja, sin capturar de nuevo, y queda como versión nueva del MISMO
+   * archivo (mismo enlace; la anterior se conserva en el historial de versiones de Drive, como Subir PDF firmado).
+   * Firmas: las de la captura (caché 6 h) o `firmasNuevas`. Sin ellas regresa { faltanFirmas, nombres } y se vuelven a
+   * firmar (no se guardan como archivos, acuerdo del 18-sep). El patrón, si ya no está su imagen, se dibuja con sus puntos.
+   */
   function generarPdf(tipo, id, forzar, usuario, firmasNuevas) {
     const esInspeccion = tipo === 'INSPECCION';
     if (!esInspeccion && tipo !== 'RESPONSIVA') throw new Error('Tipo de PDF inválido.');
@@ -597,36 +611,59 @@ const LineasCaptura = (function () {
     if (!forzar && ev.pdfs && ev.pdfs.length) return ev.pdfs[0];
 
     const firmas = firmasCache_(tipo, id, firmasNuevas);
-    // Firmas: las de esta sesión (caché 6 h); si la fila trae una ruta de imagen, se busca en la carpeta de la app
-    const archivo = (col) => LineasArchivos.blob(LineasUtil.col(fila, col));
-    const imagen = (clave, col, nombre) => (firmas && firmas[clave] ? blobBase64_(firmas[clave], nombre) : archivo(col));
-    if (!firmas && !LineasUtil.col(fila, esInspeccion ? 'FIRMA INSPECTOR' : 'FIRMA CI')) {
-      throw new Error('La firma temporal ya no está disponible. Captura ' + (esInspeccion ? 'una inspección nueva.' : 'una responsiva nueva.'));
+    const col = (c) => LineasUtil.col(fila, c);
+    if (!firmas && !col(esInspeccion ? 'FIRMA INSPECTOR' : 'FIRMA CI')) {
+      return { faltanFirmas: true, nombres: esInspeccion
+        ? { inspector: col('NOMBRE INSPECTOR') || '', responsable: col('RESPONSABLE') || '' }
+        : { ci: col('NOMBRE CI') || '', responsable: col('RESPONSABLE') || '' } };
     }
+    // Firmas: las de la captura o las nuevas; si la fila trae una ruta de imagen (AppSheet), se busca en la carpeta de la app
+    const archivo = (c) => LineasArchivos.blob(col(c));
+    const imagen = (clave, c, nombre) => (firmas && firmas[clave] ? blobBase64_(firmas[clave], nombre) : archivo(c));
+    const colPatron = esInspeccion ? 'PATRON' : 'CONTRASEÑA';
+    const patron = firmas && firmas.patron ? blobBase64_(firmas.patron, 'patron.png')
+      : LineasPatronPng.blob(col(colPatron), esInspeccion ? '#ddebf7' : '#ffffff') || archivo(colPatron);
     const destino = PDF[tipo];
     const d = destinoPdf_(tipo, fila, ev, id);
     const carpeta = d.carpeta;
     const nombre = d.nombre;
-    // Regenerar: el PDF anterior de este registro (el ligado y los del mismo nombre) se reemplaza
-    if (forzar) {
-      (ev.pdfs || []).forEach((p) => { try { DriveApp.getFileById(p.id).setTrashed(true); } catch (e) { /* ya no existe */ } });
-      const viejos = carpeta.getFilesByName(nombre);
-      while (viejos.hasNext()) viejos.next().setTrashed(true);
-    }
     const imagenes = esInspeccion
-      ? { 'FIRMA RESPONSABLE': imagen('responsable', 'FIRMA RESPONSABLE', 'firma-responsable.png'), 'FIRMA INSPECTOR': imagen('inspector', 'FIRMA INSPECTOR', 'firma-inspector.png'), 'PATRON': imagen('patron', 'PATRON', 'patron.png') }
-      : { 'FIRMA RESPONSABLE': imagen('responsable', 'FIRMA RESPONSABLE', 'firma-responsable.png'), 'FIRMA CI': imagen('ci', 'FIRMA CI', 'firma-ci.png'), 'CONTRASEÑA': imagen('patron', 'CONTRASEÑA', 'patron.png') };
+      ? { 'FIRMA RESPONSABLE': imagen('responsable', 'FIRMA RESPONSABLE', 'firma-responsable.png'), 'FIRMA INSPECTOR': imagen('inspector', 'FIRMA INSPECTOR', 'firma-inspector.png'), 'PATRON': patron }
+      : { 'FIRMA RESPONSABLE': imagen('responsable', 'FIRMA RESPONSABLE', 'firma-responsable.png'), 'FIRMA CI': imagen('ci', 'FIRMA CI', 'firma-ci.png'), 'CONTRASEÑA': patron };
+    const anterior = forzar ? pdfVigente_(ev) : null;
     try {
       const pdf = LineasPdf.generarPdfDesdePlantilla(
         esInspeccion ? LineasPdf.PLANTILLAS.INSPECCION_CELULAR : LineasPdf.PLANTILLAS.RESPONSIVA_CELULAR,
         registroPlantilla_(fila), imagenes, carpeta, nombre, d.enNucos);
+      if (d.enNucos) LineasArchivos.olvidarNuco(d.nuco);
+      if (anterior) {
+        const nuevo = DriveApp.getFileById(pdf.id);
+        LineasArchivos.reemplazarPdf(anterior.getId(), nuevo.getBlob().getBytes());
+        nuevo.setTrashed(true);
+        LineasDatos.conCandado(() => LineasRepo.registrarMovimiento('PDF_REGENERADO', { motivo: '' }, usuario, new Date(), {
+          refs: [col('ID LINEA')], nuco: col('NUCO'),
+          detalle: Object.assign(esInspeccion ? { inspeccionId: id } : { responsivaId: id }, { cambios: [{ campo: 'PDF', antes: '', despues: anterior.getName() }] }),
+        }));
+        return { id: anterior.getId(), nombre: anterior.getName(), url: anterior.getUrl(), avisos: pdf.avisos };
+      }
       const ruta = d.enNucos ? 'https://drive.google.com/file/d/' + pdf.id + '/view' : destino.carpeta + '/' + nombre;
       LineasDatos.conCandado(() => ligarPdf_(tabla, destino.columna, ids, pdf, ruta));
-      if (d.enNucos) LineasArchivos.olvidarNuco(d.nuco);
       return pdf;
     } catch (e) {
       console.error('generarPdf ' + tipo + ' (' + id + '): ' + e.message);
       throw new Error('No se pudo generar el PDF de la ' + (esInspeccion ? 'inspección' : 'responsiva') + ': ' + e.message);
+    }
+  }
+
+  /** El PDF ligado al documento, si sigue en Drive (fuera de la papelera); al regenerar se le pone la versión nueva. */
+  function pdfVigente_(ev) {
+    const p = (ev.pdfs || [])[0];
+    if (!p) return null;
+    try {
+      const f = DriveApp.getFileById(p.id);
+      return f.isTrashed() ? null : f;
+    } catch (e) {
+      return null;
     }
   }
 
@@ -706,14 +743,18 @@ const LineasCaptura = (function () {
    * PDF firmado (usuario, 5-oct): la inspección o la responsiva se pudo guardar sin la firma del responsable (se le
    * manda); al regresar firmada se sube aquí y reemplaza el PDF (LineasArchivos.reemplazarPdf: mismo archivo, la versión
    * sin firma queda en el historial de versiones de Drive). Solo PDF. Queda en el historial del registro.
-   * `doc` = { tipo, id, pdfId } ya validado como documento de `registro` (TelefoniaService).
+   * También las del AppSheet y las de la carpeta NUCOS (usuario, 5-oct: se sigue trabajando con registros de antes):
+   * su PDF de NUCOS (Documentos le junta a la del AppSheet la carpeta de NUCOS del mismo día); si no tienen, se guarda
+   * como nuevo en NUCOS (pdfFirmadoNuevo_). Los documentos salen de NUCOS, no de la carpeta del AppSheet (28-sep).
+   * `doc` = { tipo, id, origen, fecha, pdfId, carpetaId } ya validado como documento de `registro` (TelefoniaService).
    */
   function subirPdfFirmado(registro, doc, base64, usuario) {
     if (!base64) throw new Error('Elige el PDF firmado.');
     const bytes = Utilities.base64Decode(String(base64));
     if (bytes.length > 15 * 1024 * 1024) throw new Error('El archivo supera 15 MB.');
     if (String.fromCharCode.apply(null, bytes.slice(0, 5)) !== '%PDF-') throw new Error('Solo se aceptan archivos PDF.');
-    const archivo = LineasArchivos.reemplazarPdf(doc.pdfId, bytes);
+    if (!doc.pdfId && doc.origen === 'SISTEMA') throw new Error('Primero genera el PDF.');
+    const archivo = doc.pdfId ? LineasArchivos.reemplazarPdf(doc.pdfId, bytes) : pdfFirmadoNuevo_(registro, doc, bytes);
     if (registro.nuco) LineasArchivos.olvidarNuco(registro.nuco);
     LineasDatos.conCandado(() => LineasRepo.registrarMovimiento('PDF_FIRMADO', { motivo: '' }, usuario, new Date(), {
       refs: [registro.id], nuco: registro.nuco,
@@ -721,6 +762,34 @@ const LineasCaptura = (function () {
         { cambios: [{ campo: 'PDF', antes: '', despues: archivo.name }] }),
     }));
     return { id: archivo.id, nombre: archivo.name };
+  }
+
+  /**
+   * PDF firmado de una captura de antes que no tiene PDF en NUCOS: va a su carpeta de NUCOS ("INSP DD MM" /
+   * "RESP DD MM") o, si no tiene, a una nueva del día de la captura en la carpeta del NUCO (como destinoPdf_), que
+   * Documentos junta con la del AppSheet del mismo día. Sin NUCO no hay carpeta en NUCOS.
+   */
+  function pdfFirmadoNuevo_(registro, doc, bytes) {
+    const tipo = doc.tipo;
+    const nuco = LineasUtil.nuco4(registro.nuco);
+    const fecha = doc.fecha && !isNaN(new Date(doc.fecha)) ? new Date(doc.fecha) : new Date();
+    let carpeta, nombre;
+    if (doc.carpetaId && LineasArchivos.enNucos(doc.carpetaId)) {
+      carpeta = DriveApp.getFolderById(doc.carpetaId);
+      const m = carpeta.getName().match(/^(?:INSP|RESP)\s+(\d{1,2})\s+(\d{1,2})/i);
+      nombre = (tipo === 'INSPECCION' ? 'INSP ' : 'RESP ') + (nuco || 'SIN NUCO') + ' ' + (m ? m[1] + ' ' + m[2] : Utilities.formatDate(fecha, ZONA, 'dd MM')) + '.pdf';
+    } else if (nuco) {
+      const c = LineasArchivos.carpetaEvidenciaNuco(tipo, nuco, fecha);
+      carpeta = DriveApp.getFolderById(c.carpetaId);
+      nombre = c.nombrePdf;
+    } else {
+      throw new Error('El registro no tiene NUCO: no hay carpeta en NUCOS para el PDF.');
+    }
+    LineasArchivos.exigirEscribible(carpeta.getId());
+    const f = carpeta.createFile(Utilities.newBlob(bytes, MimeType.PDF, nombre));
+    // Sin setSharing: en NUCOS el archivo toma los permisos de la carpeta (LineasEvidencias) y la cuenta de la app no es
+    // dueña de esa carpeta: setSharing lanzaba «Acceso denegado: DriveApp» con el PDF ya creado (6-oct).
+    return { id: f.getId(), name: f.getName() };
   }
 
   return {

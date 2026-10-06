@@ -16,10 +16,14 @@ const LineasPdf = (function () {
     RESPONSIVA_CELULAR: '1EfSbZaQwl6c3ylQ1Z60gxjOeIXAqZ7g1_IN-qfw-pMc',
   };
 
-  // Página del PDF como la tarea MakeDoc del AppSheet (puntos). "Task for GENERAR PDF": carta, márgenes personalizados
-  // en 0; con los márgenes del documento la responsiva salía en 3 hojas en vez de 2.
-  const PAGINAS = {
-    [PLANTILLAS.RESPONSIVA_CELULAR]: { ancho: 612, alto: 792, margen: 0 },
+  // Cómo imprime el AppSheet ("Task for GENERAR PDF": carta, márgenes de la tarea en 0): convierte el Doc a HTML y lo
+  // imprime con Chromium. Los márgenes del Doc (responsiva: 14.2 pt arriba y a los lados, 0 abajo) se respetan, y el
+  // interlineado (1.0 / 1.15 / 1.5) se aplica sobre el tamaño de la letra; Google Docs lo aplica sobre la altura
+  // natural de la fuente (Century Gothic: 1.211 veces la letra) y la responsiva salía en 3 hojas (5-oct). Un párrafo
+  // vacío en ese HTML mide 11 pt. Sin interlineado propio, el párrafo toma el del estilo Normal (responsiva: 1.0). La
+  // hoja 2 empieza en las sanciones: en el AppSheet el título cae ahí por espacio.
+  const COMO_APPSHEET = {
+    [PLANTILLAS.RESPONSIVA_CELULAR]: { altoFuente: 1.211, altoVacio: 11, interlineadoNormal: 1, saltoAntesDe: 'SANCIONES POR MAL MANEJO' },
   };
 
   // ---------------- Evaluador de expresiones AppSheet (subconjunto) ----------------
@@ -201,16 +205,12 @@ const LineasPdf = (function () {
     const copia = DriveApp.getFileById(plantillaId).makeCopy('TMP ' + nombrePdf, carpeta);
     try {
       const doc = DocumentApp.openById(copia.getId());
-      const pagina = PAGINAS[plantillaId];
-      if (pagina) {
-        doc.getBody().setPageWidth(pagina.ancho).setPageHeight(pagina.alto)
-          .setMarginTop(pagina.margen).setMarginBottom(pagina.margen).setMarginLeft(pagina.margen).setMarginRight(pagina.margen);
-      }
       const secciones = [doc.getBody(), doc.getHeader(), doc.getFooter()].filter(Boolean);
       secciones.forEach((seccion) => {
         procesarBloquesIf_(seccion, registro, avisos);
         reemplazarEtiquetas_(seccion, registro, imagenes || {}, avisos);
       });
+      if (COMO_APPSHEET[plantillaId]) ajustarComoAppSheet_(doc.getBody(), COMO_APPSHEET[plantillaId], avisos);
       doc.saveAndClose();
       const pdf = carpeta.createFile(copia.getAs('application/pdf').setName(nombrePdf));
       // Sin esto, el PDF solo lo puede ver la cuenta que despliega la app
@@ -220,6 +220,51 @@ const LineasPdf = (function () {
     } finally {
       copia.setTrashed(true); // la copia temporal es nuestra; la plantilla original no se toca
     }
+  }
+
+  /** Párrafo sin texto ni imágenes (el salto de página tampoco cuenta como contenido). */
+  function vacio_(p) {
+    if (p.getText().trim() !== '') return false;
+    for (let i = 0; i < p.getNumChildren(); i++) {
+      const t = p.getChild(i).getType();
+      if (t !== DocumentApp.ElementType.TEXT && t !== DocumentApp.ElementType.PAGE_BREAK) return false;
+    }
+    return true;
+  }
+
+  /** La copia rellena queda con las alturas de la impresión del AppSheet (ver COMO_APPSHEET). */
+  function ajustarComoAppSheet_(body, ajuste, avisos) {
+    const T = DocumentApp.ElementType;
+    // Salto de página antes del título de la hoja 2; los renglones vacíos que lo separaban de la hoja 1 se quitan
+    if (ajuste.saltoAntesDe) {
+      let titulo = null;
+      for (let i = 0; i < body.getNumChildren() && !titulo; i++) {
+        const el = body.getChild(i);
+        if (el.getType() === T.PARAGRAPH && el.getText().trim().indexOf(ajuste.saltoAntesDe) === 0) titulo = el;
+      }
+      if (!titulo) avisos.push('No se encontró «' + ajuste.saltoAntesDe + '» para el salto de página.');
+      else {
+        const vacios = [];
+        for (let p = titulo.getPreviousSibling(); p && p.getType() === T.PARAGRAPH && vacio_(p); p = p.getPreviousSibling()) vacios.unshift(p);
+        // Después de una tabla Docs exige un párrafo: el primero se queda y lleva el salto
+        const conSalto = vacios.length ? vacios.shift() : body.insertParagraph(body.getChildIndex(titulo), '');
+        vacios.forEach((p) => p.removeFromParent());
+        conSalto.appendPageBreak();
+      }
+    }
+
+    const recorrer = (el) => {
+      const t = el.getType();
+      if (t !== T.PARAGRAPH && t !== T.LIST_ITEM) {
+        if (el.getNumChildren) for (let i = 0; i < el.getNumChildren(); i++) recorrer(el.getChild(i));
+      } else if (vacio_(el)) {
+        const letra = Number(el.getAttributes()[DocumentApp.Attribute.FONT_SIZE]) || 11;
+        el.setLineSpacing(ajuste.altoVacio / (letra * ajuste.altoFuente));
+      } else {
+        el.setLineSpacing((Number(el.getLineSpacing()) || ajuste.interlineadoNormal) / ajuste.altoFuente);
+      }
+    };
+    recorrer(body);
   }
 
   function buscarTodas_(seccion, patron) {

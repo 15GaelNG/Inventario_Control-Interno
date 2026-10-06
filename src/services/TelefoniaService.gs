@@ -28,9 +28,14 @@ const TelefoniaService = (function () {
   const operar_ = (token) => Permisos.puedeEditar(token, MODULO_OPERAR);
   const puedeOperar_ = (sesion) => sesion.permisos[MODULO_OPERAR] === Permisos.EDICION;
 
-  /** PIN, patrones y contraseñas de equipos: solo ADMIN. */
+  /**
+   * PIN, patrones y contraseñas de equipos: ADMIN y el área de Líneas (usuario, 5-oct: la columna AREA de USUARIOS
+   * = LINEAS; llega a la sesión como `departamento`).
+   */
+  const AREA_SECRETOS = 'LINEAS';
   function puedeVerSecretos_(sesion) {
-    return sesion.rol === Config.ROLES.ADMIN;
+    const area = String(sesion.departamento || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase();
+    return sesion.rol === Config.ROLES.ADMIN || area === AREA_SECRETOS;
   }
 
   function ocultarSecretos_(doc, campos, sesion) {
@@ -394,6 +399,25 @@ const TelefoniaService = (function () {
     return f;
   }
 
+  /**
+   * Imagen del patrón capturado en AppSheet ("INSPECCIONES LINEAS_Images/xxxx.PATRON.123456.png") para verlo en la ficha
+   * y en las capturas. Se ve mientras EQUIPOS.PATRON guarde esa ruta: al trazar uno en el sistema la columna guarda los
+   * puntos ("1-5-9") y la imagen ya no se pide. Solo ADMIN y el área de Líneas.
+   */
+  function patronAppSheet(token, ruta) {
+    const sesion = leer_(token);
+    if (!puedeVerSecretos_(sesion)) throw new Error('El patrón solo lo ven administradores y el área de Líneas.');
+    if (!/\.PATRON\.[^\/]*$/i.test(LineasArchivos.rutaAppSheet(ruta) || '')) throw new Error('No es un patrón del AppSheet.');
+    const f = LineasArchivos.resolver(ruta, true);
+    if (!f || !f.id) throw new Error('No se encontró el patrón en la carpeta del AppSheet.');
+    const b = DriveApp.getFileById(f.id).getBlob();
+    const tipo = b.getContentType() || '';
+    if (!/^image\//.test(tipo)) throw new Error('El patrón del AppSheet no es una imagen.');
+    const bytes = b.getBytes();
+    if (bytes.length > 2 * 1024 * 1024) throw new Error('La imagen del patrón supera 2 MB.');
+    return { imagen: 'data:' + tipo + ';base64,' + Utilities.base64Encode(bytes) };
+  }
+
   /** Catálogos para formularios (enums + LISTAS TELEFONOS + lugares de desecho). */
   function catalogos(token) {
     leer_(token);
@@ -521,8 +545,8 @@ const TelefoniaService = (function () {
   }
 
   /**
-   * PDF firmado de una inspección o responsiva (usuario, 5-oct). Solo el PDF que Documentos le muestra a ese registro:
-   * nunca otro archivo de Drive.
+   * PDF firmado de una inspección o responsiva (usuario, 5-oct), del sistema, del AppSheet o de la carpeta NUCOS. Solo
+   * documentos que Documentos le muestra a ese registro, y su PDF y su carpeta salen de ahí, no del cliente.
    */
   function subirPdfFirmado(token, registroId, tipo, docId, pdfId, base64) {
     const sesion = operar_(token);
@@ -530,9 +554,11 @@ const TelefoniaService = (function () {
     const r = registro_(registroId);
     if (!r) throw new Error('No existe el registro ' + registroId);
     const docs = evidencias(token, registroId);
-    const doc = (tipo === 'INSPECCION' ? docs.inspecciones : docs.responsivas).filter((d) => d.id === docId && d.pdfId && d.pdfId === pdfId)[0];
-    if (!doc) throw new Error('El PDF no es de este registro.');
-    return LineasUtil.paraCliente(LineasCaptura.subirPdfFirmado(r, { tipo: tipo, id: docId, pdfId: pdfId }, base64, usuarioOperacion_(sesion)));
+    const doc = (tipo === 'INSPECCION' ? docs.inspecciones : docs.responsivas).filter((d) => d.id === docId)[0];
+    if (!doc || (pdfId && doc.pdfId !== pdfId)) throw new Error('El PDF no es de este registro.');
+    return LineasUtil.paraCliente(LineasCaptura.subirPdfFirmado(r, {
+      tipo: tipo, id: docId, origen: doc.origen, fecha: doc.fecha, pdfId: doc.pdfId, carpetaId: doc.carpetaId,
+    }, base64, usuarioOperacion_(sesion)));
   }
 
   /** Panorama de Líneas: equipos y líneas por estatus, hoy y al cierre de cada mes. */
@@ -615,7 +641,7 @@ const TelefoniaService = (function () {
   return {
     permisos, indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, catalogos, colaboradores, bitacora, formularioRegistro, recargarDatos,
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf, subirPdfFirmado, crearRegistro, editarRegistro,
-    reasignar, fotosInspeccion, exportarBase, archivo, ultimoDocumentoNuco,
+    reasignar, fotosInspeccion, exportarBase, archivo, patronAppSheet, ultimoDocumentoNuco,
     notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva, panorama,
     formularioResguardo, mandarResguardo, mandarCancelacion, bandejaResguardos, accionBandejaResguardo,
     MODULOS_LINEAS,

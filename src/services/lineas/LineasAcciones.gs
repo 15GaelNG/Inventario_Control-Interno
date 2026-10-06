@@ -23,15 +23,19 @@ const LineasAcciones = (function () {
    * persona nueva se elige en la responsiva y su COMENTARIO es el de la acción. Al guardar, primero se revisa la
    * responsiva; si está completa, se reasigna (el equipo queda en USO, D5.1; su línea DISPONIBLE pasa a USO) y la
    * responsiva queda guardada, todo junto.
+   * La inspección también es obligatoria (usuario, 5-oct): se captura antes, dentro de la acción, y llega como
+   * `inspeccionId` (del mismo equipo y de hoy, LineasCaptura.exigirInspeccion), como en Mandar a resguardo.
    */
   function reasignar(responsiva, usuario, puedeVerSecretos) {
     const id = txt((responsiva || {}).equipoId);
     if (!id) throw new Error('Elige el equipo que se reasigna.');
+    const inspeccionId = txt((responsiva || {}).inspeccionId);
     const r = LineasCaptura.guardarResponsiva(responsiva || {}, usuario, puedeVerSecretos, {
       ref: { equipoId: id }, modo: 'REASIGNAR',
       aplicar: (ahora, valores) => {
         const f = LineasRepo.leerRegistroObligatorio(id, 'el equipo');
         const nombre = 'NUCO ' + (LineasUtil.nucoVisible(LineasUtil.col(f, 'NUCO')) || '');
+        LineasCaptura.exigirInspeccion(inspeccionId, LineasDatos.idsDeFila(f), nombre);
         const estatus = txt(LineasUtil.col(f, 'ESTATUS EQUIPO'));
         const comentario = txt(valores['OBSERVACIONES']);
         if (comentario.length <= 3) throw new Error('Escribe el comentario (queda en el historial).');
@@ -48,7 +52,7 @@ const LineasAcciones = (function () {
           refs: [id].concat(g.refs || []), nuco: LineasUtil.col(f, 'NUCO'), numero: LineasUtil.col(f, 'NUMERO TELEFONO'),
           antes: { estatus: may(estatus), responsable: { nombre: antes } },
           despues: { estatus: 'USO', responsable: { nombre: txt(valores['RESPONSABLE']) } },
-          detalle: { accion: 'REASIGNAR', idsCambios: g.idsCambios, idsReasignacion: g.idReasignacion ? [g.idReasignacion] : [], cambios: g.campos },
+          detalle: { accion: 'REASIGNAR', inspeccionId: inspeccionId, idsCambios: g.idsCambios, idsReasignacion: g.idReasignacion ? [g.idReasignacion] : [], cambios: g.campos },
         });
         return { id: id };
       },

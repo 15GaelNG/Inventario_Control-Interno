@@ -66,6 +66,9 @@ const ENTORNOS = {
     // NUCOS de producción. Las carpetas de los demás módulos siguen en las Script Properties del DEV.
     LINEAS_DRIVE_APPSHEET: '1tq-jCsFgdsdMAsQqm1WTHdynQkAN05r5',
     LINEAS_DRIVE_NUCOS: '1tq-jCsFgdsdMAsQqm1WTHdynQkAN05r5',
+    // Solo lectura: las rutas del AppSheet de la copia del libro (patrones, firmas, PDF) están en la carpeta de la app
+    // de producción; se buscan ahí si no están en la de pruebas (LineasArchivos.resolver). Nunca se escribe en ella.
+    LINEAS_DRIVE_APPSHEET_LECTURA: '1WPFFd4imLiui6zIpAa3OL62ZEu_a5BJn',
 
     // Líneas lee las hojas nuevas (LINEAS, EQUIPOS, ASIGNACIONES…) y LINEAS TELEFONICAS ya no existe en la copia, igual
     // que en producción (allá son Script Properties: LineasLectura)

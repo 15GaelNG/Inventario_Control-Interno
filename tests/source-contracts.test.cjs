@@ -732,7 +732,7 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
       base64EncodeWebSafe: (b) => String(b), computeDigest: (a, t) => t, DigestAlgorithm: {}, Charset: {},
       base64Decode: () => [1, 2, 3], newBlob: (bytes, mime, nombre) => ({ mime, nombre }), formatDate: () => '101530',
     },
-    DriveApp: { getFolderById: () => raiz, Access: { DOMAIN: 'DOMAIN' }, Permission: { VIEW: 'VIEW' } },
+    DriveApp: { getFolderById: () => raiz, searchFiles: () => ({ hasNext: () => false }), Access: { DOMAIN: 'DOMAIN' }, Permission: { VIEW: 'VIEW' } },
   };
   const LA = new Function(...Object.keys(globales), read('src/services/lineas/LineasArchivos.gs') + '\nreturn LineasArchivos;')(...Object.values(globales));
   assert.equal(LA.resolver('BITACORA DE DESECHO_Files_/a1.EVIDENCIA.1.jpg', false).id, 'ARCH1');
@@ -772,9 +772,10 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
   assert.match(read('src/services/lineas/LineasUtil.gs'), /try \{ return LineasArchivos\.carpetasNucos\(\); \}/);
   assert.match(read('src/ClientApi.gs'), /function apiLineasArchivo\(token, ruta\)/);
 
-  // Cliente: General sin Patrón; Última responsiva / inspección de NUCOS solo en el ⋮ de la ficha (usuario, 30-sep)
+  // Cliente: Última responsiva / inspección de NUCOS solo en el ⋮ de la ficha (usuario, 30-sep). El patrón volvió a
+  // General el 5-oct, dibujado o con la imagen del AppSheet, no como archivo (lineas-patron-consulta.test.cjs)
   const lineas = read('src/html/js/lineas.html');
-  assert.doesNotMatch(lineas, /\['Patrón'/);
+  assert.doesNotMatch(lineas, /\['Patrón', botonArchivo/);
   assert.doesNotMatch(lineas, /\['Última responsiva', botonUltimoNucos/);
   assert.match(lineas, /texto: 'Ver última responsiva', alHacer: \(\) => abrirUltimoDesdeMenu\('RESPONSIVA', id\)/);
   // Sin la tarjeta "Registro en la hoja" (ID, folio, fila, estatus general, fechas, comentarios); Tipo en Equipo o Línea
@@ -1023,7 +1024,7 @@ test('Historial: números que ha tenido un NUCO y NUCOs por los que pasó un nú
   assert.doesNotMatch(cliente, /el motivo solo existe si se capturó/);
   // Filtro Movimiento agrupado y en orden fijo, con las asignaciones arriba
   assert.match(cliente, /<optgroup label="Historial de asignaciones">/);
-  assert.match(cliente, /\['Documentos', \['Inspección', 'Responsiva', 'PDF firmado'\]\]/);
+  assert.match(cliente, /\['Documentos', \['Inspección', 'Responsiva', 'PDF firmado', 'PDF regenerado'\]\]/);
 });
 
 test('INICIO / FIN PLAN solo se capturan en el alta de la línea; después no se pueden cambiar (29-sep; usuario 4-oct)', () => {

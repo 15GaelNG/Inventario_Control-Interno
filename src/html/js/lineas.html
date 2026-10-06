@@ -74,13 +74,15 @@
     // Las columnas File/Image/Signature del AppSheet guardan "TABLA_Files_/archivo.ext" (relativo a su carpeta
     // raíz en Drive). Se muestran con su ícono, como en AppSheet, y al hacer clic el servidor busca el archivo
     // (apiLineasArchivo) y se abre. Los enlaces de Drive que guarda el sistema nuevo se abren directo.
-    // Algunas filas guardan el enlace del AppSheet (appsheet.com/template/gettablefileurl?…&fileName=TABLA_Files_/…):
-    // se toma la ruta de fileName y se abre desde Drive igual que las demás.
+    // Algunas filas guardan el enlace del AppSheet (appsheet.com/template/gettablefileurl?…&fileName=TABLA_Files_/…, o
+    // image/getimageurl en las imágenes): se toma la ruta de fileName y se abre desde Drive igual que las demás.
     const rutaDeEnlaceAppSheet = (v) => {
-      const m = /appsheet\.com[\/]template[\/]gettablefileurl/i.test(v) && String(v).match(/[?&]fileName=([^&#]+)/i);
+      const m = /appsheet\.com[\/](template[\/]gettablefileurl|image[\/]getimageurl)/i.test(v) && String(v).match(/[?&]fileName=([^&#]+)/i);
       if (!m) return null;
       try { return decodeURIComponent(m[1].replace(/\+/g, ' ')); } catch (e) { return null; }
     };
+    // Igual que LineasArchivos.rutaAppSheet: sin enlace del AppSheet ni la tabla delante ("TABLA::TABLA_Images/…")
+    const rutaAppSheetLimpia = (v) => (rutaDeEnlaceAppSheet(String(v || '').trim()) || String(v || '').trim()).replace(/^[^\/]*::/, '').trim();
     const esRutaArchivo = (v) => /^[^\/]+_(Files_|Images)\/[^\/].*\.\w{2,5}$/i.test(String(v || '').trim()) ||
       /^https?:\/\/(drive|docs)\.google\.com[\/]/i.test(String(v || '').trim()) || !!rutaDeEnlaceAppSheet(String(v || '').trim());
     function botonArchivo(ruta, texto) {
@@ -613,6 +615,54 @@
     }
 
     /**
+     * Patrón para consulta (pestaña General y capturas). PATRON guarda los puntos trazados en el sistema ("1-5-9") o, si
+     * viene del AppSheet, la ruta de su imagen ("INSPECCIONES LINEAS_Images/xxxx.PATRON.123456.png"): los puntos se
+     * dibujan como en la captura y la imagen se pide al servidor (cargarPatronesAppSheet). Al trazar uno nuevo la
+     * columna guarda los puntos y la imagen del AppSheet deja de mostrarse (usuario, 5-oct).
+     */
+    function rutaPatronAppSheet(valor) {
+      const v = rutaAppSheetLimpia(valor);
+      return /^[^\/]+_(Files_|Images)\/[^\/]+\.PATRON\.[^\/]*$/i.test(v) ? v : null;
+    }
+    function svgPatron(valor) {
+      const pts = String(valor).split('-').map(Number);
+      const pos = (n) => POSICIONES_PATRON[n - 1];
+      return '<svg class="ln-patron-vista" viewBox="0 0 300 300" role="img" aria-label="Patrón ' + esc(pts.join(' → ')) + '">' +
+        (pts.length > 1 ? '<polyline points="' + pts.map((n) => pos(n).join(',')).join(' ') + '" />' : '') +
+        flechasPatron(pts, 24).map((f) => '<polygon class="ln-patron-flecha" points="' + f.map((n) => n.toFixed(1)).join(',') + '" />').join('') +
+        POSICIONES_PATRON.map((p, i) => {
+          const orden = pts.indexOf(i + 1);
+          if (orden < 0) return '<circle class="ln-patron-libre" cx="' + p[0] + '" cy="' + p[1] + '" r="10" />';
+          return (orden === 0 ? '<circle class="ln-patron-inicio" cx="' + p[0] + '" cy="' + p[1] + '" r="21" />' : '') +
+            '<circle class="ln-patron-marcado" cx="' + p[0] + '" cy="' + p[1] + '" r="16" />' +
+            '<text x="' + p[0] + '" y="' + (p[1] + 1) + '">' + (orden + 1) + '</text>';
+        }).join('') + '</svg>';
+    }
+    function vistaPatron(valor) {
+      const v = String(valor === null || valor === undefined ? '' : valor).trim();
+      if (!v) return vacio;
+      if (esPuntosPatron(v)) return '<div class="ln-patron-consulta">' + svgPatron(v) + '</div>';   // el dibujo ya marca inicio, orden y dirección
+      const ruta = rutaPatronAppSheet(v);
+      if (!ruta) return esRutaArchivo(v) ? botonArchivo(v, 'Ver patrón') : esc(v); // "••••" (oculto para el rol)
+      return '<div class="ln-patron-consulta" data-ln-patron-appsheet="' + esc(ruta) + '"><span class="ln-tenue"><span class="ln-spinner"></span> Patrón de AppSheet…</span></div>';
+    }
+    const patronesAppSheet = {};   // ruta → promesa de la imagen (en memoria mientras dure la página)
+    function cargarPatronesAppSheet(contenedor) {
+      if (!contenedor) return;
+      contenedor.querySelectorAll('[data-ln-patron-appsheet]:not([data-cargado])').forEach((el) => {
+        el.dataset.cargado = '1';
+        const ruta = el.dataset.lnPatronAppsheet;
+        const promesa = patronesAppSheet[ruta] || (patronesAppSheet[ruta] = llamar('apiLineasPatronAppSheet', ruta));
+        promesa.then((r) => {
+          el.innerHTML = '<img class="ln-patron-vista" alt="Patrón capturado en AppSheet" src="' + esc(r.imagen) + '" /><span class="ln-tenue">Capturado en AppSheet</span>';
+        }).catch((e) => {
+          delete patronesAppSheet[ruta];
+          el.innerHTML = '<span class="ln-tenue">' + icono('image-off', 'ln-icon-sm') + ' ' + mensajeError(e) + '</span>';
+        });
+      });
+    }
+
+    /**
      * Varias opciones (accesorios): cada una se prende o apaga; NINGUNO apaga las demás y elegir otra apaga NINGUNO
      * (usuario, 4-oct: solo dejaba elegir una).
      */
@@ -725,14 +775,13 @@
       } else if (e.control === 'fechaHora') {
         control = '<input type="datetime-local"' + attrs + ' value="' + esc(valor) + '" />';
       } else if (e.control === 'patron') {
-        const nota = e.valorOculto ? 'Registrado (solo administradores lo ven). Si no trazas uno nuevo, se conserva.'
+        const nota = e.valorOculto ? 'Registrado (solo lo ven administradores y el área de Líneas). Si no trazas uno nuevo, se conserva.'
           : (valor && !esPuntosPatron(valor) ? 'Hay un patrón capturado en AppSheet (imagen). Si no trazas uno nuevo, se conserva.' : '');
-        control = (nota ? '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' ' + esc(nota) + '</div>' : '') + htmlPatron(id + '-patron', false);
+        // El del AppSheet se ve junto a la nota hasta que se trace uno nuevo
+        const anterior = !e.valorOculto && valor && !esPuntosPatron(valor) && rutaPatronAppSheet(valor) ? vistaPatron(valor) : '';
+        control = (nota ? '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' ' + esc(nota) + '</div>' : '') + anterior + htmlPatron(id + '-patron', false);
       } else if (e.control === 'firma') {
-        // Componente Firma del sistema; marco dorado para el responsable y azul para Control Interno
-        const rol = ROL_FIRMA[e.columna] || 'ci';
-        control = '<div class="ln-firma ln-firma-' + rol + '"><div class="ln-firma-cabecera">' + icono(rol === 'ci' ? 'shield-check' : 'user') + ' ' +
-          (rol === 'ci' ? 'Firma de Control Interno' : 'Firma del responsable') + '</div><div class="ln-firma-lienzo" id="' + id + '-firma"></div></div>';
+        control = htmlFirma(ROL_FIRMA[e.columna] || 'ci', id + '-firma');
       } else if (e.control === 'calculado') {
         control = '<div' + (autoDe(e) ? ' data-auto' : '') + ' class="ln-af-calculado' + (e.fijo ? ' ln-af-fijo' : (e.formula ? '' : ' ln-af-calculado-texto')) + '" id="' + id + '"' + (e.formula ? ' data-formula="' + esc(e.formula) + '"' : '') + '>' + (valor ? esc(valor) : '—') + '</div>';
       } else {
@@ -824,6 +873,12 @@
         }
       }
       if (campoPatron) campoPatron.classList.toggle('ln-oculto', t !== 'PATRÓN');
+    }
+
+    /** Caja de firma: marco dorado para el responsable y azul para Control Interno; el lienzo lo pone crearFirma. */
+    function htmlFirma(rol, idLienzo) {
+      return '<div class="ln-firma ln-firma-' + rol + '"><div class="ln-firma-cabecera">' + icono(rol === 'ci' ? 'shield-check' : 'user') + ' ' +
+        (rol === 'ci' ? 'Firma de Control Interno' : 'Firma del responsable') + '</div><div class="ln-firma-lienzo" id="' + idLienzo + '"></div></div>';
     }
 
     /** Firma con el componente del sistema; misma interfaz que antes (estaVacia, limpiar, base64 → promesa). */
@@ -2458,13 +2513,16 @@
                 ['Línea', l ? '<a href="#" class="ln-enlace ln-mono" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + esc(l.numero || '(sin número)') + '</a>' + (l.compania ? ' · ' + esc(l.compania) : '') : '<span class="ln-tenue">Sin línea</span>', true],
                 ['Departamento', resp.departamento]]) +
             fichaEnPestanas(
-              (e._secretosVisibles ? '' : '<div class="ln-nota">' + icono('lock') + ' Los PIN, patrones y contraseñas están ocultos para tu rol.</div>') +
+              (e._secretosVisibles ? '' : '<div class="ln-nota">' + icono('lock') + ' Los PIN, patrones y contraseñas solo los ven administradores y el área de Líneas.</div>') +
             '<div class="ln-grid-2">' +
               tarjeta(icono('smartphone') + ' Equipo', campos([
                 ['Tipo', tipoRegistro(e.legado), true],
                 ['Modelo', e.modelo], ['IMEI', e.imei], ['Color', e.color], ['Accesorios', (e.accesorios || []).join(', ')],
                 e.tipo !== 'MODEM' && e.tipo !== 'BANDA_ANCHA' && e.tipo !== 'CAMARA' ? ['Cuenta Google', e.cuentaGoogle] : null,
-                e.tipo === 'CELULAR' || e.tipo === 'CELULAR_BASICO' ? ['PIN equipo', e.pinEquipo] : null,
+                // PIN EQUIPO = PATRON con patrón guardado: solo la fila «Patrón» (no se repite la palabra, usuario 5-oct)
+                (e.tipo === 'CELULAR' || e.tipo === 'CELULAR_BASICO') && !(e.patronRuta && /^PATR[OÓ]N$/i.test(String(e.pinEquipo || '').trim()))
+                  ? ['PIN equipo', e.pinEquipo] : null,
+                e.patronRuta ? ['Patrón', vistaPatron(e.patronRuta), true] : null,   // sin patrón (ni del AppSheet ni trazado) no se muestra
                 e.tipo === 'MODEM' || e.tipo === 'BANDA_ANCHA' ? ['Contraseña módem', e.contrasenaModem] : null,
                 e.simResidual ? ['SIM residual', chip(e.simResidual, 'ambar'), true] : null,
               ])) +
@@ -2475,6 +2533,7 @@
               ]) : '<p class="empty-state">Este equipo no tiene línea asignada.</p>') +
               tarjetaResponsable(e.responsable) +
             '</div>', tarjetaDetallesCopiar(r.detalles), true);
+          cargarPatronesAppSheet(detalle);
           cargarEvidencias(id);
           cargarHistorial(id, 'NUCO ' + (e.nuco || id), 'equipo');
         });
@@ -2653,6 +2712,48 @@
       }
 
       /**
+       * Regenerar PDF (usuario, 5-oct): la responsiva se vuelve a hacer con la plantilla y lo que ya está guardado, sin
+       * llenar el formulario; queda como versión nueva del mismo PDF (LineasCaptura.generarPdf con forzar).
+       */
+      function regenerarPdf(d) {
+        captura = { guardada: true, firmas: {}, carpetaId: d.carpetaId || '' };
+        mostrarModalCaptura();
+        $('#ln-captura-icono', raiz).innerHTML = icono('signature');
+        $('#ln-captura-tipo', raiz).textContent = 'Responsiva de entrega';
+        $('#ln-captura-titulo', raiz).textContent = 'Regenerar PDF';
+        $('#ln-captura-subtitulo', raiz).textContent = [fecha(d.fecha), d.responsable].filter(Boolean).join(' · ');
+        $('#ln-captura-cuerpo', raiz).innerHTML = '';
+        refrescarDespuesDeCaptura(pila[pila.length - 1].id, d.tipoPdf, d.id, true);
+      }
+
+      /**
+       * Las firmas de la captura ya no están (el servidor las guarda 6 h; no se guardan como archivos, acuerdo del
+       * 18-sep): se vuelven a firmar aquí y se genera el PDF. Control Interno es obligatoria; el patrón lo dibuja el servidor.
+       */
+      function pedirFirmasPdf(sesion, tipo, nombres, continuar) {
+        const esInspeccion = tipo === 'INSPECCION';
+        const fondo = esInspeccion ? '#ddebf7' : '#ffffff';
+        ocultarEspera();
+        $('#ln-captura-cuerpo', raiz).innerHTML =
+          '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' Las firmas de la captura ya no están disponibles.</div>' +
+          '<div class="ln-firmas">' + htmlFirma('responsable', 'pdf-firma-responsable') + htmlFirma('ci', 'pdf-firma-ci') + '</div>' +
+          '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div>' +
+          '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
+          '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + ' Generar PDF</button></div>';
+        const responsable = crearFirma(document.getElementById('pdf-firma-responsable'), nombres.responsable);
+        const ci = crearFirma(document.getElementById('pdf-firma-ci'), esInspeccion ? nombres.inspector : nombres.ci);
+        $('#cap-guardar', raiz).addEventListener('click', () => {
+          if (ci.estaVacia()) { mostrarErrorCaptura('Falta la firma de Control Interno.'); return; }
+          $('#cap-error', raiz).hidden = true;
+          mostrarEspera('Generando tu PDF');
+          Promise.all([responsable.estaVacia() ? null : responsable.base64(fondo), ci.base64(fondo)]).then(([r, c]) => {
+            sesion.pdfFirmas = esInspeccion ? { inspector: c, responsable: r, patron: null } : { ci: c, responsable: r, patron: null };
+            continuar();
+          });
+        });
+      }
+
+      /**
        * PDF firmado (usuario, 5-oct): la inspección o la responsiva se guardó sin la firma del responsable; ya firmada se
        * sube aquí y reemplaza su PDF (el mismo archivo de Drive, LineasCaptura.subirPdfFirmado). Solo PDF.
        */
@@ -2679,7 +2780,7 @@
             r.onload = () => resolve(String(r.result).split(',')[1]);
             r.onerror = () => reject(new Error('No se pudo leer ' + f.name));
             r.readAsDataURL(f);
-          }).then((base64) => llamar('apiLineasSubirPdfFirmado', registroId, d.tipoPdf, d.id, d.pdfId, base64)).then((pdf) => {
+          }).then((base64) => llamar('apiLineasSubirPdfFirmado', registroId, d.tipoPdf, d.id, d.pdfId || '', base64)).then((pdf) => {
             if (!vigente() || captura !== sesion) return;
             mostrarEspera('PDF firmado guardado', { tono: 'listo', icono: 'circle-check', texto: '',
               acciones: enlaceDrive(pdf.id, 'Ver PDF', true) + '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
@@ -2757,7 +2858,10 @@
             { icono: 'folder-open', titulo: 'Ver carpeta en Drive', visible: (d) => !!d.carpetaId,
               alHacer: (d) => window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(d.carpetaId), '_blank', 'noopener') },
             { icono: 'file-plus', titulo: 'Generar PDF', visible: (d) => !!d.pdfPendiente, alHacer: (d) => generarPdfPendiente(d.tipoPdf, d.id, d.carpetaId) },
-            { icono: 'file-up', titulo: 'Subir PDF firmado', visible: (d) => operar && !!d.pdfId, alHacer: (d) => subirPdfFirmado(id, d) },
+            // Del sistema, con su PDF ya generado; del AppSheet y de NUCOS siempre (usuario, 5-oct)
+            { icono: 'file-up', titulo: 'Subir PDF firmado', visible: (d) => operar && (!!d.pdfId || d.origen !== 'SISTEMA'), alHacer: (d) => subirPdfFirmado(id, d) },
+            { icono: 'refresh-ccw', titulo: 'Regenerar PDF', visible: (d) => operar && d.tipoPdf === 'RESPONSIVA' && d.origen === 'SISTEMA' && !!d.pdfId,
+              alHacer: (d) => regenerarPdf(d) },
           ],
           ayuda: 'Inspecciones y responsivas del registro. Doble clic en una fila abre la inspección, o el PDF de la responsiva. ' +
             'Los indicadores de arriba filtran por tipo; la flecha de cada columna filtra u ordena. ' +
@@ -2789,26 +2893,72 @@
 
       /**
        * Reasignar (usuario, 4-oct): abre directo la responsiva, sin formulario intermedio. Equipo y línea van fijos; se
-       * elige a la persona nueva y su comentario es el de la acción. Al guardar se reasigna y se genera el PDF.
+       * elige a la persona nueva y su comentario es el de la acción.
+       * La inspección también es obligatoria (usuario, 5-oct), en este orden: 1) la responsiva se llena y se revisa (aún
+       * no se guarda), 2) la inspección se captura y se guarda, 3) se reasigna con las dos (el servidor exige la
+       * inspección) y se genera el PDF de la responsiva. Cerrar cualquiera sin guardar no reasigna; si la reasignación
+       * falla, la inspección del día ya no se vuelve a pedir.
        */
-      function abrirReasignar(fila) {
+      async function abrirReasignar(fila) {
         if (!fila) return;
-        abrirCaptura('RESPONSIVA', { equipoId: fila.id, modo: 'REASIGNAR' }, {
-          titulo: 'Reasignar', subtitulo: ['NUCO ' + (fila.nuco || '—'), fila.modelo, fila.responsable].filter(Boolean).join(' · '),
-          boton: 'Reasignar y generar PDF', pdfAqui: true,
-          guardar: (datos) => llamar('apiLineasReasignar', datos),
-          despues: (r) => aplicarCambiosIndice(r.filas).then(() => {
+        const nombre = 'NUCO ' + (fila.nuco || '—');
+        const subtitulo = [nombre, fila.modelo, fila.responsable].filter(Boolean).join(' · ');
+        const resp = await capturarEnFlujo('RESPONSIVA', { equipoId: fila.id, modo: 'REASIGNAR' }, {
+          titulo: 'Reasignar', subtitulo: subtitulo, boton: 'Seguir a la inspección', espera: 'Revisando la responsiva', sinPdf: true,
+          // Lo mismo que rechaza el servidor (LineasAcciones.reasignar), antes de pasar a la inspección
+          guardar: (datos) => {
+            const v = datos.valores || {};
+            if (String(v.OBSERVACIONES || '').trim().length <= 3) return Promise.reject(new Error('Escribe el comentario (queda en el historial).'));
+            const nuevo = String(v.RESPONSABLE || '').trim().toUpperCase();
+            if (nuevo && nuevo === String(fila.responsable || '').trim().toUpperCase()) {
+              return Promise.reject(new Error(nombre + ' ya lo tiene ' + fila.responsable + ': elige a la persona nueva.'));
+            }
+            return Promise.resolve({ datos: datos });
+          },
+        });
+        if (!resp) return;
+        let inspeccionId = inspeccionHecha(fila.id);
+        if (!inspeccionId) {
+          const r = await capturarEnFlujo('INSPECCION', { equipoId: fila.id }, { aviso: 'Inspección · ' + nombre, boton: 'Guardar inspección y reasignar' });
+          if (!r) return;
+          inspeccionesDelDia[fila.id] = { id: r.id, dia: hoyLocal() };
+          inspeccionId = r.id;
+        }
+        const d = resp.datos;
+        const sesion = captura = { guardada: true, guardando: true, firmas: {}, carpetaId: '',
+          pdfFirmas: { responsable: d.firmaResponsableBase64 || null, ci: d.firmaCiBase64, patron: d.patronBase64 || null } };
+        mostrarModalCaptura();
+        $('#ln-captura-icono', raiz).innerHTML = icono('user-round-pen');
+        $('#ln-captura-tipo', raiz).textContent = 'Responsiva de entrega';
+        $('#ln-captura-titulo', raiz).textContent = 'Reasignar';
+        $('#ln-captura-subtitulo', raiz).textContent = subtitulo;
+        $('#ln-captura-cuerpo', raiz).innerHTML = '';
+        const modal = $('#ln-modal-captura', raiz);
+        modal.setAttribute('aria-busy', 'true');
+        modal.querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = true; });
+        mostrarEspera('Reasignando');
+        llamar('apiLineasReasignar', Object.assign({}, d, { inspeccionId: inspeccionId })).then((r) => {
+          if (!vigente() || captura !== sesion) return;
+          refrescarDespuesDeCaptura(fila.id, 'RESPONSIVA', r.id);
+          aplicarCambiosIndice(r.filas).then(() => {
             Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].limpiarSeleccion(); });
             if (vigente()) { pintarIndicadores(); pintarListado(); }
             // La ficha abierta se vuelve a pintar con la persona y los estatus nuevos (como Mandar a resguardo, 4-oct)
             const actual = pila[pila.length - 1];
             if (vigente() && actual && actual.id === fila.id) abrir(actual.tipo, actual.id, true);
-          }),
+          }).catch(() => {});
+        }).catch((e) => {
+          if (!vigente() || captura !== sesion) return;
+          sesion.guardando = false;
+          modal.removeAttribute('aria-busy');
+          modal.querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = false; });
+          mostrarEspera('No se pudo reasignar', { tono: 'error', icono: 'triangle-alert', texto: 'La inspección sí quedó guardada.', detalle: mensajeError(e),
+            acciones: '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
         });
       }
 
       /**
-       * Inspección capturada dentro de una acción (mandar a resguardo). Si
+       * Inspección capturada dentro de una acción (mandar a resguardo, reasignar). Si
        * la acción no se completó, al reintentarla el mismo día no se vuelve a pedir: se guarda aquí por registro.
        */
       const inspeccionesDelDia = {};
@@ -3511,6 +3661,7 @@
       function activarPatron(prefijo, inicial) {
         const bloque = $('#' + prefijo + '-bloque', raiz);
         if (!bloque) return { puntos: () => [], valor: () => '', base64: () => null };
+        cargarPatronesAppSheet(bloque.parentNode);
         const posiciones = POSICIONES_PATRON;
         const estado = { puntos: (inicial || []).map(Number).filter((n) => n >= 1 && n <= 9) };
         const pintar = () => {
@@ -3688,7 +3839,8 @@
         errorBox.focus({ preventScroll: true });
       }
 
-      function refrescarDespuesDeCaptura(idAbierto, tipo, nuevoId) {
+      /** `regenerar`: el PDF ya existe y se vuelve a hacer (Regenerar PDF). */
+      function refrescarDespuesDeCaptura(idAbierto, tipo, nuevoId, regenerar) {
         const sesionCaptura = captura;
         sesionCaptura.guardada = true;
         memoria.cargadoEn = 0;
@@ -3699,13 +3851,20 @@
           modal.setAttribute('aria-busy', 'true');
           modal.querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = true; });
           mostrarEspera('Generando tu PDF'); // sigue la misma pantalla de espera desde el clic en Guardar
-          return llamar('apiLineasGenerarPdf', tipo, nuevoId, false, sesionCaptura.pdfFirmas || null).then((pdf) => {
+          return llamar('apiLineasGenerarPdf', tipo, nuevoId, !!regenerar, sesionCaptura.pdfFirmas || null).then((pdf) => {
             if (!vigente() || captura !== sesionCaptura) return;
             sesionCaptura.guardando = false;
+            if (pdf && pdf.faltanFirmas) { pedirFirmasPdf(sesionCaptura, tipo, pdf.nombres || {}, generar); return; }
             mostrarEspera('Tu PDF está listo', { tono: 'listo', icono: 'circle-check', texto: '',
               acciones: enlaceDrive(pdf.id, 'Ver PDF', true) + '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
-            cargarEvidencias(idAbierto);
-            cargarHistorial(idAbierto);
+            // La captura cambia lo que muestra General (responsable, color, patrón): la ficha de atrás se pinta de nuevo
+            // (trae también Documentos e Historial); si se está viendo otra cosa, solo esas dos
+            const arriba = pila[pila.length - 1];
+            if (arriba && arriba.id === idAbierto && (arriba.tipo === 'equipo' || arriba.tipo === 'linea')) abrir(arriba.tipo, arriba.id, true, true);
+            else {
+              cargarEvidencias(idAbierto);
+              cargarHistorial(idAbierto);
+            }
           }).catch((e) => {
             if (!vigente() || captura !== sesionCaptura) return;
             sesionCaptura.guardando = false;
@@ -3800,7 +3959,7 @@
         const patron = patronParaGuardar();
         const valores = leerFormularioAppSheet();
         const sesion = captura;
-        estadoGuardado(sesion.flujo && !sesion.flujo.pdfAqui ? 'Guardando la responsiva' : 'Generando tu PDF');
+        estadoGuardado(sesion.flujo && sesion.flujo.espera ? sesion.flujo.espera : (sesion.flujo && !sesion.flujo.pdfAqui ? 'Guardando la responsiva' : 'Generando tu PDF'));
         Promise.all([firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ffffff') : null, firmaCi.base64('#ffffff')]).then(([responsable, ci]) => {
           sesion.pdfFirmas = { responsable: responsable, ci: ci, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ffffff') : null };
           const datos = Object.assign({}, sesion.ref, {
@@ -3828,10 +3987,13 @@
         return new Promise((resolve) => abrirCaptura(tipo, ref, Object.assign({}, opciones, { resolver: resolve })));
       }
 
-      /** Documento guardado dentro de una acción: su PDF se genera aparte (si falla, queda «Generar PDF» en Documentos). */
+      /**
+       * Documento guardado dentro de una acción: su PDF se genera aparte (si falla, queda «Generar PDF» en Documentos).
+       * `sinPdf`: el documento solo se revisó y lo guarda la acción después (la responsiva de Reasignar).
+       */
       function terminarFlujo(sesion, tipo, r) {
         sesion.guardada = true;
-        llamar('apiLineasGenerarPdf', tipo, r.id, false, sesion.pdfFirmas || null)
+        if (!sesion.flujo.sinPdf) llamar('apiLineasGenerarPdf', tipo, r.id, false, sesion.pdfFirmas || null)
           .catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' El documento quedó guardado, pero su PDF no se generó: ' + mensajeError(e) + '. En Documentos está «Generar PDF».', 12000));
         const flujo = sesion.flujo;
         if (captura === sesion) cerrarCaptura(true);
@@ -3887,7 +4049,7 @@
         'Inspección': 'clipboard-check', 'Responsiva': 'signature', 'Reactivación': 'refresh-cw', 'Desecho': 'trash-2',
         // Acciones con nombre (etapa 3, paso 2)
         'Entrega': 'hand-helping', 'Cierre': 'flag', 'Nota': 'message-square', 'Resguardo': 'archive', 'Cancelación de línea': 'phone-off', 'Venta': 'badge-dollar-sign',
-        'Edición': 'file-pen-line', 'Comentario anterior': 'message-square-text', 'PDF firmado': 'file-up',
+        'Edición': 'file-pen-line', 'Comentario anterior': 'message-square-text', 'PDF firmado': 'file-up', 'PDF regenerado': 'refresh-ccw',
       };
       const COLOR_ORIGEN = { 'Nuevo sistema': 'verde', AppSheet: 'azul', Drive: 'neutro', 'Migración': 'neutro' };
 
@@ -3973,7 +4135,7 @@
       const GRUPOS_MOVIMIENTO = [
         ['Responsable y ubicación', ['Entrega', 'Reasignación', 'Cambio de área o ubicación']],
         ['Equipo y línea', ['Edición', 'Cambio de equipo', 'Cambio de línea', 'Cambio de plan', 'Cambio de estatus', 'Cambio de accesos']],
-        ['Documentos', ['Inspección', 'Responsiva', 'PDF firmado']],
+        ['Documentos', ['Inspección', 'Responsiva', 'PDF firmado', 'PDF regenerado']],
         ['Resguardo, cancelación y bajas', ['Resguardo', 'Cancelación de línea', 'Venta', 'Cierre']],
         ['Notas', ['Nota', 'Comentario anterior']],
         ['Alta, reactivación y desecho', ['Alta de registro', 'Reactivación', 'Desecho']],

@@ -101,7 +101,7 @@ const LineasRepo = (function () {
     'DEPARTAMENTO', 'AREA', 'JEFE DIRECTO', 'DIRECTOR', 'FOLIO', 'RAZON SOCIAL', 'PIN WHATSAPP', 'PIN EQUIPO', 'CUENTA GOOGLE',
     'COMPAÑIA', 'COSTO PLAN', 'FECHA REGISTRO', 'INICIO PLAN', 'FIN PLAN', 'ESTATUS LINEA', 'FECHA CAMBIO TEMPORAL',
     'EMAIL USUARIO', 'ESTATUS EQUIPO', 'RESPONSIVA', 'COMENTARIOS', 'FECHA INSPECCION', 'FORMATO INSPECCION'];
-  /** Columnas de la vista con secretos (solo ADMIN las ve). */
+  /** Columnas de la vista con secretos (las ven ADMIN y el área de Líneas: TelefoniaService.puedeVerSecretos_). */
   const COLS_VISTA_SECRETAS = ['PIN WHATSAPP', 'PIN EQUIPO'];
 
   // Atajos (se resuelven al llamar, no al cargar el archivo).
@@ -750,8 +750,8 @@ const LineasRepo = (function () {
     EDICION: 'Edición',
     // El COMENTARIOS que tenía la hoja vieja al retirarla (paso 4)
     COMENTARIO_ANTERIOR: 'Comentario anterior',
-    // PDF de la inspección o la responsiva, ya firmado (5-oct)
-    PDF_FIRMADO: 'PDF firmado',
+    // PDF de la inspección o la responsiva, ya firmado o vuelto a hacer con la plantilla (5-oct)
+    PDF_FIRMADO: 'PDF firmado', PDF_REGENERADO: 'PDF regenerado',
   };
   const sinAcentos_ = (v) => String(v === null || v === undefined ? '' : v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
   function movimientoDeCampo(campo) {

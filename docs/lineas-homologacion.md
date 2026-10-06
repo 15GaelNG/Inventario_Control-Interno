@@ -1,5 +1,7 @@
 # Homologar Líneas: el diagnóstico
 
+> **5-oct-2026:** la reestructura de Líneas está en producción desde el 4-oct (hojas LINEAS, EQUIPOS, ASIGNACIONES…); el estado actual está en [lineas-estado.md](lineas-estado.md). Este diagnóstico queda como antecedente.
+
 > ## ⚠️ OJO — el módulo se reestructuró el 30/09/2026, DESPUÉS de este análisis
 >
 > Hubo junta del área y Emmanuel aplicó los cambios en el libro compartido del equipo

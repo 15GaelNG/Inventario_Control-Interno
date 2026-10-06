@@ -132,8 +132,8 @@ test('Reasignar: la responsiva es la acción; equipo y línea fijos; accesorios 
   const captura = read('src/services/lineas/LineasCaptura.gs');
   assert.match(captura, /const persona = \(c\) => \(reasignar \? '' : v\(c\)\);/);
   const cliente = read('src/html/js/lineas.html');
-  assert.match(cliente, /abrirCaptura\('RESPONSIVA', \{ equipoId: fila\.id, modo: 'REASIGNAR' \}/);
-  assert.match(cliente, /guardar: \(datos\) => llamar\('apiLineasReasignar', datos\)/);
+  assert.match(cliente, /capturarEnFlujo\('RESPONSIVA', \{ equipoId: fila\.id, modo: 'REASIGNAR' \}/);
+  assert.match(cliente, /llamar\('apiLineasReasignar', Object\.assign\(\{\}, d, \{ inspeccionId: inspeccionId \}\)\)/);
   assert.match(cliente, /function alternarMulti\(boton\)/);
   assert.match(cliente, /agregar: e\.control === 'listaAbierta' && !e\.soloLista,/);
   assert.match(read('src/services/lineas/LineasRepo.gs'), /accesorios: \['CAJA', 'CABLE', 'CUBO', 'FUNDA', 'MICA', 'TARJETA SD', 'NINGUNO'\]/);
@@ -184,4 +184,54 @@ test('POSIBLE VENTA-DAÑO ya no existe: 8 estatus de equipo y los que lo tenían
   // \r?\n: en Windows git deja los archivos con CRLF (core.autocrlf) y con \n solo fallaba ahí
   assert.match(fn, /function reestructuraQuitarPosibleVentaDano\(\) \{\r?\n\s+soloEditor_\(\);/);
   assert.match(fn, /guardarCambiosRegistro\(f, \{ 'ESTATUS EQUIPO': 'POSIBLE VENTA' \}/);
+});
+
+test('Reasignar: la inspección es obligatoria (usuario, 5-oct): de ese equipo y de hoy, antes de tocar el registro', () => {
+  const vm = require('node:vm');
+  const exigidas = [];
+  const escritos = [];
+  const ctx = vm.createContext({
+    LineasUtil: { col: (f, c) => f[c], nucoVisible: (n) => String(n).padStart(4, '0') },
+    LineasDatos: { idsDeFila: (f) => [f.ID] },
+    LineasRepo: {
+      leerRegistroObligatorio: () => ({ ID: 'EQU-1', NUCO: 12, 'ESTATUS EQUIPO': 'RESGUARDO', RESPONSABLE: 'ANA' }),
+      guardarCambiosRegistro: (...a) => { escritos.push(a); return { refs: [], campos: [] }; },
+      registrarMovimiento: (...a) => escritos.push(a),
+      indiceColaboradores: () => ({ columnas: ['noEmpleado', 'nombre', 'director'], filas: [] }),
+    },
+    LineasCaptura: {
+      exigirInspeccion: (id, ids, nombre) => {
+        exigidas.push([id, ids, nombre]);
+        if (!id) throw new Error(nombre + ': falta su inspección (se captura dentro de la acción).');
+        return id;
+      },
+      guardarResponsiva: (datos, usuario, secretos, accion) => {
+        const hecho = accion.aplicar(new Date(), { OBSERVACIONES: 'CAMBIO DE PUESTO', RESPONSABLE: 'LUIS', 'No EMPLEADO': 'AC1' });
+        return { id: 'RES-1', registroId: hecho.id, filas: [] };
+      },
+    },
+  });
+  vm.runInContext(read('src/services/lineas/LineasAcciones.gs') + '\nthis.A = LineasAcciones;', ctx);
+  assert.throws(() => ctx.A.reasignar({ equipoId: 'EQU-1' }, { correo: 'a@b.mx' }, false), /NUCO 0012: falta su inspección/);
+  assert.equal(escritos.length, 0, 'sin inspección no se escribe nada');
+  const r = ctx.A.reasignar({ equipoId: 'EQU-1', inspeccionId: 'INS-9' }, { correo: 'a@b.mx' }, false);
+  assert.equal(r.id, 'RES-1');
+  assert.deepEqual(JSON.parse(JSON.stringify(exigidas[1])), ['INS-9', ['EQU-1'], 'NUCO 0012']);
+  const mov = escritos.find((a) => a[0] === 'REASIGNACION');
+  assert.equal(mov[4].detalle.inspeccionId, 'INS-9');
+
+  const cliente = read('src/html/js/lineas.html');
+  const fn = cliente.slice(cliente.indexOf('async function abrirReasignar(fila)'), cliente.indexOf('const inspeccionesDelDia = {};'));
+  // Orden (usuario, 5-oct): responsiva (se revisa, no se guarda) → inspección (se guarda) → reasignar con las dos
+  const iResp = fn.indexOf("capturarEnFlujo('RESPONSIVA'");
+  const iInsp = fn.indexOf("capturarEnFlujo('INSPECCION', { equipoId: fila.id }");
+  const iReasignar = fn.indexOf("llamar('apiLineasReasignar'");
+  assert.ok(iResp > 0 && iResp < iInsp && iInsp < iReasignar, 'responsiva, inspección y luego reasignar');
+  assert.match(fn, /sinPdf: true/);
+  assert.match(fn, /return Promise\.resolve\(\{ datos: datos \}\);/);
+  assert.match(fn, /if \(!resp\) return;/);
+  assert.match(fn, /if \(!r\) return;/);
+  assert.match(fn, /let inspeccionId = inspeccionHecha\(fila\.id\);/);
+  assert.match(fn, /refrescarDespuesDeCaptura\(fila\.id, 'RESPONSIVA', r\.id\);/);
+  assert.match(cliente, /if \(!sesion\.flujo\.sinPdf\) llamar\('apiLineasGenerarPdf'/);
 });

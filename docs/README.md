@@ -23,8 +23,7 @@ Por dónde entrar según lo que traigas.
 |---|---|
 | [mapeo-modulos.md](mapeo-modulos.md) | Qué módulo de AppSheet corresponde a qué hoja, y en qué estado está cada uno. |
 | [lineas-homologacion.md](lineas-homologacion.md) | **El diagnóstico de Líneas**, medido contra producción. Por qué la FK NO es el problema, y qué sí. **Empieza por el aviso de arriba: el módulo se reestructuró el 30/09/2026 y hay partes que ya no aplican.** |
-| [lineas-plan.md](lineas-plan.md) | El plan del módulo de Líneas Telefónicas. |
-| [lineas-estado.md](lineas-estado.md) | El estado detallado de Líneas: hojas, carpetas de Drive, NUCOS. |
+| [lineas-estado.md](lineas-estado.md) | Líneas hoy: qué hace, hojas, Drive, archivos y cómo se publica (5-oct-2026). |
 | [helpdesk-integracion.md](helpdesk-integracion.md) | Cómo mostrar en la app lo que muestra el helpdesk de TI sin su cooperación (estrategia B: token por usuario). Plan, sin código todavía. |
 
 ## Lo que hay que saber antes de tocar producción
