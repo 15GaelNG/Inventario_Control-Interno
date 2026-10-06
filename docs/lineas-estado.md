@@ -1,7 +1,7 @@
 # Líneas — estado del módulo
 
-Rama `emmanuel` (adelante de `master` con la parte 6: COMENTARIO y plantillas «(SISTEMA)», solo en el DEV) · Producción:
-versión 56 · Última actualización: 2026-10-06
+Rama `emmanuel` (adelante de `master` con la parte 6: COMENTARIO, plantillas «(SISTEMA)», página de la responsiva y
+patrón con 9 puntos en el PDF; solo en el DEV) · Producción: versión 56 · Última actualización: 2026-10-06
 
 Qué es hoy el módulo **Líneas** (equipos celulares y líneas telefónicas), dónde vive cada cosa y cómo se trabaja.
 La bitácora anterior de este archivo (§0a…§0ae, hasta el 1-oct) sigue en el historial de git. El diseño de las hojas
@@ -20,6 +20,9 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   NUCOS: versión nueva del PDF de NUCOS o, si no tiene, PDF nuevo en la carpeta de NUCOS de la captura o del día),
   Regenerar PDF (responsivas del sistema: versión nueva del mismo archivo; pasadas 6 h pide solo las firmas). Cada
   acción deja un renglón en el historial con su comentario.
+- **Páginas de la inspección y de la responsiva** (Documentos, doble clic o Historial): lo que dice el documento de ese
+  día; a la vista Ver PDF y Subir PDF firmado, y en ⋮ Ver equipo, Ver carpeta en Drive y Generar o Regenerar PDF
+  (`botonesDocumento` en lineas.html; `apiLineasInspeccion` / `apiLineasResponsiva`).
 - **Inspección y responsiva:** un solo «Comentario» (columna COMENTARIO, antes OBSERVACIONES). La inspección lleva al
   jefe directo y la responsiva al director, los dos de Capital Humano como en el AppSheet.
 - **Secretos** (PIN, patrones, contraseñas, firmas): los ven ADMIN y el área `LINEAS` de USUARIOS
@@ -28,7 +31,8 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   General lo muestra solo si hay uno: los puntos dibujados o la imagen del AppSheet (`apiLineasPatronAppSheet`, solo
   con permiso de secretos); las capturas enseñan la imagen junto al lienzo. La inspección, la responsiva y Editar, al
   trazar uno nuevo, lo guardan en el equipo y la imagen deja de verse; al guardar una captura la ficha se pinta de nuevo.
-  Con PIN EQUIPO = PATRON y patrón guardado, General muestra solo la fila «Patrón».
+  Con PIN EQUIPO = PATRON y patrón guardado, General muestra solo la fila «Patrón». El PDF lo dibuja igual que la
+  pantalla: los 9 puntos, los usados con su número y flechas (`activarPatron` y `LineasPatronPng`, iguales).
 - **Resguardos y cancelaciones:** bandeja de Pau (recibir, entregar a Líneas, vendido, cancelación con carta).
 - **Panorama:** líneas y equipos por estatus, renta por cuenta y adendums, al cierre del mes elegido.
 - **Notificaciones:** campana con adendums por vencer y avisos de seguimiento.
