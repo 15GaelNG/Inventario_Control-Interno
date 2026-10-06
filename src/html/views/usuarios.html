@@ -77,9 +77,8 @@
   .usr-editar-fila.cambiada .usr-editar-nombre::after { background: var(--color-accent); }
   .usr-editar-fila.cambiada .usr-editar-nombre { font-weight: 600; }
 
-  /* Los tres niveles: Ver azul y Editar verde, como en la ficha; Sin acceso gris (en una lista
-     donde casi todo es "Sin acceso", el rojo de la ficha sería una pared roja). El que le da
-     su área a la persona lleva un punto */
+  /* Los tres niveles con el color de la ficha: Sin acceso rojo, Ver azul, Editar verde. El que
+     le da su área a la persona lleva un punto */
   .usr-segmento { flex: none; display: inline-flex; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden; background: var(--color-surface); }
   .usr-op {
     position: relative; margin: 0; padding: 5px 11px; border: 0; border-radius: 0; background: transparent;
@@ -89,10 +88,7 @@
   .usr-op:hover { background: var(--color-bg); color: var(--color-text); }
   .usr-op:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
   .usr-op.activa { color: #fff; }
-  .usr-op.activa.NINGUNO { background: var(--color-text-muted); }
-  /* En tema oscuro ese gris es claro: la letra va oscura para que se lea */
-  :root[data-theme="dark"] .usr-op.activa.NINGUNO { color: #0d1b22; }
-  :root[data-theme="dark"] .usr-op.heredada.activa.NINGUNO::after { background: #0d1b22; }
+  .usr-op.activa.NINGUNO { background: #b42318; }
   .usr-op.activa.LECTURA { background: var(--color-primary); }
   .usr-op.activa.EDICION { background: var(--color-success); }
   .usr-op.heredada::after {
