@@ -679,7 +679,22 @@ const LineasRepo = (function () {
       responsableCI: txt(col(f, 'NOMBRE CI')), drive: driveDeEvidencia_(ev),
       pdf: ev && ev.pdfs && ev.pdfs.length ? { id: ev.pdfs[0].id } : null,
       pdfRuta: txt(col(f, 'FORMATO RESPONSIVA')),
+      // Para su página (usuario, 6-oct): lo que dice la responsiva de ese día, como el snapshot de la inspección
+      snapshot: {
+        responsable: txt(col(f, 'RESPONSABLE')), noEmpleado: txt(col(f, 'No EMPLEADO')), puesto: txt(col(f, 'PUESTO')),
+        departamento: txt(col(f, 'DEPARTAMENTO')), area: txt(col(f, 'AREA')), sede: txt(col(f, 'SEDE')),
+        oficina: txt(col(f, 'OFICINA / DESARROLLO')), director: txt(col(f, 'DIRECTOR')), correo: txt(col(f, 'CORREO')),
+        identificacion: txt(col(f, 'IDENTIFICACION')), numero: digitos(col(f, 'No TELEFONO')), imei: digitos(col(f, 'IMEI')),
+        sim: digitos(col(f, 'SIM')), modelo: txt(col(f, 'MODELO')), color: txt(col(f, 'COLOR')), compania: txt(col(f, 'COMPAÑIA')),
+        razonSocial: txt(col(f, 'RAZON SOCIAL')),
+      },
+      accesorios: txt(col(f, 'ACCESORIOS')), comentario: txt(col(f, 'COMENTARIO')),
     };
+  }
+
+  /** Responsiva que solo existe como carpeta en Drive. */
+  function responsivaDesdeEvidencia(ev) {
+    return { _id: 'drive_' + ev.carpetaId, origen: 'DRIVE', registroId: idActual(ev.idLinea), nuco: ev.nuco, fecha: ev.fecha, drive: driveDeEvidencia_(ev) };
   }
 
   /**
@@ -707,7 +722,7 @@ const LineasRepo = (function () {
       if (e.origen !== 'DRIVE') return;
       if (e.idLinea && idActual(e.idLinea) !== ids[0]) return;
       if (e.tipo === 'INSPECCION') inspecciones.push(inspeccionDesdeEvidencia(e));
-      else responsivas.push({ _id: 'drive_' + e.carpetaId, origen: 'DRIVE', nuco: e.nuco, fecha: e.fecha, drive: driveDeEvidencia_(e) });
+      else responsivas.push(responsivaDesdeEvidencia(e));
     });
     return { inspecciones: inspecciones, responsivas: responsivas };
   }
@@ -726,6 +741,22 @@ const LineasRepo = (function () {
     const filasEv = LineasDatos.existeTabla(TAB.APP_EVID) ? LineasDatos.buscarFilasVarios(TAB.APP_EVID, 'ID_REGISTRO', LineasDatos.idsDeFila(f)) : [];
     const ev = filasEv.length ? evidenciaDesdeFila(LineasDatos.leerFilas([{ tabla: TAB.APP_EVID, filas: filasEv.slice(0, 1) }])[0][0]) : null;
     return inspeccionDesdeFila(f, ev);
+  }
+
+  /** Responsiva por id: fila de RESPONSIVAS LINEAS, o "drive_<carpetaId>" si solo existe en Drive (como leerInspeccion). */
+  function leerResponsiva(id) {
+    if (/^drive_/.test(id)) {
+      if (!LineasDatos.existeTabla(TAB.APP_EVID)) return null;
+      const filas = LineasDatos.buscarFilas(TAB.APP_EVID, 'CARPETA_ID', id.slice(6));
+      if (!filas.length) return null;
+      return responsivaDesdeEvidencia(evidenciaDesdeFila(LineasDatos.leerFilas([{ tabla: TAB.APP_EVID, filas: filas.slice(0, 1) }])[0][0]));
+    }
+    const filas = LineasDatos.buscarFilasPorId(TAB.RESP, id);
+    if (!filas.length) return null;
+    const f = LineasDatos.leerFilas([{ tabla: TAB.RESP, filas: filas.slice(0, 1) }])[0][0];
+    const filasEv = LineasDatos.existeTabla(TAB.APP_EVID) ? LineasDatos.buscarFilasVarios(TAB.APP_EVID, 'ID_REGISTRO', LineasDatos.idsDeFila(f)) : [];
+    const ev = filasEv.length ? evidenciaDesdeFila(LineasDatos.leerFilas([{ tabla: TAB.APP_EVID, filas: filasEv.slice(0, 1) }])[0][0]) : null;
+    return responsivaDesdeFila(f, ev);
   }
 
   // Movimiento (lo que se filtra en el historial) según la columna que cambió.
@@ -1357,7 +1388,7 @@ const LineasRepo = (function () {
     indice, refrescarIndice, leerRegistroPorId, leerRegistroObligatorio, idActual, idsDeRegistro,
     guardarCambiosRegistro, agregarRegistro, registrarMovimiento, asegurarPestanaApp,
     evidenciaDesdeFila, inspeccionDesdeFila, inspeccionDesdeEvidencia, responsivaDesdeFila,
-    evidenciasDeRegistro, leerInspeccion, historialDeRegistro, asignacionesDeRegistro, movimientoDeCampo, bitacora,
+    evidenciasDeRegistro, leerInspeccion, leerResponsiva, historialDeRegistro, asignacionesDeRegistro, movimientoDeCampo, bitacora,
     catalogos, indiceColaboradores, borrarCaches,
   };
 })();

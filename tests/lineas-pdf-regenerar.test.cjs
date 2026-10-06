@@ -155,7 +155,7 @@ test('las firmas de la captura (caché) bastan para regenerar sin pedirlas', () 
 test('la pantalla: «Regenerar PDF» solo en responsivas del sistema con PDF y con permiso de operar; pide solo las firmas', () => {
   const cliente = read('src/html/js/lineas.html');
   assert.match(cliente, /\{ icono: 'refresh-ccw', titulo: 'Regenerar PDF', visible: \(d\) => operar && d\.tipoPdf === 'RESPONSIVA' && d\.origen === 'SISTEMA' && !!d\.pdfId,\r?\n\s+alHacer: \(d\) => regenerarPdf\(d\) \}/);
-  assert.match(cliente, /refrescarDespuesDeCaptura\(pila\[pila\.length - 1\]\.id, d\.tipoPdf, d\.id, true\);/);
+  assert.match(cliente, /refrescarDespuesDeCaptura\(registroId \|\| pila\[pila\.length - 1\]\.id, d\.tipoPdf, d\.id, true\);/);
   assert.match(cliente, /llamar\('apiLineasGenerarPdf', tipo, nuevoId, !!regenerar, sesionCaptura\.pdfFirmas \|\| null\)/);
   assert.match(cliente, /if \(pdf && pdf\.faltanFirmas\) \{ pedirFirmasPdf\(sesionCaptura, tipo, pdf\.nombres \|\| \{\}, generar\); return; \}/);
   const fn = cliente.slice(cliente.indexOf('function pedirFirmasPdf('), cliente.indexOf('/** `regenerar`'));

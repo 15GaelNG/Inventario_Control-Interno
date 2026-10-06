@@ -721,7 +721,8 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
   assert.doesNotMatch(lineas, /tarjetaRegistro|Registro en la hoja|ln-solo-escritorio/);
   assert.match(lineas, /\['Tipo', tipoRegistro\(e\.legado\), true\],/);
   assert.match(lineas, /!e \? \['Tipo', tipoRegistro\(l\.legado\), true\] : null,/);
-  assert.doesNotMatch(lineas, /d\.pdfRuta|responsivaRuta|formatoInspeccionRuta|apiLineasResponsiva|apiLineasDocumentosNuco|ln-docs-nucos|totalRotaciones/);
+  // La página de la responsiva (apiLineasResponsiva, usuario 6-oct) usa los PDF de NUCOS y del sistema, nunca pdfRuta
+  assert.doesNotMatch(lineas, /d\.pdfRuta|responsivaRuta|formatoInspeccionRuta|apiLineasDocumentosNuco|ln-docs-nucos|totalRotaciones/);
   const servicio = read('src/services/TelefoniaService.gs');
   assert.doesNotMatch(servicio, /pdfRuta|totalRotaciones|LineasArchivos\.imagen\(insp/);
   // Documentos: indicadores que filtran por tipo y una tabla con acciones por fila
@@ -769,7 +770,8 @@ test('Documentos: inspecciones y responsivas de la hoja y de la carpeta del NUCO
     ['AP1', 'APPSHEET', null, 1, 'f0'],
   ]);
   assert.deepEqual(r.responsivas.map((i) => [i.id, i.pdfId]), [['drive_r1', 'resp']]);
-  assert.match(read('src/services/TelefoniaService.gs'), /LineasRepo\.leerInspeccion\(id\) \|\| \(\/\^drive_\/\.test\(id\) \? inspeccionNucos_\(id\.slice\(6\)\) : null\)/);
+  // La inspección y la responsiva (su página, 6-oct) se leen de la hoja o, si solo están en NUCOS, de su carpeta
+  assert.match(read('src/services/TelefoniaService.gs'), /\(esInspeccion \? LineasRepo\.leerInspeccion\(id\) : LineasRepo\.leerResponsiva\(id\)\) \|\|\s+\(\/\^drive_\/\.test\(id\) \? documentoNucos_\(id\.slice\(6\), tipo\) : null\)/);
   assert.match(read('src/services/TelefoniaService.gs'), /if \(!LineasArchivos\.estaDentroDe\(carpetaId, LineasArchivos\.carpetaNucosId\(\)\)\) return null;/);
 });
 
@@ -818,9 +820,9 @@ test('detalle de la inspección: mismo diseño que la ficha, sin revisión del a
   assert.doesNotMatch(servicio, /DETALLE_RESPONSIVA|DETALLE_INSPECCION|registroDetalle_|checklist: LineasChecklist\.secciones\(\)|firmas: puedeVerSecretos_/);
   // Firmas y patrón no se listan como fotos; PIN y patrón ocultos para quien no es ADMIN
   assert.match(servicio, /if \(\/\^\(FIRMA\|PATRON\)\/i\.test\(f\.name\)\) return;/);
-  assert.match(servicio, /insp\.pinEquipo = insp\.pinEquipo \? '••••' : null;/);
-  // Una inspección de la hoja sin carpeta toma la de NUCOS del mismo día
-  assert.match(servicio, /dia_\(x\.doc\.fecha\) === dia_\(insp\.fecha\)/);
+  assert.match(servicio, /doc\.pinEquipo = doc\.pinEquipo \? '••••' : null;/);
+  // Una inspección o responsiva de la hoja sin carpeta toma la de NUCOS del mismo día
+  assert.match(servicio, /x\.tipo === tipo && dia_\(x\.doc\.fecha\) === dia_\(doc\.fecha\)/);
   const detalle = lineas.slice(lineas.indexOf('function pintarInspeccion('), lineas.indexOf('/** Desde una bitácora: abre el registro'));
   assert.doesNotMatch(detalle, /Registro completo|Firmas de validación|Revisión del activo|ln-secciones-nav/);
   assert.match(detalle, /tarjeta\(icono\('images'\) \+ ' Fotografías \('/);

@@ -2339,7 +2339,7 @@
         if (!sinApilar) {
           const existente = pila.findIndex((p) => p.tipo === tipo && p.id === id);
           if (existente >= 0) pila.splice(existente + 1);
-          else pila.push({ tipo: tipo, id: id, etiqueta: tipo === 'inspeccion' ? 'Inspección' : null });
+          else pila.push({ tipo: tipo, id: id, etiqueta: ETIQUETA_DOCUMENTO[tipo] || null });
         }
         if (!sinHistorial) pasoHistorial();
         $('#ln-listado', raiz).hidden = true;
@@ -2350,7 +2350,7 @@
         detalle.innerHTML = migas() + '<div class="card ln-cargando"><span class="ln-spinner"></span> Cargando…</div>';
         document.getElementById('view-container').scrollTop = 0;
         window.scrollTo(0, 0);
-        const pintar = { equipo: pintarEquipo, linea: pintarLinea, inspeccion: pintarInspeccion }[tipo];
+        const pintar = { equipo: pintarEquipo, linea: pintarLinea, inspeccion: pintarInspeccion, responsiva: pintarResponsiva }[tipo];
         pintar(detalle, id).catch((e) => {
           if (!vigente() || !pila.length || pila[pila.length - 1].tipo !== tipo || pila[pila.length - 1].id !== id) return;
           detalle.innerHTML = migas() + '<div class="card"><p class="error-msg">No se pudo cargar: ' + mensajeError(e) + '</p></div>';
@@ -2387,7 +2387,8 @@
        * ES (un equipo por su NUCO, una línea por su número, una inspección por su fecha), la página actual va en negritas
        * y los anteriores son enlaces discretos. "Volver" dice a dónde regresa. En celular solo se ven Volver y la actual.
        */
-      const ETIQUETA_MIGA = { equipo: 'Equipo', linea: 'Línea', inspeccion: 'Inspección' };
+      const ETIQUETA_DOCUMENTO = { inspeccion: 'Inspección', responsiva: 'Responsiva' };
+      const ETIQUETA_MIGA = { equipo: 'Equipo', linea: 'Línea', inspeccion: 'Inspección', responsiva: 'Responsiva' };
       const etiquetaMiga = (p) => (p ? p.etiqueta || ETIQUETA_MIGA[p.tipo] : 'Líneas Telefónicas');
       function migas() {
         const anterior = pila.length > 1 ? pila[pila.length - 2] : null;
@@ -2697,18 +2698,18 @@
       }
 
       /** PDF que el sistema no alcanzó a generar al guardar una inspección o responsiva. */
-      function generarPdfPendiente(tipo, idDoc, carpetaId) {
+      function generarPdfPendiente(tipo, idDoc, carpetaId, registroId) {
         captura = { guardada: true, firmas: {}, carpetaId: carpetaId || '' };
         mostrarModalCaptura();
         $('#ln-captura-titulo', raiz).textContent = 'Generar PDF pendiente';
-        refrescarDespuesDeCaptura(pila[pila.length - 1].id, tipo, idDoc);
+        refrescarDespuesDeCaptura(registroId || pila[pila.length - 1].id, tipo, idDoc);
       }
 
       /**
        * Regenerar PDF (usuario, 5-oct): la responsiva se vuelve a hacer con la plantilla y lo que ya está guardado, sin
        * llenar el formulario; queda como versión nueva del mismo PDF (LineasCaptura.generarPdf con forzar).
        */
-      function regenerarPdf(d) {
+      function regenerarPdf(d, registroId) {
         captura = { guardada: true, firmas: {}, carpetaId: d.carpetaId || '' };
         mostrarModalCaptura();
         $('#ln-captura-icono', raiz).innerHTML = icono('signature');
@@ -2716,7 +2717,7 @@
         $('#ln-captura-titulo', raiz).textContent = 'Regenerar PDF';
         $('#ln-captura-subtitulo', raiz).textContent = [fecha(d.fecha), d.responsable].filter(Boolean).join(' · ');
         $('#ln-captura-cuerpo', raiz).innerHTML = '';
-        refrescarDespuesDeCaptura(pila[pila.length - 1].id, d.tipoPdf, d.id, true);
+        refrescarDespuesDeCaptura(registroId || pila[pila.length - 1].id, d.tipoPdf, d.id, true);
       }
 
       /**
@@ -2779,6 +2780,9 @@
               acciones: enlaceDrive(pdf.id, 'Ver PDF', true) + '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
             cargarEvidencias(registroId);
             cargarHistorial(registroId);
+            // Desde la página de la inspección o la responsiva: se pinta de nuevo con su PDF
+            const arriba = pila[pila.length - 1];
+            if (arriba && arriba.id === d.id && ETIQUETA_DOCUMENTO[arriba.tipo]) abrir(arriba.tipo, arriba.id, true, true);
           }).catch((e) => {
             if (!vigente() || captura !== sesion) return;
             mostrarEspera('No se pudo subir el PDF', { tono: 'error', icono: 'file-warning', texto: '', detalle: mensajeError(e),
@@ -2846,6 +2850,7 @@
           alCambiarFiltros: marcar,
           accionesFila: [
             { icono: 'eye', titulo: 'Ver inspección', visible: (d) => d.documento === 'Inspección', alHacer: (d) => abrir('inspeccion', d.id) },
+            { icono: 'eye', titulo: 'Ver responsiva', visible: (d) => d.documento === 'Responsiva', alHacer: (d) => abrir('responsiva', d.id) },
             { icono: 'file-text', titulo: 'Ver PDF', visible: (d) => !!d.pdfId,
               alHacer: (d) => window.open('https:\/\/drive.google.com/file/d/' + encodeURIComponent(d.pdfId) + '/view', '_blank', 'noopener') },
             { icono: 'folder-open', titulo: 'Ver carpeta en Drive', visible: (d) => !!d.carpetaId,
@@ -2856,7 +2861,7 @@
             { icono: 'refresh-ccw', titulo: 'Regenerar PDF', visible: (d) => operar && d.tipoPdf === 'RESPONSIVA' && d.origen === 'SISTEMA' && !!d.pdfId,
               alHacer: (d) => regenerarPdf(d) },
           ],
-          ayuda: 'Inspecciones y responsivas del registro. Doble clic en una fila abre la inspección, o el PDF de la responsiva. ' +
+          ayuda: 'Inspecciones y responsivas del registro. Doble clic en una fila abre la inspección o la responsiva. ' +
             'Los indicadores de arriba filtran por tipo; la flecha de cada columna filtra u ordena. ' +
             'Origen: AppSheet y Sistema nuevo son registros de la hoja; Carpeta NUCOS son los que solo están en Drive.',
           columnas: [
@@ -2871,16 +2876,14 @@
           ],
         });
         tabla.setDatos(filas);
-        // Doble clic en la fila: la inspección; en una responsiva, su PDF (o su carpeta si no tiene PDF)
+        // Doble clic en la fila: la página de la inspección o de la responsiva (usuario, 6-oct)
         const porClave = {};
         filas.forEach((d) => { porClave[d._clave] = d; });
         $('.ln-docs-tabla', cont).addEventListener('dblclick', (ev) => {
           const tr = ev.target.closest('tbody tr[data-id]');
           const d = tr && !ev.target.closest('button, input, a') ? porClave[tr.dataset.id] : null;
           if (!d) return;
-          if (d.documento === 'Inspección') abrir('inspeccion', d.id);
-          else if (d.pdfId) window.open('https:\/\/drive.google.com/file/d/' + encodeURIComponent(d.pdfId) + '/view', '_blank', 'noopener');
-          else if (d.carpetaId) window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(d.carpetaId), '_blank', 'noopener');
+          abrir(d.documento === 'Inspección' ? 'inspeccion' : 'responsiva', d.id);
         });
       }
 
@@ -3856,6 +3859,7 @@
             // (trae también Documentos e Historial); si se está viendo otra cosa, solo esas dos
             const arriba = pila[pila.length - 1];
             if (arriba && arriba.id === idAbierto && (arriba.tipo === 'equipo' || arriba.tipo === 'linea')) abrir(arriba.tipo, arriba.id, true, true);
+            else if (arriba && arriba.id === nuevoId && ETIQUETA_DOCUMENTO[arriba.tipo]) abrir(arriba.tipo, arriba.id, true, true); // su página, con el PDF nuevo
             else {
               cargarEvidencias(idAbierto);
               cargarHistorial(idAbierto);
@@ -4204,6 +4208,7 @@
           detalle: { titulo: (m) => m.movimiento + ' · ' + fechaTabla(m.fecha) },
           accionesFila: [
             { icono: 'clipboard-check', titulo: 'Ver inspección', visible: (m) => m.refTipo === 'inspeccion' && !!m.refId, alHacer: (m) => abrir('inspeccion', m.refId) },
+            { icono: 'signature', titulo: 'Ver responsiva', visible: (m) => m.refTipo === 'responsiva' && !!m.refId, alHacer: (m) => abrir('responsiva', m.refId) },
             { icono: 'file-text', titulo: 'Ver PDF', visible: (m) => !!m.pdfId, alHacer: (m) => window.open('https:\/\/drive.google.com/file/d/' + encodeURIComponent(m.pdfId) + '/view', '_blank', 'noopener') },
           ],
           ayuda: 'Un renglón por acción, del AppSheet y del sistema nuevo. Responsable y estatus: los de ese momento.',
@@ -4290,6 +4295,79 @@
         return (a.periodos || []).filter((p) => !ocultarSinAsignar || p[campo]);
       }
 
+      // ---- Inspección y responsiva: su página ----
+      /**
+       * Botones de la página de una inspección o responsiva (usuario, 6-oct): a la vista Ver PDF y Subir PDF firmado; en ⋮
+       * Ver equipo, Ver carpeta en Drive y, si aplica, Generar PDF o Regenerar PDF. Las mismas reglas que en Documentos.
+       */
+      function datosDocumento(tipoPdf, d, r) {
+        const pdfs = r.pdfs || [];
+        return { documento: tipoPdf === 'INSPECCION' ? 'Inspección' : 'Responsiva', tipoPdf: tipoPdf, id: d._id, origen: d.origen,
+          fecha: d.fecha, pdfId: pdfs.length ? pdfs[0].id : null, carpetaId: d.drive ? d.drive.carpetaId : null,
+          responsable: (d.snapshot && d.snapshot.responsable) || null, registroId: d.registroId || (r.equipo && r.equipo._id) || null };
+      }
+      function opcionesDocumento(x, r) {
+        const operar = !!r.puedeOperar;
+        return [
+          r.equipo ? { icono: 'smartphone', texto: 'Ver equipo', alHacer: () => abrir('equipo', r.equipo._id) } : null,
+          x.carpetaId ? { icono: 'folder-open', texto: 'Ver carpeta en Drive',
+            alHacer: () => window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(x.carpetaId), '_blank', 'noopener') } : null,
+          operar && x.registroId && x.origen === 'SISTEMA' && !x.pdfId ? { icono: 'file-plus', texto: 'Generar PDF', separador: true,
+            alHacer: () => generarPdfPendiente(x.tipoPdf, x.id, x.carpetaId, x.registroId) } : null,
+          operar && x.registroId && x.tipoPdf === 'RESPONSIVA' && x.origen === 'SISTEMA' && x.pdfId ? { icono: 'refresh-ccw', texto: 'Regenerar PDF', separador: true,
+            alHacer: () => regenerarPdf(x, x.registroId) } : null,
+        ].filter(Boolean);
+      }
+      function botonesDocumento(tipoPdf, d, r) {
+        const x = datosDocumento(tipoPdf, d, r);
+        const pdfs = r.pdfs || [];
+        return pdfs.map((p, indice) => enlaceDrive(p.id, 'Ver PDF' + (pdfs.length > 1 ? ' ' + (indice + 1) : ''), true)).join('') +
+          (r.puedeOperar && x.registroId && (x.pdfId || x.origen !== 'SISTEMA')
+            ? '<button type="button" class="ln-btn-icono" data-ln-doc-subir>' + icono('file-up') + ' Subir PDF firmado</button>' : '') +
+          (opcionesDocumento(x, r).length
+            ? '<button type="button" class="ln-btn-icono ln-btn-mas" data-ln-doc-mas title="Más opciones" aria-label="Más opciones">' + icono('ellipsis-vertical') + '</button>' : '');
+      }
+      function activarBotonesDocumento(detalle, tipoPdf, d, r) {
+        const x = datosDocumento(tipoPdf, d, r);
+        const subir = detalle.querySelector('[data-ln-doc-subir]');
+        if (subir) subir.addEventListener('click', () => subirPdfFirmado(x.registroId, x));
+        const mas = detalle.querySelector('[data-ln-doc-mas]');
+        if (mas) mas.addEventListener('click', () => menuFlotante(mas, opcionesDocumento(x, r)));
+      }
+
+      /** Responsiva (usuario, 6-oct): su propia página, como la inspección; lo que dice la responsiva de ese día. */
+      function pintarResponsiva(detalle, id) {
+        return llamar('apiLineasResponsiva', id).then((r) => {
+          if (!vigente() || !pila.length || pila[pila.length - 1].tipo !== 'responsiva' || pila[pila.length - 1].id !== id) return;
+          const d = r.responsiva;
+          const e = r.equipo;
+          const s = d.snapshot || {};
+          const deDrive = d.origen === 'DRIVE';
+          const accesorios = String(d.accesorios || '').split(',').map((a) => a.trim()).filter(Boolean);
+          pila[pila.length - 1].etiqueta = 'Responsiva' + (fecha(d.fecha) ? ' ' + fecha(d.fecha) : '');
+          detalle.innerHTML = migas() +
+            encabezado('signature', 'Responsiva ' + esc(fecha(d.fecha) || ''),
+              chip(ORIGEN_DOCUMENTO[d.origen] || d.origen, COLOR_ORIGEN_DOCUMENTO[ORIGEN_DOCUMENTO[d.origen]] || 'neutro') + (e ? chip('NUCO ' + (e.nuco || '—'), 'neutro') : ''),
+              botonesDocumento('RESPONSIVA', d, r),
+              deDrive
+                ? [['NUCO', d.nuco || (e && e.nuco)], ['PDF', (r.pdfs || []).length ? 'Sí' : 'No']]
+                : [['Responsable', s.responsable], ['Control Interno', d.responsableCI], ['Identificación', s.identificacion]]) +
+            (deDrive
+              ? ''
+              : '<div class="ln-grid-2">' +
+                tarjeta(icono('user') + ' Responsable', campos([['Nombre', s.responsable], ['No. de empleado', s.noEmpleado], ['Puesto', s.puesto],
+                  ['Departamento', s.departamento], ['Área', s.area], ['Sede', s.sede], ['Oficina o desarrollo', s.oficina], ['Director', s.director], ['Correo', s.correo]])) +
+                tarjeta(icono('smartphone') + ' Equipo y línea', campos([['NUCO', d.nuco || (e && e.nuco)], ['Modelo', s.modelo], ['IMEI', s.imei], ['Color', s.color],
+                  ['Número', s.numero], ['SIM', s.sim], ['Compañía', s.compania], ['Razón social', s.razonSocial]])) +
+                '</div>' +
+                tarjeta(icono('package') + ' Accesorios entregados', accesorios.length
+                  ? '<div class="ln-chips">' + accesorios.map((a) => chip(a, 'neutro')).join('') + '</div>'
+                  : '<p class="ln-tenue">Sin accesorios registrados.</p>') +
+                tarjeta(icono('message-square-text') + ' Comentario', '<p class="ln-lectura-notas">' + esc(d.comentario || 'Sin comentario registrado.') + '</p>'));
+          activarBotonesDocumento(detalle, 'RESPONSIVA', d, r);
+        });
+      }
+
       // ---- Inspección ----
       function pintarInspeccion(detalle, id) {
         return llamar('apiLineasInspeccion', id).then((r) => {
@@ -4309,9 +4387,7 @@
           detalle.innerHTML = migas() +
             encabezado('clipboard-check', 'Inspección ' + esc(fecha(i.fecha) || ''),
               chip(ORIGEN_DOCUMENTO[i.origen] || i.origen, COLOR_ORIGEN_DOCUMENTO[ORIGEN_DOCUMENTO[i.origen]] || 'neutro') + (e ? chip('NUCO ' + (e.nuco || '—'), 'neutro') : ''),
-              (e ? '<button type="button" class="ln-btn-icono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' Ver equipo</button>' : '') +
-              (i.drive ? enlaceDrive(i.drive.carpetaId, 'Ver carpeta en Drive') : '') +
-              (r.pdfs || []).map((p, indice) => enlaceDrive(p.id, 'Ver PDF' + (r.pdfs.length > 1 ? ' ' + (indice + 1) : ''), true)).join(''),
+              botonesDocumento('INSPECCION', i, r),
               deDrive
                 ? [['NUCO', i.nuco || (e && e.nuco)], ['Fotos', miles(fotos.length)], ['PDF', (r.pdfs || []).length ? 'Sí' : 'No']]
                 : [['Responsable', s.responsable], ['Inspector', i.inspector], ['Calificación', porcentaje(i.calificacion)], ['Fotos', miles(fotos.length)], ['Ticket', i.ticket]]) +
@@ -4321,13 +4397,14 @@
                 tarjeta(icono('user') + ' Responsable', campos([['Nombre', s.responsable], ['Departamento', s.departamento], ['Sede', s.sede], ['Puesto', s.puesto]])) +
                 tarjeta(icono('smartphone') + ' Activo revisado', campos([['Número', s.numero], ['IMEI', s.imei], ['Modelo', s.modelo], ['Compañía', s.compania]])) +
                 '</div>' +
-                tarjeta(icono('message-square-text') + ' Observaciones', '<p class="ln-lectura-notas">' + esc(i.observaciones || 'Sin observaciones registradas.') + '</p>')) +
+                tarjeta(icono('message-square-text') + ' Comentario', '<p class="ln-lectura-notas">' + esc(i.observaciones || 'Sin comentario registrado.') + '</p>')) +
             tarjeta(icono('images') + ' Fotografías (' + fotos.length + ')',
               (fotos.length ? galeria(fotos) : '<p class="empty-state">No hay fotografías de esta inspección.</p>') +
               (r.puedeOperar ? '<div class="ln-fotos-despues"><h4>' + icono('image-plus') + ' Agregar fotos</h4>' +
                 htmlSubirFotos('insp-fotos', deDrive
                   ? 'Se guardan en Drive, en la carpeta de la app (la de NUCOS es de solo consulta), y se ven aquí con las demás.'
                   : 'Se guardan en la carpeta FOTOS de esta inspección en Drive.') + '</div>' : ''));
+          activarBotonesDocumento(detalle, 'INSPECCION', i, r);
           if (r.puedeOperar) {
             // Mejora: subir fotos a una inspección ya registrada (la carpeta se prepara al elegir la primera). Las de NUCOS
             // (solo lectura) van a una carpeta de la app ligada a la inspección (LineasCaptura.fotosInspeccion)
