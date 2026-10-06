@@ -1,6 +1,6 @@
 # Líneas — estado del módulo
 
-Ramas: `emmanuel` lleva el patrón en General, que `master` y la versión 54 de producción no tienen · Última actualización: 2026-10-05 (noche)
+Ramas `emmanuel` = `master` · Producción: versión 55 · Última actualización: 2026-10-05 (noche)
 
 Qué es hoy el módulo **Líneas** (equipos celulares y líneas telefónicas), dónde vive cada cosa y cómo se trabaja.
 La bitácora anterior de este archivo (§0a…§0ae, hasta el 1-oct) sigue en el historial de git. El diseño de las hojas
