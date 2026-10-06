@@ -203,6 +203,19 @@
     apiListarVehiculosBasico: [{ FOLIO: 'AUT0024', NUCO: '24', PLACA: 'GGY886F', MARCA: 'CHEVROLET', LINEA_VEHICULO: 'BEAT' },
       { FOLIO: 'AUT0100', NUCO: '100', PLACA: 'ABC123A', MARCA: 'MITSUBISHI', LINEA_VEHICULO: 'L200' }],
     apiBuscarVehiculoPorFolio: VEHICULO,
+    // Como el servidor: cada pestaña con el permiso de su módulo (null sin él; quitarPermisos lo quita)
+    apiFichaVehiculo: () => {
+      const parte = (modulo, valor) => (permisos[modulo] ? (typeof valor === 'string' ? JSON.parse(valor) : valor) : null);
+      return JSON.stringify({
+        completo: VEHICULO,
+        cambios: parte('cambios-vehiculos', FICHAS.apiListarCambiosVehiculosPorFolio),
+        reasignaciones: parte('reasignaciones-vehiculares', FICHAS.apiListarReasignacionesVehicularesPorFolio),
+        verificaciones: parte('verificaciones', '[]'), inspecciones: parte('inspeccion-vehicular', '[]'),
+        sensores: parte('instalacion-sensores', '[]'), hologramas: parte('hologramas', '[]'),
+        incidencias: parte('incidencias', FICHAS.apiIncidenciasPorFolio),
+        responsivas: parte('responsiva-vehicular', '[]'), adherentes: parte('adherente-vehicular', '[]'),
+      });
+    },
     apiListarInspecciones: [
       { ID: '2026_24_292', FOLIO: 'AUT0024', TIPO: 'RIFTER', FECHA: hace(1), PLACAS: 'GGY886F', PUNTAJE: 96.3, RESPONSABLE: 'JUAN MANUEL FULGENCIO', INSPECTOR: 'AYRTON SEPULVEDA', PDF: 'x.pdf' },
       { ID: '2026_25_291', FOLIO: 'AUT0025', TIPO: 'HONDA 150XR', FECHA: hace(3), PLACAS: 'GGR658F', PUNTAJE: 84.5, RESPONSABLE: 'JORGE LUIS AVECILLA', INSPECTOR: 'AYRTON SEPULVEDA', PDF: '' },
@@ -309,8 +322,9 @@
       get(_, nombre) {
         if (nombre === 'withSuccessHandler') return (f) => { exito = f; return api; };
         if (nombre === 'withFailureHandler') return (f) => { falla = f; return api; };
-        return () => {
-          const r = respuestas[nombre];
+        return (...args) => {
+          // Una respuesta puede ser una función: la arma con los argumentos y los permisos de la escena
+          const r = typeof respuestas[nombre] === 'function' ? respuestas[nombre](...args) : respuestas[nombre];
           setTimeout(() => (r === undefined ? exito(/^apiListar/.test(nombre) ? [] : null) : exito(JSON.parse(JSON.stringify(r)))), 120);
         };
       },

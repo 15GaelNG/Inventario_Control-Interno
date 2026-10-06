@@ -1999,6 +1999,8 @@
     const modalEditar = document.getElementById('modal-editar-vehiculo');
     let vehiculosPorId = {};
     let todosLosVehiculos = [];
+    /** La ficha abierta: si su copia guardada llega distinta del servidor, se vuelve a pintar */
+    let fichaVehiculoAbierta = null;
 
     document.getElementById('campos-form-vehiculo').innerHTML = renderCamposVehiculo('veh');
     document.getElementById('campos-form-editar-vehiculo').innerHTML = renderCamposVehiculo('editar-vehiculo', true);
@@ -2157,6 +2159,7 @@
     }
 
     function cerrarFichaVehiculo() {
+      fichaVehiculoAbierta = null;
       document.getElementById('veh-detalle').hidden = true;
       document.getElementById('veh-detalle').innerHTML = '';
       document.getElementById('veh-listado').hidden = false;
@@ -3067,47 +3070,30 @@
       });
     }
 
-    async function abrirFichaVehiculo(vResumen, pestanaInicial) {
+    /** repintar: la misma ficha con datos nuevos, sin "Cargando…" ni volver arriba */
+    async function abrirFichaVehiculo(vResumen, pestanaInicial, repintar) {
       const listado = document.getElementById('veh-listado');
       const detalle = document.getElementById('veh-detalle');
+      fichaVehiculoAbierta = vResumen;
       listado.hidden = true;
       detalle.hidden = false;
-      detalle.innerHTML = migasVehiculo() + '<div class="card ln-card"><p class="ln-tenue"><span class="spinner"></span> Cargando…</p></div>';
-      wireMigasVehiculo();
-      document.getElementById('view-container').scrollTop = 0;
-      window.scrollTo(0, 0);
+      if (!repintar) {
+        detalle.innerHTML = migasVehiculo() + '<div class="card ln-card"><p class="ln-tenue"><span class="spinner"></span> Cargando…</p></div>';
+        wireMigasVehiculo();
+        document.getElementById('view-container').scrollTop = 0;
+        window.scrollTo(0, 0);
+      }
 
       try {
-        // Cada pestaña es de su módulo: solo se pide (y solo aparece) si la persona puede ver
-        // ese módulo, igual que en el menú. Así una pestaña sin permiso no truena la ficha ni
-        // sale vacía como si el vehículo no tuviera nada. Si una que sí puede ver falla por
-        // otra cosa, esa sale vacía y las demás siguen.
-        const [completo, cambiosTexto, reasignaciones, verifTexto, inspTexto, sensorTexto, holoTexto, incTexto, respTexto, adhTexto] = await Promise.all([
-          callServer('apiBuscarVehiculoPorFolio', state.token, vResumen.FOLIO),
-          deModulo('cambios-vehiculos', () => callServer('apiListarCambiosVehiculosPorFolio', state.token, vResumen.FOLIO), '[]'),
-          deModulo('reasignaciones-vehiculares', () => callServer('apiListarReasignacionesVehicularesPorFolio', state.token, vResumen.FOLIO), []),
-          deModulo('verificaciones', () => callServer('apiVerificacionesPorFolio', state.token, vResumen.FOLIO), '[]'),
-          deModulo('inspeccion-vehicular', () => callServer('apiInspeccionesPorFolio', state.token, vResumen.FOLIO), '[]'),
-          deModulo('instalacion-sensores', () => callServer('apiSensoresPorFolio', state.token, vResumen.FOLIO), '[]'),
-          deModulo('hologramas', () => callServer('apiHologramasPorFolio', state.token, vResumen.FOLIO), '[]'),
-          deModulo('incidencias', () => callServer('apiIncidenciasPorFolio', state.token, vResumen.FOLIO), '[]'),
-          deModulo('responsiva-vehicular', () => callServer('apiListarResponsivasVehicularesPorFolio', state.token, vResumen.FOLIO), '[]'),
-          deModulo('adherente-vehicular', () => callServer('apiListarAdherentesVehicularesPorFolio', state.token, vResumen.FOLIO), '[]'),
-        ]);
-        // Estas regresan JSON.stringify — ver la nota en ClientApi.gs
-        // (google.script.run pierde arreglos grandes de forma intermitente;
-        // como texto viaja confiable). null = sin permiso: su pestaña no aparece.
-        const lista = (texto) => (texto === null ? null : JSON.parse(texto || '[]'));
-        const cambios = lista(cambiosTexto);
-        const verificaciones = lista(verifTexto);
-        const inspecciones = lista(inspTexto);
-        const sensores = lista(sensorTexto);
-        const hologramas = lista(holoTexto);
-        const incidencias = lista(incTexto);
-        const responsivas = lista(respTexto);
-        const adherentes = lista(adhTexto);
+        // Todo en UNA llamada (apiFichaVehiculo en ClientApi.gs): el servidor pide cada pestaña
+        // con el permiso de su módulo y manda null en las que la persona no puede ver (su pestaña
+        // no aparece, igual que en el menú); si una que sí puede ver falla, sale vacía. Una ficha
+        // ya vista sale al instante de su copia guardada y se repinta sola si llegó algo distinto;
+        // cualquier guardado borra las copias (ESCRIBE en api.html).
+        const ficha = JSON.parse((await callServerListaCacheada('apiFichaVehiculo', state.token, vResumen.FOLIO)) || '{}');
+        const { completo, cambios, reasignaciones, verificaciones, inspecciones, sensores, hologramas, incidencias, responsivas, adherentes } = ficha;
         // Se pudo haber vuelto a la lista (o abierto otro folio) mientras cargaba.
-        if (detalle.hidden || !document.body.contains(detalle)) return;
+        if (detalle.hidden || !document.body.contains(detalle) || fichaVehiculoAbierta !== vResumen) return;
         if (!completo) {
           detalle.innerHTML = migasVehiculo() + '<p class="empty-state">No se encontró el registro completo.</p>';
           wireMigasVehiculo();
@@ -3448,6 +3434,14 @@
       const archivo = ev.target.closest('[data-archivo]');
       if (archivo) ABRIR_ARCHIVO_FICHA[archivo.dataset.archivo](archivo.dataset.ruta);
     });
+    // La ficha salió de su copia guardada y del servidor llegó algo distinto: se repinta en la
+    // misma pestaña (sin "Cargando…" ni volver arriba)
+    escucharLista('apiFichaVehiculo', () => {
+      const detalle = document.getElementById('veh-detalle');
+      if (!fichaVehiculoAbierta || detalle.hidden) return;
+      const activa = detalle.querySelector('[data-ficha-tab].active');
+      abrirFichaVehiculo(fichaVehiculoAbierta, activa ? activa.dataset.fichaTab : undefined, true);
+    }, document.getElementById('veh-detalle'));
 
     // Modal de captura (verificación/sensor/holograma/incidencia): cerrar con la X o clic afuera.
     const modalCaptura = document.getElementById('veh-modal-captura');

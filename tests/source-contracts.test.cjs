@@ -417,7 +417,7 @@ test('cada vista es una sola entrada (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU) y todo
   // módulo (`enFicha`), que lo pide con deModulo para que sin permiso su pestaña no aparezca
   const enFicha = Object.fromEntries([...read('src/config/Modulos.gs').matchAll(/{ id: '([^']+)', etiqueta.*enFicha: '([^']+)'/g)].map((m) => [m[1], m[2]]));
   modulos.forEach((m) => {
-    if (enFicha[m]) { if (!js.includes(`deModulo('${m}'`)) problemas.push(m + ': vive en la ficha de ' + enFicha[m] + ' pero nadie lo pide con deModulo'); }
+    if (enFicha[m]) { if (!js.includes(`deModulo('${m}'`) && !read('src/ClientApi.gs').includes(`parte('${m}'`)) problemas.push(m + ': vive en la ficha de ' + enFicha[m] + ' pero nadie lo pide con deModulo (ni con parte en el servidor)'); }
     else if (!entradas.some((e) => e.requiere === m)) problemas.push(m + ': módulo sin vista');
   });
   assert.deepEqual(problemas, []);
@@ -2112,10 +2112,21 @@ test('la sección de sensor de Vehículos: la pantalla y el servidor bloquean lo
   assert.deepEqual([...new Set(enPantalla)].sort(), servidor.slice().sort());
 });
 
-test('las fichas piden lo de otro módulo solo si la persona lo puede ver (deModulo)', () => {
-  // Cada ficha: su archivo, su función y las llamadas que SÍ son de su propio módulo
+test('las fichas piden lo de otro módulo solo si la persona lo puede ver (deModulo o parte en el servidor)', () => {
+  // La de Vehículos va en UNA llamada: el servidor (apiFichaVehiculo) pide cada pestaña con
+  // parte('modulo', …), que la deja en null sin permiso. Ninguna lista de otro módulo va suelta.
+  const api = read('src/ClientApi.gs');
+  const ini = api.indexOf('function apiFichaVehiculo(');
+  const cuerpo = api.slice(ini, api.indexOf('\n}', ini));
+  const sueltasServidor = cuerpo.split(/\r?\n/).filter((l) => /Service\.listarPorFolio\(/.test(l) && !/parte\('[a-z-]+'/.test(l));
+  assert.deepEqual(sueltasServidor, [], 'apiFichaVehiculo: cada pestaña va con parte(modulo, …)');
+  const app = read('src/html/js/app.html');
+  const ficha = app.slice(app.indexOf('async function abrirFichaVehiculo('), app.indexOf('const estilo = CLASE_ESTILO', app.indexOf('async function abrirFichaVehiculo(')));
+  assert.match(ficha, /callServerListaCacheada\('apiFichaVehiculo'/, 'la ficha de Vehículos se pide en una sola llamada');
+  assert.doesNotMatch(ficha, /callServer\('api/, 'y nada más suelto');
+
+  // Las demás fichas: su archivo, su función y las llamadas que SÍ son de su propio módulo
   const FICHAS = [
-    { archivo: 'src/html/js/app.html', funcion: 'abrirFichaVehiculo', propias: ['apiBuscarVehiculoPorFolio'] },
     { archivo: 'src/html/js/app-cajachica.html', funcion: 'abrirFichaCajaChica', propias: ['apiBuscarCajaChicaPorId', 'apiCambiosMontoPorIdCch'] },
   ];
   FICHAS.forEach((f) => {

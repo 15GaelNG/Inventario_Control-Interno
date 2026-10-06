@@ -68,11 +68,23 @@
     return pedir_(fnName, args);
   }
 
+  /**
+   * Las llamadas que escriben. Cuando una sale bien se borran las fichas guardadas (la de un
+   * vehículo trae lo de 10 módulos: cualquier alta, cambio o baja puede tocarla), así que la
+   * siguiente vez que se abra espera lo fresco en vez de enseñar la copia vieja.
+   */
+  const ESCRIBE = /^api(Crear|Actualizar|Eliminar|Registrar|Subir|Cambiar|Cerrar|Guardar|Marcar|Reactivar|Sincronizar|Reasignar)/;
+  const FICHAS_GUARDADAS = ['apiFichaVehiculo'];
+
   function pedir_(fnName, args) {
     const inicio = performance.now();
     return new Promise((resolve, reject) => {
       google.script.run
-        .withSuccessHandler((r) => { anotarTiempo_(fnName, inicio, true); resolve(r); })
+        .withSuccessHandler((r) => {
+          anotarTiempo_(fnName, inicio, true);
+          if (ESCRIBE.test(fnName)) FICHAS_GUARDADAS.forEach(invalidarListasDe);
+          resolve(r);
+        })
         .withFailureHandler((err) => {
           anotarTiempo_(fnName, inicio, false);
           const mensaje = err.message || String(err);

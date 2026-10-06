@@ -52,6 +52,38 @@ function apiListarVehiculosBasico(token) {
 function apiBuscarVehiculoPorFolio(token, folio) {
   return VehiculosService.buscarPorFolio(token, folio);
 }
+/**
+ * La ficha de un vehículo en UNA llamada: antes eran 11, y cada llamada cuesta ~1.5–2.5 s aunque
+ * no haga nada (Apps Script no las corre todas a la vez). Cada pestaña es de su módulo: sin
+ * permiso sale null y no aparece (lo mismo que deModulo en el cliente); si una que sí puede ver
+ * falla por otra cosa, sale vacía y las demás siguen. Texto JSON, por la nota de abajo.
+ */
+function apiFichaVehiculo(token, folio) {
+  const sesion = Auth.validarSesion(token);
+  const permisos = Permisos.deCorreo(sesion.correo);
+  const parte = (modulo, leer) => {
+    if (!permisos[modulo]) return null;
+    try {
+      return leer();
+    } catch (e) {
+      if (Permisos.esFaltaDePermiso(e)) return null;
+      console.warn('Ficha del vehículo ' + folio + ', pestaña ' + modulo + ': ' + e.message);
+      return [];
+    }
+  };
+  return JSON.stringify({
+    completo: VehiculosService.buscarPorFolio(token, folio),
+    cambios: parte('cambios-vehiculos', () => CambiosVehiculosService.listarPorFolio(token, folio)),
+    reasignaciones: parte('reasignaciones-vehiculares', () => ReasignacionesVehicularesService.listarPorFolio(token, folio)),
+    verificaciones: parte('verificaciones', () => VerificacionesService.listarPorFolio(token, folio)),
+    inspecciones: parte('inspeccion-vehicular', () => InspeccionesService.listarPorFolio(token, folio)),
+    sensores: parte('instalacion-sensores', () => SensoresService.listarPorFolio(token, folio)),
+    hologramas: parte('hologramas', () => HologramasService.listarPorFolio(token, folio)),
+    incidencias: parte('incidencias', () => IncidenciasService.listarPorFolio(token, folio)),
+    responsivas: parte('responsiva-vehicular', () => ResponsivaVehicularService.listarPorFolio(token, folio)),
+    adherentes: parte('adherente-vehicular', () => AdherenteVehicularService.listarPorFolio(token, folio)),
+  });
+}
 // JSON.stringify (no el arreglo directo): con FECHA_REGISTRO (Date) en cada fila,
 // google.script.run pierde la respuesta de forma intermitente (confirmado con
 // pruebas — regresa null aunque el servidor sí arma las filas). Como texto viaja
