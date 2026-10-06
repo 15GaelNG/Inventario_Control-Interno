@@ -193,12 +193,12 @@ Revisa con `npx clasp -P .clasp.prod.json list-deployments` que ambos digan `@N`
 mueve los dos despliegues. También está el botón "Run workflow" de la GitHub Action
 (docs/subir-automatico.md).
 
-**Antes de desplegar se revisan los IDs** ( en ): que cada libro y
+**Antes de desplegar se revisan los IDs** (`revisionEntorno_` en `Diagnostico.gs`): que cada libro y
 carpeta de Entornos.gs abra, se llame como dicen las rutas que se guardan, la raíz la alcance, nada de prod
-esté en una carpeta de pruebas y existan las hojas del catálogo.  la pide en /dev y en prod no
-despliega con errores. A mano:  en el editor de cualquier proyecto, o
-. Una carpeta nueva en  va también en 
-(un contrato lo revisa).
+esté en una carpeta de pruebas y existan las hojas del catálogo. `subir.js` la pide en /dev y en prod no
+despliega con errores. A mano: `revisarEntorno()` en el editor de cualquier proyecto, o
+`node tools/subir/revisar-entorno.js prod`. Una carpeta nueva en `Config.gs` va también en
+`REVISION_CARPETAS` (un contrato lo revisa).
 
 ## Se sube comprimido: `npm run push`, no `clasp push`
 
