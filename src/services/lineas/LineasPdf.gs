@@ -16,8 +16,14 @@ const LineasPdf = (function () {
     INSPECCION_CELULAR: '1YVYDhQ9aWOEjkqxO8_4AvHdmP3f91W7QVRB8C9kjlUI',
     RESPONSIVA_CELULAR: '1EfSbZaQwl6c3ylQ1Z60gxjOeIXAqZ7g1_IN-qfw-pMc',
   };
-  /** Las que usa el sistema. */
-  const PLANTILLAS = Object.assign({}, PLANTILLAS_APPSHEET);
+  /**
+   * Las que usa el sistema: copias «(SISTEMA)» de las del AppSheet, en sus mismas carpetas (FORMATOS y
+   * RESPONSIVAS_LINEAS), con «Comentario» (lineasPlantillasComentario_copiar, 6-oct).
+   */
+  const PLANTILLAS = {
+    INSPECCION_CELULAR: '11l9vL9KK4T1vawnI-X0arnNTMHDa53Y92kmO-m5Alw4',
+    RESPONSIVA_CELULAR: '13qeTsLmV5FiRxgNI9hbb_8BH83olIiSVB6GdXNbXIF0',
+  };
 
   // Cómo imprime el AppSheet ("Task for GENERAR PDF": carta, márgenes de la tarea en 0): convierte el Doc a HTML y lo
   // imprime con Chromium. Los márgenes del Doc (responsiva: 14.2 pt arriba y a los lados, 0 abajo) se respetan, y el

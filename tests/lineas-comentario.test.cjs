@@ -110,6 +110,10 @@ test('las plantillas del AppSheet quedan aparte de las del sistema', () => {
   const P = cargarPdf();
   assert.equal(P.PLANTILLAS_APPSHEET.INSPECCION_CELULAR, '1YVYDhQ9aWOEjkqxO8_4AvHdmP3f91W7QVRB8C9kjlUI');
   assert.equal(P.PLANTILLAS_APPSHEET.RESPONSIVA_CELULAR, '1EfSbZaQwl6c3ylQ1Z60gxjOeIXAqZ7g1_IN-qfw-pMc');
+  // El sistema usa las copias «(SISTEMA)» (6-oct), y el ajuste de impresión de la responsiva va con la copia
+  assert.equal(P.PLANTILLAS.INSPECCION_CELULAR, '11l9vL9KK4T1vawnI-X0arnNTMHDa53Y92kmO-m5Alw4');
+  assert.equal(P.PLANTILLAS.RESPONSIVA_CELULAR, '13qeTsLmV5FiRxgNI9hbb_8BH83olIiSVB6GdXNbXIF0');
+  assert.match(read('src/services/lineas/LineasPdf.gs'), /\[PLANTILLAS\.RESPONSIVA_CELULAR\]: \{ altoFuente/);
   const admin = read('src/services/lineas/LineasAdmin.gs');
   assert.match(admin, /function lineasRenombrarColumnasDocumentos_revisar\(\)/);
   assert.match(admin, /function lineasPlantillasComentario_copiar\(\)/);
