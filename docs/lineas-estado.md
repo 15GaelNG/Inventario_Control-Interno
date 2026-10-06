@@ -1,7 +1,7 @@
 # Líneas — estado del módulo
 
 Rama `emmanuel` = `master` (con la parte 6: COMENTARIO, plantillas «(SISTEMA)», página de la responsiva, patrón con 9
-puntos en el PDF, Reasignar corregido, responsables adicionales, sin «quien lo usa» y firma guardada) · Producción: versión 60 · Última actualización: 2026-10-06
+puntos en el PDF, Reasignar corregido, responsables adicionales, sin «quien lo usa», firma guardada, PDF ligado fuera de su carpeta y PIN en minúsculas) · Producción: versión 62 · Última actualización: 2026-10-06
 
 Qué es hoy el módulo **Líneas** (equipos celulares y líneas telefónicas), dónde vive cada cosa y cómo se trabaja.
 La bitácora anterior de este archivo (§0a…§0ae, hasta el 1-oct) sigue en el historial de git. El diseño de las hojas
@@ -77,7 +77,11 @@ AppSheet, en sus mismas carpetas (FORMATOS y RESPONSIVAS_LINEAS), con «Comentar
 originales, que no se tocan, en `PLANTILLAS_APPSHEET`; las copias las hace `lineasPlantillasComentario_copiar`);
 la responsiva conserva los márgenes de su plantilla y su interlineado se ajusta para salir igual que la impresión del
 AppSheet (HTML con Chromium), en 2 hojas (`LineasPdf.COMO_APPSHEET`). El patrón se puede dibujar en el servidor
-(`LineasPatronPng.gs`).
+(`LineasPatronPng.gs`). Si el PDF ligado a una captura del sistema ya no está en su carpeta de NUCOS (alguien lo quitó
+a mano en Drive), se usa el PDF que sí está en esa carpeta (el del mismo nombre o el más reciente «INSP…» / «RESP…») y
+se vuelve a ligar en APP_EVIDENCIAS y en la columna del PDF (`LineasRepo.revisarPdfsLigados` con
+`LineasArchivos.pdfsFueraDeCarpeta`; al ver Documentos, la página del documento o el Historial y antes de Regenerar o
+Subir PDF firmado; se pregunta a Drive cada vez).
 
 **Configuración:** bloque por scriptId en `src/config/Entornos.gs` (producción `1NbOczw…`, DEV de Emmanuel `1rpvvay…`).
 Los archivos del AppSheet (rutas `TABLA_Images/…`) se buscan en la carpeta de la app y, si no están en la ruta, por
@@ -116,3 +120,6 @@ su nombre dentro de ella (`LineasArchivos.resolver`); el DEV además los lee de 
 - Solo Líneas: no se tocan módulos ni hojas de los compañeros (Capital Humano se lee, no se escribe).
 - Íconos de Lucide, textos cortos y técnicos, espera visible desde el clic, sin confirmaciones de más.
 - En archivos `.html`, nunca `//` dentro de un string de JS (ver `CLAUDE.md`).
+- Todo se escribe en mayúsculas (regla de `app.html`) salvo los campos con `data-respetar-texto`: PIN de WhatsApp,
+  PIN o contraseña del equipo, contraseña del módem y correo (`literal` o `secreto` en el formulario). La excepción vive
+  en `app.html`: al unir `master`, conservarla (`tests/lineas-pin-minusculas.test.cjs` falla si se pierde).

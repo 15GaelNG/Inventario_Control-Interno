@@ -84,6 +84,7 @@ function captura(fila, opciones) {
     LineasRepo: {
       TAB: { INSP: 'INSP', RESP: 'RESP', APP_EVID: 'APP_EVID' },
       evidenciaDesdeFila: () => ev,
+      revisarPdfsLigados: () => {},
       registrarMovimiento: (...a) => hechos.movimientos.push(a),
     },
     LineasDatos: {
