@@ -2157,3 +2157,15 @@ test('lo que el catálogo de módulos dice que implica un permiso es lo que hace
   });
   assert.deepEqual(editaServidor.sort(), editaCatalogo, 'editaEn en Modulos.gs = deOtroModulo en el servidor');
 });
+
+test('revisarEntorno revisa cada libro y carpeta que la app lee de Entornos.gs', () => {
+  // Una carpeta nueva en Config.gs que no esté en la revisión puede apuntar a donde sea sin que
+  // nada avise antes de desplegar (6-oct: REPORTES en pruebas, las fotos de inspección en la raíz)
+  const config = read('src/config/Config.gs');
+  const diag = read('src/Diagnostico.gs');
+  const claves = [...new Set([...config.matchAll(/(?:required|leerConfig_)\('((?:SS_ID|DRIVE_FOLDER_ID)_\w+)'\)/g)].map((m) => m[1]))];
+  const revisadas = /const REVISION_LIBROS = \[([^\]]*)\]/.exec(diag)[1] + /const REVISION_CARPETAS = \{([\s\S]*?)\n\};/.exec(diag)[1];
+  assert.deepEqual(claves.filter((k) => !new RegExp('\\b' + k + '\\b').test(revisadas)), []);
+  assert.match(read('src/Code.gs'), /revisar === 'entorno'/, 'doGet contesta la revisión que pide subir.js');
+  assert.match(read('tools/subir/subir.js'), /entorno\.revisar\(/, 'subir.js revisa el entorno antes de desplegar');
+});

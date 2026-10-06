@@ -64,4 +64,4 @@ async function revisar(idDespliegueHead, dominio, bloquesSubidos) {
   return { scripts: scripts };
 }
 
-module.exports = { revisar, htmlDeUsuario_ };
+module.exports = { revisar, htmlDeUsuario_, token_ };
