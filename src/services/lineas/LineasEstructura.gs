@@ -43,8 +43,8 @@ const ESTRUCTURA_HOJAS = {
   EQUIPOS: ['ID', 'ID ANTERIOR', 'ID APPSHEET', 'NUCO', 'TIPO DE EQUIPO', 'MODELO', 'COLOR', 'IMEI', 'ACCESORIOS', 'PIN EQUIPO', 'PATRON',
     'CONTRASEÑA MODEM', 'ESTATUS EQUIPO', 'FECHA DE ALTA', 'RESPONSIVA', 'FORMATO INSPECCION', 'FECHA INSPECCION'],
   ASIGNACIONES: ['ID', 'TIPO', 'ID LINEA', 'ID EQUIPO', 'ID PERSONA', 'NO EMPLEADO', 'RESPONSABLE', 'PUESTO',
-    'DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO', 'DIRECTOR', 'CUENTA GOOGLE', 'NOMBRE QUIEN USA',
-    'PUESTO QUIEN USA', 'FECHA INICIO', 'FECHA FIN', 'JEFE DIRECTO'], // JEFE DIRECTO: usuario, 4-oct (lo traen Reasignar y Editar)
+    'DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO', 'DIRECTOR', 'CUENTA GOOGLE',
+    'FECHA INICIO', 'FECHA FIN', 'JEFE DIRECTO'], // JEFE DIRECTO: usuario, 4-oct (lo traen Reasignar y Editar). Sin «quien lo usa» (6-oct)
   ADENDUMS: ['ID', 'ID LINEA', 'NUMERO TELEFONO', 'COMPAÑIA', 'CUENTA PADRE', 'PLAN', 'COSTO PLAN', 'INICIO PLAN',
     'FIN PLAN', 'FUENTE', 'ARCHIVO', 'FECHA DEL ARCHIVO', 'FECHA DE CARGA'],
   FACTURAS: ['ID', 'ID LINEA', 'COMPAÑIA', 'CUENTA PADRE', 'NUMERO EN FACTURA', 'PERIODO', 'FECHA DE CORTE', 'PLAN',
@@ -338,7 +338,7 @@ function reestructuraArmarEstructura() {
         // Lo guardado va a DISPONIBLE (reunión del 30-sep; aprobado para la migración, D-I3)
         'DEPARTAMENTO': clase === 'RESGUARDO' ? LineasRepo.DEPARTAMENTO_DISPONIBLE : tal(f['DEPARTAMENTO']),
         'SEDE': tal(f['SEDE']), 'OFICINA / DESARROLLO': tal(f['OFICINA / DESARROLLO']), 'DIRECTOR': tal(f['DIRECTOR']),
-        'CUENTA GOOGLE': tal(f['CUENTA GOOGLE']), 'NOMBRE QUIEN USA': '', 'PUESTO QUIEN USA': '',
+        'CUENTA GOOGLE': tal(f['CUENTA GOOGLE']),
         'FECHA INICIO': inicio, 'FECHA FIN': '',
       };
       if (clase === 'PERSONA') {
@@ -348,17 +348,7 @@ function reestructuraArmarEstructura() {
       } else if (persona) {
         anotar('Guardado con el nombre de una persona (se copia; si se limpia lo decide Líneas, B13)', ref + ' · ' + persona);
       }
-      // "Quien usa" solo si es otra persona (decisión del usuario, parte 3 §3.7). A veces trae otro código de resguardo
-      // (Y2-1051): tampoco se pasa.
-      const usa = tal(f['NOMBRE QUIEN USA']);
-      if (usa && ESTRUCTURA_ES_CODIGO_RESGUARDO.test(norm(usa))) {
-        anotar('Código de resguardo en "quien usa" (no se pasa)', ref);
-      } else if (usa && norm(usa) !== norm(responsable)) {
-        a['NOMBRE QUIEN USA'] = usa;
-        a['PUESTO QUIEN USA'] = tal(f['PUESTO QUIEN USA']);
-      } else if (usa) {
-        anotar('"Quien usa" igual al responsable (no se pasa, decisión §3.7)', ref);
-      }
+      // «Quien lo usa» ya no se pasa (usuario, 6-oct): solo el responsable y los adicionales
       salida.ASIGNACIONES.push(a);
     });
   });

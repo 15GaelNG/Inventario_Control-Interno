@@ -611,7 +611,7 @@
     function htmlPatron(prefijo, oculto) {
       return '<div id="' + prefijo + '-bloque"' + (oculto ? ' hidden' : '') + '><div class="ln-patron" id="' + prefijo + '-lienzo"><svg id="' + prefijo + '-lineas" viewBox="0 0 300 300" aria-hidden="true"></svg>' +
         Array.from({ length: 9 }, (_, i) => '<button type="button" class="ln-patron-punto" data-punto="' + (i + 1) + '" aria-label="Punto ' + (i + 1) + '"></button>').join('') +
-        '</div><div class="ln-patron-acciones"><span id="' + prefijo + '-texto">Sin patrón trazado</span><button type="button" class="secondary ln-btn-chico" id="' + prefijo + '-limpiar">Limpiar patrón</button></div></div>';
+        '</div><div class="ln-patron-acciones"><span></span><button type="button" class="secondary ln-btn-chico" id="' + prefijo + '-limpiar">Limpiar patrón</button></div></div>';
     }
 
     /**
@@ -707,6 +707,11 @@
       if (cond.tipoNoEn) return cond.tipoNoEn.indexOf(t) < 0;
       if (cond.nuevo) return !!(ctx && ctx.nuevo);
       if (cond.campo) return String((valores || {})[cond.campo] || '').trim().toUpperCase() === String(cond.igual).toUpperCase();
+      if (cond.lleno) return !!String((valores || {})[cond.lleno] || '').trim();
+      if (cond.cuantos) {
+        const k = Number(String((valores || {})[cond.cuantos] || '').trim()) || 0;
+        return cond.alMenos !== undefined ? k >= cond.alMenos : k < cond.menos;
+      }
       return true;
     }
     const condAtributo = (c) => esc(typeof c === 'object' && c !== null ? JSON.stringify(c) : (c || 'SIEMPRE'));
@@ -734,7 +739,18 @@
     const autoDe = (e) => !!(e.formula || e.deriva || e.auto);
 
     function htmlElementoFormulario(e) {
-      if (e.tipo === 'titulo') return '<h4 class="ln-af-titulo">' + (e.icono ? icono(e.icono) + ' ' : '') + esc(e.texto) + '</h4>';
+      if (e.tipo === 'titulo') {
+        if (e.sinTexto) return '';
+        const quitar = e.quitarAdicional !== null && e.quitarAdicional !== undefined
+          ? '<button type="button" class="secondary ln-af-quitar" data-quitar-adicional="' + Number(e.quitarAdicional) + '">' + icono('x') + ' Quitar</button>' : '';
+        return '<h4 class="ln-af-titulo">' + (e.icono ? icono(e.icono) + ' ' : '') + esc(e.texto) + quitar + '</h4>';
+      }
+      // «Agregar responsable»: guarda cuántos bloques de responsables adicionales se ven (RESPONSABLES ADICIONALES)
+      if (e.control === 'adicionales') {
+        return '<div class="field ln-af-campo ln-af-agregar" data-af-columna="' + esc(e.columna) + '" data-mostrar="' + condAtributo(e.mostrar) + '" data-requerido="NUNCA" data-editable="' + condAtributo(e.editable) + '">' +
+          '<span class="ln-af-req" hidden></span><input type="hidden" data-columna="' + esc(e.columna) + '" value="' + esc(e.valor === null || e.valor === undefined ? '0' : e.valor) + '" />' +
+          '<button type="button" class="secondary" data-agregar-adicional>' + icono('user-plus') + ' ' + esc(e.etiqueta) + '</button></div>';
+      }
       const id = 'af-' + e.columna.replace(/[^A-Za-z0-9]+/g, '-');
       const attrs = ' id="' + id + '" data-columna="' + esc(e.columna) + '"' + (e.virtual ? ' data-virtual' : '') + (e.deriva ? ' data-deriva-de="' + esc(e.deriva.de) + '" data-deriva-dato="' + esc(e.deriva.dato) + '"' : '') + (e.literal || e.secreto ? ' data-respetar-texto' : '') + (e.soloLectura ? ' readonly tabindex="-1"' : '') + (autoDe(e) ? ' data-auto' : '');
       const valor = e.valor === null || e.valor === undefined ? '' : String(e.valor);
@@ -795,6 +811,8 @@
     // Firmas: quién firma (su nombre va debajo de la línea) y de qué lado
     const NOMBRE_DE_FIRMA = { 'FIRMA INSPECTOR': 'NOMBRE INSPECTOR', 'FIRMA CI': 'NOMBRE CI', 'FIRMA RESPONSABLE': 'RESPONSABLE' };
     const ROL_FIRMA = { 'FIRMA INSPECTOR': 'ci', 'FIRMA CI': 'ci', 'FIRMA RESPONSABLE': 'responsable' };
+    // Responsables adicionales (6-oct): en el sistema solo firma el principal; los demás, el PDF impreso
+    const ORDEN_ADICIONALES = ['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'];
 
     /**
      * Dibuja el formulario agrupando cada título del AppSheet con sus campos. Con `acomodar` (inspección y
@@ -879,6 +897,56 @@
     function htmlFirma(rol, idLienzo) {
       return '<div class="ln-firma ln-firma-' + rol + '"><div class="ln-firma-cabecera">' + icono(rol === 'ci' ? 'shield-check' : 'user') + ' ' +
         (rol === 'ci' ? 'Firma de Control Interno' : 'Firma del responsable') + '</div><div class="ln-firma-lienzo" id="' + idLienzo + '"></div></div>';
+    }
+
+    /**
+     * «Agregar responsable» y «Quitar» (usuario, 6-oct). RESPONSABLES ADICIONALES dice cuántos bloques se ven; al quitar uno,
+     * los de abajo suben un lugar.
+     */
+    function activarAdicionales(cuerpo) {
+      const entrada = (prefijo, n) => cuerpo.querySelector('input[data-columna="' + CSS.escape(prefijo + n + ' RESPONSABLE') + '"]');
+      // El cuerpo del modal es el mismo para Editar, la inspección y la responsiva: se escucha una sola vez (si no, un clic
+      // agregaba o quitaba varios)
+      if (cuerpo._adicionalesActivos) return;
+      cuerpo._adicionalesActivos = true;
+      cuerpo.addEventListener('click', (ev) => {
+        const agregar = ev.target.closest('[data-agregar-adicional]');
+        const quitar = ev.target.closest('[data-quitar-adicional]');
+        const cuenta = cuerpo.querySelector('input[data-columna="RESPONSABLES ADICIONALES"]');
+        if ((!agregar && !quitar) || !cuenta) return;
+        ev.preventDefault();
+        let k = Number(cuenta.value) || 0;
+        if (agregar) {
+          k = Math.min(ORDEN_ADICIONALES.length, k + 1);
+        } else {
+          const i = Number(quitar.dataset.quitarAdicional);
+          for (let j = i; j < ORDEN_ADICIONALES.length; j++) {
+            ['NO EMPLEADO ', 'NOMBRE '].forEach((p) => {
+              const destino = entrada(p, ORDEN_ADICIONALES[j]);
+              const origen = j + 1 < ORDEN_ADICIONALES.length ? entrada(p, ORDEN_ADICIONALES[j + 1]) : null;
+              if (destino) destino.value = origen ? origen.value : '';
+            });
+          }
+          k = Math.max(0, k - 1);
+        }
+        cuenta.value = String(k);
+        cuenta.dispatchEvent(new Event('change', { bubbles: true }));
+        const nuevo = agregar && entrada('NO EMPLEADO ', ORDEN_ADICIONALES[k - 1]);
+        const bloque = nuevo && nuevo.closest('.ln-af-seccion');
+        if (bloque) bloque.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+    }
+
+    /**
+     * Firma guardada (usuario, 6-oct; LineasFirmas): quien captura y tiene una no firma; el servidor pone la suya en el PDF.
+     * La imagen no llega a la pantalla: aquí solo se avisa. «Firmar a mano» regresa al recuadro normal.
+     */
+    function firmaGuardadaEn(contenedor, nombre, alFirmarAMano) {
+      contenedor.innerHTML = '<div class="ln-firma-guardada">' + icono('badge-check') + '<div><b>Se usa tu firma guardada</b><span>' + esc(nombre || '') +
+        '</span></div><button type="button" class="secondary ln-btn-chico" data-firmar-a-mano>' + icono('pen-line') + ' Firmar a mano</button></div>';
+      pintarIconos(contenedor);
+      contenedor.querySelector('[data-firmar-a-mano]').addEventListener('click', () => { contenedor.innerHTML = ''; alFirmarAMano(); });
+      return { guardada: true, estaVacia: () => false, limpiar: () => {}, ajustar: () => {}, setNombre: () => {}, base64: () => Promise.resolve(null) };
     }
 
     /** Firma con el componente del sistema; misma interfaz que antes (estaVacia, limpiar, base64 → promesa). */
@@ -1196,8 +1264,8 @@
      * de nadie más (PLAN_REESTRUCTURA_LINEAS.md §3.6). En las acciones masivas la columna llega como "id|COLUMNA".
      */
     const COLUMNAS_CH = ['RESPONSABLE', 'NO EMPLEADO', 'PUESTO', 'DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO',
-      'DIRECTOR', 'JEFE DIRECTO', 'NOMBRE QUIEN USA', 'PUESTO QUIEN USA']
-      .concat(['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'].reduce((a, n) => a.concat(['NOMBRE ' + n + ' RESPONSABLE', 'PUESTO ' + n + ' RESPONSABLE']), []));
+      'DIRECTOR', 'JEFE DIRECTO']
+      .concat(['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'].reduce((a, n) => a.concat(['NOMBRE ' + n + ' RESPONSABLE', 'NO EMPLEADO ' + n + ' RESPONSABLE']), []));
     const esColumnaCH = (columna) => COLUMNAS_CH.indexOf(String(columna || '').split('|').pop().toUpperCase().replace(/\s+/g, ' ').trim()) >= 0;
 
     function activarCombosEn(cuerpo, elementos) {
@@ -2346,7 +2414,7 @@
         if (!sinApilar) {
           const existente = pila.findIndex((p) => p.tipo === tipo && p.id === id);
           if (existente >= 0) pila.splice(existente + 1);
-          else pila.push({ tipo: tipo, id: id, etiqueta: tipo === 'inspeccion' ? 'Inspección' : null });
+          else pila.push({ tipo: tipo, id: id, etiqueta: ETIQUETA_DOCUMENTO[tipo] || null });
         }
         if (!sinHistorial) pasoHistorial();
         $('#ln-listado', raiz).hidden = true;
@@ -2357,7 +2425,7 @@
         detalle.innerHTML = migas() + '<div class="card ln-cargando"><span class="ln-spinner"></span> Cargando…</div>';
         document.getElementById('view-container').scrollTop = 0;
         window.scrollTo(0, 0);
-        const pintar = { equipo: pintarEquipo, linea: pintarLinea, inspeccion: pintarInspeccion }[tipo];
+        const pintar = { equipo: pintarEquipo, linea: pintarLinea, inspeccion: pintarInspeccion, responsiva: pintarResponsiva }[tipo];
         pintar(detalle, id).catch((e) => {
           if (!vigente() || !pila.length || pila[pila.length - 1].tipo !== tipo || pila[pila.length - 1].id !== id) return;
           detalle.innerHTML = migas() + '<div class="card"><p class="error-msg">No se pudo cargar: ' + mensajeError(e) + '</p></div>';
@@ -2394,7 +2462,8 @@
        * ES (un equipo por su NUCO, una línea por su número, una inspección por su fecha), la página actual va en negritas
        * y los anteriores son enlaces discretos. "Volver" dice a dónde regresa. En celular solo se ven Volver y la actual.
        */
-      const ETIQUETA_MIGA = { equipo: 'Equipo', linea: 'Línea', inspeccion: 'Inspección' };
+      const ETIQUETA_DOCUMENTO = { inspeccion: 'Inspección', responsiva: 'Responsiva' };
+      const ETIQUETA_MIGA = { equipo: 'Equipo', linea: 'Línea', inspeccion: 'Inspección', responsiva: 'Responsiva' };
       const etiquetaMiga = (p) => (p ? p.etiqueta || ETIQUETA_MIGA[p.tipo] : 'Líneas Telefónicas');
       function migas() {
         const anterior = pila.length > 1 ? pila[pila.length - 2] : null;
@@ -2418,7 +2487,7 @@
       function tarjetaResponsable(r, titulo) {
         r = r || {};
         const adicionales = (r.usuariosAdicionales || []).length
-          ? '<div class="ln-subtitulo">Usuarios adicionales</div>' + campos(r.usuariosAdicionales.map((u) => [u.rol, esc(u.nombre) + (u.puesto ? ' <span class="ln-tenue">· ' + esc(u.puesto) + '</span>' : ''), true]))
+          ? '<div class="ln-subtitulo">Responsables adicionales</div>' + campos(r.usuariosAdicionales.map((u) => [u.rol, esc(u.nombre) + (u.noEmpleado ? ' <span class="ln-tenue">· ' + esc(u.noEmpleado) + '</span>' : ''), true]))
           : '';
         return tarjeta(icono('user') + ' ' + esc(titulo || 'Responsable'), campos([
           ['Nombre', (r.nombres && r.nombres.length > 1) ? r.nombres.map(esc).join('<br>') : esc(r.nombre || ''), true],
@@ -2704,18 +2773,18 @@
       }
 
       /** PDF que el sistema no alcanzó a generar al guardar una inspección o responsiva. */
-      function generarPdfPendiente(tipo, idDoc, carpetaId) {
+      function generarPdfPendiente(tipo, idDoc, carpetaId, registroId) {
         captura = { guardada: true, firmas: {}, carpetaId: carpetaId || '' };
         mostrarModalCaptura();
         $('#ln-captura-titulo', raiz).textContent = 'Generar PDF pendiente';
-        refrescarDespuesDeCaptura(pila[pila.length - 1].id, tipo, idDoc);
+        refrescarDespuesDeCaptura(registroId || pila[pila.length - 1].id, tipo, idDoc);
       }
 
       /**
        * Regenerar PDF (usuario, 5-oct): la responsiva se vuelve a hacer con la plantilla y lo que ya está guardado, sin
        * llenar el formulario; queda como versión nueva del mismo PDF (LineasCaptura.generarPdf con forzar).
        */
-      function regenerarPdf(d) {
+      function regenerarPdf(d, registroId) {
         captura = { guardada: true, firmas: {}, carpetaId: d.carpetaId || '' };
         mostrarModalCaptura();
         $('#ln-captura-icono', raiz).innerHTML = icono('signature');
@@ -2723,7 +2792,7 @@
         $('#ln-captura-titulo', raiz).textContent = 'Regenerar PDF';
         $('#ln-captura-subtitulo', raiz).textContent = [fecha(d.fecha), d.responsable].filter(Boolean).join(' · ');
         $('#ln-captura-cuerpo', raiz).innerHTML = '';
-        refrescarDespuesDeCaptura(pila[pila.length - 1].id, d.tipoPdf, d.id, true);
+        refrescarDespuesDeCaptura(registroId || pila[pila.length - 1].id, d.tipoPdf, d.id, true);
       }
 
       /**
@@ -2786,6 +2855,9 @@
               acciones: enlaceDrive(pdf.id, 'Ver PDF', true) + '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
             cargarEvidencias(registroId);
             cargarHistorial(registroId);
+            // Desde la página de la inspección o la responsiva: se pinta de nuevo con su PDF
+            const arriba = pila[pila.length - 1];
+            if (arriba && arriba.id === d.id && ETIQUETA_DOCUMENTO[arriba.tipo]) abrir(arriba.tipo, arriba.id, true, true);
           }).catch((e) => {
             if (!vigente() || captura !== sesion) return;
             mostrarEspera('No se pudo subir el PDF', { tono: 'error', icono: 'file-warning', texto: '', detalle: mensajeError(e),
@@ -2853,6 +2925,7 @@
           alCambiarFiltros: marcar,
           accionesFila: [
             { icono: 'eye', titulo: 'Ver inspección', visible: (d) => d.documento === 'Inspección', alHacer: (d) => abrir('inspeccion', d.id) },
+            { icono: 'eye', titulo: 'Ver responsiva', visible: (d) => d.documento === 'Responsiva', alHacer: (d) => abrir('responsiva', d.id) },
             { icono: 'file-text', titulo: 'Ver PDF', visible: (d) => !!d.pdfId,
               alHacer: (d) => window.open('https:\/\/drive.google.com/file/d/' + encodeURIComponent(d.pdfId) + '/view', '_blank', 'noopener') },
             { icono: 'folder-open', titulo: 'Ver carpeta en Drive', visible: (d) => !!d.carpetaId,
@@ -2863,7 +2936,7 @@
             { icono: 'refresh-ccw', titulo: 'Regenerar PDF', visible: (d) => operar && d.tipoPdf === 'RESPONSIVA' && d.origen === 'SISTEMA' && !!d.pdfId,
               alHacer: (d) => regenerarPdf(d) },
           ],
-          ayuda: 'Inspecciones y responsivas del registro. Doble clic en una fila abre la inspección, o el PDF de la responsiva. ' +
+          ayuda: 'Inspecciones y responsivas del registro. Doble clic en una fila abre la inspección o la responsiva. ' +
             'Los indicadores de arriba filtran por tipo; la flecha de cada columna filtra u ordena. ' +
             'Origen: AppSheet y Sistema nuevo son registros de la hoja; Carpeta NUCOS son los que solo están en Drive.',
           columnas: [
@@ -2878,16 +2951,14 @@
           ],
         });
         tabla.setDatos(filas);
-        // Doble clic en la fila: la inspección; en una responsiva, su PDF (o su carpeta si no tiene PDF)
+        // Doble clic en la fila: la página de la inspección o de la responsiva (usuario, 6-oct)
         const porClave = {};
         filas.forEach((d) => { porClave[d._clave] = d; });
         $('.ln-docs-tabla', cont).addEventListener('dblclick', (ev) => {
           const tr = ev.target.closest('tbody tr[data-id]');
           const d = tr && !ev.target.closest('button, input, a') ? porClave[tr.dataset.id] : null;
           if (!d) return;
-          if (d.documento === 'Inspección') abrir('inspeccion', d.id);
-          else if (d.pdfId) window.open('https:\/\/drive.google.com/file/d/' + encodeURIComponent(d.pdfId) + '/view', '_blank', 'noopener');
-          else if (d.carpetaId) window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(d.carpetaId), '_blank', 'noopener');
+          abrir(d.documento === 'Inspección' ? 'inspeccion' : 'responsiva', d.id);
         });
       }
 
@@ -2908,7 +2979,7 @@
           // Lo mismo que rechaza el servidor (LineasAcciones.reasignar), antes de pasar a la inspección
           guardar: (datos) => {
             const v = datos.valores || {};
-            if (String(v.OBSERVACIONES || '').trim().length <= 3) return Promise.reject(new Error('Escribe el comentario (queda en el historial).'));
+            if (String(v.COMENTARIO || '').trim().length <= 3) return Promise.reject(new Error('Escribe el comentario (queda en el historial).'));
             const nuevo = String(v.RESPONSABLE || '').trim().toUpperCase();
             if (nuevo && nuevo === String(fila.responsable || '').trim().toUpperCase()) {
               return Promise.reject(new Error(nombre + ' ya lo tiene ' + fila.responsable + ': elige a la persona nueva.'));
@@ -2918,11 +2989,15 @@
         });
         if (!resp) return;
         let inspeccionId = inspeccionHecha(fila.id);
+        let pdfInspeccion = null;
         if (!inspeccionId) {
-          const r = await capturarEnFlujo('INSPECCION', { equipoId: fila.id }, { aviso: 'Inspección · ' + nombre, boton: 'Guardar inspección y reasignar' });
+          // Empieza con lo capturado en la responsiva y no cambia a la persona del inventario: eso lo hace la reasignación
+          const r = await capturarEnFlujo('INSPECCION', { equipoId: fila.id, reasignar: true, desdeResponsiva: { valores: resp.datos.valores, patron: resp.datos.patron } },
+            { aviso: 'Inspección · ' + nombre, boton: 'Guardar inspección y reasignar' });
           if (!r) return;
           inspeccionesDelDia[fila.id] = { id: r.id, dia: hoyLocal() };
           inspeccionId = r.id;
+          pdfInspeccion = r.pdfPromesa || null;
         }
         const d = resp.datos;
         const sesion = captura = { guardada: true, guardando: true, firmas: {}, carpetaId: '',
@@ -2939,7 +3014,7 @@
         mostrarEspera('Reasignando');
         llamar('apiLineasReasignar', Object.assign({}, d, { inspeccionId: inspeccionId })).then((r) => {
           if (!vigente() || captura !== sesion) return;
-          refrescarDespuesDeCaptura(fila.id, 'RESPONSIVA', r.id);
+          refrescarDespuesDeCaptura(fila.id, 'RESPONSIVA', r.id, false, pdfInspeccion ? { promesa: pdfInspeccion, texto: 'Ver PDF de la inspección' } : null);
           aplicarCambiosIndice(r.filas).then(() => {
             Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].limpiarSeleccion(); });
             if (vigente()) { pintarIndicadores(); pintarListado(); }
@@ -3380,6 +3455,7 @@
             htmlAccionesPasos('<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + (id ? ' Guardar cambios' : ' ' + agregar) + '</button>');
           pintarIconos(cuerpo);
           activarCombosEn(cuerpo, elementos);
+          activarAdicionales(cuerpo);
           const patron = elementos.filter((e) => e.control === 'patron')[0];
           if (patron) {
             captura.patronInicial = esPuntosPatron(patron.valor) ? patron.valor : null;
@@ -3504,8 +3580,9 @@
       function actualizarFormularioAppSheet() {
         if (!captura) return;
         const tipo = tipoFormulario();
+        const valores = leerFormularioAppSheet();
         raiz.querySelectorAll('#ln-captura-cuerpo .ln-af-campo').forEach((campo) => {
-          const visible = cumpleCondicion(campo.dataset.mostrar, tipo);
+          const visible = cumpleCondicion(campo.dataset.mostrar, tipo, valores);
           campo.hidden = !visible;
           campo.querySelector('.ln-af-req').hidden = !(visible && cumpleCondicion(campo.dataset.requerido, tipo));
         });
@@ -3573,7 +3650,16 @@
           const id = 'af-' + e.columna.replace(/[^A-Za-z0-9]+/g, '-');
           if (e.control === 'firma') {
             const origen = NOMBRE_DE_FIRMA[e.columna] && cuerpo.querySelector('[data-columna="' + CSS.escape(NOMBRE_DE_FIRMA[e.columna]) + '"]');
-            captura.firmas[e.columna] = crearFirma(document.getElementById(id + '-firma'), origen ? origen.value : '');
+            const lienzo = document.getElementById(id + '-firma');
+            const sesion = captura;
+            const aMano = () => {
+              sesion.firmas[e.columna] = crearFirma(lienzo, origen ? origen.value : '');
+              if (sesion.firmas[e.columna] && sesion.firmas[e.columna].ajustar) sesion.firmas[e.columna].ajustar();
+            };
+            // La de quien captura (inspector o Control Interno) puede ser su firma guardada
+            const propia = sesion.contexto.firmaGuardada && e.columna === (sesion.tipo === 'INSPECCION' ? 'FIRMA INSPECTOR' : 'FIRMA CI');
+            if (propia) sesion.firmas[e.columna] = firmaGuardadaEn(lienzo, origen ? origen.value : '', aMano);
+            else aMano();
           }
           if (e.control === 'patron') {
             captura.columnaPatron = e.columna;
@@ -3582,6 +3668,7 @@
           }
         });
         activarCombosEn(cuerpo, captura.contexto.formulario);
+        activarAdicionales(cuerpo);
         cuerpo.addEventListener('change', (ev) => { if (ev.target.matches('[data-columna="_BLOQUEO"]')) aplicarBloqueo(cuerpo, true); });
         cuerpo.addEventListener('input', (ev) => { if (ev.target.matches('[data-columna]')) actualizarFormularioAppSheet(); });
         cuerpo.addEventListener('change', (ev) => { if (ev.target.matches('[data-columna]')) actualizarFormularioAppSheet(); });
@@ -3675,7 +3762,6 @@
             ? '<polyline points="' + estado.puntos.map((n) => posiciones[n - 1].join(',')).join(' ') + '" />' +
               flechasPatron(estado.puntos, 20).map((f) => '<polygon class="ln-patron-flecha" points="' + f.map((n) => n.toFixed(1)).join(',') + '" />').join('')
             : '';
-          $('#' + prefijo + '-texto', raiz).textContent = estado.puntos.length ? 'Patrón: ' + estado.puntos.join(' → ') : 'Sin patrón trazado';
         };
         bloque.querySelectorAll('.ln-patron-punto').forEach((p) => p.addEventListener('click', () => {
           const n = Number(p.dataset.punto); if (estado.puntos.indexOf(n) < 0) estado.puntos.push(n); pintar();
@@ -3693,6 +3779,9 @@
             // Flechas hacia donde va cada tramo
             x.fillStyle = '#c9a227';
             flechasPatron(estado.puntos, 24).forEach((f) => { x.beginPath(); x.moveTo(f[0], f[1]); x.lineTo(f[2], f[3]); x.lineTo(f[4], f[5]); x.closePath(); x.fill(); });
+            // Los 9 puntos, como en pantalla (svgPatron; usuario, 6-oct): los que no se usan, grises y chicos, encima del trazo
+            x.fillStyle = '#b8c4ca';
+            posiciones.forEach((p, i) => { if (estado.puntos.indexOf(i + 1) < 0) { x.beginPath(); x.arc(p[0], p[1], 10, 0, Math.PI * 2); x.fill(); } });
             // Puntos con su orden (1 = inicio, con anillo)
             x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = 'bold 17px Arial';
             estado.puntos.forEach((n, i) => {
@@ -3840,7 +3929,11 @@
       }
 
       /** `regenerar`: el PDF ya existe y se vuelve a hacer (Regenerar PDF). */
-      function refrescarDespuesDeCaptura(idAbierto, tipo, nuevoId, regenerar) {
+      /**
+       * `otroPdf` (Reasignar, usuario 6-oct): la promesa del PDF de la inspección que se generó antes. Al terminar se ofrecen
+       * los dos, cada uno con su nombre (antes salía un solo «Ver PDF» y no se sabía de cuál era).
+       */
+      function refrescarDespuesDeCaptura(idAbierto, tipo, nuevoId, regenerar, otroPdf) {
         const sesionCaptura = captura;
         sesionCaptura.guardada = true;
         memoria.cargadoEn = 0;
@@ -3851,16 +3944,20 @@
           modal.setAttribute('aria-busy', 'true');
           modal.querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = true; });
           mostrarEspera('Generando tu PDF'); // sigue la misma pantalla de espera desde el clic en Guardar
-          return llamar('apiLineasGenerarPdf', tipo, nuevoId, !!regenerar, sesionCaptura.pdfFirmas || null).then((pdf) => {
+          return llamar('apiLineasGenerarPdf', tipo, nuevoId, !!regenerar, sesionCaptura.pdfFirmas || null)
+            .then((pdf) => Promise.resolve(otroPdf ? otroPdf.promesa : null).catch(() => null).then((otro) => [pdf, otro])).then(([pdf, otro]) => {
             if (!vigente() || captura !== sesionCaptura) return;
             sesionCaptura.guardando = false;
             if (pdf && pdf.faltanFirmas) { pedirFirmasPdf(sesionCaptura, tipo, pdf.nombres || {}, generar); return; }
-            mostrarEspera('Tu PDF está listo', { tono: 'listo', icono: 'circle-check', texto: '',
-              acciones: enlaceDrive(pdf.id, 'Ver PDF', true) + '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
+            const conOtro = !!(otro && otro.id);
+            mostrarEspera(conOtro ? 'Tus PDF están listos' : 'Tu PDF está listo', { tono: 'listo', icono: 'circle-check', texto: '',
+              acciones: enlaceDrive(pdf.id, tipo === 'INSPECCION' ? 'Ver PDF de la inspección' : 'Ver PDF de la responsiva', true) +
+                (conOtro ? enlaceDrive(otro.id, otroPdf.texto, true) : '') + '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
             // La captura cambia lo que muestra General (responsable, color, patrón): la ficha de atrás se pinta de nuevo
             // (trae también Documentos e Historial); si se está viendo otra cosa, solo esas dos
             const arriba = pila[pila.length - 1];
             if (arriba && arriba.id === idAbierto && (arriba.tipo === 'equipo' || arriba.tipo === 'linea')) abrir(arriba.tipo, arriba.id, true, true);
+            else if (arriba && arriba.id === nuevoId && ETIQUETA_DOCUMENTO[arriba.tipo]) abrir(arriba.tipo, arriba.id, true, true); // su página, con el PDF nuevo
             else {
               cargarEvidencias(idAbierto);
               cargarHistorial(idAbierto);
@@ -3930,6 +4027,7 @@
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron,
             carpetaId: sesion.carpetaId || null, fotosCarpetaId: sesion.fotosCarpetaId || null, ruta: sesion.ruta || '', fotos: sesion.fotos,
             firmaInspectorBase64: sesion.pdfFirmas.inspector, firmaResponsableBase64: sesion.pdfFirmas.responsable, patronBase64: sesion.pdfFirmas.patron,
+            usarFirmaGuardada: !!firmaInspector.guardada,
           });
           return sesion.flujo && sesion.flujo.guardar ? sesion.flujo.guardar(datos) : llamar('apiLineasGuardarInspeccion', datos);
         }).then((r) => {
@@ -3953,8 +4051,8 @@
       function guardarResponsivaDesdeFormulario() {
         $('#cap-error', raiz).hidden = true;
         if (!validarFormularioAppSheet()) return;
-        const firmaResponsable = captura.firmas['FIRMA RESPONSABLE'];
         const firmaCi = captura.firmas['FIRMA CI'];
+        const firmaResponsable = captura.firmas['FIRMA RESPONSABLE'];
         const idAbierto = captura.idObjetivo;
         const patron = patronParaGuardar();
         const valores = leerFormularioAppSheet();
@@ -3965,6 +4063,7 @@
           const datos = Object.assign({}, sesion.ref, {
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron,
             firmaResponsableBase64: sesion.pdfFirmas.responsable, firmaCiBase64: sesion.pdfFirmas.ci, patronBase64: sesion.pdfFirmas.patron,
+            usarFirmaGuardada: !!firmaCi.guardada,
           });
           return sesion.flujo && sesion.flujo.guardar ? sesion.flujo.guardar(datos) : llamar('apiLineasGuardarResponsiva', datos);
         }).then((r) => {
@@ -3993,11 +4092,12 @@
        */
       function terminarFlujo(sesion, tipo, r) {
         sesion.guardada = true;
-        if (!sesion.flujo.sinPdf) llamar('apiLineasGenerarPdf', tipo, r.id, false, sesion.pdfFirmas || null)
-          .catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' El documento quedó guardado, pero su PDF no se generó: ' + mensajeError(e) + '. En Documentos está «Generar PDF».', 12000));
+        // La promesa del PDF viaja con el resultado (Reasignar lo ofrece al terminar); si falla, regresa null
+        const pdf = sesion.flujo.sinPdf ? null : llamar('apiLineasGenerarPdf', tipo, r.id, false, sesion.pdfFirmas || null)
+          .catch((e) => { aviso(icono('triangle-alert', 'ln-alerta') + ' El documento quedó guardado, pero su PDF no se generó: ' + mensajeError(e) + '. En Documentos está «Generar PDF».', 12000); return null; });
         const flujo = sesion.flujo;
         if (captura === sesion) cerrarCaptura(true);
-        flujo.resolver(r);
+        flujo.resolver(Object.assign({}, r, { pdfPromesa: pdf }));
       }
 
       function abrirCaptura(tipo, ref, flujo) {
@@ -4209,6 +4309,7 @@
           detalle: { titulo: (m) => m.movimiento + ' · ' + fechaTabla(m.fecha) },
           accionesFila: [
             { icono: 'clipboard-check', titulo: 'Ver inspección', visible: (m) => m.refTipo === 'inspeccion' && !!m.refId, alHacer: (m) => abrir('inspeccion', m.refId) },
+            { icono: 'signature', titulo: 'Ver responsiva', visible: (m) => m.refTipo === 'responsiva' && !!m.refId, alHacer: (m) => abrir('responsiva', m.refId) },
             { icono: 'file-text', titulo: 'Ver PDF', visible: (m) => !!m.pdfId, alHacer: (m) => window.open('https:\/\/drive.google.com/file/d/' + encodeURIComponent(m.pdfId) + '/view', '_blank', 'noopener') },
           ],
           ayuda: 'Un renglón por acción, del AppSheet y del sistema nuevo. Responsable y estatus: los de ese momento.',
@@ -4295,6 +4396,79 @@
         return (a.periodos || []).filter((p) => !ocultarSinAsignar || p[campo]);
       }
 
+      // ---- Inspección y responsiva: su página ----
+      /**
+       * Botones de la página de una inspección o responsiva (usuario, 6-oct): a la vista Ver PDF y Subir PDF firmado; en ⋮
+       * Ver equipo, Ver carpeta en Drive y, si aplica, Generar PDF o Regenerar PDF. Las mismas reglas que en Documentos.
+       */
+      function datosDocumento(tipoPdf, d, r) {
+        const pdfs = r.pdfs || [];
+        return { documento: tipoPdf === 'INSPECCION' ? 'Inspección' : 'Responsiva', tipoPdf: tipoPdf, id: d._id, origen: d.origen,
+          fecha: d.fecha, pdfId: pdfs.length ? pdfs[0].id : null, carpetaId: d.drive ? d.drive.carpetaId : null,
+          responsable: (d.snapshot && d.snapshot.responsable) || null, registroId: d.registroId || (r.equipo && r.equipo._id) || null };
+      }
+      function opcionesDocumento(x, r) {
+        const operar = !!r.puedeOperar;
+        return [
+          r.equipo ? { icono: 'smartphone', texto: 'Ver equipo', alHacer: () => abrir('equipo', r.equipo._id) } : null,
+          x.carpetaId ? { icono: 'folder-open', texto: 'Ver carpeta en Drive',
+            alHacer: () => window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(x.carpetaId), '_blank', 'noopener') } : null,
+          operar && x.registroId && x.origen === 'SISTEMA' && !x.pdfId ? { icono: 'file-plus', texto: 'Generar PDF', separador: true,
+            alHacer: () => generarPdfPendiente(x.tipoPdf, x.id, x.carpetaId, x.registroId) } : null,
+          operar && x.registroId && x.tipoPdf === 'RESPONSIVA' && x.origen === 'SISTEMA' && x.pdfId ? { icono: 'refresh-ccw', texto: 'Regenerar PDF', separador: true,
+            alHacer: () => regenerarPdf(x, x.registroId) } : null,
+        ].filter(Boolean);
+      }
+      function botonesDocumento(tipoPdf, d, r) {
+        const x = datosDocumento(tipoPdf, d, r);
+        const pdfs = r.pdfs || [];
+        return pdfs.map((p, indice) => enlaceDrive(p.id, 'Ver PDF' + (pdfs.length > 1 ? ' ' + (indice + 1) : ''), true)).join('') +
+          (r.puedeOperar && x.registroId && (x.pdfId || x.origen !== 'SISTEMA')
+            ? '<button type="button" class="ln-btn-icono" data-ln-doc-subir>' + icono('file-up') + ' Subir PDF firmado</button>' : '') +
+          (opcionesDocumento(x, r).length
+            ? '<button type="button" class="ln-btn-icono ln-btn-mas" data-ln-doc-mas title="Más opciones" aria-label="Más opciones">' + icono('ellipsis-vertical') + '</button>' : '');
+      }
+      function activarBotonesDocumento(detalle, tipoPdf, d, r) {
+        const x = datosDocumento(tipoPdf, d, r);
+        const subir = detalle.querySelector('[data-ln-doc-subir]');
+        if (subir) subir.addEventListener('click', () => subirPdfFirmado(x.registroId, x));
+        const mas = detalle.querySelector('[data-ln-doc-mas]');
+        if (mas) mas.addEventListener('click', () => menuFlotante(mas, opcionesDocumento(x, r)));
+      }
+
+      /** Responsiva (usuario, 6-oct): su propia página, como la inspección; lo que dice la responsiva de ese día. */
+      function pintarResponsiva(detalle, id) {
+        return llamar('apiLineasResponsiva', id).then((r) => {
+          if (!vigente() || !pila.length || pila[pila.length - 1].tipo !== 'responsiva' || pila[pila.length - 1].id !== id) return;
+          const d = r.responsiva;
+          const e = r.equipo;
+          const s = d.snapshot || {};
+          const deDrive = d.origen === 'DRIVE';
+          const accesorios = String(d.accesorios || '').split(',').map((a) => a.trim()).filter(Boolean);
+          pila[pila.length - 1].etiqueta = 'Responsiva' + (fecha(d.fecha) ? ' ' + fecha(d.fecha) : '');
+          detalle.innerHTML = migas() +
+            encabezado('signature', 'Responsiva ' + esc(fecha(d.fecha) || ''),
+              chip(ORIGEN_DOCUMENTO[d.origen] || d.origen, COLOR_ORIGEN_DOCUMENTO[ORIGEN_DOCUMENTO[d.origen]] || 'neutro') + (e ? chip('NUCO ' + (e.nuco || '—'), 'neutro') : ''),
+              botonesDocumento('RESPONSIVA', d, r),
+              deDrive
+                ? [['NUCO', d.nuco || (e && e.nuco)], ['PDF', (r.pdfs || []).length ? 'Sí' : 'No']]
+                : [['Responsable', s.responsable], ['Control Interno', d.responsableCI], ['Identificación', s.identificacion]]) +
+            (deDrive
+              ? ''
+              : '<div class="ln-grid-2">' +
+                tarjeta(icono('user') + ' Responsable', campos([['Nombre', s.responsable], ['No. de empleado', s.noEmpleado], ['Puesto', s.puesto],
+                  ['Departamento', s.departamento], ['Área', s.area], ['Sede', s.sede], ['Oficina o desarrollo', s.oficina], ['Director', s.director], ['Correo', s.correo]])) +
+                tarjeta(icono('smartphone') + ' Equipo y línea', campos([['NUCO', d.nuco || (e && e.nuco)], ['Modelo', s.modelo], ['IMEI', s.imei], ['Color', s.color],
+                  ['Número', s.numero], ['SIM', s.sim], ['Compañía', s.compania], ['Razón social', s.razonSocial]])) +
+                '</div>' +
+                tarjeta(icono('package') + ' Accesorios entregados', accesorios.length
+                  ? '<div class="ln-chips">' + accesorios.map((a) => chip(a, 'neutro')).join('') + '</div>'
+                  : '<p class="ln-tenue">Sin accesorios registrados.</p>') +
+                tarjeta(icono('message-square-text') + ' Comentario', '<p class="ln-lectura-notas">' + esc(d.comentario || 'Sin comentario registrado.') + '</p>'));
+          activarBotonesDocumento(detalle, 'RESPONSIVA', d, r);
+        });
+      }
+
       // ---- Inspección ----
       function pintarInspeccion(detalle, id) {
         return llamar('apiLineasInspeccion', id).then((r) => {
@@ -4314,9 +4488,7 @@
           detalle.innerHTML = migas() +
             encabezado('clipboard-check', 'Inspección ' + esc(fecha(i.fecha) || ''),
               chip(ORIGEN_DOCUMENTO[i.origen] || i.origen, COLOR_ORIGEN_DOCUMENTO[ORIGEN_DOCUMENTO[i.origen]] || 'neutro') + (e ? chip('NUCO ' + (e.nuco || '—'), 'neutro') : ''),
-              (e ? '<button type="button" class="ln-btn-icono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' Ver equipo</button>' : '') +
-              (i.drive ? enlaceDrive(i.drive.carpetaId, 'Ver carpeta en Drive') : '') +
-              (r.pdfs || []).map((p, indice) => enlaceDrive(p.id, 'Ver PDF' + (r.pdfs.length > 1 ? ' ' + (indice + 1) : ''), true)).join(''),
+              botonesDocumento('INSPECCION', i, r),
               deDrive
                 ? [['NUCO', i.nuco || (e && e.nuco)], ['Fotos', miles(fotos.length)], ['PDF', (r.pdfs || []).length ? 'Sí' : 'No']]
                 : [['Responsable', s.responsable], ['Inspector', i.inspector], ['Calificación', porcentaje(i.calificacion)], ['Fotos', miles(fotos.length)], ['Ticket', i.ticket]]) +
@@ -4326,13 +4498,14 @@
                 tarjeta(icono('user') + ' Responsable', campos([['Nombre', s.responsable], ['Departamento', s.departamento], ['Sede', s.sede], ['Puesto', s.puesto]])) +
                 tarjeta(icono('smartphone') + ' Activo revisado', campos([['Número', s.numero], ['IMEI', s.imei], ['Modelo', s.modelo], ['Compañía', s.compania]])) +
                 '</div>' +
-                tarjeta(icono('message-square-text') + ' Observaciones', '<p class="ln-lectura-notas">' + esc(i.observaciones || 'Sin observaciones registradas.') + '</p>')) +
+                tarjeta(icono('message-square-text') + ' Comentario', '<p class="ln-lectura-notas">' + esc(i.observaciones || 'Sin comentario registrado.') + '</p>')) +
             tarjeta(icono('images') + ' Fotografías (' + fotos.length + ')',
               (fotos.length ? galeria(fotos) : '<p class="empty-state">No hay fotografías de esta inspección.</p>') +
               (r.puedeOperar ? '<div class="ln-fotos-despues"><h4>' + icono('image-plus') + ' Agregar fotos</h4>' +
                 htmlSubirFotos('insp-fotos', deDrive
                   ? 'Se guardan en Drive, en la carpeta de la app (la de NUCOS es de solo consulta), y se ven aquí con las demás.'
                   : 'Se guardan en la carpeta FOTOS de esta inspección en Drive.') + '</div>' : ''));
+          activarBotonesDocumento(detalle, 'INSPECCION', i, r);
           if (r.puedeOperar) {
             // Mejora: subir fotos a una inspección ya registrada (la carpeta se prepara al elegir la primera). Las de NUCOS
             // (solo lectura) van a una carpeta de la app ligada a la inspección (LineasCaptura.fotosInspeccion)

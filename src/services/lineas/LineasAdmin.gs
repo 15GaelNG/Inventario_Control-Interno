@@ -414,3 +414,161 @@ function lineasPruebas4oct_borrar() {
   soloEditor_();
   return pruebas4oct_(true);
 }
+
+
+// ---------------- Parte 6 (pendiente 2.3): COMENTARIO (usuario, 6-oct) ----------------
+// Hojas: OBSERVACIONES → COMENTARIO en INSPECCIONES y RESPONSIVAS LINEAS (la responsiva sigue con DIRECTOR y la
+// inspección con JEFE DIRECTO). Solo cambia el encabezado; mientras no se corra, el código acepta los dos nombres
+// (LineasDatos.COLUMNAS_RENOMBRADAS). Plantillas: copia de cada una del AppSheet (que no se toca) con «Comentario» y su
+// marcador (LineasPdf). Primero los _revisar, que no escriben.
+
+/** Plantilla → la hoja de la que sale su registro (sus columnas renombradas). */
+const PLANTILLAS_COMENTARIO_ = { INSPECCION_CELULAR: 'INSPECCIONES LINEAS', RESPONSIVA_CELULAR: 'RESPONSIVAS LINEAS' };
+
+function columnasDocumentos_(aplicar) {
+  const libro = LineasDatos.libro();
+  const salida = {};
+  LineasDatos.conCandado(() => {
+    Object.keys(LineasDatos.COLUMNAS_RENOMBRADAS).forEach((nombre) => {
+      const hoja = libro.getSheetByName(nombre);
+      if (!hoja) { salida[nombre] = ['no existe la pestaña']; return; }
+      const encabezados = hoja.getRange(1, 1, 1, Math.max(1, hoja.getLastColumn())).getValues()[0].map((h) => LineasDatos.normCol(h));
+      const mapa = LineasDatos.COLUMNAS_RENOMBRADAS[nombre];
+      salida[nombre] = Object.keys(mapa).map((viejo) => {
+        const nuevo = mapa[viejo];
+        const iViejo = encabezados.indexOf(viejo);
+        if (encabezados.indexOf(nuevo) >= 0) return nuevo + ': ya está' + (iViejo >= 0 ? ' (también hay ' + viejo + ': no se toca)' : '');
+        if (iViejo < 0) return viejo + ': no está';
+        if (aplicar) hoja.getRange(1, iViejo + 1).setValue(nuevo);
+        return viejo + ' → ' + nuevo + ' (columna ' + LineasDatos.letraColumna(iViejo + 1) + ')' + (aplicar ? '' : ': falta');
+      });
+      if (aplicar) { LineasDatos.cacheBorrar('enc_' + nombre); LineasDatos.olvidarTabla(nombre); LineasDatos.tocar([nombre]); }
+    });
+  });
+  const res = { libro: libro.getName(), cambiado: !!aplicar, columnas: salida };
+  console.log(JSON.stringify(res, null, 2));
+  return res;
+}
+
+function lineasRenombrarColumnasDocumentos_revisar() {
+  soloEditor_();
+  return columnasDocumentos_(false);
+}
+function lineasRenombrarColumnasDocumentos() {
+  soloEditor_();
+  return columnasDocumentos_(true);
+}
+
+function plantillasComentario_(copiar) {
+  const res = Object.keys(PLANTILLAS_COMENTARIO_).map((clave) => {
+    const id = LineasPdf.PLANTILLAS_APPSHEET[clave];
+    const mapa = LineasDatos.COLUMNAS_RENOMBRADAS[PLANTILLAS_COMENTARIO_[clave]];
+    return Object.assign({ clave: clave }, copiar ? LineasPdf.copiaConRenombres(id, mapa) : LineasPdf.revisarRenombres(id, mapa));
+  });
+  console.log(JSON.stringify(res, null, 2));
+  return res;
+}
+
+function lineasPlantillasComentario_revisar() {
+  soloEditor_();
+  return plantillasComentario_(false);
+}
+/** Crea las copias (una vez: si ya existe una con su nombre, solo da su ID). Los IDs van a LineasPdf.PLANTILLAS. */
+function lineasPlantillasComentario_copiar() {
+  soloEditor_();
+  return plantillasComentario_(true);
+}
+
+
+// ---------------- «Quien lo usa» se quita por completo (usuario, 6-oct) ----------------
+// Solo quedan el responsable y los adicionales: se borran de ASIGNACIONES las columnas NOMBRE QUIEN USA y PUESTO QUIEN USA,
+// y lo que tenían no pasa a ningún lado (el libro tiene respaldo). Primero _revisar, que no escribe: dice qué columnas hay
+// y qué asignaciones tienen dato.
+
+function quitarQuienUsa_(aplicar) {
+  const hoja = 'ASIGNACIONES';
+  const columnas = ['NOMBRE QUIEN USA', 'PUESTO QUIEN USA'];
+  const salida = { libro: LineasDatos.libro().getName(), aplicado: !!aplicar, columnas: [], conDato: [] };
+  LineasDatos.conCandado(() => {
+    const t = LineasDatos.tablaFresca(hoja);
+    salida.columnas = columnas.filter((c) => LineasDatos.colIndice(t, c) >= 0);
+    LineasDatos.leerTabla(hoja).forEach((a) => {
+      if (!columnas.some((c) => String(a[c] || '').trim())) return;
+      salida.conDato.push({ asignacion: a['ID'], vigente: !a['FECHA FIN'], responsable: a['RESPONSABLE'], quienUsa: a['NOMBRE QUIEN USA'] || '', puesto: a['PUESTO QUIEN USA'] || '' });
+    });
+    if (aplicar) salida.columnas = LineasDatos.quitarColumnas(hoja, columnas);
+  });
+  if (aplicar) {
+    LineasRepo.borrarCaches();
+    if (typeof LineasLectura !== 'undefined') LineasLectura.limpiarCaches();
+    LineasDatos.tocar([hoja]);
+  }
+  console.log(JSON.stringify(salida, null, 2));
+  return salida;
+}
+
+function lineasQuitarQuienUsa_revisar() {
+  soloEditor_();
+  return quitarQuienUsa_(false);
+}
+function lineasQuitarQuienUsa() {
+  soloEditor_();
+  return quitarQuienUsa_(true);
+}
+
+
+// ---------------- Firmas guardadas de Líneas (usuario, 6-oct; LineasFirmas) ----------------
+// Quien corre la función crea en su Drive la carpeta «FIRMAS LINEAS (CARGAR)», sin compartir, con un PNG por persona
+// nombrado con su correo («ejecutivotelefonia.ci@ciudadmaderas.com.png»). _revisar dice qué se cargaría y qué se quitaría;
+// _cargar las guarda cifradas en este proyecto y quita las de quien ya no esté en la carpeta. Se corre en cada proyecto
+// (DEV y producción) y al final la carpeta se borra: la firma solo queda cifrada aquí.
+
+const CARPETA_FIRMAS_LINEAS = 'FIRMAS LINEAS (CARGAR)';
+
+function firmasGuardadas_(aplicar) {
+  const carpetas = DriveApp.getFoldersByName(CARPETA_FIRMAS_LINEAS);
+  if (!carpetas.hasNext()) throw new Error('No está la carpeta «' + CARPETA_FIRMAS_LINEAS + '» en tu Drive.');
+  const carpeta = carpetas.next();
+  if (carpetas.hasNext()) throw new Error('Hay más de una carpeta «' + CARPETA_FIRMAS_LINEAS + '»: deja solo una.');
+  const usuarios = {};
+  SheetUtils.getAll(Config.SPREADSHEET_IDS.USUARIOS(), 'USUARIOS').forEach((u) => {
+    usuarios[String(u.CORREO || '').trim().toLowerCase()] = { nombre: u.NOMBRE, area: u.AREA || u.COORDINACION || '' };
+  });
+  const salida = { proyecto: ScriptApp.getScriptId(), aplicado: !!aplicar, compartida: carpeta.getSharingAccess() !== DriveApp.Access.PRIVATE || carpeta.getEditors().length + carpeta.getViewers().length > 0,
+    cargar: [], quitar: [], errores: [] };
+  if (aplicar && salida.compartida) throw new Error('La carpeta está compartida: quítale el acceso a otros antes de cargar.');
+  const enCarpeta = {};
+  const archivos = carpeta.getFiles();
+  while (archivos.hasNext()) {
+    const f = archivos.next();
+    const m = /^([^\s\/]+@ciudadmaderas\.com)\.png$/i.exec(f.getName());
+    if (!m) { salida.errores.push(f.getName() + ': el nombre debe ser el correo + .png'); continue; }
+    const correo = m[1].toLowerCase();
+    const u = usuarios[correo];
+    if (!u) { salida.errores.push(f.getName() + ': ese correo no está en USUARIOS'); continue; }
+    const blob = f.getBlob();
+    if (blob.getContentType() !== 'image/png') { salida.errores.push(f.getName() + ': no es PNG'); continue; }
+    if (blob.getBytes().length > 60 * 1024) { salida.errores.push(f.getName() + ': pesa más de 60 KB'); continue; }
+    enCarpeta[correo] = true;
+    salida.cargar.push({ correo: correo, nombre: u.nombre, area: u.area, kb: Math.round(blob.getBytes().length / 102.4) / 10 });
+    if (aplicar) LineasFirmas.guardar(correo, blob.getBytes());
+  }
+  LineasFirmas.lista().forEach((g) => {
+    if (enCarpeta[g.correo]) return;
+    salida.quitar.push(g.correo);
+    if (aplicar) LineasFirmas.quitar(g.correo);
+  });
+  if (salida.compartida) salida.errores.push('La carpeta está compartida: quítale el acceso a otros antes de cargar.');
+  salida.guardadas = LineasFirmas.lista();
+  console.log(JSON.stringify(salida, null, 2));
+  return salida;
+}
+
+function lineasFirmasGuardadas_revisar() {
+  soloEditor_();
+  return firmasGuardadas_(false);
+}
+function lineasFirmasGuardadas_cargar() {
+  soloEditor_();
+  return firmasGuardadas_(true);
+}

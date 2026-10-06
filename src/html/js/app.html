@@ -3455,15 +3455,19 @@
     modalVerRegistro.addEventListener('click', (ev) => { if (ev.target === modalVerRegistro) cerrarVerRegistroFicha(); });
 
     // Binario de antes (Activos = no es baja / Inactivos = es baja), más un KPI clickeable
-    // por cada uno de los 6 valores reales de ESTATUS (ver CAMPOS_VEHICULO).
+    // por cada uno de los 6 valores reales de ESTATUS (ver CAMPOS_VEHICULO). "Baja de placa"
+    // es la excepción: no es un ESTATUS nuevo -- es el valor que YA vive en la columna PLACA
+    // (ver CENTINELAS.PLACA en Relaciones.gs y la opción "BAJA DE PLACA" del campo Placa en
+    // CAMPOS_VEHICULO), así que ese tile trae su propio `campo` en vez de asumir ESTATUS.
     const KPI_AGREGADO_VEHICULOS = { 'veh-stat-activos': 'no_contiene', 'veh-stat-inactivos': 'contiene' };
     const KPI_FILTRO_VEHICULOS = {
-      'veh-stat-utilitario': 'UTILITARIO',
-      'veh-stat-no-utilitario': 'NO UTILITARIO',
-      'veh-stat-prestamo': 'PRESTAMO',
-      'veh-stat-fuera-servicio': 'FUERA DE SERVICIO',
-      'veh-stat-nuco-sin-info': 'NUCO SIN INFORMACION',
-      'veh-stat-baja': 'BAJA VEHICULAR',
+      'veh-stat-utilitario': { campo: 'ESTATUS', valor: 'UTILITARIO' },
+      'veh-stat-no-utilitario': { campo: 'ESTATUS', valor: 'NO UTILITARIO' },
+      'veh-stat-prestamo': { campo: 'ESTATUS', valor: 'PRESTAMO' },
+      'veh-stat-fuera-servicio': { campo: 'ESTATUS', valor: 'FUERA DE SERVICIO' },
+      'veh-stat-nuco-sin-info': { campo: 'ESTATUS', valor: 'NUCO SIN INFORMACION' },
+      'veh-stat-baja': { campo: 'ESTATUS', valor: 'BAJA VEHICULAR' },
+      'veh-stat-baja-placa': { campo: 'PLACA', valor: 'BAJA DE PLACA' },
     };
     const tileTotalVeh = document.getElementById('veh-stat-total').closest('.stat-tile');
     tileTotalVeh.classList.add('stat-tile-clickable');
@@ -3478,10 +3482,11 @@
     });
     Object.keys(KPI_FILTRO_VEHICULOS).forEach((id) => {
       const tile = document.getElementById(id).closest('.stat-tile');
+      const cfg = KPI_FILTRO_VEHICULOS[id];
       tile.classList.add('stat-tile-clickable');
       tile.addEventListener('click', () => {
         const yaActivo = tile.classList.contains('stat-tile-activo');
-        tabla.setFiltro('ESTATUS', yaActivo ? null : { op: 'igual', v1: KPI_FILTRO_VEHICULOS[id] });
+        tabla.setFiltro(cfg.campo, yaActivo ? null : { op: 'igual', v1: cfg.valor });
       });
     });
     function marcarKpiActivo(filtros) {
@@ -3493,8 +3498,10 @@
         );
       });
       Object.keys(KPI_FILTRO_VEHICULOS).forEach((id) => {
+        const cfg = KPI_FILTRO_VEHICULOS[id];
+        const fc = filtros[cfg.campo];
         document.getElementById(id).closest('.stat-tile').classList.toggle(
-          'stat-tile-activo', !!(f && f.op === 'igual' && f.v1 === KPI_FILTRO_VEHICULOS[id])
+          'stat-tile-activo', !!(fc && fc.op === 'igual' && fc.v1 === cfg.valor)
         );
       });
       // Los KPIs reflejan lo que hay bajo los filtros activos (los de columna, búsqueda,
@@ -3509,9 +3516,9 @@
       document.getElementById('veh-stat-inactivos').textContent =
         filas.filter((v) => String(v.ESTATUS || '').toUpperCase().includes('BAJA')).length;
       Object.keys(KPI_FILTRO_VEHICULOS).forEach((id) => {
-        const valor = KPI_FILTRO_VEHICULOS[id];
+        const cfg = KPI_FILTRO_VEHICULOS[id];
         document.getElementById(id).textContent =
-          filas.filter((v) => String(v.ESTATUS || '').toUpperCase() === valor).length;
+          filas.filter((v) => String(v[cfg.campo] || '').toUpperCase() === cfg.valor).length;
       });
     }
 
@@ -4174,6 +4181,8 @@
       (el.tagName === 'INPUT' && ['text', 'email', 'tel', 'url'].includes(el.type));
     if (!esTexto) return;
     if (el.classList.contains('tabla-buscar-global') || el.classList.contains('th-popover-valor')) return;
+    // Campos que se guardan tal cual (PIN de WhatsApp, PIN o contraseña del equipo, correos): data-respetar-texto (Líneas)
+    if (el.closest('[data-respetar-texto]')) return;
     const inicio = el.selectionStart;
     const fin = el.selectionEnd;
     el.value = el.value.toUpperCase();

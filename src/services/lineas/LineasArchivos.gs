@@ -398,9 +398,51 @@ const LineasArchivos = (function () {
     return JSON.parse(resp.getContentText());
   }
 
+  /**
+   * PDF ligado que ya no está en su carpeta (pendiente 2.18, NUCO 0726, 6-oct): quien no es dueño de un archivo y lo quita
+   * de una carpeta (p. ej. al subir a mano en Drive otro con el mismo nombre) no lo borra, solo lo saca; queda suelto en
+   * la unidad de la cuenta de la app, sin los permisos de la carpeta («Necesitas acceso»).
+   * `lista` = [{ pdfId, carpetaId, nombre, prefijo }]. Regresa, en el mismo orden, el PDF que sí está en la carpeta
+   * ({ id, nombre }: el del mismo nombre o, si no hay, el más reciente que empiece con `prefijo`) o null si el ligado sigue
+   * ahí, si la carpeta no tiene otro o si Drive no respondió. Se pregunta cada vez (una sola petición para todos): si se
+   * recordara, quien abre la carpeta desde la ficha y cambia el PDF a mano seguiría viendo el viejo (prueba del 6-oct).
+   */
+  function pdfsFueraDeCarpeta(lista) {
+    const salida = lista.map(() => null);
+    if (!lista.length) return salida;
+    const pedir = (url) => ({ url: url, headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
+    const API = 'https://www.googleapis.com/drive/v3/files';
+    const estados = UrlFetchApp.fetchAll(lista.map((x) => pedir(API + '/' + encodeURIComponent(x.pdfId) +
+      '?supportsAllDrives=true&fields=' + encodeURIComponent('trashed,parents'))));
+    const fuera = [];
+    lista.forEach((x, i) => {
+      const codigo = estados[i].getResponseCode();
+      if (codigo !== 200 && codigo !== 404) return; // cuota o red: no se decide nada
+      const f = codigo === 200 ? JSON.parse(estados[i].getContentText()) : null;
+      if (!f || f.trashed || (f.parents || []).indexOf(x.carpetaId) < 0) fuera.push(i);
+    });
+    if (fuera.length) {
+      const contenidos = UrlFetchApp.fetchAll(fuera.map((i) => pedir(API + '?' + [
+        'q=' + encodeURIComponent("'" + lista[i].carpetaId + "' in parents and trashed = false and mimeType = 'application/pdf'"),
+        'orderBy=' + encodeURIComponent('modifiedTime desc'), 'pageSize=50',
+        'fields=' + encodeURIComponent('files(id,name)'), 'supportsAllDrives=true', 'includeItemsFromAllDrives=true',
+      ].join('&'))));
+      fuera.forEach((i, k) => {
+        if (contenidos[k].getResponseCode() !== 200) return;
+        const x = lista[i];
+        const mismo = (n) => String(n || '').trim().toUpperCase();
+        const pdfs = (JSON.parse(contenidos[k].getContentText()).files || []).filter((a) => a.id !== x.pdfId);
+        const elegido = pdfs.filter((a) => mismo(a.name) === mismo(x.nombre))[0] ||
+          pdfs.filter((a) => x.prefijo && mismo(a.name).indexOf(mismo(x.prefijo)) === 0)[0];
+        if (elegido) salida[i] = { id: elegido.id, nombre: elegido.name };
+      });
+    }
+    return salida;
+  }
+
   return {
     carpetaAppSheetId, carpetaNucosId, carpetaDeApp, idDeUrl, rutaAppSheet, resolver, imagen, blob, guardarComoAppSheet,
     carpetasNucos, archivosNuco, estaDentroDe, exigirEscribible, enNucos, carpetaEvidenciaNuco, descartarCarpeta, olvidarNuco,
-    reemplazarPdf,
+    reemplazarPdf, pdfsFueraDeCarpeta,
   };
 })();

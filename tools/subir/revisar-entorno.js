@@ -39,12 +39,16 @@ function idsFijos() {
 async function revisar(idDespliegueHead, dominio) {
   const token = await token_();
   const url = 'https://script.google.com/a/macros/' + dominio + '/s/' + idDespliegueHead + '/dev?revisar=entorno';
-  const r = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
-  const texto = await r.text();
-  let rev;
-  try { rev = JSON.parse(texto); } catch (e) {
-    throw new Error('La revisión del entorno no contestó JSON (' + r.status + '): ' + texto.slice(0, 200));
+  // Justo después de subir, /dev a veces contesta 404 unos segundos (pasó el 6-oct): se reintenta
+  let rev = null;
+  let ultimo = '';
+  for (let intento = 1; intento <= 3 && !rev; intento++) {
+    if (intento > 1) await new Promise((listo) => setTimeout(listo, 8000));
+    const r = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+    const texto = await r.text();
+    try { rev = JSON.parse(texto); } catch (e) { ultimo = r.status + ': ' + texto.slice(0, 200); }
   }
+  if (!rev) throw new Error('La revisión del entorno no contestó JSON después de 3 intentos (' + ultimo + ')');
   if (rev.error) throw new Error('La revisión del entorno: ' + rev.error);
 
   const lineas = rev.revisados.map((x) => (x.problema ? (x.grave ? '  ✘ ' : '  ⚠ ') : '  ✔ ') + x.clave + ': ' +

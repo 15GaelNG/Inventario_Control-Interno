@@ -201,23 +201,16 @@ const LineasRepo = (function () {
   }
 
   /**
-   * "Quien usa el equipo" y segundo…quinto responsable, como lista. No se lista a quien es el mismo responsable:
-   * el AppSheet lo copiaba en "quien usa" cuando él mismo usa el equipo (NUCO 0234; PLAN_REESTRUCTURA_LINEAS.md §3.7).
+   * Responsables adicionales (usuario, 6-oct): del segundo al quinto, con su número de empleado. Reemplazan a «¿El
+   * responsable usa el equipo?» y «Quien lo usa», que se quitaron por completo (sus columnas, con lineasQuitarQuienUsa,
+   * LineasAdmin). No se lista a quien es el mismo responsable (PLAN_REESTRUCTURA_LINEAS.md §3.7).
    */
   function usuariosAdicionales_(f) {
-    const lista = [];
     const mismo = (a, b) => String(a || '').replace(/\s+/g, ' ').trim().toUpperCase() === String(b || '').replace(/\s+/g, ' ').trim().toUpperCase();
     const responsable = txt(col(f, 'RESPONSABLE'));
-    const agregar = (rol, nombre, puesto) => {
-      const n = txt(col(f, nombre));
-      if (n && !mismo(n, responsable)) lista.push({ rol: rol, nombre: n, puesto: txt(col(f, puesto)) });
-    };
-    agregar('USA EL EQUIPO', 'NOMBRE QUIEN USA', 'PUESTO QUIEN USA');
-    agregar('SEGUNDO', 'NOMBRE SEGUNDO RESPONSABLE', 'PUESTO SEGUNDO RESPONSABLE');
-    agregar('TERCERO', 'NOMBRE TERCER RESPONSABLE', 'PUESTO TERCER RESPONSABLE');
-    agregar('CUARTO', 'NOMBRE CUARTO RESPONSABLE', 'PUESTO CUARTO RESPONSABLE');
-    agregar('QUINTO', 'NOMBRE QUINTO RESPONSABLE', 'PUESTO QUINTO RESPONSABLE');
-    return lista;
+    return ['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'].map((n, i) => ({
+      rol: 'Responsable ' + (i + 2), nombre: txt(col(f, 'NOMBRE ' + n + ' RESPONSABLE')), noEmpleado: txt(col(f, 'NO EMPLEADO ' + n + ' RESPONSABLE')),
+    })).filter((u) => u.nombre && !mismo(u.nombre, responsable));
   }
 
   /** Fórmula FOLIO del AppSheet. */
@@ -269,6 +262,8 @@ const LineasRepo = (function () {
     return [r.id].concat(COLS_VISTA_LINEAS.map((c) => {
       if (c === 'FOLIO') return legado.folio || null;
       if (c === 'ESTATUS GENERAL') return legado.estatusGeneral || null;
+      // «Nombre colaborador/es» del AppSheet: los responsables adicionales
+      if (c === 'NOMBRE RESPONSABLES 2') return usuariosAdicionales_(f).map((u) => u.nombre).join(' / ') || null;
       const v = col(f, c);
       if (v === '' || v === null || v === undefined) return null;
       if (v instanceof Date) return v;
@@ -625,6 +620,48 @@ const LineasRepo = (function () {
     return ev ? { carpetaId: ev.carpetaId, ruta: ev.ruta, pdfs: ev.pdfs || [], fotosCarpetaId: ev.fotosCarpetaId, fotos: ev.fotos, coincidenciaExacta: ev.coincidenciaExacta } : null;
   }
 
+  /**
+   * Pendiente 2.18 (NUCO 0726, 6-oct): si el PDF ligado a una captura del sistema ya no está en su carpeta de NUCOS (lo
+   * quitaron a mano en Drive y quedó suelto, «Necesitas acceso»), se usa el que sí está en esa carpeta y se vuelve a
+   * ligar: PDFS_JSON de APP_EVIDENCIAS y la columna del PDF de la hoja, si apuntaba al viejo. Cambia `ev.pdfs`.
+   */
+  function revisarPdfsLigados(evidencias) {
+    const revisar = (evidencias || []).filter((e) => e && e.origen === 'SISTEMA' && e.nuco && e.carpetaId && e.pdfs && e.pdfs.length && e.pdfs[0].id);
+    if (!revisar.length) return;
+    let nuevos;
+    try {
+      nuevos = LineasArchivos.pdfsFueraDeCarpeta(revisar.map((e) => ({
+        pdfId: e.pdfs[0].id, carpetaId: e.carpetaId, nombre: e.pdfs[0].nombre, prefijo: e.tipo === 'RESPONSIVA' ? 'RESP' : 'INSP',
+      })));
+    } catch (err) {
+      console.warn('revisarPdfsLigados: ' + err.message);
+      return;
+    }
+    revisar.forEach((ev, i) => {
+      const nuevo = nuevos[i];
+      if (!nuevo) return;
+      const anterior = ev.pdfs[0];
+      ev.pdfs = [nuevo];
+      try {
+        LineasDatos.conCandado(() => {
+          if (ev._fila) LineasDatos.actualizarFila(TAB.APP_EVID, ev._fila, { 'PDFS_JSON': JSON.stringify([nuevo]), 'ACTUALIZADO_EN': new Date() });
+          const tabla = ev.tipo === 'RESPONSIVA' ? TAB.RESP : TAB.INSP;
+          const columna = ev.tipo === 'RESPONSIVA' ? 'FORMATO RESPONSIVA' : 'FORMATO INSPECCIONES LINEAS';
+          const filas = ev.idRegistro ? LineasDatos.buscarFilasPorId(tabla, ev.idRegistro) : [];
+          const f = filas.length ? LineasDatos.leerFilas([{ tabla: tabla, filas: filas.slice(0, 1) }])[0][0] : null;
+          if (f && String(col(f, columna) || '').indexOf(anterior.id) >= 0) {
+            const o = {};
+            o[columna] = 'https://drive.google.com/file/d/' + nuevo.id + '/view';
+            LineasDatos.actualizarFila(tabla, filas[0], o);
+          }
+        });
+        console.log('PDF vuelto a ligar (' + ev.tipo + ' ' + ev.idRegistro + ', NUCO ' + ev.nuco + '): ' + anterior.id + ' → ' + nuevo.id);
+      } catch (err) {
+        console.warn('revisarPdfsLigados ' + ev.idRegistro + ': ' + err.message); // se muestra el bueno aunque no se guarde
+      }
+    });
+  }
+
   /** Inspección (fila de INSPECCIONES LINEAS) en el modelo de la interfaz. */
   function inspeccionDesdeFila(f, ev) {
     const checklist = {};
@@ -647,7 +684,7 @@ const LineasRepo = (function () {
       checklist: checklist, otraApp: txt(col(f, 'OTRA')), calificacion: LineasUtil.numero(col(f, 'CALIFICACION')),
       tipoContrasena: txt(col(f, 'PIN EQUIPO')) === 'PATRON' ? 'PATRON' : (txt(col(f, 'PIN EQUIPO')) ? 'PIN' : null),
       pinEquipo: txt(col(f, 'PIN EQUIPO')), patronRuta: txt(col(f, 'PATRON')),
-      observaciones: txt(col(f, 'OBSERVACIONES')), ticket: ticket === null ? null : String(ticket), inspector: txt(col(f, 'NOMBRE INSPECTOR')),
+      observaciones: txt(col(f, 'COMENTARIO')), ticket: ticket === null ? null : String(ticket), inspector: txt(col(f, 'NOMBRE INSPECTOR')),
       firmas: { responsableRuta: txt(col(f, 'FIRMA RESPONSABLE')), inspectorRuta: txt(col(f, 'FIRMA INSPECTOR')) },
       pdfRuta: txt(col(f, 'FORMATO INSPECCIONES LINEAS')),
       drive: driveDeEvidencia_(ev),
@@ -671,6 +708,11 @@ const LineasRepo = (function () {
       const anio = Number(col(f, 'AÑO'));
       if (dia && mes && anio) fch = new Date(anio, mes - 1, dia, 12);
     }
+    // FECHA RESPONSIVA tiene formato de solo día (AppSheet) y al leer varias filas llega sin hora: la del sistema toma la
+    // hora en que se guardó (APP_EVIDENCIAS) si es del mismo día, para ordenarla con la inspección (usuario, 6-oct)
+    const dia = (d) => Utilities.formatDate(d, LineasDatos.ZONA_APP, 'yyyy-MM-dd');
+    if (fch && ev && ev.origen === 'SISTEMA' && ev.fecha instanceof Date && dia(fch) === dia(ev.fecha) &&
+      Utilities.formatDate(fch, LineasDatos.ZONA_APP, 'HH:mm:ss') === '00:00:00') fch = ev.fecha;
     return {
       _id: txt(f['ID']), _idsAnteriores: LineasDatos.idsDeFila(f).slice(1), origen: ev && ev.origen === 'SISTEMA' ? 'SISTEMA' : 'APPSHEET',
       registroId: idActual(col(f, 'ID LINEA')),
@@ -679,7 +721,22 @@ const LineasRepo = (function () {
       responsableCI: txt(col(f, 'NOMBRE CI')), drive: driveDeEvidencia_(ev),
       pdf: ev && ev.pdfs && ev.pdfs.length ? { id: ev.pdfs[0].id } : null,
       pdfRuta: txt(col(f, 'FORMATO RESPONSIVA')),
+      // Para su página (usuario, 6-oct): lo que dice la responsiva de ese día, como el snapshot de la inspección
+      snapshot: {
+        responsable: txt(col(f, 'RESPONSABLE')), noEmpleado: txt(col(f, 'No EMPLEADO')), puesto: txt(col(f, 'PUESTO')),
+        departamento: txt(col(f, 'DEPARTAMENTO')), area: txt(col(f, 'AREA')), sede: txt(col(f, 'SEDE')),
+        oficina: txt(col(f, 'OFICINA / DESARROLLO')), director: txt(col(f, 'DIRECTOR')), correo: txt(col(f, 'CORREO')),
+        identificacion: txt(col(f, 'IDENTIFICACION')), numero: digitos(col(f, 'No TELEFONO')), imei: digitos(col(f, 'IMEI')),
+        sim: digitos(col(f, 'SIM')), modelo: txt(col(f, 'MODELO')), color: txt(col(f, 'COLOR')), compania: txt(col(f, 'COMPAÑIA')),
+        razonSocial: txt(col(f, 'RAZON SOCIAL')),
+      },
+      accesorios: txt(col(f, 'ACCESORIOS')), comentario: txt(col(f, 'COMENTARIO')),
     };
+  }
+
+  /** Responsiva que solo existe como carpeta en Drive. */
+  function responsivaDesdeEvidencia(ev) {
+    return { _id: 'drive_' + ev.carpetaId, origen: 'DRIVE', registroId: idActual(ev.idLinea), nuco: ev.nuco, fecha: ev.fecha, drive: driveDeEvidencia_(ev) };
   }
 
   /**
@@ -697,6 +754,7 @@ const LineasRepo = (function () {
     if (hayApp) peticiones.push({ tabla: TAB.APP_EVID, filas: LineasDatos.buscarFilasVarios(TAB.APP_EVID, 'ID_LINEA', ids) });
     const r = LineasDatos.leerFilas(peticiones);
     const evidencias = hayApp ? r[2].map(evidenciaDesdeFila) : [];
+    revisarPdfsLigados(evidencias);
     const evPorRegistro = {};
     evidencias.forEach((e) => { if (e.idRegistro) evPorRegistro[e.idRegistro] = e; });
     const evDe = (f) => LineasDatos.idsDeFila(f).map((k) => evPorRegistro[k]).filter(Boolean)[0];
@@ -707,7 +765,7 @@ const LineasRepo = (function () {
       if (e.origen !== 'DRIVE') return;
       if (e.idLinea && idActual(e.idLinea) !== ids[0]) return;
       if (e.tipo === 'INSPECCION') inspecciones.push(inspeccionDesdeEvidencia(e));
-      else responsivas.push({ _id: 'drive_' + e.carpetaId, origen: 'DRIVE', nuco: e.nuco, fecha: e.fecha, drive: driveDeEvidencia_(e) });
+      else responsivas.push(responsivaDesdeEvidencia(e));
     });
     return { inspecciones: inspecciones, responsivas: responsivas };
   }
@@ -725,7 +783,25 @@ const LineasRepo = (function () {
     const f = LineasDatos.leerFilas([{ tabla: TAB.INSP, filas: filas.slice(0, 1) }])[0][0];
     const filasEv = LineasDatos.existeTabla(TAB.APP_EVID) ? LineasDatos.buscarFilasVarios(TAB.APP_EVID, 'ID_REGISTRO', LineasDatos.idsDeFila(f)) : [];
     const ev = filasEv.length ? evidenciaDesdeFila(LineasDatos.leerFilas([{ tabla: TAB.APP_EVID, filas: filasEv.slice(0, 1) }])[0][0]) : null;
+    if (ev) revisarPdfsLigados([ev]);
     return inspeccionDesdeFila(f, ev);
+  }
+
+  /** Responsiva por id: fila de RESPONSIVAS LINEAS, o "drive_<carpetaId>" si solo existe en Drive (como leerInspeccion). */
+  function leerResponsiva(id) {
+    if (/^drive_/.test(id)) {
+      if (!LineasDatos.existeTabla(TAB.APP_EVID)) return null;
+      const filas = LineasDatos.buscarFilas(TAB.APP_EVID, 'CARPETA_ID', id.slice(6));
+      if (!filas.length) return null;
+      return responsivaDesdeEvidencia(evidenciaDesdeFila(LineasDatos.leerFilas([{ tabla: TAB.APP_EVID, filas: filas.slice(0, 1) }])[0][0]));
+    }
+    const filas = LineasDatos.buscarFilasPorId(TAB.RESP, id);
+    if (!filas.length) return null;
+    const f = LineasDatos.leerFilas([{ tabla: TAB.RESP, filas: filas.slice(0, 1) }])[0][0];
+    const filasEv = LineasDatos.existeTabla(TAB.APP_EVID) ? LineasDatos.buscarFilasVarios(TAB.APP_EVID, 'ID_REGISTRO', LineasDatos.idsDeFila(f)) : [];
+    const ev = filasEv.length ? evidenciaDesdeFila(LineasDatos.leerFilas([{ tabla: TAB.APP_EVID, filas: filasEv.slice(0, 1) }])[0][0]) : null;
+    if (ev) revisarPdfsLigados([ev]);
+    return responsivaDesdeFila(f, ev);
   }
 
   // Movimiento (lo que se filtra en el historial) según la columna que cambió.
@@ -1357,7 +1433,7 @@ const LineasRepo = (function () {
     indice, refrescarIndice, leerRegistroPorId, leerRegistroObligatorio, idActual, idsDeRegistro,
     guardarCambiosRegistro, agregarRegistro, registrarMovimiento, asegurarPestanaApp,
     evidenciaDesdeFila, inspeccionDesdeFila, inspeccionDesdeEvidencia, responsivaDesdeFila,
-    evidenciasDeRegistro, leerInspeccion, historialDeRegistro, asignacionesDeRegistro, movimientoDeCampo, bitacora,
+    evidenciasDeRegistro, leerInspeccion, leerResponsiva, revisarPdfsLigados, historialDeRegistro, asignacionesDeRegistro, movimientoDeCampo, bitacora,
     catalogos, indiceColaboradores, borrarCaches,
   };
 })();

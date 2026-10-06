@@ -463,6 +463,9 @@ function apiLineasAsignaciones(token, id, vista) {
 function apiLineasInspeccion(token, id) {
   return TelefoniaService.inspeccion(token, id);
 }
+function apiLineasResponsiva(token, id) {
+  return TelefoniaService.responsiva(token, id);
+}
 function apiLineasCatalogos(token) {
   return TelefoniaService.catalogos(token);
 }

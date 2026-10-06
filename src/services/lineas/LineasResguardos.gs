@@ -175,8 +175,9 @@ const LineasResguardos = (function () {
       if (actual && actual !== NO_APLICA) cambios[c] = '';
     });
     CAMPOS_BORRAR.forEach((c) => { if (txt(LineasUtil.col(f, c))) cambios[c] = ''; });
-    // "Quien usa" sigue al responsable (Reset_If del AppSheet)
-    if (may(LineasUtil.col(f, 'RESPONSABLE USA EL EQUIPO')) === 'SI') { cambios['NOMBRE QUIEN USA'] = ''; cambios['PUESTO QUIEN USA'] = ''; }
+    // Los responsables adicionales siguen al responsable
+    ['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'].reduce((a, n) => a.concat(['NO EMPLEADO ' + n + ' RESPONSABLE', 'NOMBRE ' + n + ' RESPONSABLE']), [])
+      .forEach((c) => { cambios[c] = ''; });
     if (txt(pedido.COMENTARIO).length > 3) cambios['COMENTARIOS'] = txt(pedido.COMENTARIO).toUpperCase();
     return cambios;
   }

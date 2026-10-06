@@ -226,9 +226,10 @@ test('el alta y edición de LINEAS TELEFONICAS sigue LINEAS TELEFONICAS_Form del
   const titulos = (els) => els.filter((e) => e.tipo === 'titulo').map((e) => e.texto);
   const ctx = { nuevo: true, nucoRepetido: () => false, telefonoRepetido: () => false };
   const altaEquipo = Reg._elementos({}, {}, { correo: 'x@y.z' }, Object.assign({}, ctx, { parte: 'EQUIPO' }));
-  assert.deepEqual(titulos(altaEquipo), ['EQUIPO', 'RESPONSABLE', 'LÍNEA', 'ADENDUM', 'ACCESORIOS Y ACCESOS']);
+  // Responsables adicionales (6-oct): un bloque por cada uno y una sección sin título con «Agregar responsable»
+  assert.deepEqual(titulos(altaEquipo), ['EQUIPO', 'RESPONSABLE', 'RESPONSABLE 2', 'RESPONSABLE 3', 'RESPONSABLE 4', 'RESPONSABLE 5', '', 'LÍNEA', 'ADENDUM', 'ACCESORIOS Y ACCESOS']);
   const altaLinea = Reg._elementos({}, {}, { correo: 'x@y.z' }, Object.assign({}, ctx, { parte: 'LINEA' }));
-  assert.deepEqual(titulos(altaLinea), ['LÍNEA', 'RESPONSABLE', 'ADENDUM', 'ACCESOS']);
+  assert.deepEqual(titulos(altaLinea), ['LÍNEA', 'RESPONSABLE', 'RESPONSABLE 2', 'RESPONSABLE 3', 'RESPONSABLE 4', 'RESPONSABLE 5', '', 'ADENDUM', 'ACCESOS']);
   const campo = (els, c) => els.filter((e) => e.columna === c)[0];
   assert.ok(!campo(altaLinea, 'EQUIPO') && !campo(altaLinea, 'ACCESORIOS') && !campo(altaLinea, 'NUCO'));
   // En el alta de un equipo el NUCO se captura; el TIPO no se elige
@@ -279,14 +280,16 @@ test('los formularios de inspección y responsiva siguen el orden y las etiqueta
   assert.deepEqual(orden('function formularioResponsiva_', 'function ocultarSecretos_').filter((c) => c !== 'columna'), ['ID', 'ID LINEA', 'NUCO',
     'MODELO', 'IMEI', 'COLOR', 'No TELEFONO', 'SIM', 'COMPAÑIA', 'RAZON SOCIAL', 'No EMPLEADO', 'RESPONSABLE', 'IDENTIFICACION', 'PUESTO',
     'DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO', 'DIRECTOR', 'CORREO', 'ACCESORIOS', 'PIN WHATSAPP', 'PIN EQUIPO', 'CONTRASEÑA',
-    'FECHA RESPONSIVA', 'TICKET', 'OBSERVACIONES', 'FIRMA RESPONSABLE', 'NOMBRE CI', 'FIRMA CI']);
+    'FECHA RESPONSIVA', 'TICKET', 'COMENTARIO', 'FIRMA RESPONSABLE', 'NOMBRE CI', 'FIRMA CI']);
   assert.match(captura, /valores\['MES'\] = MESES\[/);
   assert.match(captura, /'Septiembre'/);
-  assert.match(captura, /ed\('DIRECTOR', 'Jefe directo', 'listaAbierta', persona\('JEFE DIRECTO'\)/);
-  // Un solo COMENTARIO (plan §5.2): se guarda en OBSERVACIONES, la columna que imprime el PDF, y es obligatorio
+  // Parte 6 (usuario, 6-oct): la responsiva lleva al director (como el AppSheet) y el comentario va en COMENTARIO
+  assert.match(captura, /ed\('DIRECTOR', 'Director', 'listaAbierta', persona\('DIRECTOR'\), \{ opciones: catalogos\.directores \|\| \[\] \}\)/);
+  // Un solo COMENTARIO (plan §5.2): se guarda en COMENTARIO, la columna que imprime el PDF, y es obligatorio
   // Un solo comentario por acción (usuario, 4-oct): en la inspección no es obligatorio si la acción ya pidió el suyo (resguardo)
-  assert.match(captura, /campo_\('OBSERVACIONES', 'Comentario', 'area', \{ valor: '', requerido: enAccion \? 'NUNCA' : 'SIEMPRE' \}\)/);
-  assert.match(captura, /campo_\('OBSERVACIONES', 'Comentario', 'area', \{ valor: '', requerido: 'SIEMPRE' \}\)/);
+  assert.match(captura, /campo_\('COMENTARIO', 'Comentario', 'area', \{ valor: deResp\('COMENTARIO', ''\), requerido: enAccion \|\| resp \? 'NUNCA' : 'SIEMPRE' \}\)/);
+  assert.match(captura, /campo_\('COMENTARIO', 'Comentario', 'area', \{ valor: '', requerido: 'SIEMPRE' \}\)/);
+  assert.doesNotMatch(captura, /'OBSERVACIONES'/);
   assert.match(captura, /const acceso = \(c\) => \(reasignar \? '' : v\(c\)\);/);
   assert.match(captura, /const IDENTIFICACIONES = \['INE', 'LICENCIA DE CONDUCIR'\]/);
   assert.doesNotMatch(captura, /ESTATUS EQUIPO/);
@@ -504,8 +507,11 @@ test('los campos de texto libre del AppSheet ahora tienen lista desplegable', ()
     if (new RegExp(`listaCH\\('${c}'`).test(src)) return 'listaAbierta';   // datos del responsable: listas de Capital Humano
     return (new RegExp(`(?:campo_|\\bed)\\('${c}', '[^']+', '([a-zA-Z]+)'`).exec(src) || [])[1];
   };
-  ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'NOMBRE QUIEN USA', 'PUESTO QUIEN USA', 'DIRECTOR', 'COLOR']
-    .forEach((c) => assert.equal(control(reg, c), 'listaAbierta', 'LINEAS ' + c));
+  ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'DIRECTOR', 'COLOR'].forEach((c) => assert.equal(control(reg, c), 'listaAbierta', 'LINEAS ' + c));
+  // Responsables adicionales (6-oct): número de empleado y nombre, de Capital Humano
+  assert.match(reg, /campo\(num, 'No\. de empleado', 'listaAbierta'/);
+  assert.match(reg, /campo\(nom, 'Nombre', 'listaAbierta'/);
+  assert.doesNotMatch(reg, /RESPONSABLE USA EL EQUIPO|'Quien lo usa'/);
   // Inspección (usuario, 3-oct): el equipo y la línea vienen del registro (fijos); en la responsiva siguen con lista
   const resp = cap.slice(cap.indexOf('function formularioResponsiva_'));
   ['RESPONSABLE', 'PUESTO', 'JEFE DIRECTO'].forEach((c) => assert.equal(control(cap, c), 'listaAbierta', 'inspección ' + c));
@@ -643,7 +649,8 @@ test('inspección y responsiva: bloqueo en lista, firmas del sistema, acomodo, f
   assert.match(lineas, /memoria\.tablas\[clave\] = texto;/);
   assert.match(lineas, /function cargarCatalogos\(forzar\)/);
   // PDF: la firma recortada cabe en 160 × 70
-  assert.match(read('src/services/lineas/LineasPdf.gs'), /Math\.min\(1, 160 \/ ancho, 70 \/ alto\)/);
+  // Una firma cabe en 160 × 70; las de varios responsables juntas (responsiva, 6-oct), hasta 300 de ancho
+  assert.match(read('src/services/lineas/LineasPdf.gs'), /Math\.min\(1, \(chica \? 90 : 160\) \/ ancho, \(chica \? 40 : 70\) \/ alto\)/);
 });
 
 test('la sección de fotos de la inspección no se oculta con las condiciones del AppSheet', () => {
@@ -790,7 +797,8 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
   assert.doesNotMatch(lineas, /tarjetaRegistro|Registro en la hoja|ln-solo-escritorio/);
   assert.match(lineas, /\['Tipo', tipoRegistro\(e\.legado\), true\],/);
   assert.match(lineas, /!e \? \['Tipo', tipoRegistro\(l\.legado\), true\] : null,/);
-  assert.doesNotMatch(lineas, /d\.pdfRuta|responsivaRuta|formatoInspeccionRuta|apiLineasResponsiva|apiLineasDocumentosNuco|ln-docs-nucos|totalRotaciones/);
+  // La página de la responsiva (apiLineasResponsiva, usuario 6-oct) usa los PDF de NUCOS y del sistema, nunca pdfRuta
+  assert.doesNotMatch(lineas, /d\.pdfRuta|responsivaRuta|formatoInspeccionRuta|apiLineasDocumentosNuco|ln-docs-nucos|totalRotaciones/);
   const servicio = read('src/services/TelefoniaService.gs');
   assert.doesNotMatch(servicio, /pdfRuta|totalRotaciones|LineasArchivos\.imagen\(insp/);
   // Documentos: indicadores que filtran por tipo y una tabla con acciones por fila
@@ -838,7 +846,8 @@ test('Documentos: inspecciones y responsivas de la hoja y de la carpeta del NUCO
     ['AP1', 'APPSHEET', null, 1, 'f0'],
   ]);
   assert.deepEqual(r.responsivas.map((i) => [i.id, i.pdfId]), [['drive_r1', 'resp']]);
-  assert.match(read('src/services/TelefoniaService.gs'), /LineasRepo\.leerInspeccion\(id\) \|\| \(\/\^drive_\/\.test\(id\) \? inspeccionNucos_\(id\.slice\(6\)\) : null\)/);
+  // La inspección y la responsiva (su página, 6-oct) se leen de la hoja o, si solo están en NUCOS, de su carpeta
+  assert.match(read('src/services/TelefoniaService.gs'), /\(esInspeccion \? LineasRepo\.leerInspeccion\(id\) : LineasRepo\.leerResponsiva\(id\)\) \|\|\s+\(\/\^drive_\/\.test\(id\) \? documentoNucos_\(id\.slice\(6\), tipo\) : null\)/);
   assert.match(read('src/services/TelefoniaService.gs'), /if \(!LineasArchivos\.estaDentroDe\(carpetaId, LineasArchivos\.carpetaNucosId\(\)\)\) return null;/);
 });
 
@@ -887,9 +896,9 @@ test('detalle de la inspección: mismo diseño que la ficha, sin revisión del a
   assert.doesNotMatch(servicio, /DETALLE_RESPONSIVA|DETALLE_INSPECCION|registroDetalle_|checklist: LineasChecklist\.secciones\(\)|firmas: puedeVerSecretos_/);
   // Firmas y patrón no se listan como fotos; PIN y patrón ocultos para quien no es ADMIN
   assert.match(servicio, /if \(\/\^\(FIRMA\|PATRON\)\/i\.test\(f\.name\)\) return;/);
-  assert.match(servicio, /insp\.pinEquipo = insp\.pinEquipo \? '••••' : null;/);
-  // Una inspección de la hoja sin carpeta toma la de NUCOS del mismo día
-  assert.match(servicio, /dia_\(x\.doc\.fecha\) === dia_\(insp\.fecha\)/);
+  assert.match(servicio, /doc\.pinEquipo = doc\.pinEquipo \? '••••' : null;/);
+  // Una inspección o responsiva de la hoja sin carpeta toma la de NUCOS del mismo día
+  assert.match(servicio, /x\.tipo === tipo && dia_\(x\.doc\.fecha\) === dia_\(doc\.fecha\)/);
   const detalle = lineas.slice(lineas.indexOf('function pintarInspeccion('), lineas.indexOf('/** Desde una bitácora: abre el registro'));
   assert.doesNotMatch(detalle, /Registro completo|Firmas de validación|Revisión del activo|ln-secciones-nav/);
   assert.match(detalle, /tarjeta\(icono\('images'\) \+ ' Fotografías \('/);
@@ -1582,10 +1591,11 @@ test('Mandar a resguardo (30-sep): persona en blanco, línea según el adendum, 
   // Datos de la persona en blanco (eran N/A; usuario, 4-oct); PIN y cuenta solo si tenían algo (NO APLICA se respeta);
   // el patrón se borra
   const fila = { RESPONSABLE: 'ANA', PUESTO: 'GERENTE', 'JEFE DIRECTO': 'LUIS', DIRECTOR: 'EVA', 'PIN WHATSAPP': '123456', 'PIN EQUIPO': 'NO APLICA',
-    'CUENTA GOOGLE': '', PATRON: '1-2-3', 'RESPONSABLE USA EL EQUIPO': 'SI', 'NOMBRE QUIEN USA': 'ANA' };
+    'CUENTA GOOGLE': '', PATRON: '1-2-3', 'NOMBRE SEGUNDO RESPONSABLE': 'LUIS' };
   const pedido = { DEPARTAMENTO: 'DISPONIBLE', SEDE: 'QUERETARO', 'OFICINA / DESARROLLO': 'JARDINES', 'ESTATUS EQUIPO': 'RESGUARDO', 'ESTATUS LINEA': 'DISPONIBLE', COMENTARIO: 'baja por renuncia' };
   const c = R._cambiosResguardo(fila, pedido, true);
-  ['RESPONSABLE', 'PUESTO', 'JEFE DIRECTO', 'DIRECTOR', 'PIN WHATSAPP', 'NOMBRE QUIEN USA', 'PUESTO QUIEN USA'].forEach((k) => assert.equal(c[k], '', k));
+  ['RESPONSABLE', 'PUESTO', 'JEFE DIRECTO', 'DIRECTOR', 'PIN WHATSAPP', 'NOMBRE SEGUNDO RESPONSABLE'].forEach((k) => assert.equal(c[k], '', k));
+  assert.ok(!('NOMBRE QUIEN USA' in c), '«quien lo usa» se quitó (6-oct)');
   assert.ok(!Object.keys(c).some((k) => c[k] === 'N/A'));
   assert.equal(R._cambiosResguardo(Object.assign({}, fila, { 'CUENTA GOOGLE': 'N/A' }), pedido, true)['CUENTA GOOGLE'], ''); // un N/A viejo también
   assert.ok(!('PIN EQUIPO' in c) && !('CUENTA GOOGLE' in c));
@@ -1983,7 +1993,7 @@ test('Mandar a resguardo: formulario intermedio informativo y la persona solo qu
   assert.doesNotMatch(servidor, /const NA = 'N\/A'/);
   // Editar no deja en blanco los datos de la persona: solo «Mandar a resguardo»
   const reg = read('src/services/lineas/LineasRegistros.gs');
-  assert.match(reg, /const PERSONA_SOLO_RESGUARDO = \['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'JEFE DIRECTO', 'DIRECTOR', 'PIN WHATSAPP', 'PIN EQUIPO', 'CUENTA GOOGLE'\];/);
+  assert.match(reg, /const PERSONA_SOLO_RESGUARDO = \['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'JEFE DIRECTO', 'DIRECTOR', 'PIN WHATSAPP', 'PIN EQUIPO', 'CUENTA GOOGLE'\]\s+\.concat\(ORDEN_ADICIONALES/);
   assert.match(reg, /solo «Mandar a resguardo» lo deja en blanco/);
   const enBlanco = new Function('texto_', "return (v) => ['', 'N/A', 'NA', 'N / A', '-'].indexOf(texto_(v).trim().toUpperCase()) >= 0;")((v) => (v == null ? '' : String(v)));
   assert.ok(reg.includes("const enBlanco_ = (v) => ['', 'N/A', 'NA', 'N / A', '-'].indexOf(texto_(v).trim().toUpperCase()) >= 0;"));
@@ -2007,10 +2017,10 @@ test('Mandar a resguardo: estatus con su significado, línea vencida a cancelaci
   // Inspección dentro del resguardo: responsable en blanco, solo las personas de procesos, y no se copia la persona
   const captura = read('src/services/lineas/LineasCaptura.gs');
   assert.match(captura, /const PERSONAS_PROCESOS = \['DAFNE DONIS GARCIA', 'GAMALIEL JAIR MORA GONZALEZ', 'YOVANNI NAVA PERALTA'\];/);
-  assert.match(captura, /const persona = \(c\) => \(enAccion \? '' : v\(c\)\);/);
+  assert.match(captura, /const persona = \(c, enResponsiva\) => \(enAccion \? '' : \(resp \? deResp\(enResponsiva \|\| c, ''\) : v\(c\)\)\);/);
   assert.match(captura, /enAccion \? \{ opciones: PERSONAS_PROCESOS, soloLista: true \} : \{\}/);
   assert.match(captura, /if \(\(e\.control === 'lista' \|\| e\.soloLista\) && e\.opciones/);
-  assert.match(captura, /if \(!datos\.enAccion\) COPIA_INSPECCION_A_LINEA\.forEach/);
+  assert.match(captura, /else if \(!datos\.enAccion\) COPIA_INSPECCION_A_LINEA/);
   assert.match(cliente, /cbx\.setOpciones\(e\.soloLista \? unirOpciones\(ops\.filter/);
 });
 

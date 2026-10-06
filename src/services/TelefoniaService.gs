@@ -261,10 +261,13 @@ const TelefoniaService = (function () {
   }
 
   /**
-   * Inspección que solo existe en NUCOS ("drive_<carpeta>"): fecha y NUCO de su ruta, su PDF y sus fotos. Solo
-   * carpetas dentro de NUCOS.
+   * Inspección o responsiva que solo existe en NUCOS ("drive_<carpeta>"): fecha y NUCO de su ruta, su PDF y sus fotos.
+   * Solo carpetas dentro de NUCOS.
    */
   function inspeccionNucos_(carpetaId) {
+    return documentoNucos_(carpetaId, 'INSPECCION');
+  }
+  function documentoNucos_(carpetaId, tipo) {
     if (!LineasArchivos.estaDentroDe(carpetaId, LineasArchivos.carpetaNucosId())) return null;
     let carpeta = DriveApp.getFolderById(carpetaId);
     if (/^FOTOS$/i.test(carpeta.getName().trim()) && carpeta.getParents().hasNext()) carpeta = carpeta.getParents().next();
@@ -281,7 +284,7 @@ const TelefoniaService = (function () {
     const dm = nombres.map((x) => x.match(/^(?:INSP|RESP)\s+(\d{1,2})\s+(\d{1,2})\b/i)).filter(Boolean)[0];
     const archivos = archivosCarpeta_(carpeta.getId(), 200);
     const fotos = archivos.filter((a) => a.mimeType === 'application/vnd.google-apps.folder' && /^FOTOS$/i.test(a.name.trim()))[0];
-    const pdfs = ordenarPdfs_(archivos.filter((a) => /pdf/i.test(a.mimeType)).map((a) => ({ id: a.id, nombre: a.name })), 'INSPECCION');
+    const pdfs = ordenarPdfs_(archivos.filter((a) => /pdf/i.test(a.mimeType)).map((a) => ({ id: a.id, nombre: a.name })), tipo || 'INSPECCION');
     let registroId = null;
     if (nuco) {
       const ix = LineasRepo.indice();
@@ -338,38 +341,49 @@ const TelefoniaService = (function () {
    * NUCOS del mismo día si la inspección es de la hoja y no tiene carpeta.
    */
   function inspeccion(token, id) {
+    return documento_(token, id, 'INSPECCION');
+  }
+
+  /** Página de una responsiva (usuario, 6-oct): como la de la inspección; sin fotos, que la responsiva no lleva. */
+  function responsiva(token, id) {
+    return documento_(token, id, 'RESPONSIVA');
+  }
+
+  function documento_(token, id, tipo) {
     const sesion = leer_(token);
-    const insp = LineasRepo.leerInspeccion(id) || (/^drive_/.test(id) ? inspeccionNucos_(id.slice(6)) : null);
-    if (!insp) throw new Error('No existe la inspección ' + id);
+    const esInspeccion = tipo === 'INSPECCION';
+    const doc = (esInspeccion ? LineasRepo.leerInspeccion(id) : LineasRepo.leerResponsiva(id)) ||
+      (/^drive_/.test(id) ? documentoNucos_(id.slice(6), tipo) : null);
+    if (!doc) throw new Error('No existe ' + (esInspeccion ? 'la inspección ' : 'la responsiva ') + id);
     // PIN, patrón y firmas solo para ADMIN (igual que en la ficha)
-    if (!puedeVerSecretos_(sesion)) {
-      insp.pinEquipo = insp.pinEquipo ? '••••' : null;
-      insp.patronRuta = insp.patronRuta ? '••••' : null;
-      insp.firmas = null;
+    if (esInspeccion && !puedeVerSecretos_(sesion)) {
+      doc.pinEquipo = doc.pinEquipo ? '••••' : null;
+      doc.patronRuta = doc.patronRuta ? '••••' : null;
+      doc.firmas = null;
     }
     let eq = null;
-    if (insp.registroId) {
-      const f = LineasRepo.leerRegistroPorId(insp.registroId);
+    if (doc.registroId) {
+      const f = LineasRepo.leerRegistroPorId(doc.registroId);
       const r = f ? LineasRepo.convertirRegistro(f) : null;
       if (r && r.equipo) eq = { _id: r.id, nuco: r.equipo.nuco, modelo: r.equipo.modelo, imei: r.equipo.imei, tipo: r.equipo.tipo };
     }
 
-    if (!insp.drive && insp.registroId && insp.fecha) {
+    if (!doc.drive && doc.registroId && doc.fecha) {
       try {
-        const n = evidenciasNucos_(insp.registroId, sesion).filter((x) => x.tipo === 'INSPECCION' && dia_(x.doc.fecha) === dia_(insp.fecha))[0];
-        if (n) insp.drive = n.doc.drive;
+        const n = evidenciasNucos_(doc.registroId, sesion).filter((x) => x.tipo === tipo && dia_(x.doc.fecha) === dia_(doc.fecha))[0];
+        if (n) doc.drive = n.doc.drive;
       } catch (e) {
-        console.warn('inspección ' + id + ' en NUCOS: ' + e.message);
+        console.warn((esInspeccion ? 'inspección ' : 'responsiva ') + id + ' en NUCOS: ' + e.message);
       }
     }
 
     const fotos = [];
-    const pdfs = insp.drive && insp.drive.pdfs ? insp.drive.pdfs.slice() : [];
+    const pdfs = doc.drive && doc.drive.pdfs ? doc.drive.pdfs.slice() : [];
     // Fotos agregadas en el sistema a una inspección de NUCOS: viven en una carpeta de la app (APP_EVIDENCIAS)
-    const carpetaExtra = /^drive_/.test(String(id)) ? carpetaFotosExtra_(id) : null;
-    if (insp.drive || carpetaExtra) {
+    const carpetaExtra = esInspeccion && /^drive_/.test(String(id)) ? carpetaFotosExtra_(id) : null;
+    if (esInspeccion && (doc.drive || carpetaExtra)) {
       const vistos = {};
-      [insp.drive && insp.drive.fotosCarpetaId, insp.drive && insp.drive.carpetaId, carpetaExtra].filter(Boolean).forEach((c) => {
+      [doc.drive && doc.drive.fotosCarpetaId, doc.drive && doc.drive.carpetaId, carpetaExtra].filter(Boolean).forEach((c) => {
         archivosCarpeta_(c, 200).forEach((f) => {
           if (vistos[f.id]) return;
           vistos[f.id] = true;
@@ -379,13 +393,9 @@ const TelefoniaService = (function () {
         });
       });
     }
-    return LineasUtil.paraCliente({
-      inspeccion: insp,
-      equipo: eq,
-      fotos: fotos,
-      pdfs: pdfs,
-      puedeOperar: puedeOperar_(sesion),
-    });
+    const salida = { equipo: eq, fotos: fotos, pdfs: pdfs, puedeOperar: puedeOperar_(sesion) };
+    salida[esInspeccion ? 'inspeccion' : 'responsiva'] = doc;
+    return LineasUtil.paraCliente(salida);
   }
 
   /**
@@ -639,7 +649,7 @@ const TelefoniaService = (function () {
   }
 
   return {
-    permisos, indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, catalogos, colaboradores, bitacora, formularioRegistro, recargarDatos,
+    permisos, indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, responsiva, catalogos, colaboradores, bitacora, formularioRegistro, recargarDatos,
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf, subirPdfFirmado, crearRegistro, editarRegistro,
     reasignar, fotosInspeccion, exportarBase, archivo, patronAppSheet, ultimoDocumentoNuco,
     notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva, panorama,

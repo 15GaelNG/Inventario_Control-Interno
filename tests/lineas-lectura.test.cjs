@@ -80,7 +80,7 @@ test('sin asignación vigente: los datos de la persona de la hoja vieja, sin có
   const L = cargar(HOJAS, true);
   const r2 = L.filas().find((x) => x['ID'] === 'EQU-2');
   assert.strictEqual(r2['RESPONSABLE'], '');
-  assert.strictEqual(r2['NOMBRE QUIEN USA'], '');
+  assert.strictEqual(r2['NOMBRE QUIEN USA'], undefined, '«quien lo usa» se quitó (6-oct)');
   assert.strictEqual(r2['DEPARTAMENTO'], 'N/A');
   assert.strictEqual(r2['TIPO'], 'EQUIPO');
 });
