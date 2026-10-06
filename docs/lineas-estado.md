@@ -15,8 +15,8 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   EQUIPO + SIM BASICO, LINEA, LINEA BASICA, BANDA ANCHA, MODEM, CAMARA).
 - **Acciones con nombre:** nueva inspección, nueva responsiva, Reasignar (responsiva y luego inspección, las dos
   obligatorias; el servidor exige la inspección del día; el equipo queda en USO; el director sale de la responsiva y
-  el jefe directo de la inspección o, si no, de Capital Humano; la inspección muestra fijo lo que se llenó en la
-  responsiva y solo pasa al inventario los accesos: la persona la pone la reasignación), Mandar a resguardo (pide la
+  el jefe directo de la inspección o, si no, de Capital Humano; la inspección llega llenada con la responsiva, se
+  puede cambiar y solo pasa al inventario los accesos: la persona la pone la reasignación), Mandar a resguardo (pide la
   inspección de lo que viene de una persona), Mandar a cancelación, Subir PDF firmado (del sistema, del AppSheet o de
   NUCOS: versión nueva del PDF de NUCOS o, si no tiene, PDF nuevo en la carpeta de NUCOS de la captura o del día),
   Regenerar PDF (responsivas del sistema: versión nueva del mismo archivo; pasadas 6 h pide solo las firmas). Cada
@@ -30,7 +30,8 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   empleado y nombre de Capital Humano), cada uno en su bloque con «Quitar» y «Agregar responsable» debajo
   (`LineasRegistros.camposAdicionales`, condición `{ cuantos }`). Columnas `NO EMPLEADO / NOMBRE SEGUNDO… QUINTO
   RESPONSABLE` al final de ASIGNACIONES, RESPONSIVAS LINEAS e INSPECCIONES LINEAS. La inspección los pasa al inventario.
-  En los dos documentos cada uno firma; el PDF los muestra como el AppSheet (nombres con « / » y las firmas juntas).
+  El PDF los muestra como el AppSheet (nombres con « / »); en el sistema solo firma el principal, y con adicionales su
+  firma va más chica para que los demás firmen el impreso.
   «¿El responsable usa el equipo?» y «Quien lo usa» se quitaron por completo (sus columnas, con `lineasQuitarQuienUsa`,
   LineasAdmin). En el PDF de la responsiva, con patrón solo sale su imagen.
 - **Secretos** (PIN, patrones, contraseñas, firmas): los ven ADMIN y el área `LINEAS` de USUARIOS
