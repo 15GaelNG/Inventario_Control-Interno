@@ -1357,7 +1357,8 @@
   }
   function formatearValorInfo(valor) {
     if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(valor)) return formatearFecha(valor);
-    if (typeof valor === 'string' && /^https?:\/\//.test(valor)) {
+    // \/{2} y no \/\/: así no queda ningún "//" en el código (ver CLAUDE.md)
+    if (typeof valor === 'string' && /^https?:\/{2}/.test(valor)) {
       return `<a href="${valor}" target="_blank" rel="noopener">📎 Ver archivo</a>`;
     }
     return String(valor);

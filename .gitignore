@@ -42,3 +42,6 @@ tools/migracion/corridas/
 
 # Capturas de red del navegador (traen tokens y datos personales)
 *.har
+
+# Lo comprimido que se sube a Apps Script (npm run push / tools/subir)
+.construido/

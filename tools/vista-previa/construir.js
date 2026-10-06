@@ -13,7 +13,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const RAIZ = path.join(__dirname, '..', '..', 'src');
+// VISTA_PREVIA_SRC=.construido/revisar revisa la versión comprimida que se sube (tools/subir/construir.js)
+const RAIZ = path.resolve(process.env.VISTA_PREVIA_SRC || path.join(__dirname, '..', '..', 'src'));
 const SALIDA = path.join(__dirname, 'salida');
 
 /** include('html/styles') → contenido de src/html/styles.html (con sus propios include) */
