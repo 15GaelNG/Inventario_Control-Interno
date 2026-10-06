@@ -13,10 +13,13 @@ const NotificacionesService = (function () {
   const DIAS_POR_VENCER = 30;
   const UMBRAL_DIAS_INSPECCION = 90;
 
+  // Una sección que falló por algo pasajero (no por permisos) no deja guardar la lista
+  let pasajero_ = false;
   function seccion_(fn) {
     try {
       return fn();
     } catch (e) {
+      if (!Permisos.esFaltaDePermiso(e)) pasajero_ = true;
       return [];
     }
   }
@@ -124,7 +127,15 @@ const NotificacionesService = (function () {
    *  llega vacía en vez de tumbar toda la campanita -- mismo criterio que
    *  DashboardService.resumen(). */
   function listar(token) {
-    Auth.validarSesion(token);
+    const sesion = Auth.validarSesion(token);
+    // Ya calculada para todos los que ven los mismos módulos; se rehace al cambiar una hoja
+    return CacheHojas.calculo('campanita_' + Permisos.firmaDeLectura(sesion.correo), () => armar_(token), {
+      guardarSi: () => !pasajero_,
+    });
+  }
+
+  function armar_(token) {
+    pasajero_ = false;
     const vehiculosPorFolio = {};
     seccion_(() => VehiculosService.listarResumen(token)).forEach((v) => { vehiculosPorFolio[v.FOLIO] = v; });
 

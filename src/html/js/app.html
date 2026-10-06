@@ -450,6 +450,14 @@
     }
   }
 
+  const llavePermisos_ = () => 'permisos_' + String((state.sesion && state.sesion.correo) || '').toLowerCase();
+  function permisosGuardados_() {
+    try { return JSON.parse(localStorage.getItem(llavePermisos_()) || 'null'); } catch (e) { return null; }
+  }
+  function guardarPermisos_(permisos) {
+    try { localStorage.setItem(llavePermisos_(), JSON.stringify(permisos)); } catch (e) { /* sin almacenamiento: no pasa nada */ }
+  }
+
   function render() {
     document.getElementById('app-shell').hidden = !state.token;
     document.getElementById('login-screen-container').hidden = !!state.token;
@@ -460,12 +468,15 @@
     }
     document.getElementById('user-name').textContent = state.sesion.nombre + ' · ' + state.sesion.rol;
     marcarTemaActual(); // entrar con la sesión guardada no pasa por el login, que era quien marcaba el botón
-    // El menú se pinta hasta saber los permisos: sin ellos solo se ve el inicio. Si fallan,
-    // se queda así (mejor que enseñar módulos que el servidor va a rechazar).
-    state.permisos = {};
+    // El menú se pinta de una vez con los permisos de la visita anterior (guardados en este
+    // navegador) y se corrige cuando llegan los de verdad. Solo deciden qué se ENSEÑA: el
+    // servidor revisa el permiso en cada llamada. La primera vez no hay copia y solo se ve el
+    // inicio hasta que lleguen; si fallan, se queda así.
+    state.permisos = permisosGuardados_() || {};
     renderNavGrupos();
     callServer('apiMisPermisos', state.token).then((info) => {
       state.permisos = (info && info.permisos) || {};
+      guardarPermisos_(state.permisos);
       renderNavGrupos();
       precargarListas();
     }).catch((err) => toastError('No se pudieron cargar tus permisos: ' + ((err && err.message) || err)));
@@ -493,6 +504,11 @@
     if (detenerHeroLogin) { detenerHeroLogin(); detenerHeroLogin = null; }
     actualizarHeroLoginTema = null;
 
+    // Mientras corre la animación ya se piden los permisos y el Inicio: render() y la vista
+    // de inicio reciben estas mismas respuestas (adelantar, api.html) en vez de pedirlas después
+    adelantar('apiMisPermisos', state.token);
+    adelantar('apiResumenInicio', state.token);
+
     const container = document.getElementById('loading-screen-container');
     montarVista('tpl-loading', null, container);
 
@@ -502,7 +518,8 @@
       { icono: 'loading-icon-2', mensaje: 'Revisando accesorios…' },
       { icono: 'loading-icon-3', mensaje: 'Cerrando caja chica del día…' },
     ];
-    const duracionTotal = 1900;
+    // Era 1.9 s de espera fija antes de pedir nada; ahora es más corta y los datos ya vienen en camino
+    const duracionTotal = 1000;
     const porPaso = duracionTotal / pasos.length;
 
     const barra = document.getElementById('loading-bar-fill');

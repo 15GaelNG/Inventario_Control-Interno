@@ -19,10 +19,13 @@ const DashboardService = (function () {
     return listas_[clave];
   }
 
+  // Una sección que falló por algo pasajero (no por permisos) no deja guardar el resumen
+  let pasajero_ = false;
   function seccion_(fn) {
     try {
       return fn();
     } catch (e) {
+      if (!Permisos.esFaltaDePermiso(e)) pasajero_ = true;
       return null;
     }
   }
@@ -160,9 +163,21 @@ const DashboardService = (function () {
 
   // ---------------- Resumen completo ----------------
 
+  /**
+   * Se guarda ya calculado (CacheHojas.calculo) para todos los que ven los mismos módulos, y
+   * se recalcula solo cuando cambia alguna hoja de la que sale: antes se rearmaba completo en
+   * cada entrada (7 listas, 7–10 s).
+   */
   function resumen(token) {
-    Auth.validarSesion(token);
+    const sesion = Auth.validarSesion(token);
+    return CacheHojas.calculo('inicio_' + Permisos.firmaDeLectura(sesion.correo), () => armar_(token), {
+      guardarSi: () => !pasajero_,
+    });
+  }
+
+  function armar_(token) {
     listas_ = {};
+    pasajero_ = false;
     return {
       vehiculos: seccion_(() => kpiVehiculos_(token)),
       ticketsIncidencias: seccion_(() => kpiTicketsIncidencias_(token)),

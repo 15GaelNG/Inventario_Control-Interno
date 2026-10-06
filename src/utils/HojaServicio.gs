@@ -196,9 +196,20 @@ const HojaServicio = (function () {
     return listaGuardada_(def);
   }
 
-  function listaGuardada_(def) {
+  function listaGuardada_(def, rehacer) {
     const hojas = [def.hoja].concat(def.tambienLee || []).map((h) => [libro(def), h]);
-    return CacheHojas.recordar(claveCache_(def), hojas, () => armarLista_(def, null, def.maximo));
+    return CacheHojas.recordar(claveCache_(def), hojas, () => armarLista_(def, null, def.maximo),
+      rehacer ? SEG_CALIENTE : undefined, rehacer);
+  }
+
+  /**
+   * La vuelve a armar desde la hoja y la deja guardada, sin permiso (no hay persona: lo corre
+   * el activador de Calentador.gs). Así nadie espera a que se lea la hoja: lo que se escribió
+   * fuera de la app (AppSheet, a mano) se recoge aquí cada vuelta del activador.
+   */
+  const SEG_CALIENTE = 25 * 60;   // más que la vuelta del activador (10 min): nunca queda un hueco
+  function calentar(def) {
+    listaGuardada_(def, true);
   }
 
   /**
@@ -428,7 +439,7 @@ const HojaServicio = (function () {
 
   return {
     // leer y escribir
-    listar, listarPor, completo, buscarPorId, crear, actualizar, eliminar,
+    listar, listarPor, completo, buscarPorId, crear, actualizar, eliminar, calentar,
     // la hoja, para lo propio de cada servicio
     hoja, libro, nombreHoja,
     // valores

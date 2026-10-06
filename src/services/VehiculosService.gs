@@ -148,6 +148,16 @@ const VehiculosService = (function () {
     orden: { campo: 'FOLIO' },
   });
 
+  /** Lectura ligera para la campanita (vencimientosSeguro): 4 columnas, con caché como las demás */
+  const SEGURO = Object.assign({}, VEHICULOS, {
+    columnas: ['FOLIO', 'NUCCO', 'ESTATUS', 'FECHA VENCIMIENTO SEGURO'],
+    incluir: (r) => !!r['FOLIO'],
+    fila: (r) => ({
+      FOLIO: r['FOLIO'], NUCCO: r['NUCCO'] || '', ESTATUS: r['ESTATUS'] || '',
+      'FECHA VENCIMIENTO SEGURO': r['FECHA VENCIMIENTO SEGURO'] || '',
+    }),
+  });
+
   /**
    * Diagnóstico de solo lectura: cuántas filas de VEHICULOS tienen la columna
    * ID (ID_COLUMN) vacía -- si hay más de una, todas esas filas colisionan en
@@ -174,18 +184,7 @@ const VehiculosService = (function () {
    *  notificaciones -- NotificacionesService.itemsSeguro_ vigila FECHA VENCIMIENTO
    *  SEGURO de cada vehículo activo. */
   function vencimientosSeguro(token) {
-    Permisos.puedeLeer(token, 'vehiculos');
-    const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
-    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, ['FOLIO', 'NUCCO', 'ESTATUS', 'FECHA VENCIMIENTO SEGURO']);
-    const resultado = [];
-    for (let i = 0; i < filas; i++) {
-      if (!datos['FOLIO'][i]) continue;
-      resultado.push({
-        FOLIO: datos['FOLIO'][i], NUCCO: datos['NUCCO'][i] || '', ESTATUS: datos['ESTATUS'][i] || '',
-        'FECHA VENCIMIENTO SEGURO': datos['FECHA VENCIMIENTO SEGURO'][i] || '',
-      });
-    }
-    return resultado;
+    return HojaServicio.listar(SEGURO, token);
   }
 
   /**
@@ -321,8 +320,14 @@ const VehiculosService = (function () {
    * candado dentro de crear()). No depende de ningún otro campo del formulario,
    * así que se pide una sola vez al abrir el módulo. */
   function previsualizarNucco(token) {
-    Permisos.puedeLeer(token, 'vehiculos');
-    return generarNucco_();
+    // De la lista ya guardada, no de la hoja: es solo lo que se enseña en el formulario; el
+    // NUCCO de verdad lo calcula generarNucco_() bajo candado al guardar
+    let maximo = 0;
+    HojaServicio.listar(RESUMEN, token).forEach((v) => {
+      const texto = String(v.NUCCO || '').trim();
+      if (/^\d+$/.test(texto)) maximo = Math.max(maximo, parseInt(texto, 10));
+    });
+    return String(maximo + 1).padStart(5, '0');
   }
 
   /**
@@ -356,6 +361,8 @@ const VehiculosService = (function () {
     listar: (token) => HojaServicio.listar(VEHICULOS, token),
     listarBasico: (token) => HojaServicio.listar(BASICO, token),
     listarResumen: (token) => HojaServicio.listar(RESUMEN, token),
+    /** Para el activador (Calentador.gs): las listas que se piden en cada pantalla, ya armadas */
+    calentar: () => [BASICO, RESUMEN, SEGURO].forEach(HojaServicio.calentar),
     /** Todas las columnas de TODOS los vehículos (para "Vista": mostrar/exportar cualquier columna) */
     completo: (token) => HojaServicio.completo(VEHICULOS, token),
     buscarPorFolio, previsualizarFolio, previsualizarNucco,

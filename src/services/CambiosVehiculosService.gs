@@ -90,6 +90,8 @@ const CambiosVehiculosService = (function () {
     registrarCambios,
     /** Historial — los 500 más recientes, solo lectura */
     listarResumen: (token) => HojaServicio.listar(CAMBIOS, token),
+    /** Para el activador (Calentador.gs): la deja armada sin esperar a nadie */
+    calentar: () => HojaServicio.calentar(CAMBIOS),
     /**
      * Todas las columnas Y TODAS las filas (no solo las 500 más recientes), para "Vista":
      * mostrar/exportar cualquier columna. La hoja tiene miles de filas — se pide solo bajo demanda.

@@ -150,6 +150,8 @@ const VerificacionesService = (function () {
 
   return {
     listar: (token) => HojaServicio.listar(VERIFICACIONES, token),
+    /** Para el activador (Calentador.gs): la deja armada sin esperar a nadie */
+    calentar: () => HojaServicio.calentar(VERIFICACIONES),
     /** Verificaciones de un solo vehículo (ficha de Vehículos) */
     listarPorFolio: (token, folio) => HojaServicio.listarPor(VERIFICACIONES, token, 'FOLIO', folio),
     /** Registro completo (todas las columnas) por ID -- "Ver completo" desde la ficha de Vehículos */

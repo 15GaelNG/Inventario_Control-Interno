@@ -124,6 +124,8 @@ const IncidenciasService = (function () {
 
   return {
     listar: (token) => HojaServicio.listar(INCIDENCIAS, token),
+    /** Para el activador (Calentador.gs): la deja armada sin esperar a nadie */
+    calentar: () => HojaServicio.calentar(INCIDENCIAS),
     /** Incidencias de un solo vehículo (ficha de Vehículos) */
     listarPorFolio: (token, folio) => HojaServicio.listarPor(INCIDENCIAS, token, 'FOLIO', folio),
     /** Registro completo (todas las columnas) por ID -- "Ver completo" desde la ficha de Vehículos */

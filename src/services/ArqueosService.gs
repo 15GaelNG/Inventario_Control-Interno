@@ -640,6 +640,8 @@ const ArqueosService = (function () {
   return {
     AUDIT_ITEMS,
     listarResumen: (token) => HojaServicio.listar(ARQUEOS, token),
+    /** Para el activador (Calentador.gs): la deja armada sin esperar a nadie */
+    calentar: () => HojaServicio.calentar(ARQUEOS),
     /** Todas las columnas de TODOS los arqueos (para "Vista": mostrar/exportar cualquier columna) */
     completo: (token) => HojaServicio.completo(ARQUEOS, token),
     /** Registro completo por ID ARQUEO (para el modal de detalle/editar) */

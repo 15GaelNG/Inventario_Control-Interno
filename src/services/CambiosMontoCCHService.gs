@@ -96,6 +96,8 @@ const CambiosMontoCCHService = (function () {
   return {
     /** Historial completo (ya son solo 8 columnas, no hace falta un "resumen" más ligero) */
     listarResumen: (token) => HojaServicio.listar(INCREMENTOS, token),
+    /** Para el activador (Calentador.gs): la deja armada sin esperar a nadie */
+    calentar: () => HojaServicio.calentar(INCREMENTOS),
     /** Todas las columnas de la hoja (para "Vista": mostrar/exportar cualquier columna) */
     completo: (token) => HojaServicio.completo(INCREMENTOS, token),
     /** Cambios de monto de una sola caja chica (ficha de Caja Chica) */

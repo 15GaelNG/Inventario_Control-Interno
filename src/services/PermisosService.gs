@@ -157,6 +157,21 @@ const Permisos = (function () {
     return Object.assign({}, sesion, { permisos: permisos });
   }
 
+  /**
+   * Una huella corta de los módulos que alguien puede ver: dos personas con la misma huella
+   * ven exactamente lo mismo en lo que se arma de varios módulos (el Inicio, la campanita),
+   * así que pueden compartir lo ya calculado (CacheHojas.calculo).
+   */
+  function firmaDeLectura(correo) {
+    const texto = Object.keys(deCorreo(correo)).sort().join(',');
+    let h = 5381;
+    for (let i = 0; i < texto.length; i++) h = ((h * 33) ^ texto.charCodeAt(i)) >>> 0;
+    return h.toString(36);
+  }
+
+  /** ¿El error es porque no tiene permiso? (eso no cambia de una vez a otra; un error pasajero sí) */
+  const esFaltaDePermiso = (err) => /No tienes acceso a este módulo|Solo puedes consultar este módulo/.test(String((err && err.message) || err));
+
   const puedeLeer = (token, modulo) => exigir(token, modulo, LECTURA);
   const puedeEditar = (token, modulo) => exigir(token, modulo, EDICION);
 
@@ -326,6 +341,7 @@ const Permisos = (function () {
   return {
     LECTURA, EDICION, NINGUNO, MODULO_USUARIOS,
     deCorreo, olvidar, exigir, puedeLeer, puedeEditar, puedeLeerAlguno, mios, revisarCatalogo, crearHoja,
+    firmaDeLectura, esFaltaDePermiso,
     panel, guardar,
     resolver_, aplicarCambios_,   // expuestas para las pruebas
   };

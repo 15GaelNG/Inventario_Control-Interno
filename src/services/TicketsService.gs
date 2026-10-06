@@ -55,6 +55,8 @@ const TicketsService = (function () {
   return {
     /** Catálogo con las 10 columnas reales (nombres tal cual la hoja) */
     listarResumen: (token) => HojaServicio.listar(TICKETS, token),
+    /** Para el activador (Calentador.gs): la deja armada sin esperar a nadie */
+    calentar: () => HojaServicio.calentar(TICKETS),
     /** Todas las columnas de TODOS los tickets (para "Vista": mostrar/exportar cualquier columna) */
     completo: (token) => HojaServicio.completo(TICKETS, token),
     buscarPorId: (token, id) => HojaServicio.buscarPorId(TICKETS, token, id),

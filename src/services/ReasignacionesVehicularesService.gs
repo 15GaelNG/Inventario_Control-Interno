@@ -114,6 +114,8 @@ const ReasignacionesVehicularesService = (function () {
   return {
     /** Historial completo (ya son solo 12 columnas, no hace falta un "resumen" más ligero) */
     listarResumen: (token) => HojaServicio.listar(REASIGNACIONES, token),
+    /** Para el activador (Calentador.gs): la deja armada sin esperar a nadie */
+    calentar: () => HojaServicio.calentar(REASIGNACIONES),
     /** Todas las columnas de la hoja (para "Vista": mostrar/exportar cualquier columna) */
     completo: (token) => HojaServicio.completo(REASIGNACIONES, token),
     crear,

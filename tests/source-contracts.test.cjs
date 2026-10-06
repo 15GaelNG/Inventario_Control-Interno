@@ -371,8 +371,9 @@ test('lo que repetían los servicios de una hoja vive en HojaServicio, no en otr
     [/function subirArchivoEn_\(|Utilities\.base64Decode\(base64Data\)/, 'su propia subida a Drive (HojaServicio.subirArchivo)'],
     [/SheetUtils\.remove\(/, 'SheetUtils.remove a mano (HojaServicio.eliminar, que además respeta Relaciones)'],
   ];
-  // ListasService guarda catálogos (no la lista de un módulo) con su propio tiempo de vida
-  const CON_CACHE_PROPIA = ['ListasService.gs'];
+  // ListasService guarda catálogos (no la lista de un módulo) con su propio tiempo de vida, y
+  // CapitalHumano el de colaboradores (una persona por nombre+departamento, sin permiso de módulo)
+  const CON_CACHE_PROPIA = ['ListasService.gs', 'CapitalHumano.gs'];
   const problemas = [];
   servicios.forEach((a) => {
     const texto = read('src/services/' + a);
@@ -2079,4 +2080,18 @@ test('Mandar a cancelación: textos técnicos y espera desde el clic (prueba del
   // pedirDatos se queda con la espera hasta que termina y, si falla, "Volver" regresa a lo capturado
   assert.match(cliente, /pintarEspera\(o\.espera \|\| 'Guardando', 'No cierres esta ventana\.'\);/);
   assert.match(cliente, /pintarEspera\('No se pudo guardar', mensajeError\(e\), true\);/);
+});
+
+test('el calentador (Calentador.gs) solo llama lo que cada servicio expone', () => {
+  const calentador = read('src/Calentador.gs');
+  const llamadas = [...calentador.matchAll(/\(\) => (\w+)\.(\w+)\(/g)].map((m) => [m[1], m[2]]);
+  assert.ok(llamadas.length >= 10, 'el calentador tiene sus pasos');
+  const servicios = filesBelow(path.join(root, 'src/services')).filter((f) => f.endsWith('.gs')).map((f) => fs.readFileSync(f, 'utf8'));
+  const faltan = llamadas.filter(([obj, fn]) => {
+    const archivo = servicios.find((t) => t.includes('const ' + obj + ' = (function'));
+    return !archivo || !new RegExp('\\b' + fn + '\\b\\s*[:,]').test(archivo.slice(archivo.lastIndexOf('return {')));
+  }).map((x) => x.join('.'));
+  assert.deepEqual(faltan, []);
+  // Es una función de nivel superior: con candado, para que nadie la dispare desde el navegador
+  assert.match(calentador, /function calentarCaches\(\) \{\s*soloEditor_\(\);/);
 });

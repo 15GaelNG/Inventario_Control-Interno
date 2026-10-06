@@ -26,7 +26,31 @@
     if (tiemposServidor.length > 300) tiemposServidor.shift();
   }
 
+  /**
+   * Pedir algo ANTES de que la pantalla lo necesite (p. ej. el Inicio mientras corre la
+   * animación de entrada): la siguiente callServer con la misma función y argumentos recibe
+   * esa misma respuesta en vez de pedirla otra vez. Se usa una sola vez y caduca en 30 s.
+   */
+  const adelantadas = {};
+  const ADELANTADA_MS = 30 * 1000;
+  function adelantar(fnName, ...args) {
+    const clave = fnName + JSON.stringify(args);
+    const promesa = pedir_(fnName, args);
+    promesa.catch(() => { /* si nadie la usa, que no quede como error sin atender */ });
+    adelantadas[clave] = { promesa: promesa, ts: Date.now() };
+  }
+
   function callServer(fnName, ...args) {
+    const clave = fnName + JSON.stringify(args);
+    const adelantada = adelantadas[clave];
+    if (adelantada) {
+      delete adelantadas[clave];
+      if (Date.now() - adelantada.ts < ADELANTADA_MS) return adelantada.promesa;
+    }
+    return pedir_(fnName, args);
+  }
+
+  function pedir_(fnName, args) {
     const inicio = performance.now();
     return new Promise((resolve, reject) => {
       google.script.run

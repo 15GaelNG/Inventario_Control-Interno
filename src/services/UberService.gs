@@ -50,6 +50,8 @@ const UberService = (function () {
   return {
     /** Catálogo con las 15 columnas reales (nombres tal cual la hoja) */
     listarResumen: (token) => HojaServicio.listar(UBER, token),
+    /** Para el activador (Calentador.gs): la deja armada sin esperar a nadie */
+    calentar: () => HojaServicio.calentar(UBER),
     /** Todas las columnas de TODOS los usuarios (para "Vista": mostrar/exportar cualquier columna) */
     completo: (token) => HojaServicio.completo(UBER, token),
     buscarPorId: (token, id) => HojaServicio.buscarPorId(UBER, token, id),

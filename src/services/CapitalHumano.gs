@@ -448,6 +448,17 @@ const CapitalHumano = (function () {
    */
   function listarColaboradores(token) {
     Auth.validarSesion(token);
+    return colaboradores_(false);
+  }
+
+  /** La lista ya armada (CacheHojas): la hoja se pega a mano, así que se renueva al vencer o con
+   *  el activador (Calentador.gs), que la rehace en cada vuelta. */
+  function colaboradores_(rehacer) {
+    return CacheHojas.recordar('colaboradores_v1', [[Config.SPREADSHEET_IDS.VEHICULOS(), HOJA_CH]], armarColaboradores_,
+      rehacer ? 25 * 60 : undefined, rehacer);
+  }
+
+  function armarColaboradores_() {
     const ss = SpreadsheetApp.openById(Config.SPREADSHEET_IDS.VEHICULOS());
     const hoja = ss.getSheetByName(HOJA_CH);
     if (!hoja) return [];
@@ -476,7 +487,7 @@ const CapitalHumano = (function () {
 
   return {
     identificar, revisarLigas, idPara, columnasDePersona, describirLigas, personaDe, nombreComparable,
-    listarColaboradores, HOJA_CH, HOJA_PERSONAS, claveEmpleo, COLUMNA,
+    listarColaboradores, calentarColaboradores: () => colaboradores_(true), HOJA_CH, HOJA_PERSONAS, claveEmpleo, COLUMNA,
   };
 })();
 

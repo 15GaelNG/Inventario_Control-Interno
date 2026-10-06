@@ -112,6 +112,8 @@ const CajasChicasService = (function () {
   return {
     /** Catálogo con las 27 columnas capturables (nombres tal cual la hoja, + alias) */
     listarResumen: (token) => HojaServicio.listar(CAJAS_CHICAS, token),
+    /** Para el activador (Calentador.gs): la deja armada sin esperar a nadie */
+    calentar: () => HojaServicio.calentar(CAJAS_CHICAS),
     /** Todas las columnas de TODAS las cajas chicas (para "Vista": mostrar/exportar cualquier columna) */
     completo: (token) => HojaServicio.completo(CAJAS_CHICAS, token),
     /** Registro completo por ID CCH (para el modal de detalle/editar) */

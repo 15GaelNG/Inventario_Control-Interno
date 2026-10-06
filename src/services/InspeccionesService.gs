@@ -962,6 +962,8 @@ const InspeccionesService = (function () {
 
   return {
     listar: (token) => HojaServicio.listar(INSPECCIONES, token),
+    /** Para el activador (Calentador.gs): la deja armada sin esperar a nadie */
+    calentar: () => HojaServicio.calentar(INSPECCIONES),
     /** Inspecciones de un solo vehículo (ficha de Vehículos) */
     listarPorFolio: (token, folio) => HojaServicio.listarPor(INSPECCIONES, token, 'FOLIO', folio),
     /** Registro completo -- TODAS las 195 columnas crudas -- por ID (para "Ver completo" desde

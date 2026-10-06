@@ -35,7 +35,7 @@ console.log('2. Toda función administrativa de nivel superior tiene candado');
 // y permiso con su token) y las de compartir (con token piden ADMIN; sin token, soloEditor_)
 const PERMITIDAS = new Set(['doGet', 'include']);
 const ARCHIVOS = ['Diagnostico.gs', 'MigracionFamilia.gs', 'MigracionIds.gs', 'MigracionPipeline.gs', 'MigracionReplanche.gs',
-  'MigracionTodo.gs', 'SetupInicial.gs', 'services/lineas/LineasAdmin.gs', 'services/PermisosService.gs', 'Code.gs'];
+  'MigracionTodo.gs', 'SetupInicial.gs', 'Calentador.gs', 'services/lineas/LineasAdmin.gs', 'services/PermisosService.gs', 'Code.gs'];
 const sinCandado = [];
 let revisadas = 0;
 ARCHIVOS.forEach((archivo) => {
