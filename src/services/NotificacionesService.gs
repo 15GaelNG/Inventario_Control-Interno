@@ -14,12 +14,15 @@ const NotificacionesService = (function () {
   const UMBRAL_DIAS_INSPECCION = 90;
 
   // Una sección que falló por algo pasajero (no por permisos) no deja guardar la lista
-  let pasajero_ = false;
+  let fallos_ = [];   // errores pasajeros de la última vez (no los de permisos)
   function seccion_(fn) {
     try {
       return fn();
     } catch (e) {
-      if (!Permisos.esFaltaDePermiso(e)) pasajero_ = true;
+      if (!Permisos.esFaltaDePermiso(e)) {
+        fallos_.push(e.message);
+        console.warn('[Campanita] una sección falló: ' + e.message);
+      }
       return [];
     }
   }
@@ -130,12 +133,12 @@ const NotificacionesService = (function () {
     const sesion = Auth.validarSesion(token);
     // Ya calculada para todos los que ven los mismos módulos; se rehace al cambiar una hoja
     return CacheHojas.calculo('campanita_' + Permisos.firmaDeLectura(sesion.correo), () => armar_(token), {
-      guardarSi: () => !pasajero_,
+      guardarSi: () => !fallos_.length,
     });
   }
 
   function armar_(token) {
-    pasajero_ = false;
+    fallos_ = [];
     const vehiculosPorFolio = {};
     seccion_(() => VehiculosService.listarResumen(token)).forEach((v) => { vehiculosPorFolio[v.FOLIO] = v; });
 
@@ -148,5 +151,5 @@ const NotificacionesService = (function () {
     return items;
   }
 
-  return { listar: listar };
+  return { listar: listar, ultimosFallos: () => fallos_.slice() };
 })();

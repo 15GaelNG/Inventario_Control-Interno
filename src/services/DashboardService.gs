@@ -20,12 +20,15 @@ const DashboardService = (function () {
   }
 
   // Una sección que falló por algo pasajero (no por permisos) no deja guardar el resumen
-  let pasajero_ = false;
+  let fallos_ = [];   // errores pasajeros de la última vez (no los de permisos)
   function seccion_(fn) {
     try {
       return fn();
     } catch (e) {
-      if (!Permisos.esFaltaDePermiso(e)) pasajero_ = true;
+      if (!Permisos.esFaltaDePermiso(e)) {
+        fallos_.push(e.message);
+        console.warn('[Inicio] una sección falló: ' + e.message);
+      }
       return null;
     }
   }
@@ -171,13 +174,13 @@ const DashboardService = (function () {
   function resumen(token) {
     const sesion = Auth.validarSesion(token);
     return CacheHojas.calculo('inicio_' + Permisos.firmaDeLectura(sesion.correo), () => armar_(token), {
-      guardarSi: () => !pasajero_,
+      guardarSi: () => !fallos_.length,
     });
   }
 
   function armar_(token) {
     listas_ = {};
-    pasajero_ = false;
+    fallos_ = [];
     return {
       vehiculos: seccion_(() => kpiVehiculos_(token)),
       ticketsIncidencias: seccion_(() => kpiTicketsIncidencias_(token)),
@@ -190,5 +193,5 @@ const DashboardService = (function () {
     };
   }
 
-  return { resumen: resumen };
+  return { resumen: resumen, ultimosFallos: () => fallos_.slice() };
 })();

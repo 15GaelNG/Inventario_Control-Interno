@@ -76,3 +76,70 @@ function quitarCalentador() {
   });
   return quitados ? 'Se quitó el calentador.' : 'No había calentador.';
 }
+
+/**
+ * Diagnóstico de rapidez, desde el editor: cuánto tarda cada lista (dos veces: la segunda
+ * debe salir de la caché), el Inicio y la campanita (y qué sección falla, si alguna), y el
+ * calentador completo. Corre con los permisos de quien lo corre. Regresa el reporte en texto
+ * (también queda en el registro de ejecución).
+ */
+function diagnosticoRapidez() {
+  soloEditor_();
+  const lineas = [];
+  const correo = Session.getEffectiveUser().getEmail();
+  // Una sesión de 10 min solo para esto (los servicios piden token); se borra al terminar
+  const token = 'diag-' + Utilities.getUuid();
+  CacheService.getScriptCache().put('sesion_' + token, JSON.stringify({ correo: correo, nombre: 'diagnóstico', rol: 'ADMIN' }), 600);
+  const medir = (nombre, fn) => {
+    const t = Date.now();
+    try {
+      const r = fn();
+      const filas = Array.isArray(r) ? ' · ' + r.length + ' filas' : '';
+      lineas.push('  ' + nombre + ': ' + (Date.now() - t) + ' ms' + filas);
+      return r;
+    } catch (e) {
+      lineas.push('  ' + nombre + ': FALLÓ a los ' + (Date.now() - t) + ' ms — ' + e.message);
+      return null;
+    }
+  };
+  try {
+    lineas.push('Proyecto ' + ScriptApp.getScriptId() + ' · ' + correo);
+    lineas.push('Calentador instalado: ' +
+      (ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === CALENTADOR_FUNCION) ? 'sí' : 'NO'));
+    lineas.push('Módulos que puede ver: ' + Object.keys(Permisos.deCorreo(correo)).join(', '));
+
+    lineas.push('Listas (la 2a vez debe salir de la caché, en pocos ms):');
+    [
+      ['Vehículos', () => VehiculosService.listarResumen(token)],
+      ['Inspecciones', () => InspeccionesService.listar(token)],
+      ['Verificaciones', () => VerificacionesService.listar(token)],
+      ['Sensores', () => SensoresService.listar(token)],
+      ['Hologramas', () => HologramasService.listar(token)],
+      ['Tickets', () => TicketsService.listarResumen(token)],
+      ['Incidencias', () => IncidenciasService.listar(token)],
+      ['Cajas chicas', () => CajasChicasService.listarResumen(token)],
+      ['Arqueos', () => ArqueosService.listarResumen(token)],
+      ['Seguro', () => VehiculosService.vencimientosSeguro(token)],
+      ['Colaboradores', () => CapitalHumano.listarColaboradores(token)],
+    ].forEach(([nombre, fn]) => { medir(nombre + ' 1a', fn); medir(nombre + ' 2a', fn); });
+
+    lineas.push('Inicio:');
+    medir('1a vez', () => DashboardService.resumen(token));
+    lineas.push('  secciones que fallaron: ' + (DashboardService.ultimosFallos().join(' | ') || 'ninguna'));
+    medir('2a vez (debe salir ya calculado)', () => DashboardService.resumen(token));
+
+    lineas.push('Campanita:');
+    medir('1a vez', () => NotificacionesService.listar(token));
+    lineas.push('  secciones que fallaron: ' + (NotificacionesService.ultimosFallos().join(' | ') || 'ninguna'));
+    medir('2a vez (debe salir ya calculada)', () => NotificacionesService.listar(token));
+    medir('Líneas: notificaciones', () => TelefoniaService.notificaciones(token, 0));
+
+    lineas.push('Calentador completo:');
+    medir('calentarCaches', () => calentarCaches());
+  } finally {
+    CacheService.getScriptCache().remove('sesion_' + token);
+  }
+  const texto = lineas.join('\n');
+  console.log(texto);
+  return texto;
+}
