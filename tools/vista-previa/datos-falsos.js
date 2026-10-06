@@ -19,7 +19,7 @@
   // Los de Modulos.gs (construir.js los pone en window.__GRUPOS), solo de los grupos que tienen escenas
   const conEscenas = MODULOS.map((g) => g[0]);
   const grupos = (window.__GRUPOS || []).filter((g) => conEscenas.indexOf(g.id) !== -1)
-    .map((g) => Object.assign({}, g, { modulos: g.modulos.map((m) => ({ id: m.id, etiqueta: m.etiqueta, referencia: m.referencia || '', editaEn: m.editaEn || [] })) }));
+    .map((g) => Object.assign({}, g, { modulos: g.modulos.map((m) => ({ id: m.id, etiqueta: m.etiqueta, icono: m.icono || '', referencia: m.referencia || '', editaEn: m.editaEn || [] })) }));
   const permisos = {};
   grupos.forEach((g) => g.modulos.forEach((m) => { permisos[m.id] = 'EDICION'; }));
 
@@ -167,7 +167,7 @@
   };
 
   // ---------- Usuarios y permisos (app-permisos.html: cargar(respuesta)) ----------
-  const AREAS = ['TI', 'CONTROL INTERNO', 'POST VENTA'];
+  const AREAS = ['TI', 'CONTROL INTERNO', 'POST VENTA', 'ANALISIS DE DATOS', 'CAPITAL HUMANO', 'TESORERIA'];
   const PERMISOS_PANEL = {
     grupos,
     areas: AREAS.map((nombre) => ({ nombre })),
@@ -179,7 +179,18 @@
       { quien: 'TI', modulo: 'vehiculos', permiso: 'EDICION' }, { quien: 'TI', modulo: 'verificaciones', permiso: 'LECTURA' },
       { quien: 'CONTROL INTERNO', modulo: 'arqueos', permiso: 'EDICION' }, { quien: 'CONTROL INTERNO', modulo: 'caja-chica', permiso: 'EDICION' },
       { quien: 'persona1@ciudadmaderas.com', modulo: 'hologramas', permiso: 'EDICION' },
+      { quien: 'POST VENTA', modulo: 'vehiculos', permiso: 'LECTURA' }, { quien: 'POST VENTA', modulo: 'incidencias', permiso: 'EDICION' },
+      { quien: 'ANALISIS DE DATOS', modulo: 'vehiculos', permiso: 'LECTURA' }, { quien: 'ANALISIS DE DATOS', modulo: 'verificaciones', permiso: 'LECTURA' },
+      { quien: 'ANALISIS DE DATOS', modulo: 'hologramas', permiso: 'LECTURA' }, { quien: 'TESORERIA', modulo: 'caja-chica', permiso: 'LECTURA' },
+      { quien: 'TESORERIA', modulo: 'arqueos', permiso: 'LECTURA' }, { quien: 'CAPITAL HUMANO', modulo: 'uber', permiso: 'EDICION' },
     ],
+    // Lo que anota PERMISOS_HISTORIAL, del más reciente al más viejo
+    historial: [
+      ['2026-10-06T18:20:00Z', 'TI', 'verificaciones', 'EDICION', 'LECTURA'], ['2026-10-06T18:20:00Z', 'TI', 'vehiculos', 'LECTURA', 'EDICION'],
+      ['2026-10-05T16:05:00Z', 'persona1@ciudadmaderas.com', 'hologramas', '', 'EDICION'], ['2026-10-04T22:40:00Z', 'CONTROL INTERNO', 'arqueos', '', 'EDICION'],
+      ['2026-10-03T15:12:00Z', 'persona0@ciudadmaderas.com', 'uber', 'NINGUNO', ''],
+    ].map(([fecha, quien, modulo, antes, despues]) => ({ fecha, correo: 'admin@ciudadmaderas.com', nombre: 'AYRTON ADMIN', quien, modulo, antes, despues })),
+
   };
 
   const respuestas = {
@@ -426,6 +437,14 @@
     'sistemas': () => abrir('sistemas-vehiculos'),
     'usuarios': async () => { await abrir('usuarios'); await hasta('.dt tbody tr[data-id]'); },
     'usuarios-ficha': async () => { await abrir('usuarios'); await abrirPrimeraFila(); },
+    'usuarios-matriz': async () => {
+      await abrir('usuarios', 'matriz');
+      // Dos celdas cambiadas sin guardar: se ve el contorno dorado y la barra con la cuenta
+      (await hasta('[data-celda-area="TESORERIA"][data-celda-modulo="vehiculos"]')).click();
+      (await hasta('[data-celda-area="TI"][data-celda-modulo="hologramas"]')).click();
+      await esperar(300);
+    },
+    'usuarios-historial': () => abrir('usuarios', 'historial'),
     'usuarios-editar-permisos': async () => {
       await abrir('usuarios'); await abrirPrimeraFila();
       (await hasta('[data-usr-editar]')).click();

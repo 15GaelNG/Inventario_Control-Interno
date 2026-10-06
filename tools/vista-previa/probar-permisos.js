@@ -1,6 +1,7 @@
 /**
  * Clics de verdad en la ventana "Editar permisos" sobre la vista previa: "Todo el grupo", una
- * excepción, ↺, lo que implica cada permiso y lo que se manda al guardar. Necesita Chrome (por eso
+ * excepción, ↺, lo que implica cada permiso y lo que se manda al guardar. Luego la matriz por
+ * área: el clic que cambia la celda, volver a como estaba y lo que manda Guardar. Necesita Chrome (por eso
  * no va en npm test, que corre en GitHub sin navegador):
  *
  *   node tools/vista-previa/probar-permisos.js
@@ -32,13 +33,15 @@ const { construir } = require('./construir');
   const clic = (sel) => p.evaluate((s) => document.querySelector(s).click(), sel);
   const ok = (c, t) => { console.log((c ? '  ✔ ' : '  ✘ ') + t); if (!c) fallas++; };
 
+  const enGrupo = await p.evaluate(() => document.querySelector('[data-usr-grupo="servicios-vehiculares"]').closest('.usr-editar-grupo')
+    .nextElementSibling.querySelectorAll('[data-modulo]').length);
   let e = await estado();
   ok(e.cuenta === 'Sin cambios' && !e.guardar && e.hologramas === 'EDICION' && e.holoExcepcion, 'al abrir: sin cambios, Hologramas es excepción en Editar');
 
   await clic('[data-usr-grupo="servicios-vehiculares"] [data-nivel="LECTURA"]');
   e = await estado();
-  ok(e.vehiculos === 'LECTURA' && e.hologramas === 'LECTURA' && e.grupoActivo === 'LECTURA', 'Todo el grupo → Ver: los 8 módulos quedan en Ver');
-  ok(e.cuenta === '8 cambios sin guardar' && e.guardar, 'cuenta 8 cambios y deja guardar (' + e.cuenta + ')');
+  ok(e.vehiculos === 'LECTURA' && e.hologramas === 'LECTURA' && e.grupoActivo === 'LECTURA', 'Todo el grupo → Ver: los ' + enGrupo + ' módulos quedan en Ver');
+  ok(e.cuenta === enGrupo + ' cambios sin guardar' && e.guardar, 'cuenta ' + enGrupo + ' cambios y deja guardar (' + e.cuenta + ')');
 
   await clic('[data-usr-restablecer="hologramas"]');
   e = await estado();
@@ -65,6 +68,35 @@ const { construir } = require('./construir');
   }));
   ok(enviado.length === 1 && enviado[0].modulo === 'hologramas' && enviado[0].permiso === null && /@/.test(enviado[0].quien),
     'Guardar manda solo eso: Hologramas → sin regla (vuelve a lo del área) ' + JSON.stringify(enviado));
+
+  // ---- Matriz por área (la escena ya cambió TESORERIA·Vehículos y TI·Hologramas a Ver)
+  await p.goto('about:blank');
+  await p.goto('file:///' + pagina.replace(/\\/g, '/') + '#escena=usuarios-matriz');
+  await p.waitForSelector('#usr-matriz .usr-celda.cambiada', { timeout: 20000 });
+  const celda = (area, modulo) => '[data-celda-area="' + area + '"][data-celda-modulo="' + modulo + '"]';
+  const matriz = (area, modulo) => p.evaluate((sel) => {
+    const c = document.querySelector(sel);
+    return { nivel: ['NINGUNO', 'LECTURA', 'EDICION'].find((n) => c.classList.contains(n)), cambiada: c.classList.contains('cambiada'),
+      excepcion: c.classList.contains('con-excepcion'), cuenta: document.getElementById('usr-matriz-cuenta').textContent,
+      guardar: !document.getElementById('usr-matriz-guardar').disabled };
+  }, celda(area, modulo));
+  let m = await matriz('TESORERIA', 'vehiculos');
+  ok(m.nivel === 'LECTURA' && m.cambiada && m.cuenta === '2 cambios sin guardar' && m.guardar, 'un clic pasa de Sin acceso a Ver, marcada y contada (' + m.cuenta + ')');
+  ok((await matriz('CONTROL INTERNO', 'hologramas')).excepcion, 'el punto de excepción sale donde alguien del área tiene una');
+  await clic(celda('TESORERIA', 'vehiculos'));
+  m = await matriz('TESORERIA', 'vehiculos');
+  ok(m.nivel === 'EDICION', 'otro clic: Editar');
+  await clic(celda('TESORERIA', 'vehiculos'));
+  m = await matriz('TESORERIA', 'vehiculos');
+  ok(m.nivel === 'NINGUNO' && !m.cambiada && m.cuenta === '1 cambio sin guardar', 'y otro vuelve a como estaba: deja de contar (' + m.cuenta + ')');
+  const enviadoMatriz = await p.evaluate(() => new Promise((resolve) => {
+    const original = window.callServer;
+    window.callServer = (fn, ...a) => { if (fn === 'apiPermisosGuardar') { resolve(a[1]); return new Promise(() => {}); } return original(fn, ...a); };
+    document.getElementById('usr-matriz-guardar').click();
+  }));
+  ok(enviadoMatriz.length === 1 && enviadoMatriz[0].quien === 'TI' && enviadoMatriz[0].modulo === 'hologramas' && enviadoMatriz[0].permiso === 'LECTURA',
+    'Guardar manda solo lo que cambió, con el mismo formato que la ventana ' + JSON.stringify(enviadoMatriz));
+
   ok(!errores.length, errores.length ? 'errores: ' + errores.join(' | ') : 'sin errores de JS');
   await nav.close();
   console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');

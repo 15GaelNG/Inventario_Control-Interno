@@ -136,8 +136,12 @@ Sensores, Verificaciones, Cambios…):
   explica sola ("Podrá consultar…", "En Vehículos no podrá editar…"), sin frases por módulo.
   `source-contracts` falla si `Modulos.gs` y el servidor (`referencia: true` / `puedeLeerFamilia`,
   `deOtroModulo`) no dicen lo mismo: un caso nuevo se agrega en los dos.
-- **La ventana "Editar permisos"** (botones por nivel, "Todo el grupo", ↺): después de tocarla,
-  `node tools/vista-previa/probar-permisos.js` la prueba con clics de verdad (necesita Chrome).
+- **La ventana "Editar permisos" y la "Matriz por área"** (botones por nivel, "Todo el grupo", ↺; celdas que
+  se cambian con clic): las dos mandan los mismos cambios a `apiPermisosGuardar`. Después de tocarlas,
+  `node tools/vista-previa/probar-permisos.js` las prueba con clics de verdad (necesita Chrome).
+- **Historial:** `Permisos.guardar` anota cada cambio real en la hoja `PERMISOS_HISTORIAL` (la crea sola):
+  fecha, quién, a quién, módulo, antes y después ('' = sin regla). Un cambio de permisos que no pase por
+  `guardar` (editar la hoja PERMISOS a mano) no queda en el historial.
 - **Un campo que le pertenece a otro módulo** solo lo edita quien tiene EDICIÓN en ese módulo.
   Se declara **en los dos lados**:
   - en la pantalla, `editaModulo` en el campo de `CamposHoja` (sale bloqueado y no se manda);

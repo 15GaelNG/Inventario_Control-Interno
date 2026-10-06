@@ -16,7 +16,7 @@
  *               este: lo que el servidor marca `deOtroModulo` en la hoja de `modulo`. P. ej. la
  *               sección de sensor de la ficha de Vehículos es de Instalación de Sensores.
  *   enFicha     id del módulo en cuya ficha vive como pestaña, cuando no tiene pantalla propia
- *               (Responsiva y Adherente están en la ficha de Vehículos).
+ *               (Responsiva y Adherente están en la ficha de Vehículos); con `icono`, el de su pestaña.
  * `source-contracts` revisa que esto y el servidor digan lo mismo.
  */
 
@@ -29,8 +29,8 @@ const Modulos = (function () {
         { id: 'vehiculos', etiqueta: 'Vehículos', listo: true, referencia: 'el catálogo de vehículos para elegir la unidad' },
         { id: 'cambios-vehiculos', etiqueta: 'Cambios Vehículos' },
         { id: 'reasignaciones-vehiculares', etiqueta: 'Reasignaciones Vehiculares' },
-        { id: 'responsiva-vehicular', etiqueta: 'Responsiva Vehicular', listo: true, enFicha: 'vehiculos' },
-        { id: 'adherente-vehicular', etiqueta: 'Adherente Vehicular', listo: true, enFicha: 'vehiculos' },
+        { id: 'responsiva-vehicular', etiqueta: 'Responsiva Vehicular', listo: true, enFicha: 'vehiculos', icono: 'file-signature' },
+        { id: 'adherente-vehicular', etiqueta: 'Adherente Vehicular', listo: true, enFicha: 'vehiculos', icono: 'users' },
         { id: 'verificaciones', etiqueta: 'Verificaciones', listo: true },
         // Hoja INSPECCION VEHICULAR (290 registros, 195 columnas de checklist) +
         // MODELOS INSPECCION (18 diagramas por tipo de unidad), ver docs/mapeo-modulos.md

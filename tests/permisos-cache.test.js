@@ -25,7 +25,7 @@ const e = crearEntorno({
     },
   },
 });
-e.cargar('src/utils/CacheHojas.gs', 'src/utils/SheetUtils.gs', 'src/config/PermisosSemilla.gs', {
+e.cargar('src/utils/CacheHojas.gs', 'src/utils/SheetUtils.gs', 'src/utils/HojaServicio.gs', 'src/config/PermisosSemilla.gs', {
   nombre: 'falsos.js',
   codigo: `
     var Config = { SPREADSHEET_IDS: { USUARIOS: () => 'usuarios' } };
@@ -77,6 +77,17 @@ ok(filas.some((r) => r[0] === 'ana@x.com' && r[1] === 'uber'), 'lo escrito a man
 ok(filas.some((r) => r[0] === 'LINEAS' && r[1] === 'uber' && r[2] === 'EDICION'), 'y se agregó el cambio');
 e.global('CacheService').getScriptCache().removeAll(['permisos_ANA@X.COM', 'permisos_BETO@X.COM']);
 ok(P.deCorreo('beto@x.com').uber === undefined && P.deCorreo('ana@x.com').uber === 'LECTURA', 'después de guardar, las reglas se vuelven a leer (Beto ya no es de LINEAS)');
+
+console.log('5. Cada cambio guardado queda en PERMISOS_HISTORIAL');
+const hist = e.hojaComoTexto('usuarios', 'PERMISOS_HISTORIAL');
+ok(hist[0].join() === 'FECHA,CORREO,NOMBRE,QUIEN,MODULO,ANTES,DESPUES', 'la hoja se crea sola con sus encabezados');
+ok(hist.length === 2 && hist[1][1] === 'admin@x.com' && hist[1][3] === 'LINEAS' && hist[1][4] === 'uber' && hist[1][5] === '' && hist[1][6] === 'EDICION',
+  'un renglón: quién lo cambió, a quién, el módulo, antes (sin regla) y después ' + JSON.stringify(hist[1]));
+P.guardar('admin@x.com', [{ quien: 'LINEAS', modulo: 'uber', permiso: 'LECTURA' }, { quien: 'LINEAS', modulo: 'tickets', permiso: 'LECTURA' }]);
+const panel = P.panel('admin@x.com');
+ok(e.hojaComoTexto('usuarios', 'PERMISOS_HISTORIAL').length === 3, 'lo que se guarda igual que estaba (tickets) no se anota');
+ok(panel.historial.length === 2 && panel.historial[0].antes === 'EDICION' && panel.historial[0].despues === 'LECTURA' && /^[0-9]{4}-/.test(panel.historial[0].fecha),
+  'el panel lo trae, del más reciente al más viejo y con la fecha como texto');
 
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
 process.exit(fallas ? 1 : 0);
