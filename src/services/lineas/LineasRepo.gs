@@ -620,6 +620,48 @@ const LineasRepo = (function () {
     return ev ? { carpetaId: ev.carpetaId, ruta: ev.ruta, pdfs: ev.pdfs || [], fotosCarpetaId: ev.fotosCarpetaId, fotos: ev.fotos, coincidenciaExacta: ev.coincidenciaExacta } : null;
   }
 
+  /**
+   * Pendiente 2.18 (NUCO 0726, 6-oct): si el PDF ligado a una captura del sistema ya no está en su carpeta de NUCOS (lo
+   * quitaron a mano en Drive y quedó suelto, «Necesitas acceso»), se usa el que sí está en esa carpeta y se vuelve a
+   * ligar: PDFS_JSON de APP_EVIDENCIAS y la columna del PDF de la hoja, si apuntaba al viejo. Cambia `ev.pdfs`.
+   */
+  function revisarPdfsLigados(evidencias) {
+    const revisar = (evidencias || []).filter((e) => e && e.origen === 'SISTEMA' && e.nuco && e.carpetaId && e.pdfs && e.pdfs.length && e.pdfs[0].id);
+    if (!revisar.length) return;
+    let nuevos;
+    try {
+      nuevos = LineasArchivos.pdfsFueraDeCarpeta(revisar.map((e) => ({
+        pdfId: e.pdfs[0].id, carpetaId: e.carpetaId, nombre: e.pdfs[0].nombre, prefijo: e.tipo === 'RESPONSIVA' ? 'RESP' : 'INSP',
+      })));
+    } catch (err) {
+      console.warn('revisarPdfsLigados: ' + err.message);
+      return;
+    }
+    revisar.forEach((ev, i) => {
+      const nuevo = nuevos[i];
+      if (!nuevo) return;
+      const anterior = ev.pdfs[0];
+      ev.pdfs = [nuevo];
+      try {
+        LineasDatos.conCandado(() => {
+          if (ev._fila) LineasDatos.actualizarFila(TAB.APP_EVID, ev._fila, { 'PDFS_JSON': JSON.stringify([nuevo]), 'ACTUALIZADO_EN': new Date() });
+          const tabla = ev.tipo === 'RESPONSIVA' ? TAB.RESP : TAB.INSP;
+          const columna = ev.tipo === 'RESPONSIVA' ? 'FORMATO RESPONSIVA' : 'FORMATO INSPECCIONES LINEAS';
+          const filas = ev.idRegistro ? LineasDatos.buscarFilasPorId(tabla, ev.idRegistro) : [];
+          const f = filas.length ? LineasDatos.leerFilas([{ tabla: tabla, filas: filas.slice(0, 1) }])[0][0] : null;
+          if (f && String(col(f, columna) || '').indexOf(anterior.id) >= 0) {
+            const o = {};
+            o[columna] = 'https://drive.google.com/file/d/' + nuevo.id + '/view';
+            LineasDatos.actualizarFila(tabla, filas[0], o);
+          }
+        });
+        console.log('PDF vuelto a ligar (' + ev.tipo + ' ' + ev.idRegistro + ', NUCO ' + ev.nuco + '): ' + anterior.id + ' → ' + nuevo.id);
+      } catch (err) {
+        console.warn('revisarPdfsLigados ' + ev.idRegistro + ': ' + err.message); // se muestra el bueno aunque no se guarde
+      }
+    });
+  }
+
   /** Inspección (fila de INSPECCIONES LINEAS) en el modelo de la interfaz. */
   function inspeccionDesdeFila(f, ev) {
     const checklist = {};
@@ -712,6 +754,7 @@ const LineasRepo = (function () {
     if (hayApp) peticiones.push({ tabla: TAB.APP_EVID, filas: LineasDatos.buscarFilasVarios(TAB.APP_EVID, 'ID_LINEA', ids) });
     const r = LineasDatos.leerFilas(peticiones);
     const evidencias = hayApp ? r[2].map(evidenciaDesdeFila) : [];
+    revisarPdfsLigados(evidencias);
     const evPorRegistro = {};
     evidencias.forEach((e) => { if (e.idRegistro) evPorRegistro[e.idRegistro] = e; });
     const evDe = (f) => LineasDatos.idsDeFila(f).map((k) => evPorRegistro[k]).filter(Boolean)[0];
@@ -740,6 +783,7 @@ const LineasRepo = (function () {
     const f = LineasDatos.leerFilas([{ tabla: TAB.INSP, filas: filas.slice(0, 1) }])[0][0];
     const filasEv = LineasDatos.existeTabla(TAB.APP_EVID) ? LineasDatos.buscarFilasVarios(TAB.APP_EVID, 'ID_REGISTRO', LineasDatos.idsDeFila(f)) : [];
     const ev = filasEv.length ? evidenciaDesdeFila(LineasDatos.leerFilas([{ tabla: TAB.APP_EVID, filas: filasEv.slice(0, 1) }])[0][0]) : null;
+    if (ev) revisarPdfsLigados([ev]);
     return inspeccionDesdeFila(f, ev);
   }
 
@@ -756,6 +800,7 @@ const LineasRepo = (function () {
     const f = LineasDatos.leerFilas([{ tabla: TAB.RESP, filas: filas.slice(0, 1) }])[0][0];
     const filasEv = LineasDatos.existeTabla(TAB.APP_EVID) ? LineasDatos.buscarFilasVarios(TAB.APP_EVID, 'ID_REGISTRO', LineasDatos.idsDeFila(f)) : [];
     const ev = filasEv.length ? evidenciaDesdeFila(LineasDatos.leerFilas([{ tabla: TAB.APP_EVID, filas: filasEv.slice(0, 1) }])[0][0]) : null;
+    if (ev) revisarPdfsLigados([ev]);
     return responsivaDesdeFila(f, ev);
   }
 
@@ -1388,7 +1433,7 @@ const LineasRepo = (function () {
     indice, refrescarIndice, leerRegistroPorId, leerRegistroObligatorio, idActual, idsDeRegistro,
     guardarCambiosRegistro, agregarRegistro, registrarMovimiento, asegurarPestanaApp,
     evidenciaDesdeFila, inspeccionDesdeFila, inspeccionDesdeEvidencia, responsivaDesdeFila,
-    evidenciasDeRegistro, leerInspeccion, leerResponsiva, historialDeRegistro, asignacionesDeRegistro, movimientoDeCampo, bitacora,
+    evidenciasDeRegistro, leerInspeccion, leerResponsiva, revisarPdfsLigados, historialDeRegistro, asignacionesDeRegistro, movimientoDeCampo, bitacora,
     catalogos, indiceColaboradores, borrarCaches,
   };
 })();

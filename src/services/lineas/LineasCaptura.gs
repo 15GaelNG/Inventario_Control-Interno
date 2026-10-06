@@ -608,7 +608,9 @@ const LineasCaptura = (function () {
     const filasEv = LineasDatos.existeTabla(LineasRepo.TAB.APP_EVID) ? LineasDatos.buscarFilasVarios(LineasRepo.TAB.APP_EVID, 'ID_REGISTRO', ids) : [];
     if (!filasEv.length) return null;
     const ev = LineasRepo.evidenciaDesdeFila(LineasDatos.leerFilas([{ tabla: LineasRepo.TAB.APP_EVID, filas: filasEv.slice(0, 1) }])[0][0]);
-    return ev && ev.origen === 'SISTEMA' ? ev : null;
+    if (!ev || ev.origen !== 'SISTEMA') return null;
+    LineasRepo.revisarPdfsLigados([ev]); // Regenerar: la versión nueva va al PDF que sí está en la carpeta (pendiente 2.18)
+    return ev;
   }
 
   /** Registro para la plantilla: la fila con los formatos que muestra el AppSheet. */
