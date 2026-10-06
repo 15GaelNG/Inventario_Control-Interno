@@ -43,6 +43,30 @@
       "migrable": true
     },
     {
+      "hoja": "RESPONSIVA VEHICULAR",
+      "prefijo": "RSV",
+      "llaveAnterior": "ID",
+      "columnaAnterior": 0,
+      "familia": "vehiculos",
+      "llaveEsDato": false,
+      "delSistemaNuevo": true,
+      "externa": false,
+      "pisaLlaveAnterior": true,
+      "migrable": false
+    },
+    {
+      "hoja": "ADHERENTE VEHICULAR",
+      "prefijo": "ADH",
+      "llaveAnterior": "ID",
+      "columnaAnterior": 0,
+      "familia": "vehiculos",
+      "llaveEsDato": false,
+      "delSistemaNuevo": true,
+      "externa": false,
+      "pisaLlaveAnterior": true,
+      "migrable": false
+    },
+    {
       "hoja": "VERIFICACIONES",
       "prefijo": "VER",
       "llaveAnterior": "ID_VERIFICACION",
@@ -438,6 +462,24 @@
       "padre": "VEHICULOS",
       "llave": {
         "columna": "Folio Vehiculo",
+        "enPadre": "FOLIO"
+      }
+    },
+    {
+      "hoja": "RESPONSIVA VEHICULAR",
+      "columna": "ID VEHICULO",
+      "padre": "VEHICULOS",
+      "llave": {
+        "columna": "FOLIO VEHICULO",
+        "enPadre": "FOLIO"
+      }
+    },
+    {
+      "hoja": "ADHERENTE VEHICULAR",
+      "columna": "ID VEHICULO",
+      "padre": "VEHICULOS",
+      "llave": {
+        "columna": "FOLIO VEHICULO",
         "enPadre": "FOLIO"
       }
     },

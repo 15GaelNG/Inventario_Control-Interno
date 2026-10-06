@@ -413,8 +413,13 @@ test('cada vista es una sola entrada (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU) y todo
     if (e.requiere && !modulos.includes(e.requiere)) problemas.push(quien + 'requiere ' + e.requiere + ', que no está en Modulos.gs');
     if (!fuera.includes(e) && !e.requiere && !e.libre) problemas.push(quien + 'en el menú sin requiere ni libre');
   });
-  // Y al revés: cada módulo de Modulos.gs tiene por dónde entrar
-  modulos.forEach((m) => { if (!entradas.some((e) => e.requiere === m)) problemas.push(m + ': módulo sin vista'); });
+  // Y al revés: cada módulo de Modulos.gs tiene por dónde entrar: su vista, o la ficha de otro
+  // módulo (`enFicha`), que lo pide con deModulo para que sin permiso su pestaña no aparezca
+  const enFicha = Object.fromEntries([...read('src/config/Modulos.gs').matchAll(/{ id: '([^']+)', etiqueta.*enFicha: '([^']+)'/g)].map((m) => [m[1], m[2]]));
+  modulos.forEach((m) => {
+    if (enFicha[m]) { if (!js.includes(`deModulo('${m}'`)) problemas.push(m + ': vive en la ficha de ' + enFicha[m] + ' pero nadie lo pide con deModulo'); }
+    else if (!entradas.some((e) => e.requiere === m)) problemas.push(m + ': módulo sin vista');
+  });
   assert.deepEqual(problemas, []);
 
   // navegarA busca la entrada; no vuelve la cadena de if por vista

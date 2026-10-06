@@ -1145,6 +1145,8 @@ const MAPA = {
     // No son copias del MAPA, pero sí hijas en Entidades.REFERENCIAS: sin nombre aquí, el
     // aviso de "no se puede eliminar" diría "3 registros" en vez de "3 reasignaciones".
     'REASIGNACIONES_VEHICULOS': { modulo: 'Reasignaciones Vehiculares', uno: 'reasignación', varios: 'reasignaciones', familia: 'Vehículos' },
+    'RESPONSIVA VEHICULAR': { modulo: 'Responsiva Vehicular', uno: 'responsiva', varios: 'responsivas', familia: 'Vehículos' },
+    'ADHERENTE VEHICULAR': { modulo: 'Adherente Vehicular', uno: 'adherente', varios: 'adherentes', familia: 'Vehículos' },
     'CAMBIOS VEHICULOS': { modulo: 'Cambios de Vehículos', uno: 'cambio', varios: 'cambios', familia: 'Vehículos' },
     'APP_EVIDENCIAS': { modulo: 'Evidencias de Líneas', uno: 'evidencia', varios: 'evidencias', familia: 'Líneas' },
   };

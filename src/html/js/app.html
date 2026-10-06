@@ -1971,11 +1971,18 @@
    *  Arqueos/Cambios de monto) -- de nivel de módulo, como fichaEnPestanas/pestanaFicha/
    *  tablaFicha, porque ambas fichas la usan. */
   function accionesFichaRegistro(tipo, id, opciones) {
-    const o = Object.assign({ editar: false, eliminar: false }, opciones);
+    const o = Object.assign({ editar: false, eliminar: false, estatus: null }, opciones);
     let html = '<div class="ficha-acciones-fila">' +
       '<button type="button" class="ficha-btn-fila" data-ficha-ver="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Ver completo">' + Iconos.svg('ver') + '</button>';
     if (o.editar) {
       html += '<button type="button" class="ficha-btn-fila" data-ficha-editar="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Editar">' + Iconos.svg('editar') + '</button>';
+    }
+    // estatus: ACTIVO/BAJA de un registro que no se edita pero sí se puede dar de baja/reactivar
+    // con un clic (sin abrir ningún formulario) -- ver cambiarEstatusFicha.
+    if (o.estatus) {
+      const activo = String(o.estatus).toUpperCase() === 'ACTIVO';
+      const destino = activo ? 'BAJA' : 'ACTIVO';
+      html += '<button type="button" class="ficha-btn-fila' + (activo ? ' ficha-peligro' : '') + '" data-ficha-estatus="' + tipo + '" data-id="' + escaparHtml(id) + '" data-estatus-destino="' + destino + '" title="' + (activo ? 'Dar de baja' : 'Reactivar') + '">' + Iconos.svg(activo ? 'darDeBaja' : 'reactivar') + '</button>';
     }
     if (o.eliminar) {
       html += '<button type="button" class="ficha-btn-fila ficha-peligro" data-ficha-eliminar="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Eliminar">' + Iconos.svg('eliminar') + '</button>';
@@ -2386,6 +2393,417 @@
       });
     }
 
+    // ---------- Responsiva Vehicular (formato F-CI01-045), embebida en la ficha ----------
+    // Mismo modal que Verificación/Sensor/Holograma/Incidencia/Inspección
+    // (abrirCapturaVehiculo), con las firmas cableadas igual que Inspección (Firma.crear
+    // directo sobre [data-firma], no el tipo "firma" primitivo de CamposHoja). El folio ya
+    // se sabe -- es el de la ficha abierta -- así que, a diferencia del módulo standalone que
+    // existió antes, aquí no hay selector de Folio/Nucco ni tabla de historial propia (el
+    // historial de cada vehículo ya lo muestra la pestaña Responsiva).
+
+    // El vehículo se entrega con... (mismo orden que la plantilla F-CI01-045)
+    const RESV_ACCESORIOS = [
+      ['GATO HIDRAULICO', 'Gato hidráulico'], ['GATO MECANICO', 'Gato mecánico'],
+      ['LLAVE CRUZ', 'Llave de cruz'], ['MANERAL', 'Maneral'],
+      ['LLANTA REFACCION', 'Llanta de refacción'], ['KIT SEGURIDAD', 'Kit de seguridad'],
+      ['PARASOL', 'Parasol'], ['TAPETES RUDO', 'Tapetes uso rudo'],
+      ['TAPETES ALFOMBRA', 'Tapetes alfombra'], ['CUBRE VOLANTE', 'Cubre volante'],
+      ['CUBRE ASIENTOS', 'Cubre asientos'], ['BED LINER', 'Bed liner'],
+      ['CUBIERTA BATEA', 'Cubierta de batea'],
+    ];
+    function resvCamposDocumentacion_() {
+      return [
+        { paso: 1, clave: 'TARJETA DE CIRCULACION', etiqueta: 'Tarjeta de circulación', tipo: 'text' },
+        { paso: 1, clave: 'LICENCIA', etiqueta: 'Licencia', tipo: 'text' },
+        { paso: 1, clave: 'VIGENCIA LICENCIA', etiqueta: 'Vigencia de licencia', tipo: 'date' },
+        { paso: 1, clave: 'INE', etiqueta: 'INE', tipo: 'text' },
+        { paso: 1, clave: 'NO DE INVENTARIO', etiqueta: 'No. de inventario', tipo: 'text' },
+        { paso: 1, clave: 'POLIZA DE SEGURO', etiqueta: 'Póliza de seguro', tipo: 'text' },
+        { paso: 1, clave: 'VIGENCIA POLIZA', etiqueta: 'Vigencia de póliza', tipo: 'date' },
+      ];
+    }
+    function resvCamposAccesorios_() {
+      const campos = RESV_ACCESORIOS.map(([clave, etiqueta]) => ({
+        paso: 2, clave: clave, etiqueta: etiqueta, tipo: 'sino',
+      }));
+      campos.push({ paso: 2, clave: 'OTROS', etiqueta: 'Otros', tipo: 'text', renglonCompleto: true });
+      return campos;
+    }
+
+    // Un tema a la vez (usuario, 6-oct): mismo lenguaje visual que los pasos de
+    // Formulario.crear (form-pasos/form-paso-chip/form-paso/form-acciones-pasos, de
+    // componentes/formulario.html), pero sin su motor -- los campos aquí vienen de
+    // CamposHoja y las firmas no encajan en el modelo declarativo de Formulario. Sin
+    // candado entre pasos (decisión del usuario): se puede ir y venir libremente.
+    const RESV_PASOS = [
+      { titulo: 'Responsable y vehículo' },
+      { titulo: 'Documentación' },
+      { titulo: 'El vehículo se entrega con' },
+      { titulo: 'Cierre y firmas' },
+    ];
+
+    // ---------- Adherente Vehicular (formato F-CI01-047), gemela de Responsiva Vehicular ----------
+    // Mismo patrón (modal, pasos, firmas en azul, firma automática de "Quien entrega"), sin la
+    // tabla de accesorios (ese formato no la pide) y sin tocar RESPONSABLE VEHICULO: un
+    // adherente se SUMA, no reemplaza al responsable.
+    const ADH_PASOS = [
+      { titulo: 'Adherente y vehículo' },
+      { titulo: 'Documentación' },
+      { titulo: 'Cierre y firmas' },
+    ];
+    function adhCamposDocumentacion_() {
+      return [
+        { paso: 1, clave: 'TARJETA DE CIRCULACION', etiqueta: 'Tarjeta de circulación', tipo: 'text' },
+        { paso: 1, clave: 'LICENCIA', etiqueta: 'Licencia', tipo: 'text' },
+        { paso: 1, clave: 'VIGENCIA LICENCIA', etiqueta: 'Vigencia de licencia', tipo: 'date' },
+        { paso: 1, clave: 'INE', etiqueta: 'INE', tipo: 'text' },
+        { paso: 1, clave: 'NO DE INVENTARIO', etiqueta: 'No. de inventario', tipo: 'text' },
+        { paso: 1, clave: 'POLIZA DE SEGURO', etiqueta: 'Póliza de seguro', tipo: 'text' },
+        { paso: 1, clave: 'VIGENCIA POLIZA', etiqueta: 'Vigencia de póliza', tipo: 'date' },
+      ];
+    }
+
+    function abrirAgregarResponsivaVehicular(vResumen, completo) {
+      const cuerpo = abrirCapturaVehiculo('file-signature', 'RESPONSIVA', 'Nueva responsiva', 'Folio ' + vResumen.FOLIO);
+      const firmas = {};
+
+      const CAMPOS_RESPONSIVA_VEHICULAR = [
+        { paso: 0, clave: 'FECHA', etiqueta: 'Fecha', tipo: 'date' },
+        { paso: 0, clave: 'RESPONSABLE', etiqueta: 'Responsable', tipo: 'select', catalogo: true, requerido: true },
+        { paso: 0, clave: 'NO EMPLEADO', etiqueta: 'No. de empleado', tipo: 'text' },
+        { paso: 0, clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select', catalogo: true },
+        { paso: 0, clave: 'AREA', etiqueta: 'Área', tipo: 'text' },
+        { paso: 0, clave: 'PUESTO', etiqueta: 'Puesto', tipo: 'text' },
+        { paso: 0, clave: 'SEDE', etiqueta: 'Sede', tipo: 'select', catalogo: true },
+        { paso: 0, clave: 'OFICINA / DESARROLLO', etiqueta: 'Oficina / Desarrollo', tipo: 'select', catalogo: true },
+        { paso: 0, clave: 'LUGAR DE RESGUARDO', etiqueta: 'Lugar de resguardo', tipo: 'text' },
+        { paso: 0, clave: 'ESTADO DE ENTREGA', etiqueta: 'Estado en que se entrega', tipo: 'text', placeholder: 'Bien, mal, más o menos…' },
+        ...resvCamposDocumentacion_(),
+        ...resvCamposAccesorios_(),
+        { paso: 3, clave: 'OBSERVACIONES', etiqueta: 'Observaciones', tipo: 'text', renglonCompleto: true },
+        { paso: 3, clave: 'NOMBRE JEFE', etiqueta: 'Nombre del jefe directo', tipo: 'text' },
+        { paso: 3, clave: 'NOMBRE CI', etiqueta: 'Nombre de quien entrega', tipo: 'text' },
+      ];
+
+      cuerpo.innerHTML =
+        '<form id="resv-captura-form" novalidate>' +
+          '<ol class="form-pasos">' + RESV_PASOS.map((p, i) =>
+            '<li><button type="button" class="form-paso-chip" data-ir="' + i + '">' +
+              '<span class="form-paso-num">' + (i + 1) + '</span>' + escaparHtml(p.titulo) + '</button></li>').join('') +
+          '</ol>' +
+          RESV_PASOS.map((p, i) =>
+            '<section class="form-paso" data-paso="' + i + '"' + (i === 0 ? '' : ' hidden') + '>' +
+              '<h3 class="form-paso-titulo" tabindex="-1">' + escaparHtml(p.titulo) + '</h3>' +
+              '<div class="form-rejilla" data-columnas="3" id="resv-campos-' + i + '"></div>' +
+              (i === 3 ? '<div class="resv-firmas" style="grid-column: 1 / -1; margin-top:14px;">' +
+                '<div class="resv-firma"><label class="requerido">Firma del responsable</label><div data-firma="FIRMA RESPONSABLE"></div></div>' +
+                '<div class="resv-firma"><label>Firma del jefe directo</label><div data-firma="FIRMA JEFE"></div></div>' +
+                '<div class="resv-firma"><label>Firma de quien entrega</label><div data-firma="FIRMA CI"></div></div>' +
+              '</div>' : '') +
+            '</section>').join('') +
+          '<div class="error-msg" id="resv-captura-error" role="alert" hidden></div>' +
+          '<div class="form-acciones form-acciones-pasos">' +
+            '<button type="button" class="secondary" id="resv-atras" hidden><i data-lucide="chevron-left" class="ico"></i> Atrás</button>' +
+            '<button type="button" id="resv-siguiente">Siguiente <i data-lucide="chevron-right" class="ico"></i></button>' +
+            '<button type="submit" id="resv-captura-guardar" hidden><i data-lucide="file-signature" class="ico"></i> Registrar responsiva</button>' +
+            '<span class="form-cuenta" id="resv-cuenta"></span>' +
+          '</div>' +
+        '</form>';
+      RESV_PASOS.forEach((p, i) => {
+        document.getElementById('resv-campos-' + i).innerHTML =
+          CamposHoja.html(CAMPOS_RESPONSIVA_VEHICULAR.filter((c) => c.paso === i), { prefijo: 'resv' });
+      });
+      refreshIcons();
+
+      // Navegación de pasos: libre en los dos sentidos, sin validar (el usuario pidió
+      // "un tema a la vez" nada más, no bloquear el avance si falta algo).
+      let resvPasoActual = 0;
+      function resvMostrarPaso(i) {
+        resvPasoActual = i;
+        cuerpo.querySelectorAll('.form-paso').forEach((s) => { s.hidden = Number(s.dataset.paso) !== i; });
+        cuerpo.querySelectorAll('.form-paso-chip').forEach((chip) => {
+          const idx = Number(chip.dataset.ir);
+          chip.classList.toggle('activo', idx === i);
+          chip.classList.toggle('completado', idx < i);
+        });
+        document.getElementById('resv-atras').hidden = i === 0;
+        document.getElementById('resv-siguiente').hidden = i === RESV_PASOS.length - 1;
+        document.getElementById('resv-captura-guardar').hidden = i !== RESV_PASOS.length - 1;
+        document.getElementById('resv-cuenta').textContent = 'Paso ' + (i + 1) + ' de ' + RESV_PASOS.length;
+        const titulo = cuerpo.querySelector('.form-paso[data-paso="' + i + '"] .form-paso-titulo');
+        if (titulo) titulo.focus();
+      }
+      document.getElementById('resv-siguiente').addEventListener('click', () => resvMostrarPaso(Math.min(resvPasoActual + 1, RESV_PASOS.length - 1)));
+      document.getElementById('resv-atras').addEventListener('click', () => resvMostrarPaso(Math.max(resvPasoActual - 1, 0)));
+      cuerpo.querySelectorAll('.form-paso-chip').forEach((chip) => {
+        chip.addEventListener('click', () => resvMostrarPaso(Number(chip.dataset.ir)));
+      });
+      resvMostrarPaso(0);
+
+      document.getElementById('resv-fecha').value = hoyISO();
+      // Responsable (y lo que de él depende) se deja en blanco a propósito: esta responsiva
+      // puede ser para una persona distinta a la que el vehículo tiene hoy, y precargar al
+      // actual invitaba a dejarlo sin cambiar por descuido. "Quien entrega" sí es un dato
+      // que el sistema ya sabe -- quien tiene la sesión abierta -- así que ese sí se autollena
+      // (se puede corregir si lo firma otra persona).
+      if (state.sesion && state.sesion.nombre) CampoAuto.llenar(document.getElementById('resv-nombre-ci'), state.sesion.nombre);
+
+      cuerpo.querySelectorAll('[data-firma]').forEach((el) => {
+        firmas[el.dataset.firma] = Firma.crear(el, { marca: 'Firma aquí con el dedo o el mouse' });
+      });
+
+      // Firma automática de "Quien entrega": si el nombre coincide con alguien que ya tiene
+      // una firma guardada (datos-firmas-automaticas.html), se precarga como foto en vez de
+      // pedirle que la dibuje cada vez -- nunca encima de una firma que ya puso a mano.
+      const campoNombreCi = document.getElementById('resv-nombre-ci');
+      function aplicarFirmaAutomatica() {
+        const firmaCi = firmas['FIRMA CI'];
+        if (!firmaCi || !firmaCi.vacia()) return;
+        const lista = typeof FIRMAS_AUTOMATICAS !== 'undefined' ? FIRMAS_AUTOMATICAS : {};
+        const guardada = lista[campoNombreCi.value.trim().toUpperCase()];
+        if (guardada) firmaCi.cargarFoto(guardada.base64, guardada.mimeType);
+      }
+      campoNombreCi.addEventListener('input', aplicarFirmaAutomatica);
+      aplicarFirmaAutomatica();
+
+      callServerCacheado('apiListarDepartamentos', state.token).then((departamentos) => {
+        CamposHoja.llenarOpciones('resv-departamento', departamentos);
+      }).catch((err) => console.error('No se pudo cargar el catálogo de departamentos:', err));
+
+      callServerCacheado('apiListarColaboradores', state.token).then((colaboradores) => {
+        const lista = colaboradores || [];
+        CamposHoja.llenarOpciones('resv-responsable', Array.from(new Set(lista.map((c) => c.NOMBRE))));
+        // "Quien entrega" con el nombre de COLABORADORES ACTUALIZADO (el mismo que usa
+        // Responsable/Departamento/etc.), cruzando por correo -- USUARIOS.NOMBRE (puesto
+        // antes de que cargara esta lista) se queda solo si el correo no aparece en CH.
+        const correoSesion = String((state.sesion && state.sesion.correo) || '').trim().toLowerCase();
+        const porCorreo = correoSesion && lista.find((c) => c.CORREO.toLowerCase() === correoSesion);
+        if (porCorreo) { CampoAuto.llenar(campoNombreCi, porCorreo.NOMBRE); aplicarFirmaAutomatica(); }
+        const porNombre = {};
+        lista.forEach((c) => { if (!porNombre[c.NOMBRE.toUpperCase()]) porNombre[c.NOMBRE.toUpperCase()] = c; });
+        document.getElementById('resv-responsable').addEventListener('input', (ev) => {
+          const colaborador = porNombre[ev.target.value.trim().toUpperCase()];
+          const noEmpleado = document.getElementById('resv-no-empleado');
+          const depto = document.getElementById('resv-departamento');
+          const area = document.getElementById('resv-area');
+          const puesto = document.getElementById('resv-puesto');
+          const sede = document.getElementById('resv-sede');
+          const oficina = document.getElementById('resv-oficina-desarrollo');
+          const nombreJefe = document.getElementById('resv-nombre-jefe');
+          if (!colaborador) { [noEmpleado, depto, area, puesto, sede, oficina, nombreJefe].forEach((el) => el && CampoAuto.quitar(el)); return; }
+          if (colaborador.NO_EMPLEADO) CampoAuto.llenar(noEmpleado, colaborador.NO_EMPLEADO);
+          if (colaborador.DEPARTAMENTO) CampoAuto.llenar(depto, colaborador.DEPARTAMENTO);
+          if (colaborador.AREA) CampoAuto.llenar(area, colaborador.AREA);
+          if (colaborador.PUESTO) CampoAuto.llenar(puesto, colaborador.PUESTO);
+          if (colaborador.SEDE) CampoAuto.llenar(sede, colaborador.SEDE);
+          if (colaborador.OFICINA) CampoAuto.llenar(oficina, colaborador.OFICINA);
+          if (colaborador.JEFE_DIRECTO) CampoAuto.llenar(nombreJefe, colaborador.JEFE_DIRECTO);
+        });
+      }).catch((err) => console.error('No se pudo cargar el catálogo de colaboradores:', err));
+
+      document.getElementById('resv-captura-form').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const errorBox = document.getElementById('resv-captura-error');
+        errorBox.hidden = true;
+
+        if (firmas['FIRMA RESPONSABLE'].vacia()) {
+          errorBox.textContent = 'Falta la firma del responsable';
+          errorBox.hidden = false;
+          cuerpo.querySelector('[data-firma="FIRMA RESPONSABLE"]').scrollIntoView({ block: 'center', behavior: 'smooth' });
+          return;
+        }
+
+        const btn = document.getElementById('resv-captura-guardar');
+        const textoOriginal = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Guardando…';
+        toastCargando('Registrando…');
+        try {
+          const imagenes = {};
+          Object.keys(firmas).forEach((campo) => {
+            const firma = firmas[campo].exportar();
+            if (firma) imagenes[campo] = firma;
+          });
+          const datos = Object.assign({ 'FOLIO VEHICULO': vResumen.FOLIO }, CamposHoja.recolectar(CAMPOS_RESPONSIVA_VEHICULAR, 'resv'));
+          const res = await callServer('apiCrearResponsivaVehicular', state.token, datos, imagenes);
+          if (res.aviso) Notificar.error(res.aviso);
+          toastExito('Responsiva registrada exitosamente');
+          cerrarCapturaVehiculo();
+          abrirFichaVehiculo(vResumen, 'responsiva');
+        } catch (err) {
+          errorBox.textContent = err.message;
+          errorBox.hidden = false;
+          toastError('No se pudo registrar: ' + err.message);
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = textoOriginal;
+        }
+      });
+    }
+
+    function abrirAgregarAdherenteVehicular(vResumen, completo) {
+      const cuerpo = abrirCapturaVehiculo('file-signature', 'ADHERENTE', 'Nuevo adherente', 'Folio ' + vResumen.FOLIO);
+      const firmas = {};
+
+      const CAMPOS_ADHERENTE_VEHICULAR = [
+        { paso: 0, clave: 'FECHA', etiqueta: 'Fecha', tipo: 'date' },
+        { paso: 0, clave: 'ADHERENTE', etiqueta: 'Adherente', tipo: 'select', catalogo: true, requerido: true },
+        { paso: 0, clave: 'NO EMPLEADO', etiqueta: 'No. de empleado', tipo: 'text' },
+        { paso: 0, clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select', catalogo: true },
+        { paso: 0, clave: 'AREA', etiqueta: 'Área', tipo: 'text' },
+        { paso: 0, clave: 'PUESTO', etiqueta: 'Puesto', tipo: 'text' },
+        { paso: 0, clave: 'SEDE', etiqueta: 'Sede', tipo: 'select', catalogo: true },
+        { paso: 0, clave: 'OFICINA / DESARROLLO', etiqueta: 'Oficina / Desarrollo', tipo: 'select', catalogo: true },
+        { paso: 0, clave: 'LUGAR DE RESGUARDO', etiqueta: 'Lugar de resguardo', tipo: 'text' },
+        { paso: 0, clave: 'ESTADO DE ENTREGA', etiqueta: 'Estado en que se entrega', tipo: 'text', placeholder: 'Bien, mal, más o menos…' },
+        ...adhCamposDocumentacion_(),
+        { paso: 2, clave: 'NOMBRE JEFE', etiqueta: 'Nombre del jefe directo', tipo: 'text' },
+        { paso: 2, clave: 'NOMBRE CI', etiqueta: 'Nombre de quien entrega', tipo: 'text' },
+      ];
+
+      cuerpo.innerHTML =
+        '<form id="adh-captura-form" novalidate>' +
+          '<ol class="form-pasos">' + ADH_PASOS.map((p, i) =>
+            '<li><button type="button" class="form-paso-chip" data-ir="' + i + '">' +
+              '<span class="form-paso-num">' + (i + 1) + '</span>' + escaparHtml(p.titulo) + '</button></li>').join('') +
+          '</ol>' +
+          ADH_PASOS.map((p, i) =>
+            '<section class="form-paso" data-paso="' + i + '"' + (i === 0 ? '' : ' hidden') + '>' +
+              '<h3 class="form-paso-titulo" tabindex="-1">' + escaparHtml(p.titulo) + '</h3>' +
+              '<div class="form-rejilla" data-columnas="3" id="adh-campos-' + i + '"></div>' +
+              (i === 2 ? '<div class="resv-firmas" style="grid-column: 1 / -1; margin-top:14px;">' +
+                '<div class="resv-firma"><label class="requerido">Firma del adherente</label><div data-firma="FIRMA ADHERENTE"></div></div>' +
+                '<div class="resv-firma"><label>Firma del jefe directo</label><div data-firma="FIRMA JEFE"></div></div>' +
+                '<div class="resv-firma"><label>Firma de quien entrega</label><div data-firma="FIRMA CI"></div></div>' +
+              '</div>' : '') +
+            '</section>').join('') +
+          '<div class="error-msg" id="adh-captura-error" role="alert" hidden></div>' +
+          '<div class="form-acciones form-acciones-pasos">' +
+            '<button type="button" class="secondary" id="adh-atras" hidden><i data-lucide="chevron-left" class="ico"></i> Atrás</button>' +
+            '<button type="button" id="adh-siguiente">Siguiente <i data-lucide="chevron-right" class="ico"></i></button>' +
+            '<button type="submit" id="adh-captura-guardar" hidden><i data-lucide="file-signature" class="ico"></i> Registrar adherente</button>' +
+            '<span class="form-cuenta" id="adh-cuenta"></span>' +
+          '</div>' +
+        '</form>';
+      ADH_PASOS.forEach((p, i) => {
+        document.getElementById('adh-campos-' + i).innerHTML =
+          CamposHoja.html(CAMPOS_ADHERENTE_VEHICULAR.filter((c) => c.paso === i), { prefijo: 'adh' });
+      });
+      refreshIcons();
+
+      let adhPasoActual = 0;
+      function adhMostrarPaso(i) {
+        adhPasoActual = i;
+        cuerpo.querySelectorAll('.form-paso').forEach((s) => { s.hidden = Number(s.dataset.paso) !== i; });
+        cuerpo.querySelectorAll('.form-paso-chip').forEach((chip) => {
+          const idx = Number(chip.dataset.ir);
+          chip.classList.toggle('activo', idx === i);
+          chip.classList.toggle('completado', idx < i);
+        });
+        document.getElementById('adh-atras').hidden = i === 0;
+        document.getElementById('adh-siguiente').hidden = i === ADH_PASOS.length - 1;
+        document.getElementById('adh-captura-guardar').hidden = i !== ADH_PASOS.length - 1;
+        document.getElementById('adh-cuenta').textContent = 'Paso ' + (i + 1) + ' de ' + ADH_PASOS.length;
+        const titulo = cuerpo.querySelector('.form-paso[data-paso="' + i + '"] .form-paso-titulo');
+        if (titulo) titulo.focus();
+      }
+      document.getElementById('adh-siguiente').addEventListener('click', () => adhMostrarPaso(Math.min(adhPasoActual + 1, ADH_PASOS.length - 1)));
+      document.getElementById('adh-atras').addEventListener('click', () => adhMostrarPaso(Math.max(adhPasoActual - 1, 0)));
+      cuerpo.querySelectorAll('.form-paso-chip').forEach((chip) => {
+        chip.addEventListener('click', () => adhMostrarPaso(Number(chip.dataset.ir)));
+      });
+      adhMostrarPaso(0);
+
+      document.getElementById('adh-fecha').value = hoyISO();
+      if (state.sesion && state.sesion.nombre) CampoAuto.llenar(document.getElementById('adh-nombre-ci'), state.sesion.nombre);
+
+      cuerpo.querySelectorAll('[data-firma]').forEach((el) => {
+        firmas[el.dataset.firma] = Firma.crear(el, { marca: 'Firma aquí con el dedo o el mouse' });
+      });
+
+      const campoNombreCiAdh = document.getElementById('adh-nombre-ci');
+      function adhAplicarFirmaAutomatica() {
+        const firmaCi = firmas['FIRMA CI'];
+        if (!firmaCi || !firmaCi.vacia()) return;
+        const lista = typeof FIRMAS_AUTOMATICAS !== 'undefined' ? FIRMAS_AUTOMATICAS : {};
+        const guardada = lista[campoNombreCiAdh.value.trim().toUpperCase()];
+        if (guardada) firmaCi.cargarFoto(guardada.base64, guardada.mimeType);
+      }
+      campoNombreCiAdh.addEventListener('input', adhAplicarFirmaAutomatica);
+      adhAplicarFirmaAutomatica();
+
+      callServerCacheado('apiListarDepartamentos', state.token).then((departamentos) => {
+        CamposHoja.llenarOpciones('adh-departamento', departamentos);
+      }).catch((err) => console.error('No se pudo cargar el catálogo de departamentos:', err));
+
+      callServerCacheado('apiListarColaboradores', state.token).then((colaboradores) => {
+        const lista = colaboradores || [];
+        CamposHoja.llenarOpciones('adh-adherente', Array.from(new Set(lista.map((c) => c.NOMBRE))));
+        const correoSesion = String((state.sesion && state.sesion.correo) || '').trim().toLowerCase();
+        const porCorreo = correoSesion && lista.find((c) => c.CORREO.toLowerCase() === correoSesion);
+        if (porCorreo) { CampoAuto.llenar(campoNombreCiAdh, porCorreo.NOMBRE); adhAplicarFirmaAutomatica(); }
+        const porNombre = {};
+        lista.forEach((c) => { if (!porNombre[c.NOMBRE.toUpperCase()]) porNombre[c.NOMBRE.toUpperCase()] = c; });
+        document.getElementById('adh-adherente').addEventListener('input', (ev) => {
+          const colaborador = porNombre[ev.target.value.trim().toUpperCase()];
+          const noEmpleado = document.getElementById('adh-no-empleado');
+          const depto = document.getElementById('adh-departamento');
+          const area = document.getElementById('adh-area');
+          const puesto = document.getElementById('adh-puesto');
+          const sede = document.getElementById('adh-sede');
+          const oficina = document.getElementById('adh-oficina-desarrollo');
+          const nombreJefe = document.getElementById('adh-nombre-jefe');
+          if (!colaborador) { [noEmpleado, depto, area, puesto, sede, oficina, nombreJefe].forEach((el) => el && CampoAuto.quitar(el)); return; }
+          if (colaborador.NO_EMPLEADO) CampoAuto.llenar(noEmpleado, colaborador.NO_EMPLEADO);
+          if (colaborador.DEPARTAMENTO) CampoAuto.llenar(depto, colaborador.DEPARTAMENTO);
+          if (colaborador.AREA) CampoAuto.llenar(area, colaborador.AREA);
+          if (colaborador.PUESTO) CampoAuto.llenar(puesto, colaborador.PUESTO);
+          if (colaborador.SEDE) CampoAuto.llenar(sede, colaborador.SEDE);
+          if (colaborador.OFICINA) CampoAuto.llenar(oficina, colaborador.OFICINA);
+          if (colaborador.JEFE_DIRECTO) CampoAuto.llenar(nombreJefe, colaborador.JEFE_DIRECTO);
+        });
+      }).catch((err) => console.error('No se pudo cargar el catálogo de colaboradores:', err));
+
+      document.getElementById('adh-captura-form').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const errorBox = document.getElementById('adh-captura-error');
+        errorBox.hidden = true;
+
+        if (firmas['FIRMA ADHERENTE'].vacia()) {
+          errorBox.textContent = 'Falta la firma del adherente';
+          errorBox.hidden = false;
+          cuerpo.querySelector('[data-firma="FIRMA ADHERENTE"]').scrollIntoView({ block: 'center', behavior: 'smooth' });
+          return;
+        }
+
+        const btn = document.getElementById('adh-captura-guardar');
+        const textoOriginal = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Guardando…';
+        toastCargando('Registrando…');
+        try {
+          const imagenes = {};
+          Object.keys(firmas).forEach((campo) => {
+            const firma = firmas[campo].exportar();
+            if (firma) imagenes[campo] = firma;
+          });
+          const datos = Object.assign({ 'FOLIO VEHICULO': vResumen.FOLIO }, CamposHoja.recolectar(CAMPOS_ADHERENTE_VEHICULAR, 'adh'));
+          const res = await callServer('apiCrearAdherenteVehicular', state.token, datos, imagenes);
+          if (res.aviso) Notificar.error(res.aviso);
+          toastExito('Adherente registrado exitosamente');
+          cerrarCapturaVehiculo();
+          abrirFichaVehiculo(vResumen, 'adherente');
+        } catch (err) {
+          errorBox.textContent = err.message;
+          errorBox.hidden = false;
+          toastError('No se pudo registrar: ' + err.message);
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = textoOriginal;
+        }
+      });
+    }
+
     function mostrarPestanaFichaVehiculo(nombre) {
       mostrarPestanaFicha(document.getElementById('veh-detalle'), nombre);
     }
@@ -2400,6 +2818,11 @@
       sensor: { api: 'apiBuscarSensorPorId', titulo: 'Sensor' },
       holograma: { api: 'apiBuscarHologramaPorId', titulo: 'Holograma' },
       incidencia: { api: 'apiBuscarIncidenciaPorId', titulo: 'Incidencia' },
+      // json: true -- esta respuesta viaja como texto (JSON.stringify en ClientApi.gs), no
+      // como objeto directo: tiene 47+ columnas y google.script.run pierde objetos grandes
+      // de forma intermitente si no viajan como texto (mismo motivo que las listas grandes).
+      responsiva: { api: 'apiBuscarResponsivaVehicularPorId', titulo: 'Responsiva', json: true },
+      adherente: { api: 'apiBuscarAdherenteVehicularPorId', titulo: 'Adherente', json: true },
     };
     async function verRegistroFicha(tipo, id) {
       const cfg = API_VER_FICHA_REGISTRO[tipo];
@@ -2410,9 +2833,10 @@
       cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
       document.getElementById('veh-modal-ver-registro').hidden = false;
       try {
-        const registro = await callServer(cfg.api, state.token, id);
+        const resultado = await callServer(cfg.api, state.token, id);
         if (document.getElementById('veh-modal-ver-registro').hidden) return; // se cerró mientras cargaba
-        if (!registro) { cuerpo.innerHTML = '<p class="empty-state">No se encontró el registro.</p>'; return; }
+        const registro = cfg.json ? JSON.parse(resultado || 'null') : resultado;
+        if (!registro) { cuerpo.innerHTML = '<p class="empty-state">No se encontró el registro (ID ' + escaparHtml(id) + ').</p>'; return; }
         const items = Object.keys(registro)
           .filter((k) => registro[k] !== '' && registro[k] !== null && registro[k] !== undefined)
           .map((k) => itemInfo(tituloDesdeClave(k), registro[k]));
@@ -2428,7 +2852,7 @@
 
     const TAB_FICHA_POR_TIPO = {
       verificacion: 'verificaciones', inspeccion: 'inspecciones', sensor: 'sensor',
-      holograma: 'hologramas', incidencia: 'incidencias',
+      holograma: 'hologramas', incidencia: 'incidencias', responsiva: 'responsiva', adherente: 'adherente',
     };
     // multiple: true → la API pide un arreglo de IDs (aunque aquí siempre se manda uno solo)
     const API_ELIMINAR_FICHA_REGISTRO = {
@@ -2436,6 +2860,8 @@
       sensor: { api: 'apiEliminarSensores', lista: 'apiListarSensores', multiple: true },
       holograma: { api: 'apiEliminarHologramas', lista: 'apiListarHologramas', multiple: true },
       incidencia: { api: 'apiEliminarIncidencia', lista: 'apiListarIncidencias', multiple: false },
+      responsiva: { api: 'apiEliminarResponsivaVehicular', multiple: false },
+      adherente: { api: 'apiEliminarAdherenteVehicular', multiple: false },
     };
     async function eliminarRegistroFicha(tipo, id, vResumen) {
       const cfg = API_ELIMINAR_FICHA_REGISTRO[tipo];
@@ -2455,6 +2881,23 @@
         abrirFichaVehiculo(vResumen, TAB_FICHA_POR_TIPO[tipo]);
       } catch (err) {
         toastError('No se pudo eliminar: ' + err.message);
+      }
+    }
+
+    // ACTIVO/BAJA con un clic, sin confirmación (es reversible: volver a dar clic regresa al
+    // estatus anterior) -- a diferencia de eliminar, que sí pide confirmar por ser permanente.
+    const API_ESTATUS_FICHA_REGISTRO = {
+      adherente: { api: 'apiCambiarEstatusAdherenteVehicular' },
+    };
+    async function cambiarEstatusFicha(tipo, id, estatus, vResumen) {
+      const cfg = API_ESTATUS_FICHA_REGISTRO[tipo];
+      if (!cfg) return;
+      try {
+        await callServer(cfg.api, state.token, id, estatus);
+        toastExito(estatus === 'BAJA' ? 'Dado de baja' : 'Reactivado');
+        abrirFichaVehiculo(vResumen, TAB_FICHA_POR_TIPO[tipo]);
+      } catch (err) {
+        toastError('No se pudo actualizar: ' + err.message);
       }
     }
 
@@ -2639,7 +3082,7 @@
         // ese módulo, igual que en el menú. Así una pestaña sin permiso no truena la ficha ni
         // sale vacía como si el vehículo no tuviera nada. Si una que sí puede ver falla por
         // otra cosa, esa sale vacía y las demás siguen.
-        const [completo, cambiosTexto, reasignaciones, verifTexto, inspTexto, sensorTexto, holoTexto, incTexto] = await Promise.all([
+        const [completo, cambiosTexto, reasignaciones, verifTexto, inspTexto, sensorTexto, holoTexto, incTexto, respTexto, adhTexto] = await Promise.all([
           callServer('apiBuscarVehiculoPorFolio', state.token, vResumen.FOLIO),
           deModulo('cambios-vehiculos', () => callServer('apiListarCambiosVehiculosPorFolio', state.token, vResumen.FOLIO), '[]'),
           deModulo('reasignaciones-vehiculares', () => callServer('apiListarReasignacionesVehicularesPorFolio', state.token, vResumen.FOLIO), []),
@@ -2648,6 +3091,8 @@
           deModulo('instalacion-sensores', () => callServer('apiSensoresPorFolio', state.token, vResumen.FOLIO), '[]'),
           deModulo('hologramas', () => callServer('apiHologramasPorFolio', state.token, vResumen.FOLIO), '[]'),
           deModulo('incidencias', () => callServer('apiIncidenciasPorFolio', state.token, vResumen.FOLIO), '[]'),
+          deModulo('responsiva-vehicular', () => callServer('apiListarResponsivasVehicularesPorFolio', state.token, vResumen.FOLIO), '[]'),
+          deModulo('adherente-vehicular', () => callServer('apiListarAdherentesVehicularesPorFolio', state.token, vResumen.FOLIO), '[]'),
         ]);
         // Estas regresan JSON.stringify — ver la nota en ClientApi.gs
         // (google.script.run pierde arreglos grandes de forma intermitente;
@@ -2659,6 +3104,8 @@
         const sensores = lista(sensorTexto);
         const hologramas = lista(holoTexto);
         const incidencias = lista(incTexto);
+        const responsivas = lista(respTexto);
+        const adherentes = lista(adhTexto);
         // Se pudo haber vuelto a la lista (o abierto otro folio) mientras cargaba.
         if (detalle.hidden || !document.body.contains(detalle)) return;
         if (!completo) {
@@ -2668,6 +3115,11 @@
         }
 
         const estilo = CLASE_ESTILO[String(completo['CLASE'] || '').toUpperCase()] || { icono: 'circle', color: 'var(--color-text-muted)' };
+        const adherentesActivos = (adherentes || []).filter((r) => (r.ESTATUS || 'ACTIVO') === 'ACTIVO').length;
+        const chipAdherentes = adherentesActivos
+          ? '<span class="badge-estado pendiente"><i data-lucide="users" class="ico"></i> ' +
+            adherentesActivos + (adherentesActivos === 1 ? ' adherente' : ' adherentes') + '</span>'
+          : '';
         const resumenRapido = [
           ['Marca / Línea', [completo['MARCA'], completo['LINEA VEHICULO']].filter(Boolean).join(' · ')],
           ['Departamento', completo['DEPARTAMENTO']],
@@ -2679,7 +3131,7 @@
         html += '<div class="ln-detalle-header card">' +
           '<div class="ln-detalle-icono" style="background:none; color:' + estilo.color + '"><i data-lucide="' + estilo.icono + '" class="ico ln-icon"></i></div>' +
           '<div class="ln-detalle-titulo"><h2>Nucco: ' + escaparHtml(vResumen.NUCCO || '') + '</h2>' +
-          '<div class="ln-chips">' + badgeEstatus(completo['ESTATUS']) + '</div></div>' +
+          '<div class="ln-chips">' + badgeEstatus(completo['ESTATUS']) + chipAdherentes + '</div></div>' +
           '<div class="ln-detalle-botones">' +
           (puedeEditar ? '<button type="button" id="veh-btn-editar-ficha"><i data-lucide="pencil" class="ico"></i> Editar</button>' : '') +
           '</div>' +
@@ -2789,6 +3241,30 @@
             ], incidencias, 'Sin incidencias registradas para este vehículo.',
             puedeEditarModulo('incidencias') ? { tipo: 'incidencia', texto: 'Agregar' } : null),
           },
+          responsivas && {
+            id: 'responsiva', titulo: 'Responsiva', icono: 'file-signature', num: responsivas.length,
+            contenido: pestanaFicha('file-signature', 'Responsiva', [
+              { t: 'Fecha', r: (r) => formatearFecha(r.FECHA) },
+              { t: 'Responsable', r: (r) => escaparHtml(r.RESPONSABLE || '—') },
+              { t: 'Departamento', r: (r) => escaparHtml(r.DEPARTAMENTO || '—') },
+              { t: 'PDF', r: (r) => (r.PDF ? '<a href="' + escaparHtml(r.PDF) + '" target="_blank" rel="noopener" class="secondary" style="text-decoration:none">Ver</a>' : '—') },
+              { t: '', r: (r) => accionesFichaRegistro('responsiva', r.ID, { eliminar: puedeEditarModulo('responsiva-vehicular') }) },
+            ], responsivas, 'Sin responsivas registradas para este vehículo.',
+            puedeEditarModulo('responsiva-vehicular') ? { tipo: 'responsiva', texto: 'Generar nueva responsiva' } : null),
+          },
+          adherentes && {
+            id: 'adherente', titulo: 'Adherentes', icono: 'users',
+            num: adherentes.filter((r) => (r.ESTATUS || 'ACTIVO') === 'ACTIVO').length,
+            contenido: pestanaFicha('users', 'Adherentes', [
+              { t: 'Fecha', r: (r) => formatearFecha(r.FECHA) },
+              { t: 'Adherente', r: (r) => escaparHtml(r.ADHERENTE || '—') },
+              { t: 'Departamento', r: (r) => escaparHtml(r.DEPARTAMENTO || '—') },
+              { t: 'Estatus', r: (r) => '<span class="badge-estado ' + ((r.ESTATUS || 'ACTIVO') === 'ACTIVO' ? 'activo' : 'baja') + '">' + (r.ESTATUS || 'ACTIVO') + '</span>' },
+              { t: 'PDF', r: (r) => (r.PDF ? '<a href="' + escaparHtml(r.PDF) + '" target="_blank" rel="noopener" class="secondary" style="text-decoration:none">Ver</a>' : '—') },
+              { t: '', r: (r) => accionesFichaRegistro('adherente', r.ID, { estatus: r.ESTATUS || 'ACTIVO', eliminar: puedeEditarModulo('adherente-vehicular') }) },
+            ], adherentes, 'Sin adherentes registrados para este vehículo.',
+            puedeEditarModulo('adherente-vehicular') ? { tipo: 'adherente', texto: 'Generar nuevo adherente' } : null),
+          },
         ].filter(Boolean));
 
         detalle.innerHTML = html;
@@ -2804,6 +3280,8 @@
             else if (tipo === 'holograma') abrirAgregarHolograma(vResumen, completo);
             else if (tipo === 'incidencia') abrirAgregarIncidencia(vResumen, completo);
             else if (tipo === 'inspeccion') abrirAgregarInspeccion(vResumen, completo, hologramas || []);
+            else if (tipo === 'responsiva') abrirAgregarResponsivaVehicular(vResumen, completo);
+            else if (tipo === 'adherente') abrirAgregarAdherenteVehicular(vResumen, completo);
           });
         });
         // Ver completo/Editar/Eliminar por fila: el registro completo (para Editar) ya
@@ -2832,6 +3310,9 @@
         });
         detalle.querySelectorAll('[data-ficha-eliminar]').forEach((btn) => {
           btn.addEventListener('click', () => eliminarRegistroFicha(btn.dataset.fichaEliminar, btn.dataset.id, vResumen));
+        });
+        detalle.querySelectorAll('[data-ficha-estatus]').forEach((btn) => {
+          btn.addEventListener('click', () => cambiarEstatusFicha(btn.dataset.fichaEstatus, btn.dataset.id, btn.dataset.estatusDestino, vResumen));
         });
         refreshIcons();
       } catch (err) {

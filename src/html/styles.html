@@ -393,6 +393,24 @@
   }
   .field { margin-bottom: 14px; }
 
+  /* Campo "sino" de CamposHoja: etiqueta a la izquierda, dos botones (Sí / No) a la
+     derecha en vez de un <select> -- para checklists largos (p. ej. "El vehículo se
+     entrega con" de Responsiva Vehicular), donde elegir con un toque es más rápido que
+     abrir un desplegable renglón por renglón. */
+  .field-sino { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .field-sino label { margin: 0; }
+  .sino-toggle {
+    display: flex; flex: 0 0 auto; border: 1px solid var(--color-border);
+    border-radius: 8px; overflow: hidden;
+  }
+  .sino-btn {
+    background: #fff; color: var(--color-text-muted); border: none; border-radius: 0;
+    padding: 7px 18px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .sino-btn + .sino-btn { border-left: 1px solid var(--color-border); }
+  .sino-btn:hover { background: var(--color-bg); color: var(--color-text); }
+  .sino-btn.activo { background: var(--color-accent-soft); color: var(--color-accent-hover); }
+
   /* Rejilla de campos de un formulario (CamposHoja o escrito a mano):
        <div class="form-rejilla" data-columnas="3"> …<div class="field">…</div>… </div>
      data-columnas = columnas en escritorio (2 o 3; sin él, 2). En tableta caben como mucho 2 y
