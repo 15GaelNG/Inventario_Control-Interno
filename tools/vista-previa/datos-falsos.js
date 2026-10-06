@@ -16,7 +16,10 @@
     ['uber', 'Uber', 'car-taxi-front', [['uber', 'Uber'], ['tickets', 'Tickets']]],
     ['administracion', 'Administración', 'settings', [['usuarios', 'Usuarios y permisos'], ['relaciones', 'Datos conectados'], ['salud', 'Salud']]],
   ];
-  const grupos = MODULOS.map(([id, etiqueta, icono, mods]) => ({ id, etiqueta, icono, modulos: mods.map(([i, e]) => ({ id: i, etiqueta: e })) }));
+  // Los de Modulos.gs (construir.js los pone en window.__GRUPOS), solo de los grupos que tienen escenas
+  const conEscenas = MODULOS.map((g) => g[0]);
+  const grupos = (window.__GRUPOS || []).filter((g) => conEscenas.indexOf(g.id) !== -1)
+    .map((g) => Object.assign({}, g, { modulos: g.modulos.map((m) => ({ id: m.id, etiqueta: m.etiqueta, referencia: m.referencia || '', editaEn: m.editaEn || [] })) }));
   const permisos = {};
   grupos.forEach((g) => g.modulos.forEach((m) => { permisos[m.id] = 'EDICION'; }));
 
@@ -423,6 +426,11 @@
     'sistemas': () => abrir('sistemas-vehiculos'),
     'usuarios': async () => { await abrir('usuarios'); await hasta('.dt tbody tr[data-id]'); },
     'usuarios-ficha': async () => { await abrir('usuarios'); await abrirPrimeraFila(); },
+    'usuarios-editar-permisos': async () => {
+      await abrir('usuarios'); await abrirPrimeraFila();
+      (await hasta('[data-usr-editar]')).click();
+      await esperar(400);
+    },
     // ---- Formularios de alta (rejilla de campos .form-rejilla y componente Formulario) ----
     'vehiculos-registrar': () => abrir('vehiculos', 'registrar'),
     'incidencias-registrar': () => abrir('incidencias', 'registrar'),

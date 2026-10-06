@@ -1932,7 +1932,6 @@ test('responsivo: solo los cortes del sistema (640 / 1024) y matchMedia solo en 
     'src/html/js/lineas.html': { cortes: 0, matchMedia: 2 },
     'src/html/lineas-estilos.html': { cortes: 17, matchMedia: 0 },
     'src/html/views/relaciones.html': { cortes: 1, matchMedia: 0 },
-    'src/html/views/usuarios.html': { cortes: 1, matchMedia: 0 },
   };
   const encontrado = {};
   filesBelow(path.join(root, 'src')).filter((f) => f.endsWith('.html')).forEach((file) => {
@@ -2124,4 +2123,32 @@ test('las fichas piden lo de otro módulo solo si la persona lo puede ver (deMod
       .filter((l) => !f.propias.some((api) => l.includes("'" + api + "'")));
     assert.deepEqual(sueltas, [], f.funcion + ': lo de otro módulo va con deModulo(modulo, …)');
   });
+});
+
+test('lo que el catálogo de módulos dice que implica un permiso es lo que hace el servidor', () => {
+  // Modulos.gs (referencia / editaEn) lo usa la pantalla de permisos para explicarlo; el servidor
+  // lo hace con referencia: true / puedeLeerFamilia y deOtroModulo. Si uno cambia sin el otro, la
+  // pantalla explicaría algo que no pasa (o callaría algo que sí).
+  const ctx = {};
+  require('vm').runInNewContext(read('src/config/Modulos.gs') + '\n;this.G = Modulos.GRUPOS;', ctx);
+  const catalogo = ctx.G.reduce((t, g) => t.concat(g.modulos), []);
+  const servicios = filesBelow(path.join(root, 'src/services')).filter((f) => f.endsWith('.gs')).map((f) => fs.readFileSync(f, 'utf8'));
+  const moduloDe = (texto) => (/modulo:\s*'([a-z-]+)'/.exec(texto) || [])[1];
+
+  const referenciasCatalogo = catalogo.filter((m) => m.referencia).map((m) => m.id).sort();
+  const referenciasServidor = new Set();
+  servicios.forEach((t) => {
+    if (/referencia: true/.test(t)) referenciasServidor.add(moduloDe(t));
+    [...t.matchAll(/puedeLeerFamilia\(token, '([a-z-]+)'\)/g)].forEach((m) => referenciasServidor.add(m[1]));
+  });
+  assert.deepEqual([...referenciasServidor].sort(), referenciasCatalogo, 'referencia en Modulos.gs = referencia: true / puedeLeerFamilia en el servidor');
+
+  const editaCatalogo = catalogo.reduce((t, m) => t.concat((m.editaEn || []).map((e) => m.id + ' → ' + e.modulo)), []).sort();
+  const editaServidor = [];
+  servicios.forEach((t) => {
+    [...t.matchAll(/deOtroModulo: \{([^}]*)\}/g)].forEach((m) => {
+      [...m[1].matchAll(/'([a-z-]+)':/g)].forEach((x) => editaServidor.push(x[1] + ' → ' + moduloDe(t)));
+    });
+  });
+  assert.deepEqual(editaServidor.sort(), editaCatalogo, 'editaEn en Modulos.gs = deOtroModulo en el servidor');
 });

@@ -297,7 +297,9 @@ const Permisos = (function () {
       fuente: reglas.fuente,
       grupos: Modulos.GRUPOS.map((g) => ({
         id: g.id, etiqueta: g.etiqueta, icono: g.icono,
-        modulos: g.modulos.filter((m) => m.id !== MODULO_USUARIOS).map((m) => ({ id: m.id, etiqueta: m.etiqueta })),
+        // referencia / editaEn: lo que el permiso implica fuera de su pantalla (Modulos.gs)
+        modulos: g.modulos.filter((m) => m.id !== MODULO_USUARIOS)
+          .map((m) => ({ id: m.id, etiqueta: m.etiqueta, referencia: m.referencia || '', editaEn: m.editaEn || [] })),
       })).filter((g) => g.modulos.length),
       areas: Object.keys(porArea).sort().map((k) => porArea[k]),
       // Campo por campo, a propósito: CONTRASEÑA (y SALT/PASSWORD_HASH) nunca salen de aquí

@@ -131,6 +131,13 @@ Sensores, Verificaciones, Cambios…):
   ficha nueva se agrega ahí).
 - **Un catálogo que otro módulo de la familia necesita** (para elegir algo en su formulario) se
   marca `referencia: true` en su definición, no se le da a la gente el permiso del módulo entero.
+- **Lo que implica cada permiso se declara en `Modulos.gs`**: `referencia` (qué consulta su familia)
+  y `editaEn` (qué parte de otro módulo se edita con este). La pantalla de Usuarios y permisos lo
+  explica sola ("Podrá consultar…", "En Vehículos no podrá editar…"), sin frases por módulo.
+  `source-contracts` falla si `Modulos.gs` y el servidor (`referencia: true` / `puedeLeerFamilia`,
+  `deOtroModulo`) no dicen lo mismo: un caso nuevo se agrega en los dos.
+- **La ventana "Editar permisos"** (botones por nivel, "Todo el grupo", ↺): después de tocarla,
+  `node tools/vista-previa/probar-permisos.js` la prueba con clics de verdad (necesita Chrome).
 - **Un campo que le pertenece a otro módulo** solo lo edita quien tiene EDICIÓN en ese módulo.
   Se declara **en los dos lados**:
   - en la pantalla, `editaModulo` en el campo de `CamposHoja` (sale bloqueado y no se manda);

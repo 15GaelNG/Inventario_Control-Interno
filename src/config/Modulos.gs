@@ -6,6 +6,16 @@
  * Tener el catálogo aquí evita el problema clásico de los permisos: que alguien escriba
  * "Vehiculos" en la hoja y el módulo se llame "vehiculos", y el permiso no aplique nunca
  * sin que nadie se entere. `Permisos.revisarCatalogo()` reporta esos casos.
+ *
+ * Además de id y etiqueta, un módulo puede decir lo que su permiso implica fuera de su pantalla
+ * (la pantalla de Usuarios y permisos lo explica con esto, sin frases escritas a mano):
+ *   referencia  qué consulta toda su FAMILIA (su grupo del menú) aunque no tenga este módulo:
+ *               es lo que el servidor marca `referencia: true` (HojaServicio). P. ej. el catálogo
+ *               de vehículos, que Sensores necesita para elegir la unidad.
+ *   editaEn     [{ modulo, que }]: partes de OTRO módulo que solo edita quien tiene EDICION en
+ *               este: lo que el servidor marca `deOtroModulo` en la hoja de `modulo`. P. ej. la
+ *               sección de sensor de la ficha de Vehículos es de Instalación de Sensores.
+ * `source-contracts` revisa que esto y el servidor digan lo mismo.
  */
 
 const Modulos = (function () {
@@ -14,14 +24,14 @@ const Modulos = (function () {
       id: 'servicios-vehiculares', etiqueta: 'Servicios Vehiculares', icono: 'car',
       modulos: [
         { id: 'incidencias', etiqueta: 'Incidencias', listo: true },
-        { id: 'vehiculos', etiqueta: 'Vehículos', listo: true },
+        { id: 'vehiculos', etiqueta: 'Vehículos', listo: true, referencia: 'el catálogo de vehículos para elegir la unidad' },
         { id: 'cambios-vehiculos', etiqueta: 'Cambios Vehículos' },
         { id: 'reasignaciones-vehiculares', etiqueta: 'Reasignaciones Vehiculares' },
         { id: 'verificaciones', etiqueta: 'Verificaciones', listo: true },
         // Hoja INSPECCION VEHICULAR (290 registros, 195 columnas de checklist) +
         // MODELOS INSPECCION (18 diagramas por tipo de unidad), ver docs/mapeo-modulos.md
         { id: 'inspeccion-vehicular', etiqueta: 'Inspección Vehicular' },
-        { id: 'instalacion-sensores', etiqueta: 'Instalación de Sensores', listo: true },
+        { id: 'instalacion-sensores', etiqueta: 'Instalación de Sensores', listo: true, editaEn: [{ modulo: 'vehiculos', que: 'la sección «Accesorios y sensor» de la ficha' }] },
         { id: 'hologramas', etiqueta: 'Hologramas', listo: true },
       ],
     },
@@ -53,7 +63,7 @@ const Modulos = (function () {
       id: 'arqueos', etiqueta: 'Arqueos', icono: 'wallet',
       modulos: [
         { id: 'arqueos', etiqueta: 'Arqueos' },
-        { id: 'caja-chica', etiqueta: 'Caja Chica' },
+        { id: 'caja-chica', etiqueta: 'Caja Chica', referencia: 'la lista de cajas chicas para elegir la caja' },
       ],
     },
     {
