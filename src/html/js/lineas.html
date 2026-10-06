@@ -2345,10 +2345,10 @@
         const total = Object.keys(conteo).reduce((s, t) => s + conteo[t].total, 0);
         const regla = (t) => ((REGLAS_FORMATO.LINEAS || {}).TIPO || {})[t] || null;
         const fila = (valor, icono, color, nombre, n) =>
-          '<button type="button" class="ln-tipo' + (n ? '' : ' ln-tipo-vacio') + '" data-tipo="' + esc(valor) + '" aria-pressed="false" title="' + esc(nombre + ' · ' + miles(n)) + '">' +
-            '<span class="ln-tipo-ico"' + (color ? ' style="color:' + esc(color) + '"' : '') + '>' + ico(icono) + '</span>' +
-            '<span class="ln-tipo-nombre">' + esc(nombre) + '</span><span class="ln-tipo-num">' + miles(n) + '</span></button>';
-        cont.innerHTML = '<div class="ln-tipos-panel"><div class="ln-tipos-titulo">Tipo</div>' +
+          '<button type="button" class="filtro-tipo-item' + (n ? '' : ' filtro-tipo-item-vacio') + '" data-tipo="' + esc(valor) + '" aria-pressed="false" title="' + esc(nombre + ' · ' + miles(n)) + '">' +
+            '<span class="filtro-tipo-ico"' + (color ? ' style="color:' + esc(color) + '"' : '') + '>' + ico(icono) + '</span>' +
+            '<span class="filtro-tipo-nombre">' + esc(nombre) + '</span><span class="filtro-tipo-num">' + miles(n) + '</span></button>';
+        cont.innerHTML = '<div class="filtro-tipo-panel"><div class="filtro-tipo-titulo">Tipo</div>' +
           fila('*', 'layers', '', 'Todos', total) +
           tipos.map((t) => {
             const r = regla(t);
@@ -2361,7 +2361,7 @@
         if (!cont) return;
         const f = (filtrosActuales[modulo] || {}).tipoHoja;
         const elegidos = f && f.valores && f.valores.length ? f.valores : null;
-        cont.querySelectorAll('.ln-tipo').forEach((b) => {
+        cont.querySelectorAll('.filtro-tipo-item').forEach((b) => {
           const activo = b.dataset.tipo === '*' ? !elegidos : !!(elegidos && elegidos.indexOf(b.dataset.tipo) >= 0);
           b.classList.toggle('activo', activo);
           b.setAttribute('aria-pressed', String(activo));
@@ -2369,7 +2369,7 @@
       }
       ['equipos', 'lineas'].forEach((modulo) => {
         $('#ln-tipos-' + modulo, raiz).addEventListener('click', (ev) => {
-          const b = ev.target.closest('.ln-tipo');
+          const b = ev.target.closest('.filtro-tipo-item');
           if (!b) return;
           const t = b.dataset.tipo;
           if (t === '*' || b.classList.contains('activo')) {

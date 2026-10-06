@@ -1283,4 +1283,40 @@
   @keyframes loadingPopIn {
     to { opacity: 1; transform: translateY(0) scale(1); }
   }
+
+  /* Filtro rápido por tipo (Líneas Telefónicas, Vehículos por Clase, …): franja de íconos a la
+     izquierda que se despliega con el mouse (o el teclado) POR ENCIMA de la tabla, como el menú
+     lateral de Gmail; la tabla no se mueve. Retraso corto al entrar (que no se abra solo por
+     cruzarla) y un poco más al salir (que no se cierre al rozar el borde). Nació en Líneas
+     (filtro por TIPO) y se generalizó aquí para que otros módulos lo reutilicen en vez de copiarlo. */
+  .con-filtro-tipo { display: flex; align-items: stretch; gap: 10px; }
+  .con-filtro-tipo-tabla { flex: 1; min-width: 0; }
+  .filtro-tipo { flex: 0 0 44px; position: relative; z-index: 6; }
+  .filtro-tipo:empty { display: none; }
+  .filtro-tipo-panel { position: absolute; top: 0; left: 0; width: 44px; display: flex; flex-direction: column; gap: 2px;
+    padding: 0 4px 6px; overflow: hidden; background: var(--color-surface); border-right: 1px solid var(--color-border);
+    border-radius: 0 12px 12px 0; transition: width .2s cubic-bezier(.2, 0, 0, 1) .3s, box-shadow .2s ease .3s, border-color .2s ease .3s; }
+  .filtro-tipo:hover .filtro-tipo-panel, .filtro-tipo:focus-within .filtro-tipo-panel {
+    width: 214px; border-color: transparent; box-shadow: var(--shadow-lg); transition-delay: .12s; }
+  .filtro-tipo-titulo { height: 28px; display: flex; align-items: center; padding: 0 8px 0 10px; font-size: 11px; font-weight: 600;
+    letter-spacing: .05em; text-transform: uppercase; color: var(--color-text-muted); white-space: nowrap; }
+  .filtro-tipo-item { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 200px; min-height: 32px; padding: 5px 10px 5px 10px;
+    border: none; border-radius: 8px; background: transparent; color: var(--color-text); font-size: 13px; font-weight: 500;
+    text-align: left; cursor: pointer; transition: background-color .15s; }
+  .filtro-tipo-item:hover { background: var(--color-bg); }
+  .filtro-tipo-item.activo { background: var(--color-primary-soft); font-weight: 600; }
+  .filtro-tipo-item:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
+  .filtro-tipo-ico { display: inline-flex; flex-shrink: 0; color: var(--color-text-muted); }
+  .filtro-tipo-ico .ico { width: 16px; height: 16px; }
+  .filtro-tipo-nombre { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .filtro-tipo-num { flex-shrink: 0; color: var(--color-text-muted); font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .filtro-tipo-item-vacio .filtro-tipo-nombre, .filtro-tipo-item-vacio .filtro-tipo-num { color: var(--color-text-muted); }
+  /* Recogida: solo los íconos (los textos se desvanecen; el nombre y el conteo siguen en el title) */
+  .filtro-tipo-titulo, .filtro-tipo-nombre, .filtro-tipo-num { opacity: 0; transition: opacity .12s ease .3s; }
+  .filtro-tipo:hover .filtro-tipo-titulo, .filtro-tipo:hover .filtro-tipo-nombre, .filtro-tipo:hover .filtro-tipo-num,
+  .filtro-tipo:focus-within .filtro-tipo-titulo, .filtro-tipo:focus-within .filtro-tipo-nombre, .filtro-tipo:focus-within .filtro-tipo-num {
+    opacity: 1; transition-delay: .2s; }
+  @media (prefers-reduced-motion: reduce) {
+    .filtro-tipo-panel, .filtro-tipo-titulo, .filtro-tipo-nombre, .filtro-tipo-num { transition-duration: 0s; }
+  }
 </style>

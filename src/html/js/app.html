@@ -1492,12 +1492,61 @@
     return CamposHoja.slug(clave);
   }
 
-  /** Los campos del formulario de vehículo (componente CamposHoja). esEdicion=true en
-   * Editar muestra los "soloEdicion" (ej. Documento de baja: no tiene sentido pedirlo al
-   * DAR DE ALTA). Departamento/No. de empleado (autoCondicional) se sugieren al elegir
-   * Responsable, con "auto" (ver wireResponsableVehiculo). */
-  function renderCamposVehiculo(prefijo, esEdicion) {
-    return CamposHoja.html(CAMPOS_VEHICULO, { prefijo, esEdicion });
+  // "Un tema a la vez" (usuario, 6-oct): mismo lenguaje visual que los pasos de
+  // Responsiva/Adherente Vehicular (form-pasos/form-paso-chip/form-paso/
+  // form-acciones-pasos, de componentes/formulario.html) -- un paso por cada grupo que
+  // ya tenía CAMPOS_VEHICULO, en su mismo orden, así que la ficha de solo lectura
+  // (seccionesFichaVehiculo, que usa esos mismos grupos) no cambia. Sin candado entre
+  // pasos (igual que Responsiva/Adherente): se puede ir y venir libremente.
+  const VEH_GRUPOS_PASO = ['Vehículo', 'Identificación', 'Documentación y seguro', 'Accesorios y sensor', 'Ubicación y registro'];
+
+  /** Los campos del formulario de vehículo (componente CamposHoja), repartidos en los
+   * pasos de VEH_GRUPOS_PASO con el `soloGrupos` que CamposHoja.html ya trae para esto --
+   * así el único título que se ve por paso es el que CamposHoja imprime
+   * (info-section-title), sin duplicarlo con uno propio. esEdicion=true en Editar muestra
+   * los "soloEdicion" (ej. Documento de baja: no tiene sentido pedirlo al DAR DE ALTA).
+   * Departamento/No. de empleado (autoCondicional) se sugieren al elegir Responsable, con
+   * "auto" (ver wireResponsableVehiculo). `columnas` es el ancho de la rejilla de cada
+   * paso (3 en Registrar, 2 en el modal de Editar, que es más angosto). */
+  function renderCamposVehiculo(prefijo, esEdicion, columnas) {
+    return '<ol class="form-pasos">' + VEH_GRUPOS_PASO.map((g, i) =>
+        '<li><button type="button" class="form-paso-chip" data-ir="' + i + '">' +
+          '<span class="form-paso-num">' + (i + 1) + '</span>' + escaparHtml(g) + '</button></li>').join('') +
+      '</ol>' +
+      VEH_GRUPOS_PASO.map((g, i) =>
+        '<section class="form-paso" data-paso="' + i + '"' + (i === 0 ? '' : ' hidden') + '>' +
+          '<div class="form-rejilla" data-columnas="' + (columnas || 3) + '">' +
+            CamposHoja.html(CAMPOS_VEHICULO, { prefijo, esEdicion, soloGrupos: [g] }) +
+          '</div>' +
+        '</section>').join('');
+  }
+
+  /** Cablea Atrás/Siguiente/Guardar y las pastillas de arriba para un formulario de
+   * Vehículo ya pintado con renderCamposVehiculo -- lo usan tanto Registrar como Editar,
+   * cada uno con su propio contenedor y botones. Regresa { ir } para volver al paso 1
+   * después de guardar o cerrar. */
+  function wirePasosVehiculo(contenedor, ids) {
+    let pasoActual = 0;
+    function mostrar(i) {
+      pasoActual = i;
+      contenedor.querySelectorAll('.form-paso').forEach((s) => { s.hidden = Number(s.dataset.paso) !== i; });
+      contenedor.querySelectorAll('.form-paso-chip').forEach((chip) => {
+        const idx = Number(chip.dataset.ir);
+        chip.classList.toggle('activo', idx === i);
+        chip.classList.toggle('completado', idx < i);
+      });
+      document.getElementById(ids.atras).hidden = i === 0;
+      document.getElementById(ids.siguiente).hidden = i === VEH_GRUPOS_PASO.length - 1;
+      document.getElementById(ids.guardar).hidden = i !== VEH_GRUPOS_PASO.length - 1;
+      document.getElementById(ids.cuenta).textContent = 'Paso ' + (i + 1) + ' de ' + VEH_GRUPOS_PASO.length;
+    }
+    document.getElementById(ids.siguiente).addEventListener('click', () => mostrar(Math.min(pasoActual + 1, VEH_GRUPOS_PASO.length - 1)));
+    document.getElementById(ids.atras).addEventListener('click', () => mostrar(Math.max(pasoActual - 1, 0)));
+    contenedor.querySelectorAll('.form-paso-chip').forEach((chip) => {
+      chip.addEventListener('click', () => mostrar(Number(chip.dataset.ir)));
+    });
+    mostrar(0);
+    return { ir: mostrar };
   }
 
   /** {columna real: valor}. Los "file" se suben aparte (subirArchivosVehiculo). */
@@ -1983,7 +2032,13 @@
     let todosLosVehiculos = [];
 
     document.getElementById('campos-form-vehiculo').innerHTML = renderCamposVehiculo('veh');
-    document.getElementById('campos-form-editar-vehiculo').innerHTML = renderCamposVehiculo('editar-vehiculo', true);
+    document.getElementById('campos-form-editar-vehiculo').innerHTML = renderCamposVehiculo('editar-vehiculo', true, 2);
+    const pasosAltaVeh = wirePasosVehiculo(document.getElementById('campos-form-vehiculo'), {
+      atras: 'veh-paso-atras', siguiente: 'veh-paso-siguiente', guardar: 'btn-guardar-vehiculo', cuenta: 'veh-paso-cuenta',
+    });
+    const pasosEditarVeh = wirePasosVehiculo(document.getElementById('campos-form-editar-vehiculo'), {
+      atras: 'editar-vehiculo-paso-atras', siguiente: 'editar-vehiculo-paso-siguiente', guardar: 'btn-guardar-editar-vehiculo', cuenta: 'editar-vehiculo-paso-cuenta',
+    });
 
     // Fecha de registro en el sistema: siempre "hoy", no se edita (el
     // servidor fija el valor real al crear, esto es solo para que se vea
@@ -2118,6 +2173,15 @@
       return `<span style="display:inline-flex; align-items:center; gap:5px; color:${e.color}; font-weight:700; font-style:italic">` +
         `${Iconos.svg(e.icono)} ${escaparHtml(clase)}</span>`;
     }
+
+    // Mismo orden que las opciones de CLASE en CAMPOS_VEHICULO; etiquetas legibles para el
+    // filtro por Clase (pintarClasesVeh) -- "Nuco sin información" igual que en Panorama.
+    const ORDEN_CLASES_VEH = ['AUTOMOVIL', 'CAMION', 'CAMIONETA', 'MOTOCICLETA', 'REMOLQUE', 'MAQUINARIA MENOR', 'CUATRIMOTO', 'NUCO SIN INFORMACION', 'MOTOCARRO'];
+    const NOMBRE_CLASE_VEH = {
+      'AUTOMOVIL': 'Automóvil', 'CAMION': 'Camión', 'CAMIONETA': 'Camioneta', 'MOTOCICLETA': 'Motocicleta',
+      'REMOLQUE': 'Remolque', 'MAQUINARIA MENOR': 'Maquinaria menor', 'CUATRIMOTO': 'Cuatrimoto',
+      'NUCO SIN INFORMACION': 'Nuco sin información', 'MOTOCARRO': 'Motocarro',
+    };
 
     /**
      * Ficha de un vehículo: pantalla propia dentro del módulo (oculta la lista,
@@ -3324,8 +3388,11 @@
       }
     }
 
-    /** Acceso rápido: cambia solo ESTATUS, sin abrir el formulario completo de Editar
-     *  (reutiliza el mismo modal de captura de un solo campo). */
+    /** Acceso rápido: cambia solo ESTATUS entre los 5 valores operativos (sin abrir el
+     *  formulario completo de Editar). "BAJA VEHICULAR" NO es una opción aquí a propósito:
+     *  tiene su propio botón (darDeBajaVehiculo) para que dar de baja sea siempre esa acción
+     *  de un clic y nunca el formulario completo -- ver el comentario de ahí por qué. Sirve
+     *  también para "Reactivar" un vehículo en baja: se le pide elegir a cuál de los 5 vuelve. */
     function cambiarEstatusRapidoVehiculo(v) {
       const cuerpo = abrirCapturaVehiculo('toggle-right', 'ESTATUS', 'Cambiar estatus', 'Folio ' + v.FOLIO);
       const form = Formulario.crear(cuerpo, {
@@ -3341,7 +3408,30 @@
         alGuardado: () => { cerrarCapturaVehiculo(); cargar(); },
       });
       form.setOpciones('ESTATUS',
-        ['BAJA VEHICULAR', 'PRESTAMO', 'UTILITARIO', 'NO UTILITARIO', 'NUCO SIN INFORMACION', 'FUERA DE SERVICIO'], v.ESTATUS);
+        ['PRESTAMO', 'UTILITARIO', 'NO UTILITARIO', 'NUCO SIN INFORMACION', 'FUERA DE SERVICIO'], v.ESTATUS);
+    }
+
+    /** Dar de baja: sin modal, y solo toca ESTATUS -- nunca Placa, Departamento ni Responsable
+     *  del vehículo. Antes la única forma de marcar una baja era el formulario completo de
+     *  Editar, y ahí la costumbre (heredada del AppSheet) era escribir también "BAJA VEHICULAR"
+     *  en esas otras columnas para que "se viera" la baja -- de ahí salen los centinelas que
+     *  Relaciones.gs tiene que filtrar al propagar. Con esta acción separada ya no hace falta
+     *  pasar por ese formulario solo para dar de baja. Funciona con una o varias filas
+     *  seleccionadas a la vez (las que ya estén de baja se saltan solas). Reversible con
+     *  "Reactivar" (cambiarEstatusRapidoVehiculo) -- por eso sin confirmación. */
+    async function darDeBajaVehiculo(filas) {
+      const aDarDeBaja = filas.filter((v) => String(v.ESTATUS || '').toUpperCase() !== 'BAJA VEHICULAR');
+      if (!aDarDeBaja.length) return;
+      try {
+        await Promise.all(aDarDeBaja.map((v) =>
+          callServer('apiActualizarVehiculo', state.token, v.ID_VEHICULO, { ESTATUS: 'BAJA VEHICULAR' })));
+        invalidarCacheLista('apiListarVehiculosResumen', state.token);
+        invalidarCacheCatalogo('apiListarVehiculosBasico', state.token);
+        toastExito(aDarDeBaja.length === 1 ? 'Vehículo dado de baja' : aDarDeBaja.length + ' vehículos dados de baja');
+        cargar();
+      } catch (err) {
+        toastError('No se pudo dar de baja: ' + err.message);
+      }
     }
 
     /** Eliminar directo desde el menú contextual -- mismo apiEliminarVehiculo y limpieza
@@ -3393,12 +3483,21 @@
       ].concat(puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (v) => abrirEditarVehiculo(v) }] : []),
       // Antes vivían en menuContextual (antes de seleccionDrive, ver arriba) --
       // ahora el ⋮/clic derecho sale solo de accionesFila + accionesSeleccion.
-      // enBarra:false y maximo:1: quedan en el ⋮ (no en la barra, son demasiadas
-      // para caber ahí) y solo aplican con una fila seleccionada. "Eliminar" NO
-      // se repite aquí: ya la agrega cfg.alEliminar, con el chequeo de
-      // integridad (apiQueImpideBorrar) que la vieja eliminarVehiculoRapido no tenía.
+      // enBarra:false: quedan en el ⋮ (no en la barra, son demasiadas para caber ahí).
+      // maximo:1 en casi todas (solo aplican con una fila seleccionada) -- "Dar de
+      // baja" es la excepción, acepta varias a la vez. "Eliminar" NO se repite
+      // aquí: ya la agrega cfg.alEliminar, con el chequeo de integridad
+      // (apiQueImpideBorrar) que la vieja eliminarVehiculoRapido no tenía.
       accionesSeleccion: puedeEditar ? [
-        { icono: 'toggle-right', texto: 'Cambiar estatus', maximo: 1, enBarra: false, grupo: 'estado', alHacer: (filas) => cambiarEstatusRapidoVehiculo(filas[0]) },
+        {
+          icono: 'ban', texto: 'Dar de baja', enBarra: false, grupo: 'estado',
+          visible: (filas) => filas.some((f) => String(f.ESTATUS || '').toUpperCase() !== 'BAJA VEHICULAR'),
+          alHacer: (filas) => darDeBajaVehiculo(filas),
+        },
+        {
+          icono: 'toggle-right', texto: 'Cambiar estatus', maximo: 1, enBarra: false, grupo: 'estado',
+          alHacer: (filas) => cambiarEstatusRapidoVehiculo(filas[0]),
+        },
         { icono: 'clipboard-check', texto: 'Nueva verificación', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'verificacion') },
         { icono: 'clipboard-list', texto: 'Nueva inspección', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'inspeccion') },
         { icono: 'radio', texto: 'Nuevo sensor', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'sensor') },
@@ -3440,6 +3539,47 @@
     document.getElementById('veh-ver-registro-cerrar').addEventListener('click', cerrarVerRegistroFicha);
     modalVerRegistro.addEventListener('click', (ev) => { if (ev.target === modalVerRegistro) cerrarVerRegistroFicha(); });
 
+    // ---- Filtro rápido por Clase: misma franja de íconos de Líneas Telefónicas (filtro por
+    // TIPO), aquí por CLASE -- el CSS ya es genérico (.filtro-tipo*, movido a styles.html) y
+    // CLASE_ESTILO/etiquetaClase ya traían el ícono y color de cada clase, así que solo hace
+    // falta pintar el panel y cablearlo (usuario, 6-oct: "los filtros... pero por la clase"). ----
+    let filtrosActualesVeh = {};
+    function marcarClasesVeh() {
+      const cont = document.getElementById('veh-clases');
+      if (!cont) return;
+      const f = filtrosActualesVeh.CLASE;
+      const elegidos = f && f.valores && f.valores.length ? f.valores : null;
+      cont.querySelectorAll('.filtro-tipo-item').forEach((b) => {
+        const activo = b.dataset.clase === '*' ? !elegidos : !!(elegidos && elegidos.indexOf(b.dataset.clase) >= 0);
+        b.classList.toggle('activo', activo);
+        b.setAttribute('aria-pressed', String(activo));
+      });
+    }
+    function pintarClasesVeh(filas) {
+      const cont = document.getElementById('veh-clases');
+      if (!cont) return;
+      const conteo = {};
+      filas.forEach((v) => { const c = String(v.CLASE || '').toUpperCase(); conteo[c] = (conteo[c] || 0) + 1; });
+      const clases = ORDEN_CLASES_VEH.concat(Object.keys(conteo).filter((c) => ORDEN_CLASES_VEH.indexOf(c) < 0 && c));
+      const fila = (valor, icono, color, nombre, n) =>
+        '<button type="button" class="filtro-tipo-item' + (n ? '' : ' filtro-tipo-item-vacio') + '" data-clase="' + escaparHtml(valor) + '" aria-pressed="false" title="' + escaparHtml(nombre + ' · ' + n) + '">' +
+          '<span class="filtro-tipo-ico" style="color:' + color + '">' + Iconos.svg(icono) + '</span>' +
+          '<span class="filtro-tipo-nombre">' + escaparHtml(nombre) + '</span><span class="filtro-tipo-num">' + n + '</span></button>';
+      cont.innerHTML = '<div class="filtro-tipo-panel"><div class="filtro-tipo-titulo">Clase</div>' +
+        fila('*', 'layers', 'var(--color-text-muted)', 'Todas', filas.length) +
+        clases.map((c) => {
+          const e = CLASE_ESTILO[c] || { icono: 'circle', color: 'var(--color-text-muted)' };
+          return fila(c, e.icono, e.color, NOMBRE_CLASE_VEH[c] || c, conteo[c] || 0);
+        }).join('') + '</div>';
+      marcarClasesVeh();
+    }
+    document.getElementById('veh-clases').addEventListener('click', (ev) => {
+      const b = ev.target.closest('.filtro-tipo-item');
+      if (!b) return;
+      const c = b.dataset.clase;
+      tabla.setFiltro('CLASE', (c === '*' || b.classList.contains('activo')) ? null : { valores: [c] });
+    });
+
     // Binario de antes (Activos = no es baja / Inactivos = es baja), más un KPI clickeable
     // por cada uno de los 6 valores reales de ESTATUS (ver CAMPOS_VEHICULO). "Baja de placa"
     // es la excepción: no es un ESTATUS nuevo -- es el valor que YA vive en la columna PLACA
@@ -3476,6 +3616,8 @@
       });
     });
     function marcarKpiActivo(filtros) {
+      filtrosActualesVeh = filtros || {};
+      marcarClasesVeh();
       const f = filtros.ESTATUS;
       tileTotalVeh.classList.toggle('stat-tile-activo', !f);
       Object.keys(KPI_AGREGADO_VEHICULOS).forEach((id) => {
@@ -3526,6 +3668,7 @@
       todosLosVehiculos.forEach((v) => { vehiculosPorId[v.ID_VEHICULO] = v; });
 
       actualizarKpis(todosLosVehiculos);
+      pintarClasesVeh(todosLosVehiculos);
       tabla.setDatos(todosLosVehiculos);
     }
     // Pinta al instante con lo guardado; si del servidor llega algo distinto, se vuelve a pintar (api.html)
@@ -3554,6 +3697,7 @@
       modalEditar.hidden = true;
       document.getElementById('form-editar-vehiculo').reset();
       document.getElementById('editar-vehiculo-error').hidden = true;
+      pasosEditarVeh.ir(0);
     }
     document.getElementById('btn-cancelar-editar-vehiculo').addEventListener('click', cerrarEditarVehiculo);
     modalEditar.addEventListener('click', (ev) => { if (ev.target === modalEditar) cerrarEditarVehiculo(); });
@@ -3600,6 +3744,7 @@
         const datos = Object.assign(recolectarDatosVehiculo('veh'), archivos);
         await callServer('apiCrearVehiculo', state.token, datos);
         ev.target.reset();
+        pasosAltaVeh.ir(0);
         document.getElementById('veh-fecha-registro-sistema-ci').value = hoyISO();
         previsualizarNuccoVeh();
         invalidarCacheLista('apiListarVehiculosResumen', state.token);
