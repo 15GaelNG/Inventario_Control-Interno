@@ -2096,3 +2096,21 @@ test('el calentador (Calentador.gs) solo llama lo que cada servicio expone', () 
   // Es una función de nivel superior: con candado, para que nadie la dispare desde el navegador
   assert.match(calentador, /function calentarCaches\(\) \{\s*soloEditor_\(\);/);
 });
+
+test('la sección de sensor de Vehículos: la pantalla y el servidor bloquean los mismos campos', () => {
+  const app = read('src/html/js/app.html');
+  const enPantalla = app.split(/\r?\n/).filter((l) => l.includes('...DE_SENSORES') || /opciones: \['SI', 'NO'\], \.\.\.DE_SENSORES/.test(l))
+    .map((l) => (/clave: '([^']+)'/.exec(l) || [])[1]).filter(Boolean);
+  // LLAVE DUPLICADA ocupa dos renglones: su clave va en el renglón de arriba
+  if (/clave: 'LLAVE DUPLICADA'[\s\S]{0,200}\.\.\.DE_SENSORES/.test(app)) enPantalla.push('LLAVE DUPLICADA');
+  const servidor = JSON.parse(/deOtroModulo: \{ 'instalacion-sensores': (\[[^\]]+\]) \}/.exec(read('src/services/VehiculosService.gs'))[1].replace(/'/g, '"'));
+  assert.deepEqual([...new Set(enPantalla)].sort(), servidor.slice().sort());
+});
+
+test('la ficha de Vehículos pide cada módulo solo si la persona lo puede ver', () => {
+  const app = read('src/html/js/app.html');
+  const ini = app.indexOf('async function abrirFichaVehiculo(');
+  const bloque = app.slice(ini, app.indexOf('const lista = (texto)', ini));
+  const sueltas = bloque.split(/\r?\n/).filter((l) => /callServer\('api\w+PorFolio'/.test(l) && !/apiBuscarVehiculoPorFolio/.test(l) && !/deModulo\(/.test(l));
+  assert.deepEqual(sueltas, [], 'cada pestaña de otro módulo va con deModulo(modulo, …)');
+});

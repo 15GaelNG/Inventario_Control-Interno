@@ -67,6 +67,9 @@ const VehiculosService = (function () {
       fila['FECHA REGISTRO SISTEMA CI'] = new Date();
     },
     noEditables: ['FOLIO', 'NUCCO', 'FECHA REGISTRO SISTEMA CI'],
+    // La sección "Accesorios y sensor" de la ficha: solo la edita quien tiene EDICION en
+    // Instalación de Sensores (en la pantalla: DE_SENSORES en CAMPOS_VEHICULO, app.html)
+    deOtroModulo: { 'instalacion-sensores': ['ACCESORIOS', 'ADITAMENTOS', 'ACTIVADOR', '$ Costo del Sensor', 'LLAVE DUPLICADA'] },
     alActualizar: (cambios, ctx) => {
       // Las que manda otra hoja: editarlas aquí se perdería en la siguiente sincronización.
       // Se cambian desde su dueña (SERIE SENSOR y SENSOR: el módulo de Sensores).

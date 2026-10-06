@@ -56,6 +56,10 @@
  *                como fecha
  *   obligatorios { COLUMNA: 'mensaje' } al crear
  *   noEditables  columnas que no se cambian al actualizar (el id nunca)
+ *   deOtroModulo { modulo: ['COLUMNA', …] }: columnas que son de otro módulo (p. ej. la sección
+ *                de sensor en Vehículos). Solo las cambia quien tiene EDICION en ese módulo; a
+ *                quien no, se le ignoran al crear y al actualizar. Es el espejo de editaModulo
+ *                en CamposHoja (la pantalla las bloquea; esto es por si llegan de la consola).
  *   archivos     { COLUMNA: 'ETIQUETA' }: el cliente manda '<COLUMNA>_FILE_ID' del archivo que
  *                ya subió, y aquí se renombra a "<id>_<ETIQUETA>_<fecha>.ext" al guardar
  *   candadoAlCrear  crear bajo el candado del script (consecutivos calculados aquí)
@@ -291,9 +295,19 @@ const HojaServicio = (function () {
     Object.keys(archivos).forEach((columna) => renombrarArchivo(archivos[columna], id, def.archivos[columna]));
   }
 
+  /** Lo de def.deOtroModulo que esta persona no puede editar (no tiene EDICION en ese módulo) */
+  function quitarDeOtroModulo_(def, datos, sesion) {
+    const permisos = (sesion && sesion.permisos) || {};
+    Object.keys(def.deOtroModulo || {}).forEach((modulo) => {
+      if (permisos[modulo] === Permisos.EDICION) return;
+      def.deOtroModulo[modulo].forEach((c) => { delete datos[c]; });
+    });
+  }
+
   function crear(def, token, datos) {
     const sesion = Permisos.puedeEditar(token, def.modulo);
     const { fila, archivos } = entrada_(def, datos || {});
+    quitarDeOtroModulo_(def, fila, sesion);
     Object.keys(def.obligatorios || {}).forEach((columna) => {
       if (fila[columna] === undefined || fila[columna] === null || String(fila[columna]).trim() === '') {
         throw new Error(def.obligatorios[columna]);
@@ -322,6 +336,7 @@ const HojaServicio = (function () {
     const { fila: datos, archivos } = entrada_(def, cambios || {});
     delete datos[columnaId(def)];
     (def.noEditables || []).forEach((c) => { delete datos[c]; });
+    quitarDeOtroModulo_(def, datos, sesion);
 
     const nombreReal = nombreHoja(def);
     // El renglón de antes solo se lee si un gancho lo usa: SheetUtils.update ya lo busca y

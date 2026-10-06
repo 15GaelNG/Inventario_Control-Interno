@@ -42,7 +42,13 @@ function entorno() {
   Object.assign(e.contexto, {
     Permisos: {
       puedeLeer: (t, m) => { log.permisos.push('leer:' + m); if (t === 'sin-permiso') throw new Error('Sin permiso'); return { nombre: 'ANA' }; },
-      puedeEditar: (t, m) => { log.permisos.push('editar:' + m); if (t === 'sin-permiso') throw new Error('Sin permiso'); return { nombre: 'ANA' }; },
+      EDICION: 'EDICION',
+      // 'con-sensores': además tiene EDICION en sensores (para deOtroModulo)
+      puedeEditar: (t, m) => {
+        log.permisos.push('editar:' + m);
+        if (t === 'sin-permiso') throw new Error('Sin permiso');
+        return { nombre: 'ANA', permisos: t === 'con-sensores' ? { cosas: 'EDICION', sensores: 'EDICION' } : { cosas: 'EDICION', sensores: 'LECTURA' } };
+      },
     },
     Entidades: { prefijo: (h) => h.slice(0, 1) },
     Ids: (() => { let n = 0; return { nuevo: (p) => p + '-N' + (++n) }; })(),
@@ -216,6 +222,21 @@ console.log('\n7. eliminar');
   const conGancho = Object.assign({}, COSAS, { despuesDeEliminar: (registros) => { antes = registros; } });
   H.eliminar(conGancho, 'tok', ['C-3']);
   ok(antes && antes.length === 1 && antes[0].NOMBRE === 'Gama', 'despuesDeEliminar recibe los renglones como estaban');
+}
+
+console.log('deOtroModulo: columnas que solo cambia quien edita otro módulo');
+{
+  const { H, hoja } = entorno();
+  const def = Object.assign({}, COSAS, { deOtroModulo: { sensores: ['NOTA'] } });
+  H.actualizar(def, 'tok', 'C-1', { NOMBRE: 'Beta 2', NOTA: 'desde la consola' });
+  let fila = hoja('COSAS').find((r) => r[0] === 'C-1');
+  ok(fila[1] === 'Beta 2' && fila[5] === '', 'sin EDICION en ese módulo: lo demás se guarda y esa columna se ignora');
+  H.actualizar(def, 'con-sensores', 'C-1', { NOTA: 'con permiso' });
+  fila = hoja('COSAS').find((r) => r[0] === 'C-1');
+  ok(fila[5] === 'con permiso', 'con EDICION en ese módulo: se guarda');
+  H.crear(def, 'tok', { NOMBRE: 'Nueva', NOTA: 'no debe quedar' });
+  const nueva = hoja('COSAS').find((r) => r[1] === 'Nueva');
+  ok(nueva && nueva[5] === '', 'al crear, igual');
 }
 
 console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');

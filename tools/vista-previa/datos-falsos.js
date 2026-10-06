@@ -359,6 +359,14 @@
     p('pointerup', 320, 125);
   };
 
+  /** La persona de la escena no tiene estos módulos (lo que decide qué se ve es state.permisos) */
+  function quitarPermisos(...modulos) {
+    // De los dos lados: lo que ya tiene la app y lo que contesta apiMisPermisos si llega después
+    modulos.forEach((m) => { delete permisos[m]; });
+    state.permisos = Object.assign({}, state.permisos);
+    modulos.forEach((m) => { delete state.permisos[m]; });
+  }
+
   const ESCENAS = {
     'relaciones': async () => { await abrir('relaciones'); await vistaRelaciones(false); await hasta('.rel-s-tabla'); await esperar(300); },
     'relaciones-lineas': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('.tab-btn[data-tab="familia-1"]')).click(); await esperar(400); },
@@ -382,6 +390,22 @@
     'inicio': async () => { await abrir('dashboard'); await hasta('#dash-actividad .historial-item'); await esperar(300); },
     'vehiculos': () => abrir('vehiculos'),
     'vehiculos-ficha': async () => { await abrir('vehiculos'); await abrirPrimeraFila(); },
+    // Alguien con Vehículos pero sin Instalación de Sensores ni Cambios de vehículos: esas
+    // pestañas no aparecen y la sección de sensor del formulario sale bloqueada
+    'vehiculos-ficha-sin-sensores': async () => {
+      quitarPermisos('instalacion-sensores', 'cambios-vehiculos');
+      await abrir('vehiculos'); await abrirPrimeraFila();
+    },
+    'modal-editar-vehiculo-sin-sensores': async () => {
+      quitarPermisos('instalacion-sensores', 'cambios-vehiculos');
+      await abrir('vehiculos');
+      (await hasta('#modal-editar-vehiculo')).hidden = false;
+      await esperar(400);
+      // Hasta la sección de sensor, que es la que cambia
+      const bloqueado = document.querySelector('#modal-editar-vehiculo [data-sin-permiso]');
+      if (bloqueado) bloqueado.scrollIntoView({ block: 'center' });
+      await esperar(200);
+    },
     'panorama-vehiculos': async () => { await abrir('panorama-vehiculos'); await esperar(700); },
     'incidencias': () => abrir('incidencias'),
     'incidencias-detalle': async () => { await abrir('incidencias'); await abrirPrimeraFila(); },
