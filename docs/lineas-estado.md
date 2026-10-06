@@ -1,6 +1,6 @@
 # Líneas — estado del módulo
 
-Ramas `emmanuel` = `master` · Producción: versión 54 · Última actualización: 2026-10-05 (noche)
+Ramas: `emmanuel` lleva el patrón en General, que `master` y la versión 54 de producción no tienen · Última actualización: 2026-10-05 (noche)
 
 Qué es hoy el módulo **Líneas** (equipos celulares y líneas telefónicas), dónde vive cada cosa y cómo se trabaja.
 La bitácora anterior de este archivo (§0a…§0ae, hasta el 1-oct) sigue en el historial de git. El diseño de las hojas
@@ -19,6 +19,10 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   historial con su comentario.
 - **Secretos** (PIN, patrones, contraseñas, firmas): los ven ADMIN y el área `LINEAS` de USUARIOS
   (`TelefoniaService.puedeVerSecretos_`).
+- **Patrón:** EQUIPOS.PATRON guarda los puntos trazados en el sistema («1-5-9») o la ruta de la imagen del AppSheet.
+  General y las capturas lo muestran: los puntos dibujados, la imagen del AppSheet desde su carpeta
+  (`apiLineasPatronAppSheet`, solo con permiso de secretos). La inspección y Editar, al trazar uno nuevo, guardan los
+  puntos y la imagen deja de verse; el de la responsiva se queda en RESPONSIVAS LINEAS.
 - **Resguardos y cancelaciones:** bandeja de Pau (recibir, entregar a Líneas, vendido, cancelación con carta).
 - **Panorama:** líneas y equipos por estatus, renta por cuenta y adendums, al cierre del mes elegido.
 - **Notificaciones:** campana con adendums por vencer y avisos de seguimiento.
