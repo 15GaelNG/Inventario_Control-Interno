@@ -663,6 +663,8 @@
   .ln-af-grid.ln-af-datos { gap: 2px 14px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px dashed var(--color-border); }
   .ln-af-datos .ln-af-campo { margin-bottom: 6px; }
   .ln-af-completo { margin-top: 4px; }
+  /* «¿Más de un responsable?» en su propio renglón: cada responsable adicional queda con su número de empleado al lado */
+  .ln-af-campo[data-af-columna="MAS DE UN RESPONSABLE"] { grid-column: 1 / -1; }
   .ln-af-completo .ln-af-campo { margin-bottom: 14px; }
   /* Firmas lado a lado, grandes, con marco de color según quién firma */
   .ln-firmas { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 6px; }
