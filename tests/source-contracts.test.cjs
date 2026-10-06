@@ -371,9 +371,10 @@ test('lo que repetían los servicios de una hoja vive en HojaServicio, no en otr
     [/function subirArchivoEn_\(|Utilities\.base64Decode\(base64Data\)/, 'su propia subida a Drive (HojaServicio.subirArchivo)'],
     [/SheetUtils\.remove\(/, 'SheetUtils.remove a mano (HojaServicio.eliminar, que además respeta Relaciones)'],
   ];
-  // ListasService guarda catálogos (no la lista de un módulo) con su propio tiempo de vida, y
+  // ListasService guarda catálogos (no la lista de un módulo) con su propio tiempo de vida,
   // CapitalHumano el de colaboradores (una persona por nombre+departamento, sin permiso de módulo)
-  const CON_CACHE_PROPIA = ['ListasService.gs', 'CapitalHumano.gs'];
+  // y PermisosService las reglas y personas que revisa en cada llamada (no es un módulo: es el permiso)
+  const CON_CACHE_PROPIA = ['ListasService.gs', 'CapitalHumano.gs', 'PermisosService.gs'];
   const problemas = [];
   servicios.forEach((a) => {
     const texto = read('src/services/' + a);

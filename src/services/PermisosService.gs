@@ -64,8 +64,18 @@ const Permisos = (function () {
     return Config.SPREADSHEET_IDS.USUARIOS();
   }
 
-  /** Las reglas como [QUIEN, MODULO, PERMISO]: de la hoja PERMISOS, o de la semilla si no existe */
-  function reglas_() {
+  /**
+   * Las reglas como [QUIEN, MODULO, PERMISO]: de la hoja PERMISOS, o de la semilla si no existe.
+   * Guardadas (CacheHojas) mientras la hoja no cambie: cada llamada de la app revisa permisos y,
+   * al vencer los 5 min de deCorreo, leía la hoja entera otra vez. `fresco` (al guardar) lee la
+   * hoja sí o sí: lo que se reescribe no puede salir de una copia.
+   */
+  function reglas_(fresco) {
+    if (fresco) return reglasDeLaHoja_();
+    return CacheHojas.recordar('permisos_reglas_v1', [[ssId(), HOJA_PERMISOS]], reglasDeLaHoja_);
+  }
+
+  function reglasDeLaHoja_() {
     try {
       SheetUtils.getSheet(ssId(), HOJA_PERMISOS);
     } catch (e) {
@@ -118,8 +128,19 @@ const Permisos = (function () {
     return mapa;
   }
 
+  /**
+   * Las personas de USUARIOS, solo con lo que usan los permisos y la pantalla de permisos: sin
+   * contraseña, hash ni sal (esto se guarda en CacheService). Guardadas mientras la hoja no
+   * cambie; lo que se edite a mano en la hoja se ve a más tardar en 10 min.
+   */
+  const COLUMNAS_USUARIO = ['CORREO', 'NOMBRE', 'AREA', 'ROL', 'ACTIVO', 'NO_EMPLEADO', 'OFICINA', 'SEDE'];
   function usuarios_() {
-    return SheetUtils.getAll(ssId(), HOJA_USUARIOS);
+    return CacheHojas.recordar('permisos_usuarios_v1', [[ssId(), HOJA_USUARIOS]], () =>
+      SheetUtils.getAll(ssId(), HOJA_USUARIOS).map((u) => {
+        const r = {};
+        COLUMNAS_USUARIO.forEach((c) => { r[c] = u[c] === undefined || u[c] === null ? '' : u[c]; });
+        return r;
+      }));
   }
 
   /** Permisos de un correo, con caché corto para no leer las hojas en cada petición */
@@ -242,6 +263,7 @@ const Permisos = (function () {
     hoja.getRange(1, 1, filas.length, ENCABEZADOS.length).setValues(filas);
     hoja.setFrozenRows(1);
     hoja.getRange(1, 1, 1, ENCABEZADOS.length).setFontWeight('bold');
+    CacheHojas.tocarHoja(hoja);   // las reglas guardadas (reglas_) se vuelven a leer ya
   }
 
   // ------------------------------------------------------------ pantalla de administración
@@ -323,7 +345,7 @@ const Permisos = (function () {
     candado.waitLock(20000);
     try {
       // Primero las reglas vigentes: si la hoja no existe son las de la semilla, y se crea con ellas
-      const vigentes = reglas_().filas;
+      const vigentes = reglas_(true).filas;
       const ss = SpreadsheetApp.openById(ssId());
       const hoja = ss.getSheetByName(HOJA_PERMISOS) || ss.insertSheet(HOJA_PERMISOS);
       const nota = 'Cambiado por ' + (sesion.nombre || sesion.correo) + ' el ' +

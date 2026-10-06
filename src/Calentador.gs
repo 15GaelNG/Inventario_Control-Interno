@@ -33,6 +33,12 @@ function pasosCalentador_() {
     ['Uber', () => UberService.calentar()],
     ['Colaboradores', () => CapitalHumano.calentarColaboradores()],
     ['Líneas (índice)', () => LineasRepo.indice(true)],
+    // Su caché dura 30 min y armarlo tarda ~15 s: se rehace una vuelta sí y otra no (cada 20
+    // min, nunca llega vencido); en la otra solo se arma si no está
+    ['Líneas (panorama)', () => LineasPanorama.panorama(Math.floor(Date.now() / 600000) % 2 === 0)],
+    // Una vez al día revisa adendums y seguimientos (solo agrega avisos; no manda correos): así
+    // no le toca a la primera persona que abre la campana en la mañana
+    ['Líneas (revisión diaria de avisos)', () => LineasNotificaciones.revisar(false)],
   ];
 }
 

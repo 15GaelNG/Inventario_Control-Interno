@@ -72,6 +72,7 @@ function crearEntorno(opciones) {
         };
       },
       setFrozenRows: () => hoja,
+      clearContents() { datos.forEach((r) => r.fill('')); return hoja; },
       getDataRange() { return this.getRange(1, 1, ultimaFila(), ancho()); },
       appendRow(r) { datos.splice(ultimaFila(), 0, r.slice()); return hoja; },
       deleteRow(f) { datos.splice(f - 1, 1); },
@@ -105,6 +106,7 @@ function crearEntorno(opciones) {
     putAll: (o) => { Object.keys(o).forEach((k) => cacheMem.set(k, String(o[k]))); },
     remove: (k) => { cacheMem.delete(k); },
     removeAll: (ks) => { ks.forEach((k) => cacheMem.delete(k)); },
+    _claves: () => Array.from(cacheMem.keys()),   // solo para las pruebas (no existe en Apps Script)
   };
 
   const blob = (bytes, tipo, nombre) => ({
@@ -157,6 +159,7 @@ function crearEntorno(opciones) {
     Date: FechaFija,
     SpreadsheetApp: {
       openById: (id) => { if (!libros[id]) throw new Error('No existe el libro ' + id); return libros[id]; },
+      flush: () => {},
     },
     CacheService: { getScriptCache: () => cache, getUserCache: () => cache },
     LockService: {
