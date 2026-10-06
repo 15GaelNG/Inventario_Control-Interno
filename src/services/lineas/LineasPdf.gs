@@ -410,8 +410,8 @@ const LineasPdf = (function () {
   }
 
   // ---------------- Copias del sistema de las plantillas (parte 6, pendiente 2.3; usuario, 6-oct) ----------------
-  // La plantilla del AppSheet no se toca: se copia en su misma carpeta y en la copia «Observaciones» pasa a «Comentario»
-  // y «Director» a «Jefe directo», con sus marcadores ([COMENTARIO], [JEFE DIRECTO]; LineasDatos.COLUMNAS_RENOMBRADAS).
+  // La plantilla del AppSheet no se toca: se copia en su misma carpeta y en la copia «Observaciones» pasa a «Comentario»,
+  // con su marcador ([COMENTARIO]; las columnas de LineasDatos.COLUMNAS_RENOMBRADAS).
   // Se corre desde LineasAdmin (lineasPlantillasComentario_revisar / _copiar).
 
   /** `nuevo` (en mayúsculas) escrito como `palabra`: OBSERVACIONES → COMENTARIO, Observaciones → Comentario, … */

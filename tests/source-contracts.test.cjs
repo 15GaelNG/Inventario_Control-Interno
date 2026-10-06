@@ -278,17 +278,17 @@ test('los formularios de inspección y responsiva siguen el orden y las etiqueta
   // Responsiva (usuario, 4-oct): ordenada como la inspección; una sola fecha (DIA, MES y AÑO salen de ella al guardar)
   assert.deepEqual(orden('function formularioResponsiva_', 'function ocultarSecretos_').filter((c) => c !== 'columna'), ['ID', 'ID LINEA', 'NUCO',
     'MODELO', 'IMEI', 'COLOR', 'No TELEFONO', 'SIM', 'COMPAÑIA', 'RAZON SOCIAL', 'No EMPLEADO', 'RESPONSABLE', 'IDENTIFICACION', 'PUESTO',
-    'DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO', 'JEFE DIRECTO', 'CORREO', 'ACCESORIOS', 'PIN WHATSAPP', 'PIN EQUIPO', 'CONTRASEÑA',
+    'DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO', 'DIRECTOR', 'CORREO', 'ACCESORIOS', 'PIN WHATSAPP', 'PIN EQUIPO', 'CONTRASEÑA',
     'FECHA RESPONSIVA', 'TICKET', 'COMENTARIO', 'FIRMA RESPONSABLE', 'NOMBRE CI', 'FIRMA CI']);
   assert.match(captura, /valores\['MES'\] = MESES\[/);
   assert.match(captura, /'Septiembre'/);
-  // Parte 6 (usuario, 6-oct): el jefe se guarda en JEFE DIRECTO y el comentario en COMENTARIO (antes DIRECTOR y OBSERVACIONES)
-  assert.match(captura, /ed\('JEFE DIRECTO', 'Jefe directo', 'listaAbierta', persona\('JEFE DIRECTO'\)/);
+  // Parte 6 (usuario, 6-oct): la responsiva lleva al director (como el AppSheet) y el comentario va en COMENTARIO
+  assert.match(captura, /ed\('DIRECTOR', 'Director', 'listaAbierta', persona\('DIRECTOR'\), \{ opciones: catalogos\.directores \|\| \[\] \}\)/);
   // Un solo COMENTARIO (plan §5.2): se guarda en COMENTARIO, la columna que imprime el PDF, y es obligatorio
   // Un solo comentario por acción (usuario, 4-oct): en la inspección no es obligatorio si la acción ya pidió el suyo (resguardo)
   assert.match(captura, /campo_\('COMENTARIO', 'Comentario', 'area', \{ valor: '', requerido: enAccion \? 'NUNCA' : 'SIEMPRE' \}\)/);
   assert.match(captura, /campo_\('COMENTARIO', 'Comentario', 'area', \{ valor: '', requerido: 'SIEMPRE' \}\)/);
-  assert.doesNotMatch(captura, /'OBSERVACIONES'|'DIRECTOR'/);
+  assert.doesNotMatch(captura, /'OBSERVACIONES'/);
   assert.match(captura, /const acceso = \(c\) => \(reasignar \? '' : v\(c\)\);/);
   assert.match(captura, /const IDENTIFICACIONES = \['INE', 'LICENCIA DE CONDUCIR'\]/);
   assert.doesNotMatch(captura, /ESTATUS EQUIPO/);

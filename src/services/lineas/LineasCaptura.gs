@@ -216,7 +216,8 @@ const LineasCaptura = (function () {
    * accesorios y accesos; y el paso de firmas en Datos de la responsiva, Comentario y Firmas. Los datos del equipo y
    * la línea se pueden corregir antes de firmar (lo dijo el usuario: la reasignación llevará directo a la responsiva).
    * La fecha es una sola, como en la inspección; DIA, MES y AÑO (los que usa el PDF) se sacan de ella al guardar.
-   * El jefe directo se guarda en JEFE DIRECTO (antes DIRECTOR, donde lo dejaba el AppSheet; parte 6, 6-oct).
+   * Lleva al DIRECTOR de la persona, como el AppSheet; el jefe directo va en la inspección (usuario, 6-oct: del 4 al
+   * 6-oct la responsiva guardó al jefe en DIRECTOR).
    */
   function formularioResponsiva_(fila, catalogos, usuario, id, ahora, modo) {
     // Reasignar (usuario, 4-oct): la responsiva es la acción; equipo y línea fijos, la persona nueva se elige aquí y
@@ -234,7 +235,7 @@ const LineasCaptura = (function () {
     const accesorios = String(acceso('ACCESORIOS') || '').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean).map((x) => (x === 'SD' ? 'TARJETA SD' : x));
     // Al elegir a la persona (o al abrir, si falta algo) se llenan sus datos con lo que dice Capital Humano
     const datosCH = { 'PUESTO': 'puesto', 'DEPARTAMENTO': 'departamento', 'AREA': 'area', 'SEDE': 'sede',
-      'OFICINA / DESARROLLO': 'oficina', 'JEFE DIRECTO': 'jefe', 'CORREO': 'correo' };
+      'OFICINA / DESARROLLO': 'oficina', 'DIRECTOR': 'director', 'CORREO': 'correo' };
     const autoResponsable = Object.assign({ 'No EMPLEADO': 'noEmpleado' }, datosCH);
     return [
       titulo_('EQUIPO', 'smartphone'),
@@ -263,7 +264,7 @@ const LineasCaptura = (function () {
       ed('AREA', 'Área', 'listaAbierta', persona('AREA'), { opciones: catalogos.areas || [] }),
       ed('SEDE', 'Sede', 'listaAbierta', persona('SEDE'), { opciones: catalogos.sedes || [] }),
       ed('OFICINA / DESARROLLO', 'Oficina o desarrollo', 'listaAbierta', persona('OFICINA / DESARROLLO'), { opciones: catalogos.oficinas || [] }),
-      ed('JEFE DIRECTO', 'Jefe directo', 'listaAbierta', persona('JEFE DIRECTO'), { opciones: catalogos.jefes || [] }),
+      ed('DIRECTOR', 'Director', 'listaAbierta', persona('DIRECTOR'), { opciones: catalogos.directores || [] }),
       ed('CORREO', 'Correo', 'texto', persona('CUENTA GOOGLE'), { literal: true }),
       titulo_('ACCESORIOS Y ACCESOS', 'key-round'),
       ed('ACCESORIOS', 'Accesorios entregados', 'multi', accesorios.join(' , '), {

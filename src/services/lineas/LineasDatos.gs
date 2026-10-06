@@ -36,12 +36,12 @@ const LineasDatos = (function () {
   /**
    * Columnas renombradas (parte 6, pendiente 2.3; usuario, 6-oct): viejo → nuevo. El código usa solo el nombre nuevo;
    * mientras la hoja siga con el viejo (hasta correr lineasRenombrarColumnasDocumentos, LineasAdmin), el viejo cuenta
-   * como el nuevo. Si la hoja ya tiene el nuevo, el viejo se deja como está. En RESPONSIVAS, DIRECTOR guardaba al jefe
-   * directo desde el AppSheet.
+   * como el nuevo. Si la hoja ya tiene el nuevo, el viejo se deja como está. DIRECTOR de la responsiva no cambia: vuelve
+   * a ser el director (usuario, 6-oct).
    */
   const COLUMNAS_RENOMBRADAS = {
     'INSPECCIONES LINEAS': { 'OBSERVACIONES': 'COMENTARIO' },
-    'RESPONSIVAS LINEAS': { 'OBSERVACIONES': 'COMENTARIO', 'DIRECTOR': 'JEFE DIRECTO' },
+    'RESPONSIVAS LINEAS': { 'OBSERVACIONES': 'COMENTARIO' },
   };
 
   /**

@@ -9,9 +9,9 @@ const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 
 test('sin «¿Qué pasó?» ni regla de estatus: regresa «Cambiar estatus» (usuario, 4-oct)', () => {
   const acciones = read('src/services/lineas/LineasAcciones.gs');
-  assert.match(acciones, /return \{ reasignar, PERSONA_DE_RESPONSIVA, directorDeCH_ \};/);
-  // Reasignar: el director sale de Capital Humano y el jefe directo de la responsiva (usuario, 4-oct)
-  assert.match(acciones, /cambios\['DIRECTOR'\] = directorDeCH_\(valores\['No EMPLEADO'\], valores\['RESPONSABLE'\]\);/);
+  assert.match(acciones, /return \{ reasignar, PERSONA_DE_RESPONSIVA, datoDeCH_ \};/);
+  // Reasignar: el director sale de la responsiva y el jefe directo de Capital Humano (usuario, 6-oct)
+  assert.match(acciones, /cambios\['JEFE DIRECTO'\] = datoDeCH_\(valores\['No EMPLEADO'\], valores\['RESPONSABLE'\], 'jefe'\);/);
   assert.doesNotMatch(acciones, /function (reglas|permite|hayCamino|cerrar|cambiar)\(/);
   assert.match(read('src/services/TelefoniaService.gs'), /function catalogos\(token\) \{\r?\n    leer_\(token\);\r?\n    return LineasRepo\.catalogos\(\);/);
   const api = read('src/ClientApi.gs');
@@ -127,7 +127,7 @@ test('Reasignar: la responsiva es la acción; equipo y línea fijos; accesorios 
   assert.doesNotMatch(cuerpo, /permite\(/); // desde cualquier estatus (usuario, 4-oct)
   assert.match(cuerpo, /ya lo tiene/); // la misma persona no es reasignación
   assert.match(cuerpo, /registrarMovimiento\('REASIGNACION', \{ motivo: comentario, ticket: txt\(valores\['TICKET'\]\) \}/);
-  assert.match(acciones, /\['JEFE DIRECTO', 'JEFE DIRECTO'\]/); // parte 6 (6-oct): antes la responsiva lo guardaba en DIRECTOR
+  assert.match(acciones, /\['DIRECTOR', 'DIRECTOR'\]/); // la responsiva lleva al director (usuario, 6-oct)
   assert.match(read('src/ClientApi.gs'), /function apiLineasReasignar\(token, responsiva\)/);
   const captura = read('src/services/lineas/LineasCaptura.gs');
   assert.match(captura, /const persona = \(c\) => \(reasignar \? '' : v\(c\)\);/);
@@ -197,7 +197,7 @@ test('Reasignar: la inspección es obligatoria (usuario, 5-oct): de ese equipo y
       leerRegistroObligatorio: () => ({ ID: 'EQU-1', NUCO: 12, 'ESTATUS EQUIPO': 'RESGUARDO', RESPONSABLE: 'ANA' }),
       guardarCambiosRegistro: (...a) => { escritos.push(a); return { refs: [], campos: [] }; },
       registrarMovimiento: (...a) => escritos.push(a),
-      indiceColaboradores: () => ({ columnas: ['noEmpleado', 'nombre', 'director'], filas: [] }),
+      indiceColaboradores: () => ({ columnas: ['noEmpleado', 'nombre', 'director', 'jefe'], filas: [] }),
     },
     LineasCaptura: {
       exigirInspeccion: (id, ids, nombre) => {

@@ -416,11 +416,11 @@ function lineasPruebas4oct_borrar() {
 }
 
 
-// ---------------- Parte 6 (pendiente 2.3): COMENTARIO y JEFE DIRECTO (usuario, 6-oct) ----------------
-// Hojas: OBSERVACIONES → COMENTARIO en INSPECCIONES y RESPONSIVAS LINEAS, y DIRECTOR → JEFE DIRECTO en RESPONSIVAS (ahí el
-// AppSheet guardaba al jefe). Solo cambia el encabezado; mientras no se corra, el código acepta los dos nombres
-// (LineasDatos.COLUMNAS_RENOMBRADAS). Plantillas: copia de cada una del AppSheet (que no se toca) con «Comentario»,
-// «Jefe directo» y sus marcadores (LineasPdf). Primero los _revisar, que no escriben.
+// ---------------- Parte 6 (pendiente 2.3): COMENTARIO (usuario, 6-oct) ----------------
+// Hojas: OBSERVACIONES → COMENTARIO en INSPECCIONES y RESPONSIVAS LINEAS (la responsiva sigue con DIRECTOR y la
+// inspección con JEFE DIRECTO). Solo cambia el encabezado; mientras no se corra, el código acepta los dos nombres
+// (LineasDatos.COLUMNAS_RENOMBRADAS). Plantillas: copia de cada una del AppSheet (que no se toca) con «Comentario» y su
+// marcador (LineasPdf). Primero los _revisar, que no escriben.
 
 /** Plantilla → la hoja de la que sale su registro (sus columnas renombradas). */
 const PLANTILLAS_COMENTARIO_ = { INSPECCION_CELULAR: 'INSPECCIONES LINEAS', RESPONSIVA_CELULAR: 'RESPONSIVAS LINEAS' };

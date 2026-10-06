@@ -1,6 +1,7 @@
-// Parte 6, pendiente 2.3 (usuario, 6-oct): OBSERVACIONES → COMENTARIO en INSPECCIONES y RESPONSIVAS LINEAS, y
-// DIRECTOR → JEFE DIRECTO en RESPONSIVAS. Mientras la hoja siga con el nombre viejo, LineasDatos lo trata como el nuevo;
-// las copias de las plantillas cambian el título que se lee y el marcador de la columna sola (LineasPdf.renombresEnTexto).
+// Parte 6, pendiente 2.3 (usuario, 6-oct): OBSERVACIONES → COMENTARIO en INSPECCIONES y RESPONSIVAS LINEAS. La responsiva
+// sigue con DIRECTOR (el director) y la inspección con JEFE DIRECTO. Mientras la hoja siga con el nombre viejo,
+// LineasDatos lo trata como el nuevo; las copias de las plantillas cambian el título que se lee y el marcador de la
+// columna sola (LineasPdf.renombresEnTexto).
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -44,11 +45,12 @@ test('la hoja con los nombres viejos se lee y se escribe con los nuevos', () => 
     'ASIGNACIONES': [['ID', 'DIRECTOR', 'JEFE DIRECTO'], ['ASG-1', 'MARTA', 'LUIS']],
   });
   const r = D.tablaFresca('RESPONSIVAS LINEAS');
-  assert.equal(D.colIndice(r, 'JEFE DIRECTO'), 2);
   assert.equal(D.colIndice(r, 'COMENTARIO'), 3);
-  assert.equal(D.colIndice(r, 'DIRECTOR'), -1, 'el nombre viejo ya no se usa');
+  assert.equal(D.colIndice(r, 'OBSERVACIONES'), -1, 'el nombre viejo ya no se usa');
+  assert.equal(D.colIndice(r, 'DIRECTOR'), 2, 'la responsiva lleva al director');
+  assert.equal(D.colIndice(r, 'JEFE DIRECTO'), -1);
   const fila = D.leerTabla('RESPONSIVAS LINEAS')[0];
-  assert.equal(fila['JEFE DIRECTO'], 'LUIS');
+  assert.equal(fila['DIRECTOR'], 'LUIS');
   assert.equal(fila['COMENTARIO'], 'ENTREGA');
 
   const i = D.tablaFresca('INSPECCIONES LINEAS');
@@ -63,12 +65,12 @@ test('la hoja con los nombres viejos se lee y se escribe con los nuevos', () => 
 
 test('con la hoja ya renombrada no cambia nada, y si están los dos se queda cada uno', () => {
   const D = cargarDatos({
-    'RESPONSIVAS LINEAS': [['ID', 'JEFE DIRECTO', 'COMENTARIO', 'DIRECTOR'], ['RLI-1', 'LUIS', 'ENTREGA', 'VIEJO']],
+    'RESPONSIVAS LINEAS': [['ID', 'COMENTARIO', 'DIRECTOR', 'OBSERVACIONES'], ['RLI-1', 'ENTREGA', 'LUIS', 'VIEJO']],
   });
   const r = D.tablaFresca('RESPONSIVAS LINEAS');
-  assert.equal(D.colIndice(r, 'JEFE DIRECTO'), 1);
-  assert.equal(D.colIndice(r, 'COMENTARIO'), 2);
-  assert.equal(D.colIndice(r, 'DIRECTOR'), 3);
+  assert.equal(D.colIndice(r, 'COMENTARIO'), 1);
+  assert.equal(D.colIndice(r, 'DIRECTOR'), 2);
+  assert.equal(D.colIndice(r, 'OBSERVACIONES'), 3);
 });
 
 function cargarPdf() {
@@ -77,6 +79,7 @@ function cargarPdf() {
   return ctx.P;
 }
 
+// renombresEnTexto sirve para cualquier columna renombrada: se prueba también con una segunda (DIRECTOR)
 test('las copias de las plantillas cambian el título y el marcador de la columna sola', () => {
   const P = cargarPdf();
   const mapa = { OBSERVACIONES: 'COMENTARIO', DIRECTOR: 'JEFE DIRECTO' };
@@ -99,7 +102,7 @@ test('las copias de las plantillas cambian el título y el marcador de la column
   assert.equal(r[0].marcador, otra);
   // Palabras más largas no cuentan
   assert.deepEqual(JSON.parse(JSON.stringify(P.renombresEnTexto('DIRECTORA, DIRECTORES, SUBDIRECTOR', mapa))), []);
-  // La inspección no renombra DIRECTOR: con su mapa no hay nada que cambiar
+  // Con el mapa de hoy (solo OBSERVACIONES) «Director» no se toca
   assert.deepEqual(JSON.parse(JSON.stringify(P.renombresEnTexto('Director', { OBSERVACIONES: 'COMENTARIO' }))), []);
 });
 
