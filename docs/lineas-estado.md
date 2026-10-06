@@ -1,6 +1,7 @@
 # Líneas — estado del módulo
 
-Ramas `emmanuel` = `master` · Producción: versión 56 · Última actualización: 2026-10-06
+Rama `emmanuel` (adelante de `master` con la parte 6: COMENTARIO y plantillas «(SISTEMA)», solo en el DEV) · Producción:
+versión 56 · Última actualización: 2026-10-06
 
 Qué es hoy el módulo **Líneas** (equipos celulares y líneas telefónicas), dónde vive cada cosa y cómo se trabaja.
 La bitácora anterior de este archivo (§0a…§0ae, hasta el 1-oct) sigue en el historial de git. El diseño de las hojas
@@ -13,11 +14,14 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   Historial; Editar en pestañas con Agregar equipo / Agregar línea; TIPO se calcula solo (EQUIPO, EQUIPO + SIM,
   EQUIPO + SIM BASICO, LINEA, LINEA BASICA, BANDA ANCHA, MODEM, CAMARA).
 - **Acciones con nombre:** nueva inspección, nueva responsiva, Reasignar (responsiva y luego inspección, las dos
-  obligatorias; el servidor exige la inspección del día; el equipo queda en USO), Mandar a resguardo (pide la
+  obligatorias; el servidor exige la inspección del día; el equipo queda en USO; el director sale de la responsiva y
+  el jefe directo de Capital Humano), Mandar a resguardo (pide la
   inspección de lo que viene de una persona), Mandar a cancelación, Subir PDF firmado (del sistema, del AppSheet o de
   NUCOS: versión nueva del PDF de NUCOS o, si no tiene, PDF nuevo en la carpeta de NUCOS de la captura o del día),
   Regenerar PDF (responsivas del sistema: versión nueva del mismo archivo; pasadas 6 h pide solo las firmas). Cada
   acción deja un renglón en el historial con su comentario.
+- **Inspección y responsiva:** un solo «Comentario» (columna COMENTARIO, antes OBSERVACIONES). La inspección lleva al
+  jefe directo y la responsiva al director, los dos de Capital Humano como en el AppSheet.
 - **Secretos** (PIN, patrones, contraseñas, firmas): los ven ADMIN y el área `LINEAS` de USUARIOS
   (`TelefoniaService.puedeVerSecretos_`).
 - **Patrón:** EQUIPOS.PATRON guarda los puntos trazados en el sistema («1-5-9») o la ruta de la imagen del AppSheet.
@@ -39,7 +43,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 | ADENDUMS, CUENTAS | Plan, costo y fin de plan por línea; cuentas padre y razón social |
 | FACTURAS | Vacía: la llenará la carga mensual del proveedor |
 | CATALOGOS, LISTAS TELEFONOS | Listas de opciones |
-| INSPECCIONES LINEAS, RESPONSIVAS LINEAS | Los documentos capturados (PDF en NUCOS) |
+| INSPECCIONES LINEAS, RESPONSIVAS LINEAS | Los documentos capturados (PDF en NUCOS). El comentario va en COMENTARIO; mientras la hoja diga OBSERVACIONES, el sistema la toma como COMENTARIO (`LineasDatos.COLUMNAS_RENOMBRADAS`) hasta correr `lineasRenombrarColumnasDocumentos` (`LineasAdmin.gs`) |
 | MOVIMIENTOS | Historial único: un renglón por acción (`LineasRepo.registrarMovimiento`) |
 | APP_MOVIMIENTOS, CAMBIOS LINEAS TELEFONICAS | Historial de antes del 4-oct (APP_MOVIMIENTOS trae las pestañas retiradas con TIPO HISTORICO; CAMBIOS, la bitácora del AppSheet). La ficha los lee hasta que pasen a MOVIMIENTOS |
 | APP_RESGUARDOS, APP_NOTIFICACIONES, APP_EVIDENCIAS, APP_CORRECCIONES | Bandeja de Pau, avisos, fotos y correcciones |
@@ -50,7 +54,9 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 de arriba (`LINEAS_LECTURA = ESTRUCTURA`, `LINEAS_HOJA_VIEJA_RETIRADA`).
 
 **Drive:** documentos y fotos en la carpeta de cada NUCO dentro de NUCOS (`LINEAS_DRIVE_NUCOS`); lo que no tiene NUCO, en
-la carpeta de la app (`LINEAS_DRIVE_APPSHEET`). **PDF:** plantillas de Google Docs del AppSheet (`LineasPdf.PLANTILLAS`);
+la carpeta de la app (`LINEAS_DRIVE_APPSHEET`). **PDF:** copias «(SISTEMA)» de las plantillas de Google Docs del
+AppSheet, en sus mismas carpetas (FORMATOS y RESPONSIVAS_LINEAS), con «Comentario» (`LineasPdf.PLANTILLAS`; las
+originales, que no se tocan, en `PLANTILLAS_APPSHEET`; las copias las hace `lineasPlantillasComentario_copiar`);
 la responsiva conserva los márgenes de su plantilla y su interlineado se ajusta para salir igual que la impresión del
 AppSheet (HTML con Chromium), en 2 hojas (`LineasPdf.COMO_APPSHEET`). El patrón se puede dibujar en el servidor
 (`LineasPatronPng.gs`).
