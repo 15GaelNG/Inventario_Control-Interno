@@ -7,11 +7,13 @@
  * navegador tiene que leer. Los .gs se copian tal cual (los errores del servidor siguen
  * diciendo archivo y renglón reales).
  *
- * El cuidado de siempre (CLAUDE.md): Apps Script corta lo que sigue a un "//" en un .html,
- * aunque esté dentro de un string. El compresor convierte 'https:\/\/…' de vuelta en
- * 'https://…', así que después de comprimir se vuelven a escapar las "/" de cada string y
- * template. Si aun así queda un "//" (p. ej. dentro de una expresión regular), ese bloque se
- * deja SIN comprimir: nunca se sube algo que Apps Script pueda cortar.
+ * El cuidado de siempre (CLAUDE.md): Apps Script corta lo que sigue a un "//" y BORRA lo que
+ * hay entre "/*" y el siguiente "*\/", aunque estén dentro de un string. En el código legible
+ * casi no se nota (cada renglón empieza de nuevo), pero comprimido todo es UN renglón: un
+ * accept="image/*" se comió el resto del archivo y el principio del siguiente (página en
+ * blanco, 6-oct). Por eso, después de comprimir, en cada string y template se escapan las "/"
+ * y los "*" ("\/" y "\*" valen lo mismo en JS), y si aun así queda un "//" o un "/*" (p. ej.
+ * dentro de una expresión regular), ese bloque se deja SIN comprimir.
  *
  *   node tools/subir/construir.js [destino]     (por omisión .construido/revisar)
  *
@@ -25,24 +27,27 @@ const acorn = require('acorn');
 
 const RAIZ = path.resolve(__dirname, '..', '..');
 
-/** Las "/" de un string o template, escapadas ("\/" es la misma "/" para JS) */
+/** Lo que Apps Script toma por comentario aunque esté dentro de un string */
+const PELIGROSO = /\/\/|\/\*/;
+
+/** Las "/" y "*" de un string o template, escapadas ("\/" y "\*" son la misma "/" y "*" para JS) */
 function escaparDiagonales_(crudo) {
   let salida = '';
   for (let i = 0; i < crudo.length; i++) {
     const c = crudo[i];
     if (c === '\\') { salida += c + (crudo[i + 1] || ''); i++; continue; }
-    salida += c === '/' ? '\\/' : c;
+    salida += c === '/' ? '\\/' : c === '*' ? '\\*' : c;
   }
   return salida;
 }
 
-/** Vuelve a escapar las "/" de los strings y templates del código ya comprimido */
+/** Vuelve a escapar las "/" y "*" de los strings y templates del código ya comprimido */
 function sinDobleDiagonal_(codigo) {
-  if (!codigo.includes('//')) return codigo;
+  if (!PELIGROSO.test(codigo)) return codigo;
   const cambios = [];
   for (const t of acorn.tokenizer(codigo, { ecmaVersion: 'latest', sourceType: 'script' })) {
     const tipo = t.type.label;
-    if ((tipo === 'string' || tipo === 'template') && codigo.slice(t.start, t.end).includes('/')) {
+    if ((tipo === 'string' || tipo === 'template') && /[/*]/.test(codigo.slice(t.start, t.end))) {
       cambios.push([t.start, t.end, escaparDiagonales_(codigo.slice(t.start, t.end))]);
     }
   }
@@ -86,8 +91,8 @@ async function comprimirHtml(texto) {
     } catch (e) {
       sinComprimir.push('no se pudo comprimir (' + e.message + ')');
     }
-    if (comprimido !== null && comprimido.includes('//')) {
-      sinComprimir.push('quedaba un "//" (una expresión regular, quizá)');
+    if (comprimido !== null && PELIGROSO.test(comprimido)) {
+      sinComprimir.push('quedaba un "//" o "/*" (una expresión regular, quizá)');
       comprimido = null;
     }
     salida += comprimido === null ? m[0] : '<script>' + comprimido + '</script>';
@@ -96,8 +101,8 @@ async function comprimirHtml(texto) {
   salida = salida.replace(/<style>([\s\S]*?)<\/style>/g, (bloque, css) => {
     if (css.includes('<?')) return bloque;
     const corto = csso.minify(css, { restructure: false }).css;
-    // Igual que el JS: un "//" que no estaba en el original no se sube
-    return corto.includes('//') && !css.includes('//') ? bloque : '<style>' + corto + '</style>';
+    // Igual que el JS: ni "//" ni "/*" en lo comprimido (todo queda en un renglón)
+    return PELIGROSO.test(corto) ? bloque : '<style>' + corto + '</style>';
   });
   return { texto: salida, sinComprimir: sinComprimir };
 }

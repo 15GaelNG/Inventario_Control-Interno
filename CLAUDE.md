@@ -26,6 +26,13 @@ con un comentario. Ejemplos ya corregidos: los botones "Ver reporte"
 Esto NO aplica a URLs dentro de atributos HTML normales (`src="https://..."`,
 `href="https://..."`) fuera de un `<script>` — esas están a salvo.
 
+**Lo mismo con `/*`:** Apps Script también BORRA lo que hay entre `/*` y el siguiente `*/`,
+aunque esté en un string (p. ej. `accept="image/*"`). En el código legible casi nunca se nota,
+pero en una sola línea se comió el resto del archivo y el principio del siguiente (página en
+blanco, 6-oct, con la versión comprimida). El compresor ya escapa `/` y `*` en los strings, y
+`npm run push` baja la página como la entrega Apps Script y revisa cada `<script>`
+(tools/subir/pagina-servida.js): **la vista previa local no ve este problema, eso sí.**
+
 ## Estructura de `src/html/js/`
 
 `app.html` creció demasiado varias veces y hay que mantenerlo dividido en

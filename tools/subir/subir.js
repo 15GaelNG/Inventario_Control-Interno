@@ -20,6 +20,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 const { construir } = require('./construir');
+const { revisar } = require('./pagina-servida');
 
 const RAIZ = path.resolve(__dirname, '..', '..');
 const PROYECTOS = { dev: '.clasp.json', lab: '.clasp.lab.json', prod: '.clasp.prod.json', rama: null };
@@ -127,6 +128,18 @@ async function main() {
   quedo.forEach((_, nombre) => { if (!subido.has(nombre)) distintos.push(nombre + ' (sobra)'); });
   if (distintos.length) throw new Error('Lo que quedó en Apps Script no es lo que se subió: ' + distintos.join(', '));
   console.log('Verificado: ' + subido.size + ' archivos iguales allá.');
+
+  // Y la página como la entrega Apps Script (que corta "//" y "/*"): cada <script> completo y
+  // válido. En prod esto pasa ANTES de mover los despliegues: algo roto nunca le llega a nadie.
+  const head = /-\s+(\S+)\s+@HEAD/.exec(clasp(['-P', proyecto, 'list-deployments']));
+  if (!head) throw new Error('El proyecto no tiene despliegue @HEAD para revisar la página');
+  const bloques = [];
+  subido.forEach((ruta) => {
+    if (!ruta.endsWith('.html') || path.basename(ruta) === 'Index.html') return;
+    for (const m of fs.readFileSync(ruta, 'utf8').matchAll(/<script>([\s\S]*?)<\/script>/g)) bloques.push(m[1]);
+  });
+  const revisada = await revisar(head[1], DESTINOS.dominio, bloques);
+  console.log('Página revisada como la entrega Apps Script: ' + revisada.scripts + ' scripts completos y válidos.');
 
   if (descripcion) {
     const primero = clasp(['-P', proyecto, 'update-deployment', DESPLIEGUES_PROD[0], '-d', descripcion]);

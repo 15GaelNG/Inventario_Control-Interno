@@ -19,6 +19,10 @@ const ok = (cond, texto) => { console.log((cond ? '  ✔ ' : '  ✘ ') + texto);
   const conInvertida = sinDobleDiagonal_("var a='a\\\\/b//'");
   ok(conInvertida === "var a='a\\\\\\/b\\/\\/'" && new Function(conInvertida + ';return a;')() === 'a\\/b//', 'una diagonal invertida escapada no se confunde');
 
+  // 6-oct: accept="image/*" en un renglón comprimido hizo que Apps Script borrara hasta el siguiente "*/"
+  const estrella = sinDobleDiagonal_('var a=`<input accept="image/*">`,b=1;');
+  ok(!estrella.includes('/*') &&new Function(estrella + ';return a;')() === '<input accept="image/*">', 'un "/*" dentro de un template también se escapa y vale lo mismo: ' + estrella);
+
   console.log('2. Un <script> comprimido');
   const html = "<script>\n  // comentario\n  function irA(u) { return 'https:\\/\\/sitio.com/' + u; }\n</script>";
   const r = await comprimirHtml(html);
@@ -45,12 +49,12 @@ const ok = (cond, texto) => { console.log((cond ? '  ✔ ' : '  ✘ ') + texto);
       if (e.isDirectory()) return recorrer(ruta);
       if (!e.name.endsWith('.html') || e.name === 'Index.html') return;
       for (const m of fs.readFileSync(ruta, 'utf8').matchAll(/<script>([\s\S]*?)<\/script>/g)) {
-        if (m[1].includes('//')) conBarras.push(path.relative(destino, ruta));
+        if (m[1].includes('//') || m[1].includes('/*')) conBarras.push(path.relative(destino, ruta));
         try { new Function(m[1]); } catch (err) { invalidos.push(path.relative(destino, ruta) + ': ' + err.message); }
       }
     });
   })(destino);
-  ok(!conBarras.length, conBarras.length ? 'con "//": ' + conBarras.join(', ') : 'ningún <script> comprimido trae "//"');
+  ok(!conBarras.length, conBarras.length ? 'con "//" o "/*": ' + conBarras.join(', ') : 'ningún <script> comprimido trae "//" ni "/*"');
   ok(!invalidos.length, invalidos.length ? 'JS inválido: ' + invalidos.join('; ') : 'todo el JS comprimido es válido');
   const igual = (rel) => fs.readFileSync(path.join(__dirname, '..', 'src', rel), 'utf8') === fs.readFileSync(path.join(destino, rel), 'utf8');
   ok(igual('html/Index.html'), 'Index.html (con sus scriptlets) va tal cual');
