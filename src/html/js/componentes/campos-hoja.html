@@ -23,13 +23,16 @@
    * servidor. El id de cada control es `prefijo + '-' + CamposHoja.slug(clave)`.
    *
    * ─── TIPOS ────────────────────────────────────────────────────────────────────────
-   *   text · number (acepta decimales) · date · email · select · file · firma
+   *   text · number (acepta decimales) · date · email · select · file · firma · sino
    *   select + catalogo: caja de texto con sugerencias (datalist): se puede escribir una
    *     opción que todavía no está. Se llena con llenarOpciones(id, valores).
    *   select + opciones: lista cerrada. Al editar, un valor guardado que ya no está en la
    *     lista se agrega como opción extra, para que no se borre en silencio al guardar.
    *   file: input de archivo + "Ver archivo actual" (multiple: varias imágenes a la vez).
    *   firma: recuadro para firmar con mouse o dedo (el módulo lo conecta).
+   *   sino: dos botones (Sí / No) en vez de un <select> -- para listas largas de
+   *     SI/NO (checklists de entrega). Guarda "SI" o "NO"; se lee y se llena igual que
+   *     cualquier otro campo (recolectar/poblar), no necesita cableado aparte.
    *
    * ─── OPCIONES DE CADA CAMPO ───────────────────────────────────────────────────────
    *   grupo          título de la sección; sin grupo, el campo va sin título (formularios
@@ -87,6 +90,16 @@
               <button type="button" class="secondary firma-pad-limpiar" data-target="${id}"><i data-lucide="eraser" class="ico"></i> Limpiar firma</button>
             </div>
             <div class="file-actual" id="${id}-actual"></div>
+          </div>`;
+      }
+      if (campo.tipo === 'sino') {
+        return `<div class="field field-sino"${mostrarSi}>
+            <label>${campo.etiqueta}</label>
+            <div class="sino-toggle" data-for="${id}">
+              <button type="button" class="sino-btn" data-valor="SI">Sí</button>
+              <button type="button" class="sino-btn" data-valor="NO">No</button>
+            </div>
+            <input type="hidden" id="${id}" />
           </div>`;
       }
       if (campo.tipo === 'select' && campo.bloqueadoAlCrear && !esEdicion) {
@@ -187,10 +200,31 @@
         const mostrado = op.mostrar ? op.mostrar(campo, valor, el) : undefined;
         el.value = mostrado !== undefined ? mostrado
           : (campo.tipo === 'date' && typeof fechaParaInput === 'function' ? fechaParaInput(valor) : valor);
+        if (campo.tipo === 'sino') marcarSino_(id, el.value);
         if (op.despues && op.despues[campo.clave]) op.despues[campo.clave](prefijo);
       });
       actualizarVisibles(campos, prefijo);
     }
+
+    /** Marca el botón Sí/No que corresponde al valor; el otro queda sin marcar. */
+    function marcarSino_(id, valor) {
+      const toggle = document.querySelector('.sino-toggle[data-for="' + id + '"]');
+      if (!toggle) return;
+      toggle.querySelectorAll('.sino-btn').forEach((b) => b.classList.toggle('activo', b.dataset.valor === valor));
+    }
+    // Un clic en Sí/No guarda el valor en su input oculto y lo marca -- delegado en
+    // document porque los campos se insertan con innerHTML después de que este módulo
+    // carga (uno solo sirve para todos los formularios, sin que cada uno los cablee).
+    document.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('.sino-btn');
+      if (!btn) return;
+      const toggle = btn.closest('.sino-toggle');
+      const input = toggle && document.getElementById(toggle.dataset.for);
+      if (!input) return;
+      input.value = btn.dataset.valor;
+      marcarSino_(input.id, btn.dataset.valor);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
 
     /** Muestra u oculta los campos con mostrarSiCampo/mostrarSiValor según el valor actual. */
     function actualizarVisibles(campos, prefijo) {

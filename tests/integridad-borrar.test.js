@@ -209,7 +209,11 @@ console.log('\n11. Entidades.REFERENCIAS dice lo mismo que MIGRACION_REFERENCIAS
   const migracion = vm.runInNewContext('(' + bloque.slice(bloque.indexOf('['), bloque.indexOf('\n];') + 2) + ')');
   const clave = (hoja, padre, columna) => hoja + ' → ' + padre + ' por ' + columna;
   const deMig = migracion.map((r) => clave(r.hoja, r.padre, r.destino || r.columna)).sort();
-  const deEnt = E.REFERENCIAS.filter((r) => r.padre !== 'PERSONAS').map((r) => clave(r.hoja, r.padre, r.columna)).sort();
+  // RESPONSIVA VEHICULAR / ADHERENTE VEHICULAR: mismo caso que PERSONAS — hojas nuevas que
+  // nunca existieron en AppSheet ni se poblaron por migración, así que no hay con qué
+  // verificar un "esperado" de coincidencia.
+  const HOJAS_SIN_MIGRACION = ['RESPONSIVA VEHICULAR', 'ADHERENTE VEHICULAR'];
+  const deEnt = E.REFERENCIAS.filter((r) => r.padre !== 'PERSONAS' && HOJAS_SIN_MIGRACION.indexOf(r.hoja) === -1).map((r) => clave(r.hoja, r.padre, r.columna)).sort();
   const faltan = deMig.filter((x) => deEnt.indexOf(x) === -1);
   const sobran = deEnt.filter((x) => deMig.indexOf(x) === -1);
   ok(!faltan.length, 'ninguna de la migración falta: ' + faltan.join('; '));

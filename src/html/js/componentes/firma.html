@@ -53,6 +53,9 @@
    *   const f = Firma.crear(contenedor, { nombre: 'JUAN PÉREZ', marca: 'Firma aquí con el dedo', alCambiar: (vacia) => … });
    *   f.vacia() · f.limpiar() · f.ajustar() · f.setNombre('…')
    *   f.exportar()  → { base64, mimeType }: el trazo recortado (PNG transparente) o la foto subida
+   *   f.cargarFoto(base64, mimeType)  → mete una imagen ya lista, como si se hubiera elegido
+   *     con "Usar foto" (p. ej. la firma de alguien que siempre entrega, autocargada al
+   *     reconocer su nombre). Sigue siendo corregible: "Borrar" la quita igual que cualquier otra.
    *
    * Plan B: "Subir foto de la firma" (permitirImagen, activo por defecto). Para cuando el
    * trazo no funciona en el equipo, o la persona firmó en papel y no está presente. La foto
@@ -85,6 +88,7 @@
       mouse: { min: 1.11, max: 2.03, techo: 7.0 },
     };
     const PESO_VELOCIDAD = 0.7;
+    const COLOR_TINTA = '#1463D6';   // azul de pluma -- como una firma de verdad, no negro de fotocopia
     const LARGO_TAPER = 16;   // px de recorrido en los que el trazo abre
 
     function crear(contenedor, config) {
@@ -154,8 +158,8 @@
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         // Se pinta con discos rellenos de radio variable: canvas no sabe hacer un
         // stroke de ancho variable a lo largo de una curva
-        ctx.fillStyle = '#000000';
-        ctx.strokeStyle = '#000000';
+        ctx.fillStyle = COLOR_TINTA;
+        ctx.strokeStyle = COLOR_TINTA;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         if (respaldo) {
@@ -381,6 +385,20 @@
         });
       }
 
+      /** Mete una foto ya lista (subida por la persona, o precargada por el módulo) */
+      function ponerFoto(datos) {
+        limpiar();
+        foto = datos;
+        const vista = document.createElement('img');
+        vista.className = 'firma-imagen';
+        vista.alt = 'Firma subida';
+        vista.src = 'data:' + foto.mimeType + ';base64,' + foto.base64;
+        caja.appendChild(vista);
+        caja.classList.add('con-trazo');
+        pintarEstado('✓ Firmado con foto');
+        if (cfg.alCambiar) cfg.alCambiar(false);
+      }
+
       const archivo = contenedor.querySelector('.firma-archivo');
       if (archivo) {
         contenedor.querySelector('.firma-subir').addEventListener('click', () => archivo.click());
@@ -397,19 +415,7 @@
             return;
           }
           const lector = new FileReader();
-          lector.onload = async () => {
-            const reducida = await reducir(String(lector.result), elegido.type);
-            limpiar();
-            foto = reducida;
-            const vista = document.createElement('img');
-            vista.className = 'firma-imagen';
-            vista.alt = 'Firma subida';
-            vista.src = 'data:' + foto.mimeType + ';base64,' + foto.base64;
-            caja.appendChild(vista);
-            caja.classList.add('con-trazo');
-            pintarEstado('✓ Firmado con foto');
-            if (cfg.alCambiar) cfg.alCambiar(false);
-          };
+          lector.onload = async () => ponerFoto(await reducir(String(lector.result), elegido.type));
           lector.readAsDataURL(elegido);
         });
       }
@@ -431,6 +437,7 @@
         limpiar,
         ajustar,
         exportar,
+        cargarFoto: (base64, mimeType) => ponerFoto({ base64: base64, mimeType: mimeType || 'image/png' }),
         destruir() {
           if (observador) observador.disconnect(); else window.removeEventListener('resize', ajustar);
           contenedor.innerHTML = '';

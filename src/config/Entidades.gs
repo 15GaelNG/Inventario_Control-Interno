@@ -68,6 +68,12 @@ const Entidades = (function () {
     'VEHICULOS': { prefijo: 'VEH', llaveAnterior: 'ID_VEHICULO', familia: 'vehiculos' },
     'CAMBIOS VEHICULOS': { prefijo: 'CVE', llaveAnterior: 'ID_CAMBIO', familia: 'vehiculos' },
     'REASIGNACIONES_VEHICULOS': { prefijo: 'RVE', llaveAnterior: 'ID Reasignacion Vehicular', familia: 'vehiculos' },
+    // Responsiva vehicular firmada (formato F-CI01-045): no viene de AppSheet, la crea el
+    // módulo nuevo ResponsivaVehicularService.
+    'RESPONSIVA VEHICULAR': { prefijo: 'RSV', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'vehiculos' },
+    // Corresponsabilidad vehicular firmada por un adherente (formato F-CI01-047): gemela de
+    // RESPONSIVA VEHICULAR, la crea AdherenteVehicularService.
+    'ADHERENTE VEHICULAR': { prefijo: 'ADH', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'vehiculos' },
     // Reasignaciones de LÍNEAS (no de vehículos, pese a lo parecido del nombre).
     // La escribe LineasRepo; su "ID Linea" apunta a LINEAS TELEFONICAS (99.9% en producción).
     'VERIFICACIONES': { prefijo: 'VER', llaveAnterior: 'ID_VERIFICACION', familia: 'vehiculos' },
@@ -167,6 +173,8 @@ const Entidades = (function () {
   const REFERENCIAS = [
     { hoja: 'VERIFICACIONES', columna: 'ID VEHICULO', padre: 'VEHICULOS', llave: { columna: 'FOLIO VEHICULO', enPadre: 'FOLIO' } },
     { hoja: 'REASIGNACIONES_VEHICULOS', columna: 'ID VEHICULO', padre: 'VEHICULOS', llave: { columna: 'Folio Vehiculo', enPadre: 'FOLIO' } },
+    { hoja: 'RESPONSIVA VEHICULAR', columna: 'ID VEHICULO', padre: 'VEHICULOS', llave: { columna: 'FOLIO VEHICULO', enPadre: 'FOLIO' } },
+    { hoja: 'ADHERENTE VEHICULAR', columna: 'ID VEHICULO', padre: 'VEHICULOS', llave: { columna: 'FOLIO VEHICULO', enPadre: 'FOLIO' } },
     { hoja: 'INSTALACION DE SENSORES', columna: 'ID VEHICULO', padre: 'VEHICULOS', llave: { columna: 'FOLIO', enPadre: 'FOLIO' } },
     { hoja: 'INSPECCION VEHICULAR', columna: 'ID VEHICULO', padre: 'VEHICULOS', llave: { columna: 'FOLIO', enPadre: 'FOLIO' } },
     { hoja: 'HOLOGRAMAS', columna: 'ID VEHICULO', padre: 'VEHICULOS', llave: { columna: 'SERIE VEHICULO', enPadre: 'SERIE VEHICULO' } },
