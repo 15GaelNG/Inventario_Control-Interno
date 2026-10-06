@@ -478,3 +478,42 @@ function lineasPlantillasComentario_copiar() {
   soloEditor_();
   return plantillasComentario_(true);
 }
+
+
+// ---------------- Responsables adicionales (usuario, 6-oct): «quien lo usa» pasa a ser el segundo responsable ----------------
+// En ASIGNACIONES se copia (no se borra) NOMBRE QUIEN USA a NOMBRE SEGUNDO RESPONSABLE cuando es otra persona y el segundo
+// está vacío. El número de empleado no se inventa: queda vacío y se elige en Editar. Primero _revisar, que no escribe.
+
+function quienUsaASegundo_(aplicar) {
+  const hoja = 'ASIGNACIONES';
+  const norm = (v) => String(v || '').replace(/\s+/g, ' ').trim().toUpperCase();
+  const salida = { libro: LineasDatos.libro().getName(), aplicado: !!aplicar, mismaPersona: 0, yaTenianSegundo: 0, copiados: [] };
+  LineasDatos.conCandado(() => {
+    if (aplicar) LineasDatos.asegurarColumnas(hoja, LineasEscritura.ADICIONALES);
+    LineasDatos.leerTabla(hoja).forEach((a) => {
+      const usa = norm(a['NOMBRE QUIEN USA']);
+      if (!usa) return;
+      if (usa === norm(a['RESPONSABLE'])) { salida.mismaPersona++; return; }
+      if (norm(a['NOMBRE SEGUNDO RESPONSABLE'])) { salida.yaTenianSegundo++; return; }
+      salida.copiados.push({ asignacion: a['ID'], equipo: a['ID EQUIPO'] || '', vigente: !a['FECHA FIN'], responsable: a['RESPONSABLE'], segundo: usa });
+      if (aplicar) LineasDatos.actualizarFila(hoja, a._fila, { 'NOMBRE SEGUNDO RESPONSABLE': usa });
+    });
+  });
+  if (aplicar) {
+    LineasRepo.borrarCaches();
+    if (typeof LineasLectura !== 'undefined') LineasLectura.limpiarCaches();
+    LineasDatos.tocar([hoja]);
+  }
+  salida.vigentes = salida.copiados.filter((x) => x.vigente).length;
+  console.log(JSON.stringify(salida, null, 2));
+  return salida;
+}
+
+function lineasQuienUsaASegundo_revisar() {
+  soloEditor_();
+  return quienUsaASegundo_(false);
+}
+function lineasQuienUsaASegundo() {
+  soloEditor_();
+  return quienUsaASegundo_(true);
+}

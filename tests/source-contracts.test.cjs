@@ -436,8 +436,11 @@ test('los campos de texto libre del AppSheet ahora tienen lista desplegable', ()
     if (new RegExp(`listaCH\\('${c}'`).test(src)) return 'listaAbierta';   // datos del responsable: listas de Capital Humano
     return (new RegExp(`(?:campo_|\\bed)\\('${c}', '[^']+', '([a-zA-Z]+)'`).exec(src) || [])[1];
   };
-  ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'NOMBRE QUIEN USA', 'PUESTO QUIEN USA', 'DIRECTOR', 'COLOR']
-    .forEach((c) => assert.equal(control(reg, c), 'listaAbierta', 'LINEAS ' + c));
+  ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'DIRECTOR', 'COLOR'].forEach((c) => assert.equal(control(reg, c), 'listaAbierta', 'LINEAS ' + c));
+  // Responsables adicionales (6-oct): número de empleado y nombre, de Capital Humano
+  assert.match(reg, /campo\(num, 'No\. de empleado ' \+ \(i \+ 2\), 'listaAbierta'/);
+  assert.match(reg, /campo\(nom, 'Responsable ' \+ \(i \+ 2\), 'listaAbierta'/);
+  assert.doesNotMatch(reg, /RESPONSABLE USA EL EQUIPO|'Quien lo usa'/);
   // Inspección (usuario, 3-oct): el equipo y la línea vienen del registro (fijos); en la responsiva siguen con lista
   const resp = cap.slice(cap.indexOf('function formularioResponsiva_'));
   ['RESPONSABLE', 'PUESTO', 'JEFE DIRECTO'].forEach((c) => assert.equal(control(cap, c), 'listaAbierta', 'inspección ' + c));
@@ -575,7 +578,9 @@ test('inspección y responsiva: bloqueo en lista, firmas del sistema, acomodo, f
   assert.match(lineas, /memoria\.tablas\[clave\] = texto;/);
   assert.match(lineas, /function cargarCatalogos\(forzar\)/);
   // PDF: la firma recortada cabe en 160 × 70
-  assert.match(read('src/services/lineas/LineasPdf.gs'), /Math\.min\(1, 160 \/ ancho, 70 \/ alto\)/);
+  // Una firma cabe en 160 × 70; las de varios responsables juntas (responsiva, 6-oct), hasta 300 de ancho
+  assert.match(read('src/services/lineas/LineasPdf.gs'), /const anchoMax = \/\^firmas-\/\.test\(String\(blob\.getName \? blob\.getName\(\) : ''\)\) \? 300 : 160;/);
+  assert.match(read('src/services/lineas/LineasPdf.gs'), /Math\.min\(1, anchoMax \/ ancho, 70 \/ alto\)/);
 });
 
 test('la sección de fotos de la inspección no se oculta con las condiciones del AppSheet', () => {
@@ -1917,7 +1922,7 @@ test('Mandar a resguardo: formulario intermedio informativo y la persona solo qu
   assert.doesNotMatch(servidor, /const NA = 'N\/A'/);
   // Editar no deja en blanco los datos de la persona: solo «Mandar a resguardo»
   const reg = read('src/services/lineas/LineasRegistros.gs');
-  assert.match(reg, /const PERSONA_SOLO_RESGUARDO = \['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'JEFE DIRECTO', 'DIRECTOR', 'PIN WHATSAPP', 'PIN EQUIPO', 'CUENTA GOOGLE'\];/);
+  assert.match(reg, /const PERSONA_SOLO_RESGUARDO = \['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'JEFE DIRECTO', 'DIRECTOR', 'PIN WHATSAPP', 'PIN EQUIPO', 'CUENTA GOOGLE'\]\s+\.concat\(ORDEN_ADICIONALES/);
   assert.match(reg, /solo «Mandar a resguardo» lo deja en blanco/);
   const enBlanco = new Function('texto_', "return (v) => ['', 'N/A', 'NA', 'N / A', '-'].indexOf(texto_(v).trim().toUpperCase()) >= 0;")((v) => (v == null ? '' : String(v)));
   assert.ok(reg.includes("const enBlanco_ = (v) => ['', 'N/A', 'NA', 'N / A', '-'].indexOf(texto_(v).trim().toUpperCase()) >= 0;"));

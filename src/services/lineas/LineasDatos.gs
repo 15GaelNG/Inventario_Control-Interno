@@ -690,6 +690,21 @@ const LineasDatos = (function () {
   }
 
   /**
+   * Agrega al final de una hoja que ya existe los encabezados que le falten, sin tocar formatos (asegurarPestana cambia
+   * el de las fechas). La tabla se olvida para que la escritura vea las columnas nuevas. Regresa las agregadas.
+   */
+  function asegurarColumnas(nombre, columnas) {
+    if (virtual_(nombre)) LineasLectura.bloquearEscritura();
+    const t = tablaFresca(nombre);
+    const faltan = columnas.filter((c) => colIndice(t, c) < 0);
+    if (!faltan.length) return [];
+    t.hoja.getRange(1, t.encabezados.length + 1, 1, faltan.length).setValues([faltan]).setFontWeight('bold');
+    delete bd.tablas[nombre];
+    cacheBorrar('enc_' + nombre);
+    return faltan;
+  }
+
+  /**
    * Crea (si no existe) una pestaña propia del nuevo sistema (prefijo APP_) con sus encabezados.
    * Si ya existe, agrega al final los encabezados que falten. AppSheet ignora estas pestañas.
    */
@@ -726,7 +741,7 @@ const LineasDatos = (function () {
     cacheGuardar, cacheLeer, cacheBorrar, recordar, tocar, tiempo,
     tabla, tablaFresca, existeTabla, colIndice, deHoraHoja, aHoraHoja,
     leerTabla, ultimaFila, buscarFilas, buscarFilasVarios, buscarFilasPorId, idsDeFila, buscarEnTabla, leerFilas, leerRango,
-    actualizarFila, agregarFilas, conCandado, nuevoId, nuevoIdCorto, asegurarPestana, COLS_ID_ANTERIOR, COL_ID_APPSHEET, COLUMNAS_RENOMBRADAS,
+    actualizarFila, agregarFilas, conCandado, nuevoId, nuevoIdCorto, asegurarPestana, asegurarColumnas, COLS_ID_ANTERIOR, COL_ID_APPSHEET, COLUMNAS_RENOMBRADAS,
     olvidarTabla: (nombre) => { delete bd.tablas[nombre]; },
   };
 })();

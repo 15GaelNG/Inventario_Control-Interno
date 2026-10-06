@@ -39,18 +39,20 @@ const LineasLectura = (function () {
   const PROPIEDAD_RETIRADA = 'LINEAS_HOJA_VIEJA_RETIRADA';
 
   /** Columnas de los renglones armados: las de la hoja vieja que el sistema lee, más las referencias nuevas. */
+  /** Responsables adicionales (6-oct): número de empleado y nombre del segundo al quinto. */
+  const ADICIONALES = ['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'].reduce((a, n) => a.concat(['NO EMPLEADO ' + n + ' RESPONSABLE', 'NOMBRE ' + n + ' RESPONSABLE']), []);
   const ENCABEZADOS = ['ID', 'ID ANTERIOR', 'ID APPSHEET', 'FOLIO', 'NUMERO TELEFONO', 'NUCO', 'TIPO', 'NO EMPLEADO',
-    'RESPONSABLE', 'PUESTO', 'NOMBRE QUIEN USA', 'PUESTO QUIEN USA', 'ESTATUS GENERAL', 'EQUIPO', 'COLOR', 'IMEI', 'NUMERO SIM',
+    'RESPONSABLE', 'PUESTO', 'NOMBRE QUIEN USA', 'PUESTO QUIEN USA'].concat(ADICIONALES, [ 'ESTATUS GENERAL', 'EQUIPO', 'COLOR', 'IMEI', 'NUMERO SIM',
     'ACCESORIOS', 'SEDE', 'OFICINA / DESARROLLO', 'DEPARTAMENTO', 'AREA', 'JEFE DIRECTO', 'DIRECTOR', 'RAZON SOCIAL',
     'PIN WHATSAPP', 'PIN EQUIPO', 'CONTRASEÑA MODEM', 'PATRON', 'CUENTA GOOGLE', 'COMPAÑIA', 'COSTO PLAN',
     'FECHA REGISTRO', 'INICIO PLAN', 'FIN PLAN', 'ESTATUS LINEA', 'ESTATUS EQUIPO', 'RESPONSIVA', 'COMENTARIOS',
     'FECHA INSPECCION', 'FORMATO INSPECCION', 'ID PERSONA',
     // Referencias de la estructura nueva
-    'ID EQUIPO', 'ID LINEA', 'ID ASIGNACION', 'TIPO ASIGNACION', 'TIPO DE LINEA', 'TIPO DE EQUIPO'];
+    'ID EQUIPO', 'ID LINEA', 'ID ASIGNACION', 'TIPO ASIGNACION', 'TIPO DE LINEA', 'TIPO DE EQUIPO']);
   // De la hoja vieja, solo de consulta, hasta la migración (ver la cabecera)
   const DE_LA_HOJA_VIEJA = ['COMENTARIOS', 'RESPONSIVA', 'FORMATO INSPECCION', 'FECHA INSPECCION'];
   const PERSONA_SIN_ASIGNACION = ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'NOMBRE QUIEN USA', 'PUESTO QUIEN USA', 'SEDE',
-    'OFICINA / DESARROLLO', 'DEPARTAMENTO', 'AREA', 'DIRECTOR', 'JEFE DIRECTO', 'CUENTA GOOGLE', 'ID PERSONA'];
+    'OFICINA / DESARROLLO', 'DEPARTAMENTO', 'AREA', 'DIRECTOR', 'JEFE DIRECTO', 'CUENTA GOOGLE', 'ID PERSONA'].concat(ADICIONALES);
 
   let activo_ = null;
   let filas_ = null;
@@ -184,6 +186,7 @@ const LineasLectura = (function () {
         'ID EQUIPO': e ? String(e['ID']) : '', 'ID LINEA': l ? String(l['ID']) : '', 'ID ASIGNACION': v(a, 'ID'),
         'TIPO ASIGNACION': v(a, 'TIPO'), 'TIPO DE LINEA': v(l, 'TIPO DE LINEA'), 'TIPO DE EQUIPO': v(e, 'TIPO DE EQUIPO'),
       };
+      ADICIONALES.forEach((c) => { o[c] = v(a, c); });
       DE_LA_HOJA_VIEJA.forEach((c) => { o[c] = v(e, c) || v(l, c) || v(viejo, c); });
       const ultima = a ? null : (e ? ultimaPorEquipo[String(e['ID'])] : ultimaPorLinea[String(l['ID'])]) || null;
       if (ultima) {

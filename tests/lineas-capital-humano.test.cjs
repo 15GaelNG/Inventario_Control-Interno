@@ -87,9 +87,13 @@ test('Después de Reasignar se vuelve a pintar la ficha abierta (producción, 4-
   assert.match(reasignar, /if \(vigente\(\) && actual && actual\.id === fila\.id\) abrir\(actual\.tipo, actual\.id, true\);/);
 });
 
-test('JEFE DIRECTO: al agregar el encabezado se olvida la tabla para que la escritura lo vea (4-oct)', () => {
+test('JEFE DIRECTO y los responsables adicionales: al agregar los encabezados se olvida la tabla para que la escritura los vea', () => {
   const esc = fs.readFileSync(path.join(__dirname, '../src/services/lineas/LineasEscritura.gs'), 'utf8');
   const f = esc.slice(esc.indexOf('function asegurarJefeDirecto_()'), esc.indexOf('function hojas()'));
-  assert.match(f, /setValue\('JEFE DIRECTO'\)/);
-  assert.match(f, /LineasDatos\.olvidarTabla\(HOJA\.ASIGNACIONES\);/);
+  assert.match(f, /LineasDatos\.asegurarColumnas\(HOJA\.ASIGNACIONES, \['JEFE DIRECTO'\]\.concat\(ADICIONALES\)\);/);
+  const datos = fs.readFileSync(path.join(__dirname, '../src/services/lineas/LineasDatos.gs'), 'utf8');
+  const a = datos.slice(datos.indexOf('function asegurarColumnas('), datos.indexOf('function asegurarPestana('));
+  assert.match(a, /delete bd\.tablas\[nombre\];/);
+  assert.match(a, /cacheBorrar\('enc_' \+ nombre\);/);
+  assert.doesNotMatch(a, /setNumberFormat/, 'sin tocar formatos');
 });

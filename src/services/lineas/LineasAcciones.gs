@@ -16,7 +16,8 @@ const LineasAcciones = (function () {
   const PERSONA_DE_RESPONSIVA = [
     ['NO EMPLEADO', 'No EMPLEADO'], ['RESPONSABLE', 'RESPONSABLE'], ['PUESTO', 'PUESTO'], ['DEPARTAMENTO', 'DEPARTAMENTO'], ['AREA', 'AREA'],
     ['SEDE', 'SEDE'], ['OFICINA / DESARROLLO', 'OFICINA / DESARROLLO'], ['DIRECTOR', 'DIRECTOR'], ['CUENTA GOOGLE', 'CORREO'],
-  ];
+  ].concat(['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'].reduce((a, n) => a.concat([['NO EMPLEADO ' + n + ' RESPONSABLE', 'NO EMPLEADO ' + n + ' RESPONSABLE'],
+    ['NOMBRE ' + n + ' RESPONSABLE', 'NOMBRE ' + n + ' RESPONSABLE']]), []));
 
   /**
    * Reasignar (usuario, 4-oct): abre directo la responsiva, sin formulario intermedio. Equipo y línea van fijos; la

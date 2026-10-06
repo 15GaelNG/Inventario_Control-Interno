@@ -7,7 +7,7 @@
  *
  * Condiciones (mismo formato que evalúa lineas.html):
  *   'SIEMPRE' | 'NUNCA' | { tipoLleno: true } | { tipoEn: [...] } | { tipoNoEn: [...] } |
- *   { campo, igual } | { nuevo: true } | { y: [cond, ...] }
+ *   { campo, igual } | { lleno: campo } | { nuevo: true } | { y: [cond, ...] }
  * Validaciones (Valid_If; solo se evalúan con valor, como en el AppSheet):
  *   MAYUS · TELEFONO · NUCO · EQUIPO · PIN_WA · PIN_EQ · CUENTA · COMENTARIOS · ACCESORIOS · LISTA
  */
@@ -47,7 +47,30 @@ const LineasRegistros = (function () {
     if (cond.tipoNoEn) return cond.tipoNoEn.indexOf(tipo) < 0;
     if (cond.nuevo) return !!ctx.nuevo;
     if (cond.campo) return texto_(valores[cond.campo]).toUpperCase() === String(cond.igual).toUpperCase();
+    if (cond.lleno) return !!texto_(valores[cond.lleno]);
     return true;
+  }
+
+  /**
+   * Más de un responsable (usuario, 6-oct): reemplaza «¿El responsable usa el equipo?» y «Quien lo usa». Con SI se piden
+   * hasta cuatro más (como el AppSheet: segundo…quinto), cada uno con su número de empleado y su nombre de Capital Humano;
+   * el siguiente aparece cuando el anterior tiene nombre. Con NO se borran. La pregunta no se guarda: se responde sola.
+   */
+  const ORDEN_ADICIONALES = ['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'];
+  function camposAdicionales(campo, valorDe) {
+    const hay = ORDEN_ADICIONALES.some((n) => texto_(valorDe('NOMBRE ' + n + ' RESPONSABLE')));
+    const reset = { cuando: { campo: 'MAS DE UN RESPONSABLE', igual: 'NO' }, valor: '' };
+    return [campo('MAS DE UN RESPONSABLE', '¿Más de un responsable?', 'escala', { valor: hay ? 'SI' : 'NO', opciones: ['SI', 'NO'] })]
+      .concat(ORDEN_ADICIONALES.reduce((a, n, i) => {
+        const mostrar = i === 0 ? { campo: 'MAS DE UN RESPONSABLE', igual: 'SI' }
+          : { y: [{ campo: 'MAS DE UN RESPONSABLE', igual: 'SI' }, { lleno: 'NOMBRE ' + ORDEN_ADICIONALES[i - 1] + ' RESPONSABLE' }] };
+        const num = 'NO EMPLEADO ' + n + ' RESPONSABLE';
+        const nom = 'NOMBRE ' + n + ' RESPONSABLE';
+        return a.concat([
+          campo(num, 'No. de empleado ' + (i + 2), 'listaAbierta', { valor: valorDe(num), mostrar: mostrar, sugerencias: 'NO_EMPLEADO', autollenar: { [nom]: 'nombre' }, reset: reset }),
+          campo(nom, 'Responsable ' + (i + 2), 'listaAbierta', { valor: valorDe(nom), mostrar: mostrar, sugerencias: 'PERSONAS', autollenar: { [num]: 'noEmpleado' }, reset: reset }),
+        ]);
+      }, []));
   }
 
   const campo_ = (columna, etiqueta, control, extra) => Object.assign({
@@ -135,13 +158,7 @@ const LineasRegistros = (function () {
       listaCH('JEFE DIRECTO', 'Jefe directo', catalogos.jefes || []),
       listaCH('DIRECTOR', 'Director', catalogos.directores || []),
       ed('CUENTA GOOGLE', 'Correo', 'texto', { literal: true }),
-      ed('RESPONSABLE USA EL EQUIPO', '¿El responsable usa el equipo?', 'escala', { opciones: ['SI', 'NO'], mostrar: conEquipo ? 'SIEMPRE' : 'NUNCA' }),
-      // "Quien usa" solo se guarda si es otra persona (§3.7; el AppSheet copiaba aquí al responsable)
-      ed('NOMBRE QUIEN USA', 'Quien lo usa', 'listaAbierta', { mostrar: { campo: 'RESPONSABLE USA EL EQUIPO', igual: 'NO' },
-        sugerencias: 'PERSONAS', autollenar: { 'PUESTO QUIEN USA': 'puesto' }, reset: { cuando: { campo: 'RESPONSABLE USA EL EQUIPO', igual: 'SI' }, valor: '' } }),
-      ed('PUESTO QUIEN USA', 'Puesto de quien lo usa', 'listaAbierta', { mostrar: { campo: 'RESPONSABLE USA EL EQUIPO', igual: 'NO' }, opciones: puestos,
-        sugerencias: 'PUESTOS', reset: { cuando: { campo: 'RESPONSABLE USA EL EQUIPO', igual: 'SI' }, valor: '' } }),
-    ];
+    ].concat(camposAdicionales((columna, etiqueta, control, extra) => campo_(columna, etiqueta, control, extra), v));
     // Línea: obligatoria en una línea sola; opcional en un equipo. A un equipo sin línea se le puede poner una: un número
     // nuevo o una línea sola que ya existe (se elige de la lista y se llenan sus datos)
     const lineaReq = conEquipo ? 'NUNCA' : 'SIEMPRE';
@@ -359,7 +376,8 @@ const LineasRegistros = (function () {
    * Datos de la persona que solo «Mandar a resguardo» deja en blanco (usuario, 4-oct; LineasResguardos.CAMPOS_PERSONA).
    * "NO APLICA" no cuenta como blanco: lo pone el TIPO (módem, banda ancha, línea).
    */
-  const PERSONA_SOLO_RESGUARDO = ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'JEFE DIRECTO', 'DIRECTOR', 'PIN WHATSAPP', 'PIN EQUIPO', 'CUENTA GOOGLE'];
+  const PERSONA_SOLO_RESGUARDO = ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'JEFE DIRECTO', 'DIRECTOR', 'PIN WHATSAPP', 'PIN EQUIPO', 'CUENTA GOOGLE']
+    .concat(ORDEN_ADICIONALES.reduce((a, n) => a.concat(['NO EMPLEADO ' + n + ' RESPONSABLE', 'NOMBRE ' + n + ' RESPONSABLE']), []));
   const enBlanco_ = (v) => ['', 'N/A', 'NA', 'N / A', '-'].indexOf(texto_(v).trim().toUpperCase()) >= 0;
 
   /** Un solo COMENTARIO obligatorio en cada acción (plan §5.2): el del alta o el de la corrección. */
@@ -605,7 +623,7 @@ const LineasRegistros = (function () {
   }
 
   return {
-    formulario, crear, editar, formularioMasivo, accionMasiva,
+    formulario, crear, editar, formularioMasivo, accionMasiva, camposAdicionales,
     _elementos: elementos_, _resolver: resolver_, _cumple: cumple_, _elementosMasivos: elementosMasivos_, _tipoAutomatico: tipoAutomatico_,
   };
 })();

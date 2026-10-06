@@ -273,6 +273,9 @@ const LineasCaptura = (function () {
       ed('OFICINA / DESARROLLO', 'Oficina o desarrollo', 'listaAbierta', persona('OFICINA / DESARROLLO'), { opciones: catalogos.oficinas || [] }),
       ed('DIRECTOR', 'Director', 'listaAbierta', persona('DIRECTOR'), { opciones: catalogos.directores || [] }),
       ed('CORREO', 'Correo', 'texto', persona('CUENTA GOOGLE'), { literal: true }),
+    ].concat(
+      // Hasta cuatro responsables más (usuario, 6-oct), como en Editar; al reasignar empiezan vacíos
+      LineasRegistros.camposAdicionales((columna, etiqueta, control, extra) => campo_(columna, etiqueta, control, extra), persona), [
       titulo_('ACCESORIOS Y ACCESOS', 'key-round'),
       ed('ACCESORIOS', 'Accesorios entregados', 'multi', accesorios.join(' , '), {
         opciones: LineasRepo.CATALOGO.accesorios.concat(accesorios.filter((x) => LineasRepo.CATALOGO.accesorios.indexOf(x) < 0)),
@@ -290,10 +293,20 @@ const LineasCaptura = (function () {
       campo_('COMENTARIO', 'Comentario', 'area', { valor: '', requerido: 'SIEMPRE' }),
       titulo_('FIRMAS', 'signature'),
       campo_('FIRMA RESPONSABLE', 'FIRMA RESPONSABLE', 'firma', { valor: '' }),
+    ], FIRMAS_ADICIONALES.map((c, i) => campo_(c, 'Firma del responsable ' + (i + 2), 'firma', { valor: '',
+      mostrar: { y: [{ campo: 'MAS DE UN RESPONSABLE', igual: 'SI' }, { lleno: 'NOMBRE ' + ORDEN_ADICIONALES[i] + ' RESPONSABLE' }] } })), [
       ro('NOMBRE CI', 'NOMBRE RESPONSABLE DE CONTROL INTERNO', usuario.nombre || ''),
       campo_('FIRMA CI', 'FIRMA RESPONSABLE DE CONTROL INTERNO', 'firma', { valor: '', requerido: 'SIEMPRE' }),
-    ];
+    ]);
   }
+
+  /**
+   * Responsables adicionales de la responsiva (6-oct). Cada uno firma en su recuadro y el PDF los muestra como el
+   * AppSheet: los nombres juntos con « / » y las firmas juntas en la misma línea (la pantalla las une en una imagen).
+   */
+  const ORDEN_ADICIONALES = ['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'];
+  const ADICIONALES = ORDEN_ADICIONALES.reduce((a, n) => a.concat(['NO EMPLEADO ' + n + ' RESPONSABLE', 'NOMBRE ' + n + ' RESPONSABLE']), []);
+  const FIRMAS_ADICIONALES = ORDEN_ADICIONALES.map((n) => 'FIRMA ' + n + ' RESPONSABLE');
 
   /** Oculta PIN/patrón/contraseñas a quien no es ADMIN (el PDF sí los lleva, como en el AppSheet). */
   function ocultarSecretos_(elementos, puedeVerSecretos) {
@@ -479,6 +492,8 @@ const LineasCaptura = (function () {
       valores['DIA'] = Utilities.formatDate(fechaResp, ZONA, 'd');
       valores['MES'] = MESES[Number(Utilities.formatDate(fechaResp, ZONA, 'M')) - 1];
       valores['AÑO'] = Utilities.formatDate(fechaResp, ZONA, 'yyyy');
+      // Sin «más de un responsable» no se guarda ninguno (la pantalla solo los oculta)
+      if (String(valores['MAS DE UN RESPONSABLE'] || '').toUpperCase() !== 'SI') ADICIONALES.forEach((c) => { valores[c] = ''; });
       // Bot MAYUSCULAS
       valores['IDENTIFICACION'] = String(valores['IDENTIFICACION'] || '').toUpperCase();
       valores['COMENTARIO'] = String(valores['COMENTARIO'] || '').toUpperCase();
@@ -490,6 +505,7 @@ const LineasCaptura = (function () {
         'ID': id, 'ID LINEA': obj.reg.id, 'NUCO': LineasUtil.nucoVisible(valores['NUCO']) || '', 'TIPO CONTRASEÑA': '',
         'NOMBRE CI': usuario.nombre, 'FIRMA RESPONSABLE': '', 'FIRMA CI': '',
       });
+      if (ADICIONALES.some((c) => fila[c])) LineasDatos.asegurarColumnas(LineasRepo.TAB.RESP, ADICIONALES);
       LineasDatos.agregarFilas(LineasRepo.TAB.RESP, [fila]);
       // El color es del aparato (EQUIPOS): la responsiva lo actualiza, igual que la inspección (decisión del usuario, 3-oct)
       const copia = {};
@@ -559,6 +575,13 @@ const LineasCaptura = (function () {
   function registroPlantilla_(fila) {
     const registro = {};
     Object.keys(fila).forEach((k) => { if (k !== '_fila') registro[k] = fila[k]; });
+    // Responsiva con más de un responsable: como el AppSheet, los nombres y los números de empleado juntos con « / »
+    const nombres = ORDEN_ADICIONALES.map((n) => String(fila['NOMBRE ' + n + ' RESPONSABLE'] || '').trim()).filter(Boolean);
+    if (nombres.length) {
+      registro['RESPONSABLE'] = [String(fila['RESPONSABLE'] || '').trim()].concat(nombres).filter(Boolean).join(' / ');
+      registro['No EMPLEADO'] = [String(fila['No EMPLEADO'] || '').trim()].concat(ORDEN_ADICIONALES.map((n) => String(fila['NO EMPLEADO ' + n + ' RESPONSABLE'] || '').trim()))
+        .filter(Boolean).join(' / ');
+    }
     if ('CALIFICACION' in registro) registro['CALIFICACION'] = LineasChecklist.calificacionTexto(registro['CALIFICACION']);
     return registro;
   }
@@ -640,7 +663,8 @@ const LineasCaptura = (function () {
     const nombre = d.nombre;
     const imagenes = esInspeccion
       ? { 'FIRMA RESPONSABLE': imagen('responsable', 'FIRMA RESPONSABLE', 'firma-responsable.png'), 'FIRMA INSPECTOR': imagen('inspector', 'FIRMA INSPECTOR', 'firma-inspector.png'), 'PATRON': patron }
-      : { 'FIRMA RESPONSABLE': imagen('responsable', 'FIRMA RESPONSABLE', 'firma-responsable.png'), 'FIRMA CI': imagen('ci', 'FIRMA CI', 'firma-ci.png'), 'CONTRASEÑA': patron };
+      : { 'FIRMA RESPONSABLE': imagen('responsable', 'FIRMA RESPONSABLE', ORDEN_ADICIONALES.some((n) => col('NOMBRE ' + n + ' RESPONSABLE')) ? 'firmas-responsables.png' : 'firma-responsable.png'),
+        'FIRMA CI': imagen('ci', 'FIRMA CI', 'firma-ci.png'), 'CONTRASEÑA': patron };
     const anterior = forzar ? pdfVigente_(ev) : null;
     try {
       const pdf = LineasPdf.generarPdfDesdePlantilla(

@@ -201,23 +201,16 @@ const LineasRepo = (function () {
   }
 
   /**
-   * "Quien usa el equipo" y segundo…quinto responsable, como lista. No se lista a quien es el mismo responsable:
-   * el AppSheet lo copiaba en "quien usa" cuando él mismo usa el equipo (NUCO 0234; PLAN_REESTRUCTURA_LINEAS.md §3.7).
+   * Responsables adicionales (usuario, 6-oct): del segundo al quinto, con su número de empleado. Reemplazan a «¿El
+   * responsable usa el equipo?» y «Quien lo usa» (lo que había se copia con lineasCopiarQuienUsa, LineasAdmin). No se
+   * lista a quien es el mismo responsable (PLAN_REESTRUCTURA_LINEAS.md §3.7).
    */
   function usuariosAdicionales_(f) {
-    const lista = [];
     const mismo = (a, b) => String(a || '').replace(/\s+/g, ' ').trim().toUpperCase() === String(b || '').replace(/\s+/g, ' ').trim().toUpperCase();
     const responsable = txt(col(f, 'RESPONSABLE'));
-    const agregar = (rol, nombre, puesto) => {
-      const n = txt(col(f, nombre));
-      if (n && !mismo(n, responsable)) lista.push({ rol: rol, nombre: n, puesto: txt(col(f, puesto)) });
-    };
-    agregar('USA EL EQUIPO', 'NOMBRE QUIEN USA', 'PUESTO QUIEN USA');
-    agregar('SEGUNDO', 'NOMBRE SEGUNDO RESPONSABLE', 'PUESTO SEGUNDO RESPONSABLE');
-    agregar('TERCERO', 'NOMBRE TERCER RESPONSABLE', 'PUESTO TERCER RESPONSABLE');
-    agregar('CUARTO', 'NOMBRE CUARTO RESPONSABLE', 'PUESTO CUARTO RESPONSABLE');
-    agregar('QUINTO', 'NOMBRE QUINTO RESPONSABLE', 'PUESTO QUINTO RESPONSABLE');
-    return lista;
+    return ['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'].map((n, i) => ({
+      rol: 'Responsable ' + (i + 2), nombre: txt(col(f, 'NOMBRE ' + n + ' RESPONSABLE')), noEmpleado: txt(col(f, 'NO EMPLEADO ' + n + ' RESPONSABLE')),
+    })).filter((u) => u.nombre && !mismo(u.nombre, responsable));
   }
 
   /** Fórmula FOLIO del AppSheet. */
@@ -269,6 +262,8 @@ const LineasRepo = (function () {
     return [r.id].concat(COLS_VISTA_LINEAS.map((c) => {
       if (c === 'FOLIO') return legado.folio || null;
       if (c === 'ESTATUS GENERAL') return legado.estatusGeneral || null;
+      // «Nombre colaborador/es» del AppSheet: los responsables adicionales
+      if (c === 'NOMBRE RESPONSABLES 2') return usuariosAdicionales_(f).map((u) => u.nombre).join(' / ') || null;
       const v = col(f, c);
       if (v === '' || v === null || v === undefined) return null;
       if (v instanceof Date) return v;

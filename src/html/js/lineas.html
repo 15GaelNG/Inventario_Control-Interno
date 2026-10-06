@@ -700,6 +700,7 @@
       if (cond.tipoNoEn) return cond.tipoNoEn.indexOf(t) < 0;
       if (cond.nuevo) return !!(ctx && ctx.nuevo);
       if (cond.campo) return String((valores || {})[cond.campo] || '').trim().toUpperCase() === String(cond.igual).toUpperCase();
+      if (cond.lleno) return !!String((valores || {})[cond.lleno] || '').trim();
       return true;
     }
     const condAtributo = (c) => esc(typeof c === 'object' && c !== null ? JSON.stringify(c) : (c || 'SIEMPRE'));
@@ -774,7 +775,7 @@
         const anterior = !e.valorOculto && valor && !esPuntosPatron(valor) && rutaPatronAppSheet(valor) ? vistaPatron(valor) : '';
         control = (nota ? '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' ' + esc(nota) + '</div>' : '') + anterior + htmlPatron(id + '-patron', false);
       } else if (e.control === 'firma') {
-        control = htmlFirma(ROL_FIRMA[e.columna] || 'ci', id + '-firma');
+        control = htmlFirma(ROL_FIRMA[e.columna] || 'ci', id + '-firma', /^FIRMA (SEGUNDO|TERCER|CUARTO|QUINTO) /.test(e.columna) ? e.etiqueta : null);
       } else if (e.control === 'calculado') {
         control = '<div' + (autoDe(e) ? ' data-auto' : '') + ' class="ln-af-calculado' + (e.fijo ? ' ln-af-fijo' : (e.formula ? '' : ' ln-af-calculado-texto')) + '" id="' + id + '"' + (e.formula ? ' data-formula="' + esc(e.formula) + '"' : '') + '>' + (valor ? esc(valor) : '—') + '</div>';
       } else {
@@ -788,6 +789,10 @@
     // Firmas: quién firma (su nombre va debajo de la línea) y de qué lado
     const NOMBRE_DE_FIRMA = { 'FIRMA INSPECTOR': 'NOMBRE INSPECTOR', 'FIRMA CI': 'NOMBRE CI', 'FIRMA RESPONSABLE': 'RESPONSABLE' };
     const ROL_FIRMA = { 'FIRMA INSPECTOR': 'ci', 'FIRMA CI': 'ci', 'FIRMA RESPONSABLE': 'responsable' };
+    // Responsables adicionales de la responsiva (6-oct): cada uno firma en su recuadro, con su nombre debajo
+    const ORDEN_ADICIONALES = ['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'];
+    const FIRMAS_RESPONSABLES = ['FIRMA RESPONSABLE'].concat(ORDEN_ADICIONALES.map((n) => 'FIRMA ' + n + ' RESPONSABLE'));
+    ORDEN_ADICIONALES.forEach((n) => { NOMBRE_DE_FIRMA['FIRMA ' + n + ' RESPONSABLE'] = 'NOMBRE ' + n + ' RESPONSABLE'; ROL_FIRMA['FIRMA ' + n + ' RESPONSABLE'] = 'responsable'; });
 
     /**
      * Dibuja el formulario agrupando cada título del AppSheet con sus campos. Con `acomodar` (inspección y
@@ -869,9 +874,35 @@
     }
 
     /** Caja de firma: marco dorado para el responsable y azul para Control Interno; el lienzo lo pone crearFirma. */
-    function htmlFirma(rol, idLienzo) {
+    function htmlFirma(rol, idLienzo, titulo) {
       return '<div class="ln-firma ln-firma-' + rol + '"><div class="ln-firma-cabecera">' + icono(rol === 'ci' ? 'shield-check' : 'user') + ' ' +
-        (rol === 'ci' ? 'Firma de Control Interno' : 'Firma del responsable') + '</div><div class="ln-firma-lienzo" id="' + idLienzo + '"></div></div>';
+        esc(titulo || (rol === 'ci' ? 'Firma de Control Interno' : 'Firma del responsable')) + '</div><div class="ln-firma-lienzo" id="' + idLienzo + '"></div></div>';
+    }
+
+    /**
+     * Las firmas de los responsables en una sola imagen, una junto a otra (6-oct): el PDF las pone en la línea de firma del
+     * responsable, como el AppSheet. Con una sola, esa misma.
+     */
+    function unirFirmas(lista, fondo) {
+      const b64 = lista.filter(Boolean);
+      if (b64.length < 2) return Promise.resolve(b64[0] || null);
+      return Promise.all(b64.map((b) => new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('No se pudo leer una firma'));
+        img.src = 'data:image/png;base64,' + b;
+      }))).then((imgs) => {
+        const espacio = 40;
+        const alto = Math.max.apply(null, imgs.map((i) => i.naturalHeight));
+        const c = document.createElement('canvas');
+        c.width = imgs.reduce((s, i) => s + i.naturalWidth, 0) + espacio * (imgs.length - 1);
+        c.height = alto;
+        const g = c.getContext('2d');
+        g.fillStyle = fondo || '#ffffff'; g.fillRect(0, 0, c.width, c.height);
+        let x = 0;
+        imgs.forEach((i) => { g.drawImage(i, x, Math.round((alto - i.naturalHeight) / 2)); x += i.naturalWidth + espacio; });
+        return c.toDataURL('image/png').split(',')[1];
+      });
     }
 
     /** Firma con el componente del sistema; misma interfaz que antes (estaVacia, limpiar, base64 → promesa). */
@@ -1190,7 +1221,7 @@
      */
     const COLUMNAS_CH = ['RESPONSABLE', 'NO EMPLEADO', 'PUESTO', 'DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO',
       'DIRECTOR', 'JEFE DIRECTO', 'NOMBRE QUIEN USA', 'PUESTO QUIEN USA']
-      .concat(['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'].reduce((a, n) => a.concat(['NOMBRE ' + n + ' RESPONSABLE', 'PUESTO ' + n + ' RESPONSABLE']), []));
+      .concat(['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'].reduce((a, n) => a.concat(['NOMBRE ' + n + ' RESPONSABLE', 'PUESTO ' + n + ' RESPONSABLE', 'NO EMPLEADO ' + n + ' RESPONSABLE']), []));
     const esColumnaCH = (columna) => COLUMNAS_CH.indexOf(String(columna || '').split('|').pop().toUpperCase().replace(/\s+/g, ' ').trim()) >= 0;
 
     function activarCombosEn(cuerpo, elementos) {
@@ -2412,7 +2443,7 @@
       function tarjetaResponsable(r, titulo) {
         r = r || {};
         const adicionales = (r.usuariosAdicionales || []).length
-          ? '<div class="ln-subtitulo">Usuarios adicionales</div>' + campos(r.usuariosAdicionales.map((u) => [u.rol, esc(u.nombre) + (u.puesto ? ' <span class="ln-tenue">· ' + esc(u.puesto) + '</span>' : ''), true]))
+          ? '<div class="ln-subtitulo">Responsables adicionales</div>' + campos(r.usuariosAdicionales.map((u) => [u.rol, esc(u.nombre) + (u.noEmpleado ? ' <span class="ln-tenue">· ' + esc(u.noEmpleado) + '</span>' : ''), true]))
           : '';
         return tarjeta(icono('user') + ' ' + esc(titulo || 'Responsable'), campos([
           ['Nombre', (r.nombres && r.nombres.length > 1) ? r.nombres.map(esc).join('<br>') : esc(r.nombre || ''), true],
@@ -3502,8 +3533,9 @@
       function actualizarFormularioAppSheet() {
         if (!captura) return;
         const tipo = tipoFormulario();
+        const valores = leerFormularioAppSheet();
         raiz.querySelectorAll('#ln-captura-cuerpo .ln-af-campo').forEach((campo) => {
-          const visible = cumpleCondicion(campo.dataset.mostrar, tipo);
+          const visible = cumpleCondicion(campo.dataset.mostrar, tipo, valores);
           campo.hidden = !visible;
           campo.querySelector('.ln-af-req').hidden = !(visible && cumpleCondicion(campo.dataset.requerido, tipo));
         });
@@ -3954,14 +3986,18 @@
       function guardarResponsivaDesdeFormulario() {
         $('#cap-error', raiz).hidden = true;
         if (!validarFormularioAppSheet()) return;
-        const firmaResponsable = captura.firmas['FIRMA RESPONSABLE'];
         const firmaCi = captura.firmas['FIRMA CI'];
+        // El responsable y los adicionales que se ven (los de «más de un responsable»), cada uno con su firma
+        const firmasResponsables = FIRMAS_RESPONSABLES.filter((c) => {
+          const campo = raiz.querySelector('#ln-captura-cuerpo .ln-af-campo[data-af-columna="' + CSS.escape(c) + '"]');
+          return campo && !campo.hidden && captura.firmas[c] && !captura.firmas[c].estaVacia();
+        }).map((c) => captura.firmas[c]);
         const idAbierto = captura.idObjetivo;
         const patron = patronParaGuardar();
         const valores = leerFormularioAppSheet();
         const sesion = captura;
         estadoGuardado(sesion.flujo && sesion.flujo.espera ? sesion.flujo.espera : (sesion.flujo && !sesion.flujo.pdfAqui ? 'Guardando la responsiva' : 'Generando tu PDF'));
-        Promise.all([firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ffffff') : null, firmaCi.base64('#ffffff')]).then(([responsable, ci]) => {
+        Promise.all([Promise.all(firmasResponsables.map((f) => f.base64('#ffffff'))).then((lista) => unirFirmas(lista, '#ffffff')), firmaCi.base64('#ffffff')]).then(([responsable, ci]) => {
           sesion.pdfFirmas = { responsable: responsable, ci: ci, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ffffff') : null };
           const datos = Object.assign({}, sesion.ref, {
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron,
