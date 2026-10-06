@@ -2901,7 +2901,7 @@
           // Lo mismo que rechaza el servidor (LineasAcciones.reasignar), antes de pasar a la inspección
           guardar: (datos) => {
             const v = datos.valores || {};
-            if (String(v.OBSERVACIONES || '').trim().length <= 3) return Promise.reject(new Error('Escribe el comentario (queda en el historial).'));
+            if (String(v.COMENTARIO || '').trim().length <= 3) return Promise.reject(new Error('Escribe el comentario (queda en el historial).'));
             const nuevo = String(v.RESPONSABLE || '').trim().toUpperCase();
             if (nuevo && nuevo === String(fila.responsable || '').trim().toUpperCase()) {
               return Promise.reject(new Error(nombre + ' ya lo tiene ' + fila.responsable + ': elige a la persona nueva.'));

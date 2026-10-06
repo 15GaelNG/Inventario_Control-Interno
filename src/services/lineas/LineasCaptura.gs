@@ -11,7 +11,7 @@
  *   - Inspección  → fila en INSPECCIONES LINEAS (CALIFICACION con la fórmula del AppSheet) y
  *                   bot ACTUALIZAR DESDE INSPECCION: copia 13 campos a LINEAS TELEFONICAS
  *                   (con su bitácora en CAMBIOS LINEAS TELEFONICAS / HISTORIAL_REASIGNACIONES), y el COLOR.
- *   - Responsiva  → fila en RESPONSIVAS LINEAS; bot MAYUSCULAS (IDENTIFICACION, OBSERVACIONES).
+ *   - Responsiva  → fila en RESPONSIVAS LINEAS; bot MAYUSCULAS (IDENTIFICACION, COMENTARIO, antes OBSERVACIONES).
  *                   Del registro solo toca el COLOR del equipo (decisión del usuario, 3-oct).
  *   - Ambos       → PDF con las plantillas del AppSheet, después de guardar (generarPdf).
  * PDF en NUCOS (desde el corte a producción, 2-oct-2026), igual que los que sube el área a mano:
@@ -189,10 +189,10 @@ const LineasCaptura = (function () {
       campo_('CALIFICACION', 'Calificación', 'calculado', { valor: '', soloLectura: true }),
       campo_('FECHA DE REGISTRO', 'Fecha de la inspección', 'fechaHora', Object.assign({ valor: Utilities.formatDate(ahora, ZONA, "yyyy-MM-dd'T'HH:mm") }, req)),
       campo_('TICKET', 'Ticket', 'texto', { valor: '' }),
-      // Un solo COMENTARIO (plan §5.2): se guarda en OBSERVACIONES (lo que imprime el PDF) y en el historial. Dentro de
+      // Un solo COMENTARIO (plan §5.2): se guarda en COMENTARIO (lo que imprime el PDF) y en el historial. Dentro de
       // una acción que ya pidió el suyo (mandar a resguardo) no es obligatorio (usuario, 4-oct)
       titulo_('COMENTARIO', 'message-square-text'),
-      campo_('OBSERVACIONES', 'Comentario', 'area', { valor: '', requerido: enAccion ? 'NUNCA' : 'SIEMPRE' }),
+      campo_('COMENTARIO', 'Comentario', 'area', { valor: '', requerido: enAccion ? 'NUNCA' : 'SIEMPRE' }),
       titulo_('FIRMAS', 'signature'),
       campo_('FIRMA RESPONSABLE', 'FIRMA RESPONSABLE', 'firma', { valor: '' }),
       campo_('NOMBRE INSPECTOR', 'NOMBRE INSPECTOR', 'texto', { valor: usuario.nombre || '', soloLectura: true }),
@@ -213,10 +213,10 @@ const LineasCaptura = (function () {
 
   /**
    * RESPONSIVAS LINEAS_Form, ordenada como la inspección (usuario, 4-oct): Datos en Equipo, Línea y Responsable;
-   * accesorios y accesos; y el paso de firmas en Datos de la responsiva, Observaciones y Firmas. Los datos del equipo y
+   * accesorios y accesos; y el paso de firmas en Datos de la responsiva, Comentario y Firmas. Los datos del equipo y
    * la línea se pueden corregir antes de firmar (lo dijo el usuario: la reasignación llevará directo a la responsiva).
    * La fecha es una sola, como en la inspección; DIA, MES y AÑO (los que usa el PDF) se sacan de ella al guardar.
-   * El jefe directo se guarda en la columna DIRECTOR (decisión del usuario, 4-oct; el PDF lo imprime ahí).
+   * El jefe directo se guarda en JEFE DIRECTO (antes DIRECTOR, donde lo dejaba el AppSheet; parte 6, 6-oct).
    */
   function formularioResponsiva_(fila, catalogos, usuario, id, ahora, modo) {
     // Reasignar (usuario, 4-oct): la responsiva es la acción; equipo y línea fijos, la persona nueva se elige aquí y
@@ -234,7 +234,7 @@ const LineasCaptura = (function () {
     const accesorios = String(acceso('ACCESORIOS') || '').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean).map((x) => (x === 'SD' ? 'TARJETA SD' : x));
     // Al elegir a la persona (o al abrir, si falta algo) se llenan sus datos con lo que dice Capital Humano
     const datosCH = { 'PUESTO': 'puesto', 'DEPARTAMENTO': 'departamento', 'AREA': 'area', 'SEDE': 'sede',
-      'OFICINA / DESARROLLO': 'oficina', 'DIRECTOR': 'jefe', 'CORREO': 'correo' };
+      'OFICINA / DESARROLLO': 'oficina', 'JEFE DIRECTO': 'jefe', 'CORREO': 'correo' };
     const autoResponsable = Object.assign({ 'No EMPLEADO': 'noEmpleado' }, datosCH);
     return [
       titulo_('EQUIPO', 'smartphone'),
@@ -263,7 +263,7 @@ const LineasCaptura = (function () {
       ed('AREA', 'Área', 'listaAbierta', persona('AREA'), { opciones: catalogos.areas || [] }),
       ed('SEDE', 'Sede', 'listaAbierta', persona('SEDE'), { opciones: catalogos.sedes || [] }),
       ed('OFICINA / DESARROLLO', 'Oficina o desarrollo', 'listaAbierta', persona('OFICINA / DESARROLLO'), { opciones: catalogos.oficinas || [] }),
-      ed('DIRECTOR', 'Jefe directo', 'listaAbierta', persona('JEFE DIRECTO'), { opciones: catalogos.jefes || [] }),
+      ed('JEFE DIRECTO', 'Jefe directo', 'listaAbierta', persona('JEFE DIRECTO'), { opciones: catalogos.jefes || [] }),
       ed('CORREO', 'Correo', 'texto', persona('CUENTA GOOGLE'), { literal: true }),
       titulo_('ACCESORIOS Y ACCESOS', 'key-round'),
       ed('ACCESORIOS', 'Accesorios entregados', 'multi', accesorios.join(' , '), {
@@ -277,9 +277,9 @@ const LineasCaptura = (function () {
       campo_('FECHA RESPONSIVA', 'Fecha de la responsiva', 'fechaHora', { valor: Utilities.formatDate(ahora, ZONA, "yyyy-MM-dd'T'HH:mm"), requerido: 'SIEMPRE' }),
       // Sin columna en RESPONSIVAS: va al historial con el comentario
       campo_('TICKET', 'Ticket', 'texto', { valor: '' }),
-      // Un solo COMENTARIO (plan §5.2): se guarda en OBSERVACIONES (lo que imprime el PDF) y en el historial
+      // Un solo COMENTARIO (plan §5.2): se guarda en COMENTARIO (lo que imprime el PDF) y en el historial
       titulo_('COMENTARIO', 'message-square-text'),
-      campo_('OBSERVACIONES', 'Comentario', 'area', { valor: '', requerido: 'SIEMPRE' }),
+      campo_('COMENTARIO', 'Comentario', 'area', { valor: '', requerido: 'SIEMPRE' }),
       titulo_('FIRMAS', 'signature'),
       campo_('FIRMA RESPONSABLE', 'FIRMA RESPONSABLE', 'firma', { valor: '' }),
       ro('NOMBRE CI', 'NOMBRE RESPONSABLE DE CONTROL INTERNO', usuario.nombre || ''),
@@ -422,7 +422,7 @@ const LineasCaptura = (function () {
         'FOTOS': String((datos.fotos || []).length), 'PDFS_JSON': '[]', 'COINCIDENCIA_EXACTA': 'TRUE',
         'ALERTAS_JSON': '[]', 'ID_ANTERIOR': '', 'ACTUALIZADO_EN': ahora,
       }]);
-      LineasRepo.registrarMovimiento('INSPECCION', { motivo: valores['OBSERVACIONES'] || '', ticket: valores['TICKET'] }, usuario, ahora, {
+      LineasRepo.registrarMovimiento('INSPECCION', { motivo: valores['COMENTARIO'] || '', ticket: valores['TICKET'] }, usuario, ahora, {
         refs: [obj.reg.id].concat(g.refs || []), nuco: obj.reg.nuco, numero: valores['No TELEFONO'],
         antes: { estado: obj.equipo ? resumenEquipo_(obj.equipo) : resumenLinea_(obj.linea) },
         despues: { calificacion: calificacion },
@@ -470,7 +470,7 @@ const LineasCaptura = (function () {
       valores['AÑO'] = Utilities.formatDate(fechaResp, ZONA, 'yyyy');
       // Bot MAYUSCULAS
       valores['IDENTIFICACION'] = String(valores['IDENTIFICACION'] || '').toUpperCase();
-      valores['OBSERVACIONES'] = String(valores['OBSERVACIONES'] || '').toUpperCase();
+      valores['COMENTARIO'] = String(valores['COMENTARIO'] || '').toUpperCase();
       // La responsiva está completa: ahora sí la acción, y la responsiva queda en el registro
       const hecho = accion ? accion.aplicar(ahora, valores) : null;
       if (hecho) obj = objetivoCaptura_({ equipoId: hecho.id });
@@ -497,7 +497,7 @@ const LineasCaptura = (function () {
         'FECHA': ahora, 'CARPETA_ID': '', 'RUTA': '', 'FOTOS': '0',
         'PDFS_JSON': '[]', 'COINCIDENCIA_EXACTA': 'TRUE', 'ACTUALIZADO_EN': ahora,
       }]);
-      LineasRepo.registrarMovimiento('RESPONSIVA', { motivo: valores['OBSERVACIONES'] || '', ticket: valores['TICKET'] || '' }, usuario, ahora, {
+      LineasRepo.registrarMovimiento('RESPONSIVA', { motivo: valores['COMENTARIO'] || '', ticket: valores['TICKET'] || '' }, usuario, ahora, {
         refs: [obj.reg.id].concat(g ? g.refs || [] : []), nuco: obj.reg.nuco, numero: valores['No TELEFONO'] || null,
         antes: {}, despues: { responsable: { nombre: valores['RESPONSABLE'] || null } },
         detalle: Object.assign(detalleCambios_(g ? [g] : []), { responsivaId: id }),

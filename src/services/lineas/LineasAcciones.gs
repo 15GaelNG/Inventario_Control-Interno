@@ -12,10 +12,10 @@ const LineasAcciones = (function () {
 
   // ---------------- Reasignar ----------------
 
-  /** Datos de la persona en la responsiva → columnas del inventario (el jefe va en DIRECTOR en la responsiva). */
+  /** Datos de la persona en la responsiva → columnas del inventario. */
   const PERSONA_DE_RESPONSIVA = [
     ['NO EMPLEADO', 'No EMPLEADO'], ['RESPONSABLE', 'RESPONSABLE'], ['PUESTO', 'PUESTO'], ['DEPARTAMENTO', 'DEPARTAMENTO'], ['AREA', 'AREA'],
-    ['SEDE', 'SEDE'], ['OFICINA / DESARROLLO', 'OFICINA / DESARROLLO'], ['JEFE DIRECTO', 'DIRECTOR'], ['CUENTA GOOGLE', 'CORREO'],
+    ['SEDE', 'SEDE'], ['OFICINA / DESARROLLO', 'OFICINA / DESARROLLO'], ['JEFE DIRECTO', 'JEFE DIRECTO'], ['CUENTA GOOGLE', 'CORREO'],
   ];
 
   /**
@@ -37,7 +37,7 @@ const LineasAcciones = (function () {
         const nombre = 'NUCO ' + (LineasUtil.nucoVisible(LineasUtil.col(f, 'NUCO')) || '');
         LineasCaptura.exigirInspeccion(inspeccionId, LineasDatos.idsDeFila(f), nombre);
         const estatus = txt(LineasUtil.col(f, 'ESTATUS EQUIPO'));
-        const comentario = txt(valores['OBSERVACIONES']);
+        const comentario = txt(valores['COMENTARIO']);
         if (comentario.length <= 3) throw new Error('Escribe el comentario (queda en el historial).');
         const nuevo = txt(valores['RESPONSABLE']).toUpperCase();
         const antes = txt(LineasUtil.col(f, 'RESPONSABLE'));

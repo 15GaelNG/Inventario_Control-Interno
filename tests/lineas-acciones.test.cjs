@@ -127,7 +127,7 @@ test('Reasignar: la responsiva es la acción; equipo y línea fijos; accesorios 
   assert.doesNotMatch(cuerpo, /permite\(/); // desde cualquier estatus (usuario, 4-oct)
   assert.match(cuerpo, /ya lo tiene/); // la misma persona no es reasignación
   assert.match(cuerpo, /registrarMovimiento\('REASIGNACION', \{ motivo: comentario, ticket: txt\(valores\['TICKET'\]\) \}/);
-  assert.match(acciones, /\['JEFE DIRECTO', 'DIRECTOR'\]/);
+  assert.match(acciones, /\['JEFE DIRECTO', 'JEFE DIRECTO'\]/); // parte 6 (6-oct): antes la responsiva lo guardaba en DIRECTOR
   assert.match(read('src/ClientApi.gs'), /function apiLineasReasignar\(token, responsiva\)/);
   const captura = read('src/services/lineas/LineasCaptura.gs');
   assert.match(captura, /const persona = \(c\) => \(reasignar \? '' : v\(c\)\);/);
@@ -206,7 +206,7 @@ test('Reasignar: la inspección es obligatoria (usuario, 5-oct): de ese equipo y
         return id;
       },
       guardarResponsiva: (datos, usuario, secretos, accion) => {
-        const hecho = accion.aplicar(new Date(), { OBSERVACIONES: 'CAMBIO DE PUESTO', RESPONSABLE: 'LUIS', 'No EMPLEADO': 'AC1' });
+        const hecho = accion.aplicar(new Date(), { COMENTARIO: 'CAMBIO DE PUESTO', RESPONSABLE: 'LUIS', 'No EMPLEADO': 'AC1' });
         return { id: 'RES-1', registroId: hecho.id, filas: [] };
       },
     },

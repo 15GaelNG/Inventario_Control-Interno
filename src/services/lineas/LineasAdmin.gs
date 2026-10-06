@@ -414,3 +414,67 @@ function lineasPruebas4oct_borrar() {
   soloEditor_();
   return pruebas4oct_(true);
 }
+
+
+// ---------------- Parte 6 (pendiente 2.3): COMENTARIO y JEFE DIRECTO (usuario, 6-oct) ----------------
+// Hojas: OBSERVACIONES → COMENTARIO en INSPECCIONES y RESPONSIVAS LINEAS, y DIRECTOR → JEFE DIRECTO en RESPONSIVAS (ahí el
+// AppSheet guardaba al jefe). Solo cambia el encabezado; mientras no se corra, el código acepta los dos nombres
+// (LineasDatos.COLUMNAS_RENOMBRADAS). Plantillas: copia de cada una del AppSheet (que no se toca) con «Comentario»,
+// «Jefe directo» y sus marcadores (LineasPdf). Primero los _revisar, que no escriben.
+
+/** Plantilla → la hoja de la que sale su registro (sus columnas renombradas). */
+const PLANTILLAS_COMENTARIO_ = { INSPECCION_CELULAR: 'INSPECCIONES LINEAS', RESPONSIVA_CELULAR: 'RESPONSIVAS LINEAS' };
+
+function columnasDocumentos_(aplicar) {
+  const libro = LineasDatos.libro();
+  const salida = {};
+  LineasDatos.conCandado(() => {
+    Object.keys(LineasDatos.COLUMNAS_RENOMBRADAS).forEach((nombre) => {
+      const hoja = libro.getSheetByName(nombre);
+      if (!hoja) { salida[nombre] = ['no existe la pestaña']; return; }
+      const encabezados = hoja.getRange(1, 1, 1, Math.max(1, hoja.getLastColumn())).getValues()[0].map((h) => LineasDatos.normCol(h));
+      const mapa = LineasDatos.COLUMNAS_RENOMBRADAS[nombre];
+      salida[nombre] = Object.keys(mapa).map((viejo) => {
+        const nuevo = mapa[viejo];
+        const iViejo = encabezados.indexOf(viejo);
+        if (encabezados.indexOf(nuevo) >= 0) return nuevo + ': ya está' + (iViejo >= 0 ? ' (también hay ' + viejo + ': no se toca)' : '');
+        if (iViejo < 0) return viejo + ': no está';
+        if (aplicar) hoja.getRange(1, iViejo + 1).setValue(nuevo);
+        return viejo + ' → ' + nuevo + ' (columna ' + LineasDatos.letraColumna(iViejo + 1) + ')' + (aplicar ? '' : ': falta');
+      });
+      if (aplicar) { LineasDatos.cacheBorrar('enc_' + nombre); LineasDatos.olvidarTabla(nombre); LineasDatos.tocar([nombre]); }
+    });
+  });
+  const res = { libro: libro.getName(), cambiado: !!aplicar, columnas: salida };
+  console.log(JSON.stringify(res, null, 2));
+  return res;
+}
+
+function lineasRenombrarColumnasDocumentos_revisar() {
+  soloEditor_();
+  return columnasDocumentos_(false);
+}
+function lineasRenombrarColumnasDocumentos() {
+  soloEditor_();
+  return columnasDocumentos_(true);
+}
+
+function plantillasComentario_(copiar) {
+  const res = Object.keys(PLANTILLAS_COMENTARIO_).map((clave) => {
+    const id = LineasPdf.PLANTILLAS_APPSHEET[clave];
+    const mapa = LineasDatos.COLUMNAS_RENOMBRADAS[PLANTILLAS_COMENTARIO_[clave]];
+    return Object.assign({ clave: clave }, copiar ? LineasPdf.copiaConRenombres(id, mapa) : LineasPdf.revisarRenombres(id, mapa));
+  });
+  console.log(JSON.stringify(res, null, 2));
+  return res;
+}
+
+function lineasPlantillasComentario_revisar() {
+  soloEditor_();
+  return plantillasComentario_(false);
+}
+/** Crea las copias (una vez: si ya existe una con su nombre, solo da su ID). Los IDs van a LineasPdf.PLANTILLAS. */
+function lineasPlantillasComentario_copiar() {
+  soloEditor_();
+  return plantillasComentario_(true);
+}
