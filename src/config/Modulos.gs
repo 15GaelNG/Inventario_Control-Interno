@@ -6,6 +6,18 @@
  * Tener el catálogo aquí evita el problema clásico de los permisos: que alguien escriba
  * "Vehiculos" en la hoja y el módulo se llame "vehiculos", y el permiso no aplique nunca
  * sin que nadie se entere. `Permisos.revisarCatalogo()` reporta esos casos.
+ *
+ * Además de id y etiqueta, un módulo puede decir lo que su permiso implica fuera de su pantalla
+ * (la pantalla de Usuarios y permisos lo explica con esto, sin frases escritas a mano):
+ *   referencia  qué consulta toda su FAMILIA (su grupo del menú) aunque no tenga este módulo:
+ *               es lo que el servidor marca `referencia: true` (HojaServicio). P. ej. el catálogo
+ *               de vehículos, que Sensores necesita para elegir la unidad.
+ *   editaEn     [{ modulo, que }]: partes de OTRO módulo que solo edita quien tiene EDICION en
+ *               este: lo que el servidor marca `deOtroModulo` en la hoja de `modulo`. P. ej. la
+ *               sección de sensor de la ficha de Vehículos es de Instalación de Sensores.
+ *   enFicha     id del módulo en cuya ficha vive como pestaña, cuando no tiene pantalla propia
+ *               (Responsiva y Adherente están en la ficha de Vehículos); con `icono`, el de su pestaña.
+ * `source-contracts` revisa que esto y el servidor digan lo mismo.
  */
 
 const Modulos = (function () {
@@ -14,16 +26,16 @@ const Modulos = (function () {
       id: 'servicios-vehiculares', etiqueta: 'Servicios Vehiculares', icono: 'car',
       modulos: [
         { id: 'incidencias', etiqueta: 'Incidencias', listo: true },
-        { id: 'vehiculos', etiqueta: 'Vehículos', listo: true },
+        { id: 'vehiculos', etiqueta: 'Vehículos', listo: true, referencia: 'el catálogo de vehículos para elegir la unidad' },
         { id: 'cambios-vehiculos', etiqueta: 'Cambios Vehículos' },
         { id: 'reasignaciones-vehiculares', etiqueta: 'Reasignaciones Vehiculares' },
-        { id: 'responsiva-vehicular', etiqueta: 'Responsiva Vehicular', listo: true },
-        { id: 'adherente-vehicular', etiqueta: 'Adherente Vehicular', listo: true },
+        { id: 'responsiva-vehicular', etiqueta: 'Responsiva Vehicular', listo: true, enFicha: 'vehiculos', icono: 'file-signature' },
+        { id: 'adherente-vehicular', etiqueta: 'Adherente Vehicular', listo: true, enFicha: 'vehiculos', icono: 'users' },
         { id: 'verificaciones', etiqueta: 'Verificaciones', listo: true },
         // Hoja INSPECCION VEHICULAR (290 registros, 195 columnas de checklist) +
         // MODELOS INSPECCION (18 diagramas por tipo de unidad), ver docs/mapeo-modulos.md
         { id: 'inspeccion-vehicular', etiqueta: 'Inspección Vehicular' },
-        { id: 'instalacion-sensores', etiqueta: 'Instalación de Sensores', listo: true },
+        { id: 'instalacion-sensores', etiqueta: 'Instalación de Sensores', listo: true, editaEn: [{ modulo: 'vehiculos', que: 'la sección «Accesorios y sensor» de la ficha' }] },
         { id: 'hologramas', etiqueta: 'Hologramas', listo: true },
       ],
     },
@@ -55,7 +67,7 @@ const Modulos = (function () {
       id: 'arqueos', etiqueta: 'Arqueos', icono: 'wallet',
       modulos: [
         { id: 'arqueos', etiqueta: 'Arqueos' },
-        { id: 'caja-chica', etiqueta: 'Caja Chica' },
+        { id: 'caja-chica', etiqueta: 'Caja Chica', referencia: 'la lista de cajas chicas para elegir la caja' },
       ],
     },
     {
@@ -101,5 +113,16 @@ const Modulos = (function () {
 
   const existe = (texto) => resolver(texto) !== null;
 
-  return { GRUPOS, todos, ids, existe, etiqueta, resolver };
+  /**
+   * La familia de un módulo: los módulos de su mismo grupo del menú (Servicios Vehiculares,
+   * Arqueos y Caja Chica…). Sirve para los datos de referencia que toda la familia necesita
+   * para trabajar: el catálogo de vehículos para elegir la unidad en Sensores, la lista de
+   * cajas para Arqueos (Permisos.puedeLeerFamilia).
+   */
+  function familia(id) {
+    const grupo = GRUPOS.find((g) => g.modulos.some((m) => m.id === id));
+    return grupo ? grupo.modulos.map((m) => m.id) : [id];
+  }
+
+  return { GRUPOS, todos, ids, existe, etiqueta, resolver, familia };
 })();

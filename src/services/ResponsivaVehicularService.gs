@@ -33,8 +33,9 @@ const ResponsivaVehicularService = (function () {
 
   // Carpetas de Drive dedicadas a esta responsiva (decisión del usuario, 06-oct-2026) --
   // no la carpeta general de REPORTES que usan los demás módulos.
-  const CARPETA_IMAGENES = '12Zkdgdfiqv-jbVy-FPeGnNeucrCdIoPJ';   // RESPONSIVAS VEHICULARES_Images
-  const CARPETA_PDF = '1DXrViJKx1X4td2jEbzZgBRGZZSdnHNYD';        // RESPONSIVAS_VEHICULARES
+  // Por nombre dentro de la raíz de la app (DriveUtils.carpetaEnRaiz): cada proyecto usa las suyas
+  const CARPETA_IMAGENES = 'RESPONSIVAS VEHICULARES_Images';
+  const CARPETA_PDF = 'RESPONSIVAS_VEHICULARES';
 
   // Caja de las firmas en el PDF: la misma que usa InspeccionesService (150 × 60 pt).
   const FIRMA_PDF = { ancho: 150, alto: 60 };
@@ -58,16 +59,10 @@ const ResponsivaVehicularService = (function () {
     return SheetUtils.getSheet(ssId(), SHEET);
   }
 
-  function fechaISO_(valor) {
-    if (!valor) return '';
-    const f = valor instanceof Date ? valor : new Date(valor);
-    return isNaN(f.getTime()) ? '' : f.toISOString();
-  }
-
   function filaAResumen_(datos, i) {
     return {
       ID: datos[ID_COLUMN][i],
-      FECHA: fechaISO_(datos['FECHA'][i]),
+      FECHA: HojaServicio.fechaISO(datos['FECHA'][i]),
       FOLIO_VEHICULO: datos['FOLIO VEHICULO'][i] || '',
       NUCCO: datos['NUCCO'][i] || '',
       RESPONSABLE: datos['RESPONSABLE'][i] || '',
@@ -205,7 +200,7 @@ const ResponsivaVehicularService = (function () {
               campo, responsable, vehiculo['PLACA'] || vehiculo['FOLIO'], PdfService.fechaParaNombre(ahora),
             ]) + '.png';
             const blob = Utilities.newBlob(Utilities.base64Decode(img.base64), img.mimeType || 'image/png', nombreImagen);
-            const archivo = DriveApp.getFolderById(CARPETA_IMAGENES).createFile(blob);
+            const archivo = DriveUtils.marcarAutor(DriveUtils.carpetaEnRaiz(CARPETA_IMAGENES).createFile(blob));
             DriveUtils.compartirLoMasAmplioPosible(archivo);
           } catch (e) {
             avisos.push('No se pudo respaldar ' + campo.toLowerCase() + ' en Drive: ' + e.message);
@@ -221,7 +216,7 @@ const ResponsivaVehicularService = (function () {
           plantillaId: PLANTILLA,
           datos: datosPdf,
           imagenes: imagenesPdf,
-          carpetaId: CARPETA_PDF,
+          carpetaId: DriveUtils.carpetaEnRaiz(CARPETA_PDF).getId(),
           nombre: PdfService.nombreArchivo([
             'RESPONSIVA VEHICULAR', responsable, vehiculo['PLACA'] || vehiculo['FOLIO'], PdfService.fechaParaNombre(ahora),
           ]),
@@ -239,11 +234,11 @@ const ResponsivaVehicularService = (function () {
     }
   }
 
+  /** La hoja, para HojaServicio.eliminar (que además respeta Relaciones) */
+  const HOJA = { modulo: MODULO, libro: ssId, hoja: SHEET, columnas: COLUMNAS_RESUMEN };
+
   function eliminar(token, id) {
-    Permisos.puedeEditar(token, MODULO);
-    const ok = SheetUtils.remove(ssId(), hoja_().getName(), id, ID_COLUMN);
-    if (!ok) throw new Error('No se encontró el registro con ID=' + id);
-    return { ID: id };
+    return HojaServicio.eliminar(HOJA, token, id);
   }
 
   return { listarPorFolio, buscarPorId, crear, eliminar };

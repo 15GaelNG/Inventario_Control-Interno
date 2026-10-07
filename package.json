@@ -5,22 +5,29 @@
   "description": "Sistema de Control Interno (vehículos, telefonía, accesorios, caja chica) — Google Apps Script",
   "scripts": {
     "test": "npm run test:comportamiento && npm run test:contratos",
-    "test:comportamiento": "node tools/migracion/exportar-catalogo.js --revisar && node tests/datatable.test.js && node tests/formulario.test.js && node tests/campo-auto.test.js && node tests/campos-hoja.test.js && node tests/pantalla.test.js &&node tests/permisos.test.js && node tests/cache-hojas.test.js && node tests/listas-cliente.test.js && node tests/candado-editor.test.js && node tests/entornos.test.js && node tests/plantilla.test.js && node tests/sheetutils.test.js && node tests/driveutils.test.js && node tests/ids.test.js && node tests/entidades.test.js && node tests/insert-ids.test.js && node tests/relaciones.test.js && node tests/replanche.test.js && node tests/migracion-familia.test.js && node tests/migracion-todo.test.js && node tests/integridad-borrar.test.js && node tests/referencias-generaciones.test.js && node tests/nombres.test.js && node tests/capital-humano.test.js && node tests/renombrar-llave.test.js && node tests/llave-nueva.test.js && node tests/migracion-pipeline.test.js && node tests/pdf.test.js && node tests/inspecciones.test.js && node tests/inspecciones-captura.test.js && node tests/inspecciones-registrar.test.js && node tests/geotab.test.js",
+    "test:comportamiento": "node tools/migracion/exportar-catalogo.js --revisar && node tests/datatable.test.js && node tests/formulario.test.js && node tests/campo-auto.test.js && node tests/campos-hoja.test.js && node tests/pantalla.test.js &&node tests/permisos.test.js && node tests/permisos-cache.test.js && node tests/familias.test.js && node tests/cache-hojas.test.js && node tests/inicio-cache.test.js && node tests/construir.test.js && node tests/hoja-servicio.test.js && node tests/helpdesk.test.js && node tests/helpdesk-copia.test.js && node tests/listas-cliente.test.js && node tests/almacen-cliente.test.js && node tests/candado-editor.test.js && node tests/entornos.test.js && node tests/plantilla.test.js && node tests/sheetutils.test.js && node tests/driveutils.test.js && node tests/ids.test.js && node tests/entidades.test.js && node tests/insert-ids.test.js && node tests/relaciones.test.js && node tests/replanche.test.js && node tests/migracion-familia.test.js && node tests/migracion-todo.test.js && node tests/integridad-borrar.test.js && node tests/referencias-generaciones.test.js && node tests/nombres.test.js && node tests/capital-humano.test.js && node tests/renombrar-llave.test.js && node tests/llave-nueva.test.js && node tests/migracion-pipeline.test.js && node tests/pdf.test.js && node tests/inspecciones.test.js && node tests/inspecciones-captura.test.js && node tests/inspecciones-registrar.test.js && node tests/geotab.test.js",
     "test:contratos": "node --test tests/*.test.cjs",
     "test:migracion-py": "uv run --no-project --with pytest python -m pytest tools/migracion/tests_py -q",
     "catalogo": "node tools/migracion/exportar-catalogo.js",
     "captura": "node tools/vista-previa/capturar.js",
     "login": "clasp login",
-    "push": "clasp push",
-    "push:lab": "clasp push --force -P .clasp.lab.json",
+    "construir": "node tools/subir/construir.js",
+    "push": "node tools/subir/subir.js dev",
+    "push:lab": "node tools/subir/subir.js lab",
     "watch": "clasp push --watch",
     "open": "clasp open",
     "deploy": "clasp deploy",
-    "correcciones:semilla": "node tools/correcciones-semilla.cjs"
+    "correcciones:semilla": "node tools/correcciones-semilla.cjs",
+    "push:prod": "node tools/subir/subir.js prod",
+    "push:sin-comprimir": "clasp push"
   },
   "devDependencies": {
     "@google/clasp": "^3.0.0",
+    "acorn": "^8.19.0",
+    "csso": "^5.0.5",
+    "fake-indexeddb": "^6.2.5",
     "jsdom": "^26.1.0",
-    "puppeteer-core": "^25.11.0"
+    "puppeteer-core": "^25.11.0",
+    "terser": "^5.51.2"
   }
 }

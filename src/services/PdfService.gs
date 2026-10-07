@@ -343,7 +343,7 @@ const PdfService = (function () {
 
       let pdf;
       try {
-        pdf = carpeta.createFile(DriveApp.getFileById(copia.getId()).getAs('application/pdf')).setName(nombre + '.pdf');
+        pdf = DriveUtils.marcarAutor(carpeta.createFile(DriveApp.getFileById(copia.getId()).getAs('application/pdf')).setName(nombre + '.pdf'));
       } catch (err) {
         throw new Error(
           'Se armó el documento, pero no se pudo guardar el PDF en la carpeta. La cuenta ' + cuenta() +

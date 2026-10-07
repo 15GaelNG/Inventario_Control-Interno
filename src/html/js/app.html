@@ -365,7 +365,19 @@
 
   /** ¿Qué puede hacer esta persona en un módulo? 'LECTURA' | 'EDICION' | undefined */
   const permisoDe = (modulo) => (state.permisos || {})[modulo];
+  // Las vistas que este proyecto tiene apagadas (MODULOS_APAGADOS en Entornos.gs; las pone
+  // Index.html): ni el menú las pinta ni navegarA las abre. El servidor también las rechaza.
+  const VISTAS_APAGADAS = (() => {
+    try { return JSON.parse(document.body.dataset.apagados || '[]'); } catch (e) { return []; }
+  })();
+  const estaApagada = (entrada) => VISTAS_APAGADAS.indexOf(entrada.vista) !== -1;
   const puedeEditarModulo = (modulo) => permisoDe(modulo) === 'EDICION';
+  /**
+   * Lo de OTRO módulo dentro de una pantalla (una pestaña de la ficha): solo se pide si la
+   * persona puede ver ese módulo; si no, da null y esa pestaña no se pinta. Si sí puede y
+   * falla por otra cosa, da `vacio` y las demás siguen. Ver CLAUDE.md, "Permisos entre módulos".
+   */
+  const deModulo = (modulo, fn, vacio) => (permisoDe(modulo) ? fn().catch(() => vacio) : Promise.resolve(null));
 
   /** Escapa HTML al insertar texto dinámico con innerHTML (evita XSS con datos de hojas) */
   function escaparHtml(valor) {
@@ -450,6 +462,14 @@
     }
   }
 
+  const llavePermisos_ = () => 'permisos_' + String((state.sesion && state.sesion.correo) || '').toLowerCase();
+  function permisosGuardados_() {
+    try { return JSON.parse(localStorage.getItem(llavePermisos_()) || 'null'); } catch (e) { return null; }
+  }
+  function guardarPermisos_(permisos) {
+    try { localStorage.setItem(llavePermisos_(), JSON.stringify(permisos)); } catch (e) { /* sin almacenamiento: no pasa nada */ }
+  }
+
   function render() {
     document.getElementById('app-shell').hidden = !state.token;
     document.getElementById('login-screen-container').hidden = !!state.token;
@@ -460,12 +480,15 @@
     }
     document.getElementById('user-name').textContent = state.sesion.nombre + ' · ' + state.sesion.rol;
     marcarTemaActual(); // entrar con la sesión guardada no pasa por el login, que era quien marcaba el botón
-    // El menú se pinta hasta saber los permisos: sin ellos solo se ve el inicio. Si fallan,
-    // se queda así (mejor que enseñar módulos que el servidor va a rechazar).
-    state.permisos = {};
+    // El menú se pinta de una vez con los permisos de la visita anterior (guardados en este
+    // navegador) y se corrige cuando llegan los de verdad. Solo deciden qué se ENSEÑA: el
+    // servidor revisa el permiso en cada llamada. La primera vez no hay copia y solo se ve el
+    // inicio hasta que lleguen; si fallan, se queda así.
+    state.permisos = permisosGuardados_() || {};
     renderNavGrupos();
     callServer('apiMisPermisos', state.token).then((info) => {
       state.permisos = (info && info.permisos) || {};
+      guardarPermisos_(state.permisos);
       renderNavGrupos();
       precargarListas();
     }).catch((err) => toastError('No se pudieron cargar tus permisos: ' + ((err && err.message) || err)));
@@ -493,6 +516,11 @@
     if (detenerHeroLogin) { detenerHeroLogin(); detenerHeroLogin = null; }
     actualizarHeroLoginTema = null;
 
+    // Mientras corre la animación ya se piden los permisos y el Inicio: render() y la vista
+    // de inicio reciben estas mismas respuestas (adelantar, api.html) en vez de pedirlas después
+    adelantar('apiMisPermisos', state.token);
+    adelantar('apiResumenInicio', state.token);
+
     const container = document.getElementById('loading-screen-container');
     montarVista('tpl-loading', null, container);
 
@@ -502,7 +530,8 @@
       { icono: 'loading-icon-2', mensaje: 'Revisando accesorios…' },
       { icono: 'loading-icon-3', mensaje: 'Cerrando caja chica del día…' },
     ];
-    const duracionTotal = 1900;
+    // Era 1.9 s de espera fija antes de pedir nada; ahora es más corta y los datos ya vienen en camino
+    const duracionTotal = 1000;
     const porPaso = duracionTotal / pasos.length;
 
     const barra = document.getElementById('loading-bar-fill');
@@ -545,9 +574,8 @@
 
   /** Ícono (nombre de Lucide) temático según a qué área pertenece la vista. */
   function iconoDeVista(vista) {
-    if (vista === 'dashboard') return 'home';
-    const grupo = NAV_GRUPOS.find((g) => g.vista === vista || (g.items || []).some((it) => it.vista === vista));
-    return grupo ? grupo.icono : 'file-text';
+    const destino = vistaDe(vista);
+    return destino ? destino.iconoArea : 'file-text';
   }
 
   /**
@@ -609,43 +637,11 @@
     transicionVista(vista, etiqueta, () => {
       // El menú ya esconde lo que no se puede ver, pero a una vista también se llega por el
       // historial del navegador o por los enlaces entre módulos ("Ver vehículo")
-      const modulo = moduloDeVista(vista);
-      if (modulo && !permisoDe(modulo)) { mostrarSinAcceso(etiqueta || vista); return; }
-      if (vista === 'dashboard') { montarVista('tpl-dashboard', initDashboard); return; }
-      if (vista === 'panorama-vehiculos') { montarVista('tpl-panorama-vehiculos', initPanoramaVehiculos); return; }
-      if (vista === 'incidencias') { montarVista('tpl-incidencias', initIncidencias); return; }
-      if (vista === 'vehiculos') { montarVista('tpl-vehiculos', initVehiculos); return; }
-      if (vista === 'cambios-vehiculos') { montarVista('tpl-cambios-vehiculos', initCambiosVehiculos); return; }
-      if (vista === 'reasignaciones-vehiculares') { montarVista('tpl-reasignaciones-vehiculares', initReasignacionesVehiculares); return; }
-      if (vista === 'uber') { montarVista('tpl-uber', initUber); return; }
-      if (vista === 'tickets') { montarVista('tpl-tickets', initTickets); return; }
-      if (vista === 'caja-chica') { montarVista('tpl-cajachica', initCajaChica); return; }
-      if (vista === 'panorama-cajachica') { montarVista('tpl-panorama-cajachica', initPanoramaCajaChica); return; }
-      if (vista === 'cambios-monto-cch') { montarVista('tpl-cambios-monto-cch', initCambiosMontoCCH); return; }
-      if (vista === 'arqueos') { montarVista('tpl-arqueos', initArqueos); return; }
-      if (vista === 'verificaciones') { montarVista('tpl-verificaciones', initVerificaciones); return; }
-      if (vista === 'instalacion-sensores') { montarVista('tpl-sensores', initSensores); return; }
-      if (vista === 'hologramas') { montarVista('tpl-hologramas', initHologramas); return; }
-      if (vista === 'inspeccion-vehicular') { montarVista('tpl-inspecciones', initInspecciones); return; }
-      if (vista === 'relaciones') { montarVista('tpl-relaciones', initRelaciones); return; }
-      if (vista === 'salud') { montarVista('tpl-salud', initSalud); return; }
-      if (vista === 'usuarios') { montarVista('tpl-usuarios', initPermisosAdmin); return; }
-      if (vista === 'sistemas-vehiculos') { montarVista('tpl-sistemas', () => initSistemas('servicios-vehiculares')); return; }
-      if (vista === 'sistemas-lineas') { montarVista('tpl-sistemas', () => initSistemas('lineas')); return; }
-      if (vista === 'sistemas-arqueos') { montarVista('tpl-sistemas', () => initSistemas('arqueos')); return; }
-      if (vista === 'encuestas-solicitudes') { montarVista('tpl-sistemas', () => initSistemas('encuestas-solicitudes')); return; }
-      // --- Líneas (rama emmanuel): el módulo vive en html/js/lineas.html (namespace Lineas) ---
-      if (vista === 'panorama-lineas') { montarVista('tpl-lineas-panorama', Lineas.initPanorama); return; }
-      if (vista === 'lineas-telefonicas') { montarVista('tpl-lineas-telefonicas', Lineas.initTelefonicas); return; }
-      if (vista === 'gestion-activos') { montarVista('tpl-lineas-gestion-activos', Lineas.initGestionActivos); return; }
-      if (vista === 'accesorios-lineas') { montarVista('tpl-lineas-accesorios', Lineas.initAccesoriosLineas); return; }
-      if (vista === 'resguardos-lineas') { montarVista('tpl-lineas-resguardos', Lineas.initResguardos); return; }
-      // Módulo TEMPORAL (30-sep): se quita cuando Líneas termine sus correcciones (ver LineasCorrecciones.gs)
-      if (vista === 'correcciones-lineas') { montarVista('tpl-lineas-correcciones', LineasCorrecciones.init); return; }
-      if (vista === 'cambios-lineas') { montarVista('tpl-lineas-bitacora', Lineas.initCambios); return; }
-      // Campana de la barra superior → "Ver todas" (html/notificaciones.html, rama emmanuel)
-      if (vista === 'notificaciones') { montarVista('tpl-notificaciones', Notificaciones.initVista); return; }
-      mostrarProximamente(etiqueta || vista);
+      // Adónde lleva cada vista está en NAV_GRUPOS / VISTAS_FUERA_DEL_MENU, no aquí
+      const destino = vistaDe(vista);
+      if (!destino || estaApagada(destino)) { mostrarProximamente(etiqueta || vista); return; }
+      if (destino.requiere && !permisoDe(destino.requiere)) { mostrarSinAcceso(etiqueta || destino.etiqueta); return; }
+      montarVista(destino.plantilla, destino.init);
     });
   }
 
@@ -674,25 +670,32 @@
   }
 
   /**
-   * Estructura del sidebar por área. `requiere` es el módulo (Modulos.gs) cuyo permiso
-   * hace falta para ver el item: los panoramas y Cambios de Monto no son módulos propios,
-   * cuelgan de su padre. `libre: true` = no pide permiso (Sistemas y Encuestas: solo enlaces
-   * a sistemas externos). Sin ninguno de los dos, el item no se pinta.
+   * Las vistas del sistema: el menú por área y adónde lleva cada entrada. Una vista nueva es UNA
+   * entrada aquí (más su módulo en Modulos.gs y sus include en Index.html): navegarA, el permiso,
+   * el ícono de la transición y el de Usuarios y permisos salen de esta lista (ver vistaDe).
+   *   plantilla  el <template> de html/views que se monta
+   *   init       lo que corre al montarla; va como función flecha porque casi todas viven en
+   *              archivos que cargan después de este (app-verificaciones, modulos/*, lineas)
+   *   requiere   el módulo (Modulos.gs) cuyo permiso hace falta para ver el item: los panoramas y
+   *              Cambios de Monto no son módulos propios, cuelgan de su padre. `libre: true` = no
+   *              pide permiso (Sistemas y Encuestas: solo enlaces a sistemas externos). Sin ninguno
+   *              de los dos, el item no se pinta.
+   * source-contracts revisa que cada plantilla, función y módulo exista.
    */
   const NAV_GRUPOS = [
     {
       id: 'servicios-vehiculares', icono: 'car', etiqueta: 'Control Vehicular',
       items: [
-        { vista: 'panorama-vehiculos', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'vehiculos' },
-        { vista: 'incidencias', etiqueta: 'Incidencias', icono: 'wrench', requiere: 'incidencias' },
-        { vista: 'vehiculos', etiqueta: 'Vehículos', icono: 'car', requiere: 'vehiculos' },
-        { vista: 'cambios-vehiculos', etiqueta: 'Cambios Vehículos', icono: 'history', requiere: 'cambios-vehiculos' },
-        { vista: 'reasignaciones-vehiculares', etiqueta: 'Reasignaciones Vehiculares', icono: 'arrow-left-right', requiere: 'reasignaciones-vehiculares' },
-        { vista: 'verificaciones', etiqueta: 'Verificaciones', icono: 'badge-check', requiere: 'verificaciones' },
-        { vista: 'inspeccion-vehicular', etiqueta: 'Inspección Vehicular', icono: 'clipboard-list', requiere: 'inspeccion-vehicular' },
-        { vista: 'instalacion-sensores', etiqueta: 'Instalación de Sensores', icono: 'radio', requiere: 'instalacion-sensores' },
-        { vista: 'hologramas', etiqueta: 'Hologramas', icono: 'sparkles', requiere: 'hologramas' },
-        { vista: 'sistemas-vehiculos', etiqueta: 'Sistemas', icono: 'external-link', libre: true },
+        { vista: 'panorama-vehiculos', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'vehiculos', plantilla: 'tpl-panorama-vehiculos', init: () => initPanoramaVehiculos() },
+        { vista: 'incidencias', etiqueta: 'Incidencias', icono: 'wrench', requiere: 'incidencias', plantilla: 'tpl-incidencias', init: () => initIncidencias() },
+        { vista: 'vehiculos', etiqueta: 'Vehículos', icono: 'car', requiere: 'vehiculos', plantilla: 'tpl-vehiculos', init: () => initVehiculos() },
+        { vista: 'cambios-vehiculos', etiqueta: 'Cambios Vehículos', icono: 'history', requiere: 'cambios-vehiculos', plantilla: 'tpl-cambios-vehiculos', init: () => initCambiosVehiculos() },
+        { vista: 'reasignaciones-vehiculares', etiqueta: 'Reasignaciones Vehiculares', icono: 'arrow-left-right', requiere: 'reasignaciones-vehiculares', plantilla: 'tpl-reasignaciones-vehiculares', init: () => initReasignacionesVehiculares() },
+        { vista: 'verificaciones', etiqueta: 'Verificaciones', icono: 'badge-check', requiere: 'verificaciones', plantilla: 'tpl-verificaciones', init: () => initVerificaciones() },
+        { vista: 'inspeccion-vehicular', etiqueta: 'Inspección Vehicular', icono: 'clipboard-list', requiere: 'inspeccion-vehicular', plantilla: 'tpl-inspecciones', init: () => initInspecciones() },
+        { vista: 'instalacion-sensores', etiqueta: 'Instalación de Sensores', icono: 'radio', requiere: 'instalacion-sensores', plantilla: 'tpl-sensores', init: () => initSensores() },
+        { vista: 'hologramas', etiqueta: 'Hologramas', icono: 'sparkles', requiere: 'hologramas', plantilla: 'tpl-hologramas', init: () => initHologramas() },
+        { vista: 'sistemas-vehiculos', etiqueta: 'Sistemas', icono: 'external-link', libre: true, plantilla: 'tpl-sistemas', init: () => initSistemas('servicios-vehiculares') },
       ],
     },
     {
@@ -701,63 +704,73 @@
       id: 'lineas', icono: 'smartphone', etiqueta: 'Líneas',
       items: [
         // Íconos equivalentes a los del menú del AppSheet (Font Awesome → Lucide)
-        { vista: 'panorama-lineas', etiqueta: 'Panorama', icono: 'layout-dashboard', requiere: 'panorama-lineas' },
-        { vista: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas', icono: 'smartphone', requiere: 'lineas-telefonicas' },
-        { vista: 'resguardos-lineas', etiqueta: 'Resguardos y cancelaciones', icono: 'package-check', requiere: 'resguardos-lineas' },
-        { vista: 'correcciones-lineas', etiqueta: 'Correcciones de Líneas', icono: 'clipboard-check', requiere: 'correcciones-lineas' }, // temporal (30-sep)
-        { vista: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios', icono: 'boxes', requiere: 'accesorios-lineas' },
-        // Control de Cambios queda fuera del menú (30-sep) pero su vista sigue en navegarA: su pestaña es la bitácora
-        // del Historial y del Panorama. Reactivación, Solicitud, Reasignaciones y Desechos se retiraron con sus
+        { vista: 'panorama-lineas', etiqueta: 'Panorama', icono: 'layout-dashboard', requiere: 'panorama-lineas', plantilla: 'tpl-lineas-panorama', init: () => Lineas.initPanorama() },
+        { vista: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas', icono: 'smartphone', requiere: 'lineas-telefonicas', plantilla: 'tpl-lineas-telefonicas', init: () => Lineas.initTelefonicas() },
+        { vista: 'resguardos-lineas', etiqueta: 'Resguardos y cancelaciones', icono: 'package-check', requiere: 'resguardos-lineas', plantilla: 'tpl-lineas-resguardos', init: () => Lineas.initResguardos() },
+        { vista: 'correcciones-lineas', etiqueta: 'Correcciones de Líneas', icono: 'clipboard-check', requiere: 'correcciones-lineas', plantilla: 'tpl-lineas-correcciones', init: () => LineasCorrecciones.init() }, // temporal (30-sep)
+        { vista: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios', icono: 'boxes', requiere: 'accesorios-lineas', plantilla: 'tpl-lineas-accesorios', init: () => Lineas.initAccesoriosLineas() },
+        // Control de Cambios queda fuera del menú (30-sep) pero su vista sigue en VISTAS_FUERA_DEL_MENU: su pestaña es la
+        // bitácora del Historial y del Panorama. Reactivación, Solicitud, Reasignaciones y Desechos se retiraron con sus
         // pestañas (30-sep); sus renglones están en APP_MOVIMIENTOS y se ven en el Historial de la ficha.
         // { vista: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas', icono: 'eye' },
-        { vista: 'sistemas-lineas', etiqueta: 'Sistemas', icono: 'external-link', libre: true },
+        { vista: 'sistemas-lineas', etiqueta: 'Sistemas', icono: 'external-link', libre: true, plantilla: 'tpl-sistemas', init: () => initSistemas('lineas') },
       ],
     },
     {
       id: 'arqueos', icono: 'wallet', etiqueta: 'Arqueos',
       items: [
-        { vista: 'panorama-cajachica', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'caja-chica' },
-        { vista: 'arqueos', etiqueta: 'Arqueos', icono: 'wallet', requiere: 'arqueos' },
-        { vista: 'caja-chica', etiqueta: 'Caja Chica', icono: 'piggy-bank', requiere: 'caja-chica' },
-        { vista: 'cambios-monto-cch', etiqueta: 'Cambios de Monto', icono: 'repeat', requiere: 'caja-chica' },
-        { vista: 'sistemas-arqueos', etiqueta: 'Sistemas', icono: 'external-link', libre: true },
+        { vista: 'panorama-cajachica', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'caja-chica', plantilla: 'tpl-panorama-cajachica', init: () => initPanoramaCajaChica() },
+        { vista: 'arqueos', etiqueta: 'Arqueos', icono: 'wallet', requiere: 'arqueos', plantilla: 'tpl-arqueos', init: () => initArqueos() },
+        { vista: 'caja-chica', etiqueta: 'Caja Chica', icono: 'piggy-bank', requiere: 'caja-chica', plantilla: 'tpl-cajachica', init: () => initCajaChica() },
+        { vista: 'cambios-monto-cch', etiqueta: 'Cambios de Monto', icono: 'repeat', requiere: 'caja-chica', plantilla: 'tpl-cambios-monto-cch', init: () => initCambiosMontoCCH() },
+        { vista: 'sistemas-arqueos', etiqueta: 'Sistemas', icono: 'external-link', libre: true, plantilla: 'tpl-sistemas', init: () => initSistemas('arqueos') },
       ],
     },
     {
       id: 'uber', icono: 'car-taxi-front', etiqueta: 'Uber',
       items: [
-        { vista: 'uber', etiqueta: 'Uber', icono: 'car-taxi-front', requiere: 'uber' },
-        { vista: 'tickets', etiqueta: 'Tickets', icono: 'ticket', requiere: 'tickets' },
+        { vista: 'uber', etiqueta: 'Uber', icono: 'car-taxi-front', requiere: 'uber', plantilla: 'tpl-uber', init: () => initUber() },
+        { vista: 'tickets', etiqueta: 'Tickets', icono: 'ticket', requiere: 'tickets', plantilla: 'tpl-tickets', init: () => initTickets() },
       ],
     },
     // Activos por colaborador de todas las áreas (rama emmanuel)
-    { id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de Activos', requiere: 'gestion-activos' },
+    { id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de Activos', requiere: 'gestion-activos', plantilla: 'tpl-lineas-gestion-activos', init: () => Lineas.initGestionActivos() },
     // Encuestas y solicitudes externas (2-oct) -- mismo patrón que "Sistemas" (tpl-sistemas/
     // initSistemas en app-sistemas.html), un solo destino sin submenú porque ya muestra las 3.
-    { id: 'encuestas-solicitudes', vista: 'encuestas-solicitudes', icono: 'clipboard-list', etiqueta: 'Encuestas/Solicitudes', libre: true },
+    { id: 'encuestas-solicitudes', vista: 'encuestas-solicitudes', icono: 'clipboard-list', etiqueta: 'Encuestas/Solicitudes', libre: true, plantilla: 'tpl-sistemas', init: () => initSistemas('encuestas-solicitudes') },
+    // Los tickets del helpdesk de TI (05/10/2026): todos lo ven; cada quien, lo que su cuenta ve allá
+    { id: 'helpdesk', vista: 'helpdesk', icono: 'headset', etiqueta: 'Help Desk', libre: true, plantilla: 'tpl-helpdesk', init: () => initHelpdesk() },
     {
       id: 'administracion', icono: 'settings', etiqueta: 'Administración',
       items: [
-        { vista: 'usuarios', etiqueta: 'Usuarios y permisos', icono: 'shield-check', requiere: 'usuarios' },
-        { vista: 'relaciones', etiqueta: 'Datos conectados', icono: 'git-compare-arrows', requiere: 'relaciones' },
-        { vista: 'salud', etiqueta: 'Salud', icono: 'heart-pulse', requiere: 'salud' },
+        { vista: 'usuarios', etiqueta: 'Usuarios y permisos', icono: 'shield-check', requiere: 'usuarios', plantilla: 'tpl-usuarios', init: () => initPermisosAdmin() },
+        { vista: 'relaciones', etiqueta: 'Datos conectados', icono: 'git-compare-arrows', requiere: 'relaciones', plantilla: 'tpl-relaciones', init: () => initRelaciones() },
+        { vista: 'salud', etiqueta: 'Salud', icono: 'heart-pulse', requiere: 'salud', plantilla: 'tpl-salud', init: () => initSalud() },
       ],
     },
   ];
 
+  /** Vistas a las que se llega sin pasar por el menú. Sin `requiere`, entra cualquiera con sesión. */
+  const VISTAS_FUERA_DEL_MENU = [
+    { vista: 'dashboard', etiqueta: 'Inicio', icono: 'home', plantilla: 'tpl-dashboard', init: () => initDashboard() },
+    // La campana de la barra superior → "Ver todas" (html/notificaciones.html, rama emmanuel)
+    { vista: 'notificaciones', etiqueta: 'Notificaciones', icono: 'bell', plantilla: 'tpl-notificaciones', init: () => Notificaciones.initVista() },
+    // Control de Cambios de Líneas: salió del menú (30-sep) pero se abre desde el Panorama de Líneas
+    { vista: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas', icono: 'history', requiere: 'cambios-lineas', plantilla: 'tpl-lineas-bitacora', init: () => Lineas.initCambios() },
+  ];
+
   /**
-   * Módulo cuyo permiso pide una vista (el `requiere` de su item en NAV_GRUPOS), o null si
-   * cualquiera con sesión puede entrar (el inicio, las notificaciones). Control de Cambios
-   * de Líneas ya no está en el menú, pero se abre desde el Panorama de Líneas.
+   * La entrada de una vista (de NAV_GRUPOS o de VISTAS_FUERA_DEL_MENU), con `iconoArea`: el ícono
+   * de su grupo del menú. null si no existe.
    */
-  function moduloDeVista(vista) {
-    if (vista === 'cambios-lineas') return 'cambios-lineas';
-    let modulo = null;
-    NAV_GRUPOS.forEach((g) => {
-      if (g.vista === vista) modulo = g.requiere;
-      (g.items || []).forEach((it) => { if (it.vista === vista) modulo = it.requiere; });
-    });
-    return modulo;
+  function vistaDe(vista) {
+    for (const g of NAV_GRUPOS) {
+      if (g.vista === vista) return Object.assign({ iconoArea: g.icono }, g);
+      const item = (g.items || []).find((it) => it.vista === vista);
+      if (item) return Object.assign({ iconoArea: g.icono }, item);
+    }
+    const suelta = VISTAS_FUERA_DEL_MENU.find((v) => v.vista === vista);
+    return suelta ? Object.assign({ iconoArea: suelta.icono }, suelta) : null;
   }
 
   // Los grupos ya no son acordeón (se abren/cierran) — se quedan siempre
@@ -771,7 +784,8 @@
     // su grupo: un grupo sin ningún módulo con permiso no se pinta. Por eso esto se vuelve a
     // llamar al llegar los permisos.
     const visibles = NAV_GRUPOS
-      .map((g) => (g.items ? Object.assign({}, g, { items: g.items.filter((it) => it.libre || permisoDe(it.requiere)) }) : g))
+      .filter((g) => !estaApagada(g))
+      .map((g) => (g.items ? Object.assign({}, g, { items: g.items.filter((it) => !estaApagada(it) && (it.libre || permisoDe(it.requiere))) }) : g))
       .filter((g) => (g.items ? g.items.some((it) => !it.libre) : g.libre || permisoDe(g.requiere)));
     contenedor.innerHTML = visibles.map((grupo) => (grupo.vista ? `
       <div class="nav-item" data-view="${grupo.vista}" data-etiqueta="${grupo.etiqueta}" data-tooltip="${grupo.etiqueta}">
@@ -931,6 +945,10 @@
       el.addEventListener('click', () => navegarA(el.dataset.view));
     });
     cargarResumenInicio();
+    // Se pinta al instante con los números de la visita anterior y, si los de ahora llegan
+    // distintos, se vuelve a pintar solo (callServerListaCacheada / escucharLista, api.html)
+    const contActividad = document.getElementById('dash-actividad');
+    if (contActividad) escucharLista('apiResumenInicio', cargarResumenInicio, contActividad);
   }
 
   /** Números del panel de Inicio (KPIs, alertas y actividad reciente) — un solo viaje al servidor. */
@@ -938,7 +956,7 @@
     const contActividad = document.getElementById('dash-actividad');
     if (!contActividad) return; // se navegó a otra vista antes de terminar de montar esta
     try {
-      const r = JSON.parse(await callServer('apiResumenInicio', state.token));
+      const r = JSON.parse(await callServerListaCacheada('apiResumenInicio', state.token));
       if (!document.body.contains(contActividad)) return; // se navegó a otra vista mientras cargaba
 
       const set = (id, valor) => {
@@ -1356,7 +1374,8 @@
   }
   function formatearValorInfo(valor) {
     if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(valor)) return formatearFecha(valor);
-    if (typeof valor === 'string' && /^https?:\/\//.test(valor)) {
+    // \/{2} y no \/\/: así no queda ningún "//" en el código (ver CLAUDE.md)
+    if (typeof valor === 'string' && /^https?:\/{2}/.test(valor)) {
       return `<a href="${valor}" target="_blank" rel="noopener">📎 Ver archivo</a>`;
     }
     return String(valor);
@@ -1380,6 +1399,10 @@
    * hoja — se usa tal cual como llave al mandar los datos al servidor
    * (VehiculosService.crear/actualizar ya esperan las claves reales).
    */
+  // La sección "Accesorios y sensor" es de Instalación de Sensores: se ve en la ficha, pero solo la
+  // edita quien tiene EDICIÓN ahí (CamposHoja editaModulo; el servidor revisa lo mismo,
+  // VehiculosService.COLUMNAS_DE_SENSORES)
+  const DE_SENSORES = { editaModulo: 'instalacion-sensores', etiquetaModulo: 'Sensores' };
   const CAMPOS_VEHICULO = [
     { grupo: 'Vehículo', clave: 'MARCA', etiqueta: 'Marca', tipo: 'select', catalogo: true },
     {
@@ -1456,8 +1479,8 @@
     { grupo: 'Documentación y seguro', clave: 'ARCHIVO TENENCIA', etiqueta: 'Archivo de tenencia', tipo: 'file' },
     { grupo: 'Documentación y seguro', clave: 'ADJUNTAR FACTURA', etiqueta: 'Factura', tipo: 'text' },
 
-    { grupo: 'Accesorios y sensor', clave: 'ACCESORIOS', etiqueta: 'Accesorios', tipo: 'text' },
-    { grupo: 'Accesorios y sensor', clave: 'ADITAMENTOS', etiqueta: 'Aditamentos', tipo: 'text' },
+    { grupo: 'Accesorios y sensor', clave: 'ACCESORIOS', etiqueta: 'Accesorios', tipo: 'text', ...DE_SENSORES },
+    { grupo: 'Accesorios y sensor', clave: 'ADITAMENTOS', etiqueta: 'Aditamentos', tipo: 'text', ...DE_SENSORES },
     // SENSOR y SERIE SENSOR los manda Instalación de Sensores (Relaciones.gs): se ven aquí
     // pero se cambian allá. El servidor tampoco las acepta desde este formulario.
     {
@@ -1466,11 +1489,11 @@
     },
     { grupo: 'Accesorios y sensor', clave: 'SERIE SENSOR', etiqueta: 'Serie del sensor', tipo: 'text',
       soloLectura: true, placeholder: 'La pone Instalación de Sensores' },
-    { grupo: 'Accesorios y sensor', clave: 'ACTIVADOR', etiqueta: 'Activador', tipo: 'text' },
-    { grupo: 'Accesorios y sensor', clave: '$ Costo del Sensor', etiqueta: 'Costo del sensor', tipo: 'number', moneda: true },
+    { grupo: 'Accesorios y sensor', clave: 'ACTIVADOR', etiqueta: 'Activador', tipo: 'text', ...DE_SENSORES },
+    { grupo: 'Accesorios y sensor', clave: '$ Costo del Sensor', etiqueta: 'Costo del sensor', tipo: 'number', moneda: true, ...DE_SENSORES },
     {
       grupo: 'Accesorios y sensor', clave: 'LLAVE DUPLICADA', etiqueta: 'Llave duplicada', tipo: 'select',
-      opciones: ['SI', 'NO'],
+      opciones: ['SI', 'NO'], ...DE_SENSORES,
     },
 
     { grupo: 'Ubicación y registro', clave: 'SEDE', etiqueta: 'Sede', tipo: 'select', catalogo: true },
@@ -2020,6 +2043,8 @@
       pestanas.map((t, n) => '<div data-ficha-panel="' + t.id + '"' + (n ? ' hidden' : '') + '>' + t.contenido + '</div>').join('');
   }
   function mostrarPestanaFicha(contenedor, nombre) {
+    // Una pestaña sin permiso no existe (deModulo): se queda en la que ya está
+    if (!contenedor.querySelector('[data-ficha-tab="' + nombre + '"]')) return;
     contenedor.querySelectorAll('[data-ficha-tab]').forEach((b) => {
       const activa = b.dataset.fichaTab === nombre;
       b.classList.toggle('active', activa);
@@ -2077,6 +2102,8 @@
     const modalEditar = document.getElementById('modal-editar-vehiculo');
     let vehiculosPorId = {};
     let todosLosVehiculos = [];
+    /** La ficha abierta: si su copia guardada llega distinta del servidor, se vuelve a pintar */
+    let fichaVehiculoAbierta = null;
 
     document.getElementById('campos-form-vehiculo').innerHTML = renderCamposVehiculo('veh');
     document.getElementById('campos-form-editar-vehiculo').innerHTML = renderCamposVehiculo('editar-vehiculo', true, 2);
@@ -2250,6 +2277,7 @@
     }
 
     function cerrarFichaVehiculo() {
+      fichaVehiculoAbierta = null;
       document.getElementById('veh-detalle').hidden = true;
       document.getElementById('veh-detalle').innerHTML = '';
       document.getElementById('veh-listado').hidden = false;
@@ -3160,46 +3188,30 @@
       });
     }
 
-    async function abrirFichaVehiculo(vResumen, pestanaInicial) {
+    /** repintar: la misma ficha con datos nuevos, sin "Cargando…" ni volver arriba */
+    async function abrirFichaVehiculo(vResumen, pestanaInicial, repintar) {
       const listado = document.getElementById('veh-listado');
       const detalle = document.getElementById('veh-detalle');
+      fichaVehiculoAbierta = vResumen;
       listado.hidden = true;
       detalle.hidden = false;
-      detalle.innerHTML = migasVehiculo() + '<div class="card ln-card"><p class="ln-tenue"><span class="spinner"></span> Cargando…</p></div>';
-      wireMigasVehiculo();
-      document.getElementById('view-container').scrollTop = 0;
-      window.scrollTo(0, 0);
+      if (!repintar) {
+        detalle.innerHTML = migasVehiculo() + '<div class="card ln-card"><p class="ln-tenue"><span class="spinner"></span> Cargando…</p></div>';
+        wireMigasVehiculo();
+        document.getElementById('view-container').scrollTop = 0;
+        window.scrollTo(0, 0);
+      }
 
       try {
-        // Las últimas 5 van con .catch propio: si el usuario no tiene permiso de leer
-        // ESE módulo (o falla por lo que sea), esa pestaña sale vacía en vez de tumbar
-        // toda la ficha — a diferencia de completo/cambios/reasignaciones, que si fallan
-        // sí es un error real (no se pudo ni cargar el vehículo).
-        const [completo, cambiosTexto, reasignaciones, verifTexto, inspTexto, sensorTexto, holoTexto, incTexto, respTexto, adhTexto] = await Promise.all([
-          callServer('apiBuscarVehiculoPorFolio', state.token, vResumen.FOLIO),
-          callServer('apiListarCambiosVehiculosPorFolio', state.token, vResumen.FOLIO),
-          callServer('apiListarReasignacionesVehicularesPorFolio', state.token, vResumen.FOLIO),
-          callServer('apiVerificacionesPorFolio', state.token, vResumen.FOLIO).catch(() => '[]'),
-          callServer('apiInspeccionesPorFolio', state.token, vResumen.FOLIO).catch(() => '[]'),
-          callServer('apiSensoresPorFolio', state.token, vResumen.FOLIO).catch(() => '[]'),
-          callServer('apiHologramasPorFolio', state.token, vResumen.FOLIO).catch(() => '[]'),
-          callServer('apiIncidenciasPorFolio', state.token, vResumen.FOLIO).catch(() => '[]'),
-          callServer('apiListarResponsivasVehicularesPorFolio', state.token, vResumen.FOLIO).catch(() => '[]'),
-          callServer('apiListarAdherentesVehicularesPorFolio', state.token, vResumen.FOLIO).catch(() => '[]'),
-        ]);
-        // Estas regresan JSON.stringify — ver la nota en ClientApi.gs
-        // (google.script.run pierde arreglos grandes de forma intermitente;
-        // como texto viaja confiable).
-        const cambios = JSON.parse(cambiosTexto || '[]');
-        const verificaciones = JSON.parse(verifTexto || '[]');
-        const inspecciones = JSON.parse(inspTexto || '[]');
-        const sensores = JSON.parse(sensorTexto || '[]');
-        const hologramas = JSON.parse(holoTexto || '[]');
-        const incidencias = JSON.parse(incTexto || '[]');
-        const responsivas = JSON.parse(respTexto || '[]');
-        const adherentes = JSON.parse(adhTexto || '[]');
+        // Todo en UNA llamada (apiFichaVehiculo en ClientApi.gs): el servidor pide cada pestaña
+        // con el permiso de su módulo y manda null en las que la persona no puede ver (su pestaña
+        // no aparece, igual que en el menú); si una que sí puede ver falla, sale vacía. Una ficha
+        // ya vista sale al instante de su copia guardada y se repinta sola si llegó algo distinto;
+        // cualquier guardado borra las copias (ESCRIBE en api.html).
+        const ficha = JSON.parse((await callServerListaCacheada('apiFichaVehiculo', state.token, vResumen.FOLIO)) || '{}');
+        const { completo, cambios, reasignaciones, verificaciones, inspecciones, sensores, hologramas, incidencias, responsivas, adherentes } = ficha;
         // Se pudo haber vuelto a la lista (o abierto otro folio) mientras cargaba.
-        if (detalle.hidden || !document.body.contains(detalle)) return;
+        if (detalle.hidden || !document.body.contains(detalle) || fichaVehiculoAbierta !== vResumen) return;
         if (!completo) {
           detalle.innerHTML = migasVehiculo() + '<p class="empty-state">No se encontró el registro completo.</p>';
           wireMigasVehiculo();
@@ -3207,7 +3219,7 @@
         }
 
         const estilo = CLASE_ESTILO[String(completo['CLASE'] || '').toUpperCase()] || { icono: 'circle', color: 'var(--color-text-muted)' };
-        const adherentesActivos = adherentes.filter((r) => (r.ESTATUS || 'ACTIVO') === 'ACTIVO').length;
+        const adherentesActivos = (adherentes || []).filter((r) => (r.ESTATUS || 'ACTIVO') === 'ACTIVO').length;
         const chipAdherentes = adherentesActivos
           ? '<span class="badge-estado pendiente"><i data-lucide="users" class="ico"></i> ' +
             adherentesActivos + (adherentesActivos === 1 ? ' adherente' : ' adherentes') + '</span>'
@@ -3235,7 +3247,8 @@
         const detalles = seccionesFichaVehiculo(completo, CAMPOS_VEHICULO.map((c) => c.grupo)
           .filter((g, i, arr) => arr.indexOf(g) === i && GRUPOS_FICHA_GENERAL.indexOf(g) === -1).concat('Otros datos'));
 
-        const historial = '<div class="card ln-card"><h3><i data-lucide="pencil" class="ico ln-icon"></i> Historial de cambios</h3>' +
+        // Cada parte del historial es de su módulo (Cambios / Reasignaciones): sin permiso, no sale
+        const historial = (cambios === null ? '' : '<div class="card ln-card"><h3><i data-lucide="pencil" class="ico ln-icon"></i> Historial de cambios</h3>' +
           ((cambios || []).length ? '<div class="historial-timeline">' + cambios.map((c) => `
               <div class="historial-item">
                 <div class="historial-icon"><i data-lucide="pencil" class="ico"></i></div>
@@ -3252,8 +3265,8 @@
                   <div>${formatearFecha(c.FECHA)}</div>
                 </div>
               </div>
-            `).join('') + '</div>' : '<p class="empty-state">Sin cambios registrados para este vehículo.</p>') + '</div>' +
-          '<div class="card ln-card"><h3><i data-lucide="arrow-left-right" class="ico ln-icon"></i> Historial de reasignaciones</h3>' +
+            `).join('') + '</div>' : '<p class="empty-state">Sin cambios registrados para este vehículo.</p>') + '</div>') +
+          (reasignaciones === null ? '' : '<div class="card ln-card"><h3><i data-lucide="arrow-left-right" class="ico ln-icon"></i> Historial de reasignaciones</h3>' +
           ((reasignaciones || []).length ? '<div class="historial-timeline">' + reasignaciones.map((r) => `
               <div class="historial-item">
                 <div class="historial-icon historial-icon-accent"><i data-lucide="arrow-left-right" class="ico"></i></div>
@@ -3270,13 +3283,13 @@
                   <div>${formatearFecha(r.FECHA)}</div>
                 </div>
               </div>
-            `).join('') + '</div>' : '<p class="empty-state">Sin reasignaciones registradas para este vehículo.</p>') + '</div>';
+            `).join('') + '</div>' : '<p class="empty-state">Sin reasignaciones registradas para este vehículo.</p>') + '</div>');
 
         html += fichaEnPestanas([
           { id: 'general', titulo: 'General', icono: 'layout-grid', contenido: general },
           { id: 'detalles', titulo: 'Detalles', icono: 'clipboard-list', contenido: detalles },
-          { id: 'historial', titulo: 'Historial', icono: 'history', contenido: historial, num: (cambios || []).length + (reasignaciones || []).length },
-          {
+          (cambios || reasignaciones) && { id: 'historial', titulo: 'Historial', icono: 'history', contenido: historial, num: (cambios || []).length + (reasignaciones || []).length },
+          verificaciones && {
             id: 'verificaciones', titulo: 'Verificaciones', icono: 'clipboard-check', num: verificaciones.length,
             contenido: pestanaFicha('clipboard-check', 'Verificaciones', [
               { t: 'Verificación', r: (v) => formatearFecha(v.FECHA_VERIFICACION) },
@@ -3286,7 +3299,7 @@
             ], verificaciones, 'Sin verificaciones registradas para este vehículo.',
             puedeEditarModulo('verificaciones') ? { tipo: 'verificacion', texto: 'Agregar' } : null),
           },
-          {
+          inspecciones && {
             id: 'inspecciones', titulo: 'Inspecciones', icono: 'clipboard-list', num: inspecciones.length,
             contenido: pestanaFicha('clipboard-list', 'Inspecciones', [
               { t: 'Fecha', r: (i) => formatearFecha(i.FECHA) },
@@ -3298,7 +3311,7 @@
             ], inspecciones, 'Sin inspecciones registradas para este vehículo.',
             puedeEditarModulo('inspeccion-vehicular') ? { tipo: 'inspeccion', texto: 'Agregar' } : null),
           },
-          {
+          sensores && {
             id: 'sensor', titulo: 'Sensor', icono: 'radio', num: sensores.length,
             contenido: pestanaFicha('radio', 'Sensor', [
               { t: 'Instalación', r: (s) => formatearFecha(s.FECHA_INSTALACION) },
@@ -3309,7 +3322,7 @@
             ], sensores, 'Sin sensor instalado para este vehículo.',
             puedeEditarModulo('instalacion-sensores') ? { tipo: 'sensor', texto: 'Agregar' } : null),
           },
-          {
+          hologramas && {
             id: 'hologramas', titulo: 'Hologramas', icono: 'credit-card', num: hologramas.length,
             contenido: pestanaFicha('credit-card', 'Hologramas', [
               { t: 'Proveedor', r: (h) => escaparHtml(h.PROVEEDOR || '—') },
@@ -3321,7 +3334,7 @@
             ], hologramas, 'Sin hologramas registrados para este vehículo.',
             puedeEditarModulo('hologramas') ? { tipo: 'holograma', texto: 'Agregar' } : null),
           },
-          {
+          incidencias && {
             id: 'incidencias', titulo: 'Incidencias', icono: 'wrench', num: incidencias.length,
             contenido: pestanaFicha('wrench', 'Incidencias', [
               { t: 'Fecha', r: (i) => formatearFecha(i.FECHA_REGISTRO) },
@@ -3332,7 +3345,7 @@
             ], incidencias, 'Sin incidencias registradas para este vehículo.',
             puedeEditarModulo('incidencias') ? { tipo: 'incidencia', texto: 'Agregar' } : null),
           },
-          {
+          responsivas && {
             id: 'responsiva', titulo: 'Responsiva', icono: 'file-signature', num: responsivas.length,
             contenido: pestanaFicha('file-signature', 'Responsiva', [
               { t: 'Fecha', r: (r) => formatearFecha(r.FECHA) },
@@ -3343,7 +3356,7 @@
             ], responsivas, 'Sin responsivas registradas para este vehículo.',
             puedeEditarModulo('responsiva-vehicular') ? { tipo: 'responsiva', texto: 'Generar nueva responsiva' } : null),
           },
-          {
+          adherentes && {
             id: 'adherente', titulo: 'Adherentes', icono: 'users',
             num: adherentes.filter((r) => (r.ESTATUS || 'ACTIVO') === 'ACTIVO').length,
             contenido: pestanaFicha('users', 'Adherentes', [
@@ -3356,7 +3369,7 @@
             ], adherentes, 'Sin adherentes registrados para este vehículo.',
             puedeEditarModulo('adherente-vehicular') ? { tipo: 'adherente', texto: 'Generar nuevo adherente' } : null),
           },
-        ]);
+        ].filter(Boolean));
 
         detalle.innerHTML = html;
         wireMigasVehiculo();
@@ -3370,7 +3383,7 @@
             else if (tipo === 'sensor') abrirAgregarSensor(vResumen);
             else if (tipo === 'holograma') abrirAgregarHolograma(vResumen, completo);
             else if (tipo === 'incidencia') abrirAgregarIncidencia(vResumen, completo);
-            else if (tipo === 'inspeccion') abrirAgregarInspeccion(vResumen, completo, hologramas);
+            else if (tipo === 'inspeccion') abrirAgregarInspeccion(vResumen, completo, hologramas || []);
             else if (tipo === 'responsiva') abrirAgregarResponsivaVehicular(vResumen, completo);
             else if (tipo === 'adherente') abrirAgregarAdherenteVehicular(vResumen, completo);
           });
@@ -3380,10 +3393,10 @@
         // vez, sin volver a pedirlo al servidor (Ver completo sí pide el suyo aparte,
         // porque necesita TODAS las columnas, no solo las de este resumen curado).
         const porIdFicha = {
-          verificacion: Object.fromEntries(verificaciones.map((v) => [v.ID, v])),
-          sensor: Object.fromEntries(sensores.map((s) => [s.ID, s])),
-          holograma: Object.fromEntries(hologramas.map((h) => [h.ID, h])),
-          incidencia: Object.fromEntries(incidencias.map((i) => [i.ID, i])),
+          verificacion: Object.fromEntries((verificaciones || []).map((v) => [v.ID, v])),
+          sensor: Object.fromEntries((sensores || []).map((s) => [s.ID, s])),
+          holograma: Object.fromEntries((hologramas || []).map((h) => [h.ID, h])),
+          incidencia: Object.fromEntries((incidencias || []).map((i) => [i.ID, i])),
         };
         detalle.querySelectorAll('[data-ficha-ver]').forEach((btn) => {
           btn.addEventListener('click', () => verRegistroFicha(btn.dataset.fichaVer, btn.dataset.id));
@@ -3576,6 +3589,14 @@
       const archivo = ev.target.closest('[data-archivo]');
       if (archivo) ABRIR_ARCHIVO_FICHA[archivo.dataset.archivo](archivo.dataset.ruta);
     });
+    // La ficha salió de su copia guardada y del servidor llegó algo distinto: se repinta en la
+    // misma pestaña (sin "Cargando…" ni volver arriba)
+    escucharLista('apiFichaVehiculo', () => {
+      const detalle = document.getElementById('veh-detalle');
+      if (!fichaVehiculoAbierta || detalle.hidden) return;
+      const activa = detalle.querySelector('[data-ficha-tab].active');
+      abrirFichaVehiculo(fichaVehiculoAbierta, activa ? activa.dataset.fichaTab : undefined, true);
+    }, document.getElementById('veh-detalle'));
 
     // Modal de captura (verificación/sensor/holograma/incidencia): cerrar con la X o clic afuera.
     const modalCaptura = document.getElementById('veh-modal-captura');
@@ -4242,6 +4263,35 @@
   }
 
   // ---------- Tickets (bitácora general de atención) ----------
+  // Los campos de un ticket: el módulo Tickets y "Registrar en Tickets" de Help Desk
+  // (app-helpdesk.html) usan esta misma lista. Departamento y Solicitante: se puede escribir uno
+  // que todavía no está en la lista (se llenan en cargarCatalogosTickets). FECHA DE REGISTRO la
+  // pone el servidor al crear.
+  const CAMPOS_TICKET = [
+    { clave: 'TICKET', etiqueta: 'Ticket', tipo: 'text', placeholder: 'Ej. 4021' },
+    { clave: 'FECHA DE REGISTRO', etiqueta: 'Fecha de registro', tipo: 'text', soloLectura: true, soloAlta: true },
+    { clave: 'FECHA', etiqueta: 'Fecha', tipo: 'date' },
+    { clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select', catalogo: true },
+    { clave: 'SOLICITANTE', etiqueta: 'Solicitante', tipo: 'select', catalogo: true, placeholder: 'Escribe o elige un nombre' },
+    // Los de tarjeta de combustible van para EOX y para EDENRED (EDENRED agregado el 05/10/2026)
+    { clave: 'TIPO ATENCION', etiqueta: 'Tipo de atención', tipo: 'select', requerido: true, opciones: [
+      'ACTUALIZACION DE INFORMACION UBER', 'ALTA DE HOLOGRAMA EDENRED', 'ALTA DE HOLOGRAMA EOX', 'ALTA DE USUARIO UBER',
+      'BAJA DE USUARIO UBER', 'CONSULTA DE INFORMACION UBER',
+      'INCREMENTO DE COMBUSTIBLE EDENRED INDETERMINADO', 'INCREMENTO DE COMBUSTIBLE EDENRED PERMANENTE',
+      'INCREMENTO DE COMBUSTIBLE EDENRED TEMPORAL', 'INCREMENTO DE COMBUSTIBLE EOX INDETERMINADO',
+      'INCREMENTO DE COMBUSTIBLE EOX PERMANENTE', 'INCREMENTO DE COMBUSTIBLE EOX TEMPORAL',
+      'INFORMACION GENERAL - EDENRED', 'INFORMACION GENERAL - EOX', 'NIP EDENRED', 'NIP EOX',
+      'REEMBOLSO DE COMBUSTIBLE EDENRED', 'REEMBOLSO DE COMBUSTIBLE EOX',
+      'REEMPLAZO DE HOLOGRAMA EDENRED', 'REEMPLAZO DE HOLOGRAMA EOX',
+      'REPORTE DE CONSUMO DE COMBUSTIBLE EDENRED', 'REPORTE DE CONSUMO DE COMBUSTIBLE EOX',
+    ] },
+    { clave: 'PLACA', etiqueta: 'Placa', tipo: 'text' },
+    { clave: 'QUIEN ATENDIO', etiqueta: 'Quién atendió', tipo: 'select', opciones: [
+      'ABIGAIL LEDESMA CORONA', 'DAVID MOISES MALDONADO HERNANDEZ', 'GIOVANNI JAVIER ORDUÑA DE LA PEÑA', 'JORGE LUIS AVECILLA RIVERA',
+    ] },
+    { clave: 'COMENTARIO', etiqueta: 'Comentario', tipo: 'text', renglonCompleto: true },
+  ];
+
   async function initTickets() {
     wireTabsSimple(document.getElementById('view-container'));
     // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
@@ -4250,32 +4300,6 @@
     const modalEditar = document.getElementById('modal-editar-ticket');
     let todosLosTickets = [];
 
-    // Departamento y Solicitante: se puede escribir uno que todavía no está en la lista
-    // (se llenan en cargarCatalogosTickets). FECHA DE REGISTRO la pone el servidor al crear.
-    const CAMPOS_TICKET = [
-      { clave: 'TICKET', etiqueta: 'Ticket', tipo: 'text', placeholder: 'Ej. 4021' },
-      { clave: 'FECHA DE REGISTRO', etiqueta: 'Fecha de registro', tipo: 'text', soloLectura: true, soloAlta: true },
-      { clave: 'FECHA', etiqueta: 'Fecha', tipo: 'date' },
-      { clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select', catalogo: true },
-      { clave: 'SOLICITANTE', etiqueta: 'Solicitante', tipo: 'select', catalogo: true, placeholder: 'Escribe o elige un nombre' },
-      // Los de tarjeta de combustible van para EOX y para EDENRED (EDENRED agregado el 05/10/2026)
-      { clave: 'TIPO ATENCION', etiqueta: 'Tipo de atención', tipo: 'select', requerido: true, opciones: [
-        'ACTUALIZACION DE INFORMACION UBER', 'ALTA DE HOLOGRAMA EDENRED', 'ALTA DE HOLOGRAMA EOX', 'ALTA DE USUARIO UBER',
-        'BAJA DE USUARIO UBER', 'CONSULTA DE INFORMACION UBER',
-        'INCREMENTO DE COMBUSTIBLE EDENRED INDETERMINADO', 'INCREMENTO DE COMBUSTIBLE EDENRED PERMANENTE',
-        'INCREMENTO DE COMBUSTIBLE EDENRED TEMPORAL', 'INCREMENTO DE COMBUSTIBLE EOX INDETERMINADO',
-        'INCREMENTO DE COMBUSTIBLE EOX PERMANENTE', 'INCREMENTO DE COMBUSTIBLE EOX TEMPORAL',
-        'INFORMACION GENERAL - EDENRED', 'INFORMACION GENERAL - EOX', 'NIP EDENRED', 'NIP EOX',
-        'REEMBOLSO DE COMBUSTIBLE EDENRED', 'REEMBOLSO DE COMBUSTIBLE EOX',
-        'REEMPLAZO DE HOLOGRAMA EDENRED', 'REEMPLAZO DE HOLOGRAMA EOX',
-        'REPORTE DE CONSUMO DE COMBUSTIBLE EDENRED', 'REPORTE DE CONSUMO DE COMBUSTIBLE EOX',
-      ] },
-      { clave: 'PLACA', etiqueta: 'Placa', tipo: 'text' },
-      { clave: 'QUIEN ATENDIO', etiqueta: 'Quién atendió', tipo: 'select', opciones: [
-        'ABIGAIL LEDESMA CORONA', 'DAVID MOISES MALDONADO HERNANDEZ', 'GIOVANNI JAVIER ORDUÑA DE LA PEÑA', 'JORGE LUIS AVECILLA RIVERA',
-      ] },
-      { clave: 'COMENTARIO', etiqueta: 'Comentario', tipo: 'text', renglonCompleto: true },
-    ];
     document.getElementById('campos-form-ticket').innerHTML = CamposHoja.html(CAMPOS_TICKET, { prefijo: 'ticket' });
     document.getElementById('campos-form-editar-ticket').innerHTML = CamposHoja.html(CAMPOS_TICKET, { prefijo: 'editar-ticket', esEdicion: true });
 

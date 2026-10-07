@@ -80,10 +80,10 @@ test('Telefonía muestra sus módulos en orden y Gestión de Activos queda fuera
     assert.doesNotMatch(read('src/config/Modulos.gs'), new RegExp(`id: '${v}'`), v);
   });
   // Acceso directo debajo del desplegable de Líneas
-  assert.match(app, /\{ id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de Activos', requiere: 'gestion-activos' \}/);
+  assert.match(app, /\{ id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de Activos', requiere: 'gestion-activos'[^}]*\}/);
   assert.match(app, /grupo\.vista \? `/);
   orden.concat('gestion-activos', ocultos)
-    .forEach((route) => assert.match(app, new RegExp(`vista === '${route}'`), `falta montar ${route}`));
+    .forEach((route) => assert.match(app, new RegExp(`vista: '${route}'[^\\n]*plantilla: 'tpl-`), `falta montar ${route}`));
   // Retirados: Post Venta (ya no existe) y Detalles (ahora es la vista de tarjetas de Líneas Telefónicas)
   ['lineas-post-venta', 'detalles-lineas-telefonicas'].forEach((retirado) => {
     assert.doesNotMatch(app, new RegExp(retirado));
@@ -360,6 +360,76 @@ test('el shell es el de master y Líneas es uno de sus grupos', () => {
   const grupos = /const NAV_GRUPOS = \[([\s\S]*?)\n  \];/.exec(app)[1];
   // Desde la unión con master (1-oct) el menú trae los módulos de todos; Líneas es un grupo más
   assert.ok([...grupos.matchAll(/^      id: '([^']+)'/gm)].map((m) => m[1]).includes('lineas'));
+});
+
+test('lo que repetían los servicios de una hoja vive en HojaServicio, no en otra copia', () => {
+  // Leer/escribir una hoja con su permiso, caché, fechas y archivos: src/utils/HojaServicio.gs.
+  // Líneas (services/lineas/) todavía tiene su propia capa (LineasDatos) y queda fuera.
+  const dir = path.join(root, 'src/services');
+  const servicios = fs.readdirSync(dir).filter((a) => a.endsWith('.gs'));
+  const PROHIBIDO = [
+    [/function fechaISO_\(/, 'su propio fechaISO_ (HojaServicio.fechaISO)'],
+    [/function fechaDesdeInput_\(/, 'su propio fechaDesdeInput_ (HojaServicio.fechaObligatoria)'],
+    [/function renombrar\w*_\(/, 'su propio renombrar*_ (HojaServicio.renombrarArchivo / renombrarRuta, o `archivos` en la definición)'],
+    [/function subirArchivoEn_\(|Utilities\.base64Decode\(base64Data\)/, 'su propia subida a Drive (HojaServicio.subirArchivo)'],
+    [/SheetUtils\.remove\(/, 'SheetUtils.remove a mano (HojaServicio.eliminar, que además respeta Relaciones)'],
+  ];
+  // ListasService guarda catálogos (no la lista de un módulo) con su propio tiempo de vida,
+  // CapitalHumano el de colaboradores (una persona por nombre+departamento, sin permiso de módulo)
+  // y PermisosService las reglas y personas que revisa en cada llamada (no es un módulo: es el permiso)
+  const CON_CACHE_PROPIA = ['ListasService.gs', 'CapitalHumano.gs', 'PermisosService.gs'];
+  const problemas = [];
+  servicios.forEach((a) => {
+    const texto = read('src/services/' + a);
+    PROHIBIDO.forEach(([re, que]) => { if (re.test(texto)) problemas.push(a + ': ' + que); });
+    if (/CacheHojas\.recordar\(/.test(texto) && !CON_CACHE_PROPIA.includes(a)) problemas.push(a + ': CacheHojas.recordar a mano (HojaServicio.listar)');
+  });
+  assert.deepEqual(problemas, []);
+  // HojaServicio corre en el servidor: lo carga Apps Script solo, pero sus pruebas tienen que estar en npm test
+  assert.match(read('package.json'), /node tests\/hoja-servicio\.test\.js/);
+});
+
+test('cada vista es una sola entrada (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU) y todo lo que nombra existe', () => {
+  const app = read('src/html/js/app.html');
+  const index = read('src/html/Index.html');
+  const arreglo = (nombre) => new Function('return ' + new RegExp(`const ${nombre} = (\\[[\\s\\S]*?\\n  \\]);`).exec(app)[1])();
+  const entradas = [];
+  arreglo('NAV_GRUPOS').forEach((g) => (g.items || [g]).forEach((e) => entradas.push(e)));
+  const fuera = arreglo('VISTAS_FUERA_DEL_MENU');
+  entradas.push(...fuera);
+  const vistas = entradas.map((e) => e.vista).filter(Boolean);
+  assert.deepEqual(vistas.filter((v, i) => vistas.indexOf(v) !== i), [], 'vistas repetidas');
+
+  const plantillas = [...index.matchAll(/include\('(html\/[^']+)'\)/g)].map((m) => read('src/' + m[1] + '.html')).join('\n');
+  const js = filesBelow(path.join(root, 'src/html')).filter((f) => f.endsWith('.html')).map((f) => fs.readFileSync(f, 'utf8')).join('\n');
+  const modulos = [...read('src/config/Modulos.gs').matchAll(/\{ id: '([^']+)', etiqueta/g)].map((m) => m[1]);
+  const problemas = [];
+  entradas.filter((e) => e.vista).forEach((e) => {
+    const quien = e.vista + ': ';
+    if (!e.plantilla || !plantillas.includes(`<template id="${e.plantilla}"`)) problemas.push(quien + 'plantilla ' + e.plantilla + ' no está en un archivo incluido en Index.html');
+    const init = /=>\s*(?:(\w+)\.)?(\w+)\(/.exec(String(e.init || ''));
+    if (!init) problemas.push(quien + 'sin init');
+    else {
+      if (init[1] && !new RegExp(`(const|let|var) ${init[1]}\\b`).test(js)) problemas.push(quien + init[1] + ' no existe');
+      if (!new RegExp(`function ${init[2]}\\(|\\b${init[2]}: `).test(js)) problemas.push(quien + init[2] + ' no existe');
+    }
+    if (e.requiere && !modulos.includes(e.requiere)) problemas.push(quien + 'requiere ' + e.requiere + ', que no está en Modulos.gs');
+    if (!fuera.includes(e) && !e.requiere && !e.libre) problemas.push(quien + 'en el menú sin requiere ni libre');
+  });
+  // Y al revés: cada módulo de Modulos.gs tiene por dónde entrar: su vista, o la ficha de otro
+  // módulo (`enFicha`), que lo pide con deModulo para que sin permiso su pestaña no aparezca
+  const enFicha = Object.fromEntries([...read('src/config/Modulos.gs').matchAll(/{ id: '([^']+)', etiqueta.*enFicha: '([^']+)'/g)].map((m) => [m[1], m[2]]));
+  modulos.forEach((m) => {
+    if (enFicha[m]) { if (!js.includes(`deModulo('${m}'`) && !read('src/ClientApi.gs').includes(`parte('${m}'`)) problemas.push(m + ': vive en la ficha de ' + enFicha[m] + ' pero nadie lo pide con deModulo (ni con parte en el servidor)'); }
+    else if (!entradas.some((e) => e.requiere === m)) problemas.push(m + ': módulo sin vista');
+  });
+  assert.deepEqual(problemas, []);
+
+  // navegarA busca la entrada; no vuelve la cadena de if por vista
+  const navegar = app.slice(app.indexOf('function navegarA('), app.indexOf('function mostrarSinAcceso('));
+  assert.match(navegar, /const destino = vistaDe\(vista\);/);
+  assert.doesNotMatch(navegar, /vista === '/);
+  assert.doesNotMatch(app, /function moduloDeVista\(/);
 });
 
 test('el JS de los .html no tiene "//" dentro de strings (Apps Script lo corta como comentario)', () => {
@@ -677,6 +747,7 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
       base64Decode: () => [1, 2, 3], newBlob: (bytes, mime, nombre) => ({ mime, nombre }), formatDate: () => '101530',
     },
     DriveApp: { getFolderById: () => raiz, searchFiles: () => ({ hasNext: () => false }), Access: { DOMAIN: 'DOMAIN' }, Permission: { VIEW: 'VIEW' } },
+    DriveUtils: { marcarAutor: (a) => a },   // quién lo subió: aquí no importa
   };
   const LA = new Function(...Object.keys(globales), read('src/services/lineas/LineasArchivos.gs') + '\nreturn LineasArchivos;')(...Object.values(globales));
   assert.equal(LA.resolver('BITACORA DE DESECHO_Files_/a1.EVIDENCIA.1.jpg', false).id, 'ARCH1');
@@ -1028,7 +1099,7 @@ test('Notificaciones: adendum por vencer una semana antes, sin las ya vencidas n
   assert.match(read('src/ClientApi.gs'), /function apiLineasNotificaciones\(token, limite\)/);
   assert.match(read('src/services/lineas/LineasRegistros.gs'), /LineasNotificaciones\.revisarPronto\(\);/);
   assert.match(read('src/html/Index.html'), /include\('html\/notificaciones'\)/);
-  assert.match(read('src/html/js/app.html'), /montarVista\('tpl-notificaciones', Notificaciones\.initVista\)/);
+  assert.match(read('src/html/js/app.html'), /vista: 'notificaciones'[^\n]*plantilla: 'tpl-notificaciones', init: \(\) => Notificaciones\.initVista\(\)/);
   assert.match(read('src/html/js/lineas.html'), /irARegistro: irARegistro/);
 });
 
@@ -1216,9 +1287,9 @@ test('Panorama: estatus al cierre de cada mes reconstruido hacia atrás con la b
   assert.match(read('src/html/views/lineas/lineas-panorama.html'), /<select id="lnp-mes" disabled>/);
   // Menú: Panorama primero; Reactivación se retiró con su pestaña (30-sep)
   const app = read('src/html/js/app.html');
-  assert.match(app, /\{ vista: 'panorama-lineas', etiqueta: 'Panorama', icono: 'layout-dashboard', requiere: 'panorama-lineas' \},\s*\{ vista: 'lineas-telefonicas'/);
+  assert.match(app, /\{ vista: 'panorama-lineas', etiqueta: 'Panorama', icono: 'layout-dashboard', requiere: 'panorama-lineas'[^\n]*\},\s*\{ vista: 'lineas-telefonicas'/);
   assert.doesNotMatch(app, /'reactivacion-lineas'/);
-  assert.match(app, /montarVista\('tpl-lineas-panorama', Lineas\.initPanorama\)/);
+  assert.match(app, /plantilla: 'tpl-lineas-panorama', init: \(\) => Lineas\.initPanorama\(\)/);
   assert.match(read('src/html/Index.html'), /include\('html\/views\/lineas\/lineas-panorama'\)/);
   assert.match(read('src/ClientApi.gs'), /function apiLineasPanorama\(token, forzar\)/);
 });
@@ -1569,7 +1640,7 @@ test('Mandar a resguardo (30-sep): persona en blanco, línea según el adendum, 
   assert.match(cliente, /inspecciones = await inspeccionesEnFlujo\(deUnaPersona, 'al mandarlo a resguardo'\);/);
   assert.match(src, /LineasCaptura\.exigirInspeccion\(\(d\.inspecciones \|\| \{\}\)\[id\], LineasDatos\.idsDeFila\(f\),/);
   assert.match(cliente, /function initResguardos\(\)/);
-  assert.match(read('src/html/js/app.html'), /if \(vista === 'resguardos-lineas'\) \{ montarVista\('tpl-lineas-resguardos', Lineas\.initResguardos\); return; \}/);
+  assert.match(read('src/html/js/app.html'), /vista: 'resguardos-lineas'[^\n]*plantilla: 'tpl-lineas-resguardos', init: \(\) => Lineas\.initResguardos\(\)/);
   assert.match(read('src/config/Entidades.gs'), /'APP_RESGUARDOS': \{ prefijo: 'RSG'/);
   // En el historial se leen con nombre (no RESGUARDO / CANCELACION_LINEA)
   assert.match(read('src/services/lineas/LineasRepo.gs'), /RESGUARDO: 'Resguardo', CANCELACION_LINEA: 'Cancelación de línea', VENTA: 'Venta'/);
@@ -1734,7 +1805,7 @@ test('Correcciones de Líneas (módulo temporal, 30-sep): cargas que conservan, 
   assert.match(read('.gitignore'), /src\/services\/lineas\/LineasCorreccionesSemilla\.gs/);
   assert.match(read('src/services/lineas/LineasCorrecciones.gs'), /function apiLineasCorreccionesMarcar\(token, accion, ids, comentario\)/);
   assert.doesNotMatch(read('src/ClientApi.gs'), /Correcciones/);
-  assert.match(read('src/html/js/app.html'), /if \(vista === 'correcciones-lineas'\) \{ montarVista\('tpl-lineas-correcciones', LineasCorrecciones\.init\); return; \}/);
+  assert.match(read('src/html/js/app.html'), /vista: 'correcciones-lineas'[^\n]*plantilla: 'tpl-lineas-correcciones', init: \(\) => LineasCorrecciones\.init\(\)/);
   assert.match(read('src/config/Entidades.gs'), /'APP_CORRECCIONES': \{ prefijo: 'COR'/);
   assert.match(read('package.json'), /"correcciones:semilla": "node tools\/correcciones-semilla\.cjs"/);
 });
@@ -1877,7 +1948,6 @@ test('responsivo: solo los cortes del sistema (640 / 1024) y matchMedia solo en 
     'src/html/js/lineas.html': { cortes: 0, matchMedia: 2 },
     'src/html/lineas-estilos.html': { cortes: 17, matchMedia: 0 },
     'src/html/views/relaciones.html': { cortes: 1, matchMedia: 0 },
-    'src/html/views/usuarios.html': { cortes: 1, matchMedia: 0 },
   };
   const encontrado = {};
   filesBelow(path.join(root, 'src')).filter((f) => f.endsWith('.html')).forEach((file) => {
@@ -2026,4 +2096,141 @@ test('Mandar a cancelación: textos técnicos y espera desde el clic (prueba del
   // pedirDatos se queda con la espera hasta que termina y, si falla, "Volver" regresa a lo capturado
   assert.match(cliente, /pintarEspera\(o\.espera \|\| 'Guardando', 'No cierres esta ventana\.'\);/);
   assert.match(cliente, /pintarEspera\('No se pudo guardar', mensajeError\(e\), true\);/);
+});
+
+test('el calentador (Calentador.gs) solo llama lo que cada servicio expone', () => {
+  const calentador = read('src/Calentador.gs');
+  const llamadas = [...calentador.matchAll(/\(\) => (\w+)\.(\w+)\(/g)].map((m) => [m[1], m[2]]);
+  assert.ok(llamadas.length >= 10, 'el calentador tiene sus pasos');
+  const servicios = filesBelow(path.join(root, 'src/services')).filter((f) => f.endsWith('.gs')).map((f) => fs.readFileSync(f, 'utf8'));
+  const faltan = llamadas.filter(([obj, fn]) => {
+    const archivo = servicios.find((t) => t.includes('const ' + obj + ' = (function'));
+    return !archivo || !new RegExp('\\b' + fn + '\\b\\s*[:,]').test(archivo.slice(archivo.lastIndexOf('return {')));
+  }).map((x) => x.join('.'));
+  assert.deepEqual(faltan, []);
+  // Es una función de nivel superior: con candado, para que nadie la dispare desde el navegador
+  assert.match(calentador, /function calentarCaches\(\) \{\s*soloEditor_\(\);/);
+});
+
+test('la sección de sensor de Vehículos: la pantalla y el servidor bloquean los mismos campos', () => {
+  const app = read('src/html/js/app.html');
+  const enPantalla = app.split(/\r?\n/).filter((l) => l.includes('...DE_SENSORES') || /opciones: \['SI', 'NO'\], \.\.\.DE_SENSORES/.test(l))
+    .map((l) => (/clave: '([^']+)'/.exec(l) || [])[1]).filter(Boolean);
+  // LLAVE DUPLICADA ocupa dos renglones: su clave va en el renglón de arriba
+  if (/clave: 'LLAVE DUPLICADA'[\s\S]{0,200}\.\.\.DE_SENSORES/.test(app)) enPantalla.push('LLAVE DUPLICADA');
+  const servidor = JSON.parse(/deOtroModulo: \{ 'instalacion-sensores': (\[[^\]]+\]) \}/.exec(read('src/services/VehiculosService.gs'))[1].replace(/'/g, '"'));
+  assert.deepEqual([...new Set(enPantalla)].sort(), servidor.slice().sort());
+});
+
+test('las fichas van en una llamada y piden lo de otro módulo solo si la persona lo puede ver', () => {
+  // Cada ficha: su función en el cliente y su función del servidor. El cliente pide UNA cosa
+  // (callServerListaCacheada) y nada suelto; el servidor arma cada pestaña con parte('modulo', …),
+  // que la deja en null sin permiso (su pestaña no aparece), y la anota en FICHAS_GUARDADAS para
+  // que un guardado borre su copia.
+  const FICHAS = [
+    { archivo: 'src/html/js/app.html', funcion: 'abrirFichaVehiculo', servidor: 'apiFichaVehiculo' },
+    { archivo: 'src/html/js/app-cajachica.html', funcion: 'abrirFichaCajaChica', servidor: 'apiFichaCajaChica' },
+  ];
+  const api = read('src/ClientApi.gs');
+  const guardadas = /const FICHAS_GUARDADAS = \[([^\]]*)\]/.exec(read('src/html/js/api.html'))[1];
+  FICHAS.forEach((f) => {
+    const i = api.indexOf('function ' + f.servidor + '(');
+    assert.ok(i >= 0, f.servidor + ' existe');
+    const cuerpo = api.slice(i, api.indexOf('\n}', i));
+    const sueltas = cuerpo.split(/\r?\n/).filter((l) => /Service\.listarPor\w+\(/.test(l) && !/parte\('[a-z-]+'/.test(l));
+    assert.deepEqual(sueltas, [], f.servidor + ': cada pestaña va con parte(modulo, …)');
+    const texto = read(f.archivo);
+    const desde = texto.indexOf('async function ' + f.funcion + '(');
+    const funcion = texto.slice(desde, texto.indexOf('\n    }\n', desde) > 0 ? texto.indexOf('\n    }\n', desde) : texto.indexOf('\n    }\r\n', desde));
+    assert.match(funcion, new RegExp("callServerListaCacheada\\('" + f.servidor + "'"), f.funcion + ' pide ' + f.servidor);
+    assert.doesNotMatch(funcion, /callServer\('api/, f.funcion + ': nada más suelto');
+    assert.ok(guardadas.includes("'" + f.servidor + "'"), f.servidor + ' está en FICHAS_GUARDADAS (api.html)');
+  });
+});
+
+test('lo que el catálogo de módulos dice que implica un permiso es lo que hace el servidor', () => {
+  // Modulos.gs (referencia / editaEn) lo usa la pantalla de permisos para explicarlo; el servidor
+  // lo hace con referencia: true / puedeLeerFamilia y deOtroModulo. Si uno cambia sin el otro, la
+  // pantalla explicaría algo que no pasa (o callaría algo que sí).
+  const ctx = {};
+  require('vm').runInNewContext(read('src/config/Modulos.gs') + '\n;this.G = Modulos.GRUPOS;', ctx);
+  const catalogo = ctx.G.reduce((t, g) => t.concat(g.modulos), []);
+  const servicios = filesBelow(path.join(root, 'src/services')).filter((f) => f.endsWith('.gs')).map((f) => fs.readFileSync(f, 'utf8'));
+  const moduloDe = (texto) => (/modulo:\s*'([a-z-]+)'/.exec(texto) || [])[1];
+
+  const referenciasCatalogo = catalogo.filter((m) => m.referencia).map((m) => m.id).sort();
+  const referenciasServidor = new Set();
+  servicios.forEach((t) => {
+    if (/referencia: true/.test(t)) referenciasServidor.add(moduloDe(t));
+    [...t.matchAll(/puedeLeerFamilia\(token, '([a-z-]+)'\)/g)].forEach((m) => referenciasServidor.add(m[1]));
+  });
+  assert.deepEqual([...referenciasServidor].sort(), referenciasCatalogo, 'referencia en Modulos.gs = referencia: true / puedeLeerFamilia en el servidor');
+
+  const editaCatalogo = catalogo.reduce((t, m) => t.concat((m.editaEn || []).map((e) => m.id + ' → ' + e.modulo)), []).sort();
+  const editaServidor = [];
+  servicios.forEach((t) => {
+    [...t.matchAll(/deOtroModulo: \{([^}]*)\}/g)].forEach((m) => {
+      [...m[1].matchAll(/'([a-z-]+)':/g)].forEach((x) => editaServidor.push(x[1] + ' → ' + moduloDe(t)));
+    });
+  });
+  assert.deepEqual(editaServidor.sort(), editaCatalogo, 'editaEn en Modulos.gs = deOtroModulo en el servidor');
+});
+
+test('revisarEntorno revisa cada libro y carpeta que la app lee de Entornos.gs', () => {
+  // Una carpeta nueva en Config.gs que no esté en la revisión puede apuntar a donde sea sin que
+  // nada avise antes de desplegar (6-oct: REPORTES en pruebas, las fotos de inspección en la raíz)
+  const config = read('src/config/Config.gs');
+  const diag = read('src/Diagnostico.gs');
+  const claves = [...new Set([...config.matchAll(/(?:required|leerConfig_)\('((?:SS_ID|DRIVE_FOLDER_ID)_\w+)'\)/g)].map((m) => m[1]))];
+  const revisadas = /const REVISION_LIBROS = \[([^\]]*)\]/.exec(diag)[1] + /const REVISION_CARPETAS = \{([\s\S]*?)\n\};/.exec(diag)[1];
+  assert.deepEqual(claves.filter((k) => !new RegExp('\\b' + k + '\\b').test(revisadas)), []);
+  assert.match(read('src/Code.gs'), /revisar === 'entorno'/, 'doGet contesta la revisión que pide subir.js');
+  assert.match(read('tools/subir/subir.js'), /entorno\.revisar\(/, 'subir.js revisa el entorno antes de desplegar');
+});
+
+test('cada archivo que la gente sube o genera dice quién lo subió (DriveUtils.marcarAutor)', () => {
+  // La app corre como quien la desplegó: sin la nota, Drive dice que todo es de esa cuenta.
+  // Fuera: herramientas del editor (respaldos, correcciones, configuración inicial).
+  const HERRAMIENTAS = ['LineasAdmin.gs', 'LineasCorrecciones.gs', 'SetupInicial.gs'];
+  const sinAutor = [];
+  filesBelow(path.join(root, 'src')).filter((f) => f.endsWith('.gs') && !HERRAMIENTAS.includes(path.basename(f))).forEach((f) => {
+    fs.readFileSync(f, 'utf8').split('\n').forEach((linea, i) => {
+      if (/\.createFile\(/.test(linea) && !/marcarAutor\(/.test(linea)) sinAutor.push(path.basename(f) + ':' + (i + 1));
+    });
+  });
+  assert.deepEqual(sinAutor, []);
+});
+
+test('las carpetas de los servicios se buscan por nombre en la raíz, no con un ID fijo', () => {
+  // Un ID fijo no cambia por proyecto: los DEV escribían en producción, y uno que apuntaba a la
+  // copia de pruebas hacía que producción escribiera en pruebas (FIRMA EXTERNA de Arqueos, 6-oct).
+  const servicios = filesBelow(path.join(root, 'src/services')).filter((f) => f.endsWith('.gs'));
+  const fijos = [];
+  const nombres = new Set();
+  servicios.forEach((f) => {
+    const texto = fs.readFileSync(f, 'utf8');
+    for (const m of texto.matchAll(/const (\w*(?:CARPETA|FOLDER)\w*) = '([\w-]{25,})'/g)) fijos.push(path.basename(f) + ' ' + m[1]);
+    for (const m of texto.matchAll(/carpetaEnRaiz\('([^']+)'\)/g)) nombres.add(m[1]);
+    // const CARPETA_X = 'NOMBRE' que luego se pasa a carpetaEnRaiz(CARPETA_X)
+    for (const m of texto.matchAll(/const (CARPETA_\w+) = '([^']+)'/g)) {
+      if (new RegExp('carpetaEnRaiz\\([^\\n]*\\b' + m[1] + '\\b').test(texto)) nombres.add(m[2]);
+    }
+  });
+  assert.deepEqual(fijos, [], 'carpetas con ID fijo (usa DriveUtils.carpetaEnRaiz)');
+  // Y revisarEntorno sabe de cada una: en producción tienen que existir antes de desplegar
+  const revisadas = /const REVISION_EN_RAIZ = \[([\s\S]*?)\];/.exec(read('src/Diagnostico.gs'))[1];
+  assert.deepEqual([...nombres].filter((n) => !revisadas.includes("'" + n + "'")), [], 'en REVISION_EN_RAIZ (Diagnostico.gs)');
+  assert.ok(nombres.size >= 9, 'encontró las carpetas que se usan (' + [...nombres].join(', ') + ')');
+});
+
+test('una vista que se puede apagar por proyecto (MODULOS_APAGADOS) se apaga también en el servidor', () => {
+  // El menú solo esconde: si una llamada del módulo no revisa Config.exigirEncendido, se usa desde la consola
+  const api = read('src/ClientApi.gs');
+  const llamadas = [...api.matchAll(/function (apiHelpdesk\w+)\([^)]*\) \{([^}]*)\}/g)];
+  assert.ok(llamadas.length >= 9, 'encontró las llamadas de Help Desk (' + llamadas.length + ')');
+  const sinRevisar = llamadas
+    .filter((m) => !m[2].includes("Config.exigirEncendido('helpdesk')")).map((m) => m[1]);
+  assert.deepEqual(sinRevisar, [], 'llamadas de Help Desk sin Config.exigirEncendido');
+  assert.ok(read('src/html/Index.html').includes('<body data-apagados="<?= apagados ?>">'), 'Index.html pasa la lista al menú');
+  assert.ok(read('src/Router.gs').includes('template.apagados = JSON.stringify(Config.apagados())'), 'Router llena la lista');
 });

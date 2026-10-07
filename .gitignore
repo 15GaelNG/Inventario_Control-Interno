@@ -39,3 +39,9 @@ tools/migracion/corridas/
 
 # Llaves privadas de cuentas de servicio de Google (lector-*.json): secretos, nunca al repo
 /lector-*.json
+
+# Capturas de red del navegador (traen tokens y datos personales)
+*.har
+
+# Lo comprimido que se sube a Apps Script (npm run push / tools/subir)
+.construido/

@@ -1,0 +1,125 @@
+<template id="tpl-helpdesk">
+  <style>
+    /* Help Desk: solo lo propio; lo demás (tabla, chips, ventana, ficha) es de los componentes */
+    .hd-paso { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 10px; font-size: 13px; }
+    .hd-paso-num {
+      flex: 0 0 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+      background: var(--color-primary-soft); color: var(--color-primary); font-weight: 700; font-size: 12px;
+    }
+    .hd-marcador {
+      display: block; width: 100%; font-family: ui-monospace, Consolas, monospace; font-size: 11.5px;
+      background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 8px; padding: 8px 10px;
+      word-break: break-all; white-space: pre-wrap; color: var(--color-text); margin: 6px 0;
+    }
+    .hd-estado { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-bottom: 14px; font-size: 13px; }
+    .hd-estado .hd-quien { font-weight: 600; }
+    .hd-estado .hd-acciones { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+    .hd-filtros { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 4px; }
+    .hd-filtros .field { margin: 0; min-width: 180px; flex: 1 1 180px; }
+    .hd-punto { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: middle; background: var(--color-border); }
+    .hd-chip-color { border-left-width: 4px; }
+    .hd-mensajes { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+    .hd-mensaje { border: 1px solid var(--color-border); border-radius: 10px; padding: 10px 12px; background: var(--color-surface); }
+    .hd-mensaje.privado { border-style: dashed; background: var(--color-bg); }
+    .hd-mensaje-cabeza { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; color: var(--color-text-muted); margin-bottom: 6px; }
+    .hd-mensaje-cabeza strong { color: var(--color-text); }
+    .hd-mensaje-texto { white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.45; }
+    .hd-registrar { margin-top: 14px; border-top: 1px solid var(--color-border); padding-top: 14px; }
+  </style>
+
+  <div class="page-header">
+    <div>
+      <h2><i data-lucide="headset" class="ico"></i> Help Desk</h2>
+      <p class="page-subtitle">Los tickets del helpdesk de TI que tu cuenta ve allá. Aquí solo se consultan: nada se marca como leído ni cambia en el helpdesk.</p>
+    </div>
+  </div>
+
+  <div id="hd-cargando" class="card"><p class="empty-state">Revisando tu conexión con el helpdesk…</p></div>
+
+  <!-- Sin conectar -->
+  <div id="hd-conectar" class="card form-card" hidden>
+    <div class="form-card-header">
+      <div class="form-card-icon"><i data-lucide="plug" class="ico"></i></div>
+      <div>
+        <h3>Conecta tu helpdesk</h3>
+        <p>Una vez al día: tu sesión del helpdesk dura 24 horas</p>
+      </div>
+    </div>
+    <p class="hd-paso"><span class="hd-paso-num">1</span><span><strong>Solo la primera vez:</strong> copia el marcador con este botón.</span></p>
+    <code class="hd-marcador" id="hd-marcador"></code>
+    <button type="button" class="secondary" id="hd-copiar-marcador"><i data-lucide="copy" class="ico"></i> Copiar el marcador</button>
+    <p class="hd-paso" style="margin-top:14px"><span class="hd-paso-num" style="visibility:hidden">1</span><span>En Chrome, muestra la barra de favoritos (Ctrl+Shift+B), dale
+      <strong>clic derecho</strong> → <strong>"Agregar página…"</strong>. Nombre: <em>Token helpdesk</em>; en <strong>URL</strong> pega lo que copiaste y guarda.
+      (También sirve: Ctrl+Shift+O → los tres puntos de arriba a la derecha → "Agregar marcador nuevo".)</span></p>
+    <p class="hd-paso" style="margin-top:14px"><span class="hd-paso-num">2</span><span>Entra al helpdesk con tu cuenta y dale clic al marcador: copia tu token.</span></p>
+    <p class="hd-paso"><span class="hd-paso-num">3</span><span>Pégalo aquí y conecta. Se guarda solo en el servidor, a tu nombre, y nadie más puede usarlo.</span></p>
+    <form id="hd-form-conectar">
+      <div class="field">
+        <label for="hd-token">Tu token del helpdesk</label>
+        <input type="password" id="hd-token" autocomplete="off" required placeholder="Pega aquí tu token" />
+      </div>
+      <div class="error-msg" id="hd-conectar-error" hidden></div>
+      <button type="submit" id="hd-btn-conectar"><i data-lucide="plug" class="ico"></i> Conectar</button>
+    </form>
+  </div>
+
+  <!-- Conectado -->
+  <div id="hd-conectado" hidden>
+    <div class="hd-estado">
+      <span><i data-lucide="circle-check" class="ico" style="color:var(--color-success)"></i> Conectado como <span class="hd-quien" id="hd-quien"></span></span>
+      <span class="form-ayuda" id="hd-vence"></span>
+      <span class="hd-acciones">
+        <button type="button" class="secondary" id="hd-btn-actualizar"><i data-lucide="refresh-cw" class="ico"></i> Actualizar</button>
+        <button type="button" class="secondary" id="hd-btn-desconectar"><i data-lucide="log-out" class="ico"></i> Desconectar</button>
+      </span>
+    </div>
+
+    <div class="tabs-simple" id="hd-tabs">
+      <button type="button" class="tab-btn active" data-tab="helpdesk"><i data-lucide="headset" class="ico"></i> En el helpdesk</button>
+      <button type="button" class="tab-btn" data-tab="guardados" id="hd-tab-guardados" hidden><i data-lucide="archive" class="ico"></i> Guardados</button>
+    </div>
+
+    <div class="tab-panel" data-tab-panel="helpdesk">
+      <div class="kpi-chips" id="hd-estatus"></div>
+      <div class="hd-filtros">
+        <div class="field"><label for="hd-f-grupo">Grupo</label><select id="hd-f-grupo"><option value="">Todos</option></select></div>
+        <div class="field"><label for="hd-f-formulario">Formulario</label><select id="hd-f-formulario"><option value="">Todos</option></select></div>
+        <div class="field"><label for="hd-f-prioridad">Prioridad</label><select id="hd-f-prioridad"><option value="">Todas</option></select></div>
+      </div>
+      <p class="form-ayuda" id="hd-resumen"></p>
+      <div class="card card-compacta"><div id="hd-tabla"></div></div>
+    </div>
+
+    <div class="tab-panel" data-tab-panel="guardados" hidden>
+      <p class="form-ayuda">La copia que la app guarda sola de los tickets que se han visto aquí (sin las conversaciones).</p>
+      <div class="card card-compacta"><div id="hd-guardados"></div></div>
+    </div>
+  </div>
+
+  <!-- Detalle de un ticket -->
+  <div class="modal-backdrop" id="hd-modal" hidden>
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <div>
+          <h3 style="margin:0" id="hd-modal-titulo"></h3>
+          <p class="modal-subtitle" id="hd-modal-sub"></p>
+        </div>
+        <button type="button" class="modal-close" id="hd-modal-cerrar"><i data-lucide="x" class="ico"></i></button>
+      </div>
+      <div class="modal-form-scroll">
+        <div id="hd-modal-cuerpo"><p class="empty-state">Cargando…</p></div>
+        <div class="hd-registrar" id="hd-registrar" hidden>
+          <div id="hd-registrado" class="form-ayuda" hidden></div>
+          <button type="button" id="hd-btn-registrar"><i data-lucide="ticket" class="ico"></i> Registrar en Tickets</button>
+          <form id="hd-form-ticket" class="form-rejilla" data-columnas="2" hidden>
+            <div id="hd-campos-ticket" style="display: contents"></div>
+            <div style="grid-column: 1 / -1;">
+              <div class="error-msg" id="hd-ticket-error" hidden></div>
+              <button type="submit" id="hd-btn-guardar-ticket"><i data-lucide="save" class="ico"></i> Guardar en Tickets</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>

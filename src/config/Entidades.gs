@@ -148,6 +148,9 @@ const Entidades = (function () {
     'FACTURAS': { prefijo: 'FAC', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
     // El historial único (paso 3): un renglón por acción
     'MOVIMIENTOS': { prefijo: 'MVT', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
+    // Copia de los tickets del helpdesk de TI que se han visto desde la app (05/10/2026): la
+    // crea y la mantiene HelpdeskService; un renglón por ticket del helpdesk
+    'APP_HELPDESK': { prefijo: 'HDK', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'otros', modulo: 'helpdesk' },
   };
 
   /**
@@ -246,6 +249,8 @@ const Entidades = (function () {
     e.delSistemaNuevo = !!POR_HOJA[hoja].delSistemaNuevo;
     // Se pega desde otro sistema: la app solo la lee y MigracionIds nunca le pone ID.
     e.externa = !!POR_HOJA[hoja].externa;
+    // De qué vista es, si se puede apagar por proyecto (Config.apagado): apagada, no se pide la hoja
+    e.modulo = POR_HOJA[hoja].modulo || '';
     // ¿El ID nuevo pisa la columna vieja? Solo si esa columna ya se llama "ID".
     e.pisaLlaveAnterior = clave_(e.llaveAnterior) === clave_(COLUMNA_ID);
     POR_CLAVE[clave_(hoja)] = e;

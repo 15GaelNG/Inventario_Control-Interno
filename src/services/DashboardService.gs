@@ -19,19 +19,21 @@ const DashboardService = (function () {
     return listas_[clave];
   }
 
+  // Una sección que falló por algo pasajero (no por permisos) no deja guardar el resumen
+  let fallos_ = [];   // errores pasajeros de la última vez (no los de permisos)
   function seccion_(fn) {
     try {
       return fn();
     } catch (e) {
+      if (!Permisos.esFaltaDePermiso(e)) {
+        fallos_.push(e.message);
+        console.warn('[Inicio] una sección falló: ' + e.message);
+      }
       return null;
     }
   }
 
-  function fechaISO_(valor) {
-    if (!valor) return '';
-    const f = valor instanceof Date ? valor : new Date(valor);
-    return isNaN(f.getTime()) ? '' : f.toISOString();
-  }
+  const fechaISO_ = (valor) => HojaServicio.fechaISO(valor);
 
   // ---------------- KPIs ----------------
 
@@ -164,9 +166,21 @@ const DashboardService = (function () {
 
   // ---------------- Resumen completo ----------------
 
+  /**
+   * Se guarda ya calculado (CacheHojas.calculo) para todos los que ven los mismos módulos, y
+   * se recalcula solo cuando cambia alguna hoja de la que sale: antes se rearmaba completo en
+   * cada entrada (7 listas, 7–10 s).
+   */
   function resumen(token) {
-    Auth.validarSesion(token);
+    const sesion = Auth.validarSesion(token);
+    return CacheHojas.calculo('inicio_' + Permisos.firmaDeLectura(sesion.correo), () => armar_(token), {
+      guardarSi: () => !fallos_.length,
+    });
+  }
+
+  function armar_(token) {
     listas_ = {};
+    fallos_ = [];
     return {
       vehiculos: seccion_(() => kpiVehiculos_(token)),
       ticketsIncidencias: seccion_(() => kpiTicketsIncidencias_(token)),
@@ -179,5 +193,5 @@ const DashboardService = (function () {
     };
   }
 
-  return { resumen: resumen };
+  return { resumen: resumen, ultimosFallos: () => fallos_.slice() };
 })();

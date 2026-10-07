@@ -186,6 +186,200 @@ function diagnosticoEntorno() {
 }
 
 /**
+ * ¿Los IDs de este proyecto (Entornos.gs o Script Properties) son los correctos?
+ *
+ *   revisarEntorno()   desde el editor de CUALQUIER proyecto (prod, tu DEV): el reporte en el log
+ *
+ * Revisa ID por ID que abra, que sea del tipo correcto (libro o carpeta) y, en las carpetas
+ * donde AppSheet y la app guardan "rutas" ("INSPECCION VEHICULAR_Images/…png"), que se llame
+ * como esa ruta dice y que la raíz la alcance con ese nombre (carpeta o acceso directo): si no,
+ * el archivo se guarda pero nunca se vuelve a encontrar (6-oct: las fotos de inspección caían
+ * en la raíz). En producción, además, que nada esté dentro de una carpeta de pruebas (el mismo
+ * día: REPORTES apuntaba a la carpeta de la copia de pruebas). Y que existan las hojas del
+ * catálogo y el calentador.
+ *
+ * tools/subir/subir.js pide lo mismo en la URL /dev (?revisar=entorno, ver doGet) justo antes
+ * de desplegar a prod, y no despliega si hay errores. Solo se le contesta a quien desplegó la
+ * app; la contraseña de Geotab no sale nunca (no está en la lista).
+ */
+const REVISION_LIBROS = ['SS_ID_USUARIOS', 'SS_ID_VEHICULOS', 'SS_ID_TELEFONIA', 'SS_ID_ACCESORIOS', 'SS_ID_CAJACHICA'];
+/** Carpetas: `nombre` = la carpeta que va al principio de las rutas que se guardan en la hoja; la raíz la tiene que alcanzar con ese nombre, salvo `sinRaiz` */
+const REVISION_CARPETAS = {
+  DRIVE_FOLDER_ID_RAIZ: {},
+  DRIVE_FOLDER_ID_REPORTES: { nombre: 'INSPECCIONES VEHICULARES' },
+  DRIVE_FOLDER_ID_VERIFICACIONES: { nombre: 'VERIFICACIONES_Images' },
+  DRIVE_FOLDER_ID_SENSORES: { nombre: 'INSTALACION DE SENSORES_Files_' },
+  DRIVE_FOLDER_ID_HOLOGRAMAS_IMAGENES: { nombre: 'HOLOGRAMAS_Images' },
+  DRIVE_FOLDER_ID_HOLOGRAMAS_ARCHIVOS: { nombre: 'HOLOGRAMAS_Files_' },
+  DRIVE_FOLDER_ID_INSPECCIONES_IMAGENES: { nombre: 'INSPECCION VEHICULAR_Images' },
+  // Los modelos se leen directo de su carpeta (InspeccionesService.raizDe_), no caminando desde la raíz
+  DRIVE_FOLDER_ID_MODELOS: { nombre: 'MODELOS INSPECCION', sinRaiz: true },
+  DRIVE_FOLDER_ID_VERIFICACIONES_LECTURA: {},
+  LINEAS_DRIVE_APPSHEET: {},
+  LINEAS_DRIVE_NUCOS: {},
+  LINEAS_DRIVE_APPSHEET_LECTURA: {},
+};
+/**
+ * Las carpetas que los servicios buscan por NOMBRE dentro de la raíz (DriveUtils.carpetaEnRaiz).
+ * En producción tienen que existir (si no, la captura truena); en un DEV se crean solas al usarse.
+ * Un contrato revisa que cada nombre que usa un servicio esté aquí.
+ */
+const REVISION_EN_RAIZ = [
+  'ARQUEOS', 'ARQUEOS_Images', 'ARQUEOS_Files_', 'UBER_Files_', 'VEHICULOS_Files_', 'VEHICULOS_Images',
+  'RESPONSIVAS VEHICULARES_Images', 'RESPONSIVAS_VEHICULARES', 'ADHERENTES VEHICULAR',
+];
+/**
+ * Hojas del catálogo que pueden faltar sin que sea error: APP_CORRECCIONES la crea Líneas la primera vez que
+ * se usa, y LINEAS TELEFONICAS ya no se lee cuando se retiró (LINEAS_HOJA_VIEJA_RETIRADA, LineasRetiro.gs).
+ */
+function noSePide_(hoja) {
+  if (hoja === 'APP_CORRECCIONES') return true;
+  return hoja === 'LINEAS TELEFONICAS' && !!leerConfig_('LINEAS_HOJA_VIEJA_RETIRADA');
+}
+/** Un nombre así, en la carpeta o en una de arriba, en producción es casi seguro un error */
+const REVISION_PRUEBAS = /prueba|copia de|\btest\b|\bdev\b|laboratorio/i;
+
+function revisarEntorno() {
+  soloEditor_();
+  const r = revisionEntorno_();
+  const lineas = ['REVISIÓN DE IDS — proyecto ' + r.scriptId + ' (' + (r.entorno || 'sin ENTORNO') + ')', ''];
+  r.revisados.forEach((x) => lineas.push((x.problema ? (x.grave ? '  ✘ ' : '  ⚠ ') : '  ✔ ') + x.clave + ': ' +
+    (x.id ? (x.nombre ? '"' + x.nombre + '"' : x.id) : 'sin configurar') + (x.problema ? '\n      ' + x.problema : '')));
+  lineas.push('');
+  lineas.push(r.hojasQueFaltan.length ? (r.entorno === 'PROD' ? '  ✘' : '  ⚠') + ' Faltan hojas: ' + r.hojasQueFaltan.join(', ') : '  ✔ Están todas las hojas del catálogo');
+  lineas.push((r.calentador ? '  ✔' : '  ⚠') + ' Calentador ' + (r.calentador ? 'instalado' : 'NO instalado (correr instalarCalentador)'));
+  lineas.push('');
+  lineas.push(r.errores.length ? 'ERRORES (' + r.errores.length + '):\n  - ' + r.errores.join('\n  - ') : 'SIN ERRORES');
+  if (r.avisos.length) lineas.push('AVISOS (' + r.avisos.length + '):\n  - ' + r.avisos.join('\n  - '));
+  const texto = lineas.join('\n');
+  Logger.log(texto);
+  return texto;
+}
+
+function revisionEntorno_() {
+  const activo = String(Session.getActiveUser().getEmail() || '').toLowerCase();
+  const efectivo = String(Session.getEffectiveUser().getEmail() || '').toLowerCase();
+  if (activo && efectivo && activo !== efectivo) return { error: 'Solo para quien desplegó la app.' };
+
+  const entorno = (leerConfig_('ENTORNO') || '').trim().toUpperCase();
+  const esProd = entorno === 'PROD';
+  const errores = [];
+  const avisos = [];
+  const revisados = [];
+  /** En prod, lo que está mal es error (no se despliega); en un DEV, aviso. Lo que no abre siempre es error. */
+  const anotar = (x, problema, siempreGrave) => {
+    x.problema = problema;
+    x.grave = esProd || !!siempreGrave;
+    (x.grave ? errores : avisos).push(x.clave + ': ' + problema);
+  };
+  const obligatoria = (clave) => DIAG_OBLIGATORIAS.some((o) => o.clave === clave);
+  /** El nombre de pruebas que tiene ella o una carpeta de arriba (null si ninguna) */
+  const enPruebas = (archivo) => {
+    let actual = archivo;
+    for (let i = 0; i < 12 && actual; i++) {
+      if (REVISION_PRUEBAS.test(actual.getName())) return actual.getName();
+      const padres = actual.getParents();
+      actual = padres.hasNext() ? padres.next() : null;
+    }
+    return null;
+  };
+
+  // ---- libros
+  const pestanas = {};
+  const abiertos = {};
+  REVISION_LIBROS.forEach((clave) => {
+    const x = { clave: clave, id: (leerConfig_(clave) || '').trim() };
+    revisados.push(x);
+    if (!x.id) {
+      if (obligatoria(clave)) anotar(x, 'sin configurar', true);
+      return;
+    }
+    try {
+      const ss = abiertos[x.id] || (abiertos[x.id] = SpreadsheetApp.openById(x.id));
+      x.nombre = ss.getName();
+      ss.getSheets().forEach((h) => { pestanas[h.getName().trim().toUpperCase()] = true; });
+    } catch (e) {
+      anotar(x, 'no abre como libro (' + e.message + ')', true);
+      return;
+    }
+    const prueba = esProd && enPruebas(DriveApp.getFileById(x.id));
+    if (prueba) anotar(x, 'está en "' + prueba + '": parece de pruebas, no de producción');
+  });
+
+  // ---- carpetas
+  let raiz = null;
+  Object.keys(REVISION_CARPETAS).forEach((clave) => {
+    const regla = REVISION_CARPETAS[clave];
+    const x = { clave: clave, id: (leerConfig_(clave) || '').trim() };
+    revisados.push(x);
+    if (!x.id) {
+      if (obligatoria(clave)) anotar(x, 'sin configurar', true);
+      return;
+    }
+    let carpeta;
+    try {
+      carpeta = DriveApp.getFolderById(x.id);
+      x.nombre = carpeta.getName();
+    } catch (e) {
+      anotar(x, 'no abre como carpeta: no existe, es un archivo o no tienes acceso (' + e.message + ')', true);
+      return;
+    }
+    if (carpeta.isTrashed()) { anotar(x, 'la carpeta está en la papelera', true); return; }
+    if (clave === 'DRIVE_FOLDER_ID_RAIZ') raiz = carpeta;
+    const prueba = esProd && enPruebas(carpeta);
+    if (prueba) { anotar(x, 'está en "' + prueba + '": parece de pruebas, no de producción'); return; }
+    if (!regla.nombre) return;
+    if (x.nombre !== regla.nombre) {
+      anotar(x, 'se llama "' + x.nombre + '" y debería ser "' + regla.nombre + '": las rutas que se guardan ("' +
+        regla.nombre + '/…") no la van a encontrar');
+    } else if (raiz && !regla.sinRaiz && !revisionAlcanza_(raiz, regla.nombre, x.id)) {
+      anotar(x, 'la raíz ("' + raiz.getName() + '") no tiene "' + regla.nombre + '" que lleve a esta carpeta ' +
+        '(ni carpeta ni acceso directo): lo que se guarde no se va a volver a encontrar');
+    }
+  });
+
+  // ---- carpetas que se buscan por nombre en la raíz
+  if (raiz) {
+    REVISION_EN_RAIZ.forEach((nombre) => {
+      const x = { clave: 'raíz / ' + nombre, id: '' };
+      revisados.push(x);
+      const enRaiz = DriveUtils.carpetaEnRaizSiExiste(raiz, nombre);
+      if (enRaiz) { x.id = enRaiz.getId(); x.nombre = nombre; return; }
+      // anotar: en producción es error; en un DEV, aviso
+      anotar(x, esProd
+        ? 'no existe en la raíz: lo que se guarde ahí va a fallar (créala, o un acceso directo con ese nombre)'
+        : 'no existe todavía; se crea sola la primera vez que se use');
+    });
+  }
+
+  // ---- hojas y calentador
+  const hojasQueFaltan = Object.keys(abiertos).length
+    ? Entidades.todas().filter((e) => !(e.modulo && Config.apagado(e.modulo)) && !noSePide_(e.hoja)).map((e) => e.hoja).concat(['USUARIOS', 'PERMISOS'])
+      .filter((h) => !pestanas[String(h).trim().toUpperCase()])
+    : [];
+  if (hojasQueFaltan.length) (esProd ? errores : avisos).push('Faltan hojas en los libros: ' + hojasQueFaltan.join(', '));
+  const calentador = ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === CALENTADOR_FUNCION);
+  if (!calentador) avisos.push('El calentador no está instalado: correr instalarCalentador() una vez en el editor');
+
+  return {
+    scriptId: ScriptApp.getScriptId(), entorno: entorno, revisados: revisados,
+    hojasQueFaltan: hojasQueFaltan, calentador: calentador, errores: errores, avisos: avisos,
+  };
+}
+
+/** ¿La raíz tiene una carpeta (o un acceso directo a carpeta) con ese nombre que sea esta? */
+function revisionAlcanza_(raiz, nombre, id) {
+  const reales = raiz.getFoldersByName(nombre);
+  while (reales.hasNext()) if (reales.next().getId() === id) return true;
+  const accesos = raiz.getFilesByName(nombre);
+  while (accesos.hasNext()) {
+    const a = accesos.next();
+    try { if (a.getMimeType() === MimeType.SHORTCUT && a.getTargetId() === id) return true; } catch (e) { /* sin acceso al destino */ }
+  }
+  return false;
+}
+
+/**
  * Qué permisos le calcula la app a un correo, y de dónde los saca. Para cuando alguien "no
  * ve" un módulo: dice de qué libro lee USUARIOS, qué ROL y ACTIVO encontró, qué había en la
  * caché (5 minutos) y qué sale al recalcular. Borra esa caché de paso, así que después de

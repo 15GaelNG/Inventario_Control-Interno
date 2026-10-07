@@ -64,6 +64,7 @@ function generar(plantillaId, elemento, cuerpoArmado) {
   const copia = { getId: () => 'tmp', getAs: () => ({ setName: () => ({}) }), setTrashed: () => {} };
   const contexto = vm.createContext({
     DriveApp: { getFileById: () => ({ makeCopy: () => copia }), Access: { DOMAIN: 'DOMAIN' }, Permission: { VIEW: 'VIEW' } },
+    DriveUtils: { marcarAutor: (a) => a },   // quién lo subió: aquí no importa
     DocumentApp: { ElementType: TIPOS, Attribute: { FONT_SIZE: 'FONT_SIZE' }, openById: () => ({ getBody: () => cuerpo, getHeader: () => null, getFooter: () => null, saveAndClose: () => {} }) },
   });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/services/lineas/LineasPdf.gs'), 'utf8') + '\nthis.pdf = LineasPdf;', contexto);

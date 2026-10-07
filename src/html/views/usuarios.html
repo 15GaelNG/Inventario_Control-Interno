@@ -47,31 +47,139 @@
   .usr-chip-enlace { cursor: pointer; border: none; font: inherit; }
   .usr-chip-enlace:hover { text-decoration: underline; }
 
-  /* Ventana "Editar permisos": una lista limpia, el color solo dice de dónde viene cada permiso */
+  /* Ventana "Editar permisos": un renglón por módulo con sus tres niveles a la vista */
   .usr-modal-regla { margin: -8px 0 10px; font-size: 12.5px; color: var(--color-text-muted); line-height: 1.45; }
-  .usr-modal-leyenda { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; font-size: 12px; color: var(--color-text-muted); }
+  .usr-modal-leyenda { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; font-size: 12px; color: var(--color-text-muted); }
+  .usr-modal-leyenda:empty { display: none; }
+  .usr-modal-leyenda .ico { width: 13px; height: 13px; vertical-align: -2px; }
+  .usr-leyenda-punto { display: inline-flex; align-items: center; gap: 6px; }
+  .usr-leyenda-punto::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--color-primary); }
+
+  /* Título de cada grupo, con "Todo el grupo" a la derecha */
   .usr-editar-grupo {
-    display: flex; align-items: center; gap: 6px; margin: 16px 0 2px; padding: 0 2px;
+    display: flex; align-items: center; gap: 6px; margin: 18px 0 6px; padding: 0 2px;
     font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted);
   }
   .usr-editar-grupo:first-child { margin-top: 0; }
   .usr-editar-grupo .ico { width: 13px; height: 13px; }
+  .usr-editar-grupo-nombre { flex: 1; min-width: 0; }
+  .usr-editar-grupo-todo { text-transform: none; letter-spacing: 0; font-weight: 600; font-size: 11.5px; }
+  .usr-editar-grupo .usr-op { padding: 3px 9px; font-size: 11.5px; }
+
   .usr-editar-lista { border: 1px solid var(--color-border); border-radius: 10px; overflow: hidden; }
-  .usr-editar-fila { display: flex; align-items: center; gap: 10px; padding: 7px 10px 7px 12px; margin: 0; cursor: default; }
+  .usr-editar-fila { display: flex; align-items: center; gap: 10px; padding: 7px 10px 7px 12px; margin: 0; }
   .usr-editar-fila + .usr-editar-fila { border-top: 1px solid var(--color-border); }
   .usr-editar-fila:hover { background: var(--color-bg); }
   .usr-editar-fila > .ico { flex: none; width: 15px; height: 15px; color: var(--color-text-muted); }
+  .usr-editar-fila.excepcion { background: var(--color-accent-soft); }
   .usr-editar-nombre { flex: 1; min-width: 0; font-size: 13.5px; display: flex; align-items: center; gap: 6px; }
   .usr-editar-nombre::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: transparent; flex: none; }
   .usr-editar-fila.cambiada .usr-editar-nombre::after { background: var(--color-accent); }
   .usr-editar-fila.cambiada .usr-editar-nombre { font-weight: 600; }
-  .usr-editar-fila select { width: 172px; flex: none; margin: 0; padding: 5px 8px; font-size: 12.5px; font-weight: 600; border-radius: 8px; }
-  .usr-editar-fila select.area { background: var(--color-primary-soft); color: var(--color-primary); border-color: transparent; }
-  .usr-editar-fila select.excepcion { background: var(--color-accent-soft); color: var(--color-text); border-color: var(--color-accent); }
+
+  /* Los tres niveles con el color de la ficha: Sin acceso rojo, Ver azul, Editar verde. El que
+     le da su área a la persona lleva un punto */
+  .usr-segmento { flex: none; display: inline-flex; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden; background: var(--color-surface); }
+  .usr-op {
+    position: relative; margin: 0; padding: 5px 11px; border: 0; border-radius: 0; background: transparent;
+    color: var(--color-text-muted); font-size: 12.5px; font-weight: 600; cursor: pointer; box-shadow: none;
+  }
+  .usr-op + .usr-op { border-left: 1px solid var(--color-border); }
+  .usr-op:hover { background: var(--color-bg); color: var(--color-text); }
+  .usr-op:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+  .usr-op.activa { color: #fff; }
+  .usr-op.activa.NINGUNO { background: #b42318; }
+  .usr-op.activa.LECTURA { background: var(--color-primary); }
+  .usr-op.activa.EDICION { background: var(--color-success); }
+  .usr-op.heredada::after {
+    content: ''; position: absolute; top: 3px; right: 3px; width: 5px; height: 5px; border-radius: 50%; background: var(--color-primary);
+  }
+  .usr-op.heredada.activa::after { background: #fff; }
+
+  .usr-restablecer {
+    flex: none; display: grid; place-items: center; width: 28px; height: 28px; margin: 0; padding: 0;
+    border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); color: var(--color-text-muted); cursor: pointer;
+  }
+  .usr-restablecer:hover { color: var(--color-text); background: var(--color-bg); }
+  .usr-restablecer .ico { width: 14px; height: 14px; }
+
   .usr-modal-pie { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--color-border); }
   .usr-modal-pie p { margin: 0 auto 0 0; font-size: 12.5px; color: var(--color-text-muted); }
   .usr-modal-pie button:disabled { opacity: .5; cursor: not-allowed; }
-  @media (max-width: 560px) { .usr-editar-fila select { width: 140px; } }
+
+  /* "Su área le da N módulos · más M excepciones propias" (ficha de la persona) */
+  .usr-herencia { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; font-size: 13px; color: var(--color-text-muted); }
+  .usr-herencia .ico { width: 15px; height: 15px; flex: none; }
+  .usr-herencia b { color: var(--color-text); }
+
+  /* Lo que implican los permisos fuera de sus pantallas (ficha y ventana) */
+  .usr-implica ul { list-style: none; margin: 0; padding: 0; }
+  .usr-implica li { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; font-size: 13px; line-height: 1.45; }
+  .usr-implica li + li { border-top: 1px solid var(--color-border); }
+  .usr-implica li .ico { flex: none; width: 15px; height: 15px; margin-top: 2px; color: var(--color-primary); }
+  #usr-modal-cuerpo .usr-implica { margin-top: 16px; }
+
+  /* Matriz por área: módulos (renglones, por grupo) contra áreas (columnas, el nombre de lado).
+     Editar resalta (verde lleno), Ver en azul suave y Sin acceso apenas en rojo, para que se
+     lea de un vistazo qué edita cada área. El encabezado y la columna de módulos se quedan fijos. */
+  .usr-matriz-barra { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; padding: 10px 12px; border-bottom: 1px solid var(--color-border); font-size: 12px; color: var(--color-text-muted); }
+  .usr-matriz-leyenda { display: inline-flex; align-items: center; gap: 6px; }
+  .usr-matriz-leyenda .usr-celda { width: 18px; height: 16px; cursor: default; }
+  .usr-matriz-barra p { margin: 0 0 0 auto; font-size: 12.5px; }
+  .usr-matriz-barra p.con-cambios { color: var(--color-text); font-weight: 600; }
+  .usr-matriz-barra button:disabled { opacity: .5; cursor: not-allowed; }
+  .usr-matriz-scroll { overflow: auto; max-height: calc(100vh - 300px); min-height: 240px; }
+  .usr-matriz { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+  .usr-matriz th, .usr-matriz td { background: var(--color-surface); }
+  .usr-matriz thead th { position: sticky; top: 0; z-index: 2; vertical-align: bottom; padding: 10px 3px 8px; border-bottom: 1px solid var(--color-border); }
+  .usr-matriz .usr-matriz-mod {
+    position: sticky; left: 0; z-index: 1; text-align: left; white-space: nowrap; font-weight: 500;
+    width: 1%; padding: 3px 14px 3px 12px; border-right: 1px solid var(--color-border);
+  }
+  .usr-matriz thead .usr-matriz-mod { z-index: 3; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted); }
+  .usr-matriz-mod .ico { width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px; color: var(--color-text-muted); }
+  .usr-matriz-area {
+    writing-mode: vertical-rl; transform: rotate(180deg); max-height: 150px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; margin: 0 auto; padding: 0; border: 0; background: none; box-shadow: none;
+    color: var(--color-text); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+  .usr-matriz-area:hover { color: var(--color-primary); text-decoration: underline; }
+  .usr-matriz-grupo th { padding: 14px 12px 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted); }
+  .usr-matriz-grupo td { border-bottom: 0; }
+  .usr-matriz tbody td { padding: 2px 3px; text-align: center; }
+  .usr-matriz tbody tr:not(.usr-matriz-grupo):hover > * { background: var(--color-bg); }
+
+  .usr-celda {
+    position: relative; display: inline-grid; place-items: center; width: 32px; height: 26px; margin: 0; padding: 0;
+    border: 0; border-radius: 6px; box-shadow: none; cursor: pointer; vertical-align: middle;
+  }
+  .usr-celda svg, .usr-celda .ico { width: 14px; height: 14px; }
+  .usr-celda.EDICION { background: var(--color-success); color: #fff; }
+  .usr-celda.LECTURA { background: var(--color-primary-soft); color: var(--color-primary); }
+  .usr-celda.NINGUNO { background: rgba(180, 35, 24, .07); color: rgba(180, 35, 24, .55); }
+  :root[data-theme="dark"] .usr-celda.LECTURA { background: rgba(96, 165, 250, .22); color: #93c5fd; }
+  :root[data-theme="dark"] .usr-celda.NINGUNO { background: rgba(248, 113, 113, .10); color: rgba(248, 113, 113, .6); }
+  .usr-celda:hover { filter: brightness(.94); }
+  .usr-celda:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  .usr-celda.cambiada { box-shadow: 0 0 0 2px var(--color-accent); }
+  .usr-celda.con-excepcion::after {
+    content: ''; position: absolute; top: 2px; right: 2px; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--color-accent); box-shadow: 0 0 0 1px var(--color-surface);
+  }
+
+  /* Historial: antes → después */
+  .usr-historial-cambio { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .usr-historial-cambio > .ico { width: 13px; height: 13px; color: var(--color-text-muted); }
+
+  /* Celular: el nombre arriba y los tres niveles a todo lo ancho, para el dedo */
+  @media (max-width: 640px) {
+    .usr-editar-fila { flex-wrap: wrap; }
+    .usr-editar-fila .usr-segmento { flex: 1 1 100%; }
+    .usr-editar-fila .usr-op { flex: 1; padding: 8px 6px; }
+    .usr-editar-grupo { flex-wrap: wrap; }
+    .usr-editar-grupo .usr-segmento { flex: 1 1 100%; }
+    .usr-editar-grupo .usr-op { flex: 1; }
+  }
 </style>
 
 <template id="tpl-usuarios">
@@ -113,12 +221,32 @@
     <div class="tabs-simple" id="usr-tabs">
       <button type="button" class="tab-btn active" data-tab="personas"><i data-lucide="user" class="ico"></i> Personas</button>
       <button type="button" class="tab-btn" data-tab="areas"><i data-lucide="users" class="ico"></i> Áreas</button>
+      <button type="button" class="tab-btn" data-tab="matriz"><i data-lucide="grid-3x3" class="ico"></i> Matriz por área</button>
+      <button type="button" class="tab-btn" data-tab="historial"><i data-lucide="history" class="ico"></i> Historial</button>
     </div>
     <div class="tab-panel" data-tab-panel="personas">
       <div class="card card-compacta"><div id="usr-tabla-personas"></div></div>
     </div>
     <div class="tab-panel" data-tab-panel="areas" hidden>
       <div class="card card-compacta"><div id="usr-tabla-areas"></div></div>
+    </div>
+    <!-- Todas las áreas contra todos los módulos: clic en una celda la cambia; se guarda junto -->
+    <div class="tab-panel" data-tab-panel="matriz" hidden>
+      <div class="card card-compacta usr-matriz-card">
+        <div class="usr-matriz-barra">
+          <span class="usr-matriz-leyenda"><span class="usr-celda EDICION" aria-hidden="true"></span> Editar</span>
+          <span class="usr-matriz-leyenda"><span class="usr-celda LECTURA" aria-hidden="true"></span> Ver</span>
+          <span class="usr-matriz-leyenda"><span class="usr-celda NINGUNO" aria-hidden="true"></span> Sin acceso</span>
+          <span class="usr-matriz-leyenda"><span class="usr-celda NINGUNO con-excepcion" aria-hidden="true"></span> Alguien del área tiene excepción</span>
+          <p id="usr-matriz-cuenta">Clic en una celda para cambiarla</p>
+          <button type="button" class="secondary" id="usr-matriz-descartar" hidden>Descartar</button>
+          <button type="button" id="usr-matriz-guardar" disabled><i data-lucide="save" class="ico"></i> <span>Guardar</span></button>
+        </div>
+        <div class="usr-matriz-scroll" id="usr-matriz" data-scroll-x></div>
+      </div>
+    </div>
+    <div class="tab-panel" data-tab-panel="historial" hidden>
+      <div class="card card-compacta"><div id="usr-tabla-historial"></div></div>
     </div>
   </section>
 

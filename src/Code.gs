@@ -5,6 +5,10 @@
  */
 
 function doGet(e) {
+  // ?revisar=entorno: lo que tools/subir/subir.js revisa antes de desplegar (solo para quien desplegó)
+  if (e && e.parameter && e.parameter.revisar === 'entorno') {
+    return ContentService.createTextOutput(JSON.stringify(revisionEntorno_())).setMimeType(ContentService.MimeType.JSON);
+  }
   return Router.renderShell(e);
 }
 

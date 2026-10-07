@@ -1,9 +1,7 @@
 /**
  * CambiosMontoCCHService.gs
  * Historial de cambios de monto asignado a una Caja Chica (incrementos y
- * reducciones) — referencia el ID CCH del catálogo de Cajas Chicas. Vive en
- * el mismo spreadsheet original de AppSheet que el resto de los módulos —
- * la pestaña real se ubica por firma de columnas, no por nombre fijo.
+ * reducciones) — referencia el ID CCH del catálogo de Cajas Chicas.
  *
  * Columnas reales (8): ID | ID CCH | TIPO | CANTIDAD | CANTIDAD ANTERIOR |
  *   CANTIDAD ACTUALIZADA | FECHA | QUIEN REALIZO
@@ -28,84 +26,30 @@
  */
 
 const CambiosMontoCCHService = (function () {
-  // Nombre real ya confirmado ("INCREMENTOS", a pesar del nombre del
-  // módulo/Service) — directo por nombre, no por firma de columnas (ver
-  // mismo comentario en ArqueosService).
-  const NOMBRE_HOJA = 'INCREMENTOS';
-  const ID_COLUMN = 'ID';
-
-  function ssId() {
-    return Config.SPREADSHEET_IDS.VEHICULOS();
-  }
-
-  function hoja_() {
-    return SheetUtils.getSheet(ssId(), NOMBRE_HOJA);
-  }
-
-  function fechaISO_(valor) {
-    if (!valor) return '';
-    const f = valor instanceof Date ? valor : new Date(valor);
-    return isNaN(f.getTime()) ? '' : f.toISOString();
-  }
-
-  const COLUMNAS_RESUMEN = [
-    'ID', 'ID CCH', 'TIPO', 'CANTIDAD', 'CANTIDAD ANTERIOR', 'CANTIDAD ACTUALIZADA', 'FECHA', 'QUIEN REALIZO',
-  ];
-
-  /** Historial completo (ya son solo 8 columnas, no hace falta un "resumen" más ligero). */
-  function listarResumen(token) {
-    Permisos.puedeLeer(token, 'caja-chica');
-    // Guardado mientras la hoja no cambie (CacheHojas): el permiso se revisa antes, siempre
-    return CacheHojas.recordar('cmcch_resumen', [[ssId(), NOMBRE_HOJA]], () => {
-      const sheet = hoja_();
-      const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
-
-      const resultado = [];
-      for (let i = 0; i < filas; i++) {
-        if (!datos['ID'][i]) continue;
-        resultado.push({
-          ID: datos['ID'][i],
-          ID_CCH: datos['ID CCH'][i] || '',
-          TIPO: datos['TIPO'][i] || '',
-          CANTIDAD: datos['CANTIDAD'][i] || '',
-          CANTIDAD_ANTERIOR: datos['CANTIDAD ANTERIOR'][i] || '',
-          CANTIDAD_ACTUALIZADA: datos['CANTIDAD ACTUALIZADA'][i] || '',
-          FECHA: fechaISO_(datos['FECHA'][i]),
-          QUIEN_REALIZO: datos['QUIEN REALIZO'][i] || '',
-        });
-      }
-      return resultado.sort((a, b) => new Date(b.FECHA) - new Date(a.FECHA));
-    });
-  }
-
-  /** Todas las columnas de la hoja (para "Vista": mostrar/exportar cualquier columna). */
-  function completo(token) {
-    Permisos.puedeLeer(token, 'caja-chica');
-    return SheetUtils.getAll(ssId(), NOMBRE_HOJA);
-  }
-
-  /** Cambios de monto de una sola caja chica (ficha de Caja Chica). */
-  function listarPorIdCch(token, idCch) {
-    if (!idCch) return [];
-    return listarResumen(token).filter((c) => c.ID_CCH === idCch);
-  }
-
-  /** Registro completo (todas las columnas) por ID -- "Ver completo" desde la ficha de Caja Chica. */
-  function buscarPorId(token, id) {
-    Permisos.puedeLeer(token, 'caja-chica');
-    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, ID_COLUMN);
-    if (!encontrado) return null;
-    const limpio = {};
-    Object.keys(encontrado.data).forEach((k) => {
-      const v = encontrado.data[k];
-      limpio[k] = v instanceof Date ? v.toISOString() : v;
-    });
-    return limpio;
-  }
+  /** La hoja, para HojaServicio */
+  const INCREMENTOS = {
+    modulo: 'caja-chica',
+    libro: () => Config.SPREADSHEET_IDS.VEHICULOS(),
+    // Nombre real de la pestaña, a pesar del nombre del módulo
+    hoja: 'INCREMENTOS',
+    columnas: ['ID', 'ID CCH', 'TIPO', 'CANTIDAD', 'CANTIDAD ANTERIOR', 'CANTIDAD ACTUALIZADA', 'FECHA', 'QUIEN REALIZO'],
+    fila: (r) => ({
+      ID: r['ID'],
+      ID_CCH: r['ID CCH'] || '',
+      TIPO: r['TIPO'] || '',
+      CANTIDAD: r['CANTIDAD'] || '',
+      CANTIDAD_ANTERIOR: r['CANTIDAD ANTERIOR'] || '',
+      CANTIDAD_ACTUALIZADA: r['CANTIDAD ACTUALIZADA'] || '',
+      FECHA: HojaServicio.fechaISO(r['FECHA']),
+      QUIEN_REALIZO: r['QUIEN REALIZO'] || '',
+    }),
+    orden: { campo: 'FECHA', desc: true },
+  };
 
   /**
    * Registra un cambio de monto para una Caja Chica y, en la misma
-   * operación, actualiza su MONTO ACTUAL.
+   * operación, actualiza su MONTO ACTUAL. Escrito a mano y no con HojaServicio.crear: son dos
+   * hojas que tienen que cambiar juntas, bajo el mismo candado.
    */
   function crear(token, datos) {
     const sesion = Permisos.puedeEditar(token, 'caja-chica');
@@ -124,39 +68,43 @@ const CambiosMontoCCHService = (function () {
         throw new Error('La cantidad actualizada es igual a la actual — no hay cambio que registrar.');
       }
 
-      const fila = {};
-      // El ID lo pone SheetUtils.insert con el formato del sistema (ver docs/ids-asignacion.md)
-      // 'ID CAJA CHICA' es la llave foránea: 'cajaActual' ya venía completa y su ID se
-      // estaba tirando. 'ID CCH' se queda porque es dato de negocio.
+      // 'ID CAJA CHICA' es la llave foránea; 'ID CCH' se queda porque es dato de negocio.
       const idCaja = cajaActual['ID'];
       if (!idCaja) {
         throw new Error('La caja chica con ID CCH=' + idCch + ' no tiene ID. Corre el ' +
           'pipeline de IDs sobre este libro antes de registrar cambios de monto.');
       }
-      fila['ID CAJA CHICA'] = idCaja;
-      fila['ID CCH'] = idCch;
-      fila['TIPO'] = nueva > anterior ? 'INCREMENTO' : 'REDUCCION';
-      fila['CANTIDAD'] = Math.abs(nueva - anterior);
-      fila['CANTIDAD ANTERIOR'] = anterior;
-      fila['CANTIDAD ACTUALIZADA'] = nueva;
-      fila['FECHA'] = new Date();
-      fila['QUIEN REALIZO'] = sesion.nombre;
-
-      SheetUtils.insert(ssId(), hoja_().getName(), fila);
+      // El ID lo pone SheetUtils.insert con el formato del sistema (ver docs/ids-asignacion.md)
+      const fila = {
+        'ID CAJA CHICA': idCaja,
+        'ID CCH': idCch,
+        'TIPO': nueva > anterior ? 'INCREMENTO' : 'REDUCCION',
+        'CANTIDAD': Math.abs(nueva - anterior),
+        'CANTIDAD ANTERIOR': anterior,
+        'CANTIDAD ACTUALIZADA': nueva,
+        'FECHA': new Date(),
+        'QUIEN REALIZO': sesion.nombre,
+      };
+      SheetUtils.insert(HojaServicio.libro(INCREMENTOS), INCREMENTOS.hoja, fila);
       CajasChicasService.actualizar(token, idCch, { 'MONTO ACTUAL': nueva });
-
-      return { ID: fila[ID_COLUMN] };
+      return { ID: fila['ID'] };
     } finally {
       lock.releaseLock();
     }
   }
 
-  function eliminar(token, id) {
-    Permisos.puedeEditar(token, 'caja-chica');
-    const ok = SheetUtils.remove(ssId(), hoja_().getName(), id, ID_COLUMN);
-    if (!ok) throw new Error('No se encontró el registro con ID=' + id);
-    return { ID: id };
-  }
-
-  return { listarResumen, completo, listarPorIdCch, buscarPorId, crear, eliminar };
+  return {
+    /** Historial completo (ya son solo 8 columnas, no hace falta un "resumen" más ligero) */
+    listarResumen: (token) => HojaServicio.listar(INCREMENTOS, token),
+    /** Para el activador (Calentador.gs): la deja armada sin esperar a nadie */
+    calentar: () => HojaServicio.calentar(INCREMENTOS),
+    /** Todas las columnas de la hoja (para "Vista": mostrar/exportar cualquier columna) */
+    completo: (token) => HojaServicio.completo(INCREMENTOS, token),
+    /** Cambios de monto de una sola caja chica (ficha de Caja Chica) */
+    listarPorIdCch: (token, idCch) => HojaServicio.listarPor(INCREMENTOS, token, 'ID_CCH', idCch),
+    /** Registro completo (todas las columnas) por ID -- "Ver completo" desde la ficha de Caja Chica */
+    buscarPorId: (token, id) => HojaServicio.buscarPorId(INCREMENTOS, token, id),
+    crear,
+    eliminar: (token, id) => HojaServicio.eliminar(INCREMENTOS, token, id),
+  };
 })();

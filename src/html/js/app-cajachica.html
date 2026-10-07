@@ -133,6 +133,8 @@
     if (!puedeEditar) document.querySelector('#cch-tabs .tab-btn[data-tab="registrar"]').remove();
     const modalEditar = document.getElementById('modal-editar-cajachica');
     let todasLasCajas = [];
+    /** La ficha abierta: si su copia guardada llega distinta del servidor, se vuelve a pintar */
+    let fichaCajaAbierta = null;
 
     document.getElementById('campos-form-cajachica').innerHTML = renderCamposCajaChica('cch', false);
     document.getElementById('campos-form-editar-cajachica').innerHTML = renderCamposCajaChica('editar-cajachica', true);
@@ -205,10 +207,19 @@
       if (enlace) enlace.addEventListener('click', (ev) => { ev.preventDefault(); cerrarFichaCajaChica(); });
     }
     function cerrarFichaCajaChica() {
+      fichaCajaAbierta = null;
       document.getElementById('cch-detalle').hidden = true;
       document.getElementById('cch-detalle').innerHTML = '';
       document.getElementById('cch-listado').hidden = false;
     }
+    // La ficha salió de su copia guardada y del servidor llegó algo distinto: se repinta en la
+    // misma pestaña (sin "Cargando…" ni volver arriba)
+    escucharLista('apiFichaCajaChica', () => {
+      const detalle = document.getElementById('cch-detalle');
+      if (!fichaCajaAbierta || detalle.hidden) return;
+      const activa = detalle.querySelector('[data-ficha-tab].active');
+      abrirFichaCajaChica(fichaCajaAbierta, activa ? activa.dataset.fichaTab : undefined, true);
+    }, document.getElementById('cch-detalle'));
 
     const ICONO_GRUPO_CAJACHICA = {
       'Identificación': 'id-card', 'Jefe y captura': 'user', 'Ubicación': 'map-pin',
@@ -361,26 +372,29 @@
       }
     }
 
-    async function abrirFichaCajaChica(cResumen, pestanaInicial) {
+    /** repintar: la misma ficha con datos nuevos, sin "Cargando…" ni volver arriba */
+    async function abrirFichaCajaChica(cResumen, pestanaInicial, repintar) {
       const listado = document.getElementById('cch-listado');
       const detalle = document.getElementById('cch-detalle');
+      fichaCajaAbierta = cResumen;
       listado.hidden = true;
       detalle.hidden = false;
-      detalle.innerHTML = migasCajaChica() + '<div class="card ln-card"><p class="ln-tenue"><span class="spinner"></span> Cargando…</p></div>';
-      wireMigasCajaChica();
-      document.getElementById('view-container').scrollTop = 0;
-      window.scrollTo(0, 0);
+      if (!repintar) {
+        detalle.innerHTML = migasCajaChica() + '<div class="card ln-card"><p class="ln-tenue"><span class="spinner"></span> Cargando…</p></div>';
+        wireMigasCajaChica();
+        document.getElementById('view-container').scrollTop = 0;
+        window.scrollTo(0, 0);
+      }
 
       const id = cResumen['ID CCH'];
       try {
-        const [completo, arqueosTexto, cambiosTexto] = await Promise.all([
-          callServer('apiBuscarCajaChicaPorId', state.token, id),
-          callServer('apiArqueosPorIdCch', state.token, id).catch(() => '[]'),
-          callServer('apiCambiosMontoPorIdCch', state.token, id).catch(() => '[]'),
-        ]);
-        const arqueos = JSON.parse(arqueosTexto || '[]');
-        const cambios = JSON.parse(cambiosTexto || '[]');
-        if (detalle.hidden || !document.body.contains(detalle)) return;
+        // En UNA llamada (apiFichaCajaChica), como la de Vehículos: los arqueos son de su módulo y
+        // sin permiso de Arqueos llegan en null (la pestaña no aparece). Una ficha ya vista sale de
+        // su copia guardada y se repinta sola si llegó algo distinto.
+        const ficha = JSON.parse((await callServerListaCacheada('apiFichaCajaChica', state.token, id)) || '{}');
+        const { completo, arqueos } = ficha;
+        const cambios = ficha.cambios || [];
+        if (detalle.hidden || !document.body.contains(detalle) || fichaCajaAbierta !== cResumen) return;
         if (!completo) {
           detalle.innerHTML = migasCajaChica() + '<p class="empty-state">No se encontró el registro completo.</p>';
           wireMigasCajaChica();
@@ -403,7 +417,7 @@
         html += fichaEnPestanas([
           { id: 'general', titulo: 'General', icono: 'layout-grid', contenido: general },
           { id: 'detalles', titulo: 'Detalles', icono: 'clipboard-list', contenido: detalles },
-          {
+          arqueos && {
             id: 'arqueos', titulo: 'Arqueos', icono: 'clipboard-check', num: arqueos.length,
             contenido: pestanaFicha('clipboard-check', 'Arqueos', [
               { t: 'Fecha', r: (a) => formatearFecha(a.FECHA_INICIO) },
@@ -430,7 +444,7 @@
             ], cambios, 'Sin cambios de monto registrados para esta caja chica.',
             puedeEditar ? { tipo: 'cambio-monto', texto: 'Agregar' } : null),
           },
-        ]);
+        ].filter(Boolean));
 
         detalle.innerHTML = html;
         wireMigasCajaChica();
@@ -450,7 +464,7 @@
         // Ver completo/Editar/Eliminar por fila: el registro completo (para Editar
         // arqueo) ya está en memoria en el arreglo que se acaba de pedir -- se indexa
         // por ID una vez, sin volver a pedirlo.
-        const arqueosPorIdFicha = Object.fromEntries(arqueos.map((a) => [a.ID, a]));
+        const arqueosPorIdFicha = Object.fromEntries((arqueos || []).map((a) => [a.ID, a]));
         detalle.querySelectorAll('[data-ficha-ver]').forEach((btn) => {
           btn.addEventListener('click', () => verRegistroFichaCajaChica(btn.dataset.fichaVer, btn.dataset.id));
         });

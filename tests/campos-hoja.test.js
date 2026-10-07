@@ -137,5 +137,27 @@ $('#f').innerHTML = CamposHoja.html(CORTOS, { prefijo: 'c', esEdicion: true });
 ok(!$('#c-fecha-registro') && !!$('#c-anterior'), 'soloAlta no aparece al editar');
 ok(!$('#c-folio').required, 'requeridoAlCrear: al editar se puede dejar vacío');
 
+console.log('editaModulo: un dato de otro módulo solo lo edita quien tiene ese permiso');
+const DE_OTRO = [
+  { grupo: 'Sensor', clave: 'ACTIVADOR', etiqueta: 'Activador', tipo: 'text', editaModulo: 'instalacion-sensores', etiquetaModulo: 'Instalación de Sensores' },
+  { grupo: 'Sensor', clave: 'LLAVE DUPLICADA', etiqueta: 'Llave', tipo: 'select', opciones: ['SI', 'NO'], editaModulo: 'instalacion-sensores' },
+  { grupo: 'Sensor', clave: 'PLACA', etiqueta: 'Placa', tipo: 'text' },
+];
+window.eval('var puedeEditarModulo = (m) => false;');
+$('#f').innerHTML = window.CamposHoja.html(DE_OTRO, { prefijo: 's', esEdicion: true });
+window.CamposHoja.poblar(DE_OTRO, 's', { ACTIVADOR: 'BOTÓN', 'LLAVE DUPLICADA': 'SI', PLACA: 'ABC' });
+ok($('#s-activador').disabled && $('#s-activador').value === 'BOTÓN', 'sin permiso: se ve el dato, bloqueado');
+ok(/Instalación de Sensores/.test($('#s-activador').title) && !$('#s-activador').hasAttribute('data-auto'),
+  'dice de quién es (y sin etiqueta "auto": es por permiso, no lo decide el sistema)');
+ok($('#s-llave-duplicada').tagName === 'INPUT' && $('#s-llave-duplicada').disabled, 'un select de otro módulo también queda bloqueado');
+let datosSin = window.CamposHoja.recolectar(DE_OTRO, 's');
+ok(!('ACTIVADOR' in datosSin) && !('LLAVE DUPLICADA' in datosSin) && datosSin.PLACA === 'ABC', 'y no se manda al guardar (lo demás sí)');
+window.eval('puedeEditarModulo = (m) => m === "instalacion-sensores";');
+$('#f').innerHTML = window.CamposHoja.html(DE_OTRO, { prefijo: 's', esEdicion: true });
+window.CamposHoja.poblar(DE_OTRO, 's', { ACTIVADOR: 'BOTÓN', 'LLAVE DUPLICADA': 'SI' });
+ok(!$('#s-activador').disabled && $('#s-llave-duplicada').tagName === 'SELECT', 'con permiso de edición en ese módulo: se edita normal');
+datosSin = window.CamposHoja.recolectar(DE_OTRO, 's');
+ok(datosSin.ACTIVADOR === 'BOTÓN' && datosSin['LLAVE DUPLICADA'] === 'SI', 'y se manda al guardar');
+
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
 process.exit(fallas ? 1 : 0);

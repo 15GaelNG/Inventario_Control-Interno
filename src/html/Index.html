@@ -9,7 +9,8 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <?!= include('html/styles'); ?>
 </head>
-<body>
+<!-- data-apagados: lo que este proyecto tiene apagado (Config.apagados); el menú no lo pinta -->
+<body data-apagados="<?= apagados ?>">
 
   <div id="login-screen-container"></div>
   <div id="loading-screen-container"></div>
@@ -89,6 +90,7 @@
   <?!= include('html/views/salud'); ?>
   <?!= include('html/views/usuarios'); ?>
   <?!= include('html/views/sistemas'); ?>
+  <?!= include('html/views/helpdesk'); ?>
 
   <!-- Líneas (rama emmanuel) -->
   <?!= include('html/views/lineas/lineas-panorama'); ?>
@@ -145,6 +147,7 @@
   <?!= include('html/js/app-relaciones'); ?>
   <?!= include('html/js/app-salud'); ?>
   <?!= include('html/js/app-permisos'); ?>
+  <?!= include('html/js/app-helpdesk'); ?>
   <?!= include('html/js/modulos/sensores'); ?>
   <?!= include('html/js/modulos/hologramas'); ?>
   <?!= include('html/js/modulos/inspecciones'); ?>

@@ -17,6 +17,7 @@ const Router = (function () {
   // como "&lt;?...?&gt;", así que un reemplazo así nunca encuentra nada.)
   function renderShell(e) {
     const template = HtmlService.createTemplateFromFile('html/Index');
+    template.apagados = JSON.stringify(Config.apagados());
     return template
       .evaluate()
       .setTitle('Control Interno — Ciudad Maderas')

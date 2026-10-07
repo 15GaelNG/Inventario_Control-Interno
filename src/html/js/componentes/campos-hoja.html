@@ -49,6 +49,11 @@
    *   soloAlta       no aparece al editar (p. ej. Fecha de registro, que es la de hoy)
    *   bloqueadoAlCrear + valorPorDefecto   al dar de alta queda fijo en ese valor
    *   mostrarSiCampo + mostrarSiValor      aparece solo si otro campo tiene ese valor
+   *   editaModulo    el dato es de otro módulo: solo lo cambia quien tiene EDICIÓN en ese
+   *                  módulo (p. ej. 'instalacion-sensores' en la ficha de Vehículos). Si no,
+   *                  sale bloqueado (sin "auto": es por permiso, no lo decide el sistema) y no se
+   *                  manda al guardar. El servidor revisa lo mismo. etiquetaModulo: cómo se llama
+   *                  ese módulo en el aviso ("Instalación de Sensores")
    *
    * Métodos: html · recolectar · poblar · llenarOpciones · actualizarVisibles · slug
    */
@@ -61,8 +66,17 @@
     }
     const idDe = (prefijo, clave) => prefijo + '-' + slug(clave);
 
+    /** ¿El campo es de otro módulo y esta persona no lo puede editar? (puedeEditarModulo vive en app.html) */
+    const sinPermiso = (campo) => !!campo.editaModulo &&
+      !(typeof puedeEditarModulo === 'function' && puedeEditarModulo(campo.editaModulo));
+
     function campoHtml(campo, prefijo, esEdicion) {
       const id = idDe(prefijo, campo.clave);
+      if (sinPermiso(campo) && campo.tipo !== 'file' && campo.tipo !== 'firma') {
+        const aviso = 'Solo quien edita ' + (campo.etiquetaModulo || campo.editaModulo);
+        return `<div class="field"${campo.renglonCompleto ? ' style="grid-column: 1 / -1;"' : ''}><label>${campo.etiqueta}</label>` +
+          `<input type="text" id="${id}" disabled data-sin-permiso title="${aviso}" placeholder="${aviso}" /></div>`;
+      }
       const req = campo.requerido || (campo.requeridoAlCrear && !esEdicion) ? ' required' : '';
       // mostrarSi: los atributos extra del <div class="field"> (ancho y cuándo se ve)
       const mostrarSi = (campo.renglonCompleto ? ' style="grid-column: 1 / -1;"' : '') + (campo.mostrarSiCampo
@@ -152,7 +166,7 @@
     function recolectar(campos, prefijo) {
       const datos = {};
       campos.forEach((campo) => {
-        if (campo.tipo === 'file' || campo.tipo === 'firma' || campo.soloLectura || campo.noSeGuarda) return;
+        if (campo.tipo === 'file' || campo.tipo === 'firma' || campo.soloLectura || campo.noSeGuarda || sinPermiso(campo)) return;
         const el = document.getElementById(idDe(prefijo, campo.clave));
         if (el) datos[campo.clave] = el.value.trim();
       });
