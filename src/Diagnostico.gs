@@ -228,6 +228,14 @@ const REVISION_EN_RAIZ = [
   'ARQUEOS', 'ARQUEOS_Images', 'ARQUEOS_Files_', 'UBER_Files_', 'VEHICULOS_Files_', 'VEHICULOS_Images',
   'RESPONSIVAS VEHICULARES_Images', 'RESPONSIVAS_VEHICULARES', 'ADHERENTES VEHICULAR',
 ];
+/**
+ * Hojas del catálogo que pueden faltar sin que sea error: APP_CORRECCIONES la crea Líneas la primera vez que
+ * se usa, y LINEAS TELEFONICAS ya no se lee cuando se retiró (LINEAS_HOJA_VIEJA_RETIRADA, LineasRetiro.gs).
+ */
+function noSePide_(hoja) {
+  if (hoja === 'APP_CORRECCIONES') return true;
+  return hoja === 'LINEAS TELEFONICAS' && !!leerConfig_('LINEAS_HOJA_VIEJA_RETIRADA');
+}
 /** Un nombre así, en la carpeta o en una de arriba, en producción es casi seguro un error */
 const REVISION_PRUEBAS = /prueba|copia de|\btest\b|\bdev\b|laboratorio/i;
 
@@ -346,7 +354,7 @@ function revisionEntorno_() {
 
   // ---- hojas y calentador
   const hojasQueFaltan = Object.keys(abiertos).length
-    ? Entidades.todas().filter((e) => !(e.modulo && Config.apagado(e.modulo))).map((e) => e.hoja).concat(['USUARIOS', 'PERMISOS'])
+    ? Entidades.todas().filter((e) => !(e.modulo && Config.apagado(e.modulo)) && !noSePide_(e.hoja)).map((e) => e.hoja).concat(['USUARIOS', 'PERMISOS'])
       .filter((h) => !pestanas[String(h).trim().toUpperCase()])
     : [];
   if (hojasQueFaltan.length) (esProd ? errores : avisos).push('Faltan hojas en los libros: ' + hojasQueFaltan.join(', '));
