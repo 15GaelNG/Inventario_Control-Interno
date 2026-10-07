@@ -113,3 +113,15 @@ test('adendum vigente: entre fotos del proveedor manda el archivo más nuevo; lo
   assert.equal(vigente({ 'FIN PLAN': F('2026-01-01'), 'FECHA DE CARGA': F('2026-10-09') }, migrado), false);
   assert.equal(vigente(migrado, null), true);
 });
+
+test('contrato: lo que el inventario no tenía se completa; solo es distinto un dato que los dos tienen y no coincide', () => {
+  const inv = inventario();
+  inv.adendums[0]['INICIO PLAN'] = ''; // LIN-1 sin inicio
+  const lote = { archivos: [{ tipo: 'ADENDUM', archivo: 'x.xlsx', fecha: '2026-09-28', lineas: [
+    linea({ numero: '4421000001', inicio: '2024-05-25', fin: '2026-05-25' }), // completa el inicio
+    linea({ numero: '4421000002', inicio: '2024-05-24', fin: '2026-05-27' }), // fin a 3 días: distinto
+    linea({ numero: '4421000004', renta: null, plan: '', inicio: '2024-05-24', fin: '2026-05-24' }), // sin renta ni plan: igual
+  ] }] };
+  const c = plano(P.plan_(P.limpiarLote_(lote), inv).resumen.contratos);
+  assert.deepEqual([c.completan, c.cambian, c.iguales, c.formato], [1, 1, 1, 0]);
+});

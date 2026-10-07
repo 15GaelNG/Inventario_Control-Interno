@@ -65,7 +65,7 @@ test('formato corto del portal (Hoja1, sin penalización) también se reconoce',
   assert.equal(r.lineas[0].fin, '');
 });
 
-test('barrido de AT&T: SIM sin la F, renta del nombre del plan, sin fecha adentro', () => {
+test('barrido de AT&T: SIM sin la F, sin renta (el $ del plan no es la renta) y sin fecha adentro', () => {
   const r = L.excel('barrido septiembre 2026 (descargado 18-09-2026, ReporteEmpresarial).xls', [{ nombre: 'Sheet0', filas: [
     ['Cuenta', 'Número Telefónico', 'Estatus', 'SIM', 'IMEI', 'Modelo del equipo', 'Plan Tarifario', 'Fecha inicio plazo', 'Plazo', 'Fecha fin plazo', 'Add control', 'Tipo telefonia'],
     [507727479.0, 6631070502.0, 'ACTIVA', '8952050002011574778F', 861016060407594.0, 'OWNED', 'ATT ÁRMALO NEGOCIOS $399_ARR', '2024-04-09 00:00:00.000000000', 24.0, '2026-04-08 00:00:00.000000000', 'SI', 'CPP'],
@@ -77,7 +77,7 @@ test('barrido de AT&T: SIM sin la F, renta del nombre del plan, sin fecha adentr
   assert.equal(r.lineas.length, 1);
   assert.deepEqual(plano(r.lineas[0]), {
     numero: '6631070502', cuentaPadre: '507727479', cuenta: '', rfc: '', estatus: 'ACTIVA', sim: '8952050002011574778',
-    imei: '861016060407594', plan: 'ATT ÁRMALO NEGOCIOS $399_ARR', renta: 399, equipo: 'OWNED', plazo: 24,
+    imei: '861016060407594', plan: 'ATT ÁRMALO NEGOCIOS $399_ARR', renta: null, equipo: 'OWNED', plazo: 24,
     inicio: '2024-04-09', fin: '2026-04-08', baja: '', penalizacion: null,
   });
   assert.equal(L.excel('barrido junio 2026 (1).xls', [{ nombre: 'Sheet0', filas: r.lineas.length ? [] : [] }]), null);

@@ -120,7 +120,10 @@
       return { tipo: 'ADENDUM', compania: 'TELCEL', fecha: fechaDelNombre(nombre), lineas: lineas };
     }
 
-    /** Barrido de AT&T (ReporteEmpresarial .xls): no trae fecha adentro; renta del nombre del plan («…$399_ARR»). */
+    /**
+     * Barrido de AT&T (ReporteEmpresarial .xls): no trae fecha adentro ni renta. El «$399_ARR» del nombre del plan no es
+     * la renta (en el DEV, 165 líneas con otra en el inventario, 7-oct): la renta llega con la factura.
+     */
     function barridoAtt(filas, nombre) {
       const e = encabezados(filas, ['cuenta', 'sim', 'fecha fin plazo']);
       if (!e) return null;
@@ -131,11 +134,9 @@
       filas.slice(e.fila + 1).forEach((r) => {
         const numero = telefono(r[iNumero]);
         if (!numero) return;
-        const plan = txt(v(r, 'Plan Tarifario'));
-        const precio = plan.match(/\$\s?(\d+(?:\.\d+)?)/);
         lineas.push({
           numero: numero, cuentaPadre: entero(v(r, 'Cuenta')), cuenta: '', rfc: '', estatus: txt(v(r, 'Estatus')),
-          sim: sim(v(r, 'SIM')), imei: imei(v(r, 'IMEI')), plan: plan, renta: precio ? Number(precio[1]) : null,
+          sim: sim(v(r, 'SIM')), imei: imei(v(r, 'IMEI')), plan: txt(v(r, 'Plan Tarifario')), renta: null,
           equipo: txt(v(r, 'Modelo del equipo')), plazo: Number(entero(v(r, 'Plazo'))) || null,
           inicio: fecha(v(r, 'Fecha inicio plazo')), fin: fecha(v(r, 'Fecha fin plazo')), baja: '', penalizacion: null,
         });
@@ -268,7 +269,8 @@
         const notas = [
           c.nuevos ? miles(c.nuevos) + ' sin adendum anterior' : '',
           c.iguales ? miles(c.iguales) + ' iguales' : '',
-          c.formato ? miles(c.formato) + ' con un día de diferencia por el formato de fecha de Telcel' : '',
+          c.completan ? miles(c.completan) + ' completan datos que faltaban' : '',
+          c.formato ? miles(c.formato) + ' con un día de diferencia por el formato de fecha del proveedor' : '',
           c.bajas ? miles(c.bajas) + ' dadas de baja por el proveedor' : '',
           r.cuentas ? miles(r.cuentas) + ' llenan cuenta y razón social' : '',
         ].filter(Boolean);

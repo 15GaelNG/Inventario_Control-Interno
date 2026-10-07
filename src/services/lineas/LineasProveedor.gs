@@ -101,7 +101,7 @@ const LineasProveedor = (function () {
 
     const acc = { adendums: [], lineas: {}, altas: [], cambiosNumero: [], estatus: [] };
     const res = {
-      archivos: [], contratos: { nuevos: 0, iguales: 0, formato: 0, cambian: 0, bajas: 0, ejemplos: [] },
+      archivos: [], contratos: { nuevos: 0, iguales: 0, completan: 0, formato: 0, cambian: 0, bajas: 0, ejemplos: [] },
       sims: [], cuentas: 0, altas: [], sinAlta: [], cambiosNumero: [], estatus: [], yaCargadas: 0, total: 0,
     };
     const cambiarLinea = (l, campo, valor, registrar) => {
@@ -129,10 +129,20 @@ const LineasProveedor = (function () {
           else if (!v) res.contratos.nuevos++;
           else {
             const ant = { plan: txt(v['PLAN']), renta: Number(v['COSTO PLAN']) || null, inicio: ymd(v['INICIO PLAN']), fin: ymd(v['FIN PLAN']) };
-            const igualSalvoFechas = (!p.plan || !ant.plan || p.plan === ant.plan) && (p.renta === null || ant.renta === null || p.renta === ant.renta);
-            const unDia = (x, y) => x === y || (x && y && Math.abs(diasEntre(x, y)) === 1);
-            if (igualSalvoFechas && p.inicio === ant.inicio && p.fin === ant.fin) res.contratos.iguales++;
-            else if (igualSalvoFechas && unDia(p.inicio, ant.inicio) && unDia(p.fin, ant.fin) && p.fin) res.contratos.formato++;
+            // Distinto: un dato que los dos tienen y no coincide (las fechas, por más de un día). Lo que el inventario no
+            // tenía se completa; un día de diferencia es el formato de fecha del proveedor (7-oct: Telcel y AT&T)
+            let distinto = (p.plan && ant.plan && p.plan !== ant.plan) || (p.renta !== null && ant.renta !== null && p.renta !== ant.renta);
+            let formato = false;
+            let completa = false;
+            ['inicio', 'fin'].forEach((c) => {
+              if (!p[c] || p[c] === ant[c]) return;
+              if (!ant[c]) { completa = true; return; }
+              if (Math.abs(diasEntre(ant[c], p[c])) === 1) formato = true; else distinto = true;
+            });
+            if (!distinto && (p.plan && !ant.plan || p.renta !== null && ant.renta === null)) completa = true;
+            if (!distinto && formato) res.contratos.formato++;
+            else if (!distinto && completa) res.contratos.completan++;
+            else if (!distinto) res.contratos.iguales++;
             else {
               res.contratos.cambian++;
               if (res.contratos.ejemplos.length < EJEMPLOS) {
