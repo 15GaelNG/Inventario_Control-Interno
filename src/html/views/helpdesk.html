@@ -106,6 +106,15 @@
   .hd-fila-3 .hd-fila-form { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hd-no-leidos { margin-left: auto; flex: none; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--hd); color: #fff; font-size: 11px; font-weight: 700; display: inline-grid; place-items: center; }
   :root[data-theme="dark"] .hd-no-leidos { color: #14142b; }
+  /* ¿Ya está en Tickets? (solo en los formularios que se registran ahí) */
+  .hd-reg { flex: none; display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; white-space: nowrap; }
+  .hd-reg .ico { width: 12px; height: 12px; }
+  /* En tableta y celular la lista es angosta: solo el ícono (el texto queda en el title) */
+  @media (max-width: 1024px) { .hd-reg { padding: 2px 4px; } .hd-reg-txt { display: none; } }
+  .hd-reg.ok { color: var(--color-success); background: color-mix(in srgb, var(--color-success) 12%, transparent); }
+  .hd-reg.falta { color: var(--color-danger); background: color-mix(in srgb, var(--color-accent) 22%, transparent); }
+  :root[data-theme="dark"] .hd-reg.ok { color: #6fd3a0; }
+  :root[data-theme="dark"] .hd-reg.falta { color: var(--color-accent); }
   .hd-lista-pie { padding: 10px; text-align: center; font-size: 12px; color: var(--color-text-muted); border-top: 1px solid var(--color-border); }
   .hd-lista-pie button { font-size: 12.5px; padding: 6px 12px; }
   .hd-esqueleto { height: 64px; margin: 8px 12px; border-radius: 10px; background: linear-gradient(90deg, var(--color-bg), var(--color-border), var(--color-bg)); background-size: 200% 100%; animation: hdBrillo 1.2s infinite; }
@@ -279,7 +288,7 @@
           <dt><span class="hd-estado">/</span></dt><dd>Buscar (o #folio y Enter)</dd>
           <dt><span class="hd-estado">R</span></dt><dd>Actualizar la bandeja</dd>
           <dt><span class="hd-estado">F</span></dt><dd>Ver el formulario del ticket</dd>
-          <dt><span class="hd-estado">1</span> … <span class="hd-estado">7</span></dt><dd>Cambiar de bandeja</dd>
+          <dt><span class="hd-estado">1</span> … <span class="hd-estado">8</span></dt><dd>Cambiar de bandeja</dd>
           <dt><span class="hd-estado">Esc</span></dt><dd>Salir de la búsqueda / volver a la lista</dd>
         </dl>
       </div>

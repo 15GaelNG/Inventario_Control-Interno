@@ -138,7 +138,29 @@ console.log('\n2. Registrar en Tickets');
   ok(t[4] === '2026-10-02T06:00:00.000Z', 'la fecha, como medianoche local (por HojaServicio)');
   ok(fila(901)[col('ID TICKET CI')] === r.ID, 'y la copia queda ligada a ese ticket: ' + r.ID);
   ok(/ya está registrado/.test(truena(() => srv.registrarEnTickets('tok-ana', 901, datos))), 'no se registra dos veces');
-  ok(JSON.stringify(srv.registrados('tok-luis', [901, 902])) === JSON.stringify({ 901: r.ID }), 'registrados() dice cuáles ya están (para la pantalla)');
+  ok(JSON.stringify(srv.registrados('tok-ana', [901, 902])) === JSON.stringify({ 901: r.ID }), 'registrados() dice cuáles ya están (para la pantalla)');
+}
+{
+  // "En Tickets / Falta registrar": cuenta también lo capturado a mano en Tickets (la columna
+  // TICKET es el folio del helpdesk), aunque nunca se haya abierto aquí
+  const { e, srv } = entorno();
+  const tickets = e.libros.libro.getSheetByName('TICKETS')._datos;
+  tickets.push(['TCK-20', '61800 Y 61801', '', '', '', '', '', 'NIP EOX', '', '']);
+  tickets.push(['TCK-21', '#62000', '', '', '', '', '', 'NIP EOX', '', '']);
+  tickets.push(['TCK-22', 'PENDIENTE', '', '', '', '', '', 'NIP EOX', '', '']);
+  const r = srv.registrados('tok-ana', [700, 61800, 61801, 62000, 63000]);
+  ok(JSON.stringify(r) === JSON.stringify({ 700: 'TCK-1', 61800: 'TCK-20', 61801: 'TCK-20', 62000: 'TCK-21' }),
+    'sin copia en APP_HELPDESK: los folios de la columna TICKET (uno o varios, con texto alrededor) cuentan; 63000 falta');
+  ok(/No tienes acceso/.test(truena(() => srv.registrados('tok-luis', [700]))), 'quien no lee Tickets no puede preguntar');
+  ok(JSON.stringify(srv.registrados('tok-ana', [])) === '{}', 'sin folios: vacío');
+}
+{
+  const { e, srv } = entorno();
+  e.cargar('src/config/HelpdeskFormularios.gs');
+  e.contexto.Modulos = { etiqueta: (m) => m };
+  const deTickets = srv.catalogo('tok-luis').filter((f) => f.modulo === 'tickets').map((f) => f.id).sort((a, b) => a - b);
+  ok(JSON.stringify(deTickets) === JSON.stringify([149, 288, 290, 291, 292, 293, 317]),
+    'los formularios que se registran en Tickets: combustible y NIP, Holograma y Uber (' + deTickets.join(', ') + ')');
 }
 {
   const { e, api, srv, col, fila } = entorno();

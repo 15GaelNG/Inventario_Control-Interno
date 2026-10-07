@@ -40,13 +40,22 @@
     { id: 'resueltos', etiqueta: 'Resueltos y cerrados', icono: 'circle-check', filtros: { vista: 'grupos', estatus: [3, 4] } },
     { id: 'departamento', etiqueta: 'Mi departamento', icono: 'building-2', filtros: { vista: 'departamento' }, otra: true },
     { id: 'mios', etiqueta: 'Los que levanté', icono: 'send', filtros: { vista: 'mios' }, otra: true },
+    // Los de los formularios que se registran en Tickets y todavía no están ahí (quien ve Tickets).
+    // El helpdesk no sabe qué registramos: se piden sus tickets de esos formularios y aquí se
+    // quitan los que ya están (apiHelpdeskRegistrados, sin llamar al helpdesk).
+    { id: 'por-registrar', etiqueta: 'Por registrar', icono: 'clipboard-list', filtros: { vista: 'grupos' }, porRegistrar: true, requiere: 'tickets' },
   ];
+  // "Por registrar": si en lo que llegó quedan pocos, se piden hasta 2 páginas más solas
+  const HD_POR_REGISTRAR_MINIMO = 10;
+  const HD_POR_REGISTRAR_PAGINAS_SOLAS = 2;
 
   // Lo que se queda entre visitas a la Bandeja (mientras no se recargue la página)
   const HD_DETALLES = new Map();     // idTicket → detalle (abrirlo otra vez no llama)
   const HD_FORMULARIOS = new Map();  // idTicket → respuestas del formulario
   const HD_ARCHIVOS = new Map();     // ruta → { tipo, base64 }
   const HD_CONTEOS = {};             // bandeja → total visto la última vez
+  const HD_REGISTRO = new Map();     // idTicket → su ID en Tickets, o '' si falta registrarlo
+  let hdFormulariosDeTickets = null; // Set de idForm que se registran en Tickets (del catálogo)
   let hdBandejaActual = 'todos';
 
   /** ¿Está conectado? (no llama al helpdesk: lo lee del token guardado) */
@@ -111,20 +120,47 @@
       return f && !isNaN(f) ? f.toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' }) : '';
     };
 
+    // ---------- ¿ya está en Tickets? Solo para quien ve Tickets y en los formularios que van ahí
+    const veTickets = !!permisoDe('tickets');
+    const vaEnTickets = (t) => veTickets && !!hdFormulariosDeTickets && hdFormulariosDeTickets.has(Number(t.ID_FORMULARIO));
+    function registroHtml(t) {
+      if (!vaEnTickets(t) || !HD_REGISTRO.has(t.ID)) return '';
+      const ci = HD_REGISTRO.get(t.ID);
+      return ci
+        ? `<span class="hd-reg ok" title="Registrado en Tickets (${e(ci)})"><i data-lucide="check" class="ico"></i><span class="hd-reg-txt">En Tickets</span></span>`
+        : '<span class="hd-reg falta" title="Este formulario se registra en Tickets y todavía no está ahí"><i data-lucide="circle-alert" class="ico"></i><span class="hd-reg-txt">Falta registrar</span></span>';
+    }
+    /** Cuáles de estos ya están en Tickets: una llamada a NUESTRAS hojas (ninguna al helpdesk). false si falló. */
+    async function revisarRegistro(tickets) {
+      const ids = tickets.filter((t) => vaEnTickets(t) && !HD_REGISTRO.has(t.ID)).map((t) => t.ID);
+      if (!ids.length) return true;
+      try {
+        const r = await callServer('apiHelpdeskRegistrados', state.token, ids);
+        ids.forEach((id) => HD_REGISTRO.set(id, r[id] || ''));
+        return true;
+      } catch (err) {
+        return false;
+      }
+    }
+    const faltanRegistrar = () => lista.filter((t) => HD_REGISTRO.get(t.ID) === '');
+
     // ---------- bandejas
     function pintarBandejas() {
       const fila = (b, i) => `<button type="button" class="hd-bandeja${b.id === hdBandejaActual ? ' activa' : ''}" data-bandeja="${b.id}" title="${e(b.etiqueta)} (${i + 1})">
           <i data-lucide="${b.icono}" class="ico"></i><span>${e(b.etiqueta)}</span>
           <span class="hd-bandeja-n">${HD_CONTEOS[b.id] === undefined ? '' : HD_CONTEOS[b.id]}</span></button>`;
       const filtros = contarFiltros();
+      const seccion = (titulo, cuales) => {
+        const bs = bandejasVisibles().filter(cuales);
+        return bs.length ? '<div class="hd-bandejas-titulo">' + titulo + '</div>' + bs.map((b) => fila(b, HD_BANDEJAS.indexOf(b))).join('') : '';
+      };
       $('hd-bandejas').innerHTML =
-        '<div class="hd-bandejas-titulo">Mis grupos</div>' +
-        HD_BANDEJAS.filter((b) => !b.otra).map((b) => fila(b, HD_BANDEJAS.indexOf(b))).join('') +
-        '<div class="hd-bandejas-titulo">Más</div>' +
-        HD_BANDEJAS.filter((b) => b.otra).map((b) => fila(b, HD_BANDEJAS.indexOf(b))).join('') +
+        seccion('Mis grupos', (b) => !b.otra && !b.porRegistrar) +
+        seccion('Más', (b) => b.otra) +
+        seccion('Control Interno', (b) => b.porRegistrar) +
         `<details class="hd-filtros-caja"${filtros ? ' open' : ''}>
           <summary><i data-lucide="sliders-horizontal" class="ico"></i> Filtros ${filtros ? '<span class="hd-filtros-n">' + filtros + '</span>' : ''}</summary>
-          <p class="form-ayuda" style="margin:4px 0 0">Aplican a las bandejas de "Mis grupos".</p>
+          <p class="form-ayuda" style="margin:4px 0 0">No aplican a "Mi departamento" ni a "Los que levanté".</p>
           ${selectFiltro('grupos', 'Grupo', catalogo.grupos)}
           ${selectFiltro('formularios', 'Formulario', catalogo.formularios)}
           ${selectFiltro('prioridades', 'Prioridad', catalogo.prioridades)}
@@ -165,44 +201,63 @@
       if (bandejaActual().otra) elegirBandeja('todos'); else cargar(false);
     });
 
-    const bandejaActual = () => HD_BANDEJAS.find((b) => b.id === hdBandejaActual) || HD_BANDEJAS[0];
+    // "Por registrar" necesita ver Tickets y saber qué formularios van ahí (el catálogo)
+    const bandejasVisibles = () => HD_BANDEJAS.filter((b) => (!b.requiere || permisoDe(b.requiere)) && (!b.porRegistrar || hdFormulariosDeTickets));
+    const bandejaActual = () => bandejasVisibles().find((b) => b.id === hdBandejaActual) || HD_BANDEJAS[0];
     function filtrosDe(b) {
       if (b.otra) return Object.assign({}, b.filtros);
+      if (b.porRegistrar) {
+        // Si eligieron un formulario de los de Tickets en los filtros, solo ese; si no, todos
+        const elegidos = filtrosExtra.formularios.filter((id) => hdFormulariosDeTickets.has(id));
+        return Object.assign({}, filtrosExtra, b.filtros, { formularios: elegidos.length ? elegidos : Array.from(hdFormulariosDeTickets) });
+      }
       return Object.assign({}, filtrosExtra, b.filtros);
     }
     function elegirBandeja(id) {
-      if (!HD_BANDEJAS.some((b) => b.id === id)) return;
+      if (!bandejasVisibles().some((b) => b.id === id)) return;
       hdBandejaActual = id;
       pintarBandejas();
       cargar(false);
     }
 
     // ---------- lista
+    // Lo que se puede ver de lo que llegó: en "Por registrar", solo lo que falta registrar
+    const base = () => (bandejaActual().porRegistrar ? faltanRegistrar() : lista);
     function visibles() {
       const q = texto.trim().toLowerCase().replace(/^#/, '');
-      if (!q) return lista;
-      return lista.filter((t) => [t.ID, t.TITULO, t.SOLICITANTE, t.FORMULARIO, t.AGENTE, t.GRUPO, t.AREA_DESTINO]
+      if (!q) return base();
+      return base().filter((t) => [t.ID, t.TITULO, t.SOLICITANTE, t.FORMULARIO, t.AGENTE, t.GRUPO, t.AREA_DESTINO]
         .some((v) => String(v || '').toLowerCase().indexOf(q) !== -1));
     }
     function pintarLista() {
       const b = bandejaActual();
       $('hd-lista-titulo').textContent = b.etiqueta;
       const filas = visibles();
-      $('hd-lista-total').textContent = texto ? filas.length + ' de ' + lista.length : (total ? total + (total === 1 ? ' ticket' : ' tickets') : '');
+      const n = base().length;
+      if (b.porRegistrar) HD_CONTEOS[b.id] = n + (siguiente ? '+' : '');
+      $('hd-lista-total').textContent = texto ? filas.length + ' de ' + n
+        : b.porRegistrar ? (n === 1 ? '1 por registrar' : n + ' por registrar')
+          : (total ? total + (total === 1 ? ' ticket' : ' tickets') : '');
       $('hd-filas').innerHTML = filas.length ? filas.map((t) => `
         <button type="button" class="hd-fila${t.ID === abierto ? ' activa' : ''}${t.SIN_LEER ? ' sin-leer' : ''}" data-id="${t.ID}" role="option" aria-selected="${t.ID === abierto}">
           ${Avatar.html(t.CORREO_SOLICITANTE, t.SOLICITANTE, { tam: 34 })}
           <span class="hd-fila-texto">
             <span class="hd-fila-1"><span class="hd-fila-quien">${e(t.SOLICITANTE || 'Sin solicitante')}</span><span class="hd-fila-cuando">${cuando(t.FECHA_CREACION)}</span></span>
             <span class="hd-fila-titulo">${e(t.TITULO || '(sin título)')}</span>
-            <span class="hd-fila-3">${estado(t)}<span>#${t.ID}</span><span class="hd-fila-form">${e(t.FORMULARIO || t.AREA_DESTINO || '')}</span>
+            <span class="hd-fila-3">${estado(t)}<span>#${t.ID}</span>${registroHtml(t)}<span class="hd-fila-form">${e(t.FORMULARIO || t.AREA_DESTINO || '')}</span>
               ${t.SIN_LEER ? '<span class="hd-no-leidos" title="Mensajes sin leer">' + t.SIN_LEER + '</span>' : ''}</span>
           </span>
         </button>`).join('')
-        : `<div class="hd-vacio"><div><i data-lucide="inbox" class="ico"></i><h3>${texto ? 'Nada coincide' : 'Sin tickets'}</h3>
+        : b.porRegistrar && !texto
+          ? `<div class="hd-vacio"><div><i data-lucide="clipboard-check" class="ico"></i><h3>Nada por registrar</h3>
+              <p>Los ${lista.length} tickets revisados de combustible, NIP, hologramas y Uber ya están en Tickets.</p></div></div>`
+          : `<div class="hd-vacio"><div><i data-lucide="inbox" class="ico"></i><h3>${texto ? 'Nada coincide' : 'Sin tickets'}</h3>
             <p>${texto ? 'Prueba con otra palabra, o escribe #folio y Enter para abrir uno que no está aquí.' : 'El helpdesk no tiene tickets en esta bandeja.'}</p></div></div>`;
       const pie = $('hd-lista-pie');
-      if (siguiente && !texto) pie.innerHTML = '<button type="button" class="secondary" id="hd-btn-mas"><i data-lucide="chevrons-down" class="ico"></i> Cargar 25 más</button>';
+      if (b.porRegistrar && !texto && lista.length) {
+        pie.innerHTML = '<span>Revisados los ' + lista.length + ' más recientes' + (total > lista.length ? ' de ' + total : '') + '.</span>' +
+          (siguiente ? ' <button type="button" class="secondary" id="hd-btn-mas"><i data-lucide="chevrons-down" class="ico"></i> Revisar 25 más</button>' : '');
+      } else if (siguiente && !texto) pie.innerHTML = '<button type="button" class="secondary" id="hd-btn-mas"><i data-lucide="chevrons-down" class="ico"></i> Cargar 25 más</button>';
       else if (lista.length < total && !b.otra) pie.textContent = 'Se muestran ' + lista.length + ' de ' + total + '. Usa los filtros para ver otros.';
       else if (lista.length < total) pie.textContent = 'Los ' + lista.length + ' más recientes de ' + total + ' (así los da el helpdesk en esta bandeja).';
       else pie.textContent = '';
@@ -226,13 +281,47 @@
         const hora = new Date(r.consultado).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
         $('hd-consultado').textContent = hora;
         $('hd-consultado').title = 'Actualizado a las ' + hora;
+        if (b.porRegistrar) {
+          // Aquí la lista ES lo que falta: se espera a saberlo antes de pintar
+          if (!(await revisarRegistro(lista))) throw new Error('No se pudo revisar qué tickets ya están en Tickets. Intenta de nuevo con R.');
+          if (mia !== consulta) return;
+          await completarPorRegistrar(mia);
+          if (mia !== consulta) return;
+          pintarLista();
+          pintarBandejas();
+          return;
+        }
         pintarBandejas();
         pintarLista();
+        // Las etiquetas "En Tickets / Falta registrar" llegan después: no detienen la lista
+        revisarRegistro(lista).then(() => { if (mia === consulta) pintarLista(); });
       } catch (err) {
         if (mia !== consulta) return;
         $('hd-filas').innerHTML = '<div class="hd-vacio"><div><i data-lucide="cloud-off" class="ico"></i><h3>No se pudo cargar</h3><p>' + e(err.message) + '</p></div></div>';
         refreshIcons();
         if (/venció|Conecta tu cuenta/.test(err.message)) sinConexion();
+      }
+    }
+
+    /** La página que sigue, pegada a la lista (y revisada contra Tickets). false si cambiaron de bandeja. */
+    async function pedirMas(mia) {
+      const r = JSON.parse(await callServer('apiHelpdeskTickets', state.token, Object.assign(filtrosDe(bandejaActual()), { despuesDe: siguiente }), false));
+      if (mia !== consulta) return false;
+      const ya = new Set(lista.map((t) => t.ID));
+      const nuevos = r.tickets.filter((t) => !ya.has(t.ID));
+      lista = lista.concat(nuevos);
+      siguiente = r.siguiente || null;
+      await revisarRegistro(nuevos);
+      return mia === consulta;
+    }
+    /** "Por registrar": si en lo que llegó quedan pocos, revisa unas páginas más (pocas: cada una es una llamada al helpdesk) */
+    async function completarPorRegistrar(mia) {
+      for (let i = 0; i < HD_POR_REGISTRAR_PAGINAS_SOLAS && siguiente && faltanRegistrar().length < HD_POR_REGISTRAR_MINIMO; i++) {
+        try {
+          if (!(await pedirMas(mia))) return;
+        } catch (err) {
+          return;   // se queda con lo que ya revisó; "Revisar 25 más" lo vuelve a intentar
+        }
       }
     }
 
@@ -242,12 +331,9 @@
       const mia = consulta;
       btn.disabled = true;
       try {
-        const r = JSON.parse(await callServer('apiHelpdeskTickets', state.token, Object.assign(filtrosDe(bandejaActual()), { despuesDe: siguiente }), false));
-        if (mia !== consulta) return;
-        const ya = new Set(lista.map((t) => t.ID));
-        lista = lista.concat(r.tickets.filter((t) => !ya.has(t.ID)));
-        siguiente = r.siguiente || null;
+        if (!(await pedirMas(mia))) return;
         pintarLista();
+        if (bandejaActual().porRegistrar) pintarBandejas();
       } catch (err) {
         Notificar.error(err.message);
         btn.disabled = false;
@@ -445,6 +531,10 @@
     async function prepararRegistro(d) {
       let registrados = {};
       try { registrados = await callServer('apiHelpdeskRegistrados', state.token, [d.ID]); } catch (err) { /* se ofrece igual: el servidor no deja duplicar */ }
+      if (vaEnTickets(d) && HD_REGISTRO.get(d.ID) !== (registrados[d.ID] || '')) {
+        HD_REGISTRO.set(d.ID, registrados[d.ID] || '');
+        pintarLista();
+      }
       if (abierto !== d.ID || !$('hd-btn-registrar')) return;
       if (registrados[d.ID]) {
         $('hd-registrado').textContent = 'Ya está en Tickets (' + registrados[d.ID] + ')';
@@ -489,6 +579,9 @@
           invalidarCacheLista('apiListarTicketsResumen', state.token);
           Notificar.exito('Registrado en Tickets (' + r.ID + ')');
           cerrarRegistro();
+          HD_REGISTRO.set(d.ID, r.ID);
+          pintarLista();   // en "Por registrar" sale de la lista
+          if (bandejaActual().porRegistrar) pintarBandejas();
           if (abierto === d.ID && $('hd-btn-registrar')) {
             $('hd-btn-registrar').hidden = true;
             $('hd-registrado').textContent = 'Ya está en Tickets (' + r.ID + ')';
@@ -508,7 +601,9 @@
     $('hd-btn-atajos').addEventListener('click', () => { modalAtajos.hidden = false; });
     $('hd-atajos-cerrar').addEventListener('click', () => { modalAtajos.hidden = true; });
     modalAtajos.addEventListener('click', (ev) => { if (ev.target === modalAtajos) modalAtajos.hidden = true; });
-    $('hd-btn-actualizar').addEventListener('click', () => { HD_DETALLES.clear(); cargar(true); });
+    // Actualizar también vuelve a preguntar qué ya está en Tickets (alguien más pudo registrar)
+    const actualizar = () => { HD_DETALLES.clear(); HD_REGISTRO.clear(); cargar(true); };
+    $('hd-btn-actualizar').addEventListener('click', actualizar);
 
     function mover(paso) {
       const filas = visibles();
@@ -533,9 +628,9 @@
       if (k === 'j') { ev.preventDefault(); mover(1); }
       else if (k === 'k') { ev.preventDefault(); mover(-1); }
       else if (k === '/') { ev.preventDefault(); buscar.focus(); buscar.select(); }
-      else if (k === 'r') { ev.preventDefault(); HD_DETALLES.clear(); cargar(true); }
+      else if (k === 'r') { ev.preventDefault(); actualizar(); }
       else if (k === 'f') { ev.preventDefault(); verFormulario(); }
-      else if (/^[1-7]$/.test(k)) { ev.preventDefault(); elegirBandeja(HD_BANDEJAS[Number(k) - 1].id); }
+      else if (/^[1-9]$/.test(k) && HD_BANDEJAS[Number(k) - 1]) { ev.preventDefault(); elegirBandeja(HD_BANDEJAS[Number(k) - 1].id); }
       else if (k === '?') { ev.preventDefault(); modalAtajos.hidden = false; }
     };
     if (!helpdeskTeclasPuesto) {
@@ -554,6 +649,15 @@
     let est;
     try { est = await helpdeskEstado(); } catch (err) { est = null; }
     if (!est || !est.conectado) return sinConexion();
+    // Qué formularios se registran en Tickets (catálogo nuestro, guardado en el navegador): antes
+    // de la lista, para que sus etiquetas y "Por registrar" salgan desde la primera pintada
+    if (veTickets && !hdFormulariosDeTickets) {
+      try {
+        const formularios = await callServerCacheado('apiHelpdeskCatalogo', state.token);
+        hdFormulariosDeTickets = new Set(formularios.filter((f) => f.modulo === 'tickets').map((f) => f.id));
+        pintarBandejas();
+      } catch (err) { /* sin etiquetas ni "Por registrar": la Bandeja sigue */ }
+    }
     // El catálogo (colores, filtros) llega una vez por hora; no detiene la lista
     callServer('apiHelpdeskFiltros', state.token).then((c) => { catalogo = c || catalogo; pintarBandejas(); if (lista.length) pintarLista(); })
       .catch((err) => Notificar.error('No se pudieron cargar los filtros del helpdesk: ' + err.message));

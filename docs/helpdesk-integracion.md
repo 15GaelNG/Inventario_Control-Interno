@@ -117,9 +117,25 @@ Reglas:
 
 ## Relación con nuestra hoja `TICKETS`
 
-`TicketsService.gs` ya maneja una bitácora propia de atención (hoja `TICKETS`, con una
-columna `TICKET`). **Pendiente:** confirmar si esa columna guarda el folio del helpdesk.
-Si sí, se pueden ligar los dos: desde un ticket nuestro ver su estatus en el helpdesk.
+`TicketsService.gs` maneja una bitácora propia de atención (hoja `TICKETS`). **Su columna
+`TICKET` es el folio del helpdesk** (confirmado el 07/10/2026 en sus 2,109 registros: los números
+suben con el tiempo igual que los folios de allá).
+
+No todo lo del helpdesk va en Tickets: solo 7 formularios, los de combustible y NIP (290, 291, 292,
+293, 317), Holograma (149) y Uber (288). Salen de `MODULO_POR_FORMULARIO` en `HelpdeskService.gs`
+(los que dicen `'tickets'`). Con eso, en la Bandeja:
+
+- **Etiqueta en cada ticket** de esos formularios: "En Tickets" o "Falta registrar". La da
+  `HelpdeskService.registrados`, que cruza el folio contra la columna `TICKET` (de la lista de
+  Tickets ya guardada en caché; un registro con varios folios o con texto cuenta cada número) y
+  contra lo registrado desde aquí (`ID TICKET CI` de `APP_HELPDESK`). **No llama al helpdesk.**
+- **Bandeja "Por registrar"**, solo para quien ve Tickets: pide al helpdesk sus tickets de esos 7
+  formularios (respeta los demás filtros: fechas, agente…) y enseña los que faltan. Si en la
+  primera página quedan menos de 10, revisa hasta 2 páginas más solas; luego "Revisar 25 más".
+- Al registrar uno, sale de "Por registrar". `R` vuelve a preguntar (alguien más pudo registrar).
+
+Pendiente: el reporte de cobertura por mes (cuántos de esos formularios se registraron), con
+`tickets/downloadExcelTickets`, que trae un rango de fechas en una sola llamada.
 
 ## Riesgos que se aceptan con esta estrategia
 

@@ -307,7 +307,10 @@
       tickets: filas(12, (i) => ({
         ID: 103700 - i * 7, TITULO: ['RIFTER UNU794H | Alertas en tablero', 'Alta de nueva oficina CHMGTO', 'Solicitud nuevo sensor', 'Desactivar alarma del GPS'][i % 4],
         DESCRIPCION: 'Texto de prueba', ESTATUS: ['Abierto', 'Pendiente', 'Cerrado', 'Resuelto'][i % 4], ID_ESTATUS: [1, 2, 4, 3][i % 4],
-        PRIORIDAD: ['Baja', 'Media', 'Alta', 'Urgente'][i % 4], FORMULARIO: i % 2 ? 'Solicitud - Alta de Conceptos CXP' : 'Incidencia | Solicitud - Sensores',
+        // Cada tercero es de NIP (se registra en Tickets): "En Tickets" / "Falta registrar" y "Por registrar"
+        PRIORIDAD: ['Baja', 'Media', 'Alta', 'Urgente'][i % 4],
+        FORMULARIO: i % 3 === 1 ? 'NIP PARA COMBUSTIBLES' : i % 2 ? 'Solicitud - Alta de Conceptos CXP' : 'Incidencia | Solicitud - Sensores',
+        ID_FORMULARIO: i % 3 === 1 ? 317 : i % 2 ? 137 : 148,
         GRUPO: i % 2 ? 'Análisis de Datos' : 'Sensores', SOLICITANTE: ['ISAMAR JUAREZ', 'MARILY AVILA', 'DAVID MALDONADO', 'JAVIER ORDUÑA'][i % 4],
         CORREO_SOLICITANTE: 'persona@ejemplo.com', AREA_SOLICITANTE: 'SUMINISTROS', DEPARTAMENTO_SOLICITANTE: 'COMPRAS', AGENTE: 'Agente de Prueba',
         AREA_DESTINO: i % 2 ? 'ANÁLISIS DE DATOS' : 'SENSORES', DEPARTAMENTO_DESTINO: 'CONTROL INTERNO',
@@ -332,7 +335,8 @@
       INVOLUCRADOS: [{ NOMBRE: 'ISAMAR JUAREZ', CORREO: 'persona@ejemplo.com' }, { NOMBRE: 'Agente de Prueba', CORREO: 'agente@ejemplo.com' }],
     }),
     apiHelpdeskArchivo: { tipo: 'image/png', base64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==' },
-    apiHelpdeskRegistrados: {},
+    // De los de NIP, el primero y el tercero ya están en Tickets
+    apiHelpdeskRegistrados: (token, ids) => Object.fromEntries((ids || []).filter((id, i) => i % 2 === 0).map((id) => [id, 'TCK-' + id])),
     apiHelpdeskFormulario: { FORMULARIO: 'Incidencia | Solicitud - Sensores', CAMPOS: [
       { ID: 1083, ETIQUETA: 'Departamento Solicitante', TIPO: 'select', VALOR: 'POST VENTA' },
       { ID: 1084, ETIQUETA: 'Oficina / Desarrollo', TIPO: 'select', VALOR: 'JARDINES' },
@@ -449,6 +453,7 @@
     'helpdesk-detalle': async () => { await abrir('helpdesk'); (await hasta('#hd-filas .hd-fila')).click(); await hasta('.hd-msj .hd-msj-texto'); (await hasta('#hd-btn-formulario')).click(); await hasta('.hd-respuestas'); await esperar(400); },
     'helpdesk-registrar': async () => { await abrir('helpdesk'); (await hasta('#hd-filas .hd-fila')).click(); (await hasta('#hd-btn-registrar:not([hidden])')).click(); await hasta('#hd-modal-registrar:not([hidden])'); await esperar(500); },
     'helpdesk-formularios': async () => { await abrir('helpdesk-formularios'); await hasta('.hd-form-campo'); await esperar(300); },
+    'helpdesk-por-registrar': async () => { await abrir('helpdesk'); (await hasta('[data-bandeja="por-registrar"]')).click(); await hasta('#hd-filas .hd-fila .hd-reg'); await esperar(300); },
     'helpdesk-registrados': async () => { await abrir('helpdesk-registrados'); await esperar(800); },
     'inspecciones-detalle': async () => { await abrir('inspeccion-vehicular'); await abrirPrimeraFila(); },
     'sensores-detalle': async () => { await abrir('instalacion-sensores'); await abrirPrimeraFila(); },

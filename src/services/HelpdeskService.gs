@@ -177,39 +177,56 @@ const HelpdeskService = (function () {
     }
   }
 
-  /** Para la pantalla: qué tickets del helpdesk ya están en Tickets ({ idHelpdesk: idTicketCI }) */
+  /**
+   * Para la pantalla (la etiqueta "En Tickets" / "Falta registrar" y la bandeja "Por registrar"):
+   * cuáles de estos tickets del helpdesk ya están en Tickets → { idHelpdesk: idTicketCI }.
+   * Cuenta lo registrado desde aquí (ID TICKET CI de la copia) y lo capturado a mano: la columna
+   * TICKET de Tickets es el folio del helpdesk (revisado el 07/10/2026 en sus 2,109 registros).
+   * Sale de la lista de Tickets que ya está en caché (HojaServicio + Calentador): no lee la hoja.
+   * Lo pide quien lee Tickets, igual que la lista de donde sale.
+   */
   function registrados(token, idsHd) {
-    Auth.validarSesion(token);
-    const hoja = hoja_(false);
-    if (!hoja || !Array.isArray(idsHd) || !idsHd.length) return {};
+    const enTickets = TicketsService.listarResumen(token);
+    if (!Array.isArray(idsHd) || !idsHd.length) return {};
     const buscados = new Set(idsHd.slice(0, 200).map((x) => String(Number(x))));
-    const { filas, datos } = SheetUtils.leerColumnas(hoja, [COL_HD, COL_CI]);
     const r = {};
-    for (let i = 0; i < filas; i++) {
-      const hd = comoTexto_(datos[COL_HD][i]);
-      const ci = comoTexto_(datos[COL_CI][i]);
-      if (ci && buscados.has(hd)) r[hd] = ci;
+    // A mano a veces va más de un folio o con texto ("61800 Y 61801", "#61800"): cuenta cada número
+    enTickets.forEach((t) => {
+      (String(t['TICKET'] || '').match(/\d{3,}/g) || []).forEach((n) => {
+        const hd = String(Number(n));
+        if (buscados.has(hd) && !r[hd]) r[hd] = t['ID'];
+      });
+    });
+    const hoja = hoja_(false);
+    if (hoja) {
+      const { filas, datos } = SheetUtils.leerColumnas(hoja, [COL_HD, COL_CI]);
+      for (let i = 0; i < filas; i++) {
+        const hd = comoTexto_(datos[COL_HD][i]);
+        const ci = comoTexto_(datos[COL_CI][i]);
+        if (ci && buscados.has(hd)) r[hd] = ci;
+      }
     }
     return r;
   }
 
   /**
    * A qué módulo NUESTRO corresponde cada formulario del helpdesk (idForm → id de Modulos.gs), para
-   * enseñarlo en Formularios y, más adelante, ligar un ticket con su registro. PROPUESTA del
-   * 07/10/2026 a partir de los nombres y campos del catálogo: revisarla con el área. Los que no
-   * están (Análisis de Datos, Auditoría, Procesos, CXP, CH…) no tienen módulo en la app.
+   * enseñarlo en Formularios y ligar un ticket con su registro. PROPUESTA del 07/10/2026 a partir
+   * de los nombres y campos del catálogo: revisarla con el área. Los que no están (Análisis de
+   * Datos, Auditoría, Procesos, CXP, CH…) no tienen módulo en la app.
+   * Los de 'tickets' son los que se registran en la bitácora de Tickets (la etiqueta "Falta
+   * registrar" y la bandeja "Por registrar" salen de aquí): combustible y NIP, y también Holograma
+   * (149) y Uber (288), porque en los registros reales de Tickets ahí es donde se anotan.
    */
   const MODULO_POR_FORMULARIO = {
     101: 'caja-chica', 102: 'caja-chica', 103: 'caja-chica', 109: 'caja-chica', 306: 'caja-chica',
     148: 'instalacion-sensores',
-    149: 'hologramas',
     241: 'vehiculos', 294: 'vehiculos',
     281: 'lineas-telefonicas', 283: 'lineas-telefonicas', 284: 'lineas-telefonicas', 286: 'lineas-telefonicas',
     282: 'accesorios-lineas',
     285: 'incidencias', 289: 'incidencias',
     287: 'inspeccion-vehicular',
-    288: 'uber',
-    290: 'tickets', 291: 'tickets', 292: 'tickets', 293: 'tickets', 317: 'tickets',
+    149: 'tickets', 288: 'tickets', 290: 'tickets', 291: 'tickets', 292: 'tickets', 293: 'tickets', 317: 'tickets',
   };
 
   /** Los formularios de nuestro grupo (HelpdeskFormularios.gs, del Excel) con su módulo. Todos con sesión. */
