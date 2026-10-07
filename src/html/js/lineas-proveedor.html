@@ -263,7 +263,7 @@
           tile('file-pen', miles(c.cambian), 'Contratos distintos', c.cambian ? 'stat-tile-warn' : ''),
           tile('card-sim', miles(r.sims.length), 'SIM cambiadas'),
           tile('circle-plus', miles(r.altas.length), 'Altas (sueltas)'),
-          tile('arrow-left-right', miles(r.cambiosNumero.length), 'Posibles cambios de número', r.cambiosNumero.length ? 'stat-tile-warn' : ''),
+          tile('arrow-left-right', miles(r.cambiosNumero.length), 'Número distinto', r.cambiosNumero.length ? 'stat-tile-warn' : ''),
           tile('circle-alert', miles(r.estatus.length), 'Estatus distinto', r.estatus.length ? 'stat-tile-warn' : ''),
         ].join('');
         const notas = [
@@ -277,8 +277,10 @@
         const sinVacios = (lista) => esc(lista.filter((v) => v !== null && v !== '').join(' · '));
         $('#lnp-detalle', raiz).innerHTML =
           (notas.length ? '<p class="ln-tenue lnp-notas">' + esc(notas.join(' · ')) + '</p>' : '') +
-          seccion('arrow-left-right', 'Posibles cambios de número (aviso a Líneas, no se aplica)', r.cambiosNumero.length,
-            tabla(['Inventario', 'Proveedor', 'Pista', 'Estatus'], r.cambiosNumero.map((x) => [mono(x.antes), mono(x.despues), esc(x.pista), esc(x.estatusInventario)]))) +
+          seccion('arrow-left-right', 'Número distinto en el inventario y en el proveedor (aviso a Líneas, no se aplica)', r.cambiosNumero.length,
+            tabla(['Inventario', 'Proveedor', 'Pista', 'Estatus'], r.cambiosNumero.map((x) => [mono(x.inventario), mono(x.proveedor), esc(x.pista), esc(x.estatusInventario)]))) +
+          seccion('history', 'El proveedor trae el número anterior (ya registrado en el historial)', r.numerosRegistrados.length,
+            tabla(['Inventario', 'Proveedor', 'Cambio registrado'], r.numerosRegistrados.map((x) => [mono(x.inventario), mono(x.proveedor), esc(x.registrado)]))) +
           seccion('circle-alert', 'Suspendidas o dadas de baja por el proveedor (aviso a Líneas)', r.estatus.length,
             tabla(['Número', 'Inventario', 'Proveedor'], r.estatus.map((x) => [mono(x.numero), esc(x.inventario), esc(x.proveedor)]))) +
           seccion('file-pen', 'Contratos distintos', c.cambian,

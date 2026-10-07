@@ -61,8 +61,8 @@ test('adendum de Telcel contra el inventario: cuentas, SIM, contrato, cambios de
   assert.deepEqual(res.sims, [{ numero: '4421000002', antes: '8952020000000000002', despues: '8952020000000000099' }]);
   assert.equal(res.cuentas, 2, 'LIN-1 y LIN-4 llenan cuenta, cuenta padre y razón social; LIN-2 ya las tenía');
   assert.equal(res.cambiosNumero.length, 1);
-  assert.equal(res.cambiosNumero[0].antes, '4421000002');
-  assert.equal(res.cambiosNumero[0].despues, '4421000005');
+  assert.equal(res.cambiosNumero[0].inventario, '4421000002');
+  assert.equal(res.cambiosNumero[0].proveedor, '4421000005');
   assert.match(res.cambiosNumero[0].pista, /^misma cuenta 777$/);
   assert.deepEqual(res.altas.map((a) => a.numero), ['4421000006']);
   assert.deepEqual(res.sinAlta.map((a) => a.numero), ['4421000007']);
@@ -83,7 +83,7 @@ test('barrido de AT&T: la misma SIM con otro número es un posible cambio de nú
   ] }] };
   const res = plano(P.plan_(P.limpiarLote_(lote), inventario()).resumen);
   assert.equal(res.cambiosNumero.length, 1);
-  assert.equal(res.cambiosNumero[0].antes, '6631000003');
+  assert.equal(res.cambiosNumero[0].inventario, '6631000003');
   assert.match(res.cambiosNumero[0].pista, /^misma SIM/);
   assert.equal(res.altas.length, 0);
 });
@@ -130,4 +130,18 @@ test('el aviso de cambio de número abre el registro (el equipo donde está la l
   const fuente = read('src/services/lineas/LineasProveedor.gs');
   assert.match(fuente, /LineasLectura\.filas\(\)\.forEach\(\(f\) => \{ if \(f\['ID LINEA'\]\) registroDe\[txt\(f\['ID LINEA'\]\)\] = txt\(f\['ID'\]\); \}\);/);
   assert.match(fuente, /refId: registroDe\[c\.idLinea\] \|\| c\.idLinea,/);
+});
+
+test('número distinto con la misma SIM: si la bitácora ya tiene ese cambio, no se avisa y la foto se liga a la línea', () => {
+  // Usuario, 7-oct: el barrido del 18-sep traía el 4424588249 (número anterior) de la línea que Líneas cambió el 23-sep
+  const inv = inventario();
+  inv.cambioRegistrado = (antes, despues) => (antes === '4461000033' && despues === '6631000003' ? '23/09/2026' : '');
+  const lote = { archivos: [{ tipo: 'BARRIDO', archivo: 'barrido.xls', fecha: '2026-09-18', lineas: [
+    linea({ numero: '4461000033', cuentaPadre: '507727479', sim: '8952050000000000003', plan: 'ATT', renta: null }),
+  ] }] };
+  const r = P.plan_(P.limpiarLote_(lote), inv);
+  const res = plano(r.resumen);
+  assert.equal(res.cambiosNumero.length, 0);
+  assert.deepEqual(res.numerosRegistrados.map((x) => [x.inventario, x.proveedor, x.registrado]), [['6631000003', '4461000033', '23/09/2026']]);
+  assert.equal(r.acciones.adendums[0].idLinea, 'LIN-3');
 });

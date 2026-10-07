@@ -102,7 +102,7 @@ const LineasProveedor = (function () {
     const acc = { adendums: [], lineas: {}, altas: [], cambiosNumero: [], estatus: [] };
     const res = {
       archivos: [], contratos: { nuevos: 0, iguales: 0, completan: 0, formato: 0, cambian: 0, bajas: 0, ejemplos: [] },
-      sims: [], cuentas: 0, altas: [], sinAlta: [], cambiosNumero: [], estatus: [], yaCargadas: 0, total: 0,
+      sims: [], cuentas: 0, altas: [], sinAlta: [], cambiosNumero: [], numerosRegistrados: [], estatus: [], yaCargadas: 0, total: 0,
     };
     const cambiarLinea = (l, campo, valor, registrar) => {
       const id = txt(l['ID']);
@@ -173,11 +173,19 @@ const LineasProveedor = (function () {
         // No está con ese número: ¿es otra línea del inventario con otro número? (plan §4.8)
         const otra = (a.tipo === 'ADENDUM' && p.cuenta && porCuenta[p.cuenta]) || (s19(p.sim).length >= 18 && porSim[s19(p.sim)]) || null;
         if (otra) {
-          const c = { antes: txt(otra['NUMERO TELEFONO']), despues: p.numero, pista: porCuenta[p.cuenta] === otra && a.tipo === 'ADENDUM' ? 'misma cuenta ' + p.cuenta : 'misma SIM ' + p.sim,
+          // Sin suponer cuál es el nuevo (usuario, 7-oct: el barrido del 18-sep traía el número viejo de una línea que
+          // Líneas ya había cambiado el 23-sep). Si la bitácora ya tiene ese cambio, no hay nada que avisar
+          const c = { inventario: txt(otra['NUMERO TELEFONO']), proveedor: p.numero, pista: porCuenta[p.cuenta] === otra && a.tipo === 'ADENDUM' ? 'misma cuenta ' + p.cuenta : 'misma SIM ' + p.sim,
             idLinea: txt(otra['ID']), estatusInventario: txt(otra['ESTATUS LINEA']), archivo: a.archivo, fecha: a.fecha };
+          const registrado = inv.cambioRegistrado ? inv.cambioRegistrado(c.proveedor, c.inventario) : '';
+          if (registrado) {
+            res.numerosRegistrados.push(Object.assign({ registrado: registrado }, c));
+            acc.adendums.push({ a: a, p: p, idLinea: c.idLinea }); // es la misma línea con su número anterior
+            return;
+          }
           acc.cambiosNumero.push(c);
           res.cambiosNumero.push(c);
-          acc.adendums.push({ a: a, p: p, idLinea: '' }); // no se liga hasta que Líneas cambie el número
+          acc.adendums.push({ a: a, p: p, idLinea: '' }); // no se liga hasta que Líneas lo revise
           return;
         }
         acc.adendums.push({ a: a, p: p, idLinea: null }); // null: se liga a la línea que se da de alta
@@ -201,7 +209,35 @@ const LineasProveedor = (function () {
     return {
       lineas: LineasDatos.leerTabla('LINEAS'), adendums: LineasDatos.leerTabla('ADENDUMS'), cuentas: cuentas,
       vigente: LineasLectura.esAdendumMasReciente,
+      cambioRegistrado: cambioRegistrado_,
     };
+  }
+
+  /**
+   * Fecha (dd/mm/aaaa) en que la bitácora registró que una línea pasó del número `antes` al `despues`, o ''. Se busca en
+   * CAMBIOS LINEAS TELEFONICAS (AppSheet) y en MOVIMIENTOS (sistema nuevo), solo los renglones con esos números.
+   */
+  function cambioRegistrado_(antes, despues) {
+    const dig = (v) => txt(v).replace(/\D/g, '').slice(-10);
+    const corta = (v) => (v instanceof Date ? fechaCorta(ymd(v)) : txt(v).slice(0, 10));
+    const tabCambios = LineasRepo.TAB.CAMBIOS;
+    if (LineasDatos.existeTabla(tabCambios)) {
+      const filas = LineasDatos.buscarFilas(tabCambios, 'ANTES', antes);
+      const hit = filas.length ? LineasDatos.leerFilas([{ tabla: tabCambios, filas: filas }])[0]
+        .filter((f) => /NUMERO TELEFONO/i.test(txt(f['CAMPO'])) && dig(f['ANTES']) === antes && dig(f['DESPUES']) === despues)[0] : null;
+      if (hit) return corta(LineasUtil.col(hit, 'FECHA ACTUALIZACION')) || 'sí';
+    }
+    const tabMov = LineasRepo.TAB.MOV;
+    if (LineasDatos.existeTabla(tabMov)) {
+      const filas = LineasDatos.buscarFilas(tabMov, 'CAMBIOS', antes, true);
+      const hit = (filas.length ? LineasDatos.leerFilas([{ tabla: tabMov, filas: filas }])[0] : []).filter((f) => {
+        let cambios = [];
+        try { cambios = JSON.parse(txt(f['CAMBIOS']) || '[]'); } catch (e) { return false; }
+        return cambios.some((x) => /NUMERO TELEFONO/i.test(txt(x.campo)) && dig(x.antes) === antes && dig(x.despues) === despues);
+      })[0];
+      if (hit) return corta(hit['FECHA']) || 'sí';
+    }
+    return '';
   }
 
   function exigirEstructura_() {
@@ -297,9 +333,9 @@ const LineasProveedor = (function () {
     acc.cambiosNumero.forEach((c) => {
       LineasNotificaciones.crear({
         tipo: 'CAMBIO DE NUMERO', refId: registroDe[c.idLinea] || c.idLinea,
-        titulo: 'Posible cambio de número · ' + c.antes + ' → ' + c.despues,
-        mensaje: 'El ' + (c.archivo || 'archivo del proveedor') + ' (' + fechaCorta(c.fecha) + ') trae el ' + c.despues + ' con la ' + c.pista +
-          ' que en el inventario tiene el ' + c.antes + (c.estatusInventario ? ' (' + c.estatusInventario + ')' : '') + '. No se cambió nada: revisar y, si procede, cambiar el número en Editar.',
+        titulo: 'Número distinto con la ' + c.pista.replace(/ \d+$/, '') + ' · ' + c.inventario,
+        mensaje: 'Inventario: ' + c.inventario + (c.estatusInventario ? ' (' + c.estatusInventario + ')' : '') + '. Proveedor: ' + c.proveedor +
+          ', con la ' + c.pista + ' (' + (c.archivo || 'archivo del proveedor') + ', ' + fechaCorta(c.fecha) + '). No se cambió nada.',
       });
     });
     // Estatus: un aviso por archivo con todas sus líneas
