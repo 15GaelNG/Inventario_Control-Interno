@@ -2222,3 +2222,15 @@ test('las carpetas de los servicios se buscan por nombre en la raíz, no con un 
   assert.deepEqual([...nombres].filter((n) => !revisadas.includes("'" + n + "'")), [], 'en REVISION_EN_RAIZ (Diagnostico.gs)');
   assert.ok(nombres.size >= 9, 'encontró las carpetas que se usan (' + [...nombres].join(', ') + ')');
 });
+
+test('una vista que se puede apagar por proyecto (MODULOS_APAGADOS) se apaga también en el servidor', () => {
+  // El menú solo esconde: si una llamada del módulo no revisa Config.exigirEncendido, se usa desde la consola
+  const api = read('src/ClientApi.gs');
+  const llamadas = [...api.matchAll(/function (apiHelpdesk\w+)\([^)]*\) \{([^}]*)\}/g)];
+  assert.ok(llamadas.length >= 9, 'encontró las llamadas de Help Desk (' + llamadas.length + ')');
+  const sinRevisar = llamadas
+    .filter((m) => !m[2].includes("Config.exigirEncendido('helpdesk')")).map((m) => m[1]);
+  assert.deepEqual(sinRevisar, [], 'llamadas de Help Desk sin Config.exigirEncendido');
+  assert.ok(read('src/html/Index.html').includes('<body data-apagados="<?= apagados ?>">'), 'Index.html pasa la lista al menú');
+  assert.ok(read('src/Router.gs').includes('template.apagados = JSON.stringify(Config.apagados())'), 'Router llena la lista');
+});

@@ -9,7 +9,8 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <?!= include('html/styles'); ?>
 </head>
-<body>
+<!-- data-apagados: lo que este proyecto tiene apagado (Config.apagados); el menú no lo pinta -->
+<body data-apagados="<?= apagados ?>">
 
   <div id="login-screen-container"></div>
   <div id="loading-screen-container"></div>

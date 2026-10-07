@@ -365,6 +365,12 @@
 
   /** ¿Qué puede hacer esta persona en un módulo? 'LECTURA' | 'EDICION' | undefined */
   const permisoDe = (modulo) => (state.permisos || {})[modulo];
+  // Las vistas que este proyecto tiene apagadas (MODULOS_APAGADOS en Entornos.gs; las pone
+  // Index.html): ni el menú las pinta ni navegarA las abre. El servidor también las rechaza.
+  const VISTAS_APAGADAS = (() => {
+    try { return JSON.parse(document.body.dataset.apagados || '[]'); } catch (e) { return []; }
+  })();
+  const estaApagada = (entrada) => VISTAS_APAGADAS.indexOf(entrada.vista) !== -1;
   const puedeEditarModulo = (modulo) => permisoDe(modulo) === 'EDICION';
   /**
    * Lo de OTRO módulo dentro de una pantalla (una pestaña de la ficha): solo se pide si la
@@ -633,7 +639,7 @@
       // historial del navegador o por los enlaces entre módulos ("Ver vehículo")
       // Adónde lleva cada vista está en NAV_GRUPOS / VISTAS_FUERA_DEL_MENU, no aquí
       const destino = vistaDe(vista);
-      if (!destino) { mostrarProximamente(etiqueta || vista); return; }
+      if (!destino || estaApagada(destino)) { mostrarProximamente(etiqueta || vista); return; }
       if (destino.requiere && !permisoDe(destino.requiere)) { mostrarSinAcceso(etiqueta || destino.etiqueta); return; }
       montarVista(destino.plantilla, destino.init);
     });
@@ -778,7 +784,8 @@
     // su grupo: un grupo sin ningún módulo con permiso no se pinta. Por eso esto se vuelve a
     // llamar al llegar los permisos.
     const visibles = NAV_GRUPOS
-      .map((g) => (g.items ? Object.assign({}, g, { items: g.items.filter((it) => it.libre || permisoDe(it.requiere)) }) : g))
+      .filter((g) => !estaApagada(g))
+      .map((g) => (g.items ? Object.assign({}, g, { items: g.items.filter((it) => !estaApagada(it) && (it.libre || permisoDe(it.requiere))) }) : g))
       .filter((g) => (g.items ? g.items.some((it) => !it.libre) : g.libre || permisoDe(g.requiere)));
     contenedor.innerHTML = visibles.map((grupo) => (grupo.vista ? `
       <div class="nav-item" data-view="${grupo.vista}" data-etiqueta="${grupo.etiqueta}" data-tooltip="${grupo.etiqueta}">

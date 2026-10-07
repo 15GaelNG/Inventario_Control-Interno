@@ -225,30 +225,39 @@ function apiEliminarTicket(token, id) {
 // Todos los que tienen sesión; cada quien ve lo que SU token ve allá. Lo que habla con el
 // helpdesk es HelpdeskApi (con sus límites); la copia y el registro en Tickets, HelpdeskService.
 function apiHelpdeskEstado(token) {
+  Config.exigirEncendido('helpdesk');
   return HelpdeskApi.estado(token);
 }
 function apiHelpdeskConectar(token, tokenHelpdesk) {
+  Config.exigirEncendido('helpdesk');
   return HelpdeskApi.conectar(token, tokenHelpdesk);
 }
 function apiHelpdeskDesconectar(token) {
+  Config.exigirEncendido('helpdesk');
   return HelpdeskApi.desconectar(token);
 }
 function apiHelpdeskFiltros(token) {
+  Config.exigirEncendido('helpdesk');
   return HelpdeskApi.filtros(token);
 }
 function apiHelpdeskTickets(token, filtros, forzar) {
+  Config.exigirEncendido('helpdesk');
   return JSON.stringify(HelpdeskApi.listarTickets(token, filtros, forzar));
 }
 function apiHelpdeskDetalle(token, idTicket) {
+  Config.exigirEncendido('helpdesk');
   return JSON.stringify(HelpdeskApi.detalle(token, idTicket));
 }
 function apiHelpdeskRegistrados(token, idsTicket) {
+  Config.exigirEncendido('helpdesk');
   return HelpdeskService.registrados(token, idsTicket);
 }
 function apiHelpdeskRegistrarEnTickets(token, idTicket, datos) {
+  Config.exigirEncendido('helpdesk');
   return HelpdeskService.registrarEnTickets(token, idTicket, datos);
 }
 function apiHelpdeskGuardados(token) {
+  Config.exigirEncendido('helpdesk');
   return JSON.stringify(HelpdeskService.listarGuardados(token));
 }
 

@@ -15,6 +15,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": false,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": false,
       "migrable": true
     },
@@ -27,6 +28,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": false,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": false,
       "migrable": true
     },
@@ -39,6 +41,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": false,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": false,
       "migrable": true
     },
@@ -51,6 +54,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": true,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": true,
       "migrable": false
     },
@@ -63,6 +67,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": true,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": true,
       "migrable": false
     },
@@ -75,6 +80,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": false,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": false,
       "migrable": true
     },
@@ -87,6 +93,7 @@
       "llaveEsDato": true,
       "delSistemaNuevo": false,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": false,
       "migrable": true
     },
@@ -99,6 +106,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": false,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": false,
       "migrable": true
     },
@@ -111,6 +119,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": false,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": false,
       "migrable": true
     },
@@ -123,6 +132,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": false,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": false,
       "migrable": true
     },
@@ -135,6 +145,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": false,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": true,
       "migrable": true
     },
@@ -147,6 +158,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": false,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": true,
       "migrable": true
     },
@@ -159,6 +171,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": false,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": true,
       "migrable": true
     },
@@ -171,6 +184,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": false,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": false,
       "migrable": true
     },
@@ -183,6 +197,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": false,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": false,
       "migrable": true
     },
@@ -195,6 +210,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": false,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": false,
       "migrable": true
     },
@@ -207,6 +223,7 @@
       "llaveEsDato": true,
       "delSistemaNuevo": false,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": false,
       "migrable": true
     },
@@ -219,6 +236,7 @@
       "llaveEsDato": true,
       "delSistemaNuevo": false,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": false,
       "migrable": true
     },
@@ -231,6 +249,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": false,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": true,
       "migrable": true
     },
@@ -243,6 +262,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": false,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": true,
       "migrable": true
     },
@@ -255,6 +275,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": false,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": true,
       "migrable": true
     },
@@ -267,6 +288,7 @@
       "llaveEsDato": true,
       "delSistemaNuevo": false,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": false,
       "migrable": true
     },
@@ -279,6 +301,7 @@
       "llaveEsDato": true,
       "delSistemaNuevo": false,
       "externa": true,
+      "modulo": "",
       "pisaLlaveAnterior": false,
       "migrable": false
     },
@@ -291,6 +314,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": true,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": false,
       "migrable": false
     },
@@ -303,6 +327,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": true,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": true,
       "migrable": false
     },
@@ -315,6 +340,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": true,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": true,
       "migrable": false
     },
@@ -327,6 +353,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": true,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": true,
       "migrable": false
     },
@@ -339,6 +366,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": true,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": true,
       "migrable": false
     },
@@ -351,6 +379,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": true,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": true,
       "migrable": false
     },
@@ -363,6 +392,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": true,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": true,
       "migrable": false
     },
@@ -375,6 +405,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": true,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": true,
       "migrable": false
     },
@@ -387,6 +418,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": true,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": true,
       "migrable": false
     },
@@ -399,6 +431,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": true,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": true,
       "migrable": false
     },
@@ -411,6 +444,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": true,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": true,
       "migrable": false
     },
@@ -423,6 +457,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": true,
       "externa": false,
+      "modulo": "",
       "pisaLlaveAnterior": true,
       "migrable": false
     },
@@ -435,6 +470,7 @@
       "llaveEsDato": false,
       "delSistemaNuevo": true,
       "externa": false,
+      "modulo": "helpdesk",
       "pisaLlaveAnterior": true,
       "migrable": false
     }

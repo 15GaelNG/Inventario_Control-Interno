@@ -346,7 +346,7 @@ function revisionEntorno_() {
 
   // ---- hojas y calentador
   const hojasQueFaltan = Object.keys(abiertos).length
-    ? Entidades.todas().map((e) => e.hoja).concat(['USUARIOS', 'PERMISOS'])
+    ? Entidades.todas().filter((e) => !(e.modulo && Config.apagado(e.modulo))).map((e) => e.hoja).concat(['USUARIOS', 'PERMISOS'])
       .filter((h) => !pestanas[String(h).trim().toUpperCase()])
     : [];
   if (hojasQueFaltan.length) (esProd ? errores : avisos).push('Faltan hojas en los libros: ' + hojasQueFaltan.join(', '));

@@ -12,6 +12,8 @@
  *   SS_ID_ACCESORIOS
  *   SS_ID_CAJACHICA
  *   ENTORNO            ("DEV" | "PROD")
+ *   MODULOS_APAGADOS   (opcional) vistas que este proyecto no enseña ni deja usar, separadas
+ *                      por coma (p. ej. "helpdesk" en producción): ver Config.apagado
  *
  * Para los módulos nuevos (rama `ayrton` — Verificaciones/Sensores/Hologramas/
  * Inspección Vehicular), además:
@@ -77,6 +79,14 @@ const Config = (function () {
       HOLOGRAMAS_IMAGENES: () => required('DRIVE_FOLDER_ID_HOLOGRAMAS_IMAGENES'),
       REPORTES: () => required('DRIVE_FOLDER_ID_REPORTES'),
       INSPECCIONES_IMAGENES: () => required('DRIVE_FOLDER_ID_INSPECCIONES_IMAGENES'),
+    },
+
+    // Lo que este proyecto tiene apagado (MODULOS_APAGADOS): el menú no lo pinta (la lista llega
+    // en Index.html), el servidor rechaza sus llamadas y revisarEntorno no pide sus hojas
+    apagados: () => String(leerConfig_('MODULOS_APAGADOS') || '').split(',').map((s) => s.trim()).filter(Boolean),
+    apagado: (id) => Config.apagados().indexOf(id) !== -1,
+    exigirEncendido: (id) => {
+      if (Config.apagado(id)) throw new Error('Este módulo no está disponible todavía.');
     },
 
     SESION_DURACION_HORAS: 8,

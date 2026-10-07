@@ -22,6 +22,10 @@ const ENTORNOS = {
   '1NbOczw_H8UJ7adxRP4h_jl9VlfyvxM3mANYsaz12U5uo8Gj0BmfIYN3k': {
     ENTORNO: 'PROD',
 
+    // Módulos que en este proyecto no se enseñan ni se dejan usar (Config.apagado), separados por coma.
+    // Help Desk: todavía no sale a producción (7-oct-2026); en los DEV sigue encendido.
+    MODULOS_APAGADOS: 'helpdesk',
+
     // El libro migrado (migrar.py --copiar-produccion, 4-oct-2026, corrida final)
     SS_ID_USUARIOS: '17YrtuMYjGGg5LZm1BxMNrEZyCxTMI2DiUHSVUIldUlc',
     SS_ID_VEHICULOS: '17YrtuMYjGGg5LZm1BxMNrEZyCxTMI2DiUHSVUIldUlc',
