@@ -151,12 +151,22 @@ Todo se mide desde el navegador de un usuario, con F12 → Network → Fetch/XHR
       Cada ticket trae título, notas, estatus y prioridad (con color), solicitante, agente,
       formulario, áreas, `dateCreationDB` (yyyy-MM-dd), `dateClose` (ISO) y mensajes sin leer.
       Forma de ejemplo (inventada): `tests/helpdesk.test.js`.
-- [x] **La página siguiente:** no hay. Su página siempre pide 25 y se navega filtrando (estatus,
-      grupo, formulario, prioridad), con la forma `{ idStatus, idBranch, idForm, idPriority, … }`.
+- [x] **La página siguiente** (corregido el 07/10/2026; el 05/10 se creyó que no había): por
+      cursor, `pagination.nextPageLastIdTicket` = el `idTicket` del último de la página anterior
+      (también existe `prevPageFirstIdTicket`). Al filtrar, la forma es `{ idStatus, idBranch, idForm,
+      idPriority, idAgent, idDepartmentCustomer, dateCreation, dateCreationEnd (yyyy-MM-dd), … }`.
+- [x] **Las pestañas de su inicio:** `POST /tickets/getTicketsListHome { get: 'departmentTickets' |
+      'myTickets', applyFilters, pagination: { rowsPerPage } }` → `{ totalTickets, tickets }`, con
+      menos campos (`nameUserDepartment`, `areaName`, `date` "dd-MM-yyyy hh:mm AM", sin `dateClose`).
+      No se sabe cómo pagina: solo se usa la primera página.
 - [x] **El detalle:** `POST /tickets/getTicket { idTicket, isTramite: 0 }` y
       `POST /tickets/getConversationTickets { idTicket }` (los mensajes vienen en HTML: se vuelven
-      texto en el servidor). Hay también `getTicketTimeline` (cambios de estatus) y
-      `chat/getCloudFile { path }` (adjuntos), que todavía no se usan.
+      texto en el servidor). Las imágenes vienen dentro del HTML como
+      `<img src="tickets/<id>/conversation<n>/file1.png">`; su página las pide con
+      `chat/getCloudFile { path }` SIN la extensión, y la respuesta es el archivo en base64 como texto.
+      Quiénes están en el ticket: `chat/getAllUsers { idTicket }` → `usersInvolved` (trae también
+      `users`: TODOS los usuarios con correo; no se guardan). `chat/getTickets` trae la misma
+      conversación con menos campos. `getTicketTimeline` (cambios de estatus) todavía no se usa.
       **Ojo:** su página llama `POST /tickets/markMessageAsSeen` al abrir un ticket; ESCRIBE (lo
       marca como leído). Nuestra app no lo llama nunca.
 - [x] **Los catálogos:** `POST /tickets/getFilters { isTramite: 0 }` trae estatus (1 Abierto,
@@ -167,17 +177,51 @@ Todo se mide desde el navegador de un usuario, con F12 → Network → Fetch/XHR
       se lee con un script que tapa los tokens, no se sube (`*.har` en .gitignore) y se borra.
 - [x] **¿Qué ve cada usuario?** Lo que su token ve en el helpdesk (p. ej. "tickets de mi
       departamento" según sus permisos allá).
+- [x] **Las respuestas del formulario de un ticket:** `POST /homeT/getNewTicketCatalogs { isTramite: null,
+      idForm, idTicket, desarrollo: null, condominio: null }` → `fields.arrayForm.arrayForm.fields`
+      (los campos del formulario), `fields.datas.dataAnswer` (`{ idField, value }` de ESE ticket) y
+      `dataComponent4` (las opciones de los select). El catálogo de los formularios de nuestro grupo
+      está en `Catalogo_Maestro_HelpDesk_Control_Interno.xlsx`. Todavía no se usa.
+- [x] **Otras rutas vistas (07/10/2026), sin usar:** `dashboard/getStatusTikets` (KPIs: se dejó fuera a
+      propósito), `tickets/catalog`, `filters/getDashboardFilters`, `headquarters/getBranches`,
+      `reports/tickets/byForm/getReportsByForm`, `tickets/downloadExcelTickets`, `tickets/getTicketsReject`,
+      `survey`, `solutions/getSolutions`. Todas leen; ninguna escribe.
 - [ ] Si la columna `TICKET` de nuestra hoja `TICKETS` es el folio del helpdesk.
 
 ## Lo que ya está (src/services/HelpdeskApi.gs)
 
 `conectar` (valida formato, que el correo del token sea el de la sesión, que no haya vencido, y
 una llamada a autoLogin), `desconectar`, `estado` (sin llamar al helpdesk), `listarTickets`
-(los 25 del filtro, en nuestro formato), `filtros` (una vez por hora) y `detalle` (ticket +
-conversación en texto plano, sin marcarlo como leído). Límites para no saturarlo: la lista se reutiliza 60 s, 2 s
+(25 por página con "Cargar más"; filtros de estatus, grupo, formulario, prioridad, agente, departamento
+y fechas; o las vistas "Mi departamento" y "Los que yo levanté"), `filtros` (una vez por hora),
+`detalle` (ticket + conversación en texto plano + involucrados, sin marcarlo como leído; 3 llamadas) y
+`archivo` (una imagen o PDF de la conversación, solo de un ticket que la persona abrió y solo al darle clic). Límites para no saturarlo: la lista se reutiliza 60 s, 2 s
 mínimo entre llamadas de una persona, 10 por minuto por persona y 30 entre toda la app, una
 página por llamada, cero reintentos, y ante 429/5xx toda la app se detiene lo que pida
 `Retry-After` (o 2 min). 401/403 borra el token. Pruebas: `tests/helpdesk.test.js`.
+
+**La familia Help Desk (07/10/2026).** Bandeja, Formularios, Registrados y Conexión
+(`src/html/views/helpdesk.html`, `src/html/js/app-helpdesk.html`), con identidad propia (acento índigo,
+`.hd-tema`). La Bandeja sigue a Zendesk / Help Scout: bandejas a la izquierda (filtros guardados: Abiertos,
+Sin asignar, Pendientes, Resueltos, Mi departamento, Los que levanté), la lista al centro y el ticket a la
+derecha con la conversación como chat y un panel con quien lo pide, propiedades, formulario y
+participantes. Teclado: J/K, /, R, F, 1–7, Esc.
+
+**Lo que cuesta cada cosa en llamadas al helpdesk** (límite: 15 por minuto por persona, 1 s entre
+operaciones, 40 por minuto en toda la app):
+
+| Acción | Llamadas |
+|---|---|
+| Abrir una bandeja | 1 (se reutiliza 60 s) |
+| Abrir un ticket que vino en la lista | 1 (la ficha ya está, 15 min) |
+| Abrir un ticket por #folio | 2 |
+| Volver a abrir un ticket | 0 (memoria de la pantalla) |
+| Buscar por texto | 0 (filtra lo que ya llegó) |
+| Pasar con J/K por varios tickets | 1, del ticket donde se detiene |
+| Ver el formulario | 1, solo al pedirlo (30 min) |
+| Ver una imagen | 1, solo al pedirla |
+
+`chat/getAllUsers` ya no se usa: quiénes están en el ticket salen de la conversación.
 
 **El marcador "Token helpdesk"** (Chrome → nuevo marcador, en la URL):
 `javascript:(()=>{const t=localStorage.getItem('token');if(!t){alert('Primero inicia sesión en el helpdesk');return;}navigator.clipboard.writeText(t).then(()=>alert('Token copiado: pégalo en Control Interno'),()=>prompt('Copia tu token:',t));})()`

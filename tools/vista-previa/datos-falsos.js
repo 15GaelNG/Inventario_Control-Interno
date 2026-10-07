@@ -281,6 +281,8 @@
       estatusVehiculoCatalogo: 'UTILITARIO', tipoCombustibleVehiculo: 'MAGNA',
     },
     // Help Desk (tickets inventados, con la forma de los reales)
+    // Sin fotos en la vista previa (no hay red): los avatares salen con iniciales
+    apiFotosPerfil: {},
     apiHelpdeskEstado: { conectado: true, nombre: 'Persona de Prueba', rol: 'Agente Sr.', vence: new Date(Date.now() + 20 * 3600e3).toISOString() },
     apiHelpdeskFiltros: {
       estatus: [{ id: 1, nombre: 'Abierto', color: '#4caf50' }, { id: 2, nombre: 'Pendiente', color: '#2196f3' }, { id: 3, nombre: 'Resuelto', color: '#4caf50' },
@@ -288,6 +290,8 @@
       prioridades: [{ id: 1, nombre: 'Baja', color: '#A0D76A' }, { id: 2, nombre: 'Media', color: '#4DA1FF' }, { id: 3, nombre: 'Alta', color: '#FFD012' }, { id: 4, nombre: 'Urgente', color: '#FF5959' }],
       formularios: [{ id: 148, nombre: 'Incidencia | Solicitud - Sensores' }, { id: 137, nombre: 'Solicitud - Alta de Conceptos CXP' }],
       grupos: [{ id: 226, nombre: 'Sensores' }, { id: 9, nombre: 'Análisis de Datos' }],
+      agentes: [{ id: 7, nombre: 'Agente de Prueba' }, { id: 2, nombre: 'Otra Agente' }],
+      departamentos: [{ id: 2, nombre: 'COMPRAS' }, { id: 3, nombre: 'CONTROL INTERNO' }],
     },
     apiHelpdeskTickets: JSON.stringify({
       total: 41,
@@ -301,6 +305,7 @@
         FECHA_CREACION: hace(i * 2).slice(0, 10), FECHA_CIERRE: i % 4 === 2 ? hace(i) : '', ULTIMA_RESPUESTA: 'Respuesta hace ' + (i + 1) + ' horas.',
         SIN_LEER: i % 3, ABIERTO: i % 4 !== 2,
       })),
+      siguiente: 103623,
       consultado: new Date().toISOString(),
     }),
     apiHelpdeskDetalle: JSON.stringify({
@@ -310,12 +315,31 @@
       DURACION_DIAS: 2, SIN_LEER: 1, ABIERTO: true,
       DESCRIPCION: 'Buen día equipo\n\nLa unidad muestra alertas en el tablero desde la entrega. ¿Nos ayudan a revisarla?',
       MENSAJES: [
-        { ID: 1, AUTOR: 'ISAMAR JUAREZ', FECHA: hace(2), TEXTO: 'Buen día equipo\nAdjunto fotos del tablero.', PRIVADO: false, ADJUNTOS: ['tablero.jpg'] },
-        { ID: 2, AUTOR: 'Agente de Prueba', FECHA: hace(1), TEXTO: 'Hola, lo revisamos en el taller esta semana (ver https://ejemplo.com/guia).', PRIVADO: false, ADJUNTOS: [] },
-        { ID: 3, AUTOR: 'Agente de Prueba', FECHA: hace(1), TEXTO: 'Nota interna: pedir cita con el proveedor.', PRIVADO: true, ADJUNTOS: [] },
+        { ID: 1, AUTOR: 'ISAMAR JUAREZ', CORREO: 'persona@ejemplo.com', FECHA: hace(2), TEXTO: 'Buen día equipo\nAdjunto fotos del tablero.', PRIVADO: false, ADJUNTOS: [],
+          ARCHIVOS: [{ RUTA: 'tickets/103700/conversation1/file1', NOMBRE: 'Imagen 1', IMAGEN: true }] },
+        { ID: 2, AUTOR: 'Agente de Prueba', CORREO: 'agente@ejemplo.com', FECHA: hace(1), TEXTO: 'Hola, lo revisamos en el taller esta semana (ver https://ejemplo.com/guia).', PRIVADO: false, ADJUNTOS: [] },
+        { ID: 3, AUTOR: 'Agente de Prueba', CORREO: 'agente@ejemplo.com', FECHA: hace(1), TEXTO: 'Nota interna: pedir cita con el proveedor.', PRIVADO: true, ADJUNTOS: [] },
       ],
+      INVOLUCRADOS: [{ NOMBRE: 'ISAMAR JUAREZ', CORREO: 'persona@ejemplo.com' }, { NOMBRE: 'Agente de Prueba', CORREO: 'agente@ejemplo.com' }],
     }),
+    apiHelpdeskArchivo: { tipo: 'image/png', base64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==' },
     apiHelpdeskRegistrados: {},
+    apiHelpdeskFormulario: { FORMULARIO: 'Incidencia | Solicitud - Sensores', CAMPOS: [
+      { ID: 1083, ETIQUETA: 'Departamento Solicitante', TIPO: 'select', VALOR: 'POST VENTA' },
+      { ID: 1084, ETIQUETA: 'Oficina / Desarrollo', TIPO: 'select', VALOR: 'JARDINES' },
+      { ID: 421, ETIQUETA: 'Tipo', TIPO: 'select', VALOR: 'Reportar Incidencia' },
+      { ID: 420, ETIQUETA: 'No. de Serie Vehículo', TIPO: 'text', VALOR: '93Y1R5F52RJ649008' },
+      { ID: 424, ETIQUETA: 'Fecha de Incidencia', TIPO: 'date', VALOR: '2026-10-06T13:37' }] },
+    apiHelpdeskCatalogo: [
+      { id: 148, nombre: 'Incidencia | Solicitud - Sensores', modulo: 'instalacion-sensores', moduloEtiqueta: 'Instalación de Sensores', campos: [
+        { id: 1083, etiqueta: 'Departamento Solicitante', tipo: 'select', opciones: [] },
+        { id: 421, etiqueta: 'Tipo', tipo: 'select', opciones: ['Reportar Incidencia', 'Solicitud de Sensor'] },
+        { id: 420, etiqueta: 'No. de Serie Vehículo', tipo: 'text', opciones: [] },
+        { id: 424, etiqueta: 'Fecha de Incidencia | Solicitud', tipo: 'date', opciones: [] }] },
+      { id: 317, nombre: 'NIP PARA COMBUSTIBLES', modulo: 'tickets', moduloEtiqueta: 'Tickets', campos: [
+        { id: 1647, etiqueta: '¿Qué servicio de combustible se requiere?', tipo: 'select', opciones: ['EOX', 'Edenred'] },
+        { id: 1646, etiqueta: 'Placa, Nuco o VIN', tipo: 'text', opciones: [] }] },
+      { id: 63, nombre: 'Solicitud - Análisis de Datos', modulo: '', moduloEtiqueta: '', campos: [] }],
     apiHelpdeskGuardados: JSON.stringify([]),
   };
 
@@ -410,9 +434,13 @@
     'salud-tecnica': async () => { await abrir('salud'); await vistaSalud(true); await hasta('.rel-tarjeta'); await esperar(300); },
     'salud-capital': async () => { await abrir('salud'); await vistaSalud(false); const b = [...document.querySelectorAll('#salud-tabs .tab-btn')].find((x) => /Capital/.test(x.textContent)); b.click(); await esperar(500); },
     'relaciones-capital': async () => { await abrir('relaciones'); await vistaRelaciones(false); const b = [...document.querySelectorAll('#rel-s-tabs .tab-btn')].find((x) => /Capital/.test(x.textContent)); b.click(); await esperar(400); },
-    'helpdesk-conectar': async () => { respuestas.apiHelpdeskEstado = { conectado: false }; await abrir('helpdesk'); await hasta('#hd-conectar:not([hidden])'); await esperar(300); },
-    'helpdesk-lista': async () => { await abrir('helpdesk'); await hasta('#hd-tabla tbody tr[data-id]'); await esperar(300); },
-    'helpdesk-detalle': async () => { await abrir('helpdesk'); await abrirPrimeraFila(); await hasta('.hd-mensaje'); (await hasta('#hd-btn-registrar:not([hidden])')).click(); await esperar(500); },
+    'helpdesk-conectar': async () => { respuestas.apiHelpdeskEstado = { conectado: false }; await abrir('helpdesk-conexion'); await hasta('#hd-conectar:not([hidden])'); await esperar(300); },
+    'helpdesk-conexion': async () => { await abrir('helpdesk-conexion'); await hasta('#hd-conectado:not([hidden])'); await esperar(300); },
+    'helpdesk-lista': async () => { await abrir('helpdesk'); await hasta('#hd-filas .hd-fila'); await esperar(300); },
+    'helpdesk-detalle': async () => { await abrir('helpdesk'); (await hasta('#hd-filas .hd-fila')).click(); await hasta('.hd-msj .hd-msj-texto'); (await hasta('#hd-btn-formulario')).click(); await hasta('.hd-respuestas'); await esperar(400); },
+    'helpdesk-registrar': async () => { await abrir('helpdesk'); (await hasta('#hd-filas .hd-fila')).click(); (await hasta('#hd-btn-registrar:not([hidden])')).click(); await hasta('#hd-modal-registrar:not([hidden])'); await esperar(500); },
+    'helpdesk-formularios': async () => { await abrir('helpdesk-formularios'); await hasta('.hd-form-campo'); await esperar(300); },
+    'helpdesk-registrados': async () => { await abrir('helpdesk-registrados'); await esperar(800); },
     'inspecciones-detalle': async () => { await abrir('inspeccion-vehicular'); await abrirPrimeraFila(); },
     'sensores-detalle': async () => { await abrir('instalacion-sensores'); await abrirPrimeraFila(); },
     'hologramas-detalle': async () => { await abrir('hologramas'); await abrirPrimeraFila(); },

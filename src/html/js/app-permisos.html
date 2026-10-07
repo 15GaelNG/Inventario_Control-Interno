@@ -61,8 +61,6 @@
 
     // ---------------------------------------------------------------- piezas de HTML
     const ico = (nombre) => '<i data-lucide="' + nombre + '" class="ico"></i>';
-    const iniciales = (texto) => String(texto || '?').split(/[\s.@_-]+/).filter(Boolean).slice(0, 2)
-      .map((s) => s[0].toUpperCase()).join('');
     const nivel = (v) => '<span class="usr-nivel ' + v + '">' + ico(PERM_ICONO[v]) + PERM_TEXTO[v] + '</span>';
     const badgeRol = (rol) => (rol === 'USER' ? '' : '<span class="badge-estado pendiente">' + escaparHtml(rol) + '</span>');
     const badgeActivo = (activo) => '<span class="badge-estado ' + (activo ? 'activo' : 'baja') + '">' + (activo ? 'Activo' : 'Inactivo') + '</span>';
@@ -185,7 +183,7 @@
       const resumen = [['Correo', p.correo], ['Área', p.area], ['Coordinación', p.coordinacion], ['Sede', [p.oficina, p.sede].filter(Boolean).join(' · ')]]
         .filter((d) => d[1]);
       let html = migas() + '<div class="ln-detalle-header card">' +
-        '<div class="ln-detalle-icono"><span class="usr-avatar">' + escaparHtml(iniciales(p.nombre || p.correo)) + '</span></div>' +
+        '<div class="ln-detalle-icono">' + Avatar.html(p.correo, p.nombre, { tam: 0, clase: 'usr-avatar' }) + '</div>' +
         '<div class="ln-detalle-titulo"><h2>' + escaparHtml(p.nombre || p.correo) + '</h2><div class="ln-chips">' +
         badgeRol(p.rol) + badgeActivo(p.activo) +
         (p.area ? '<button type="button" class="badge-estado pendiente usr-chip-enlace" data-usr-area="' + escaparHtml(p.area) + '" title="Ver el área">' + ico('users') + ' ' + escaparHtml(p.area) + '</button>' : '') +
@@ -597,7 +595,8 @@
       alCambiarFiltros: (filtros) => marcarKpis(filtros),
       ordenInicial: { campo: 'NOMBRE', dir: 'asc' },
       columnas: [
-        { campo: 'NOMBRE', titulo: 'Nombre', tipo: 'texto', fijada: true },
+        { campo: 'NOMBRE', titulo: 'Nombre', tipo: 'texto', fijada: true,
+          render: (v, f) => '<span class="usr-nombre">' + Avatar.html(f.CORREO, v, { tam: 26 }) + escaparHtml(v) + '</span>' },
         { campo: 'AREA', titulo: 'Área', tipo: 'lista' },
         { campo: 'ROL', titulo: 'Rol', tipo: 'lista', render: (v) => badgeRol(v) || escaparHtml(v) },
         { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', render: (v) => badgeActivo(v === 'Activo') },

@@ -77,8 +77,10 @@ const HelpdeskService = (function () {
    * Guarda o actualiza en APP_HELPDESK los tickets que acaban de llegar del helpdesk.
    * Solo escribe lo nuevo y lo que cambió. Regresa { nuevos, actualizados } o { saltado: true }.
    * La llama HelpdeskApi; nunca truena hacia afuera (una copia que falla no debe tumbar la pantalla).
+   * parcial: los tickets vienen de una lista que no trae todos los campos (la del inicio del
+   * helpdesk): un campo vacío ahí es "no vino", no "se borró", así que no toca lo guardado.
    */
-  function sincronizar_(tickets, correo) {
+  function sincronizar_(tickets, correo, parcial) {
     const lista = (tickets || []).filter((t) => t && t.ID);
     if (!lista.length) return { nuevos: 0, actualizados: 0 };
     const lock = LockService.getScriptLock();
@@ -112,9 +114,10 @@ const HelpdeskService = (function () {
         }
         if (i === 'nuevo') return;
         const fila = filas[i];
-        const cambio = DEL_HELPDESK.some((c) => comoTexto_(fila[pos[c]]) !== comoTexto_(datos[c]));
+        const columnas = parcial ? DEL_HELPDESK.filter((c) => comoTexto_(datos[c]) !== '') : DEL_HELPDESK;
+        const cambio = columnas.some((c) => comoTexto_(fila[pos[c]]) !== comoTexto_(datos[c]));
         if (!cambio) return;
-        DEL_HELPDESK.forEach((c) => { fila[pos[c]] = datos[c]; });
+        columnas.forEach((c) => { fila[pos[c]] = datos[c]; });
         fila[pos['ACTUALIZADO']] = ahora;
         fila[pos['ACTUALIZADO POR']] = correo || '';
         hoja.getRange(i + 2, 1, 1, enc.length).setValues([fila]);
@@ -190,5 +193,33 @@ const HelpdeskService = (function () {
     return r;
   }
 
-  return { sincronizar_, listarGuardados, registrarEnTickets, registrados, ENCABEZADOS };
+  /**
+   * A qué módulo NUESTRO corresponde cada formulario del helpdesk (idForm → id de Modulos.gs), para
+   * enseñarlo en Formularios y, más adelante, ligar un ticket con su registro. PROPUESTA del
+   * 07/10/2026 a partir de los nombres y campos del catálogo: revisarla con el área. Los que no
+   * están (Análisis de Datos, Auditoría, Procesos, CXP, CH…) no tienen módulo en la app.
+   */
+  const MODULO_POR_FORMULARIO = {
+    101: 'caja-chica', 102: 'caja-chica', 103: 'caja-chica', 109: 'caja-chica', 306: 'caja-chica',
+    148: 'instalacion-sensores',
+    149: 'hologramas',
+    241: 'vehiculos', 294: 'vehiculos',
+    281: 'lineas-telefonicas', 283: 'lineas-telefonicas', 284: 'lineas-telefonicas', 286: 'lineas-telefonicas',
+    282: 'accesorios-lineas',
+    285: 'incidencias', 289: 'incidencias',
+    287: 'inspeccion-vehicular',
+    288: 'uber',
+    290: 'tickets', 291: 'tickets', 292: 'tickets', 293: 'tickets', 317: 'tickets',
+  };
+
+  /** Los formularios de nuestro grupo (HelpdeskFormularios.gs, del Excel) con su módulo. Todos con sesión. */
+  function catalogo(token) {
+    Auth.validarSesion(token);
+    return HELPDESK_FORMULARIOS.map((f) => {
+      const modulo = MODULO_POR_FORMULARIO[f.id] || '';
+      return Object.assign({}, f, { modulo: modulo, moduloEtiqueta: modulo ? Modulos.etiqueta(modulo) : '' });
+    });
+  }
+
+  return { sincronizar_, listarGuardados, registrarEnTickets, registrados, catalogo, ENCABEZADOS, MODULO_POR_FORMULARIO };
 })();

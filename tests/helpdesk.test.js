@@ -17,7 +17,7 @@ const jwt = (email, horas) => [b64url({ alg: 'HS256', typ: 'JWT' }),
   b64url({ idUser: 9, name: 'Persona Prueba', rol: 'Agente Sr.', email, iat: AHORA / 1000, exp: AHORA / 1000 + horas * 3600 }), 'firmaFalsa'].join('.');
 
 const TICKET = {
-  idTicket: 900001, title: 'RIFTER  ABC123 | Fundaciones', notes: 'Hola equipo\n\nla unidad marca alertas', idStatus: 1, idPriority: 1,
+  idTicket: 900001, idForm: 148, title: 'RIFTER  ABC123 | Fundaciones', notes: 'Hola equipo\n\nla unidad marca alertas', idStatus: 1, idPriority: 1,
   namePriority: 'Baja', colorPriority: '#A0D76A', nameStatus: 'Abierto', nameUser: 'PERSONA  SOLICITANTE', email: 'Solicita@Ejemplo.com',
   nameAgent: 'Agente Inventado', nameDepartment: 'COMPRAS', nameToDepartment: 'CONTROL INTERNO', nameToArea: 'SENSORES',
   nameArea: 'SUMINISTROS', dateCreation: 'viernes, 02 octubre 2026  09:28:17 ', dateCreationDB: '2026-10-02', dateClose: null,
@@ -57,19 +57,38 @@ const FILTROS = {
   branches: [{ idBranch: 226, name: 'Sensores', status: 1 }],
 };
 const CONVERSACION = [
-  { idConversation: 1, nameAnswer: 'Persona  Uno', dateCreation: '2026-09-04T12:13:03.480Z', isPrivate: 0, attachNames: null,
+  { idConversation: 1, nameAnswer: 'Persona  Uno', email: ' Uno@Ejemplo.com', dateCreation: '2026-09-04T12:13:03.480Z', isPrivate: 0, attachNames: null,
     notes: '<p data-x="1"><strong>Hola</strong>, equipo &amp; amigos&nbsp;✨</p><p>Ver <a href="https://ejemplo.com/x">la guía</a><br>gracias</p>' +
       '<img src="x" onerror="alert(1)"><script>alert(2)</script><h4>Fin</h4>' },
   { idConversation: 2, nameAnswer: 'Agente', dateCreation: '2026-09-05T10:00:00.000Z', isPrivate: 1, attachNames: 'foto.png, nota.pdf', notes: 'texto &lt;b&gt; plano' },
+  // Imágenes pegadas como las manda su editor (medido el 07/10/2026); una de OTRO ticket no se acepta
+  { idConversation: 3, idTicket: 900002, nameAnswer: 'Agente', dateCreation: '2026-09-06T10:00:00.000Z', isPrivate: 0,
+    notes: '<p>Va la foto</p><p><img src="tickets/900002/conversation3/file1.png" alt="Image" style="width: 300;"></p>' +
+      '<img src="tickets/900002/conversation3/file1.png"><img src="tickets/111/conversation9/file1.png"><img src="https://otro.com/x.png">' },
 ];
+const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+// La lista del inicio (getTicketsListHome): menos campos y otros nombres
+const DE_INICIO = {
+  idTicket: 900100, title: 'SUMAR ADHERENTE', notes: 'SUMAR ADHERENTE', idStatus: 1, idPriority: 1, idForm: 148, idBranch: 226,
+  areaName: 'GESTORÍA VEHICULAR', dateCreate: 'miércoles, 07 octubre 2026  08:43:30 ', date: '07-10-2026 08:43 AM',
+  nameAgent: 'Agente Inventado', nameStatus: 'Abierto', colorStatus: '#4caf50', nameUserDepartment: 'MARIO  PRUEBA ', cantUnseenMessages: 2,
+};
+const RESUELTO_INICIO = Object.assign({}, DE_INICIO, { idTicket: 900099, idStatus: 3, nameStatus: 'Resuelto' });
+const pagina = (desde, n) => Array.from({ length: n }, (_, i) => Object.assign({}, TICKET, { idTicket: desde - i }));
 const DETALLE = Object.assign({}, CERRADO, { idTicket: 900002, intervalTime: '7', dateStart: '28 agosto 2026', dateEnd: '04 septiembre 2026' });
 
 const normal = (url, op) => {
   if (/autoLogin$/.test(url)) return { cuerpo: { status: 1, message: 'Sesión activa', data: { email: JSON.parse(Buffer.from(op.headers.authorization.split('.')[1], 'base64')).email, name: 'Persona Prueba', rol: 'Agente Sr.' } } };
   if (/tickets\/list$/.test(url)) return { cuerpo: { cantTotalTickets: 288, tickets: [TICKET, CERRADO] } };
   if (/getFilters$/.test(url)) return { cuerpo: FILTROS };
-  if (/getTicket$/.test(url)) return { cuerpo: { tickets: JSON.parse(op.payload).idTicket === 900002 ? [DETALLE] : [] } };
+  if (/getTicket$/.test(url)) return { cuerpo: { tickets: ({ 900002: [DETALLE], 900003: [Object.assign({}, DETALLE, { idTicket: 900003 })] })[JSON.parse(op.payload).idTicket] || [] } };
   if (/getConversationTickets$/.test(url)) return { cuerpo: { conversation: CONVERSACION, task: [] } };
+  if (/chat\/getAllUsers$/.test(url)) {
+    return { cuerpo: { users: [{ idUser: 1, name: 'Todos  Los Demás', email: 'x@ejemplo.com', status: 1 }],
+      usersInvolved: [{ idUser: 7, name: 'Agente  Inventado', email: ' Agente@Ejemplo.com', status: 1 }, { idUser: 8, name: null }] } };
+  }
+  if (/getTicketsListHome$/.test(url)) return { cuerpo: { totalTickets: 9458, tickets: [DE_INICIO, RESUELTO_INICIO] } };
+  if (/chat\/getCloudFile$/.test(url)) return { cuerpo: PNG };
   return { codigo: 404, cuerpo: '' };
 };
 
@@ -144,9 +163,16 @@ console.log('\n2b. Filtros y detalle');
   e.avanzar(2100);
   const d = H.detalle('tok-ana', '900002');
   const rutas = llamadas.slice(antes).map((l) => l.url.replace(/^.*\.com/, ''));
-  ok(rutas.join() === '/tickets/getTicket,/tickets/getConversationTickets', 'el detalle son 2 llamadas: ' + rutas.join(', '));
+  ok(rutas.join() === '/tickets/getConversationTickets', 'un ticket que llegó en la lista es UNA llamada (su ficha ya está): ' + rutas.join(', '));
   ok(!llamadas.some((l) => /markMessageAsSeen/.test(l.url)), 'NUNCA marca como leído (verlo aquí no cambia nada allá)');
-  ok(d.ID === 900002 && d.DURACION_DIAS === 7 && d.MENSAJES.length === 2, 'trae el ticket, su duración y sus mensajes');
+  ok(d.ID === 900002 && d.ESTATUS === 'Cerrado' && d.MENSAJES.length === 3, 'trae la ficha (de la lista) y sus mensajes');
+  ok(JSON.stringify(d.INVOLUCRADOS) === '[{"NOMBRE":"PERSONA SOLICITANTE","CORREO":"solicita@ejemplo.com"},{"NOMBRE":"Persona Uno","CORREO":"uno@ejemplo.com"},{"NOMBRE":"Agente","CORREO":""}]',
+    'involucrados: quien lo pidió y quien escribió, sin repetir y sin llamar a getAllUsers: ' + JSON.stringify(d.INVOLUCRADOS));
+  ok(!llamadas.some((l) => /getAllUsers/.test(l.url)), 'nunca pide la lista de TODOS los usuarios');
+  const img = d.MENSAJES[2].ARCHIVOS;
+  ok(img.length === 1 && img[0].RUTA === 'tickets/900002/conversation3/file1' && img[0].IMAGEN && img[0].NOMBRE === 'Imagen 1',
+    'la imagen pegada sale como archivo, sin extensión (como la pide su página), una vez, y no las de otro ticket ni de otra página');
+  ok(d.MENSAJES[0].ARCHIVOS.length === 0 && d.MENSAJES[2].TEXTO === 'Va la foto', 'un <img> que no es del helpdesk no es archivo, y el texto queda sin imágenes');
   const m = d.MENSAJES[0];
   ok(!/[<>]/.test(m.TEXTO.replace('<b>', '')) && !/alert|onerror|script/.test(m.TEXTO), 'el HTML del mensaje se vuelve texto: sin etiquetas, sin scripts, sin imágenes');
   ok(m.TEXTO === 'Hola, equipo & amigos ✨\nVer la guía (https://ejemplo.com/x)\ngracias\nFin', 'conserva párrafos, ligas y acentos: ' + JSON.stringify(m.TEXTO));
@@ -158,7 +184,147 @@ console.log('\n2b. Filtros y detalle');
   ok(llamadas.length === n, 'abrirlo otra vez sale de la caché');
   e.avanzar(2100);
   ok(/no regresó ese ticket/.test(truena(() => H.detalle('tok-ana', 123))), 'un ticket que el helpdesk no le da: se dice');
+  e.avanzar(2100);
+  const antesFolio = llamadas.length;
+  const porFolio = H.detalle('tok-ana', 900003);
+  ok(llamadas.slice(antesFolio).map((l) => l.url.replace(/^.*.com/, '')).join() === '/tickets/getTicket,/tickets/getConversationTickets' && porFolio.DURACION_DIAS === 7,
+    'uno que NO llegó en una lista (por folio): dos llamadas, y trae su duración');
   ok(/Ticket inválido/.test(truena(() => H.detalle('tok-ana', 'abc'))), 'un id que no es número ni llega al helpdesk');
+}
+
+// ---------------------------------------------------------------------------------- 2c
+console.log('\n2c. Páginas, fechas, agente, departamento y las vistas del inicio');
+{
+  let paginas = { primera: pagina(900025, 25), segunda: pagina(900000, 25) };
+  const { e, H, llamadas } = entorno((url, op) => {
+    if (/tickets\/list$/.test(url)) {
+      const p = JSON.parse(op.payload).pagination;
+      return { cuerpo: { cantTotalTickets: 60, tickets: p.nextPageLastIdTicket ? paginas.segunda : paginas.primera } };
+    }
+    return normal(url, op);
+  });
+  H.conectar('tok-ana', jwt('ana@ejemplo.com', 24));
+  e.avanzar(2100);
+  H.filtros('tok-ana');   // el catálogo queda en la caché: con él se completan nombres de la lista del inicio
+  e.avanzar(2100);
+  const r1 = H.listarTickets('tok-ana', { agentes: [7], departamentos: ['18'], desde: '2026-10-16', hasta: '2026-10-01' });
+  const f = JSON.parse(llamadas[llamadas.length - 1].op.payload);
+  ok(JSON.stringify(f.filters.idAgent) === '[7]' && JSON.stringify(f.filters.idDepartmentCustomer) === '[18]',
+    'agente y departamento del solicitante van como idAgent / idDepartmentCustomer');
+  ok(f.filters.dateCreation === '2026-10-01' && f.filters.dateCreationEnd === '2026-10-16', 'las fechas van en orden aunque lleguen al revés');
+  ok(!('nextPageLastIdTicket' in f.pagination), 'la primera página no lleva cursor');
+  ok(r1.tickets.length === 25 && r1.siguiente === 900001, 'página llena: regresa el cursor (el último ID) para "Cargar más"');
+  e.avanzar(2100);
+  const r2 = H.listarTickets('tok-ana', { agentes: [7], departamentos: [18], desde: '2026-10-01', hasta: '2026-10-16', despuesDe: r1.siguiente });
+  ok(JSON.parse(llamadas[llamadas.length - 1].op.payload).pagination.nextPageLastIdTicket === 900001, 'la siguiente página manda nextPageLastIdTicket');
+  ok(r2.siguiente === 899976, 'y trae su propio cursor');
+  paginas = { primera: paginas.primera, segunda: pagina(900030, 25) };   // un helpdesk que no avanza
+  e.avanzar(2100);
+  const r3 = H.listarTickets('tok-ana', { despuesDe: 900001 });
+  ok(r3.siguiente === null, 'si el cursor no baja, no se ofrece otra página (nunca un ciclo)');
+  e.avanzar(2100);
+  paginas = { primera: pagina(900025, 3), segunda: [] };
+  ok(H.listarTickets('tok-ana', { estatus: [2] }).siguiente === null, 'una página incompleta no tiene siguiente');
+  e.avanzar(2100);
+  ok(H.listarTickets('tok-ana', { desde: 'ayer' }) && JSON.parse(llamadas[llamadas.length - 1].op.payload).filters.dateCreation === null,
+    'una fecha que no es yyyy-MM-dd no se manda');
+
+  e.avanzar(2100);
+  const antes = llamadas.length;
+  const d = H.listarTickets('tok-ana', { vista: 'departamento', estatus: [1], despuesDe: 5 });
+  const pedido = JSON.parse(llamadas[antes].op.payload);
+  ok(/getTicketsListHome$/.test(llamadas[antes].url) && pedido.get === 'departmentTickets' && pedido.pagination.rowsPerPage === 25,
+    '"Mi departamento" es la pestaña departmentTickets de su inicio');
+  ok(d.total === 9458 && d.siguiente === null, 'el total de su departamento, sin "Cargar más" (no se sabe cómo pagina esa lista)');
+  const t = d.tickets[0];
+  ok(t.SOLICITANTE === 'MARIO PRUEBA' && t.AREA_DESTINO === 'GESTORÍA VEHICULAR' && t.FECHA_CREACION === '2026-10-07' && t.COLOR_ESTATUS === '#4caf50',
+    'su forma corta se normaliza igual (solicitante, área, fecha dd-MM-yyyy)');
+  ok(t.PRIORIDAD === 'Baja' && t.FORMULARIO === 'Incidencia | Solicitud - Sensores' && t.GRUPO === 'Sensores',
+    'prioridad, formulario y grupo salen del catálogo que ya estaba en la caché');
+  ok(t.ABIERTO === true && d.tickets[1].ABIERTO === false, 'sin dateClose, abierto/cerrado sale del estatus');
+  e.avanzar(2100);
+  H.listarTickets('tok-ana', { vista: 'mios' });
+  ok(JSON.parse(llamadas[llamadas.length - 1].op.payload).get === 'myTickets', '"Los que yo levanté" es myTickets');
+  const n = llamadas.length;
+  H.listarTickets('tok-ana', { vista: 'departamento', grupos: [3] });
+  ok(llamadas.length === n, 'en las vistas del inicio los filtros no cuentan: sale de la caché');
+  const fi = H.filtros('tok-ana');
+  ok(Array.isArray(fi.agentes) && Array.isArray(fi.departamentos), 'filtros trae agentes y departamentos');
+}
+{
+  const { e, H } = entorno((url, op) => (/getFilters$/.test(url)
+    ? { cuerpo: Object.assign({}, FILTROS, {
+      agents: [{ idUser: 7, name: 'Zoe  Agente', idBranch: 9 }, { idUser: 7, name: 'Zoe Agente', idBranch: 36 }, { idUser: 2, name: 'Ana Agente', idBranch: 9 }],
+      departmentCustomers: [{ idDepartment: 3, name: 'CONTROL INTERNO' }, { idDepartment: 2, name: 'COMPRAS' }] }) }
+    : normal(url, op)));
+  H.conectar('tok-ana', jwt('ana@ejemplo.com', 24));
+  e.avanzar(2100);
+  const fi = H.filtros('tok-ana');
+  ok(fi.agentes.map((a) => a.id + ':' + a.nombre).join() === '2:Ana Agente,7:Zoe Agente', 'un agente de varios grupos sale una vez, en orden');
+  ok(fi.departamentos.map((a) => a.nombre).join() === 'COMPRAS,CONTROL INTERNO', 'departamentos de los solicitantes, en orden');
+}
+
+// ---------------------------------------------------------------------------------- 2d
+console.log('\n2d. Archivos de la conversación');
+{
+  let respuesta = PNG;
+  const { e, H, llamadas } = entorno((url, op) => (/getCloudFile$/.test(url) ? { cuerpo: respuesta } : normal(url, op)));
+  H.conectar('tok-ana', jwt('ana@ejemplo.com', 24));
+  const RUTA = 'tickets/900002/conversation3/file1';
+  e.avanzar(2100);
+  ok(/Abre el ticket otra vez/.test(truena(() => H.archivo('tok-ana', 900002, RUTA))), 'sin abrir el ticket, no se pide ningún archivo');
+  ok(/Archivo inválido/.test(truena(() => H.archivo('tok-ana', 900002, 'tickets/900002/../../etc'))), 'una ruta rara ni se intenta');
+  ok(/Archivo inválido/.test(truena(() => H.archivo('tok-ana', 900002, 'tickets/111/conversation9/file1'))), 'ni la de otro ticket');
+  H.detalle('tok-ana', 900002);
+  e.avanzar(2100);
+  const antes = llamadas.length;
+  const a = H.archivo('tok-ana', '900002', RUTA);
+  ok(a.tipo === 'image/png' && a.base64 === PNG, 'después de abrirlo, la imagen llega en base64 con su tipo');
+  ok(llamadas.length === antes + 1 && JSON.parse(llamadas[antes].op.payload).path === RUTA, 'una llamada a getCloudFile con la ruta sin extensión');
+  e.avanzar(10);
+  H.conectar('tok-luis', jwt('luis@ejemplo.com', 24));
+  ok(/Abre el ticket otra vez/.test(truena(() => H.archivo('tok-luis', 900002, RUTA))), 'otra persona no puede pedir los archivos que Ana abrió');
+  e.avanzar(2100);
+  respuesta = Buffer.from('<svg onload="alert(1)"></svg>').toString('base64');
+  ok(/no se puede ver aquí/.test(truena(() => H.archivo('tok-ana', 900002, RUTA))), 'un SVG (o lo que no sea imagen o PDF) no se manda a la pantalla');
+  e.avanzar(2100);
+  respuesta = '<html>error</html>';
+  ok(/no regresó el archivo/.test(truena(() => H.archivo('tok-ana', 900002, RUTA))), 'si no es base64, se dice');
+  e.avanzar(2100);
+  respuesta = 'JVBERi0' + 'A'.repeat(H.LIMITES.MAX_ARCHIVO_B64);
+  ok(/muy grande/.test(truena(() => H.archivo('tok-ana', 900002, RUTA))), 'uno muy grande no viaja a la pantalla');
+  ok(H.tipoDe_('JVBERi0xLjQ=') === 'application/pdf' && H.tipoDe_('/9j/4AAQ') === 'image/jpeg', 'reconoce PDF y JPG por sus primeros bytes');
+}
+
+// ---------------------------------------------------------------------------------- 2e
+console.log('\n2e. Las respuestas del formulario ("Ver formulario")');
+{
+  // Forma medida el 05/10/2026 (getNewTicketCatalogs), con datos inventados
+  const CATALOGOS = { fields: {
+    arrayForm: { arrayForm: { note: 'Incidencia | Solicitud - Sensores', fields: [
+      { idField: 1083, tagAgent: 'Departamento  Solicitante', type: 'select', canSee: 1 },
+      { idField: 420, tagAgent: 'No. de Serie Vehículo', type: 'text', canSee: 1 },
+      { idField: 424, tagAgent: 'Fecha de Incidencia', type: 'date', canSee: 1 },
+      { idField: 999, tagAgent: 'Oculto', type: 'text', canSee: 0 },
+    ] } },
+    datas: { dataAnswer: [{ idField: 1083, value: 'POST VENTA' }, { idField: 420, value: ' 93Y1R5F52RJ649008 ' }, { idField: 999, value: 'no' }] },
+  } };
+  const { e, H, llamadas } = entorno((url, op) => (/getNewTicketCatalogs$/.test(url) ? { cuerpo: CATALOGOS } : normal(url, op)));
+  H.conectar('tok-ana', jwt('ana@ejemplo.com', 24));
+  e.avanzar(2100);
+  ok(/No se sabe de qué formulario/.test(truena(() => H.formulario('tok-ana', 900001))), 'sin la ficha ni el formulario, no se adivina');
+  H.listarTickets('tok-ana');
+  e.avanzar(2100);
+  const antes = llamadas.length;
+  const f = H.formulario('tok-ana', 900001);
+  const pedido = JSON.parse(llamadas[antes].op.payload);
+  ok(llamadas.length === antes + 1 && pedido.idForm === 148 && pedido.idTicket === 900001,
+    'UNA llamada, con el idTicket y el formulario de su ficha');
+  ok(f.FORMULARIO === 'Incidencia | Solicitud - Sensores' && f.CAMPOS.length === 3, 'el nombre del formulario y sus campos visibles (el oculto no)');
+  ok(f.CAMPOS[0].ETIQUETA === 'Departamento Solicitante' && f.CAMPOS[0].VALOR === 'POST VENTA' && f.CAMPOS[1].VALOR === '93Y1R5F52RJ649008' && f.CAMPOS[2].VALOR === '',
+    'cada campo con su respuesta (vacía si no la contestó)');
+  H.formulario('tok-ana', 900001);
+  ok(llamadas.length === antes + 1, 'la segunda vez sale de la caché');
 }
 
 // ---------------------------------------------------------------------------------- 3
@@ -166,13 +332,13 @@ console.log('\n3. No saturar al helpdesk');
 {
   const { e, H, llamadas } = entorno(normal);
   H.conectar('tok-ana', jwt('ana@ejemplo.com', 24));
-  ok(/Espera un par de segundos/.test(truena(() => H.listarTickets('tok-ana', null, true))), 'dos llamadas de la misma persona en menos de 2 s: la segunda no sale');
+  ok(/Espera un par de segundos/.test(truena(() => H.listarTickets('tok-ana', null, true))), 'dos llamadas de la misma persona en menos de 1 s: la segunda no sale');
   let salieron = 1;
   for (let i = 0; i < 15; i++) {
     e.avanzar(2100);
     if (!truena(() => H.listarTickets('tok-ana', null, true))) salieron++;
   }
-  ok(salieron <= 10 && llamadas.length === salieron, 'a lo más 10 por minuto por persona (salieron ' + salieron + ' de 16 intentos)');
+  ok(salieron <= 15 && llamadas.length === salieron, 'a lo más 15 por minuto por persona (salieron ' + salieron + ' de 16 intentos)');
   ok(/veces en este minuto/.test(truena(() => { e.avanzar(2100); H.listarTickets('tok-ana', null, true); })), 'y lo dice claro');
 }
 {
@@ -188,7 +354,7 @@ console.log('\n3. No saturar al helpdesk');
     tokens.forEach((t) => { intentos++; truena(() => H.listarTickets(t, null, true)); });
     if (e.registro.locks > 200) break;
   }
-  ok(llamadas.length === 30, 'entre toda la app, a lo más 30 por minuto, contando las de conectar (' + llamadas.length + ' llamadas de ' + (intentos + 4) + ' intentos en ~25 s)');
+  ok(llamadas.length === 40, 'entre toda la app, a lo más 40 por minuto, contando las de conectar (' + llamadas.length + ' llamadas de ' + (intentos + 4) + ' intentos en ~25 s)');
 }
 {
   // El helpdesk dice "ya basta": toda la app se detiene, sin reintentos

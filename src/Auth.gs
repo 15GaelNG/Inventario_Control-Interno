@@ -106,7 +106,10 @@ const Auth = (function () {
     if (!found || String(found.ACTIVO).toUpperCase() !== 'TRUE') {
       return { coincide: false, correo: correoDetectado };
     }
-    return { coincide: true, correo: correoDetectado, nombre: found.NOMBRE };
+    // La foto, solo si ya está guardada (FotosDirectorio.de no llama a Google: la entrada no espera)
+    let foto = '';
+    try { foto = FotosDirectorio.de(correoDetectado); } catch (e) { /* sin foto: iniciales */ }
+    return { coincide: true, correo: correoDetectado, nombre: found.NOMBRE, foto: foto };
   }
 
   function loginConGoogle() {

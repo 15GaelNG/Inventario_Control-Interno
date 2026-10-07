@@ -54,8 +54,12 @@ plantilla, la función y el módulo existan.
 Lo que se repite entre módulos va en un componente, no en otra copia. Antes de
 escribirlo a mano en un módulo, revisa si ya existe: `Formulario` (captura con
 validación, pasos y panel), `DataTable`, `Combobox`, `Confirmar`, `Notificar`,
-`Firma`, `Lienzo`, `ExportarExcel`, `CampoAuto`, `FolioNucco` y `CamposHoja`. Cada
+`Firma`, `Lienzo`, `ExportarExcel`, `CampoAuto`, `FolioNucco`, `CamposHoja` y `Avatar`. Cada
 uno documenta su uso al inicio del archivo y tiene su prueba en `tests/`.
+
+- **Una persona (foto o iniciales) → `Avatar.html(correo, nombre, { tam })`.** La foto es la de
+  su perfil de Google, del directorio del dominio (`FotosDirectorio.gs`, People API, guardada en
+  caché y rehecha por el Calentador). No pintes iniciales a mano.
 
 - **Formularios declarados por columnas de una hoja → `CamposHoja`.** Vehículos
   (`CAMPOS_VEHICULO`), Caja Chica (`CAMPOS_CAJACHICA`), Arqueos (`CAMPOS_ARQUEO`),
@@ -193,6 +197,11 @@ versión en cada subida a prod:
    `https://script.google.com/a/macros/ciudadmaderas.com/s/AKfycbx_53Gz2VfBXhFvLmjnoM2qVzJYmk9kuQD74mUCpOQzeYPaQ1COR8LB_l69sSQb5RJB/exec`
 
 Revisa con `npx clasp -P .clasp.prod.json list-deployments` que ambos digan `@N`.
+
+**Un permiso nuevo en `oauthScopes` (appsscript.json) tumba la app hasta que se autorice.** La app
+corre como quien la desplegó: si el manifiesto pide un permiso que esa cuenta no ha aceptado, NADIE
+puede entrar. Antes de mover los despliegues, quien desplegó corre en el editor de ESE proyecto una
+función que lo use y acepta (para `directory.readonly`, de las fotos: `revisarFotosDirectorio()`).
 
 `node tools/subir/subir.js prod --desplegar "…"` hace todo eso solo: comprime, sube, verifica y
 mueve los dos despliegues. También está el botón "Run workflow" de la GitHub Action

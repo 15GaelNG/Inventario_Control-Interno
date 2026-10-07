@@ -24,6 +24,10 @@ function apiResumenInicio(token) {
 function apiLogin(correo, password) {
   return Auth.login(correo, password);
 }
+// Las fotos de perfil del directorio ({ correo: url }), para el componente Avatar
+function apiFotosPerfil(token) {
+  return FotosDirectorio.todas(token);
+}
 function apiIdentidadGoogle() {
   return Auth.identidadGoogle();
 }
@@ -247,6 +251,18 @@ function apiHelpdeskTickets(token, filtros, forzar) {
 function apiHelpdeskDetalle(token, idTicket) {
   Config.exigirEncendido('helpdesk');
   return JSON.stringify(HelpdeskApi.detalle(token, idTicket));
+}
+function apiHelpdeskFormulario(token, idTicket, idForm) {
+  Config.exigirEncendido('helpdesk');
+  return HelpdeskApi.formulario(token, idTicket, idForm);
+}
+function apiHelpdeskCatalogo(token) {
+  Config.exigirEncendido('helpdesk');
+  return HelpdeskService.catalogo(token);
+}
+function apiHelpdeskArchivo(token, idTicket, ruta) {
+  Config.exigirEncendido('helpdesk');
+  return HelpdeskApi.archivo(token, idTicket, ruta);
 }
 function apiHelpdeskRegistrados(token, idsTicket) {
   Config.exigirEncendido('helpdesk');

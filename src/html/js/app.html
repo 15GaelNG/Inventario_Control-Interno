@@ -370,7 +370,8 @@
   const VISTAS_APAGADAS = (() => {
     try { return JSON.parse(document.body.dataset.apagados || '[]'); } catch (e) { return []; }
   })();
-  const estaApagada = (entrada) => VISTAS_APAGADAS.indexOf(entrada.vista) !== -1;
+  // Apagar 'helpdesk' apaga su familia (el grupo y sus vistas 'helpdesk-…')
+  const estaApagada = (entrada) => [entrada.vista, entrada.id].some((v) => v && VISTAS_APAGADAS.some((a) => v === a || v.indexOf(a + '-') === 0));
   const puedeEditarModulo = (modulo) => permisoDe(modulo) === 'EDICION';
   /**
    * Lo de OTRO módulo dentro de una pantalla (una pestaña de la ficha): solo se pide si la
@@ -479,6 +480,11 @@
       return;
     }
     document.getElementById('user-name').textContent = state.sesion.nombre + ' · ' + state.sesion.rol;
+    document.getElementById('user-avatar').innerHTML = Avatar.html(state.sesion.correo, state.sesion.nombre, { tam: 30 });
+    // Las fotos de todos (una vez; con copia de la visita anterior salen al instante). Una copia
+    // vacía (de cuando el directorio todavía no respondía) no se usa: se piden frescas
+    Avatar.cargar(() => callServerCacheado('apiFotosPerfil', state.token).then((copia) =>
+      (copia && Object.keys(copia).length ? copia : callServer('apiFotosPerfil', state.token))));
     marcarTemaActual(); // entrar con la sesión guardada no pasa por el login, que era quien marcaba el botón
     // El menú se pinta de una vez con los permisos de la visita anterior (guardados en este
     // navegador) y se corrige cuando llegan los de verdad. Solo deciden qué se ENSEÑA: el
@@ -563,6 +569,19 @@
     }, duracionTotal + 250);
   }
 
+  /**
+   * Una vista puede poner algo en la barra de arriba (Help Desk: su marca junto al logo y su
+   * búsqueda al centro, para usar toda la pantalla). Lo que pone lleva data-de-vista y navegarA
+   * lo quita al cambiar de vista. donde: 'izquierda' (junto al logo) o 'centro'.
+   */
+  function ponerEnBarraSuperior(el, donde) {
+    const barra = document.querySelector('.topbar');
+    el.setAttribute('data-de-vista', '');
+    if (donde === 'izquierda') barra.querySelector('.topbar-left').appendChild(el);
+    else barra.insertBefore(el, barra.querySelector('.topbar-right'));
+    return el;
+  }
+
   function montarVista(templateId, initFn, container) {
     container = container || document.getElementById('view-container');
     const tpl = document.getElementById(templateId);
@@ -638,6 +657,7 @@
       // El menú ya esconde lo que no se puede ver, pero a una vista también se llega por el
       // historial del navegador o por los enlaces entre módulos ("Ver vehículo")
       // Adónde lleva cada vista está en NAV_GRUPOS / VISTAS_FUERA_DEL_MENU, no aquí
+      document.querySelectorAll('.topbar [data-de-vista]').forEach((el) => el.remove());   // lo que puso la vista anterior
       const destino = vistaDe(vista);
       if (!destino || estaApagada(destino)) { mostrarProximamente(etiqueta || vista); return; }
       if (destino.requiere && !permisoDe(destino.requiere)) { mostrarSinAcceso(etiqueta || destino.etiqueta); return; }
@@ -738,8 +758,18 @@
     // Encuestas y solicitudes externas (2-oct) -- mismo patrón que "Sistemas" (tpl-sistemas/
     // initSistemas en app-sistemas.html), un solo destino sin submenú porque ya muestra las 3.
     { id: 'encuestas-solicitudes', vista: 'encuestas-solicitudes', icono: 'clipboard-list', etiqueta: 'Encuestas/Solicitudes', libre: true, plantilla: 'tpl-sistemas', init: () => initSistemas('encuestas-solicitudes') },
-    // Los tickets del helpdesk de TI (05/10/2026): todos lo ven; cada quien, lo que su cuenta ve allá
-    { id: 'helpdesk', vista: 'helpdesk', icono: 'headset', etiqueta: 'Help Desk', libre: true, plantilla: 'tpl-helpdesk', init: () => initHelpdesk() },
+    // Los tickets del helpdesk de TI (05/10/2026; su propia familia el 07/10). Todos lo ven (cada
+    // quien, lo que su cuenta ve allá): por eso el grupo es `libre` aunque casi todo sea libre.
+    // Registrados es la copia en la hoja: solo quien lee Tickets.
+    {
+      id: 'helpdesk', icono: 'headset', etiqueta: 'Help Desk', libre: true,
+      items: [
+        { vista: 'helpdesk', etiqueta: 'Bandeja', icono: 'inbox', libre: true, plantilla: 'tpl-helpdesk', init: () => initHelpdesk() },
+        { vista: 'helpdesk-formularios', etiqueta: 'Formularios', icono: 'list-checks', libre: true, plantilla: 'tpl-helpdesk-formularios', init: () => initHelpdeskFormularios() },
+        { vista: 'helpdesk-registrados', etiqueta: 'Registrados', icono: 'archive', requiere: 'tickets', plantilla: 'tpl-helpdesk-registrados', init: () => initHelpdeskRegistrados() },
+        { vista: 'helpdesk-conexion', etiqueta: 'Conexión', icono: 'plug', libre: true, plantilla: 'tpl-helpdesk-conexion', init: () => initHelpdeskConexion() },
+      ],
+    },
     {
       id: 'administracion', icono: 'settings', etiqueta: 'Administración',
       items: [
@@ -786,7 +816,8 @@
     const visibles = NAV_GRUPOS
       .filter((g) => !estaApagada(g))
       .map((g) => (g.items ? Object.assign({}, g, { items: g.items.filter((it) => !estaApagada(it) && (it.libre || permisoDe(it.requiere))) }) : g))
-      .filter((g) => (g.items ? g.items.some((it) => !it.libre) : g.libre || permisoDe(g.requiere)));
+      // Un grupo `libre` (Help Desk) se ve aunque solo le queden items libres
+      .filter((g) => (g.items ? g.items.length && (g.libre || g.items.some((it) => !it.libre)) : g.libre || permisoDe(g.requiere)));
     contenedor.innerHTML = visibles.map((grupo) => (grupo.vista ? `
       <div class="nav-item" data-view="${grupo.vista}" data-etiqueta="${grupo.etiqueta}" data-tooltip="${grupo.etiqueta}">
         <span class="nav-icon"><i data-lucide="${grupo.icono}" class="ico"></i></span><span class="nav-label">${grupo.etiqueta}</span>
@@ -903,8 +934,8 @@
       const identidad = await callServer('apiIdentidadGoogle');
       if (!identidad || !identidad.coincide) return; // se queda solo el formulario manual
 
-      document.getElementById('google-account-avatar').textContent =
-        (identidad.nombre || identidad.correo).trim().charAt(0).toUpperCase();
+      document.getElementById('google-account-avatar').innerHTML =
+        Avatar.html(identidad.correo, identidad.nombre, { tam: 34, foto: identidad.foto });
       document.getElementById('google-account-name').textContent = identidad.nombre || identidad.correo;
       document.getElementById('google-account-email').textContent = identidad.correo;
       chip.hidden = false;

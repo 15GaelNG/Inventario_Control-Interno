@@ -1,267 +1,475 @@
 <script>
   /**
-   * app-helpdesk.html — Help Desk: los tickets del helpdesk de TI que la cuenta de cada persona ve
-   * allá (todos tienen acceso). El servidor habla con el helpdesk (HelpdeskApi.gs, con límites
-   * para no saturarlo) y guarda solo una copia de lo que llega (APP_HELPDESK, HelpdeskService.gs).
-   * Desde aquí NO se cambia nada allá: ni siquiera se marca un ticket como leído.
+   * app-helpdesk.html — la familia Help Desk (07/10/2026): Bandeja, Formularios, Registrados y
+   * Conexión. Los tickets del helpdesk de TI que la cuenta de cada persona ve allá (todos tienen
+   * acceso). El servidor habla con el helpdesk (HelpdeskApi.gs, con límites para no saturarlo) y
+   * guarda solo una copia de lo que llega (APP_HELPDESK, HelpdeskService.gs). Desde aquí NO se
+   * cambia nada allá: ni siquiera se marca un ticket como leído.
+   *
+   * La Bandeja sigue a las plataformas de soporte (Zendesk split view, Help Scout): bandejas a la
+   * izquierda (cada una es un filtro guardado), la lista al centro y el ticket abierto a la
+   * derecha, con teclado (J/K, /, R, F, 1–7). Cuida las llamadas al helpdesk:
+   *   - abrir un ticket de la lista cuesta UNA llamada (el servidor ya tiene su ficha) y abrirlo
+   *     otra vez, ninguna (HD_DETALLES, en esta pantalla);
+   *   - la búsqueda por texto filtra lo que ya llegó, sin llamar; solo "#folio + Enter" llama;
+   *   - J/K esperan a que se deje de teclear antes de pedir el ticket;
+   *   - el contador de cada bandeja es el último que se vio (no se pide uno por bandeja);
+   *   - las respuestas del formulario y las imágenes, solo cuando se piden.
    *
    * Lo que se pinta del helpdesk va SIEMPRE con escaparHtml: los mensajes ya llegan como texto
    * plano (el servidor les quita el HTML), pero títulos y nombres los escribe cualquiera.
    */
 
   // El marcador que copia el token del helpdesk (lo guarda su página en localStorage, llave
-  // "token"). Sin "//" literal: ver el bug de Apps Script en CLAUDE.md.
+  // "token"). Sin doble diagonal literal: ver el bug de Apps Script en CLAUDE.md.
   const HELPDESK_MARCADOR = "javascript:(()=>{const t=localStorage.getItem('token');if(!t){alert('Primero inicia sesión en el helpdesk');return;}" +
     "navigator.clipboard.writeText(t).then(()=>alert('Token copiado: pégalo en Control Interno'),()=>prompt('Copia tu token:',t));})()";
-  const HELPDESK_PAGINA = 'https:\/\/helpdesk-maderas.gphsis.com/tickets';
+  // La lista de tickets de su página (medida en el HAR del 07/10/2026; /tickets solo no existe)
+  const HELPDESK_PAGINA = 'https:\/\/helpdesk-maderas.gphsis.com/app/tickets';
   // Una placa en el título ("RIFTER UNU794H | Fundaciones"), para sugerirla al registrar
   const PLACA_EN_TEXTO = /\b[A-Z]{3}[0-9]{3,4}[A-Z]?\b/;
 
+  // Las bandejas: filtros guardados sobre lo que da el helpdesk. Los ids de estatus son los suyos
+  // (getFilters, medidos el 05/10/2026): 1 Abierto, 2 Pendiente, 3 Resuelto, 4 Cerrado,
+  // 7 Abierto sin asignación, 8 Reabierto.
+  const HD_BANDEJAS = [
+    { id: 'todos', etiqueta: 'Todos mis grupos', icono: 'inbox', filtros: { vista: 'grupos' } },
+    { id: 'abiertos', etiqueta: 'Abiertos', icono: 'circle-dot', filtros: { vista: 'grupos', estatus: [1, 8] } },
+    { id: 'sin-asignar', etiqueta: 'Sin asignar', icono: 'user-x', filtros: { vista: 'grupos', estatus: [7] } },
+    { id: 'pendientes', etiqueta: 'Pendientes', icono: 'clock', filtros: { vista: 'grupos', estatus: [2] } },
+    { id: 'resueltos', etiqueta: 'Resueltos y cerrados', icono: 'circle-check', filtros: { vista: 'grupos', estatus: [3, 4] } },
+    { id: 'departamento', etiqueta: 'Mi departamento', icono: 'building-2', filtros: { vista: 'departamento' }, otra: true },
+    { id: 'mios', etiqueta: 'Los que levanté', icono: 'send', filtros: { vista: 'mios' }, otra: true },
+  ];
+
+  // Lo que se queda entre visitas a la Bandeja (mientras no se recargue la página)
+  const HD_DETALLES = new Map();     // idTicket → detalle (abrirlo otra vez no llama)
+  const HD_FORMULARIOS = new Map();  // idTicket → respuestas del formulario
+  const HD_ARCHIVOS = new Map();     // ruta → { tipo, base64 }
+  const HD_CONTEOS = {};             // bandeja → total visto la última vez
+  let hdBandejaActual = 'todos';
+
+  /** ¿Está conectado? (no llama al helpdesk: lo lee del token guardado) */
+  const helpdeskEstado = () => callServer('apiHelpdeskEstado', state.token);
+
+  // =========================================================================== Bandeja
   async function initHelpdesk() {
     const $ = (id) => document.getElementById(id);
-    wireTabsSimple($('view-container'));
-    const puedeVerGuardados = !!permisoDe('tickets');
-    const puedeRegistrar = puedeEditarModulo('tickets');
-    $('hd-tab-guardados').hidden = !puedeVerGuardados;
+    const e = escaparHtml;
+    const app = $('hd-app');
+    const filtrosExtra = { grupos: [], formularios: [], prioridades: [], agentes: [], departamentos: [], desde: '', hasta: '' };
+    let catalogo = { estatus: [], prioridades: [], formularios: [], grupos: [], agentes: [], departamentos: [] };
+    let lista = [];        // lo que llegó de la bandeja (con lo de "Cargar más")
+    let total = 0;
+    let siguiente = null;  // cursor de la página que sigue
+    let abierto = null;    // ID del ticket abierto
+    let consulta = 0;      // si cambian de bandeja mientras llega una respuesta, solo cuenta la última
+    let texto = '';        // lo que se busca dentro de la bandeja
 
-    const filtros = { estatus: [], grupos: [], formularios: [], prioridades: [] };
-    let catalogo = { estatus: [], prioridades: [], formularios: [], grupos: [] };
-    let abierto = null;   // el ticket del detalle
+    $('hd-ir-conexion').addEventListener('click', () => navegarA('helpdesk-conexion', 'Conexión'));
 
-    const colorDe = (lista, nombre) => ((lista || []).find((x) => x.nombre === nombre) || {}).color || '';
-    const badgeEstatus = (v) => {
-      const c = colorDe(catalogo.estatus, v);
-      return v ? `<span class="badge-estado" style="${c ? 'background:' + c + '22;color:' + c : ''}">${escaparHtml(v)}</span>` : '—';
+    // ---------- la marca y la búsqueda, en la barra de arriba (en celular se quedan aquí: no caben)
+    const barra = $('hd-barra');
+    const marca = $('hd-marca');
+    function colocarBarra() {
+      if (!app.isConnected) return quitarAvisoPantalla();   // ya se fue de la Bandeja
+      if (Pantalla.esCelular()) {
+        [barra, marca].forEach((el) => el.removeAttribute('data-de-vista'));
+        barra.prepend(marca);
+        app.prepend(barra);
+      } else {
+        ponerEnBarraSuperior(marca, 'izquierda');
+        ponerEnBarraSuperior(barra, 'centro');
+      }
+    }
+    const quitarAvisoPantalla = Pantalla.alCambiar(colocarBarra);
+    colocarBarra();
+
+    // ---------- piezas
+    const colorEstatus = (t) => t.COLOR_ESTATUS || ((catalogo.estatus || []).find((s) => s.nombre === t.ESTATUS) || {}).color || '';
+    const colorPrioridad = (t) => t.COLOR_PRIORIDAD || ((catalogo.prioridades || []).find((p) => p.nombre === t.PRIORIDAD) || {}).color || '';
+    const estado = (t) => {
+      const c = colorEstatus(t);
+      return t.ESTATUS ? `<span class="hd-estado" style="${c ? 'color:' + c + ';background:' + c + '1f' : ''}"><span class="hd-punto" style="${c ? 'background:' + c : ''}"></span>${e(t.ESTATUS)}</span>` : '';
     };
-    const puntoPrioridad = (v) => {
-      const c = colorDe(catalogo.prioridades, v);
-      return v ? `<span class="hd-punto" style="${c ? 'background:' + c : ''}"></span>${escaparHtml(v)}` : '—';
+    const prioridad = (t) => {
+      const c = colorPrioridad(t);
+      return t.PRIORIDAD ? `<span class="hd-estado"><span class="hd-punto" style="${c ? 'background:' + c : ''}"></span>${e(t.PRIORIDAD)}</span>` : '';
     };
+    function cuando(fecha) {
+      if (!fecha) return '';
+      const d = new Date(String(fecha).length === 10 ? fecha + 'T12:00:00' : fecha);
+      if (isNaN(d)) return '';
+      const dias = Math.round((new Date(hoyLocal() + 'T12:00:00') - new Date(d.toDateString() + ' 12:00')) / 864e5);
+      if (dias <= 0) return 'hoy';
+      if (dias === 1) return 'ayer';
+      if (dias < 30) return 'hace ' + dias + ' días';
+      return d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: dias > 300 ? 'numeric' : undefined });
+    }
     const fechaHora = (iso) => {
       const f = iso ? new Date(iso) : null;
-      return f && !isNaN(f) ? f.toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+      return f && !isNaN(f) ? f.toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' }) : '';
     };
 
-    // ----- Conectar -----
-    $('hd-marcador').textContent = HELPDESK_MARCADOR;
-    $('hd-copiar-marcador').addEventListener('click', async () => {
-      if (await copiarEnlace_(HELPDESK_MARCADOR)) Notificar.exito('Marcador copiado: pégalo en la URL del marcador nuevo');
-      else Notificar.error('El navegador no dejó copiar: selecciona el texto y cópialo');
+    // ---------- bandejas
+    function pintarBandejas() {
+      const fila = (b, i) => `<button type="button" class="hd-bandeja${b.id === hdBandejaActual ? ' activa' : ''}" data-bandeja="${b.id}" title="${e(b.etiqueta)} (${i + 1})">
+          <i data-lucide="${b.icono}" class="ico"></i><span>${e(b.etiqueta)}</span>
+          <span class="hd-bandeja-n">${HD_CONTEOS[b.id] === undefined ? '' : HD_CONTEOS[b.id]}</span></button>`;
+      const filtros = contarFiltros();
+      $('hd-bandejas').innerHTML =
+        '<div class="hd-bandejas-titulo">Mis grupos</div>' +
+        HD_BANDEJAS.filter((b) => !b.otra).map((b) => fila(b, HD_BANDEJAS.indexOf(b))).join('') +
+        '<div class="hd-bandejas-titulo">Más</div>' +
+        HD_BANDEJAS.filter((b) => b.otra).map((b) => fila(b, HD_BANDEJAS.indexOf(b))).join('') +
+        `<details class="hd-filtros-caja"${filtros ? ' open' : ''}>
+          <summary><i data-lucide="sliders-horizontal" class="ico"></i> Filtros ${filtros ? '<span class="hd-filtros-n">' + filtros + '</span>' : ''}</summary>
+          <p class="form-ayuda" style="margin:4px 0 0">Aplican a las bandejas de "Mis grupos".</p>
+          ${selectFiltro('grupos', 'Grupo', catalogo.grupos)}
+          ${selectFiltro('formularios', 'Formulario', catalogo.formularios)}
+          ${selectFiltro('prioridades', 'Prioridad', catalogo.prioridades)}
+          ${selectFiltro('agentes', 'Agente', catalogo.agentes)}
+          ${selectFiltro('departamentos', 'Departamento solicitante', catalogo.departamentos)}
+          <div class="field"><label for="hd-f-desde">Creado desde</label><input type="date" id="hd-f-desde" value="${e(filtrosExtra.desde)}" /></div>
+          <div class="field"><label for="hd-f-hasta">Hasta</label><input type="date" id="hd-f-hasta" value="${e(filtrosExtra.hasta)}" /></div>
+          ${filtros ? '<button type="button" class="secondary hd-filtros-limpiar" id="hd-filtros-limpiar">Quitar filtros</button>' : ''}
+        </details>`;
+      refreshIcons();
+    }
+    function selectFiltro(campo, etiqueta, opciones) {
+      const actual = filtrosExtra[campo][0];
+      return `<div class="field"><label for="hd-f-${campo}">${etiqueta}</label><select id="hd-f-${campo}" data-filtro="${campo}">
+        <option value="">Todos</option>${(opciones || []).map((o) => `<option value="${o.id}"${o.id === actual ? ' selected' : ''}>${e(o.nombre)}</option>`).join('')}</select></div>`;
+    }
+    const contarFiltros = () => ['grupos', 'formularios', 'prioridades', 'agentes', 'departamentos'].filter((c) => filtrosExtra[c].length).length +
+      (filtrosExtra.desde ? 1 : 0) + (filtrosExtra.hasta ? 1 : 0);
+
+    $('hd-bandejas').addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-bandeja]');
+      if (b) return elegirBandeja(b.dataset.bandeja);
+      if (ev.target.closest('#hd-filtros-limpiar')) {
+        Object.assign(filtrosExtra, { grupos: [], formularios: [], prioridades: [], agentes: [], departamentos: [], desde: '', hasta: '' });
+        pintarBandejas();
+        cargar(false);
+      }
+    });
+    $('hd-bandejas').addEventListener('change', (ev) => {
+      const el = ev.target;
+      if (el.dataset.filtro) filtrosExtra[el.dataset.filtro] = el.value ? [Number(el.value)] : [];
+      else if (el.id === 'hd-f-desde') filtrosExtra.desde = el.value || '';
+      else if (el.id === 'hd-f-hasta') filtrosExtra.hasta = el.value || '';
+      else return;
+      const abierta = el.closest('details');
+      pintarBandejas();
+      if (abierta) $('hd-bandejas').querySelector('details').open = true;
+      if (bandejaActual().otra) elegirBandeja('todos'); else cargar(false);
     });
 
-    function mostrar(estado) {
-      $('hd-cargando').hidden = true;
-      const conectado = !!(estado && estado.conectado);
-      $('hd-conectar').hidden = conectado;
-      $('hd-conectado').hidden = !conectado;
-      if (!conectado) return;
-      $('hd-quien').textContent = estado.nombre || '';
-      $('hd-vence').textContent = estado.vence ? 'Tu sesión del helpdesk vence ' + fechaHora(estado.vence) : '';
-      arrancar();
+    const bandejaActual = () => HD_BANDEJAS.find((b) => b.id === hdBandejaActual) || HD_BANDEJAS[0];
+    function filtrosDe(b) {
+      if (b.otra) return Object.assign({}, b.filtros);
+      return Object.assign({}, filtrosExtra, b.filtros);
+    }
+    function elegirBandeja(id) {
+      if (!HD_BANDEJAS.some((b) => b.id === id)) return;
+      hdBandejaActual = id;
+      pintarBandejas();
+      cargar(false);
     }
 
-    async function revisar() {
+    // ---------- lista
+    function visibles() {
+      const q = texto.trim().toLowerCase().replace(/^#/, '');
+      if (!q) return lista;
+      return lista.filter((t) => [t.ID, t.TITULO, t.SOLICITANTE, t.FORMULARIO, t.AGENTE, t.GRUPO, t.AREA_DESTINO]
+        .some((v) => String(v || '').toLowerCase().indexOf(q) !== -1));
+    }
+    function pintarLista() {
+      const b = bandejaActual();
+      $('hd-lista-titulo').textContent = b.etiqueta;
+      const filas = visibles();
+      $('hd-lista-total').textContent = texto ? filas.length + ' de ' + lista.length : (total ? total + (total === 1 ? ' ticket' : ' tickets') : '');
+      $('hd-filas').innerHTML = filas.length ? filas.map((t) => `
+        <button type="button" class="hd-fila${t.ID === abierto ? ' activa' : ''}${t.SIN_LEER ? ' sin-leer' : ''}" data-id="${t.ID}" role="option" aria-selected="${t.ID === abierto}">
+          ${Avatar.html(t.CORREO_SOLICITANTE, t.SOLICITANTE, { tam: 34 })}
+          <span class="hd-fila-texto">
+            <span class="hd-fila-1"><span class="hd-fila-quien">${e(t.SOLICITANTE || 'Sin solicitante')}</span><span class="hd-fila-cuando">${cuando(t.FECHA_CREACION)}</span></span>
+            <span class="hd-fila-titulo">${e(t.TITULO || '(sin título)')}</span>
+            <span class="hd-fila-3">${estado(t)}<span>#${t.ID}</span><span class="hd-fila-form">${e(t.FORMULARIO || t.AREA_DESTINO || '')}</span>
+              ${t.SIN_LEER ? '<span class="hd-no-leidos" title="Mensajes sin leer">' + t.SIN_LEER + '</span>' : ''}</span>
+          </span>
+        </button>`).join('')
+        : `<div class="hd-vacio"><div><i data-lucide="inbox" class="ico"></i><h3>${texto ? 'Nada coincide' : 'Sin tickets'}</h3>
+            <p>${texto ? 'Prueba con otra palabra, o escribe #folio y Enter para abrir uno que no está aquí.' : 'El helpdesk no tiene tickets en esta bandeja.'}</p></div></div>`;
+      const pie = $('hd-lista-pie');
+      if (siguiente && !texto) pie.innerHTML = '<button type="button" class="secondary" id="hd-btn-mas"><i data-lucide="chevrons-down" class="ico"></i> Cargar 25 más</button>';
+      else if (lista.length < total && !b.otra) pie.textContent = 'Se muestran ' + lista.length + ' de ' + total + '. Usa los filtros para ver otros.';
+      else if (lista.length < total) pie.textContent = 'Los ' + lista.length + ' más recientes de ' + total + ' (así los da el helpdesk en esta bandeja).';
+      else pie.textContent = '';
+      refreshIcons();
+    }
+
+    async function cargar(forzar) {
+      const mia = ++consulta;
+      const b = bandejaActual();
+      $('hd-filas').innerHTML = '<div class="hd-esqueleto"></div><div class="hd-esqueleto"></div><div class="hd-esqueleto"></div><div class="hd-esqueleto"></div>';
+      $('hd-lista-pie').textContent = '';
+      $('hd-lista-titulo').textContent = b.etiqueta;
+      $('hd-lista-total').textContent = '';
       try {
-        mostrar(await callServer('apiHelpdeskEstado', state.token));
+        const r = JSON.parse(await callServer('apiHelpdeskTickets', state.token, filtrosDe(b), !!forzar));
+        if (mia !== consulta) return;
+        lista = r.tickets;
+        total = r.total;
+        siguiente = r.siguiente || null;
+        HD_CONTEOS[b.id] = r.total;
+        const hora = new Date(r.consultado).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+        $('hd-consultado').textContent = hora;
+        $('hd-consultado').title = 'Actualizado a las ' + hora;
+        pintarBandejas();
+        pintarLista();
       } catch (err) {
-        $('hd-cargando').innerHTML = '<p class="empty-state">No se pudo revisar la conexión: ' + escaparHtml(err.message) + '</p>';
+        if (mia !== consulta) return;
+        $('hd-filas').innerHTML = '<div class="hd-vacio"><div><i data-lucide="cloud-off" class="ico"></i><h3>No se pudo cargar</h3><p>' + e(err.message) + '</p></div></div>';
+        refreshIcons();
+        if (/venció|Conecta tu cuenta/.test(err.message)) sinConexion();
       }
     }
 
-    $('hd-form-conectar').addEventListener('submit', async (ev) => {
-      ev.preventDefault();
-      const error = $('hd-conectar-error');
-      error.hidden = true;
-      const btn = $('hd-btn-conectar');
+    $('hd-lista-pie').addEventListener('click', async (ev) => {
+      const btn = ev.target.closest('#hd-btn-mas');
+      if (!btn) return;
+      const mia = consulta;
       btn.disabled = true;
       try {
-        const r = await callServer('apiHelpdeskConectar', state.token, $('hd-token').value);
-        $('hd-token').value = '';
-        Notificar.exito('Conectado al helpdesk');
-        mostrar(r);
+        const r = JSON.parse(await callServer('apiHelpdeskTickets', state.token, Object.assign(filtrosDe(bandejaActual()), { despuesDe: siguiente }), false));
+        if (mia !== consulta) return;
+        const ya = new Set(lista.map((t) => t.ID));
+        lista = lista.concat(r.tickets.filter((t) => !ya.has(t.ID)));
+        siguiente = r.siguiente || null;
+        pintarLista();
       } catch (err) {
-        error.textContent = err.message;
-        error.hidden = false;
-      } finally {
+        Notificar.error(err.message);
         btn.disabled = false;
       }
     });
 
-    $('hd-btn-desconectar').addEventListener('click', async () => {
-      try {
-        await callServer('apiHelpdeskDesconectar', state.token);
-        tabla.setDatos([]);
-        mostrar({ conectado: false });
-      } catch (err) {
-        Notificar.error('No se pudo desconectar: ' + err.message);
-      }
-    });
-    $('hd-btn-actualizar').addEventListener('click', () => cargar(true));
-
-    // ----- Filtros -----
-    function pintarEstatus() {
-      const activo = filtros.estatus[0];
-      const chip = (id, nombre, color) => `<button type="button" class="kpi-chip hd-chip-color${activo === id ? ' activo' : ''}" data-estatus="${id || ''}"
-          style="${color ? 'border-left-color:' + color : ''}"><span class="kpi-chip-label">${escaparHtml(nombre)}</span></button>`;
-      $('hd-estatus').innerHTML = chip(undefined, 'Todos') + catalogo.estatus.map((s) => chip(s.id, s.nombre, s.color)).join('');
-      $('hd-estatus').querySelectorAll('[data-estatus]').forEach((b) => b.addEventListener('click', () => {
-        filtros.estatus = b.dataset.estatus ? [Number(b.dataset.estatus)] : [];
-        pintarEstatus();
-        cargar(false);
-      }));
-    }
-    function llenarSelect(id, lista, campo) {
-      const sel = $(id);
-      sel.innerHTML = sel.options[0].outerHTML + lista.map((x) => `<option value="${x.id}">${escaparHtml(x.nombre)}</option>`).join('');
-      sel.onchange = () => { filtros[campo] = sel.value ? [Number(sel.value)] : []; cargar(false); };
-    }
-
-    // ----- Lista -----
-    const tabla = DataTable.crear($('hd-tabla'), {
-      idCampo: 'ID',
-      idTabla: 'helpdesk',
-      ordenInicial: { campo: 'FECHA_CREACION', dir: 'desc' },
-      textoVacio: 'El helpdesk no tiene tickets con estos filtros',
-      ayuda: 'Lo mismo que tu cuenta ve en el helpdesk de TI. El helpdesk manda los 25 más recientes de cada ' +
-        'filtro: usa los estatus, el grupo o el formulario para ver otros. Doble clic (o tocar) abre el ticket.',
-      exportar: { nombreArchivo: 'Help Desk' },
-      etiquetaFila: (t) => '#' + t.ID + ' ' + t.TITULO,
-      detalle: false,
-      // Como las demás tablas: clic selecciona, doble clic (o tocar) abre; una a la vez (no hay acciones masivas)
-      modoSeleccion: true,
-      seleccionDrive: true,
-      seleccionUnica: true,
-      alAbrirFila: (t) => abrirDetalle(t),
-      alTocarFila: (t) => abrirDetalle(t),
-      accionesFila: [{ icono: 'ver', titulo: 'Ver ticket', alHacer: (t) => abrirDetalle(t) }],
-      columnas: [
-        { campo: 'ID', titulo: '#', tipo: 'numero', fijada: true },
-        { campo: 'TITULO', titulo: 'Título', tipo: 'texto' },
-        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', render: (v) => badgeEstatus(v) },
-        { campo: 'PRIORIDAD', titulo: 'Prioridad', tipo: 'lista', render: (v) => puntoPrioridad(v) },
-        { campo: 'SOLICITANTE', titulo: 'Solicitante', tipo: 'texto' },
-        { campo: 'AREA_DESTINO', titulo: 'Área', tipo: 'lista' },
-        { campo: 'FORMULARIO', titulo: 'Formulario', tipo: 'lista' },
-        { campo: 'FECHA_CREACION', titulo: 'Creado', tipo: 'fecha' },
-        { campo: 'SIN_LEER', titulo: 'Sin leer', tipo: 'numero' },
-        { campo: 'ULTIMA_RESPUESTA', titulo: 'Última respuesta', tipo: 'texto', visible: false },
-        { campo: 'AGENTE', titulo: 'Agente', tipo: 'lista', visible: false },
-        { campo: 'GRUPO', titulo: 'Grupo', tipo: 'lista', visible: false },
-        { campo: 'FECHA_CIERRE', titulo: 'Cerrado', tipo: 'fecha', visible: false },
-        { campo: 'DEPARTAMENTO_SOLICITANTE', titulo: 'Departamento', tipo: 'lista', visible: false },
-      ],
+    $('hd-filas').addEventListener('click', (ev) => {
+      const fila = ev.target.closest('[data-id]');
+      if (fila) abrir(Number(fila.dataset.id), 0);
     });
 
-    async function cargar(forzar) {
-      tabla.setCargando(true);
+    // ---------- buscar
+    const buscar = $('hd-buscar');
+    buscar.addEventListener('input', () => { texto = buscar.value; pintarLista(); });
+    buscar.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') {
+        const folio = buscar.value.trim().replace(/^#/, '');
+        if (/^\d{3,}$/.test(folio)) { ev.preventDefault(); abrir(Number(folio), 0); }
+      } else if (ev.key === 'Escape') {
+        buscar.value = ''; texto = ''; pintarLista(); buscar.blur();
+      }
+    });
+
+    // ---------- ticket abierto
+    let esperaTeclas = null;
+    function abrir(id, retraso) {
+      if (!id) return;
+      abierto = id;
+      app.dataset.panel = 'ticket';
+      $('hd-filas').querySelectorAll('.hd-fila').forEach((f) => {
+        const es = Number(f.dataset.id) === id;
+        f.classList.toggle('activa', es);
+        f.setAttribute('aria-selected', es);
+        if (es) f.scrollIntoView({ block: 'nearest' });
+      });
+      const base = lista.find((t) => t.ID === id);
+      if (HD_DETALLES.has(id)) return pintarTicket(HD_DETALLES.get(id));
+      pintarTicket(base || { ID: id, TITULO: 'Ticket #' + id }, true);
+      clearTimeout(esperaTeclas);
+      // Con J/K se espera a que se deje de teclear: pasar por 5 tickets no son 5 llamadas
+      esperaTeclas = setTimeout(() => pedirDetalle(id), retraso || 0);
+    }
+    async function pedirDetalle(id) {
       try {
-        const r = JSON.parse(await callServer('apiHelpdeskTickets', state.token, filtros, !!forzar));
-        tabla.setDatos(r.tickets);
-        $('hd-resumen').textContent = r.tickets.length < r.total
-          ? `Se muestran ${r.tickets.length} de ${r.total}: los más recientes. Filtra para ver otros.`
-          : `${r.total} ${r.total === 1 ? 'ticket' : 'tickets'}`;
+        const d = JSON.parse(await callServer('apiHelpdeskDetalle', state.token, id));
+        HD_DETALLES.set(id, d);
+        if (abierto === id) pintarTicket(d);
       } catch (err) {
-        tabla.setError(err.message);
-        if (/venció|Conecta tu cuenta/.test(err.message)) revisar();
+        if (abierto !== id) return;
+        $('hd-t-conversacion').innerHTML = '<div class="hd-vacio"><div><i data-lucide="cloud-off" class="ico"></i><h3>No se pudo abrir</h3><p>' + e(err.message) + '</p></div></div>';
+        refreshIcons();
+        if (/venció|Conecta tu cuenta/.test(err.message)) sinConexion();
       }
     }
 
-    let arrancado = false;
-    async function arrancar() {
-      if (arrancado) return cargar(false);
-      arrancado = true;
-      try {
-        catalogo = await callServer('apiHelpdeskFiltros', state.token);
-        pintarEstatus();
-        llenarSelect('hd-f-grupo', catalogo.grupos, 'grupos');
-        llenarSelect('hd-f-formulario', catalogo.formularios, 'formularios');
-        llenarSelect('hd-f-prioridad', catalogo.prioridades, 'prioridades');
-      } catch (err) {
-        Notificar.error('No se pudieron cargar los filtros del helpdesk: ' + err.message);
-      }
-      await cargar(false);
-    }
-
-    // ----- Detalle -----
-    const modal = $('hd-modal');
-    const cerrarModal = () => { modal.hidden = true; abierto = null; };
-    $('hd-modal-cerrar').addEventListener('click', cerrarModal);
-    modal.addEventListener('click', (ev) => { if (ev.target === modal) cerrarModal(); });
-
-    const dato = (etiqueta, valorHtml) => `<div class="info-item"><div class="info-label">${etiqueta}</div><div class="info-value">${valorHtml || '—'}</div></div>`;
-
-    async function abrirDetalle(t) {
-      abierto = t;
-      $('hd-modal-titulo').textContent = '#' + t.ID + ' · ' + t.TITULO;
-      $('hd-modal-sub').innerHTML = badgeEstatus(t.ESTATUS);
-      $('hd-modal-cuerpo').innerHTML = '<p class="empty-state">Cargando el ticket…</p>';
-      $('hd-registrar').hidden = true;
-      modal.hidden = false;
+    function pintarTicket(t, cargando) {
+      const deQuienPide = (m) => (m.CORREO && t.CORREO_SOLICITANTE ? m.CORREO === t.CORREO_SOLICITANTE : m.AUTOR === t.SOLICITANTE);
+      const mensajes = (t.MENSAJES || []).slice().sort((a, b) => String(a.FECHA).localeCompare(String(b.FECHA)));
+      const conversacion = cargando
+        ? '<div class="hd-esqueleto"></div><div class="hd-esqueleto"></div>'
+        : (mensajes.length ? mensajes : [{ AUTOR: t.SOLICITANTE, CORREO: t.CORREO_SOLICITANTE, FECHA: t.FECHA_CREACION, TEXTO: t.DESCRIPCION, ARCHIVOS: [], ADJUNTOS: [] }])
+          .map((m) => {
+            const archivos = m.ARCHIVOS || [];
+            const nombres = archivos.length ? [] : (m.ADJUNTOS || []);
+            return `<div class="hd-msj${deQuienPide(m) ? '' : ' de-agente'}${m.PRIVADO ? ' privado' : ''}">
+              ${Avatar.html(m.CORREO, m.AUTOR, { tam: 32 })}
+              <div class="hd-msj-caja">
+                <div class="hd-msj-cabeza"><strong>${e(m.AUTOR || '—')}</strong><span>${fechaHora(m.FECHA) || e(m.FECHA || '')}</span>
+                  ${m.PRIVADO ? '<span>· Nota interna</span>' : ''}${nombres.length ? '<span>· adjuntos: ' + e(nombres.join(', ')) + '</span>' : ''}</div>
+                <div class="hd-msj-texto">${e(m.TEXTO) || '<em>(sin texto)</em>'}</div>
+                ${archivos.length ? '<div class="hd-archivos">' + archivos.map((a) =>
+                  `<button type="button" class="secondary" data-hd-ruta="${e(a.RUTA)}" data-hd-nombre="${e(a.NOMBRE)}">${Iconos.svg(a.IMAGEN ? 'imagen' : 'documento')} Ver ${e(a.NOMBRE)}</button>`).join('') + '</div>' : ''}
+              </div></div>`;
+          }).join('');
+      const prop = (k, v) => (v ? `<dt>${k}</dt><dd>${v}</dd>` : '');
+      const gente = (t.INVOLUCRADOS || []).map((p) => `<div title="${e(p.CORREO)}">${Avatar.html(p.CORREO, p.NOMBRE, { tam: 24 })}<span>${e(p.NOMBRE)}</span></div>`).join('');
+      const formulario = HD_FORMULARIOS.get(t.ID);
+      $('hd-ticket').innerHTML = `
+        <div class="hd-t-cabeza">
+          <button type="button" class="secondary hd-t-volver" id="hd-t-volver"><i data-lucide="arrow-left" class="ico"></i> Bandeja</button>
+          <div class="hd-t-folio">#${t.ID}${t.FORMULARIO ? ' · ' + e(t.FORMULARIO) : ''}</div>
+          <h2 class="hd-t-titulo">${e(t.TITULO || '')}</h2>
+          <div class="hd-t-chips">${estado(t)}${prioridad(t)}${t.GRUPO ? '<span>' + e(t.GRUPO) + '</span>' : ''}${t.ULTIMA_RESPUESTA ? '<span>· ' + e(t.ULTIMA_RESPUESTA) + '</span>' : ''}</div>
+          <div class="hd-t-acciones">
+            <button type="button" class="secondary" id="hd-btn-abrir-hd">${Iconos.svg('externo')} Abrir en el helpdesk</button>
+            ${puedeEditarModulo('tickets') ? '<button type="button" class="secondary" id="hd-btn-registrar" hidden><i data-lucide="ticket" class="ico"></i> Registrar en Tickets</button><span class="form-ayuda" id="hd-registrado" hidden></span>' : ''}
+          </div>
+        </div>
+        <div class="hd-t-cuerpo">
+          <div class="hd-conversacion" id="hd-t-conversacion">${conversacion}</div>
+          <aside class="hd-lado">
+            <div>
+              <div class="hd-lado-titulo">Quien lo pide</div>
+              <div class="hd-persona-tarjeta">${Avatar.html(t.CORREO_SOLICITANTE, t.SOLICITANTE, { tam: 40 })}
+                <div><strong>${e(t.SOLICITANTE || '—')}</strong><span>${e(t.CORREO_SOLICITANTE || '')}</span>
+                  <span>${e([t.AREA_SOLICITANTE, t.DEPARTAMENTO_SOLICITANTE].filter(Boolean).join(' · '))}</span></div></div>
+            </div>
+            <div>
+              <div class="hd-lado-titulo">Propiedades</div>
+              <dl class="hd-props">
+                ${prop('Estatus', estado(t))}${prop('Prioridad', prioridad(t))}${prop('Agente', e(t.AGENTE))}${prop('Grupo', e(t.GRUPO))}
+                ${prop('Área destino', e(t.AREA_DESTINO))}${prop('Creado', t.FECHA_CREACION ? formatearFecha(t.FECHA_CREACION) : '')}
+                ${prop('Cerrado', fechaHora(t.FECHA_CIERRE))}${prop('Duración', t.DURACION_DIAS !== '' && t.DURACION_DIAS !== undefined ? e(t.DURACION_DIAS) + ' días' : '')}
+              </dl>
+            </div>
+            <div>
+              <div class="hd-lado-titulo">Formulario</div>
+              <div id="hd-t-formulario">${formulario ? respuestasHtml(formulario)
+                : '<button type="button" class="secondary" id="hd-btn-formulario"' + (cargando ? ' disabled' : '') + '><i data-lucide="list-checks" class="ico"></i> Ver respuestas (F)</button>'}</div>
+            </div>
+            ${gente ? '<div><div class="hd-lado-titulo">En el ticket</div><div class="hd-gente">' + gente + '</div></div>' : ''}
+          </aside>
+        </div>`;
       refreshIcons();
-      let d;
-      try {
-        d = JSON.parse(await callServer('apiHelpdeskDetalle', state.token, t.ID));
-      } catch (err) {
-        if (abierto === t) $('hd-modal-cuerpo').innerHTML = '<p class="empty-state">' + escaparHtml(err.message) + '</p>';
-        return;
-      }
-      if (abierto !== t) return;   // ya abrieron otro
-      const e = escaparHtml;
-      $('hd-modal-cuerpo').innerHTML =
-        '<div class="info-grid">' +
-          dato('Estatus', badgeEstatus(d.ESTATUS)) + dato('Prioridad', puntoPrioridad(d.PRIORIDAD)) +
-          dato('Solicitante', e(d.SOLICITANTE)) + dato('Correo', e(d.CORREO_SOLICITANTE)) +
-          dato('Área del solicitante', e(d.AREA_SOLICITANTE)) + dato('Departamento', e(d.DEPARTAMENTO_SOLICITANTE)) +
-          dato('Agente', e(d.AGENTE)) + dato('Grupo', e(d.GRUPO)) +
-          dato('Formulario', e(d.FORMULARIO)) + dato('Área destino', e(d.AREA_DESTINO)) +
-          dato('Creado', formatearFecha(d.FECHA_CREACION)) + dato('Cerrado', d.FECHA_CIERRE ? fechaHora(d.FECHA_CIERRE) : '') +
-          (d.DURACION_DIAS !== '' ? dato('Duración', e(d.DURACION_DIAS) + ' días') : '') +
-          '<div class="info-section-title">Descripción</div>' +
-          `<div class="info-item" style="grid-column: 1 / -1"><div class="hd-mensaje-texto">${e(d.DESCRIPCION) || '—'}</div></div>` +
-        '</div>' +
-        `<div class="info-section-title" style="margin-top:16px">Conversación (${d.MENSAJES.length})</div>` +
-        '<div class="hd-mensajes">' + (d.MENSAJES.length ? d.MENSAJES.map((m) => `
-          <div class="hd-mensaje${m.PRIVADO ? ' privado' : ''}">
-            <div class="hd-mensaje-cabeza"><strong>${e(m.AUTOR)}</strong><span>${fechaHora(m.FECHA)}</span>
-              ${m.PRIVADO ? '<span>· nota privada</span>' : ''}${m.ADJUNTOS.length ? '<span>· adjuntos: ' + e(m.ADJUNTOS.join(', ')) + '</span>' : ''}</div>
-            <div class="hd-mensaje-texto">${e(m.TEXTO) || '<em>(sin texto)</em>'}</div>
-          </div>`).join('') : '<p class="empty-state">Sin mensajes todavía</p>') + '</div>' +
-        `<p style="margin-top:14px"><a href="${HELPDESK_PAGINA}" target="_blank" rel="noopener">${Iconos.svg('externo')} Abrir en el helpdesk</a></p>`;
-      refreshIcons();
-      if (puedeRegistrar) prepararRegistro(d);
+      Avatar.completar($('hd-ticket'));
+      if (!cargando && puedeEditarModulo('tickets')) prepararRegistro(t);
     }
 
-    // ----- Registrar en Tickets (quien edita Tickets) -----
+    function respuestasHtml(f) {
+      const campos = (f.CAMPOS || []).filter((c) => c.TIPO !== 'check' || c.VALOR);
+      if (!campos.length) return '<p class="form-ayuda" style="margin:0">El formulario no tiene campos llenos.</p>';
+      // Las fechas llegan como "2026-08-27T13:37" o "2026-08-27"
+      const valor = (c) => {
+        if (c.TIPO === 'date' && /^d{4}-d{2}-d{2}/.test(c.VALOR)) {
+          const f = new Date(c.VALOR.length === 10 ? c.VALOR + 'T12:00:00' : c.VALOR);
+          if (!isNaN(f)) return f.toLocaleString('es-MX', c.VALOR.length === 10 ? { dateStyle: 'medium' } : { dateStyle: 'medium', timeStyle: 'short' });
+        }
+        return c.VALOR;
+      };
+      return '<div class="hd-respuestas">' + campos.map((c) => `<div><span>${e(c.ETIQUETA)}</span><strong>${e(valor(c)) || '—'}</strong></div>`).join('') + '</div>';
+    }
+    async function verFormulario() {
+      const id = abierto;
+      const btn = $('hd-btn-formulario');
+      if (!id || !btn || btn.disabled) return;
+      btn.disabled = true;
+      const t = HD_DETALLES.get(id) || {};
+      try {
+        const f = await callServer('apiHelpdeskFormulario', state.token, id, t.ID_FORMULARIO || null);
+        HD_FORMULARIOS.set(id, f);
+        if (abierto === id) $('hd-t-formulario').innerHTML = respuestasHtml(f);
+      } catch (err) {
+        Notificar.error(err.message);
+        btn.disabled = false;
+      }
+    }
+
+    $('hd-ticket').addEventListener('click', async (ev) => {
+      if (ev.target.closest('#hd-t-volver')) { app.dataset.panel = 'lista'; return; }
+      if (ev.target.closest('#hd-btn-abrir-hd')) { window.open(HELPDESK_PAGINA, '_blank', 'noopener'); return; }
+      if (ev.target.closest('#hd-btn-formulario')) return verFormulario();
+      if (ev.target.closest('#hd-btn-registrar')) return abrirRegistro(HD_DETALLES.get(abierto));
+      const btn = ev.target.closest('[data-hd-ruta]');
+      if (btn) verArchivo(btn);
+    });
+
+    // ---------- archivos de la conversación: uno por uno, solo al darles clic
+    function mostrarArchivo(btn, a) {
+      const caja = document.createElement('div');
+      if (a.tipo.indexOf('image/') === 0) {
+        const img = document.createElement('img');
+        img.className = 'hd-imagen';
+        img.alt = btn.dataset.hdNombre || 'Imagen';
+        img.src = 'data:' + a.tipo + ';base64,' + a.base64;
+        caja.appendChild(img);
+      } else {
+        // PDF: como Blob (un data: largo no abre en todos los navegadores)
+        const bytes = Uint8Array.from(atob(a.base64), (c) => c.charCodeAt(0));
+        const liga = document.createElement('a');
+        liga.href = URL.createObjectURL(new Blob([bytes], { type: a.tipo }));
+        liga.target = '_blank';
+        liga.rel = 'noopener';
+        liga.download = (btn.dataset.hdNombre || 'archivo') + '.pdf';
+        liga.textContent = 'Abrir ' + (btn.dataset.hdNombre || 'el PDF');
+        caja.appendChild(liga);
+      }
+      btn.replaceWith(caja);
+    }
+    async function verArchivo(btn) {
+      const ruta = btn.dataset.hdRuta;
+      const id = abierto;
+      if (HD_ARCHIVOS.has(ruta)) return mostrarArchivo(btn, HD_ARCHIVOS.get(ruta));
+      btn.disabled = true;
+      try {
+        const a = await callServer('apiHelpdeskArchivo', state.token, id, ruta);
+        HD_ARCHIVOS.set(ruta, a);
+        if (abierto === id && btn.isConnected) mostrarArchivo(btn, a);
+      } catch (err) {
+        Notificar.error(err.message);
+        btn.disabled = false;
+      }
+    }
+
+    // ---------- registrar en Tickets (quien edita Tickets)
     async function prepararRegistro(d) {
-      $('hd-registrar').hidden = false;
-      $('hd-form-ticket').hidden = true;
-      $('hd-btn-registrar').hidden = true;
-      $('hd-registrado').hidden = true;
       let registrados = {};
-      try { registrados = await callServer('apiHelpdeskRegistrados', state.token, [d.ID]); } catch (e) { /* se ofrece igual: el servidor no deja duplicar */ }
-      if (abierto && abierto.ID !== d.ID) return;
+      try { registrados = await callServer('apiHelpdeskRegistrados', state.token, [d.ID]); } catch (err) { /* se ofrece igual: el servidor no deja duplicar */ }
+      if (abierto !== d.ID || !$('hd-btn-registrar')) return;
       if (registrados[d.ID]) {
-        $('hd-registrado').textContent = 'Ya está registrado en Tickets (' + registrados[d.ID] + ').';
+        $('hd-registrado').textContent = 'Ya está en Tickets (' + registrados[d.ID] + ')';
         $('hd-registrado').hidden = false;
-        return;
+      } else {
+        $('hd-btn-registrar').hidden = false;
       }
-      $('hd-btn-registrar').hidden = false;
-      $('hd-btn-registrar').onclick = () => abrirFormulario(d);
     }
-
-    async function abrirFormulario(d) {
-      $('hd-btn-registrar').hidden = true;
+    const modalRegistro = $('hd-modal-registrar');
+    const cerrarRegistro = () => { modalRegistro.hidden = true; };
+    $('hd-registrar-cerrar').addEventListener('click', cerrarRegistro);
+    modalRegistro.addEventListener('click', (ev) => { if (ev.target === modalRegistro) cerrarRegistro(); });
+    async function abrirRegistro(d) {
+      if (!d) return;
+      $('hd-registrar-sub').textContent = '#' + d.ID + ' · ' + d.TITULO;
       $('hd-campos-ticket').innerHTML = CamposHoja.html(CAMPOS_TICKET, { prefijo: 'hd-ticket' });
       const placa = (String(d.TITULO).toUpperCase().match(PLACA_EN_TEXTO) || [''])[0];
       CamposHoja.poblar(CAMPOS_TICKET, 'hd-ticket', {
         TICKET: String(d.ID), FECHA: d.FECHA_CREACION, DEPARTAMENTO: d.DEPARTAMENTO_SOLICITANTE,
         SOLICITANTE: d.SOLICITANTE, PLACA: placa, COMENTARIO: d.TITULO,
       });
-      const numero = document.getElementById('hd-ticket-ticket');
-      numero.disabled = true;   // siempre el número del helpdesk (el servidor lo pone igual)
+      document.getElementById('hd-ticket-ticket').disabled = true;   // siempre el número del helpdesk (el servidor lo pone igual)
       document.getElementById('hd-ticket-fecha-de-registro').value = new Date().toLocaleDateString('es-MX');
       $('hd-ticket-error').hidden = true;
-      $('hd-form-ticket').hidden = false;
+      modalRegistro.hidden = false;
       refreshIcons();
       try {
         const [departamentos, solicitantes] = await Promise.all([
@@ -280,9 +488,12 @@
           const r = await callServer('apiHelpdeskRegistrarEnTickets', state.token, d.ID, CamposHoja.recolectar(CAMPOS_TICKET, 'hd-ticket'));
           invalidarCacheLista('apiListarTicketsResumen', state.token);
           Notificar.exito('Registrado en Tickets (' + r.ID + ')');
-          $('hd-form-ticket').hidden = true;
-          $('hd-registrado').textContent = 'Registrado en Tickets (' + r.ID + ').';
-          $('hd-registrado').hidden = false;
+          cerrarRegistro();
+          if (abierto === d.ID && $('hd-btn-registrar')) {
+            $('hd-btn-registrar').hidden = true;
+            $('hd-registrado').textContent = 'Ya está en Tickets (' + r.ID + ')';
+            $('hd-registrado').hidden = false;
+          }
         } catch (err) {
           $('hd-ticket-error').textContent = err.message;
           $('hd-ticket-error').hidden = false;
@@ -292,42 +503,203 @@
       };
     }
 
-    // ----- Guardados (la copia; quien puede leer Tickets) -----
-    let guardadosTabla = null;
-    document.querySelector('#hd-tabs [data-tab="guardados"]').addEventListener('click', async () => {
-      if (!puedeVerGuardados) return;
-      if (!guardadosTabla) {
-        guardadosTabla = DataTable.crear($('hd-guardados'), {
-          idCampo: 'ID',
-          idTabla: 'helpdesk-guardados',
-          ordenInicial: { campo: 'FECHA CREACION', dir: 'desc' },
-          textoVacio: 'Todavía no se ha guardado ningún ticket del helpdesk',
-          exportar: { nombreArchivo: 'Help Desk guardados' },
-          etiquetaFila: (t) => '#' + t['ID TICKET HD'],
-          columnas: [
-            { campo: 'ID TICKET HD', titulo: '#', tipo: 'numero', fijada: true },
-            { campo: 'TITULO', titulo: 'Título', tipo: 'texto' },
-            { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista' },
-            { campo: 'PRIORIDAD', titulo: 'Prioridad', tipo: 'lista' },
-            { campo: 'SOLICITANTE', titulo: 'Solicitante', tipo: 'texto' },
-            { campo: 'AREA DESTINO', titulo: 'Área', tipo: 'lista' },
-            { campo: 'FORMULARIO', titulo: 'Formulario', tipo: 'lista' },
-            { campo: 'FECHA CREACION', titulo: 'Creado', tipo: 'fecha' },
-            { campo: 'FECHA CIERRE', titulo: 'Cerrado', tipo: 'fecha' },
-            { campo: 'ID TICKET CI', titulo: 'En Tickets', tipo: 'texto' },
-            { campo: 'ACTUALIZADO', titulo: 'Actualizado', tipo: 'fecha', visible: false },
-            { campo: 'ACTUALIZADO POR', titulo: 'Visto por', tipo: 'lista', visible: false },
-          ],
-        });
+    // ---------- atajos y barra
+    const modalAtajos = $('hd-modal-atajos');
+    $('hd-btn-atajos').addEventListener('click', () => { modalAtajos.hidden = false; });
+    $('hd-atajos-cerrar').addEventListener('click', () => { modalAtajos.hidden = true; });
+    modalAtajos.addEventListener('click', (ev) => { if (ev.target === modalAtajos) modalAtajos.hidden = true; });
+    $('hd-btn-actualizar').addEventListener('click', () => { HD_DETALLES.clear(); cargar(true); });
+
+    function mover(paso) {
+      const filas = visibles();
+      if (!filas.length) return;
+      const i = filas.findIndex((t) => t.ID === abierto);
+      const j = i === -1 ? 0 : Math.min(filas.length - 1, Math.max(0, i + paso));
+      abrir(filas[j].ID, 450);
+    }
+    // Un solo escuchador para toda la sesión: solo actúa mientras la Bandeja está montada
+    helpdeskTeclas = (ev) => {
+      if (!document.getElementById('hd-app')) return;
+      if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+      if (ev.key === 'Escape') {
+        if (!modalAtajos.hidden) { modalAtajos.hidden = true; return; }
+        if (!modalRegistro.hidden) return;
+        app.dataset.panel = 'lista';
+        return;
       }
-      guardadosTabla.setCargando(true);
+      const escribiendo = /^(INPUT|TEXTAREA|SELECT)$/.test((ev.target && ev.target.tagName) || '') || (ev.target && ev.target.isContentEditable);
+      if (escribiendo || !modalRegistro.hidden) return;
+      const k = ev.key.toLowerCase();
+      if (k === 'j') { ev.preventDefault(); mover(1); }
+      else if (k === 'k') { ev.preventDefault(); mover(-1); }
+      else if (k === '/') { ev.preventDefault(); buscar.focus(); buscar.select(); }
+      else if (k === 'r') { ev.preventDefault(); HD_DETALLES.clear(); cargar(true); }
+      else if (k === 'f') { ev.preventDefault(); verFormulario(); }
+      else if (/^[1-7]$/.test(k)) { ev.preventDefault(); elegirBandeja(HD_BANDEJAS[Number(k) - 1].id); }
+      else if (k === '?') { ev.preventDefault(); modalAtajos.hidden = false; }
+    };
+    if (!helpdeskTeclasPuesto) {
+      document.addEventListener('keydown', (ev) => helpdeskTeclas && helpdeskTeclas(ev));
+      helpdeskTeclasPuesto = true;
+    }
+
+    // ---------- arrancar
+    function sinConexion() {
+      $('hd-cuerpo').hidden = true;
+      $('hd-sin-conexion').hidden = false;
+    }
+    $('hd-ticket').innerHTML = '<div class="hd-vacio"><div><i data-lucide="inbox" class="ico"></i><h3>Elige un ticket</h3>' +
+      '<p>Usa <strong>J</strong> / <strong>K</strong> para moverte entre tickets y <strong>/</strong> para buscar.</p></div></div>';
+    pintarBandejas();
+    let est;
+    try { est = await helpdeskEstado(); } catch (err) { est = null; }
+    if (!est || !est.conectado) return sinConexion();
+    // El catálogo (colores, filtros) llega una vez por hora; no detiene la lista
+    callServer('apiHelpdeskFiltros', state.token).then((c) => { catalogo = c || catalogo; pintarBandejas(); if (lista.length) pintarLista(); })
+      .catch((err) => Notificar.error('No se pudieron cargar los filtros del helpdesk: ' + err.message));
+    cargar(false);
+  }
+  let helpdeskTeclas = null;
+  let helpdeskTeclasPuesto = false;
+
+  // =========================================================================== Conexión
+  async function initHelpdeskConexion() {
+    const $ = (id) => document.getElementById(id);
+    $('hd-marcador').textContent = HELPDESK_MARCADOR;
+    $('hd-copiar-marcador').addEventListener('click', async () => {
+      if (await copiarEnlace_(HELPDESK_MARCADOR)) Notificar.exito('Marcador copiado: pégalo en la URL del marcador nuevo');
+      else Notificar.error('El navegador no dejó copiar: selecciona el texto y cópialo');
+    });
+    $('hd-ir-bandeja').addEventListener('click', () => navegarA('helpdesk', 'Bandeja'));
+
+    function mostrar(est) {
+      $('hd-cargando').hidden = true;
+      const conectado = !!(est && est.conectado);
+      $('hd-conectar').hidden = conectado;
+      $('hd-conectado').hidden = !conectado;
+      if (!conectado) return;
+      $('hd-yo').innerHTML = Avatar.html(state.sesion.correo, est.nombre || state.sesion.nombre, { tam: 44 });
+      $('hd-quien').textContent = est.nombre || '';
+      const vence = est.vence ? new Date(est.vence) : null;
+      $('hd-vence').textContent = vence && !isNaN(vence) ? 'Tu sesión del helpdesk vence ' + vence.toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+    }
+    $('hd-form-conectar').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const error = $('hd-conectar-error');
+      error.hidden = true;
+      const btn = $('hd-btn-conectar');
+      btn.disabled = true;
       try {
-        guardadosTabla.setDatos(JSON.parse(await callServer('apiHelpdeskGuardados', state.token)));
+        const r = await callServer('apiHelpdeskConectar', state.token, $('hd-token').value);
+        $('hd-token').value = '';
+        HD_DETALLES.clear();
+        Notificar.exito('Conectado al helpdesk');
+        mostrar(r);
       } catch (err) {
-        guardadosTabla.setError(err.message);
+        error.textContent = err.message;
+        error.hidden = false;
+      } finally {
+        btn.disabled = false;
       }
     });
+    $('hd-btn-desconectar').addEventListener('click', async () => {
+      try {
+        await callServer('apiHelpdeskDesconectar', state.token);
+        HD_DETALLES.clear(); HD_FORMULARIOS.clear(); HD_ARCHIVOS.clear();
+        mostrar({ conectado: false });
+      } catch (err) {
+        Notificar.error('No se pudo desconectar: ' + err.message);
+      }
+    });
+    try {
+      mostrar(await helpdeskEstado());
+    } catch (err) {
+      $('hd-cargando').innerHTML = '<p class="empty-state">No se pudo revisar la conexión: ' + escaparHtml(err.message) + '</p>';
+    }
+  }
 
-    revisar();
+  // =========================================================================== Registrados
+  async function initHelpdeskRegistrados() {
+    const tabla = DataTable.crear(document.getElementById('hd-guardados'), {
+      idCampo: 'ID',
+      idTabla: 'helpdesk-guardados',
+      ordenInicial: { campo: 'FECHA CREACION', dir: 'desc' },
+      textoVacio: 'Todavía no se ha guardado ningún ticket del helpdesk',
+      exportar: { nombreArchivo: 'Help Desk registrados' },
+      etiquetaFila: (t) => '#' + t['ID TICKET HD'],
+      columnas: [
+        { campo: 'ID TICKET HD', titulo: '#', tipo: 'numero', fijada: true },
+        { campo: 'TITULO', titulo: 'Título', tipo: 'texto' },
+        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista' },
+        { campo: 'PRIORIDAD', titulo: 'Prioridad', tipo: 'lista' },
+        { campo: 'SOLICITANTE', titulo: 'Solicitante', tipo: 'texto' },
+        { campo: 'AREA DESTINO', titulo: 'Área', tipo: 'lista' },
+        { campo: 'FORMULARIO', titulo: 'Formulario', tipo: 'lista' },
+        { campo: 'FECHA CREACION', titulo: 'Creado', tipo: 'fecha' },
+        { campo: 'FECHA CIERRE', titulo: 'Cerrado', tipo: 'fecha' },
+        { campo: 'ID TICKET CI', titulo: 'En Tickets', tipo: 'texto' },
+        { campo: 'ACTUALIZADO', titulo: 'Actualizado', tipo: 'fecha', visible: false },
+        { campo: 'ACTUALIZADO POR', titulo: 'Visto por', tipo: 'lista', visible: false },
+      ],
+    });
+    tabla.setCargando(true);
+    try {
+      tabla.setDatos(JSON.parse(await callServer('apiHelpdeskGuardados', state.token)));
+    } catch (err) {
+      tabla.setError(err.message);
+    }
+  }
+
+  // =========================================================================== Formularios
+  async function initHelpdeskFormularios() {
+    const $ = (id) => document.getElementById(id);
+    const e = escaparHtml;
+    let formularios = [];
+    let elegido = null;
+    const TIPOS = { select: 'Lista', text: 'Texto', multiline: 'Texto largo', date: 'Fecha', number: 'Número', decimal: 'Número', check: 'Casilla' };
+
+    function pintarLista() {
+      const q = $('hd-form-buscar').value.trim().toLowerCase();
+      const coincide = (f) => !q || f.nombre.toLowerCase().indexOf(q) !== -1 || String(f.id) === q ||
+        f.campos.some((c) => c.etiqueta.toLowerCase().indexOf(q) !== -1);
+      const filtrados = formularios.filter(coincide);
+      $('hd-form-items').innerHTML = filtrados.length ? filtrados.map((f) =>
+        `<button type="button" class="hd-form-item${f.id === elegido ? ' activa' : ''}" data-form="${f.id}"><span>${e(f.nombre)}</span><small>#${f.id}</small></button>`).join('')
+        : '<p class="empty-state">Nada coincide</p>';
+    }
+    function pintarDetalle() {
+      const f = formularios.find((x) => x.id === elegido);
+      if (!f) return;
+      $('hd-form-detalle').innerHTML = `
+        <div class="hd-t-folio">Formulario #${f.id}</div>
+        <h3 style="margin:2px 0 8px">${e(f.nombre)}</h3>
+        <p style="margin:0 0 12px">${f.modulo
+          ? '<span class="hd-modulo"><i data-lucide="link" class="ico"></i> En la app: ' + e(f.moduloEtiqueta) + '</span>'
+          : '<span class="form-ayuda">No corresponde a ningún módulo de la app.</span>'}</p>
+        <div class="hd-lado-titulo">${f.campos.length} ${f.campos.length === 1 ? 'campo' : 'campos'}</div>
+        ${f.campos.length ? f.campos.map((c) => `
+          <div class="hd-form-campo">
+            <div class="hd-form-campo-cabeza"><strong>${e(c.etiqueta)}</strong><small>${e(TIPOS[c.tipo] || c.tipo)}</small></div>
+            ${c.opciones.length ? '<div class="hd-opciones">' + c.opciones.map((o) => '<span class="hd-opcion">' + e(o) + '</span>').join('') + '</div>'
+              : (c.tipo === 'select' ? '<div class="form-ayuda">Sus opciones las da el helpdesk en cada ticket.</div>' : '')}
+          </div>`).join('') : '<p class="empty-state">Solo título y descripción: no pide campos propios.</p>'}`;
+      refreshIcons();
+    }
+    $('hd-form-items').addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-form]');
+      if (!b) return;
+      elegido = Number(b.dataset.form);
+      pintarLista();
+      pintarDetalle();
+    });
+    $('hd-form-buscar').addEventListener('input', pintarLista);
+    try {
+      formularios = await callServerCacheado('apiHelpdeskCatalogo', state.token);
+      elegido = formularios.length ? formularios[0].id : null;
+      pintarLista();
+      pintarDetalle();
+    } catch (err) {
+      $('hd-form-items').innerHTML = '<p class="empty-state">' + e(err.message) + '</p>';
+    }
   }
 </script>

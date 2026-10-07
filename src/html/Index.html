@@ -52,6 +52,7 @@
             <div class="topbar-date" id="topbar-date"></div>
             <!-- Aquí se inserta sola la campana de Notificaciones (html/notificaciones.html) -->
             <div class="topbar-user-menu">
+              <span id="user-avatar"></span>
               <div class="topbar-user" id="user-name"></div>
               <button type="button" id="btn-logout" class="topbar-logout-btn" title="Cerrar sesión">
                 <i data-lucide="log-out" class="ico"></i>
@@ -118,6 +119,9 @@
   <!-- CamposHoja: el motor de los formularios declarados por columnas (Vehículos, Caja Chica,
        Arqueos). Antes de app.html porque slugCampo, que usan todos los módulos, vive ahí. -->
   <?!= include('html/js/componentes/campos-hoja'); ?>
+  <!-- Avatar: foto de perfil (directorio de Google) o iniciales. Antes de app.html: su render()
+       pinta el avatar de la barra de arriba en la primera pasada. -->
+  <?!= include('html/js/componentes/avatar'); ?>
   <?!= include('html/js/app'); ?>
   <?!= include('html/js/app-arqueos'); ?>
   <?!= include('html/js/app-cajachica'); ?>

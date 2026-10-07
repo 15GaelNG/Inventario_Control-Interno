@@ -1,125 +1,374 @@
+<!--
+  Help Desk (familia propia desde el 07/10/2026): Bandeja, Formularios, Registrados y Conexión.
+  Lógica: js/app-helpdesk.html. Lo que se ve del helpdesk de TI solo se consulta: nada cambia allá.
+
+  Identidad propia dentro del sistema: todo lo de la familia lleva .hd-tema (acento índigo, en vez
+  del dorado de la marca), y la Bandeja es un espacio de trabajo a pantalla completa como el de las
+  plataformas de soporte (Zendesk, Help Scout): bandejas a la izquierda, la lista al centro y el
+  ticket abierto a la derecha. Mismos tokens, fuentes, componentes y modo oscuro que el resto.
+-->
+<style>
+  .hd-tema {
+    --hd: #5b5bd6; --hd-fuerte: #4646bd; --hd-suave: rgba(91, 91, 214, .10); --hd-borde: rgba(91, 91, 214, .28);
+    --hd-nota: #fff6e0; --hd-nota-borde: #e9c46a;
+  }
+  :root[data-theme="dark"] .hd-tema {
+    --hd: #a3a3f5; --hd-fuerte: #c0c0fa; --hd-suave: rgba(163, 163, 245, .13); --hd-borde: rgba(163, 163, 245, .32);
+    --hd-nota: #2d2716; --hd-nota-borde: #8a7434;
+  }
+  .hd-tema .hd-boton-acento { background: var(--hd); border-color: var(--hd); color: #fff; }
+  .hd-tema .hd-boton-acento:hover { background: var(--hd-fuerte); border-color: var(--hd-fuerte); }
+  :root[data-theme="dark"] .hd-tema .hd-boton-acento { color: #14142b; }
+  .hd-marca { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: var(--hd); white-space: nowrap; }
+  .hd-marca .ico { width: 18px; height: 18px; }
+  .hd-punto { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--color-border); }
+  .hd-estado { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--color-bg); white-space: nowrap; }
+  .hd-vacio { display: grid; place-items: center; text-align: center; padding: 40px 20px; color: var(--color-text-muted); font-size: 13px; height: 100%; }
+  .hd-vacio .ico { width: 34px; height: 34px; color: var(--hd); opacity: .7; }
+  .hd-vacio h3 { margin: 8px 0 4px; color: var(--color-text); font-size: 15px; }
+
+  /* ===== Bandeja: el espacio de trabajo ===== */
+  #view-container:has(> .hd-app) { padding: 0; overflow: hidden; }
+  .hd-app { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--color-bg); }
+  .hd-barra {
+    display: flex; align-items: center; gap: 14px; padding: 10px 20px; flex: none;
+    background: var(--color-surface); border-bottom: 1px solid var(--color-border);
+  }
+  .hd-buscar { position: relative; flex: 1; max-width: 460px; }
+  .hd-buscar .ico { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; color: var(--color-text-muted); }
+  .hd-buscar input { width: 100%; padding: 8px 34px 8px 32px; border-radius: 10px; background: var(--color-bg); border: 1px solid transparent; font-size: 13px; }
+  .hd-buscar input:focus { border-color: var(--hd); background: var(--color-surface); outline: none; }
+  .hd-tecla { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 11px; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--color-border); color: var(--color-text-muted); }
+  .hd-barra-derecha { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-text-muted); }
+  .hd-consultado { margin-left: auto; font-size: 11.5px !important; }
+  .hd-lista-cabeza { align-items: center; }
+  .hd-lista-cabeza h2, .hd-lista-cabeza span { white-space: nowrap; }
+  .hd-lista-cabeza h2 { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .hd-actualizar { width: 28px; height: 28px; border-radius: 8px; flex: none; }
+  .hd-actualizar .ico { width: 14px; height: 14px; }
+  /* En la barra de arriba (escritorio y tableta) */
+  #main:has(.hd-app) .topbar { margin-bottom: 0; gap: 12px; }
+  /* Lo que se cede para que quepa la búsqueda: la fecha (y en tableta el nombre; queda su foto) */
+  #main:has(.hd-app) .topbar-date { display: none; }
+  #main:has(.hd-app) .topbar-left, #main:has(.hd-app) .topbar-right { flex-shrink: 0; }
+  .topbar .hd-barra { flex: 1; min-width: 0; justify-content: center; gap: 8px; padding: 0; background: none; border: 0; }
+  .topbar .hd-buscar { max-width: 560px; min-width: 0; }
+  .topbar .hd-barra-derecha { margin-left: 0; }
+  .topbar-left .hd-marca { padding-left: 16px; border-left: 1px solid var(--color-border); }
+  .hd-icono-btn { display: inline-grid; place-items: center; width: 34px; height: 34px; padding: 0; border-radius: 9px; }
+  .hd-icono-btn .ico { width: 16px; height: 16px; }
+
+  .hd-cuerpo { flex: 1; min-height: 0; display: grid; grid-template-columns: 228px minmax(300px, 380px) minmax(0, 1fr); }
+
+  /* Bandejas */
+  .hd-bandejas { overflow-y: auto; padding: 10px; border-right: 1px solid var(--color-border); background: var(--color-surface); }
+  .hd-bandejas-titulo { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--color-text-muted); padding: 12px 10px 6px; }
+  .hd-bandeja {
+    display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; margin: 1px 0; border: 0; border-radius: 9px;
+    background: transparent; color: var(--color-text); font-size: 13px; font-weight: 500; text-align: left; cursor: pointer; box-shadow: none;
+  }
+  .hd-bandeja .ico { width: 16px; height: 16px; color: var(--color-text-muted); flex: none; }
+  .hd-bandeja:hover { background: var(--color-bg); }
+  .hd-bandeja.activa { background: var(--hd-suave); color: var(--hd); font-weight: 700; }
+  .hd-bandeja.activa .ico { color: var(--hd); }
+  .hd-bandeja-n { margin-left: auto; font-size: 11.5px; font-weight: 600; color: var(--color-text-muted); }
+  .hd-bandeja.activa .hd-bandeja-n { color: var(--hd); }
+  .hd-filtros-caja { margin-top: 6px; padding: 0 10px 10px; }
+  .hd-filtros-caja summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--color-text-muted); padding: 8px 0; list-style: none; display: flex; align-items: center; gap: 6px; }
+  .hd-filtros-caja summary::-webkit-details-marker { display: none; }
+  .hd-filtros-caja summary .ico { width: 15px; height: 15px; }
+  .hd-filtros-caja .field { margin: 8px 0 0; }
+  .hd-filtros-caja label { font-size: 11.5px; }
+  .hd-filtros-caja select, .hd-filtros-caja input { font-size: 12.5px; padding: 6px 8px; }
+  .hd-filtros-n { font-size: 11px; background: var(--hd); color: #fff; border-radius: 999px; padding: 0 6px; }
+  .hd-filtros-limpiar { margin-top: 10px; font-size: 12px; padding: 5px 10px; width: 100%; }
+
+  /* Lista */
+  .hd-lista { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--color-border); background: var(--color-surface); }
+  .hd-lista-cabeza { display: flex; align-items: baseline; gap: 8px; padding: 14px 16px 10px; border-bottom: 1px solid var(--color-border); }
+  .hd-lista-cabeza h2 { margin: 0; font-size: 16px; }
+  .hd-lista-cabeza span { font-size: 12px; color: var(--color-text-muted); }
+  .hd-filas { flex: 1; overflow-y: auto; }
+  .hd-fila {
+    display: flex; gap: 10px; width: 100%; padding: 11px 14px 11px 12px; border: 0; border-radius: 0; border-bottom: 1px solid var(--color-border);
+    border-left: 3px solid transparent; background: transparent; text-align: left; cursor: pointer; color: var(--color-text); box-shadow: none;
+  }
+  .hd-fila:hover { background: var(--color-bg); }
+  .hd-fila.activa { background: var(--hd-suave); border-left-color: var(--hd); }
+  .hd-fila:focus-visible { outline: 2px solid var(--hd); outline-offset: -2px; }
+  .hd-fila-texto { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .hd-fila-1 { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-text-muted); }
+  .hd-fila-quien { font-weight: 600; color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hd-fila-cuando { margin-left: auto; flex: none; }
+  .hd-fila-titulo { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hd-fila.sin-leer .hd-fila-titulo { font-weight: 700; }
+  .hd-fila-3 { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--color-text-muted); min-width: 0; }
+  .hd-fila-3 .hd-fila-form { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hd-no-leidos { margin-left: auto; flex: none; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--hd); color: #fff; font-size: 11px; font-weight: 700; display: inline-grid; place-items: center; }
+  :root[data-theme="dark"] .hd-no-leidos { color: #14142b; }
+  .hd-lista-pie { padding: 10px; text-align: center; font-size: 12px; color: var(--color-text-muted); border-top: 1px solid var(--color-border); }
+  .hd-lista-pie button { font-size: 12.5px; padding: 6px 12px; }
+  .hd-esqueleto { height: 64px; margin: 8px 12px; border-radius: 10px; background: linear-gradient(90deg, var(--color-bg), var(--color-border), var(--color-bg)); background-size: 200% 100%; animation: hdBrillo 1.2s infinite; }
+  @keyframes hdBrillo { to { background-position: -200% 0; } }
+
+  /* Ticket abierto */
+  .hd-ticket { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--color-bg); }
+  .hd-t-cabeza { padding: 14px 22px 12px; background: var(--color-surface); border-bottom: 1px solid var(--color-border); }
+  .hd-t-volver { display: none; font-size: 12.5px; padding: 4px 10px; }
+  .hd-t-folio { font-size: 12px; color: var(--color-text-muted); font-weight: 600; }
+  .hd-t-titulo { margin: 2px 0 8px; font-size: 18px; line-height: 1.3; }
+  .hd-t-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; color: var(--color-text-muted); }
+  .hd-t-acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .hd-t-acciones button, .hd-t-acciones a { font-size: 12.5px; padding: 6px 12px; display: inline-flex; align-items: center; gap: 6px; }
+  .hd-t-cuerpo { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 290px; }
+  .hd-conversacion { overflow-y: auto; padding: 18px 22px 30px; display: flex; flex-direction: column; gap: 14px; }
+  .hd-msj { display: flex; gap: 10px; max-width: 760px; }
+  .hd-msj-caja { flex: 1; min-width: 0; padding: 10px 14px 12px; border-radius: 4px 14px 14px 14px; background: var(--color-surface); border: 1px solid var(--color-border); }
+  .hd-msj.de-agente .hd-msj-caja { background: var(--hd-suave); border-color: var(--hd-borde); }
+  .hd-msj.privado .hd-msj-caja { background: var(--hd-nota); border: 1px dashed var(--hd-nota-borde); }
+  .hd-msj-cabeza { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 12px; color: var(--color-text-muted); margin-bottom: 4px; }
+  .hd-msj-cabeza strong { color: var(--color-text); font-size: 13px; }
+  .hd-msj-texto { white-space: pre-wrap; word-break: break-word; font-size: 13.5px; line-height: 1.5; }
+  .hd-archivos { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; align-items: flex-start; }
+  .hd-archivos button { font-size: 12px; padding: 4px 10px; }
+  .hd-imagen { display: block; max-width: 100%; max-height: 420px; border-radius: 8px; border: 1px solid var(--color-border); }
+  .hd-lado { overflow-y: auto; padding: 16px; border-left: 1px solid var(--color-border); background: var(--color-surface); display: flex; flex-direction: column; gap: 20px; }
+  .hd-lado-titulo { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--color-text-muted); margin-bottom: 8px; }
+  .hd-persona-tarjeta { display: flex; gap: 10px; align-items: center; }
+  .hd-persona-tarjeta > div > strong { display: block; font-size: 13.5px; }
+  .hd-persona-tarjeta > div > span { display: block; font-size: 12px; color: var(--color-text-muted); word-break: break-all; }
+  .hd-props { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 7px 12px; font-size: 12.5px; margin: 0; }
+  .hd-props dt { color: var(--color-text-muted); }
+  .hd-props dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+  .hd-gente { display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; }
+  .hd-gente div { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .hd-respuestas { display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; }
+  .hd-respuestas span { display: block; color: var(--color-text-muted); font-size: 11.5px; }
+  .hd-respuestas strong { font-weight: 500; overflow-wrap: anywhere; }
+  .hd-lado button.secondary { font-size: 12.5px; padding: 6px 12px; }
+
+  /* Tableta: el panel de la derecha baja debajo de la conversación */
+  @media (max-width: 1024px) {
+    /* En tableta la búsqueda manda: la marca se esconde (Help Desk se sigue viendo en el menú) */
+    .topbar #hd-btn-atajos, .topbar .hd-tecla, .topbar-left .hd-marca { display: none; }
+    .topbar .hd-buscar { min-width: 150px; }
+    #main:has(.hd-app) .topbar-user { display: none; }
+    .topbar .hd-buscar input { padding-right: 10px; }
+    .hd-cuerpo { grid-template-columns: 196px minmax(250px, 310px) minmax(0, 1fr); }
+    .hd-t-cuerpo { display: flex; flex-direction: column; overflow-y: auto; }
+    .hd-conversacion, .hd-lado { overflow: visible; }
+    .hd-lado { border-left: 0; border-top: 1px solid var(--color-border); }
+  }
+  /* Celular: un panel a la vez (bandejas arriba como pestañas, la lista, o el ticket) */
+  @media (max-width: 640px) {
+    .hd-barra { padding: 8px 12px; flex-wrap: wrap; gap: 8px; }
+    .hd-buscar { max-width: none; order: 3; flex-basis: 100%; }
+    .hd-tecla, #hd-btn-atajos, .hd-consultado { display: none; }
+    .hd-actualizar { margin-left: auto; }
+    .hd-cuerpo { display: flex; flex-direction: column; }
+    .hd-bandejas { display: flex; gap: 6px; padding: 8px 12px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--color-border); flex: none; }
+    .hd-bandejas-titulo, .hd-filtros-caja { display: none; }
+    .hd-bandeja { width: auto; flex: none; white-space: nowrap; border: 1px solid var(--color-border); border-radius: 999px; padding: 6px 12px; }
+    .hd-lista { flex: 1; border-right: 0; }
+    .hd-ticket { display: none; }
+    .hd-app[data-panel="ticket"] .hd-bandejas, .hd-app[data-panel="ticket"] .hd-lista { display: none; }
+    .hd-app[data-panel="ticket"] .hd-ticket { display: flex; flex: 1; }
+    .hd-t-volver { display: inline-flex; margin-bottom: 6px; }
+    .hd-t-cabeza { padding: 12px 14px; }
+    .hd-conversacion { padding: 14px; }
+  }
+
+  /* ===== Páginas de la familia (Formularios, Registrados, Conexión) ===== */
+  .hd-pagina .page-header h2 .ico { color: var(--hd); }
+  .hd-paso { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 10px; font-size: 13px; }
+  .hd-paso-num {
+    flex: 0 0 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    background: var(--hd-suave); color: var(--hd); font-weight: 700; font-size: 12px;
+  }
+  .hd-marcador {
+    display: block; width: 100%; font-family: ui-monospace, Consolas, monospace; font-size: 11.5px;
+    background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 8px; padding: 8px 10px;
+    word-break: break-all; white-space: pre-wrap; color: var(--color-text); margin: 6px 0;
+  }
+  .hd-conexion-estado { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: 13.5px; }
+  .hd-conexion-estado .hd-acciones { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+  .hd-form-lista { display: grid; grid-template-columns: minmax(240px, 340px) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .hd-form-items { max-height: 70vh; overflow-y: auto; }
+  .hd-form-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 0; border-radius: 0; border-bottom: 1px solid var(--color-border); background: transparent; text-align: left; cursor: pointer; color: var(--color-text); font-size: 13px; box-shadow: none; }
+  .hd-form-item:hover { background: var(--color-bg); }
+  .hd-form-item.activa { background: var(--hd-suave); color: var(--hd); font-weight: 600; }
+  .hd-form-item small { margin-left: auto; color: var(--color-text-muted); font-weight: 400; flex: none; }
+  .hd-form-campo { padding: 10px 0; border-bottom: 1px solid var(--color-border); font-size: 13px; }
+  .hd-form-campo:last-child { border-bottom: 0; }
+  .hd-form-campo-cabeza { display: flex; gap: 8px; align-items: baseline; }
+  .hd-form-campo-cabeza small { margin-left: auto; color: var(--color-text-muted); font-size: 11.5px; flex: none; }
+  .hd-opciones { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+  .hd-opcion { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; background: var(--hd-suave); color: var(--hd); }
+  .hd-modulo { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 999px; background: var(--color-primary-soft); color: var(--color-text); }
+  @media (max-width: 640px) {
+    .hd-form-lista { grid-template-columns: 1fr; }
+  }
+</style>
+
+<!-- ===================================================================== Bandeja -->
 <template id="tpl-helpdesk">
-  <style>
-    /* Help Desk: solo lo propio; lo demás (tabla, chips, ventana, ficha) es de los componentes */
-    .hd-paso { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 10px; font-size: 13px; }
-    .hd-paso-num {
-      flex: 0 0 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
-      background: var(--color-primary-soft); color: var(--color-primary); font-weight: 700; font-size: 12px;
-    }
-    .hd-marcador {
-      display: block; width: 100%; font-family: ui-monospace, Consolas, monospace; font-size: 11.5px;
-      background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 8px; padding: 8px 10px;
-      word-break: break-all; white-space: pre-wrap; color: var(--color-text); margin: 6px 0;
-    }
-    .hd-estado { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-bottom: 14px; font-size: 13px; }
-    .hd-estado .hd-quien { font-weight: 600; }
-    .hd-estado .hd-acciones { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
-    .hd-filtros { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 4px; }
-    .hd-filtros .field { margin: 0; min-width: 180px; flex: 1 1 180px; }
-    .hd-punto { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: middle; background: var(--color-border); }
-    .hd-chip-color { border-left-width: 4px; }
-    .hd-mensajes { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
-    .hd-mensaje { border: 1px solid var(--color-border); border-radius: 10px; padding: 10px 12px; background: var(--color-surface); }
-    .hd-mensaje.privado { border-style: dashed; background: var(--color-bg); }
-    .hd-mensaje-cabeza { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; color: var(--color-text-muted); margin-bottom: 6px; }
-    .hd-mensaje-cabeza strong { color: var(--color-text); }
-    .hd-mensaje-texto { white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.45; }
-    .hd-registrar { margin-top: 14px; border-top: 1px solid var(--color-border); padding-top: 14px; }
-  </style>
-
-  <div class="page-header">
-    <div>
-      <h2><i data-lucide="headset" class="ico"></i> Help Desk</h2>
-      <p class="page-subtitle">Los tickets del helpdesk de TI que tu cuenta ve allá. Aquí solo se consultan: nada se marca como leído ni cambia en el helpdesk.</p>
+  <div class="hd-app hd-tema" id="hd-app" data-panel="lista">
+    <!-- En escritorio y tableta, la marca va junto al logo de arriba y esto al centro de la barra de
+         arriba (ponerEnBarraSuperior): la Bandeja usa toda la pantalla. En celular se queda aquí. -->
+    <div class="hd-barra hd-tema" id="hd-barra">
+      <span class="hd-marca hd-tema" id="hd-marca"><i data-lucide="headset" class="ico"></i> Help Desk</span>
+      <div class="hd-buscar">
+        <i data-lucide="search" class="ico"></i>
+        <input type="search" id="hd-buscar" autocomplete="off" placeholder="Buscar en la bandeja, o #folio y Enter" aria-label="Buscar tickets" />
+        <span class="hd-tecla">/</span>
+      </div>
+      <div class="hd-barra-derecha">
+        <button type="button" class="secondary hd-icono-btn" id="hd-btn-atajos" title="Atajos de teclado"><i data-lucide="keyboard" class="ico"></i></button>
+      </div>
     </div>
-  </div>
 
-  <div id="hd-cargando" class="card"><p class="empty-state">Revisando tu conexión con el helpdesk…</p></div>
-
-  <!-- Sin conectar -->
-  <div id="hd-conectar" class="card form-card" hidden>
-    <div class="form-card-header">
-      <div class="form-card-icon"><i data-lucide="plug" class="ico"></i></div>
+    <div id="hd-sin-conexion" class="hd-vacio" hidden>
       <div>
+        <i data-lucide="plug" class="ico"></i>
         <h3>Conecta tu helpdesk</h3>
-        <p>Una vez al día: tu sesión del helpdesk dura 24 horas</p>
+        <p>Para ver tus tickets aquí, conecta tu cuenta del helpdesk (una vez al día).</p>
+        <button type="button" class="hd-boton-acento" id="hd-ir-conexion"><i data-lucide="plug" class="ico"></i> Ir a Conexión</button>
       </div>
     </div>
-    <p class="hd-paso"><span class="hd-paso-num">1</span><span><strong>Solo la primera vez:</strong> copia el marcador con este botón.</span></p>
-    <code class="hd-marcador" id="hd-marcador"></code>
-    <button type="button" class="secondary" id="hd-copiar-marcador"><i data-lucide="copy" class="ico"></i> Copiar el marcador</button>
-    <p class="hd-paso" style="margin-top:14px"><span class="hd-paso-num" style="visibility:hidden">1</span><span>En Chrome, muestra la barra de favoritos (Ctrl+Shift+B), dale
-      <strong>clic derecho</strong> → <strong>"Agregar página…"</strong>. Nombre: <em>Token helpdesk</em>; en <strong>URL</strong> pega lo que copiaste y guarda.
-      (También sirve: Ctrl+Shift+O → los tres puntos de arriba a la derecha → "Agregar marcador nuevo".)</span></p>
-    <p class="hd-paso" style="margin-top:14px"><span class="hd-paso-num">2</span><span>Entra al helpdesk con tu cuenta y dale clic al marcador: copia tu token.</span></p>
-    <p class="hd-paso"><span class="hd-paso-num">3</span><span>Pégalo aquí y conecta. Se guarda solo en el servidor, a tu nombre, y nadie más puede usarlo.</span></p>
-    <form id="hd-form-conectar">
-      <div class="field">
-        <label for="hd-token">Tu token del helpdesk</label>
-        <input type="password" id="hd-token" autocomplete="off" required placeholder="Pega aquí tu token" />
-      </div>
-      <div class="error-msg" id="hd-conectar-error" hidden></div>
-      <button type="submit" id="hd-btn-conectar"><i data-lucide="plug" class="ico"></i> Conectar</button>
-    </form>
-  </div>
 
-  <!-- Conectado -->
-  <div id="hd-conectado" hidden>
-    <div class="hd-estado">
-      <span><i data-lucide="circle-check" class="ico" style="color:var(--color-success)"></i> Conectado como <span class="hd-quien" id="hd-quien"></span></span>
-      <span class="form-ayuda" id="hd-vence"></span>
-      <span class="hd-acciones">
-        <button type="button" class="secondary" id="hd-btn-actualizar"><i data-lucide="refresh-cw" class="ico"></i> Actualizar</button>
-        <button type="button" class="secondary" id="hd-btn-desconectar"><i data-lucide="log-out" class="ico"></i> Desconectar</button>
-      </span>
+    <div class="hd-cuerpo" id="hd-cuerpo">
+      <nav class="hd-bandejas" id="hd-bandejas" aria-label="Bandejas" data-scroll-x></nav>
+
+      <section class="hd-lista" aria-label="Tickets">
+        <div class="hd-lista-cabeza"><h2 id="hd-lista-titulo">Bandeja</h2><span id="hd-lista-total"></span><span class="hd-consultado" id="hd-consultado"></span><button type="button" class="secondary hd-icono-btn hd-actualizar" id="hd-btn-actualizar" title="Actualizar (R)"><i data-lucide="refresh-cw" class="ico"></i></button></div>
+        <div class="hd-filas" id="hd-filas" role="listbox" aria-label="Tickets"></div>
+        <div class="hd-lista-pie" id="hd-lista-pie"></div>
+      </section>
+
+      <section class="hd-ticket" id="hd-ticket" aria-live="polite"></section>
     </div>
 
-    <div class="tabs-simple" id="hd-tabs">
-      <button type="button" class="tab-btn active" data-tab="helpdesk"><i data-lucide="headset" class="ico"></i> En el helpdesk</button>
-      <button type="button" class="tab-btn" data-tab="guardados" id="hd-tab-guardados" hidden><i data-lucide="archive" class="ico"></i> Guardados</button>
-    </div>
-
-    <div class="tab-panel" data-tab-panel="helpdesk">
-      <div class="kpi-chips" id="hd-estatus"></div>
-      <div class="hd-filtros">
-        <div class="field"><label for="hd-f-grupo">Grupo</label><select id="hd-f-grupo"><option value="">Todos</option></select></div>
-        <div class="field"><label for="hd-f-formulario">Formulario</label><select id="hd-f-formulario"><option value="">Todos</option></select></div>
-        <div class="field"><label for="hd-f-prioridad">Prioridad</label><select id="hd-f-prioridad"><option value="">Todas</option></select></div>
-      </div>
-      <p class="form-ayuda" id="hd-resumen"></p>
-      <div class="card card-compacta"><div id="hd-tabla"></div></div>
-    </div>
-
-    <div class="tab-panel" data-tab-panel="guardados" hidden>
-      <p class="form-ayuda">La copia que la app guarda sola de los tickets que se han visto aquí (sin las conversaciones).</p>
-      <div class="card card-compacta"><div id="hd-guardados"></div></div>
-    </div>
-  </div>
-
-  <!-- Detalle de un ticket -->
-  <div class="modal-backdrop" id="hd-modal" hidden>
-    <div class="modal-card modal-card-wide">
-      <div class="modal-header">
-        <div>
-          <h3 style="margin:0" id="hd-modal-titulo"></h3>
-          <p class="modal-subtitle" id="hd-modal-sub"></p>
+    <!-- Registrar en Tickets (quien edita Tickets) -->
+    <div class="modal-backdrop" id="hd-modal-registrar" hidden>
+      <div class="modal-card modal-card-wide">
+        <div class="modal-header">
+          <div><h3 style="margin:0">Registrar en Tickets</h3><p class="modal-subtitle" id="hd-registrar-sub"></p></div>
+          <button type="button" class="modal-close" id="hd-registrar-cerrar"><i data-lucide="x" class="ico"></i></button>
         </div>
-        <button type="button" class="modal-close" id="hd-modal-cerrar"><i data-lucide="x" class="ico"></i></button>
-      </div>
-      <div class="modal-form-scroll">
-        <div id="hd-modal-cuerpo"><p class="empty-state">Cargando…</p></div>
-        <div class="hd-registrar" id="hd-registrar" hidden>
-          <div id="hd-registrado" class="form-ayuda" hidden></div>
-          <button type="button" id="hd-btn-registrar"><i data-lucide="ticket" class="ico"></i> Registrar en Tickets</button>
-          <form id="hd-form-ticket" class="form-rejilla" data-columnas="2" hidden>
+        <div class="modal-form-scroll">
+          <form id="hd-form-ticket" class="form-rejilla" data-columnas="2">
             <div id="hd-campos-ticket" style="display: contents"></div>
             <div style="grid-column: 1 / -1;">
               <div class="error-msg" id="hd-ticket-error" hidden></div>
-              <button type="submit" id="hd-btn-guardar-ticket"><i data-lucide="save" class="ico"></i> Guardar en Tickets</button>
+              <button type="submit" class="hd-boton-acento" id="hd-btn-guardar-ticket"><i data-lucide="save" class="ico"></i> Guardar en Tickets</button>
             </div>
           </form>
         </div>
       </div>
+    </div>
+
+    <!-- Atajos -->
+    <div class="modal-backdrop" id="hd-modal-atajos" hidden>
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 style="margin:0">Atajos de teclado</h3>
+          <button type="button" class="modal-close" id="hd-atajos-cerrar"><i data-lucide="x" class="ico"></i></button>
+        </div>
+        <dl class="hd-props" style="font-size:13px">
+          <dt><span class="hd-estado">J</span> <span class="hd-estado">K</span></dt><dd>Siguiente / anterior ticket</dd>
+          <dt><span class="hd-estado">/</span></dt><dd>Buscar (o #folio y Enter)</dd>
+          <dt><span class="hd-estado">R</span></dt><dd>Actualizar la bandeja</dd>
+          <dt><span class="hd-estado">F</span></dt><dd>Ver el formulario del ticket</dd>
+          <dt><span class="hd-estado">1</span> … <span class="hd-estado">7</span></dt><dd>Cambiar de bandeja</dd>
+          <dt><span class="hd-estado">Esc</span></dt><dd>Salir de la búsqueda / volver a la lista</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</template>
+
+<!-- ===================================================================== Formularios -->
+<template id="tpl-helpdesk-formularios">
+  <div class="hd-tema hd-pagina">
+    <div class="page-header">
+      <div>
+        <h2><i data-lucide="list-checks" class="ico"></i> Formularios</h2>
+        <p class="page-subtitle">Los formularios del helpdesk que atiende nuestro grupo: qué pide cada uno y a qué módulo de la app corresponde.</p>
+      </div>
+    </div>
+    <div class="hd-form-lista">
+      <div class="card card-compacta" style="padding:0; overflow:hidden">
+        <div style="padding:10px"><input type="search" id="hd-form-buscar" placeholder="Buscar formulario o campo…" aria-label="Buscar formulario" /></div>
+        <div class="hd-form-items" id="hd-form-items"><p class="empty-state">Cargando…</p></div>
+      </div>
+      <div class="card" id="hd-form-detalle"><p class="empty-state">Elige un formulario</p></div>
+    </div>
+  </div>
+</template>
+
+<!-- ===================================================================== Registrados -->
+<template id="tpl-helpdesk-registrados">
+  <div class="hd-tema hd-pagina">
+    <div class="page-header">
+      <div>
+        <h2><i data-lucide="archive" class="ico"></i> Registrados</h2>
+        <p class="page-subtitle">La copia que la app guarda sola de los tickets que se han visto (sin las conversaciones) y cuáles ya están en nuestra bitácora de Tickets.</p>
+      </div>
+    </div>
+    <div class="card card-compacta"><div id="hd-guardados"></div></div>
+  </div>
+</template>
+
+<!-- ===================================================================== Conexión -->
+<template id="tpl-helpdesk-conexion">
+  <div class="hd-tema hd-pagina">
+    <div class="page-header">
+      <div>
+        <h2><i data-lucide="plug" class="ico"></i> Conexión</h2>
+        <p class="page-subtitle">Tu sesión del helpdesk dura 24 horas. Se guarda solo en el servidor, a tu nombre, y nadie más puede usarla.</p>
+      </div>
+    </div>
+
+    <div id="hd-cargando" class="card"><p class="empty-state">Revisando tu conexión con el helpdesk…</p></div>
+
+    <div id="hd-conectado" class="card" hidden>
+      <div class="hd-conexion-estado">
+        <span id="hd-yo"></span>
+        <div>
+          <div><i data-lucide="circle-check" class="ico" style="color:var(--color-success)"></i> Conectado como <strong id="hd-quien"></strong></div>
+          <div class="form-ayuda" id="hd-vence"></div>
+        </div>
+        <span class="hd-acciones">
+          <button type="button" class="hd-boton-acento" id="hd-ir-bandeja"><i data-lucide="inbox" class="ico"></i> Ir a la Bandeja</button>
+          <button type="button" class="secondary" id="hd-btn-desconectar"><i data-lucide="log-out" class="ico"></i> Desconectar</button>
+        </span>
+      </div>
+    </div>
+
+    <div id="hd-conectar" class="card form-card" hidden>
+      <div class="form-card-header">
+        <div class="form-card-icon"><i data-lucide="plug" class="ico"></i></div>
+        <div>
+          <h3>Conecta tu helpdesk</h3>
+          <p>Una vez al día: tu sesión del helpdesk dura 24 horas</p>
+        </div>
+      </div>
+      <p class="hd-paso"><span class="hd-paso-num">1</span><span><strong>Solo la primera vez:</strong> copia el marcador con este botón.</span></p>
+      <code class="hd-marcador" id="hd-marcador"></code>
+      <button type="button" class="secondary" id="hd-copiar-marcador"><i data-lucide="copy" class="ico"></i> Copiar el marcador</button>
+      <p class="hd-paso" style="margin-top:14px"><span class="hd-paso-num" style="visibility:hidden">1</span><span>En Chrome, muestra la barra de favoritos (Ctrl+Shift+B), dale
+        <strong>clic derecho</strong> → <strong>"Agregar página…"</strong>. Nombre: <em>Token helpdesk</em>; en <strong>URL</strong> pega lo que copiaste y guarda.
+        (También sirve: Ctrl+Shift+O → los tres puntos de arriba a la derecha → "Agregar marcador nuevo".)</span></p>
+      <p class="hd-paso" style="margin-top:14px"><span class="hd-paso-num">2</span><span>Entra al helpdesk con tu cuenta y dale clic al marcador: copia tu token.</span></p>
+      <p class="hd-paso"><span class="hd-paso-num">3</span><span>Pégalo aquí y conecta.</span></p>
+      <form id="hd-form-conectar">
+        <div class="field">
+          <label for="hd-token">Tu token del helpdesk</label>
+          <input type="password" id="hd-token" autocomplete="off" required placeholder="Pega aquí tu token" />
+        </div>
+        <div class="error-msg" id="hd-conectar-error" hidden></div>
+        <button type="submit" class="hd-boton-acento" id="hd-btn-conectar"><i data-lucide="plug" class="ico"></i> Conectar</button>
+      </form>
     </div>
   </div>
 </template>

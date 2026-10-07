@@ -111,6 +111,18 @@ console.log('1. La copia se llena sola, sin llamar de más al helpdesk');
     'sin candado: la copia se salta (la siguiente consulta la pone al día) y la pantalla igual recibe su lista');
 }
 
+{
+  // La lista del inicio del helpdesk trae menos campos: lo que no trae no borra lo guardado
+  const { e, srv, fila, col } = entorno();
+  srv.sincronizar_([{ ID: 950, TITULO: 'Uno', CORREO_SOLICITANTE: 'a@ejemplo.com', ESTATUS: 'Abierto', FORMULARIO: 'F' }], 'ana@ejemplo.com');
+  e.avanzar(60000);
+  srv.sincronizar_([{ ID: 950, TITULO: 'Uno', CORREO_SOLICITANTE: '', ESTATUS: 'Resuelto', FORMULARIO: '' }], 'luis@ejemplo.com', true);
+  ok(fila(950)[col('ESTATUS')] === 'Resuelto' && fila(950)[col('CORREO SOLICITANTE')] === 'a@ejemplo.com' && fila(950)[col('FORMULARIO')] === 'F',
+    'parcial: actualiza lo que sí vino (estatus) y no borra lo que no vino (correo, formulario)');
+  srv.sincronizar_([{ ID: 950, TITULO: 'Uno', CORREO_SOLICITANTE: '', ESTATUS: 'Resuelto', FORMULARIO: '' }], 'luis@ejemplo.com');
+  ok(fila(950)[col('CORREO SOLICITANTE')] === '', 'completo (lista o detalle): lo vacío sí cuenta');
+}
+
 // ---------------------------------------------------------------------------------- 2
 console.log('\n2. Registrar en Tickets');
 {
