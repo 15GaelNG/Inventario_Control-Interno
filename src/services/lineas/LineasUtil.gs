@@ -144,5 +144,15 @@ const LineasUtil = (function () {
     return m ? m[valor.trim().toUpperCase()] || valor : valor;
   }
 
-  return { txt, digitos, nuco4, nucoVisible, fecha, numero, col, mesNumero, paraCliente, carpetasNucos, ABREVIATURAS_CH, PALABRAS_CH, mostrarCH, guardarCH };
+  /**
+   * PIN del equipo (usuario, 7-oct): con el bloqueo «PIN» solo lleva números; la contraseña acepta todo. El tipo de bloqueo
+   * es de la pantalla (PIN y contraseña van en la misma columna PIN EQUIPO): llega aparte, en `datos.bloqueo`. Editar, la
+   * inspección y la responsiva; la pantalla hace lo mismo (errorPinBloqueo en lineas.html).
+   */
+  function exigirPinEquipo(datos) {
+    const pin = String(((datos && datos.valores) || {})['PIN EQUIPO'] || '').trim();
+    if (String((datos && datos.bloqueo) || '').trim().toUpperCase() === 'PIN' && pin && !/^\d+$/.test(pin)) throw new Error('PIN DEL EQUIPO: SOLO NUMEROS');
+  }
+
+  return { txt, digitos, nuco4, nucoVisible, fecha, numero, col, mesNumero, paraCliente, carpetasNucos, ABREVIATURAS_CH, PALABRAS_CH, mostrarCH, guardarCH, exigirPinEquipo };
 })();
