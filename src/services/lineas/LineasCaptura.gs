@@ -424,6 +424,7 @@ const LineasCaptura = (function () {
   const ACCESOS_INSPECCION = ['PIN WHATSAPP', 'PIN EQUIPO', 'PATRON', 'CONTRASEÑA MODEM'];
 
   function guardarInspeccion(datos, usuario, puedeVerSecretos) {
+    LineasUtil.exigirPinEquipo(datos);
     const ref = { equipoId: datos.equipoId || null, lineaId: datos.equipoId ? null : datos.lineaId };
     if (datos.usarFirmaGuardada) datos.firmaInspectorBase64 = firmaPropia_(usuario);
     if (!datos.firmaInspectorBase64) throw new Error('FIRMA INSPECTOR es obligatorio');
@@ -503,6 +504,7 @@ const LineasCaptura = (function () {
    * mismo candado.
    */
   function guardarResponsiva(datos, usuario, puedeVerSecretos, accion) {
+    LineasUtil.exigirPinEquipo(datos);
     const ref = accion ? accion.ref : { equipoId: datos.equipoId || null, lineaId: datos.equipoId ? null : datos.lineaId };
     if (datos.usarFirmaGuardada) datos.firmaCiBase64 = firmaPropia_(usuario);
     if (!datos.firmaCiBase64) throw new Error('FIRMA RESPONSABLE DE CONTROL INTERNO es obligatorio');

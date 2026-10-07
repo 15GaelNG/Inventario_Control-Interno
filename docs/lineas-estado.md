@@ -1,7 +1,8 @@
 # Líneas — estado del módulo
 
-Rama `emmanuel` = `master` (con la parte 6: COMENTARIO, plantillas «(SISTEMA)», página de la responsiva, patrón con 9
-puntos en el PDF, Reasignar corregido, responsables adicionales, sin «quien lo usa», firma guardada, PDF ligado fuera de su carpeta y PIN en minúsculas) · Producción: versión 62 · Última actualización: 2026-10-06
+Rama `master` = producción (versión 62: parte 6 con COMENTARIO, plantillas «(SISTEMA)», página de la responsiva, patrón
+con 9 puntos en el PDF, Reasignar corregido, responsables adicionales, sin «quien lo usa», firma guardada, PDF ligado fuera
+de su carpeta y PIN en minúsculas). Rama `emmanuel`: además, el PIN del equipo solo con números · Última actualización: 2026-10-07
 
 Qué es hoy el módulo **Líneas** (equipos celulares y líneas telefónicas), dónde vive cada cosa y cómo se trabaja.
 La bitácora anterior de este archivo (§0a…§0ae, hasta el 1-oct) sigue en el historial de git. El diseño de las hojas
@@ -47,6 +48,11 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   trazar uno nuevo, lo guardan en el equipo y la imagen deja de verse; al guardar una captura la ficha se pinta de nuevo.
   Con PIN EQUIPO = PATRON y patrón guardado, General muestra solo la fila «Patrón». El PDF lo dibuja igual que la
   pantalla: los 9 puntos, los usados con su número y flechas (`activarPatron` y `LineasPatronPng`, iguales).
+- **Tipo de bloqueo del equipo** (PIN, PATRÓN, CONTRASEÑA o SIN BLOQUEO): una lista en Editar, la inspección y la
+  responsiva (`conSelectorBloqueo` / `activarBloqueo`, lineas.html) que no se guarda: PIN y contraseña van en PIN
+  EQUIPO; patrón, «PATRON»; sin bloqueo, «N/A». Con «PIN» solo números (no deja escribir letras); la contraseña acepta
+  todo. La lista viaja como `datos.bloqueo` y el servidor lo revisa (`LineasUtil.exigirPinEquipo`). En Editar, PIN
+  EQUIPO sigue con 6 caracteres como máximo (regla del AppSheet).
 - **Resguardos y cancelaciones:** bandeja de Pau (recibir, entregar a Líneas, vendido, cancelación con carta).
 - **Panorama:** líneas y equipos por estatus, renta por cuenta y adendums, al cierre del mes elegido.
 - **Notificaciones:** campana con adendums por vencer y avisos de seguimiento.
