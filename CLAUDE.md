@@ -205,6 +205,11 @@ despliega con errores. A mano: `revisarEntorno()` en el editor de cualquier proy
 `node tools/subir/revisar-entorno.js prod`. Una carpeta nueva en `Config.gs` va también en
 `REVISION_CARPETAS` (un contrato lo revisa).
 
+**Un módulo que todavía no sale a producción** se apaga ahí con `MODULOS_APAGADOS` en el bloque de
+prod de `Entornos.gs` (hoy: `'helpdesk'`): el menú no lo pinta, el servidor rechaza sus llamadas
+(`Config.exigirEncendido` en cada `api…` del módulo) y `revisarEntorno` no pide sus hojas
+(`modulo:` en `Entidades.gs`). En los DEV sigue encendido. Encenderlo es quitarlo de esa línea.
+
 ## Se sube comprimido: `npm run push`, no `clasp push`
 
 `npm run push` (y `push:lab`, `push:prod`) comprime el JS y el CSS de los `.html` antes de
