@@ -51,6 +51,8 @@ const Modulos = (function () {
         // TEMPORAL (30-sep): Líneas corrige los casos de la conciliación y después se elimina (LineasCorrecciones.gs)
         { id: 'correcciones-lineas', etiqueta: 'Correcciones de Líneas', listo: true },
         { id: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios', listo: true },
+        // Adendums y facturas del mes (parte 7, 7-oct): solo para quienes los piden al proveedor
+        { id: 'proveedor-lineas', etiqueta: 'Proveedor', listo: true },
         // Control de Cambios queda fuera del menú (30-sep). Reactivación, Solicitud, Reasignaciones y Desechos se
         // retiraron con sus pestañas (30-sep, reunión con Líneas).
         { id: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas', listo: true },

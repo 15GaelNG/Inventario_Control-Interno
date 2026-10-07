@@ -1,7 +1,6 @@
 // Parte 6, pendiente 2.3 (usuario, 6-oct): OBSERVACIONES → COMENTARIO en INSPECCIONES y RESPONSIVAS LINEAS. La responsiva
-// sigue con DIRECTOR (el director) y la inspección con JEFE DIRECTO. Mientras la hoja siga con el nombre viejo,
-// LineasDatos lo trata como el nuevo; las copias de las plantillas cambian el título que se lee y el marcador de la
-// columna sola (LineasPdf.renombresEnTexto).
+// sigue con DIRECTOR (el director) y la inspección con JEFE DIRECTO. Las dos hojas se renombraron (DEV el 6-oct,
+// producción el 7-oct) y el 7-oct se quitó la compatibilidad con el nombre viejo y las funciones de una sola vez.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -38,39 +37,33 @@ function cargarDatos(hojas) {
   return ctx.D;
 }
 
-test('la hoja con los nombres viejos se lee y se escribe con los nuevos', () => {
+test('las hojas se leen con COMENTARIO; DIRECTOR y JEFE DIRECTO se quedan como están', () => {
   const D = cargarDatos({
-    'RESPONSIVAS LINEAS': [['ID', 'RESPONSABLE', 'DIRECTOR', 'OBSERVACIONES'], ['RLI-1', 'ANA', 'LUIS', 'ENTREGA']],
-    'INSPECCIONES LINEAS': [['ID', 'JEFE DIRECTO', 'OBSERVACIONES'], ['ILI-1', 'LUIS', 'SIN DAÑOS']],
+    'RESPONSIVAS LINEAS': [['ID', 'RESPONSABLE', 'DIRECTOR', 'COMENTARIO'], ['RLI-1', 'ANA', 'LUIS', 'ENTREGA']],
+    'INSPECCIONES LINEAS': [['ID', 'JEFE DIRECTO', 'COMENTARIO'], ['ILI-1', 'LUIS', 'SIN DAÑOS']],
     'ASIGNACIONES': [['ID', 'DIRECTOR', 'JEFE DIRECTO'], ['ASG-1', 'MARTA', 'LUIS']],
   });
   const r = D.tablaFresca('RESPONSIVAS LINEAS');
   assert.equal(D.colIndice(r, 'COMENTARIO'), 3);
-  assert.equal(D.colIndice(r, 'OBSERVACIONES'), -1, 'el nombre viejo ya no se usa');
   assert.equal(D.colIndice(r, 'DIRECTOR'), 2, 'la responsiva lleva al director');
   assert.equal(D.colIndice(r, 'JEFE DIRECTO'), -1);
   const fila = D.leerTabla('RESPONSIVAS LINEAS')[0];
   assert.equal(fila['DIRECTOR'], 'LUIS');
   assert.equal(fila['COMENTARIO'], 'ENTREGA');
-
   const i = D.tablaFresca('INSPECCIONES LINEAS');
   assert.equal(D.colIndice(i, 'COMENTARIO'), 2);
-  assert.equal(D.colIndice(i, 'JEFE DIRECTO'), 1, 'la inspección ya tenía JEFE DIRECTO');
-
-  // DIRECTOR de ASIGNACIONES es el director de la persona (Capital Humano): no se toca
+  assert.equal(D.colIndice(i, 'JEFE DIRECTO'), 1);
   const a = D.tablaFresca('ASIGNACIONES');
   assert.equal(D.colIndice(a, 'DIRECTOR'), 1);
   assert.equal(D.colIndice(a, 'JEFE DIRECTO'), 2);
 });
 
-test('con la hoja ya renombrada no cambia nada, y si están los dos se queda cada uno', () => {
-  const D = cargarDatos({
-    'RESPONSIVAS LINEAS': [['ID', 'COMENTARIO', 'DIRECTOR', 'OBSERVACIONES'], ['RLI-1', 'ENTREGA', 'LUIS', 'VIEJO']],
-  });
+test('sin compatibilidad: OBSERVACIONES ya no cuenta como COMENTARIO', () => {
+  const D = cargarDatos({ 'RESPONSIVAS LINEAS': [['ID', 'OBSERVACIONES'], ['RLI-1', 'VIEJO']] });
   const r = D.tablaFresca('RESPONSIVAS LINEAS');
-  assert.equal(D.colIndice(r, 'COMENTARIO'), 1);
-  assert.equal(D.colIndice(r, 'DIRECTOR'), 2);
-  assert.equal(D.colIndice(r, 'OBSERVACIONES'), 3);
+  assert.equal(D.colIndice(r, 'COMENTARIO'), -1);
+  assert.equal(D.colIndice(r, 'OBSERVACIONES'), 1);
+  assert.doesNotMatch(read('src/services/lineas/LineasDatos.gs'), /COLUMNAS_RENOMBRADAS/);
 });
 
 function cargarPdf() {
@@ -78,33 +71,6 @@ function cargarPdf() {
   vm.runInContext(read('src/services/lineas/LineasPdf.gs') + '\nthis.P = LineasPdf;', ctx);
   return ctx.P;
 }
-
-// renombresEnTexto sirve para cualquier columna renombrada: se prueba también con una segunda (DIRECTOR)
-test('las copias de las plantillas cambian el título y el marcador de la columna sola', () => {
-  const P = cargarPdf();
-  const mapa = { OBSERVACIONES: 'COMENTARIO', DIRECTOR: 'JEFE DIRECTO' };
-  const aplicar = (texto) => {
-    let s = texto;
-    JSON.parse(JSON.stringify(P.renombresEnTexto(texto, mapa))).filter((c) => c.despues).reverse()
-      .forEach((c) => { s = s.slice(0, c.inicio) + c.despues + s.slice(c.fin); });
-    return s;
-  };
-  assert.equal(aplicar('OBSERVACIONES: <<[OBSERVACIONES]>>'), 'COMENTARIO: <<[COMENTARIO]>>');
-  assert.equal(aplicar('Observaciones <<OBSERVACIONES>>'), 'Comentario <<COMENTARIO>>');
-  assert.equal(aplicar('Director: <<UPPER([DIRECTOR])>>'), 'Jefe directo: <<UPPER([JEFE DIRECTO])>>');
-  assert.equal(aplicar('director'), 'jefe directo');
-  // Otra columna que solo contiene la palabra no se toca, y se avisa
-  const otra = '<<[TITULO_CALIFICACION OBSERVACIONES Y FIRMAS]>>';
-  assert.equal(aplicar(otra), otra);
-  const r = JSON.parse(JSON.stringify(P.renombresEnTexto(otra, mapa)));
-  assert.equal(r.length, 1);
-  assert.equal(r[0].despues, null);
-  assert.equal(r[0].marcador, otra);
-  // Palabras más largas no cuentan
-  assert.deepEqual(JSON.parse(JSON.stringify(P.renombresEnTexto('DIRECTORA, DIRECTORES, SUBDIRECTOR', mapa))), []);
-  // Con el mapa de hoy (solo OBSERVACIONES) «Director» no se toca
-  assert.deepEqual(JSON.parse(JSON.stringify(P.renombresEnTexto('Director', { OBSERVACIONES: 'COMENTARIO' }))), []);
-});
 
 test('las plantillas del AppSheet quedan aparte de las del sistema', () => {
   const P = cargarPdf();
@@ -114,7 +80,8 @@ test('las plantillas del AppSheet quedan aparte de las del sistema', () => {
   assert.equal(P.PLANTILLAS.INSPECCION_CELULAR, '11l9vL9KK4T1vawnI-X0arnNTMHDa53Y92kmO-m5Alw4');
   assert.equal(P.PLANTILLAS.RESPONSIVA_CELULAR, '13qeTsLmV5FiRxgNI9hbb_8BH83olIiSVB6GdXNbXIF0');
   assert.match(read('src/services/lineas/LineasPdf.gs'), /\[PLANTILLAS\.RESPONSIVA_CELULAR\]: \{ altoFuente/);
+  // Las funciones de una sola vez (renombrar columnas, copiar plantillas) ya se corrieron y se quitaron (7-oct)
   const admin = read('src/services/lineas/LineasAdmin.gs');
-  assert.match(admin, /function lineasRenombrarColumnasDocumentos_revisar\(\)/);
-  assert.match(admin, /function lineasPlantillasComentario_copiar\(\)/);
+  assert.doesNotMatch(admin, /lineasRenombrarColumnasDocumentos|lineasPlantillasComentario/);
+  assert.deepEqual(Object.keys(P).sort(), ['PLANTILLAS', 'PLANTILLAS_APPSHEET', 'generarPdfDesdePlantilla']);
 });

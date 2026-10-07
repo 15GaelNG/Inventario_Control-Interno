@@ -18,7 +18,8 @@ const LineasPdf = (function () {
   };
   /**
    * Las que usa el sistema: copias «(SISTEMA)» de las del AppSheet, en sus mismas carpetas (FORMATOS y
-   * RESPONSIVAS_LINEAS), con «Comentario» (lineasPlantillasComentario_copiar, 6-oct).
+   * RESPONSIVAS_LINEAS), con el título «Comentario» y el marcador [COMENTARIO] (6-oct; la función que las hizo,
+   * lineasPlantillasComentario_copiar, se quitó el 7-oct y sigue en el historial de git).
    */
   const PLANTILLAS = {
     INSPECCION_CELULAR: '11l9vL9KK4T1vawnI-X0arnNTMHDa53Y92kmO-m5Alw4',
@@ -417,99 +418,5 @@ const LineasPdf = (function () {
     }
   }
 
-  // ---------------- Copias del sistema de las plantillas (parte 6, pendiente 2.3; usuario, 6-oct) ----------------
-  // La plantilla del AppSheet no se toca: se copia en su misma carpeta y en la copia «Observaciones» pasa a «Comentario»,
-  // con su marcador ([COMENTARIO]; las columnas de LineasDatos.COLUMNAS_RENOMBRADAS).
-  // Se corre desde LineasAdmin (lineasPlantillasComentario_revisar / _copiar).
-
-  /** `nuevo` (en mayúsculas) escrito como `palabra`: OBSERVACIONES → COMENTARIO, Observaciones → Comentario, … */
-  function comoEscrito_(palabra, nuevo) {
-    if (palabra === palabra.toUpperCase()) return nuevo;
-    const minus = nuevo.toLowerCase();
-    return palabra.charAt(0) === palabra.charAt(0).toUpperCase() ? minus.charAt(0).toUpperCase() + minus.slice(1) : minus;
-  }
-
-  /**
-   * Qué cambiar en un texto de la plantilla. mapa = { VIEJO: NUEVO }. Fuera de un marcador es el título que se lee;
-   * dentro, solo la columna sola ([OBSERVACIONES] o <<OBSERVACIONES>>). Una columna que solo la contiene
-   * ([TITULO_CALIFICACION OBSERVACIONES Y FIRMAS]) es otra y no se toca: despues = null.
-   * Regresa [{ inicio, fin (exclusivo), antes, despues, marcador }].
-   */
-  function renombresEnTexto(texto, mapa) {
-    const s = String(texto || '');
-    const viejos = Object.keys(mapa || {});
-    if (!viejos.length) return [];
-    const marcadores = [];
-    const reMarcador = /<<[^<>]*>>/g;
-    let m;
-    while ((m = reMarcador.exec(s)) !== null) marcadores.push([m.index, m.index + m[0].length]);
-    const letra = 'A-Za-zÁÉÍÓÚÜÑáéíóúüñ_';
-    const re = new RegExp('(^|[^' + letra + '])(' + viejos.join('|') + ')(?![' + letra + '])', 'gi');
-    const salida = [];
-    while ((m = re.exec(s)) !== null) {
-      const inicio = m.index + m[1].length;
-      const fin = inicio + m[2].length;
-      const nuevo = mapa[m[2].toUpperCase()];
-      const marcador = marcadores.filter((r) => inicio > r[0] && fin < r[1])[0];
-      if (!marcador) { salida.push({ inicio: inicio, fin: fin, antes: m[2], despues: comoEscrito_(m[2], nuevo), marcador: null }); continue; }
-      const sola = (s.charAt(inicio - 1) === '[' && s.charAt(fin) === ']') || (inicio === marcador[0] + 2 && fin === marcador[1] - 2);
-      salida.push({ inicio: inicio, fin: fin, antes: m[2], despues: sola ? nuevo : null, marcador: s.slice(marcador[0], marcador[1]) });
-    }
-    return salida;
-  }
-
-  /** Lo que renombresEnTexto encuentra en el Doc, con su contexto; con `aplicar` lo cambia conservando el formato. */
-  function renombrarEnDoc_(doc, mapa, aplicar) {
-    const encontrados = [];
-    [doc.getBody(), doc.getHeader(), doc.getFooter()].filter(Boolean).forEach((seccion) => {
-      buscarTodas_(seccion, '[\\s\\S]+').forEach((bloque) => {
-        const cambios = renombresEnTexto(bloque.etiqueta, mapa);
-        cambios.forEach((c) => encontrados.push({
-          antes: c.antes, despues: c.despues, marcador: c.marcador,
-          contexto: bloque.etiqueta.slice(Math.max(0, c.inicio - 30), c.fin + 30).replace(/\s+/g, ' '),
-        }));
-        if (!aplicar) return;
-        cambios.filter((c) => c.despues).reverse().forEach((c) => {
-          const formato = formatoDe_(bloque.elemento, c.inicio);
-          bloque.elemento.deleteText(c.inicio, c.fin - 1);
-          bloque.elemento.insertText(c.inicio, c.despues);
-          if (formato) bloque.elemento.setAttributes(c.inicio, c.inicio + c.despues.length - 1, formato);
-        });
-      });
-    });
-    return encontrados;
-  }
-
-  /** Carpeta de la plantilla y nombre de su copia del sistema. */
-  function datosCopia_(plantillaId) {
-    const original = DriveApp.getFileById(plantillaId);
-    const padres = original.getParents();
-    if (!padres.hasNext()) throw new Error('La plantilla ' + original.getName() + ' no está en una carpeta que se pueda leer.');
-    return { original: original, carpeta: padres.next(), nombre: original.getName() + ' (SISTEMA)' };
-  }
-
-  /** Sin escribir nada: qué se cambiaría en la plantilla, dónde quedaría la copia y si ya existe. */
-  function revisarRenombres(plantillaId, mapa) {
-    const d = datosCopia_(plantillaId);
-    const existente = d.carpeta.getFilesByName(d.nombre);
-    return {
-      plantilla: d.original.getName(), carpeta: d.carpeta.getName() + ' (' + d.carpeta.getId() + ')', copia: d.nombre,
-      copiaExistente: existente.hasNext() ? existente.next().getId() : null,
-      encontrados: renombrarEnDoc_(DocumentApp.openById(plantillaId), mapa, false),
-    };
-  }
-
-  /** Hace la copia (si no existe ya una con ese nombre en la carpeta) y le aplica los cambios. Regresa su ID. */
-  function copiaConRenombres(plantillaId, mapa) {
-    const d = datosCopia_(plantillaId);
-    const existente = d.carpeta.getFilesByName(d.nombre);
-    if (existente.hasNext()) return { id: existente.next().getId(), nombre: d.nombre, yaExistia: true, cambios: [] };
-    const copia = d.original.makeCopy(d.nombre, d.carpeta);
-    const doc = DocumentApp.openById(copia.getId());
-    const cambios = renombrarEnDoc_(doc, mapa, true);
-    doc.saveAndClose();
-    return { id: copia.getId(), nombre: d.nombre, yaExistia: false, cambios: cambios };
-  }
-
-  return { PLANTILLAS, PLANTILLAS_APPSHEET, generarPdfDesdePlantilla, renombresEnTexto, revisarRenombres, copiaConRenombres };
+  return { PLANTILLAS, PLANTILLAS_APPSHEET, generarPdfDesdePlantilla };
 })();

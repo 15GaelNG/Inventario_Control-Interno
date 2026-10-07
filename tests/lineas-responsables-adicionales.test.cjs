@@ -128,14 +128,12 @@ test('el PDF: nombres y números de empleado con « / », la firma del principal
   assert.match(pdf, /Math\.min\(1, \(chica \? 90 : 160\) \/ ancho, \(chica \? 40 : 70\) \/ alto\)/);
 });
 
-test('«quien lo usa» se quitó por completo: ni se lee ni se escribe, y sus columnas se borran con lineasQuitarQuienUsa', () => {
+test('«quien lo usa» se quitó por completo: ni se lee ni se escribe (sus columnas se borraron: DEV 6-oct, producción 7-oct)', () => {
   ['LineasEscritura', 'LineasLectura', 'LineasResguardos', 'LineasRetiro', 'LineasEstructura', 'LineasRegistros', 'LineasCaptura']
     .forEach((f) => assert.doesNotMatch(read('src/services/lineas/' + f + '.gs'), /'(NOMBRE|PUESTO) QUIEN USA'/, f));
   assert.doesNotMatch(read('src/html/js/lineas.html'), /QUIEN USA/);
   const admin = read('src/services/lineas/LineasAdmin.gs');
-  assert.doesNotMatch(admin, /QuienUsaASegundo/);
-  assert.match(admin, /function lineasQuitarQuienUsa_revisar\(\)/);
-  assert.match(admin, /if \(aplicar\) salida\.columnas = LineasDatos\.quitarColumnas\(hoja, columnas\);/);
+  assert.doesNotMatch(admin, /QuienUsaASegundo|lineasQuitarQuienUsa|QUIEN USA/);
   const datos = read('src/services/lineas/LineasDatos.gs');
   const q = datos.slice(datos.indexOf('function quitarColumnas('), datos.indexOf('function asegurarPestana('));
   assert.match(q, /\.sort\(\(a, b\) => b - a\)/, 'de derecha a izquierda');

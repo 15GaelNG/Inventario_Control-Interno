@@ -1,8 +1,10 @@
 # Líneas — estado del módulo
 
-Rama `master` = producción (versión 62: parte 6 con COMENTARIO, plantillas «(SISTEMA)», página de la responsiva, patrón
-con 9 puntos en el PDF, Reasignar corregido, responsables adicionales, sin «quien lo usa», firma guardada, PDF ligado fuera
-de su carpeta y PIN en minúsculas). Rama `emmanuel`: además, el PIN del equipo solo con números · Última actualización: 2026-10-07
+Rama `master` = producción (versión 64, de Ayrton; lo último de Líneas ahí es la parte 6 con COMENTARIO, plantillas
+«(SISTEMA)», página de la responsiva, patrón con 9 puntos en el PDF, Reasignar corregido, responsables adicionales, sin
+«quien lo usa», firma guardada, PDF ligado fuera de su carpeta y PIN en minúsculas). Rama `emmanuel`: además, el PIN
+del equipo solo con números, sin la compatibilidad con OBSERVACIONES, la hoja armada en Exportar a Excel y la pantalla Proveedor (etapa 1) · Última
+actualización: 2026-10-07
 
 Qué es hoy el módulo **Líneas** (equipos celulares y líneas telefónicas), dónde vive cada cosa y cómo se trabaja.
 La bitácora anterior de este archivo (§0a…§0ae, hasta el 1-oct) sigue en el historial de git. El diseño de las hojas
@@ -33,8 +35,8 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   RESPONSABLE` al final de ASIGNACIONES, RESPONSIVAS LINEAS e INSPECCIONES LINEAS. La inspección los pasa al inventario.
   El PDF los muestra como el AppSheet (nombres con « / »); en el sistema solo firma el principal, y con adicionales su
   firma va más chica para que los demás firmen el impreso.
-  «¿El responsable usa el equipo?» y «Quien lo usa» se quitaron por completo (sus columnas, con `lineasQuitarQuienUsa`,
-  LineasAdmin). En el PDF de la responsiva, con patrón solo sale su imagen.
+  «¿El responsable usa el equipo?» y «Quien lo usa» se quitaron por completo (sus columnas de ASIGNACIONES se
+  borraron: DEV 6-oct, producción 7-oct). En el PDF de la responsiva, con patrón solo sale su imagen.
 - **Secretos** (PIN, patrones, contraseñas, firmas): los ven ADMIN y el área `LINEAS` de USUARIOS
   (`TelefoniaService.puedeVerSecretos_`).
 - **Firma guardada** (`LineasFirmas.gs`): la de quien captura en Líneas va sola en FIRMA INSPECTOR o FIRMA CI («Se usa tu
@@ -53,6 +55,15 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   EQUIPO; patrón, «PATRON»; sin bloqueo, «N/A». Con «PIN» solo números (no deja escribir letras); la contraseña acepta
   todo. La lista viaja como `datos.bloqueo` y el servidor lo revisa (`LineasUtil.exigirPinEquipo`). En Editar, PIN
   EQUIPO sigue con 6 caracteres como máximo (regla del AppSheet).
+- **Exportar a Excel del inventario:** primero una hoja LINEAS TELEFONICAS armada como la vieja (mismas columnas, una
+  fila por equipo o línea sola, ESTATUS GENERAL como en la tabla; `LineasExportar.inventarioJunto_`) y después LINEAS,
+  EQUIPOS, ASIGNACIONES y ADENDUMS. El reporte mensual (`reporte_lineas/scripts/inventario.py`) lee esa primera hoja.
+- **Proveedor** (`proveedor-lineas`, parte 7; `lineas-proveedor.html` y `LineasProveedor.gs`): quien tenga el permiso
+  sube los adendums de Telcel y los barridos de AT&T del mes; se leen en el navegador, se revisan contra el inventario
+  y se cargan: foto del mes en ADENDUMS (columnas CUENTA, NUMERO SIM, IMEI, ESTATUS PROVEEDOR, EQUIPO, PLAZO,
+  PENALIZACION y FECHA DE BAJA), cuenta, razón social y SIM en LINEAS, altas como línea suelta DISPONIBLE y avisos a
+  Líneas de número distinto con la misma SIM o cuenta (salvo si la bitácora ya tiene ese cambio) y de estatus distintos; un aviso igual no se repite. Un archivo
+  anterior al último cargado de su cuenta no se carga. El adendum vigente es el del archivo más nuevo.
 - **Resguardos y cancelaciones:** bandeja de Pau (recibir, entregar a Líneas, vendido, cancelación con carta).
 - **Panorama:** líneas y equipos por estatus, renta por cuenta y adendums, al cierre del mes elegido.
 - **Notificaciones:** campana con adendums por vencer y avisos de seguimiento.
@@ -67,7 +78,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 | ADENDUMS, CUENTAS | Plan, costo y fin de plan por línea; cuentas padre y razón social |
 | FACTURAS | Vacía: la llenará la carga mensual del proveedor |
 | CATALOGOS, LISTAS TELEFONOS | Listas de opciones |
-| INSPECCIONES LINEAS, RESPONSIVAS LINEAS | Los documentos capturados (PDF en NUCOS). El comentario va en COMENTARIO; mientras la hoja diga OBSERVACIONES, el sistema la toma como COMENTARIO (`LineasDatos.COLUMNAS_RENOMBRADAS`) hasta correr `lineasRenombrarColumnasDocumentos` (`LineasAdmin.gs`) |
+| INSPECCIONES LINEAS, RESPONSIVAS LINEAS | Los documentos capturados (PDF en NUCOS). El comentario va en COMENTARIO (antes OBSERVACIONES; renombrada en el DEV el 6-oct y en producción el 7-oct) |
 | MOVIMIENTOS | Historial único: un renglón por acción (`LineasRepo.registrarMovimiento`) |
 | APP_MOVIMIENTOS, CAMBIOS LINEAS TELEFONICAS | Historial de antes del 4-oct (APP_MOVIMIENTOS trae las pestañas retiradas con TIPO HISTORICO; CAMBIOS, la bitácora del AppSheet). La ficha los lee hasta que pasen a MOVIMIENTOS |
 | APP_RESGUARDOS, APP_NOTIFICACIONES, APP_EVIDENCIAS, APP_CORRECCIONES | Bandeja de Pau, avisos, fotos y correcciones |
@@ -80,7 +91,7 @@ de arriba (`LINEAS_LECTURA = ESTRUCTURA`, `LINEAS_HOJA_VIEJA_RETIRADA`).
 **Drive:** documentos y fotos en la carpeta de cada NUCO dentro de NUCOS (`LINEAS_DRIVE_NUCOS`); lo que no tiene NUCO, en
 la carpeta de la app (`LINEAS_DRIVE_APPSHEET`). **PDF:** copias «(SISTEMA)» de las plantillas de Google Docs del
 AppSheet, en sus mismas carpetas (FORMATOS y RESPONSIVAS_LINEAS), con «Comentario» (`LineasPdf.PLANTILLAS`; las
-originales, que no se tocan, en `PLANTILLAS_APPSHEET`; las copias las hace `lineasPlantillasComentario_copiar`);
+originales, que no se tocan, en `PLANTILLAS_APPSHEET`; las copias se hicieron una vez, el 6-oct);
 la responsiva conserva los márgenes de su plantilla y su interlineado se ajusta para salir igual que la impresión del
 AppSheet (HTML con Chromium), en 2 hojas (`LineasPdf.COMO_APPSHEET`). El patrón se puede dibujar en el servidor
 (`LineasPatronPng.gs`). Si el PDF ligado a una captura del sistema ya no está en su carpeta de NUCOS (alguien lo quitó
