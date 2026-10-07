@@ -43,11 +43,27 @@ function htmlDeUsuario_(pagina) {
  * @param {string[]} bloquesSubidos  el JS de cada <script> comprimido que se subió
  * @return {{scripts: number}}  truena si algo llegó roto o cortado
  */
+/**
+ * /dev corre con la cuenta de quien lo abre (la de ~/.clasprc.json), no con la del dueño: si esa
+ * cuenta nunca aceptó los permisos de ESE proyecto (o el manifiesto pidió uno nuevo), Google
+ * contesta 200 con la página "Authorization needed" en vez de la app. Por script no se puede
+ * aceptar: se corre una vez revisarEntorno() en el editor del proyecto con esa cuenta.
+ */
+function exigirAutorizado_(texto, url) {
+  if (!/Authorization needed|Se necesita autorizaci|requires? (your )?authorization/i.test(texto)) return;
+  throw new Error('Tu cuenta de clasp no ha aceptado los permisos de este proyecto (Google contestó "Authorization needed").\n' +
+    '  Arréglalo una vez: abre el editor de Apps Script de ESE proyecto con la misma cuenta con la que hiciste\n' +
+    '  "clasp login", elige revisarEntorno (Diagnostico.gs), dale Ejecutar y acepta todos los permisos.\n' +
+    '  Luego vuelve a correr el mismo comando. (' + url + ')');
+}
+
 async function revisar(idDespliegueHead, dominio, bloquesSubidos) {
   const url = 'https://script.google.com/a/macros/' + dominio + '/s/' + idDespliegueHead + '/dev';
   const r = await fetch(url, { headers: { Authorization: 'Bearer ' + (await token_()) } });
   if (r.status !== 200) throw new Error('La página respondió ' + r.status + ' (' + url + ')');
-  const html = htmlDeUsuario_(await r.text());
+  const texto = await r.text();
+  exigirAutorizado_(texto, url);
+  const html = htmlDeUsuario_(texto);
 
   const rotos = [];
   let scripts = 0;
@@ -64,4 +80,4 @@ async function revisar(idDespliegueHead, dominio, bloquesSubidos) {
   return { scripts: scripts };
 }
 
-module.exports = { revisar, htmlDeUsuario_, token_ };
+module.exports = { revisar, htmlDeUsuario_, token_, exigirAutorizado_ };

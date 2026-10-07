@@ -14,7 +14,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { token_ } = require('./pagina-servida');
+const { token_, exigirAutorizado_ } = require('./pagina-servida');
 
 const RAIZ = path.resolve(__dirname, '..', '..');
 
@@ -48,6 +48,7 @@ async function revisar(idDespliegueHead, dominio) {
     if (intento > 1) await new Promise((listo) => setTimeout(listo, 8000));
     const r = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
     const texto = await r.text();
+    exigirAutorizado_(texto, url);
     try { rev = JSON.parse(texto); } catch (e) { ultimo = r.status + ': ' + texto.slice(0, 200); }
   }
   if (!rev) throw new Error('La revisión del entorno no contestó JSON después de 3 intentos (' + ultimo + ')');

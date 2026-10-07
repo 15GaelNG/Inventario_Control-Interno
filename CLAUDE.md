@@ -214,6 +214,12 @@ despliega con errores. A mano: `revisarEntorno()` en el editor de cualquier proy
 `node tools/subir/revisar-entorno.js prod`. Una carpeta nueva en `Config.gs` va también en
 `REVISION_CARPETAS` (un contrato lo revisa).
 
+**"Authorization needed" al subir:** esa revisión abre el link `/dev`, que corre con la cuenta de
+quien sube (la de `clasp login`), no con la del dueño. Si esa cuenta nunca aceptó los permisos de
+ESE proyecto (o el manifiesto pidió uno nuevo), Google contesta esa página, `subir.js` no mueve los
+despliegues y por script no se puede aceptar: esa persona corre una vez `revisarEntorno()` en el
+editor de ese proyecto, acepta todo y repite el comando. Cada quien que suba a prod lo hace una vez.
+
 **Un módulo que todavía no sale a producción** se apaga ahí con `MODULOS_APAGADOS` en el bloque de
 prod de `Entornos.gs` (hoy: `'helpdesk'`): el menú no lo pinta, el servidor rechaza sus llamadas
 (`Config.exigirEncendido` en cada `api…` del módulo) y `revisarEntorno` no pide sus hojas
