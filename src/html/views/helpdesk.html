@@ -143,11 +143,19 @@
   .hd-imagen { display: block; max-width: 100%; max-height: 420px; border-radius: 8px; border: 1px solid var(--color-border); }
   .hd-lado { overflow-y: auto; padding: 16px; border-left: 1px solid var(--color-border); background: var(--color-surface); display: flex; flex-direction: column; gap: 20px; }
   .hd-lado-titulo { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--color-text-muted); margin-bottom: 8px; }
-  /* La foto va solo junto al nombre: lo demás ocupa todo el ancho del panel */
-  .hd-persona-cabeza { display: flex; gap: 10px; align-items: center; margin-bottom: 6px; }
-  .hd-persona-cabeza strong { font-size: 13.5px; line-height: 1.3; }
-  .hd-persona-tarjeta > span { display: block; font-size: 12px; line-height: 1.5; color: var(--color-text-muted); overflow-wrap: anywhere; }
-  .hd-persona-tarjeta > span:empty { display: none; }
+  /* Quien lo pide: foto, nombre y correo (chico, en un renglón) y abajo su tarjetón */
+  .hd-persona-cabeza { display: flex; gap: 10px; align-items: center; min-width: 0; }
+  .hd-persona-nombre { min-width: 0; display: flex; flex-direction: column; }
+  .hd-persona-nombre strong { font-size: 13.5px; line-height: 1.3; }
+  .hd-persona-nombre small { font-size: 11.5px; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hd-persona-datos { margin: 12px 0 0; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-bg);
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px 14px; }
+  .hd-persona-datos:empty { display: none; }
+  .hd-persona-datos > div { min-width: 0; }
+  .hd-persona-datos > div.ancho { grid-column: 1 / -1; }
+  .hd-persona-datos dt { display: flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--color-text-muted); }
+  .hd-persona-datos dt .ico { width: 12px; height: 12px; color: var(--hd); }
+  .hd-persona-datos dd { margin: 2px 0 0; font-size: 12.5px; font-weight: 500; line-height: 1.35; color: var(--color-text); overflow-wrap: anywhere; }
   .hd-props { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 7px 12px; font-size: 12.5px; margin: 0; }
   .hd-props dt { color: var(--color-text-muted); }
   .hd-props dd { margin: 0; text-align: right; overflow-wrap: anywhere; }

@@ -459,10 +459,10 @@
             <div>
               <div class="hd-lado-titulo">Quien lo pide</div>
               <div class="hd-persona-tarjeta">
-                <div class="hd-persona-cabeza">${Avatar.html(t.CORREO_SOLICITANTE, t.SOLICITANTE, { tam: 36 })}<strong>${e(t.SOLICITANTE || '—')}</strong></div>
-                <span>${e(t.CORREO_SOLICITANTE || '')}</span>
-                <span>${e([t.AREA_SOLICITANTE, t.DEPARTAMENTO_SOLICITANTE].filter(Boolean).join(' · '))}</span>
-                <span id="hd-t-persona"></span>
+                <div class="hd-persona-cabeza">${Avatar.html(t.CORREO_SOLICITANTE, t.SOLICITANTE, { tam: 40 })}
+                  <div class="hd-persona-nombre"><strong>${e(t.SOLICITANTE || '—')}</strong>
+                    ${t.CORREO_SOLICITANTE ? `<small title="${e(t.CORREO_SOLICITANTE)}">${e(t.CORREO_SOLICITANTE)}</small>` : ''}</div></div>
+                <dl class="hd-persona-datos" id="hd-t-persona">${datosPersona(t, null)}</dl>
               </div>
             </div>
             <div id="hd-t-contexto">${cargando ? '' : '<div class="hd-lado-titulo">En Control Interno</div><div class="hd-esqueleto hd-esqueleto-chico"></div>'}</div>
@@ -492,6 +492,22 @@
       if (!cargando) pedirContexto(t);
     }
 
+    /**
+     * El tarjetón de quien lo pide: lo del helpdesk (área y departamento) al momento, y lo de
+     * Capital Humano (puesto, número, jefe) cuando llega el contexto. Lo que no hay no se pinta.
+     */
+    function datosPersona(t, p) {
+      const dato = (icono, etiqueta, valor, ancho) => (valor
+        ? `<div${ancho ? ' class="ancho"' : ''}><dt><i data-lucide="${icono}" class="ico"></i>${etiqueta}</dt><dd title="${e(valor)}">${e(valor)}</dd></div>` : '');
+      const persona = p || {};
+      const html = dato('building-2', 'Área', t.AREA_SOLICITANTE || persona.AREA) +
+        dato('users', 'Departamento', t.DEPARTAMENTO_SOLICITANTE || persona.DEPARTAMENTO) +
+        dato('briefcase', 'Puesto', persona.PUESTO) +
+        dato('id-card', 'No. empleado', (persona.NUMEROS || []).join(' / ')) +
+        dato('user-round', 'Jefe directo', persona.JEFE_DIRECTO, true);
+      return html;
+    }
+
     // ---------- lo que sabemos en Control Interno de quien lo pide (una llamada a NUESTRO servidor)
     async function pedirContexto(t) {
       const formulario = HD_FORMULARIOS.get(t.ID);
@@ -515,11 +531,7 @@
     function pintarContexto(t, c) {
       const caja = $('hd-t-contexto');
       if (!caja) return;
-      const p = c.persona;
-      if (p && $('hd-t-persona')) {
-        $('hd-t-persona').innerHTML = e([p.PUESTO, (p.NUMEROS || []).join(' / ')].filter(Boolean).join(' · ')) +
-          (p.JEFE_DIRECTO ? '<br>Jefe directo: ' + e(p.JEFE_DIRECTO) : '');
-      }
+      if (c.persona && $('hd-t-persona')) $('hd-t-persona').innerHTML = datosPersona(t, c.persona);
       const verVeh = !!permisoDe('vehiculos');
       const verCaja = !!permisoDe('caja-chica');
       const partes = [];
