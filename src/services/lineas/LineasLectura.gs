@@ -87,7 +87,14 @@ const LineasLectura = (function () {
    */
   function esAdendumMasReciente(d, actual) {
     const ms = (v) => (v instanceof Date ? v.getTime() : 0);
-    return !actual || ms(d['FIN PLAN']) > ms(actual['FIN PLAN']) ||
+    if (!actual) return true;
+    // Fotos del proveedor (módulo Proveedor, 7-oct): entre dos, la del archivo más nuevo, aunque su fin sea antes (una
+    // baja, o el día de diferencia entre los formatos de fecha de Telcel); contra lo capturado o migrado, la última carga
+    const archivoD = ms(d['FECHA DEL ARCHIVO']);
+    const archivoA = ms(actual['FECHA DEL ARCHIVO']);
+    if (archivoD && archivoA && archivoD !== archivoA) return archivoD > archivoA;
+    if ((archivoD || archivoA) && ms(d['FECHA DE CARGA']) !== ms(actual['FECHA DE CARGA'])) return ms(d['FECHA DE CARGA']) > ms(actual['FECHA DE CARGA']);
+    return ms(d['FIN PLAN']) > ms(actual['FIN PLAN']) ||
       (ms(d['FIN PLAN']) === ms(actual['FIN PLAN']) && ms(d['FECHA DE CARGA']) > ms(actual['FECHA DE CARGA']));
   }
 
