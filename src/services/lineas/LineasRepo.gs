@@ -202,8 +202,8 @@ const LineasRepo = (function () {
 
   /**
    * Responsables adicionales (usuario, 6-oct): del segundo al quinto, con su número de empleado. Reemplazan a «¿El
-   * responsable usa el equipo?» y «Quien lo usa», que se quitaron por completo (sus columnas, con lineasQuitarQuienUsa,
-   * LineasAdmin). No se lista a quien es el mismo responsable (PLAN_REESTRUCTURA_LINEAS.md §3.7).
+   * responsable usa el equipo?» y «Quien lo usa», que se quitaron por completo (sus columnas se
+   * borraron el 6-oct en el DEV y el 7-oct en producción). No se lista a quien es el mismo responsable (PLAN_REESTRUCTURA_LINEAS.md §3.7).
    */
   function usuariosAdicionales_(f) {
     const mismo = (a, b) => String(a || '').replace(/\s+/g, ' ').trim().toUpperCase() === String(b || '').replace(/\s+/g, ' ').trim().toUpperCase();
