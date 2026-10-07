@@ -145,3 +145,42 @@ test('número distinto con la misma SIM: si la bitácora ya tiene ese cambio, no
   assert.deepEqual(res.numerosRegistrados.map((x) => [x.inventario, x.proveedor, x.registrado]), [['6631000003', '4461000033', '23/09/2026']]);
   assert.equal(r.acciones.adendums[0].idLinea, 'LIN-3');
 });
+
+test('no se carga un archivo anterior al último cargado de su cuenta (ni al más nuevo de la misma carga)', () => {
+  const inv = inventario();
+  inv.adendums.push({ 'ID LINEA': 'LIN-1', 'NUMERO TELEFONO': '4421000001', FUENTE: 'ADENDUM TELCEL', 'CUENTA PADRE': '62637313', 'FECHA DEL ARCHIVO': F('2026-09-28'), 'FECHA DE CARGA': F('2026-10-07') });
+  const agosto = { tipo: 'ADENDUM', archivo: 'agosto.xlsx', fecha: '2026-08-31', lineas: [linea({ numero: '4421000001' })] };
+  let res = plano(P.plan_(P.limpiarLote_({ archivos: [agosto] }), inv).resumen);
+  assert.deepEqual(res.anteriores, [{ archivo: 'agosto.xlsx', fecha: '2026-08-31', masNuevo: '2026-09-28' }]);
+  assert.equal(res.total, 0, 'sus líneas no se revisan');
+  assert.equal(res.archivos[0].anteriorA, '2026-09-28');
+  // Otra cuenta padre o el mismo día: sí
+  const otra = { tipo: 'ADENDUM', archivo: 'fro.xlsx', fecha: '2026-08-31', lineas: [linea({ numero: '4421000002', cuentaPadre: '12419802' })] };
+  assert.equal(plano(P.plan_(P.limpiarLote_({ archivos: [otra] }), inv).resumen).anteriores.length, 0);
+  // En la misma carga, el de julio con el de octubre: julio no
+  const julio = { tipo: 'ADENDUM', archivo: 'julio.xlsx', fecha: '2026-07-03', lineas: [linea({ numero: '4421000002', cuentaPadre: '45511805' })] };
+  const octubre = { tipo: 'ADENDUM', archivo: 'octubre.xlsx', fecha: '2026-10-28', lineas: [linea({ numero: '4421000002', cuentaPadre: '45511805' })] };
+  res = plano(P.plan_(P.limpiarLote_({ archivos: [julio, octubre] }), inventario()).resumen);
+  assert.deepEqual(res.anteriores.map((x) => x.archivo), ['julio.xlsx']);
+  // El barrido de AT&T, igual (por fuente: un barrido no choca con un adendum de Telcel)
+  const barrido = { tipo: 'BARRIDO', archivo: 'b.xls', fecha: '2026-08-15', lineas: [linea({ numero: '6631000003', cuentaPadre: '62637313' })] };
+  assert.equal(plano(P.plan_(P.limpiarLote_({ archivos: [barrido] }), inv).resumen).anteriores.length, 0);
+});
+
+test('las fotos que quedaron sin línea se ligan cuando Líneas ya puso ese número en el inventario', () => {
+  const inv = inventario();
+  // El 4421000001 vino en septiembre con la SIM de otra línea (número distinto) y Líneas ya se lo puso a LIN-1
+  inv.adendums.push({ 'ID LINEA': '', 'NUMERO TELEFONO': '4421000001', FUENTE: 'ADENDUM TELCEL', 'FECHA DEL ARCHIVO': F('2026-09-28'), _fila: 9 });
+  inv.adendums.push({ 'ID LINEA': '', 'NUMERO TELEFONO': '4429999999', FUENTE: 'ADENDUM TELCEL', 'FECHA DEL ARCHIVO': F('2026-09-28'), _fila: 10 });
+  const r = P.plan_(P.limpiarLote_({ archivos: [{ tipo: 'ADENDUM', archivo: 'x.xlsx', fecha: '2026-10-28', lineas: [linea({ numero: '4421000002' })] }] }), inv);
+  assert.deepEqual(plano(r.acciones.ligar), [{ fila: 9, idLinea: 'LIN-1' }]);
+  assert.equal(r.resumen.ligadas, 1);
+});
+
+test('los avisos del proveedor no se repiten: llevan clave y crear no duplica una que ya existe', () => {
+  const fuente = read('src/services/lineas/LineasProveedor.gs');
+  assert.match(fuente, /tipo: 'CAMBIO DE NUMERO', refId: registroDe\[c\.idLinea\] \|\| c\.idLinea, clave: c\.inventario \+ '\|' \+ c\.proveedor,/);
+  assert.match(fuente, /tipo: 'ESTATUS PROVEEDOR', clave: archivo,/);
+  const notif = read('src/services/lineas/LineasNotificaciones.gs');
+  assert.match(notif, /if \(txt\(n\.clave\) && LineasDatos\.leerTabla\(TAB\)\.some\(\(x\) => txt\(x\['CLAVE'\]\) === clave\)\) return false;/);
+});

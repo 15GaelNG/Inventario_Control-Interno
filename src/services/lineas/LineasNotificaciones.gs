@@ -228,15 +228,18 @@ const LineasNotificaciones = (function () {
   }
 
   /**
-   * Aviso de un evento del sistema (p. ej. equipos mandados a resguardo). n = { tipo, titulo, mensaje, para, refId, nuco }.
-   * `para` vacío = lo ven todos; PARA_APROBADORES = solo quien aprueba resguardos.
+   * Aviso de un evento del sistema (p. ej. equipos mandados a resguardo). n = { tipo, titulo, mensaje, para, refId, nuco, clave }.
+   * `para` vacío = lo ven todos; PARA_APROBADORES = solo quien aprueba resguardos. Con `clave`, el aviso no se repite
+   * si ya existe uno con esa clave (módulo Proveedor: el mismo número distinto cada mes); regresa false.
    */
   function crear(n) {
     return LineasDatos.conCandado(() => {
       LineasDatos.asegurarPestana(TAB, ENCABEZADOS); // agrega PARA si la pestaña ya existía sin ella
       const ahora = new Date();
+      const clave = txt(n.clave) ? txt(n.tipo) + '|' + txt(n.clave) : txt(n.tipo) + '|' + ahora.getTime();
+      if (txt(n.clave) && LineasDatos.leerTabla(TAB).some((x) => txt(x['CLAVE']) === clave)) return false;
       LineasDatos.agregarFilas(TAB, [{
-        'ID': LineasDatos.nuevoId(TAB), 'FECHA': ahora, 'TIPO': txt(n.tipo), 'CLAVE': txt(n.tipo) + '|' + ahora.getTime(),
+        'ID': LineasDatos.nuevoId(TAB), 'FECHA': ahora, 'TIPO': txt(n.tipo), 'CLAVE': clave,
         'REF_ID': txt(n.refId), 'NUCO': txt(n.nuco), 'NUMERO': '', 'TITULO': txt(n.titulo), 'MENSAJE': txt(n.mensaje),
         'VENCE': '', 'LEIDA_POR': ',', 'CORREO_ENVIADO_EN': '', 'PARA': txt(n.para),
       }]);

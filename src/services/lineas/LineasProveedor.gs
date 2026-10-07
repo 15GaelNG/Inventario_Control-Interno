@@ -93,16 +93,26 @@ const LineasProveedor = (function () {
     });
     const vigente = {};
     const cargadas = {};
+    // El archivo más nuevo de cada fuente y cuenta padre (lo cargado y lo que viene en esta carga): uno anterior no se
+    // carga (usuario, 7-oct: si ya está septiembre, no agosto ni julio)
+    const ultimo = {};
+    const masNuevo = (k, f) => { if (f && (!ultimo[k] || f > ultimo[k])) ultimo[k] = f; };
     inv.adendums.forEach((d) => {
       const k = txt(d['ID LINEA']);
       if (k && inv.vigente(d, vigente[k])) vigente[k] = d;
-      if (txt(d['FECHA DEL ARCHIVO'])) cargadas[txt(d['FUENTE']) + '|' + ymd(d['FECHA DEL ARCHIVO']) + '|' + txt(d['NUMERO TELEFONO'])] = true;
+      if (txt(d['FECHA DEL ARCHIVO'])) {
+        cargadas[txt(d['FUENTE']) + '|' + ymd(d['FECHA DEL ARCHIVO']) + '|' + txt(d['NUMERO TELEFONO'])] = true;
+        if (txt(d['CUENTA PADRE'])) masNuevo(txt(d['FUENTE']) + '|' + txt(d['CUENTA PADRE']), ymd(d['FECHA DEL ARCHIVO']));
+      }
     });
+    const cuentasDe = (a) => a.lineas.map((p) => p.cuentaPadre).filter((c, i, l) => c && l.indexOf(c) === i);
+    archivos.forEach((a) => cuentasDe(a).forEach((c) => masNuevo(a.fuente + '|' + c, a.fecha)));
 
-    const acc = { adendums: [], lineas: {}, altas: [], cambiosNumero: [], estatus: [] };
+    const acc = { adendums: [], lineas: {}, altas: [], cambiosNumero: [], estatus: [], ligar: [] };
     const res = {
       archivos: [], contratos: { nuevos: 0, iguales: 0, completan: 0, formato: 0, cambian: 0, bajas: 0, ejemplos: [] },
       sims: [], cuentas: 0, altas: [], sinAlta: [], cambiosNumero: [], numerosRegistrados: [], estatus: [], yaCargadas: 0, total: 0,
+      anteriores: [], ligadas: 0,
     };
     const cambiarLinea = (l, campo, valor, registrar) => {
       const id = txt(l['ID']);
@@ -115,6 +125,12 @@ const LineasProveedor = (function () {
     const vistos = {};
 
     archivos.forEach((a) => {
+      const nuevo = cuentasDe(a).map((c) => ultimo[a.fuente + '|' + c]).filter((f) => f > a.fecha).sort().pop();
+      if (nuevo) {
+        res.archivos.push({ archivo: a.archivo, tipo: a.tipo, fuente: a.fuente, compania: a.compania, fecha: a.fecha, lineas: a.lineas.length, yaCargadas: 0, anteriorA: nuevo });
+        res.anteriores.push({ archivo: a.archivo, fecha: a.fecha, masNuevo: nuevo });
+        return;
+      }
       let ya = 0;
       a.lineas.forEach((p) => {
         if (cargadas[a.fuente + '|' + a.fecha + '|' + p.numero] || vistos[a.fuente + '|' + a.fecha + '|' + p.numero]) { ya++; return; }
@@ -198,6 +214,13 @@ const LineasProveedor = (function () {
       res.total += a.lineas.length - ya;
     });
     res.cuentas = Object.keys(acc.lineas).filter((id) => ['CUENTA', 'CUENTA PADRE', 'RAZON SOCIAL'].some((c) => acc.lineas[id].cambios[c] !== undefined)).length;
+    // Fotos de cargas anteriores que quedaron sin línea (número distinto) y cuyo número ya está en el inventario
+    // (Líneas lo cambió en Editar): se ligan a esa línea
+    inv.adendums.forEach((d) => {
+      const l = !txt(d['ID LINEA']) && txt(d['FECHA DEL ARCHIVO']) && porNumero[txt(d['NUMERO TELEFONO']).replace(/\D/g, '').slice(-10)];
+      if (l && d._fila) acc.ligar.push({ fila: d._fila, idLinea: txt(l['ID']) });
+    });
+    res.ligadas = acc.ligar.length;
     return { resumen: res, acciones: acc };
   }
 
@@ -257,6 +280,10 @@ const LineasProveedor = (function () {
     const ahora = new Date();
     const resultado = LineasDatos.conCandado(() => {
       const r = plan_(archivos, inventario_());
+      if (r.resumen.anteriores.length) {
+        throw new Error(r.resumen.anteriores.map((x) => x.archivo + ' es del ' + fechaCorta(x.fecha) + ' y ya está cargado el del ' + fechaCorta(x.masNuevo)).join(' · ') +
+          '. Solo se carga lo más reciente.');
+      }
       const acc = r.acciones;
       const tocados = [];
 
@@ -300,8 +327,9 @@ const LineasProveedor = (function () {
         });
       }
 
-      // 3) ADENDUMS: la foto del mes
+      // 3) ADENDUMS: la foto del mes, y las fotos sin línea cuyo número ya está en el inventario
       LineasDatos.asegurarColumnas('ADENDUMS', COLUMNAS_ADENDUMS);
+      acc.ligar.forEach((x) => LineasDatos.actualizarFila('ADENDUMS', x.fila, { 'ID LINEA': x.idLinea }));
       LineasDatos.agregarFilas('ADENDUMS', acc.adendums.map((d) => ({
         'ID LINEA': d.idLinea || '', 'NUMERO TELEFONO': d.p.numero, 'COMPAÑIA': d.a.compania, 'CUENTA PADRE': d.p.cuentaPadre, 'CUENTA': d.p.cuenta,
         'PLAN': d.p.plan, 'COSTO PLAN': d.p.renta === null ? '' : d.p.renta, 'INICIO PLAN': aFecha(d.p.inicio), 'FIN PLAN': aFecha(d.p.fin),
@@ -332,7 +360,7 @@ const LineasProveedor = (function () {
   function avisar_(acc, registroDe) {
     acc.cambiosNumero.forEach((c) => {
       LineasNotificaciones.crear({
-        tipo: 'CAMBIO DE NUMERO', refId: registroDe[c.idLinea] || c.idLinea,
+        tipo: 'CAMBIO DE NUMERO', refId: registroDe[c.idLinea] || c.idLinea, clave: c.inventario + '|' + c.proveedor,
         titulo: 'Número distinto con la ' + c.pista.replace(/ \d+$/, '') + ' · ' + c.inventario,
         mensaje: 'Inventario: ' + c.inventario + (c.estatusInventario ? ' (' + c.estatusInventario + ')' : '') + '. Proveedor: ' + c.proveedor +
           ', con la ' + c.pista + ' (' + (c.archivo || 'archivo del proveedor') + ', ' + fechaCorta(c.fecha) + '). No se cambió nada.',
@@ -344,7 +372,7 @@ const LineasProveedor = (function () {
     Object.keys(porArchivo).forEach((archivo) => {
       const lista = porArchivo[archivo];
       LineasNotificaciones.crear({
-        tipo: 'ESTATUS PROVEEDOR',
+        tipo: 'ESTATUS PROVEEDOR', clave: archivo,
         titulo: 'El proveedor reporta ' + lista.length + (lista.length === 1 ? ' línea suspendida o dada de baja' : ' líneas suspendidas o dadas de baja'),
         mensaje: archivo + ': ' + lista.map((e) => e.numero + ' (' + e.proveedor + '; inventario: ' + e.inventario + ')').join(', ') + '.',
       });

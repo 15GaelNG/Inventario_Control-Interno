@@ -171,6 +171,7 @@
       let listo = false;
       refreshIcons();
 
+      const fechaCorta = (f) => (f ? f.slice(8, 10) + '/' + f.slice(5, 7) + '/' + f.slice(0, 4) : '');
       const validos = () => archivos.filter((a) => !a.error);
       const lote = () => ({ archivos: validos().map((a) => ({ tipo: a.tipo, archivo: a.archivo, fecha: a.fecha, lineas: a.lineas })) });
       const mono = (v) => '<span class="ln-mono">' + esc(v || '—') + '</span>';
@@ -246,13 +247,24 @@
           const r = await C.llamar('apiLineasProveedorRevisar', lote());
           if (yo !== revision || !vigente()) return;
           pintarRevision(r);
-          listo = r.total > 0;
+          marcarAnteriores(r.anteriores);
+          listo = r.total > 0 && !r.anteriores.length;
           $('#lnp-cargar', raiz).disabled = !listo;
         } catch (e) {
           if (yo !== revision || !vigente()) return;
           kpis.hidden = true;
           detalle.innerHTML = '<div class="error-msg">' + esc(mensajeError(e)) + '</div>';
         }
+      }
+
+      /** Un archivo anterior al último cargado de su cuenta no se carga: se marca en la lista y no deja Cargar. */
+      function marcarAnteriores(anteriores) {
+        anteriores.forEach((x) => {
+          const i = archivos.findIndex((a) => a.archivo === x.archivo);
+          const fila = i >= 0 && $('#lnp-lista', raiz).querySelector('[data-quitar="' + i + '"]');
+          const celda = fila && fila.closest('tr').children[1];
+          if (celda) celda.innerHTML += ' ' + chip('Anterior al ' + fechaCorta(x.masNuevo), 'rojo');
+        });
       }
 
       function pintarRevision(r) {
@@ -273,9 +285,12 @@
           c.formato ? miles(c.formato) + ' con un día de diferencia por el formato de fecha del proveedor' : '',
           c.bajas ? miles(c.bajas) + ' dadas de baja por el proveedor' : '',
           r.cuentas ? miles(r.cuentas) + ' llenan cuenta y razón social' : '',
+          r.ligadas ? miles(r.ligadas) + ' fotos anteriores se ligan a su línea' : '',
         ].filter(Boolean);
         const sinVacios = (lista) => esc(lista.filter((v) => v !== null && v !== '').join(' · '));
         $('#lnp-detalle', raiz).innerHTML =
+          (r.anteriores.length ? '<div class="error-msg">' + ico('calendar-x') + ' ' + r.anteriores.map((x) => esc(x.archivo) + ' es del ' + fechaCorta(x.fecha) +
+            '; ya está cargado el del ' + fechaCorta(x.masNuevo)).join(' · ') + '. Solo se carga lo más reciente: quítalo para seguir.</div>' : '') +
           (notas.length ? '<p class="ln-tenue lnp-notas">' + esc(notas.join(' · ')) + '</p>' : '') +
           seccion('arrow-left-right', 'Número distinto en el inventario y en el proveedor (aviso a Líneas, no se aplica)', r.cambiosNumero.length,
             tabla(['Inventario', 'Proveedor', 'Pista', 'Estatus'], r.cambiosNumero.map((x) => [mono(x.inventario), mono(x.proveedor), esc(x.pista), esc(x.estatusInventario)]))) +
