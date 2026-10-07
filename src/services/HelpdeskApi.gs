@@ -222,6 +222,7 @@ const HelpdeskApi = (function () {
 
   const color_ = (c) => (/^#[0-9a-f]{3,8}$/i.test(String(c || '')) ? c : '');
   const id_ = (v) => (Number.isInteger(Number(v)) && Number(v) > 0 ? Number(v) : null);
+  const numero_ = (v) => (v === null || v === undefined || v === '' || !isFinite(Number(v)) ? null : Number(v));
 
   /**
    * Un ticket del helpdesk → nuestro formato. Las pantallas solo ven esto, nunca el JSON crudo.
@@ -261,6 +262,14 @@ const HelpdeskApi = (function () {
       FECHA_CIERRE: cierre && !isNaN(cierre.getTime()) ? cierre.toISOString() : '',
       ULTIMA_RESPUESTA: texto(t.lastRes),
       SIN_LEER: Number(t.cantUnseenMessages) || 0,
+      // Los tiempos que mide el helpdesk, en minutos y al momento de pedirlos (MEDIDO_EN: la
+      // pantalla le suma lo que ha pasado, porque la lista y la ficha se reutilizan de la caché).
+      // nextAnswer: minutos desde la última respuesta; diffLastResponse: los que faltan para su
+      // meta (negativo = ya pasó). La suma es la meta: 120 en todas las prioridades (medido en los
+      // HAR del 05 y 07/10/2026). La lista del inicio no los trae: null.
+      MIN_SIN_RESPUESTA: numero_(t.nextAnswer),
+      META_RESPUESTA_MIN: numero_(t.nextAnswer) !== null && numero_(t.diffLastResponse) !== null ? numero_(t.nextAnswer) + numero_(t.diffLastResponse) : null,
+      MEDIDO_EN: new Date(ahora_()).toISOString(),
       // La lista del inicio no trae dateClose: ahí se sabe por el estatus (3 Resuelto, 4 Cerrado)
       ABIERTO: 'dateClose' in t ? !t.dateClose : [3, 4].indexOf(Number(t.idStatus)) < 0,
     };

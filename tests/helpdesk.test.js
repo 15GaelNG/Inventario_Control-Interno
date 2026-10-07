@@ -22,6 +22,7 @@ const TICKET = {
   nameAgent: 'Agente Inventado', nameDepartment: 'COMPRAS', nameToDepartment: 'CONTROL INTERNO', nameToArea: 'SENSORES',
   nameArea: 'SUMINISTROS', dateCreation: 'viernes, 02 octubre 2026  09:28:17 ', dateCreationDB: '2026-10-02', dateClose: null,
   lastRes: 'Respuesta hace 41 minutos.', cantUnseenMessages: 1, nameAreaUser: null, nameDepartmentUser: null,
+  nextAnswer: 41, diffLastResponse: 79, firstAnswer: 7163, diffFirstResponse: null,
   nameForm: 'Incidencia | Solicitud - Sensores',
 };
 const CERRADO = Object.assign({}, TICKET, { idTicket: 900002, nameStatus: 'Cerrado', idStatus: 4, dateClose: '2026-10-01T14:19:58.000Z',
@@ -133,6 +134,8 @@ console.log('\n2. La lista, en nuestro formato');
   const c = r.tickets[1];
   ok(c.ABIERTO === false && c.FECHA_CIERRE === '2026-10-01T14:19:58.000Z' && c.SIN_LEER === 0, 'un cerrado trae su fecha de cierre');
   ok(c.COLOR_PRIORIDAD === '' && t.COLOR_PRIORIDAD === '#A0D76A', 'un color que no es #hex no pasa (va a ir a un style)');
+  ok(t.MIN_SIN_RESPUESTA === 41 && t.META_RESPUESTA_MIN === 120 && !isNaN(new Date(t.MEDIDO_EN)),
+    'tiempo sin respuesta: 41 min, meta del helpdesk 120 (41 + 79) y cuándo se midió');
   H.listarTickets('tok-ana');
   ok(llamadas.length === 2, 'la segunda vez sale de la caché: el helpdesk no se entera');
 }

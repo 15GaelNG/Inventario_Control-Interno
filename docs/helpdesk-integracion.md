@@ -115,6 +115,20 @@ Reglas:
 - Después, lista de tickets con filtros por estatus y el detalle al dar clic.
 - Un enlace "Abrir en helpdesk" en cada ticket, para lo que no replicamos.
 
+### Tiempo sin respuesta
+
+La lista del helpdesk ya trae, por ticket, `nextAnswer` (minutos desde la última respuesta) y
+`diffLastResponse` (los que faltan para su meta; negativo = ya pasó). Su suma es la meta: **120 min
+en todas las prioridades** (medido en los HAR del 05 y 07/10/2026, comparando el mismo ticket en
+los dos). `normalizar_` los guarda como `MIN_SIN_RESPUESTA`, `META_RESPUESTA_MIN` y `MEDIDO_EN`
+(cuándo se midieron: la pantalla le suma lo que pasó, porque la lista y la ficha salen de la caché).
+**No cuesta llamadas.** La lista del inicio (Mi departamento, Los que levanté) no los trae.
+
+Solo cuenta en lo que espera respuesta nuestra (Abierto, Sin asignación, Reabierto; Pendiente
+espera al solicitante): ámbar al pasar la meta del helpdesk, rojo con más de un día (con la meta de
+2 h casi todo saldría en rojo). Sale junto a la fecha de cada ticket, en sus Propiedades y, en la
+cabecera de la lista, cuántos de los que se ven llevan más de un día.
+
 ### "En Control Interno": el contexto de quien pide el ticket
 
 En el panel del ticket, lo que sabemos de esa persona en nuestros módulos

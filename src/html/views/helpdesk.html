@@ -99,7 +99,7 @@
   .hd-fila-texto { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
   .hd-fila-1 { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-text-muted); }
   .hd-fila-quien { font-weight: 600; color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .hd-fila-cuando { margin-left: auto; flex: none; }
+  .hd-fila-cuando { margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 6px; }
   .hd-fila-titulo { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hd-fila.sin-leer .hd-fila-titulo { font-weight: 700; }
   .hd-fila-3 { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--color-text-muted); min-width: 0; }
@@ -129,7 +129,7 @@
   .hd-t-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; color: var(--color-text-muted); }
   .hd-t-acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
   .hd-t-acciones button, .hd-t-acciones a { font-size: 12.5px; padding: 6px 12px; display: inline-flex; align-items: center; gap: 6px; }
-  .hd-t-cuerpo { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 290px; }
+  .hd-t-cuerpo { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 320px; }
   .hd-conversacion { overflow-y: auto; padding: 18px 22px 30px; display: flex; flex-direction: column; gap: 14px; }
   .hd-msj { display: flex; gap: 10px; max-width: 760px; }
   .hd-msj-caja { flex: 1; min-width: 0; padding: 10px 14px 12px; border-radius: 4px 14px 14px 14px; background: var(--color-surface); border: 1px solid var(--color-border); }
@@ -143,13 +143,14 @@
   .hd-imagen { display: block; max-width: 100%; max-height: 420px; border-radius: 8px; border: 1px solid var(--color-border); }
   .hd-lado { overflow-y: auto; padding: 16px; border-left: 1px solid var(--color-border); background: var(--color-surface); display: flex; flex-direction: column; gap: 20px; }
   .hd-lado-titulo { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--color-text-muted); margin-bottom: 8px; }
-  .hd-persona-tarjeta { display: flex; gap: 10px; align-items: center; }
-  .hd-persona-tarjeta > div > strong { display: block; font-size: 13.5px; }
-  .hd-persona-tarjeta > div > span { display: block; font-size: 12px; color: var(--color-text-muted); word-break: break-all; }
+  /* La foto va solo junto al nombre: lo demás ocupa todo el ancho del panel */
+  .hd-persona-cabeza { display: flex; gap: 10px; align-items: center; margin-bottom: 6px; }
+  .hd-persona-cabeza strong { font-size: 13.5px; line-height: 1.3; }
+  .hd-persona-tarjeta > span { display: block; font-size: 12px; line-height: 1.5; color: var(--color-text-muted); overflow-wrap: anywhere; }
+  .hd-persona-tarjeta > span:empty { display: none; }
   .hd-props { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 7px 12px; font-size: 12.5px; margin: 0; }
   .hd-props dt { color: var(--color-text-muted); }
   .hd-props dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
-  .hd-persona-tarjeta #hd-t-persona { word-break: normal; }
   /* En Control Interno: lo nuestro ligado a quien lo pide (vehículos, cajas, sus otros tickets) */
   .hd-ci-grupo { font-size: 11.5px; font-weight: 600; color: var(--color-text-muted); margin: 10px 0 4px; }
   .hd-ci-grupo:first-of-type { margin-top: 0; }
@@ -167,6 +168,16 @@
   .hd-ci-ticket span, .hd-ci-ticket small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hd-ci-ticket small { color: var(--color-text-muted); font-size: 11.5px; }
   .hd-esqueleto.hd-esqueleto-chico { height: 44px; margin: 0; }
+  /* Tiempo sin respuesta: ámbar al pasar la meta del helpdesk (2 h), rojo con más de un día */
+  .hd-espera { flex: none; display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; white-space: nowrap; }
+  .hd-espera .ico { width: 12px; height: 12px; }
+  .hd-espera.tarde { color: #8a5a00; background: #fff1cc; }
+  .hd-espera.grave { color: #b42318; background: #fde4e1; }
+  .hd-espera.a-tiempo { color: var(--color-success); background: color-mix(in srgb, var(--color-success) 12%, transparent); }
+  :root[data-theme="dark"] .hd-espera.tarde { color: #ffd27a; background: #4a3a10; }
+  :root[data-theme="dark"] .hd-espera.grave { color: #ffb4ab; background: #5c1f1a; }
+  .hd-props small { color: var(--color-text-muted); font-size: 11px; }
+  @media (max-width: 1024px) { .hd-fila .hd-espera { padding: 1px 5px; } }
   .hd-gente { display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; }
   .hd-gente div { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .hd-respuestas { display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; }

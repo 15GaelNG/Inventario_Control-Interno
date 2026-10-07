@@ -316,6 +316,8 @@
         AREA_DESTINO: i % 2 ? 'ANÁLISIS DE DATOS' : 'SENSORES', DEPARTAMENTO_DESTINO: 'CONTROL INTERNO',
         FECHA_CREACION: hace(i * 2).slice(0, 10), FECHA_CIERRE: i % 4 === 2 ? hace(i) : '', ULTIMA_RESPUESTA: 'Respuesta hace ' + (i + 1) + ' horas.',
         SIN_LEER: i % 3, ABIERTO: i % 4 !== 2,
+        // Tiempo sin respuesta (lo da el helpdesk): de 40 min a 3 días, meta de 2 h
+        MIN_SIN_RESPUESTA: [40, 300, 4400][i % 3], META_RESPUESTA_MIN: 120, MEDIDO_EN: new Date().toISOString(),
       })),
       siguiente: 103623,
       consultado: new Date().toISOString(),
@@ -324,7 +326,8 @@
       ID: 103700, TITULO: 'RIFTER UNU794H | Alertas en tablero', ESTATUS: 'Abierto', PRIORIDAD: 'Baja', FORMULARIO: 'Incidencia | Solicitud - Sensores',
       GRUPO: 'Sensores', SOLICITANTE: 'ISAMAR JUAREZ', CORREO_SOLICITANTE: 'persona@ejemplo.com', AREA_SOLICITANTE: 'SUMINISTROS',
       DEPARTAMENTO_SOLICITANTE: 'COMPRAS', AGENTE: 'Agente de Prueba', AREA_DESTINO: 'SENSORES', FECHA_CREACION: hace(2).slice(0, 10), FECHA_CIERRE: '',
-      DURACION_DIAS: 2, SIN_LEER: 1, ABIERTO: true,
+      DURACION_DIAS: 2, SIN_LEER: 1, ABIERTO: true, ID_ESTATUS: 1,
+      MIN_SIN_RESPUESTA: 300, META_RESPUESTA_MIN: 120, MEDIDO_EN: new Date().toISOString(),
       DESCRIPCION: 'Buen día equipo\n\nLa unidad muestra alertas en el tablero desde la entrega. ¿Nos ayudan a revisarla?',
       MENSAJES: [
         { ID: 1, AUTOR: 'ISAMAR JUAREZ', CORREO: 'persona@ejemplo.com', FECHA: hace(2), TEXTO: 'Buen día equipo\nAdjunto fotos del tablero.', PRIVADO: false, ADJUNTOS: [],

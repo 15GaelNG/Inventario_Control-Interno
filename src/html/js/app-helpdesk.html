@@ -121,6 +121,33 @@
       return f && !isNaN(f) ? f.toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' }) : '';
     };
 
+    // ---------- tiempo sin respuesta. Lo mide el helpdesk (minutos desde la última respuesta y su
+    // meta, 2 h); aquí solo se le suma lo que pasó desde que se midió (MEDIDO_EN). Solo cuenta en lo
+    // que espera respuesta NUESTRA: Pendiente espera al solicitante, y lo resuelto ya no espera.
+    const ESPERAN_RESPUESTA = [1, 7, 8];   // Abierto, Abierto sin asignación, Reabierto
+    const UN_DIA = 24 * 60;
+    function sinRespuesta(t) {
+      if (typeof t.MIN_SIN_RESPUESTA !== 'number' || ESPERAN_RESPUESTA.indexOf(Number(t.ID_ESTATUS)) < 0) return null;
+      const medido = t.MEDIDO_EN ? new Date(t.MEDIDO_EN).getTime() : Date.now();
+      const min = t.MIN_SIN_RESPUESTA + Math.max(0, (Date.now() - medido) / 60000);
+      const meta = t.META_RESPUESTA_MIN || 120;
+      // Ámbar al pasar la meta del helpdesk; rojo con más de un día (con la meta de 2 h casi todo
+      // estaría en rojo y el rojo dejaría de decir algo)
+      return { min: min, meta: meta, nivel: min >= UN_DIA ? 'grave' : min >= meta ? 'tarde' : 'a-tiempo' };
+    }
+    function duracion(min) {
+      if (min < 60) return Math.max(1, Math.round(min)) + ' min';
+      if (min < UN_DIA) return Math.floor(min / 60) + ' h';
+      const dias = Math.floor(min / UN_DIA);
+      return dias + (dias === 1 ? ' día' : ' días');
+    }
+    function esperaHtml(t) {
+      const s = sinRespuesta(t);
+      if (!s || s.nivel === 'a-tiempo') return '';
+      return `<span class="hd-espera ${s.nivel}" title="Sin respuesta desde hace ${duracion(s.min)} (la meta del helpdesk es ${duracion(s.meta)})">` +
+        `<i data-lucide="hourglass" class="ico"></i><span class="hd-espera-txt">${duracion(s.min)}</span></span>`;
+    }
+
     // ---------- ¿ya está en Tickets? Solo para quien ve Tickets y en los formularios que van ahí
     const veTickets = !!permisoDe('tickets');
     const vaEnTickets = (t) => veTickets && !!hdFormulariosDeTickets && hdFormulariosDeTickets.has(Number(t.ID_FORMULARIO));
@@ -236,14 +263,17 @@
       const filas = visibles();
       const n = base().length;
       if (b.porRegistrar) HD_CONTEOS[b.id] = n + (siguiente ? '+' : '');
-      $('hd-lista-total').textContent = texto ? filas.length + ' de ' + n
+      // Cuántos de los que llegaron llevan más de un día sin respuesta (no se pide nada más)
+      const graves = base().filter((t) => (sinRespuesta(t) || {}).nivel === 'grave').length;
+      $('hd-lista-total').innerHTML = e(texto ? filas.length + ' de ' + n
         : b.porRegistrar ? (n === 1 ? '1 por registrar' : n + ' por registrar')
-          : (total ? total + (total === 1 ? ' ticket' : ' tickets') : '');
+          : (total ? total + (total === 1 ? ' ticket' : ' tickets') : '')) +
+        (graves && !texto ? ` <span class="hd-espera grave" title="${graves} de los que se ven llevan más de un día sin respuesta"><i data-lucide="hourglass" class="ico"></i>${graves}</span>` : '');
       $('hd-filas').innerHTML = filas.length ? filas.map((t) => `
         <button type="button" class="hd-fila${t.ID === abierto ? ' activa' : ''}${t.SIN_LEER ? ' sin-leer' : ''}" data-id="${t.ID}" role="option" aria-selected="${t.ID === abierto}">
           ${Avatar.html(t.CORREO_SOLICITANTE, t.SOLICITANTE, { tam: 34 })}
           <span class="hd-fila-texto">
-            <span class="hd-fila-1"><span class="hd-fila-quien">${e(t.SOLICITANTE || 'Sin solicitante')}</span><span class="hd-fila-cuando">${cuando(t.FECHA_CREACION)}</span></span>
+            <span class="hd-fila-1"><span class="hd-fila-quien">${e(t.SOLICITANTE || 'Sin solicitante')}</span><span class="hd-fila-cuando">${esperaHtml(t)}${cuando(t.FECHA_CREACION)}</span></span>
             <span class="hd-fila-titulo">${e(t.TITULO || '(sin título)')}</span>
             <span class="hd-fila-3">${estado(t)}<span>#${t.ID}</span>${registroHtml(t)}<span class="hd-fila-form">${e(t.FORMULARIO || t.AREA_DESTINO || '')}</span>
               ${t.SIN_LEER ? '<span class="hd-no-leidos" title="Mensajes sin leer">' + t.SIN_LEER + '</span>' : ''}</span>
@@ -428,10 +458,12 @@
           <aside class="hd-lado">
             <div>
               <div class="hd-lado-titulo">Quien lo pide</div>
-              <div class="hd-persona-tarjeta">${Avatar.html(t.CORREO_SOLICITANTE, t.SOLICITANTE, { tam: 40 })}
-                <div><strong>${e(t.SOLICITANTE || '—')}</strong><span>${e(t.CORREO_SOLICITANTE || '')}</span>
-                  <span>${e([t.AREA_SOLICITANTE, t.DEPARTAMENTO_SOLICITANTE].filter(Boolean).join(' · '))}</span>
-                  <span id="hd-t-persona"></span></div></div>
+              <div class="hd-persona-tarjeta">
+                <div class="hd-persona-cabeza">${Avatar.html(t.CORREO_SOLICITANTE, t.SOLICITANTE, { tam: 36 })}<strong>${e(t.SOLICITANTE || '—')}</strong></div>
+                <span>${e(t.CORREO_SOLICITANTE || '')}</span>
+                <span>${e([t.AREA_SOLICITANTE, t.DEPARTAMENTO_SOLICITANTE].filter(Boolean).join(' · '))}</span>
+                <span id="hd-t-persona"></span>
+              </div>
             </div>
             <div id="hd-t-contexto">${cargando ? '' : '<div class="hd-lado-titulo">En Control Interno</div><div class="hd-esqueleto hd-esqueleto-chico"></div>'}</div>
             <div>
@@ -439,6 +471,10 @@
               <dl class="hd-props">
                 ${prop('Estatus', estado(t))}${prop('Prioridad', prioridad(t))}${prop('Agente', e(t.AGENTE))}${prop('Grupo', e(t.GRUPO))}
                 ${prop('Área destino', e(t.AREA_DESTINO))}${prop('Creado', t.FECHA_CREACION ? formatearFecha(t.FECHA_CREACION) : '')}
+                ${prop('Sin respuesta', (() => {
+                  const s = sinRespuesta(t);
+                  return s ? `<span class="hd-espera ${s.nivel}"><i data-lucide="hourglass" class="ico"></i>${duracion(s.min)}</span> <small>meta ${duracion(s.meta)}</small>` : '';
+                })())}
                 ${prop('Cerrado', fechaHora(t.FECHA_CIERRE))}${prop('Duración', t.DURACION_DIAS !== '' && t.DURACION_DIAS !== undefined ? e(t.DURACION_DIAS) + ' días' : '')}
               </dl>
             </div>
