@@ -1337,10 +1337,33 @@
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-6px); }
   }
+  /* Camina hacia su esquina al cambiar de pantalla (usuario, 7-oct): no todo el tiempo -- "o ya
+     es mucho" -- solo una vez por navegación, con un pequeño rebote de pasos. Más específica que
+     la regla de arriba, así que mientras dura reemplaza la respiración (navegarA le agrega y le
+     quita la clase, ver app.html). */
+  #asistente-flotante.asistente-caminando {
+    animation: asistenteCamina .9s cubic-bezier(.22, 1, .36, 1) both;
+  }
+  @keyframes asistenteCamina {
+    0% { transform: translate(-140px, 0); opacity: 0; }
+    15% { opacity: 1; }
+    25% { transform: translate(-100px, -8px); }
+    50% { transform: translate(-60px, 0); }
+    75% { transform: translate(-25px, -8px); }
+    100% { transform: translate(0, 0); }
+  }
   @media (max-width: 640px) {
     #asistente-flotante { right: 14px; bottom: 80px; width: 52px; height: 52px; }
+    @keyframes asistenteCamina {
+      0% { transform: translate(-90px, 0); opacity: 0; }
+      15% { opacity: 1; }
+      25% { transform: translate(-65px, -6px); }
+      50% { transform: translate(-40px, 0); }
+      75% { transform: translate(-16px, -6px); }
+      100% { transform: translate(0, 0); }
+    }
   }
   @media (prefers-reduced-motion: reduce) {
-    #asistente-flotante { animation: none; }
+    #asistente-flotante, #asistente-flotante.asistente-caminando { animation: none; }
   }
 </style>

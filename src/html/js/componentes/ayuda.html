@@ -1,0 +1,115 @@
+<style>
+  .ayuda-card { max-width: 480px; }
+  .ayuda-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .ayuda-header img { width: 40px; height: 40px; object-fit: contain; flex-shrink: 0; }
+  .ayuda-header h3 { margin: 0; font-size: 16px; }
+  .ayuda-header p { margin: 2px 0 0; font-size: 12.5px; color: var(--color-text-muted); }
+  .ayuda-buscar { margin-bottom: 10px; }
+  .ayuda-lista { max-height: 50vh; overflow-y: auto; margin: 0 -4px; padding: 0 4px; }
+  .ayuda-item {
+    border: 1px solid var(--color-border); border-radius: 10px; margin-bottom: 8px; overflow: hidden;
+  }
+  .ayuda-item summary {
+    padding: 10px 12px; font-size: 13.5px; font-weight: 600; cursor: pointer; list-style: none;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .ayuda-item summary::-webkit-details-marker { display: none; }
+  .ayuda-item summary::before { content: '+'; color: var(--color-accent); font-weight: 700; width: 14px; flex-shrink: 0; }
+  .ayuda-item[open] summary::before { content: '–'; }
+  .ayuda-item summary:hover { background: var(--color-bg); }
+  .ayuda-item p {
+    margin: 0; padding: 0 12px 12px 34px; font-size: 13px; color: var(--color-text-muted); line-height: 1.5;
+  }
+  .ayuda-vacio { text-align: center; padding: 20px 10px; color: var(--color-text-muted); font-size: 13px; }
+  .ayuda-pie { margin-top: 12px; text-align: center; }
+  .ayuda-pie button { font-size: 12.5px; }
+  @media (max-width: 640px) {
+    .ayuda-lista { max-height: 60vh; }
+  }
+</style>
+
+<script>
+  /**
+   * Ayuda — panel de preguntas frecuentes de la pantalla en la que estés, abierto desde el
+   * asistente flotante (el muñeco) en vez de un recorrido guiado paso a paso:
+   *
+   *   Ayuda.abrir([
+   *     { pregunta: '¿Cómo busco un vehículo por su serie?', respuesta: 'Usa el cuadro…' },
+   *   ], { onTour: () => iniciarTourVehiculos() });   // opcional: liga a un Tour.iniciar si el módulo ya tiene uno
+   *
+   * Esc, clic fuera o la X → cierra. Con más de 6 preguntas aparece un buscador (filtra
+   * pregunta + respuesta). No guarda nada ni manda nada al servidor -- es contenido fijo que
+   * declara cada módulo (ver NAV_GRUPOS.ayuda en app.html), no un chat.
+   */
+  const Ayuda = (function () {
+    const UMBRAL_BUSCADOR = 6;
+
+    function esc(v) {
+      return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+      ));
+    }
+
+    function normalizar(s) {
+      return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    }
+
+    function abrir(preguntas, opciones) {
+      const o = opciones || {};
+      const fondo = document.createElement('div');
+      fondo.className = 'modal-backdrop';
+      fondo.innerHTML = `
+        <div class="modal-card ayuda-card" role="dialog" aria-modal="true" aria-labelledby="ayuda-titulo">
+          <div class="modal-header" style="margin-bottom:0">
+            <div class="ayuda-header">
+              <img src="https:\/\/raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/mascota-asistente.png" alt="" />
+              <div>
+                <h3 id="ayuda-titulo">Preguntas frecuentes</h3>
+                <p>Lo que más se pregunta de esta pantalla</p>
+              </div>
+            </div>
+            <button type="button" class="modal-close" data-ayuda-cerrar aria-label="Cerrar"><i data-lucide="x" class="ico"></i></button>
+          </div>
+          ${preguntas.length > UMBRAL_BUSCADOR ? '<input type="search" class="ayuda-buscar" placeholder="Buscar…" aria-label="Buscar en las preguntas" />' : ''}
+          <div class="ayuda-lista" data-ayuda-lista></div>
+          ${o.onTour ? '<div class="ayuda-pie"><button type="button" class="secondary" data-ayuda-tour>¿Prefieres un recorrido guiado?</button></div>' : ''}
+        </div>`;
+      document.body.appendChild(fondo);
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+
+      const lista = fondo.querySelector('[data-ayuda-lista]');
+      function pintar(texto) {
+        const q = normalizar(texto);
+        const filtradas = !q ? preguntas : preguntas.filter((p) => normalizar(p.pregunta).includes(q) || normalizar(p.respuesta).includes(q));
+        lista.innerHTML = filtradas.length
+          ? filtradas.map((p, i) => `
+            <details class="ayuda-item"${i === 0 && !q ? ' open' : ''}>
+              <summary>${esc(p.pregunta)}</summary>
+              <p>${esc(p.respuesta)}</p>
+            </details>`).join('')
+          : '<p class="ayuda-vacio">Nada encontrado -- prueba con otra palabra.</p>';
+      }
+      pintar('');
+
+      const focoPrevio = document.activeElement;
+      const terminar = () => {
+        document.removeEventListener('keydown', alTecla, true);
+        fondo.remove();
+        if (focoPrevio && focoPrevio.focus) focoPrevio.focus();
+      };
+      const alTecla = (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); terminar(); } };
+
+      fondo.querySelector('[data-ayuda-cerrar]').addEventListener('click', terminar);
+      fondo.addEventListener('mousedown', (ev) => { if (ev.target === fondo) terminar(); });
+      document.addEventListener('keydown', alTecla, true);
+      const buscador = fondo.querySelector('.ayuda-buscar');
+      if (buscador) buscador.addEventListener('input', () => pintar(buscador.value));
+      const btnTour = fondo.querySelector('[data-ayuda-tour]');
+      if (btnTour) btnTour.addEventListener('click', () => { terminar(); o.onTour(); });
+
+      (buscador || fondo.querySelector('.ayuda-item summary')).focus();
+    }
+
+    return { abrir };
+  })();
+</script>
