@@ -6,6 +6,7 @@
   /* ---- Barra superior ---- */
   .dt-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
   .dt-toolbar .dt-buscar { max-width: 260px; }
+  .dt-toolbar .dt-buscar-col { max-width: 180px; }
   .dt-toolbar button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; font-size: 13px; white-space: nowrap; }
   .dt-toolbar .dt-espacio { flex: 1; }
   .dt-seleccion-info { font-size: 12.5px; color: var(--color-text-muted); }
@@ -316,11 +317,13 @@
   .dt-panel-extra { margin-top: 14px; }
 
   /* ---- Tabla / Tarjetas (ver "MODO TARJETAS" en la documentación de abajo) ----
-     El botón solo existe hasta 1024px: en escritorio siempre es tabla. */
+     El botón solo existe hasta 1024px: en escritorio siempre es tabla -- salvo que el módulo
+     pida cfg.tarjetasAncho (raíz .dt-tarjetas-ancho), ahí se ve en cualquier ancho. */
   .dt-modo { display: none; }
   @media (max-width: 1024px) {
     .dt-modo { display: inline-flex; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden; flex-shrink: 0; }
   }
+  .dt-tarjetas-ancho .dt-modo { display: inline-flex; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden; flex-shrink: 0; }
   .dt-toolbar .dt-modo button { background: transparent; border: 0; border-radius: 0; color: var(--color-text-muted); padding: 8px 11px; }
   .dt-toolbar .dt-modo button + button { border-left: 1px solid var(--color-border); }
   .dt-toolbar .dt-modo button[aria-pressed="true"] { background: var(--color-primary); color: #fff; }
@@ -365,6 +368,19 @@
   .dt.dt-tarjetas tbody td[data-campo]:empty { display: none; }
   .dt.dt-tarjetas tbody tr:not([data-id]) { padding-right: 14px; }
   .dt.dt-tarjetas tbody td.dt-editable { padding-right: 30px; }
+
+  /* Tarjetas en cuadrícula cuando el módulo pidió tarjetasAncho (usuario, 7-oct: "literal como
+     las de Líneas" — ahí en 3 por renglón en escritorio): mismo acomodo 3/2/1 que ya usa
+     .form-rejilla[data-columnas="3"] en los mismos dos cortes del sistema. Sin esto (el resto de
+     los módulos) las tarjetas se quedan en una sola columna, como siempre. */
+  .dt.dt-tarjetas-ancho.dt-tarjetas tbody { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .dt.dt-tarjetas-ancho.dt-tarjetas tbody tr { margin-bottom: 0; }
+  @media (max-width: 1024px) {
+    .dt.dt-tarjetas-ancho.dt-tarjetas tbody { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 640px) {
+    .dt.dt-tarjetas-ancho.dt-tarjetas tbody { grid-template-columns: 1fr; }
+  }
 
   /* ---- Celular: barra y pie que caben en 390px ---- */
   .dt-pagina { white-space: nowrap; }
@@ -454,12 +470,20 @@
    *     umbralPalabraClave: 10,                 // eliminar pide escribir "ELIMINAR" desde N filas
    *     tarjeta: { campos: ['FOLIO', 'PLACA'], titulo: (fila) => … },   // opcional: qué muestra cada tarjeta (ver abajo)
    *     tarjetas: false,                        // opcional: sin modo tarjetas (el módulo trae su propia vista)
+   *     tarjetasAncho: true,                    // opcional: el botón Tabla / Tarjetas también en escritorio
+   *     buscarColumna: { campo: 'NUCCO', placeholder: 'Buscar por Nucco…' },   // opcional: un segundo
+   *       // buscador en la misma barra, que solo filtra esa columna (op "contiene") -- para cuando
+   *       // el buscador general (que ya busca en todas las columnas visibles) mezcla demasiado.
    *   });
    *
    * ─── MODO TARJETAS (celular y tableta) ────────────────────────────────────────────
    *   Hasta 1024px (Pantalla.esAngosta) la barra trae el botón Tabla / Tarjetas. Sin elección,
    *   el celular ve tarjetas y la tableta, tabla; lo que elija la persona se recuerda con su
-   *   "Vista" (y "Restablecer vista" lo regresa a automático). En escritorio siempre es tabla.
+   *   "Vista" (y "Restablecer vista" lo regresa a automático). En escritorio siempre es tabla,
+   *   salvo que el módulo pida `tarjetasAncho: true` (usuario, 7-oct): ahí el botón se ve en
+   *   cualquier ancho, pero sigue sin elegir tarjetas solo -- la persona tiene que tocarlo. Con
+   *   tarjetasAncho las tarjetas además van en cuadrícula (3 por renglón en escritorio, 2 en
+   *   tableta, 1 en celular) en vez de una sola columna -- igual que ya hacía Líneas a mano.
    *   Título de la tarjeta: cfg.tarjeta.titulo(fila), o si no cfg.etiquetaFila (cómo el módulo ya
    *   nombra una fila en avisos y confirmaciones), o si no la primera columna. Debajo, cfg.tarjeta.campos
    *   o las primeras 5 columnas de la vista de la persona, cada dato con el nombre de su columna; los
@@ -856,9 +880,11 @@
        * 10 columnas no cabe) y tabla en tableta.
        */
       const conTarjetas = cfg.tarjetas !== false;
+      const tarjetasAncho = !!cfg.tarjetasAncho;
       function modoEfectivo() {
-        if (!conTarjetas || !pantalla || !pantalla.esAngosta()) return 'tabla';
-        return st.modo || (pantalla.esCelular() ? 'tarjetas' : 'tabla');
+        if (!conTarjetas) return 'tabla';
+        if (!tarjetasAncho && (!pantalla || !pantalla.esAngosta())) return 'tabla';
+        return st.modo || (pantalla && pantalla.esCelular() ? 'tarjetas' : 'tabla');
       }
 
       // localStorage puede no estar disponible (incógnito, vista previa): la vista solo no se recuerda
@@ -981,6 +1007,7 @@
         <div class="dt">
           <div class="dt-toolbar">
             <input type="search" class="dt-buscar" placeholder="Buscar en la tabla…" aria-label="Buscar en la tabla" />
+            ${cfg.buscarColumna ? `<input type="search" class="dt-buscar-col" placeholder="${esc(cfg.buscarColumna.placeholder || 'Buscar…')}" aria-label="${esc(cfg.buscarColumna.placeholder || 'Buscar')}" />` : ''}
             <button type="button" class="secondary dt-btn-columnas" title="Columnas, orden, ancho y densidad">${ic('vista')} Vista</button>
             ${conTarjetas ? `<div class="dt-modo" role="group" aria-label="Ver como">${Object.keys(MODOS).map((modo) =>
               botonIcono('dt-btn-modo', modo, 'Ver como ' + MODOS[modo].toLowerCase(), `data-modo="${modo}" aria-pressed="false"`)).join('')}</div>` : ''}
@@ -1089,7 +1116,7 @@
         raiz.className = 'dt dt-densidad-' + st.densidad +
           // modoSeleccion (rama emmanuel): className se reescribe en cada render, así que el modo va aquí
           (cfg.modoSeleccion ? ' dt-con-modo-seleccion' : '') + (st.modoSeleccion ? ' dt-modo-seleccion' : '') + (cfg.seleccionDrive ? ' dt-drive' : '') +
-          (m.tarjetas ? ' dt-tarjetas' : '') + (cfg.seleccionable ? ' dt-con-casillas' : '');
+          (m.tarjetas ? ' dt-tarjetas' : '') + (cfg.seleccionable ? ' dt-con-casillas' : '') + (tarjetasAncho ? ' dt-tarjetas-ancho' : '');
         contenedor.querySelectorAll('.dt-btn-modo').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.modo === (m.tarjetas ? 'tarjetas' : 'tabla'))));
         ultimoModo = m.tarjetas;
         pintarEncabezado(m);
@@ -2161,6 +2188,12 @@
       // =====================================================================
       // ---- Barra, chips, aviso y paginación ----
       buscador.addEventListener('input', () => cambiarBusqueda(buscador.value));
+      if (cfg.buscarColumna) {
+        $('.dt-buscar-col').addEventListener('input', (ev) => {
+          const v = ev.target.value.trim();
+          cambiarFiltro(cfg.buscarColumna.campo, v ? { op: 'contiene', v1: v } : null);
+        });
+      }
       $('.dt-btn-columnas').addEventListener('click', (ev) => abrirVista(ev.currentTarget));
       $('.dt-tamano').addEventListener('change', (ev) => { st.pagina = 1; cambiarVista(() => { st.tamanoPagina = Number(ev.target.value); }); });
       const irAPagina = (calcular) => () => { st.pagina = calcular(st.pagina); render(); };
