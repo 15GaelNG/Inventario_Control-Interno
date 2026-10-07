@@ -62,7 +62,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   sube los adendums de Telcel y los barridos de AT&T del mes; se leen en el navegador, se revisan contra el inventario
   y se cargan: foto del mes en ADENDUMS (columnas CUENTA, NUMERO SIM, IMEI, ESTATUS PROVEEDOR, EQUIPO, PLAZO,
   PENALIZACION y FECHA DE BAJA), cuenta, razón social y SIM en LINEAS, altas como línea suelta DISPONIBLE y avisos a
-  Líneas de posibles cambios de número y de estatus distintos. El adendum vigente es el del archivo más nuevo.
+  Líneas de número distinto con la misma SIM o cuenta (salvo si la bitácora ya tiene ese cambio) y de estatus distintos. El adendum vigente es el del archivo más nuevo.
 - **Resguardos y cancelaciones:** bandeja de Pau (recibir, entregar a Líneas, vendido, cancelación con carta).
 - **Panorama:** líneas y equipos por estatus, renta por cuenta y adendums, al cierre del mes elegido.
 - **Notificaciones:** campana con adendums por vencer y avisos de seguimiento.
