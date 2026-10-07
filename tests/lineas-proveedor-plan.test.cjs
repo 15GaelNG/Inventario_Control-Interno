@@ -125,3 +125,9 @@ test('contrato: lo que el inventario no tenía se completa; solo es distinto un 
   const c = plano(P.plan_(P.limpiarLote_(lote), inv).resumen.contratos);
   assert.deepEqual([c.completan, c.cambian, c.iguales, c.formato], [1, 1, 1, 0]);
 });
+
+test('el aviso de cambio de número abre el registro (el equipo donde está la línea), no el ID de la línea', () => {
+  const fuente = read('src/services/lineas/LineasProveedor.gs');
+  assert.match(fuente, /LineasLectura\.filas\(\)\.forEach\(\(f\) => \{ if \(f\['ID LINEA'\]\) registroDe\[txt\(f\['ID LINEA'\]\)\] = txt\(f\['ID'\]\); \}\);/);
+  assert.match(fuente, /refId: registroDe\[c\.idLinea\] \|\| c\.idLinea,/);
+});

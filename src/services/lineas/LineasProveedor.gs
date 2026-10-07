@@ -277,8 +277,11 @@ const LineasProveedor = (function () {
     });
 
     // 4) Avisos a Líneas (fuera del candado: cada aviso toma el suyo)
-    avisar_(resultado.acciones);
     LineasLectura.limpiarCaches();
+    // «Ver» abre el registro: el equipo donde está la línea, o la línea si va suelta
+    const registroDe = {};
+    LineasLectura.filas().forEach((f) => { if (f['ID LINEA']) registroDe[txt(f['ID LINEA'])] = txt(f['ID']); });
+    avisar_(resultado.acciones, registroDe);
     const res = resultado.resumen;
     res.cargadas = resultado.acciones.adendums.length;
     return res;
@@ -290,10 +293,10 @@ const LineasProveedor = (function () {
     return c ? { razon: txt(c['RAZON SOCIAL']) } : null;
   }
 
-  function avisar_(acc) {
+  function avisar_(acc, registroDe) {
     acc.cambiosNumero.forEach((c) => {
       LineasNotificaciones.crear({
-        tipo: 'CAMBIO DE NUMERO', refId: c.idLinea,
+        tipo: 'CAMBIO DE NUMERO', refId: registroDe[c.idLinea] || c.idLinea,
         titulo: 'Posible cambio de número · ' + c.antes + ' → ' + c.despues,
         mensaje: 'El ' + (c.archivo || 'archivo del proveedor') + ' (' + fechaCorta(c.fecha) + ') trae el ' + c.despues + ' con la ' + c.pista +
           ' que en el inventario tiene el ' + c.antes + (c.estatusInventario ? ' (' + c.estatusInventario + ')' : '') + '. No se cambió nada: revisar y, si procede, cambiar el número en Editar.',
