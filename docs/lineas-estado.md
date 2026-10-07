@@ -3,7 +3,7 @@
 Rama `master` = producción (versión 64, de Ayrton; lo último de Líneas ahí es la parte 6 con COMENTARIO, plantillas
 «(SISTEMA)», página de la responsiva, patrón con 9 puntos en el PDF, Reasignar corregido, responsables adicionales, sin
 «quien lo usa», firma guardada, PDF ligado fuera de su carpeta y PIN en minúsculas). Rama `emmanuel`: además, el PIN
-del equipo solo con números, sin la compatibilidad con OBSERVACIONES y la hoja armada en Exportar a Excel · Última
+del equipo solo con números, sin la compatibilidad con OBSERVACIONES la hoja armada en Exportar a Excel y la pantalla Proveedor (etapa 1) · Última
 actualización: 2026-10-07
 
 Qué es hoy el módulo **Líneas** (equipos celulares y líneas telefónicas), dónde vive cada cosa y cómo se trabaja.
@@ -58,6 +58,11 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 - **Exportar a Excel del inventario:** primero una hoja LINEAS TELEFONICAS armada como la vieja (mismas columnas, una
   fila por equipo o línea sola, ESTATUS GENERAL como en la tabla; `LineasExportar.inventarioJunto_`) y después LINEAS,
   EQUIPOS, ASIGNACIONES y ADENDUMS. El reporte mensual (`reporte_lineas/scripts/inventario.py`) lee esa primera hoja.
+- **Proveedor** (`proveedor-lineas`, parte 7; `lineas-proveedor.html` y `LineasProveedor.gs`): quien tenga el permiso
+  sube los adendums de Telcel y los barridos de AT&T del mes; se leen en el navegador, se revisan contra el inventario
+  y se cargan: foto del mes en ADENDUMS (columnas CUENTA, NUMERO SIM, IMEI, ESTATUS PROVEEDOR, EQUIPO, PLAZO,
+  PENALIZACION y FECHA DE BAJA), cuenta, razón social y SIM en LINEAS, altas como línea suelta DISPONIBLE y avisos a
+  Líneas de posibles cambios de número y de estatus distintos. El adendum vigente es el del archivo más nuevo.
 - **Resguardos y cancelaciones:** bandeja de Pau (recibir, entregar a Líneas, vendido, cancelación con carta).
 - **Panorama:** líneas y equipos por estatus, renta por cuenta y adendums, al cierre del mes elegido.
 - **Notificaciones:** campana con adendums por vencer y avisos de seguimiento.
