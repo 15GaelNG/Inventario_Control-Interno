@@ -67,7 +67,7 @@ const ArqueosService = (function () {
    */
   const AUDIT_ITEMS = [
     {
-      clave: 'AUDIT_01_Facturas_Pendientes', etiqueta: 'Facturas pendientes',
+      clave: 'AUDIT_01_Facturas_Pendientes', etiqueta: 'Facturas pendientes de registrar en el sistema de CPP',
       opciones: [
         { texto: 'a) Semana actual - 100%', puntos: 100 },
         { texto: 'b) 1 a 3 Facturas anteriores - 75%', puntos: 75 },
@@ -76,7 +76,7 @@ const ArqueosService = (function () {
       ],
     },
     {
-      clave: 'AUDIT_02_Folios_Rechazados', etiqueta: 'Folios rechazados',
+      clave: 'AUDIT_02_Folios_Rechazados', etiqueta: 'Seguimiento de folios rechazados en el sistema de CPP',
       opciones: [
         { texto: 'a) 0 folios rechazados - 100%', puntos: 100 },
         { texto: 'b) Incidencia justificada - 75%', puntos: 75 },
@@ -85,7 +85,7 @@ const ArqueosService = (function () {
       ],
     },
     {
-      clave: 'AUDIT_03_Folios_No_Reembolsados', etiqueta: 'Folios no reembolsados',
+      clave: 'AUDIT_03_Folios_No_Reembolsados', etiqueta: 'Folios no Reembolsados por falta de seguimiento',
       opciones: [
         { texto: 'a) 0 folios no reembolsados - 100%', puntos: 100 },
         { texto: 'b) 1 a 3 Folios - 75%', puntos: 75 },
@@ -94,7 +94,7 @@ const ArqueosService = (function () {
       ],
     },
     {
-      clave: 'AUDIT_04_Folios_Errores_Captura', etiqueta: 'Folios con errores de captura',
+      clave: 'AUDIT_04_Folios_Errores_Captura', etiqueta: 'Folios con errores de captura (panel equivocado, servicio/partida, insumo, entre otros)',
       opciones: [
         { texto: 'a) 0 Folios sin errores - 100%', puntos: 100 },
         { texto: 'b) 1 a 3 Folios - 75%', puntos: 75 },
@@ -103,7 +103,7 @@ const ArqueosService = (function () {
       ],
     },
     {
-      clave: 'AUDIT_05_Gastos_No_Capturados', etiqueta: 'Gastos no capturados',
+      clave: 'AUDIT_05_Gastos_No_Capturados', etiqueta: 'Gastos no capturados sin seguimiento',
       opciones: [
         { texto: 'a) 0 Gastos - 100%', puntos: 100 },
         { texto: 'b) 1 a 3 Gastos - 75%', puntos: 75 },
@@ -112,7 +112,7 @@ const ArqueosService = (function () {
       ],
     },
     {
-      clave: 'AUDIT_06_Seguimiento_No_Facturados', etiqueta: 'Seguimiento a no facturados',
+      clave: 'AUDIT_06_Seguimiento_No_Facturados', etiqueta: 'Seguimiento a tickets que no han podido facturarse',
       opciones: [
         { texto: 'a) 0 Tickets - 100%', puntos: 100 },
         { texto: 'b) 1 a 2 Tickets - 75%', puntos: 75 },
@@ -121,7 +121,7 @@ const ArqueosService = (function () {
       ],
     },
     {
-      clave: 'AUDIT_07_Vales_Rosas', etiqueta: 'Vales rosas',
+      clave: 'AUDIT_07_Vales_Rosas', etiqueta: 'Vales rosas sin nombre completo, firma, fecha o cualquier dato que no se haya llenado',
       opciones: [
         { texto: 'a) 0 Vales - 100%', puntos: 100 },
         { texto: 'b) 1 a 2 Vales - 75%', puntos: 75 },
@@ -130,7 +130,7 @@ const ArqueosService = (function () {
       ],
     },
     {
-      clave: 'AUDIT_08_Comprobante_Transferencia', etiqueta: 'Comprobante de transferencia',
+      clave: 'AUDIT_08_Comprobante_Transferencia', etiqueta: 'Comprobantes de transferencias sin colocar en concepto "Caja Chica" o "CCH" y descripción del motivo de la transferencia',
       opciones: [
         { texto: 'a) 0 Transferencias - 100%', puntos: 100 },
         { texto: 'b) 1 a 2 Transferencias - 75%', puntos: 75 },
@@ -139,7 +139,7 @@ const ArqueosService = (function () {
       ],
     },
     {
-      clave: 'AUDIT_09_Transferencias_No_Enviadas', etiqueta: 'Transferencias no enviadas',
+      clave: 'AUDIT_09_Transferencias_No_Enviadas', etiqueta: 'Transferencias NO enviadas para confirmación por WhatsApp o correo electrónico',
       opciones: [
         { texto: 'a) 0 Transferencias - 100%', puntos: 100 },
         { texto: 'b) 1 a 3 Transferencias - 75%', puntos: 75 },
@@ -148,7 +148,7 @@ const ArqueosService = (function () {
       ],
     },
     {
-      clave: 'AUDIT_10_Gastos_No_Deducibles', etiqueta: 'Gastos no deducibles',
+      clave: 'AUDIT_10_Gastos_No_Deducibles', etiqueta: 'Gastos NO deducibles rezagados mayor a un mes',
       opciones: [
         { texto: 'a) 0 Folios - 100%', puntos: 100 },
         { texto: 'b) 1 a 3 Folios - 75%', puntos: 75 },
@@ -157,7 +157,7 @@ const ArqueosService = (function () {
       ],
     },
     {
-      clave: 'AUDIT_11_Sobrante_Dinero', etiqueta: 'Sobrante de dinero',
+      clave: 'AUDIT_11_Sobrante_Dinero', etiqueta: 'Sobrante de dinero en efectivo y/o cuenta bancaria a partir de $20',
       opciones: [
         { texto: 'a) $20 o menos - 100%', puntos: 100 },
         { texto: 'b) $21 a $200 - 75%', puntos: 75 },
@@ -166,7 +166,7 @@ const ArqueosService = (function () {
       ],
     },
     {
-      clave: 'AUDIT_12_Faltante_Dinero_1', etiqueta: 'Faltante de dinero',
+      clave: 'AUDIT_12_Faltante_Dinero_1', etiqueta: 'Faltante de dinero a partir de $1',
       opciones: [
         { texto: 'a) $1 o menos - 100%', puntos: 100 },
         { texto: 'b) $2 a $100 - 75%', puntos: 75 },
@@ -175,14 +175,14 @@ const ArqueosService = (function () {
       ],
     },
     {
-      clave: 'AUDIT_13_Prestamo_Dinero', etiqueta: 'Préstamo de dinero',
+      clave: 'AUDIT_13_Prestamo_Dinero', etiqueta: 'Préstamo de dinero entre cajas chicas',
       opciones: [
         { texto: 'a) No - 100%', puntos: 100 },
         { texto: 'b) Sí - 0%', puntos: 0 },
       ],
     },
     {
-      clave: 'AUDIT_14_Cuenta_Para_CCH', etiqueta: 'Cuenta exclusiva para CCH',
+      clave: 'AUDIT_14_Cuenta_Para_CCH', etiqueta: 'Cuenta o apartado bancario exclusivo para caja chica',
       opciones: [
         { texto: 'a) Sí - 100%', puntos: 100 },
         { texto: 'b) No - 0%', puntos: 0 },
@@ -190,14 +190,14 @@ const ArqueosService = (function () {
       ],
     },
     {
-      clave: 'AUDIT_15_Cambio_Titular', etiqueta: 'Cambio de titular',
+      clave: 'AUDIT_15_Cambio_Titular', etiqueta: 'Cambio de titular de caja chica sin previo aviso a Control Interno (Acta Administrativa a los involucrados)',
       opciones: [
         { texto: 'a) No - 100%', puntos: 100 },
         { texto: 'b) Sí - 0%', puntos: 0 },
       ],
     },
     {
-      clave: 'AUDIT_16_Gastos_No_Permitioos', etiqueta: 'Gastos no permitidos',
+      clave: 'AUDIT_16_Gastos_No_Permitioos', etiqueta: 'Gastos NO permitidos por Caja Chica sin autorización',
       opciones: [
         { texto: 'a) Sí cuenta con autorización - 100%', puntos: 100 },
         { texto: 'b) No cuenta con autorización - 0%', puntos: 50 }, // sí, 50 — confirmado con el usuario
@@ -205,7 +205,7 @@ const ArqueosService = (function () {
       ],
     },
     {
-      clave: 'AUDIT_17_Incidencias_contempladas', etiqueta: 'Incidencias contempladas',
+      clave: 'AUDIT_17_Incidencias_contempladas', etiqueta: 'Incidencias que no se tengan contempladas en el presente tabulador, si se detecta que no se cuenta con una buena administración o mal uso de la caja chica',
       opciones: [
         { texto: 'a) Sin incidencias adicionales - 100%', puntos: 100 },
         { texto: 'b) Con incidencias adicionales - 0%', puntos: 75 }, // sí, 75 — confirmado con el usuario
@@ -316,13 +316,14 @@ const ArqueosService = (function () {
     libro: ssId,
     hoja: NOMBRE_HOJA,
     id: ID_COLUMN,
-    // Catálogo ligero para la tabla (11 columnas, no las 79 completas)
+    // Catálogo ligero para la tabla (12 columnas, no las 79 completas)
     columnas: [
-      'ID ARQUEO', 'ID CCH', 'RESPONSABLE', 'TIPO DE ARQUEO', 'FECHA INICIO',
+      'ID ARQUEO', 'ESTATUS ARQUEO', 'ID CCH', 'RESPONSABLE', 'TIPO DE ARQUEO', 'FECHA INICIO',
       'TOTAL GENERAL', 'DIFERENCIA', 'CALIFICACION_AUDITORIA_FINAL', 'ESTADO PDF', 'FORMATO ARQUEO', 'EVIDENCIAS',
     ],
     fila: (r) => ({
       ID: r['ID ARQUEO'],
+      ESTATUS: r['ESTATUS ARQUEO'] || '',
       ID_CCH: r['ID CCH'] || '',
       RESPONSABLE: r['RESPONSABLE'] || '',
       TIPO_ARQUEO: r['TIPO DE ARQUEO'] || '',

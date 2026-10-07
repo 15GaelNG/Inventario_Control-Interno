@@ -62,6 +62,15 @@
         <div id="view-container"></div>
       </main>
     </div>
+
+    <!-- Asistente flotante (el muñeco): dentro de app-shell a propósito, para que su mismo
+         `hidden` lo tape en login/cargando -- visible en TODA la app ya adentro, no solo donde
+         ya hay tour. Picarle lanza el de la pantalla en la que estés, o avisa que ahí todavía
+         no hay uno. Quitado temporalmente (usuario, 7-oct) con `hidden` -- el botón y el Tour
+         siguen aquí tal cual, solo falta quitar este atributo para que vuelva a aparecer. -->
+    <button type="button" id="asistente-flotante" title="¿Dudas de esta pantalla? Pícame" hidden>
+      <img src="https://raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/mascota-asistente.png" alt="Asistente de Control Interno" />
+    </button>
   </div>
 
   <!-- Notificación flotante de cargando/éxito/error para Registrar/Editar/Eliminar -->

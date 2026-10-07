@@ -99,9 +99,18 @@
     MARCA: de(['CHEVROLET', 'NISSAN', 'MITSUBISHI', 'RAM', 'HONDA'], i), LINEA_VEHICULO: de(['BEAT', 'NP300', 'L200', '700', '150XR'], i),
     MODELO: 2017 + (i % 8), PLACA: 'GG' + String.fromCharCode(65 + i) + (880 + i) + 'F', ESTATUS: de(['UTILITARIO', 'UTILITARIO', 'PERSONAL', 'BAJA VEHICULAR'], i),
     NO_ECONOMICO: 'E-' + (100 + i), COLOR: de(['BLANCO', 'GRIS', 'ROJO'], i), SEDE: de(SEDES, i), FECHA_REGISTRO: hace(30 * i + 3),
+    SERIE_VEHICULO: 'MA6CA6CD4KT' + String(46600 + i * 37),
+  }));
+  // Volcado "crudo" de la hoja (columnasCompletas, botón "Vista"): encabezados reales, con
+  // espacios -- para probar que no se duplica una columna que ya existe con otra clave
+  // (ver normCampo_ en datatable.html).
+  const apiVehiculosCompleto = VEHICULOS.map((v) => ({
+    'ID': v.ID_VEHICULO, 'FOLIO': v.FOLIO, 'NUCCO': v.NUCCO, 'SERIE VEHICULO': v.SERIE_VEHICULO,
+    'RAZON SOCIAL': de(['FRO', 'IID', 'CIB'], 0),
   }));
   const LISTAS = {
     apiListarVehiculosResumen: JSON.stringify(VEHICULOS),
+    apiVehiculosCompleto: JSON.stringify(apiVehiculosCompleto),
     apiListarIncidencias: filas(9, (i) => ({
       ID: 'INC-' + (i + 1), FECHA_REGISTRO: hace(4 * i + 1), FOLIO: VEHICULOS[i].FOLIO, DEPARTAMENTO: de(DEPTOS, i),
       ESTADO: de(['ABIERTA', 'EN TALLER', 'CERRADA'], i), MODELO: VEHICULOS[i].MODELO, ANIO: VEHICULOS[i].MODELO, KILOMETRAJE: 48000 + i * 3100,

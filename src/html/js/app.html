@@ -627,7 +627,13 @@
     navegarA('caja-chica', 'Caja Chica');
   }
 
+  // Qué vista está montada ahora mismo -- lo usa el asistente flotante (más abajo) para saber
+  // si esta pantalla tiene un tour (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU → `tour`). Se guarda
+  // aquí, no se adivina del menú (⟵ llega igual por el historial o un enlace entre módulos).
+  let vistaActual = null;
+
   function navegarA(vista, etiqueta) {
+    vistaActual = vista;
     // Rama emmanuel: cada cambio de módulo es un paso de Atrás/Adelante (html/historial-navegador.html)
     if (typeof HistorialApp !== 'undefined') HistorialApp.alNavegar(vista, etiqueta);
     document.querySelectorAll('.nav-item, .nav-subitem').forEach((el) => {
@@ -688,7 +694,7 @@
       items: [
         { vista: 'panorama-vehiculos', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'vehiculos', plantilla: 'tpl-panorama-vehiculos', init: () => initPanoramaVehiculos() },
         { vista: 'incidencias', etiqueta: 'Incidencias', icono: 'wrench', requiere: 'incidencias', plantilla: 'tpl-incidencias', init: () => initIncidencias() },
-        { vista: 'vehiculos', etiqueta: 'Vehículos', icono: 'car', requiere: 'vehiculos', plantilla: 'tpl-vehiculos', init: () => initVehiculos() },
+        { vista: 'vehiculos', etiqueta: 'Vehículos', icono: 'car', requiere: 'vehiculos', plantilla: 'tpl-vehiculos', init: () => initVehiculos(), tour: () => iniciarTourVehiculos() },
         { vista: 'cambios-vehiculos', etiqueta: 'Cambios Vehículos', icono: 'history', requiere: 'cambios-vehiculos', plantilla: 'tpl-cambios-vehiculos', init: () => initCambiosVehiculos() },
         { vista: 'reasignaciones-vehiculares', etiqueta: 'Reasignaciones Vehiculares', icono: 'arrow-left-right', requiere: 'reasignaciones-vehiculares', plantilla: 'tpl-reasignaciones-vehiculares', init: () => initReasignacionesVehiculares() },
         { vista: 'verificaciones', etiqueta: 'Verificaciones', icono: 'badge-check', requiere: 'verificaciones', plantilla: 'tpl-verificaciones', init: () => initVerificaciones() },
@@ -3500,7 +3506,10 @@
       idCampo: 'ID_VEHICULO',
       idTabla: 'vehiculos',
       tarjetasAncho: true,   // el botón Tabla/Tarjetas también en escritorio (usuario, 7-oct)
-      buscarColumna: { campo: 'NUCCO', placeholder: 'Buscar por Nucco…' },   // (usuario, 7-oct)
+      buscarColumna: [   // (usuario, 7-oct)
+        { campo: 'NUCCO', placeholder: 'Buscar por Nucco…' },
+        { campo: 'SERIE_VEHICULO', placeholder: 'Buscar por Serie…' },
+      ],
       textoVacio: 'Todavía no hay vehículos registrados',
       exportar: {
         nombreArchivo: 'Vehículos',
@@ -3531,6 +3540,13 @@
         { campo: 'LINEA_VEHICULO', titulo: 'Línea', tipo: 'lista', enDetalle: false },
         { campo: 'MODELO', titulo: 'Año', tipo: 'texto', enDetalle: false },
         { campo: 'PLACA', titulo: 'Placa', tipo: 'texto', enDetalle: false },
+        // Visible por defecto (no 'visible:false' como NO_ECONOMICO/COLOR/SEDE de abajo): si
+        // se escondiera, el buscador de la tabla no la encontraría (filasFiltradas() solo busca
+        // en columnas visibles) -- el usuario busca vehículos por serie seguido (usuario, 7-oct).
+        // campo SERIE_VEHICULO (con guion bajo), no SERIE: "Vista" > columnas completas compara
+        // normalizando "_"->" " contra el encabezado real de la hoja ("SERIE VEHICULO") -- con
+        // otra clave no la reconoce como la misma y agrega una segunda columna duplicada.
+        { campo: 'SERIE_VEHICULO', titulo: 'Serie Vehículo', tipo: 'texto', enDetalle: false },
         // 'texto' (no 'lista'): ESTATUS trae varias razones de baja distintas
         // ("BAJA VEHICULAR", etc.) — contiene/no contiene "BAJA" cubre todas
         // sin tener que enumerarlas, igual que hacía el filtro de KPI de antes.
@@ -3839,55 +3855,6 @@
       window.open('https:\/\/datastudio.google.com/u/0/reporting/40272bf8-ecac-4d37-8cca-01f4c4c32841/page/1jHvF', '_blank', 'noopener');
     });
 
-    // Tour guiado (usuario, 7-oct): empieza por Vehículos -- ver componentes/tour.html. El
-    // primer paso fuerza la pestaña "Catálogo" porque los demás pasos están ahí adentro (una
-    // pestaña escondida mide 0 -- Tour se salta el paso solo, pero mejor dejarla lista).
-    document.getElementById('veh-btn-tour').addEventListener('click', () => {
-      Tour.iniciar([
-        {
-          selector: '#veh-listado .stat-row',
-          titulo: 'Totales y KPIs',
-          texto: 'Cuántos vehículos hay en cada estatus. Haz clic en cualquiera de estos números para filtrar la lista por ese valor -- otro clic lo quita.',
-          antes: () => { const t = document.querySelector('#veh-tabs [data-tab="lista"]'); if (t) t.click(); },
-        },
-        {
-          selector: '#veh-clases',
-          titulo: 'Filtro por Clase',
-          texto: 'Un ícono por cada clase de vehículo (automóvil, camioneta, camión…) con cuántos hay de cada una. Clic en uno para filtrar la tabla.',
-        },
-        {
-          selector: '#veh-tabla .dt-buscar',
-          titulo: 'Buscar en la tabla',
-          texto: 'Escribe cualquier dato -- folio, marca, departamento, nucco -- y filtra la lista al instante.',
-        },
-        {
-          selector: '#veh-tabla .dt-buscar-col',
-          titulo: 'Buscar por Nucco',
-          texto: 'Si ya sabes el Nucco exacto, este cuadro busca solo ahí, sin mezclarse con los demás datos.',
-        },
-        {
-          selector: '#veh-tabla .dt-modo',
-          titulo: 'Tabla o Tarjetas',
-          texto: 'Cambia cómo se ve la lista: tabla clásica o tarjetas, lo que se te acomode mejor.',
-        },
-        {
-          selector: '#veh-tabla .dt-btn-excel',
-          titulo: 'Exportar a Excel',
-          texto: 'Descarga la base completa -- todas las columnas y filas -- sin importar los filtros que tengas activos.',
-        },
-        {
-          selector: '#veh-tabs [data-tab="registrar"]',
-          titulo: 'Registrar',
-          texto: 'Da de alta un vehículo nuevo. El formulario va paso a paso: Vehículo, Identificación, Documentación y seguro, Accesorios y sensor, Ubicación y registro.',
-        },
-        {
-          selector: '#veh-tabla tbody tr[data-id]',
-          titulo: 'Cada vehículo',
-          texto: 'Doble clic (o toca) una fila para ver su ficha completa. El ⋮ o clic derecho trae más acciones: editar, dar de baja (una o varias a la vez) y más.',
-        },
-      ]);
-    });
-
     // En paralelo, no uno tras otro — los catálogos no dependen de la lista
     // de vehículos ni viceversa.
     await Promise.all([cargarCatalogosVehiculo(), cargar()]);
@@ -3901,6 +3868,57 @@
       if (v) abrirFichaVehiculo(v);
       else toastError('No se encontró el vehículo con folio ' + folio);
     }
+  }
+
+  // Tour guiado de Vehículos (usuario, 7-oct): a propósito FUERA de initVehiculos (de verdad
+  // afuera, no solo con la misma sangría -- initVehiculos ya estaba cerrada arriba) para que
+  // lo pueda lanzar el asistente flotante (NAV_GRUPOS → tour) sin esperar a que el módulo esté
+  // montado. El propio Tour navega a la pestaña correcta si hace falta (paso 0, `antes`).
+  // Ver componentes/tour.html.
+  function iniciarTourVehiculos() {
+    Tour.iniciar([
+      {
+        selector: '#veh-listado .stat-row',
+        titulo: 'Totales y KPIs',
+        texto: 'Cuántos vehículos hay en cada estatus. Haz clic en cualquiera de estos números para filtrar la lista por ese valor -- otro clic lo quita.',
+        antes: () => { const t = document.querySelector('#veh-tabs [data-tab="lista"]'); if (t) t.click(); },
+      },
+      {
+        selector: '#veh-clases',
+        titulo: 'Filtro por Clase',
+        texto: 'Un ícono por cada clase de vehículo (automóvil, camioneta, camión…) con cuántos hay de cada una. Clic en uno para filtrar la tabla.',
+      },
+      {
+        selector: '#veh-tabla .dt-buscar',
+        titulo: 'Buscar en la tabla',
+        texto: 'Escribe cualquier dato -- folio, marca, departamento, nucco -- y filtra la lista al instante.',
+      },
+      {
+        selector: '#veh-tabla .dt-buscar-col',
+        titulo: 'Buscar por Nucco',
+        texto: 'Si ya sabes el Nucco exacto, este cuadro busca solo ahí, sin mezclarse con los demás datos.',
+      },
+      {
+        selector: '#veh-tabla .dt-modo',
+        titulo: 'Tabla o Tarjetas',
+        texto: 'Cambia cómo se ve la lista: tabla clásica o tarjetas, lo que se te acomode mejor.',
+      },
+      {
+        selector: '#veh-tabla .dt-btn-excel',
+        titulo: 'Exportar a Excel',
+        texto: 'Descarga la base completa -- todas las columnas y filas -- sin importar los filtros que tengas activos.',
+      },
+      {
+        selector: '#veh-tabs [data-tab="registrar"]',
+        titulo: 'Registrar',
+        texto: 'Da de alta un vehículo nuevo. El formulario va paso a paso: Vehículo, Identificación, Documentación y seguro, Accesorios y sensor, Ubicación y registro.',
+      },
+      {
+        selector: '#veh-tabla tbody tr[data-id]',
+        titulo: 'Cada vehículo',
+        texto: 'Doble clic (o toca) una fila para ver su ficha completa. El ⋮ o clic derecho trae más acciones: editar, dar de baja (una o varias a la vez) y más.',
+      },
+    ]);
   }
 
   // ---------- Uber (usuarios autorizados) ----------
@@ -4461,6 +4479,15 @@
   document.getElementById('btn-logout').addEventListener('click', cerrarSesion);
   document.querySelectorAll('#sidebar .nav-item[data-view]').forEach((el) => {
     el.addEventListener('click', () => navegarA(el.dataset.view));
+  });
+
+  // Asistente flotante (usuario, 7-oct): lanza el tour de la pantalla en la que estés
+  // (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU → `tour`); si esa vista todavía no tiene uno, lo avisa
+  // en vez de no hacer nada.
+  document.getElementById('asistente-flotante').addEventListener('click', () => {
+    const destino = vistaDe(vistaActual);
+    if (destino && destino.tour) { destino.tour(); return; }
+    Notificar.info('Todavía no hay un recorrido para esta pantalla -- por ahora pícame en Vehículos.');
   });
 
   /**
