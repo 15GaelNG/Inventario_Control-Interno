@@ -6,34 +6,38 @@
  * campo que de verdad cambió: quién lo hizo, cuándo, y el valor antes/después.
  *
  * Columnas reales (8), confirmadas con el usuario contra la hoja real:
- *   ID_CAMBIO | FOLIO | TABLA | CAMPO | ANTES | DESPUES | ACTUALIZADO POR |
- *   FECHA ACTUALIZACION
+ *   ID | FOLIO | TABLA | CAMPO | ANTES | DESPUES | ACTUALIZADO POR | FECHA ACTUALIZACION
  */
 
 const CambiosVehiculosService = (function () {
-  // El nombre real de la pestaña ya está confirmado ("CAMBIOS VEHICULOS")
-  // — se busca directo por nombre (SheetUtils.getSheet), no por columnas
-  // como en Arqueos/Caja Chica. Evita cualquier riesgo de que la búsqueda
-  // por columnas encuentre una pestaña equivocada (ej. una copia/respaldo
-  // con las mismas 8 columnas) y la deje cacheada 6 horas.
-  const NOMBRE_HOJA = 'CAMBIOS VEHICULOS';
-  // No es una huella de pestana aunque se llame FIRMA: se usa con leerColumnasDeHoja,
-  // no con getSheetByColumns. 'ID' en vez de 'ID_CAMBIO', que la migracion renombro.
-  const COLUMNAS_FIRMA = ['ID', 'FOLIO', 'TABLA', 'CAMPO', 'ANTES', 'DESPUES', 'ACTUALIZADO POR', 'FECHA ACTUALIZACION'];
-
-  function ssId() {
-    return Config.SPREADSHEET_IDS.VEHICULOS();
-  }
-
-  function hoja_() {
-    return SheetUtils.getSheet(ssId(), NOMBRE_HOJA);
-  }
-
-  function fechaISO_(valor) {
-    if (!valor) return '';
-    const f = valor instanceof Date ? valor : new Date(valor);
-    return isNaN(f.getTime()) ? '' : f.toISOString();
-  }
+  /**
+   * La hoja, para HojaServicio. Con miles de filas viejas (9,000+ del sistema anterior),
+   * regresarlas TODAS y ordenarlas hacía que la respuesta se perdiera en el camino. Como cada
+   * renglón se agrega al final, recorrer la hoja de abajo hacia arriba ya da el orden
+   * cronológico sin ordenar, y se mandan solo los más recientes.
+   */
+  const CAMBIOS = {
+    modulo: 'cambios-vehiculos',
+    libro: () => Config.SPREADSHEET_IDS.VEHICULOS(),
+    // Por nombre y no por columnas: una copia con las mismas 8 columnas podía quedar cacheada 6 h
+    hoja: 'CAMBIOS VEHICULOS',
+    columnas: ['ID', 'FOLIO', 'TABLA', 'CAMPO', 'ANTES', 'DESPUES', 'ACTUALIZADO POR', 'FECHA ACTUALIZACION'],
+    // Los renglones de antes de este módulo no tienen ID; FOLIO es el que dice que el renglón es real
+    incluir: (r) => !!r['FOLIO'],
+    fila: (r) => ({
+      ID: r['ID'] || '',
+      FOLIO: r['FOLIO'] || '',
+      CAMPO: r['CAMPO'] || '',
+      ANTES: r['ANTES'] || '',
+      DESPUES: r['DESPUES'] || '',
+      ACTUALIZADO_POR: r['ACTUALIZADO POR'] || '',
+      FECHA: HojaServicio.fechaISO(r['FECHA ACTUALIZACION']),
+    }),
+    ultimosPrimero: true,
+    maximo: 500,
+  };
+  // Un vehículo no debería acumular tantos, pero se deja un tope generoso por seguridad
+  const MAXIMO_POR_VEHICULO = 200;
 
   /** Normaliza un valor (crudo de la hoja, o texto del cliente) para poder
    * comparar "antes" contra "después" sin falsos cambios por diferencias de
@@ -57,18 +61,16 @@ const CambiosVehiculosService = (function () {
    */
   function registrarCambios(folio, datosAntes, datosNuevos, actualizadoPor) {
     try {
-      const sheet = hoja_();
+      const nombreHoja = HojaServicio.hoja(CAMBIOS).getName();
       const ahora = new Date();
       Object.keys(datosNuevos || {}).forEach((campo) => {
         const antes = normalizar_(datosAntes ? datosAntes[campo] : '');
         const despues = normalizar_(datosNuevos[campo]);
         if (antes === despues) return;
-        SheetUtils.insert(ssId(), sheet.getName(), {
+        SheetUtils.insert(HojaServicio.libro(CAMBIOS), nombreHoja, {
           ID: Ids.nuevo(Entidades.prefijo('CAMBIOS VEHICULOS')),
-          // datosAntes ES el renglón completo del vehículo, así que ya trae su ID: no hace
-          // falta cambiarle la firma a esta función ni volver a leer la hoja. Si el
-          // vehículo no tuviera ID se guarda vacío a propósito — esto es una bitácora y
-          // nunca debe poder tumbar el guardado real del vehículo.
+          // datosAntes ES el renglón completo del vehículo, así que ya trae su ID. Si no lo
+          // tuviera se guarda vacío a propósito: una bitácora nunca debe tumbar el guardado.
           'ID VEHICULO': (datosAntes && datosAntes['ID']) || '',
           FOLIO: folio || '',
           TABLA: 'VEHICULOS',
@@ -84,86 +86,18 @@ const CambiosVehiculosService = (function () {
     }
   }
 
-  // Con miles de filas viejas (esta hoja ya trae 9,000+ del sistema
-  // anterior), regresarlas TODAS y luego ordenarlas con .sort() hacía que
-  // la respuesta se perdiera en el camino (confirmado con pruebas: 1 solo
-  // renglón sí llega bien, la lista completa no). Recorrer la hoja de
-  // ABAJO hacia ARRIBA evita el sort por completo — como cada renglón se
-  // agrega al final (tanto lo viejo como lo que escribe registrarCambios),
-  // ya vienen en orden cronológico por posición — y de una vez limita
-  // cuántos manda, para no repetir el mismo problema de tamaño.
-  const MAXIMO_CAMBIOS = 500;
-
-  /** Historial — los MAXIMO_CAMBIOS más recientes, solo lectura. */
-  function listarResumen(token) {
-    Permisos.puedeLeer(token, 'cambios-vehiculos');
-    // Guardado mientras la hoja no cambie (CacheHojas): el permiso se revisa antes, siempre
-    return CacheHojas.recordar('cveh_resumen', [[ssId(), NOMBRE_HOJA]], () => {
-      const sheet = hoja_();
-      const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_FIRMA);
-
-      const resultado = [];
-      for (let i = filas - 1; i >= 0 && resultado.length < MAXIMO_CAMBIOS; i--) {
-        // Los renglones viejos (de antes de este módulo) nunca tuvieron
-        // ID_CAMBIO asignado — solo se genera para los nuevos de aquí en
-        // adelante. FOLIO sí debería estar siempre lleno, es el indicador
-        // confiable de que el renglón es real.
-        if (!datos.FOLIO[i]) continue;
-        resultado.push({
-          ID: datos.ID[i] || '',
-          FOLIO: datos.FOLIO[i] || '',
-          CAMPO: datos.CAMPO[i] || '',
-          ANTES: datos.ANTES[i] || '',
-          DESPUES: datos.DESPUES[i] || '',
-          ACTUALIZADO_POR: datos['ACTUALIZADO POR'][i] || '',
-          FECHA: fechaISO_(datos['FECHA ACTUALIZACION'][i]),
-        });
-      }
-      return resultado;
-    });
-  }
-
-  /**
-   * Todas las columnas Y TODAS las filas (no solo las MAXIMO_CAMBIOS más recientes), para "Vista":
-   * mostrar/exportar cualquier columna. La hoja tiene miles de filas — se pide solo bajo demanda.
-   */
-  function completo(token) {
-    Permisos.puedeLeer(token, 'cambios-vehiculos');
-    return SheetUtils.getAll(ssId(), NOMBRE_HOJA);
-  }
-
-  /**
-   * Historial de cambios de UN vehículo (para enlazarlo desde el detalle
-   * de Vehículos) — recorre la hoja de abajo hacia arriba, igual que
-   * listarResumen (mismo motivo: evitar el bug de .sort() con 9,000+
-   * filas), pero filtrando por FOLIO en vez de limitarse a los últimos
-   * MAXIMO_CAMBIOS globales — un vehículo puntual no debería acumular
-   * tantos cambios como para necesitar ese límite, pero se deja uno
-   * generoso (200) por seguridad.
-   */
-  const MAXIMO_CAMBIOS_POR_VEHICULO = 200;
-
-  function listarPorFolio(token, folio) {
-    Permisos.puedeLeer(token, 'cambios-vehiculos');
-    if (!folio) return [];
-    const sheet = hoja_();
-    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_FIRMA);
-
-    const resultado = [];
-    for (let i = filas - 1; i >= 0 && resultado.length < MAXIMO_CAMBIOS_POR_VEHICULO; i--) {
-      if (String(datos.FOLIO[i] || '') !== String(folio)) continue;
-      resultado.push({
-        ID: datos.ID[i] || '',
-        FOLIO: datos.FOLIO[i] || '',
-        CAMPO: datos.CAMPO[i] || '',
-        ANTES: datos.ANTES[i] || '',
-        DESPUES: datos.DESPUES[i] || '',
-        ACTUALIZADO_POR: datos['ACTUALIZADO POR'][i] || '',
-        FECHA: fechaISO_(datos['FECHA ACTUALIZACION'][i]),
-      });
-    }
-    return resultado;
-  }
-
-  return { registrarCambios, listarResumen, completo, listarPorFolio };
+  return {
+    registrarCambios,
+    /** Historial — los 500 más recientes, solo lectura */
+    listarResumen: (token) => HojaServicio.listar(CAMBIOS, token),
+    /** Para el activador (Calentador.gs): la deja armada sin esperar a nadie */
+    calentar: () => HojaServicio.calentar(CAMBIOS),
+    /**
+     * Todas las columnas Y TODAS las filas (no solo las 500 más recientes), para "Vista":
+     * mostrar/exportar cualquier columna. La hoja tiene miles de filas — se pide solo bajo demanda.
+     */
+    completo: (token) => HojaServicio.completo(CAMBIOS, token),
+    /** Historial de UN vehículo (detalle de Vehículos): en toda la hoja, no solo en los 500 */
+    listarPorFolio: (token, folio) => HojaServicio.listarPor(CAMBIOS, token, 'FOLIO', folio, { maximo: MAXIMO_POR_VEHICULO }),
+  };
 })();

@@ -25,7 +25,7 @@
  * sus enlaces. Drive no abre un PDF en una página: por eso el recorte.
  *
  * Para eliminarlo: borrar este archivo, LineasCorreccionesSemilla.gs, html/views/lineas/lineas-correcciones.html,
- * html/js/lineas-correcciones.html, sus dos include de Index.html, su línea en navegarA y en NAV_GRUPOS (app.html), su
+ * html/js/lineas-correcciones.html, sus dos include de Index.html, su entrada en NAV_GRUPOS (app.html), su
  * entrada en Modulos.gs y en Entidades.gs (APP_CORRECCIONES), el script `correcciones:semilla`, la pestaña
  * APP_CORRECCIONES de la hoja y la carpeta Correcciones_Evidencias de Drive. `Lineas.comun` (lineas.html) puede quedarse.
  */

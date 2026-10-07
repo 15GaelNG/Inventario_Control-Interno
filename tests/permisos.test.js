@@ -198,6 +198,19 @@ ok(base.length === 3 && base[0][2] === 'EDICION', 'no modifica las reglas que re
 p = Permisos.resolver_(usuario({ AREA: 'CI' }), Permisos.aplicarCambios_(base, [{ quien: 'CI', modulo: 'uber', permiso: 'LECTURA' }], 'n'), Modulos.ids());
 ok(p.uber === 'LECTURA' && p.vehiculos === 'EDICION', 'lo guardado se resuelve igual que lo de la hoja');
 
+console.log('7b. Historial: qué cambió de verdad (diferencias_)');
+let d = Permisos.diferencias_(base, [{ quien: 'CI', modulo: 'Hologramas', permiso: 'EDICION' }]);
+ok(d.length === 1 && d[0].modulo === 'hologramas' && d[0].antes === 'LECTURA' && d[0].despues === 'EDICION',
+  'anota antes y después, con el id del módulo ' + JSON.stringify(d));
+d = Permisos.diferencias_(base, [{ quien: 'CI', modulo: 'vehiculos', permiso: 'NINGUNO' }, { quien: 'CI', modulo: 'uber', permiso: 'LECTURA' }]);
+ok(d.length === 2 && d[0].antes === 'EDICION' && d[0].despues === '' && d[1].antes === '' && d[1].despues === 'LECTURA',
+  'quitarle a un área queda "" (sin regla); dar algo nuevo sale de ""');
+d = Permisos.diferencias_(base, [{ quien: 'x@ciudadmaderas.com', modulo: 'uber', permiso: null }, { quien: 'x@ciudadmaderas.com', modulo: 'arqueos', permiso: 'NINGUNO' }]);
+ok(d.length === 2 && d[0].antes === 'EDICION' && d[0].despues === '' && d[1].despues === 'NINGUNO',
+  'en una persona: quitar la excepción queda "" (vuelve a su área) y Sin acceso se anota como NINGUNO');
+d = Permisos.diferencias_(base, [{ quien: 'CI', modulo: 'vehiculos', permiso: 'EDICION' }, { quien: 'CI', modulo: 'arqueos', permiso: 'NINGUNO' }]);
+ok(!d.length, 'lo que queda igual no se anota (ni Sin acceso a un área que ya no tenía nada)');
+
 console.log('8. Catálogo de módulos');
 ok(Modulos.existe('instalacion-sensores') && Modulos.existe(' Vehiculos '),
   'el id tolera mayúsculas y espacios: escribir "Vehiculos" en la hoja sí funciona');

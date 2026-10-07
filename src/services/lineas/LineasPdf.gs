@@ -222,7 +222,7 @@ const LineasPdf = (function () {
       });
       if (COMO_APPSHEET[plantillaId]) ajustarComoAppSheet_(doc.getBody(), COMO_APPSHEET[plantillaId], avisos);
       doc.saveAndClose();
-      const pdf = carpeta.createFile(copia.getAs('application/pdf').setName(nombrePdf));
+      const pdf = DriveUtils.marcarAutor(carpeta.createFile(copia.getAs('application/pdf').setName(nombrePdf)));
       // Sin esto, el PDF solo lo puede ver la cuenta que despliega la app
       // (quien lo creó) — nadie más puede abrir el link, aunque sea válido.
       if (!sinCompartir) pdf.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);

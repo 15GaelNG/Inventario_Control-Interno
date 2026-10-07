@@ -1,0 +1,8 @@
+{
+  "comentario": "A qué proyecto de Apps Script va cada cosa (los scriptId no son secretos: Entornos.gs ya los trae). La GitHub Action sube cada rama de 'ramas' a su DEV al hacer push; prod solo con el botón 'Run workflow'.",
+  "dominio": "ciudadmaderas.com",
+  "prod": "1NbOczw_H8UJ7adxRP4h_jl9VlfyvxM3mANYsaz12U5uo8Gj0BmfIYN3k",
+  "ramas": {
+    "ayrton": "1zCusAR0-Jntf853WxfdwejgmGNzRODqeHkWq6PLVThM3CsNjusg5Nmaf"
+  }
+}

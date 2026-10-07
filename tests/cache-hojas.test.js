@@ -84,6 +84,39 @@ const conFecha = CacheHojas.recordar('fecha', VEH, () => ({ f: new Date('2026-10
 ok(conFecha.f === '2026-10-02T12:00:00.000Z', 'una fecha sale como texto ISO desde la primera vez…');
 ok(CacheHojas.recordar('fecha', VEH, () => null).f === '2026-10-02T12:00:00.000Z', '…y igual desde la caché: siempre la misma forma');
 
+console.log('4b. calculo(): lo que sale de otras listas');
+let calculados = 0;
+const TIC = [['libro1234567', 'TICKETS']];
+const inicio = () => {
+  calculados++;
+  const veh = CacheHojas.recordar('veh', VEH, armar);
+  const tic = CacheHojas.recordar('tic', TIC, () => [1, 2, 3]);
+  return { vehiculos: veh.length, tickets: tic.length, vez: calculados };
+};
+let calc = CacheHojas.calculo('inicio_A', inicio);
+ok(calculados === 1 && calc.tickets === 3, 'la primera vez calcula');
+calc = CacheHojas.calculo('inicio_A', inicio);
+ok(calculados === 1 && calc.vez === 1, 'la segunda devuelve lo guardado');
+CacheHojas.tocar('libro1234567', 'TICKETS');
+calc = CacheHojas.calculo('inicio_A', inicio);
+ok(calculados === 2 && calc.vez === 2, 'escribir en una hoja que consultó (sin decir cuál) lo vuelve a calcular');
+CacheHojas.tocar('libro1234567', 'UBER');
+CacheHojas.calculo('inicio_A', inicio);
+ok(calculados === 2, 'escribir en una hoja que NO consultó no lo toca');
+CacheHojas.calculo('inicio_B', inicio);
+ok(calculados === 3, 'otra clave (otros permisos) es otro cálculo');
+let sinGuardar = 0;
+CacheHojas.calculo('falla', () => ++sinGuardar, { guardarSi: () => false });
+CacheHojas.calculo('falla', () => ++sinGuardar, { guardarSi: () => false });
+ok(sinGuardar === 2, 'guardarSi = false no lo guarda (se vuelve a calcular)');
+cache.remove('ver_libro12345_TICKETS');
+CacheHojas.calculo('inicio_A', inicio);
+ok(calculados === 4, 'si se perdió la versión de una hoja, se recalcula (no se confía)');
+let rehechos = 0;
+CacheHojas.recordar('rh', VEH, () => ++rehechos);
+CacheHojas.recordar('rh', VEH, () => ++rehechos, undefined, true);
+ok(rehechos === 2 && CacheHojas.recordar('rh', VEH, () => ++rehechos) === 2, 'recordar(…, rehacer) vuelve a armar y deja guardado lo nuevo');
+
 console.log('5. Si la caché falla, no truena');
 const rota = vm.createContext({ CacheService: { getScriptCache: () => { throw new Error('sin caché'); } }, Utilities });
 vm.runInContext(leer('utils/CacheHojas.gs') + '\nthis.CacheHojas = CacheHojas;', rota);

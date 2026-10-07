@@ -13,7 +13,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const RAIZ = path.join(__dirname, '..', '..', 'src');
+// VISTA_PREVIA_SRC=.construido/revisar revisa la versión comprimida que se sube (tools/subir/construir.js)
+const RAIZ = path.resolve(process.env.VISTA_PREVIA_SRC || path.join(__dirname, '..', '..', 'src'));
 const SALIDA = path.join(__dirname, 'salida');
 
 /** include('html/styles') → contenido de src/html/styles.html (con sus propios include) */
@@ -36,9 +37,17 @@ function viewportDelServidor() {
   return m[1];
 }
 
+/** Los grupos de módulos de src/config/Modulos.gs (los reales, con referencia / editaEn): así la
+ *  vista previa no tiene su propia copia que se desfase */
+function gruposReales() {
+  const ctx = {};
+  require('vm').runInNewContext(fs.readFileSync(path.join(RAIZ, 'config', 'Modulos.gs'), 'utf8') + '\n;this.G = Modulos.GRUPOS;', ctx);
+  return ctx.G;
+}
+
 function construir() {
   let pagina = resolver('html/Index');
-  const falsos = fs.readFileSync(path.join(__dirname, 'datos-falsos.js'), 'utf8');
+  const falsos = 'window.__GRUPOS = ' + JSON.stringify(gruposReales()) + ';\n' + fs.readFileSync(path.join(__dirname, 'datos-falsos.js'), 'utf8');
   // El servidor falso va ANTES que todo: api.html usa google.script.run al cargar
   pagina = pagina.replace(/<head>/i, '<head>\n<meta name="viewport" content="' + viewportDelServidor() + '">' +
     '\n<script>\n' + falsos + '\n</script>');

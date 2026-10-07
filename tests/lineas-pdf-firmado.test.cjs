@@ -97,6 +97,7 @@ test('del AppSheet o de NUCOS sin PDF: el firmado se guarda en NUCOS; del sistem
     MimeType: { PDF: 'application/pdf' },
     Utilities: { base64Decode: (b) => Array.from(Buffer.from(b, 'base64')), newBlob: (bytes, mime, nombre) => ({ mime, nombre }), formatDate: () => '09 09' },
     DriveApp: { getFolderById: (id) => carpetas[id], Access: { DOMAIN: 'D' }, Permission: { VIEW: 'V' } },
+    DriveUtils: { marcarAutor: (a) => a },   // quién lo subió: aquí no importa
     LineasUtil: { nuco4: (n) => (n ? String(n).padStart(4, '0') : null) },
     LineasArchivos: {
       reemplazarPdf: () => { throw new Error('no debe reemplazar'); }, olvidarNuco: () => {},

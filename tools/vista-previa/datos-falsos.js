@@ -16,7 +16,10 @@
     ['uber', 'Uber', 'car-taxi-front', [['uber', 'Uber'], ['tickets', 'Tickets']]],
     ['administracion', 'Administración', 'settings', [['usuarios', 'Usuarios y permisos'], ['relaciones', 'Datos conectados'], ['salud', 'Salud']]],
   ];
-  const grupos = MODULOS.map(([id, etiqueta, icono, mods]) => ({ id, etiqueta, icono, modulos: mods.map(([i, e]) => ({ id: i, etiqueta: e })) }));
+  // Los de Modulos.gs (construir.js los pone en window.__GRUPOS), solo de los grupos que tienen escenas
+  const conEscenas = MODULOS.map((g) => g[0]);
+  const grupos = (window.__GRUPOS || []).filter((g) => conEscenas.indexOf(g.id) !== -1)
+    .map((g) => Object.assign({}, g, { modulos: g.modulos.map((m) => ({ id: m.id, etiqueta: m.etiqueta, icono: m.icono || '', referencia: m.referencia || '', editaEn: m.editaEn || [] })) }));
   const permisos = {};
   grupos.forEach((g) => g.modulos.forEach((m) => { permisos[m.id] = 'EDICION'; }));
 
@@ -164,7 +167,7 @@
   };
 
   // ---------- Usuarios y permisos (app-permisos.html: cargar(respuesta)) ----------
-  const AREAS = ['TI', 'CONTROL INTERNO', 'POST VENTA'];
+  const AREAS = ['TI', 'CONTROL INTERNO', 'POST VENTA', 'ANALISIS DE DATOS', 'CAPITAL HUMANO', 'TESORERIA'];
   const PERMISOS_PANEL = {
     grupos,
     areas: AREAS.map((nombre) => ({ nombre })),
@@ -176,7 +179,18 @@
       { quien: 'TI', modulo: 'vehiculos', permiso: 'EDICION' }, { quien: 'TI', modulo: 'verificaciones', permiso: 'LECTURA' },
       { quien: 'CONTROL INTERNO', modulo: 'arqueos', permiso: 'EDICION' }, { quien: 'CONTROL INTERNO', modulo: 'caja-chica', permiso: 'EDICION' },
       { quien: 'persona1@ciudadmaderas.com', modulo: 'hologramas', permiso: 'EDICION' },
+      { quien: 'POST VENTA', modulo: 'vehiculos', permiso: 'LECTURA' }, { quien: 'POST VENTA', modulo: 'incidencias', permiso: 'EDICION' },
+      { quien: 'ANALISIS DE DATOS', modulo: 'vehiculos', permiso: 'LECTURA' }, { quien: 'ANALISIS DE DATOS', modulo: 'verificaciones', permiso: 'LECTURA' },
+      { quien: 'ANALISIS DE DATOS', modulo: 'hologramas', permiso: 'LECTURA' }, { quien: 'TESORERIA', modulo: 'caja-chica', permiso: 'LECTURA' },
+      { quien: 'TESORERIA', modulo: 'arqueos', permiso: 'LECTURA' }, { quien: 'CAPITAL HUMANO', modulo: 'uber', permiso: 'EDICION' },
     ],
+    // Lo que anota PERMISOS_HISTORIAL, del más reciente al más viejo
+    historial: [
+      ['2026-10-06T18:20:00Z', 'TI', 'verificaciones', 'EDICION', 'LECTURA'], ['2026-10-06T18:20:00Z', 'TI', 'vehiculos', 'LECTURA', 'EDICION'],
+      ['2026-10-05T16:05:00Z', 'persona1@ciudadmaderas.com', 'hologramas', '', 'EDICION'], ['2026-10-04T22:40:00Z', 'CONTROL INTERNO', 'arqueos', '', 'EDICION'],
+      ['2026-10-03T15:12:00Z', 'persona0@ciudadmaderas.com', 'uber', 'NINGUNO', ''],
+    ].map(([fecha, quien, modulo, antes, despues]) => ({ fecha, correo: 'admin@ciudadmaderas.com', nombre: 'AYRTON ADMIN', quien, modulo, antes, despues })),
+
   };
 
   const respuestas = {
@@ -189,6 +203,24 @@
     apiListarVehiculosBasico: [{ FOLIO: 'AUT0024', NUCO: '24', PLACA: 'GGY886F', MARCA: 'CHEVROLET', LINEA_VEHICULO: 'BEAT' },
       { FOLIO: 'AUT0100', NUCO: '100', PLACA: 'ABC123A', MARCA: 'MITSUBISHI', LINEA_VEHICULO: 'L200' }],
     apiBuscarVehiculoPorFolio: VEHICULO,
+    apiFichaCajaChica: () => JSON.stringify({
+      completo: FICHAS.apiBuscarCajaChicaPorId,
+      cambios: permisos['caja-chica'] ? JSON.parse(FICHAS.apiCambiosMontoPorIdCch) : null,
+      arqueos: permisos.arqueos ? JSON.parse(FICHAS.apiArqueosPorIdCch) : null,
+    }),
+    // Como el servidor: cada pestaña con el permiso de su módulo (null sin él; quitarPermisos lo quita)
+    apiFichaVehiculo: () => {
+      const parte = (modulo, valor) => (permisos[modulo] ? (typeof valor === 'string' ? JSON.parse(valor) : valor) : null);
+      return JSON.stringify({
+        completo: VEHICULO,
+        cambios: parte('cambios-vehiculos', FICHAS.apiListarCambiosVehiculosPorFolio),
+        reasignaciones: parte('reasignaciones-vehiculares', FICHAS.apiListarReasignacionesVehicularesPorFolio),
+        verificaciones: parte('verificaciones', '[]'), inspecciones: parte('inspeccion-vehicular', '[]'),
+        sensores: parte('instalacion-sensores', '[]'), hologramas: parte('hologramas', '[]'),
+        incidencias: parte('incidencias', FICHAS.apiIncidenciasPorFolio),
+        responsivas: parte('responsiva-vehicular', '[]'), adherentes: parte('adherente-vehicular', '[]'),
+      });
+    },
     apiListarInspecciones: [
       { ID: '2026_24_292', FOLIO: 'AUT0024', TIPO: 'RIFTER', FECHA: hace(1), PLACAS: 'GGY886F', PUNTAJE: 96.3, RESPONSABLE: 'JUAN MANUEL FULGENCIO', INSPECTOR: 'AYRTON SEPULVEDA', PDF: 'x.pdf' },
       { ID: '2026_25_291', FOLIO: 'AUT0025', TIPO: 'HONDA 150XR', FECHA: hace(3), PLACAS: 'GGR658F', PUNTAJE: 84.5, RESPONSABLE: 'JORGE LUIS AVECILLA', INSPECTOR: 'AYRTON SEPULVEDA', PDF: '' },
@@ -248,6 +280,43 @@
       DEPARTAMENTO: 'TI', SERIE_VEHICULO: 'MA6CA6CD4KT046623', CAPACIDAD: 35, RAZON_SOCIAL: 'CIUDAD MADERAS',
       estatusVehiculoCatalogo: 'UTILITARIO', tipoCombustibleVehiculo: 'MAGNA',
     },
+    // Help Desk (tickets inventados, con la forma de los reales)
+    apiHelpdeskEstado: { conectado: true, nombre: 'Persona de Prueba', rol: 'Agente Sr.', vence: new Date(Date.now() + 20 * 3600e3).toISOString() },
+    apiHelpdeskFiltros: {
+      estatus: [{ id: 1, nombre: 'Abierto', color: '#4caf50' }, { id: 2, nombre: 'Pendiente', color: '#2196f3' }, { id: 3, nombre: 'Resuelto', color: '#4caf50' },
+        { id: 4, nombre: 'Cerrado', color: '#f44336' }, { id: 7, nombre: 'Abierto sin asignación', color: '#4caf50' }, { id: 8, nombre: 'Reabierto', color: '#4caf50' }],
+      prioridades: [{ id: 1, nombre: 'Baja', color: '#A0D76A' }, { id: 2, nombre: 'Media', color: '#4DA1FF' }, { id: 3, nombre: 'Alta', color: '#FFD012' }, { id: 4, nombre: 'Urgente', color: '#FF5959' }],
+      formularios: [{ id: 148, nombre: 'Incidencia | Solicitud - Sensores' }, { id: 137, nombre: 'Solicitud - Alta de Conceptos CXP' }],
+      grupos: [{ id: 226, nombre: 'Sensores' }, { id: 9, nombre: 'Análisis de Datos' }],
+    },
+    apiHelpdeskTickets: JSON.stringify({
+      total: 41,
+      tickets: filas(12, (i) => ({
+        ID: 103700 - i * 7, TITULO: ['RIFTER UNU794H | Alertas en tablero', 'Alta de nueva oficina CHMGTO', 'Solicitud nuevo sensor', 'Desactivar alarma del GPS'][i % 4],
+        DESCRIPCION: 'Texto de prueba', ESTATUS: ['Abierto', 'Pendiente', 'Cerrado', 'Resuelto'][i % 4], ID_ESTATUS: [1, 2, 4, 3][i % 4],
+        PRIORIDAD: ['Baja', 'Media', 'Alta', 'Urgente'][i % 4], FORMULARIO: i % 2 ? 'Solicitud - Alta de Conceptos CXP' : 'Incidencia | Solicitud - Sensores',
+        GRUPO: i % 2 ? 'Análisis de Datos' : 'Sensores', SOLICITANTE: ['ISAMAR JUAREZ', 'MARILY AVILA', 'DAVID MALDONADO', 'JAVIER ORDUÑA'][i % 4],
+        CORREO_SOLICITANTE: 'persona@ejemplo.com', AREA_SOLICITANTE: 'SUMINISTROS', DEPARTAMENTO_SOLICITANTE: 'COMPRAS', AGENTE: 'Agente de Prueba',
+        AREA_DESTINO: i % 2 ? 'ANÁLISIS DE DATOS' : 'SENSORES', DEPARTAMENTO_DESTINO: 'CONTROL INTERNO',
+        FECHA_CREACION: hace(i * 2).slice(0, 10), FECHA_CIERRE: i % 4 === 2 ? hace(i) : '', ULTIMA_RESPUESTA: 'Respuesta hace ' + (i + 1) + ' horas.',
+        SIN_LEER: i % 3, ABIERTO: i % 4 !== 2,
+      })),
+      consultado: new Date().toISOString(),
+    }),
+    apiHelpdeskDetalle: JSON.stringify({
+      ID: 103700, TITULO: 'RIFTER UNU794H | Alertas en tablero', ESTATUS: 'Abierto', PRIORIDAD: 'Baja', FORMULARIO: 'Incidencia | Solicitud - Sensores',
+      GRUPO: 'Sensores', SOLICITANTE: 'ISAMAR JUAREZ', CORREO_SOLICITANTE: 'persona@ejemplo.com', AREA_SOLICITANTE: 'SUMINISTROS',
+      DEPARTAMENTO_SOLICITANTE: 'COMPRAS', AGENTE: 'Agente de Prueba', AREA_DESTINO: 'SENSORES', FECHA_CREACION: hace(2).slice(0, 10), FECHA_CIERRE: '',
+      DURACION_DIAS: 2, SIN_LEER: 1, ABIERTO: true,
+      DESCRIPCION: 'Buen día equipo\n\nLa unidad muestra alertas en el tablero desde la entrega. ¿Nos ayudan a revisarla?',
+      MENSAJES: [
+        { ID: 1, AUTOR: 'ISAMAR JUAREZ', FECHA: hace(2), TEXTO: 'Buen día equipo\nAdjunto fotos del tablero.', PRIVADO: false, ADJUNTOS: ['tablero.jpg'] },
+        { ID: 2, AUTOR: 'Agente de Prueba', FECHA: hace(1), TEXTO: 'Hola, lo revisamos en el taller esta semana (ver https://ejemplo.com/guia).', PRIVADO: false, ADJUNTOS: [] },
+        { ID: 3, AUTOR: 'Agente de Prueba', FECHA: hace(1), TEXTO: 'Nota interna: pedir cita con el proveedor.', PRIVADO: true, ADJUNTOS: [] },
+      ],
+    }),
+    apiHelpdeskRegistrados: {},
+    apiHelpdeskGuardados: JSON.stringify([]),
   };
 
   // ---------- google.script.run de mentira ----------
@@ -258,8 +327,9 @@
       get(_, nombre) {
         if (nombre === 'withSuccessHandler') return (f) => { exito = f; return api; };
         if (nombre === 'withFailureHandler') return (f) => { falla = f; return api; };
-        return () => {
-          const r = respuestas[nombre];
+        return (...args) => {
+          // Una respuesta puede ser una función: la arma con los argumentos y los permisos de la escena
+          const r = typeof respuestas[nombre] === 'function' ? respuestas[nombre](...args) : respuestas[nombre];
           setTimeout(() => (r === undefined ? exito(/^apiListar/.test(nombre) ? [] : null) : exito(JSON.parse(JSON.stringify(r)))), 120);
         };
       },
@@ -322,6 +392,14 @@
     p('pointerup', 320, 125);
   };
 
+  /** La persona de la escena no tiene estos módulos (lo que decide qué se ve es state.permisos) */
+  function quitarPermisos(...modulos) {
+    // De los dos lados: lo que ya tiene la app y lo que contesta apiMisPermisos si llega después
+    modulos.forEach((m) => { delete permisos[m]; });
+    state.permisos = Object.assign({}, state.permisos);
+    modulos.forEach((m) => { delete state.permisos[m]; });
+  }
+
   const ESCENAS = {
     'relaciones': async () => { await abrir('relaciones'); await vistaRelaciones(false); await hasta('.rel-s-tabla'); await esperar(300); },
     'relaciones-lineas': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('.tab-btn[data-tab="familia-1"]')).click(); await esperar(400); },
@@ -332,6 +410,9 @@
     'salud-tecnica': async () => { await abrir('salud'); await vistaSalud(true); await hasta('.rel-tarjeta'); await esperar(300); },
     'salud-capital': async () => { await abrir('salud'); await vistaSalud(false); const b = [...document.querySelectorAll('#salud-tabs .tab-btn')].find((x) => /Capital/.test(x.textContent)); b.click(); await esperar(500); },
     'relaciones-capital': async () => { await abrir('relaciones'); await vistaRelaciones(false); const b = [...document.querySelectorAll('#rel-s-tabs .tab-btn')].find((x) => /Capital/.test(x.textContent)); b.click(); await esperar(400); },
+    'helpdesk-conectar': async () => { respuestas.apiHelpdeskEstado = { conectado: false }; await abrir('helpdesk'); await hasta('#hd-conectar:not([hidden])'); await esperar(300); },
+    'helpdesk-lista': async () => { await abrir('helpdesk'); await hasta('#hd-tabla tbody tr[data-id]'); await esperar(300); },
+    'helpdesk-detalle': async () => { await abrir('helpdesk'); await abrirPrimeraFila(); await hasta('.hd-mensaje'); (await hasta('#hd-btn-registrar:not([hidden])')).click(); await esperar(500); },
     'inspecciones-detalle': async () => { await abrir('inspeccion-vehicular'); await abrirPrimeraFila(); },
     'sensores-detalle': async () => { await abrir('instalacion-sensores'); await abrirPrimeraFila(); },
     'hologramas-detalle': async () => { await abrir('hologramas'); await abrirPrimeraFila(); },
@@ -342,6 +423,22 @@
     'inicio': async () => { await abrir('dashboard'); await hasta('#dash-actividad .historial-item'); await esperar(300); },
     'vehiculos': () => abrir('vehiculos'),
     'vehiculos-ficha': async () => { await abrir('vehiculos'); await abrirPrimeraFila(); },
+    // Alguien con Vehículos pero sin Instalación de Sensores ni Cambios de vehículos: esas
+    // pestañas no aparecen y la sección de sensor del formulario sale bloqueada
+    'vehiculos-ficha-sin-sensores': async () => {
+      quitarPermisos('instalacion-sensores', 'cambios-vehiculos');
+      await abrir('vehiculos'); await abrirPrimeraFila();
+    },
+    'modal-editar-vehiculo-sin-sensores': async () => {
+      quitarPermisos('instalacion-sensores', 'cambios-vehiculos');
+      await abrir('vehiculos');
+      (await hasta('#modal-editar-vehiculo')).hidden = false;
+      await esperar(400);
+      // Hasta la sección de sensor, que es la que cambia
+      const bloqueado = document.querySelector('#modal-editar-vehiculo [data-sin-permiso]');
+      if (bloqueado) bloqueado.scrollIntoView({ block: 'center' });
+      await esperar(200);
+    },
     'panorama-vehiculos': async () => { await abrir('panorama-vehiculos'); await esperar(700); },
     'incidencias': () => abrir('incidencias'),
     'incidencias-detalle': async () => { await abrir('incidencias'); await abrirPrimeraFila(); },
@@ -359,6 +456,19 @@
     'sistemas': () => abrir('sistemas-vehiculos'),
     'usuarios': async () => { await abrir('usuarios'); await hasta('.dt tbody tr[data-id]'); },
     'usuarios-ficha': async () => { await abrir('usuarios'); await abrirPrimeraFila(); },
+    'usuarios-matriz': async () => {
+      await abrir('usuarios', 'matriz');
+      // Dos celdas cambiadas sin guardar: se ve el contorno dorado y la barra con la cuenta
+      (await hasta('[data-celda-area="TESORERIA"][data-celda-modulo="vehiculos"]')).click();
+      (await hasta('[data-celda-area="TI"][data-celda-modulo="hologramas"]')).click();
+      await esperar(300);
+    },
+    'usuarios-historial': () => abrir('usuarios', 'historial'),
+    'usuarios-editar-permisos': async () => {
+      await abrir('usuarios'); await abrirPrimeraFila();
+      (await hasta('[data-usr-editar]')).click();
+      await esperar(400);
+    },
     // ---- Formularios de alta (rejilla de campos .form-rejilla y componente Formulario) ----
     'vehiculos-registrar': () => abrir('vehiculos', 'registrar'),
     'incidencias-registrar': () => abrir('incidencias', 'registrar'),

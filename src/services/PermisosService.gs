@@ -29,6 +29,10 @@
  *
  * Los permisos se leen por petición con caché corto: cambiar un permiso aplica en
  * minutos, sin que la persona tenga que cerrar sesión.
+ *
+ * Cada cambio hecho desde la pantalla deja un renglón en PERMISOS_HISTORIAL (mismo libro):
+ * cuándo, quién lo hizo, a quién (área o correo), el módulo y el nivel antes y después.
+ * '' en ANTES / DESPUES = sin regla (la persona tiene lo de su área; el área, sin acceso).
  */
 
 const Permisos = (function () {
@@ -36,6 +40,10 @@ const Permisos = (function () {
   const HOJA_USUARIOS = 'USUARIOS';
   const ENCABEZADOS = ['QUIEN', 'MODULO', 'PERMISO', 'NOTA'];
   const SEGUNDOS_CACHE = 300;   // 5 minutos
+  const HOJA_HISTORIAL = 'PERMISOS_HISTORIAL';
+  const ENCABEZADOS_HISTORIAL = ['FECHA', 'CORREO', 'NOMBRE', 'QUIEN', 'MODULO', 'ANTES', 'DESPUES'];
+  /** Lo que la pantalla recibe del historial: los más recientes (la hoja guarda todo) */
+  const HISTORIAL_EN_PANTALLA = 1000;
 
   const NINGUNO = 'NINGUNO';
   const LECTURA = 'LECTURA';
@@ -59,13 +67,25 @@ const Permisos = (function () {
   const idModulo_ = (v) => Modulos.resolver(v) || limpiar_(v).toLowerCase().replace(/\s+/g, '-');
   const nivelValido_ = (v) => (NIVEL[clave_(v)] === undefined ? null : clave_(v));
   const mayor_ = (a, b) => (NIVEL[a] >= NIVEL[b] ? a : b);
+  /** Una regla es la misma si es del mismo área (o correo) y módulo, se escriba como se escriba */
+  const llaveRegla_ = (quien, modulo) => (esCorreo_(quien) ? clave_(quien) : area_(quien)) + '|' + idModulo_(modulo);
 
   function ssId() {
     return Config.SPREADSHEET_IDS.USUARIOS();
   }
 
-  /** Las reglas como [QUIEN, MODULO, PERMISO]: de la hoja PERMISOS, o de la semilla si no existe */
-  function reglas_() {
+  /**
+   * Las reglas como [QUIEN, MODULO, PERMISO]: de la hoja PERMISOS, o de la semilla si no existe.
+   * Guardadas (CacheHojas) mientras la hoja no cambie: cada llamada de la app revisa permisos y,
+   * al vencer los 5 min de deCorreo, leía la hoja entera otra vez. `fresco` (al guardar) lee la
+   * hoja sí o sí: lo que se reescribe no puede salir de una copia.
+   */
+  function reglas_(fresco) {
+    if (fresco) return reglasDeLaHoja_();
+    return CacheHojas.recordar('permisos_reglas_v1', [[ssId(), HOJA_PERMISOS]], reglasDeLaHoja_);
+  }
+
+  function reglasDeLaHoja_() {
     try {
       SheetUtils.getSheet(ssId(), HOJA_PERMISOS);
     } catch (e) {
@@ -118,8 +138,19 @@ const Permisos = (function () {
     return mapa;
   }
 
+  /**
+   * Las personas de USUARIOS, solo con lo que usan los permisos y la pantalla de permisos: sin
+   * contraseña, hash ni sal (esto se guarda en CacheService). Guardadas mientras la hoja no
+   * cambie; lo que se edite a mano en la hoja se ve a más tardar en 10 min.
+   */
+  const COLUMNAS_USUARIO = ['CORREO', 'NOMBRE', 'AREA', 'ROL', 'ACTIVO', 'NO_EMPLEADO', 'OFICINA', 'SEDE'];
   function usuarios_() {
-    return SheetUtils.getAll(ssId(), HOJA_USUARIOS);
+    return CacheHojas.recordar('permisos_usuarios_v1', [[ssId(), HOJA_USUARIOS]], () =>
+      SheetUtils.getAll(ssId(), HOJA_USUARIOS).map((u) => {
+        const r = {};
+        COLUMNAS_USUARIO.forEach((c) => { r[c] = u[c] === undefined || u[c] === null ? '' : u[c]; });
+        return r;
+      }));
   }
 
   /** Permisos de un correo, con caché corto para no leer las hojas en cada petición */
@@ -157,8 +188,33 @@ const Permisos = (function () {
     return Object.assign({}, sesion, { permisos: permisos });
   }
 
+  /**
+   * Una huella corta de los módulos que alguien puede ver: dos personas con la misma huella
+   * ven exactamente lo mismo en lo que se arma de varios módulos (el Inicio, la campanita),
+   * así que pueden compartir lo ya calculado (CacheHojas.calculo).
+   */
+  function firmaDeLectura(correo) {
+    const texto = Object.keys(deCorreo(correo)).sort().join(',');
+    let h = 5381;
+    for (let i = 0; i < texto.length; i++) h = ((h * 33) ^ texto.charCodeAt(i)) >>> 0;
+    return h.toString(36);
+  }
+
+  /** ¿El error es porque no tiene permiso? (eso no cambia de una vez a otra; un error pasajero sí) */
+  const esFaltaDePermiso = (err) => /No tienes acceso a este módulo|Solo puedes consultar este módulo/.test(String((err && err.message) || err));
+
   const puedeLeer = (token, modulo) => exigir(token, modulo, LECTURA);
   const puedeEditar = (token, modulo) => exigir(token, modulo, EDICION);
+
+  /**
+   * Datos de REFERENCIA de un módulo (no su pantalla): los puede leer quien tenga cualquier
+   * módulo de su familia (Modulos.familia). P. ej. quien solo tiene Sensores necesita el
+   * catálogo de vehículos para elegir la unidad. La pantalla del módulo sigue pidiendo su
+   * propio permiso; esto es solo para las lecturas marcadas como referencia.
+   */
+  function puedeLeerFamilia(token, modulo) {
+    return puedeLeerAlguno(token, Modulos.familia(idModulo_(modulo)));
+  }
 
   /** Para datos que comparten varios módulos (el índice de Líneas): basta con ver uno */
   function puedeLeerAlguno(token, modulos) {
@@ -227,6 +283,7 @@ const Permisos = (function () {
     hoja.getRange(1, 1, filas.length, ENCABEZADOS.length).setValues(filas);
     hoja.setFrozenRows(1);
     hoja.getRange(1, 1, 1, ENCABEZADOS.length).setFontWeight('bold');
+    CacheHojas.tocarHoja(hoja);   // las reglas guardadas (reglas_) se vuelven a leer ya
   }
 
   // ------------------------------------------------------------ pantalla de administración
@@ -250,7 +307,9 @@ const Permisos = (function () {
       fuente: reglas.fuente,
       grupos: Modulos.GRUPOS.map((g) => ({
         id: g.id, etiqueta: g.etiqueta, icono: g.icono,
-        modulos: g.modulos.filter((m) => m.id !== MODULO_USUARIOS).map((m) => ({ id: m.id, etiqueta: m.etiqueta })),
+        // referencia / editaEn: lo que el permiso implica fuera de su pantalla (Modulos.gs)
+        modulos: g.modulos.filter((m) => m.id !== MODULO_USUARIOS)
+          .map((m) => ({ id: m.id, etiqueta: m.etiqueta, icono: m.icono || '', referencia: m.referencia || '', editaEn: m.editaEn || [] })),
       })).filter((g) => g.modulos.length),
       areas: Object.keys(porArea).sort().map((k) => porArea[k]),
       // Campo por campo, a propósito: CONTRASEÑA (y SALT/PASSWORD_HASH) nunca salen de aquí
@@ -263,6 +322,7 @@ const Permisos = (function () {
       reglas: reglas.filas
         .filter((r) => limpiar_(r[0]) && nivelValido_(r[2]))
         .map((r) => ({ quien: limpiar_(r[0]), modulo: idModulo_(r[1]), permiso: nivelValido_(r[2]), nota: limpiar_(r[3]) })),
+      historial: historial_(),
     };
   }
 
@@ -273,18 +333,73 @@ const Permisos = (function () {
    * tener regla, y así la hoja no se llena de renglones que no dicen nada.
    */
   function aplicarCambios_(reglas, cambios, nota) {
-    const llave = (quien, modulo) => (esCorreo_(quien) ? clave_(quien) : area_(quien)) + '|' + idModulo_(modulo);
     const resultado = reglas.map((r) => r.slice(0, 4));
     cambios.forEach((c) => {
-      const k = llave(c.quien, c.modulo);
+      const k = llaveRegla_(c.quien, c.modulo);
       for (let i = resultado.length - 1; i >= 0; i--) {
-        if (llave(resultado[i][0], resultado[i][1]) === k) resultado.splice(i, 1);
+        if (llaveRegla_(resultado[i][0], resultado[i][1]) === k) resultado.splice(i, 1);
       }
       const permiso = c.permiso == null ? null : nivelValido_(c.permiso);
       if (!permiso || (permiso === NINGUNO && !esCorreo_(c.quien))) return;
       resultado.push([limpiar_(c.quien), idModulo_(c.modulo), permiso, nota]);
     });
     return resultado;
+  }
+
+  /**
+   * Lo que cambia de verdad con estos cambios, regla por regla (sin tocar Sheets, para probarlo):
+   * [{ quien, modulo, antes, despues }] con '' = sin regla. Un cambio que deja lo mismo no cuenta.
+   */
+  function diferencias_(reglas, cambios) {
+    /** El nivel de esa regla en estas reglas ('' sin regla; NINGUNO de un área es lo mismo) */
+    const nivelEn = (lista, quien, modulo) => {
+      const k = llaveRegla_(quien, modulo);
+      const nivel = lista.reduce((n, r) => {
+        const p = nivelValido_(r[2]);
+        return p && llaveRegla_(r[0], r[1]) === k ? (n ? mayor_(p, n) : p) : n;
+      }, '');
+      return nivel === NINGUNO && !esCorreo_(quien) ? '' : nivel;
+    };
+    const nuevas = aplicarCambios_(reglas, cambios, '');
+    const vistas = {};
+    return cambios
+      .filter((c) => !vistas[llaveRegla_(c.quien, c.modulo)] && (vistas[llaveRegla_(c.quien, c.modulo)] = true))
+      .map((c) => ({
+        quien: limpiar_(c.quien), modulo: idModulo_(c.modulo),
+        antes: nivelEn(reglas, c.quien, c.modulo), despues: nivelEn(nuevas, c.quien, c.modulo),
+      }))
+      .filter((d) => d.antes !== d.despues);
+  }
+
+  /** Agrega los cambios al final de PERMISOS_HISTORIAL (la crea si falta) */
+  function anotarHistorial_(ss, sesion, difs) {
+    if (!difs.length) return;
+    let hoja = ss.getSheetByName(HOJA_HISTORIAL);
+    if (!hoja) {
+      hoja = ss.insertSheet(HOJA_HISTORIAL);
+      hoja.getRange(1, 1, 1, ENCABEZADOS_HISTORIAL.length).setValues([ENCABEZADOS_HISTORIAL]).setFontWeight('bold');
+      hoja.setFrozenRows(1);
+    }
+    const ahora = new Date();
+    const filas = difs.map((d) => [ahora, sesion.correo || '', sesion.nombre || '', d.quien, d.modulo, d.antes, d.despues]);
+    hoja.getRange(hoja.getLastRow() + 1, 1, filas.length, ENCABEZADOS_HISTORIAL.length).setValues(filas);
+    CacheHojas.tocarHoja(hoja);
+  }
+
+  /** Los cambios más recientes primero, para la pantalla ([] si la hoja aún no existe) */
+  function historial_() {
+    return CacheHojas.recordar('permisos_historial_v1', [[ssId(), HOJA_HISTORIAL]], () => {
+      try {
+        SheetUtils.getSheet(ssId(), HOJA_HISTORIAL);
+      } catch (e) {
+        if (String(e.message).indexOf('No existe la hoja') === -1) throw e;
+        return [];
+      }
+      return SheetUtils.getAll(ssId(), HOJA_HISTORIAL).slice(-HISTORIAL_EN_PANTALLA).reverse().map((f) => ({
+        fecha: HojaServicio.fechaISO(f['FECHA']), correo: limpiar_(f['CORREO']), nombre: limpiar_(f['NOMBRE']),
+        quien: limpiar_(f['QUIEN']), modulo: idModulo_(f['MODULO']), antes: nivelValido_(f['ANTES']) || '', despues: nivelValido_(f['DESPUES']) || '',
+      }));
+    });
   }
 
   /** Guarda los cambios de la pantalla en la hoja PERMISOS (la crea con la semilla si falta) */
@@ -308,12 +423,13 @@ const Permisos = (function () {
     candado.waitLock(20000);
     try {
       // Primero las reglas vigentes: si la hoja no existe son las de la semilla, y se crea con ellas
-      const vigentes = reglas_().filas;
+      const vigentes = reglas_(true).filas;
       const ss = SpreadsheetApp.openById(ssId());
       const hoja = ss.getSheetByName(HOJA_PERMISOS) || ss.insertSheet(HOJA_PERMISOS);
       const nota = 'Cambiado por ' + (sesion.nombre || sesion.correo) + ' el ' +
         Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
       escribirHoja_(hoja, aplicarCambios_(vigentes, cambios, nota));
+      anotarHistorial_(ss, sesion, diferencias_(vigentes, cambios));
       SpreadsheetApp.flush();
     } finally {
       candado.releaseLock();
@@ -325,9 +441,10 @@ const Permisos = (function () {
 
   return {
     LECTURA, EDICION, NINGUNO, MODULO_USUARIOS,
-    deCorreo, olvidar, exigir, puedeLeer, puedeEditar, puedeLeerAlguno, mios, revisarCatalogo, crearHoja,
+    deCorreo, olvidar, exigir, puedeLeer, puedeEditar, puedeLeerAlguno, puedeLeerFamilia, mios, revisarCatalogo, crearHoja,
+    firmaDeLectura, esFaltaDePermiso,
     panel, guardar,
-    resolver_, aplicarCambios_,   // expuestas para las pruebas
+    resolver_, aplicarCambios_, diferencias_,   // expuestas para las pruebas
   };
 })();
 

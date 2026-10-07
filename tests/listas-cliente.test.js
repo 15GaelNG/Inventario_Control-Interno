@@ -34,7 +34,7 @@ function navegador(localStorageInicial) {
   }) } };
   w.eval(js + '\nwindow.callServerListaCacheada = callServerListaCacheada; window.invalidarCacheLista = invalidarCacheLista;' +
     'window.escucharLista = escucharLista; window.limpiarListasGuardadas = limpiarListasGuardadas; window.precargarLista = precargarLista;' +
-    'window.verTiempos = verTiempos;');
+    'window.verTiempos = verTiempos; window.adelantar = adelantar; window.callServer = callServer;');
   w.eval('var state = { sesion: { correo: "ana@x.com" } };');
   return { w, servidor };
 }
@@ -93,13 +93,14 @@ function navegador(localStorageInicial) {
   ({ w, servidor } = navegador({ 'lista:ana@x.com:apiListarX[]': '[{"ID":1}]' }));
   servidor.respuestas.apiListarX = [{ ID: 1, EDITADO: true }];
   w.invalidarCacheLista('apiListarX', 't');
+  await espera(5);
   ok(w.localStorage.getItem('lista:ana@x.com:apiListarX[]') === null, 'borra la copia guardada');
   r = await w.callServerListaCacheada('apiListarX', 't');
   ok(r[0].EDITADO === true, 'y el cargar() que sigue espera el dato recién guardado');
 
   console.log('6. Cerrar sesión y precarga');
   ({ w, servidor } = navegador({ 'lista:ana@x.com:apiListarX[]': '[1]', 'lista:ana@x.com:apiListarY[]': '[2]', 'lineas.modoVista': 'tabla' }));
-  w.limpiarListasGuardadas();
+  await w.limpiarListasGuardadas();
   ok(w.localStorage.getItem('lista:ana@x.com:apiListarX[]') === null && w.localStorage.getItem('lista:ana@x.com:apiListarY[]') === null,
     'al cerrar sesión se borran todas las listas guardadas');
   ok(w.localStorage.getItem('lineas.modoVista') === 'tabla', 'y no toca otras preferencias del navegador');
@@ -114,8 +115,21 @@ function navegador(localStorageInicial) {
   servidor.respuestas.apiListarX = [{ ID: 1 }];
   r = await w.callServerListaCacheada('apiListarX', 't');
   ok(r.length === 1, 'funciona igual, solo con memoria');
-  w.limpiarListasGuardadas();
+  await w.limpiarListasGuardadas();
   ok(true, 'y cerrar sesión no truena');
+
+  console.log('8. adelantar(): pedir antes de que la pantalla lo necesite');
+  ({ w, servidor } = navegador());
+  servidor.respuestas.apiResumenInicio = { kpi: 1 };
+  w.adelantar('apiResumenInicio', 'tok');
+  ok(servidor.llamadas.length === 1, 'adelantar ya manda la llamada');
+  r = await w.callServer('apiResumenInicio', 'tok');
+  ok(r.kpi === 1 && servidor.llamadas.length === 1, 'la pantalla recibe esa misma respuesta, sin pedirla otra vez');
+  await w.callServer('apiResumenInicio', 'tok');
+  ok(servidor.llamadas.length === 2, 'se usa una sola vez: la siguiente sí va al servidor');
+  w.adelantar('apiResumenInicio', 'tok');
+  await w.callServer('apiResumenInicio', 'OTRO');
+  ok(servidor.llamadas.length === 4, 'con otros argumentos no se confunde');
 
   console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
   process.exit(fallas ? 1 : 0);

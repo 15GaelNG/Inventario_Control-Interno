@@ -35,8 +35,9 @@ const AdherenteVehicularService = (function () {
   // Carpetas de Drive (decisión del usuario, 06-oct-2026): las firmas van a la MISMA carpeta
   // que ya usa Responsiva Vehicular (ResponsivaVehicularService.CARPETA_IMAGENES); el PDF
   // final a una carpeta propia, separada de la de Responsiva.
-  const CARPETA_IMAGENES = '12Zkdgdfiqv-jbVy-FPeGnNeucrCdIoPJ';   // RESPONSIVAS VEHICULARES_Images (compartida)
-  const CARPETA_PDF = '11TrhInbCJoX37sQrCf6Nffn82cwZr3lS';        // ADHERENTES VEHICULAR
+  // Por nombre dentro de la raíz de la app (DriveUtils.carpetaEnRaiz): cada proyecto usa las suyas
+  const CARPETA_IMAGENES = 'RESPONSIVAS VEHICULARES_Images';   // compartida con Responsiva
+  const CARPETA_PDF = 'ADHERENTES VEHICULAR';
 
   // Caja de las firmas en el PDF: la misma que usa InspeccionesService (150 × 60 pt).
   const FIRMA_PDF = { ancho: 150, alto: 60 };
@@ -55,16 +56,10 @@ const AdherenteVehicularService = (function () {
     return SheetUtils.getSheet(ssId(), SHEET);
   }
 
-  function fechaISO_(valor) {
-    if (!valor) return '';
-    const f = valor instanceof Date ? valor : new Date(valor);
-    return isNaN(f.getTime()) ? '' : f.toISOString();
-  }
-
   function filaAResumen_(datos, i) {
     return {
       ID: datos[ID_COLUMN][i],
-      FECHA: fechaISO_(datos['FECHA'][i]),
+      FECHA: HojaServicio.fechaISO(datos['FECHA'][i]),
       FOLIO_VEHICULO: datos['FOLIO VEHICULO'][i] || '',
       NUCCO: datos['NUCCO'][i] || '',
       ADHERENTE: datos['ADHERENTE'][i] || '',
@@ -187,7 +182,7 @@ const AdherenteVehicularService = (function () {
               campo, adherente, vehiculo['PLACA'] || vehiculo['FOLIO'], PdfService.fechaParaNombre(ahora),
             ]) + '.png';
             const blob = Utilities.newBlob(Utilities.base64Decode(img.base64), img.mimeType || 'image/png', nombreImagen);
-            const archivo = DriveApp.getFolderById(CARPETA_IMAGENES).createFile(blob);
+            const archivo = DriveUtils.marcarAutor(DriveUtils.carpetaEnRaiz(CARPETA_IMAGENES).createFile(blob));
             DriveUtils.compartirLoMasAmplioPosible(archivo);
           } catch (e) {
             avisos.push('No se pudo respaldar ' + campo.toLowerCase() + ' en Drive: ' + e.message);
@@ -203,7 +198,7 @@ const AdherenteVehicularService = (function () {
           plantillaId: PLANTILLA,
           datos: datosPdf,
           imagenes: imagenesPdf,
-          carpetaId: CARPETA_PDF,
+          carpetaId: DriveUtils.carpetaEnRaiz(CARPETA_PDF).getId(),
           nombre: PdfService.nombreArchivo([
             'ADHERENTE VEHICULAR', adherente, vehiculo['PLACA'] || vehiculo['FOLIO'], PdfService.fechaParaNombre(ahora),
           ]),
@@ -231,11 +226,11 @@ const AdherenteVehicularService = (function () {
     return { ID: id, ESTATUS: limpio };
   }
 
+  /** La hoja, para HojaServicio.eliminar (que además respeta Relaciones) */
+  const HOJA = { modulo: MODULO, libro: ssId, hoja: SHEET, columnas: COLUMNAS_RESUMEN };
+
   function eliminar(token, id) {
-    Permisos.puedeEditar(token, MODULO);
-    const ok = SheetUtils.remove(ssId(), hoja_().getName(), id, ID_COLUMN);
-    if (!ok) throw new Error('No se encontró el registro con ID=' + id);
-    return { ID: id };
+    return HojaServicio.eliminar(HOJA, token, id);
   }
 
   return { listarPorFolio, buscarPorId, crear, cambiarEstatus, eliminar };

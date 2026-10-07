@@ -7,6 +7,12 @@
  * lugar (services/*.gs) y aquí solo se decide qué queda expuesto al cliente.
  */
 
+// --- Medir ---
+/** No hace nada: lo que tarda es el piso de cualquier llamada (medirPiso() en la consola) */
+function apiPing() {
+  return Date.now();
+}
+
 // --- Dashboard ---
 // JSON.stringify: incluye fechas (Date/ISO) mezcladas en varias secciones —
 // mismo motivo que apiListarVehiculosResumen (ver comentario más abajo).
@@ -45,6 +51,46 @@ function apiListarVehiculosBasico(token) {
 }
 function apiBuscarVehiculoPorFolio(token, folio) {
   return VehiculosService.buscarPorFolio(token, folio);
+}
+/**
+ * Para las fichas que se piden en una llamada: parte(modulo, leer) regresa lo que lee, null si
+ * la persona no puede ver ese módulo (su pestaña no aparece) y [] si falla por otra cosa.
+ */
+function partesDeFicha_(token, deQue) {
+  const sesion = Auth.validarSesion(token);
+  const permisos = Permisos.deCorreo(sesion.correo);
+  return (modulo, leer) => {
+    if (!permisos[modulo]) return null;
+    try {
+      return leer();
+    } catch (e) {
+      if (Permisos.esFaltaDePermiso(e)) return null;
+      console.warn('Ficha ' + deQue + ', pestaña ' + modulo + ': ' + e.message);
+      return [];
+    }
+  };
+}
+
+/**
+ * La ficha de un vehículo en UNA llamada: antes eran 11, y cada llamada cuesta ~1.5–2.5 s aunque
+ * no haga nada (Apps Script no las corre todas a la vez). Cada pestaña es de su módulo: sin
+ * permiso sale null y no aparece (lo mismo que deModulo en el cliente); si una que sí puede ver
+ * falla por otra cosa, sale vacía y las demás siguen. Texto JSON, por la nota de abajo.
+ */
+function apiFichaVehiculo(token, folio) {
+  const parte = partesDeFicha_(token, 'del vehículo ' + folio);
+  return JSON.stringify({
+    completo: VehiculosService.buscarPorFolio(token, folio),
+    cambios: parte('cambios-vehiculos', () => CambiosVehiculosService.listarPorFolio(token, folio)),
+    reasignaciones: parte('reasignaciones-vehiculares', () => ReasignacionesVehicularesService.listarPorFolio(token, folio)),
+    verificaciones: parte('verificaciones', () => VerificacionesService.listarPorFolio(token, folio)),
+    inspecciones: parte('inspeccion-vehicular', () => InspeccionesService.listarPorFolio(token, folio)),
+    sensores: parte('instalacion-sensores', () => SensoresService.listarPorFolio(token, folio)),
+    hologramas: parte('hologramas', () => HologramasService.listarPorFolio(token, folio)),
+    incidencias: parte('incidencias', () => IncidenciasService.listarPorFolio(token, folio)),
+    responsivas: parte('responsiva-vehicular', () => ResponsivaVehicularService.listarPorFolio(token, folio)),
+    adherentes: parte('adherente-vehicular', () => AdherenteVehicularService.listarPorFolio(token, folio)),
+  });
 }
 // JSON.stringify (no el arreglo directo): con FECHA_REGISTRO (Date) en cada fila,
 // google.script.run pierde la respuesta de forma intermitente (confirmado con
@@ -175,6 +221,46 @@ function apiEliminarTicket(token, id) {
   return TicketsService.eliminar(token, id);
 }
 
+// --- Help Desk (helpdesk de TI) ---
+// Todos los que tienen sesión; cada quien ve lo que SU token ve allá. Lo que habla con el
+// helpdesk es HelpdeskApi (con sus límites); la copia y el registro en Tickets, HelpdeskService.
+function apiHelpdeskEstado(token) {
+  Config.exigirEncendido('helpdesk');
+  return HelpdeskApi.estado(token);
+}
+function apiHelpdeskConectar(token, tokenHelpdesk) {
+  Config.exigirEncendido('helpdesk');
+  return HelpdeskApi.conectar(token, tokenHelpdesk);
+}
+function apiHelpdeskDesconectar(token) {
+  Config.exigirEncendido('helpdesk');
+  return HelpdeskApi.desconectar(token);
+}
+function apiHelpdeskFiltros(token) {
+  Config.exigirEncendido('helpdesk');
+  return HelpdeskApi.filtros(token);
+}
+function apiHelpdeskTickets(token, filtros, forzar) {
+  Config.exigirEncendido('helpdesk');
+  return JSON.stringify(HelpdeskApi.listarTickets(token, filtros, forzar));
+}
+function apiHelpdeskDetalle(token, idTicket) {
+  Config.exigirEncendido('helpdesk');
+  return JSON.stringify(HelpdeskApi.detalle(token, idTicket));
+}
+function apiHelpdeskRegistrados(token, idsTicket) {
+  Config.exigirEncendido('helpdesk');
+  return HelpdeskService.registrados(token, idsTicket);
+}
+function apiHelpdeskRegistrarEnTickets(token, idTicket, datos) {
+  Config.exigirEncendido('helpdesk');
+  return HelpdeskService.registrarEnTickets(token, idTicket, datos);
+}
+function apiHelpdeskGuardados(token) {
+  Config.exigirEncendido('helpdesk');
+  return JSON.stringify(HelpdeskService.listarGuardados(token));
+}
+
 // --- Cajas Chicas ---
 function apiListarCajasChicasResumen(token) {
   return CajasChicasService.listarResumen(token);
@@ -201,6 +287,19 @@ function apiQueImpideBorrar(token, hoja, ids) {
   if (!MODULO_AL_BORRAR_[hoja]) throw new Error('"' + hoja + '" no se puede eliminar desde la app');
   Permisos.puedeEditar(token, MODULO_AL_BORRAR_[hoja]);
   return Relaciones.queImpideBorrar(hoja, ids);
+}
+/**
+ * La ficha de una caja chica en UNA llamada (como apiFichaVehiculo): la caja, sus cambios de
+ * monto (del mismo módulo) y sus arqueos, que son de su módulo: sin permiso de Arqueos, null y
+ * su pestaña no aparece. Si los cambios o los arqueos fallan por otra cosa, salen vacíos.
+ */
+function apiFichaCajaChica(token, idCch) {
+  const parte = partesDeFicha_(token, 'de la caja ' + idCch);
+  return JSON.stringify({
+    completo: CajasChicasService.buscarPorId(token, idCch),
+    cambios: parte('caja-chica', () => CambiosMontoCCHService.listarPorIdCch(token, idCch)),
+    arqueos: parte('arqueos', () => ArqueosService.listarPorIdCch(token, idCch)),
+  });
 }
 function apiArqueosPorIdCch(token, idCch) {
   return JSON.stringify(ArqueosService.listarPorIdCch(token, idCch));

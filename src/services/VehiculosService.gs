@@ -17,8 +17,6 @@
 
 const VehiculosService = (function () {
   const SHEET_VEHICULOS = 'VEHICULOS';
-  // La columna ID real de esta hoja es ID_VEHICULO, no "ID" (a diferencia de
-  // las hojas nuevas) — hay que pasarla explícitamente a SheetUtils.update/remove.
   // La llave de renglon es la NUEVA. La columna 'ID_VEHICULO' pasa a llamarse
   // "ID ANTERIOR" en el paso 2 del pipeline de IDs y queda solo como rastro: sus valores
   // (REFWF1, REFWF2...) eran un prefijo mas un contador de AppSheet, no un dato.
@@ -27,121 +25,144 @@ const VehiculosService = (function () {
   // guardan una ruta relativa, no una URL — hay que resolverlos antes de
   // mandarlos al cliente.
   const CAMPOS_ARCHIVO = ['RESPONSIVA', 'DOCUMENTO BAJA', 'POLIZA SEGURO', 'ARCHIVO TENENCIA'];
+  // Etiqueta corta para el nombre de archivo en Drive, por columna ("<ID>_<ETIQUETA>_<fecha>.ext")
+  const ETIQUETA_ARCHIVO = {
+    'RESPONSIVA': 'RESPONSIVA',
+    'DOCUMENTO BAJA': 'DOCUMENTO_BAJA',
+    'POLIZA SEGURO': 'POLIZA_SEGURO',
+    'ARCHIVO TENENCIA': 'TENENCIA',
+  };
 
   function ssId() {
     return Config.SPREADSHEET_IDS.VEHICULOS();
   }
 
-  function limpiarValor_(valor) {
-    // google.script.run puede fallar (entrega null) con arreglos de objetos
-    // que traen Date crudo — se manda todo como texto ISO.
-    return valor instanceof Date ? valor.toISOString() : valor;
-  }
-
-  /** Catálogo completo, todas las columnas. Pesado (648 filas x 41 columnas) —
-   * usar listarResumen() para listas/tarjetas y buscarPorFolio() para detalle. */
-  function listar(token) {
-    Permisos.puedeLeer(token, 'vehiculos');
-    return SheetUtils.getAll(ssId(), SHEET_VEHICULOS).map((row) => {
-      const limpio = {};
-      Object.keys(row).forEach((k) => { limpio[k] = limpiarValor_(row[k]); });
-      return limpio;
-    });
-  }
+  /**
+   * La hoja, para HojaServicio. Al crear: FOLIO (por Clase), NUCCO, ID y FECHA REGISTRO
+   * SISTEMA CI no los manda el cliente, se calculan aquí bajo candado (dos altas a la vez no
+   * deben terminar con el mismo folio NI el mismo NUCCO). Al editar: se compara contra lo que
+   * había y la diferencia va a la bitácora de Cambios Vehículos (CambiosVehiculosService), y
+   * los campos copiados (placa, marca, línea…) se propagan a Instalación de Sensores,
+   * Verificaciones y Hologramas (Relaciones.gs / docs/relaciones.md).
+   */
+  const VEHICULOS = {
+    modulo: 'vehiculos',
+    nombre: 'el vehículo',
+    libro: ssId,
+    hoja: SHEET_VEHICULOS,
+    // El catálogo completo trae también los renglones sin ID (diagnosticoIds los cuenta)
+    incluir: () => true,
+    archivos: ETIQUETA_ARCHIVO,
+    candadoAlCrear: true,
+    alCrear: (fila, ctx) => {
+      // Las columnas que manda otra hoja (SERIE SENSOR y SENSOR, que manda Instalación de
+      // Sensores) no se capturan aquí: un vehículo nuevo nace "sin sensor".
+      const ajenas = Relaciones.deOtraHoja(SHEET_VEHICULOS);
+      ajenas.columnas.forEach((c) => { delete fila[c]; });
+      Object.assign(fila, ajenas.sinDueno);
+      conPersona_(fila, fila);
+      fila.FOLIO = generarFolio_(ctx.datos.CLASE);
+      fila.NUCCO = generarNucco_();
+      fila[ID_COLUMN] = Ids.nuevo(Entidades.prefijo(SHEET_VEHICULOS));
+      fila['FECHA REGISTRO SISTEMA CI'] = new Date();
+    },
+    noEditables: ['FOLIO', 'NUCCO', 'FECHA REGISTRO SISTEMA CI'],
+    // La sección "Accesorios y sensor" de la ficha: solo la edita quien tiene EDICION en
+    // Instalación de Sensores (en la pantalla: DE_SENSORES en CAMPOS_VEHICULO, app.html)
+    deOtroModulo: { 'instalacion-sensores': ['ACCESORIOS', 'ADITAMENTOS', 'ACTIVADOR', '$ Costo del Sensor', 'LLAVE DUPLICADA'] },
+    alActualizar: (cambios, ctx) => {
+      // Las que manda otra hoja: editarlas aquí se perdería en la siguiente sincronización.
+      // Se cambian desde su dueña (SERIE SENSOR y SENSOR: el módulo de Sensores).
+      Relaciones.deOtraHoja(SHEET_VEHICULOS).columnas.forEach((c) => { delete cambios[c]; });
+      conPersona_(cambios, Object.assign({}, ctx.actual, cambios));
+    },
+    despues: (registro, ctx) => {
+      if (ctx.accion !== 'actualizar') return;
+      CambiosVehiculosService.registrarCambios(ctx.actual.FOLIO, ctx.actual, ctx.cambios, ctx.sesion.nombre);
+      // El vehículo YA se guardó: si propagar falla no se revierte nada, solo se avisa en los
+      // logs y revisar() lo corrige en la corrida nocturna. candadoTomado: quien llama ya tiene
+      // el candado (Reasignaciones) y waitLock no es reentrante.
+      try {
+        if (ctx.opciones.candadoTomado) Relaciones.propagarSinCandado('VEHICULOS', registro, ctx.cambios);
+        else Relaciones.propagar('VEHICULOS', registro, ctx.cambios);
+      } catch (err) {
+        console.error('Relaciones.propagar falló para el vehículo ' + ctx.id + ': ' + err.message);
+      }
+    },
+  };
 
   /**
-   * Catálogo ligero (FOLIO + datos clave) para autocompletar otros módulos
-   * que referencian un vehículo por folio (ej. Incidencias, Reasignaciones
-   * Vehiculares). Excluye vehículos dados de baja. MODELO en esta hoja es
-   * el año del vehículo, no el nombre del modelo (ese es LINEA VEHICULO).
+   * Catálogo ligero (FOLIO + datos clave) para autocompletar otros módulos que referencian
+   * un vehículo por folio (ej. Incidencias, Reasignaciones). Excluye los dados de baja.
+   * MODELO en esta hoja es el año del vehículo, no el nombre del modelo (ese es LINEA
+   * VEHICULO). Lee solo estas columnas, no las 41.
    *
-   * Optimizado: en vez de leer las 41 columnas completas (SheetUtils.getAll)
-   * solo para quedarse con unas cuantas, lee únicamente esas columnas — de
-   * ~26,500 celdas a ~5,800.
+   * 'ID' va aquí para que el catálogo que consumen los formularios pueda identificar un
+   * vehículo sin depender del folio. Hoy los formularios siguen MANDANDO el folio y el
+   * servidor resuelve el ID: el control de búsqueda de vehículo no es un <select> con
+   * valor oculto, es una caja de texto donde lo que se manda es lo que se ve (ver
+   * Combobox, que mete `valor` en el input).
    */
-  // 'ID' va aquí para que el catálogo que consumen los formularios pueda identificar un
-  // vehículo sin depender del folio. Hoy los formularios siguen MANDANDO el folio y el
-  // servidor resuelve el ID: el control de búsqueda de vehículo no es un <select> con
-  // valor oculto, es una caja de texto donde lo que se manda es lo que se ve (ver
-  // Combobox, que mete `valor` en el input). Mandar el ID exigiría agregarle un campo
-  // oculto al componente Formulario, y eso está pendiente a propósito.
-  const COLUMNAS_BASICO = [
-    'ID', 'FOLIO', 'DEPARTAMENTO', 'MARCA', 'LINEA VEHICULO', 'MODELO', 'ESTATUS',
-    'RESPONSABLE VEHICULO', 'NO EMPLEADO', 'SERIE VEHICULO', 'NUCCO',
-  ];
-
-  function listarBasico(token) {
-    Permisos.puedeLeer(token, 'vehiculos');
-    // Guardado mientras la hoja no cambie (CacheHojas): el permiso se revisa antes, siempre
-    return CacheHojas.recordar('veh_basico', [[ssId(), SHEET_VEHICULOS]], () => {
-      const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
-      const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_BASICO);
-
-      const resultado = [];
-      for (let i = 0; i < filas; i++) {
-        if (!datos['FOLIO'][i]) continue;
-        if (String(datos['ESTATUS'][i] || '').toUpperCase() === 'BAJA VEHICULAR') continue;
-        resultado.push({
-          ID: datos['ID'][i],
-          FOLIO: datos['FOLIO'][i],
-          DEPARTAMENTO: datos['DEPARTAMENTO'][i] || '',
-          MARCA: datos['MARCA'][i] || '',
-          LINEA_VEHICULO: datos['LINEA VEHICULO'][i] || '',
-          MODELO: datos['MODELO'][i] || '',
-          RESPONSABLE_VEHICULO: datos['RESPONSABLE VEHICULO'][i] || '',
-          NO_EMPLEADO: datos['NO EMPLEADO'][i] || '',
-          VIN: datos['SERIE VEHICULO'][i] || '',
-          NUCO: datos['NUCCO'][i] || '',
-        });
-      }
-      return resultado.sort((a, b) => String(a.FOLIO).localeCompare(String(b.FOLIO)));
-    });
-  }
-
-  // Ojo: la propiedad de salida sigue llamandose ID_VEHICULO porque es el contrato con
-  // el frontend (app.html usa idCampo: 'ID_VEHICULO'), pero el VALOR sale de la columna
-  // 'ID'. Antes leia 'ID_VEHICULO', que la migracion renombro a ID ANTERIOR: la lista
-  // cargaba pero con el id en undefined, y editar/eliminar desde ahi no servian.
-  const COLUMNAS_RESUMEN = [
-    'ID', 'FOLIO', 'NUCCO', 'DEPARTAMENTO', 'NO ECONOMICO', 'MARCA', 'CLASE',
-    'LINEA VEHICULO', 'MODELO', 'COLOR', 'PLACA', 'SEDE', 'ESTATUS', 'FECHA REGISTRO SISTEMA CI',
-  ];
+  // El catálogo para elegir la unidad (FolioNucco) en Sensores, Hologramas, Verificaciones,
+  // Inspección, Reasignaciones e Incidencias: lo lee toda la familia, no solo Vehículos
+  const BASICO = Object.assign({}, VEHICULOS, {
+    referencia: true,
+    columnas: ['ID', 'FOLIO', 'DEPARTAMENTO', 'MARCA', 'LINEA VEHICULO', 'MODELO', 'ESTATUS',
+      'RESPONSABLE VEHICULO', 'NO EMPLEADO', 'SERIE VEHICULO', 'NUCCO'],
+    incluir: (r) => !!r['FOLIO'] && String(r['ESTATUS'] || '').toUpperCase() !== 'BAJA VEHICULAR',
+    fila: (r) => ({
+      ID: r['ID'],
+      FOLIO: r['FOLIO'],
+      DEPARTAMENTO: r['DEPARTAMENTO'] || '',
+      MARCA: r['MARCA'] || '',
+      LINEA_VEHICULO: r['LINEA VEHICULO'] || '',
+      MODELO: r['MODELO'] || '',
+      RESPONSABLE_VEHICULO: r['RESPONSABLE VEHICULO'] || '',
+      NO_EMPLEADO: r['NO EMPLEADO'] || '',
+      VIN: r['SERIE VEHICULO'] || '',
+      NUCO: r['NUCCO'] || '',
+    }),
+    orden: { campo: 'FOLIO' },
+  });
 
   /**
-   * Catálogo ligero para la lista/tarjetas del módulo (solo las columnas que
-   * se muestran, no las 41) — incluye vehículos de baja (a diferencia de
-   * listarBasico, que es para autocompletar y los excluye).
+   * Catálogo ligero para la lista/tarjetas del módulo (solo las columnas que se muestran) —
+   * incluye vehículos de baja (a diferencia de BASICO, que es para autocompletar).
+   * Ojo: la propiedad de salida sigue llamandose ID_VEHICULO porque es el contrato con
+   * el frontend (app.html usa idCampo: 'ID_VEHICULO'), pero el VALOR sale de la columna 'ID'.
    */
-  function listarResumen(token) {
-    Permisos.puedeLeer(token, 'vehiculos');
-    // Guardado mientras la hoja no cambie (CacheHojas): el permiso se revisa antes, siempre
-    return CacheHojas.recordar('veh_resumen', [[ssId(), SHEET_VEHICULOS]], () => {
-      const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
-      const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
+  const RESUMEN = Object.assign({}, VEHICULOS, {
+    columnas: ['ID', 'FOLIO', 'NUCCO', 'DEPARTAMENTO', 'NO ECONOMICO', 'MARCA', 'CLASE',
+      'LINEA VEHICULO', 'MODELO', 'COLOR', 'PLACA', 'SEDE', 'ESTATUS', 'FECHA REGISTRO SISTEMA CI'],
+    incluir: (r) => !!r['FOLIO'],
+    fila: (r) => ({
+      ID_VEHICULO: r['ID'],
+      FOLIO: r['FOLIO'],
+      NUCCO: r['NUCCO'] || '',
+      DEPARTAMENTO: r['DEPARTAMENTO'] || '',
+      NO_ECONOMICO: r['NO ECONOMICO'] || '',
+      MARCA: r['MARCA'] || '',
+      CLASE: r['CLASE'] || '',
+      LINEA_VEHICULO: r['LINEA VEHICULO'] || '',
+      MODELO: r['MODELO'] || '',
+      COLOR: r['COLOR'] || '',
+      PLACA: r['PLACA'] || '',
+      SEDE: r['SEDE'] || '',
+      ESTATUS: r['ESTATUS'] || '',
+      FECHA_REGISTRO: r['FECHA REGISTRO SISTEMA CI'] || '',
+    }),
+    orden: { campo: 'FOLIO' },
+  });
 
-      const resultado = [];
-      for (let i = 0; i < filas; i++) {
-        if (!datos['FOLIO'][i]) continue;
-        resultado.push({
-          ID_VEHICULO: datos['ID'][i],
-          FOLIO: datos['FOLIO'][i],
-          NUCCO: datos['NUCCO'][i] || '',
-          DEPARTAMENTO: datos['DEPARTAMENTO'][i] || '',
-          NO_ECONOMICO: datos['NO ECONOMICO'][i] || '',
-          MARCA: datos['MARCA'][i] || '',
-          CLASE: datos['CLASE'][i] || '',
-          LINEA_VEHICULO: datos['LINEA VEHICULO'][i] || '',
-          MODELO: datos['MODELO'][i] || '',
-          COLOR: datos['COLOR'][i] || '',
-          PLACA: datos['PLACA'][i] || '',
-          SEDE: datos['SEDE'][i] || '',
-          ESTATUS: datos['ESTATUS'][i] || '',
-          FECHA_REGISTRO: datos['FECHA REGISTRO SISTEMA CI'][i] || '',
-        });
-      }
-      return resultado.sort((a, b) => String(a.FOLIO).localeCompare(String(b.FOLIO)));
-    });
-  }
+  /** Lectura ligera para la campanita (vencimientosSeguro): 4 columnas, con caché como las demás */
+  const SEGURO = Object.assign({}, VEHICULOS, {
+    columnas: ['FOLIO', 'NUCCO', 'ESTATUS', 'FECHA VENCIMIENTO SEGURO'],
+    incluir: (r) => !!r['FOLIO'],
+    fila: (r) => ({
+      FOLIO: r['FOLIO'], NUCCO: r['NUCCO'] || '', ESTATUS: r['ESTATUS'] || '',
+      'FECHA VENCIMIENTO SEGURO': r['FECHA VENCIMIENTO SEGURO'] || '',
+    }),
+  });
 
   /**
    * Diagnóstico de solo lectura: cuántas filas de VEHICULOS tienen la columna
@@ -169,24 +190,7 @@ const VehiculosService = (function () {
    *  notificaciones -- NotificacionesService.itemsSeguro_ vigila FECHA VENCIMIENTO
    *  SEGURO de cada vehículo activo. */
   function vencimientosSeguro(token) {
-    Permisos.puedeLeer(token, 'vehiculos');
-    const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
-    const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, ['FOLIO', 'NUCCO', 'ESTATUS', 'FECHA VENCIMIENTO SEGURO']);
-    const resultado = [];
-    for (let i = 0; i < filas; i++) {
-      if (!datos['FOLIO'][i]) continue;
-      resultado.push({
-        FOLIO: datos['FOLIO'][i], NUCCO: datos['NUCCO'][i] || '', ESTATUS: datos['ESTATUS'][i] || '',
-        'FECHA VENCIMIENTO SEGURO': datos['FECHA VENCIMIENTO SEGURO'][i] || '',
-      });
-    }
-    return resultado;
-  }
-
-  /** Todas las columnas de TODOS los vehículos (para "Vista": mostrar/exportar cualquier columna). */
-  function completo(token) {
-    Permisos.puedeLeer(token, 'vehiculos');
-    return SheetUtils.getAll(ssId(), SHEET_VEHICULOS);
+    return HojaServicio.listar(SEGURO, token);
   }
 
   /**
@@ -196,7 +200,8 @@ const VehiculosService = (function () {
    * más la columna FOLIO para ubicar el renglón, y luego lee solo esa fila.
    */
   function buscarPorFolio(token, folio) {
-    Permisos.puedeLeer(token, 'vehiculos');
+    // Referencia: el detalle de una incidencia o una reasignación también necesita el vehículo
+    Permisos.puedeLeerFamilia(token, 'vehiculos');
     if (!folio) return null;
 
     const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
@@ -322,47 +327,14 @@ const VehiculosService = (function () {
    * candado dentro de crear()). No depende de ningún otro campo del formulario,
    * así que se pide una sola vez al abrir el módulo. */
   function previsualizarNucco(token) {
-    Permisos.puedeLeer(token, 'vehiculos');
-    return generarNucco_();
-  }
-
-  /** Da de alta un vehículo. El FOLIO no lo manda el cliente — se calcula aquí
-   * a partir de la Clase (ver generarFolio_) — y la columna ID_VEHICULO no la
-   * trae SheetUtils.insert sola (solo autogenera si la columna se llama
-   * literalmente "ID") — se genera aquí también. FECHA REGISTRO SISTEMA CI
-   * siempre es "hoy" (no la manda el cliente, mismo patrón que FECHA DE
-   * REGISTRO en Tickets). NUCCO también se calcula aquí (ver generarNucco_).
-   * Con LockService: dos altas al mismo tiempo no deben terminar con el mismo
-   * folio NI el mismo NUCCO. */
-  function crear(token, datos) {
-    Permisos.puedeEditar(token, 'vehiculos');
-    const lock = LockService.getScriptLock();
-    lock.waitLock(30000);
-    try {
-      const fila = Object.assign({}, datos);
-      // Los "<COLUMNA>_FILE_ID" no son columnas reales: solo viajan para poder renombrar
-      // en Drive el archivo ya subido una vez que se sabe el ID real del vehículo.
-      const archivosIds = {};
-      CAMPOS_ARCHIVO.forEach((campo) => {
-        const clave = campo + '_FILE_ID';
-        if (fila[clave]) { archivosIds[campo] = fila[clave]; delete fila[clave]; }
-      });
-      // Las columnas que manda otra hoja (SERIE SENSOR y SENSOR, que manda Instalación de
-      // Sensores) no se capturan aquí: un vehículo nuevo nace "sin sensor".
-      const ajenas = Relaciones.deOtraHoja(SHEET_VEHICULOS);
-      ajenas.columnas.forEach((c) => { delete fila[c]; });
-      Object.assign(fila, ajenas.sinDueno);
-      conPersona_(fila, fila);
-      fila.FOLIO = generarFolio_(datos.CLASE);
-      fila.NUCCO = generarNucco_();
-      fila[ID_COLUMN] = Ids.nuevo(Entidades.prefijo(SHEET_VEHICULOS));
-      fila['FECHA REGISTRO SISTEMA CI'] = new Date();
-      SheetUtils.insert(ssId(), SHEET_VEHICULOS, fila);
-      Object.keys(archivosIds).forEach((campo) => renombrarArchivo_(archivosIds[campo], fila[ID_COLUMN], campo));
-      return { ID: fila[ID_COLUMN], FOLIO: fila.FOLIO };
-    } finally {
-      lock.releaseLock();
-    }
+    // De la lista ya guardada, no de la hoja: es solo lo que se enseña en el formulario; el
+    // NUCCO de verdad lo calcula generarNucco_() bajo candado al guardar
+    let maximo = 0;
+    HojaServicio.listar(RESUMEN, token).forEach((v) => {
+      const texto = String(v.NUCCO || '').trim();
+      if (/^\d+$/.test(texto)) maximo = Math.max(maximo, parseInt(texto, 10));
+    });
+    return String(maximo + 1).padStart(5, '0');
   }
 
   /**
@@ -384,150 +356,43 @@ const VehiculosService = (function () {
     }
   }
 
-  /** Edita un vehículo. Además de guardar, compara contra el registro que
-   * había antes y manda la diferencia campo por campo a la bitácora de
-   * Cambios Vehículos (ver CambiosVehiculosService) — así queda quién
-   * cambió qué y cuándo, sin que nadie tenga que anotarlo a mano. También
-   * propaga los campos copiados (placa, marca, línea…) a Instalación de
-   * Sensores, Verificaciones y Hologramas (ver Relaciones.gs / docs/relaciones.md). */
-  /**
-   * @param opciones.candadoTomado  true si el llamador YA tiene el candado del script.
-   *   waitLock() no es reentrante, asi que propagar() se colgaria 20 s y moriria en el
-   *   catch de abajo, perdiendo la propagacion sin que nadie se enterara. Lo usa
-   *   ReasignacionesVehicularesService.crear().
-   */
-  function actualizar(token, id, cambios, opciones) {
-    const sesion = Permisos.puedeEditar(token, 'vehiculos');
-    const cfg = opciones || {};
-    const datos = Object.assign({}, cambios);
-    // Los "<COLUMNA>_FILE_ID" no son columnas reales: solo viajan para poder renombrar
-    // en Drive el archivo recién subido (ver subirArchivo/renombrarArchivo_).
-    const archivosIds = {};
-    CAMPOS_ARCHIVO.forEach((campo) => {
-      const clave = campo + '_FILE_ID';
-      if (datos[clave]) { archivosIds[campo] = datos[clave]; delete datos[clave]; }
-    });
-    delete datos.FOLIO; // no se edita, se fija solo al crear
-    delete datos.NUCCO; // ídem
-    delete datos['FECHA REGISTRO SISTEMA CI']; // ídem
-    // Las que manda otra hoja: editarlas aquí se perdería en la siguiente sincronización.
-    // Se cambian desde su dueña (SERIE SENSOR y SENSOR: el módulo de Sensores).
-    Relaciones.deOtraHoja(SHEET_VEHICULOS).columnas.forEach((c) => { delete datos[c]; });
+  // Carpetas de Drive de los adjuntos (responsiva, documento de baja, póliza, tenencia): PDF a
+  // "VEHICULOS_Files_", imagen (foto del documento) a "VEHICULOS_Images", las dos en la raíz de
+  // la app (DriveUtils.carpetaEnRaiz). El archivo hereda los permisos que ya tenga la carpeta.
+  const CARPETA_ADJUNTOS = 'VEHICULOS_Files_';
+  const CARPETA_ADJUNTOS_IMAGENES = 'VEHICULOS_Images';
 
-    const encontrado = SheetUtils.findById(ssId(), SHEET_VEHICULOS, id, ID_COLUMN);
-    if (encontrado) conPersona_(datos, Object.assign({}, encontrado.data, datos));
-    const actualizado = SheetUtils.update(ssId(), SHEET_VEHICULOS, id, datos, ID_COLUMN);
-    Object.keys(archivosIds).forEach((campo) => renombrarArchivo_(archivosIds[campo], id, campo));
-
-    if (encontrado) {
-      CambiosVehiculosService.registrarCambios(encontrado.data.FOLIO, encontrado.data, datos, sesion.nombre);
-    }
-    // El vehículo YA se guardó bien en este punto — si propagar falla, no se revierte
-    // nada: solo se avisa en los logs y revisar() lo corrige en la corrida nocturna.
-    try {
-      if (cfg.candadoTomado) Relaciones.propagarSinCandado('VEHICULOS', actualizado, datos);
-      else Relaciones.propagar('VEHICULOS', actualizado, datos);
-    } catch (err) {
-      console.error('Relaciones.propagar falló para el vehículo ' + id + ': ' + err.message);
-    }
-    return { ID: id };
-  }
-
-  /** Elimina por completo un vehículo (borrado físico) — solo ADMIN.
-   * OJO: el negocio normalmente "da de baja" (ESTATUS = BAJA VEHICULAR) en
-   * vez de borrar — esto es un borrado real, para altas hechas por error. */
-  function eliminar(token, id) {
-    Permisos.puedeEditar(token, 'vehiculos');
-    // Relaciones.borrar y no SheetUtils.remove: se niega si el vehículo tiene historial
-    // (inspecciones, incidencias, hologramas…), para no dejar a nadie apuntando a la nada.
-    const { eliminadas } = Relaciones.borrar(SHEET_VEHICULOS, [id]);
-    if (!eliminadas) throw new Error('No se encontró el vehículo con ID=' + id);
-    return { ID: id };
-  }
-
-  // TODO: reasignarResponsable, registrarVerificacion, registrarServicio,
-  //       guardarInspeccion (usa PdfService.generarReporteDanios)
-
-  // Carpeta de Drive donde se guardan los archivos adjuntos (responsiva, documento de
-  // baja, póliza de seguro, archivo de tenencia): PDF a "VEHICULOS_Files_", imagen
-  // (foto del mismo documento, en vez de escaneo) a "VEHICULOS_Images". No se cambia la
-  // seguridad del archivo — hereda los permisos que ya tenga esa carpeta compartida.
-  const CARPETA_ADJUNTOS_ID = '1BrGhaC18GtXDCw7k9kZlMdK-Pp15lupz';
-  const CARPETA_ADJUNTOS_IMAGENES_ID = '11NfoCfZyGUvlLJ3PPKUTg5kwN8nYaZLP';
-  const TAMANO_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
-  // Etiqueta corta para el nombre de archivo en Drive, por columna (ver renombrarArchivo_).
-  const ETIQUETA_ARCHIVO = {
-    'RESPONSIVA': 'RESPONSIVA',
-    'DOCUMENTO BAJA': 'DOCUMENTO_BAJA',
-    'POLIZA SEGURO': 'POLIZA_SEGURO',
-    'ARCHIVO TENENCIA': 'TENENCIA',
+  return {
+    /** Catálogo completo, todas las columnas. Pesado (648 filas x 41 columnas) —
+     * usar listarResumen() para listas/tarjetas y buscarPorFolio() para detalle. */
+    listar: (token) => HojaServicio.listar(VEHICULOS, token),
+    listarBasico: (token) => HojaServicio.listar(BASICO, token),
+    listarResumen: (token) => HojaServicio.listar(RESUMEN, token),
+    /** Para el activador (Calentador.gs): las listas que se piden en cada pantalla, ya armadas */
+    calentar: () => [BASICO, RESUMEN, SEGURO].forEach(HojaServicio.calentar),
+    /** Todas las columnas de TODOS los vehículos (para "Vista": mostrar/exportar cualquier columna) */
+    completo: (token) => HojaServicio.completo(VEHICULOS, token),
+    buscarPorFolio, previsualizarFolio, previsualizarNucco,
+    crear: (token, datos) => HojaServicio.crear(VEHICULOS, token, datos),
+    /**
+     * @param opciones.candadoTomado  true si el llamador YA tiene el candado del script.
+     *   waitLock() no es reentrante, así que propagar() se colgaría 20 s y moriría en
+     *   silencio. Lo usa ReasignacionesVehicularesService.crear().
+     */
+    actualizar: (token, id, cambios, opciones) => HojaServicio.actualizar(VEHICULOS, token, id, cambios, opciones),
+    /** Borrado físico, para altas hechas por error — el negocio normalmente "da de baja"
+     * (ESTATUS = BAJA VEHICULAR). Por Relaciones (lo hace HojaServicio): se niega si el
+     * vehículo tiene historial (inspecciones, incidencias, hologramas…). */
+    eliminar: (token, id) => HojaServicio.eliminar(VEHICULOS, token, id),
+    /**
+     * Sube un adjunto (PDF/imagen) en base64 y regresa su URL — el cliente guarda esa URL en
+     * la columna (RESPONSIVA / DOCUMENTO BAJA / …) al llamar crear()/actualizar().
+     */
+    subirArchivo(token, nombreArchivo, mimeType, base64Data) {
+      Permisos.puedeEditar(token, 'vehiculos');
+      const carpeta = DriveUtils.carpetaEnRaiz(/^image\//.test(mimeType || '') ? CARPETA_ADJUNTOS_IMAGENES : CARPETA_ADJUNTOS).getId();
+      return HojaServicio.subirArchivo(carpeta, 'de adjuntos de Vehículos', nombreArchivo, mimeType, base64Data);
+    },
+    diagnosticoIds, vencimientosSeguro,
   };
-
-  /** Renombra en Drive el archivo recién subido a "<ID>_<ETIQUETA>_<fecha>.ext" (conserva la
-   *  extensión que ya trae, puesta por subirArchivo a partir del nombre/tipo original del
-   *  cliente). No bloquea el alta/edición si falla -- el archivo ya quedó guardado y accesible
-   *  con el nombre que traía, solo no se le pudo poner el nombre bonito. */
-  function renombrarArchivo_(fileId, id, columna) {
-    if (!fileId || !id) return;
-    try {
-      const archivo = DriveApp.getFileById(fileId);
-      const extension = (archivo.getName().match(/\.[^.]+$/) || [''])[0];
-      const fecha = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-      const etiqueta = ETIQUETA_ARCHIVO[columna] || columna.replace(/\s+/g, '_');
-      archivo.setName(id + '_' + etiqueta + '_' + fecha + extension);
-    } catch (e) {
-      console.warn('No se pudo renombrar el archivo de Vehículos (' + columna + ', ' + fileId + '): ' + e.message);
-    }
-  }
-
-  /**
-   * Sube un archivo (PDF/imagen) codificado en base64 a la carpeta de Drive
-   * de adjuntos y regresa su URL — el cliente guarda esa URL en la columna
-   * correspondiente (RESPONSIVA / DOCUMENTO BAJA / ARCHIVO TENENCIA) al
-   * llamar crear()/actualizar(), igual que cualquier otro campo de texto.
-   */
-  function subirArchivo(token, nombreArchivo, mimeType, base64Data) {
-    Permisos.puedeEditar(token, 'vehiculos');
-    if (!base64Data) throw new Error('No se recibió ningún archivo.');
-
-    const bytes = Utilities.base64Decode(base64Data);
-    if (bytes.length > TAMANO_MAX_BYTES) {
-      throw new Error('El archivo pesa más de 10 MB — súbelo más ligero.');
-    }
-
-    const blob = Utilities.newBlob(bytes, mimeType || 'application/octet-stream', nombreArchivo || 'archivo');
-    // El mensaje genérico de Drive ("Acceso denegado") no dice qué cuenta ni en qué paso
-    // falló (abrir la carpeta / crear el archivo / compartirlo) — aquí sí, para no tener
-    // que adivinar cada vez que pase.
-    const cuenta = () => Session.getEffectiveUser().getEmail();
-    const esImagen = /^image\//.test(mimeType || '');
-    let carpeta, archivo;
-    try {
-      carpeta = DriveApp.getFolderById(esImagen ? CARPETA_ADJUNTOS_IMAGENES_ID : CARPETA_ADJUNTOS_ID);
-    } catch (e) {
-      throw new Error('No se pudo abrir la carpeta de adjuntos de Vehículos en Drive. La cuenta con la que ' +
-        'corre la app ahora mismo (' + cuenta() + ') no tiene acceso a esa carpeta.');
-    }
-    try {
-      archivo = carpeta.createFile(blob);
-    } catch (e) {
-      throw new Error('Se pudo abrir la carpeta de adjuntos de Vehículos, pero no crear el archivo ahí. La cuenta ' +
-        cuenta() + ' necesita permiso de editor (no solo lector) en esa carpeta. Error original: ' + e.message);
-    }
-    // Mejor esfuerzo, no bloquea el registro: la carpeta de adjuntos ya tiene
-    // acceso general (grupo/dominio) configurado, así que un archivo nuevo
-    // casi siempre hereda ese compartir solo — esto es un respaldo extra por
-    // si algún día esa carpeta cambia y deja de compartirse por default.
-    // Si una política de Workspace bloquea el compartir explícito (le pasa a
-    // algunas cuentas en carpetas que no son suyas), no vale la pena tronar
-    // el registro completo por eso: el archivo ya quedó guardado.
-    if (!DriveUtils.compartirLoMasAmplioPosible(archivo)) {
-      console.warn('No se pudo compartir explícitamente el archivo de Vehículos (cuenta ' + cuenta() +
-        '); se deja como quedó por default de la carpeta. Archivo: ' + archivo.getUrl());
-    }
-
-    return { url: archivo.getUrl(), id: archivo.getId(), nombre: nombreArchivo };
-  }
-
-  return { listar, listarBasico, listarResumen, completo, buscarPorFolio, previsualizarFolio, previsualizarNucco, crear, actualizar, eliminar, subirArchivo, diagnosticoIds, vencimientosSeguro };
 })();

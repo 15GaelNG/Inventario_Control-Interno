@@ -133,6 +133,8 @@
     if (!puedeEditar) document.querySelector('#cch-tabs .tab-btn[data-tab="registrar"]').remove();
     const modalEditar = document.getElementById('modal-editar-cajachica');
     let todasLasCajas = [];
+    /** La ficha abierta: si su copia guardada llega distinta del servidor, se vuelve a pintar */
+    let fichaCajaAbierta = null;
 
     document.getElementById('campos-form-cajachica').innerHTML = renderCamposCajaChica('cch', false);
     document.getElementById('campos-form-editar-cajachica').innerHTML = renderCamposCajaChica('editar-cajachica', true);
@@ -181,6 +183,15 @@
       return '<span class="estatus-appsheet" style="color:#2ba02b"><i data-lucide="circle-check" class="ico"></i> VIGENTE</span>';
     }
 
+    // Mismos colores/íconos que badgeEstatusCaja, para el filtro rápido por Estatus
+    // (pintarEstatusCch) -- orden: vigente primero, luego en proceso, luego cerrada.
+    const ORDEN_ESTATUS_CCH = ['VIGENTE', 'EN PROCESO DE CIERRE', 'CERRADA'];
+    const ESTILO_ESTATUS_CCH = {
+      'VIGENTE': { icono: 'circle-check', color: '#2ba02b' },
+      'EN PROCESO DE CIERRE': { icono: 'clock', color: '#e0a020' },
+      'CERRADA': { icono: 'circle-x', color: '#e02020' },
+    };
+
     // ---------- Ficha de una caja chica: pantalla propia dentro del módulo (oculta la
     // lista, muestra esto), mismo patrón que Vehículos — migas para volver, encabezado
     // con ícono/estatus, y pestañas con lo relacionado (Arqueos, Cambios de Monto). ----------
@@ -196,10 +207,19 @@
       if (enlace) enlace.addEventListener('click', (ev) => { ev.preventDefault(); cerrarFichaCajaChica(); });
     }
     function cerrarFichaCajaChica() {
+      fichaCajaAbierta = null;
       document.getElementById('cch-detalle').hidden = true;
       document.getElementById('cch-detalle').innerHTML = '';
       document.getElementById('cch-listado').hidden = false;
     }
+    // La ficha salió de su copia guardada y del servidor llegó algo distinto: se repinta en la
+    // misma pestaña (sin "Cargando…" ni volver arriba)
+    escucharLista('apiFichaCajaChica', () => {
+      const detalle = document.getElementById('cch-detalle');
+      if (!fichaCajaAbierta || detalle.hidden) return;
+      const activa = detalle.querySelector('[data-ficha-tab].active');
+      abrirFichaCajaChica(fichaCajaAbierta, activa ? activa.dataset.fichaTab : undefined, true);
+    }, document.getElementById('cch-detalle'));
 
     const ICONO_GRUPO_CAJACHICA = {
       'Identificación': 'id-card', 'Jefe y captura': 'user', 'Ubicación': 'map-pin',
@@ -352,26 +372,29 @@
       }
     }
 
-    async function abrirFichaCajaChica(cResumen, pestanaInicial) {
+    /** repintar: la misma ficha con datos nuevos, sin "Cargando…" ni volver arriba */
+    async function abrirFichaCajaChica(cResumen, pestanaInicial, repintar) {
       const listado = document.getElementById('cch-listado');
       const detalle = document.getElementById('cch-detalle');
+      fichaCajaAbierta = cResumen;
       listado.hidden = true;
       detalle.hidden = false;
-      detalle.innerHTML = migasCajaChica() + '<div class="card ln-card"><p class="ln-tenue"><span class="spinner"></span> Cargando…</p></div>';
-      wireMigasCajaChica();
-      document.getElementById('view-container').scrollTop = 0;
-      window.scrollTo(0, 0);
+      if (!repintar) {
+        detalle.innerHTML = migasCajaChica() + '<div class="card ln-card"><p class="ln-tenue"><span class="spinner"></span> Cargando…</p></div>';
+        wireMigasCajaChica();
+        document.getElementById('view-container').scrollTop = 0;
+        window.scrollTo(0, 0);
+      }
 
       const id = cResumen['ID CCH'];
       try {
-        const [completo, arqueosTexto, cambiosTexto] = await Promise.all([
-          callServer('apiBuscarCajaChicaPorId', state.token, id),
-          callServer('apiArqueosPorIdCch', state.token, id).catch(() => '[]'),
-          callServer('apiCambiosMontoPorIdCch', state.token, id).catch(() => '[]'),
-        ]);
-        const arqueos = JSON.parse(arqueosTexto || '[]');
-        const cambios = JSON.parse(cambiosTexto || '[]');
-        if (detalle.hidden || !document.body.contains(detalle)) return;
+        // En UNA llamada (apiFichaCajaChica), como la de Vehículos: los arqueos son de su módulo y
+        // sin permiso de Arqueos llegan en null (la pestaña no aparece). Una ficha ya vista sale de
+        // su copia guardada y se repinta sola si llegó algo distinto.
+        const ficha = JSON.parse((await callServerListaCacheada('apiFichaCajaChica', state.token, id)) || '{}');
+        const { completo, arqueos } = ficha;
+        const cambios = ficha.cambios || [];
+        if (detalle.hidden || !document.body.contains(detalle) || fichaCajaAbierta !== cResumen) return;
         if (!completo) {
           detalle.innerHTML = migasCajaChica() + '<p class="empty-state">No se encontró el registro completo.</p>';
           wireMigasCajaChica();
@@ -394,7 +417,7 @@
         html += fichaEnPestanas([
           { id: 'general', titulo: 'General', icono: 'layout-grid', contenido: general },
           { id: 'detalles', titulo: 'Detalles', icono: 'clipboard-list', contenido: detalles },
-          {
+          arqueos && {
             id: 'arqueos', titulo: 'Arqueos', icono: 'clipboard-check', num: arqueos.length,
             contenido: pestanaFicha('clipboard-check', 'Arqueos', [
               { t: 'Fecha', r: (a) => formatearFecha(a.FECHA_INICIO) },
@@ -421,7 +444,7 @@
             ], cambios, 'Sin cambios de monto registrados para esta caja chica.',
             puedeEditar ? { tipo: 'cambio-monto', texto: 'Agregar' } : null),
           },
-        ]);
+        ].filter(Boolean));
 
         detalle.innerHTML = html;
         wireMigasCajaChica();
@@ -441,7 +464,7 @@
         // Ver completo/Editar/Eliminar por fila: el registro completo (para Editar
         // arqueo) ya está en memoria en el arreglo que se acaba de pedir -- se indexa
         // por ID una vez, sin volver a pedirlo.
-        const arqueosPorIdFicha = Object.fromEntries(arqueos.map((a) => [a.ID, a]));
+        const arqueosPorIdFicha = Object.fromEntries((arqueos || []).map((a) => [a.ID, a]));
         detalle.querySelectorAll('[data-ficha-ver]').forEach((btn) => {
           btn.addEventListener('click', () => verRegistroFichaCajaChica(btn.dataset.fichaVer, btn.dataset.id));
         });
@@ -532,6 +555,45 @@
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
 
+    // ---- Filtro rápido por Estatus: misma franja de íconos que ya usan Líneas Telefónicas
+    // (por Tipo) y Vehículos (por Clase) -- el CSS es genérico (.filtro-tipo*, styles.html).
+    let filtrosActualesCch = {};
+    function marcarEstatusCch() {
+      const cont = document.getElementById('cch-filtro-estatus');
+      if (!cont) return;
+      const f = filtrosActualesCch.ESTATUS;
+      const elegidos = f && f.valores && f.valores.length ? f.valores : null;
+      cont.querySelectorAll('.filtro-tipo-item').forEach((b) => {
+        const activo = b.dataset.estatus === '*' ? !elegidos : !!(elegidos && elegidos.indexOf(b.dataset.estatus) >= 0);
+        b.classList.toggle('activo', activo);
+        b.setAttribute('aria-pressed', String(activo));
+      });
+    }
+    function pintarEstatusCch(filas) {
+      const cont = document.getElementById('cch-filtro-estatus');
+      if (!cont) return;
+      const conteo = {};
+      filas.forEach((c) => { const e = String(c.ESTATUS || '').toUpperCase(); conteo[e] = (conteo[e] || 0) + 1; });
+      const estatus = ORDEN_ESTATUS_CCH.concat(Object.keys(conteo).filter((e) => ORDEN_ESTATUS_CCH.indexOf(e) < 0 && e));
+      const fila = (valor, icono, color, nombre, n) =>
+        '<button type="button" class="filtro-tipo-item' + (n ? '' : ' filtro-tipo-item-vacio') + '" data-estatus="' + escaparHtml(valor) + '" aria-pressed="false" title="' + escaparHtml(nombre + ' · ' + n) + '">' +
+          '<span class="filtro-tipo-ico" style="color:' + color + '">' + Iconos.svg(icono) + '</span>' +
+          '<span class="filtro-tipo-nombre">' + escaparHtml(nombre) + '</span><span class="filtro-tipo-num">' + n + '</span></button>';
+      cont.innerHTML = '<div class="filtro-tipo-panel"><div class="filtro-tipo-titulo">Estatus</div>' +
+        fila('*', 'layers', 'var(--color-text-muted)', 'Todas', filas.length) +
+        estatus.map((e) => {
+          const estilo = ESTILO_ESTATUS_CCH[e] || { icono: 'circle', color: 'var(--color-text-muted)' };
+          return fila(e, estilo.icono, estilo.color, e, conteo[e] || 0);
+        }).join('') + '</div>';
+      marcarEstatusCch();
+    }
+    document.getElementById('cch-filtro-estatus').addEventListener('click', (ev) => {
+      const b = ev.target.closest('.filtro-tipo-item');
+      if (!b) return;
+      const e = b.dataset.estatus;
+      tabla.setFiltro('ESTATUS', (e === '*' || b.classList.contains('activo')) ? null : { valores: [e] });
+    });
+
     const KPI_FILTRO_CCH = { 'cch-stat-vigentes': 'VIGENTE', 'cch-stat-proceso-cierre': 'EN PROCESO DE CIERRE', 'cch-stat-cerradas': 'CERRADA' };
     const tileTotalCch = document.getElementById('cch-stat-total').closest('.stat-tile');
     tileTotalCch.classList.add('stat-tile-clickable');
@@ -545,6 +607,8 @@
       });
     });
     function marcarKpiActivo(filtros) {
+      filtrosActualesCch = filtros || {};
+      marcarEstatusCch();
       const valores = filtros.ESTATUS && filtros.ESTATUS.valores;
       tileTotalCch.classList.toggle('stat-tile-activo', !valores);
       Object.keys(KPI_FILTRO_CCH).forEach((id) => {
@@ -575,6 +639,7 @@
       }
 
       actualizarKpisCch(todasLasCajas);
+      pintarEstatusCch(todasLasCajas);
       tabla.setDatos(todasLasCajas);
     }
     // Pinta al instante con lo guardado; si del servidor llega algo distinto, se vuelve a pintar (api.html)
