@@ -16,6 +16,10 @@ const path = require('path');
 const vm = require('vm');
 const zlib = require('zlib');
 
+// Apps Script corre en la zona del manifiesto: new Date(a, m, d) es medianoche de México
+// aunque la prueba corra en otra zona (la GitHub Action corre en UTC)
+process.env.TZ = 'America/Mexico_City';
+
 const RAIZ = path.resolve(__dirname, '..');
 const DESFASE_MS = -6 * 3600 * 1000;           // Ciudad de México
 const AHORA = Date.UTC(2026, 9, 5, 18, 30, 0);  // 05/10/2026 12:30 hora local
