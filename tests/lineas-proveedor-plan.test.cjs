@@ -10,7 +10,7 @@ const P = new Function(read('src/services/lineas/LineasProveedor.gs') + '\nretur
 const plano = (x) => JSON.parse(JSON.stringify(x));
 
 // esAdendumMasReciente se saca de LineasLectura tal cual
-const lectura = read('src/services/lineas/LineasLectura.gs');
+const lectura = read('src/services/lineas/LineasLectura.gs').replace(/\r\n/g, '\n'); // en Windows llega con CRLF
 const ini = lectura.indexOf('  function esAdendumMasReciente(');
 const vigente = new Function(lectura.slice(ini, lectura.indexOf('\n  }\n', ini) + 4) + '\nreturn esAdendumMasReciente;')();
 const F = (s) => new Date(s + 'T12:00:00');
