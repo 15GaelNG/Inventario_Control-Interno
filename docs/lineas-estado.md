@@ -3,7 +3,7 @@
 Rama `master` = producción (versión 64, de Ayrton; lo último de Líneas ahí es la parte 6 con COMENTARIO, plantillas
 «(SISTEMA)», página de la responsiva, patrón con 9 puntos en el PDF, Reasignar corregido, responsables adicionales, sin
 «quien lo usa», firma guardada, PDF ligado fuera de su carpeta y PIN en minúsculas). Rama `emmanuel`: además, el PIN
-del equipo solo con números, sin la compatibilidad con OBSERVACIONES la hoja armada en Exportar a Excel y la pantalla Proveedor (etapa 1) · Última
+del equipo solo con números, sin la compatibilidad con OBSERVACIONES, la hoja armada en Exportar a Excel y la pantalla Proveedor (etapa 1) · Última
 actualización: 2026-10-07
 
 Qué es hoy el módulo **Líneas** (equipos celulares y líneas telefónicas), dónde vive cada cosa y cómo se trabaja.
