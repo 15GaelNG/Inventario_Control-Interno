@@ -363,6 +363,10 @@
           { FOLIO: 'AUT0031', PLACA: 'GGY886F', MARCA: 'CHEVROLET', LINEA: 'BEAT', MODELO: 2019, POR: 'responsable' }],
       },
       cajas: [{ ID_CCH: 12, RESPONSABLE: q.nombre, ESTATUS: 'VIGENTE', MONTO_ACTUAL: 5000 }],
+      lineas: {
+        mencionados: [],
+        aCargo: [{ ID: 'EQU-1', TIPO: 'equipo', NUCO: '30412', NUMERO: '5512345678', COMPANIA: 'TELCEL', MODELO: 'GALAXY A15', TIPO_EQUIPO: 'CELULAR', ESTATUS: 'ASIGNADO', POR: 'responsable' }],
+      },
       otrosTickets: { total: 3, abiertos: 1, ultimos: [
         { ID: 103512, TITULO: 'NIP para la unidad nueva', ESTATUS: 'Abierto', FECHA: hace(5).slice(0, 10) },
         { ID: 102877, TITULO: 'Incremento de combustible septiembre', ESTATUS: 'Cerrado', FECHA: hace(22).slice(0, 10) },

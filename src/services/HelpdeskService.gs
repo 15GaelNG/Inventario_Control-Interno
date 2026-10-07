@@ -239,6 +239,7 @@ const HelpdeskService = (function () {
       for (let n = 0; n < 3 && i + n < palabras.length; n++) {
         junta += palabras[i + n];
         if (junta.length >= 5) claves.add(junta);
+        if (/^\d{11,13}$/.test(junta)) claves.add(junta.slice(-10));   // un teléfono con lada (+52 …)
       }
     }
     return claves;
@@ -253,8 +254,10 @@ const HelpdeskService = (function () {
    *                 texto; el Nucco solo en un campo del formulario que lo pida, porque en texto
    *                 libre un número de 5 cifras puede ser un kilometraje) y los que tiene a cargo
    *   cajas         sus cajas chicas (responsable)
+   *   lineas        { mencionados, aCargo }: equipos y líneas citados (número de 10 dígitos; NUCO solo de
+   *                 un campo de un formulario de Líneas) y los suyos. Sin datos secretos (ver abajo)
    *   otrosTickets  sus otros tickets en la copia APP_HELPDESK (quien lee Tickets)
-   * consulta: { id, correo, nombre, textos: [título, descripción, mensajes…], campos: [{ ETIQUETA, VALOR }] }
+   * consulta: { id, correo, nombre, formulario (su id), textos: [título, descripción, mensajes…], campos: [{ ETIQUETA, VALOR }] }
    */
   function contexto(token, consulta) {
     Auth.validarSesion(token);
@@ -278,7 +281,10 @@ const HelpdeskService = (function () {
     const enTexto = clavesDe_(textos);
     const campos = Array.isArray(q.campos) ? q.campos.slice(0, 60) : [];
     const enCampos = new Set();
-    campos.filter((c) => /placa|nuco|nucco|vin|serie/i.test(String(c.ETIQUETA || ''))).forEach((c) => clavesDe_(c.VALOR).forEach((k) => enCampos.add(k)));
+    campos.filter((c) => /placa|nuco|nucco|vin|serie|tel[eé]fono/i.test(String(c.ETIQUETA || ''))).forEach((c) => clavesDe_(c.VALOR).forEach((k) => enCampos.add(k)));
+    // "Nuco" existe en vehículos y en equipos de Líneas: el de un campo se busca solo en el módulo
+    // del formulario (el de cambio de número es de Líneas; el de combustible, de Vehículos)
+    const deLineas = /^(lineas-telefonicas|accesorios-lineas)$/.test(MODULO_POR_FORMULARIO[Number(q.formulario)] || '');
 
     const vehiculos = siPuede_(() => {
       const lista = VehiculosService.listarBasico(token) || [];
@@ -291,7 +297,7 @@ const HelpdeskService = (function () {
         const cita = [['placa', v.PLACA], ['VIN', v.VIN], ['folio', v.FOLIO]].find(([, valor]) => {
           const k = clave_(valor);
           return k.length >= 5 && mezcla_(k) && (enTexto.has(k) || enCampos.has(k));
-        }) || (clave_(v.NUCO) && enCampos.has(clave_(v.NUCO)) ? ['Nucco'] : null);
+        }) || (!deLineas && clave_(v.NUCO) && enCampos.has(clave_(v.NUCO)) ? ['Nucco'] : null);
         if (cita) mencionados.push(ficha(v, cita[0]));
       });
       const aCargo = lista.filter((v) => esSuyo(v.NO_EMPLEADO, v.RESPONSABLE_VEHICULO)).map((v) => ficha(v, 'responsable'));
@@ -302,6 +308,37 @@ const HelpdeskService = (function () {
       .filter((c) => (correo && String(c['CORREO ELECTRONICO DE RESPONSABLE'] || '').trim().toLowerCase() === correo) || esSuyo('', c.RESPONSABLE))
       .slice(0, 10)
       .map((c) => ({ ID_CCH: c.ID_CCH, RESPONSABLE: c.RESPONSABLE, ESTATUS: c['ESTATUS'] || '', MONTO_ACTUAL: c.MONTO_ACTUAL })));
+
+    // Líneas: del ÍNDICE de Líneas (como Gestión de Activos), nunca de su vista de tabla, que trae
+    // los PIN. Y de cada renglón solo se copian estos campos: nada de PIN, contraseñas, patrón,
+    // cuenta Google, IMEI ni SIM, aunque mañana el índice los trajera.
+    const lineas = siPuede_(() => {
+      const ix = TelefoniaService.indice(token);
+      const renglones = (t) => ((t && t.filas) || []).map((f) => {
+        const r = {};
+        (t.columnas || []).forEach((c, i) => { r[c] = f[i]; });
+        return r;
+      });
+      const diez = (numero) => { const d = String(numero || '').replace(/\D/g, ''); return d.length >= 10 ? d.slice(-10) : ''; };
+      const citaNumero = (numero) => !!diez(numero) && (enTexto.has(diez(numero)) || enCampos.has(diez(numero)));
+      const citaNuco = (nuco) => deLineas && !!clave_(nuco) && enCampos.has(clave_(nuco));
+      const ficha = (r, tipo, por) => ({
+        ID: r.id, TIPO: tipo, NUCO: tipo === 'equipo' ? r.nuco || '' : r.nucoEquipo || '', NUMERO: r.numero || '',
+        COMPANIA: r.compania || '', MODELO: tipo === 'equipo' ? r.modelo || '' : '', TIPO_EQUIPO: tipo === 'equipo' ? r.tipo || '' : '',
+        ESTATUS: r.estatus || '', POR: por,
+      });
+      const mencionados = [];
+      const aCargo = [];
+      // Un equipo trae su línea; una línea sin equipo ("suelta") va aparte, como en Gestión de Activos
+      const todos = renglones(ix.equipos).map((r) => ['equipo', r])
+        .concat(renglones(ix.lineas).filter((r) => r.suelta).map((r) => ['linea', r]));
+      todos.forEach(([tipo, r]) => {
+        const por = citaNumero(r.numero) ? 'número' : (tipo === 'equipo' && citaNuco(r.nuco) ? 'NUCO' : '');
+        if (por) mencionados.push(ficha(r, tipo, por));
+        if (r.responsable && nombres.has(CapitalHumano.nombreComparable(r.responsable))) aCargo.push(ficha(r, tipo, 'responsable'));
+      });
+      return { mencionados: mencionados.slice(0, 10), aCargo: aCargo.slice(0, 20) };
+    });
 
     const otrosTickets = siPuede_(() => {
       Permisos.puedeLeer(token, 'tickets');
@@ -317,7 +354,7 @@ const HelpdeskService = (function () {
       };
     });
 
-    return { persona: persona, vehiculos: vehiculos, cajas: cajas, otrosTickets: otrosTickets };
+    return { persona: persona, vehiculos: vehiculos, cajas: cajas, lineas: lineas, otrosTickets: otrosTickets };
   }
 
   /**

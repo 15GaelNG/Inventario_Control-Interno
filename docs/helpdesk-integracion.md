@@ -129,13 +129,18 @@ En el panel del ticket, lo que sabemos de esa persona en nuestros módulos
   ("UNU-794-H"). El **Nucco solo se toma de un campo del formulario que lo pida** (Placa, Nuco o
   VIN): en texto libre un número de 5 cifras puede ser un kilometraje o un monto. Al abrir las
   respuestas del formulario (F) se vuelve a preguntar con ellas.
+- **Líneas y equipos:** los suyos (por el nombre del responsable, como Gestión de Activos) y los
+  que el ticket cita: un número de 10 dígitos en el texto o el formulario (con lada o espacios) o el
+  NUCO de un campo, este solo en formularios de Líneas (en los de combustible el "Nuco" es de
+  Vehículos). Sale del ÍNDICE de Líneas, nunca de su vista de tabla, y de cada renglón solo se
+  copian NUCO, número, compañía, modelo, tipo y estatus: **nada de PIN, contraseñas, patrón,
+  cuenta Google, IMEI ni SIM** (una prueba lo revisa). "Ver" abre la ficha (`Lineas.irARegistro`).
 - **Caja chica:** las suyas (por correo o nombre del responsable), con "Ver".
 - **Sus otros tickets:** de la copia `APP_HELPDESK`, por su correo; un clic los abre en la Bandeja.
 
 Cada parte sale solo si la persona puede ver ese módulo (Vehículos o su familia, Caja Chica o
-Arqueos, Tickets). Sin permiso, el servidor da `null` y la pantalla no la pinta; "Ver" sale solo
-si además puede abrir la ficha. Pendiente: **Líneas** (las líneas a su nombre), con cuidado de
-los campos secretos (PIN, contraseñas).
+Arqueos, cualquiera de Líneas, Tickets). Sin permiso, el servidor da `null` y la pantalla no la
+pinta; "Ver" sale solo si además puede abrir la ficha.
 
 ## Relación con nuestra hoja `TICKETS`
 

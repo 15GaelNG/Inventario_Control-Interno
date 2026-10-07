@@ -464,7 +464,7 @@
       // El texto del ticket, para encontrar la placa, el VIN o el folio que cita (con un tope)
       const textos = [t.TITULO, t.DESCRIPCION].concat((t.MENSAJES || []).map((m) => m.TEXTO)).filter(Boolean).join('\n').slice(0, 20000);
       const consulta = {
-        id: t.ID, correo: t.CORREO_SOLICITANTE || '', nombre: t.SOLICITANTE || '', textos: [textos],
+        id: t.ID, correo: t.CORREO_SOLICITANTE || '', nombre: t.SOLICITANTE || '', formulario: t.ID_FORMULARIO || null, textos: [textos],
         campos: formulario ? (formulario.CAMPOS || []).map((c) => ({ ETIQUETA: c.ETIQUETA, VALOR: c.VALOR })) : [],
       };
       try {
@@ -502,6 +502,23 @@
           </div>`);
         if (filas.length) partes.push('<div class="hd-ci-grupo">Vehículos</div>' + filas.join(''));
       }
+      if (c.lineas) {
+        // Lo mismo que con vehículos: citado y además suyo sale una vez. Solo lo que no es secreto
+        // (el servidor no manda PIN, contraseñas, IMEI ni SIM)
+        const vistas = new Map();
+        c.lineas.mencionados.forEach((l) => vistas.set(l.ID, Object.assign({ citado: l.POR }, l)));
+        c.lineas.aCargo.forEach((l) => vistas.set(l.ID, Object.assign(vistas.get(l.ID) || l, { suyo: true })));
+        const verLinea = !!permisoDe('lineas-telefonicas');
+        const filas = Array.from(vistas.values()).map((l) => `
+          <div class="hd-ci-fila">
+            <i data-lucide="${l.TIPO === 'equipo' ? 'smartphone' : 'phone'}" class="ico"></i>
+            <div><strong>${l.TIPO === 'equipo' ? 'NUCO ' + e(l.NUCO || '—') : 'Línea suelta'}${l.NUMERO ? ' · ' + e(l.NUMERO) : ''}</strong>
+              <span>${e([l.TIPO_EQUIPO, l.MODELO, l.COMPANIA, l.ESTATUS].filter(Boolean).join(' · '))}</span>
+              <span class="hd-ci-marcas">${l.citado ? '<span class="hd-ci-marca">Citado en el ticket (' + e(l.citado) + ')</span>' : ''}${l.suyo ? '<span class="hd-ci-marca suyo">A su cargo</span>' : ''}</span></div>
+            ${verLinea ? `<button type="button" class="secondary hd-ci-ver" data-hd-linea="${e(l.ID)}" title="Abrir su ficha en Líneas Telefónicas">Ver</button>` : ''}
+          </div>`);
+        if (filas.length) partes.push('<div class="hd-ci-grupo">Líneas y equipos</div>' + filas.join(''));
+      }
       if (c.cajas && c.cajas.length) {
         partes.push('<div class="hd-ci-grupo">Caja chica</div>' + c.cajas.map((k) => `
           <div class="hd-ci-fila">
@@ -518,9 +535,9 @@
           (o.total > o.ultimos.length ? '<p class="form-ayuda" style="margin:4px 0 0">Se muestran los ' + o.ultimos.length + ' más recientes.</p>' : ''));
       }
       // Sin ningún módulo que lo pueda mostrar, la sección no aparece
-      const algo = c.vehiculos || c.cajas || c.otrosTickets;
+      const algo = c.vehiculos || c.cajas || c.lineas || c.otrosTickets;
       caja.innerHTML = !algo ? '' : '<div class="hd-lado-titulo">En Control Interno</div>' +
-        (partes.length ? partes.join('') : '<p class="form-ayuda" style="margin:0">Nada ligado: no tiene vehículos ni cajas a su cargo y el ticket no cita ninguna unidad.</p>');
+        (partes.length ? partes.join('') : '<p class="form-ayuda" style="margin:0">Nada ligado: no tiene vehículos, líneas ni cajas a su cargo y el ticket no cita ninguno.</p>');
       refreshIcons();
     }
 
@@ -562,6 +579,8 @@
       if (ev.target.closest('#hd-btn-registrar')) return abrirRegistro(HD_DETALLES.get(abierto));
       const veh = ev.target.closest('[data-hd-vehiculo]');
       if (veh) return verFichaVehiculoDesdeOtroModulo(veh.dataset.hdVehiculo);
+      const lin = ev.target.closest('[data-hd-linea]');
+      if (lin) return Lineas.irARegistro(lin.dataset.hdLinea);
       const cch = ev.target.closest('[data-hd-caja]');
       if (cch) return verFichaCajaChicaDesdeOtroModulo(cch.dataset.hdCaja);
       const otro = ev.target.closest('[data-hd-otro]');

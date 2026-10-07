@@ -205,6 +205,7 @@ console.log('\n3. Contexto del solicitante (el panel del ticket)');
           { ID_CCH: 13, RESPONSABLE: 'Otra', ESTATUS: 'VIGENTE', 'CORREO ELECTRONICO DE RESPONSABLE': 'otra@ejemplo.com' }];
       },
     },
+    TelefoniaService: { indice: () => { throw new Error(SIN_PERMISO); } },   // Líneas, en el caso de abajo
   });
   e.contexto.Permisos.esFaltaDePermiso = (err) => /No tienes acceso|Solo puedes consultar/.test(String(err && err.message));
   // Sus otros tickets llegan a la copia al ver la lista
@@ -229,8 +230,47 @@ console.log('\n3. Contexto del solicitante (el panel del ticket)');
     'sus otros tickets de la copia, sin el que está abierto (902, cerrado)');
 
   const l = srv.contexto('tok-luis', consulta);
-  ok(l.persona && l.vehiculos === null && l.cajas === null && l.otrosTickets === null,
-    'sin permiso de Vehículos, Caja Chica ni Tickets: esas partes salen null (no truena ni sale vacío)');
+  ok(l.persona && l.vehiculos === null && l.cajas === null && l.lineas === null && l.otrosTickets === null,
+    'sin permiso de Vehículos, Caja Chica, Líneas ni Tickets: esas partes salen null (no truena ni sale vacío)');
+}
+{
+  // Líneas: del índice (nunca de la vista con PIN) y solo campos permitidos
+  const { e, srv } = entorno();
+  Object.assign(e.contexto, {
+    CapitalHumano: {
+      nombreComparable: (s) => String(s || '').toUpperCase().replace(/\s+/g, ' ').trim(),
+      listarColaboradores: () => [{ NOMBRE: 'ISAMAR JUAREZ', NO_EMPLEADO: 'HA00100', CORREO: 'isamar@ejemplo.com' }],
+    },
+    VehiculosService: { listarBasico: () => [{ FOLIO: 'AUT0024', PLACA: 'XXX111', NUCO: '12345', MARCA: 'NISSAN', RESPONSABLE_VEHICULO: 'Otro' }] },
+    CajasChicasService: { listarResumen: () => [] },
+    TelefoniaService: {
+      indice: (t) => {
+        if (t !== 'tok-ana') throw new Error('No tienes acceso a este módulo. Pídeselo a quien administra los permisos.');
+        return {
+          // El índice real no trae secretos; aquí se le ponen para probar que no se copian
+          equipos: { columnas: ['id', 'nuco', 'tipo', 'modelo', 'imei', 'estatus', 'responsable', 'numero', 'compania', 'PIN EQUIPO', 'CONTRASEÑA MODEM'],
+            filas: [['EQU-1', '12345', 'CELULAR', 'A15', '359999', 'ASIGNADO', 'Isamar Juarez', '55 1234 5678', 'TELCEL', '9911', 'clave'],
+              ['EQU-2', '20001', 'CELULAR', 'A05', '358888', 'ASIGNADO', 'Otra Persona', '3312345678', 'AT&T', '1234', ''],
+              ['EQU-3', '20002', 'MODEM', 'B310', '357777', 'DISPONIBLE', 'Nadie', '', '', '', '']] },
+          lineas: { columnas: ['id', 'numero', 'sim', 'compania', 'estatus', 'equipoId', 'nucoEquipo', 'responsable', 'suelta'],
+            filas: [['LIN-9', '8187654321', '8952', 'TELCEL', 'ACTIVA', '', '', 'ISAMAR JUAREZ', true]] },
+          vista: { columnas: ['PIN WHATSAPP'], secretas: ['PIN WHATSAPP'], filas: [['LIN-9', '4455']] },
+        };
+      },
+    },
+  });
+  e.contexto.Permisos.esFaltaDePermiso = (err) => /No tienes acceso|Solo puedes consultar/.test(String(err && err.message));
+  const q = { id: 1, correo: 'isamar@ejemplo.com', nombre: 'ISAMAR JUAREZ', formulario: 286,
+    textos: ['Cambio de número de la línea +52 33 1234 5678 por favor'], campos: [{ ETIQUETA: 'NUCO del que se solicita el cambio de número', VALOR: '20002' }] };
+  const c = srv.contexto('tok-ana', q);
+  const ids = (lista) => lista.map((x) => x.ID + ':' + x.POR).join(' ');
+  ok(ids(c.lineas.mencionados) === 'EQU-2:número EQU-3:NUCO', 'citados: el número con lada y espacios, y el NUCO del campo de un formulario de Líneas (' + ids(c.lineas.mencionados) + ')');
+  ok(ids(c.lineas.aCargo) === 'EQU-1:responsable LIN-9:responsable', 'los suyos, por el nombre del responsable: su equipo y su línea suelta');
+  ok(!c.vehiculos.mencionados.length, 'el NUCO de un formulario de Líneas no se busca en Vehículos (AUT0024 tiene el mismo número de otro catálogo)');
+  const texto = JSON.stringify(c.lineas);
+  ok(!/9911|clave|4455|359999|8952|PIN|CONTRASE|imei|sim/i.test(texto), 'sin PIN, contraseñas, IMEI ni SIM en lo que sale');
+  const v = srv.contexto('tok-ana', Object.assign({}, q, { formulario: 317, campos: [{ ETIQUETA: 'Placa. Nuco o VIN', VALOR: '12345' }] }));
+  ok(v.vehiculos.mencionados.length === 1 && !v.lineas.mencionados.some((x) => x.POR === 'NUCO'), 'y al revés: en un formulario de combustible el Nucco es de Vehículos, no de Líneas');
 
   const nada = srv.contexto('tok-ana', { id: 5, correo: 'nadie@ejemplo.com', textos: ['sin nada'] });
   ok(nada.persona === null && nada.vehiculos.mencionados.length === 0 && nada.vehiculos.aCargo.length === 0 && nada.cajas.length === 0,
