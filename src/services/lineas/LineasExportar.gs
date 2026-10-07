@@ -3,7 +3,8 @@
  * "Exportar a Excel" de los módulos de Líneas: la base completa del módulo (todas las filas y todas las
  * columnas de su pestaña), no solo lo que se ve en la tabla. Solo lectura.
  *
- *   baseCompleta('INVENTARIO')   → LINEAS TELEFONICAS
+ *   baseCompleta('INVENTARIO')   → LINEAS TELEFONICAS; con las hojas nuevas, armada como la vieja (una fila por equipo o
+ *                                  línea sola, con ESTATUS GENERAL) y después LINEAS, EQUIPOS, ASIGNACIONES y ADENDUMS
  *   baseCompleta('CAMBIOS')      → CAMBIOS LINEAS TELEFONICAS (todas, no solo las 5000 más recientes)
  *   baseCompleta('ACCESORIOS')   → ACCESORIOS CELULARES + MOVIMIENTOS_ACCESORIOS (una hoja cada una)
  *   …
@@ -52,13 +53,31 @@ const LineasExportar = (function () {
   function hoja_(nombre, puedeVerSecretos) {
     if (!LineasDatos.existeTabla(nombre)) return null;
     const t = LineasDatos.tablaFresca(nombre);
-    const zona = LineasDatos.zona();
-    const cols = [];
-    t.encabezados.forEach((h, i) => { if (h) cols.push({ titulo: h, i: i }); });
     const ultima = t.hoja.getLastRow();
     const crudas = ultima >= 2 && t.encabezados.length
       ? t.hoja.getRange(2, 1, ultima - 1, t.encabezados.length).getValues().filter((v) => v.some((x) => x !== '' && x !== null))
       : [];
+    return tabla_(nombre, t.encabezados, crudas, puedeVerSecretos);
+  }
+
+  /**
+   * LINEAS TELEFONICAS armada con las hojas nuevas (pendiente 1.9, 7-oct): las mismas columnas que la hoja vieja, para
+   * que el reporte mensual (generar.py y conciliacion.py, en reporte_lineas) la siga leyendo. ESTATUS GENERAL, con la
+   * fórmula del AppSheet, como en la tabla.
+   */
+  function inventarioJunto_(puedeVerSecretos) {
+    const titulos = LineasLectura.ENCABEZADOS;
+    const txt = LineasUtil.txt;
+    const crudas = LineasLectura.filas().map((r) => titulos.map((h) => (h !== 'ESTATUS GENERAL' ? r[h]
+      : LineasRepo.estatusGeneralRegistro(txt(r['ID APPSHEET']) || txt(r['ID']), (txt(r['TIPO']) || '').toUpperCase(),
+        txt(r['ESTATUS EQUIPO']), txt(r['ESTATUS LINEA'])))));
+    return tabla_(LineasLectura.HOJA_VIEJA, titulos, crudas, puedeVerSecretos);
+  }
+
+  function tabla_(nombre, encabezados, crudas, puedeVerSecretos) {
+    const zona = LineasDatos.zona();
+    const cols = [];
+    encabezados.forEach((h, i) => { if (h) cols.push({ titulo: h, i: i }); });
 
     const secretas = puedeVerSecretos ? [] : cols.filter((c) => COLUMNA_SECRETA.test(c.titulo)).map((c) => c.i);
     // CAMBIOS: el valor de antes/después de un PIN o contraseña también es secreto
@@ -98,6 +117,9 @@ const LineasExportar = (function () {
     const tablas = modulos_()[String(modulo || '').toUpperCase()];
     if (!tablas) throw new Error('Módulo desconocido para exportar: ' + modulo);
     const hojas = tablas.map((nombre) => hoja_(nombre, puedeVerSecretos)).filter(Boolean);
+    if (String(modulo).toUpperCase() === 'INVENTARIO' && typeof LineasLectura !== 'undefined' && LineasLectura.activo()) {
+      hojas.unshift(inventarioJunto_(puedeVerSecretos));
+    }
     if (!hojas.length) throw new Error('No existe la pestaña de este módulo en la base de datos.');
     return { hojas: hojas };
   }
