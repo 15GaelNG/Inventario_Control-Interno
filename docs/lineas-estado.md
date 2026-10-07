@@ -2,7 +2,7 @@
 
 Rama `master` = producción (versión 62: parte 6 con COMENTARIO, plantillas «(SISTEMA)», página de la responsiva, patrón
 con 9 puntos en el PDF, Reasignar corregido, responsables adicionales, sin «quien lo usa», firma guardada, PDF ligado fuera
-de su carpeta y PIN en minúsculas). Rama `emmanuel`: además, el PIN del equipo solo con números y sin la compatibilidad con OBSERVACIONES · Última actualización: 2026-10-07
+de su carpeta y PIN en minúsculas). Rama `emmanuel`: además, el PIN del equipo solo con números, sin la compatibilidad con OBSERVACIONES y la hoja armada en Exportar a Excel · Última actualización: 2026-10-07
 
 Qué es hoy el módulo **Líneas** (equipos celulares y líneas telefónicas), dónde vive cada cosa y cómo se trabaja.
 La bitácora anterior de este archivo (§0a…§0ae, hasta el 1-oct) sigue en el historial de git. El diseño de las hojas
@@ -53,6 +53,9 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   EQUIPO; patrón, «PATRON»; sin bloqueo, «N/A». Con «PIN» solo números (no deja escribir letras); la contraseña acepta
   todo. La lista viaja como `datos.bloqueo` y el servidor lo revisa (`LineasUtil.exigirPinEquipo`). En Editar, PIN
   EQUIPO sigue con 6 caracteres como máximo (regla del AppSheet).
+- **Exportar a Excel del inventario:** primero una hoja LINEAS TELEFONICAS armada como la vieja (mismas columnas, una
+  fila por equipo o línea sola, ESTATUS GENERAL como en la tabla; `LineasExportar.inventarioJunto_`) y después LINEAS,
+  EQUIPOS, ASIGNACIONES y ADENDUMS. El reporte mensual (`reporte_lineas/scripts/inventario.py`) lee esa primera hoja.
 - **Resguardos y cancelaciones:** bandeja de Pau (recibir, entregar a Líneas, vendido, cancelación con carta).
 - **Panorama:** líneas y equipos por estatus, renta por cuenta y adendums, al cierre del mes elegido.
 - **Notificaciones:** campana con adendums por vencer y avisos de seguimiento.
