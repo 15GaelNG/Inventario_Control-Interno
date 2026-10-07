@@ -4,6 +4,7 @@
    * navegador los lee y el servidor (LineasProveedor.gs) revisa contra el inventario y carga ADENDUMS, FACTURAS y
    * LINEAS. Etapa 1: adendums de Telcel (.xlsx) y barridos de AT&T (.xls).
    *
+   *   LineasProveedor.init()    vista 'proveedor-lineas' (tpl-lineas-proveedor)
    *   LineasProveedor.leer      lectura de cada archivo (sin pantalla; la usan las pruebas)
    */
   const LineasProveedor = (function () {
@@ -44,6 +45,8 @@
      * archivo): «24/05/2026» → 2026-05-24; «2026-05-25T05:59:59.000+00:00» y «2026-04-08 00:00:00» → su día escrito.
      */
     function fecha(v) {
+      // Una celda de fecha de Excel llega como número de serie (días desde el 30-dic-1899)
+      if (typeof v === 'number' && v > 20000 && v < 80000) return new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 86400000).toISOString().slice(0, 10);
       const s = txt(v);
       let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
       if (m) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
@@ -151,6 +154,188 @@
 
     const leer = { excel, adendumTelcel, barridoAtt, fecha, finOBaja, fechaDelNombre, telefono, sim, imei, monto };
 
-    return { leer };
+    // ---------------- Pantalla ----------------
+
+    const NOMBRE_TIPO = { ADENDUM: 'Adendum Telcel', BARRIDO: 'Barrido AT&T' };
+    let montaje = 0;
+
+    function init() {
+      const C = Lineas.comun;
+      const { $, esc, miles, ico, chip, aviso, icono, mensajeError } = C;
+      const n = ++montaje;
+      const raiz = document.getElementById('ln-proveedor');
+      const vigente = () => n === montaje && document.body.contains(raiz);
+      let archivos = []; // { archivo, tipo, compania, fecha, lineas } o { archivo, error }
+      let revision = 0;
+      let listo = false;
+      refreshIcons();
+
+      const validos = () => archivos.filter((a) => !a.error);
+      const lote = () => ({ archivos: validos().map((a) => ({ tipo: a.tipo, archivo: a.archivo, fecha: a.fecha, lineas: a.lineas })) });
+      const mono = (v) => '<span class="ln-mono">' + esc(v || '—') + '</span>';
+      const tabla = (titulos, filas) => '<div data-scroll-x><table><thead><tr>' + titulos.map((t) => '<th>' + esc(t) + '</th>').join('') +
+        '</tr></thead><tbody>' + filas.map((f) => '<tr>' + f.map((c) => '<td>' + c + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>';
+      const seccion = (icon, titulo, cuantos, cuerpo) => (cuantos ? '<details class="card card-compacta lnp-seccion"><summary>' + ico(icon) + ' ' +
+        esc(titulo) + ' · ' + miles(cuantos) + '</summary>' + cuerpo + '</details>' : '');
+      const tile = (icon, valor, etiqueta, clase) => '<div class="stat-tile ' + (clase || '') + '"><div class="stat-icon">' + ico(icon) +
+        '</div><div><div class="stat-value">' + esc(valor) + '</div><div class="stat-label">' + esc(etiqueta) + '</div></div></div>';
+
+      async function agregar(lista) {
+        const nuevos = Array.from(lista || []);
+        if (!nuevos.length) return;
+        pintarEspera('Leyendo ' + nuevos.length + (nuevos.length === 1 ? ' archivo' : ' archivos'));
+        let XLSX;
+        try { XLSX = await ExportarExcel.cargarLibreria(); } catch (e) { aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 9000); pintarLista(); return; }
+        for (const f of nuevos) {
+          let leido;
+          try {
+            const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
+            const hojas = wb.SheetNames.map((h) => ({ nombre: h, filas: XLSX.utils.sheet_to_json(wb.Sheets[h], { header: 1, raw: true, defval: null }) }));
+            leido = excel(f.name, hojas) || { archivo: f.name, error: 'No es un adendum de Telcel ni un barrido de AT&T' };
+          } catch (e) {
+            leido = { archivo: f.name, error: 'No se pudo leer: ' + mensajeError(e) };
+          }
+          archivos = archivos.filter((a) => a.archivo !== f.name).concat([leido]);
+        }
+        if (!vigente()) return;
+        pintarLista();
+        revisar();
+      }
+
+      function pintarEspera(texto) {
+        const lista = $('#lnp-lista', raiz);
+        lista.hidden = false;
+        lista.innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> ' + esc(texto) + '…</p>';
+      }
+
+      function pintarLista() {
+        const lista = $('#lnp-lista', raiz);
+        lista.hidden = !archivos.length;
+        $('#lnp-limpiar', raiz).hidden = !archivos.length;
+        lista.innerHTML = archivos.length ? tabla(['Archivo', 'Tipo', 'Fecha', 'Líneas', ''], archivos.map((a, i) => [
+          ico(a.error ? 'file-x' : 'file-spreadsheet') + ' ' + esc(a.archivo),
+          a.error ? chip('No reconocido', 'rojo') : esc(NOMBRE_TIPO[a.tipo]) + ' · ' + mono(a.lineas[0] && a.lineas[0].cuentaPadre),
+          a.error ? '<span class="ln-tenue">' + esc(a.error) + '</span>'
+            : '<input type="date" class="lnp-fecha" data-i="' + i + '" value="' + esc(a.fecha) + '" required' + (a.fecha ? '' : ' aria-invalid="true"') + '>',
+          a.error ? '' : miles(a.lineas.length),
+          '<button type="button" class="icon-btn" data-quitar="' + i + '" title="Quitar">' + ico('x') + '</button>',
+        ])) : '';
+        refreshIcons();
+      }
+
+      async function revisar() {
+        const yo = ++revision;
+        listo = false;
+        $('#lnp-cargar', raiz).disabled = true;
+        const kpis = $('#lnp-kpis', raiz);
+        const detalle = $('#lnp-detalle', raiz);
+        if (!validos().length) { kpis.hidden = true; detalle.innerHTML = ''; return; }
+        const sinFecha = validos().filter((a) => !a.fecha);
+        if (sinFecha.length) {
+          kpis.hidden = true;
+          detalle.innerHTML = '<div class="error-msg">' + ico('calendar-x') + ' Falta la fecha de ' + sinFecha.map((a) => esc(a.archivo)).join(', ') + '</div>';
+          refreshIcons();
+          return;
+        }
+        kpis.hidden = false;
+        kpis.innerHTML = tile('loader-circle', '…', 'Revisando contra el inventario');
+        detalle.innerHTML = '';
+        refreshIcons();
+        try {
+          const r = await C.llamar('apiLineasProveedorRevisar', lote());
+          if (yo !== revision || !vigente()) return;
+          pintarRevision(r);
+          listo = r.total > 0;
+          $('#lnp-cargar', raiz).disabled = !listo;
+        } catch (e) {
+          if (yo !== revision || !vigente()) return;
+          kpis.hidden = true;
+          detalle.innerHTML = '<div class="error-msg">' + esc(mensajeError(e)) + '</div>';
+        }
+      }
+
+      function pintarRevision(r) {
+        const c = r.contratos;
+        $('#lnp-kpis', raiz).innerHTML = [
+          tile('list', miles(r.total), 'Líneas por cargar'),
+          r.yaCargadas ? tile('check-check', miles(r.yaCargadas), 'Ya cargadas') : '',
+          tile('file-pen', miles(c.cambian), 'Contratos distintos', c.cambian ? 'stat-tile-warn' : ''),
+          tile('card-sim', miles(r.sims.length), 'SIM cambiadas'),
+          tile('circle-plus', miles(r.altas.length), 'Altas (sueltas)'),
+          tile('arrow-left-right', miles(r.cambiosNumero.length), 'Posibles cambios de número', r.cambiosNumero.length ? 'stat-tile-warn' : ''),
+          tile('circle-alert', miles(r.estatus.length), 'Estatus distinto', r.estatus.length ? 'stat-tile-warn' : ''),
+        ].join('');
+        const notas = [
+          c.nuevos ? miles(c.nuevos) + ' sin adendum anterior' : '',
+          c.iguales ? miles(c.iguales) + ' iguales' : '',
+          c.formato ? miles(c.formato) + ' con un día de diferencia por el formato de fecha de Telcel' : '',
+          c.bajas ? miles(c.bajas) + ' dadas de baja por el proveedor' : '',
+          r.cuentas ? miles(r.cuentas) + ' llenan cuenta y razón social' : '',
+        ].filter(Boolean);
+        const sinVacios = (lista) => esc(lista.filter((v) => v !== null && v !== '').join(' · '));
+        $('#lnp-detalle', raiz).innerHTML =
+          (notas.length ? '<p class="ln-tenue lnp-notas">' + esc(notas.join(' · ')) + '</p>' : '') +
+          seccion('arrow-left-right', 'Posibles cambios de número (aviso a Líneas, no se aplica)', r.cambiosNumero.length,
+            tabla(['Inventario', 'Proveedor', 'Pista', 'Estatus'], r.cambiosNumero.map((x) => [mono(x.antes), mono(x.despues), esc(x.pista), esc(x.estatusInventario)]))) +
+          seccion('circle-alert', 'Suspendidas o dadas de baja por el proveedor (aviso a Líneas)', r.estatus.length,
+            tabla(['Número', 'Inventario', 'Proveedor'], r.estatus.map((x) => [mono(x.numero), esc(x.inventario), esc(x.proveedor)]))) +
+          seccion('file-pen', 'Contratos distintos', c.cambian,
+            tabla(['Número', 'Antes', 'Ahora'], c.ejemplos.map((x) => [mono(x.numero), sinVacios(x.antes), sinVacios(x.despues)])) +
+            (c.cambian > c.ejemplos.length ? '<p class="ln-tenue">Primeros ' + c.ejemplos.length + '</p>' : '')) +
+          seccion('card-sim', 'SIM cambiadas (se actualizan)', r.sims.length,
+            tabla(['Número', 'Antes', 'Ahora'], r.sims.map((x) => [mono(x.numero), mono(x.antes), mono(x.despues)]))) +
+          seccion('circle-plus', 'Altas como línea suelta, sin responsable', r.altas.length,
+            tabla(['Número', 'Compañía', 'Cuenta padre', 'Plan', 'Estatus'], r.altas.map((x) => [mono(x.numero), esc(x.compania), mono(x.cuentaPadre), esc(x.plan), esc(x.estatus)]))) +
+          seccion('circle-off', 'Dadas de baja por el proveedor y sin registro (no se dan de alta)', r.sinAlta.length,
+            tabla(['Número', 'Estatus'], r.sinAlta.map((x) => [mono(x.numero), esc(x.estatus)])));
+        refreshIcons();
+      }
+
+      async function cargar() {
+        if (!listo) return;
+        const b = $('#lnp-cargar', raiz);
+        b.disabled = true;
+        const original = b.innerHTML;
+        b.innerHTML = '<span class="ln-spinner"></span> Cargando';
+        try {
+          const r = await C.llamar('apiLineasProveedorCargar', lote());
+          aviso(icono('circle-check') + ' Cargado: ' + miles(r.cargadas) + ' líneas' + (r.altas.length ? ', ' + miles(r.altas.length) + ' altas' : '') +
+            (r.cambiosNumero.length || r.estatus.length ? ' · avisos a Líneas' : ''), 10000);
+          if (!vigente()) return;
+          archivos = [];
+          pintarLista();
+          revisar();
+        } catch (e) {
+          aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 12000);
+          b.disabled = false;
+        } finally {
+          b.innerHTML = original;
+          refreshIcons();
+        }
+      }
+
+      const entrada = $('#lnp-archivos', raiz);
+      entrada.addEventListener('change', () => { agregar(entrada.files); entrada.value = ''; });
+      raiz.addEventListener('dragover', (ev) => ev.preventDefault());
+      raiz.addEventListener('drop', (ev) => { ev.preventDefault(); agregar(ev.dataTransfer.files); });
+      $('#lnp-lista', raiz).addEventListener('click', (ev) => {
+        const q = ev.target.closest('[data-quitar]');
+        if (!q) return;
+        archivos.splice(Number(q.dataset.quitar), 1);
+        pintarLista();
+        revisar();
+      });
+      $('#lnp-lista', raiz).addEventListener('change', (ev) => {
+        const f = ev.target.closest('.lnp-fecha');
+        if (!f) return;
+        archivos[Number(f.dataset.i)].fecha = f.value;
+        f.toggleAttribute('aria-invalid', !f.value);
+        revisar();
+      });
+      $('#lnp-limpiar', raiz).addEventListener('click', () => { archivos = []; pintarLista(); revisar(); });
+      $('#lnp-cargar', raiz).addEventListener('click', cargar);
+    }
+
+    return { init, leer };
   })();
 </script>

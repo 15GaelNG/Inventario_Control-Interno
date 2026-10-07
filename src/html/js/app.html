@@ -709,6 +709,7 @@
         { vista: 'resguardos-lineas', etiqueta: 'Resguardos y cancelaciones', icono: 'package-check', requiere: 'resguardos-lineas', plantilla: 'tpl-lineas-resguardos', init: () => Lineas.initResguardos() },
         { vista: 'correcciones-lineas', etiqueta: 'Correcciones de Líneas', icono: 'clipboard-check', requiere: 'correcciones-lineas', plantilla: 'tpl-lineas-correcciones', init: () => LineasCorrecciones.init() }, // temporal (30-sep)
         { vista: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios', icono: 'boxes', requiere: 'accesorios-lineas', plantilla: 'tpl-lineas-accesorios', init: () => Lineas.initAccesoriosLineas() },
+        { vista: 'proveedor-lineas', etiqueta: 'Proveedor', icono: 'file-spreadsheet', requiere: 'proveedor-lineas', plantilla: 'tpl-lineas-proveedor', init: () => LineasProveedor.init() },
         // Control de Cambios queda fuera del menú (30-sep) pero su vista sigue en VISTAS_FUERA_DEL_MENU: su pestaña es la
         // bitácora del Historial y del Panorama. Reactivación, Solicitud, Reasignaciones y Desechos se retiraron con sus
         // pestañas (30-sep); sus renglones están en APP_MOVIMIENTOS y se ven en el Historial de la ficha.
