@@ -407,6 +407,7 @@ const LineasRegistros = (function () {
   function crear(datos, usuario) {
     asegurarEsquema_();
     const comentario = comentarioObligatorio_(datos, 'de dónde sale este registro');
+    LineasUtil.exigirPinEquipo(datos);
     const enviados = (datos && datos.valores) || datos || {};
     // Agregar equipo o Agregar línea (usuario, 4-oct): el TIPO no se elige, se asigna solo
     const parte = parteDe_({ parte: (datos && datos.parte) || 'EQUIPO' }, '');
@@ -438,6 +439,7 @@ const LineasRegistros = (function () {
 
   function editar(id, datos, usuario, puedeVerSecretos) {
     asegurarEsquema_();
+    LineasUtil.exigirPinEquipo(datos);
     const enviados = (datos && datos.valores) || datos || {};
     const resultado = LineasDatos.conCandado(() => {
       const fila = LineasRepo.leerRegistroObligatorio(id, 'el registro');

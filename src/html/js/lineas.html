@@ -886,11 +886,31 @@
           if (cambio) {
             if (t === 'PATRÓN') input.value = 'PATRON';
             else if (t === 'SIN BLOQUEO') input.value = 'N/A';
-            else if (/^(PATRON|N\/A)$/i.test(input.value)) input.value = '';
+            else if (/^(PATRON|N\/A)$/i.test(input.value) || (t === 'PIN' && /\D/.test(input.value))) input.value = '';
           }
         }
       }
       if (campoPatron) campoPatron.classList.toggle('ln-oculto', t !== 'PATRÓN');
+    }
+    /** Bloqueo elegido ('' si el formulario no tiene la lista). Va aparte al servidor: PIN y contraseña comparten PIN EQUIPO. */
+    function bloqueoElegido(cuerpo) {
+      const sel = cuerpo && cuerpo.querySelector('select[data-columna="_BLOQUEO"]');
+      return sel ? sel.value : '';
+    }
+    /** Con el bloqueo «PIN», solo números (usuario, 7-oct); la contraseña acepta todo. Igual que LineasUtil.exigirPinEquipo. */
+    function errorPinBloqueo(cuerpo) {
+      const input = cuerpo && cuerpo.querySelector('input[data-columna="PIN EQUIPO"]');
+      const v = input ? input.value.trim() : '';
+      return bloqueoElegido(cuerpo) === 'PIN' && v && !/^\d+$/.test(v) ? 'SOLO NUMEROS' : '';
+    }
+    /** La lista de bloqueo de Editar, la inspección y la responsiva: con «PIN» las letras no se escriben. */
+    function activarBloqueo(cuerpo) {
+      cuerpo.addEventListener('change', (ev) => { if (ev.target.matches('[data-columna="_BLOQUEO"]')) aplicarBloqueo(cuerpo, true); });
+      cuerpo.addEventListener('input', (ev) => {
+        const el = ev.target;
+        if (el.matches('input[data-columna="PIN EQUIPO"]') && bloqueoElegido(cuerpo) === 'PIN' && /\D/.test(el.value)) el.value = el.value.replace(/\D/g, '');
+      });
+      aplicarBloqueo(cuerpo, false);
     }
 
     /** Caja de firma: marco dorado para el responsable y azul para Control Interno; el lienzo lo pone crearFirma. */
@@ -1357,6 +1377,9 @@
         const regla = e.valida && VALIDA_CLIENTE[e.valida];
         if (regla && !regla.f(v, t)) error(regla.msg);
       });
+      const pin = errorPinBloqueo(cuerpo);
+      const campoPin = (elementos || []).filter((e) => e.columna === 'PIN EQUIPO')[0];
+      if (pin && campoPin && !errores.some((x) => x.columna === 'PIN EQUIPO')) errores.push({ e: campoPin, columna: 'PIN EQUIPO', corto: pin, msg: 'PIN DEL EQUIPO: ' + pin });
       return errores;
     }
 
@@ -3440,7 +3463,7 @@
         llamar('apiLineasFormularioRegistro', id || '', parte || '').then((form) => {
           if (!captura || captura.tipo !== 'REGISTRO') return;
           const cuerpo = $('#ln-captura-cuerpo', raiz);
-          const elementos = form.elementos;
+          const elementos = conSelectorBloqueo(form.elementos);
           const valorDe = (c) => ((elementos.filter((e) => e.columna === c)[0] || {}).valor) || '';
           const ctx = { nuevo: form.nuevo, id: id, idDG: form.idDG || null, tipoInicial: form.tipo || '', parte: form.parte, historico: !!form.historico,
             nuco: form.nuevo ? '' : valorDe('NUCO') };
@@ -3456,6 +3479,7 @@
           pintarIconos(cuerpo);
           activarCombosEn(cuerpo, elementos);
           activarAdicionales(cuerpo);
+          activarBloqueo(cuerpo);
           const patron = elementos.filter((e) => e.control === 'patron')[0];
           if (patron) {
             captura.patronInicial = esPuntosPatron(patron.valor) ? patron.valor : null;
@@ -3526,7 +3550,7 @@
               if (!nota || captura !== sesionEditor) return null;
               return leerArchivosEn(cuerpo).then((archivos) => {
               estadoGuardado(id ? 'Guardando cambios' : 'Guardando');
-              const datos = { valores: valores, archivos: archivos, comentario: nota.comentario, ticket: nota.ticket, parte: ctx.parte };
+              const datos = { valores: valores, archivos: archivos, comentario: nota.comentario, ticket: nota.ticket, parte: ctx.parte, bloqueo: bloqueoElegido(cuerpo) };
               return (id ? llamar('apiLineasEditarRegistro', id, datos) : llamar('apiLineasCrearRegistro', datos)).then((r) => aplicarCambiosIndice(r.filas).then(() => {
                 cerrarCaptura(true);
                 aviso(icono('circle-check') + ' ' + (id ? 'Información actualizada' : (ctx.parte === 'LINEA' ? 'Línea agregada' : 'Equipo agregado')), 6000);
@@ -3669,7 +3693,7 @@
         });
         activarCombosEn(cuerpo, captura.contexto.formulario);
         activarAdicionales(cuerpo);
-        cuerpo.addEventListener('change', (ev) => { if (ev.target.matches('[data-columna="_BLOQUEO"]')) aplicarBloqueo(cuerpo, true); });
+        activarBloqueo(cuerpo);
         cuerpo.addEventListener('input', (ev) => { if (ev.target.matches('[data-columna]')) actualizarFormularioAppSheet(); });
         cuerpo.addEventListener('change', (ev) => { if (ev.target.matches('[data-columna]')) actualizarFormularioAppSheet(); });
         actualizarFormularioAppSheet();
@@ -3700,6 +3724,8 @@
             errores.push({ columna: e.columna, etiqueta: e.etiqueta, msg: 'Elige un valor de la lista' });
           }
         });
+        const pin = errorPinBloqueo($('#ln-captura-cuerpo', raiz));
+        if (pin) errores.push({ columna: 'PIN EQUIPO', etiqueta: 'PIN DEL EQUIPO', msg: pin });
         return seccion ? errores.filter((x) => seccion.querySelector('[data-af-columna="' + CSS.escape(x.columna) + '"]')) : errores;
       }
 
@@ -4018,13 +4044,14 @@
         const idAbierto = captura.idObjetivo;
         const patron = patronParaGuardar();
         const valores = leerFormularioAppSheet();
+        const bloqueo = bloqueoElegido($('#ln-captura-cuerpo', raiz));
         const sesion = captura;
         estadoGuardado(sesion.flujo ? 'Guardando la inspección' : 'Generando tu PDF');
         // La carpeta de fotos solo existe si se subió alguna (ya quedó creada al subirla)
         Promise.all([firmaInspector.base64('#ddebf7'), firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ddebf7') : null, sesion.carpetaPromesa || null]).then(([inspector, responsable]) => {
           sesion.pdfFirmas = { inspector: inspector, responsable: responsable, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ddebf7') : null };
           const datos = Object.assign({}, sesion.ref, {
-            id: sesion.contexto.idPropuesto, valores: valores, patron: patron,
+            id: sesion.contexto.idPropuesto, valores: valores, patron: patron, bloqueo: bloqueo,
             carpetaId: sesion.carpetaId || null, fotosCarpetaId: sesion.fotosCarpetaId || null, ruta: sesion.ruta || '', fotos: sesion.fotos,
             firmaInspectorBase64: sesion.pdfFirmas.inspector, firmaResponsableBase64: sesion.pdfFirmas.responsable, patronBase64: sesion.pdfFirmas.patron,
             usarFirmaGuardada: !!firmaInspector.guardada,
@@ -4056,12 +4083,13 @@
         const idAbierto = captura.idObjetivo;
         const patron = patronParaGuardar();
         const valores = leerFormularioAppSheet();
+        const bloqueo = bloqueoElegido($('#ln-captura-cuerpo', raiz));
         const sesion = captura;
         estadoGuardado(sesion.flujo && sesion.flujo.espera ? sesion.flujo.espera : (sesion.flujo && !sesion.flujo.pdfAqui ? 'Guardando la responsiva' : 'Generando tu PDF'));
         Promise.all([firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ffffff') : null, firmaCi.base64('#ffffff')]).then(([responsable, ci]) => {
           sesion.pdfFirmas = { responsable: responsable, ci: ci, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ffffff') : null };
           const datos = Object.assign({}, sesion.ref, {
-            id: sesion.contexto.idPropuesto, valores: valores, patron: patron,
+            id: sesion.contexto.idPropuesto, valores: valores, patron: patron, bloqueo: bloqueo,
             firmaResponsableBase64: sesion.pdfFirmas.responsable, firmaCiBase64: sesion.pdfFirmas.ci, patronBase64: sesion.pdfFirmas.patron,
             usarFirmaGuardada: !!firmaCi.guardada,
           });
