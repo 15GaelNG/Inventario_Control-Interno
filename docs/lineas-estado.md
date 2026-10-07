@@ -1,8 +1,10 @@
 # Líneas — estado del módulo
 
-Rama `master` = producción (versión 62: parte 6 con COMENTARIO, plantillas «(SISTEMA)», página de la responsiva, patrón
-con 9 puntos en el PDF, Reasignar corregido, responsables adicionales, sin «quien lo usa», firma guardada, PDF ligado fuera
-de su carpeta y PIN en minúsculas). Rama `emmanuel`: además, el PIN del equipo solo con números, sin la compatibilidad con OBSERVACIONES y la hoja armada en Exportar a Excel · Última actualización: 2026-10-07
+Rama `master` = producción (versión 64, de Ayrton; lo último de Líneas ahí es la parte 6 con COMENTARIO, plantillas
+«(SISTEMA)», página de la responsiva, patrón con 9 puntos en el PDF, Reasignar corregido, responsables adicionales, sin
+«quien lo usa», firma guardada, PDF ligado fuera de su carpeta y PIN en minúsculas). Rama `emmanuel`: además, el PIN
+del equipo solo con números, sin la compatibilidad con OBSERVACIONES y la hoja armada en Exportar a Excel · Última
+actualización: 2026-10-07
 
 Qué es hoy el módulo **Líneas** (equipos celulares y líneas telefónicas), dónde vive cada cosa y cómo se trabaja.
 La bitácora anterior de este archivo (§0a…§0ae, hasta el 1-oct) sigue en el historial de git. El diseño de las hojas
