@@ -53,6 +53,7 @@
   const HD_DETALLES = new Map();     // idTicket → detalle (abrirlo otra vez no llama)
   const HD_FORMULARIOS = new Map();  // idTicket → respuestas del formulario
   const HD_ARCHIVOS = new Map();     // ruta → { tipo, base64 }
+  const HD_CONTEXTO = new Map();     // idTicket (+ ':f' con el formulario) → lo nuestro de quien lo pide
   const HD_CONTEOS = {};             // bandeja → total visto la última vez
   const HD_REGISTRO = new Map();     // idTicket → su ID en Tickets, o '' si falta registrarlo
   let hdFormulariosDeTickets = null; // Set de idForm que se registran en Tickets (del catálogo)
@@ -429,8 +430,10 @@
               <div class="hd-lado-titulo">Quien lo pide</div>
               <div class="hd-persona-tarjeta">${Avatar.html(t.CORREO_SOLICITANTE, t.SOLICITANTE, { tam: 40 })}
                 <div><strong>${e(t.SOLICITANTE || '—')}</strong><span>${e(t.CORREO_SOLICITANTE || '')}</span>
-                  <span>${e([t.AREA_SOLICITANTE, t.DEPARTAMENTO_SOLICITANTE].filter(Boolean).join(' · '))}</span></div></div>
+                  <span>${e([t.AREA_SOLICITANTE, t.DEPARTAMENTO_SOLICITANTE].filter(Boolean).join(' · '))}</span>
+                  <span id="hd-t-persona"></span></div></div>
             </div>
+            <div id="hd-t-contexto">${cargando ? '' : '<div class="hd-lado-titulo">En Control Interno</div><div class="hd-esqueleto hd-esqueleto-chico"></div>'}</div>
             <div>
               <div class="hd-lado-titulo">Propiedades</div>
               <dl class="hd-props">
@@ -450,6 +453,75 @@
       refreshIcons();
       Avatar.completar($('hd-ticket'));
       if (!cargando && puedeEditarModulo('tickets')) prepararRegistro(t);
+      if (!cargando) pedirContexto(t);
+    }
+
+    // ---------- lo que sabemos en Control Interno de quien lo pide (una llamada a NUESTRO servidor)
+    async function pedirContexto(t) {
+      const formulario = HD_FORMULARIOS.get(t.ID);
+      const llave = t.ID + (formulario ? ':f' : '');
+      if (HD_CONTEXTO.has(llave)) return pintarContexto(t, HD_CONTEXTO.get(llave));
+      // El texto del ticket, para encontrar la placa, el VIN o el folio que cita (con un tope)
+      const textos = [t.TITULO, t.DESCRIPCION].concat((t.MENSAJES || []).map((m) => m.TEXTO)).filter(Boolean).join('\n').slice(0, 20000);
+      const consulta = {
+        id: t.ID, correo: t.CORREO_SOLICITANTE || '', nombre: t.SOLICITANTE || '', textos: [textos],
+        campos: formulario ? (formulario.CAMPOS || []).map((c) => ({ ETIQUETA: c.ETIQUETA, VALOR: c.VALOR })) : [],
+      };
+      try {
+        const c = JSON.parse(await callServer('apiHelpdeskContexto', state.token, consulta));
+        HD_CONTEXTO.set(llave, c);
+        if (abierto === t.ID) pintarContexto(t, c);
+      } catch (err) {
+        if (abierto === t.ID && $('hd-t-contexto')) $('hd-t-contexto').innerHTML = '<div class="hd-lado-titulo">En Control Interno</div><p class="form-ayuda" style="margin:0">No se pudo consultar: ' + e(err.message) + '</p>';
+      }
+    }
+
+    function pintarContexto(t, c) {
+      const caja = $('hd-t-contexto');
+      if (!caja) return;
+      const p = c.persona;
+      if (p && $('hd-t-persona')) {
+        $('hd-t-persona').innerHTML = e([p.PUESTO, (p.NUMEROS || []).join(' / ')].filter(Boolean).join(' · ')) +
+          (p.JEFE_DIRECTO ? '<br>Jefe directo: ' + e(p.JEFE_DIRECTO) : '');
+      }
+      const verVeh = !!permisoDe('vehiculos');
+      const verCaja = !!permisoDe('caja-chica');
+      const partes = [];
+      if (c.vehiculos) {
+        // Un vehículo citado y además a su cargo sale una vez, con las dos marcas
+        const vistos = new Map();
+        c.vehiculos.mencionados.forEach((v) => vistos.set(v.FOLIO, Object.assign({ citado: v.POR }, v)));
+        c.vehiculos.aCargo.forEach((v) => vistos.set(v.FOLIO, Object.assign(vistos.get(v.FOLIO) || v, { suyo: true })));
+        const filas = Array.from(vistos.values()).map((v) => `
+          <div class="hd-ci-fila">
+            <i data-lucide="car" class="ico"></i>
+            <div><strong>${e(v.FOLIO)}${v.PLACA ? ' · ' + e(v.PLACA) : ''}</strong>
+              <span>${e([v.MARCA, v.LINEA, v.MODELO].filter(Boolean).join(' '))}</span>
+              <span class="hd-ci-marcas">${v.citado ? '<span class="hd-ci-marca">Citado en el ticket (' + e(v.citado) + ')</span>' : ''}${v.suyo ? '<span class="hd-ci-marca suyo">A su cargo</span>' : ''}</span></div>
+            ${verVeh ? `<button type="button" class="secondary hd-ci-ver" data-hd-vehiculo="${e(v.FOLIO)}" title="Abrir su ficha en Vehículos">Ver</button>` : ''}
+          </div>`);
+        if (filas.length) partes.push('<div class="hd-ci-grupo">Vehículos</div>' + filas.join(''));
+      }
+      if (c.cajas && c.cajas.length) {
+        partes.push('<div class="hd-ci-grupo">Caja chica</div>' + c.cajas.map((k) => `
+          <div class="hd-ci-fila">
+            <i data-lucide="wallet" class="ico"></i>
+            <div><strong>Caja ${e(k.ID_CCH)}</strong><span>${e([k.ESTATUS, k.MONTO_ACTUAL !== '' && k.MONTO_ACTUAL !== undefined && k.MONTO_ACTUAL !== null ? formatearMoneda(k.MONTO_ACTUAL) : ''].filter(Boolean).join(' · '))}</span></div>
+            ${verCaja ? `<button type="button" class="secondary hd-ci-ver" data-hd-caja="${e(k.ID_CCH)}" title="Abrir su ficha en Caja Chica">Ver</button>` : ''}
+          </div>`).join(''));
+      }
+      if (c.otrosTickets && c.otrosTickets.total) {
+        const o = c.otrosTickets;
+        partes.push(`<div class="hd-ci-grupo">Sus otros tickets · ${o.total}${o.abiertos ? ' (' + o.abiertos + (o.abiertos === 1 ? ' abierto' : ' abiertos') + ')' : ''}</div>` +
+          o.ultimos.map((x) => `<button type="button" class="hd-ci-ticket" data-hd-otro="${x.ID}">
+            <span>#${x.ID} · ${e(x.TITULO || '(sin título)')}</span><small>${e([x.ESTATUS, cuando(x.FECHA)].filter(Boolean).join(' · '))}</small></button>`).join('') +
+          (o.total > o.ultimos.length ? '<p class="form-ayuda" style="margin:4px 0 0">Se muestran los ' + o.ultimos.length + ' más recientes.</p>' : ''));
+      }
+      // Sin ningún módulo que lo pueda mostrar, la sección no aparece
+      const algo = c.vehiculos || c.cajas || c.otrosTickets;
+      caja.innerHTML = !algo ? '' : '<div class="hd-lado-titulo">En Control Interno</div>' +
+        (partes.length ? partes.join('') : '<p class="form-ayuda" style="margin:0">Nada ligado: no tiene vehículos ni cajas a su cargo y el ticket no cita ninguna unidad.</p>');
+      refreshIcons();
     }
 
     function respuestasHtml(f) {
@@ -475,6 +547,8 @@
         const f = await callServer('apiHelpdeskFormulario', state.token, id, t.ID_FORMULARIO || null);
         HD_FORMULARIOS.set(id, f);
         if (abierto === id) $('hd-t-formulario').innerHTML = respuestasHtml(f);
+        // Las respuestas pueden traer la placa o el Nucco: se vuelve a preguntar con ellas
+        if (abierto === id && HD_DETALLES.has(id)) pedirContexto(HD_DETALLES.get(id));
       } catch (err) {
         Notificar.error(err.message);
         btn.disabled = false;
@@ -486,6 +560,12 @@
       if (ev.target.closest('#hd-btn-abrir-hd')) { window.open(HELPDESK_PAGINA, '_blank', 'noopener'); return; }
       if (ev.target.closest('#hd-btn-formulario')) return verFormulario();
       if (ev.target.closest('#hd-btn-registrar')) return abrirRegistro(HD_DETALLES.get(abierto));
+      const veh = ev.target.closest('[data-hd-vehiculo]');
+      if (veh) return verFichaVehiculoDesdeOtroModulo(veh.dataset.hdVehiculo);
+      const cch = ev.target.closest('[data-hd-caja]');
+      if (cch) return verFichaCajaChicaDesdeOtroModulo(cch.dataset.hdCaja);
+      const otro = ev.target.closest('[data-hd-otro]');
+      if (otro) return abrir(Number(otro.dataset.hdOtro), 0);
       const btn = ev.target.closest('[data-hd-ruta]');
       if (btn) verArchivo(btn);
     });
@@ -602,7 +682,7 @@
     $('hd-atajos-cerrar').addEventListener('click', () => { modalAtajos.hidden = true; });
     modalAtajos.addEventListener('click', (ev) => { if (ev.target === modalAtajos) modalAtajos.hidden = true; });
     // Actualizar también vuelve a preguntar qué ya está en Tickets (alguien más pudo registrar)
-    const actualizar = () => { HD_DETALLES.clear(); HD_REGISTRO.clear(); cargar(true); };
+    const actualizar = () => { HD_DETALLES.clear(); HD_REGISTRO.clear(); HD_CONTEXTO.clear(); cargar(true); };
     $('hd-btn-actualizar').addEventListener('click', actualizar);
 
     function mover(paso) {

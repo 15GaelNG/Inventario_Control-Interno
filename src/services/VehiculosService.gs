@@ -108,11 +108,13 @@ const VehiculosService = (function () {
   const BASICO = Object.assign({}, VEHICULOS, {
     referencia: true,
     columnas: ['ID', 'FOLIO', 'DEPARTAMENTO', 'MARCA', 'LINEA VEHICULO', 'MODELO', 'ESTATUS',
-      'RESPONSABLE VEHICULO', 'NO EMPLEADO', 'SERIE VEHICULO', 'NUCCO'],
+      'RESPONSABLE VEHICULO', 'NO EMPLEADO', 'SERIE VEHICULO', 'NUCCO', 'PLACA'],
     incluir: (r) => !!r['FOLIO'] && String(r['ESTATUS'] || '').toUpperCase() !== 'BAJA VEHICULAR',
     fila: (r) => ({
       ID: r['ID'],
       FOLIO: r['FOLIO'],
+      // La etiqueta de Verificaciones la usa, y Help Desk busca la unidad por placa en el ticket
+      PLACA: r['PLACA'] || '',
       DEPARTAMENTO: r['DEPARTAMENTO'] || '',
       MARCA: r['MARCA'] || '',
       LINEA_VEHICULO: r['LINEA VEHICULO'] || '',

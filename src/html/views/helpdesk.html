@@ -149,6 +149,24 @@
   .hd-props { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 7px 12px; font-size: 12.5px; margin: 0; }
   .hd-props dt { color: var(--color-text-muted); }
   .hd-props dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+  .hd-persona-tarjeta #hd-t-persona { word-break: normal; }
+  /* En Control Interno: lo nuestro ligado a quien lo pide (vehículos, cajas, sus otros tickets) */
+  .hd-ci-grupo { font-size: 11.5px; font-weight: 600; color: var(--color-text-muted); margin: 10px 0 4px; }
+  .hd-ci-grupo:first-of-type { margin-top: 0; }
+  .hd-ci-fila { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--color-border); font-size: 12.5px; min-width: 0; }
+  .hd-ci-fila > .ico { flex: none; width: 16px; height: 16px; color: var(--hd); }
+  .hd-ci-fila > div { flex: 1; min-width: 0; }
+  .hd-ci-fila > div > strong, .hd-ci-fila > div > span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hd-ci-fila > div > span { color: var(--color-text-muted); font-size: 12px; }
+  .hd-ci-marcas { display: flex !important; flex-wrap: wrap; gap: 4px; margin-top: 2px; white-space: normal !important; }
+  .hd-ci-marca { font-size: 10.5px; font-weight: 600; padding: 0 6px; border-radius: 999px; color: var(--hd); background: color-mix(in srgb, var(--hd) 12%, transparent); }
+  .hd-ci-marca.suyo { color: var(--color-success); background: color-mix(in srgb, var(--color-success) 12%, transparent); }
+  .hd-ci-ver { flex: none; font-size: 12px; padding: 4px 10px; }
+  .hd-ci-ticket { display: block; width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--color-border); padding: 6px 0; cursor: pointer; color: var(--color-text); font: inherit; font-size: 12.5px; }
+  .hd-ci-ticket:hover span { color: var(--hd); }
+  .hd-ci-ticket span, .hd-ci-ticket small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hd-ci-ticket small { color: var(--color-text-muted); font-size: 11.5px; }
+  .hd-esqueleto.hd-esqueleto-chico { height: 44px; margin: 0; }
   .hd-gente { display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; }
   .hd-gente div { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .hd-respuestas { display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; }

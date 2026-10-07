@@ -173,7 +173,72 @@ console.log('\n2. Registrar en Tickets');
 }
 
 // ---------------------------------------------------------------------------------- 3
-console.log('\n3. Guardados');
+console.log('\n3. Contexto del solicitante (el panel del ticket)');
+{
+  const { e, api, srv, estado } = entorno();
+  const SIN_PERMISO = 'No tienes acceso a este módulo. Pídeselo a quien administra los permisos.';
+  const veHolo = { 'tok-ana': true, 'tok-luis': false };   // Luis no ve vehículos ni cajas
+  Object.assign(e.contexto, {
+    CapitalHumano: {
+      nombreComparable: (s) => String(s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim(),
+      listarColaboradores: () => [
+        { NOMBRE: 'Isamar Juárez Atonal', NO_EMPLEADO: 'HA00100', PUESTO: 'ANALISTA', DEPARTAMENTO: 'COMPRAS', JEFE_DIRECTO: 'X', CORREO: 'Isamar@ejemplo.com' },
+        { NOMBRE: 'ISAMAR JUAREZ ATONAL', NO_EMPLEADO: 'VALLE00200', PUESTO: 'ANALISTA', DEPARTAMENTO: 'COMPRAS', CORREO: 'isamar@ejemplo.com' },
+        { NOMBRE: 'Otra Persona', NO_EMPLEADO: 'HA00999', CORREO: 'otra@ejemplo.com' },
+      ],
+    },
+    VehiculosService: {
+      listarBasico: (t) => {
+        if (!veHolo[t]) throw new Error(SIN_PERMISO);
+        return [
+          { FOLIO: 'AUT0024', PLACA: 'UNU-794-H', VIN: '3N6AD33A0NK800001', NUCO: '00031', MARCA: 'NISSAN', LINEA_VEHICULO: 'NP300', RESPONSABLE_VEHICULO: 'OTRA PERSONA', NO_EMPLEADO: 'HA00999' },
+          { FOLIO: 'AUT0025', PLACA: 'GGY886F', VIN: '93Y1R5F52RJ649008', NUCO: '45000', MARCA: 'RENAULT', RESPONSABLE_VEHICULO: 'Alguien', NO_EMPLEADO: 'HA00555' },
+          { FOLIO: 'AUT0026', PLACA: 'XYZ1234', VIN: '', NUCO: '00077', MARCA: 'CHEVROLET', RESPONSABLE_VEHICULO: 'Isamar Juarez Atonal', NO_EMPLEADO: '' },
+          { FOLIO: 'AUT0027', PLACA: 'AAA1111', VIN: '', NUCO: '00078', MARCA: 'VW', RESPONSABLE_VEHICULO: 'Nombre distinto', NO_EMPLEADO: 'VALLE00200' },
+        ];
+      },
+    },
+    CajasChicasService: {
+      listarResumen: (t) => {
+        if (!veHolo[t]) throw new Error(SIN_PERMISO);
+        return [{ ID_CCH: 12, RESPONSABLE: 'ISAMAR JUAREZ ATONAL', ESTATUS: 'VIGENTE', MONTO_ACTUAL: 5000, 'CORREO ELECTRONICO DE RESPONSABLE': '' },
+          { ID_CCH: 13, RESPONSABLE: 'Otra', ESTATUS: 'VIGENTE', 'CORREO ELECTRONICO DE RESPONSABLE': 'otra@ejemplo.com' }];
+      },
+    },
+  });
+  e.contexto.Permisos.esFaltaDePermiso = (err) => /No tienes acceso|Solo puedes consultar/.test(String(err && err.message));
+  // Sus otros tickets llegan a la copia al ver la lista
+  estado.lista = [ticket(901, { email: 'isamar@ejemplo.com' }), ticket(902, { email: 'isamar@ejemplo.com', idStatus: 4, nameStatus: 'Cerrado', dateClose: '2026-10-04T15:00:00.000Z' }), ticket(903)];
+  e.avanzar(2100);
+  api.listarTickets('tok-ana');
+
+  const consulta = {
+    id: 901, correo: 'ISAMAR@ejemplo.com', nombre: 'ISAMAR JUAREZ ATONAL',
+    textos: ['RIFTER unu 794 h | Alertas', 'El km es 45000 y el VIN 93Y1R5F52RJ649008. Folio aut0024 otra vez.'],
+    campos: [{ ETIQUETA: 'Placa. Nuco o VIN', VALOR: '00077' }, { ETIQUETA: 'Kilometraje', VALOR: '00078' }],
+  };
+  const c = srv.contexto('tok-ana', consulta);
+  ok(c.persona && c.persona.PUESTO === 'ANALISTA' && c.persona.NUMEROS.join() === 'HA00100,VALLE00200', 'quién es, por su correo (sin importar mayúsculas), con sus dos números');
+  const por = (lista) => lista.map((v) => v.FOLIO + ':' + v.POR).join(' ');
+  ok(por(c.vehiculos.mencionados) === 'AUT0024:placa AUT0025:VIN AUT0026:Nucco',
+    'mencionados: placa con espacios, VIN y folio en el texto; Nucco solo del campo que lo pide (' + por(c.vehiculos.mencionados) + ')');
+  ok(!c.vehiculos.mencionados.some((v) => v.FOLIO === 'AUT0027'), 'un número en un campo que no es de placa/Nucco (kilometraje) no cuenta');
+  ok(por(c.vehiculos.aCargo) === 'AUT0026:responsable AUT0027:responsable', 'a su cargo: por nombre del responsable o por cualquiera de sus números');
+  ok(c.cajas.length === 1 && c.cajas[0].ID_CCH === 12, 'sus cajas chicas (por nombre del responsable)');
+  ok(c.otrosTickets.total === 1 && c.otrosTickets.abiertos === 0 && c.otrosTickets.ultimos[0].ID === 902,
+    'sus otros tickets de la copia, sin el que está abierto (902, cerrado)');
+
+  const l = srv.contexto('tok-luis', consulta);
+  ok(l.persona && l.vehiculos === null && l.cajas === null && l.otrosTickets === null,
+    'sin permiso de Vehículos, Caja Chica ni Tickets: esas partes salen null (no truena ni sale vacío)');
+
+  const nada = srv.contexto('tok-ana', { id: 5, correo: 'nadie@ejemplo.com', textos: ['sin nada'] });
+  ok(nada.persona === null && nada.vehiculos.mencionados.length === 0 && nada.vehiculos.aCargo.length === 0 && nada.cajas.length === 0,
+    'alguien que no está en CH ni tiene nada: todo vacío');
+}
+
+// ---------------------------------------------------------------------------------- 4
+console.log('\n4. Guardados');
 {
   const { e, api, srv } = entorno();
   ok(Array.isArray(srv.listarGuardados('tok-ana')) && srv.listarGuardados('tok-ana').length === 0, 'sin hoja todavía: lista vacía, sin tronar');

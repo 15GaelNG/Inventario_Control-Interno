@@ -209,6 +209,117 @@ const HelpdeskService = (function () {
     return r;
   }
 
+  // ------------------------------------------------------------------ contexto del solicitante
+
+  /** Lo de un módulo, o null si la persona no lo puede ver (otro error sí truena) */
+  function siPuede_(fn) {
+    try {
+      return fn();
+    } catch (err) {
+      if (Permisos.esFaltaDePermiso(err)) return null;
+      throw err;
+    }
+  }
+
+  // Sin acentos, en mayúsculas y solo letras y números: "unu-794-h" y "UNU 794H" son UNU794H
+  const clave_ = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const mezcla_ = (s) => /[A-Z]/.test(s) && /[0-9]/.test(s);   // placa, VIN, folio: letras Y números
+  const MAX_TEXTO = 20000;
+
+  /**
+   * Las claves que un texto podría citar: cada palabra y cada 2 o 3 palabras seguidas juntas
+   * ("UNU 794 H" → UNU794H). Así una placa escrita con guiones o espacios se encuentra, sin
+   * buscarla dentro de otras palabras (que daría falsos positivos).
+   */
+  function clavesDe_(texto) {
+    const palabras = String(texto || '').slice(0, MAX_TEXTO).split(/[^A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ]+/).map(clave_).filter(Boolean);
+    const claves = new Set();
+    for (let i = 0; i < palabras.length; i++) {
+      let junta = '';
+      for (let n = 0; n < 3 && i + n < palabras.length; n++) {
+        junta += palabras[i + n];
+        if (junta.length >= 5) claves.add(junta);
+      }
+    }
+    return claves;
+  }
+
+  /**
+   * Lo que sabemos en Control Interno de quien pidió un ticket, para el panel del ticket en la
+   * Bandeja. Una sola llamada y NINGUNA al helpdesk: todo sale de listas que ya están en caché.
+   * Cada parte sale solo si la persona puede verla (si no, null y la pantalla no la pinta):
+   *   persona       de la lista de Capital Humano, por su correo (puesto, número, jefe)
+   *   vehiculos     { mencionados, aCargo }: los que el ticket cita (placa, VIN o folio en el
+   *                 texto; el Nucco solo en un campo del formulario que lo pida, porque en texto
+   *                 libre un número de 5 cifras puede ser un kilometraje) y los que tiene a cargo
+   *   cajas         sus cajas chicas (responsable)
+   *   otrosTickets  sus otros tickets en la copia APP_HELPDESK (quien lee Tickets)
+   * consulta: { id, correo, nombre, textos: [título, descripción, mensajes…], campos: [{ ETIQUETA, VALOR }] }
+   */
+  function contexto(token, consulta) {
+    Auth.validarSesion(token);
+    const q = consulta || {};
+    const correo = String(q.correo || '').trim().toLowerCase();
+    const nombre = CapitalHumano.nombreComparable(String(q.nombre || ''));
+    const idTicket = Number(q.id) || 0;
+
+    // Quién es: sus empleos en la lista de CH (puede tener más de un número)
+    const empleos = (CapitalHumano.listarColaboradores(token) || []).filter((c) =>
+      (correo && String(c.CORREO || '').trim().toLowerCase() === correo) ||
+      (!correo && nombre && CapitalHumano.nombreComparable(c.NOMBRE) === nombre));
+    const numeros = new Set(empleos.map((c) => clave_(c.NO_EMPLEADO)).filter(Boolean));
+    const nombres = new Set(empleos.map((c) => CapitalHumano.nombreComparable(c.NOMBRE)).concat(nombre ? [nombre] : []));
+    const persona = empleos.length ? Object.assign({}, empleos[0], { NUMEROS: Array.from(new Set(empleos.map((c) => c.NO_EMPLEADO).filter(Boolean))) }) : null;
+    const esSuyo = (numero, responsable) => (numero && numeros.has(clave_(numero))) ||
+      (!!responsable && nombres.has(CapitalHumano.nombreComparable(responsable)));
+
+    // Lo que cita el ticket
+    const textos = (Array.isArray(q.textos) ? q.textos : []).map(String).join('\n');
+    const enTexto = clavesDe_(textos);
+    const campos = Array.isArray(q.campos) ? q.campos.slice(0, 60) : [];
+    const enCampos = new Set();
+    campos.filter((c) => /placa|nuco|nucco|vin|serie/i.test(String(c.ETIQUETA || ''))).forEach((c) => clavesDe_(c.VALOR).forEach((k) => enCampos.add(k)));
+
+    const vehiculos = siPuede_(() => {
+      const lista = VehiculosService.listarBasico(token) || [];
+      const ficha = (v, por) => ({
+        FOLIO: v.FOLIO, NUCO: v.NUCO, PLACA: v.PLACA, MARCA: v.MARCA, LINEA: v.LINEA_VEHICULO, MODELO: v.MODELO,
+        RESPONSABLE: v.RESPONSABLE_VEHICULO, DEPARTAMENTO: v.DEPARTAMENTO, POR: por,
+      });
+      const mencionados = [];
+      lista.forEach((v) => {
+        const cita = [['placa', v.PLACA], ['VIN', v.VIN], ['folio', v.FOLIO]].find(([, valor]) => {
+          const k = clave_(valor);
+          return k.length >= 5 && mezcla_(k) && (enTexto.has(k) || enCampos.has(k));
+        }) || (clave_(v.NUCO) && enCampos.has(clave_(v.NUCO)) ? ['Nucco'] : null);
+        if (cita) mencionados.push(ficha(v, cita[0]));
+      });
+      const aCargo = lista.filter((v) => esSuyo(v.NO_EMPLEADO, v.RESPONSABLE_VEHICULO)).map((v) => ficha(v, 'responsable'));
+      return { mencionados: mencionados.slice(0, 10), aCargo: aCargo.slice(0, 20) };
+    });
+
+    const cajas = siPuede_(() => (CajasChicasService.listarResumen(token) || [])
+      .filter((c) => (correo && String(c['CORREO ELECTRONICO DE RESPONSABLE'] || '').trim().toLowerCase() === correo) || esSuyo('', c.RESPONSABLE))
+      .slice(0, 10)
+      .map((c) => ({ ID_CCH: c.ID_CCH, RESPONSABLE: c.RESPONSABLE, ESTATUS: c['ESTATUS'] || '', MONTO_ACTUAL: c.MONTO_ACTUAL })));
+
+    const otrosTickets = siPuede_(() => {
+      Permisos.puedeLeer(token, 'tickets');
+      if (!correo || !hoja_(false)) return { total: 0, abiertos: 0, ultimos: [] };
+      const suyos = HojaServicio.listar(HELPDESK, token).filter((t) =>
+        String(t['CORREO SOLICITANTE'] || '').trim().toLowerCase() === correo && Number(t[COL_HD]) !== idTicket);
+      const abierto = (t) => !t['FECHA CIERRE'] && !/resuelto|cerrado/i.test(String(t['ESTATUS'] || ''));
+      return {
+        total: suyos.length,
+        abiertos: suyos.filter(abierto).length,
+        // La lista ya viene de la más nueva a la más vieja (orden de HELPDESK)
+        ultimos: suyos.slice(0, 8).map((t) => ({ ID: Number(t[COL_HD]), TITULO: t['TITULO'], ESTATUS: t['ESTATUS'], FECHA: t['FECHA CREACION'], FORMULARIO: t['FORMULARIO'] })),
+      };
+    });
+
+    return { persona: persona, vehiculos: vehiculos, cajas: cajas, otrosTickets: otrosTickets };
+  }
+
   /**
    * A qué módulo NUESTRO corresponde cada formulario del helpdesk (idForm → id de Modulos.gs), para
    * enseñarlo en Formularios y ligar un ticket con su registro. PROPUESTA del 07/10/2026 a partir
@@ -238,5 +349,5 @@ const HelpdeskService = (function () {
     });
   }
 
-  return { sincronizar_, listarGuardados, registrarEnTickets, registrados, catalogo, ENCABEZADOS, MODULO_POR_FORMULARIO };
+  return { sincronizar_, listarGuardados, registrarEnTickets, registrados, contexto, catalogo, ENCABEZADOS, MODULO_POR_FORMULARIO };
 })();

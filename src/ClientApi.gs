@@ -272,6 +272,10 @@ function apiHelpdeskRegistrarEnTickets(token, idTicket, datos) {
   Config.exigirEncendido('helpdesk');
   return HelpdeskService.registrarEnTickets(token, idTicket, datos);
 }
+function apiHelpdeskContexto(token, consulta) {
+  Config.exigirEncendido('helpdesk');
+  return JSON.stringify(HelpdeskService.contexto(token, consulta));
+}
 function apiHelpdeskGuardados(token) {
   Config.exigirEncendido('helpdesk');
   return JSON.stringify(HelpdeskService.listarGuardados(token));

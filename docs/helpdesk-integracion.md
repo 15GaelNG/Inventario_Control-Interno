@@ -115,6 +115,28 @@ Reglas:
 - Después, lista de tickets con filtros por estatus y el detalle al dar clic.
 - Un enlace "Abrir en helpdesk" en cada ticket, para lo que no replicamos.
 
+### "En Control Interno": el contexto de quien pide el ticket
+
+En el panel del ticket, lo que sabemos de esa persona en nuestros módulos
+(`HelpdeskService.contexto`, `apiHelpdeskContexto`). Es una llamada a nuestro servidor y
+**ninguna al helpdesk**: todo sale de listas que ya están en caché.
+
+- **Quién es:** puesto, número(s) de empleado y jefe directo, de la lista de Capital Humano,
+  buscado por su correo.
+- **Vehículos:** los que el ticket cita y los que tiene a cargo (por cualquiera de sus números o
+  por el nombre del responsable), con "Ver" a su ficha. Se busca la placa, el VIN o el folio en el
+  título, la conversación y las respuestas del formulario, también escritos con guiones o espacios
+  ("UNU-794-H"). El **Nucco solo se toma de un campo del formulario que lo pida** (Placa, Nuco o
+  VIN): en texto libre un número de 5 cifras puede ser un kilometraje o un monto. Al abrir las
+  respuestas del formulario (F) se vuelve a preguntar con ellas.
+- **Caja chica:** las suyas (por correo o nombre del responsable), con "Ver".
+- **Sus otros tickets:** de la copia `APP_HELPDESK`, por su correo; un clic los abre en la Bandeja.
+
+Cada parte sale solo si la persona puede ver ese módulo (Vehículos o su familia, Caja Chica o
+Arqueos, Tickets). Sin permiso, el servidor da `null` y la pantalla no la pinta; "Ver" sale solo
+si además puede abrir la ficha. Pendiente: **Líneas** (las líneas a su nombre), con cuidado de
+los campos secretos (PIN, contraseñas).
+
 ## Relación con nuestra hoja `TICKETS`
 
 `TicketsService.gs` maneja una bitácora propia de atención (hoja `TICKETS`). **Su columna

@@ -354,6 +354,20 @@
         { id: 1646, etiqueta: 'Placa, Nuco o VIN', tipo: 'text', opciones: [] }] },
       { id: 63, nombre: 'Solicitud - Análisis de Datos', modulo: '', moduloEtiqueta: '', campos: [] }],
     apiHelpdeskGuardados: JSON.stringify([]),
+    // El panel "En Control Interno" del ticket (HelpdeskService.contexto)
+    apiHelpdeskContexto: (token, q) => JSON.stringify({
+      persona: { NOMBRE: q.nombre, PUESTO: 'ANALISTA DE COMPRAS', NUMEROS: ['HA00100'], JEFE_DIRECTO: 'JEFA DE PRUEBA', DEPARTAMENTO: 'COMPRAS' },
+      vehiculos: {
+        mencionados: [{ FOLIO: 'AUT0024', PLACA: 'UNU794H', MARCA: 'PEUGEOT', LINEA: 'RIFTER', MODELO: 2023, POR: 'placa' }],
+        aCargo: [{ FOLIO: 'AUT0024', PLACA: 'UNU794H', MARCA: 'PEUGEOT', LINEA: 'RIFTER', MODELO: 2023, POR: 'responsable' },
+          { FOLIO: 'AUT0031', PLACA: 'GGY886F', MARCA: 'CHEVROLET', LINEA: 'BEAT', MODELO: 2019, POR: 'responsable' }],
+      },
+      cajas: [{ ID_CCH: 12, RESPONSABLE: q.nombre, ESTATUS: 'VIGENTE', MONTO_ACTUAL: 5000 }],
+      otrosTickets: { total: 3, abiertos: 1, ultimos: [
+        { ID: 103512, TITULO: 'NIP para la unidad nueva', ESTATUS: 'Abierto', FECHA: hace(5).slice(0, 10) },
+        { ID: 102877, TITULO: 'Incremento de combustible septiembre', ESTATUS: 'Cerrado', FECHA: hace(22).slice(0, 10) },
+        { ID: 101004, TITULO: 'Alta de holograma', ESTATUS: 'Resuelto', FECHA: hace(60).slice(0, 10) }] },
+    }),
   };
 
   // ---------- google.script.run de mentira ----------
