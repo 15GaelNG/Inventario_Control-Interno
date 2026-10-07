@@ -181,6 +181,15 @@
       return '<span class="estatus-appsheet" style="color:#2ba02b"><i data-lucide="circle-check" class="ico"></i> VIGENTE</span>';
     }
 
+    // Mismos colores/íconos que badgeEstatusCaja, para el filtro rápido por Estatus
+    // (pintarEstatusCch) -- orden: vigente primero, luego en proceso, luego cerrada.
+    const ORDEN_ESTATUS_CCH = ['VIGENTE', 'EN PROCESO DE CIERRE', 'CERRADA'];
+    const ESTILO_ESTATUS_CCH = {
+      'VIGENTE': { icono: 'circle-check', color: '#2ba02b' },
+      'EN PROCESO DE CIERRE': { icono: 'clock', color: '#e0a020' },
+      'CERRADA': { icono: 'circle-x', color: '#e02020' },
+    };
+
     // ---------- Ficha de una caja chica: pantalla propia dentro del módulo (oculta la
     // lista, muestra esto), mismo patrón que Vehículos — migas para volver, encabezado
     // con ícono/estatus, y pestañas con lo relacionado (Arqueos, Cambios de Monto). ----------
@@ -532,6 +541,45 @@
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
 
+    // ---- Filtro rápido por Estatus: misma franja de íconos que ya usan Líneas Telefónicas
+    // (por Tipo) y Vehículos (por Clase) -- el CSS es genérico (.filtro-tipo*, styles.html).
+    let filtrosActualesCch = {};
+    function marcarEstatusCch() {
+      const cont = document.getElementById('cch-filtro-estatus');
+      if (!cont) return;
+      const f = filtrosActualesCch.ESTATUS;
+      const elegidos = f && f.valores && f.valores.length ? f.valores : null;
+      cont.querySelectorAll('.filtro-tipo-item').forEach((b) => {
+        const activo = b.dataset.estatus === '*' ? !elegidos : !!(elegidos && elegidos.indexOf(b.dataset.estatus) >= 0);
+        b.classList.toggle('activo', activo);
+        b.setAttribute('aria-pressed', String(activo));
+      });
+    }
+    function pintarEstatusCch(filas) {
+      const cont = document.getElementById('cch-filtro-estatus');
+      if (!cont) return;
+      const conteo = {};
+      filas.forEach((c) => { const e = String(c.ESTATUS || '').toUpperCase(); conteo[e] = (conteo[e] || 0) + 1; });
+      const estatus = ORDEN_ESTATUS_CCH.concat(Object.keys(conteo).filter((e) => ORDEN_ESTATUS_CCH.indexOf(e) < 0 && e));
+      const fila = (valor, icono, color, nombre, n) =>
+        '<button type="button" class="filtro-tipo-item' + (n ? '' : ' filtro-tipo-item-vacio') + '" data-estatus="' + escaparHtml(valor) + '" aria-pressed="false" title="' + escaparHtml(nombre + ' · ' + n) + '">' +
+          '<span class="filtro-tipo-ico" style="color:' + color + '">' + Iconos.svg(icono) + '</span>' +
+          '<span class="filtro-tipo-nombre">' + escaparHtml(nombre) + '</span><span class="filtro-tipo-num">' + n + '</span></button>';
+      cont.innerHTML = '<div class="filtro-tipo-panel"><div class="filtro-tipo-titulo">Estatus</div>' +
+        fila('*', 'layers', 'var(--color-text-muted)', 'Todas', filas.length) +
+        estatus.map((e) => {
+          const estilo = ESTILO_ESTATUS_CCH[e] || { icono: 'circle', color: 'var(--color-text-muted)' };
+          return fila(e, estilo.icono, estilo.color, e, conteo[e] || 0);
+        }).join('') + '</div>';
+      marcarEstatusCch();
+    }
+    document.getElementById('cch-filtro-estatus').addEventListener('click', (ev) => {
+      const b = ev.target.closest('.filtro-tipo-item');
+      if (!b) return;
+      const e = b.dataset.estatus;
+      tabla.setFiltro('ESTATUS', (e === '*' || b.classList.contains('activo')) ? null : { valores: [e] });
+    });
+
     const KPI_FILTRO_CCH = { 'cch-stat-vigentes': 'VIGENTE', 'cch-stat-proceso-cierre': 'EN PROCESO DE CIERRE', 'cch-stat-cerradas': 'CERRADA' };
     const tileTotalCch = document.getElementById('cch-stat-total').closest('.stat-tile');
     tileTotalCch.classList.add('stat-tile-clickable');
@@ -545,6 +593,8 @@
       });
     });
     function marcarKpiActivo(filtros) {
+      filtrosActualesCch = filtros || {};
+      marcarEstatusCch();
       const valores = filtros.ESTATUS && filtros.ESTATUS.valores;
       tileTotalCch.classList.toggle('stat-tile-activo', !valores);
       Object.keys(KPI_FILTRO_CCH).forEach((id) => {
@@ -575,6 +625,7 @@
       }
 
       actualizarKpisCch(todasLasCajas);
+      pintarEstatusCch(todasLasCajas);
       tabla.setDatos(todasLasCajas);
     }
     // Pinta al instante con lo guardado; si del servidor llega algo distinto, se vuelve a pintar (api.html)
