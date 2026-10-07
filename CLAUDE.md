@@ -242,8 +242,8 @@ cada llamada). Por eso:
 
 - Rama de trabajo: `jorge`. Nunca hacer push a `master` sin que se pida
   explícitamente.
-- Verificación estándar antes de dar por bueno un cambio: `npx clasp push`,
-  luego jalar a un directorio temporal apuntando al mismo scriptId de DEV
-  (`1qE6UYn-ay4jZYRxiBOnmDwiE_iKWVtBSuiPEaz_PjArz0lf0YcfojqC-`) para
-  confirmar que se desplegó bien, y revisar sintaxis de cada `<script>` con
-  `node -e "new Function(js)"` antes de commitear.
+- Verificación estándar antes de dar por bueno un cambio: `npm run push` (no
+  `clasp push` a mano — ver "Se sube comprimido" arriba; usa el scriptId de DEV
+  de `.clasp.json`, `1qE6UYn-ay4jZYRxiBOnmDwiE_iKWVtBSuiPEaz_PjArz0lf0YcfojqC-`,
+  y ya baja y compara lo que quedó allá), y revisar sintaxis de cada `<script>`
+  con `node -e "new Function(js)"` antes de commitear.

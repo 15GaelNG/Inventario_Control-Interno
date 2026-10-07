@@ -1329,4 +1329,28 @@
   @media (prefers-reduced-motion: reduce) {
     .filtro-tipo-panel, .filtro-tipo-titulo, .filtro-tipo-nombre, .filtro-tipo-num { transition-duration: 0s; }
   }
+
+  /* Asistente flotante (el muñeco de Control Interno): esquina inferior derecha, en TODA la
+     app (usuario, 7-oct) -- no solo donde ya hay un tour. z-index por debajo de .modal-backdrop
+     (500) a propósito: con un modal abierto se tapa solo, no estorba encima de sus botones.
+     bottom:92px (no 20px): .notif-toast-contenedor vive justo en esa esquina a 20px -- así no
+     se encima con un aviso de Notificar. Un respiro suave para que se note sin ser invasivo. */
+  #asistente-flotante {
+    position: fixed; right: 20px; bottom: 92px; z-index: 400;
+    width: 64px; height: 64px; padding: 0; border: 0; background: transparent; cursor: pointer;
+    animation: asistenteRespira 3.2s ease-in-out infinite;
+  }
+  #asistente-flotante img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, .3)); }
+  #asistente-flotante:hover, #asistente-flotante:focus-visible { animation-play-state: paused; transform: scale(1.08); outline: none; }
+  #asistente-flotante:active { transform: scale(.96); }
+  @keyframes asistenteRespira {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+  }
+  @media (max-width: 640px) {
+    #asistente-flotante { right: 14px; bottom: 80px; width: 52px; height: 52px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #asistente-flotante { animation: none; }
+  }
 </style>

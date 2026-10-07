@@ -646,7 +646,13 @@
     navegarA('caja-chica', 'Caja Chica');
   }
 
+  // Qué vista está montada ahora mismo -- lo usa el asistente flotante (más abajo) para saber
+  // si esta pantalla tiene un tour (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU → `tour`). Se guarda
+  // aquí, no se adivina del menú (⟵ llega igual por el historial o un enlace entre módulos).
+  let vistaActual = null;
+
   function navegarA(vista, etiqueta) {
+    vistaActual = vista;
     // Rama emmanuel: cada cambio de módulo es un paso de Atrás/Adelante (html/historial-navegador.html)
     if (typeof HistorialApp !== 'undefined') HistorialApp.alNavegar(vista, etiqueta);
     document.querySelectorAll('.nav-item, .nav-subitem').forEach((el) => {
@@ -708,7 +714,7 @@
       items: [
         { vista: 'panorama-vehiculos', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'vehiculos', plantilla: 'tpl-panorama-vehiculos', init: () => initPanoramaVehiculos() },
         { vista: 'incidencias', etiqueta: 'Incidencias', icono: 'wrench', requiere: 'incidencias', plantilla: 'tpl-incidencias', init: () => initIncidencias() },
-        { vista: 'vehiculos', etiqueta: 'Vehículos', icono: 'car', requiere: 'vehiculos', plantilla: 'tpl-vehiculos', init: () => initVehiculos() },
+        { vista: 'vehiculos', etiqueta: 'Vehículos', icono: 'car', requiere: 'vehiculos', plantilla: 'tpl-vehiculos', init: () => initVehiculos(), tour: () => iniciarTourVehiculos() },
         { vista: 'cambios-vehiculos', etiqueta: 'Cambios Vehículos', icono: 'history', requiere: 'cambios-vehiculos', plantilla: 'tpl-cambios-vehiculos', init: () => initCambiosVehiculos() },
         { vista: 'reasignaciones-vehiculares', etiqueta: 'Reasignaciones Vehiculares', icono: 'arrow-left-right', requiere: 'reasignaciones-vehiculares', plantilla: 'tpl-reasignaciones-vehiculares', init: () => initReasignacionesVehiculares() },
         { vista: 'verificaciones', etiqueta: 'Verificaciones', icono: 'badge-check', requiere: 'verificaciones', plantilla: 'tpl-verificaciones', init: () => initVerificaciones() },
@@ -1908,6 +1914,50 @@
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
 
+    // ---- Filtro rápido por Estado: misma franja de íconos de Líneas/Vehículos/Caja Chica --
+    // el CSS es genérico (.filtro-tipo*, styles.html). Mismos colores que badgeEstadoIncidencia.
+    const ORDEN_ESTADO_INC = ['ABIERTA', 'CERRADA'];
+    const ESTILO_ESTADO_INC = {
+      'ABIERTA': { icono: 'lock-open', color: 'var(--color-danger)' },
+      'CERRADA': { icono: 'circle-check', color: 'var(--color-success)' },
+    };
+    let filtrosActualesInc = {};
+    function marcarEstadoInc() {
+      const cont = document.getElementById('inc-filtro-estado');
+      if (!cont) return;
+      const f = filtrosActualesInc.ESTADO;
+      const elegidos = f && f.valores && f.valores.length ? f.valores : null;
+      cont.querySelectorAll('.filtro-tipo-item').forEach((b) => {
+        const activo = b.dataset.estado === '*' ? !elegidos : !!(elegidos && elegidos.indexOf(b.dataset.estado) >= 0);
+        b.classList.toggle('activo', activo);
+        b.setAttribute('aria-pressed', String(activo));
+      });
+    }
+    function pintarEstadoInc(filas) {
+      const cont = document.getElementById('inc-filtro-estado');
+      if (!cont) return;
+      const conteo = {};
+      filas.forEach((i) => { const e = String(i.ESTADO || '').toUpperCase(); conteo[e] = (conteo[e] || 0) + 1; });
+      const estados = ORDEN_ESTADO_INC.concat(Object.keys(conteo).filter((e) => ORDEN_ESTADO_INC.indexOf(e) < 0 && e));
+      const fila = (valor, icono, color, nombre, n) =>
+        '<button type="button" class="filtro-tipo-item' + (n ? '' : ' filtro-tipo-item-vacio') + '" data-estado="' + escaparHtml(valor) + '" aria-pressed="false" title="' + escaparHtml(nombre + ' · ' + n) + '">' +
+          '<span class="filtro-tipo-ico" style="color:' + color + '">' + Iconos.svg(icono) + '</span>' +
+          '<span class="filtro-tipo-nombre">' + escaparHtml(nombre) + '</span><span class="filtro-tipo-num">' + n + '</span></button>';
+      cont.innerHTML = '<div class="filtro-tipo-panel"><div class="filtro-tipo-titulo">Estado</div>' +
+        fila('*', 'layers', 'var(--color-text-muted)', 'Todas', filas.length) +
+        estados.map((e) => {
+          const estilo = ESTILO_ESTADO_INC[e] || { icono: 'circle', color: 'var(--color-text-muted)' };
+          return fila(e, estilo.icono, estilo.color, e, conteo[e] || 0);
+        }).join('') + '</div>';
+      marcarEstadoInc();
+    }
+    document.getElementById('inc-filtro-estado').addEventListener('click', (ev) => {
+      const b = ev.target.closest('.filtro-tipo-item');
+      if (!b) return;
+      const e = b.dataset.estado;
+      tabla.setFiltro('ESTADO', (e === '*' || b.classList.contains('activo')) ? null : { valores: [e] });
+    });
+
     const tilesKpiIncidencias = { 'stat-total': null, 'stat-abiertas': 'ABIERTA', 'stat-cerradas': 'CERRADA' };
     Object.keys(tilesKpiIncidencias).forEach((id) => {
       const tile = document.getElementById(id).closest('.stat-tile');
@@ -1918,6 +1968,8 @@
       });
     });
     function marcarKpiActivo(filtros) {
+      filtrosActualesInc = filtros || {};
+      marcarEstadoInc();
       const valores = filtros.ESTADO && filtros.ESTADO.valores;
       Object.keys(tilesKpiIncidencias).forEach((id) => {
         const valor = tilesKpiIncidencias[id];
@@ -1950,6 +2002,7 @@
       }
 
       actualizarKpis(todasLasIncidencias);
+      pintarEstadoInc(todasLasIncidencias);
       tabla.setDatos(todasLasIncidencias);
     }
     // Pinta al instante con lo guardado; si del servidor llega algo distinto, se vuelve a pintar (api.html)
@@ -3483,6 +3536,11 @@
     const tabla = DataTable.crear(document.getElementById('veh-tabla'), {
       idCampo: 'ID_VEHICULO',
       idTabla: 'vehiculos',
+      tarjetasAncho: true,   // el botón Tabla/Tarjetas también en escritorio (usuario, 7-oct)
+      buscarColumna: [   // (usuario, 7-oct)
+        { campo: 'NUCCO', placeholder: 'Buscar por Nucco…' },
+        { campo: 'SERIE_VEHICULO', placeholder: 'Buscar por Serie…' },
+      ],
       textoVacio: 'Todavía no hay vehículos registrados',
       exportar: {
         nombreArchivo: 'Vehículos',
@@ -3513,6 +3571,13 @@
         { campo: 'LINEA_VEHICULO', titulo: 'Línea', tipo: 'lista', enDetalle: false },
         { campo: 'MODELO', titulo: 'Año', tipo: 'texto', enDetalle: false },
         { campo: 'PLACA', titulo: 'Placa', tipo: 'texto', enDetalle: false },
+        // Visible por defecto (no 'visible:false' como NO_ECONOMICO/COLOR/SEDE de abajo): si
+        // se escondiera, el buscador de la tabla no la encontraría (filasFiltradas() solo busca
+        // en columnas visibles) -- el usuario busca vehículos por serie seguido (usuario, 7-oct).
+        // campo SERIE_VEHICULO (con guion bajo), no SERIE: "Vista" > columnas completas compara
+        // normalizando "_"->" " contra el encabezado real de la hoja ("SERIE VEHICULO") -- con
+        // otra clave no la reconoce como la misma y agrega una segunda columna duplicada.
+        { campo: 'SERIE_VEHICULO', titulo: 'Serie Vehículo', tipo: 'texto', enDetalle: false },
         // 'texto' (no 'lista'): ESTATUS trae varias razones de baja distintas
         // ("BAJA VEHICULAR", etc.) — contiene/no contiene "BAJA" cubre todas
         // sin tener que enumerarlas, igual que hacía el filtro de KPI de antes.
@@ -3836,6 +3901,57 @@
     }
   }
 
+  // Tour guiado de Vehículos (usuario, 7-oct): a propósito FUERA de initVehiculos (de verdad
+  // afuera, no solo con la misma sangría -- initVehiculos ya estaba cerrada arriba) para que
+  // lo pueda lanzar el asistente flotante (NAV_GRUPOS → tour) sin esperar a que el módulo esté
+  // montado. El propio Tour navega a la pestaña correcta si hace falta (paso 0, `antes`).
+  // Ver componentes/tour.html.
+  function iniciarTourVehiculos() {
+    Tour.iniciar([
+      {
+        selector: '#veh-listado .stat-row',
+        titulo: 'Totales y KPIs',
+        texto: 'Cuántos vehículos hay en cada estatus. Haz clic en cualquiera de estos números para filtrar la lista por ese valor -- otro clic lo quita.',
+        antes: () => { const t = document.querySelector('#veh-tabs [data-tab="lista"]'); if (t) t.click(); },
+      },
+      {
+        selector: '#veh-clases',
+        titulo: 'Filtro por Clase',
+        texto: 'Un ícono por cada clase de vehículo (automóvil, camioneta, camión…) con cuántos hay de cada una. Clic en uno para filtrar la tabla.',
+      },
+      {
+        selector: '#veh-tabla .dt-buscar',
+        titulo: 'Buscar en la tabla',
+        texto: 'Escribe cualquier dato -- folio, marca, departamento, nucco -- y filtra la lista al instante.',
+      },
+      {
+        selector: '#veh-tabla .dt-buscar-col',
+        titulo: 'Buscar por Nucco',
+        texto: 'Si ya sabes el Nucco exacto, este cuadro busca solo ahí, sin mezclarse con los demás datos.',
+      },
+      {
+        selector: '#veh-tabla .dt-modo',
+        titulo: 'Tabla o Tarjetas',
+        texto: 'Cambia cómo se ve la lista: tabla clásica o tarjetas, lo que se te acomode mejor.',
+      },
+      {
+        selector: '#veh-tabla .dt-btn-excel',
+        titulo: 'Exportar a Excel',
+        texto: 'Descarga la base completa -- todas las columnas y filas -- sin importar los filtros que tengas activos.',
+      },
+      {
+        selector: '#veh-tabs [data-tab="registrar"]',
+        titulo: 'Registrar',
+        texto: 'Da de alta un vehículo nuevo. El formulario va paso a paso: Vehículo, Identificación, Documentación y seguro, Accesorios y sensor, Ubicación y registro.',
+      },
+      {
+        selector: '#veh-tabla tbody tr[data-id]',
+        titulo: 'Cada vehículo',
+        texto: 'Doble clic (o toca) una fila para ver su ficha completa. El ⋮ o clic derecho trae más acciones: editar, dar de baja (una o varias a la vez) y más.',
+      },
+    ]);
+  }
+
   // ---------- Uber (usuarios autorizados) ----------
   async function initUber() {
     wireTabsSimple(document.getElementById('view-container'));
@@ -4005,6 +4121,52 @@
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
 
+    // ---- Filtro rápido por Estatus: misma franja de íconos de Líneas/Vehículos/Caja
+    // Chica/Incidencias -- el CSS es genérico (.filtro-tipo*, styles.html). Mismos colores
+    // que badgeEstatusUber.
+    const ORDEN_ESTATUS_UBER = ['ACTIVO', 'PENDIENTE', 'BAJA'];
+    const ESTILO_ESTATUS_UBER = {
+      'ACTIVO': { icono: 'circle-check', color: 'var(--color-success)' },
+      'PENDIENTE': { icono: 'clock', color: 'var(--color-primary)' },
+      'BAJA': { icono: 'ban', color: 'var(--color-danger)' },
+    };
+    let filtrosActualesUber = {};
+    function marcarEstatusUberFiltro() {
+      const cont = document.getElementById('uber-filtro-estatus');
+      if (!cont) return;
+      const f = filtrosActualesUber.ESTATUS;
+      const elegidos = f && f.valores && f.valores.length ? f.valores : null;
+      cont.querySelectorAll('.filtro-tipo-item').forEach((b) => {
+        const activo = b.dataset.estatus === '*' ? !elegidos : !!(elegidos && elegidos.indexOf(b.dataset.estatus) >= 0);
+        b.classList.toggle('activo', activo);
+        b.setAttribute('aria-pressed', String(activo));
+      });
+    }
+    function pintarEstatusUber(filas) {
+      const cont = document.getElementById('uber-filtro-estatus');
+      if (!cont) return;
+      const conteo = {};
+      filas.forEach((u) => { const e = String(u.ESTATUS || '').toUpperCase(); conteo[e] = (conteo[e] || 0) + 1; });
+      const estatus = ORDEN_ESTATUS_UBER.concat(Object.keys(conteo).filter((e) => ORDEN_ESTATUS_UBER.indexOf(e) < 0 && e));
+      const fila = (valor, icono, color, nombre, n) =>
+        '<button type="button" class="filtro-tipo-item' + (n ? '' : ' filtro-tipo-item-vacio') + '" data-estatus="' + escaparHtml(valor) + '" aria-pressed="false" title="' + escaparHtml(nombre + ' · ' + n) + '">' +
+          '<span class="filtro-tipo-ico" style="color:' + color + '">' + Iconos.svg(icono) + '</span>' +
+          '<span class="filtro-tipo-nombre">' + escaparHtml(nombre) + '</span><span class="filtro-tipo-num">' + n + '</span></button>';
+      cont.innerHTML = '<div class="filtro-tipo-panel"><div class="filtro-tipo-titulo">Estatus</div>' +
+        fila('*', 'layers', 'var(--color-text-muted)', 'Todos', filas.length) +
+        estatus.map((e) => {
+          const estilo = ESTILO_ESTATUS_UBER[e] || { icono: 'circle', color: 'var(--color-text-muted)' };
+          return fila(e, estilo.icono, estilo.color, e, conteo[e] || 0);
+        }).join('') + '</div>';
+      marcarEstatusUberFiltro();
+    }
+    document.getElementById('uber-filtro-estatus').addEventListener('click', (ev) => {
+      const b = ev.target.closest('.filtro-tipo-item');
+      if (!b) return;
+      const e = b.dataset.estatus;
+      tabla.setFiltro('ESTATUS', (e === '*' || b.classList.contains('activo')) ? null : { valores: [e] });
+    });
+
     // KPI clickeables: los valores de ESTATUS son exactos (ACTIVO/PENDIENTE/BAJA,
     // las mismas 3 opciones del <select> de Registrar), así que un filtro de
     // lista exacta basta — no hace falta la prueba "contains" que traía la
@@ -4022,6 +4184,8 @@
       });
     });
     function marcarKpiActivo(filtros) {
+      filtrosActualesUber = filtros || {};
+      marcarEstatusUberFiltro();
       const valores = filtros.ESTATUS && filtros.ESTATUS.valores;
       tileTotalUber.classList.toggle('stat-tile-activo', !valores);
       Object.keys(KPI_FILTRO_UBER).forEach((id) => {
@@ -4055,6 +4219,7 @@
       todosLosUsuarios.forEach((u) => { usuariosPorId[u.ID] = u; });
 
       actualizarKpis(todosLosUsuarios);
+      pintarEstatusUber(todosLosUsuarios);
       tabla.setDatos(todosLosUsuarios);
     }
     // Pinta al instante con lo guardado; si del servidor llega algo distinto, se vuelve a pintar (api.html)
@@ -4345,6 +4510,15 @@
   document.getElementById('btn-logout').addEventListener('click', cerrarSesion);
   document.querySelectorAll('#sidebar .nav-item[data-view]').forEach((el) => {
     el.addEventListener('click', () => navegarA(el.dataset.view));
+  });
+
+  // Asistente flotante (usuario, 7-oct): lanza el tour de la pantalla en la que estés
+  // (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU → `tour`); si esa vista todavía no tiene uno, lo avisa
+  // en vez de no hacer nada.
+  document.getElementById('asistente-flotante').addEventListener('click', () => {
+    const destino = vistaDe(vistaActual);
+    if (destino && destino.tour) { destino.tour(); return; }
+    Notificar.info('Todavía no hay un recorrido para esta pantalla -- por ahora pícame en Vehículos.');
   });
 
   /**

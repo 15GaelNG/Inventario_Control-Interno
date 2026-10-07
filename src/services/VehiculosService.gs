@@ -133,7 +133,7 @@ const VehiculosService = (function () {
    */
   const RESUMEN = Object.assign({}, VEHICULOS, {
     columnas: ['ID', 'FOLIO', 'NUCCO', 'DEPARTAMENTO', 'NO ECONOMICO', 'MARCA', 'CLASE',
-      'LINEA VEHICULO', 'MODELO', 'COLOR', 'PLACA', 'SEDE', 'ESTATUS', 'FECHA REGISTRO SISTEMA CI'],
+      'LINEA VEHICULO', 'MODELO', 'COLOR', 'PLACA', 'SERIE VEHICULO', 'SEDE', 'ESTATUS', 'FECHA REGISTRO SISTEMA CI'],
     incluir: (r) => !!r['FOLIO'],
     fila: (r) => ({
       ID_VEHICULO: r['ID'],
@@ -147,6 +147,7 @@ const VehiculosService = (function () {
       MODELO: r['MODELO'] || '',
       COLOR: r['COLOR'] || '',
       PLACA: r['PLACA'] || '',
+      SERIE_VEHICULO: r['SERIE VEHICULO'] || '',
       SEDE: r['SEDE'] || '',
       ESTATUS: r['ESTATUS'] || '',
       FECHA_REGISTRO: r['FECHA REGISTRO SISTEMA CI'] || '',

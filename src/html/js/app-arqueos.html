@@ -100,24 +100,27 @@
     // se llenan por JS con el catálogo real (apiListarAuditItems).
     // mostrarSiCampo/mostrarSiValor: no aparecen (ni deshabilitados) hasta que
     // "¿Se realiza auditoría?" sea SI — vista más limpia cuando la respuesta es NO.
-    { grupo: 'Auditoría', clave: 'AUDIT_01_Facturas_Pendientes', etiqueta: 'Facturas pendientes', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
-    { grupo: 'Auditoría', clave: 'AUDIT_02_Folios_Rechazados', etiqueta: 'Folios rechazados', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
-    { grupo: 'Auditoría', clave: 'AUDIT_03_Folios_No_Reembolsados', etiqueta: 'Folios no reembolsados', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
-    { grupo: 'Auditoría', clave: 'AUDIT_04_Folios_Errores_Captura', etiqueta: 'Folios con errores de captura', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
-    { grupo: 'Auditoría', clave: 'AUDIT_05_Gastos_No_Capturados', etiqueta: 'Gastos no capturados', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
-    { grupo: 'Auditoría', clave: 'AUDIT_06_Seguimiento_No_Facturados', etiqueta: 'Seguimiento a no facturados', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
-    { grupo: 'Auditoría', clave: 'AUDIT_07_Vales_Rosas', etiqueta: 'Vales rosas', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
-    { grupo: 'Auditoría', clave: 'AUDIT_08_Comprobante_Transferencia', etiqueta: 'Comprobante de transferencia', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
-    { grupo: 'Auditoría', clave: 'AUDIT_09_Transferencias_No_Enviadas', etiqueta: 'Transferencias no enviadas', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
-    { grupo: 'Auditoría', clave: 'AUDIT_10_Gastos_No_Deducibles', etiqueta: 'Gastos no deducibles', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
-    { grupo: 'Auditoría', clave: 'AUDIT_11_Sobrante_Dinero', etiqueta: 'Sobrante de dinero', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
-    { grupo: 'Auditoría', clave: 'AUDIT_12_Faltante_Dinero_1', etiqueta: 'Faltante de dinero', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
-    { grupo: 'Auditoría', clave: 'AUDIT_13_Prestamo_Dinero', etiqueta: 'Préstamo de dinero', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
-    { grupo: 'Auditoría', clave: 'AUDIT_14_Cuenta_Para_CCH', etiqueta: 'Cuenta exclusiva para CCH', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
-    { grupo: 'Auditoría', clave: 'AUDIT_15_Cambio_Titular', etiqueta: 'Cambio de titular', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
-    { grupo: 'Auditoría', clave: 'AUDIT_16_Gastos_No_Permitioos', etiqueta: 'Gastos no permitidos', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
-    { grupo: 'Auditoría', clave: 'AUDIT_17_Incidencias_contempladas', etiqueta: 'Incidencias contempladas', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
-    { grupo: 'Auditoría', clave: 'CALIFICACION_AUDITORIA_FINAL', etiqueta: 'Calificación final', tipo: 'text', soloLectura: true, placeholder: '0%', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    // Etiquetas completas, iguales a como se veían en AppSheet (usuario, 7-oct: la versión
+    // corta confundía al usuario final) -- el texto corto que tenían antes se queda solo en
+    // la `clave` (nombre interno/columna), no en lo que se ve.
+    { grupo: 'Auditoría', clave: 'AUDIT_01_Facturas_Pendientes', etiqueta: 'Facturas pendientes de registrar en el sistema de CPP', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_02_Folios_Rechazados', etiqueta: 'Seguimiento de folios rechazados en el sistema de CPP', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_03_Folios_No_Reembolsados', etiqueta: 'Folios no Reembolsados por falta de seguimiento', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_04_Folios_Errores_Captura', etiqueta: 'Folios con errores de captura (panel equivocado, servicio/partida, insumo, entre otros)', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_05_Gastos_No_Capturados', etiqueta: 'Gastos no capturados sin seguimiento', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_06_Seguimiento_No_Facturados', etiqueta: 'Seguimiento a tickets que no han podido facturarse', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_07_Vales_Rosas', etiqueta: 'Vales rosas sin nombre completo, firma, fecha o cualquier dato que no se haya llenado', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_08_Comprobante_Transferencia', etiqueta: 'Comprobantes de transferencias sin colocar en concepto "Caja Chica" o "CCH" y descripción del motivo de la transferencia', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_09_Transferencias_No_Enviadas', etiqueta: 'Transferencias NO enviadas para confirmación por WhatsApp o correo electrónico', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_10_Gastos_No_Deducibles', etiqueta: 'Gastos NO deducibles rezagados mayor a un mes', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_11_Sobrante_Dinero', etiqueta: 'Sobrante de dinero en efectivo y/o cuenta bancaria a partir de $20', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_12_Faltante_Dinero_1', etiqueta: 'Faltante de dinero a partir de $1', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_13_Prestamo_Dinero', etiqueta: 'Préstamo de dinero entre cajas chicas', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_14_Cuenta_Para_CCH', etiqueta: 'Cuenta o apartado bancario exclusivo para caja chica', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_15_Cambio_Titular', etiqueta: 'Cambio de titular de caja chica sin previo aviso a Control Interno (Acta Administrativa a los involucrados)', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_16_Gastos_No_Permitioos', etiqueta: 'Gastos NO permitidos por Caja Chica sin autorización', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'AUDIT_17_Incidencias_contempladas', etiqueta: 'Incidencias que no se tengan contempladas en el presente tabulador, si se detecta que no se cuenta con una buena administración o mal uso de la caja chica', tipo: 'select', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
+    { grupo: 'Auditoría', clave: 'CALIFICACION_AUDITORIA_FINAL', etiqueta: 'Calificación final auditoria', tipo: 'text', soloLectura: true, placeholder: '0%', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
     { grupo: 'Auditoría', clave: 'OBSERVACIONES FINALES', etiqueta: 'Observaciones finales', tipo: 'text', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
 
     { grupo: 'Firmas y evidencia', clave: 'CUENTA CON FIRMA RESPONSABLE', etiqueta: 'Cuenta con firma del responsable', tipo: 'select', opciones: ['SI', 'NO'] },
@@ -147,6 +150,14 @@
     // ArqueosService.generarPdfArqueo_) a partir de la plantilla F-CI03-009.
     { grupo: 'Firmas y evidencia', clave: 'ESTADO PDF', etiqueta: 'Estado del PDF', tipo: 'text', soloLectura: true, placeholder: 'Se genera solo al guardar' },
     { grupo: 'Firmas y evidencia', clave: 'FORMATO ARQUEO', etiqueta: 'Formato de arqueo (PDF)', tipo: 'file', soloLectura: true },
+
+    // Apartado al final, aparte (usuario, 7-oct) -- columna agregada a mano en la hoja
+    // (ESTATUS ARQUEO). Sin valorPorDefecto/bloqueadoAlCrear a propósito: se puede cambiar
+    // libremente en cualquier momento, no solo al dar de alta.
+    {
+      grupo: 'Estatus', clave: 'ESTATUS ARQUEO', etiqueta: 'Estado del actual arqueo: ¿Cuenta con información pendiente?', tipo: 'select',
+      opciones: ['COMPLETO', 'PENDIENTE'],
+    },
   ];
 
   /** Genera los <div class="field"> agrupados por sección para un formulario de arqueo.
@@ -159,6 +170,19 @@
     return CamposHoja.html(CAMPOS_ARQUEO, { prefijo, soloGrupos });
   }
 
+  // Top-level a propósito (no dentro de initArqueos): lo usa también la ficha de Caja Chica
+  // (app-cajachica.html, pestaña Arqueos), otro <script> que comparte este mismo scope global.
+  // En blanco (registros de antes de que existiera la columna) se ve como COMPLETO -- la
+  // mayoría de lo que ya estaba ya se había terminado, PENDIENTE es la excepción que alguien
+  // tiene que marcar a mano. Mismo patrón que badgeEstatusCaja (app-cajachica.html).
+  function badgeEstatusArqueo(estatus) {
+    const valor = String(estatus || '').toUpperCase();
+    if (valor === 'PENDIENTE') {
+      return '<span class="badge-estado pendiente"><i data-lucide="clock" class="ico"></i> Pendiente</span>';
+    }
+    return '<span class="badge-estado activo"><i data-lucide="circle-check" class="ico"></i> Completo</span>';
+  }
+
   /** Agrupa los 9 "grupo" de CAMPOS_ARQUEO en 5 pasos, mismo patrón visual que
    *  el wizard de Inspección Vehicular (chips + Atrás/Siguiente). */
   const PASOS_ARQUEO = [
@@ -167,6 +191,7 @@
     { titulo: 'Gastos', grupos: ['Totales de gasto'] },
     { titulo: 'Auditoría', grupos: ['Auditoría'] },
     { titulo: 'Firmas y evidencia', grupos: ['Firmas y evidencia'] },
+    { titulo: 'Estatus', grupos: ['Estatus'] },
   ];
 
   /**
@@ -473,10 +498,12 @@
       'TOTAL CAJA CHICA CON FACTURAS (PENDIENTES)', 'TOTAL VIATICOS CON FACTURAS (PENDIENTES)',
       'TOTAL CAJA CHICA NO DEDUCIBLES (PENDIENTES)', 'TOTAL VIATICOS NO DEDUCIBLES (PENDIENTES)',
     ].reduce((acc, clave) => acc + val(clave), 0);
-    // Subtotal de TODO el grupo "Totales de gasto" (los 8 de arriba + Otros),
-    // antes de sumarle Efectivo/Disponible/Cheques para el Total general.
-    const subtotalGastos = sumaGastos + val('OTROS');
-    const totalGeneral = totalEfectivo + val('DISPONIBLE CUENTA BANCARIA') + val('TOTAL CHEQUES') + subtotalGastos;
+    // Subtotal de TODO el grupo "Totales de gasto" (los 8 de arriba + Otros + Cheques --
+    // usuario, 7-oct: el total de cheques no se sumaba en ningún lado, ahora entra aquí),
+    // antes de sumarle Efectivo/Disponible para el Total general. Mismo total final de
+    // siempre (Cheques ya no se suma aparte, para no contarlo dos veces).
+    const subtotalGastos = sumaGastos + val('OTROS') + val('TOTAL CHEQUES');
+    const totalGeneral = totalEfectivo + val('DISPONIBLE CUENTA BANCARIA') + subtotalGastos;
 
     const montoCajaEl = document.getElementById(prefijo + '-' + slugCampo('MONTO CAJA'));
     const montoCaja = montoCajaEl ? Number(montoCajaEl.dataset.valor) || 0 : 0;
@@ -858,6 +885,7 @@
       alTocarFila: (a) => tabla.abrirDetalle(String(a.ID)),
       columnas: [
         { campo: 'ID', titulo: 'ID Arqueo', tipo: 'texto', fijada: true, enDetalle: false },
+        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', render: (v) => badgeEstatusArqueo(v), enDetalle: false },
         { campo: 'ID_CCH', titulo: 'ID CCH', tipo: 'texto', enDetalle: false },
         { campo: 'RESPONSABLE', titulo: 'Responsable', tipo: 'texto', enDetalle: false },
         { campo: 'TIPO_ARQUEO', titulo: 'Tipo', tipo: 'lista', enDetalle: false },
@@ -884,20 +912,28 @@
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
 
-    // Solo Total/Con diferencia son "categorías" clickeables — Calificación
+    // Total/Con diferencia/Pendientes son "categorías" clickeables — Calificación
     // promedio es un promedio, no algo que se pueda filtrar como categoría.
     const tileTotalArq = document.getElementById('arq-stat-total').closest('.stat-tile');
     const tileDiferenciasArq = document.getElementById('arq-stat-diferencias').closest('.stat-tile');
-    [tileTotalArq, tileDiferenciasArq].forEach((t) => t.classList.add('stat-tile-clickable'));
-    tileTotalArq.addEventListener('click', () => tabla.setFiltro('DIFERENCIA', null));
+    const tilePendientesArq = document.getElementById('arq-stat-pendientes').closest('.stat-tile');
+    [tileTotalArq, tileDiferenciasArq, tilePendientesArq].forEach((t) => t.classList.add('stat-tile-clickable'));
+    // "Total" limpia los dos filtros de categoría, no solo el de diferencia.
+    tileTotalArq.addEventListener('click', () => { tabla.setFiltro('DIFERENCIA', null); tabla.setFiltro('ESTATUS', null); });
     tileDiferenciasArq.addEventListener('click', () => {
       const yaActivo = tileDiferenciasArq.classList.contains('stat-tile-activo');
       tabla.setFiltro('DIFERENCIA', yaActivo ? null : { op: '!=', v1: 0 });
     });
+    tilePendientesArq.addEventListener('click', () => {
+      const yaActivo = tilePendientesArq.classList.contains('stat-tile-activo');
+      tabla.setFiltro('ESTATUS', yaActivo ? null : { valores: ['PENDIENTE'] });
+    });
     function marcarKpiActivo(filtros) {
       const f = filtros.DIFERENCIA;
-      tileTotalArq.classList.toggle('stat-tile-activo', !f);
+      const e = filtros.ESTATUS;
+      tileTotalArq.classList.toggle('stat-tile-activo', !f && !e);
       tileDiferenciasArq.classList.toggle('stat-tile-activo', !!(f && f.op === '!=' && f.v1 === 0));
+      tilePendientesArq.classList.toggle('stat-tile-activo', !!(e && e.valores && e.valores.indexOf('PENDIENTE') >= 0));
       actualizarKpis(tabla.getFiltradas());
     }
 
@@ -908,6 +944,8 @@
       document.getElementById('arq-stat-calificacion').textContent = Math.round(promedio * 100) / 100 + '%';
       document.getElementById('arq-stat-diferencias').textContent =
         filas.filter((a) => (Number(a.DIFERENCIA) || 0) !== 0).length;
+      document.getElementById('arq-stat-pendientes').textContent =
+        filas.filter((a) => String(a.ESTATUS || '').toUpperCase() === 'PENDIENTE').length;
     }
 
     async function cargar() {

@@ -1,0 +1,186 @@
+<style>
+  /* El "foco" es el propio elemento resaltado: su box-shadow con spread gigante (9999px) pinta
+     el oscurecido de toda la pantalla sin necesitar un overlay aparte -- el truco de
+     Intro.js/Shepherd/Driver.js. z-index alto lo saca por encima de todo lo demás. */
+  .tour-resaltado {
+    position: relative !important; z-index: 9998 !important; border-radius: 10px;
+    box-shadow: 0 0 0 4px var(--color-accent), 0 0 0 9999px rgba(6, 38, 58, .68) !important;
+    transition: box-shadow .15s ease;
+  }
+  .tour-tooltip {
+    position: fixed; z-index: 9999; width: 320px; max-width: calc(100vw - 24px);
+    background: var(--color-surface); border-radius: 14px; box-shadow: var(--shadow-lg);
+    padding: 54px 18px 16px; font-size: 13.5px; color: var(--color-text);
+  }
+  /* El muñeco de Control Interno, asomado arriba de la tarjeta -- como si fuera quien guía el
+     tour (usuario, 7-oct). pointer-events:none: es decoración, no debe robar clics. */
+  .tour-mascota {
+    position: absolute; top: -34px; left: 14px; width: 76px; height: 76px; object-fit: contain;
+    filter: drop-shadow(0 6px 12px rgba(0, 0, 0, .28)); pointer-events: none;
+  }
+  .tour-paso {
+    font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--color-accent); margin-bottom: 4px;
+  }
+  .tour-titulo { margin: 0 0 6px; font-size: 15px; }
+  .tour-texto { margin: 0 0 14px; color: var(--color-text-muted); line-height: 1.5; }
+  .tour-acciones { display: flex; align-items: center; gap: 8px; }
+  .tour-acciones .tour-espacio { flex: 1; }
+  .tour-acciones button { padding: 7px 12px; font-size: 12.5px; }
+  @media (max-width: 640px) {
+    .tour-tooltip { width: auto; }
+    .tour-acciones button { min-height: 40px; }
+  }
+</style>
+
+<script>
+  /**
+   * Tour — recorrido guiado: resalta un elemento de la pantalla a la vez con un cuadro de
+   * texto al lado, navegable con Atrás/Siguiente/Saltar. Sirve para explicarle a alguien
+   * nuevo qué hace cada parte de una pantalla, sin tocar nada del módulo más que un botón
+   * que lo arranque.
+   *
+   *   Tour.iniciar([
+   *     { selector: '#veh-stat-total', titulo: 'Totales', texto: 'Aquí ves cuántos vehículos hay…' },
+   *     {
+   *       selector: '#veh-tabs [data-tab="registrar"]', titulo: 'Registrar',
+   *       texto: 'Da de alta un vehículo nuevo.',
+   *       antes: () => document.querySelector('#veh-tabs [data-tab="lista"]').click(),  // deja la pestaña correcta activa antes de resaltar
+   *     },
+   *   ]);
+   *
+   *   Tour.iniciar(pasos, { onTerminar: () => {} });   // opcional: qué hacer al cerrar (Saltar, Esc o el último paso)
+   *
+   * Cada paso: selector (CSS, se vuelve a buscar en cada paso -- si no existe en ese momento, se
+   * salta solo al siguiente), titulo, texto, y opcional antes() (async opcional) para dejar la
+   * pantalla lista -- cambiar de pestaña, abrir un menú, etc. -- antes de resaltar y medir.
+   *
+   * No se guarda "ya lo vio" en ningún lado (decisión a propósito: empieza simple) -- cada
+   * módulo decide cuándo ofrecerlo (un botón "Tour guiado" en vez de que aparezca solo).
+   */
+  const Tour = (function () {
+    let estado = null;
+    // "\/\/" (no "//"): Apps Script le borra a los .html todo lo que encuentre después de "//"
+    // pensando que es un comentario -- incluso dentro de un string -- y rompería esta URL.
+    const MASCOTA_URL = 'https:\/\/raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/mascota-asistente.png';
+
+    function esc(v) {
+      return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+      ));
+    }
+
+    function limpiarResaltado() {
+      if (estado && estado.elementoActual) estado.elementoActual.classList.remove('tour-resaltado');
+    }
+
+    function reposicionar() {
+      if (estado && estado.elementoActual && estado.tooltip) posicionar(estado.elementoActual, estado.tooltip);
+    }
+
+    function posicionar(el, tooltip) {
+      const r = el.getBoundingClientRect();
+      const espacio = 14;
+      if (typeof Pantalla !== 'undefined' && Pantalla.esCelular && Pantalla.esCelular()) {
+        Object.assign(tooltip.style, { left: '12px', right: '12px', bottom: '12px', top: 'auto', width: 'auto' });
+        return;
+      }
+      tooltip.style.width = '';
+      const tr = tooltip.getBoundingClientRect();
+      let top;
+      if (r.bottom + espacio + tr.height < window.innerHeight) top = r.bottom + espacio;
+      else if (r.top - espacio - tr.height > 0) top = r.top - espacio - tr.height;
+      else top = Math.max(espacio, (window.innerHeight - tr.height) / 2);
+      const left = Math.min(Math.max(espacio, r.left), window.innerWidth - tr.width - espacio);
+      Object.assign(tooltip.style, { top: top + 'px', left: left + 'px', right: 'auto', bottom: 'auto' });
+    }
+
+    function pintarTooltip(paso, el) {
+      if (!estado.tooltip) {
+        estado.tooltip = document.createElement('div');
+        estado.tooltip.className = 'tour-tooltip';
+        estado.tooltip.setAttribute('role', 'dialog');
+        estado.tooltip.setAttribute('aria-modal', 'false');
+        document.body.appendChild(estado.tooltip);
+      }
+      const n = estado.pasos.length;
+      estado.tooltip.innerHTML = `
+        <img class="tour-mascota" src="${MASCOTA_URL}" alt="Asistente de Control Interno" />
+        <div class="tour-paso">Paso ${estado.i + 1} de ${n}</div>
+        <h4 class="tour-titulo">${esc(paso.titulo)}</h4>
+        <p class="tour-texto">${esc(paso.texto)}</p>
+        <div class="tour-acciones">
+          <button type="button" class="secondary" data-tour="saltar">Saltar tour</button>
+          <span class="tour-espacio"></span>
+          ${estado.i > 0 ? '<button type="button" class="secondary" data-tour="atras">Atrás</button>' : ''}
+          <button type="button" data-tour="siguiente">${estado.i === n - 1 ? 'Terminar' : 'Siguiente'}</button>
+        </div>`;
+      estado.tooltip.querySelector('[data-tour="saltar"]').addEventListener('click', cerrar);
+      const btnAtras = estado.tooltip.querySelector('[data-tour="atras"]');
+      if (btnAtras) btnAtras.addEventListener('click', atras);
+      estado.tooltip.querySelector('[data-tour="siguiente"]').addEventListener('click', siguiente);
+      requestAnimationFrame(() => posicionar(el, estado.tooltip));
+    }
+
+    async function mostrarPaso(i) {
+      if (!estado) return;
+      limpiarResaltado();
+      const paso = estado.pasos[i];
+      if (paso.antes) { try { await paso.antes(); } catch (e) { /* no-op: el paso sigue, solo no se preparó la pantalla */ } }
+      await new Promise((r) => requestAnimationFrame(r));
+      const el = document.querySelector(paso.selector);
+      if (!el) {
+        // No existe ahora mismo (pestaña equivocada, permiso sin ese botón, etc.): se salta solo.
+        if (i < estado.pasos.length - 1) { mostrarPaso(i + 1); return; }
+        cerrar();
+        return;
+      }
+      estado.i = i;
+      estado.elementoActual = el;
+      el.classList.add('tour-resaltado');
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      pintarTooltip(paso, el);
+    }
+
+    function siguiente() {
+      if (!estado) return;
+      if (estado.i + 1 < estado.pasos.length) mostrarPaso(estado.i + 1);
+      else cerrar();
+    }
+    function atras() {
+      if (!estado) return;
+      if (estado.i > 0) mostrarPaso(estado.i - 1);
+    }
+
+    function alTecla(ev) {
+      if (!estado) return;
+      if (ev.key === 'Escape') { ev.stopPropagation(); cerrar(); }
+      else if (ev.key === 'ArrowRight') siguiente();
+      else if (ev.key === 'ArrowLeft') atras();
+    }
+
+    function cerrar() {
+      if (!estado) return;
+      limpiarResaltado();
+      if (estado.tooltip) estado.tooltip.remove();
+      document.removeEventListener('keydown', alTecla, true);
+      window.removeEventListener('scroll', reposicionar, true);
+      window.removeEventListener('resize', reposicionar);
+      const alTerminar = estado.onTerminar;
+      estado = null;
+      if (alTerminar) alTerminar();
+    }
+
+    function iniciar(pasos, opciones) {
+      if (!pasos || !pasos.length) return;
+      if (estado) cerrar();
+      estado = { pasos, i: 0, elementoActual: null, tooltip: null, onTerminar: opciones && opciones.onTerminar };
+      document.addEventListener('keydown', alTecla, true);
+      window.addEventListener('scroll', reposicionar, true);
+      window.addEventListener('resize', reposicionar);
+      mostrarPaso(0);
+    }
+
+    return { iniciar, cerrar };
+  })();
+</script>
