@@ -43,6 +43,13 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   fija (ref.lineaNueva) y su comentario; si no, el comentario va en otra ventana. Movimientos ASIGNAR_LINEA («Vincular
   línea»), CAMBIO_LINEA, CAMBIO_EQUIPO y RETIRAR_LINEA («Desvincular línea»). La línea se separa con
   `LineasEscritura.separarLinea` (también con el equipo guardado, donde cambiar el estatus no los separaba).
+- **Vínculos** (8-oct, solo en `emmanuel` y el DEV; `lineas-vinculos.html`): tercer modo de Líneas Telefónicas junto a
+  Tabla y Tarjetas. Personas, equipos y líneas como íconos con sus vínculos, en cuatro zonas: En uso (cada persona con
+  sus equipos y la línea de cada uno; lo suelto entre ellas), Resguardo, Venta y desecho, y Cancelación. Búsqueda por
+  persona, NUCO, número (también el anterior), IMEI o estatus, varias con coma; sin búsqueda no salen las bajas.
+  Arrastrar abre la acción de siempre con lo soltado ya elegido (`LineasVinculos.alSoltar`): Vincular o Cambiar línea,
+  Cambiar de equipo, Desvincular (tijeras), Mandar a cancelación, Mandar a resguardo (también PARA VENTA) y Reasignar.
+  Sin permiso de operar solo se ve. Clic = vista rápida; doble clic = ficha.
 - **Cambio de número** (8-oct): al cambiar el número en Editar línea se elige el motivo, CAMBIO DE NUMERO (la línea
   ahora tiene otro: movimiento `CAMBIO_NUMERO`, «Cambio de número» en el historial) o CORRECCION DE CAPTURA (Edición).
   La ficha de la línea tiene «Números de esta línea» (el actual y los anteriores con fecha y comentario,
@@ -151,7 +158,7 @@ su nombre dentro de ella (`LineasArchivos.resolver`); el DEV además los lee de 
 | `lineas/LineasAccesorios.gs`, `LineasCorrecciones.gs` (+ `LineasCorreccionesSemilla.gs`, fuera de git) | Accesorios y Correcciones |
 | `lineas/LineasEstructura.gs`, `LineasRetiro.gs`, `LineasReestructura.gs`, `LineasRevisionBD.gs` | Herramientas de la reestructura (ya corridas; no se vuelven a usar) |
 | `lineas/LineasAdmin.gs` | Utilidades que se corren desde el editor |
-| `html/js/lineas.html`, `lineas-correcciones.html`, `html/lineas-estilos.html`, `html/views/lineas/*` | Pantallas |
+| `html/js/lineas.html`, `lineas-vinculos.html`, `lineas-correcciones.html`, `html/lineas-estilos.html`, `html/views/lineas/*` | Pantallas (`lineas-vinculos.html`: la vista Vínculos) |
 | `tests/lineas-*.test.cjs`, `pdf-render.test.cjs` | Pruebas (`npm test`) |
 
 ## 4. Cómo se trabaja
