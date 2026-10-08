@@ -18,6 +18,7 @@
                               AppSheet y la app. Nada sale de su NUCO; todo queda en .cache/bitacoras/
     deshacer <bitacora.jsonl> regresa lo que hizo un ordenar
     verificar                 solo lectura: que no falte nada de lo de antes ni de AppSheet en su NUCO
+    crear-nucos --nucos 643,… EN LA REAL: la carpeta de un NUCO de la hoja que no tiene (luego, ordenar)
     respaldar <carpeta>       copia 1.-DOCUMENTACIÓN de cada NUCO tal como está hoy (leída en vivo) a esa carpeta
 
 Usa el token de tools/migracion (autorizar.py lab, con Drive). Copiar solo LEE el original. Candados: aplicar
@@ -858,6 +859,37 @@ def respaldar(carpeta, hilos=6):
     print("\nRespaldo: https://drive.google.com/drive/folders/%s" % raiz)
 
 
+OTRAS_CARPETAS = ["2.- SERVICIOS", "3.- VERIFICACIONES", "4.- INSPECCIONES"]   # los nombres que más se usan en NUCOS
+
+
+def crear_nucos(pedidos):
+    """EN LA REAL: la carpeta de un NUCO que está en la hoja VEHICULOS pero no en NUCOS VEHICULOS (643–647 se dieron de
+    alta sin carpeta), con 2.-/3.-/4.-; 1.-DOCUMENTACIÓN y sus 6 las arma después `ordenar`. Se anota en una bitácora
+    (deshacer la manda a la papelera si sigue vacía) y se agrega a arbol.json, para que el plan lo incluya."""
+    d = drive()
+    vehiculos = {str(int(v["NUCCO"])) for v in json.loads((CACHE / "vehiculos.json").read_text(encoding="utf-8")) if v["NUCCO"].isdigit()}
+    existentes = {_nfc(h["name"]) for h in hijos_de(d, [NUCOS])[NUCOS] if h["mimeType"] == reglas.CARPETA}
+    arbol = json.loads((CACHE / "arbol.json").read_text(encoding="utf-8"))
+    bit = Bitacora(CACHE / "bitacoras" / (time.strftime("%Y%m%d-%H%M%S") + "-crear.jsonl"))
+    for n in pedidos:
+        if n not in vehiculos:
+            print("  %s: no está en la hoja VEHICULOS; no se crea" % n)
+            continue
+        if _nfc(n) in existentes:
+            print("  %s: ya tiene carpeta" % n)
+            continue
+        i = llamar(d.files().create(body={"name": n, "mimeType": reglas.CARPETA, "parents": [NUCOS]}, fields="id"))["id"]
+        bit.anotar(accion="crear_carpeta", nuco=n, id=i, padre=NUCOS, nombre=n)
+        for otra in OTRAS_CARPETAS:
+            j = llamar(d.files().create(body={"name": otra, "mimeType": reglas.CARPETA, "parents": [i]}, fields="id"))["id"]
+            bit.anotar(accion="crear_carpeta", nuco=n, id=j, padre=i, nombre=otra)
+        arbol.append({"id": i, "name": n, "mimeType": reglas.CARPETA, "documentacion": []})
+        print("  %s: creada" % n)
+    (CACHE / "arbol.json").write_text(json.dumps(arbol, ensure_ascii=False), encoding="utf-8")
+    if bit.ruta.exists():
+        respaldar_bitacora(bit.ruta)
+
+
 def verificar():
     """SOLO LECTURA. Que no falte ningún pedazo de documentación, comparando contra la lectura de ANTES (arbol.json):
     1. cada archivo que había en 1.-DOCUMENTACIÓN de un NUCO sigue existiendo, fuera de la papelera, dentro de ESE NUCO;
@@ -974,7 +1006,7 @@ def deshacer(ruta):
 
 if __name__ == "__main__":
     args = sys.argv[1:]
-    if not args or args[0] not in ("leer", "leer-appsheet", "plan", "aplicar", "excel", "ordenar", "deshacer", "respaldar", "verificar"):
+    if not args or args[0] not in ("leer", "leer-appsheet", "plan", "aplicar", "excel", "ordenar", "deshacer", "respaldar", "verificar", "crear-nucos"):
         sys.exit(__doc__)
     if args[0] == "leer":
         leer()
@@ -987,6 +1019,8 @@ if __name__ == "__main__":
         leer_appsheet()
     elif args[0] == "verificar":
         verificar()
+    elif args[0] == "crear-nucos":
+        crear_nucos(args[args.index("--nucos") + 1].split(","))
     elif args[0] == "respaldar":
         respaldar(args[1], int(args[args.index("--hilos") + 1]) if "--hilos" in args else 6)
     elif args[0] == "deshacer":
