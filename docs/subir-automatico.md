@@ -43,6 +43,28 @@ Cada subida hace esto:
   versión nueva. El botón aparece para `master` hasta que el workflow esté en `master`, es
   decir, después de mezclarlo.
 
+### Producción solo desde la Action: con qué cuenta corre la app
+
+La app de producción corre **con la cuenta de quien movió los despliegues** (`executeAs:
+USER_DEPLOYING`), no con la del dueño del proyecto. Si cada quien despliega desde su máquina, la
+app cambia de cuenta en cada versión, y basta con que a una le falte permiso de editor en una
+carpeta o una plantilla para que algo deje de funcionar para todos (8-oct: Emmanuel desplegó la
+v66 y las inspecciones dejaron de generar PDF).
+
+Por eso:
+
+- `subir.js prod --desplegar` **solo corre en la Action**, que usa siempre la cuenta del secreto
+  `CLASPRC_JSON` (el paso "Cuenta con la que va a correr la app" la imprime). Desde una máquina
+  truena, salvo con `--desde-aqui`: entonces la app pasa a correr con la cuenta de clasp de esa
+  persona.
+- `npm run push:prod` (subir sin desplegar) sigue funcionando desde cualquier máquina: no cambia
+  la cuenta de nadie.
+- **Antes de desplegar se revisa que esa cuenta pueda escribir** (`revisarEntorno`): ser editora de
+  cada libro y de cada carpeta que no sea de solo lectura (`soloLee` en `REVISION_CARPETAS`) y poder
+  copiar cada plantilla de PDF (`revisionPlantillas_`: responsiva, adherente, arqueo, Líneas y las de
+  MODELOS INSPECCION). Si falta algo, es error y no se despliega. Una plantilla nueva se agrega ahí.
+- Lo ideal es que el secreto sea de una **cuenta institucional** dueña de todo, no de una persona.
+
 ### Activarla (una vez)
 
 1. **El secreto con las credenciales de clasp.** En tu máquina, abre `~/.clasprc.json`

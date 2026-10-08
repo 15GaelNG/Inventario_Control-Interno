@@ -233,5 +233,5 @@ const AdherenteVehicularService = (function () {
     return HojaServicio.eliminar(HOJA, token, id);
   }
 
-  return { listarPorFolio, buscarPorId, crear, cambiarEstatus, eliminar };
+  return { listarPorFolio, buscarPorId, crear, cambiarEstatus, eliminar, PLANTILLA };
 })();

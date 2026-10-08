@@ -67,12 +67,12 @@ async function revisar(idDespliegueHead, dominio) {
     avisos.push(f.archivo + ' ' + f.constante + ' está fijo en el código' + (d.name ? ' ("' + d.name + '")' : ' (no se encontró en Drive)') +
       ': todos los proyectos, DEV incluido, usan ese mismo');
   }
-  return { entorno: rev.entorno, errores: rev.errores, avisos: avisos, lineas: lineas };
+  return { entorno: rev.entorno, cuenta: rev.cuenta, errores: rev.errores, avisos: avisos, lineas: lineas };
 }
 
 /** Lo imprime como lo ve quien sube */
 function imprimir(res) {
-  console.log('Entorno (' + (res.entorno || 'sin ENTORNO') + '):');
+  console.log('Entorno (' + (res.entorno || 'sin ENTORNO') + ')' + (res.cuenta ? ', revisado con la cuenta ' + res.cuenta + ' (la app va a correr con ella)' : '') + ':');
   res.lineas.forEach((l) => console.log(l));
   if (res.avisos.length) console.log('  Avisos:\n    - ' + res.avisos.join('\n    - '));
   console.log(res.errores.length ? '  ERRORES (' + res.errores.length + '):\n    - ' + res.errores.join('\n    - ') : '  Sin errores.');

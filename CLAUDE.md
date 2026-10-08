@@ -204,12 +204,17 @@ puede entrar. Antes de mover los despliegues, quien desplegó corre en el editor
 función que lo use y acepta (para `directory.readonly`, de las fotos: `revisarFotosDirectorio()`).
 
 `node tools/subir/subir.js prod --desplegar "…"` hace todo eso solo: comprime, sube, verifica y
-mueve los dos despliegues. También está el botón "Run workflow" de la GitHub Action
-(docs/subir-automatico.md).
+mueve los dos despliegues. **Solo corre en la GitHub Action** (botón "Run workflow" sobre `master`,
+docs/subir-automatico.md): la app corre con la cuenta de quien movió los despliegues
+(`executeAs: USER_DEPLOYING`), y desde la Action es siempre la del secreto `CLASPRC_JSON`. Desde una
+máquina truena salvo con `--desde-aqui` (8-oct: Emmanuel desplegó la v66 desde la suya y las
+inspecciones dejaron de generar PDF). No le pongas `--desde-aqui` sin que la persona lo pida.
 
 **Antes de desplegar se revisan los IDs** (`revisionEntorno_` en `Diagnostico.gs`): que cada libro y
 carpeta de Entornos.gs abra, se llame como dicen las rutas que se guardan, la raíz la alcance, nada de prod
-esté en una carpeta de pruebas y existan las hojas del catálogo. `subir.js` la pide en /dev y en prod no
+esté en una carpeta de pruebas y existan las hojas del catálogo. También que **la cuenta que despliega pueda
+escribir**: editora de cada libro y carpeta (salvo `soloLee`) y que pueda copiar cada plantilla de PDF
+(`revisionPlantillas_`; una plantilla nueva va ahí, un contrato lo revisa). `subir.js` la pide en /dev y en prod no
 despliega con errores. A mano: `revisarEntorno()` en el editor de cualquier proyecto, o
 `node tools/subir/revisar-entorno.js prod`. Una carpeta nueva en `Config.gs` va también en
 `REVISION_CARPETAS` (un contrato lo revisa).

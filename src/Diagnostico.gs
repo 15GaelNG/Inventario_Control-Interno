@@ -203,7 +203,11 @@ function diagnosticoEntorno() {
  * app; la contraseña de Geotab no sale nunca (no está en la lista).
  */
 const REVISION_LIBROS = ['SS_ID_USUARIOS', 'SS_ID_VEHICULOS', 'SS_ID_TELEFONIA', 'SS_ID_ACCESORIOS', 'SS_ID_CAJACHICA'];
-/** Carpetas: `nombre` = la carpeta que va al principio de las rutas que se guardan en la hoja; la raíz la tiene que alcanzar con ese nombre, salvo `sinRaiz` */
+/**
+ * Carpetas: `nombre` = la carpeta que va al principio de las rutas que se guardan en la hoja; la raíz la tiene que
+ * alcanzar con ese nombre, salvo `sinRaiz`. La cuenta que despliega tiene que poder ESCRIBIR en cada una, salvo
+ * `soloLee` (abrirla basta con ser lector; guardar ahí no: 8-oct, las inspecciones no generaban PDF).
+ */
 const REVISION_CARPETAS = {
   DRIVE_FOLDER_ID_RAIZ: {},
   DRIVE_FOLDER_ID_REPORTES: { nombre: 'INSPECCIONES VEHICULARES' },
@@ -213,12 +217,34 @@ const REVISION_CARPETAS = {
   DRIVE_FOLDER_ID_HOLOGRAMAS_ARCHIVOS: { nombre: 'HOLOGRAMAS_Files_' },
   DRIVE_FOLDER_ID_INSPECCIONES_IMAGENES: { nombre: 'INSPECCION VEHICULAR_Images' },
   // Los modelos se leen directo de su carpeta (InspeccionesService.raizDe_), no caminando desde la raíz
-  DRIVE_FOLDER_ID_MODELOS: { nombre: 'MODELOS INSPECCION', sinRaiz: true },
-  DRIVE_FOLDER_ID_VERIFICACIONES_LECTURA: {},
+  DRIVE_FOLDER_ID_MODELOS: { nombre: 'MODELOS INSPECCION', sinRaiz: true, soloLee: true },
+  DRIVE_FOLDER_ID_VERIFICACIONES_LECTURA: { soloLee: true },
   LINEAS_DRIVE_APPSHEET: {},
   LINEAS_DRIVE_NUCOS: {},
-  LINEAS_DRIVE_APPSHEET_LECTURA: {},
+  LINEAS_DRIVE_APPSHEET_LECTURA: { soloLee: true },
 };
+/**
+ * Las plantillas de Google Docs que la app COPIA para armar cada PDF (makeCopy): la cuenta que despliega tiene
+ * que poder copiarlas. Cada servicio dice la suya; las de inspección vienen de la hoja MODELOS INSPECCION.
+ */
+function revisionPlantillas_() {
+  const lista = [
+    { nombre: 'Responsiva vehicular', id: ResponsivaVehicularService.PLANTILLA },
+    { nombre: 'Adherente vehicular', id: AdherenteVehicularService.PLANTILLA },
+    { nombre: 'Arqueo', id: ArqueosService.PLANTILLA },
+  ];
+  Object.keys(LineasPdf.PLANTILLAS).forEach((k) => lista.push({ nombre: 'Líneas ' + k, id: LineasPdf.PLANTILLAS[k] }));
+  try {
+    InspeccionesService.plantillas().forEach((p) => lista.push({ nombre: 'Inspección ' + p.tipo, id: p.id }));
+  } catch (e) {
+    lista.push({ nombre: 'Inspección (MODELOS INSPECCION)', error: e.message });
+  }
+  return lista;
+}
+/** Qué puede hacer con un archivo o carpeta la cuenta con la que corre (Drive v3: el permiso real, no solo si abre) */
+function revisionCapacidades_(id) {
+  return Drive.Files.get(id, { fields: 'capabilities(canEdit,canAddChildren,canCopy)', supportsAllDrives: true }).capabilities || {};
+}
 /**
  * Las carpetas que los servicios buscan por NOMBRE dentro de la raíz (DriveUtils.carpetaEnRaiz).
  * En producción tienen que existir (si no, la captura truena); en un DEV se crean solas al usarse.
@@ -242,7 +268,7 @@ const REVISION_PRUEBAS = /prueba|copia de|\btest\b|\bdev\b|laboratorio/i;
 function revisarEntorno() {
   soloEditor_();
   const r = revisionEntorno_();
-  const lineas = ['REVISIÓN DE IDS — proyecto ' + r.scriptId + ' (' + (r.entorno || 'sin ENTORNO') + ')', ''];
+  const lineas = ['REVISIÓN DE IDS — proyecto ' + r.scriptId + ' (' + (r.entorno || 'sin ENTORNO') + '), con la cuenta ' + r.cuenta, ''];
   r.revisados.forEach((x) => lineas.push((x.problema ? (x.grave ? '  ✘ ' : '  ⚠ ') : '  ✔ ') + x.clave + ': ' +
     (x.id ? (x.nombre ? '"' + x.nombre + '"' : x.id) : 'sin configurar') + (x.problema ? '\n      ' + x.problema : '')));
   lineas.push('');
@@ -273,6 +299,20 @@ function revisionEntorno_() {
     (x.grave ? errores : avisos).push(x.clave + ': ' + problema);
   };
   const obligatoria = (clave) => DIAG_OBLIGATORIAS.some((o) => o.clave === clave);
+  /**
+   * Que la cuenta con la que corre la app (la que despliega) tenga ese permiso. Sin él es error en cualquier
+   * entorno: lo que se guarde ahí va a fallar para todos. Si no se puede preguntar, aviso.
+   */
+  const cuenta = efectivo || 'La cuenta con la que corre la app';
+  const capacidades = {};
+  const exigir = (x, id, capacidad, problema) => {
+    try {
+      const c = capacidades[id] || (capacidades[id] = revisionCapacidades_(id));
+      if (!c[capacidad]) anotar(x, cuenta + ' ' + problema, true);
+    } catch (e) {
+      avisos.push(x.clave + ': no se pudo revisar qué permiso tiene ' + cuenta + ' (' + e.message + ')');
+    }
+  };
   /** El nombre de pruebas que tiene ella o una carpeta de arriba (null si ninguna) */
   const enPruebas = (archivo) => {
     let actual = archivo;
@@ -302,6 +342,7 @@ function revisionEntorno_() {
       anotar(x, 'no abre como libro (' + e.message + ')', true);
       return;
     }
+    exigir(x, x.id, 'canEdit', 'solo puede ver este libro: no podrá guardar nada (necesita ser Editor)');
     const prueba = esProd && enPruebas(DriveApp.getFileById(x.id));
     if (prueba) anotar(x, 'está en "' + prueba + '": parece de pruebas, no de producción');
   });
@@ -326,6 +367,7 @@ function revisionEntorno_() {
     }
     if (carpeta.isTrashed()) { anotar(x, 'la carpeta está en la papelera', true); return; }
     if (clave === 'DRIVE_FOLDER_ID_RAIZ') raiz = carpeta;
+    if (!regla.soloLee) exigir(x, x.id, 'canAddChildren', 'solo puede ver esta carpeta: lo que se guarde ahí va a fallar (necesita ser Editor)');
     const prueba = esProd && enPruebas(carpeta);
     if (prueba) { anotar(x, 'está en "' + prueba + '": parece de pruebas, no de producción'); return; }
     if (!regla.nombre) return;
@@ -344,13 +386,31 @@ function revisionEntorno_() {
       const x = { clave: 'raíz / ' + nombre, id: '' };
       revisados.push(x);
       const enRaiz = DriveUtils.carpetaEnRaizSiExiste(raiz, nombre);
-      if (enRaiz) { x.id = enRaiz.getId(); x.nombre = nombre; return; }
+      if (enRaiz) {
+        x.id = enRaiz.getId(); x.nombre = nombre;
+        exigir(x, x.id, 'canAddChildren', 'solo puede ver esta carpeta: lo que se guarde ahí va a fallar (necesita ser Editor)');
+        return;
+      }
       // anotar: en producción es error; en un DEV, aviso
       anotar(x, esProd
         ? 'no existe en la raíz: lo que se guarde ahí va a fallar (créala, o un acceso directo con ese nombre)'
         : 'no existe todavía; se crea sola la primera vez que se use');
     });
   }
+
+  // ---- plantillas de los PDF: la app las copia
+  revisionPlantillas_().forEach((p) => {
+    const x = { clave: 'plantilla / ' + p.nombre, id: p.id || '' };
+    revisados.push(x);
+    if (p.error) { anotar(x, 'no se pudieron leer las plantillas (' + p.error + ')'); return; }
+    try {
+      x.nombre = DriveApp.getFileById(p.id).getName();
+    } catch (e) {
+      anotar(x, 'no abre: no existe o ' + cuenta + ' no la puede ver (' + e.message + ')', true);
+      return;
+    }
+    exigir(x, p.id, 'canCopy', 'no puede copiarla: ese PDF no se va a generar (necesita ser Editor, o que la plantilla deje copiar)');
+  });
 
   // ---- hojas y calentador
   const hojasQueFaltan = Object.keys(abiertos).length
@@ -362,7 +422,7 @@ function revisionEntorno_() {
   if (!calentador) avisos.push('El calentador no está instalado: correr instalarCalentador() una vez en el editor');
 
   return {
-    scriptId: ScriptApp.getScriptId(), entorno: entorno, revisados: revisados,
+    scriptId: ScriptApp.getScriptId(), entorno: entorno, cuenta: efectivo, revisados: revisados,
     hojasQueFaltan: hojasQueFaltan, calentador: calentador, errores: errores, avisos: avisos,
   };
 }
