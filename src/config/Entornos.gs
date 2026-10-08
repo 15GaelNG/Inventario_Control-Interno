@@ -57,6 +57,13 @@ const ENTORNOS = {
     GEOTAB_USUARIO: 'auxiliar6datos.ci@ciudadmaderas.com',
     GEOTAB_BASE_DATOS: 'ciudad_maderas',
     GEOTAB_SERVIDOR: '',
+
+    // Despliegue aparte del mismo proyecto, con acceso "Cualquier usuario" (sin pedir cuenta
+    // de dominio) -- solo lo usa la liga de firma a distancia (Responsiva/Adherente
+    // Vehicular). El despliegue normal (los "dos links" de siempre) sigue con acceso de
+    // dominio. Su ID va también en despliegueFirmaPublicaProd (tools/subir/destinos.json),
+    // para que subir.js lo mueva a la versión nueva junto con los otros dos.
+    URL_FIRMA_PUBLICA: 'https://script.google.com/macros/s/AKfycbyK6Zwlpm_fvlUTVdMb5BBM6uXZzBvWUkouso2O0Ekui0YFtF4sR3ub4sKbApZ4UzEr/exec',
   },
 
   // ---------------------------------------------------------------- DEV de Jorge (rama jorge)
