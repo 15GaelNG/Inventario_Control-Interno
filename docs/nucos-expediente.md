@@ -84,6 +84,7 @@ comparte la cuota con todo el mundo y se agotó al leer.
 | `ordenar --nucos … \| --todos` | **En la real**: mueve dentro del mismo NUCO y copia ahí lo de AppSheet y la app |
 | `deshacer <bitacora.jsonl>` | Regresa lo que hizo un `ordenar` |
 | `verificar` | Solo lectura: que no falte nada de lo de antes ni de AppSheet en su NUCO |
+| `crear-nucos --nucos …` | **En la real**: la carpeta de un NUCO que está en la hoja y no en NUCOS VEHICULOS |
 
 Pruebas: `npm run test:nucos-py` (18). Incluyen un Drive simulado que comprueba que `deshacer` deja todo idéntico.
 
@@ -118,6 +119,8 @@ Bitácoras del 8-oct-2026. Para deshacer todo, de la más nueva a la más vieja:
 
 | Bitácora | Qué fue |
 |---|---|
+| `20261008-171920` | Las 6 carpetas y los archivos de AppSheet de los 11 NUCO nuevos |
+| `20261008-171840-crear` | Las 11 carpetas de NUCO que no existían |
 | `20261008-165647` | Las 489 versiones anteriores de AppSheet (solo copias) |
 | `20261008-161618` | Los 4 últimos (156, 159, 160, 235) |
 | `20261008-160842` | Los 109 pendientes después del corte |
@@ -155,8 +158,11 @@ Bitácoras del 8-oct-2026. Para deshacer todo, de la más nueva a la más vieja:
    - de los 7,998 archivos que había en las DOCUMENTACIÓN, **0 faltan** y **0 quedaron en otro NUCO**;
    - de los 2,057 de AppSheet asignados, **0 sin su contenido** en su NUCO; igual con lo de la app nueva.
    - Hay 9,303 archivos hoy.
-   - Sin lugar: 6 archivos de vehículos sin carpeta de NUCO (96, 257, 269, 643, 644) y 49 con claves de AppSheet
-     que ya no están en la hoja. Están en `.cache/verificacion.json` para revisarlos a mano.
+   - Sin lugar: 49 archivos con claves de AppSheet que ya no están en la hoja (algunas, ligadas a dos vehículos en
+     la bitácora). Están en `.cache/verificacion.json` para que el área los asigne a mano.
+10. **Los 11 NUCO sin carpeta** (96, 99, 257, 269, 272, 273, 643–647), que están en la hoja pero no tenían carpeta en
+    NUCOS VEHICULOS. Se les creó con `crear-nucos` (con 2.-/3.-/4.-) y `ordenar` les armó las 6 y les copió sus
+    archivos de AppSheet. Ojo: el 647 tiene folio FOL0650.
 
 ## Resultado
 
