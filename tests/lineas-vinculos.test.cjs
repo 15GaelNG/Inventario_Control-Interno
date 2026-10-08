@@ -47,6 +47,20 @@ test('agrupar: la persona con su equipo y su línea sola; lo suelto, el resguard
   assert.deepEqual(r.companias, ['AT&T', 'TELCEL']);
 });
 
+test('agrupar: los estatus de antes del 30-sep van a su zona; lo que no se reconoce es baja y no va a «En uso»', () => {
+  const ix = { equipos: [
+    { id: 'A', nuco: '0003', estatus: 'FUERA DE INVENTARIO' }, { id: 'B', nuco: '0007', estatus: 'POSIBLE VENTA' },
+    { id: 'C', nuco: '0008', estatus: 'ESPERA DE RESPONSIVA', responsable: 'LUIS' }, { id: 'D', nuco: '0009', estatus: 'ROBADO' },
+  ], lineas: [{ id: 'X', numero: '1', estatus: 'SIN LINEA', suelta: true }, { id: 'Y', numero: '2', estatus: 'SUSPENDIDA', suelta: true }] };
+  const nucos = (gs) => gs.map((g) => g.pares.map((p) => (p.equipo ? p.equipo.nuco : p.linea.numero)).join());
+  const r = V.agrupar(ix, {});
+  assert.deepEqual(nucos(r.zonas.uso).sort(), ['0008', '2']);
+  assert.deepEqual(nucos(r.zonas.venta), ['0007']);
+  assert.deepEqual(nucos(r.zonas.cancelacion), []);
+  assert.deepEqual(nucos(V.agrupar(ix, { q: 'fuera de inventario' }).zonas.venta), ['0003']);
+  assert.deepEqual(nucos(V.agrupar(ix, { q: '1' }).zonas.cancelacion), ['1']);
+});
+
 test('agrupar: la búsqueda encuentra personas, NUCO, números anteriores e IMEI, y con ella salen las bajas', () => {
   const zonasCon = (q) => Object.entries(V.agrupar(indice(), { q: q }).zonas).filter(([, gs]) => gs.length).map(([z, gs]) => z + ':' + gs.length);
   assert.deepEqual(zonasCon('ana ruiz'), ['uso:1']);
@@ -56,6 +70,8 @@ test('agrupar: la búsqueda encuentra personas, NUCO, números anteriores e IMEI
   assert.deepEqual(zonasCon('vendido'), ['venta:1']);
   assert.deepEqual(zonasCon('4420000000'), ['cancelacion:1']);
   assert.deepEqual(zonasCon('442 475 4517'), ['uso:1']);
+  // Con coma, las dos cosas que se van a juntar
+  assert.deepEqual(zonasCon('9990000001, 0013'), ['uso:1', 'resguardo:1']);
   const r = V.agrupar(indice(), { departamento: 'VENTAS', compania: 'TELCEL' });
   assert.deepEqual(Object.entries(r.zonas).filter(([, gs]) => gs.length).map(([z]) => z), ['uso']);
 });

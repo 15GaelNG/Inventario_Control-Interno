@@ -23,10 +23,12 @@
       { id: 'venta', titulo: 'Venta y desecho', icono: 'tag' },
       { id: 'cancelacion', titulo: 'Cancelación', icono: 'phone-off' },
     ];
-    // Estatus del catálogo (LineasRepo.CATALOGO): los de venta o desecho van a su zona; las bajas solo salen al buscar
-    const VENTA = ['PARA VENTA', 'PARA DESECHO'];
-    const BAJA_EQUIPO = ['VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'];
-    const CANCELACION = ['EN PROCESO DE CANCELACION', 'CANCELADA'];
+    // Estatus del catálogo (LineasRepo.CATALOGO) y los de antes del 30-sep que siguen en la hoja (COLOR_ESTATUS de
+    // lineas.html). Va a «En uso» solo lo que está en uso; lo que no se reconoce cuenta como baja (FUERA DE INVENTARIO,
+    // ROBADO…) y sale solo al buscar
+    const USO_EQUIPO = ['', 'USO', 'EN USO', 'ESPERA DE RESPONSIVA', 'EN ENVIO'];
+    const VENTA = ['PARA VENTA', 'PARA DESECHO', 'POSIBLE VENTA', 'VENTA'];
+    const USO_LINEA = ['', 'USO', 'EN USO', 'DISPONIBLE', 'USO TEMPORAL', 'ESPERA DE RESPONSIVA', 'ESPERA DE EQUIPO', 'SUSPENDIDA', 'RENOVADA'];
     // Lo mismo que pide LineasAcciones.vincular (ESTATUS_VINCULABLE) y la ventana de Vincular
     const VINCULABLE = ['USO', 'RESGUARDO'];
     const ICONO_EQUIPO = { CELULAR: 'smartphone', CELULAR_BASICO: 'smartphone', MODEM: 'router', BANDA_ANCHA: 'wifi', CAMARA: 'cctv' };
@@ -35,13 +37,12 @@
 
     function zonaEquipo(e) {
       const s = may(e.estatus);
-      if (s === 'RESGUARDO') return 'resguardo';
-      if (VENTA.indexOf(s) >= 0 || BAJA_EQUIPO.indexOf(s) >= 0) return 'venta';
-      return 'uso';
+      if (USO_EQUIPO.indexOf(s) >= 0) return 'uso';
+      return s === 'RESGUARDO' ? 'resguardo' : 'venta';
     }
-    const zonaLinea = (l) => (CANCELACION.indexOf(may(l.estatus)) >= 0 ? 'cancelacion' : 'uso');
-    const arrastraEquipo = (e) => BAJA_EQUIPO.indexOf(may(e.estatus)) < 0;
-    const arrastraLinea = (l) => CANCELACION.indexOf(may(l.estatus)) < 0;
+    const zonaLinea = (l) => (USO_LINEA.indexOf(may(l.estatus)) >= 0 ? 'uso' : 'cancelacion');
+    const arrastraEquipo = (e) => zonaEquipo(e) !== 'venta' || VENTA.indexOf(may(e.estatus)) >= 0;
+    const arrastraLinea = (l) => zonaLinea(l) === 'uso';
 
     /** Orden fijo pero revuelto (lo suelto convive con las personas): el mismo grupo cae siempre en el mismo lugar. */
     function hash(s) {
@@ -54,7 +55,8 @@
      * Grupos del índice de Líneas Telefónicas (memoria.indice de lineas.html): una persona con sus equipos (cada uno con
      * su línea) y sus líneas sin equipo; un equipo sin persona con su línea; una línea suelta. Cada grupo va en la zona
      * de su estatus. filtro = { q, departamento, compania }: sin búsqueda no salen las bajas (equipos VENDIDO, DONADO,
-     * DESECHADO o EXTRAVIO-ROBO y líneas CANCELADA); con búsqueda sale todo lo que coincide.
+     * DESECHADO, EXTRAVIO-ROBO o de antes como FUERA DE INVENTARIO; líneas CANCELADA); con búsqueda sale todo lo que
+     * coincide, y con comas se buscan varias cosas a la vez.
      * → { zonas: { uso, resguardo, venta, cancelacion }, departamentos, companias }
      */
     function agrupar(ix, filtro) {
@@ -95,7 +97,7 @@
         // Una línea sola con responsable (en USO) va con la persona; DISPONIBLE, suelta
         const g = zona === 'uso' && may(l.estatus) !== 'DISPONIBLE' ? grupoDePersona(l) : null;
         if (g) g.pares.push(par);
-        else grupos.push({ clave: 'l:' + l.id, zona: zona, persona: null, pares: [par], baja: may(l.estatus) === 'CANCELADA' });
+        else grupos.push({ clave: 'l:' + l.id, zona: zona, persona: null, pares: [par], baja: zona === 'cancelacion' && may(l.estatus) !== 'EN PROCESO DE CANCELACION' });
       });
 
       const departamentos = {};
@@ -128,11 +130,12 @@
         g.companias.forEach((c) => { companias[c] = true; });
       });
 
-      const palabras = normal(f.q).split(/\s+/).filter(Boolean);
+      // Con comas, varias búsquedas a la vez («0012, 4421090805»): el equipo y la línea que se van a juntar
+      const busquedas = normal(f.q).split(',').map((b) => b.split(/\s+/).filter(Boolean)).filter((b) => b.length);
       const depto = may(f.departamento);
       const cia = may(f.compania);
       const zonas = { uso: [], resguardo: [], venta: [], cancelacion: [] };
-      grupos.filter((g) => (palabras.length ? palabras.every((p) => g.texto.indexOf(p) >= 0) : !g.baja) &&
+      grupos.filter((g) => (busquedas.length ? busquedas.some((b) => b.every((p) => g.texto.indexOf(p) >= 0)) : !g.baja) &&
         (!depto || g.deptos.indexOf(depto) >= 0) && (!cia || g.companias.indexOf(cia) >= 0))
         .sort((a, b) => hash(a.clave) - hash(b.clave))
         .forEach((g) => zonas[g.zona].push(g));
@@ -214,7 +217,7 @@
 
       cont.innerHTML =
         '<div class="vn-barra">' +
-          '<label class="vn-buscar">' + ic('search') + '<input type="search" data-vn-q placeholder="Persona, NUCO, número, IMEI" aria-label="Buscar"></label>' +
+          '<label class="vn-buscar">' + ic('search') + '<input type="search" data-vn-q placeholder="Persona, NUCO, número, IMEI · varios con coma" aria-label="Buscar"></label>' +
           '<select data-vn-filtro="departamento" aria-label="Departamento"><option value="">Departamento</option></select>' +
           '<select data-vn-filtro="compania" aria-label="Compañía"><option value="">Compañía</option></select>' +
           '<span class="vn-leyenda"><span class="vn-punto vn-verde"></span>Uso<span class="vn-punto vn-azul"></span>Disponible o resguardo' +

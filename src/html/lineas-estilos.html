@@ -1063,9 +1063,10 @@
   /* Equipo → línea: la línea viva en verde; las tijeras aparecen al pasar el mouse (con el dedo, siempre) */
   .vn-enlace { position: relative; width: 0; height: 26px; border-left: 2px solid var(--ln-neutro-tx); }
   .vn-enlace.vn-vivo { border-left-color: var(--ln-verde-tx); }
-  .vn-cortar { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 22px; height: 22px; min-height: 0; padding: 0;
+  .vn .vn-cortar { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 22px; height: 22px; min-height: 0; padding: 0;
     border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--color-surface);
     border: 1px solid var(--color-border); color: var(--ln-rojo-tx); opacity: 0; transition: opacity .15s; }
+  .vn .vn-cortar:hover { background: var(--ln-rojo-bg); }
   .vn-cortar .ln-icon { width: 13px; height: 13px; }
   .vn-par:hover .vn-cortar, .vn-cortar:focus-visible { opacity: 1; }
   @media (pointer: coarse) { .vn-cortar { opacity: 1; } }
