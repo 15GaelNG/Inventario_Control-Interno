@@ -606,17 +606,22 @@ def ordenar(nucos_pedidos=None, todos=False, hilos=6):
                 if padre == destino and _nfc(f["name"]) == _nfc(c["nombre"]):
                     sumar("ya estaban")
                     continue
-                if (_nfc(c["nombre"]), False) in hijos(destino) and padre != destino:
-                    bit.anotar(accion="saltado", nuco=p["nuco"], id=c["origen"], motivo="ya hay un archivo con el nombre " + c["nombre"])
-                    sumar("saltados")
-                    continue
-                cambios = {"fileId": c["origen"], "body": {"name": c["nombre"]}, "fields": "id", "supportsAllDrives": True}
+                nombre = c["nombre"]
+                if (_nfc(nombre), False) in hijos(destino) and padre != destino:
+                    # Ya hay OTRO archivo con ese nombre (dos "image009.png" de correos distintos): no se pisa, va con (2)
+                    import re as _re
+                    base, ext = _re.match(r"^(.*?)(\.[A-Za-z0-9]{2,4})?$", nombre).groups()
+                    n = 2
+                    while (_nfc("%s (%d)%s" % (base, n, ext or "")), False) in hijos(destino):
+                        n += 1
+                    nombre = "%s (%d)%s" % (base, n, ext or "")
+                cambios = {"fileId": c["origen"], "body": {"name": nombre}, "fields": "id", "supportsAllDrives": True}
                 if padre != destino:
                     cambios.update(addParents=destino, removeParents=padre)
                 llamar(d.files().update(**cambios))
                 bit.anotar(accion="mover", nuco=p["nuco"], id=c["origen"], de_padre=padre, de_nombre=f["name"],
-                           a_padre=destino, a_nombre=c["nombre"])
-                hijos(destino)[(_nfc(c["nombre"]), False)] = c["origen"]
+                           a_padre=destino, a_nombre=nombre)
+                hijos(destino)[(_nfc(nombre), False)] = c["origen"]
                 sumar("movidos" if padre != destino else "renombrados")
             else:
                 if (_nfc(c["nombre"]), False) in hijos(destino):
@@ -647,6 +652,14 @@ def ordenar(nucos_pedidos=None, todos=False, hilos=6):
                     llamar(d.files().update(fileId=h["id"], addParents=apartado, removeParents=seis, fields="id", supportsAllDrives=True))
                     bit.anotar(accion="mover", nuco=p["nuco"], id=h["id"], de_padre=seis, de_nombre=h["name"], a_padre=apartado, a_nombre=h["name"])
                     sumar("rellenos apartados")
+
+        # Y el relleno suelto en la raíz de 1.-DOCUMENTACIÓN (los NUCO cuya documentación estaba "vacía")
+        for h in lista(doc):
+            if h["mimeType"] != reglas.CARPETA and reglas.es_relleno(h["name"]):
+                apartado = carpeta_en(carpeta_en(doc, reglas.ANTERIORES), ESTRUCTURA_ANTERIOR)
+                llamar(d.files().update(fileId=h["id"], addParents=apartado, removeParents=doc, fields="id", supportsAllDrives=True))
+                bit.anotar(accion="mover", nuco=p["nuco"], id=h["id"], de_padre=doc, de_nombre=h["name"], a_padre=apartado, a_nombre=h["name"])
+                sumar("rellenos apartados")
 
         nuevas = {_nfc(c) for _, c, _ in reglas.SEIS} | {_nfc(reglas.ANTERIORES)}
         viejas = [(doc, h) for h in lista(doc) if h["mimeType"] == reglas.CARPETA and _nfc(h["name"]) not in nuevas]

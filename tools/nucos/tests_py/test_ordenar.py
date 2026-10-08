@@ -185,3 +185,27 @@ def test_una_carpeta_vieja_con_algo_real_no_se_aparta(tmp_path, monkeypatch):
     monkeypatch.setattr(expediente, "respaldar_bitacora", lambda ruta: None)
     expediente.ordenar(["7"], hilos=1)
     assert dr.archivos[rara]["parents"] == [doc]
+
+
+def test_nombre_que_choca_va_con_2_y_el_relleno_suelto_se_aparta(tmp_path, monkeypatch):
+    dr = DriveFalso()
+    nucos = dr.nuevo("NUCOS VEHICULOS", None, True)
+    n235 = dr.nuevo("235", nucos, True)
+    doc = dr.nuevo("1.-DOCUMENTACIÓN", n235, True)
+    vieja = dr.nuevo("4.- ALTA DE PLACAS", doc, True)
+    img = dr.nuevo("image009.png", vieja)
+    destino = dr.nuevo("ANTERIORES", doc, True)
+    ya = dr.nuevo("image009.png", destino)                       # otra imagen, mismo nombre
+    rel = dr.nuevo("CARPETA SIN INFORMACIÓN.jpg", doc)           # relleno suelto en la raíz
+    (tmp_path / "plan.json").write_text(json.dumps([{"nuco": "235", "id": n235, "copias": [
+        {"origen": img, "destino": ["1.-DOCUMENTACIÓN", "ANTERIORES"], "nombre": "image009.png", "de": "x", "fuente": "nuco"}]}]),
+        encoding="utf-8")
+    monkeypatch.setattr(expediente, "CACHE", tmp_path)
+    monkeypatch.setattr(expediente, "NUCOS", nucos)
+    monkeypatch.setattr(expediente, "drive", lambda: dr)
+    monkeypatch.setattr(expediente, "respaldar_bitacora", lambda ruta: None)
+    expediente.ordenar(["235"], hilos=1)
+    assert dr.ruta(img).endswith("1.-DOCUMENTACIÓN/ANTERIORES/image009 (2).png")
+    assert dr.ruta(ya).endswith("1.-DOCUMENTACIÓN/ANTERIORES/image009.png")
+    assert dr.ruta(rel).endswith("ANTERIORES/ESTRUCTURA ANTERIOR/CARPETA SIN INFORMACIÓN.jpg")
+    assert dr.ruta(vieja).endswith("ANTERIORES/ESTRUCTURA ANTERIOR/4.- ALTA DE PLACAS")      # ya vacía, se aparta
