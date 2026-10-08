@@ -29,6 +29,17 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   resguardo» y «Mandar a cancelación».
 - **PIN de WhatsApp** (8-oct): en la ficha va en la información del equipo (General → Equipo, y Equipo en la ficha de
   la línea), no en la línea; sin línea no se muestra. La línea sola ya no lo muestra ni lo pide (pendiente 2.25).
+- **Editar línea y Editar información** (8-oct): la línea se edita aparte (⋮ de la línea, ⋮ del equipo con línea y la
+  tabla de líneas; `apiLineasFormularioRegistro(id, 'LINEA')`, `LineasRegistros.contextoEdicion_`). Una línea de un NUCO
+  trae Línea y Adendum, su responsable (el del equipo) solo para ver y, como estatus, el suyo, EN PROCESO DE CANCELACION
+  o CANCELADA. Editar información de un equipo con línea ya no trae la línea ni el adendum. La línea sola con
+  responsable tiene «Quitar responsable» (queda DISPONIBLE); con un responsable nuevo pasa a USO y en USO lo exige.
+- **Cambio de número** (8-oct): al cambiar el número en Editar línea se elige el motivo, CAMBIO DE NUMERO (la línea
+  ahora tiene otro: movimiento `CAMBIO_NUMERO`, «Cambio de número» en el historial) o CORRECCION DE CAPTURA (Edición).
+  La ficha de la línea tiene «Números de esta línea» (el actual y los anteriores con fecha y comentario,
+  `LineasRepo.numerosDeLinea`) y la tabla de líneas enseña «antes …» junto al número: la búsqueda la encuentra por uno
+  anterior (índice `numerosAnteriores`, caché `indice_telefonia_v6`). Lo de antes del 8-oct sigue solo en la bitácora
+  del AppSheet («Números que ha tenido» del equipo; pendiente 4.1).
 - **Acciones con nombre:** nueva inspección, nueva responsiva, Reasignar (responsiva y luego inspección, las dos
   obligatorias; el servidor exige la inspección del día; el equipo queda en USO; el director sale de la responsiva y
   el jefe directo de la inspección o, si no, de Capital Humano; la inspección llega llenada con la responsiva, se
