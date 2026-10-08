@@ -425,7 +425,7 @@
               { t: 'Tipo', r: (a) => escaparHtml(a.TIPO_ARQUEO || '—') },
               { t: 'Total general', r: (a) => (a.TOTAL_GENERAL === '' || a.TOTAL_GENERAL === null || a.TOTAL_GENERAL === undefined) ? '—' : formatearMoneda(a.TOTAL_GENERAL) },
               { t: 'Diferencia', r: (a) => (a.DIFERENCIA === '' || a.DIFERENCIA === null || a.DIFERENCIA === undefined) ? '—' : formatearMoneda(a.DIFERENCIA) },
-              { t: 'Calificación', r: (a) => (a.CALIFICACION === '' || a.CALIFICACION === null || a.CALIFICACION === undefined) ? '—' : escaparHtml(a.CALIFICACION + '%') },
+              { t: 'Calificación', r: (a) => { const n = normalizarCalificacion_(a.CALIFICACION); return n === null ? '—' : escaparHtml(n.toFixed(2) + '%'); } },
               { t: 'Archivo', r: (a) => a.FORMATO_ARQUEO ? '<a href="' + escaparHtml(a.FORMATO_ARQUEO) + '" target="_blank" rel="noopener">📎 Ver PDF</a>' : '<span class="empty-state" style="margin:0">Sin archivo</span>' },
               { t: 'Evidencia', r: (a) => a.EVIDENCIAS ? '<a href="' + escaparHtml(a.EVIDENCIAS) + '" target="_blank" rel="noopener">📎 Ver evidencia</a>' : '<span class="empty-state" style="margin:0">Sin evidencia</span>' },
               { t: '', r: (a) => accionesFichaRegistro('arqueo', a.ID, { editar: puedeEditarModulo('arqueos'), eliminar: puedeEditarModulo('arqueos') }) },

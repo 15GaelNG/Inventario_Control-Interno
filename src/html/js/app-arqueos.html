@@ -183,6 +183,19 @@
     return '<span class="badge-estado activo"><i data-lucide="circle-check" class="ico"></i> Completo</span>';
   }
 
+  /**
+   * CALIFICACION_AUDITORIA_FINAL en base 100 (ej. 97.06), como la calcula calcularCampos_ --
+   * pero los arqueos migrados de AppSheet la tienen guardada como fracción (ej. 0.9706, igual
+   * que la hoja la muestra con formato de "97.06%"). Un valor <= 1 se interpreta como fracción
+   * y se multiplica por 100, para que ambos se vean igual ("97.06%", no "0.9706%"). null si no
+   * es un número.
+   */
+  function normalizarCalificacion_(valor) {
+    const n = Number(valor);
+    if (valor === '' || valor === null || valor === undefined || isNaN(n)) return null;
+    return n <= 1 ? n * 100 : n;
+  }
+
   /** Agrupa los 9 "grupo" de CAMPOS_ARQUEO en 5 pasos, mismo patrón visual que
    *  el wizard de Inspección Vehicular (chips + Atrás/Siguiente). */
   const PASOS_ARQUEO = [
@@ -866,7 +879,10 @@
           .map((k) => {
             let valor = completo[k];
             if (CAMPOS_MONEDA_DETALLE_ARQUEO.includes(k)) valor = formatearMoneda(valor);
-            else if (k === 'CALIFICACION_AUDITORIA_FINAL') valor = valor + '%';
+            else if (k === 'CALIFICACION_AUDITORIA_FINAL') {
+              const n = normalizarCalificacion_(valor);
+              valor = (n === null ? valor : n.toFixed(2)) + '%';
+            }
             return itemInfo(tituloDesdeClave(k), valor);
           })
           .join('');
@@ -908,7 +924,7 @@
         { campo: 'FECHA_INICIO', titulo: 'Fecha', tipo: 'fecha', enDetalle: false },
         { campo: 'TOTAL_GENERAL', titulo: 'Total general', tipo: 'numero', render: (v) => escaparHtml(formatearMoneda(v)), enDetalle: false },
         { campo: 'DIFERENCIA', titulo: 'Diferencia', tipo: 'numero', render: (v) => badgeDiferencia(v), enDetalle: false },
-        { campo: 'CALIFICACION', titulo: 'Calificación', tipo: 'numero', render: (v) => (v === '' ? '—' : escaparHtml(v + '%')), enDetalle: false },
+        { campo: 'CALIFICACION', titulo: 'Calificación', tipo: 'numero', render: (v) => { const n = normalizarCalificacion_(v); return n === null ? '—' : escaparHtml(n.toFixed(2) + '%'); }, enDetalle: false },
         { campo: 'ESTADO_PDF', titulo: 'Estado PDF', tipo: 'lista', enDetalle: false },
       ],
       accionesFila: [].concat(
@@ -955,9 +971,9 @@
 
     function actualizarKpis(filas) {
       document.getElementById('arq-stat-total').textContent = filas.length;
-      const calificaciones = filas.map((a) => Number(a.CALIFICACION)).filter((n) => !isNaN(n));
+      const calificaciones = filas.map((a) => normalizarCalificacion_(a.CALIFICACION)).filter((n) => n !== null);
       const promedio = calificaciones.length ? calificaciones.reduce((a, b) => a + b, 0) / calificaciones.length : 0;
-      document.getElementById('arq-stat-calificacion').textContent = Math.round(promedio * 100) / 100 + '%';
+      document.getElementById('arq-stat-calificacion').textContent = (Math.round(promedio * 100) / 100).toFixed(2) + '%';
       document.getElementById('arq-stat-diferencias').textContent =
         filas.filter((a) => (Number(a.DIFERENCIA) || 0) !== 0).length;
       document.getElementById('arq-stat-pendientes').textContent =
