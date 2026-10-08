@@ -35,7 +35,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   o CANCELADA. Editar información de un equipo con línea ya no trae la línea ni el adendum. La línea sola con
   responsable tiene «Quitar responsable» (queda DISPONIBLE); con un responsable nuevo pasa a USO y en USO lo exige.
   Un SIM BASICO sin datos de adendum no enseña el adendum (ni al agregar ni al editar).
-- **Vincular, cambiar y desvincular** (8-oct; ⋮ de la ficha; `LineasAcciones.vincular`, `apiLineasVincular`): en el
+- **Vincular, cambiar y desvincular** (8-oct; ⋮ de la ficha y clic derecho de la lista; `LineasAcciones.vincular`, `apiLineasVincular`): en el
   equipo, Vincular línea (sin línea) o Cambiar línea y Desvincular línea; en la línea, Vincular a equipo (suelta y
   DISPONIBLE) o Cambiar de equipo y Desvincular del equipo. Solo líneas sueltas DISPONIBLE y equipos en USO o RESGUARDO
   sin línea. La línea sigue al equipo (USO o DISPONIBLE); la que deja el equipo queda DISPONIBLE o va a la bandeja de
@@ -125,7 +125,8 @@ se vuelve a ligar en APP_EVIDENCIAS y en la columna del PDF (`LineasRepo.revisar
 `LineasArchivos.pdfsFueraDeCarpeta`; al ver Documentos, la página del documento o el Historial y antes de Regenerar o
 Subir PDF firmado; se pregunta a Drive cada vez).
 
-**Permisos de Google:** la app corre con la cuenta de quien publica (`executeAs: USER_DEPLOYING`). Desde la v66, Líneas
+**Permisos de Google:** la app corre con la cuenta que mueve los despliegues (`executeAs: USER_DEPLOYING`); desde el
+8-oct es siempre la de la GitHub Action (`cuentaProd` de `tools/subir/destinos.json`). Desde la v66, Líneas
 usa Drive con `DriveApp` y con el servicio avanzado Drive v3 (`LineasArchivos.listarDrive`, `appsscript.json`), no con
 `UrlFetchApp`: así solo depende de los permisos de Drive y de Sheets, que toda la app necesita, y no del de servicios
 externos (`script.external_request`), que no tenía la cuenta que había publicado la v65. `UrlFetchApp` queda solo en el
@@ -156,9 +157,11 @@ su nombre dentro de ella (`LineasArchivos.resolver`); el DEV además los lee de 
 ## 4. Cómo se trabaja
 
 1. Cambiar en `emmanuel`, `npm test`, commit.
-2. Probar en el DEV de Emmanuel: `npx clasp push --force` (su `.clasp.json` apunta al DEV, con copia de la base de producción).
-3. Unir con `master` antes de publicar (`git fetch`, merge de `origin/master`).
-4. Publicar: `clasp push` a producción, `clasp version` y `clasp redeploy` de **las dos** `/exec` a la misma versión.
+2. Probar en el DEV de Emmanuel: `npm run push` (sube comprimido al proyecto de `.clasp.json`, el DEV, con copia de la
+   base de producción).
+3. Unir con `master` (`git fetch`, merge de `origin/master`) y subir a `master`.
+4. Publicar: desde el 8-oct solo con la GitHub Action, botón «Run workflow» sobre `master` (`docs/subir-automatico.md`):
+   sube, revisa el entorno y mueve **las dos** `/exec` a la misma versión.
 5. Nunca editar en el editor web de Apps Script: una pestaña vieja al guardar regresa todo el proyecto (pasó con la v47).
 
 ## 5. Reglas del módulo
