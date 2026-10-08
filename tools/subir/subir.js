@@ -31,16 +31,77 @@ const RAIZ = path.resolve(__dirname, '..', '..');
 const PROYECTOS = { dev: '.clasp.json', lab: '.clasp.lab.json', prod: '.clasp.prod.json', rama: null };
 const DESTINOS = JSON.parse(fs.readFileSync(path.join(__dirname, 'destinos.json'), 'utf8'));
 // Producción: el primero crea la versión; el segundo es el link que usa el equipo
-const DESPLIEGUES_PROD = [
-  'AKfycbymScqpx_d9yLaYhpqTcFxuo9HfSK8Zb1qcBgzzkTKU5wCS5RRXBN0iClZeA3Fp5_I3',
-  'AKfycbx_53Gz2VfBXhFvLmjnoM2qVzJYmk9kuQD74mUCpOQzeYPaQ1COR8LB_l69sSQb5RJB',
-];
+const DESPLIEGUES_PROD = DESTINOS.desplieguesProd;
+const EN_ACTION = process.env.GITHUB_ACTIONS === 'true';
 
 // clasp se corre con el mismo Node y sin shell: así una ruta o una descripción con espacios
 // llega entera (en Windows, npx.cmd con shell las partía)
 const CLASP = path.join(RAIZ, 'node_modules', '@google', 'clasp', 'build', 'src', 'index.js');
 function clasp(args, cwd) {
   return execFileSync(process.execPath, [CLASP].concat(args), { cwd: cwd || RAIZ, encoding: 'utf8' });
+}
+
+/** En la Action, el resumen que sale al abrir la ejecución (GITHUB_STEP_SUMMARY); fuera de ella, nada */
+function resumen_(markdown) {
+  if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, markdown + '\n');
+}
+
+/** La cuenta de Google con la que corre clasp: con ella va a correr la app si se mueven los despliegues */
+function cuentaClasp_() {
+  const m = /logged in as (\S+?)\.?\s*$/m.exec(clasp(['show-authorized-user']));
+  return m ? m[1].toLowerCase() : '';
+}
+
+/**
+ * Antes de mover los despliegues de prod. La app corre con la cuenta de quien los MUEVE (executeAs:
+ * USER_DEPLOYING): desde la Action es la del secreto CLASPRC_JSON, y tiene que ser `cuentaProd`
+ * (destinos.json); desde una máquina sería la de esa persona, y si a esa cuenta le falta una carpeta o
+ * una plantilla, la app falla para todos (8-oct: las inspecciones sin PDF). Por eso, fuera de la Action,
+ * solo con --desde-aqui.
+ */
+function exigirCuentaDeProd_(args) {
+  const cuenta = cuentaClasp_();
+  if (!EN_ACTION && !args.includes('--desde-aqui')) {
+    throw new Error('A producción se despliega con la GitHub Action (Actions → "Subir a Apps Script" → Run workflow ' +
+      'sobre master), para que la app corra siempre con la misma cuenta. Si de verdad tiene que ser desde aquí, ' +
+      'agrega --desde-aqui: la app va a correr con TU cuenta de clasp (' + cuenta + ').');
+  }
+  if (EN_ACTION && DESTINOS.cuentaProd && cuenta !== DESTINOS.cuentaProd.toLowerCase()) {
+    throw new Error('El secreto CLASPRC_JSON es de ' + (cuenta || 'una cuenta que no se pudo leer') + ', no de ' +
+      DESTINOS.cuentaProd + ' (cuentaProd en tools/subir/destinos.json). No se tocó producción.');
+  }
+  console.log('La app de producción va a correr con la cuenta ' + cuenta + '.');
+  return cuenta;
+}
+
+/** Mueve los dos links de prod a la versión y revisa que los dos hayan quedado ahí */
+function moverDespliegues_(proyecto, version, descripcion) {
+  clasp(['-P', proyecto, 'update-deployment', DESPLIEGUES_PROD[1], '-V', version, '-d', descripcion]);
+  const lista = clasp(['-P', proyecto, 'list-deployments']);
+  const enVersion = DESPLIEGUES_PROD.filter((d) => new RegExp(d + ' @' + version + '\\b').test(lista));
+  if (enVersion.length !== 2) throw new Error('Los dos despliegues no quedaron en @' + version + ':\n' + lista);
+}
+
+const LINK_EQUIPO = () => 'https://script.google.com/a/macros/' + DESTINOS.dominio + '/s/' + DESPLIEGUES_PROD[1] + '/exec';
+
+/**
+ * --regresar N: los dos links vuelven a una versión que ya existe, sin subir código. Para cuando una
+ * versión nueva salió mal: el equipo vuelve a la anterior en segundos y el arreglo se hace con calma.
+ */
+function regresar_(args, version) {
+  if (!/^\d+$/.test(version || '')) throw new Error('--regresar lleva el número de versión (p. ej. --regresar 65)');
+  const cuenta = exigirCuentaDeProd_(args);
+  fs.mkdirSync(path.join(RAIZ, '.construido'), { recursive: true });
+  const proyecto = path.join(RAIZ, '.construido', 'prod.clasp.json');
+  fs.writeFileSync(proyecto, JSON.stringify({ scriptId: scriptIdDe('prod'), rootDir: 'prod' }));
+  const antes = (/AKfycbx_\S+ @(\d+)/.exec(clasp(['-P', proyecto, 'list-deployments'])) || [])[1];
+  const descripcion = 'Regreso a la v' + version + (antes ? ' (desde la v' + antes + ')' : '');
+  clasp(['-P', proyecto, 'update-deployment', DESPLIEGUES_PROD[0], '-V', version, '-d', descripcion]);
+  moverDespliegues_(proyecto, version, descripcion);
+  console.log('Regresado: los dos links de producción en la versión ' + version + '.');
+  resumen_('## ↩️ Producción regresó a la versión ' + version + '\n\n' +
+    '| | |\n|---|---|\n| Antes | v' + (antes || '?') + ' |\n| Ahora | v' + version + ' |\n' +
+    '| La app corre con | ' + cuenta + ' |\n| Link del equipo | ' + LINK_EQUIPO() + ' |');
 }
 
 function ramaActual_() {
@@ -91,18 +152,17 @@ const normal_ = (texto) => texto.replace(/\r\n/g, '\n').trimEnd();
 async function main() {
   const args = process.argv.slice(2);
   const destino = args[0];
-  if (!(destino in PROYECTOS)) throw new Error('Uso: node tools/subir/subir.js dev|lab|prod|rama [--desplegar "descripción"]');
+  if (!(destino in PROYECTOS)) throw new Error('Uso: node tools/subir/subir.js dev|lab|prod|rama [--desplegar "descripción" | --regresar N]');
+  const r = args.indexOf('--regresar');
+  if (r >= 0) {
+    if (destino !== 'prod') throw new Error('--regresar es solo para prod');
+    return regresar_(args, args[r + 1]);
+  }
   const i = args.indexOf('--desplegar');
   const descripcion = i >= 0 ? args[i + 1] : null;
   if (i >= 0 && (destino !== 'prod' || !descripcion)) throw new Error('--desplegar es solo para prod y lleva una descripción');
-  // La app corre con la cuenta de quien MUEVE los despliegues (executeAs: USER_DEPLOYING). Desde la Action es
-  // siempre la del secreto CLASPRC_JSON; desde una máquina sería la de esa persona, y si a esa cuenta le falta
-  // una carpeta o una plantilla, la app falla para todos (8-oct: las inspecciones sin PDF).
-  if (descripcion && process.env.GITHUB_ACTIONS !== 'true' && !args.includes('--desde-aqui')) {
-    throw new Error('A producción se despliega con la GitHub Action (Actions → "Subir a Apps Script" → Run workflow ' +
-      'sobre master), para que la app corra siempre con la misma cuenta. Si de verdad tiene que ser desde aquí, ' +
-      'agrega --desde-aqui: la app va a correr con TU cuenta de clasp (docs/subir-automatico.md).');
-  }
+  // Antes de subir nada: si no se va a poder desplegar, que truene ya
+  if (descripcion) exigirCuentaDeProd_(args);
 
   const scriptId = scriptIdDe(destino);
   const carpeta = path.join(RAIZ, '.construido', destino);
@@ -157,20 +217,26 @@ async function main() {
   // Los IDs del proyecto (carpetas, libros, hojas): en prod, un error no deja desplegar
   const rev = await entorno.revisar(head[1], DESTINOS.dominio);
   entorno.imprimir(rev);
+  resumen_('### Revisión del entorno (' + (rev.entorno || '?') + ')' + (rev.cuenta ? ' con ' + rev.cuenta : '') + '\n\n' +
+    (rev.errores.length ? '**' + rev.errores.length + ' errores:**\n' + rev.errores.map((e) => '- ❌ ' + e).join('\n') : '✅ Sin errores') +
+    (rev.avisos.length ? '\n\n<details><summary>' + rev.avisos.length + ' avisos</summary>\n\n' + rev.avisos.map((a) => '- ' + a).join('\n') + '\n</details>' : ''));
   if (destino === 'prod' && rev.errores.length) {
     throw new Error('El entorno de producción tiene errores: ' + (descripcion ? 'NO se desplegó' : 'no lo despliegues') +
       ' (el código ya está subido; la versión que usa el equipo sigue igual).');
   }
 
   if (descripcion) {
+    const antes = (/AKfycbx_\S+ @(\d+)/.exec(clasp(['-P', proyecto, 'list-deployments'])) || [])[1];
     const primero = clasp(['-P', proyecto, 'update-deployment', DESPLIEGUES_PROD[0], '-d', descripcion]);
     const m = /@(\d+)/.exec(primero);
     if (!m) throw new Error('No encontré la versión nueva en: ' + primero);
-    clasp(['-P', proyecto, 'update-deployment', DESPLIEGUES_PROD[1], '-V', m[1], '-d', descripcion]);
-    const lista = clasp(['-P', proyecto, 'list-deployments']);
-    const enVersion = DESPLIEGUES_PROD.filter((d) => new RegExp(d + ' @' + m[1] + '\\b').test(lista));
-    if (enVersion.length !== 2) throw new Error('Los dos despliegues no quedaron en @' + m[1] + ':\n' + lista);
+    moverDespliegues_(proyecto, m[1], descripcion);
     console.log('Desplegado: los dos links de producción en la versión ' + m[1] + '.');
+    resumen_('## 🚀 Producción en la versión ' + m[1] + '\n\n| | |\n|---|---|\n| Qué cambia | ' + descripcion.replace(/\|/g, '/') + ' |\n' +
+      '| Antes | v' + (antes || '?') + ' |\n| La app corre con | ' + (rev.cuenta || '?') + ' |\n| Link del equipo | ' + LINK_EQUIPO() + ' |\n\n' +
+      (antes ? 'Si algo salió mal: **Run workflow** → acción "regresar a una versión" → versión `' + antes + '`.' : ''));
+  } else if (destino === 'prod') {
+    resumen_('## 🔎 Subido a producción sin desplegar\n\nEl código quedó en el link `/dev`; el equipo sigue en la versión de antes.');
   }
 }
 
