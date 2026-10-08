@@ -21,6 +21,6 @@ test('el DEV de Emmanuel: copia de producción, hojas nuevas y Drive de pruebas 
   assert.ok(dev.length > 100, 'falta el bloque del DEV');
   assert.match(dev, /LINEAS_LECTURA: 'ESTRUCTURA',/);
   assert.match(dev, /LINEAS_HOJA_VIEJA_RETIRADA: '\d{4}-\d{2}-\d{2}T/);
-  assert.match(dev, /SS_ID_TELEFONIA: '1RgtHxKZgo6PFYY1e6ic9coqjBUaNhRlk2X8_Raz6HNQ'/);
+  assert.match(dev, /SS_ID_TELEFONIA: '1L177getuQ0RSGXbVsLZEgc9Fn5d2QySDlwjvUuqu_0E'/);
   assert.doesNotMatch(dev, /17YrtuMYjGGg5LZm1BxMNrEZyCxTMI2DiUHSVUIldUlc|12SRBi1nZlIzfNx0d2y1fAtzOydA2QrT-/);
 });
