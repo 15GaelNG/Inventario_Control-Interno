@@ -39,8 +39,16 @@ Cada subida hace esto:
   `npm test` y, si pasa, sube a su DEV. Para otra persona, agrega su rama y el scriptId de
   su DEV en `destinos.json`, y la rama en `on.push.branches` del workflow.
 - **Producción, solo a mano:** en GitHub → Actions → "Subir a Apps Script" → **Run workflow**,
-  elige `master` y escribe qué cambia. Corre las pruebas, sube y deja los dos links en la
-  versión nueva. El botón aparece para `master` hasta que el workflow esté en `master`, es
+  elige `master` y una **acción**:
+  - **desplegar** (escribe qué cambia): pruebas, sube, revisa y deja los dos links en la versión nueva;
+  - **revisar sin desplegar**: sube al `/dev` de prod y corre la revisión del entorno; el equipo no ve nada.
+    Sirve para saber si un despliegue va a pasar;
+  - **regresar a una versión** (escribe el número): los dos links vuelven a una versión que ya existe, sin
+    subir código. Si una versión salió mal, el equipo vuelve a la anterior en un minuto.
+
+  Al terminar, la ejecución muestra un resumen: versión de antes y de ahora, con qué cuenta corre la
+  app, la revisión del entorno y a qué versión regresar si algo salió mal. La cuenta del secreto tiene
+  que ser `cuentaProd` de `tools/subir/destinos.json`; si no, no se toca producción. El botón aparece para `master` hasta que el workflow esté en `master`, es
   decir, después de mezclarlo.
 
 ### Producción solo desde la Action: con qué cuenta corre la app
