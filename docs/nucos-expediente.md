@@ -75,6 +75,7 @@ comparte la cuota con todo el mundo y se agotó al leer.
 
 | Paso | Qué hace |
 |---|---|
+| `leer-appsheet` | Solo lectura: cada archivo de `VEHICULOS_Files_`, también las versiones viejas, → su NUCO |
 | `leer` | Solo lectura: árbol de `1.-DOCUMENTACIÓN` de cada NUCO, la hoja VEHICULOS (sin responsable ni número de empleado), `VEHICULOS_Files_` y lo que registran las hojas de Responsiva y Adherente vehicular. Queda en `tools/nucos/.cache/` (fuera de git) |
 | `plan` | Qué archivo va a cuál carpeta de cada NUCO. No toca Drive |
 | `excel [archivo]` | Un renglón por vehículo con sus 6 documentos y la liga a cada uno, el detalle archivo por archivo y un resumen |
@@ -82,6 +83,7 @@ comparte la cuota con todo el mundo y se agotó al leer.
 | `respaldar <carpeta>` | Copia `1.-DOCUMENTACIÓN` de cada NUCO tal como está |
 | `ordenar --nucos … \| --todos` | **En la real**: mueve dentro del mismo NUCO y copia ahí lo de AppSheet y la app |
 | `deshacer <bitacora.jsonl>` | Regresa lo que hizo un `ordenar` |
+| `verificar` | Solo lectura: que no falte nada de lo de antes ni de AppSheet en su NUCO |
 
 Pruebas: `npm run test:nucos-py` (18). Incluyen un Drive simulado que comprueba que `deshacer` deja todo idéntico.
 
@@ -116,6 +118,7 @@ Bitácoras del 8-oct-2026. Para deshacer todo, de la más nueva a la más vieja:
 
 | Bitácora | Qué fue |
 |---|---|
+| `20261008-165647` | Las 489 versiones anteriores de AppSheet (solo copias) |
 | `20261008-161618` | Los 4 últimos (156, 159, 160, 235) |
 | `20261008-160842` | Los 109 pendientes después del corte |
 | `20261008-150505` | La corrida de todos, cortada en 537/637 porque se desconectó la unidad D: |
@@ -142,6 +145,18 @@ Bitácoras del 8-oct-2026. Para deshacer todo, de la más nueva a la más vieja:
 6. **Los 637.** A los 537 se desconectó la unidad D:, donde vivía el repo. La bitácora quedó completa, se respaldó y
    una segunda corrida terminó los pendientes. Repetir `ordenar` no duplica nada.
 7. **Revisión final**, solo lectura: los 637 con una sola `1.-DOCUMENTACIÓN`, las 6 carpetas y nada más que ANTERIORES.
+8. **Las versiones anteriores de AppSheet.** La hoja VEHICULOS solo liga la versión vigente de cada responsiva, póliza
+   y tenencia, pero AppSheet dejaba las anteriores en `VEHICULOS_Files_` (1,144 responsivas, 411 pólizas, 420
+   tenencias). `leer-appsheet` asignó 2,057 de 2,106 a su NUCO, por su nombre exacto en la bitácora CAMBIOS VEHICULOS
+   o por la clave con que empieza (ID, ID ANTERIOR, FOLIO). Casi todas ya estaban idénticas en el NUCO; se copiaron
+   las 489 que faltaban a `RESPONSIVAS ANTERIORES`, `SEGUROS ANTERIORES` y `TENENCIAS ANTERIORES`
+   (`ordenar --todos --solo-copias`, bitácora `20261008-165647`).
+9. **Verificación de completitud** (`verificar`, contra la lectura de antes):
+   - de los 7,998 archivos que había en las DOCUMENTACIÓN, **0 faltan** y **0 quedaron en otro NUCO**;
+   - de los 2,057 de AppSheet asignados, **0 sin su contenido** en su NUCO; igual con lo de la app nueva.
+   - Hay 9,303 archivos hoy.
+   - Sin lugar: 6 archivos de vehículos sin carpeta de NUCO (96, 257, 269, 643, 644) y 49 con claves de AppSheet
+     que ya no están en la hoja. Están en `.cache/verificacion.json` para revisarlos a mano.
 
 ## Resultado
 

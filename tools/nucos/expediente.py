@@ -17,6 +17,7 @@
                               EN LA CARPETA REAL: mueve cada archivo a su lugar dentro de su NUCO y copia ahí lo de
                               AppSheet y la app. Nada sale de su NUCO; todo queda en .cache/bitacoras/
     deshacer <bitacora.jsonl> regresa lo que hizo un ordenar
+    verificar                 solo lectura: que no falte nada de lo de antes ni de AppSheet en su NUCO
     respaldar <carpeta>       copia 1.-DOCUMENTACIÓN de cada NUCO tal como está hoy (leída en vivo) a esa carpeta
 
 Usa el token de tools/migracion (autorizar.py lab, con Drive). Copiar solo LEE el original. Candados: aplicar
@@ -857,6 +858,93 @@ def respaldar(carpeta, hilos=6):
     print("\nRespaldo: https://drive.google.com/drive/folders/%s" % raiz)
 
 
+def verificar():
+    """SOLO LECTURA. Que no falte ningún pedazo de documentación, comparando contra la lectura de ANTES (arbol.json):
+    1. cada archivo que había en 1.-DOCUMENTACIÓN de un NUCO sigue existiendo, fuera de la papelera, dentro de ESE NUCO;
+    2. cada archivo de VEHICULOS_Files_ asignado a un NUCO (vf_nuco.json) tiene su contenido (md5) en ese NUCO;
+    3. igual con lo que registró la app (app.json).
+    El detalle queda en .cache/verificacion.json."""
+    d = drive()
+    nucos = [n for n in hijos_de(d, [NUCOS])[NUCOS] if n["mimeType"] == reglas.CARPETA]
+    nuco_de = {n["id"]: n["name"].strip() for n in nucos}
+    sub = hijos_de(d, list(nuco_de))
+    ahora = {}        # id → (NUCO, md5, nombre)
+    md5_de = {}       # NUCO → contenidos
+    nivel = []
+    for n in nucos:
+        for h in sub[n["id"]]:
+            if h["mimeType"] == reglas.CARPETA and reglas.es_documentacion(h["name"]):
+                h["_nuco"] = n["name"].strip()
+                nivel.append(h)
+    while nivel:
+        por = hijos_de(d, [c["id"] for c in nivel])
+        siguiente = []
+        for c in nivel:
+            for h in por[c["id"]]:
+                h["_nuco"] = c["_nuco"]
+                if h["mimeType"] == reglas.CARPETA:
+                    siguiente.append(h)
+                else:
+                    ahora[h["id"]] = (h["_nuco"], h.get("md5Checksum"), h["name"])
+                    if h.get("md5Checksum"):
+                        md5_de.setdefault(str(int(h["_nuco"])) if h["_nuco"].isdigit() else h["_nuco"], set()).add(h["md5Checksum"])
+        nivel = siguiente
+
+    # 1. Lo que había en cada NUCO
+    antes = {}
+    def juntar(nodo, nuco):
+        for h in nodo.get("hijos") or []:
+            if h["mimeType"] == reglas.CARPETA:
+                juntar(h, nuco)
+            else:
+                antes[h["id"]] = (nuco, h["name"])
+    for n in json.loads((CACHE / "arbol.json").read_text(encoding="utf-8")):
+        for doc in n["documentacion"]:
+            juntar(doc, n["name"].strip())
+    faltan, otro_nuco = [], []
+    for i, (nuco, nombre) in antes.items():
+        if i not in ahora:
+            try:
+                f = llamar(d.files().get(fileId=i, fields="name,trashed,parents", supportsAllDrives=True))
+                donde = "en la papelera" if f.get("trashed") else "fuera de 1.-DOCUMENTACIÓN"
+            except Exception:   # noqa: BLE001
+                donde = "ya no existe"
+            faltan.append({"nuco": nuco, "id": i, "nombre": nombre, "donde": donde})
+        elif ahora[i][0] != nuco:
+            otro_nuco.append({"nuco": nuco, "id": i, "nombre": nombre, "ahora_en": ahora[i][0]})
+
+    # 2 y 3. AppSheet y la app: el contenido en su NUCO
+    vf = {f["name"].strip(): f for f in json.loads((CACHE / "vehiculos_files.json").read_text(encoding="utf-8"))}
+    asignados = json.loads((CACHE / "vf_nuco.json").read_text(encoding="utf-8")) if (CACHE / "vf_nuco.json").exists() else {}
+    sin_appsheet, sin_carpeta = [], []
+    hay_nuco = set(md5_de) | {str(int(x)) for x in nuco_de.values() if x.isdigit()}
+    for nombre, nuco in asignados.items():
+        f, k = vf.get(nombre), str(int(nuco)) if nuco.isdigit() else nuco
+        if not f:
+            continue
+        if k not in hay_nuco:
+            sin_carpeta.append({"nuco": nuco, "archivo": nombre})
+        elif f.get("md5Checksum") and f["md5Checksum"] not in md5_de.get(k, ()):
+            sin_appsheet.append({"nuco": nuco, "archivo": nombre, "id": f["id"]})
+    no_asignados = sorted(set(vf) - set(asignados))
+    sin_app = []
+    if (CACHE / "app.json").exists():
+        for a in json.loads((CACHE / "app.json").read_text(encoding="utf-8")):
+            if a.get("md5Checksum") and a["md5Checksum"] not in md5_de.get(str(int(a["nucco"])), ()):
+                sin_app.append({"nuco": a["nucco"], "archivo": a["name"]})
+
+    r = {"archivos_antes": len(antes), "archivos_ahora": len(ahora), "faltan": faltan, "en_otro_nuco": otro_nuco,
+         "appsheet_sin_su_contenido_en_el_nuco": sin_appsheet, "appsheet_de_vehiculos_sin_carpeta": sin_carpeta,
+         "appsheet_sin_vehiculo": no_asignados, "app_sin_su_contenido_en_el_nuco": sin_app}
+    (CACHE / "verificacion.json").write_text(json.dumps(r, ensure_ascii=False, indent=1), encoding="utf-8")
+    print("Archivos en 1.-DOCUMENTACIÓN: antes %d, ahora %d" % (len(antes), len(ahora)))
+    print("1. De los de antes, faltan: %d   en otro NUCO: %d" % (len(faltan), len(otro_nuco)))
+    print("2. AppSheet asignados (%d): sin su contenido en el NUCO: %d · de vehículos sin carpeta: %d · sin vehículo: %d"
+          % (len(asignados), len(sin_appsheet), len(sin_carpeta), len(no_asignados)))
+    print("3. De la app: sin su contenido en el NUCO: %d" % len(sin_app))
+    print("Detalle: %s" % (CACHE / "verificacion.json"))
+
+
 def deshacer(ruta):
     """Regresa lo que hizo ordenar(), de la última línea a la primera: lo movido vuelve a su carpeta y nombre, lo
     copiado y las carpetas creadas (si quedaron vacías) van a la papelera."""
@@ -886,7 +974,7 @@ def deshacer(ruta):
 
 if __name__ == "__main__":
     args = sys.argv[1:]
-    if not args or args[0] not in ("leer", "leer-appsheet", "plan", "aplicar", "excel", "ordenar", "deshacer", "respaldar"):
+    if not args or args[0] not in ("leer", "leer-appsheet", "plan", "aplicar", "excel", "ordenar", "deshacer", "respaldar", "verificar"):
         sys.exit(__doc__)
     if args[0] == "leer":
         leer()
@@ -897,6 +985,8 @@ if __name__ == "__main__":
                 int(args[args.index("--hilos") + 1]) if "--hilos" in args else 6, "--solo-copias" in args)
     elif args[0] == "leer-appsheet":
         leer_appsheet()
+    elif args[0] == "verificar":
+        verificar()
     elif args[0] == "respaldar":
         respaldar(args[1], int(args[args.index("--hilos") + 1]) if "--hilos" in args else 6)
     elif args[0] == "deshacer":
