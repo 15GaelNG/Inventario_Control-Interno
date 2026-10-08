@@ -3341,8 +3341,9 @@
               info(q, 'VIGENCIA', 'Vigencia', vigenciaTexto(q))] : [])
             .concat([titulo(q, 'DESTINO', 'archive')], els, [titulo(q, 'ESTATUS', 'toggle-right')], estatus);
         });
-        // Un solo COMENTARIO (plan §5.2) y el TICKET
-        const motivoEl = campo('_MOTIVO', 'Comentario', 'area', { requerido: 'SIEMPRE', valor: '' });
+        // Un solo COMENTARIO (plan §5.2) y el TICKET. La regla del servidor (más de 3 caracteres) se revisa aquí, antes de
+        // pedir las inspecciones: si no, el error salía al final, con las inspecciones ya guardadas (usuario, 8-oct)
+        const motivoEl = campo('_MOTIVO', 'Comentario', 'area', { requerido: 'SIEMPRE', valor: '', valida: 'COMENTARIOS' });
         const ticketEl = campo('_TICKET', 'Ticket', 'texto', { valor: '', literal: true });
         cuerpo.innerHTML =
           ((form.omitidos || []).length ? '<div class="ln-nota ln-alerta">' + icono('triangle-alert', 'ln-icon-sm') + ' No se incluyen: ' +

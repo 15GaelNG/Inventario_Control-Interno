@@ -217,7 +217,7 @@ const LineasCaptura = (function () {
       // Un solo COMENTARIO (plan §5.2): se guarda en COMENTARIO (lo que imprime el PDF) y en el historial. Dentro de
       // una acción que ya pidió el suyo (mandar a resguardo, reasignar) no es obligatorio (usuario, 4-oct)
       titulo_('COMENTARIO', 'message-square-text'),
-      campo_('COMENTARIO', 'Comentario', 'area', { valor: deResp('COMENTARIO', ''), requerido: enAccion || resp ? 'NUNCA' : 'SIEMPRE' }),
+      campo_('COMENTARIO', 'Comentario', 'area', { valor: deResp('COMENTARIO', ''), requerido: enAccion || resp ? 'NUNCA' : 'SIEMPRE', valida: 'COMENTARIOS' }),
       titulo_('FIRMAS', 'signature'),
       // En el sistema solo firma el responsable principal (el de Capital Humano); los adicionales firman el PDF impreso
       // (usuario, 6-oct)
@@ -310,7 +310,7 @@ const LineasCaptura = (function () {
       campo_('TICKET', 'Ticket', 'texto', { valor: '' }),
       // Un solo COMENTARIO (plan §5.2): se guarda en COMENTARIO (lo que imprime el PDF) y en el historial
       titulo_('COMENTARIO', 'message-square-text'),
-      campo_('COMENTARIO', 'Comentario', 'area', { valor: '', requerido: 'SIEMPRE' }),
+      campo_('COMENTARIO', 'Comentario', 'area', { valor: '', requerido: 'SIEMPRE', valida: 'COMENTARIOS' }),
       titulo_('FIRMAS', 'signature'),
       campo_('FIRMA RESPONSABLE', 'FIRMA RESPONSABLE', 'firma', { valor: '' }),
       ro('NOMBRE CI', 'NOMBRE RESPONSABLE DE CONTROL INTERNO', usuario.nombre || ''),
@@ -401,6 +401,8 @@ const LineasCaptura = (function () {
       const valor = valores[e.columna];
       if (visible && LineasChecklist.cumple(e.requerido, tipo) && !valor) { errores.push(e.etiqueta + ' es obligatorio'); return; }
       if (!valor) return;
+      // Comentario con contexto (más de 3 caracteres: «N/A» no), la misma regla que las acciones (usuario, 8-oct)
+      if (e.valida === 'COMENTARIOS' && valor.length <= 3) errores.push(e.etiqueta + ': ESCRIBE MÁS DE 3 CARACTERES');
       if (e.control === 'escala' && e.opciones.indexOf(valor.toUpperCase()) < 0) errores.push(e.etiqueta + ': valor no válido');
       if (e.control === 'escala') valores[e.columna] = valor.toUpperCase();
       // Valid_If = IN([COLUMNA], SORT(SELECT(LISTAS TELEFONOS[COLUMNA], TRUE)))
