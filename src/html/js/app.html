@@ -4591,6 +4591,7 @@
       idCampo: 'ID',
       idTabla: 'tickets',
       ordenInicial: { campo: 'FECHA', dir: 'desc' },
+      buscarColumna: [{ campo: 'PLACA', placeholder: 'Buscar por Placa…' }],
       textoVacio: 'Todavía no hay tickets registrados',
       alCambiarFiltros: () => actualizarKpis(tabla.getFiltradas()),
       exportar: {
@@ -4615,7 +4616,7 @@
         { campo: 'SOLICITANTE', titulo: 'Solicitante', tipo: 'lista' },
         { campo: 'TIPO ATENCION', titulo: 'Tipo de atención', tipo: 'lista' },
         { campo: 'QUIEN ATENDIO', titulo: 'Atendió', tipo: 'lista' },
-        { campo: 'PLACA', titulo: 'Placa', tipo: 'texto', visible: false },
+        { campo: 'PLACA', titulo: 'Placa', tipo: 'texto', fijada: true },
         { campo: 'COMENTARIO', titulo: 'Comentario', tipo: 'texto', visible: false },
         { campo: 'FECHA DE REGISTRO', titulo: 'Fecha de registro', tipo: 'fecha', visible: false },
       ],
