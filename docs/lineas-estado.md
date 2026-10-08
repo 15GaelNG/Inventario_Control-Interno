@@ -4,7 +4,7 @@ Rama `emmanuel` = `master` = producción (la versión vigente está en el INDICE
 con COMENTARIO, plantillas «(SISTEMA)», página de la responsiva, patrón con 9 puntos en el PDF, Reasignar corregido,
 responsables adicionales, sin «quien lo usa», firma guardada, PDF ligado fuera de su carpeta, PIN en minúsculas y Drive
 sin `UrlFetchApp`). Lo que `emmanuel` tenía de más hasta el 8-oct (PIN solo con números, sin la compatibilidad con
-OBSERVACIONES, la hoja armada en Exportar a Excel y la pantalla Proveedor) está en la rama `emmanuel-respaldo-8oct` ·
+OBSERVACIONES, la hoja armada en Exportar a Excel y la pantalla Proveedor) quedó en `_archivo/emmanuel_respaldo_8oct.zip` de la carpeta del proyecto ·
 Última actualización: 2026-10-08
 
 Qué es hoy el módulo **Líneas** (equipos celulares y líneas telefónicas), dónde vive cada cosa y cómo se trabaja.
