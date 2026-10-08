@@ -86,3 +86,14 @@ test('la pantalla: Editar línea en los menús, { cambio } y la búsqueda por n�
   assert.match(html, /function tarjetaNumeros\(l, cambios\)/);
   assert.match(read('src/services/lineas/LineasRepo.gs'), /'numerosAnteriores'\];/);
 });
+
+test('al editar, un SIM BASICO sin datos de adendum no enseña el adendum', () => {
+  const Reg = cargar();
+  const basica = { TIPO: 'LINEA BASICA', 'NUMERO TELEFONO': '4420000002', 'TIPO DE LINEA': 'SIM BASICO', 'ESTATUS LINEA': 'DISPONIBLE' };
+  const ctx = Reg._contextoEdicion(basica, null);
+  const els = Reg._elementos(basica, {}, usuario, ctx);
+  assert.ok(!Reg._cumple(campo(els, 'FIN PLAN').mostrar, basica, ctx));
+  // Con datos de adendum se siguen viendo
+  const conFin = Object.assign({}, basica, { 'FIN PLAN': '2027-01-01' });
+  assert.equal(campo(Reg._elementos(conFin, {}, usuario, ctx), 'FIN PLAN').mostrar, 'SIEMPRE');
+});
