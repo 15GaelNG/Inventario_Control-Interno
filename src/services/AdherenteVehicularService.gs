@@ -32,12 +32,11 @@ const AdherenteVehicularService = (function () {
   // Doc de Google con los marcadores <<CAMPO>> (formato F-CI01-047, corregido por el área).
   const PLANTILLA = '1vwDs6mtcGHGVF1RdirqC6Um30QGRclmJXMDoDO0LhMQ';
 
-  // Carpetas de Drive (decisión del usuario, 06-oct-2026): las firmas van a la MISMA carpeta
-  // que ya usa Responsiva Vehicular (ResponsivaVehicularService.CARPETA_IMAGENES); el PDF
-  // final a una carpeta propia, separada de la de Responsiva.
-  // Por nombre dentro de la raíz de la app (DriveUtils.carpetaEnRaiz): cada proyecto usa las suyas
+  // Carpetas de Drive: las firmas van a la MISMA carpeta que ya usa Responsiva Vehicular
+  // (ResponsivaVehicularService.CARPETA_IMAGENES, por nombre en la raíz de la app; decisión del 06-oct-2026).
+  // El PDF va al expediente del vehículo, 5.-RESPONSIVA/ADHERENTES de su NUCO (ExpedienteNuco, 08-oct-2026);
+  // la carpeta "ADHERENTES VEHICULAR" de la raíz ya no se usa.
   const CARPETA_IMAGENES = 'RESPONSIVAS VEHICULARES_Images';   // compartida con Responsiva
-  const CARPETA_PDF = 'ADHERENTES VEHICULAR';
 
   // Caja de las firmas en el PDF: la misma que usa InspeccionesService (150 × 60 pt).
   const FIRMA_PDF = { ancho: 150, alto: 60 };
@@ -198,11 +197,17 @@ const AdherenteVehicularService = (function () {
           plantillaId: PLANTILLA,
           datos: datosPdf,
           imagenes: imagenesPdf,
-          carpetaId: DriveUtils.carpetaEnRaiz(CARPETA_PDF).getId(),
+          // Directo en el expediente del vehículo (…/5.-RESPONSIVA/ADHERENTES), sin tocar la responsiva vigente
+          carpetaId: ExpedienteNuco.carpeta(vehiculo['NUCCO'], 'RESPONSIVA', ['ADHERENTES']).getId(),
           nombre: PdfService.nombreArchivo([
             'ADHERENTE VEHICULAR', adherente, vehiculo['PLACA'] || vehiculo['FOLIO'], PdfService.fechaParaNombre(ahora),
           ]),
         });
+        try {
+          ExpedienteNuco.archivar(DriveApp.getFileById(pdf.fileId), vehiculo['NUCCO'], 'RESPONSIVA', { adherente: true });
+        } catch (e) {
+          avisos.push('El PDF se generó, pero no se pudo acomodar en el expediente del NUCO: ' + e.message);
+        }
         SheetUtils.update(ssId(), hoja_().getName(), id, { 'PDF': pdf.url }, ID_COLUMN);
       } catch (e) {
         avisos.push('El adherente se guardó, pero no se pudo generar el PDF: ' + e.message);

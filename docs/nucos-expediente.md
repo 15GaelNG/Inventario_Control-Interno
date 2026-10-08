@@ -224,9 +224,12 @@ renombres (incluidas las carpetas viejas apartadas), 1,320 copias y 6,377 carpet
 
 ## Pendientes
 
-1. **Que la app guarde directo en el NUCO.** Responsiva y Adherente vehicular hoy guardan su PDF en
-   `RESPONSIVAS_VEHICULARES` / `ADHERENTES VEHICULAR`, y los adjuntos de póliza y tenencia caen en `VEHICULOS_Files_`.
-   La decisión es jubilar `RESPONSIVAS_VEHICULARES`. Mientras no se cambie, lo nuevo vuelve a caer fuera del NUCO.
+1. **Que la app guarde directo en el NUCO** — hecho en la rama `ayrton` (8-oct), falta que salga a producción:
+   `src/utils/ExpedienteNuco.gs`. Vehículos archiva en el NUCO la póliza, tenencia, responsiva y documento de baja al
+   guardar la ficha; Responsiva y Adherente generan su PDF directo en `5.-RESPONSIVA` (y `ADHERENTES`).
+   `RESPONSIVAS_VEHICULARES` y `ADHERENTES VEHICULAR` ya no se usan. Siguen pendientes: la factura (Vehículos no tiene
+   columna para subirla), mover a `BAJA DE ADHERENTES` cuando un adherente se da de baja, y las carpetas 2.-, 3.- y 4.-
+   (servicios, verificaciones, inspecciones), que todavía no se revisan.
 2. **Los 49 archivos de AppSheet sin vehículo** (29 responsivas, 18 tenencias, 1 póliza y otro archivo, con 35 claves
    como `refwf07` o `5a1dbf78`). Sus claves ya no están en la hoja y algunas aparecen en la bitácora ligadas a dos
    vehículos. Que el área los asigne; la lista está en `.cache/verificacion.json`.

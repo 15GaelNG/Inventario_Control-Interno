@@ -15,7 +15,7 @@ const VEHICULO_BASE = {
 };
 
 function crearContexto() {
-  const llamadas = { insert: [], update: [], actualizarVehiculo: [], imagenesSubidas: [] };
+  const llamadas = { expediente: [], insert: [], update: [], actualizarVehiculo: [], imagenesSubidas: [] };
   const contexto = vm.createContext({
     Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'SS' }, DRIVE_FOLDERS: { REPORTES: () => 'FOLDER' } },
     Permisos: { puedeLeer: () => {}, puedeEditar: () => ({ nombre: 'TESTER', correo: 't@x.com' }) },
@@ -28,6 +28,7 @@ function crearContexto() {
       newBlob: (bytes, mimeType, nombre) => ({ bytes, mimeType, nombre }),
     },
     DriveApp: {
+      getFileById: (id) => ({ id }),
       getFolderById: (id) => ({
         createFile: (blob) => { llamadas.imagenesSubidas.push({ carpetaId: id, nombre: blob.nombre }); return { id: 'file-' + llamadas.imagenesSubidas.length }; },
       }),
@@ -54,8 +55,12 @@ function crearContexto() {
       buscarPorFolio: () => Object.assign({}, VEHICULO_BASE),
       actualizar: (token, id, cambios) => { llamadas.actualizarVehiculo.push({ id, cambios }); },
     },
+    ExpedienteNuco: {
+      carpeta: (nucco, doc, sub) => { llamadas.expediente.push({ carpeta: [nucco, doc].concat(sub || []).join('/') }); return { getId: () => 'NUCO/' + [nucco, doc].concat(sub || []).join('/') }; },
+      archivar: (archivo, nucco, doc, op) => { llamadas.expediente.push({ archivar: archivo.id, nucco, doc, adherente: !!(op && op.adherente) }); },
+    },
     PdfService: {
-      generar: () => ({ id: 'pdf1', nombre: 'a.pdf', url: 'https://drive/a.pdf' }),
+      generar: (o) => { llamadas.pdfEn = o.carpetaId; return { fileId: 'pdf1', url: 'https://drive/x.pdf' }; },
       nombreArchivo: () => 'nombre',
       fechaParaNombre: () => '2026-10-06',
     },
@@ -117,4 +122,12 @@ test('cambiarEstatus solo acepta ACTIVO o BAJA, y no toca nada más del registro
   assert.equal(llamadas.update[0].cambios.ESTATUS, 'BAJA');
   assert.equal(Object.keys(llamadas.update[0].cambios).length, 1);
   assert.throws(() => contexto.Servicio.cambiarEstatus('tok', 'ADH-1', 'INACTIVO'), /Estatus inválido/);
+});
+
+
+test('el PDF se genera en el expediente del NUCO del vehículo y se archiva ahí (adherente)', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', ADHERENTE: 'MARIA LOPEZ' }, FIRMA_OK);
+  assert.equal(llamadas.pdfEn, 'NUCO/00001/RESPONSIVA/ADHERENTES');
+  assert.deepEqual(llamadas.expediente.filter((x) => x.archivar), [{ archivar: 'pdf1', nucco: '00001', doc: 'RESPONSIVA', adherente: true }]);
 });

@@ -43,6 +43,8 @@ const ENTORNOS = {
     DRIVE_FOLDER_ID_INSPECCIONES_IMAGENES: '1X4je88ejXgBXpELZFYo2-pftsFjHZabL',
     DRIVE_FOLDER_ID_VERIFICACIONES_LECTURA: '',   // opcional
     DRIVE_FOLDER_ID_MODELOS: '1ddRghL8izS63UYWDHn9w_YFHPuRC8bTm',   // opcional: sin esto se usa RAIZ
+    // El expediente de cada vehículo (ExpedienteNuco.gs; ordenada el 8-oct-2026, docs/nucos-expediente.md)
+    DRIVE_FOLDER_ID_NUCOS_VEHICULOS: '1pgEmrDM58FuALsfzBzckC9ROz941HR9P',
 
     // Líneas (opcionales: sin esto usan las carpetas de AppSheet que trae el código)
     LINEAS_DRIVE_APPSHEET: '1WPFFd4imLiui6zIpAa3OL62ZEu_a5BJn',

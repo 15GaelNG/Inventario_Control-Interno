@@ -220,6 +220,8 @@ const REVISION_CARPETAS = {
   DRIVE_FOLDER_ID_MODELOS: { nombre: 'MODELOS INSPECCION', sinRaiz: true, soloLee: true },
   DRIVE_FOLDER_ID_VERIFICACIONES_LECTURA: { soloLee: true },
   LINEAS_DRIVE_APPSHEET: {},
+  // El expediente por NUCO: no vive en la raíz de la app (en un DEV sin la clave, sí: ExpedienteNuco)
+  DRIVE_FOLDER_ID_NUCOS_VEHICULOS: { nombre: 'NUCOS VEHICULOS', sinRaiz: true },
   LINEAS_DRIVE_NUCOS: {},
   LINEAS_DRIVE_APPSHEET_LECTURA: { soloLee: true },
 };
@@ -252,7 +254,7 @@ function revisionCapacidades_(id) {
  */
 const REVISION_EN_RAIZ = [
   'ARQUEOS', 'ARQUEOS_Images', 'ARQUEOS_Files_', 'UBER_Files_', 'VEHICULOS_Files_', 'VEHICULOS_Images',
-  'RESPONSIVAS VEHICULARES_Images', 'RESPONSIVAS_VEHICULARES', 'ADHERENTES VEHICULAR',
+  'RESPONSIVAS VEHICULARES_Images',   // RESPONSIVAS_VEHICULARES y ADHERENTES VEHICULAR ya no: el PDF va al NUCO (8-oct)
 ];
 /**
  * Hojas del catálogo que pueden faltar sin que sea error: APP_CORRECCIONES la crea Líneas la primera vez que

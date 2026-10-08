@@ -31,11 +31,10 @@ const ResponsivaVehicularService = (function () {
   // Doc de Google con los marcadores <<CAMPO>> (formato F-CI01-045, corregido por el área).
   const PLANTILLA = '1JCbmKTFkSQlY5mXG0RFi54K3d7rSyuO_lb4oVCHjmHc';
 
-  // Carpetas de Drive dedicadas a esta responsiva (decisión del usuario, 06-oct-2026) --
-  // no la carpeta general de REPORTES que usan los demás módulos.
-  // Por nombre dentro de la raíz de la app (DriveUtils.carpetaEnRaiz): cada proyecto usa las suyas
+  // El PDF va al expediente del vehículo, 5.-RESPONSIVA de su NUCO (ExpedienteNuco, 08-oct-2026): la carpeta
+  // RESPONSIVAS_VEHICULARES de la raíz ya no se usa. El respaldo de las firmas sigue en su carpeta de la raíz
+  // (por nombre: DriveUtils.carpetaEnRaiz, cada proyecto usa la suya).
   const CARPETA_IMAGENES = 'RESPONSIVAS VEHICULARES_Images';
-  const CARPETA_PDF = 'RESPONSIVAS_VEHICULARES';
 
   // Caja de las firmas en el PDF: la misma que usa InspeccionesService (150 × 60 pt).
   const FIRMA_PDF = { ancho: 150, alto: 60 };
@@ -216,11 +215,19 @@ const ResponsivaVehicularService = (function () {
           plantillaId: PLANTILLA,
           datos: datosPdf,
           imagenes: imagenesPdf,
-          carpetaId: DriveUtils.carpetaEnRaiz(CARPETA_PDF).getId(),
+          // Directo en el expediente del vehículo (NUCOS VEHICULOS/<NUCO>/1.-DOCUMENTACIÓN/5.-RESPONSIVA)
+          carpetaId: ExpedienteNuco.carpeta(vehiculo['NUCCO'], 'RESPONSIVA').getId(),
           nombre: PdfService.nombreArchivo([
             'RESPONSIVA VEHICULAR', responsable, vehiculo['PLACA'] || vehiculo['FOLIO'], PdfService.fechaParaNombre(ahora),
           ]),
         });
+        // Su nombre (RESPONSIVA-0088.pdf) y la que estaba vigente pasa a RESPONSIVAS ANTERIORES. Si esto falla, el PDF
+        // ya existe y queda ligado: solo se avisa.
+        try {
+          ExpedienteNuco.archivar(DriveApp.getFileById(pdf.fileId), vehiculo['NUCCO'], 'RESPONSIVA');
+        } catch (e) {
+          avisos.push('El PDF se generó, pero no se pudo acomodar en el expediente del NUCO: ' + e.message);
+        }
         // Se guarda la URL completa (no una ruta relativa a resolver después): es un
         // documento nuevo, sin el legado de rutas de AppSheet que cargan Inspección/Vehículos.
         SheetUtils.update(ssId(), hoja_().getName(), id, { 'PDF': pdf.url }, ID_COLUMN);

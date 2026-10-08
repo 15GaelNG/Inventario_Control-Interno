@@ -79,6 +79,9 @@ const Config = (function () {
       HOLOGRAMAS_IMAGENES: () => required('DRIVE_FOLDER_ID_HOLOGRAMAS_IMAGENES'),
       REPORTES: () => required('DRIVE_FOLDER_ID_REPORTES'),
       INSPECCIONES_IMAGENES: () => required('DRIVE_FOLDER_ID_INSPECCIONES_IMAGENES'),
+      // NUCOS VEHICULOS: el expediente de cada vehículo (ExpedienteNuco.gs). Opcional: sin ella (un DEV) se usa una
+      // carpeta "NUCOS VEHICULOS" de pruebas en la raíz de ese proyecto, nunca la real
+      NUCOS_VEHICULOS: () => leerConfig_('DRIVE_FOLDER_ID_NUCOS_VEHICULOS') || '',
     },
 
     // Lo que este proyecto tiene apagado (MODULOS_APAGADOS): el menú no lo pinta (la lista llega

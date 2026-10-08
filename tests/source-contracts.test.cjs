@@ -2237,7 +2237,8 @@ test('las carpetas de los servicios se buscan por nombre en la raíz, no con un 
   // Y revisarEntorno sabe de cada una: en producción tienen que existir antes de desplegar
   const revisadas = /const REVISION_EN_RAIZ = \[([\s\S]*?)\];/.exec(read('src/Diagnostico.gs'))[1];
   assert.deepEqual([...nombres].filter((n) => !revisadas.includes("'" + n + "'")), [], 'en REVISION_EN_RAIZ (Diagnostico.gs)');
-  assert.ok(nombres.size >= 9, 'encontró las carpetas que se usan (' + [...nombres].join(', ') + ')');
+  // 7 desde el 8-oct-2026: Responsiva y Adherente ya guardan en el expediente del NUCO (ExpedienteNuco), no en la raíz
+  assert.ok(nombres.size >= 7, 'encontró las carpetas que se usan (' + [...nombres].join(', ') + ')');
 });
 
 test('una vista que se puede apagar por proyecto (MODULOS_APAGADOS) se apaga también en el servidor', () => {
@@ -2250,4 +2251,20 @@ test('una vista que se puede apagar por proyecto (MODULOS_APAGADOS) se apaga tam
   assert.deepEqual(sinRevisar, [], 'llamadas de Help Desk sin Config.exigirEncendido');
   assert.ok(read('src/html/Index.html').includes('<body data-apagados="<?= apagados ?>">'), 'Index.html pasa la lista al menú');
   assert.ok(read('src/Router.gs').includes('template.apagados = JSON.stringify(Config.apagados())'), 'Router llena la lista');
+});
+
+test('los documentos del vehículo se guardan en el expediente de su NUCO (ExpedienteNuco), no en carpetas sueltas', () => {
+  // 8-oct-2026: NUCOS VEHICULOS quedó ordenada (docs/nucos-expediente.md). Si un servicio vuelve a guardar en una carpeta
+  // de la raíz, lo nuevo se desordena otra vez.
+  const veh = read('src/services/VehiculosService.gs');
+  const campos = /const CAMPOS_ARCHIVO = \[([^\]]*)\]/.exec(veh)[1].match(/'[^']+'/g).map((x) => x.slice(1, -1));
+  const doc = /const DOCUMENTO_DE = \{([\s\S]*?)\};/.exec(veh)[1];
+  assert.deepEqual(campos.filter((c) => !doc.includes("'" + c + "'")), [], 'cada columna de archivo de Vehículos tiene su documento');
+  assert.match(veh, /despues: \(registro, ctx\) => \{\s*archivarEnExpediente_\(/, 'Vehículos archiva al guardar (crear y actualizar)');
+  for (const f of ['ResponsivaVehicularService.gs', 'AdherenteVehicularService.gs']) {
+    const s = read('src/services/' + f);
+    assert.match(s, /ExpedienteNuco\.carpeta\(/, f + ' genera el PDF en el expediente');
+    assert.match(s, /ExpedienteNuco\.archivar\(/, f + ' le pone su nombre y aparta el vigente');
+    assert.doesNotMatch(s, /RESPONSIVAS_VEHICULARES'|'ADHERENTES VEHICULAR'/, f + ' ya no usa la carpeta vieja');
+  }
 });

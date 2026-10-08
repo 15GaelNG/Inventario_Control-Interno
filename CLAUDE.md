@@ -112,6 +112,13 @@ ganchos: `ArqueosService.gs` y `VehiculosService.gs`. La guía completa está al
   que los DEV escribieran en producción. Una carpeta nueva va también en `REVISION_EN_RAIZ`
   (Diagnostico.gs); un contrato revisa las dos cosas. Las plantillas sí pueden ir fijas: solo se copian.
 - Cada `createFile` va dentro de `DriveUtils.marcarAutor(…)` (quién lo subió; contrato).
+- **Un documento de un vehículo va a su expediente: `ExpedienteNuco`** (`src/utils/ExpedienteNuco.gs`). La carpeta
+  NUCOS VEHICULOS tiene una carpeta por NUCO con `1.-DOCUMENTACIÓN/1.-FACTURA … 6.-TENENCIA` (docs/nucos-expediente.md).
+  `ExpedienteNuco.archivar(archivo, nucco, 'SEGURO')` lo mueve ahí, le pone su nombre (`SEGURO-0088.pdf`) y pasa el
+  vigente a `SEGUROS ANTERIORES`; `ExpedienteNuco.carpeta(nucco, 'RESPONSIVA')` para generar un PDF directo ahí. Ya lo
+  usan Vehículos (al guardar la ficha), Responsiva y Adherente. Producción apunta a la real con
+  `DRIVE_FOLDER_ID_NUCOS_VEHICULOS` (Entornos.gs); un DEV sin esa clave usa una "NUCOS VEHICULOS" de pruebas en su raíz.
+  No guardes un documento del vehículo en una carpeta suelta de la raíz (contrato).
 
 ## Permisos entre módulos (lo de un módulo dentro de otro)
 
