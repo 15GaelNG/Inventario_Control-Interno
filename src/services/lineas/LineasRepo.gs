@@ -862,7 +862,8 @@ const LineasRepo = (function () {
   const MOVIMIENTO_APP = {
     ALTA: 'Alta de registro', INSPECCION: 'Inspección', RESPONSIVA: 'Responsiva', DESECHO: 'Desecho', REASIGNACION: 'Reasignación',
     CAMBIO_ESTATUS_EQUIPO: 'Cambio de estatus', CAMBIO_ESTATUS_LINEA: 'Cambio de estatus',
-    ASIGNAR_LINEA: 'Cambio de línea', RETIRAR_LINEA: 'Cambio de línea', CAMBIO_EQUIPO: 'Cambio de equipo',
+    // Etapa 3 (8-oct): Vincular línea, Desvincular, Cambiar línea y Cambiar de equipo
+    ASIGNAR_LINEA: 'Vincular línea', RETIRAR_LINEA: 'Desvincular línea', CAMBIO_EQUIPO: 'Cambio de equipo',
     // Resguardos y cancelaciones (30-sep)
     RESGUARDO: 'Resguardo', CANCELACION_LINEA: 'Cancelación de línea', VENTA: 'Venta',
     // Acciones con nombre (etapa 3, paso 2): Entregar y el cierre (vendido, donado, desechado o extravío-robo)

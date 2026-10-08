@@ -529,7 +529,8 @@ test('los campos de texto libre del AppSheet ahora tienen lista desplegable', ()
   assert.match(resp, /ro\('MODELO', 'Modelo', v\('EQUIPO'\)\)/);
   assert.match(resp, /ro\('IMEI', 'IMEI', v\('IMEI'\)\)/);
   ['COMPAÑIA', 'RAZON SOCIAL'].forEach((c) => assert.match(resp, new RegExp("deLinea\\('" + c + "'")));
-  assert.match(resp, /const deLinea = \(columna, etiqueta, valor, extra\) => \(reasignar \? ro\(columna, etiqueta, valor\) : ed\(columna, etiqueta, 'listaAbierta', valor, extra\)\);/);
+  // Fija también con Vincular / Cambiar línea (la línea que se pone, etapa 3, 8-oct)
+  assert.match(resp, /const deLinea = \(columna, etiqueta, valor, extra\) => \(reasignar \|\| lineaFila \? ro\(columna, etiqueta, valor\) : ed\(columna, etiqueta, 'listaAbierta', valor, extra\)\);/);
   assert.equal(control(resp, 'IDENTIFICACION'), 'listaAbierta', 'responsiva IDENTIFICACION: sugiere INE y licencia y se puede escribir (usuario, 4-oct)');
   assert.match(resp, /'IDENTIFICACION', 'Identificación', 'listaAbierta', \{ valor: '', requerido: 'SIEMPRE', opciones: IDENTIFICACIONES \}/);
   assert.match(resp, /sugerencias: 'NUMEROS', autollenar: \{ 'SIM': 'sim'/);

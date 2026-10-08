@@ -475,6 +475,12 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente(LineasRegistros.editar(id, datos || {}, usuarioOperacion_(sesion), puedeVerSecretos_(sesion)));
   }
 
+  /** Vincular, cambiar o desvincular línea y equipo (LineasAcciones.vincular; etapa 3, 8-oct). */
+  function vincular(token, datos) {
+    const sesion = operar_(token);
+    return LineasUtil.paraCliente(LineasAcciones.vincular(datos || {}, usuarioOperacion_(sesion), puedeVerSecretos_(sesion)));
+  }
+
   /** Reasignar: la responsiva es la acción (LineasAcciones.reasignar). */
   function reasignar(token, responsiva) {
     const sesion = operar_(token);
@@ -651,7 +657,7 @@ const TelefoniaService = (function () {
   return {
     permisos, indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, responsiva, catalogos, colaboradores, bitacora, formularioRegistro, recargarDatos,
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf, subirPdfFirmado, crearRegistro, editarRegistro,
-    reasignar, fotosInspeccion, exportarBase, archivo, patronAppSheet, ultimoDocumentoNuco,
+    reasignar, vincular, fotosInspeccion, exportarBase, archivo, patronAppSheet, ultimoDocumentoNuco,
     notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva, panorama,
     formularioResguardo, mandarResguardo, mandarCancelacion, bandejaResguardos, accionBandejaResguardo,
     MODULOS_LINEAS,

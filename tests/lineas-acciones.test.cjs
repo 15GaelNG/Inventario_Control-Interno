@@ -9,7 +9,7 @@ const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 
 test('sin «¿Qué pasó?» ni regla de estatus: regresa «Cambiar estatus» (usuario, 4-oct)', () => {
   const acciones = read('src/services/lineas/LineasAcciones.gs');
-  assert.match(acciones, /return \{ reasignar, PERSONA_DE_RESPONSIVA, datoDeCH_ \};/);
+  assert.match(acciones, /return \{ reasignar, vincular, PERSONA_DE_RESPONSIVA, datoDeCH_ \};/);
   // Reasignar: el director sale de la responsiva y el jefe directo de la inspección (si es de la misma persona) o de
   // Capital Humano (usuario, 6-oct)
   assert.match(acciones, /cambios\['JEFE DIRECTO'\] = deInspeccion \|\| datoDeCH_\(valores\['No EMPLEADO'\], valores\['RESPONSABLE'\], 'jefe'\);/);

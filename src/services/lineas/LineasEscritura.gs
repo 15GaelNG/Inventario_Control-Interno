@@ -475,8 +475,43 @@ const LineasEscritura = (function () {
     return salida;
   }
 
+  /**
+   * Separa la línea de su equipo (etapa 3, usuario 8-oct: Cambiar línea, Cambiar de equipo y Desvincular). Cierra la
+   * asignación del registro y abre dos: la del equipo, igual que estaba (su persona o su resguardo), y la de la línea
+   * sola y guardada (departamento DISPONIBLE, la sede y la oficina de antes), con ESTATUS LINEA DISPONIBLE. Funciona
+   * también con el equipo guardado, donde cambiar el estatus no los separa (los dos quedan en RESGUARDO).
+   * Regresa { idLinea, campos, refs }.
+   */
+  function separarLinea(f, ahora) {
+    const h = hojas();
+    const id = (c) => String(f[c] === null || f[c] === undefined ? '' : f[c]).trim();
+    const e = id('ID EQUIPO') ? h.EQUIPOS.porId[id('ID EQUIPO')] || null : null;
+    const l = id('ID LINEA') ? h.LINEAS.porId[id('ID LINEA')] || null : null;
+    const a = id('ID ASIGNACION') ? h.ASIGNACIONES.porId[id('ID ASIGNACION')] || null : null;
+    if (!e || !l) throw new Error('El registro ' + id('ID') + ' no tiene equipo y línea juntos.');
+    if (a && a['FECHA FIN']) throw new Error('El registro cambió mientras se guardaba; vuelve a abrirlo e intenta otra vez.');
+    const refs = [e['ID'], l['ID']];
+    if (a) {
+      actualizar_('ASIGNACIONES', a, { 'FECHA FIN': ahora });
+      const delEquipo = {};
+      Object.keys(a).forEach((k) => { if (k !== '_fila' && k !== 'ID') delEquipo[k] = a[k]; });
+      refs.push(a['ID'], agregar_('ASIGNACIONES', Object.assign(delEquipo, { 'ID LINEA': '', 'FECHA INICIO': ahora, 'FECHA FIN': '' }))['ID']);
+    }
+    refs.push(agregar_('ASIGNACIONES', Object.assign(datosAsignacion_('RESGUARDO', a || {}, {}, null), {
+      'TIPO': 'RESGUARDO', 'ID LINEA': l['ID'], 'ID EQUIPO': '', 'FECHA INICIO': ahora, 'FECHA FIN': '',
+    }))['ID']);
+    const campos = [{ campo: 'NUMERO TELEFONO', antes: texto_(l['NUMERO TELEFONO']), despues: '' }];
+    if (may(l['ESTATUS LINEA']) !== 'DISPONIBLE') {
+      campos.push({ campo: 'ESTATUS LINEA', antes: texto_(l['ESTATUS LINEA']), despues: 'DISPONIBLE' });
+      actualizar_('LINEAS', l, { 'ESTATUS LINEA': 'DISPONIBLE' });
+    }
+    tocados_.push(String(l['ID']));
+    LineasLectura.olvidar();
+    return { idLinea: String(l['ID']), campos: campos, refs: refs };
+  }
+
   return {
-    ADICIONALES, guardar, agregar, hojasEnMemoria,
+    ADICIONALES, guardar, agregar, hojasEnMemoria, separarLinea,
     /** Registros que aparecieron en esta ejecución (para refrescar el índice sin recargar). */
     tocados: () => tocados_.slice(),
     _limpio: limpio_, _clase: clase_,
