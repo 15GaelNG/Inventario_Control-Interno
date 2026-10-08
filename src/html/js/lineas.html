@@ -706,6 +706,7 @@
       if (cond.tipoEn) return cond.tipoEn.indexOf(t) >= 0;
       if (cond.tipoNoEn) return cond.tipoNoEn.indexOf(t) < 0;
       if (cond.nuevo) return !!(ctx && ctx.nuevo);
+      if (cond.campo && cond.distinto !== undefined) return String((valores || {})[cond.campo] || '').trim().toUpperCase() !== String(cond.distinto).toUpperCase();
       if (cond.campo) return String((valores || {})[cond.campo] || '').trim().toUpperCase() === String(cond.igual).toUpperCase();
       if (cond.lleno) return !!String((valores || {})[cond.lleno] || '').trim();
       if (cond.cuantos) {
@@ -1222,6 +1223,12 @@
      * NUMEROS / IMEIS / SIMS del índice de Líneas. Las de personas traen `datos` para autollenar.
      */
     function opcionesSugeridas(tipo) {
+      // Agregar línea (usuario, 8-oct): NUCO con modelo y responsable (o el estatus si está guardado)
+      if (tipo === 'EQUIPOS_SIN_LINEA') {
+        return cargarIndice().then((ix) => ix.equipos.filter((e) => e.nuco).map((e) => ({
+          valor: String(e.nuco), etiqueta: [e.modelo, e.responsable || e.estatus].filter(Boolean).join(' · '),
+        })));
+      }
       if (tipo === 'NUMEROS' || tipo === 'IMEIS' || tipo === 'SIMS') {
         const campo = { NUMEROS: 'numero', IMEIS: 'imei', SIMS: 'sim' }[tipo];
         return cargarIndice().then((ix) => {
@@ -1395,12 +1402,37 @@
       const vacio = (x) => !x || ['N/A', 'NA', 'NO APLICA', '-', 'SOLO LINEA', 'SIN EQUIPO'].indexOf(x) >= 0;
       const conLinea = (!vacio(txt('NUMERO TELEFONO')) || !vacio(txt('NUMERO SIM'))) && txt('ESTATUS LINEA') !== 'CANCELADA';
       const basica = txt('TIPO DE LINEA') === 'SIM BASICO';
-      if (ctx && ctx.parte === 'LINEA') return basica ? 'LINEA BASICA' : 'LINEA';
+      if (ctx && ctx.parte === 'LINEA' && txt('_VINCULAR') !== 'TRUE') return basica ? 'LINEA BASICA' : 'LINEA';
+      if (ctx && ctx.parte === 'LINEA') return basica ? 'EQUIPO + SIM BASICO' : 'EQUIPO + SIM';
       return !conLinea ? 'EQUIPO' : (basica ? 'EQUIPO + SIM BASICO' : 'EQUIPO + SIM');
+    }
+
+    /** El equipo del índice con ese NUCO (a 4 dígitos), o null. */
+    function equipoPorNuco(nuco) {
+      const n = String(nuco || '').trim();
+      if (!/^\d+$/.test(n)) return null;
+      const clave = ('0000' + n).slice(-4);
+      return ((memoria.indice || {}).equipos || []).filter((e) => String(e.nuco || '') === clave)[0] || null;
     }
 
     function formulaRegistro(nombre, v, id) {
       const tipo = String(v.TIPO || '').toUpperCase();
+      // Agregar línea (usuario, 8-oct; misma cuenta que LineasRegistros.estatusAltaLinea_): la cancelación si se eligió;
+      // con equipo, USO si está en uso y DISPONIBLE si está guardado; sola, USO con responsable y DISPONIBLE sin él
+      const conEquipo = String(v._VINCULAR || '').toUpperCase() === 'TRUE';
+      if (nombre === 'ESTATUS_LINEA_ALTA') {
+        const cancelacion = String(v._CANCELACION || '').toUpperCase();
+        if (cancelacion && cancelacion !== 'NO') return cancelacion;
+        if (conEquipo) {
+          const eq = equipoPorNuco(v._NUCO);
+          return eq ? (String(eq.estatus || '').toUpperCase() === 'USO' ? 'USO' : 'DISPONIBLE') : '';
+        }
+        return String(v.RESPONSABLE || '').trim() ? 'USO' : 'DISPONIBLE';
+      }
+      if (nombre === 'RESPONSABLE_EQUIPO') {
+        const eq = conEquipo ? equipoPorNuco(v._NUCO) : null;
+        return eq ? (eq.responsable || 'SIN RESPONSABLE · ' + (eq.estatus || '')) : '';
+      }
       if (nombre === 'TIPO_EQUIPO' || nombre === 'TIPO_LINEA') return tipo;
       if (nombre === 'FOLIO') {
         const prefijo = { 'EQUIPO + SIM': 'EQS', 'LINEA': 'LIN', 'MODEM': 'MOD', 'CAMARA': 'CAM', 'BANDA ANCHA': 'BAN', 'EQUIPO': 'EQP' }[tipo] || '';

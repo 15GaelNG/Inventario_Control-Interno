@@ -224,12 +224,15 @@ test('el alta y edición de LINEAS TELEFONICAS sigue LINEAS TELEFONICAS_Form del
     { getScriptCache: () => ({ get: () => '', put: () => {} }) },
     { formatDate: () => '2026-09-24' }, {}, {}, LineasUtil);
   const titulos = (els) => els.filter((e) => e.tipo === 'titulo').map((e) => e.texto);
+  const campo0 = (els, c) => els.filter((e) => e.columna === c)[0];
   const ctx = { nuevo: true, nucoRepetido: () => false, telefonoRepetido: () => false };
   const altaEquipo = Reg._elementos({}, {}, { correo: 'x@y.z' }, Object.assign({}, ctx, { parte: 'EQUIPO' }));
   // Responsables adicionales (6-oct): un bloque por cada uno y una sección sin título con «Agregar responsable»
   assert.deepEqual(titulos(altaEquipo), ['EQUIPO', 'RESPONSABLE', 'RESPONSABLE 2', 'RESPONSABLE 3', 'RESPONSABLE 4', 'RESPONSABLE 5', '', 'LÍNEA', 'ADENDUM', 'ACCESORIOS Y ACCESOS']);
   const altaLinea = Reg._elementos({}, {}, { correo: 'x@y.z' }, Object.assign({}, ctx, { parte: 'LINEA' }));
-  assert.deepEqual(titulos(altaLinea), ['LÍNEA', 'RESPONSABLE', 'RESPONSABLE 2', 'RESPONSABLE 3', 'RESPONSABLE 4', 'RESPONSABLE 5', '', 'ADENDUM', 'ACCESOS']);
+  // La línea sola ya no tiene accesos: el PIN de WhatsApp es del equipo (usuario, 8-oct)
+  assert.deepEqual(titulos(altaLinea), ['LÍNEA', 'RESPONSABLE', 'RESPONSABLE 2', 'RESPONSABLE 3', 'RESPONSABLE 4', 'RESPONSABLE 5', '', 'ADENDUM']);
+  assert.ok(!campo0(altaLinea, 'PIN WHATSAPP') && campo0(altaEquipo, 'PIN WHATSAPP'));
   const campo = (els, c) => els.filter((e) => e.columna === c)[0];
   assert.ok(!campo(altaLinea, 'EQUIPO') && !campo(altaLinea, 'ACCESORIOS') && !campo(altaLinea, 'NUCO'));
   // En el alta de un equipo el NUCO se captura; el TIPO no se elige
@@ -1067,6 +1070,10 @@ test('INICIO / FIN PLAN solo se capturan en el alta de la línea; después no se
   const ra = Reg._resolver(alta, {}, { 'NUMERO TELEFONO': '4420000009', 'FIN PLAN': '2028-05-01' }, altaCtx);
   assert.equal(ra.valores['FIN PLAN'], '2028-05-01');
   assert.ok(ra.errores.some((e) => /^Inicio es obligatorio/.test(e)));
+  // Un SIM BASICO no tiene adendum: no se pide y lo capturado se borra (usuario, 8-oct)
+  const rb = Reg._resolver(alta, {}, { 'NUMERO TELEFONO': '4420000009', 'TIPO DE LINEA': 'SIM BASICO', 'FIN PLAN': '2028-05-01' }, altaCtx);
+  assert.ok(!rb.errores.some((e) => /^(Inicio|Fin) es obligatorio/.test(e)));
+  assert.equal(rb.valores['FIN PLAN'], '');
   // A un equipo sin línea se le puede poner una con sus fechas (es el alta de esa línea)
   const sinLinea = Reg._elementos({ TIPO: 'EQUIPO' }, {}, { correo: 'x@y.z' }, ctx);
   assert.equal(sinLinea.filter((e) => e.columna === 'FIN PLAN')[0].editable, 'SIEMPRE');
