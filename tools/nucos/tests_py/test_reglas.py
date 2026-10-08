@@ -46,8 +46,8 @@ def test_un_nuco_de_la_generacion_vieja_queda_en_las_seis():
         archivo("CARPETA SIN INFORMACIÓN.jpg"))
     copias, resumen = reglas.planear_nuco("293", [doc], {"TENENCIA": [archivo("CTA0293.ARCHIVO TENENCIA.235043.pdf")]})
     d = destinos(copias)
-    assert d["CARTA FACTURA 293.pdf"] == "1.-FACTURA/FACTURA-0293.pdf"            # la más reciente sin fecha
-    assert d["FACTURA 293.pdf"] == "1.-FACTURA/FACTURA-0293 2023-05-17.pdf"
+    assert d["FACTURA 293.pdf"] == "1.-FACTURA/FACTURA-0293.pdf"                  # la factura antes que la carta
+    assert d["CARTA FACTURA 293.pdf"] == "1.-FACTURA/FACTURA-0293 2023-06-01.pdf"   # aunque la carta sea más reciente
     assert d["348.- Factura.pdf"].startswith("1.-FACTURA/")                       # mal archivada: se acomoda
     assert d["ALTA 293.pdf"] == "3.-ALTA DE PLACAS/ALTA DE PLACAS-0293.pdf"
     assert d["CTA0293.ARCHIVO TENENCIA.235043.pdf"] == "6.-TENENCIA/TENENCIA-0293.pdf"   # el adjunto de la hoja

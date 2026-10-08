@@ -4,6 +4,8 @@
 
     leer                      lee (solo lectura) el árbol de DOCUMENTACIÓN de cada NUCO, la hoja VEHICULOS y
                               VEHICULOS_Files_, y lo guarda en tools/nucos/.cache/ (trae datos de unidades: fuera de git)
+    excel [archivo.xlsx]      un renglón por vehículo con sus 6 documentos y la liga a cada uno, el detalle por
+                              archivo y un resumen (sale de .cache; no toca Drive)
     plan                      con lo leído, qué archivo va a cuál carpeta de cada NUCO; resumen en pantalla y
                               el detalle en .cache/plan.json. No toca Drive
     aplicar <carpeta> [--nucos 1,2,3 | --muestra N]
@@ -186,6 +188,185 @@ def plan():
     print("  con los 5 obligatorios (seguro NO APLICA con su imagen cuenta): %d / %d" % (len(cinco), len(activos)))
 
 
+def excel(salida):
+    """Un renglón por vehículo de la hoja, sus 6 documentos con liga directa al original, el detalle archivo
+    por archivo y un resumen con fórmulas. Sin Drive: sale de .cache (leer + plan)."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+    from openpyxl.formatting.rule import CellIsRule
+
+    plan_ = {p["nuco"]: p for p in json.loads((CACHE / "plan.json").read_text(encoding="utf-8"))}
+    vehiculos = json.loads((CACHE / "vehiculos.json").read_text(encoding="utf-8"))
+    vehiculos.sort(key=lambda v: int(v["NUCCO"]) if v["NUCCO"].isdigit() else 10 ** 6)
+    liga_archivo = lambda i: "https://drive.google.com/file/d/%s/view" % i
+    liga_carpeta = lambda i: "https://drive.google.com/drive/folders/%s" % i
+
+    FUENTE = "Arial"
+    base = Font(name=FUENTE, size=10)
+    enc = Font(name=FUENTE, size=10, bold=True, color="FFFFFF")
+    azul = PatternFill("solid", fgColor="1F4E78")
+    gris = PatternFill("solid", fgColor="D9E1F2")
+    link = Font(name=FUENTE, size=10, color="0563C1", underline="single")
+    fina = Side(style="thin", color="BFBFBF")
+
+    wb = Workbook()
+    # ---------------------------------------------------------------- Expediente: un renglón por vehículo
+    ws = wb.active
+    ws.title = "Expediente"
+    fijas = ["NUCO", "FOLIO", "ESTATUS", "SEDE", "SEGURO EN LA HOJA", "TENENCIA EN LA HOJA", "CARPETA DEL NUCO"]
+    cab = list(fijas)
+    for _, carpeta, _ in reglas.SEIS:
+        cab += [carpeta, carpeta + " · documento", carpeta + " · archivos"]
+    cab += ["DOCUMENTOS CON SOPORTE (DE 6)", "LOS 5 OBLIGATORIOS", "QUÉ FALTA"]
+    ws.append(cab)
+    col_estado = {c: len(fijas) + 1 + 3 * i for i, (c, _, _) in enumerate(reglas.SEIS)}
+    for fila, v in enumerate(vehiculos, start=2):
+        nuco = str(int(v["NUCCO"])) if v["NUCCO"].isdigit() else v["NUCCO"]
+        p = plan_.get(nuco)
+        valores = [int(nuco) if nuco.isdigit() else nuco, v["FOLIO"], v["ESTATUS"], v["SEDE"], v["SEGURO (SI / NO)"], v["TENENCIA (SI / NO)"],
+                   "Abrir carpeta" if p else "SIN CARPETA"]
+        ws.append(valores)
+        if p:
+            ws.cell(fila, 7).hyperlink = liga_carpeta(p["id"])
+            ws.cell(fila, 7).font = link
+        faltan = []
+        for c, carpeta, _ in reglas.SEIS:
+            col = col_estado[c]
+            copias = [x for x in (p["copias"] if p else []) if len(x["destino"]) > 1 and x["destino"][1] == carpeta]
+            reales = [x for x in copias if not x["de"].startswith("imagen de inexistente")]
+            if reales:
+                estado, principal = "Sí", reales[0]
+            elif copias:
+                estado, principal = "No aplica", copias[0]
+            else:
+                estado, principal = "Falta", None
+                faltan.append(carpeta.split(".-")[1].title())
+            ws.cell(fila, col, estado)
+            if principal:
+                celda = ws.cell(fila, col + 1, principal["de"].split("/")[-1])
+                celda.hyperlink = liga_archivo(principal["origen"])
+                celda.font = link
+            ws.cell(fila, col + 2, len(reales))
+        # Fórmulas: cuentan sobre las celdas de estado del mismo renglón
+        estados = [get_column_letter(col_estado[c]) + str(fila) for c, _, _ in reglas.SEIS]
+        n = len(cab)
+        ws.cell(fila, n - 2, "=" + "+".join('IF(OR(%s="Sí",%s="No aplica"),1,0)' % (e, e) for e in estados))
+        ws.cell(fila, n - 1, '=IF(AND(%s),"Completo","Incompleto")' % ",".join('OR(%s="Sí",%s="No aplica")' % (e, e) for e in estados[:5]))
+        ws.cell(fila, n, ", ".join(faltan) if faltan else "—")
+    ultima = len(vehiculos) + 1
+    for fila in ws.iter_rows(min_row=1, max_row=ultima):
+        for celda in fila:
+            if celda.font != link:
+                celda.font = base
+            celda.border = Border(bottom=fina)
+    for celda in ws[1]:
+        celda.font, celda.fill = enc, azul
+        celda.alignment = Alignment(wrap_text=True, vertical="center")
+    ws.row_dimensions[1].height = 42
+    anchos = [7, 10, 16, 16, 12, 12, 13] + [10, 30, 8] * 6 + [12, 13, 40]
+    for i, a in enumerate(anchos, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = a
+    ws.freeze_panes = "B2"
+    ws.auto_filter.ref = "A1:%s%d" % (get_column_letter(len(cab)), ultima)
+    verde = PatternFill("solid", fgColor="C6EFCE")
+    rojo = PatternFill("solid", fgColor="FFC7CE")
+    ambar = PatternFill("solid", fgColor="FFEB9C")
+    for c in col_estado.values():
+        rango = "%s2:%s%d" % (get_column_letter(c), get_column_letter(c), ultima)
+        ws.conditional_formatting.add(rango, CellIsRule(operator="equal", formula=['"Sí"'], fill=verde))
+        ws.conditional_formatting.add(rango, CellIsRule(operator="equal", formula=['"Falta"'], fill=rojo))
+        ws.conditional_formatting.add(rango, CellIsRule(operator="equal", formula=['"No aplica"'], fill=ambar))
+    letra_ok = get_column_letter(len(cab) - 1)
+    ws.conditional_formatting.add("%s2:%s%d" % (letra_ok, letra_ok, ultima), CellIsRule(operator="equal", formula=['"Completo"'], fill=verde))
+
+    # ---------------------------------------------------------------- Documentos: archivo por archivo
+    wd = wb.create_sheet("Documentos")
+    wd.append(["NUCO", "VA EN", "NOMBRE NUEVO", "NOMBRE ORIGINAL", "DÓNDE ESTÁ HOY", "ABRIR ORIGINAL"])
+    for nuco in sorted(plan_, key=lambda x: int(x) if x.isdigit() else 10 ** 6):
+        for x in plan_[nuco]["copias"]:
+            partes = x["de"].split("/")
+            wd.append([int(nuco) if nuco.isdigit() else nuco, "/".join(x["destino"][1:]), x["nombre"], partes[-1], "/".join(partes[:-1]), "Abrir"])
+            c = wd.cell(wd.max_row, 6)
+            c.hyperlink, c.font = liga_archivo(x["origen"]), link
+    for fila in wd.iter_rows(min_row=2, max_row=wd.max_row, max_col=5):
+        for celda in fila:
+            celda.font = base
+    for celda in wd[1]:
+        celda.font, celda.fill = enc, azul
+    for i, a in enumerate([7, 42, 32, 40, 60, 9], start=1):
+        wd.column_dimensions[get_column_letter(i)].width = a
+    wd.freeze_panes = "A2"
+    wd.auto_filter.ref = "A1:F%d" % wd.max_row
+
+    # ---------------------------------------------------------------- Resumen: fórmulas sobre Expediente
+    wr = wb.create_sheet("Resumen", 0)
+    estatus = sorted({v["ESTATUS"] for v in vehiculos})
+    wr["A1"] = "Expediente por NUCO — cuántos vehículos tienen cada documento"
+    wr["A1"].font = Font(name=FUENTE, size=13, bold=True)
+    wr["A2"] = ("Sale de la hoja VEHICULOS y de NUCOS VEHICULOS (lectura del 8-oct-2026). \"Sí\" = hay un archivo real; "
+                "\"No aplica\" = seguro NO APLICA en la hoja, con la imagen de inexistente; \"Falta\" = no hay nada.")
+    wr["A2"].font = Font(name=FUENTE, size=9, italic=True)
+    wr.append([])
+    wr.append(["ESTATUS", "VEHÍCULOS"] + [carpeta for _, carpeta, _ in reglas.SEIS] + ["LOS 5 OBLIGATORIOS"])
+    fila_enc = wr.max_row
+    rango_estatus = "Expediente!$C$2:$C$%d" % ultima
+    for e in estatus + ["TOTAL"]:
+        r = wr.max_row + 1
+        wr.cell(r, 1, e)
+        if e == "TOTAL":
+            for col in range(2, 4 + len(reglas.SEIS)):
+                letra = get_column_letter(col)
+                wr.cell(r, col, "=SUM(%s%d:%s%d)" % (letra, fila_enc + 1, letra, r - 1))
+            continue
+        wr.cell(r, 2, '=COUNTIF(%s,$A%d)' % (rango_estatus, r))
+        for i, (c, _, _) in enumerate(reglas.SEIS):
+            letra = get_column_letter(col_estado[c])
+            rango = "Expediente!$%s$2:$%s$%d" % (letra, letra, ultima)
+            wr.cell(r, 3 + i, '=COUNTIFS(%s,$A%d,%s,"Sí")+COUNTIFS(%s,$A%d,%s,"No aplica")' % (rango_estatus, r, rango, rango_estatus, r, rango))
+        ok = get_column_letter(len(cab) - 1)
+        wr.cell(r, 3 + len(reglas.SEIS), '=COUNTIFS(%s,$A%d,Expediente!$%s$2:$%s$%d,"Completo")' % (rango_estatus, r, ok, ok, ultima))
+    for fila in wr.iter_rows(min_row=fila_enc, max_row=wr.max_row):
+        for celda in fila:
+            celda.font = base
+            celda.border = Border(bottom=fina)
+    for celda in wr[fila_enc]:
+        celda.font, celda.fill = enc, azul
+        celda.alignment = Alignment(wrap_text=True)
+    for celda in wr[wr.max_row]:
+        celda.font = Font(name=FUENTE, size=10, bold=True)
+        celda.fill = gris
+    wr.column_dimensions["A"].width = 24
+    for i in range(2, 11):
+        wr.column_dimensions[get_column_letter(i)].width = 14
+    wr.row_dimensions[fila_enc].height = 32
+
+    # ---------------------------------------------------------------- Cómo se lee
+    wl = wb.create_sheet("Cómo se lee")
+    for linea in [
+        "Expediente: un renglón por vehículo de la hoja VEHICULOS (los 648). Para cada una de las 6 carpetas: el estado,",
+        "  la liga al documento principal (el más reciente) y cuántos archivos hay. Las ligas abren el ARCHIVO ORIGINAL,",
+        "  donde está hoy (NUCOS VEHICULOS o el adjunto de la hoja): todavía no se ordena nada.",
+        "Documentos: cada archivo, a qué carpeta iría, con qué nombre nuevo, dónde está hoy y su liga.",
+        "  \"1.-DOCUMENTACIÓN/ANTERIORES/…\" = no es ninguno de los 6 (Oxxo Gas, verificaciones, permisos…); no se pierde.",
+        "Resumen: cuántos vehículos tienen cada documento, por estatus (fórmulas sobre Expediente).",
+        "",
+        "Estados: Sí = hay un archivo real · No aplica = seguro NO APLICA en la hoja (lleva la imagen de inexistente) · Falta = no hay nada.",
+        "No se copian: el relleno \"CARPETA SIN INFORMACIÓN\" ni los archivos repetidos (mismo contenido).",
+        "\"Con soporte\" quiere decir que existe un archivo en el lugar correcto; no se abrió ninguno para revisar su contenido.",
+        "Generado con tools/nucos/expediente.py (leer → plan → excel).",
+    ]:
+        wl.append([linea])
+    wl.column_dimensions["A"].width = 130
+    for fila in wl.iter_rows():
+        for celda in fila:
+            celda.font = base
+
+    wb.calculation.fullCalcOnLoad = True
+    wb.save(salida)
+    print("Excel: %s (%d vehículos, %d archivos)" % (salida, len(vehiculos), wd.max_row - 1))
+
+
 def exigir_destino(d, carpeta):
     """Que ni el destino ni ninguna carpeta de arriba esté en PROHIBIDOS."""
     actual = carpeta
@@ -248,12 +429,14 @@ def aplicar(carpeta, nucos_pedidos=None, muestra=None):
 
 if __name__ == "__main__":
     args = sys.argv[1:]
-    if not args or args[0] not in ("leer", "plan", "aplicar"):
+    if not args or args[0] not in ("leer", "plan", "aplicar", "excel"):
         sys.exit(__doc__)
     if args[0] == "leer":
         leer()
     elif args[0] == "plan":
         plan()
+    elif args[0] == "excel":
+        excel(args[1] if len(args) > 1 else str(CACHE / "expediente.xlsx"))
     else:
         if len(args) < 2:
             sys.exit("aplicar <carpeta> [--nucos 1,2,3 | --muestra N]")

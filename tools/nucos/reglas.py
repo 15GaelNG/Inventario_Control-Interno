@@ -173,7 +173,11 @@ def planear_nuco(nuco, documentacion, adjuntos, sin_seguro=None):
     for c, carpeta, prefijo in SEIS:
         vistos = set()
         unicos = []
-        for a in sorted(candidatos[c], key=lambda x: x.get("modifiedTime") or "", reverse=True):
+        # La más reciente primero (se queda con el nombre sin fecha); en factura, la factura antes que la carta factura
+        ordenados = sorted(candidatos[c], key=lambda x: x.get("modifiedTime") or "", reverse=True)
+        if c == "FACTURA":
+            ordenados.sort(key=lambda x: "CARTA" in normal(x["name"]))
+        for a in ordenados:
             clave = a.get("md5Checksum") or a["id"]
             if clave in vistos:
                 resumen["duplicados"] += 1
