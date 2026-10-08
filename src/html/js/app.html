@@ -2732,9 +2732,7 @@
               '<div class="form-rejilla" data-columnas="3" id="resv-campos-' + i + '"></div>' +
               (i === 3 ? '<div class="resv-firmas" style="grid-column: 1 / -1; margin-top:14px;">' +
                 '<div class="resv-firma"><label class="requerido">Firma del responsable</label><div data-firma="FIRMA RESPONSABLE"></div></div>' +
-                '<div class="resv-firma"><label>Firma del jefe directo</label><div data-firma="FIRMA JEFE"></div>' +
-                  '<button type="button" class="secondary" id="resv-enviar-liga-jefe" style="margin-top:8px;width:100%"><i data-lucide="link" class="ico"></i> Enviar liga para que el jefe firme a distancia</button>' +
-                '</div>' +
+                '<div class="resv-firma"><label>Firma del jefe directo</label><div data-firma="FIRMA JEFE"></div></div>' +
                 '<div class="resv-firma"><label class="requerido">Firma de quien entrega</label><div data-firma="FIRMA CI"></div></div>' +
               '</div>' : '') +
             '</section>').join('') +
@@ -2742,7 +2740,10 @@
           '<div class="form-acciones form-acciones-pasos">' +
             '<button type="button" class="secondary" id="resv-atras" hidden><i data-lucide="chevron-left" class="ico"></i> Atrás</button>' +
             '<button type="button" id="resv-siguiente">Siguiente <i data-lucide="chevron-right" class="ico"></i></button>' +
-            '<button type="button" class="secondary" id="resv-enviar-liga" hidden><i data-lucide="link" class="ico"></i> Enviar liga para firmar a distancia</button>' +
+            // Un solo botón para firmar a distancia: si el responsable tampoco firmó aquí, se
+            // difiere junto con el jefe (dos ligas de un jalón) -- cubre los dos casos, por
+            // eso ya no hay un botón aparte solo para el responsable (usuario, 8-oct).
+            '<button type="button" class="secondary" id="resv-enviar-liga-jefe" hidden><i data-lucide="link" class="ico"></i> Enviar liga(s) para firmar a distancia</button>' +
             '<button type="submit" id="resv-captura-guardar" hidden><i data-lucide="file-signature" class="ico"></i> Registrar responsiva</button>' +
             '<span class="form-cuenta" id="resv-cuenta"></span>' +
           '</div>' +
@@ -2767,7 +2768,7 @@
         document.getElementById('resv-atras').hidden = i === 0;
         document.getElementById('resv-siguiente').hidden = i === RESV_PASOS.length - 1;
         document.getElementById('resv-captura-guardar').hidden = i !== RESV_PASOS.length - 1;
-        document.getElementById('resv-enviar-liga').hidden = i !== RESV_PASOS.length - 1;
+        document.getElementById('resv-enviar-liga-jefe').hidden = i !== RESV_PASOS.length - 1;
         document.getElementById('resv-cuenta').textContent = 'Paso ' + (i + 1) + ' de ' + RESV_PASOS.length;
         const titulo = cuerpo.querySelector('.form-paso[data-paso="' + i + '"] .form-paso-titulo');
         if (titulo) titulo.focus();
@@ -2780,6 +2781,9 @@
       resvMostrarPaso(0);
 
       document.getElementById('resv-fecha').value = hoyISO();
+      // "No. de inventario" es el Nucco del vehículo (así lo usa este formato) -- se autollena
+      // solo, se puede corregir si hiciera falta.
+      if (vResumen.NUCCO) CampoAuto.llenar(document.getElementById('resv-no-de-inventario'), vResumen.NUCCO);
       // Responsable (y lo que de él depende) se deja en blanco a propósito: esta responsiva
       // puede ser para una persona distinta a la que el vehículo tiene hoy, y precargar al
       // actual invitaba a dejarlo sin cambiar por descuido. "Quien entrega" sí es un dato
@@ -2841,19 +2845,19 @@
       }).catch((err) => console.error('No se pudo cargar el catálogo de colaboradores:', err));
 
       /** modo='presencial': de siempre (exige la firma del responsable, genera el PDF de una
-       *  vez). modo='remoto': "Enviar liga para firmar a distancia" -- no exige la firma del
-       *  responsable (le genera su propia liga). modo='remotoJefe': "Enviar liga para que el
-       *  jefe firme a distancia" -- NO exige la firma del responsable tampoco: si ya se
-       *  dibujó, se captura ahora (como siempre); si no, se difiere igual (le genera SU
-       *  liga también, aparte de la del jefe) -- nadie tiene que estar presente para generar
-       *  cualquiera de las dos ligas. Si al final hay dos ligas, se muestran juntas. */
+       *  vez). modo='remotoJefe': "Enviar liga(s) para firmar a distancia" -- no exige la
+       *  firma del responsable: si ya se dibujó, se captura ahora (como siempre); si no, se
+       *  difiere igual (le genera SU liga también, aparte de la del jefe, que siempre se
+       *  difiere con este botón) -- nadie tiene que estar presente para generar cualquiera de
+       *  las dos. Si al final hay dos ligas, se muestran juntas. Un solo botón para los dos
+       *  casos (antes había uno aparte solo para el responsable): usuario, 8-oct. */
       async function guardarResponsiva_(modo, boton) {
         const errorBox = document.getElementById('resv-captura-error');
         errorBox.hidden = true;
 
         // Quien entrega SIEMPRE firma al capturar (presencial o a distancia): es quien está
         // armando este renglón ahora mismo, nunca hay "después" para su firma. Es la única
-        // firma obligatoria en los tres modos -- la del responsable solo en 'presencial'.
+        // firma obligatoria en los dos modos -- la del responsable solo en 'presencial'.
         if (modo === 'presencial' && firmas['FIRMA RESPONSABLE'].vacia()) {
           errorBox.textContent = 'Falta la firma del responsable';
           errorBox.hidden = false;
@@ -2878,13 +2882,11 @@
             if (firma) imagenes[campo] = firma;
           });
           const datos = Object.assign({ 'FOLIO VEHICULO': vResumen.FOLIO }, CamposHoja.recolectar(CAMPOS_RESPONSIVA_VEHICULAR, 'resv'));
-          let opciones;
-          if (modo === 'remoto') opciones = { remoto: true };
-          else if (modo === 'remotoJefe') {
-            // Si el responsable tampoco firmó, se difiere junto con el jefe (dos ligas de un
-            // jalón) -- nadie tiene que estar presente para pedir la del jefe.
-            opciones = firmas['FIRMA RESPONSABLE'].vacia() ? { remoto: true, remotoJefe: true } : { remotoJefe: true };
-          }
+          // Si el responsable tampoco firmó, se difiere junto con el jefe (dos ligas de un
+          // jalón) -- nadie tiene que estar presente para pedir la del jefe.
+          const opciones = modo === 'remotoJefe'
+            ? (firmas['FIRMA RESPONSABLE'].vacia() ? { remoto: true, remotoJefe: true } : { remotoJefe: true })
+            : undefined;
           const res = await callServer('apiCrearResponsivaVehicular', state.token, datos, imagenes, opciones);
           if (res.aviso) Notificar.error(res.aviso);
           toastExito(modo === 'presencial' ? 'Responsiva registrada exitosamente' : 'Liga generada');
@@ -2906,9 +2908,6 @@
       document.getElementById('resv-captura-form').addEventListener('submit', (ev) => {
         ev.preventDefault();
         guardarResponsiva_('presencial', document.getElementById('resv-captura-guardar'));
-      });
-      document.getElementById('resv-enviar-liga').addEventListener('click', () => {
-        guardarResponsiva_('remoto', document.getElementById('resv-enviar-liga'));
       });
       document.getElementById('resv-enviar-liga-jefe').addEventListener('click', () => {
         guardarResponsiva_('remotoJefe', document.getElementById('resv-enviar-liga-jefe'));
@@ -2947,9 +2946,7 @@
               '<div class="form-rejilla" data-columnas="3" id="adh-campos-' + i + '"></div>' +
               (i === 2 ? '<div class="resv-firmas" style="grid-column: 1 / -1; margin-top:14px;">' +
                 '<div class="resv-firma"><label class="requerido">Firma del adherente</label><div data-firma="FIRMA ADHERENTE"></div></div>' +
-                '<div class="resv-firma"><label>Firma del jefe directo</label><div data-firma="FIRMA JEFE"></div>' +
-                  '<button type="button" class="secondary" id="adh-enviar-liga-jefe" style="margin-top:8px;width:100%"><i data-lucide="link" class="ico"></i> Enviar liga para que el jefe firme a distancia</button>' +
-                '</div>' +
+                '<div class="resv-firma"><label>Firma del jefe directo</label><div data-firma="FIRMA JEFE"></div></div>' +
                 '<div class="resv-firma"><label class="requerido">Firma de quien entrega</label><div data-firma="FIRMA CI"></div></div>' +
               '</div>' : '') +
             '</section>').join('') +
@@ -2957,7 +2954,9 @@
           '<div class="form-acciones form-acciones-pasos">' +
             '<button type="button" class="secondary" id="adh-atras" hidden><i data-lucide="chevron-left" class="ico"></i> Atrás</button>' +
             '<button type="button" id="adh-siguiente">Siguiente <i data-lucide="chevron-right" class="ico"></i></button>' +
-            '<button type="button" class="secondary" id="adh-enviar-liga" hidden><i data-lucide="link" class="ico"></i> Enviar liga para firmar a distancia</button>' +
+            // Un solo botón para firmar a distancia -- ver el comentario gemelo en
+            // abrirAgregarResponsivaVehicular (usuario, 8-oct).
+            '<button type="button" class="secondary" id="adh-enviar-liga-jefe" hidden><i data-lucide="link" class="ico"></i> Enviar liga(s) para firmar a distancia</button>' +
             '<button type="submit" id="adh-captura-guardar" hidden><i data-lucide="file-signature" class="ico"></i> Registrar adherente</button>' +
             '<span class="form-cuenta" id="adh-cuenta"></span>' +
           '</div>' +
@@ -2980,7 +2979,7 @@
         document.getElementById('adh-atras').hidden = i === 0;
         document.getElementById('adh-siguiente').hidden = i === ADH_PASOS.length - 1;
         document.getElementById('adh-captura-guardar').hidden = i !== ADH_PASOS.length - 1;
-        document.getElementById('adh-enviar-liga').hidden = i !== ADH_PASOS.length - 1;
+        document.getElementById('adh-enviar-liga-jefe').hidden = i !== ADH_PASOS.length - 1;
         document.getElementById('adh-cuenta').textContent = 'Paso ' + (i + 1) + ' de ' + ADH_PASOS.length;
         const titulo = cuerpo.querySelector('.form-paso[data-paso="' + i + '"] .form-paso-titulo');
         if (titulo) titulo.focus();
@@ -2993,6 +2992,9 @@
       adhMostrarPaso(0);
 
       document.getElementById('adh-fecha').value = hoyISO();
+      // "No. de inventario" es el Nucco del vehículo -- ver el comentario gemelo en
+      // abrirAgregarResponsivaVehicular.
+      if (vResumen.NUCCO) CampoAuto.llenar(document.getElementById('adh-no-de-inventario'), vResumen.NUCCO);
       if (state.sesion && state.sesion.nombre) CampoAuto.llenar(document.getElementById('adh-nombre-ci'), state.sesion.nombre);
 
       cuerpo.querySelectorAll('[data-firma]').forEach((el) => {
@@ -3042,13 +3044,13 @@
         });
       }).catch((err) => console.error('No se pudo cargar el catálogo de colaboradores:', err));
 
-      /** modo='presencial'/'remoto'/'remotoJefe' -- ver el comentario gemelo en
-       *  guardarResponsiva_ (misma lógica, solo cambia el campo de la firma principal). */
+      /** modo='presencial'/'remotoJefe' -- ver el comentario gemelo en guardarResponsiva_
+       *  (misma lógica, solo cambia el campo de la firma principal). */
       async function guardarAdherente_(modo, boton) {
         const errorBox = document.getElementById('adh-captura-error');
         errorBox.hidden = true;
 
-        // Quien entrega SIEMPRE firma al capturar -- es la única obligatoria en los tres
+        // Quien entrega SIEMPRE firma al capturar -- es la única obligatoria en los dos
         // modos. La del adherente solo en 'presencial' -- ver el comentario gemelo en
         // guardarResponsiva_.
         if (modo === 'presencial' && firmas['FIRMA ADHERENTE'].vacia()) {
@@ -3075,11 +3077,9 @@
             if (firma) imagenes[campo] = firma;
           });
           const datos = Object.assign({ 'FOLIO VEHICULO': vResumen.FOLIO }, CamposHoja.recolectar(CAMPOS_ADHERENTE_VEHICULAR, 'adh'));
-          let opciones;
-          if (modo === 'remoto') opciones = { remoto: true };
-          else if (modo === 'remotoJefe') {
-            opciones = firmas['FIRMA ADHERENTE'].vacia() ? { remoto: true, remotoJefe: true } : { remotoJefe: true };
-          }
+          const opciones = modo === 'remotoJefe'
+            ? (firmas['FIRMA ADHERENTE'].vacia() ? { remoto: true, remotoJefe: true } : { remotoJefe: true })
+            : undefined;
           const res = await callServer('apiCrearAdherenteVehicular', state.token, datos, imagenes, opciones);
           if (res.aviso) Notificar.error(res.aviso);
           toastExito(modo === 'presencial' ? 'Adherente registrado exitosamente' : 'Liga generada');
@@ -3101,9 +3101,6 @@
       document.getElementById('adh-captura-form').addEventListener('submit', (ev) => {
         ev.preventDefault();
         guardarAdherente_('presencial', document.getElementById('adh-captura-guardar'));
-      });
-      document.getElementById('adh-enviar-liga').addEventListener('click', () => {
-        guardarAdherente_('remoto', document.getElementById('adh-enviar-liga'));
       });
       document.getElementById('adh-enviar-liga-jefe').addEventListener('click', () => {
         guardarAdherente_('remotoJefe', document.getElementById('adh-enviar-liga-jefe'));
