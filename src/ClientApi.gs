@@ -571,6 +571,9 @@ function apiLineasEditarRegistro(token, id, datos) {
 function apiLineasReasignar(token, responsiva) {
   return TelefoniaService.reasignar(token, responsiva);
 }
+function apiLineasVincular(token, datos) {
+  return TelefoniaService.vincular(token, datos);
+}
 function apiLineasFotosInspeccion(token, id, accion) {
   return TelefoniaService.fotosInspeccion(token, id, accion);
 }

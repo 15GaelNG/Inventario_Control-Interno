@@ -706,12 +706,15 @@
       if (cond.tipoEn) return cond.tipoEn.indexOf(t) >= 0;
       if (cond.tipoNoEn) return cond.tipoNoEn.indexOf(t) < 0;
       if (cond.nuevo) return !!(ctx && ctx.nuevo);
+      if (cond.campo && cond.distinto !== undefined) return String((valores || {})[cond.campo] || '').trim().toUpperCase() !== String(cond.distinto).toUpperCase();
       if (cond.campo) return String((valores || {})[cond.campo] || '').trim().toUpperCase() === String(cond.igual).toUpperCase();
       if (cond.lleno) return !!String((valores || {})[cond.lleno] || '').trim();
       if (cond.cuantos) {
         const k = Number(String((valores || {})[cond.cuantos] || '').trim()) || 0;
         return cond.alMenos !== undefined ? k >= cond.alMenos : k < cond.menos;
       }
+      // { cambio: COLUMNA }: ya no es lo que tenía el registro al abrir el formulario (ctx.inicial)
+      if (cond.cambio) return String((valores || {})[cond.cambio] || '').trim() !== String(((ctx && ctx.inicial) || {})[cond.cambio] || '').trim();
       return true;
     }
     const condAtributo = (c) => esc(typeof c === 'object' && c !== null ? JSON.stringify(c) : (c || 'SIEMPRE'));
@@ -1222,6 +1225,18 @@
      * NUMEROS / IMEIS / SIMS del índice de Líneas. Las de personas traen `datos` para autollenar.
      */
     function opcionesSugeridas(tipo) {
+      // Agregar línea (usuario, 8-oct): NUCO con modelo y responsable (o el estatus si está guardado)
+      // Vincular o Cambiar línea (etapa 3, 8-oct): número con compañía y tipo
+      if (tipo === 'LINEAS_DISPONIBLES') {
+        return cargarIndice().then((ix) => ix.lineas.filter((l) => l.numero).map((l) => ({
+          valor: String(l.numero), etiqueta: [l.compania, l.tipoHoja].filter(Boolean).join(' · '),
+        })));
+      }
+      if (tipo === 'EQUIPOS_SIN_LINEA') {
+        return cargarIndice().then((ix) => ix.equipos.filter((e) => e.nuco).map((e) => ({
+          valor: String(e.nuco), etiqueta: [e.modelo, e.responsable || e.estatus].filter(Boolean).join(' · '),
+        })));
+      }
       if (tipo === 'NUMEROS' || tipo === 'IMEIS' || tipo === 'SIMS') {
         const campo = { NUMEROS: 'numero', IMEIS: 'imei', SIMS: 'sim' }[tipo];
         return cargarIndice().then((ix) => {
@@ -1395,12 +1410,35 @@
       const vacio = (x) => !x || ['N/A', 'NA', 'NO APLICA', '-', 'SOLO LINEA', 'SIN EQUIPO'].indexOf(x) >= 0;
       const conLinea = (!vacio(txt('NUMERO TELEFONO')) || !vacio(txt('NUMERO SIM'))) && txt('ESTATUS LINEA') !== 'CANCELADA';
       const basica = txt('TIPO DE LINEA') === 'SIM BASICO';
-      if (ctx && ctx.parte === 'LINEA') return basica ? 'LINEA BASICA' : 'LINEA';
+      if (ctx && ctx.parte === 'LINEA' && txt('_VINCULAR') !== 'TRUE') return basica ? 'LINEA BASICA' : 'LINEA';
+      if (ctx && ctx.parte === 'LINEA') return basica ? 'EQUIPO + SIM BASICO' : 'EQUIPO + SIM';
       return !conLinea ? 'EQUIPO' : (basica ? 'EQUIPO + SIM BASICO' : 'EQUIPO + SIM');
+    }
+
+    /** El equipo del índice con ese NUCO (a 4 dígitos), o null. */
+    function equipoPorNuco(nuco) {
+      const n = String(nuco || '').trim();
+      if (!/^\d+$/.test(n)) return null;
+      const clave = ('0000' + n).slice(-4);
+      return ((memoria.indice || {}).equipos || []).filter((e) => String(e.nuco || '') === clave)[0] || null;
     }
 
     function formulaRegistro(nombre, v, id) {
       const tipo = String(v.TIPO || '').toUpperCase();
+      // Agregar línea (usuario, 8-oct; misma cuenta que LineasRegistros.estatusAltaLinea_): con equipo, USO si está en uso
+      // y DISPONIBLE si está guardado; sola, USO con responsable y DISPONIBLE sin él
+      const conEquipo = String(v._VINCULAR || '').toUpperCase() === 'TRUE';
+      if (nombre === 'ESTATUS_LINEA_ALTA') {
+        if (conEquipo) {
+          const eq = equipoPorNuco(v._NUCO);
+          return eq ? (String(eq.estatus || '').toUpperCase() === 'USO' ? 'USO' : 'DISPONIBLE') : '';
+        }
+        return String(v.RESPONSABLE || '').trim() ? 'USO' : 'DISPONIBLE';
+      }
+      if (nombre === 'RESPONSABLE_EQUIPO') {
+        const eq = conEquipo ? equipoPorNuco(v._NUCO) : null;
+        return eq ? (eq.responsable || 'SIN RESPONSABLE · ' + (eq.estatus || '')) : '';
+      }
       if (nombre === 'TIPO_EQUIPO' || nombre === 'TIPO_LINEA') return tipo;
       if (nombre === 'FOLIO') {
         const prefijo = { 'EQUIPO + SIM': 'EQS', 'LINEA': 'LIN', 'MODEM': 'MOD', 'CAMARA': 'CAM', 'BANDA ANCHA': 'BAN', 'EQUIPO': 'EQP' }[tipo] || '';
@@ -1844,7 +1882,11 @@
         detalle: 'linea', textoVacio: 'Sin líneas',
         etiqueta: (r) => 'Línea ' + (r.numero || '—'),
         columnas: [
-          { campo: 'numero', titulo: 'Número', tipo: 'texto', fijada: true, render: (v) => '<span class="ln-mono ln-fuerte">' + guion(v) + '</span>' },
+          // Con los números que tuvo por un cambio de número (8-oct): la búsqueda encuentra la línea por uno anterior
+          { campo: 'numero', titulo: 'Número', tipo: 'texto', fijada: true,
+            valor: (r) => [r.numero, r.numerosAnteriores ? 'antes ' + r.numerosAnteriores : ''].filter(Boolean).join(' · '),
+            render: (v, r) => '<span class="ln-mono ln-fuerte">' + guion(r && r.numero) + '</span>' +
+              (r && r.numerosAnteriores ? ' <span class="ln-tenue ln-mono">antes ' + esc(r.numerosAnteriores) + '</span>' : '') },
           { campo: 'tipoHoja', titulo: 'Tipo', tipo: 'lista', render: (v) => formatoAppSheet('LINEAS', 'TIPO', v) || guion(v) },
           { campo: 'compania', titulo: 'Compañía', tipo: 'lista' },
           { campo: 'estatus', titulo: 'Estatus', tipo: 'lista', render: (v) => chip(v) },
@@ -1882,6 +1924,8 @@
       let fichaActual = null; // la ficha abierta (su carpeta de Drive, para el ⋮)
       // Estatus del equipo que van por el formulario de resguardo (LineasResguardos.ESTATUS_EQUIPO_RESGUARDO)
       const ESTATUS_EQUIPO_RESGUARDO = ['RESGUARDO', 'PARA VENTA', 'PARA DESECHO'];
+      // Los de la línea que en Editar llevan el mismo aviso (LineasRegistros.ESTATUS_LINEA_PANEL)
+      const ESTATUS_LINEA_PANEL = ['EN PROCESO DE CANCELACION', 'CANCELADA'];
       let marcarKpi = null;
       raiz.querySelectorAll('#ln-tabs .tab-btn').forEach((tab) => {
         tab.addEventListener('click', () => mostrarModulo(tab.dataset.tab));
@@ -2103,8 +2147,13 @@
         const UNO = 1; // sin acciones masivas por ahora
         const detalles = { icono: 'info', texto: 'Detalles', titulo: 'Panel con lo fundamental; sigue a la fila que selecciones', maximo: 1, grupo: 'ver',
           activo: () => detallesAbiertos, alHacer: (f) => (detallesAbiertos && panelAbierto ? panelAbierto.cerrar() : mostrarDetalles(tipo, f[0])) };
-        const editar = { icono: 'pencil', texto: 'Editar información', maximo: 1, enBarra: false, grupo: 'abrir', visible: operar, alHacer: (f) => abrirEditor(f[0].id) };
+        const editar = { icono: 'pencil', texto: tipo === 'linea' ? 'Editar línea' : 'Editar información', maximo: 1, enBarra: false, grupo: 'abrir', visible: operar,
+          alHacer: (f) => abrirEditor(f[0].id, tipo === 'linea' ? 'LINEA' : undefined) };
         const historial = { icono: 'history', texto: 'Historial', maximo: 1, enBarra: false, grupo: 'linea', alHacer: (f) => abrirEnPestana(tipo, f[0].id, 'historial') };
+        // Vincular, cambiar y desvincular, igual que en el ⋮ de la ficha (etapa 3, usuario 8-oct)
+        const vinculo = (ic, texto, modo, cuando) => ({ icono: ic, texto: texto, maximo: 1, enBarra: false, grupo: 'vinculo',
+          visible: (f) => operar() && cuando(f[0]), alHacer: (f) => abrirVinculo(modo, f[0]) });
+        const disponible = (r) => String(r.estatus || '').toUpperCase() === 'DISPONIBLE';
         if (modulo === 'equipos') {
           return [detalles,
             { icono: 'archive', texto: 'Mandar a resguardo', titulo: 'El equipo con su ubicación y el estatus de su línea; se cierra la asignación de la persona', maximo: UNO, grupo: 'mover',
@@ -2112,6 +2161,11 @@
             { icono: 'user-round-pen', texto: 'Reasignar', titulo: 'Asigna el equipo a otro responsable', maximo: UNO, grupo: 'mover', visible: operar,
               alHacer: (f) => abrirReasignar(f[0]) },
             editar,
+            { icono: 'card-sim', texto: 'Editar línea', maximo: 1, enBarra: false, grupo: 'abrir', visible: (f) => operar() && !!f[0].lineaId,
+              alHacer: (f) => abrirEditor(f[0].lineaId, 'LINEA') },
+            vinculo('link', 'Vincular línea', 'VINCULAR_LINEA', (r) => !r.lineaId),
+            vinculo('arrow-left-right', 'Cambiar línea', 'CAMBIAR_LINEA', (r) => !!r.lineaId),
+            vinculo('unlink', 'Desvincular línea', 'DESVINCULAR', (r) => !!r.lineaId),
             // Documentos separados por tipo, con su título, para no confundir "nueva" con "ver la última" (usuario, 30-sep)
             { icono: 'clipboard-check', texto: 'Nueva inspección', maximo: 1, enBarra: false, grupo: 'inspeccion', tituloGrupo: 'Inspección', visible: operar,
               alHacer: (f) => abrirCaptura('INSPECCION', { equipoId: f[0].id }) },
@@ -2129,7 +2183,11 @@
           { icono: 'phone-off', texto: 'Mandar a cancelación', titulo: 'Pasa a la bandeja de cancelaciones de quien la tramita; el equipo no cambia', maximo: UNO, grupo: 'mover',
             visible: operar, alHacer: (f) => abrirCancelacion(f) },
           { icono: 'smartphone', texto: 'Ir al equipo', maximo: 1, grupo: 'mover', visible: (f) => !!f[0].equipoId, alHacer: (f) => abrir('equipo', f[0].equipoId) },
-          editar, historial];
+          editar,
+          vinculo('link', 'Vincular a equipo', 'VINCULAR_EQUIPO', (r) => !r.equipoId && disponible(r)),
+          vinculo('arrow-left-right', 'Cambiar de equipo', 'CAMBIAR_EQUIPO', (r) => !!r.equipoId),
+          vinculo('unlink', 'Desvincular del equipo', 'DESVINCULAR', (r) => !!r.equipoId),
+          historial];
       }
 
       // "Detalles" = la vista rápida como el panel "Ver detalles" de Drive: abierto, sigue a la fila seleccionada
@@ -2507,6 +2565,18 @@
         return '<div class="card ln-card ' + (clase || '') + '"><h3>' + titulo + '</h3>' + cuerpo + '</div>';
       }
 
+      /**
+       * «Números de esta línea» (usuario, 8-oct): el actual y los que tuvo por un cambio de número (Editar línea), del más
+       * nuevo al más viejo, con la fecha del cambio y su comentario.
+       */
+      function tarjetaNumeros(l, cambios) {
+        const ultimo = cambios[cambios.length - 1];
+        const filas = [['Actual', '<span class="ln-mono">' + esc(l.numero || '—') + '</span>' + (ultimo ? ' <span class="ln-tenue">desde ' + esc(fecha(ultimo.fecha)) + '</span>' : ''), true]]
+          .concat(cambios.slice().reverse().map((c) => [fecha(c.fecha) || '—', '<span class="ln-mono">' + esc(c.antes || '—') + '</span>' +
+            ' <span class="ln-tenue">→ ' + esc(c.despues || '—') + (c.comentario ? ' · ' + esc(c.comentario) : '') + '</span>', true]));
+        return tarjeta(icono('phone') + ' Números de esta línea', campos(filas));
+      }
+
       function tarjetaResponsable(r, titulo) {
         r = r || {};
         const adicionales = (r.usuariosAdicionales || []).length
@@ -2616,11 +2686,13 @@
                   ? ['PIN equipo', e.pinEquipo] : null,
                 e.patronRuta ? ['Patrón', vistaPatron(e.patronRuta), true] : null,   // sin patrón (ni del AppSheet ni trazado) no se muestra
                 e.tipo === 'MODEM' || e.tipo === 'BANDA_ANCHA' ? ['Contraseña módem', e.contrasenaModem] : null,
+                // PIN de WhatsApp: del equipo; sin línea no hay (usuario, 8-oct)
+                l ? ['PIN WhatsApp', l.pinWhatsapp] : null,
                 e.simResidual ? ['SIM residual', chip(e.simResidual, 'ambar'), true] : null,
               ])) +
               tarjeta(icono('card-sim') + ' Línea asignada', l ? campos([
                 ['Número', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + icono('phone') + ' ' + esc(l.numero || '(sin número)') + ' ' + icono('chevron-right') + '</a>', true],
-                ['Compañía', l.compania], ['Razón social', l.razonSocial], ['Estatus', chip(l.estatus), true], ['SIM', l.sim], ['PIN WhatsApp', l.pinWhatsapp],
+                ['Compañía', l.compania], ['Razón social', l.razonSocial], ['Estatus', chip(l.estatus), true], ['SIM', l.sim],
                 ['Costo plan', costo], ['Plan', [fecha(l.inicioPlan), fecha(l.finPlan)].filter(Boolean).join(' → ')],
               ]) : '<p class="empty-state">Este equipo no tiene línea asignada.</p>') +
               tarjetaResponsable(e.responsable) +
@@ -2653,7 +2725,7 @@
             '<div class="ln-grid-2">' +
               tarjeta(icono('card-sim') + ' Línea', campos([
                 !e ? ['Tipo', tipoRegistro(l.legado), true] : null,
-                ['Compañía', l.compania], ['SIM', l.sim], ['PIN WhatsApp', l.pinWhatsapp], ['Razón social', l.razonSocial],
+                ['Compañía', l.compania], ['SIM', l.sim], ['Razón social', l.razonSocial],
                 ['Costo plan', costo], ['Inicio plan', fecha(l.inicioPlan)], ['Fin plan', fecha(l.finPlan)],
                 l.usoTemporal ? ['Uso temporal', 'Desde ' + esc(fecha(l.usoTemporal.desde) || '—') + ' · ' + esc(l.usoTemporal.correo || ''), true] : null,
                 !e && l.nucoLegado ? ['NUCO (anterior)', l.nucoLegado] : null,
@@ -2661,8 +2733,10 @@
               tarjeta(icono('smartphone') + ' Equipo', e ? campos([
                 ['NUCO', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' ' + esc(e.nuco || '—') + ' ' + icono('chevron-right') + '</a>', true],
                 ['Tipo', tipoRegistro(e.legado), true], ['Modelo', e.modelo], ['IMEI', e.imei], ['Estatus', chip(e.estatus), true],
+                ['PIN WhatsApp', l.pinWhatsapp],
               ]) : '<p class="empty-state">Línea suelta: no está instalada en un equipo de la empresa.</p>') +
               tarjetaResponsable(e ? e.responsable : l.responsable, e ? 'Responsable (del equipo)' : 'Responsable') +
+              tarjetaNumeros(l, r.numeros || []) +
             '</div>', tarjetaDetallesCopiar(r.detalles), !e);
           if (!e) cargarEvidencias(id);
           cargarHistorial(id, e ? 'NUCO ' + (e.nuco || id) : 'Linea ' + (l.numero || id), 'linea');
@@ -2697,8 +2771,12 @@
         const ix = memoria.indice || { equipos: [], lineas: [] };
         const r = (tipo === 'equipo' ? ix.equipos : ix.lineas).filter((x) => x.id === id)[0] || { id: id };
         const operar = !!(memoria.permisos && memoria.permisos.puedeOperar);
-        const comunes = [
+        // Editar línea y Editar información (del equipo) por separado (usuario, 8-oct)
+        const comunes = tipo === 'equipo' ? [
           { icono: 'pencil', texto: 'Editar información', alHacer: () => abrirEditor(id) },
+          r.lineaId ? { icono: 'card-sim', texto: 'Editar línea', alHacer: () => abrirEditor(r.lineaId, 'LINEA') } : null,
+        ] : [
+          { icono: 'pencil', texto: 'Editar línea', alHacer: () => abrirEditor(id, 'LINEA') },
         ];
         // La carpeta de Drive va sola, separada de inspección y responsiva (usuario, 30-sep)
         const carpeta = fichaActual && fichaActual.id === id ? fichaActual.carpetaDriveId : null;
@@ -2709,13 +2787,22 @@
           tieneNuco(r) ? { icono: 'file-text', texto: 'Ver última responsiva', alHacer: () => abrirUltimoDesdeMenu('RESPONSIVA', id) } : null,
         ].filter(Boolean);
         if (documentos.length) documentos[0].titulo = 'Documentos';
+        // Vincular, cambiar y desvincular (etapa 3, usuario 8-oct)
+        const vinculo = !operar ? [] : (tipo === 'equipo'
+          ? (r.lineaId ? [{ icono: 'arrow-left-right', texto: 'Cambiar línea', separador: true, alHacer: () => abrirVinculo('CAMBIAR_LINEA', r) },
+            { icono: 'unlink', texto: 'Desvincular línea', alHacer: () => abrirVinculo('DESVINCULAR', r) }]
+            : [{ icono: 'link', texto: 'Vincular línea', separador: true, alHacer: () => abrirVinculo('VINCULAR_LINEA', r) }])
+          : (r.equipoId ? [{ icono: 'arrow-left-right', texto: 'Cambiar de equipo', separador: true, alHacer: () => abrirVinculo('CAMBIAR_EQUIPO', r) },
+            { icono: 'unlink', texto: 'Desvincular del equipo', alHacer: () => abrirVinculo('DESVINCULAR', r) }]
+            : (String(r.estatus || '').toUpperCase() === 'DISPONIBLE'
+              ? [{ icono: 'link', texto: 'Vincular a equipo', separador: true, alHacer: () => abrirVinculo('VINCULAR_EQUIPO', r) }] : [])));
         const items = tipo === 'equipo' ? (operar ? comunes.concat([
           { icono: 'archive', texto: 'Mandar a resguardo', separador: true, alHacer: () => abrirResguardo([r]) },
           { icono: 'user-round-pen', texto: 'Reasignar', alHacer: () => abrirReasignar(r) },
-        ]) : []).concat(drive, documentos, [
+        ], vinculo) : []).concat(drive, documentos, [
           r.lineaId ? { icono: 'card-sim', texto: 'Ir a la línea', separador: true, alHacer: () => abrir('linea', r.lineaId) } : null,
           { icono: 'history', texto: 'Historial', separador: !r.lineaId, alHacer: () => mostrarPestanaFicha('historial') },
-        ]) : comunes.concat([
+        ]) : comunes.concat(vinculo, [
           r.numero ? { icono: 'phone-off', texto: 'Mandar a cancelación', separador: true, alHacer: () => abrirCancelacion([r]) } : null,
           r.equipoId ? { icono: 'smartphone', texto: 'Ir al equipo', separador: true, alHacer: () => abrir('equipo', r.equipoId) } : null,
           { icono: 'history', texto: 'Historial', separador: !r.equipoId, alHacer: () => mostrarPestanaFicha('historial') },
@@ -3341,8 +3428,9 @@
               info(q, 'VIGENCIA', 'Vigencia', vigenciaTexto(q))] : [])
             .concat([titulo(q, 'DESTINO', 'archive')], els, [titulo(q, 'ESTATUS', 'toggle-right')], estatus);
         });
-        // Un solo COMENTARIO (plan §5.2) y el TICKET
-        const motivoEl = campo('_MOTIVO', 'Comentario', 'area', { requerido: 'SIEMPRE', valor: '' });
+        // Un solo COMENTARIO (plan §5.2) y el TICKET. La regla del servidor (más de 3 caracteres) se revisa aquí, antes de
+        // pedir las inspecciones: si no, el error salía al final, con las inspecciones ya guardadas (usuario, 8-oct)
+        const motivoEl = campo('_MOTIVO', 'Comentario', 'area', { requerido: 'SIEMPRE', valor: '', valida: 'COMENTARIOS' });
         const ticketEl = campo('_TICKET', 'Ticket', 'texto', { valor: '', literal: true });
         cuerpo.innerHTML =
           ((form.omitidos || []).length ? '<div class="ln-nota ln-alerta">' + icono('triangle-alert', 'ln-icon-sm') + ' No se incluyen: ' +
@@ -3412,6 +3500,99 @@
       }
 
       /**
+       * Vincular, cambiar y desvincular línea y equipo (etapa 3, usuario 8-oct; LineasAcciones.vincular). `modo`:
+       * VINCULAR_LINEA y CAMBIAR_LINEA (desde el equipo: se elige una línea suelta DISPONIBLE), VINCULAR_EQUIPO y
+       * CAMBIAR_EQUIPO (desde la línea: se elige un NUCO en USO o RESGUARDO sin línea) y DESVINCULAR. La línea que deja
+       * el equipo queda DISPONIBLE o va a la bandeja de cancelaciones. Si el equipo queda en USO con otra línea, la
+       * responsiva es obligatoria y su comentario es el de la acción; si no, el comentario va en otra ventana.
+       */
+      async function abrirVinculo(modo, fila) {
+        const ix = memoria.indice || { equipos: [], lineas: [] };
+        const desdeEquipo = ['VINCULAR_LINEA', 'CAMBIAR_LINEA'].indexOf(modo) >= 0 || (modo === 'DESVINCULAR' && !fila.equipoId);
+        const equipoActual = ix.equipos.filter((e) => e.id === (desdeEquipo ? fila.id : fila.equipoId))[0] || null;
+        const numeroActual = desdeEquipo ? (equipoActual && equipoActual.numero) || fila.numero : fila.numero;
+        const TITULOS = { VINCULAR_LINEA: 'Vincular línea', CAMBIAR_LINEA: 'Cambiar línea', DESVINCULAR: 'Desvincular línea',
+          VINCULAR_EQUIPO: 'Vincular a equipo', CAMBIAR_EQUIPO: 'Cambiar de equipo' };
+        const titulo = TITULOS[modo];
+        const subtitulo = equipoActual ? ['NUCO ' + (equipoActual.nuco || '—'), equipoActual.modelo, numeroActual].filter(Boolean).join(' · ')
+          : 'Línea ' + (fila.numero || '—');
+        const may = (x) => String(x || '').trim().toUpperCase();
+        const lineasLibres = ix.lineas.filter((l) => l.suelta && may(l.estatus) === 'DISPONIBLE' && l.numero);
+        const equiposLibres = ix.equipos.filter((e) => e.nuco && !e.lineaId && ['USO', 'RESGUARDO'].indexOf(may(e.estatus)) >= 0 && e.id !== fila.equipoId);
+        const campo = (columna, etiqueta, control, extra) => Object.assign({ tipo: 'campo', columna: columna, etiqueta: etiqueta, control: control,
+          requerido: 'SIEMPRE', mostrar: 'SIEMPRE', editable: 'SIEMPRE', soloLectura: false, valor: '' }, extra || {});
+        const elementos = [{ tipo: 'titulo', texto: titulo.toUpperCase(), icono: modo === 'DESVINCULAR' ? 'unlink' : 'link' }];
+        if (modo === 'VINCULAR_LINEA' || modo === 'CAMBIAR_LINEA') {
+          elementos.push(campo('_LINEA', 'Línea', 'listaAbierta', { opciones: lineasLibres.map((l) => String(l.numero)), soloLista: true,
+            sugerencias: 'LINEAS_DISPONIBLES', mensaje: 'ELIGE UNA LÍNEA DISPONIBLE' }));
+        }
+        if (modo === 'VINCULAR_EQUIPO' || modo === 'CAMBIAR_EQUIPO') {
+          elementos.push(campo('_NUCO', 'NUCO', 'listaAbierta', { opciones: equiposLibres.map((e) => String(e.nuco)), soloLista: true,
+            sugerencias: 'EQUIPOS_SIN_LINEA', mensaje: 'ELIGE UN NUCO SIN LÍNEA' }));
+        }
+        // La que deja el equipo (en Cambiar de equipo se va con la línea: no se pregunta)
+        if (modo === 'CAMBIAR_LINEA' || modo === 'DESVINCULAR') {
+          elementos.push(campo('_ANTERIOR', 'La línea ' + (numeroActual || '') + ' queda', 'lista', { opciones: ['DISPONIBLE', 'MANDAR A CANCELACIÓN'], valor: 'DISPONIBLE' }));
+        }
+        mostrarModalCaptura();
+        $('#ln-captura-icono', raiz).innerHTML = icono(modo === 'DESVINCULAR' ? 'unlink' : (modo.indexOf('CAMBIAR') === 0 ? 'arrow-left-right' : 'link'));
+        $('#ln-captura-tipo', raiz).textContent = 'LINEAS TELEFONICAS';
+        $('#ln-captura-titulo', raiz).textContent = titulo;
+        $('#ln-captura-subtitulo', raiz).textContent = subtitulo;
+        const sesion = captura = { tipo: 'VINCULO', firmas: {} };
+        const cuerpo = $('#ln-captura-cuerpo', raiz);
+        cuerpo.innerHTML = htmlFormularioAppSheet(elementos, { acomodar: true }) +
+          '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div><div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
+          '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + ' ' + esc(titulo) + '</button></div>';
+        pintarIconos(cuerpo);
+        activarCombosEn(cuerpo, elementos);
+        $('#cap-guardar', raiz).addEventListener('click', async () => {
+          $('#cap-error', raiz).hidden = true;
+          const errores = erroresFormularioEn(cuerpo, elementos, '', { nuevo: false });
+          marcarErroresEn(cuerpo, errores.map((x) => ({ columna: x.columna, msg: x.corto })));
+          if (errores.length) { mostrarErrorCaptura(errores.map((x) => x.msg).slice(0, 3).join(' · ')); return; }
+          const v = leerFormularioEn(cuerpo, elementos);
+          const linea = v._LINEA ? lineasLibres.filter((l) => String(l.numero) === v._LINEA)[0] : null;
+          const nuco = v._NUCO ? ('0000' + v._NUCO).slice(-4) : '';
+          const equipoNuevo = nuco ? equiposLibres.filter((e) => String(e.nuco) === nuco)[0] : null;
+          const equipo = desdeEquipo || modo === 'DESVINCULAR' ? equipoActual : equipoNuevo;
+          if (!equipo) { mostrarErrorCaptura('Elige el equipo.'); return; }
+          const datos = {
+            equipoId: equipo.id,
+            // Desde la línea: la línea suelta es su registro; la de un equipo, el del equipo (el servidor la separa)
+            lineaId: linea ? linea.id : (modo === 'VINCULAR_EQUIPO' || modo === 'CAMBIAR_EQUIPO' ? fila.id : ''),
+            anterior: v._ANTERIOR === 'MANDAR A CANCELACIÓN' ? 'CANCELACION' : 'DISPONIBLE',
+          };
+          const conResponsiva = !!datos.lineaId && may(equipo.estatus) === 'USO';
+          const listo = (r) => {
+            if (!r) return null;
+            return aplicarCambiosIndice(r.filas).then(() => {
+              Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].limpiarSeleccion(); });
+              if (vigente()) { pintarIndicadores(); pintarListado(); }
+              aviso(icono('circle-check') + ' ' + titulo + ' · NUCO ' + (equipo.nuco || '—'), 6000);
+              if (vigente() && pila.length) abrir('equipo', equipo.id, true);
+            });
+          };
+          if (captura !== sesion) return;
+          cerrarCaptura(true);
+          if (conResponsiva) {
+            // La responsiva con la línea nueva, fija; el equipo se queda con su responsable
+            const r = await capturarEnFlujo('RESPONSIVA', { equipoId: equipo.id, lineaNueva: datos.lineaId, modo: 'LINEA' }, {
+              titulo: titulo, subtitulo: 'NUCO ' + (equipo.nuco || '—') + ' · responsiva con la línea nueva', boton: 'Guardar responsiva y ' + titulo.toLowerCase(),
+              espera: titulo,
+              guardar: (resp) => llamar('apiLineasVincular', Object.assign({}, datos, { responsiva: resp })),
+            });
+            Promise.resolve(listo(r)).catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 10000));
+            return;
+          }
+          pedirDatos('Comentario', 'NUCO ' + (equipo.nuco || '—') + ' · ' + titulo,
+            [{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }, { clave: 'ticket', etiqueta: 'Ticket' }],
+            titulo, { espera: titulo, alConfirmar: (nota) => llamar('apiLineasVincular', Object.assign({}, datos, { comentario: nota.comentario, ticket: nota.ticket })) })
+            .then(listo).catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 10000));
+        });
+      }
+
+      /**
        * "Mandar a cancelación" (30-sep): una o varias líneas pasan a la pestaña Cancelaciones de la bandeja (carta
        * firmada → enviada → cancelada), sin mandar el equipo a resguardo. La línea queda EN PROCESO DE CANCELACION.
        */
@@ -3456,7 +3637,7 @@
         mostrarModalCaptura();
         $('#ln-captura-icono', raiz).innerHTML = icono(id ? 'pencil' : (parte === 'LINEA' ? 'card-sim' : 'smartphone'));
         $('#ln-captura-tipo', raiz).textContent = 'LINEAS TELEFONICAS';
-        $('#ln-captura-titulo', raiz).textContent = id ? 'Editar información' : agregar;
+        $('#ln-captura-titulo', raiz).textContent = id ? (parte === 'LINEA' ? 'Editar línea' : 'Editar información') : agregar;
         $('#ln-captura-subtitulo', raiz).textContent = '';
         $('#ln-captura-cuerpo', raiz).innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando…</p>';
         const sesionEditor = captura = { tipo: 'REGISTRO', idObjetivo: id, firmas: {} };
@@ -3466,7 +3647,8 @@
           const elementos = conSelectorBloqueo(form.elementos);
           const valorDe = (c) => ((elementos.filter((e) => e.columna === c)[0] || {}).valor) || '';
           const ctx = { nuevo: form.nuevo, id: id, idDG: form.idDG || null, tipoInicial: form.tipo || '', parte: form.parte, historico: !!form.historico,
-            nuco: form.nuevo ? '' : valorDe('NUCO') };
+            nuco: form.nuevo ? '' : valorDe('NUCO'), inicial: {} };
+          elementos.forEach((e) => { if (e.tipo === 'campo') ctx.inicial[e.columna] = String(e.valor === undefined || e.valor === null ? '' : e.valor); });
           captura.contexto = { formulario: elementos };
           $('#ln-captura-subtitulo', raiz).textContent = !id ? '' : (form.parte === 'LINEA'
             ? [valorDe('NUMERO TELEFONO'), valorDe('RESPONSABLE')] : ['NUCO ' + (valorDe('NUCO') || '—'), valorDe('EQUIPO'), valorDe('RESPONSABLE')]).filter(Boolean).join(' · ');
@@ -3516,45 +3698,39 @@
               return;
             }
             const valores = leerFormularioEn(cuerpo, elementos);
-            // Estatus que siguen su flujo (usuario, 4-oct): RESGUARDO, PARA VENTA y PARA DESECHO → Mandar a resguardo;
-            // EN PROCESO DE CANCELACION → Mandar a cancelación. Lo demás se guarda aquí; si solo cambió el estatus, se va
-            // directo al flujo (su formulario pide su comentario)
+            // Estatus del panel de Pau (usuario, 8-oct): RESGUARDO, PARA VENTA y PARA DESECHO del equipo, y EN PROCESO DE
+            // CANCELACION y CANCELADA de la línea, se guardan aquí después de un aviso: no entran al panel de Resguardos y
+            // cancelaciones, solo al historial. Al panel se llega con «Mandar a resguardo» y «Mandar a cancelación»
             const inicial = {};
             elementos.forEach((e) => { if (e.tipo === 'campo') inicial[e.columna] = String(e.valor === undefined || e.valor === null ? '' : e.valor); });
-            let flujo = null;
-            if (id && valores['ESTATUS EQUIPO'] !== inicial['ESTATUS EQUIPO'] && ESTATUS_EQUIPO_RESGUARDO.indexOf(valores['ESTATUS EQUIPO']) >= 0) {
-              flujo = { tipo: 'RESGUARDO', estatus: valores['ESTATUS EQUIPO'] };
-              valores['ESTATUS EQUIPO'] = inicial['ESTATUS EQUIPO'];
-            } else if (id && valores['ESTATUS LINEA'] !== inicial['ESTATUS LINEA'] && valores['ESTATUS LINEA'] === 'EN PROCESO DE CANCELACION') {
-              flujo = { tipo: 'CANCELACION' };
-              valores['ESTATUS LINEA'] = inicial['ESTATUS LINEA'];
-            }
-            const seguirFlujo = () => {
-              if (!flujo) return;
-              const ix = memoria.indice || { equipos: [], lineas: [] };
-              const r = ix.equipos.filter((x) => x.id === id)[0] || ix.lineas.filter((x) => x.id === id)[0] || { id: id };
-              if (flujo.tipo === 'RESGUARDO') abrirResguardo([{ id: id }], { estatus: flujo.estatus }); else abrirCancelacion([r]);
-            };
-            const norma = (x) => String(x === undefined || x === null ? '' : x).replace(/\s+/g, '').toUpperCase();
-            const otros = Object.keys(valores).some((c) => c !== (patron && patron.columna) && norma(valores[c]) !== norma(inicial[c])) ||
-              (patron && patronParaGuardar() !== undefined);
-            if (flujo && !otros) { cerrarCaptura(true); seguirFlujo(); return; }
+            const cambiaA = (c, lista) => !!id && valores[c] !== inicial[c] && lista.indexOf(valores[c]) >= 0;
+            const avisos = [];
+            if (cambiaA('ESTATUS EQUIPO', ESTATUS_EQUIPO_RESGUARDO)) avisos.push('Equipo: ' + (inicial['ESTATUS EQUIPO'] || '—') + ' → ' + valores['ESTATUS EQUIPO']);
+            if (cambiaA('ESTATUS LINEA', ESTATUS_LINEA_PANEL)) avisos.push('Línea: ' + (inicial['ESTATUS LINEA'] || '—') + ' → ' + valores['ESTATUS LINEA']);
+            // El servidor deja DISPONIBLE la línea en uso del equipo que se guarda (LineasRegistros.editar). Editar información
+            // del equipo ya no trae la línea: su estatus llega en form.estatusLinea
+            else if (avisos.length && (inicial['ESTATUS LINEA'] || form.estatusLinea) === 'USO' && (valores['ESTATUS LINEA'] || 'USO') === 'USO') avisos.push('Línea: USO → DISPONIBLE');
             if (patron) {
               const p = patronParaGuardar();
               if (p === undefined) delete valores[patron.columna]; else valores[patron.columna] = p;
             }
+            const avisoEstatus = !avisos.length ? Promise.resolve(true) : Confirmar.pedir({
+              titulo: 'Cambio de estatus',
+              mensaje: 'Este cambio no se agregará en el panel de Resguardos y cancelaciones, pero se quedará en el historial.',
+              detalle: avisos, textoConfirmar: 'Confirmar',
+            });
             // Segunda ventana: un solo COMENTARIO obligatorio y el TICKET (plan §5.2), ya con los cambios aceptados
-            pedirDatos('Comentario', $('#ln-captura-subtitulo', raiz).textContent || (ctx.parte === 'LINEA' ? 'Agregar línea' : 'Agregar equipo'),
+            avisoEstatus.then((ok) => (!ok || captura !== sesionEditor ? null : pedirDatos('Comentario', $('#ln-captura-subtitulo', raiz).textContent || (ctx.parte === 'LINEA' ? 'Agregar línea' : 'Agregar equipo'),
               [{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }, { clave: 'ticket', etiqueta: 'Ticket' }],
-              id ? 'Guardar cambios' : (ctx.parte === 'LINEA' ? 'Agregar línea' : 'Agregar equipo')).then((nota) => {
+              id ? 'Guardar cambios' : (ctx.parte === 'LINEA' ? 'Agregar línea' : 'Agregar equipo')))).then((nota) => {
               if (!nota || captura !== sesionEditor) return null;
               return leerArchivosEn(cuerpo).then((archivos) => {
               estadoGuardado(id ? 'Guardando cambios' : 'Guardando');
-              const datos = { valores: valores, archivos: archivos, comentario: nota.comentario, ticket: nota.ticket, parte: ctx.parte, bloqueo: bloqueoElegido(cuerpo) };
+              const datos = { valores: valores, archivos: archivos, comentario: nota.comentario, ticket: nota.ticket, parte: ctx.parte, bloqueo: bloqueoElegido(cuerpo),
+                sinPanel: avisos.length > 0 };
               return (id ? llamar('apiLineasEditarRegistro', id, datos) : llamar('apiLineasCrearRegistro', datos)).then((r) => aplicarCambiosIndice(r.filas).then(() => {
                 cerrarCaptura(true);
                 aviso(icono('circle-check') + ' ' + (id ? 'Información actualizada' : (ctx.parte === 'LINEA' ? 'Línea agregada' : 'Equipo agregado')), 6000);
-                if (flujo) { seguirFlujo(); return; }
                 abrirRegistro(id || r.id);
               }));
               });
