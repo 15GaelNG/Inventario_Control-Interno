@@ -24,7 +24,8 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   inspección de lo que viene de una persona), Mandar a cancelación, Subir PDF firmado (del sistema, del AppSheet o de
   NUCOS: versión nueva del PDF de NUCOS o, si no tiene, PDF nuevo en la carpeta de NUCOS de la captura o del día),
   Regenerar PDF (responsivas del sistema: versión nueva del mismo archivo; pasadas 6 h pide solo las firmas). Cada
-  acción deja un renglón en el historial con su comentario.
+  acción deja un renglón en el historial con su comentario: de más de 3 caracteres («N/A» no), revisado en la pantalla
+  al escribirlo (Mandar a resguardo, antes de pedir las inspecciones; inspección y responsiva) y en el servidor.
 - **Páginas de la inspección y de la responsiva** (Documentos, doble clic o Historial): lo que dice el documento de ese
   día; a la vista Ver PDF y Subir PDF firmado, y en ⋮ Ver equipo, Ver carpeta en Drive y Generar o Regenerar PDF
   (`botonesDocumento` en lineas.html; `apiLineasInspeccion` / `apiLineasResponsiva`).
