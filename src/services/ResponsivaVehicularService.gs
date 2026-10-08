@@ -241,5 +241,5 @@ const ResponsivaVehicularService = (function () {
     return HojaServicio.eliminar(HOJA, token, id);
   }
 
-  return { listarPorFolio, buscarPorId, crear, eliminar };
+  return { listarPorFolio, buscarPorId, crear, eliminar, PLANTILLA };
 })();

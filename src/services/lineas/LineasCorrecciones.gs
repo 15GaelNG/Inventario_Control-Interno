@@ -187,13 +187,12 @@ const LineasCorrecciones = (function () {
 
   /** Copia de un Excel de Drive como Google Sheets en la misma carpeta (mismo nombre). Regresa el id. */
   function copiarComoHoja_(id, nombre, carpetaId) {
-    const resp = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + id + '/copy?supportsAllDrives=true', {
-      method: 'post', contentType: 'application/json',
-      payload: JSON.stringify({ name: nombre, mimeType: MIME_HOJA, parents: [carpetaId] }),
-      headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true,
-    });
-    if (resp.getResponseCode() !== 200) throw new Error('No se pudo convertir ' + nombre + ' (' + resp.getResponseCode() + '): ' + resp.getContentText().slice(0, 200));
-    return JSON.parse(resp.getContentText()).id;
+    // Servicio avanzado de Drive, no UrlFetchApp (LineasArchivos.listarDrive)
+    try {
+      return Drive.Files.copy({ name: nombre, mimeType: MIME_HOJA, parents: [carpetaId] }, id, { supportsAllDrives: true }).id;
+    } catch (e) {
+      throw new Error('No se pudo convertir ' + nombre + ': ' + e.message);
+    }
   }
 
   /** Para el panel de ADMIN: qué falta subir de lo que pide evidencias.json. */
@@ -270,17 +269,12 @@ const LineasCorrecciones = (function () {
 
   /** Sube un Excel convirtiéndolo a Google Sheets (API de Drive; el nombre se queda con su extensión). */
   function convertirAHoja_(carpetaId, nombre, bytes) {
-    const limite = 'lnc' + Utilities.getUuid().replace(/-/g, '');
-    const meta = JSON.stringify({ name: nombre, mimeType: MIME_HOJA, parents: [carpetaId] });
     const tipo = /\.xls$/i.test(nombre) ? 'application/vnd.ms-excel' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-    const cuerpo = Utilities.newBlob('--' + limite + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + meta +
-      '\r\n--' + limite + '\r\nContent-Type: ' + tipo + '\r\n\r\n').getBytes()
-      .concat(bytes, Utilities.newBlob('\r\n--' + limite + '--').getBytes());
-    const resp = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', {
-      method: 'post', contentType: 'multipart/related; boundary=' + limite, payload: cuerpo,
-      headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true,
-    });
-    if (resp.getResponseCode() !== 200) throw new Error('No se pudo convertir ' + nombre + ' a Google Sheets (' + resp.getResponseCode() + '): ' + resp.getContentText().slice(0, 200));
+    try {
+      Drive.Files.create({ name: nombre, mimeType: MIME_HOJA, parents: [carpetaId] }, Utilities.newBlob(bytes, tipo, nombre), { supportsAllDrives: true });
+    } catch (e) {
+      throw new Error('No se pudo convertir ' + nombre + ' a Google Sheets: ' + e.message);
+    }
   }
 
   // ---------------- Carga ----------------

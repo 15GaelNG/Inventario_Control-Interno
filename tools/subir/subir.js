@@ -5,7 +5,8 @@
  *   node tools/subir/subir.js lab                       .clasp.lab.json
  *   node tools/subir/subir.js prod                      producción (.clasp.prod.json): solo sube
  *   node tools/subir/subir.js prod --desplegar "texto"  y además mueve LOS DOS despliegues a la
- *                                                       versión nueva (CLAUDE.md: "dos links")
+ *                                                       versión nueva (CLAUDE.md: "dos links"). Solo
+ *                                                       en la GitHub Action, salvo --desde-aqui
  *   node tools/subir/subir.js rama                      el DEV de la rama actual (destinos.json);
  *                                                       es lo que usa la GitHub Action
  *
@@ -94,6 +95,14 @@ async function main() {
   const i = args.indexOf('--desplegar');
   const descripcion = i >= 0 ? args[i + 1] : null;
   if (i >= 0 && (destino !== 'prod' || !descripcion)) throw new Error('--desplegar es solo para prod y lleva una descripción');
+  // La app corre con la cuenta de quien MUEVE los despliegues (executeAs: USER_DEPLOYING). Desde la Action es
+  // siempre la del secreto CLASPRC_JSON; desde una máquina sería la de esa persona, y si a esa cuenta le falta
+  // una carpeta o una plantilla, la app falla para todos (8-oct: las inspecciones sin PDF).
+  if (descripcion && process.env.GITHUB_ACTIONS !== 'true' && !args.includes('--desde-aqui')) {
+    throw new Error('A producción se despliega con la GitHub Action (Actions → "Subir a Apps Script" → Run workflow ' +
+      'sobre master), para que la app corra siempre con la misma cuenta. Si de verdad tiene que ser desde aquí, ' +
+      'agrega --desde-aqui: la app va a correr con TU cuenta de clasp (docs/subir-automatico.md).');
+  }
 
   const scriptId = scriptIdDe(destino);
   const carpeta = path.join(RAIZ, '.construido', destino);

@@ -69,6 +69,9 @@ jobs:
         run: printf '%s' "$CLASPRC_JSON" > ~/.clasprc.json
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+      # La app de producción va a correr con esta cuenta (executeAs: USER_DEPLOYING)
+      - name: Cuenta con la que va a correr la app
+        run: npx clasp show-authorized-user
       - run: node tools/subir/subir.js prod --desplegar "$DESCRIPCION ($(git rev-parse --short HEAD))"
         env:
           DESCRIPCION: ${{ inputs.descripcion }}

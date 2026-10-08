@@ -646,6 +646,8 @@ const ArqueosService = (function () {
 
   return {
     AUDIT_ITEMS,
+    /** La plantilla del PDF (la revisa revisarEntorno: la cuenta que despliega tiene que poder copiarla) */
+    PLANTILLA: PLANTILLA_ARQUEO_DOC_ID,
     listarResumen: (token) => HojaServicio.listar(ARQUEOS, token),
     /** Para el activador (Calentador.gs): la deja armada sin esperar a nadie */
     calentar: () => HojaServicio.calentar(ARQUEOS),
