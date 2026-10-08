@@ -162,11 +162,15 @@ const LineasArchivos = (function () {
 
   // ---------------- NUCOS (producción): lectura ----------------
 
-  function driveApi_(parametros) {
-    const url = 'https://www.googleapis.com/drive/v3/files?' + parametros.concat(['supportsAllDrives=true', 'includeItemsFromAllDrives=true']).join('&');
-    const resp = UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
-    if (resp.getResponseCode() !== 200) throw new Error('No se pudo leer Drive (' + resp.getResponseCode() + ').');
-    return JSON.parse(resp.getContentText());
+  /**
+   * files.list de Drive con el servicio avanzado (appsscript.json), no con UrlFetchApp (7-oct): Líneas solo depende del
+   * permiso de Drive, que toda la app necesita. UrlFetchApp pide además el de servicios externos; si quien despliega no
+   * lo dio (v65), las fotos y los PDF dejan de funcionar para todos. `opciones` = q, pageSize, orderBy, fields, pageToken.
+   */
+  function listarDrive(opciones) {
+    const parametros = { supportsAllDrives: true, includeItemsFromAllDrives: true };
+    Object.keys(opciones).forEach((k) => { if (opciones[k] != null) parametros[k] = opciones[k]; }); // sin pageToken vacío
+    return Drive.Files.list(parametros);
   }
 
   /** NUCO → id de su carpeta dentro de NUCOS (subcarpetas con nombre numérico). Caché 6 h. */
@@ -176,10 +180,10 @@ const LineasArchivos = (function () {
     const mapa = {};
     let pagina = null;
     do {
-      const r = driveApi_([
-        'q=' + encodeURIComponent("'" + carpetaNucosId() + "' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"),
-        'pageSize=1000', 'fields=' + encodeURIComponent('nextPageToken,files(id,name)'),
-      ].concat(pagina ? ['pageToken=' + encodeURIComponent(pagina)] : []));
+      const r = listarDrive({
+        q: "'" + carpetaNucosId() + "' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+        pageSize: 1000, fields: 'nextPageToken,files(id,name)', pageToken: pagina || undefined,
+      });
       (r.files || []).forEach((f) => {
         const nombre = String(f.name || '').trim();
         if (/^\d+$/.test(nombre)) mapa[LineasUtil.nuco4(nombre)] = f.id;
@@ -212,11 +216,12 @@ const LineasArchivos = (function () {
         const padres = nivel.slice(i, i + 40);
         let pagina = null;
         do {
-          const r = driveApi_([
-            'q=' + encodeURIComponent('(' + padres.map((p) => "'" + p + "' in parents").join(' or ') + ') and trashed = false'),
-            'pageSize=1000', 'orderBy=name',
-            'fields=' + encodeURIComponent('nextPageToken,files(id,name,mimeType,parents,thumbnailLink,webViewLink,modifiedTime)'),
-          ].concat(pagina ? ['pageToken=' + encodeURIComponent(pagina)] : []));
+          const r = listarDrive({
+            q: '(' + padres.map((p) => "'" + p + "' in parents").join(' or ') + ') and trashed = false',
+            pageSize: 1000, orderBy: 'name',
+            fields: 'nextPageToken,files(id,name,mimeType,parents,thumbnailLink,webViewLink,modifiedTime)',
+            pageToken: pagina || undefined,
+          });
           (r.files || []).forEach((f) => {
             const padre = (f.parents || []).filter((p) => p in rutas)[0];
             if (padre === undefined) return;
@@ -384,18 +389,25 @@ const LineasArchivos = (function () {
     if (archivo.getMimeType() !== MimeType.PDF) throw new Error('El documento no es un PDF.');
     const padres = archivo.getParents();
     exigirEscribible(padres.hasNext() ? padres.next().getId() : null);
-    const opciones = (metodo, extra) => Object.assign({ method: metodo, headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true }, extra || {});
-    const base = 'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(archivoId);
-    const revisiones = UrlFetchApp.fetch(base + '/revisions?pageSize=1000&fields=' + encodeURIComponent('revisions(id)'), opciones('get'));
-    const ultima = revisiones.getResponseCode() === 200 ? (JSON.parse(revisiones.getContentText()).revisions || []).pop() : null;
+    // Servicio avanzado de Drive, no UrlFetchApp (ver listarDrive)
+    let ultima = null;
+    try {
+      ultima = (Drive.Revisions.list(archivoId, { pageSize: 1000, fields: 'revisions(id)' }).revisions || []).pop() || null;
+    } catch (e) { /* sin historial: se reemplaza igual */ }
     if (ultima) {
-      const r = UrlFetchApp.fetch(base + '/revisions/' + encodeURIComponent(ultima.id), opciones('patch', { contentType: 'application/json', payload: JSON.stringify({ keepForever: true }) }));
-      if (r.getResponseCode() !== 200) console.warn('reemplazarPdf ' + archivoId + ': la versión anterior no se marcó (' + r.getResponseCode() + ').');
+      try {
+        Drive.Revisions.update({ keepForever: true }, archivoId, ultima.id);
+      } catch (e) {
+        console.warn('reemplazarPdf ' + archivoId + ': la versión anterior no se marcó (' + e.message + ').');
+      }
     }
-    const resp = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files/' + encodeURIComponent(archivoId) +
-      '?uploadType=media&supportsAllDrives=true&fields=' + encodeURIComponent('id,name'), opciones('patch', { contentType: 'application/pdf', payload: bytes }));
-    if (resp.getResponseCode() !== 200) throw new Error('No se pudo guardar el PDF en Drive (' + resp.getResponseCode() + ').');
-    return JSON.parse(resp.getContentText());
+    let r;
+    try {
+      r = Drive.Files.update({}, archivoId, Utilities.newBlob(bytes, 'application/pdf'), { supportsAllDrives: true, fields: 'id,name' });
+    } catch (e) {
+      throw new Error('No se pudo guardar el PDF en Drive (' + e.message + ').');
+    }
+    return { id: r.id, name: r.name };
   }
 
   /**
@@ -404,45 +416,45 @@ const LineasArchivos = (function () {
    * la unidad de la cuenta de la app, sin los permisos de la carpeta («Necesitas acceso»).
    * `lista` = [{ pdfId, carpetaId, nombre, prefijo }]. Regresa, en el mismo orden, el PDF que sí está en la carpeta
    * ({ id, nombre }: el del mismo nombre o, si no hay, el más reciente que empiece con `prefijo`) o null si el ligado sigue
-   * ahí, si la carpeta no tiene otro o si Drive no respondió. Se pregunta cada vez (una sola petición para todos): si se
-   * recordara, quien abre la carpeta desde la ficha y cambia el PDF a mano seguiría viendo el viejo (prueba del 6-oct).
+   * ahí o si la carpeta no tiene otro. Se pregunta cada vez: si se recordara, quien abre la carpeta desde la ficha y
+   * cambia el PDF a mano seguiría viendo el viejo (prueba del 6-oct). Una consulta por cada 40 carpetas (los PDF que
+   * hay en ellas, lo más reciente primero): el ligado sigue ahí si sale en la de su carpeta. Si Drive no responde,
+   * truena y no se decide nada.
    */
   function pdfsFueraDeCarpeta(lista) {
     const salida = lista.map(() => null);
     if (!lista.length) return salida;
-    const pedir = (url) => ({ url: url, headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
-    const API = 'https://www.googleapis.com/drive/v3/files';
-    const estados = UrlFetchApp.fetchAll(lista.map((x) => pedir(API + '/' + encodeURIComponent(x.pdfId) +
-      '?supportsAllDrives=true&fields=' + encodeURIComponent('trashed,parents'))));
-    const fuera = [];
-    lista.forEach((x, i) => {
-      const codigo = estados[i].getResponseCode();
-      if (codigo !== 200 && codigo !== 404) return; // cuota o red: no se decide nada
-      const f = codigo === 200 ? JSON.parse(estados[i].getContentText()) : null;
-      if (!f || f.trashed || (f.parents || []).indexOf(x.carpetaId) < 0) fuera.push(i);
-    });
-    if (fuera.length) {
-      const contenidos = UrlFetchApp.fetchAll(fuera.map((i) => pedir(API + '?' + [
-        'q=' + encodeURIComponent("'" + lista[i].carpetaId + "' in parents and trashed = false and mimeType = 'application/pdf'"),
-        'orderBy=' + encodeURIComponent('modifiedTime desc'), 'pageSize=50',
-        'fields=' + encodeURIComponent('files(id,name)'), 'supportsAllDrives=true', 'includeItemsFromAllDrives=true',
-      ].join('&'))));
-      fuera.forEach((i, k) => {
-        if (contenidos[k].getResponseCode() !== 200) return;
-        const x = lista[i];
-        const mismo = (n) => String(n || '').trim().toUpperCase();
-        const pdfs = (JSON.parse(contenidos[k].getContentText()).files || []).filter((a) => a.id !== x.pdfId);
-        const elegido = pdfs.filter((a) => mismo(a.name) === mismo(x.nombre))[0] ||
-          pdfs.filter((a) => x.prefijo && mismo(a.name).indexOf(mismo(x.prefijo)) === 0)[0];
-        if (elegido) salida[i] = { id: elegido.id, nombre: elegido.name };
-      });
+    const enCarpeta = {};
+    lista.forEach((x) => { enCarpeta[x.carpetaId] = []; });
+    const carpetas = Object.keys(enCarpeta);
+    for (let i = 0; i < carpetas.length; i += 40) {
+      const grupo = carpetas.slice(i, i + 40);
+      let pagina = null;
+      do {
+        const r = listarDrive({
+          q: '(' + grupo.map((c) => "'" + c + "' in parents").join(' or ') + ") and trashed = false and mimeType = 'application/pdf'",
+          orderBy: 'modifiedTime desc', pageSize: 1000, fields: 'nextPageToken,files(id,name,parents)',
+          pageToken: pagina || undefined,
+        });
+        (r.files || []).forEach((a) => (a.parents || []).forEach((p) => { if (enCarpeta[p]) enCarpeta[p].push(a); }));
+        pagina = r.nextPageToken || null;
+      } while (pagina);
     }
+    const mismo = (n) => String(n || '').trim().toUpperCase();
+    lista.forEach((x, i) => {
+      const pdfs = enCarpeta[x.carpetaId];
+      if (pdfs.some((a) => a.id === x.pdfId)) return;
+      const otros = pdfs.filter((a) => a.id !== x.pdfId);
+      const elegido = otros.filter((a) => mismo(a.name) === mismo(x.nombre))[0] ||
+        otros.filter((a) => x.prefijo && mismo(a.name).indexOf(mismo(x.prefijo)) === 0)[0];
+      if (elegido) salida[i] = { id: elegido.id, nombre: elegido.name };
+    });
     return salida;
   }
 
   return {
     carpetaAppSheetId, carpetaNucosId, carpetaDeApp, idDeUrl, rutaAppSheet, resolver, imagen, blob, guardarComoAppSheet,
     carpetasNucos, archivosNuco, estaDentroDe, exigirEscribible, enNucos, carpetaEvidenciaNuco, descartarCarpeta, olvidarNuco,
-    reemplazarPdf, pdfsFueraDeCarpeta,
+    reemplazarPdf, pdfsFueraDeCarpeta, listarDrive,
   };
 })();

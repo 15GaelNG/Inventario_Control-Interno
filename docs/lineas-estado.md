@@ -100,6 +100,12 @@ se vuelve a ligar en APP_EVIDENCIAS y en la columna del PDF (`LineasRepo.revisar
 `LineasArchivos.pdfsFueraDeCarpeta`; al ver Documentos, la página del documento o el Historial y antes de Regenerar o
 Subir PDF firmado; se pregunta a Drive cada vez).
 
+**Permisos de Google:** la app corre con la cuenta de quien publica (`executeAs: USER_DEPLOYING`). Desde la v66, Líneas
+usa Drive con `DriveApp` y con el servicio avanzado Drive v3 (`LineasArchivos.listarDrive`, `appsscript.json`), no con
+`UrlFetchApp`: así solo depende de los permisos de Drive y de Sheets, que toda la app necesita, y no del de servicios
+externos (`script.external_request`), que no tenía la cuenta que había publicado la v65. `UrlFetchApp` queda solo en el
+respaldo de pestañas retiradas de `LineasAdmin.gs` (ADMIN, una vez).
+
 **Configuración:** bloque por scriptId en `src/config/Entornos.gs` (producción `1NbOczw…`, DEV de Emmanuel `1rpvvay…`).
 Los archivos del AppSheet (rutas `TABLA_Images/…`) se buscan en la carpeta de la app y, si no están en la ruta, por
 su nombre dentro de ella (`LineasArchivos.resolver`); el DEV además los lee de la carpeta de producción

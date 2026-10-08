@@ -324,16 +324,14 @@ const TelefoniaService = (function () {
 
   /** Archivos de una carpeta de Drive (fotos/PDF) con miniaturas. */
   function archivosCarpeta_(carpetaId, limite) {
-    const url = 'https://www.googleapis.com/drive/v3/files?' + [
-      'q=' + encodeURIComponent("'" + carpetaId + "' in parents and trashed = false"),
-      'pageSize=' + (limite || 200),
-      'orderBy=name',
-      'fields=' + encodeURIComponent('files(id,name,mimeType,thumbnailLink,webViewLink)'),
-      'supportsAllDrives=true', 'includeItemsFromAllDrives=true',
-    ].join('&');
-    const resp = UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
-    if (resp.getResponseCode() !== 200) return [];
-    return JSON.parse(resp.getContentText()).files || [];
+    try {
+      return LineasArchivos.listarDrive({
+        q: "'" + carpetaId + "' in parents and trashed = false", pageSize: limite || 200, orderBy: 'name',
+        fields: 'files(id,name,mimeType,thumbnailLink,webViewLink)',
+      }).files || [];
+    } catch (e) {
+      return [];
+    }
   }
 
   /**

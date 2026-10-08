@@ -27,8 +27,9 @@ test('mismo archivo de Drive: versión nueva, la anterior se conserva', () => {
   assert.match(fn, /getMimeType\(\) !== MimeType\.PDF/);
   assert.match(fn, /exigirEscribible\(/);
   assert.match(fn, /keepForever: true/);
-  assert.match(fn, /upload\/drive\/v3\/files\/' \+ encodeURIComponent\(archivoId\)/);
-  assert.match(fn, /uploadType=media&supportsAllDrives=true/);
+  // Servicio avanzado de Drive, no UrlFetchApp (7-oct: v65 sin el permiso de servicios externos)
+  assert.match(fn, /Drive\.Files\.update\(\{\}, archivoId, Utilities\.newBlob\(bytes, 'application\/pdf'\), \{ supportsAllDrives: true/);
+  assert.doesNotMatch(fn, /UrlFetchApp\.fetch/);
   assert.doesNotMatch(fn, /setTrashed|createFile/);
 });
 
