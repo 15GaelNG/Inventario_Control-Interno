@@ -48,7 +48,7 @@ test('la pantalla: las acciones en el ⋮ y el formulario de la acción', () => 
   const html = read('src/html/js/lineas.html');
   ['Vincular línea', 'Cambiar línea', 'Desvincular línea', 'Cambiar de equipo', 'Desvincular del equipo', 'Vincular a equipo']
     .forEach((t) => assert.match(html, new RegExp("texto: '" + t + "'"), t));
-  assert.match(html, /async function abrirVinculo\(modo, fila\)/);
+  assert.match(html, /async function abrirVinculo\(modo, fila, pre\)/);
   assert.match(html, /tipo === 'LINEAS_DISPONIBLES'/);
   assert.match(html, /const conResponsiva = !!datos\.lineaId && may\(equipo\.estatus\) === 'USO';/);
   assert.match(html, /capturarEnFlujo\('RESPONSIVA', \{ equipoId: equipo\.id, lineaNueva: datos\.lineaId, modo: 'LINEA' \}/);

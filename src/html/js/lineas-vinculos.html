@@ -1,0 +1,478 @@
+<script>
+  /**
+   * lineas-vinculos.html — Líneas Telefónicas › Vínculos (usuario, 8-oct).
+   *
+   * El inventario como un espacio: cada persona con sus equipos y la línea de cada uno, lo suelto junto a ellos, y
+   * aparte el resguardo, la venta o el desecho y la cancelación. Arrastrar abre la acción que ya existe (vincular,
+   * cambiar, desvincular, mandar a resguardo o a cancelación, reasignar) con su ventana, su comentario y su
+   * responsiva: aquí no se guarda nada ni se revisa una regla nueva, el servidor revisa lo de siempre.
+   *
+   * lineas.html lo monta (montar) con el índice y las acciones. agrupar, alSoltar y describir no tocan la pantalla
+   * (tests/lineas-vinculos.test.cjs).
+   */
+  const LineasVinculos = (function () {
+    'use strict';
+
+    const may = (v) => String(v === null || v === undefined ? '' : v).trim().toUpperCase();
+    const normal = (s) => String(s === null || s === undefined ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const miles = (n) => Number(n || 0).toLocaleString('es-MX');
+
+    const ZONAS = [
+      { id: 'uso', titulo: 'En uso', icono: 'users' },
+      { id: 'resguardo', titulo: 'Resguardo', icono: 'archive' },
+      { id: 'venta', titulo: 'Venta y desecho', icono: 'tag' },
+      { id: 'cancelacion', titulo: 'Cancelación', icono: 'phone-off' },
+    ];
+    // Estatus del catálogo (LineasRepo.CATALOGO): los de venta o desecho van a su zona; las bajas solo salen al buscar
+    const VENTA = ['PARA VENTA', 'PARA DESECHO'];
+    const BAJA_EQUIPO = ['VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'];
+    const CANCELACION = ['EN PROCESO DE CANCELACION', 'CANCELADA'];
+    // Lo mismo que pide LineasAcciones.vincular (ESTATUS_VINCULABLE) y la ventana de Vincular
+    const VINCULABLE = ['USO', 'RESGUARDO'];
+    const ICONO_EQUIPO = { CELULAR: 'smartphone', CELULAR_BASICO: 'smartphone', MODEM: 'router', BANDA_ANCHA: 'wifi', CAMARA: 'cctv' };
+    // Un responsable como «RES-12» es el código de un resguardo del AppSheet, no una persona (LineasRepo.convertirRegistro)
+    const esCodigoResguardo = (s) => /^[A-Z]{1,4}-\d+/i.test(String(s || '').trim());
+
+    function zonaEquipo(e) {
+      const s = may(e.estatus);
+      if (s === 'RESGUARDO') return 'resguardo';
+      if (VENTA.indexOf(s) >= 0 || BAJA_EQUIPO.indexOf(s) >= 0) return 'venta';
+      return 'uso';
+    }
+    const zonaLinea = (l) => (CANCELACION.indexOf(may(l.estatus)) >= 0 ? 'cancelacion' : 'uso');
+    const arrastraEquipo = (e) => BAJA_EQUIPO.indexOf(may(e.estatus)) < 0;
+    const arrastraLinea = (l) => CANCELACION.indexOf(may(l.estatus)) < 0;
+
+    /** Orden fijo pero revuelto (lo suelto convive con las personas): el mismo grupo cae siempre en el mismo lugar. */
+    function hash(s) {
+      let h = 5381;
+      for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+      return h >>> 0;
+    }
+
+    /**
+     * Grupos del índice de Líneas Telefónicas (memoria.indice de lineas.html): una persona con sus equipos (cada uno con
+     * su línea) y sus líneas sin equipo; un equipo sin persona con su línea; una línea suelta. Cada grupo va en la zona
+     * de su estatus. filtro = { q, departamento, compania }: sin búsqueda no salen las bajas (equipos VENDIDO, DONADO,
+     * DESECHADO o EXTRAVIO-ROBO y líneas CANCELADA); con búsqueda sale todo lo que coincide.
+     * → { zonas: { uso, resguardo, venta, cancelacion }, departamentos, companias }
+     */
+    function agrupar(ix, filtro) {
+      const f = filtro || {};
+      const equipos = (ix && ix.equipos) || [];
+      const lineas = (ix && ix.lineas) || [];
+      const conEquipo = {};
+      equipos.forEach((e) => { conEquipo[e.id] = true; });
+      const lineaDe = {};
+      lineas.forEach((l) => { if (l.equipoId && conEquipo[l.equipoId]) lineaDe[l.equipoId] = l; });
+      const grupos = [];
+      const personas = {};
+      const grupoDePersona = (fila) => {
+        const nombre = String(fila.responsable || '').trim();
+        if (!nombre || esCodigoResguardo(nombre)) return null;
+        const no = String(fila['NO EMPLEADO'] || '').trim();
+        const clave = 'p:' + (no || normal(nombre));
+        if (!personas[clave]) {
+          personas[clave] = { clave: clave, zona: 'uso', pares: [],
+            persona: { clave: clave, nombre: nombre, noEmpleado: no, departamento: fila.departamento || '', puesto: fila['PUESTO'] || '' } };
+          grupos.push(personas[clave]);
+        }
+        return personas[clave];
+      };
+      equipos.forEach((e) => {
+        // Por si la línea no viene en el índice de líneas: la del equipo, con lo que trae su fila
+        const linea = lineaDe[e.id] || (e.lineaId ? { id: e.lineaId, numero: e.numero, compania: e.compania, estatus: e.estatusLinea, equipoId: e.id } : null);
+        const zona = zonaEquipo(e);
+        const par = { equipo: e, linea: linea };
+        const g = zona === 'uso' ? grupoDePersona(e) : null;
+        if (g) g.pares.push(par);
+        else grupos.push({ clave: 'e:' + e.id, zona: zona, persona: null, pares: [par], baja: !arrastraEquipo(e) });
+      });
+      lineas.forEach((l) => {
+        if (l.equipoId && conEquipo[l.equipoId]) return;
+        const zona = zonaLinea(l);
+        const par = { equipo: null, linea: l };
+        // Una línea sola con responsable (en USO) va con la persona; DISPONIBLE, suelta
+        const g = zona === 'uso' && may(l.estatus) !== 'DISPONIBLE' ? grupoDePersona(l) : null;
+        if (g) g.pares.push(par);
+        else grupos.push({ clave: 'l:' + l.id, zona: zona, persona: null, pares: [par], baja: may(l.estatus) === 'CANCELADA' });
+      });
+
+      const departamentos = {};
+      const companias = {};
+      grupos.forEach((g) => {
+        const partes = [];
+        const deptos = [];
+        const cias = [];
+        if (g.persona) {
+          partes.push(g.persona.nombre, g.persona.noEmpleado, g.persona.departamento, g.persona.puesto);
+          deptos.push(g.persona.departamento);
+        }
+        g.pares.forEach((p) => {
+          const e = p.equipo;
+          const l = p.linea;
+          if (e) {
+            partes.push(e.nuco ? 'nuco ' + e.nuco : '', e.modelo, e.imei, e.estatus, e.responsable, e.departamento, e.sede);
+            deptos.push(e.departamento);
+          }
+          if (l) {
+            partes.push(l.numero, l.numerosAnteriores, l.sim, l.compania, l.estatus, l.responsable, l.departamento);
+            deptos.push(l.departamento);
+            cias.push(l.compania);
+          }
+        });
+        g.texto = normal(partes.filter(Boolean).join(' '));
+        g.deptos = deptos.map(may).filter(Boolean);
+        g.companias = cias.map(may).filter(Boolean);
+        g.deptos.forEach((d) => { departamentos[d] = true; });
+        g.companias.forEach((c) => { companias[c] = true; });
+      });
+
+      const palabras = normal(f.q).split(/\s+/).filter(Boolean);
+      const depto = may(f.departamento);
+      const cia = may(f.compania);
+      const zonas = { uso: [], resguardo: [], venta: [], cancelacion: [] };
+      grupos.filter((g) => (palabras.length ? palabras.every((p) => g.texto.indexOf(p) >= 0) : !g.baja) &&
+        (!depto || g.deptos.indexOf(depto) >= 0) && (!cia || g.companias.indexOf(cia) >= 0))
+        .sort((a, b) => hash(a.clave) - hash(b.clave))
+        .forEach((g) => zonas[g.zona].push(g));
+      return { zonas: zonas, departamentos: Object.keys(departamentos).sort(), companias: Object.keys(companias).sort() };
+    }
+
+    /**
+     * Qué acción abre soltar `origen` en `destino` (o null si no hace nada, o { aviso } si no se puede).
+     * origen = { tipo: 'linea' | 'equipo', fila, equipo (el de la línea), persona (clave de su persona) };
+     * destino = { tipo: 'equipo', fila, linea } | { tipo: 'persona', persona } | { tipo: 'zona', zona }.
+     * → { tipo: 'vinculo', modo, fila, pre } (abrirVinculo) | { tipo: 'cancelacion', fila } | { tipo: 'resguardo', fila,
+     * estatus } | { tipo: 'reasignar', fila, persona }
+     */
+    function alSoltar(o, d) {
+      if (!o || !d) return null;
+      if (o.tipo === 'linea') {
+        const l = o.fila;
+        if (d.tipo === 'equipo') {
+          const e = d.fila;
+          if (o.equipo && o.equipo.id === e.id) return null;
+          if (!e.nuco || VINCULABLE.indexOf(may(e.estatus)) < 0) {
+            return { aviso: 'NUCO ' + (e.nuco || '—') + ' está en ' + (may(e.estatus) || 'sin estatus') + ': la línea solo va a equipos en USO o RESGUARDO' };
+          }
+          if (o.equipo) {
+            if (d.linea) return { aviso: 'NUCO ' + e.nuco + ' ya tiene línea: desvincúlala primero' };
+            return { tipo: 'vinculo', modo: 'CAMBIAR_EQUIPO', fila: l, linea: l, desde: o.equipo, hacia: e, pre: { nuco: String(e.nuco) } };
+          }
+          if (may(l.estatus) !== 'DISPONIBLE' || !l.numero) return { aviso: 'Solo se vinculan líneas DISPONIBLE (' + (l.numero || 'sin número') + ' está en ' + (may(l.estatus) || 'sin estatus') + ')' };
+          return { tipo: 'vinculo', modo: d.linea ? 'CAMBIAR_LINEA' : 'VINCULAR_LINEA', fila: e, linea: l, anterior: d.linea || null, hacia: e, pre: { linea: String(l.numero) } };
+        }
+        if (d.tipo === 'zona' && d.zona === 'cancelacion') {
+          if (zonaLinea(l) === 'cancelacion') return null;
+          if (!l.numero) return { aviso: 'La línea no tiene número' };
+          return { tipo: 'cancelacion', fila: l };
+        }
+        // Sacar la línea de su equipo al espacio = desvincularla (lo mismo que las tijeras)
+        if (d.tipo === 'zona' && d.zona === 'uso' && o.equipo) return { tipo: 'vinculo', modo: 'DESVINCULAR', fila: o.equipo, linea: l, pre: {} };
+        return null;
+      }
+      const e = o.fila;
+      if (d.tipo === 'persona') return o.persona === d.persona.clave ? null : { tipo: 'reasignar', fila: e, persona: d.persona };
+      if (d.tipo !== 'zona') return null;
+      if (d.zona === 'resguardo') return may(e.estatus) === 'RESGUARDO' ? null : { tipo: 'resguardo', fila: e, estatus: 'RESGUARDO' };
+      if (d.zona === 'venta') return VENTA.indexOf(may(e.estatus)) >= 0 ? null : { tipo: 'resguardo', fila: e, estatus: 'PARA VENTA' };
+      if (d.zona === 'uso') return zonaEquipo(e) === 'uso' ? null : { tipo: 'reasignar', fila: e, persona: null };
+      if (d.zona === 'cancelacion') return { aviso: 'A cancelación va la línea: arrastra la línea, no el equipo' };
+      return null;
+    }
+
+    /** El nombre de la acción y lo que mueve, como se ve junto a lo que se arrastra. */
+    function describir(a) {
+      if (!a) return '';
+      if (a.aviso) return a.aviso;
+      const num = (l) => (l && l.numero) || '—';
+      const nuco = (e) => 'NUCO ' + ((e && e.nuco) || '—');
+      if (a.tipo === 'vinculo') {
+        if (a.modo === 'VINCULAR_LINEA') return 'Vincular línea · ' + num(a.linea) + ' → ' + nuco(a.hacia);
+        if (a.modo === 'CAMBIAR_LINEA') return 'Cambiar línea · ' + nuco(a.hacia) + ' · ' + num(a.anterior) + ' → ' + num(a.linea);
+        if (a.modo === 'CAMBIAR_EQUIPO') return 'Cambiar de equipo · ' + num(a.linea) + ' · ' + nuco(a.desde) + ' → ' + nuco(a.hacia);
+        if (a.modo === 'DESVINCULAR') return 'Desvincular línea · ' + num(a.linea) + ' · ' + nuco(a.fila);
+      }
+      if (a.tipo === 'cancelacion') return 'Mandar a cancelación · ' + num(a.fila);
+      if (a.tipo === 'resguardo') return (a.estatus === 'RESGUARDO' ? 'Mandar a resguardo · ' : 'Venta o desecho · ') + nuco(a.fila);
+      if (a.tipo === 'reasignar') return 'Reasignar · ' + nuco(a.fila) + (a.persona ? ' → ' + a.persona.nombre : '');
+      return '';
+    }
+
+    /**
+     * Pinta el espacio en `cont`. cfg = { indice() (memoria.indice), puedeOperar(), icono(nombre), esc(texto),
+     * color(estatus) ('verde', 'azul', 'ambar', 'rojo' o ''), alVer(tipo, fila), alAbrir(tipo, fila), alSoltar(accion),
+     * alAvisar(texto) }. Regresa { pintar }.
+     */
+    function montar(cont, cfg) {
+      const ic = cfg.icono;
+      const esc = cfg.esc;
+      const estado = { q: '', departamento: '', compania: '', mas: {} };
+      let mapa = {}; // 'e:<id>' / 'l:<id>' → { tipo, fila, equipo, linea, persona }; 'p:…' → persona
+      let opcionesPintadas = '';
+
+      cont.innerHTML =
+        '<div class="vn-barra">' +
+          '<label class="vn-buscar">' + ic('search') + '<input type="search" data-vn-q placeholder="Persona, NUCO, número, IMEI" aria-label="Buscar"></label>' +
+          '<select data-vn-filtro="departamento" aria-label="Departamento"><option value="">Departamento</option></select>' +
+          '<select data-vn-filtro="compania" aria-label="Compañía"><option value="">Compañía</option></select>' +
+          '<span class="vn-leyenda"><span class="vn-punto vn-verde"></span>Uso<span class="vn-punto vn-azul"></span>Disponible o resguardo' +
+          '<span class="vn-punto vn-ambar"></span>Venta, desecho o en cancelación<span class="vn-punto vn-rojo"></span>Baja</span>' +
+        '</div>' +
+        '<div class="vn-espacio">' + ZONAS.map((z) =>
+          '<section class="vn-zona vn-zona-' + z.id + '" data-vn-zona="' + z.id + '">' +
+            '<header class="vn-zona-cabeza">' + ic(z.icono) + '<span>' + esc(z.titulo) + '</span><span class="vn-zona-num"></span></header>' +
+            '<div class="vn-zona-cuerpo"><p class="vn-vacio"><span class="ln-spinner"></span> Cargando…</p></div><div class="vn-zona-pie"></div>' +
+          '</section>').join('') + '</div>' +
+        '<p class="vn-sr" data-vn-estado aria-live="polite"></p>';
+
+      const colorDe = (estatus) => cfg.color(estatus) || 'neutro';
+      const titulo = (partes) => esc(partes.filter(Boolean).join(' · '));
+
+      function nodoEquipo(e, operar) {
+        const t = titulo(['NUCO ' + (e.nuco || '—'), e.modelo, e.estatus]);
+        return '<div class="vn-nodo vn-equipo vn-' + colorDe(e.estatus) + '" role="button" tabindex="0" data-vn-ver="e:' + esc(e.id) + '" data-vn-destino="equipo"' +
+          (operar && arrastraEquipo(e) ? ' data-vn-arrastre' : '') + ' title="' + t + '" aria-label="' + t + '">' +
+          '<span class="vn-ico">' + (ic(ICONO_EQUIPO[may(e.tipo)] || 'smartphone') || ic('smartphone')) + '</span><span class="vn-etq">' + esc(e.nuco || '—') + '</span></div>';
+      }
+      function nodoLinea(l, operar) {
+        const t = titulo(['Línea ' + (l.numero || '—'), l.compania, l.estatus, l.numerosAnteriores ? 'antes ' + l.numerosAnteriores : '']);
+        return '<div class="vn-nodo vn-linea vn-' + colorDe(l.estatus) + '" role="button" tabindex="0" data-vn-ver="l:' + esc(l.id) + '"' +
+          (operar && arrastraLinea(l) ? ' data-vn-arrastre' : '') + ' title="' + t + '" aria-label="' + t + '">' +
+          '<span class="vn-ico">' + ic('card-sim') + '</span><span class="vn-etq">' + esc(l.numero || '—') + '</span></div>';
+      }
+      function nodoPersona(p) {
+        const t = titulo([p.nombre, p.noEmpleado ? 'No. ' + p.noEmpleado : '', p.puesto, p.departamento]);
+        return '<div class="vn-nodo vn-persona" data-vn-destino="persona" data-vn-persona="' + esc(p.clave) + '" title="' + t + '">' +
+          '<span class="vn-ico">' + ic('user-round') + '</span><span class="vn-etq">' + esc(p.nombre) + '</span></div>';
+      }
+      function grupoHtml(g, operar) {
+        const pares = g.pares.map((p) => '<div class="vn-par">' +
+          (p.equipo ? nodoEquipo(p.equipo, operar) : '') +
+          (p.equipo && p.linea ? '<div class="vn-enlace' + (may(p.linea.estatus) === 'USO' ? ' vn-vivo' : '') + '">' +
+            (operar ? '<button type="button" class="vn-cortar" data-vn-cortar="' + esc(p.equipo.id) + '" title="Desvincular línea" aria-label="Desvincular línea · NUCO ' +
+              esc(p.equipo.nuco || '—') + '">' + ic('scissors') + '</button>' : '') + '</div>' : '') +
+          (p.linea ? nodoLinea(p.linea, operar) : '') + '</div>').join('');
+        const h = hash(g.clave);
+        const estilo = ' style="--vn-retraso:-' + (h % 7000) + 'ms;--vn-duracion:' + (5000 + (h % 3000)) + 'ms"';
+        if (!g.persona) return '<div class="vn-grupo"' + estilo + '>' + pares + '</div>';
+        return '<div class="vn-grupo vn-con-persona"' + estilo + '>' + nodoPersona(g.persona) + '<div class="vn-hijos">' + pares + '</div></div>';
+      }
+      function registrar(g) {
+        const persona = g.persona ? g.persona.clave : null;
+        if (g.persona) mapa[g.persona.clave] = g.persona;
+        g.pares.forEach((p) => {
+          if (p.equipo) mapa['e:' + p.equipo.id] = { tipo: 'equipo', fila: p.equipo, linea: p.linea, persona: persona };
+          if (p.linea) mapa['l:' + p.linea.id] = { tipo: 'linea', fila: p.linea, equipo: p.equipo, persona: persona };
+        });
+      }
+
+      /** Cuántos grupos caben a lo ancho de la zona: «En uso» cuatro filas, las demás tres; «Mostrar más» agrega otro tanto. */
+      function capacidad(zona) {
+        const cuerpo = cont.querySelector('[data-vn-zona="' + zona + '"] .vn-zona-cuerpo');
+        const ancho = (cuerpo && cuerpo.clientWidth) || 900;
+        return Math.max(2, Math.floor(ancho / 110)) * (zona === 'uso' ? 4 : 3) * (1 + (estado.mas[zona] || 0));
+      }
+
+      function llenarOpciones(r) {
+        const firma = JSON.stringify([r.departamentos, r.companias]);
+        if (firma === opcionesPintadas) return;
+        opcionesPintadas = firma;
+        [['departamento', r.departamentos, 'Departamento'], ['compania', r.companias, 'Compañía']].forEach(([campo, lista, vacio]) => {
+          const sel = cont.querySelector('[data-vn-filtro="' + campo + '"]');
+          sel.innerHTML = '<option value="">' + esc(vacio) + '</option>' + lista.map((v) => '<option value="' + esc(v) + '">' + esc(v) + '</option>').join('');
+          sel.value = lista.indexOf(estado[campo]) >= 0 ? estado[campo] : '';
+          estado[campo] = sel.value;
+        });
+      }
+
+      function pintar() {
+        const ix = cfg.indice();
+        if (!ix) return;
+        const r = agrupar(ix, estado);
+        llenarOpciones(r);
+        const operar = !!cfg.puedeOperar();
+        mapa = {};
+        ZONAS.forEach((z) => {
+          const zona = cont.querySelector('[data-vn-zona="' + z.id + '"]');
+          const lista = r.zonas[z.id];
+          const visibles = lista.slice(0, capacidad(z.id));
+          visibles.forEach(registrar);
+          zona.querySelector('.vn-zona-cuerpo').innerHTML = visibles.length ? visibles.map((g) => grupoHtml(g, operar)).join('')
+            : '<p class="vn-vacio">' + (estado.q ? 'Sin coincidencias' : 'Sin registros') + '</p>';
+          zona.querySelector('.vn-zona-num').textContent = lista.length > visibles.length ? miles(visibles.length) + ' de ' + miles(lista.length) : miles(lista.length);
+          zona.querySelector('.vn-zona-pie').innerHTML = lista.length > visibles.length
+            ? '<button type="button" class="secondary" data-vn-mas="' + z.id + '">Mostrar más</button>' : '';
+        });
+      }
+
+      // ---- Búsqueda y filtros ----
+      let esperaBusqueda = null;
+      cont.querySelector('[data-vn-q]').addEventListener('input', (ev) => {
+        clearTimeout(esperaBusqueda);
+        esperaBusqueda = setTimeout(() => { estado.q = ev.target.value; estado.mas = {}; pintar(); }, 150);
+      });
+      cont.querySelectorAll('[data-vn-filtro]').forEach((sel) => sel.addEventListener('change', () => {
+        estado[sel.dataset.vnFiltro] = sel.value;
+        estado.mas = {};
+        pintar();
+      }));
+      let esperaAncho = null;
+      const alCambiarAncho = () => {
+        if (!document.body.contains(cont)) { window.removeEventListener('resize', alCambiarAncho); return; }
+        clearTimeout(esperaAncho);
+        esperaAncho = setTimeout(() => { if (!cont.hidden) pintar(); }, 200);
+      };
+      window.addEventListener('resize', alCambiarAncho);
+
+      // ---- Clic: vista rápida; doble clic: ficha; tijeras: desvincular ----
+      let sinClic = false; // el clic que llega al soltar lo que se arrastró
+      cont.addEventListener('click', (ev) => {
+        if (sinClic) return;
+        const mas = ev.target.closest('[data-vn-mas]');
+        if (mas) { estado.mas[mas.dataset.vnMas] = (estado.mas[mas.dataset.vnMas] || 0) + 1; pintar(); return; }
+        const cortar = ev.target.closest('[data-vn-cortar]');
+        if (cortar) {
+          const x = mapa['e:' + cortar.dataset.vnCortar];
+          if (x) cfg.alSoltar({ tipo: 'vinculo', modo: 'DESVINCULAR', fila: x.fila, linea: x.linea, pre: {} });
+          return;
+        }
+        const nodo = ev.target.closest('[data-vn-ver]');
+        const x = nodo && mapa[nodo.dataset.vnVer];
+        if (x) cfg.alVer(x.tipo, x.fila);
+      });
+      cont.addEventListener('dblclick', (ev) => {
+        const nodo = ev.target.closest('[data-vn-ver]');
+        const x = nodo && mapa[nodo.dataset.vnVer];
+        if (x) cfg.alAbrir(x.tipo, x.fila);
+      });
+      cont.addEventListener('keydown', (ev) => {
+        if (ev.key !== 'Enter' && ev.key !== ' ') return;
+        const nodo = ev.target.closest && ev.target.closest('[data-vn-ver]');
+        const x = nodo && mapa[nodo.dataset.vnVer];
+        if (!x) return;
+        ev.preventDefault();
+        cfg.alVer(x.tipo, x.fila);
+      });
+      cont.addEventListener('contextmenu', (ev) => { if (ev.target.closest('[data-vn-arrastre]')) ev.preventDefault(); });
+
+      // ---- Arrastrar ----
+      // Con el mouse empieza al moverse; con el dedo, al dejarlo presionado (así se puede deslizar la página)
+      let arr = null;
+      const bloquearDesliz = (ev) => ev.preventDefault();
+      const estadoEl = cont.querySelector('[data-vn-estado]');
+
+      function destinoEn(x, y) {
+        const el = document.elementFromPoint(x, y);
+        if (!el || !cont.contains(el)) return null;
+        const nodo = el.closest('[data-vn-destino]');
+        if (nodo && nodo.dataset.vnDestino === 'equipo') {
+          const info = mapa[nodo.dataset.vnVer];
+          return info ? { tipo: 'equipo', fila: info.fila, linea: info.linea, el: nodo } : null;
+        }
+        if (nodo && nodo.dataset.vnDestino === 'persona') {
+          const p = mapa[nodo.dataset.vnPersona];
+          return p ? { tipo: 'persona', persona: p, el: nodo } : null;
+        }
+        const zona = el.closest('[data-vn-zona]');
+        return zona ? { tipo: 'zona', zona: zona.dataset.vnZona, el: zona } : null;
+      }
+      function desplazable() {
+        for (let p = cont.parentElement; p && p !== document.body; p = p.parentElement) {
+          const s = getComputedStyle(p).overflowY;
+          if ((s === 'auto' || s === 'scroll') && p.scrollHeight > p.clientHeight) return p;
+        }
+        return document.scrollingElement || document.documentElement;
+      }
+      function empezar() {
+        arr.activo = true;
+        clearTimeout(arr.espera);
+        const f = document.createElement('div');
+        f.className = 'vn-fantasma';
+        f.innerHTML = arr.el.outerHTML + '<span class="vn-fantasma-accion"></span>';
+        document.body.appendChild(f);
+        arr.fantasma = f;
+        arr.caja = desplazable();
+        arr.el.classList.add('vn-origen');
+        cont.classList.add('vn-arrastrando');
+        document.addEventListener('touchmove', bloquearDesliz, { passive: false });
+        mover(arr.x, arr.y);
+      }
+      function mover(x, y) {
+        arr.x = x;
+        arr.y = y;
+        const f = arr.fantasma;
+        f.style.transform = 'translate(' + Math.round(x - f.offsetWidth / 2) + 'px,' + Math.round(y - 22) + 'px)';
+        const d = destinoEn(x, y);
+        const a = alSoltar(arr.origen, d);
+        if (arr.blanco) arr.blanco.classList.remove('vn-blanco');
+        arr.blanco = a && !a.aviso && d ? d.el : null;
+        if (arr.blanco) arr.blanco.classList.add('vn-blanco');
+        const texto = describir(a);
+        f.querySelector('.vn-fantasma-accion').textContent = texto;
+        f.classList.toggle('vn-fantasma-no', !!(a && a.aviso));
+        estadoEl.textContent = texto;
+        // Cerca de la orilla de la pantalla, se desliza (las zonas de abajo en celular)
+        const borde = 56;
+        if (y < borde) arr.caja.scrollTop -= 14;
+        else if (y > window.innerHeight - borde) arr.caja.scrollTop += 14;
+      }
+      function terminar() {
+        if (!arr) return;
+        clearTimeout(arr.espera);
+        if (arr.fantasma) arr.fantasma.remove();
+        if (arr.blanco) arr.blanco.classList.remove('vn-blanco');
+        arr.el.classList.remove('vn-origen');
+        cont.classList.remove('vn-arrastrando');
+        document.removeEventListener('pointermove', alMover);
+        document.removeEventListener('pointerup', alSoltarPuntero);
+        document.removeEventListener('pointercancel', alCancelar);
+        document.removeEventListener('touchmove', bloquearDesliz, { passive: false });
+        estadoEl.textContent = '';
+        if (arr.activo) { sinClic = true; setTimeout(() => { sinClic = false; }, 0); }
+        arr = null;
+      }
+      function alMover(ev) {
+        if (!arr || ev.pointerId !== arr.id) return;
+        const lejos = Math.hypot(ev.clientX - arr.x0, ev.clientY - arr.y0) > 6;
+        if (!arr.activo) {
+          if (!lejos) return;
+          if (arr.tactil) { terminar(); return; } // el dedo se movió antes de tiempo: es deslizar la página
+          arr.x = ev.clientX;
+          arr.y = ev.clientY;
+          empezar();
+          return;
+        }
+        ev.preventDefault();
+        mover(ev.clientX, ev.clientY);
+      }
+      function alSoltarPuntero(ev) {
+        if (!arr || ev.pointerId !== arr.id) return;
+        if (!arr.activo) { terminar(); return; }
+        const a = alSoltar(arr.origen, destinoEn(ev.clientX, ev.clientY));
+        terminar();
+        if (!a) return;
+        if (a.aviso) cfg.alAvisar(a.aviso);
+        else cfg.alSoltar(a);
+      }
+      function alCancelar() { terminar(); }
+      cont.addEventListener('pointerdown', (ev) => {
+        if (ev.button !== 0 || arr) return;
+        const el = ev.target.closest('[data-vn-arrastre]');
+        const info = el && mapa[el.dataset.vnVer];
+        if (!info || !cfg.puedeOperar()) return;
+        arr = { el: el, id: ev.pointerId, x0: ev.clientX, y0: ev.clientY, x: ev.clientX, y: ev.clientY, activo: false,
+          tactil: ev.pointerType === 'touch', origen: { tipo: info.tipo, fila: info.fila, equipo: info.equipo || null, persona: info.persona } };
+        if (arr.tactil) arr.espera = setTimeout(() => { if (arr && !arr.activo) empezar(); }, 350);
+        document.addEventListener('pointermove', alMover);
+        document.addEventListener('pointerup', alSoltarPuntero);
+        document.addEventListener('pointercancel', alCancelar);
+      });
+
+      return { pintar: pintar };
+    }
+
+    return { montar: montar, agrupar: agrupar, alSoltar: alSoltar, describir: describir, ZONAS: ZONAS };
+  })();
+</script>

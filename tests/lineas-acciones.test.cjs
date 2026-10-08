@@ -234,7 +234,7 @@ test('Reasignar: la inspección es obligatoria (usuario, 5-oct): de ese equipo y
   assert.equal(escritos.find((a) => a[1] && a[1]['ESTATUS EQUIPO'] === 'USO')[1]['JEFE DIRECTO'], 'JEFA DE LA INSPECCION');
 
   const cliente = read('src/html/js/lineas.html');
-  const fn = cliente.slice(cliente.indexOf('async function abrirReasignar(fila)'), cliente.indexOf('const inspeccionesDelDia = {};'));
+  const fn = cliente.slice(cliente.indexOf('async function abrirReasignar(fila, para)'), cliente.indexOf('const inspeccionesDelDia = {};'));
   // Orden (usuario, 5-oct): responsiva (se revisa, no se guarda) → inspección (se guarda) → reasignar con las dos
   const iResp = fn.indexOf("capturarEnFlujo('RESPONSIVA'");
   const iInsp = fn.indexOf("capturarEnFlujo('INSPECCION', { equipoId: fila.id, reasignar: true, desdeResponsiva: { valores: resp.datos.valores, patron: resp.datos.patron } }");

@@ -2032,13 +2032,32 @@
         if (ev.target.closest('[data-cerrar-modal]')) cerrarCaptura();
       });
 
+      let puedeOperarTabla = false; // con los permisos (abajo, «Selección estilo Google Drive»); Vínculos también lo usa
+      // ---- Vínculos (usuario, 8-oct): personas, equipos y líneas en un espacio; arrastrar abre la acción de siempre ----
+      const espacioVinculos = LineasVinculos.montar($('#ln-vinculos', raiz), {
+        indice: () => memoria.indice,
+        puedeOperar: () => puedeOperarTabla,
+        icono: icono,
+        esc: esc,
+        color: (estatus) => COLOR_ESTATUS[String(estatus || '').toUpperCase()] || '',
+        alVer: (tipo, fila) => vistaRapida(tipo, fila),
+        alAbrir: (tipo, fila) => abrir(tipo, fila.id),
+        alAvisar: (texto) => aviso(icono('triangle-alert', 'ln-alerta') + ' ' + esc(texto), 7000),
+        alSoltar: (a) => {
+          if (a.tipo === 'vinculo') abrirVinculo(a.modo, a.fila, a.pre);
+          else if (a.tipo === 'cancelacion') abrirCancelacion([a.fila]);
+          else if (a.tipo === 'resguardo') abrirResguardo([a.fila], { estatus: a.estatus });
+          else if (a.tipo === 'reasignar') abrirReasignar(a.fila, a.persona);
+        },
+      });
+
       // ---- Carga inicial ----
       if (!memoria.modoVista) {
         // Sin preferencia guardada: tarjetas en celular (una tabla de 10 columnas no cabe) y tabla en lo demás
         const porDefecto = window.matchMedia && window.matchMedia('(max-width: 700px)').matches ? 'tarjetas' : 'tabla';
         let guardado = null;
         try { guardado = localStorage.getItem('lineas.modoVista'); } catch (e) { guardado = null; }
-        memoria.modoVista = guardado === 'tarjetas' || guardado === 'tabla' ? guardado : porDefecto;
+        memoria.modoVista = ['tabla', 'tarjetas', 'vinculos'].indexOf(guardado) >= 0 ? guardado : porDefecto;
       }
       mostrarModulo(memoria.modulo, true);
       crearTabla(memoria.modulo).setCargando(true);
@@ -2102,6 +2121,8 @@
         const clic = (t) => {
           const d = defs[Number(t.dataset.kpi)];
           const quitar = t.classList.contains('stat-tile-activo') && Object.keys(d.filtros).length > 0;
+          // Los indicadores filtran la tabla: desde Vínculos se regresa a ella
+          if (memoria.modoVista === 'vinculos') { memoria.modoVista = 'tabla'; aplicarModoVista(); }
           mostrarModulo(d.modulo);
           const tabla = crearTabla(d.modulo);
           campos[d.modulo].forEach((c) => tabla.setFiltro(c, quitar ? null : (d.filtros[c] || null)));
@@ -2117,10 +2138,10 @@
       }
 
       // ---- Selección estilo Google Drive (30-sep): acciones de la barra, del ⋮ y del clic derecho ----
-      let puedeOperarTabla = false;
       cargarPermisos().then((p) => {
         puedeOperarTabla = !!(p && p.puedeOperar);
         Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].refrescarSeleccion(); });
+        if (memoria.modoVista === 'vinculos' && vigente()) espacioVinculos.pintar();
       }).catch(() => { /* sin permisos: solo las acciones de consulta */ });
       const ACCION_REASIGNAR = ACCIONES_MASIVAS.filter((a) => a.clave === 'REASIGNAR')[0];
 
@@ -2363,14 +2384,19 @@
 
       function aplicarModoVista() {
         const tarjetas = memoria.modoVista === 'tarjetas';
+        const enVinculos = memoria.modoVista === 'vinculos';
         $('#ln-listado', raiz).classList.toggle('ln-modo-tarjetas', tarjetas);
+        // Vínculos (usuario, 8-oct): el espacio en lugar de las pestañas Equipos / Líneas (lineas-vinculos.html)
+        $('#ln-listado', raiz).classList.toggle('ln-modo-vinculos', enVinculos);
+        $('#ln-vinculos', raiz).hidden = !enVinculos;
         raiz.querySelectorAll('#ln-modo-vista [data-modo]').forEach((b) => {
           const activo = b.dataset.modo === memoria.modoVista;
           b.classList.toggle('activo', activo);
           b.setAttribute('aria-pressed', String(activo));
         });
         ['equipos', 'lineas'].forEach((m) => { $('#ln-tarjetas-' + m, raiz).hidden = !tarjetas; });
-        if (tarjetas) { tarjetasVisibles[memoria.modulo] = PASO_TARJETAS; pintarTarjetas(memoria.modulo); }
+        if (enVinculos) espacioVinculos.pintar();
+        else if (tarjetas) { tarjetasVisibles[memoria.modulo] = PASO_TARJETAS; pintarTarjetas(memoria.modulo); }
         else if (tablas[memoria.modulo]) tablas[memoria.modulo].ajustarAlto();
       }
 
@@ -2472,6 +2498,7 @@
         pintarTipos('equipos');
         pintarTipos('lineas');
         mostrarModulo(memoria.modulo);
+        if (memoria.modoVista === 'vinculos') espacioVinculos.pintar();
         $('#ln-conteo', raiz).textContent = 'Datos de la hoja al ' + fechaHora(memoria.indice.generadoEn) + '.';
       }
 
@@ -3080,12 +3107,14 @@
        * inspección) y se genera el PDF de la responsiva. Cerrar cualquiera sin guardar no reasigna; si la reasignación
        * falla, la inspección del día ya no se vuelve a pedir.
        */
-      async function abrirReasignar(fila) {
+      async function abrirReasignar(fila, para) {
         if (!fila) return;
         const nombre = 'NUCO ' + (fila.nuco || '—');
         const subtitulo = [nombre, fila.modelo, fila.responsable].filter(Boolean).join(' · ');
         const resp = await capturarEnFlujo('RESPONSIVA', { equipoId: fila.id, modo: 'REASIGNAR' }, {
           titulo: 'Reasignar', subtitulo: subtitulo, boton: 'Seguir a la inspección', espera: 'Revisando la responsiva', sinPdf: true,
+          // Desde Vínculos, soltado sobre una persona: a quién va (la persona se elige en la responsiva, como siempre)
+          aviso: para ? 'Para ' + para.nombre + (para.noEmpleado ? ' · No. ' + para.noEmpleado : '') : undefined,
           // Lo mismo que rechaza el servidor (LineasAcciones.reasignar), antes de pasar a la inspección
           guardar: (datos) => {
             const v = datos.valores || {};
@@ -3505,8 +3534,10 @@
        * CAMBIAR_EQUIPO (desde la línea: se elige un NUCO en USO o RESGUARDO sin línea) y DESVINCULAR. La línea que deja
        * el equipo queda DISPONIBLE o va a la bandeja de cancelaciones. Si el equipo queda en USO con otra línea, la
        * responsiva es obligatoria y su comentario es el de la acción; si no, el comentario va en otra ventana.
+       * `pre` (Vínculos, al soltar): la línea o el NUCO ya elegidos ({ linea, nuco }); la ventana se confirma igual.
        */
-      async function abrirVinculo(modo, fila) {
+      async function abrirVinculo(modo, fila, pre) {
+        const elegido = pre || {};
         const ix = memoria.indice || { equipos: [], lineas: [] };
         const desdeEquipo = ['VINCULAR_LINEA', 'CAMBIAR_LINEA'].indexOf(modo) >= 0 || (modo === 'DESVINCULAR' && !fila.equipoId);
         const equipoActual = ix.equipos.filter((e) => e.id === (desdeEquipo ? fila.id : fila.equipoId))[0] || null;
@@ -3524,11 +3555,11 @@
         const elementos = [{ tipo: 'titulo', texto: titulo.toUpperCase(), icono: modo === 'DESVINCULAR' ? 'unlink' : 'link' }];
         if (modo === 'VINCULAR_LINEA' || modo === 'CAMBIAR_LINEA') {
           elementos.push(campo('_LINEA', 'Línea', 'listaAbierta', { opciones: lineasLibres.map((l) => String(l.numero)), soloLista: true,
-            sugerencias: 'LINEAS_DISPONIBLES', mensaje: 'ELIGE UNA LÍNEA DISPONIBLE' }));
+            sugerencias: 'LINEAS_DISPONIBLES', mensaje: 'ELIGE UNA LÍNEA DISPONIBLE', valor: elegido.linea || '' }));
         }
         if (modo === 'VINCULAR_EQUIPO' || modo === 'CAMBIAR_EQUIPO') {
           elementos.push(campo('_NUCO', 'NUCO', 'listaAbierta', { opciones: equiposLibres.map((e) => String(e.nuco)), soloLista: true,
-            sugerencias: 'EQUIPOS_SIN_LINEA', mensaje: 'ELIGE UN NUCO SIN LÍNEA' }));
+            sugerencias: 'EQUIPOS_SIN_LINEA', mensaje: 'ELIGE UN NUCO SIN LÍNEA', valor: elegido.nuco || '' }));
         }
         // La que deja el equipo (en Cambiar de equipo se va con la línea: no se pregunta)
         if (modo === 'CAMBIAR_LINEA' || modo === 'DESVINCULAR') {
