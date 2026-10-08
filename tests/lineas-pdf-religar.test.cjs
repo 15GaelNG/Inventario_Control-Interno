@@ -9,25 +9,30 @@ const vm = require('node:vm');
 
 const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
-/** LineasArchivos con Drive simulado: `archivos` = { id: { parents, trashed } } (sin entrada = 404), `carpetas` = { id: [{ id, name }] }. */
+/**
+ * LineasArchivos con Drive simulado (servicio avanzado, 7-oct): `archivos` = { id: { parents, trashed } }, `carpetas` =
+ * { id: [{ id, name }] }. Los PDF que lista una carpeta son los de `carpetas` más los de `archivos` que estén en ella y no
+ * en la papelera.
+ */
 function archivosCon(archivos, carpetas, opciones) {
   const o = opciones || {};
   const pedidas = [];
-  const respuesta = (codigo, cuerpo) => ({ getResponseCode: () => codigo, getContentText: () => JSON.stringify(cuerpo) });
   const ctx = vm.createContext({
     console,
-    ScriptApp: { getOAuthToken: () => 'tok' },
-    UrlFetchApp: { fetchAll: (lista) => lista.map((p) => {
-      pedidas.push(p.url);
-      if (o.fallaDrive) return respuesta(500, {});
-      const m = p.url.match(/\/files\/([^?]+)\?/);
-      if (m) {
-        const f = archivos[decodeURIComponent(m[1])];
-        return f ? respuesta(200, f) : respuesta(404, {});
-      }
-      const carpeta = decodeURIComponent(p.url).match(/'([^']+)' in parents/)[1];
-      return respuesta(200, { files: carpetas[carpeta] || [] });
-    }) },
+    Drive: { Files: { list: (p) => {
+      pedidas.push(p);
+      if (o.fallaDrive) throw new Error('API call to drive.files.list failed');
+      const ids = Array.from(p.q.matchAll(/'([^']+)' in parents/g)).map((m) => m[1]);
+      const files = [];
+      ids.forEach((c) => {
+        (carpetas[c] || []).forEach((a) => files.push(Object.assign({ parents: [c] }, a)));
+        Object.keys(archivos).forEach((id) => {
+          const f = archivos[id];
+          if (!f.trashed && (f.parents || []).indexOf(c) >= 0) files.push({ id: id, name: 'ligado.pdf', parents: f.parents });
+        });
+      });
+      return { files: files };
+    } } },
     leerConfig_: () => null,
   });
   vm.runInContext(read('src/services/lineas/LineasArchivos.gs') + '\nthis.A = LineasArchivos;', ctx);
@@ -39,9 +44,10 @@ const VIEJO = { pdfId: 'VIEJO', carpetaId: 'INSP0510', nombre: 'INSP 0726 05 10.
 test('el PDF que sigue en su carpeta no se cambia; se pregunta cada vez, sin recordarlo (prueba del 6-oct)', () => {
   const { A, pedidas } = archivosCon({ VIEJO: { parents: ['INSP0510'], trashed: false } }, {});
   assert.deepEqual(JSON.parse(JSON.stringify(A.pdfsFueraDeCarpeta([VIEJO]))), [null]);
-  assert.equal(pedidas.length, 1, 'no lista la carpeta');
+  assert.equal(pedidas.length, 1, 'una consulta para todas las carpetas');
   A.pdfsFueraDeCarpeta([VIEJO]);
   assert.equal(pedidas.length, 2);
+  assert.doesNotMatch(read('src/services/lineas/LineasArchivos.gs'), /UrlFetchApp\.fetch/);
   assert.doesNotMatch(read('src/services/lineas/LineasArchivos.gs').slice(read('src/services/lineas/LineasArchivos.gs').indexOf('function pdfsFueraDeCarpeta(')), /CacheService/);
 });
 
@@ -63,9 +69,9 @@ test('borrado, en la papelera o sin acceso: sin uno del mismo nombre, el más re
   assert.deepEqual(JSON.parse(JSON.stringify(archivosCon({}, { RESP0510: [{ id: 'INE', name: 'INE 0726.pdf' }] }).A.pdfsFueraDeCarpeta([resp]))), [null]);
 });
 
-test('fuera de su carpeta y sin otro, o si Drive falla: no se cambia', () => {
+test('fuera de su carpeta y sin otro: no se cambia; si Drive falla truena (revisarPdfsLigados lo ignora)', () => {
   assert.deepEqual(JSON.parse(JSON.stringify(archivosCon({}, { INSP0510: [] }).A.pdfsFueraDeCarpeta([VIEJO]))), [null]);
-  assert.deepEqual(JSON.parse(JSON.stringify(archivosCon({}, {}, { fallaDrive: true }).A.pdfsFueraDeCarpeta([VIEJO]))), [null]);
+  assert.throws(() => archivosCon({}, {}, { fallaDrive: true }).A.pdfsFueraDeCarpeta([VIEJO]));
 });
 
 /** LineasRepo con hojas simuladas: solo lo que usa revisarPdfsLigados. */
