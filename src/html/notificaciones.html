@@ -676,4 +676,11 @@
     // app.html llama iniciar() al entrar (lo pedía la campanita de jorge): aquí la sesión ya la vigila vigilarSesion
     return { iniciar: () => {}, initVista: initVista, actualizar: actualizar, TIPOS: TIPOS, MODULOS: MODULOS };
   })();
+
+  // Top-level a propósito (fuera del IIFE de arriba): NAV_GRUPOS (app.html) necesita leerla.
+  const AYUDA_NOTIFICACIONES = [
+    { pregunta: '¿Qué avisa aquí?', respuesta: 'Por módulo: Líneas (adendums por vencer, resguardos, cancelaciones) y Vehículos (verificaciones y seguros vencidos o por vencer, inspecciones atrasadas).' },
+    { pregunta: '¿Tengo que marcarlas como leídas a mano?', respuesta: 'No necesariamente -- muchas se quitan solas en cuanto se atiende lo que avisan. También puedes marcarlas una por una o todas de jalón.' },
+    { pregunta: '¿Dónde veo las que ya atendí?', respuesta: 'Pestaña "Todas" -- "Por atender" solo muestra las que siguen pendientes.' },
+  ];
 </script>

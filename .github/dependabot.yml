@@ -1,0 +1,8 @@
+# Las acciones del workflow van fijas a un commit (SHA): Dependabot avisa con un PR cuando sale una
+# versión nueva, para que se actualicen a propósito y no solas.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

@@ -960,6 +960,13 @@ const InspeccionesService = (function () {
       .sort((a, b) => a.tipo.localeCompare(b.tipo));
   }
 
+  /** La plantilla de cada tipo (revisarEntorno: la cuenta que despliega tiene que poder copiarlas) */
+  function plantillas() {
+    return SheetUtils.getAll(ssId(), HOJA_MODELOS)
+      .filter((f) => limpiar_(f['TIPO']) && limpiar_(f[COL_PLANTILLA]))
+      .map((f) => ({ tipo: limpiar_(f['TIPO']), id: limpiar_(f[COL_PLANTILLA]) }));
+  }
+
   return {
     listar: (token) => HojaServicio.listar(INSPECCIONES, token),
     /** Para el activador (Calentador.gs): la deja armada sin esperar a nadie */
@@ -971,7 +978,7 @@ const InspeccionesService = (function () {
     buscarPorId: (token, id) => HojaServicio.buscarPorId(INSPECCIONES, token, id),
     completo: (token) => HojaServicio.completo(INSPECCIONES, token),
     detalle, registrar, urlFormato, previsualizarImagen,
-    estructuraDeTipo, olvidarTipo, tipos,
+    estructuraDeTipo, olvidarTipo, tipos, plantillas,
     nombrePlantilla_, carpetaDe_,   // las usa configurarInspecciones
     calcularPuntaje_, valorDeRespuesta_,   // expuestas para las pruebas
   };

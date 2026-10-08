@@ -39,9 +39,39 @@ Cada subida hace esto:
   `npm test` y, si pasa, sube a su DEV. Para otra persona, agrega su rama y el scriptId de
   su DEV en `destinos.json`, y la rama en `on.push.branches` del workflow.
 - **Producción, solo a mano:** en GitHub → Actions → "Subir a Apps Script" → **Run workflow**,
-  elige `master` y escribe qué cambia. Corre las pruebas, sube y deja los dos links en la
-  versión nueva. El botón aparece para `master` hasta que el workflow esté en `master`, es
+  elige `master` y una **acción**:
+  - **desplegar** (escribe qué cambia): pruebas, sube, revisa y deja los dos links en la versión nueva;
+  - **revisar sin desplegar**: sube al `/dev` de prod y corre la revisión del entorno; el equipo no ve nada.
+    Sirve para saber si un despliegue va a pasar;
+  - **regresar a una versión** (escribe el número): los dos links vuelven a una versión que ya existe, sin
+    subir código. Si una versión salió mal, el equipo vuelve a la anterior en un minuto.
+
+  Al terminar, la ejecución muestra un resumen: versión de antes y de ahora, con qué cuenta corre la
+  app, la revisión del entorno y a qué versión regresar si algo salió mal. La cuenta del secreto tiene
+  que ser `cuentaProd` de `tools/subir/destinos.json`; si no, no se toca producción. El botón aparece para `master` hasta que el workflow esté en `master`, es
   decir, después de mezclarlo.
+
+### Producción solo desde la Action: con qué cuenta corre la app
+
+La app de producción corre **con la cuenta de quien movió los despliegues** (`executeAs:
+USER_DEPLOYING`), no con la del dueño del proyecto. Si cada quien despliega desde su máquina, la
+app cambia de cuenta en cada versión, y basta con que a una le falte permiso de editor en una
+carpeta o una plantilla para que algo deje de funcionar para todos (8-oct: Emmanuel desplegó la
+v66 y las inspecciones dejaron de generar PDF).
+
+Por eso:
+
+- `subir.js prod --desplegar` **solo corre en la Action**, que usa siempre la cuenta del secreto
+  `CLASPRC_JSON` (el paso "Cuenta con la que va a correr la app" la imprime). Desde una máquina
+  truena, salvo con `--desde-aqui`: entonces la app pasa a correr con la cuenta de clasp de esa
+  persona.
+- `npm run push:prod` (subir sin desplegar) sigue funcionando desde cualquier máquina: no cambia
+  la cuenta de nadie.
+- **Antes de desplegar se revisa que esa cuenta pueda escribir** (`revisarEntorno`): ser editora de
+  cada libro y de cada carpeta que no sea de solo lectura (`soloLee` en `REVISION_CARPETAS`) y poder
+  copiar cada plantilla de PDF (`revisionPlantillas_`: responsiva, adherente, arqueo, Líneas y las de
+  MODELOS INSPECCION). Si falta algo, es error y no se despliega. Una plantilla nueva se agrega ahí.
+- Lo ideal es que el secreto sea de una **cuenta institucional** dueña de todo, no de una persona.
 
 ### Activarla (una vez)
 

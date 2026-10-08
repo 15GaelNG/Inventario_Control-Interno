@@ -1,7 +1,12 @@
 {
-  "comentario": "A qué proyecto de Apps Script va cada cosa (los scriptId no son secretos: Entornos.gs ya los trae). La GitHub Action sube cada rama de 'ramas' a su DEV al hacer push; prod solo con el botón 'Run workflow'.",
+  "comentario": "A qué proyecto de Apps Script va cada cosa (los scriptId no son secretos: Entornos.gs ya los trae). La GitHub Action sube cada rama de 'ramas' a su DEV al hacer push; prod solo con el botón 'Run workflow'. 'desplieguesProd': el primero crea la versión, el segundo es el link que usa el equipo (CLAUDE.md: 'dos links'). 'cuentaProd': la cuenta con la que corre la app de producción, la del secreto CLASPRC_JSON; la Action no despliega con otra.",
   "dominio": "ciudadmaderas.com",
   "prod": "1NbOczw_H8UJ7adxRP4h_jl9VlfyvxM3mANYsaz12U5uo8Gj0BmfIYN3k",
+  "desplieguesProd": [
+    "AKfycbymScqpx_d9yLaYhpqTcFxuo9HfSK8Zb1qcBgzzkTKU5wCS5RRXBN0iClZeA3Fp5_I3",
+    "AKfycbx_53Gz2VfBXhFvLmjnoM2qVzJYmk9kuQD74mUCpOQzeYPaQ1COR8LB_l69sSQb5RJB"
+  ],
+  "cuentaProd": "auxiliar6datos.ci@ciudadmaderas.com",
   "ramas": {
     "ayrton": "1zCusAR0-Jntf853WxfdwejgmGNzRODqeHkWq6PLVThM3CsNjusg5Nmaf"
   }

@@ -2201,6 +2201,22 @@ test('revisarEntorno revisa cada libro y carpeta que la app lee de Entornos.gs',
   assert.match(read('tools/subir/subir.js'), /entorno\.revisar\(/, 'subir.js revisa el entorno antes de desplegar');
 });
 
+test('revisarEntorno revisa que la cuenta que despliega pueda copiar cada plantilla de PDF', () => {
+  // La app corre con la cuenta que despliega: si no puede copiar una plantilla, ese PDF no sale para nadie
+  // (8-oct: inspecciones sin PDF). Cada servicio con una plantilla fija la exporta y revisionPlantillas_ la pide.
+  const revision = /function revisionPlantillas_\(\) \{([\s\S]*?)\n\}/.exec(read('src/Diagnostico.gs'))[1];
+  const faltan = [];
+  filesBelow(path.join(root, 'src/services')).filter((f) => f.endsWith('.gs')).forEach((f) => {
+    const texto = fs.readFileSync(f, 'utf8');
+    if (!/const PLANTILLA\w* = '[\w-]{25,}'/.test(texto) && !/const PLANTILLAS = \{/.test(texto)) return;
+    const servicio = /^const (\w+) = \(function/m.exec(texto)[1];
+    if (!new RegExp('\\b' + servicio + '\\.PLANTILLAS?\\b').test(revision)) faltan.push(servicio);
+  });
+  assert.deepEqual(faltan, [], 'servicios con plantilla que no están en revisionPlantillas_ (Diagnostico.gs)');
+  assert.match(revision, /InspeccionesService\.plantillas\(\)/, 'las plantillas de MODELOS INSPECCION');
+  assert.match(read('tools/subir/subir.js'), /GITHUB_ACTIONS/, 'a prod se despliega solo desde la Action');
+});
+
 test('cada archivo que la gente sube o genera dice quién lo subió (DriveUtils.marcarAutor)', () => {
   // La app corre como quien la desplegó: sin la nota, Drive dice que todo es de esa cuenta.
   // Fuera: herramientas del editor (respaldos, correcciones, configuración inicial).

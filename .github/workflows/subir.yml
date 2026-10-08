@@ -1,11 +1,21 @@
 # Sube a Apps Script sin correr comandos (tools/subir/subir.js: comprime, sube y verifica).
 #
 # - push a una rama de tools/subir/destinos.json ("ramas") → pruebas y, si pasan, a su DEV.
-# - Producción: solo a mano, con el botón "Run workflow" (pestaña Actions) sobre master. Sube y
-#   mueve los dos despliegues a la versión nueva (CLAUDE.md: "dos links").
+# - Producción: solo a mano, con el botón "Run workflow" (pestaña Actions) sobre master:
+#     · desplegar                → sube y mueve los dos links a la versión nueva (CLAUDE.md: "dos links")
+#     · revisar sin desplegar    → sube al /dev de prod y revisa el entorno; el equipo no ve nada
+#     · regresar a una versión   → los dos links vuelven a una versión que ya existe, sin subir código
 #
-# Necesita el secreto CLASPRC_JSON: el contenido de ~/.clasprc.json de alguien que pueda
-# editar esos proyectos (lo deja `npx clasp login`). Ver docs/subir-automatico.md.
+# La app de producción corre con la cuenta de quien mueve los despliegues (executeAs:
+# USER_DEPLOYING): aquí siempre es la del secreto CLASPRC_JSON, que tiene que ser `cuentaProd` de
+# destinos.json (subir.js lo revisa). Ver docs/subir-automatico.md.
+#
+# Seguridad (guía de GitHub, "Security hardening for GitHub Actions"):
+# - el GITHUB_TOKEN solo lee el repo (permissions);
+# - las acciones van fijas a un commit (SHA), no a una etiqueta que se puede mover; Dependabot
+#   (.github/dependabot.yml) propone las actualizaciones;
+# - lo que escribe la persona (descripción, versión) llega por env, nunca pegado en el script;
+# - las credenciales de clasp se borran al terminar, pase lo que pase.
 
 name: Subir a Apps Script
 
@@ -14,21 +24,41 @@ on:
     branches: [ayrton]
   workflow_dispatch:
     inputs:
+      accion:
+        description: 'Qué hacer en producción'
+        type: choice
+        options:
+          - desplegar
+          - revisar sin desplegar
+          - regresar a una versión
+        default: desplegar
       descripcion:
-        description: 'Qué cambia (va en la versión de producción)'
-        required: true
+        description: 'Para desplegar: qué cambia (va en la versión)'
+        required: false
+      version:
+        description: 'Para regresar: número de versión (p. ej. 65)'
+        required: false
 
-# Dos pushes seguidos a la misma rama no se pisan: el segundo espera al primero
+permissions:
+  contents: read
+
+# Dos subidas al mismo destino nunca se pisan: la segunda espera a que termine la primera.
+# Todo lo de producción comparte un solo turno, venga de la rama que venga.
 concurrency:
-  group: subir-${{ github.ref_name }}
+  group: subir-${{ github.event_name == 'workflow_dispatch' && 'produccion' || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   probar:
-    runs-on: ubuntu-latest
+    name: Pruebas
+    if: github.event_name == 'push' || inputs.accion != 'regresar a una versión'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
@@ -36,12 +66,16 @@ jobs:
       - run: npm test
 
   dev:
+    name: Subir a su DEV
     needs: probar
     if: github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
@@ -51,24 +85,63 @@ jobs:
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
       - run: node tools/subir/subir.js rama
+      - name: Borrar credenciales
+        if: always()
+        run: rm -f ~/.clasprc.json
 
   produccion:
+    name: Producción
     needs: probar
-    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'master'
-    runs-on: ubuntu-latest
-    # Con un "environment" se puede pedir aprobación de alguien más en Settings → Environments
-    environment: produccion
+    # Con "regresar" no hay pruebas (no se sube código): corre si se saltaron, nunca si fallaron
+    if: >-
+      always() && github.event_name == 'workflow_dispatch' &&
+      (needs.probar.result == 'success' || (needs.probar.result == 'skipped' && inputs.accion == 'regresar a una versión'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Con required reviewers en Settings → Environments → produccion, espera a que alguien apruebe
+    environment:
+      name: produccion
+      url: https://script.google.com/a/macros/ciudadmaderas.com/s/AKfycbx_53Gz2VfBXhFvLmjnoM2qVzJYmk9kuQD74mUCpOQzeYPaQ1COR8LB_l69sSQb5RJB/exec
+    env:
+      ACCION: ${{ inputs.accion }}
+      DESCRIPCION: ${{ inputs.descripcion }}
+      VERSION: ${{ inputs.version }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Revisar lo que se pidió
+        run: |
+          if [ "$GITHUB_REF_NAME" != "master" ]; then
+            echo "::error::A producción solo se sube desde master (se eligió $GITHUB_REF_NAME)."; exit 1
+          fi
+          case "$ACCION" in
+            desplegar)
+              [ -n "$DESCRIPCION" ] || { echo "::error::Para desplegar escribe qué cambia."; exit 1; } ;;
+            "regresar a una versión")
+              [[ "$VERSION" =~ ^[0-9]+$ ]] || { echo "::error::Para regresar escribe el número de versión (p. ej. 65)."; exit 1; } ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Sin caché de npm: en el trabajo que tiene las credenciales de producción, nada que haya dejado
+      # otra rama (recomendación de setup-node contra el envenenamiento de caché)
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-          cache: npm
       - run: npm ci
       - name: Credenciales de clasp
         run: printf '%s' "$CLASPRC_JSON" > ~/.clasprc.json
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
-      - run: node tools/subir/subir.js prod --desplegar "$DESCRIPCION ($(git rev-parse --short HEAD))"
-        env:
-          DESCRIPCION: ${{ inputs.descripcion }}
+      - name: Cuenta con la que va a correr la app
+        run: npx clasp show-authorized-user
+      - name: Desplegar
+        if: inputs.accion == 'desplegar'
+        run: node tools/subir/subir.js prod --desplegar "$DESCRIPCION ($(git rev-parse --short HEAD))"
+      - name: Revisar sin desplegar
+        if: inputs.accion == 'revisar sin desplegar'
+        run: node tools/subir/subir.js prod
+      - name: Regresar a la versión ${{ inputs.version }}
+        if: inputs.accion == 'regresar a una versión'
+        run: node tools/subir/subir.js prod --regresar "$VERSION"
+      - name: Borrar credenciales
+        if: always()
+        run: rm -f ~/.clasprc.json
