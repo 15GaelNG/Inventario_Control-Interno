@@ -401,6 +401,25 @@ const ArqueosService = (function () {
     return HojaServicio.subirArchivo(carpeta().getId(), 'de ' + de + ' de Arqueos', nombreArchivo, mimeType, base64Data);
   }
 
+  /**
+   * FORMATO ARQUEO / EVIDENCIAS: los arqueos capturados con esta app guardan la URL completa del
+   * PDF (HojaServicio.subirArchivo/generarPdfArqueo_ ya la regresan armada), pero los migrados de
+   * AppSheet (antes del 7-oct-2026) guardan la ruta relativa de AppSheet ("ARQUEOS/2026/archivo.pdf")
+   * -- abrirla tal cual en el navegador no lleva a ningún lado. Para esos se busca el archivo real,
+   * primero en la raíz actual y luego en la carpeta histórica (Config.DRIVE_FOLDERS.ARQUEOS_HISTORICO).
+   */
+  function resolverArchivo(token, ruta) {
+    Permisos.puedeLeer(token, 'arqueos');
+    if (!ruta) return null;
+    if (/^https?:/i.test(ruta)) return ruta;
+    const raices = [Config.DRIVE_FOLDERS.RAIZ(), Config.DRIVE_FOLDERS.ARQUEOS_HISTORICO()].filter(Boolean);
+    for (const raizId of raices) {
+      const url = DriveUtils.urlDeRutaProfunda(ruta, raizId);
+      if (url) return url;
+    }
+    throw new Error('No se encontró "' + ruta + '" en Drive.');
+  }
+
   // ---------- Generación automática del PDF (plantilla F-CI03-009) ----------
   // Plantilla de Google Docs compartida por el usuario — mismo patrón que
   // PdfService.gs (copiar plantilla, reemplazar marcadores, exportar a PDF,
@@ -646,5 +665,7 @@ const ArqueosService = (function () {
     subirFirma: (token, nombre, tipo, base64) => subirEn_(token, () => DriveUtils.carpetaEnRaiz('ARQUEOS_Images'), 'firmas', nombre, tipo, base64),
     /** Evidencias (el PDF combinado de fotos) -- carpeta aparte */
     subirEvidencia: (token, nombre, tipo, base64) => subirEn_(token, () => DriveUtils.carpetaEnRaiz('ARQUEOS_Files_'), 'evidencias', nombre, tipo, base64),
+    /** URL real de FORMATO ARQUEO/EVIDENCIAS, resolviendo la ruta vieja de AppSheet si no es una URL ya */
+    resolverArchivo,
   };
 })();

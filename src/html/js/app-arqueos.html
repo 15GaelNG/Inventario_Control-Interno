@@ -706,6 +706,22 @@
     });
   }
 
+  /**
+   * Abre FORMATO ARQUEO/EVIDENCIAS: si ya es una URL (arqueos capturados con esta app), directo;
+   * si es la ruta vieja de AppSheet ("ARQUEOS/2026/archivo.pdf", arqueos migrados), la resuelve
+   * con el servidor antes de abrirla (ArqueosService.resolverArchivo).
+   */
+  async function abrirArchivoArqueo_(valor) {
+    if (!valor) return;
+    if (/^https?:/i.test(valor)) { window.open(valor, '_blank', 'noopener'); return; }
+    try {
+      const url = await callServer('apiUrlArchivoArqueo', state.token, valor);
+      window.open(url, '_blank', 'noopener');
+    } catch (err) {
+      toastError(err.message);
+    }
+  }
+
   async function initArqueos() {
     wireTabsSimple(document.getElementById('view-container'));
     // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
@@ -898,8 +914,8 @@
       accionesFila: [].concat(
         [
           { icono: 'wallet', titulo: 'Ver caja chica', alHacer: (a) => verFichaCajaChicaDesdeOtroModulo(a.ID_CCH) },
-          { icono: 'documento', titulo: 'Ver PDF', visible: (a) => !!a.FORMATO_ARQUEO, alHacer: (a) => window.open(a.FORMATO_ARQUEO, '_blank', 'noopener') },
-          { icono: 'imagen', titulo: 'Ver evidencia', visible: (a) => !!a.EVIDENCIAS, alHacer: (a) => window.open(a.EVIDENCIAS, '_blank', 'noopener') },
+          { icono: 'documento', titulo: 'Ver PDF', visible: (a) => !!a.FORMATO_ARQUEO, alHacer: (a) => abrirArchivoArqueo_(a.FORMATO_ARQUEO) },
+          { icono: 'imagen', titulo: 'Ver evidencia', visible: (a) => !!a.EVIDENCIAS, alHacer: (a) => abrirArchivoArqueo_(a.EVIDENCIAS) },
         ],
         puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (a) => abrirEditarArqueo(a.ID) }] : []
       ),

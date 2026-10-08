@@ -43,6 +43,10 @@ const ENTORNOS = {
     DRIVE_FOLDER_ID_INSPECCIONES_IMAGENES: '1X4je88ejXgBXpELZFYo2-pftsFjHZabL',
     DRIVE_FOLDER_ID_VERIFICACIONES_LECTURA: '',   // opcional
     DRIVE_FOLDER_ID_MODELOS: '1ddRghL8izS63UYWDHn9w_YFHPuRC8bTm',   // opcional: sin esto se usa RAIZ
+    // Solo lectura: Arqueos migrados de AppSheet guardan una ruta relativa ("ARQUEOS/<año>/archivo.pdf"),
+    // no una URL -- y esos archivos reales viven en esta carpeta (la raíz vieja de Drive, de antes del
+    // 7-oct-2026, donde también están REPORTES y MODELOS). Los arqueos nuevos usan RAIZ; nunca se escribe aquí.
+    DRIVE_FOLDER_ID_ARQUEOS_HISTORICO: '1D3m1H3C_Is2Bol9IBPdnV6ugJiXizSCN',   // opcional
 
     // Líneas (opcionales: sin esto usan las carpetas de AppSheet que trae el código)
     LINEAS_DRIVE_APPSHEET: '1WPFFd4imLiui6zIpAa3OL62ZEu_a5BJn',

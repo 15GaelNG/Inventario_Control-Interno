@@ -29,6 +29,8 @@
  *   DRIVE_FOLDER_ID_REPORTES                carpeta donde caen los formatos ya llenados en PDF
  *                                           (la misma que usa AppSheet, no una nueva)
  *   DRIVE_FOLDER_ID_INSPECCIONES_IMAGENES   carpeta de imágenes de Inspección Vehicular
+ *   DRIVE_FOLDER_ID_ARQUEOS_HISTORICO       (opcional) solo lectura: de dónde se resuelven los
+ *                                           Arqueos migrados de AppSheet con ruta relativa
  *
  * Geotab (opcional; sin esto la app funciona igual, solo sin telemetría — ver GeotabService.gs):
  *   GEOTAB_USUARIO, GEOTAB_PASSWORD, GEOTAB_BASE_DATOS, GEOTAB_SERVIDOR
@@ -79,6 +81,10 @@ const Config = (function () {
       HOLOGRAMAS_IMAGENES: () => required('DRIVE_FOLDER_ID_HOLOGRAMAS_IMAGENES'),
       REPORTES: () => required('DRIVE_FOLDER_ID_REPORTES'),
       INSPECCIONES_IMAGENES: () => required('DRIVE_FOLDER_ID_INSPECCIONES_IMAGENES'),
+      // Solo lectura: Arqueos de antes del 7-oct-2026 (migrados de AppSheet) guardan una ruta
+      // relativa, no una URL -- de ahí se resuelven. Nunca se escribe aquí. Sin la propiedad,
+      // esas rutas viejas no se resuelven (ArqueosService.resolverArchivo las deja sin abrir).
+      ARQUEOS_HISTORICO: () => leerConfig_('DRIVE_FOLDER_ID_ARQUEOS_HISTORICO') || '',
     },
 
     // Lo que este proyecto tiene apagado (MODULOS_APAGADOS): el menú no lo pinta (la lista llega

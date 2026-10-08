@@ -215,6 +215,7 @@ const REVISION_CARPETAS = {
   // Los modelos se leen directo de su carpeta (InspeccionesService.raizDe_), no caminando desde la raíz
   DRIVE_FOLDER_ID_MODELOS: { nombre: 'MODELOS INSPECCION', sinRaiz: true },
   DRIVE_FOLDER_ID_VERIFICACIONES_LECTURA: {},
+  DRIVE_FOLDER_ID_ARQUEOS_HISTORICO: {},
   LINEAS_DRIVE_APPSHEET: {},
   LINEAS_DRIVE_NUCOS: {},
   LINEAS_DRIVE_APPSHEET_LECTURA: {},
