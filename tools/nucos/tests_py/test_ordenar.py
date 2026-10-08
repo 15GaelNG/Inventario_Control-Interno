@@ -100,6 +100,7 @@ def test_ordenar_mueve_dentro_del_nuco_copia_appsheet_y_deshacer_lo_regresa_todo
     monkeypatch.setattr(expediente, "CACHE", tmp_path)
     monkeypatch.setattr(expediente, "NUCOS", nucos)
     monkeypatch.setattr(expediente, "drive", lambda: dr)
+    monkeypatch.setattr(expediente, "respaldar_bitacora", lambda ruta: None)
     antes = dr.foto()
 
     expediente.ordenar(["293"], hilos=1)
@@ -135,6 +136,7 @@ def test_ordenar_no_trabaja_un_nuco_que_ya_no_esta_en_nucos(tmp_path, monkeypatc
     monkeypatch.setattr(expediente, "CACHE", tmp_path)
     monkeypatch.setattr(expediente, "NUCOS", nucos)
     monkeypatch.setattr(expediente, "drive", lambda: dr)
+    monkeypatch.setattr(expediente, "respaldar_bitacora", lambda ruta: None)
     n = len(dr.archivos)
     expediente.ordenar(["5"], hilos=1)
     assert len(dr.archivos) == n

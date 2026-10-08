@@ -481,6 +481,22 @@ class Bitacora:
             f.write(json.dumps(dict(x, cuando=time.strftime("%Y-%m-%dT%H:%M:%S")), ensure_ascii=False) + "\n")
 
 
+RESPALDO = "1dxcRFSgn1SD8KYYLamB3lGcsCmDEe-DB"   # Mi unidad > PRUEBA DE NUCOS VEHICULARES: ahí van las bitácoras
+
+
+def respaldar_bitacora(ruta):
+    """Sube la bitácora a PRUEBA DE NUCOS VEHICULARES/BITACORAS: si se pierde la de esta máquina, el rollback sigue."""
+    from googleapiclient.http import MediaFileUpload
+    d = drive()
+    r = llamar(d.files().list(q="'%s' in parents and name = 'BITACORAS' and mimeType = '%s' and trashed = false" % (RESPALDO, reglas.CARPETA),
+                              fields="files(id)"))["files"]
+    carpeta = r[0]["id"] if r else llamar(d.files().create(body={"name": "BITACORAS", "mimeType": reglas.CARPETA, "parents": [RESPALDO]},
+                                                           fields="id"))["id"]
+    llamar(d.files().create(body={"name": Path(ruta).name, "parents": [carpeta]}, fields="id",
+                            media_body=MediaFileUpload(str(ruta), mimetype="text/plain")))
+    print("Bitácora respaldada en Drive: PRUEBA DE NUCOS VEHICULARES/BITACORAS/%s" % Path(ruta).name)
+
+
 def ordenar(nucos_pedidos=None, todos=False, hilos=6):
     """EN LA CARPETA REAL: cada archivo de un NUCO se MUEVE (y renombra) a su lugar dentro de ese mismo NUCO, y lo
     de AppSheet / la app / la imagen de inexistente se COPIA ahí. Nada sale de su NUCO ni se escribe fuera de
@@ -605,6 +621,8 @@ def ordenar(nucos_pedidos=None, todos=False, hilos=6):
             hechos += 1
             print("\r  %d/%d NUCO  %s" % (hechos, len(plan_), totales), end="", flush=True)
     print("\nBitácora: %s" % bit.ruta)
+    if bit.ruta.exists():
+        respaldar_bitacora(bit.ruta)
 
 
 def deshacer(ruta):
