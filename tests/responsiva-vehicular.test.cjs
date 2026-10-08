@@ -1,6 +1,8 @@
 // Responsiva Vehicular (formato F-CI01-045): el enganche con reasignación solo debe tocar
 // VEHICULOS cuando el responsable que firma es distinto al actual, y sin la firma del
-// responsable no se debe escribir nada (ni la fila de la responsiva, ni el PDF).
+// responsable ni la de quien entrega no se debe escribir nada (ni la fila, ni el PDF). El
+// responsable y el jefe pueden firmar cada quien por su propia liga, independiente uno del
+// otro -- el PDF se genera hasta que TODAS las ligas que se mandaron se completen.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -15,17 +17,21 @@ const VEHICULO_BASE = {
 };
 
 function crearContexto() {
-  const llamadas = { insert: [], update: [], actualizarVehiculo: [], imagenesSubidas: [] };
+  const llamadas = { insert: [], update: [], actualizarVehiculo: [], imagenesSubidas: [], pdfGenerados: 0, vistasPrevias: 0 };
+  let uuids = 0;
   const contexto = vm.createContext({
-    Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'SS' }, DRIVE_FOLDERS: { REPORTES: () => 'FOLDER' } },
+    Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'SS' }, DRIVE_FOLDERS: { REPORTES: () => 'FOLDER' }, urlFirmaPublica: () => '' },
     Permisos: { puedeLeer: () => {}, puedeEditar: () => ({ nombre: 'TESTER', correo: 't@x.com' }) },
     LockService: { getScriptLock: () => ({ waitLock: () => {}, releaseLock: () => {} }) },
     Ids: { nuevo: (prefijo) => prefijo + '-1' },
     Entidades: { prefijo: () => 'RSV' },
+    ScriptApp: { getService: () => ({ getUrl: () => 'https://script.google.com/exec' }) },
+    Session: { getActiveUser: () => ({ getEmail: () => 'firmante@ciudadmaderas.com' }) },
     Utilities: {
       formatDate: () => '1',
       base64Decode: (b64) => b64,
       newBlob: (bytes, mimeType, nombre) => ({ bytes, mimeType, nombre }),
+      getUuid: () => 'token-' + (++uuids),
     },
     DriveApp: {
       getFolderById: (id) => ({
@@ -44,9 +50,18 @@ function crearContexto() {
     SheetUtils: {
       getSheet: () => ({ getName: () => 'RESPONSIVA VEHICULAR' }),
       insert: (ssId, hoja, fila) => { llamadas.insert.push(fila); },
-      update: (ssId, hoja, id, cambios) => { llamadas.update.push({ id, cambios }); },
+      // Igual que el SheetUtils.update real (lee-mezcla-escribe): así una llamada después sí
+      // ve ESTADO FIRMA/TOKEN FIRMA ya actualizados.
+      update: (ssId, hoja, id, cambios) => {
+        llamadas.update.push({ id, cambios });
+        const fila = llamadas.insert.find((f) => f.ID === id);
+        if (fila) Object.assign(fila, cambios);
+      },
       remove: () => true,
-      getAll: () => [],
+      // Simula la hoja con lo que ya se insertó -- suficiente para que buscarPorToken_
+      // (SheetUtils.getAll(...).find(...)) encuentre el renglón pendiente que un
+      // crear(..., {remoto:true}/{remotoJefe:true}) anterior ya guardó.
+      getAll: () => llamadas.insert,
       findById: () => null,
       leerColumnasDeHoja: () => ({ filas: 0, datos: {} }),
     },
@@ -55,7 +70,8 @@ function crearContexto() {
       actualizar: (token, id, cambios) => { llamadas.actualizarVehiculo.push({ id, cambios }); },
     },
     PdfService: {
-      generar: () => ({ id: 'pdf1', nombre: 'r.pdf', url: 'https://drive/r.pdf' }),
+      generar: () => { llamadas.pdfGenerados++; return { id: 'pdf1', nombre: 'r.pdf', url: 'https://drive/r.pdf' }; },
+      generarVistaPrevia: (p) => { llamadas.vistasPrevias++; return { base64: 'pdf-bytes', mimeType: 'application/pdf', imagenes: p.imagenes }; },
       nombreArchivo: () => 'nombre',
       fechaParaNombre: () => '2026-10-05',
     },
@@ -68,16 +84,43 @@ function crearContexto() {
   return { contexto, llamadas };
 }
 
-const FIRMA_OK = { 'FIRMA RESPONSABLE': { base64: 'abc', mimeType: 'image/png' } };
+const FIRMA_RESPONSABLE = { base64: 'abc', mimeType: 'image/png' };
+const FIRMA_JEFE = { base64: 'jefe', mimeType: 'image/png' };
+const FIRMA_CI = { base64: 'ci', mimeType: 'image/png' };
+const FIRMA_OK = { 'FIRMA RESPONSABLE': FIRMA_RESPONSABLE, 'FIRMA CI': FIRMA_CI };
+
+// Columnas que SIEMPRE se insertan (metadatos del flujo de firma, nunca la firma en sí) --
+// las únicas con "FIRMA" en el nombre que un renglón normal debe traer.
+const METADATO = [
+  'ESTADO FIRMA', 'TOKEN FIRMA', 'TOKEN FIRMA EXPIRA', 'TOKEN FIRMA JEFE', 'TOKEN FIRMA JEFE EXPIRA',
+  'FIRMADO POR', 'FIRMADO POR JEFE', 'FIRMA RESPONSABLE TEMP', 'FIRMA JEFE TEMP', 'FIRMA CI TEMP',
+];
 
 test('sin la firma del responsable truena antes de escribir nada', () => {
   const { contexto, llamadas } = crearContexto();
   assert.throws(
-    () => contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'JUAN PEREZ' }, {}),
+    () => contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'JUAN PEREZ' }, { 'FIRMA CI': FIRMA_CI }),
     /Falta la firma del responsable/
   );
   assert.deepEqual(llamadas.insert, []);
   assert.deepEqual(llamadas.actualizarVehiculo, []);
+});
+
+test('sin la firma de quien entrega truena antes de escribir nada (presencial, remoto o remotoJefe)', () => {
+  const { contexto, llamadas } = crearContexto();
+  assert.throws(
+    () => contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'JUAN PEREZ' }, { 'FIRMA RESPONSABLE': FIRMA_RESPONSABLE }),
+    /Falta la firma de quien entrega/
+  );
+  assert.throws(
+    () => contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'JUAN PEREZ' }, {}, { remoto: true }),
+    /Falta la firma de quien entrega/
+  );
+  assert.throws(
+    () => contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'JUAN PEREZ' }, { 'FIRMA RESPONSABLE': FIRMA_RESPONSABLE }, { remotoJefe: true }),
+    /Falta la firma de quien entrega/
+  );
+  assert.deepEqual(llamadas.insert, []);
 });
 
 test('si el responsable que firma es el mismo que ya tiene el vehículo, no se reasigna', () => {
@@ -96,12 +139,244 @@ test('si el responsable que firma es distinto, se reasigna el vehículo en la mi
   assert.equal(llamadas.actualizarVehiculo[0].cambios['RESPONSABLE VEHICULO'], 'Maria Lopez');
 });
 
-test('cada firma se respalda como imagen en la carpeta de imágenes, sin ligarla en la hoja', () => {
+test('presencial: cada firma se respalda como imagen en Drive, sin ligarla en la hoja, y cierra FIRMADO de una vez', () => {
   const { contexto, llamadas } = crearContexto();
   contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' },
-    { 'FIRMA RESPONSABLE': { base64: 'abc', mimeType: 'image/png' }, 'FIRMA JEFE': { base64: 'def', mimeType: 'image/png' } });
-  assert.equal(llamadas.imagenesSubidas.length, 2);
+    { 'FIRMA RESPONSABLE': FIRMA_RESPONSABLE, 'FIRMA JEFE': FIRMA_JEFE, 'FIRMA CI': FIRMA_CI });
+  assert.equal(llamadas.imagenesSubidas.length, 3);
   assert.ok(llamadas.imagenesSubidas.every((img) => img.carpeta === 'RESPONSIVAS VEHICULARES_Images'));
-  // La fila insertada no gana columnas de URL de firma -- solo queda en Drive.
-  assert.ok(!Object.keys(llamadas.insert[0]).some((k) => k.toUpperCase().indexOf('FIRMA') !== -1));
+  const otrasColumnas = Object.keys(llamadas.insert[0]).filter((k) => METADATO.indexOf(k) === -1);
+  assert.ok(!otrasColumnas.some((k) => k.toUpperCase().indexOf('FIRMA') !== -1));
+  assert.equal(llamadas.insert[0]['FIRMA JEFE TEMP'], '');
+  assert.equal(llamadas.insert[0]['FIRMA CI TEMP'], '');
+  assert.equal(llamadas.insert[0]['FIRMA RESPONSABLE TEMP'], '');
+  assert.equal(llamadas.insert[0]['ESTADO FIRMA'], 'FIRMADO');
+  assert.equal(llamadas.pdfGenerados, 1);
+});
+
+// ---------- Firma a distancia: liga del RESPONSABLE (opciones.remoto) ----------
+
+test('remoto: no exige la firma del responsable (CI sigue siendo obligatoria), no genera PDF, y sí reasigna si el responsable cambió', () => {
+  const { contexto, llamadas } = crearContexto();
+  const res = contexto.Servicio.crear(
+    'tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Maria Lopez' }, { 'FIRMA CI': FIRMA_CI }, { remoto: true }
+  );
+  assert.equal(llamadas.insert.length, 1);
+  assert.equal(llamadas.insert[0]['ESTADO FIRMA'], 'PENDIENTE');
+  assert.ok(llamadas.insert[0]['TOKEN FIRMA']);
+  assert.equal(llamadas.insert[0]['TOKEN FIRMA JEFE'], '');
+  // CI ya firmó al generar la liga: se guarda TEMP, pero aún no se sube a Drive ni se genera PDF.
+  assert.ok(llamadas.insert[0]['FIRMA CI TEMP']);
+  assert.equal(llamadas.pdfGenerados, 0);
+  assert.equal(llamadas.imagenesSubidas.length, 0);
+  // La reasignación la decide quien captura, con su sesión, aquí y ahora -- no se puede
+  // posponer a completarFirma (que no tiene sesión, ver el comentario del archivo).
+  assert.equal(llamadas.actualizarVehiculo.length, 1);
+  assert.equal(llamadas.actualizarVehiculo[0].cambios['RESPONSABLE VEHICULO'], 'Maria Lopez');
+  assert.ok(res.liga.includes('tipo=responsiva'));
+  assert.ok(!res.liga.includes('quien=jefe'));
+  assert.ok(res.liga.includes(llamadas.insert[0]['TOKEN FIRMA']));
+  assert.ok(!res.ligaJefe);
+});
+
+test('remoto: la firma de Jefe que sí llegó (presencial) se guarda temporalmente, no se pierde', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' },
+    { 'FIRMA JEFE': FIRMA_JEFE, 'FIRMA CI': FIRMA_CI }, { remoto: true });
+  assert.equal(JSON.parse(llamadas.insert[0]['FIRMA JEFE TEMP']).base64, 'jefe');
+  assert.equal(JSON.parse(llamadas.insert[0]['FIRMA CI TEMP']).base64, 'ci');
+});
+
+test('vistaPrevia (liga del responsable): el PDF sin guardar, con las firmas TEMP ya puestas y sin la del responsable todavía', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' },
+    { 'FIRMA CI': FIRMA_CI, 'FIRMA JEFE': FIRMA_JEFE }, { remoto: true });
+  const res = contexto.Servicio.vistaPrevia(llamadas.insert[0]['TOKEN FIRMA']);
+  assert.equal(llamadas.vistasPrevias, 1);
+  assert.equal(llamadas.pdfGenerados, 0);
+  assert.equal(res.base64, 'pdf-bytes');
+  assert.ok(res.imagenes['FIRMA JEFE']);
+  assert.ok(res.imagenes['FIRMA CI']);
+  assert.ok(!res.imagenes['FIRMA RESPONSABLE'], 'todavía no hay firma del responsable -- es justo lo que se está por decidir');
+});
+
+test('vistaPrevia: token inválido truena', () => {
+  const { contexto } = crearContexto();
+  assert.throws(() => contexto.Servicio.vistaPrevia('no-existe'), /liga no es válida/);
+});
+
+test('completarFirma: token inválido truena sin tocar nada', () => {
+  const { contexto, llamadas } = crearContexto();
+  assert.throws(() => contexto.Servicio.completarFirma('no-existe', { base64: 'x', mimeType: 'image/png' }), /liga no es válida/);
+  assert.equal(llamadas.update.length, 0);
+});
+
+test('completarFirma: token ya usado (ESTADO FIRMA ya no PENDIENTE) truena', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' }, { 'FIRMA CI': FIRMA_CI }, { remoto: true });
+  llamadas.insert[0]['ESTADO FIRMA'] = 'FIRMADO';
+  assert.throws(
+    () => contexto.Servicio.completarFirma(llamadas.insert[0]['TOKEN FIRMA'], { base64: 'x', mimeType: 'image/png' }),
+    /ya se usó/
+  );
+});
+
+test('completarFirma: token vencido truena', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' }, { 'FIRMA CI': FIRMA_CI }, { remoto: true });
+  llamadas.insert[0]['TOKEN FIRMA EXPIRA'] = new Date(Date.now() - 1000);
+  assert.throws(
+    () => contexto.Servicio.completarFirma(llamadas.insert[0]['TOKEN FIRMA'], { base64: 'x', mimeType: 'image/png' }),
+    /venció/
+  );
+});
+
+test('completarFirma: sin liga de Jefe pendiente, genera el PDF de una vez (junta Jefe/CI TEMP con la nueva) y limpia el token', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' },
+    { 'FIRMA CI': FIRMA_CI, 'FIRMA JEFE': FIRMA_JEFE }, { remoto: true });
+  const token = llamadas.insert[0]['TOKEN FIRMA'];
+  const res = contexto.Servicio.completarFirma(token, { base64: 'firmo-aqui', mimeType: 'image/png' });
+  assert.equal(llamadas.pdfGenerados, 1);
+  assert.equal(res.PDF, 'https://drive/r.pdf');
+  assert.ok(!res.pendiente);
+  // Tres respaldos en Drive: la firma que llegó por la liga + Jefe y CI que ya estaban TEMP.
+  assert.equal(llamadas.imagenesSubidas.length, 3);
+  const cambios = llamadas.update[llamadas.update.length - 1].cambios;
+  assert.equal(cambios['ESTADO FIRMA'], 'FIRMADO');
+  assert.equal(cambios['TOKEN FIRMA'], '');
+  assert.equal(cambios['FIRMA JEFE TEMP'], '');
+  assert.equal(cambios['FIRMADO POR'], 'firmante@ciudadmaderas.com');
+});
+
+test('completarFirma: si TAMBIÉN hay una liga de Jefe pendiente, solo se guarda y se espera (sin PDF)', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' }, { 'FIRMA CI': FIRMA_CI }, { remoto: true, remotoJefe: true });
+  const token = llamadas.insert[0]['TOKEN FIRMA'];
+  const res = contexto.Servicio.completarFirma(token, { base64: 'firmo-aqui', mimeType: 'image/png' });
+  assert.equal(llamadas.pdfGenerados, 0);
+  assert.equal(res.PDF, null);
+  assert.equal(res.pendiente, true);
+  assert.match(res.aviso, /jefe directo/);
+  assert.equal(llamadas.insert[0]['ESTADO FIRMA'], 'PENDIENTE');
+  assert.equal(llamadas.insert[0]['TOKEN FIRMA'], '');            // la suya ya se limpió
+  assert.ok(llamadas.insert[0]['TOKEN FIRMA JEFE']);               // la del jefe sigue viva
+  assert.ok(JSON.parse(llamadas.insert[0]['FIRMA RESPONSABLE TEMP']).base64, 'firmo-aqui');
+});
+
+// ---------- Firma a distancia: liga del JEFE (opciones.remotoJefe) ----------
+
+test('remotoJefe: exige la firma del responsable AHORA (no es ella la que se difiere), y nunca la del jefe', () => {
+  const { contexto, llamadas } = crearContexto();
+  assert.throws(
+    () => contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' }, { 'FIRMA CI': FIRMA_CI }, { remotoJefe: true }),
+    /Falta la firma del responsable/
+  );
+  const res = contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' },
+    { 'FIRMA RESPONSABLE': FIRMA_RESPONSABLE, 'FIRMA CI': FIRMA_CI }, { remotoJefe: true });
+  assert.equal(llamadas.insert.length, 1);
+  assert.equal(llamadas.insert[0]['ESTADO FIRMA'], 'PENDIENTE');
+  assert.ok(llamadas.insert[0]['TOKEN FIRMA JEFE']);
+  assert.equal(llamadas.insert[0]['TOKEN FIRMA'], '');
+  // El responsable ya firmó, pero como el jefe sigue pendiente, su firma se guarda TEMP.
+  assert.ok(JSON.parse(llamadas.insert[0]['FIRMA RESPONSABLE TEMP']).base64, 'abc');
+  assert.equal(llamadas.pdfGenerados, 0);
+  assert.ok(res.ligaJefe.includes('tipo=responsiva'));
+  assert.ok(res.ligaJefe.includes('quien=jefe'));
+  assert.ok(res.ligaJefe.includes(llamadas.insert[0]['TOKEN FIRMA JEFE']));
+  assert.ok(!res.liga);
+});
+
+test('remoto + remotoJefe juntos: dos ligas independientes en el mismo renglón', () => {
+  const { contexto, llamadas } = crearContexto();
+  const res = contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' },
+    { 'FIRMA CI': FIRMA_CI }, { remoto: true, remotoJefe: true });
+  assert.ok(res.liga && res.ligaJefe);
+  assert.notEqual(res.liga, res.ligaJefe);
+  assert.ok(llamadas.insert[0]['TOKEN FIRMA'] && llamadas.insert[0]['TOKEN FIRMA JEFE']);
+  assert.notEqual(llamadas.insert[0]['TOKEN FIRMA'], llamadas.insert[0]['TOKEN FIRMA JEFE']);
+});
+
+test('ligaDeToken: arma la misma liga que crear() para cada token, siempre del lado del servidor', () => {
+  const { contexto, llamadas } = crearContexto();
+  const res = contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' },
+    { 'FIRMA CI': FIRMA_CI }, { remoto: true, remotoJefe: true });
+  const token = llamadas.insert[0]['TOKEN FIRMA'];
+  const tokenJefe = llamadas.insert[0]['TOKEN FIRMA JEFE'];
+  assert.equal(contexto.Servicio.ligaDeToken('tok', token, 'principal'), res.liga);
+  assert.equal(contexto.Servicio.ligaDeToken('tok', tokenJefe, 'jefe'), res.ligaJefe);
+});
+
+test('la liga usa el despliegue público si está configurado (Config.urlFirmaPublica), en vez del despliegue normal', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Config.urlFirmaPublica = () => 'https://script.google.com/macros/s/PUBLICO/exec';
+  const res = contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' },
+    { 'FIRMA CI': FIRMA_CI }, { remoto: true });
+  assert.ok(res.liga.startsWith('https://script.google.com/macros/s/PUBLICO/exec'));
+});
+
+test('obtenerPendienteJefePorToken: igual de estricto que el del responsable (no existe / ya firmado / vencido)', () => {
+  const { contexto, llamadas } = crearContexto();
+  assert.equal(contexto.Servicio.obtenerPendienteJefePorToken('no-existe').vigente, false);
+
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' },
+    { 'FIRMA RESPONSABLE': FIRMA_RESPONSABLE, 'FIRMA CI': FIRMA_CI }, { remotoJefe: true });
+  const tokenJefe = llamadas.insert[0]['TOKEN FIRMA JEFE'];
+  const info = contexto.Servicio.obtenerPendienteJefePorToken(tokenJefe);
+  assert.equal(info.vigente, true);
+  assert.equal(info.nombre, 'Juan Perez');   // a quién pertenece la responsiva, para que el jefe sepa qué firma
+
+  llamadas.insert[0]['TOKEN FIRMA JEFE EXPIRA'] = new Date(Date.now() - 1000);
+  assert.equal(contexto.Servicio.obtenerPendienteJefePorToken(tokenJefe).vigente, false);
+});
+
+test('completarFirmaJefe: sin liga del responsable pendiente, genera el PDF de una vez', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' },
+    { 'FIRMA RESPONSABLE': FIRMA_RESPONSABLE, 'FIRMA CI': FIRMA_CI }, { remotoJefe: true });
+  const tokenJefe = llamadas.insert[0]['TOKEN FIRMA JEFE'];
+  const res = contexto.Servicio.completarFirmaJefe(tokenJefe, { base64: 'firma-jefe-remota', mimeType: 'image/png' });
+  assert.equal(llamadas.pdfGenerados, 1);
+  assert.equal(res.PDF, 'https://drive/r.pdf');
+  assert.ok(!res.pendiente);
+  // Responsable (TEMP) + CI (TEMP) + Jefe (recién llegada) = 3 respaldos en Drive.
+  assert.equal(llamadas.imagenesSubidas.length, 3);
+  const cambios = llamadas.update[llamadas.update.length - 1].cambios;
+  assert.equal(cambios['ESTADO FIRMA'], 'FIRMADO');
+  assert.equal(cambios['TOKEN FIRMA JEFE'], '');
+  assert.equal(cambios['FIRMADO POR JEFE'], 'firmante@ciudadmaderas.com');
+});
+
+test('completarFirmaJefe: si TAMBIÉN hay una liga del responsable pendiente, solo se guarda y se espera', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' },
+    { 'FIRMA CI': FIRMA_CI }, { remoto: true, remotoJefe: true });
+  const tokenJefe = llamadas.insert[0]['TOKEN FIRMA JEFE'];
+  const res = contexto.Servicio.completarFirmaJefe(tokenJefe, { base64: 'firma-jefe-remota', mimeType: 'image/png' });
+  assert.equal(llamadas.pdfGenerados, 0);
+  assert.equal(res.pendiente, true);
+  assert.match(res.aviso, /responsable/);
+  assert.ok(llamadas.insert[0]['TOKEN FIRMA'], 'la liga del responsable sigue viva');
+  assert.equal(llamadas.insert[0]['TOKEN FIRMA JEFE'], '');
+});
+
+test('las dos ligas, cada una completada por su lado, terminan generando el PDF una sola vez (la segunda en llegar)', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' }, { 'FIRMA CI': FIRMA_CI }, { remoto: true, remotoJefe: true });
+  const token = llamadas.insert[0]['TOKEN FIRMA'];
+  const tokenJefe = llamadas.insert[0]['TOKEN FIRMA JEFE'];
+
+  const primero = contexto.Servicio.completarFirmaJefe(tokenJefe, { base64: 'jefe', mimeType: 'image/png' });
+  assert.equal(primero.pendiente, true);
+  assert.equal(llamadas.pdfGenerados, 0);
+
+  const segundo = contexto.Servicio.completarFirma(token, { base64: 'responsable', mimeType: 'image/png' });
+  assert.ok(!segundo.pendiente);
+  assert.equal(llamadas.pdfGenerados, 1);
+  // Responsable + Jefe + CI, los tres.
+  assert.equal(llamadas.imagenesSubidas.length, 3);
+
+  // Repetir cualquiera de las dos ligas ya usadas truena (de un solo uso).
+  assert.throws(() => contexto.Servicio.completarFirma(token, { base64: 'x', mimeType: 'image/png' }), /no es válida/);
+  assert.throws(() => contexto.Servicio.completarFirmaJefe(tokenJefe, { base64: 'x', mimeType: 'image/png' }), /no es válida/);
 });

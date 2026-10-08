@@ -349,8 +349,8 @@ function apiBuscarResponsivaVehicularPorId(token, id) {
   // google.script.run pierde objetos grandes de forma intermitente si no viajan como texto.
   return JSON.stringify(ResponsivaVehicularService.buscarPorId(token, id));
 }
-function apiCrearResponsivaVehicular(token, datos, imagenes) {
-  return ResponsivaVehicularService.crear(token, datos, imagenes);
+function apiCrearResponsivaVehicular(token, datos, imagenes, opciones) {
+  return ResponsivaVehicularService.crear(token, datos, imagenes, opciones);
 }
 function apiEliminarResponsivaVehicular(token, id) {
   return ResponsivaVehicularService.eliminar(token, id);
@@ -363,14 +363,39 @@ function apiListarAdherentesVehicularesPorFolio(token, folio) {
 function apiBuscarAdherenteVehicularPorId(token, id) {
   return JSON.stringify(AdherenteVehicularService.buscarPorId(token, id));
 }
-function apiCrearAdherenteVehicular(token, datos, imagenes) {
-  return AdherenteVehicularService.crear(token, datos, imagenes);
+function apiCrearAdherenteVehicular(token, datos, imagenes, opciones) {
+  return AdherenteVehicularService.crear(token, datos, imagenes, opciones);
 }
 function apiCambiarEstatusAdherenteVehicular(token, id, estatus) {
   return AdherenteVehicularService.cambiarEstatus(token, id, estatus);
 }
 function apiEliminarAdherenteVehicular(token, id) {
   return AdherenteVehicularService.eliminar(token, id);
+}
+
+// --- Firma a distancia (Responsiva/Adherente Vehicular) ---
+// Sin `token` de sesión: quien firma por la liga puede no tener usuario en el sistema. El
+// TOKEN FIRMA (o TOKEN FIRMA JEFE) de la liga ya es la credencial de estas llamadas (ver el
+// comentario al inicio de ResponsivaVehicularService.gs). `quien` distingue cuál de las dos
+// ligas es (el responsable/adherente, o el jefe directo -- cada uno con la suya).
+function apiFirmaRemotaObtener(tipo, quien, tokenFirma) {
+  const servicio = tipo === 'adherente' ? AdherenteVehicularService : ResponsivaVehicularService;
+  return quien === 'jefe' ? servicio.obtenerPendienteJefePorToken(tokenFirma) : servicio.obtenerPendientePorToken(tokenFirma);
+}
+function apiFirmaRemotaVistaPrevia(tipo, quien, tokenFirma) {
+  const servicio = tipo === 'adherente' ? AdherenteVehicularService : ResponsivaVehicularService;
+  return servicio.vistaPrevia(tokenFirma, quien);
+}
+function apiFirmaRemotaCompletar(tipo, quien, tokenFirma, imagen) {
+  const servicio = tipo === 'adherente' ? AdherenteVehicularService : ResponsivaVehicularService;
+  return quien === 'jefe' ? servicio.completarFirmaJefe(tokenFirma, imagen) : servicio.completarFirma(tokenFirma, imagen);
+}
+// Esta SÍ lleva `token` de sesión: la pide el operador desde la ficha ("Copiar liga de
+// nuevo"), no quien va a firmar. Se arma siempre en el servidor -- nunca en el navegador,
+// donde location.origin es el sandbox de Apps Script, no la URL real (ver ligaDeToken).
+function apiFirmaRemotaLiga(token, tipo, quien, tokenFirma) {
+  const servicio = tipo === 'adherente' ? AdherenteVehicularService : ResponsivaVehicularService;
+  return servicio.ligaDeToken(token, tokenFirma, quien);
 }
 
 // --- Arqueos ---

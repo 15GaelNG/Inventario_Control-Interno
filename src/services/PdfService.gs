@@ -260,6 +260,43 @@ const PdfService = (function () {
   }
 
   /**
+   * Llena una COPIA ya creada de la plantilla (imágenes + texto + formato), y de paso le
+   * mete un aviso arriba del todo si se pide uno (vistaPrevia: el documento de verdad
+   * generado antes de tiempo, para que se vea igual que el final salvo por ese aviso).
+   * Separado de generar() para que generarVistaPrevia() lo reuse sin guardar nada en Drive.
+   */
+  function llenarCopia_(copiaId, p, aviso) {
+    const doc = DocumentApp.openById(copiaId);
+    const body = doc.getBody();
+
+    // Primero las imágenes: si no, el paso de texto borraría sus marcadores
+    Object.keys(p.imagenes || {}).forEach((campo) => {
+      const imagen = p.imagenes[campo];
+      if (!imagen || (!imagen.base64 && !imagen.blob)) return;
+      // Puede venir capturada por el usuario (base64) o ya como archivo de Drive (blob),
+      // que es el caso de los diagramas en blanco cuando no se marcó ningún daño
+      const blob = imagen.blob || Utilities.newBlob(
+        Utilities.base64Decode(imagen.base64), imagen.mimeType || 'image/png', campo + '.png'
+      );
+      // En las plantillas el marcador de imagen se escribe con corchetes
+      const caja = { ancho: imagen.ancho, alto: imagen.alto };
+      if (!insertarImagen_(body, '<<[' + campo + ']>>', blob, caja)) {
+        insertarImagen_(body, '<<' + campo + '>>', blob, caja);
+      }
+    });
+
+    const resultado = llenarTexto_(body, datosParaPlantilla_(p.datos));
+    if (p.formato) aplicarFormato_(body, p.formato);
+    if (aviso) {
+      const parrafo = body.insertParagraph(0, aviso);
+      parrafo.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+      parrafo.editAsText().setBold(true).setForegroundColor('#8a6d3a').setFontSize(14);
+    }
+    doc.saveAndClose();
+    return resultado;
+  }
+
+  /**
    * Genera un PDF a partir de una plantilla.
    *
    * @param {Object} p
@@ -318,28 +355,7 @@ const PdfService = (function () {
 
     let resultado;
     try {
-      const doc = DocumentApp.openById(copia.getId());
-      const body = doc.getBody();
-
-      // Primero las imágenes: si no, el paso de texto borraría sus marcadores
-      Object.keys(p.imagenes || {}).forEach((campo) => {
-        const imagen = p.imagenes[campo];
-        if (!imagen || (!imagen.base64 && !imagen.blob)) return;
-        // Puede venir capturada por el usuario (base64) o ya como archivo de Drive (blob),
-        // que es el caso de los diagramas en blanco cuando no se marcó ningún daño
-        const blob = imagen.blob || Utilities.newBlob(
-          Utilities.base64Decode(imagen.base64), imagen.mimeType || 'image/png', campo + '.png'
-        );
-        // En las plantillas el marcador de imagen se escribe con corchetes
-        const caja = { ancho: imagen.ancho, alto: imagen.alto };
-        if (!insertarImagen_(body, '<<[' + campo + ']>>', blob, caja)) {
-          insertarImagen_(body, '<<' + campo + '>>', blob, caja);
-        }
-      });
-
-      resultado = llenarTexto_(body, datosParaPlantilla_(p.datos));
-      if (p.formato) aplicarFormato_(body, p.formato);
-      doc.saveAndClose();
+      resultado = llenarCopia_(copia.getId(), p);
 
       let pdf;
       try {
@@ -372,6 +388,29 @@ const PdfService = (function () {
     }
   }
 
+  /**
+   * Una vista previa del PDF SIN guardar nada permanente en Drive: llena la plantilla igual
+   * que generar(), con un aviso arriba ("VISTA PREVIA — AÚN SIN FIRMAR"), la exporta a bytes
+   * y de inmediato borra la copia del Doc -- regresa el PDF como base64, no un archivo.
+   * Para la liga de firma a distancia (FirmaExterna.html), antes de firmar.
+   *
+   * @param {Object} p  mismos p.plantillaId/datos/imagenes/carpetaId que generar() (carpetaId
+   *                    es solo dónde vive la copia MIENTRAS se llena; nunca queda ahí)
+   * @return {{base64: string, mimeType: string}}
+   */
+  function generarVistaPrevia(p) {
+    if (!p || !p.plantillaId) throw new Error('Falta indicar la plantilla');
+    const carpeta = p.carpetaId ? DriveApp.getFolderById(p.carpetaId) : carpetaReportes_();
+    const copia = DriveApp.getFileById(p.plantillaId).makeCopy('vista previa ' + Utilities.getUuid(), carpeta);
+    try {
+      llenarCopia_(copia.getId(), p, 'VISTA PREVIA — AÚN SIN FIRMAR');
+      const blob = DriveApp.getFileById(copia.getId()).getAs('application/pdf');
+      return { base64: Utilities.base64Encode(blob.getBytes()), mimeType: 'application/pdf' };
+    } finally {
+      try { DriveApp.getFileById(copia.getId()).setTrashed(true); } catch (e) { /* no-op */ }
+    }
+  }
+
   /** Qué campos pide una plantilla (útil para armar el formulario del módulo) */
   function camposDePlantilla(plantillaId) {
     const doc = DocumentApp.openById(plantillaId);
@@ -379,7 +418,7 @@ const PdfService = (function () {
   }
 
   return {
-    generar, camposDePlantilla, nombreArchivo, fechaParaNombre, subcarpeta_,
+    generar, generarVistaPrevia, camposDePlantilla, nombreArchivo, fechaParaNombre, subcarpeta_,
     datosParaPlantilla_, aplicarFormato_, medidaDeImagen_, anchoDeCelda_,   // expuestas para las pruebas
   };
 })();

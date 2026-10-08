@@ -9,6 +9,18 @@ function doGet(e) {
   if (e && e.parameter && e.parameter.revisar === 'entorno') {
     return ContentService.createTextOutput(JSON.stringify(revisionEntorno_())).setMimeType(ContentService.MimeType.JSON);
   }
+  // ?firmar=1&tipo=...&token=...: liga de firma a distancia (Responsiva/Adherente Vehicular).
+  // Página aparte, nunca la SPA completa -- quien la abre puede no tener usuario en el sistema,
+  // así que no pasa por el login ni por el resto de la app (ver ClientApi.apiFirmaRemota*).
+  if (e && e.parameter && e.parameter.firmar) {
+    const t = HtmlService.createTemplateFromFile('html/FirmaExterna');
+    t.tipo = e.parameter.tipo === 'adherente' ? 'adherente' : 'responsiva';
+    t.quien = e.parameter.quien === 'jefe' ? 'jefe' : 'principal';
+    t.token = e.parameter.token || '';
+    return t.evaluate()
+      .setTitle('Firmar documento — Control Interno')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  }
   return Router.renderShell(e);
 }
 

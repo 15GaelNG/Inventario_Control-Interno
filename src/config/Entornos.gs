@@ -59,6 +59,17 @@ const ENTORNOS = {
     GEOTAB_SERVIDOR: '',
   },
 
+  // ---------------------------------------------------------------- DEV de Jorge (rama jorge)
+  // Solo esta propiedad: lo demás (SS_ID_*, carpetas…) de este proyecto sigue viniendo de sus
+  // Script Properties de siempre -- leerConfig_ cae a la Script Property cuando la clave no
+  // está en el bloque de este proyecto, así que agregar solo una no mueve nada más.
+  '1qE6UYn-ay4jZYRxiBOnmDwiE_iKWVtBSuiPEaz_PjArz0lf0YcfojqC-': {
+    // Despliegue aparte del mismo proyecto, con acceso "Cualquier usuario" (sin pedir cuenta
+    // de dominio) -- solo lo usa la liga de firma a distancia (Responsiva/Adherente
+    // Vehicular). El despliegue normal (el que usa el equipo) sigue con acceso de dominio.
+    URL_FIRMA_PUBLICA: 'https://script.google.com/macros/s/AKfycbx53or0V18l5wwo-inkuv5RBcjA-0YdteMwCBNn_0TLZY462bQWNo_A3lsVZA4VfplK/exec',
+  },
+
   // ---------------------------------------------------------------- DEV de Emmanuel (rama emmanuel)
   '1rpvvay1hBTFfm5paVyvy6-Thmx-CQ6uUWVef20Jr8VmHQxkCWZ7UmeOa': {
     ENTORNO: 'DEV',

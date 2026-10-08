@@ -32,6 +32,9 @@ const PROYECTOS = { dev: '.clasp.json', lab: '.clasp.lab.json', prod: '.clasp.pr
 const DESTINOS = JSON.parse(fs.readFileSync(path.join(__dirname, 'destinos.json'), 'utf8'));
 // Producción: el primero crea la versión; el segundo es el link que usa el equipo
 const DESPLIEGUES_PROD = DESTINOS.desplieguesProd;
+// Opcional: el despliegue aparte (acceso "Cualquier usuario") de las ligas de firma a
+// distancia -- '' hasta que exista, y entonces no se mueve ni se revisa (ver destinos.json)
+const DESPLIEGUE_FIRMA_PUBLICA = DESTINOS.despliegueFirmaPublicaProd || null;
 const EN_ACTION = process.env.GITHUB_ACTIONS === 'true';
 
 // clasp se corre con el mismo Node y sin shell: así una ruta o una descripción con espacios
@@ -74,12 +77,17 @@ function exigirCuentaDeProd_(args) {
   return cuenta;
 }
 
-/** Mueve los dos links de prod a la versión y revisa que los dos hayan quedado ahí */
+/** Mueve los dos links de prod a la versión (y el de firma pública, si ya existe) y revisa
+ *  que todos hayan quedado ahí -- deploy y regreso pasan por aquí, así nunca se desincroniza. */
 function moverDespliegues_(proyecto, version, descripcion) {
   clasp(['-P', proyecto, 'update-deployment', DESPLIEGUES_PROD[1], '-V', version, '-d', descripcion]);
+  if (DESPLIEGUE_FIRMA_PUBLICA) {
+    clasp(['-P', proyecto, 'update-deployment', DESPLIEGUE_FIRMA_PUBLICA, '-V', version, '-d', descripcion]);
+  }
+  const esperados = DESPLIEGUE_FIRMA_PUBLICA ? DESPLIEGUES_PROD.concat(DESPLIEGUE_FIRMA_PUBLICA) : DESPLIEGUES_PROD;
   const lista = clasp(['-P', proyecto, 'list-deployments']);
-  const enVersion = DESPLIEGUES_PROD.filter((d) => new RegExp(d + ' @' + version + '\\b').test(lista));
-  if (enVersion.length !== 2) throw new Error('Los dos despliegues no quedaron en @' + version + ':\n' + lista);
+  const enVersion = esperados.filter((d) => new RegExp(d + ' @' + version + '\\b').test(lista));
+  if (enVersion.length !== esperados.length) throw new Error('No todos los despliegues quedaron en @' + version + ':\n' + lista);
 }
 
 const LINK_EQUIPO = () => 'https://script.google.com/a/macros/' + DESTINOS.dominio + '/s/' + DESPLIEGUES_PROD[1] + '/exec';
@@ -98,10 +106,11 @@ function regresar_(args, version) {
   const descripcion = 'Regreso a la v' + version + (antes ? ' (desde la v' + antes + ')' : '');
   clasp(['-P', proyecto, 'update-deployment', DESPLIEGUES_PROD[0], '-V', version, '-d', descripcion]);
   moverDespliegues_(proyecto, version, descripcion);
-  console.log('Regresado: los dos links de producción en la versión ' + version + '.');
+  console.log('Regresado: los dos links de producción' + (DESPLIEGUE_FIRMA_PUBLICA ? ' y la liga pública de firma' : '') + ' en la versión ' + version + '.');
   resumen_('## ↩️ Producción regresó a la versión ' + version + '\n\n' +
     '| | |\n|---|---|\n| Antes | v' + (antes || '?') + ' |\n| Ahora | v' + version + ' |\n' +
-    '| La app corre con | ' + cuenta + ' |\n| Link del equipo | ' + LINK_EQUIPO() + ' |');
+    '| La app corre con | ' + cuenta + ' |\n| Link del equipo | ' + LINK_EQUIPO() + ' |' +
+    (DESPLIEGUE_FIRMA_PUBLICA ? '\n| Liga pública de firma | también regresada |' : ''));
 }
 
 function ramaActual_() {
@@ -206,13 +215,20 @@ async function main() {
   // válido. En prod esto pasa ANTES de mover los despliegues: algo roto nunca le llega a nadie.
   const head = /-\s+(\S+)\s+@HEAD/.exec(clasp(['-P', proyecto, 'list-deployments']));
   if (!head) throw new Error('El proyecto no tiene despliegue @HEAD para revisar la página');
+  // Index.html y FirmaExterna.html son páginas completas por su cuenta (nunca un <script>
+  // incluido dentro del shell de la SPA): la primera no se revisa aquí (no se comprime, ver
+  // construir.js); la segunda se revisa aparte, pidiendo su propia liga (abajo).
+  const APARTE = ['Index.html', 'FirmaExterna.html'];
   const bloques = [];
   subido.forEach((ruta) => {
-    if (!ruta.endsWith('.html') || path.basename(ruta) === 'Index.html') return;
+    if (!ruta.endsWith('.html') || APARTE.includes(path.basename(ruta))) return;
     for (const m of fs.readFileSync(ruta, 'utf8').matchAll(/<script>([\s\S]*?)<\/script>/g)) bloques.push(m[1]);
   });
   const revisada = await revisar(head[1], DESTINOS.dominio, bloques);
   console.log('Página revisada como la entrega Apps Script: ' + revisada.scripts + ' scripts completos y válidos.');
+  // FirmaExterna.html no se revisa aquí (es su propia página, con su propia liga -- no un
+  // <script> del shell de la SPA): al probar algo que la use, ábrela a mano una vez
+  // (?firmar=1&tipo=responsiva&token=x) para confirmar que Apps Script no le cortó nada.
 
   // Los IDs del proyecto (carpetas, libros, hojas): en prod, un error no deja desplegar
   const rev = await entorno.revisar(head[1], DESTINOS.dominio);
@@ -231,9 +247,10 @@ async function main() {
     const m = /@(\d+)/.exec(primero);
     if (!m) throw new Error('No encontré la versión nueva en: ' + primero);
     moverDespliegues_(proyecto, m[1], descripcion);
-    console.log('Desplegado: los dos links de producción en la versión ' + m[1] + '.');
+    console.log('Desplegado: los dos links de producción' + (DESPLIEGUE_FIRMA_PUBLICA ? ' y la liga pública de firma' : '') + ' en la versión ' + m[1] + '.');
     resumen_('## 🚀 Producción en la versión ' + m[1] + '\n\n| | |\n|---|---|\n| Qué cambia | ' + descripcion.replace(/\|/g, '/') + ' |\n' +
-      '| Antes | v' + (antes || '?') + ' |\n| La app corre con | ' + (rev.cuenta || '?') + ' |\n| Link del equipo | ' + LINK_EQUIPO() + ' |\n\n' +
+      '| Antes | v' + (antes || '?') + ' |\n| La app corre con | ' + (rev.cuenta || '?') + ' |\n| Link del equipo | ' + LINK_EQUIPO() + ' |' +
+      (DESPLIEGUE_FIRMA_PUBLICA ? '\n| Liga pública de firma | también movida |' : '') + '\n\n' +
       (antes ? 'Si algo salió mal: **Run workflow** → acción "regresar a una versión" → versión `' + antes + '`.' : ''));
   } else if (destino === 'prod') {
     resumen_('## 🔎 Subido a producción sin desplegar\n\nEl código quedó en el link `/dev`; el equipo sigue en la versión de antes.');
