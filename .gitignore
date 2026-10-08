@@ -45,3 +45,6 @@ tools/migracion/corridas/
 
 # Lo comprimido que se sube a Apps Script (npm run push / tools/subir)
 .construido/
+
+# Expediente por NUCO: lo leído de Drive y la hoja (datos de unidades)
+tools/nucos/.cache/
