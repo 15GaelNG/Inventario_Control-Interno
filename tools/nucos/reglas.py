@@ -45,6 +45,37 @@ def normal(texto):
     return "".join(ch for ch in s if unicodedata.category(ch) != "Mn").upper().strip()
 
 
+def distancia(a, b):
+    """Errores de dedo entre dos palabras: letras de más, de menos, cambiadas o volteadas (RESPONSVIA → RESPONSIVA = 1)."""
+    d = [[0] * (len(b) + 1) for _ in range(len(a) + 1)]
+    for i in range(len(a) + 1):
+        d[i][0] = i
+    for j in range(len(b) + 1):
+        d[0][j] = j
+    for i in range(1, len(a) + 1):
+        for j in range(1, len(b) + 1):
+            costo = 0 if a[i - 1] == b[j - 1] else 1
+            d[i][j] = min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + costo)
+            if i > 1 and j > 1 and a[i - 1] == b[j - 2] and a[i - 2] == b[j - 1]:
+                d[i][j] = min(d[i][j], d[i - 2][j - 2] + 1)
+    return d[len(a)][len(b)]
+
+
+def parecida(n, clave):
+    """¿El nombre (ya normal()) trae esa palabra, aunque venga con un error de dedo? Las claves cortas (ALTA, TC) se
+    piden exactas; hasta 8 letras se aguanta 1 error y de 9 en adelante 2 ("CIRUCLACION", "DOCUEMENTOS"). El plural
+    cuenta igual ("TENENCIAS", "POLIZAS")."""
+    if clave in n:
+        return True
+    if len(clave) < 6:
+        return False
+    tope = 1 if len(clave) < 9 else 2
+    for w in re.findall(r"[A-Z]+", n):
+        if abs(len(w) - len(clave)) <= tope + 1 and (distancia(w, clave) <= tope or distancia(w.rstrip("S"), clave) <= tope):
+            return True
+    return False
+
+
 def concepto(nombre):
     """El documento que dice el nombre de una carpeta (o None si no es ninguno de los 6).
 
@@ -54,17 +85,17 @@ def concepto(nombre):
     n = normal(nombre)
     if "SOLICITUD" in n:
         return None
-    if "FACTURA" in n:
+    if parecida(n, "FACTURA"):
         return "FACTURA"
-    if re.search(r"SEGURO|POLIZA", n):
+    if parecida(n, "SEGURO") or parecida(n, "POLIZA"):
         return "SEGURO"
     if "ALTA" in n or re.search(r"(^|\W)PLACAS?$", n):
         return "ALTA DE PLACAS"
-    if re.search(r"TARJETA|CIRCULACION|CIRUCLACION", n):
+    if parecida(n, "TARJETA") or parecida(n, "CIRCULACION"):
         return "TARJETA DE CIRCULACION"
-    if re.search(r"RESPONS", n):
+    if "RESPONS" in n or parecida(n, "RESPONSIVA"):
         return "RESPONSIVA"
-    if "TENENCIA" in n:
+    if parecida(n, "TENENCIA"):
         return "TENENCIA"
     return None
 
@@ -75,19 +106,29 @@ def concepto_archivo(nombre):
     sirve para los sueltos ("DOCUMENTOS/ALTA.pdf"). Más estricto que concepto(): "Tarjeta corp.jpg"
     (de Oxxo Gas) no es una tarjeta de circulación."""
     n = normal(nombre)
-    if re.search(r"\bFACTURA\b", n) and "SOLICITUD" not in n:
+    if "SERVICIO" in n:          # "FCATURA SERVICIO.pdf": la factura de un servicio no es la del vehículo
+        return None
+    if parecida(n, "FACTURA") and "SOLICITUD" not in n:
         return "FACTURA"
-    if re.search(r"\bPOLIZA\b|\bSEGURO\b", n):
+    # SEGURO exacto (acepta SEGUROS): con tolerancia, el apellido "SEGURA" se volvía póliza
+    if parecida(n, "POLIZA") or re.search(r"SEGURO", n):
         return "SEGURO"
-    if re.search(r"TARJETA\s*(DE\s*)?CIRCUL|\bTC\b|\bT\.C\.", n):
+    # TARJETA y CIRCULACIÓN juntas: un "Permiso circulación" no es la tarjeta
+    if (parecida(n, "TARJETA") and parecida(n, "CIRCULACION")) or re.search(r"\bTC\b|\bT\.C\.", n):
         return "TARJETA DE CIRCULACION"
     if re.search(r"\bALTA\b|BAJA DE PLACA", n):
         return "ALTA DE PLACAS"
-    if re.search(r"\bRESPONSIVA\b", n):
+    if parecida(n, "RESPONSIVA"):
         return "RESPONSIVA"
-    if re.search(r"\bTENENCIA", n):
+    if parecida(n, "TENENCIA"):
         return "TENENCIA"
     return None
+
+
+def ajena(ruta):
+    """¿La ruta pasa por una carpeta que no es de estos documentos (servicio, verificación, Oxxo Gas…)? Ahí el nombre
+    del archivo no manda: el "Factura_106.xml" de SERVICIO es la factura de un servicio, no la del vehículo."""
+    return any(re.search(r"SERVICIO|VERIFICACION|OXXO|EVIDENCIA|GUIA|LIBRETA|PROGRAMA|PERMISO", normal(p)) for p in ruta)
 
 
 def es_documentacion(nombre):
@@ -100,11 +141,12 @@ def es_relleno(nombre):
 
 def es_anterior(nombre):
     """Subcarpeta de responsivas viejas, con cualquiera de sus nombres (ANTERIORES, ANTIGUAS, RESPONSVIAS…)."""
-    return bool(re.search(r"ANTERIOR|ANTIGU", normal(nombre)))
+    n = normal(nombre)
+    return "ANTIGU" in n or ((parecida(n, "ANTERIOR") or parecida(n, "ANTERIORES")) and "INTERIOR" not in n)   # "FOTOS INTERIOR" está a una letra
 
 
 def es_adherente(nombre):
-    return "ADHERENTE" in normal(nombre)
+    return parecida(normal(nombre), "ADHERENTE")
 
 
 def extension(nombre, mime):
@@ -151,7 +193,6 @@ def planear_nuco(nuco, documentacion, adjuntos, sin_seguro=None):
         for h in nodo.get("hijos") or []:
             if h["mimeType"] == CARPETA:
                 c = concepto(h["name"]) or actual
-                s = sub
                 nombre = h["name"].strip()
                 if c == "RESPONSIVA" and sub and sub[0] == ADHERENTES:
                     s = sub + [nombre]                       # ADHERENTES/ADHERENTES ANTERIORES/…: se conserva
@@ -159,12 +200,18 @@ def planear_nuco(nuco, documentacion, adjuntos, sin_seguro=None):
                     # Antes que "anteriores": "ADHERENTES ANTERIORES" son adherentes, no responsivas viejas
                     s = [ADHERENTES] + ([nombre] if normal(nombre) != ADHERENTES else [])
                 elif c == "RESPONSIVA" and es_anterior(nombre):
-                    s = [RESPONSIVAS_ANTERIORES]
+                    s = sub or [RESPONSIVAS_ANTERIORES]
+                elif actual and c == actual:
+                    # Una subcarpeta DENTRO de un documento dice algo ("2.-SEGURO/SEGURO VENCIDO", "TENENCIA 2023"):
+                    # se conserva tal cual, y lo de adentro no compite por ser el documento vigente
+                    s = (sub or []) + [nombre]
+                else:
+                    s = None                                 # carpeta de otro documento (o la primera): empieza de cero
                 visitar(h, ruta + [nombre], c, s)
             elif es_relleno(h["name"]):
                 rellenos += 1
-            elif concepto_archivo(h["name"]) or actual:
-                c = concepto_archivo(h["name"]) or actual
+            elif (not ajena(ruta) and concepto_archivo(h["name"])) or actual:
+                c = (not ajena(ruta) and concepto_archivo(h["name"])) or actual
                 candidatos[c].append(dict(h, de="/".join(ruta), sub=sub if c == actual else None, fuente="nuco"))
             else:
                 anteriores.append(dict(h, de="/".join(ruta), fuente="nuco"))

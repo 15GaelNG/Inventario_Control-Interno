@@ -149,3 +149,34 @@ def test_repetidos_gana_el_del_nuco_y_el_otro_repetido_del_nuco_sale_a_anteriore
     assert ("nuco", "1.-FACTURA", "350.- Factura.pdf") in porfuente
     assert any(d.startswith("ANTERIORES/REPETIDOS") for f, d, n in porfuente if n == "350.- Factura.pdf")
     assert resumen["duplicados"] == 2 and resumen["repetidos"] == 1
+
+
+def test_errores_de_dedo_se_reconocen_sin_confundir_palabras_parecidas():
+    assert reglas.concepto_archivo("RESPONSVIA 350 ENERO 2025.pdf") == "RESPONSIVA"
+    assert reglas.concepto_archivo("TARJETA DE CIRUCLACION 12.pdf") == "TARJETA DE CIRCULACION"
+    assert reglas.concepto_archivo("TENENCIAS 2024.pdf") == "TENENCIA"
+    assert reglas.concepto("2.- POLIZAS") == "SEGURO"
+    assert reglas.es_anterior("RESPONSIVS ANTERIRES") and reglas.es_adherente("ADHERENTS")
+    # Lo que se parece pero no es
+    assert reglas.concepto_archivo("RESPONSABLE DE UNIDAD.pdf") is None
+    assert reglas.concepto_archivo("PERMISO PARA CIRCULAR.pdf") is None
+    assert not reglas.es_anterior("FOTOS INTERIOR")
+    assert reglas.concepto_archivo("ALTO.pdf") is None                      # las claves cortas se piden exactas
+
+
+def test_una_subcarpeta_dentro_de_un_documento_se_conserva():
+    doc = carpeta("1.-DOCUMENTACIÓN", carpeta("2.-SEGURO",
+        archivo("poliza 2026.pdf", "2026-01-01T00:00:00Z"),
+        carpeta("SEGURO VENCIDO", archivo("5-SEGURO 2025-4406.pdf", "2026-05-01T00:00:00Z"))))
+    d = destinos(reglas.planear_nuco("100", [doc], {})[0])
+    assert d["poliza 2026.pdf"] == "2.-SEGURO/SEGURO-0100.pdf"                     # la vigente, aunque la vencida sea más nueva
+    assert d["5-SEGURO 2025-4406.pdf"] == "2.-SEGURO/SEGURO VENCIDO/SEGURO-0100.pdf"
+
+
+def test_falsos_positivos_que_encontro_la_medicion():
+    assert reglas.concepto_archivo("SALVADOR SARABIA SEGURA-74.pdf") is None          # apellido, no póliza
+    assert reglas.concepto_archivo("FCATURA SERVICIO.pdf") is None
+    assert reglas.concepto_archivo("Permiso circulación 165067.pdf") is None
+    doc = carpeta("1.-DOCUMENTACIÓN", carpeta("SERVICIO", archivo("ROLJ580205EP0_Factura__106.xml")))
+    d = destinos(reglas.planear_nuco("106", [doc], {})[0])
+    assert d["ROLJ580205EP0_Factura__106.xml"].startswith("ANTERIORES/SERVICIO/")
