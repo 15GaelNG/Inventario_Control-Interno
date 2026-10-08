@@ -2150,6 +2150,10 @@
         const editar = { icono: 'pencil', texto: tipo === 'linea' ? 'Editar línea' : 'Editar información', maximo: 1, enBarra: false, grupo: 'abrir', visible: operar,
           alHacer: (f) => abrirEditor(f[0].id, tipo === 'linea' ? 'LINEA' : undefined) };
         const historial = { icono: 'history', texto: 'Historial', maximo: 1, enBarra: false, grupo: 'linea', alHacer: (f) => abrirEnPestana(tipo, f[0].id, 'historial') };
+        // Vincular, cambiar y desvincular, igual que en el ⋮ de la ficha (etapa 3, usuario 8-oct)
+        const vinculo = (ic, texto, modo, cuando) => ({ icono: ic, texto: texto, maximo: 1, enBarra: false, grupo: 'vinculo',
+          visible: (f) => operar() && cuando(f[0]), alHacer: (f) => abrirVinculo(modo, f[0]) });
+        const disponible = (r) => String(r.estatus || '').toUpperCase() === 'DISPONIBLE';
         if (modulo === 'equipos') {
           return [detalles,
             { icono: 'archive', texto: 'Mandar a resguardo', titulo: 'El equipo con su ubicación y el estatus de su línea; se cierra la asignación de la persona', maximo: UNO, grupo: 'mover',
@@ -2157,6 +2161,11 @@
             { icono: 'user-round-pen', texto: 'Reasignar', titulo: 'Asigna el equipo a otro responsable', maximo: UNO, grupo: 'mover', visible: operar,
               alHacer: (f) => abrirReasignar(f[0]) },
             editar,
+            { icono: 'card-sim', texto: 'Editar línea', maximo: 1, enBarra: false, grupo: 'abrir', visible: (f) => operar() && !!f[0].lineaId,
+              alHacer: (f) => abrirEditor(f[0].lineaId, 'LINEA') },
+            vinculo('link', 'Vincular línea', 'VINCULAR_LINEA', (r) => !r.lineaId),
+            vinculo('arrow-left-right', 'Cambiar línea', 'CAMBIAR_LINEA', (r) => !!r.lineaId),
+            vinculo('unlink', 'Desvincular línea', 'DESVINCULAR', (r) => !!r.lineaId),
             // Documentos separados por tipo, con su título, para no confundir "nueva" con "ver la última" (usuario, 30-sep)
             { icono: 'clipboard-check', texto: 'Nueva inspección', maximo: 1, enBarra: false, grupo: 'inspeccion', tituloGrupo: 'Inspección', visible: operar,
               alHacer: (f) => abrirCaptura('INSPECCION', { equipoId: f[0].id }) },
@@ -2174,7 +2183,11 @@
           { icono: 'phone-off', texto: 'Mandar a cancelación', titulo: 'Pasa a la bandeja de cancelaciones de quien la tramita; el equipo no cambia', maximo: UNO, grupo: 'mover',
             visible: operar, alHacer: (f) => abrirCancelacion(f) },
           { icono: 'smartphone', texto: 'Ir al equipo', maximo: 1, grupo: 'mover', visible: (f) => !!f[0].equipoId, alHacer: (f) => abrir('equipo', f[0].equipoId) },
-          editar, historial];
+          editar,
+          vinculo('link', 'Vincular a equipo', 'VINCULAR_EQUIPO', (r) => !r.equipoId && disponible(r)),
+          vinculo('arrow-left-right', 'Cambiar de equipo', 'CAMBIAR_EQUIPO', (r) => !!r.equipoId),
+          vinculo('unlink', 'Desvincular del equipo', 'DESVINCULAR', (r) => !!r.equipoId),
+          historial];
       }
 
       // "Detalles" = la vista rápida como el panel "Ver detalles" de Drive: abierto, sigue a la fila seleccionada
@@ -3557,7 +3570,7 @@
               Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].limpiarSeleccion(); });
               if (vigente()) { pintarIndicadores(); pintarListado(); }
               aviso(icono('circle-check') + ' ' + titulo + ' · NUCO ' + (equipo.nuco || '—'), 6000);
-              if (vigente()) abrir('equipo', equipo.id, true);
+              if (vigente() && pila.length) abrir('equipo', equipo.id, true);
             });
           };
           if (captura !== sesion) return;

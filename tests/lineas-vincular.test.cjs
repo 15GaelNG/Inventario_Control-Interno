@@ -60,3 +60,14 @@ test('la pantalla: las acciones en el ⋮ y el formulario de la acción', () => 
 test('la ventana de comentario sigue las esquinas redondeadas', () => {
   assert.match(read('src/html/lineas-estilos.html'), /border-bottom-left-radius: inherit; border-bottom-right-radius: inherit;/);
 });
+
+test('el clic derecho de la lista trae las mismas acciones que el ⋮ de la ficha', () => {
+  const html = read('src/html/js/lineas.html');
+  const fn = html.slice(html.indexOf('function accionesSeleccionDe('), html.indexOf('let detallesAbiertos'));
+  [["'link', 'Vincular línea', 'VINCULAR_LINEA'"], ["'arrow-left-right', 'Cambiar línea', 'CAMBIAR_LINEA'"], ["'unlink', 'Desvincular línea', 'DESVINCULAR'"],
+    ["'link', 'Vincular a equipo', 'VINCULAR_EQUIPO'"], ["'arrow-left-right', 'Cambiar de equipo', 'CAMBIAR_EQUIPO'"], ["'unlink', 'Desvincular del equipo', 'DESVINCULAR'"]]
+    .forEach(([t]) => assert.ok(fn.includes('vinculo(' + t), t));
+  assert.match(fn, /texto: 'Editar línea', maximo: 1, enBarra: false, grupo: 'abrir', visible: \(f\) => operar\(\) && !!f\[0\]\.lineaId/);
+  // Desde la lista no abre la ficha al terminar (como Reasignar)
+  assert.match(html, /if \(vigente\(\) && pila\.length\) abrir\('equipo', equipo\.id, true\);/);
+});
