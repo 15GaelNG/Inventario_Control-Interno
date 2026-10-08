@@ -140,6 +140,20 @@ def plan():
     vehiculos = {str(int(v["NUCCO"])): v for v in json.loads((CACHE / "vehiculos.json").read_text(encoding="utf-8"))
                  if v["NUCCO"].isdigit()}
     COLUMNA = {"SEGURO": "POLIZA SEGURO", "TENENCIA": "ARCHIVO TENENCIA", "RESPONSIVA": "RESPONSIVA", "ALTA DE PLACAS": "DOCUMENTO BAJA"}
+
+    # La imagen de "inexistente" que ya se usa: una de las "CARPETA SIN INFORMACIÓN.jpg" (todas son la misma)
+    def buscar_imagen(nodo):
+        for h in nodo.get("hijos") or nodo.get("documentacion") or []:
+            if h["mimeType"] == "image/jpeg" and reglas.normal(h["name"]) == reglas.normal("CARPETA SIN INFORMACIÓN.jpg"):
+                return h
+            if h["mimeType"] == reglas.CARPETA:
+                r = buscar_imagen(h)
+                if r:
+                    return r
+        return None
+    inexistente = next((r for r in (buscar_imagen(n) for n in nucos) if r), None)
+    if not inexistente:
+        raise SystemExit('No encontré la imagen "CARPETA SIN INFORMACIÓN.jpg" para los seguros que no aplican')
     salida = []
     for n in sorted(nucos, key=lambda x: int(x["name"]) if x["name"].strip().isdigit() else 10 ** 6):
         clave = str(int(n["name"])) if n["name"].strip().isdigit() else n["name"].strip()
@@ -149,10 +163,9 @@ def plan():
             a = archivos.get(nombre_adjunto(v.get(col)) or "")
             if a:
                 adjuntos.setdefault(c, []).append(a)
-        copias, resumen = reglas.planear_nuco(clave, n["documentacion"], adjuntos)
-        faltan = [c for c, _, _ in reglas.SEIS if not resumen["docs"][c]]
-        if v.get("SEGURO (SI / NO)") == "NO APLICA" and "SEGURO" in faltan:
-            faltan[faltan.index("SEGURO")] = "SEGURO (no aplica: falta la imagen de que no tiene)"
+        no_aplica = v.get("SEGURO (SI / NO)") == "NO APLICA"
+        copias, resumen = reglas.planear_nuco(clave, n["documentacion"], adjuntos, inexistente if no_aplica else None)
+        faltan = [c for c, _, _ in reglas.SEIS if not resumen["docs"][c] and not (c == "SEGURO" and resumen.get("sin_seguro"))]
         salida.append({"nuco": n["name"].strip(), "id": n["id"], "estatus": v.get("ESTATUS", "(no está en la hoja)"),
                        "sede": v.get("SEDE", ""), "copias": copias, "resumen": resumen, "faltan": faltan})
     (CACHE / "plan.json").write_text(json.dumps(salida, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -167,9 +180,10 @@ def plan():
     for c, carpeta, _ in reglas.SEIS:
         n = sum(1 for p in activos if p["resumen"]["docs"][c])
         print("  %-26s %3d / %d  (%d%%)" % (carpeta, n, len(activos), round(100 * n / max(1, len(activos)))))
-    cinco = [p for p in activos if all(p["resumen"]["docs"][c] or (c == "SEGURO" and any("no aplica" in f for f in p["faltan"]))
+    cinco = [p for p in activos if all(p["resumen"]["docs"][c] or (c == "SEGURO" and p["resumen"].get("sin_seguro"))
                                        for c, _, _ in reglas.SEIS[:5])]
-    print("  con los 5 obligatorios (seguro NO APLICA cuenta): %d / %d" % (len(cinco), len(activos)))
+    print("  2.-SEGURO con la imagen de inexistente (NO APLICA en la hoja): %d" % sum(1 for p in activos if p["resumen"].get("sin_seguro")))
+    print("  con los 5 obligatorios (seguro NO APLICA con su imagen cuenta): %d / %d" % (len(cinco), len(activos)))
 
 
 def exigir_destino(d, carpeta):

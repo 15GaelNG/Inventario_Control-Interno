@@ -99,3 +99,14 @@ def test_el_candado_no_deja_escribir_dentro_de_nucos_real_ni_en_subcarpetas():
         with pytest.raises(SystemExit, match="NUCOS VEHICULOS"):
             expediente.exigir_destino(Drive(), destino)
     expediente.exigir_destino(Drive(), "prueba")   # la carpeta de prueba sí
+
+
+def test_seguro_no_aplica_lleva_la_imagen_de_inexistente_solo_si_no_hay_poliza():
+    imagen = {"id": "img", "name": "CARPETA SIN INFORMACIÓN.jpg", "mimeType": "image/jpeg"}
+    vacio = carpeta("1.-DOCUMENTACIÓN", carpeta("2.-SEGURO"))
+    copias, resumen = reglas.planear_nuco("45", [vacio], {}, imagen)
+    assert [("/".join(c["destino"][1:]), c["nombre"]) for c in copias] == [("2.-SEGURO", "SEGURO-0045 NO APLICA.jpg")]
+    assert resumen["sin_seguro"]
+    con_poliza = carpeta("1.-DOCUMENTACIÓN", carpeta("2.-SEGURO", archivo("poliza.pdf")))
+    copias, resumen = reglas.planear_nuco("45", [con_poliza], {}, imagen)
+    assert [c["nombre"] for c in copias] == ["SEGURO-0045.pdf"] and not resumen.get("sin_seguro")

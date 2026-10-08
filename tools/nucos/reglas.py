@@ -128,12 +128,14 @@ def nombre_final(prefijo, nuco, fecha, ext, usados):
     return "%s (%d)%s" % (base, n, ext)
 
 
-def planear_nuco(nuco, documentacion, adjuntos):
+def planear_nuco(nuco, documentacion, adjuntos, sin_seguro=None):
     """Lo que va en cada carpeta de un NUCO.
 
     documentacion: lista de nodos {id, name, mimeType, modifiedTime, md5Checksum, hijos} (las
     carpetas 1.-DOCUMENTACIÓN de ese NUCO, en cualquier generación).
     adjuntos: {clave: [archivo de VEHICULOS_Files_ que la hoja liga a esa clave]}.
+    sin_seguro: la imagen de "inexistente" (la misma "CARPETA SIN INFORMACIÓN.jpg" de siempre) si la hoja
+    dice que el seguro NO APLICA; se pone en 2.-SEGURO solo cuando no hay ninguna póliza.
 
     Devuelve (copias, resumen): copias = [{origen, md5, destino: [carpetas…], nombre, de}].
     """
@@ -193,6 +195,12 @@ def planear_nuco(nuco, documentacion, adjuntos):
             copias.append({"origen": a["id"], "md5": a.get("md5Checksum"), "destino": destino, "de": a["de"] + "/" + a["name"],
                            "nombre": nombre_final(prefijo, nuco, a.get("modifiedTime"), ext, usados[ruta]), "mime": a.get("mimeType"), "size": a.get("size")})
         resumen["docs"][c] = len(unicos)
+        if c == "SEGURO" and not unicos and sin_seguro:
+            copias.append({"origen": sin_seguro["id"], "md5": sin_seguro.get("md5Checksum"), "destino": [DOCUMENTACION, carpeta],
+                           "de": "imagen de inexistente (seguro NO APLICA en la hoja)/" + sin_seguro["name"],
+                           "nombre": "%s-%04d NO APLICA%s" % (prefijo, int(nuco), extension(sin_seguro["name"], sin_seguro.get("mimeType"))),
+                           "mime": sin_seguro.get("mimeType"), "size": sin_seguro.get("size")})
+            resumen["sin_seguro"] = True
     for a in anteriores:
         partes = a["de"].split("/")[1:]   # sin la carpeta 1.-DOCUMENTACIÓN
         copias.append({"origen": a["id"], "md5": a.get("md5Checksum"), "destino": [DOCUMENTACION, ANTERIORES] + partes,
