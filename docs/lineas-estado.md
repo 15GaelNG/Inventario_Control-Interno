@@ -17,6 +17,12 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 - **Líneas Telefónicas:** tabla de equipos y líneas (selección estilo Google Drive), ficha con General, Documentos e
   Historial; Editar en pestañas con Agregar equipo / Agregar línea; TIPO se calcula solo (EQUIPO, EQUIPO + SIM,
   EQUIPO + SIM BASICO, LINEA, LINEA BASICA, BANDA ANCHA, MODEM, CAMARA).
+- **Agregar línea** (8-oct): «¿Se vincula a un equipo?». Sí → se elige un NUCO en USO o RESGUARDO sin línea (lista con
+  modelo y responsable) y la línea queda con el equipo, en su asignación: el responsable es el del equipo y el estatus
+  lo sigue (USO si está en uso, DISPONIBLE si está guardado). No → responsable a mano y opcional; USO con responsable,
+  DISPONIBLE sin él. EN PROCESO DE CANCELACION o CANCELADA solo si se eligen en «Cancelación» (una CANCELADA no se
+  vincula). Con SIM BASICO no se pide ni se guarda adendum (`LineasRegistros.crearLineaEnEquipo_`,
+  `estatusAltaLinea_`). La línea sola ya no muestra el PIN de WhatsApp (es del equipo; pendiente 2.25).
 - **Acciones con nombre:** nueva inspección, nueva responsiva, Reasignar (responsiva y luego inspección, las dos
   obligatorias; el servidor exige la inspección del día; el equipo queda en USO; el director sale de la responsiva y
   el jefe directo de la inspección o, si no, de Capital Humano; la inspección llega llenada con la responsiva, se
