@@ -16,6 +16,7 @@
                               EN LA CARPETA REAL: mueve cada archivo a su lugar dentro de su NUCO y copia ahí lo de
                               AppSheet y la app. Nada sale de su NUCO; todo queda en .cache/bitacoras/
     deshacer <bitacora.jsonl> regresa lo que hizo un ordenar
+    respaldar <carpeta>       copia 1.-DOCUMENTACIÓN de cada NUCO tal como está hoy (leída en vivo) a esa carpeta
 
 Usa el token de tools/migracion (autorizar.py lab, con Drive). Copiar solo LEE el original. Candados: aplicar
 (copias de prueba) no escribe dentro de PROHIBIDOS, venga de donde venga el destino; ordenar es lo único que
@@ -670,6 +671,79 @@ def ordenar(nucos_pedidos=None, todos=False, hilos=6):
         respaldar_bitacora(bit.ruta)
 
 
+def respaldar(carpeta, hilos=6):
+    """Copia 1.-DOCUMENTACIÓN de cada NUCO TAL COMO ESTÁ (leída en vivo, sin homologar) a <carpeta>/RESPALDO NUCOS
+    VEHICULOS <fecha>/<NUCO>/. Solo lee NUCOS; el destino pasa por el candado de las copias. Se puede repetir: lo que
+    ya está (mismo nombre en el mismo lugar) no se vuelve a copiar."""
+    import re
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+    m = re.search(r"/folders/([A-Za-z0-9_-]+)", carpeta)
+    destino = m.group(1) if m else carpeta
+    d0 = drive()
+    exigir_destino(d0, destino)
+    nombre = "RESPALDO NUCOS VEHICULOS " + time.strftime("%Y-%m-%d")
+    r = llamar(d0.files().list(q="'%s' in parents and name = '%s' and trashed = false" % (destino, nombre), fields="files(id)"))["files"]
+    raiz = r[0]["id"] if r else llamar(d0.files().create(body={"name": nombre, "mimeType": reglas.CARPETA, "parents": [destino],
+                                                                "description": "Respaldo de 1.-DOCUMENTACIÓN de cada NUCO antes de ordenar NUCOS VEHICULOS."},
+                                                          fields="id"))["id"]
+    nucos = [n for n in json.loads((CACHE / "arbol.json").read_text(encoding="utf-8"))]
+    local = threading.local()
+    totales = {"copiados": 0, "ya estaban": 0, "NUCO": 0}
+    candado = threading.Lock()
+
+    def dr():
+        if not hasattr(local, "d"):
+            local.d = drive()
+        return local.d
+
+    def lista(d, i):
+        out, tok = [], None
+        while True:
+            r = llamar(d.files().list(q="'%s' in parents and trashed = false" % i, pageSize=1000, pageToken=tok,
+                                      fields="nextPageToken,files(id,name,mimeType)", supportsAllDrives=True, includeItemsFromAllDrives=True))
+            out += r["files"]
+            tok = r.get("nextPageToken")
+            if not tok:
+                return out
+
+    def espejo(d, origen, copia):
+        ya = {(_nfc(h["name"]), h["mimeType"] == reglas.CARPETA): h["id"] for h in lista(d, copia)}
+        for h in lista(d, origen):
+            es_carpeta = h["mimeType"] == reglas.CARPETA
+            clave = (_nfc(h["name"]), es_carpeta)
+            if es_carpeta:
+                sub = ya.get(clave) or llamar(d.files().create(body={"name": h["name"], "mimeType": reglas.CARPETA, "parents": [copia]},
+                                                               fields="id"))["id"]
+                espejo(d, h["id"], sub)
+            elif clave in ya:
+                with candado:
+                    totales["ya estaban"] += 1
+            else:
+                llamar(d.files().copy(fileId=h["id"], supportsAllDrives=True, fields="id",
+                                      body={"name": h["name"], "parents": [copia], "description": "Respaldo de: " + h["id"]}))
+                with candado:
+                    totales["copiados"] += 1
+
+    def un_nuco(n):
+        d = dr()
+        hay = {(_nfc(h["name"]), True): h["id"] for h in lista(d, raiz) if h["mimeType"] == reglas.CARPETA}
+        en_respaldo = hay.get((_nfc(n["name"]), True)) or llamar(d.files().create(
+            body={"name": n["name"], "mimeType": reglas.CARPETA, "parents": [raiz]}, fields="id"))["id"]
+        for doc in [h for h in lista(d, n["id"]) if h["mimeType"] == reglas.CARPETA and reglas.es_documentacion(h["name"])]:
+            ya = {(_nfc(h["name"]), True): h["id"] for h in lista(d, en_respaldo) if h["mimeType"] == reglas.CARPETA}
+            copia = ya.get((_nfc(doc["name"]), True)) or llamar(d.files().create(
+                body={"name": doc["name"], "mimeType": reglas.CARPETA, "parents": [en_respaldo]}, fields="id"))["id"]
+            espejo(d, doc["id"], copia)
+        with candado:
+            totales["NUCO"] += 1
+
+    with ThreadPoolExecutor(max_workers=hilos) as ex:
+        for _ in ex.map(un_nuco, nucos):
+            print("\r  %s de %d" % (totales, len(nucos)), end="", flush=True)
+    print("\nRespaldo: https://drive.google.com/drive/folders/%s" % raiz)
+
+
 def deshacer(ruta):
     """Regresa lo que hizo ordenar(), de la última línea a la primera: lo movido vuelve a su carpeta y nombre, lo
     copiado y las carpetas creadas (si quedaron vacías) van a la papelera."""
@@ -699,7 +773,7 @@ def deshacer(ruta):
 
 if __name__ == "__main__":
     args = sys.argv[1:]
-    if not args or args[0] not in ("leer", "plan", "aplicar", "excel", "ordenar", "deshacer"):
+    if not args or args[0] not in ("leer", "plan", "aplicar", "excel", "ordenar", "deshacer", "respaldar"):
         sys.exit(__doc__)
     if args[0] == "leer":
         leer()
@@ -708,6 +782,8 @@ if __name__ == "__main__":
     elif args[0] == "ordenar":
         ordenar(args[args.index("--nucos") + 1].split(",") if "--nucos" in args else None, "--todos" in args,
                 int(args[args.index("--hilos") + 1]) if "--hilos" in args else 6)
+    elif args[0] == "respaldar":
+        respaldar(args[1], int(args[args.index("--hilos") + 1]) if "--hilos" in args else 6)
     elif args[0] == "deshacer":
         deshacer(args[1])
     elif args[0] == "excel":
