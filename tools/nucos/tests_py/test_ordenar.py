@@ -82,6 +82,8 @@ def test_ordenar_mueve_dentro_del_nuco_copia_appsheet_y_deshacer_lo_regresa_todo
     fac = dr.nuevo("FACTURA", viejos, True)
     oxxo = dr.nuevo("OXXO-GAS", viejos, True)
     f1 = dr.nuevo("FACTURA 293.pdf", fac)
+    seg = dr.nuevo("2.-SEGURO", doc, True)                       # una de las 6 que ya existía, con su relleno
+    rel_seg = dr.nuevo("CARPETA SIN INFORMACIÓN.jpg", seg)
     o1 = dr.nuevo("Carta Recepción Tarjeta.pdf", oxxo)
     rel = dr.nuevo("CARPETA SIN INFORMACIÓN.jpg", viejos)
     ten = dr.nuevo("CTA0293.ARCHIVO TENENCIA.pdf", vf)
@@ -113,6 +115,7 @@ def test_ordenar_mueve_dentro_del_nuco_copia_appsheet_y_deshacer_lo_regresa_todo
     assert dr.ruta(ajeno) == "NUCOS VEHICULOS/999/de otro NUCO.pdf"                                   # nunca sale de su NUCO
     # nada se borra: la carpeta vieja (solo quedó el relleno) se aparta entera, con el relleno adentro
     assert dr.ruta(rel) == "NUCOS VEHICULOS/293/1.-DOCUMENTACIÓN/ANTERIORES/ESTRUCTURA ANTERIOR/DOCUEMENTOS/CARPETA SIN INFORMACIÓN.jpg"
+    assert dr.ruta(rel_seg).endswith("1.-DOCUMENTACIÓN/ANTERIORES/ESTRUCTURA ANTERIOR/2.-SEGURO/CARPETA SIN INFORMACIÓN.jpg")
     en_doc = {a["name"] for a in dr.archivos.values() if a["parents"] == [doc] and not a["trashed"]}
     assert en_doc == {c for _, c, _ in reglas.SEIS} | {"ANTERIORES"}, en_doc
     seis = {dr.archivos[i]["name"] for i in dr.archivos if dr.archivos[i]["parents"] == [doc] and dr.archivos[i]["mimeType"] == F}

@@ -519,7 +519,7 @@ def ordenar(nucos_pedidos=None, todos=False, hilos=6):
         return local.d
 
     totales = {"movidos": 0, "renombrados": 0, "copiados": 0, "ya estaban": 0, "saltados": 0, "carpetas": 0,
-               "carpetas viejas apartadas": 0, "carpetas viejas que se quedan": 0}
+               "carpetas viejas apartadas": 0, "carpetas viejas que se quedan": 0, "rellenos apartados": 0}
     candado = threading.Lock()
 
     def sumar(k):
@@ -635,6 +635,17 @@ def ordenar(nucos_pedidos=None, todos=False, hilos=6):
 
         def sin_nada_real(i):
             return all(sin_nada_real(h["id"]) if h["mimeType"] == reglas.CARPETA else reglas.es_relleno(h["name"]) for h in lista(i))
+
+        # El relleno que ya estaba dentro de una de las 6 (una "2.-SEGURO" de antes, reusada) también se aparta: no tiene
+        # caso junto a la póliza. La imagen "SEGURO-NNNN NO APLICA" no es relleno (se llama distinto) y se queda.
+        for _, nombre_carpeta, _ in reglas.SEIS:
+            seis = carpeta_en(doc, nombre_carpeta)
+            for h in lista(seis):
+                if h["mimeType"] != reglas.CARPETA and reglas.es_relleno(h["name"]):
+                    apartado = carpeta_en(carpeta_en(carpeta_en(doc, reglas.ANTERIORES), ESTRUCTURA_ANTERIOR), nombre_carpeta)
+                    llamar(d.files().update(fileId=h["id"], addParents=apartado, removeParents=seis, fields="id", supportsAllDrives=True))
+                    bit.anotar(accion="mover", nuco=p["nuco"], id=h["id"], de_padre=seis, de_nombre=h["name"], a_padre=apartado, a_nombre=h["name"])
+                    sumar("rellenos apartados")
 
         nuevas = {_nfc(c) for _, c, _ in reglas.SEIS} | {_nfc(reglas.ANTERIORES)}
         viejas = [(doc, h) for h in lista(doc) if h["mimeType"] == reglas.CARPETA and _nfc(h["name"]) not in nuevas]
