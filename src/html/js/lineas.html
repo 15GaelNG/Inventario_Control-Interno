@@ -713,6 +713,8 @@
         const k = Number(String((valores || {})[cond.cuantos] || '').trim()) || 0;
         return cond.alMenos !== undefined ? k >= cond.alMenos : k < cond.menos;
       }
+      // { cambio: COLUMNA }: ya no es lo que tenía el registro al abrir el formulario (ctx.inicial)
+      if (cond.cambio) return String((valores || {})[cond.cambio] || '').trim() !== String(((ctx && ctx.inicial) || {})[cond.cambio] || '').trim();
       return true;
     }
     const condAtributo = (c) => esc(typeof c === 'object' && c !== null ? JSON.stringify(c) : (c || 'SIEMPRE'));
@@ -1874,7 +1876,11 @@
         detalle: 'linea', textoVacio: 'Sin líneas',
         etiqueta: (r) => 'Línea ' + (r.numero || '—'),
         columnas: [
-          { campo: 'numero', titulo: 'Número', tipo: 'texto', fijada: true, render: (v) => '<span class="ln-mono ln-fuerte">' + guion(v) + '</span>' },
+          // Con los números que tuvo por un cambio de número (8-oct): la búsqueda encuentra la línea por uno anterior
+          { campo: 'numero', titulo: 'Número', tipo: 'texto', fijada: true,
+            valor: (r) => [r.numero, r.numerosAnteriores ? 'antes ' + r.numerosAnteriores : ''].filter(Boolean).join(' · '),
+            render: (v, r) => '<span class="ln-mono ln-fuerte">' + guion(r && r.numero) + '</span>' +
+              (r && r.numerosAnteriores ? ' <span class="ln-tenue ln-mono">antes ' + esc(r.numerosAnteriores) + '</span>' : '') },
           { campo: 'tipoHoja', titulo: 'Tipo', tipo: 'lista', render: (v) => formatoAppSheet('LINEAS', 'TIPO', v) || guion(v) },
           { campo: 'compania', titulo: 'Compañía', tipo: 'lista' },
           { campo: 'estatus', titulo: 'Estatus', tipo: 'lista', render: (v) => chip(v) },
@@ -2135,7 +2141,8 @@
         const UNO = 1; // sin acciones masivas por ahora
         const detalles = { icono: 'info', texto: 'Detalles', titulo: 'Panel con lo fundamental; sigue a la fila que selecciones', maximo: 1, grupo: 'ver',
           activo: () => detallesAbiertos, alHacer: (f) => (detallesAbiertos && panelAbierto ? panelAbierto.cerrar() : mostrarDetalles(tipo, f[0])) };
-        const editar = { icono: 'pencil', texto: 'Editar información', maximo: 1, enBarra: false, grupo: 'abrir', visible: operar, alHacer: (f) => abrirEditor(f[0].id) };
+        const editar = { icono: 'pencil', texto: tipo === 'linea' ? 'Editar línea' : 'Editar información', maximo: 1, enBarra: false, grupo: 'abrir', visible: operar,
+          alHacer: (f) => abrirEditor(f[0].id, tipo === 'linea' ? 'LINEA' : undefined) };
         const historial = { icono: 'history', texto: 'Historial', maximo: 1, enBarra: false, grupo: 'linea', alHacer: (f) => abrirEnPestana(tipo, f[0].id, 'historial') };
         if (modulo === 'equipos') {
           return [detalles,
@@ -2539,6 +2546,18 @@
         return '<div class="card ln-card ' + (clase || '') + '"><h3>' + titulo + '</h3>' + cuerpo + '</div>';
       }
 
+      /**
+       * «Números de esta línea» (usuario, 8-oct): el actual y los que tuvo por un cambio de número (Editar línea), del más
+       * nuevo al más viejo, con la fecha del cambio y su comentario.
+       */
+      function tarjetaNumeros(l, cambios) {
+        const ultimo = cambios[cambios.length - 1];
+        const filas = [['Actual', '<span class="ln-mono">' + esc(l.numero || '—') + '</span>' + (ultimo ? ' <span class="ln-tenue">desde ' + esc(fecha(ultimo.fecha)) + '</span>' : ''), true]]
+          .concat(cambios.slice().reverse().map((c) => [fecha(c.fecha) || '—', '<span class="ln-mono">' + esc(c.antes || '—') + '</span>' +
+            ' <span class="ln-tenue">→ ' + esc(c.despues || '—') + (c.comentario ? ' · ' + esc(c.comentario) : '') + '</span>', true]));
+        return tarjeta(icono('phone') + ' Números de esta línea', campos(filas));
+      }
+
       function tarjetaResponsable(r, titulo) {
         r = r || {};
         const adicionales = (r.usuariosAdicionales || []).length
@@ -2698,6 +2717,7 @@
                 ['PIN WhatsApp', l.pinWhatsapp],
               ]) : '<p class="empty-state">Línea suelta: no está instalada en un equipo de la empresa.</p>') +
               tarjetaResponsable(e ? e.responsable : l.responsable, e ? 'Responsable (del equipo)' : 'Responsable') +
+              tarjetaNumeros(l, r.numeros || []) +
             '</div>', tarjetaDetallesCopiar(r.detalles), !e);
           if (!e) cargarEvidencias(id);
           cargarHistorial(id, e ? 'NUCO ' + (e.nuco || id) : 'Linea ' + (l.numero || id), 'linea');
@@ -2732,8 +2752,12 @@
         const ix = memoria.indice || { equipos: [], lineas: [] };
         const r = (tipo === 'equipo' ? ix.equipos : ix.lineas).filter((x) => x.id === id)[0] || { id: id };
         const operar = !!(memoria.permisos && memoria.permisos.puedeOperar);
-        const comunes = [
+        // Editar línea y Editar información (del equipo) por separado (usuario, 8-oct)
+        const comunes = tipo === 'equipo' ? [
           { icono: 'pencil', texto: 'Editar información', alHacer: () => abrirEditor(id) },
+          r.lineaId ? { icono: 'card-sim', texto: 'Editar línea', alHacer: () => abrirEditor(r.lineaId, 'LINEA') } : null,
+        ] : [
+          { icono: 'pencil', texto: 'Editar línea', alHacer: () => abrirEditor(id, 'LINEA') },
         ];
         // La carpeta de Drive va sola, separada de inspección y responsiva (usuario, 30-sep)
         const carpeta = fichaActual && fichaActual.id === id ? fichaActual.carpetaDriveId : null;
@@ -3492,7 +3516,7 @@
         mostrarModalCaptura();
         $('#ln-captura-icono', raiz).innerHTML = icono(id ? 'pencil' : (parte === 'LINEA' ? 'card-sim' : 'smartphone'));
         $('#ln-captura-tipo', raiz).textContent = 'LINEAS TELEFONICAS';
-        $('#ln-captura-titulo', raiz).textContent = id ? 'Editar información' : agregar;
+        $('#ln-captura-titulo', raiz).textContent = id ? (parte === 'LINEA' ? 'Editar línea' : 'Editar información') : agregar;
         $('#ln-captura-subtitulo', raiz).textContent = '';
         $('#ln-captura-cuerpo', raiz).innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando…</p>';
         const sesionEditor = captura = { tipo: 'REGISTRO', idObjetivo: id, firmas: {} };
@@ -3502,7 +3526,8 @@
           const elementos = conSelectorBloqueo(form.elementos);
           const valorDe = (c) => ((elementos.filter((e) => e.columna === c)[0] || {}).valor) || '';
           const ctx = { nuevo: form.nuevo, id: id, idDG: form.idDG || null, tipoInicial: form.tipo || '', parte: form.parte, historico: !!form.historico,
-            nuco: form.nuevo ? '' : valorDe('NUCO') };
+            nuco: form.nuevo ? '' : valorDe('NUCO'), inicial: {} };
+          elementos.forEach((e) => { if (e.tipo === 'campo') ctx.inicial[e.columna] = String(e.valor === undefined || e.valor === null ? '' : e.valor); });
           captura.contexto = { formulario: elementos };
           $('#ln-captura-subtitulo', raiz).textContent = !id ? '' : (form.parte === 'LINEA'
             ? [valorDe('NUMERO TELEFONO'), valorDe('RESPONSABLE')] : ['NUCO ' + (valorDe('NUCO') || '—'), valorDe('EQUIPO'), valorDe('RESPONSABLE')]).filter(Boolean).join(' · ');
@@ -3561,8 +3586,9 @@
             const avisos = [];
             if (cambiaA('ESTATUS EQUIPO', ESTATUS_EQUIPO_RESGUARDO)) avisos.push('Equipo: ' + (inicial['ESTATUS EQUIPO'] || '—') + ' → ' + valores['ESTATUS EQUIPO']);
             if (cambiaA('ESTATUS LINEA', ESTATUS_LINEA_PANEL)) avisos.push('Línea: ' + (inicial['ESTATUS LINEA'] || '—') + ' → ' + valores['ESTATUS LINEA']);
-            // El servidor deja DISPONIBLE la línea en uso del equipo que se guarda (LineasRegistros.editar)
-            else if (avisos.length && inicial['ESTATUS LINEA'] === 'USO' && valores['ESTATUS LINEA'] === 'USO') avisos.push('Línea: USO → DISPONIBLE');
+            // El servidor deja DISPONIBLE la línea en uso del equipo que se guarda (LineasRegistros.editar). Editar información
+            // del equipo ya no trae la línea: su estatus llega en form.estatusLinea
+            else if (avisos.length && (inicial['ESTATUS LINEA'] || form.estatusLinea) === 'USO' && (valores['ESTATUS LINEA'] || 'USO') === 'USO') avisos.push('Línea: USO → DISPONIBLE');
             if (patron) {
               const p = patronParaGuardar();
               if (p === undefined) delete valores[patron.columna]; else valores[patron.columna] = p;

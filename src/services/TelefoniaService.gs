@@ -105,6 +105,8 @@ const TelefoniaService = (function () {
       linea: ocultarSecretos_(r.linea, CAMPOS_SECRETOS_LINEA, sesion),
       equipo: ocultarSecretos_(r.equipo, CAMPOS_SECRETOS_EQUIPO, sesion),
       detalles: r.detalles,
+      // «Números de esta línea»: sus cambios de número (Editar línea, 8-oct)
+      numeros: LineasRepo.numerosDeLinea(r.linea),
     });
   }
 

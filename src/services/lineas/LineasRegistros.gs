@@ -23,6 +23,11 @@ const LineasRegistros = (function () {
   // Agregar línea (usuario, 8-oct): campos que no son columnas (empiezan con «_»: no se escriben en la hoja)
   const VINCULAR = '_VINCULAR';
   const NUCO_VINCULAR = '_NUCO';
+  // Editar línea (usuario, 8-oct; pendiente 2.23): por qué cambia el número y «Quitar responsable» de la línea sola
+  const CAMBIO_NUMERO = '_CAMBIO_NUMERO';
+  const MOTIVO_CAMBIO_NUMERO = 'CAMBIO DE NUMERO';
+  const MOTIVOS_NUMERO = [MOTIVO_CAMBIO_NUMERO, 'CORRECCION DE CAPTURA'];
+  const QUITAR_RESPONSABLE = '_QUITAR_RESPONSABLE';
   /** Estatus de la línea que en Editar se aceptan solo con el aviso confirmado (no entran a la bandeja de Pau). */
   const ESTATUS_LINEA_PANEL = ['EN PROCESO DE CANCELACION', 'CANCELADA'];
   /** Equipos a los que se les puede vincular una línea: en uso o en resguardo, y sin línea. */
@@ -57,6 +62,8 @@ const LineasRegistros = (function () {
     if (cond.campo) return texto_(valores[cond.campo]).toUpperCase() === String(cond.igual).toUpperCase();
     if (cond.lleno) return !!texto_(valores[cond.lleno]);
     if (cond.cuantos) return cuantosCumple_(cond, valores[cond.cuantos]);
+    // { cambio: COLUMNA }: el valor ya no es el que tenía el registro (ctx.base)
+    if (cond.cambio) return texto_(valores[cond.cambio]) !== texto_(((ctx && ctx.base) || {})[cond.cambio]);
     return true;
   }
   /** { cuantos: COLUMNA, alMenos: n } o { cuantos: COLUMNA, menos: n }: compara el número que guarda COLUMNA. */
@@ -150,6 +157,13 @@ const LineasRegistros = (function () {
     const conEquipo = parte === 'EQUIPO';
     const historico = TIPOS_HISTORICOS.indexOf(tipoActual) >= 0;
     const tieneLinea = !nuevo && !!(LineasUtil.txt(v('NUMERO TELEFONO')) || LineasUtil.txt(v('NUMERO SIM')));
+    // Editar línea y Editar equipo por separado (usuario, 8-oct): la línea de un NUCO se edita sola (su responsable es el
+    // del equipo: se ve, no se cambia) y el equipo con línea se edita sin la línea ni el adendum
+    const lineaEnEquipo = !!(ctx && ctx.lineaEnEquipo);
+    const equipoConLinea = conEquipo && tieneLinea;
+    const lineaSola = !nuevo && !conEquipo && !lineaEnEquipo;
+    // Sin la línea en el formulario, el TIPO no se puede calcular en pantalla: se muestra el que tiene
+    const tipoFijo = historico || lineaEnEquipo || equipoConLinea;
     const fijo = (columna, etiqueta, valor, extra) => campo_(columna, etiqueta, 'calculado', Object.assign({ valor: valor, soloLectura: true, fijo: true }, extra || {}));
     const ed = (columna, etiqueta, control, extra) => campo_(columna, etiqueta, control, Object.assign({ valor: v(columna) }, extra || {}));
     const titulo = (texto, icono) => ({ tipo: 'titulo', texto: texto, icono: icono });
@@ -158,7 +172,8 @@ const LineasRegistros = (function () {
       fijo('FOLIO', 'Folio', v('FOLIO'), { formula: 'FOLIO' }),
       conEquipo && nuevo ? ed('NUCO', 'NUCO', 'numero', { valor: '', requerido: 'SIEMPRE', valida: 'NUCO' })
         : (conEquipo || LineasUtil.nucoVisible(v('NUCO')) ? fijo('NUCO', 'NUCO', LineasUtil.nucoVisible(v('NUCO')) || '') : null),
-      fijo('TIPO', 'Tipo', historico ? tipoActual : (nuevo ? '' : tipoActual), historico ? {} : { formula: 'TIPO_' + parte }),
+      fijo('TIPO', 'Tipo', tipoFijo ? tipoActual : (nuevo ? '' : tipoActual), tipoFijo ? {} : { formula: 'TIPO_' + parte }),
+      lineaEnEquipo ? fijo('_RESPONSABLE_EQUIPO', 'Responsable (del equipo)', v('RESPONSABLE') || '—') : null,
     ].filter(Boolean);
     const equipo = !conEquipo ? [] : [
       titulo('EQUIPO', 'smartphone'),
@@ -200,9 +215,19 @@ const LineasRegistros = (function () {
           sugerencias: 'EQUIPOS_SIN_LINEA', mostrar: conNuco, requerido: conNuco, mensaje: 'ELIGE UN NUCO SIN LÍNEA' }),
         campo_('_RESPONSABLE_EQUIPO', 'Responsable', 'calculado', { valor: '', soloLectura: true, formula: 'RESPONSABLE_EQUIPO', mostrar: conNuco }));
     }
+    // Línea sola con responsable (usuario, 8-oct): «Quitar responsable» la deja DISPONIBLE (ver editar)
+    if (lineaSola && texto_(v('RESPONSABLE'))) {
+      const conPersona = { campo: QUITAR_RESPONSABLE, igual: 'FALSE' };
+      responsable.forEach((e) => {
+        if (e.tipo !== 'campo') return;
+        e.mostrar = e.mostrar === 'SIEMPRE' ? conPersona : { y: [conPersona, e.mostrar] };
+      });
+      responsable.splice(1, 0, campo_(QUITAR_RESPONSABLE, 'Quitar responsable', 'siNo', { valor: 'FALSE' }));
+    }
     // Línea: obligatoria en una línea sola; opcional en un equipo. A un equipo sin línea se le puede poner una: un número
     // nuevo o una línea sola que ya existe (se elige de la lista y se llenan sus datos)
-    const lineaReq = conEquipo ? 'NUNCA' : 'SIEMPRE';
+    // La línea de un equipo, como en el formulario del equipo: sin obligatorios (hay registros viejos sin compañía)
+    const lineaReq = conEquipo || lineaEnEquipo ? 'NUNCA' : 'SIEMPRE';
     const enlazar = conEquipo && !nuevo && !tieneLinea;
     const tiposLinea = TIPOS_DE_LINEA.concat(TIPOS_DE_LINEA.indexOf(texto_(v('TIPO DE LINEA')).toUpperCase()) < 0 && texto_(v('TIPO DE LINEA')) ? [texto_(v('TIPO DE LINEA')).toUpperCase()] : []);
     const linea = [
@@ -212,6 +237,11 @@ const LineasRegistros = (function () {
         ? ed('NUMERO TELEFONO', 'Número', 'listaAbierta', { valida: 'TELEFONO', literal: true, sugerencias: 'NUMEROS',
           autollenar: { 'NUMERO SIM': 'sim', 'COMPAÑIA': 'compania', 'RAZON SOCIAL': 'razonSocial' } })
         : ed('NUMERO TELEFONO', 'Número', 'texto', { valida: 'TELEFONO', literal: true, requerido: lineaReq }),
+    ], !nuevo && !conEquipo && texto_(v('NUMERO TELEFONO')) ? [
+      // Al cambiar el número se dice si la línea ahora tiene otro (va a «Números de esta línea») o si estaba mal capturado
+      campo_(CAMBIO_NUMERO, 'Motivo del cambio de número', 'lista', { valor: '', opciones: MOTIVOS_NUMERO,
+        mostrar: { cambio: 'NUMERO TELEFONO' }, requerido: { cambio: 'NUMERO TELEFONO' } }),
+    ] : [], [
       ed('NUMERO SIM', 'SIM', 'texto', { literal: true }),
       ed('TIPO DE LINEA', 'Tipo de línea', 'lista', { valor: v('TIPO DE LINEA') || (nuevo ? 'PLAN' : ''), opciones: tiposLinea }),
       ed('COMPAÑIA', 'Compañía', 'listaAbierta', { opciones: ['TELCEL', 'AT&T', 'BAIT'], valida: 'MAYUS', requerido: lineaReq }),
@@ -222,7 +252,10 @@ const LineasRegistros = (function () {
       // elige en el alta: se hace en Editar o con «Mandar a cancelación». El servidor hace la misma cuenta (estatusAltaLinea_)
       campo_('ESTATUS LINEA', 'Estatus de la línea', 'calculado', { valor: '', soloLectura: true, formula: 'ESTATUS_LINEA_ALTA' }),
     ] : [
-      ed('ESTATUS LINEA', 'Estatus de la línea', 'lista', { valor: enBlanco('ESTATUS LINEA'), opciones: LineasRepo.CATALOGO.estatusLinea,
+      // La línea de un equipo sigue al equipo (USO o DISPONIBLE); aquí solo se manda a cancelación o se cancela
+      ed('ESTATUS LINEA', 'Estatus de la línea', 'lista', { valor: enBlanco('ESTATUS LINEA'),
+        opciones: lineaEnEquipo ? [enBlanco('ESTATUS LINEA')].concat(ESTATUS_LINEA_PANEL).filter((x, i, a) => x && a.indexOf(x) === i)
+          : LineasRepo.CATALOGO.estatusLinea,
         requerido: lineaReq, valida: 'LISTA', validaSiCambia: true }),
     ]);
     // INICIO y FIN del adendum: solo al dar de alta la línea (pedido del área, 29-sep; confirmado por el usuario el 4-oct)
@@ -241,7 +274,9 @@ const LineasRegistros = (function () {
       titulo(conEquipo ? 'ACCESORIOS Y ACCESOS' : 'ACCESOS', 'key-round'),
     ].concat(conEquipo ? [
       ed('ACCESORIOS', 'Accesorios', 'multi', { opciones: ACCESORIOS, valida: 'ACCESORIOS' }),
-      ed('PIN WHATSAPP', 'PIN de WhatsApp', 'texto', { valida: 'PIN_WA', literal: true, secreto: true }),
+      // Sin línea no hay PIN de WhatsApp: en el alta y en un equipo sin línea aparece al escribir el número
+      ed('PIN WHATSAPP', 'PIN de WhatsApp', 'texto', { valida: 'PIN_WA', literal: true, secreto: true,
+        mostrar: equipoConLinea ? 'SIEMPRE' : { lleno: 'NUMERO TELEFONO' } }),
     ] : [], conEquipo ? [
       ed('PIN EQUIPO', 'PIN EQUIPO', 'texto', { valida: 'PIN_EQ', literal: true, secreto: true }),
       ed('PATRON', 'Patrón', 'patron', { secreto: true }),
@@ -249,8 +284,9 @@ const LineasRegistros = (function () {
       ed('CONTRASEÑA MODEM', 'Contraseña del módem', 'texto', { literal: true, secreto: true }),
     ] : []);
     const conAccesos = accesos.length > 1 ? accesos : [];
-    const elementos = conEquipo ? equipo.concat(responsable, linea, adendum, conAccesos) : linea.concat(responsable, adendum, conAccesos);
-    return elementos;
+    if (lineaEnEquipo) return linea.concat(adendum);
+    if (equipoConLinea) return equipo.concat(responsable, conAccesos); // su línea, con «Editar línea»
+    return conEquipo ? equipo.concat(responsable, linea, adendum, conAccesos) : linea.concat(responsable, adendum, conAccesos);
   }
 
   /**
@@ -321,17 +357,29 @@ const LineasRegistros = (function () {
     return elementos.map((e) => (e.secreto && e.valor ? Object.assign({}, e, { valor: '', valorOculto: true }) : e));
   }
 
+  /**
+   * Contexto de una edición: `parte` 'LINEA' edita solo la línea del registro (Editar línea, 8-oct); si no, lo que es el
+   * registro (equipo o línea sola). lineaEnEquipo: la línea está en un NUCO.
+   */
+  function contextoEdicion_(base, parte) {
+    const conLinea = !!(LineasUtil.txt(base['NUMERO TELEFONO']) || LineasUtil.txt(base['NUMERO SIM']));
+    const deEquipo = !!LineasRepo.TIPOS_CON_EQUIPO[texto_(base['TIPO']).toUpperCase()];
+    const soloLinea = String(parte || '').toUpperCase() === 'LINEA' && conLinea;
+    return { nuevo: false, parte: soloLinea ? 'LINEA' : null, lineaEnEquipo: soloLinea && deEquipo, base: base };
+  }
+
   /** Formulario para el cliente: alta (id vacío) o edición. */
   function formulario(id, usuario, puedeVerSecretos, parte) {
     const fila = id ? LineasRepo.leerRegistroObligatorio(id, 'el registro') : null;
     const base = fila ? baseDeFila_(fila) : baseNueva_();
-    const ctx = { nuevo: !fila, parte: fila ? null : parte };
+    const ctx = fila ? contextoEdicion_(base, parte) : { nuevo: true, parte: parte };
     // Agregar línea: los NUCO a los que se le puede vincular (se leen solo aquí; al guardar se revisan otra vez)
     if (!fila && parteDe_(ctx, '') === 'LINEA') ctx.equiposSinLinea = equiposSinLinea_().map((x) => x.nuco);
     // idDG: el ID con el que ESTATUS GENERAL reconoce al personal de DG (DG001…); tras migrar quedó en ID APPSHEET
     const idDG = fila ? LineasDatos.idsDeFila(fila).filter((k) => /^DG/i.test(k))[0] || null : null;
     const tipo = texto_(base['TIPO']).toUpperCase();
-    return { nuevo: ctx.nuevo, idDG: idDG, parte: parteDe_(ctx, tipo), tipo: tipo, historico: TIPOS_HISTORICOS.indexOf(tipo) >= 0,
+    return { nuevo: ctx.nuevo, idDG: idDG, parte: parteDe_(ctx, tipo), tipo: tipo, historico: TIPOS_HISTORICOS.indexOf(tipo) >= 0 || !!ctx.lineaEnEquipo ||
+      (!ctx.nuevo && !ctx.parte && !!LineasRepo.TIPOS_CON_EQUIPO[tipo] && !!(LineasUtil.txt(base['NUMERO TELEFONO']) || LineasUtil.txt(base['NUMERO SIM']))), estatusLinea: texto_(base['ESTATUS LINEA']).toUpperCase(),
       elementos: ocultarSecretos_(elementos_(base, LineasRepo.catalogos(), usuario, ctx), puedeVerSecretos) };
   }
 
@@ -541,10 +589,12 @@ const LineasRegistros = (function () {
     const resultado = LineasDatos.conCandado(() => {
       const fila = LineasRepo.leerRegistroObligatorio(id, 'el registro');
       const base = baseDeFila_(fila);
-      const parte = parteDe_(null, base['TIPO']);
+      // Editar línea (datos.parte = 'LINEA') o lo que es el registro
+      const edicion = contextoEdicion_(base, datos && datos.parte);
+      const parte = parteDe_(edicion, base['TIPO']);
       // A un equipo sin línea se le puede poner una línea sola que ya existe: su número no cuenta como repetido
       const sinLinea = parte === 'EQUIPO' && !LineasUtil.txt(base['NUMERO TELEFONO']) && !LineasUtil.txt(base['NUMERO SIM']);
-      const ctx = Object.assign(contextoValidacion_(id, false, sinLinea), { parte: parte });
+      const ctx = Object.assign(contextoValidacion_(id, false, sinLinea), edicion, { parte: parte });
       const elementos = elementos_(base, LineasRepo.catalogos(), usuario, ctx)
         .map((e) => (e.secreto && !puedeVerSecretos ? Object.assign({}, e, { valorOculto: true }) : e));
       const r = resolver_(elementos, base, enviados, ctx);
@@ -579,11 +629,27 @@ const LineasRegistros = (function () {
       if (sinPanel && aGuardado && !('ESTATUS LINEA' in cambios) && texto_(base['ESTATUS LINEA']).toUpperCase() === 'USO') {
         cambios['ESTATUS LINEA'] = 'DISPONIBLE';
       }
+      // Línea sola (usuario, 8-oct): «Quitar responsable» la deja DISPONIBLE; con un responsable nuevo pasa a USO; en USO
+      // lleva responsable
+      const lineaSola = parte === 'LINEA' && !edicion.lineaEnEquipo;
+      const quitar = lineaSola && texto_(r.valores[QUITAR_RESPONSABLE]).toUpperCase() === 'TRUE';
+      if (lineaSola && ESTATUS_LINEA_PANEL.indexOf(estatusLinea) < 0) {
+        if (quitar) cambios['ESTATUS LINEA'] = 'DISPONIBLE';
+        else if (!texto_(base['RESPONSABLE']) && texto_(valores['RESPONSABLE']) && estatusLinea === 'DISPONIBLE') cambios['ESTATUS LINEA'] = 'USO';
+        const final = texto_('ESTATUS LINEA' in cambios ? cambios['ESTATUS LINEA'] : base['ESTATUS LINEA']).toUpperCase();
+        if (final === 'USO' && !quitar && !texto_(valores['RESPONSABLE'])) {
+          throw new Error('Una línea en USO lleva responsable: escríbelo o pon la línea DISPONIBLE.');
+        }
+      }
+      // Cambio de número (usuario, 8-oct): CAMBIO DE NUMERO es otro número de la misma línea («Números de esta línea»);
+      // CORRECCION DE CAPTURA, un dato mal escrito (solo Edición en el historial)
+      const cambioDeNumero = 'NUMERO TELEFONO' in cambios && !!texto_(base['NUMERO TELEFONO']) &&
+        texto_(r.valores[CAMBIO_NUMERO]).toUpperCase() === MOTIVO_CAMBIO_NUMERO;
       const antes = LineasRepo.convertirRegistro(fila);
       // corregir: cambiar a la persona aquí es corregir el dato en la misma asignación (usuario, 4-oct); pasar el equipo a
       // otra persona es Reasignar, con su responsiva
       const guardado = LineasRepo.guardarCambiosRegistro(fila, cambios, usuario, new Date(), { corregir: true });
-      LineasRepo.registrarMovimiento('EDICION', { motivo: motivo, ticket: texto_(datos && datos.ticket) }, usuario, new Date(), {
+      LineasRepo.registrarMovimiento(cambioDeNumero ? LineasRepo.ACCION_CAMBIO_NUMERO : 'EDICION', { motivo: motivo, ticket: texto_(datos && datos.ticket) }, usuario, new Date(), {
         refs: [id].concat(guardado.refs || []), nuco: valores.NUCO, numero: valores['NUMERO TELEFONO'], antes: antes, despues: cambios,
         detalle: { idsCambios: guardado.idsCambios, idsReasignacion: guardado.idReasignacion ? [guardado.idReasignacion] : [], cambios: guardado.campos,
           sinPanel: sinPanel || undefined },
@@ -755,6 +821,6 @@ const LineasRegistros = (function () {
   return {
     formulario, crear, editar, formularioMasivo, accionMasiva, camposAdicionales, cuantosAdicionales, CUENTA_ADICIONALES,
     _elementos: elementos_, _resolver: resolver_, _cumple: cumple_, _elementosMasivos: elementosMasivos_, _tipoAutomatico: tipoAutomatico_,
-    _estatusAltaLinea: estatusAltaLinea_, _equiposSinLinea: equiposSinLinea_, ESTATUS_LINEA_PANEL,
+    _estatusAltaLinea: estatusAltaLinea_, _equiposSinLinea: equiposSinLinea_, _contextoEdicion: contextoEdicion_, ESTATUS_LINEA_PANEL,
   };
 })();

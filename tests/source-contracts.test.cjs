@@ -248,7 +248,10 @@ test('el alta y edición de LINEAS TELEFONICAS sigue LINEAS TELEFONICAS_Form del
   // Un equipo sin línea puede recibir una (número con sugerencias de las líneas); con línea, el número es texto
   assert.equal(campo(edicion, 'NUMERO TELEFONO').control, 'listaAbierta');
   assert.equal(campo(edicion, 'NUMERO TELEFONO').sugerencias, 'NUMEROS');
-  assert.equal(campo(Reg._elementos({ TIPO: 'EQUIPO + SIM', 'NUMERO TELEFONO': '4421090805' }, {}, { correo: 'x@y.z' }, { nuevo: false }), 'NUMERO TELEFONO').control, 'texto');
+  // Un equipo con línea se edita sin la línea (Editar línea aparte, 8-oct); en Editar línea el número es texto
+  const conLinea = { TIPO: 'EQUIPO + SIM', 'NUMERO TELEFONO': '4421090805' };
+  assert.ok(!campo(Reg._elementos(conLinea, {}, { correo: 'x@y.z' }, { nuevo: false }), 'NUMERO TELEFONO'));
+  assert.equal(campo(Reg._elementos(conLinea, {}, { correo: 'x@y.z' }, Reg._contextoEdicion(conLinea, 'LINEA')), 'NUMERO TELEFONO').control, 'texto');
   // TIPO automático
   const T = Reg._tipoAutomatico;
   assert.equal(T('EQUIPO', {}, ''), 'EQUIPO');
@@ -922,7 +925,7 @@ test('NUCO siempre a 4 dígitos (tabla, ficha, detalles, bitácoras, historial y
   assert.match(repo, /if \(c === 'NUCO'\) return LineasUtil\.nucoVisible\(v\);/);
   assert.match(repo, /nuco: LineasUtil\.nucoVisible\(crudo\('NUCO'\)\) \|\| '',/);
   assert.match(repo, /nuco: txt\(col\(f, 'NUCO'\)\) === null \? null : LineasUtil\.nucoVisible\(col\(f, 'NUCO'\)\),/);
-  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v5';/);
+  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v6';/);
   assert.match(read('src/services/lineas/LineasExportar.gs'), /return LineasUtil\.nucoVisible\(valor\);/);
 });
 

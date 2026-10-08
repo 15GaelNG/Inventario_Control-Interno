@@ -89,9 +89,11 @@ const LineasRepo = (function () {
     'RESPONSIVA', 'TIPO', 'COMPAÑIA', 'COSTO PLAN', 'NUCO', 'COMENTARIOS'];
 
   const COLS_INDICE_EQUIPOS = ['id', 'nuco', 'tipo', 'modelo', 'imei', 'estatus', 'responsable', 'departamento', 'sede', 'lineaId', 'numero', 'compania', 'estatusLinea', 'tipoHoja'];
-  const COLS_INDICE_LINEAS = ['id', 'numero', 'sim', 'compania', 'estatus', 'equipoId', 'nucoEquipo', 'responsable', 'departamento', 'suelta', 'tipoHoja'];
+  // numerosAnteriores: los que tuvo la línea por un cambio de número (8-oct); la búsqueda de la tabla los encuentra
+  const COLS_INDICE_LINEAS = ['id', 'numero', 'sim', 'compania', 'estatus', 'equipoId', 'nucoEquipo', 'responsable', 'departamento', 'suelta', 'tipoHoja',
+    'numerosAnteriores'];
   const SEG_CACHE_INDICE = 30 * 60;
-  const CLAVE_INDICE = 'indice_telefonia_v5'; // v5: oficinas con AGS / MTY / SLP completas (3-oct)
+  const CLAVE_INDICE = 'indice_telefonia_v6'; // v6: numerosAnteriores en las líneas (8-oct); v5: oficinas AGS / MTY / SLP (3-oct)
   /**
    * Vista de tabla LINEAS TELEFONICAS del AppSheet: sus columnas en su orden (ViewDefinition.ColumnOrder; ID va
    * oculta y "No EMPLEADO" / "NO EMPLEADO" es la misma columna). FOLIO y ESTATUS GENERAL son fórmulas del AppSheet.
@@ -182,6 +184,8 @@ const LineasRepo = (function () {
       razonSocial: txt(col(f, 'RAZON SOCIAL')), pinWhatsapp: texto('PIN WHATSAPP'), estatus: estatusLinea,
       usoTemporal: estatusLinea === 'USO TEMPORAL' ? { desde: fecha(col(f, 'FECHA CAMBIO TEMPORAL')), correo: txt(col(f, 'EMAIL USUARIO')) } : null,
       equipoId: tieneEquipo ? id : null,
+      // El ID de la hoja LINEAS (el registro de una línea en un equipo es el del equipo): con él se leen sus cambios de número
+      idLinea: txt(col(f, 'ID LINEA')) || id,
       responsable: tieneEquipo ? null : datosResponsable, // solo si la línea está suelta
       nucoLegado: tieneEquipo ? null : nuco, legado: legado,
     } : null;
@@ -249,11 +253,49 @@ const LineasRepo = (function () {
       (equipo.legado || {}).tipo || null]; // tipoHoja: TIPO tal cual en la hoja (reglas de formato del AppSheet)
   }
 
-  function filaIndiceLinea_(linea, equipo) {
+  function filaIndiceLinea_(linea, equipo, cambiosNumero) {
     const r = (equipo ? equipo.responsable : linea.responsable) || {};
+    const anteriores = numerosDeLinea(linea, cambiosNumero).map((x) => x.antes).filter((n, i, a) => n && n !== linea.numero && a.indexOf(n) === i);
     return [linea._id, linea.numero || null, linea.sim || null, linea.compania || null, linea.estatus || null, linea.equipoId || null,
       equipo ? equipo.nuco || null : linea.nucoLegado || null, r.nombre || null, r.departamento || null, !linea.equipoId,
-      ((equipo || linea).legado || {}).tipo || null];
+      ((equipo || linea).legado || {}).tipo || null, anteriores.length ? anteriores.join(' · ') : null];
+  }
+
+  // ---------------- Números de una línea (cambio de número, 8-oct) ----------------
+
+  /** ACCION de MOVIMIENTOS de un cambio de número (Editar línea: la línea ahora tiene otro número). */
+  const ACCION_CAMBIO_NUMERO = 'CAMBIO_NUMERO';
+
+  /**
+   * Cambios de número de MOVIMIENTOS por ID de la hoja LINEAS: { idLinea: [{ antes, despues, fecha, comentario, quien }] },
+   * del más viejo al más nuevo. Solo los marcados como cambio de número desde el 8-oct; lo de antes sigue en la bitácora
+   * del AppSheet («Números que ha tenido» del equipo) hasta que pase a MOVIMIENTOS (pendiente 4.1).
+   */
+  function cambiosDeNumero_() {
+    if (!LineasDatos.existeTabla(TAB.MOV)) return {};
+    // Lo que se acaba de escribir (el cambio de número de esta misma edición) tiene que estar en la hoja antes de leerla
+    SpreadsheetApp.flush();
+    const filas = LineasDatos.buscarFilas(TAB.MOV, 'ACCION', ACCION_CAMBIO_NUMERO);
+    if (!filas.length) return {};
+    const salida = {};
+    LineasDatos.leerFilas([{ tabla: TAB.MOV, filas: filas }])[0].forEach((m) => {
+      let cambios = [];
+      try { cambios = JSON.parse(m['CAMBIOS'] || '[]'); } catch (e) { cambios = []; }
+      const c = cambios.filter((x) => sinAcentos_(x.campo) === 'NUMERO TELEFONO')[0];
+      if (!c) return;
+      String(m['ID LINEA'] || '').split(',').map((x) => x.trim()).filter(Boolean).forEach((k) => {
+        (salida[k] = salida[k] || []).push({ antes: digitos(c.antes) || txt(c.antes) || '', despues: digitos(c.despues) || txt(c.despues) || '',
+          fecha: fecha(m['FECHA']), comentario: txt(m['COMENTARIO']) || '', quien: txt(m['QUIEN']) || '' });
+      });
+    });
+    Object.keys(salida).forEach((k) => salida[k].sort((a, b) => (a.fecha || 0) - (b.fecha || 0)));
+    return salida;
+  }
+
+  /** Cambios de número de una línea del registro convertido (`cambios` ya leídos, o se leen). */
+  function numerosDeLinea(linea, cambios) {
+    if (!linea) return [];
+    return ((cambios || cambiosDeNumero_())[linea.idLinea || linea._id] || []).slice();
   }
 
   /** Valores de la fila para la vista de tabla del AppSheet: [id, …COLS_VISTA_LINEAS]. */
@@ -283,11 +325,12 @@ const LineasRepo = (function () {
     const equipos = [];
     const lineas = [];
     const vista = [];
+    const cambiosNumero = cambiosDeNumero_();
     LineasDatos.leerTabla(TAB.LINEAS).forEach((f) => {
       const r = convertirRegistro(f);
       if (!r) return;
       if (r.equipo) equipos.push(filaIndiceEquipo_(r.equipo, r.linea));
-      if (r.linea) lineas.push(filaIndiceLinea_(r.linea, r.equipo));
+      if (r.linea) lineas.push(filaIndiceLinea_(r.linea, r.equipo, cambiosNumero));
       if (r.equipo || r.linea) vista.push(filaVista_(f, r));
     });
     const ix = LineasUtil.paraCliente({
@@ -316,6 +359,7 @@ const LineasRepo = (function () {
     const ix = LineasDatos.cacheLeer(CLAVE_INDICE);
     // Hojas nuevas: una línea que se separa de su equipo aparece como registro aparte
     const todos = (ids || []).concat(LineasLectura.activo() ? LineasEscritura.tocados() : []);
+    let cambiosNumero = null;
     todos.filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).forEach((id) => {
       const f = leerRegistroPorId(id);
       const r = f ? convertirRegistro(f) : null;
@@ -338,7 +382,8 @@ const LineasRepo = (function () {
         cambios.quitar.equipos.push(id);
       }
       if (r && r.linea) {
-        const fl = LineasUtil.paraCliente(filaIndiceLinea_(r.linea, r.equipo));
+        if (!cambiosNumero) cambiosNumero = cambiosDeNumero_();
+        const fl = LineasUtil.paraCliente(filaIndiceLinea_(r.linea, r.equipo, cambiosNumero));
         cambios.lineas.push(fl);
         if (ix) ix.lineas.filas.push(fl);
       } else {
@@ -824,6 +869,8 @@ const LineasRepo = (function () {
     ENTREGA: 'Entrega', CIERRE: 'Cierre', NOTA: 'Nota', CAMBIO_LINEA: 'Cambio de línea',
     // Editar (corrige y cambia estatus, 4-oct)
     EDICION: 'Edición',
+    // Editar línea: la línea ahora tiene otro número (8-oct)
+    CAMBIO_NUMERO: 'Cambio de número',
     // El COMENTARIOS que tenía la hoja vieja al retirarla (paso 4)
     COMENTARIO_ANTERIOR: 'Comentario anterior',
     // PDF de la inspección o la responsiva, ya firmado o vuelto a hacer con la plantilla (5-oct)
@@ -1434,6 +1481,7 @@ const LineasRepo = (function () {
     guardarCambiosRegistro, agregarRegistro, registrarMovimiento, asegurarPestanaApp,
     evidenciaDesdeFila, inspeccionDesdeFila, inspeccionDesdeEvidencia, responsivaDesdeFila,
     evidenciasDeRegistro, leerInspeccion, leerResponsiva, revisarPdfsLigados, historialDeRegistro, asignacionesDeRegistro, movimientoDeCampo, bitacora,
+    ACCION_CAMBIO_NUMERO, numerosDeLinea,
     catalogos, indiceColaboradores, borrarCaches,
   };
 })();
