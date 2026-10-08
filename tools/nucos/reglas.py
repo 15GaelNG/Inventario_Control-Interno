@@ -137,7 +137,9 @@ def planear_nuco(nuco, documentacion, adjuntos, sin_seguro=None):
     sin_seguro: la imagen de "inexistente" (la misma "CARPETA SIN INFORMACIÓN.jpg" de siempre) si la hoja
     dice que el seguro NO APLICA; se pone en 2.-SEGURO solo cuando no hay ninguna póliza.
 
-    Devuelve (copias, resumen): copias = [{origen, md5, destino: [carpetas…], nombre, de}].
+    Devuelve (copias, resumen): copias = [{origen, md5, destino: [carpetas…], nombre, de, fuente}]. fuente: "nuco" (ya
+    está en la carpeta del NUCO: en la real se MUEVE), "hoja" / "app" (adjunto de AppSheet o documento de la app: se
+    COPIA, porque la hoja y la app lo siguen abriendo de ahí) o "imagen" (la de inexistente: se copia).
     """
     candidatos = {c: [] for c, _, _ in SEIS}
     anteriores = []
@@ -149,24 +151,30 @@ def planear_nuco(nuco, documentacion, adjuntos, sin_seguro=None):
             if h["mimeType"] == CARPETA:
                 c = concepto(h["name"]) or actual
                 s = sub
-                if c == "RESPONSIVA" and es_anterior(h["name"]):
-                    s = RESPONSIVAS_ANTERIORES
-                elif c == "RESPONSIVA" and es_adherente(h["name"]):
-                    s = ADHERENTES
-                visitar(h, ruta + [h["name"].strip()], c, s)
+                nombre = h["name"].strip()
+                if c == "RESPONSIVA" and sub and sub[0] == ADHERENTES:
+                    s = sub + [nombre]                       # ADHERENTES/ADHERENTES ANTERIORES/…: se conserva
+                elif c == "RESPONSIVA" and es_adherente(nombre):
+                    # Antes que "anteriores": "ADHERENTES ANTERIORES" son adherentes, no responsivas viejas
+                    s = [ADHERENTES] + ([nombre] if normal(nombre) != ADHERENTES else [])
+                elif c == "RESPONSIVA" and es_anterior(nombre):
+                    s = [RESPONSIVAS_ANTERIORES]
+                visitar(h, ruta + [nombre], c, s)
             elif es_relleno(h["name"]):
                 rellenos += 1
             elif concepto_archivo(h["name"]) or actual:
                 c = concepto_archivo(h["name"]) or actual
-                candidatos[c].append(dict(h, de="/".join(ruta), sub=sub if c == actual else None))
+                candidatos[c].append(dict(h, de="/".join(ruta), sub=sub if c == actual else None, fuente="nuco"))
             else:
-                anteriores.append(dict(h, de="/".join(ruta)))
+                anteriores.append(dict(h, de="/".join(ruta), fuente="nuco"))
 
     for d in documentacion:
         visitar(d, [d["name"].strip()], None, None)
     for c, lista in (adjuntos or {}).items():
         for a in lista:
-            candidatos[c].append(dict(a, de="VEHICULOS_Files_ (adjunto de la hoja)", sub=None))
+            # Adjunto de AppSheet o documento de la app: puede traer su propia subcarpeta (un adherente)
+            candidatos[c].append(dict(a, de=a.get("de") or "VEHICULOS_Files_ (adjunto de la hoja)", sub=a.get("sub"),
+                                      fuente=a.get("fuente") or "hoja"))
 
     copias = []
     resumen = {"rellenos": rellenos, "duplicados": 0, "docs": {}}
@@ -186,28 +194,32 @@ def planear_nuco(nuco, documentacion, adjuntos, sin_seguro=None):
             unicos.append(a)
         # Responsiva: la más reciente (que no esté ya en anteriores ni sea adherente) va a la raíz
         if c == "RESPONSIVA":
-            vigente = next((a for a in unicos if a["sub"] is None), None)
+            vigente = next((a for a in unicos if not a["sub"]), None)
             for a in unicos:
-                if a["sub"] is None and a is not vigente:
-                    a["sub"] = RESPONSIVAS_ANTERIORES
+                if not a["sub"] and a is not vigente:
+                    a["sub"] = [RESPONSIVAS_ANTERIORES]
         usados = {}
         for a in unicos:
-            destino = [DOCUMENTACION, carpeta] + ([a["sub"]] if a["sub"] else [])
+            destino = [DOCUMENTACION, carpeta] + list(a["sub"] or [])
             ruta = "/".join(destino)
             usados.setdefault(ruta, set())
             ext = extension(a["name"], a.get("mimeType"))
+            adherente = bool(a["sub"]) and a["sub"][0] == ADHERENTES
             copias.append({"origen": a["id"], "md5": a.get("md5Checksum"), "destino": destino, "de": a["de"] + "/" + a["name"],
-                           "nombre": nombre_final(prefijo, nuco, a.get("modifiedTime"), ext, usados[ruta]), "mime": a.get("mimeType"), "size": a.get("size")})
-        resumen["docs"][c] = len(unicos)
+                           "nombre": nombre_final("ADHERENTE" if adherente else prefijo, nuco, a.get("modifiedTime"), ext, usados[ruta]),
+                           "mime": a.get("mimeType"), "size": a.get("size"), "fuente": a["fuente"]})
+        # Un adherente no es la responsiva del vehículo: no cuenta para "tiene responsiva"
+        resumen["docs"][c] = len([a for a in unicos if not (a["sub"] and a["sub"][0] == ADHERENTES)])
         if c == "SEGURO" and not unicos and sin_seguro:
             copias.append({"origen": sin_seguro["id"], "md5": sin_seguro.get("md5Checksum"), "destino": [DOCUMENTACION, carpeta],
                            "de": "imagen de inexistente (seguro NO APLICA en la hoja)/" + sin_seguro["name"],
                            "nombre": "%s-%04d NO APLICA%s" % (prefijo, int(nuco), extension(sin_seguro["name"], sin_seguro.get("mimeType"))),
-                           "mime": sin_seguro.get("mimeType"), "size": sin_seguro.get("size")})
+                           "mime": sin_seguro.get("mimeType"), "size": sin_seguro.get("size"), "fuente": "imagen"})
             resumen["sin_seguro"] = True
     for a in anteriores:
         partes = a["de"].split("/")[1:]   # sin la carpeta 1.-DOCUMENTACIÓN
         copias.append({"origen": a["id"], "md5": a.get("md5Checksum"), "destino": [DOCUMENTACION, ANTERIORES] + partes,
-                       "de": a["de"] + "/" + a["name"], "nombre": a["name"], "mime": a.get("mimeType"), "size": a.get("size")})
+                       "de": a["de"] + "/" + a["name"], "nombre": a["name"], "mime": a.get("mimeType"), "size": a.get("size"),
+                       "fuente": "nuco"})
     resumen["anteriores"] = len(anteriores)
     return copias, resumen

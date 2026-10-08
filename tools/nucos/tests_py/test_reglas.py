@@ -110,3 +110,27 @@ def test_seguro_no_aplica_lleva_la_imagen_de_inexistente_solo_si_no_hay_poliza()
     con_poliza = carpeta("1.-DOCUMENTACIÓN", carpeta("2.-SEGURO", archivo("poliza.pdf")))
     copias, resumen = reglas.planear_nuco("45", [con_poliza], {}, imagen)
     assert [c["nombre"] for c in copias] == ["SEGURO-0045.pdf"] and not resumen.get("sin_seguro")
+
+
+def test_adherentes_van_a_adherentes_con_sus_variantes_y_no_cuentan_como_responsiva():
+    doc = carpeta("1.-DOCUMENTACIÓN", carpeta("9.- CARTA RESPONSIVA",
+        carpeta("ADHERENTES", archivo("JORGE CASTAÑON GONZALEZ-28.pdf")),
+        carpeta("ADHERENTES ANTERIORES", archivo("VICTOR CARDOSO-28.pdf")),
+        carpeta("BAJA DE ADHERENTES", archivo("PEDRO-28.pdf"))))
+    copias, resumen = reglas.planear_nuco("28", [doc], {})
+    d = destinos(copias)
+    assert d["JORGE CASTAÑON GONZALEZ-28.pdf"] == "5.-RESPONSIVA/ADHERENTES/ADHERENTE-0028.pdf"
+    assert d["VICTOR CARDOSO-28.pdf"] == "5.-RESPONSIVA/ADHERENTES/ADHERENTES ANTERIORES/ADHERENTE-0028.pdf"
+    assert d["PEDRO-28.pdf"] == "5.-RESPONSIVA/ADHERENTES/BAJA DE ADHERENTES/ADHERENTE-0028.pdf"
+    assert resumen["docs"]["RESPONSIVA"] == 0          # tener adherentes no es tener responsiva
+    assert {c["fuente"] for c in copias} == {"nuco"}
+
+
+def test_lo_de_appsheet_y_la_app_se_marca_para_copiar_y_lo_del_nuco_para_mover():
+    doc = carpeta("1.-DOCUMENTACIÓN", carpeta("1.-FACTURA", archivo("f.pdf")))
+    adherente_app = dict(archivo("ADHERENTE VEHICULAR X.pdf"), de="ADHERENTE VEHICULAR (app)", fuente="app", sub=["ADHERENTES"])
+    copias, _ = reglas.planear_nuco("5", [doc], {"TENENCIA": [archivo("t.pdf")], "RESPONSIVA": [adherente_app]})
+    fuentes = {c["de"].split("/")[-1]: (c["fuente"], "/".join(c["destino"][1:])) for c in copias}
+    assert fuentes["f.pdf"] == ("nuco", "1.-FACTURA")
+    assert fuentes["t.pdf"] == ("hoja", "6.-TENENCIA")
+    assert fuentes["ADHERENTE VEHICULAR X.pdf"] == ("app", "5.-RESPONSIVA/ADHERENTES")

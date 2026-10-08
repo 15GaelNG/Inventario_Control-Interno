@@ -12,10 +12,15 @@
                               COPIA según el plan dentro de <carpeta> (id o URL). Se puede repetir: lo que ya
                               está (mismo nombre en el mismo lugar) no se vuelve a copiar
 
-Usa el token de tools/migracion (autorizar.py lab, con Drive). Copiar solo LEE el original. El candado es
-PROHIBIDOS: ninguna escritura cae dentro de esas carpetas, venga de donde venga el destino. NUCOS VEHICULOS
-se quita de ahí a propósito, en su propio commit, el día que toque ordenar la real (y entonces moviendo, para
-conservar los IDs, no copiando).
+    ordenar --nucos 1,2,3 | --todos [--hilos 6]
+                              EN LA CARPETA REAL: mueve cada archivo a su lugar dentro de su NUCO y copia ahí lo de
+                              AppSheet y la app. Nada sale de su NUCO; todo queda en .cache/bitacoras/
+    deshacer <bitacora.jsonl> regresa lo que hizo un ordenar
+
+Usa el token de tools/migracion (autorizar.py lab, con Drive). Copiar solo LEE el original. Candados: aplicar
+(copias de prueba) no escribe dentro de PROHIBIDOS, venga de donde venga el destino; ordenar es lo único que
+escribe en NUCOS VEHICULOS, solo dentro de la carpeta de cada NUCO (revisa que el NUCO esté directo en NUCOS y que
+cada archivo que mueve esté dentro de él) y MOVIENDO, para conservar IDs, dueño e historial (decidido el 8-oct-2026).
 """
 import json
 import random
@@ -122,6 +127,27 @@ def leer():
     vehiculos = [{c: (v[i].strip() if i < len(v) else "") for c, i in idx.items()} for v in valores[1:]]
     vehiculos = [v for v in vehiculos if v["NUCCO"]]
     (CACHE / "vehiculos.json").write_text(json.dumps(vehiculos, ensure_ascii=False), encoding="utf-8")
+
+    # Lo que generó la app (Responsiva y Adherente vehicular): solo lo que su hoja tiene registrado, con su PDF
+    import re
+    app = []
+    for hoja, tipo in (("RESPONSIVA VEHICULAR", "responsiva"), ("ADHERENTE VEHICULAR", "adherente")):
+        v = llamar(hojas.values().get(spreadsheetId=LIBRO, range="'%s'!A1:ZZ20000" % hoja)).get("values", [])
+        if not v:
+            continue
+        e = [h.strip() for h in v[0]]
+        for fila in v[1:]:
+            r = {c: (fila[e.index(c)].strip() if c in e and e.index(c) < len(fila) else "") for c in ("NUCCO", "FECHA", "PDF", "ESTATUS")}
+            m = re.search(r"/d/([A-Za-z0-9_-]+)", r["PDF"])
+            if not (m and r["NUCCO"]):
+                continue
+            try:
+                f = llamar(d.files().get(fileId=m.group(1), fields=CAMPOS, supportsAllDrives=True))
+            except Exception:   # noqa: BLE001 — el PDF ya no existe: no hay nada que llevar
+                continue
+            app.append(dict(f, tipo=tipo, nucco=r["NUCCO"], estatus=r["ESTATUS"], hoja=hoja))
+    (CACHE / "app.json").write_text(json.dumps(app, ensure_ascii=False), encoding="utf-8")
+    print("De la app: %d documentos registrados con PDF" % len(app))
     print("Leído: %d NUCO, %d archivos en VEHICULOS_Files_, %d vehículos en la hoja" % (len(nucos), len(archivos), len(vehiculos)))
 
 
@@ -142,6 +168,11 @@ def plan():
     vehiculos = {str(int(v["NUCCO"])): v for v in json.loads((CACHE / "vehiculos.json").read_text(encoding="utf-8"))
                  if v["NUCCO"].isdigit()}
     COLUMNA = {"SEGURO": "POLIZA SEGURO", "TENENCIA": "ARCHIVO TENENCIA", "RESPONSIVA": "RESPONSIVA", "ALTA DE PLACAS": "DOCUMENTO BAJA"}
+    app_por = {}
+    if (CACHE / "app.json").exists():
+        for a in json.loads((CACHE / "app.json").read_text(encoding="utf-8")):
+            if a["nucco"].isdigit():
+                app_por.setdefault(str(int(a["nucco"])), []).append(a)
 
     # La imagen de "inexistente" que ya se usa: una de las "CARPETA SIN INFORMACIÓN.jpg" (todas son la misma)
     def buscar_imagen(nodo):
@@ -165,6 +196,11 @@ def plan():
             a = archivos.get(nombre_adjunto(v.get(col)) or "")
             if a:
                 adjuntos.setdefault(c, []).append(a)
+        for a in app_por.get(clave, []):
+            sub = None
+            if a["tipo"] == "adherente":
+                sub = [reglas.ADHERENTES] + (["BAJA DE ADHERENTES"] if a["estatus"] == "BAJA" else [])
+            adjuntos.setdefault("RESPONSIVA", []).append(dict(a, fuente="app", sub=sub, de=a["hoja"] + " (app)"))
         no_aplica = v.get("SEGURO (SI / NO)") == "NO APLICA"
         copias, resumen = reglas.planear_nuco(clave, n["documentacion"], adjuntos, inexistente if no_aplica else None)
         faltan = [c for c, _, _ in reglas.SEIS if not resumen["docs"][c] and not (c == "SEGURO" and resumen.get("sin_seguro"))]
@@ -427,14 +463,190 @@ def aplicar(carpeta, nucos_pedidos=None, muestra=None):
     print("\nListo: %d NUCO en https://drive.google.com/drive/folders/%s" % (len(plan_), destino))
 
 
+def _nfc(s):
+    import unicodedata
+    return unicodedata.normalize("NFC", (s or "").strip())
+
+
+class Bitacora:
+    """Cada cambio en la carpeta real, una línea JSON, en el momento: con esto deshacer() regresa todo."""
+
+    def __init__(self, ruta):
+        import threading
+        self.ruta, self.candado = ruta, threading.Lock()
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+
+    def anotar(self, **x):
+        with self.candado, open(self.ruta, "a", encoding="utf-8") as f:
+            f.write(json.dumps(dict(x, cuando=time.strftime("%Y-%m-%dT%H:%M:%S")), ensure_ascii=False) + "\n")
+
+
+def ordenar(nucos_pedidos=None, todos=False, hilos=6):
+    """EN LA CARPETA REAL: cada archivo de un NUCO se MUEVE (y renombra) a su lugar dentro de ese mismo NUCO, y lo
+    de AppSheet / la app / la imagen de inexistente se COPIA ahí. Nada sale de su NUCO ni se escribe fuera de
+    NUCOS VEHICULOS. Todo queda en una bitácora (.cache/bitacoras/) para deshacer(). Nada se borra: lo que no se
+    mueve (el relleno, los repetidos) se queda donde estaba."""
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+    plan_ = json.loads((CACHE / "plan.json").read_text(encoding="utf-8"))
+    if nucos_pedidos:
+        plan_ = [p for p in plan_ if p["nuco"] in nucos_pedidos]
+    elif not todos:
+        raise SystemExit("ordenar pide --nucos 1,2,3 o --todos")
+    bit = Bitacora(CACHE / "bitacoras" / (time.strftime("%Y%m%d-%H%M%S") + ".jsonl"))
+    local = threading.local()
+
+    def dr():
+        if not hasattr(local, "d"):
+            local.d = drive()
+        return local.d
+
+    totales = {"movidos": 0, "renombrados": 0, "copiados": 0, "ya estaban": 0, "saltados": 0, "carpetas": 0}
+    candado = threading.Lock()
+
+    def sumar(k):
+        with candado:
+            totales[k] += 1
+
+    def un_nuco(p):
+        d = dr()
+        raiz = p["id"]
+        info = llamar(d.files().get(fileId=raiz, fields="name,parents", supportsAllDrives=True))
+        if NUCOS not in (info.get("parents") or []) or _nfc(info["name"]) != _nfc(p["nuco"]):
+            bit.anotar(accion="saltado", nuco=p["nuco"], motivo="la carpeta del NUCO ya no está donde dice el plan")
+            sumar("saltados")
+            return
+        contenido = {}   # carpeta → {nombre NFC: id} (lo que hay adentro, leído una vez)
+
+        def hijos(padre):
+            if padre not in contenido:
+                contenido[padre] = {}
+                tok = None
+                while True:
+                    r = llamar(d.files().list(q="'%s' in parents and trashed = false" % padre, pageSize=1000, pageToken=tok,
+                                              fields="nextPageToken,files(id,name,mimeType)", supportsAllDrives=True,
+                                              includeItemsFromAllDrives=True))
+                    for f in r["files"]:
+                        contenido[padre][(_nfc(f["name"]), f["mimeType"] == reglas.CARPETA)] = f["id"]
+                    tok = r.get("nextPageToken")
+                    if not tok:
+                        break
+            return contenido[padre]
+
+        def carpeta_en(padre, nombre):
+            h = hijos(padre)
+            clave = (_nfc(nombre), True)
+            if clave not in h:
+                h[clave] = llamar(d.files().create(body={"name": nombre, "mimeType": reglas.CARPETA, "parents": [padre]},
+                                                   fields="id", supportsAllDrives=True))["id"]
+                contenido[h[clave]] = {}
+                bit.anotar(accion="crear_carpeta", nuco=p["nuco"], id=h[clave], padre=padre, nombre=nombre)
+                sumar("carpetas")
+            return h[clave]
+
+        def dentro_del_nuco(padre):
+            actual = padre
+            for _ in range(15):
+                if actual == raiz:
+                    return True
+                ps = llamar(d.files().get(fileId=actual, fields="parents", supportsAllDrives=True)).get("parents")
+                if not ps:
+                    return False
+                actual = ps[0]
+            return False
+
+        doc = carpeta_en(raiz, reglas.DOCUMENTACION)
+        for _, nombre_carpeta, _ in reglas.SEIS:
+            carpeta_en(doc, nombre_carpeta)
+        for c in p["copias"]:
+            destino = raiz
+            for parte in c["destino"]:
+                destino = carpeta_en(destino, parte)
+            if c["fuente"] == "nuco":
+                try:
+                    f = llamar(d.files().get(fileId=c["origen"], fields="name,parents,trashed", supportsAllDrives=True))
+                except Exception as e:   # noqa: BLE001
+                    bit.anotar(accion="saltado", nuco=p["nuco"], id=c["origen"], motivo="no se encontró: %s" % e)
+                    sumar("saltados")
+                    continue
+                padre = (f.get("parents") or [None])[0]
+                if f.get("trashed") or not padre or not dentro_del_nuco(padre):
+                    bit.anotar(accion="saltado", nuco=p["nuco"], id=c["origen"], motivo="ya no está dentro de su NUCO")
+                    sumar("saltados")
+                    continue
+                if padre == destino and _nfc(f["name"]) == _nfc(c["nombre"]):
+                    sumar("ya estaban")
+                    continue
+                if (_nfc(c["nombre"]), False) in hijos(destino) and padre != destino:
+                    bit.anotar(accion="saltado", nuco=p["nuco"], id=c["origen"], motivo="ya hay un archivo con el nombre " + c["nombre"])
+                    sumar("saltados")
+                    continue
+                cambios = {"fileId": c["origen"], "body": {"name": c["nombre"]}, "fields": "id", "supportsAllDrives": True}
+                if padre != destino:
+                    cambios.update(addParents=destino, removeParents=padre)
+                llamar(d.files().update(**cambios))
+                bit.anotar(accion="mover", nuco=p["nuco"], id=c["origen"], de_padre=padre, de_nombre=f["name"],
+                           a_padre=destino, a_nombre=c["nombre"])
+                hijos(destino)[(_nfc(c["nombre"]), False)] = c["origen"]
+                sumar("movidos" if padre != destino else "renombrados")
+            else:
+                if (_nfc(c["nombre"]), False) in hijos(destino):
+                    sumar("ya estaban")
+                    continue
+                nuevo = llamar(d.files().copy(fileId=c["origen"], supportsAllDrives=True, fields="id",
+                                              body={"name": c["nombre"], "parents": [destino], "description": "Copia de: " + c["de"]}))["id"]
+                bit.anotar(accion="copiar", nuco=p["nuco"], origen=c["origen"], id=nuevo, a_padre=destino, a_nombre=c["nombre"])
+                hijos(destino)[(_nfc(c["nombre"]), False)] = nuevo
+                sumar("copiados")
+
+    hechos = 0
+    with ThreadPoolExecutor(max_workers=hilos) as ex:
+        for _ in ex.map(un_nuco, plan_):
+            hechos += 1
+            print("\r  %d/%d NUCO  %s" % (hechos, len(plan_), totales), end="", flush=True)
+    print("\nBitácora: %s" % bit.ruta)
+
+
+def deshacer(ruta):
+    """Regresa lo que hizo ordenar(), de la última línea a la primera: lo movido vuelve a su carpeta y nombre, lo
+    copiado y las carpetas creadas (si quedaron vacías) van a la papelera."""
+    d = drive()
+    lineas = [json.loads(x) for x in Path(ruta).read_text(encoding="utf-8").splitlines() if x.strip()]
+    hechos = 0
+    for x in reversed(lineas):
+        if x["accion"] == "mover":
+            cambios = {"fileId": x["id"], "body": {"name": x["de_nombre"]}, "fields": "id", "supportsAllDrives": True}
+            if x["de_padre"] != x["a_padre"]:
+                cambios.update(addParents=x["de_padre"], removeParents=x["a_padre"])
+            llamar(d.files().update(**cambios))
+        elif x["accion"] == "copiar":
+            llamar(d.files().update(fileId=x["id"], body={"trashed": True}, supportsAllDrives=True))
+        elif x["accion"] == "crear_carpeta":
+            dentro = llamar(d.files().list(q="'%s' in parents and trashed = false" % x["id"], fields="files(id)", pageSize=1))["files"]
+            if dentro:
+                print("\n  la carpeta %s (%s) no quedó vacía: se deja" % (x["nombre"], x["id"]))
+                continue
+            llamar(d.files().update(fileId=x["id"], body={"trashed": True}, supportsAllDrives=True))
+        else:
+            continue
+        hechos += 1
+        print("\r  %d deshechos" % hechos, end="", flush=True)
+    print("\nListo: %s deshecha" % ruta)
+
+
 if __name__ == "__main__":
     args = sys.argv[1:]
-    if not args or args[0] not in ("leer", "plan", "aplicar", "excel"):
+    if not args or args[0] not in ("leer", "plan", "aplicar", "excel", "ordenar", "deshacer"):
         sys.exit(__doc__)
     if args[0] == "leer":
         leer()
     elif args[0] == "plan":
         plan()
+    elif args[0] == "ordenar":
+        ordenar(args[args.index("--nucos") + 1].split(",") if "--nucos" in args else None, "--todos" in args,
+                int(args[args.index("--hilos") + 1]) if "--hilos" in args else 6)
+    elif args[0] == "deshacer":
+        deshacer(args[1])
     elif args[0] == "excel":
         excel(args[1] if len(args) > 1 else str(CACHE / "expediente.xlsx"))
     else:
