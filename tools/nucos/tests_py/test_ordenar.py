@@ -111,7 +111,10 @@ def test_ordenar_mueve_dentro_del_nuco_copia_appsheet_y_deshacer_lo_regresa_todo
     copias = [a for a in dr.archivos.values() if a["name"] == "TENENCIA-0293.pdf"]
     assert len(copias) == 1 and dr.ruta(copias[0]["id"]).endswith("293/1.-DOCUMENTACIÓN/6.-TENENCIA/TENENCIA-0293.pdf")  # …se copia
     assert dr.ruta(ajeno) == "NUCOS VEHICULOS/999/de otro NUCO.pdf"                                   # nunca sale de su NUCO
-    assert dr.ruta(rel) == "NUCOS VEHICULOS/293/1.-DOCUMENTACIÓN/DOCUEMENTOS/CARPETA SIN INFORMACIÓN.jpg"   # nada se borra
+    # nada se borra: la carpeta vieja (solo quedó el relleno) se aparta entera, con el relleno adentro
+    assert dr.ruta(rel) == "NUCOS VEHICULOS/293/1.-DOCUMENTACIÓN/ANTERIORES/ESTRUCTURA ANTERIOR/DOCUEMENTOS/CARPETA SIN INFORMACIÓN.jpg"
+    en_doc = {a["name"] for a in dr.archivos.values() if a["parents"] == [doc] and not a["trashed"]}
+    assert en_doc == {c for _, c, _ in reglas.SEIS} | {"ANTERIORES"}, en_doc
     seis = {dr.archivos[i]["name"] for i in dr.archivos if dr.archivos[i]["parents"] == [doc] and dr.archivos[i]["mimeType"] == F}
     assert {c for _, c, _ in reglas.SEIS} <= seis
 
@@ -163,3 +166,19 @@ def test_una_carpeta_con_espacio_de_mas_se_reusa_y_se_deja_exacta(tmp_path, monk
     for bit in (tmp_path / "bitacoras").glob("*.jsonl"):
         expediente.deshacer(bit)
     assert {i: v for i, v in dr.foto().items() if not v[2]} == antes
+
+
+def test_una_carpeta_vieja_con_algo_real_no_se_aparta(tmp_path, monkeypatch):
+    dr = DriveFalso()
+    nucos = dr.nuevo("NUCOS VEHICULOS", None, True)
+    n7 = dr.nuevo("7", nucos, True)
+    doc = dr.nuevo("1.-DOCUMENTACIÓN", n7, True)
+    rara = dr.nuevo("COSAS", doc, True)
+    dr.nuevo("algo que el plan no conoce.pdf", rara)
+    (tmp_path / "plan.json").write_text(json.dumps([{"nuco": "7", "id": n7, "copias": []}]), encoding="utf-8")
+    monkeypatch.setattr(expediente, "CACHE", tmp_path)
+    monkeypatch.setattr(expediente, "NUCOS", nucos)
+    monkeypatch.setattr(expediente, "drive", lambda: dr)
+    monkeypatch.setattr(expediente, "respaldar_bitacora", lambda ruta: None)
+    expediente.ordenar(["7"], hilos=1)
+    assert dr.archivos[rara]["parents"] == [doc]

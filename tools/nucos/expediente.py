@@ -481,6 +481,7 @@ class Bitacora:
             f.write(json.dumps(dict(x, cuando=time.strftime("%Y-%m-%dT%H:%M:%S")), ensure_ascii=False) + "\n")
 
 
+ESTRUCTURA_ANTERIOR = "ESTRUCTURA ANTERIOR"   # dentro de ANTERIORES: las carpetas viejas que quedaron vacías o solo con relleno
 RESPALDO = "1dxcRFSgn1SD8KYYLamB3lGcsCmDEe-DB"   # Mi unidad > PRUEBA DE NUCOS VEHICULARES: ahí van las bitácoras
 
 
@@ -517,7 +518,8 @@ def ordenar(nucos_pedidos=None, todos=False, hilos=6):
             local.d = drive()
         return local.d
 
-    totales = {"movidos": 0, "renombrados": 0, "copiados": 0, "ya estaban": 0, "saltados": 0, "carpetas": 0}
+    totales = {"movidos": 0, "renombrados": 0, "copiados": 0, "ya estaban": 0, "saltados": 0, "carpetas": 0,
+               "carpetas viejas apartadas": 0, "carpetas viejas que se quedan": 0}
     candado = threading.Lock()
 
     def sumar(k):
@@ -624,6 +626,28 @@ def ordenar(nucos_pedidos=None, todos=False, hilos=6):
                 bit.anotar(accion="copiar", nuco=p["nuco"], origen=c["origen"], id=nuevo, a_padre=destino, a_nombre=c["nombre"])
                 hijos(destino)[(_nfc(c["nombre"]), False)] = nuevo
                 sumar("copiados")
+
+        # Las carpetas viejas que quedaron vacías o solo con el relleno se apartan a ANTERIORES/ESTRUCTURA ANTERIOR (no
+        # son de esta cuenta: no se pueden borrar, solo mover). Una que todavía tenga algo de verdad se queda a la vista.
+        def lista(i):
+            return llamar(d.files().list(q="'%s' in parents and trashed = false" % i, fields="files(id,name,mimeType)",
+                                         pageSize=1000, supportsAllDrives=True, includeItemsFromAllDrives=True))["files"]
+
+        def sin_nada_real(i):
+            return all(sin_nada_real(h["id"]) if h["mimeType"] == reglas.CARPETA else reglas.es_relleno(h["name"]) for h in lista(i))
+
+        nuevas = {_nfc(c) for _, c, _ in reglas.SEIS} | {_nfc(reglas.ANTERIORES)}
+        viejas = [(doc, h) for h in lista(doc) if h["mimeType"] == reglas.CARPETA and _nfc(h["name"]) not in nuevas]
+        viejas += [(raiz, h) for h in lista(raiz) if h["mimeType"] == reglas.CARPETA and h["id"] != doc and reglas.es_documentacion(h["name"])]
+        for padre, h in viejas:
+            if not sin_nada_real(h["id"]):
+                bit.anotar(accion="queda", nuco=p["nuco"], id=h["id"], nombre=h["name"], motivo="todavía tiene archivos que no son relleno")
+                sumar("carpetas viejas que se quedan")
+                continue
+            apartado = carpeta_en(carpeta_en(doc, reglas.ANTERIORES), ESTRUCTURA_ANTERIOR)
+            llamar(d.files().update(fileId=h["id"], addParents=apartado, removeParents=padre, fields="id", supportsAllDrives=True))
+            bit.anotar(accion="mover", nuco=p["nuco"], id=h["id"], de_padre=padre, de_nombre=h["name"], a_padre=apartado, a_nombre=h["name"])
+            sumar("carpetas viejas apartadas")
 
     hechos = 0
     with ThreadPoolExecutor(max_workers=hilos) as ex:
