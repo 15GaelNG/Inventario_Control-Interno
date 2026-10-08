@@ -12,7 +12,8 @@
                               COPIA según el plan dentro de <carpeta> (id o URL). Se puede repetir: lo que ya
                               está (mismo nombre en el mismo lugar) no se vuelve a copiar
 
-    ordenar --nucos 1,2,3 | --todos [--hilos 6]
+    leer-appsheet             cada archivo de VEHICULOS_Files_ (también las versiones viejas) → su NUCO
+    ordenar --nucos 1,2,3 | --todos [--hilos 6] [--solo-copias]
                               EN LA CARPETA REAL: mueve cada archivo a su lugar dentro de su NUCO y copia ahí lo de
                               AppSheet y la app. Nada sale de su NUCO; todo queda en .cache/bitacoras/
     deshacer <bitacora.jsonl> regresa lo que hizo un ordenar
@@ -163,12 +164,86 @@ def nombre_adjunto(valor):
     return ruta.split("/")[-1].strip()
 
 
+def tipo_appsheet(nombre):
+    """El documento que dice el nombre de un archivo de VEHICULOS_Files_: AppSheet ("refwf240.RESPONSIVA.192331.pdf") o
+    la app nueva ("VEH-000000GXV2XFTK_POLIZA_SEGURO_2026-10-07.Pdf")."""
+    import re
+    m = re.search(r"[._](RESPONSIVA|ARCHIVO[ _]TENENCIA|POLIZA[ _]SEGURO|DOCUMENTO[ _]BAJA)", nombre.upper())
+    return {"RESPONSIVA": "RESPONSIVA", "ARCHIVO TENENCIA": "TENENCIA", "POLIZA SEGURO": "SEGURO",
+            "DOCUMENTO BAJA": "ALTA DE PLACAS"}[m.group(1).replace("_", " ")] if m else None
+
+
+def leer_appsheet():
+    """SOLO LECTURA. Cada archivo de VEHICULOS_Files_ → su NUCO, también las versiones VIEJAS que la hoja ya no liga
+    (AppSheet guardaba el archivo anterior al subir uno nuevo). Dos pistas: el nombre exacto del archivo en cualquier
+    pestaña del libro (la bitácora CAMBIOS VEHICULOS guardaba la ruta junto al folio) y, si no, la clave con la que
+    empieza el nombre (ID, ID ANTERIOR o FOLIO del vehículo). Queda en .cache/vf_nuco.json."""
+    import re
+    from urllib.parse import unquote_plus
+    from autorizar import credenciales
+    from googleapiclient.discovery import build
+    hojas = build("sheets", "v4", credentials=credenciales("lab"), cache_discovery=False).spreadsheets()
+    archivos = {f["name"].strip() for f in json.loads((CACHE / "vehiculos_files.json").read_text(encoding="utf-8"))}
+    v = llamar(hojas.values().get(spreadsheetId=LIBRO, range="'VEHICULOS'!A1:ZZ100000")).get("values", [])
+    e = [x.strip() for x in v[0]]
+    col = lambda f, c: f[e.index(c)].strip() if e.index(c) < len(f) else ""
+    por_clave, folio_nuco = {}, {}
+    for f in v[1:]:
+        nuco = col(f, "NUCCO")
+        if not nuco:
+            continue
+        for c in ("ID", "ID ANTERIOR", "FOLIO"):
+            if col(f, c):
+                por_clave.setdefault(col(f, c).upper(), set()).add(nuco)
+        folio_nuco[col(f, "FOLIO").upper()] = nuco
+    donde = {}
+    titulos = [s["properties"]["title"] for s in llamar(hojas.get(spreadsheetId=LIBRO, fields="sheets.properties.title"))["sheets"]]
+    for t in titulos:
+        vals = llamar(hojas.values().get(spreadsheetId=LIBRO, range="'%s'!A1:ZZ100000" % t)).get("values", [])
+        if not vals:
+            continue
+        enc = [x.strip().upper() for x in vals[0]]
+        i_nuco = next((i for i, x in enumerate(enc) if x in ("NUCCO", "NUCO")), None)
+        i_folio = next((i for i, x in enumerate(enc) if x in ("FOLIO", "FOLIO VEHICULO")), None)
+        for fila in vals[1:]:
+            nuco = fila[i_nuco].strip() if i_nuco is not None and i_nuco < len(fila) else ""
+            if not nuco and i_folio is not None and i_folio < len(fila):
+                nuco = folio_nuco.get(fila[i_folio].strip().upper(), "")
+            if not nuco:
+                continue
+            for celda in fila:
+                if "VEHICULOS_Files_" in celda:
+                    for m in re.finditer(r"VEHICULOS_Files_(?:/|%2F)([^&\"\n]+?\.(?:pdf|jpe?g|png))", celda, re.I):
+                        n = unquote_plus(m.group(1)).strip()
+                        if n in archivos:
+                            donde.setdefault(n, set()).add(nuco)
+    asignados = {}
+    for n in archivos:
+        clave = (n.split("_")[0] if n.upper().startswith("VEH-") else n.split(".")[0]).upper()
+        if len(donde.get(n, ())) == 1:
+            asignados[n] = next(iter(donde[n]))
+        elif len(por_clave.get(clave, ())) == 1:
+            asignados[n] = next(iter(por_clave[clave]))
+    (CACHE / "vf_nuco.json").write_text(json.dumps(asignados, ensure_ascii=False), encoding="utf-8")
+    print("VEHICULOS_Files_: %d archivos, %d con su NUCO" % (len(archivos), len(asignados)))
+
+
+# Las versiones viejas de AppSheet van en una subcarpeta: no compiten con el documento vigente
+VERSION_ANTERIOR = {"RESPONSIVA": reglas.RESPONSIVAS_ANTERIORES, "SEGURO": "SEGUROS ANTERIORES", "TENENCIA": "TENENCIAS ANTERIORES",
+                    "ALTA DE PLACAS": None}
+
+
 def plan():
     nucos = json.loads((CACHE / "arbol.json").read_text(encoding="utf-8"))
     archivos = {f["name"].strip(): f for f in json.loads((CACHE / "vehiculos_files.json").read_text(encoding="utf-8"))}
     vehiculos = {str(int(v["NUCCO"])): v for v in json.loads((CACHE / "vehiculos.json").read_text(encoding="utf-8"))
                  if v["NUCCO"].isdigit()}
     COLUMNA = {"SEGURO": "POLIZA SEGURO", "TENENCIA": "ARCHIVO TENENCIA", "RESPONSIVA": "RESPONSIVA", "ALTA DE PLACAS": "DOCUMENTO BAJA"}
+    viejos_por = {}   # NUCO → archivos de VEHICULOS_Files_ (leer_appsheet), también los que la hoja ya no liga
+    if (CACHE / "vf_nuco.json").exists():
+        for n, nuco in json.loads((CACHE / "vf_nuco.json").read_text(encoding="utf-8")).items():
+            if nuco.isdigit() and n in archivos:
+                viejos_por.setdefault(str(int(nuco)), []).append(archivos[n])
     app_por = {}
     if (CACHE / "app.json").exists():
         for a in json.loads((CACHE / "app.json").read_text(encoding="utf-8")):
@@ -197,6 +272,13 @@ def plan():
             a = archivos.get(nombre_adjunto(v.get(col)) or "")
             if a:
                 adjuntos.setdefault(c, []).append(a)
+        ligados = {a["id"] for lista in adjuntos.values() for a in lista}
+        for f in viejos_por.get(clave, []):
+            c = tipo_appsheet(f["name"])
+            if c and f["id"] not in ligados:
+                sub = VERSION_ANTERIOR.get(c)
+                adjuntos.setdefault(c, []).append(dict(f, fuente="hoja", sub=[sub] if sub else None,
+                                                       de="VEHICULOS_Files_ (versión anterior en AppSheet)"))
         for a in app_por.get(clave, []):
             sub = None
             if a["tipo"] == "adherente":
@@ -499,7 +581,7 @@ def respaldar_bitacora(ruta):
     print("Bitácora respaldada en Drive: PRUEBA DE NUCOS VEHICULARES/BITACORAS/%s" % Path(ruta).name)
 
 
-def ordenar(nucos_pedidos=None, todos=False, hilos=6):
+def ordenar(nucos_pedidos=None, todos=False, hilos=6, solo_copias=False):
     """EN LA CARPETA REAL: cada archivo de un NUCO se MUEVE (y renombra) a su lugar dentro de ese mismo NUCO, y lo
     de AppSheet / la app / la imagen de inexistente se COPIA ahí. Nada sale de su NUCO ni se escribe fuera de
     NUCOS VEHICULOS. Todo queda en una bitácora (.cache/bitacoras/) para deshacer(). Nada se borra: lo que no se
@@ -537,6 +619,7 @@ def ordenar(nucos_pedidos=None, todos=False, hilos=6):
             return
         contenido = {}   # carpeta → {(nombre NFC sin espacios de más, es carpeta): id} (lo que hay adentro, leído una vez)
         nombres = {}     # id → nombre tal cual está en Drive
+        md5s = {}        # carpeta → contenidos (md5) que ya tiene: una copia idéntica no se vuelve a hacer
 
         def hijos(padre):
             if padre not in contenido:
@@ -544,11 +627,13 @@ def ordenar(nucos_pedidos=None, todos=False, hilos=6):
                 tok = None
                 while True:
                     r = llamar(d.files().list(q="'%s' in parents and trashed = false" % padre, pageSize=1000, pageToken=tok,
-                                              fields="nextPageToken,files(id,name,mimeType)", supportsAllDrives=True,
+                                              fields="nextPageToken,files(id,name,mimeType,md5Checksum)", supportsAllDrives=True,
                                               includeItemsFromAllDrives=True))
                     for f in r["files"]:
                         contenido[padre][(_nfc(f["name"]), f["mimeType"] == reglas.CARPETA)] = f["id"]
                         nombres[f["id"]] = f["name"]
+                        if f.get("md5Checksum"):
+                            md5s.setdefault(padre, set()).add(f["md5Checksum"])
                     tok = r.get("nextPageToken")
                     if not tok:
                         break
@@ -588,6 +673,8 @@ def ordenar(nucos_pedidos=None, todos=False, hilos=6):
         for _, nombre_carpeta, _ in reglas.SEIS:
             carpeta_en(doc, nombre_carpeta)
         for c in p["copias"]:
+            if solo_copias and c["fuente"] == "nuco":
+                continue
             destino = raiz
             for parte in c["destino"]:
                 destino = carpeta_en(destino, parte)
@@ -624,13 +711,26 @@ def ordenar(nucos_pedidos=None, todos=False, hilos=6):
                 hijos(destino)[(_nfc(nombre), False)] = c["origen"]
                 sumar("movidos" if padre != destino else "renombrados")
             else:
-                if (_nfc(c["nombre"]), False) in hijos(destino):
+                h = hijos(destino)
+                # Ya está si en esa carpeta hay algo con el mismo contenido; o, sin md5 para comparar, con el mismo nombre
+                if (c.get("md5") and c["md5"] in md5s.get(destino, ())) or (not c.get("md5") and (_nfc(c["nombre"]), False) in h):
                     sumar("ya estaban")
                     continue
+                nombre = c["nombre"]
+                if (_nfc(nombre), False) in h:
+                    # Otro archivo, distinto, ya se llama así: no se pisa, va con (2)
+                    import re as _re
+                    base, ext = _re.match(r"^(.*?)(\.[A-Za-z0-9]{2,4})?$", nombre).groups()
+                    n = 2
+                    while (_nfc("%s (%d)%s" % (base, n, ext or "")), False) in h:
+                        n += 1
+                    nombre = "%s (%d)%s" % (base, n, ext or "")
                 nuevo = llamar(d.files().copy(fileId=c["origen"], supportsAllDrives=True, fields="id",
-                                              body={"name": c["nombre"], "parents": [destino], "description": "Copia de: " + c["de"]}))["id"]
-                bit.anotar(accion="copiar", nuco=p["nuco"], origen=c["origen"], id=nuevo, a_padre=destino, a_nombre=c["nombre"])
-                hijos(destino)[(_nfc(c["nombre"]), False)] = nuevo
+                                              body={"name": nombre, "parents": [destino], "description": "Copia de: " + c["de"]}))["id"]
+                bit.anotar(accion="copiar", nuco=p["nuco"], origen=c["origen"], id=nuevo, a_padre=destino, a_nombre=nombre)
+                h[(_nfc(nombre), False)] = nuevo
+                if c.get("md5"):
+                    md5s.setdefault(destino, set()).add(c["md5"])
                 sumar("copiados")
 
         # Las carpetas viejas que quedaron vacías o solo con el relleno se apartan a ANTERIORES/ESTRUCTURA ANTERIOR (no
@@ -786,7 +886,7 @@ def deshacer(ruta):
 
 if __name__ == "__main__":
     args = sys.argv[1:]
-    if not args or args[0] not in ("leer", "plan", "aplicar", "excel", "ordenar", "deshacer", "respaldar"):
+    if not args or args[0] not in ("leer", "leer-appsheet", "plan", "aplicar", "excel", "ordenar", "deshacer", "respaldar"):
         sys.exit(__doc__)
     if args[0] == "leer":
         leer()
@@ -794,7 +894,9 @@ if __name__ == "__main__":
         plan()
     elif args[0] == "ordenar":
         ordenar(args[args.index("--nucos") + 1].split(",") if "--nucos" in args else None, "--todos" in args,
-                int(args[args.index("--hilos") + 1]) if "--hilos" in args else 6)
+                int(args[args.index("--hilos") + 1]) if "--hilos" in args else 6, "--solo-copias" in args)
+    elif args[0] == "leer-appsheet":
+        leer_appsheet()
     elif args[0] == "respaldar":
         respaldar(args[1], int(args[args.index("--hilos") + 1]) if "--hilos" in args else 6)
     elif args[0] == "deshacer":
