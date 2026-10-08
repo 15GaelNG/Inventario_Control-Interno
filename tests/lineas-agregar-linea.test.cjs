@@ -30,25 +30,25 @@ test('Agregar línea pregunta si se vincula a un equipo y el responsable solo se
   assert.ok(!Reg._cumple(campo(els, 'RESPONSABLE').mostrar, { _VINCULAR: 'TRUE' }, ctx));
   assert.ok(Reg._cumple(campo(els, '_NUCO').requerido, { _VINCULAR: 'TRUE' }, ctx));
   // El responsable es opcional y el NUCO se pide solo al vincular
-  const r = Reg._resolver(els, {}, { 'NUMERO TELEFONO': '4420000001', 'TIPO DE LINEA': 'SIM BASICO', _VINCULAR: 'TRUE', _CANCELACION: 'NO' }, ctx);
+  const r = Reg._resolver(els, {}, { 'NUMERO TELEFONO': '4420000001', 'TIPO DE LINEA': 'SIM BASICO', _VINCULAR: 'TRUE' }, ctx);
   assert.ok(r.errores.some((e) => /^NUCO es obligatorio/.test(e)));
-  const sola = Reg._resolver(els, {}, { 'NUMERO TELEFONO': '4420000001', 'TIPO DE LINEA': 'SIM BASICO', 'COMPAÑIA': 'TELCEL', _VINCULAR: 'FALSE', _CANCELACION: 'NO' }, ctx);
+  const sola = Reg._resolver(els, {}, { 'NUMERO TELEFONO': '4420000001', 'TIPO DE LINEA': 'SIM BASICO', 'COMPAÑIA': 'TELCEL', _VINCULAR: 'FALSE' }, ctx);
   assert.deepEqual(sola.errores, []);
 });
 
-test('el estatus de la línea nueva se pone solo; la cancelación solo si se elige', () => {
+test('el estatus de la línea nueva se pone solo y en el alta no hay cancelación', () => {
   const Reg = cargar();
   const els = Reg._elementos({}, {}, { correo: 'x@y.z' }, ctx);
   assert.equal(campo(els, 'ESTATUS LINEA').control, 'calculado');
   assert.equal(campo(els, 'ESTATUS LINEA').formula, 'ESTATUS_LINEA_ALTA');
-  assert.deepEqual(campo(els, '_CANCELACION').opciones, ['NO', 'EN PROCESO DE CANCELACION', 'CANCELADA']);
+  // La cancelación se hace en Editar o con «Mandar a cancelación» (usuario, 8-oct)
+  assert.ok(!campo(els, '_CANCELACION'));
   const e = Reg._estatusAltaLinea;
-  assert.equal(e({ _CANCELACION: 'NO', RESPONSABLE: 'JUAN' }, null), 'USO');
-  assert.equal(e({ _CANCELACION: 'NO', RESPONSABLE: '' }, null), 'DISPONIBLE');
-  assert.equal(e({ _CANCELACION: 'EN PROCESO DE CANCELACION', RESPONSABLE: 'JUAN' }, null), 'EN PROCESO DE CANCELACION');
+  assert.equal(e({ RESPONSABLE: 'JUAN' }, null), 'USO');
+  assert.equal(e({ RESPONSABLE: '' }, null), 'DISPONIBLE');
   // Con equipo, sigue al equipo (opción A): en uso → USO; guardado → DISPONIBLE
-  assert.equal(e({ _CANCELACION: 'NO' }, { 'ESTATUS EQUIPO': 'USO' }), 'USO');
-  assert.equal(e({ _CANCELACION: 'NO' }, { 'ESTATUS EQUIPO': 'RESGUARDO' }), 'DISPONIBLE');
+  assert.equal(e({}, { 'ESTATUS EQUIPO': 'USO' }), 'USO');
+  assert.equal(e({}, { 'ESTATUS EQUIPO': 'RESGUARDO' }), 'DISPONIBLE');
 });
 
 test('solo se vinculan equipos en uso o en resguardo y sin línea', () => {
@@ -69,5 +69,8 @@ test('la pantalla hace las mismas cuentas y los campos con «_» no se escriben 
   assert.match(html, /cond\.campo && cond\.distinto !== undefined/);
   assert.match(reg, /e\.columna\.charAt\(0\) !== '_'/);
   assert.match(reg, /function crearLineaEnEquipo_/);
-  assert.match(reg, /Una línea CANCELADA no se vincula a un equipo\./);
+  assert.doesNotMatch(reg + html, /_CANCELACION/);
+  // PIN de WhatsApp en la información del equipo, no en la línea (usuario, 8-oct)
+  assert.match(html, /l \? \['PIN WhatsApp', l\.pinWhatsapp\] : null,/);
+  assert.doesNotMatch(html, /\['SIM', l\.sim\], \['PIN WhatsApp', l\.pinWhatsapp\]/);
 });

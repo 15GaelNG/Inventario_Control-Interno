@@ -23,8 +23,8 @@ const LineasRegistros = (function () {
   // Agregar línea (usuario, 8-oct): campos que no son columnas (empiezan con «_»: no se escriben en la hoja)
   const VINCULAR = '_VINCULAR';
   const NUCO_VINCULAR = '_NUCO';
-  const CANCELACION = '_CANCELACION';
-  const ESTATUS_CANCELACION = ['EN PROCESO DE CANCELACION', 'CANCELADA'];
+  /** Estatus de la línea que en Editar se aceptan solo con el aviso confirmado (no entran a la bandeja de Pau). */
+  const ESTATUS_LINEA_PANEL = ['EN PROCESO DE CANCELACION', 'CANCELADA'];
   /** Equipos a los que se les puede vincular una línea: en uso o en resguardo, y sin línea. */
   const ESTATUS_VINCULABLE = ['USO', 'RESGUARDO'];
   const MENSAJES = {
@@ -166,8 +166,8 @@ const LineasRegistros = (function () {
       ed('EQUIPO', 'Modelo', 'listaAbierta', { opciones: catalogos.modelos || [], valida: excepcionEquipo ? null : 'EQUIPO', requerido: 'SIEMPRE' }),
       ed('IMEI', 'IMEI', 'texto'),
       ed('COLOR', 'Color', 'listaAbierta', { opciones: catalogos.colores || [] }),
-      // Los estatus se cambian aquí (sin «Cambiar estatus», usuario 4-oct). RESGUARDO, PARA VENTA y PARA DESECHO siguen el
-      // flujo de resguardo y EN PROCESO DE CANCELACION el de cancelación (la pantalla los abre; el servidor no los acepta aquí)
+      // Los estatus se cambian aquí (sin «Cambiar estatus», usuario 4-oct). RESGUARDO, PARA VENTA y PARA DESECHO, con un
+      // aviso confirmado: no entran al panel de Pau, solo al historial (usuario, 8-oct; ver editar)
       ed('ESTATUS EQUIPO', 'Estatus del equipo', 'lista', { valor: enBlanco('ESTATUS EQUIPO'), opciones: LineasRepo.CATALOGO.estatusEquipo,
         requerido: 'SIEMPRE', valida: 'LISTA', validaSiCambia: true }),
     ], nuevo ? [] : [fijo('FECHA REGISTRO', 'Fecha de alta', v('FECHA REGISTRO'))]);
@@ -218,9 +218,8 @@ const LineasRegistros = (function () {
       // La razón social es de la línea (la del contrato), no del responsable (§3.3)
       ed('RAZON SOCIAL', 'Razón social', 'lista', { opciones: catalogos.razonesSociales || [], valida: 'LISTA', validaSiCambia: true }),
     ], altaLinea ? [
-      // Estatus solo (usuario, 8-oct): USO con equipo en uso o con responsable; DISPONIBLE si no. La cancelación solo si
-      // se elige aquí. El servidor hace la misma cuenta (estatusAltaLinea_)
-      campo_(CANCELACION, 'Cancelación', 'lista', { valor: 'NO', opciones: ['NO'].concat(ESTATUS_CANCELACION), requerido: 'SIEMPRE' }),
+      // Estatus solo (usuario, 8-oct): USO con equipo en uso o con responsable; DISPONIBLE si no. La cancelación ya no se
+      // elige en el alta: se hace en Editar o con «Mandar a cancelación». El servidor hace la misma cuenta (estatusAltaLinea_)
       campo_('ESTATUS LINEA', 'Estatus de la línea', 'calculado', { valor: '', soloLectura: true, formula: 'ESTATUS_LINEA_ALTA' }),
     ] : [
       ed('ESTATUS LINEA', 'Estatus de la línea', 'lista', { valor: enBlanco('ESTATUS LINEA'), opciones: LineasRepo.CATALOGO.estatusLinea,
@@ -269,13 +268,11 @@ const LineasRegistros = (function () {
   }
 
   /**
-   * Estatus de una línea nueva (usuario, 8-oct): la cancelación si se eligió; con equipo, la del equipo (USO si está en
-   * uso; DISPONIBLE si está guardado: opción A); sola, USO con responsable y DISPONIBLE sin él. La pantalla hace la
-   * misma cuenta (formulaRegistro, ESTATUS_LINEA_ALTA).
+   * Estatus de una línea nueva (usuario, 8-oct): con equipo, la del equipo (USO si está en uso; DISPONIBLE si está
+   * guardado: opción A); sola, USO con responsable y DISPONIBLE sin él. La pantalla hace la misma cuenta
+   * (formulaRegistro, ESTATUS_LINEA_ALTA).
    */
   function estatusAltaLinea_(valores, equipo) {
-    const cancelacion = texto_(valores[CANCELACION]).toUpperCase();
-    if (ESTATUS_CANCELACION.indexOf(cancelacion) >= 0) return cancelacion;
     if (equipo) return texto_(LineasUtil.col(equipo, 'ESTATUS EQUIPO')).toUpperCase() === 'USO' ? 'USO' : 'DISPONIBLE';
     return texto_(valores['RESPONSABLE']) ? 'USO' : 'DISPONIBLE';
   }
@@ -513,13 +510,11 @@ const LineasRegistros = (function () {
   /**
    * Agregar línea vinculada a un equipo (usuario, 8-oct): la línea se crea y queda con el equipo, en su asignación (la
    * misma escritura que ponerle línea a un equipo en Editar: LineasEscritura.lineaParaEquipo_). El responsable es el del
-   * equipo y su estatus lo sigue: USO si está en uso, DISPONIBLE si está guardado (opción A); EN PROCESO DE CANCELACION
-   * solo si se eligió. Regresa { id: el del equipo, filas }.
+   * equipo y su estatus lo sigue: USO si está en uso, DISPONIBLE si está guardado (opción A; lo pone la escritura).
+   * Regresa { id: el del equipo, filas }.
    */
   function crearLineaEnEquipo_(enviados, valores, comentario, datos, usuario) {
     const nuco = LineasUtil.nucoVisible(enviados[NUCO_VINCULAR]) || '';
-    const cancelacion = texto_(enviados[CANCELACION]).toUpperCase();
-    if (cancelacion === 'CANCELADA') throw new Error('Una línea CANCELADA no se vincula a un equipo.');
     const ahora = new Date();
     let id = null;
     LineasDatos.conCandado(() => {
@@ -528,8 +523,6 @@ const LineasRegistros = (function () {
       const fila = LineasRepo.leerRegistroObligatorio(eq.id, 'el equipo');
       const cambios = {};
       COLUMNAS_LINEA_ALTA.forEach((c) => { if (valores[c] !== undefined && valores[c] !== null && valores[c] !== '') cambios[c] = valores[c]; });
-      // Sin cancelación, el estatus lo pone la escritura según el equipo (estatusAltaLinea_ dice lo mismo en pantalla)
-      if (cancelacion === 'EN PROCESO DE CANCELACION') cambios['ESTATUS LINEA'] = cancelacion;
       const guardado = LineasRepo.guardarCambiosRegistro(fila, cambios, usuario, ahora);
       id = eq.id;
       LineasRepo.registrarMovimiento('ALTA', { motivo: comentario, ticket: texto_(datos && datos.ticket) }, usuario, ahora, {
@@ -569,9 +562,22 @@ const LineasRegistros = (function () {
       if (vacios.length) throw new Error(vacios.join(', ') + ': no se deja en blanco al editar; solo «Mandar a resguardo» lo deja en blanco.');
       // Editar es corregir un dato mal capturado: siempre con su comentario (qué se corrigió y por qué), §5.2
       const motivo = comentarioObligatorio_(datos, 'qué se corrigió y por qué');
-      if ('ESTATUS EQUIPO' in cambios) exigirFormularioResguardo_(base.TIPO, base['ESTATUS EQUIPO'], valores['ESTATUS EQUIPO']);
-      if ('ESTATUS LINEA' in cambios && texto_(valores['ESTATUS LINEA']).toUpperCase() === 'EN PROCESO DE CANCELACION') {
-        throw new Error('Para mandar la línea a cancelación usa «Mandar a cancelación»: entra a la bandeja de cancelaciones.');
+      // RESGUARDO, PARA VENTA y PARA DESECHO del equipo, y EN PROCESO DE CANCELACION y CANCELADA de la línea (usuario,
+      // 8-oct): se cambian aquí si la pantalla avisó que no entran al panel de Resguardos y cancelaciones y se confirmó
+      // (datos.sinPanel); quedan en el historial. Al panel se llega con «Mandar a resguardo» y «Mandar a cancelación»
+      const sinPanel = !!(datos && datos.sinPanel);
+      const estatusEquipo = texto_(valores['ESTATUS EQUIPO']).toUpperCase();
+      const estatusLinea = texto_(valores['ESTATUS LINEA']).toUpperCase();
+      if (!sinPanel) {
+        if ('ESTATUS EQUIPO' in cambios) exigirFormularioResguardo_(base.TIPO, base['ESTATUS EQUIPO'], valores['ESTATUS EQUIPO']);
+        if ('ESTATUS LINEA' in cambios && ESTATUS_LINEA_PANEL.indexOf(estatusLinea) >= 0) {
+          throw new Error('La línea a ' + estatusLinea + ': confirma el aviso (no entra a Resguardos y cancelaciones) o usa «Mandar a cancelación».');
+        }
+      }
+      // El equipo que se guarda (sin persona) se lleva su línea en uso: queda DISPONIBLE, como en el alta (opción A)
+      const aGuardado = 'ESTATUS EQUIPO' in cambios && LineasResguardos.ESTATUS_EQUIPO_RESGUARDO.indexOf(estatusEquipo) >= 0;
+      if (sinPanel && aGuardado && !('ESTATUS LINEA' in cambios) && texto_(base['ESTATUS LINEA']).toUpperCase() === 'USO') {
+        cambios['ESTATUS LINEA'] = 'DISPONIBLE';
       }
       const antes = LineasRepo.convertirRegistro(fila);
       // corregir: cambiar a la persona aquí es corregir el dato en la misma asignación (usuario, 4-oct); pasar el equipo a
@@ -579,7 +585,8 @@ const LineasRegistros = (function () {
       const guardado = LineasRepo.guardarCambiosRegistro(fila, cambios, usuario, new Date(), { corregir: true });
       LineasRepo.registrarMovimiento('EDICION', { motivo: motivo, ticket: texto_(datos && datos.ticket) }, usuario, new Date(), {
         refs: [id].concat(guardado.refs || []), nuco: valores.NUCO, numero: valores['NUMERO TELEFONO'], antes: antes, despues: cambios,
-        detalle: { idsCambios: guardado.idsCambios, idsReasignacion: guardado.idReasignacion ? [guardado.idReasignacion] : [], cambios: guardado.campos },
+        detalle: { idsCambios: guardado.idsCambios, idsReasignacion: guardado.idReasignacion ? [guardado.idReasignacion] : [], cambios: guardado.campos,
+          sinPanel: sinPanel || undefined },
       });
       return guardado;
     });
@@ -748,6 +755,6 @@ const LineasRegistros = (function () {
   return {
     formulario, crear, editar, formularioMasivo, accionMasiva, camposAdicionales, cuantosAdicionales, CUENTA_ADICIONALES,
     _elementos: elementos_, _resolver: resolver_, _cumple: cumple_, _elementosMasivos: elementosMasivos_, _tipoAutomatico: tipoAutomatico_,
-    _estatusAltaLinea: estatusAltaLinea_, _equiposSinLinea: equiposSinLinea_,
+    _estatusAltaLinea: estatusAltaLinea_, _equiposSinLinea: equiposSinLinea_, ESTATUS_LINEA_PANEL,
   };
 })();

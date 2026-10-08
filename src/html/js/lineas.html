@@ -1417,12 +1417,10 @@
 
     function formulaRegistro(nombre, v, id) {
       const tipo = String(v.TIPO || '').toUpperCase();
-      // Agregar línea (usuario, 8-oct; misma cuenta que LineasRegistros.estatusAltaLinea_): la cancelación si se eligió;
-      // con equipo, USO si está en uso y DISPONIBLE si está guardado; sola, USO con responsable y DISPONIBLE sin él
+      // Agregar línea (usuario, 8-oct; misma cuenta que LineasRegistros.estatusAltaLinea_): con equipo, USO si está en uso
+      // y DISPONIBLE si está guardado; sola, USO con responsable y DISPONIBLE sin él
       const conEquipo = String(v._VINCULAR || '').toUpperCase() === 'TRUE';
       if (nombre === 'ESTATUS_LINEA_ALTA') {
-        const cancelacion = String(v._CANCELACION || '').toUpperCase();
-        if (cancelacion && cancelacion !== 'NO') return cancelacion;
         if (conEquipo) {
           const eq = equipoPorNuco(v._NUCO);
           return eq ? (String(eq.estatus || '').toUpperCase() === 'USO' ? 'USO' : 'DISPONIBLE') : '';
@@ -1914,6 +1912,8 @@
       let fichaActual = null; // la ficha abierta (su carpeta de Drive, para el ⋮)
       // Estatus del equipo que van por el formulario de resguardo (LineasResguardos.ESTATUS_EQUIPO_RESGUARDO)
       const ESTATUS_EQUIPO_RESGUARDO = ['RESGUARDO', 'PARA VENTA', 'PARA DESECHO'];
+      // Los de la línea que en Editar llevan el mismo aviso (LineasRegistros.ESTATUS_LINEA_PANEL)
+      const ESTATUS_LINEA_PANEL = ['EN PROCESO DE CANCELACION', 'CANCELADA'];
       let marcarKpi = null;
       raiz.querySelectorAll('#ln-tabs .tab-btn').forEach((tab) => {
         tab.addEventListener('click', () => mostrarModulo(tab.dataset.tab));
@@ -2648,11 +2648,13 @@
                   ? ['PIN equipo', e.pinEquipo] : null,
                 e.patronRuta ? ['Patrón', vistaPatron(e.patronRuta), true] : null,   // sin patrón (ni del AppSheet ni trazado) no se muestra
                 e.tipo === 'MODEM' || e.tipo === 'BANDA_ANCHA' ? ['Contraseña módem', e.contrasenaModem] : null,
+                // PIN de WhatsApp: del equipo; sin línea no hay (usuario, 8-oct)
+                l ? ['PIN WhatsApp', l.pinWhatsapp] : null,
                 e.simResidual ? ['SIM residual', chip(e.simResidual, 'ambar'), true] : null,
               ])) +
               tarjeta(icono('card-sim') + ' Línea asignada', l ? campos([
                 ['Número', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + icono('phone') + ' ' + esc(l.numero || '(sin número)') + ' ' + icono('chevron-right') + '</a>', true],
-                ['Compañía', l.compania], ['Razón social', l.razonSocial], ['Estatus', chip(l.estatus), true], ['SIM', l.sim], ['PIN WhatsApp', l.pinWhatsapp],
+                ['Compañía', l.compania], ['Razón social', l.razonSocial], ['Estatus', chip(l.estatus), true], ['SIM', l.sim],
                 ['Costo plan', costo], ['Plan', [fecha(l.inicioPlan), fecha(l.finPlan)].filter(Boolean).join(' → ')],
               ]) : '<p class="empty-state">Este equipo no tiene línea asignada.</p>') +
               tarjetaResponsable(e.responsable) +
@@ -2685,7 +2687,7 @@
             '<div class="ln-grid-2">' +
               tarjeta(icono('card-sim') + ' Línea', campos([
                 !e ? ['Tipo', tipoRegistro(l.legado), true] : null,
-                ['Compañía', l.compania], ['SIM', l.sim], ['PIN WhatsApp', l.pinWhatsapp], ['Razón social', l.razonSocial],
+                ['Compañía', l.compania], ['SIM', l.sim], ['Razón social', l.razonSocial],
                 ['Costo plan', costo], ['Inicio plan', fecha(l.inicioPlan)], ['Fin plan', fecha(l.finPlan)],
                 l.usoTemporal ? ['Uso temporal', 'Desde ' + esc(fecha(l.usoTemporal.desde) || '—') + ' · ' + esc(l.usoTemporal.correo || ''), true] : null,
                 !e && l.nucoLegado ? ['NUCO (anterior)', l.nucoLegado] : null,
@@ -2693,6 +2695,7 @@
               tarjeta(icono('smartphone') + ' Equipo', e ? campos([
                 ['NUCO', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' ' + esc(e.nuco || '—') + ' ' + icono('chevron-right') + '</a>', true],
                 ['Tipo', tipoRegistro(e.legado), true], ['Modelo', e.modelo], ['IMEI', e.imei], ['Estatus', chip(e.estatus), true],
+                ['PIN WhatsApp', l.pinWhatsapp],
               ]) : '<p class="empty-state">Línea suelta: no está instalada en un equipo de la empresa.</p>') +
               tarjetaResponsable(e ? e.responsable : l.responsable, e ? 'Responsable (del equipo)' : 'Responsable') +
             '</div>', tarjetaDetallesCopiar(r.detalles), !e);
@@ -3549,45 +3552,38 @@
               return;
             }
             const valores = leerFormularioEn(cuerpo, elementos);
-            // Estatus que siguen su flujo (usuario, 4-oct): RESGUARDO, PARA VENTA y PARA DESECHO → Mandar a resguardo;
-            // EN PROCESO DE CANCELACION → Mandar a cancelación. Lo demás se guarda aquí; si solo cambió el estatus, se va
-            // directo al flujo (su formulario pide su comentario)
+            // Estatus del panel de Pau (usuario, 8-oct): RESGUARDO, PARA VENTA y PARA DESECHO del equipo, y EN PROCESO DE
+            // CANCELACION y CANCELADA de la línea, se guardan aquí después de un aviso: no entran al panel de Resguardos y
+            // cancelaciones, solo al historial. Al panel se llega con «Mandar a resguardo» y «Mandar a cancelación»
             const inicial = {};
             elementos.forEach((e) => { if (e.tipo === 'campo') inicial[e.columna] = String(e.valor === undefined || e.valor === null ? '' : e.valor); });
-            let flujo = null;
-            if (id && valores['ESTATUS EQUIPO'] !== inicial['ESTATUS EQUIPO'] && ESTATUS_EQUIPO_RESGUARDO.indexOf(valores['ESTATUS EQUIPO']) >= 0) {
-              flujo = { tipo: 'RESGUARDO', estatus: valores['ESTATUS EQUIPO'] };
-              valores['ESTATUS EQUIPO'] = inicial['ESTATUS EQUIPO'];
-            } else if (id && valores['ESTATUS LINEA'] !== inicial['ESTATUS LINEA'] && valores['ESTATUS LINEA'] === 'EN PROCESO DE CANCELACION') {
-              flujo = { tipo: 'CANCELACION' };
-              valores['ESTATUS LINEA'] = inicial['ESTATUS LINEA'];
-            }
-            const seguirFlujo = () => {
-              if (!flujo) return;
-              const ix = memoria.indice || { equipos: [], lineas: [] };
-              const r = ix.equipos.filter((x) => x.id === id)[0] || ix.lineas.filter((x) => x.id === id)[0] || { id: id };
-              if (flujo.tipo === 'RESGUARDO') abrirResguardo([{ id: id }], { estatus: flujo.estatus }); else abrirCancelacion([r]);
-            };
-            const norma = (x) => String(x === undefined || x === null ? '' : x).replace(/\s+/g, '').toUpperCase();
-            const otros = Object.keys(valores).some((c) => c !== (patron && patron.columna) && norma(valores[c]) !== norma(inicial[c])) ||
-              (patron && patronParaGuardar() !== undefined);
-            if (flujo && !otros) { cerrarCaptura(true); seguirFlujo(); return; }
+            const cambiaA = (c, lista) => !!id && valores[c] !== inicial[c] && lista.indexOf(valores[c]) >= 0;
+            const avisos = [];
+            if (cambiaA('ESTATUS EQUIPO', ESTATUS_EQUIPO_RESGUARDO)) avisos.push('Equipo: ' + (inicial['ESTATUS EQUIPO'] || '—') + ' → ' + valores['ESTATUS EQUIPO']);
+            if (cambiaA('ESTATUS LINEA', ESTATUS_LINEA_PANEL)) avisos.push('Línea: ' + (inicial['ESTATUS LINEA'] || '—') + ' → ' + valores['ESTATUS LINEA']);
+            // El servidor deja DISPONIBLE la línea en uso del equipo que se guarda (LineasRegistros.editar)
+            else if (avisos.length && inicial['ESTATUS LINEA'] === 'USO' && valores['ESTATUS LINEA'] === 'USO') avisos.push('Línea: USO → DISPONIBLE');
             if (patron) {
               const p = patronParaGuardar();
               if (p === undefined) delete valores[patron.columna]; else valores[patron.columna] = p;
             }
+            const avisoEstatus = !avisos.length ? Promise.resolve(true) : Confirmar.pedir({
+              titulo: 'Cambio de estatus',
+              mensaje: 'Este cambio no se agregará en el panel de Resguardos y cancelaciones, pero se quedará en el historial.',
+              detalle: avisos, textoConfirmar: 'Confirmar',
+            });
             // Segunda ventana: un solo COMENTARIO obligatorio y el TICKET (plan §5.2), ya con los cambios aceptados
-            pedirDatos('Comentario', $('#ln-captura-subtitulo', raiz).textContent || (ctx.parte === 'LINEA' ? 'Agregar línea' : 'Agregar equipo'),
+            avisoEstatus.then((ok) => (!ok || captura !== sesionEditor ? null : pedirDatos('Comentario', $('#ln-captura-subtitulo', raiz).textContent || (ctx.parte === 'LINEA' ? 'Agregar línea' : 'Agregar equipo'),
               [{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }, { clave: 'ticket', etiqueta: 'Ticket' }],
-              id ? 'Guardar cambios' : (ctx.parte === 'LINEA' ? 'Agregar línea' : 'Agregar equipo')).then((nota) => {
+              id ? 'Guardar cambios' : (ctx.parte === 'LINEA' ? 'Agregar línea' : 'Agregar equipo')))).then((nota) => {
               if (!nota || captura !== sesionEditor) return null;
               return leerArchivosEn(cuerpo).then((archivos) => {
               estadoGuardado(id ? 'Guardando cambios' : 'Guardando');
-              const datos = { valores: valores, archivos: archivos, comentario: nota.comentario, ticket: nota.ticket, parte: ctx.parte, bloqueo: bloqueoElegido(cuerpo) };
+              const datos = { valores: valores, archivos: archivos, comentario: nota.comentario, ticket: nota.ticket, parte: ctx.parte, bloqueo: bloqueoElegido(cuerpo),
+                sinPanel: avisos.length > 0 };
               return (id ? llamar('apiLineasEditarRegistro', id, datos) : llamar('apiLineasCrearRegistro', datos)).then((r) => aplicarCambiosIndice(r.filas).then(() => {
                 cerrarCaptura(true);
                 aviso(icono('circle-check') + ' ' + (id ? 'Información actualizada' : (ctx.parte === 'LINEA' ? 'Línea agregada' : 'Equipo agregado')), 6000);
-                if (flujo) { seguirFlujo(); return; }
                 abrirRegistro(id || r.id);
               }));
               });

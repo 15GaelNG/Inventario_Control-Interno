@@ -1659,12 +1659,12 @@ test('PARA VENTA y PARA DESECHO siguen la lógica de Mandar a resguardo (usuario
   const reg = read('src/services/lineas/LineasRegistros.gs');
   const resg = read('src/services/lineas/LineasResguardos.gs');
   const cliente = read('src/html/js/lineas.html');
-  // El servidor no deja llegar a esos estatus por el cambio rápido ni por la edición directa
+  // Sin el aviso confirmado el servidor no deja llegar a esos estatus por la edición directa
   assert.match(reg, /function exigirFormularioResguardo_\(tipo, estatusAntes, estatusNuevo\)/);
   assert.match(reg, /LineasResguardos\.ESTATUS_EQUIPO_RESGUARDO\.indexOf\(nuevo\)/);
   assert.equal((reg.match(/exigirFormularioResguardo_\(/g) || []).length, 2, 'definición + editar');
-  // Editar abre el formulario de resguardo con el estatus elegido (Para venta, Para desecho), usuario 4-oct
-  assert.match(cliente, /if \(flujo\.tipo === 'RESGUARDO'\) abrirResguardo\(\[\{ id: id \}\], \{ estatus: flujo\.estatus \}\); else abrirCancelacion\(\[r\]\);/);
+  // Editar ya no abre el formulario de resguardo (usuario, 8-oct): avisa que no entra al panel y se guarda con sinPanel
+  assert.match(cliente, /cambiaA\('ESTATUS EQUIPO', ESTATUS_EQUIPO_RESGUARDO\)/);
   // Sin regla de estatus (usuario, 4-oct): cada equipo ofrece la lista completa
   assert.match(cliente, /'Estatus del equipo', 'escala', \{ opciones: form\.estatusEquipo, valor: estatusInicial, requerido: 'SIEMPRE', ayudas: SIGNIFICADO_ESTATUS \}/);
   assert.doesNotMatch(resg, /LineasAcciones\.hayCamino|estatusPosibles/);
