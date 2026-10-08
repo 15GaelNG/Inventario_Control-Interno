@@ -21,6 +21,7 @@ DOCUMENTACION = "1.-DOCUMENTACIÓN"
 ANTERIORES = "ANTERIORES"
 RESPONSIVAS_ANTERIORES = "RESPONSIVAS ANTERIORES"
 ADHERENTES = "ADHERENTES"
+REPETIDOS = "REPETIDOS"   # dentro de ANTERIORES: copias idénticas de algo que ya está en las 6
 CARPETA = "application/vnd.google-apps.folder"
 
 # (clave, carpeta, prefijo del archivo)
@@ -178,20 +179,23 @@ def planear_nuco(nuco, documentacion, adjuntos, sin_seguro=None):
 
     copias = []
     resumen = {"rellenos": rellenos, "duplicados": 0, "docs": {}}
+    repetidos = []
     for c, carpeta, prefijo in SEIS:
-        vistos = set()
-        unicos = []
-        # La más reciente primero (se queda con el nombre sin fecha); en factura, la factura antes que la carta factura
-        ordenados = sorted(candidatos[c], key=lambda x: x.get("modifiedTime") or "", reverse=True)
-        if c == "FACTURA":
-            ordenados.sort(key=lambda x: "CARTA" in normal(x["name"]))
-        for a in ordenados:
+        # Repetidos (mismo contenido): se queda el que ya está en el NUCO (se mueve, no hace falta copiar nada) y,
+        # entre esos, el más reciente. Un repetido del NUCO también sale de su carpeta vieja: a ANTERIORES/REPETIDOS
+        elegido = {}
+        for a in sorted(candidatos[c], key=lambda x: (x["fuente"] != "nuco", "".join(chr(255 - ord(ch)) for ch in (x.get("modifiedTime") or "")))):
             clave = a.get("md5Checksum") or a["id"]
-            if clave in vistos:
-                resumen["duplicados"] += 1
+            if clave not in elegido:
+                elegido[clave] = a
                 continue
-            vistos.add(clave)
-            unicos.append(a)
+            resumen["duplicados"] += 1
+            if a["fuente"] == "nuco":
+                repetidos.append(a)
+        # La más reciente primero (se queda con el nombre sin fecha); en factura, la factura antes que la carta factura
+        unicos = sorted(elegido.values(), key=lambda x: x.get("modifiedTime") or "", reverse=True)
+        if c == "FACTURA":
+            unicos.sort(key=lambda x: "CARTA" in normal(x["name"]))
         # Responsiva: la más reciente (que no esté ya en anteriores ni sea adherente) va a la raíz
         if c == "RESPONSIVA":
             vigente = next((a for a in unicos if not a["sub"]), None)
@@ -221,5 +225,11 @@ def planear_nuco(nuco, documentacion, adjuntos, sin_seguro=None):
         copias.append({"origen": a["id"], "md5": a.get("md5Checksum"), "destino": [DOCUMENTACION, ANTERIORES] + partes,
                        "de": a["de"] + "/" + a["name"], "nombre": a["name"], "mime": a.get("mimeType"), "size": a.get("size"),
                        "fuente": "nuco"})
+    for a in repetidos:
+        partes = a["de"].split("/")[1:]
+        copias.append({"origen": a["id"], "md5": a.get("md5Checksum"), "destino": [DOCUMENTACION, ANTERIORES, REPETIDOS] + partes,
+                       "de": a["de"] + "/" + a["name"], "nombre": a["name"], "mime": a.get("mimeType"), "size": a.get("size"),
+                       "fuente": "nuco"})
     resumen["anteriores"] = len(anteriores)
+    resumen["repetidos"] = len(repetidos)
     return copias, resumen

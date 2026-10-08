@@ -532,7 +532,8 @@ def ordenar(nucos_pedidos=None, todos=False, hilos=6):
             bit.anotar(accion="saltado", nuco=p["nuco"], motivo="la carpeta del NUCO ya no está donde dice el plan")
             sumar("saltados")
             return
-        contenido = {}   # carpeta → {nombre NFC: id} (lo que hay adentro, leído una vez)
+        contenido = {}   # carpeta → {(nombre NFC sin espacios de más, es carpeta): id} (lo que hay adentro, leído una vez)
+        nombres = {}     # id → nombre tal cual está en Drive
 
         def hijos(padre):
             if padre not in contenido:
@@ -544,6 +545,7 @@ def ordenar(nucos_pedidos=None, todos=False, hilos=6):
                                               includeItemsFromAllDrives=True))
                     for f in r["files"]:
                         contenido[padre][(_nfc(f["name"]), f["mimeType"] == reglas.CARPETA)] = f["id"]
+                        nombres[f["id"]] = f["name"]
                     tok = r.get("nextPageToken")
                     if not tok:
                         break
@@ -556,8 +558,16 @@ def ordenar(nucos_pedidos=None, todos=False, hilos=6):
                 h[clave] = llamar(d.files().create(body={"name": nombre, "mimeType": reglas.CARPETA, "parents": [padre]},
                                                    fields="id", supportsAllDrives=True))["id"]
                 contenido[h[clave]] = {}
+                nombres[h[clave]] = nombre
                 bit.anotar(accion="crear_carpeta", nuco=p["nuco"], id=h[clave], padre=padre, nombre=nombre)
                 sumar("carpetas")
+            elif nombres.get(h[clave]) != nombre:
+                # Ya existe pero con un espacio de más ("4.-TARJETA DE CIRCULACIÓN "): se deja exacta
+                llamar(d.files().update(fileId=h[clave], body={"name": nombre}, fields="id", supportsAllDrives=True))
+                bit.anotar(accion="mover", nuco=p["nuco"], id=h[clave], de_padre=padre, de_nombre=nombres[h[clave]],
+                           a_padre=padre, a_nombre=nombre)
+                nombres[h[clave]] = nombre
+                sumar("renombrados")
             return h[clave]
 
         def dentro_del_nuco(padre):

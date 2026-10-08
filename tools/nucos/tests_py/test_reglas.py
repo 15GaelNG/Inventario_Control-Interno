@@ -134,3 +134,18 @@ def test_lo_de_appsheet_y_la_app_se_marca_para_copiar_y_lo_del_nuco_para_mover()
     assert fuentes["f.pdf"] == ("nuco", "1.-FACTURA")
     assert fuentes["t.pdf"] == ("hoja", "6.-TENENCIA")
     assert fuentes["ADHERENTE VEHICULAR X.pdf"] == ("app", "5.-RESPONSIVA/ADHERENTES")
+
+
+def test_repetidos_gana_el_del_nuco_y_el_otro_repetido_del_nuco_sale_a_anteriores():
+    doc = carpeta("1.-DOCUMENTACIÓN",
+        carpeta("9.- CARTA RESPONSIVA", archivo("JUAN - 100.pdf", "2023-01-01T00:00:00Z", md5="r")),
+        archivo("350.- Factura.pdf", "2022-01-01T00:00:00Z", md5="f"),
+        carpeta("350.- RESPONSIVA ILEANA", archivo("350.- Factura.pdf", "2024-01-01T00:00:00Z", md5="f")))
+    adj = dict(archivo("refwf219.RESPONSIVA.pdf", "2025-01-01T00:00:00Z", md5="r"))
+    copias, resumen = reglas.planear_nuco("100", [doc], {"RESPONSIVA": [adj]})
+    porfuente = sorted((c["fuente"], "/".join(c["destino"][1:]), c["de"].split("/")[-1]) for c in copias)
+    assert ("nuco", "5.-RESPONSIVA", "JUAN - 100.pdf") in porfuente                 # el del NUCO, no la copia de AppSheet
+    assert not any(f == "hoja" for f, _, _ in porfuente)
+    assert ("nuco", "1.-FACTURA", "350.- Factura.pdf") in porfuente
+    assert any(d.startswith("ANTERIORES/REPETIDOS") for f, d, n in porfuente if n == "350.- Factura.pdf")
+    assert resumen["duplicados"] == 2 and resumen["repetidos"] == 1

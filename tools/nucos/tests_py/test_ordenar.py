@@ -140,3 +140,26 @@ def test_ordenar_no_trabaja_un_nuco_que_ya_no_esta_en_nucos(tmp_path, monkeypatc
     n = len(dr.archivos)
     expediente.ordenar(["5"], hilos=1)
     assert len(dr.archivos) == n
+
+
+def test_una_carpeta_con_espacio_de_mas_se_reusa_y_se_deja_exacta(tmp_path, monkeypatch):
+    dr = DriveFalso()
+    nucos = dr.nuevo("NUCOS VEHICULOS", None, True)
+    n24 = dr.nuevo("24", nucos, True)
+    doc = dr.nuevo("1.-DOCUMENTACIÓN", n24, True)
+    tc = dr.nuevo("4.-TARJETA DE CIRCULACIÓN ", doc, True)
+    f = dr.nuevo("TC.pdf", tc)
+    (tmp_path / "plan.json").write_text(json.dumps([{"nuco": "24", "id": n24, "copias": [
+        {"origen": f, "destino": ["1.-DOCUMENTACIÓN", "4.-TARJETA DE CIRCULACIÓN"], "nombre": "TARJETA DE CIRCULACION-0024.pdf", "de": "x", "fuente": "nuco"}]}]),
+        encoding="utf-8")
+    monkeypatch.setattr(expediente, "CACHE", tmp_path)
+    monkeypatch.setattr(expediente, "NUCOS", nucos)
+    monkeypatch.setattr(expediente, "drive", lambda: dr)
+    monkeypatch.setattr(expediente, "respaldar_bitacora", lambda ruta: None)
+    antes = dr.foto()
+    expediente.ordenar(["24"], hilos=1)
+    assert dr.archivos[tc]["name"] == "4.-TARJETA DE CIRCULACIÓN"          # la misma carpeta, ya sin el espacio
+    assert dr.ruta(f).endswith("1.-DOCUMENTACIÓN/4.-TARJETA DE CIRCULACIÓN/TARJETA DE CIRCULACION-0024.pdf")
+    for bit in (tmp_path / "bitacoras").glob("*.jsonl"):
+        expediente.deshacer(bit)
+    assert {i: v for i, v in dr.foto().items() if not v[2]} == antes
