@@ -32,9 +32,6 @@ const PROYECTOS = { dev: '.clasp.json', lab: '.clasp.lab.json', prod: '.clasp.pr
 const DESTINOS = JSON.parse(fs.readFileSync(path.join(__dirname, 'destinos.json'), 'utf8'));
 // Producción: el primero crea la versión; el segundo es el link que usa el equipo
 const DESPLIEGUES_PROD = DESTINOS.desplieguesProd;
-// Opcional: el despliegue aparte (acceso "Cualquier usuario") de las ligas de firma a
-// distancia -- '' hasta que exista, y entonces no se mueve ni se revisa (ver destinos.json)
-const DESPLIEGUE_FIRMA_PUBLICA = DESTINOS.despliegueFirmaPublicaProd || null;
 const EN_ACTION = process.env.GITHUB_ACTIONS === 'true';
 
 // clasp se corre con el mismo Node y sin shell: así una ruta o una descripción con espacios
@@ -77,17 +74,22 @@ function exigirCuentaDeProd_(args) {
   return cuenta;
 }
 
-/** Mueve los dos links de prod a la versión (y el de firma pública, si ya existe) y revisa
- *  que todos hayan quedado ahí -- deploy y regreso pasan por aquí, así nunca se desincroniza. */
+/**
+ * Mueve los dos links de prod a la versión y revisa que los dos hayan quedado ahí.
+ *
+ * El despliegue público de firma (URL_FIRMA_PUBLICA) NO se toca aquí a propósito: moverlo por
+ * la API (clasp update-deployment) le resetea "Quién tiene acceso" al del manifiesto normal
+ * (Dominio) -- Apps Script no respeta el "Cualquier usuario" que se eligió a mano al crearlo
+ * en cuanto se le apunta a otra versión por la API (confirmado, 8-oct: quedó pidiendo cuenta
+ * de dominio después del primer --desplegar con esto automatizado). Por eso ese despliegue se
+ * actualiza A MANO, desde el editor (Implementar → Administrar implementaciones → lápiz →
+ * elegir la versión nueva → confirmar "Cualquier usuario" otra vez ahí mismo, antes de guardar).
+ */
 function moverDespliegues_(proyecto, version, descripcion) {
   clasp(['-P', proyecto, 'update-deployment', DESPLIEGUES_PROD[1], '-V', version, '-d', descripcion]);
-  if (DESPLIEGUE_FIRMA_PUBLICA) {
-    clasp(['-P', proyecto, 'update-deployment', DESPLIEGUE_FIRMA_PUBLICA, '-V', version, '-d', descripcion]);
-  }
-  const esperados = DESPLIEGUE_FIRMA_PUBLICA ? DESPLIEGUES_PROD.concat(DESPLIEGUE_FIRMA_PUBLICA) : DESPLIEGUES_PROD;
   const lista = clasp(['-P', proyecto, 'list-deployments']);
-  const enVersion = esperados.filter((d) => new RegExp(d + ' @' + version + '\\b').test(lista));
-  if (enVersion.length !== esperados.length) throw new Error('No todos los despliegues quedaron en @' + version + ':\n' + lista);
+  const enVersion = DESPLIEGUES_PROD.filter((d) => new RegExp(d + ' @' + version + '\\b').test(lista));
+  if (enVersion.length !== 2) throw new Error('Los dos despliegues no quedaron en @' + version + ':\n' + lista);
 }
 
 const LINK_EQUIPO = () => 'https://script.google.com/a/macros/' + DESTINOS.dominio + '/s/' + DESPLIEGUES_PROD[1] + '/exec';
@@ -106,11 +108,11 @@ function regresar_(args, version) {
   const descripcion = 'Regreso a la v' + version + (antes ? ' (desde la v' + antes + ')' : '');
   clasp(['-P', proyecto, 'update-deployment', DESPLIEGUES_PROD[0], '-V', version, '-d', descripcion]);
   moverDespliegues_(proyecto, version, descripcion);
-  console.log('Regresado: los dos links de producción' + (DESPLIEGUE_FIRMA_PUBLICA ? ' y la liga pública de firma' : '') + ' en la versión ' + version + '.');
+  console.log('Regresado: los dos links de producción en la versión ' + version + '.');
   resumen_('## ↩️ Producción regresó a la versión ' + version + '\n\n' +
     '| | |\n|---|---|\n| Antes | v' + (antes || '?') + ' |\n| Ahora | v' + version + ' |\n' +
-    '| La app corre con | ' + cuenta + ' |\n| Link del equipo | ' + LINK_EQUIPO() + ' |' +
-    (DESPLIEGUE_FIRMA_PUBLICA ? '\n| Liga pública de firma | también regresada |' : ''));
+    '| La app corre con | ' + cuenta + ' |\n| Link del equipo | ' + LINK_EQUIPO() + ' |\n\n' +
+    'La liga pública de firma (si la usas) se actualiza a mano, aparte -- ver el comentario de moverDespliegues_.');
 }
 
 function ramaActual_() {
@@ -247,10 +249,11 @@ async function main() {
     const m = /@(\d+)/.exec(primero);
     if (!m) throw new Error('No encontré la versión nueva en: ' + primero);
     moverDespliegues_(proyecto, m[1], descripcion);
-    console.log('Desplegado: los dos links de producción' + (DESPLIEGUE_FIRMA_PUBLICA ? ' y la liga pública de firma' : '') + ' en la versión ' + m[1] + '.');
+    console.log('Desplegado: los dos links de producción en la versión ' + m[1] + '.');
     resumen_('## 🚀 Producción en la versión ' + m[1] + '\n\n| | |\n|---|---|\n| Qué cambia | ' + descripcion.replace(/\|/g, '/') + ' |\n' +
-      '| Antes | v' + (antes || '?') + ' |\n| La app corre con | ' + (rev.cuenta || '?') + ' |\n| Link del equipo | ' + LINK_EQUIPO() + ' |' +
-      (DESPLIEGUE_FIRMA_PUBLICA ? '\n| Liga pública de firma | también movida |' : '') + '\n\n' +
+      '| Antes | v' + (antes || '?') + ' |\n| La app corre con | ' + (rev.cuenta || '?') + ' |\n| Link del equipo | ' + LINK_EQUIPO() + ' |\n\n' +
+      'Si usas la liga pública de firma, actualízala a mano (Implementar → Administrar implementaciones → lápiz → ' +
+      'versión ' + m[1] + ' → confirma "Cualquier usuario" antes de guardar -- la API se lo resetea solo).\n\n' +
       (antes ? 'Si algo salió mal: **Run workflow** → acción "regresar a una versión" → versión `' + antes + '`.' : ''));
   } else if (destino === 'prod') {
     resumen_('## 🔎 Subido a producción sin desplegar\n\nEl código quedó en el link `/dev`; el equipo sigue en la versión de antes.');
