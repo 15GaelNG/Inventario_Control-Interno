@@ -52,13 +52,13 @@ jobs:
   probar:
     name: Pruebas
     if: github.event_name == 'push' || inputs.accion != 'regresar a una versión'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
@@ -69,13 +69,13 @@ jobs:
     name: Subir a su DEV
     needs: probar
     if: github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
@@ -90,13 +90,13 @@ jobs:
         run: rm -f ~/.clasprc.json
 
   produccion:
-    name: Producción (${{ inputs.accion }})
+    name: Producción
     needs: probar
     # Con "regresar" no hay pruebas (no se sube código): corre si se saltaron, nunca si fallaron
     if: >-
       always() && github.event_name == 'workflow_dispatch' &&
       (needs.probar.result == 'success' || (needs.probar.result == 'skipped' && inputs.accion == 'regresar a una versión'))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     # Con required reviewers en Settings → Environments → produccion, espera a que alguien apruebe
     environment:
@@ -118,13 +118,14 @@ jobs:
             "regresar a una versión")
               [[ "$VERSION" =~ ^[0-9]+$ ]] || { echo "::error::Para regresar escribe el número de versión (p. ej. 65)."; exit 1; } ;;
           esac
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      # Sin caché de npm: en el trabajo que tiene las credenciales de producción, nada que haya dejado
+      # otra rama (recomendación de setup-node contra el envenenamiento de caché)
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-          cache: npm
       - run: npm ci
       - name: Credenciales de clasp
         run: printf '%s' "$CLASPRC_JSON" > ~/.clasprc.json
