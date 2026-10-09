@@ -317,15 +317,17 @@ const LineasRepo = (function () {
 
   /**
    * La vista de tabla del AppSheet completa, como la muestra el panel (Exportar a Excel, 9-oct): un renglón por equipo o
-   * línea suelta con las columnas COLS_VISTA_LINEAS, sin ID. Sin caché, para que las fechas sigan siendo Date.
+   * línea suelta con las columnas COLS_VISTA_LINEAS. Antes, ID como en la hoja vieja: el del AppSheet (con él ligan
+   * CAMBIOS y las fotos viejas el reporte y la conciliación, reporte_lineas/scripts) o, si es nuevo, el del sistema.
+   * Sin caché, para que las fechas sigan siendo Date.
    */
   function vistaCompleta() {
     const filas = [];
     LineasDatos.leerTabla(TAB.LINEAS).forEach((f) => {
       const r = convertirRegistro(f);
-      if (r && (r.equipo || r.linea)) filas.push(filaVista_(f, r).slice(1));
+      if (r && (r.equipo || r.linea)) filas.push([txt(col(f, LineasDatos.COL_ID_APPSHEET)) || r.id].concat(filaVista_(f, r).slice(1)));
     });
-    return { columnas: COLS_VISTA_LINEAS.slice(), filas: filas };
+    return { columnas: ['ID'].concat(COLS_VISTA_LINEAS), filas: filas };
   }
 
   /** Índices de equipos y líneas + columnas de la vista de tabla del AppSheet (1 lectura de la pestaña; caché 30 min). */
