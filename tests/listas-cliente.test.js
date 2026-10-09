@@ -166,6 +166,12 @@ function navegador(localStorageInicial) {
   await w.vigilarListas(true);
   await espera(20);
   ok(servidor.llamadas.length === 2, 'con la huella nueva ya no la vuelve a pedir');
+  servidor.vigentes = {};   // el servidor no pudo leer las versiones (CacheService lento)
+  const llamadasAntes = servidor.llamadas.length;
+  await w.vigilarListas(true);
+  await espera(20);
+  ok(servidor.llamadas.length === llamadasAntes, 'si el servidor no sabe las versiones, no repide nada (nada de pedir todo a la vez)');
+  servidor.vigentes = { ver_libro_VEHICULOS: 'b2' };
   Object.defineProperty(w.document, 'hidden', { value: true, configurable: true });
   const antes = servidor.preguntas;
   await w.vigilarListas(true);

@@ -388,6 +388,9 @@
     } catch (err) {
       return pedidas;   // sin red o sesión vencida: se intenta en la siguiente vuelta
     }
+    // Sin ninguna clave: el servidor no pudo leer las versiones (CacheService lento). No se sabe si algo cambió, así que
+    // no se repide nada (si no, una falla de Google haría que todas las pantallas pidieran todo a la vez)
+    if (!vigentes || !Object.keys(vigentes).length) return pedidas;
     conHuella.forEach(([k, e]) => {
       if (Object.keys(e.huella).some((c) => vigentes[c] !== e.huella[c])) repedir(k, e);
     });

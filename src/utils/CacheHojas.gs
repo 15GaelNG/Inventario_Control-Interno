@@ -176,9 +176,19 @@ const CacheHojas = (function () {
     }
   }
 
-  /** Las versiones de hoy de esas claves de huella ('' si ya no están: venció la versión, se toma como cambio) */
+  /**
+   * Las versiones de hoy de esas claves de huella ('' si ya no están: venció la versión, se toma como cambio). Si
+   * CacheService falla (DEADLINE_EXCEEDED, pasajero), {} sin claves: el vigía lo toma como "no se sabe" y no repide
+   * nada; pregunta otra vez en la siguiente vuelta. Nunca truena: es una pregunta de fondo, cada minuto.
+   */
   function vigentes(claves) {
-    const actuales = claves.length ? cache().getAll(claves) : {};
+    let actuales;
+    try {
+      actuales = claves.length ? cache().getAll(claves) : {};
+    } catch (e) {
+      console.warn('CacheHojas.vigentes: ' + e.message);
+      return {};
+    }
     const r = {};
     claves.forEach((k) => { r[k] = actuales[k] || ''; });
     return r;

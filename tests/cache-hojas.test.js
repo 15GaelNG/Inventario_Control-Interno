@@ -173,6 +173,10 @@ h = CacheHojas.conHuella(() => CacheHojas.calculo('inicio_h', () => { throw new 
 ok(h.v === 2 && h.huella[claveSens], 'calculo() desde la caché también da su huella');
 h = CacheHojas.conHuella(() => 'sin hojas');
 ok(Object.keys(h.huella).length === 0, 'una lista que no lee hojas por CacheHojas sale con huella vacía');
+const getAllReal = cache.getAll;
+cache.getAll = () => { throw new Error('Se produjo un error en el servidor al leer desde el almacenamiento. Código de error: DEADLINE_EXCEEDED'); };
+ok(Object.keys(CacheHojas.vigentes([claveSens])).length === 0, 'si CacheService tarda de más (DEADLINE_EXCEEDED), vigentes no truena: regresa {} (no se sabe)');
+cache.getAll = getAllReal;
 
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
 process.exit(fallas ? 1 : 0);
