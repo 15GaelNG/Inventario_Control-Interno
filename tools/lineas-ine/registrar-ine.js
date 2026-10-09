@@ -12,14 +12,19 @@
  * como en el paso 1 (LineasIdentificaciones.nombreArchivo: «INE - NOMBRE - ID PERSONA.pdf») y queda un renglón en
  * APP_IDENTIFICACIONES con ORIGEN «NUCOS» y su ID de Ids.nuevo (los mismos .gs, cargados como en las pruebas).
  *
- * En el DEV: el PDF va a la carpeta de NUCOS de pruebas, con la misma ruta que su original
+ * En el DEV (sin opciones): el PDF va a la carpeta de NUCOS de pruebas, con la misma ruta que su original
  * (<NUCO>/CARTA RESPONSIVA/<AÑO>/RESP DD MM) y el registro al libro del DEV. Los originales de NUCOS de producción solo
- * se leen. Producción no está aquí: cuando el usuario lo diga, se agrega aparte.
+ * se leen.
+ * En producción (--produccion; el usuario lo pidió el 9-oct): el PDF va a la carpeta real de su responsiva en NUCOS,
+ * junto a los originales (que no se tocan; se revisa que la carpeta se siga llamando como dice el inventario), y el
+ * registro a APP_IDENTIFICACIONES del libro de producción (bloque de .clasp.produccion.json en Entornos.gs); si la hoja
+ * no está, se crea como LineasDatos.asegurarPestana. Activos, según el Capital Humano de producción. Lo que se lee
+ * (inventario, lectura y ensayo) sigue en el libro del DEV. --ensayo: dice qué haría y revisa las carpetas, sin escribir.
  *
  * Se puede volver a correr: salta a quien ya tiene su renglón con ORIGEN «NUCOS» y, si el PDF ya está en la carpeta, no
  * lo vuelve a subir.
  *
- * Uso:   node tools/lineas-ine/registrar-ine.js [--limite N] [--paralelo 4]
+ * Uso:   node tools/lineas-ine/registrar-ine.js [--produccion] [--ensayo] [--limite N] [--paralelo 4]
  */
 'use strict';
 const fs = require('node:fs');
@@ -37,6 +42,43 @@ const LIMITE = arg('limite', Infinity);
 const PARALELO = arg('paralelo', 4);
 const LADO_MAXIMO = 2400;
 const ORIGEN = 'NUCOS';
+const PRODUCCION = process.argv.indexOf('--produccion') > 0;
+const ENSAYO = process.argv.indexOf('--ensayo') > 0;
+
+/** El libro de producción, del bloque de .clasp.produccion.json en Entornos.gs (que diga ENTORNO 'PROD'). */
+function entornoProduccion() {
+  const scriptId = JSON.parse(fs.readFileSync(path.join(REPO, '.clasp.produccion.json'), 'utf8')).scriptId;
+  const fuente = fs.readFileSync(path.join(REPO, 'src/config/Entornos.gs'), 'utf8').replace(/\r/g, '');
+  const inicio = fuente.indexOf("'" + scriptId + "'");
+  if (inicio < 0) throw new Error('Entornos.gs no tiene el bloque de producción ' + scriptId);
+  const bloque = fuente.slice(inicio, fuente.indexOf('\n  },', inicio));
+  const valor = (k) => { const m = bloque.match(new RegExp(k + ":\\s*'([^']*)'")); return m ? m[1] : ''; };
+  if (valor('ENTORNO') !== 'PROD') throw new Error('El bloque de .clasp.produccion.json no dice ENTORNO PROD.');
+  return { telefonia: valor('SS_ID_TELEFONIA'), vehiculos: valor('SS_ID_VEHICULOS') };
+}
+
+/** La carpeta de la responsiva donde está el original (producción), si se sigue llamando como dice el inventario. */
+async function carpetaOriginal(x) {
+  const f = await api('GET', DRIVE + '/' + x.ids[0] + '?supportsAllDrives=true&fields=parents,trashed');
+  const padre = (f.parents || [])[0];
+  if (!padre || f.trashed) throw new Error('el original ya no está');
+  const c = await api('GET', DRIVE + '/' + padre + '?supportsAllDrives=true&fields=name,trashed');
+  const esperado = x.ruta.split('/').pop().trim();
+  if (c.trashed || String(c.name).trim() !== esperado) throw new Error('la carpeta de su responsiva ya no se llama «' + esperado + '»');
+  return padre;
+}
+
+/** APP_IDENTIFICACIONES nueva como LineasDatos.asegurarPestana: encabezado en negritas y fijo, texto salvo FECHA con hora. */
+async function crearHojaRegistro(libro, hoja, encabezados) {
+  const r = await api('POST', SHEETS + libro + ':batchUpdate', { requests: [{ addSheet: { properties: { title: hoja, gridProperties: { frozenRowCount: 1 } } } }] });
+  const sheetId = r.replies[0].addSheet.properties.sheetId;
+  await api('PUT', SHEETS + libro + '/values/' + rango(hoja, 'A1') + '?valueInputOption=RAW', { values: [encabezados] });
+  await api('POST', SHEETS + libro + ':batchUpdate', { requests: [
+    { repeatCell: { range: { sheetId, startRowIndex: 0, endRowIndex: 1 }, cell: { userEnteredFormat: { textFormat: { bold: true } } }, fields: 'userEnteredFormat.textFormat.bold' } },
+  ].concat(encabezados.map((h, i) => ({ repeatCell: { range: { sheetId, startRowIndex: 1, startColumnIndex: i, endColumnIndex: i + 1 },
+    cell: { userEnteredFormat: { numberFormat: /FECHA/.test(h) ? { type: 'DATE_TIME', pattern: 'dd/MM/yyyy HH:mm:ss' } : { type: 'TEXT' } } },
+    fields: 'userEnteredFormat.numberFormat' } }))) });
+}
 
 /** armarPdfDeJpeg de la pantalla (el mismo del paso 1), como en tests/lineas-identificacion.test.cjs. */
 function armadorPdf() {
@@ -151,7 +193,10 @@ async function main() {
   const ENC = [...g.LineasIdentificaciones.ENCABEZADOS];
   const HOJA = g.LineasIdentificaciones.HOJA;
   const quien = (await api('GET', 'https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)')).user.emailAddress;
-  console.log('DEV: PDF a la carpeta de NUCOS de pruebas ' + dev.nucos + ' · registro en ' + HOJA + ' del libro ' + dev.telefonia + ' · ' + quien);
+  const destino = PRODUCCION ? entornoProduccion() : { telefonia: dev.telefonia, vehiculos: dev.vehiculos };
+  console.log((PRODUCCION ? 'PRODUCCIÓN: PDF a la carpeta de cada responsiva en NUCOS · registro en ' + HOJA + ' del libro ' + destino.telefonia
+    : 'DEV: PDF a la carpeta de NUCOS de pruebas ' + dev.nucos + ' · registro en ' + HOJA + ' del libro ' + dev.telefonia) +
+    ' · ' + quien + (ENSAYO ? ' · ENSAYO: no escribe nada' : ''));
 
   // Lo que va al registro, con la misma función que el .gs
   const ensayo = await valores(dev.telefonia, g.INE_ENSAYO_PESTANA, 'A2:L');
@@ -160,7 +205,7 @@ async function main() {
   const mimes = {};
   const carpetaNuco = {};
   (await valores(dev.telefonia, g.INE_NUCOS_PESTANA, 'A2:E')).forEach((r) => { mimes[r[3]] = r[4] || ''; carpetaNuco[r[3]] = r[0]; });
-  const ch = await valores(dev.vehiculos, 'COLABORADORES ACTUALIZADO', 'A:AZ');
+  const ch = await valores(destino.vehiculos, 'COLABORADORES ACTUALIZADO', 'A:AZ');
   const iNum = ch[0].indexOf('No EMPLEADO');
   const iSt = ch[0].indexOf('STATUS');
   const activos = new Set(ch.slice(1).filter((r) => /ACTIV/i.test(r[iSt] || '')).map((r) => String(r[iNum] || '').trim().toUpperCase()));
@@ -168,12 +213,10 @@ async function main() {
     (id) => nombres[id] || '', (n) => activos.has(n));
 
   // Registro: la pestaña (si no está) y quién ya tiene su renglón de NUCOS
-  const meta = await api('GET', SHEETS + dev.telefonia + '?fields=sheets.properties.title');
-  if (meta.sheets.map((s) => s.properties.title).indexOf(HOJA) < 0) {
-    await api('POST', SHEETS + dev.telefonia + ':batchUpdate', { requests: [{ addSheet: { properties: { title: HOJA } } }] });
-    await api('PUT', SHEETS + dev.telefonia + '/values/' + rango(HOJA, 'A1') + '?valueInputOption=RAW', { values: [ENC] });
-  }
-  const registro = await valores(dev.telefonia, HOJA, 'A:Z');
+  const meta = await api('GET', SHEETS + destino.telefonia + '?fields=sheets.properties.title');
+  const hayHoja = meta.sheets.map((s) => s.properties.title).indexOf(HOJA) >= 0;
+  if (!hayHoja && !ENSAYO) await crearHojaRegistro(destino.telefonia, HOJA, ENC);
+  const registro = hayHoja || !ENSAYO ? await valores(destino.telefonia, HOJA, 'A:Z') : [ENC];
   const col = (k) => registro[0].indexOf(k);
   const yaEstan = new Set(registro.slice(1).filter((r) => r[col('ORIGEN')] === ORIGEN).map((r) => r[col('ID PERSONA')] || r[col('NOMBRE')]));
   const faltan = todos.filter((x) => !yaEstan.has(x.idPersona || x.nombre));
@@ -186,7 +229,7 @@ async function main() {
     if (!filas.length) return escribiendo;
     const lote = filas;
     filas = [];
-    escribiendo = escribiendo.then(() => api('POST', SHEETS + dev.telefonia + '/values/' + rango(HOJA, 'A1') +
+    escribiendo = escribiendo.then(() => api('POST', SHEETS + destino.telefonia + '/values/' + rango(HOJA, 'A1') +
       ':append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS', { values: lote }));
     return escribiendo;
   };
@@ -205,7 +248,9 @@ async function main() {
       try {
         const p = piezas(x, (id) => /pdf/i.test(mimes[id] || ''));
         const nombre = g.LineasIdentificaciones.nombreArchivo('INE', x.nombre, x.idPersona);
-        const carpeta = await carpetaDestino(dev.nucos, [carpetaNuco[x.ids[0]] || x.nuco].concat(x.ruta.split('/')));
+        const carpeta = PRODUCCION ? await carpetaOriginal(x)
+          : (ENSAYO ? 'ensayo' : await carpetaDestino(dev.nucos, [carpetaNuco[x.ids[0]] || x.nuco].concat(x.ruta.split('/'))));
+        if (ENSAYO) { hechos++; continue; }
         let id = await buscarEn(carpeta, nombre, false);
         if (!id) {
           const bytes = p.pdf ? await bruto('GET', DRIVE + '/' + p.pdf + '?alt=media&supportsAllDrives=true')
@@ -232,7 +277,7 @@ async function main() {
   };
   await Promise.all(Array.from({ length: PARALELO }, trabajador));
   await vaciar();
-  console.log('\nRegistradas ' + (hechos - errores.length) + ' en ' + Math.round((Date.now() - inicio) / 60000) + ' min · con error ' + errores.length);
+  console.log('\n' + (ENSAYO ? 'Se registrarían ' : 'Registradas ') + (hechos - errores.length) + ' en ' + Math.round((Date.now() - inicio) / 60000) + ' min · con error ' + errores.length);
   errores.forEach((e) => console.log('  ' + e));
   if (detener) {
     console.log((detener instanceof ErrorCuota ? 'Se detuvo por un límite de Google: ' : 'Se detuvo: ') + detener.message +

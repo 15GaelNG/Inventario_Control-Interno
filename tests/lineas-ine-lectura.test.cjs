@@ -271,8 +271,13 @@ test('etapa C (tools/lineas-ine/registrar-ine.js): qué forma el PDF, medidas de
   assert.equal(medidasJpeg(Buffer.from('%PDF-1.4')), null);
   assert.equal(typeof armadorPdf(), 'function', 'el armador del paso 1 se encuentra en lineas.html');
   const herramienta = fs.readFileSync(path.join(__dirname, '..', 'tools/lineas-ine/registrar-ine.js'), 'utf8').replace(/\r/g, '');
-  assert.match(herramienta, /const dev = comun\.entornoDev\(\);/, 'solo con el bloque del DEV');
-  assert.match(herramienta, /await carpetaDestino\(dev\.nucos, /, 'los PDF van a la carpeta de NUCOS de pruebas');
+  assert.match(herramienta, /const dev = comun\.entornoDev\(\);/, 'lee del DEV (inventario, lectura y ensayo)');
+  assert.match(herramienta, /const destino = PRODUCCION \? entornoProduccion\(\) : \{ telefonia: dev\.telefonia, vehiculos: dev\.vehiculos \};/,
+    'a producción solo con --produccion; si no, al libro del DEV');
+  assert.match(herramienta, /const carpeta = PRODUCCION \? await carpetaOriginal\(x\)\n\s*: \(ENSAYO \? 'ensayo' : await carpetaDestino\(dev\.nucos, /,
+    'en producción, junto al original; en el DEV, en la carpeta de NUCOS de pruebas');
+  assert.match(herramienta, /if \(valor\('ENTORNO'\) !== 'PROD'\) throw/);
+  assert.match(herramienta, /if \(ENSAYO\) \{ hechos\+\+; continue; \}/, 'el ensayo no sube ni registra');
   assert.doesNotMatch(herramienta, /api\('(PATCH|DELETE)'|'DELETE'|trashed: true/, 'no cambia ni tira nada en Drive');
-  assert.match(herramienta, /SHEETS \+ dev\.telefonia \+ '\/values\/' \+ rango\(HOJA, 'A1'\) \+\n?\s*':append/, 'el registro, al libro del DEV');
+  assert.match(herramienta, /SHEETS \+ destino\.telefonia \+ '\/values\/' \+ rango\(HOJA, 'A1'\) \+\n?\s*':append/, 'el registro, al libro de destino');
 });
