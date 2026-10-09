@@ -90,10 +90,11 @@ async function autorizar(cliente) {
       if (!u.searchParams.get('code') && !u.searchParams.get('error')) { res.end(); return; }
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end('<p style="font-family:sans-serif">Listo, ya puedes cerrar esta pestaña y volver a la terminal.</p>');
+      const redireccion = 'http://127.0.0.1:' + servidor.address().port; // antes de cerrar: cerrado ya no tiene puerto
       servidor.close();
       if (u.searchParams.get('state') !== estado) return reject(new Error('OAuth: la respuesta no corresponde a esta solicitud'));
       if (u.searchParams.get('error')) return reject(new Error('OAuth: ' + u.searchParams.get('error')));
-      resolve({ codigo: u.searchParams.get('code'), redireccion: 'http://127.0.0.1:' + servidor.address().port });
+      resolve({ codigo: u.searchParams.get('code'), redireccion });
     });
     servidor.listen(0, '127.0.0.1', () => {
       const redireccionUri = 'http://127.0.0.1:' + servidor.address().port;
