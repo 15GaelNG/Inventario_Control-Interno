@@ -699,7 +699,8 @@ test('Exportar a Excel descarga la base completa del módulo, no solo lo que se 
       .replace('HH', pad(d.getHours())).replace('mm', pad(d.getMinutes())).replace('ss', pad(d.getSeconds())).replace(/'/g, ''),
   };
   const LineasRepo = { TAB: { LINEAS: 'L', CAMBIOS: 'C', REASIG: 'R', DESECHO: 'D', REACTIVACION: 'RA', SOLICITUD: 'S' } };
-  const mod = new Function('LineasDatos', 'Utilities', 'LineasRepo', read('src/services/lineas/LineasExportar.gs') + '\nreturn LineasExportar;')(LineasDatos, Utilities, LineasRepo);
+  const LineasUtil = { nucoVisible: (v) => String(v).trim().padStart(4, '0') };
+  const mod = new Function('LineasDatos', 'Utilities', 'LineasRepo', 'LineasUtil', read('src/services/lineas/LineasExportar.gs') + '\nreturn LineasExportar;')(LineasDatos, Utilities, LineasRepo, LineasUtil);
   const operador = mod.baseCompleta('CAMBIOS', false).hojas[0];
   assert.deepEqual(operador.columnas.map((c) => c.tipo), ['texto', 'texto', 'texto', 'texto', 'texto', 'fecha', 'fechaHora', 'numero']);
   assert.equal(operador.filas.length, 2);   // la fila vacía no se exporta
@@ -708,6 +709,20 @@ test('Exportar a Excel descarga la base completa del módulo, no solo lo que se 
   assert.deepEqual(mod.baseCompleta('CAMBIOS', true).hojas[0].filas[0].slice(3, 5), ['1234', '5678']);
   assert.equal(mod.baseCompleta('ACCESORIOS', false).hojas.length, 2);
   assert.throws(() => mod.baseCompleta('OTRO', false), /desconocido/);
+
+  // Inventario (9-oct): una sola hoja como el panel (vista del AppSheet), no LINEAS / EQUIPOS / ASIGNACIONES / ADENDUMS
+  LineasRepo.vistaCompleta = () => ({
+    columnas: ['NUMERO TELEFONO', 'NUCO', 'PIN EQUIPO', 'COSTO PLAN', 'FIN PLAN'],
+    filas: [['4421090805', '0012', '1234', 299, fecha('2027-01-15T00:00:00')], [null, '13', null, null, null]],
+  });
+  const inventario = mod.baseCompleta('INVENTARIO', false).hojas;
+  assert.equal(inventario.length, 1);
+  assert.equal(inventario[0].nombre, 'L');
+  assert.deepEqual(inventario[0].columnas.map((c) => c.tipo), ['texto', 'texto', 'texto', 'numero', 'fecha']);
+  assert.deepEqual(inventario[0].filas, [['4421090805', '0012', '••••', 299, '2027-01-15'], ['', '0013', '', '', '']]);
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  // ID primero, como en la hoja vieja: el del AppSheet (el reporte y la conciliación ligan con él)
+  assert.match(repo, /function vistaCompleta\(\) \{[\s\S]*?\[txt\(col\(f, LineasDatos\.COL_ID_APPSHEET\)\) \|\| r\.id\]\.concat\(filaVista_\(f, r\)\.slice\(1\)\)[\s\S]*?columnas: \['ID'\]\.concat\(COLS_VISTA_LINEAS\)/);
 });
 
 test('Líneas usa la BD de pruebas del equipo y ninguna carpeta personal de pruebas', () => {
