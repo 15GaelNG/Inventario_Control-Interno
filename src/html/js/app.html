@@ -2106,7 +2106,7 @@
    *  Arqueos/Cambios de monto) -- de nivel de módulo, como fichaEnPestanas/pestanaFicha/
    *  tablaFicha, porque ambas fichas la usan. */
   function accionesFichaRegistro(tipo, id, opciones) {
-    const o = Object.assign({ editar: false, eliminar: false, estatus: null, copiarLiga: null, copiarLigaJefe: null }, opciones);
+    const o = Object.assign({ editar: false, eliminar: false, estatus: null, copiarLiga: null, copiarLigaJefe: null, devolverPrestamo: false }, opciones);
     let html = '<div class="ficha-acciones-fila">' +
       '<button type="button" class="ficha-btn-fila" data-ficha-ver="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Ver completo">' + Iconos.svg('ver') + '</button>';
     if (o.editar) {
@@ -2130,6 +2130,11 @@
     if (o.copiarLigaJefe) {
       html += '<button type="button" class="ficha-btn-fila" data-ficha-copiar-liga-jefe="' + tipo + '" data-id="' + escaparHtml(id) + '" data-token="' + escaparHtml(o.copiarLigaJefe) + '" title="Copiar liga del jefe directo">' + Iconos.svg('copiar') + '</button>';
     }
+    // devolverPrestamo: Préstamo Vehicular en curso -- un clic regresa el vehículo a quien lo
+    // tenía antes, sin pedir firma ni generar PDF (ver devolverPrestamoFicha).
+    if (o.devolverPrestamo) {
+      html += '<button type="button" class="ficha-btn-fila" data-ficha-devolver-prestamo="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Marcar como devuelto">' + Iconos.svg('devolver') + '</button>';
+    }
     if (o.eliminar) {
       html += '<button type="button" class="ficha-btn-fila ficha-peligro" data-ficha-eliminar="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Eliminar">' + Iconos.svg('eliminar') + '</button>';
     }
@@ -2151,6 +2156,18 @@
     else if (faltaPrincipal) texto = 'Ya firmó el jefe, falta ' + principal;
     else if (faltaJefe) texto = 'Ya firmó ' + (principal === 'adherente' ? 'el adherente' : 'el responsable') + ', falta el jefe';
     return '<span class="badge-estado pendiente">' + escaparHtml(texto) + '</span>';
+  }
+
+  /** Badge de Préstamo Vehicular en la pestaña Responsiva: en blanco para una definitiva
+   *  (no hay nada que avisar), y para un préstamo dice si sigue en curso (con su fecha), ya
+   *  venció (rojo) o ya se devolvió. */
+  function badgePrestamo(r) {
+    if ((r.TIPO_RESPONSIVA || 'DEFINITIVA') !== 'PRESTAMO') return '—';
+    if (r.ESTATUS_PRESTAMO === 'DEVUELTO') return '<span class="badge-estado activo">Préstamo devuelto</span>';
+    const vencido = r.FECHA_FIN_PRESTAMO && new Date(r.FECHA_FIN_PRESTAMO) < new Date();
+    if (vencido) return '<span class="badge-estado pendiente">Préstamo vencido</span>';
+    const fecha = r.FECHA_FIN_PRESTAMO ? ' (vence ' + formatearFecha(r.FECHA_FIN_PRESTAMO) + ')' : '';
+    return '<span class="badge-estado activo">En préstamo' + escaparHtml(fecha) + '</span>';
   }
 
   /** Mismo patrón que copiarEnlace_ en app-sistemas.html: la API moderna primero, y si el
@@ -2721,6 +2738,12 @@
 
       const CAMPOS_RESPONSIVA_VEHICULAR = [
         { paso: 0, clave: 'FECHA', etiqueta: 'Fecha', tipo: 'date' },
+        // Préstamo Vehicular: misma responsiva, solo que temporal -- sin elegir nada (el
+        // valor por defecto es "" = vacío = definitiva, el servidor lo trata igual), se
+        // comporta exactamente como hoy. "Fecha de fin de préstamo" solo aparece al elegir
+        // Préstamo (wireVisibilidadCondicionalResponsiva, mismo patrón que Arqueos).
+        { paso: 0, clave: 'TIPO RESPONSIVA', etiqueta: 'Tipo', tipo: 'select', opciones: ['DEFINITIVA', 'PRESTAMO'] },
+        { paso: 0, clave: 'FECHA FIN PRESTAMO', etiqueta: 'Fecha de fin de préstamo', tipo: 'date', mostrarSiCampo: 'TIPO RESPONSIVA', mostrarSiValor: 'PRESTAMO' },
         { paso: 0, clave: 'RESPONSABLE', etiqueta: 'Responsable', tipo: 'select', catalogo: true, requerido: true },
         { paso: 0, clave: 'NO EMPLEADO', etiqueta: 'No. de empleado', tipo: 'text' },
         { paso: 0, clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select', catalogo: true },
@@ -2770,6 +2793,14 @@
           CamposHoja.html(CAMPOS_RESPONSIVA_VEHICULAR.filter((c) => c.paso === i), { prefijo: 'resv' });
       });
       refreshIcons();
+
+      // "Fecha de fin de préstamo" solo se ve si Tipo = Préstamo (mismo patrón que
+      // wireVisibilidadCondicionalArqueo en app-arqueos.html).
+      CAMPOS_RESPONSIVA_VEHICULAR.filter((c) => c.mostrarSiCampo).forEach((campo) => {
+        const dependeDe = document.getElementById('resv-' + CamposHoja.slug(campo.mostrarSiCampo));
+        if (dependeDe) dependeDe.addEventListener('change', () => CamposHoja.actualizarVisibles(CAMPOS_RESPONSIVA_VEHICULAR, 'resv'));
+      });
+      CamposHoja.actualizarVisibles(CAMPOS_RESPONSIVA_VEHICULAR, 'resv');
 
       // Navegación de pasos: libre en los dos sentidos, sin validar (el usuario pidió
       // "un tema a la vez" nada más, no bloquear el avance si falta algo).
@@ -3221,6 +3252,18 @@
       }
     }
 
+    /** Cierra un Préstamo Vehicular (Responsiva): regresa el vehículo a quien lo tenía antes,
+     *  sin pedir firma ni generar PDF (ver el comentario de devolverPrestamo en el servicio). */
+    async function devolverPrestamoFicha(id, vResumen) {
+      try {
+        await callServer('apiDevolverPrestamoVehicular', state.token, id);
+        toastExito('Préstamo devuelto');
+        abrirFichaVehiculo(vResumen, 'responsiva');
+      } catch (err) {
+        toastError('No se pudo devolver el préstamo: ' + err.message);
+      }
+    }
+
     /** "Copiar liga de nuevo" (Responsiva/Adherente pendientes): SIEMPRE se pide al servidor
      *  (apiFirmaRemotaLiga) -- armarla en el navegador con location.origin apunta al sandbox
      *  de Apps Script, no a la URL real (8-oct, confirmado con el usuario). */
@@ -3561,12 +3604,14 @@
               { t: 'Fecha', r: (r) => formatearFecha(r.FECHA) },
               { t: 'Responsable', r: (r) => escaparHtml(r.RESPONSABLE || '—') },
               { t: 'Departamento', r: (r) => escaparHtml(r.DEPARTAMENTO || '—') },
+              { t: 'Préstamo', r: (r) => badgePrestamo(r) },
               { t: 'Estado', r: (r) => badgeEstadoFirma(r, 'responsable') },
               { t: 'PDF', r: (r) => (r.PDF ? '<a href="' + escaparHtml(r.PDF) + '" target="_blank" rel="noopener" class="secondary" style="text-decoration:none">Ver</a>' : '—') },
               { t: '', r: (r) => accionesFichaRegistro('responsiva', r.ID, {
                 eliminar: puedeEditarModulo('responsiva-vehicular'),
                 copiarLiga: r.TOKEN_FIRMA || null,
                 copiarLigaJefe: r.TOKEN_FIRMA_JEFE || null,
+                devolverPrestamo: puedeEditarModulo('responsiva-vehicular') && r.TIPO_RESPONSIVA === 'PRESTAMO' && r.ESTATUS_PRESTAMO === 'EN PRESTAMO',
               }) },
             ], responsivas, 'Sin responsivas registradas para este vehículo.',
             puedeEditarModulo('responsiva-vehicular') ? { tipo: 'responsiva', texto: 'Generar nueva responsiva' } : null),
@@ -3644,6 +3689,9 @@
         });
         detalle.querySelectorAll('[data-ficha-copiar-liga-jefe]').forEach((btn) => {
           btn.addEventListener('click', () => copiarLigaFicha_(btn.dataset.fichaCopiarLigaJefe, 'jefe', btn.dataset.token));
+        });
+        detalle.querySelectorAll('[data-ficha-devolver-prestamo]').forEach((btn) => {
+          btn.addEventListener('click', () => devolverPrestamoFicha(btn.dataset.id, vResumen));
         });
         refreshIcons();
       } catch (err) {

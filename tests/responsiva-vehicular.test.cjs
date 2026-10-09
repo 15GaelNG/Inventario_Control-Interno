@@ -79,7 +79,12 @@ function crearContexto() {
       // (SheetUtils.getAll(...).find(...)) encuentre el renglón pendiente que un
       // crear(..., {remoto:true}/{remotoJefe:true}) anterior ya guardó.
       getAll: () => llamadas.insert,
-      findById: () => null,
+      // devolverPrestamo busca por ID (no por token): mismo "lee-mezcla-escribe" que update,
+      // para que lo recién insertado/actualizado se encuentre.
+      findById: (ssId, hoja, id) => {
+        const fila = llamadas.insert.find((f) => f.ID === id);
+        return fila ? { data: fila, rowIndex: 2 } : null;
+      },
       leerColumnasDeHoja: () => ({ filas: 0, datos: {} }),
     },
     VehiculosService: {
@@ -437,4 +442,67 @@ test('el PDF se genera en el expediente del NUCO del vehículo y se archiva ahí
   contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' }, FIRMA_OK);
   assert.equal(llamadas.pdfEn, 'NUCO/00001/RESPONSIVA');
   assert.deepEqual(llamadas.expediente, [{ archivar: 'pdf1', nucco: '00001', doc: 'RESPONSIVA', adherente: false }]);
+});
+
+// ---------- Préstamo Vehicular (TIPO RESPONSIVA / devolverPrestamo) ----------
+
+test('préstamo: reasigna el vehículo a quien lo recibe y respalda a quién lo tenía antes', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok',
+    { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Maria Lopez', 'TIPO RESPONSIVA': 'PRESTAMO', 'FECHA FIN PRESTAMO': '2026-10-15' },
+    FIRMA_OK);
+  assert.equal(llamadas.insert[0]['TIPO RESPONSIVA'], 'PRESTAMO');
+  assert.equal(llamadas.insert[0]['ESTATUS PRESTAMO'], 'EN PRESTAMO');
+  assert.equal(llamadas.insert[0]['RESPONSABLE ANTERIOR'], 'JUAN PEREZ');   // quien tenía el vehículo antes
+  assert.ok(llamadas.insert[0]['FECHA FIN PRESTAMO']);
+  assert.equal(llamadas.actualizarVehiculo.length, 1);
+  assert.equal(llamadas.actualizarVehiculo[0].cambios['RESPONSABLE VEHICULO'], 'Maria Lopez');
+});
+
+test('sin TIPO RESPONSIVA (o con DEFINITIVA) se comporta exactamente como hoy -- regresión', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Maria Lopez' }, FIRMA_OK);
+  assert.equal(llamadas.insert[0]['TIPO RESPONSIVA'], 'DEFINITIVA');
+  assert.equal(llamadas.insert[0]['ESTATUS PRESTAMO'], '');
+  assert.equal(llamadas.insert[0]['RESPONSABLE ANTERIOR'], '');
+  assert.equal(llamadas.insert[0]['FECHA FIN PRESTAMO'], '');
+});
+
+test('FECHA FIN PRESTAMO se ignora si TIPO RESPONSIVA no es PRESTAMO (el formulario la oculta, pero el servidor no confía solo en eso)', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok',
+    { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez', 'TIPO RESPONSIVA': 'DEFINITIVA', 'FECHA FIN PRESTAMO': '2026-10-15' },
+    FIRMA_OK);
+  assert.equal(llamadas.insert[0]['FECHA FIN PRESTAMO'], '');
+});
+
+test('devolverPrestamo: regresa el vehículo al responsable anterior y marca DEVUELTO, sin PDF ni firma', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok',
+    { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Maria Lopez', 'TIPO RESPONSIVA': 'PRESTAMO' }, FIRMA_OK);
+  const id = llamadas.insert[0].ID;
+  const pdfAntes = llamadas.pdfGenerados;
+  const res = contexto.Servicio.devolverPrestamo('tok', id);
+  assert.equal(res.ESTATUS_PRESTAMO, 'DEVUELTO');
+  assert.equal(llamadas.insert[0]['ESTATUS PRESTAMO'], 'DEVUELTO');
+  // Una reasignación al crear (a Maria) y otra al devolver (de vuelta a Juan).
+  assert.equal(llamadas.actualizarVehiculo.length, 2);
+  assert.equal(llamadas.actualizarVehiculo[1].cambios['RESPONSABLE VEHICULO'], 'JUAN PEREZ');
+  assert.equal(llamadas.pdfGenerados, pdfAntes);
+});
+
+test('devolverPrestamo truena si el registro no es un préstamo', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' }, FIRMA_OK);
+  const id = llamadas.insert[0].ID;
+  assert.throws(() => contexto.Servicio.devolverPrestamo('tok', id), /no es un préstamo/);
+});
+
+test('devolverPrestamo truena si el préstamo ya se devolvió (de un solo uso)', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok',
+    { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Maria Lopez', 'TIPO RESPONSIVA': 'PRESTAMO' }, FIRMA_OK);
+  const id = llamadas.insert[0].ID;
+  contexto.Servicio.devolverPrestamo('tok', id);
+  assert.throws(() => contexto.Servicio.devolverPrestamo('tok', id), /ya se devolvió/);
 });

@@ -70,7 +70,14 @@ const ResponsivaVehicularService = (function () {
   const COLUMNAS_RESUMEN = [
     ID_COLUMN, 'FECHA', 'FOLIO VEHICULO', 'NUCCO', 'RESPONSABLE', 'DEPARTAMENTO', 'ESTADO FIRMA',
     'TOKEN FIRMA', 'TOKEN FIRMA JEFE', 'PDF', 'REGISTRADO POR',
+    'TIPO RESPONSIVA', 'FECHA FIN PRESTAMO', 'ESTATUS PRESTAMO', 'RESPONSABLE ANTERIOR',
   ];
+
+  // Valores válidos de TIPO RESPONSIVA / ESTATUS PRESTAMO (Préstamo Vehicular).
+  const TIPO_DEFINITIVA = 'DEFINITIVA';
+  const TIPO_PRESTAMO = 'PRESTAMO';
+  const PRESTAMO_EN_CURSO = 'EN PRESTAMO';
+  const PRESTAMO_DEVUELTO = 'DEVUELTO';
 
   function ssId() {
     return Config.SPREADSHEET_IDS.VEHICULOS();
@@ -94,6 +101,11 @@ const ResponsivaVehicularService = (function () {
       TOKEN_FIRMA_JEFE: datos['TOKEN FIRMA JEFE'][i] || '',
       PDF: datos['PDF'][i] || '',
       REGISTRADO_POR: datos['REGISTRADO POR'][i] || '',
+      // En blanco (renglones de antes de Préstamo Vehicular) = responsiva definitiva de siempre.
+      TIPO_RESPONSIVA: datos['TIPO RESPONSIVA'][i] || TIPO_DEFINITIVA,
+      FECHA_FIN_PRESTAMO: HojaServicio.fechaISO(datos['FECHA FIN PRESTAMO'][i]) || '',
+      ESTATUS_PRESTAMO: datos['ESTATUS PRESTAMO'][i] || '',
+      RESPONSABLE_ANTERIOR: datos['RESPONSABLE ANTERIOR'][i] || '',
     };
   }
 
@@ -366,6 +378,12 @@ const ResponsivaVehicularService = (function () {
         'FIRMADO POR JEFE': '',
         'REGISTRADO POR': sesion.nombre,
         'FECHA REGISTRO': new Date(),
+        'TIPO RESPONSIVA': TIPO_DEFINITIVA,
+        'FECHA FIN PRESTAMO': '',
+        'ESTATUS PRESTAMO': '',
+        'RESPONSABLE ANTERIOR': '',
+        'NO EMPLEADO ANTERIOR': '',
+        'DEPARTAMENTO ANTERIOR': '',
       };
       ACCESORIOS.forEach((clave) => {
         fila[clave] = String(datos[clave] || '').trim().toUpperCase() === 'SI' ? 'SI' : 'NO';
@@ -397,12 +415,30 @@ const ResponsivaVehicularService = (function () {
         }
       }
 
+      // Préstamo Vehicular: la misma responsiva, solo que temporal -- mientras dura, el
+      // vehículo SÍ se reasigna al que lo recibe (abajo, igual que una definitiva), pero antes
+      // se respalda a quién tenía el vehículo justo antes, para poder regresárselo con un clic
+      // (devolverPrestamo) sin pedirle que vuelva a firmar: su responsiva de antes nunca dejó
+      // de ser válida. FECHA FIN PRESTAMO es solo informativa (no dispara nada solo) y, como el
+      // formulario la oculta si no es préstamo, aquí tampoco se confía en que venga vacía sola.
+      const tipoResponsiva = String(datos['TIPO RESPONSIVA'] || '').trim().toUpperCase() === TIPO_PRESTAMO
+        ? TIPO_PRESTAMO : TIPO_DEFINITIVA;
+      fila['TIPO RESPONSIVA'] = tipoResponsiva;
+      if (tipoResponsiva === TIPO_PRESTAMO) {
+        fila['FECHA FIN PRESTAMO'] = datos['FECHA FIN PRESTAMO'] ? new Date(datos['FECHA FIN PRESTAMO']) : '';
+        fila['ESTATUS PRESTAMO'] = PRESTAMO_EN_CURSO;
+        fila['RESPONSABLE ANTERIOR'] = vehiculo['RESPONSABLE VEHICULO'] || '';
+        fila['NO EMPLEADO ANTERIOR'] = vehiculo['NO EMPLEADO'] || '';
+        fila['DEPARTAMENTO ANTERIOR'] = vehiculo['DEPARTAMENTO'] || '';
+      }
+
       SheetUtils.insert(ssId(), hoja_().getName(), fila);
 
       // Enganche con reasignación: si el responsable que firma es distinto al actual del
       // vehículo, se actualiza en la misma operación -- candadoTomado porque este hilo ya
       // tiene el candado de arriba (waitLock no es reentrante). Corre siempre aquí (presencial
-      // o a distancia): es la única sesión con permiso que esta operación va a tener.
+      // o a distancia, definitiva o préstamo): es la única sesión con permiso que esta
+      // operación va a tener.
       const actual = String(vehiculo['RESPONSABLE VEHICULO'] || '').trim().toUpperCase();
       if (responsable.toUpperCase() !== actual) {
         VehiculosService.actualizar(token, idVehiculo, {
@@ -570,6 +606,44 @@ const ResponsivaVehicularService = (function () {
     }
   }
 
+  /**
+   * Cierra un Préstamo Vehicular: regresa el vehículo a quien lo tenía antes (RESPONSABLE
+   * ANTERIOR, respaldado al crear el préstamo) y marca ESTATUS PRESTAMO = DEVUELTO. A
+   * propósito NO genera PDF ni pide firma -- la responsiva de quien lo recibe de vuelta nunca
+   * dejó de ser válida, esto solo actualiza quién lo trae hoy. Truena si el registro no es un
+   * préstamo o si ya se devolvió (de un solo uso, como las ligas de firma).
+   */
+  function devolverPrestamo(token, id) {
+    Permisos.puedeEditar(token, MODULO);
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+      const encontrado = SheetUtils.findById(ssId(), SHEET, id, ID_COLUMN);
+      if (!encontrado) throw new Error('No se encontró la responsiva ' + id);
+      const fila = encontrado.data;
+      if (String(fila['TIPO RESPONSIVA'] || '').trim().toUpperCase() !== TIPO_PRESTAMO) {
+        throw new Error('Esta responsiva no es un préstamo.');
+      }
+      if (String(fila['ESTATUS PRESTAMO'] || '').trim().toUpperCase() !== PRESTAMO_EN_CURSO) {
+        throw new Error('Este préstamo ya se devolvió.');
+      }
+      const idVehiculo = fila['ID VEHICULO'];
+      if (idVehiculo) {
+        // candadoTomado: este hilo ya tiene el candado de arriba (waitLock no es reentrante) --
+        // mismo patrón que la reasignación de crear().
+        VehiculosService.actualizar(token, idVehiculo, {
+          'RESPONSABLE VEHICULO': fila['RESPONSABLE ANTERIOR'] || '',
+          'NO EMPLEADO': fila['NO EMPLEADO ANTERIOR'] || '',
+          'DEPARTAMENTO': fila['DEPARTAMENTO ANTERIOR'] || '',
+        }, { candadoTomado: true });
+      }
+      SheetUtils.update(ssId(), hoja_().getName(), id, { 'ESTATUS PRESTAMO': PRESTAMO_DEVUELTO }, ID_COLUMN);
+      return { ID: id, ESTATUS_PRESTAMO: PRESTAMO_DEVUELTO };
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
   /** La hoja, para HojaServicio.eliminar (que además respeta Relaciones) */
   const HOJA = { modulo: MODULO, libro: ssId, hoja: SHEET, columnas: COLUMNAS_RESUMEN };
 
@@ -580,6 +654,7 @@ const ResponsivaVehicularService = (function () {
   return {
     listarPorFolio, buscarPorId, crear, eliminar, ligaDeToken,
     obtenerPendientePorToken, obtenerPendienteJefePorToken, vistaPrevia, completarFirma, completarFirmaJefe,
+    devolverPrestamo,
     PLANTILLA,
   };
 })();

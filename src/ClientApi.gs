@@ -355,6 +355,11 @@ function apiCrearResponsivaVehicular(token, datos, imagenes, opciones) {
 function apiEliminarResponsivaVehicular(token, id) {
   return ResponsivaVehicularService.eliminar(token, id);
 }
+// Préstamo Vehicular: cierra el préstamo y regresa el vehículo a quien lo tenía antes, sin
+// pedir firma ni generar PDF (ver el comentario de devolverPrestamo en el servicio).
+function apiDevolverPrestamoVehicular(token, id) {
+  return ResponsivaVehicularService.devolverPrestamo(token, id);
+}
 
 // --- Adherente Vehicular ---
 function apiListarAdherentesVehicularesPorFolio(token, folio) {
