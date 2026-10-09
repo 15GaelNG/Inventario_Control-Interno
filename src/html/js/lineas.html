@@ -869,7 +869,8 @@
       const v = String(pin.valor || '').trim().toUpperCase();
       const inicial = v === 'PATRON' || v === 'PATRÓN' || esPuntosPatron(patron.valor) ? 'PATRÓN'
         : (/^\d+$/.test(v) ? 'PIN' : (/^(N\/A|NA|NO APLICA|NINGUNO|SIN BLOQUEO)$/.test(v) ? 'SIN BLOQUEO' : (v ? 'CONTRASEÑA' : '')));
-      const selector = { tipo: 'campo', columna: '_BLOQUEO', etiqueta: 'TIPO DE BLOQUEO DEL EQUIPO', control: 'lista', opciones: OPCIONES_BLOQUEO, valor: inicial, mostrar: pin.mostrar, requerido: 'NUNCA', virtual: true };
+      // Obligatorio siempre que se ve (usuario, 9-oct): la lista ya trae «SIN BLOQUEO»
+      const selector = { tipo: 'campo', columna: '_BLOQUEO', etiqueta: 'TIPO DE BLOQUEO DEL EQUIPO', control: 'lista', opciones: OPCIONES_BLOQUEO, valor: inicial, mostrar: pin.mostrar, requerido: pin.mostrar, virtual: true };
       const i = elementos.indexOf(pin);
       return elementos.slice(0, i).concat([selector], elementos.slice(i));
     }
@@ -898,9 +899,11 @@
       if (campoPatron) campoPatron.classList.toggle('ln-oculto', t !== 'PATRÓN');
     }
     /** Bloqueo elegido ('' si el formulario no tiene la lista). Va aparte al servidor: PIN y contraseña comparten PIN EQUIPO. */
+    /** null si el formulario no tiene la lista o no se ve (el servidor solo exige el bloqueo cuando llega: LineasUtil.exigirPinEquipo). */
     function bloqueoElegido(cuerpo) {
       const sel = cuerpo && cuerpo.querySelector('select[data-columna="_BLOQUEO"]');
-      return sel ? sel.value : '';
+      const campo = sel && sel.closest && sel.closest('.ln-af-campo');
+      return sel && !(campo && campo.hidden) ? sel.value : null;
     }
     /** Con el bloqueo «PIN», solo números (usuario, 7-oct); la contraseña acepta todo. Igual que LineasUtil.exigirPinEquipo. */
     function errorPinBloqueo(cuerpo) {
@@ -1386,7 +1389,8 @@
       (elementos || []).forEach((e) => {
         if (e.tipo !== 'campo' || e.soloLectura || e.control === 'calculado' || e.control === 'firma' || e.control === 'patron' || e.control === 'archivo' || e.valorOculto) return;
         if (!cumpleCondicion(e.mostrar, t, valores, ctx)) return;
-        const v = valores[e.columna] || '';
+        // La lista de bloqueo no se guarda (data-virtual): su valor se lee aparte
+        const v = (e.columna === '_BLOQUEO' ? bloqueoElegido(cuerpo) : valores[e.columna]) || '';
         const error = (corto) => errores.push({ e: e, columna: e.columna, corto: corto, msg: e.etiqueta + ': ' + corto });
         if (!v) { if (cumpleCondicion(e.requerido, t, valores, ctx)) errores.push({ e: e, columna: e.columna, corto: 'Obligatorio', msg: e.etiqueta + ' es obligatorio' }); return; }
         if ((e.control === 'lista' || e.soloLista) && (e.opciones || []).map((o) => String(o).toUpperCase()).indexOf(v.toUpperCase()) < 0) { error(e.mensaje || 'VALOR NO ENCONTRADO EN LA LISTA'); return; }
@@ -1554,7 +1558,7 @@
         lista.innerHTML = s.pdf
           ? '<span class="ln-foto-chip">' + icono('file-text', 'ln-icon-sm') + '<a class="ln-foto-nombre" href="' + esc(s.pdf.url) + '" target="_blank" rel="noopener">' + esc(s.pdf.archivo.name) + '</a>' +
             '<button type="button" data-ine-quitar="pdf" aria-label="Quitar">' + icono('x', 'ln-icon-sm') + '</button></span>'
-          : s.fotos.map((f, i) => '<span class="ln-ine-foto"><img src="' + esc(f.url) + '" alt="' + esc(f.archivo.name) + '" data-ine-ver="' + i + '" />' +
+          : s.fotos.map((f, i) => '<span class="ln-miniatura"><img src="' + esc(f.url) + '" alt="' + esc(f.archivo.name) + '" data-ver-foto />' +
             '<button type="button" data-ine-quitar="' + i + '" aria-label="Quitar">' + icono('x', 'ln-icon-sm') + '</button></span>').join('');
         pintarIconos(lista);
       };
@@ -1601,8 +1605,6 @@
           pintar(caja);
           return;
         }
-        const ver = ev.target.closest('[data-ine-ver]');
-        if (ver) { verFotoIdentificacion(ver.getAttribute('src')); return; }
         // Al quitar un responsable adicional, los de abajo suben un lugar (activarAdicionales): sus identificaciones también
         const otro = ev.target.closest('[data-quitar-adicional]');
         if (otro) {
@@ -1623,8 +1625,8 @@
       });
     }
 
-    /** La foto en grande, para revisar que se lea antes de guardar. Se cierra con un clic. */
-    function verFotoIdentificacion(url) {
+    /** La foto en grande (identificación e inspección), para revisarla antes de guardar. Se cierra con un clic. */
+    function verFotoEnGrande(url) {
       const capa = document.createElement('div');
       capa.className = 'ln-ine-visor';
       capa.innerHTML = '<img src="' + esc(url) + '" alt="" />';
@@ -2218,9 +2220,15 @@
         const quitarFoto = ev.target.closest('[data-quitar-foto]');
         if (quitarFoto) {
           if (captura) captura.fotos = captura.fotos.filter((f) => f.id !== quitarFoto.dataset.quitarFoto);
-          quitarFoto.closest('.ln-foto-chip').remove();
+          const caja = quitarFoto.closest('.ln-miniatura, .ln-foto-chip');
+          const img = caja.querySelector('img');
+          if (img && /^blob:/.test(img.src)) URL.revokeObjectURL(img.src);
+          caja.remove();
           return;
         }
+        // Miniatura de una foto (inspección o identificación): en grande
+        const verFoto = ev.target.closest('[data-ver-foto]');
+        if (verFoto) { verFotoEnGrande(verFoto.getAttribute('src')); return; }
       });
       raiz.addEventListener('dblclick', (ev) => {
         const tarjeta = ev.target.closest('#ln-listado .ln-cuadro[data-ln-ir]');
@@ -4161,6 +4169,7 @@
         });
         const pin = errorPinBloqueo($('#ln-captura-cuerpo', raiz));
         if (pin) errores.push({ columna: 'PIN EQUIPO', etiqueta: 'PIN DEL EQUIPO', msg: pin });
+        if (bloqueoElegido($('#ln-captura-cuerpo', raiz)) === '') errores.push({ columna: '_BLOQUEO', etiqueta: 'TIPO DE BLOQUEO DEL EQUIPO', msg: 'Obligatorio' });
         return seccion ? errores.filter((x) => seccion.querySelector('[data-af-columna="' + CSS.escape(x.columna) + '"]')) : errores;
       }
 
@@ -4256,24 +4265,32 @@
         };
       }
 
+      /**
+       * Foto de la inspección: se ve en miniatura desde que se elige (como la identificación de la responsiva, usuario
+       * 9-oct), con la espera encima mientras sube; clic = en grande; la X la quita.
+       */
       function subirImagenCaptura(archivo, listaId, carpetaId, onSubido, sinQuitar) {
         const lista = document.getElementById(listaId);
         if (!lista) return Promise.resolve();
-        const chip = document.createElement('span');
-        chip.className = 'ln-foto-chip ln-foto-subiendo';
-        chip.innerHTML = icono('loader-circle', 'ln-icon-sm') + '<span class="ln-foto-nombre">' + esc(archivo.name) + '</span>';
-        lista.appendChild(chip);
+        const url = URL.createObjectURL(archivo);
+        const caja = document.createElement('span');
+        caja.className = 'ln-miniatura ln-foto-subiendo';
+        caja.innerHTML = '<img src="' + esc(url) + '" alt="' + esc(archivo.name) + '" data-ver-foto />' +
+          '<span class="ln-miniatura-estado">' + icono('loader-circle', 'ln-icon-sm ln-girando') + '</span>';
+        lista.appendChild(caja);
+        pintarIconos(caja);
         return Promise.all([redimensionarImagen(archivo, 1600), Promise.resolve(typeof carpetaId === 'function' ? carpetaId() : carpetaId)])
           .then(([img, carpeta]) => llamar('apiLineasSubirArchivo', carpeta, archivo.name, img.mime, img.base64))
           .then((subido) => {
-            chip.className = 'ln-foto-chip';
-            chip.innerHTML = icono('check', 'ln-icon-sm') + '<span class="ln-foto-nombre">' + esc(subido.nombre) + '</span>' +
-              (sinQuitar ? '' : '<button type="button" data-quitar-foto="' + esc(subido.id) + '">' + icono('x', 'ln-icon-sm') + '</button>');
+            caja.className = 'ln-miniatura';
+            caja.querySelector('.ln-miniatura-estado').remove();
+            if (!sinQuitar) caja.insertAdjacentHTML('beforeend', '<button type="button" data-quitar-foto="' + esc(subido.id) + '" aria-label="Quitar">' + icono('x', 'ln-icon-sm') + '</button>');
+            pintarIconos(caja);
             onSubido(subido);
           }).catch((e) => {
-            chip.className = 'ln-foto-chip';
-            chip.style.background = 'var(--ln-rojo-bg)'; chip.style.color = 'var(--ln-rojo-tx)';
-            chip.innerHTML = icono('triangle-alert', 'ln-icon-sm') + '<span class="ln-foto-nombre">' + esc(mensajeError(e)) + '</span>';
+            caja.className = 'ln-miniatura ln-miniatura-error';
+            caja.querySelector('.ln-miniatura-estado').innerHTML = icono('triangle-alert', 'ln-icon-sm') + '<span>' + esc(mensajeError(e)) + '</span>';
+            pintarIconos(caja);
             onSubido(null);
           });
       }

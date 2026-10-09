@@ -252,7 +252,7 @@ const LineasCaptura = (function () {
    * la responsiva y en APP_IDENTIFICACIONES (LineasIdentificaciones). Opcional. orden 0 = el principal, cuyo tipo es
    * IDENTIFICACION; los demás eligen el suyo en el mismo apartado.
    */
-  const archivoIdentificacion_ = (orden, mostrar) => campo_('_IDENTIFICACION_' + orden, 'Identificación (fotos o PDF)', 'identificacion',
+  const archivoIdentificacion_ = (orden, mostrar) => campo_('_IDENTIFICACION_' + orden, 'Identificación', 'identificacion',
     { valor: '', orden: orden, conTipo: orden > 0, opciones: orden > 0 ? IDENTIFICACIONES : undefined, mostrar: mostrar || 'SIEMPRE', virtual: true });
   function conIdentificacionAdicional_(elementos) {
     return elementos.reduce((a, e) => {

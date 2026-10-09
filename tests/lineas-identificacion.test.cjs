@@ -199,3 +199,21 @@ test('fotos → PDF: carta, dos por hoja, el JPEG va tal cual y la tabla xref ap
   const cm = una.match(/q ([\d.]+) 0 0 ([\d.]+) ([\d.]+) ([\d.]+) cm/);
   assert.equal(Number(cm[1]), 540, 'a todo lo ancho entre márgenes');
 });
+
+test('el campo de archivos se queda dentro de su botón (cuadro blanco al regresar de elegir, 9-oct)', () => {
+  const css = read('src/html/lineas-estilos.html');
+  assert.match(css, /\.ln-upload \{\n\s+position: relative; overflow: hidden;/);
+  assert.match(css, /\.ln-upload input \{ position: absolute; top: 0; left: 0;/);
+  assert.match(read('src/services/lineas/LineasCaptura.gs'), /campo_\('_IDENTIFICACION_' \+ orden, 'Identificación', 'identificacion',/);
+});
+
+test('fotos de la inspección: miniatura desde que se eligen, espera encima, clic en grande y X para quitar (usuario, 9-oct)', () => {
+  const pantalla = read('src/html/js/lineas.html');
+  const fn = pantalla.slice(pantalla.indexOf('      function subirImagenCaptura('), pantalla.indexOf('      function manejarSubidaArchivo('));
+  assert.match(fn, /caja\.className = 'ln-miniatura ln-foto-subiendo';/, 'guardar sigue esperando a .ln-foto-subiendo');
+  assert.match(fn, /<img src="' \+ esc\(url\) \+ '" alt="' \+ esc\(archivo\.name\) \+ '" data-ver-foto \/>/);
+  assert.match(fn, /data-quitar-foto="' \+ esc\(subido\.id\) \+ '"/);
+  assert.match(fn, /caja\.className = 'ln-miniatura ln-miniatura-error';/);
+  assert.match(pantalla, /const verFoto = ev\.target\.closest\('\[data-ver-foto\]'\);\n\s+if \(verFoto\) \{ verFotoEnGrande\(verFoto\.getAttribute\('src'\)\); return; \}/);
+  assert.match(pantalla, /const caja = quitarFoto\.closest\('\.ln-miniatura, \.ln-foto-chip'\);/);
+});

@@ -65,7 +65,18 @@ test('pantalla: el error sale solo con «PIN» y letras', () => {
   assert.equal(errorPinBloqueo(cuerpoFalso('PIN', '12a4')), 'SOLO NUMEROS');
   assert.equal(errorPinBloqueo(cuerpoFalso('PIN', '1234')), '');
   assert.equal(errorPinBloqueo(cuerpoFalso('CONTRASEÑA', 'abC1')), '');
-  assert.equal(bloqueoElegido({ querySelector: () => null }), '', 'formulario sin la lista');
+  assert.equal(bloqueoElegido({ querySelector: () => null }), null, 'formulario sin la lista: no se manda');
+  assert.equal(bloqueoElegido(cuerpoFalso('', '')), '', 'con la lista y sin elegir: vacío (el servidor lo rechaza)');
+});
+
+test('tipo de bloqueo obligatorio siempre que se ve (usuario, 9-oct): la lista ya trae SIN BLOQUEO', () => {
+  assert.throws(() => LineasUtil.exigirPinEquipo({ bloqueo: '', valores: {} }), /TIPO DE BLOQUEO DEL EQUIPO es obligatorio/);
+  assert.doesNotThrow(() => LineasUtil.exigirPinEquipo({ bloqueo: null, valores: {} }), 'sin la lista (o oculta) no llega');
+  assert.doesNotThrow(() => LineasUtil.exigirPinEquipo({ bloqueo: 'SIN BLOQUEO', valores: { 'PIN EQUIPO': 'N/A' } }));
+  const cliente = read('src/html/js/lineas.html');
+  assert.match(cliente, /columna: '_BLOQUEO', etiqueta: 'TIPO DE BLOQUEO DEL EQUIPO', control: 'lista', opciones: OPCIONES_BLOQUEO, valor: inicial, mostrar: pin\.mostrar, requerido: pin\.mostrar, virtual: true/);
+  assert.match(cliente, /const v = \(e\.columna === '_BLOQUEO' \? bloqueoElegido\(cuerpo\) : valores\[e\.columna\]\) \|\| '';/, 'Editar y Agregar');
+  assert.match(cliente, /if \(bloqueoElegido\(\$\('#ln-captura-cuerpo', raiz\)\) === ''\) errores\.push\(\{ columna: '_BLOQUEO'/, 'inspección y responsiva');
 });
 
 test('pantalla: con «PIN» las letras no se escriben; con contraseña sí', () => {

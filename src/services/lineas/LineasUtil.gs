@@ -150,6 +150,8 @@ const LineasUtil = (function () {
    * inspección y la responsiva; la pantalla hace lo mismo (errorPinBloqueo en lineas.html).
    */
   function exigirPinEquipo(datos) {
+    // Obligatorio cuando el formulario tiene la lista y se ve (usuario, 9-oct); sin ella no llega (null)
+    if (datos && datos.bloqueo === '') throw new Error('TIPO DE BLOQUEO DEL EQUIPO es obligatorio');
     const pin = String(((datos && datos.valores) || {})['PIN EQUIPO'] || '').trim();
     if (String((datos && datos.bloqueo) || '').trim().toUpperCase() === 'PIN' && pin && !/^\d+$/.test(pin)) throw new Error('PIN DEL EQUIPO: SOLO NUMEROS');
   }
