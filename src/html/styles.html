@@ -863,6 +863,8 @@
     padding-bottom: 6px; border-bottom: 1px solid var(--color-border);
   }
   .info-section-title:first-child { margin-top: 0; }
+  /* En un formulario la línea del título no se pega a las etiquetas del primer renglón (el -2px es para la ficha) */
+  .info-section-title:has(+ .field) { margin-bottom: 10px; }
   /* Ficha de datos (dos columnas) en celular: una, para que los valores largos no se corten */
   @media (max-width: 640px) {
     .info-grid { grid-template-columns: minmax(0, 1fr); }
