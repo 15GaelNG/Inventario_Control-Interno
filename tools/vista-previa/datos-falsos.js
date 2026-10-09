@@ -220,7 +220,7 @@
         { desde: 'RESPONSIVA VEHICULAR', hacia: 'VEHICULOS', donde: 'ResponsivaVehicularService.gs',
           cuando: 'Al dar de alta una responsiva con un responsable distinto al actual',
           columnas: [['RESPONSABLE', 'RESPONSABLE VEHICULO'], ['NO EMPLEADO', 'NO EMPLEADO'], ['DEPARTAMENTO', 'DEPARTAMENTO']],
-          etiquetaDesde: { nombre: 'Responsiva Vehicular' }, etiquetaHacia: { nombre: 'Vehículos' } },
+          etiquetaDesde: { nombre: 'Responsiva Vehicular', familia: 'Vehículos' }, etiquetaHacia: { nombre: 'Vehículos', familia: 'Vehículos' } },
       ] };
     })()),
     apiDatosConectadosVistaPrevia: JSON.stringify({ tipo: 'cache', registros: 212, encontradas: 207, sinLlave: 3, sinDueno: 2,
@@ -499,6 +499,7 @@
     'relaciones': async () => { await abrir('relaciones'); await vistaRelaciones(false); await hasta('.dc-tarjeta'); await esperar(300); },
     'relaciones-familia': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('.tab-btn[data-tab="familia-0"]')).click(); await hasta('.rel-s-tabla'); await esperar(300); },
     'relaciones-revisar': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('.dc-tarjeta [data-dc-accion="revisar"]')).click(); (await hasta('.dc-vista')).scrollIntoView({ block: 'center' }); await esperar(300); },
+    'relaciones-cajachica': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('[data-dc-familia="Caja Chica"]')).click(); await esperar(300); },
     'relaciones-nueva': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('[data-dc-accion="nueva"]')).click();
       const sel = (n) => document.querySelector('[data-dc-nueva="' + n + '"]'); sel('dueno').value = 'VEHICULOS'; sel('copia').value = 'HOLOGRAMAS';
       document.querySelector('[data-dc-accion="sugerir"]').click(); await hasta('.dc-elegir'); await esperar(300); },

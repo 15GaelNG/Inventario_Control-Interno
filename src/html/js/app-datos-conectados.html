@@ -113,10 +113,12 @@
     }
 
     function alReves() {
-      if (!datos.alReves || !datos.alReves.length) return '';
+      // Con un filtro de familia, solo las que escriben en una hoja de esa familia (hoy las dos van a Vehículos)
+      const lista = (datos.alReves || []).filter((a) => !filtroFamilia || (a.etiquetaHacia && a.etiquetaHacia.familia) === filtroFamilia);
+      if (!lista.length) return '';
       return `<h4 class="dc-h4">${Iconos.svg('corner-up-left')} Se copian al revés (solo para ver)</h4>
         <p class="dc-sutil">Un registro nuevo actualiza a su dueño. Están en el código a propósito: escriben en la hoja que manda.</p>
-        <div class="dc-tarjetas">${datos.alReves.map((a) => `<article class="dc-tarjeta dc-reves">
+        <div class="dc-tarjetas">${lista.map((a) => `<article class="dc-tarjeta dc-reves">
           <header class="dc-t-cabeza"><div class="dc-t-hojas"><strong>${esc(a.etiquetaDesde.nombre)}</strong>
             <span class="dc-flecha grande">${Iconos.svg('arrow-right')}</span><strong>${esc(a.etiquetaHacia.nombre)}</strong></div>
             <span class="rel-tipo bitacora">${Iconos.svg('lock')} Del sistema</span></header>
