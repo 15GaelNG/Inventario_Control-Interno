@@ -21,6 +21,8 @@ function modulo(opciones) {
   const papelera = [];
   const filas = [];
   const carpetas = [];
+  const copias = [];
+  const registro = o.registro || []; // renglones de APP_IDENTIFICACIONES (paso 3)
   const carpeta = (id) => ({
     getId: () => id,
     createFile: (blob) => {
@@ -39,7 +41,11 @@ function modulo(opciones) {
     MimeType: { PDF: 'application/pdf' },
     DriveApp: {
       getFolderById: (id) => carpeta(id),
-      getFileById: (id) => ({ setTrashed: () => papelera.push(id) }),
+      getFileById: (id) => ({
+        setTrashed: () => papelera.push(id),
+        isTrashed: () => (o.enPapelera || []).indexOf(id) >= 0,
+        makeCopy: (nombre, destino) => { copias.push({ de: id, nombre, carpeta: destino.getId() }); return { getId: () => 'COPIA' + copias.length }; },
+      }),
     },
     DriveUtils: { marcarAutor: (f) => f },
     CapitalHumano: { idPara: (hoja, r) => (r['RESPONSABLE'] === 'JUAN PEREZ LOPEZ' ? 'PER-000123' : '') },
@@ -61,10 +67,12 @@ function modulo(opciones) {
       existeTabla: () => true,
       asegurarPestana: () => {},
       agregarFilas: (hoja, nuevas) => { nuevas.forEach((f) => filas.push(Object.assign({ _hoja: hoja }, f))); },
+      buscarFilasVarios: (hoja, columna, valores) => registro.map((f, i) => (valores.indexOf(f[columna]) >= 0 ? i + 2 : 0)).filter(Boolean),
+      leerFilas: (peticiones) => peticiones.map((q) => q.filas.map((n) => registro[n - 2])),
     },
   });
   vm.runInContext(read('src/services/lineas/LineasIdentificaciones.gs') + '\nthis.I = LineasIdentificaciones;', ctx);
-  return { I: ctx.I, creados, papelera, filas, carpetas };
+  return { I: ctx.I, creados, papelera, filas, carpetas, copias };
 }
 
 test('revisar: solo PDF, de un responsable que está en la responsiva, uno por responsable', () => {
@@ -216,4 +224,57 @@ test('fotos de la inspección: miniatura desde que se eligen, espera encima, cli
   assert.match(fn, /caja\.className = 'ln-miniatura ln-miniatura-error';/);
   assert.match(pantalla, /const verFoto = ev\.target\.closest\('\[data-ver-foto\]'\);\n\s+if \(verFoto\) \{ verFotoEnGrande\(verFoto\.getAttribute\('src'\)\); return; \}/);
   assert.match(pantalla, /const caja = quitarFoto\.closest\('\.ln-miniatura, \.ln-foto-chip'\);/);
+});
+
+// Paso 3 (pendiente 2.29): la identificación que la persona ya tiene en el registro se ofrece con «¿Es correcta?»
+const REGISTRO = [
+  { 'ID': 'IDN-VIEJA', 'ID PERSONA': 'PER-000123', 'ARCHIVO ID': 'A-VIEJA', 'TIPO': 'INE', 'NUCO': '0003', 'FECHA': '2025-03-01 10:00:00' },
+  { 'ID': 'IDN-NUEVA', 'ID PERSONA': 'PER-000123', 'ARCHIVO ID': 'A-NUEVA', 'TIPO': 'INE', 'NUCO': '0012', 'FECHA': '2026-05-02 10:00:00' },
+  { 'ID': 'IDN-TIRADA', 'ID PERSONA': 'PER-000123', 'ARCHIVO ID': 'A-TIRADA', 'TIPO': 'INE', 'NUCO': '0099', 'FECHA': '2026-09-01 10:00:00' },
+  { 'ID': 'IDN-OTRA', 'ID PERSONA': 'PER-999', 'ARCHIVO ID': 'A-OTRA', 'TIPO': 'INE', 'NUCO': '0050', 'FECHA': '2026-09-09 10:00:00' },
+];
+
+test('paso 3: la registrada de cada responsable es la más reciente cuyo archivo sigue en Drive; sin ID PERSONA, nada', () => {
+  const { I } = modulo({ registro: REGISTRO, enPapelera: ['A-TIRADA'] });
+  const r = I.registradas([{ orden: 0, nombre: 'juan perez lopez', noEmpleado: 'HA00059' }, { orden: 1, nombre: 'ANA RUIZ' }, { orden: 2, nombre: '' }]);
+  assert.equal(r.length, 3);
+  assert.equal(r[0].registrada.registro, 'IDN-NUEVA', 'la más reciente; la de la papelera no cuenta');
+  assert.equal(r[0].registrada.archivoId, 'A-NUEVA');
+  assert.equal(r[0].registrada.nuco, '0012');
+  assert.equal(r[0].registrada.fecha, '2026-05-02');
+  assert.equal(r[1].registrada, null, 'ANA RUIZ no tiene ID PERSONA');
+  assert.equal(r[2].registrada, null);
+});
+
+test('paso 3: «Sí» copia la registrada a la carpeta de la responsiva nueva, solo si es de esa persona; ORIGEN REUTILIZADA', () => {
+  const m = modulo({ registro: REGISTRO });
+  const lista = m.I.revisar([{ orden: 0, reutilizar: 'IDN-NUEVA' }], VALORES);
+  assert.equal(lista[0].reutilizar, 'IDN-NUEVA');
+  const escritos = m.I.escribir(lista, '15', m.I.fechaDe('2026-10-09T10:30'), 'Files');
+  assert.deepEqual(m.copias, [{ de: 'A-NUEVA', nombre: 'INE - JUAN PEREZ LOPEZ - PER-000123.pdf', carpeta: 'RESP0015' }]);
+  assert.equal(m.creados.length, 0, 'no se sube nada nuevo');
+  m.I.registrar(escritos, 'RES-2', { id: 'EQU-2', nuco: '0015' }, { correo: 'ci@x.com' }, new Date());
+  assert.equal(m.filas[0]['ORIGEN'], 'REUTILIZADA');
+  assert.equal(m.filas[0]['ARCHIVO ID'], 'COPIA1');
+  // La de otra persona no se puede usar (aunque la pantalla mandara su ID)
+  const otra = modulo({ registro: REGISTRO });
+  assert.throws(() => otra.I.escribir(otra.I.revisar([{ orden: 0, reutilizar: 'IDN-OTRA' }], VALORES), '15', new Date(), 'Files'), /no es de JUAN PEREZ LOPEZ/);
+  assert.equal(otra.copias.length, 0);
+  // Sin ID PERSONA tampoco
+  const sinId = modulo({ registro: REGISTRO });
+  assert.throws(() => sinId.I.escribir(sinId.I.revisar([{ orden: 1, reutilizar: 'IDN-NUEVA' }], VALORES), '15', new Date(), 'Files'), /no es de ANA RUIZ/);
+});
+
+test('paso 3 en la pantalla: busca al cambiar el responsable, pregunta «¿Es correcta?» y manda reutilizar', () => {
+  const pantalla = read('src/html/js/lineas.html');
+  const estilos = read('src/html/lineas-estilos.html');
+  const tiene = (texto, trozo, porque) => assert.ok(texto.includes(trozo), porque || trozo);
+  tiene(pantalla, "llamar('apiLineasIdentificacionesRegistradas', ");
+  tiene(pantalla, '<span class="ln-ine-pregunta">¿Es correcta?</span>');
+  tiene(pantalla, 'data-ine-registrada="si"');
+  tiene(pantalla, "if (s.reutilizar) return { orden: Number(caja.dataset.ineOrden), tipo: tipo ? tipo.value : '', reutilizar: s.reutilizar };");
+  tiene(pantalla, 'if (!caja || !pedida || caja._clave !== pedida.clave || !x.registrada) return;', 'una respuesta vieja no pinta a otra persona');
+  tiene(estilos, '.ln-ine [hidden] { display: none !important; }', 'los botones (display: grid) sí se ocultan');
+  tiene(read('src/ClientApi.gs'), 'function apiLineasIdentificacionesRegistradas(token, personas) {\n  return TelefoniaService.identificacionesRegistradas(token, personas);');
+  tiene(read('src/services/TelefoniaService.gs'), 'function identificacionesRegistradas(token, personas) {\n    operar_(token);', 'con permiso de operar Líneas');
 });

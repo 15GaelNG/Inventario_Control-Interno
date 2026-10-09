@@ -45,12 +45,14 @@ const LineasIdentificaciones = (function () {
       const persona = personaDe_(valores, orden);
       const quien = orden === 0 ? 'del responsable' : 'del responsable ' + (orden + 1);
       if (!persona.nombre) throw new Error('Falta el nombre ' + quien + ' de la identificación.');
+      const tipoElegido = (orden === 0 ? txt(valores['IDENTIFICACION']) : txt(x.tipo)).toUpperCase() || 'INE';
+      // Paso 3: la que ya está en el registro (que sea de esta persona se revisa en escribir, con su ID PERSONA)
+      if (x.reutilizar) return { orden: orden, tipo: tipoElegido, reutilizar: txt(x.reutilizar), persona: persona };
       const bytes = Utilities.base64Decode(String(x.base64 || ''));
       if (!bytes.length) throw new Error('La identificación ' + quien + ' está vacía.');
       if (bytes.length > MAXIMO_MB * 1024 * 1024) throw new Error('La identificación ' + quien + ' supera ' + MAXIMO_MB + ' MB.');
       if (String.fromCharCode.apply(null, bytes.slice(0, 5)) !== '%PDF-') throw new Error('La identificación ' + quien + ' no es un PDF.');
-      const tipo = (orden === 0 ? txt(valores['IDENTIFICACION']) : txt(x.tipo)).toUpperCase() || 'INE';
-      return { orden: orden, tipo: tipo, bytes: bytes, persona: persona };
+      return { orden: orden, tipo: tipoElegido, bytes: bytes, persona: persona };
     });
   }
 
@@ -84,9 +86,18 @@ const LineasIdentificaciones = (function () {
       lista.forEach((x) => {
         const idPersona = idPersona_(x.persona);
         const nombre = nombreArchivo(x.tipo, x.persona.nombre, idPersona);
-        // Sin setSharing: en NUCOS el archivo toma los permisos de la carpeta (como el PDF firmado, 6-oct)
-        const f = DriveUtils.marcarAutor(carpeta.createFile(Utilities.newBlob(x.bytes, MimeType.PDF, nombre)));
-        archivos.push({ orden: x.orden, id: f.getId(), nombre: nombre, tipo: x.tipo, persona: x.persona, idPersona: idPersona });
+        let f;
+        if (x.reutilizar) {
+          // Paso 3: se copia la registrada a la carpeta de esta responsiva, si de verdad es de esta persona
+          const previa = registro_(x.reutilizar);
+          if (!previa || !idPersona || previa.idPersona !== idPersona) throw new Error('La identificación registrada no es de ' + x.persona.nombre + '.');
+          f = DriveUtils.marcarAutor(DriveApp.getFileById(previa.archivoId).makeCopy(nombre, carpeta));
+        } else {
+          // Sin setSharing: en NUCOS el archivo toma los permisos de la carpeta (como el PDF firmado, 6-oct)
+          f = DriveUtils.marcarAutor(carpeta.createFile(Utilities.newBlob(x.bytes, MimeType.PDF, nombre)));
+        }
+        archivos.push({ orden: x.orden, id: f.getId(), nombre: nombre, tipo: x.tipo, persona: x.persona, idPersona: idPersona,
+          reutilizada: x.reutilizar || '' });
       });
     } catch (e) {
       descartar({ carpetaId: c ? c.carpetaId : '', archivos: archivos });
@@ -114,7 +125,7 @@ const LineasIdentificaciones = (function () {
     LineasDatos.agregarFilas(HOJA, escritos.archivos.map((a) => ({
       'ID PERSONA': a.idPersona, 'NO EMPLEADO': a.persona.noEmpleado, 'NOMBRE': a.persona.nombre, 'TIPO': a.tipo,
       'ARCHIVO ID': a.id, 'ARCHIVO': a.nombre, 'NUCO': LineasUtil.nucoVisible(reg.nuco) || '', 'ID RESPONSIVA': responsivaId,
-      'ID LINEA': reg.id, 'ORIGEN': 'RESPONSIVA', 'FECHA': ahora, 'QUIEN': (usuario && usuario.correo) || '',
+      'ID LINEA': reg.id, 'ORIGEN': a.reutilizada ? 'REUTILIZADA' : 'RESPONSIVA', 'FECHA': ahora, 'QUIEN': (usuario && usuario.correo) || '',
     })));
   }
 
@@ -129,11 +140,53 @@ const LineasIdentificaciones = (function () {
     })).filter((x) => x.id);
   }
 
+  // ------------------------------------------------------------ paso 3 (pendiente 2.29): reutilizar la registrada
+
+  const fechaMs_ = (v) => (v instanceof Date ? v.getTime() : (Date.parse(String(v || '').replace(/^(\d{2})\/(\d{2})\/(\d{4})/, '$3-$2-$1')) || 0));
+  const deFila_ = (f) => ({ registro: txt(f['ID']), idPersona: txt(f['ID PERSONA']), archivoId: txt(f['ARCHIVO ID']), tipo: txt(f['TIPO']) || 'INE',
+    nuco: txt(f['NUCO']), fecha: f['FECHA'] });
+
+  /** Un renglón del registro por su ID, o null. */
+  function registro_(id) {
+    if (!id || !LineasDatos.existeTabla(HOJA)) return null;
+    const filas = LineasDatos.buscarFilasVarios(HOJA, 'ID', [id]);
+    const f = filas.length ? LineasDatos.leerFilas([{ tabla: HOJA, filas: filas.slice(0, 1) }])[0][0] : null;
+    return f && txt(f['ID']) === id ? deFila_(f) : null;
+  }
+
+  /** La identificación más reciente de una persona (por ID PERSONA) cuyo archivo sigue en Drive, o null. */
+  function ultimaDe_(idPersona) {
+    if (!idPersona || !LineasDatos.existeTabla(HOJA)) return null;
+    const filas = LineasDatos.buscarFilasVarios(HOJA, 'ID PERSONA', [idPersona]);
+    if (!filas.length) return null;
+    const lista = LineasDatos.leerFilas([{ tabla: HOJA, filas: filas }])[0].map(deFila_)
+      .filter((r) => r.idPersona === idPersona && r.archivoId)
+      .sort((a, b) => fechaMs_(b.fecha) - fechaMs_(a.fecha));
+    for (let i = 0; i < lista.length; i++) {
+      try { if (!DriveApp.getFileById(lista[i].archivoId).isTrashed()) return lista[i]; } catch (e) { /* ya no está: la siguiente */ }
+    }
+    return null;
+  }
+
+  /**
+   * Para la pantalla de la responsiva: por cada responsable [{ orden, nombre, noEmpleado, correo }], su identificación
+   * registrada → [{ orden, registrada: { registro, archivoId, tipo, nuco, fecha } | null }]. La pantalla pregunta
+   * «¿Es correcta?»; si sí, manda { orden, reutilizar: registro } y escribir() la copia a la carpeta nueva.
+   */
+  function registradas(personas) {
+    return (personas || []).slice(0, 1 + ORDEN_ADICIONALES.length).map((p) => {
+      const persona = { nombre: txt(p && p.nombre).toUpperCase(), noEmpleado: txt(p && p.noEmpleado), correo: txt(p && p.correo) };
+      const r = persona.nombre ? ultimaDe_(idPersona_(persona)) : null;
+      const fecha = r && r.fecha ? (r.fecha instanceof Date ? Utilities.formatDate(r.fecha, Session.getScriptTimeZone(), 'dd/MM/yyyy') : txt(r.fecha).slice(0, 10)) : '';
+      return { orden: Number(p && p.orden) || 0, registrada: r ? { registro: r.registro, archivoId: r.archivoId, tipo: r.tipo, nuco: r.nuco, fecha: fecha } : null };
+    });
+  }
+
   /** Fecha de la responsiva como la guarda LineasCaptura («yyyy-MM-ddTHH:mm» de la pantalla), para la carpeta del día. */
   function fechaDe(valor) {
     const d = valor ? new Date(valor) : new Date();
     return isNaN(d) ? new Date() : d;
   }
 
-  return { HOJA, ENCABEZADOS, revisar, nombreArchivo, escribir, descartar, registrar, deResponsiva, fechaDe };
+  return { HOJA, ENCABEZADOS, revisar, nombreArchivo, escribir, descartar, registrar, deResponsiva, fechaDe, registradas };
 })();

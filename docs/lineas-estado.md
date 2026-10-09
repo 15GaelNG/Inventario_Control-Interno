@@ -89,6 +89,12 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   ID PERSONA, solo el nombre), y un renglón por archivo en APP_IDENTIFICACIONES; si la responsiva no se guarda, la
   carpeta va a la papelera (`LineasIdentificaciones.gs`). Sin NUCO va a la carpeta de la app (`Files`). La página de la
   responsiva ofrece «Ver INE» (o «Ver …» con el nombre, si son varias).
+  **Reutilizarla** (9-oct, pendiente 2.29, en el DEV): al llenar o cambiar el nombre o el número de un responsable, la
+  pantalla busca su identificación más reciente en APP_IDENTIFICACIONES por ID PERSONA (`apiLineasIdentificacionesRegistradas`,
+  permiso de operar Líneas; la de un archivo en la papelera no cuenta) y, si tiene, muestra «INE registrada · NUCO ·
+  fecha · Ver · ¿Es correcta? Sí / No». Sí: no se sube nada; al guardar se copia a la carpeta de la responsiva nueva con
+  su nombre de siempre y queda un renglón con ORIGEN REUTILIZADA (el servidor revisa que el registro sea de esa misma
+  persona). No: se suben fotos o PDF como siempre. Sirve en la responsiva sola, Reasignar y Vincular.
 - **Fotos de la inspección** (9-oct): se ven en miniatura desde que se eligen, con la espera encima mientras suben;
   clic = en grande (`verFotoEnGrande`), X = quitar (`subirImagenCaptura`, lineas.html). El campo oculto de archivos va
   dentro de su botón (`.ln-upload` con `position: relative`): fuera de él, al regresar de elegir, la ventana de captura

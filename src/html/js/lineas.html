@@ -1542,6 +1542,7 @@
       const tipo = e.conTipo ? '<select data-ine-tipo aria-label="Tipo de identificación">' +
         (e.opciones || []).map((o) => '<option value="' + esc(o) + '">' + esc(o) + '</option>').join('') + '</select>' : '';
       return '<div class="ln-ine" data-ine-orden="' + Number(e.orden || 0) + '">' + tipo +
+        '<div class="ln-ine-registrada" hidden></div>' +
         '<div class="ln-fotos-botones">' +
         '<label class="ln-upload ln-solo-tactil">' + icono('camera') + '<span><b>Tomar foto</b><small>Con la cámara del equipo</small></span>' +
         '<input type="file" accept="image/*" capture="environment" data-ine-archivo /></label>' +
@@ -1550,11 +1551,39 @@
         '<div class="ln-ine-lista"></div></div>';
     }
 
-    /** Lo elegido en cada apartado vive en el propio elemento (caja._ine = { pdf, fotos: [{ archivo, url }] }). */
+    // Paso 3 (pendiente 2.29): de quién es cada apartado, para buscar su identificación registrada
+    const columnasResponsable = (orden) => (orden === 0 ? ['RESPONSABLE', 'No EMPLEADO', 'CORREO']
+      : ['NOMBRE ' + ORDEN_ADICIONALES[orden - 1] + ' RESPONSABLE', 'NO EMPLEADO ' + ORDEN_ADICIONALES[orden - 1] + ' RESPONSABLE', '']);
+    const COLUMNAS_IDENTIFICADO = [0, 1, 2, 3, 4].reduce((a, o) => a.concat(columnasResponsable(o).filter(Boolean)), []);
+
+    /**
+     * Lo elegido en cada apartado vive en el propio elemento: caja._ine = { pdf, fotos: [{ archivo, url }], reutilizar },
+     * caja._registrada = la identificación que ya tiene la persona en el registro (o null) y caja._clave = de quién se
+     * buscó (nombre|número). Con una registrada se pregunta «¿Es correcta?»: sí = se usa esa (reutilizar = su registro).
+     */
     function activarIdentificaciones(cuerpo) {
+      const pintarRegistrada = (caja) => {
+        const r = caja._registrada;
+        const s = caja._ine;
+        const bloque = caja.querySelector('.ln-ine-registrada');
+        const usa = !!(r && s.reutilizar);
+        bloque.hidden = !r || r.descartada;
+        caja.querySelector('.ln-fotos-botones').hidden = usa;
+        caja.querySelector('.ln-ine-lista').hidden = usa;
+        if (bloque.hidden) { bloque.innerHTML = ''; return; }
+        const detalle = [r.tipo || 'INE', 'registrada', r.nuco ? 'NUCO ' + r.nuco : '', r.fecha].filter(Boolean).join(' · ');
+        bloque.innerHTML = icono('id-card') + '<span class="ln-ine-registrada-texto">' + esc(detalle) + '</span>' +
+          '<a href="https:\/\/drive.google.com/file/d/' + esc(r.archivoId) + '/view" target="_blank" rel="noopener">Ver</a>' +
+          (usa ? '<button type="button" class="secondary ln-btn-chico" data-ine-registrada="cambiar">Cambiar</button>'
+            : '<span class="ln-ine-pregunta">¿Es correcta?</span>' +
+              '<button type="button" class="primary ln-btn-chico" data-ine-registrada="si">Sí</button>' +
+              '<button type="button" class="secondary ln-btn-chico" data-ine-registrada="no">No</button>');
+        pintarIconos(bloque);
+      };
       const pintar = (caja) => {
         const s = caja._ine;
         const lista = caja.querySelector('.ln-ine-lista');
+        pintarRegistrada(caja);
         lista.innerHTML = s.pdf
           ? '<span class="ln-foto-chip">' + icono('file-text', 'ln-icon-sm') + '<a class="ln-foto-nombre" href="' + esc(s.pdf.url) + '" target="_blank" rel="noopener">' + esc(s.pdf.archivo.name) + '</a>' +
             '<button type="button" data-ine-quitar="pdf" aria-label="Quitar">' + icono('x', 'ln-icon-sm') + '</button></span>'
@@ -1566,12 +1595,48 @@
         const s = caja._ine;
         if (s.pdf) URL.revokeObjectURL(s.pdf.url);
         s.fotos.forEach((f) => URL.revokeObjectURL(f.url));
-        caja._ine = { pdf: null, fotos: [] };
+        caja._ine = { pdf: null, fotos: [], reutilizar: null };
       };
-      cuerpo.querySelectorAll('.ln-ine').forEach((caja) => { caja._ine = { pdf: null, fotos: [] }; });
+      const cajaDe = (orden) => cuerpo.querySelector('.ln-ine[data-ine-orden="' + orden + '"]');
+      // La registrada de cada responsable: se busca cuando cambia su nombre o su número (una vez por persona)
+      const buscarRegistradas = () => {
+        const valor = (col) => { const el = col && cuerpo.querySelector('[data-columna="' + CSS.escape(col) + '"]'); return el ? String(el.value || '').trim() : ''; };
+        const pedir = [];
+        cuerpo.querySelectorAll('.ln-ine').forEach((caja) => {
+          const orden = Number(caja.dataset.ineOrden);
+          const [nombre, numero, correo] = columnasResponsable(orden).map(valor);
+          const clave = (nombre + '|' + numero).toUpperCase();
+          if (clave === caja._clave) return;
+          caja._clave = clave;
+          caja._registrada = null;
+          caja._ine.reutilizar = null;
+          pintarRegistrada(caja);
+          if (nombre) pedir.push({ orden: orden, nombre: nombre, noEmpleado: numero, correo: correo, clave: clave });
+        });
+        if (!pedir.length) return;
+        llamar('apiLineasIdentificacionesRegistradas', pedir.map((p) => ({ orden: p.orden, nombre: p.nombre, noEmpleado: p.noEmpleado, correo: p.correo })))
+          .then((r) => (r || []).forEach((x) => {
+            const caja = cajaDe(x.orden);
+            const pedida = pedir.filter((p) => p.orden === x.orden)[0];
+            // Si mientras tanto cambió la persona, esta respuesta ya no es suya
+            if (!caja || !pedida || caja._clave !== pedida.clave || !x.registrada) return;
+            caja._registrada = x.registrada;
+            pintarRegistrada(caja);
+          }))
+          .catch(() => { /* sin la registrada: se sube como siempre */ });
+      };
+      cuerpo.querySelectorAll('.ln-ine').forEach((caja) => { caja._ine = { pdf: null, fotos: [], reutilizar: null }; caja._registrada = null; caja._clave = null; });
+      cuerpo._buscarRegistradas = buscarRegistradas;
+      buscarRegistradas();
       // El cuerpo del modal se reutiliza (Editar, inspección, responsiva): se escucha una sola vez, como activarAdicionales
       if (cuerpo._identificacionesActivas) return;
       cuerpo._identificacionesActivas = true;
+      let espera = null;
+      cuerpo.addEventListener('change', (ev) => {
+        if (!ev.target.matches || !ev.target.matches('[data-columna]') || COLUMNAS_IDENTIFICADO.indexOf(ev.target.dataset.columna) < 0) return;
+        clearTimeout(espera);
+        espera = setTimeout(() => cuerpo._buscarRegistradas && cuerpo._buscarRegistradas(), 300);
+      });
       cuerpo.addEventListener('change', (ev) => {
         const input = ev.target.closest('input[data-ine-archivo]');
         if (!input) return;
@@ -1596,6 +1661,17 @@
         pintar(caja);
       });
       cuerpo.addEventListener('click', (ev) => {
+        const respuesta = ev.target.closest('[data-ine-registrada]');
+        if (respuesta) {
+          const caja = respuesta.closest('.ln-ine');
+          const r = caja._registrada;
+          if (!r) return;
+          if (respuesta.dataset.ineRegistrada === 'si') { vaciar(caja); caja._ine.reutilizar = r.registro; }
+          else if (respuesta.dataset.ineRegistrada === 'no') { r.descartada = true; caja._ine.reutilizar = null; }
+          else caja._ine.reutilizar = null;
+          pintar(caja);
+          return;
+        }
         const quitar = ev.target.closest('[data-ine-quitar]');
         if (quitar) {
           const caja = quitar.closest('.ln-ine');
@@ -1608,15 +1684,20 @@
         // Al quitar un responsable adicional, los de abajo suben un lugar (activarAdicionales): sus identificaciones también
         const otro = ev.target.closest('[data-quitar-adicional]');
         if (otro) {
-          const caja = (orden) => cuerpo.querySelector('.ln-ine[data-ine-orden="' + orden + '"]');
           const desde = Number(otro.dataset.quitarAdicional) + 1;
-          if (!caja(desde)) return;
-          vaciar(caja(desde));
+          if (!cajaDe(desde)) return;
+          vaciar(cajaDe(desde));
+          cajaDe(desde)._registrada = null;
+          cajaDe(desde)._clave = null;
           for (let orden = desde; orden < ORDEN_ADICIONALES.length; orden++) {
-            const actual = caja(orden), siguiente = caja(orden + 1);
+            const actual = cajaDe(orden), siguiente = cajaDe(orden + 1);
             if (!actual || !siguiente) break;
             actual._ine = siguiente._ine;
-            siguiente._ine = { pdf: null, fotos: [] };
+            actual._registrada = siguiente._registrada;
+            actual._clave = siguiente._clave;
+            siguiente._ine = { pdf: null, fotos: [], reutilizar: null };
+            siguiente._registrada = null;
+            siguiente._clave = null;
             const t1 = actual.querySelector('[data-ine-tipo]'), t2 = siguiente.querySelector('[data-ine-tipo]');
             if (t1 && t2) { t1.value = t2.value; t2.selectedIndex = 0; }
           }
@@ -1636,18 +1717,19 @@
 
     /**
      * Lo que va al servidor: [{ orden, tipo, base64 }] de cada responsable que sigue en la responsiva (con nombre). Las
-     * fotos van en un PDF; un PDF va tal cual.
+     * fotos van en un PDF; un PDF va tal cual. La registrada que se confirmó va como { orden, tipo, reutilizar }.
      */
     function leerIdentificaciones(cuerpo, valores) {
       const nombreDe = (orden) => String(valores[orden === 0 ? 'RESPONSABLE' : 'NOMBRE ' + ORDEN_ADICIONALES[orden - 1] + ' RESPONSABLE'] || '').trim();
       const cajas = Array.from(cuerpo.querySelectorAll('.ln-ine')).filter((caja) => {
         const s = caja._ine;
         const campo = caja.closest('.ln-af-campo');
-        return s && (s.pdf || s.fotos.length) && !(campo && campo.hidden) && nombreDe(Number(caja.dataset.ineOrden));
+        return s && (s.pdf || s.fotos.length || s.reutilizar) && !(campo && campo.hidden) && nombreDe(Number(caja.dataset.ineOrden));
       });
       return Promise.all(cajas.map((caja) => {
         const s = caja._ine;
         const tipo = caja.querySelector('[data-ine-tipo]');
+        if (s.reutilizar) return { orden: Number(caja.dataset.ineOrden), tipo: tipo ? tipo.value : '', reutilizar: s.reutilizar };
         const bytes = s.pdf ? s.pdf.archivo.arrayBuffer().then((b) => new Uint8Array(b)) : pdfDeFotos(s.fotos.map((f) => f.archivo));
         return bytes.then((b) => {
           if (b.length > INE_MAX_MB * 1024 * 1024) throw new Error('La identificación de ' + nombreDe(Number(caja.dataset.ineOrden)) + ' supera ' + INE_MAX_MB + ' MB.');
