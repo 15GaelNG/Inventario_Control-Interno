@@ -121,7 +121,10 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   General lo muestra solo si hay uno: los puntos dibujados o la imagen del AppSheet (`apiLineasPatronAppSheet`, solo
   con permiso de secretos); las capturas enseñan la imagen junto al lienzo. La inspección, la responsiva y Editar, al
   trazar uno nuevo, lo guardan en el equipo y la imagen deja de verse; al guardar una captura la ficha se pinta de nuevo.
-  Con PIN EQUIPO = PATRON y patrón guardado, General muestra solo la fila «Patrón». El PDF lo dibuja igual que la
+  Con PIN EQUIPO = PATRON y patrón guardado, General muestra solo la fila «Patrón». Un solo bloqueo (usuario, 9-oct):
+  el patrón vale si PIN EQUIPO dice PATRON o está vacío (`LineasUtil.patronVigente`); con un PIN o una contraseña,
+  General y el PDF no lo enseñan, y guardar con «PIN», «CONTRASEÑA» o «SIN BLOQUEO» lo borra (Editar, inspección y
+  responsiva, que también deja su PIN en el equipo; `LineasUtil.bloqueoSinPatron`). El PDF lo dibuja igual que la
   pantalla: los 9 puntos, los usados con su número y flechas (`activarPatron` y `LineasPatronPng`, iguales).
 - **Tipo de bloqueo del equipo** (PIN, PATRÓN, CONTRASEÑA o SIN BLOQUEO): una lista en Editar, la inspección y la
   responsiva (`conSelectorBloqueo` / `activarBloqueo`, lineas.html) que no se guarda: PIN y contraseña van en PIN
