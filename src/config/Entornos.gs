@@ -24,7 +24,9 @@ const ENTORNOS = {
 
     // Módulos que en este proyecto no se enseñan ni se dejan usar (Config.apagado), separados por coma.
     // Help Desk: todavía no sale a producción (7-oct-2026); en los DEV sigue encendido.
-    MODULOS_APAGADOS: 'helpdesk',
+    // Vínculos de Líneas (vinculos-lineas): una idea de Emmanuel que se queda así (8-oct-2026); en producción no se
+    // enseña el modo Vínculos de Líneas Telefónicas (lineas.html), en los DEV sí.
+    MODULOS_APAGADOS: 'helpdesk,vinculos-lineas',
 
     // El libro migrado (migrar.py --copiar-produccion, 4-oct-2026, corrida final)
     SS_ID_USUARIOS: '17YrtuMYjGGg5LZm1BxMNrEZyCxTMI2DiUHSVUIldUlc',

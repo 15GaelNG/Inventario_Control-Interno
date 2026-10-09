@@ -194,7 +194,19 @@ test('Líneas Telefónicas: Vínculos es un modo de la lista y abre las ventanas
   assert.match(js, /mensaje: 'ELIGE UN NUCO SIN LÍNEA', valor: elegido\.nuco \|\| '' \}/);
   // El permiso y el espacio existen antes de la carga inicial (aplicarModoVista los usa al entrar)
   const permiso = js.indexOf('let puedeOperarTabla = false;');
-  const espacio = js.indexOf('const espacioVinculos = LineasVinculos.montar(');
+  const espacio = js.indexOf('const espacioVinculos = ');
   const carga = js.indexOf('// ---- Carga inicial ----');
   assert.ok(permiso > 0 && permiso < espacio && espacio < carga);
+});
+
+test('Vínculos es una idea que no sale a producción: apagada ahí como Help Desk, encendida en los DEV', () => {
+  const entornos = read('src/config/Entornos.gs');
+  const prod = entornos.slice(entornos.indexOf("'1NbOczw_H8UJ7adxRP4h_jl9VlfyvxM3mANYsaz12U5uo8Gj0BmfIYN3k'"), entornos.indexOf('},', entornos.indexOf("'1NbOczw_H8UJ7adxRP4h_jl9VlfyvxM3mANYsaz12U5uo8Gj0BmfIYN3k'")));
+  assert.match(prod, /MODULOS_APAGADOS: '[^']*vinculos-lineas[^']*'/);
+  assert.equal((entornos.match(/vinculos-lineas/g) || []).length, 2, 'solo en el bloque de producción (y su comentario)');
+  const js = read('src/html/js/lineas.html');
+  assert.match(js, /JSON\.parse\(document\.body\.dataset\.apagados \|\| '\[\]'\)\.indexOf\('vinculos-lineas'\) >= 0/);
+  assert.match(js, /if \(boton\) boton\.remove\(\);/);
+  assert.match(js, /const espacioVinculos = vinculosApagado \? \{ pintar: \(\) => \{\} \} : LineasVinculos\.montar\(/);
+  assert.match(js, /if \(vinculosApagado && memoria\.modoVista === 'vinculos'\) memoria\.modoVista = 'tabla';/);
 });

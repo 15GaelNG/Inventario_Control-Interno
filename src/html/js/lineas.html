@@ -2034,7 +2034,16 @@
 
       let puedeOperarTabla = false; // con los permisos (abajo, «Selección estilo Google Drive»); Vínculos también lo usa
       // ---- Vínculos (usuario, 8-oct): personas, equipos y líneas en un espacio; arrastrar abre la acción de siempre ----
-      const espacioVinculos = LineasVinculos.montar($('#ln-vinculos', raiz), {
+      // Es una idea que se queda así: en producción está apagada (MODULOS_APAGADOS de Entornos.gs, como Help Desk) y no hay
+      // botón ni espacio; en los DEV sí. No tiene llamadas propias al servidor: solo abre las ventanas de siempre
+      const vinculosApagado = (() => {
+        try { return JSON.parse(document.body.dataset.apagados || '[]').indexOf('vinculos-lineas') >= 0; } catch (e) { return false; }
+      })();
+      if (vinculosApagado) {
+        const boton = raiz.querySelector('#ln-modo-vista [data-modo="vinculos"]');
+        if (boton) boton.remove();
+      }
+      const espacioVinculos = vinculosApagado ? { pintar: () => {} } : LineasVinculos.montar($('#ln-vinculos', raiz), {
         indice: () => memoria.indice,
         puedeOperar: () => puedeOperarTabla,
         icono: icono,
@@ -2059,6 +2068,7 @@
         try { guardado = localStorage.getItem('lineas.modoVista'); } catch (e) { guardado = null; }
         memoria.modoVista = ['tabla', 'tarjetas', 'vinculos'].indexOf(guardado) >= 0 ? guardado : porDefecto;
       }
+      if (vinculosApagado && memoria.modoVista === 'vinculos') memoria.modoVista = 'tabla';
       mostrarModulo(memoria.modulo, true);
       crearTabla(memoria.modulo).setCargando(true);
       aplicarModoVista();
