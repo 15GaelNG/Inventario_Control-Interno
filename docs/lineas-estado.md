@@ -3,9 +3,10 @@
 Rama `master` = producción (la versión vigente está en el INDICE; lo último de Líneas ahí es la parte 6 con COMENTARIO,
 plantillas «(SISTEMA)», página de la responsiva, patrón con 9 puntos en el PDF, Reasignar corregido, responsables
 adicionales, sin «quien lo usa», firma guardada, PDF ligado fuera de su carpeta, PIN en minúsculas y Drive sin
-`UrlFetchApp`). Rama `emmanuel`: además, el PIN del equipo solo con números y sin la compatibilidad con OBSERVACIONES.
+`UrlFetchApp`). Rama `emmanuel`: además, el PIN del equipo solo con números, sin la compatibilidad con OBSERVACIONES y
+la identificación de cada responsable en la responsiva.
 Lo de adendums y facturas (Exportar a Excel con la hoja armada y la pantalla Proveedor) salió de `emmanuel` el 8-oct y
-queda para después (`_archivo/emmanuel_respaldo_8oct.zip` de la carpeta del proyecto) · Última actualización: 2026-10-08
+queda para después (`_archivo/emmanuel_respaldo_8oct.zip` de la carpeta del proyecto) · Última actualización: 2026-10-09
 
 Qué es hoy el módulo **Líneas** (equipos celulares y líneas telefónicas), dónde vive cada cosa y cómo se trabaja.
 La bitácora anterior de este archivo (§0a…§0ae, hasta el 1-oct) sigue en el historial de git. El diseño de las hojas
@@ -80,6 +81,15 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   (`botonesDocumento` en lineas.html; `apiLineasInspeccion` / `apiLineasResponsiva`).
 - **Inspección y responsiva:** un solo «Comentario» (columna COMENTARIO, antes OBSERVACIONES). La inspección lleva al
   jefe directo y la responsiva al director, los dos de Capital Humano como en el AppSheet.
+- **Identificación en la responsiva** (9-oct, opcional): por cada responsable (el principal, cuyo tipo es
+  IDENTIFICACION, y del segundo al quinto, con su propio tipo) se eligen fotos (hasta 4: una, o frente y vuelta) o un
+  PDF, que se ven antes de guardar (clic en la foto = en grande). Las fotos se juntan en el navegador en un PDF carta,
+  dos por hoja, JPEG calidad .92 y hasta 2400 px por lado (`pdfDeFotos` en lineas.html); el servidor solo recibe PDF de
+  hasta 15 MB (`datos.identificaciones`). Se guarda antes que la responsiva, en una carpeta nueva de la responsiva en
+  NUCOS (`RESP DD MM`, donde después va su PDF), como «INE - NOMBRE - ID PERSONA.pdf» (`CapitalHumano.idPara`; sin
+  ID PERSONA, solo el nombre), y un renglón por archivo en APP_IDENTIFICACIONES; si la responsiva no se guarda, la
+  carpeta va a la papelera (`LineasIdentificaciones.gs`). Sin NUCO va a la carpeta de la app (`Files`). La página de la
+  responsiva ofrece «Ver INE» (o «Ver …» con el nombre, si son varias).
 - **Responsables adicionales:** en Editar, la responsiva y la inspección, hasta cuatro más (segundo a quinto: número de
   empleado y nombre de Capital Humano), cada uno en su bloque con «Quitar» y «Agregar responsable» debajo
   (`LineasRegistros.camposAdicionales`, condición `{ cuantos }`). Columnas `NO EMPLEADO / NOMBRE SEGUNDO… QUINTO
@@ -124,6 +134,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 | MOVIMIENTOS | Historial único: un renglón por acción (`LineasRepo.registrarMovimiento`) |
 | APP_MOVIMIENTOS, CAMBIOS LINEAS TELEFONICAS | Historial de antes del 4-oct (APP_MOVIMIENTOS trae las pestañas retiradas con TIPO HISTORICO; CAMBIOS, la bitácora del AppSheet). La ficha los lee hasta que pasen a MOVIMIENTOS |
 | APP_RESGUARDOS, APP_NOTIFICACIONES, APP_EVIDENCIAS, APP_CORRECCIONES | Bandeja de Pau, avisos, fotos y correcciones |
+| APP_IDENTIFICACIONES | Identificación de cada responsable subida con la responsiva: ID PERSONA, número de empleado, nombre, tipo, archivo, NUCO, ID RESPONSIVA, ID LINEA, origen, fecha y quién. Se crea sola con la primera (no se pide antes de desplegar: `noSePide_`) |
 | ACCESORIOS CELULARES | Inventario de accesorios |
 | COLABORADORES ACTUALIZADO | Capital Humano (la mantiene Ayrton; Líneas solo la lee) |
 
@@ -163,6 +174,7 @@ su nombre dentro de ella (`LineasArchivos.resolver`); el DEV además los lee de 
 | `lineas/LineasRepo.gs`, `LineasDatos.gs`, `LineasUtil.gs` | Acceso a datos, IDs, normalización (NUCO a 4 dígitos) |
 | `lineas/LineasRegistros.gs` | Formulario de alta y edición (reglas del AppSheet) |
 | `lineas/LineasCaptura.gs`, `LineasChecklist.gs`, `LineasPdf.gs`, `LineasPatronPng.gs`, `LineasEvidencias.gs`, `LineasArchivos.gs` | Inspección y responsiva: checklist, firmas, fotos, PDF (y la imagen del patrón) y Drive |
+| `lineas/LineasIdentificaciones.gs` | Identificación de cada responsable en la responsiva (Drive y APP_IDENTIFICACIONES) |
 | `lineas/LineasAcciones.gs`, `LineasResguardos.gs` | Reasignar, Mandar a resguardo y bandeja de Pau |
 | `lineas/LineasPanorama.gs`, `LineasNotificaciones.gs`, `LineasExportar.gs` | Panorama, avisos y Exportar a Excel |
 | `lineas/LineasAccesorios.gs`, `LineasCorrecciones.gs` (+ `LineasCorreccionesSemilla.gs`, fuera de git) | Accesorios y Correcciones |
