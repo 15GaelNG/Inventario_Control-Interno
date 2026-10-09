@@ -92,19 +92,22 @@
   .dc-chip { padding: 5px 12px; border-radius: 999px; font-size: 12.5px; background: var(--color-surface); border: 1px solid var(--color-border); color: var(--color-text); }
   .dc-chip.activo { background: var(--color-primary-soft); color: var(--color-primary); border-color: var(--color-primary); font-weight: 600; }
   .dc-nueva { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
-  .dc-tarjetas { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .dc-tarjetas { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
   .dc-tarjeta { border: 1px solid var(--color-border); border-radius: 12px; padding: 14px; background: var(--color-surface); display: flex; flex-direction: column; gap: 10px; }
-  .dc-tarjeta.dc-reves { background: var(--color-bg); }
+  .dc-tarjeta.dc-reves { border-style: dashed; }
   .dc-nueva-card { margin-bottom: 14px; border-color: var(--color-primary); }
-  .dc-t-cabeza { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .dc-t-hojas { display: flex; align-items: center; gap: 8px; font-size: 15px; flex-wrap: wrap; }
+  /* Título a la izquierda (se parte en renglones si es largo) y la etiqueta siempre arriba a la derecha */
+  .dc-t-cabeza { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px; }
+  .dc-t-cabeza .rel-tipo { margin-top: 2px; }
+  .dc-t-hojas { display: flex; align-items: center; column-gap: 8px; row-gap: 2px; font-size: 15px; flex-wrap: wrap; min-width: 0; }
+  .dc-destino { display: inline-flex; align-items: center; gap: 8px; }
   .dc-t-llave { margin: 0; font-size: 12.5px; color: var(--color-text-muted); }
   .dc-datos { display: flex; flex-direction: column; gap: 4px; }
   .dc-dato { display: grid; grid-template-columns: 1fr auto 1fr 28px; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: var(--color-bg); font-size: 13px; }
   .dc-de, .dc-a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dc-flecha { color: var(--color-text-muted); display: inline-flex; }
   .dc-flecha.grande { color: var(--color-primary); }
-  .dc-mas { align-self: flex-start; background: transparent; border: none; padding: 4px 2px; color: var(--color-primary); font-size: 12.5px; font-weight: 600; }
+  .dc-mas { align-self: flex-start; background: transparent; border: none; padding: 4px 8px; color: var(--color-primary); font-size: 12.5px; font-weight: 600; }
   .dc-mas:hover { background: transparent; text-decoration: underline; }
   .dc-quitar { background: transparent; border: none; padding: 2px; color: var(--color-text-muted); display: inline-flex; justify-content: center; }
   .dc-quitar:hover { color: var(--color-danger); background: transparent; }
@@ -112,7 +115,9 @@
   .dc-t-acciones { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; }
   .dc-t-acciones button, .dc-form-acciones button, .dc-vista-acciones button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 13px; }
   .dc-sutil { font-size: 12px; color: var(--color-text-muted); margin: 0; }
-  .dc-h4 { margin: 8px 0 4px; font-size: 14.5px; display: flex; align-items: center; gap: 7px; }
+  .dc-seccion { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--color-border); }
+  .dc-h4 { margin: 0 0 4px; font-size: 14.5px; display: flex; align-items: center; gap: 7px; }
+  .dc-seccion-texto { margin-bottom: 12px; }
   .dc-h5 { margin: 12px 0 6px; font-size: 13.5px; }
   .dc-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
   .dc-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--color-text-muted); flex: 1 1 200px; }
@@ -136,6 +141,8 @@
   @media (max-width: 640px) {
     .dc-tarjetas { grid-template-columns: 1fr; }
     .dc-nueva { margin-left: 0; }
+    /* En celular el nombre del dato se parte en renglones en vez de cortarse ("Número de em…") */
+    .dc-de, .dc-a { white-space: normal; overflow-wrap: anywhere; }
     .dc-elegir-fila { grid-template-columns: 1fr; }
     .dc-elegir-fila .dc-flecha { display: none; }
   }

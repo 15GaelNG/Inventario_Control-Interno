@@ -500,6 +500,7 @@
     'relaciones-familia': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('.tab-btn[data-tab="familia-0"]')).click(); await hasta('.rel-s-tabla'); await esperar(300); },
     'relaciones-revisar': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('.dc-tarjeta [data-dc-accion="revisar"]')).click(); (await hasta('.dc-vista')).scrollIntoView({ block: 'center' }); await esperar(300); },
     'relaciones-cajachica': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('[data-dc-familia="Caja Chica"]')).click(); await esperar(300); },
+    'relaciones-reves': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('.dc-seccion')).scrollIntoView({ block: 'center' }); await esperar(300); },
     'relaciones-nueva': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('[data-dc-accion="nueva"]')).click();
       const sel = (n) => document.querySelector('[data-dc-nueva="' + n + '"]'); sel('dueno').value = 'VEHICULOS'; sel('copia').value = 'HOLOGRAMAS';
       document.querySelector('[data-dc-accion="sugerir"]').click(); await hasta('.dc-elegir'); await esperar(300); },

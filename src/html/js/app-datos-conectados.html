@@ -93,14 +93,13 @@
         <header class="dc-t-cabeza">
           <div class="dc-t-hojas">
             <strong>${esc(d.etiqueta.nombre)}</strong>
-            <span class="dc-flecha grande">${Iconos.svg('arrow-right')}</span>
-            <strong>${esc(c.etiqueta.nombre)}</strong>
+            <span class="dc-destino"><span class="dc-flecha grande">${Iconos.svg('arrow-right')}</span><strong>${esc(c.etiqueta.nombre)}</strong></span>
           </div>
           <span class="rel-tipo ${c.tipo === 'bitacora' ? 'bitacora' : 'cache'}" title="${esc(tipoAyuda(c.tipo))}">${esc(tipoTexto(c.tipo))}</span>
         </header>
         <p class="dc-t-llave">Se encuentran por: <strong>${esc(nombreDato(c.claveOrigen))}</strong>
           ${nombreDato(c.clave) !== nombreDato(c.claveOrigen) ? ' = <strong>' + esc(nombreDato(c.clave)) + '</strong>' : ''}
-          ${c.llaveForanea ? '<span class="dc-sutil">(o por ' + esc(c.llaveForanea) + ' si ya lo tiene)</span>' : ''}</p>
+          ${c.llaveForanea ? '<span class="dc-sutil">(o por su ID si ya lo tiene)</span>' : ''}</p>
         <div class="dc-datos">${filas || '<p class="dc-sutil">Esta conexión no copia datos: vigila que cada registro tenga su dueño.</p>'}
           ${sobran ? `<button type="button" class="dc-mas" data-dc-accion="mas" data-dc-id="${id}">${todas ? 'Ver menos' : 'Ver los ' + c.columnas.length + ' datos'}</button>` : ''}</div>
         <div class="dc-agregar" data-dc-agregar="${id}" hidden></div>
@@ -116,17 +115,16 @@
       // Con un filtro de familia, solo las que escriben en una hoja de esa familia (hoy las dos van a Vehículos)
       const lista = (datos.alReves || []).filter((a) => !filtroFamilia || (a.etiquetaHacia && a.etiquetaHacia.familia) === filtroFamilia);
       if (!lista.length) return '';
-      return `<h4 class="dc-h4">${Iconos.svg('corner-up-left')} Se copian al revés (solo para ver)</h4>
-        <p class="dc-sutil">Un registro nuevo actualiza a su dueño. Están en el código a propósito: escriben en la hoja que manda.</p>
+      return `<section class="dc-seccion"><h4 class="dc-h4">${Iconos.svg('corner-up-left')} Se copian al revés (solo para ver)</h4>
+        <p class="dc-sutil dc-seccion-texto">Un registro nuevo actualiza a su dueño. Están en el código a propósito: escriben en la hoja que manda.</p>
         <div class="dc-tarjetas">${lista.map((a) => `<article class="dc-tarjeta dc-reves">
           <header class="dc-t-cabeza"><div class="dc-t-hojas"><strong>${esc(a.etiquetaDesde.nombre)}</strong>
-            <span class="dc-flecha grande">${Iconos.svg('arrow-right')}</span><strong>${esc(a.etiquetaHacia.nombre)}</strong></div>
-            <span class="rel-tipo bitacora">${Iconos.svg('lock')} Del sistema</span></header>
+            <span class="dc-destino"><span class="dc-flecha grande">${Iconos.svg('arrow-right')}</span><strong>${esc(a.etiquetaHacia.nombre)}</strong></span></div>
+            <span class="rel-tipo bitacora" title="Está en el código (${esc(a.donde)}): no se cambia desde aquí">${Iconos.svg('lock')} Del sistema</span></header>
           <p class="dc-t-llave">${esc(a.cuando)}</p>
           <div class="dc-datos">${a.columnas.map(([de, hacia]) => `<div class="dc-dato"><span class="dc-de">${esc(nombreDato(de))}</span>
             <span class="dc-flecha">${Iconos.svg('arrow-right')}</span><span class="dc-a">${esc(nombreDato(hacia))}</span></div>`).join('')}</div>
-          <p class="dc-sutil">En ${esc(a.donde)}</p>
-        </article>`).join('')}</div>`;
+        </article>`).join('')}</div></section>`;
     }
 
     /** Lo que cambiaría (o lo que hoy no coincide): cifras y ejemplos, con el botón para ponerlo al día */
