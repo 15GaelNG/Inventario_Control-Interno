@@ -384,8 +384,9 @@ test('lo que repetían los servicios de una hoja vive en HojaServicio, no en otr
   ];
   // ListasService guarda catálogos (no la lista de un módulo) con su propio tiempo de vida,
   // CapitalHumano el de colaboradores (una persona por nombre+departamento, sin permiso de módulo)
-  // y PermisosService las reglas y personas que revisa en cada llamada (no es un módulo: es el permiso)
-  const CON_CACHE_PROPIA = ['ListasService.gs', 'CapitalHumano.gs', 'PermisosService.gs'];
+  // y PermisosService las reglas y personas que revisa en cada llamada (no es un módulo: es el permiso);
+  // DatosConectados, lo conectado desde la pantalla, que Relaciones lee en cada propagación (es configuración)
+  const CON_CACHE_PROPIA = ['ListasService.gs', 'CapitalHumano.gs', 'PermisosService.gs', 'DatosConectados.gs'];
   const problemas = [];
   servicios.forEach((a) => {
     const texto = read('src/services/' + a);

@@ -13,6 +13,25 @@ function apiPing() {
   return Date.now();
 }
 
+// --- Pantallas que se actualizan solas (api.html: pedirLista_ y el vigía) ---
+// Una lista de la app (apiListar…, apiFicha…, apiResumenInicio) con su huella: de qué versiones de hoja salió
+// (CacheHojas.conHuella). La lista revisa sus propios permisos con el token, igual que si se llamara directo.
+function apiListaConHuella(token, fn, args) {
+  if (!/^api[A-Z][A-Za-z0-9]*$/.test(String(fn)) || /^api(ListaConHuella|HuellasVigentes)$/.test(fn)) {
+    throw new Error('Lista desconocida: ' + fn);
+  }
+  const f = globalThis[fn];
+  if (typeof f !== 'function') throw new Error('Lista desconocida: ' + fn);
+  const r = CacheHojas.conHuella(() => f.apply(null, [token].concat(args || [])));
+  return { v: r.v, huella: r.huella };
+}
+// ¿Cambió algo de lo que se ve? Solo CacheService (sin leer hojas): la llamada más barata que hay.
+function apiHuellasVigentes(token, claves) {
+  Auth.validarSesion(token);
+  const validas = (claves || []).filter((k) => /^ver_[\w-]{1,10}_/.test(String(k))).slice(0, 300);
+  return CacheHojas.vigentes(validas);
+}
+
 // --- Dashboard ---
 // JSON.stringify: incluye fechas (Date/ISO) mezcladas en varias secciones —
 // mismo motivo que apiListarVehiculosResumen (ver comentario más abajo).
@@ -788,6 +807,30 @@ function apiRegistrarInspeccion(token, datos, imagenes) {
 // separados: 'relaciones' para el mapa, 'salud' para revisar y actualizar. Aquí solo van
 // permisos y la forma de la respuesta. JSON.stringify porque las celdas pueden traer Date,
 // y google.script.run no las pasa dentro de un objeto.
+// Datos conectados que se arman desde la pantalla (DatosConectados.gs): tarjetas, columnas para elegir, sugerencias,
+// vista previa, conectar, quitar y poner al día. Leer: permiso 'relaciones'; cambiar: EDICION en 'relaciones'.
+function apiDatosConectados(token) {
+  return JSON.stringify(DatosConectados.pantalla(token));
+}
+function apiDatosConectadosColumnas(token, hoja) {
+  return JSON.stringify(DatosConectados.columnas(token, hoja));
+}
+function apiDatosConectadosSugerir(token, dueno, copia) {
+  return JSON.stringify(DatosConectados.sugerir(token, dueno, copia));
+}
+function apiDatosConectadosVistaPrevia(token, propuesta) {
+  return JSON.stringify(DatosConectados.vistaPrevia(token, propuesta));
+}
+function apiDatosConectadosConectar(token, propuesta, ponerAlDia) {
+  return JSON.stringify(DatosConectados.guardar(token, propuesta, ponerAlDia));
+}
+function apiDatosConectadosQuitar(token, dueno, copia, colDueno) {
+  return JSON.stringify(DatosConectados.quitar(token, dueno, copia, colDueno));
+}
+function apiDatosConectadosPonerAlDia(token, copia) {
+  return JSON.stringify(DatosConectados.ponerAlDia(token, copia));
+}
+
 function apiRelacionesMapa(token) {
   Permisos.puedeLeer(token, 'relaciones');
   return JSON.stringify(mapaCompleto_());

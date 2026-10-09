@@ -121,9 +121,25 @@ const Auth = (function () {
   }
 
   function validarSesion(token) {
-    const raw = CacheService.getScriptCache().get('sesion_' + token);
+    const raw = leerSesion_(token);
     if (!raw) throw new Error('Sesión expirada, inicia sesión de nuevo');
     return JSON.parse(raw);
+  }
+
+  /**
+   * CacheService a veces tarda de más del lado de Google y truena con "error en el servidor al leer desde el
+   * almacenamiento… DEADLINE_EXCEEDED" (pasajero). Cada llamada lee la sesión: se reintenta dos veces antes de rendirse,
+   * para que una lectura lenta no se vuelva un error en pantalla.
+   */
+  function leerSesion_(token) {
+    for (let intento = 1; ; intento++) {
+      try {
+        return CacheService.getScriptCache().get('sesion_' + token);
+      } catch (e) {
+        if (intento >= 3) throw e;
+        Utilities.sleep(250 * intento);
+      }
+    }
   }
 
   function requiereRol(token, rolesPermitidos) {
