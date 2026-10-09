@@ -215,3 +215,22 @@ test('el documento de la carpeta: dos personas con «/», otra letra en el segun
   assert.equal(filas[1][10], 'SEGURA', 'solo por nombre, pero el documento dice la misma persona');
   assert.match(filas[1][11], /es el del documento/);
 });
+
+test('la revisión a mano (usuario, 9-oct): solo lo que deja a alguien activo sin INE', () => {
+  const ctx = vm.createContext({});
+  vm.runInContext(fuente + '\nthis.r = ineLecParaRevisar_;', ctx);
+  // NUCO, CARPETA, ARCHIVOS, LADOS, IDS, ID PERSONA, No EMPLEADO, NOMBRE, COMO, EN EL DOCUMENTO, RESULTADO, NOTA
+  const f = (nuco, nombre, num, resultado, nota) => [nuco, 'C', 1, 'FRENTE', 'id-' + nuco + nombre, '', num, nombre, '', '', resultado, nota];
+  const ensayo = [
+    f('0001', 'ANA', 'A1', 'SEGURA', ''),
+    f('0002', 'ANA', 'A1', 'DUDOSA', 'solo por nombre'), // ya tiene segura
+    f('0003', 'LUIS', 'L1', 'DUDOSA', 'solo por nombre'), // activo sin segura → sí
+    f('0004', 'PEDRO', 'P1', 'DUDOSA', 'solo por nombre'), // baja → no
+    f('0001', '', '', 'SIN DUEÑO', 'no se leyó'), // NUCO con segura → no
+    f('0005', '', '', 'SIN DUEÑO', 'no se leyó'), // NUCO sin segura → sí
+    f('0006', '', '', 'SIN DUEÑO', 'no está en Capital Humano'), // → no
+    f('0007', '', '', 'SIN DUEÑO', 'el texto coincide con 2 nombres'), // → sí
+  ];
+  const r = ctx.r(ensayo, (n) => n === 'L1' || n === 'A1');
+  assert.deepEqual([...r.map((x) => x.fila[0])], ['0003', '0005', '0007']);
+});

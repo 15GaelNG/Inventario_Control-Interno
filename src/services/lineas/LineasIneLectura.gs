@@ -22,6 +22,7 @@
  *   lineasIneLectura_todo()      todas (empieza de cero; tandas de 4.5 min que se reprograman solas)
  *   lineasIneLectura_estado() · lineasIneLectura_detener()
  *   lineasIneEnsayo()            arma «INE ENSAYO» con lo leído hasta ese momento
+ *   lineasIneRevision()          arma «INE REVISION»: lo que el usuario revisa a mano (decisión del 9-oct, abajo)
  */
 const INE_LEC_PROP = 'LINEAS_INE_LECTURA';
 const INE_LEC_CONTINUAR = 'lineasIneLectura_continuar';
@@ -572,6 +573,96 @@ function lineasIneEnsayo() {
   filas.forEach((f) => { cuenta[f[10]] = (cuenta[f[10]] || 0) + 1; });
   const texto = 'INE ENSAYO · ' + leidos.length + ' archivos en ' + filas.length + ' renglones · ' +
     ['SEGURA', 'DUDOSA', 'SIN DUEÑO'].map((k) => k + ' ' + (cuenta[k] || 0)).join(' · ');
+  console.log(texto);
+  return texto;
+}
+
+// ---------------------------------------------------------------- revisión a mano
+
+const INE_REV_PESTANA = 'INE REVISION';
+const INE_REV_ENCABEZADOS = ['NUCO', 'CARPETA', 'ARCHIVOS', 'PROPUESTA', 'No EMPLEADO', 'EN EL DOCUMENTO', 'POR QUE', '¿ES?',
+  'OTRA PERSONA (No EMPLEADO)', 'IDS', 'ID PERSONA'];
+const INE_REV_RESPUESTAS = ['SI', 'NO', 'OTRA'];
+
+/**
+ * Puro: de los renglones de «INE ENSAYO» (en el orden de INE_ENSAYO_ENCABEZADOS), lo que se revisa a mano. Decisión del
+ * usuario (9-oct): solo lo que deja a alguien activo sin INE; fuera las dudosas de quien ya tiene una segura, las de
+ * bajas, las ilegibles de un NUCO que ya tiene una segura y las de personas que no están en Capital Humano.
+ *   - DUDOSA de personal activo sin ninguna SEGURA
+ *   - SIN DUEÑO ilegible en un NUCO sin ninguna SEGURA
+ *   - SIN DUEÑO porque el nombre coincide con varias personas
+ * `esActivo(numeros)` dice si alguno de esos números está activo en Capital Humano.
+ */
+function ineLecParaRevisar_(ensayo, esActivo) {
+  const seguras = {};
+  const nucosConSegura = {};
+  ensayo.forEach((f) => {
+    if (f[10] !== 'SEGURA') return;
+    seguras[f[7]] = true;
+    nucosConSegura[f[0]] = true;
+  });
+  const salida = [];
+  ensayo.forEach((f) => {
+    const nota = String(f[11] || '');
+    if (f[10] === 'DUDOSA' && !seguras[f[7]] && esActivo(f[6])) salida.push({ fila: f, porque: 'Dudosa: ' + nota });
+    else if (f[10] === 'SIN DUEÑO' && /no se leyó/.test(nota) && !nucosConSegura[f[0]]) salida.push({ fila: f, porque: 'No se leyó; el NUCO no tiene otra INE' });
+    else if (f[10] === 'SIN DUEÑO' && /coincide|personas con ese nombre/.test(nota)) salida.push({ fila: f, porque: 'Varias personas posibles: ' + nota });
+  });
+  return salida;
+}
+
+function lineasIneRevision() {
+  soloEditor_();
+  ineNucosExigirDev_();
+  const libro = SpreadsheetApp.openById(Config.SPREADSHEET_IDS.TELEFONIA());
+  const hojaEnsayo = libro.getSheetByName(INE_ENSAYO_PESTANA);
+  if (!hojaEnsayo || hojaEnsayo.getLastRow() < 2) throw new Error('Falta el ensayo: corre lineasIneEnsayo() primero.');
+  const ensayo = hojaEnsayo.getRange(2, 1, hojaEnsayo.getLastRow() - 1, INE_ENSAYO_ENCABEZADOS.length).getDisplayValues();
+  // Activos de Capital Humano, por número
+  const ch = SpreadsheetApp.openById(Config.SPREADSHEET_IDS.VEHICULOS()).getSheetByName(CapitalHumano.HOJA_CH);
+  const v = ch.getRange(1, 1, ch.getLastRow(), ch.getLastColumn()).getDisplayValues();
+  const iNum = v[0].indexOf('No EMPLEADO');
+  const iSt = v[0].indexOf('STATUS');
+  const activos = {};
+  v.slice(1).forEach((r) => { if (/ACTIV/i.test(r[iSt])) activos[ineLecNorm_(r[iNum]).trim()] = true; });
+  const lista = ineLecParaRevisar_(ensayo, (numeros) => String(numeros || '').split(', ').some((n) => activos[n]));
+
+  // Lo que ya se haya contestado se conserva (por los IDS de los archivos)
+  const anteriores = {};
+  let hoja = libro.getSheetByName(INE_REV_PESTANA);
+  if (hoja && hoja.getLastRow() > 1) {
+    hoja.getRange(2, 1, hoja.getLastRow() - 1, INE_REV_ENCABEZADOS.length).getValues().forEach((r) => {
+      if (r[7] || r[8]) anteriores[r[9]] = [r[7], r[8]];
+    });
+  }
+  hoja = ineLecHoja_(INE_REV_PESTANA, INE_REV_ENCABEZADOS, true);
+  if (!lista.length) return 'INE REVISION · nada que revisar';
+  const filas = lista.map((x) => {
+    const f = x.fila;
+    const previa = anteriores[f[4]] || ['', ''];
+    return [f[0], f[1], '', f[7], f[6], f[9], x.porque, previa[0], previa[1], f[4], f[5]];
+  });
+  hoja.getRange(2, 1, filas.length, INE_REV_ENCABEZADOS.length).setValues(filas);
+  // ARCHIVOS: un enlace por archivo, con su lado («Frente · Vuelta»)
+  const etiqueta = { FRENTE: 'Frente', VUELTA: 'Vuelta', 'LOS DOS': 'Los dos' };
+  hoja.getRange(2, 3, filas.length, 1).setRichTextValues(lista.map((x) => {
+    const ids = String(x.fila[4]).split(', ');
+    const lados = String(x.fila[3]).split(', ');
+    const partes = ids.map((id, i) => ({ id, texto: etiqueta[lados[i]] || 'Archivo ' + (i + 1) }));
+    const texto = partes.map((p) => p.texto).join(' · ');
+    const rico = SpreadsheetApp.newRichTextValue().setText(texto);
+    let pos = 0;
+    partes.forEach((p) => {
+      rico.setLinkUrl(pos, pos + p.texto.length, 'https://drive.google.com/file/d/' + p.id + '/view');
+      pos += p.texto.length + 3;
+    });
+    return [rico.build()];
+  }));
+  hoja.getRange(2, 8, filas.length, 1).setDataValidation(SpreadsheetApp.newDataValidation()
+    .requireValueInList(INE_REV_RESPUESTAS, true).setAllowInvalid(false).build());
+  hoja.hideColumns(10, 2);
+  hoja.autoResizeColumns(1, 9);
+  const texto = 'INE REVISION · ' + filas.length + ' por revisar · ya contestadas: ' + filas.filter((f) => f[7]).length;
   console.log(texto);
   return texto;
 }
