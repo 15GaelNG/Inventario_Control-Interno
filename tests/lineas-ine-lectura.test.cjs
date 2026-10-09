@@ -279,5 +279,6 @@ test('etapa C (tools/lineas-ine/registrar-ine.js): qué forma el PDF, medidas de
   assert.match(herramienta, /if \(valor\('ENTORNO'\) !== 'PROD'\) throw/);
   assert.match(herramienta, /if \(ENSAYO\) \{ hechos\+\+; continue; \}/, 'el ensayo no sube ni registra');
   assert.doesNotMatch(herramienta, /api\('(PATCH|DELETE)'|'DELETE'|trashed: true/, 'no cambia ni tira nada en Drive');
-  assert.match(herramienta, /SHEETS \+ destino\.telefonia \+ '\/values\/' \+ rango\(HOJA, 'A1'\) \+\n?\s*':append/, 'el registro, al libro de destino');
+  assert.match(herramienta, /SHEETS \+ destino\.telefonia \+ '\/values\/' \+ rango\(HOJA, 'A1'\) \+\n(?:\s*\/\/.*\n)?\s*':append\?valueInputOption=USER_ENTERED&insertDataOption=OVERWRITE'/,
+    'el registro, al libro de destino, en filas que ya tienen su formato');
 });
