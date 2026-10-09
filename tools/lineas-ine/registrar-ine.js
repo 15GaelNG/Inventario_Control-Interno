@@ -230,7 +230,8 @@ async function main() {
     const lote = filas;
     filas = [];
     escribiendo = escribiendo.then(() => api('POST', SHEETS + destino.telefonia + '/values/' + rango(HOJA, 'A1') +
-      ':append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS', { values: lote }));
+      // OVERWRITE: en las filas que ya tienen su formato (texto, FECHA con hora); INSERT_ROWS las agregaba sin él (9-oct)
+      ':append?valueInputOption=USER_ENTERED&insertDataOption=OVERWRITE', { values: lote }));
     return escribiendo;
   };
   const texto = (v) => (v ? "'" + v : ''); // con USER_ENTERED, «0209» y los números de empleado se quedan como texto
@@ -260,7 +261,7 @@ async function main() {
             dos(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + dos(d.getHours()) + ':' + dos(d.getMinutes()));
         }
         const o = { 'ID': g.Ids.nuevo('IDN'), 'ID PERSONA': texto(x.idPersona), 'NO EMPLEADO': texto(x.noEmpleado), 'NOMBRE': texto(x.nombre),
-          'TIPO': 'INE', 'ARCHIVO ID': texto(id), 'ARCHIVO': texto(nombre), 'NUCO': texto(x.nuco), 'ID RESPONSIVA': '', 'ID LINEA': '',
+          'TIPO': 'INE', 'ARCHIVO ID': texto(id), 'ARCHIVO': texto(nombre), 'NUCO': texto(/^\d{1,3}$/.test(x.nuco) ? ('0000' + x.nuco).slice(-4) : x.nuco), 'ID RESPONSIVA': '', 'ID LINEA': '',
           'ORIGEN': ORIGEN, 'FECHA': ahora(), 'QUIEN': quien };
         filas.push(registro[0].map((k) => (k in o ? o[k] : '')));
         if (filas.length >= 20) vaciar();
