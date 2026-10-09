@@ -45,17 +45,18 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   `LineasEscritura.separarLinea` (también con el equipo guardado, donde cambiar el estatus no los separaba).
 - **Vínculos** (8-oct, solo en `emmanuel` y el DEV; `lineas-vinculos.html`): tercer modo de Líneas Telefónicas junto a
   Tabla y Tarjetas, con el cajón a la izquierda y dos vistas. **Grafo**: todo lo que cabe en la pantalla flotando como
-  red (personas con sus equipos y líneas como íconos y sus vínculos), con capas que se prenden (Personas, Sueltos,
-  Resguardo, Venta y desecho, Cancelación), búsqueda (persona, NUCO, número también anterior, IMEI o estatus; varias con
+  red (personas con sus equipos y líneas como íconos y sus vínculos; se prenden Personas y Sueltos), búsqueda (persona, NUCO, número también anterior, IMEI o estatus; varias con
   coma; con búsqueda salen las bajas), departamento y compañía; la rueda acerca, el fondo se arrastra y se aleja solo
   para que quepa. Lo que interesa se mete al cajón: clic en la relación y «Al cajón», arrastrarla al cajón o «Todo al
   cajón» (hasta 60). **Lienzo**: en blanco; se saca del cajón arrastrando la ficha, cada nodo se queda donde se suelta y
-  se regresa al cajón arrastrándolo ahí. Cajas de Resguardo, Venta y desecho y Cancelación que se ponen, se mueven del
-  encabezado, se estiran de la esquina y se quitan; en cada caja vive lo del lienzo que tiene ese estatus. Soltar abre la
+  se regresa al cajón arrastrándolo ahí. **Módulos** (en las dos vistas): Resguardo, Venta y desecho y Cancelación son
+  cajas que se ponen a un lado de la red, se mueven del encabezado, se estiran de la esquina (caben más) y se quitan, con
+  lo de su estatus flotando adentro, su buscador y su cuenta («12 de 300»); en el lienzo también vive en su caja lo
+  suelto con ese estatus, y lo que se saca de un módulo se queda en el lienzo. Soltar abre la
   acción de siempre con lo soltado ya elegido (`LineasVinculos.alSoltar`): línea sobre un equipo → Vincular o Cambiar
   línea o Cambiar de equipo; tijeras del vínculo → Desvincular; línea a Cancelación → Mandar a cancelación; equipo a
-  Resguardo o a Venta y desecho → Mandar a resguardo (con PARA VENTA); equipo sobre una persona → Reasignar. El cajón y
-  el lienzo se guardan en el navegador (`localStorage` `lineas.vinculos.v1`: claves y posiciones). Sin permiso de operar
+  Resguardo o a Venta y desecho → Mandar a resguardo (con PARA VENTA); equipo sobre una persona (también uno sacado del
+  módulo de Resguardo) → Reasignar. El cajón, el lienzo y los módulos se guardan en el navegador (`localStorage` `lineas.vinculos.v1`: claves y posiciones). Sin permiso de operar
   solo se ve y se arma. Clic = vista rápida (en el grafo, elige la relación); doble clic = ficha.
 - **Cambio de número** (8-oct): al cambiar el número en Editar línea se elige el motivo, CAMBIO DE NUMERO (la línea
   ahora tiene otro: movimiento `CAMBIO_NUMERO`, «Cambio de número» en el historial) o CORRECCION DE CAPTURA (Edición).
