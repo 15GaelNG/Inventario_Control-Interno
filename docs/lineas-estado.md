@@ -90,7 +90,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   ID PERSONA, solo el nombre), y un renglón por archivo en APP_IDENTIFICACIONES; si la responsiva no se guarda, la
   carpeta va a la papelera (`LineasIdentificaciones.gs`). Sin NUCO va a la carpeta de la app (`Files`). La página de la
   responsiva ofrece «Ver INE» (o «Ver …» con el nombre, si son varias).
-  **Reutilizarla** (9-oct, pendiente 2.29, en el DEV): al llenar o cambiar el nombre o el número de un responsable, la
+  **Reutilizarla** (9-oct, en producción desde la v88): al llenar o cambiar el nombre o el número de un responsable, la
   pantalla busca su identificación más reciente en APP_IDENTIFICACIONES por su nombre (sin acentos; si el nombre es de
   dos personas, con su número; `apiLineasIdentificacionesRegistradas`, permiso de operar Líneas; la de un archivo en la
   papelera no cuenta) y, si tiene, muestra «INE registrada · NUCO ·
@@ -147,7 +147,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 | MOVIMIENTOS | Historial único: un renglón por acción (`LineasRepo.registrarMovimiento`) |
 | APP_MOVIMIENTOS, CAMBIOS LINEAS TELEFONICAS | Historial de antes del 4-oct (APP_MOVIMIENTOS trae las pestañas retiradas con TIPO HISTORICO; CAMBIOS, la bitácora del AppSheet). La ficha los lee hasta que pasen a MOVIMIENTOS |
 | APP_RESGUARDOS, APP_NOTIFICACIONES, APP_EVIDENCIAS, APP_CORRECCIONES | Bandeja de Pau, avisos, fotos y correcciones |
-| APP_IDENTIFICACIONES | Identificación de cada responsable subida con la responsiva: ID PERSONA, número de empleado, nombre, tipo, archivo, NUCO, ID RESPONSIVA, ID LINEA, origen (RESPONSIVA, REUTILIZADA: la registrada copiada a otra responsiva; NUCOS: las que ya estaban, pendiente 2.28), fecha y quién. Se crea sola con la primera (no se pide antes de desplegar: `noSePide_`) |
+| APP_IDENTIFICACIONES | Identificación de cada responsable subida con la responsiva: ID PERSONA, número de empleado, nombre, tipo, archivo, NUCO, ID RESPONSIVA, ID LINEA, origen (RESPONSIVA, REUTILIZADA: la registrada copiada a otra responsiva; NUCOS: las que ya estaban, 610 el 9-oct), fecha y quién. Se crea sola con la primera (no se pide antes de desplegar: `noSePide_`) |
 | ACCESORIOS CELULARES | Inventario de accesorios |
 | COLABORADORES ACTUALIZADO | Capital Humano (la mantiene Ayrton; Líneas solo la lee) |
 
@@ -188,7 +188,7 @@ su nombre dentro de ella (`LineasArchivos.resolver`); el DEV además los lee de 
 | `lineas/LineasRegistros.gs` | Formulario de alta y edición (reglas del AppSheet) |
 | `lineas/LineasCaptura.gs`, `LineasChecklist.gs`, `LineasPdf.gs`, `LineasPatronPng.gs`, `LineasEvidencias.gs`, `LineasArchivos.gs` | Inspección y responsiva: checklist, firmas, fotos, PDF (y la imagen del patrón) y Drive |
 | `lineas/LineasIdentificaciones.gs` | Identificación de cada responsable en la responsiva (Drive y APP_IDENTIFICACIONES) |
-| `lineas/LineasIneNucos.gs` | INE que ya están en NUCOS (pendiente 2.28): inventario de solo lectura de NUCOS de producción en la pestaña «INE NUCOS» del libro del DEV (`lineasIneNucos_inventario`, desde el editor de un DEV) |
+| `lineas/LineasIneNucos.gs` | INE que ya estaban en NUCOS (9-oct): inventario de solo lectura de NUCOS de producción en la pestaña «INE NUCOS» del libro del DEV (`lineasIneNucos_inventario`, desde el editor de un DEV) |
 | `lineas/LineasAcciones.gs`, `LineasResguardos.gs` | Reasignar, Mandar a resguardo y bandeja de Pau |
 | `lineas/LineasPanorama.gs`, `LineasNotificaciones.gs`, `LineasExportar.gs` | Panorama, avisos y Exportar a Excel (el inventario: una hoja LINEAS TELEFONICAS como el panel, con ID del AppSheet y las columnas de la vista del AppSheet, `LineasRepo.vistaCompleta`; Cambios y Accesorios, sus pestañas tal cual) |
 | `lineas/LineasAccesorios.gs`, `LineasCorrecciones.gs` (+ `LineasCorreccionesSemilla.gs`, fuera de git) | Accesorios y Correcciones |
