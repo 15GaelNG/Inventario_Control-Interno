@@ -29,6 +29,18 @@
  *   DRIVE_FOLDER_ID_REPORTES                carpeta donde caen los formatos ya llenados en PDF
  *                                           (la misma que usa AppSheet, no una nueva)
  *   DRIVE_FOLDER_ID_INSPECCIONES_IMAGENES   carpeta de imágenes de Inspección Vehicular
+ *   DRIVE_FOLDER_ID_ARQUEOS_HISTORICO       (opcional) solo lectura: de dónde se resuelven los
+ *                                           Arqueos migrados de AppSheet con ruta relativa
+ *   URL_FIRMA_PUBLICA                       (opcional) la liga de firma a distancia (Responsiva/
+ *                                           Adherente Vehicular) la arma con esto en vez de con
+ *                                           ScriptApp.getService().getUrl() -- es OTRO despliegue
+ *                                           del mismo proyecto, con acceso "Cualquiera" (sin pedir
+ *                                           cuenta de dominio), solo para que alguien sin cuenta
+ *                                           @ciudadmaderas.com pueda abrir esa liga y firmar. El
+ *                                           resto de la app sigue sirviéndose del despliegue de
+ *                                           siempre (acceso de dominio); sin esta propiedad, la
+ *                                           liga usa ese mismo despliegue y solo la abre quien
+ *                                           tenga cuenta del dominio (como hasta ahora).
  *
  * Geotab (opcional; sin esto la app funciona igual, solo sin telemetría — ver GeotabService.gs):
  *   GEOTAB_USUARIO, GEOTAB_PASSWORD, GEOTAB_BASE_DATOS, GEOTAB_SERVIDOR
@@ -51,6 +63,10 @@ const Config = (function () {
   return {
     // Getter: se lee al usarse, no al cargar el archivo (Entornos.gs podría cargarse después)
     get ENTORNO() { return leerConfig_('ENTORNO') || 'DEV'; },
+
+    // Ver la nota larga de arriba (URL_FIRMA_PUBLICA). Vacío = no hay despliegue público
+    // configurado todavía; las ligas de firma usan el despliegue normal, como siempre.
+    urlFirmaPublica: () => leerConfig_('URL_FIRMA_PUBLICA') || '',
 
     SPREADSHEET_IDS: {
       USUARIOS: () => required('SS_ID_USUARIOS'),
@@ -82,6 +98,10 @@ const Config = (function () {
       // NUCOS VEHICULOS: el expediente de cada vehículo (ExpedienteNuco.gs). Opcional: sin ella (un DEV) se usa una
       // carpeta "NUCOS VEHICULOS" de pruebas en la raíz de ese proyecto, nunca la real
       NUCOS_VEHICULOS: () => leerConfig_('DRIVE_FOLDER_ID_NUCOS_VEHICULOS') || '',
+      // Solo lectura: Arqueos de antes del 7-oct-2026 (migrados de AppSheet) guardan una ruta
+      // relativa, no una URL -- de ahí se resuelven. Nunca se escribe aquí. Sin la propiedad,
+      // esas rutas viejas no se resuelven (ArqueosService.resolverArchivo las deja sin abrir).
+      ARQUEOS_HISTORICO: () => leerConfig_('DRIVE_FOLDER_ID_ARQUEOS_HISTORICO') || '',
     },
 
     // Lo que este proyecto tiene apagado (MODULOS_APAGADOS): el menú no lo pinta (la lista llega

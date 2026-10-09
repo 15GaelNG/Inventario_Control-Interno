@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Firmar documento — Control Interno</title>
+<style>
+  :root {
+    --color-primary: #06263A; --color-bg: #F5F6F5; --color-surface: #ffffff;
+    --color-text: #1c2b33; --color-text-muted: #5c6b72; --color-border: #E7E7E7;
+    --color-danger: #8a6d3a; --color-success: #1e7d4f;
+    --shadow-lg: 0 24px 48px -16px rgba(6,38,58,.35);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-primary: #2f7bb0; --color-bg: #0b1a23; --color-surface: #142732;
+      --color-text: #edf1f3; --color-text-muted: #9db0b8; --color-border: #26404c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--color-bg); color: var(--color-text);
+    font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+    display: flex; justify-content: center; padding: 28px 16px;
+  }
+  .firex-card {
+    max-width: 440px; width: 100%; background: var(--color-surface);
+    border: 1px solid var(--color-border); border-radius: 14px; padding: 24px;
+    box-shadow: var(--shadow-lg); align-self: flex-start;
+  }
+  h1 { font-size: 17px; margin: 0 0 4px; text-align: center; }
+  .firex-sub { font-size: 13px; color: var(--color-text-muted); text-align: center; margin: 0 0 18px; }
+  .firex-resumen {
+    background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 18px; font-size: 13.5px; line-height: 1.7;
+  }
+  .firex-resumen b { color: var(--color-text); }
+  label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 6px; }
+  button[type="submit"] {
+    width: 100%; padding: 11px; font-size: 14px; font-weight: 600; border: none;
+    border-radius: 9px; background: var(--color-primary); color: #fff; cursor: pointer; margin-top: 14px;
+  }
+  button[type="submit"]:disabled { opacity: .6; cursor: default; }
+  .firex-btn-secundario {
+    width: 100%; padding: 9px; font-size: 13px; font-weight: 600; border: 1px solid var(--color-border);
+    border-radius: 9px; background: transparent; color: var(--color-primary); cursor: pointer; margin-bottom: 14px;
+  }
+  .firex-btn-secundario:disabled { opacity: .6; cursor: default; }
+  .firex-error {
+    background: rgba(138,109,58,.12); border: 1px solid var(--color-danger); color: var(--color-danger);
+    border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-bottom: 14px;
+  }
+  .firex-exito { text-align: center; padding: 8px 0; }
+  .firex-exito .firex-ok {
+    width: 46px; height: 46px; border-radius: 50%; background: var(--color-success); color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 24px; margin: 0 auto 12px;
+  }
+  .firex-oculto { display: none; }
+  a.firex-pdf { color: var(--color-primary); font-weight: 600; }
+  .firex-spinner {
+    display: inline-block; width: 13px; height: 13px; border: 2px solid rgba(255,255,255,.5);
+    border-top-color: #fff; border-radius: 50%; vertical-align: -2px; margin-right: 6px;
+    animation: firex-girar .7s linear infinite;
+  }
+  @keyframes firex-girar { to { transform: rotate(360deg); } }
+</style>
+<?!= include('html/js/componentes/firma'); ?>
+</head>
+<!-- data-tipo/data-quien/data-token: igual que data-apagados en Index.html -- así el bloque de
+     JS de abajo no lleva scriptlets de Apps Script adentro (Apps Script evalúa cualquier
+     scriptlet que encuentre en el archivo, hasta dentro de un comentario como este -- por eso
+     ni los nombro aquí con sus símbolos reales, ver CLAUDE.md), que tienen que ser JS válido
+     por sí solos para los contratos de construir.js. -->
+<body data-tipo="<?= tipo ?>" data-quien="<?= quien ?>" data-token="<?= token ?>">
+  <div class="firex-card">
+    <h1 id="firex-titulo">Firmar documento</h1>
+    <p class="firex-sub">Control Interno — Ciudad Maderas</p>
+
+    <p id="firex-cargando">Cargando…</p>
+
+    <div id="firex-invalido" class="firex-oculto">
+      <div class="firex-error" id="firex-invalido-msg"></div>
+      <p class="firex-sub">Pide que te manden una liga nueva.</p>
+    </div>
+
+    <form id="firex-form" class="firex-oculto">
+      <div class="firex-resumen" id="firex-resumen"></div>
+      <button type="button" class="firex-btn-secundario" id="firex-vista-previa">Generar vista previa del documento</button>
+      <a href="#" id="firex-vista-previa-link" class="firex-pdf firex-oculto" target="_blank" rel="noopener" style="display:block;text-align:center;margin:-8px 0 14px">Abrir vista previa ↗</a>
+      <div class="firex-error firex-oculto" id="firex-error"></div>
+      <label id="firex-firma-label">Tu firma</label>
+      <div id="firex-firma"></div>
+      <button type="submit" id="firex-guardar">Firmar y enviar</button>
+    </form>
+
+    <div id="firex-exito" class="firex-oculto firex-exito">
+      <div class="firex-ok">✓</div>
+      <p><b>Firma registrada</b></p>
+      <p class="firex-sub">Ya puedes cerrar esta ventana.</p>
+      <p id="firex-exito-pdf"></p>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const tipo = document.body.dataset.tipo === 'adherente' ? 'adherente' : 'responsiva';
+      const quien = document.body.dataset.quien === 'jefe' ? 'jefe' : 'principal';
+      const token = document.body.dataset.token || '';
+      const NOMBRE_PRINCIPAL = { responsiva: 'Responsable', adherente: 'Adherente' };
+
+      function llamar(fn) {
+        return new Promise((resolver, rechazar) => {
+          google.script.run.withSuccessHandler(resolver).withFailureHandler(rechazar)[fn](tipo, quien, token);
+        });
+      }
+
+      function mostrar(id) {
+        ['firex-cargando', 'firex-invalido', 'firex-form', 'firex-exito'].forEach((otro) => {
+          document.getElementById(otro).classList.toggle('firex-oculto', otro !== id);
+        });
+      }
+
+      const MOTIVOS = {
+        'no-existe': 'Esta liga no es válida.',
+        'ya-firmado': 'Esta liga ya se usó.',
+        'vencido': 'Esta liga ya venció.',
+      };
+
+      if (quien === 'jefe') {
+        document.getElementById('firex-titulo').textContent = 'Firmar como jefe directo';
+        document.getElementById('firex-firma-label').textContent = 'Tu firma (jefe directo)';
+      }
+
+      llamar('apiFirmaRemotaObtener').then((info) => {
+        if (!info || !info.vigente) {
+          document.getElementById('firex-invalido-msg').textContent =
+            (info && MOTIVOS[info.motivo]) || 'Esta liga no es válida.';
+          mostrar('firex-invalido');
+          return;
+        }
+        document.getElementById('firex-resumen').innerHTML =
+          '<div><b>Documento:</b> ' + info.documento + '</div>' +
+          '<div><b>Vehículo:</b> ' + [info.marca, info.modelo].filter(Boolean).join(' ') +
+            (info.placa ? ' · ' + info.placa : '') + '</div>' +
+          '<div><b>' + (quien === 'jefe' ? 'Jefe directo de' : NOMBRE_PRINCIPAL[tipo]) + ':</b> ' + info.nombre + '</div>';
+        const firma = Firma.crear(document.getElementById('firex-firma'), { marca: 'Firma aquí con el dedo o el mouse' });
+        mostrar('firex-form');
+
+        // window.open() dentro de un withSuccessHandler ya no cuenta como "lo abrió la
+        // persona" para el navegador (pasó un viaje al servidor de por medio) y lo bloquea
+        // como popup -- por eso, en vez de abrirlo solo, se arma la liga del PDF (Blob, sin
+        // tocar Drive) y se revela como su propia liga para que la persona la abra ella
+        // misma con un clic, que sí cuenta.
+        let ultimoBlobUrl = null;
+        const enlaceVistaPrevia = document.getElementById('firex-vista-previa-link');
+        const btnVistaPrevia = document.getElementById('firex-vista-previa');
+        btnVistaPrevia.addEventListener('click', () => {
+          const textoOriginal = btnVistaPrevia.innerHTML;
+          btnVistaPrevia.disabled = true;
+          btnVistaPrevia.innerHTML = '<span class="firex-spinner"></span> Generando…';
+          enlaceVistaPrevia.classList.add('firex-oculto');
+          google.script.run.withSuccessHandler((pdf) => {
+            btnVistaPrevia.disabled = false;
+            btnVistaPrevia.innerHTML = textoOriginal;
+            if (ultimoBlobUrl) URL.revokeObjectURL(ultimoBlobUrl);
+            const binario = atob(pdf.base64);
+            const bytes = new Uint8Array(binario.length);
+            for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
+            ultimoBlobUrl = URL.createObjectURL(new Blob([bytes], { type: pdf.mimeType || 'application/pdf' }));
+            enlaceVistaPrevia.href = ultimoBlobUrl;
+            enlaceVistaPrevia.classList.remove('firex-oculto');
+          }).withFailureHandler((err) => {
+            btnVistaPrevia.disabled = false;
+            btnVistaPrevia.innerHTML = textoOriginal;
+            const error = document.getElementById('firex-error');
+            error.textContent = 'No se pudo generar la vista previa: ' + ((err && err.message) || String(err));
+            error.classList.remove('firex-oculto');
+          }).apiFirmaRemotaVistaPrevia(tipo, quien, token);
+        });
+
+        document.getElementById('firex-form').addEventListener('submit', (ev) => {
+          ev.preventDefault();
+          const error = document.getElementById('firex-error');
+          error.classList.add('firex-oculto');
+          if (firma.vacia()) {
+            error.textContent = 'Falta tu firma.';
+            error.classList.remove('firex-oculto');
+            return;
+          }
+          const boton = document.getElementById('firex-guardar');
+          boton.disabled = true;
+          const textoOriginal = boton.innerHTML;
+          boton.innerHTML = '<span class="firex-spinner"></span> Enviando…';
+          google.script.run.withSuccessHandler((res) => {
+            if (res && res.aviso) {
+              document.getElementById('firex-exito-pdf').textContent = res.aviso;
+            } else if (res && res.PDF) {
+              document.getElementById('firex-exito-pdf').innerHTML =
+                '<a class="firex-pdf" href="' + res.PDF + '" target="_blank" rel="noopener">Ver el documento firmado</a>';
+            }
+            mostrar('firex-exito');
+          }).withFailureHandler((err) => {
+            error.textContent = (err && err.message) || String(err);
+            error.classList.remove('firex-oculto');
+            boton.disabled = false;
+            boton.innerHTML = textoOriginal;
+          }).apiFirmaRemotaCompletar(tipo, quien, token, firma.exportar());
+        });
+      }).catch((err) => {
+        document.getElementById('firex-invalido-msg').textContent = (err && err.message) || String(err);
+        mostrar('firex-invalido');
+      });
+    })();
+  </script>
+</body>
+</html>

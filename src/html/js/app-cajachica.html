@@ -425,7 +425,7 @@
               { t: 'Tipo', r: (a) => escaparHtml(a.TIPO_ARQUEO || '—') },
               { t: 'Total general', r: (a) => (a.TOTAL_GENERAL === '' || a.TOTAL_GENERAL === null || a.TOTAL_GENERAL === undefined) ? '—' : formatearMoneda(a.TOTAL_GENERAL) },
               { t: 'Diferencia', r: (a) => (a.DIFERENCIA === '' || a.DIFERENCIA === null || a.DIFERENCIA === undefined) ? '—' : formatearMoneda(a.DIFERENCIA) },
-              { t: 'Calificación', r: (a) => (a.CALIFICACION === '' || a.CALIFICACION === null || a.CALIFICACION === undefined) ? '—' : escaparHtml(a.CALIFICACION + '%') },
+              { t: 'Calificación', r: (a) => { const n = normalizarCalificacion_(a.CALIFICACION); return n === null ? '—' : escaparHtml(n.toFixed(2) + '%'); } },
               { t: 'Archivo', r: (a) => a.FORMATO_ARQUEO ? '<a href="' + escaparHtml(a.FORMATO_ARQUEO) + '" target="_blank" rel="noopener">📎 Ver PDF</a>' : '<span class="empty-state" style="margin:0">Sin archivo</span>' },
               { t: 'Evidencia', r: (a) => a.EVIDENCIAS ? '<a href="' + escaparHtml(a.EVIDENCIAS) + '" target="_blank" rel="noopener">📎 Ver evidencia</a>' : '<span class="empty-state" style="margin:0">Sin evidencia</span>' },
               { t: '', r: (a) => accionesFichaRegistro('arqueo', a.ID, { editar: puedeEditarModulo('arqueos'), eliminar: puedeEditarModulo('arqueos') }) },
@@ -750,6 +750,13 @@
     }
   }
 
+  const AYUDA_CAJACHICA = [
+    { pregunta: '¿Qué es una caja chica?', respuesta: 'Un registro por responsable: quién la administra, monto asignado, estatus y los arqueos/cambios de monto que ha tenido.' },
+    { pregunta: '¿Cómo veo los arqueos de una caja chica?', respuesta: 'Abre su ficha (doble clic o "Ver ficha") -- tiene pestañas con sus Arqueos y sus Cambios de monto.' },
+    { pregunta: '¿Qué significan Vigente / En proceso de cierre / Cerrada?', respuesta: 'El estatus de la caja: se filtra con los chips arriba de la tabla.' },
+    { pregunta: '¿Dónde veo el cronograma de arqueos?', respuesta: 'Botón "Cronograma" arriba a la derecha.' },
+  ];
+
   // ---------- Cambios de Monto (Caja Chica) ----------
   async function initCambiosMontoCCH() {
     wireTabsSimple(document.getElementById('view-container'));
@@ -944,6 +951,12 @@
     await cargar();
   }
 
+  const AYUDA_CAMBIOS_MONTO_CCH = [
+    { pregunta: '¿Qué es esta bitácora?', respuesta: 'El historial de incrementos y reducciones al monto asignado de cada caja chica.' },
+    { pregunta: '¿Cómo registro un cambio de monto?', respuesta: 'Pestaña "Registrar": elige la caja chica, el tipo de cambio y el monto.' },
+    { pregunta: '¿Dónde veo el monto actual de una caja chica?', respuesta: 'En su ficha (módulo Caja Chica) o en el catálogo de Caja Chica.' },
+  ];
+
   // ---------- Cambios Vehículos (bitácora automática, solo lectura) ----------
   async function initCambiosVehiculos() {
     let todosLosCambios = [];
@@ -1031,4 +1044,11 @@
 
     await cargar();
   }
+
+  const AYUDA_CAMBIOS_VEHICULOS = [
+    { pregunta: '¿Qué es esta bitácora?', respuesta: 'Se llena sola cuando alguien edita un vehículo: qué campo cambió, de qué valor a cuál, quién lo hizo y cuándo.' },
+    { pregunta: '¿Puedo editar o borrar un renglón?', respuesta: 'No -- es de solo lectura, automática. Para corregir algo hay que volver a editar el vehículo.' },
+    { pregunta: '¿Cuántos registros guarda?', respuesta: 'Los 500 cambios más recientes.' },
+    { pregunta: '¿Cómo busco los cambios de un vehículo en particular?', respuesta: 'Usa el buscador general de la tabla con su folio o Nucco.' },
+  ];
 </script>

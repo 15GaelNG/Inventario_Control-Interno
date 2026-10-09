@@ -9,7 +9,7 @@ const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 
 test('sin «¿Qué pasó?» ni regla de estatus: regresa «Cambiar estatus» (usuario, 4-oct)', () => {
   const acciones = read('src/services/lineas/LineasAcciones.gs');
-  assert.match(acciones, /return \{ reasignar, PERSONA_DE_RESPONSIVA, datoDeCH_ \};/);
+  assert.match(acciones, /return \{ reasignar, vincular, PERSONA_DE_RESPONSIVA, datoDeCH_ \};/);
   // Reasignar: el director sale de la responsiva y el jefe directo de la inspección (si es de la misma persona) o de
   // Capital Humano (usuario, 6-oct)
   assert.match(acciones, /cambios\['JEFE DIRECTO'\] = deInspeccion \|\| datoDeCH_\(valores\['No EMPLEADO'\], valores\['RESPONSABLE'\], 'jefe'\);/);
@@ -30,17 +30,25 @@ test('sin «¿Qué pasó?» ni regla de estatus: regresa «Cambiar estatus» (us
   assert.doesNotMatch(cliente, /apiLineasAgregarNota|esNota/);
 });
 
-test('sin «Cambiar estatus»: los estatus se cambian en Editar y los de resguardo y cancelación siguen su flujo (usuario, 4-oct)', () => {
+test('sin «Cambiar estatus»: los estatus se cambian en Editar; los del panel de Pau, con aviso (usuario, 4-oct y 8-oct)', () => {
   const reg = read('src/services/lineas/LineasRegistros.gs');
   assert.doesNotMatch(reg, /function cambiarEstatus\(/);
-  assert.match(reg, /throw new Error\('Para mandar la línea a cancelación usa «Mandar a cancelación»/);
+  // Sin el aviso confirmado (datos.sinPanel) el servidor sigue pidiendo el formulario de resguardo o el aviso de la línea
+  assert.match(reg, /const sinPanel = !!\(datos && datos\.sinPanel\);/);
+  assert.match(reg, /if \(!sinPanel\) \{\s+if \('ESTATUS EQUIPO' in cambios\) exigirFormularioResguardo_/);
+  assert.match(reg, /ESTATUS_LINEA_PANEL\.indexOf\(estatusLinea\) >= 0/);
+  // El equipo que se guarda deja DISPONIBLE su línea en uso
+  assert.match(reg, /if \(sinPanel && aGuardado && !\('ESTATUS LINEA' in cambios\) && texto_\(base\['ESTATUS LINEA'\]\)\.toUpperCase\(\) === 'USO'\)/);
   assert.match(reg, /guardarCambiosRegistro\(fila, cambios, usuario, new Date\(\), \{ corregir: true \}\)/);
   const cliente = read('src/html/js/lineas.html');
   assert.doesNotMatch(cliente, /abrirCambioEstatus|fichaDeFila|texto: 'Cambiar estatus'/);
   const editar = cliente.slice(cliente.indexOf('function abrirEditor('), cliente.indexOf('// ---- Captura: inspección y responsiva nuevas'));
-  assert.match(editar, /ESTATUS_EQUIPO_RESGUARDO\.indexOf\(valores\['ESTATUS EQUIPO'\]\) >= 0/);
-  assert.match(editar, /valores\['ESTATUS LINEA'\] === 'EN PROCESO DE CANCELACION'/);
-  assert.match(editar, /if \(flujo && !otros\) \{ cerrarCaptura\(true\); seguirFlujo\(\); return; \}/);
+  // Ya no abre Mandar a resguardo ni Mandar a cancelación: avisa, se confirma y se guarda con sinPanel
+  assert.match(editar, /cambiaA\('ESTATUS EQUIPO', ESTATUS_EQUIPO_RESGUARDO\)/);
+  assert.match(editar, /cambiaA\('ESTATUS LINEA', ESTATUS_LINEA_PANEL\)/);
+  assert.match(editar, /mensaje: 'Este cambio no se agregará en el panel de Resguardos y cancelaciones, pero se quedará en el historial\.'/);
+  assert.match(editar, /sinPanel: avisos\.length > 0/);
+  assert.doesNotMatch(editar, /seguirFlujo|abrirResguardo\(|abrirCancelacion\(/);
   assert.doesNotMatch(editar, /placeholder=|class="ln-nota"/); // sin textos de ayuda
   // Agregar equipo y Agregar línea en lugar de Registrar NUCO
   const vista = read('src/html/views/lineas/lineas-telefonicas.html');

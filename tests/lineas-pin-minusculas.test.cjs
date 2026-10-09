@@ -18,7 +18,7 @@ test('la regla de mayúsculas de app.html no toca los campos con data-respetar-t
 test('los PIN, la contraseña del módem y el correo llevan data-respetar-texto (literal o secreto) en Editar y en las capturas', () => {
   assert.match(read('src/html/js/lineas.html'), /\(e\.literal \|\| e\.secreto \? ' data-respetar-texto' : ''\)/);
   const registros = read('src/services/lineas/LineasRegistros.gs');
-  assert.match(registros, /ed\('PIN WHATSAPP', 'PIN de WhatsApp', 'texto', \{ valida: 'PIN_WA', literal: true, secreto: true \}\)/);
+  assert.match(registros, /ed\('PIN WHATSAPP', 'PIN de WhatsApp', 'texto', \{ valida: 'PIN_WA', literal: true, secreto: true,/);
   assert.match(registros, /ed\('PIN EQUIPO', 'PIN EQUIPO', 'texto', \{ valida: 'PIN_EQ', literal: true, secreto: true \}\)/);
   const captura = read('src/services/lineas/LineasCaptura.gs');
   assert.equal((captura.match(/campo_\('PIN WHATSAPP', 'PIN de WhatsApp', 'texto', \{[^}]*literal: true/g) || []).length, 2);

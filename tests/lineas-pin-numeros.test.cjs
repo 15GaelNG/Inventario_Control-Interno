@@ -96,7 +96,7 @@ test('pantalla: al cambiar a «PIN» se borra una contraseña con letras', () =>
 test('pantalla: Editar tiene la lista de bloqueo y los tres formularios mandan el bloqueo elegido', () => {
   assert.match(cliente, /const elementos = conSelectorBloqueo\(form\.elementos\);/);
   assert.equal((cliente.match(/activarBloqueo\(cuerpo\);/g) || []).length, 2, 'Editar y las capturas');
-  assert.match(cliente, /parte: ctx\.parte, bloqueo: bloqueoElegido\(cuerpo\) \};/);
+  assert.match(cliente, /parte: ctx\.parte, bloqueo: bloqueoElegido\(cuerpo\),/);
   assert.equal((cliente.match(/valores: valores, patron: patron, bloqueo: bloqueo,/g) || []).length, 2, 'inspección y responsiva');
   assert.match(tramo('    function erroresFormularioEn(', '    /** FOLIO y ESTATUS GENERAL'), /errorPinBloqueo\(cuerpo\)/);
   assert.match(tramo('      function erroresCaptura(', '      function patronParaGuardar('), /errorPinBloqueo\(/);

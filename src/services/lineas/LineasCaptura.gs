@@ -217,7 +217,7 @@ const LineasCaptura = (function () {
       // Un solo COMENTARIO (plan §5.2): se guarda en COMENTARIO (lo que imprime el PDF) y en el historial. Dentro de
       // una acción que ya pidió el suyo (mandar a resguardo, reasignar) no es obligatorio (usuario, 4-oct)
       titulo_('COMENTARIO', 'message-square-text'),
-      campo_('COMENTARIO', 'Comentario', 'area', { valor: deResp('COMENTARIO', ''), requerido: enAccion || resp ? 'NUNCA' : 'SIEMPRE' }),
+      campo_('COMENTARIO', 'Comentario', 'area', { valor: deResp('COMENTARIO', ''), requerido: enAccion || resp ? 'NUNCA' : 'SIEMPRE', valida: 'COMENTARIOS' }),
       titulo_('FIRMAS', 'signature'),
       // En el sistema solo firma el responsable principal (el de Capital Humano); los adicionales firman el PDF impreso
       // (usuario, 6-oct)
@@ -246,17 +246,21 @@ const LineasCaptura = (function () {
    * Lleva al DIRECTOR de la persona, como el AppSheet; el jefe directo va en la inspección (usuario, 6-oct: del 4 al
    * 6-oct la responsiva guardó al jefe en DIRECTOR).
    */
-  function formularioResponsiva_(fila, catalogos, usuario, id, ahora, modo) {
+  /** Columnas de la línea en la responsiva: con Vincular / Cambiar línea salen de la línea que se pone. */
+  const COLUMNAS_DE_LINEA = ['NUMERO TELEFONO', 'NUMERO SIM', 'COMPAÑIA', 'RAZON SOCIAL', 'PIN WHATSAPP'];
+
+  function formularioResponsiva_(fila, catalogos, usuario, id, ahora, modo, lineaFila) {
     // Reasignar (usuario, 4-oct): la responsiva es la acción; equipo y línea fijos, la persona nueva se elige aquí y
     // accesorios y accesos empiezan vacíos
     const reasignar = String(modo || '').toUpperCase() === 'REASIGNAR';
     const acceso = (c) => (reasignar ? '' : v(c));
-    const v = (c) => valorLinea_(fila, c);
+    // Vincular, Cambiar línea o Cambiar de equipo (etapa 3, 8-oct): la línea es la que se pone (lineaFila), fija
+    const v = (c) => valorLinea_(lineaFila && COLUMNAS_DE_LINEA.indexOf(c) >= 0 ? lineaFila : fila, c);
     const persona = (c) => (reasignar ? '' : v(c));
     const ro = (columna, etiqueta, valor) => campo_(columna, etiqueta, 'texto', { valor: valor, soloLectura: true });
     const ed = (columna, etiqueta, control, valor, extra) => campo_(columna, etiqueta, control, Object.assign({ valor: valor }, extra || {}));
     // La línea: editable (con sugerencias) en la responsiva suelta; fija al reasignar
-    const deLinea = (columna, etiqueta, valor, extra) => (reasignar ? ro(columna, etiqueta, valor) : ed(columna, etiqueta, 'listaAbierta', valor, extra));
+    const deLinea = (columna, etiqueta, valor, extra) => (reasignar || lineaFila ? ro(columna, etiqueta, valor) : ed(columna, etiqueta, 'listaAbierta', valor, extra));
     // Accesorios: la lista única (D5.5) con "TARJETA SD" (usuario, 4-oct; "SD" de antes cuenta como la misma) y lo que
     // ya traiga el equipo fuera de la lista, para no perderlo
     const accesorios = String(acceso('ACCESORIOS') || '').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean).map((x) => (x === 'SD' ? 'TARJETA SD' : x));
@@ -310,7 +314,7 @@ const LineasCaptura = (function () {
       campo_('TICKET', 'Ticket', 'texto', { valor: '' }),
       // Un solo COMENTARIO (plan §5.2): se guarda en COMENTARIO (lo que imprime el PDF) y en el historial
       titulo_('COMENTARIO', 'message-square-text'),
-      campo_('COMENTARIO', 'Comentario', 'area', { valor: '', requerido: 'SIEMPRE' }),
+      campo_('COMENTARIO', 'Comentario', 'area', { valor: '', requerido: 'SIEMPRE', valida: 'COMENTARIOS' }),
       titulo_('FIRMAS', 'signature'),
       campo_('FIRMA RESPONSABLE', 'FIRMA RESPONSABLE', 'firma', { valor: '' }),
       ro('NOMBRE CI', 'NOMBRE RESPONSABLE DE CONTROL INTERNO', usuario.nombre || ''),
@@ -354,13 +358,19 @@ const LineasCaptura = (function () {
     };
   }
 
+  /** La línea que se pone con Vincular, Cambiar línea o Cambiar de equipo (ref.lineaNueva = su registro), o null. */
+  function lineaDeRef_(ref) {
+    return ref && ref.lineaNueva ? LineasRepo.leerRegistroObligatorio(String(ref.lineaNueva), 'la línea') : null;
+  }
+
   function contextoResponsiva(ref, usuario, puedeVerSecretos) {
     const obj = objetivoCaptura_(ref);
     const ahora = new Date();
+    const lineaFila = lineaDeRef_(ref);
     return {
       equipo: obj.equipo, linea: obj.linea, idPropuesto: LineasDatos.nuevoId(LineasRepo.TAB.RESP), nombreCI: usuario.nombre,
       firmaGuardada: LineasFirmas.tiene(usuario.correo),
-      _armar: (id) => ocultarSecretos_(formularioResponsiva_(obj.fila, LineasRepo.catalogos(), usuario, id, ahora, ref && ref.modo), puedeVerSecretos),
+      _armar: (id) => ocultarSecretos_(formularioResponsiva_(obj.fila, LineasRepo.catalogos(), usuario, id, ahora, ref && ref.modo, lineaFila), puedeVerSecretos),
     };
   }
 
@@ -401,6 +411,8 @@ const LineasCaptura = (function () {
       const valor = valores[e.columna];
       if (visible && LineasChecklist.cumple(e.requerido, tipo) && !valor) { errores.push(e.etiqueta + ' es obligatorio'); return; }
       if (!valor) return;
+      // Comentario con contexto (más de 3 caracteres: «N/A» no), la misma regla que las acciones (usuario, 8-oct)
+      if (e.valida === 'COMENTARIOS' && valor.length <= 3) errores.push(e.etiqueta + ': ESCRIBE MÁS DE 3 CARACTERES');
       if (e.control === 'escala' && e.opciones.indexOf(valor.toUpperCase()) < 0) errores.push(e.etiqueta + ': valor no válido');
       if (e.control === 'escala') valores[e.columna] = valor.toUpperCase();
       // Valid_If = IN([COLUMNA], SORT(SELECT(LISTAS TELEFONOS[COLUMNA], TRUE)))
@@ -513,7 +525,7 @@ const LineasCaptura = (function () {
     const res = LineasDatos.conCandado(() => {
       const ahora = new Date();
       let obj = objetivoCaptura_(ref);
-      const elementos = formularioResponsiva_(obj.fila, LineasRepo.catalogos(), usuario, id, ahora, accion ? accion.modo : '')
+      const elementos = formularioResponsiva_(obj.fila, LineasRepo.catalogos(), usuario, id, ahora, accion ? accion.modo : '', accion ? accion.lineaFila || null : null)
         .map((e) => (e.secreto && !puedeVerSecretos ? Object.assign({}, e, { valorOculto: true }) : e));
       const ocultos = {};
       elementos.forEach((e) => { if (e.secreto) ocultos[e.columna] = e.valor; });

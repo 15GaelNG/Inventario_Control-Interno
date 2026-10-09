@@ -219,6 +219,7 @@ const REVISION_CARPETAS = {
   // Los modelos se leen directo de su carpeta (InspeccionesService.raizDe_), no caminando desde la raíz
   DRIVE_FOLDER_ID_MODELOS: { nombre: 'MODELOS INSPECCION', sinRaiz: true, soloLee: true },
   DRIVE_FOLDER_ID_VERIFICACIONES_LECTURA: { soloLee: true },
+  DRIVE_FOLDER_ID_ARQUEOS_HISTORICO: { soloLee: true },
   LINEAS_DRIVE_APPSHEET: {},
   // El expediente por NUCO: no vive en la raíz de la app (en un DEV sin la clave, sí: ExpedienteNuco)
   DRIVE_FOLDER_ID_NUCOS_VEHICULOS: { nombre: 'NUCOS VEHICULOS', sinRaiz: true },

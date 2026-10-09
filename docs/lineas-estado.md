@@ -1,10 +1,11 @@
 # Líneas — estado del módulo
 
-Rama `master` = producción (versión 64, de Ayrton; lo último de Líneas ahí es la parte 6 con COMENTARIO, plantillas
-«(SISTEMA)», página de la responsiva, patrón con 9 puntos en el PDF, Reasignar corregido, responsables adicionales, sin
-«quien lo usa», firma guardada, PDF ligado fuera de su carpeta y PIN en minúsculas). Rama `emmanuel`: además, el PIN
-del equipo solo con números, sin la compatibilidad con OBSERVACIONES, la hoja armada en Exportar a Excel y la pantalla Proveedor (etapa 1) · Última
-actualización: 2026-10-07
+Rama `master` = producción (la versión vigente está en el INDICE; lo último de Líneas ahí es la parte 6 con COMENTARIO,
+plantillas «(SISTEMA)», página de la responsiva, patrón con 9 puntos en el PDF, Reasignar corregido, responsables
+adicionales, sin «quien lo usa», firma guardada, PDF ligado fuera de su carpeta, PIN en minúsculas y Drive sin
+`UrlFetchApp`). Rama `emmanuel`: además, el PIN del equipo solo con números y sin la compatibilidad con OBSERVACIONES.
+Lo de adendums y facturas (Exportar a Excel con la hoja armada y la pantalla Proveedor) salió de `emmanuel` el 8-oct y
+queda para después (`_archivo/emmanuel_respaldo_8oct.zip` de la carpeta del proyecto) · Última actualización: 2026-10-08
 
 Qué es hoy el módulo **Líneas** (equipos celulares y líneas telefónicas), dónde vive cada cosa y cómo se trabaja.
 La bitácora anterior de este archivo (§0a…§0ae, hasta el 1-oct) sigue en el historial de git. El diseño de las hojas
@@ -16,6 +17,38 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 - **Líneas Telefónicas:** tabla de equipos y líneas (selección estilo Google Drive), ficha con General, Documentos e
   Historial; Editar en pestañas con Agregar equipo / Agregar línea; TIPO se calcula solo (EQUIPO, EQUIPO + SIM,
   EQUIPO + SIM BASICO, LINEA, LINEA BASICA, BANDA ANCHA, MODEM, CAMARA).
+- **Agregar línea** (8-oct): «¿Se vincula a un equipo?». Sí → se elige un NUCO en USO o RESGUARDO sin línea (lista con
+  modelo y responsable) y la línea queda con el equipo, en su asignación: el responsable es el del equipo y el estatus
+  lo sigue (USO si está en uso, DISPONIBLE si está guardado). No → responsable a mano y opcional; USO con responsable,
+  DISPONIBLE sin él. La cancelación no se elige al agregar. Con SIM BASICO no se pide ni se guarda adendum
+  (`LineasRegistros.crearLineaEnEquipo_`, `estatusAltaLinea_`).
+- **Estatus en Editar información** (8-oct): directo. RESGUARDO, PARA VENTA y PARA DESECHO del equipo, y EN PROCESO DE
+  CANCELACION y CANCELADA de la línea, con un aviso «no se agregará en el panel de Resguardos y cancelaciones, pero se
+  quedará en el historial» (Confirmar o Cancelar; el servidor los acepta solo con `datos.sinPanel`). El equipo que pasa
+  a uno de esos estatus deja DISPONIBLE su línea en uso (el aviso lo dice). Al panel de Pau se llega con «Mandar a
+  resguardo» y «Mandar a cancelación».
+- **PIN de WhatsApp** (8-oct): en la ficha va en la información del equipo (General → Equipo, y Equipo en la ficha de
+  la línea), no en la línea; sin línea no se muestra. La línea sola ya no lo muestra ni lo pide (pendiente 2.25).
+- **Editar línea y Editar información** (8-oct): la línea se edita aparte (⋮ de la línea, ⋮ del equipo con línea y la
+  tabla de líneas; `apiLineasFormularioRegistro(id, 'LINEA')`, `LineasRegistros.contextoEdicion_`). Una línea de un NUCO
+  trae Línea y Adendum, su responsable (el del equipo) solo para ver y, como estatus, el suyo, EN PROCESO DE CANCELACION
+  o CANCELADA. Editar información de un equipo con línea ya no trae la línea ni el adendum. La línea sola con
+  responsable tiene «Quitar responsable» (queda DISPONIBLE); con un responsable nuevo pasa a USO y en USO lo exige.
+  Un SIM BASICO sin datos de adendum no enseña el adendum (ni al agregar ni al editar).
+- **Vincular, cambiar y desvincular** (8-oct; ⋮ de la ficha y clic derecho de la lista; `LineasAcciones.vincular`, `apiLineasVincular`): en el
+  equipo, Vincular línea (sin línea) o Cambiar línea y Desvincular línea; en la línea, Vincular a equipo (suelta y
+  DISPONIBLE) o Cambiar de equipo y Desvincular del equipo. Solo líneas sueltas DISPONIBLE y equipos en USO o RESGUARDO
+  sin línea. La línea sigue al equipo (USO o DISPONIBLE); la que deja el equipo queda DISPONIBLE o va a la bandeja de
+  cancelaciones («Mandar a cancelación»). Con el equipo en USO y otra línea, responsiva obligatoria con la línea nueva
+  fija (ref.lineaNueva) y su comentario; si no, el comentario va en otra ventana. Movimientos ASIGNAR_LINEA («Vincular
+  línea»), CAMBIO_LINEA, CAMBIO_EQUIPO y RETIRAR_LINEA («Desvincular línea»). La línea se separa con
+  `LineasEscritura.separarLinea` (también con el equipo guardado, donde cambiar el estatus no los separaba).
+- **Cambio de número** (8-oct): al cambiar el número en Editar línea se elige el motivo, CAMBIO DE NUMERO (la línea
+  ahora tiene otro: movimiento `CAMBIO_NUMERO`, «Cambio de número» en el historial) o CORRECCION DE CAPTURA (Edición).
+  La ficha de la línea tiene «Números de esta línea» (el actual y los anteriores con fecha y comentario,
+  `LineasRepo.numerosDeLinea`) y la tabla de líneas enseña «antes …» junto al número: la búsqueda la encuentra por uno
+  anterior (índice `numerosAnteriores`, caché `indice_telefonia_v6`). Lo de antes del 8-oct sigue solo en la bitácora
+  del AppSheet («Números que ha tenido» del equipo; pendiente 4.1).
 - **Acciones con nombre:** nueva inspección, nueva responsiva, Reasignar (responsiva y luego inspección, las dos
   obligatorias; el servidor exige la inspección del día; el equipo queda en USO; el director sale de la responsiva y
   el jefe directo de la inspección o, si no, de Capital Humano; la inspección llega llenada con la responsiva, se
@@ -23,7 +56,8 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   inspección de lo que viene de una persona), Mandar a cancelación, Subir PDF firmado (del sistema, del AppSheet o de
   NUCOS: versión nueva del PDF de NUCOS o, si no tiene, PDF nuevo en la carpeta de NUCOS de la captura o del día),
   Regenerar PDF (responsivas del sistema: versión nueva del mismo archivo; pasadas 6 h pide solo las firmas). Cada
-  acción deja un renglón en el historial con su comentario.
+  acción deja un renglón en el historial con su comentario: de más de 3 caracteres («N/A» no), revisado en la pantalla
+  al escribirlo (Mandar a resguardo, antes de pedir las inspecciones; inspección y responsiva) y en el servidor.
 - **Páginas de la inspección y de la responsiva** (Documentos, doble clic o Historial): lo que dice el documento de ese
   día; a la vista Ver PDF y Subir PDF firmado, y en ⋮ Ver equipo, Ver carpeta en Drive y Generar o Regenerar PDF
   (`botonesDocumento` en lineas.html; `apiLineasInspeccion` / `apiLineasResponsiva`).
@@ -55,15 +89,6 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   EQUIPO; patrón, «PATRON»; sin bloqueo, «N/A». Con «PIN» solo números (no deja escribir letras); la contraseña acepta
   todo. La lista viaja como `datos.bloqueo` y el servidor lo revisa (`LineasUtil.exigirPinEquipo`). En Editar, PIN
   EQUIPO sigue con 6 caracteres como máximo (regla del AppSheet).
-- **Exportar a Excel del inventario:** primero una hoja LINEAS TELEFONICAS armada como la vieja (mismas columnas, una
-  fila por equipo o línea sola, ESTATUS GENERAL como en la tabla; `LineasExportar.inventarioJunto_`) y después LINEAS,
-  EQUIPOS, ASIGNACIONES y ADENDUMS. El reporte mensual (`reporte_lineas/scripts/inventario.py`) lee esa primera hoja.
-- **Proveedor** (`proveedor-lineas`, parte 7; `lineas-proveedor.html` y `LineasProveedor.gs`): quien tenga el permiso
-  sube los adendums de Telcel y los barridos de AT&T del mes; se leen en el navegador, se revisan contra el inventario
-  y se cargan: foto del mes en ADENDUMS (columnas CUENTA, NUMERO SIM, IMEI, ESTATUS PROVEEDOR, EQUIPO, PLAZO,
-  PENALIZACION y FECHA DE BAJA), cuenta, razón social y SIM en LINEAS, altas como línea suelta DISPONIBLE y avisos a
-  Líneas de número distinto con la misma SIM o cuenta (salvo si la bitácora ya tiene ese cambio) y de estatus distintos; un aviso igual no se repite. Un archivo
-  anterior al último cargado de su cuenta no se carga. El adendum vigente es el del archivo más nuevo.
 - **Resguardos y cancelaciones:** bandeja de Pau (recibir, entregar a Líneas, vendido, cancelación con carta).
 - **Panorama:** líneas y equipos por estatus, renta por cuenta y adendums, al cierre del mes elegido.
 - **Notificaciones:** campana con adendums por vencer y avisos de seguimiento.
@@ -100,7 +125,8 @@ se vuelve a ligar en APP_EVIDENCIAS y en la columna del PDF (`LineasRepo.revisar
 `LineasArchivos.pdfsFueraDeCarpeta`; al ver Documentos, la página del documento o el Historial y antes de Regenerar o
 Subir PDF firmado; se pregunta a Drive cada vez).
 
-**Permisos de Google:** la app corre con la cuenta de quien publica (`executeAs: USER_DEPLOYING`). Desde la v66, Líneas
+**Permisos de Google:** la app corre con la cuenta que mueve los despliegues (`executeAs: USER_DEPLOYING`); desde el
+8-oct es siempre la de la GitHub Action (`cuentaProd` de `tools/subir/destinos.json`). Desde la v66, Líneas
 usa Drive con `DriveApp` y con el servicio avanzado Drive v3 (`LineasArchivos.listarDrive`, `appsscript.json`), no con
 `UrlFetchApp`: así solo depende de los permisos de Drive y de Sheets, que toda la app necesita, y no del de servicios
 externos (`script.external_request`), que no tenía la cuenta que había publicado la v65. `UrlFetchApp` queda solo en el
@@ -131,9 +157,11 @@ su nombre dentro de ella (`LineasArchivos.resolver`); el DEV además los lee de 
 ## 4. Cómo se trabaja
 
 1. Cambiar en `emmanuel`, `npm test`, commit.
-2. Probar en el DEV de Emmanuel: `npx clasp push --force` (su `.clasp.json` apunta al DEV, con copia de la base de producción).
-3. Unir con `master` antes de publicar (`git fetch`, merge de `origin/master`).
-4. Publicar: `clasp push` a producción, `clasp version` y `clasp redeploy` de **las dos** `/exec` a la misma versión.
+2. Probar en el DEV de Emmanuel: `npm run push` (sube comprimido al proyecto de `.clasp.json`, el DEV, con copia de la
+   base de producción).
+3. Unir con `master` (`git fetch`, merge de `origin/master`) y subir a `master`.
+4. Publicar: desde el 8-oct solo con la GitHub Action, botón «Run workflow» sobre `master` (`docs/subir-automatico.md`):
+   sube, revisa el entorno y mueve **las dos** `/exec` a la misma versión.
 5. Nunca editar en el editor web de Apps Script: una pestaña vieja al guardar regresa todo el proyecto (pasó con la v47).
 
 ## 5. Reglas del módulo

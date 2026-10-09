@@ -183,6 +183,19 @@
     return '<span class="badge-estado activo"><i data-lucide="circle-check" class="ico"></i> Completo</span>';
   }
 
+  /**
+   * CALIFICACION_AUDITORIA_FINAL en base 100 (ej. 97.06), como la calcula calcularCampos_ --
+   * pero los arqueos migrados de AppSheet la tienen guardada como fracción (ej. 0.9706, igual
+   * que la hoja la muestra con formato de "97.06%"). Un valor <= 1 se interpreta como fracción
+   * y se multiplica por 100, para que ambos se vean igual ("97.06%", no "0.9706%"). null si no
+   * es un número.
+   */
+  function normalizarCalificacion_(valor) {
+    const n = Number(valor);
+    if (valor === '' || valor === null || valor === undefined || isNaN(n)) return null;
+    return n <= 1 ? n * 100 : n;
+  }
+
   /** Agrupa los 9 "grupo" de CAMPOS_ARQUEO en 5 pasos, mismo patrón visual que
    *  el wizard de Inspección Vehicular (chips + Atrás/Siguiente). */
   const PASOS_ARQUEO = [
@@ -706,6 +719,22 @@
     });
   }
 
+  /**
+   * Abre FORMATO ARQUEO/EVIDENCIAS: si ya es una URL (arqueos capturados con esta app), directo;
+   * si es la ruta vieja de AppSheet ("ARQUEOS/2026/archivo.pdf", arqueos migrados), la resuelve
+   * con el servidor antes de abrirla (ArqueosService.resolverArchivo).
+   */
+  async function abrirArchivoArqueo_(valor) {
+    if (!valor) return;
+    if (/^https?:/i.test(valor)) { window.open(valor, '_blank', 'noopener'); return; }
+    try {
+      const url = await callServer('apiUrlArchivoArqueo', state.token, valor);
+      window.open(url, '_blank', 'noopener');
+    } catch (err) {
+      toastError(err.message);
+    }
+  }
+
   async function initArqueos() {
     wireTabsSimple(document.getElementById('view-container'));
     // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
@@ -850,7 +879,10 @@
           .map((k) => {
             let valor = completo[k];
             if (CAMPOS_MONEDA_DETALLE_ARQUEO.includes(k)) valor = formatearMoneda(valor);
-            else if (k === 'CALIFICACION_AUDITORIA_FINAL') valor = valor + '%';
+            else if (k === 'CALIFICACION_AUDITORIA_FINAL') {
+              const n = normalizarCalificacion_(valor);
+              valor = (n === null ? valor : n.toFixed(2)) + '%';
+            }
             return itemInfo(tituloDesdeClave(k), valor);
           })
           .join('');
@@ -892,14 +924,14 @@
         { campo: 'FECHA_INICIO', titulo: 'Fecha', tipo: 'fecha', enDetalle: false },
         { campo: 'TOTAL_GENERAL', titulo: 'Total general', tipo: 'numero', render: (v) => escaparHtml(formatearMoneda(v)), enDetalle: false },
         { campo: 'DIFERENCIA', titulo: 'Diferencia', tipo: 'numero', render: (v) => badgeDiferencia(v), enDetalle: false },
-        { campo: 'CALIFICACION', titulo: 'Calificación', tipo: 'numero', render: (v) => (v === '' ? '—' : escaparHtml(v + '%')), enDetalle: false },
+        { campo: 'CALIFICACION', titulo: 'Calificación', tipo: 'numero', render: (v) => { const n = normalizarCalificacion_(v); return n === null ? '—' : escaparHtml(n.toFixed(2) + '%'); }, enDetalle: false },
         { campo: 'ESTADO_PDF', titulo: 'Estado PDF', tipo: 'lista', enDetalle: false },
       ],
       accionesFila: [].concat(
         [
           { icono: 'wallet', titulo: 'Ver caja chica', alHacer: (a) => verFichaCajaChicaDesdeOtroModulo(a.ID_CCH) },
-          { icono: 'documento', titulo: 'Ver PDF', visible: (a) => !!a.FORMATO_ARQUEO, alHacer: (a) => window.open(a.FORMATO_ARQUEO, '_blank', 'noopener') },
-          { icono: 'imagen', titulo: 'Ver evidencia', visible: (a) => !!a.EVIDENCIAS, alHacer: (a) => window.open(a.EVIDENCIAS, '_blank', 'noopener') },
+          { icono: 'documento', titulo: 'Ver PDF', visible: (a) => !!a.FORMATO_ARQUEO, alHacer: (a) => abrirArchivoArqueo_(a.FORMATO_ARQUEO) },
+          { icono: 'imagen', titulo: 'Ver evidencia', visible: (a) => !!a.EVIDENCIAS, alHacer: (a) => abrirArchivoArqueo_(a.EVIDENCIAS) },
         ],
         puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (a) => abrirEditarArqueo(a.ID) }] : []
       ),
@@ -939,9 +971,9 @@
 
     function actualizarKpis(filas) {
       document.getElementById('arq-stat-total').textContent = filas.length;
-      const calificaciones = filas.map((a) => Number(a.CALIFICACION)).filter((n) => !isNaN(n));
+      const calificaciones = filas.map((a) => normalizarCalificacion_(a.CALIFICACION)).filter((n) => n !== null);
       const promedio = calificaciones.length ? calificaciones.reduce((a, b) => a + b, 0) / calificaciones.length : 0;
-      document.getElementById('arq-stat-calificacion').textContent = Math.round(promedio * 100) / 100 + '%';
+      document.getElementById('arq-stat-calificacion').textContent = (Math.round(promedio * 100) / 100).toFixed(2) + '%';
       document.getElementById('arq-stat-diferencias').textContent =
         filas.filter((a) => (Number(a.DIFERENCIA) || 0) !== 0).length;
       document.getElementById('arq-stat-pendientes').textContent =
@@ -1105,4 +1137,11 @@
     await cargar();
   }
 
+  const AYUDA_ARQUEOS = [
+    { pregunta: '¿Qué es un arqueo?', respuesta: 'La auditoría y conteo de efectivo de una caja chica: cuánto debería haber contra cuánto hay realmente, más el checklist de 17 puntos de control interno.' },
+    { pregunta: '¿Cómo registro un arqueo?', respuesta: 'Pestaña "Registrar": elige la caja chica y avanza por los 6 pasos (Identificación, Efectivo, Gastos, Auditoría, Firmas y evidencia, Estatus). El ID Arqueo y los totales se calculan solos.' },
+    { pregunta: '¿Qué es el "Estatus del arqueo"?', respuesta: 'El último paso del formulario: marca si el arqueo quedó completo o si todavía falta información pendiente -- ayuda a dar seguimiento a los que quedaron a medias.' },
+    { pregunta: '¿De dónde sale la Calificación de auditoría?', respuesta: 'Se calcula sola con las respuestas de los 17 reactivos del paso "Auditoría" -- no se captura a mano.' },
+    { pregunta: '¿El PDF se genera solo?', respuesta: 'Sí, al registrar o editar el arqueo -- "Estado del PDF" muestra si ya está listo. No hay que subirlo a mano.' },
+  ];
 </script>

@@ -762,4 +762,12 @@
     refrescarListado();
     refreshIcons();
   }
+
+  const AYUDA_USUARIOS = [
+    { pregunta: '¿Qué son los tres niveles de permiso?', respuesta: 'Sin acceso (rojo), Ver (azul, solo consulta) y Editar (verde, puede capturar/cambiar) -- por módulo.' },
+    { pregunta: '¿Cómo cambio el permiso de una persona?', respuesta: 'Abre su ficha (pestaña Personas) y usa "Editar permisos", o cambia celdas directo en "Matriz por área".' },
+    { pregunta: '¿Qué es una "excepción" (dorado)?', respuesta: 'Un permiso distinto al que le da su área -- por ejemplo, alguien con Ver en un módulo donde su área en general no tiene acceso.' },
+    { pregunta: '¿Qué pasa si cambio el permiso de un área en vez de una persona?', respuesta: 'Afecta a todas las personas de esa área que no tengan ya una excepción propia en ese módulo.' },
+    { pregunta: '¿Dónde veo quién cambió qué permiso y cuándo?', respuesta: 'Pestaña "Historial" -- cada cambio real queda registrado con fecha, quién lo hizo, a quién y el antes/después.' },
+  ];
 </script>

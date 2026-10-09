@@ -23,6 +23,20 @@ con un comentario. Ejemplos ya corregidos: los botones "Ver reporte"
 (Vehículos) y "Calendario" (Arqueos) en `src/html/js/app.html` y
 `app-arqueos.html`.
 
+## ⚠️ Bug relacionado: nunca escribas `<?` ni `?>` sueltos en un `.html` que se sirve con `createTemplateFromFile().evaluate()`
+
+Si el archivo se evalúa como template (hoy: `Index.html` y `FirmaExterna.html`, vía
+`createTemplateFromFile(...).evaluate()` en `Router.gs`/`Code.gs`), Apps Script busca
+scriptlets `<? ... ?>` en **todo el texto del archivo tal cual está escrito**, incluso
+dentro de un comentario HTML (`<!-- ... -->`) que solo estaba explicando el tema en
+prosa. Un comentario como `<!-- ... entre <? y ?> ... -->` crea un scriptlet de verdad
+(`<? y ?>`) que Apps Script intenta correr como código del servidor: si `y` no existe,
+truena con una página en blanco y `ReferenceError: y is not defined (línea N)` — el
+error no viene del navegador, es la propia página de error de Apps Script (8-oct,
+`FirmaExterna.html`). **Para hablar de scriptlets en un comentario, nunca escribas los
+símbolos literales** `<?`/`?>`: descríbelos en palabras (como en este párrafo) o, si hace
+falta mostrarlos, parte la secuencia para que nunca quede un `<?` ni un `?>` juntos.
+
 Esto NO aplica a URLs dentro de atributos HTML normales (`src="https://..."`,
 `href="https://..."`) fuera de un `<script>` — esas están a salvo.
 

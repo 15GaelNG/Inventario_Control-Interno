@@ -99,7 +99,7 @@ test('la factura y el alta no tienen "anteriores": la segunda se queda junto, co
   E.archivar(c, 5, 'FACTURA');
   assert.equal(drive.ruta(a), 'NUCOS VEHICULOS/5/1.-DOCUMENTACIÓN/1.-FACTURA/FACTURA-0005.pdf');
   assert.equal(drive.ruta(b), 'NUCOS VEHICULOS/5/1.-DOCUMENTACIÓN/1.-FACTURA/FACTURA-0005.xml');
-  assert.equal(drive.ruta(c), 'NUCOS VEHICULOS/5/1.-DOCUMENTACIÓN/1.-FACTURA/FACTURA-0005 2026-10-08.pdf');
+  assert.match(drive.ruta(c), /^NUCOS VEHICULOS\/5\/1\.-DOCUMENTACIÓN\/1\.-FACTURA\/FACTURA-0005 \d{4}-\d{2}-\d{2}\.pdf$/);   // con la fecha de hoy
 });
 
 test('sin la clave (un DEV) usa la carpeta de pruebas de la raíz, nunca la real', () => {

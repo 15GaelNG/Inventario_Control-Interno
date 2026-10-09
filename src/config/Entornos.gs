@@ -45,6 +45,10 @@ const ENTORNOS = {
     DRIVE_FOLDER_ID_MODELOS: '1ddRghL8izS63UYWDHn9w_YFHPuRC8bTm',   // opcional: sin esto se usa RAIZ
     // El expediente de cada vehículo (ExpedienteNuco.gs; ordenada el 8-oct-2026, docs/nucos-expediente.md)
     DRIVE_FOLDER_ID_NUCOS_VEHICULOS: '1pgEmrDM58FuALsfzBzckC9ROz941HR9P',
+    // Solo lectura: Arqueos migrados de AppSheet guardan una ruta relativa ("ARQUEOS/<año>/archivo.pdf"),
+    // no una URL -- y esos archivos reales viven en esta carpeta (la raíz vieja de Drive, de antes del
+    // 7-oct-2026, donde también están REPORTES y MODELOS). Los arqueos nuevos usan RAIZ; nunca se escribe aquí.
+    DRIVE_FOLDER_ID_ARQUEOS_HISTORICO: '1D3m1H3C_Is2Bol9IBPdnV6ugJiXizSCN',   // opcional
 
     // Líneas (opcionales: sin esto usan las carpetas de AppSheet que trae el código)
     LINEAS_DRIVE_APPSHEET: '1WPFFd4imLiui6zIpAa3OL62ZEu_a5BJn',
@@ -55,18 +59,36 @@ const ENTORNOS = {
     GEOTAB_USUARIO: 'auxiliar6datos.ci@ciudadmaderas.com',
     GEOTAB_BASE_DATOS: 'ciudad_maderas',
     GEOTAB_SERVIDOR: '',
+
+    // Despliegue aparte del mismo proyecto, con acceso "Cualquier usuario" (sin pedir cuenta
+    // de dominio) -- solo lo usa la liga de firma a distancia (Responsiva/Adherente
+    // Vehicular). El despliegue normal (los "dos links" de siempre) sigue con acceso de
+    // dominio. Su ID va también en despliegueFirmaPublicaProd (tools/subir/destinos.json),
+    // para que subir.js lo mueva a la versión nueva junto con los otros dos.
+    URL_FIRMA_PUBLICA: 'https://script.google.com/macros/s/AKfycbyK6Zwlpm_fvlUTVdMb5BBM6uXZzBvWUkouso2O0Ekui0YFtF4sR3ub4sKbApZ4UzEr/exec',
+  },
+
+  // ---------------------------------------------------------------- DEV de Jorge (rama jorge)
+  // Solo esta propiedad: lo demás (SS_ID_*, carpetas…) de este proyecto sigue viniendo de sus
+  // Script Properties de siempre -- leerConfig_ cae a la Script Property cuando la clave no
+  // está en el bloque de este proyecto, así que agregar solo una no mueve nada más.
+  '1qE6UYn-ay4jZYRxiBOnmDwiE_iKWVtBSuiPEaz_PjArz0lf0YcfojqC-': {
+    // Despliegue aparte del mismo proyecto, con acceso "Cualquier usuario" (sin pedir cuenta
+    // de dominio) -- solo lo usa la liga de firma a distancia (Responsiva/Adherente
+    // Vehicular). El despliegue normal (el que usa el equipo) sigue con acceso de dominio.
+    URL_FIRMA_PUBLICA: 'https://script.google.com/macros/s/AKfycbx53or0V18l5wwo-inkuv5RBcjA-0YdteMwCBNn_0TLZY462bQWNo_A3lsVZA4VfplK/exec',
   },
 
   // ---------------------------------------------------------------- DEV de Emmanuel (rama emmanuel)
   '1rpvvay1hBTFfm5paVyvy6-Thmx-CQ6uUWVef20Jr8VmHQxkCWZ7UmeOa': {
     ENTORNO: 'DEV',
 
-    // Copia del libro de producción ("DEV EMMANUEL - Copia de produccion 2026-10-05")
-    SS_ID_USUARIOS: '1RgtHxKZgo6PFYY1e6ic9coqjBUaNhRlk2X8_Raz6HNQ',
-    SS_ID_VEHICULOS: '1RgtHxKZgo6PFYY1e6ic9coqjBUaNhRlk2X8_Raz6HNQ',
-    SS_ID_TELEFONIA: '1RgtHxKZgo6PFYY1e6ic9coqjBUaNhRlk2X8_Raz6HNQ',
-    SS_ID_ACCESORIOS: '1RgtHxKZgo6PFYY1e6ic9coqjBUaNhRlk2X8_Raz6HNQ',
-    SS_ID_CAJACHICA: '1RgtHxKZgo6PFYY1e6ic9coqjBUaNhRlk2X8_Raz6HNQ',
+    // Copia del libro de producción ("DEV EMMANUEL - Copia de produccion 2026-10-08")
+    SS_ID_USUARIOS: '1L177getuQ0RSGXbVsLZEgc9Fn5d2QySDlwjvUuqu_0E',
+    SS_ID_VEHICULOS: '1L177getuQ0RSGXbVsLZEgc9Fn5d2QySDlwjvUuqu_0E',
+    SS_ID_TELEFONIA: '1L177getuQ0RSGXbVsLZEgc9Fn5d2QySDlwjvUuqu_0E',
+    SS_ID_ACCESORIOS: '1L177getuQ0RSGXbVsLZEgc9Fn5d2QySDlwjvUuqu_0E',
+    SS_ID_CAJACHICA: '1L177getuQ0RSGXbVsLZEgc9Fn5d2QySDlwjvUuqu_0E',
 
     // Líneas: lo que escribe (inspecciones, responsivas, fotos, PDF firmados) va a una carpeta de pruebas, nunca a
     // NUCOS de producción. Las carpetas de los demás módulos siguen en las Script Properties del DEV.

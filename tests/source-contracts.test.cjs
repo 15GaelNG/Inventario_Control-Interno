@@ -225,12 +225,15 @@ test('el alta y edición de LINEAS TELEFONICAS sigue LINEAS TELEFONICAS_Form del
     { getScriptCache: () => ({ get: () => '', put: () => {} }) },
     { formatDate: () => '2026-09-24' }, {}, {}, LineasUtil);
   const titulos = (els) => els.filter((e) => e.tipo === 'titulo').map((e) => e.texto);
+  const campo0 = (els, c) => els.filter((e) => e.columna === c)[0];
   const ctx = { nuevo: true, nucoRepetido: () => false, telefonoRepetido: () => false };
   const altaEquipo = Reg._elementos({}, {}, { correo: 'x@y.z' }, Object.assign({}, ctx, { parte: 'EQUIPO' }));
   // Responsables adicionales (6-oct): un bloque por cada uno y una sección sin título con «Agregar responsable»
   assert.deepEqual(titulos(altaEquipo), ['EQUIPO', 'RESPONSABLE', 'RESPONSABLE 2', 'RESPONSABLE 3', 'RESPONSABLE 4', 'RESPONSABLE 5', '', 'LÍNEA', 'ADENDUM', 'ACCESORIOS Y ACCESOS']);
   const altaLinea = Reg._elementos({}, {}, { correo: 'x@y.z' }, Object.assign({}, ctx, { parte: 'LINEA' }));
-  assert.deepEqual(titulos(altaLinea), ['LÍNEA', 'RESPONSABLE', 'RESPONSABLE 2', 'RESPONSABLE 3', 'RESPONSABLE 4', 'RESPONSABLE 5', '', 'ADENDUM', 'ACCESOS']);
+  // La línea sola ya no tiene accesos: el PIN de WhatsApp es del equipo (usuario, 8-oct)
+  assert.deepEqual(titulos(altaLinea), ['LÍNEA', 'RESPONSABLE', 'RESPONSABLE 2', 'RESPONSABLE 3', 'RESPONSABLE 4', 'RESPONSABLE 5', '', 'ADENDUM']);
+  assert.ok(!campo0(altaLinea, 'PIN WHATSAPP') && campo0(altaEquipo, 'PIN WHATSAPP'));
   const campo = (els, c) => els.filter((e) => e.columna === c)[0];
   assert.ok(!campo(altaLinea, 'EQUIPO') && !campo(altaLinea, 'ACCESORIOS') && !campo(altaLinea, 'NUCO'));
   // En el alta de un equipo el NUCO se captura; el TIPO no se elige
@@ -246,7 +249,10 @@ test('el alta y edición de LINEAS TELEFONICAS sigue LINEAS TELEFONICAS_Form del
   // Un equipo sin línea puede recibir una (número con sugerencias de las líneas); con línea, el número es texto
   assert.equal(campo(edicion, 'NUMERO TELEFONO').control, 'listaAbierta');
   assert.equal(campo(edicion, 'NUMERO TELEFONO').sugerencias, 'NUMEROS');
-  assert.equal(campo(Reg._elementos({ TIPO: 'EQUIPO + SIM', 'NUMERO TELEFONO': '4421090805' }, {}, { correo: 'x@y.z' }, { nuevo: false }), 'NUMERO TELEFONO').control, 'texto');
+  // Un equipo con línea se edita sin la línea (Editar línea aparte, 8-oct); en Editar línea el número es texto
+  const conLinea = { TIPO: 'EQUIPO + SIM', 'NUMERO TELEFONO': '4421090805' };
+  assert.ok(!campo(Reg._elementos(conLinea, {}, { correo: 'x@y.z' }, { nuevo: false }), 'NUMERO TELEFONO'));
+  assert.equal(campo(Reg._elementos(conLinea, {}, { correo: 'x@y.z' }, Reg._contextoEdicion(conLinea, 'LINEA')), 'NUMERO TELEFONO').control, 'texto');
   // TIPO automático
   const T = Reg._tipoAutomatico;
   assert.equal(T('EQUIPO', {}, ''), 'EQUIPO');
@@ -288,8 +294,10 @@ test('los formularios de inspección y responsiva siguen el orden y las etiqueta
   assert.match(captura, /ed\('DIRECTOR', 'Director', 'listaAbierta', persona\('DIRECTOR'\), \{ opciones: catalogos\.directores \|\| \[\] \}\)/);
   // Un solo COMENTARIO (plan §5.2): se guarda en COMENTARIO, la columna que imprime el PDF, y es obligatorio
   // Un solo comentario por acción (usuario, 4-oct): en la inspección no es obligatorio si la acción ya pidió el suyo (resguardo)
-  assert.match(captura, /campo_\('COMENTARIO', 'Comentario', 'area', \{ valor: deResp\('COMENTARIO', ''\), requerido: enAccion \|\| resp \? 'NUNCA' : 'SIEMPRE' \}\)/);
-  assert.match(captura, /campo_\('COMENTARIO', 'Comentario', 'area', \{ valor: '', requerido: 'SIEMPRE' \}\)/);
+  assert.match(captura, /campo_\('COMENTARIO', 'Comentario', 'area', \{ valor: deResp\('COMENTARIO', ''\), requerido: enAccion \|\| resp \? 'NUNCA' : 'SIEMPRE', valida: 'COMENTARIOS' \}\)/);
+  assert.match(captura, /campo_\('COMENTARIO', 'Comentario', 'area', \{ valor: '', requerido: 'SIEMPRE', valida: 'COMENTARIOS' \}\)/);
+  assert.match(captura, /e\.valida === 'COMENTARIOS' && valor\.length <= 3/);
+  assert.match(read('src/html/js/lineas.html'), /campo\('_MOTIVO', 'Comentario', 'area', \{ requerido: 'SIEMPRE', valor: '', valida: 'COMENTARIOS' \}\)/);
   assert.doesNotMatch(captura, /'OBSERVACIONES'/);
   assert.match(captura, /const acceso = \(c\) => \(reasignar \? '' : v\(c\)\);/);
   assert.match(captura, /const IDENTIFICACIONES = \['INE', 'LICENCIA DE CONDUCIR'\]/);
@@ -522,7 +530,8 @@ test('los campos de texto libre del AppSheet ahora tienen lista desplegable', ()
   assert.match(resp, /ro\('MODELO', 'Modelo', v\('EQUIPO'\)\)/);
   assert.match(resp, /ro\('IMEI', 'IMEI', v\('IMEI'\)\)/);
   ['COMPAÑIA', 'RAZON SOCIAL'].forEach((c) => assert.match(resp, new RegExp("deLinea\\('" + c + "'")));
-  assert.match(resp, /const deLinea = \(columna, etiqueta, valor, extra\) => \(reasignar \? ro\(columna, etiqueta, valor\) : ed\(columna, etiqueta, 'listaAbierta', valor, extra\)\);/);
+  // Fija también con Vincular / Cambiar línea (la línea que se pone, etapa 3, 8-oct)
+  assert.match(resp, /const deLinea = \(columna, etiqueta, valor, extra\) => \(reasignar \|\| lineaFila \? ro\(columna, etiqueta, valor\) : ed\(columna, etiqueta, 'listaAbierta', valor, extra\)\);/);
   assert.equal(control(resp, 'IDENTIFICACION'), 'listaAbierta', 'responsiva IDENTIFICACION: sugiere INE y licencia y se puede escribir (usuario, 4-oct)');
   assert.match(resp, /'IDENTIFICACION', 'Identificación', 'listaAbierta', \{ valor: '', requerido: 'SIEMPRE', opciones: IDENTIFICACIONES \}/);
   assert.match(resp, /sugerencias: 'NUMEROS', autollenar: \{ 'SIM': 'sim'/);
@@ -918,7 +927,7 @@ test('NUCO siempre a 4 dígitos (tabla, ficha, detalles, bitácoras, historial y
   assert.match(repo, /if \(c === 'NUCO'\) return LineasUtil\.nucoVisible\(v\);/);
   assert.match(repo, /nuco: LineasUtil\.nucoVisible\(crudo\('NUCO'\)\) \|\| '',/);
   assert.match(repo, /nuco: txt\(col\(f, 'NUCO'\)\) === null \? null : LineasUtil\.nucoVisible\(col\(f, 'NUCO'\)\),/);
-  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v5';/);
+  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v6';/);
   assert.match(read('src/services/lineas/LineasExportar.gs'), /return LineasUtil\.nucoVisible\(valor\);/);
 });
 
@@ -1066,6 +1075,10 @@ test('INICIO / FIN PLAN solo se capturan en el alta de la línea; después no se
   const ra = Reg._resolver(alta, {}, { 'NUMERO TELEFONO': '4420000009', 'FIN PLAN': '2028-05-01' }, altaCtx);
   assert.equal(ra.valores['FIN PLAN'], '2028-05-01');
   assert.ok(ra.errores.some((e) => /^Inicio es obligatorio/.test(e)));
+  // Un SIM BASICO no tiene adendum: no se pide y lo capturado se borra (usuario, 8-oct)
+  const rb = Reg._resolver(alta, {}, { 'NUMERO TELEFONO': '4420000009', 'TIPO DE LINEA': 'SIM BASICO', 'FIN PLAN': '2028-05-01' }, altaCtx);
+  assert.ok(!rb.errores.some((e) => /^(Inicio|Fin) es obligatorio/.test(e)));
+  assert.equal(rb.valores['FIN PLAN'], '');
   // A un equipo sin línea se le puede poner una con sus fechas (es el alta de esa línea)
   const sinLinea = Reg._elementos({ TIPO: 'EQUIPO' }, {}, { correo: 'x@y.z' }, ctx);
   assert.equal(sinLinea.filter((e) => e.columna === 'FIN PLAN')[0].editable, 'SIEMPRE');
@@ -1651,12 +1664,12 @@ test('PARA VENTA y PARA DESECHO siguen la lógica de Mandar a resguardo (usuario
   const reg = read('src/services/lineas/LineasRegistros.gs');
   const resg = read('src/services/lineas/LineasResguardos.gs');
   const cliente = read('src/html/js/lineas.html');
-  // El servidor no deja llegar a esos estatus por el cambio rápido ni por la edición directa
+  // Sin el aviso confirmado el servidor no deja llegar a esos estatus por la edición directa
   assert.match(reg, /function exigirFormularioResguardo_\(tipo, estatusAntes, estatusNuevo\)/);
   assert.match(reg, /LineasResguardos\.ESTATUS_EQUIPO_RESGUARDO\.indexOf\(nuevo\)/);
   assert.equal((reg.match(/exigirFormularioResguardo_\(/g) || []).length, 2, 'definición + editar');
-  // Editar abre el formulario de resguardo con el estatus elegido (Para venta, Para desecho), usuario 4-oct
-  assert.match(cliente, /if \(flujo\.tipo === 'RESGUARDO'\) abrirResguardo\(\[\{ id: id \}\], \{ estatus: flujo\.estatus \}\); else abrirCancelacion\(\[r\]\);/);
+  // Editar ya no abre el formulario de resguardo (usuario, 8-oct): avisa que no entra al panel y se guarda con sinPanel
+  assert.match(cliente, /cambiaA\('ESTATUS EQUIPO', ESTATUS_EQUIPO_RESGUARDO\)/);
   // Sin regla de estatus (usuario, 4-oct): cada equipo ofrece la lista completa
   assert.match(cliente, /'Estatus del equipo', 'escala', \{ opciones: form\.estatusEquipo, valor: estatusInicial, requerido: 'SIEMPRE', ayudas: SIGNIFICADO_ESTATUS \}/);
   assert.doesNotMatch(resg, /LineasAcciones\.hayCamino|estatusPosibles/);

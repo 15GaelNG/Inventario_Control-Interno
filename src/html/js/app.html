@@ -651,7 +651,18 @@
   // aquí, no se adivina del menú (⟵ llega igual por el historial o un enlace entre módulos).
   let vistaActual = null;
 
+  /** Lo hace caminar a su esquina una vez (no en bucle -- "o ya es mucho", usuario 7-oct);
+   *  navegarA la llama solo si de verdad se cambió de pantalla, no al reclicar la misma. */
+  function caminarAsistente() {
+    const btn = document.getElementById('asistente-flotante');
+    if (!btn || btn.hidden) return;
+    btn.classList.remove('asistente-caminando');
+    void btn.offsetWidth; // reinicia la animación por si ya estaba a medias
+    btn.classList.add('asistente-caminando');
+  }
+
   function navegarA(vista, etiqueta) {
+    if (vista !== vistaActual) caminarAsistente();
     vistaActual = vista;
     // Rama emmanuel: cada cambio de módulo es un paso de Atrás/Adelante (html/historial-navegador.html)
     if (typeof HistorialApp !== 'undefined') HistorialApp.alNavegar(vista, etiqueta);
@@ -712,15 +723,15 @@
     {
       id: 'servicios-vehiculares', icono: 'car', etiqueta: 'Control Vehicular',
       items: [
-        { vista: 'panorama-vehiculos', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'vehiculos', plantilla: 'tpl-panorama-vehiculos', init: () => initPanoramaVehiculos() },
-        { vista: 'incidencias', etiqueta: 'Incidencias', icono: 'wrench', requiere: 'incidencias', plantilla: 'tpl-incidencias', init: () => initIncidencias() },
-        { vista: 'vehiculos', etiqueta: 'Vehículos', icono: 'car', requiere: 'vehiculos', plantilla: 'tpl-vehiculos', init: () => initVehiculos(), tour: () => iniciarTourVehiculos() },
-        { vista: 'cambios-vehiculos', etiqueta: 'Cambios Vehículos', icono: 'history', requiere: 'cambios-vehiculos', plantilla: 'tpl-cambios-vehiculos', init: () => initCambiosVehiculos() },
-        { vista: 'reasignaciones-vehiculares', etiqueta: 'Reasignaciones Vehiculares', icono: 'arrow-left-right', requiere: 'reasignaciones-vehiculares', plantilla: 'tpl-reasignaciones-vehiculares', init: () => initReasignacionesVehiculares() },
-        { vista: 'verificaciones', etiqueta: 'Verificaciones', icono: 'badge-check', requiere: 'verificaciones', plantilla: 'tpl-verificaciones', init: () => initVerificaciones() },
-        { vista: 'inspeccion-vehicular', etiqueta: 'Inspección Vehicular', icono: 'clipboard-list', requiere: 'inspeccion-vehicular', plantilla: 'tpl-inspecciones', init: () => initInspecciones() },
-        { vista: 'instalacion-sensores', etiqueta: 'Instalación de Sensores', icono: 'radio', requiere: 'instalacion-sensores', plantilla: 'tpl-sensores', init: () => initSensores() },
-        { vista: 'hologramas', etiqueta: 'Hologramas', icono: 'sparkles', requiere: 'hologramas', plantilla: 'tpl-hologramas', init: () => initHologramas() },
+        { vista: 'panorama-vehiculos', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'vehiculos', plantilla: 'tpl-panorama-vehiculos', init: () => initPanoramaVehiculos(), ayuda: () => AYUDA_PANORAMA_VEHICULOS },
+        { vista: 'incidencias', etiqueta: 'Incidencias', icono: 'wrench', requiere: 'incidencias', plantilla: 'tpl-incidencias', init: () => initIncidencias(), ayuda: () => AYUDA_INCIDENCIAS },
+        { vista: 'vehiculos', etiqueta: 'Vehículos', icono: 'car', requiere: 'vehiculos', plantilla: 'tpl-vehiculos', init: () => initVehiculos(), tour: () => iniciarTourVehiculos(), ayuda: () => AYUDA_VEHICULOS },
+        { vista: 'cambios-vehiculos', etiqueta: 'Cambios Vehículos', icono: 'history', requiere: 'cambios-vehiculos', plantilla: 'tpl-cambios-vehiculos', init: () => initCambiosVehiculos(), ayuda: () => AYUDA_CAMBIOS_VEHICULOS },
+        { vista: 'reasignaciones-vehiculares', etiqueta: 'Reasignaciones Vehiculares', icono: 'arrow-left-right', requiere: 'reasignaciones-vehiculares', plantilla: 'tpl-reasignaciones-vehiculares', init: () => initReasignacionesVehiculares(), ayuda: () => AYUDA_REASIGNACIONES },
+        { vista: 'verificaciones', etiqueta: 'Verificaciones', icono: 'badge-check', requiere: 'verificaciones', plantilla: 'tpl-verificaciones', init: () => initVerificaciones(), ayuda: () => AYUDA_VERIFICACIONES },
+        { vista: 'inspeccion-vehicular', etiqueta: 'Inspección Vehicular', icono: 'clipboard-list', requiere: 'inspeccion-vehicular', plantilla: 'tpl-inspecciones', init: () => initInspecciones(), ayuda: () => AYUDA_INSPECCIONES },
+        { vista: 'instalacion-sensores', etiqueta: 'Instalación de Sensores', icono: 'radio', requiere: 'instalacion-sensores', plantilla: 'tpl-sensores', init: () => initSensores(), ayuda: () => AYUDA_SENSORES },
+        { vista: 'hologramas', etiqueta: 'Hologramas', icono: 'sparkles', requiere: 'hologramas', plantilla: 'tpl-hologramas', init: () => initHologramas(), ayuda: () => AYUDA_HOLOGRAMAS },
         { vista: 'sistemas-vehiculos', etiqueta: 'Sistemas', icono: 'external-link', libre: true, plantilla: 'tpl-sistemas', init: () => initSistemas('servicios-vehiculares') },
       ],
     },
@@ -746,18 +757,18 @@
     {
       id: 'arqueos', icono: 'wallet', etiqueta: 'Arqueos',
       items: [
-        { vista: 'panorama-cajachica', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'caja-chica', plantilla: 'tpl-panorama-cajachica', init: () => initPanoramaCajaChica() },
-        { vista: 'arqueos', etiqueta: 'Arqueos', icono: 'wallet', requiere: 'arqueos', plantilla: 'tpl-arqueos', init: () => initArqueos() },
-        { vista: 'caja-chica', etiqueta: 'Caja Chica', icono: 'piggy-bank', requiere: 'caja-chica', plantilla: 'tpl-cajachica', init: () => initCajaChica() },
-        { vista: 'cambios-monto-cch', etiqueta: 'Cambios de Monto', icono: 'repeat', requiere: 'caja-chica', plantilla: 'tpl-cambios-monto-cch', init: () => initCambiosMontoCCH() },
+        { vista: 'panorama-cajachica', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'caja-chica', plantilla: 'tpl-panorama-cajachica', init: () => initPanoramaCajaChica(), ayuda: () => AYUDA_PANORAMA_CAJACHICA },
+        { vista: 'arqueos', etiqueta: 'Arqueos', icono: 'wallet', requiere: 'arqueos', plantilla: 'tpl-arqueos', init: () => initArqueos(), ayuda: () => AYUDA_ARQUEOS },
+        { vista: 'caja-chica', etiqueta: 'Caja Chica', icono: 'piggy-bank', requiere: 'caja-chica', plantilla: 'tpl-cajachica', init: () => initCajaChica(), ayuda: () => AYUDA_CAJACHICA },
+        { vista: 'cambios-monto-cch', etiqueta: 'Cambios de Monto', icono: 'repeat', requiere: 'caja-chica', plantilla: 'tpl-cambios-monto-cch', init: () => initCambiosMontoCCH(), ayuda: () => AYUDA_CAMBIOS_MONTO_CCH },
         { vista: 'sistemas-arqueos', etiqueta: 'Sistemas', icono: 'external-link', libre: true, plantilla: 'tpl-sistemas', init: () => initSistemas('arqueos') },
       ],
     },
     {
       id: 'uber', icono: 'car-taxi-front', etiqueta: 'Uber',
       items: [
-        { vista: 'uber', etiqueta: 'Uber', icono: 'car-taxi-front', requiere: 'uber', plantilla: 'tpl-uber', init: () => initUber() },
-        { vista: 'tickets', etiqueta: 'Tickets', icono: 'ticket', requiere: 'tickets', plantilla: 'tpl-tickets', init: () => initTickets() },
+        { vista: 'uber', etiqueta: 'Uber', icono: 'car-taxi-front', requiere: 'uber', plantilla: 'tpl-uber', init: () => initUber(), ayuda: () => AYUDA_UBER },
+        { vista: 'tickets', etiqueta: 'Tickets', icono: 'ticket', requiere: 'tickets', plantilla: 'tpl-tickets', init: () => initTickets(), ayuda: () => AYUDA_TICKETS },
       ],
     },
     // Activos por colaborador de todas las áreas (rama emmanuel)
@@ -771,7 +782,7 @@
     {
       id: 'helpdesk', icono: 'headset', etiqueta: 'Help Desk', libre: true,
       items: [
-        { vista: 'helpdesk', etiqueta: 'Bandeja', icono: 'inbox', libre: true, plantilla: 'tpl-helpdesk', init: () => initHelpdesk() },
+        { vista: 'helpdesk', etiqueta: 'Bandeja', icono: 'inbox', libre: true, plantilla: 'tpl-helpdesk', init: () => initHelpdesk(), ayuda: () => AYUDA_HELPDESK },
         { vista: 'helpdesk-formularios', etiqueta: 'Formularios', icono: 'list-checks', libre: true, plantilla: 'tpl-helpdesk-formularios', init: () => initHelpdeskFormularios() },
         { vista: 'helpdesk-registrados', etiqueta: 'Registrados', icono: 'archive', requiere: 'tickets', plantilla: 'tpl-helpdesk-registrados', init: () => initHelpdeskRegistrados() },
         { vista: 'helpdesk-conexion', etiqueta: 'Conexión', icono: 'plug', libre: true, plantilla: 'tpl-helpdesk-conexion', init: () => initHelpdeskConexion() },
@@ -780,18 +791,18 @@
     {
       id: 'administracion', icono: 'settings', etiqueta: 'Administración',
       items: [
-        { vista: 'usuarios', etiqueta: 'Usuarios y permisos', icono: 'shield-check', requiere: 'usuarios', plantilla: 'tpl-usuarios', init: () => initPermisosAdmin() },
-        { vista: 'relaciones', etiqueta: 'Datos conectados', icono: 'git-compare-arrows', requiere: 'relaciones', plantilla: 'tpl-relaciones', init: () => initRelaciones() },
-        { vista: 'salud', etiqueta: 'Salud', icono: 'heart-pulse', requiere: 'salud', plantilla: 'tpl-salud', init: () => initSalud() },
+        { vista: 'usuarios', etiqueta: 'Usuarios y permisos', icono: 'shield-check', requiere: 'usuarios', plantilla: 'tpl-usuarios', init: () => initPermisosAdmin(), ayuda: () => AYUDA_USUARIOS },
+        { vista: 'relaciones', etiqueta: 'Datos conectados', icono: 'git-compare-arrows', requiere: 'relaciones', plantilla: 'tpl-relaciones', init: () => initRelaciones(), ayuda: () => AYUDA_RELACIONES },
+        { vista: 'salud', etiqueta: 'Salud', icono: 'heart-pulse', requiere: 'salud', plantilla: 'tpl-salud', init: () => initSalud(), ayuda: () => AYUDA_SALUD },
       ],
     },
   ];
 
   /** Vistas a las que se llega sin pasar por el menú. Sin `requiere`, entra cualquiera con sesión. */
   const VISTAS_FUERA_DEL_MENU = [
-    { vista: 'dashboard', etiqueta: 'Inicio', icono: 'home', plantilla: 'tpl-dashboard', init: () => initDashboard() },
+    { vista: 'dashboard', etiqueta: 'Inicio', icono: 'home', plantilla: 'tpl-dashboard', init: () => initDashboard(), ayuda: () => AYUDA_DASHBOARD },
     // La campana de la barra superior → "Ver todas" (html/notificaciones.html, rama emmanuel)
-    { vista: 'notificaciones', etiqueta: 'Notificaciones', icono: 'bell', plantilla: 'tpl-notificaciones', init: () => Notificaciones.initVista() },
+    { vista: 'notificaciones', etiqueta: 'Notificaciones', icono: 'bell', plantilla: 'tpl-notificaciones', init: () => Notificaciones.initVista(), ayuda: () => AYUDA_NOTIFICACIONES },
     // Control de Cambios de Líneas: salió del menú (30-sep) pero se abre desde el Panorama de Líneas
     { vista: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas', icono: 'history', requiere: 'cambios-lineas', plantilla: 'tpl-lineas-bitacora', init: () => Lineas.initCambios() },
   ];
@@ -988,6 +999,13 @@
     const contActividad = document.getElementById('dash-actividad');
     if (contActividad) escucharLista('apiResumenInicio', cargarResumenInicio, contActividad);
   }
+
+  const AYUDA_DASHBOARD = [
+    { pregunta: '¿Qué es esta pantalla?', respuesta: 'Un resumen general: cuántos vehículos, incidencias, tickets y cajas chicas hay, qué necesita atención y accesos rápidos a lo que más se usa.' },
+    { pregunta: '¿Por qué los números tienen distinto color?', respuesta: 'Verde/azul son valores normales; ámbar o rojo señalan algo que conviene revisar (incidencias abiertas, verificaciones vencidas, etc.).' },
+    { pregunta: '¿Puedo ir directo a un módulo desde aquí?', respuesta: 'Sí -- cualquier tarjeta de número o de "Accesos rápidos" te lleva directo a esa pantalla (algunas ya filtradas, como las verificaciones vencidas).' },
+    { pregunta: '¿Qué es "Actividad reciente"?', respuesta: 'Lo último que se registró o actualizó en el sistema, de cualquier módulo, más reciente arriba.' },
+  ];
 
   /** Números del panel de Inicio (KPIs, alertas y actividad reciente) — un solo viaje al servidor. */
   async function cargarResumenInicio() {
@@ -2068,6 +2086,14 @@
     await Promise.all([promesaVehiculos, cargar()]);
   }
 
+  const AYUDA_INCIDENCIAS = [
+    { pregunta: '¿Qué es una incidencia?', respuesta: 'La bitácora de taller: cuándo entró un vehículo, qué se le hizo y cuándo salió.' },
+    { pregunta: '¿Cómo registro el ingreso de un vehículo al taller?', respuesta: 'Pestaña "Registrar": elige el vehículo y describe el motivo del ingreso.' },
+    { pregunta: '¿Cómo cierro una incidencia?', respuesta: 'Desde el ⋮ o clic derecho de su fila, "Cerrar" -- ahí se captura el trabajo realizado y la fecha de salida.' },
+    { pregunta: '¿Puedo corregir cualquier dato después de registrada?', respuesta: 'Sí, con "Editar" se puede corregir cualquier campo, esté abierta o cerrada.' },
+    { pregunta: '¿Cómo veo solo las abiertas o solo las cerradas?', respuesta: 'El panel de la izquierda de la tabla filtra por estado; los números de arriba también son clicables.' },
+  ];
+
   // ---------- Ficha por pestañas (genérica: la usa cualquier módulo con una "ficha
   // única" — Vehículos, Caja Chica, ...) ----------
 
@@ -2112,7 +2138,7 @@
    *  Arqueos/Cambios de monto) -- de nivel de módulo, como fichaEnPestanas/pestanaFicha/
    *  tablaFicha, porque ambas fichas la usan. */
   function accionesFichaRegistro(tipo, id, opciones) {
-    const o = Object.assign({ editar: false, eliminar: false, estatus: null }, opciones);
+    const o = Object.assign({ editar: false, eliminar: false, estatus: null, copiarLiga: null, copiarLigaJefe: null }, opciones);
     let html = '<div class="ficha-acciones-fila">' +
       '<button type="button" class="ficha-btn-fila" data-ficha-ver="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Ver completo">' + Iconos.svg('ver') + '</button>';
     if (o.editar) {
@@ -2125,10 +2151,92 @@
       const destino = activo ? 'BAJA' : 'ACTIVO';
       html += '<button type="button" class="ficha-btn-fila' + (activo ? ' ficha-peligro' : '') + '" data-ficha-estatus="' + tipo + '" data-id="' + escaparHtml(id) + '" data-estatus-destino="' + destino + '" title="' + (activo ? 'Dar de baja' : 'Reactivar') + '">' + Iconos.svg(activo ? 'darDeBaja' : 'reactivar') + '</button>';
     }
+    // copiarLiga/copiarLigaJefe: el token (no un booleano) de una liga PENDIENTE -- cada una
+    // independiente (responsable/adherente y jefe tienen cada quien la suya, ver el comentario
+    // de ResponsivaVehicularService.gs); null/vacío donde ya se firmó, donde el botón ni se
+    // pinta. La liga se pide siempre al servidor (apiFirmaRemotaLiga) al hacer clic, nunca se
+    // arma en el navegador -- ver el wireup más abajo y el comentario de ligaDeToken.
+    if (o.copiarLiga) {
+      html += '<button type="button" class="ficha-btn-fila" data-ficha-copiar-liga="' + tipo + '" data-id="' + escaparHtml(id) + '" data-token="' + escaparHtml(o.copiarLiga) + '" title="Copiar liga del responsable/adherente">' + Iconos.svg('copiar') + '</button>';
+    }
+    if (o.copiarLigaJefe) {
+      html += '<button type="button" class="ficha-btn-fila" data-ficha-copiar-liga-jefe="' + tipo + '" data-id="' + escaparHtml(id) + '" data-token="' + escaparHtml(o.copiarLigaJefe) + '" title="Copiar liga del jefe directo">' + Iconos.svg('copiar') + '</button>';
+    }
     if (o.eliminar) {
       html += '<button type="button" class="ficha-btn-fila ficha-peligro" data-ficha-eliminar="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Eliminar">' + Iconos.svg('eliminar') + '</button>';
     }
     return html + '</div>';
+  }
+
+  /** Mismo patrón que copiarEnlace_ en app-sistemas.html: la API moderna primero, y si el
+   *  marco de Apps Script la bloquea, el truco clásico del textarea oculto + execCommand. */
+  async function copiarTexto_(texto) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(texto); return true; }
+    } catch (e) { /* cae al método clásico */ }
+    const area = document.createElement('textarea');
+    area.value = texto;
+    area.setAttribute('readonly', '');
+    area.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+    document.body.appendChild(area);
+    area.select();
+    let copiado = false;
+    try { copiado = document.execCommand('copy'); } catch (e) { /* no-op */ }
+    area.remove();
+    return copiado;
+  }
+
+  /** Modal chico con la(s) liga(s) de firma a distancia y un botón para copiar cada una -- se
+   *  usa tanto al generarlas (abrirAgregarResponsivaVehicular/AdherenteVehicular, que puede
+   *  generar una o dos de un jalón si ni el responsable/adherente ni el jefe estaban
+   *  presentes) como al "Copiar liga de nuevo" desde la pestaña (data-ficha-copiar-liga/
+   *  -jefe), que siempre manda una sola. Mismo patrón que Confirmar.pedir (.modal-backdrop,
+   *  Esc, clic fuera) pero sin promesa -- no hay nada que confirmar.
+   *
+   *  @param {string|Array<{titulo?:string, liga:string}>} ligas  una liga, o varias con su
+   *    etiqueta (p. ej. [{titulo:'Responsable', liga:a}, {titulo:'Jefe directo', liga:b}]).
+   */
+  function mostrarLigaFirma_(ligas) {
+    const lista = Array.isArray(ligas) ? ligas : [{ titulo: null, liga: ligas }];
+    const fondo = document.createElement('div');
+    fondo.className = 'modal-backdrop';
+    const campos = lista.map((item, i) =>
+      (item.titulo ? '<label style="margin-top:' + (i ? '12px' : '0') + '">' + escaparHtml(item.titulo) + '</label>' : '') +
+      '<div style="display:flex;gap:8px;margin-top:' + (item.titulo ? '6px' : (i ? '12px' : '0')) + '">' +
+        '<input type="text" readonly value="' + escaparHtml(item.liga) + '" id="liga-firma-' + i + '" ' +
+          'style="flex:1;min-width:0;padding:9px 10px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-bg);color:var(--color-text);font-size:13px">' +
+        '<button type="button" class="secondary" data-copiar="liga-firma-' + i + '" title="Copiar liga"><i data-lucide="copy" class="ico"></i></button>' +
+      '</div>'
+    ).join('');
+    fondo.innerHTML =
+      '<div class="modal-card">' +
+        '<h3><i data-lucide="link" class="ico"></i> Liga' + (lista.length > 1 ? 's' : '') + ' para firmar a distancia</h3>' +
+        '<p style="margin:4px 0 14px;color:var(--color-text-muted);font-size:13px">' +
+          'Mánda' + (lista.length > 1 ? 'selas' : 'sela') + ' a la persona (WhatsApp, correo…) para que la abra y firme desde su celular.</p>' +
+        campos +
+        '<div class="form-acciones" style="margin-top:14px">' +
+          '<button type="button" class="secondary" data-accion="cerrar">Cerrar</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(fondo);
+    refreshIcons();
+
+    const focoPrevio = document.activeElement;
+    const terminar = () => {
+      document.removeEventListener('keydown', alTecla, true);
+      fondo.remove();
+      if (focoPrevio && focoPrevio.focus) focoPrevio.focus();
+    };
+    const alTecla = (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); terminar(); } };
+    fondo.querySelector('[data-accion="cerrar"]').addEventListener('click', terminar);
+    fondo.addEventListener('mousedown', (ev) => { if (ev.target === fondo) terminar(); });
+    document.addEventListener('keydown', alTecla, true);
+    fondo.querySelectorAll('[data-copiar]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const ok = await copiarTexto_(document.getElementById(btn.dataset.copiar).value);
+        if (ok) Notificar.exito('Liga copiada'); else Notificar.error('El navegador no permitió copiar la liga');
+      });
+    });
   }
 
   // ---------- Vehículos ----------
@@ -2657,13 +2765,17 @@
               (i === 3 ? '<div class="resv-firmas" style="grid-column: 1 / -1; margin-top:14px;">' +
                 '<div class="resv-firma"><label class="requerido">Firma del responsable</label><div data-firma="FIRMA RESPONSABLE"></div></div>' +
                 '<div class="resv-firma"><label>Firma del jefe directo</label><div data-firma="FIRMA JEFE"></div></div>' +
-                '<div class="resv-firma"><label>Firma de quien entrega</label><div data-firma="FIRMA CI"></div></div>' +
+                '<div class="resv-firma"><label class="requerido">Firma de quien entrega</label><div data-firma="FIRMA CI"></div></div>' +
               '</div>' : '') +
             '</section>').join('') +
           '<div class="error-msg" id="resv-captura-error" role="alert" hidden></div>' +
           '<div class="form-acciones form-acciones-pasos">' +
             '<button type="button" class="secondary" id="resv-atras" hidden><i data-lucide="chevron-left" class="ico"></i> Atrás</button>' +
             '<button type="button" id="resv-siguiente">Siguiente <i data-lucide="chevron-right" class="ico"></i></button>' +
+            // Un solo botón para firmar a distancia: si el responsable tampoco firmó aquí, se
+            // difiere junto con el jefe (dos ligas de un jalón) -- cubre los dos casos, por
+            // eso ya no hay un botón aparte solo para el responsable (usuario, 8-oct).
+            '<button type="button" class="secondary" id="resv-enviar-liga-jefe" hidden><i data-lucide="link" class="ico"></i> Enviar liga(s) para firmar a distancia</button>' +
             '<button type="submit" id="resv-captura-guardar" hidden><i data-lucide="file-signature" class="ico"></i> Registrar responsiva</button>' +
             '<span class="form-cuenta" id="resv-cuenta"></span>' +
           '</div>' +
@@ -2688,6 +2800,7 @@
         document.getElementById('resv-atras').hidden = i === 0;
         document.getElementById('resv-siguiente').hidden = i === RESV_PASOS.length - 1;
         document.getElementById('resv-captura-guardar').hidden = i !== RESV_PASOS.length - 1;
+        document.getElementById('resv-enviar-liga-jefe').hidden = i !== RESV_PASOS.length - 1;
         document.getElementById('resv-cuenta').textContent = 'Paso ' + (i + 1) + ' de ' + RESV_PASOS.length;
         const titulo = cuerpo.querySelector('.form-paso[data-paso="' + i + '"] .form-paso-titulo');
         if (titulo) titulo.focus();
@@ -2700,6 +2813,9 @@
       resvMostrarPaso(0);
 
       document.getElementById('resv-fecha').value = hoyISO();
+      // "No. de inventario" es el Nucco del vehículo (así lo usa este formato) -- se autollena
+      // solo, se puede corregir si hiciera falta.
+      if (vResumen.NUCCO) CampoAuto.llenar(document.getElementById('resv-no-de-inventario'), vResumen.NUCCO);
       // Responsable (y lo que de él depende) se deja en blanco a propósito: esta responsiva
       // puede ser para una persona distinta a la que el vehículo tiene hoy, y precargar al
       // actual invitaba a dejarlo sin cambiar por descuido. "Quien entrega" sí es un dato
@@ -2760,23 +2876,37 @@
         });
       }).catch((err) => console.error('No se pudo cargar el catálogo de colaboradores:', err));
 
-      document.getElementById('resv-captura-form').addEventListener('submit', async (ev) => {
-        ev.preventDefault();
+      /** modo='presencial': de siempre (exige la firma del responsable, genera el PDF de una
+       *  vez). modo='remotoJefe': "Enviar liga(s) para firmar a distancia" -- no exige la
+       *  firma del responsable: si ya se dibujó, se captura ahora (como siempre); si no, se
+       *  difiere igual (le genera SU liga también, aparte de la del jefe, que siempre se
+       *  difiere con este botón) -- nadie tiene que estar presente para generar cualquiera de
+       *  las dos. Si al final hay dos ligas, se muestran juntas. Un solo botón para los dos
+       *  casos (antes había uno aparte solo para el responsable): usuario, 8-oct. */
+      async function guardarResponsiva_(modo, boton) {
         const errorBox = document.getElementById('resv-captura-error');
         errorBox.hidden = true;
 
-        if (firmas['FIRMA RESPONSABLE'].vacia()) {
+        // Quien entrega SIEMPRE firma al capturar (presencial o a distancia): es quien está
+        // armando este renglón ahora mismo, nunca hay "después" para su firma. Es la única
+        // firma obligatoria en los dos modos -- la del responsable solo en 'presencial'.
+        if (modo === 'presencial' && firmas['FIRMA RESPONSABLE'].vacia()) {
           errorBox.textContent = 'Falta la firma del responsable';
           errorBox.hidden = false;
           cuerpo.querySelector('[data-firma="FIRMA RESPONSABLE"]').scrollIntoView({ block: 'center', behavior: 'smooth' });
           return;
         }
+        if (firmas['FIRMA CI'].vacia()) {
+          errorBox.textContent = 'Falta la firma de quien entrega';
+          errorBox.hidden = false;
+          cuerpo.querySelector('[data-firma="FIRMA CI"]').scrollIntoView({ block: 'center', behavior: 'smooth' });
+          return;
+        }
 
-        const btn = document.getElementById('resv-captura-guardar');
-        const textoOriginal = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner"></span> Guardando…';
-        toastCargando('Registrando…');
+        const textoOriginal = boton.innerHTML;
+        boton.disabled = true;
+        boton.innerHTML = '<span class="spinner"></span> ' + (modo === 'presencial' ? 'Guardando…' : 'Generando liga…');
+        toastCargando(modo === 'presencial' ? 'Registrando…' : 'Generando liga…');
         try {
           const imagenes = {};
           Object.keys(firmas).forEach((campo) => {
@@ -2784,19 +2914,35 @@
             if (firma) imagenes[campo] = firma;
           });
           const datos = Object.assign({ 'FOLIO VEHICULO': vResumen.FOLIO }, CamposHoja.recolectar(CAMPOS_RESPONSIVA_VEHICULAR, 'resv'));
-          const res = await callServer('apiCrearResponsivaVehicular', state.token, datos, imagenes);
+          // Si el responsable tampoco firmó, se difiere junto con el jefe (dos ligas de un
+          // jalón) -- nadie tiene que estar presente para pedir la del jefe.
+          const opciones = modo === 'remotoJefe'
+            ? (firmas['FIRMA RESPONSABLE'].vacia() ? { remoto: true, remotoJefe: true } : { remotoJefe: true })
+            : undefined;
+          const res = await callServer('apiCrearResponsivaVehicular', state.token, datos, imagenes, opciones);
           if (res.aviso) Notificar.error(res.aviso);
-          toastExito('Responsiva registrada exitosamente');
+          toastExito(modo === 'presencial' ? 'Responsiva registrada exitosamente' : 'Liga generada');
           cerrarCapturaVehiculo();
           abrirFichaVehiculo(vResumen, 'responsiva');
+          if (res.liga && res.ligaJefe) {
+            mostrarLigaFirma_([{ titulo: 'Responsable', liga: res.liga }, { titulo: 'Jefe directo', liga: res.ligaJefe }]);
+          } else if (res.liga) mostrarLigaFirma_(res.liga);
+          else if (res.ligaJefe) mostrarLigaFirma_(res.ligaJefe);
         } catch (err) {
           errorBox.textContent = err.message;
           errorBox.hidden = false;
-          toastError('No se pudo registrar: ' + err.message);
+          toastError('No se pudo ' + (modo === 'presencial' ? 'registrar' : 'generar la liga') + ': ' + err.message);
         } finally {
-          btn.disabled = false;
-          btn.innerHTML = textoOriginal;
+          boton.disabled = false;
+          boton.innerHTML = textoOriginal;
         }
+      }
+      document.getElementById('resv-captura-form').addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        guardarResponsiva_('presencial', document.getElementById('resv-captura-guardar'));
+      });
+      document.getElementById('resv-enviar-liga-jefe').addEventListener('click', () => {
+        guardarResponsiva_('remotoJefe', document.getElementById('resv-enviar-liga-jefe'));
       });
     }
 
@@ -2833,13 +2979,16 @@
               (i === 2 ? '<div class="resv-firmas" style="grid-column: 1 / -1; margin-top:14px;">' +
                 '<div class="resv-firma"><label class="requerido">Firma del adherente</label><div data-firma="FIRMA ADHERENTE"></div></div>' +
                 '<div class="resv-firma"><label>Firma del jefe directo</label><div data-firma="FIRMA JEFE"></div></div>' +
-                '<div class="resv-firma"><label>Firma de quien entrega</label><div data-firma="FIRMA CI"></div></div>' +
+                '<div class="resv-firma"><label class="requerido">Firma de quien entrega</label><div data-firma="FIRMA CI"></div></div>' +
               '</div>' : '') +
             '</section>').join('') +
           '<div class="error-msg" id="adh-captura-error" role="alert" hidden></div>' +
           '<div class="form-acciones form-acciones-pasos">' +
             '<button type="button" class="secondary" id="adh-atras" hidden><i data-lucide="chevron-left" class="ico"></i> Atrás</button>' +
             '<button type="button" id="adh-siguiente">Siguiente <i data-lucide="chevron-right" class="ico"></i></button>' +
+            // Un solo botón para firmar a distancia -- ver el comentario gemelo en
+            // abrirAgregarResponsivaVehicular (usuario, 8-oct).
+            '<button type="button" class="secondary" id="adh-enviar-liga-jefe" hidden><i data-lucide="link" class="ico"></i> Enviar liga(s) para firmar a distancia</button>' +
             '<button type="submit" id="adh-captura-guardar" hidden><i data-lucide="file-signature" class="ico"></i> Registrar adherente</button>' +
             '<span class="form-cuenta" id="adh-cuenta"></span>' +
           '</div>' +
@@ -2862,6 +3011,7 @@
         document.getElementById('adh-atras').hidden = i === 0;
         document.getElementById('adh-siguiente').hidden = i === ADH_PASOS.length - 1;
         document.getElementById('adh-captura-guardar').hidden = i !== ADH_PASOS.length - 1;
+        document.getElementById('adh-enviar-liga-jefe').hidden = i !== ADH_PASOS.length - 1;
         document.getElementById('adh-cuenta').textContent = 'Paso ' + (i + 1) + ' de ' + ADH_PASOS.length;
         const titulo = cuerpo.querySelector('.form-paso[data-paso="' + i + '"] .form-paso-titulo');
         if (titulo) titulo.focus();
@@ -2874,6 +3024,9 @@
       adhMostrarPaso(0);
 
       document.getElementById('adh-fecha').value = hoyISO();
+      // "No. de inventario" es el Nucco del vehículo -- ver el comentario gemelo en
+      // abrirAgregarResponsivaVehicular.
+      if (vResumen.NUCCO) CampoAuto.llenar(document.getElementById('adh-no-de-inventario'), vResumen.NUCCO);
       if (state.sesion && state.sesion.nombre) CampoAuto.llenar(document.getElementById('adh-nombre-ci'), state.sesion.nombre);
 
       cuerpo.querySelectorAll('[data-firma]').forEach((el) => {
@@ -2923,23 +3076,32 @@
         });
       }).catch((err) => console.error('No se pudo cargar el catálogo de colaboradores:', err));
 
-      document.getElementById('adh-captura-form').addEventListener('submit', async (ev) => {
-        ev.preventDefault();
+      /** modo='presencial'/'remotoJefe' -- ver el comentario gemelo en guardarResponsiva_
+       *  (misma lógica, solo cambia el campo de la firma principal). */
+      async function guardarAdherente_(modo, boton) {
         const errorBox = document.getElementById('adh-captura-error');
         errorBox.hidden = true;
 
-        if (firmas['FIRMA ADHERENTE'].vacia()) {
+        // Quien entrega SIEMPRE firma al capturar -- es la única obligatoria en los dos
+        // modos. La del adherente solo en 'presencial' -- ver el comentario gemelo en
+        // guardarResponsiva_.
+        if (modo === 'presencial' && firmas['FIRMA ADHERENTE'].vacia()) {
           errorBox.textContent = 'Falta la firma del adherente';
           errorBox.hidden = false;
           cuerpo.querySelector('[data-firma="FIRMA ADHERENTE"]').scrollIntoView({ block: 'center', behavior: 'smooth' });
           return;
         }
+        if (firmas['FIRMA CI'].vacia()) {
+          errorBox.textContent = 'Falta la firma de quien entrega';
+          errorBox.hidden = false;
+          cuerpo.querySelector('[data-firma="FIRMA CI"]').scrollIntoView({ block: 'center', behavior: 'smooth' });
+          return;
+        }
 
-        const btn = document.getElementById('adh-captura-guardar');
-        const textoOriginal = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner"></span> Guardando…';
-        toastCargando('Registrando…');
+        const textoOriginal = boton.innerHTML;
+        boton.disabled = true;
+        boton.innerHTML = '<span class="spinner"></span> ' + (modo === 'presencial' ? 'Guardando…' : 'Generando liga…');
+        toastCargando(modo === 'presencial' ? 'Registrando…' : 'Generando liga…');
         try {
           const imagenes = {};
           Object.keys(firmas).forEach((campo) => {
@@ -2947,19 +3109,33 @@
             if (firma) imagenes[campo] = firma;
           });
           const datos = Object.assign({ 'FOLIO VEHICULO': vResumen.FOLIO }, CamposHoja.recolectar(CAMPOS_ADHERENTE_VEHICULAR, 'adh'));
-          const res = await callServer('apiCrearAdherenteVehicular', state.token, datos, imagenes);
+          const opciones = modo === 'remotoJefe'
+            ? (firmas['FIRMA ADHERENTE'].vacia() ? { remoto: true, remotoJefe: true } : { remotoJefe: true })
+            : undefined;
+          const res = await callServer('apiCrearAdherenteVehicular', state.token, datos, imagenes, opciones);
           if (res.aviso) Notificar.error(res.aviso);
-          toastExito('Adherente registrado exitosamente');
+          toastExito(modo === 'presencial' ? 'Adherente registrado exitosamente' : 'Liga generada');
           cerrarCapturaVehiculo();
           abrirFichaVehiculo(vResumen, 'adherente');
+          if (res.liga && res.ligaJefe) {
+            mostrarLigaFirma_([{ titulo: 'Adherente', liga: res.liga }, { titulo: 'Jefe directo', liga: res.ligaJefe }]);
+          } else if (res.liga) mostrarLigaFirma_(res.liga);
+          else if (res.ligaJefe) mostrarLigaFirma_(res.ligaJefe);
         } catch (err) {
           errorBox.textContent = err.message;
           errorBox.hidden = false;
-          toastError('No se pudo registrar: ' + err.message);
+          toastError('No se pudo ' + (modo === 'presencial' ? 'registrar' : 'generar la liga') + ': ' + err.message);
         } finally {
-          btn.disabled = false;
-          btn.innerHTML = textoOriginal;
+          boton.disabled = false;
+          boton.innerHTML = textoOriginal;
         }
+      }
+      document.getElementById('adh-captura-form').addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        guardarAdherente_('presencial', document.getElementById('adh-captura-guardar'));
+      });
+      document.getElementById('adh-enviar-liga-jefe').addEventListener('click', () => {
+        guardarAdherente_('remotoJefe', document.getElementById('adh-enviar-liga-jefe'));
       });
     }
 
@@ -3057,6 +3233,17 @@
         abrirFichaVehiculo(vResumen, TAB_FICHA_POR_TIPO[tipo]);
       } catch (err) {
         toastError('No se pudo actualizar: ' + err.message);
+      }
+    }
+
+    /** "Copiar liga de nuevo" (Responsiva/Adherente pendientes): SIEMPRE se pide al servidor
+     *  (apiFirmaRemotaLiga) -- armarla en el navegador con location.origin apunta al sandbox
+     *  de Apps Script, no a la URL real (8-oct, confirmado con el usuario). */
+    async function copiarLigaFicha_(tipo, quien, tokenFirma) {
+      try {
+        mostrarLigaFirma_(await callServer('apiFirmaRemotaLiga', state.token, tipo, quien, tokenFirma));
+      } catch (err) {
+        toastError('No se pudo generar la liga: ' + err.message);
       }
     }
 
@@ -3389,8 +3576,13 @@
               { t: 'Fecha', r: (r) => formatearFecha(r.FECHA) },
               { t: 'Responsable', r: (r) => escaparHtml(r.RESPONSABLE || '—') },
               { t: 'Departamento', r: (r) => escaparHtml(r.DEPARTAMENTO || '—') },
+              { t: 'Estado', r: (r) => '<span class="badge-estado ' + ((r.ESTADO_FIRMA || 'FIRMADO') === 'PENDIENTE' ? 'pendiente' : 'activo') + '">' + ((r.ESTADO_FIRMA || 'FIRMADO') === 'PENDIENTE' ? 'Pendiente de firma' : 'Firmado') + '</span>' },
               { t: 'PDF', r: (r) => (r.PDF ? '<a href="' + escaparHtml(r.PDF) + '" target="_blank" rel="noopener" class="secondary" style="text-decoration:none">Ver</a>' : '—') },
-              { t: '', r: (r) => accionesFichaRegistro('responsiva', r.ID, { eliminar: puedeEditarModulo('responsiva-vehicular') }) },
+              { t: '', r: (r) => accionesFichaRegistro('responsiva', r.ID, {
+                eliminar: puedeEditarModulo('responsiva-vehicular'),
+                copiarLiga: r.TOKEN_FIRMA || null,
+                copiarLigaJefe: r.TOKEN_FIRMA_JEFE || null,
+              }) },
             ], responsivas, 'Sin responsivas registradas para este vehículo.',
             puedeEditarModulo('responsiva-vehicular') ? { tipo: 'responsiva', texto: 'Generar nueva responsiva' } : null),
           },
@@ -3402,8 +3594,14 @@
               { t: 'Adherente', r: (r) => escaparHtml(r.ADHERENTE || '—') },
               { t: 'Departamento', r: (r) => escaparHtml(r.DEPARTAMENTO || '—') },
               { t: 'Estatus', r: (r) => '<span class="badge-estado ' + ((r.ESTATUS || 'ACTIVO') === 'ACTIVO' ? 'activo' : 'baja') + '">' + (r.ESTATUS || 'ACTIVO') + '</span>' },
+              { t: 'Firma', r: (r) => '<span class="badge-estado ' + ((r.ESTADO_FIRMA || 'FIRMADO') === 'PENDIENTE' ? 'pendiente' : 'activo') + '">' + ((r.ESTADO_FIRMA || 'FIRMADO') === 'PENDIENTE' ? 'Pendiente' : 'Firmado') + '</span>' },
               { t: 'PDF', r: (r) => (r.PDF ? '<a href="' + escaparHtml(r.PDF) + '" target="_blank" rel="noopener" class="secondary" style="text-decoration:none">Ver</a>' : '—') },
-              { t: '', r: (r) => accionesFichaRegistro('adherente', r.ID, { estatus: r.ESTATUS || 'ACTIVO', eliminar: puedeEditarModulo('adherente-vehicular') }) },
+              { t: '', r: (r) => accionesFichaRegistro('adherente', r.ID, {
+                estatus: r.ESTATUS || 'ACTIVO',
+                eliminar: puedeEditarModulo('adherente-vehicular'),
+                copiarLiga: r.TOKEN_FIRMA || null,
+                copiarLigaJefe: r.TOKEN_FIRMA_JEFE || null,
+              }) },
             ], adherentes, 'Sin adherentes registrados para este vehículo.',
             puedeEditarModulo('adherente-vehicular') ? { tipo: 'adherente', texto: 'Generar nuevo adherente' } : null),
           },
@@ -3455,6 +3653,12 @@
         });
         detalle.querySelectorAll('[data-ficha-estatus]').forEach((btn) => {
           btn.addEventListener('click', () => cambiarEstatusFicha(btn.dataset.fichaEstatus, btn.dataset.id, btn.dataset.estatusDestino, vResumen));
+        });
+        detalle.querySelectorAll('[data-ficha-copiar-liga]').forEach((btn) => {
+          btn.addEventListener('click', () => copiarLigaFicha_(btn.dataset.fichaCopiarLiga, 'principal', btn.dataset.token));
+        });
+        detalle.querySelectorAll('[data-ficha-copiar-liga-jefe]').forEach((btn) => {
+          btn.addEventListener('click', () => copiarLigaFicha_(btn.dataset.fichaCopiarLigaJefe, 'jefe', btn.dataset.token));
         });
         refreshIcons();
       } catch (err) {
@@ -3927,8 +4131,8 @@
       },
       {
         selector: '#veh-tabla .dt-buscar-col',
-        titulo: 'Buscar por Nucco',
-        texto: 'Si ya sabes el Nucco exacto, este cuadro busca solo ahí, sin mezclarse con los demás datos.',
+        titulo: 'Buscar por Nucco o por Serie',
+        texto: 'Si ya sabes el Nucco o la serie exacta, estos dos cuadros buscan solo ahí, sin mezclarse con los demás datos.',
       },
       {
         selector: '#veh-tabla .dt-modo',
@@ -3952,6 +4156,36 @@
       },
     ]);
   }
+
+  // Preguntas frecuentes de Vehículos (usuario, 7-oct): igual que iniciarTourVehiculos, a
+  // propósito a nivel superior (fuera de initVehiculos) para que el asistente flotante la pueda
+  // leer sin que el módulo esté montado. Ver componentes/ayuda.html.
+  const AYUDA_VEHICULOS = [
+    {
+      pregunta: '¿Cómo busco un vehículo por su número de serie?',
+      respuesta: 'En la pestaña Catálogo, usa el cuadro "Buscar por Serie…" junto al buscador general -- busca solo en esa columna, sin mezclarse con folio, marca, etc.',
+    },
+    {
+      pregunta: '¿Cómo busco por Nucco?',
+      respuesta: 'Igual que la serie: hay un cuadro dedicado "Buscar por Nucco…" junto al buscador general de la tabla.',
+    },
+    {
+      pregunta: '¿Cómo doy de baja uno o varios vehículos a la vez?',
+      respuesta: 'Selecciona uno o varios (clic, Shift+clic o Ctrl/Cmd+clic) y usa "Dar de baja" en la barra de acciones o el ⋮ de una fila.',
+    },
+    {
+      pregunta: '¿Cómo exporto la tabla completa a Excel?',
+      respuesta: 'El botón "Exportar a Excel" descarga TODAS las columnas y filas de la base, sin importar los filtros o la búsqueda que tengas activos en ese momento.',
+    },
+    {
+      pregunta: '¿Dónde veo el historial de cambios de un vehículo?',
+      respuesta: 'Abre su ficha (doble clic o "Ver ficha" en la tabla) -- ahí tiene pestañas con sus verificaciones, inspecciones, sensores, hologramas, incidencias y cambios.',
+    },
+    {
+      pregunta: '¿Tabla o tarjetas, cuál uso?',
+      respuesta: 'Es lo mismo, solo cambia cómo se ve: el botón junto al buscador alterna entre tabla clásica y tarjetas -- en celular se acomoda solo.',
+    },
+  ];
 
   // ---------- Uber (usuarios autorizados) ----------
   async function initUber() {
@@ -4312,6 +4546,13 @@
     await Promise.all([cargarCatalogosUber(), cargar()]);
   }
 
+  const AYUDA_UBER = [
+    { pregunta: '¿Qué es este catálogo?', respuesta: 'Quiénes están autorizados para usar Uber por viáticos de la empresa.' },
+    { pregunta: '¿Cómo doy de alta a alguien?', respuesta: 'Pestaña "Registrar" -- nombre, departamento y los datos que pida el formulario.' },
+    { pregunta: '¿Qué significa "Pendientes de activar"?', respuesta: 'Ya están dados de alta en el catálogo pero todavía no se confirma su activación real en Uber.' },
+    { pregunta: '¿Cómo doy de baja a alguien?', respuesta: 'Edita su registro y cambia el estatus -- queda en el historial, no se borra.' },
+  ];
+
   // ---------- Tickets (bitácora general de atención) ----------
   // Los campos de un ticket: el módulo Tickets y "Registrar en Tickets" de Help Desk
   // (app-helpdesk.html) usan esta misma lista. Departamento y Solicitante: se puede escribir uno
@@ -4379,6 +4620,7 @@
       idCampo: 'ID',
       idTabla: 'tickets',
       ordenInicial: { campo: 'FECHA', dir: 'desc' },
+      buscarColumna: [{ campo: 'PLACA', placeholder: 'Buscar por Placa…' }],
       textoVacio: 'Todavía no hay tickets registrados',
       alCambiarFiltros: () => actualizarKpis(tabla.getFiltradas()),
       exportar: {
@@ -4403,7 +4645,7 @@
         { campo: 'SOLICITANTE', titulo: 'Solicitante', tipo: 'lista' },
         { campo: 'TIPO ATENCION', titulo: 'Tipo de atención', tipo: 'lista' },
         { campo: 'QUIEN ATENDIO', titulo: 'Atendió', tipo: 'lista' },
-        { campo: 'PLACA', titulo: 'Placa', tipo: 'texto', visible: false },
+        { campo: 'PLACA', titulo: 'Placa', tipo: 'texto', fijada: true },
         { campo: 'COMENTARIO', titulo: 'Comentario', tipo: 'texto', visible: false },
         { campo: 'FECHA DE REGISTRO', titulo: 'Fecha de registro', tipo: 'fecha', visible: false },
       ],
@@ -4507,19 +4749,32 @@
     await Promise.all([cargarCatalogosTickets(), cargar()]);
   }
 
+  const AYUDA_TICKETS = [
+    { pregunta: '¿Qué se registra aquí?', respuesta: 'Cualquier atención o solicitud general -- Uber, tarjeta de combustible (EOX/EDENRED), hologramas, consultas, etc.' },
+    { pregunta: '¿Cómo registro un ticket?', respuesta: 'Pestaña "Registrar": elige el tipo de atención y llena los datos que pida (varían según el tipo).' },
+    { pregunta: '¿Qué relación tiene con Help Desk?', respuesta: 'Desde el detalle de un ticket del helpdesk de TI se puede "Registrar en Tickets" directo, sin volver a capturar los datos.' },
+    { pregunta: '¿Puedo editar un ticket ya registrado?', respuesta: 'Sí, con "Editar" se corrige cualquier campo.' },
+  ];
 
   document.getElementById('btn-logout').addEventListener('click', cerrarSesion);
   document.querySelectorAll('#sidebar .nav-item[data-view]').forEach((el) => {
     el.addEventListener('click', () => navegarA(el.dataset.view));
   });
 
-  // Asistente flotante (usuario, 7-oct): lanza el tour de la pantalla en la que estés
-  // (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU → `tour`); si esa vista todavía no tiene uno, lo avisa
+  // Asistente flotante (usuario, 7-oct): abre las preguntas frecuentes de la pantalla en la
+  // que estés (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU → `ayuda`) -- el panel, a su vez, ofrece el
+  // recorrido guiado (`tour`) si esa vista también tiene uno. Sin ninguno de los dos, lo avisa
   // en vez de no hacer nada.
   document.getElementById('asistente-flotante').addEventListener('click', () => {
     const destino = vistaDe(vistaActual);
+    if (destino && destino.ayuda) { Ayuda.abrir(destino.ayuda(), { onTour: destino.tour }); return; }
     if (destino && destino.tour) { destino.tour(); return; }
-    Notificar.info('Todavía no hay un recorrido para esta pantalla -- por ahora pícame en Vehículos.');
+    Notificar.info('Todavía no hay ayuda para esta pantalla -- por ahora pícame en Vehículos.');
+  });
+  // Quita la clase de "caminando" (caminarAsistente) en cuanto termina -- si no se quitara,
+  // la respiración (animación por default) ya no volvería a correr.
+  document.getElementById('asistente-flotante').addEventListener('animationend', (ev) => {
+    if (ev.animationName === 'asistenteCamina') ev.currentTarget.classList.remove('asistente-caminando');
   });
 
   /**
