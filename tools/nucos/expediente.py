@@ -978,17 +978,25 @@ def verificar():
 
 
 def deshacer(ruta):
-    """Regresa lo que hizo ordenar(), de la última línea a la primera: lo movido vuelve a su carpeta y nombre, lo
-    copiado y las carpetas creadas (si quedaron vacías) van a la papelera."""
+    """Regresa lo que hizo ordenar() o inspecciones.py, de la última línea a la primera: lo movido vuelve a su carpeta y
+    nombre (y sin las appProperties de origen), lo copiado y las carpetas creadas (si quedaron vacías) van a la papelera,
+    lo que se mandó a la papelera sale de ella y la carpeta renombrada recupera su nombre."""
     d = drive()
     lineas = [json.loads(x) for x in Path(ruta).read_text(encoding="utf-8").splitlines() if x.strip()]
     hechos = 0
     for x in reversed(lineas):
         if x["accion"] == "mover":
-            cambios = {"fileId": x["id"], "body": {"name": x["de_nombre"]}, "fields": "id", "supportsAllDrives": True}
+            body = {"name": x["de_nombre"]}
+            if x.get("app"):
+                body["appProperties"] = {"origen_padre": None, "origen_nombre": None}
+            cambios = {"fileId": x["id"], "body": body, "fields": "id", "supportsAllDrives": True}
             if x["de_padre"] != x["a_padre"]:
                 cambios.update(addParents=x["de_padre"], removeParents=x["a_padre"])
             llamar(d.files().update(**cambios))
+        elif x["accion"] in ("papelera", "papelera_carpeta"):
+            llamar(d.files().update(fileId=x["id"], body={"trashed": False}, supportsAllDrives=True))
+        elif x["accion"] == "renombrar_carpeta":
+            llamar(d.files().update(fileId=x["id"], body={"name": x["de_nombre"]}, supportsAllDrives=True))
         elif x["accion"] == "copiar":
             llamar(d.files().update(fileId=x["id"], body={"trashed": True}, supportsAllDrives=True))
         elif x["accion"] == "crear_carpeta":
