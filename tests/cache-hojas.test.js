@@ -158,5 +158,21 @@ ok(tocadas.pop() === 'libro|VEHICULOS', 'removeMany toca la hoja');
 SU.removeMany('libro', 'VEHICULOS', ['NO-EXISTE']);
 ok(tocadas.length === 0, 'removeMany sin nada que borrar no toca');
 
+console.log('7. conHuella() y vigentes(): para que la pantalla se actualice sola');
+const LIB = [['libroHuella', 'SENSORES']];
+let h = CacheHojas.conHuella(() => CacheHojas.recordar('sens_h', LIB, () => [1, 2]));
+const claveSens = Object.keys(h.huella)[0];
+ok(h.v.length === 2 && /^ver_libroHuell_SENSORES$/.test(claveSens), 'la lista sale con su huella (la versión de la hoja que leyó)');
+ok(CacheHojas.vigentes([claveSens])[claveSens] === h.huella[claveSens], 'sin escrituras, la versión vigente es la misma');
+CacheHojas.tocar('libroHuella', 'SENSORES');
+ok(CacheHojas.vigentes([claveSens])[claveSens] !== h.huella[claveSens], 'después de escribir en la hoja, cambia');
+ok(CacheHojas.vigentes(['ver_noexiste_X']).ver_noexiste_X === '', 'una versión que ya no está sale vacía (se toma como cambio)');
+// calculo() que responde de la caché también entrega sus dependencias
+CacheHojas.calculo('inicio_h', () => CacheHojas.recordar('sens_h', LIB, () => [1, 2]).length);
+h = CacheHojas.conHuella(() => CacheHojas.calculo('inicio_h', () => { throw new Error('no debía recalcular'); }));
+ok(h.v === 2 && h.huella[claveSens], 'calculo() desde la caché también da su huella');
+h = CacheHojas.conHuella(() => 'sin hojas');
+ok(Object.keys(h.huella).length === 0, 'una lista que no lee hojas por CacheHojas sale con huella vacía');
+
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
 process.exit(fallas ? 1 : 0);

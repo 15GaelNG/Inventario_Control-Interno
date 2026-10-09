@@ -423,6 +423,11 @@ function revisionEntorno_() {
   if (hojasQueFaltan.length) (esProd ? errores : avisos).push('Faltan hojas en los libros: ' + hojasQueFaltan.join(', '));
   const calentador = ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === CALENTADOR_FUNCION);
   if (!calentador) avisos.push('El calentador no está instalado: correr instalarCalentador() una vez en el editor');
+  const avisoCambios = ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === AVISO_CAMBIOS_FUNCION);
+  if (!avisoCambios) {
+    avisos.push('El aviso de cambios no está instalado (lo que se edite a mano en la hoja no llega solo a las pantallas): ' +
+      'correr instalarAvisoDeCambios() una vez en el editor');
+  }
 
   return {
     scriptId: ScriptApp.getScriptId(), entorno: entorno, cuenta: efectivo, revisados: revisados,

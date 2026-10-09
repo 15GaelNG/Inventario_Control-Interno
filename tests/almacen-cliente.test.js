@@ -28,9 +28,15 @@ function pagina(disco, localStorageInicial) {
   w.google = { script: { run: new Proxy({}, {
     get(_, prop) {
       if (prop !== 'withSuccessHandler') return undefined;
-      return (exito) => ({ withFailureHandler: (falla) => new Proxy({}, { get: (__, fn) => (...args) => {
+      return (exito) => ({ withFailureHandler: (falla) => new Proxy({}, { get: (__, fnLlamada) => (...argsLlamada) => {
+        // Las listas llegan envueltas (apiListaConHuella: [token, fn, resto]); se anotan como la función de verdad
+        const envuelta = fnLlamada === 'apiListaConHuella';
+        const fn = envuelta ? argsLlamada[1] : fnLlamada;
+        const args = envuelta ? [argsLlamada[0]].concat(argsLlamada[2]) : argsLlamada;
         servidor.llamadas.push(fn + JSON.stringify(args));
-        setTimeout(() => (servidor.fallar[fn] ? falla(new Error('servidor caído')) : exito(JSON.parse(JSON.stringify(servidor.respuestas[fn] === undefined ? null : servidor.respuestas[fn])))), 5);
+        const valor = () => JSON.parse(JSON.stringify(servidor.respuestas[fn] === undefined ? null : servidor.respuestas[fn]));
+        setTimeout(() => (servidor.fallar[fn] ? falla(new Error('servidor caído'))
+          : exito(envuelta ? { v: valor(), huella: {} } : valor())), 5);
       } }) });
     },
   }) } };

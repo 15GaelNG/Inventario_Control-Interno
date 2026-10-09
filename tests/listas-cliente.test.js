@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Pruebas de las listas del cliente que pintan al instante (src/html/js/api.html):
  * callServerListaCacheada devuelve la copia guardada y actualiza por detrás, avisa con
  * "lista-actualizada" solo si cambió, invalidarCacheLista fuerza lo fresco y al cerrar
@@ -19,14 +19,22 @@ function navegador(localStorageInicial) {
   const dom = new JSDOM('<!doctype html><body><div id="vista"></div></body>', { runScripts: 'outside-only', url: 'https://x.test/' });
   const w = dom.window;
   Object.keys(localStorageInicial || {}).forEach((k) => w.localStorage.setItem(k, localStorageInicial[k]));
-  const servidor = { respuestas: {}, llamadas: [] };
-  // google.script.run de mentira: responde lo que diga servidor.respuestas[fn], un poco después
+  const servidor = { respuestas: {}, llamadas: [], huellas: {}, vigentes: {}, preguntas: 0 };
+  // google.script.run de mentira: responde lo que diga servidor.respuestas[fn], un poco después. Las listas llegan
+  // por apiListaConHuella (con la huella de servidor.huellas[fn]) y el vigía pregunta a apiHuellasVigentes.
   w.google = { script: { run: new Proxy({}, {
     get(_, prop) {
       if (prop === 'withSuccessHandler') {
         return (ok) => ({ withFailureHandler: () => new Proxy({}, { get: (__, fn) => (...args) => {
-          servidor.llamadas.push(fn);
-          setTimeout(() => ok(JSON.parse(JSON.stringify(servidor.respuestas[fn]))), 5);
+          if (fn === 'apiHuellasVigentes') {
+            servidor.preguntas++;
+            setTimeout(() => ok(JSON.parse(JSON.stringify(servidor.vigentes))), 5);
+            return;
+          }
+          const real = fn === 'apiListaConHuella' ? args[1] : fn;
+          servidor.llamadas.push(real);
+          const valor = JSON.parse(JSON.stringify(servidor.respuestas[real] === undefined ? null : servidor.respuestas[real]));
+          setTimeout(() => ok(fn === 'apiListaConHuella' ? { v: valor, huella: servidor.huellas[real] || {} } : valor), 5);
         } }) });
       }
       return undefined;
@@ -130,6 +138,44 @@ function navegador(localStorageInicial) {
   w.adelantar('apiResumenInicio', 'tok');
   await w.callServer('apiResumenInicio', 'OTRO');
   ok(servidor.llamadas.length === 4, 'con otros argumentos no se confunde');
+
+  console.log('9. El vigía: la pantalla abierta se actualiza sola cuando cambia su hoja');
+  ({ w, servidor } = navegador());
+  w.eval('window.vigilarListas = vigilarListas; state.token = "tok-v";');
+  // jsdom arranca con la página "escondida" (document.hidden = true): aquí la pestaña está a la vista
+  Object.defineProperty(w.document, 'hidden', { value: false, configurable: true });
+  servidor.respuestas.apiListarV = [{ ID: 1 }];
+  servidor.huellas.apiListarV = { ver_libro_VEHICULOS: 'a1' };
+  servidor.vigentes = { ver_libro_VEHICULOS: 'a1' };
+  const vistaV = w.document.getElementById('vista');
+  let repintadas = 0;
+  w.escucharLista('apiListarV', () => repintadas++, vistaV);
+  await w.callServerListaCacheada('apiListarV', 'tok-v');
+  ok(servidor.llamadas.join() === 'apiListarV', 'la lista llega con su huella (por apiListaConHuella)');
+  await w.vigilarListas(true);
+  await espera(20);
+  ok(servidor.preguntas === 1 && servidor.llamadas.length === 1, 'sin cambios: solo pregunta (barato) y no vuelve a pedir la lista');
+  servidor.vigentes = { ver_libro_VEHICULOS: 'b2' };
+  servidor.respuestas.apiListarV = [{ ID: 1 }, { ID: 2 }];
+  servidor.huellas.apiListarV = { ver_libro_VEHICULOS: 'b2' };   // la lista nueva llega con la versión nueva
+  await w.vigilarListas(true);
+  await espera(30);
+  ok(servidor.llamadas.length === 2, 'cambió la versión de su hoja: vuelve a pedir esa lista');
+  ok(repintadas === 1, 'y como llegó distinta, la pantalla se vuelve a pintar sola');
+  servidor.vigentes = { ver_libro_VEHICULOS: 'b2' };
+  await w.vigilarListas(true);
+  await espera(20);
+  ok(servidor.llamadas.length === 2, 'con la huella nueva ya no la vuelve a pedir');
+  Object.defineProperty(w.document, 'hidden', { value: true, configurable: true });
+  const antes = servidor.preguntas;
+  await w.vigilarListas(true);
+  ok(servidor.preguntas === antes, 'con la pestaña escondida no pregunta nada');
+  Object.defineProperty(w.document, 'hidden', { value: false, configurable: true });
+  vistaV.remove();
+  await w.vigilarListas(true);
+  ok(servidor.preguntas === antes, 'si ya se navegó a otro módulo, esa lista ya no se vigila');
+  w.eval('state.token = "";');
+  ok((await w.vigilarListas(true)) === 0, 'sin sesión no hace nada');
 
   console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
   process.exit(fallas ? 1 : 0);

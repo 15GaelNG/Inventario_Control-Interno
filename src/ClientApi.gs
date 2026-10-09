@@ -13,6 +13,25 @@ function apiPing() {
   return Date.now();
 }
 
+// --- Pantallas que se actualizan solas (api.html: pedirLista_ y el vigía) ---
+// Una lista de la app (apiListar…, apiFicha…, apiResumenInicio) con su huella: de qué versiones de hoja salió
+// (CacheHojas.conHuella). La lista revisa sus propios permisos con el token, igual que si se llamara directo.
+function apiListaConHuella(token, fn, args) {
+  if (!/^api[A-Z][A-Za-z0-9]*$/.test(String(fn)) || /^api(ListaConHuella|HuellasVigentes)$/.test(fn)) {
+    throw new Error('Lista desconocida: ' + fn);
+  }
+  const f = globalThis[fn];
+  if (typeof f !== 'function') throw new Error('Lista desconocida: ' + fn);
+  const r = CacheHojas.conHuella(() => f.apply(null, [token].concat(args || [])));
+  return { v: r.v, huella: r.huella };
+}
+// ¿Cambió algo de lo que se ve? Solo CacheService (sin leer hojas): la llamada más barata que hay.
+function apiHuellasVigentes(token, claves) {
+  Auth.validarSesion(token);
+  const validas = (claves || []).filter((k) => /^ver_[\w-]{1,10}_/.test(String(k))).slice(0, 300);
+  return CacheHojas.vigentes(validas);
+}
+
 // --- Dashboard ---
 // JSON.stringify: incluye fechas (Date/ISO) mezcladas en varias secciones —
 // mismo motivo que apiListarVehiculosResumen (ver comentario más abajo).

@@ -141,7 +141,11 @@ const CacheHojas = (function () {
       if (guardado && guardado.deps) {
         const claves = Object.keys(guardado.deps);
         const actuales = claves.length ? cache().getAll(claves) : {};
-        if (claves.every((c) => actuales[c] === guardado.deps[c])) return guardado.v;
+        if (claves.every((c) => actuales[c] === guardado.deps[c])) {
+          // Sale de la caché sin pasar por versiones(): quien esté anotando (conHuella) recibe sus dependencias
+          anotando_.forEach((deps) => Object.assign(deps, guardado.deps));
+          return guardado.v;
+        }
       }
     } catch (e) { /* sin caché: se calcula */ }
 
@@ -157,5 +161,28 @@ const CacheHojas = (function () {
     return valor;
   }
 
-  return { recordar, calculo, tocar, tocarHoja, versiones, guardar, leer, borrar, SEG_DEFECTO };
+  /**
+   * Para que la pantalla se actualice sola: corre `armar` (una lista de la app) y anota de qué versiones de hoja
+   * salió, igual que calculo(). La "huella" ({ver_…: versión}) viaja al navegador; después basta preguntar
+   * vigentes(claves) —solo CacheService, ninguna hoja— para saber si algo cambió.
+   */
+  function conHuella(armar) {
+    const deps = {};
+    anotando_.push(deps);
+    try {
+      return { v: armar(), huella: deps };
+    } finally {
+      anotando_.splice(anotando_.indexOf(deps), 1);
+    }
+  }
+
+  /** Las versiones de hoy de esas claves de huella ('' si ya no están: venció la versión, se toma como cambio) */
+  function vigentes(claves) {
+    const actuales = claves.length ? cache().getAll(claves) : {};
+    const r = {};
+    claves.forEach((k) => { r[k] = actuales[k] || ''; });
+    return r;
+  }
+
+  return { recordar, calculo, conHuella, vigentes, tocar, tocarHoja, versiones, guardar, leer, borrar, SEG_DEFECTO };
 })();
