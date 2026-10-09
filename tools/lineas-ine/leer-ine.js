@@ -64,10 +64,12 @@ function entornoDev() {
 
 /** Las funciones y constantes de LineasIneNucos.gs y LineasIneLectura.gs, como en las pruebas (nada corre al cargar). */
 function logicaGs() {
-  const leer = (f) => fs.readFileSync(path.join(REPO, 'src/services/lineas', f), 'utf8');
+  const leer = (f) => fs.readFileSync(path.join(REPO, 'src', f), 'utf8');
   const ctx = vm.createContext({});
-  vm.runInContext(leer('LineasIneNucos.gs') + '\n' + leer('LineasIneLectura.gs') + '\nthis.g = { ineLecInterpretar_, ineLecPersonas_, ' +
-    'INE_NUCOS_PESTANA, INE_LEC_PESTANA, INE_LEC_ENCABEZADOS, INE_LEC_TEMPORAL };', ctx);
+  vm.runInContext(['utils/Ids.gs', 'services/lineas/LineasIdentificaciones.gs', 'services/lineas/LineasIneNucos.gs',
+    'services/lineas/LineasIneLectura.gs'].map(leer).join('\n') +
+    '\nthis.g = { ineLecInterpretar_, ineLecPersonas_, ineLecParaRegistro_, ineLecDocumentoDeRuta_, Ids, LineasIdentificaciones, ' +
+    'INE_NUCOS_PESTANA, INE_LEC_PESTANA, INE_LEC_ENCABEZADOS, INE_LEC_TEMPORAL, INE_ENSAYO_PESTANA, INE_ENSAYO_ENCABEZADOS };', ctx);
   return ctx.g;
 }
 
@@ -274,4 +276,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch((e) => { console.error('\n' + (e.message || e)); process.exitCode = 1; });
-module.exports = { entornoDev, logicaGs };
+module.exports = { entornoDev, logicaGs, api, valores, rango, accessToken, ErrorCuota, DRIVE, SHEETS, REPO };

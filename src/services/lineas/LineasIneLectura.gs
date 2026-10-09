@@ -577,6 +577,45 @@ function lineasIneEnsayo() {
   return texto;
 }
 
+// ---------------------------------------------------------------- lo que va al registro (etapa C)
+
+/**
+ * Puro: lo que va a APP_IDENTIFICACIONES (decisión del usuario, 9-oct): de «INE ENSAYO», las SEGURA de personal
+ * activo, de carpetas de responsiva (las fotos de inspección son del paquete completo: equipo, SIM, caja y la INE entre
+ * todo) y con «INE» en el nombre de cada archivo. Una por persona: la que tiene los dos lados y, entre esas, la de la
+ * responsiva más reciente. Las demás bajas, dudosas y sin dueño se quedan fuera; el registro se llena con el paso 1.
+ *   ensayo: renglones de «INE ENSAYO» (orden de INE_ENSAYO_ENCABEZADOS) · nombreDe(id): nombre del archivo
+ *   activo(numero): ¿está activo en Capital Humano?
+ * → [{ nuco, ruta, ids, lados, idPersona, noEmpleado, nombre, fecha }]
+ */
+function ineLecParaRegistro_(ensayo, nombreDe, activo) {
+  const NOMBRES_INE = ['INE', 'IFE', 'IDENTIFICACION', 'CREDENCIAL'];
+  const elegida = {};
+  const puntos = (x) => [x.completa ? 1 : 0, x.fecha || ''];
+  ensayo.forEach((f) => {
+    if (f[10] !== 'SEGURA' || /^INSP/i.test(String(f[1]))) return;
+    const ids = String(f[4]).split(', ').filter(Boolean);
+    if (!ids.length || !ids.every((id) => NOMBRES_INE.indexOf(ineNucosPorNombre_(nombreDe(id))) >= 0)) return;
+    const noEmpleado = String(f[6] || '').split(', ').filter((n) => activo(n))[0];
+    if (!noEmpleado) return;
+    const lados = String(f[3]).split(', ');
+    const doc = ineLecDocumentoDeRuta_(f[1]);
+    const x = { nuco: String(f[0]), ruta: String(f[1]), ids: ids, lados: lados, idPersona: String(f[5] || ''), noEmpleado: noEmpleado,
+      nombre: String(f[7]), fecha: doc ? doc.fecha : '',
+      completa: lados.indexOf('LOS DOS') >= 0 || (lados.indexOf('FRENTE') >= 0 && lados.indexOf('VUELTA') >= 0) };
+    const k = x.idPersona || x.nombre;
+    const antes = elegida[k];
+    if (!antes) { elegida[k] = x; return; }
+    const a = puntos(x), b = puntos(antes);
+    if (a[0] > b[0] || (a[0] === b[0] && a[1] > b[1])) elegida[k] = x;
+  });
+  return Object.keys(elegida).map((k) => {
+    const x = elegida[k];
+    delete x.completa;
+    return x;
+  }).sort((a, b) => (a.nuco < b.nuco ? -1 : a.nuco > b.nuco ? 1 : 0));
+}
+
 // ---------------------------------------------------------------- revisión a mano
 
 const INE_REV_PESTANA = 'INE REVISION';

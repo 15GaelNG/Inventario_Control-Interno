@@ -234,3 +234,45 @@ test('la revisión a mano (usuario, 9-oct): solo lo que deja a alguien activo si
   const r = ctx.r(ensayo, (n) => n === 'L1' || n === 'A1');
   assert.deepEqual([...r.map((x) => x.fila[0])], ['0003', '0005', '0007']);
 });
+
+test('al registro (usuario, 9-oct): seguras de activos, de responsiva, con «INE» en el nombre; una por persona', () => {
+  const ctx = vm.createContext({});
+  const nucos = fs.readFileSync(path.join(__dirname, '..', 'src/services/lineas/LineasIneNucos.gs'), 'utf8');
+  vm.runInContext(nucos + '\n' + fuente + '\nthis.r = ineLecParaRegistro_;', ctx);
+  // NUCO, CARPETA, ARCHIVOS, LADOS, IDS, ID PERSONA, No EMPLEADO, NOMBRE, COMO, EN EL DOCUMENTO, RESULTADO, NOTA
+  const f = (nuco, ruta, lados, ids, idp, num, res) => [nuco, ruta, ids.split(', ').length, lados, ids, idp, num, 'N ' + idp, 'CURP', '', res || 'SEGURA', ''];
+  const nombres = { a: 'INE FRONTAL 0001.jpg', b: 'INE TRASERA 0001.jpg', c: 'INE 0002.pdf', d: 'IMG_1.jpg', e: 'INE 0003.pdf', g: 'INE 0004.pdf', h: 'INE 0005.pdf' };
+  const ensayo = [
+    f('0001', 'CARTA RESPONSIVA/2025/RESP 10 05', 'FRENTE, VUELTA', 'a, b', 'PER-1', 'X1, A1'),
+    f('0002', 'CARTA RESPONSIVA/2026/RESP 01 03', 'LOS DOS', 'c', 'PER-1', 'A1'), // más reciente y completa: gana
+    f('0003', 'CARTA RESPONSIVA/2026/RESP 01 09', 'FRENTE', 'e', 'PER-1', 'A1'), // más reciente pero sin vuelta
+    f('0002', 'CARTA RESPONSIVA/2025/RESP 01 01', 'FRENTE', 'd', 'PER-2', 'A2'), // sin «INE» en el nombre
+    f('0004', 'INSPECCIONES/2025/2DO CUATRIMESTRE/MAYO/INSP 1 5/FOTOS', 'LOS DOS', 'g', 'PER-3', 'A3'), // inspección
+    f('0005', 'CARTA RESPONSIVA/2025/RESP 01 01', 'LOS DOS', 'h', 'PER-4', 'B4'), // baja
+    f('0005', 'CARTA RESPONSIVA/2025/RESP 01 01', 'LOS DOS', 'h', 'PER-5', 'A5', 'DUDOSA'),
+  ];
+  const r = ctx.r(ensayo, (id) => nombres[id], (n) => /^A/.test(n));
+  assert.equal(r.length, 1);
+  assert.equal(r[0].nuco, '0002');
+  assert.equal(r[0].noEmpleado, 'A1', 'el número activo');
+  assert.equal(r[0].fecha, '2026-03-01');
+});
+
+test('etapa C (tools/lineas-ine/registrar-ine.js): qué forma el PDF, medidas del JPEG y que solo escribe en el DEV', () => {
+  const { piezas, medidasJpeg, armadorPdf } = require('../tools/lineas-ine/registrar-ine.js');
+  const esPdf = (id) => /pdf/.test(id);
+  assert.deepEqual(piezas({ ids: ['f.jpg', 'v.jpg'], lados: ['FRENTE', 'VUELTA'] }, esPdf), { imagenes: ['f.jpg', 'v.jpg'] });
+  assert.deepEqual(piezas({ ids: ['v.jpg', 'f.jpg'], lados: ['VUELTA', 'FRENTE'] }, esPdf), { imagenes: ['f.jpg', 'v.jpg'] }, 'frente primero');
+  assert.deepEqual(piezas({ ids: ['x.jpg', 'dos.pdf'], lados: ['?', 'LOS DOS'] }, esPdf), { pdf: 'dos.pdf' }, 'el PDF con los dos lados, tal cual');
+  assert.deepEqual(piezas({ ids: ['f.pdf', 'f2.jpg', 'v.jpg'], lados: ['FRENTE', 'FRENTE', 'VUELTA'] }, esPdf), { imagenes: ['f.pdf', 'v.jpg'] });
+  // SOF0 de un JPEG de 1200 x 800, 3 canales
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x00, 0x00, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x03, 0x20, 0x04, 0xb0, 0x03, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  assert.deepEqual(medidasJpeg(jpeg), { alto: 800, ancho: 1200, canales: 3 });
+  assert.equal(medidasJpeg(Buffer.from('%PDF-1.4')), null);
+  assert.equal(typeof armadorPdf(), 'function', 'el armador del paso 1 se encuentra en lineas.html');
+  const herramienta = fs.readFileSync(path.join(__dirname, '..', 'tools/lineas-ine/registrar-ine.js'), 'utf8').replace(/\r/g, '');
+  assert.match(herramienta, /const dev = comun\.entornoDev\(\);/, 'solo con el bloque del DEV');
+  assert.match(herramienta, /await carpetaDestino\(dev\.nucos, /, 'los PDF van a la carpeta de NUCOS de pruebas');
+  assert.doesNotMatch(herramienta, /api\('(PATCH|DELETE)'|'DELETE'|trashed: true/, 'no cambia ni tira nada en Drive');
+  assert.match(herramienta, /SHEETS \+ dev\.telefonia \+ '\/values\/' \+ rango\(HOJA, 'A1'\) \+\n?\s*':append/, 'el registro, al libro del DEV');
+});
