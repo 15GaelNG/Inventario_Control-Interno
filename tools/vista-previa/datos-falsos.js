@@ -523,6 +523,9 @@
     },
     // ---- Formularios de alta (rejilla de campos .form-rejilla y componente Formulario) ----
     'vehiculos-registrar': () => abrir('vehiculos', 'registrar'),
+    'vehiculos-registrar-docs': async () => { await abrir('vehiculos', 'registrar'); await esperar(600);
+      const paso = [...document.querySelectorAll('button')].find((x) => /Documentación y seguro/.test(x.textContent)); if (paso) paso.click(); await esperar(500); const l = [...document.querySelectorAll('label, .campo-etiqueta, span')].find((x) => x.textContent.trim().startsWith('Tarjeta de circulación'));
+      if (l) l.scrollIntoView({ block: 'center' }); await esperar(300); },
     'incidencias-registrar': () => abrir('incidencias', 'registrar'),
     'uber-registrar': () => abrir('uber', 'registrar'),
     'caja-chica-registrar': () => abrir('caja-chica', 'registrar'),

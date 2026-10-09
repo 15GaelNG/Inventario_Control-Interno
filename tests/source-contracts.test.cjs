@@ -2296,3 +2296,20 @@ test('los documentos del vehículo se guardan en el expediente de su NUCO (Exped
     assert.doesNotMatch(s, /RESPONSIVAS_VEHICULARES'|'ADHERENTES VEHICULAR'/, f + ' ya no usa la carpeta vieja');
   }
 });
+
+test('cada documento del vehículo es campo de archivo en la ficha, con su nombre y su carpeta del NUCO', () => {
+  // 9-oct-2026: Factura, Tarjeta de circulación y Alta de placas se suben como la póliza y la tenencia (liga de Drive)
+  const veh = read('src/services/VehiculosService.gs');
+  const lista = (re) => re.exec(veh)[1].match(/'[^']+'/g).map((x) => x.slice(1, -1));
+  const archivos = lista(/const CAMPOS_ARCHIVO = \[([^\]]*)\]/);
+  const nuevas = lista(/const COLUMNAS_DOCUMENTO_NUEVAS = \[([^\]]*)\]/);
+  const etiquetas = /const ETIQUETA_ARCHIVO = \{([\s\S]*?)\};/.exec(veh)[1];
+  const app = read('src/html/js/app.html');
+  for (const c of archivos) {
+    assert.match(etiquetas, new RegExp("'" + c + "':"), c + ' tiene su etiqueta para el nombre del archivo');
+    assert.match(app, new RegExp("clave: '" + c + "'[^}]*tipo: 'file'"), c + ' es campo de archivo en CAMPOS_VEHICULO');
+  }
+  assert.deepEqual(nuevas.filter((c) => !archivos.includes(c)), [], 'las columnas que se agregan solas son de archivo');
+  assert.match(veh, /alCrear: \(fila, ctx\) => \{\s*asegurarColumnasDocumento_\(fila\);/, 'al crear se asegura la columna');
+  assert.match(veh, /alActualizar: \(cambios, ctx\) => \{\s*asegurarColumnasDocumento_\(cambios\);/, 'al editar también');
+});
