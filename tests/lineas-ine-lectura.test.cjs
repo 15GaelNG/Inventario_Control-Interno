@@ -194,3 +194,24 @@ test('un archivo leído dos veces (DEV y computadora a la vez, o un reintento) c
   const r = ctx.u([{ id: 'a', error: 'Internal Error' }, { id: 'b', error: '', lado: 'FRENTE' }, { id: 'a', error: '', lado: 'VUELTA' }, { id: 'b', error: '', lado: 'X' }]);
   assert.deepEqual([...r.map((x) => x.id + ':' + x.lado)], ['a:VUELTA', 'b:FRENTE']);
 });
+
+test('el documento de la carpeta: dos personas con «/», otra letra en el segundo nombre; nombre + documento = SEGURA', () => {
+  const { f, ix } = mundo();
+  const ctx = vm.createContext({});
+  vm.runInContext(fuente + '\nthis.e = ineLecEsElDelDoc_;', ctx);
+  const juan = ix.porNombre['JUAN CARLOS PEREZ LOPEZ'][0];
+  assert.equal(ctx.e(juan, 'JUAN KARLOS PEREZ LOPEZ'), true, 'otra letra en el segundo nombre');
+  assert.equal(ctx.e(juan, 'JUAN PEREZ GARCIA'), false, 'otro apellido materno');
+  const frente = f.ineLecInterpretar_(FRENTE, VOCABULARIO);
+  const leidos = [
+    { id: 'a', nuco: '0012', ruta: 'CARTA RESPONSIVA/2026/RESP 10 05', lado: 'FRENTE', curp: frente.curp, nacimiento: frente.nacimiento, nombreVuelta: '', nombres: [...frente.nombres].join(' ') },
+    { id: 'b', nuco: '0012', ruta: 'CARTA RESPONSIVA/2026/RESP 11 05', lado: 'FRENTE', curp: '', nacimiento: '', nombreVuelta: '', nombres: 'ANA GARCIA RUIZ' },
+  ];
+  const filas = f.ineLecEnsayo_(leidos, ix, {
+    '12|RESP|2026-05-10': ['MARIA GARCIA RUIZ', 'JUAN KARLOS PEREZ LOPEZ'], // la celda «MARIA… / JUAN…» ya separada
+    '12|RESP|2026-05-11': ['ANA GARCIA RUIZ'],
+  });
+  assert.equal(filas[0][10], 'SEGURA', 'CURP y es el segundo nombre de la celda');
+  assert.equal(filas[1][10], 'SEGURA', 'solo por nombre, pero el documento dice la misma persona');
+  assert.match(filas[1][11], /es el del documento/);
+});

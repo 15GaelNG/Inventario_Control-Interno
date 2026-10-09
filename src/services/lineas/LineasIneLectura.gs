@@ -417,6 +417,33 @@ function ineLecDocumentoDeRuta_(ruta) {
   return { tipo: hoja[1], fecha: anio + '-' + ('0' + hoja[3]).slice(-2) + '-' + ('0' + hoja[2]).slice(-2) };
 }
 
+/**
+ * ¿La persona es la que dice el documento? Sus apellidos y su primer nombre están en el nombre del documento (que
+ * puede traer otra letra en un segundo nombre, «MICHELL» y «MICHEL», o el nombre en otro orden).
+ */
+function ineLecEsElDelDoc_(p, nombreDoc) {
+  if (p.nombre === nombreDoc) return true;
+  if (!p.paterno || !p.nombres || !p.nombres.length) return false;
+  const doc = {};
+  String(nombreDoc).split(' ').forEach((w) => { doc[w] = true; });
+  return p.paterno.every((w) => doc[w]) && p.materno.every((w) => doc[w]) && !!doc[p.nombres[0]];
+}
+
+/** La persona de Capital Humano que es la del documento: por nombre exacto o, si no, la única que cumple lo de arriba. */
+function ineLecPersonaDelDoc_(nombreDoc, ix) {
+  const exactas = ix.porNombre[nombreDoc] || [];
+  if (exactas.length) return exactas.length === 1 ? exactas[0] : null;
+  const vistos = {};
+  const cumplen = [];
+  String(nombreDoc).split(' ').forEach((w) => (ix.porPaterno[w] || []).forEach((p) => {
+    const k = p.nombre + '|' + p.nac;
+    if (vistos[k]) return;
+    vistos[k] = true;
+    if (ineLecEsElDelDoc_(p, nombreDoc)) cumplen.push(p);
+  }));
+  return cumplen.length === 1 ? cumplen[0] : null;
+}
+
 /** NUCO|tipo|fecha → nombres de los responsables de esa responsiva o inspección. */
 function ineLecDocumentos_() {
   const ss = SpreadsheetApp.openById(Config.SPREADSHEET_IDS.TELEFONIA());
@@ -433,7 +460,9 @@ function ineLecDocumentos_() {
       const fecha = fechaDe(o);
       if (!fecha || !nuco(o.NUCO)) return;
       const k = nuco(o.NUCO) + '|' + tipo + '|' + fecha;
-      salida[k] = (salida[k] || []).concat(nombres.map((c) => ineLecPalabras_(o[c]).join(' ')).filter(Boolean));
+      // Una celda puede traer dos personas separadas por «/» (99 inspecciones y 59 responsivas del libro, 9-oct)
+      salida[k] = (salida[k] || []).concat([].concat.apply([], nombres.map((c) => String(o[c] || '').split('/')))
+        .map((x) => ineLecPalabras_(x).join(' ')).filter(Boolean));
     });
   };
   const iso = (v) => (v instanceof Date && !isNaN(v.getTime()) ? Utilities.formatDate(v, ss.getSpreadsheetTimeZone(), 'yyyy-MM-dd') : '');
@@ -483,20 +512,22 @@ function ineLecEnsayo_(leidos, ix, documentos) {
       sueltos.length = 0;
     }
     if (!lista.length && sueltos.length && esperados && esperados.length === 1) {
-      const p = (ix.porNombre[esperados[0]] || []);
-      lista = [{ persona: p.length === 1 ? p[0] : { nombre: esperados[0], numeros: [], id: '' }, como: 'RESPONSIVA', archivos: sueltos.slice() }];
+      const p = ineLecPersonaDelDoc_(esperados[0], ix);
+      lista = [{ persona: p || { nombre: esperados[0], numeros: [], id: '' }, como: 'RESPONSIVA', archivos: sueltos.slice() }];
       sueltos.length = 0;
     }
     const enDoc = esperados ? esperados.join(' / ') : (doc ? 'no está en ' + (doc.tipo === 'RESP' ? 'RESPONSIVAS LINEAS' : 'INSPECCIONES LINEAS') : '');
     lista.forEach((g) => {
-      const esDelDoc = esperados && esperados.indexOf(g.persona.nombre) >= 0;
+      const esDelDoc = !!esperados && esperados.some((e) => ineLecEsElDelDoc_(g.persona, e));
       let resultado = 'DUDOSA';
       const nota = [];
       if (g.nota) nota.push(g.nota);
       if ((g.como === 'CURP' || g.como === 'FECHA Y NOMBRE') && (!esperados || esDelDoc)) resultado = 'SEGURA';
+      // Solo por nombre, pero el documento de la misma carpeta dice la misma persona: dos fuentes que coinciden
+      if (g.como === 'NOMBRE' && esDelDoc) resultado = 'SEGURA';
       if (esperados && !esDelDoc && g.como !== 'RESPONSIVA') nota.push('no es responsable del documento de la carpeta');
       if (g.como === 'RESPONSIVA') nota.push('no se leyó: se toma al responsable');
-      if (g.como === 'NOMBRE') nota.push('solo por nombre');
+      if (g.como === 'NOMBRE') nota.push(esDelDoc ? 'por nombre, y es el del documento' : 'solo por nombre');
       if (!g.persona.id) nota.push('sin ID PERSONA');
       filas.push(ineLecFilaEnsayo_(c, g.archivos, g.persona, g.como, enDoc, resultado, nota));
     });
