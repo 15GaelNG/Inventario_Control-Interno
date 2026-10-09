@@ -154,13 +154,62 @@ const ResponsivaVehicularService = (function () {
     return !fila['TOKEN FIRMA'] && !fila['TOKEN FIRMA JEFE'];
   }
 
+  /**
+   * Una columna …TEMP nunca guarda el base64 directo: Sheets no deja más de 50,000 caracteres
+   * por celda y una firma por FOTO (no por trazo) fácil lo rebasa -- el JPEG de hasta 1200 px
+   * que arma componentes/firma.html puede pesar 100-300 KB, 130,000-400,000 caracteres en
+   * base64 (bug real, 9-oct: "límite de 50000" al mandar una liga con firma por foto). Se
+   * guarda como archivo chico en la misma carpeta que ya usan las firmas finales
+   * (CARPETA_IMAGENES) y en la celda solo va su ID -- un puñado de caracteres, sin importar
+   * qué tan pesada sea la foto.
+   */
+  function guardarFirmaTemp_(campo, imagen) {
+    const nombreImagen = PdfService.nombreArchivo([campo, 'temp', Utilities.getUuid()]) + (imagen.mimeType === 'image/jpeg' ? '.jpg' : '.png');
+    const blob = Utilities.newBlob(Utilities.base64Decode(imagen.base64), imagen.mimeType || 'image/png', nombreImagen);
+    const archivo = DriveUtils.marcarAutor(DriveUtils.carpetaEnRaiz(CARPETA_IMAGENES).createFile(blob));
+    return JSON.stringify({ archivoId: archivo.getId(), mimeType: imagen.mimeType || 'image/png' });
+  }
+
+  /**
+   * Lee lo que haya en una columna …TEMP: un archivo de Drive (guardarFirmaTemp_, lo normal
+   * desde este arreglo) o, al revés, el base64 directo que dejó una liga creada ANTES de este
+   * arreglo y que seguía pendiente al momento de desplegarlo -- sin esto, esa firma se perdía
+   * en silencio (ni error ni aviso, solo faltaba del PDF) en cuanto alguien la completaba.
+   * null si no hay nada o el archivo ya no existe.
+   */
+  function leerFirmaTemp_(valor) {
+    if (!valor) return null;
+    let datos;
+    try { datos = JSON.parse(valor); } catch (e) { return null; }
+    if (!datos) return null;
+    if (datos.archivoId) {
+      const archivo = DriveApp.getFileById(datos.archivoId);
+      return { base64: Utilities.base64Encode(archivo.getBlob().getBytes()), mimeType: datos.mimeType || 'image/png' };
+    }
+    if (datos.base64) return { base64: datos.base64, mimeType: datos.mimeType || 'image/png' };
+    return null;
+  }
+
+  /** Borra de Drive el archivo temporal de una columna …TEMP ya junta con las demás (el PDF
+   *  final ya tiene su propio respaldo en Drive, aparte -- este solo servía para esperar). */
+  function borrarFirmaTempSiHay_(valor) {
+    if (!valor) return;
+    try {
+      const datos = JSON.parse(valor);
+      if (datos && datos.archivoId) DriveApp.getFileById(datos.archivoId).setTrashed(true);
+    } catch (e) { /* no-op: si no se pudo borrar, queda un archivo suelto en Drive, nada más */ }
+  }
+
   /** Las firmas que ya se tienen guardadas en las columnas TEMP, listas para el PDF. */
   function imagenesDesdeTemp_(fila) {
     const imagenesPdf = {};
     [['FIRMA RESPONSABLE', 'FIRMA RESPONSABLE TEMP'], ['FIRMA JEFE', 'FIRMA JEFE TEMP'], ['FIRMA CI', 'FIRMA CI TEMP']].forEach(([campo, columna]) => {
       const guardada = fila[columna];
       if (!guardada) return;
-      try { imagenesPdf[campo] = Object.assign({}, JSON.parse(guardada), FIRMA_PDF); } catch (e) { /* se ignora, sin esa firma */ }
+      try {
+        const datos = leerFirmaTemp_(guardada);
+        if (datos) imagenesPdf[campo] = Object.assign({}, datos, FIRMA_PDF);
+      } catch (e) { /* se ignora, sin esa firma */ }
     });
     return imagenesPdf;
   }
@@ -216,6 +265,10 @@ const ResponsivaVehicularService = (function () {
         'TOKEN FIRMA': '', 'TOKEN FIRMA EXPIRA': '', 'TOKEN FIRMA JEFE': '', 'TOKEN FIRMA JEFE EXPIRA': '',
         'FIRMA RESPONSABLE TEMP': '', 'FIRMA JEFE TEMP': '', 'FIRMA CI TEMP': '',
       }, camposExtra || {}), ID_COLUMN);
+      // Los archivos temporales de Drive (guardarFirmaTemp_) ya sirvieron: el PDF ya quedó con
+      // su propia firma respaldada arriba. Si alguno no se pudo borrar, queda un archivo suelto
+      // en Drive -- no afecta nada más.
+      ['FIRMA RESPONSABLE TEMP', 'FIRMA JEFE TEMP', 'FIRMA CI TEMP'].forEach((columna) => borrarFirmaTempSiHay_(fila[columna]));
     } catch (e) {
       avisos.push('Se guardó, pero no se pudo generar el PDF: ' + e.message);
     }
@@ -323,12 +376,12 @@ const ResponsivaVehicularService = (function () {
       if (remoto || remotoJefe) {
         // Todo lo que YA se tiene (CI siempre; responsable y/o jefe si no son ellos los que
         // se están difiriendo) se guarda en TEMP hasta que la última liga pendiente complete.
-        fila['FIRMA CI TEMP'] = JSON.stringify(imagenes['FIRMA CI']);
+        fila['FIRMA CI TEMP'] = guardarFirmaTemp_('FIRMA CI', imagenes['FIRMA CI']);
         if (!remoto && imagenes['FIRMA RESPONSABLE'] && imagenes['FIRMA RESPONSABLE'].base64) {
-          fila['FIRMA RESPONSABLE TEMP'] = JSON.stringify(imagenes['FIRMA RESPONSABLE']);
+          fila['FIRMA RESPONSABLE TEMP'] = guardarFirmaTemp_('FIRMA RESPONSABLE', imagenes['FIRMA RESPONSABLE']);
         }
         if (!remotoJefe && imagenes['FIRMA JEFE'] && imagenes['FIRMA JEFE'].base64) {
-          fila['FIRMA JEFE TEMP'] = JSON.stringify(imagenes['FIRMA JEFE']);
+          fila['FIRMA JEFE TEMP'] = guardarFirmaTemp_('FIRMA JEFE', imagenes['FIRMA JEFE']);
         }
         if (remoto) {
           const tokenFirma = Utilities.getUuid();
@@ -461,7 +514,7 @@ const ResponsivaVehicularService = (function () {
         throw new Error('Esta liga ya venció -- pide que te manden una nueva.');
       }
 
-      fila['FIRMA RESPONSABLE TEMP'] = JSON.stringify(imagen);
+      fila['FIRMA RESPONSABLE TEMP'] = guardarFirmaTemp_('FIRMA RESPONSABLE', imagen);
       fila['TOKEN FIRMA'] = '';
       fila['TOKEN FIRMA EXPIRA'] = '';
       fila['FIRMADO POR'] = Session.getActiveUser().getEmail() || '';
@@ -498,7 +551,7 @@ const ResponsivaVehicularService = (function () {
         throw new Error('Esta liga ya venció -- pide que te manden una nueva.');
       }
 
-      fila['FIRMA JEFE TEMP'] = JSON.stringify(imagenJefe);
+      fila['FIRMA JEFE TEMP'] = guardarFirmaTemp_('FIRMA JEFE', imagenJefe);
       fila['TOKEN FIRMA JEFE'] = '';
       fila['TOKEN FIRMA JEFE EXPIRA'] = '';
       fila['FIRMADO POR JEFE'] = Session.getActiveUser().getEmail() || '';

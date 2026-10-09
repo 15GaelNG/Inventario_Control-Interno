@@ -19,6 +19,11 @@ const VEHICULO_BASE = {
 function crearContexto() {
   const llamadas = { expediente: [], pdfEn: null, insert: [], update: [], actualizarVehiculo: [], imagenesSubidas: [], pdfGenerados: 0, vistasPrevias: 0 };
   let uuids = 0;
+  // Drive falso para las firmas TEMP (guardarFirmaTemp_/leerFirmaTemp_): guarda el "contenido"
+  // (aquí, el base64 tal cual -- base64Decode/base64Encode son identidad) para que lo que se lee
+  // de vuelta sea lo mismo que se guardó, igual que en Drive real.
+  const archivosDrive = {};
+  let contadorArchivos = 0;
   const contexto = vm.createContext({
     Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'SS' }, DRIVE_FOLDERS: { REPORTES: () => 'FOLDER' }, urlFirmaPublica: () => '' },
     Permisos: { puedeLeer: () => {}, puedeEditar: () => ({ nombre: 'TESTER', correo: 't@x.com' }) },
@@ -30,11 +35,17 @@ function crearContexto() {
     Utilities: {
       formatDate: () => '1',
       base64Decode: (b64) => b64,
+      base64Encode: (bytes) => bytes,
       newBlob: (bytes, mimeType, nombre) => ({ bytes, mimeType, nombre }),
       getUuid: () => 'token-' + (++uuids),
     },
     DriveApp: {
-      getFileById: (id) => ({ id }),
+      getFileById: (id) => ({
+        id,
+        getId: () => id,
+        getBlob: () => ({ getBytes: () => (archivosDrive[id] || {}).bytes }),
+        setTrashed: (v) => { if (archivosDrive[id]) archivosDrive[id].trashed = v; },
+      }),
       getFolderById: (id) => ({
         createFile: (blob) => { llamadas.imagenesSubidas.push({ carpetaId: id, nombre: blob.nombre }); return { id: 'file-' + llamadas.imagenesSubidas.length }; },
       }),
@@ -45,7 +56,12 @@ function crearContexto() {
       // Las carpetas se buscan por nombre en la raíz de la app: aquí el nombre hace de ID
       carpetaEnRaiz: (nombre) => ({
         getId: () => nombre,
-        createFile: (blob) => { llamadas.imagenesSubidas.push({ carpeta: nombre, nombre: blob.nombre }); return { id: 'file-' + llamadas.imagenesSubidas.length }; },
+        createFile: (blob) => {
+          const id = 'file-' + (++contadorArchivos);
+          archivosDrive[id] = { bytes: blob.bytes, trashed: false };
+          llamadas.imagenesSubidas.push({ carpeta: nombre, nombre: blob.nombre });
+          return { id, getId: () => id, setTrashed: (v) => { archivosDrive[id].trashed = v; } };
+        },
       }),
     },
     SheetUtils: {
@@ -73,7 +89,7 @@ function crearContexto() {
       archivar: (archivo, nucco, doc, op) => { llamadas.expediente.push({ archivar: archivo.id, nucco, doc, adherente: !!(op && op.adherente) }); },
     },
     PdfService: {
-      generar: (o) => { llamadas.pdfGenerados++; llamadas.pdfEn = o.carpetaId; return { id: 'pdf1', fileId: 'pdf1', nombre: 'a.pdf', url: 'https://drive/a.pdf' }; },
+      generar: (o) => { llamadas.pdfGenerados++; llamadas.pdfEn = o.carpetaId; llamadas.imagenesPdf = o.imagenes; return { id: 'pdf1', fileId: 'pdf1', nombre: 'a.pdf', url: 'https://drive/a.pdf' }; },
       generarVistaPrevia: (p) => { llamadas.vistasPrevias++; return { base64: 'pdf-bytes', mimeType: 'application/pdf', imagenes: p.imagenes }; },
       nombreArchivo: () => 'nombre',
       fechaParaNombre: () => '2026-10-06',
@@ -187,6 +203,22 @@ test('remoto: no exige la firma del adherente (CI sigue siendo obligatoria), no 
   assert.ok(!res.ligaJefe);
 });
 
+test('retrocompatibilidad: una liga pendiente creada ANTES de este arreglo (base64 directo en TEMP, sin archivoId) se completa igual', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', ADHERENTE: 'Maria Lopez' }, { 'FIRMA CI': FIRMA_CI }, { remoto: true });
+  // Simula lo que dejó el código viejo antes de desplegar este arreglo: el base64 directo en la
+  // celda (sin archivoId), de una firma de Jefe que ya había llegado presencial.
+  llamadas.insert[0]['FIRMA JEFE TEMP'] = JSON.stringify({ base64: 'jefe-de-antes-del-arreglo', mimeType: 'image/png' });
+  const token = llamadas.insert[0]['TOKEN FIRMA'];
+  const res = contexto.Servicio.completarFirma(token, { base64: 'respondio-despues-del-arreglo', mimeType: 'image/png' });
+  assert.ok(!res.pendiente);
+  assert.equal(llamadas.pdfGenerados, 1);
+  // La firma vieja (sin archivoId) sí llegó al PDF -- antes de este arreglo se habría perdido
+  // en silencio.
+  assert.equal(llamadas.imagenesPdf['FIRMA JEFE'].base64, 'jefe-de-antes-del-arreglo');
+  assert.equal(llamadas.imagenesPdf['FIRMA ADHERENTE'].base64, 'respondio-despues-del-arreglo');
+});
+
 test('vistaPrevia (liga del adherente): el PDF sin guardar, con las firmas TEMP ya puestas y sin la del adherente todavía', () => {
   const { contexto, llamadas } = crearContexto();
   contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', ADHERENTE: 'Maria Lopez' },
@@ -216,7 +248,9 @@ test('completarFirma: token inválido/vencido truena; sin liga de Jefe pendiente
   assert.equal(llamadas.pdfGenerados, 1);
   assert.equal(res.PDF, 'https://drive/a.pdf');
   assert.ok(!res.pendiente);
-  assert.equal(llamadas.imagenesSubidas.length, 3);   // la que llegó por la liga + Jefe y CI (TEMP)
+  // 2 temporales al crear (Jefe + CI) + 1 temporal al completar (la que acaba de llegar) + 3
+  // respaldos finales (Adherente/Jefe/CI) al generar el PDF = 6.
+  assert.equal(llamadas.imagenesSubidas.length, 6);
   const cambios = llamadas.update[llamadas.update.length - 1].cambios;
   assert.equal(cambios['ESTADO FIRMA'], 'FIRMADO');
   assert.equal(cambios['TOKEN FIRMA'], '');
@@ -268,7 +302,7 @@ test('remotoJefe: exige la firma del adherente AHORA, nunca toca VEHICULOS, y ge
   assert.equal(llamadas.insert.length, 1);
   assert.equal(llamadas.insert[0]['ESTADO FIRMA'], 'PENDIENTE');
   assert.ok(llamadas.insert[0]['TOKEN FIRMA JEFE']);
-  assert.ok(JSON.parse(llamadas.insert[0]['FIRMA ADHERENTE TEMP']).base64, 'abc');
+  assert.ok(JSON.parse(llamadas.insert[0]['FIRMA ADHERENTE TEMP']).archivoId);
   assert.equal(llamadas.pdfGenerados, 0);
   assert.deepEqual(llamadas.actualizarVehiculo, []);
   assert.ok(res.ligaJefe.includes('tipo=adherente'));
@@ -284,7 +318,9 @@ test('completarFirmaJefe: sin liga del adherente pendiente, genera el PDF de una
   const res = contexto.Servicio.completarFirmaJefe(tokenJefe, { base64: 'firma-jefe-remota', mimeType: 'image/png' });
   assert.equal(llamadas.pdfGenerados, 1);
   assert.equal(res.PDF, 'https://drive/a.pdf');
-  assert.equal(llamadas.imagenesSubidas.length, 3);   // Adherente (TEMP) + CI (TEMP) + Jefe
+  // 2 temporales al crear (Adherente + CI) + 1 temporal al completar (Jefe, recién llegada) + 3
+  // respaldos finales (Adherente/Jefe/CI) al generar el PDF = 6.
+  assert.equal(llamadas.imagenesSubidas.length, 6);
   const cambios = llamadas.update[llamadas.update.length - 1].cambios;
   assert.equal(cambios['FIRMADO POR JEFE'], 'firmante@ciudadmaderas.com');
 });
@@ -302,7 +338,9 @@ test('las dos ligas, cada una completada por su lado, terminan generando el PDF 
   const segundo = contexto.Servicio.completarFirmaJefe(tokenJefe, { base64: 'jefe', mimeType: 'image/png' });
   assert.ok(!segundo.pendiente);
   assert.equal(llamadas.pdfGenerados, 1);
-  assert.equal(llamadas.imagenesSubidas.length, 3);
+  // 1 temporal al crear (CI) + 1 al completar la del adherente + 1 al completar la del jefe + 3
+  // respaldos finales (Adherente/Jefe/CI) al generar el PDF = 6.
+  assert.equal(llamadas.imagenesSubidas.length, 6);
 
   assert.throws(() => contexto.Servicio.completarFirma(token, { base64: 'x', mimeType: 'image/png' }), /no es válida/);
   assert.throws(() => contexto.Servicio.completarFirmaJefe(tokenJefe, { base64: 'x', mimeType: 'image/png' }), /no es válida/);

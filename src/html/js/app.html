@@ -2136,6 +2136,23 @@
     return html + '</div>';
   }
 
+  /** Badge "Pendiente de firma"/"Firmado" de Responsiva/Adherente Vehicular, pero diciendo CUÁL
+   *  de las dos ligas ya se firmó (TOKEN_FIRMA/TOKEN_FIRMA_JEFE vacío = esa ya se firmó o nunca
+   *  se diferió) en vez de solo "Pendiente" -- así no hay que adivinarlo por qué botón de copiar
+   *  liga sigue apareciendo en la fila. `principal` es como se le dice al firmante que no es el
+   *  jefe (p. ej. "responsable" o "adherente"). */
+  function badgeEstadoFirma(r, principal) {
+    const pendiente = (r.ESTADO_FIRMA || 'FIRMADO') === 'PENDIENTE';
+    if (!pendiente) return '<span class="badge-estado activo">Firmado</span>';
+    const faltaPrincipal = !!r.TOKEN_FIRMA;
+    const faltaJefe = !!r.TOKEN_FIRMA_JEFE;
+    let texto = 'Pendiente';
+    if (faltaPrincipal && faltaJefe) texto = 'Pendiente: falta ' + principal + ' y jefe';
+    else if (faltaPrincipal) texto = 'Ya firmó el jefe, falta ' + principal;
+    else if (faltaJefe) texto = 'Ya firmó ' + (principal === 'adherente' ? 'el adherente' : 'el responsable') + ', falta el jefe';
+    return '<span class="badge-estado pendiente">' + escaparHtml(texto) + '</span>';
+  }
+
   /** Mismo patrón que copiarEnlace_ en app-sistemas.html: la API moderna primero, y si el
    *  marco de Apps Script la bloquea, el truco clásico del textarea oculto + execCommand. */
   async function copiarTexto_(texto) {
@@ -3544,7 +3561,7 @@
               { t: 'Fecha', r: (r) => formatearFecha(r.FECHA) },
               { t: 'Responsable', r: (r) => escaparHtml(r.RESPONSABLE || '—') },
               { t: 'Departamento', r: (r) => escaparHtml(r.DEPARTAMENTO || '—') },
-              { t: 'Estado', r: (r) => '<span class="badge-estado ' + ((r.ESTADO_FIRMA || 'FIRMADO') === 'PENDIENTE' ? 'pendiente' : 'activo') + '">' + ((r.ESTADO_FIRMA || 'FIRMADO') === 'PENDIENTE' ? 'Pendiente de firma' : 'Firmado') + '</span>' },
+              { t: 'Estado', r: (r) => badgeEstadoFirma(r, 'responsable') },
               { t: 'PDF', r: (r) => (r.PDF ? '<a href="' + escaparHtml(r.PDF) + '" target="_blank" rel="noopener" class="secondary" style="text-decoration:none">Ver</a>' : '—') },
               { t: '', r: (r) => accionesFichaRegistro('responsiva', r.ID, {
                 eliminar: puedeEditarModulo('responsiva-vehicular'),
@@ -3562,7 +3579,7 @@
               { t: 'Adherente', r: (r) => escaparHtml(r.ADHERENTE || '—') },
               { t: 'Departamento', r: (r) => escaparHtml(r.DEPARTAMENTO || '—') },
               { t: 'Estatus', r: (r) => '<span class="badge-estado ' + ((r.ESTATUS || 'ACTIVO') === 'ACTIVO' ? 'activo' : 'baja') + '">' + (r.ESTATUS || 'ACTIVO') + '</span>' },
-              { t: 'Firma', r: (r) => '<span class="badge-estado ' + ((r.ESTADO_FIRMA || 'FIRMADO') === 'PENDIENTE' ? 'pendiente' : 'activo') + '">' + ((r.ESTADO_FIRMA || 'FIRMADO') === 'PENDIENTE' ? 'Pendiente' : 'Firmado') + '</span>' },
+              { t: 'Firma', r: (r) => badgeEstadoFirma(r, 'adherente') },
               { t: 'PDF', r: (r) => (r.PDF ? '<a href="' + escaparHtml(r.PDF) + '" target="_blank" rel="noopener" class="secondary" style="text-decoration:none">Ver</a>' : '—') },
               { t: '', r: (r) => accionesFichaRegistro('adherente', r.ID, {
                 estatus: r.ESTATUS || 'ACTIVO',
