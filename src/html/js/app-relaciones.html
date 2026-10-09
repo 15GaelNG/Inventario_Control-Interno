@@ -29,6 +29,11 @@
       const lista = document.getElementById('rel-s-tabs-lista');
       const tabsCont = document.getElementById('rel-s-tabs');
       const familias = RelSencilla.familias(mapa);
+      // Primero "Conexiones": las tarjetas donde se ve, se conecta y se pone al día (app-datos-conectados.html)
+      lista.insertAdjacentHTML('beforeend',
+        `<button type="button" class="tab-btn" data-tab="conexiones">${Iconos.svg('cable')} Conexiones</button>`);
+      tabsCont.insertAdjacentHTML('beforeend', '<div class="card card-compacta" data-panel="conexiones"><div id="dc-raiz"></div></div>');
+      DatosConectadosUI.iniciar(document.getElementById('dc-raiz'));
       familias.forEach((familia, i) => {
         const id = 'familia-' + i;
         lista.insertAdjacentHTML('beforeend',
@@ -43,7 +48,7 @@
         pintar('');
         tabsCont.querySelector('[data-familia-buscar="' + i + '"]').addEventListener('input', (ev) => pintar(ev.target.value));
       });
-      Tabs.iniciar(tabsCont, { inicial: 'familia-0' });
+      Tabs.iniciar(tabsCont, { inicial: 'conexiones' });
     }
 
     // ----- Técnica: columna del dueño × hoja copia -----

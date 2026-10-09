@@ -1,0 +1,392 @@
+<script>
+  /**
+   * app-datos-conectados.html — la pestaña "Conexiones" de Administración > Datos conectados: una tarjeta por cada
+   * par de hojas conectadas (la que manda → la que copia), con sus datos en renglones. Desde aquí se conectan datos
+   * nuevos y conexiones nuevas, con vista previa antes de guardar; lo conectado se mantiene al día solo
+   * (DatosConectados.gs + Relaciones.gs: al guardar en la app y al editar a mano en la hoja).
+   *
+   *   - Lo del sistema (MAPA en el código) se ve con candado y no se quita desde aquí.
+   *   - Lo que se copia al revés (Responsiva → Vehículos) solo se ve: está en código a propósito.
+   *   - Sin permiso de EDICION en 'relaciones' todo se ve y nada se cambia (el servidor lo vuelve a revisar).
+   *
+   * DatosConectadosUI.iniciar(contenedor) lo llama initRelaciones al armar las pestañas.
+   */
+  const DatosConectadosUI = (function () {
+    let datos = null;            // lo de apiDatosConectados: { mapa, hojas, puedeEditar, alReves }
+    let raiz = null;
+    let filtroFamilia = '';
+    const columnasCache = {};    // hoja → promesa de apiDatosConectadosColumnas
+
+    const esc = (v) => escaparHtml(String(v == null ? '' : v));
+    const nombreDato = (c) => (typeof RelSencilla !== 'undefined' && RelSencilla.dato ? RelSencilla.dato(c) : c);
+    const etiquetaHoja = (hoja) => {
+      const h = (datos.hojas || []).find((x) => x.hoja === hoja);
+      return h ? h.etiqueta.nombre : hoja;
+    };
+    const tipoTexto = (tipo) => (tipo === 'bitacora' ? 'Se guarda el del día' : 'Se mantiene al día');
+    const tipoAyuda = (tipo) => (tipo === 'bitacora'
+      ? 'Guarda cómo estaba el dato el día que se registró (una inspección, un arqueo): no se cambia después.'
+      : 'Cuando cambia en la hoja que manda, se copia solo: al guardar en la app y al editar a mano en la hoja.');
+
+    function columnasDe(hoja) {
+      if (!columnasCache[hoja]) {
+        columnasCache[hoja] = callServer('apiDatosConectadosColumnas', state.token, hoja).then((t) => JSON.parse(t))
+          .catch((err) => { delete columnasCache[hoja]; throw err; });
+      }
+      return columnasCache[hoja];
+    }
+
+    /** Vehículos es el centro de casi todo: va primero; después las demás familias en orden alfabético */
+    const ORDEN_FAMILIAS = ['Vehículos', 'Caja Chica', 'Líneas'];
+    const ordenFamilia = (f) => (ORDEN_FAMILIAS.indexOf(f) === -1 ? 99 : ORDEN_FAMILIAS.indexOf(f));
+    /** Cuántos datos se ven de entrada en una tarjeta; el resto, con "Ver los N datos" */
+    const DATOS_A_LA_VISTA = 6;
+    const abiertas = new Set();   // tarjetas con todos sus datos a la vista
+
+    /** Las conexiones (dueña → copia) del mapa: por familia y, dentro, la de más datos primero */
+    function conexiones() {
+      const out = [];
+      datos.mapa.duenos.forEach((d) => d.copias.forEach((c) => out.push({ dueno: d, copia: c })));
+      return out.filter((x) => !filtroFamilia || x.dueno.etiqueta.familia === filtroFamilia)
+        .sort((a, b) => ordenFamilia(a.dueno.etiqueta.familia) - ordenFamilia(b.dueno.etiqueta.familia) ||
+          b.copia.columnas.length - a.copia.columnas.length);
+    }
+
+    // ------------------------------------------------------------------ pintar
+
+    function pintar() {
+      const familias = Array.from(new Set(datos.mapa.duenos.map((d) => d.etiqueta.familia)))
+        .sort((a, b) => ordenFamilia(a) - ordenFamilia(b) || a.localeCompare(b));
+      raiz.innerHTML = `
+        <div class="dc-cabeza">
+          <p class="rel-s-intro">Cada tarjeta es una conexión: los datos de la izquierda mandan y se copian a la derecha.
+            ${datos.puedeEditar ? 'Puedes conectar más datos o una conexión nueva; antes de guardar ves qué cambiaría.' : 'Solo puedes verlas: para cambiarlas hace falta EDICIÓN en Datos conectados.'}</p>
+          <div class="dc-filtros">
+            <button type="button" class="dc-chip${filtroFamilia ? '' : ' activo'}" data-dc-familia="">Todas</button>
+            ${familias.map((f) => `<button type="button" class="dc-chip${filtroFamilia === f ? ' activo' : ''}" data-dc-familia="${esc(f)}">${esc(f)}</button>`).join('')}
+            ${datos.puedeEditar ? `<button type="button" class="primary dc-nueva" data-dc-accion="nueva">${Iconos.svg('plus')} Nueva conexión</button>` : ''}
+          </div>
+        </div>
+        <div id="dc-nueva" hidden></div>
+        <div class="dc-tarjetas">${conexiones().map(tarjeta).join('') || '<p class="empty-state">No hay conexiones en esta familia</p>'}</div>
+        ${alReves()}`;
+    }
+
+    function tarjeta(x) {
+      const d = x.dueno;
+      const c = x.copia;
+      const id = esc(d.hoja + '>' + c.nombre);
+      const todas = abiertas.has(d.hoja + '>' + c.nombre);
+      const sobran = Math.max(0, c.columnas.length - DATOS_A_LA_VISTA);
+      // Lo conectado desde la pantalla va primero: es lo que alguien acaba de poner y quiere ver
+      const orden = c.columnas.filter((x) => x.pantalla).concat(c.columnas.filter((x) => !x.pantalla));
+      const filas = (todas ? orden : orden.slice(0, DATOS_A_LA_VISTA)).map((col) => `
+        <div class="dc-dato">
+          <span class="dc-de" title="${esc(col.origen)}">${esc(nombreDato(col.origen))}</span>
+          <span class="dc-flecha">${Iconos.svg('arrow-right')}</span>
+          <span class="dc-a" title="${esc(col.destino)}">${esc(nombreDato(col.destino))}${col.calculada ? ' <span class="rel-calc">calculada</span>' : ''}</span>
+          ${col.pantalla && datos.puedeEditar
+            ? `<button type="button" class="dc-quitar" title="Desconectar este dato" data-dc-accion="quitar" data-dc-dueno="${esc(d.hoja)}" data-dc-copia="${esc(c.nombre)}" data-dc-col="${esc(col.origen)}">${Iconos.svg('x')}</button>`
+            : (col.pantalla ? '' : `<span class="dc-sistema" title="Del sistema: está en el código y no se quita desde aquí">${Iconos.svg('lock')}</span>`)}
+        </div>`).join('');
+      return `<article class="dc-tarjeta" data-dc-tarjeta="${id}">
+        <header class="dc-t-cabeza">
+          <div class="dc-t-hojas">
+            <strong>${esc(d.etiqueta.nombre)}</strong>
+            <span class="dc-flecha grande">${Iconos.svg('arrow-right')}</span>
+            <strong>${esc(c.etiqueta.nombre)}</strong>
+          </div>
+          <span class="rel-tipo ${c.tipo === 'bitacora' ? 'bitacora' : 'cache'}" title="${esc(tipoAyuda(c.tipo))}">${esc(tipoTexto(c.tipo))}</span>
+        </header>
+        <p class="dc-t-llave">Se encuentran por: <strong>${esc(nombreDato(c.claveOrigen))}</strong>
+          ${nombreDato(c.clave) !== nombreDato(c.claveOrigen) ? ' = <strong>' + esc(nombreDato(c.clave)) + '</strong>' : ''}
+          ${c.llaveForanea ? '<span class="dc-sutil">(o por ' + esc(c.llaveForanea) + ' si ya lo tiene)</span>' : ''}</p>
+        <div class="dc-datos">${filas || '<p class="dc-sutil">Esta conexión no copia datos: vigila que cada registro tenga su dueño.</p>'}
+          ${sobran ? `<button type="button" class="dc-mas" data-dc-accion="mas" data-dc-id="${id}">${todas ? 'Ver menos' : 'Ver los ' + c.columnas.length + ' datos'}</button>` : ''}</div>
+        <div class="dc-agregar" data-dc-agregar="${id}" hidden></div>
+        <div class="dc-resultado" data-dc-resultado="${id}"></div>
+        <footer class="dc-t-acciones">
+          ${c.columnas.length ? `<button type="button" class="secondary" data-dc-accion="revisar" data-dc-dueno="${esc(d.hoja)}" data-dc-copia="${esc(c.nombre)}">${Iconos.svg('search-check')} Revisar si coinciden</button>` : ''}
+          ${datos.puedeEditar ? `<button type="button" class="secondary" data-dc-accion="agregar" data-dc-dueno="${esc(d.hoja)}" data-dc-copia="${esc(c.nombre)}">${Iconos.svg('plus')} Conectar otro dato</button>` : ''}
+        </footer>
+      </article>`;
+    }
+
+    function alReves() {
+      if (!datos.alReves || !datos.alReves.length) return '';
+      return `<h4 class="dc-h4">${Iconos.svg('corner-up-left')} Se copian al revés (solo para ver)</h4>
+        <p class="dc-sutil">Un registro nuevo actualiza a su dueño. Están en el código a propósito: escriben en la hoja que manda.</p>
+        <div class="dc-tarjetas">${datos.alReves.map((a) => `<article class="dc-tarjeta dc-reves">
+          <header class="dc-t-cabeza"><div class="dc-t-hojas"><strong>${esc(a.etiquetaDesde.nombre)}</strong>
+            <span class="dc-flecha grande">${Iconos.svg('arrow-right')}</span><strong>${esc(a.etiquetaHacia.nombre)}</strong></div>
+            <span class="rel-tipo bitacora">${Iconos.svg('lock')} Del sistema</span></header>
+          <p class="dc-t-llave">${esc(a.cuando)}</p>
+          <div class="dc-datos">${a.columnas.map(([de, hacia]) => `<div class="dc-dato"><span class="dc-de">${esc(nombreDato(de))}</span>
+            <span class="dc-flecha">${Iconos.svg('arrow-right')}</span><span class="dc-a">${esc(nombreDato(hacia))}</span></div>`).join('')}</div>
+          <p class="dc-sutil">En ${esc(a.donde)}</p>
+        </article>`).join('')}</div>`;
+    }
+
+    /** Lo que cambiaría (o lo que hoy no coincide): cifras y ejemplos, con el botón para ponerlo al día */
+    function pintarVista(cont, v, opciones) {
+      const o = opciones || {};
+      const dif = v.columnas.reduce((s, c) => s + c.diferencias, 0);
+      const varios = (v.etiquetaCopia && v.etiquetaCopia.varios) || 'registros';
+      const cifras = `<p class="dc-cifras">${v.encontradas} de ${v.registros} ${esc(varios)} encuentran su registro
+        ${v.sinDueno ? ' · <span class="dc-aviso">' + v.sinDueno + ' sin dueño</span>' : ''}
+        ${v.sinLlave ? ' · ' + v.sinLlave + ' sin dato para encontrarlo' : ''}
+        ${v.duplicadasEnDueno ? ' · <span class="dc-aviso">' + v.duplicadasEnDueno + ' repetidos en la que manda</span>' : ''}</p>`;
+      const porDato = v.columnas.map((c) => `<div class="dc-dif">
+          <div><strong>${esc(nombreDato(c.copia))}</strong>: ${c.diferencias
+            ? '<span class="dc-aviso">' + c.diferencias + ' distinto' + (c.diferencias === 1 ? '' : 's') + '</span>'
+            : '<span class="dc-ok">' + Iconos.svg('check') + ' todo coincide</span>'}</div>
+          ${c.ejemplos.length ? `<ul class="dc-ejemplos">${c.ejemplos.map((e) => `<li><code>${esc(e.clave)}</code>
+            tiene <em>${esc(e.enCopia || '(vacío)')}</em> y debería tener <em>${esc(e.enDueno || '(vacío)')}</em></li>`).join('')}</ul>` : ''}
+        </div>`).join('');
+      const nota = v.tipo === 'bitacora'
+        ? '<p class="dc-sutil">Es "del día": las diferencias son historia y no se cambian.</p>' : '';
+      cont.innerHTML = `<div class="dc-vista">${cifras}${porDato}${nota}
+        <div class="dc-vista-acciones">${o.acciones || ''}
+          ${!o.acciones && dif && v.tipo !== 'bitacora' && datos.puedeEditar
+            ? `<button type="button" class="primary" data-dc-accion="alDia" data-dc-copia="${esc(o.copia)}">${Iconos.svg('refresh-cw')} Poner al día ${dif}</button>` : ''}
+          <button type="button" class="secondary" data-dc-accion="cerrarVista">Cerrar</button></div></div>`;
+    }
+
+    // ------------------------------------------------------------------ conectar otro dato (en una tarjeta)
+
+    async function abrirAgregar(dueno, copia) {
+      const id = dueno + '>' + copia;
+      const cont = raiz.querySelector(`[data-dc-agregar="${CSS.escape(id)}"]`);
+      cont.hidden = false;
+      cont.innerHTML = '<p class="dc-sutil">Cargando columnas…</p>';
+      try {
+        const [cd, cc] = await Promise.all([columnasDe(dueno), columnasDe(copia)]);
+        const opcion = (col) => `<option value="${esc(col.nombre)}"${col.secreto || col.esId ? ' disabled' : ''}>${esc(nombreDato(col.nombre))}${col.ejemplos.length ? ' · ej. ' + esc(col.ejemplos.join(', ')) : ''}${col.secreto ? ' (secreto)' : col.esId ? ' (ID)' : ''}</option>`;
+        cont.innerHTML = `<div class="dc-form">
+          <label>Dato en ${esc(cd.etiqueta.nombre)}<select data-dc-campo="dueno"><option value="">Elige…</option>${cd.columnas.map(opcion).join('')}</select></label>
+          <span class="dc-flecha grande">${Iconos.svg('arrow-right')}</span>
+          <label>Se copia a ${esc(cc.etiqueta.nombre)}<select data-dc-campo="copia"><option value="">Elige…</option>${cc.columnas.map(opcion).join('')}</select></label>
+          <div class="dc-form-acciones">
+            <button type="button" class="secondary" data-dc-accion="previaDato" data-dc-dueno="${esc(dueno)}" data-dc-copia="${esc(copia)}">${Iconos.svg('eye')} Ver qué cambiaría</button>
+            <button type="button" class="secondary" data-dc-accion="cancelarAgregar">Cancelar</button>
+          </div>
+          <div data-dc-previa></div>
+        </div>`;
+        // Al elegir el de la izquierda, si en la otra hoja hay uno que se llama igual, se propone
+        cont.querySelector('[data-dc-campo="dueno"]').addEventListener('change', (ev) => {
+          const sel = cont.querySelector('[data-dc-campo="copia"]');
+          if (!sel.value && cc.columnas.some((x) => x.nombre === ev.target.value && !x.esId && !x.secreto)) sel.value = ev.target.value;
+        });
+      } catch (err) {
+        cont.innerHTML = '<p class="empty-state">' + esc(err.message) + '</p>';
+      }
+    }
+
+    function propuestaDeTarjeta(dueno, copia, colDueno, colCopia) {
+      const d = datos.mapa.duenos.find((x) => x.hoja === dueno);
+      const c = d.copias.find((x) => x.nombre === copia);
+      return { dueno: dueno, copia: copia, llaveDueno: c.claveOrigen, llaveCopia: c.clave, tipo: c.tipo, columnas: [[colDueno, colCopia]] };
+    }
+
+    // ------------------------------------------------------------------ nueva conexión
+
+    function abrirNueva() {
+      const cont = raiz.querySelector('#dc-nueva');
+      cont.hidden = false;
+      const porFamilia = {};
+      datos.hojas.forEach((h) => { (porFamilia[h.etiqueta.familia || h.familia] = porFamilia[h.etiqueta.familia || h.familia] || []).push(h); });
+      const opciones = Object.keys(porFamilia).map((f) => `<optgroup label="${esc(f)}">${porFamilia[f]
+        .map((h) => `<option value="${esc(h.hoja)}">${esc(h.etiqueta.nombre)}</option>`).join('')}</optgroup>`).join('');
+      cont.innerHTML = `<div class="dc-tarjeta dc-nueva-card">
+        <header class="dc-t-cabeza"><strong>${Iconos.svg('git-branch-plus')} Nueva conexión</strong>
+          <button type="button" class="secondary" data-dc-accion="cerrarNueva">Cancelar</button></header>
+        <div class="dc-form">
+          <label>¿Qué hoja manda?<select data-dc-nueva="dueno"><option value="">Elige…</option>${opciones}</select></label>
+          <span class="dc-flecha grande">${Iconos.svg('arrow-right')}</span>
+          <label>¿Qué hoja copia?<select data-dc-nueva="copia"><option value="">Elige…</option>${opciones}</select></label>
+          <div class="dc-form-acciones"><button type="button" class="primary" data-dc-accion="sugerir">${Iconos.svg('sparkles')} Continuar</button></div>
+        </div>
+        <div data-dc-nueva-paso2></div>
+      </div>`;
+      cont.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    async function sugerir() {
+      const cont = raiz.querySelector('#dc-nueva');
+      const dueno = cont.querySelector('[data-dc-nueva="dueno"]').value;
+      const copia = cont.querySelector('[data-dc-nueva="copia"]').value;
+      const paso = cont.querySelector('[data-dc-nueva-paso2]');
+      if (!dueno || !copia) { Notificar.error('Elige las dos hojas'); return; }
+      if (dueno === copia) { Notificar.error('Una hoja no se conecta consigo misma'); return; }
+      paso.innerHTML = '<p class="dc-sutil">Buscando cómo se encuentran…</p>';
+      try {
+        const [s, cd, cc] = await Promise.all([
+          callServer('apiDatosConectadosSugerir', state.token, dueno, copia).then((t) => JSON.parse(t)),
+          columnasDe(dueno), columnasDe(copia),
+        ]);
+        if (!s.llaves.length) {
+          paso.innerHTML = '<p class="empty-state">No encontré una columna que tengan en común con valores que coincidan. Estas dos hojas no se pueden conectar todavía.</p>';
+          return;
+        }
+        const sugeridos = new Set(s.datos.map((x) => x[0]));
+        const opcionCopia = (sel) => cc.columnas.filter((x) => !x.secreto && !x.esId)
+          .map((x) => `<option value="${esc(x.nombre)}"${x.nombre === sel ? ' selected' : ''}>${esc(nombreDato(x.nombre))}</option>`).join('');
+        paso.innerHTML = `
+          <h5 class="dc-h5">1. ¿Cómo se encuentran?</h5>
+          <div class="dc-llaves">${s.llaves.map((l, i) => `<label class="dc-opcion"><input type="radio" name="dc-llave" value="${i}"${i ? '' : ' checked'} />
+            <span><strong>${esc(nombreDato(l.dueno))}</strong>${l.copia !== l.dueno ? ' = <strong>' + esc(nombreDato(l.copia)) + '</strong>' : ''}
+            <span class="dc-sutil">encuentra ${l.encontradas} de ${l.deCopia}${l.duplicadasEnDueno ? ' · ' + l.duplicadasEnDueno + ' repetidos' : ''}</span></span></label>`).join('')}</div>
+          <h5 class="dc-h5">2. ¿Qué datos se copian?</h5>
+          <div class="dc-elegir">${cd.columnas.filter((x) => !x.secreto && !x.esId).map((x) => `<div class="dc-elegir-fila">
+            <label class="dc-opcion"><input type="checkbox" data-dc-col="${esc(x.nombre)}"${sugeridos.has(x.nombre) ? ' checked' : ''} />
+              <span>${esc(nombreDato(x.nombre))}${x.ejemplos.length ? ' <span class="dc-sutil">ej. ' + esc(x.ejemplos.join(', ')) + '</span>' : ''}</span></label>
+            <span class="dc-flecha">${Iconos.svg('arrow-right')}</span>
+            <select data-dc-col-copia="${esc(x.nombre)}"><option value="">—</option>${opcionCopia(sugeridos.has(x.nombre) ? x.nombre : '')}</select>
+          </div>`).join('')}</div>
+          <h5 class="dc-h5">3. ¿Cómo se copia?</h5>
+          <div class="dc-llaves">
+            <label class="dc-opcion"><input type="radio" name="dc-tipo" value="cache" checked /><span><strong>Se mantiene al día</strong>
+              <span class="dc-sutil">${esc(tipoAyuda('cache'))}</span></span></label>
+            <label class="dc-opcion"><input type="radio" name="dc-tipo" value="bitacora" /><span><strong>Se guarda el del día</strong>
+              <span class="dc-sutil">${esc(tipoAyuda('bitacora'))}</span></span></label>
+          </div>
+          <div class="dc-form-acciones"><button type="button" class="primary" data-dc-accion="previaNueva">${Iconos.svg('eye')} Ver qué cambiaría</button></div>
+          <div data-dc-previa-nueva></div>`;
+        paso.dataset.llaves = JSON.stringify(s.llaves);
+        paso.dataset.dueno = dueno;
+        paso.dataset.copia = copia;
+      } catch (err) {
+        paso.innerHTML = '<p class="empty-state">' + esc(err.message) + '</p>';
+      }
+    }
+
+    function propuestaNueva() {
+      const paso = raiz.querySelector('[data-dc-nueva-paso2]');
+      const llaves = JSON.parse(paso.dataset.llaves || '[]');
+      const elegida = llaves[Number((paso.querySelector('input[name="dc-llave"]:checked') || {}).value || 0)];
+      const columnas = Array.from(paso.querySelectorAll('[data-dc-col]:checked')).map((cb) => {
+        const sel = paso.querySelector(`[data-dc-col-copia="${CSS.escape(cb.dataset.dcCol)}"]`);
+        return [cb.dataset.dcCol, sel ? sel.value : ''];
+      }).filter((x) => x[1]);
+      return {
+        dueno: paso.dataset.dueno, copia: paso.dataset.copia, llaveDueno: elegida.dueno, llaveCopia: elegida.copia,
+        tipo: (paso.querySelector('input[name="dc-tipo"]:checked') || {}).value || 'cache', columnas: columnas,
+      };
+    }
+
+    // ------------------------------------------------------------------ servidor
+
+    async function vistaPrevia(propuesta, cont, botones) {
+      cont.innerHTML = '<p class="dc-sutil">Revisando las hojas…</p>';
+      try {
+        const v = JSON.parse(await callServer('apiDatosConectadosVistaPrevia', state.token, propuesta));
+        pintarVista(cont, v, { acciones: botones, copia: propuesta.copia });
+        cont.dataset.propuesta = JSON.stringify(propuesta);
+      } catch (err) {
+        cont.innerHTML = '<p class="empty-state">' + esc(err.message) + '</p>';
+      }
+    }
+
+    async function conectar(propuesta, ponerAlDia, boton) {
+      boton.disabled = true;
+      try {
+        const r = JSON.parse(await callServer('apiDatosConectadosConectar', state.token, propuesta, ponerAlDia));
+        Notificar.exito(r.conectados
+          ? r.conectados + ' dato' + (r.conectados === 1 ? '' : 's') + ' conectado' + (r.conectados === 1 ? '' : 's') +
+            (r.alDia ? ' · ' + (r.alDia.diferencias || 0) + ' puesto(s) al día' : '')
+          : (r.mensaje || 'Sin cambios'));
+        await recargar();
+      } catch (err) {
+        Notificar.error(err.message);
+        boton.disabled = false;
+      }
+    }
+
+    async function recargar() {
+      datos = JSON.parse(await callServer('apiDatosConectados', state.token));
+      pintar();
+    }
+
+    // ------------------------------------------------------------------ eventos
+
+    async function alClic(ev) {
+      const b = ev.target.closest('[data-dc-accion], [data-dc-familia]');
+      if (!b) return;
+      if (b.dataset.dcFamilia !== undefined) { filtroFamilia = b.dataset.dcFamilia; pintar(); return; }
+      const accion = b.dataset.dcAccion;
+      const tarjetaEl = b.closest('[data-dc-tarjeta]');
+      const resultado = tarjetaEl ? tarjetaEl.querySelector('[data-dc-resultado]') : null;
+      if (accion === 'mas') {
+        const k = b.dataset.dcId;
+        if (abiertas.has(k)) abiertas.delete(k); else abiertas.add(k);
+        pintar();
+      } else if (accion === 'nueva') abrirNueva();
+      else if (accion === 'cerrarNueva') { raiz.querySelector('#dc-nueva').hidden = true; raiz.querySelector('#dc-nueva').innerHTML = ''; }
+      else if (accion === 'sugerir') sugerir();
+      else if (accion === 'agregar') abrirAgregar(b.dataset.dcDueno, b.dataset.dcCopia);
+      else if (accion === 'cancelarAgregar') { const c = b.closest('[data-dc-agregar]'); c.hidden = true; c.innerHTML = ''; }
+      else if (accion === 'cerrarVista') { const c = b.closest('.dc-vista').parentElement; c.innerHTML = ''; }
+      else if (accion === 'revisar') {
+        const d = datos.mapa.duenos.find((x) => x.hoja === b.dataset.dcDueno);
+        const c = d.copias.find((x) => x.nombre === b.dataset.dcCopia);
+        const p = { dueno: d.hoja, copia: c.nombre, llaveDueno: c.claveOrigen, llaveCopia: c.clave, tipo: c.tipo,
+          columnas: c.columnas.map((x) => [x.origen, x.destino]) };
+        resultado.innerHTML = '<p class="dc-sutil">Revisando las hojas…</p>';
+        try {
+          const v = JSON.parse(await callServer('apiDatosConectadosVistaPrevia', state.token, p));
+          pintarVista(resultado, v, { copia: c.nombre });
+        } catch (err) { resultado.innerHTML = '<p class="empty-state">' + esc(err.message) + '</p>'; }
+      } else if (accion === 'alDia') {
+        const ok = await Confirmar.pedir({ titulo: 'Poner al día', mensaje: 'Se copia el dato de la hoja que manda a los registros que hoy no coinciden. Queda en el registro de cambios.', textoConfirmar: 'Poner al día' });
+        if (!ok) return;
+        b.disabled = true;
+        try {
+          const r = JSON.parse(await callServer('apiDatosConectadosPonerAlDia', state.token, b.dataset.dcCopia));
+          Notificar.exito('Listo' + (r && r.diferencias !== undefined ? ': ' + r.diferencias + ' puesto(s) al día' : ''));
+          b.closest('.dc-vista').parentElement.innerHTML = '';
+        } catch (err) { Notificar.error(err.message); b.disabled = false; }
+      } else if (accion === 'quitar') {
+        const ok = await Confirmar.pedir({ titulo: 'Desconectar dato', mensaje: 'Deja de copiarse ' + nombreDato(b.dataset.dcCol) + ' a ' + etiquetaHoja(b.dataset.dcCopia) + '. Lo que ya se copió se queda como está.', textoConfirmar: 'Desconectar', peligro: true });
+        if (!ok) return;
+        try {
+          await callServer('apiDatosConectadosQuitar', state.token, b.dataset.dcDueno, b.dataset.dcCopia, b.dataset.dcCol);
+          Notificar.exito('Dato desconectado');
+          await recargar();
+        } catch (err) { Notificar.error(err.message); }
+      } else if (accion === 'previaDato') {
+        const cont = b.closest('[data-dc-agregar]');
+        const colD = cont.querySelector('[data-dc-campo="dueno"]').value;
+        const colC = cont.querySelector('[data-dc-campo="copia"]').value;
+        if (!colD || !colC) { Notificar.error('Elige el dato y a dónde se copia'); return; }
+        const p = propuestaDeTarjeta(b.dataset.dcDueno, b.dataset.dcCopia, colD, colC);
+        await vistaPrevia(p, cont.querySelector('[data-dc-previa]'), botonesConectar(p.tipo));
+      } else if (accion === 'previaNueva') {
+        const p = propuestaNueva();
+        if (!p.columnas.length) { Notificar.error('Marca al menos un dato y a qué columna se copia'); return; }
+        await vistaPrevia(p, raiz.querySelector('[data-dc-previa-nueva]'), botonesConectar(p.tipo));
+      } else if (accion === 'conectar' || accion === 'conectarAlDia') {
+        const cont = b.closest('[data-dc-previa], [data-dc-previa-nueva]');
+        conectar(JSON.parse(cont.dataset.propuesta), accion === 'conectarAlDia', b);
+      }
+    }
+
+    function botonesConectar(tipo) {
+      return (tipo !== 'bitacora'
+        ? `<button type="button" class="primary" data-dc-accion="conectarAlDia">${Iconos.svg('check')} Conectar y poner al día</button>` : '') +
+        `<button type="button" class="${tipo === 'bitacora' ? 'primary' : 'secondary'}" data-dc-accion="conectar">${Iconos.svg('link')} Conectar${tipo !== 'bitacora' ? ' sin cambiar lo de hoy' : ''}</button>`;
+    }
+
+    async function iniciar(contenedor) {
+      raiz = contenedor;
+      raiz.innerHTML = '<p class="empty-state">Cargando conexiones…</p>';
+      raiz.addEventListener('click', alClic);
+      try {
+        await recargar();
+      } catch (err) {
+        raiz.innerHTML = '<p class="empty-state">' + esc(err.message) + '</p>';
+      }
+    }
+
+    return { iniciar };
+  })();
+</script>

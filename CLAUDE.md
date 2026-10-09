@@ -134,6 +134,12 @@ ganchos: `ArqueosService.gs` y `VehiculosService.gs`. La guía completa está al
   `DRIVE_FOLDER_ID_NUCOS_VEHICULOS` (Entornos.gs); un DEV sin esa clave usa una "NUCOS VEHICULOS" de pruebas en su raíz.
   No guardes un documento del vehículo en una carpeta suelta de la raíz (contrato).
 
+- **Copiar un dato de una hoja a otra (y mantenerlo al día) → Datos conectados**, no código a mano en el servicio: el
+  `MAPA` de `Relaciones.gs` o, desde la pantalla, `DatosConectados.gs` (docs/relaciones.md, "Conectar datos desde la
+  pantalla"). `HojaServicio.actualizar` ya propaga (`Relaciones.alGuardar`) y el activador de `AvisoDeCambios.gs` copia lo
+  editado a mano. Solo lo que va AL REVÉS (un registro nuevo que actualiza a su dueño) se escribe en el servicio, y se
+  anota en `DatosConectados.AL_REVES` para que la pantalla lo muestre.
+
 ## Permisos entre módulos (lo de un módulo dentro de otro)
 
 El modelo, en capas (como Salesforce u Odoo: objeto → campo → registro):
