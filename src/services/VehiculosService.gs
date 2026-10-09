@@ -24,13 +24,20 @@ const VehiculosService = (function () {
   // Campos tipo archivo (ver buscarPorFolio): en datos migrados de AppSheet
   // guardan una ruta relativa, no una URL — hay que resolverlos antes de
   // mandarlos al cliente.
-  const CAMPOS_ARCHIVO = ['RESPONSIVA', 'DOCUMENTO BAJA', 'POLIZA SEGURO', 'ARCHIVO TENENCIA'];
+  const CAMPOS_ARCHIVO = ['RESPONSIVA', 'DOCUMENTO BAJA', 'POLIZA SEGURO', 'ARCHIVO TENENCIA', 'ADJUNTAR FACTURA',
+    'TARJETA CIRCULACION', 'ALTA PLACAS'];
+  // Columnas de documento que la hoja vieja no traía (9-oct-2026): si faltan, se agregan al final la primera vez que
+  // se sube uno (asegurarColumnasDocumento_). ADJUNTAR FACTURA ya existía (como texto, vacía en los 648).
+  const COLUMNAS_DOCUMENTO_NUEVAS = ['TARJETA CIRCULACION', 'ALTA PLACAS'];
   // Etiqueta corta para el nombre de archivo en Drive, por columna ("<ID>_<ETIQUETA>_<fecha>.ext")
   const ETIQUETA_ARCHIVO = {
     'RESPONSIVA': 'RESPONSIVA',
     'DOCUMENTO BAJA': 'DOCUMENTO_BAJA',
     'POLIZA SEGURO': 'POLIZA_SEGURO',
     'ARCHIVO TENENCIA': 'TENENCIA',
+    'ADJUNTAR FACTURA': 'FACTURA',
+    'TARJETA CIRCULACION': 'TARJETA_CIRCULACION',
+    'ALTA PLACAS': 'ALTA_PLACAS',
   };
 
   function ssId() {
@@ -55,6 +62,7 @@ const VehiculosService = (function () {
     archivos: ETIQUETA_ARCHIVO,
     candadoAlCrear: true,
     alCrear: (fila, ctx) => {
+      asegurarColumnasDocumento_(fila);
       // Las columnas que manda otra hoja (SERIE SENSOR y SENSOR, que manda Instalación de
       // Sensores) no se capturan aquí: un vehículo nuevo nace "sin sensor".
       const ajenas = Relaciones.deOtraHoja(SHEET_VEHICULOS);
@@ -71,6 +79,7 @@ const VehiculosService = (function () {
     // Instalación de Sensores (en la pantalla: DE_SENSORES en CAMPOS_VEHICULO, app.html)
     deOtroModulo: { 'instalacion-sensores': ['ACCESORIOS', 'ADITAMENTOS', 'ACTIVADOR', '$ Costo del Sensor', 'LLAVE DUPLICADA'] },
     alActualizar: (cambios, ctx) => {
+      asegurarColumnasDocumento_(cambios);
       // Las que manda otra hoja: editarlas aquí se perdería en la siguiente sincronización.
       // Se cambian desde su dueña (SERIE SENSOR y SENSOR: el módulo de Sensores).
       Relaciones.deOtraHoja(SHEET_VEHICULOS).columnas.forEach((c) => { delete cambios[c]; });
@@ -368,7 +377,25 @@ const VehiculosService = (function () {
   // Qué documento del expediente es cada columna de archivo (ExpedienteNuco: carpeta del NUCO)
   const DOCUMENTO_DE = {
     'RESPONSIVA': 'RESPONSIVA', 'DOCUMENTO BAJA': 'ALTA', 'POLIZA SEGURO': 'SEGURO', 'ARCHIVO TENENCIA': 'TENENCIA',
+    'ADJUNTAR FACTURA': 'FACTURA', 'TARJETA CIRCULACION': 'TARJETA', 'ALTA PLACAS': 'ALTA',
   };
+
+  /**
+   * SheetUtils escribe solo en las columnas que la hoja ya tiene: sin esto, la liga de la tarjeta o del alta se perdía
+   * (el archivo sí llegaba al NUCO). Agrega al final de VEHICULOS las de COLUMNAS_DOCUMENTO_NUEVAS que traiga lo que se
+   * va a guardar y la hoja no tenga. Solo encabezados: los renglones de antes quedan vacíos en esas columnas.
+   */
+  function asegurarColumnasDocumento_(datos) {
+    const quiere = COLUMNAS_DOCUMENTO_NUEVAS.filter((c) => datos && datos[c]);
+    if (!quiere.length) return;
+    const hoja = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
+    const encabezados = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0];
+    const indices = SheetUtils.indiceDeColumnas(encabezados, quiere);
+    const faltan = quiere.filter((c) => indices[c] === -1);
+    if (!faltan.length) return;
+    hoja.getRange(1, encabezados.length + 1, 1, faltan.length).setValues([faltan]);
+    CacheHojas.tocarHoja(hoja);
+  }
 
   /**
    * Después de guardar: cada archivo nuevo de la ficha (la liga a Drive que dejó subirArchivo) pasa al expediente de su
