@@ -6,11 +6,14 @@ const path = require('path');
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 
-// Vínculos (usuario, 8-oct): personas, equipos y líneas en un espacio; arrastrar abre la acción que ya existe
+// Vínculos (usuario, 8-oct): el grafo con todo, el cajón y el lienzo donde soltar abre la acción que ya existe
 
 const fuente = read('src/html/js/lineas-vinculos.html').replace(/^\s*<script>/, '').replace(/<\/script>\s*$/, '');
-const cargar = (contexto) => new Function('window', 'document', 'getComputedStyle', fuente + '; return LineasVinculos;')(
-  contexto ? contexto.window : {}, contexto ? contexto.window.document : {}, contexto ? contexto.window.getComputedStyle : null);
+const cargar = (dom) => {
+  const w = dom ? dom.window : {};
+  return new Function('window', 'document', 'getComputedStyle', 'localStorage', 'requestAnimationFrame', 'performance', fuente + '; return LineasVinculos;')(
+    w, w.document || {}, w.getComputedStyle || null, w.localStorage || null, w.requestAnimationFrame || ((f) => setTimeout(f, 16)), w.performance || performance);
+};
 const V = cargar();
 
 // NUCO 0012 con Ana (y su línea en USO); 0013 en resguardo con su línea DISPONIBLE; 0020 para venta; 0030 vendido;
@@ -76,7 +79,7 @@ test('agrupar: la búsqueda encuentra personas, NUCO, números anteriores e IMEI
   assert.deepEqual(Object.entries(r.zonas).filter(([, gs]) => gs.length).map(([z]) => z), ['uso']);
 });
 
-test('alSoltar: cada movimiento abre la acción de siempre con lo que se soltó ya elegido', () => {
+test('alSoltar: en el lienzo cada movimiento abre la acción de siempre con lo que se soltó ya elegido', () => {
   const ix = indice();
   const e = (id) => ix.equipos.filter((x) => x.id === id)[0];
   const l = (id) => ix.lineas.filter((x) => x.id === id)[0];
@@ -94,57 +97,78 @@ test('alSoltar: cada movimiento abre la acción de siempre con lo que se soltó 
   const otro = V.alSoltar(deEquipo, { tipo: 'equipo', fila: sinLinea, linea: null });
   assert.deepEqual([otro.modo, otro.fila.id, otro.pre.nuco], ['CAMBIAR_EQUIPO', 'L2', '0012']);
   assert.match(V.alSoltar(deEquipo, { tipo: 'equipo', fila: e('E12'), linea: l('L1') }).aviso, /ya tiene línea/);
-  // Sacarla al espacio o las tijeras: desvincular desde el equipo
-  const fuera = V.alSoltar(deEquipo, { tipo: 'zona', zona: 'uso' });
-  assert.deepEqual([fuera.modo, fuera.fila.id], ['DESVINCULAR', 'E13']);
+  // Soltar en el lienzo vacío solo mueve (desvincular es con las tijeras)
+  assert.equal(V.alSoltar(deEquipo, null), null);
   // Solo líneas DISPONIBLE y equipos en USO o RESGUARDO, como LineasAcciones.vincular
   assert.match(V.alSoltar({ tipo: 'linea', fila: l('L4'), equipo: null }, { tipo: 'equipo', fila: sinLinea, linea: null }).aviso, /DISPONIBLE/);
   assert.match(V.alSoltar(suelta, { tipo: 'equipo', fila: e('E20'), linea: null }).aviso, /USO o RESGUARDO/);
-  // Cancelación, resguardo, venta y reasignar
-  assert.deepEqual(V.alSoltar(suelta, { tipo: 'zona', zona: 'cancelacion' }), { tipo: 'cancelacion', fila: l('L3') });
-  assert.equal(V.alSoltar({ tipo: 'linea', fila: l('L5') }, { tipo: 'zona', zona: 'cancelacion' }), null);
-  const equipo = { tipo: 'equipo', fila: e('E12'), persona: 'p:501' };
-  assert.deepEqual(V.alSoltar(equipo, { tipo: 'zona', zona: 'resguardo' }), { tipo: 'resguardo', fila: e('E12'), estatus: 'RESGUARDO' });
-  assert.deepEqual(V.alSoltar(equipo, { tipo: 'zona', zona: 'venta' }), { tipo: 'resguardo', fila: e('E12'), estatus: 'PARA VENTA' });
-  assert.match(V.alSoltar(equipo, { tipo: 'zona', zona: 'cancelacion' }).aviso, /arrastra la línea/);
+  // Cajas: cancelación, resguardo, venta; reasignar sobre una persona
+  assert.deepEqual(V.alSoltar(suelta, { tipo: 'caja', caja: 'cancelacion' }), { tipo: 'cancelacion', fila: l('L3') });
+  assert.match(V.alSoltar(suelta, { tipo: 'caja', caja: 'resguardo' }).aviso, /con su equipo/);
+  assert.equal(V.alSoltar({ tipo: 'linea', fila: l('L5') }, { tipo: 'caja', caja: 'cancelacion' }), null);
+  const equipo = { tipo: 'equipo', fila: e('E12'), dueno: 'p:501' };
+  assert.deepEqual(V.alSoltar(equipo, { tipo: 'caja', caja: 'resguardo' }), { tipo: 'resguardo', fila: e('E12'), estatus: 'RESGUARDO' });
+  assert.deepEqual(V.alSoltar(equipo, { tipo: 'caja', caja: 'venta' }), { tipo: 'resguardo', fila: e('E12'), estatus: 'PARA VENTA' });
+  assert.match(V.alSoltar(equipo, { tipo: 'caja', caja: 'cancelacion' }).aviso, /arrastra la línea/);
   assert.equal(V.alSoltar(equipo, { tipo: 'persona', persona: { clave: 'p:501', nombre: 'ANA RUIZ' } }), null);
-  const guardado = { tipo: 'equipo', fila: e('E13'), persona: null };
-  assert.equal(V.alSoltar(guardado, { tipo: 'persona', persona: { clave: 'p:501', nombre: 'ANA RUIZ' } }).tipo, 'reasignar');
+  const guardado = { tipo: 'equipo', fila: e('E13'), dueno: null };
   assert.equal(V.describir(V.alSoltar(guardado, { tipo: 'persona', persona: { clave: 'p:501', nombre: 'ANA RUIZ' } })), 'Reasignar · NUCO 0013 → ANA RUIZ');
-  assert.deepEqual(V.alSoltar(guardado, { tipo: 'zona', zona: 'uso' }), { tipo: 'reasignar', fila: e('E13'), persona: null });
+  assert.equal(V.alSoltar(guardado, { tipo: 'caja', caja: 'resguardo' }), null);
 });
 
-test('montar: pinta las zonas con íconos, la vista rápida al dar clic y las tijeras desvinculan', () => {
+test('red y cajaDe: cada nodo con su clave y sus vínculos; en el lienzo vive en la caja de su estatus', () => {
+  const r = V.red(indice());
+  assert.deepEqual(Object.keys(r.nodos).sort(), ['e:E12', 'e:E13', 'e:E20', 'e:E30', 'l:L1', 'l:L2', 'l:L3', 'l:L4', 'l:L5', 'l:L6', 'p:501']);
+  assert.deepEqual(r.enlaces.map((x) => x.join('-')).sort(), ['e:E12-l:L1-l', 'e:E13-l:L2-l', 'p:501-e:E12-p', 'p:501-l:L4-p']);
+  assert.equal(r.porRef['n:4421090805'], 'l:L2');
+  assert.equal(r.porRef['u:0012'], 'e:E12');
+  assert.deepEqual(['e:E12', 'e:E13', 'l:L2', 'e:E20', 'l:L5', 'l:L3', 'p:501'].map((k) => V.cajaDe(r.nodos[k])),
+    [null, 'resguardo', 'resguardo', 'venta', 'cancelacion', null, null]);
+});
+
+test('montar: el grafo con las capas, al cajón, el lienzo y lo que se recuerda en el navegador', () => {
   const { JSDOM } = require('jsdom');
-  const dom = new JSDOM('<!doctype html><body><div id="v"></div></body>');
+  const dom = new JSDOM('<!doctype html><body><div id="v" class="vn"></div></body>', { url: 'https://vinculos.test/', pretendToBeVisual: true });
   const W = cargar(dom);
-  const vistos = [];
-  const soltados = [];
-  const cont = dom.window.document.getElementById('v');
+  const doc = dom.window.document;
   const esc = (v) => String(v === null || v === undefined ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const espacio = W.montar(cont, {
-    indice: indice, puedeOperar: () => true, icono: (n) => '<i data-i="' + n + '"></i>', esc: esc,
+  const cfg = { indice: indice, puedeOperar: () => true, icono: (n) => '<i data-i="' + n + '"></i>', esc: esc,
     color: (s) => ({ USO: 'verde', DISPONIBLE: 'azul', RESGUARDO: 'azul' }[s] || ''),
-    alVer: (tipo, fila) => vistos.push(tipo + ':' + fila.id), alAbrir: () => {}, alSoltar: (a) => soltados.push(a), alAvisar: () => {},
-  });
-  espacio.pintar();
-  const uso = cont.querySelector('[data-vn-zona="uso"]');
-  assert.ok(uso.querySelector('.vn-con-persona .vn-persona'));
-  assert.equal(uso.querySelector('[data-vn-ver="e:E12"]').className, 'vn-nodo vn-equipo vn-verde');
-  assert.ok(uso.querySelector('[data-vn-ver="e:E12"] [data-i="smartphone"]'));
-  assert.ok(cont.querySelector('[data-vn-zona="venta"] [data-vn-ver="e:E20"] [data-i="router"]'));
-  assert.ok(cont.querySelector('[data-vn-zona="resguardo"] [data-vn-ver="l:L2"][data-vn-arrastre]'));
-  // La línea en cancelación no se arrastra
-  assert.equal(cont.querySelector('[data-vn-zona="cancelacion"] [data-vn-ver="l:L5"]').hasAttribute('data-vn-arrastre'), false);
-  cont.querySelector('[data-vn-ver="l:L3"]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-  assert.deepEqual(vistos, ['linea:L3']);
-  cont.querySelector('[data-vn-cortar="E12"]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-  assert.deepEqual(soltados.map((a) => [a.modo, a.fila.id, a.linea.id]), [['DESVINCULAR', 'E12', 'L1']]);
-  // Sin permiso de operar: ni tijeras ni arrastre
-  const sinPermiso = W.montar(cont, { indice: indice, puedeOperar: () => false, icono: () => '', esc: esc, color: () => '',
-    alVer: () => {}, alAbrir: () => {}, alSoltar: () => {}, alAvisar: () => {} });
-  sinPermiso.pintar();
-  assert.equal(cont.querySelectorAll('[data-vn-cortar], [data-vn-arrastre]').length, 0);
+    alVer: () => {}, alAbrir: () => {}, alSoltar: () => {}, alAvisar: () => {} };
+  const cont = doc.getElementById('v');
+  W.montar(cont, cfg).pintar();
+  const claves = (raiz, tipo) => [...raiz.querySelectorAll('[data-vn-espacio="' + tipo + '"] [data-vn-k]')].map((n) => n.dataset.vnK).sort();
+  // Personas y sueltos prendidos; el resguardo se prende aparte
+  assert.deepEqual(claves(cont, 'grafo'), ['e:E12', 'l:L1', 'l:L3', 'l:L4', 'p:501']);
+  cont.querySelector('[data-vn-capa="resguardo"]').click();
+  assert.deepEqual(claves(cont, 'grafo'), ['e:E12', 'e:E13', 'l:L1', 'l:L2', 'l:L3', 'l:L4', 'p:501']);
+  // Un clic en un nodo elige su relación; «Al cajón» la guarda
+  const nodo = cont.querySelector('[data-vn-k="e:E12"]');
+  nodo.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, clientX: 5, clientY: 5 }));
+  nodo.dispatchEvent(new dom.window.MouseEvent('pointerup', { bubbles: true, clientX: 5, clientY: 5 }));
+  assert.equal(cont.querySelector('[data-vn-sel]').hidden, false);
+  cont.querySelector('[data-vn-sel-cajon]').click();
+  assert.match(cont.querySelector('[data-vn-cajon-lista]').textContent, /ANA RUIZ · NUCO 0012 · 4424754517 · 4425550190/);
+  // El lienzo empieza en blanco y del cajón se saca arrastrando
+  cont.querySelector('[data-vn-modo="lienzo"]').click();
+  assert.deepEqual(claves(cont, 'lienzo'), []);
+  assert.ok(cont.querySelector('[data-vn-cajon-lista] .vn-ficha-saca'));
+  cont.remove();
+
+  // Lo guardado en el navegador vuelve: el lienzo con sus nodos y su caja (la clave vieja se encuentra por el número)
+  dom.window.localStorage.setItem('lineas.vinculos.v1', JSON.stringify({ modo: 'lienzo', cajon: [['l:L3']],
+    recuerdo: { 'l:VIEJA': { ref: 'n:4421090805', tipo: 'linea' } },
+    lienzo: { nodos: [['e:E12', 0, 0, 1], ['l:L1', 0, 60, 0], ['l:VIEJA', 90, 0, 1]], cajas: [['resguardo', 200, 0, 260, 220]], vista: [0, 0, 1] } }));
+  const otro = doc.createElement('div');
+  otro.className = 'vn';
+  doc.body.appendChild(otro);
+  W.montar(otro, cfg).pintar();
+  assert.deepEqual(claves(otro, 'lienzo'), ['e:E12', 'l:L1', 'l:L2']);
+  assert.ok(otro.querySelector('[data-vn-caja="resguardo"]'));
+  assert.equal(otro.querySelector('[data-vn-poner="resguardo"]').hidden, true);
+  assert.match(otro.querySelector('[data-vn-cajon-lista]').textContent, /9990000001/);
+  otro.remove();
+  dom.window.close();
 });
 
 test('Líneas Telefónicas: Vínculos es un modo de la lista y abre las ventanas de siempre', () => {

@@ -995,99 +995,124 @@
   .ln-af-sin-etiqueta .ln-af-campo > label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
   /* ---------------- Vínculos (html/js/lineas-vinculos.html, usuario 8-oct) ----------------
-     Personas, equipos y líneas en un espacio; los colores son los de los chips de estatus. */
+     Grafo y lienzo con el cajón al lado; los colores son los de los chips de estatus. */
   #ln-listado.ln-modo-vinculos #ln-tabs, #ln-listado.ln-modo-vinculos .tab-panel { display: none !important; }
   .ln-segmentado button + button:not(:last-child) { margin-left: -1px; }
-  .vn[hidden] { display: none; }
-  .vn-barra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-bottom: 10px; }
-  .vn-buscar { position: relative; display: flex; align-items: center; flex: 1 1 240px; max-width: 380px; margin: 0; }
+  .vn[hidden], .vn [hidden], .vn .vn-oculto { display: none !important; }
+  .vn { --vn-quieto: 0; }
+  @media (prefers-reduced-motion: reduce) { .vn { --vn-quieto: 1; } }
+  .vn-barra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-bottom: 8px; }
+  .vn-barra .ln-segmentado { margin-bottom: 0; }
+  .vn-barra-2 { min-height: 32px; }
+  .vn-buscar { position: relative; display: flex; align-items: center; flex: 1 1 240px; max-width: 420px; margin: 0; }
   .vn-buscar .ln-icon { position: absolute; left: 10px; color: var(--color-text-muted); pointer-events: none; }
   .vn-buscar input { width: 100%; padding-left: 32px; }
   .vn-barra select { flex: 0 1 190px; min-width: 0; }
-  .vn-leyenda { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-left: auto; font-size: 11.5px; color: var(--color-text-muted); }
-  .vn-punto { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid currentColor; margin-left: 6px; }
-  .vn-punto.vn-verde { color: var(--ln-verde-tx); background: var(--ln-verde-bg); }
-  .vn-punto.vn-azul { color: var(--ln-azul-tx); background: var(--ln-azul-bg); }
-  .vn-punto.vn-ambar { color: var(--ln-ambar-tx); background: var(--ln-ambar-bg); }
-  .vn-punto.vn-rojo { color: var(--ln-rojo-tx); background: var(--ln-rojo-bg); }
-  .vn-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .vn-capas, .vn-cajas { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .vn .vn-capa { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px; border-radius: 999px; font-size: 12px;
+    background: transparent; color: var(--color-text-muted); border: 1px dashed var(--color-border); }
+  .vn .vn-capa:hover { background: var(--color-primary-soft); }
+  .vn .vn-capa.activo { background: var(--color-primary-soft); color: var(--color-primary); border: 1px solid var(--color-primary); }
+  .vn-cuenta { font-size: 12px; color: var(--color-text-muted); font-variant-numeric: tabular-nums; margin-left: auto; }
+  .vn .vn-barra-2 button { display: inline-flex; align-items: center; gap: 6px; height: 30px; min-height: 0; padding: 0 10px; font-size: 12.5px; }
+  .vn .vn-barra-2 .vn-icono, .vn .vn-icono { width: 30px; padding: 0; justify-content: center; }
 
-  .vn-espacio { display: grid; grid-template-columns: minmax(0, 1fr) minmax(250px, 30%); gap: 12px; align-items: start; }
-  .vn-zona { border: 1.5px dashed var(--color-border); border-radius: 12px; padding: 10px 12px 12px; background: var(--color-surface);
-    transition: border-color .15s, background-color .15s; }
-  .vn-zona-uso { grid-row: span 3; min-height: 440px; }
-  .vn-zona-cabeza { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--color-text-muted); margin-bottom: 4px; }
-  .vn-zona-num { margin-left: auto; font-weight: 500; font-variant-numeric: tabular-nums; }
-  .vn-zona-cuerpo { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: center; gap: 4px 8px; }
-  .vn-zona-pie { text-align: center; margin-top: 6px; }
-  .vn-zona-pie:empty { display: none; }
-  .vn-vacio { color: var(--color-text-muted); font-size: 12px; margin: 22px 0; }
-  .vn-zona.vn-blanco { border-color: var(--color-primary); background: var(--color-primary-soft); }
+  .vn-cuerpo { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 10px; height: clamp(460px, calc(100vh - 330px), 1100px); }
+  .vn-cajon { display: flex; flex-direction: column; gap: 6px; min-height: 0; padding: 10px; border: 1.5px dashed var(--color-border);
+    border-radius: 12px; background: var(--color-surface); transition: border-color .15s, background-color .15s; }
+  .vn-cajon > header { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--color-text-muted); }
+  .vn-cajon > header span { margin-left: auto; font-variant-numeric: tabular-nums; }
+  .vn-cajon-lista { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
+  .vn-cajon-vacio { margin: 24px 4px; text-align: center; font-size: 12px; color: var(--color-text-muted); }
+  .vn-cajon > button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+  .vn-cajon.vn-blanco, .vn-vista.vn-blanco { border-color: var(--color-primary); background: var(--color-primary-soft); }
+  .vn-ficha { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid var(--color-border); border-radius: 8px;
+    background: var(--color-bg); font-size: 12px; user-select: none; -webkit-user-select: none; }
+  .vn-ficha > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .vn-ficha-saca { cursor: grab; touch-action: none; }
+  .vn .vn-ficha-quitar { width: 20px; height: 20px; min-height: 0; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+    background: transparent; color: var(--color-text-muted); border: none; }
+  .vn .vn-ficha-quitar:hover { background: var(--ln-rojo-bg); color: var(--ln-rojo-tx); }
+  .vn-ficha-fantasma { position: fixed; left: 0; top: 0; z-index: 10000; pointer-events: none; max-width: 240px; box-shadow: 0 6px 18px rgba(0, 0, 0, .18); }
+  .vn-ficha-fantasma .vn-ficha-quitar { display: none; }
 
-  /* Cada grupo flota despacio, cada uno a su ritmo */
-  .vn-grupo { display: flex; flex-direction: column; align-items: center; padding: 6px 2px;
-    animation: vn-flotar var(--vn-duracion, 6s) ease-in-out var(--vn-retraso, 0s) infinite; }
-  @keyframes vn-flotar { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
-  @media (prefers-reduced-motion: reduce) { .vn-grupo { animation: none; } }
-  .vn-arrastrando .vn-grupo { animation-play-state: paused; }
+  /* La vista: el mundo se acerca, se aleja y se mueve; todo lo de adentro va en coordenadas del mundo */
+  .vn-vista { position: relative; overflow: hidden; border: 1.5px solid var(--color-border); border-radius: 12px; touch-action: none;
+    background-color: var(--color-surface); background-image: radial-gradient(var(--color-border) 1px, transparent 1px); background-size: 22px 22px;
+    cursor: grab; user-select: none; -webkit-user-select: none; transition: border-color .15s; }
+  .vn-vista:active { cursor: grabbing; }
+  .vn-espacio, .vn-mundo { position: absolute; left: 0; top: 0; }
+  .vn-espacio { inset: 0; }
+  .vn-mundo { transform-origin: 0 0; }
+  .vn-svg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+  .vn-enlace { stroke: var(--ln-neutro-tx); stroke-width: 1.6; opacity: .55; }
+  .vn-enlace-p { stroke-width: 1; stroke-dasharray: 3 4; }
+  .vn-enlace.vn-vivo { stroke: var(--ln-verde-tx); opacity: .8; }
+  .vn-enlace.vn-tenue { opacity: .12; }
+  .vn-vacio { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0; padding: 0 30px;
+    text-align: center; font-size: 13px; color: var(--color-text-muted); pointer-events: none; }
 
-  /* Persona → equipos: tallo punteado y una rama a cada equipo (cada par mide 84px) */
-  .vn-hijos { display: flex; position: relative; padding-top: 12px; }
-  .vn-hijos::before { content: ''; position: absolute; top: 0; left: 42px; right: 42px; border-top: 1px dashed var(--color-text-muted); }
-  .vn-hijos::after { content: ''; position: absolute; top: -8px; left: 50%; height: 8px; border-left: 1px dashed var(--color-text-muted); }
-  .vn-par { position: relative; width: 84px; display: flex; flex-direction: column; align-items: center; }
-  .vn-con-persona .vn-par::before { content: ''; position: absolute; top: -12px; left: 50%; height: 12px; border-left: 1px dashed var(--color-text-muted); }
-
-  .vn-nodo { display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; outline: none;
-    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
-  .vn-nodo[data-vn-arrastre] { cursor: grab; }
-  .vn-ico { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  .vn-n { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; z-index: 2;
+    transition: opacity .2s; }
+  .vn-ico { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
     border: 1.5px solid currentColor; background: var(--ln-neutro-bg); color: var(--ln-neutro-tx); transition: box-shadow .15s; }
-  .vn-ico .ln-icon { width: 20px; height: 20px; }
-  .vn-linea .vn-ico { width: 34px; height: 34px; border-radius: 10px; }
-  .vn-linea .vn-ico .ln-icon { width: 17px; height: 17px; }
+  .vn-ico .ln-icon { width: 18px; height: 18px; }
+  .vn-linea .vn-ico { width: 30px; height: 30px; border-radius: 9px; }
+  .vn-linea .vn-ico .ln-icon { width: 15px; height: 15px; }
+  .vn-persona .vn-ico { width: 30px; height: 30px; background: var(--color-surface); color: var(--color-text); border-width: 1px; }
   .vn-verde .vn-ico { background: var(--ln-verde-bg); color: var(--ln-verde-tx); }
   .vn-azul .vn-ico { background: var(--ln-azul-bg); color: var(--ln-azul-tx); }
   .vn-ambar .vn-ico { background: var(--ln-ambar-bg); color: var(--ln-ambar-tx); }
   .vn-rojo .vn-ico { background: var(--ln-rojo-bg); color: var(--ln-rojo-tx); }
-  .vn-etq { max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--color-text);
-    font-variant-numeric: tabular-nums; }
-  .vn-persona { cursor: default; margin-bottom: 8px; }
-  .vn-persona .vn-ico { width: 28px; height: 28px; border: none; background: none; color: var(--color-text); }
-  .vn-persona .vn-etq { max-width: 150px; white-space: normal; text-align: center; font-weight: 600; line-height: 1.25;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-  .vn-nodo:focus-visible .vn-ico { box-shadow: 0 0 0 3px var(--color-primary-soft); }
-  .vn-nodo.vn-blanco .vn-ico { box-shadow: 0 0 0 3px var(--color-primary); }
-  .vn-origen { opacity: .3; }
+  .vn-etq { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--color-text);
+    font-variant-numeric: tabular-nums; pointer-events: none; }
+  .vn-persona .vn-etq { font-weight: 600; }
+  /* De lejos, como en Obsidian: sin nombres, salvo lo iluminado o bajo el mouse */
+  .vn-lejos .vn-etq { opacity: 0; }
+  .vn-lejos .vn-n:hover .vn-etq, .vn-lejos .vn-luz .vn-etq { opacity: 1; }
+  .vn-n:hover { z-index: 4; }
+  .vn-n:hover .vn-ico, .vn-luz .vn-ico { box-shadow: 0 0 0 3px var(--color-primary-soft); }
+  .vn-tenue { opacity: .18; }
+  .vn-n.vn-blanco .vn-ico { box-shadow: 0 0 0 4px var(--color-primary); }
+  .vn-arrastre { z-index: 6; cursor: grabbing; pointer-events: none; }
+  .vn-arrastre .vn-ico { box-shadow: 0 6px 18px rgba(0, 0, 0, .2); }
 
-  /* Equipo → línea: la línea viva en verde; las tijeras aparecen al pasar el mouse (con el dedo, siempre) */
-  .vn-enlace { position: relative; width: 0; height: 26px; border-left: 2px solid var(--ln-neutro-tx); }
-  .vn-enlace.vn-vivo { border-left-color: var(--ln-verde-tx); }
-  .vn .vn-cortar { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 22px; height: 22px; min-height: 0; padding: 0;
-    border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--color-surface);
-    border: 1px solid var(--color-border); color: var(--ln-rojo-tx); opacity: 0; transition: opacity .15s; }
-  .vn .vn-cortar:hover { background: var(--ln-rojo-bg); }
-  .vn-cortar .ln-icon { width: 13px; height: 13px; }
-  .vn-par:hover .vn-cortar, .vn-cortar:focus-visible { opacity: 1; }
-  @media (pointer: coarse) { .vn-cortar { opacity: 1; } }
-  .vn-arrastrando .vn-cortar { opacity: 0; pointer-events: none; }
+  .vn .vn-cortar { position: absolute; left: 0; top: 0; z-index: 3; width: 20px; height: 20px; min-height: 0; padding: 0; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; background: var(--color-surface); border: 1px solid var(--color-border);
+    color: var(--ln-rojo-tx); opacity: .35; transition: opacity .15s; }
+  .vn .vn-cortar:hover { opacity: 1; background: var(--ln-rojo-bg); }
+  .vn-cortar .ln-icon { width: 12px; height: 12px; }
 
-  /* Lo que se arrastra, con el nombre de la acción debajo */
-  .vn-fantasma { position: fixed; left: 0; top: 0; z-index: 10000; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 6px; }
-  .vn-fantasma .vn-nodo { cursor: grabbing; }
-  .vn-fantasma .vn-ico { box-shadow: 0 6px 18px rgba(0, 0, 0, .18); }
-  .vn-fantasma-accion { max-width: 320px; padding: 4px 9px; border-radius: 7px; background: var(--color-text); color: var(--color-surface);
-    font-size: 11.5px; font-weight: 600; text-align: center; }
-  .vn-fantasma-accion:empty { display: none; }
-  .vn-fantasma-no .vn-fantasma-accion { background: var(--ln-rojo-bg); color: var(--ln-rojo-tx); }
+  /* Cajas del lienzo: se mueven del encabezado, se estiran de la esquina y se quitan con la X */
+  .vn-caja { position: absolute; left: 0; top: 0; z-index: 1; border: 1.5px dashed var(--color-border); border-radius: 14px;
+    background: color-mix(in srgb, var(--color-surface) 85%, transparent); transition: border-color .15s, background-color .15s; }
+  .vn-caja.vn-blanco { border-color: var(--color-primary); background: var(--color-primary-soft); }
+  .vn-caja-cabeza { display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 6px 0 12px; font-size: 12.5px; font-weight: 600;
+    color: var(--color-text-muted); cursor: move; }
+  .vn .vn-caja-quitar { margin-left: auto; width: 24px; height: 24px; min-height: 0; padding: 0; display: inline-flex; align-items: center;
+    justify-content: center; background: transparent; border: none; color: var(--color-text-muted); }
+  .vn .vn-caja-quitar:hover { background: var(--ln-rojo-bg); color: var(--ln-rojo-tx); }
+  .vn-caja-estirar { position: absolute; right: 4px; bottom: 4px; cursor: nwse-resize; color: var(--color-text-muted); display: flex; }
+  .vn-caja-estirar .ln-icon { width: 14px; height: 14px; }
+
+  /* Lo elegido en el grafo y el nombre de la acción junto a lo que se arrastra */
+  .vn-sel { position: absolute; left: 10px; bottom: 10px; right: 10px; z-index: 7; display: flex; align-items: center; gap: 8px; max-width: 560px;
+    padding: 6px 6px 6px 12px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .1); font-size: 12.5px; cursor: default; }
+  .vn-sel > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .vn-sel > button { display: inline-flex; align-items: center; gap: 6px; }
+  .vn-letrero { position: absolute; z-index: 8; transform: translateX(-50%); max-width: 340px; padding: 4px 9px; border-radius: 7px; pointer-events: none;
+    background: var(--color-text); color: var(--color-surface); font-size: 11.5px; font-weight: 600; text-align: center; }
+  .vn-letrero.vn-letrero-no { background: var(--ln-rojo-bg); color: var(--ln-rojo-tx); }
 
   @media (max-width: 1024px) {
-    .vn-espacio { grid-template-columns: minmax(0, 1fr); }
-    .vn-zona-uso { grid-row: auto; min-height: 0; }
+    .vn-cuerpo { grid-template-columns: 190px minmax(0, 1fr); }
   }
   @media (max-width: 640px) {
     .vn-buscar { flex-basis: 100%; max-width: none; }
     .vn-barra select { flex: 1 1 40%; }
-    .vn-leyenda { margin-left: 0; }
+    .vn-cuerpo { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(380px, 1fr); height: auto; }
+    .vn-cajon { max-height: 150px; }
+    .vn-vista { min-height: 420px; }
   }
 </style>
