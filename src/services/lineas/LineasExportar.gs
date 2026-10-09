@@ -3,8 +3,9 @@
  * "Exportar a Excel" de los módulos de Líneas: la base completa del módulo (todas las filas y todas las
  * columnas de su pestaña), no solo lo que se ve en la tabla. Solo lectura.
  *
- *   baseCompleta('INVENTARIO')   → LINEAS TELEFONICAS; con las hojas nuevas, armada como la vieja (una fila por equipo o
- *                                  línea sola, con ESTATUS GENERAL) y después LINEAS, EQUIPOS, ASIGNACIONES y ADENDUMS
+ *   baseCompleta('INVENTARIO')   → LINEAS TELEFONICAS como la muestra el panel (9-oct): un renglón por equipo o línea
+ *                                  suelta con las columnas de la vista del AppSheet (LineasRepo.vistaCompleta), no
+ *                                  las hojas de la reestructura (LINEAS, EQUIPOS, ASIGNACIONES, ADENDUMS) por separado
  *   baseCompleta('CAMBIOS')      → CAMBIOS LINEAS TELEFONICAS (todas, no solo las 5000 más recientes)
  *   baseCompleta('ACCESORIOS')   → ACCESORIOS CELULARES + MOVIMIENTOS_ACCESORIOS (una hoja cada una)
  *   …
@@ -15,14 +16,13 @@
  */
 
 const LineasExportar = (function () {
+  // El inventario no es una pestaña: es la vista del panel (vista_)
+  const VISTA = 'VISTA';
   // Se arma al usarse: este archivo carga antes que LineasRepo
   const modulos_ = () => {
     const TAB = LineasRepo.TAB;
     return {
-      // Reestructura, etapa 2: con el interruptor encendido el inventario son las hojas nuevas
-      INVENTARIO: typeof LineasLectura !== 'undefined' && LineasLectura.activo()
-        ? [LineasLectura.HOJAS.LINEAS, LineasLectura.HOJAS.EQUIPOS, LineasLectura.HOJAS.ASIGNACIONES, LineasLectura.HOJAS.ADENDUMS]
-        : [TAB.LINEAS],
+      INVENTARIO: [VISTA],
       CAMBIOS: [TAB.CAMBIOS],
       // REASIGNACIONES, DESECHOS, REACTIVACION y SOLICITUD se retiraron con sus pestañas (30-sep)
       ACCESORIOS: ['ACCESORIOS CELULARES', 'MOVIMIENTOS_ACCESORIOS'],
@@ -50,6 +50,7 @@ const LineasExportar = (function () {
     return 'texto';
   }
 
+  /** Una pestaña de la base tal como está: todas sus filas no vacías y todas sus columnas con encabezado. */
   function hoja_(nombre, puedeVerSecretos) {
     if (!LineasDatos.existeTabla(nombre)) return null;
     const t = LineasDatos.tablaFresca(nombre);
@@ -57,24 +58,17 @@ const LineasExportar = (function () {
     const crudas = ultima >= 2 && t.encabezados.length
       ? t.hoja.getRange(2, 1, ultima - 1, t.encabezados.length).getValues().filter((v) => v.some((x) => x !== '' && x !== null))
       : [];
-    return tabla_(nombre, t.encabezados, crudas, puedeVerSecretos);
+    return armar_(nombre, t.encabezados, crudas, puedeVerSecretos);
   }
 
-  /**
-   * LINEAS TELEFONICAS armada con las hojas nuevas (pendiente 1.9, 7-oct): las mismas columnas que la hoja vieja, para
-   * que el reporte mensual (generar.py y conciliacion.py, en reporte_lineas) la siga leyendo. ESTATUS GENERAL, con la
-   * fórmula del AppSheet, como en la tabla.
-   */
-  function inventarioJunto_(puedeVerSecretos) {
-    const titulos = LineasLectura.ENCABEZADOS;
-    const txt = LineasUtil.txt;
-    const crudas = LineasLectura.filas().map((r) => titulos.map((h) => (h !== 'ESTATUS GENERAL' ? r[h]
-      : LineasRepo.estatusGeneralRegistro(txt(r['ID APPSHEET']) || txt(r['ID']), (txt(r['TIPO']) || '').toUpperCase(),
-        txt(r['ESTATUS EQUIPO']), txt(r['ESTATUS LINEA'])))));
-    return tabla_(LineasLectura.HOJA_VIEJA, titulos, crudas, puedeVerSecretos);
+  /** El inventario como lo muestra el panel: la vista del AppSheet de LINEAS TELEFONICAS. */
+  function vista_(puedeVerSecretos) {
+    const v = LineasRepo.vistaCompleta();
+    return armar_(LineasRepo.TAB.LINEAS, v.columnas, v.filas, puedeVerSecretos);
   }
 
-  function tabla_(nombre, encabezados, crudas, puedeVerSecretos) {
+  /** Hoja del Excel con los tipos de cada columna, los secretos ocultos y el NUCO a 4 dígitos. */
+  function armar_(nombre, encabezados, crudas, puedeVerSecretos) {
     const zona = LineasDatos.zona();
     const cols = [];
     encabezados.forEach((h, i) => { if (h) cols.push({ titulo: h, i: i }); });
@@ -116,10 +110,7 @@ const LineasExportar = (function () {
   function baseCompleta(modulo, puedeVerSecretos) {
     const tablas = modulos_()[String(modulo || '').toUpperCase()];
     if (!tablas) throw new Error('Módulo desconocido para exportar: ' + modulo);
-    const hojas = tablas.map((nombre) => hoja_(nombre, puedeVerSecretos)).filter(Boolean);
-    if (String(modulo).toUpperCase() === 'INVENTARIO' && typeof LineasLectura !== 'undefined' && LineasLectura.activo()) {
-      hojas.unshift(inventarioJunto_(puedeVerSecretos));
-    }
+    const hojas = tablas.map((nombre) => (nombre === VISTA ? vista_(puedeVerSecretos) : hoja_(nombre, puedeVerSecretos))).filter(Boolean);
     if (!hojas.length) throw new Error('No existe la pestaña de este módulo en la base de datos.');
     return { hojas: hojas };
   }

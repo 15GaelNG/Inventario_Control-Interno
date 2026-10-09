@@ -19,6 +19,11 @@ const VEHICULO_BASE = {
 function crearContexto() {
   const llamadas = { expediente: [], pdfEn: null, insert: [], update: [], actualizarVehiculo: [], imagenesSubidas: [], pdfGenerados: 0, vistasPrevias: 0 };
   let uuids = 0;
+  // Drive falso para las firmas TEMP (guardarFirmaTemp_/leerFirmaTemp_): guarda el "contenido"
+  // (aquí, el base64 tal cual -- base64Decode/base64Encode son identidad) para que lo que se lee
+  // de vuelta sea lo mismo que se guardó, igual que en Drive real.
+  const archivosDrive = {};
+  let contadorArchivos = 0;
   const contexto = vm.createContext({
     Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'SS' }, DRIVE_FOLDERS: { REPORTES: () => 'FOLDER' }, urlFirmaPublica: () => '' },
     Permisos: { puedeLeer: () => {}, puedeEditar: () => ({ nombre: 'TESTER', correo: 't@x.com' }) },
@@ -30,11 +35,17 @@ function crearContexto() {
     Utilities: {
       formatDate: () => '1',
       base64Decode: (b64) => b64,
+      base64Encode: (bytes) => bytes,
       newBlob: (bytes, mimeType, nombre) => ({ bytes, mimeType, nombre }),
       getUuid: () => 'token-' + (++uuids),
     },
     DriveApp: {
-      getFileById: (id) => ({ id }),
+      getFileById: (id) => ({
+        id,
+        getId: () => id,
+        getBlob: () => ({ getBytes: () => (archivosDrive[id] || {}).bytes }),
+        setTrashed: (v) => { if (archivosDrive[id]) archivosDrive[id].trashed = v; },
+      }),
       getFolderById: (id) => ({
         createFile: (blob) => { llamadas.imagenesSubidas.push({ carpetaId: id, nombre: blob.nombre }); return { id: 'file-' + llamadas.imagenesSubidas.length }; },
       }),
@@ -45,7 +56,12 @@ function crearContexto() {
       // Las carpetas se buscan por nombre en la raíz de la app: aquí el nombre hace de ID
       carpetaEnRaiz: (nombre) => ({
         getId: () => nombre,
-        createFile: (blob) => { llamadas.imagenesSubidas.push({ carpeta: nombre, nombre: blob.nombre }); return { id: 'file-' + llamadas.imagenesSubidas.length }; },
+        createFile: (blob) => {
+          const id = 'file-' + (++contadorArchivos);
+          archivosDrive[id] = { bytes: blob.bytes, trashed: false };
+          llamadas.imagenesSubidas.push({ carpeta: nombre, nombre: blob.nombre });
+          return { id, getId: () => id, setTrashed: (v) => { archivosDrive[id].trashed = v; } };
+        },
       }),
     },
     SheetUtils: {
@@ -63,7 +79,12 @@ function crearContexto() {
       // (SheetUtils.getAll(...).find(...)) encuentre el renglón pendiente que un
       // crear(..., {remoto:true}/{remotoJefe:true}) anterior ya guardó.
       getAll: () => llamadas.insert,
-      findById: () => null,
+      // devolverPrestamo busca por ID (no por token): mismo "lee-mezcla-escribe" que update,
+      // para que lo recién insertado/actualizado se encuentre.
+      findById: (ssId, hoja, id) => {
+        const fila = llamadas.insert.find((f) => f.ID === id);
+        return fila ? { data: fila, rowIndex: 2 } : null;
+      },
       leerColumnasDeHoja: () => ({ filas: 0, datos: {} }),
     },
     VehiculosService: {
@@ -75,7 +96,7 @@ function crearContexto() {
       archivar: (archivo, nucco, doc, op) => { llamadas.expediente.push({ archivar: archivo.id, nucco, doc, adherente: !!(op && op.adherente) }); },
     },
     PdfService: {
-      generar: (o) => { llamadas.pdfGenerados++; llamadas.pdfEn = o.carpetaId; return { id: 'pdf1', fileId: 'pdf1', nombre: 'r.pdf', url: 'https://drive/r.pdf' }; },
+      generar: (o) => { llamadas.pdfGenerados++; llamadas.pdfEn = o.carpetaId; llamadas.imagenesPdf = o.imagenes; return { id: 'pdf1', fileId: 'pdf1', nombre: 'r.pdf', url: 'https://drive/r.pdf' }; },
       generarVistaPrevia: (p) => { llamadas.vistasPrevias++; return { base64: 'pdf-bytes', mimeType: 'application/pdf', imagenes: p.imagenes }; },
       nombreArchivo: () => 'nombre',
       fechaParaNombre: () => '2026-10-05',
@@ -170,10 +191,13 @@ test('remoto: no exige la firma del responsable (CI sigue siendo obligatoria), n
   assert.equal(llamadas.insert[0]['ESTADO FIRMA'], 'PENDIENTE');
   assert.ok(llamadas.insert[0]['TOKEN FIRMA']);
   assert.equal(llamadas.insert[0]['TOKEN FIRMA JEFE'], '');
-  // CI ya firmó al generar la liga: se guarda TEMP, pero aún no se sube a Drive ni se genera PDF.
+  // CI ya firmó al generar la liga: se guarda TEMP (como archivo chico de Drive, no el base64
+  // directo en la celda -- Sheets no deja más de 50,000 caracteres por celda, ver el comentario
+  // de guardarFirmaTemp_), pero el PDF final todavía no se genera.
   assert.ok(llamadas.insert[0]['FIRMA CI TEMP']);
+  assert.ok(JSON.parse(llamadas.insert[0]['FIRMA CI TEMP']).archivoId);
   assert.equal(llamadas.pdfGenerados, 0);
-  assert.equal(llamadas.imagenesSubidas.length, 0);
+  assert.equal(llamadas.imagenesSubidas.length, 1);   // la de CI, guardada como temporal
   // La reasignación la decide quien captura, con su sesión, aquí y ahora -- no se puede
   // posponer a completarFirma (que no tiene sesión, ver el comentario del archivo).
   assert.equal(llamadas.actualizarVehiculo.length, 1);
@@ -184,12 +208,35 @@ test('remoto: no exige la firma del responsable (CI sigue siendo obligatoria), n
   assert.ok(!res.ligaJefe);
 });
 
-test('remoto: la firma de Jefe que sí llegó (presencial) se guarda temporalmente, no se pierde', () => {
+test('remoto: la firma de Jefe que sí llegó (presencial) se guarda temporalmente (como archivo de Drive, no el base64 directo en la celda), no se pierde', () => {
   const { contexto, llamadas } = crearContexto();
   contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' },
     { 'FIRMA JEFE': FIRMA_JEFE, 'FIRMA CI': FIRMA_CI }, { remoto: true });
-  assert.equal(JSON.parse(llamadas.insert[0]['FIRMA JEFE TEMP']).base64, 'jefe');
-  assert.equal(JSON.parse(llamadas.insert[0]['FIRMA CI TEMP']).base64, 'ci');
+  // La celda solo trae el ID del archivo, nunca el base64: así nunca rebasa los 50,000
+  // caracteres por celda sin importar qué tan pesada sea la firma (bug real, 9-oct, con una
+  // firma por foto).
+  assert.ok(JSON.parse(llamadas.insert[0]['FIRMA JEFE TEMP']).archivoId);
+  assert.ok(JSON.parse(llamadas.insert[0]['FIRMA CI TEMP']).archivoId);
+  // Lo que de verdad importa: que al leerla de vuelta (vistaPrevia) sea la misma imagen de antes.
+  const vista = contexto.Servicio.vistaPrevia(llamadas.insert[0]['TOKEN FIRMA']);
+  assert.equal(vista.imagenes['FIRMA JEFE'].base64, 'jefe');
+  assert.equal(vista.imagenes['FIRMA CI'].base64, 'ci');
+});
+
+test('retrocompatibilidad: una liga pendiente creada ANTES de este arreglo (base64 directo en TEMP, sin archivoId) se completa igual', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' }, { 'FIRMA CI': FIRMA_CI }, { remoto: true });
+  // Simula lo que dejó el código viejo antes de desplegar este arreglo: el base64 directo en la
+  // celda (sin archivoId), de una firma de Jefe que ya había llegado presencial.
+  llamadas.insert[0]['FIRMA JEFE TEMP'] = JSON.stringify({ base64: 'jefe-de-antes-del-arreglo', mimeType: 'image/png' });
+  const token = llamadas.insert[0]['TOKEN FIRMA'];
+  const res = contexto.Servicio.completarFirma(token, { base64: 'respondio-despues-del-arreglo', mimeType: 'image/png' });
+  assert.ok(!res.pendiente);
+  assert.equal(llamadas.pdfGenerados, 1);
+  // La firma vieja (sin archivoId) sí llegó al PDF -- antes de este arreglo se habría perdido
+  // en silencio.
+  assert.equal(llamadas.imagenesPdf['FIRMA JEFE'].base64, 'jefe-de-antes-del-arreglo');
+  assert.equal(llamadas.imagenesPdf['FIRMA RESPONSABLE'].base64, 'respondio-despues-del-arreglo');
 });
 
 test('vistaPrevia (liga del responsable): el PDF sin guardar, con las firmas TEMP ya puestas y sin la del responsable todavía', () => {
@@ -245,8 +292,9 @@ test('completarFirma: sin liga de Jefe pendiente, genera el PDF de una vez (junt
   assert.equal(llamadas.pdfGenerados, 1);
   assert.equal(res.PDF, 'https://drive/r.pdf');
   assert.ok(!res.pendiente);
-  // Tres respaldos en Drive: la firma que llegó por la liga + Jefe y CI que ya estaban TEMP.
-  assert.equal(llamadas.imagenesSubidas.length, 3);
+  // 2 temporales al crear (Jefe + CI, que ya venían firmados) + 1 temporal al completar (la que
+  // acaba de llegar) + 3 respaldos finales (Responsable/Jefe/CI) al generar el PDF = 6.
+  assert.equal(llamadas.imagenesSubidas.length, 6);
   const cambios = llamadas.update[llamadas.update.length - 1].cambios;
   assert.equal(cambios['ESTADO FIRMA'], 'FIRMADO');
   assert.equal(cambios['TOKEN FIRMA'], '');
@@ -266,7 +314,7 @@ test('completarFirma: si TAMBIÉN hay una liga de Jefe pendiente, solo se guarda
   assert.equal(llamadas.insert[0]['ESTADO FIRMA'], 'PENDIENTE');
   assert.equal(llamadas.insert[0]['TOKEN FIRMA'], '');            // la suya ya se limpió
   assert.ok(llamadas.insert[0]['TOKEN FIRMA JEFE']);               // la del jefe sigue viva
-  assert.ok(JSON.parse(llamadas.insert[0]['FIRMA RESPONSABLE TEMP']).base64, 'firmo-aqui');
+  assert.ok(JSON.parse(llamadas.insert[0]['FIRMA RESPONSABLE TEMP']).archivoId);
 });
 
 // ---------- Firma a distancia: liga del JEFE (opciones.remotoJefe) ----------
@@ -284,7 +332,7 @@ test('remotoJefe: exige la firma del responsable AHORA (no es ella la que se dif
   assert.ok(llamadas.insert[0]['TOKEN FIRMA JEFE']);
   assert.equal(llamadas.insert[0]['TOKEN FIRMA'], '');
   // El responsable ya firmó, pero como el jefe sigue pendiente, su firma se guarda TEMP.
-  assert.ok(JSON.parse(llamadas.insert[0]['FIRMA RESPONSABLE TEMP']).base64, 'abc');
+  assert.ok(JSON.parse(llamadas.insert[0]['FIRMA RESPONSABLE TEMP']).archivoId);
   assert.equal(llamadas.pdfGenerados, 0);
   assert.ok(res.ligaJefe.includes('tipo=responsiva'));
   assert.ok(res.ligaJefe.includes('quien=jefe'));
@@ -344,8 +392,9 @@ test('completarFirmaJefe: sin liga del responsable pendiente, genera el PDF de u
   assert.equal(llamadas.pdfGenerados, 1);
   assert.equal(res.PDF, 'https://drive/r.pdf');
   assert.ok(!res.pendiente);
-  // Responsable (TEMP) + CI (TEMP) + Jefe (recién llegada) = 3 respaldos en Drive.
-  assert.equal(llamadas.imagenesSubidas.length, 3);
+  // 2 temporales al crear (Responsable + CI) + 1 temporal al completar (Jefe, recién llegada)
+  // + 3 respaldos finales (Responsable/Jefe/CI) al generar el PDF = 6.
+  assert.equal(llamadas.imagenesSubidas.length, 6);
   const cambios = llamadas.update[llamadas.update.length - 1].cambios;
   assert.equal(cambios['ESTADO FIRMA'], 'FIRMADO');
   assert.equal(cambios['TOKEN FIRMA JEFE'], '');
@@ -378,8 +427,9 @@ test('las dos ligas, cada una completada por su lado, terminan generando el PDF 
   const segundo = contexto.Servicio.completarFirma(token, { base64: 'responsable', mimeType: 'image/png' });
   assert.ok(!segundo.pendiente);
   assert.equal(llamadas.pdfGenerados, 1);
-  // Responsable + Jefe + CI, los tres.
-  assert.equal(llamadas.imagenesSubidas.length, 3);
+  // 1 temporal al crear (CI) + 1 al completar la del jefe + 1 al completar la del responsable
+  // + 3 respaldos finales (Responsable/Jefe/CI) al generar el PDF = 6.
+  assert.equal(llamadas.imagenesSubidas.length, 6);
 
   // Repetir cualquiera de las dos ligas ya usadas truena (de un solo uso).
   assert.throws(() => contexto.Servicio.completarFirma(token, { base64: 'x', mimeType: 'image/png' }), /no es válida/);
@@ -392,4 +442,67 @@ test('el PDF se genera en el expediente del NUCO del vehículo y se archiva ahí
   contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' }, FIRMA_OK);
   assert.equal(llamadas.pdfEn, 'NUCO/00001/RESPONSIVA');
   assert.deepEqual(llamadas.expediente, [{ archivar: 'pdf1', nucco: '00001', doc: 'RESPONSIVA', adherente: false }]);
+});
+
+// ---------- Préstamo Vehicular (TIPO RESPONSIVA / devolverPrestamo) ----------
+
+test('préstamo: reasigna el vehículo a quien lo recibe y respalda a quién lo tenía antes', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok',
+    { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Maria Lopez', 'TIPO RESPONSIVA': 'PRESTAMO', 'FECHA FIN PRESTAMO': '2026-10-15' },
+    FIRMA_OK);
+  assert.equal(llamadas.insert[0]['TIPO RESPONSIVA'], 'PRESTAMO');
+  assert.equal(llamadas.insert[0]['ESTATUS PRESTAMO'], 'EN PRESTAMO');
+  assert.equal(llamadas.insert[0]['RESPONSABLE ANTERIOR'], 'JUAN PEREZ');   // quien tenía el vehículo antes
+  assert.ok(llamadas.insert[0]['FECHA FIN PRESTAMO']);
+  assert.equal(llamadas.actualizarVehiculo.length, 1);
+  assert.equal(llamadas.actualizarVehiculo[0].cambios['RESPONSABLE VEHICULO'], 'Maria Lopez');
+});
+
+test('sin TIPO RESPONSIVA (o con DEFINITIVA) se comporta exactamente como hoy -- regresión', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Maria Lopez' }, FIRMA_OK);
+  assert.equal(llamadas.insert[0]['TIPO RESPONSIVA'], 'DEFINITIVA');
+  assert.equal(llamadas.insert[0]['ESTATUS PRESTAMO'], '');
+  assert.equal(llamadas.insert[0]['RESPONSABLE ANTERIOR'], '');
+  assert.equal(llamadas.insert[0]['FECHA FIN PRESTAMO'], '');
+});
+
+test('FECHA FIN PRESTAMO se ignora si TIPO RESPONSIVA no es PRESTAMO (el formulario la oculta, pero el servidor no confía solo en eso)', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok',
+    { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez', 'TIPO RESPONSIVA': 'DEFINITIVA', 'FECHA FIN PRESTAMO': '2026-10-15' },
+    FIRMA_OK);
+  assert.equal(llamadas.insert[0]['FECHA FIN PRESTAMO'], '');
+});
+
+test('devolverPrestamo: regresa el vehículo al responsable anterior y marca DEVUELTO, sin PDF ni firma', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok',
+    { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Maria Lopez', 'TIPO RESPONSIVA': 'PRESTAMO' }, FIRMA_OK);
+  const id = llamadas.insert[0].ID;
+  const pdfAntes = llamadas.pdfGenerados;
+  const res = contexto.Servicio.devolverPrestamo('tok', id);
+  assert.equal(res.ESTATUS_PRESTAMO, 'DEVUELTO');
+  assert.equal(llamadas.insert[0]['ESTATUS PRESTAMO'], 'DEVUELTO');
+  // Una reasignación al crear (a Maria) y otra al devolver (de vuelta a Juan).
+  assert.equal(llamadas.actualizarVehiculo.length, 2);
+  assert.equal(llamadas.actualizarVehiculo[1].cambios['RESPONSABLE VEHICULO'], 'JUAN PEREZ');
+  assert.equal(llamadas.pdfGenerados, pdfAntes);
+});
+
+test('devolverPrestamo truena si el registro no es un préstamo', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' }, FIRMA_OK);
+  const id = llamadas.insert[0].ID;
+  assert.throws(() => contexto.Servicio.devolverPrestamo('tok', id), /no es un préstamo/);
+});
+
+test('devolverPrestamo truena si el préstamo ya se devolvió (de un solo uso)', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok',
+    { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Maria Lopez', 'TIPO RESPONSIVA': 'PRESTAMO' }, FIRMA_OK);
+  const id = llamadas.insert[0].ID;
+  contexto.Servicio.devolverPrestamo('tok', id);
+  assert.throws(() => contexto.Servicio.devolverPrestamo('tok', id), /ya se devolvió/);
 });
