@@ -19,17 +19,6 @@
   .rel-tipo { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 600; white-space: nowrap; }
   .rel-tipo.cache { background: var(--color-primary-soft); color: var(--color-primary); }
   .rel-tipo.bitacora { background: var(--color-bg); color: var(--color-text-muted); border: 1px solid var(--color-border); }
-  .rel-matriz-scroll { overflow: auto; border: 1px solid var(--color-border); border-radius: 10px; }
-  .rel-matriz { font-size: 12.5px; border-collapse: collapse; min-width: 100%; }
-  .rel-matriz th, .rel-matriz td { padding: 7px 10px; border-bottom: 1px solid var(--color-border); text-align: left; white-space: nowrap; }
-  .rel-matriz thead th { background: var(--color-surface); position: sticky; top: 0; vertical-align: bottom; }
-  .rel-matriz thead th .rel-llave { display: block; font-weight: normal; font-size: 11px; color: var(--color-text-muted); margin-top: 2px; }
-  .rel-matriz tbody th { font-weight: 600; position: sticky; left: 0; background: var(--color-surface); }
-  .rel-matriz td.rel-vacia { color: var(--color-border); text-align: center; }
-  .rel-matriz td.rel-igual { color: var(--color-text); }
-  .rel-matriz td.rel-renombrada, .rel-leyenda .rel-renombrada { color: var(--color-primary); }
-  .rel-leyenda { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--color-text-muted); margin: 10px 0 0; }
-  .rel-centinelas code { background: var(--color-bg); padding: 1px 6px; border-radius: 6px; margin-right: 4px; font-size: 12px; }
 
   /* ---- Vista sencilla (para todos): pestaña Avisos + una por familia ---- */
   .rel-switch { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--color-text-muted); cursor: pointer; user-select: none; white-space: nowrap; }
@@ -158,9 +147,8 @@
   <div class="page-header-compacto">
     <div>
       <h2><i data-lucide="git-compare-arrows" class="ico"></i> Datos conectados</h2>
-      <p class="page-subtitle">Algunos datos se capturan en un módulo y se usan en otros. Aquí ves qué módulo decide cada dato y a dónde se copia. Si coinciden o no, lo revisa Salud.</p>
+      <p class="page-subtitle">Algunos datos se capturan en un módulo y se usan en otros. Aquí ves qué módulo decide cada dato, a dónde se copia y si coinciden; también puedes conectar más datos.</p>
     </div>
-    <label class="rel-switch"><input type="checkbox" id="rel-tecnico-toggle" /> Ver detalle técnico</label>
   </div>
 
   <!-- Vista sencilla: una pestaña por familia (las agrega initRelaciones al cargar el mapa) -->
@@ -170,10 +158,4 @@
     </div>
   </div>
 
-  <!-- Vista técnica: la matriz columna del dueño × hoja copia -->
-  <div id="rel-tecnica" hidden>
-    <div class="card card-compacta">
-      <div id="rel-mapa"><p class="empty-state">Cargando…</p></div>
-    </div>
-  </div>
 </template>
