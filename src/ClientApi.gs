@@ -580,6 +580,12 @@ function apiLineasGuardarResponsiva(token, datos) {
 function apiLineasIdentificacionesRegistradas(token, personas) {
   return TelefoniaService.identificacionesRegistradas(token, personas);
 }
+function apiLineasMediciones(token, filas) {
+  return TelefoniaService.registrarMediciones(token, filas);
+}
+function apiLineasMedirServidor(token, que, id) {
+  return TelefoniaService.medirServidor(token, que, id);
+}
 function apiLineasGenerarPdf(token, tipo, id, forzar, firmas) {
   return TelefoniaService.generarPdf(token, tipo, id, forzar, firmas);
 }

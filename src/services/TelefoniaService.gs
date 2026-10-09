@@ -557,6 +557,55 @@ const TelefoniaService = (function () {
   }
 
   /** Paso 3 de la identificación (pendiente 2.29): la registrada de cada responsable de la responsiva que se captura. */
+  /**
+   * Medidor de tiempos (html/js/lineas-medidor.html, con ?medir=1; usuario, 9-oct): una fila por acción en la hoja
+   * MEDICIONES LINEAS del libro de Líneas. Solo en un DEV: en producción no escribe.
+   */
+  const HOJA_MEDICIONES = 'MEDICIONES LINEAS';
+  const COLS_MEDICIONES = ['FECHA', 'SESION', 'USUARIO', 'N', 'VISTA', 'VISTA FINAL', 'ACCION', 'TOTAL MS', 'LLAMADAS', 'SERVIDOR MS', 'DETALLE', 'NOTA'];
+  function registrarMediciones(token, filas) {
+    const sesion = leer_(token);
+    if (String(Config.ENTORNO || '').toUpperCase() === 'PROD') throw new Error('El medidor solo escribe en un DEV.');
+    if (!LineasDatos.existeTabla(HOJA_MEDICIONES)) LineasDatos.asegurarPestana(HOJA_MEDICIONES, COLS_MEDICIONES);
+    const ahora = new Date();
+    const t = (v) => String(v === null || v === undefined ? '' : v).slice(0, 2000);
+    LineasDatos.agregarFilas(HOJA_MEDICIONES, (filas || []).slice(0, 50).map((f) => ({
+      'FECHA': ahora, 'SESION': t(f.sesion), 'USUARIO': t(sesion && (sesion.correo || sesion.email)), 'N': Number(f.n) || '',
+      'VISTA': t(f.vista), 'VISTA FINAL': t(f.vistaFinal), 'ACCION': t(f.accion), 'TOTAL MS': Number(f.total_ms) || 0,
+      'LLAMADAS': Number(f.llamadas) || 0, 'SERVIDOR MS': Number(f.servidor_ms) || 0, 'DETALLE': t(f.detalle), 'NOTA': t(f.nota),
+    })));
+    return true;
+  }
+
+  /**
+   * Lo mismo que una llamada de la pantalla, pero con sus pasos medidos (abrir el libro, cada búsqueda, cada lectura y
+   * caché: LineasDatos.tiempo), para saber qué parte tarda. Solo en un DEV; lo pide el medidor con ?medir=1&diag=…
+   * Deja una fila «SERVIDOR …» en MEDICIONES LINEAS y la regresa.
+   */
+  function medirServidor(token, que, id) {
+    leer_(token);
+    if (String(Config.ENTORNO || '').toUpperCase() === 'PROD') throw new Error('El medidor solo corre en un DEV.');
+    const llamadas = {
+      equipo: () => equipo(token, id), linea: () => linea(token, id), evidencias: () => evidencias(token, id),
+      historial: () => historial(token, id), asignaciones: () => asignaciones(token, id, 'equipo'),
+      asignacionesLinea: () => asignaciones(token, id, 'linea'), ultimaInspeccion: () => ultimoDocumentoNuco(token, id, 'INSPECCION'),
+      indice: () => LineasRepo.indice(true),
+    };
+    if (!llamadas[que]) throw new Error('No se mide «' + que + '».');
+    LineasDatos.medirPasos(true);
+    const inicio = Date.now();
+    let error = '';
+    try { llamadas[que](); } catch (e) { error = e.message; }
+    const total = Date.now() - inicio;
+    const pasos = LineasDatos.pasos();
+    LineasDatos.medirPasos(false);
+    const fila = { sesion: 'SERVIDOR', vista: 'servidor', vistaFinal: '', accion: 'SERVIDOR ' + que + ' ' + id, total_ms: total,
+      llamadas: pasos.length, servidor_ms: pasos.reduce((s, p) => s + (Number(String(p).split(' ').pop()) || 0), 0),
+      detalle: pasos.join(' | '), nota: error };
+    registrarMediciones(token, [fila]);
+    return fila;
+  }
+
   function identificacionesRegistradas(token, personas) {
     operar_(token);
     return LineasUtil.paraCliente(LineasIdentificaciones.registradas(personas));
@@ -664,7 +713,7 @@ const TelefoniaService = (function () {
 
   return {
     permisos, indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, responsiva, catalogos, colaboradores, bitacora, formularioRegistro, recargarDatos,
-    contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, identificacionesRegistradas, generarPdf, subirPdfFirmado, crearRegistro, editarRegistro,
+    contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, identificacionesRegistradas, registrarMediciones, medirServidor, generarPdf, subirPdfFirmado, crearRegistro, editarRegistro,
     reasignar, vincular, fotosInspeccion, exportarBase, archivo, patronAppSheet, ultimoDocumentoNuco,
     notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva, panorama,
     formularioResguardo, mandarResguardo, mandarCancelacion, bandejaResguardos, accionBandejaResguardo,

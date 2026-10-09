@@ -1,0 +1,161 @@
+<script>
+  /**
+   * Medidor de tiempos de Líneas (usuario, 9-oct: registrar cuánto tarda todo antes de optimizar). Apagado salvo que la
+   * página se abra con ?medir=1 al final de la dirección (/dev?medir=1).
+   *
+   * Cada clic (o Enter) abre una «acción»: dura hasta que no queda ninguna llamada suya al servidor pendiente y la
+   * pantalla deja de cambiar 500 ms. El total va del clic al último cambio de la pantalla o a la última respuesta del
+   * servidor (lo que pase después); la espera de 500 ms no cuenta. «primera» es cuando llegó la primera respuesta (casi
+   * siempre lo principal de la pantalla; lo demás se carga detrás). Un segundo clic en lo mismo antes de 450 ms (doble
+   * clic) sigue siendo la misma acción.
+   *
+   * Cada acción se escribe en la consola («[MEDIR] {…}») y en la hoja MEDICIONES LINEAS del DEV (apiLineasMediciones).
+   * Al activarse mide el piso: tres apiPing seguidos (lo que tarda una llamada que no hace nada).
+   *
+   * Cuenta las llamadas envolviendo pedir_ (api.html), por donde pasan callServer y las listas con caché. No cambia
+   * nada de lo que hace la página.
+   */
+  (function () {
+    const QUIETO_MS = 500;
+    const DOBLE_CLIC_MS = 450;
+    const MAX_MS = 120000;
+    const registro = [];
+    let actual = null;
+    let espera = null;
+    let original = null;
+    let marca = null;
+    const SESION = new Date().toISOString().slice(0, 16) + '-' + Math.random().toString(36).slice(2, 6);
+    const cola = [];
+    let enviando = false;
+
+    window.medidorTiempos = function () { console.table(registro); return registro; };
+
+    function ahora() { return performance.now(); }
+    function vista() { try { return typeof vistaActual !== 'undefined' ? String(vistaActual || '') : ''; } catch (e) { return ''; } }
+    function texto(el) {
+      const objetivo = el && el.closest ? (el.closest('button, a, [role="tab"], [role="button"], .nav-item, .nav-subitem, tr, .ln-cuadro, label') || el) : null;
+      if (!objetivo) return '';
+      const t = (objetivo.getAttribute && (objetivo.getAttribute('aria-label') || objetivo.getAttribute('title'))) || objetivo.textContent || '';
+      return t.replace(/\s+/g, ' ').trim().slice(0, 60);
+    }
+
+    function anotar(fila) {
+      fila.n = registro.length + 1;
+      registro.push(fila);
+      console.info('[MEDIR] ' + JSON.stringify(fila));
+      cola.push(Object.assign({ sesion: SESION }, fila));
+      if (marca) marca.textContent = 'Midiendo · ' + registro.length + ' · ' + fila.accion.slice(0, 24) + ' · ' + fila.total_ms + ' ms';
+      enviar();
+    }
+
+    function terminar(motivo) {
+      clearTimeout(espera);
+      if (!actual) return;
+      const a = actual;
+      actual = null;
+      const total = Math.round(a.fin - a.inicio);
+      if (!a.llamadas.length && total < 80) return; // un clic sin efecto (o casi instantáneo)
+      const primera = a.llamadas.filter((x) => x.ms !== null).map((x) => x.desde + x.ms).sort((x, y) => x - y)[0];
+      anotar({
+        vista: a.vista, vistaFinal: vista(), accion: a.accion, total_ms: total, llamadas: a.llamadas.length,
+        servidor_ms: a.llamadas.reduce((s, x) => s + (x.ms || 0), 0),
+        detalle: (primera !== undefined ? 'primera=' + primera + ' | ' : '') +
+          a.llamadas.map((x) => x.fn + '@' + x.desde + '+' + (x.ms === null ? '?' : x.ms)).join(' '),
+        nota: motivo || '',
+      });
+    }
+
+    function revisar() {
+      clearTimeout(espera);
+      if (!actual) return;
+      if (ahora() - actual.inicio > MAX_MS) { terminar('cortada a los 120 s'); return; }
+      if (actual.pendientes > 0) return;
+      espera = setTimeout(() => { if (actual && actual.pendientes === 0) terminar(); }, QUIETO_MS);
+    }
+
+    function empezar(ev) {
+      const que = (ev.type === 'keydown' ? '[' + ev.key + '] ' : '') + texto(ev.target);
+      if (actual && actual.accion === que && ahora() - actual.inicio < DOBLE_CLIC_MS) return; // doble clic: la misma acción
+      if (actual) terminar('cortada por otro clic');
+      actual = { inicio: ahora(), fin: ahora(), vista: vista(), accion: que, llamadas: [], pendientes: 0 };
+      revisar();
+    }
+
+    // Cada acción va a la hoja directo con google.script.run: no cuenta como llamada de la siguiente
+    function enviar() {
+      if (enviando || !cola.length || typeof state === 'undefined' || !state.token) return;
+      enviando = true;
+      const filas = cola.splice(0, cola.length);
+      const listo = () => { enviando = false; if (cola.length) setTimeout(enviar, 1000); };
+      google.script.run.withSuccessHandler(listo).withFailureHandler((e) => { console.warn('[MEDIR] no se guardó', e); listo(); })
+        .apiLineasMediciones(state.token, filas);
+    }
+
+    async function medirPiso_() {
+      const ms = [];
+      for (let i = 0; i < 3; i++) {
+        const t = ahora();
+        try { await original('apiPing', []); } catch (e) { /* sin red: no cuenta */ }
+        ms.push(Math.round(ahora() - t));
+      }
+      anotar({ vista: vista(), vistaFinal: vista(), accion: 'PISO (3 apiPing seguidos)', total_ms: Math.min.apply(null, ms), llamadas: 3,
+        servidor_ms: ms.reduce((s, x) => s + x, 0), detalle: ms.join(' '), nota: 'mínimo de los tres' });
+    }
+
+    function activar() {
+      if (typeof pedir_ !== 'function') { console.warn('[MEDIR] no está pedir_ (api.html)'); return; }
+      original = pedir_;
+      // Las llamadas de toda la página pasan por aquí (callServer y las listas buscan pedir_ por su nombre)
+      window.pedir_ = function (fn, args, etiqueta) {
+        const a = actual;
+        const x = a ? { fn: etiqueta || fn, desde: Math.round(ahora() - a.inicio), ms: null } : null;
+        if (a) { a.llamadas.push(x); a.pendientes++; }
+        const inicio = ahora();
+        const fin = () => {
+          if (!a) return;
+          x.ms = Math.round(ahora() - inicio);
+          a.pendientes = Math.max(0, a.pendientes - 1);
+          a.fin = Math.max(a.fin, ahora());
+          if (actual === a) revisar();
+        };
+        const p = original.apply(this, arguments);
+        p.then(fin, fin);
+        return p;
+      };
+      document.addEventListener('click', empezar, true);
+      document.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') empezar(ev); }, true);
+      new MutationObserver(() => { if (actual) { actual.fin = ahora(); revisar(); } })
+        .observe(document.body, { childList: true, subtree: true, characterData: true });
+      marca = document.createElement('div');
+      marca.textContent = 'Midiendo';
+      marca.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99999;padding:3px 8px;border-radius:6px;font:600 11px system-ui;' +
+        'background:#b3261e;color:#fff;pointer-events:none;opacity:.85';
+      document.body.appendChild(marca);
+      console.info('[MEDIR] activo');
+      setTimeout(medirPiso_, 3000);
+    }
+
+    // ?medir=1&diag=equipo:ID,historial:ID,… pide al servidor cada medición, una tras otra (apiLineasMedirServidor, solo DEV)
+    function diagnostico(lista) {
+      const pendientes = String(lista).split(',').map((x) => x.trim().split(':')).filter((x) => x[0] && x[1]);
+      const siguiente = () => {
+        if (!pendientes.length) { if (marca) marca.textContent = 'Midiendo · servidor listo'; return; }
+        if (typeof state === 'undefined' || !state.token) { setTimeout(siguiente, 1000); return; }
+        const [que, id] = pendientes.shift();
+        if (marca) marca.textContent = 'Midiendo · servidor ' + que;
+        google.script.run.withSuccessHandler((r) => { console.info('[MEDIR] servidor ' + JSON.stringify(r)); siguiente(); })
+          .withFailureHandler((e) => { console.warn('[MEDIR] servidor ' + que, e); siguiente(); })
+          .apiLineasMedirServidor(state.token, que, id);
+      };
+      setTimeout(siguiente, 6000);
+    }
+
+    try {
+      google.script.url.getLocation((loc) => {
+        if (!loc || !loc.parameter || loc.parameter.medir !== '1') return;
+        activar();
+        if (loc.parameter.diag) diagnostico(loc.parameter.diag);
+      });
+    } catch (e) { /* fuera de Apps Script (vista previa local): apagado */ }
+  })();
+</script>

@@ -70,7 +70,7 @@ const LineasDatos = (function () {
   }
 
   function libro() {
-    if (!bd.libro) bd.libro = SpreadsheetApp.openById(id());
+    if (!bd.libro) { const t = Date.now(); bd.libro = SpreadsheetApp.openById(id()); tiempo('abrir libro', t); }
     return bd.libro;
   }
 
@@ -109,7 +109,12 @@ const LineasDatos = (function () {
   // ejecuciones (console.log). Apagado no hace nada.
   const INICIO_ = Date.now();
   let midiendo_ = null;
+  // Medidor del servidor (TelefoniaService.medirServidor, solo DEV; usuario, 9-oct): los pasos de esta ejecución
+  let pasos_ = null;
+  function medirPasos(activo) { pasos_ = activo ? [] : null; }
+  function pasos() { return pasos_ || []; }
   function tiempo(que, desde) {
+    if (pasos_) pasos_.push(que + ' ' + (Date.now() - desde));
     if (midiendo_ === null) {
       try { midiendo_ = PropertiesService.getScriptProperties().getProperty('LINEAS_MEDIR') === '1'; } catch (e) { midiendo_ = false; }
     }
@@ -283,18 +288,38 @@ const LineasDatos = (function () {
     const t = tabla(nombre);
     const c = colIndice(t, columna);
     if (c < 0) throw new Error('La pestaña "' + nombre + '" no tiene la columna "' + columna + '".');
+    const inicio = Date.now();
     const ultima = t.hoja.getLastRow();
     if (ultima < 2) return [];
-    return t.hoja.getRange(2, c + 1, ultima - 1, 1)
+    const filas = t.hoja.getRange(2, c + 1, ultima - 1, 1)
       .createTextFinder(String(valor)).matchEntireCell(!parcial).matchCase(false)
       .findAll().map((r) => r.getRow());
+    tiempo('buscar ' + nombre + '.' + columna + ' (' + filas.length + ')', inicio);
+    return filas;
   }
 
   /** buscarFilas con varios valores (p. ej. el ID nuevo y el viejo de un registro): filas sin repetir, en orden. */
   function buscarFilasVarios(nombre, columna, valores, parcial) {
-    const vistas = {};
-    (valores || []).forEach((v) => buscarFilas(nombre, columna, v, parcial).forEach((n) => { vistas[n] = true; }));
-    return Object.keys(vistas).map(Number).sort((a, b) => a - b);
+    const unicos = (valores || []).map((v) => (v === null || v === undefined ? '' : String(v))).filter((v, i, a) => v !== '' && a.indexOf(v) === i);
+    if (unicos.length < 2 || virtual_(nombre)) {
+      const vistas = {};
+      unicos.forEach((v) => buscarFilas(nombre, columna, v, parcial).forEach((n) => { vistas[n] = true; }));
+      return Object.keys(vistas).map(Number).sort((a, b) => a - b);
+    }
+    // Una sola búsqueda para todos los valores (usuario, 9-oct: cada búsqueda cuesta 0.25–0.45 s aunque no encuentre
+    // nada, y el historial buscaba el ID nuevo y los anteriores uno por uno): «a|b|c» como expresión regular
+    const t = tabla(nombre);
+    const c = colIndice(t, columna);
+    if (c < 0) throw new Error('La pestaña "' + nombre + '" no tiene la columna "' + columna + '".');
+    const inicio = Date.now();
+    const ultima = t.hoja.getLastRow();
+    if (ultima < 2) return [];
+    const patron = unicos.map((v) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    const filas = t.hoja.getRange(2, c + 1, ultima - 1, 1)
+      .createTextFinder(parcial ? patron : '^(?:' + patron + ')$').useRegularExpression(true).matchCase(false)
+      .findAll().map((r) => r.getRow());
+    tiempo('buscar ' + nombre + '.' + columna + ' ×' + unicos.length + ' (' + filas.length + ')', inicio);
+    return filas.filter((n, i, a) => a.indexOf(n) === i).sort((a, b) => a - b);
   }
 
   /**
@@ -369,7 +394,10 @@ const LineasDatos = (function () {
 
     if (!apiSheetsDisponible_()) return leerFilasSinApi_(peticiones);
     try {
-      return leerFilasConApi_(peticiones);
+      const inicio = Date.now();
+      const r = leerFilasConApi_(peticiones);
+      tiempo('leerFilas API ' + peticiones.map((p) => p.tabla + ' ' + p.filas.length).join(', '), inicio);
+      return r;
     } catch (e) {
       if (!marcarApiSinHabilitar_(e)) throw e;
       return leerFilasSinApi_(peticiones);
@@ -732,7 +760,7 @@ const LineasDatos = (function () {
   return {
     ZONA_APP,
     id, libro, zona, normCol, esColumnaFecha, letraColumna, sheetsApi,
-    cacheGuardar, cacheLeer, cacheBorrar, recordar, tocar, tiempo,
+    cacheGuardar, cacheLeer, cacheBorrar, recordar, tocar, tiempo, medirPasos, pasos,
     tabla, tablaFresca, existeTabla, colIndice, deHoraHoja, aHoraHoja,
     leerTabla, ultimaFila, buscarFilas, buscarFilasVarios, buscarFilasPorId, idsDeFila, buscarEnTabla, leerFilas, leerRango,
     actualizarFila, agregarFilas, conCandado, nuevoId, nuevoIdCorto, asegurarPestana, asegurarColumnas, quitarColumnas, COLS_ID_ANTERIOR, COL_ID_APPSHEET,
