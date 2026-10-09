@@ -140,3 +140,12 @@ test('un solo bloqueo: con PIN, contraseña o sin bloqueo el patrón se borra al
   const repo = read('src/services/lineas/LineasRepo.gs');
   assert.equal((repo.match(/patronRuta: LineasUtil\.patronVigente\(col\(f, 'PIN EQUIPO'\), col\(f, 'PATRON'\)\) \|\| null/g) || []).length, 2, 'ficha e inspección');
 });
+
+// Usuario, 9-oct: vista de tarjetas con la sede junto al departamento, y el filtro de tipo dentro de la tarjeta
+test('tarjetas del inventario: «DEPARTAMENTO · SEDE» y el filtro de tipo no se sale', () => {
+  assert.match(cliente, /const depto = guion\(\[r\.departamento, r\['SEDE'\] \|\| r\.sede\]\.filter\(Boolean\)\.join\(' · '\)\);/);
+  assert.equal((cliente.match(/'<div class="ln-cuadro-depto">' \+ depto \+ '<\/div>'/g) || []).length, 2, 'equipos y líneas');
+  const estilos = read('src/html/lineas-estilos.html');
+  assert.match(estilos, /\.ln-modulo \.filtro-tipo \{ min-width: 0; \}/);
+  assert.match(estilos, /\.ln-modulo \.filtro-tipo-panel \{ position: relative; \}/);
+});

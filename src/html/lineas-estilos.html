@@ -508,6 +508,10 @@
   .ln-modo-tarjetas .dt-scroll, .ln-modo-tarjetas .dt-pie, .ln-modo-tarjetas .dt-btn-columnas { display: none; }
   .ln-tarjetas { padding-top: 6px; }
   .ln-tarjetas[hidden] { display: none; }
+  /* Con pocas tarjetas (o ninguna) el filtro de tipo de la izquierda se salía de la tarjeta (usuario, 9-oct): en Líneas el
+     panel ocupa su alto y la tarjeta crece con él; al abrirse se sigue encimando sin mover la lista (min-width: 0) */
+  .ln-modulo .filtro-tipo { min-width: 0; }
+  .ln-modulo .filtro-tipo-panel { position: relative; }
   .ln-cuadro-tipo .ln-regla { font-size: 11px; }
   /* Selección estilo Google Drive (30-sep): tarjeta seleccionada, panel Detalles sin fondo y ⋮ de la ficha */
   #ln-telefonicas button.ln-cuadro.ln-cuadro-sel { background: var(--color-primary-soft); box-shadow: inset 0 0 0 2px var(--color-primary); }

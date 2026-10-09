@@ -2671,10 +2671,12 @@
       function tarjetaInventario(modulo, r) {
         const tipo = formatoAppSheet('LINEAS', 'TIPO', r.tipoHoja) || guion(r.tipoHoja);
         const pie = (izq, der) => '<div class="ln-cuadro-pie"><span>' + izq + '</span><span>' + der + '</span></div>';
+        // Departamento y sede (usuario, 9-oct): «POST VENTA · QUERETARO»
+        const depto = guion([r.departamento, r['SEDE'] || r.sede].filter(Boolean).join(' · '));
         if (modulo === 'equipos') {
           return '<button type="button" class="card ln-cuadro ln-cuadro-activo" data-ln-ir="equipo" data-id="' + esc(r.id) + '" aria-label="Abrir NUCO ' + esc(r.nuco || '') + '">' +
             '<div class="ln-cuadro-superior"><span class="ln-cuadro-folio ln-mono">NUCO ' + guion(r.nuco) + '</span><span class="ln-cuadro-tipo">' + tipo + '</span></div>' +
-            '<div class="ln-cuadro-depto">' + guion(r.departamento) + '</div>' +
+            '<div class="ln-cuadro-depto">' + depto + '</div>' +
             '<div class="ln-cuadro-principal">' + guion(r.responsable) + '</div>' +
             '<div class="ln-cuadro-secundario">' + guion(r.modelo) + '</div>' +
             pie(icono('phone') + ' <span class="ln-mono">' + (r.numero ? esc(r.numero) : 'Sin línea') + '</span>', icono('scan-line') + ' <span class="ln-mono">' + guion(r.imei) + '</span>') +
@@ -2682,7 +2684,7 @@
         }
         return '<button type="button" class="card ln-cuadro ln-cuadro-activo" data-ln-ir="linea" data-id="' + esc(r.id) + '" aria-label="Abrir línea ' + esc(r.numero || '') + '">' +
           '<div class="ln-cuadro-superior"><span class="ln-cuadro-folio ln-mono">' + guion(r.numero) + '</span><span class="ln-cuadro-tipo">' + tipo + '</span></div>' +
-          '<div class="ln-cuadro-depto">' + guion(r.departamento) + '</div>' +
+          '<div class="ln-cuadro-depto">' + depto + '</div>' +
           '<div class="ln-cuadro-principal">' + guion(r.responsable) + '</div>' +
           '<div class="ln-cuadro-secundario">' + guion(r.compania) + '</div>' +
           pie(icono('card-sim') + ' <span class="ln-mono">' + guion(r.sim) + '</span>', r.suelta ? chip('Suelta', 'ambar') : icono('smartphone') + ' NUCO ' + guion(r.nucoEquipo)) +
