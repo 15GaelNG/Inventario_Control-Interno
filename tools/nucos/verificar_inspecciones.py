@@ -69,10 +69,43 @@ def verificar(plan_json, foto_json, nucos, arbol=False):
         total.clear()
 
 
+def contra_foto(foto_json, nucos):
+    """Después de deshacer: ¿la carpeta de inspecciones quedó idéntica a la foto de antes? Cada archivo y carpeta en la
+    misma carpeta y con el mismo nombre, nada de más y sin las appProperties de origen."""
+    d = e.drive()
+    foto = json.load(open(foto_json, encoding="utf-8"))
+    for nuco in nucos:
+        r = next(x for x in foto["raices"] if x["nuco"] == nuco)
+        vivo = arbol_vivo(d, r["id"])
+        antes = {c["id"]: (c["padre"], c["name"]) for c in foto["carpetas"] + foto["archivos"] if c["nuco"] == nuco}
+        raiz = e.llamar(d.files().get(fileId=r["id"], fields="name,trashed"))
+        mal = []
+        if nfc(raiz["name"]) != nfc(r["name"]) or raiz.get("trashed"):
+            mal.append("la raíz se llama %r (antes %r)" % (raiz["name"], r["name"]))
+        for i, (padre, nombre) in antes.items():
+            v = vivo.get(i)
+            if not v:
+                mal.append("falta: " + nombre)
+            elif v[0] != padre or nfc(v[1]) != nfc(nombre):
+                mal.append("distinto: %s (ahora %s)" % (nombre, v[1]))
+        sobran = [v[1] for i, v in vivo.items() if i not in antes]
+        con_app = 0
+        for i in [i for i, v in vivo.items() if not v[2]][:400]:
+            if e.llamar(d.files().get(fileId=i, fields="appProperties")).get("appProperties", {}).get("origen_padre"):
+                con_app += 1
+        print("NUCO %s: %d de %d como en la foto | sobran %d | con appProperties de origen %d (de %d revisados)"
+              % (nuco, len(antes) - len(mal), len(antes), len(sobran), con_app, min(400, sum(1 for v in vivo.values() if not v[2]))))
+        for m in (mal + ["sobra: " + s for s in sobran])[:15]:
+            print("  ✗", m)
+
+
 def arbol_vivo_plano(d, raiz):
     return [{"id": i} for i in arbol_vivo(d, raiz)]
 
 
 if __name__ == "__main__":
     a = sys.argv[1:]
-    verificar(a[0], a[1], a[a.index("--nucos") + 1].split(","), "--arbol" in a)
+    if "--contra-foto" in a:
+        contra_foto(a[a.index("--contra-foto") + 1], a[a.index("--nucos") + 1].split(","))
+    else:
+        verificar(a[0], a[1], a[a.index("--nucos") + 1].split(","), "--arbol" in a)

@@ -127,7 +127,8 @@ A documentación, Por revisar, Papelera, Choques de nombre) y los árboles antes
 | `reporte_insp.py <foto.json> <plan.json> <salida> <NUCO,…>` | El Excel y los árboles antes/después de esos NUCO |
 | `inspecciones.py aplicar <plan.json> <foto.json> <foto-doc.json> (--nucos … \| --todos) [--hilos N] [--continuar <bitácora>]` | **En la real.** Revisa que cada NUCO siga como en la foto (si no, no lo toca), crea carpetas, mueve y renombra, papelera, carpetas vacías; bitácora, respaldo en Drive y hoja |
 | `verificar_inspecciones.py <plan.json> <foto.json> --nucos … [--arbol]` | Solo lectura: cada archivo está donde el plan dice, carpetas vacías, profundidad, nombres de nivel 2 |
-| `expediente.py deshacer <bitácora.jsonl>` | Regresa todo, de la última línea a la primera |
+| `expediente.py deshacer <bitácora.jsonl> [--nucos 482,…]` | Regresa todo (o solo esos NUCO), de la última línea a la primera. Anota en `<bitácora>.deshechos` lo deshecho para no repetirlo |
+| `verificar_inspecciones.py x x --contra-foto <foto.json> --nucos …` | Después de deshacer: ¿quedó idéntico a la foto? |
 
 Cada archivo movido lleva en `appProperties` de dónde venía (`origen_padre`, `origen_nombre`): viaja con él aunque
 alguien lo mueva después. Mover conserva el ID, así que las ligas siguen sirviendo.
@@ -177,8 +178,9 @@ la corrida grande (por si hay que deshacer) y luego el dueño la vacía.
 
 ## Pendientes
 
-1. **Probar `deshacer` de verdad** en un NUCO del piloto (482) y volver a aplicar: las acciones nuevas (sacar de
-   `_PAPELERA`, quitar `appProperties`, `renombrar_carpeta`) no se han probado contra Drive.
+1. ~~Probar `deshacer` de verdad~~ **Hecho (9-oct):** el 482 se deshizo (`deshacer … --nucos 482`), quedó idéntico a
+   la foto (361 de 361 elementos en su carpeta y con su nombre, nada de más, 0 con `appProperties`, sus 18 carpetas de
+   vuelta de `_PAPELERA`) y se volvió a aplicar con la bitácora `20261009-123421-inspecciones.jsonl`.
 2. **Foto nueva y dry run** justo antes de la corrida grande (la actual es de la mañana del 9-oct): `foto.py` con
    `INSPECC` y `DOCUMENTAC`, `homologar_insp.py`, revisar el resumen.
 3. **Corrida grande**: `inspecciones.py aplicar … --todos --hilos 6`, en un horario sin movimiento (avisar al área que no

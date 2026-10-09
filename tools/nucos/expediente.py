@@ -977,12 +977,20 @@ def verificar():
     print("Detalle: %s" % (CACHE / "verificacion.json"))
 
 
-def deshacer(ruta):
+def deshacer(ruta, nucos=None):
     """Regresa lo que hizo ordenar() o inspecciones.py, de la última línea a la primera: lo movido vuelve a su carpeta y
     nombre (y sin las appProperties de origen), lo copiado y las carpetas creadas (si quedaron vacías) van a la papelera,
-    lo que se mandó a la papelera sale de ella y la carpeta renombrada recupera su nombre."""
+    lo que se mandó a la papelera sale de ella y la carpeta renombrada recupera su nombre.
+
+    Con `nucos` solo esos (una bitácora puede traer varios). Los NUCO deshechos se anotan en <bitácora>.deshechos y no
+    se vuelven a deshacer con esa bitácora: si después se aplicó otra vez, la que manda es la bitácora nueva."""
     d = drive()
     lineas = [json.loads(x) for x in Path(ruta).read_text(encoding="utf-8").splitlines() if x.strip()]
+    marca = Path(str(ruta) + ".deshechos")
+    ya = set(marca.read_text(encoding="utf-8").split()) if marca.exists() else set()
+    lineas = [x for x in lineas if (nucos is None or x.get("nuco") in nucos) and x.get("nuco") not in ya]
+    if ya:
+        print("  ya deshechos antes con esta bitácora (se saltan): %s" % " ".join(sorted(ya)))
     hechos = 0
     for x in reversed(lineas):
         if x["accion"] == "mover":
@@ -1009,7 +1017,10 @@ def deshacer(ruta):
             continue
         hechos += 1
         print("\r  %d deshechos" % hechos, end="", flush=True)
-    print("\nListo: %s deshecha" % ruta)
+    nuevos = {x["nuco"] for x in lineas if x.get("nuco")}
+    with open(marca, "a", encoding="utf-8") as f:
+        f.write("".join(n + "\n" for n in sorted(nuevos)))
+    print("\nListo: %s deshecha%s" % (ruta, (" (NUCO %s)" % ", ".join(sorted(nuevos))) if nucos else ""))
 
 
 if __name__ == "__main__":
@@ -1032,7 +1043,7 @@ if __name__ == "__main__":
     elif args[0] == "respaldar":
         respaldar(args[1], int(args[args.index("--hilos") + 1]) if "--hilos" in args else 6)
     elif args[0] == "deshacer":
-        deshacer(args[1])
+        deshacer(args[1], set(args[args.index("--nucos") + 1].split(",")) if "--nucos" in args else None)
     elif args[0] == "excel":
         excel(args[1] if len(args) > 1 else str(CACHE / "expediente.xlsx"))
     else:
