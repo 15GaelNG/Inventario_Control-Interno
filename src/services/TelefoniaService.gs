@@ -394,6 +394,8 @@ const TelefoniaService = (function () {
       });
     }
     const salida = { equipo: eq, fotos: fotos, pdfs: pdfs, puedeOperar: puedeOperar_(sesion) };
+    // Identificación de cada responsable, subida con la responsiva (usuario, 9-oct; pendiente 2.27)
+    if (!esInspeccion) salida.identificaciones = LineasIdentificaciones.deResponsiva([id]);
     salida[esInspeccion ? 'inspeccion' : 'responsiva'] = doc;
     return LineasUtil.paraCliente(salida);
   }

@@ -780,6 +780,8 @@
       } else if (e.control === 'archivo') {
         const enlace = valor ? botonArchivo(valor, 'Ver archivo actual') : '<span class="ln-tenue">Sin archivo</span>';
         control = '<div class="ln-af-archivo">' + enlace + '<input type="file" id="' + id + '" data-archivo="' + esc(e.columna) + '" accept="application/pdf,image/*" /></div>';
+      } else if (e.control === 'identificacion') {
+        control = htmlIdentificacion(e, id);
       } else if (e.control === 'fecha') {
         control = '<input type="date"' + attrs + ' value="' + esc(valor) + '" />';
       } else if (e.control === 'siNo') {
@@ -806,7 +808,7 @@
       } else {
         control = '<input type="text"' + attrs + ' value="' + esc(valor) + '" autocomplete="off"' + (e.valorOculto ? ' placeholder="•••• (se conserva el valor registrado)"' : '') + ' />';
       }
-      const ancho = ['escala', 'area', 'patron', 'firma'].indexOf(e.control) >= 0 ? ' ln-af-ancho' : '';
+      const ancho = ['escala', 'area', 'patron', 'firma', 'identificacion'].indexOf(e.control) >= 0 ? ' ln-af-ancho' : '';
       return '<div class="field ln-af-campo' + ancho + (e.control === 'escala' ? ' ln-af-escala' : '') + (e.soloLectura ? ' ln-af-lectura' : '') + '" data-af-columna="' + esc(e.columna) + '" data-mostrar="' + condAtributo(e.mostrar) + '" data-requerido="' + condAtributo(e.requerido) + '" data-editable="' + condAtributo(e.editable) + '">' +
         '<label for="' + id + '">' + esc(e.etiqueta) + '<span class="ln-af-req"' + (e.requerido === 'SIEMPRE' ? '' : ' hidden') + '> *</span></label>' + control + '</div>';
     }
@@ -842,7 +844,7 @@
           const ocultos = sec.campos.filter((e) => e.soloLectura && nombresDeFirma.indexOf(e.columna) >= 0);
           const lectura = sec.campos.filter((e) => e.soloLectura && e.control !== 'calculado' && ocultos.indexOf(e) < 0);
           const firmas = sec.campos.filter((e) => e.control === 'firma');
-          const anchos = sec.campos.filter((e) => e.control === 'area' || e.control === 'patron');
+          const anchos = sec.campos.filter((e) => e.control === 'area' || e.control === 'patron' || e.control === 'identificacion');
           const escalas = sec.campos.filter((e) => e.control === 'escala' && e.checklist); // renglones del checklist; las demás, a todo lo ancho
           const resto = sec.campos.filter((e) => [ocultos, lectura, firmas, anchos, escalas].every((g) => g.indexOf(e) < 0));
           cuerpo = (lectura.length ? '<div class="ln-af-grid ln-af-datos">' + html(lectura) + '</div>' : '') +
@@ -1524,6 +1526,222 @@
         };
         lector.readAsDataURL(archivo);
       });
+    }
+
+    // ---- Identificación de cada responsable en la responsiva (usuario, 9-oct; pendiente 2.27) ----
+    // Fotos (una, o frente y vuelta) o un PDF, que se ven antes de guardar. Las fotos se juntan aquí en un solo PDF; el
+    // servidor solo recibe PDF y lo guarda en la carpeta de la responsiva (LineasIdentificaciones).
+    const INE_MAX_FOTOS = 4;
+    const INE_MAX_MB = 15;
+
+    function htmlIdentificacion(e, id) {
+      const tipo = e.conTipo ? '<select data-ine-tipo aria-label="Tipo de identificación">' +
+        (e.opciones || []).map((o) => '<option value="' + esc(o) + '">' + esc(o) + '</option>').join('') + '</select>' : '';
+      return '<div class="ln-ine" data-ine-orden="' + Number(e.orden || 0) + '">' + tipo +
+        '<div class="ln-fotos-botones">' +
+        '<label class="ln-upload ln-solo-tactil">' + icono('camera') + '<span><b>Tomar foto</b><small>Con la cámara del equipo</small></span>' +
+        '<input type="file" accept="image/*" capture="environment" data-ine-archivo /></label>' +
+        '<label class="ln-upload">' + icono('id-card') + '<span><b>Elegir fotos o PDF</b><small>De la galería o de la computadora</small></span>' +
+        '<input type="file" id="' + id + '" accept="image/*,application/pdf" multiple data-ine-archivo /></label></div>' +
+        '<div class="ln-ine-lista"></div></div>';
+    }
+
+    /** Lo elegido en cada apartado vive en el propio elemento (caja._ine = { pdf, fotos: [{ archivo, url }] }). */
+    function activarIdentificaciones(cuerpo) {
+      const pintar = (caja) => {
+        const s = caja._ine;
+        const lista = caja.querySelector('.ln-ine-lista');
+        lista.innerHTML = s.pdf
+          ? '<span class="ln-foto-chip">' + icono('file-text', 'ln-icon-sm') + '<a class="ln-foto-nombre" href="' + esc(s.pdf.url) + '" target="_blank" rel="noopener">' + esc(s.pdf.archivo.name) + '</a>' +
+            '<button type="button" data-ine-quitar="pdf" aria-label="Quitar">' + icono('x', 'ln-icon-sm') + '</button></span>'
+          : s.fotos.map((f, i) => '<span class="ln-ine-foto"><img src="' + esc(f.url) + '" alt="' + esc(f.archivo.name) + '" data-ine-ver="' + i + '" />' +
+            '<button type="button" data-ine-quitar="' + i + '" aria-label="Quitar">' + icono('x', 'ln-icon-sm') + '</button></span>').join('');
+        pintarIconos(lista);
+      };
+      const vaciar = (caja) => {
+        const s = caja._ine;
+        if (s.pdf) URL.revokeObjectURL(s.pdf.url);
+        s.fotos.forEach((f) => URL.revokeObjectURL(f.url));
+        caja._ine = { pdf: null, fotos: [] };
+      };
+      cuerpo.querySelectorAll('.ln-ine').forEach((caja) => { caja._ine = { pdf: null, fotos: [] }; });
+      // El cuerpo del modal se reutiliza (Editar, inspección, responsiva): se escucha una sola vez, como activarAdicionales
+      if (cuerpo._identificacionesActivas) return;
+      cuerpo._identificacionesActivas = true;
+      cuerpo.addEventListener('change', (ev) => {
+        const input = ev.target.closest('input[data-ine-archivo]');
+        if (!input) return;
+        const caja = input.closest('.ln-ine');
+        const archivos = Array.from(input.files || []);
+        input.value = '';
+        if (!archivos.length) return;
+        const pdfs = archivos.filter((a) => a.type === 'application/pdf' || /\.pdf$/i.test(a.name));
+        const fotos = archivos.filter((a) => pdfs.indexOf(a) < 0);
+        const error = (t) => aviso(icono('triangle-alert', 'ln-alerta') + ' ' + esc(t), 7000);
+        if (pdfs.length && fotos.length) return error('Elige fotos o un PDF, no los dos.');
+        if (pdfs.length > 1) return error('Elige un solo PDF.');
+        if (archivos.some((a) => a.size > INE_MAX_MB * 1024 * 1024)) return error('El archivo supera ' + INE_MAX_MB + ' MB.');
+        if (pdfs.length) {
+          vaciar(caja);
+          caja._ine.pdf = { archivo: pdfs[0], url: URL.createObjectURL(pdfs[0]) };
+        } else {
+          if (caja._ine.pdf) vaciar(caja);
+          if (caja._ine.fotos.length + fotos.length > INE_MAX_FOTOS) return error('Son hasta ' + INE_MAX_FOTOS + ' fotos.');
+          fotos.forEach((a) => caja._ine.fotos.push({ archivo: a, url: URL.createObjectURL(a) }));
+        }
+        pintar(caja);
+      });
+      cuerpo.addEventListener('click', (ev) => {
+        const quitar = ev.target.closest('[data-ine-quitar]');
+        if (quitar) {
+          const caja = quitar.closest('.ln-ine');
+          const s = caja._ine;
+          if (quitar.dataset.ineQuitar === 'pdf') vaciar(caja);
+          else { const f = s.fotos.splice(Number(quitar.dataset.ineQuitar), 1)[0]; if (f) URL.revokeObjectURL(f.url); }
+          pintar(caja);
+          return;
+        }
+        const ver = ev.target.closest('[data-ine-ver]');
+        if (ver) { verFotoIdentificacion(ver.getAttribute('src')); return; }
+        // Al quitar un responsable adicional, los de abajo suben un lugar (activarAdicionales): sus identificaciones también
+        const otro = ev.target.closest('[data-quitar-adicional]');
+        if (otro) {
+          const caja = (orden) => cuerpo.querySelector('.ln-ine[data-ine-orden="' + orden + '"]');
+          const desde = Number(otro.dataset.quitarAdicional) + 1;
+          if (!caja(desde)) return;
+          vaciar(caja(desde));
+          for (let orden = desde; orden < ORDEN_ADICIONALES.length; orden++) {
+            const actual = caja(orden), siguiente = caja(orden + 1);
+            if (!actual || !siguiente) break;
+            actual._ine = siguiente._ine;
+            siguiente._ine = { pdf: null, fotos: [] };
+            const t1 = actual.querySelector('[data-ine-tipo]'), t2 = siguiente.querySelector('[data-ine-tipo]');
+            if (t1 && t2) { t1.value = t2.value; t2.selectedIndex = 0; }
+          }
+          cuerpo.querySelectorAll('.ln-ine').forEach(pintar);
+        }
+      });
+    }
+
+    /** La foto en grande, para revisar que se lea antes de guardar. Se cierra con un clic. */
+    function verFotoIdentificacion(url) {
+      const capa = document.createElement('div');
+      capa.className = 'ln-ine-visor';
+      capa.innerHTML = '<img src="' + esc(url) + '" alt="" />';
+      capa.addEventListener('click', () => capa.remove());
+      document.body.appendChild(capa);
+    }
+
+    /**
+     * Lo que va al servidor: [{ orden, tipo, base64 }] de cada responsable que sigue en la responsiva (con nombre). Las
+     * fotos van en un PDF; un PDF va tal cual.
+     */
+    function leerIdentificaciones(cuerpo, valores) {
+      const nombreDe = (orden) => String(valores[orden === 0 ? 'RESPONSABLE' : 'NOMBRE ' + ORDEN_ADICIONALES[orden - 1] + ' RESPONSABLE'] || '').trim();
+      const cajas = Array.from(cuerpo.querySelectorAll('.ln-ine')).filter((caja) => {
+        const s = caja._ine;
+        const campo = caja.closest('.ln-af-campo');
+        return s && (s.pdf || s.fotos.length) && !(campo && campo.hidden) && nombreDe(Number(caja.dataset.ineOrden));
+      });
+      return Promise.all(cajas.map((caja) => {
+        const s = caja._ine;
+        const tipo = caja.querySelector('[data-ine-tipo]');
+        const bytes = s.pdf ? s.pdf.archivo.arrayBuffer().then((b) => new Uint8Array(b)) : pdfDeFotos(s.fotos.map((f) => f.archivo));
+        return bytes.then((b) => {
+          if (b.length > INE_MAX_MB * 1024 * 1024) throw new Error('La identificación de ' + nombreDe(Number(caja.dataset.ineOrden)) + ' supera ' + INE_MAX_MB + ' MB.');
+          return { orden: Number(caja.dataset.ineOrden), tipo: tipo ? tipo.value : '', base64: base64DeBytes(b) };
+        });
+      }));
+    }
+
+    function base64DeBytes(bytes) {
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      return btoa(bin);
+    }
+
+    /**
+     * Fotos → un PDF carta, dos por hoja (frente arriba, vuelta abajo), enteras y centradas; una sola foto ocupa la hoja.
+     * Cada foto se vuelve a guardar como JPEG de calidad .92 y hasta 2400 px por lado (el navegador ya la endereza): una
+     * identificación se sigue leyendo igual al acercarse y el archivo no pesa de más. Sin librerías: el JPEG va tal cual
+     * dentro del PDF (DCTDecode).
+     */
+    function pdfDeFotos(archivos) {
+      return Promise.all(archivos.map((a) => jpegDeFoto(a, 2400, 0.92))).then(armarPdfDeJpeg);
+    }
+
+    function jpegDeFoto(archivo, maxDim, calidad) {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(archivo);
+        const img = new Image();
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(archivo.name + ': no se pudo leer la imagen.')); };
+        img.onload = () => {
+          const k = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+          const w = Math.max(1, Math.round(img.naturalWidth * k));
+          const h = Math.max(1, Math.round(img.naturalHeight * k));
+          const lienzo = document.createElement('canvas');
+          lienzo.width = w; lienzo.height = h;
+          const g = lienzo.getContext('2d');
+          g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h);
+          g.drawImage(img, 0, 0, w, h);
+          URL.revokeObjectURL(url);
+          const bin = atob(lienzo.toDataURL('image/jpeg', calidad).split(',')[1]);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          resolve({ ancho: w, alto: h, bytes: bytes });
+        };
+        img.src = url;
+      });
+    }
+
+    function armarPdfDeJpeg(fotos) {
+      const texto = new TextEncoder();
+      const partes = [];
+      const posiciones = [];
+      let largo = 0;
+      const poner = (x) => { const b = typeof x === 'string' ? texto.encode(x) : x; partes.push(b); largo += b.length; };
+      const ANCHO = 612, ALTO = 792, MARGEN = 36, ENTRE = 18, POR_HOJA = 2;
+      const hojas = [];
+      for (let i = 0; i < fotos.length; i += POR_HOJA) hojas.push(fotos.slice(i, i + POR_HOJA));
+      let n = 3;
+      const objetos = hojas.map((fs) => ({ pagina: n++, contenido: n++, fotos: fs.map(() => n++) }));
+      const total = n - 1;
+      const objeto = (num, dicc, flujo) => {
+        posiciones[num] = largo;
+        poner(num + ' 0 obj\n' + dicc);
+        if (flujo) { poner('\nstream\n'); poner(flujo); poner('\nendstream'); }
+        poner('\nendobj\n');
+      };
+      poner('%PDF-1.4\n');
+      poner(new Uint8Array([0x25, 0xe2, 0xe3, 0xcf, 0xd3, 0x0a]));
+      objeto(1, '<< /Type /Catalog /Pages 2 0 R >>');
+      objeto(2, '<< /Type /Pages /Kids [' + objetos.map((o) => o.pagina + ' 0 R').join(' ') + '] /Count ' + hojas.length + ' >>');
+      const anchoCelda = ANCHO - 2 * MARGEN;
+      const altoCelda = fotos.length === 1 ? ALTO - 2 * MARGEN : (ALTO - 2 * MARGEN - ENTRE * (POR_HOJA - 1)) / POR_HOJA;
+      hojas.forEach((fs, h) => {
+        const o = objetos[h];
+        const dibujo = fs.map((f, i) => {
+          const k = Math.min(anchoCelda / f.ancho, altoCelda / f.alto);
+          const w = f.ancho * k, alto = f.alto * k;
+          const x = MARGEN + (anchoCelda - w) / 2;
+          const y = ALTO - MARGEN - i * (altoCelda + ENTRE) - (altoCelda - alto) / 2 - alto;
+          return 'q ' + w.toFixed(2) + ' 0 0 ' + alto.toFixed(2) + ' ' + x.toFixed(2) + ' ' + y.toFixed(2) + ' cm /F' + i + ' Do Q';
+        }).join('\n');
+        objeto(o.pagina, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + ANCHO + ' ' + ALTO + '] /Resources << /XObject << ' +
+          fs.map((f, i) => '/F' + i + ' ' + o.fotos[i] + ' 0 R').join(' ') + ' >> >> /Contents ' + o.contenido + ' 0 R >>');
+        const c = texto.encode(dibujo);
+        objeto(o.contenido, '<< /Length ' + c.length + ' >>', c);
+        fs.forEach((f, i) => objeto(o.fotos[i], '<< /Type /XObject /Subtype /Image /Width ' + f.ancho + ' /Height ' + f.alto +
+          ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + f.bytes.length + ' >>', f.bytes));
+      });
+      const inicioTabla = largo;
+      let tabla = 'xref\n0 ' + (total + 1) + '\n0000000000 65535 f \n';
+      for (let i = 1; i <= total; i++) tabla += String(posiciones[i]).padStart(10, '0') + ' 00000 n \n';
+      poner(tabla + 'trailer\n<< /Size ' + (total + 1) + ' /Root 1 0 R >>\nstartxref\n' + inicioTabla + '\n%%EOF\n');
+      const salida = new Uint8Array(largo);
+      let p = 0;
+      partes.forEach((b) => { salida.set(b, p); p += b.length; });
+      return salida;
     }
 
     /**
@@ -4289,6 +4507,7 @@
 
       function iniciarFormularioResponsiva() {
         iniciarFormularioAppSheet();
+        activarIdentificaciones($('#ln-captura-cuerpo', raiz));
         $('#cap-guardar', raiz).addEventListener('click', guardarResponsivaDesdeFormulario);
       }
 
@@ -4303,12 +4522,13 @@
         const bloqueo = bloqueoElegido($('#ln-captura-cuerpo', raiz));
         const sesion = captura;
         estadoGuardado(sesion.flujo && sesion.flujo.espera ? sesion.flujo.espera : (sesion.flujo && !sesion.flujo.pdfAqui ? 'Guardando la responsiva' : 'Generando tu PDF'));
-        Promise.all([firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ffffff') : null, firmaCi.base64('#ffffff')]).then(([responsable, ci]) => {
+        Promise.all([firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ffffff') : null, firmaCi.base64('#ffffff'),
+          leerIdentificaciones($('#ln-captura-cuerpo', raiz), valores)]).then(([responsable, ci, identificaciones]) => {
           sesion.pdfFirmas = { responsable: responsable, ci: ci, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ffffff') : null };
           const datos = Object.assign({}, sesion.ref, {
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron, bloqueo: bloqueo,
             firmaResponsableBase64: sesion.pdfFirmas.responsable, firmaCiBase64: sesion.pdfFirmas.ci, patronBase64: sesion.pdfFirmas.patron,
-            usarFirmaGuardada: !!firmaCi.guardada,
+            usarFirmaGuardada: !!firmaCi.guardada, identificaciones: identificaciones,
           });
           return sesion.flujo && sesion.flujo.guardar ? sesion.flujo.guardar(datos) : llamar('apiLineasGuardarResponsiva', datos);
         }).then((r) => {
@@ -4667,7 +4887,10 @@
       function botonesDocumento(tipoPdf, d, r) {
         const x = datosDocumento(tipoPdf, d, r);
         const pdfs = r.pdfs || [];
+        // Identificación de cada responsable (usuario, 9-oct): «Ver INE», o con el nombre si son varios
+        const ids = r.identificaciones || [];
         return pdfs.map((p, indice) => enlaceDrive(p.id, 'Ver PDF' + (pdfs.length > 1 ? ' ' + (indice + 1) : ''), true)).join('') +
+          ids.map((x) => enlaceDrive(x.id, 'Ver ' + (x.tipo || 'identificación') + (ids.length > 1 ? ' · ' + x.persona : ''), true)).join('') +
           (r.puedeOperar && x.registroId && (x.pdfId || x.origen !== 'SISTEMA')
             ? '<button type="button" class="ln-btn-icono" data-ln-doc-subir>' + icono('file-up') + ' Subir PDF firmado</button>' : '') +
           (opcionesDocumento(x, r).length
