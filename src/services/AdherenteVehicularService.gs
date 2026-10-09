@@ -42,7 +42,8 @@ const AdherenteVehicularService = (function () {
   // final a una carpeta propia, separada de la de Responsiva.
   // Por nombre dentro de la raíz de la app (DriveUtils.carpetaEnRaiz): cada proyecto usa las suyas
   const CARPETA_IMAGENES = 'RESPONSIVAS VEHICULARES_Images';   // compartida con Responsiva
-  const CARPETA_PDF = 'ADHERENTES VEHICULAR';
+  // El PDF (y la copia temporal de la vista previa) va al expediente del vehículo en su NUCO (ExpedienteNuco,
+  // 08-oct-2026): la carpeta ADHERENTES VEHICULAR de la raíz ya no se usa.
 
   // Caja de las firmas en el PDF: la misma que usa InspeccionesService (150 × 60 pt).
   const FIRMA_PDF = { ancho: 150, alto: 60 };
@@ -184,11 +185,19 @@ const AdherenteVehicularService = (function () {
         plantillaId: PLANTILLA,
         datos: datosPdf,
         imagenes: imagenesPdf,
-        carpetaId: DriveUtils.carpetaEnRaiz(CARPETA_PDF).getId(),
+        // Directo en el expediente del vehículo (NUCOS VEHICULOS/<NUCO>/1.-DOCUMENTACIÓN/5.-RESPONSIVA/ADHERENTES)
+        carpetaId: ExpedienteNuco.carpeta(fila['NUCCO'], 'RESPONSIVA', ['ADHERENTES']).getId(),
         nombre: PdfService.nombreArchivo([
           'ADHERENTE VEHICULAR', fila['ADHERENTE'], fila['PLACA'] || fila['FOLIO VEHICULO'], PdfService.fechaParaNombre(ahora),
         ]),
       });
+      // Su nombre en el expediente (ADHERENTE-0088.pdf) y, si es responsiva, la vigente pasa a RESPONSIVAS ANTERIORES.
+      // Si esto falla el PDF ya existe y queda ligado: solo se avisa.
+      try {
+        ExpedienteNuco.archivar(DriveApp.getFileById(pdf.fileId), fila['NUCCO'], 'RESPONSIVA', { adherente: true });
+      } catch (e) {
+        avisos.push('El PDF se generó, pero no se pudo acomodar en el expediente del NUCO: ' + e.message);
+      }
       SheetUtils.update(ssId(), hoja_().getName(), id, Object.assign({
         'PDF': pdf.url, 'ESTADO FIRMA': 'FIRMADO',
         'TOKEN FIRMA': '', 'TOKEN FIRMA EXPIRA': '', 'TOKEN FIRMA JEFE': '', 'TOKEN FIRMA JEFE EXPIRA': '',
@@ -394,7 +403,7 @@ const AdherenteVehicularService = (function () {
       'AÑO': Utilities.formatDate(ahora, ZONA, 'yyyy'),
     });
     return PdfService.generarVistaPrevia({
-      plantillaId: PLANTILLA, datos: datosPdf, imagenes: imagenesDesdeTemp_(fila), carpetaId: DriveUtils.carpetaEnRaiz(CARPETA_PDF).getId(),
+      plantillaId: PLANTILLA, datos: datosPdf, imagenes: imagenesDesdeTemp_(fila), carpetaId: ExpedienteNuco.carpeta(fila['NUCCO'], 'RESPONSIVA', ['ADHERENTES']).getId(),
     });
   }
 
