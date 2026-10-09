@@ -315,6 +315,19 @@ const LineasRepo = (function () {
     }));
   }
 
+  /**
+   * La vista de tabla del AppSheet completa, como la muestra el panel (Exportar a Excel, 9-oct): un renglón por equipo o
+   * línea suelta con las columnas COLS_VISTA_LINEAS, sin ID. Sin caché, para que las fechas sigan siendo Date.
+   */
+  function vistaCompleta() {
+    const filas = [];
+    LineasDatos.leerTabla(TAB.LINEAS).forEach((f) => {
+      const r = convertirRegistro(f);
+      if (r && (r.equipo || r.linea)) filas.push(filaVista_(f, r).slice(1));
+    });
+    return { columnas: COLS_VISTA_LINEAS.slice(), filas: filas };
+  }
+
   /** Índices de equipos y líneas + columnas de la vista de tabla del AppSheet (1 lectura de la pestaña; caché 30 min). */
   function indice(forzar) {
     const inicio = Date.now();
@@ -1478,7 +1491,7 @@ const LineasRepo = (function () {
     TAB, ENCABEZADOS_APP, TIPOS_CON_EQUIPO, TIPOS_CON_LINEA, TIPOS_LINEA_OPCIONAL, CATALOGO,
     COLS_LINEA, VALORES_SIN_LINEA, ESTATUS_EN_BLANCO, DEPARTAMENTO_DISPONIBLE, COLS_RESPONSABLE, CAMPOS_BITACORA,
     tipoConLinea, tipoSinLinea, convertirRegistro, folioRegistro, estatusGeneralRegistro,
-    indice, refrescarIndice, leerRegistroPorId, leerRegistroObligatorio, idActual, idsDeRegistro,
+    indice, vistaCompleta, refrescarIndice, leerRegistroPorId, leerRegistroObligatorio, idActual, idsDeRegistro,
     guardarCambiosRegistro, agregarRegistro, registrarMovimiento, asegurarPestanaApp,
     evidenciaDesdeFila, inspeccionDesdeFila, inspeccionDesdeEvidencia, responsivaDesdeFila,
     evidenciasDeRegistro, leerInspeccion, leerResponsiva, revisarPdfsLigados, historialDeRegistro, asignacionesDeRegistro, movimientoDeCampo, bitacora,
