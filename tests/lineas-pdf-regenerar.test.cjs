@@ -91,7 +91,8 @@ function captura(fila, opciones) {
       buscarFilasPorId: () => [2], leerFilas: () => [[fila]], idsDeFila: () => [fila.ID], existeTabla: () => true,
       buscarFilasVarios: () => [7], conCandado: (f) => f(), actualizarFila: (...a) => hechos.ligados.push(a),
     },
-    LineasUtil: { col: (f, c) => (c in f ? f[c] : null), nuco4: (n) => String(n).padStart(4, '0') },
+    LineasUtil: { col: (f, c) => (c in f ? f[c] : null), nuco4: (n) => String(n).padStart(4, '0'),
+      patronVigente: (pin, p) => (!pin || /^PATR[OÓ]N$/i.test(pin) ? (p || '') : '') },
     LineasArchivos: {
       blob: () => null, enNucos: () => true, olvidarNuco: () => {},
       reemplazarPdf: (id, bytes) => { hechos.reemplazos.push([id, bytes.length]); return { id, name: 'RESP 0012 05 10.pdf' }; },

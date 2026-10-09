@@ -114,3 +114,29 @@ test('pantalla: Editar tiene la lista de bloqueo y los tres formularios mandan e
   assert.match(tramo('    function erroresFormularioEn(', '    /** FOLIO y ESTATUS GENERAL'), /errorPinBloqueo\(cuerpo\)/);
   assert.match(tramo('      function erroresCaptura(', '      function patronParaGuardar('), /errorPinBloqueo\(/);
 });
+
+// Usuario, 9-oct: el NUCO 0896 mostraba su PIN y, a la vez, la imagen de un patrón que dejó una inspección del AppSheet
+// (la inspección del 7-oct eligió «PIN» y el patrón viejo se quedó). Un solo bloqueo.
+test('un solo bloqueo: con PIN, contraseña o sin bloqueo el patrón se borra al guardar y no se muestra', () => {
+  assert.equal(LineasUtil.bloqueoSinPatron({ bloqueo: 'PIN' }), true);
+  assert.equal(LineasUtil.bloqueoSinPatron({ bloqueo: 'CONTRASEÑA' }), true);
+  assert.equal(LineasUtil.bloqueoSinPatron({ bloqueo: 'SIN BLOQUEO' }), true);
+  assert.equal(LineasUtil.bloqueoSinPatron({ bloqueo: 'PATRÓN' }), false);
+  assert.equal(LineasUtil.bloqueoSinPatron({ bloqueo: null }), false, 'sin la lista no se toca');
+  const img = 'INSPECCIONES LINEAS_Images/cbbef8da.PATRON.175320.png';
+  assert.equal(LineasUtil.patronVigente('123456', img), '', 'NUCO 0896');
+  assert.equal(LineasUtil.patronVigente('Clave1', img), '');
+  assert.equal(LineasUtil.patronVigente('PATRON', img), img);
+  assert.equal(LineasUtil.patronVigente('PATRÓN', '1-5-9'), '1-5-9');
+  assert.equal(LineasUtil.patronVigente('', img), img, 'sin PIN: el del AppSheet se sigue viendo');
+  assert.equal(LineasUtil.patronVigente('N/A', img), img, 'N/A del AppSheet: como estaba');
+
+  const captura = read('src/services/lineas/LineasCaptura.gs');
+  assert.match(captura, /valores\['PATRON'\] = String\(datos\.patron\);\s*if \(LineasUtil\.bloqueoSinPatron\(datos\)\) valores\['PATRON'\] = '';/, 'inspección');
+  assert.match(captura, /valores\['CONTRASEÑA'\] = String\(datos\.patron\);\s*if \(LineasUtil\.bloqueoSinPatron\(datos\)\) valores\['CONTRASEÑA'\] = '';/, 'responsiva');
+  assert.match(captura, /if \(LineasUtil\.bloqueoSinPatron\(datos\)\) \{ copia\['PATRON'\] = ''; copia\['PIN EQUIPO'\] = valores\['PIN EQUIPO'\] \|\| ''; \}/, 'responsiva → equipo');
+  assert.match(captura, /const rutaPatron = LineasUtil\.patronVigente\(col\('PIN EQUIPO'\), col\(colPatron\)\);/, 'PDF');
+  assert.match(read('src/services/lineas/LineasRegistros.gs'), /if \(LineasUtil\.bloqueoSinPatron\(datos\) && 'PATRON' in valores\) valores\['PATRON'\] = '';/, 'Editar');
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  assert.equal((repo.match(/patronRuta: LineasUtil\.patronVigente\(col\(f, 'PIN EQUIPO'\), col\(f, 'PATRON'\)\) \|\| null/g) || []).length, 2, 'ficha e inspección');
+});

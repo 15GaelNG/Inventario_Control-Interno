@@ -603,6 +603,7 @@ const LineasRegistros = (function () {
       const r = resolver_(elementos, base, enviados, ctx);
       if (r.errores.length) throw new Error(r.errores.slice(0, 8).join(' · '));
       const valores = homologarNuco_(aHoja_(elementos, r.valores));
+      if (LineasUtil.bloqueoSinPatron(datos) && 'PATRON' in valores) valores['PATRON'] = '';
       // Solo lo que cambió (las fechas sin cambio se comparan por texto para no reescribirlas)
       const cambios = {};
       Object.keys(valores).forEach((c) => {
