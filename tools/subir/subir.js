@@ -74,7 +74,17 @@ function exigirCuentaDeProd_(args) {
   return cuenta;
 }
 
-/** Mueve los dos links de prod a la versión y revisa que los dos hayan quedado ahí */
+/**
+ * Mueve los dos links de prod a la versión y revisa que los dos hayan quedado ahí.
+ *
+ * El despliegue público de firma (URL_FIRMA_PUBLICA) NO se toca aquí a propósito: moverlo por
+ * la API (clasp update-deployment) le resetea "Quién tiene acceso" al del manifiesto normal
+ * (Dominio) -- Apps Script no respeta el "Cualquier usuario" que se eligió a mano al crearlo
+ * en cuanto se le apunta a otra versión por la API (confirmado, 8-oct: quedó pidiendo cuenta
+ * de dominio después del primer --desplegar con esto automatizado). Por eso ese despliegue se
+ * actualiza A MANO, desde el editor (Implementar → Administrar implementaciones → lápiz →
+ * elegir la versión nueva → confirmar "Cualquier usuario" otra vez ahí mismo, antes de guardar).
+ */
 function moverDespliegues_(proyecto, version, descripcion) {
   clasp(['-P', proyecto, 'update-deployment', DESPLIEGUES_PROD[1], '-V', version, '-d', descripcion]);
   const lista = clasp(['-P', proyecto, 'list-deployments']);
@@ -101,7 +111,8 @@ function regresar_(args, version) {
   console.log('Regresado: los dos links de producción en la versión ' + version + '.');
   resumen_('## ↩️ Producción regresó a la versión ' + version + '\n\n' +
     '| | |\n|---|---|\n| Antes | v' + (antes || '?') + ' |\n| Ahora | v' + version + ' |\n' +
-    '| La app corre con | ' + cuenta + ' |\n| Link del equipo | ' + LINK_EQUIPO() + ' |');
+    '| La app corre con | ' + cuenta + ' |\n| Link del equipo | ' + LINK_EQUIPO() + ' |\n\n' +
+    'La liga pública de firma (si la usas) se actualiza a mano, aparte -- ver el comentario de moverDespliegues_.');
 }
 
 function ramaActual_() {
@@ -206,13 +217,20 @@ async function main() {
   // válido. En prod esto pasa ANTES de mover los despliegues: algo roto nunca le llega a nadie.
   const head = /-\s+(\S+)\s+@HEAD/.exec(clasp(['-P', proyecto, 'list-deployments']));
   if (!head) throw new Error('El proyecto no tiene despliegue @HEAD para revisar la página');
+  // Index.html y FirmaExterna.html son páginas completas por su cuenta (nunca un <script>
+  // incluido dentro del shell de la SPA): la primera no se revisa aquí (no se comprime, ver
+  // construir.js); la segunda se revisa aparte, pidiendo su propia liga (abajo).
+  const APARTE = ['Index.html', 'FirmaExterna.html'];
   const bloques = [];
   subido.forEach((ruta) => {
-    if (!ruta.endsWith('.html') || path.basename(ruta) === 'Index.html') return;
+    if (!ruta.endsWith('.html') || APARTE.includes(path.basename(ruta))) return;
     for (const m of fs.readFileSync(ruta, 'utf8').matchAll(/<script>([\s\S]*?)<\/script>/g)) bloques.push(m[1]);
   });
   const revisada = await revisar(head[1], DESTINOS.dominio, bloques);
   console.log('Página revisada como la entrega Apps Script: ' + revisada.scripts + ' scripts completos y válidos.');
+  // FirmaExterna.html no se revisa aquí (es su propia página, con su propia liga -- no un
+  // <script> del shell de la SPA): al probar algo que la use, ábrela a mano una vez
+  // (?firmar=1&tipo=responsiva&token=x) para confirmar que Apps Script no le cortó nada.
 
   // Los IDs del proyecto (carpetas, libros, hojas): en prod, un error no deja desplegar
   const rev = await entorno.revisar(head[1], DESTINOS.dominio);
@@ -234,6 +252,8 @@ async function main() {
     console.log('Desplegado: los dos links de producción en la versión ' + m[1] + '.');
     resumen_('## 🚀 Producción en la versión ' + m[1] + '\n\n| | |\n|---|---|\n| Qué cambia | ' + descripcion.replace(/\|/g, '/') + ' |\n' +
       '| Antes | v' + (antes || '?') + ' |\n| La app corre con | ' + (rev.cuenta || '?') + ' |\n| Link del equipo | ' + LINK_EQUIPO() + ' |\n\n' +
+      'Si usas la liga pública de firma, actualízala a mano (Implementar → Administrar implementaciones → lápiz → ' +
+      'versión ' + m[1] + ' → confirma "Cualquier usuario" antes de guardar -- la API se lo resetea solo).\n\n' +
       (antes ? 'Si algo salió mal: **Run workflow** → acción "regresar a una versión" → versión `' + antes + '`.' : ''));
   } else if (destino === 'prod') {
     resumen_('## 🔎 Subido a producción sin desplegar\n\nEl código quedó en el link `/dev`; el equipo sigue en la versión de antes.');

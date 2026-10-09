@@ -19,17 +19,6 @@
   .rel-tipo { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 600; white-space: nowrap; }
   .rel-tipo.cache { background: var(--color-primary-soft); color: var(--color-primary); }
   .rel-tipo.bitacora { background: var(--color-bg); color: var(--color-text-muted); border: 1px solid var(--color-border); }
-  .rel-matriz-scroll { overflow: auto; border: 1px solid var(--color-border); border-radius: 10px; }
-  .rel-matriz { font-size: 12.5px; border-collapse: collapse; min-width: 100%; }
-  .rel-matriz th, .rel-matriz td { padding: 7px 10px; border-bottom: 1px solid var(--color-border); text-align: left; white-space: nowrap; }
-  .rel-matriz thead th { background: var(--color-surface); position: sticky; top: 0; vertical-align: bottom; }
-  .rel-matriz thead th .rel-llave { display: block; font-weight: normal; font-size: 11px; color: var(--color-text-muted); margin-top: 2px; }
-  .rel-matriz tbody th { font-weight: 600; position: sticky; left: 0; background: var(--color-surface); }
-  .rel-matriz td.rel-vacia { color: var(--color-border); text-align: center; }
-  .rel-matriz td.rel-igual { color: var(--color-text); }
-  .rel-matriz td.rel-renombrada, .rel-leyenda .rel-renombrada { color: var(--color-primary); }
-  .rel-leyenda { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--color-text-muted); margin: 10px 0 0; }
-  .rel-centinelas code { background: var(--color-bg); padding: 1px 6px; border-radius: 6px; margin-right: 4px; font-size: 12px; }
 
   /* ---- Vista sencilla (para todos): pestaña Avisos + una por familia ---- */
   .rel-switch { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--color-text-muted); cursor: pointer; user-select: none; white-space: nowrap; }
@@ -85,6 +74,67 @@
   .rel-s-detalle-cabeza h3 { margin: 0 0 4px; font-size: 17px; }
   .rel-s-detalle-cabeza p { margin: 0; font-size: 13px; color: var(--color-text-muted); max-width: 640px; }
   .rel-s-detalle-cabeza button { display: inline-flex; align-items: center; gap: 6px; }
+
+  /* ---- Conexiones (app-datos-conectados.html): una tarjeta por par de hojas, editable ---- */
+  .dc-cabeza { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+  .dc-filtros { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .dc-chip { padding: 5px 12px; border-radius: 999px; font-size: 12.5px; background: var(--color-surface); border: 1px solid var(--color-border); color: var(--color-text); }
+  .dc-chip.activo { background: var(--color-primary-soft); color: var(--color-primary); border-color: var(--color-primary); font-weight: 600; }
+  .dc-nueva { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+  .dc-tarjetas { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+  .dc-tarjeta { border: 1px solid var(--color-border); border-radius: 12px; padding: 14px; background: var(--color-surface); display: flex; flex-direction: column; gap: 10px; }
+  .dc-tarjeta.dc-reves { border-style: dashed; }
+  .dc-nueva-card { margin-bottom: 14px; border-color: var(--color-primary); }
+  /* Título a la izquierda (se parte en renglones si es largo) y la etiqueta siempre arriba a la derecha */
+  .dc-t-cabeza { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px; }
+  .dc-t-cabeza .rel-tipo { margin-top: 2px; }
+  .dc-t-hojas { display: flex; align-items: center; column-gap: 8px; row-gap: 2px; font-size: 15px; flex-wrap: wrap; min-width: 0; }
+  .dc-destino { display: inline-flex; align-items: center; gap: 8px; }
+  .dc-t-llave { margin: 0; font-size: 12.5px; color: var(--color-text-muted); }
+  .dc-datos { display: flex; flex-direction: column; gap: 4px; }
+  .dc-dato { display: grid; grid-template-columns: 1fr auto 1fr 28px; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: var(--color-bg); font-size: 13px; }
+  .dc-de, .dc-a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dc-flecha { color: var(--color-text-muted); display: inline-flex; }
+  .dc-flecha.grande { color: var(--color-primary); }
+  .dc-mas { align-self: flex-start; background: transparent; border: none; padding: 4px 8px; color: var(--color-primary); font-size: 12.5px; font-weight: 600; }
+  .dc-mas:hover { background: transparent; text-decoration: underline; }
+  .dc-quitar { background: transparent; border: none; padding: 2px; color: var(--color-text-muted); display: inline-flex; justify-content: center; }
+  .dc-quitar:hover { color: var(--color-danger); background: transparent; }
+  .dc-sistema { color: var(--color-text-muted); display: inline-flex; justify-content: center; }
+  .dc-t-acciones { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; }
+  .dc-t-acciones button, .dc-form-acciones button, .dc-vista-acciones button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 13px; }
+  .dc-sutil { font-size: 12px; color: var(--color-text-muted); margin: 0; }
+  .dc-seccion { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--color-border); }
+  .dc-h4 { margin: 0 0 4px; font-size: 14.5px; display: flex; align-items: center; gap: 7px; }
+  .dc-seccion-texto { margin-bottom: 12px; }
+  .dc-h5 { margin: 12px 0 6px; font-size: 13.5px; }
+  .dc-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  .dc-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--color-text-muted); flex: 1 1 200px; }
+  .dc-form select { width: 100%; }
+  .dc-form-acciones, .dc-vista-acciones { display: flex; gap: 8px; flex-wrap: wrap; width: 100%; }
+  .dc-agregar { border-top: 1px dashed var(--color-border); padding-top: 10px; }
+  .dc-agregar [data-dc-previa] { width: 100%; }
+  .dc-llaves { display: flex; flex-direction: column; gap: 6px; }
+  .dc-opcion { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; cursor: pointer; }
+  .dc-opcion input { width: auto; margin-top: 3px; }
+  .dc-opcion .dc-sutil { display: block; }
+  .dc-elegir { display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow: auto; padding-right: 4px; }
+  .dc-elegir-fila { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; }
+  .dc-vista { border: 1px solid var(--color-border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; background: var(--color-bg); }
+  .dc-cifras { margin: 0; font-size: 13px; }
+  .dc-dif { font-size: 13px; }
+  .dc-ejemplos { margin: 4px 0 0 18px; padding: 0; font-size: 12.5px; color: var(--color-text-muted); }
+  .dc-ejemplos code { background: var(--color-surface); padding: 0 5px; border-radius: 5px; }
+  .dc-aviso { color: var(--color-danger); font-weight: 600; }
+  .dc-ok { color: var(--color-success); display: inline-flex; align-items: center; gap: 4px; }
+  @media (max-width: 640px) {
+    .dc-tarjetas { grid-template-columns: 1fr; }
+    .dc-nueva { margin-left: 0; }
+    /* En celular el nombre del dato se parte en renglones en vez de cortarse ("Número de em…") */
+    .dc-de, .dc-a { white-space: normal; overflow-wrap: anywhere; }
+    .dc-elegir-fila { grid-template-columns: 1fr; }
+    .dc-elegir-fila .dc-flecha { display: none; }
+  }
 </style>
 
 <!--
@@ -97,9 +147,8 @@
   <div class="page-header-compacto">
     <div>
       <h2><i data-lucide="git-compare-arrows" class="ico"></i> Datos conectados</h2>
-      <p class="page-subtitle">Algunos datos se capturan en un módulo y se usan en otros. Aquí ves qué módulo decide cada dato y a dónde se copia. Si coinciden o no, lo revisa Salud.</p>
+      <p class="page-subtitle">Algunos datos se capturan en un módulo y se usan en otros. Aquí ves qué módulo decide cada dato, a dónde se copia y si coinciden; también puedes conectar más datos.</p>
     </div>
-    <label class="rel-switch"><input type="checkbox" id="rel-tecnico-toggle" /> Ver detalle técnico</label>
   </div>
 
   <!-- Vista sencilla: una pestaña por familia (las agrega initRelaciones al cargar el mapa) -->
@@ -109,10 +158,4 @@
     </div>
   </div>
 
-  <!-- Vista técnica: la matriz columna del dueño × hoja copia -->
-  <div id="rel-tecnica" hidden>
-    <div class="card card-compacta">
-      <div id="rel-mapa"><p class="empty-state">Cargando…</p></div>
-    </div>
-  </div>
 </template>

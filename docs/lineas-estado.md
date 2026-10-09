@@ -3,9 +3,10 @@
 Rama `master` = producción (la versión vigente está en el INDICE; lo último de Líneas ahí es la parte 6 con COMENTARIO,
 plantillas «(SISTEMA)», página de la responsiva, patrón con 9 puntos en el PDF, Reasignar corregido, responsables
 adicionales, sin «quien lo usa», firma guardada, PDF ligado fuera de su carpeta, PIN en minúsculas y Drive sin
-`UrlFetchApp`). Rama `emmanuel`: además, el PIN del equipo solo con números, sin la compatibilidad con OBSERVACIONES y
-la identificación de cada responsable en la responsiva y Exportar a Excel del inventario como lo muestra el panel (9-oct).
-Lo de adendums y facturas (la pantalla Proveedor) salió de `emmanuel` el 8-oct y queda para después (`_archivo/emmanuel_respaldo_8oct.zip` de la carpeta del proyecto) · Última actualización: 2026-10-09
+`UrlFetchApp`), el PIN del equipo solo con números, sin la compatibilidad con OBSERVACIONES, Exportar a Excel del
+inventario como lo muestra el panel, la identificación de cada responsable en la responsiva y reutilizarla con «¿Es
+correcta?» (9-oct). Lo de adendums y facturas (la pantalla Proveedor) salió de `emmanuel` el 8-oct y queda para después
+(`_archivo/emmanuel_respaldo_8oct.zip` de la carpeta del proyecto) · Última actualización: 2026-10-09
 
 Qué es hoy el módulo **Líneas** (equipos celulares y líneas telefónicas), dónde vive cada cosa y cómo se trabaja.
 La bitácora anterior de este archivo (§0a…§0ae, hasta el 1-oct) sigue en el historial de git. El diseño de las hojas

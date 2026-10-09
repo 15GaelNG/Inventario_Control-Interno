@@ -489,7 +489,8 @@ const MAPA = {
   function deOtraHoja(nombreHoja) {
     const columnas = [];
     const sinDueno = {};
-    Object.keys(MAPA).forEach((o) => MAPA[o].copias.forEach((c) => {
+    const mapa = mapa_();
+    Object.keys(mapa).forEach((o) => mapa[o].copias.forEach((c) => {
       if (c.nombre !== nombreHoja || esBitacora_(c)) return;
       Object.keys(c.columnas).forEach((k) => columnas.push(c.columnas[k]));
       Object.assign(sinDueno, c.sinDueno || {});
@@ -538,7 +539,8 @@ const MAPA = {
   }
 
   function hojaCopia_(copia, ssId) {
-    return SheetUtils.getSheetByColumns(ssId, copia.firma);
+    // Las conectadas desde la pantalla no traen firma: se abren por su nombre (es el de la hoja, del catálogo)
+    return copia.firma ? SheetUtils.getSheetByColumns(ssId, copia.firma) : SheetUtils.getSheet(ssId, copia.nombre);
   }
 
   /** Posición (base 1) de una columna por nombre; truena claro si no existe — nunca escribe en otra. */
@@ -623,7 +625,7 @@ const MAPA = {
    * tomado; si no, usa propagar().
    */
   function propagarSinCandado_(origen, filaOrigen, cambios, opciones) {
-    const definicion = MAPA[origen];
+    const definicion = mapa_()[origen];
     const soltar = !!(opciones && opciones.soltar);
     if (!definicion || !filaOrigen || (!cambios && !soltar)) return {};
     const ssId = definicion.spreadsheet();
@@ -714,7 +716,7 @@ const MAPA = {
             // Vale la pena saberlo: son filas sin FK, y las que la app crea ya nacen con
             // ella. Casi siempre significa "las capturó AppSheet".
             console.log('Relaciones: ' + copia.nombre + ' — ' + porFk + ' fila(s) por ID y ' +
-              porClave + ' por ' + copia.clave + ' (sin ' + copia.llaveForanea + ')');
+              porClave + ' por ' + copia.clave + (copia.llaveForanea ? ' (sin ' + copia.llaveForanea + ')' : ''));
           }
         } catch (err) {
           errores.push(copia.nombre + ': ' + err.message);
@@ -765,9 +767,10 @@ const MAPA = {
    *   negocio y las columnas copiadas — listos para SheetUtils.insert
    */
   function datosParaNuevo(nombreCopia, valorClave) {
-    const origenNombre = Object.keys(MAPA).find((o) => MAPA[o].copias.some((c) => c.nombre === nombreCopia));
+    const mapa = mapa_();
+    const origenNombre = Object.keys(mapa).find((o) => mapa[o].copias.some((c) => c.nombre === nombreCopia));
     if (!origenNombre) throw new Error('Relaciones: "' + nombreCopia + '" no está en el MAPA');
-    const origenDef = MAPA[origenNombre];
+    const origenDef = mapa[origenNombre];
     const copia = origenDef.copias.find((c) => c.nombre === nombreCopia);
 
     const ssId = origenDef.spreadsheet();
@@ -897,8 +900,9 @@ const MAPA = {
   function revisarSinCandado_(corregir, conLog, soloHojas, conDetalle, soloFilas, quien) {
     const resultado = {};
 
-    Object.keys(MAPA).forEach((origenNombre) => {
-      const origenDef = MAPA[origenNombre];
+    const mapa = mapa_();
+    Object.keys(mapa).forEach((origenNombre) => {
+      const origenDef = mapa[origenNombre];
       const copias = origenDef.copias.filter((c) => !soloHojas || soloHojas.indexOf(normalizar_(c.nombre)) !== -1);
       if (!copias.length) return;
       // Un libro que no está configurado (SS_ID_TELEFONIA en un proyecto sin Líneas) o una
@@ -1159,10 +1163,136 @@ const MAPA = {
       : { nombre: hoja, uno: 'registro', varios: 'registros', familia: 'Otros' };
   };
 
+  // ---------------------------------------------------------- lo conectado desde la pantalla
+
+  /** En qué libro vive cada familia, para las hojas que no están en el MAPA del código */
+  const LIBRO_DE_FAMILIA = {
+    vehiculos: () => Config.SPREADSHEET_IDS.VEHICULOS(),
+    cajachica: () => Config.SPREADSHEET_IDS.CAJACHICA(),
+    lineas: () => Config.SPREADSHEET_IDS.TELEFONIA(),
+  };
+
+  /** El libro de una hoja: el de su dueño en el MAPA si aparece ahí; si no, el de su familia */
+  function libroDe(hoja) {
+    const h = normalizar_(hoja);
+    const dueno = Object.keys(MAPA).find((o) => normalizar_(o) === h ||
+      MAPA[o].copias.some((c) => normalizar_(c.nombre) === h));
+    if (dueno) return MAPA[dueno].spreadsheet();
+    let familia = 'vehiculos';
+    try { familia = (Entidades.de(hoja) || {}).familia || familia; } catch (e) { /* sin catálogo */ }
+    return (LIBRO_DE_FAMILIA[familia] || LIBRO_DE_FAMILIA.vehiculos)();
+  }
+
+  let mapaEnEjecucion_ = null;
+  /** Después de guardar o quitar desde la pantalla: la siguiente consulta vuelve a armar el mapa */
+  function olvidarMapa() { mapaEnEjecucion_ = null; }
+
+  /**
+   * El MAPA del código más lo conectado desde la pantalla (DatosConectados.reglas). Lo del código manda: un dato que
+   * ya está conectado ahí no se repite, y una columna de la copia recibe de un solo lugar. Sin DatosConectados (las
+   * pruebas, o si falla leer la configuración) es el MAPA tal cual.
+   */
+  function mapa_() {
+    if (mapaEnEjecucion_) return mapaEnEjecucion_;
+    let reglas = [];
+    try {
+      if (typeof DatosConectados !== 'undefined') reglas = DatosConectados.reglas();
+    } catch (e) {
+      console.warn('Relaciones: no se pudo leer lo conectado desde la pantalla, se usa solo el MAPA: ' + e.message);
+    }
+    if (!reglas.length) return (mapaEnEjecucion_ = MAPA);
+    const m = {};
+    Object.keys(MAPA).forEach((k) => {
+      m[k] = Object.assign({}, MAPA[k], {
+        copias: MAPA[k].copias.map((c) => Object.assign({}, c, { columnas: Object.assign({}, c.columnas) })),
+      });
+    });
+    reglas.forEach((r) => {
+      let duenoNombre = Object.keys(m).find((k) => normalizar_(k) === normalizar_(r.dueno));
+      if (!duenoNombre) {
+        duenoNombre = r.dueno;
+        const libro = libroDe(r.dueno);
+        m[duenoNombre] = { spreadsheet: () => libro, hoja: r.dueno, llaveDeNegocio: r.llaveDueno, copias: [], desdePantalla: true };
+      }
+      const d = m[duenoNombre];
+      let c = d.copias.find((x) => normalizar_(x.nombre) === normalizar_(r.copia));
+      if (!c) {
+        c = { nombre: r.copia, tipo: r.tipo, claveOrigen: r.llaveDueno, clave: r.llaveCopia, columnas: {}, desdePantalla: true };
+        d.copias.push(c);
+      }
+      const destinos = Object.keys(c.columnas).map((k) => normalizar_(c.columnas[k]));
+      if (c.columnas[r.colDueno] !== undefined || destinos.indexOf(normalizar_(r.colCopia)) !== -1) return;
+      c.columnas[r.colDueno] = r.colCopia;
+      c.dePantalla = Object.assign({}, c.dePantalla, { [r.colDueno]: true });
+    });
+    return (mapaEnEjecucion_ = m);
+  }
+
+  /** Estos ya propagan desde su propio servicio (VehiculosService, SensoresService): alGuardar no lo repite */
+  const PROPAGA_EN_SU_SERVICIO = ['VEHICULOS', 'INSTALACION DE SENSORES'];
+
+  /**
+   * Después de guardar un registro desde la app (HojaServicio.actualizar): si su hoja es dueña de algún dato
+   * conectado, se copia a las hojas que lo mantienen al día. Para que lo conectado desde la pantalla funcione con
+   * cualquier hoja, no solo con las que ya llamaban a propagar().
+   */
+  function alGuardar(hoja, registro, cambios, opciones) {
+    if (!hoja || !registro || !cambios) return {};
+    if (PROPAGA_EN_SU_SERVICIO.indexOf(normalizar_(hoja)) !== -1) return {};
+    const mapa = mapa_();
+    const dueno = Object.keys(mapa).find((k) => normalizar_(k) === normalizar_(hoja));
+    if (!dueno || !mapa[dueno].copias.some((c) => !esBitacora_(c))) return {};
+    return opciones && opciones.candadoTomado
+      ? propagarSinCandado_(dueno, registro, cambios)
+      : propagar(dueno, registro, cambios);
+  }
+
+  /** Cuántos renglones de una edición a mano se copian a la vez (un pegado enorme no debe agotar el activador) */
+  const A_MANO_MAX = 200;
+
+  /**
+   * Lo que alguien edita A MANO en la hoja dueña también se copia (AvisoDeCambios.alEditarLibro). Solo si lo que se
+   * editó es un dato conectado "al día"; lo copiado queda en LOG_RELACIONES (tipo EDICION A MANO) con quién lo editó.
+   * @param {Sheet} hoja   la pestaña editada
+   */
+  function alEditarAMano(ssId, hoja, fila1, nFilas, col1, nCols, quien) {
+    const mapa = mapa_();
+    const dueno = Object.keys(mapa).find((k) => normalizar_(k) === normalizar_(hoja.getName()));
+    if (!dueno || fila1 + nFilas - 1 < 2) return 0;
+    const alDia = mapa[dueno].copias.filter((c) => !esBitacora_(c));
+    if (!alDia.length) return 0;
+    const encabezados = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0];
+    const conectadas = {};
+    alDia.forEach((c) => Object.keys(c.columnas).forEach((o) => { conectadas[normalizar_(o)] = true; }));
+    const tocadas = encabezados.slice(col1 - 1, col1 - 1 + nCols).filter((c) => conectadas[normalizar_(c)]);
+    if (!tocadas.length) return 0;
+    const desde = Math.max(2, fila1);
+    const cuantas = Math.min(fila1 + nFilas - desde, A_MANO_MAX);
+    const filas = hoja.getRange(desde, 1, cuantas, encabezados.length).getValues();
+    const log = [];
+    filas.forEach((f) => {
+      const registro = {};
+      encabezados.forEach((c, i) => { registro[c] = f[i]; });
+      const cambios = {};
+      tocadas.forEach((c) => { cambios[c] = registro[c]; });
+      try {
+        const r = propagar(dueno, registro, cambios);
+        Object.keys(r).forEach((copia) => tocadas.forEach((c) => log.push({
+          tipo: 'EDICION A MANO', hoja: copia, clave: registro[mapa[dueno].llaveDeNegocio] || '', columna: c,
+          tenia: '', quedo: limpiar_(cambios[c]) + ' (' + r[copia] + ')',
+        })));
+      } catch (err) {
+        console.error('Relaciones.alEditarAMano (' + dueno + '): ' + err.message);
+      }
+    });
+    if (log.length) escribirLog_(ssId, log, quien || '');
+    return log.length;
+  }
+
   function describir() {
     return {
-      duenos: Object.keys(MAPA).map((nombre) => {
-        const d = MAPA[nombre];
+      duenos: Object.keys(mapa_()).map((nombre) => {
+        const d = mapa_()[nombre];
         return {
           hoja: d.hoja,
           etiqueta: etiqueta_(d.hoja),
@@ -1176,7 +1306,9 @@ const MAPA = {
             clave: c.clave,
             columnas: Object.keys(c.columnas).map((k) => ({
               origen: k, destino: c.columnas[k], calculada: !!(c.calcular && c.calcular[c.columnas[k]]),
+              pantalla: !!(c.dePantalla && c.dePantalla[k]),
             })),
+            desdePantalla: !!c.desdePantalla,
             campoEnDueno: campoEnDueno_(c),
             sinDueno: c.sinDueno || null,
             nota: c.nota || '',
@@ -1204,7 +1336,7 @@ const MAPA = {
    */
   function cambiarClave(origen, claveNombre, claveVieja, claveNueva, opciones) {
     const confirmar = !!(opciones && opciones.confirmar);
-    const definicion = MAPA[origen];
+    const definicion = mapa_()[origen];
     if (!definicion) throw new Error('Relaciones: "' + origen + '" no está en el MAPA');
     if (!claveNueva || normalizar_(claveNueva) === normalizar_(claveVieja)) {
       throw new Error('La clave nueva debe ser distinta de la vieja');
@@ -1394,7 +1526,7 @@ const MAPA = {
   function impedimentos_(padre, ssId, padres) {
     const b = borrable_(padre);
     const e = etiqueta_(padre);
-    const llave = MAPA[padre] ? MAPA[padre].llaveDeNegocio : b.columnaId;
+    const llave = mapa_()[padre] ? mapa_()[padre].llaveDeNegocio : b.columnaId;
     const cuentas = contarHijos_(padre, ssId, padres);
     const bloqueados = [];
     padres.forEach((p, i) => {
@@ -1462,6 +1594,8 @@ const MAPA = {
     borrar, queImpideBorrar, protegeBorrado,
     // Para quien escribe junto a Relaciones (CapitalHumano): el mismo log y los mismos nombres
     anotar: escribirLog_, etiqueta: etiqueta_,
+    // Lo conectado desde la pantalla (DatosConectados.gs)
+    libroDe, olvidarMapa, alGuardar, alEditarAMano,
     // Solo para quien ya tiene el candado tomado. Ver su comentario.
     propagarSinCandado: propagarSinCandado_,
   };

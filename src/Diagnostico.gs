@@ -221,6 +221,8 @@ const REVISION_CARPETAS = {
   DRIVE_FOLDER_ID_VERIFICACIONES_LECTURA: { soloLee: true },
   DRIVE_FOLDER_ID_ARQUEOS_HISTORICO: { soloLee: true },
   LINEAS_DRIVE_APPSHEET: {},
+  // El expediente por NUCO: no vive en la raíz de la app (en un DEV sin la clave, sí: ExpedienteNuco)
+  DRIVE_FOLDER_ID_NUCOS_VEHICULOS: { nombre: 'NUCOS VEHICULOS', sinRaiz: true },
   LINEAS_DRIVE_NUCOS: {},
   LINEAS_DRIVE_APPSHEET_LECTURA: { soloLee: true },
 };
@@ -253,7 +255,7 @@ function revisionCapacidades_(id) {
  */
 const REVISION_EN_RAIZ = [
   'ARQUEOS', 'ARQUEOS_Images', 'ARQUEOS_Files_', 'UBER_Files_', 'VEHICULOS_Files_', 'VEHICULOS_Images',
-  'RESPONSIVAS VEHICULARES_Images', 'RESPONSIVAS_VEHICULARES', 'ADHERENTES VEHICULAR',
+  'RESPONSIVAS VEHICULARES_Images',   // RESPONSIVAS_VEHICULARES y ADHERENTES VEHICULAR ya no: el PDF va al NUCO (8-oct)
 ];
 /**
  * Hojas del catálogo que pueden faltar sin que sea error: APP_CORRECCIONES la crea Líneas la primera vez que
@@ -423,6 +425,11 @@ function revisionEntorno_() {
   if (hojasQueFaltan.length) (esProd ? errores : avisos).push('Faltan hojas en los libros: ' + hojasQueFaltan.join(', '));
   const calentador = ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === CALENTADOR_FUNCION);
   if (!calentador) avisos.push('El calentador no está instalado: correr instalarCalentador() una vez en el editor');
+  const avisoCambios = ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === AVISO_CAMBIOS_FUNCION);
+  if (!avisoCambios) {
+    avisos.push('El aviso de cambios no está instalado (lo que se edite a mano en la hoja no llega solo a las pantallas): ' +
+      'correr instalarAvisoDeCambios() una vez en el editor');
+  }
 
   return {
     scriptId: ScriptApp.getScriptId(), entorno: entorno, cuenta: efectivo, revisados: revisados,

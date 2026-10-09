@@ -13,12 +13,28 @@
  * actualiza RESPONSABLE VEHICULO / NO EMPLEADO / DEPARTAMENTO en la misma operación (bajo
  * candado) vía VehiculosService.actualizar(), que de paso ya deja su propio rastro en Cambios
  * Vehículos — mismo patrón que ReasignacionesVehicularesService, sin duplicar esa lógica aquí.
+ * Esto corre siempre al CREAR el renglón (presencial o a distancia) y nunca al completar una
+ * firma a distancia: VehiculosService.actualizar exige una sesión con permiso, y quien completa
+ * una firma a distancia no necesariamente tiene una — la reasignación ya quedó decidida por
+ * quien capturó, la firma solo falta para el papel.
  *
  * Las firmas (Responsable, Jefe Directo, Entrega/CI) NO se guardan en la hoja: llegan como
  * { base64, mimeType } por campo, se insertan directo en el PDF (PdfService.generar, mismo
  * motor que Inspección) y, aparte, se respaldan como imagen suelta en CARPETA_IMAGENES (sin
  * ligarlas desde la hoja — decisión del usuario, 06-oct-2026). Si el PDF o el respaldo de una
  * firma fallan, la responsiva ya quedó guardada — se avisa en vez de perder la captura.
+ *
+ * Firma a distancia (opciones.remoto / opciones.remotoJefe en crear): el responsable y el jefe
+ * pueden firmar cada quien por SU PROPIA liga, independiente uno del otro -- no es la misma
+ * página ni hace falta que coincidan en tiempo o dispositivo. Cada uno tiene su propio token de
+ * un solo uso (TOKEN FIRMA / TOKEN FIRMA JEFE) y, si no está presente, el renglón se guarda sin
+ * su firma, en ESTADO FIRMA="PENDIENTE". Quien entrega (CI) siempre firma al capturar -- nunca
+ * se difiere -- así que en cuanto se difiere CUALQUIERA de los otros dos, su firma (y la del que
+ * sí firmó presencial, si solo se difirió uno) se guarda temporalmente (columnas …TEMP, como
+ * JSON) hasta que la ÚLTIMA liga pendiente se complete: ESE es el momento en que de verdad se
+ * junta todo y se genera el PDF (intentarFinalizar_). completarFirma()/completarFirmaJefe() no
+ * piden `token` de sesión ni pasan por Permisos -- el TOKEN FIRMA de la liga ya es la credencial
+ * de esa llamada (quien firma puede no tener usuario en el sistema).
  */
 
 const ResponsivaVehicularService = (function () {
@@ -35,10 +51,14 @@ const ResponsivaVehicularService = (function () {
   // no la carpeta general de REPORTES que usan los demás módulos.
   // Por nombre dentro de la raíz de la app (DriveUtils.carpetaEnRaiz): cada proyecto usa las suyas
   const CARPETA_IMAGENES = 'RESPONSIVAS VEHICULARES_Images';
-  const CARPETA_PDF = 'RESPONSIVAS_VEHICULARES';
+  // El PDF (y la copia temporal de la vista previa) va al expediente del vehículo en su NUCO (ExpedienteNuco,
+  // 08-oct-2026): la carpeta RESPONSIVAS_VEHICULARES de la raíz ya no se usa.
 
   // Caja de las firmas en el PDF: la misma que usa InspeccionesService (150 × 60 pt).
   const FIRMA_PDF = { ancho: 150, alto: 60 };
+
+  // Firma a distancia: cuánto dura cada liga antes de que haya que mandar una nueva.
+  const FIRMA_REMOTA_DIAS_VIGENCIA = 5;
 
   // El vehículo se entrega con... (SI/NO cada uno; columna = <<IF([CLAVE]="SI",...)>> en la plantilla)
   const ACCESORIOS = [
@@ -48,8 +68,16 @@ const ResponsivaVehicularService = (function () {
   ];
 
   const COLUMNAS_RESUMEN = [
-    ID_COLUMN, 'FECHA', 'FOLIO VEHICULO', 'NUCCO', 'RESPONSABLE', 'DEPARTAMENTO', 'PDF', 'REGISTRADO POR',
+    ID_COLUMN, 'FECHA', 'FOLIO VEHICULO', 'NUCCO', 'RESPONSABLE', 'DEPARTAMENTO', 'ESTADO FIRMA',
+    'TOKEN FIRMA', 'TOKEN FIRMA JEFE', 'PDF', 'REGISTRADO POR',
+    'TIPO RESPONSIVA', 'FECHA FIN PRESTAMO', 'ESTATUS PRESTAMO', 'RESPONSABLE ANTERIOR',
   ];
+
+  // Valores válidos de TIPO RESPONSIVA / ESTATUS PRESTAMO (Préstamo Vehicular).
+  const TIPO_DEFINITIVA = 'DEFINITIVA';
+  const TIPO_PRESTAMO = 'PRESTAMO';
+  const PRESTAMO_EN_CURSO = 'EN PRESTAMO';
+  const PRESTAMO_DEVUELTO = 'DEVUELTO';
 
   function ssId() {
     return Config.SPREADSHEET_IDS.VEHICULOS();
@@ -67,8 +95,17 @@ const ResponsivaVehicularService = (function () {
       NUCCO: datos['NUCCO'][i] || '',
       RESPONSABLE: datos['RESPONSABLE'][i] || '',
       DEPARTAMENTO: datos['DEPARTAMENTO'][i] || '',
+      // En blanco (renglones de antes de esta función) = ya estaba firmado presencial
+      ESTADO_FIRMA: datos['ESTADO FIRMA'][i] || 'FIRMADO',
+      TOKEN_FIRMA: datos['TOKEN FIRMA'][i] || '',
+      TOKEN_FIRMA_JEFE: datos['TOKEN FIRMA JEFE'][i] || '',
       PDF: datos['PDF'][i] || '',
       REGISTRADO_POR: datos['REGISTRADO POR'][i] || '',
+      // En blanco (renglones de antes de Préstamo Vehicular) = responsiva definitiva de siempre.
+      TIPO_RESPONSIVA: datos['TIPO RESPONSIVA'][i] || TIPO_DEFINITIVA,
+      FECHA_FIN_PRESTAMO: HojaServicio.fechaISO(datos['FECHA FIN PRESTAMO'][i]) || '',
+      ESTATUS_PRESTAMO: datos['ESTATUS PRESTAMO'][i] || '',
+      RESPONSABLE_ANTERIOR: datos['RESPONSABLE ANTERIOR'][i] || '',
     };
   }
 
@@ -94,22 +131,194 @@ const ResponsivaVehicularService = (function () {
     return resultado;
   }
 
+  /** La liga que se manda a quien tiene que firmar a distancia (responsable o jefe, cada uno
+   *  con la suya -- ver el comentario del archivo). Usa el despliegue público si ya está
+   *  configurado (Config.urlFirmaPublica) -- así la puede abrir alguien sin cuenta de dominio;
+   *  si no, cae al despliegue normal de siempre (igual que antes). */
+  function construirLiga_(tokenFirma, quien) {
+    const base = Config.urlFirmaPublica() || ScriptApp.getService().getUrl();
+    return base + '?firmar=1&tipo=responsiva' +
+      (quien === 'jefe' ? '&quien=jefe' : '') + '&token=' + encodeURIComponent(tokenFirma);
+  }
+
   /**
-   * Registra una responsiva firmada y, si el responsable es distinto al actual del vehículo,
-   * actualiza el vehículo en la misma operación (candado). Genera el PDF al final; si falla,
-   * la responsiva ya quedó guardada (se regresa el aviso, no se pierde la captura).
+   * "Copiar liga de nuevo" desde la pestaña: SIEMPRE se arma aquí, nunca en el navegador --
+   * dentro de la app, location.origin es el sandbox de Apps Script
+   * (…-script.googleusercontent.com/userCodeAppPanel), no la URL real, así que una liga
+   * armada del lado del cliente no abre para nadie más (8-oct, confirmado con el usuario).
+   */
+  function ligaDeToken(token, tokenFirma, quien) {
+    Permisos.puedeLeer(token, MODULO);
+    return construirLiga_(tokenFirma, quien);
+  }
+
+  /** El renglón completo (todas sus columnas) por el token vigente de la columna dada;
+   *  null si no hay match. */
+  function buscarPorToken_(tokenFirma, columna) {
+    const limpio = String(tokenFirma || '').trim();
+    if (!limpio) return null;
+    return SheetUtils.getAll(ssId(), hoja_().getName()).find((f) => String(f[columna] || '') === limpio) || null;
+  }
+
+  /** ¿Ya no falta ninguna liga pendiente? (ni la del responsable ni la del jefe). Se evalúa
+   *  sobre la fila YA actualizada en memoria (con el token que se acaba de limpiar). */
+  function listoParaFinalizar_(fila) {
+    return !fila['TOKEN FIRMA'] && !fila['TOKEN FIRMA JEFE'];
+  }
+
+  /**
+   * Una columna …TEMP nunca guarda el base64 directo: Sheets no deja más de 50,000 caracteres
+   * por celda y una firma por FOTO (no por trazo) fácil lo rebasa -- el JPEG de hasta 1200 px
+   * que arma componentes/firma.html puede pesar 100-300 KB, 130,000-400,000 caracteres en
+   * base64 (bug real, 9-oct: "límite de 50000" al mandar una liga con firma por foto). Se
+   * guarda como archivo chico en la misma carpeta que ya usan las firmas finales
+   * (CARPETA_IMAGENES) y en la celda solo va su ID -- un puñado de caracteres, sin importar
+   * qué tan pesada sea la foto.
+   */
+  function guardarFirmaTemp_(campo, imagen) {
+    const nombreImagen = PdfService.nombreArchivo([campo, 'temp', Utilities.getUuid()]) + (imagen.mimeType === 'image/jpeg' ? '.jpg' : '.png');
+    const blob = Utilities.newBlob(Utilities.base64Decode(imagen.base64), imagen.mimeType || 'image/png', nombreImagen);
+    const archivo = DriveUtils.marcarAutor(DriveUtils.carpetaEnRaiz(CARPETA_IMAGENES).createFile(blob));
+    return JSON.stringify({ archivoId: archivo.getId(), mimeType: imagen.mimeType || 'image/png' });
+  }
+
+  /**
+   * Lee lo que haya en una columna …TEMP: un archivo de Drive (guardarFirmaTemp_, lo normal
+   * desde este arreglo) o, al revés, el base64 directo que dejó una liga creada ANTES de este
+   * arreglo y que seguía pendiente al momento de desplegarlo -- sin esto, esa firma se perdía
+   * en silencio (ni error ni aviso, solo faltaba del PDF) en cuanto alguien la completaba.
+   * null si no hay nada o el archivo ya no existe.
+   */
+  function leerFirmaTemp_(valor) {
+    if (!valor) return null;
+    let datos;
+    try { datos = JSON.parse(valor); } catch (e) { return null; }
+    if (!datos) return null;
+    if (datos.archivoId) {
+      const archivo = DriveApp.getFileById(datos.archivoId);
+      return { base64: Utilities.base64Encode(archivo.getBlob().getBytes()), mimeType: datos.mimeType || 'image/png' };
+    }
+    if (datos.base64) return { base64: datos.base64, mimeType: datos.mimeType || 'image/png' };
+    return null;
+  }
+
+  /** Borra de Drive el archivo temporal de una columna …TEMP ya junta con las demás (el PDF
+   *  final ya tiene su propio respaldo en Drive, aparte -- este solo servía para esperar). */
+  function borrarFirmaTempSiHay_(valor) {
+    if (!valor) return;
+    try {
+      const datos = JSON.parse(valor);
+      if (datos && datos.archivoId) DriveApp.getFileById(datos.archivoId).setTrashed(true);
+    } catch (e) { /* no-op: si no se pudo borrar, queda un archivo suelto en Drive, nada más */ }
+  }
+
+  /** Las firmas que ya se tienen guardadas en las columnas TEMP, listas para el PDF. */
+  function imagenesDesdeTemp_(fila) {
+    const imagenesPdf = {};
+    [['FIRMA RESPONSABLE', 'FIRMA RESPONSABLE TEMP'], ['FIRMA JEFE', 'FIRMA JEFE TEMP'], ['FIRMA CI', 'FIRMA CI TEMP']].forEach(([campo, columna]) => {
+      const guardada = fila[columna];
+      if (!guardada) return;
+      try {
+        const datos = leerFirmaTemp_(guardada);
+        if (datos) imagenesPdf[campo] = Object.assign({}, datos, FIRMA_PDF);
+      } catch (e) { /* se ignora, sin esa firma */ }
+    });
+    return imagenesPdf;
+  }
+
+  /**
+   * Respalda cada firma como imagen suelta en Drive, genera el PDF y guarda su URL -- lo
+   * mismo sin importar si las firmas se capturaron en persona (crear) o llegaron por una o dos
+   * ligas (completarFirma/completarFirmaJefe). Si algo de esto falla, el renglón ya estaba
+   * guardado desde antes: se regresa el aviso en vez de perder la captura.
+   */
+  function generarPdfYGuardar_(id, fila, imagenesPdf, ahora, camposExtra) {
+    const avisos = [];
+    let pdf = null;
+    try {
+      Object.keys(imagenesPdf).forEach((campo) => {
+        try {
+          const img = imagenesPdf[campo];
+          const nombreImagen = PdfService.nombreArchivo([
+            campo, fila['RESPONSABLE'], fila['PLACA'] || fila['FOLIO VEHICULO'], PdfService.fechaParaNombre(ahora),
+          ]) + '.png';
+          const blob = Utilities.newBlob(Utilities.base64Decode(img.base64), img.mimeType || 'image/png', nombreImagen);
+          const archivo = DriveUtils.marcarAutor(DriveUtils.carpetaEnRaiz(CARPETA_IMAGENES).createFile(blob));
+          DriveUtils.compartirLoMasAmplioPosible(archivo);
+        } catch (e) {
+          avisos.push('No se pudo respaldar ' + campo.toLowerCase() + ' en Drive: ' + e.message);
+        }
+      });
+
+      const datosPdf = Object.assign({}, fila, {
+        'DIA': Utilities.formatDate(ahora, ZONA, 'd'),
+        'MES': MESES[Number(Utilities.formatDate(ahora, ZONA, 'M')) - 1],
+        'AÑO': Utilities.formatDate(ahora, ZONA, 'yyyy'),
+      });
+      pdf = PdfService.generar({
+        plantillaId: PLANTILLA,
+        datos: datosPdf,
+        imagenes: imagenesPdf,
+        // Directo en el expediente del vehículo (NUCOS VEHICULOS/<NUCO>/1.-DOCUMENTACIÓN/5.-RESPONSIVA)
+        carpetaId: ExpedienteNuco.carpeta(fila['NUCCO'], 'RESPONSIVA').getId(),
+        nombre: PdfService.nombreArchivo([
+          'RESPONSIVA VEHICULAR', fila['RESPONSABLE'], fila['PLACA'] || fila['FOLIO VEHICULO'], PdfService.fechaParaNombre(ahora),
+        ]),
+      });
+      // Su nombre en el expediente (RESPONSIVA-0088.pdf) y, si es responsiva, la vigente pasa a RESPONSIVAS ANTERIORES.
+      // Si esto falla el PDF ya existe y queda ligado: solo se avisa.
+      try {
+        ExpedienteNuco.archivar(DriveApp.getFileById(pdf.fileId), fila['NUCCO'], 'RESPONSIVA');
+      } catch (e) {
+        avisos.push('El PDF se generó, pero no se pudo acomodar en el expediente del NUCO: ' + e.message);
+      }
+      SheetUtils.update(ssId(), hoja_().getName(), id, Object.assign({
+        'PDF': pdf.url, 'ESTADO FIRMA': 'FIRMADO',
+        'TOKEN FIRMA': '', 'TOKEN FIRMA EXPIRA': '', 'TOKEN FIRMA JEFE': '', 'TOKEN FIRMA JEFE EXPIRA': '',
+        'FIRMA RESPONSABLE TEMP': '', 'FIRMA JEFE TEMP': '', 'FIRMA CI TEMP': '',
+      }, camposExtra || {}), ID_COLUMN);
+      // Los archivos temporales de Drive (guardarFirmaTemp_) ya sirvieron: el PDF ya quedó con
+      // su propia firma respaldada arriba. Si alguno no se pudo borrar, queda un archivo suelto
+      // en Drive -- no afecta nada más.
+      ['FIRMA RESPONSABLE TEMP', 'FIRMA JEFE TEMP', 'FIRMA CI TEMP'].forEach((columna) => borrarFirmaTempSiHay_(fila[columna]));
+    } catch (e) {
+      avisos.push('Se guardó, pero no se pudo generar el PDF: ' + e.message);
+    }
+    return { ID: id, PDF: pdf ? pdf.url : null, aviso: avisos.join(' ') };
+  }
+
+  /**
+   * Registra una responsiva y, si el responsable es distinto al actual del vehículo, actualiza
+   * el vehículo en la misma operación (candado) -- sin importar si las firmas son presenciales
+   * o a distancia: la reasignación ya la decidió quien captura, aquí y ahora, con su sesión.
+   *
+   * opciones.remoto: no exige la firma del responsable, le genera su propia liga.
+   * opciones.remotoJefe: le genera al jefe su propia liga (independiente de la del responsable);
+   *   la firma del jefe NUNCA es obligatoria -- esto es solo para pedirla a distancia en vez de
+   *   dejarla en blanco. Los dos se pueden usar juntos o por separado.
+   * Si ninguna de las dos aplica: exige lo que corresponda y genera el PDF de una vez, como
+   * siempre. Si cualquiera aplica, el PDF se genera hasta que TODAS las ligas que se hayan
+   * mandado se completen (ver completarFirma/completarFirmaJefe/listoParaFinalizar_).
    *
    * @param {Object} datos      { 'FOLIO VEHICULO', 'RESPONSABLE', ... las demás columnas de captura manual }
    * @param {Object} imagenes   { 'FIRMA RESPONSABLE': {base64,mimeType}, 'FIRMA JEFE': ..., 'FIRMA CI': ... }
    */
-  function crear(token, datos, imagenes) {
+  function crear(token, datos, imagenes, opciones) {
     const sesion = Permisos.puedeEditar(token, MODULO);
+    const remoto = !!(opciones && opciones.remoto);
+    const remotoJefe = !!(opciones && opciones.remotoJefe);
     const folio = String((datos || {})['FOLIO VEHICULO'] || '').trim();
     if (!folio) throw new Error('Selecciona el vehículo (Folio).');
     const responsable = String((datos || {})['RESPONSABLE'] || '').trim();
     if (!responsable) throw new Error('Captura el responsable.');
-    if (!imagenes || !imagenes['FIRMA RESPONSABLE'] || !imagenes['FIRMA RESPONSABLE'].base64) {
+    if (!remoto && (!imagenes || !imagenes['FIRMA RESPONSABLE'] || !imagenes['FIRMA RESPONSABLE'].base64)) {
       throw new Error('Falta la firma del responsable.');
+    }
+    // Quien entrega SIEMPRE firma al capturar, presencial o a distancia -- a diferencia del
+    // responsable y del jefe (cada quien puede firmar después por su propia liga), quien
+    // entrega es quien está armando este renglón ahora mismo, así que no hay "después" para él.
+    if (!imagenes || !imagenes['FIRMA CI'] || !imagenes['FIRMA CI'].base64) {
+      throw new Error('Falta la firma de quien entrega.');
     }
 
     const lock = LockService.getScriptLock();
@@ -157,18 +366,79 @@ const ResponsivaVehicularService = (function () {
         'NOMBRE JEFE': datos['NOMBRE JEFE'] || '',
         'NOMBRE CI': datos['NOMBRE CI'] || sesion.nombre,
         'PDF': '',
+        'ESTADO FIRMA': (remoto || remotoJefe) ? 'PENDIENTE' : 'FIRMADO',
+        'TOKEN FIRMA': '',
+        'TOKEN FIRMA EXPIRA': '',
+        'TOKEN FIRMA JEFE': '',
+        'TOKEN FIRMA JEFE EXPIRA': '',
+        'FIRMA RESPONSABLE TEMP': '',
+        'FIRMA JEFE TEMP': '',
+        'FIRMA CI TEMP': '',
+        'FIRMADO POR': '',
+        'FIRMADO POR JEFE': '',
         'REGISTRADO POR': sesion.nombre,
         'FECHA REGISTRO': new Date(),
+        'TIPO RESPONSIVA': TIPO_DEFINITIVA,
+        'FECHA FIN PRESTAMO': '',
+        'ESTATUS PRESTAMO': '',
+        'RESPONSABLE ANTERIOR': '',
+        'NO EMPLEADO ANTERIOR': '',
+        'DEPARTAMENTO ANTERIOR': '',
       };
       ACCESORIOS.forEach((clave) => {
         fila[clave] = String(datos[clave] || '').trim().toUpperCase() === 'SI' ? 'SI' : 'NO';
       });
 
+      let liga = '';
+      let ligaJefe = '';
+      if (remoto || remotoJefe) {
+        // Todo lo que YA se tiene (CI siempre; responsable y/o jefe si no son ellos los que
+        // se están difiriendo) se guarda en TEMP hasta que la última liga pendiente complete.
+        fila['FIRMA CI TEMP'] = guardarFirmaTemp_('FIRMA CI', imagenes['FIRMA CI']);
+        if (!remoto && imagenes['FIRMA RESPONSABLE'] && imagenes['FIRMA RESPONSABLE'].base64) {
+          fila['FIRMA RESPONSABLE TEMP'] = guardarFirmaTemp_('FIRMA RESPONSABLE', imagenes['FIRMA RESPONSABLE']);
+        }
+        if (!remotoJefe && imagenes['FIRMA JEFE'] && imagenes['FIRMA JEFE'].base64) {
+          fila['FIRMA JEFE TEMP'] = guardarFirmaTemp_('FIRMA JEFE', imagenes['FIRMA JEFE']);
+        }
+        if (remoto) {
+          const tokenFirma = Utilities.getUuid();
+          fila['TOKEN FIRMA'] = tokenFirma;
+          fila['TOKEN FIRMA EXPIRA'] = new Date(Date.now() + FIRMA_REMOTA_DIAS_VIGENCIA * 24 * 60 * 60 * 1000);
+          liga = construirLiga_(tokenFirma, 'responsable');
+        }
+        if (remotoJefe) {
+          const tokenFirmaJefe = Utilities.getUuid();
+          fila['TOKEN FIRMA JEFE'] = tokenFirmaJefe;
+          fila['TOKEN FIRMA JEFE EXPIRA'] = new Date(Date.now() + FIRMA_REMOTA_DIAS_VIGENCIA * 24 * 60 * 60 * 1000);
+          ligaJefe = construirLiga_(tokenFirmaJefe, 'jefe');
+        }
+      }
+
+      // Préstamo Vehicular: la misma responsiva, solo que temporal -- mientras dura, el
+      // vehículo SÍ se reasigna al que lo recibe (abajo, igual que una definitiva), pero antes
+      // se respalda a quién tenía el vehículo justo antes, para poder regresárselo con un clic
+      // (devolverPrestamo) sin pedirle que vuelva a firmar: su responsiva de antes nunca dejó
+      // de ser válida. FECHA FIN PRESTAMO es solo informativa (no dispara nada solo) y, como el
+      // formulario la oculta si no es préstamo, aquí tampoco se confía en que venga vacía sola.
+      const tipoResponsiva = String(datos['TIPO RESPONSIVA'] || '').trim().toUpperCase() === TIPO_PRESTAMO
+        ? TIPO_PRESTAMO : TIPO_DEFINITIVA;
+      fila['TIPO RESPONSIVA'] = tipoResponsiva;
+      if (tipoResponsiva === TIPO_PRESTAMO) {
+        fila['FECHA FIN PRESTAMO'] = datos['FECHA FIN PRESTAMO'] ? new Date(datos['FECHA FIN PRESTAMO']) : '';
+        fila['ESTATUS PRESTAMO'] = PRESTAMO_EN_CURSO;
+        fila['RESPONSABLE ANTERIOR'] = vehiculo['RESPONSABLE VEHICULO'] || '';
+        fila['NO EMPLEADO ANTERIOR'] = vehiculo['NO EMPLEADO'] || '';
+        fila['DEPARTAMENTO ANTERIOR'] = vehiculo['DEPARTAMENTO'] || '';
+      }
+
       SheetUtils.insert(ssId(), hoja_().getName(), fila);
 
       // Enganche con reasignación: si el responsable que firma es distinto al actual del
-      // vehículo, se actualiza en la misma operación — candadoTomado porque este hilo ya
-      // tiene el candado de arriba (waitLock no es reentrante).
+      // vehículo, se actualiza en la misma operación -- candadoTomado porque este hilo ya
+      // tiene el candado de arriba (waitLock no es reentrante). Corre siempre aquí (presencial
+      // o a distancia, definitiva o préstamo): es la única sesión con permiso que esta
+      // operación va a tener.
       const actual = String(vehiculo['RESPONSABLE VEHICULO'] || '').trim().toUpperCase();
       if (responsable.toUpperCase() !== actual) {
         VehiculosService.actualizar(token, idVehiculo, {
@@ -178,57 +448,197 @@ const ResponsivaVehicularService = (function () {
         }, { candadoTomado: true });
       }
 
-      let pdf = null;
-      const avisos = [];
-      try {
-        const imagenesPdf = {};
-        ['FIRMA RESPONSABLE', 'FIRMA JEFE', 'FIRMA CI'].forEach((campo) => {
-          const img = imagenes[campo];
-          // FIRMA_PDF: misma caja que usa Inspección (150 × 60 pt) -- sin esto, PdfService
-          // no tiene de dónde más sacar un tope y la firma se estira a lo ancho de la celda.
-          if (img && img.base64) imagenesPdf[campo] = Object.assign({}, img, FIRMA_PDF);
-        });
-
-        // Respaldo de cada firma como imagen suelta en Drive, además de insertarla en el
-        // PDF -- no se liga en la hoja (decisión del usuario: no agregar columnas para
-        // esto), solo queda ahí por si hace falta la imagen fuera del documento. Un fallo
-        // aquí no debe perder la responsiva ni tumbar el PDF: se avisa y sigue.
-        Object.keys(imagenesPdf).forEach((campo) => {
-          try {
-            const img = imagenesPdf[campo];
-            const nombreImagen = PdfService.nombreArchivo([
-              campo, responsable, vehiculo['PLACA'] || vehiculo['FOLIO'], PdfService.fechaParaNombre(ahora),
-            ]) + '.png';
-            const blob = Utilities.newBlob(Utilities.base64Decode(img.base64), img.mimeType || 'image/png', nombreImagen);
-            const archivo = DriveUtils.marcarAutor(DriveUtils.carpetaEnRaiz(CARPETA_IMAGENES).createFile(blob));
-            DriveUtils.compartirLoMasAmplioPosible(archivo);
-          } catch (e) {
-            avisos.push('No se pudo respaldar ' + campo.toLowerCase() + ' en Drive: ' + e.message);
-          }
-        });
-
-        const datosPdf = Object.assign({}, fila, {
-          'DIA': Utilities.formatDate(ahora, ZONA, 'd'),
-          'MES': MESES[Number(Utilities.formatDate(ahora, ZONA, 'M')) - 1],
-          'AÑO': Utilities.formatDate(ahora, ZONA, 'yyyy'),
-        });
-        pdf = PdfService.generar({
-          plantillaId: PLANTILLA,
-          datos: datosPdf,
-          imagenes: imagenesPdf,
-          carpetaId: DriveUtils.carpetaEnRaiz(CARPETA_PDF).getId(),
-          nombre: PdfService.nombreArchivo([
-            'RESPONSIVA VEHICULAR', responsable, vehiculo['PLACA'] || vehiculo['FOLIO'], PdfService.fechaParaNombre(ahora),
-          ]),
-        });
-        // Se guarda la URL completa (no una ruta relativa a resolver después): es un
-        // documento nuevo, sin el legado de rutas de AppSheet que cargan Inspección/Vehículos.
-        SheetUtils.update(ssId(), hoja_().getName(), id, { 'PDF': pdf.url }, ID_COLUMN);
-      } catch (e) {
-        avisos.push('La responsiva se guardó, pero no se pudo generar el PDF: ' + e.message);
+      if (remoto || remotoJefe) {
+        const resultado = { ID: id };
+        if (liga) resultado.liga = liga;
+        if (ligaJefe) resultado.ligaJefe = ligaJefe;
+        return resultado;
       }
 
-      return { ID: id, PDF: pdf ? pdf.url : null, aviso: avisos.join(' ') };
+      const imagenesPdf = {};
+      ['FIRMA RESPONSABLE', 'FIRMA JEFE', 'FIRMA CI'].forEach((campo) => {
+        const img = imagenes[campo];
+        // FIRMA_PDF: misma caja que usa Inspección (150 × 60 pt) -- sin esto, PdfService
+        // no tiene de dónde más sacar un tope y la firma se estira a lo ancho de la celda.
+        if (img && img.base64) imagenesPdf[campo] = Object.assign({}, img, FIRMA_PDF);
+      });
+      return generarPdfYGuardar_(id, fila, imagenesPdf, ahora, {});
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  /** Lo mínimo para pintar la página de firma a distancia del RESPONSABLE (nunca el renglón
+   *  completo). */
+  function obtenerPendientePorToken(tokenFirma) {
+    const fila = buscarPorToken_(tokenFirma, 'TOKEN FIRMA');
+    if (!fila) return { vigente: false, motivo: 'no-existe' };
+    if (String(fila['ESTADO FIRMA'] || '') !== 'PENDIENTE' || !fila['TOKEN FIRMA']) return { vigente: false, motivo: 'ya-firmado' };
+    const expira = fila['TOKEN FIRMA EXPIRA'] ? new Date(fila['TOKEN FIRMA EXPIRA']) : null;
+    if (!expira || isNaN(expira.getTime()) || expira.getTime() < Date.now()) return { vigente: false, motivo: 'vencido' };
+    return {
+      vigente: true,
+      documento: 'Responsiva Vehicular',
+      nombre: fila['RESPONSABLE'] || '',
+      folio: fila['FOLIO VEHICULO'] || '',
+      placa: fila['PLACA'] || '',
+      marca: fila['MARCA'] || '',
+      modelo: fila['MODELO'] || '',
+    };
+  }
+
+  /** Lo mínimo para pintar la página de firma a distancia del JEFE. */
+  function obtenerPendienteJefePorToken(tokenFirmaJefe) {
+    const fila = buscarPorToken_(tokenFirmaJefe, 'TOKEN FIRMA JEFE');
+    if (!fila) return { vigente: false, motivo: 'no-existe' };
+    if (String(fila['ESTADO FIRMA'] || '') !== 'PENDIENTE' || !fila['TOKEN FIRMA JEFE']) return { vigente: false, motivo: 'ya-firmado' };
+    const expira = fila['TOKEN FIRMA JEFE EXPIRA'] ? new Date(fila['TOKEN FIRMA JEFE EXPIRA']) : null;
+    if (!expira || isNaN(expira.getTime()) || expira.getTime() < Date.now()) return { vigente: false, motivo: 'vencido' };
+    return {
+      vigente: true,
+      documento: 'Responsiva Vehicular',
+      // A quién pertenece la responsiva (el jefe firma como jefe DE alguien, no por sí mismo)
+      nombre: fila['RESPONSABLE'] || '',
+      folio: fila['FOLIO VEHICULO'] || '',
+      placa: fila['PLACA'] || '',
+      marca: fila['MARCA'] || '',
+      modelo: fila['MODELO'] || '',
+    };
+  }
+
+  /** El PDF tal como va a quedar hasta ahora, con un aviso de "VISTA PREVIA" -- sin guardar
+   *  nada en Drive. Para que quien va a firmar (responsable o jefe, por su propia liga) vea el
+   *  documento antes de decidir. */
+  function vistaPrevia(tokenFirma, quien) {
+    const columna = quien === 'jefe' ? 'TOKEN FIRMA JEFE' : 'TOKEN FIRMA';
+    const columnaExpira = quien === 'jefe' ? 'TOKEN FIRMA JEFE EXPIRA' : 'TOKEN FIRMA EXPIRA';
+    const fila = buscarPorToken_(tokenFirma, columna);
+    if (!fila) throw new Error('Esta liga no es válida.');
+    if (String(fila['ESTADO FIRMA'] || '') !== 'PENDIENTE') throw new Error('Esta liga ya se usó.');
+    const expira = fila[columnaExpira] ? new Date(fila[columnaExpira]) : null;
+    if (!expira || isNaN(expira.getTime()) || expira.getTime() < Date.now()) {
+      throw new Error('Esta liga ya venció -- pide que te manden una nueva.');
+    }
+    const ahora = new Date();
+    const datosPdf = Object.assign({}, fila, {
+      'DIA': Utilities.formatDate(ahora, ZONA, 'd'),
+      'MES': MESES[Number(Utilities.formatDate(ahora, ZONA, 'M')) - 1],
+      'AÑO': Utilities.formatDate(ahora, ZONA, 'yyyy'),
+    });
+    return PdfService.generarVistaPrevia({
+      plantillaId: PLANTILLA, datos: datosPdf, imagenes: imagenesDesdeTemp_(fila), carpetaId: ExpedienteNuco.carpeta(fila['NUCCO'], 'RESPONSIVA').getId(),
+    });
+  }
+
+  /**
+   * Completa la firma del RESPONSABLE que llegó por su liga. Si la del jefe también está
+   * pendiente (tiene su propio token todavía), solo se guarda y se espera -- el PDF se genera
+   * hasta que la última liga pendiente se complete. Sin `token` de sesión (ver el comentario
+   * del archivo).
+   */
+  function completarFirma(tokenFirma, imagen) {
+    if (!imagen || !imagen.base64) throw new Error('Falta la firma.');
+
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+      const fila = buscarPorToken_(tokenFirma, 'TOKEN FIRMA');
+      if (!fila) throw new Error('Esta liga no es válida.');
+      if (String(fila['ESTADO FIRMA'] || '') !== 'PENDIENTE' || !fila['TOKEN FIRMA']) throw new Error('Esta liga ya se usó.');
+      const expira = fila['TOKEN FIRMA EXPIRA'] ? new Date(fila['TOKEN FIRMA EXPIRA']) : null;
+      if (!expira || isNaN(expira.getTime()) || expira.getTime() < Date.now()) {
+        throw new Error('Esta liga ya venció -- pide que te manden una nueva.');
+      }
+
+      fila['FIRMA RESPONSABLE TEMP'] = guardarFirmaTemp_('FIRMA RESPONSABLE', imagen);
+      fila['TOKEN FIRMA'] = '';
+      fila['TOKEN FIRMA EXPIRA'] = '';
+      fila['FIRMADO POR'] = Session.getActiveUser().getEmail() || '';
+
+      if (!listoParaFinalizar_(fila)) {
+        SheetUtils.update(ssId(), hoja_().getName(), fila['ID'], {
+          'FIRMA RESPONSABLE TEMP': fila['FIRMA RESPONSABLE TEMP'],
+          'TOKEN FIRMA': '', 'TOKEN FIRMA EXPIRA': '', 'FIRMADO POR': fila['FIRMADO POR'],
+        }, ID_COLUMN);
+        return { ID: fila['ID'], PDF: null, pendiente: true, aviso: 'Tu firma quedó registrada. Falta la firma del jefe directo para generar el documento.' };
+      }
+
+      return generarPdfYGuardar_(fila['ID'], fila, imagenesDesdeTemp_(fila), new Date(), { 'FIRMADO POR': fila['FIRMADO POR'] });
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  /**
+   * Completa la firma del JEFE que llegó por su liga -- gemela de completarFirma, del otro
+   * lado. Si la del responsable todavía está pendiente, solo se guarda y se espera.
+   */
+  function completarFirmaJefe(tokenFirmaJefe, imagenJefe) {
+    if (!imagenJefe || !imagenJefe.base64) throw new Error('Falta la firma.');
+
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+      const fila = buscarPorToken_(tokenFirmaJefe, 'TOKEN FIRMA JEFE');
+      if (!fila) throw new Error('Esta liga no es válida.');
+      if (String(fila['ESTADO FIRMA'] || '') !== 'PENDIENTE' || !fila['TOKEN FIRMA JEFE']) throw new Error('Esta liga ya se usó.');
+      const expira = fila['TOKEN FIRMA JEFE EXPIRA'] ? new Date(fila['TOKEN FIRMA JEFE EXPIRA']) : null;
+      if (!expira || isNaN(expira.getTime()) || expira.getTime() < Date.now()) {
+        throw new Error('Esta liga ya venció -- pide que te manden una nueva.');
+      }
+
+      fila['FIRMA JEFE TEMP'] = guardarFirmaTemp_('FIRMA JEFE', imagenJefe);
+      fila['TOKEN FIRMA JEFE'] = '';
+      fila['TOKEN FIRMA JEFE EXPIRA'] = '';
+      fila['FIRMADO POR JEFE'] = Session.getActiveUser().getEmail() || '';
+
+      if (!listoParaFinalizar_(fila)) {
+        SheetUtils.update(ssId(), hoja_().getName(), fila['ID'], {
+          'FIRMA JEFE TEMP': fila['FIRMA JEFE TEMP'],
+          'TOKEN FIRMA JEFE': '', 'TOKEN FIRMA JEFE EXPIRA': '', 'FIRMADO POR JEFE': fila['FIRMADO POR JEFE'],
+        }, ID_COLUMN);
+        return { ID: fila['ID'], PDF: null, pendiente: true, aviso: 'Tu firma quedó registrada. Falta la firma del responsable para generar el documento.' };
+      }
+
+      return generarPdfYGuardar_(fila['ID'], fila, imagenesDesdeTemp_(fila), new Date(), { 'FIRMADO POR JEFE': fila['FIRMADO POR JEFE'] });
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  /**
+   * Cierra un Préstamo Vehicular: regresa el vehículo a quien lo tenía antes (RESPONSABLE
+   * ANTERIOR, respaldado al crear el préstamo) y marca ESTATUS PRESTAMO = DEVUELTO. A
+   * propósito NO genera PDF ni pide firma -- la responsiva de quien lo recibe de vuelta nunca
+   * dejó de ser válida, esto solo actualiza quién lo trae hoy. Truena si el registro no es un
+   * préstamo o si ya se devolvió (de un solo uso, como las ligas de firma).
+   */
+  function devolverPrestamo(token, id) {
+    Permisos.puedeEditar(token, MODULO);
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+      const encontrado = SheetUtils.findById(ssId(), SHEET, id, ID_COLUMN);
+      if (!encontrado) throw new Error('No se encontró la responsiva ' + id);
+      const fila = encontrado.data;
+      if (String(fila['TIPO RESPONSIVA'] || '').trim().toUpperCase() !== TIPO_PRESTAMO) {
+        throw new Error('Esta responsiva no es un préstamo.');
+      }
+      if (String(fila['ESTATUS PRESTAMO'] || '').trim().toUpperCase() !== PRESTAMO_EN_CURSO) {
+        throw new Error('Este préstamo ya se devolvió.');
+      }
+      const idVehiculo = fila['ID VEHICULO'];
+      if (idVehiculo) {
+        // candadoTomado: este hilo ya tiene el candado de arriba (waitLock no es reentrante) --
+        // mismo patrón que la reasignación de crear().
+        VehiculosService.actualizar(token, idVehiculo, {
+          'RESPONSABLE VEHICULO': fila['RESPONSABLE ANTERIOR'] || '',
+          'NO EMPLEADO': fila['NO EMPLEADO ANTERIOR'] || '',
+          'DEPARTAMENTO': fila['DEPARTAMENTO ANTERIOR'] || '',
+        }, { candadoTomado: true });
+      }
+      SheetUtils.update(ssId(), hoja_().getName(), id, { 'ESTATUS PRESTAMO': PRESTAMO_DEVUELTO }, ID_COLUMN);
+      return { ID: id, ESTATUS_PRESTAMO: PRESTAMO_DEVUELTO };
     } finally {
       lock.releaseLock();
     }
@@ -241,5 +651,10 @@ const ResponsivaVehicularService = (function () {
     return HojaServicio.eliminar(HOJA, token, id);
   }
 
-  return { listarPorFolio, buscarPorId, crear, eliminar, PLANTILLA };
+  return {
+    listarPorFolio, buscarPorId, crear, eliminar, ligaDeToken,
+    obtenerPendientePorToken, obtenerPendienteJefePorToken, vistaPrevia, completarFirma, completarFirmaJefe,
+    devolverPrestamo,
+    PLANTILLA,
+  };
 })();

@@ -13,6 +13,25 @@ function apiPing() {
   return Date.now();
 }
 
+// --- Pantallas que se actualizan solas (api.html: pedirLista_ y el vigía) ---
+// Una lista de la app (apiListar…, apiFicha…, apiResumenInicio) con su huella: de qué versiones de hoja salió
+// (CacheHojas.conHuella). La lista revisa sus propios permisos con el token, igual que si se llamara directo.
+function apiListaConHuella(token, fn, args) {
+  if (!/^api[A-Z][A-Za-z0-9]*$/.test(String(fn)) || /^api(ListaConHuella|HuellasVigentes)$/.test(fn)) {
+    throw new Error('Lista desconocida: ' + fn);
+  }
+  const f = globalThis[fn];
+  if (typeof f !== 'function') throw new Error('Lista desconocida: ' + fn);
+  const r = CacheHojas.conHuella(() => f.apply(null, [token].concat(args || [])));
+  return { v: r.v, huella: r.huella };
+}
+// ¿Cambió algo de lo que se ve? Solo CacheService (sin leer hojas): la llamada más barata que hay.
+function apiHuellasVigentes(token, claves) {
+  Auth.validarSesion(token);
+  const validas = (claves || []).filter((k) => /^ver_[\w-]{1,10}_/.test(String(k))).slice(0, 300);
+  return CacheHojas.vigentes(validas);
+}
+
 // --- Dashboard ---
 // JSON.stringify: incluye fechas (Date/ISO) mezcladas en varias secciones —
 // mismo motivo que apiListarVehiculosResumen (ver comentario más abajo).
@@ -349,11 +368,16 @@ function apiBuscarResponsivaVehicularPorId(token, id) {
   // google.script.run pierde objetos grandes de forma intermitente si no viajan como texto.
   return JSON.stringify(ResponsivaVehicularService.buscarPorId(token, id));
 }
-function apiCrearResponsivaVehicular(token, datos, imagenes) {
-  return ResponsivaVehicularService.crear(token, datos, imagenes);
+function apiCrearResponsivaVehicular(token, datos, imagenes, opciones) {
+  return ResponsivaVehicularService.crear(token, datos, imagenes, opciones);
 }
 function apiEliminarResponsivaVehicular(token, id) {
   return ResponsivaVehicularService.eliminar(token, id);
+}
+// Préstamo Vehicular: cierra el préstamo y regresa el vehículo a quien lo tenía antes, sin
+// pedir firma ni generar PDF (ver el comentario de devolverPrestamo en el servicio).
+function apiDevolverPrestamoVehicular(token, id) {
+  return ResponsivaVehicularService.devolverPrestamo(token, id);
 }
 
 // --- Adherente Vehicular ---
@@ -363,14 +387,39 @@ function apiListarAdherentesVehicularesPorFolio(token, folio) {
 function apiBuscarAdherenteVehicularPorId(token, id) {
   return JSON.stringify(AdherenteVehicularService.buscarPorId(token, id));
 }
-function apiCrearAdherenteVehicular(token, datos, imagenes) {
-  return AdherenteVehicularService.crear(token, datos, imagenes);
+function apiCrearAdherenteVehicular(token, datos, imagenes, opciones) {
+  return AdherenteVehicularService.crear(token, datos, imagenes, opciones);
 }
 function apiCambiarEstatusAdherenteVehicular(token, id, estatus) {
   return AdherenteVehicularService.cambiarEstatus(token, id, estatus);
 }
 function apiEliminarAdherenteVehicular(token, id) {
   return AdherenteVehicularService.eliminar(token, id);
+}
+
+// --- Firma a distancia (Responsiva/Adherente Vehicular) ---
+// Sin `token` de sesión: quien firma por la liga puede no tener usuario en el sistema. El
+// TOKEN FIRMA (o TOKEN FIRMA JEFE) de la liga ya es la credencial de estas llamadas (ver el
+// comentario al inicio de ResponsivaVehicularService.gs). `quien` distingue cuál de las dos
+// ligas es (el responsable/adherente, o el jefe directo -- cada uno con la suya).
+function apiFirmaRemotaObtener(tipo, quien, tokenFirma) {
+  const servicio = tipo === 'adherente' ? AdherenteVehicularService : ResponsivaVehicularService;
+  return quien === 'jefe' ? servicio.obtenerPendienteJefePorToken(tokenFirma) : servicio.obtenerPendientePorToken(tokenFirma);
+}
+function apiFirmaRemotaVistaPrevia(tipo, quien, tokenFirma) {
+  const servicio = tipo === 'adherente' ? AdherenteVehicularService : ResponsivaVehicularService;
+  return servicio.vistaPrevia(tokenFirma, quien);
+}
+function apiFirmaRemotaCompletar(tipo, quien, tokenFirma, imagen) {
+  const servicio = tipo === 'adherente' ? AdherenteVehicularService : ResponsivaVehicularService;
+  return quien === 'jefe' ? servicio.completarFirmaJefe(tokenFirma, imagen) : servicio.completarFirma(tokenFirma, imagen);
+}
+// Esta SÍ lleva `token` de sesión: la pide el operador desde la ficha ("Copiar liga de
+// nuevo"), no quien va a firmar. Se arma siempre en el servidor -- nunca en el navegador,
+// donde location.origin es el sandbox de Apps Script, no la URL real (ver ligaDeToken).
+function apiFirmaRemotaLiga(token, tipo, quien, tokenFirma) {
+  const servicio = tipo === 'adherente' ? AdherenteVehicularService : ResponsivaVehicularService;
+  return servicio.ligaDeToken(token, tokenFirma, quien);
 }
 
 // --- Arqueos ---
@@ -761,6 +810,30 @@ function apiRegistrarInspeccion(token, datos, imagenes) {
 // separados: 'relaciones' para el mapa, 'salud' para revisar y actualizar. Aquí solo van
 // permisos y la forma de la respuesta. JSON.stringify porque las celdas pueden traer Date,
 // y google.script.run no las pasa dentro de un objeto.
+// Datos conectados que se arman desde la pantalla (DatosConectados.gs): tarjetas, columnas para elegir, sugerencias,
+// vista previa, conectar, quitar y poner al día. Leer: permiso 'relaciones'; cambiar: EDICION en 'relaciones'.
+function apiDatosConectados(token) {
+  return JSON.stringify(DatosConectados.pantalla(token));
+}
+function apiDatosConectadosColumnas(token, hoja) {
+  return JSON.stringify(DatosConectados.columnas(token, hoja));
+}
+function apiDatosConectadosSugerir(token, dueno, copia) {
+  return JSON.stringify(DatosConectados.sugerir(token, dueno, copia));
+}
+function apiDatosConectadosVistaPrevia(token, propuesta) {
+  return JSON.stringify(DatosConectados.vistaPrevia(token, propuesta));
+}
+function apiDatosConectadosConectar(token, propuesta, ponerAlDia) {
+  return JSON.stringify(DatosConectados.guardar(token, propuesta, ponerAlDia));
+}
+function apiDatosConectadosQuitar(token, dueno, copia, colDueno) {
+  return JSON.stringify(DatosConectados.quitar(token, dueno, copia, colDueno));
+}
+function apiDatosConectadosPonerAlDia(token, copia) {
+  return JSON.stringify(DatosConectados.ponerAlDia(token, copia));
+}
+
 function apiRelacionesMapa(token) {
   Permisos.puedeLeer(token, 'relaciones');
   return JSON.stringify(mapaCompleto_());

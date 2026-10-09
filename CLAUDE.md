@@ -23,6 +23,20 @@ con un comentario. Ejemplos ya corregidos: los botones "Ver reporte"
 (Vehículos) y "Calendario" (Arqueos) en `src/html/js/app.html` y
 `app-arqueos.html`.
 
+## ⚠️ Bug relacionado: nunca escribas `<?` ni `?>` sueltos en un `.html` que se sirve con `createTemplateFromFile().evaluate()`
+
+Si el archivo se evalúa como template (hoy: `Index.html` y `FirmaExterna.html`, vía
+`createTemplateFromFile(...).evaluate()` en `Router.gs`/`Code.gs`), Apps Script busca
+scriptlets `<? ... ?>` en **todo el texto del archivo tal cual está escrito**, incluso
+dentro de un comentario HTML (`<!-- ... -->`) que solo estaba explicando el tema en
+prosa. Un comentario como `<!-- ... entre <? y ?> ... -->` crea un scriptlet de verdad
+(`<? y ?>`) que Apps Script intenta correr como código del servidor: si `y` no existe,
+truena con una página en blanco y `ReferenceError: y is not defined (línea N)` — el
+error no viene del navegador, es la propia página de error de Apps Script (8-oct,
+`FirmaExterna.html`). **Para hablar de scriptlets en un comentario, nunca escribas los
+símbolos literales** `<?`/`?>`: descríbelos en palabras (como en este párrafo) o, si hace
+falta mostrarlos, parte la secuencia para que nunca quede un `<?` ni un `?>` juntos.
+
 Esto NO aplica a URLs dentro de atributos HTML normales (`src="https://..."`,
 `href="https://..."`) fuera de un `<script>` — esas están a salvo.
 
@@ -108,6 +122,19 @@ ganchos: `ArqueosService.gs` y `VehiculosService.gs`. La guía completa está al
   que los DEV escribieran en producción. Una carpeta nueva va también en `REVISION_EN_RAIZ`
   (Diagnostico.gs); un contrato revisa las dos cosas. Las plantillas sí pueden ir fijas: solo se copian.
 - Cada `createFile` va dentro de `DriveUtils.marcarAutor(…)` (quién lo subió; contrato).
+- **Un documento de un vehículo va a su expediente: `ExpedienteNuco`** (`src/utils/ExpedienteNuco.gs`). La carpeta
+  NUCOS VEHICULOS tiene una carpeta por NUCO con `1.-DOCUMENTACIÓN/1.-FACTURA … 6.-TENENCIA` (docs/nucos-expediente.md).
+  `ExpedienteNuco.archivar(archivo, nucco, 'SEGURO')` lo mueve ahí, le pone su nombre (`SEGURO-0088.pdf`) y pasa el
+  vigente a `SEGUROS ANTERIORES`; `ExpedienteNuco.carpeta(nucco, 'RESPONSIVA')` para generar un PDF directo ahí. Ya lo
+  usan Vehículos (al guardar la ficha), Responsiva y Adherente. Producción apunta a la real con
+  `DRIVE_FOLDER_ID_NUCOS_VEHICULOS` (Entornos.gs); un DEV sin esa clave usa una "NUCOS VEHICULOS" de pruebas en su raíz.
+  No guardes un documento del vehículo en una carpeta suelta de la raíz (contrato).
+
+- **Copiar un dato de una hoja a otra (y mantenerlo al día) → Datos conectados**, no código a mano en el servicio: el
+  `MAPA` de `Relaciones.gs` o, desde la pantalla, `DatosConectados.gs` (docs/relaciones.md, "Conectar datos desde la
+  pantalla"). `HojaServicio.actualizar` ya propaga (`Relaciones.alGuardar`) y el activador de `AvisoDeCambios.gs` copia lo
+  editado a mano. Solo lo que va AL REVÉS (un registro nuevo que actualiza a su dueño) se escribe en el servicio, y se
+  anota en `DatosConectados.AL_REVES` para que la pantalla lo muestre.
 
 ## Permisos entre módulos (lo de un módulo dentro de otro)
 
@@ -210,6 +237,12 @@ despliega con errores. A mano: `revisarEntorno()` en el editor de cualquier proy
 `node tools/subir/revisar-entorno.js prod`. Una carpeta nueva en `Config.gs` va también en
 `REVISION_CARPETAS` (un contrato lo revisa).
 
+**"Authorization needed" al subir:** esa revisión abre el link `/dev`, que corre con la cuenta de
+quien sube (la de `clasp login`), no con la del dueño. Si esa cuenta nunca aceptó los permisos de
+ESE proyecto (o el manifiesto pidió uno nuevo), Google contesta esa página, `subir.js` no mueve los
+despliegues y por script no se puede aceptar: esa persona corre una vez `revisarEntorno()` en el
+editor de ese proyecto, acepta todo y repite el comando. Cada quien que suba a prod lo hace una vez.
+
 **Un módulo que todavía no sale a producción** se apaga ahí con `MODULOS_APAGADOS` en el bloque de
 prod de `Entornos.gs` (hoy: `'helpdesk'`): el menú no lo pinta, el servidor rechaza sus llamadas
 (`Config.exigirEncendido` en cada `api…` del módulo) y `revisarEntorno` no pide sus hojas
@@ -230,6 +263,12 @@ cada llamada). Por eso:
 - **Lo que sale de varias listas** (el Inicio, la campanita) se guarda ya calculado con
   `CacheHojas.calculo`, por firma de permisos (`Permisos.firmaDeLectura`).
 - **Lo que una pantalla va a necesitar de seguro** se pide antes con `adelantar` (api.html).
+- **Las pantallas se actualizan solas.** Las listas de `callServerListaCacheada` llegan por `apiListaConHuella`
+  con su huella (las versiones de hoja que leyó, `CacheHojas.conHuella`). Cada 60 s, con la pestaña a la vista, el
+  vigía de `api.html` pregunta `apiHuellasVigentes` (solo CacheService) por las listas que una pantalla escucha
+  (`escucharLista`); si cambió una, la pide y `lista-actualizada` la vuelve a pintar. Una lista nueva solo necesita
+  `callServerListaCacheada` + `escucharLista`. Lo editado a mano en la hoja llega con el activador
+  `instalarAvisoDeCambios()` (AvisoDeCambios.gs), una vez por proyecto; `revisarEntorno` avisa si falta.
 - **Una lista nueva** de `HojaServicio` exporta `calentar` y va en `pasosCalentador_()` de
   `Calentador.gs`. Es un activador que la rehace cada 10 min: se instala una vez por proyecto
   con `instalarCalentador()` desde el editor. Un contrato revisa que cada paso exista.

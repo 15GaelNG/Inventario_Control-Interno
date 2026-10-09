@@ -86,7 +86,8 @@ contexto.Date.now = reloj;
 console.log('\n8. Base32 de ida y vuelta');
 ok(Ids.aBase32_(0, 8) === '00000000', 'el cero se rellena con ceros');
 ok(Ids.deBase32_(Ids.aBase32_(1234567, 8)) === 1234567, '1,234,567 sobrevive el viaje');
-ok(Ids.deBase32_(Ids.aBase32_(Date.now() - Ids.EPOCA_MS, 8)) === Date.now() - Ids.EPOCA_MS,
+const ahoraMs = Date.now() - Ids.EPOCA_MS;   // una sola lectura del reloj (dos podían caer en milisegundos distintos)
+ok(Ids.deBase32_(Ids.aBase32_(ahoraMs, 8)) === ahoraMs,
    'el tiempo de hoy sobrevive el viaje');
 truena(() => Ids.aBase32_(Math.pow(32, 9), 8), 'un número que no cabe en 8 símbolos truena');
 

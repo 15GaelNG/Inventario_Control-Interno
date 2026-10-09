@@ -2106,7 +2106,7 @@
    *  Arqueos/Cambios de monto) -- de nivel de módulo, como fichaEnPestanas/pestanaFicha/
    *  tablaFicha, porque ambas fichas la usan. */
   function accionesFichaRegistro(tipo, id, opciones) {
-    const o = Object.assign({ editar: false, eliminar: false, estatus: null }, opciones);
+    const o = Object.assign({ editar: false, eliminar: false, estatus: null, copiarLiga: null, copiarLigaJefe: null, devolverPrestamo: false }, opciones);
     let html = '<div class="ficha-acciones-fila">' +
       '<button type="button" class="ficha-btn-fila" data-ficha-ver="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Ver completo">' + Iconos.svg('ver') + '</button>';
     if (o.editar) {
@@ -2119,10 +2119,126 @@
       const destino = activo ? 'BAJA' : 'ACTIVO';
       html += '<button type="button" class="ficha-btn-fila' + (activo ? ' ficha-peligro' : '') + '" data-ficha-estatus="' + tipo + '" data-id="' + escaparHtml(id) + '" data-estatus-destino="' + destino + '" title="' + (activo ? 'Dar de baja' : 'Reactivar') + '">' + Iconos.svg(activo ? 'darDeBaja' : 'reactivar') + '</button>';
     }
+    // copiarLiga/copiarLigaJefe: el token (no un booleano) de una liga PENDIENTE -- cada una
+    // independiente (responsable/adherente y jefe tienen cada quien la suya, ver el comentario
+    // de ResponsivaVehicularService.gs); null/vacío donde ya se firmó, donde el botón ni se
+    // pinta. La liga se pide siempre al servidor (apiFirmaRemotaLiga) al hacer clic, nunca se
+    // arma en el navegador -- ver el wireup más abajo y el comentario de ligaDeToken.
+    if (o.copiarLiga) {
+      html += '<button type="button" class="ficha-btn-fila" data-ficha-copiar-liga="' + tipo + '" data-id="' + escaparHtml(id) + '" data-token="' + escaparHtml(o.copiarLiga) + '" title="Copiar liga del responsable/adherente">' + Iconos.svg('copiar') + '</button>';
+    }
+    if (o.copiarLigaJefe) {
+      html += '<button type="button" class="ficha-btn-fila" data-ficha-copiar-liga-jefe="' + tipo + '" data-id="' + escaparHtml(id) + '" data-token="' + escaparHtml(o.copiarLigaJefe) + '" title="Copiar liga del jefe directo">' + Iconos.svg('copiar') + '</button>';
+    }
+    // devolverPrestamo: Préstamo Vehicular en curso -- un clic regresa el vehículo a quien lo
+    // tenía antes, sin pedir firma ni generar PDF (ver devolverPrestamoFicha).
+    if (o.devolverPrestamo) {
+      html += '<button type="button" class="ficha-btn-fila" data-ficha-devolver-prestamo="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Marcar como devuelto">' + Iconos.svg('devolver') + '</button>';
+    }
     if (o.eliminar) {
       html += '<button type="button" class="ficha-btn-fila ficha-peligro" data-ficha-eliminar="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Eliminar">' + Iconos.svg('eliminar') + '</button>';
     }
     return html + '</div>';
+  }
+
+  /** Badge "Pendiente de firma"/"Firmado" de Responsiva/Adherente Vehicular, pero diciendo CUÁL
+   *  de las dos ligas ya se firmó (TOKEN_FIRMA/TOKEN_FIRMA_JEFE vacío = esa ya se firmó o nunca
+   *  se diferió) en vez de solo "Pendiente" -- así no hay que adivinarlo por qué botón de copiar
+   *  liga sigue apareciendo en la fila. `principal` es como se le dice al firmante que no es el
+   *  jefe (p. ej. "responsable" o "adherente"). */
+  function badgeEstadoFirma(r, principal) {
+    const pendiente = (r.ESTADO_FIRMA || 'FIRMADO') === 'PENDIENTE';
+    if (!pendiente) return '<span class="badge-estado activo">Firmado</span>';
+    const faltaPrincipal = !!r.TOKEN_FIRMA;
+    const faltaJefe = !!r.TOKEN_FIRMA_JEFE;
+    let texto = 'Pendiente';
+    if (faltaPrincipal && faltaJefe) texto = 'Pendiente: falta ' + principal + ' y jefe';
+    else if (faltaPrincipal) texto = 'Ya firmó el jefe, falta ' + principal;
+    else if (faltaJefe) texto = 'Ya firmó ' + (principal === 'adherente' ? 'el adherente' : 'el responsable') + ', falta el jefe';
+    return '<span class="badge-estado pendiente">' + escaparHtml(texto) + '</span>';
+  }
+
+  /** Badge de Préstamo Vehicular en la pestaña Responsiva: en blanco para una definitiva
+   *  (no hay nada que avisar), y para un préstamo dice si sigue en curso (con su fecha), ya
+   *  venció (rojo) o ya se devolvió. */
+  function badgePrestamo(r) {
+    if ((r.TIPO_RESPONSIVA || 'DEFINITIVA') !== 'PRESTAMO') return '—';
+    if (r.ESTATUS_PRESTAMO === 'DEVUELTO') return '<span class="badge-estado activo">Préstamo devuelto</span>';
+    const vencido = r.FECHA_FIN_PRESTAMO && new Date(r.FECHA_FIN_PRESTAMO) < new Date();
+    if (vencido) return '<span class="badge-estado pendiente">Préstamo vencido</span>';
+    const fecha = r.FECHA_FIN_PRESTAMO ? ' (vence ' + formatearFecha(r.FECHA_FIN_PRESTAMO) + ')' : '';
+    return '<span class="badge-estado activo">En préstamo' + escaparHtml(fecha) + '</span>';
+  }
+
+  /** Mismo patrón que copiarEnlace_ en app-sistemas.html: la API moderna primero, y si el
+   *  marco de Apps Script la bloquea, el truco clásico del textarea oculto + execCommand. */
+  async function copiarTexto_(texto) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(texto); return true; }
+    } catch (e) { /* cae al método clásico */ }
+    const area = document.createElement('textarea');
+    area.value = texto;
+    area.setAttribute('readonly', '');
+    area.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+    document.body.appendChild(area);
+    area.select();
+    let copiado = false;
+    try { copiado = document.execCommand('copy'); } catch (e) { /* no-op */ }
+    area.remove();
+    return copiado;
+  }
+
+  /** Modal chico con la(s) liga(s) de firma a distancia y un botón para copiar cada una -- se
+   *  usa tanto al generarlas (abrirAgregarResponsivaVehicular/AdherenteVehicular, que puede
+   *  generar una o dos de un jalón si ni el responsable/adherente ni el jefe estaban
+   *  presentes) como al "Copiar liga de nuevo" desde la pestaña (data-ficha-copiar-liga/
+   *  -jefe), que siempre manda una sola. Mismo patrón que Confirmar.pedir (.modal-backdrop,
+   *  Esc, clic fuera) pero sin promesa -- no hay nada que confirmar.
+   *
+   *  @param {string|Array<{titulo?:string, liga:string}>} ligas  una liga, o varias con su
+   *    etiqueta (p. ej. [{titulo:'Responsable', liga:a}, {titulo:'Jefe directo', liga:b}]).
+   */
+  function mostrarLigaFirma_(ligas) {
+    const lista = Array.isArray(ligas) ? ligas : [{ titulo: null, liga: ligas }];
+    const fondo = document.createElement('div');
+    fondo.className = 'modal-backdrop';
+    const campos = lista.map((item, i) =>
+      (item.titulo ? '<label style="margin-top:' + (i ? '12px' : '0') + '">' + escaparHtml(item.titulo) + '</label>' : '') +
+      '<div style="display:flex;gap:8px;margin-top:' + (item.titulo ? '6px' : (i ? '12px' : '0')) + '">' +
+        '<input type="text" readonly value="' + escaparHtml(item.liga) + '" id="liga-firma-' + i + '" ' +
+          'style="flex:1;min-width:0;padding:9px 10px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-bg);color:var(--color-text);font-size:13px">' +
+        '<button type="button" class="secondary" data-copiar="liga-firma-' + i + '" title="Copiar liga"><i data-lucide="copy" class="ico"></i></button>' +
+      '</div>'
+    ).join('');
+    fondo.innerHTML =
+      '<div class="modal-card">' +
+        '<h3><i data-lucide="link" class="ico"></i> Liga' + (lista.length > 1 ? 's' : '') + ' para firmar a distancia</h3>' +
+        '<p style="margin:4px 0 14px;color:var(--color-text-muted);font-size:13px">' +
+          'Mánda' + (lista.length > 1 ? 'selas' : 'sela') + ' a la persona (WhatsApp, correo…) para que la abra y firme desde su celular.</p>' +
+        campos +
+        '<div class="form-acciones" style="margin-top:14px">' +
+          '<button type="button" class="secondary" data-accion="cerrar">Cerrar</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(fondo);
+    refreshIcons();
+
+    const focoPrevio = document.activeElement;
+    const terminar = () => {
+      document.removeEventListener('keydown', alTecla, true);
+      fondo.remove();
+      if (focoPrevio && focoPrevio.focus) focoPrevio.focus();
+    };
+    const alTecla = (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); terminar(); } };
+    fondo.querySelector('[data-accion="cerrar"]').addEventListener('click', terminar);
+    fondo.addEventListener('mousedown', (ev) => { if (ev.target === fondo) terminar(); });
+    document.addEventListener('keydown', alTecla, true);
+    fondo.querySelectorAll('[data-copiar]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const ok = await copiarTexto_(document.getElementById(btn.dataset.copiar).value);
+        if (ok) Notificar.exito('Liga copiada'); else Notificar.error('El navegador no permitió copiar la liga');
+      });
+    });
   }
 
   // ---------- Vehículos ----------
@@ -2622,6 +2738,12 @@
 
       const CAMPOS_RESPONSIVA_VEHICULAR = [
         { paso: 0, clave: 'FECHA', etiqueta: 'Fecha', tipo: 'date' },
+        // Préstamo Vehicular: misma responsiva, solo que temporal -- sin elegir nada (el
+        // valor por defecto es "" = vacío = definitiva, el servidor lo trata igual), se
+        // comporta exactamente como hoy. "Fecha de fin de préstamo" solo aparece al elegir
+        // Préstamo (wireVisibilidadCondicionalResponsiva, mismo patrón que Arqueos).
+        { paso: 0, clave: 'TIPO RESPONSIVA', etiqueta: 'Tipo', tipo: 'select', opciones: ['DEFINITIVA', 'PRESTAMO'] },
+        { paso: 0, clave: 'FECHA FIN PRESTAMO', etiqueta: 'Fecha de fin de préstamo', tipo: 'date', mostrarSiCampo: 'TIPO RESPONSIVA', mostrarSiValor: 'PRESTAMO' },
         { paso: 0, clave: 'RESPONSABLE', etiqueta: 'Responsable', tipo: 'select', catalogo: true, requerido: true },
         { paso: 0, clave: 'NO EMPLEADO', etiqueta: 'No. de empleado', tipo: 'text' },
         { paso: 0, clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select', catalogo: true },
@@ -2651,13 +2773,17 @@
               (i === 3 ? '<div class="resv-firmas" style="grid-column: 1 / -1; margin-top:14px;">' +
                 '<div class="resv-firma"><label class="requerido">Firma del responsable</label><div data-firma="FIRMA RESPONSABLE"></div></div>' +
                 '<div class="resv-firma"><label>Firma del jefe directo</label><div data-firma="FIRMA JEFE"></div></div>' +
-                '<div class="resv-firma"><label>Firma de quien entrega</label><div data-firma="FIRMA CI"></div></div>' +
+                '<div class="resv-firma"><label class="requerido">Firma de quien entrega</label><div data-firma="FIRMA CI"></div></div>' +
               '</div>' : '') +
             '</section>').join('') +
           '<div class="error-msg" id="resv-captura-error" role="alert" hidden></div>' +
           '<div class="form-acciones form-acciones-pasos">' +
             '<button type="button" class="secondary" id="resv-atras" hidden><i data-lucide="chevron-left" class="ico"></i> Atrás</button>' +
             '<button type="button" id="resv-siguiente">Siguiente <i data-lucide="chevron-right" class="ico"></i></button>' +
+            // Un solo botón para firmar a distancia: si el responsable tampoco firmó aquí, se
+            // difiere junto con el jefe (dos ligas de un jalón) -- cubre los dos casos, por
+            // eso ya no hay un botón aparte solo para el responsable (usuario, 8-oct).
+            '<button type="button" class="secondary" id="resv-enviar-liga-jefe" hidden><i data-lucide="link" class="ico"></i> Enviar liga(s) para firmar a distancia</button>' +
             '<button type="submit" id="resv-captura-guardar" hidden><i data-lucide="file-signature" class="ico"></i> Registrar responsiva</button>' +
             '<span class="form-cuenta" id="resv-cuenta"></span>' +
           '</div>' +
@@ -2667,6 +2793,14 @@
           CamposHoja.html(CAMPOS_RESPONSIVA_VEHICULAR.filter((c) => c.paso === i), { prefijo: 'resv' });
       });
       refreshIcons();
+
+      // "Fecha de fin de préstamo" solo se ve si Tipo = Préstamo (mismo patrón que
+      // wireVisibilidadCondicionalArqueo en app-arqueos.html).
+      CAMPOS_RESPONSIVA_VEHICULAR.filter((c) => c.mostrarSiCampo).forEach((campo) => {
+        const dependeDe = document.getElementById('resv-' + CamposHoja.slug(campo.mostrarSiCampo));
+        if (dependeDe) dependeDe.addEventListener('change', () => CamposHoja.actualizarVisibles(CAMPOS_RESPONSIVA_VEHICULAR, 'resv'));
+      });
+      CamposHoja.actualizarVisibles(CAMPOS_RESPONSIVA_VEHICULAR, 'resv');
 
       // Navegación de pasos: libre en los dos sentidos, sin validar (el usuario pidió
       // "un tema a la vez" nada más, no bloquear el avance si falta algo).
@@ -2682,6 +2816,7 @@
         document.getElementById('resv-atras').hidden = i === 0;
         document.getElementById('resv-siguiente').hidden = i === RESV_PASOS.length - 1;
         document.getElementById('resv-captura-guardar').hidden = i !== RESV_PASOS.length - 1;
+        document.getElementById('resv-enviar-liga-jefe').hidden = i !== RESV_PASOS.length - 1;
         document.getElementById('resv-cuenta').textContent = 'Paso ' + (i + 1) + ' de ' + RESV_PASOS.length;
         const titulo = cuerpo.querySelector('.form-paso[data-paso="' + i + '"] .form-paso-titulo');
         if (titulo) titulo.focus();
@@ -2694,6 +2829,9 @@
       resvMostrarPaso(0);
 
       document.getElementById('resv-fecha').value = hoyISO();
+      // "No. de inventario" es el Nucco del vehículo (así lo usa este formato) -- se autollena
+      // solo, se puede corregir si hiciera falta.
+      if (vResumen.NUCCO) CampoAuto.llenar(document.getElementById('resv-no-de-inventario'), vResumen.NUCCO);
       // Responsable (y lo que de él depende) se deja en blanco a propósito: esta responsiva
       // puede ser para una persona distinta a la que el vehículo tiene hoy, y precargar al
       // actual invitaba a dejarlo sin cambiar por descuido. "Quien entrega" sí es un dato
@@ -2754,23 +2892,37 @@
         });
       }).catch((err) => console.error('No se pudo cargar el catálogo de colaboradores:', err));
 
-      document.getElementById('resv-captura-form').addEventListener('submit', async (ev) => {
-        ev.preventDefault();
+      /** modo='presencial': de siempre (exige la firma del responsable, genera el PDF de una
+       *  vez). modo='remotoJefe': "Enviar liga(s) para firmar a distancia" -- no exige la
+       *  firma del responsable: si ya se dibujó, se captura ahora (como siempre); si no, se
+       *  difiere igual (le genera SU liga también, aparte de la del jefe, que siempre se
+       *  difiere con este botón) -- nadie tiene que estar presente para generar cualquiera de
+       *  las dos. Si al final hay dos ligas, se muestran juntas. Un solo botón para los dos
+       *  casos (antes había uno aparte solo para el responsable): usuario, 8-oct. */
+      async function guardarResponsiva_(modo, boton) {
         const errorBox = document.getElementById('resv-captura-error');
         errorBox.hidden = true;
 
-        if (firmas['FIRMA RESPONSABLE'].vacia()) {
+        // Quien entrega SIEMPRE firma al capturar (presencial o a distancia): es quien está
+        // armando este renglón ahora mismo, nunca hay "después" para su firma. Es la única
+        // firma obligatoria en los dos modos -- la del responsable solo en 'presencial'.
+        if (modo === 'presencial' && firmas['FIRMA RESPONSABLE'].vacia()) {
           errorBox.textContent = 'Falta la firma del responsable';
           errorBox.hidden = false;
           cuerpo.querySelector('[data-firma="FIRMA RESPONSABLE"]').scrollIntoView({ block: 'center', behavior: 'smooth' });
           return;
         }
+        if (firmas['FIRMA CI'].vacia()) {
+          errorBox.textContent = 'Falta la firma de quien entrega';
+          errorBox.hidden = false;
+          cuerpo.querySelector('[data-firma="FIRMA CI"]').scrollIntoView({ block: 'center', behavior: 'smooth' });
+          return;
+        }
 
-        const btn = document.getElementById('resv-captura-guardar');
-        const textoOriginal = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner"></span> Guardando…';
-        toastCargando('Registrando…');
+        const textoOriginal = boton.innerHTML;
+        boton.disabled = true;
+        boton.innerHTML = '<span class="spinner"></span> ' + (modo === 'presencial' ? 'Guardando…' : 'Generando liga…');
+        toastCargando(modo === 'presencial' ? 'Registrando…' : 'Generando liga…');
         try {
           const imagenes = {};
           Object.keys(firmas).forEach((campo) => {
@@ -2778,19 +2930,35 @@
             if (firma) imagenes[campo] = firma;
           });
           const datos = Object.assign({ 'FOLIO VEHICULO': vResumen.FOLIO }, CamposHoja.recolectar(CAMPOS_RESPONSIVA_VEHICULAR, 'resv'));
-          const res = await callServer('apiCrearResponsivaVehicular', state.token, datos, imagenes);
+          // Si el responsable tampoco firmó, se difiere junto con el jefe (dos ligas de un
+          // jalón) -- nadie tiene que estar presente para pedir la del jefe.
+          const opciones = modo === 'remotoJefe'
+            ? (firmas['FIRMA RESPONSABLE'].vacia() ? { remoto: true, remotoJefe: true } : { remotoJefe: true })
+            : undefined;
+          const res = await callServer('apiCrearResponsivaVehicular', state.token, datos, imagenes, opciones);
           if (res.aviso) Notificar.error(res.aviso);
-          toastExito('Responsiva registrada exitosamente');
+          toastExito(modo === 'presencial' ? 'Responsiva registrada exitosamente' : 'Liga generada');
           cerrarCapturaVehiculo();
           abrirFichaVehiculo(vResumen, 'responsiva');
+          if (res.liga && res.ligaJefe) {
+            mostrarLigaFirma_([{ titulo: 'Responsable', liga: res.liga }, { titulo: 'Jefe directo', liga: res.ligaJefe }]);
+          } else if (res.liga) mostrarLigaFirma_(res.liga);
+          else if (res.ligaJefe) mostrarLigaFirma_(res.ligaJefe);
         } catch (err) {
           errorBox.textContent = err.message;
           errorBox.hidden = false;
-          toastError('No se pudo registrar: ' + err.message);
+          toastError('No se pudo ' + (modo === 'presencial' ? 'registrar' : 'generar la liga') + ': ' + err.message);
         } finally {
-          btn.disabled = false;
-          btn.innerHTML = textoOriginal;
+          boton.disabled = false;
+          boton.innerHTML = textoOriginal;
         }
+      }
+      document.getElementById('resv-captura-form').addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        guardarResponsiva_('presencial', document.getElementById('resv-captura-guardar'));
+      });
+      document.getElementById('resv-enviar-liga-jefe').addEventListener('click', () => {
+        guardarResponsiva_('remotoJefe', document.getElementById('resv-enviar-liga-jefe'));
       });
     }
 
@@ -2827,13 +2995,16 @@
               (i === 2 ? '<div class="resv-firmas" style="grid-column: 1 / -1; margin-top:14px;">' +
                 '<div class="resv-firma"><label class="requerido">Firma del adherente</label><div data-firma="FIRMA ADHERENTE"></div></div>' +
                 '<div class="resv-firma"><label>Firma del jefe directo</label><div data-firma="FIRMA JEFE"></div></div>' +
-                '<div class="resv-firma"><label>Firma de quien entrega</label><div data-firma="FIRMA CI"></div></div>' +
+                '<div class="resv-firma"><label class="requerido">Firma de quien entrega</label><div data-firma="FIRMA CI"></div></div>' +
               '</div>' : '') +
             '</section>').join('') +
           '<div class="error-msg" id="adh-captura-error" role="alert" hidden></div>' +
           '<div class="form-acciones form-acciones-pasos">' +
             '<button type="button" class="secondary" id="adh-atras" hidden><i data-lucide="chevron-left" class="ico"></i> Atrás</button>' +
             '<button type="button" id="adh-siguiente">Siguiente <i data-lucide="chevron-right" class="ico"></i></button>' +
+            // Un solo botón para firmar a distancia -- ver el comentario gemelo en
+            // abrirAgregarResponsivaVehicular (usuario, 8-oct).
+            '<button type="button" class="secondary" id="adh-enviar-liga-jefe" hidden><i data-lucide="link" class="ico"></i> Enviar liga(s) para firmar a distancia</button>' +
             '<button type="submit" id="adh-captura-guardar" hidden><i data-lucide="file-signature" class="ico"></i> Registrar adherente</button>' +
             '<span class="form-cuenta" id="adh-cuenta"></span>' +
           '</div>' +
@@ -2856,6 +3027,7 @@
         document.getElementById('adh-atras').hidden = i === 0;
         document.getElementById('adh-siguiente').hidden = i === ADH_PASOS.length - 1;
         document.getElementById('adh-captura-guardar').hidden = i !== ADH_PASOS.length - 1;
+        document.getElementById('adh-enviar-liga-jefe').hidden = i !== ADH_PASOS.length - 1;
         document.getElementById('adh-cuenta').textContent = 'Paso ' + (i + 1) + ' de ' + ADH_PASOS.length;
         const titulo = cuerpo.querySelector('.form-paso[data-paso="' + i + '"] .form-paso-titulo');
         if (titulo) titulo.focus();
@@ -2868,6 +3040,9 @@
       adhMostrarPaso(0);
 
       document.getElementById('adh-fecha').value = hoyISO();
+      // "No. de inventario" es el Nucco del vehículo -- ver el comentario gemelo en
+      // abrirAgregarResponsivaVehicular.
+      if (vResumen.NUCCO) CampoAuto.llenar(document.getElementById('adh-no-de-inventario'), vResumen.NUCCO);
       if (state.sesion && state.sesion.nombre) CampoAuto.llenar(document.getElementById('adh-nombre-ci'), state.sesion.nombre);
 
       cuerpo.querySelectorAll('[data-firma]').forEach((el) => {
@@ -2917,23 +3092,32 @@
         });
       }).catch((err) => console.error('No se pudo cargar el catálogo de colaboradores:', err));
 
-      document.getElementById('adh-captura-form').addEventListener('submit', async (ev) => {
-        ev.preventDefault();
+      /** modo='presencial'/'remotoJefe' -- ver el comentario gemelo en guardarResponsiva_
+       *  (misma lógica, solo cambia el campo de la firma principal). */
+      async function guardarAdherente_(modo, boton) {
         const errorBox = document.getElementById('adh-captura-error');
         errorBox.hidden = true;
 
-        if (firmas['FIRMA ADHERENTE'].vacia()) {
+        // Quien entrega SIEMPRE firma al capturar -- es la única obligatoria en los dos
+        // modos. La del adherente solo en 'presencial' -- ver el comentario gemelo en
+        // guardarResponsiva_.
+        if (modo === 'presencial' && firmas['FIRMA ADHERENTE'].vacia()) {
           errorBox.textContent = 'Falta la firma del adherente';
           errorBox.hidden = false;
           cuerpo.querySelector('[data-firma="FIRMA ADHERENTE"]').scrollIntoView({ block: 'center', behavior: 'smooth' });
           return;
         }
+        if (firmas['FIRMA CI'].vacia()) {
+          errorBox.textContent = 'Falta la firma de quien entrega';
+          errorBox.hidden = false;
+          cuerpo.querySelector('[data-firma="FIRMA CI"]').scrollIntoView({ block: 'center', behavior: 'smooth' });
+          return;
+        }
 
-        const btn = document.getElementById('adh-captura-guardar');
-        const textoOriginal = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner"></span> Guardando…';
-        toastCargando('Registrando…');
+        const textoOriginal = boton.innerHTML;
+        boton.disabled = true;
+        boton.innerHTML = '<span class="spinner"></span> ' + (modo === 'presencial' ? 'Guardando…' : 'Generando liga…');
+        toastCargando(modo === 'presencial' ? 'Registrando…' : 'Generando liga…');
         try {
           const imagenes = {};
           Object.keys(firmas).forEach((campo) => {
@@ -2941,19 +3125,33 @@
             if (firma) imagenes[campo] = firma;
           });
           const datos = Object.assign({ 'FOLIO VEHICULO': vResumen.FOLIO }, CamposHoja.recolectar(CAMPOS_ADHERENTE_VEHICULAR, 'adh'));
-          const res = await callServer('apiCrearAdherenteVehicular', state.token, datos, imagenes);
+          const opciones = modo === 'remotoJefe'
+            ? (firmas['FIRMA ADHERENTE'].vacia() ? { remoto: true, remotoJefe: true } : { remotoJefe: true })
+            : undefined;
+          const res = await callServer('apiCrearAdherenteVehicular', state.token, datos, imagenes, opciones);
           if (res.aviso) Notificar.error(res.aviso);
-          toastExito('Adherente registrado exitosamente');
+          toastExito(modo === 'presencial' ? 'Adherente registrado exitosamente' : 'Liga generada');
           cerrarCapturaVehiculo();
           abrirFichaVehiculo(vResumen, 'adherente');
+          if (res.liga && res.ligaJefe) {
+            mostrarLigaFirma_([{ titulo: 'Adherente', liga: res.liga }, { titulo: 'Jefe directo', liga: res.ligaJefe }]);
+          } else if (res.liga) mostrarLigaFirma_(res.liga);
+          else if (res.ligaJefe) mostrarLigaFirma_(res.ligaJefe);
         } catch (err) {
           errorBox.textContent = err.message;
           errorBox.hidden = false;
-          toastError('No se pudo registrar: ' + err.message);
+          toastError('No se pudo ' + (modo === 'presencial' ? 'registrar' : 'generar la liga') + ': ' + err.message);
         } finally {
-          btn.disabled = false;
-          btn.innerHTML = textoOriginal;
+          boton.disabled = false;
+          boton.innerHTML = textoOriginal;
         }
+      }
+      document.getElementById('adh-captura-form').addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        guardarAdherente_('presencial', document.getElementById('adh-captura-guardar'));
+      });
+      document.getElementById('adh-enviar-liga-jefe').addEventListener('click', () => {
+        guardarAdherente_('remotoJefe', document.getElementById('adh-enviar-liga-jefe'));
       });
     }
 
@@ -3051,6 +3249,29 @@
         abrirFichaVehiculo(vResumen, TAB_FICHA_POR_TIPO[tipo]);
       } catch (err) {
         toastError('No se pudo actualizar: ' + err.message);
+      }
+    }
+
+    /** Cierra un Préstamo Vehicular (Responsiva): regresa el vehículo a quien lo tenía antes,
+     *  sin pedir firma ni generar PDF (ver el comentario de devolverPrestamo en el servicio). */
+    async function devolverPrestamoFicha(id, vResumen) {
+      try {
+        await callServer('apiDevolverPrestamoVehicular', state.token, id);
+        toastExito('Préstamo devuelto');
+        abrirFichaVehiculo(vResumen, 'responsiva');
+      } catch (err) {
+        toastError('No se pudo devolver el préstamo: ' + err.message);
+      }
+    }
+
+    /** "Copiar liga de nuevo" (Responsiva/Adherente pendientes): SIEMPRE se pide al servidor
+     *  (apiFirmaRemotaLiga) -- armarla en el navegador con location.origin apunta al sandbox
+     *  de Apps Script, no a la URL real (8-oct, confirmado con el usuario). */
+    async function copiarLigaFicha_(tipo, quien, tokenFirma) {
+      try {
+        mostrarLigaFirma_(await callServer('apiFirmaRemotaLiga', state.token, tipo, quien, tokenFirma));
+      } catch (err) {
+        toastError('No se pudo generar la liga: ' + err.message);
       }
     }
 
@@ -3383,8 +3604,15 @@
               { t: 'Fecha', r: (r) => formatearFecha(r.FECHA) },
               { t: 'Responsable', r: (r) => escaparHtml(r.RESPONSABLE || '—') },
               { t: 'Departamento', r: (r) => escaparHtml(r.DEPARTAMENTO || '—') },
+              { t: 'Préstamo', r: (r) => badgePrestamo(r) },
+              { t: 'Estado', r: (r) => badgeEstadoFirma(r, 'responsable') },
               { t: 'PDF', r: (r) => (r.PDF ? '<a href="' + escaparHtml(r.PDF) + '" target="_blank" rel="noopener" class="secondary" style="text-decoration:none">Ver</a>' : '—') },
-              { t: '', r: (r) => accionesFichaRegistro('responsiva', r.ID, { eliminar: puedeEditarModulo('responsiva-vehicular') }) },
+              { t: '', r: (r) => accionesFichaRegistro('responsiva', r.ID, {
+                eliminar: puedeEditarModulo('responsiva-vehicular'),
+                copiarLiga: r.TOKEN_FIRMA || null,
+                copiarLigaJefe: r.TOKEN_FIRMA_JEFE || null,
+                devolverPrestamo: puedeEditarModulo('responsiva-vehicular') && r.TIPO_RESPONSIVA === 'PRESTAMO' && r.ESTATUS_PRESTAMO === 'EN PRESTAMO',
+              }) },
             ], responsivas, 'Sin responsivas registradas para este vehículo.',
             puedeEditarModulo('responsiva-vehicular') ? { tipo: 'responsiva', texto: 'Generar nueva responsiva' } : null),
           },
@@ -3396,8 +3624,14 @@
               { t: 'Adherente', r: (r) => escaparHtml(r.ADHERENTE || '—') },
               { t: 'Departamento', r: (r) => escaparHtml(r.DEPARTAMENTO || '—') },
               { t: 'Estatus', r: (r) => '<span class="badge-estado ' + ((r.ESTATUS || 'ACTIVO') === 'ACTIVO' ? 'activo' : 'baja') + '">' + (r.ESTATUS || 'ACTIVO') + '</span>' },
+              { t: 'Firma', r: (r) => badgeEstadoFirma(r, 'adherente') },
               { t: 'PDF', r: (r) => (r.PDF ? '<a href="' + escaparHtml(r.PDF) + '" target="_blank" rel="noopener" class="secondary" style="text-decoration:none">Ver</a>' : '—') },
-              { t: '', r: (r) => accionesFichaRegistro('adherente', r.ID, { estatus: r.ESTATUS || 'ACTIVO', eliminar: puedeEditarModulo('adherente-vehicular') }) },
+              { t: '', r: (r) => accionesFichaRegistro('adherente', r.ID, {
+                estatus: r.ESTATUS || 'ACTIVO',
+                eliminar: puedeEditarModulo('adherente-vehicular'),
+                copiarLiga: r.TOKEN_FIRMA || null,
+                copiarLigaJefe: r.TOKEN_FIRMA_JEFE || null,
+              }) },
             ], adherentes, 'Sin adherentes registrados para este vehículo.',
             puedeEditarModulo('adherente-vehicular') ? { tipo: 'adherente', texto: 'Generar nuevo adherente' } : null),
           },
@@ -3449,6 +3683,15 @@
         });
         detalle.querySelectorAll('[data-ficha-estatus]').forEach((btn) => {
           btn.addEventListener('click', () => cambiarEstatusFicha(btn.dataset.fichaEstatus, btn.dataset.id, btn.dataset.estatusDestino, vResumen));
+        });
+        detalle.querySelectorAll('[data-ficha-copiar-liga]').forEach((btn) => {
+          btn.addEventListener('click', () => copiarLigaFicha_(btn.dataset.fichaCopiarLiga, 'principal', btn.dataset.token));
+        });
+        detalle.querySelectorAll('[data-ficha-copiar-liga-jefe]').forEach((btn) => {
+          btn.addEventListener('click', () => copiarLigaFicha_(btn.dataset.fichaCopiarLigaJefe, 'jefe', btn.dataset.token));
+        });
+        detalle.querySelectorAll('[data-ficha-devolver-prestamo]').forEach((btn) => {
+          btn.addEventListener('click', () => devolverPrestamoFicha(btn.dataset.id, vResumen));
         });
         refreshIcons();
       } catch (err) {
@@ -4410,6 +4653,7 @@
       idCampo: 'ID',
       idTabla: 'tickets',
       ordenInicial: { campo: 'FECHA', dir: 'desc' },
+      buscarColumna: [{ campo: 'PLACA', placeholder: 'Buscar por Placa…' }],
       textoVacio: 'Todavía no hay tickets registrados',
       alCambiarFiltros: () => actualizarKpis(tabla.getFiltradas()),
       exportar: {
@@ -4434,7 +4678,7 @@
         { campo: 'SOLICITANTE', titulo: 'Solicitante', tipo: 'lista' },
         { campo: 'TIPO ATENCION', titulo: 'Tipo de atención', tipo: 'lista' },
         { campo: 'QUIEN ATENDIO', titulo: 'Atendió', tipo: 'lista' },
-        { campo: 'PLACA', titulo: 'Placa', tipo: 'texto', visible: false },
+        { campo: 'PLACA', titulo: 'Placa', tipo: 'texto', fijada: true },
         { campo: 'COMENTARIO', titulo: 'Comentario', tipo: 'texto', visible: false },
         { campo: 'FECHA DE REGISTRO', titulo: 'Fecha de registro', tipo: 'fecha', visible: false },
       ],

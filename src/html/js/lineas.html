@@ -5735,6 +5735,9 @@
       let filtrados = [];
       let visibles = paso;
       let temporizador = null;
+      // Para "Exportar a Excel" (todo el catálogo de activos, ya cacheado para los KPIs y el
+      // panel lateral) -- se guarda aquí para no volver a pedirlo al exportar.
+      let catalogosActivos = { indice: null, vehiculos: [], hologramas: [], uber: [], cajasChicas: [] };
 
       function filasPorResponsable(indice, nombre) {
         const texto = normal(nombre);
@@ -5950,8 +5953,112 @@
         marcar();
       }
 
+      /**
+       * Exportar a Excel: respeta la búsqueda/filtro actuales (como el de DataTable), con una
+       * hoja de colaboradores y una hoja por tipo de activo (Líneas y equipos, Vehículos,
+       * Hologramas, Uber, Cajas chicas) -- cada fila con el nombre del colaborador, para poder
+       * auditar quién tiene qué. Los catálogos ya están en memoria (catalogosActivos, los mismos
+       * que usan los KPIs): no se vuelve a pedir nada al servidor.
+       */
+      async function exportarActivos(boton) {
+        if (!filtrados.length) { Notificar.error('No hay colaboradores que coincidan con la búsqueda o los filtros.'); return; }
+        const original = boton.innerHTML;
+        boton.disabled = true;
+        boton.innerHTML = '<span class="ln-spinner"></span> Generando…';
+        try {
+          const nombres = new Set(filtrados.map((c) => normal(c.nombre)));
+          const enFiltro = (nombre) => nombres.has(normal(nombre));
+          const { indice, vehiculos, hologramas, uber, cajasChicas } = catalogosActivos;
+
+          const filasColaboradores = filtrados.map((c) => ({
+            Nombre: c.nombre, 'No. empleado': c.noEmpleado, Puesto: c.puesto, Departamento: c.departamento,
+            Área: c.area, Sede: c.sede, 'Oficina/Desarrollo': c.oficina, Estatus: c.estatus, 'Total de activos': c.totalActivos,
+          }));
+
+          const filasLineas = (indice.equipos || []).filter((r) => enFiltro(r.responsable)).map((r) => ({
+            Colaborador: r.responsable, NUCO: r.nuco, Tipo: TIPO_EQUIPO[r.tipo] || r.tipo || '', Modelo: r.modelo,
+            Estatus: r.estatus, 'Número de línea': r.numero || '',
+          })).concat((indice.lineas || []).filter((r) => r.suelta && enFiltro(r.responsable)).map((r) => ({
+            Colaborador: r.responsable, NUCO: '', Tipo: 'Línea suelta', Modelo: r.compania, Estatus: r.estatus, 'Número de línea': r.numero,
+          })));
+
+          const filasVehiculos = (vehiculos || []).filter((v) => enFiltro(v.RESPONSABLE_VEHICULO)).map((v) => ({
+            Colaborador: v.RESPONSABLE_VEHICULO, Folio: v.FOLIO, Nucco: v.NUCO,
+            'Marca/Línea': [v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' '), Modelo: v.MODELO,
+          }));
+
+          const filasHologramas = (hologramas || []).filter((h) => enFiltro(h.RESPONSABLE)).map((h) => ({
+            Colaborador: h.RESPONSABLE, Placa: h.PLACA, Calcomanía: h.CALCOMANIA,
+            'Marca/Línea': [h.MARCA, h.LINEA].filter(Boolean).join(' '), 'Estatus EOX': h.ESTATUS_EOX || 'Sin estatus',
+          }));
+
+          const filasUber = (uber || []).filter((u) => enFiltro(u.NOMBRE_COMPLETO)).map((u) => ({
+            Colaborador: u.NOMBRE_COMPLETO, Rol: u.ROL, Estatus: u.ESTATUS || 'Sin estatus', 'Razón social': u.RAZON_SOCIAL,
+          }));
+
+          const filasCch = (cajasChicas || []).filter((c) => enFiltro(c.RESPONSABLE)).map((c) => ({
+            Colaborador: c.RESPONSABLE, 'ID CCH': c.ID_CCH, Departamento: c.DEPARTAMENTO, Sede: c.SEDE,
+            Estatus: c.ESTATUS || 'Sin estatus',
+          }));
+
+          // Hoja "General": una fila por colaborador con el mismo estilo de la vista vieja de
+          // AppSheet (AppSheet.ViewData.*.csv) -- emoji y un resumen de texto por tipo de activo
+          // en vez de una tabla aparte. agrupar() junta el detalle de cada tipo por colaborador.
+          function agrupar(lista, campoResponsable, formatear) {
+            const mapa = {};
+            (lista || []).forEach((item) => {
+              const clave = normal(item[campoResponsable]);
+              if (!clave) return;
+              (mapa[clave] = mapa[clave] || []).push(formatear(item));
+            });
+            return (nombre) => (mapa[normal(nombre)] || []).join('  |  ');
+          }
+          const lineasEquiposTexto = agrupar(indice.equipos, 'responsable', (r) => '📱 EQUIPO + SIM: ' + (r.numero || 'sin línea'));
+          const lineasSueltasTexto = agrupar((indice.lineas || []).filter((r) => r.suelta), 'responsable', (r) => '📞 LÍNEA SUELTA: ' + (r.numero || ''));
+          const lineasTexto = (nombre) => [lineasEquiposTexto(nombre), lineasSueltasTexto(nombre)].filter(Boolean).join('  |  ');
+          const vehiculosTexto = agrupar(vehiculos, 'RESPONSABLE_VEHICULO', (v) => '🚗 ' + [v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ') + (v.NUCO ? ' · NUCO ' + v.NUCO : ''));
+          const hologramasTexto = agrupar(hologramas, 'RESPONSABLE', (h) => '⛽ PLACA ' + (h.PLACA || '—') + (h.CALCOMANIA ? ' · ' + h.CALCOMANIA : ''));
+          const uberTexto = agrupar(uber, 'NOMBRE_COMPLETO', (u) => '🚕 ' + (u.ROL || 'UBER') + (u.ESTATUS ? ' · ' + u.ESTATUS : ''));
+          const cchTexto = agrupar(cajasChicas, 'RESPONSABLE', (c) => '💰 ID ' + (c.ID_CCH || '—') + (c.DEPARTAMENTO ? ' · ' + c.DEPARTAMENTO : ''));
+
+          const filasGeneral = filtrados.map((c) => {
+            const conActivos = c.totalActivos > 0;
+            const estatusLaboral = String(c.estatus).toUpperCase() === 'ACTIVO' ? '🟢 ACTIVO' : '🔴 ' + (c.estatus || 'SIN ESTATUS');
+            const estatusActivos = conActivos ? '🟢 CON ACTIVOS ASOCIADOS' : '🔴 SIN ACTIVOS ASOCIADOS';
+            return {
+              'No. empleado': c.noEmpleado, 'Nombre completo': c.nombre, Departamento: c.departamento, Área: c.area,
+              Puesto: c.puesto, Sede: c.sede, 'Oficina/Desarrollo': c.oficina, 'Estatus colaborador': c.estatus,
+              'Sede / oficina': '📍 ' + (c.sede || '—') + '  ┃  🏢 ' + (c.oficina || '—') + '  ┃  👤 LABORAL: ' + estatusLaboral + '  ┃  📦 ACTIVOS: ' + estatusActivos,
+              Estatus: estatusActivos,
+              'Líneas:': lineasTexto(c.nombre), 'Vehículos:': vehiculosTexto(c.nombre), 'Hologramas:': hologramasTexto(c.nombre),
+              'Uber:': uberTexto(c.nombre), 'Cajas chicas:': cchTexto(c.nombre),
+            };
+          });
+
+          const total = await ExportarExcel.descargarLibroCrudo({
+            nombreArchivo: 'Gestion_de_Activos',
+            hojas: [
+              { nombre: 'General', filas: filasGeneral },
+              { nombre: 'Colaboradores', filas: filasColaboradores },
+              { nombre: 'Lineas y equipos', filas: filasLineas },
+              { nombre: 'Vehiculos', filas: filasVehiculos },
+              { nombre: 'Hologramas', filas: filasHologramas },
+              { nombre: 'Uber', filas: filasUber },
+              { nombre: 'Cajas chicas', filas: filasCch },
+            ],
+          });
+          Notificar.exito('Se descargaron ' + miles(total) + ' filas en el Excel.');
+        } catch (e) {
+          Notificar.error(mensajeError(e));
+        } finally {
+          boton.disabled = false;
+          boton.innerHTML = original;
+        }
+      }
+
       $('#lnga-filtro-activos', raiz).addEventListener('change', aplicarFiltros);
       $('#lnga-mas', raiz).addEventListener('click', () => { visibles += paso; pintarCuadros(); });
+      $('#lnga-exportar', raiz).addEventListener('click', (ev) => exportarActivos(ev.currentTarget));
       raiz.addEventListener('click', (ev) => {
         const sug = ev.target.closest('[data-colaborador-i]');
         if (sug) {
@@ -5975,6 +6082,7 @@
         deOtroModulo('caja-chica', 'apiListarCajasChicasResumen'),
       ]).then(([r, indice, vehiculos, hologramas, uber, cajasChicas]) => {
         if (!vigente()) return;
+        catalogosActivos = { indice: indice, vehiculos: vehiculos || [], hologramas: hologramas || [], uber: uber || [], cajasChicas: cajasChicas || [] };
         const conteo = {};
         const suma = (lista, campo) => (lista || []).forEach((a) => { const k = normal(a[campo]); if (k) conteo[k] = (conteo[k] || 0) + 1; });
         indice.equipos.forEach((a) => { const k = normal(a.responsable); if (k) conteo[k] = (conteo[k] || 0) + 1; });

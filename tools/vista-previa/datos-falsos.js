@@ -207,6 +207,43 @@
     ...FICHAS,
     apiPermisosPanel: PERMISOS_PANEL,
     apiRelacionesMapa: JSON.stringify(REL_MAPA),
+    // Datos conectados: el mismo mapa (sin Capital Humano, que se calcula aparte) con COLOR → HOLOGRAMAS puesto desde la pantalla
+    apiDatosConectados: JSON.stringify((() => {
+      const mapa = JSON.parse(JSON.stringify(REL_MAPA));
+      mapa.duenos = mapa.duenos.filter((d) => d.hoja !== 'PERSONAS');
+      const holo = mapa.duenos.find((d) => d.hoja === 'VEHICULOS').copias.find((c) => c.nombre === 'HOLOGRAMAS');
+      holo.columnas.push({ origen: 'COLOR', destino: 'COLOR', calculada: false, pantalla: true });
+      const hojas = [];
+      mapa.duenos.forEach((d) => [d].concat(d.copias.map((c) => ({ hoja: c.nombre, etiqueta: c.etiqueta })))
+        .forEach((h) => { if (!hojas.some((x) => x.hoja === h.hoja)) hojas.push({ hoja: h.hoja, familia: h.etiqueta.familia, etiqueta: h.etiqueta }); }));
+      return { mapa, hojas, puedeEditar: true, quien: 'prueba@ciudadmaderas.com', alReves: [
+        { desde: 'RESPONSIVA VEHICULAR', hacia: 'VEHICULOS', donde: 'ResponsivaVehicularService.gs',
+          cuando: 'Al dar de alta una responsiva con un responsable distinto al actual',
+          columnas: [['RESPONSABLE', 'RESPONSABLE VEHICULO'], ['NO EMPLEADO', 'NO EMPLEADO'], ['DEPARTAMENTO', 'DEPARTAMENTO']],
+          etiquetaDesde: { nombre: 'Responsiva Vehicular', familia: 'Vehículos' }, etiquetaHacia: { nombre: 'Vehículos', familia: 'Vehículos' } },
+      ] };
+    })()),
+    apiDatosConectadosVistaPrevia: JSON.stringify({ tipo: 'cache', registros: 212, encontradas: 207, sinLlave: 3, sinDueno: 2,
+      duplicadasEnDueno: 0, etiquetaDueno: { nombre: 'Vehículos' }, etiquetaCopia: { nombre: 'Hologramas', varios: 'hologramas' },
+      columnas: [
+        { dueno: 'PLACA', copia: 'PLACA', diferencias: 0, ejemplos: [] },
+        { dueno: 'COLOR', copia: 'COLOR', diferencias: 3, ejemplos: [
+          { clave: '3N1CK3CD5KL227451', enCopia: 'ROJO', enDueno: 'BLANCO' },
+          { clave: 'MR0HA3CD8L0012345', enCopia: '', enDueno: 'GRIS' },
+        ] },
+      ] }),
+    apiDatosConectadosColumnas: JSON.stringify({ hoja: 'VEHICULOS', etiqueta: { nombre: 'Vehículos' }, registros: 648, columnas: [
+      { nombre: 'ID', ejemplos: ['VEH-000000…'], secreto: false, esId: true },
+      { nombre: 'FOLIO', ejemplos: ['AUT0024', 'CTA0018'], secreto: false, esId: false },
+      { nombre: 'SERIE VEHICULO', ejemplos: ['3N1CK3CD5KL227451'], secreto: false, esId: false },
+      { nombre: 'PLACA', ejemplos: ['GGY886F', 'UNE342E'], secreto: false, esId: false },
+      { nombre: 'COLOR', ejemplos: ['BLANCO', 'GRIS', 'ROJO'], secreto: false, esId: false },
+      { nombre: 'KILOMETRAJE', ejemplos: ['120500', '43000'], secreto: false, esId: false },
+    ] }),
+    apiDatosConectadosSugerir: JSON.stringify({ llaves: [
+      { dueno: 'SERIE VEHICULO', copia: 'SERIE VEHICULO', encontradas: 207, deCopia: 212, conValor: 209, duplicadasEnDueno: 0 },
+      { dueno: 'FOLIO', copia: 'FOLIO', encontradas: 198, deCopia: 212, conValor: 205, duplicadasEnDueno: 0 },
+    ], datos: [['PLACA', 'PLACA'], ['COLOR', 'COLOR']] }),
     apiSaludRevisar: JSON.stringify({ mapa: REL_MAPA, reporte: REL_REVISION }),
     apiMisPermisos: { correo: 'prueba@ciudadmaderas.com', permisos, grupos },
     apiListarVehiculosBasico: [{ FOLIO: 'AUT0024', NUCO: '24', PLACA: 'GGY886F', MARCA: 'CHEVROLET', LINEA_VEHICULO: 'BEAT' },
@@ -367,9 +404,9 @@
     if (t.checked !== tecnica) { t.checked = tecnica; evento(t, 'change'); }
     await esperar(300);
   }
-  async function vistaRelaciones(tecnica) {
-    const t = await hasta('#rel-tecnico-toggle');
-    if (t.checked !== tecnica) { t.checked = tecnica; evento(t, 'change'); }
+  // Datos conectados ya no tiene vista técnica (9-oct): solo se espera a que carguen las pestañas
+  async function vistaRelaciones() {
+    await hasta('#rel-s-tabs-lista .tab-btn');
     await esperar(300);
   }
   async function elegirVehiculo(selector, valor) {
@@ -410,9 +447,15 @@
   }
 
   const ESCENAS = {
-    'relaciones': async () => { await abrir('relaciones'); await vistaRelaciones(false); await hasta('.rel-s-tabla'); await esperar(300); },
+    'relaciones': async () => { await abrir('relaciones'); await vistaRelaciones(false); await hasta('.dc-tarjeta'); await esperar(300); },
+    'relaciones-familia': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('.tab-btn[data-tab="familia-0"]')).click(); await hasta('.rel-s-tabla'); await esperar(300); },
+    'relaciones-revisar': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('.dc-tarjeta [data-dc-accion="revisar"]')).click(); (await hasta('.dc-vista')).scrollIntoView({ block: 'center' }); await esperar(300); },
+    'relaciones-cajachica': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('[data-dc-familia="Caja Chica"]')).click(); await esperar(300); },
+    'relaciones-reves': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('.dc-seccion')).scrollIntoView({ block: 'center' }); await esperar(300); },
+    'relaciones-nueva': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('[data-dc-accion="nueva"]')).click();
+      const sel = (n) => document.querySelector('[data-dc-nueva="' + n + '"]'); sel('dueno').value = 'VEHICULOS'; sel('copia').value = 'HOLOGRAMAS';
+      document.querySelector('[data-dc-accion="sugerir"]').click(); await hasta('.dc-elegir'); await esperar(300); },
     'relaciones-lineas': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('.tab-btn[data-tab="familia-1"]')).click(); await esperar(400); },
-    'relaciones-mapa': async () => { await abrir('relaciones'); await vistaRelaciones(true); await hasta('.rel-matriz'); await esperar(300); },
     'salud': async () => { await abrir('salud'); await vistaSalud(false); await hasta('.rel-s-pend'); await esperar(300); },
     'salud-lineas': async () => { await abrir('salud'); await vistaSalud(false); (await hasta('#salud-tabs .tab-btn[data-tab="familia-1"]')).click(); await esperar(400); },
     'salud-detalle-seleccion': async () => { await abrir('salud'); await vistaSalud(false); (await hasta('[data-s-ver]')).click(); await esperar(700); const cajas = document.querySelectorAll('#salud-tabla tbody input[type="checkbox"]'); if (cajas[0]) cajas[0].click(); await esperar(400); },

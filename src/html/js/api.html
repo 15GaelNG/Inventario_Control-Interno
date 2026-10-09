@@ -76,17 +76,17 @@
   const ESCRIBE = /^api(Crear|Actualizar|Eliminar|Registrar|Subir|Cambiar|Cerrar|Guardar|Marcar|Reactivar|Sincronizar|Reasignar)/;
   const FICHAS_GUARDADAS = ['apiFichaVehiculo', 'apiFichaCajaChica'];
 
-  function pedir_(fnName, args) {
+  function pedir_(fnName, args, etiqueta) {   // etiqueta: con qué nombre se anota en verTiempos (la lista, no la envoltura)
     const inicio = performance.now();
     return new Promise((resolve, reject) => {
       google.script.run
         .withSuccessHandler((r) => {
-          anotarTiempo_(fnName, inicio, true);
+          anotarTiempo_(etiqueta || fnName, inicio, true);
           if (ESCRIBE.test(fnName)) FICHAS_GUARDADAS.forEach(invalidarListasDe);
           resolve(r);
         })
         .withFailureHandler((err) => {
-          anotarTiempo_(fnName, inicio, false);
+          anotarTiempo_(etiqueta || fnName, inicio, false);
           const mensaje = err.message || String(err);
           // Sesión expirada (Auth.validarSesion, server-side): sin importar
           // desde qué pantalla/módulo venga la llamada, se maneja aquí una
@@ -278,15 +278,29 @@
     return (cacheListas[llave] = entrada);
   }
 
+  /**
+   * La lista y su huella: de qué versiones de hoja salió (apiListaConHuella, en el servidor). Con la huella, el vigía
+   * sabe si cambió sin volver a pedir la lista. Si la lista ya se había adelantado (adelantar), se usa esa respuesta
+   * y la huella llega en la siguiente vuelta del vigía (huella null = todavía no se sabe).
+   */
+  function pedirConHuella_(fnName, args) {
+    if (adelantadas[fnName + JSON.stringify(args)]) {
+      return callServer(fnName, ...args).then((v) => ({ valor: v, huella: null }));
+    }
+    return pedir_('apiListaConHuella', [args[0], fnName, args.slice(1)], fnName).then((r) => ({ valor: r.v, huella: r.huella || {} }));
+  }
+
   function pedirLista_(fnName, args, llave) {
     const entrada = entradaLista_(llave);
     if (entrada.promesa) return entrada.promesa;
+    entrada.fn = fnName;
+    entrada.args = args;
     entrada.promesa = entrada.carga.then(() => {
       const teniaCopia = entrada.texto !== null;
-      return callServer(fnName, ...args).then((valor) => {
+      return pedirConHuella_(fnName, args).then(({ valor, huella }) => {
         const texto = JSON.stringify(valor === undefined ? null : valor);
         const cambio = texto !== entrada.texto;
-        Object.assign(entrada, { valor: valor, texto: texto, ts: Date.now(), promesa: null });
+        Object.assign(entrada, { valor: valor, texto: texto, ts: Date.now(), promesa: null, huella: huella });
         Almacen.guardar(llaveGuardada_(llave), texto);
         if (cambio && teniaCopia) {
           window.dispatchEvent(new CustomEvent('lista-actualizada', { detail: { fn: fnName } }));
@@ -322,7 +336,68 @@
       if (ev.detail && ev.detail.fn === fnName) recargar();
     };
     window.addEventListener('lista-actualizada', alActualizar);
+    listasEnPantalla.push({ fn: fnName, elemento: elemento });
   }
+
+  /**
+   * El vigía: que la pantalla abierta se actualice sola cuando alguien más cambia sus datos (otra persona en la
+   * app, otro módulo que copia datos, o alguien a mano en la hoja: AvisoDeCambios.gs). Cada VIGIA_MS, y solo con la
+   * pestaña a la vista, pregunta por las listas que una pantalla está escuchando (escucharLista) si cambió alguna de
+   * las versiones de su huella (apiHuellasVigentes: solo CacheService, ninguna hoja). Si cambió, pide esa lista; al
+   * llegar distinta, "lista-actualizada" la vuelve a pintar como ya pasaba.
+   *   - huella null (se usó una respuesta adelantada): se pide en la siguiente vuelta para tener huella.
+   *   - huella vacía (la lista no sale de CacheHojas): se vuelve a pedir completa cada SIN_HUELLA_MS.
+   */
+  const VIGIA_MS = 60 * 1000;
+  const SIN_HUELLA_MS = 5 * 60 * 1000;
+  const listasEnPantalla = [];   // { fn, elemento } de escucharLista; se limpian cuando el elemento sale de la página
+  let ultimaVigia = 0;
+
+  function listasALaVista_() {
+    for (let i = listasEnPantalla.length - 1; i >= 0; i--) {
+      const el = listasEnPantalla[i].elemento;
+      if (!el || !document.body.contains(el)) listasEnPantalla.splice(i, 1);
+    }
+    return new Set(listasEnPantalla.map((l) => l.fn));
+  }
+
+  async function vigilarListas(forzar) {
+    const token = (typeof state !== 'undefined' && state && state.token) || '';
+    if (!token || document.hidden) return 0;
+    if (!forzar && Date.now() - ultimaVigia < VIGIA_MS - 1000) return 0;
+    ultimaVigia = Date.now();
+    const vistas = listasALaVista_();
+    const entradas = Object.keys(cacheListas).map((k) => [k, cacheListas[k]])
+      .filter(([, e]) => e.fn && vistas.has(e.fn) && !e.promesa && e.texto !== null);
+    let pedidas = 0;
+    const repedir = (k, e) => {
+      pedidas++;
+      pedirLista_(e.fn, [token].concat(e.args.slice(1)), k).catch(() => { /* se queda lo que hay */ });
+    };
+    const conHuella = [];
+    entradas.forEach(([k, e]) => {
+      if (e.huella === null || e.huella === undefined) repedir(k, e);
+      else if (!Object.keys(e.huella).length) { if (Date.now() - e.ts > SIN_HUELLA_MS) repedir(k, e); }
+      else conHuella.push([k, e]);
+    });
+    if (!conHuella.length) return pedidas;
+    const claves = Array.from(new Set([].concat(...conHuella.map(([, e]) => Object.keys(e.huella)))));
+    let vigentes;
+    try {
+      vigentes = await pedir_('apiHuellasVigentes', [token, claves]);
+    } catch (err) {
+      return pedidas;   // sin red o sesión vencida: se intenta en la siguiente vuelta
+    }
+    // Sin ninguna clave: el servidor no pudo leer las versiones (CacheService lento). No se sabe si algo cambió, así que
+    // no se repide nada (si no, una falla de Google haría que todas las pantallas pidieran todo a la vez)
+    if (!vigentes || !Object.keys(vigentes).length) return pedidas;
+    conHuella.forEach(([k, e]) => {
+      if (Object.keys(e.huella).some((c) => vigentes[c] !== e.huella[c])) repedir(k, e);
+    });
+    return pedidas;
+  }
+  setInterval(() => { vigilarListas(false); }, VIGIA_MS);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) vigilarListas(false); });
 
   /** Pide por detrás, sin pintar nada, para que el módulo abra al instante (precarga al entrar) */
   function precargarLista(fnName, ...args) {
