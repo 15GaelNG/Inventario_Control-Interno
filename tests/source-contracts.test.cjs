@@ -721,7 +721,8 @@ test('Exportar a Excel descarga la base completa del módulo, no solo lo que se 
   assert.deepEqual(inventario[0].columnas.map((c) => c.tipo), ['texto', 'texto', 'texto', 'numero', 'fecha']);
   assert.deepEqual(inventario[0].filas, [['4421090805', '0012', '••••', 299, '2027-01-15'], ['', '0013', '', '', '']]);
   const repo = read('src/services/lineas/LineasRepo.gs');
-  assert.match(repo, /function vistaCompleta\(\) \{[\s\S]*?filas\.push\(filaVista_\(f, r\)\.slice\(1\)\);/);
+  // ID primero, como en la hoja vieja: el del AppSheet (el reporte y la conciliación ligan con él)
+  assert.match(repo, /function vistaCompleta\(\) \{[\s\S]*?\[txt\(col\(f, LineasDatos\.COL_ID_APPSHEET\)\) \|\| r\.id\]\.concat\(filaVista_\(f, r\)\.slice\(1\)\)[\s\S]*?columnas: \['ID'\]\.concat\(COLS_VISTA_LINEAS\)/);
 });
 
 test('Líneas usa la BD de pruebas del equipo y ninguna carpeta personal de pruebas', () => {
