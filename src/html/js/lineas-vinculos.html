@@ -4,11 +4,12 @@
    *
    * Dos vistas, con el cajón al lado:
    * - Grafo: todo lo que cabe en la pantalla, flotando como red y sin lugar fijo (cada persona con sus equipos y
-   *   líneas y lo suelto; el resguardo, la venta o desecho y la cancelación se prenden aparte). Se filtra y lo que
-   *   interesa se mete al cajón.
-   * - Lienzo: en blanco. Se saca del cajón lo que se va a trabajar y ahí se vincula, se cambia, se desvincula, se
-   *   reasigna o se mete a las cajas de Resguardo, Venta y desecho y Cancelación, que se ponen, se mueven, se estiran y
-   *   se quitan. Lo que se olvidó se busca en el grafo, se mete al cajón y se vuelve al lienzo, que sigue como quedó.
+   *   líneas, y lo suelto). Se filtra y lo que interesa se mete al cajón.
+   * - Lienzo: en blanco. Se saca del cajón lo que se va a trabajar y ahí se vincula, se cambia, se desvincula o se
+   *   reasigna. Lo que se olvidó se busca en el grafo, se mete al cajón y se vuelve al lienzo, que sigue como quedó.
+   * Resguardo, Venta y desecho y Cancelación son módulos (usuario, 8-oct), en las dos vistas: una caja que se pone, se
+   * mueve, se estira y se quita, con lo de su estatus flotando adentro (con su buscador; estirada caben más). En el
+   * lienzo se saca de un módulo (un equipo de Resguardo a una persona) o se mete a uno.
    *
    * Soltar en el lienzo abre la acción que ya existe (vincular, cambiar, desvincular, mandar a resguardo o a
    * cancelación, reasignar) con su ventana, su comentario y su responsiva: aquí no se guarda nada ni hay reglas nuevas.
@@ -36,13 +37,10 @@
     // Un responsable como «RES-12» es el código de un resguardo del AppSheet, no una persona (LineasRepo.convertirRegistro)
     const esCodigoResguardo = (s) => /^[A-Z]{1,4}-\d+/i.test(String(s || '').trim());
 
-    /** Lo que se prende en el grafo; las cajas del lienzo son las mismas tres de abajo. */
+    /** Lo que se prende y se apaga en el grafo. Resguardo, venta y cancelación no: son módulos (CAJAS). */
     const CAPAS = [
       { id: 'personas', titulo: 'Personas', icono: 'users', inicial: true },
       { id: 'sueltos', titulo: 'Sueltos', icono: 'unlink', inicial: true },
-      { id: 'resguardo', titulo: 'Resguardo', icono: 'archive' },
-      { id: 'venta', titulo: 'Venta y desecho', icono: 'tag' },
-      { id: 'cancelacion', titulo: 'Cancelación', icono: 'phone-off' },
     ];
     const CAJAS = { resguardo: { titulo: 'Resguardo', icono: 'archive' }, venta: { titulo: 'Venta y desecho', icono: 'tag' },
       cancelacion: { titulo: 'Cancelación', icono: 'phone-off' } };
@@ -278,6 +276,7 @@
       let cajon = []; // [[claves]]: cada entrada es una relación o lo que se regresó del lienzo
       let recuerdo = {}; // clave → { ref, tipo, persona }: para encontrarla si cambió y para la persona que se quedó sin equipo
       let guardado = null; // el lienzo leído del navegador, se arma cuando llega el índice
+      let guardadoGrafo = null; // los módulos puestos en el grafo
       let opcionesPintadas = '';
       let seleccion = null; // clave del nodo elegido en el grafo
 
@@ -287,6 +286,7 @@
           cajon = g.cajon.filter((x) => Array.isArray(x) && x.length);
           recuerdo = g.recuerdo || {};
           guardado = g.lienzo || null;
+          guardadoGrafo = g.grafo || null;
           modo = g.modo === 'lienzo' ? 'lienzo' : 'grafo';
         }
       } catch (e) { /* sin navegador o dañado: se empieza en blanco */ }
@@ -303,7 +303,7 @@
         '<div class="vn-barra vn-barra-2">' +
           '<span class="vn-capas" data-vn-solo="grafo">' + CAPAS.map((c) => '<button type="button" class="vn-capa" data-vn-capa="' + c.id + '">' +
             ic(c.icono) + ' ' + esc(c.titulo) + '</button>').join('') + '</span>' +
-          '<span class="vn-cajas" data-vn-solo="lienzo">' + Object.keys(CAJAS).map((id) => '<button type="button" class="secondary vn-poner" data-vn-poner="' + id + '">' +
+          '<span class="vn-cajas">' + Object.keys(CAJAS).map((id) => '<button type="button" class="secondary vn-poner" data-vn-poner="' + id + '">' +
             ic('plus') + ' ' + esc(CAJAS[id].titulo) + '</button>').join('') + '</span>' +
           '<span class="vn-cuenta" data-vn-cuenta data-vn-solo="grafo"></span>' +
           '<button type="button" class="secondary" data-vn-todo data-vn-solo="grafo" hidden>' + ic('inbox') + ' <span></span></button>' +
@@ -402,7 +402,7 @@
           const vecino = catalogo.enlaces.filter((x) => x[0] === k || x[1] === k).map((x) => esp.nodos.get(x[0] === k ? x[1] : x[0])).filter(Boolean)[0];
           const a = Math.random() * 6.3;
           const r = vecino ? 30 : Math.random() * radio;
-          agregarNodo(esp, info, (vecino ? vecino.x : centro.x) + Math.cos(a) * r, (vecino ? vecino.y : centro.y) + Math.sin(a) * r);
+          agregarNodo(esp, info, (vecino ? vecino.x : centro.x) + Math.cos(a) * r, (vecino ? vecino.y : centro.y) + Math.sin(a) * r).nuevo = true;
           cambio = true;
         });
         recalcularEnlaces(esp);
@@ -441,14 +441,18 @@
           k.forEach((x) => claves.add(x));
           visibles++;
         }
+        if (guardadoGrafo) { (guardadoGrafo.cajas || []).forEach((c) => { if (CAJAS[c[0]]) ponerCaja(grafo, c[0], { x: c[1], y: c[2], w: c[3], h: c[4], q: c[5] || '' }); }); guardadoGrafo = null; }
+        const modulos = enModulos(grafo, ix);
+        modulos.forEach((id, k) => claves.add(k));
         sincronizar(grafo, claves);
+        aplicarModulos(grafo, modulos);
         if (seleccion && !grafo.nodos.has(seleccion)) elegir(null);
         $('[data-vn-cuenta]').textContent = (visibles < gruposGrafo.length ? miles(visibles) + ' de ' : '') + miles(gruposGrafo.length) + ' relaciones';
         const conFiltro = !!(filtro.q || filtro.departamento || filtro.compania);
         const todo = $('[data-vn-todo]');
         todo.hidden = !conFiltro || !gruposGrafo.length || gruposGrafo.length > 60;
         todo.querySelector('span').textContent = 'Todo al cajón (' + miles(gruposGrafo.length) + ')';
-        $('[data-vn-vacio]').textContent = gruposGrafo.length ? '' : (conFiltro ? 'Sin coincidencias' : 'Prende una capa');
+        $('[data-vn-vacio]').textContent = gruposGrafo.length || modulos.size ? '' : (conFiltro ? 'Sin coincidencias' : 'Prende Personas o Sueltos, o pon un módulo');
         if (!grafo.centrado && grafo.nodos.size) { grafo.centrado = true; grafo.vista.x = 0; grafo.vista.y = 0; }
       }
 
@@ -457,6 +461,7 @@
         if (guardado) { armarGuardado(); guardado = null; }
         // Lo que cambió de clave después de una acción (la línea separada de su equipo) se busca por su número o NUCO
         [...lienzo.nodos.values()].forEach((n) => {
+          if (n.modulo) return;
           const info = resolver(n.k);
           if (!info) { quitarNodo(lienzo, n.k); return; }
           if (info.clave !== n.k) {
@@ -469,14 +474,19 @@
           recordar(info);
           pintarNodo(lienzo, n);
         });
+        const ix = cfg.indice();
+        if (ix) {
+          const modulos = enModulos(lienzo, ix);
+          [...lienzo.nodos.values()].forEach((n) => { if (n.modulo && !modulos.has(n.k)) quitarNodo(lienzo, n.k); });
+          aplicarModulos(lienzo, modulos);
+        }
         recalcularEnlaces(lienzo);
         $('[data-vn-vacio]').textContent = lienzo.nodos.size || Object.keys(lienzo.cajas).length ? '' : (cajon.length ? 'Arrastra aquí lo del cajón' : 'Busca en el grafo y mete al cajón lo que vas a trabajar');
-        cont.querySelectorAll('[data-vn-poner]').forEach((b) => { b.hidden = !!lienzo.cajas[b.dataset.vnPoner]; });
       }
       function armarGuardado() {
         const g = guardado;
         if (Array.isArray(g.vista)) lienzo.vista = { x: g.vista[0] || 0, y: g.vista[1] || 0, k: g.vista[2] || 1 };
-        (g.cajas || []).forEach((c) => { if (CAJAS[c[0]]) ponerCaja(c[0], { x: c[1], y: c[2], w: c[3], h: c[4] }); });
+        (g.cajas || []).forEach((c) => { if (CAJAS[c[0]]) ponerCaja(lienzo, c[0], { x: c[1], y: c[2], w: c[3], h: c[4], q: c[5] || '' }); });
         (g.nodos || []).forEach((x) => {
           const info = resolver(x[0]);
           if (!info || lienzo.nodos.has(info.clave)) return;
@@ -484,29 +494,94 @@
         });
         lienzo.centrado = true;
       }
-      function ponerCaja(id, pos) {
-        if (lienzo.cajas[id]) return;
+      /** Pone un módulo (Resguardo, Venta y desecho, Cancelación) en el grafo o el lienzo. */
+      function ponerCaja(esp, id, pos) {
+        if (esp.cajas[id]) return;
         const c = CAJAS[id];
-        const centro = centroDe(lienzo);
-        const n = Object.keys(lienzo.cajas).length;
-        const caja = Object.assign({ id: id, x: centro.x + 60 + n * 24, y: centro.y - 140 + n * 24, w: 260, h: 220 }, pos || {});
+        // A un lado de lo que ya hay (la red y los otros módulos), del tamaño que se ve en la pantalla
+        const k = esp.vista.k || 1;
+        const w = Math.round(320 / k);
+        const h = Math.round(260 / k);
+        let x2 = -Infinity, y1 = Infinity;
+        esp.nodos.forEach((m) => { if (!m.modulo) { x2 = Math.max(x2, m.x); y1 = Math.min(y1, m.y); } });
+        const otras = Object.values(esp.cajas);
+        const centro = centroDe(esp);
+        // A la derecha de la red y de los otros módulos; uno debajo del otro
+        const derecha = Math.max(isFinite(x2) ? x2 : centro.x - w / 2 - 80 / k, ...otras.map((o) => o.x - 80 / k));
+        const arriba = isFinite(y1) ? y1 : centro.y - h / 2;
+        const abajo = otras.filter((o) => o.x - 80 / k >= derecha - 1).reduce((t, o) => Math.max(t, o.y + o.h + 40 / k), arriba);
+        const caja = Object.assign({ id: id, x: derecha + 80 / k, y: abajo, w: w, h: h, q: '' }, pos || {});
         caja.el = document.createElement('div');
         caja.el.className = 'vn-caja';
         caja.el.dataset.vnCaja = id;
-        caja.el.innerHTML = '<header class="vn-caja-cabeza">' + ic(c.icono) + '<span>' + esc(c.titulo) + '</span>' +
-          '<button type="button" class="vn-caja-quitar" data-vn-quitar-caja title="Quitar caja" aria-label="Quitar caja">' + ic('x') + '</button></header>' +
+        caja.el.innerHTML = '<header class="vn-caja-cabeza">' + ic(c.icono) + '<span class="vn-caja-titulo">' + esc(c.titulo) + '</span>' +
+          '<input type="search" class="vn-caja-buscar" data-vn-caja-q placeholder="Buscar" aria-label="Buscar en ' + esc(c.titulo) + '" value="' + esc(caja.q) + '">' +
+          '<span class="vn-caja-num" data-vn-caja-num></span>' +
+          '<button type="button" class="vn-caja-quitar" data-vn-quitar-caja title="Quitar módulo" aria-label="Quitar módulo">' + ic('x') + '</button></header>' +
           '<span class="vn-caja-estirar" data-vn-estirar aria-hidden="true">' + ic('move-diagonal-2') + '</span>';
-        lienzo.mundo.insertBefore(caja.el, lienzo.svg);
-        lienzo.cajas[id] = caja;
+        esp.mundo.insertBefore(caja.el, esp.svg);
+        esp.cajas[id] = caja;
       }
-      function quitarCaja(id) {
-        const c = lienzo.cajas[id];
+      function quitarCaja(esp, id) {
+        const c = esp.cajas[id];
         if (!c) return;
         c.el.remove();
-        delete lienzo.cajas[id];
-        pintarLienzo();
+        delete esp.cajas[id];
+        [...esp.nodos.values()].forEach((n) => { if (n.modulo === id) quitarNodo(esp, n.k); });
+        pintar();
         guardar();
       }
+      /**
+       * Lo que va dentro de cada módulo puesto: lo de su estatus (su buscador; en el grafo, también departamento y
+       * compañía), lo que quepa por su tamaño. En el lienzo no repite lo que ya está suelto en el lienzo ni lo del cajón.
+       * → Map clave → id del módulo
+       */
+      function enModulos(esp, ix) {
+        const mapa = new Map();
+        Object.values(esp.cajas).forEach((c) => {
+          const r = agrupar(ix, { q: c.q, departamento: esp === grafo ? filtro.departamento : '', compania: esp === grafo ? filtro.compania : '' });
+          const grupos = r.zonas[c.id] || [];
+          const cabe = Math.max(4, Math.floor(c.w * c.h / 5000));
+          let puestos = 0;
+          let caben = 0;
+          for (let i = 0; i < grupos.length; i++) {
+            const claves = clavesDe(grupos[i]).filter((k) => {
+              const n = esp.nodos.get(k);
+              return !(n && !n.modulo) && !(esp === lienzo && cajon.some((e) => e.indexOf(k) >= 0));
+            });
+            if (puestos + claves.length > cabe && caben) break;
+            claves.forEach((k) => mapa.set(k, c.id));
+            puestos += claves.length;
+            caben++;
+          }
+          c.el.querySelector('[data-vn-caja-num]').textContent = (caben < grupos.length ? miles(caben) + ' de ' : '') + miles(grupos.length);
+        });
+        return mapa;
+      }
+      /** Pone en su módulo lo que va adentro (lo nuevo aparece dentro de la caja). */
+      function aplicarModulos(esp, mapa) {
+        mapa.forEach((id, k) => {
+          const c = esp.cajas[id];
+          let n = esp.nodos.get(k);
+          if (n && !n.modulo && esp === lienzo) return;
+          if (!n) {
+            const info = resolver(k);
+            if (!info) return;
+            n = agregarNodo(esp, info, 0, 0);
+            n.nuevo = true;
+          } else n.info = resolver(k) || n.info;
+          if (n.nuevo || n.modulo !== id) {
+            n.x = c.x + 40 + Math.random() * Math.max(10, c.w - 80);
+            n.y = c.y + 70 + Math.random() * Math.max(10, c.h - 110);
+          }
+          n.nuevo = false;
+          n.modulo = id;
+          pintarNodo(esp, n);
+        });
+        esp.nodos.forEach((n) => { if (n.modulo && !mapa.has(n.k)) n.modulo = null; });
+      }
+      /** El módulo donde vive un nodo: el que lo trajo o, en el lienzo, el de su estatus si está puesto. */
+      const cajaDeNodo = (esp, n) => n.modulo || (esp === lienzo ? cajaDe(n.info) : null);
 
       // ---- Cajón ----
       function textoEntrada(claves) {
@@ -572,6 +647,7 @@
 
       // ---- Pintar todo ----
       function pintar() {
+        cont.querySelectorAll('[data-vn-solo]').forEach((el) => { el.classList.toggle('vn-oculto', el.dataset.vnSolo !== modo); });
         const ix = cfg.indice();
         if (!ix) { $('[data-vn-vacio]').innerHTML = '<span class="ln-spinner"></span> Cargando…'; return; }
         catalogo = red(ix);
@@ -588,6 +664,8 @@
         lienzo.raiz.hidden = modo !== 'lienzo';
         $('[data-vn-sel]').hidden = modo !== 'grafo' || !seleccion;
         if (modo === 'grafo') pintarGrafo(ix); else pintarLienzo();
+        grafo.nodos.forEach((n) => { n.nuevo = false; });
+        cont.querySelectorAll('[data-vn-poner]').forEach((b) => { b.hidden = !!activo().cajas[b.dataset.vnPoner]; });
         pintarCajon();
         arrancar();
       }
@@ -604,13 +682,15 @@
       function guardar() {
         clearTimeout(esperaGuardar);
         esperaGuardar = setTimeout(() => {
-          const usadas = new Set([].concat(...cajon, [...lienzo.nodos.keys()]));
+          const sueltos = [...lienzo.nodos.values()].filter((n) => !n.modulo);
+          const usadas = new Set([].concat(...cajon, sueltos.map((n) => n.k)));
           const r = {};
           usadas.forEach((k) => { if (recuerdo[k]) r[k] = recuerdo[k]; });
           recuerdo = r;
-          const datos = { modo: modo, cajon: cajon, recuerdo: r, lienzo: guardado || {
-            nodos: [...lienzo.nodos.values()].map((n) => [n.k, Math.round(n.x), Math.round(n.y), n.fijo ? 1 : 0]),
-            cajas: Object.values(lienzo.cajas).map((c) => [c.id, Math.round(c.x), Math.round(c.y), Math.round(c.w), Math.round(c.h)]),
+          const cajas = (esp) => Object.values(esp.cajas).map((c) => [c.id, Math.round(c.x), Math.round(c.y), Math.round(c.w), Math.round(c.h), c.q || '']);
+          const datos = { modo: modo, cajon: cajon, recuerdo: r, grafo: guardadoGrafo || { cajas: cajas(grafo) }, lienzo: guardado || {
+            nodos: sueltos.map((n) => [n.k, Math.round(n.x), Math.round(n.y), n.fijo ? 1 : 0]),
+            cajas: cajas(lienzo),
             vista: [Math.round(lienzo.vista.x), Math.round(lienzo.vista.y), Math.round(lienzo.vista.k * 100) / 100] } };
           try { localStorage.setItem(LLAVE, JSON.stringify(datos)); } catch (e) { /* sin espacio o sin navegador: no se recuerda */ }
         }, 400);
@@ -642,20 +722,23 @@
             const dy = n.y - m.y;
             const d2 = dx * dx + dy * dy;
             if (d2 > 40000) continue;
+            // Lo de un módulo solo se acomoda entre sí; la caja lo separa de lo demás
+            if ((n.modulo || m.modulo) && (n.modulo !== m.modulo || d2 > 8100)) continue;
             const d = Math.sqrt(d2) || 1;
             const f = Math.min(8, 3200 / Math.max(d2, 150)) * fuerza;
             n.vx += dx / d * f; n.vy += dy / d * f;
             m.vx -= dx / d * f; m.vy -= dy / d * f;
           }
         }
-        const centro = esp.tipo === 'grafo' ? centroDe(esp) : null;
+        // La red se junta hacia un punto fijo (el centro de cuando apareció), no hacia la pantalla: los módulos van a un lado
+        const centro = esp.tipo === 'grafo' ? (esp.centroRed || (esp.centroRed = centroDe(esp))) : null;
         const cajas = Object.values(esp.cajas);
         ns.forEach((n) => {
-          if (centro) { n.vx += (centro.x - n.x) * 0.0016; n.vy += (centro.y - n.y) * 0.0016; }
+          if (centro && !n.modulo) { n.vx += (centro.x - n.x) * 0.0016; n.vy += (centro.y - n.y) * 0.0016; }
           if (cajas.length) {
-            const suya = esp.cajas[cajaDe(n.info)];
+            const suya = esp.cajas[cajaDeNodo(esp, n)];
             if (suya) {
-              const x1 = suya.x + 30, x2 = suya.x + suya.w - 30, y1 = suya.y + 54, y2 = suya.y + suya.h - 34;
+              const x1 = suya.x + 34, x2 = suya.x + suya.w - 34, y1 = suya.y + 44 / esp.vista.k + 24, y2 = suya.y + suya.h - 36;
               if (n.x < x1 || n.x > x2 || n.y < y1 || n.y > y2) {
                 n.fijo = false;
                 n.vx += ((n.x < x1 ? x1 : n.x > x2 ? x2 : n.x) - n.x) * 0.06;
@@ -668,7 +751,7 @@
                   const dx = n.x - (c.x + c.w / 2);
                   const dy = n.y - (c.y + c.h / 2);
                   const d = Math.hypot(dx, dy) || 1;
-                  n.vx += dx / d * 1.6; n.vy += dy / d * 1.6;
+                  n.vx += dx / d * 3; n.vy += dy / d * 3;
                 }
               });
             }
@@ -693,6 +776,8 @@
         const v = esp.vista;
         esp.mundo.style.transform = 'translate(' + v.x + 'px,' + v.y + 'px) scale(' + v.k + ')';
         esp.mundo.classList.toggle('vn-lejos', v.k < 0.75);
+        // El encabezado de los módulos se lee igual de cerca o de lejos (lineas-estilos.html, --vn-inv)
+        esp.mundo.style.setProperty('--vn-inv', (1 / v.k).toFixed(3));
         esp.nodos.forEach((n) => { n.el.style.transform = 'translate(' + n.x.toFixed(1) + 'px,' + n.y.toFixed(1) + 'px) translate(-50%,-20px)'; });
         Object.values(esp.cajas).forEach((c) => {
           c.el.style.transform = 'translate(' + c.x + 'px,' + c.y + 'px)';
@@ -768,20 +853,29 @@
         esperaBusqueda = setTimeout(() => { filtro.q = ev.target.value; pintar(); }, 200);
       });
       cont.querySelectorAll('[data-vn-filtro]').forEach((sel) => sel.addEventListener('change', () => { filtro[sel.dataset.vnFiltro] = sel.value; pintar(); }));
+      let esperaModulo = null;
+      vista.addEventListener('input', (ev) => {
+        const campo = ev.target.closest('[data-vn-caja-q]');
+        if (!campo) return;
+        const c = activo().cajas[campo.closest('[data-vn-caja]').dataset.vnCaja];
+        if (!c) return;
+        clearTimeout(esperaModulo);
+        esperaModulo = setTimeout(() => { c.q = campo.value; pintar(); guardar(); }, 250);
+      });
       cont.addEventListener('click', (ev) => {
         const b = (s) => ev.target.closest(s);
         let x;
         if ((x = b('[data-vn-modo]'))) { cambiarModo(x.dataset.vnModo); return; }
         if ((x = b('[data-vn-capa]'))) { filtro.capas[x.dataset.vnCapa] = !filtro.capas[x.dataset.vnCapa]; pintar(); return; }
-        if ((x = b('[data-vn-poner]'))) { ponerCaja(x.dataset.vnPoner); pintarLienzo(); guardar(); return; }
-        if ((x = b('[data-vn-quitar-caja]'))) { quitarCaja(x.closest('[data-vn-caja]').dataset.vnCaja); return; }
+        if ((x = b('[data-vn-poner]'))) { ponerCaja(activo(), x.dataset.vnPoner); pintar(); guardar(); return; }
+        if ((x = b('[data-vn-quitar-caja]'))) { quitarCaja(activo(), x.closest('[data-vn-caja]').dataset.vnCaja); return; }
         if (b('[data-vn-todo]')) { alCajon(gruposGrafo.map(clavesDe)); return; }
         if (b('[data-vn-vaciar]')) {
           // Al cajón, cada grupo unido por separado
           const vistos = new Set();
-          [...lienzo.nodos.keys()].forEach((k) => {
+          [...lienzo.nodos.values()].filter((n) => !n.modulo).map((n) => n.k).forEach((k) => {
             if (vistos.has(k)) return;
-            const c = componente(k);
+            const c = componente(k).filter((y) => !lienzo.nodos.get(y).modulo);
             c.forEach((y) => vistos.add(y));
             cajon.push(c);
           });
@@ -853,13 +947,13 @@
 
       vista.addEventListener('pointerdown', (ev) => {
         if (arr || (ev.pointerType === 'mouse' && ev.button !== 0)) return;
-        if (ev.target.closest('[data-vn-cortar], [data-vn-quitar-caja], [data-vn-sel], button')) return;
+        if (ev.target.closest('[data-vn-cortar], [data-vn-quitar-caja], [data-vn-sel], button, input')) return;
         const esp = activo();
         const p = puntoMundo(esp, ev);
         const cajaEl = ev.target.closest('[data-vn-caja]');
         const nodoEl = ev.target.closest('[data-vn-k]');
-        if (cajaEl && !nodoEl && ev.target.closest('[data-vn-estirar]')) arr = { tipo: 'estirar', caja: lienzo.cajas[cajaEl.dataset.vnCaja], p: p };
-        else if (cajaEl && !nodoEl && ev.target.closest('.vn-caja-cabeza')) arr = { tipo: 'caja', caja: lienzo.cajas[cajaEl.dataset.vnCaja], p: p };
+        if (cajaEl && !nodoEl && ev.target.closest('[data-vn-estirar]')) arr = { tipo: 'estirar', caja: esp.cajas[cajaEl.dataset.vnCaja], p: p };
+        else if (cajaEl && !nodoEl && ev.target.closest('.vn-caja-cabeza')) arr = { tipo: 'caja', caja: esp.cajas[cajaEl.dataset.vnCaja], p: p };
         else if (nodoEl) arr = { tipo: 'nodo', n: esp.nodos.get(nodoEl.dataset.vnK) };
         else arr = { tipo: 'fondo', vx: esp.vista.x, vy: esp.vista.y };
         if (arr.tipo === 'nodo' && !arr.n) { arr = null; return; }
@@ -882,7 +976,7 @@
           if (arr.tipo === 'estirar') { c.w = Math.max(180, c.w + dx); c.h = Math.max(140, c.h + dy); return; }
           c.x += dx; c.y += dy;
           // Lo que vive en la caja se mueve con ella
-          esp.nodos.forEach((n) => { if (cajaDe(n.info) === c.id) { n.x += dx; n.y += dy; } });
+          esp.nodos.forEach((n) => { if (cajaDeNodo(esp, n) === c.id) { n.x += dx; n.y += dy; } });
           return;
         }
         const n = arr.n;
@@ -909,6 +1003,7 @@
         const d = a.tipo === 'nodo' && a.movio ? destinoEn(ev, a.n) : null;
         terminarArrastre();
         if (a.tipo === 'fondo') { if (!a.movio && modo === 'grafo') elegir(null); if (esp === lienzo) guardar(); return; }
+        if (a.tipo === 'estirar') pintar();
         if (a.tipo !== 'nodo') { guardar(); return; }
         const n = a.n;
         if (!a.movio) {
@@ -932,6 +1027,7 @@
           return;
         }
         if (modo !== 'lienzo') return;
+        if (n.modulo) { n.modulo = null; recordar(n.info); }
         n.fijo = true; // en el lienzo se queda donde lo dejaste
         guardar();
         if (!cfg.puedeOperar() || n.info.tipo === 'persona') return;

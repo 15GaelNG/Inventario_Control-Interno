@@ -138,10 +138,16 @@ test('montar: el grafo con las capas, al cajón, el lienzo y lo que se recuerda 
   const cont = doc.getElementById('v');
   W.montar(cont, cfg).pintar();
   const claves = (raiz, tipo) => [...raiz.querySelectorAll('[data-vn-espacio="' + tipo + '"] [data-vn-k]')].map((n) => n.dataset.vnK).sort();
-  // Personas y sueltos prendidos; el resguardo se prende aparte
+  // Personas y sueltos prendidos; el resguardo es un módulo que se pone, con lo suyo adentro y su cuenta
   assert.deepEqual(claves(cont, 'grafo'), ['e:E12', 'l:L1', 'l:L3', 'l:L4', 'p:501']);
-  cont.querySelector('[data-vn-capa="resguardo"]').click();
+  assert.equal(cont.querySelector('[data-vn-capa="resguardo"]'), null);
+  cont.querySelector('[data-vn-poner="resguardo"]').click();
   assert.deepEqual(claves(cont, 'grafo'), ['e:E12', 'e:E13', 'l:L1', 'l:L2', 'l:L3', 'l:L4', 'p:501']);
+  const modulo = cont.querySelector('[data-vn-espacio="grafo"] [data-vn-caja="resguardo"]');
+  assert.equal(modulo.querySelector('[data-vn-caja-num]').textContent, '1');
+  assert.equal(cont.querySelector('[data-vn-poner="resguardo"]').hidden, true);
+  modulo.querySelector('[data-vn-quitar-caja]').click();
+  assert.deepEqual(claves(cont, 'grafo'), ['e:E12', 'l:L1', 'l:L3', 'l:L4', 'p:501']);
   // Un clic en un nodo elige su relación; «Al cajón» la guarda
   const nodo = cont.querySelector('[data-vn-k="e:E12"]');
   nodo.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, clientX: 5, clientY: 5 }));
@@ -155,7 +161,8 @@ test('montar: el grafo con las capas, al cajón, el lienzo y lo que se recuerda 
   assert.ok(cont.querySelector('[data-vn-cajon-lista] .vn-ficha-saca'));
   cont.remove();
 
-  // Lo guardado en el navegador vuelve: el lienzo con sus nodos y su caja (la clave vieja se encuentra por el número)
+  // Lo guardado en el navegador vuelve: el lienzo con sus nodos y su módulo, que trae lo suyo (la clave vieja se
+  // encuentra por el número; lo que ya está suelto en el lienzo no se repite en el módulo)
   dom.window.localStorage.setItem('lineas.vinculos.v1', JSON.stringify({ modo: 'lienzo', cajon: [['l:L3']],
     recuerdo: { 'l:VIEJA': { ref: 'n:4421090805', tipo: 'linea' } },
     lienzo: { nodos: [['e:E12', 0, 0, 1], ['l:L1', 0, 60, 0], ['l:VIEJA', 90, 0, 1]], cajas: [['resguardo', 200, 0, 260, 220]], vista: [0, 0, 1] } }));
@@ -163,7 +170,7 @@ test('montar: el grafo con las capas, al cajón, el lienzo y lo que se recuerda 
   otro.className = 'vn';
   doc.body.appendChild(otro);
   W.montar(otro, cfg).pintar();
-  assert.deepEqual(claves(otro, 'lienzo'), ['e:E12', 'l:L1', 'l:L2']);
+  assert.deepEqual(claves(otro, 'lienzo'), ['e:E12', 'e:E13', 'l:L1', 'l:L2']);
   assert.ok(otro.querySelector('[data-vn-caja="resguardo"]'));
   assert.equal(otro.querySelector('[data-vn-poner="resguardo"]').hidden, true);
   assert.match(otro.querySelector('[data-vn-cajon-lista]').textContent, /9990000001/);

@@ -1083,17 +1083,23 @@
   .vn .vn-cortar:hover { opacity: 1; background: var(--ln-rojo-bg); }
   .vn-cortar .ln-icon { width: 12px; height: 12px; }
 
-  /* Cajas del lienzo: se mueven del encabezado, se estiran de la esquina y se quitan con la X */
+  /* Módulos (Resguardo, Venta y desecho, Cancelación): se mueven del encabezado, se estiran de la esquina y se quitan con la X */
   .vn-caja { position: absolute; left: 0; top: 0; z-index: 1; border: 1.5px dashed var(--color-border); border-radius: 14px;
     background: color-mix(in srgb, var(--color-surface) 85%, transparent); transition: border-color .15s, background-color .15s; }
   .vn-caja.vn-blanco { border-color: var(--color-primary); background: var(--color-primary-soft); }
-  .vn-caja-cabeza { display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 6px 0 12px; font-size: 12.5px; font-weight: 600;
-    color: var(--color-text-muted); cursor: move; }
-  .vn .vn-caja-quitar { margin-left: auto; width: 24px; height: 24px; min-height: 0; padding: 0; display: inline-flex; align-items: center;
-    justify-content: center; background: transparent; border: none; color: var(--color-text-muted); }
+  /* El encabezado conserva su tamaño en la pantalla al acercar o alejar (--vn-inv = 1 / zoom, lo pone lineas-vinculos.html) */
+  .vn-caja-cabeza { --i: var(--vn-inv, 1); display: flex; align-items: center; gap: calc(6px * var(--i)); height: calc(40px * var(--i));
+    padding: 0 calc(6px * var(--i)) 0 calc(12px * var(--i)); font-size: calc(12.5px * var(--i)); font-weight: 600; color: var(--color-text-muted); cursor: move; }
+  .vn-caja-cabeza .ln-icon { width: calc(15px * var(--i)); height: calc(15px * var(--i)); }
+  .vn .vn-caja-quitar { margin-left: auto; width: calc(24px * var(--i)); height: calc(24px * var(--i)); min-height: 0; padding: 0; display: inline-flex;
+    align-items: center; justify-content: center; background: transparent; border: none; color: var(--color-text-muted); }
   .vn .vn-caja-quitar:hover { background: var(--ln-rojo-bg); color: var(--ln-rojo-tx); }
+  .vn-caja-titulo { white-space: nowrap; }
+  .vn .vn-caja-buscar { flex: 1; min-width: calc(50px * var(--i)); height: calc(26px * var(--i)); padding: 0 calc(8px * var(--i)); font-size: calc(12px * var(--i));
+    font-weight: 400; border-radius: calc(6px * var(--i)); cursor: text; }
+  .vn-caja-num { font-size: calc(11.5px * var(--i)); font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .vn-caja-estirar { position: absolute; right: 4px; bottom: 4px; cursor: nwse-resize; color: var(--color-text-muted); display: flex; }
-  .vn-caja-estirar .ln-icon { width: 14px; height: 14px; }
+  .vn-caja-estirar .ln-icon { width: calc(14px * var(--vn-inv, 1)); height: calc(14px * var(--vn-inv, 1)); }
 
   /* Lo elegido en el grafo y el nombre de la acción junto a lo que se arrastra */
   .vn-sel { position: absolute; left: 10px; bottom: 10px; right: 10px; z-index: 7; display: flex; align-items: center; gap: 8px; max-width: 560px;
