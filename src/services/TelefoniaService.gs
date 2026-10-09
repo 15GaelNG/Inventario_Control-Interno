@@ -590,6 +590,10 @@ const TelefoniaService = (function () {
       historial: () => historial(token, id), asignaciones: () => asignaciones(token, id, 'equipo'),
       asignacionesLinea: () => asignaciones(token, id, 'linea'), ultimaInspeccion: () => ultimoDocumentoNuco(token, id, 'INSPECCION'),
       indice: () => LineasRepo.indice(true),
+      catalogos: () => catalogos(token), colaboradores: () => colaboradores(token),
+      contextoInspeccion: () => contextoInspeccion(token, { equipoId: id }), contextoResponsiva: () => contextoResponsiva(token, { equipoId: id }),
+      // Sin caché, como la primera vez (usuario, 9-oct): índices, catálogos, colaboradores, IDs y la estructura de LINEAS
+      frio: () => { LineasRepo.borrarCaches(); LineasDatos.tocar(['LINEAS', 'EQUIPOS', 'ASIGNACIONES', 'ADENDUMS']); },
     };
     if (!llamadas[que]) throw new Error('No se mide «' + que + '».');
     LineasDatos.medirPasos(true);

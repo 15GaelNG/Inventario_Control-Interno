@@ -1439,7 +1439,15 @@ const LineasRepo = (function () {
     const juntar = function () {
       return Array.prototype.concat.apply([], arguments).filter((v, i, a) => a.indexOf(v) === i).sort();
     };
-    const ch = colaboradoresActivos_();
+    // Lo de Capital Humano sale del índice de colaboradores (caché 6 h), no de leer otra vez la base (usuario, 9-oct: la
+    // inspección pedía catálogos y colaboradores y las dos leían las 15 mil filas de CH sin caché)
+    const ix = indiceColaboradores();
+    const ch = ix.filas.map((f) => {
+      const o = {};
+      [['puesto', 'PUESTO'], ['departamento', 'DEPARTAMENTO'], ['area', 'AREA'], ['sede', 'SEDE'], ['oficina', 'OFICINA/DESARROLLO'],
+        ['director', 'DIRECTOR'], ['jefe', 'JEFE DIRECTO']].forEach(([k, c]) => { o[c] = f[ix.columnas.indexOf(k)]; });
+      return o;
+    });
     // Listas de LISTAS TELEFONOS con que el AppSheet valida (Valid_If = IN(..., SORT(SELECT(LISTAS TELEFONOS[...]))))
     const c = Object.assign({}, CATALOGO, {
       sedes: unicos(ch, 'SEDE'),
