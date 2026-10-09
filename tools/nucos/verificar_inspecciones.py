@@ -1,6 +1,7 @@
 """SOLO LECTURA: ¿cada archivo del plan está hoy en Drive donde el plan dice? (homologar 4.- INSPECCIONES)
 
-Uso: verificar_inspecciones.py <plan.json> <foto.json> --nucos 113[,…] [--arbol]
+Uso: verificar_inspecciones.py <plan.json> <foto.json> (--nucos 113[,…] | --todos) [--arbol]
+     verificar_inspecciones.py x x --contra-foto <foto.json> --nucos 482   (después de deshacer)
 """
 import sys, json, collections, unicodedata
 import expediente as e
@@ -108,4 +109,8 @@ if __name__ == "__main__":
     if "--contra-foto" in a:
         contra_foto(a[a.index("--contra-foto") + 1], a[a.index("--nucos") + 1].split(","))
     else:
-        verificar(a[0], a[1], a[a.index("--nucos") + 1].split(","), "--arbol" in a)
+        if "--todos" in a:
+            nucos = sorted({p["nuco"] for p in json.load(open(a[0], encoding="utf-8"))["plan"]}, key=int)
+        else:
+            nucos = a[a.index("--nucos") + 1].split(",")
+        verificar(a[0], a[1], nucos, "--arbol" in a)

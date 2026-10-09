@@ -4,8 +4,8 @@ Segunda parte de [nucos-expediente.md](nucos-expediente.md), que dejó `1.-DOCUM
 Aquí se documenta lo de `4.- INSPECCIONES` del 9-oct-2026: el inventario, las reglas, la herramienta, el piloto de 6
 NUCO y lo que falta para los demás.
 
-> **Estado al 9-oct-2026:** piloto aplicado y verificado en 6 NUCO (113, 267, 482, 111, 260, 140). Faltan los ~570
-> restantes (ver [Pendientes](#pendientes)).
+> **Estado al 9-oct-2026:** piloto aplicado y verificado en 6 NUCO (113, 267, 482, 111, 260, 140) y rollback probado
+> en el 482. Faltan los ~570 restantes: **[Para retomar](#para-retomar-dónde-se-quedó-el-9-oct-2026)** tiene los pasos.
 
 ## Lo que había
 
@@ -125,8 +125,9 @@ A documentación, Por revisar, Papelera, Choques de nombre) y los árboles antes
 | `foto.py <salida.json> [CLAVE]` | Solo lectura: el árbol completo (carpetas con ID, archivos con md5) de la carpeta de cada NUCO cuyo nombre contenga `CLAVE` (`INSPECC`, `SERVIC`, `DOCUMENTAC`) |
 | `homologar_insp.py <foto.json> <salida>` | Dry run: el plan archivo por archivo (`salida.json`). Lee también `foto-doc.json` (la foto de `1.-DOCUMENTACIÓN`) junto a `foto.json` |
 | `reporte_insp.py <foto.json> <plan.json> <salida> <NUCO,…>` | El Excel y los árboles antes/después de esos NUCO |
+| `inspecciones_app.py <salida> <archivos.json>` | Dry run de las inspecciones de la app (hoja vs. `REPORTES` vs. NUCO). Hay que adaptarlo (ver [Para retomar](#después-de-la-corrida-grande)) |
 | `inspecciones.py aplicar <plan.json> <foto.json> <foto-doc.json> (--nucos … \| --todos) [--hilos N] [--continuar <bitácora>]` | **En la real.** Revisa que cada NUCO siga como en la foto (si no, no lo toca), crea carpetas, mueve y renombra, papelera, carpetas vacías; bitácora, respaldo en Drive y hoja |
-| `verificar_inspecciones.py <plan.json> <foto.json> --nucos … [--arbol]` | Solo lectura: cada archivo está donde el plan dice, carpetas vacías, profundidad, nombres de nivel 2 |
+| `verificar_inspecciones.py <plan.json> <foto.json> (--nucos … \| --todos) [--arbol]` | Solo lectura: cada archivo está donde el plan dice, carpetas vacías, profundidad, nombres de nivel 2 |
 | `expediente.py deshacer <bitácora.jsonl> [--nucos 482,…]` | Regresa todo (o solo esos NUCO), de la última línea a la primera. Anota en `<bitácora>.deshechos` lo deshecho para no repetirlo |
 | `verificar_inspecciones.py x x --contra-foto <foto.json> --nucos …` | Después de deshacer: ¿quedó idéntico a la foto? |
 
@@ -175,6 +176,92 @@ ahí `_PAPELERA` y el modo `--continuar` (terminar un NUCO que se cortó sin rep
 de documentos y servicios que se vaciaron) y 8 archivos (4 relleno, 4 fotos idénticas del 260). Las de
 `especialista.ci` (100) y `especialistainspecciones.ci` (63) solo las puede tirar su dueño. Se deja así hasta terminar
 la corrida grande (por si hay que deshacer) y luego el dueño la vacía.
+
+## Para retomar (dónde se quedó el 9-oct-2026)
+
+**Estado:** el piloto está aplicado y verificado en 6 NUCO (113, 267, 482, 111, 260, 140), y el rollback se probó de
+verdad en el 482. **Los otros ~570 NUCO no se han tocado.** La carpeta real tiene `_PAPELERA` (165 cosas del piloto) y
+la hoja `BITACORA EXPEDIENTES NUCO` (en `PRUEBA DE NUCOS VEHICULARES`). Todo el código está en `ayrton`.
+
+Bitácoras vigentes, de la más nueva a la más vieja:
+
+| Bitácora | NUCO | Nota |
+|---|---|---|
+| `20261009-123421-inspecciones.jsonl` | 482 | la que manda para el 482 |
+| `20261009-115806-inspecciones.jsonl` | 267, 111, 260, 140 (y 482 ya deshecho) | `…jsonl.deshechos` dice `482` |
+| `20261009-115102-inspecciones.jsonl` | 113 | |
+
+Están en `tools/nucos/.cache/bitacoras/` y respaldadas en Drive (`PRUEBA DE NUCOS VEHICULARES/BITACORAS/`).
+
+### Antes de empezar
+
+1. **Horario sin movimiento** (tarde-noche o fin de semana) y **avisar al área** que no suba a `4.- INSPECCIONES`
+   mientras corre. Si alguien sube o mueve algo, ese NUCO se salta (no se rompe), pero hay que repetir la foto para él.
+2. Revisar que el token siga vivo: `uv run --no-project --with google-api-python-client --with google-auth-oauthlib
+   python -c "import expediente as e; print(e.drive().about().get(fields='user').execute())"` desde `tools/nucos`.
+3. **Decisiones que quedaron abiertas** (no bloquean la corrida, pero conviene cerrarlas):
+   - El relleno `CARPETA SIN INFORMACIÓN` va a la papelera (en documentación se apartó, no se tiró). Se dejó así.
+   - La hoja registra lo que se aplica, no lo que se deshace (el 482 sale dos veces). ¿Que `deshacer` también escriba ahí?
+   - Quién vacía `_PAPELERA` al final: dueños `especialista.ci`, `especialistainspecciones.ci`, `ecajachica.ci`.
+
+### Los pasos (desde `tools/nucos`)
+
+```bash
+cd tools/nucos
+UV="uv run --no-project --with google-api-python-client --with google-auth-oauthlib --with openpyxl"
+C=.cache/inspecciones/$(date +%Y%m%d)        # una carpeta por corrida; los nombres foto.json / foto-doc.json son fijos
+mkdir -p $C
+
+# 1) Foto nueva (solo lectura; ~15 min cada una). La del 9-oct ya no sirve: el piloto cambió 6 NUCO.
+$UV python foto.py $C/foto.json INSPECC
+$UV python foto.py $C/foto-doc.json DOCUMENTAC
+
+# 2) Dry run y reporte (sin Drive). Revisar el resumen: debe parecerse al del 9-oct (≈39 mil a mover, 162 papelera,
+#    0 carpetas a más de 3 niveles). Los 6 del piloto deben salir casi todo IGUAL.
+PYTHONIOENCODING=utf-8 $UV python homologar_insp.py $C/foto.json $C/homolog-insp
+PYTHONIOENCODING=utf-8 $UV python reporte_insp.py $C/foto.json $C/homolog-insp.json $C/dry-run 113,267,482,111,260,140
+
+# 3) Otros 5 de prueba con hilos (elegir unos con raíz de otro nombre, p. ej. de los 76 «4.-INSPECCIONES»)
+PYTHONIOENCODING=utf-8 $UV python inspecciones.py aplicar $C/homolog-insp.json $C/foto.json $C/foto-doc.json --nucos A,B,C,D,E --hilos 5
+PYTHONIOENCODING=utf-8 $UV python verificar_inspecciones.py $C/homolog-insp.json $C/foto.json --nucos A,B,C,D,E
+
+# 4) La corrida grande (2-3 h). Se puede cortar: volver a correr el mismo comando salta lo ya hecho
+#    (ya no coincide con la foto). Si se corta A LA MITAD de un NUCO, terminarlo con --continuar <bitácora> --nucos N.
+PYTHONIOENCODING=utf-8 $UV python inspecciones.py aplicar $C/homolog-insp.json $C/foto.json $C/foto-doc.json --todos --hilos 6 | tee $C/corrida.log
+
+# 5) Verificar todo
+PYTHONIOENCODING=utf-8 $UV python verificar_inspecciones.py $C/homolog-insp.json $C/foto.json --todos | tee $C/verificacion.log
+```
+
+Lo que hay que mirar en la salida:
+
+- `NO SE TOCA: cambió desde la foto`: ese NUCO se saltó. Repetir foto y plan solo si son muchos; si son pocos, anotarlos.
+- `FALLÓ: choque inesperado`: alguien dejó en el destino un archivo con el mismo nombre. Ese NUCO quedó a medias (la
+  bitácora lo tiene); revisar a mano y terminarlo con `--continuar`.
+- En la verificación: todo en `en su lugar`, `carpetas vacías: 0` y `profundidad … 3`.
+
+### Para deshacer
+
+```bash
+$UV python expediente.py deshacer .cache/bitacoras/<bitácora>.jsonl [--nucos N,…]
+$UV python verificar_inspecciones.py x x --contra-foto $C/foto.json --nucos N,…    # ¿quedó como la foto?
+```
+
+De la bitácora más nueva a la más vieja. Lo deshecho queda en `<bitácora>.deshechos` y no se repite.
+
+### Después de la corrida grande
+
+1. **Inspecciones de la app** (304 de 2026, hoja `INSPECCION VEHICULAR`): `inspecciones_app.py` es el dry run del 9-oct
+   (202 ya copiadas por el área al NUCO → solo cambiar la liga de la hoja; 102 solo en `REPORTES` → moverlas al
+   trimestre y guardar la liga). **Hay que adaptarlo** a la foto nueva (`foto.json`, campo `md5`) y a los nombres
+   homologados (`INSPECCION-<NUCO> <fecha>.pdf`), y escribir el que lo aplica (cambia celdas de la hoja de producción:
+   la bitácora guarda el valor anterior). En la app: `InspeccionesService.registrar` genera el PDF en
+   `<NUCO>/4.- INSPECCIONES/<año>/<N> TRIMESTRE/INSPECCION-<NUCO> <fecha>.pdf` (por `ExpedienteNuco`), guarda la liga y
+   `urlFormato` acepta ligas además de rutas. Decisiones ya tomadas: trimestre por fecha; los originales de `REPORTES` de
+   las 202 copiadas se quedan donde están.
+2. **`_POR REVISAR`**: que el área diga qué es (pestaña "Por revisar" del Excel).
+3. **Vaciar `_PAPELERA`** con las cuentas dueñas.
+4. Seguir con **`2.- SERVICIOS`** (inventario y propuesta abajo) y **`3.- VERIFICACIONES`**.
 
 ## Pendientes
 
