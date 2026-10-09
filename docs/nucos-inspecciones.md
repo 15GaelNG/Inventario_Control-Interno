@@ -258,7 +258,9 @@ De la bitácora más nueva a la más vieja. Lo deshecho queda en `<bitácora>.de
    la bitácora guarda el valor anterior). En la app: `InspeccionesService.registrar` genera el PDF en
    `<NUCO>/4.- INSPECCIONES/<año>/<N> TRIMESTRE/INSPECCION-<NUCO> <fecha>.pdf` (por `ExpedienteNuco`), guarda la liga y
    `urlFormato` acepta ligas además de rutas. Decisiones ya tomadas: trimestre por fecha; los originales de `REPORTES` de
-   las 202 copiadas se quedan donde están.
+   las 202 copiadas se quedan donde están. **El cambio de la app espera (9-oct-2026, decisión de Ayrton):** no se toca
+   mientras la homologación esté a medias ni mientras se estén moviendo archivos; se hace cuando ninguna corrida esté en
+   curso. Mientras tanto la app sigue guardando en `REPORTES` e `INSPECCIONES_Images`.
 2. **`_POR REVISAR`**: que el área diga qué es (pestaña "Por revisar" del Excel).
 3. **Vaciar `_PAPELERA`** con las cuentas dueñas.
 4. Seguir con **`2.- SERVICIOS`** (inventario y propuesta abajo) y **`3.- VERIFICACIONES`**.
