@@ -78,16 +78,23 @@ function lineasIneLectura_continuar() {
   if (hoja.getLastRow() > 1) hoja.getRange(2, 1, hoja.getLastRow() - 1, 1).getValues().forEach((r) => { leidas[r[0]] = true; });
   const faltan = ineLecCandidatas_().filter((c) => !leidas[c.id]);
   st.faltan = faltan.length;
+  let espera = 60;
   try {
     ineLecLeerLista_(faltan, hoja, st, () => Date.now() - inicio < INE_LEC_TANDA_MS, false);
+    delete st.pausa;
   } catch (e) {
-    st.error = e.message;
-    ineLecGuardar_(st);
-    throw e;
+    if (!ineLecEsCuota_(e)) {
+      st.error = e.message;
+      ineLecGuardar_(st);
+      throw e;
+    }
+    // Límite de Google (llamadas o tiempo del día): no se anota como error; se sigue en 30 min
+    st.pausa = new Date().toISOString() + ' · ' + String(e.message || e).slice(0, 150);
+    espera = 30 * 60;
   }
   if (st.faltan <= 0) { st.fase = 'LISTO'; st.fin = new Date().toISOString(); }
   ineLecGuardar_(st);
-  if (st.fase === 'LEER') ScriptApp.newTrigger(INE_LEC_CONTINUAR).timeBased().after(60 * 1000).create();
+  if (st.fase === 'LEER') ScriptApp.newTrigger(INE_LEC_CONTINUAR).timeBased().after(espera * 1000).create();
   return ineLecInforme_(st);
 }
 
@@ -158,6 +165,9 @@ function ineLecTexto_(id, temporal) {
   }
 }
 
+/** ¿Es un límite de Google (cuota, demasiadas llamadas) y no algo del archivo? Esos se reintentan, no se anotan. */
+const ineLecEsCuota_ = (e) => /quota|rate ?limit|limit exceeded|too many|demasiad|l[ií]mite|cuota/i.test(String((e && e.message) || e));
+
 /** Lee la lista mientras `queda()`, escribiendo cada 10 renglones. */
 function ineLecLeerLista_(lista, hoja, st, queda, conTexto) {
   const temporal = ineLecTemporal_();
@@ -175,7 +185,12 @@ function ineLecLeerLista_(lista, hoja, st, queda, conTexto) {
       const t0 = Date.now();
       let texto = '';
       let error = '';
-      try { texto = ineLecTexto_(c.id, temporal); } catch (e) { error = String(e.message || e).slice(0, 200); }
+      try {
+        texto = ineLecTexto_(c.id, temporal);
+      } catch (e) {
+        if (ineLecEsCuota_(e)) throw e;
+        error = String(e.message || e).slice(0, 200);
+      }
       const l = ineLecInterpretar_(texto, vocabulario);
       const fila = [c.id, c.nuco, c.ruta, c.nombre, c.kb, l.tipo, l.lado, l.curp, l.curpOk ? 'SI' : '', l.nacimiento, l.sexo,
         l.nombreVuelta, l.idmex, l.clave, l.nombres.join(' '), error, Math.round((Date.now() - t0) / 1000)];
@@ -199,6 +214,10 @@ function ineLecVocabulario_() {
   return v;
 }
 
+// Nombres de funcionarios del INE/IFE que vienen impresos (la firma) en las credenciales: no son de quien la trae.
+const INE_LEC_FIRMAS = ['EDMUNDO JACOBO MOLINA', 'CLAUDIA EDITH SUAREZ OJEDA', 'MARIA ELENA CORNEJO ESPARZA',
+  'LORENZO CORDOVA VIANELLO', 'GUADALUPE TADDEI ZAVALA'];
+const ineLecSinFirmas_ = (s) => INE_LEC_FIRMAS.reduce((x, f) => x.replace(new RegExp('\\b' + f.replace(/ /g, '\\s+') + '\\b', 'g'), ' '), s);
 const ineLecNorm_ = (s) => String(s == null ? '' : s).toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 const ineLecPalabras_ = (s) => ineLecNorm_(s).split(/[^A-Z]+/).filter((w) => w.length >= 2);
 
@@ -210,7 +229,11 @@ function ineLecDigitoCurp_(c) {
   return String((10 - (s % 10)) % 10);
 }
 
-/** La CURP del texto, corrigiendo lo que el OCR suele cambiar (O por 0, I por 1…) según la posición. */
+/**
+ * La CURP del texto, corrigiendo lo que el OCR suele cambiar (O por 0, I por 1…) según la posición. La posición 17 es
+ * letra para quien nació desde 2000 y dígito antes: una O ahí con año de dos dígitos mayor que 15 es un 0 (el dígito
+ * verificador no lo nota: la O y el 0 suman lo mismo en esa posición).
+ */
 function ineLecCurp_(t) {
   const aDigito = { O: '0', Q: '0', D: '0', U: '0', I: '1', L: '1', Z: '2', S: '5', B: '8', G: '6', T: '7' };
   const aLetra = { 0: 'O', 1: 'I', 2: 'Z', 5: 'S', 6: 'G', 8: 'B' };
@@ -219,7 +242,7 @@ function ineLecCurp_(t) {
   (t.replace(/[^A-Z0-9]+/g, ' ').match(/\b[A-Z0-9]{18}\b/g) || []).forEach((tok) => {
     const c = tok.split('').map((ch, i) => {
       if (i >= 4 && i <= 9) return aDigito[ch] || ch;
-      if (i === 17) return aDigito[ch] || ch;
+      if (i === 17 || (i === 16 && Number(tok.slice(4, 6).replace(/O/g, '0')) > 15)) return aDigito[ch] || ch;
       if (letras.indexOf(i) >= 0) return aLetra[ch] || ch;
       return ch;
     }).join('');
@@ -258,19 +281,20 @@ function ineLecInterpretar_(texto, vocabulario) {
     r.curp = curp.curp;
     r.curpOk = curp.ok;
     r.sexo = curp.curp[10];
-    r.nacimiento = ineLecFecha6_(curp.curp.slice(4, 10), /[A-Z]/.test(curp.curp[16]));
+    r.nacimiento = ineLecFecha6_(curp.curp.slice(4, 10), /[A-Z]/.test(curp.curp[16]) && Number(curp.curp.slice(4, 6)) <= 15);
   }
   const clave = t.replace(/\s+/g, ' ').match(/\b([A-Z]{6}\d{8}[HM]\d{3})\b/);
   if (clave) r.clave = clave[1];
-  // La vuelta: tres renglones de máquina (IDMEX…, la fecha de nacimiento y el nombre con «<»)
+  // La vuelta: tres renglones de máquina (IDMEX…, la fecha de nacimiento y el nombre con «<»). El OCR a veces junta
+  // dos en uno, así que se buscan en cualquier parte del renglón.
   const renglones = t.split(/\n/).map((x) => x.replace(/\s+/g, '').replace(/«/g, '<<').replace(/‹/g, '<'));
   renglones.forEach((x) => {
     const id = x.match(/IDMEX(\d{9,10})(?:<+(\d{13}))?/);
     if (id && !r.idmex) r.idmex = id[1] + (id[2] ? '/' + id[2] : '');
-    const nac = x.match(/^(\d{6})\d([HM])\d{6}\d?MEX/);
+    const nac = x.match(/(\d{6})\d([HM])\d{6}\d?MEX/);
     if (nac && !r.nacimiento) { r.nacimiento = ineLecFecha6_(nac[1]); r.sexo = r.sexo || nac[2]; }
-    const nom = x.match(/^([A-Z]+(?:<[A-Z]+)*)<<([A-Z]+(?:<[A-Z]+)*)<*$/);
-    if (nom && x.length >= 10 && !r.nombreVuelta) r.nombreVuelta = nom[2].replace(/</g, ' ') + ' ' + nom[1].replace(/</g, ' ');
+    const nom = x.match(/([A-Z]+(?:<[A-Z]+)*)<<([A-Z]+(?:<[A-Z]+)*)(?=<|$)/);
+    if (nom && nom[0].length >= 10 && !r.nombreVuelta) r.nombreVuelta = nom[2].replace(/</g, ' ') + ' ' + nom[1].replace(/</g, ' ');
   });
   if (!r.nacimiento) {
     const f = (t.match(/\b(\d{2})\/(\d{2})\/(\d{4})\b/g) || []).map((x) => x.split('/'))
@@ -280,7 +304,7 @@ function ineLecInterpretar_(texto, vocabulario) {
   if (r.curp || r.clave || /CREDENCIAL PARA VOTAR|DOMICILIO/.test(t)) r.lado = 'FRENTE';
   if (r.idmex || r.nombreVuelta) r.lado = r.lado ? 'LOS DOS' : 'VUELTA';
   const vistos = {};
-  ineLecPalabras_(t).forEach((w) => { if (vocabulario[w] && !vistos[w]) { vistos[w] = true; r.nombres.push(w); } });
+  ineLecPalabras_(ineLecSinFirmas_(t)).forEach((w) => { if (vocabulario[w] && !vistos[w]) { vistos[w] = true; r.nombres.push(w); } });
   return r;
 }
 
@@ -348,7 +372,7 @@ function ineLecCoincide_(p, palabras) {
 /** Un archivo leído → { persona, como } o { persona: null, nota }. */
 function ineLecPersonaDe_(l, ix) {
   const palabras = {};
-  String(l.nombres || '').split(' ').concat(ineLecPalabras_(l.nombreVuelta)).forEach((w) => { if (w) palabras[w] = true; });
+  ineLecSinFirmas_(String(l.nombres || '')).split(' ').concat(ineLecPalabras_(l.nombreVuelta)).forEach((w) => { if (w) palabras[w] = true; });
   if (l.nacimiento) {
     let mismos = (ix.porNac[l.nacimiento] || []).filter((p) => ineLecCoincide_(p, palabras).basico);
     if (mismos.length > 1) mismos = mismos.filter((p) => ineLecCoincide_(p, palabras).completo);
@@ -358,11 +382,17 @@ function ineLecPersonaDe_(l, ix) {
   }
   const vistos = {};
   const porNombre = [];
+  const parcial = [];
   Object.keys(palabras).forEach((w) => (ix.porPaterno[w] || []).forEach((p) => {
     if (vistos[p.nombre + '|' + p.nac]) return;
     vistos[p.nombre + '|' + p.nac] = true;
-    if (ineLecCoincide_(p, palabras).completo) porNombre.push(p);
+    const c = ineLecCoincide_(p, palabras);
+    if (c.completo) porNombre.push(p);
+    else if (c.basico && p.materno.length && p.materno.every((x) => palabras[x])) parcial.push(p);
   }));
+  // Sin nombre completo: apellidos y primer nombre (un segundo nombre que el OCR no leyó), si es una sola persona
+  if (!porNombre.length && parcial.length === 1) return { persona: parcial[0], como: 'NOMBRE' };
+  if (!porNombre.length && parcial.length > 1) return { persona: null, nota: 'el texto coincide en parte con ' + parcial.length + ' personas' };
   // Dos empleos con el mismo nombre y sin fecha (o con fechas distintas) pueden ser la misma persona o homónimos
   const nombres = {};
   porNombre.forEach((p) => { nombres[p.nombre] = (nombres[p.nombre] || []).concat([p]); });
@@ -504,7 +534,8 @@ function lineasIneEnsayo() {
 function ineLecInforme_(st) {
   if (!st) { console.log('INE LECTURA: no se ha corrido.'); return 'Sin correr'; }
   const texto = ['INE LECTURA · ' + st.fase + (st.error ? ' · ERROR: ' + st.error : ''),
-    'Leídos: ' + st.leidos + (st.faltan != null ? ' · faltan ' + st.faltan : '') + ' · con error: ' + st.errores].join('\n');
+    'Leídos: ' + st.leidos + (st.faltan != null ? ' · faltan ' + st.faltan : '') + ' · con error: ' + st.errores]
+    .concat(st.pausa ? ['En pausa por un límite de Google (sigue sola en 30 min): ' + st.pausa] : []).join('\n');
   console.log(texto);
   return texto;
 }

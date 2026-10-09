@@ -143,3 +143,35 @@ test('solo lee NUCOS: la única copia va a la carpeta temporal del DEV y solo es
     assert.match(fuente, new RegExp('function ' + fn + '\\(\\) \\{\\n  soloEditor_\\(\\);\\n  ineNucosExigirDev_\\(\\);'));
   });
 });
+
+test('lo que salió en la muestra del 9-oct: renglones de máquina juntos, O en vez de 0 en la CURP, firmas impresas', () => {
+  const { ineLecInterpretar_, ineLecCurp_ } = cargar();
+  const juntos = ineLecInterpretar_('IDMEX1234567890<<1234567890123 8501018H3312315MEX<02<<12345<7 PEREZ <LOPEZ<<JUAN<CARLOS<<<<', VOCABULARIO);
+  assert.equal(juntos.nacimiento, '1985-01-01');
+  assert.equal(juntos.nombreVuelta, 'JUAN CARLOS PEREZ LOPEZ');
+  assert.equal(juntos.idmex, '1234567890/1234567890123');
+  const o = ineLecCurp_('PELJ850101HQTRPNO8');
+  assert.equal(o.curp, 'PELJ850101HQTRPN08', 'nacido en 1985: la posición 17 es dígito');
+  assert.equal(ineLecInterpretar_('CURP PELJ850101HQTRPNO8', VOCABULARIO).nacimiento, '1985-01-01', 'no 2085');
+  assert.equal(ineLecCurp_('PELJ050101HQTRPNA0').curp[16], 'A', 'nacido en 2005: letra');
+  const firmas = ineLecInterpretar_('IDMEX1234567890 EDMUNDO JACOBO MOLINA CLAUDIA EDITH SUAREZ OJEDA PEREZ LOPEZ JUAN',
+    { ...VOCABULARIO, EDMUNDO: true, JACOBO: true, MOLINA: true, CLAUDIA: true, EDITH: true, SUAREZ: true, OJEDA: true });
+  assert.deepEqual([...firmas.nombres], ['PEREZ', 'LOPEZ', 'JUAN'], 'la firma del funcionario no es de quien trae la credencial');
+});
+
+test('sin nombre completo: apellidos y primer nombre, si es una sola persona (el OCR se comió el segundo nombre)', () => {
+  const { f, ix } = mundo();
+  const r = f.ineLecPersonaDe_({ lado: 'VUELTA', nombres: 'PEREZ LOPEZ JUAN', nombreVuelta: '' }, ix);
+  assert.equal(r.persona && r.persona.id, 'PER-1');
+  assert.equal(r.como, 'NOMBRE');
+});
+
+test('un límite de Google no se anota como error del archivo: se pausa y sigue en 30 min', () => {
+  const ctx = vm.createContext({});
+  vm.runInContext(fuente + '\nthis.c = ineLecEsCuota_;', ctx);
+  assert.equal(ctx.c(new Error('User rate limit exceeded.')), true);
+  assert.equal(ctx.c(new Error('Service invoked too many times for one day: driveapp.')), true);
+  assert.equal(ctx.c(new Error('File not found: 1abc')), false);
+  assert.match(fuente, /if \(ineLecEsCuota_\(e\)\) throw e;/);
+  assert.match(fuente, /espera = 30 \* 60;/);
+});
