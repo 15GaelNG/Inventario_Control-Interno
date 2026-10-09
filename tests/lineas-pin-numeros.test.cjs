@@ -76,6 +76,8 @@ test('tipo de bloqueo obligatorio siempre que se ve (usuario, 9-oct): la lista y
   const cliente = read('src/html/js/lineas.html');
   assert.match(cliente, /columna: '_BLOQUEO', etiqueta: 'TIPO DE BLOQUEO DEL EQUIPO', control: 'lista', opciones: OPCIONES_BLOQUEO, valor: inicial, mostrar: pin\.mostrar, requerido: pin\.mostrar, virtual: true/);
   assert.match(cliente, /const v = \(e\.columna === '_BLOQUEO' \? bloqueoElegido\(cuerpo\) : valores\[e\.columna\]\) \|\| '';/, 'Editar y Agregar');
+  assert.match(cliente, /if \(e\.columna === '_BLOQUEO' && bloqueoElegido\(cuerpo\) === null\) return;/,
+    'Editar: si la lista no está a la vista no se pide (usuario, 9-oct: salió «obligatorio» al editar una línea)');
   assert.match(cliente, /if \(bloqueoElegido\(\$\('#ln-captura-cuerpo', raiz\)\) === ''\) errores\.push\(\{ columna: '_BLOQUEO'/, 'inspección y responsiva');
 });
 

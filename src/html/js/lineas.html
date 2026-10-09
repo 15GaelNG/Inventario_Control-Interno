@@ -1389,7 +1389,9 @@
       (elementos || []).forEach((e) => {
         if (e.tipo !== 'campo' || e.soloLectura || e.control === 'calculado' || e.control === 'firma' || e.control === 'patron' || e.control === 'archivo' || e.valorOculto) return;
         if (!cumpleCondicion(e.mostrar, t, valores, ctx)) return;
-        // La lista de bloqueo no se guarda (data-virtual): su valor se lee aparte
+        // La lista de bloqueo no se guarda (data-virtual): su valor se lee aparte. Solo se pide si está a la vista
+        // (usuario, 9-oct: al editar una línea salió «obligatorio» sin que se viera; la pantalla decide con su ctx)
+        if (e.columna === '_BLOQUEO' && bloqueoElegido(cuerpo) === null) return;
         const v = (e.columna === '_BLOQUEO' ? bloqueoElegido(cuerpo) : valores[e.columna]) || '';
         const error = (corto) => errores.push({ e: e, columna: e.columna, corto: corto, msg: e.etiqueta + ': ' + corto });
         if (!v) { if (cumpleCondicion(e.requerido, t, valores, ctx)) errores.push({ e: e, columna: e.columna, corto: 'Obligatorio', msg: e.etiqueta + ' es obligatorio' }); return; }
