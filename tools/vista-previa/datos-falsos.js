@@ -453,9 +453,9 @@
     if (t.checked !== tecnica) { t.checked = tecnica; evento(t, 'change'); }
     await esperar(300);
   }
-  async function vistaRelaciones(tecnica) {
-    const t = await hasta('#rel-tecnico-toggle');
-    if (t.checked !== tecnica) { t.checked = tecnica; evento(t, 'change'); }
+  // Datos conectados ya no tiene vista técnica (9-oct): solo se espera a que carguen las pestañas
+  async function vistaRelaciones() {
+    await hasta('#rel-s-tabs-lista .tab-btn');
     await esperar(300);
   }
   async function elegirVehiculo(selector, valor) {
@@ -505,7 +505,6 @@
       const sel = (n) => document.querySelector('[data-dc-nueva="' + n + '"]'); sel('dueno').value = 'VEHICULOS'; sel('copia').value = 'HOLOGRAMAS';
       document.querySelector('[data-dc-accion="sugerir"]').click(); await hasta('.dc-elegir'); await esperar(300); },
     'relaciones-lineas': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('.tab-btn[data-tab="familia-1"]')).click(); await esperar(400); },
-    'relaciones-mapa': async () => { await abrir('relaciones'); await vistaRelaciones(true); await hasta('.rel-matriz'); await esperar(300); },
     'salud': async () => { await abrir('salud'); await vistaSalud(false); await hasta('.rel-s-pend'); await esperar(300); },
     'salud-lineas': async () => { await abrir('salud'); await vistaSalud(false); (await hasta('#salud-tabs .tab-btn[data-tab="familia-1"]')).click(); await esperar(400); },
     'salud-detalle-seleccion': async () => { await abrir('salud'); await vistaSalud(false); (await hasta('[data-s-ver]')).click(); await esperar(700); const cajas = document.querySelectorAll('#salud-tabla tbody input[type="checkbox"]'); if (cajas[0]) cajas[0].click(); await esperar(400); },
