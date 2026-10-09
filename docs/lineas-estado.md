@@ -43,7 +43,9 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   fija (ref.lineaNueva) y su comentario; si no, el comentario va en otra ventana. Movimientos ASIGNAR_LINEA («Vincular
   línea»), CAMBIO_LINEA, CAMBIO_EQUIPO y RETIRAR_LINEA («Desvincular línea»). La línea se separa con
   `LineasEscritura.separarLinea` (también con el equipo guardado, donde cambiar el estatus no los separaba).
-- **Vínculos** (8-oct, solo en `emmanuel` y el DEV; `lineas-vinculos.html`): tercer modo de Líneas Telefónicas junto a
+- **Vínculos** (8-oct; `lineas-vinculos.html`): **una idea del usuario que se queda así**, apagada en producción como Help
+  Desk (`vinculos-lineas` en `MODULOS_APAGADOS` del bloque de producción de `Entornos.gs`: sin botón ni espacio); en
+  los DEV se ve. No tiene llamadas propias al servidor, solo abre las ventanas de siempre. Es el tercer modo de Líneas Telefónicas junto a
   Tabla y Tarjetas, con el cajón a la izquierda y dos vistas. **Grafo**: todo lo que cabe en la pantalla flotando como
   red (personas con sus equipos y líneas como íconos y sus vínculos; se prenden Personas y Sueltos), búsqueda (persona, NUCO, número también anterior, IMEI o estatus; varias con
   coma; con búsqueda salen las bajas), departamento y compañía; la rueda acerca, el fondo se arrastra y se aleja solo
