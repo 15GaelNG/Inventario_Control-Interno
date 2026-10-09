@@ -14,12 +14,24 @@
 
 const AVISO_CAMBIOS_FUNCION = 'alEditarLibro';
 
-/** El activador: la hoja que se editó a mano tiene versión nueva */
+/**
+ * El activador: la hoja que se editó a mano tiene versión nueva, y si lo editado es un dato conectado (Datos
+ * conectados), se copia a las hojas que lo mantienen al día (Relaciones.alEditarAMano).
+ */
 function alEditarLibro(e) {
   try {
     CacheHojas.tocar(e.source.getId(), e.range.getSheet().getName());
   } catch (err) {
     console.warn('alEditarLibro: ' + err.message);
+  }
+  try {
+    const r = e.range;
+    let quien = '';
+    try { quien = e.user && e.user.getEmail ? e.user.getEmail() : ''; } catch (x) { /* sin correo */ }
+    Relaciones.alEditarAMano(e.source.getId(), r.getSheet(), r.getRow(), r.getNumRows(), r.getColumn(), r.getNumColumns(),
+      quien ? quien + ' (a mano)' : 'a mano');
+  } catch (err) {
+    console.error('alEditarLibro, datos conectados: ' + err.message);
   }
 }
 

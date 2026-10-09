@@ -822,6 +822,30 @@ function apiRegistrarInspeccion(token, datos, imagenes) {
 // separados: 'relaciones' para el mapa, 'salud' para revisar y actualizar. Aquí solo van
 // permisos y la forma de la respuesta. JSON.stringify porque las celdas pueden traer Date,
 // y google.script.run no las pasa dentro de un objeto.
+// Datos conectados que se arman desde la pantalla (DatosConectados.gs): tarjetas, columnas para elegir, sugerencias,
+// vista previa, conectar, quitar y poner al día. Leer: permiso 'relaciones'; cambiar: EDICION en 'relaciones'.
+function apiDatosConectados(token) {
+  return JSON.stringify(DatosConectados.pantalla(token));
+}
+function apiDatosConectadosColumnas(token, hoja) {
+  return JSON.stringify(DatosConectados.columnas(token, hoja));
+}
+function apiDatosConectadosSugerir(token, dueno, copia) {
+  return JSON.stringify(DatosConectados.sugerir(token, dueno, copia));
+}
+function apiDatosConectadosVistaPrevia(token, propuesta) {
+  return JSON.stringify(DatosConectados.vistaPrevia(token, propuesta));
+}
+function apiDatosConectadosConectar(token, propuesta, ponerAlDia) {
+  return JSON.stringify(DatosConectados.guardar(token, propuesta, ponerAlDia));
+}
+function apiDatosConectadosQuitar(token, dueno, copia, colDueno) {
+  return JSON.stringify(DatosConectados.quitar(token, dueno, copia, colDueno));
+}
+function apiDatosConectadosPonerAlDia(token, copia) {
+  return JSON.stringify(DatosConectados.ponerAlDia(token, copia));
+}
+
 function apiRelacionesMapa(token) {
   Permisos.puedeLeer(token, 'relaciones');
   return JSON.stringify(mapaCompleto_());

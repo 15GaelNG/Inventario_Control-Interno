@@ -368,6 +368,15 @@ const HojaServicio = (function () {
     const registro = SheetUtils.update(libro(def), nombreReal, id, datos, columnaId(def));
     renombrarArchivos_(def, archivos, id);
     if (def.despues) def.despues(registro, Object.assign(ctx, { cambios: datos }));
+    // Los datos conectados (Administración > Datos conectados) se copian a las hojas que los mantienen al día. Si
+    // falla, lo guardado se queda: Salud lo pone al día después.
+    if (typeof Relaciones !== 'undefined') {
+      try {
+        Relaciones.alGuardar(nombreReal, registro, datos, ctx.opciones);
+      } catch (err) {
+        console.error('Datos conectados: no se pudo copiar ' + nombre(def) + ' ' + id + ': ' + err.message);
+      }
+    }
     return respuesta_(def, registro, id);
   }
 
