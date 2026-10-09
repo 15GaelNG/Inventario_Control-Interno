@@ -198,6 +198,7 @@ su nombre dentro de ella (`LineasArchivos.resolver`); el DEV además los lee de 
 | `lineas/LineasEstructura.gs`, `LineasRetiro.gs`, `LineasReestructura.gs`, `LineasRevisionBD.gs` | Herramientas de la reestructura (ya corridas; no se vuelven a usar) |
 | `lineas/LineasAdmin.gs` | Utilidades que se corren desde el editor |
 | `html/js/lineas.html`, `lineas-vinculos.html`, `lineas-correcciones.html`, `html/lineas-estilos.html`, `html/views/lineas/*` | Pantallas (`lineas-vinculos.html`: la vista Vínculos) |
+| `html/js/lineas-medidor.html` + `apiLineasMediciones`, `apiLineasMedirServidor` | Medidor de tiempos (9-oct): apagado salvo con `?medir=1` en la dirección; escribe en la hoja MEDICIONES LINEAS solo en un DEV (en producción lo rechaza). Cómo se usa: `migracion/TIEMPOS_LINEAS.md` |
 | `tests/lineas-*.test.cjs`, `pdf-render.test.cjs` | Pruebas (`npm test`) |
 
 ## 4. Cómo se trabaja
