@@ -69,6 +69,7 @@ function modulo(opciones) {
       agregarFilas: (hoja, nuevas) => { nuevas.forEach((f) => filas.push(Object.assign({ _hoja: hoja }, f))); },
       buscarFilasVarios: (hoja, columna, valores) => registro.map((f, i) => (valores.indexOf(f[columna]) >= 0 ? i + 2 : 0)).filter(Boolean),
       leerFilas: (peticiones) => peticiones.map((q) => q.filas.map((n) => registro[n - 2])),
+      leerTabla: () => registro.slice(),
     },
   });
   vm.runInContext(read('src/services/lineas/LineasIdentificaciones.gs') + '\nthis.I = LineasIdentificaciones;', ctx);
@@ -227,23 +228,29 @@ test('fotos de la inspección: miniatura desde que se eligen, espera encima, cli
 });
 
 // Paso 3 (pendiente 2.29): la identificación que la persona ya tiene en el registro se ofrece con «¿Es correcta?»
+const JUAN = { 'ID PERSONA': 'PER-000123', 'NOMBRE': 'JUAN PÉREZ LÓPEZ', 'NO EMPLEADO': 'HA00059', 'TIPO': 'INE' };
 const REGISTRO = [
-  { 'ID': 'IDN-VIEJA', 'ID PERSONA': 'PER-000123', 'ARCHIVO ID': 'A-VIEJA', 'TIPO': 'INE', 'NUCO': '0003', 'FECHA': '2025-03-01 10:00:00' },
-  { 'ID': 'IDN-NUEVA', 'ID PERSONA': 'PER-000123', 'ARCHIVO ID': 'A-NUEVA', 'TIPO': 'INE', 'NUCO': '0012', 'FECHA': '2026-05-02 10:00:00' },
-  { 'ID': 'IDN-TIRADA', 'ID PERSONA': 'PER-000123', 'ARCHIVO ID': 'A-TIRADA', 'TIPO': 'INE', 'NUCO': '0099', 'FECHA': '2026-09-01 10:00:00' },
-  { 'ID': 'IDN-OTRA', 'ID PERSONA': 'PER-999', 'ARCHIVO ID': 'A-OTRA', 'TIPO': 'INE', 'NUCO': '0050', 'FECHA': '2026-09-09 10:00:00' },
+  Object.assign({ 'ID': 'IDN-VIEJA', 'ARCHIVO ID': 'A-VIEJA', 'NUCO': '0003', 'FECHA': '2025-03-01 10:00:00' }, JUAN),
+  Object.assign({ 'ID': 'IDN-NUEVA', 'ARCHIVO ID': 'A-NUEVA', 'NUCO': '0012', 'FECHA': '2026-05-02 10:00:00' }, JUAN),
+  Object.assign({ 'ID': 'IDN-TIRADA', 'ARCHIVO ID': 'A-TIRADA', 'NUCO': '0099', 'FECHA': '2026-09-01 10:00:00' }, JUAN),
+  { 'ID': 'IDN-OTRA', 'ID PERSONA': 'PER-999', 'NOMBRE': 'LUIS SOTO', 'NO EMPLEADO': 'X1', 'ARCHIVO ID': 'A-OTRA', 'TIPO': 'INE', 'NUCO': '0050', 'FECHA': '2026-09-09 10:00:00' },
+  { 'ID': 'IDN-HOM1', 'ID PERSONA': 'PER-1', 'NOMBRE': 'MARIA LOPEZ', 'NO EMPLEADO': 'M1', 'ARCHIVO ID': 'A-HOM1', 'TIPO': 'INE', 'NUCO': '0060', 'FECHA': '2026-01-01 10:00:00' },
+  { 'ID': 'IDN-HOM2', 'ID PERSONA': 'PER-2', 'NOMBRE': 'MARIA LOPEZ', 'NO EMPLEADO': 'M2', 'ARCHIVO ID': 'A-HOM2', 'TIPO': 'INE', 'NUCO': '0061', 'FECHA': '2026-01-02 10:00:00' },
 ];
 
-test('paso 3: la registrada de cada responsable es la más reciente cuyo archivo sigue en Drive; sin ID PERSONA, nada', () => {
+test('paso 3: la registrada es la más reciente de la persona (por nombre, sin acentos; homónimos por número) que sigue en Drive', () => {
   const { I } = modulo({ registro: REGISTRO, enPapelera: ['A-TIRADA'] });
-  const r = I.registradas([{ orden: 0, nombre: 'juan perez lopez', noEmpleado: 'HA00059' }, { orden: 1, nombre: 'ANA RUIZ' }, { orden: 2, nombre: '' }]);
-  assert.equal(r.length, 3);
+  const r = I.registradas([{ orden: 0, nombre: 'juan perez lopez', noEmpleado: 'HA00059' }, { orden: 1, nombre: 'ANA RUIZ' }, { orden: 2, nombre: '' },
+    { orden: 3, nombre: 'MARIA LOPEZ', noEmpleado: 'M2' }, { orden: 4, nombre: 'MARIA LOPEZ', noEmpleado: '' }]);
+  assert.equal(r.length, 5);
   assert.equal(r[0].registrada.registro, 'IDN-NUEVA', 'la más reciente; la de la papelera no cuenta');
   assert.equal(r[0].registrada.archivoId, 'A-NUEVA');
   assert.equal(r[0].registrada.nuco, '0012');
   assert.equal(r[0].registrada.fecha, '2026-05-02');
-  assert.equal(r[1].registrada, null, 'ANA RUIZ no tiene ID PERSONA');
+  assert.equal(r[1].registrada, null, 'ANA RUIZ no tiene ninguna');
   assert.equal(r[2].registrada, null);
+  assert.equal(r[3].registrada.registro, 'IDN-HOM2', 'dos personas con el mismo nombre: la del número');
+  assert.equal(r[4].registrada, null, 'sin número no se adivina cuál');
 });
 
 test('paso 3: «Sí» copia la registrada a la carpeta de la responsiva nueva, solo si es de esa persona; ORIGEN REUTILIZADA', () => {
@@ -275,6 +282,7 @@ test('paso 3 en la pantalla: busca al cambiar el responsable, pregunta «¿Es co
   tiene(pantalla, "if (s.reutilizar) return { orden: Number(caja.dataset.ineOrden), tipo: tipo ? tipo.value : '', reutilizar: s.reutilizar };");
   tiene(pantalla, 'if (!caja || !pedida || caja._clave !== pedida.clave || !x.registrada) return;', 'una respuesta vieja no pinta a otra persona');
   tiene(estilos, '.ln-ine [hidden] { display: none !important; }', 'los botones (display: grid) sí se ocultan');
+  tiene(pantalla, "if (captura.pasos) captura.pasos.irAlCampo('_IDENTIFICACION_' + sinContestar.dataset.ineOrden);", 'sin contestar no se guarda: lleva a la pregunta');
   tiene(read('src/ClientApi.gs'), 'function apiLineasIdentificacionesRegistradas(token, personas) {\n  return TelefoniaService.identificacionesRegistradas(token, personas);');
   tiene(read('src/services/TelefoniaService.gs'), 'function identificacionesRegistradas(token, personas) {\n    operar_(token);', 'con permiso de operar Líneas');
 });

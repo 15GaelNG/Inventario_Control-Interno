@@ -144,7 +144,9 @@ const LineasIdentificaciones = (function () {
 
   const fechaMs_ = (v) => (v instanceof Date ? v.getTime() : (Date.parse(String(v || '').replace(/^(\d{2})\/(\d{2})\/(\d{4})/, '$3-$2-$1')) || 0));
   const deFila_ = (f) => ({ registro: txt(f['ID']), idPersona: txt(f['ID PERSONA']), archivoId: txt(f['ARCHIVO ID']), tipo: txt(f['TIPO']) || 'INE',
-    nuco: txt(f['NUCO']), fecha: f['FECHA'] });
+    nuco: txt(f['NUCO']), fecha: f['FECHA'], nombre: txt(f['NOMBRE']), noEmpleado: txt(f['NO EMPLEADO']) });
+  // Para comparar nombres sin acentos ni signos (las de NUCOS se registraron así, las de la responsiva como se escribieron)
+  const comparable_ = (s) => txt(s).toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
 
   /** Un renglón del registro por su ID, o null. */
   function registro_(id) {
@@ -154,18 +156,30 @@ const LineasIdentificaciones = (function () {
     return f && txt(f['ID']) === id ? deFila_(f) : null;
   }
 
-  /** La identificación más reciente de una persona (por ID PERSONA) cuyo archivo sigue en Drive, o null. */
-  function ultimaDe_(idPersona) {
-    if (!idPersona || !LineasDatos.existeTabla(HOJA)) return null;
-    const filas = LineasDatos.buscarFilasVarios(HOJA, 'ID PERSONA', [idPersona]);
-    if (!filas.length) return null;
-    const lista = LineasDatos.leerFilas([{ tabla: HOJA, filas: filas }])[0].map(deFila_)
-      .filter((r) => r.idPersona === idPersona && r.archivoId)
-      .sort((a, b) => fechaMs_(b.fecha) - fechaMs_(a.fecha));
-    for (let i = 0; i < lista.length; i++) {
-      try { if (!DriveApp.getFileById(lista[i].archivoId).isTrashed()) return lista[i]; } catch (e) { /* ya no está: la siguiente */ }
+  /** La más reciente de una lista de renglones cuyo archivo sigue en Drive, o null. */
+  function masReciente_(lista) {
+    const orden = lista.filter((r) => r.archivoId).sort((a, b) => fechaMs_(b.fecha) - fechaMs_(a.fecha));
+    for (let i = 0; i < orden.length; i++) {
+      try { if (!DriveApp.getFileById(orden[i].archivoId).isTrashed()) return orden[i]; } catch (e) { /* ya no está: la siguiente */ }
     }
     return null;
+  }
+
+  /**
+   * Los renglones de una persona por su nombre (y, si el nombre es de dos personas distintas, por su número). Rápido a
+   * propósito (usuario, 9-oct: el aviso tardaba): la pantalla lo pide al escribir el nombre, y buscar su ID PERSONA arma el
+   * índice de Capital Humano (15 mil renglones). Al guardar, escribir() sí revisa el ID PERSONA.
+   */
+  function deLaPersona_(filas, nombre, numero) {
+    const n = comparable_(nombre);
+    if (!n) return [];
+    let mias = filas.filter((r) => comparable_(r.nombre) === n);
+    const quienes = (l) => l.map((r) => r.idPersona || r.nombre).filter((x, i, a) => a.indexOf(x) === i).length;
+    if (quienes(mias) > 1) {
+      mias = mias.filter((r) => comparable_(r.noEmpleado) === comparable_(numero));
+      if (quienes(mias) !== 1) return [];
+    }
+    return mias;
   }
 
   /**
@@ -174,9 +188,9 @@ const LineasIdentificaciones = (function () {
    * «¿Es correcta?»; si sí, manda { orden, reutilizar: registro } y escribir() la copia a la carpeta nueva.
    */
   function registradas(personas) {
+    const filas = LineasDatos.existeTabla(HOJA) ? LineasDatos.leerTabla(HOJA).map(deFila_) : [];
     return (personas || []).slice(0, 1 + ORDEN_ADICIONALES.length).map((p) => {
-      const persona = { nombre: txt(p && p.nombre).toUpperCase(), noEmpleado: txt(p && p.noEmpleado), correo: txt(p && p.correo) };
-      const r = persona.nombre ? ultimaDe_(idPersona_(persona)) : null;
+      const r = filas.length ? masReciente_(deLaPersona_(filas, p && p.nombre, p && p.noEmpleado)) : null;
       const fecha = r && r.fecha ? (r.fecha instanceof Date ? Utilities.formatDate(r.fecha, Session.getScriptTimeZone(), 'dd/MM/yyyy') : txt(r.fecha).slice(0, 10)) : '';
       return { orden: Number(p && p.orden) || 0, registrada: r ? { registro: r.registro, archivoId: r.archivoId, tipo: r.tipo, nuco: r.nuco, fecha: fecha } : null };
     });

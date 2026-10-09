@@ -4613,6 +4613,18 @@
       function guardarResponsivaDesdeFormulario() {
         $('#cap-error', raiz).hidden = true;
         if (!validarFormularioAppSheet()) return;
+        // La INE registrada no se puede pasar por alto (usuario, 9-oct): sin contestar «¿Es correcta?» no se guarda
+        const sinContestar = Array.from(raiz.querySelectorAll('#ln-captura-cuerpo .ln-ine')).filter((caja) => {
+          const s = caja._ine;
+          const campo = caja.closest('.ln-af-campo');
+          return caja._registrada && !caja._registrada.descartada && s && !s.reutilizar && !s.pdf && !s.fotos.length && !(campo && campo.hidden);
+        })[0];
+        if (sinContestar) {
+          if (captura.pasos) captura.pasos.irAlCampo('_IDENTIFICACION_' + sinContestar.dataset.ineOrden);
+          sinContestar.querySelector('.ln-ine-registrada').classList.add('ln-ine-registrada-falta');
+          mostrarErrorCaptura('Contesta si la INE registrada es correcta.', '.ln-ine[data-ine-orden="' + sinContestar.dataset.ineOrden + '"]');
+          return;
+        }
         const firmaCi = captura.firmas['FIRMA CI'];
         const firmaResponsable = captura.firmas['FIRMA RESPONSABLE'];
         const idAbierto = captura.idObjetivo;
