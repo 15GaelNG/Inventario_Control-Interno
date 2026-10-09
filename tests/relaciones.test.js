@@ -207,7 +207,7 @@ function armar() {
 
 // -------------------------------------------------------------------- sandbox
 
-function cargar(hs) {
+function cargar(hs, extra) {
   const norm = (v) => String(v == null ? '' : v).trim().toUpperCase();
   const filasDe = (h) => h.datos.map((d) => {
     const o = {};
@@ -231,6 +231,7 @@ function cargar(hs) {
     // resolver su spreadsheet, no en qué archivo vive cada familia.
     Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'SS', CAJACHICA: () => 'SS' } },
     SheetUtils: {
+      getSheet: (ssId, nombre) => { if (!hs[nombre]) throw new Error('No existe la hoja ' + nombre); return hs[nombre]; },
       getSheetByColumns: (ssId, firma) => {
         const cand = Object.keys(hs).filter((n) => firma.every((c) => hs[n].enc.indexOf(c) !== -1));
         if (!cand.length) throw new Error('ninguna hoja con la firma ' + firma.join(', '));
@@ -259,6 +260,7 @@ function cargar(hs) {
   // Ids va primero: datosParaNuevo usa Ids.tieneForma para distinguir si le dieron el ID
   // del dueño o su llave de negocio. En Apps Script es un global; aquí hay que dárselo, y
   // así la prueba ejercita el validador de verdad en vez de una copia.
+  Object.assign(ctx, extra || {});   // p. ej. un DatosConectados de mentira (lo conectado desde la pantalla)
   const ids = path.join(__dirname, '..', 'src', 'utils', 'Ids.gs');
   const ruta = path.join(__dirname, '..', 'src', 'services', 'Relaciones.gs');
   vm.runInContext(
@@ -829,6 +831,53 @@ console.log('\nUn libro sin configurar no tumba la revisión de las demás famil
   ok(Array.isArray(r['INSPECCIONES LINEAS'].entradas), 'y trae su lista vacía, como las demás');
   ok(r['INSTALACION DE SENSORES'] && !r['INSTALACION DE SENSORES'].error && r['INSTALACION DE SENSORES'].revisadas > 0,
     'Vehículos se revisó igual');
+}
+
+console.log('\nLo conectado desde la pantalla (DatosConectados): se suma al MAPA y se mantiene al día solo');
+{
+  const hs = armar();
+  // HOLOGRAMAS gana una columna COLOR que el código no conecta; desde la pantalla se conecta al COLOR de VEHICULOS
+  hs['HOLOGRAMAS'].enc.push('COLOR');
+  hs['HOLOGRAMAS'].datos.forEach((d) => d.push('ROJO'));
+  const regla = (o) => Object.assign({ dueno: 'VEHICULOS', copia: 'HOLOGRAMAS', llaveDueno: 'SERIE VEHICULO',
+    llaveCopia: 'SERIE VEHICULO', tipo: 'cache' }, o);
+  const reglas = [
+    regla({ colDueno: 'COLOR', colCopia: 'COLOR' }),
+    regla({ colDueno: 'PLACA', colCopia: 'PLACA' }),          // ya lo conecta el código: no cambia nada
+    regla({ colDueno: 'MARCA', colCopia: 'PLACA' }),          // PLACA ya recibe de otro lado: se ignora
+    // Una conexión que el código no tiene: el mecánico de INCIDENCIAS a VERIFICACIONES (por folio)
+    { dueno: 'INCIDENCIAS', copia: 'VERIFICACIONES', llaveDueno: 'FOLIO', llaveCopia: 'FOLIO VEHICULO',
+      colDueno: 'NOMBRE MECANICO', colCopia: 'COMPROBANTE VERIFICACION', tipo: 'cache' },
+  ];
+  const R = cargar(hs, { DatosConectados: { reglas: () => reglas } });
+  const holo = R.describir().duenos.find((d) => d.hoja === 'VEHICULOS').copias.find((c) => c.nombre === 'HOLOGRAMAS');
+  ok(holo.columnas.some((c) => c.origen === 'COLOR' && c.destino === 'COLOR' && c.pantalla), 'el dato conectado aparece en el mapa, marcado como de la pantalla');
+  const aPlaca = holo.columnas.filter((c) => c.destino === 'PLACA');
+  ok(aPlaca.length === 1 && aPlaca[0].origen === 'PLACA' && !aPlaca[0].pantalla, 'lo del código manda: PLACA sigue recibiendo solo la placa');
+  R.propagar('VEHICULOS', Object.assign({}, vehiculos[0], { COLOR: 'AZUL' }), { COLOR: 'AZUL' });
+  ok(hs['HOLOGRAMAS'].valor('SER1', 'SERIE VEHICULO', 'COLOR') === 'AZUL', 'al guardar el vehículo, el color se copia solo al holograma');
+
+  const nueva = R.describir().duenos.find((d) => d.hoja === 'INCIDENCIAS');
+  ok(nueva && nueva.copias[0].nombre === 'VERIFICACIONES' && nueva.copias[0].desdePantalla, 'una conexión nueva entre dos hojas aparece con su dueño');
+  ok(Object.keys(R.alGuardar('VEHICULOS', vehiculos[0], { COLOR: 'X' })).length === 0, 'alGuardar no repite lo que Vehículos ya propaga en su servicio');
+  const r = R.alGuardar('INCIDENCIAS', { FOLIO: 'CTA0001', 'NOMBRE MECANICO': 'PEDRO' }, { 'NOMBRE MECANICO': 'PEDRO' });
+  ok(r.VERIFICACIONES === 1 && hs['VERIFICACIONES'].valor('CTA0001', 'FOLIO VEHICULO', 'COMPROBANTE VERIFICACION') === 'PEDRO',
+    'alGuardar (HojaServicio) copia lo de una hoja que no propagaba sola');
+
+  // A mano: alguien cambia la placa y el responsable de CTA0001 directo en la hoja VEHICULOS
+  const veh = hs['VEHICULOS'];
+  const fila = veh.datos.findIndex((d) => d[veh.enc.indexOf('FOLIO')] === 'CTA0001');
+  veh.datos[fila][veh.enc.indexOf('PLACA')] = 'ZZZ999';
+  veh.datos[fila][veh.enc.indexOf('RESPONSABLE VEHICULO')] = 'BETO';
+  const col1 = veh.enc.indexOf('PLACA') + 1;
+  const n = R.alEditarAMano('SS', veh, fila + 2, 1, col1, 1, 'ana@x.com (a mano)');
+  ok(hs['INSTALACION DE SENSORES'].valor('SER1', 'SERIE VEHICULO', 'PLACA') === 'ZZZ999' &&
+     hs['HOLOGRAMAS'].valor('SER1', 'SERIE VEHICULO', 'PLACA') === 'ZZZ999', 'la placa editada a mano se copia a Sensores y Hologramas');
+  ok(hs['INSTALACION DE SENSORES'].valor('SER1', 'SERIE VEHICULO', 'RESPONSABLE') === 'ANA', 'solo lo que se editó (el responsable no estaba en el rango)');
+  ok(n > 0 && logDe(hs, 'EDICION A MANO', 'PLACA').length > 0, 'y queda en LOG_RELACIONES como EDICION A MANO');
+  ok(R.alEditarAMano('SS', veh, fila + 2, 1, veh.enc.indexOf('ID') + 1, 1, '') === 0, 'editar algo que no está conectado no copia nada');
+  ok(R.alEditarAMano('SS', veh, 1, 1, col1, 1, '') === 0, 'editar el encabezado tampoco');
+  ok(hs['INSPECCION VEHICULAR'].valor('SER1', 'NO SERIE', 'RESPONSABLE') === 'ANA', 'la bitácora (inspección) nunca se toca');
 }
 
 console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');

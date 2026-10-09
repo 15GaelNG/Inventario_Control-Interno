@@ -28,6 +28,7 @@
         <div class="ln-segmentado" id="ln-modo-vista" role="group" aria-label="Forma de ver el inventario">
           <button type="button" class="secondary activo" data-modo="tabla" aria-pressed="true"><i data-lucide="table" class="ico"></i> Tabla</button>
           <button type="button" class="secondary" data-modo="tarjetas" aria-pressed="false"><i data-lucide="layout-grid" class="ico"></i> Tarjetas</button>
+          <button type="button" class="secondary" data-modo="vinculos" aria-pressed="false"><i data-lucide="waypoints" class="ico"></i> Vínculos</button>
         </div>
       </div>
 
@@ -37,6 +38,8 @@
       <div class="tab-panel" data-tab-panel="lineas" hidden>
         <div class="card card-compacta"><div class="con-filtro-tipo"><nav class="filtro-tipo" id="ln-tipos-lineas" aria-label="Filtrar por tipo"></nav><div class="con-filtro-tipo-tabla"><div id="ln-tabla-lineas"></div><div class="ln-tarjetas" id="ln-tarjetas-lineas" hidden></div></div></div></div>
       </div>
+      <!-- Vínculos: personas, equipos y líneas en un espacio (html/js/lineas-vinculos.html) -->
+      <div class="vn" id="ln-vinculos" hidden></div>
       <p class="ln-conteo" id="ln-conteo"></p>
     </section>
 

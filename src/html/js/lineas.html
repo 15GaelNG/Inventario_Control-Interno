@@ -780,6 +780,8 @@
       } else if (e.control === 'archivo') {
         const enlace = valor ? botonArchivo(valor, 'Ver archivo actual') : '<span class="ln-tenue">Sin archivo</span>';
         control = '<div class="ln-af-archivo">' + enlace + '<input type="file" id="' + id + '" data-archivo="' + esc(e.columna) + '" accept="application/pdf,image/*" /></div>';
+      } else if (e.control === 'identificacion') {
+        control = htmlIdentificacion(e, id);
       } else if (e.control === 'fecha') {
         control = '<input type="date"' + attrs + ' value="' + esc(valor) + '" />';
       } else if (e.control === 'siNo') {
@@ -806,7 +808,7 @@
       } else {
         control = '<input type="text"' + attrs + ' value="' + esc(valor) + '" autocomplete="off"' + (e.valorOculto ? ' placeholder="•••• (se conserva el valor registrado)"' : '') + ' />';
       }
-      const ancho = ['escala', 'area', 'patron', 'firma'].indexOf(e.control) >= 0 ? ' ln-af-ancho' : '';
+      const ancho = ['escala', 'area', 'patron', 'firma', 'identificacion'].indexOf(e.control) >= 0 ? ' ln-af-ancho' : '';
       return '<div class="field ln-af-campo' + ancho + (e.control === 'escala' ? ' ln-af-escala' : '') + (e.soloLectura ? ' ln-af-lectura' : '') + '" data-af-columna="' + esc(e.columna) + '" data-mostrar="' + condAtributo(e.mostrar) + '" data-requerido="' + condAtributo(e.requerido) + '" data-editable="' + condAtributo(e.editable) + '">' +
         '<label for="' + id + '">' + esc(e.etiqueta) + '<span class="ln-af-req"' + (e.requerido === 'SIEMPRE' ? '' : ' hidden') + '> *</span></label>' + control + '</div>';
     }
@@ -842,7 +844,7 @@
           const ocultos = sec.campos.filter((e) => e.soloLectura && nombresDeFirma.indexOf(e.columna) >= 0);
           const lectura = sec.campos.filter((e) => e.soloLectura && e.control !== 'calculado' && ocultos.indexOf(e) < 0);
           const firmas = sec.campos.filter((e) => e.control === 'firma');
-          const anchos = sec.campos.filter((e) => e.control === 'area' || e.control === 'patron');
+          const anchos = sec.campos.filter((e) => e.control === 'area' || e.control === 'patron' || e.control === 'identificacion');
           const escalas = sec.campos.filter((e) => e.control === 'escala' && e.checklist); // renglones del checklist; las demás, a todo lo ancho
           const resto = sec.campos.filter((e) => [ocultos, lectura, firmas, anchos, escalas].every((g) => g.indexOf(e) < 0));
           cuerpo = (lectura.length ? '<div class="ln-af-grid ln-af-datos">' + html(lectura) + '</div>' : '') +
@@ -867,7 +869,8 @@
       const v = String(pin.valor || '').trim().toUpperCase();
       const inicial = v === 'PATRON' || v === 'PATRÓN' || esPuntosPatron(patron.valor) ? 'PATRÓN'
         : (/^\d+$/.test(v) ? 'PIN' : (/^(N\/A|NA|NO APLICA|NINGUNO|SIN BLOQUEO)$/.test(v) ? 'SIN BLOQUEO' : (v ? 'CONTRASEÑA' : '')));
-      const selector = { tipo: 'campo', columna: '_BLOQUEO', etiqueta: 'TIPO DE BLOQUEO DEL EQUIPO', control: 'lista', opciones: OPCIONES_BLOQUEO, valor: inicial, mostrar: pin.mostrar, requerido: 'NUNCA', virtual: true };
+      // Obligatorio siempre que se ve (usuario, 9-oct): la lista ya trae «SIN BLOQUEO»
+      const selector = { tipo: 'campo', columna: '_BLOQUEO', etiqueta: 'TIPO DE BLOQUEO DEL EQUIPO', control: 'lista', opciones: OPCIONES_BLOQUEO, valor: inicial, mostrar: pin.mostrar, requerido: pin.mostrar, virtual: true };
       const i = elementos.indexOf(pin);
       return elementos.slice(0, i).concat([selector], elementos.slice(i));
     }
@@ -896,9 +899,11 @@
       if (campoPatron) campoPatron.classList.toggle('ln-oculto', t !== 'PATRÓN');
     }
     /** Bloqueo elegido ('' si el formulario no tiene la lista). Va aparte al servidor: PIN y contraseña comparten PIN EQUIPO. */
+    /** null si el formulario no tiene la lista o no se ve (el servidor solo exige el bloqueo cuando llega: LineasUtil.exigirPinEquipo). */
     function bloqueoElegido(cuerpo) {
       const sel = cuerpo && cuerpo.querySelector('select[data-columna="_BLOQUEO"]');
-      return sel ? sel.value : '';
+      const campo = sel && sel.closest && sel.closest('.ln-af-campo');
+      return sel && !(campo && campo.hidden) ? sel.value : null;
     }
     /** Con el bloqueo «PIN», solo números (usuario, 7-oct); la contraseña acepta todo. Igual que LineasUtil.exigirPinEquipo. */
     function errorPinBloqueo(cuerpo) {
@@ -1384,7 +1389,8 @@
       (elementos || []).forEach((e) => {
         if (e.tipo !== 'campo' || e.soloLectura || e.control === 'calculado' || e.control === 'firma' || e.control === 'patron' || e.control === 'archivo' || e.valorOculto) return;
         if (!cumpleCondicion(e.mostrar, t, valores, ctx)) return;
-        const v = valores[e.columna] || '';
+        // La lista de bloqueo no se guarda (data-virtual): su valor se lee aparte
+        const v = (e.columna === '_BLOQUEO' ? bloqueoElegido(cuerpo) : valores[e.columna]) || '';
         const error = (corto) => errores.push({ e: e, columna: e.columna, corto: corto, msg: e.etiqueta + ': ' + corto });
         if (!v) { if (cumpleCondicion(e.requerido, t, valores, ctx)) errores.push({ e: e, columna: e.columna, corto: 'Obligatorio', msg: e.etiqueta + ' es obligatorio' }); return; }
         if ((e.control === 'lista' || e.soloLista) && (e.opciones || []).map((o) => String(o).toUpperCase()).indexOf(v.toUpperCase()) < 0) { error(e.mensaje || 'VALOR NO ENCONTRADO EN LA LISTA'); return; }
@@ -1524,6 +1530,302 @@
         };
         lector.readAsDataURL(archivo);
       });
+    }
+
+    // ---- Identificación de cada responsable en la responsiva (usuario, 9-oct; pendiente 2.27) ----
+    // Fotos (una, o frente y vuelta) o un PDF, que se ven antes de guardar. Las fotos se juntan aquí en un solo PDF; el
+    // servidor solo recibe PDF y lo guarda en la carpeta de la responsiva (LineasIdentificaciones).
+    const INE_MAX_FOTOS = 4;
+    const INE_MAX_MB = 15;
+
+    function htmlIdentificacion(e, id) {
+      const tipo = e.conTipo ? '<select data-ine-tipo aria-label="Tipo de identificación">' +
+        (e.opciones || []).map((o) => '<option value="' + esc(o) + '">' + esc(o) + '</option>').join('') + '</select>' : '';
+      return '<div class="ln-ine" data-ine-orden="' + Number(e.orden || 0) + '">' + tipo +
+        '<div class="ln-ine-registrada" hidden></div>' +
+        '<div class="ln-fotos-botones">' +
+        '<label class="ln-upload ln-solo-tactil">' + icono('camera') + '<span><b>Tomar foto</b><small>Con la cámara del equipo</small></span>' +
+        '<input type="file" accept="image/*" capture="environment" data-ine-archivo /></label>' +
+        '<label class="ln-upload">' + icono('id-card') + '<span><b>Elegir fotos o PDF</b><small>De la galería o de la computadora</small></span>' +
+        '<input type="file" id="' + id + '" accept="image/*,application/pdf" multiple data-ine-archivo /></label></div>' +
+        '<div class="ln-ine-lista"></div></div>';
+    }
+
+    // Paso 3 (pendiente 2.29): de quién es cada apartado, para buscar su identificación registrada
+    const columnasResponsable = (orden) => (orden === 0 ? ['RESPONSABLE', 'No EMPLEADO', 'CORREO']
+      : ['NOMBRE ' + ORDEN_ADICIONALES[orden - 1] + ' RESPONSABLE', 'NO EMPLEADO ' + ORDEN_ADICIONALES[orden - 1] + ' RESPONSABLE', '']);
+    const COLUMNAS_IDENTIFICADO = [0, 1, 2, 3, 4].reduce((a, o) => a.concat(columnasResponsable(o).filter(Boolean)), []);
+
+    /**
+     * Lo elegido en cada apartado vive en el propio elemento: caja._ine = { pdf, fotos: [{ archivo, url }], reutilizar },
+     * caja._registrada = la identificación que ya tiene la persona en el registro (o null) y caja._clave = de quién se
+     * buscó (nombre|número). Con una registrada se pregunta «¿Es correcta?»: sí = se usa esa (reutilizar = su registro).
+     */
+    function activarIdentificaciones(cuerpo) {
+      const pintarRegistrada = (caja) => {
+        const r = caja._registrada;
+        const s = caja._ine;
+        const bloque = caja.querySelector('.ln-ine-registrada');
+        const usa = !!(r && s.reutilizar);
+        bloque.hidden = !r || r.descartada;
+        caja.querySelector('.ln-fotos-botones').hidden = usa;
+        caja.querySelector('.ln-ine-lista').hidden = usa;
+        if (bloque.hidden) { bloque.innerHTML = ''; return; }
+        const detalle = [r.tipo || 'INE', 'registrada', r.nuco ? 'NUCO ' + r.nuco : '', r.fecha].filter(Boolean).join(' · ');
+        bloque.innerHTML = icono('id-card') + '<span class="ln-ine-registrada-texto">' + esc(detalle) + '</span>' +
+          '<a href="https:\/\/drive.google.com/file/d/' + esc(r.archivoId) + '/view" target="_blank" rel="noopener">Ver</a>' +
+          (usa ? '<button type="button" class="secondary ln-btn-chico" data-ine-registrada="cambiar">Cambiar</button>'
+            : '<span class="ln-ine-pregunta">¿Es correcta?</span>' +
+              '<button type="button" class="primary ln-btn-chico" data-ine-registrada="si">Sí</button>' +
+              '<button type="button" class="secondary ln-btn-chico" data-ine-registrada="no">No</button>');
+        pintarIconos(bloque);
+      };
+      const pintar = (caja) => {
+        const s = caja._ine;
+        const lista = caja.querySelector('.ln-ine-lista');
+        pintarRegistrada(caja);
+        lista.innerHTML = s.pdf
+          ? '<span class="ln-foto-chip">' + icono('file-text', 'ln-icon-sm') + '<a class="ln-foto-nombre" href="' + esc(s.pdf.url) + '" target="_blank" rel="noopener">' + esc(s.pdf.archivo.name) + '</a>' +
+            '<button type="button" data-ine-quitar="pdf" aria-label="Quitar">' + icono('x', 'ln-icon-sm') + '</button></span>'
+          : s.fotos.map((f, i) => '<span class="ln-miniatura"><img src="' + esc(f.url) + '" alt="' + esc(f.archivo.name) + '" data-ver-foto />' +
+            '<button type="button" data-ine-quitar="' + i + '" aria-label="Quitar">' + icono('x', 'ln-icon-sm') + '</button></span>').join('');
+        pintarIconos(lista);
+      };
+      const vaciar = (caja) => {
+        const s = caja._ine;
+        if (s.pdf) URL.revokeObjectURL(s.pdf.url);
+        s.fotos.forEach((f) => URL.revokeObjectURL(f.url));
+        caja._ine = { pdf: null, fotos: [], reutilizar: null };
+      };
+      const cajaDe = (orden) => cuerpo.querySelector('.ln-ine[data-ine-orden="' + orden + '"]');
+      // La registrada de cada responsable: se busca cuando cambia su nombre o su número (una vez por persona)
+      const buscarRegistradas = () => {
+        const valor = (col) => { const el = col && cuerpo.querySelector('[data-columna="' + CSS.escape(col) + '"]'); return el ? String(el.value || '').trim() : ''; };
+        const pedir = [];
+        cuerpo.querySelectorAll('.ln-ine').forEach((caja) => {
+          const orden = Number(caja.dataset.ineOrden);
+          const [nombre, numero, correo] = columnasResponsable(orden).map(valor);
+          const clave = (nombre + '|' + numero).toUpperCase();
+          if (clave === caja._clave) return;
+          caja._clave = clave;
+          caja._registrada = null;
+          caja._ine.reutilizar = null;
+          pintarRegistrada(caja);
+          if (nombre) pedir.push({ orden: orden, nombre: nombre, noEmpleado: numero, correo: correo, clave: clave });
+        });
+        if (!pedir.length) return;
+        llamar('apiLineasIdentificacionesRegistradas', pedir.map((p) => ({ orden: p.orden, nombre: p.nombre, noEmpleado: p.noEmpleado, correo: p.correo })))
+          .then((r) => (r || []).forEach((x) => {
+            const caja = cajaDe(x.orden);
+            const pedida = pedir.filter((p) => p.orden === x.orden)[0];
+            // Si mientras tanto cambió la persona, esta respuesta ya no es suya
+            if (!caja || !pedida || caja._clave !== pedida.clave || !x.registrada) return;
+            caja._registrada = x.registrada;
+            pintarRegistrada(caja);
+          }))
+          .catch(() => { /* sin la registrada: se sube como siempre */ });
+      };
+      cuerpo.querySelectorAll('.ln-ine').forEach((caja) => { caja._ine = { pdf: null, fotos: [], reutilizar: null }; caja._registrada = null; caja._clave = null; });
+      cuerpo._buscarRegistradas = buscarRegistradas;
+      buscarRegistradas();
+      // El cuerpo del modal se reutiliza (Editar, inspección, responsiva): se escucha una sola vez, como activarAdicionales
+      if (cuerpo._identificacionesActivas) return;
+      cuerpo._identificacionesActivas = true;
+      let espera = null;
+      cuerpo.addEventListener('change', (ev) => {
+        if (!ev.target.matches || !ev.target.matches('[data-columna]') || COLUMNAS_IDENTIFICADO.indexOf(ev.target.dataset.columna) < 0) return;
+        clearTimeout(espera);
+        espera = setTimeout(() => cuerpo._buscarRegistradas && cuerpo._buscarRegistradas(), 300);
+      });
+      cuerpo.addEventListener('change', (ev) => {
+        const input = ev.target.closest('input[data-ine-archivo]');
+        if (!input) return;
+        const caja = input.closest('.ln-ine');
+        const archivos = Array.from(input.files || []);
+        input.value = '';
+        if (!archivos.length) return;
+        const pdfs = archivos.filter((a) => a.type === 'application/pdf' || /\.pdf$/i.test(a.name));
+        const fotos = archivos.filter((a) => pdfs.indexOf(a) < 0);
+        const error = (t) => aviso(icono('triangle-alert', 'ln-alerta') + ' ' + esc(t), 7000);
+        if (pdfs.length && fotos.length) return error('Elige fotos o un PDF, no los dos.');
+        if (pdfs.length > 1) return error('Elige un solo PDF.');
+        if (archivos.some((a) => a.size > INE_MAX_MB * 1024 * 1024)) return error('El archivo supera ' + INE_MAX_MB + ' MB.');
+        if (pdfs.length) {
+          vaciar(caja);
+          caja._ine.pdf = { archivo: pdfs[0], url: URL.createObjectURL(pdfs[0]) };
+        } else {
+          if (caja._ine.pdf) vaciar(caja);
+          if (caja._ine.fotos.length + fotos.length > INE_MAX_FOTOS) return error('Son hasta ' + INE_MAX_FOTOS + ' fotos.');
+          fotos.forEach((a) => caja._ine.fotos.push({ archivo: a, url: URL.createObjectURL(a) }));
+        }
+        pintar(caja);
+      });
+      cuerpo.addEventListener('click', (ev) => {
+        const respuesta = ev.target.closest('[data-ine-registrada]');
+        if (respuesta) {
+          const caja = respuesta.closest('.ln-ine');
+          const r = caja._registrada;
+          if (!r) return;
+          if (respuesta.dataset.ineRegistrada === 'si') { vaciar(caja); caja._ine.reutilizar = r.registro; }
+          else if (respuesta.dataset.ineRegistrada === 'no') { r.descartada = true; caja._ine.reutilizar = null; }
+          else caja._ine.reutilizar = null;
+          pintar(caja);
+          return;
+        }
+        const quitar = ev.target.closest('[data-ine-quitar]');
+        if (quitar) {
+          const caja = quitar.closest('.ln-ine');
+          const s = caja._ine;
+          if (quitar.dataset.ineQuitar === 'pdf') vaciar(caja);
+          else { const f = s.fotos.splice(Number(quitar.dataset.ineQuitar), 1)[0]; if (f) URL.revokeObjectURL(f.url); }
+          pintar(caja);
+          return;
+        }
+        // Al quitar un responsable adicional, los de abajo suben un lugar (activarAdicionales): sus identificaciones también
+        const otro = ev.target.closest('[data-quitar-adicional]');
+        if (otro) {
+          const desde = Number(otro.dataset.quitarAdicional) + 1;
+          if (!cajaDe(desde)) return;
+          vaciar(cajaDe(desde));
+          cajaDe(desde)._registrada = null;
+          cajaDe(desde)._clave = null;
+          for (let orden = desde; orden < ORDEN_ADICIONALES.length; orden++) {
+            const actual = cajaDe(orden), siguiente = cajaDe(orden + 1);
+            if (!actual || !siguiente) break;
+            actual._ine = siguiente._ine;
+            actual._registrada = siguiente._registrada;
+            actual._clave = siguiente._clave;
+            siguiente._ine = { pdf: null, fotos: [], reutilizar: null };
+            siguiente._registrada = null;
+            siguiente._clave = null;
+            const t1 = actual.querySelector('[data-ine-tipo]'), t2 = siguiente.querySelector('[data-ine-tipo]');
+            if (t1 && t2) { t1.value = t2.value; t2.selectedIndex = 0; }
+          }
+          cuerpo.querySelectorAll('.ln-ine').forEach(pintar);
+        }
+      });
+    }
+
+    /** La foto en grande (identificación e inspección), para revisarla antes de guardar. Se cierra con un clic. */
+    function verFotoEnGrande(url) {
+      const capa = document.createElement('div');
+      capa.className = 'ln-ine-visor';
+      capa.innerHTML = '<img src="' + esc(url) + '" alt="" />';
+      capa.addEventListener('click', () => capa.remove());
+      document.body.appendChild(capa);
+    }
+
+    /**
+     * Lo que va al servidor: [{ orden, tipo, base64 }] de cada responsable que sigue en la responsiva (con nombre). Las
+     * fotos van en un PDF; un PDF va tal cual. La registrada que se confirmó va como { orden, tipo, reutilizar }.
+     */
+    function leerIdentificaciones(cuerpo, valores) {
+      const nombreDe = (orden) => String(valores[orden === 0 ? 'RESPONSABLE' : 'NOMBRE ' + ORDEN_ADICIONALES[orden - 1] + ' RESPONSABLE'] || '').trim();
+      const cajas = Array.from(cuerpo.querySelectorAll('.ln-ine')).filter((caja) => {
+        const s = caja._ine;
+        const campo = caja.closest('.ln-af-campo');
+        return s && (s.pdf || s.fotos.length || s.reutilizar) && !(campo && campo.hidden) && nombreDe(Number(caja.dataset.ineOrden));
+      });
+      return Promise.all(cajas.map((caja) => {
+        const s = caja._ine;
+        const tipo = caja.querySelector('[data-ine-tipo]');
+        if (s.reutilizar) return { orden: Number(caja.dataset.ineOrden), tipo: tipo ? tipo.value : '', reutilizar: s.reutilizar };
+        const bytes = s.pdf ? s.pdf.archivo.arrayBuffer().then((b) => new Uint8Array(b)) : pdfDeFotos(s.fotos.map((f) => f.archivo));
+        return bytes.then((b) => {
+          if (b.length > INE_MAX_MB * 1024 * 1024) throw new Error('La identificación de ' + nombreDe(Number(caja.dataset.ineOrden)) + ' supera ' + INE_MAX_MB + ' MB.');
+          return { orden: Number(caja.dataset.ineOrden), tipo: tipo ? tipo.value : '', base64: base64DeBytes(b) };
+        });
+      }));
+    }
+
+    function base64DeBytes(bytes) {
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      return btoa(bin);
+    }
+
+    /**
+     * Fotos → un PDF carta, dos por hoja (frente arriba, vuelta abajo), enteras y centradas; una sola foto ocupa la hoja.
+     * Cada foto se vuelve a guardar como JPEG de calidad .92 y hasta 2400 px por lado (el navegador ya la endereza): una
+     * identificación se sigue leyendo igual al acercarse y el archivo no pesa de más. Sin librerías: el JPEG va tal cual
+     * dentro del PDF (DCTDecode).
+     */
+    function pdfDeFotos(archivos) {
+      return Promise.all(archivos.map((a) => jpegDeFoto(a, 2400, 0.92))).then(armarPdfDeJpeg);
+    }
+
+    function jpegDeFoto(archivo, maxDim, calidad) {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(archivo);
+        const img = new Image();
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(archivo.name + ': no se pudo leer la imagen.')); };
+        img.onload = () => {
+          const k = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+          const w = Math.max(1, Math.round(img.naturalWidth * k));
+          const h = Math.max(1, Math.round(img.naturalHeight * k));
+          const lienzo = document.createElement('canvas');
+          lienzo.width = w; lienzo.height = h;
+          const g = lienzo.getContext('2d');
+          g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h);
+          g.drawImage(img, 0, 0, w, h);
+          URL.revokeObjectURL(url);
+          const bin = atob(lienzo.toDataURL('image/jpeg', calidad).split(',')[1]);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          resolve({ ancho: w, alto: h, bytes: bytes });
+        };
+        img.src = url;
+      });
+    }
+
+    function armarPdfDeJpeg(fotos) {
+      const texto = new TextEncoder();
+      const partes = [];
+      const posiciones = [];
+      let largo = 0;
+      const poner = (x) => { const b = typeof x === 'string' ? texto.encode(x) : x; partes.push(b); largo += b.length; };
+      const ANCHO = 612, ALTO = 792, MARGEN = 36, ENTRE = 18, POR_HOJA = 2;
+      const hojas = [];
+      for (let i = 0; i < fotos.length; i += POR_HOJA) hojas.push(fotos.slice(i, i + POR_HOJA));
+      let n = 3;
+      const objetos = hojas.map((fs) => ({ pagina: n++, contenido: n++, fotos: fs.map(() => n++) }));
+      const total = n - 1;
+      const objeto = (num, dicc, flujo) => {
+        posiciones[num] = largo;
+        poner(num + ' 0 obj\n' + dicc);
+        if (flujo) { poner('\nstream\n'); poner(flujo); poner('\nendstream'); }
+        poner('\nendobj\n');
+      };
+      poner('%PDF-1.4\n');
+      poner(new Uint8Array([0x25, 0xe2, 0xe3, 0xcf, 0xd3, 0x0a]));
+      objeto(1, '<< /Type /Catalog /Pages 2 0 R >>');
+      objeto(2, '<< /Type /Pages /Kids [' + objetos.map((o) => o.pagina + ' 0 R').join(' ') + '] /Count ' + hojas.length + ' >>');
+      const anchoCelda = ANCHO - 2 * MARGEN;
+      const altoCelda = fotos.length === 1 ? ALTO - 2 * MARGEN : (ALTO - 2 * MARGEN - ENTRE * (POR_HOJA - 1)) / POR_HOJA;
+      hojas.forEach((fs, h) => {
+        const o = objetos[h];
+        const dibujo = fs.map((f, i) => {
+          const k = Math.min(anchoCelda / f.ancho, altoCelda / f.alto);
+          const w = f.ancho * k, alto = f.alto * k;
+          const x = MARGEN + (anchoCelda - w) / 2;
+          const y = ALTO - MARGEN - i * (altoCelda + ENTRE) - (altoCelda - alto) / 2 - alto;
+          return 'q ' + w.toFixed(2) + ' 0 0 ' + alto.toFixed(2) + ' ' + x.toFixed(2) + ' ' + y.toFixed(2) + ' cm /F' + i + ' Do Q';
+        }).join('\n');
+        objeto(o.pagina, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + ANCHO + ' ' + ALTO + '] /Resources << /XObject << ' +
+          fs.map((f, i) => '/F' + i + ' ' + o.fotos[i] + ' 0 R').join(' ') + ' >> >> /Contents ' + o.contenido + ' 0 R >>');
+        const c = texto.encode(dibujo);
+        objeto(o.contenido, '<< /Length ' + c.length + ' >>', c);
+        fs.forEach((f, i) => objeto(o.fotos[i], '<< /Type /XObject /Subtype /Image /Width ' + f.ancho + ' /Height ' + f.alto +
+          ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + f.bytes.length + ' >>', f.bytes));
+      });
+      const inicioTabla = largo;
+      let tabla = 'xref\n0 ' + (total + 1) + '\n0000000000 65535 f \n';
+      for (let i = 1; i <= total; i++) tabla += String(posiciones[i]).padStart(10, '0') + ' 00000 n \n';
+      poner(tabla + 'trailer\n<< /Size ' + (total + 1) + ' /Root 1 0 R >>\nstartxref\n' + inicioTabla + '\n%%EOF\n');
+      const salida = new Uint8Array(largo);
+      let p = 0;
+      partes.forEach((b) => { salida.set(b, p); p += b.length; });
+      return salida;
     }
 
     /**
@@ -2000,9 +2302,15 @@
         const quitarFoto = ev.target.closest('[data-quitar-foto]');
         if (quitarFoto) {
           if (captura) captura.fotos = captura.fotos.filter((f) => f.id !== quitarFoto.dataset.quitarFoto);
-          quitarFoto.closest('.ln-foto-chip').remove();
+          const caja = quitarFoto.closest('.ln-miniatura, .ln-foto-chip');
+          const img = caja.querySelector('img');
+          if (img && /^blob:/.test(img.src)) URL.revokeObjectURL(img.src);
+          caja.remove();
           return;
         }
+        // Miniatura de una foto (inspección o identificación): en grande
+        const verFoto = ev.target.closest('[data-ver-foto]');
+        if (verFoto) { verFotoEnGrande(verFoto.getAttribute('src')); return; }
       });
       raiz.addEventListener('dblclick', (ev) => {
         const tarjeta = ev.target.closest('#ln-listado .ln-cuadro[data-ln-ir]');
@@ -2032,14 +2340,43 @@
         if (ev.target.closest('[data-cerrar-modal]')) cerrarCaptura();
       });
 
+      let puedeOperarTabla = false; // con los permisos (abajo, «Selección estilo Google Drive»); Vínculos también lo usa
+      // ---- Vínculos (usuario, 8-oct): personas, equipos y líneas en un espacio; arrastrar abre la acción de siempre ----
+      // Es una idea que se queda así: en producción está apagada (MODULOS_APAGADOS de Entornos.gs, como Help Desk) y no hay
+      // botón ni espacio; en los DEV sí. No tiene llamadas propias al servidor: solo abre las ventanas de siempre
+      const vinculosApagado = (() => {
+        try { return JSON.parse(document.body.dataset.apagados || '[]').indexOf('vinculos-lineas') >= 0; } catch (e) { return false; }
+      })();
+      if (vinculosApagado) {
+        const boton = raiz.querySelector('#ln-modo-vista [data-modo="vinculos"]');
+        if (boton) boton.remove();
+      }
+      const espacioVinculos = vinculosApagado ? { pintar: () => {} } : LineasVinculos.montar($('#ln-vinculos', raiz), {
+        indice: () => memoria.indice,
+        puedeOperar: () => puedeOperarTabla,
+        icono: icono,
+        esc: esc,
+        color: (estatus) => COLOR_ESTATUS[String(estatus || '').toUpperCase()] || '',
+        alVer: (tipo, fila) => vistaRapida(tipo, fila),
+        alAbrir: (tipo, fila) => abrir(tipo, fila.id),
+        alAvisar: (texto) => aviso(icono('triangle-alert', 'ln-alerta') + ' ' + esc(texto), 7000),
+        alSoltar: (a) => {
+          if (a.tipo === 'vinculo') abrirVinculo(a.modo, a.fila, a.pre);
+          else if (a.tipo === 'cancelacion') abrirCancelacion([a.fila]);
+          else if (a.tipo === 'resguardo') abrirResguardo([a.fila], { estatus: a.estatus });
+          else if (a.tipo === 'reasignar') abrirReasignar(a.fila, a.persona);
+        },
+      });
+
       // ---- Carga inicial ----
       if (!memoria.modoVista) {
         // Sin preferencia guardada: tarjetas en celular (una tabla de 10 columnas no cabe) y tabla en lo demás
         const porDefecto = window.matchMedia && window.matchMedia('(max-width: 700px)').matches ? 'tarjetas' : 'tabla';
         let guardado = null;
         try { guardado = localStorage.getItem('lineas.modoVista'); } catch (e) { guardado = null; }
-        memoria.modoVista = guardado === 'tarjetas' || guardado === 'tabla' ? guardado : porDefecto;
+        memoria.modoVista = ['tabla', 'tarjetas', 'vinculos'].indexOf(guardado) >= 0 ? guardado : porDefecto;
       }
+      if (vinculosApagado && memoria.modoVista === 'vinculos') memoria.modoVista = 'tabla';
       mostrarModulo(memoria.modulo, true);
       crearTabla(memoria.modulo).setCargando(true);
       aplicarModoVista();
@@ -2102,6 +2439,8 @@
         const clic = (t) => {
           const d = defs[Number(t.dataset.kpi)];
           const quitar = t.classList.contains('stat-tile-activo') && Object.keys(d.filtros).length > 0;
+          // Los indicadores filtran la tabla: desde Vínculos se regresa a ella
+          if (memoria.modoVista === 'vinculos') { memoria.modoVista = 'tabla'; aplicarModoVista(); }
           mostrarModulo(d.modulo);
           const tabla = crearTabla(d.modulo);
           campos[d.modulo].forEach((c) => tabla.setFiltro(c, quitar ? null : (d.filtros[c] || null)));
@@ -2117,10 +2456,10 @@
       }
 
       // ---- Selección estilo Google Drive (30-sep): acciones de la barra, del ⋮ y del clic derecho ----
-      let puedeOperarTabla = false;
       cargarPermisos().then((p) => {
         puedeOperarTabla = !!(p && p.puedeOperar);
         Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].refrescarSeleccion(); });
+        if (memoria.modoVista === 'vinculos' && vigente()) espacioVinculos.pintar();
       }).catch(() => { /* sin permisos: solo las acciones de consulta */ });
       const ACCION_REASIGNAR = ACCIONES_MASIVAS.filter((a) => a.clave === 'REASIGNAR')[0];
 
@@ -2363,14 +2702,19 @@
 
       function aplicarModoVista() {
         const tarjetas = memoria.modoVista === 'tarjetas';
+        const enVinculos = memoria.modoVista === 'vinculos';
         $('#ln-listado', raiz).classList.toggle('ln-modo-tarjetas', tarjetas);
+        // Vínculos (usuario, 8-oct): el espacio en lugar de las pestañas Equipos / Líneas (lineas-vinculos.html)
+        $('#ln-listado', raiz).classList.toggle('ln-modo-vinculos', enVinculos);
+        $('#ln-vinculos', raiz).hidden = !enVinculos;
         raiz.querySelectorAll('#ln-modo-vista [data-modo]').forEach((b) => {
           const activo = b.dataset.modo === memoria.modoVista;
           b.classList.toggle('activo', activo);
           b.setAttribute('aria-pressed', String(activo));
         });
         ['equipos', 'lineas'].forEach((m) => { $('#ln-tarjetas-' + m, raiz).hidden = !tarjetas; });
-        if (tarjetas) { tarjetasVisibles[memoria.modulo] = PASO_TARJETAS; pintarTarjetas(memoria.modulo); }
+        if (enVinculos) espacioVinculos.pintar();
+        else if (tarjetas) { tarjetasVisibles[memoria.modulo] = PASO_TARJETAS; pintarTarjetas(memoria.modulo); }
         else if (tablas[memoria.modulo]) tablas[memoria.modulo].ajustarAlto();
       }
 
@@ -2472,6 +2816,7 @@
         pintarTipos('equipos');
         pintarTipos('lineas');
         mostrarModulo(memoria.modulo);
+        if (memoria.modoVista === 'vinculos') espacioVinculos.pintar();
         $('#ln-conteo', raiz).textContent = 'Datos de la hoja al ' + fechaHora(memoria.indice.generadoEn) + '.';
       }
 
@@ -3080,12 +3425,14 @@
        * inspección) y se genera el PDF de la responsiva. Cerrar cualquiera sin guardar no reasigna; si la reasignación
        * falla, la inspección del día ya no se vuelve a pedir.
        */
-      async function abrirReasignar(fila) {
+      async function abrirReasignar(fila, para) {
         if (!fila) return;
         const nombre = 'NUCO ' + (fila.nuco || '—');
         const subtitulo = [nombre, fila.modelo, fila.responsable].filter(Boolean).join(' · ');
         const resp = await capturarEnFlujo('RESPONSIVA', { equipoId: fila.id, modo: 'REASIGNAR' }, {
           titulo: 'Reasignar', subtitulo: subtitulo, boton: 'Seguir a la inspección', espera: 'Revisando la responsiva', sinPdf: true,
+          // Desde Vínculos, soltado sobre una persona: a quién va (la persona se elige en la responsiva, como siempre)
+          aviso: para ? 'Para ' + para.nombre + (para.noEmpleado ? ' · No. ' + para.noEmpleado : '') : undefined,
           // Lo mismo que rechaza el servidor (LineasAcciones.reasignar), antes de pasar a la inspección
           guardar: (datos) => {
             const v = datos.valores || {};
@@ -3505,8 +3852,10 @@
        * CAMBIAR_EQUIPO (desde la línea: se elige un NUCO en USO o RESGUARDO sin línea) y DESVINCULAR. La línea que deja
        * el equipo queda DISPONIBLE o va a la bandeja de cancelaciones. Si el equipo queda en USO con otra línea, la
        * responsiva es obligatoria y su comentario es el de la acción; si no, el comentario va en otra ventana.
+       * `pre` (Vínculos, al soltar): la línea o el NUCO ya elegidos ({ linea, nuco }); la ventana se confirma igual.
        */
-      async function abrirVinculo(modo, fila) {
+      async function abrirVinculo(modo, fila, pre) {
+        const elegido = pre || {};
         const ix = memoria.indice || { equipos: [], lineas: [] };
         const desdeEquipo = ['VINCULAR_LINEA', 'CAMBIAR_LINEA'].indexOf(modo) >= 0 || (modo === 'DESVINCULAR' && !fila.equipoId);
         const equipoActual = ix.equipos.filter((e) => e.id === (desdeEquipo ? fila.id : fila.equipoId))[0] || null;
@@ -3524,11 +3873,11 @@
         const elementos = [{ tipo: 'titulo', texto: titulo.toUpperCase(), icono: modo === 'DESVINCULAR' ? 'unlink' : 'link' }];
         if (modo === 'VINCULAR_LINEA' || modo === 'CAMBIAR_LINEA') {
           elementos.push(campo('_LINEA', 'Línea', 'listaAbierta', { opciones: lineasLibres.map((l) => String(l.numero)), soloLista: true,
-            sugerencias: 'LINEAS_DISPONIBLES', mensaje: 'ELIGE UNA LÍNEA DISPONIBLE' }));
+            sugerencias: 'LINEAS_DISPONIBLES', mensaje: 'ELIGE UNA LÍNEA DISPONIBLE', valor: elegido.linea || '' }));
         }
         if (modo === 'VINCULAR_EQUIPO' || modo === 'CAMBIAR_EQUIPO') {
           elementos.push(campo('_NUCO', 'NUCO', 'listaAbierta', { opciones: equiposLibres.map((e) => String(e.nuco)), soloLista: true,
-            sugerencias: 'EQUIPOS_SIN_LINEA', mensaje: 'ELIGE UN NUCO SIN LÍNEA' }));
+            sugerencias: 'EQUIPOS_SIN_LINEA', mensaje: 'ELIGE UN NUCO SIN LÍNEA', valor: elegido.nuco || '' }));
         }
         // La que deja el equipo (en Cambiar de equipo se va con la línea: no se pregunta)
         if (modo === 'CAMBIAR_LINEA' || modo === 'DESVINCULAR') {
@@ -3902,6 +4251,7 @@
         });
         const pin = errorPinBloqueo($('#ln-captura-cuerpo', raiz));
         if (pin) errores.push({ columna: 'PIN EQUIPO', etiqueta: 'PIN DEL EQUIPO', msg: pin });
+        if (bloqueoElegido($('#ln-captura-cuerpo', raiz)) === '') errores.push({ columna: '_BLOQUEO', etiqueta: 'TIPO DE BLOQUEO DEL EQUIPO', msg: 'Obligatorio' });
         return seccion ? errores.filter((x) => seccion.querySelector('[data-af-columna="' + CSS.escape(x.columna) + '"]')) : errores;
       }
 
@@ -3997,24 +4347,32 @@
         };
       }
 
+      /**
+       * Foto de la inspección: se ve en miniatura desde que se elige (como la identificación de la responsiva, usuario
+       * 9-oct), con la espera encima mientras sube; clic = en grande; la X la quita.
+       */
       function subirImagenCaptura(archivo, listaId, carpetaId, onSubido, sinQuitar) {
         const lista = document.getElementById(listaId);
         if (!lista) return Promise.resolve();
-        const chip = document.createElement('span');
-        chip.className = 'ln-foto-chip ln-foto-subiendo';
-        chip.innerHTML = icono('loader-circle', 'ln-icon-sm') + '<span class="ln-foto-nombre">' + esc(archivo.name) + '</span>';
-        lista.appendChild(chip);
+        const url = URL.createObjectURL(archivo);
+        const caja = document.createElement('span');
+        caja.className = 'ln-miniatura ln-foto-subiendo';
+        caja.innerHTML = '<img src="' + esc(url) + '" alt="' + esc(archivo.name) + '" data-ver-foto />' +
+          '<span class="ln-miniatura-estado">' + icono('loader-circle', 'ln-icon-sm ln-girando') + '</span>';
+        lista.appendChild(caja);
+        pintarIconos(caja);
         return Promise.all([redimensionarImagen(archivo, 1600), Promise.resolve(typeof carpetaId === 'function' ? carpetaId() : carpetaId)])
           .then(([img, carpeta]) => llamar('apiLineasSubirArchivo', carpeta, archivo.name, img.mime, img.base64))
           .then((subido) => {
-            chip.className = 'ln-foto-chip';
-            chip.innerHTML = icono('check', 'ln-icon-sm') + '<span class="ln-foto-nombre">' + esc(subido.nombre) + '</span>' +
-              (sinQuitar ? '' : '<button type="button" data-quitar-foto="' + esc(subido.id) + '">' + icono('x', 'ln-icon-sm') + '</button>');
+            caja.className = 'ln-miniatura';
+            caja.querySelector('.ln-miniatura-estado').remove();
+            if (!sinQuitar) caja.insertAdjacentHTML('beforeend', '<button type="button" data-quitar-foto="' + esc(subido.id) + '" aria-label="Quitar">' + icono('x', 'ln-icon-sm') + '</button>');
+            pintarIconos(caja);
             onSubido(subido);
           }).catch((e) => {
-            chip.className = 'ln-foto-chip';
-            chip.style.background = 'var(--ln-rojo-bg)'; chip.style.color = 'var(--ln-rojo-tx)';
-            chip.innerHTML = icono('triangle-alert', 'ln-icon-sm') + '<span class="ln-foto-nombre">' + esc(mensajeError(e)) + '</span>';
+            caja.className = 'ln-miniatura ln-miniatura-error';
+            caja.querySelector('.ln-miniatura-estado').innerHTML = icono('triangle-alert', 'ln-icon-sm') + '<span>' + esc(mensajeError(e)) + '</span>';
+            pintarIconos(caja);
             onSubido(null);
           });
       }
@@ -4248,12 +4606,25 @@
 
       function iniciarFormularioResponsiva() {
         iniciarFormularioAppSheet();
+        activarIdentificaciones($('#ln-captura-cuerpo', raiz));
         $('#cap-guardar', raiz).addEventListener('click', guardarResponsivaDesdeFormulario);
       }
 
       function guardarResponsivaDesdeFormulario() {
         $('#cap-error', raiz).hidden = true;
         if (!validarFormularioAppSheet()) return;
+        // La INE registrada no se puede pasar por alto (usuario, 9-oct): sin contestar «¿Es correcta?» no se guarda
+        const sinContestar = Array.from(raiz.querySelectorAll('#ln-captura-cuerpo .ln-ine')).filter((caja) => {
+          const s = caja._ine;
+          const campo = caja.closest('.ln-af-campo');
+          return caja._registrada && !caja._registrada.descartada && s && !s.reutilizar && !s.pdf && !s.fotos.length && !(campo && campo.hidden);
+        })[0];
+        if (sinContestar) {
+          if (captura.pasos) captura.pasos.irAlCampo('_IDENTIFICACION_' + sinContestar.dataset.ineOrden);
+          sinContestar.querySelector('.ln-ine-registrada').classList.add('ln-ine-registrada-falta');
+          mostrarErrorCaptura('Contesta si la INE registrada es correcta.', '.ln-ine[data-ine-orden="' + sinContestar.dataset.ineOrden + '"]');
+          return;
+        }
         const firmaCi = captura.firmas['FIRMA CI'];
         const firmaResponsable = captura.firmas['FIRMA RESPONSABLE'];
         const idAbierto = captura.idObjetivo;
@@ -4262,12 +4633,13 @@
         const bloqueo = bloqueoElegido($('#ln-captura-cuerpo', raiz));
         const sesion = captura;
         estadoGuardado(sesion.flujo && sesion.flujo.espera ? sesion.flujo.espera : (sesion.flujo && !sesion.flujo.pdfAqui ? 'Guardando la responsiva' : 'Generando tu PDF'));
-        Promise.all([firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ffffff') : null, firmaCi.base64('#ffffff')]).then(([responsable, ci]) => {
+        Promise.all([firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ffffff') : null, firmaCi.base64('#ffffff'),
+          leerIdentificaciones($('#ln-captura-cuerpo', raiz), valores)]).then(([responsable, ci, identificaciones]) => {
           sesion.pdfFirmas = { responsable: responsable, ci: ci, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ffffff') : null };
           const datos = Object.assign({}, sesion.ref, {
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron, bloqueo: bloqueo,
             firmaResponsableBase64: sesion.pdfFirmas.responsable, firmaCiBase64: sesion.pdfFirmas.ci, patronBase64: sesion.pdfFirmas.patron,
-            usarFirmaGuardada: !!firmaCi.guardada,
+            usarFirmaGuardada: !!firmaCi.guardada, identificaciones: identificaciones,
           });
           return sesion.flujo && sesion.flujo.guardar ? sesion.flujo.guardar(datos) : llamar('apiLineasGuardarResponsiva', datos);
         }).then((r) => {
@@ -4626,7 +4998,10 @@
       function botonesDocumento(tipoPdf, d, r) {
         const x = datosDocumento(tipoPdf, d, r);
         const pdfs = r.pdfs || [];
+        // Identificación de cada responsable (usuario, 9-oct): «Ver INE», o con el nombre si son varios
+        const ids = r.identificaciones || [];
         return pdfs.map((p, indice) => enlaceDrive(p.id, 'Ver PDF' + (pdfs.length > 1 ? ' ' + (indice + 1) : ''), true)).join('') +
+          ids.map((x) => enlaceDrive(x.id, 'Ver ' + (x.tipo || 'identificación') + (ids.length > 1 ? ' · ' + x.persona : ''), true)).join('') +
           (r.puedeOperar && x.registroId && (x.pdfId || x.origen !== 'SISTEMA')
             ? '<button type="button" class="ln-btn-icono" data-ln-doc-subir>' + icono('file-up') + ' Subir PDF firmado</button>' : '') +
           (opcionesDocumento(x, r).length

@@ -289,7 +289,10 @@
   .ln-checklist-avance-barra { height: 7px; overflow: hidden; border-radius: 999px; background: var(--color-border); }
   .ln-checklist-avance-barra span { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--color-accent); transition: width .2s ease; }
   .ln-checklist-avance.incompleto .ln-checklist-avance-cabecera { color: var(--ln-rojo-tx); }
+  /* position: relative: el campo de archivos (oculto) se queda dentro de su botón. Sin esto se calculaba más abajo de la
+     ventana y, al regresar de elegir los archivos, la página se recorría y dejaba un cuadro blanco (9-oct) */
   .ln-upload {
+    position: relative; overflow: hidden;
     min-height: 92px; border: 1.5px dashed var(--color-accent); border-radius: 13px; padding: 16px;
     display: flex; align-items: center; justify-content: center; gap: 12px; text-align: left;
     background: var(--color-accent-soft); color: var(--color-text); cursor: pointer;
@@ -298,7 +301,7 @@
   .ln-upload > .ln-icon { width: 25px; height: 25px; color: var(--color-primary); }
   .ln-upload b, .ln-upload small { display: block; }
   .ln-upload small { margin-top: 3px; color: var(--color-text-muted); font-size: 11.5px; }
-  .ln-upload input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  .ln-upload input { position: absolute; top: 0; left: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
   .ln-checklist-seccion { margin-bottom: 16px; }
   .ln-checklist-punto { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--color-border); }
   .ln-checklist-punto:last-child { border-bottom: none; }
@@ -695,6 +698,25 @@
   .ln-fotos-botones { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
   @media (hover: hover) and (pointer: fine) { .ln-solo-tactil { display: none !important; } }
   .ln-fotos-nota { font-size: 12px; margin: 8px 0 0; }
+  /* Identificación de cada responsable en la responsiva (9-oct): fotos o PDF, revisadas antes de guardar */
+  .ln-ine select[data-ine-tipo] { max-width: 260px; margin-bottom: 10px; }
+  .ln-ine-lista { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+  .ln-ine-lista:empty { display: none; }
+  .ln-ine [hidden] { display: none !important; }
+  /* La que ya tiene la persona en el registro (paso 3, 2.29): «¿Es correcta?» */
+  .ln-ine-registrada { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-bottom: 10px; padding: 10px 12px; border: 1px solid var(--color-border); border-left: 4px solid var(--color-primary, #2563eb); border-radius: 10px; background: var(--color-bg); font-size: 13px; }
+  .ln-ine-registrada-falta { box-shadow: 0 0 0 2px var(--ln-rojo-tx, #b42318); }
+  .ln-ine-registrada-texto { font-weight: 600; }
+  .ln-ine-pregunta { margin-left: auto; color: var(--color-text-muted, inherit); }
+  /* Miniatura de una foto elegida (identificación e inspección): clic = en grande */
+  .ln-miniatura { position: relative; width: 168px; aspect-ratio: 3 / 2; border: 1px solid var(--color-border); border-radius: 10px; overflow: hidden; background: var(--color-bg); }
+  .ln-miniatura img { width: 100%; height: 100%; object-fit: contain; cursor: zoom-in; }
+  .ln-miniatura-estado { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px; background: rgba(255,255,255,.72); color: var(--color-text); font-size: 12px; text-align: center; overflow-wrap: anywhere; }
+  .ln-miniatura-error .ln-miniatura-estado { background: rgba(243,236,214,.94); color: var(--ln-rojo-tx); }
+  .ln-miniatura button { position: absolute; top: 4px; right: 4px; display: inline-flex; padding: 3px; border: none; border-radius: 50%; background: var(--color-surface); color: var(--color-text); cursor: pointer; box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,.2)); }
+  .ln-foto-chip a.ln-foto-nombre { color: inherit; }
+  .ln-ine-visor { position: fixed; inset: 0; z-index: 700; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0,0,0,.82); cursor: zoom-out; }
+  .ln-ine-visor img { max-width: 100%; max-height: 100%; object-fit: contain; }
   .ln-fotos-despues { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--color-border); }
   .ln-fotos-despues h4 { display: flex; align-items: center; gap: 7px; }
   .ln-estatus-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
@@ -993,4 +1015,132 @@
   .ln-espera .ln-pdf-acciones { margin-top: 14px; }
   /* Observaciones: la sección ya dice el nombre */
   .ln-af-sin-etiqueta .ln-af-campo > label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+  /* ---------------- Vínculos (html/js/lineas-vinculos.html, usuario 8-oct) ----------------
+     Grafo y lienzo con el cajón al lado; los colores son los de los chips de estatus. */
+  #ln-listado.ln-modo-vinculos #ln-tabs, #ln-listado.ln-modo-vinculos .tab-panel { display: none !important; }
+  .ln-segmentado button + button:not(:last-child) { margin-left: -1px; }
+  .vn[hidden], .vn [hidden], .vn .vn-oculto { display: none !important; }
+  .vn { --vn-quieto: 0; }
+  @media (prefers-reduced-motion: reduce) { .vn { --vn-quieto: 1; } }
+  .vn-barra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-bottom: 8px; }
+  .vn-barra .ln-segmentado { margin-bottom: 0; }
+  .vn-barra-2 { min-height: 32px; }
+  .vn-buscar { position: relative; display: flex; align-items: center; flex: 1 1 240px; max-width: 420px; margin: 0; }
+  .vn-buscar .ln-icon { position: absolute; left: 10px; color: var(--color-text-muted); pointer-events: none; }
+  .vn-buscar input { width: 100%; padding-left: 32px; }
+  .vn-barra select { flex: 0 1 190px; min-width: 0; }
+  .vn-capas, .vn-cajas { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .vn .vn-capa { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px; border-radius: 999px; font-size: 12px;
+    background: transparent; color: var(--color-text-muted); border: 1px dashed var(--color-border); }
+  .vn .vn-capa:hover { background: var(--color-primary-soft); }
+  .vn .vn-capa.activo { background: var(--color-primary-soft); color: var(--color-primary); border: 1px solid var(--color-primary); }
+  .vn-cuenta { font-size: 12px; color: var(--color-text-muted); font-variant-numeric: tabular-nums; margin-left: auto; }
+  .vn .vn-barra-2 button { display: inline-flex; align-items: center; gap: 6px; height: 30px; min-height: 0; padding: 0 10px; font-size: 12.5px; }
+  .vn .vn-barra-2 .vn-icono, .vn .vn-icono { width: 30px; padding: 0; justify-content: center; }
+
+  .vn-cuerpo { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 10px; height: clamp(460px, calc(100vh - 330px), 1100px); }
+  .vn-cajon { display: flex; flex-direction: column; gap: 6px; min-height: 0; padding: 10px; border: 1.5px dashed var(--color-border);
+    border-radius: 12px; background: var(--color-surface); transition: border-color .15s, background-color .15s; }
+  .vn-cajon > header { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--color-text-muted); }
+  .vn-cajon > header span { margin-left: auto; font-variant-numeric: tabular-nums; }
+  .vn-cajon-lista { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
+  .vn-cajon-vacio { margin: 24px 4px; text-align: center; font-size: 12px; color: var(--color-text-muted); }
+  .vn-cajon > button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+  .vn-cajon.vn-blanco, .vn-vista.vn-blanco { border-color: var(--color-primary); background: var(--color-primary-soft); }
+  .vn-ficha { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid var(--color-border); border-radius: 8px;
+    background: var(--color-bg); font-size: 12px; user-select: none; -webkit-user-select: none; }
+  .vn-ficha > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .vn-ficha-saca { cursor: grab; touch-action: none; }
+  .vn .vn-ficha-quitar { width: 20px; height: 20px; min-height: 0; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+    background: transparent; color: var(--color-text-muted); border: none; }
+  .vn .vn-ficha-quitar:hover { background: var(--ln-rojo-bg); color: var(--ln-rojo-tx); }
+  .vn-ficha-fantasma { position: fixed; left: 0; top: 0; z-index: 10000; pointer-events: none; max-width: 240px; box-shadow: 0 6px 18px rgba(0, 0, 0, .18); }
+  .vn-ficha-fantasma .vn-ficha-quitar { display: none; }
+
+  /* La vista: el mundo se acerca, se aleja y se mueve; todo lo de adentro va en coordenadas del mundo */
+  .vn-vista { position: relative; overflow: hidden; border: 1.5px solid var(--color-border); border-radius: 12px; touch-action: none;
+    background-color: var(--color-surface); background-image: radial-gradient(var(--color-border) 1px, transparent 1px); background-size: 22px 22px;
+    cursor: grab; user-select: none; -webkit-user-select: none; transition: border-color .15s; }
+  .vn-vista:active { cursor: grabbing; }
+  .vn-espacio, .vn-mundo { position: absolute; left: 0; top: 0; }
+  .vn-espacio { inset: 0; }
+  .vn-mundo { transform-origin: 0 0; }
+  .vn-svg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+  .vn-enlace { stroke: var(--ln-neutro-tx); stroke-width: 1.6; opacity: .55; }
+  .vn-enlace-p { stroke-width: 1; stroke-dasharray: 3 4; }
+  .vn-enlace.vn-vivo { stroke: var(--ln-verde-tx); opacity: .8; }
+  .vn-enlace.vn-tenue { opacity: .12; }
+  .vn-vacio { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0; padding: 0 30px;
+    text-align: center; font-size: 13px; color: var(--color-text-muted); pointer-events: none; }
+
+  .vn-n { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; z-index: 2;
+    transition: opacity .2s; }
+  .vn-ico { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    border: 1.5px solid currentColor; background: var(--ln-neutro-bg); color: var(--ln-neutro-tx); transition: box-shadow .15s; }
+  .vn-ico .ln-icon { width: 18px; height: 18px; }
+  .vn-linea .vn-ico { width: 30px; height: 30px; border-radius: 9px; }
+  .vn-linea .vn-ico .ln-icon { width: 15px; height: 15px; }
+  .vn-persona .vn-ico { width: 30px; height: 30px; background: var(--color-surface); color: var(--color-text); border-width: 1px; }
+  .vn-verde .vn-ico { background: var(--ln-verde-bg); color: var(--ln-verde-tx); }
+  .vn-azul .vn-ico { background: var(--ln-azul-bg); color: var(--ln-azul-tx); }
+  .vn-ambar .vn-ico { background: var(--ln-ambar-bg); color: var(--ln-ambar-tx); }
+  .vn-rojo .vn-ico { background: var(--ln-rojo-bg); color: var(--ln-rojo-tx); }
+  .vn-etq { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--color-text);
+    font-variant-numeric: tabular-nums; pointer-events: none; }
+  .vn-persona .vn-etq { font-weight: 600; }
+  /* De lejos, como en Obsidian: sin nombres, salvo lo iluminado o bajo el mouse */
+  .vn-lejos .vn-etq { opacity: 0; }
+  .vn-lejos .vn-n:hover .vn-etq, .vn-lejos .vn-luz .vn-etq { opacity: 1; }
+  .vn-n:hover { z-index: 4; }
+  .vn-n:hover .vn-ico, .vn-luz .vn-ico { box-shadow: 0 0 0 3px var(--color-primary-soft); }
+  .vn-tenue { opacity: .18; }
+  .vn-n.vn-blanco .vn-ico { box-shadow: 0 0 0 4px var(--color-primary); }
+  .vn-arrastre { z-index: 6; cursor: grabbing; pointer-events: none; }
+  .vn-arrastre .vn-ico { box-shadow: 0 6px 18px rgba(0, 0, 0, .2); }
+
+  .vn .vn-cortar { position: absolute; left: 0; top: 0; z-index: 3; width: 20px; height: 20px; min-height: 0; padding: 0; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; background: var(--color-surface); border: 1px solid var(--color-border);
+    color: var(--ln-rojo-tx); opacity: .35; transition: opacity .15s; }
+  .vn .vn-cortar:hover { opacity: 1; background: var(--ln-rojo-bg); }
+  .vn-cortar .ln-icon { width: 12px; height: 12px; }
+
+  /* Módulos (Resguardo, Venta y desecho, Cancelación): se mueven del encabezado, se estiran de la esquina y se quitan con la X */
+  .vn-caja { position: absolute; left: 0; top: 0; z-index: 1; border: 1.5px dashed var(--color-border); border-radius: 14px;
+    background: color-mix(in srgb, var(--color-surface) 85%, transparent); transition: border-color .15s, background-color .15s; }
+  .vn-caja.vn-blanco { border-color: var(--color-primary); background: var(--color-primary-soft); }
+  /* El encabezado conserva su tamaño en la pantalla al acercar o alejar (--vn-inv = 1 / zoom, lo pone lineas-vinculos.html) */
+  .vn-caja-cabeza { --i: var(--vn-inv, 1); display: flex; align-items: center; gap: calc(6px * var(--i)); height: calc(40px * var(--i));
+    padding: 0 calc(6px * var(--i)) 0 calc(12px * var(--i)); font-size: calc(12.5px * var(--i)); font-weight: 600; color: var(--color-text-muted); cursor: move; }
+  .vn-caja-cabeza .ln-icon { width: calc(15px * var(--i)); height: calc(15px * var(--i)); }
+  .vn .vn-caja-quitar { margin-left: auto; width: calc(24px * var(--i)); height: calc(24px * var(--i)); min-height: 0; padding: 0; display: inline-flex;
+    align-items: center; justify-content: center; background: transparent; border: none; color: var(--color-text-muted); }
+  .vn .vn-caja-quitar:hover { background: var(--ln-rojo-bg); color: var(--ln-rojo-tx); }
+  .vn-caja-titulo { white-space: nowrap; }
+  .vn .vn-caja-buscar { flex: 1; min-width: calc(50px * var(--i)); height: calc(26px * var(--i)); padding: 0 calc(8px * var(--i)); font-size: calc(12px * var(--i));
+    font-weight: 400; border-radius: calc(6px * var(--i)); cursor: text; }
+  .vn-caja-num { font-size: calc(11.5px * var(--i)); font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .vn-caja-estirar { position: absolute; right: 4px; bottom: 4px; cursor: nwse-resize; color: var(--color-text-muted); display: flex; }
+  .vn-caja-estirar .ln-icon { width: calc(14px * var(--vn-inv, 1)); height: calc(14px * var(--vn-inv, 1)); }
+
+  /* Lo elegido en el grafo y el nombre de la acción junto a lo que se arrastra */
+  .vn-sel { position: absolute; left: 10px; bottom: 10px; right: 10px; z-index: 7; display: flex; align-items: center; gap: 8px; max-width: 560px;
+    padding: 6px 6px 6px 12px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .1); font-size: 12.5px; cursor: default; }
+  .vn-sel > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .vn-sel > button { display: inline-flex; align-items: center; gap: 6px; }
+  .vn-letrero { position: absolute; z-index: 8; transform: translateX(-50%); max-width: 340px; padding: 4px 9px; border-radius: 7px; pointer-events: none;
+    background: var(--color-text); color: var(--color-surface); font-size: 11.5px; font-weight: 600; text-align: center; }
+  .vn-letrero.vn-letrero-no { background: var(--ln-rojo-bg); color: var(--ln-rojo-tx); }
+
+  @media (max-width: 1024px) {
+    .vn-cuerpo { grid-template-columns: 190px minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .vn-buscar { flex-basis: 100%; max-width: none; }
+    .vn-barra select { flex: 1 1 40%; }
+    .vn-cuerpo { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(380px, 1fr); height: auto; }
+    .vn-cajon { max-height: 150px; }
+    .vn-vista { min-height: 420px; }
+  }
 </style>

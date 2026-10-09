@@ -130,6 +130,12 @@ ganchos: `ArqueosService.gs` y `VehiculosService.gs`. La guía completa está al
   `DRIVE_FOLDER_ID_NUCOS_VEHICULOS` (Entornos.gs); un DEV sin esa clave usa una "NUCOS VEHICULOS" de pruebas en su raíz.
   No guardes un documento del vehículo en una carpeta suelta de la raíz (contrato).
 
+- **Copiar un dato de una hoja a otra (y mantenerlo al día) → Datos conectados**, no código a mano en el servicio: el
+  `MAPA` de `Relaciones.gs` o, desde la pantalla, `DatosConectados.gs` (docs/relaciones.md, "Conectar datos desde la
+  pantalla"). `HojaServicio.actualizar` ya propaga (`Relaciones.alGuardar`) y el activador de `AvisoDeCambios.gs` copia lo
+  editado a mano. Solo lo que va AL REVÉS (un registro nuevo que actualiza a su dueño) se escribe en el servicio, y se
+  anota en `DatosConectados.AL_REVES` para que la pantalla lo muestre.
+
 ## Permisos entre módulos (lo de un módulo dentro de otro)
 
 El modelo, en capas (como Salesforce u Odoo: objeto → campo → registro):
@@ -257,6 +263,12 @@ cada llamada). Por eso:
 - **Lo que sale de varias listas** (el Inicio, la campanita) se guarda ya calculado con
   `CacheHojas.calculo`, por firma de permisos (`Permisos.firmaDeLectura`).
 - **Lo que una pantalla va a necesitar de seguro** se pide antes con `adelantar` (api.html).
+- **Las pantallas se actualizan solas.** Las listas de `callServerListaCacheada` llegan por `apiListaConHuella`
+  con su huella (las versiones de hoja que leyó, `CacheHojas.conHuella`). Cada 60 s, con la pestaña a la vista, el
+  vigía de `api.html` pregunta `apiHuellasVigentes` (solo CacheService) por las listas que una pantalla escucha
+  (`escucharLista`); si cambió una, la pide y `lista-actualizada` la vuelve a pintar. Una lista nueva solo necesita
+  `callServerListaCacheada` + `escucharLista`. Lo editado a mano en la hoja llega con el activador
+  `instalarAvisoDeCambios()` (AvisoDeCambios.gs), una vez por proyecto; `revisarEntorno` avisa si falta.
 - **Una lista nueva** de `HojaServicio` exporta `calentar` y va en `pasosCalentador_()` de
   `Calentador.gs`. Es un activador que la rehace cada 10 min: se instala una vez por proyecto
   con `instalarCalentador()` desde el editor. Un contrato revisa que cada paso exista.

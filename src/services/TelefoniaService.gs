@@ -394,6 +394,8 @@ const TelefoniaService = (function () {
       });
     }
     const salida = { equipo: eq, fotos: fotos, pdfs: pdfs, puedeOperar: puedeOperar_(sesion) };
+    // Identificación de cada responsable, subida con la responsiva (usuario, 9-oct; pendiente 2.27)
+    if (!esInspeccion) salida.identificaciones = LineasIdentificaciones.deResponsiva([id]);
     salida[esInspeccion ? 'inspeccion' : 'responsiva'] = doc;
     return LineasUtil.paraCliente(salida);
   }
@@ -554,6 +556,12 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente(LineasCaptura.guardarResponsiva(datos, usuarioOperacion_(sesion), puedeVerSecretos_(sesion)));
   }
 
+  /** Paso 3 de la identificación (pendiente 2.29): la registrada de cada responsable de la responsiva que se captura. */
+  function identificacionesRegistradas(token, personas) {
+    operar_(token);
+    return LineasUtil.paraCliente(LineasIdentificaciones.registradas(personas));
+  }
+
   /** Genera (o regenera) el PDF de una inspección/responsiva capturada en el sistema. */
   function generarPdf(token, tipo, id, forzar, firmas) {
     const sesion = operar_(token);
@@ -656,7 +664,7 @@ const TelefoniaService = (function () {
 
   return {
     permisos, indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, responsiva, catalogos, colaboradores, bitacora, formularioRegistro, recargarDatos,
-    contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf, subirPdfFirmado, crearRegistro, editarRegistro,
+    contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, identificacionesRegistradas, generarPdf, subirPdfFirmado, crearRegistro, editarRegistro,
     reasignar, vincular, fotosInspeccion, exportarBase, archivo, patronAppSheet, ultimoDocumentoNuco,
     notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva, panorama,
     formularioResguardo, mandarResguardo, mandarCancelacion, bandejaResguardos, accionBandejaResguardo,

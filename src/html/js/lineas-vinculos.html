@@ -1,0 +1,1104 @@
+<script>
+  /**
+   * lineas-vinculos.html — Líneas Telefónicas › Vínculos (usuario, 8-oct).
+   *
+   * Dos vistas, con el cajón al lado:
+   * - Grafo: todo lo que cabe en la pantalla, flotando como red y sin lugar fijo (cada persona con sus equipos y
+   *   líneas, y lo suelto). Se filtra y lo que interesa se mete al cajón.
+   * - Lienzo: en blanco. Se saca del cajón lo que se va a trabajar y ahí se vincula, se cambia, se desvincula o se
+   *   reasigna. Lo que se olvidó se busca en el grafo, se mete al cajón y se vuelve al lienzo, que sigue como quedó.
+   * Resguardo, Venta y desecho y Cancelación son módulos (usuario, 8-oct), en las dos vistas: una caja que se pone, se
+   * mueve, se estira y se quita, con lo de su estatus flotando adentro (con su buscador; estirada caben más). En el
+   * lienzo se saca de un módulo (un equipo de Resguardo a una persona) o se mete a uno.
+   *
+   * Soltar en el lienzo abre la acción que ya existe (vincular, cambiar, desvincular, mandar a resguardo o a
+   * cancelación, reasignar) con su ventana, su comentario y su responsiva: aquí no se guarda nada ni hay reglas nuevas.
+   * El cajón y el lienzo se recuerdan en el navegador (claves y posiciones, nada más).
+   *
+   * lineas.html lo monta (montar) con el índice y las acciones. agrupar, red, cajaDe, alSoltar y describir no tocan la
+   * pantalla (tests/lineas-vinculos.test.cjs).
+   */
+  const LineasVinculos = (function () {
+    'use strict';
+
+    const may = (v) => String(v === null || v === undefined ? '' : v).trim().toUpperCase();
+    const normal = (s) => String(s === null || s === undefined ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const miles = (n) => Number(n || 0).toLocaleString('es-MX');
+
+    // Estatus del catálogo (LineasRepo.CATALOGO) y los de antes del 30-sep que siguen en la hoja (COLOR_ESTATUS de
+    // lineas.html). En uso solo lo que está en uso; lo que no se reconoce cuenta como baja (FUERA DE INVENTARIO,
+    // ROBADO…) y sale solo al buscar
+    const USO_EQUIPO = ['', 'USO', 'EN USO', 'ESPERA DE RESPONSIVA', 'EN ENVIO'];
+    const VENTA = ['PARA VENTA', 'PARA DESECHO', 'POSIBLE VENTA', 'VENTA'];
+    const USO_LINEA = ['', 'USO', 'EN USO', 'DISPONIBLE', 'USO TEMPORAL', 'ESPERA DE RESPONSIVA', 'ESPERA DE EQUIPO', 'SUSPENDIDA', 'RENOVADA'];
+    // Lo mismo que pide LineasAcciones.vincular (ESTATUS_VINCULABLE) y la ventana de Vincular
+    const VINCULABLE = ['USO', 'RESGUARDO'];
+    const ICONO_EQUIPO = { CELULAR: 'smartphone', CELULAR_BASICO: 'smartphone', MODEM: 'router', BANDA_ANCHA: 'wifi', CAMARA: 'cctv' };
+    // Un responsable como «RES-12» es el código de un resguardo del AppSheet, no una persona (LineasRepo.convertirRegistro)
+    const esCodigoResguardo = (s) => /^[A-Z]{1,4}-\d+/i.test(String(s || '').trim());
+
+    /** Lo que se prende y se apaga en el grafo. Resguardo, venta y cancelación no: son módulos (CAJAS). */
+    const CAPAS = [
+      { id: 'personas', titulo: 'Personas', icono: 'users', inicial: true },
+      { id: 'sueltos', titulo: 'Sueltos', icono: 'unlink', inicial: true },
+    ];
+    const CAJAS = { resguardo: { titulo: 'Resguardo', icono: 'archive' }, venta: { titulo: 'Venta y desecho', icono: 'tag' },
+      cancelacion: { titulo: 'Cancelación', icono: 'phone-off' } };
+    const LLAVE = 'lineas.vinculos.v1';
+
+    function zonaEquipo(e) {
+      const s = may(e.estatus);
+      if (USO_EQUIPO.indexOf(s) >= 0) return 'uso';
+      return s === 'RESGUARDO' ? 'resguardo' : 'venta';
+    }
+    const zonaLinea = (l) => (USO_LINEA.indexOf(may(l.estatus)) >= 0 ? 'uso' : 'cancelacion');
+    const arrastraEquipo = (e) => zonaEquipo(e) !== 'venta' || VENTA.indexOf(may(e.estatus)) >= 0;
+    const capaDe = (g) => (g.zona === 'uso' ? (g.persona ? 'personas' : 'sueltos') : g.zona);
+
+    /** Orden fijo pero revuelto (lo suelto convive con las personas): el mismo grupo cae siempre en el mismo lugar. */
+    function hash(s) {
+      let h = 5381;
+      for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+      return h >>> 0;
+    }
+
+    /**
+     * Grupos del índice de Líneas Telefónicas (memoria.indice de lineas.html): una persona con sus equipos (cada uno con
+     * su línea) y sus líneas sin equipo; un equipo sin persona con su línea; una línea suelta. Cada grupo lleva la zona
+     * de su estatus. filtro = { q, departamento, compania, todo }: sin búsqueda no salen las bajas (equipos VENDIDO,
+     * DONADO, DESECHADO, EXTRAVIO-ROBO o de antes como FUERA DE INVENTARIO; líneas CANCELADA), salvo con `todo`; con
+     * búsqueda sale todo lo que coincide, y con comas se buscan varias cosas a la vez.
+     * → { zonas: { uso, resguardo, venta, cancelacion }, departamentos, companias }
+     */
+    function agrupar(ix, filtro) {
+      const f = filtro || {};
+      const equipos = (ix && ix.equipos) || [];
+      const lineas = (ix && ix.lineas) || [];
+      const conEquipo = {};
+      equipos.forEach((e) => { conEquipo[e.id] = true; });
+      const lineaDe = {};
+      lineas.forEach((l) => { if (l.equipoId && conEquipo[l.equipoId]) lineaDe[l.equipoId] = l; });
+      const grupos = [];
+      const personas = {};
+      const grupoDePersona = (fila) => {
+        const nombre = String(fila.responsable || '').trim();
+        if (!nombre || esCodigoResguardo(nombre)) return null;
+        const no = String(fila['NO EMPLEADO'] || '').trim();
+        const clave = 'p:' + (no || normal(nombre));
+        if (!personas[clave]) {
+          personas[clave] = { clave: clave, zona: 'uso', pares: [],
+            persona: { clave: clave, nombre: nombre, noEmpleado: no, departamento: fila.departamento || '', puesto: fila['PUESTO'] || '' } };
+          grupos.push(personas[clave]);
+        }
+        return personas[clave];
+      };
+      equipos.forEach((e) => {
+        // Por si la línea no viene en el índice de líneas: la del equipo, con lo que trae su fila
+        const linea = lineaDe[e.id] || (e.lineaId ? { id: e.lineaId, numero: e.numero, compania: e.compania, estatus: e.estatusLinea, equipoId: e.id } : null);
+        const zona = zonaEquipo(e);
+        const par = { equipo: e, linea: linea };
+        const g = zona === 'uso' ? grupoDePersona(e) : null;
+        if (g) g.pares.push(par);
+        else grupos.push({ clave: 'e:' + e.id, zona: zona, persona: null, pares: [par], baja: !arrastraEquipo(e) });
+      });
+      lineas.forEach((l) => {
+        if (l.equipoId && conEquipo[l.equipoId]) return;
+        const zona = zonaLinea(l);
+        const par = { equipo: null, linea: l };
+        // Una línea sola con responsable (en USO) va con la persona; DISPONIBLE, suelta
+        const g = zona === 'uso' && may(l.estatus) !== 'DISPONIBLE' ? grupoDePersona(l) : null;
+        if (g) g.pares.push(par);
+        else grupos.push({ clave: 'l:' + l.id, zona: zona, persona: null, pares: [par], baja: zona === 'cancelacion' && may(l.estatus) !== 'EN PROCESO DE CANCELACION' });
+      });
+
+      const departamentos = {};
+      const companias = {};
+      grupos.forEach((g) => {
+        const partes = [];
+        const deptos = [];
+        const cias = [];
+        if (g.persona) {
+          partes.push(g.persona.nombre, g.persona.noEmpleado, g.persona.departamento, g.persona.puesto);
+          deptos.push(g.persona.departamento);
+        }
+        g.pares.forEach((p) => {
+          const e = p.equipo;
+          const l = p.linea;
+          if (e) {
+            partes.push(e.nuco ? 'nuco ' + e.nuco : '', e.modelo, e.imei, e.estatus, e.responsable, e.departamento, e.sede);
+            deptos.push(e.departamento);
+          }
+          if (l) {
+            partes.push(l.numero, l.numerosAnteriores, l.sim, l.compania, l.estatus, l.responsable, l.departamento);
+            deptos.push(l.departamento);
+            cias.push(l.compania);
+          }
+        });
+        g.capa = capaDe(g);
+        g.texto = normal(partes.filter(Boolean).join(' '));
+        g.deptos = deptos.map(may).filter(Boolean);
+        g.companias = cias.map(may).filter(Boolean);
+        g.deptos.forEach((d) => { departamentos[d] = true; });
+        g.companias.forEach((c) => { companias[c] = true; });
+      });
+
+      // Con comas, varias búsquedas a la vez («0012, 4421090805»): el equipo y la línea que se van a juntar
+      const busquedas = normal(f.q).split(',').map((b) => b.split(/\s+/).filter(Boolean)).filter((b) => b.length);
+      const depto = may(f.departamento);
+      const cia = may(f.compania);
+      const zonas = { uso: [], resguardo: [], venta: [], cancelacion: [] };
+      grupos.filter((g) => (busquedas.length ? busquedas.some((b) => b.every((p) => g.texto.indexOf(p) >= 0)) : (f.todo || !g.baja)) &&
+        (!depto || g.deptos.indexOf(depto) >= 0) && (!cia || g.companias.indexOf(cia) >= 0))
+        .sort((a, b) => hash(a.clave) - hash(b.clave))
+        .forEach((g) => zonas[g.zona].push(g));
+      return { zonas: zonas, departamentos: Object.keys(departamentos).sort(), companias: Object.keys(companias).sort() };
+    }
+
+    /** Claves de los nodos de un grupo: 'p:<persona>', 'e:<id del equipo>', 'l:<id de la línea>'. */
+    function clavesDe(g) {
+      const k = g.persona ? [g.persona.clave] : [];
+      g.pares.forEach((p) => {
+        if (p.equipo) k.push('e:' + p.equipo.id);
+        if (p.linea) k.push('l:' + p.linea.id);
+      });
+      return k;
+    }
+
+    /**
+     * La red completa (con las bajas): cada nodo con lo que es ({ clave, tipo: 'persona' | 'equipo' | 'linea', fila,
+     * persona, equipo, linea, dueno (clave de su persona), ref, grupo }) y sus vínculos [a, b, 'p' persona o 'l' línea].
+     * `ref` (número o NUCO) sirve para encontrar el nodo si su clave cambió después de una acción.
+     */
+    function red(ix) {
+      const r = agrupar(ix, { todo: true });
+      const nodos = {};
+      const porRef = {};
+      const enlaces = [];
+      Object.keys(r.zonas).forEach((z) => r.zonas[z].forEach((g) => {
+        const dueno = g.persona ? g.persona.clave : null;
+        if (g.persona) nodos[dueno] = { clave: dueno, tipo: 'persona', persona: g.persona, grupo: g, ref: dueno };
+        g.pares.forEach((p) => {
+          const ke = p.equipo ? 'e:' + p.equipo.id : null;
+          const kl = p.linea ? 'l:' + p.linea.id : null;
+          if (ke) nodos[ke] = { clave: ke, tipo: 'equipo', fila: p.equipo, linea: p.linea, dueno: dueno, grupo: g, ref: 'u:' + (p.equipo.nuco || p.equipo.id) };
+          if (kl) nodos[kl] = { clave: kl, tipo: 'linea', fila: p.linea, equipo: p.equipo, dueno: dueno, grupo: g, ref: 'n:' + (p.linea.numero || p.linea.id) };
+          if (dueno) enlaces.push([dueno, ke || kl, 'p']);
+          if (ke && kl) enlaces.push([ke, kl, 'l']);
+        });
+      }));
+      Object.keys(nodos).forEach((k) => { porRef[nodos[k].ref] = k; });
+      return { nodos: nodos, porRef: porRef, enlaces: enlaces };
+    }
+
+    /** La caja del lienzo donde vive un nodo por su estatus (la línea de un equipo, con su equipo), o null. */
+    function cajaDe(info) {
+      if (!info || info.tipo === 'persona') return null;
+      const equipo = info.tipo === 'equipo' ? info.fila : info.equipo;
+      if (equipo) {
+        const z = zonaEquipo(equipo);
+        return z === 'uso' ? null : z;
+      }
+      return zonaLinea(info.fila) === 'cancelacion' ? 'cancelacion' : null;
+    }
+
+    /**
+     * Qué acción abre soltar `origen` en `destino` en el lienzo (null si solo se movió, o { aviso } si no se puede).
+     * origen = { tipo: 'linea' | 'equipo', fila, equipo (el de la línea), dueno (clave de su persona) };
+     * destino = { tipo: 'equipo', fila, linea } | { tipo: 'persona', persona } | { tipo: 'caja', caja }.
+     * → { tipo: 'vinculo', modo, fila, pre } (abrirVinculo) | { tipo: 'cancelacion', fila } | { tipo: 'resguardo', fila,
+     * estatus } | { tipo: 'reasignar', fila, persona }
+     */
+    function alSoltar(o, d) {
+      if (!o || !d) return null;
+      if (o.tipo === 'linea') {
+        const l = o.fila;
+        if (d.tipo === 'equipo') {
+          const e = d.fila;
+          if (o.equipo && o.equipo.id === e.id) return null;
+          if (!e.nuco || VINCULABLE.indexOf(may(e.estatus)) < 0) {
+            return { aviso: 'NUCO ' + (e.nuco || '—') + ' está en ' + (may(e.estatus) || 'sin estatus') + ': la línea solo va a equipos en USO o RESGUARDO' };
+          }
+          if (o.equipo) {
+            if (d.linea) return { aviso: 'NUCO ' + e.nuco + ' ya tiene línea: desvincúlala primero' };
+            return { tipo: 'vinculo', modo: 'CAMBIAR_EQUIPO', fila: l, linea: l, desde: o.equipo, hacia: e, pre: { nuco: String(e.nuco) } };
+          }
+          if (may(l.estatus) !== 'DISPONIBLE' || !l.numero) return { aviso: 'Solo se vinculan líneas DISPONIBLE (' + (l.numero || 'sin número') + ' está en ' + (may(l.estatus) || 'sin estatus') + ')' };
+          return { tipo: 'vinculo', modo: d.linea ? 'CAMBIAR_LINEA' : 'VINCULAR_LINEA', fila: e, linea: l, anterior: d.linea || null, hacia: e, pre: { linea: String(l.numero) } };
+        }
+        if (d.tipo === 'caja') {
+          if (d.caja !== 'cancelacion') return { aviso: 'La línea entra a ' + CAJAS[d.caja].titulo + ' con su equipo: arrastra el equipo' };
+          if (zonaLinea(l) === 'cancelacion') return null;
+          if (!l.numero) return { aviso: 'La línea no tiene número' };
+          return { tipo: 'cancelacion', fila: l };
+        }
+        return null;
+      }
+      if (o.tipo !== 'equipo') return null;
+      const e = o.fila;
+      if (d.tipo === 'persona') return o.dueno === d.persona.clave ? null : { tipo: 'reasignar', fila: e, persona: d.persona };
+      if (d.tipo !== 'caja') return null;
+      if (d.caja === 'resguardo') return may(e.estatus) === 'RESGUARDO' ? null : { tipo: 'resguardo', fila: e, estatus: 'RESGUARDO' };
+      if (d.caja === 'venta') return VENTA.indexOf(may(e.estatus)) >= 0 ? null : { tipo: 'resguardo', fila: e, estatus: 'PARA VENTA' };
+      if (d.caja === 'cancelacion') return { aviso: 'A cancelación va la línea: arrastra la línea, no el equipo' };
+      return null;
+    }
+
+    /** El nombre de la acción y lo que mueve, como se ve junto a lo que se arrastra. */
+    function describir(a) {
+      if (!a) return '';
+      if (a.aviso) return a.aviso;
+      const num = (l) => (l && l.numero) || '—';
+      const nuco = (e) => 'NUCO ' + ((e && e.nuco) || '—');
+      if (a.tipo === 'vinculo') {
+        if (a.modo === 'VINCULAR_LINEA') return 'Vincular línea · ' + num(a.linea) + ' → ' + nuco(a.hacia);
+        if (a.modo === 'CAMBIAR_LINEA') return 'Cambiar línea · ' + nuco(a.hacia) + ' · ' + num(a.anterior) + ' → ' + num(a.linea);
+        if (a.modo === 'CAMBIAR_EQUIPO') return 'Cambiar de equipo · ' + num(a.linea) + ' · ' + nuco(a.desde) + ' → ' + nuco(a.hacia);
+        if (a.modo === 'DESVINCULAR') return 'Desvincular línea · ' + num(a.linea) + ' · ' + nuco(a.fila);
+      }
+      if (a.tipo === 'cancelacion') return 'Mandar a cancelación · ' + num(a.fila);
+      if (a.tipo === 'resguardo') return (a.estatus === 'RESGUARDO' ? 'Mandar a resguardo · ' : 'Venta o desecho · ') + nuco(a.fila);
+      if (a.tipo === 'reasignar') return 'Reasignar · ' + nuco(a.fila) + (a.persona ? ' → ' + a.persona.nombre : '');
+      return '';
+    }
+
+    /**
+     * Pinta Vínculos en `cont`. cfg = { indice() (memoria.indice), puedeOperar(), icono(nombre), esc(texto),
+     * color(estatus) ('verde', 'azul', 'ambar', 'rojo' o ''), alVer(tipo, fila), alAbrir(tipo, fila), alSoltar(accion),
+     * alAvisar(texto) }. Regresa { pintar }.
+     */
+    function montar(cont, cfg) {
+      const ic = cfg.icono;
+      const esc = cfg.esc;
+      const filtro = { q: '', departamento: '', compania: '', capas: {} };
+      CAPAS.forEach((c) => { filtro.capas[c.id] = !!c.inicial; });
+      let catalogo = { nodos: {}, porRef: {}, enlaces: [] };
+      let modo = 'grafo';
+      let cajon = []; // [[claves]]: cada entrada es una relación o lo que se regresó del lienzo
+      let recuerdo = {}; // clave → { ref, tipo, persona }: para encontrarla si cambió y para la persona que se quedó sin equipo
+      let guardado = null; // el lienzo leído del navegador, se arma cuando llega el índice
+      let guardadoGrafo = null; // los módulos puestos en el grafo
+      let opcionesPintadas = '';
+      let seleccion = null; // clave del nodo elegido en el grafo
+
+      try {
+        const g = JSON.parse(localStorage.getItem(LLAVE) || 'null');
+        if (g && Array.isArray(g.cajon)) {
+          cajon = g.cajon.filter((x) => Array.isArray(x) && x.length);
+          recuerdo = g.recuerdo || {};
+          guardado = g.lienzo || null;
+          guardadoGrafo = g.grafo || null;
+          modo = g.modo === 'lienzo' ? 'lienzo' : 'grafo';
+        }
+      } catch (e) { /* sin navegador o dañado: se empieza en blanco */ }
+
+      cont.innerHTML =
+        '<div class="vn-barra">' +
+          '<div class="ln-segmentado vn-modo" role="group" aria-label="Vista">' +
+            '<button type="button" class="secondary" data-vn-modo="grafo">' + ic('waypoints') + ' Grafo</button>' +
+            '<button type="button" class="secondary" data-vn-modo="lienzo">' + ic('square-dashed') + ' Lienzo</button></div>' +
+          '<label class="vn-buscar" data-vn-solo="grafo">' + ic('search') + '<input type="search" data-vn-q placeholder="Persona, NUCO, número, IMEI · varios con coma" aria-label="Buscar"></label>' +
+          '<select data-vn-filtro="departamento" data-vn-solo="grafo" aria-label="Departamento"><option value="">Departamento</option></select>' +
+          '<select data-vn-filtro="compania" data-vn-solo="grafo" aria-label="Compañía"><option value="">Compañía</option></select>' +
+        '</div>' +
+        '<div class="vn-barra vn-barra-2">' +
+          '<span class="vn-capas" data-vn-solo="grafo">' + CAPAS.map((c) => '<button type="button" class="vn-capa" data-vn-capa="' + c.id + '">' +
+            ic(c.icono) + ' ' + esc(c.titulo) + '</button>').join('') + '</span>' +
+          '<span class="vn-cajas">' + Object.keys(CAJAS).map((id) => '<button type="button" class="secondary vn-poner" data-vn-poner="' + id + '">' +
+            ic('plus') + ' ' + esc(CAJAS[id].titulo) + '</button>').join('') + '</span>' +
+          '<span class="vn-cuenta" data-vn-cuenta data-vn-solo="grafo"></span>' +
+          '<button type="button" class="secondary" data-vn-todo data-vn-solo="grafo" hidden>' + ic('inbox') + ' <span></span></button>' +
+          '<button type="button" class="secondary" data-vn-vaciar data-vn-solo="lienzo">' + ic('eraser') + ' Vaciar lienzo</button>' +
+          '<button type="button" class="secondary vn-icono" data-vn-centrar title="Centrar" aria-label="Centrar">' + ic('scan') + '</button>' +
+        '</div>' +
+        '<div class="vn-cuerpo">' +
+          '<aside class="vn-cajon" data-vn-cajon><header>' + ic('inbox') + ' Cajón <span data-vn-cajon-num></span></header>' +
+            '<div class="vn-cajon-lista" data-vn-cajon-lista></div>' +
+            '<button type="button" class="secondary" data-vn-ir></button></aside>' +
+          '<div class="vn-vista" data-vn-vista>' +
+            '<div class="vn-espacio" data-vn-espacio="grafo"></div><div class="vn-espacio" data-vn-espacio="lienzo"></div>' +
+            '<p class="vn-vacio" data-vn-vacio></p>' +
+            '<div class="vn-sel" data-vn-sel hidden></div>' +
+            '<div class="vn-letrero" data-vn-letrero hidden></div>' +
+          '</div>' +
+        '</div>';
+
+      const $ = (sel) => cont.querySelector(sel);
+      const vista = $('[data-vn-vista]');
+      const letrero = $('[data-vn-letrero]');
+
+      // ---- Espacios: el grafo y el lienzo, cada uno con su mundo (lo que se acerca, se aleja y se mueve) ----
+      function crearEspacio(tipo) {
+        const raiz = $('[data-vn-espacio="' + tipo + '"]');
+        raiz.innerHTML = '<div class="vn-mundo"><svg class="vn-svg" width="1" height="1"></svg></div>';
+        return { tipo: tipo, raiz: raiz, mundo: raiz.firstChild, svg: raiz.firstChild.firstChild, nodos: new Map(), enlaces: [],
+          cajas: {}, vista: { x: 0, y: 0, k: 1 }, alfa: 1, luz: null, cortes: new Map(), centrado: false };
+      }
+      const grafo = crearEspacio('grafo');
+      const lienzo = crearEspacio('lienzo');
+      const activo = () => (modo === 'lienzo' ? lienzo : grafo);
+
+      function resolver(k) {
+        if (catalogo.nodos[k]) return catalogo.nodos[k];
+        const m = recuerdo[k];
+        if (m && m.ref && catalogo.porRef[m.ref]) return catalogo.nodos[catalogo.porRef[m.ref]];
+        // La persona que se quedó sin equipos sigue en el lienzo: a ella se le puede reasignar uno
+        if (m && m.tipo === 'persona' && m.persona) return { clave: k, tipo: 'persona', persona: m.persona, huerfana: true, ref: k };
+        return null;
+      }
+      function recordar(info) {
+        recuerdo[info.clave] = { ref: info.ref, tipo: info.tipo, persona: info.tipo === 'persona' ? info.persona : undefined };
+      }
+      const etiqueta = (i) => (i.tipo === 'persona' ? i.persona.nombre : i.tipo === 'equipo' ? (i.fila.nuco || '—') : (i.fila.numero || '—'));
+      function titulo(i) {
+        if (i.tipo === 'persona') return [i.persona.nombre, i.persona.noEmpleado ? 'No. ' + i.persona.noEmpleado : '', i.persona.puesto, i.persona.departamento].filter(Boolean).join(' · ');
+        if (i.tipo === 'equipo') return ['NUCO ' + (i.fila.nuco || '—'), i.fila.modelo, i.fila.estatus].filter(Boolean).join(' · ');
+        return ['Línea ' + (i.fila.numero || '—'), i.fila.compania, i.fila.estatus, i.fila.numerosAnteriores ? 'antes ' + i.fila.numerosAnteriores : ''].filter(Boolean).join(' · ');
+      }
+      const iconoDe = (i) => (i.tipo === 'persona' ? 'user-round' : i.tipo === 'linea' ? 'card-sim' : (ICONO_EQUIPO[may(i.fila.tipo)] || 'smartphone'));
+      const colorDe = (i) => (i.tipo === 'persona' ? (i.huerfana ? 'neutro' : 'persona') : (cfg.color(i.fila.estatus) || 'neutro'));
+
+      function pintarNodo(esp, n) {
+        const i = n.info;
+        const clave = iconoDe(i) + '|' + etiqueta(i);
+        if (n.dibujo !== clave) {
+          n.dibujo = clave;
+          n.el.innerHTML = '<span class="vn-ico">' + (ic(iconoDe(i)) || ic('smartphone')) + '</span><span class="vn-etq">' + esc(etiqueta(i)) + '</span>';
+        }
+        n.el.className = 'vn-n vn-' + i.tipo + ' vn-' + colorDe(i) + (esp.luz ? (esp.luz.has(n.k) ? ' vn-luz' : ' vn-tenue') : '') + (n.arrastre ? ' vn-arrastre' : '');
+        n.el.title = titulo(i);
+      }
+      function agregarNodo(esp, info, x, y) {
+        const n = { k: info.clave, info: info, x: x, y: y, vx: 0, vy: 0, fijo: false, ph: Math.random() * 6.3 };
+        n.el = document.createElement('div');
+        n.el.dataset.vnK = info.clave;
+        esp.mundo.appendChild(n.el);
+        esp.nodos.set(info.clave, n);
+        pintarNodo(esp, n);
+        return n;
+      }
+      function quitarNodo(esp, k) {
+        const n = esp.nodos.get(k);
+        if (!n) return;
+        n.el.remove();
+        esp.nodos.delete(k);
+      }
+      function recalcularEnlaces(esp) {
+        esp.enlaces = catalogo.enlaces.filter(([a, b]) => esp.nodos.has(a) && esp.nodos.has(b));
+        esp.alfa = Math.max(esp.alfa, 0.5);
+      }
+      const centroDe = (esp) => ({ x: (vista.clientWidth / 2 - esp.vista.x) / esp.vista.k, y: (vista.clientHeight / 2 - esp.vista.y) / esp.vista.k });
+
+      /** Deja en el espacio exactamente `claves`; lo nuevo aparece junto a lo suyo o cerca de `cerca`. */
+      function sincronizar(esp, claves, cerca) {
+        let cambio = false;
+        [...esp.nodos.keys()].forEach((k) => { if (!claves.has(k)) { quitarNodo(esp, k); cambio = true; } });
+        const centro = cerca || centroDe(esp);
+        const radio = cerca ? 40 : Math.min(vista.clientWidth, vista.clientHeight) / (2 * esp.vista.k);
+        claves.forEach((k) => {
+          const info = resolver(k);
+          if (!info) return;
+          const n = esp.nodos.get(k);
+          if (n) { n.info = info; pintarNodo(esp, n); return; }
+          const vecino = catalogo.enlaces.filter((x) => x[0] === k || x[1] === k).map((x) => esp.nodos.get(x[0] === k ? x[1] : x[0])).filter(Boolean)[0];
+          const a = Math.random() * 6.3;
+          const r = vecino ? 30 : Math.random() * radio;
+          agregarNodo(esp, info, (vecino ? vecino.x : centro.x) + Math.cos(a) * r, (vecino ? vecino.y : centro.y) + Math.sin(a) * r).nuevo = true;
+          cambio = true;
+        });
+        recalcularEnlaces(esp);
+        // Cuando cambia lo que se ve, el grafo se acomoda y se aleja solo para que quepa todo
+        if (esp.tipo === 'grafo' && cambio) esp.ajustar = performance.now() + 1400;
+      }
+
+      // ---- Grafo: todo lo que cabe en la pantalla ----
+      function capacidad() {
+        const area = Math.max(vista.clientWidth, 320) * Math.max(vista.clientHeight, 320);
+        return Math.max(80, Math.min(500, Math.floor(area / 1500)));
+      }
+      function llenarOpciones(r) {
+        const firma = JSON.stringify([r.departamentos, r.companias]);
+        if (firma === opcionesPintadas) return;
+        opcionesPintadas = firma;
+        [['departamento', r.departamentos, 'Departamento'], ['compania', r.companias, 'Compañía']].forEach(([campo, lista, vacio]) => {
+          const sel = cont.querySelector('[data-vn-filtro="' + campo + '"]');
+          sel.innerHTML = '<option value="">' + esc(vacio) + '</option>' + lista.map((v) => '<option value="' + esc(v) + '">' + esc(v) + '</option>').join('');
+          sel.value = lista.indexOf(filtro[campo]) >= 0 ? filtro[campo] : '';
+          filtro[campo] = sel.value;
+        });
+      }
+      let gruposGrafo = []; // los que coinciden con el filtro y las capas (para «Todo al cajón»)
+      function pintarGrafo(ix) {
+        const r = agrupar(ix, filtro);
+        llenarOpciones(r);
+        gruposGrafo = [].concat(r.zonas.uso, r.zonas.resguardo, r.zonas.venta, r.zonas.cancelacion)
+          .filter((g) => filtro.capas[g.capa]).sort((a, b) => hash(a.clave) - hash(b.clave));
+        const cap = capacidad();
+        const claves = new Set();
+        let visibles = 0;
+        for (let i = 0; i < gruposGrafo.length; i++) {
+          const k = clavesDe(gruposGrafo[i]);
+          if (claves.size + k.length > cap && visibles) break;
+          k.forEach((x) => claves.add(x));
+          visibles++;
+        }
+        if (guardadoGrafo) { (guardadoGrafo.cajas || []).forEach((c) => { if (CAJAS[c[0]]) ponerCaja(grafo, c[0], { x: c[1], y: c[2], w: c[3], h: c[4], q: c[5] || '' }); }); guardadoGrafo = null; }
+        const modulos = enModulos(grafo, ix);
+        modulos.forEach((id, k) => claves.add(k));
+        sincronizar(grafo, claves);
+        aplicarModulos(grafo, modulos);
+        if (seleccion && !grafo.nodos.has(seleccion)) elegir(null);
+        $('[data-vn-cuenta]').textContent = (visibles < gruposGrafo.length ? miles(visibles) + ' de ' : '') + miles(gruposGrafo.length) + ' relaciones';
+        const conFiltro = !!(filtro.q || filtro.departamento || filtro.compania);
+        const todo = $('[data-vn-todo]');
+        todo.hidden = !conFiltro || !gruposGrafo.length || gruposGrafo.length > 60;
+        todo.querySelector('span').textContent = 'Todo al cajón (' + miles(gruposGrafo.length) + ')';
+        $('[data-vn-vacio]').textContent = gruposGrafo.length || modulos.size ? '' : (conFiltro ? 'Sin coincidencias' : 'Prende Personas o Sueltos, o pon un módulo');
+        if (!grafo.centrado && grafo.nodos.size) { grafo.centrado = true; grafo.vista.x = 0; grafo.vista.y = 0; }
+      }
+
+      // ---- Lienzo ----
+      function pintarLienzo() {
+        if (guardado) { armarGuardado(); guardado = null; }
+        // Lo que cambió de clave después de una acción (la línea separada de su equipo) se busca por su número o NUCO
+        [...lienzo.nodos.values()].forEach((n) => {
+          if (n.modulo) return;
+          const info = resolver(n.k);
+          if (!info) { quitarNodo(lienzo, n.k); return; }
+          if (info.clave !== n.k) {
+            lienzo.nodos.delete(n.k);
+            n.k = info.clave;
+            n.el.dataset.vnK = info.clave;
+            lienzo.nodos.set(n.k, n);
+          }
+          n.info = info;
+          recordar(info);
+          pintarNodo(lienzo, n);
+        });
+        const ix = cfg.indice();
+        if (ix) {
+          const modulos = enModulos(lienzo, ix);
+          [...lienzo.nodos.values()].forEach((n) => { if (n.modulo && !modulos.has(n.k)) quitarNodo(lienzo, n.k); });
+          aplicarModulos(lienzo, modulos);
+        }
+        recalcularEnlaces(lienzo);
+        $('[data-vn-vacio]').textContent = lienzo.nodos.size || Object.keys(lienzo.cajas).length ? '' : (cajon.length ? 'Arrastra aquí lo del cajón' : 'Busca en el grafo y mete al cajón lo que vas a trabajar');
+      }
+      function armarGuardado() {
+        const g = guardado;
+        if (Array.isArray(g.vista)) lienzo.vista = { x: g.vista[0] || 0, y: g.vista[1] || 0, k: g.vista[2] || 1 };
+        (g.cajas || []).forEach((c) => { if (CAJAS[c[0]]) ponerCaja(lienzo, c[0], { x: c[1], y: c[2], w: c[3], h: c[4], q: c[5] || '' }); });
+        (g.nodos || []).forEach((x) => {
+          const info = resolver(x[0]);
+          if (!info || lienzo.nodos.has(info.clave)) return;
+          agregarNodo(lienzo, info, x[1], x[2]).fijo = !!x[3];
+        });
+        lienzo.centrado = true;
+      }
+      /** Pone un módulo (Resguardo, Venta y desecho, Cancelación) en el grafo o el lienzo. */
+      function ponerCaja(esp, id, pos) {
+        if (esp.cajas[id]) return;
+        const c = CAJAS[id];
+        // A un lado de lo que ya hay (la red y los otros módulos), del tamaño que se ve en la pantalla
+        const k = esp.vista.k || 1;
+        const w = Math.round(320 / k);
+        const h = Math.round(260 / k);
+        let x2 = -Infinity, y1 = Infinity;
+        esp.nodos.forEach((m) => { if (!m.modulo) { x2 = Math.max(x2, m.x); y1 = Math.min(y1, m.y); } });
+        const otras = Object.values(esp.cajas);
+        const centro = centroDe(esp);
+        // A la derecha de la red y de los otros módulos; uno debajo del otro
+        const derecha = Math.max(isFinite(x2) ? x2 : centro.x - w / 2 - 80 / k, ...otras.map((o) => o.x - 80 / k));
+        const arriba = isFinite(y1) ? y1 : centro.y - h / 2;
+        const abajo = otras.filter((o) => o.x - 80 / k >= derecha - 1).reduce((t, o) => Math.max(t, o.y + o.h + 40 / k), arriba);
+        const caja = Object.assign({ id: id, x: derecha + 80 / k, y: abajo, w: w, h: h, q: '' }, pos || {});
+        caja.el = document.createElement('div');
+        caja.el.className = 'vn-caja';
+        caja.el.dataset.vnCaja = id;
+        caja.el.innerHTML = '<header class="vn-caja-cabeza">' + ic(c.icono) + '<span class="vn-caja-titulo">' + esc(c.titulo) + '</span>' +
+          '<input type="search" class="vn-caja-buscar" data-vn-caja-q placeholder="Buscar" aria-label="Buscar en ' + esc(c.titulo) + '" value="' + esc(caja.q) + '">' +
+          '<span class="vn-caja-num" data-vn-caja-num></span>' +
+          '<button type="button" class="vn-caja-quitar" data-vn-quitar-caja title="Quitar módulo" aria-label="Quitar módulo">' + ic('x') + '</button></header>' +
+          '<span class="vn-caja-estirar" data-vn-estirar aria-hidden="true">' + ic('move-diagonal-2') + '</span>';
+        esp.mundo.insertBefore(caja.el, esp.svg);
+        esp.cajas[id] = caja;
+      }
+      function quitarCaja(esp, id) {
+        const c = esp.cajas[id];
+        if (!c) return;
+        c.el.remove();
+        delete esp.cajas[id];
+        [...esp.nodos.values()].forEach((n) => { if (n.modulo === id) quitarNodo(esp, n.k); });
+        pintar();
+        guardar();
+      }
+      /**
+       * Lo que va dentro de cada módulo puesto: lo de su estatus (su buscador; en el grafo, también departamento y
+       * compañía), lo que quepa por su tamaño. En el lienzo no repite lo que ya está suelto en el lienzo ni lo del cajón.
+       * → Map clave → id del módulo
+       */
+      function enModulos(esp, ix) {
+        const mapa = new Map();
+        Object.values(esp.cajas).forEach((c) => {
+          const r = agrupar(ix, { q: c.q, departamento: esp === grafo ? filtro.departamento : '', compania: esp === grafo ? filtro.compania : '' });
+          const grupos = r.zonas[c.id] || [];
+          const cabe = Math.max(4, Math.floor(c.w * c.h / 5000));
+          let puestos = 0;
+          let caben = 0;
+          for (let i = 0; i < grupos.length; i++) {
+            const claves = clavesDe(grupos[i]).filter((k) => {
+              const n = esp.nodos.get(k);
+              return !(n && !n.modulo) && !(esp === lienzo && cajon.some((e) => e.indexOf(k) >= 0));
+            });
+            if (puestos + claves.length > cabe && caben) break;
+            claves.forEach((k) => mapa.set(k, c.id));
+            puestos += claves.length;
+            caben++;
+          }
+          c.el.querySelector('[data-vn-caja-num]').textContent = (caben < grupos.length ? miles(caben) + ' de ' : '') + miles(grupos.length);
+        });
+        return mapa;
+      }
+      /** Pone en su módulo lo que va adentro (lo nuevo aparece dentro de la caja). */
+      function aplicarModulos(esp, mapa) {
+        mapa.forEach((id, k) => {
+          const c = esp.cajas[id];
+          let n = esp.nodos.get(k);
+          if (n && !n.modulo && esp === lienzo) return;
+          if (!n) {
+            const info = resolver(k);
+            if (!info) return;
+            n = agregarNodo(esp, info, 0, 0);
+            n.nuevo = true;
+          } else n.info = resolver(k) || n.info;
+          if (n.nuevo || n.modulo !== id) {
+            n.x = c.x + 40 + Math.random() * Math.max(10, c.w - 80);
+            n.y = c.y + 70 + Math.random() * Math.max(10, c.h - 110);
+          }
+          n.nuevo = false;
+          n.modulo = id;
+          pintarNodo(esp, n);
+        });
+        esp.nodos.forEach((n) => { if (n.modulo && !mapa.has(n.k)) n.modulo = null; });
+      }
+      /** El módulo donde vive un nodo: el que lo trajo o, en el lienzo, el de su estatus si está puesto. */
+      const cajaDeNodo = (esp, n) => n.modulo || (esp === lienzo ? cajaDe(n.info) : null);
+
+      // ---- Cajón ----
+      function textoEntrada(claves) {
+        const partes = claves.map((k) => resolver(k)).filter(Boolean).map((i) => (i.tipo === 'equipo' ? 'NUCO ' : '') + etiqueta(i));
+        return partes.join(' · ') || '—';
+      }
+      function pintarCajon() {
+        // Lo que ya no existe se va; lo que cambió de clave se corrige
+        cajon = cajon.map((e) => e.map((k) => { const i = resolver(k); return i ? i.clave : null; }).filter(Boolean)).filter((e) => e.length);
+        const lienzoAbierto = modo === 'lienzo';
+        $('[data-vn-cajon-num]').textContent = cajon.length ? miles(cajon.length) : '';
+        $('[data-vn-cajon-lista]').innerHTML = cajon.length ? cajon.map((e, i) => {
+          const primero = resolver(e[0]);
+          return '<div class="vn-ficha' + (lienzoAbierto ? ' vn-ficha-saca' : '') + '" data-vn-ficha="' + i + '" title="' + esc(textoEntrada(e)) + '">' +
+            ic(primero ? iconoDe(primero) : 'circle') + '<span>' + esc(textoEntrada(e)) + '</span>' +
+            '<button type="button" class="vn-ficha-quitar" data-vn-sacar="' + i + '" title="Quitar del cajón" aria-label="Quitar del cajón">' + ic('x') + '</button></div>';
+        }).join('') : '<p class="vn-cajon-vacio">' + (lienzoAbierto ? 'Vacío' : 'Arrastra aquí lo del grafo') + '</p>';
+        const ir = $('[data-vn-ir]');
+        ir.innerHTML = lienzoAbierto ? ic('waypoints') + ' Ver grafo' : ic('square-dashed') + ' Abrir lienzo';
+      }
+      /** Mete al cajón una o varias relaciones (listas de claves), cada una en su ficha; lo que ya está se salta. */
+      function alCajon(relaciones) {
+        let metidas = 0;
+        relaciones.forEach((claves) => {
+          const nuevas = claves.filter((k) => !lienzo.nodos.has(k) && !cajon.some((e) => e.indexOf(k) >= 0));
+          if (!nuevas.length) return;
+          nuevas.forEach((k) => { const i = resolver(k); if (i) recordar(i); });
+          cajon.push(nuevas);
+          metidas++;
+        });
+        if (!metidas) { cfg.alAvisar('Ya está en el cajón o en el lienzo'); return; }
+        pintarCajon();
+        guardar();
+      }
+      /** Lo unido a `k` en el lienzo (sin lo que vive en una caja puesta, que se queda en ella). */
+      function componente(k) {
+        const s = new Set([k]);
+        let cambio = true;
+        while (cambio) {
+          cambio = false;
+          lienzo.enlaces.forEach(([a, b]) => { if (s.has(a) !== s.has(b)) { s.add(a); s.add(b); cambio = true; } });
+        }
+        return [...s];
+      }
+
+      // ---- Selección en el grafo: la relación iluminada y qué hacer con ella ----
+      function elegir(k) {
+        seleccion = k;
+        const sel = $('[data-vn-sel]');
+        const n = k && grafo.nodos.get(k);
+        if (!n) {
+          grafo.luz = null;
+          sel.hidden = true;
+        } else {
+          grafo.luz = new Set(clavesDe(n.info.grupo));
+          sel.hidden = false;
+          sel.innerHTML = '<span>' + esc(textoEntrada(clavesDe(n.info.grupo))) + '</span>' +
+            '<button type="button" class="secondary" data-vn-sel-cajon>' + ic('inbox') + ' Al cajón</button>' +
+            (n.info.tipo !== 'persona' ? '<button type="button" class="secondary vn-icono" data-vn-sel-ver title="Vista rápida" aria-label="Vista rápida">' + ic('eye') + '</button>' : '');
+        }
+        grafo.nodos.forEach((x) => pintarNodo(grafo, x));
+      }
+
+      // ---- Pintar todo ----
+      function pintar() {
+        cont.querySelectorAll('[data-vn-solo]').forEach((el) => { el.classList.toggle('vn-oculto', el.dataset.vnSolo !== modo); });
+        const ix = cfg.indice();
+        if (!ix) { $('[data-vn-vacio]').innerHTML = '<span class="ln-spinner"></span> Cargando…'; return; }
+        catalogo = red(ix);
+        cont.querySelectorAll('[data-vn-modo]').forEach((b) => {
+          b.classList.toggle('activo', b.dataset.vnModo === modo);
+          b.setAttribute('aria-pressed', String(b.dataset.vnModo === modo));
+        });
+        cont.querySelectorAll('[data-vn-solo]').forEach((el) => { el.classList.toggle('vn-oculto', el.dataset.vnSolo !== modo); });
+        cont.querySelectorAll('[data-vn-capa]').forEach((b) => {
+          b.classList.toggle('activo', !!filtro.capas[b.dataset.vnCapa]);
+          b.setAttribute('aria-pressed', String(!!filtro.capas[b.dataset.vnCapa]));
+        });
+        grafo.raiz.hidden = modo !== 'grafo';
+        lienzo.raiz.hidden = modo !== 'lienzo';
+        $('[data-vn-sel]').hidden = modo !== 'grafo' || !seleccion;
+        if (modo === 'grafo') pintarGrafo(ix); else pintarLienzo();
+        grafo.nodos.forEach((n) => { n.nuevo = false; });
+        cont.querySelectorAll('[data-vn-poner]').forEach((b) => { b.hidden = !!activo().cajas[b.dataset.vnPoner]; });
+        pintarCajon();
+        arrancar();
+      }
+      function cambiarModo(m) {
+        if (m === modo) return;
+        modo = m;
+        terminarArrastre();
+        pintar();
+        guardar();
+      }
+
+      // ---- Guardar en el navegador (solo para quien lo usa en esta computadora) ----
+      let esperaGuardar = null;
+      function guardar() {
+        clearTimeout(esperaGuardar);
+        esperaGuardar = setTimeout(() => {
+          const sueltos = [...lienzo.nodos.values()].filter((n) => !n.modulo);
+          const usadas = new Set([].concat(...cajon, sueltos.map((n) => n.k)));
+          const r = {};
+          usadas.forEach((k) => { if (recuerdo[k]) r[k] = recuerdo[k]; });
+          recuerdo = r;
+          const cajas = (esp) => Object.values(esp.cajas).map((c) => [c.id, Math.round(c.x), Math.round(c.y), Math.round(c.w), Math.round(c.h), c.q || '']);
+          const datos = { modo: modo, cajon: cajon, recuerdo: r, grafo: guardadoGrafo || { cajas: cajas(grafo) }, lienzo: guardado || {
+            nodos: sueltos.map((n) => [n.k, Math.round(n.x), Math.round(n.y), n.fijo ? 1 : 0]),
+            cajas: cajas(lienzo),
+            vista: [Math.round(lienzo.vista.x), Math.round(lienzo.vista.y), Math.round(lienzo.vista.k * 100) / 100] } };
+          try { localStorage.setItem(LLAVE, JSON.stringify(datos)); } catch (e) { /* sin espacio o sin navegador: no se recuerda */ }
+        }, 400);
+      }
+
+      // ---- Movimiento: cada nodo flota; los vínculos lo jalan, los demás lo empujan; en el lienzo, las cajas ----
+      // Sin flotar si la persona pidió menos movimiento (lo dice el CSS: --vn-quieto en lineas-estilos.html)
+      const quieto = getComputedStyle(cont).getPropertyValue('--vn-quieto').trim() === '1';
+      function paso(esp) {
+        const ns = [...esp.nodos.values()];
+        const a = esp.alfa;
+        esp.alfa = Math.max(0.05, a * 0.985);
+        const fuerza = Math.max(a, 0.2);
+        esp.enlaces.forEach(([p, q, t]) => {
+          const A = esp.nodos.get(p);
+          const B = esp.nodos.get(q);
+          const dx = B.x - A.x;
+          const dy = B.y - A.y;
+          const d = Math.hypot(dx, dy) || 1;
+          const f = (d - (t === 'p' ? 90 : 56)) * 0.035 * fuerza;
+          A.vx += dx / d * f; A.vy += dy / d * f;
+          B.vx -= dx / d * f; B.vy -= dy / d * f;
+        });
+        for (let i = 0; i < ns.length; i++) {
+          const n = ns[i];
+          for (let j = i + 1; j < ns.length; j++) {
+            const m = ns[j];
+            const dx = n.x - m.x;
+            const dy = n.y - m.y;
+            const d2 = dx * dx + dy * dy;
+            if (d2 > 40000) continue;
+            // Lo de un módulo solo se acomoda entre sí; la caja lo separa de lo demás
+            if ((n.modulo || m.modulo) && (n.modulo !== m.modulo || d2 > 8100)) continue;
+            const d = Math.sqrt(d2) || 1;
+            const f = Math.min(8, 3200 / Math.max(d2, 150)) * fuerza;
+            n.vx += dx / d * f; n.vy += dy / d * f;
+            m.vx -= dx / d * f; m.vy -= dy / d * f;
+          }
+        }
+        // La red se junta hacia un punto fijo (el centro de cuando apareció), no hacia la pantalla: los módulos van a un lado
+        const centro = esp.tipo === 'grafo' ? (esp.centroRed || (esp.centroRed = centroDe(esp))) : null;
+        const cajas = Object.values(esp.cajas);
+        ns.forEach((n) => {
+          if (centro && !n.modulo) { n.vx += (centro.x - n.x) * 0.0016; n.vy += (centro.y - n.y) * 0.0016; }
+          if (cajas.length) {
+            const suya = esp.cajas[cajaDeNodo(esp, n)];
+            if (suya) {
+              const x1 = suya.x + 34, x2 = suya.x + suya.w - 34, y1 = suya.y + 44 / esp.vista.k + 24, y2 = suya.y + suya.h - 36;
+              if (n.x < x1 || n.x > x2 || n.y < y1 || n.y > y2) {
+                n.fijo = false;
+                n.vx += ((n.x < x1 ? x1 : n.x > x2 ? x2 : n.x) - n.x) * 0.06;
+                n.vy += ((n.y < y1 ? y1 : n.y > y2 ? y2 : n.y) - n.y) * 0.06;
+              }
+            } else {
+              cajas.forEach((c) => {
+                if (n.x > c.x - 24 && n.x < c.x + c.w + 24 && n.y > c.y - 24 && n.y < c.y + c.h + 40) {
+                  n.fijo = false;
+                  const dx = n.x - (c.x + c.w / 2);
+                  const dy = n.y - (c.y + c.h / 2);
+                  const d = Math.hypot(dx, dy) || 1;
+                  n.vx += dx / d * 3; n.vy += dy / d * 3;
+                }
+              });
+            }
+          }
+          if (!quieto) {
+            const flota = esp.tipo === 'grafo' ? 0.03 : 0.008;
+            n.vx += Math.cos(performance.now() / 1300 + n.ph) * flota;
+            n.vy += Math.sin(performance.now() / 1700 + n.ph) * flota;
+          }
+          if (n.arrastre || n.fijo) { n.vx = 0; n.vy = 0; return; }
+          n.vx *= 0.82; n.vy *= 0.82;
+          n.x += n.vx; n.y += n.vy;
+        });
+      }
+      function dibujar(esp) {
+        if (esp.meta) {
+          const m = esp.meta;
+          const v0 = esp.vista;
+          v0.x += (m.x - v0.x) * 0.12; v0.y += (m.y - v0.y) * 0.12; v0.k += (m.k - v0.k) * 0.12;
+          if (Math.abs(m.k - v0.k) < 0.002 && Math.abs(m.x - v0.x) < 0.5 && Math.abs(m.y - v0.y) < 0.5) esp.meta = null;
+        }
+        const v = esp.vista;
+        esp.mundo.style.transform = 'translate(' + v.x + 'px,' + v.y + 'px) scale(' + v.k + ')';
+        esp.mundo.classList.toggle('vn-lejos', v.k < 0.75);
+        // El encabezado de los módulos se lee igual de cerca o de lejos (lineas-estilos.html, --vn-inv)
+        esp.mundo.style.setProperty('--vn-inv', (1 / v.k).toFixed(3));
+        esp.nodos.forEach((n) => { n.el.style.transform = 'translate(' + n.x.toFixed(1) + 'px,' + n.y.toFixed(1) + 'px) translate(-50%,-20px)'; });
+        Object.values(esp.cajas).forEach((c) => {
+          c.el.style.transform = 'translate(' + c.x + 'px,' + c.y + 'px)';
+          c.el.style.width = c.w + 'px';
+          c.el.style.height = c.h + 'px';
+        });
+        let s = '';
+        const vivos = new Set();
+        const operar = esp.tipo === 'lienzo' && cfg.puedeOperar();
+        esp.enlaces.forEach(([p, q, t]) => {
+          const A = esp.nodos.get(p);
+          const B = esp.nodos.get(q);
+          const tenue = esp.luz && !(esp.luz.has(p) && esp.luz.has(q));
+          const vivo = t === 'l' && may(B.info.fila.estatus) === 'USO';
+          s += '<line x1="' + A.x.toFixed(1) + '" y1="' + A.y.toFixed(1) + '" x2="' + B.x.toFixed(1) + '" y2="' + B.y.toFixed(1) + '" class="vn-enlace vn-enlace-' + t +
+            (vivo ? ' vn-vivo' : '') + (tenue ? ' vn-tenue' : '') + '"/>';
+          if (t === 'l' && operar) {
+            vivos.add(p);
+            let c = esp.cortes.get(p);
+            if (!c) {
+              c = document.createElement('button');
+              c.type = 'button';
+              c.className = 'vn-cortar';
+              c.dataset.vnCortar = p;
+              c.title = 'Desvincular línea';
+              c.setAttribute('aria-label', 'Desvincular línea');
+              c.innerHTML = ic('scissors');
+              esp.mundo.appendChild(c);
+              esp.cortes.set(p, c);
+            }
+            c.style.transform = 'translate(' + ((A.x + B.x) / 2).toFixed(1) + 'px,' + ((A.y + B.y) / 2).toFixed(1) + 'px) translate(-50%,-50%)';
+          }
+        });
+        esp.cortes.forEach((c, k) => { if (!vivos.has(k)) { c.remove(); esp.cortes.delete(k); } });
+        esp.svg.innerHTML = s;
+      }
+      let corriendo = false;
+      function arrancar() {
+        if (corriendo) return;
+        corriendo = true;
+        requestAnimationFrame(cuadro);
+      }
+      function cuadro() {
+        // Fuera del módulo se detiene; si no se ve (la tabla, la ficha abierta) espera sin calcular
+        if (!document.body.contains(cont)) { corriendo = false; return; }
+        if (cont.offsetParent === null) { setTimeout(() => requestAnimationFrame(cuadro), 500); return; }
+        const esp = activo();
+        if (esp.ajustar && performance.now() > esp.ajustar) { esp.ajustar = 0; centrar(true); }
+        paso(esp);
+        dibujar(esp);
+        requestAnimationFrame(cuadro);
+      }
+      function centrar(suave) {
+        const esp = activo();
+        esp.meta = null;
+        const ns = [...esp.nodos.values()];
+        const cajas = Object.values(esp.cajas);
+        if (!ns.length && !cajas.length) { esp.vista = { x: 0, y: 0, k: 1 }; return; }
+        let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+        ns.forEach((n) => { x1 = Math.min(x1, n.x); y1 = Math.min(y1, n.y); x2 = Math.max(x2, n.x); y2 = Math.max(y2, n.y); });
+        cajas.forEach((c) => { x1 = Math.min(x1, c.x); y1 = Math.min(y1, c.y); x2 = Math.max(x2, c.x + c.w); y2 = Math.max(y2, c.y + c.h); });
+        const w = vista.clientWidth, h = vista.clientHeight;
+        const k = Math.max(0.25, Math.min(1.4, Math.min((w - 60) / Math.max(x2 - x1, 1), (h - 60) / Math.max(y2 - y1, 1))));
+        const meta = { k: k, x: w / 2 - (x1 + x2) / 2 * k, y: h / 2 - (y1 + y2) / 2 * k };
+        if (suave) esp.meta = meta; else esp.vista = meta;
+        if (esp === lienzo) guardar();
+      }
+
+      // ---- Barra ----
+      let esperaBusqueda = null;
+      $('[data-vn-q]').addEventListener('input', (ev) => {
+        clearTimeout(esperaBusqueda);
+        esperaBusqueda = setTimeout(() => { filtro.q = ev.target.value; pintar(); }, 200);
+      });
+      cont.querySelectorAll('[data-vn-filtro]').forEach((sel) => sel.addEventListener('change', () => { filtro[sel.dataset.vnFiltro] = sel.value; pintar(); }));
+      let esperaModulo = null;
+      vista.addEventListener('input', (ev) => {
+        const campo = ev.target.closest('[data-vn-caja-q]');
+        if (!campo) return;
+        const c = activo().cajas[campo.closest('[data-vn-caja]').dataset.vnCaja];
+        if (!c) return;
+        clearTimeout(esperaModulo);
+        esperaModulo = setTimeout(() => { c.q = campo.value; pintar(); guardar(); }, 250);
+      });
+      cont.addEventListener('click', (ev) => {
+        const b = (s) => ev.target.closest(s);
+        let x;
+        if ((x = b('[data-vn-modo]'))) { cambiarModo(x.dataset.vnModo); return; }
+        if ((x = b('[data-vn-capa]'))) { filtro.capas[x.dataset.vnCapa] = !filtro.capas[x.dataset.vnCapa]; pintar(); return; }
+        if ((x = b('[data-vn-poner]'))) { ponerCaja(activo(), x.dataset.vnPoner); pintar(); guardar(); return; }
+        if ((x = b('[data-vn-quitar-caja]'))) { quitarCaja(activo(), x.closest('[data-vn-caja]').dataset.vnCaja); return; }
+        if (b('[data-vn-todo]')) { alCajon(gruposGrafo.map(clavesDe)); return; }
+        if (b('[data-vn-vaciar]')) {
+          // Al cajón, cada grupo unido por separado
+          const vistos = new Set();
+          [...lienzo.nodos.values()].filter((n) => !n.modulo).map((n) => n.k).forEach((k) => {
+            if (vistos.has(k)) return;
+            const c = componente(k).filter((y) => !lienzo.nodos.get(y).modulo);
+            c.forEach((y) => vistos.add(y));
+            cajon.push(c);
+          });
+          [...lienzo.nodos.keys()].forEach((k) => quitarNodo(lienzo, k));
+          Object.keys(lienzo.cajas).forEach((id) => { lienzo.cajas[id].el.remove(); delete lienzo.cajas[id]; });
+          pintar();
+          guardar();
+          return;
+        }
+        if (b('[data-vn-centrar]')) { centrar(true); return; }
+        if (b('[data-vn-ir]')) { cambiarModo(modo === 'lienzo' ? 'grafo' : 'lienzo'); return; }
+        if ((x = b('[data-vn-sacar]'))) { cajon.splice(Number(x.dataset.vnSacar), 1); pintarCajon(); pintarLienzo(); guardar(); return; }
+        if (b('[data-vn-sel-cajon]') && seleccion) { const n = grafo.nodos.get(seleccion); if (n) alCajon([clavesDe(n.info.grupo)]); return; }
+        if (b('[data-vn-sel-ver]') && seleccion) { const n = grafo.nodos.get(seleccion); if (n) cfg.alVer(n.info.tipo, n.info.fila); return; }
+        if ((x = b('[data-vn-cortar]'))) {
+          const n = lienzo.nodos.get(x.dataset.vnCortar);
+          if (n && n.info.linea) cfg.alSoltar({ tipo: 'vinculo', modo: 'DESVINCULAR', fila: n.info.fila, linea: n.info.linea, pre: {} });
+        }
+      });
+
+      // ---- Arrastrar: el fondo mueve la vista, un nodo se mueve o se suelta en algo, las cajas se mueven y estiran ----
+      let arr = null;
+      let ultimoClic = { k: null, t: 0 };
+      const bloquearDesliz = (ev) => ev.preventDefault();
+      const puntoMundo = (esp, ev) => {
+        const r = vista.getBoundingClientRect();
+        return { x: (ev.clientX - r.left - esp.vista.x) / esp.vista.k, y: (ev.clientY - r.top - esp.vista.y) / esp.vista.k };
+      };
+      const dentro = (el, ev) => { const r = el.getBoundingClientRect(); return ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom; };
+      function destinoEn(ev, sin) {
+        if (dentro($('[data-vn-cajon]'), ev)) return { tipo: 'cajon' };
+        if (modo !== 'lienzo') return null;
+        const el = document.elementFromPoint(ev.clientX, ev.clientY);
+        if (!el || !lienzo.raiz.contains(el)) return null;
+        const nodo = el.closest('[data-vn-k]');
+        const n = nodo && lienzo.nodos.get(nodo.dataset.vnK);
+        if (n && n !== sin) {
+          if (n.info.tipo === 'equipo') return { tipo: 'equipo', fila: n.info.fila, linea: n.info.linea, el: n.el };
+          if (n.info.tipo === 'persona') return { tipo: 'persona', persona: n.info.persona, el: n.el };
+        }
+        const caja = el.closest('[data-vn-caja]');
+        return caja ? { tipo: 'caja', caja: caja.dataset.vnCaja, el: caja } : null;
+      }
+      const origenDe = (n) => ({ tipo: n.info.tipo, fila: n.info.fila, equipo: n.info.equipo || null, dueno: n.info.dueno || null });
+      function mostrarLetrero(ev, texto, no) {
+        if (!texto) { letrero.hidden = true; return; }
+        const r = vista.getBoundingClientRect();
+        letrero.hidden = false;
+        letrero.textContent = texto;
+        letrero.classList.toggle('vn-letrero-no', !!no);
+        letrero.style.left = (ev.clientX - r.left) + 'px';
+        letrero.style.top = (ev.clientY - r.top + 30) + 'px';
+      }
+      function marcar(el) {
+        if (arr && arr.blanco && arr.blanco !== el) arr.blanco.classList.remove('vn-blanco');
+        if (arr) arr.blanco = el || null;
+        if (el) el.classList.add('vn-blanco');
+      }
+      function terminarArrastre() {
+        if (!arr) return;
+        marcar(null);
+        if (arr.n) { arr.n.arrastre = false; pintarNodo(activo(), arr.n); }
+        if (arr.fantasma) arr.fantasma.remove();
+        letrero.hidden = true;
+        $('[data-vn-cajon]').classList.remove('vn-blanco');
+        document.removeEventListener('touchmove', bloquearDesliz, { passive: false });
+        arr = null;
+      }
+
+      vista.addEventListener('pointerdown', (ev) => {
+        if (arr || (ev.pointerType === 'mouse' && ev.button !== 0)) return;
+        if (ev.target.closest('[data-vn-cortar], [data-vn-quitar-caja], [data-vn-sel], button, input')) return;
+        const esp = activo();
+        const p = puntoMundo(esp, ev);
+        const cajaEl = ev.target.closest('[data-vn-caja]');
+        const nodoEl = ev.target.closest('[data-vn-k]');
+        if (cajaEl && !nodoEl && ev.target.closest('[data-vn-estirar]')) arr = { tipo: 'estirar', caja: esp.cajas[cajaEl.dataset.vnCaja], p: p };
+        else if (cajaEl && !nodoEl && ev.target.closest('.vn-caja-cabeza')) arr = { tipo: 'caja', caja: esp.cajas[cajaEl.dataset.vnCaja], p: p };
+        else if (nodoEl) arr = { tipo: 'nodo', n: esp.nodos.get(nodoEl.dataset.vnK) };
+        else arr = { tipo: 'fondo', vx: esp.vista.x, vy: esp.vista.y };
+        if (arr.tipo === 'nodo' && !arr.n) { arr = null; return; }
+        Object.assign(arr, { id: ev.pointerId, x0: ev.clientX, y0: ev.clientY, movio: false });
+        try { vista.setPointerCapture(ev.pointerId); } catch (e) { /* sin captura: igual sigue con los eventos del documento */ }
+        document.addEventListener('touchmove', bloquearDesliz, { passive: false });
+      });
+      vista.addEventListener('pointermove', (ev) => {
+        if (!arr || ev.pointerId !== arr.id) return;
+        if (!arr.movio && Math.hypot(ev.clientX - arr.x0, ev.clientY - arr.y0) < 5) return;
+        arr.movio = true;
+        const esp = activo();
+        if (arr.tipo === 'fondo') { esp.meta = null; esp.ajustar = 0; esp.vista.x = arr.vx + ev.clientX - arr.x0; esp.vista.y = arr.vy + ev.clientY - arr.y0; return; }
+        const p = puntoMundo(esp, ev);
+        if (arr.tipo === 'caja' || arr.tipo === 'estirar') {
+          const c = arr.caja;
+          const dx = p.x - arr.p.x;
+          const dy = p.y - arr.p.y;
+          arr.p = p;
+          if (arr.tipo === 'estirar') { c.w = Math.max(180, c.w + dx); c.h = Math.max(140, c.h + dy); return; }
+          c.x += dx; c.y += dy;
+          // Lo que vive en la caja se mueve con ella
+          esp.nodos.forEach((n) => { if (cajaDeNodo(esp, n) === c.id) { n.x += dx; n.y += dy; } });
+          return;
+        }
+        const n = arr.n;
+        if (!n.arrastre) { n.arrastre = true; pintarNodo(esp, n); }
+        n.x = p.x; n.y = p.y;
+        esp.alfa = Math.max(esp.alfa, 0.3);
+        const d = destinoEn(ev, n);
+        if (d && d.tipo === 'cajon') {
+          marcar(null);
+          $('[data-vn-cajon]').classList.add('vn-blanco');
+          mostrarLetrero(ev, modo === 'lienzo' ? 'Regresar al cajón' : 'Al cajón');
+          return;
+        }
+        $('[data-vn-cajon]').classList.remove('vn-blanco');
+        if (modo !== 'lienzo' || !cfg.puedeOperar() || n.info.tipo === 'persona') { marcar(null); mostrarLetrero(ev, ''); return; }
+        const a = alSoltar(origenDe(n), d);
+        marcar(a && !a.aviso && d ? d.el : null);
+        mostrarLetrero(ev, describir(a), a && a.aviso);
+      });
+      vista.addEventListener('pointerup', (ev) => {
+        if (!arr || ev.pointerId !== arr.id) return;
+        const a = arr;
+        const esp = activo();
+        const d = a.tipo === 'nodo' && a.movio ? destinoEn(ev, a.n) : null;
+        terminarArrastre();
+        if (a.tipo === 'fondo') { if (!a.movio && modo === 'grafo') elegir(null); if (esp === lienzo) guardar(); return; }
+        if (a.tipo === 'estirar') pintar();
+        if (a.tipo !== 'nodo') { guardar(); return; }
+        const n = a.n;
+        if (!a.movio) {
+          // Un clic: en el grafo elige la relación; en el lienzo, la vista rápida. Doble clic: la ficha
+          const doble = ultimoClic.k === n.k && Date.now() - ultimoClic.t < 350;
+          ultimoClic = { k: n.k, t: Date.now() };
+          if (doble && n.info.tipo !== 'persona') { cfg.alAbrir(n.info.tipo, n.info.fila); return; }
+          if (modo === 'grafo') elegir(seleccion === n.k ? null : n.k);
+          else if (n.info.tipo !== 'persona') cfg.alVer(n.info.tipo, n.info.fila);
+          return;
+        }
+        if (d && d.tipo === 'cajon') {
+          if (modo === 'grafo') alCajon([clavesDe(n.info.grupo)]);
+          else {
+            const c = componente(n.k);
+            c.forEach((k) => quitarNodo(lienzo, k));
+            cajon.push(c);
+            pintar();
+            guardar();
+          }
+          return;
+        }
+        if (modo !== 'lienzo') return;
+        if (n.modulo) { n.modulo = null; recordar(n.info); }
+        n.fijo = true; // en el lienzo se queda donde lo dejaste
+        guardar();
+        if (!cfg.puedeOperar() || n.info.tipo === 'persona') return;
+        const accion = alSoltar(origenDe(n), d);
+        if (accion && accion.aviso) cfg.alAvisar(accion.aviso);
+        else if (accion) cfg.alSoltar(accion);
+      });
+      vista.addEventListener('pointercancel', terminarArrastre);
+      vista.addEventListener('wheel', (ev) => {
+        ev.preventDefault();
+        const esp = activo();
+        esp.meta = null;
+        esp.ajustar = 0;
+        const r = vista.getBoundingClientRect();
+        const px = ev.clientX - r.left;
+        const py = ev.clientY - r.top;
+        const k = Math.max(0.25, Math.min(2.5, esp.vista.k * Math.exp(-ev.deltaY * 0.0015)));
+        esp.vista.x = px - (px - esp.vista.x) * k / esp.vista.k;
+        esp.vista.y = py - (py - esp.vista.y) * k / esp.vista.k;
+        esp.vista.k = k;
+        if (esp === lienzo) guardar();
+      }, { passive: false });
+
+      // Sacar del cajón al lienzo, arrastrando la ficha
+      $('[data-vn-cajon-lista]').addEventListener('pointerdown', (ev) => {
+        if (modo !== 'lienzo' || ev.target.closest('[data-vn-sacar]') || (ev.pointerType === 'mouse' && ev.button !== 0)) return;
+        const ficha = ev.target.closest('[data-vn-ficha]');
+        if (!ficha) return;
+        const i = Number(ficha.dataset.vnFicha);
+        const fantasma = ficha.cloneNode(true);
+        fantasma.classList.add('vn-ficha-fantasma');
+        document.body.appendChild(fantasma);
+        const mover = (e) => { fantasma.style.transform = 'translate(' + (e.clientX - 20) + 'px,' + (e.clientY - 14) + 'px)'; };
+        mover(ev);
+        document.addEventListener('touchmove', bloquearDesliz, { passive: false });
+        const alMover = (e) => { mover(e); vista.classList.toggle('vn-blanco', dentro(vista, e)); };
+        const alSoltarFicha = (e) => {
+          document.removeEventListener('pointermove', alMover);
+          document.removeEventListener('pointerup', alSoltarFicha);
+          document.removeEventListener('touchmove', bloquearDesliz, { passive: false });
+          fantasma.remove();
+          vista.classList.remove('vn-blanco');
+          if (!dentro(vista, e) || !cajon[i]) return;
+          const p = puntoMundo(lienzo, e);
+          const claves = cajon.splice(i, 1)[0];
+          claves.forEach((k, j) => {
+            const info = resolver(k);
+            if (!info || lienzo.nodos.has(info.clave)) return;
+            recordar(info);
+            const a = j * 2.4;
+            agregarNodo(lienzo, info, p.x + Math.cos(a) * j * 14, p.y + Math.sin(a) * j * 14);
+          });
+          lienzo.centrado = true;
+          pintar();
+          guardar();
+        };
+        document.addEventListener('pointermove', alMover);
+        document.addEventListener('pointerup', alSoltarFicha);
+      });
+
+      let esperaAncho = null;
+      const alCambiarAncho = () => {
+        if (!document.body.contains(cont)) { window.removeEventListener('resize', alCambiarAncho); return; }
+        clearTimeout(esperaAncho);
+        esperaAncho = setTimeout(() => { if (cont.offsetParent !== null && modo === 'grafo') pintar(); }, 250);
+      };
+      window.addEventListener('resize', alCambiarAncho);
+
+      return { pintar: pintar };
+    }
+
+    return { montar: montar, agrupar: agrupar, red: red, cajaDe: cajaDe, clavesDe: clavesDe, alSoltar: alSoltar, describir: describir, CAPAS: CAPAS };
+  })();
+</script>

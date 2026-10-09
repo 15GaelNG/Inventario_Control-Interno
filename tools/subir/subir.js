@@ -87,9 +87,16 @@ function exigirCuentaDeProd_(args) {
  */
 function moverDespliegues_(proyecto, version, descripcion) {
   clasp(['-P', proyecto, 'update-deployment', DESPLIEGUES_PROD[1], '-V', version, '-d', descripcion]);
-  const lista = clasp(['-P', proyecto, 'list-deployments']);
-  const enVersion = DESPLIEGUES_PROD.filter((d) => new RegExp(d + ' @' + version + '\\b').test(lista));
-  if (enVersion.length !== 2) throw new Error('Los dos despliegues no quedaron en @' + version + ':\n' + lista);
+  // Google tarda unos segundos en reflejar el despliegue movido: list-deployments justo después todavía puede decir la
+  // versión anterior (9-oct: la v87 quedó bien y aun así la Action falló). Se reintenta antes de declarar el error.
+  let lista = '';
+  for (let intento = 1; intento <= 6; intento++) {
+    lista = clasp(['-P', proyecto, 'list-deployments']);
+    const enVersion = DESPLIEGUES_PROD.filter((d) => new RegExp(d + ' @' + version + '\\b').test(lista));
+    if (enVersion.length === 2) return;
+    if (intento < 6) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5000);
+  }
+  throw new Error('Los dos despliegues no quedaron en @' + version + ' (después de 30 s):\n' + lista);
 }
 
 const LINK_EQUIPO = () => 'https://script.google.com/a/macros/' + DESTINOS.dominio + '/s/' + DESPLIEGUES_PROD[1] + '/exec';

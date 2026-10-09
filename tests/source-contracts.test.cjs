@@ -384,8 +384,9 @@ test('lo que repetían los servicios de una hoja vive en HojaServicio, no en otr
   ];
   // ListasService guarda catálogos (no la lista de un módulo) con su propio tiempo de vida,
   // CapitalHumano el de colaboradores (una persona por nombre+departamento, sin permiso de módulo)
-  // y PermisosService las reglas y personas que revisa en cada llamada (no es un módulo: es el permiso)
-  const CON_CACHE_PROPIA = ['ListasService.gs', 'CapitalHumano.gs', 'PermisosService.gs'];
+  // y PermisosService las reglas y personas que revisa en cada llamada (no es un módulo: es el permiso);
+  // DatosConectados, lo conectado desde la pantalla, que Relaciones lee en cada propagación (es configuración)
+  const CON_CACHE_PROPIA = ['ListasService.gs', 'CapitalHumano.gs', 'PermisosService.gs', 'DatosConectados.gs'];
   const problemas = [];
   servicios.forEach((a) => {
     const texto = read('src/services/' + a);
@@ -2294,4 +2295,21 @@ test('los documentos del vehículo se guardan en el expediente de su NUCO (Exped
     assert.match(s, /ExpedienteNuco\.archivar\(/, f + ' le pone su nombre y aparta el vigente');
     assert.doesNotMatch(s, /RESPONSIVAS_VEHICULARES'|'ADHERENTES VEHICULAR'/, f + ' ya no usa la carpeta vieja');
   }
+});
+
+test('cada documento del vehículo es campo de archivo en la ficha, con su nombre y su carpeta del NUCO', () => {
+  // 9-oct-2026: Factura, Tarjeta de circulación y Alta de placas se suben como la póliza y la tenencia (liga de Drive)
+  const veh = read('src/services/VehiculosService.gs');
+  const lista = (re) => re.exec(veh)[1].match(/'[^']+'/g).map((x) => x.slice(1, -1));
+  const archivos = lista(/const CAMPOS_ARCHIVO = \[([^\]]*)\]/);
+  const nuevas = lista(/const COLUMNAS_DOCUMENTO_NUEVAS = \[([^\]]*)\]/);
+  const etiquetas = /const ETIQUETA_ARCHIVO = \{([\s\S]*?)\};/.exec(veh)[1];
+  const app = read('src/html/js/app.html');
+  for (const c of archivos) {
+    assert.match(etiquetas, new RegExp("'" + c + "':"), c + ' tiene su etiqueta para el nombre del archivo');
+    assert.match(app, new RegExp("clave: '" + c + "'[^}]*tipo: 'file'"), c + ' es campo de archivo en CAMPOS_VEHICULO');
+  }
+  assert.deepEqual(nuevas.filter((c) => !archivos.includes(c)), [], 'las columnas que se agregan solas son de archivo');
+  assert.match(veh, /alCrear: \(fila, ctx\) => \{\s*asegurarColumnasDocumento_\(fila\);/, 'al crear se asegura la columna');
+  assert.match(veh, /alActualizar: \(cambios, ctx\) => \{\s*asegurarColumnasDocumento_\(cambios\);/, 'al editar también');
 });

@@ -364,6 +364,32 @@ Con cientos o pocos miles de filas: propagar tarda 1–2 s; `revisar` todo, meno
 
 ---
 
+## Conectar datos desde la pantalla (9-oct-2026)
+
+Administración > Datos conectados, pestaña **Conexiones**: una tarjeta por par de hojas (la que manda → la que copia)
+con sus datos en renglones. Con EDICIÓN en `relaciones`:
+
+- **Conectar otro dato** en una tarjeta, o **Nueva conexión** entre dos hojas del catálogo (`Entidades`): se sugiere la
+  llave (la columna que empareja más registros) y los datos que se llaman igual, con valores de ejemplo.
+- **Ver qué cambiaría** antes de guardar: cuántos registros de la copia encuentran a su dueño y cuántos tienen hoy otro
+  valor en cada dato, con ejemplos. **Conectar y poner al día** guarda y actualiza lo distinto (lo mismo que Salud).
+- **Revisar si coinciden** en cualquier tarjeta; **Poner al día** lo que no coincide.
+- Lo del código (el `MAPA`) se ve con candado y no se quita desde ahí. Lo que se copia al revés (Responsiva y
+  Reasignaciones → Vehículos) solo se ve: escribe en la hoja que manda y se queda en código a propósito.
+
+Cómo funciona por dentro:
+
+- `DatosConectados.gs` guarda lo de la pantalla en la hoja `DATOS CONECTADOS` del libro de usuarios (un renglón por
+  dato; quitar = `ACTIVO` FALSE) y cada cambio en `DATOS CONECTADOS_HISTORIAL`. No deja conectar secretos (PIN, patrón,
+  contraseña), escribir en una columna de ID o en la llave, hojas de libros distintos, ni dos orígenes para una columna.
+- `Relaciones.mapa_()` = `MAPA` + lo de la pantalla; todo lo demás (propagar, revisar, Salud) lo usa igual. Lo del
+  código manda si choca.
+- Se mantiene al día solo: `HojaServicio.actualizar` llama a `Relaciones.alGuardar` (cualquier hoja dueña, no solo
+  Vehículos y Sensores), y el activador `alEditarLibro` (`instalarAvisoDeCambios()`, AvisoDeCambios.gs) copia lo que se
+  edita **a mano** en la hoja dueña (`Relaciones.alEditarAMano`, hasta 200 renglones por edición) y lo anota en
+  `LOG_RELACIONES` como `EDICION A MANO`. Una copia "del día" (bitácora) nunca se toca.
+- Pruebas: `tests/datos-conectados.test.cjs` y la última sección de `tests/relaciones.test.js`.
+
 ## Reglas para desarrollar mientras tanto
 
 Para que conectar `Relaciones` al final sea cambiar unas pocas líneas y no una búsqueda

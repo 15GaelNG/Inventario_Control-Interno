@@ -3,6 +3,9 @@
 La carpeta de Drive **NUCOS VEHICULOS** (`1pgEmrDM58FuALsfzBzckC9ROz941HR9P`, dueño controlinterno@) tiene una
 carpeta por NUCO. Cada una trae `1.-DOCUMENTACIÓN`, `2.- SERVICIOS`, `3.- VERIFICACIONES` y `4.- INSPECCIONES`.
 
+> `4.- INSPECCIONES` se homologa aparte desde el 9-oct-2026: [nucos-inspecciones.md](nucos-inspecciones.md). Ahí también
+> pasan a `1.-DOCUMENTACIÓN` los documentos que estaban guardados en inspecciones.
+
 El 8-oct-2026 se hizo esto:
 
 - **Se ordenó `1.-DOCUMENTACIÓN`** de todos los NUCO a una sola estructura. Las otras tres carpetas no se tocaron.
