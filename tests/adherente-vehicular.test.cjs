@@ -17,7 +17,7 @@ const VEHICULO_BASE = {
 };
 
 function crearContexto() {
-  const llamadas = { insert: [], update: [], actualizarVehiculo: [], imagenesSubidas: [], pdfGenerados: 0, vistasPrevias: 0 };
+  const llamadas = { expediente: [], pdfEn: null, insert: [], update: [], actualizarVehiculo: [], imagenesSubidas: [], pdfGenerados: 0, vistasPrevias: 0 };
   let uuids = 0;
   const contexto = vm.createContext({
     Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'SS' }, DRIVE_FOLDERS: { REPORTES: () => 'FOLDER' }, urlFirmaPublica: () => '' },
@@ -34,6 +34,7 @@ function crearContexto() {
       getUuid: () => 'token-' + (++uuids),
     },
     DriveApp: {
+      getFileById: (id) => ({ id }),
       getFolderById: (id) => ({
         createFile: (blob) => { llamadas.imagenesSubidas.push({ carpetaId: id, nombre: blob.nombre }); return { id: 'file-' + llamadas.imagenesSubidas.length }; },
       }),
@@ -67,8 +68,12 @@ function crearContexto() {
       buscarPorFolio: () => Object.assign({}, VEHICULO_BASE),
       actualizar: (token, id, cambios) => { llamadas.actualizarVehiculo.push({ id, cambios }); },
     },
+    ExpedienteNuco: {
+      carpeta: (nucco, doc, sub) => ({ getId: () => 'NUCO/' + [nucco, doc].concat(sub || []).join('/') }),
+      archivar: (archivo, nucco, doc, op) => { llamadas.expediente.push({ archivar: archivo.id, nucco, doc, adherente: !!(op && op.adherente) }); },
+    },
     PdfService: {
-      generar: () => { llamadas.pdfGenerados++; return { id: 'pdf1', nombre: 'a.pdf', url: 'https://drive/a.pdf' }; },
+      generar: (o) => { llamadas.pdfGenerados++; llamadas.pdfEn = o.carpetaId; return { id: 'pdf1', fileId: 'pdf1', nombre: 'a.pdf', url: 'https://drive/a.pdf' }; },
       generarVistaPrevia: (p) => { llamadas.vistasPrevias++; return { base64: 'pdf-bytes', mimeType: 'application/pdf', imagenes: p.imagenes }; },
       nombreArchivo: () => 'nombre',
       fechaParaNombre: () => '2026-10-06',
@@ -301,4 +306,12 @@ test('las dos ligas, cada una completada por su lado, terminan generando el PDF 
 
   assert.throws(() => contexto.Servicio.completarFirma(token, { base64: 'x', mimeType: 'image/png' }), /no es válida/);
   assert.throws(() => contexto.Servicio.completarFirmaJefe(tokenJefe, { base64: 'x', mimeType: 'image/png' }), /no es válida/);
+});
+
+
+test('el PDF se genera en el expediente del NUCO del vehículo y se archiva ahí (adherente)', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', ADHERENTE: 'MARIA LOPEZ' }, FIRMA_OK);
+  assert.equal(llamadas.pdfEn, 'NUCO/00001/RESPONSIVA/ADHERENTES');
+  assert.deepEqual(llamadas.expediente, [{ archivar: 'pdf1', nucco: '00001', doc: 'RESPONSIVA', adherente: true }]);
 });

@@ -77,6 +77,7 @@ const VehiculosService = (function () {
       conPersona_(cambios, Object.assign({}, ctx.actual, cambios));
     },
     despues: (registro, ctx) => {
+      archivarEnExpediente_(registro, ctx.accion === 'actualizar' ? ctx.cambios : registro);
       if (ctx.accion !== 'actualizar') return;
       CambiosVehiculosService.registrarCambios(ctx.actual.FOLIO, ctx.actual, ctx.cambios, ctx.sesion.nombre);
       // El vehículo YA se guardó: si propagar falla no se revierte nada, solo se avisa en los
@@ -361,6 +362,29 @@ const VehiculosService = (function () {
   // "VEHICULOS_Files_", imagen (foto del documento) a "VEHICULOS_Images", las dos en la raíz de
   // la app (DriveUtils.carpetaEnRaiz). El archivo hereda los permisos que ya tenga la carpeta.
   const CARPETA_ADJUNTOS = 'VEHICULOS_Files_';
+
+  // Qué documento del expediente es cada columna de archivo (ExpedienteNuco: carpeta del NUCO)
+  const DOCUMENTO_DE = {
+    'RESPONSIVA': 'RESPONSIVA', 'DOCUMENTO BAJA': 'ALTA', 'POLIZA SEGURO': 'SEGURO', 'ARCHIVO TENENCIA': 'TENENCIA',
+  };
+
+  /**
+   * Después de guardar: cada archivo nuevo de la ficha (la liga a Drive que dejó subirArchivo) pasa al expediente de su
+   * NUCO con su nombre (SEGURO-0088.pdf) y el que estaba vigente, a "anteriores". Mover no cambia el ID, así que la
+   * liga de la columna sigue sirviendo. Las rutas de AppSheet ("VEHICULOS_Files_/…") no son ligas: no se tocan. Si
+   * algo falla el vehículo ya quedó guardado: se anota y sigue.
+   */
+  function archivarEnExpediente_(registro, cambios) {
+    Object.keys(DOCUMENTO_DE).forEach((columna) => {
+      const id = ExpedienteNuco.idDeLiga((cambios || {})[columna]);
+      if (!id) return;
+      try {
+        ExpedienteNuco.archivar(DriveApp.getFileById(id), registro.NUCCO, DOCUMENTO_DE[columna]);
+      } catch (err) {
+        console.error('No se pudo guardar ' + columna + ' en el expediente del NUCO ' + registro.NUCCO + ': ' + err.message);
+      }
+    });
+  }
   const CARPETA_ADJUNTOS_IMAGENES = 'VEHICULOS_Images';
 
   return {

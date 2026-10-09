@@ -51,7 +51,8 @@ const ResponsivaVehicularService = (function () {
   // no la carpeta general de REPORTES que usan los demás módulos.
   // Por nombre dentro de la raíz de la app (DriveUtils.carpetaEnRaiz): cada proyecto usa las suyas
   const CARPETA_IMAGENES = 'RESPONSIVAS VEHICULARES_Images';
-  const CARPETA_PDF = 'RESPONSIVAS_VEHICULARES';
+  // El PDF (y la copia temporal de la vista previa) va al expediente del vehículo en su NUCO (ExpedienteNuco,
+  // 08-oct-2026): la carpeta RESPONSIVAS_VEHICULARES de la raíz ya no se usa.
 
   // Caja de las firmas en el PDF: la misma que usa InspeccionesService (150 × 60 pt).
   const FIRMA_PDF = { ancho: 150, alto: 60 };
@@ -197,11 +198,19 @@ const ResponsivaVehicularService = (function () {
         plantillaId: PLANTILLA,
         datos: datosPdf,
         imagenes: imagenesPdf,
-        carpetaId: DriveUtils.carpetaEnRaiz(CARPETA_PDF).getId(),
+        // Directo en el expediente del vehículo (NUCOS VEHICULOS/<NUCO>/1.-DOCUMENTACIÓN/5.-RESPONSIVA)
+        carpetaId: ExpedienteNuco.carpeta(fila['NUCCO'], 'RESPONSIVA').getId(),
         nombre: PdfService.nombreArchivo([
           'RESPONSIVA VEHICULAR', fila['RESPONSABLE'], fila['PLACA'] || fila['FOLIO VEHICULO'], PdfService.fechaParaNombre(ahora),
         ]),
       });
+      // Su nombre en el expediente (RESPONSIVA-0088.pdf) y, si es responsiva, la vigente pasa a RESPONSIVAS ANTERIORES.
+      // Si esto falla el PDF ya existe y queda ligado: solo se avisa.
+      try {
+        ExpedienteNuco.archivar(DriveApp.getFileById(pdf.fileId), fila['NUCCO'], 'RESPONSIVA');
+      } catch (e) {
+        avisos.push('El PDF se generó, pero no se pudo acomodar en el expediente del NUCO: ' + e.message);
+      }
       SheetUtils.update(ssId(), hoja_().getName(), id, Object.assign({
         'PDF': pdf.url, 'ESTADO FIRMA': 'FIRMADO',
         'TOKEN FIRMA': '', 'TOKEN FIRMA EXPIRA': '', 'TOKEN FIRMA JEFE': '', 'TOKEN FIRMA JEFE EXPIRA': '',
@@ -428,7 +437,7 @@ const ResponsivaVehicularService = (function () {
       'AÑO': Utilities.formatDate(ahora, ZONA, 'yyyy'),
     });
     return PdfService.generarVistaPrevia({
-      plantillaId: PLANTILLA, datos: datosPdf, imagenes: imagenesDesdeTemp_(fila), carpetaId: DriveUtils.carpetaEnRaiz(CARPETA_PDF).getId(),
+      plantillaId: PLANTILLA, datos: datosPdf, imagenes: imagenesDesdeTemp_(fila), carpetaId: ExpedienteNuco.carpeta(fila['NUCCO'], 'RESPONSIVA').getId(),
     });
   }
 

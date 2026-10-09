@@ -122,6 +122,13 @@ ganchos: `ArqueosService.gs` y `VehiculosService.gs`. La guía completa está al
   que los DEV escribieran en producción. Una carpeta nueva va también en `REVISION_EN_RAIZ`
   (Diagnostico.gs); un contrato revisa las dos cosas. Las plantillas sí pueden ir fijas: solo se copian.
 - Cada `createFile` va dentro de `DriveUtils.marcarAutor(…)` (quién lo subió; contrato).
+- **Un documento de un vehículo va a su expediente: `ExpedienteNuco`** (`src/utils/ExpedienteNuco.gs`). La carpeta
+  NUCOS VEHICULOS tiene una carpeta por NUCO con `1.-DOCUMENTACIÓN/1.-FACTURA … 6.-TENENCIA` (docs/nucos-expediente.md).
+  `ExpedienteNuco.archivar(archivo, nucco, 'SEGURO')` lo mueve ahí, le pone su nombre (`SEGURO-0088.pdf`) y pasa el
+  vigente a `SEGUROS ANTERIORES`; `ExpedienteNuco.carpeta(nucco, 'RESPONSIVA')` para generar un PDF directo ahí. Ya lo
+  usan Vehículos (al guardar la ficha), Responsiva y Adherente. Producción apunta a la real con
+  `DRIVE_FOLDER_ID_NUCOS_VEHICULOS` (Entornos.gs); un DEV sin esa clave usa una "NUCOS VEHICULOS" de pruebas en su raíz.
+  No guardes un documento del vehículo en una carpeta suelta de la raíz (contrato).
 
 ## Permisos entre módulos (lo de un módulo dentro de otro)
 
@@ -223,6 +230,12 @@ escribir**: editora de cada libro y carpeta (salvo `soloLee`) y que pueda copiar
 despliega con errores. A mano: `revisarEntorno()` en el editor de cualquier proyecto, o
 `node tools/subir/revisar-entorno.js prod`. Una carpeta nueva en `Config.gs` va también en
 `REVISION_CARPETAS` (un contrato lo revisa).
+
+**"Authorization needed" al subir:** esa revisión abre el link `/dev`, que corre con la cuenta de
+quien sube (la de `clasp login`), no con la del dueño. Si esa cuenta nunca aceptó los permisos de
+ESE proyecto (o el manifiesto pidió uno nuevo), Google contesta esa página, `subir.js` no mueve los
+despliegues y por script no se puede aceptar: esa persona corre una vez `revisarEntorno()` en el
+editor de ese proyecto, acepta todo y repite el comando. Cada quien que suba a prod lo hace una vez.
 
 **Un módulo que todavía no sale a producción** se apaga ahí con `MODULOS_APAGADOS` en el bloque de
 prod de `Entornos.gs` (hoy: `'helpdesk'`): el menú no lo pinta, el servidor rechaza sus llamadas
