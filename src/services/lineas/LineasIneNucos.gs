@@ -47,7 +47,7 @@ function lineasIneNucos_continuar() {
   const queda = () => Date.now() - inicio < INE_NUCOS_TANDA_MS;
   try {
     if (st.fase === 'CARPETAS') ineNucosCarpetas_(st, queda);
-    if (st.fase === 'TEXTO' && queda()) ineNucosTexto_(st);
+    if (st.fase === 'TEXTO' && queda()) ineNucosTexto_(st, queda);
   } catch (e) {
     st.error = e.message;
     ineNucosGuardar_(st);
@@ -178,36 +178,41 @@ function ineNucosRaices_() {
   return lista.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
 }
 
-/** Marca en «POR TEXTO» los archivos del inventario en cuyo texto Drive encuentra una credencial. */
-function ineNucosTexto_(st) {
+/**
+ * Marca en «POR TEXTO» los archivos del inventario en cuyo texto Drive encuentra una credencial. Busca en todo el Drive
+ * (una palabra como PASAPORTE puede traer miles de archivos de fuera de NUCOS), así que se pausa entre páginas: lo
+ * marcado se queda en la columna y la búsqueda y su página, en st.texto.
+ */
+function ineNucosTexto_(st, queda) {
   const hoja = ineNucosPestana_(false);
   const n = hoja.getLastRow() - 1;
   if (n <= 0) { st.fase = 'LISTO'; return; }
   const ids = hoja.getRange(2, 4, n, 1).getValues().map((r) => String(r[0]));
   const fila = {};
   ids.forEach((id, i) => { fila[id] = i; });
-  const marcas = ids.map(() => []);
-  st.textos = {};
-  INE_NUCOS_TEXTOS.forEach(([tipo, texto]) => {
-    let pagina = null;
-    let hallados = 0;
-    do {
-      const r = LineasArchivos.listarDrive({
-        q: "fullText contains '" + texto + "' and trashed = false and mimeType != 'application/vnd.google-apps.folder'",
-        corpora: 'allDrives', pageSize: 1000, fields: 'nextPageToken,files(id)', pageToken: pagina || undefined,
-      });
-      (r.files || []).forEach((f) => {
-        if (!(f.id in fila)) return;
-        hallados++;
-        if (marcas[fila[f.id]].indexOf(tipo) < 0) marcas[fila[f.id]].push(tipo);
-      });
-      pagina = r.nextPageToken || null;
-    } while (pagina);
-    st.textos[texto] = hallados;
-  });
+  const marcas = hoja.getRange(2, 9, n, 1).getValues().map((r) => (r[0] ? String(r[0]).split(', ') : []));
+  st.textos = st.textos || {};
+  st.texto = st.texto || { i: 0, pagina: null, revisados: 0 };
+  while (st.texto.i < INE_NUCOS_TEXTOS.length && queda()) {
+    const [tipo, texto] = INE_NUCOS_TEXTOS[st.texto.i];
+    const r = LineasArchivos.listarDrive({
+      q: "fullText contains '" + texto + "' and trashed = false and mimeType != 'application/vnd.google-apps.folder'",
+      corpora: 'allDrives', pageSize: 1000, fields: 'nextPageToken,files(id)', pageToken: st.texto.pagina || undefined,
+    });
+    (r.files || []).forEach((f) => {
+      st.texto.revisados++;
+      if (!(f.id in fila)) return;
+      st.textos[texto] = (st.textos[texto] || 0) + 1;
+      if (marcas[fila[f.id]].indexOf(tipo) < 0) marcas[fila[f.id]].push(tipo);
+    });
+    st.texto.pagina = r.nextPageToken || null;
+    if (!st.texto.pagina) { st.textos[texto] = st.textos[texto] || 0; st.texto.i++; }
+  }
   hoja.getRange(2, 9, n, 1).setValues(marcas.map((m) => [m.join(', ')]));
-  st.fase = 'LISTO';
-  st.fin = new Date().toISOString();
+  if (st.texto.i >= INE_NUCOS_TEXTOS.length) {
+    st.fase = 'LISTO';
+    st.fin = new Date().toISOString();
+  }
 }
 
 /** Cómo va, en texto (también al registro de ejecución). Al terminar, cuenta por nombre y por texto. */
@@ -216,6 +221,7 @@ function ineNucosInforme_(st) {
   const lineas = ['INE NUCOS · ' + st.fase + (st.error ? ' · ERROR: ' + st.error : ''),
     'NUCOS recorridos: ' + st.cursor + (st.nucos ? ' de ' + st.nucos : ''),
     'Archivos anotados: ' + st.archivos + ' · omitidos (INSP/RESP, firmas, patrones, videos): ' + st.omitidos];
+  if (st.texto && st.fase === 'TEXTO') lineas.push('Búsqueda por texto: ' + st.texto.i + ' de ' + INE_NUCOS_TEXTOS.length + ' · archivos de Drive revisados: ' + st.texto.revisados);
   if (st.textos) lineas.push('Encontrados por texto: ' + Object.keys(st.textos).map((t) => t + ' ' + st.textos[t]).join(' · '));
   if (st.fase === 'LISTO') {
     const hoja = ineNucosPestana_(false);
