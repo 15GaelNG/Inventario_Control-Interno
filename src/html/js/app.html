@@ -705,7 +705,7 @@
       items: [
         { vista: 'panorama-vehiculos', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'vehiculos', plantilla: 'tpl-panorama-vehiculos', init: () => initPanoramaVehiculos(), ayuda: () => AYUDA_PANORAMA_VEHICULOS },
         { vista: 'incidencias', etiqueta: 'Incidencias', icono: 'wrench', requiere: 'incidencias', plantilla: 'tpl-incidencias', init: () => initIncidencias(), ayuda: () => AYUDA_INCIDENCIAS },
-        { vista: 'vehiculos', etiqueta: 'Vehículos', icono: 'car', requiere: 'vehiculos', plantilla: 'tpl-vehiculos', init: () => initVehiculos(), tour: () => iniciarTourVehiculos(), ayuda: () => AYUDA_VEHICULOS },
+        { vista: 'vehiculos', etiqueta: 'Vehículos', icono: 'car', requiere: 'vehiculos', plantilla: 'tpl-vehiculos', init: () => initVehiculos(), tour: () => iniciarTourVehiculosSegunPantalla(), ayuda: () => AYUDA_VEHICULOS },
         { vista: 'cambios-vehiculos', etiqueta: 'Cambios Vehículos', icono: 'history', requiere: 'cambios-vehiculos', plantilla: 'tpl-cambios-vehiculos', init: () => initCambiosVehiculos(), ayuda: () => AYUDA_CAMBIOS_VEHICULOS },
         { vista: 'reasignaciones-vehiculares', etiqueta: 'Reasignaciones Vehiculares', icono: 'arrow-left-right', requiere: 'reasignaciones-vehiculares', plantilla: 'tpl-reasignaciones-vehiculares', init: () => initReasignacionesVehiculares(), ayuda: () => AYUDA_REASIGNACIONES },
         { vista: 'verificaciones', etiqueta: 'Verificaciones', icono: 'badge-check', requiere: 'verificaciones', plantilla: 'tpl-verificaciones', init: () => initVerificaciones(), ayuda: () => AYUDA_VERIFICACIONES },
@@ -4188,6 +4188,38 @@
         texto: 'Doble clic (o toca) una fila para ver su ficha completa. El ⋮ o clic derecho trae más acciones: editar, dar de baja (una o varias a la vez) y más.',
       },
     ]);
+  }
+
+  // Tour de la ficha de un vehículo (distinto al de la lista, usuario 9-oct): el asistente
+  // flotante elige uno u otro según si la ficha ya está abierta cuando lo pican -- ver el
+  // dispatcher en iniciarTourVehiculos más abajo.
+  function iniciarTourFichaVehiculo() {
+    Tour.iniciar([
+      {
+        selector: '.ln-detalle-header',
+        titulo: 'La ficha de un vehículo',
+        texto: 'Nucco, estatus, departamento, responsable y placa de un vistazo. "Volver" (arriba) regresa a la lista; "Editar" corrige cualquier dato del vehículo.',
+      },
+      {
+        selector: '.ln-ficha-tabs',
+        titulo: 'El desglose por pestañas',
+        texto: 'Debajo, la ficha se reparte en pestañas: General, Detalles, Historial, Verificaciones, Inspecciones, Sensor, Hologramas, Incidencias, Responsiva… cada una con lo que le toca a ese vehículo.',
+      },
+      {
+        selector: '.ln-ficha-tabs',
+        titulo: 'Si llegaste desde otro lado',
+        texto: 'Al abrir la ficha desde una Incidencia, una Responsiva u otro módulo, arranca directo en esa pestaña en vez de en General -- no es un error, solo cambia por dónde empieza: las demás siguen aquí mismo, a un clic.',
+      },
+    ]);
+  }
+
+  /** Decide qué tour mostrar para la vista Vehículos: el de la ficha si ya está abierta
+   *  (detalle visible), el de la lista si no. Es lo que llama el asistente flotante -- la
+   *  vista sigue siendo una sola ('vehiculos'), por eso el dispatcher va aquí y no en NAV_GRUPOS. */
+  function iniciarTourVehiculosSegunPantalla() {
+    const detalle = document.getElementById('veh-detalle');
+    if (detalle && !detalle.hidden) { iniciarTourFichaVehiculo(); return; }
+    iniciarTourVehiculos();
   }
 
   // Preguntas frecuentes de Vehículos (usuario, 7-oct): igual que iniciarTourVehiculos, a
