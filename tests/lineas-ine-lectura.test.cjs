@@ -175,3 +175,15 @@ test('un límite de Google no se anota como error del archivo: se pausa y sigue 
   assert.match(fuente, /if \(ineLecEsCuota_\(e\)\) throw e;/);
   assert.match(fuente, /espera = 30 \* 60;/);
 });
+
+test('el programa de la computadora (tools/lineas-ine/leer-ine.js): mismo intérprete, solo el DEV, solo copias temporales', () => {
+  const herramienta = fs.readFileSync(path.join(__dirname, '..', 'tools/lineas-ine/leer-ine.js'), 'utf8').replace(/\r/g, '');
+  assert.match(herramienta, /ineLecInterpretar_\(texto, vocabulario\)/, 'interpreta con la función del .gs, no con otra copia');
+  assert.match(herramienta, /if \(e\.entorno !== 'DEV'\) throw/);
+  assert.match(herramienta, /if \(!e\.nucos \|\| e\.nucos === prod\) throw/);
+  // En Drive: la copia va a la carpeta temporal, solo esa copia se tira y la carpeta temporal se crea dentro de NUCOS del DEV
+  assert.equal((herramienta.match(/api\('(POST|PATCH|PUT|DELETE)', DRIVE/g) || []).length, 3);
+  assert.match(herramienta, /\/copy\?ocrLanguage=es&supportsAllDrives=true&fields=id',\n    \{ name: 'OCR ' \+ id, mimeType: 'application\/vnd\.google-apps\.document', parents: \[temporal\] \}/);
+  assert.match(herramienta, /api\('PATCH', DRIVE \+ '\/' \+ copia\.id \+ '\?supportsAllDrives=true&fields=id', \{ trashed: true \}\)/);
+  assert.match(herramienta, /mimeType: 'application\/vnd\.google-apps\.folder', parents: \[nucosDev\] \}/);
+});
