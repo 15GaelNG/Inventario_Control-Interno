@@ -19,7 +19,8 @@
  * la empresa), en ../credenciales/lineas-ine-cliente.json (fuera del repo). La primera vez abre el navegador para
  * autorizar con tu cuenta y guarda el permiso en ../credenciales/lineas-ine-token.json.
  *
- * Uso:   node tools/lineas-ine/leer-ine.js [--paralelo 6] [--limite N]
+ * Uso:   node tools/lineas-ine/leer-ine.js [--paralelo 6] [--limite N] [--reintentar]   (--reintentar: vuelve a leer lo que
+ *        falló por algo pasajero de Google)
  * No correr a la vez que lineasIneLectura_todo() en el DEV (se leerían dos veces): primero lineasIneLectura_detener().
  */
 'use strict';
@@ -42,6 +43,7 @@ const arg = (nombre, omision) => {
 };
 const PARALELO = arg('paralelo', 6);
 const LIMITE = arg('limite', Infinity);
+const REINTENTAR = process.argv.indexOf('--reintentar') > 0;
 
 // ------------------------------------------------------------------ configuración y lógica del .gs
 
@@ -193,7 +195,11 @@ async function main() {
     await api('PUT', SHEETS + dev.telefonia + '/values/' + rango(g.INE_LEC_PESTANA, 'A1') + '?valueInputOption=RAW', { values: [encabezados] });
     if (primera.length) console.log('«' + g.INE_LEC_PESTANA + '» era la de la muestra: se vació.');
   }
-  const leidas = new Set((await valores(dev.telefonia, g.INE_LEC_PESTANA, 'A2:A')).map((r) => r[0]));
+  // Con --reintentar, lo que falló por algo pasajero de Google («Internal Error») se vuelve a leer; el ensayo toma la
+  // lectura sin error. Lo que no tiene remedio (formato que el OCR no acepta, archivo demasiado grande) no se repite.
+  const sinRemedio = /conversion is not supported|Request Too Large|not found/i;
+  const leidas = new Set((await valores(dev.telefonia, g.INE_LEC_PESTANA, 'A2:P'))
+    .filter((r) => !REINTENTAR || !r[15] || sinRemedio.test(r[15])).map((r) => r[0]));
 
   const candidatas = (await valores(dev.telefonia, g.INE_NUCOS_PESTANA, 'A2:I'))
     .filter((r) => r[7] || r[8])

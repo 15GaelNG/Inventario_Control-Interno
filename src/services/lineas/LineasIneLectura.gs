@@ -511,6 +511,19 @@ function ineLecFilaEnsayo_(c, archivos, persona, como, enDoc, resultado, nota) {
     persona ? persona.numeros.join(', ') : '', persona ? persona.nombre : '', como, enDoc, resultado, nota.join('; ')];
 }
 
+/**
+ * Un renglón por archivo: si se leyó dos veces (la lectura del DEV y la de la computadora a la vez, 9-oct, o un
+ * reintento de un error), cuenta la lectura sin error.
+ */
+function ineLecUnoPorArchivo_(leidos) {
+  const porId = {};
+  const orden = [];
+  leidos.forEach((l) => {
+    if (!(l.id in porId)) { porId[l.id] = l; orden.push(l.id); } else if (porId[l.id].error && !l.error) porId[l.id] = l;
+  });
+  return orden.map((id) => porId[id]);
+}
+
 function lineasIneEnsayo() {
   soloEditor_();
   ineNucosExigirDev_();
@@ -518,8 +531,9 @@ function lineasIneEnsayo() {
   if (!hoja || hoja.getLastRow() < 2) throw new Error('No hay nada leído: corre lineasIneLectura_muestra() o lineasIneLectura_todo().');
   const v = hoja.getRange(1, 1, hoja.getLastRow(), INE_LEC_ENCABEZADOS.length).getValues();
   const col = (k) => INE_LEC_ENCABEZADOS.indexOf(k);
-  const leidos = v.slice(1).map((r) => ({ id: r[col('ID')], nuco: String(r[col('NUCO')]), ruta: String(r[col('RUTA')]), lado: r[col('LADO')],
-    curp: r[col('CURP')], nacimiento: String(r[col('NACIMIENTO')]), nombreVuelta: r[col('NOMBRE VUELTA')], nombres: r[col('NOMBRES EN TEXTO')] }));
+  const leidos = ineLecUnoPorArchivo_(v.slice(1).map((r) => ({ id: r[col('ID')], nuco: String(r[col('NUCO')]), ruta: String(r[col('RUTA')]),
+    lado: r[col('LADO')], curp: r[col('CURP')], nacimiento: String(r[col('NACIMIENTO')]), nombreVuelta: r[col('NOMBRE VUELTA')],
+    nombres: r[col('NOMBRES EN TEXTO')], error: r[col('ERROR')] })));
   const filas = ineLecEnsayo_(leidos, ineLecIndice_(ineLecCH_()), ineLecDocumentos_());
   const salida = ineLecHoja_(INE_ENSAYO_PESTANA, INE_ENSAYO_ENCABEZADOS, true);
   if (filas.length) salida.getRange(2, 1, filas.length, INE_ENSAYO_ENCABEZADOS.length).setValues(filas);

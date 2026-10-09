@@ -187,3 +187,10 @@ test('el programa de la computadora (tools/lineas-ine/leer-ine.js): mismo intér
   assert.match(herramienta, /api\('PATCH', DRIVE \+ '\/' \+ copia\.id \+ '\?supportsAllDrives=true&fields=id', \{ trashed: true \}\)/);
   assert.match(herramienta, /mimeType: 'application\/vnd\.google-apps\.folder', parents: \[nucosDev\] \}/);
 });
+
+test('un archivo leído dos veces (DEV y computadora a la vez, o un reintento) cuenta una vez, con la lectura sin error', () => {
+  const ctx = vm.createContext({});
+  vm.runInContext(fuente + '\nthis.u = ineLecUnoPorArchivo_;', ctx);
+  const r = ctx.u([{ id: 'a', error: 'Internal Error' }, { id: 'b', error: '', lado: 'FRENTE' }, { id: 'a', error: '', lado: 'VUELTA' }, { id: 'b', error: '', lado: 'X' }]);
+  assert.deepEqual([...r.map((x) => x.id + ':' + x.lado)], ['a:VUELTA', 'b:FRENTE']);
+});
