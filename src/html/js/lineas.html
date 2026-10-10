@@ -66,7 +66,24 @@
       return '<a class="externo ln-boton" target="_blank" rel="noopener" href="' + url + '">' + icono(esArchivo ? 'file-text' : 'folder-open') + ' ' + esc(texto) + ' ' + icono('external-link', 'ln-icon-sm') + '</a>';
     };
 
+    // Lo que pide la ficha de un equipo o línea se guarda 2 min (usuario, 9-oct: «Volver a NUCO» desde una inspección
+    // volvía a pedir sus 6 llamadas, ~10 s). Las páginas de inspección y responsiva no lo borran; cualquier otra llamada
+    // (guardar, generar o subir un PDF, abrir un formulario, recargar) sí, para no enseñar nada de antes de un cambio.
+    const FICHA_EN_MEMORIA = /^apiLineas(Equipo|Linea|Evidencias|Historial|Asignaciones|UltimoDocumentoNuco)$/;
+    const NO_BORRAN_FICHA = /^apiLineas(Inspeccion|Responsiva|PatronAppSheet|Archivo)$/;
+    const FICHA_MEMORIA_MS = 2 * 60 * 1000;
+    let fichaEnMemoria = {};
     function llamar(fn, ...args) {
+      if (FICHA_EN_MEMORIA.test(fn)) {
+        const clave = fn + JSON.stringify(args);
+        const guardada = fichaEnMemoria[clave];
+        if (guardada && Date.now() - guardada.ts < FICHA_MEMORIA_MS) return guardada.promesa;
+        const promesa = callServer(fn, state.token, ...args);
+        fichaEnMemoria[clave] = { promesa: promesa, ts: Date.now() };
+        promesa.catch(() => { if (fichaEnMemoria[clave] && fichaEnMemoria[clave].promesa === promesa) delete fichaEnMemoria[clave]; });
+        return promesa;
+      }
+      if (!NO_BORRAN_FICHA.test(fn)) fichaEnMemoria = {};
       return callServer(fn, state.token, ...args);
     }
 
@@ -2853,6 +2870,7 @@
         const detalle = $('#ln-detalle', raiz);
         detalle.hidden = false;
         detalle.innerHTML = migas() + '<div class="card ln-cargando"><span class="ln-spinner"></span> Cargando…</div>';
+        if (tipo === 'inspeccion' || tipo === 'responsiva') pintarDocumentoPrevio(detalle, tipo, id);
         document.getElementById('view-container').scrollTop = 0;
         window.scrollTo(0, 0);
         const pintar = { equipo: pintarEquipo, linea: pintarLinea, inspeccion: pintarInspeccion, responsiva: pintarResponsiva }[tipo];
@@ -2860,6 +2878,43 @@
           if (!vigente() || !pila.length || pila[pila.length - 1].tipo !== tipo || pila[pila.length - 1].id !== id) return;
           detalle.innerHTML = migas() + '<div class="card"><p class="error-msg">No se pudo cargar: ' + mensajeError(e) + '</p></div>';
         });
+      }
+
+      // ---- Página de una inspección o responsiva: al instante con lo que ya trajo la ficha (usuario, 9-oct: «Detalles» o
+      // el PDF salían antes que la página). La fila de Documentos ya tiene fecha, responsable, inspector, calificación y
+      // PDF: se pintan de inmediato y lo demás llega del servidor. Al seleccionar la fila, el documento se pide antes.
+      const resumenDocumentos = {};
+      const precargasDocumento = {};
+      const API_DOCUMENTO = { inspeccion: 'apiLineasInspeccion', responsiva: 'apiLineasResponsiva' };
+      const PRECARGA_DOCUMENTO_MS = 60000;
+      function precargarDocumento(tipo, id) {
+        const k = tipo + '|' + id;
+        const p = precargasDocumento[k];
+        if (p && Date.now() - p.ts < PRECARGA_DOCUMENTO_MS) return;
+        const promesa = llamar(API_DOCUMENTO[tipo], id);
+        promesa.catch(() => { delete precargasDocumento[k]; });
+        precargasDocumento[k] = { promesa: promesa, ts: Date.now() };
+      }
+      /** La precarga se usa una sola vez: después de un cambio (fotos, PDF) la página se vuelve a pedir completa. */
+      function pedirDocumento(tipo, id) {
+        const k = tipo + '|' + id;
+        const p = precargasDocumento[k];
+        delete precargasDocumento[k];
+        return p && Date.now() - p.ts < PRECARGA_DOCUMENTO_MS ? p.promesa : llamar(API_DOCUMENTO[tipo], id);
+      }
+      function pintarDocumentoPrevio(detalle, tipo, id) {
+        const d = resumenDocumentos[tipo + '|' + id];
+        if (!d) return;
+        const esInspeccion = tipo === 'inspeccion';
+        pila[pila.length - 1].etiqueta = ETIQUETA_DOCUMENTO[tipo] + (fecha(d.fecha) ? ' ' + fecha(d.fecha) : '');
+        detalle.innerHTML = migas() +
+          encabezado(esInspeccion ? 'clipboard-check' : 'signature', ETIQUETA_DOCUMENTO[tipo] + ' ' + esc(fecha(d.fecha) || ''),
+            chip(ORIGEN_DOCUMENTO[d.origen] || d.origen, COLOR_ORIGEN_DOCUMENTO[ORIGEN_DOCUMENTO[d.origen]] || 'neutro'),
+            d.pdfId ? enlaceDrive(d.pdfId, 'Ver PDF', true) : '',
+            esInspeccion
+              ? [['Responsable', d.responsable], ['Inspector', d.inspector], ['Calificación', porcentaje(d.calificacion)], ['Fotos', miles(d.fotos || 0)]]
+              : [['Responsable', d.responsable], ['Control Interno', d.inspector]]) +
+          '<div class="card ln-cargando"><span class="ln-spinner"></span> Cargando…</div>';
       }
 
       /** Abre un registro sabiendo solo su ID (equipo si existe como equipo; si no, línea). */
@@ -3347,6 +3402,7 @@
         const filas = inspecciones.map((d) => Object.assign({}, d, { documento: 'Inspección', tipoPdf: 'INSPECCION' }))
           .concat(responsivas.map((d) => Object.assign({}, d, { documento: 'Responsiva', tipoPdf: 'RESPONSIVA' })))
           .map((d, n) => Object.assign(d, { _clave: 'doc' + n, origenTexto: ORIGEN_DOCUMENTO[d.origen] || d.origen || '' }));
+        filas.forEach((d) => { resumenDocumentos[(d.tipoPdf === 'INSPECCION' ? 'inspeccion' : 'responsiva') + '|' + d.id] = d; });
         contarEnPestana('documentos', filas.length);
         // El servidor las manda de la más reciente a la más antigua
         const ultimaInsp = inspecciones[0];
@@ -3380,6 +3436,8 @@
           ordenInicial: { campo: 'fecha', dir: 'desc' },
           textoVacio: 'Sin documentos con esos filtros',
           etiquetaFila: (d) => d.documento + ' · ' + (fecha(d.fecha) || 'Sin fecha'),
+          // Al seleccionar una fila su página se pide antes: al abrirla ya está (o casi)
+          alCambiarSeleccion: (sel) => { if (sel.length === 1) precargarDocumento(sel[0].tipoPdf === 'INSPECCION' ? 'inspeccion' : 'responsiva', sel[0].id); },
           detalle: false,
           alCambiarFiltros: marcar,
           accionesFila: [
@@ -5021,7 +5079,7 @@
 
       /** Responsiva (usuario, 6-oct): su propia página, como la inspección; lo que dice la responsiva de ese día. */
       function pintarResponsiva(detalle, id) {
-        return llamar('apiLineasResponsiva', id).then((r) => {
+        return pedirDocumento('responsiva', id).then((r) => {
           if (!vigente() || !pila.length || pila[pila.length - 1].tipo !== 'responsiva' || pila[pila.length - 1].id !== id) return;
           const d = r.responsiva;
           const e = r.equipo;
@@ -5054,7 +5112,7 @@
 
       // ---- Inspección ----
       function pintarInspeccion(detalle, id) {
-        return llamar('apiLineasInspeccion', id).then((r) => {
+        return pedirDocumento('inspeccion', id).then((r) => {
           if (!vigente() || !pila.length || pila[pila.length - 1].tipo !== 'inspeccion' || pila[pila.length - 1].id !== id) return;
           const i = r.inspeccion;
           const e = r.equipo;

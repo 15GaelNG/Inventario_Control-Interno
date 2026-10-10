@@ -352,8 +352,10 @@ const TelefoniaService = (function () {
   function documento_(token, id, tipo) {
     const sesion = leer_(token);
     const esInspeccion = tipo === 'INSPECCION';
+    const t0 = Date.now();
     const doc = (esInspeccion ? LineasRepo.leerInspeccion(id) : LineasRepo.leerResponsiva(id)) ||
       (/^drive_/.test(id) ? documentoNucos_(id.slice(6), tipo) : null);
+    LineasDatos.tiempo('documento: leído', t0);
     if (!doc) throw new Error('No existe ' + (esInspeccion ? 'la inspección ' : 'la responsiva ') + id);
     // PIN, patrón y firmas solo para ADMIN (igual que en la ficha)
     if (esInspeccion && !puedeVerSecretos_(sesion)) {
@@ -367,6 +369,7 @@ const TelefoniaService = (function () {
       const r = f ? LineasRepo.convertirRegistro(f) : null;
       if (r && r.equipo) eq = { _id: r.id, nuco: r.equipo.nuco, modelo: r.equipo.modelo, imei: r.equipo.imei, tipo: r.equipo.tipo };
     }
+    LineasDatos.tiempo('documento: su equipo', t0);
 
     if (!doc.drive && doc.registroId && doc.fecha) {
       try {
@@ -377,6 +380,7 @@ const TelefoniaService = (function () {
       }
     }
 
+    LineasDatos.tiempo('documento: carpeta en NUCOS', t0);
     const fotos = [];
     const pdfs = doc.drive && doc.drive.pdfs ? doc.drive.pdfs.slice() : [];
     // Fotos agregadas en el sistema a una inspección de NUCOS: viven en una carpeta de la app (APP_EVIDENCIAS)
@@ -393,6 +397,7 @@ const TelefoniaService = (function () {
         });
       });
     }
+    LineasDatos.tiempo('documento: fotos', t0);
     const salida = { equipo: eq, fotos: fotos, pdfs: pdfs, puedeOperar: puedeOperar_(sesion) };
     // Identificación de cada responsable, subida con la responsiva (usuario, 9-oct; pendiente 2.27)
     if (!esInspeccion) salida.identificaciones = LineasIdentificaciones.deResponsiva([id]);
@@ -591,6 +596,7 @@ const TelefoniaService = (function () {
       asignacionesLinea: () => asignaciones(token, id, 'linea'), ultimaInspeccion: () => ultimoDocumentoNuco(token, id, 'INSPECCION'),
       indice: () => LineasRepo.indice(true),
       catalogos: () => catalogos(token), colaboradores: () => colaboradores(token),
+      inspeccion: () => inspeccion(token, id), responsiva: () => responsiva(token, id),
       contextoInspeccion: () => contextoInspeccion(token, { equipoId: id }), contextoResponsiva: () => contextoResponsiva(token, { equipoId: id }),
       // Sin caché, como la primera vez (usuario, 9-oct): índices, catálogos, colaboradores, IDs y la estructura de LINEAS
       frio: () => { LineasRepo.borrarCaches(); LineasDatos.tocar(['LINEAS', 'EQUIPOS', 'ASIGNACIONES', 'ADENDUMS']); },
