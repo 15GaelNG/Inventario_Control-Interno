@@ -4,7 +4,11 @@
  *
  *   <NUCO>/1.-DOCUMENTACIÓN/
  *      1.-FACTURA  2.-SEGURO  3.-ALTA DE PLACAS  4.-TARJETA DE CIRCULACIÓN  5.-RESPONSIVA  6.-TENENCIA
- *   <NUCO>/2.- SERVICIOS   3.- VERIFICACIONES   4.- INSPECCIONES
+ *   <NUCO>/2.-SERVICIOS   3.-VERIFICACIONES   4.-INSPECCIONES
+ *
+ * Los nombres van sin espacio después del guion, como sus subcarpetas (11-oct-2026). Una carpeta se reconoce aunque
+ * su nombre traiga espacios o acentos de más o de menos ("2.- SERVICIOS", "3.-VERIFICACIÓN ES"): nunca se crea
+ * otra al lado de la que ya está.
  *
  * Es lo mismo que hace tools/nucos (que ordenó la carpeta real): si cambia una regla, cambia en los dos.
  *
@@ -23,7 +27,7 @@
 const ExpedienteNuco = (function () {
   const RAIZ_NOMBRE = 'NUCOS VEHICULOS';
   const DOCUMENTACION = '1.-DOCUMENTACIÓN';
-  const OTRAS = ['2.- SERVICIOS', '3.- VERIFICACIONES', '4.- INSPECCIONES'];
+  const OTRAS = ['2.-SERVICIOS', '3.-VERIFICACIONES', '4.-INSPECCIONES'];
   /** Cada documento: su carpeta, el prefijo del nombre y dónde van las versiones anteriores (null: se quedan junto) */
   const DOCUMENTOS = {
     FACTURA: { carpeta: '1.-FACTURA', prefijo: 'FACTURA', anteriores: null },
@@ -40,9 +44,21 @@ const ExpedienteNuco = (function () {
     return id ? DriveApp.getFolderById(id) : DriveUtils.carpetaEnRaiz(RAIZ_NOMBRE);
   }
 
+  /** Para comparar nombres de carpeta: sin espacios ni acentos, en mayúsculas ("2.- Servicios" = "2.-SERVICIOS") */
+  function clave_(nombre) {
+    return String(nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '').toUpperCase();
+  }
+
   function subcarpeta_(padre, nombre) {
-    const hay = padre.getFoldersByName(nombre);
-    return hay.hasNext() ? hay.next() : padre.createFolder(nombre);
+    const exacta = padre.getFoldersByName(nombre);
+    if (exacta.hasNext()) return exacta.next();
+    const buscada = clave_(nombre);
+    const todas = padre.getFolders();
+    while (todas.hasNext()) {
+      const c = todas.next();
+      if (clave_(c.getName()) === buscada) return c;
+    }
+    return padre.createFolder(nombre);
   }
 
   /** "88", "0088" y 88 son el mismo NUCO; la carpeta se llama sin ceros, como las que ya existen */
