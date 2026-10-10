@@ -78,7 +78,10 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   al escribirlo (Mandar a resguardo, antes de pedir las inspecciones; inspección y responsiva) y en el servidor.
 - **Páginas de la inspección y de la responsiva** (Documentos, doble clic o Historial): lo que dice el documento de ese
   día; a la vista Ver PDF y Subir PDF firmado, y en ⋮ Ver equipo, Ver carpeta en Drive y Generar o Regenerar PDF
-  (`botonesDocumento` en lineas.html; `apiLineasInspeccion` / `apiLineasResponsiva`).
+  (`botonesDocumento` en lineas.html; `apiLineasInspeccion` / `apiLineasResponsiva`). Se ve al instante con lo que ya
+  trajo Documentos (fecha, responsable, inspector, calificación, Ver PDF) y se completa al llegar lo demás; al
+  seleccionar su fila se pide antes (`precargarDocumento`). Lo que pide la ficha queda 2 min en la página: «Volver» no
+  lo pide otra vez; cualquier otra llamada al servidor (guardar, PDF, formularios) lo borra (`llamar`, 9-oct).
 - **Inspección y responsiva:** un solo «Comentario» (columna COMENTARIO, antes OBSERVACIONES). La inspección lleva al
   jefe directo y la responsiva al director, los dos de Capital Humano como en el AppSheet.
 - **Identificación en la responsiva** (9-oct, opcional): por cada responsable (el principal, cuyo tipo es
