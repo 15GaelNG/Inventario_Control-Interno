@@ -133,7 +133,7 @@ for cid, (k, aviso) in nota.items():
     filas_c.append([c["nuco"], k, "/".join([c["nuco"]] + c["ruta"]),
                     "(se quita este nivel)" if despues is None else "/".join([c["nuco"], "4.- INSPECCIONES"] + despues),
                     cuenta[(c["nuco"], "/".join(c["ruta"]))], aviso])
-orden = ["SIN CLASIFICAR", "AJENO", "EXTRA", "SECCION SUELTA", "ENVOLTORIO", "MOTIVO", "PERIODO", "AÑO"]
+orden = ["SIN CLASIFICAR", "AJENO", "EXTRA", "SECCION SUELTA", "ENVOLTORIO", "MOTIVO", "PERIODO", "AÑO", "POR REVISAR"]
 for f in sorted(filas_c, key=lambda f: (orden.index(f[1]), int(f[0]) if f[0].isdigit() else 0, f[2])):
     s.append(f)
     for c in s[s.max_row]:
