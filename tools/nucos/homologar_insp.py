@@ -45,9 +45,13 @@ raiz_de = {r["id"]: r for r in x["raices"]}
 def fecha_nombre(nombre):
     """'22122025-U46BLX.PDF' → (2025, 12, 22); solo si es una fecha válida ddmmaaaa al inicio."""
     m = re.match(r"\s*(\d{2})(\d{2})(\d{4})(?!\d)", nombre)
-    if not m:
+    h = re.match(r"\s*INSPECCION-\d{4} (\d{4})-(\d{2})-(\d{2})(?!\d)", nombre)   # el nombre ya homologado
+    if h:
+        a, mes, d = int(h.group(1)), int(h.group(2)), int(h.group(3))
+    elif not m:
         return None
-    d, mes, a = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    else:
+        d, mes, a = int(m.group(1)), int(m.group(2)), int(m.group(3))
     return (a, mes, d) if 1 <= d <= 31 and 1 <= mes <= 12 and 2010 <= a <= 2030 else None
 
 
@@ -256,6 +260,12 @@ def colocar(c, anio, ctx):
     # no es confiable (se suben semanas después, o se copian de otra carpeta). Para el año de algo suelto sí sirve.
     if fuente != "pdf":
         fecha = None
+    # Ya homologada (una corrida anterior, el piloto): se queda como está. Sin esto el plan no es idempotente:
+    # "SIN PERIODO - X" se volvía "SIN PERIODO - SIN PERIODO - X" y "POR BAJA 2026-05-13" perdía su fecha
+    if c["name"].strip() == SIN_PERIODO or c["name"].startswith(SIN_PERIODO + " - "):
+        nota[c["id"]] = ("PERIODO", "ya homologada")
+        inspeccion(c["id"], anio, c["name"].strip(), ctx)
+        return
     if t[0] == "AJENO":
         nota[c["id"]] = ("AJENO", "")
         ajeno(c["id"], anio, AJENO + [str(anio), c["name"].strip()])
@@ -263,6 +273,9 @@ def colocar(c, anio, ctx):
     if t[0] == "MOTIVO":
         f = fecha if fecha and fecha[0] == anio else None
         nombre = t[1] + (" %04d-%02d-%02d" % f if f else "")
+        ya = re.fullmatch(re.escape(t[1]) + r" (\d{4})-\d{2}-\d{2}", c["name"].strip())
+        if not f and ya and int(ya.group(1)) == anio:
+            nombre = c["name"].strip()
         nota[c["id"]] = ("MOTIVO", "" if f else "sin fecha: va sin fecha")
         if f and fuente == "archivos":
             nota[c["id"]] = ("MOTIVO", "fecha tomada de cuándo se subieron los archivos (no hay PDF con fecha)")
@@ -325,6 +338,12 @@ def archivo_suelto(a, anio):
 
 for r in x["raices"]:
     for c in hijas[r["id"]]:
+        if c["name"].strip() == "_POR REVISAR":
+            # Ya apartado por una corrida anterior: se queda (plano) como está
+            destino[c["id"]] = ["_POR REVISAR"]
+            nota[c["id"]] = ("POR REVISAR", "ya homologada")
+            bajo_igual(c["id"], destino[c["id"]])
+            continue
         if es_anio(c["name"]):
             anio = int(c["name"].strip())
             destino[c["id"]] = [str(anio)]
