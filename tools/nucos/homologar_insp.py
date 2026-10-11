@@ -15,7 +15,7 @@ Reglas (acordadas el 9-oct-2026):
 
 Uso: homologar_insp.py foto.json salida   →  salida.xlsx, salida.json, salida-arboles.txt
 """
-import sys, json, re, collections, statistics
+import sys, datetime, json, re, collections, statistics
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent))
 import reglas
 
@@ -55,6 +55,40 @@ def fecha_nombre(nombre):
     return (a, mes, d) if 1 <= d <= 31 and 1 <= mes <= 12 and 2010 <= a <= 2030 else None
 
 
+def _valida(a, mes, d):
+    try:
+        datetime.date(a, mes, d)
+    except ValueError:
+        return None
+    return (a, mes, d) if 2015 <= a <= 2026 else None
+
+
+def fecha_flexible(nombre):
+    """Las otras formas en que el área escribe la fecha del PDF, solo las que no se prestan a dos lecturas
+    (11-oct-2026; 348 PDF se quedaban sin renombrar):
+      '8072025-LA73647.PDF'   d/mm/aaaa de 7 dígitos, si solo una lectura es fecha ('1072025' es 1/07 o 10/7: no)
+      '181224-SV5769C.pdf', 'SV5769C-181224.pdf'   ddmmaa al inicio o al final
+      '20231026113318911.pdf'   el sello del escáner (aaaammdd + hora)"""
+    n = nombre.strip()
+    m = re.match(r"(20\d\d)(\d\d)(\d\d)\d{6,}(?!\d)", n)
+    if m:
+        return _valida(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    m = re.match(r"(\d)(\d)(\d)(\d{4})(?!\d)", n)
+    if m:
+        a = int(m.group(4))
+        lecturas = {f for f in (_valida(a, int(m.group(2) + m.group(3)), int(m.group(1))),
+                                _valida(a, int(m.group(3)), int(m.group(1) + m.group(2)))) if f}
+        return lecturas.pop() if len(lecturas) == 1 else None
+    m = re.match(r"(\d\d)(\d\d)(\d\d)(?=[-_ ])", n) or re.search(r"[-_ ](\d\d)(\d\d)(\d\d)(?=\.[A-Za-z0-9]{2,4}$|$)", n)
+    if m:
+        return _valida(2000 + int(m.group(3)), int(m.group(2)), int(m.group(1)))
+    return None
+
+
+def fecha_pdf(nombre):
+    return fecha_nombre(nombre) or fecha_flexible(nombre)
+
+
 def todos_los_archivos(cid, prof=3):
     out = list(arch_de[cid])
     if prof:
@@ -66,7 +100,7 @@ def todos_los_archivos(cid, prof=3):
 def fecha_carpeta(cid):
     """La fecha de una inspección: la de su PDF (ddmmaaaa); si hay varios, la más repetida. Si no hay, la mediana de
     cuándo se subieron sus archivos. → ((año, mes, día), 'pdf' | 'archivos') o (None, None)"""
-    pdfs = [fecha_nombre(a["name"]) for a in arch_de[cid] if a["mime"].endswith("pdf")]
+    pdfs = [fecha_pdf(a["name"]) for a in arch_de[cid] if a["mime"].endswith("pdf")]
     pdfs = [f for f in pdfs if f]
     if pdfs:
         return collections.Counter(pdfs).most_common(1)[0][0], "pdf"
@@ -406,6 +440,9 @@ for a in A:
     # El PDF de la inspección (directo en el periodo o motivo) con fecha → INSPECCION-0267 2025-12-22.pdf
     if es_anio(segs[0] if segs else "") and len(segs) == 2 and a["mime"].endswith("pdf"):
         f = fecha_nombre(a["name"])
+        if not f:
+            f = fecha_flexible(a["name"])
+            f = f if f and f[0] == int(segs[0]) else None    # la forma dudosa solo si cuadra con su año
         if f:
             nombre = "INSPECCION-%04d %04d-%02d-%02d.pdf" % (int(a["nuco"]), *f)
     plan.append(dict(base, accion="MOVER", despues="/".join([a["nuco"], RAIZ] + segs + [nombre])))
