@@ -4,12 +4,14 @@
   verificaciones.py ocr             lee cada comprobante con el OCR de Google: una copia como Documento en una carpeta
                                     temporal propia (fuera de NUCOS), se baja el texto y se borra la copia. Se guarda en
                                     .cache/verificaciones/ocr.json y se puede cortar y seguir.
+  verificaciones.py vehiculos        NUCO, serie y placa de cada vehículo → .cache/verificaciones/vehiculos.json.
+                                    El vehículo se identifica por serie (NIV) o NUCO, JAMÁS por el folio.
   verificaciones.py dry-run <xlsx>  el plan de cada archivo (→ plan.json) y un Excel para revisarlo.
 
 El periodo sale de, en este orden: la fecha de expedición del certificado (OCR), la fecha del nombre del archivo
 (`B-153 VERIFICACION 2026 04 27.pdf`), la carpeta del área (`PROGRAMA 2025/PRIMER SEMESTRE`; sus "BIMESTRE" también son
-semestres, lo dicen los certificados), el registro de la app si el NUCO tiene uno solo en un semestre. Nunca la fecha
-de subida. Lo que no se puede fechar va a `_POR REVISAR`.
+semestres, lo dicen los certificados). Nunca la fecha de subida ni la hoja de la app (sus registros apuntan por folio y
+152 están ligados a otro vehículo). Lo que no se puede fechar va a `_POR REVISAR`.
 """
 import sys, json, re, collections, datetime, threading
 from concurrent.futures import ThreadPoolExecutor
@@ -19,6 +21,7 @@ import expediente as e, reglas
 
 CACHE = Path(__file__).resolve().parent / ".cache" / "verificaciones"
 FOTO, OCR, APP, PLAN = CACHE / "foto.json", CACHE / "ocr.json", CACHE / "app.json", CACHE / "plan.json"
+VEHICULOS = CACHE / "vehiculos.json"            # [{nuco, serie, placa, id}] de la hoja VEHICULOS (leer_vehiculos)
 FOTO_DOC = Path(__file__).resolve().parent / ".cache" / "inspecciones" / "foto-doc.json"
 RAIZ = "3.- VERIFICACIONES"
 POR_REVISAR = "_POR REVISAR"
@@ -142,6 +145,34 @@ def lee_certificado(texto):
                 corregida=corregida, doble_cero=bool(re.search(r"DOBLE CERO", T)))
 
 
+def nucos_por_serie(texto, nucos_de_serie):
+    """Los NUCO cuya serie (NIV, 17 caracteres) aparece en el texto; tolera una letra mal leída si solo hay un candidato."""
+    out = set()
+    for s_ in set(re.findall(r"(?<![A-Z0-9])[A-HJ-NPR-Z0-9]{17}(?![A-Z0-9])", N(texto or ""))):
+        if s_ in nucos_de_serie:
+            out |= nucos_de_serie[s_]
+        else:
+            cerca = [k for k in nucos_de_serie if len(k) == 17 and sum(a != b for a, b in zip(k, s_)) == 1]
+            if len(cerca) == 1:
+                out |= nucos_de_serie[cerca[0]]
+    return out
+
+
+def leer_vehiculos():
+    """NUCO, serie, placa e ID de cada vehículo (hoja VEHICULOS de producción) → vehiculos.json. Sin el folio."""
+    from autorizar import credenciales
+    from googleapiclient.discovery import build
+    h = build("sheets", "v4", credentials=credenciales("lab"), cache_discovery=False).spreadsheets()
+    val = e.llamar(h.values().get(spreadsheetId=e.LIBRO, range="'VEHICULOS'!A1:ZZ100000"))["values"]
+    enc = val[0]
+    filas = [dict(zip(enc, f + [""] * (len(enc) - len(f)))) for f in val[1:] if any(f)]
+    num = lambda x: str(int(re.match(r"\s*(\d+)", x).group(1))) if re.match(r"\s*(\d+)", x or "") else ""
+    out = [dict(nuco=num(x.get("NUCCO")), serie=re.sub(r"[^A-Z0-9]", "", N(x.get("SERIE VEHICULO", ""))),
+                placa=x.get("PLACA", ""), id=x.get("ID", "")) for x in filas if num(x.get("NUCCO"))]
+    json.dump(out, open(VEHICULOS, "w", encoding="utf-8"), ensure_ascii=False)
+    print("vehículos:", len(out))
+
+
 def fecha_del_nombre(nombre):
     m = re.search(r"(?<!\d)(20\d\d)[ _.-]?(\d\d)[ _.-]?(\d\d)(?!\d)", nombre)
     if m:
@@ -184,18 +215,12 @@ def dry_run(salida):
     doc = json.load(open(FOTO_DOC, encoding="utf-8")) if FOTO_DOC.exists() else {"archivos": []}
     nuco_num = lambda s: str(int(re.match(r"\s*(\d+)", s).group(1))) if re.match(r"\s*(\d+)", s) else s
 
-    # El registro de la app por NUCO: (año, semestre) de cada verificación
-    app_sem = collections.defaultdict(set)
-    for v in app["ver"]:
-        m = re.match(r"(\d{1,2})/(\d{1,2})/(\d{4})", v.get("FECHA VERIFICACION") or "")
-        nuco = app["nuco_de"].get(v.get("FOLIO VEHICULO"), "")
-        if m and nuco:
-            app_sem[nuco_num(nuco)].add((m.group(3), 1 if int(m.group(2)) <= 6 else 2))
-    placa_de = collections.defaultdict(set)
-    for v in app["ver"]:
-        nuco = app["nuco_de"].get(v.get("FOLIO VEHICULO"), "")
-        if nuco and v.get("PLACA"):
-            placa_de[nuco_num(nuco)].add(N(v["PLACA"]).replace(" ", ""))
+    # El vehículo se identifica por su serie (NIV) o su NUCO, JAMÁS por el folio (el FOLIO VEHICULO de la hoja de la
+    # app apunta a otro vehículo en 152 registros). Por eso la app no decide nada aquí: ni el periodo ni el vehículo.
+    nucos_de_serie = collections.defaultdict(set)
+    for x in json.load(open(VEHICULOS, encoding="utf-8")):
+        if len(x["serie"]) >= 11:
+            nucos_de_serie[x["serie"]].add(x["nuco"])
     md5_doc = collections.defaultdict(set)
     for d in doc["archivos"]:
         md5_doc[nuco_num(d["nuco"])].add(d.get("md5"))
@@ -209,9 +234,10 @@ def dry_run(salida):
         c = lee_certificado(r.get("texto", ""))
         base = dict(id=a["id"], nuco=a["nuco"], antes="/".join(a["ruta"]), mime=a["mime"], md5=a.get("md5"),
                     ocr_fecha=c["fecha"], ocr_motivo=c["motivo"], ocr_error=r.get("error", ""),
-                    es_certificado="SI" if c["certificado"] else "", placa_ok="", fuente="", accion="", despues="", aviso="")
-        if placa_de.get(nuco) and c["placas"]:
-            base["placa_ok"] = "SI" if placa_de[nuco] & c["placas"] else "NO: " + ", ".join(sorted(c["placas"]))[:60]
+                    es_certificado="SI" if c["certificado"] else "", serie_ok="", fuente="", accion="", despues="", aviso="")
+        dueños = nucos_por_serie(r.get("texto", ""), nucos_de_serie)
+        if dueños:
+            base["serie_ok"] = "SI" if dueños == {nuco} else "NO: es del NUCO " + ", ".join(sorted(dueños))
 
         if a["mime"] == "application/vnd.google-apps.shortcut":
             plan.append(dict(base, accion="REVISAR", aviso="acceso directo"))
@@ -239,7 +265,7 @@ def dry_run(salida):
         # El periodo
         fecha, fuente = c["fecha"], "OCR del certificado" if c["fecha"] else ""
         if c["corregida"]:
-            base["aviso"] = "año del OCR corregido con el folio del certificado"
+            base["aviso"] = "año del OCR corregido con el folio del certificado (su número, no el folio del vehículo)"
         if not fecha:
             fecha = fecha_del_nombre(a["name"])
             fuente = "fecha del nombre" if fecha else ""
@@ -248,9 +274,6 @@ def dry_run(salida):
             anio, sem = periodo_de_carpeta(ruta)
             if anio and sem:
                 fuente = "carpeta del área"
-            elif len(app_sem.get(nuco, ())) == 1:
-                anio, sem = next(iter(app_sem[nuco]))
-                fuente = "único registro de la app"
             else:
                 anio, sem = "", 0
         if not (anio and sem):
@@ -341,18 +364,18 @@ def excel(salida, plan, renombrar, sin, foto):
     filas += [["%s → %s" % (a, t or "-"), n] for (a, t), n in sorted(cuenta.items())]
     filas += [["", ""], ["El periodo salió de…", ""]] + [["   " + f, n] for f, n in fuentes.most_common()]
     filas += [["", ""], ["Certificados con RECHAZO", sum(1 for p in plan if "RECHAZO" in p["despues"])],
-              ["Certificados cuya placa NO es la del vehículo (según la app)", sum(1 for p in plan if p["placa_ok"].startswith("NO"))]]
+              ["Certificados cuya serie (NIV) es de OTRO NUCO", sum(1 for p in plan if p["serie_ok"].startswith("NO"))]]
     hoja(ws, ["Concepto", "Cantidad"], filas, [62, 14])
 
     orden = {"POR REVISAR": 0, "DOCUMENTACION": 1, "PERIODO": 2, "": 3}
     ws = wb.create_sheet("Archivos")
     filas = [[p["nuco"], p["accion"], p.get("destino_tipo", ""), p["antes"], p["despues"], p["fuente"], p["ocr_fecha"],
-              p["ocr_motivo"], p["es_certificado"], p["placa_ok"], p["aviso"] or p["ocr_error"],
+              p["ocr_motivo"], p["es_certificado"], p["serie_ok"], p["aviso"] or p["ocr_error"],
               '=HYPERLINK("https://drive.google.com/file/d/%s/view","abrir")' % p["id"]]
              for p in sorted(plan, key=lambda p: (orden.get(p.get("destino_tipo", ""), 9),
                                                   int(re.match(r"\d+", p["nuco"]).group()) if re.match(r"\d+", p["nuco"]) else 0))]
     hoja(ws, ["NUCO", "Acción", "Destino", "Ruta de antes", "Ruta nueva", "Periodo por", "Fecha OCR", "Motivo OCR",
-              "¿Certificado?", "¿Placa del vehículo?", "Aviso", "Archivo"], filas, [8, 10, 14, 60, 60, 22, 12, 11, 12, 22, 45, 9])
+              "¿Certificado?", "¿Serie (NIV) de este NUCO?", "Aviso", "Archivo"], filas, [8, 10, 14, 60, 60, 22, 12, 11, 12, 22, 45, 9])
 
     ws = wb.create_sheet("Renombrar raíz")
     hoja(ws, ["NUCO", "Nombre de antes", "Nombre nuevo"], [[r["nuco"], r["name"], RAIZ] for r in renombrar], [8, 34, 24])
@@ -368,6 +391,8 @@ def excel(salida, plan, renombrar, sin, foto):
 if __name__ == "__main__":
     if sys.argv[1:2] == ["ocr"]:
         ocr()
+    elif sys.argv[1:2] == ["vehiculos"]:
+        leer_vehiculos()
     elif sys.argv[1:2] == ["dry-run"]:
         dry_run(sys.argv[2])
     else:
