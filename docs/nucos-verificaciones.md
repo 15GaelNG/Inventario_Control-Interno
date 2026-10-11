@@ -26,12 +26,13 @@ vigencia. 301 de 302 se leyeron; 19 PDF son escaneos con una capa de texto en bl
 
 ## Lo que se encontró en la app
 
-1. **152 registros ligados al vehículo equivocado** (por el número de serie del certificado contra `SERIE VEHICULO` del
-   catálogo; tolera una letra mal leída). 49 están en `MOT0002` (una moto dada de baja: 76 registros, casi todos de otros
-   vehículos) y 14 en `MOT0116`. Todos se capturaron en AppSheet (2024–2026; la mayoría el 23-ene-2025, la carga
+1. **152 registros ligados al vehículo equivocado**: el número de serie (NIV) del certificado es de otro NUCO que el
+   que dice la hoja (`ID VEHICULO` → NUCO; tolera una letra mal leída). 49 están en el NUCO 2 (una moto dada de baja:
+   76 registros, casi todos de otros vehículos) y 14 en el 116. **La clave del vehículo es la serie o el NUCO, nunca
+   el folio:** la hoja solo trae `FOLIO VEHICULO` (de ahí salió `ID VEHICULO` en la migración) y es justo lo que falla. Todos se capturaron en AppSheet (2024–2026; la mayoría el 23-ene-2025, la carga
    inicial). **El error ya estaba en AppSheet**: en su libro original (`1h5ibDsm…`) los 152 dicen el mismo folio. La
    migración lo copió fiel. La `PLACA` de la hoja es la del vehículo ligado (se copia sola), no la del certificado.
-   La lista con el vehículo correcto está en `religar.json`.
+   La lista (NUCO e ID del vehículo de hoy y el correcto, con su serie) está en `religar.json`.
 2. 127 registros sin serie legible: no se puede confirmar a qué vehículo son.
 3. 15 certificados de **Rechazo** capturados como verificación hecha.
 4. 66 registros cuya fecha capturada difiere más de 7 días de la del certificado (10 traen el comprobante de otro
@@ -73,8 +74,8 @@ Falta ajustar el dry run a eso y rehacerlo con la foto nueva (308 archivos).
 ## Orden propuesto
 
 1. **Homologar la carpeta** (solo dentro de ella): foto, dry run, piloto de 3–4 NUCO, verificación, el resto.
-2. **Corregir la hoja de la app** antes de mover sus comprobantes: re-ligar los 152 por número de serie (`FOLIO VEHICULO`,
-   `ID VEHICULO`, `PLACA`), con bitácora del valor anterior, y que el área decida rechazos, duplicados y fechas.
+2. **Corregir la hoja de la app** antes de mover sus comprobantes: re-ligar los 152 al NUCO que dice la serie del
+   certificado (`ID VEHICULO` y lo que se copia de él), con bitácora del valor anterior, y que el área decida rechazos, duplicados y fechas.
    Si se movieran antes, 152 comprobantes caerían en el NUCO equivocado.
 3. **Llevar los comprobantes de la app al NUCO** (los 331 que solo están en la app; los 99 que ya están, solo la liga).
 4. **La app guarda en el NUCO** (`ExpedienteNuco`) y lee el certificado al subirlo: fecha, semestre, motivo y serie;
